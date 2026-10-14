@@ -1,0 +1,448 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<template>
+  <el-container class="layout">
+    <!-- PC 侧边栏（≥768px 显示） -->
+    <el-aside width="210px" class="aside desktop-menu">
+      <div class="logo"><img class="logo-img" src="../../assets/FSSC_LOGO_Blue.jpeg" alt="FSSC 财务共享" /></div>
+      <el-menu :default-active="$route.path" router background-color="#1f2d3d" text-color="#bfcbd9" active-text-color="#409eff">
+        <MenuTree :nodes="menuTree" />
+      </el-menu>
+    </el-aside>
+
+    <el-container>
+      <el-header class="header">
+        <!-- 移动端菜单按钮 -->
+        <el-button v-if="isMobile" link class="hamburger" @click="drawer = true">
+          <el-icon :size="20"><Menu /></el-icon>
+        </el-button>
+        <span class="page-title">{{ $route.meta.title }}</span>
+
+        <!-- Header 右侧功能区 -->
+        <div class="header-right">
+          <!-- P1: 暗色模式切换 -->
+          <el-button link class="header-btn" @click="toggleTheme" title="切换深/浅色模式">
+            <el-icon :size="18"><Sunny v-if="!isDark" /><Moon v-else /></el-icon>
+          </el-button>
+          <!-- P1: 快捷键帮助 -->
+          <el-button link class="header-btn" @click="kbHelpVisible = true" title="快捷键 (?)">
+            <el-icon :size="18"><Key /></el-icon>
+          </el-button>
+          <!-- P0: 待办角标 + 搜索 + 通知 + 收藏 -->
+          <HeaderBadges
+            ref="headerBadgesRef"
+            @search="searchVisible = true"
+            @notify="notifyVisible = !notifyVisible"
+            @todo="router.push('/approval')"
+            @favorites="favVisible = true"
+          />
+          <NotificationCenter v-model:visible="notifyVisible" />
+
+          <el-dropdown @command="onCommand">
+            <span class="user">{{ user?.realName || user?.username || '用户' }}</span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                <!-- D-DEC-302：「角色化首页」入口已下架（路由与组件保留，直接访问 /role-dashboard 仍可用）。
+                     原因＝四项 KPI 取数键与后端返回不符（恒 0）＋四项为写死的展示值（D-DEC-308），
+                     真要修等于重做整页取数与角色模型，而重做后独有内容与报表看板/流程监控大屏重叠。 -->
+                <el-dropdown-item v-if="canFlowMonitor" command="flow-monitor">流程监控大屏</el-dropdown-item>
+                <!-- G3 共享作业层新视图：同属「无 sys_menu 承载的入口页」，按各页首屏接口权限码收敛 -->
+                <el-dropdown-item v-if="canTaskPool" command="shared-pool">共享任务池（五视图）</el-dropdown-item>
+                <el-dropdown-item v-if="canFlowMonitor" command="shared-ops">共享作业控制台</el-dropdown-item>
+                <el-dropdown-item v-if="canFlowMonitor" command="task-quality">任务质量报表</el-dropdown-item>
+                <el-dropdown-item v-if="canFlowMonitor" command="flow-log">流程日志中心</el-dropdown-item>
+                <el-dropdown-item v-if="canFlowMonitor" command="handover">流程移交</el-dropdown-item>
+                <el-dropdown-item v-if="canBizProgress" command="biz-progress">业务进度看板</el-dropdown-item>
+                <el-dropdown-item divided command="my-stats">效率统计</el-dropdown-item>
+                <el-dropdown-item command="export-preview">导出预览</el-dropdown-item>
+                <el-dropdown-item command="toggle-watermark">{{ watermarkEnabled ? '关闭水印' : '开启水印' }}</el-dropdown-item>
+                <el-dropdown-item divided command="onboarding">新手引导</el-dropdown-item>
+                <el-dropdown-item command="help">帮助中心</el-dropdown-item>
+                <el-dropdown-item v-if="canMonthEnd" command="month-end">月结看板</el-dropdown-item>
+                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+      </el-header>
+
+      <!-- 面包屑导航 -->
+      <div class="breadcrumb-bar">
+        <el-breadcrumb :separator-icon="ArrowRight">
+          <el-breadcrumb-item :to="{ path: '/dashboard' }">首页</el-breadcrumb-item>
+          <el-breadcrumb-item v-if="domainLabel">{{ domainLabel }}</el-breadcrumb-item>
+          <el-breadcrumb-item>{{ $route.meta.title || '当前页' }}</el-breadcrumb-item>
+        </el-breadcrumb>
+      </div>
+
+      <!-- 移动端抽屉菜单 -->
+      <el-drawer v-model="drawer" direction="ltr" size="70%" :with-header="false" class="mobile-drawer">
+        <div class="drawer-logo"><img class="drawer-logo-img" src="../../assets/FSSC_LOGO.png" alt="FSSC 财务共享" /></div>
+        <el-menu :default-active="$route.path" router background-color="#fff" @select="drawer = false">
+          <MenuTree :nodes="menuTree" />
+        </el-menu>
+      </el-drawer>
+
+      <el-main class="main">
+        <!-- :key=$route.path：防止"同组件不同菜单"（如 银行账户/金融机构 等共用 MasterConfigTable）
+             复用同一实例导致旧数据残留、新页签字段全空（2026-09-17 用户实测踩坑） -->
+        <router-view :key="$route.path" />
+      </el-main>
+    </el-container>
+
+    <!-- 公告弹窗提醒 -->
+    <el-dialog v-model="noticeVisible" title="系统公告" width="520px" :close-on-click-modal="false">
+      <template v-if="currentNotice">
+        <h3 style="margin: 0 0 8px">{{ currentNotice.noticeTitle }}</h3>
+        <div style="color: #666; font-size: 13px; margin-bottom: 12px">
+          发布时间：{{ currentNotice.publishTime }}
+        </div>
+        <div style="white-space: pre-wrap; line-height: 1.6">{{ currentNotice.noticeContent }}</div>
+      </template>
+      <template #footer>
+        <el-button @click="closeNotice">关闭</el-button>
+        <el-button v-if="notices.length > 1" type="primary" @click="nextNotice">下一条 ({{ currentIdx + 1 }}/{{ notices.length }})</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- P0-1 全局搜索 Ctrl+K -->
+    <SearchCommand v-model:visible="searchVisible" />
+
+    <!-- P1-7 收藏夹 -->
+    <Favorites v-model="favVisible" ref="favoritesRef" />
+
+    <!-- P1-5 个人效率统计 -->
+    <MyStats v-model="statsVisible" />
+
+    <!-- P1-9 全局水印 -->
+    <Watermark ref="watermarkRef" :enabled="watermarkEnabled" />
+
+    <!-- P1-10 导出预览 -->
+    <ExportPreview v-model="exportVisible" :columns="exportColumns" :rows="exportRows" :title="exportTitle" />
+
+    <!-- P1-1 快捷键帮助弹窗 -->
+    <el-dialog v-model="kbHelpVisible" title="键盘快捷键" width="480px" :destroy-on-close="true">
+      <el-table :data="kbShortcuts" size="small" border empty-text="暂无数据" v-loading="loading">
+        <el-table-column prop="key" label="快捷键" width="140" />
+        <el-table-column prop="desc" label="功能说明" min-width="200" show-overflow-tooltip />
+      </el-table>
+    </el-dialog>
+
+    <!-- P2-1 新手引导 -->
+    <OnboardingGuide ref="onboardingRef" />
+
+    <!-- P2-2 上下文帮助面板 -->
+    <HelpPanel v-model:visible="helpVisible" />
+
+    <!-- P2-3 AI 智能助手 -->
+    <AIAssistant />
+
+    <!-- P2-5 操作引导气泡 -->
+    <CoachMark ref="coachMarkRef" />
+
+    <!-- R5-16 弱网降级小通知（右下角，不影响浏览） -->
+    <Transition name="net-slide">
+      <div v-if="isSlowNetwork && !netNoticeDismissed" class="net-notice" :class="degradationLevel">
+        <span class="net-notice-icon">{{ degradationLevel === 'severe' ? '' : '' }}</span>
+        <span class="net-notice-text">
+          {{ degradationLevel === 'severe' ? '网络较差，已开启重度降级' : '网络较慢，已优化加载速度' }}
+        </span>
+        <span class="net-notice-close" @click="netNoticeDismissed = true">✕</span>
+      </div>
+    </Transition>
+  </el-container>
+</template>
+
+<script setup>
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowRight, Key, Sunny, Moon } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { store, getMenuTree, logout, noticeApi } from '../../api'
+import MenuTree from '../../components/MenuTree.vue'
+import HeaderBadges from '../../components/HeaderBadges.vue'
+import SearchCommand from '../../components/SearchCommand.vue'
+import NotificationCenter from '../../components/NotificationCenter.vue'
+import Favorites from '../../components/Favorites.vue'
+import MyStats from '../../components/MyStats.vue'
+import Watermark from '../../components/Watermark.vue'
+import ExportPreview from '../../components/ExportPreview.vue'
+import OnboardingGuide from '../../components/OnboardingGuide.vue'
+import HelpPanel from '../../components/HelpPanel.vue'
+import AIAssistant from '../../components/AIAssistant.vue'
+import CoachMark from '../../components/CoachMark.vue'
+import { useKeyboard } from '../../composables/useKeyboard'
+import { useTheme } from '../../composables/useTheme'
+import { useNetworkDegradation } from '../../composables/useNetworkDegradation'
+import { hasPerm } from '../../utils/perm'
+
+const route = useRoute()
+const router = useRouter()
+const user = store.user
+const drawer = ref(false)
+const isMobile = ref(false)
+const menuTree = ref([])
+const searchVisible = ref(false)
+
+// R5-16: 弱网降级
+const { isSlowNetwork, degradationLevel, degradationConfig } = useNetworkDegradation()
+const netNoticeDismissed = ref(false)
+const notifyVisible = ref(false)
+const favVisible = ref(false)
+const headerBadgesRef = ref(null)
+const favoritesRef = ref(null)
+const statsVisible = ref(false)
+const exportVisible = ref(false)
+const exportColumns = ref([])
+const exportRows = ref([])
+const exportTitle = ref('报表')
+const watermarkRef = ref(null)
+const watermarkEnabled = ref(loadWatermarkPref())
+
+function loadWatermarkPref() {
+  try { return localStorage.getItem('fssc_watermark_enabled') !== 'false' } catch { return true }
+}
+const kbHelpVisible = ref(false)
+const loading = ref(false)
+const helpVisible = ref(false)
+const onboardingRef = ref(null)
+const coachMarkRef = ref(null)
+
+// P1-8 暗色模式
+const { isDark, toggle: toggleTheme } = useTheme()
+
+/**
+ * 全局入口页权限门控（2026-09-16 P0 权限治理）
+ *
+ * 用户下拉菜单里的「流程监控大屏」「月结看板」是**没有菜单承载**的入口页
+ * （sys_menu 中无任何 path/component 指向它们），因此不受菜单权限体系约束。
+ * 此前对全员无条件渲染 → 无权限者点进去即弹「缺少权限：xxx」。
+ * 这里按各自页面首屏接口的真实权限码收敛。
+ */
+const canFlowMonitor = hasPerm('wf:instance:list')
+const canMonthEnd = hasPerm('gl:monthclose:list')
+// G3 任务池五视图是业务角色日常工作台，权限码为 wf:task:list（与 /wf/pool/mine 同族）
+const canTaskPool = hasPerm('wf:task:list')
+// D-DEC-303：业务进度看板的两条取数腿分别是 dashboard:view（付款进度）与 exp:bill:list（在途单量），
+// 两码皆无者进来只会看到空卡，故入口同样按首屏接口权限码收敛。
+const canBizProgress = hasPerm('dashboard:view') || hasPerm('exp:bill:list')
+
+// P1-1 快捷键（Alt+4 仅在持 wf:instance:list 时展示，避免"按了没反应"的困惑）
+const kbShortcuts = computed(() => [
+  { key: 'Ctrl + K', desc: '全局搜索' },
+  { key: 'Ctrl + /', desc: '快捷键帮助' },
+  { key: 'Ctrl + D', desc: '收藏当前页' },
+  { key: 'Ctrl + B', desc: '收藏夹' },
+  { key: 'Ctrl + E', desc: '效率统计' },
+  { key: 'Ctrl + H', desc: '切换深/浅色模式' },
+  { key: 'Alt + 1', desc: '首页 Dashboard' },
+  { key: 'Alt + 2', desc: '我的审批' },
+  { key: 'Alt + 3', desc: '任务池' },
+  ...(canFlowMonitor ? [{ key: 'Alt + 4', desc: '流程监控大屏' }] : []),
+  { key: 'F1', desc: '帮助中心' },
+  { key: 'Esc', desc: '关闭弹窗/抽屉' },
+])
+
+useKeyboard({
+  'ctrl+/': () => { kbHelpVisible.value = true },
+  'ctrl+d': () => { addCurrentPageToFav() },
+  'ctrl+b': () => { favVisible.value = true },
+  'ctrl+e': () => { statsVisible.value = true },
+  'ctrl+h': () => { toggleTheme() },
+  'f1': () => { helpVisible.value = true },
+  'alt+1': () => { router.push('/dashboard') },
+  'alt+2': () => { router.push('/approval') },
+  'alt+3': () => { router.push('/sharing/task-pool') },
+  'alt+4': () => { if (canFlowMonitor) router.push('/flow-monitor') },
+})
+
+function addCurrentPageToFav() {
+  if (!favoritesRef.value) return
+  favoritesRef.value.addFavorite({
+    id: 'menu-' + route.path,
+    type: 'menu',
+    name: route.meta.title || route.path,
+    path: route.path,
+  })
+  ElMessage.success('已收藏当前页面')
+}
+
+// 面包屑：路径首段 → 业务域标签
+const PATH_DOMAIN_MAP = {
+  expense: '费用报账', approval: '费用报账', wf: '费用报账',
+  pay: '付款与对账', 'corp-pay': '付款与对账', contract: '付款与对账',
+  purchase: '采购管理', invoice: '发票管理',
+  sharing: '共享运营',
+  system: '系统管理',
+  budget: '预算管理', asset: '财务核算', treasury: '财务核算',
+  receivable: '财务核算', archive: '财务核算',
+  report: '管理报表', reports: '管理报表',
+  op: '财务核算', glex: '财务核算', bank: '财务核算', customer: '主数据管理',
+}
+const domainLabel = computed(() => {
+  const seg = route.path.split('/')[1]
+  return PATH_DOMAIN_MAP[seg] || ''
+})
+
+// 公告弹窗
+const noticeVisible = ref(false)
+const notices = ref([])
+const currentIdx = ref(0)
+const currentNotice = computed(() => notices.value[currentIdx.value] || null)
+
+function closeNotice() {
+  noticeVisible.value = false
+  notices.value = []
+  currentIdx.value = 0
+}
+function nextNotice() {
+  if (currentIdx.value < notices.value.length - 1) {
+    currentIdx.value++
+  } else {
+    closeNotice()
+  }
+}
+
+const mq = window.matchMedia('(max-width: 767px)')
+function onMq(e) { isMobile.value = e.matches }
+
+onMounted(async () => {
+  isMobile.value = mq.matches
+  mq.addEventListener('change', onMq)
+  try {
+    const raw = await getMenuTree()
+    menuTree.value = raw
+  } catch (e) {
+    // 菜单树拉取失败不阻塞页面
+    console.warn('菜单树加载失败', e.message)
+  }
+  // 加载公告弹窗
+  try {
+    const list = await noticeApi.active()
+    if (list && list.length > 0) {
+      notices.value = list
+      currentIdx.value = 0
+      noticeVisible.value = true
+    }
+  } catch (e) {
+    // 公告加载失败不阻塞
+    console.warn('公告加载失败', e.message)
+  }
+  // 新手引导仅从下拉菜单手动触发，不自动弹出（全屏遮罩会阻断用户操作）
+})
+onBeforeUnmount(() => mq.removeEventListener('change', onMq))
+
+async function onCommand(cmd) {
+  if (cmd === 'logout') {
+    try { await logout() } catch (e) { /* 忽略后端退出失败，前端仍清理 */ }
+    store.logout()
+    router.push('/login')
+  } else if (cmd === 'profile') {
+    router.push('/profile')
+  } else if (cmd === 'flow-monitor') {
+    router.push('/flow-monitor')
+  } else if (cmd === 'shared-pool') {
+    router.push('/sharing/shared-pool')
+  } else if (cmd === 'shared-ops') {
+    router.push('/sharing/shared-ops')
+  } else if (cmd === 'task-quality') {
+    router.push('/sharing/task-quality')
+  } else if (cmd === 'flow-log') {
+    router.push('/flow-center/log')
+  } else if (cmd === 'handover') {
+    router.push('/flow-center/handover')
+  } else if (cmd === 'biz-progress') {
+    router.push('/biz-progress')
+  } else if (cmd === 'my-stats') {
+    statsVisible.value = true
+  } else if (cmd === 'export-preview') {
+    exportVisible.value = true
+  } else if (cmd === 'toggle-watermark') {
+    watermarkEnabled.value = !watermarkEnabled.value
+    localStorage.setItem('fssc_watermark_enabled', String(watermarkEnabled.value))
+    ElMessage.success(watermarkEnabled.value ? '水印已开启' : '水印已关闭')
+  } else if (cmd === 'onboarding') {
+    onboardingRef.value?.start()
+  } else if (cmd === 'help') {
+    helpVisible.value = true
+  } else if (cmd === 'month-end') {
+    router.push('/month-end')
+  }
+}
+</script>
+
+<style scoped>
+.layout { height: 100%; }
+.aside { background: #1f2d3d; }
+.desktop-menu { display: none; }
+.logo { height: 56px; display: flex; align-items: center; justify-content: center; }
+.logo-img { height: 40px; border-radius: 8px; object-fit: contain; }
+.aside :deep(.el-menu) { border-right: none; }
+.header {
+  display: flex; align-items: center; background: #fff;
+  border-bottom: 1px solid #e4e7ed; height: 56px; padding: 0 16px; gap: 8px;
+}
+.page-title { font-size: 16px; font-weight: 600; flex: 1; }
+.header-right { display: flex; align-items: center; gap: 8px; }
+.header-btn { color: #606266; }
+.header-btn:hover { color: #409eff; }
+.user { cursor: pointer; color: #409eff; }
+.breadcrumb-bar {
+  padding: 8px 16px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #e4e7ed;
+}
+.main { padding: 16px; }
+.drawer-logo { padding: 12px 16px; }
+.drawer-logo-img { height: 40px; object-fit: contain; }
+
+/* ≥768px 显示侧边栏 */
+@media (min-width: 768px) {
+  .desktop-menu { display: block; }
+}
+@media (max-width: 767px) {
+  .main { padding: 10px; }
+  .page-title { font-size: 15px; }
+}
+
+/* R5-16 弱网降级小通知 */
+.net-notice {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #856404;
+  background: #fff3cd;
+  border: 1px solid #ffe082;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  max-width: 320px;
+}
+.net-notice.severe {
+  color: #721c24;
+  background: #f8d7da;
+  border-color: #f5c6cb;
+}
+.net-notice-icon { font-size: 15px; }
+.net-notice-text { flex: 1; line-height: 1.4; }
+.net-notice-close {
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 14px;
+}
+.net-notice-close:hover { opacity: 1; }
+.net-slide-enter-active, .net-slide-leave-active {
+  transition: all 0.3s ease;
+}
+.net-slide-enter-from, .net-slide-leave-to {
+  opacity: 0;
+  transform: translateX(40px);
+}
+</style>

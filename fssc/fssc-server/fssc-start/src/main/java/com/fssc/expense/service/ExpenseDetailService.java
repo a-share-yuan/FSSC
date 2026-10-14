@@ -1,0 +1,600 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+package com.fssc.expense.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
+import com.fssc.budget.service.BudgetService;
+import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.entity.ExpBillLine;
+import com.fssc.expense.entity.ExpBillRelation;
+import com.fssc.expense.entity.ExpLoanOffset;
+import com.fssc.expense.entity.ExpTravel;
+import com.fssc.expense.mapper.ExpBillLineMapper;
+import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.expense.mapper.ExpBillRelationMapper;
+import com.fssc.expense.mapper.ExpLoanOffsetMapper;
+import com.fssc.expense.mapper.ExpTravelMapper;
+import com.fssc.framework.tenant.TenantContext;
+import com.fssc.masterdata.entity.MdExpenseStandard;
+import com.fssc.masterdata.mapper.MdExpenseStandardMapper;
+import com.fssc.system.entity.SysConfig;
+import com.fssc.system.mapper.SysConfigMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+/**
+ * 单据细分服务：差旅明细（exp_travel）、借款冲抵（exp_loan_offset）、单据关联（exp_bill_relation）。
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ExpenseDetailService {
+
+    private final ExpTravelMapper expTravelMapper;
+    private final ExpLoanOffsetMapper expLoanOffsetMapper;
+    private final ExpBillRelationMapper expBillRelationMapper;
+    private final ExpBillMapper expBillMapper;
+    private final ExpBillLineMapper expBillLineMapper;
+    private final MdExpenseStandardMapper mdExpenseStandardMapper;
+    private final SysConfigMapper sysConfigMapper;
+    private final BudgetService budgetService;
+    private final com.fssc.framework.org.OrgGuard orgGuard;
+
+    // ---------- 差旅明细 ----------
+
+    /** 保存差旅行（整表替换，仅 DRAFT） */
+    @Transactional(rollbackFor = Exception.class)
+    public void saveTravels(Long billId, List<ExpTravel> travels) {
+        ExpBill bill = requireBill(billId);
+        if (!"DRAFT".equals(bill.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿可维护差旅行");
+        }
+        expTravelMapper.delete(new LambdaQueryWrapper<ExpTravel>().eq(ExpTravel::getBillId, billId));
+        // 境外凭证合规⑤（V1.3.14）：开关关闭时补贴超标并入个税标记跳过（回退旧行为）
+        boolean overseasCompliance = isOverseasComplianceEnabled();
+        if (travels != null) {
+            int no = 1;
+            int allowanceAutoCount = 0;
+            for (ExpTravel t : travels) {
+                t.setId(null);
+                t.setBillId(billId);
+                t.setLineNo(no++);
+                // 海外报账③（V1.3.10）：days 缺失按 起止日期含首末日全算 自动补
+                // （end − begin + 1；半天/比例折算法留待配置化扩展）
+                t.setDays(AbroadStandardRule.resolveDays(t.getDays(), t.getBeginDate(), t.getEndDate()));
+                // 补贴按天自动核算：days 有值且补贴未填 → allowance = days × 境外补贴标准 allowance_daily；
+                // 查不到补贴标准则跳过不报错（保持人工填报口径）
+                BigDecimal allowanceDaily = null;
+                if (t.getDays() != null && t.getDays().compareTo(BigDecimal.ZERO) > 0
+                        && nvl(t.getAllowanceAmount()).compareTo(BigDecimal.ZERO) == 0) {
+                    allowanceDaily = findAllowanceDaily(billId);
+                    BigDecimal auto = AbroadStandardRule.calcAllowance(t.getDays(), allowanceDaily);
+                    if (auto != null) {
+                        t.setAllowanceAmount(auto);
+                        allowanceAutoCount++;
+                    }
+                }
+                // 境外凭证合规⑤（V1.3.14）：境外差旅行（destCountry 非空且非国内）补贴超过 标准/日×天数 时，
+                // 超标部分并入工资薪金计税 → allowance_taxable=1（19号公告+个税口径）
+                if (overseasCompliance && t.getDestCountry() != null && !t.getDestCountry().isBlank()
+                        && !AbroadStandardRule.isDomestic(t.getDestCountry())) {
+                    if (allowanceDaily == null) {
+                        allowanceDaily = findAllowanceDaily(billId);
+                    }
+                    BigDecimal over = OverseasVoucherRule.allowanceTaxable(
+                            t.getAllowanceAmount(), allowanceDaily, t.getDays());
+                    if (over.compareTo(BigDecimal.ZERO) > 0) {
+                        t.setAllowanceTaxable(1);
+                        log.info("差旅行补贴超标 billId={} 行程行={}（{}）超标 {} 元，将并入工资薪金计税",
+                                billId, t.getLineNo(), t.getDestCountry(), over);
+                    } else {
+                        t.setAllowanceTaxable(0);
+                    }
+                }
+                if (t.getTotalAmount() == null) {
+                    // D-V4R-33：兜底合计原先只加 住宿+长途交通+补贴+其他，漏了市内交通费
+                    // ——前端「小计」一直把这栏算进去，两边不一致时草稿重开就会出现"分量 5,400 / 合计 6,000"。
+                    BigDecimal total = nvl(t.getHotelAmount()).add(nvl(t.getTrafficAmount()))
+                            .add(nvl(t.getAllowanceAmount())).add(nvl(t.getLocalTrafficAmount()))
+                            .add(nvl(t.getOtherAmount()));
+                    t.setTotalAmount(total);
+                }
+                expTravelMapper.insert(t);
+            }
+            if (allowanceAutoCount > 0) {
+                log.info("差旅行补贴按天自动核算 billId={} 共 {} 行按 天数×补贴/日 生成出差补贴", billId, allowanceAutoCount);
+            }
+        }
+    }
+
+    /**
+     * 取补贴/日标准（allowance_daily）：优先匹配本单费用明细行 itemId 的 abroad=1 补贴标准，
+     * 无则退取本租户任一 abroad=1 且 allowance_daily 非空的标准（优先级高者）；均无返回 null。
+     */
+    private BigDecimal findAllowanceDaily(Long billId) {
+        List<Long> itemIds = expBillLineMapper.selectList(
+                        new LambdaQueryWrapper<ExpBillLine>().eq(ExpBillLine::getBillId, billId))
+                .stream().map(ExpBillLine::getItemId).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        MdExpenseStandard std = selectAllowanceStandard(itemIds.isEmpty() ? null : itemIds);
+        if (std == null && !itemIds.isEmpty()) {
+            std = selectAllowanceStandard(null); // itemId 无匹配 → 本租户任一 abroad=1 补贴标准
+        }
+        return std == null ? null : std.getAllowanceDaily();
+    }
+
+    private MdExpenseStandard selectAllowanceStandard(List<Long> itemIds) {
+        LambdaQueryWrapper<MdExpenseStandard> w = new LambdaQueryWrapper<>();
+        w.eq(MdExpenseStandard::getAbroad, 1).isNotNull(MdExpenseStandard::getAllowanceDaily);
+        if (itemIds != null) {
+            w.in(MdExpenseStandard::getItemId, itemIds);
+        }
+        w.orderByDesc(MdExpenseStandard::getPriority).last("limit 1");
+        return mdExpenseStandardMapper.selectOne(w);
+    }
+
+    /**
+     * 境外凭证合规⑤总开关：sys_config overseas.compliance_enabled（V1.3.14 种子=1，租户拦截器自动过滤）。
+     * 无记录/读取异常一律视为开启（参照 ExpenseBillService），值=0 时回退旧行为。
+     */
+    private boolean isOverseasComplianceEnabled() {
+        try {
+            SysConfig c = sysConfigMapper.selectOne(new LambdaQueryWrapper<SysConfig>()
+                    .eq(SysConfig::getConfigKey, "overseas.compliance_enabled")
+                    .last("limit 1"));
+            return c == null || c.getConfigValue() == null || !"0".equals(c.getConfigValue().trim());
+        } catch (Exception e) {
+            log.warn("读取 overseas.compliance_enabled 失败，默认开启境外凭证合规", e);
+            return true;
+        }
+    }
+
+    public List<ExpTravel> travels(Long billId) {
+        ExpBill bill = expBillMapper.selectById(billId);
+        if (bill != null) {
+            orgGuard.assertVisible(bill.getCompanyId(), bill.getApplyUserId());
+        }
+        return expTravelMapper.selectList(new LambdaQueryWrapper<ExpTravel>()
+                .eq(ExpTravel::getBillId, billId).orderByAsc(ExpTravel::getLineNo));
+    }
+
+    // ---------- 借款冲抵 ----------
+
+    /**
+     * 添加借款冲抵：记录冲抵 + 更新单据 offset_amount/payable_amount。
+     * P1-强制冲销（#2 借款余额台账）：当指定 loanBillId（借款单）时，校验冲抵金额 ≤ 该借款单可用余额。
+     *
+     * <p><b>D-DEC-384/391（X-40 甲·①提交腿）</b>：报销冲抵（CLAIM）与还款冲抵（REPAY）<b>两腿同口径</b>，
+     * 提交期一律<b>只登记占用量</b>——载体是现列现表的
+     * {@code exp_bill_relation(LOAN_CLAIM).use_amount}，不写 {@code exp_loan_offset} 流水、
+     * 不减 {@code loan_balance}、不迁借款单状态；冲抵流水与余额减记改由审批通过腿落
+     * （{@code ExpenseWfEventListener.offsetLoansByClaim} / {@code repayLoan}），余额由那两腿按
+     * 「借款额 − Σ现存冲抵流水」<b>绝对量重算</b>（甲②），报销/还款单驳回、撤回、反审核时
+     * 在途占用自然释放或流水作废重算（甲③）。三段同波，缺一即台账失真。治的三条病灶：
+     * <ol>
+     *  <li>提单期就把台账真值扣掉 ⇒ 审批链对「是否已结清」不具控制力（D-DEC-106 同病灶的残留半条，
+     *      原 REPAY 腿即此形；本号把它与 CLAIM 腿并到同一条腿上）；</li>
+     *  <li>草稿改额只加不减 ⇒ {@code offset_amount} 翻倍、余额越改越少（本方法原「累加写表头」）；</li>
+     *  <li>报销单被驳回/撤回无人回补（{@code restoreLoanBalanceOnReject} 只管 REPAY 腿）
+     *      ⇒ 借款余额永久停在扣后值。</li>
+     * </ol>
+     *
+     * <p><b>登记人（D-DEC-391③）</b>：本方法不再 INSERT {@code exp_loan_offset}，故 {@code create_by}
+     * 的显式补写随之下移到两处通过腿——{@code repayLoan}（一直是 {@code currentUserOr(申请人)}）与
+     * {@code @TableField(fill=...)}，本仓库的 {@code FsscMetaObjectHandler} 是注解驱动填充，
+     * 不显式 set 就是 NULL（X-40 第 4 点核查结论：{@code exp_loan} 表不存在，借款余额列在
+     * {@code exp_bill.loan_balance}，其审计列由 {@code TenantAuditBase} 标了
+     * {@code fill=INSERT_UPDATE}，走 {@code updateById} 才自动填）。
+     *
+     * <p><b>已知在册残口（本号不动，勿据此认为已修）</b>：①前端「冲销借款」候选面默认额仍取
+     * {@code row.loanBalance} 账面余额、未扣在途（{@code LoanApply.vue:341}/{@code useBill.js:759}），
+     * 第二张草稿勾满额会走到本方法被 {@link #registerLoanOccupancy} 的服务端闸拒掉；
+     * ②前端删行只 splice 本地数组、服务端无删除端点，旧登记不撤销 ⇒ 在途占用会锁在关系行上，
+     * 直到该单被驳回/撤回/作废才释放。
+     *
+     * @return 关系行 id（在途登记的载体；不再是 exp_loan_offset id）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long addLoanOffset(Long billId, ExpLoanOffset offset) {
+        ExpBill bill = requireBill(billId);
+        if (!"DRAFT".equals(bill.getStatus()) && !"APPROVING".equals(bill.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "当前状态不可冲抵借款: " + bill.getStatus());
+        }
+        // 冲抵金额必填且为正
+        if (offset.getOffsetAmount() == null || offset.getOffsetAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "冲抵金额必须大于 0");
+        }
+        offset.setOffsetType(offset.getOffsetType() == null ? "CLAIM" : offset.getOffsetType());
+        // CLAIM／REPAY 同走占用登记：入参上的 offsetType 只是界面语义，提交期不再落流水，
+        // 真正的流水类型由审批通过腿按单据 bill_type 裁定（REPAY 单→repayLoan、CLAIM 单→offsetLoansByClaim）。
+        return registerLoanOccupancy(bill, offset);
+    }
+
+    /**
+     * 借款冲抵的在途登记（D-DEC-384/391 甲①，CLAIM 与 REPAY 共用）：占用量写
+     * {@code exp_bill_relation(LOAN_CLAIM).use_amount}，幂等 upsert；
+     * 借款单余额与冲抵流水一律留给审批通过腿，提单期不动台账。
+     *
+     * <p>可冲余额 = 借款单账面余额 − 其他<b>在途</b>（DRAFT/APPROVING）报销/还款单已占用量。
+     * 余额不再于提单期扣减，故必须在服务端自己扣在途，否则同一笔在贷余额可被任意多张草稿重复全额勾走
+     * ——这一句就是 R-18「还款/冲抵超额」的实际拦闸点（本方法末段）。
+     *
+     * <p>{@code relation_type} 沿用 {@code LOAN_CLAIM}：还款冲销也挂这个类型是 D-DEC-393 已在册的
+     * 语义复用缺陷（枚举里没有还款型关系），本号不扩词表、只按同一载体取数。
+     *
+     * @return 关系行 id（在途登记的载体；不再是 exp_loan_offset id）
+     */
+    private Long registerLoanOccupancy(ExpBill bill, ExpLoanOffset offset) {
+        if (offset.getLoanBillId() == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "冲抵借款必须指定借款单");
+        }
+        ExpBill loan = expBillMapper.selectById(offset.getLoanBillId());
+        if (loan == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "借款单不存在: " + offset.getLoanBillId());
+        }
+        if (!"LOAN".equals(loan.getBillType())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "冲抵对象不是借款单: " + offset.getLoanBillId());
+        }
+        if (bill.getApplyUserId() != null && !bill.getApplyUserId().equals(loan.getApplyUserId())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "只能冲销本人名下的借款单");
+        }
+        offset.setLoanBillNo(loan.getBillNo());
+        BigDecimal bookBal = nvl(loan.getLoanBalance());
+        BigDecimal transit = transitLoanOccupancy(loan.getId(), bill.getId());
+        BigDecimal avail = bookBal.subtract(transit);
+        if (offset.getOffsetAmount().compareTo(avail) > 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "冲抵金额(" + offset.getOffsetAmount()
+                    + ")超过借款单可冲抵余额(" + avail + ")：账面余额 " + bookBal
+                    + "，其中在途报销/还款单已占用 " + transit);
+        }
+        ExpBillRelation exist = expBillRelationMapper.selectOne(new LambdaQueryWrapper<ExpBillRelation>()
+                .eq(ExpBillRelation::getSourceBillId, loan.getId())
+                .eq(ExpBillRelation::getTargetBillId, bill.getId())
+                .eq(ExpBillRelation::getRelationType, "LOAN_CLAIM")
+                .last("limit 1"));
+        BigDecimal booked = exist == null ? BigDecimal.ZERO : nvl(exist.getUseAmount());
+        Long relId;
+        if (exist == null) {
+            ExpBillRelation r = new ExpBillRelation();
+            r.setTenantId(TenantContext.getTenantId());
+            r.setSourceBillId(loan.getId());
+            r.setTargetBillId(bill.getId());
+            r.setRelationType("LOAN_CLAIM");
+            r.setUseAmount(offset.getOffsetAmount());
+            r.setCreateTime(LocalDateTime.now());
+            expBillRelationMapper.insert(r);
+            relId = r.getId();
+        } else {
+            ExpBillRelation upd = new ExpBillRelation();
+            upd.setId(exist.getId());
+            upd.setUseAmount(offset.getOffsetAmount());
+            expBillRelationMapper.updateById(upd);
+            relId = exist.getId();
+        }
+        // 表头按「本次 − 已登记」差额校正（甲①·病灶②）：同一单重复保存/改额不再无条件累加。
+        applyOffsetToHeader(bill, offset.getOffsetAmount().subtract(booked));
+        return relId;
+    }
+
+    /**
+     * 已通过的单其冲抵额已落成流水并扣进 loan_balance，不再重复扣。
+     */
+    private BigDecimal transitLoanOccupancy(Long loanBillId, Long selfBillId) {
+        List<ExpBillRelation> rels = expBillRelationMapper.selectList(new LambdaQueryWrapper<ExpBillRelation>()
+                .eq(ExpBillRelation::getSourceBillId, loanBillId)
+                .eq(ExpBillRelation::getRelationType, "LOAN_CLAIM")
+                .ne(selfBillId != null, ExpBillRelation::getTargetBillId, selfBillId));
+        BigDecimal sum = BigDecimal.ZERO;
+        for (ExpBillRelation r : rels) {
+            if (r.getTargetBillId() == null) {
+                continue;
+            }
+            ExpBill t = expBillMapper.selectById(r.getTargetBillId());
+            String st = t == null ? null : t.getStatus();
+            if ("DRAFT".equals(st) || "APPROVING".equals(st)) {
+                sum = sum.add(nvl(r.getUseAmount()));
+            }
+        }
+        return sum;
+    }
+
+    /** 冲抵额记入报销单表头：offset_amount 按差额累加、payable_amount 随之重算（借款冲抵与预付冲销共用口径）。 */
+    private void applyOffsetToHeader(ExpBill bill, BigDecimal delta) {
+        if (delta == null || delta.signum() == 0) {
+            return;
+        }
+        BigDecimal totalOffset = nvl(bill.getOffsetAmount()).add(delta);
+        ExpBill update = new ExpBill();
+        update.setId(bill.getId());
+        update.setOffsetAmount(totalOffset.signum() < 0 ? BigDecimal.ZERO : totalOffset);
+        // 应付 = 核定口径 − 冲抵。口径优先级与 ExpenseBillService.approveDeduct 保持一致：
+        // 核定付款 > 核定报销 > 申请金额（审批核减后按核定付款控制，防超付基于核定口径）
+        BigDecimal base = bill.getApprovedPayAmount() != null ? bill.getApprovedPayAmount()
+                : (bill.getApprovedAmount() != null ? bill.getApprovedAmount() : bill.getTotalAmount());
+        BigDecimal payable = nvl(base).subtract(update.getOffsetAmount());
+        update.setPayableAmount(payable.signum() < 0 ? BigDecimal.ZERO : payable);
+        expBillMapper.updateById(update);
+    }
+
+    public List<ExpLoanOffset> loanOffsets(Long billId) {
+        List<ExpLoanOffset> rows = new java.util.ArrayList<>(expLoanOffsetMapper.selectList(
+                new LambdaQueryWrapper<ExpLoanOffset>().eq(ExpLoanOffset::getBillId, billId)));
+        // D-DEC-384/391（X-40 甲①配套·回读）：报销/还款冲抵的在途量不再于提单期落流水，
+        // 草稿「编辑重提」必须从 LOAN_CLAIM 关系行把它补回来，否则冲销借款清单整块看不见。
+        // 已生效腿（审批后落的流水）优先，同一借款单不再重复补在途行。
+        // 补出来的行 offsetType 统一按 CLAIM 呈现（关系表不存类型）——两腿的提交期登记已并为同一动作，
+        // 该标签只影响回显、不影响落库，真正的流水类型由审批通过腿按单据 bill_type 裁定。
+        List<ExpBillRelation> rels = expBillRelationMapper.selectList(new LambdaQueryWrapper<ExpBillRelation>()
+                .eq(ExpBillRelation::getTargetBillId, billId)
+                .eq(ExpBillRelation::getRelationType, "LOAN_CLAIM"));
+        for (ExpBillRelation r : rels) {
+            if (r.getSourceBillId() == null) {
+                continue;
+            }
+            // 同一 (本单, 借款单) 已有流水行（CLAIM 或 REPAY 都算）＝该笔冲抵已在台账上，
+            // 关系行只是同一笔的另一面视图，再补在途行就是双份（还款单的 LOAN_CLAIM 关系即此形）。
+            boolean booked = rows.stream().anyMatch(o -> Objects.equals(o.getLoanBillId(), r.getSourceBillId()));
+            if (booked) {
+                continue;
+            }
+            ExpLoanOffset transit = new ExpLoanOffset();
+            transit.setBillId(billId);
+            transit.setLoanBillId(r.getSourceBillId());
+            transit.setOffsetAmount(nvl(r.getUseAmount()));
+            transit.setOffsetType("CLAIM");
+            transit.setRemark("在途占用（未经审批，不占台账）");
+            rows.add(transit);
+        }
+        fillTransitLoanBillNo(rows);
+        return rows;
+    }
+
+    /** 在途合成行只带借款单 id，单据号回查补齐（关系表只存 id，界面按单号展示）。 */
+    private void fillTransitLoanBillNo(List<ExpLoanOffset> rows) {
+        java.util.Set<Long> missing = rows.stream()
+                .filter(o -> o.getLoanBillNo() == null && o.getLoanBillId() != null)
+                .map(ExpLoanOffset::getLoanBillId).collect(Collectors.toSet());
+        if (missing.isEmpty()) {
+            return;
+        }
+        java.util.Map<Long, String> noById = new java.util.HashMap<>();
+        for (ExpBill b : expBillMapper.selectBatchIds(missing)) {
+            noById.put(b.getId(), b.getBillNo());
+        }
+        for (ExpLoanOffset o : rows) {
+            if (o.getLoanBillNo() == null) {
+                o.setLoanBillNo(noById.get(o.getLoanBillId()));
+            }
+        }
+    }
+
+    // ---------- 单据关联 ----------
+
+    @Transactional(rollbackFor = Exception.class)
+    public Long addRelation(Long sourceBillId, Long targetBillId, String relationType, BigDecimal useAmount) {
+        // 勾稽校验（补齐 §1.4）：单据存在性 + 占用金额合法 + 累计占用 ≤ 源单据金额
+        assertRelationUseAmount(sourceBillId, targetBillId, relationType, useAmount);
+
+        // E2E-001 修复：同源同目标同类型已存在时不重复插入（草稿重复保存场景），
+        // 仅更新占用金额，避免 LOAN_CLAIM 关系重复导致差额计算累加出错。
+        ExpBillRelation exist = expBillRelationMapper.selectOne(new LambdaQueryWrapper<ExpBillRelation>()
+                .eq(ExpBillRelation::getSourceBillId, sourceBillId)
+                .eq(ExpBillRelation::getTargetBillId, targetBillId)
+                .eq(relationType != null, ExpBillRelation::getRelationType, relationType)
+                .last("limit 1"));
+        if (exist != null) {
+            ExpBillRelation upd = new ExpBillRelation();
+            upd.setId(exist.getId());
+            if (useAmount != null) {
+                upd.setUseAmount(useAmount);
+            }
+            expBillRelationMapper.updateById(upd);
+            return exist.getId();
+        }
+
+        ExpBillRelation r = new ExpBillRelation();
+        r.setTenantId(TenantContext.getTenantId());
+        r.setSourceBillId(sourceBillId);
+        r.setTargetBillId(targetBillId);
+        r.setRelationType(relationType);
+        r.setUseAmount(useAmount);
+        r.setCreateTime(LocalDateTime.now());
+        expBillRelationMapper.insert(r);
+        return r.getId();
+    }
+
+    /**
+     * 单据关联占用校验（补齐 §1.4「累计报销占用 ≤ 申请金额」）。
+     *
+     * <p>source 为被占用方：APPLY_CLAIM=事前申请单、LOAN_CLAIM=借款单；
+     * 同一 source 允许多次被报销关联（多次报销共用一张申请单），
+     * 但 Σuse_amount 不得超过其单据金额——此前本方法直接 insert 无任何校验，
+     * 可无限关联导致超申请/超借款总额报销。
+     */
+    private void assertRelationUseAmount(Long sourceBillId, Long targetBillId,
+                                         String relationType, BigDecimal useAmount) {
+        if (sourceBillId == null || targetBillId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "关联单据ID不能为空");
+        }
+        if (sourceBillId.equals(targetBillId)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "不能关联单据自身");
+        }
+        ExpBill source = expBillMapper.selectById(sourceBillId);
+        if (source == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "源单据不存在: " + sourceBillId);
+        }
+        if (expBillMapper.selectById(targetBillId) == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "目标单据不存在: " + targetBillId);
+        }
+        if (useAmount == null) {
+            return; // 历史调用可不携带金额，跳过占用校验
+        }
+        if (useAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "占用金额必须大于 0");
+        }
+        // 累计占用（含本次）不得超出源单据金额
+        // 合规整改( ):排除本单自身在草稿保存阶段已写入的占用关联,否则提交时本单自占被重复计数,
+        // 事前申请报销永远无法提交(已占用=本次来源均为同一 target)
+        List<ExpBillRelation> existed = expBillRelationMapper.selectList(
+                new LambdaQueryWrapper<ExpBillRelation>()
+                        .eq(ExpBillRelation::getSourceBillId, sourceBillId)
+                        .eq(relationType != null, ExpBillRelation::getRelationType, relationType)
+                        .ne(targetBillId != null, ExpBillRelation::getTargetBillId, targetBillId));
+        // 合规整改( 续):仅统计在途/已批目标单的占用——草稿/已驳回/已作废单不占额度
+        // D-DEC-384/391（X-40 甲③）：WITHDRAWN（撤回）补进排除名单——撤回后单据不可复活，
+        // 但关系行按追溯口径保留，若仍计占用就会把借款/申请额度锁死在一张已终止的单上。
+        BigDecimal used = BigDecimal.ZERO;
+        for (ExpBillRelation e : existed) {
+            ExpBill t = expBillMapper.selectById(e.getTargetBillId());
+            String st = t == null || t.getStatus() == null ? "DRAFT" : t.getStatus();
+            if ("DRAFT".equals(st) || "REJECTED".equals(st) || "WITHDRAWN".equals(st)
+                    || "CANCELLED".equals(st) || "VOID".equals(st) || "CLOSED".equals(st)) {
+                continue;
+            }
+            used = used.add(nvl(e.getUseAmount()));
+        }
+        BigDecimal limit = nvl(source.getTotalAmount());
+        if (used.add(useAmount).compareTo(limit) > 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "累计占用(" + used.add(useAmount) + ")超出" + typeName(relationType) + "金额(" + limit
+                            + ")，已占用 " + used + "，本次 " + useAmount);
+        }
+    }
+
+    private static String typeName(String relationType) {
+        if ("APPLY_CLAIM".equals(relationType)) return "事前申请";
+        if ("LOAN_CLAIM".equals(relationType)) return "借款单";
+        if ("PREPAY_CLAIM".equals(relationType)) return "预付款单";
+        return "源单据";
+    }
+
+    // ---------- 预付冲销（#13） ----------
+
+    /**
+     * 预付冲销（#13）：报销单冲销预付款单（bill_type=PAY 且 bill_sub_type=PREPAY）。
+     *
+     * <p>勾稽：冲销额 &gt; 0 且 累计冲销 ≤ 预付金额（防超额冲销）；
+     * 并释放预付款占用的预算，避免"预付占用预算 + 报销再占一次"的双计。
+     *
+     * <p>此前系统仅有借款冲抵（addLoanOffset），预付款无冲销出口，
+     * 预付资金只能靠人工在报销单上备注，预算也被重复占用。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long writeOffPrepay(Long billId, Long prepayBillId, BigDecimal amount) {
+        ExpBill bill = requireBill(billId);
+        if (!"DRAFT".equals(bill.getStatus()) && !"APPROVING".equals(bill.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "当前状态不可冲销预付: " + bill.getStatus());
+        }
+        ExpBill prepay = expBillMapper.selectById(prepayBillId);
+        if (prepay == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "预付款单不存在: " + prepayBillId);
+        }
+        if (!"PAY".equals(prepay.getBillType()) || !"PREPAY".equals(prepay.getBillSubType())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "冲销对象不是预付款单(PAY/PREPAY): " + prepayBillId);
+        }
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "冲销金额必须大于 0");
+        }
+        // 累计冲销（含本次）不得超预付金额
+        List<ExpBillRelation> existed = expBillRelationMapper.selectList(
+                new LambdaQueryWrapper<ExpBillRelation>()
+                        .eq(ExpBillRelation::getSourceBillId, prepayBillId)
+                        .eq(ExpBillRelation::getRelationType, "PREPAY_CLAIM"));
+        BigDecimal used = BigDecimal.ZERO;
+        for (ExpBillRelation e : existed) {
+            used = used.add(nvl(e.getUseAmount()));
+        }
+        BigDecimal limit = nvl(prepay.getTotalAmount());
+        if (used.add(amount).compareTo(limit) > 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "冲销金额(" + amount + ")超出预付款可冲销余额(" + limit.subtract(used) + ")");
+        }
+
+        ExpBillRelation r = new ExpBillRelation();
+        r.setTenantId(TenantContext.getTenantId());
+        r.setSourceBillId(prepayBillId);
+        r.setTargetBillId(billId);
+        r.setRelationType("PREPAY_CLAIM");
+        r.setUseAmount(amount);
+        r.setCreateTime(LocalDateTime.now());
+        expBillRelationMapper.insert(r);
+
+        // 重算报销单冲抵/应付（口径与借款冲抵一致：核定付款 > 核定报销 > 申请金额）
+        BigDecimal totalOffset = nvl(bill.getOffsetAmount()).add(amount);
+        BigDecimal base = bill.getApprovedPayAmount() != null ? bill.getApprovedPayAmount()
+                : (bill.getApprovedAmount() != null ? bill.getApprovedAmount() : bill.getTotalAmount());
+        BigDecimal payable = nvl(base).subtract(totalOffset);
+        ExpBill upd = new ExpBill();
+        upd.setId(billId);
+        upd.setOffsetAmount(totalOffset);
+        upd.setPayableAmount(payable.signum() < 0 ? BigDecimal.ZERO : payable);
+        expBillMapper.updateById(upd);
+
+        // 预算：释放预付款明细行对应占用（防预付与报销双计预算）
+        List<ExpBillLine> pLines = expBillLineMapper.selectList(
+                new LambdaQueryWrapper<ExpBillLine>().eq(ExpBillLine::getBillId, prepayBillId));
+        for (ExpBillLine pl : pLines) {
+            if (pl.getBudgetItemId() != null && pl.getAmount() != null && pl.getAmount().signum() > 0) {
+                BigDecimal release = amount.min(pl.getAmount());
+                if (release.signum() > 0) {
+                    budgetService.release(pl.getBudgetItemId(), release, "EXP_PREPAY_OFFSET",
+                            billId, bill.getBillNo());
+                }
+            }
+        }
+        return r.getId();
+    }
+
+    public List<ExpBillRelation> relations(Long billId) {
+        List<ExpBillRelation> list = expBillRelationMapper.selectList(new LambdaQueryWrapper<ExpBillRelation>()
+                .eq(ExpBillRelation::getSourceBillId, billId).or()
+                .eq(ExpBillRelation::getTargetBillId, billId));
+        fillRelationBillNos(list);
+        return list;
+    }
+
+    /** 关系表只存 id：批量补源/目标单据号，草稿重开时「关联事前申请」才认得出是哪张单 */
+    private void fillRelationBillNos(List<ExpBillRelation> list) {
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (ExpBillRelation r : list) {
+            if (r.getSourceBillId() != null) ids.add(r.getSourceBillId());
+            if (r.getTargetBillId() != null) ids.add(r.getTargetBillId());
+        }
+        if (ids.isEmpty()) {
+            return;
+        }
+        java.util.Map<Long, String> noById = new java.util.HashMap<>();
+        for (ExpBill b : expBillMapper.selectBatchIds(ids)) {
+            noById.put(b.getId(), b.getBillNo());
+        }
+        for (ExpBillRelation r : list) {
+            r.setSourceBillNo(noById.get(r.getSourceBillId()));
+            r.setTargetBillNo(noById.get(r.getTargetBillId()));
+        }
+    }
+
+    // ---------- 工具 ----------
+
+    private ExpBill requireBill(Long billId) {
+        ExpBill bill = expBillMapper.selectById(billId);
+        if (bill == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "单据不存在: " + billId);
+        }
+        return bill;
+    }
+
+    private BigDecimal nvl(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
+    }
+}

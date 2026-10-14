@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_TR_PAY" targetNamespace="http://fssc">
+  <bpmn:process id="TR_PAY" name="付款执行审批流程（网银/票据档）" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:exclusiveGateway id="GW_TRP" name="支付方式分档" default="Flow_in_Task_2" />
+    <bpmn:sequenceFlow id="Flow_start_gw" sourceRef="StartEvent_1" targetRef="GW_TRP" />
+    <bpmn:userTask id="Task_2" name="付款指令编制【资金专员】" flowable:candidateGroups="FUND_STAFF" />
+    <bpmn:sequenceFlow id="Flow_in_Task_2" sourceRef="GW_TRP" targetRef="Task_2" />
+    <bpmn:userTask id="Task_3" name="基地财务经理审核【基地财务经理】" flowable:candidateGroups="BASE_FIN_MANAGER" />
+    <bpmn:sequenceFlow id="Flow_in_Task_3" sourceRef="Task_2" targetRef="Task_3" />
+    <bpmn:userTask id="Task_4" name="基地总经理审批【基地总经理】" flowable:candidateGroups="BASE_GM" />
+    <bpmn:sequenceFlow id="Flow_in_Task_4" sourceRef="Task_3" targetRef="Task_4" />
+    <bpmn:userTask id="Task_5" name="板块财务经理审核【板块财务经理】" flowable:candidateGroups="PLATE_FIN_MANAGER" />
+    <bpmn:sequenceFlow id="Flow_in_Task_5" sourceRef="Task_4" targetRef="Task_5" />
+    <bpmn:userTask id="Task_6" name="财务总监审批【财务总监】" flowable:candidateGroups="CFO" />
+    <bpmn:sequenceFlow id="Flow_in_Task_6" sourceRef="Task_5" targetRef="Task_6" />
+    <bpmn:userTask id="Task_7" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
+    <bpmn:sequenceFlow id="Flow_in_Task_7" sourceRef="Task_6" targetRef="Task_7" />
+    <bpmn:userTask id="Task_8" name="共享主管监督【共享主管】" flowable:candidateGroups="FSSC_SUPERVISOR" />
+    <bpmn:sequenceFlow id="Flow_in_Task_8" sourceRef="Task_7" targetRef="Task_8" />
+    <bpmn:userTask id="Task_9" name="网银执行与回单【资金付款岗】" flowable:candidateGroups="FUND_PAY_STAFF" />
+    <bpmn:sequenceFlow id="Flow_in_Task_9" sourceRef="Task_8" targetRef="Task_9" />
+    <bpmn:userTask id="TB_1" name="票据业务登记【资金专员】" flowable:candidateGroups="FUND_STAFF" />
+    <bpmn:sequenceFlow id="Flow_GW_TRP_TB_1" sourceRef="GW_TRP" targetRef="TB_1" name="票据档（背书/贴现/托收）"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${billType == 'TR_BILL'}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:userTask id="TB_2" name="票据财务审核【财务经理】" flowable:candidateGroups="FIN_MANAGER" />
+    <bpmn:sequenceFlow id="Flow_TB_2" sourceRef="TB_1" targetRef="TB_2" />
+    <bpmn:userTask id="TB_3" name="票据总监审批【财务总监】" flowable:candidateGroups="CFO" />
+    <bpmn:sequenceFlow id="Flow_TB_3" sourceRef="TB_2" targetRef="TB_3" />
+    <bpmn:sequenceFlow id="Flow_sgjoin_TB_3" sourceRef="TB_3" targetRef="EndEvent_1" />
+    <bpmn:userTask id="TPF_1" name="失败原因核查与重试【资金专员】" flowable:candidateGroups="FUND_STAFF" />
+    <bpmn:sequenceFlow id="Flow_GW_TRP_TPF_1" sourceRef="GW_TRP" targetRef="TPF_1" name="支付失败处理档"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${billType == 'TR_PAY_FAIL'}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_sgjoin_TPF_1" sourceRef="TPF_1" targetRef="Task_9" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="Task_9" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="TR_PAY">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="GW_TRP_di" bpmnElement="GW_TRP"><dc:Bounds x="216" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_2_di" bpmnElement="Task_2"><dc:Bounds x="316" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3"><dc:Bounds x="506" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4"><dc:Bounds x="696" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_5_di" bpmnElement="Task_5"><dc:Bounds x="886" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_6_di" bpmnElement="Task_6"><dc:Bounds x="1076" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_7_di" bpmnElement="Task_7"><dc:Bounds x="1266" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_8_di" bpmnElement="Task_8"><dc:Bounds x="1456" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_9_di" bpmnElement="Task_9"><dc:Bounds x="1646" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="TB_1_di" bpmnElement="TB_1"><dc:Bounds x="276" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="TB_2_di" bpmnElement="TB_2"><dc:Bounds x="466" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="TB_3_di" bpmnElement="TB_3"><dc:Bounds x="656" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="TPF_1_di" bpmnElement="TPF_1"><dc:Bounds x="276" y="480" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="1846" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_start_gw_di" bpmnElement="Flow_start_gw"><di:waypoint x="138" y="120" /><di:waypoint x="236" y="122" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_Task_2_di" bpmnElement="Flow_in_Task_2"><di:waypoint x="236" y="122" /><di:waypoint x="381" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_Task_3_di" bpmnElement="Flow_in_Task_3"><di:waypoint x="381" y="120" /><di:waypoint x="571" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_Task_4_di" bpmnElement="Flow_in_Task_4"><di:waypoint x="571" y="120" /><di:waypoint x="761" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_Task_5_di" bpmnElement="Flow_in_Task_5"><di:waypoint x="761" y="120" /><di:waypoint x="951" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_Task_6_di" bpmnElement="Flow_in_Task_6"><di:waypoint x="951" y="120" /><di:waypoint x="1141" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_Task_7_di" bpmnElement="Flow_in_Task_7"><di:waypoint x="1141" y="120" /><di:waypoint x="1331" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_Task_8_di" bpmnElement="Flow_in_Task_8"><di:waypoint x="1331" y="120" /><di:waypoint x="1521" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_Task_9_di" bpmnElement="Flow_in_Task_9"><di:waypoint x="1521" y="120" /><di:waypoint x="1711" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_TRP_TB_1_di" bpmnElement="Flow_GW_TRP_TB_1"><di:waypoint x="236" y="122" /><di:waypoint x="341" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_TB_2_di" bpmnElement="Flow_TB_2"><di:waypoint x="341" y="420" /><di:waypoint x="531" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_TB_3_di" bpmnElement="Flow_TB_3"><di:waypoint x="531" y="420" /><di:waypoint x="721" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_sgjoin_TB_3_di" bpmnElement="Flow_sgjoin_TB_3"><di:waypoint x="721" y="420" /><di:waypoint x="1864" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_TRP_TPF_1_di" bpmnElement="Flow_GW_TRP_TPF_1"><di:waypoint x="236" y="122" /><di:waypoint x="341" y="520" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_sgjoin_TPF_1_di" bpmnElement="Flow_sgjoin_TPF_1"><di:waypoint x="341" y="520" /><di:waypoint x="1711" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="1711" y="120" /><di:waypoint x="1864" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

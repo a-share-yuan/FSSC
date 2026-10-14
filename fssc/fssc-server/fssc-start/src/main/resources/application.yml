@@ -1,0 +1,236 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+server:
+  port: 8089
+  servlet:
+    context-path: /
+  # 维度8 STAB-01：优雅停机——停机时先停止接收新请求，等待在途请求完成（最长 30s），
+  # 避免滚动发布/重启时在途单据请求被硬切；K8s/脚本停机统一走 SIGTERM。
+  shutdown: graceful
+  
+  # JWT 权限多时 Authorization 头可能超 8KB 默认上限（CONFIG_ADMIN 类角色 300+ 权限 → token ~8.7KB → 400 Request header is too large）
+  # 注意：Spring Boot 4 已废弃 server.max-http-header-size，改名为 server.max-http-request-header-size（仅请求头）
+  max-http-request-header-size: 64KB
+
+spring:
+  application:
+    name: fssc-server
+  lifecycle:
+    # 优雅停机等待窗口（STAB-01），与 server.shutdown=graceful 配套
+    timeout-per-shutdown-phase: 30s
+  profiles:
+    active: dev
+  # 附件上传体积上限（DEV-10）：Spring multipart 在进入 Controller 前就拦请求，
+  # 未显式配置时用 Boot 默认 1MB —— 大附件会被静默拒绝且业务侧拿不到原因。
+  # 上限与 fssc.file.max-size（默认 20MB）保持一致，超限由 GlobalExceptionHandler 给出明确提示。
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 40MB
+  # 【Redis 提示】fssc.redis.enabled=false（默认）时 Boot 的 Redis 自动配置为懒连接，启动不会产生任何
+  # Redis 连接、无需 exclude；若多实例部署确认启用 Redis 后想彻底隔离 Redis 故障对启动的影响，可放开：
+  #   autoconfigure:
+  #     exclude:
+  #       - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+  # ===== 消息多渠道-邮件通知（smtp；host 为空则邮件渠道自动禁用）=====
+  mail:
+    host: ""        # 如 smtp.qq.com / smtp.exmail.qq.com
+    port: 465
+    username: ""
+    password: ""
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: true
+
+# ===== OpenAPI / Swagger UI（springdoc-openapi 3.1.0，Boot4 兼容线）=====
+# P2：文档默认匿名放行（开发/联调）；生产设置 FSSC_OPENAPI_PUBLIC=false 后需携带 Token，
+#     或设置 FSSC_OPENAPI_ENABLED=false 直接关闭文档端点。
+springdoc:
+  api-docs:
+    enabled: ${FSSC_OPENAPI_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${FSSC_OPENAPI_ENABLED:true}
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+  # 只扫描业务/框架控制器包，避免 common POJO 全量进文档
+  packages-to-scan: com.fssc
+  group-configs:
+    - group: tenant
+      display-name: 租户端 API
+      packages-to-scan: com.fssc
+    - group: platform
+      display-name: 平台端 API
+      packages-to-scan: com.fssc.platform
+
+# ===== P0-B1 可观测性（Actuator + Micrometer）=====
+# 免鉴权探活：/actuator/health（聚合）、/actuator/health/liveness、/actuator/health/readiness
+#   —— 这三个路径已在 JwtAuthFilter 白名单放行，K8s 探针 / SLB / 监控可直接调用，无需 Token。
+# 指标：/actuator/prometheus（Prometheus 抓取）、/actuator/metrics（人工排查）。
+#   —— 这两个路径【不】在白名单，需携带有效 Token 访问：指标含接口面与容量信息，不对公网匿名开放。
+# 安全：env / beans / configprops / heapdump / threaddump / shutdown 一律不暴露（防配置与内存泄漏）。
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      # 明细（各组件状态）直接展示：与免鉴权的 /api/health 口径一致，且明细只含 UP/DOWN 不含口令等敏感值。
+      # 注：本项目的鉴权是自研 JwtAuthFilter，Actuator 无法感知"已登录"，故 when-authorized 永不生效。
+      show-details: always
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    #  两个必须显式关闭的探测项，否则 /actuator/health 恒为 DOWN（组件未启用 ≠ 故障）：
+    #  redis：spring-boot-starter-data-redis 在类路径上就会注册 RedisHealthIndicator，
+    #         而单机部署 fssc.redis.enabled=false 不连 Redis → 误判 DOWN。
+    #         多实例部署启用 Redis 后，请把此项改为 true 纳入健康检查。
+    #  mail ：spring.mail.host 为空串时 JavaMailSender 仍被装配 → MailHealthIndicator 连接失败 → DOWN。
+    #         生产配置 SMTP 后如需纳入健康检查，把此项改为 true。
+    redis:
+      enabled: false
+    mail:
+      enabled: false
+
+# /actuator/info 内容（供发布核对版本）
+info:
+  app:
+    name: fssc-server
+    version: 1.0.0
+    encoding: UTF-8
+    java: 17
+
+# 自定义配置
+fssc:
+  # 批次执行打款成功后按收款方归集核销 APPROVED 计划：paid_amount 累加、全额置 DONE，
+  # 台账 op_plan_paid_log（batch_no+plan_id 唯一，重试幂等）。false 可整体关闭（回退用）。
+  plan-writeback:
+    enabled: true
+  # ===== 流程引擎（workflow 包）=====
+  wf:
+    # BPMN 仓库化根目录（G3-4）：wf_model.bpmn_xml 的版本快照、latest 与发布 diff 落在这里。
+    # 指向代码仓库子目录（如 D:/SourceCode/Ashare/bpmn-repo 或部署机上的仓库工作副本）后一起 git 提交，
+    # 流程设计就获得了 review/回溯能力；留默认值 ./bpmn-repo 时落在进程工作目录，仅本地留痕。
+    # 全量导出：POST /api/tenant/wf/designer/export-repo（发布动作会自动补写单模型快照）。
+    bpmn-repo-dir: ${FSSC_BPMN_REPO_DIR:./bpmn-repo}
+    # Flowable ACT_HI_* 历史保留月数（超期由每周日 03:00 的归档任务清理，业务台账 wf_* 不清）
+    history-retention-months: 6
+  # ===== 分布式状态可插拔（framework/spi/DistributedState：主数据缓存/登录防刷计数/调度锁）=====
+  # false 或缺省：进程内实现（单机行为与历史完全一致，调度锁走 MySQL GET_LOCK）；
+  # 多实例部署置 true，并配置 spring.data.redis.host / spring.data.redis.port（或环境变量
+  # SPRING_DATA_REDIS_HOST / SPRING_DATA_REDIS_PORT）——缓存/限流/调度锁全部转 Redis。
+  redis:
+    enabled: false
+  # ===== OCR 通道可插拔（image/channel/OcrChannel SPI）=====
+  # gateway（默认）：发票能力网关 InvoiceGateway（独立闭源服务，默认端口 8096），
+  #   发票 OCR 识别默认走自家封装 API；端点/密钥/开关见下方顶层 invoice.gateway 块，
+  #   租户级即时覆盖走「系统设置→OCR通道配置」（sys_config ocr.channel / invoice.gateway.*）。
+  #   整体回退：invoice.gateway.enabled=false（或 fssc.gateway.enabled=false）。
+  # mock：确定性模拟票面（原 MockOcrProvider 逻辑收编），演示/冒烟专用，需显式配置 ocr.channel=mock；
+  # http：通用 HTTP POST 通道，接入任意真引擎（百度/腾讯/开灵等）只需在「系统设置→OCR通道配置」
+  #   配置 sys_config：ocr.api.url（识别接口地址）/ ocr.api.token（Bearer 令牌）/
+  #   ocr.api.mapping（响应字段映射 JSON，留空用内置百度式默认），无需改代码、改配置免重启。
+  # paddle：本地 PaddleOCR 微服务通道（kb_ocr_server.py，图片发票真识别 DF2-06），
+  #   端点 sys_config ocr.paddle.url（默认 http://127.0.0.1:8087/invoice_ocr），
+  #   响应即 fssc 票面结构无需映射；OCR 与应用同机部署（127.0.0.1 回环私连）。
+  ocr:
+    channel: gateway
+  # 发票能力网关在 FSSC 侧的总开关（OCR 通道 + 定时验真默认腿共用）。
+  # false ⇒ 识别退回 ocr.channel 的其余取值、验真退回「无 ENABLED 外部配置即不判定」的旧口径。
+  gateway:
+    enabled: ${INVOICE_GATEWAY_ENABLED:true}
+  # ===== LinkU Webhook 回调共享密钥（P0-1 回调对接）=====
+  # 与 BCP 侧 FSSC_LINKU_CALLBACK_SECRET 保持完全一致。
+  # 为空（未配置）时 FSSC 直接拒绝所有 linku-* 回调（fail-fast，绝不静默放行）。
+  linku-callback:
+    secret: ${FSSC_LINKU_CALLBACK_SECRET:}
+  jwt:
+    # 密钥外置：默认值仅供 dev/演示使用；生产环境必须通过环境变量 FSSC_JWT_SECRET 注入 >= 32 字节强随机密钥。
+    # 非 dev profile 且仍为默认值时，TokenService 启动自检会 fail-fast 拒绝启动。
+    # 【多实例/多服务一致性】主域与各域服务（如未来的影像档案服务）必须注入完全相同的密钥，
+    # 否则 A 服务签发的令牌在 B 服务验签失败，表现为"刚登录就被踢"。建议统一由 KMS/配置中心下发。
+    secret: ${FSSC_JWT_SECRET:fssc-default-secret-please-change-32bytes!!}
+    expire-seconds: 7200
+  # ===== 登录图形验证码（C-3 本体已实现：com.fssc.auth.CaptchaService / CaptchaTriggerService / CaptchaController）=====
+  # captcha-enabled —— 总开关（是否启用"失败阈值后的验证码校验"），默认 false 不动：
+  #   false = 登录链完全不介入验证码（01 册冒烟脚本 S1-01~S1-25 与演示的程序化登录零影响）；
+  #   true  = 仅当同一身份（租户 tenantCode+账号 / 平台 PLATFORM+账号）连续「凭据失败」累计达到
+  #           captcha-fail-threshold 之后，后续登录才必须携带 captchaId + captchaCode；
+  #           登录成功即清零，5 分钟统计窗口与 LoginGuardService 的失败锁定同源同窗口
+  #           （锁定阈值仍为 5 次/15 分钟，高于验证码阈值 3，两者不冲突：第 3、4 次要验证码，第 5 次锁定）。
+  # captcha-fail-threshold —— 触发验证码的连续失败次数；代码注解默认 3，本键缺失时取 3。
+  # captcha-debug-text —— 仅联调/自动化用：true 时 GET /api/auth/captcha 额外回传图片明文。
+  #   生产与演练必须 false（等于验证码形同虚设）。
+  # 下发端点：GET /api/auth/captcha（匿名，JwtAuthFilter 白名单 /api/auth/**）→
+  #   data = { captchaId, image(base64 PNG dataURL) }；一次性，校验过或过期即失效（防重放），TTL 120s。
+  # 错误码：4011 = 需要图形验证码（未携带或跨过阈值那一拍），4012 = 验证码错误/已失效。
+  login:
+    # C-3 生产口径切换（10-07 构建窗）：原值 false → 新值 true；回滚值 false（改此行即回滚，无需改码）。
+    # 生效后果：同一身份连续 3 次「凭据失败」后，登录必须携带 captchaId + captchaCode（4011/4012），
+    # 成功即清零；未达阈值的正常登录链完全不介入，01 册冒烟 25 项的程序化登录不受影响。
+    captcha-enabled: true
+    captcha-fail-threshold: 3
+    captcha-debug-text: false
+  file:
+    # 上传文件大小限制（字节），默认 20MB
+    max-size: 20971520
+    # 允许的扩展名白名单（逗号分隔），空则允许所有
+    allowed-extensions: jpg,jpeg,png,gif,bmp,webp,pdf,ofd,xml,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar
+    # ===== 存储设计（多环境部署可覆盖，代码不硬编码路径）=====
+    # 存储根目录（本地磁盘根；生产可映射网络盘/对象存储挂载点）
+    local-root: ./data/files
+    # 存储区域逻辑隔离（相对 local-root 的子目录）：
+    #   temp    临时附件存储区（草稿单据）
+    #   business 业务正式影像存储区（审批中单据）
+    #   archive 归档档案存储区（已归档会计档案）
+    zones:
+      temp: temp
+      business: business
+      archive: archive
+  # 自助注册开关（默认关闭，财务规范要求仅管理员邀请）
+  self-registration:
+    enabled: false
+  # R5-D-303：租户管理员初始口令不写死在代码与前端，改由环境变量一次性注入。
+  # 留空＝fail-closed：「租户审核开通」会在改状态之前被拦截（宁可用一把没人知道的口令不开通）。
+  tenant:
+    init-admin-pwd: ${FSSC_TENANT_INIT_ADMIN_PWD:}
+  # 消息多渠道-企业微信（站内信始终启用；wecom-webhook 空则不启用企微渠道）
+  notify:
+    wecom-webhook: ""
+    # ===== P0-B1 运维告警通道（系统级，非某个用户的业务通知）=====
+    # 触达：定时任务连续失败、健康探针探测到 DB/Redis 不可用。
+    # ops-webhook：企微群机器人 webhook（留空则回退用上面的 wecom-webhook，再空则只落日志）。
+    # ops-mail-to：运维邮件接收人（多个用逗号分隔；留空则不发邮件）。
+    # ops-alert-enabled：总开关，默认 true。
+    # 同标题告警 5 分钟内最多推 5 条（走 DistributedState 限流，多实例共享），防雪崩刷屏。
+    ops-webhook: ""
+    ops-mail-to: ""
+    ops-alert-enabled: true
+  # ===== AI 平权（方案 20260924）：入站网关 =====
+  # 判据：关闭本开关不影响任何既有页面功能（/api/ai/** 是新增路径，人侧链路零依赖）。
+  ai:
+    gateway:
+      # 总开关。true=网关可用（仍受目录+红线+权限+票据四重闸门约束）
+      enabled: true
+      # 回环转发基址：AI 动作必须走与人相同的 /api/tenant/** 链路
+      base-url: http://127.0.0.1:${server.port:8089}
+      # 高风险确认票据 TTL（分钟），一次性、参数摘要绑定
+      confirm-ttl-minutes: 10
+
+# ===== 发票能力网关（InvoiceGateway，独立闭源服务，D:\SourceCode\InvoiceGateway）=====
+# FSSC 的进项/销项发票、发票 OCR 识别、真伪查验默认走这层封装 API（三系统统一键名）。
+# 上游厂商凭证（AppKey/AppSecret）只存在于网关进程内，业务系统不感知、也不得出现其字面量。
+# 未启动网关时：识别返回失败、验真本轮不判定（D-DEC-115 口径），绝不伪造票面或「验真通过」。
+invoice:
+  gateway:
+    base-url: ${INVOICE_GATEWAY_BASE_URL:http://127.0.0.1:8096}
+    # 网关侧配置了内部密钥时才需填写（请求头 X-Gateway-Api-Key）；网关留空即内网免密钥模式
+    api-key: ${INVOICE_GATEWAY_API_KEY:}

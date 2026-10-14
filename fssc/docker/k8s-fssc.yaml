@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+# 维度8 STAB-08：K8s 部署配置（Deployment+Service+探针+资源限额+滚动更新）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fssc-server
+  labels: {app: fssc-server}
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels: {app: fssc-server}
+  template:
+    metadata:
+      labels: {app: fssc-server}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8089"
+    spec:
+      containers:
+        - name: fssc-server
+          image: fssc-server:1.0.0
+          ports: [{containerPort: 8089}]
+          env:
+            - name: FSSC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: db-password}
+            - name: FSSC_JWT_SECRET
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: jwt-secret}
+            - name: FSSC_OPENAPI_ENABLED
+              value: "false"
+          resources:
+            requests: {cpu: "2", memory: 4Gi}
+            limits: {cpu: "4", memory: 8Gi}
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: 8089}
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: 8089}
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          volumeMounts:
+            - {name: logs, mountPath: /app/logs}
+      volumes:
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fssc-server
+spec:
+  selector: {app: fssc-server}
+  ports:
+    - port: 8089
+      targetPort: 8089

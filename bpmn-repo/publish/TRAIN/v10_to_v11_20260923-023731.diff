@@ -1,0 +1,100 @@
+--- bpmn:TRAIN v10
++++ bpmn:TRAIN v11
+@@ -1,51 +1,58 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_TRAIN" targetNamespace="http://fssc">
+-  <bpmn:process id="TRAIN" name="培训事前申请" isExecutable="true">
++  <bpmn:process id="TRAIN" name="培训费事前申请审批流程" isExecutable="true">
+     <bpmn:startEvent id="StartEvent_1" name="开始" />
+-    <bpmn:userTask id="Task_1" name="提交出差/培训申请" flowable:assignee="${approver}" />
+-    <bpmn:userTask id="Task_2" name="审核申请单【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
+-    <bpmn:userTask id="Task_3" name="部门经理审核【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+-    <bpmn:userTask id="Task_4" name="项目经理审核【项目经理/费用承担部门负责人】" flowable:candidateGroups="PROJECT_MANAGER" />
+-    <bpmn:userTask id="Task_5" name="归口部门审核【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+-    <bpmn:userTask id="Task_6" name="基地分管领导审核【基地分管领导】" flowable:candidateGroups="BASE_DIV_LEADER" />
+-    <bpmn:userTask id="Task_7" name="基地总经理审核【基地总经理】" flowable:candidateGroups="BASE_GM" />
+-    <bpmn:userTask id="Task_8" name="板块分管领导审核【板块分管领导】" flowable:candidateGroups="PLATE_DIV_LEADER" />
+-    <bpmn:userTask id="Task_9" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
++    <bpmn:userTask id="Task_3" name="部门经理审核业务必要性及归口安排【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
++    <bpmn:userTask id="Task_4" name="项目经理/费用承担部门审核预算【项目经理/费用承担部门负责人】" flowable:candidateGroups="PROJECT_MANAGER" />
++    <bpmn:userTask id="Task_2" name="财务审核岗审核申请单及标准合规性【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
++    <bpmn:exclusiveGateway id="Gw_7" name="金额授权" default="Flow_5_def" />
++    <bpmn:userTask id="Task_7" name="基地总经理审批【基地总经理·20万以上】" flowable:candidateGroups="BASE_GM" />
++    <bpmn:exclusiveGateway id="Gw_8" name="金额授权" default="Flow_6_def" />
++    <bpmn:userTask id="Task_8" name="板块分管领导审批【板块分管领导·50万以上】" flowable:candidateGroups="PLATE_DIV_LEADER" />
++    <bpmn:exclusiveGateway id="Gw_9" name="金额授权" default="Flow_7_def" />
++    <bpmn:userTask id="Task_9" name="总裁审批【总裁·500万以上】" flowable:candidateGroups="PRESIDENT" />
+     <bpmn:endEvent id="EndEvent_1" name="结束" />
+-    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1" />
+-    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="Task_2" />
+-    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_2" targetRef="Task_3" />
+-    <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_3" targetRef="Task_4" />
+-    <bpmn:sequenceFlow id="Flow_5" sourceRef="Task_4" targetRef="Task_5" />
+-    <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_5" targetRef="Task_6" />
+-    <bpmn:sequenceFlow id="Flow_7" sourceRef="Task_6" targetRef="Task_7" />
+-    <bpmn:sequenceFlow id="Flow_8" sourceRef="Task_7" targetRef="Task_8" />
+-    <bpmn:sequenceFlow id="Flow_9" sourceRef="Task_8" targetRef="Task_9" />
++    <bpmn:sequenceFlow id="Flow_start" sourceRef="StartEvent_1" targetRef="Task_3" />
++    <bpmn:sequenceFlow id="Flow_d1" sourceRef="Task_3" targetRef="Task_4" />
++    <bpmn:sequenceFlow id="Flow_d2" sourceRef="Task_4" targetRef="Task_2" />
++    <bpmn:sequenceFlow id="Flow_5_in" sourceRef="Task_2" targetRef="Gw_7" />
++    <bpmn:sequenceFlow id="Flow_5_cond" name="金额&gt;20万" sourceRef="Gw_7" targetRef="Task_7"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount > 200000}</bpmn:conditionExpression></bpmn:sequenceFlow>
++    <bpmn:sequenceFlow id="Flow_5_def" name="金额不足/其他" sourceRef="Gw_7" targetRef="Gw_8" />
++    <bpmn:sequenceFlow id="Flow_6_in" sourceRef="Task_7" targetRef="Gw_8" />
++    <bpmn:sequenceFlow id="Flow_6_cond" name="金额&gt;50万" sourceRef="Gw_8" targetRef="Task_8"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount > 500000}</bpmn:conditionExpression></bpmn:sequenceFlow>
++    <bpmn:sequenceFlow id="Flow_6_def" name="金额不足/其他" sourceRef="Gw_8" targetRef="Gw_9" />
++    <bpmn:sequenceFlow id="Flow_7_in" sourceRef="Task_8" targetRef="Gw_9" />
++    <bpmn:sequenceFlow id="Flow_7_cond" name="金额&gt;500万" sourceRef="Gw_9" targetRef="Task_9"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount > 5000000}</bpmn:conditionExpression></bpmn:sequenceFlow>
++    <bpmn:sequenceFlow id="Flow_7_def" name="金额不足/其他" sourceRef="Gw_9" targetRef="EndEvent_1" />
+     <bpmn:sequenceFlow id="Flow_end" sourceRef="Task_9" targetRef="EndEvent_1" />
+   </bpmn:process>
+   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="TRAIN">
+ <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1"><dc:Bounds x="210.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_2_di" bpmnElement="Task_2"><dc:Bounds x="400.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3"><dc:Bounds x="590.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4"><dc:Bounds x="780.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_5_di" bpmnElement="Task_5"><dc:Bounds x="970.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_6_di" bpmnElement="Task_6"><dc:Bounds x="1160.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_7_di" bpmnElement="Task_7"><dc:Bounds x="1350.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_8_di" bpmnElement="Task_8"><dc:Bounds x="1540.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_9_di" bpmnElement="Task_9"><dc:Bounds x="1730.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="1920.0" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="156.0" y="120" /><di:waypoint x="275.0" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="340.0" y="120" /><di:waypoint x="465.0" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="530.0" y="120" /><di:waypoint x="655.0" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4"><di:waypoint x="720.0" y="120" /><di:waypoint x="845.0" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5"><di:waypoint x="910.0" y="120" /><di:waypoint x="1035.0" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6"><di:waypoint x="1100.0" y="120" /><di:waypoint x="1225.0" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_7_di" bpmnElement="Flow_7"><di:waypoint x="1290.0" y="120" /><di:waypoint x="1415.0" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_8_di" bpmnElement="Flow_8"><di:waypoint x="1480.0" y="120" /><di:waypoint x="1605.0" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_9_di" bpmnElement="Flow_9"><di:waypoint x="1670.0" y="120" /><di:waypoint x="1795.0" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="1860.0" y="120" /><di:waypoint x="1920.0" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Task_2_di" bpmnElement="Task_2"><dc:Bounds x="596" y="80" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Gw_7_di" bpmnElement="Gw_7"><dc:Bounds x="786" y="102" width="40" height="40" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Task_7_di" bpmnElement="Task_7"><dc:Bounds x="886" y="80" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Gw_8_di" bpmnElement="Gw_8"><dc:Bounds x="1076" y="102" width="40" height="40" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Task_8_di" bpmnElement="Task_8"><dc:Bounds x="1176" y="80" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Gw_9_di" bpmnElement="Gw_9"><dc:Bounds x="1366" y="102" width="40" height="40" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Task_9_di" bpmnElement="Task_9"><dc:Bounds x="1466" y="80" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="1656" y="102" width="36" height="36" /></bpmndi:BPMNShape>
++<bpmndi:BPMNEdge id="Flow_start_di" bpmnElement="Flow_start"><di:waypoint x="156" y="120" /><di:waypoint x="216" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_d1_di" bpmnElement="Flow_d1"><di:waypoint x="346" y="120" /><di:waypoint x="406" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_d2_di" bpmnElement="Flow_d2"><di:waypoint x="536" y="120" /><di:waypoint x="596" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_5_in_di" bpmnElement="Flow_5_in"><di:waypoint x="726" y="120" /><di:waypoint x="786" y="122" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_5_cond_di" bpmnElement="Flow_5_cond"><di:waypoint x="826" y="122" /><di:waypoint x="886" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_5_def_di" bpmnElement="Flow_5_def"><di:waypoint x="806" y="142" /><di:waypoint x="806" y="230" /><di:waypoint x="1096" y="230" /><di:waypoint x="1096" y="142" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_6_in_di" bpmnElement="Flow_6_in"><di:waypoint x="1016" y="120" /><di:waypoint x="1076" y="122" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_6_cond_di" bpmnElement="Flow_6_cond"><di:waypoint x="1116" y="122" /><di:waypoint x="1176" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_6_def_di" bpmnElement="Flow_6_def"><di:waypoint x="1096" y="142" /><di:waypoint x="1096" y="255" /><di:waypoint x="1386" y="255" /><di:waypoint x="1386" y="142" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_7_in_di" bpmnElement="Flow_7_in"><di:waypoint x="1306" y="120" /><di:waypoint x="1366" y="122" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_7_cond_di" bpmnElement="Flow_7_cond"><di:waypoint x="1406" y="122" /><di:waypoint x="1466" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_7_def_di" bpmnElement="Flow_7_def"><di:waypoint x="1386" y="142" /><di:waypoint x="1386" y="280" /><di:waypoint x="1674" y="280" /><di:waypoint x="1674" y="138" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="1596" y="120" /><di:waypoint x="1656" y="120" /></bpmndi:BPMNEdge>
+     </bpmndi:BPMNPlane>
+   </bpmndi:BPMNDiagram>
+ </bpmn:definitions>
++

@@ -1,0 +1,66 @@
+--- bpmn:CLAIM v16
++++ bpmn:CLAIM v17
+@@ -1,7 +1,14 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_CLAIM" targetNamespace="http://fssc">
+-  <bpmn:process id="CLAIM" name="一般费用报销(招待费分支见CLAIM_G1)" isExecutable="true">
++  <bpmn:process id="CLAIM" name="员工费用报销(招待费特批档见Gw_ENT分支)" isExecutable="true">
+     <bpmn:startEvent id="StartEvent_1" name="开始" />
++    <bpmn:exclusiveGateway id="Gw_ENT" name="招待费特批档" default="Flow_ENT_def" />
++    <bpmn:userTask id="ET_2" name="部门经理审核业务真实性【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
++    <bpmn:userTask id="ET_3" name="共享审核人均标准及预制凭证【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
++    <bpmn:userTask id="ET_4" name="总监级授权审批【中心/总监级审批档】" flowable:candidateGroups="CENTER_APPROVER" />
++    <bpmn:exclusiveGateway id="Gw_ENT2" name="大额升级判定" default="Flow_9b" />
++    <bpmn:userTask id="ET_5" name="高管决策审批【高管决策审批档】" flowable:candidateGroups="EXEC_APPROVER" />
++    <bpmn:userTask id="ET_7" name="审核预制凭证【总账会计】" flowable:candidateGroups="FIN_GL" />
+     <bpmn:userTask id="Task_2" name="扫描单据【财务扫描岗】" flowable:candidateGroups="SCAN_STAFF" />
+     <bpmn:userTask id="Task_4" name="直接上级审核【直线上级】" flowable:candidateGroups="DIRECT_SUPERVISOR" />
+     <bpmn:userTask id="Task_5" name="部门经理审核【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+@@ -19,6 +26,16 @@
+     <bpmn:userTask id="Task_13" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
+     <bpmn:userTask id="Task_14" name="审核预制凭证【总账会计】" flowable:candidateGroups="FIN_GL" />
+     <bpmn:endEvent id="EndEvent_1" name="结束" />
++    <bpmn:sequenceFlow id="Flow_start_ent" sourceRef="StartEvent_1" targetRef="Gw_ENT" />
++    <bpmn:sequenceFlow id="Flow_ENT_yes" name="招待费(明细含07)" sourceRef="Gw_ENT" targetRef="ET_2"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${expenseType == 'ENTERTAIN'}</bpmn:conditionExpression></bpmn:sequenceFlow>
++    <bpmn:sequenceFlow id="Flow_ENT_def" name="普通报销" sourceRef="Gw_ENT" targetRef="Task_2" />
++    <bpmn:sequenceFlow id="Flow_et_2" sourceRef="ET_2" targetRef="ET_3" />
++    <bpmn:sequenceFlow id="Flow_et_3" sourceRef="ET_3" targetRef="ET_4" />
++    <bpmn:sequenceFlow id="Flow_et_4" sourceRef="ET_4" targetRef="Gw_ENT2" />
++    <bpmn:sequenceFlow id="Flow_8b" name="金额&gt;1万" sourceRef="Gw_ENT2" targetRef="ET_5"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount > 10000}</bpmn:conditionExpression></bpmn:sequenceFlow>
++    <bpmn:sequenceFlow id="Flow_9b" name="金额不足/其他" sourceRef="Gw_ENT2" targetRef="ET_7" />
++    <bpmn:sequenceFlow id="Flow_et_5" sourceRef="ET_5" targetRef="ET_7" />
++    <bpmn:sequenceFlow id="Flow_et_end" sourceRef="ET_7" targetRef="EndEvent_1" />
+     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_2" />
+     <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_2" targetRef="Task_4" />
+     <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_4" targetRef="Task_5" />
+@@ -44,6 +61,13 @@
+   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="CLAIM">
+ <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Gw_ENT_di" bpmnElement="Gw_ENT"><dc:Bounds x="216" y="342" width="40" height="40" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="ET_2_di" bpmnElement="ET_2"><dc:Bounds x="316" y="322" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="ET_3_di" bpmnElement="ET_3"><dc:Bounds x="506" y="322" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="ET_4_di" bpmnElement="ET_4"><dc:Bounds x="696" y="322" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="Gw_ENT2_di" bpmnElement="Gw_ENT2"><dc:Bounds x="886" y="342" width="40" height="40" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="ET_5_di" bpmnElement="ET_5"><dc:Bounds x="986" y="322" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="ET_7_di" bpmnElement="ET_7"><dc:Bounds x="1176" y="322" width="130" height="80" /></bpmndi:BPMNShape>
+ <bpmndi:BPMNShape id="Task_2_di" bpmnElement="Task_2"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+ <bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+ <bpmndi:BPMNShape id="Task_5_di" bpmnElement="Task_5"><dc:Bounds x="596" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+@@ -61,6 +85,16 @@
+ <bpmndi:BPMNShape id="Task_13_di" bpmnElement="Task_13"><dc:Bounds x="2516" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+ <bpmndi:BPMNShape id="Task_14_di" bpmnElement="Task_14"><dc:Bounds x="2706" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+ <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="2896" y="102" width="36" height="36" /></bpmndi:BPMNShape>
++<bpmndi:BPMNEdge id="Flow_start_ent_di" bpmnElement="Flow_start_ent"><di:waypoint x="138" y="138" /><di:waypoint x="138" y="362" /><di:waypoint x="216" y="362" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_ENT_yes_di" bpmnElement="Flow_ENT_yes"><di:waypoint x="256" y="362" /><di:waypoint x="316" y="362" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_ENT_def_di" bpmnElement="Flow_ENT_def"><di:waypoint x="236" y="342" /><di:waypoint x="236" y="160" /><di:waypoint x="216" y="160" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_et_2_di" bpmnElement="Flow_et_2"><di:waypoint x="446" y="362" /><di:waypoint x="506" y="362" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_et_3_di" bpmnElement="Flow_et_3"><di:waypoint x="636" y="362" /><di:waypoint x="696" y="362" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_et_4_di" bpmnElement="Flow_et_4"><di:waypoint x="826" y="362" /><di:waypoint x="886" y="362" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_8b_di" bpmnElement="Flow_8b"><di:waypoint x="926" y="362" /><di:waypoint x="986" y="362" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_9b_di" bpmnElement="Flow_9b"><di:waypoint x="906" y="382" /><di:waypoint x="906" y="430" /><di:waypoint x="1241" y="430" /><di:waypoint x="1241" y="402" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_et_5_di" bpmnElement="Flow_et_5"><di:waypoint x="1116" y="362" /><di:waypoint x="1176" y="362" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_et_end_di" bpmnElement="Flow_et_end"><di:waypoint x="1306" y="362" /><di:waypoint x="2914" y="362" /><di:waypoint x="2914" y="138" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="156" y="120" /><di:waypoint x="216" y="120" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="346" y="120" /><di:waypoint x="406" y="120" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4"><di:waypoint x="536" y="120" /><di:waypoint x="596" y="120" /></bpmndi:BPMNEdge>

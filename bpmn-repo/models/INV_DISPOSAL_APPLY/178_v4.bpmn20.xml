@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_INV_DISPOSAL_APPLY" targetNamespace="http://fssc">
+  <bpmn:process id="INV_DISPOSAL_APPLY" name="存货处置审批流程（申请→确认→执行）" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:userTask id="IVD_1" name="处置申请登记【仓管员】" flowable:candidateGroups="WH_KEEPER" />
+    <bpmn:sequenceFlow id="Flow_in_IVD_1" sourceRef="StartEvent_1" targetRef="IVD_1" />
+    <bpmn:userTask id="IVD_2" name="物资状态确认【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+    <bpmn:sequenceFlow id="Flow_in_IVD_2" sourceRef="IVD_1" targetRef="IVD_2" />
+    <bpmn:userTask id="IVD_3" name="内审复核【内审专员】" flowable:candidateGroups="INTERNAL_AUDITOR" />
+    <bpmn:sequenceFlow id="Flow_in_IVD_3" sourceRef="IVD_2" targetRef="IVD_3" />
+    <bpmn:exclusiveGateway id="GW_IVD_AMT" name="金额授权" default="Flow_in_IVD_6" />
+    <bpmn:sequenceFlow id="Flow_in_GW_IVD_AMT" sourceRef="IVD_3" targetRef="GW_IVD_AMT" />
+    <bpmn:userTask id="IVD_5" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
+    <bpmn:sequenceFlow id="Flow_GW_IVD_AMT_IVD_5" sourceRef="GW_IVD_AMT" targetRef="IVD_5"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 2000000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:userTask id="IVD_4" name="财务总监审批【财务总监】" flowable:candidateGroups="CFO" />
+    <bpmn:sequenceFlow id="Flow_GW_IVD_AMT_IVD_4" sourceRef="GW_IVD_AMT" targetRef="IVD_4"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 200000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:userTask id="IVD_6" name="处置执行与账务【总账会计】" flowable:candidateGroups="FIN_GL" />
+    <bpmn:sequenceFlow id="Flow_in_IVD_6" sourceRef="GW_IVD_AMT" targetRef="IVD_6" />
+    <bpmn:sequenceFlow id="Flow_back_IVD_5" sourceRef="IVD_5" targetRef="IVD_6" />
+    <bpmn:sequenceFlow id="Flow_back_IVD_4" sourceRef="IVD_4" targetRef="IVD_6" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="IVD_6" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="INV_DISPOSAL_APPLY">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="IVD_1_di" bpmnElement="IVD_1"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="IVD_2_di" bpmnElement="IVD_2"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="IVD_3_di" bpmnElement="IVD_3"><dc:Bounds x="596" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="GW_IVD_AMT_di" bpmnElement="GW_IVD_AMT"><dc:Bounds x="786" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="IVD_5_di" bpmnElement="IVD_5"><dc:Bounds x="741" y="240" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="IVD_4_di" bpmnElement="IVD_4"><dc:Bounds x="741" y="330" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="IVD_6_di" bpmnElement="IVD_6"><dc:Bounds x="886" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="1086" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_in_IVD_1_di" bpmnElement="Flow_in_IVD_1"><di:waypoint x="138" y="120" /><di:waypoint x="281" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_IVD_2_di" bpmnElement="Flow_in_IVD_2"><di:waypoint x="281" y="120" /><di:waypoint x="471" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_IVD_3_di" bpmnElement="Flow_in_IVD_3"><di:waypoint x="471" y="120" /><di:waypoint x="661" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_GW_IVD_AMT_di" bpmnElement="Flow_in_GW_IVD_AMT"><di:waypoint x="661" y="120" /><di:waypoint x="806" y="122" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_IVD_AMT_IVD_5_di" bpmnElement="Flow_GW_IVD_AMT_IVD_5"><di:waypoint x="806" y="122" /><di:waypoint x="806" y="280" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_IVD_AMT_IVD_4_di" bpmnElement="Flow_GW_IVD_AMT_IVD_4"><di:waypoint x="806" y="122" /><di:waypoint x="806" y="370" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_IVD_6_di" bpmnElement="Flow_in_IVD_6"><di:waypoint x="806" y="122" /><di:waypoint x="951" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_back_IVD_5_di" bpmnElement="Flow_back_IVD_5"><di:waypoint x="806" y="280" /><di:waypoint x="951" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_back_IVD_4_di" bpmnElement="Flow_back_IVD_4"><di:waypoint x="806" y="370" /><di:waypoint x="951" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="951" y="120" /><di:waypoint x="1104" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

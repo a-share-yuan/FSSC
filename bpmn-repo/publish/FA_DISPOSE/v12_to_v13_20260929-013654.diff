@@ -1,0 +1,40 @@
+--- bpmn:FA_DISPOSE v12
++++ bpmn:FA_DISPOSE v13
+@@ -2,10 +2,10 @@
+ <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_FA_DISPOSE" targetNamespace="http://fssc">
+   <bpmn:process id="FA_DISPOSE" name="资产处置审批流程（报废/对外销售档）" isExecutable="true">
+     <bpmn:startEvent id="StartEvent_1" name="开始" />
+-    <bpmn:exclusiveGateway id="GW_FAD" name="处置方式分档" default="Flow_GW_FAD_def" />
++    <bpmn:exclusiveGateway id="GW_FAD" name="处置方式分档" default="Flow_in_FD_1" />
+     <bpmn:sequenceFlow id="Flow_start_gw" sourceRef="StartEvent_1" targetRef="GW_FAD" />
+     <bpmn:userTask id="FD_1" name="处置申请登记【资产管理员】" flowable:candidateGroups="FA_ASSET_ADMIN" />
+-    <bpmn:sequenceFlow id="Flow_in_FD_1" sourceRef="StartEvent_1" targetRef="FD_1" />
++    <bpmn:sequenceFlow id="Flow_in_FD_1" sourceRef="GW_FAD" targetRef="FD_1" />
+     <bpmn:userTask id="FD_2" name="内审复核【内审专员】" flowable:candidateGroups="INTERNAL_AUDITOR" />
+     <bpmn:sequenceFlow id="Flow_in_FD_2" sourceRef="FD_1" targetRef="FD_2" />
+     <bpmn:exclusiveGateway id="GW_FAD_AMT" name="金额授权" default="Flow_in_FD_3" />
+@@ -18,7 +18,6 @@
+     <bpmn:sequenceFlow id="Flow_in_FD_3" sourceRef="GW_FAD_AMT" targetRef="FD_3" />
+     <bpmn:sequenceFlow id="Flow_back_FD_5" sourceRef="FD_5" targetRef="FD_3" />
+     <bpmn:sequenceFlow id="Flow_back_FD_4" sourceRef="FD_4" targetRef="FD_3" />
+-    <bpmn:sequenceFlow id="Flow_GW_FAD_def" sourceRef="GW_FAD" targetRef="FD_1" />
+     <bpmn:userTask id="FDA_1" name="售价与受让方核对【采购经理】" flowable:candidateGroups="PURCHASE_MANAGER" />
+     <bpmn:sequenceFlow id="Flow_GW_FAD_FDA_1" sourceRef="GW_FAD" targetRef="FDA_1" name="对外销售档"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${billType == 'FA_ALIENATE'}</bpmn:conditionExpression></bpmn:sequenceFlow>
+     <bpmn:userTask id="FDA_2" name="受让核对复核【内审专员】" flowable:candidateGroups="INTERNAL_AUDITOR" />
+@@ -41,7 +40,7 @@
+ <bpmndi:BPMNShape id="FDA_2_di" bpmnElement="FDA_2"><dc:Bounds x="466" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+ <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="996" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+ <bpmndi:BPMNEdge id="Flow_start_gw_di" bpmnElement="Flow_start_gw"><di:waypoint x="138" y="120" /><di:waypoint x="236" y="122" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_in_FD_1_di" bpmnElement="Flow_in_FD_1"><di:waypoint x="138" y="120" /><di:waypoint x="381" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_in_FD_1_di" bpmnElement="Flow_in_FD_1"><di:waypoint x="236" y="122" /><di:waypoint x="381" y="120" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_in_FD_2_di" bpmnElement="Flow_in_FD_2"><di:waypoint x="381" y="120" /><di:waypoint x="571" y="120" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_in_GW_FAD_AMT_di" bpmnElement="Flow_in_GW_FAD_AMT"><di:waypoint x="571" y="120" /><di:waypoint x="716" y="122" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_GW_FAD_AMT_FD_5_di" bpmnElement="Flow_GW_FAD_AMT_FD_5"><di:waypoint x="716" y="122" /><di:waypoint x="716" y="280" /></bpmndi:BPMNEdge>
+@@ -49,7 +48,6 @@
+ <bpmndi:BPMNEdge id="Flow_in_FD_3_di" bpmnElement="Flow_in_FD_3"><di:waypoint x="716" y="122" /><di:waypoint x="861" y="120" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_back_FD_5_di" bpmnElement="Flow_back_FD_5"><di:waypoint x="716" y="280" /><di:waypoint x="861" y="120" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_back_FD_4_di" bpmnElement="Flow_back_FD_4"><di:waypoint x="716" y="370" /><di:waypoint x="861" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_GW_FAD_def_di" bpmnElement="Flow_GW_FAD_def"><di:waypoint x="236" y="122" /><di:waypoint x="381" y="120" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_GW_FAD_FDA_1_di" bpmnElement="Flow_GW_FAD_FDA_1"><di:waypoint x="236" y="122" /><di:waypoint x="341" y="420" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_FDA_2_di" bpmnElement="Flow_FDA_2"><di:waypoint x="341" y="420" /><di:waypoint x="531" y="420" /></bpmndi:BPMNEdge>
+ <bpmndi:BPMNEdge id="Flow_sgjoin_FDA_2_di" bpmnElement="Flow_sgjoin_FDA_2"><di:waypoint x="531" y="420" /><di:waypoint x="861" y="120" /></bpmndi:BPMNEdge>

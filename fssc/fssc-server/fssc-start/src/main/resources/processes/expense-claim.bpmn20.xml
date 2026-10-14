@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/BPMN/20100524/DI"
+             targetNamespace="http://www.fssc.com/bpmn">
+
+  <process id="expenseClaim" name="费用报销审批" isExecutable="true">
+
+    <startEvent id="start" name="开始"/>
+
+    <sequenceFlow id="f1" sourceRef="start" targetRef="managerApprove"/>
+
+    <userTask id="managerApprove" name="部门经理审批" flowable:assignee="${approver}"/>
+
+    <!-- 审批通过 → 正常结束 -->
+    <sequenceFlow id="f2" sourceRef="managerApprove" targetRef="endApprove">
+      <conditionExpression xsi:type="tFormalExpression">${approved == true}</conditionExpression>
+    </sequenceFlow>
+
+    <!-- 审批驳回 → 驳回结束 -->
+    <sequenceFlow id="f3" sourceRef="managerApprove" targetRef="endReject">
+      <conditionExpression xsi:type="tFormalExpression">${approved == false}</conditionExpression>
+    </sequenceFlow>
+
+    <endEvent id="endApprove" name="通过"/>
+    <endEvent id="endReject" name="驳回"/>
+
+  </process>
+</definitions>

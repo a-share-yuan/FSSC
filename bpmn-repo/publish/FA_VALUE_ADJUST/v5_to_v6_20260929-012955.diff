@@ -1,0 +1,11 @@
+--- bpmn:FA_VALUE_ADJUST v5
++++ bpmn:FA_VALUE_ADJUST v6
+@@ -8,7 +8,7 @@
+     <bpmn:sequenceFlow id="Flow_in_FV_2" sourceRef="FV_1" targetRef="FV_2" />
+     <bpmn:userTask id="FV_3" name="财务审核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
+     <bpmn:sequenceFlow id="Flow_in_FV_3" sourceRef="FV_2" targetRef="FV_3" />
+-    <bpmn:exclusiveGateway id="GW_FAV_AMT" name="金额授权" default="Flow_GW_FAV_AMT_def" />
++    <bpmn:exclusiveGateway id="GW_FAV_AMT" name="金额授权" default="Flow_in_FV_5" />
+     <bpmn:sequenceFlow id="Flow_in_GW_FAV_AMT" sourceRef="FV_3" targetRef="GW_FAV_AMT" />
+     <bpmn:userTask id="FV_4" name="财务总监审批【财务总监】" flowable:candidateGroups="CFO" />
+     <bpmn:sequenceFlow id="Flow_GW_FAV_AMT_FV_4" sourceRef="GW_FAV_AMT" targetRef="FV_4"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 500000}</bpmn:conditionExpression></bpmn:sequenceFlow>

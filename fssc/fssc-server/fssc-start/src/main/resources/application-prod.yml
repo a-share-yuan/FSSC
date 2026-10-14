@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+# ===================================================================================
+# 生产 profile（发布腿新增，2026-10-07 波次四 · 配置与发布腿）
+#
+# 启用方式（不改 application.yml 里的 spring.profiles.active，dev 起跑口径维持现状）：
+#   java -jar fssc-start.jar --spring.profiles.active=prod
+#   —— profile 专属文件的键值覆盖 application.yml 同名键，故本文件只写"生产必须与开发不同"的项。
+#
+# ★ 硬约束：本文件不含任何真实密钥/口令字面值（连示例值都没有）。
+#   全部机密以 ${ENV_VAR:} 形式引用，未注入即解析成空串，由代码侧 fail-closed 拒绝启动 ——
+#   宁可生产起不来，也不能"带着内置默认值上线"。
+#
+# 覆盖清单与判据出处：
+#   C-2 令牌签名  fssc.jwt.*（读取点 TokenService#checkSecret / #key）
+#   C-3 登录验证码 fssc.login.*（读取点 LoginGuardService / CaptchaTriggerService / CaptchaService）
+#   C-11 附件类型 fssc.file.allowed-extensions（读取点 FileService#upload）
+# ===================================================================================
+
+# ---------- Flowable：生产不由应用改表结构 ----------
+# dev 靠 database-schema-update: true 自动建 ACT_*/FLW_*；生产表结构由发布脚本/DDL 工单管理。
+# async-executor-activate 必须为 true（application-dev.yml 第 6-12 行 G2 第 3 条口径：
+# 边界定时器与异步作业只有执行器在跑才会被拾取，关着等于超时处置永不触发）。
+flowable:
+  database-schema-update: false
+  async-executor-activate: true
+  check-process-definitions: false
+
+spring:
+  # 上传体积闸（容器层第一道）。与 fssc.file.max-size（应用层第二道，application.yml 第 177-179 行）
+  # 必须同值或应用层更小，否则超容器的请求先被拒成 413、应用闸形同虚设。
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 40MB
+
+# ---------- MyBatis-Plus ----------
+# dev 的同名配置在 application-dev.yml 里，切到 prod 后不再加载，故此处必须重声明，
+# 否则回落到 MyBatis-Plus 默认 IdType.ASSIGN_ID（雪花）—— 全仓 103 个实体虽都显式标了
+# @TableId(type = IdType.AUTO)，但 mapper-locations 缺失会让日后新增的 XML Mapper 静默失效。
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    # 刻意不设 log-impl（dev 用 StdOutImpl 打印全量 SQL）：生产 SQL 含业务数据，不进 stdout。
+  global-config:
+    db-config:
+      id-type: auto
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+fssc:
+  # ===== C-2 令牌签名 =====
+  jwt:
+    # 内置默认密钥的"放行分支"在生产关闭（代码缺省即 false，这里显式写出，防被环境配置放开）。
+    allow-default-secret: false
+    # 未注入 FSSC_JWT_SECRET ⇒ 空串 ⇒ TokenService 启动自检直接拒绝启动；
+    # 绝不回落到 application.yml 里那份内置默认值（那正是 C-2 登记的放行分支）。
+    secret: ${FSSC_JWT_SECRET:}
+    expire-seconds: ${FSSC_JWT_EXPIRE_SECONDS:7200}
+
+  # ===== C-3 登录图形验证码（本体见 com.fssc.auth.CaptchaService / CaptchaTriggerService）=====
+  login:
+    # 生产开启：同一身份连续「凭据失败」达阈值后，后续登录必须携带验证码；登录成功即清零。
+    captcha-enabled: true
+    # 阈值沿用代码默认（CaptchaTriggerService 的 @Value 默认值 3），不另设更严/更松口径。
+    captcha-fail-threshold: 3
+    # 明文回传只用于联调/自动化；生产必须 false —— true 等于验证码形同虚设。
+    captcha-debug-text: false
+
+  # ===== C-11 附件类型闸 =====
+  file:
+    # FileService#upload 读该键；application.yml 注释写"空则允许所有"（fail-open），
+    # 生产把清单钉死在这里，避免环境变量把白名单覆盖成空值后整条闸失效。
+    # 清单取值按实测在传类型核定（fssc.sys_file 现存 22 条：pdf/jpg/jpeg/png/xml 全在本清单内；
+    allowed-extensions: jpg,jpeg,png,gif,bmp,webp,pdf,ofd,xml,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar
+    max-size: 20971520
+
+  # ===== 数据源（分库：master=fssc / image=fssc_image）=====
+  # dev 的 jdbc-url/账号/口令在 application-dev.yml，prod 不加载该文件 ⇒ 必须在此重声明。
+  # 三项均为 ${ENV:}：未注入即空串 ⇒ Hikari 建池失败、启动失败（fail-closed，不静默连到 dev 库）。
+  datasource:
+    master:
+      jdbc-url: ${FSSC_DB_MASTER_JDBC_URL:}
+      username: ${FSSC_DB_USERNAME:}
+      password: ${FSSC_DB_PASSWORD:}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      minimum-idle: 5
+      maximum-pool-size: 40
+      connection-timeout: 30000
+    image:
+      jdbc-url: ${FSSC_DB_IMAGE_JDBC_URL:}
+      username: ${FSSC_DB_USERNAME:}
+      password: ${FSSC_DB_PASSWORD:}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 30000
+
+  # ===== 分布式状态（framework/spi/DistributedState）=====
+  # 多实例部署必须置 true 并注入 SPRING_DATA_REDIS_HOST / SPRING_DATA_REDIS_PORT，
+  # 否则登录防刷计数/验证码缓存/调度锁只活在单个进程里（可被绕过、调度重复执行）。
+  # 单机生产保持 false 时，请在发布单上注明"单实例"。
+  redis:
+    enabled: ${FSSC_REDIS_ENABLED:false}
+
+  # ===== 回调共享密钥（LinkU Webhook）=====
+  # application.yml 已写明"为空即拒绝所有 linku-* 回调"，此处只保留环境变量引用形态。
+  linku-callback:
+    secret: ${FSSC_LINKU_CALLBACK_SECRET:}

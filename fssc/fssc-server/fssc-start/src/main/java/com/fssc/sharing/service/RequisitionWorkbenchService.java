@@ -1,0 +1,345 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+package com.fssc.sharing.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.common.core.PageQuery;
+import com.fssc.common.core.PageResult;
+import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.entity.ExpBillPayment;
+import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.expense.mapper.ExpBillPaymentMapper;
+import com.fssc.framework.facade.ArchiveFacade;
+import com.fssc.framework.facade.ImageFacade;
+import com.fssc.framework.facade.dto.ArchiveInfoDTO;
+import com.fssc.framework.facade.dto.ImageFileDTO;
+import com.fssc.framework.security.UserContext;
+import com.fssc.sharing.entity.OpVoucher;
+import com.fssc.sharing.entity.OpVoucherLine;
+import com.fssc.sharing.mapper.OpVoucherLineMapper;
+import com.fssc.sharing.mapper.OpVoucherMapper;
+import com.fssc.workflow.entity.WfInstance;
+import com.fssc.workflow.entity.WfTask;
+import com.fssc.workflow.entity.WfTaskHistory;
+import com.fssc.workflow.mapper.WfInstanceMapper;
+import com.fssc.workflow.mapper.WfTaskHistoryMapper;
+import com.fssc.workflow.mapper.WfTaskMapper;
+import com.fssc.workflow.service.BillRouteRegistry;
+import com.fssc.workflow.service.WfQueryService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.*;
+
+/**
+ * P0-6 统一收单工作台 Service
+ * 聚合多数据源为统一视图：场景卡片 + 概览看板 + 我的单据/待办/已办 + 单据全链路详情
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RequisitionWorkbenchService {
+
+    private final ExpBillMapper expBillMapper;
+    private final ExpBillPaymentMapper expBillPaymentMapper;
+    private final OpVoucherMapper opVoucherMapper;
+    private final OpVoucherLineMapper opVoucherLineMapper;
+    private final ImageFacade imageFacade;
+    private final ArchiveFacade archiveFacade;
+    private final WfTaskMapper wfTaskMapper;
+    private final WfTaskHistoryMapper wfTaskHistoryMapper;
+    private final WfInstanceMapper wfInstanceMapper;
+
+    // ======================== 场景卡片 ========================
+
+    /**
+     * 返回所有可发起单据的场景卡片
+     */
+    public List<Map<String, Object>> getScenes() {
+        return List.of(
+            group("费用报销", List.of(
+                scene("CLAIM", "员工费用报销", "ExpenseClaim", "/expense/claim", "daily-reimbursement"),
+                scene("CLAIM_TRAVEL", "差旅培训报销", "TravelClaim", "/expense/claim-travel", "travel-reimbursement")
+            )),
+            group("事前申请", List.of(
+                scene("APPLY_MEETING", "会议申请", "MeetingApply", "/expense/apply/meeting", "meeting"),
+                scene("APPLY_TRAVEL", "出差申请", "TravelApply", "/expense/apply/travel", "business-trip"),
+                scene("APPLY_TRAIN", "培训申请", "TrainApply", "/expense/apply/train", "training")
+            )),
+            group("资金收付", List.of(
+                scene("LOAN", "员工借款", "LoanApply", "/expense/loan", "loan"),
+                scene("REPAY", "还款", "RepayApply", "/expense/repay", "repayment"),
+                scene("PAY", "对公付款", "CorpPay", "/corp-pay", "payment"),
+                scene("FUND_PLAN", "资金计划", "FundPlan", "/treasury", "fund-plan"),
+                scene("TRANSFER", "资金调拨", "Transfer", "/treasury", "transfer")
+            )),
+            group("采购应付", List.of(
+                scene("PO_ORDER", "采购订单", "PoOrder", "/purchase/order", "purchase-order"),
+                scene("PO_RECEIPT", "收货单", "PoReceipt", "/purchase/receipt", "receipt"),
+                scene("CONTRACT", "合同录入", "Contract", "/contract", "contract")
+            )),
+            group("应收收入", List.of(
+                scene("INVOICE_ISSUE", "发票开具", "InvoiceIssue", "/invoice", "invoice"),
+                scene("RECEIVABLE", "应收确认", "Receivable", "/receivable", "receivable")
+            )),
+            group("资产存货", List.of(
+                scene("ASSET", "资产卡片", "AssetCard", "/asset", "asset"),
+                scene("DEPR_BATCH", "折旧计提", "DeprBatch", "/asset", "depreciation")
+            ))
+        );
+    }
+
+    private Map<String, Object> group(String label, List<Map<String, Object>> items) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("category", label);
+        m.put("items", items);
+        return m;
+    }
+
+    private Map<String, Object> scene(String type, String label, String component, String route, String icon) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("docType", type);
+        m.put("label", label);
+        m.put("component", component);
+        m.put("route", route);
+        m.put("icon", icon);
+        return m;
+    }
+
+    // ======================== 概览看板 ========================
+
+    public Map<String, Object> getDashboard() {
+        Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
+
+        // 我的待办数
+        long todoCount = wfTaskMapper.selectCount(new LambdaQueryWrapper<WfTask>()
+                .eq(WfTask::getStatus, "PENDING")
+                .and(w -> w.eq(WfTask::getAssigneeId, userId)
+                        .or().like(WfTask::getCandidateIds, "," + userId + ",")));
+
+        // 我发起的（在途）——改前按 exp_bill 一表 status=APPROVING 计数，合同/采购/预算/总账的在途单
+        // 一个都不进这个数（与同页「我的单据」的承诺同病，D-CON-01）。改按流程实例统计＝天然全类型。
+        long mineCount = wfInstanceMapper.selectCount(new LambdaQueryWrapper<WfInstance>()
+                .eq(WfInstance::getStartUserId, userId)
+                .eq(WfInstance::getStatus, "RUNNING"));
+
+        // wf_instance.status=COMPLETED 过滤，而该取值全库 0 行（终态实际写 APPROVED/REJECTED/CANCELLED）
+        // ⇒ 卡片恒为 0，和 tab 里的列表自相矛盾。
+        // D-DEC-109：终态收尾行自本轮起也带 oper_user_id（"谁的最后一票定论"），但它不是"我办了这一节"，
+        // 计入就是把同一节数两遍（同 D-DEC-275 对作废行的处理），故与 tab 一并排除。
+        long doneCount = wfTaskHistoryMapper.selectCount(new LambdaQueryWrapper<WfTaskHistory>()
+                .eq(WfTaskHistory::getOperUserId, userId)
+                .notIn(WfTaskHistory::getAction, WfQueryService.TERMINAL_ACTIONS));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("todo", todoCount);
+        result.put("mine", mineCount);
+        result.put("done", doneCount);
+        result.put("timestamp", LocalDateTime.now().toString());
+        return result;
+    }
+
+    // ======================== 我的单据（费用域 exp_bill 一表） ========================
+
+    /**
+     * 旧口径：只查 exp_bill（10+ 种 bill_type 都在这一张表，但合同/采购/预算/总账都不在）。
+     * 全类型见 {@code MyDocumentService.myDocs()}（批次5 / D-CON-01）；本方法保留一个版本给旧入口。
+     */
+    public PageResult<Map<String, Object>> myBills(PageQuery query, String billType, String status) {
+        Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
+
+        LambdaQueryWrapper<ExpBill> qw = new LambdaQueryWrapper<ExpBill>()
+                .eq(ExpBill::getApplyUserId, userId)
+                .orderByDesc(ExpBill::getId);
+
+        if (billType != null && !billType.isBlank()) {
+            qw.eq(ExpBill::getBillType, billType);
+        }
+        if (status != null && !status.isBlank()) {
+            qw.eq(ExpBill::getStatus, status);
+        }
+
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<ExpBill> p =
+                expBillMapper.selectPage(com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(
+                        query.getPageNum(), query.getPageSize()), qw);
+
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (ExpBill bill : p.getRecords()) {
+            list.add(billToMap(bill));
+        }
+        return PageResult.of(list, p.getTotal(), query.getPageNum(), query.getPageSize());
+    }
+
+    private Map<String, Object> billToMap(ExpBill bill) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", bill.getId());
+        m.put("billNo", bill.getBillNo());
+        m.put("billType", bill.getBillType());
+        m.put("billSubType", bill.getBillSubType());
+        m.put("title", bill.getTitle());
+        m.put("status", bill.getStatus());
+        m.put("totalAmount", bill.getTotalAmount());
+        m.put("applyDate", bill.getApplyDate());
+        m.put("applyUserName", bill.getApplyUserName());
+        m.put("companyId", bill.getCompanyId());
+        m.put("deptId", bill.getDeptId());
+        return m;
+    }
+
+    // ======================== 我的待办 ========================
+
+    public PageResult<Map<String, Object>> myTodo(PageQuery query) {
+        Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
+
+        LambdaQueryWrapper<WfTask> qw = new LambdaQueryWrapper<WfTask>()
+                .eq(WfTask::getStatus, "PENDING")
+                .and(w -> w.eq(WfTask::getAssigneeId, userId)
+                        .or().like(WfTask::getCandidateIds, "," + userId + ","))
+                .orderByDesc(WfTask::getId);
+
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<WfTask> p =
+                wfTaskMapper.selectPage(com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(
+                        query.getPageNum(), query.getPageSize()), qw);
+
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (WfTask task : p.getRecords()) {
+            list.add(taskToMap(task));
+        }
+        return PageResult.of(list, p.getTotal(), query.getPageNum(), query.getPageSize());
+    }
+
+    private Map<String, Object> taskToMap(WfTask task) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("taskId", task.getTaskId());
+        m.put("id", task.getId());
+        m.put("procInstId", task.getProcInstId());
+        m.put("bizType", task.getBizType());
+        m.put("bizNo", task.getBizNo());
+        m.put("bizId", task.getBizId());
+        m.put("title", task.getTitle());
+        m.put("taskName", task.getNodeName());
+        m.put("status", task.getStatus());
+        m.put("createTime", task.getCreateTime());
+        return m;
+    }
+
+    // ======================== 我的已办 ========================
+
+    public PageResult<Map<String, Object>> myDone(PageQuery query) {
+        Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
+
+        LambdaQueryWrapper<WfTaskHistory> qw = new LambdaQueryWrapper<WfTaskHistory>()
+                .eq(WfTaskHistory::getOperUserId, userId)
+                // D-DEC-109：与上方卡片同口径——终态收尾行不算"我办理的某一节"
+                .notIn(WfTaskHistory::getAction, WfQueryService.TERMINAL_ACTIONS)
+                .orderByDesc(WfTaskHistory::getId);
+
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<WfTaskHistory> p =
+                wfTaskHistoryMapper.selectPage(com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(
+                        query.getPageNum(), query.getPageSize()), qw);
+
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (WfTaskHistory h : p.getRecords()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", h.getId());
+            m.put("procInstId", h.getProcInstId());
+            m.put("bizType", h.getBizType());
+            m.put("bizId", h.getBizId());
+            m.put("taskName", h.getNodeName());
+            m.put("action", h.getAction());
+            m.put("comment", h.getComment());
+            m.put("operUserName", h.getOperUserName());
+            m.put("handleTime", h.getOperTime());
+            list.add(m);
+        }
+        return PageResult.of(list, p.getTotal(), query.getPageNum(), query.getPageSize());
+    }
+
+    // ======================== 单据全链路详情 ========================
+
+    /**
+     * 聚合单据全链路：单据基础 + 流程轨迹 + 凭证 + 付款 + 影像 + 档案
+     *
+     * <p>本方法按 <b>exp_bill 主键</b>取数。"我的单据"扩到全类型后（批次5），各域 id 空间互不相干
+     * （合同 id=7 与报销单 id=7 同时存在），故只有<b>明确是费用域</b>的类型才放行——
+     * 类型缺失或非费用域一律拒绝：回一份同主键的报销单详情，比回空更危险。
+     * 影像同样按 bizId 查（{@code img_file} 无类型维度），跨域时一并给空而不是给别人的影像。
+     */
+    public Map<String, Object> getBillDetail(Long billId, String bizType) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        boolean known = bizType != null && !bizType.isBlank();
+        boolean expenseFamily = known && BillRouteRegistry.isInlinedExpense(BillRouteRegistry.of(bizType));
+        if (!expenseFamily) {
+            result.put("bill", null);
+            result.put("images", Collections.emptyList());
+            result.put("imageCount", 0);
+            result.put("error", (known ? "「" + bizType + "」不是费用域单据" : "未指明单据类型")
+                    + "，本详情接口按报销单(exp_bill)主键取数（各域 id 空间互不相干，跨域同 id 会撞号）"
+                    + "⇒ 请到该域的台账页查看");
+            return result;
+        }
+
+        // 1. 单据基础信息
+        ExpBill bill = expBillMapper.selectById(billId);
+        if (bill == null) {
+            // 单据主档缺失（测试脏数据/业务行被清理等）：不阻断影像/档案查看，
+            // 仍按 bizId 尽力返回已关联的影像与档案，并给可读提示而非硬错误。
+            result.put("bill", null);
+            result.put("billDetail", null);
+            result.put("wfInstance", null);
+            result.put("voucher", null);
+            result.put("voucherLines", Collections.emptyList());
+            result.put("payments", Collections.emptyList());
+            List<ImageFileDTO> orphanImages = imageFacade.findImageFilesByBizId(billId);
+            result.put("images", orphanImages);
+            result.put("imageCount", orphanImages.size());
+            result.put("archive", archiveFacade.findLatestByRefId(billId));
+            result.put("error", "单据主档不存在或已被清理（billId=" + billId
+                    + "），仅展示已关联的影像/档案，业务详情不可用");
+            return result;
+        }
+        result.put("bill", billToMap(bill));
+        result.put("billDetail", bill);
+
+        // 2. 流程轨迹（WfInstance by bizNo = billNo）
+        WfInstance instance = wfInstanceMapper.selectOne(new LambdaQueryWrapper<WfInstance>()
+                .eq(WfInstance::getBizNo, bill.getBillNo())
+                .orderByDesc(WfInstance::getId)
+                .last("LIMIT 1"));
+        result.put("wfInstance", instance);
+
+        // 3. 凭证（OpVoucher by bill_id）
+        OpVoucher voucher = opVoucherMapper.selectOne(new LambdaQueryWrapper<OpVoucher>()
+                .eq(OpVoucher::getBillId, billId)
+                .orderByDesc(OpVoucher::getId)
+                .last("LIMIT 1"));
+        if (voucher != null) {
+            List<OpVoucherLine> lines = opVoucherLineMapper.selectByVoucherId(voucher.getId());
+            result.put("voucher", voucher);
+            result.put("voucherLines", lines);
+        } else {
+            result.put("voucher", null);
+            result.put("voucherLines", Collections.emptyList());
+        }
+
+        // 4. 付款记录（ExpBillPayment by bill_id）
+        List<ExpBillPayment> payments = expBillPaymentMapper.selectList(new LambdaQueryWrapper<ExpBillPayment>()
+                .eq(ExpBillPayment::getBillId, billId)
+                .orderByAsc(ExpBillPayment::getLineNo));
+        result.put("payments", payments);
+
+        // 5. 影像/附件（断点5：通过 ImageFacade 查询，不再直接依赖 ImgFileMapper）
+        List<ImageFileDTO> images = imageFacade.findImageFilesByBizId(billId);
+        result.put("images", images);
+        result.put("imageCount", images.size());
+
+        // 6. 档案（断点5：通过 ArchiveFacade 查询，不再直接依赖 OpArchiveMapper）
+        ArchiveInfoDTO archive = archiveFacade.findLatestByRefId(billId);
+        result.put("archive", archive);
+
+        return result;
+    }
+}

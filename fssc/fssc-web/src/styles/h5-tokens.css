@@ -1,0 +1,554 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) */
+
+/**
+ * 移动报销端（H5）视觉 / 交互 token —— 方案 §5「交互与视觉规范」的可执行落点（P1-1 / P1-2）
+ *
+ * 为什么是全局表而不是三页各自 scoped：AD-04 实测「三页样式各自复制一份，无共享 token」，
+ * 同一份 .card/.no/.submit 在三页里被复制三遍，其中 H5Workbench 的 .no 既当单号样式
+ * 又当驳回按钮底色（AD-09 单号被渲染成白字红底）。本表把色板 / 字号阶 / 间距阶 / 圆角 /
+ * 状态色 / 热区一次性收口，三页只留页面特有布局，禁止再写内联 style（AD-05）。
+ *
+ * 三条硬线（可被 §7-V1/V2 断言直接量到，改动前先想清楚会不会破线）：
+ *  1. 触控热区 ≥44×44 CSS px（K318 W3C WCAG 2.2 SC 2.5.5；最小不得低于 24×24＝SC 2.5.8）；
+ *     相邻可点元素间隔 ≥8px，破坏性动作与常规动作不同行。
+ *  2. 输入类 computed font-size ≥16px（AD-07：iOS Safari 对 <16px 输入聚焦即放大页面，
+ *     靠禁缩放解决会伤无障碍，故只把字号抬到 16）。
+ *  3. 单滚动容器 ＝ 文档流本身（AD-02/03：原先 .h5-body 内层 overflow:auto +
+ *     calc(100vh - 100px) 魔法数字，实测内层可视高 407px、整页 546px，且 header+nav 实高
+ *     94.8px ≠ 100px）。本表不给任何区块设 overflow / max-height，
+ *     吸底栏与 Tab Bar 用 position:fixed + env(safe-area-inset-bottom)（需 index.html 的
+ *     viewport-fit=cover 才生效），页面底部用 padding 让位。
+ *
+ * 兼容：100dvh 前先给 -webkit-fill-available 兜底（旧 WebView 不认 dvh 时不能白屏）。
+ * 命名：全部 .h5-* 前缀，规则一律挂在 .h5-page 作用域下，避免与 PC 端样式互相污染。
+ */
+
+:root {
+  /* 色板（与 PC 端 Element Plus 主题同值，移动端不另起一套色） */
+  --h5-primary: #409eff;
+  --h5-primary-dark: #337ecc;
+  --h5-primary-soft: #ecf5ff;
+  --h5-success: #67c23a;
+  --h5-warning: #e6a23c;
+  --h5-danger: #f56c6c;
+  --h5-bg: #f5f7fa;
+  --h5-card: #ffffff;
+  --h5-text: #303133;
+  --h5-text-regular: #606266;
+  --h5-text-2: #909399;
+  --h5-border: #ebeef5;
+  --h5-border-input: #dcdfe6;
+
+  /* 字号阶：辅助 ≥12（方案 §5「辅助文字 ≥12px 且仅用于次要信息」） */
+  --h5-fs-aux: 12px;
+  --h5-fs-body: 14px;
+  --h5-fs-input: 16px;
+  --h5-fs-title: 16px;
+  --h5-fs-head: 17px;
+  --h5-fs-amount: 22px;
+
+  /* 间距阶（4 的倍数；热区之间最小 8px） */
+  --h5-gap: 8px;
+  --h5-gap-2: 12px;
+  --h5-gap-3: 16px;
+  --h5-pad: 12px;
+
+  --h5-radius: 10px;
+  --h5-radius-sm: 6px;
+  --h5-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+
+  /* 触控热区硬线 */
+  --h5-tap-h: 44px;
+
+  /* 吸底两件高度（改这里要同步 .h5-page--tabbed / .h5-page--bar 的让位 padding） */
+  --h5-tabbar-h: 56px;
+  --h5-bar-h: 60px;
+
+  /* 安全区：viewport-fit=cover 生效时由系统注入，桌面浏览器回退 0 */
+  --h5-safe-b: env(safe-area-inset-bottom, 0px);
+  --h5-safe-t: env(safe-area-inset-top, 0px);
+
+  /* 动效时长阶（P2-5）：快＝即时反馈、中＝进出场、慢＝大位移；与色板同处一份 :root，
+     不在页面里各写一份（AD-04 的老毛病就是同一套 token 被复制三遍） */
+  --h5-dur-1: .16s;
+  --h5-dur-2: .26s;
+  --h5-dur-3: .42s;
+  --h5-ease: cubic-bezier(.32, .72, 0, 1);
+}
+
+/* ---------------- 页面骨架 ---------------- */
+.h5-page {
+  max-width: 480px;
+  margin: 0 auto;
+  /* 单滚动容器＝文档：区块不设 overflow/max-height，滚动位置天然由浏览器保持 */
+  min-height: -webkit-fill-available;
+  min-height: 100dvh;
+  background: var(--h5-bg);
+  font-size: var(--h5-fs-body);
+  color: var(--h5-text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 带吸底 Tab Bar 的工作台：给底部让位（含安全区），否则最后一张卡会被手势条压住 */
+.h5-page--tabbed {
+  padding-bottom: calc(var(--h5-tabbar-h) + var(--h5-safe-b) + 12px);
+}
+/* 带吸底操作栏的子页（提单 / 审批详情）同理 */
+.h5-page--bar {
+  padding-bottom: calc(var(--h5-bar-h) + var(--h5-safe-b) + 16px);
+}
+
+/* 顶栏：sticky 而非内层滚动＋固定头，保证全页只有一个滚动容器 */
+.h5-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--h5-gap);
+  /* 状态栏顶到页面时（viewport-fit=cover）不给内容被刘海压住 */
+  padding: calc(12px + var(--h5-safe-t)) var(--h5-gap-3) 12px;
+  background: var(--h5-primary);
+  color: #fff;
+  font-size: var(--h5-fs-head);
+  font-weight: 600;
+}
+.h5-header__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h5-header__sub { font-size: var(--h5-fs-aux); font-weight: 400; opacity: .9; }
+
+.h5-body { padding: var(--h5-pad); }
+.h5-body + .h5-body { padding-top: 0; }
+
+/* ---------------- 卡片 ---------------- */
+.h5-page .h5-card {
+  background: var(--h5-card);
+  border-radius: var(--h5-radius);
+  padding: var(--h5-pad);
+  margin-bottom: var(--h5-gap-2);
+  box-shadow: var(--h5-shadow);
+}
+.h5-page .h5-card--tap { cursor: pointer; }
+.h5-page .h5-card--tap:active { background: #fafcff; }
+.h5-card__row { display: flex; align-items: center; justify-content: space-between; gap: var(--h5-gap); }
+/* 明细行的「删除」是 44×44 热区，下面紧跟 .h5-field（上内边距 6px）⇒ 实测垂直净距只有 6px，
+   破 §5「相邻可点元素间距 ≥8px」硬线。只给明细区补行距，别处的 __row（标题+标记）不受影响。 */
+.h5-lines > .h5-card__row { margin-bottom: var(--h5-gap); }
+.h5-card__title { font-size: 15px; font-weight: 500; margin: 6px 0; word-break: break-all; }
+/* AD-07/§5：辅助文字 ≥12px；单号长串要能折，不能撑破卡片 */
+.h5-card__meta { color: var(--h5-text-2); font-size: var(--h5-fs-aux); line-height: 18px; word-break: break-all; }
+.h5-section-title { font-size: var(--h5-fs-body); font-weight: 600; color: var(--h5-text); margin: 4px 2px var(--h5-gap); }
+
+/* AD-09：单号是文本不是按钮。原先 .no 同时被 scoped 里的驳回按钮染色规则命中 ⇒ 白字红底。
+   这里显式写死透明底，并在 P0-6 把按钮类名改成 .h5-btn-danger，两条规则不再同名。 */
+.h5-page .no {
+  color: var(--h5-text-2);
+  font-size: var(--h5-fs-aux);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-weight: 400;
+  word-break: break-all;
+}
+
+.h5-big-num { font-size: var(--h5-fs-amount); font-weight: 700; color: var(--h5-warning); }
+.h5-tip { text-align: center; color: var(--h5-text-2); font-size: var(--h5-fs-aux); padding: var(--h5-gap) 0; line-height: 18px; }
+.h5-amount-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--h5-gap); }
+
+/* ---------------- 表单（AD-07：输入字号 ≥16px；label 与控件同高） ---------------- */
+.h5-field {
+  display: flex;
+  align-items: center;
+  gap: var(--h5-gap);
+  margin-bottom: 10px;
+  background: #f9f9fb;
+  border-radius: var(--h5-radius-sm);
+  padding: 6px 10px;
+}
+.h5-field > label { flex: 0 0 76px; color: var(--h5-text-regular); font-size: var(--h5-fs-body); }
+.h5-field--col { flex-direction: column; align-items: stretch; }
+.h5-input,
+.h5-field input,
+.h5-field select,
+.h5-field textarea,
+.h5-textarea {
+  flex: 1;
+  min-width: 0;
+  /* 硬线：字号 ≥16px（iOS 聚焦不放大）；行高把热区顶到 ≥44px */
+  font-size: var(--h5-fs-input);
+  min-height: var(--h5-tap-h);
+  border: 1px solid var(--h5-border-input);
+  border-radius: var(--h5-radius-sm);
+  padding: 8px 10px;
+  background: #fff;
+  color: var(--h5-text);
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.h5-textarea { resize: vertical; line-height: 22px; }
+.h5-input:focus, .h5-field input:focus, .h5-field select:focus, .h5-field textarea:focus, .h5-textarea:focus {
+  outline: none;
+  border-color: var(--h5-primary);
+}
+/* 字段级错误定位（P0-9）：出错行标红＋把错误文案挂在字段下方 */
+.h5-field.is-error { background: #fef0f0; }
+.h5-field.is-error input, .h5-field.is-error select, .h5-field.is-error textarea { border-color: var(--h5-danger); }
+.h5-field__err { color: var(--h5-danger); font-size: var(--h5-fs-aux); line-height: 18px; padding: 2px 10px 6px; }
+
+/* ---------------- 按钮（§5：一律 ≥44×44；破坏性动作与常规动作不同行） ---------------- */
+.h5-page button {
+  min-height: var(--h5-tap-h);
+  min-width: var(--h5-tap-h);
+  font-size: var(--h5-fs-body);
+  font-family: inherit;
+  border-radius: var(--h5-radius-sm);
+  cursor: pointer;
+}
+.h5-btn {
+  display: block;
+  width: 100%;
+  background: var(--h5-primary);
+  color: #fff;
+  border: 0;
+  border-radius: var(--h5-radius-sm);
+  padding: 10px var(--h5-gap-2);
+  font-size: var(--h5-fs-input);
+  min-height: 48px;
+}
+.h5-btn:active { background: var(--h5-primary-dark); }
+.h5-btn[disabled] { opacity: .5; }
+.h5-btn--ghost { background: #fff; color: var(--h5-primary); border: 1px dashed var(--h5-primary); }
+.h5-btn--sub { background: #fff; color: var(--h5-text-regular); border: 1px solid var(--h5-border-input); }
+.h5-btn--block-ghost { display: block; width: 100%; }
+.h5-btn-ok { flex: 1; background: var(--h5-success); color: #fff; border: 0; font-size: var(--h5-fs-input); min-height: 48px; }
+.h5-btn-danger { flex: 1; background: var(--h5-danger); color: #fff; border: 0; font-size: var(--h5-fs-input); min-height: 48px; }
+/* 行内小按钮（删除明细 / 移除附件）：视觉是小字，热区必须仍 ≥44×44（AD-06 实测 21.5px） */
+.h5-btn-link {
+  background: transparent;
+  border: 0;
+  color: var(--h5-danger);
+  font-size: var(--h5-fs-body);
+  min-width: var(--h5-tap-h);
+  min-height: var(--h5-tap-h);
+  padding: 0 6px;
+}
+.h5-btn-link--plain { color: var(--h5-primary); }
+/* 禁用态：只有 :disabled 属性、没有视觉差别 ⇒ 用户点了没反应会以为页面坏了（本窗实测缺口）。
+   只改颜色与光标，min-height/min-width 保持不变 ⇒ 热区仍 ≥44（§7-V1 L1 判据不受影响）。 */
+.h5-btn-link:disabled { color: var(--h5-text-2); opacity: .55; cursor: not-allowed; }
+.h5-ops { display: flex; gap: var(--h5-gap-2); margin-top: var(--h5-gap); }
+
+/* 顶栏返回：热区 44×44（AD-06 实测「退出」仅 42px 宽 ⇒ 从主导航摘出） */
+.h5-back {
+  flex: 0 0 auto;
+  width: var(--h5-tap-h);
+  height: var(--h5-tap-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, .16);
+  border: 0;
+  color: #fff;
+  font-size: 18px;
+  border-radius: var(--h5-radius-sm);
+}
+
+/* ---------------- 吸底 Tab Bar / 操作栏（AD-01/06/12） ---------------- */
+.h5-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  /* 相邻可点元素间隔 ≥8px（§5 硬线，V1 断言直接量） */
+  gap: var(--h5-gap);
+  padding: 6px var(--h5-gap-2) calc(6px + var(--h5-safe-b));
+  background: #fff;
+  border-top: 1px solid var(--h5-border);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, .05);
+}
+.h5-tab {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: var(--h5-tap-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: transparent;
+  border: 0;
+  color: var(--h5-text-regular);
+  font-size: var(--h5-fs-aux);
+}
+.h5-tab__icon { font-size: 18px; line-height: 20px; }
+.h5-tab.on { color: var(--h5-primary); font-weight: 600; }
+.h5-tab__badge {
+  position: absolute;
+  top: 2px;
+  right: 8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--h5-danger);
+  color: #fff;
+  font-size: var(--h5-fs-aux);
+  line-height: 18px;
+  text-align: center;
+  font-weight: 600;
+}
+/* 吸底操作栏（提单三出口 / 审批动作集） */
+.h5-actionbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  gap: var(--h5-gap);
+  align-items: center;
+  padding: 8px var(--h5-gap-2) calc(8px + var(--h5-safe-b));
+  background: #fff;
+  border-top: 1px solid var(--h5-border);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, .05);
+}
+.h5-actionbar__sum { flex: 0 0 auto; font-size: var(--h5-fs-aux); color: var(--h5-text-regular); line-height: 16px; }
+.h5-actionbar__sum b { display: block; font-size: 18px; color: var(--h5-warning); font-weight: 700; }
+/* 吸底栏里的按钮要并排平分（.h5-btn 默认是整行块级）；两个动作之间 ≥8px 已由 gap 保证 */
+.h5-actionbar .h5-btn { flex: 1 1 0; width: auto; min-width: 0; }
+.h5-actionbar .h5-btn--narrow { flex: 0 0 auto; }
+
+/* ---------------- 三态：骨架 / 空（带引导） / 错（带重试）（AD-13、UX-05） ---------------- */
+.h5-skeleton { background: #fff; border-radius: var(--h5-radius); padding: var(--h5-pad); margin-bottom: var(--h5-gap-2); }
+.h5-skeleton__line { height: 14px; border-radius: 4px; background: linear-gradient(90deg, #f0f2f5 25%, #e6e8eb 37%, #f0f2f5 63%); background-size: 400% 100%; animation: h5-skel 1.2s ease infinite; }
+.h5-skeleton__line + .h5-skeleton__line { margin-top: 10px; }
+.h5-skeleton__line--s { width: 45%; }
+.h5-skeleton__line--m { width: 75%; }
+@keyframes h5-skel { 0% { background-position: 100% 50% } 100% { background-position: 0 50% } }
+
+.h5-state { padding: 28px var(--h5-gap-3); text-align: center; }
+.h5-state__title { font-size: var(--h5-fs-body); color: var(--h5-text-2); margin-bottom: 6px; line-height: 20px; }
+.h5-state__hint { font-size: var(--h5-fs-aux); color: #b6bac2; line-height: 18px; margin-bottom: 10px; }
+.h5-state__act { display: inline-block; background: var(--h5-primary-soft); color: var(--h5-primary); border: 0; padding: 8px 16px; min-height: var(--h5-tap-h); }
+/* 权限不足（code:4030）与「真的没数据」必须文案分立（AD-13/UX-05，本窗实测提报岗三面板报 4030） */
+.h5-denied { background: #fdf6ec; border: 1px solid #faecd8; border-radius: var(--h5-radius); padding: var(--h5-pad); margin-bottom: var(--h5-gap-2); }
+.h5-denied__t { color: var(--h5-warning); font-size: var(--h5-fs-body); font-weight: 600; line-height: 20px; }
+.h5-denied__d { color: var(--h5-text-regular); font-size: var(--h5-fs-aux); line-height: 18px; margin-top: 4px; word-break: break-all; }
+.h5-error { background: #fef0f0; border: 1px solid #fbc4c4; border-radius: var(--h5-radius); padding: var(--h5-pad); margin-bottom: var(--h5-gap-2); }
+.h5-error__d { color: var(--h5-danger); font-size: var(--h5-fs-body); line-height: 20px; word-break: break-all; }
+
+/* ---------------- 弹层（AD-11） ---------------- */
+.h5-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, .45);
+  display: flex;
+  align-items: flex-end;
+}
+.h5-sheet {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  /* 内容高度自适应＋上限；安全区让位，否则底部按钮被手势条吃掉 */
+  max-height: 78dvh;
+  padding: var(--h5-gap-3) var(--h5-gap-3) calc(var(--h5-gap-3) + var(--h5-safe-b));
+  box-sizing: border-box;
+}
+.h5-sheet__title { font-size: var(--h5-fs-title); font-weight: 600; margin-bottom: var(--h5-gap-2); }
+.h5-sheet__row { display: flex; gap: var(--h5-gap); padding: 8px 0; border-bottom: 1px dashed var(--h5-border); font-size: var(--h5-fs-body); }
+.h5-sheet__row > span:first-child { width: 76px; flex: 0 0 auto; color: var(--h5-text-2); }
+.h5-sheet__list { max-height: 44dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.h5-sheet__grip { width: 36px; height: 4px; border-radius: 2px; background: #dcdfe6; margin: 0 auto var(--h5-gap-2); }
+
+/* ---------------- chip（费用项 Top5 / 意见常用语 / 状态筛选） ---------------- */
+.h5-chips { display: flex; flex-wrap: wrap; gap: var(--h5-gap); margin-bottom: var(--h5-gap); }
+.h5-chip {
+  background: #f4f4f5;
+  color: var(--h5-text-regular);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0 14px;
+  min-height: var(--h5-tap-h);
+  min-width: var(--h5-tap-h);
+  font-size: var(--h5-fs-body);
+}
+.h5-chip.on { background: var(--h5-primary-soft); color: var(--h5-primary); border-color: var(--h5-primary); font-weight: 600; }
+/* 筛选行小标题（状态／类型）：两行 chip 并排时无标题会分不清哪行筛的是什么（本窗补类型筛选时新增）。
+   纯说明文本，不给 min-height，避免被 §7-V1 L1 当成可点元素量。 */
+.h5-chips__cap { font-size: var(--h5-fs-aux); color: var(--h5-text-2); align-self: center; }
+
+/* ---------------- 影像 / 附件（UX-03：审批页看不到附件是最致命的一条） ---------------- */
+.h5-thumb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--h5-gap); }
+.h5-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--h5-radius-sm);
+  overflow: hidden;
+  background: #f0f2f5;
+  border: 0;
+  padding: 0;
+  min-height: var(--h5-tap-h);
+  min-width: var(--h5-tap-h);
+}
+.h5-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.h5-thumb__name {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 2px 4px; background: rgba(0, 0, 0, .45); color: #fff;
+  font-size: var(--h5-fs-aux); line-height: 16px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.h5-thumb--file { display: flex; align-items: center; justify-content: center; background: #f4f4f5; color: var(--h5-text-regular); font-size: var(--h5-fs-aux); padding: 4px; word-break: break-all; }
+.h5-lightbox { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--h5-gap-2); }
+.h5-lightbox img { max-width: 100%; max-height: 78dvh; object-fit: contain; }
+.h5-lightbox__cap { color: #dcdfe6; font-size: var(--h5-fs-aux); padding: 0 var(--h5-gap-3); text-align: center; word-break: break-all; }
+.h5-lightbox__x { position: absolute; top: calc(10px + var(--h5-safe-t)); right: 14px; background: rgba(255, 255, 255, .16); color: #fff; border: 0; width: var(--h5-tap-h); height: var(--h5-tap-h); border-radius: var(--h5-radius-sm); font-size: 18px; }
+
+/* ---------------- 状态色（§5：待办橙 / 驳回红 / 办结绿，与 PC 枚举同口径，禁中英直显） ---------------- */
+.h5-flag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: var(--h5-fs-aux); line-height: 18px; }
+.h5-flag--warn { background: #fdf6ec; color: var(--h5-warning); }
+.h5-flag--danger { background: #fef0f0; color: var(--h5-danger); }
+.h5-flag--ok { background: #f0f9eb; color: var(--h5-success); }
+.h5-flag--info { background: #f4f4f5; color: var(--h5-text-regular); }
+/* 停留超 24h 标橙、超 72h 标红（沿用既有超时治理口径，不新造规则） */
+.h5-stay--late { color: var(--h5-warning); font-weight: 600; }
+.h5-stay--over { color: var(--h5-danger); font-weight: 600; }
+
+/* ---------------- 身份卡（UX-12：没有「我是谁 / 我在哪个公司」） ---------------- */
+.h5-idcard { display: flex; align-items: center; gap: var(--h5-gap-2); }
+.h5-idcard__ava { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; background: var(--h5-primary-soft); color: var(--h5-primary); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+.h5-idcard__name { font-size: var(--h5-fs-title); font-weight: 600; }
+
+/* 上传进度 / 列表加载更多 */
+.h5-loadmore { text-align: center; color: var(--h5-primary); padding: 10px 0; font-size: var(--h5-fs-body); }
+.h5-row-sub { display: flex; align-items: center; justify-content: space-between; gap: var(--h5-gap); padding: 8px 0; border-bottom: 1px dashed var(--h5-border); }
+.h5-pf { height: 4px; border-radius: 2px; background: var(--h5-border); overflow: hidden; margin-top: 4px; }
+.h5-pf i { display: block; height: 100%; background: var(--h5-primary); transition: width .2s linear; }
+
+/* ---------------- 工具类（AD-05「禁内联 style」的落点） ----------------
+   只允许出现"清一色"的语义小类；唯一例外是数据驱动的绑定（如上传进度 width:{{pct}}%），
+   那种值没法预先成类，仍写在模板里并注明原因。 */
+.h5-mt-8 { margin-top: 8px; }
+.h5-mt-10 { margin-top: 10px; }
+.h5-mt-12 { margin-top: 12px; }
+.h5-mt-16 { margin-top: 16px; }
+/* 卡片/区块首行：把组件默认的上下外边距清掉，避免每个页面自己写 margin:0
+   （本表在 .h5-card__title/.h5-section-title 之后声明，同特异性后者胜，不需要 !important） */
+.h5-flush { margin-top: 0; margin-bottom: 0; }
+.h5-flag--block { display: block; margin-top: 6px; }
+.h5-card__meta--block { display: block; }
+.h5-row-sub--block { display: block; }
+.h5-flex-1 { flex: 1; min-width: 0; }
+/* 说明型 tip：左对齐、不居中（居中只用于空态一行话） */
+.h5-tip--left { text-align: left; padding: var(--h5-gap) 0; }
+.h5-tip--tight { padding: 0 0 var(--h5-gap); }
+/* 行内动作按钮（验真）：不占满行，热区仍 ≥44 */
+.h5-btn-ok--inline { flex: 0 0 auto; min-height: var(--h5-tap-h); padding: 8px 14px; }
+
+/* 无障碍：视觉隐藏但读屏可读（§5 无障碍行；图标按钮必须带 aria-label） */
+.h5-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+/* =====================================================================
+   动效层（方案 §6 P2-5：提单/审批的动效与状态过渡＋ prefers-reduced-motion）
+   新增窗口 10-04 00:3x。五条自限原则，改动前先对号：
+     1. 只动 opacity / transform / 颜色，绝不动 width/height/padding/margin
+        ⇒ §7-V1 的「可点元素 ≥44×44」判据不会因为动效而破线（热区量的是稳态）。
+     2. 入场位移一律用 transform（合成层），不用 top/height ⇒ 不触发 reflow，
+        低端机滑动不掉帧。
+     3. 反馈要"即时可感"：按压态、载入态、进出场、禁用态各有一处过渡，
+        原先本仓三页 0 处 transition（实测 grep 命中 0），点了没动静被用户读成"页面坏了"。
+     4. Vue <Transition> 只包最外层容器（弹层包 mask，不包 sheet），
+        面板位移用后代选择器跟着根节点走，避免每页写两份动画。
+     5. 整套可被 prefers-reduced-motion 一把关掉；关掉后仍保留"非位移"的进行指示
+        （旋转环换成呼吸式淡入淡出），前庭功能敏感用户不该被迫看位移，但不能丢状态反馈。
+   ===================================================================== */
+
+/* ① 交互反馈：按钮 / chip / tab / 卡片 / 缩略图的按压与选中态都要有过渡（原先是硬切） */
+.h5-page button,
+.h5-chip,
+.h5-tab,
+.h5-thumb,
+.h5-page .h5-card--tap {
+  transition:
+    background-color var(--h5-dur-1) var(--h5-ease),
+    border-color var(--h5-dur-1) var(--h5-ease),
+    color var(--h5-dur-1) var(--h5-ease),
+    opacity var(--h5-dur-1) var(--h5-ease);
+}
+/* 按压微缩：只 1.5%，够"按到了"，又不至于让相邻 8px 间隔在视觉上抖动 */
+.h5-btn:active:not([disabled]),
+.h5-btn-ok:active:not([disabled]),
+.h5-btn-danger:active:not([disabled]),
+.h5-chip:active { transform: scale(.985); }
+.h5-tab:active { opacity: .65; }
+
+/* ② 列表与区块入场 */
+@keyframes h5-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes h5-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes h5-pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+.h5-page .h5-card { animation: h5-rise var(--h5-dur-2) var(--h5-ease) both; }
+/* 三态（空／错／无权限）也要淡入，否则骨架屏"啪"地换成文案，用户会以为页面闪断 */
+.h5-state, .h5-error, .h5-denied, .h5-field__err { animation: h5-fade var(--h5-dur-2) var(--h5-ease) both; }
+.h5-tab__badge { animation: h5-pop var(--h5-dur-2) var(--h5-ease) both; }
+
+/* ③ 进行中指示：按钮内转环（不动文案长度，避免点按钮时热区宽度跳） */
+@keyframes h5-spin { to { transform: rotate(360deg); } }
+.h5-spin {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: h5-spin .7s linear infinite;
+}
+.h5-loadmore.is-loading { color: var(--h5-text-2); }
+
+/* ④ 弹层进出场（<Transition name="h5-pop"> 包 mask；面板位移跟着根节点） */
+.h5-pop-enter-active, .h5-pop-leave-active { transition: opacity var(--h5-dur-2) var(--h5-ease); }
+.h5-pop-enter-active .h5-sheet, .h5-pop-leave-active .h5-sheet { transition: transform var(--h5-dur-3) var(--h5-ease); }
+.h5-pop-enter-from, .h5-pop-leave-to { opacity: 0; }
+.h5-pop-enter-from .h5-sheet, .h5-pop-leave-to .h5-sheet { transform: translateY(100%); }
+/* 大图查看层是全屏固定层，只做淡入淡出，不做位移 */
+.h5-fade-enter-active, .h5-fade-leave-active { transition: opacity var(--h5-dur-2) var(--h5-ease); }
+.h5-fade-enter-from, .h5-fade-leave-to { opacity: 0; }
+
+/* ⑤ 无障碍守卫：系统开了"减弱动态效果"就把位移与动画压到几乎为 0，
+      但把"正在处理"的转环保换成呼吸式淡入淡出＝进度反馈不能一起丢。 */
+@keyframes h5-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .h5-page *,
+  .h5-page *::before,
+  .h5-page *::after,
+  .h5-mask,
+  .h5-sheet,
+  .h5-lightbox {
+    animation-duration: .001ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: .001ms !important;
+  }
+  .h5-btn:active:not([disabled]),
+  .h5-btn-ok:active:not([disabled]),
+  .h5-btn-danger:active:not([disabled]),
+  .h5-chip:active { transform: none; }
+  .h5-pop-enter-from .h5-sheet, .h5-pop-leave-to .h5-sheet { transform: none; }
+  .h5-spin {
+    animation: h5-pulse 1.2s ease-in-out infinite !important;
+    border-right-color: currentColor;
+  }
+}
+

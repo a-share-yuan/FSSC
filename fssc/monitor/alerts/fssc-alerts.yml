@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+# 维度8 STAB-07：告警规则（错误率/时延/堆内存/连接池/任务失败）
+groups:
+  - name: fssc-core
+    rules:
+      - alert: FsscHighErrorRate
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count[5m])) > 0.01
+        for: 2m
+        labels: {severity: P1}
+        annotations: {summary: "FSSC 接口错误率 > 1%（5分钟窗口）"}
+      - alert: FsscHighP99
+        expr: http_server_requests_seconds{quantile=0.99} > 3
+        for: 5m
+        labels: {severity: P2}
+        annotations: {summary: "FSSC P99 请求耗时 > 3s"}
+      - alert: FsscHeapHigh
+        expr: jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.9
+        for: 5m
+        labels: {severity: P1}
+        annotations: {summary: "JVM 堆使用率 > 90%，疑似内存泄漏"}
+      - alert: FsscPoolPending
+        expr: hikaricp_connections_pending > 5
+        for: 2m
+        labels: {severity: P2}
+        annotations: {summary: "HikariCP 连接池等待 > 5，检查慢查询"}
+      - alert: FsscInstanceDown
+        expr: up{job="fssc-server"} == 0
+        for: 1m
+        labels: {severity: P0}
+        annotations: {summary: "fssc-server 探活失败（疑似非计划重启）"}

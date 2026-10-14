@@ -1,0 +1,11 @@
+--- bpmn:INV_DISPOSAL_APPLY v3
++++ bpmn:INV_DISPOSAL_APPLY v4
+@@ -8,7 +8,7 @@
+     <bpmn:sequenceFlow id="Flow_in_IVD_2" sourceRef="IVD_1" targetRef="IVD_2" />
+     <bpmn:userTask id="IVD_3" name="内审复核【内审专员】" flowable:candidateGroups="INTERNAL_AUDITOR" />
+     <bpmn:sequenceFlow id="Flow_in_IVD_3" sourceRef="IVD_2" targetRef="IVD_3" />
+-    <bpmn:exclusiveGateway id="GW_IVD_AMT" name="金额授权" default="Flow_GW_IVD_AMT_def" />
++    <bpmn:exclusiveGateway id="GW_IVD_AMT" name="金额授权" default="Flow_in_IVD_6" />
+     <bpmn:sequenceFlow id="Flow_in_GW_IVD_AMT" sourceRef="IVD_3" targetRef="GW_IVD_AMT" />
+     <bpmn:userTask id="IVD_5" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
+     <bpmn:sequenceFlow id="Flow_GW_IVD_AMT_IVD_5" sourceRef="GW_IVD_AMT" targetRef="IVD_5"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 2000000}</bpmn:conditionExpression></bpmn:sequenceFlow>

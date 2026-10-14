@@ -1,0 +1,375 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+/**
+ * useFormRules - 表单联动校验 composable
+ * R5-06: 封装跨字段联动校验规则
+ * R5-20: 统一表单校验规则
+ *
+ * 用法：
+ *   import { useFormRules } from '@/composables/useFormRules'
+ *   const { rules, validateForm, validateField } = useFormRules('EXPENSE_CLAIM')
+ *   // 在 el-form :rules="rules"
+ */
+
+import { ref, computed } from 'vue'
+
+function isBlank(v) {
+  return v === null || v === undefined || (typeof v === 'string' && !v.trim())
+}
+
+// 必填判定一律走自定义 validator：async-validator 只在 rule 的键恰好只剩 required 时才用类型无关的
+// required 校验器，多任何一个键（trigger / whitespace / min）它就改走 string 校验器，于是下拉选中的
+// 年份与申请人 ID（数字）、开关选"否"（布尔）这些**合法值会被判为不合法**，表单永远提交不过。
+// 自定义 validator 既保留红星（EP 只看 rule.required 标志），又能顺手判空白文本。
+const requiredValidator = (msg) => (rule, value, cb) => (isBlank(value) ? cb(new Error(msg)) : cb())
+
+// 通用校验规则（页面级 el-form 的 rules 从这里取，导出以便弹窗直接拼字段→规则映射）
+export const commonRules = {
+  required: (msg = '此字段为必填') => [{ required: true, message: msg, validator: requiredValidator(msg) }],
+  amount: (msg = '金额必须大于 0') => [
+    { required: true, type: 'number', min: 0.01, message: msg },
+  ],
+  // 金额绑在 el-input 上时值是字符串，type:number 会把 "1000" 判成非法，故按文本判数字形态
+  amountText: (msg = '请输入金额') => [{
+    required: true,
+    message: msg,
+    validator: (rule, value, cb) => {
+      if (isBlank(value)) return cb(new Error(msg))
+      if (!isFinite(Number(value)) || Number(value) <= 0) return cb(new Error(`${msg}（须为大于 0 的数字）`))
+      cb()
+    },
+  }],
+  // 允许 0 与负数的数字文本（税额可为 0/红字为负），只拦"没填"和"不是数字"
+  numberText: (msg = '请输入数字') => [{
+    required: true,
+    message: msg,
+    validator: (rule, value, cb) => {
+      if (isBlank(value)) return cb(new Error(msg))
+      if (!isFinite(Number(value))) return cb(new Error(`${msg}（须为数字）`))
+      cb()
+    },
+  }],
+  amountAllowZero: () => [
+    { type: 'number', min: 0, message: '金额不能为负' },
+  ],
+  // 多选下拉：空数组也算未填（required 校验器只认 null/''，数组要单独判）
+  multiSelect: (msg = '请选择') => [{
+    required: true,
+    message: msg,
+    validator: (rule, value, cb) => {
+      const empty = Array.isArray(value) ? value.length === 0 : isBlank(value)
+      if (empty) return cb(new Error(msg))
+      cb()
+    },
+  }],
+  date: (msg = '请选择日期') => [{ required: true, message: msg, validator: requiredValidator(msg) }],
+  select: (msg = '请选择') => [{ required: true, message: msg, validator: requiredValidator(msg) }],
+  invoiceNo: () => [
+    { pattern: /^[0-9]{8,20}$/, message: '发票号应为 8-20 位数字', trigger: 'blur' },
+  ],
+  phone: () => [
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' },
+  ],
+  email: () => [
+    { type: 'email', message: '请输入正确的邮箱', trigger: 'blur' },
+  ],
+  bankAccount: () => [
+    { pattern: /^\d{6,30}$/, message: '银行账号应为 6-30 位数字', trigger: 'blur' },
+  ],
+  maxLength: (n, msg) => [{ max: n, message: msg || `最多 ${n} 个字符`, trigger: 'blur' }],
+}
+
+// 按表单类型的联动规则
+const formTypeRules = {
+  EXPENSE_CLAIM: {
+    applyUserId: commonRules.select('请选择申请人'),
+    currencyCode: commonRules.select('请选择币种'),
+    periodYear: commonRules.select('请选择预算年度'),
+    totalAmount: commonRules.amount('请输入报销金额'),
+  },
+  EXPENSE_TRAVEL: {
+    applyUserId: commonRules.select('请选择申请人'),
+    currencyCode: commonRules.select('请选择币种'),
+    periodYear: commonRules.select('请选择预算年度'),
+    totalAmount: commonRules.amount('请输入差旅金额'),
+  },
+  LOAN: {
+    applyUserId: commonRules.select('请选择借款人'),
+    currencyCode: commonRules.select('请选择币种'),
+    loanAmount: commonRules.amount('请输入借款金额'),
+  },
+  PREAPPLY: {
+    applyUserId: commonRules.select('请选择申请人'),
+    currencyCode: commonRules.select('请选择币种'),
+    periodYear: commonRules.select('请选择预算年度'),
+  },
+  EXPENSE: {
+    title: commonRules.required('请输入单据标题'),
+    applyDate: commonRules.date('请选择申请日期'),
+    currencyCode: commonRules.select('请选择币种'),
+    // 收款对象/收款账号只在付款类单据渲染（v-if），未挂载时 EP 不校验
+    payTarget: commonRules.select('请选择收款对象'),
+    payeeAccountNo: commonRules.required('请输入收款账号（防付错）'),
+  },
+  CORP_PAY: {
+    payeeName: commonRules.required('请输入收款方名称'),
+    payeeAccount: commonRules.bankAccount(),
+    payeeBank: commonRules.required('请输入收款银行'),
+    amount: commonRules.amount('请输入付款金额'),
+  },
+  CONTRACT: {
+    contractName: commonRules.required('请输入合同名称'),
+    contractType: commonRules.select('请选择合同类型'),
+    partyBName: commonRules.required('请输入乙方名称'),
+    itemId: commonRules.select('请选择费用类型'),
+  },
+  BUDGET_ADJUST: {
+    schemeId: commonRules.select('请选择预算方案'),
+    reason: commonRules.required('请输入调整原因'),
+  },
+  BUDGET_SCHEME: {
+    schemeName: commonRules.required('请输入方案名称'),
+    budgetYear: commonRules.required('请输入预算年度'),
+    dimension: commonRules.required('请至少选择一个预算维度'),
+  },
+  BUDGET_ITEM: {
+    schemeId: commonRules.select('请选择预算方案'),
+    budgetYear: commonRules.required('请输入预算年度'),
+    itemId: commonRules.select('请选择费用项'),
+    totalAmount: [{ required: true, type: 'number', min: 0, message: '请输入预算总额（不能为负）' }],
+  },
+  // 三场景条件必输（出口/即征即退填计税基数+退税率，留抵退税填申请税额），
+  // 页面用 v-if 挂载对应表单项，未挂载的字段天然不参与校验，故此处一律按必输登记。
+  TAX_REFUND: {
+    companyId: commonRules.select('请选择公司'),
+    refundType: commonRules.select('请选择退税类型'),
+    period: commonRules.date('请选择所属期'),
+    baseAmount: commonRules.amount('请输入计税基数（须大于 0）'),
+    rate: commonRules.amount('请输入退税率（须大于 0，不超过 100）'),
+    taxAmount: commonRules.amount('请输入申请税额（须大于 0）'),
+  },
+  INVOICE: {
+    // 发票号码＝外部票据号（口径 Q1 例外，人工必输）；发票代码在数电票下不存在，故不设为必填
+    invoiceNo: [{ required: true, message: '请输入发票号码', validator: requiredValidator('请输入发票号码') },
+      { pattern: /^[0-9]{8,20}$/, message: '发票号应为 8-20 位数字' }],
+    invoiceDate: commonRules.date('请选择开票日期'),
+    sellerName: commonRules.required('请输入销售方名称'),
+    // 购买方名称＝发票抬头（字段名沿用实体的 invoiceTitle）
+    invoiceTitle: commonRules.required('请输入购买方名称（发票抬头）'),
+    currencyCode: commonRules.select('请选择币种'),
+    // 金额三元组：后端会校验"价税合计 = 未税 + 税额"，三项都必须有值
+    amount: commonRules.amount('请输入价税合计（须大于 0）'),
+    netAmount: [{ required: true, type: 'number', min: 0, message: '请输入未税金额（可为 0，不能为负）' }],
+    taxAmount: [{ required: true, type: 'number', min: 0, message: '请输入税额（可为 0，不能为负）' }],
+    // 生成报销草稿：费用项必选（标题留空由后端按"发票报销-票号"兜底）
+    itemId: commonRules.select('请选择报销费用项'),
+  },
+  INVOICE_BIND: {
+    billId: commonRules.select('请选择要关联的业务单据'),
+    occupyAmount: commonRules.amount('请输入本次覆盖/占用金额（须大于 0）'),
+  },
+  PAY_PLAN: {
+    planType: commonRules.select('请选择计划类型'),
+    supplierId: commonRules.select('请选择供应商'),
+    period: commonRules.required('请选择计划期间'),
+    amount: commonRules.amount('请输入计划金额（须大于 0）'),
+    purpose: commonRules.required('请填写用途说明'),
+  },
+  PO_ORDER: {
+    orderDate: commonRules.date('请选择下单日期'),
+    supplierId: commonRules.select('请选择供应商'),
+    amount: commonRules.amount('请输入订单金额（须大于 0）'),
+    currency: commonRules.select('请选择币种'),
+    companyId: commonRules.select('请选择法人主体'),
+  },
+  PO_RECEIPT: {
+    receiptDate: commonRules.date('请选择收货日期'),
+    supplierId: commonRules.select('请选择供应商'),
+    amount: commonRules.amount('请输入收货金额（须大于 0）'),
+  },
+  SALES_RETURN: {
+    customerCode: commonRules.required('请输入客户代码'),
+    billDate: commonRules.date('请选择退货日期'),
+    amount: commonRules.amountText('请输入退货金额（须大于 0）'),
+    returnMode: commonRules.select('请选择退货方式'),
+  },
+  PUR_RETURN: {
+    vendorCode: commonRules.required('请输入供应商代码'),
+    billDate: commonRules.date('请选择退货日期'),
+    amount: commonRules.amountText('请输入退货金额（须大于 0）'),
+    returnMode: commonRules.select('请选择退货方式'),
+  },
+  RECEIVABLE: {
+    customerId: commonRules.select('请选择往来单位'),
+    amount: commonRules.amount('请输入应收金额（须大于 0）'),
+    currencyCode: commonRules.select('请选择币种'),
+    // 到期日决定逾期计提能否扫到这张单（accrueOverdueBadDebt 用 isNotNull(dueDate) 过滤），留空即永不过期
+    dueDate: commonRules.date('请选择到期日'),
+  },
+  RECEIPT: {
+    customerId: commonRules.select('请选择往来单位'),
+    amount: commonRules.amount('请输入收款金额（须大于 0）'),
+    receiptDate: commonRules.date('请选择收款日期'),
+  },
+  // 资产卡片：资产编号属主数据编码，按口径 Q1 系统维护、人工只读 ⇒ 不登记为必填；
+  // 残值/税法年限/供应商/发票号可空（自建、受赠、CIP 转固等来源本就没有采购发票）。
+  ASSET_CARD: {
+    assetName: commonRules.required('请输入资产名称'),
+    categoryId: commonRules.select('请选择资产类别'),
+    deptId: commonRules.select('请选择使用部门'),
+    companyId: commonRules.select('请选择所属公司'),
+    purchaseDate: commonRules.date('请选择购置日期'),
+    originalAmount: commonRules.amount('请输入原值（须大于 0）'),
+    depreciationMethod: commonRules.select('请选择折旧方法'),
+    // 折旧月数决定月折旧额（computeDepr 里 ≤0 直接抛错），必须是正整数
+    depreciationMonths: [{ required: true, type: 'number', min: 1, message: '请输入折旧月数（须大于 0）' }],
+  },
+  ASSET_CAPITAL: {
+    amount: commonRules.amount('请输入支出金额（须大于 0）'),
+    assetName: commonRules.required('请输入资产/项目名称'),
+    deptId: commonRules.select('请选择使用部门'),
+    companyId: commonRules.select('请选择所属公司'),
+    remark: commonRules.required('请输入申请说明'),
+  },
+  ASSET_TRANSFER: {
+    targetDeptId: commonRules.select('请选择目标部门'),
+  },
+  // 资产原值调整（X-06/D-DEC-431）：原因必输——旧版前端把原因写死成一句固定文案传给后端，
+  // 落库的"原因"与真实成因无关，事后追溯看到的是同一句话。金额绑 el-input，值为字符串⇒用 amountText。
+  ASSET_ADJUST: {
+    newOriginalAmount: commonRules.amountText('请输入调整后原值（须大于 0）'),
+    reason: commonRules.required('请填写调整原因'),
+  },
+  ASSET_CATEGORY: {
+    // 默认折旧月数/残值率是「带出口径」而非「入账口径」（资产卡片自身已强制必填），
+    // 且存量类别多数为空——登记为必填会让任何一次编辑都被拦下，故只锁编码与名称。
+    categoryCode: commonRules.required('请输入类别编码'),
+    categoryName: commonRules.required('请输入类别名称'),
+  },
+  // 存货 7 种操作（入库/出库/领用/处置三段/内部销售）共用一个弹窗：操作专属字段用 v-if 挂载，
+  // 未挂载的表单项 EP 不校验，所以这里按「该字段一出现就必输」统一登记即可，无需分操作建 key。
+  INVENTORY_OP: {
+    itemCode: commonRules.required('请输入物料编码'),
+    itemName: commonRules.required('请输入物料名称'),
+    warehouseId: commonRules.select('请选择仓库'),
+    priceMethod: commonRules.select('请选择计价方式'),
+    // 数量为 0 时后端 writeOff 直接抛错（且移动平均下 0 成本核销会污染结存单价），一律锁正值
+    qty: [{ required: true, type: 'number', min: 0.01, message: '请输入数量（须大于 0）' }],
+    price: [{ required: true, type: 'number', min: 0, message: '请输入入库单价（不能为负）' }],
+    // 领用用途 / 处置说明：同一个 extra 字段按操作换文案，审批人靠它判断去向
+    extra: commonRules.required('请填写领用用途 / 处置说明'),
+  },
+  DEPR_BATCH: {
+    // 计提期间留空时，服务层会静默按「当前月」补值——用户在跨月补提时以为提的是上月，实际落在本月
+    period: commonRules.required('请选择计提期间（格式 yyyy-MM）'),
+  },
+  // 在建工程卡片：编码是人工维护的主数据编码（非系统取号），与后端「编码唯一/必填」断言对应
+  CIP_CARD: {
+    cipCode: commonRules.required('请输入编码'),
+    cipName: commonRules.required('请输入名称'),
+    companyId: commonRules.select('请选择所属公司'),
+  },
+  // 在建工程转固：转固日期即资产购置日（折旧起算口径），留空会落一张没有购置日的卡片
+  CIP_TRANSFER: {
+    transferDate: commonRules.date('请选择转固日期'),
+    categoryId: commonRules.select('请选择固定资产类别'),
+    deptId: commonRules.select('请选择使用部门'),
+    depreciationMonths: [{ required: true, type: 'number', min: 1, message: '请输入折旧月数（须大于 0）' }],
+  },
+  // 资产卡片页的转固入口（/asset/{id}/cipToAsset）：只有转固日期一项人工输入，备注可空
+  ASSET_CIP_TRANSFER: {
+    transferDate: commonRules.date('请选择转固日期'),
+  },
+  // 在建工程成本归集（工具行式录入）：类型与金额必输；发生日期可空（后端不补值，留空即无归集日期）
+  CIP_COST: {
+    costType: commonRules.select('请选择归集类型'),
+    amount: commonRules.amount('请输入归集金额（须大于 0）'),
+  },
+  BANK_CLAIM: {
+    claimReceivableId: commonRules.select('请选择应收单'),
+  },
+  BANK_SLIP: {
+    // 归档＝把流水状态推到 ARCHIVED（终态），没有影像文件的归档等于凭空造一条"已回单"记录
+    slipFileId: commonRules.required('请选择回单影像文件'),
+  },
+  ARCHIVE_ACCESS: {
+    archiveId: commonRules.select('请选择调阅档案'),
+    reason: commonRules.required('请填写申请理由'),
+  },
+  ARCHIVE_DESTROY: {
+    archiveIds: commonRules.multiSelect('请选择要销毁的档案'),
+    destroyReason: commonRules.required('请填写销毁理由'),
+  },
+  ARCHIVE_DISPATCH: {
+    // 单据标识＝业务单据主键（数字），非自动编号字段，由人工填写；DA-04：非数字后端 500
+    billId: [{ required: true, message: '请输入单据标识', validator: requiredValidator('请输入单据标识') },
+      { pattern: /^\d+$/, message: '单据标识必须为数字' }],
+    billType: commonRules.select('请选择单据类型'),
+    // expense_type / amount 在 dispatch_task 表为 NOT NULL，留空/未填直接 500
+    expenseType: commonRules.required('请输入费项'),
+    amount: [{ required: true, type: 'number', min: 0, message: '请输入金额（不能为负）' }],
+    legalEntityId: commonRules.select('请选择法人主体'),
+  },
+  ARCHIVE_CREATE: {
+    archiveType: commonRules.select('请选择档案类型'),
+    archiveYear: [{ required: true, type: 'number', min: 2000, message: '请输入年度' }],
+    archivePeriod: [{ required: true, message: '请输入期间', validator: requiredValidator('请输入期间') },
+      { pattern: /^\d{4}-\d{2}$/, message: '期间格式应为 yyyy-MM' }],
+    retentionPeriod: commonRules.select('请选择保管期限'),
+  },
+  // 进项发票认证：工具条上的所属期/申报期间是必输项（后端 InvoiceService.certify 同口径拦下）
+  INVOICE_CERTIFY: {
+    certifyPeriod: commonRules.date('请选择认证所属期'),
+  },
+  INVOICE_FILING: {
+    summaryPeriod: commonRules.date('请选择申报期间'),
+  },
+  // 三单匹配容差参数（按公司维护）：容差本身可为 0（0＝不启用该档），故只判「是否填写」
+  MATCH_TOLERANCE: {
+    companyId: commonRules.select('请选择公司'),
+    amountPct: [{ required: true, message: '请填写金额容差百分比' }],
+    amountAbs: [{ required: true, message: '请填写绝对值容差' }],
+  },
+  // 差异化容差规则（维度/公司/供应商）：容差值可为 0（0＝严格按金额一致）
+  PAY_TOL_SCOPE: {
+    dimensionCode: commonRules.select('请选择维度'),
+    toleranceType: commonRules.select('请选择容差类型'),
+    toleranceValue: [{ required: true, type: 'number', min: 0, message: '请输入容差值' }],
+  },
+}
+
+export function useFormRules(formType) {
+  const customRules = computed(() => formTypeRules[formType] || {})
+
+  // 获取指定字段的校验规则
+  function getRule(field) {
+    return customRules.value[field] || []
+  }
+
+  // 预算超限联动校验
+  function budgetOverrunValidator(value, budget, callback) {
+    if (value && budget && Number(value) > Number(budget)) {
+      callback(new Error(`金额 ${value} 超出预算 ${budget}`))
+    } else {
+      callback()
+    }
+  }
+
+  // 金额匹配校验
+  function amountMatchValidator(invoiceAmount, orderAmount, callback) {
+    if (invoiceAmount && orderAmount && Math.abs(Number(invoiceAmount) - Number(orderAmount)) > 0.01) {
+      callback(new Error(`发票金额 ${invoiceAmount} 与订单金额 ${orderAmount} 不一致`))
+    } else {
+      callback()
+    }
+  }
+
+  return {
+    rules: customRules,
+    getRule,
+    commonRules,
+    budgetOverrunValidator,
+    amountMatchValidator,
+  }
+}

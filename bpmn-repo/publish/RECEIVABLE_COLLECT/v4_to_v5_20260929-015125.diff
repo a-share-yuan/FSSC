@@ -1,0 +1,38 @@
+--- bpmn:RECEIVABLE_COLLECT v4
++++ bpmn:RECEIVABLE_COLLECT v5
+@@ -1,27 +1,19 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_RECEIVABLE_COLLECT" targetNamespace="http://fssc">
+-  <bpmn:process id="RECEIVABLE_COLLECT" name="应收账款催收管理审批流程" isExecutable="true">
++  <bpmn:process id="RECEIVABLE_COLLECT" name="应收催收（作业）" isExecutable="true">
+     <bpmn:startEvent id="StartEvent_1" name="开始" />
+-    <bpmn:userTask id="Task_3" name="逾期催收执行并留痕（到期提醒／7天／15天／每工作日两次催款函）【财务专员】" flowable:candidateGroups="FIN_STAFF" />
+-    <bpmn:userTask id="Task_7" name="逾期满60天资料整理归档并移交板块法律部【档案管理员】" flowable:candidateGroups="FM_ARCHIVIST" />
+-    <bpmn:userTask id="Task_8" name="采用法律手段强力催收【应收会计】" flowable:candidateGroups="FIN_AR" />
++    <bpmn:userTask id="CLC_1" name="账龄催收派单作业【催收专员】" flowable:candidateGroups="AR_COLLECTOR" />
++    <bpmn:sequenceFlow id="Flow_in_CLC_1" sourceRef="StartEvent_1" targetRef="CLC_1" />
+     <bpmn:endEvent id="EndEvent_1" name="结束" />
+-    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_3" />
+-    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_3" targetRef="Task_7" />
+-    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_7" targetRef="Task_8" />
+-    <bpmn:sequenceFlow id="Flow_end" sourceRef="Task_8" targetRef="EndEvent_1" />
++    <bpmn:sequenceFlow id="Flow_end" sourceRef="CLC_1" targetRef="EndEvent_1" />
+   </bpmn:process>
+   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="RECEIVABLE_COLLECT">
+ <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_7_di" bpmnElement="Task_7"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_8_di" bpmnElement="Task_8"><dc:Bounds x="596" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="786" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="156" y="120" /><di:waypoint x="216" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="346" y="120" /><di:waypoint x="406" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="536" y="120" /><di:waypoint x="596" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="726" y="120" /><di:waypoint x="786" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNShape id="CLC_1_di" bpmnElement="CLC_1"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="416" y="102" width="36" height="36" /></bpmndi:BPMNShape>
++<bpmndi:BPMNEdge id="Flow_in_CLC_1_di" bpmnElement="Flow_in_CLC_1"><di:waypoint x="138" y="120" /><di:waypoint x="281" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="281" y="120" /><di:waypoint x="434" y="120" /></bpmndi:BPMNEdge>
+     </bpmndi:BPMNPlane>
+   </bpmndi:BPMNDiagram>
+ </bpmn:definitions>
