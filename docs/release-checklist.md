@@ -1,0 +1,311 @@
+# 开源发布前置检查清单（Release Checklist）
+
+> 本文是**发布阻断项**的唯一权威清单。所有数字均为本机实测（`du -sh` / `find | wc` / Node 统计，2026-10-07 00:4x～01:1x），不是估计。复算命令见 §4b 末尾。
+
+## 0. 一句话现状
+
+工作区 `fssc/` 实测 **14 GB**，而真正需要发布的源码+配置+BPMN+文档合计 **1,814 个文件 / 280,542 行 / 13.66 MB**（01:2x 实测，用 `node _tools/payload.mjs` 复算；脚本会跳过 `target*`、`dist*`、`node_modules`、`*.class/jar/log`。文档还在增补，所以这个数每轮都会略涨——**引用前重跑一次，别抄本文的数字**）。也就是说：**发布体积可以砍掉 99.9%**，而这一步决定了仓库能不能要。
+
+把 `fssc/sql/`（238 文件 / 6.27 MB 施工脚本）也带上则是 **2,053 个文件 / 300,092 行 / 19.99 MB**——建议不带，理由见第 2 节。
+
+| 实测构成 | 体积 | 处置 |
+|---|---:|---|
+| `fssc-server/fssc-start/target/`（**11 个 jar**，含多代 `.bak-` 快照） | 4.5 GB |  排除 |
+| `fssc/logs/` + `fssc-server/logs/` + `fssc-start/logs/` | 2.6 + 2.4 + 1.4 GB |  排除 |
+| `fssc-server/.run/`（含 699 MB 的 `deploy_*.out.log`） | 699 MB |  排除 |
+| `fssc/db/`（`backup/20260929/fssc_full_20260929.sql` **487 MB**；`Dump20260911/fssc_act_ge_bytearray.sql` **103,513,554 B**） | 598 MB |  排除（真实数据） |
+| `fssc-web/node_modules/` | 279 MB |  排除 |
+| `fssc-web/dist32 … dist38 / dist_h5 / dist_check_20261001`（**9 个产物目录**，`dist36` 334 MB） | ~888 MB |  排除 |
+| `fssc/scripts/` | 431 MB |  排除（临时施工） |
+| `fssc/releases/` | 173 MB |  排除 |
+| `_run_b2c.log` **128,119,194 B** / `_run_b2b.log` **55,322,730 B** | 183 MB |  排除 |
+| 根目录 `.tmp*` / `_tmp*` 探查脚本与输出 | **1,149 个文件** |  排除 |
+| 根目录散落文档（57 个 `.md` + 26 个 `.docx`，含 9.9 MB 设计方案 docx） | 数百 MB |  分拣，见第 3 条 |
+| `fssc-common/target_locked6 … target_locked11/`（**6 份构建产物副本**，含 5 个 `fssc-common-1.0.0.jar` + 70 个 `.class`） | 数十 MB |  排除（jar 窗文件锁留下的历史副本，源码树里的脏东西，直接删） |
+| `fssc-common/{.classpath,.project,.factorypath,.settings/}` | KB 级 |  排除（Eclipse/IDE 元数据，新人拿到只会困惑） |
+| `fssc-start/src/main/java/com/fssc/_tmp_s3_treasury.log` | — |  排除（**临时日志躺在 Java 源码目录里**，拷贝时删；`.gitignore` 的 `*.log` 已兜住） |
+| 要发布的部分（见下方白名单） | **13.66 MB** |  |
+
+## 1. 阻断项总览
+
+| # | 阻断项 | 状态 | 验收标准 |
+|---|---|---|---|
+| 1 | 仓库不是 git 工作树 |  未做 | `git log` 有历史；`git count-objects -vH` 中 pack < 100 MB |
+| 2 | 缺 LICENSE / README / CONTRIBUTING / SECURITY |  已备（本次产出） | 首屏可见 license 徽章与文档索引 |
+| 4 | **无数据库基线**（205 个增量脚本 + 无 Flyway/Liquibase） |  未做 | 空库执行 `schema-baseline.sql` 0 报错；新用户能建库 |
+| 5 | 凭据卫生（口令类环境变量存在弱默认值 + 4 处硬编码字面量） |  已逐条定位（见 §4b），待整改 | 4 处字面量改为配置项；`secret_scan --fail-on-hit` 0 命中；非 dev profile 缺省即启动失败 |
+| 6 | 真实数据/个人信息脱敏 |  源码树已核（命中皆为合成测试向量），种子数据与截图待核 | 扫描器 0 命中；截图不含实名/工号/证件号；`seed-demo.sql` 全为别名数据 |
+| 7 | `docker/Dockerfile` COPY 目标与实际 jar 名不一致 → 构建必失败 |  **名字已对上**（2026-10-07 07:40 修，`fssc/docker/Dockerfile:8` 现为 `fssc-server.jar`；同批新增 `fssc/.dockerignore`，此前根本没有，而构建上下文里的 `target/` 实测 4.5 G）； **仍未实跑 `docker build`**（本机 `docker` 命令不存在） | 容器实机 `docker build` 成功产出镜像并可启动 |
+| 8 | 演示账号明文 |  待文档化 | `docs/demo-accounts.md` 只描述角色与用途，口令走环境变量/初始化脚本 |
+| 9 | 前端 `package.json` `"private": true` |  **已代判：维持仅源码发布，`private: true` 保留不动**（见 §8 第 ② 项，签字栏留空） | `package.json` 保持 `"private": true`，且 README/CONTRIBUTING 的发布形态表述一致为"仅源码" |
+| 10 | `vite.config.js` `outDir: dist36` + `emptyOutDir: false` |  待改 | 构建输出 `dist/` 且清空 |
+| 11 | CI 未接通 |  已备 yaml | 首个 PR 上 Actions 全绿 |
+| 12 | README 截图缺失 |  未做 | 5–8 张演示环境截图，已过脱敏 |
+| 13 | **许可头**：活树 1,056 个 `.java`（发布白名单内 1,049＝fssc-start 主源 1,007＋测试 27＋fssc-common 15）带 Apache 许可声明的 **0 个** |  副本侧已做完，末态＝候选发布包（10-13 17:4x 重做：包 1,840 件，**加头 1,608 枚各 +3 行**，六道复核全绿，四条构建腿 **224 例后端＋63 例前端全绿**，915 条引用按锚文本重算 0 条不符）； 活树仍 0 头＝**不随源码发布**，发版时按 `_tools/LICENSE-HEADERS.md` §四现做副本 | 执行记录与七步重跑手册＝`_tools/LICENSE-HEADERS.md`；剩余项＝行尾混排（包内 231 枚 CRLF）要不要统一转 LF，见该手册 §五第 5 条与 §2 那条 `.gitattributes` |
+| 14 | 发布基线钉在**已过厂商支持期**的非 LTS JDK（26，End of Availability 2026-09） |  已代判降到 25 LTS（§8 第 ⑥ 项）， 未改码——本机无 JDK 25、无 docker CLI | CI 上 `java-version: '25'` 跑 `mvn -DskipTests package` 绿；pom `:20-21`、ci.yml `:28`、Dockerfile `:4`、README `:7`/`:88` 六处口径一致（ 这两枚 README 行号会随首屏改动漂移，动手前重新 `grep -n`） |
+| 15 | GitHub 命名空间还是占位 `<owner>/<repo>`：`.github/ISSUE_TEMPLATE/config.yml` 的两条 `contact_links`、`CHANGELOG.md` 末行链接 |  相对链接的坑已修（`config.yml` 原先写 `../../security/advisories/new` 这类**相对地址**，GitHub 不解析 ⇒ 点了就 404；已换成带占位的绝对地址） | 建仓后把三处 `<owner>/<repo>` 一次性替换成真名，再点一遍"报告安全漏洞""使用问答与讨论"两个入口 |
+| 16 | **会让 `git clone`／首个 PR 直接红的四件事**（10-13 18:0x 全部堵掉） |  ① `.gitattributes` 已补（`* text=auto eol=lf`，`.bat/.cmd` 强制 CRLF、`.sh` 强制 LF、二进制标 binary）——此前载荷内 1,377 枚 LF 与 231 枚 CRLF 混排且无归一规则；② 保留设备名 `nul`（开发目录实测 **6 枚**）已进 `_tools` 的文件层剔除规则 ⇒ 载荷内 **0 枚**；③ `ci.yml` 四处模块路径补上 `fssc/` 前缀（原写 `working-directory: fssc-server`/`fssc-web`、artifact `path:`、`cache-dependency-path:`，与册内 `fssc/...` 引用口径不一致 ⇒ 提到仓库根后这两步必红）；④ 4 条指向未发布历史 SQL 的引用降级为 provenance 说明（结论照写、不给跳不到的行号，可核部分换成现役代码锚） | 包根跑 `cite_check` **EXIT=0**（此前恒 1，唯一成因就是④）；开发侧同套闸 738/738 通过；`git ls-files` 里无 `nul`、无 `*.bak-*` |
+
+## 2. 白名单：只发布这些
+
+```
+仓库根 = 发布册目录的内容（开发目录里叫 `开源发布/`）拍平到根，同级再挂 `fssc/` 与 `bpmn-repo/`
+        拍平由 `_tools/publish_repo.mjs` 做：加头与文档行号重算都在"同构暂存"上算完，才拍平，顺序不能反
+├── .env.example  .gitignore  .gitattributes  CHANGELOG.md  CONTRIBUTING.md  LICENSE  NOTICE
+├── README.md  SECURITY.md                                          ← 根骨架 9 件 / 800 行
+├── .github/                  ← workflows/ci.yml + ISSUE_TEMPLATE/ + PULL_REQUEST_TEMPLATE.md   5 件
+├── docs/                     ← 对外文档 16 份 + _facts/（自动生成）；册内文档闸只数 *.md（含根上 4 份＝20 份）
+├── _tools/                   ← 文档闸与发布流水线脚本；**必须随仓库发布**，因为 ci.yml 有三步直接 `node _tools/...`
+├── fssc/                     ← ★这一层要保留！册内 44 条引用与 ci.yml 的 working-directory 都按 `fssc/…` 写
+│   ├── fssc-server/          pom.xml ＋ fssc-common/src ＋ fssc-start/{pom.xml,src}  ＝ 1,106 文件 / 199,424 行
+│   ├── fssc-web/             {package.json,package-lock.json,vite.config.js,vitest.config.js,index.html} ＋ src/ ＝ 250 文件 / 77,557 行
+│   └── docker/  monitor/  image-service/                                    ＝ 6 文件
+├── bpmn-repo/                ← 流程模型真相源（开发目录里在工作区根，不在 fssc/ 下）
+│   ├── publish/              190 文件  发布（内含 113 枚 .diff 待点名，见 §1 第 16 行与包外 NOTE §四）
+│   ├── models/               278 文件  发布
+│   └── drafts/                排除（施工草稿与日志）
+└── db/                       ← 待生成：schema-baseline.sql / schema-image.sql / seed-demo.sql
+```
+
+ **`payload.mjs` 只能数"同构暂存"，不能拿去数拍平后的仓库**：它的 groups 写的是 `开源发布/…` 这类路径，对仓库根跑会把根骨架/`.github`/`docs` 三组数成 **0 文件**（实案 17:13：仓库侧合计 1,830、暂存侧合计 1,861，差的全在这三组）。要数仓库就用 `find` 复点，或先跑 `publish_repo.mjs` 的复点段。
+
+ **端到端 UI 脚本不进发布包**：那个目录**不在本项目三棵树里**（是开发机上与本仓库同级的另一处施工目录）。对它做过一次只读扫描（10-07 01:0x 实测）：179 处命中，其中 97 处是给口令赋字面值的联调脚本，另有若干调试件把真实 JWT 落盘 ⇒ 对外价值低、风险高。若确实想给新人一份自动化示例，另制 `examples/api-smoke/`（2~3 个文件，凭据一律 `process.env`，不写任何真实账号）， 不要从本项目之外的任何目录拷子集进来。
+
+ **`bpmn-repo` 有 4 份同名副本**（实测：工作区根 2,790 文件／`fssc/bpmn-repo` 14 文件／`fssc/fssc-server/bpmn-repo` 32 文件／`resources/processes` 2 文件）。**只有工作区根那份是真相源**，其余是历史遗留。发布时只拷根那份的 `publish/` + `models/`，并在 `docs/getting-started.md` 里要求显式设置 `FSSC_BPMN_REPO_DIR`（配置默认值是相对路径 `./bpmn-repo`，随启动目录搬家）。
+
+ **`fssc-server/src/` 不要拷**：它是空壳目录，不参与构建（父 pom `packaging=pom`，只有 `fssc-common` 与 `fssc-start` 两个 module）。带上会让新人以为有两份源码。
+
+`fssc/sql/`（238 个文件 / 29,641 行 / 6.27 MB）**建议移到 `docs/history-sql/`** 并明确标注"施工记录，不可用于建库"。它占了发布包 1/3 体积却对新人零价值——基线脚本才是入口。
+
+ **同名留底件不进发布包**（10-11 复算）：`src/main/java` 里躺着 **67 枚** `*.java.bak-<批次号>`（历次修复窗留下的改版前副本），`bpmn-repo/models/*/` 里还有 **11 枚点开头**的 `.bak-fam2-pre.xml`（模型改前的整份副本；它扩展名是 `.xml`，只按文件名**后缀**定规则会漏——实案里它混进过包还被加了许可头，靠 XML 枚数复算 295→284 才抓出来）。剔除规则的唯一出处＝`_tools/stage_payload.mjs` 与 `_tools/payload.mjs`，**两把尺同规则，改一处必须同步另一处**。活树里照旧保留，只是不拷。
+
+ **载荷统计有两把尺**：造副本的 `stage_payload.mjs` 报 1,840 件 / 14.40 MB，盘点用的 `payload.mjs` 报 1,828 件（差的 12 枚＝`_tools/` 自己，它没进 groups）。引数时要注明用哪把尺；两把尺的分组枚数对不上时先查 `_tools`。候选发布包已整份拷到**本仓库之外的独立目录**（目录名 `FSSC-opensource`，与开发目录同级、不重叠；构建方法与末态读数见 `_tools/LICENSE-HEADERS.md` §六；包外另有一份同名的 `-PACKAGE-NOTE.md` 说明与重做命令，**不要拷进包**）。
+
+ **上面那两条剔除规则只能用在各自的层面上**：`dist*`/`target*` 这类构建快照名只按**目录**拦，留底形态只按**文件**拦。10-13 实案——把快照名规则放宽到文件名层面（字符类加了 `.` 与大小写不敏感）之后，一枚正常源文件 `framework/spi/DistributedState.java` 被当成"dist 快照"跳过，包内少这枚类 ⇒ 八个服务类编译报"找不到符号"、四条出证腿当场 BUILD FAILURE；靠"每次都拿包内字节真跑一遍构建"才抓住。⇒ 改剔除规则后必须做两件事：**枚举个数与上一版对得上**（1,831→1,838 这种漂移要能解释），**且包内字节真编译**。
+
+## 3. 文档分拣规则（决定哪些进发布包）
+
+| 类别 | 处理 |
+|---|---|
+| 需求规格、域设计说明书（内部编号 01–32 那一整套） |  改写为对外文档（去内部编号、去施工口径），是本项目的**核心竞争力材料**。**原稿不进发布包**，所以本文档里也**不再引用它的目录号**——读者在这里看不到、也不需要看到 |
+| 演示指南、部署手册、运维手册、常见问题（内部手册若干份） |  内容合并进 `getting-started.md` / `deployment.md`，同样只留结论不留内部出处 |
+| 大容量原始设计 docx（最大单文件 9.9 MB）、影像/发票样本、`*.vsd` 源文件 |  不进发布包（体积 + 可能含真实票据信息）。确需示例，另制矢量图/示意件 |
+
+**执行要点**：分拣要**逐份判断**，不要按目录整块 `git add docs/`。
+
+## 4. Git 起步（顺序很重要）
+
+> 这是**结构性操作**，请你在确认白名单无误后再执行。因为历史上从没进过 git，你有唯一一次干净起步的机会——一旦把 487 MB 数据库备份或 128 MB 日志提交进首个 commit，它们会永久留在 pack 里，`git rm` 也删不掉，只能重造历史。
+>
+> **仓库位置已定**：`FSSC-opensource`（与开发目录同级的独立目录）**就是这个项目今后的 git 目录**，所有提交都进它；开发目录 `Ashare` 继续当施工区，不进 git。同步方向永远是单向：开发目录 →（造包链）→ 同构暂存 →（`_tools/publish_repo.mjs` 拍平）→ 仓库目录 → `git commit`。 不要在仓库目录里直接改代码，否则下一次同步会覆盖掉那些改动。
+
+```bash
+cd <仓库目录>                    # 先按第 2 节白名单拷出并拍平，再 init，不要反过来
+git init -b main
+git status --short | head -50    #  逐条看，出现 .jar/.log/Dump/dist/node_modules 立刻补 .gitignore
+git ls-files | wc -l             # 期望量级＝本轮载荷枚数（10-14 实测 1,874→拍平后 1,875；引前重跑 find 复点）
+# 体积用字节求和， 别用 `git ls-files | xargs du -ch | tail -1`——文件多时 xargs 分批，
+# 每批各打一个 total，tail -1 只拿到最后一批（实案：真值 14.83 MB，那样测出来 2.6 MB）。
+git ls-files -z | xargs -0 stat -c %s 2>/dev/null | awk '{s+=$1} END{print s" 字节 = "s/1048576" MB"}'   # 期望 < 25 MB
+git ls-files -z | node -e "const fs=require('fs');let s=0,m=0,f='';for(const p of require('fs').readFileSync(0,'utf8').split('\0').filter(Boolean)){const n=fs.statSync(p).size;s+=n;if(n>m){m=n;f=p;}}console.log('合计 '+s+' 字节｜最大单文件 '+m+' → '+f);"
+
+# 首个提交只放骨架，第二个放代码，便于回溯
+git add .gitignore .gitattributes LICENSE NOTICE README.md SECURITY.md CONTRIBUTING.md CHANGELOG.md .github docs _tools
+git commit -m "chore: 开源发布骨架（license/文档/CI/卫生规则）"
+
+git add fssc bpmn-repo db .env.example
+git commit -m "feat: FSSC 首个公开版本源码"
+
+# 提交前最后一道闸：全仓扫敏感形态（脚本只输出命中位置，不回显内容）
+node _tools/secret_scan.mjs --fail-on-hit
+node _tools/cite_check.mjs $(find . -name '*.md' -not -path './_tools/*' -not -path './fssc/fssc-web/node_modules/*' | sort)
+```
+
+ 两条实测踩过的坑：① **别在仓库目录里跑 `npm install`**——实案 10-13 有会话把 17,115 个文件的 `node_modules`（约 240 MB）装进了发布目录，`.gitignore` 虽然挡得住（`node_modules/`），但它会让"仓库=纯净载荷"这个前提失效，体积统计、`find` 复点全要加排除项；② `git add` 之前先看 `git status --short` 的**条数**是否与载荷枚数同量级，差得多就是有东西被误收或误漏。
+
+**打完 tag 再推送**：`git tag -a v1.0.0 -m "首个公开版本"` → 人工确认 → `git push`。**先本地确认体积与扫描通过，再碰远端**（远端历史无法优雅撤回）。
+
+## 4b. 卫生扫描实测结果（首测 2026-10-07 01:0x，末行复算 10-07 08:1x，`_tools/secret_scan.mjs`）
+
+扫描器**只输出规则名 + 文件:行号 + 命中数，绝不回显命中内容**，所以下表可以安全地放进发布包。
+
+**四棵树各自的命中量**（文本文件数／命中数）：
+
+| 扫描根 | 文本文件 | 命中 | 结论 |
+|---|---:|---:|---|
+| `fssc/fssc-server/`（含 target，扫描器自动跳过产物） | 1,198 / 8.45 MB | 74 | 真需整改的 **4 处**，其余为假阳性/合成向量 |
+| `fssc/fssc-web/src/` | 234 / 3.25 MB | 4 | 真需整改的 **2 处**（同一行对） |
+| `bpmn-repo/publish/`、`bpmn-repo/models/` | 190 + 289 / 2.08 MB | **0** |  白名单这两档可以直接拷 |
+| 本发布目录 `开源发布/`（**不加** `--docs-only` 的全规则扫描） | 40 / 0.47 MB | 1 | **假阳性**：§8 第 ⑥ 项里那句 Adoptium 原文引用带一枚四段点号的 JDK 构建号，被"非回环 IPv4"规则当成地址吃掉（本表刻意不复现那串字面量，否则自己也成一个命中）。真实 IP 与它的区别＝数字前面紧贴着 `-` 或字母。 将来若把全规则扫描做成阻断闸，先处理这条再上 |
+
+**扫描面口径（重要，别照着旧版抄）**：上表四行**只扫与本项目相关的三棵树**（`fssc/`、`bpmn-repo/`、本发布目录）。施工期为判断噪声量级跑过一次覆盖整台开发机工作区的全局扫描，但**那份输出不属于本项目**——它会点名与工作区同级的其他目录、其他工程乃至个人笔记目录，因此既不写进本文档，也不留在发布目录里（10-07 08:1x 已把当时落盘的 `scan_all.txt` 从 `_tools/` 移出）。⇒ 一条硬约定：**对外文档只描述本项目**，不出现绝对机器路径、不点名工作区同级的其他条目。
+
+### 必须整改的硬编码凭据（4 处，逐条给位置）
+
+| 位置 | 形态 | 判定 | 建议处置 |
+|---|---|---|---|
+| `fssc-start/src/main/java/com/fssc/framework/security/TokenService.java:49` | 内置默认签名密钥字面量 | **可保留**：该类对非 dev profile 有启动自检，仍用默认值即拒绝启动 | 保留，但 `README` / `SECURITY.md` / `getting-started.md` 必须写明"生产必须注入 `FSSC_JWT_SECRET`"，且这个占位串要在 `docs/getting-started.md` 的配置表里指到 |
+| `fssc-start/src/main/java/com/fssc/platform/service/TenantLifecycleService.java:43` | `public static final` 租户管理员**初始口令常量** |  真硬编码，且被前端原文展示 | 改为配置项（如 `fssc.tenant.init-admin-password`）；缺省时随机生成并在响应里一次性返回，配合"首次登录强制改密" |
+| `fssc-start/src/main/java/com/fssc/system/service/UserService.java:162`、`:263` | 重置密码/批量导入的**兜底弱口令字面量**（6 位纯数字形态） |  真硬编码，两处成对 | 同上：走配置项 + 口令策略校验；不配则拒绝执行重置而不是静默用弱值 |
+| `fssc-web/src/views/common/Login.vue:174`、`:174` | 注册成功后**把初始管理口令写进提示文案**并回填进表单 |  与上面那条常量成对；发布后它就在公开 JS bundle 里 | 后端改配置项后同步删掉这两处字面量，文案改为"初始口令见部署文档/邮件下发" |
+
+>  这四条**不是**代码疏漏，而是演示/联调期留下的便利逻辑——所以整改要连着改文档（`docs/demo-accounts.md` 刻意不含任何口令，就是为此留的位置）。
+
+### 已核实为假阳性 / 合成向量（不整改，但要留档，避免下一轮重复排查）
+
+- 掩码与脱敏单测里的号码形态字符串＝**合成测试向量**（`MaskUtilTest.java:61`、`SensitiveMaskTest.java:75~100`）：脱敏逻辑的测试输入，公开反而能证明掩码规则生效。
+- `LocalDistributedStateTest.java:70~77` 的 IPv4 形态＝限流/缓存键测试用的假地址。
+- `OcrConfigService.java:36/42`＝配置**键名**常量里含 `token`/`key` 字样，不是值。
+- `permMappings.js:84`＝权限码中文对照表里"密钥"这个词条。
+- `settings-noproxy.xml`＝0 字节空文件；`sql/V1.4.18_budget_full_coverage*.sql`、`framework/log/OperLog*.java`＝文件名命中了"备份/日志"路径规则，是源码本体，必须发布。
+
+### 其余命中怎么处理（已收口 2 项，剩 1 项待执行）
+
+1. `bpmn-repo/drafts/`（2,129 文件 / 224 MB）里有多个联调脚本给口令赋字面值——白名单已把它整体排除，但**拷贝时别顺手带上**（它是发布包里最容易漏排的一档）。
+2.  已处置：端到端 UI 脚本目录（179 命中）本来就不在本项目三棵树内 ⇒ 第 2 节白名单不含它，理由与替代方案见那里那段 。
+3. ⏳ 待执行：`.gitignore` 原有 `_*.log` / `_*.txt` 但**没有 `_*.json`**——`fssc-server/_login_resp.json`（内含真实 JWT）这类残留会被 `git add` 抓进首个 commit。**已补** `_*.json` / `_*.sql` / `.classpath` / `.project` / `.factorypath` / `.settings/` / `bpmn-repo/drafts/` / `output/`，但**拷贝阶段仍应直接丢弃那两个文件**，别依赖 ignore 规则。（`.gitignore` 里原先还列过本项目之外的目录名，10-07 08:2x 已删——发布仓库的 ignore 规则不该描述别处的目录布局。）
+
+### 厂商名扫描（新增规则，已复验 0 命中）
+
+给 `_tools/secret_scan.mjs` 加了 `对外文案含厂商名` 一条：只对 `.md`/`README`/`CONTRIBUTING`/`SECURITY` 生效，`LICENSE`/`NOTICE`/`COPYING` 豁免（那里必须写许可方署名）。同时把读文件从 latin1 改成 **utf8**——否则中文规则永远 0 命中，这是假安全。
+
+- 复验（01:19 实测）：`node _tools/secret_scan.mjs --root=开源发布` → 36 个文本文件 / 0.35 MB，**敏感形态 0 命中、禁发形态 0 命中**。
+- 再复验（10-07 **08:1x** 实测，同一命令）：40 个文本文件 / 0.47 MB，**禁发形态 0 命中**；敏感形态 **1 命中＝假阳性**（§4b 末行那条 JDK 版本串）。CI 用的阻断闸是 `--docs-only`（只跑厂商名规则），此刻仍 0 命中 EXIT=0。⇒ 那两个数别混着抄：**文档闸绿 ≠ 全规则扫描 0 命中**。
+
+### 载荷数字怎么复算（所有 §0 的数字都来自这条命令）
+
+```bash
+node _tools/payload.mjs                    # 白名单载荷
+node _tools/payload.mjs --with-history-sql # 追加 fssc/sql 施工记录后的对比值
+```
+
+脚本会跳过 `target*`（含 `fssc-common/target_locked6…11/` 这 6 份锁文件副本）、`dist*`、`node_modules`、`.settings`、`*.class/jar/log/lst/prefs` 与 Eclipse 元数据文件。**改白名单前先跑一次基线，改完再跑一次对比**，别凭感觉估。
+
+## 4c. 文档引用核对（`_tools/cite_check.mjs`，已进 CI 阻断闸）
+
+AI 写的文档最典型的两种坏法是：**行号漂移**（代码改过后 `:183` 指到别处）和**引用不存在的文件**（凭印象造路径）。这两种都能机器判定，所以做了这个工具。
+
+```bash
+node _tools/cite_check.mjs docs/*.md README.md   # 以工作区根为 cwd 跑
+```
+
+它做六件事，判据逐条对应（除"路径写法不全／归属歧义"两条只提示外，其余命中一律 `EXIT=1`）：
+
+| 判据 | 含义 | 为什么要拦 |
+|---|---|---|
+| 缺文件 | 引用的路径在仓库里找不到 | 读者按图索骥扑空，整篇文档可信度归零 |
+| 行号越界 | 文件在，但行号超出文件行数 | 行号漂移的直接信号 |
+| **死引用** | 文件在**本地工作区**有，但在发布排除名单里（数据库转储、`backup/`、`target*`、`dist*`、`logs/`、`.env`） | 发布后外部读者拿不到那个文件 ⇒ 对外仍是死链。本地"能跳到"是假安全 |
+| **作用域外引用**（10-07 08:2x 新增，同样阻断） | 引用解析到的真实文件不在本项目三棵树里（`fssc/`、`bpmn-repo/`、`开源发布/`） | 这一条是本轮补的：脚本原本只判"文件在不在"，而开发机上工作区根也有一个 `docs/` 目录（和本仓库的 `docs/` 同名）。于是"根目录那篇文档里的一行"会被判**通过**——可它既不属于本项目、也不会随包发布 ⇒ 双重假绿。已用自测件验过这条真会 FAIL（`EXIT=1`） |
+| **绝对机器路径**（10-07 08:3x 新增，同样阻断） | 正文里出现带盘符的路径写法或 UNC 写法 | 对外文档里它既跳不到（读者的机器上没有）、又泄漏开发机环境（盘符＋程序目录名＋用户名常常在同一枚路径里）。报错**只给行列、不回显内容**——复述被扫路径本身就是一次泄漏（本轮实测踩过：清洗记录把被清掉的路径原文抄了回来，于是那一行自己成了全库唯一一处绝对路径）。已用自测件验过这条真会 FAIL（`EXIT=1`） |
+| 相对行号 | 句内裸写的“L＋数字”这类简写，按"同句最近点名 → 本节声明的归属约定 → 本节最后点名"三级归属后做边界核对 | 这类引用第一遍抓不到（没有文件名），却最容易漂移 |
+
+- 缩写别名（`J/` `T/` `C/` `RES/` `SQL/` `SQL2/` `V/` `FACTS/`）与 `docs/glossary.md`「路径缩写」表**一一对应**，改那边要同步改这边的 `ALIAS`；对不上就报"路径写法不全"而不是随便猜一个。
+- 基线（2026-10-07 **08:36:20** 复算，`node _tools/cite_check.mjs` ＋ `node _tools/secret_scan.mjs --docs-only --fail-on-hit` 两道闸同时 EXIT=0）：**20 份文档 / 3,617 行 / 厂商名与不该发布形态各 0 命中**，**742 条显式引用全通过、0 缺文件、0 越界、0 路径写法不全、0 死引用、0 作用域外、0 绝对机器路径**；另有 76 条句内裸写行号，0 越界、0 归属歧义（45 条靠各节开头那句"归属约定"兜住）；7 条"裸名同名多份"是同名文件在多个模块下各有一份，脚本按最近点名核对，不算失败。上一轮 01:5x 的基线是 13 份文档 / 578 条，增量主要来自 `docs/workflow-engine.md` 补入的 §8/§9/§10（**387 行 / 67,504 B**，其中 §8 一条就带 70 处引用）与本轮 §8 六项代判（＋12 条引用）。 这一轮补 §8/§9/§10 时**曾把 workflow-engine.md 整份覆盖掉一次**（并行写者），已找回并补齐——一个文件同一时间只允许一个写者，改前先核 `mtime`。**引用数会随文档增补变化，引用前先重跑，别抄这里的数字。**
+- 整改记录①（证据类）：`docs/permissions.md` 原有 3 条指向 `fssc/db/backup/…_full_….sql` 与 `fssc/sql/backup/…` 的证据引用（那是 487 MB 的真实数据转储，明确不发布）⇒ 已改成"该 `CREATE TABLE` 只在未随包发布的转储里，读者侧不可核 ⇒ 基线缺口见 §5"，并保留结论本身。**这类改动的口径**：结论照写，出处降级为" provenance 说明"，绝不为了留住行号把转储放进发布包。
+- 整改记录②（**项目事实被写错**，本轮实测推翻三条，全部来自"照着别的项目的惯例补文档"）：
+  - "本项目接了 Flyway" ⇒ `pom.xml` 三份零命中，实际是 `V*_seed.sql` + `V*_rollback.sql` 成对＋人工按序。`CONTRIBUTING.md` 已改，并在 §10 第 7 条把"没有可发布的迁移器"记成未决项。
+  - "新增文案请同步 `src/i18n/`" ⇒ 项目**没有国际化框架**（`package.json` 无 `vue-i18n`，全仓无 `createI18n`/`$t(` 调用，`src/i18n/` 只有一枚 bpmn-js 画布补丁）。`CONTRIBUTING.md`、`README.md`、`docs/module-map.md` 与本清单 §8 四处同一说法已改。
+  - "改查询层＝改 Mapper XML" ⇒ 全仓 `*Mapper.xml` **0 个**，SQL 只有注解与 Java 两种形态；另有主源码 18 个文件用 `JdbcTemplate` 直连（这条是租户过滤的旁路面，见 `docs/workflow-engine.md` §10 第 8 条）。
+  - **为什么会写出这三条**：它们都是"别的项目通常有"的东西。补文档时凡涉及"有没有某个机制"，必须先 `grep` 实测再落笔，拿不到结论就写"未见/未接"，别按行业惯例填空。
+- 整改记录③（**文档里的缺陷判词也会过期**，本轮实测推翻自己写过的两条）：
+  - "Dockerfile 的 `COPY` 目标写成了根本不存在的 `fssc-start-1.0.0.jar` ⇒ `docker build` 必失败"——这句在本清单 §6、`docs/architecture.md`、`docs/deployment.md`、`CHANGELOG.md` 四处同源抄过一遍。**现在代码已经改了**：`fssc/docker/Dockerfile:8` 实测为 `COPY fssc-server/fssc-start/target/fssc-server.jar`，与 `fssc/fssc-server/fssc-start/pom.xml:178` 的 `<finalName>fssc-server</finalName>` 对上，fat jar 也在位。四处已改成"曾经的缺陷已修 "，**但  那半句留着**：本机 `docker: command not found`，从未实跑过 `docker build`，所以"修好了"只是静态核对，不是容器验证。
+  - **口径**：文档里的" 未修／构建必失败／已知坑"是**关于代码的断言**，不是关于文档自己的断言——代码一变它就过期，而且四处同源说法会一起过期。凡从本清单转引缺陷状态，先重测被引那一行；改不动的（缺 Docker CLI、缺构建窗）就明确标"未经实机验证"，别让"已修"两字悄悄越界成"已验证"。顺带两条同源发现：`fssc/scripts/start-server.bat:8`、`fssc/scripts/start-server.sh:7`、`fssc/scripts/_probe_state.py:38` 仍写着旧 jar 名（`scripts/` 不在发布白名单里 ⇒ 不阻断发布，属内部脚本残留）；现役启动器 `fssc/start-server.bat:7`、`fssc/运行.bat:33` 用的是 `fssc-server.jar`，无需改。
+- 整改记录④（**发布册里混进了别的项目／本机环境**，10-07 08:2x 全目录复查后逐条清掉）：
+  - `_tools/scan_all.txt`——那份**整台开发机工作区**的扫描输出（4,188 B）躺在发布目录里，内容点名同级的其他工程目录、个人笔记目录与临时脚本目录。⇒ 已移出发布目录（施工留档，不删除）。它同时是"哪里有机密"的地图，本来就不该随包发布。
+  - §4b 原有一行"全工作区"的扫描统计，里面写了绝对机器路径与别的目录名 ⇒ 换成上面那张四行表（只统计本项目三棵树），并加了"扫描面口径"那段硬约定。
+  - §3 分拣表原先引内部文档的目录号（`docs/01–19` 这类）——那些编号目录在工作区根，既不随包发布、现在也已不在原位置 ⇒ 改为按类别描述，不再给出可跳但跳不到的内部路径。
+  - `CONTRIBUTING.md` 的测试命令块里有一条 `cd` 进**本项目之外那个施工目录**的命令——第 2 节已明确它不进发布包，命令却还留着，等于让新人照着去敲一个本仓库里不存在的路径 ⇒ 删掉命令，改为"不在本仓库里，想补自动化示例按 `examples/api-smoke/` 口径另制"。
+  - 绝对机器路径两处：本清单 §8 第 ⑥ 项的实测锚里写了那台开发机上 JDK 的安装路径（带盘符，还带了系统程序目录名）⇒ 改成"指向 JDK 26 的安装目录，且那台机器只装了这一枚"；`docs/_facts/facts.json` 的 `srcRoot` 曾写死成带盘符的源码根。后者是**生成器写死的**，所以改的是 `_tools/inventory.mjs` 与 `_tools/emit_facts.mjs`（现在都以 cwd 为根，`srcRoot` 输出相对路径），复算后 `docs/_facts/` 四件里只有 `facts.json` 变了两个字段（`srcRoot`＋时间戳），表数/域数/其余三件字节数不变。 顺带修掉一个真实可用性缺陷：那两个脚本原本在别人机器上根本跑不起来。
+  -  **这条清洗本身泄漏过一次**：第一版整改记录把被清掉的那两处路径**原文抄了回来**（写成"把某枚盘符开头的路径改成了……"那种句子），于是"清掉了绝对路径"的那一行自己就是全库唯一一处绝对路径。⇒ 已改写为不含盘符的表述。⇒ 记进 §4b 那段硬约定的推论：**复述被扫对象本身就是泄漏面**，清洗记录只写类别、不写原值。
+  - `_tools/secret_scan.mjs` 的跳过名单与 `.gitignore` 里留着几枚**本项目树内实测 0 枚**的目录名（开发机上与本项目同级的资产目录、个人笔记目录；也是那次全局扫描的遗留）⇒ 全部删掉，并在代码里注明"发布工具不该编码本项目之外的目录布局"。 本轮不复现那几个名字：写进文档就等于把别的项目的目录结构抄进了 FSSC 的册子。
+  - 闸本身补了两条判据（见上表"作用域外引用"与"绝对机器路径"），两条都自测过它会 FAIL。⇒ 口径教训：**核对器的盲区就是文档的盲区**。"文件存在"这个判据默认了工作区根＝发布根，两个前提一冲突，它就悄悄选错边；而"文档闸绿"也只覆盖**参与核对的那批 `*.md`**——本轮把手册类文件一并手工复扫（38 个文本文件）时，就在 `_tools/` 那份许可头手册里抓到一枚带盘符的绝对路径。
+  -  **上面那条移交项已收口**（10-07 08:5x，由做许可头的那条会话自己改）：`_tools/LICENSE-HEADERS.md` §四的"重跑手册"代码块里那枚带盘符的根路径两处，已换成 `<工作区根>`／`<WS>` 占位符，改后 Node 复扫该手册全文＝盘符形态 0 处。 保留原警告：CI 的核对面（`find . -name '*.md' -not -path './_tools/*'`）**不含** `_tools/` 里的 md ⇒ 第六条判据在那条路上不会自动拦，别把"CI 绿"当成"全目录没有绝对路径"——`_tools/` 里的每一件都要自己复扫。
+-  工具只判**存在性与边界**，不判语义。"行号在范围内但指错东西"要人读；`docs/how-to-read-this-code.md` 的"追踪弹"方法就是干这个的。
+
+## 5. 基线脚本生成
+
+见 `docs/data-model.md` 第 6 节，含 `mysqldump --no-data` 导出、剔除 `ACT_/FLW_`、空库校验与演示数据导出的完整命令。**验收：全新机器 → 建库 → 启动 → 能提单。**
+
+## 6. Dockerfile 那个坑（已修，但仍未经容器实机验证）
+
+原来的坑：`fssc/docker/Dockerfile` 的 COPY 目标写着 `fssc-start-1.0.0.jar`，而 `fssc/fssc-server/fssc-start/pom.xml:178` 的 `<finalName>fssc-server</finalName>` 让产物叫 `fssc-server.jar` ⇒ 照现状 `docker build` 必失败。
+
+**现状（2026-10-07 07:40 实测复核）**：`fssc/docker/Dockerfile:8` 已改成 `COPY fssc-server/fssc-start/target/fssc-server.jar /app/fssc-start.jar`，与该目录里现存的 fat jar 名字对得上；同批新增 `fssc/.dockerignore`（此前**根本没有**这一文件，而构建上下文＝整个 `fssc/`，其中 `target/` 单目录实测 4.5 G）。 **本机 `docker` 命令不存在**（`docker: command not found`）⇒ 这一路只核对了"路径与文件名存在"，**`docker build` 一次都没真跑过**，验收标准见 §1 第 7 行。仍建议同时处理：
+
+- `fssc/docker/Dockerfile:12` 的 `JAVA_OPTS` 把堆写死成 `-Xms4g -Xmx4g`，对小实例不友好 → 改成 `-XX:MaxRAMPercentage=70`，让 cgroup 决定
+- `fssc/docker/Dockerfile:4` 的 `eclipse-temurin:26-jre-alpine` 随 §8 第 ⑥ 项一起降到 25 LTS（26 是非 LTS 且已过 End of Availability）
+- `fssc/docker/k8s-fssc.yaml` 的 `logs` 卷当前是 `emptyDir: {}`，Pod 重建即丢日志 → 生产换持久卷或接日志采集
+-  同一个 jar 名的**旧默认值还留在内部脚本里**：`fssc/scripts/start-server.bat:8`、`fssc/scripts/start-server.sh:7`、`fssc/scripts/_probe_state.py:38` 三处仍写 `fssc-start-1.0.0.jar`（不存在的产物名）。现役启动器不受影响——`fssc/start-server.bat:7` 与 `fssc/运行.bat:33` 用的都是 `fssc-server.jar`；而 `fssc/scripts/` 本就在发布排除名单外 ⇒ **不阻断发布**，但会咬住下一个照那几个脚本启动的人
+- 前端无镜像 → 补一个 nginx 静态镜像 + `/api` 反代，或用 `docker-compose.yml` 串起 MySQL/后端/前端三件套（**新用户的第一体验**）；注意 `_tools/payload.mjs` 已把 `docker/` 列进白名单映射，但发布目录里现在**还没有** `docker/` 这一层，拷贝动作未执行
+
+## 7. 发布后第一周要做的事
+
+1. 开 Discussions，把 Issue 只留缺陷/需求（模板已配 `blank_issues_enabled: false`）
+2. 造 10–15 个 `good first issue`（好找、可独立验证、能让人第一次就跑通构建）
+3. 建 `release/1.x` 与 `main` 的分支保护，CI 设为必过
+4. README 顶部加"当前不保证生产可用"的诚实声明（已写，别删）
+5. 每天看一次新 Issue，**第一周的回应用速度决定这个项目有没有第二周**
+
+## 8. 六项待决：本轮全部代判（签字栏留空）
+
+判法约定：每项只给**一个**最佳解，两条锚——一条外部原文（附链接，可点开核对），一条本仓实测（`路径:行号` 或真机读数）。 代判≠代签：这六项涉及法律与产品定位，**下表"签字"一律留空**，须维护者（或法务）落名后才算生效。落码进度：②③④⑤ 的对外文字改动本轮已落（`CONTRIBUTING.md`／`README.md`／`NOTICE`／`docs/getting-started.md`）；**① 的逐文件许可头已在 staging 副本上做完**（10-07 08:5x，第四代副本，执行记录与重跑手册＝`_tools/LICENSE-HEADERS.md`；活树仍然 0 头＝发布时现做副本，不在活树上改，否则全仓 `file:line` 引用位移）；**⑥ 的 JDK 降线未改码**——本机无 JDK 25、无 docker CLI，须走 CI＋构建窗。
+
+| # | 事项 | 代判结论 | 落码状态 | 签字 |
+|---|---|---|---|---|
+| ① | 许可证 | **维持 Apache-2.0**，不换 MIT | 许可头已在第四代副本落地（1,597 个文件各 +3 行，六道复核全绿）；活树 0 头＝发布时现做副本 | ____ |
+| ② | 发布形态 | **仅源码**，`private: true` 保留不动 | 已落：`CONTRIBUTING.md` 新增"发布形态"段＋README 英文摘要同口径；`private: true` 未动 | ____ |
+| ③ | 主语言 | README **不做整篇英译**，只加一段英文 TL;DR | 已落：README 首屏 `<details>` 段＋`docs/getting-started.md` 明示"界面只有中文" | ____ |
+| ④ | 项目命名 | **不改**任何 `fssc` 标识符，只在 README/NOTICE 加一句缩写说明 | 说明句已加（见下）；商标检索仍待法务 | ____ |
+| ⑤ | MySQL 驱动许可 | **保留 Connector/J**，不换 MariaDB 驱动 | 已落：`NOTICE` 按判词改写（驱动专段） | ____ |
+| ⑥ | JDK 26 | **降到 JDK 25 LTS** 作发布基线 |  未改（本机无 JDK 25、无 docker CLI，须走 CI＋构建窗） | ____ |
+
+### ① 许可证：维持 Apache-2.0
+
+- **原文锚**：`LICENSE:2-4` 实测正文就是 **[Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)**；该许可证 §4(d) 要求分发时在"被修改的文件里"保留许可声明，这是它相对 MIT 的唯一实际成本，也是第 ① 项落码动作的来源（见下条实测）。
+- **实测锚**：`find fssc -name '*.java' -not -path '*/target/*'` ＝ **1,056** 个，其中随发布包走的那 1,049 个＝fssc-start 主源 1,007＋测试 27＋fssc-common 15（见 §2 白名单）；`grep -rl "Licensed under the Apache License"` ＝ **0** 个。也就是说全部 Java 源码目前**一枚许可头都没有**。
+- **判由**：这是财务/审批类业务系统，贡献者可能来自企业，专利授权条款（Apache-2.0 §3）换来的保护远大于补头的机械成本；MIT 没有专利条款。上游 Spring Boot、Flowable、MyBatis-Plus、ECharts 本身就是 Apache-2.0（见 `NOTICE:14-27` 的组件清单），不存在许可证兼容障碍。
+- **落码动作（发布阻断，别在活树上做）＝已做完，做在副本上**：给发布白名单内可注释的文件逐个加两行 SPDX 头＋一行空行＝每文件 **+3 行**；末态以候选发布包为准（10-11 09:4x 重做＝**1,599 个**：`.java` 1,057／`.xml` 284／`.vue` 172／`.js` 63／`.yml` 9／`.mjs` 9／`.ts`·`.yaml`·`.html`·`.css`·`Dockerfile` 各 1；10-07 那代是 1,597，差的两枚是活树这四天新加的）。再把本册引用按位移机械重算——同一批闸 09:49 实测 **742 条显式引用**、`shift_citations.mjs` 共改写 **915 处**（含区间写法，以及句内只写行号不写文件名的那种简写）。 直接改活树会让全部引用位移，而核对器只判"仍在范围内"＝**假绿**；所以这一步自带一道**锚文本判据**（`活树第 old 行`必须逐字等于`副本第 old+N 行`），本轮 915 处 0 条不符。完整执行记录与七步重跑手册＝`_tools/LICENSE-HEADERS.md`。
+- **头文案是 SPDX 短标识，不是那句长文案**：加的是 `SPDX-License-Identifier: Apache-2.0` ＋ 一行版权行，全文仍由仓库根 `LICENSE` 承载。⇒ 上面那条"grep 长句＝0 个"是**立项时的实测锚**，不能拿来当验收判据；验收要 grep `SPDX-License-Identifier`。
+- **判据**：副本内 `grep -L 'SPDX-License-Identifier'`（限允许表内的扩展名）为空；`verify_headers.mjs` 六道复核（头文字、逐字节还原、行数差、**行尾一致**、XML well-formed 带对照组、Vue SFC parse）全绿；`cite_check` 0 越界 0 死引用 0 作用域外；`secret_scan --docs-only` 0 命中。
+
+### ② 发布形态：仅源码，npm 不发
+
+- **原文锚**：`npm view fssc` 与 `npm view fssc-web` 实测都返回 `E404 Not Found - GET https://registry.npmjs.org/...` ⇒ 两个名字在 npm 上**未被占用**，也就是说"要发就得先抢名"这条担忧不成立，剩下的问题只是"该不该发"。
+- **实测锚**：`fssc/fssc-web/package.json:2` 是 `"name": "fssc-web"`、`:4` 是 `"private": true`；`fssc/fssc-server/pom.xml` 是聚合工程（`:9` artifactId `fssc-server`），`fssc-start` 是应用模块而非库（`fssc/fssc-server/fssc-start/pom.xml:178` 配 `<finalName>fssc-server</finalName>` 打 fat jar）。
+- **判由**：这是一个**要跑起来的系统**，不是一个可复用的依赖。发 npm 包要先从 `fssc-web/src` 里拆出组件库层——那是独立一笔投入，且拆出来的东西没有版本承诺可言。仅源码＋容器两条路已够外部用户使用（`docs/getting-started.md`、`fssc/docker/`）。
+- **落码动作（本轮已做）**：**保持 `private: true` 不动**（改成 false 只会引入"被人 `npm install` 一个没有发布流程的应用包"的风险）；`CONTRIBUTING.md` 加了一段"发布形态（已定，别开新路子）"明说只发源码、勿拆库、勿改 `private`，`README.md` 首屏英文 TL;DR 里同口径（"Source-only release"）。
+-  别把这条和第 10 行清单里的 `vite.config.js` `outDir: dist36` 混一起：那个输出目录正被现有前端热更投放流程依赖，**擅改会打断现网**，属另一条待人工裁决项。
+
+### ③ 主语言：不整篇翻译，只加一段英文 TL;DR
+
+- **判据来源说明**：这一项**没有可引的外部原文锚**——它不是"某个机制有没有"的问题，而是投入产出判断。全部依据落在下条实测＋首屏读者体验上，因此本项判词的强度只有"实测支撑现状、结论属自定"这一级，复核时请把它当建议而非事实。
+- **实测锚**：`fssc-web/package.json` 无 `vue-i18n` 依赖，全仓无 `createI18n` 与 `$t(` 调用，`fssc/fssc-web/src/i18n/` 目录里**只有一枚** `bpmn-zh.js`（bpmn-js 画布的中文翻译补丁，不是国际化框架）。界面文案就是中文字面量，状态码中文显示登记在 `fssc/fssc-web/src/constants/billStatus.js`。
+- **判由**：20 份互相引用、且靠脚本核对行号的中文文档，翻成第二语言等于把维护成本翻倍，而读者拿到的仍是一个界面只有中文的系统。诚实做法是：英文摘要写清"这是什么、能不能用、界面语言是中文"，把整套英文化登记成 1.0.0 之后的独立投入。
+- **落码动作（本轮已做）**：`README.md` 首屏加了一段 `<details open>` 的英文 TL;DR（定位／技术栈／先读哪几页／五条诚实告警，含 **UI is Chinese-only, there is no i18n framework in this repo**）；`docs/getting-started.md` 校准状态段里新增"界面语言：只有中文"一节，明说别去找不存在的语言开关。
+- **判据**：README 首屏英文读者能在不查代码的前提下说出这个系统的边界，且不会去找根本不存在的语言切换入口。
+
+### ④ 项目命名：保留 `fssc` 技术前缀，只补一句缩写说明
+
+- **原文锚**：本轮检索显示 `FSSC` 在两个不相干领域都已被大量使用——它既是"财务共享服务中心（Financial Shared Service Center）"这一**行业通用缩写**，也是 `fssc.com` 那套食品安全认证体系（FSSC 22000）的名字；npm 侧 `fssc`/`fssc-web` 均未被占用（第 ② 项实测）。⇒ 缩写本身通用，重名焦虑主要落在**搜索引擎可辨识度**上，而不是商标法上。
+- **实测锚**：改名的爆炸半径——`fssc/fssc-server/pom.xml:12`（artifactId `fssc-server`）、`fssc/fssc-server/fssc-start/pom.xml:17`（`fssc-start`）、Java 包根 `com.fssc`（1,056 个源文件的 `package` 行全部命中，见第 ① 项计数）、`fssc/fssc-web/package.json:2`、`fssc/docker/Dockerfile:6`（组名/用户名 `fssc`）与镜像 tag、`.github/workflows/ci.yml` 的路径过滤。
+- **判由**：改名是纯机械腿＋一次全量回归，收益只有"搜得到"，1.0.0 不值这笔；而"与同名商业产品混淆"的解法不是改名，是**在第一屏就把话说清**。
+- **落码动作（本轮已做）**：`README.md` 首屏与 `NOTICE:4-6` 各加一句——本项目名里的 FSSC 取"财务共享服务中心"这一行业通用缩写，与任何同名商业产品/认证体系无关，也不包含其代码或素材。
+-  **商标可注册性本轮无法证明**：我只能证明这个缩写是通用词，不能证明目标发布名无商标冲突。⇒ 签字前请法务做一次商标与包名检索（npm 已实测空闲，Maven Central / PyPI 未查）。
+
+### ⑤ MySQL 驱动：保留 Connector/J，把 NOTICE 的措辞按判词收紧
+
+- **原文锚**：MySQL 的 **[FOSS Exception](https://www.mysql.com/about/legal/licensing/foss-exception/)** 官方页里被覆盖的独立作品许可清单**明确列有 Apache License 2.0**，条件是"你对该 Program 本身在一切方面遵守 GPL"且"你的独立作品按清单里的许可分发"。⇒ 本项目（Apache-2.0 ＋ 仅源码 ＋ pom 声明依赖）落在这条例外覆盖范围内；原先 `NOTICE:26` 那行标的"唯一需要法务确认的组件"至此有了书面依据，已改为"判定见下方专段"。
+- **实测锚**：`fssc/fssc-server/fssc-start/pom.xml:91-92` 声明 `com.mysql:mysql-connector-j`（不写版本，由 `fssc/fssc-server/pom.xml:29` 的 Spring Boot 4.1.0 BOM 管）；现役 fat jar 里实际打进去的是 `BOOT-INF/lib/mysql-connector-j-9.7.0.jar`（2,607,237 B，`BOOT-INF/lib/` 共 192 条）。⇒ **关键差别**：源码发布不带该二进制，而任何**由使用者构建出的 jar/镜像**含它，那一路径下必须随附本 `NOTICE` 与例外条款链接。
+- **判由**：MariaDB Connector/J（LGPL）理论上更干净，但换驱动要重验 SQL 方言、认证插件、`utf8mb4` 与时区参数面——本项目的库、表与迁移脚本全部按 MySQL 立（见 `docs/data-model.md`、`docs/deployment.md`），风险远大于收益。
+- **落码动作（本轮已做）**：`NOTICE:29-36` 把原来那段"若编入闭源分发物请自行确认；或改用 MariaDB 驱动"改写为可执行口径：本包仅源码＋声明式依赖，`mvn package` 产出的 fat jar 含该 GPL 组件，分发构建物请连同本 NOTICE 一并保留（附例外条款链接），并写明不换驱动的理由。
+-  这条判词只对**开源分发**成立。若将来做托管 demo（第 ② 项里那个"提供托管 demo"选项），SaaS 分发路径要重新过一次法务。
+
+### ⑥ JDK 26 → 发布基线降到 JDK 25 LTS（本轮未改码）
+
+- **原文锚**：**[Eclipse Adoptium 支持周期页](https://adoptium.net/support/)** 原文——"Java 26 ... First Availability Mar 2026, Latest Release Aug 2026 jdk-26.0.2.1+1, **End of Availability Sep 2026**"；"Java 25 (LTS) ... First Availability Sep 2025 ... **End of Availability At least Sep 2031**"，且非 LTS 版本只支持到下一版发布。框架侧：**[Spring Boot 系统要求](https://docs.spring.io/spring-boot/system-requirements.html)** 原文——"requires at least Java 17 and is compatible with versions up to and including Java 26"。⇒ 25 落在 Boot 的支持区间内，降级无框架障碍。
+- **实测锚**：今天是 **2026-10-07**，JDK 26 的 End of Availability（Sep 2026）**已经过了**；本仓三个文件四处钉死了 26——`fssc/fssc-server/pom.xml:23` `<java.version>26</java.version>`、`:21` `<maven.compiler.release>26</maven.compiler.release>`、`.github/workflows/ci.yml:31` `java-version: '26'`、`fssc/docker/Dockerfile:4` `FROM eclipse-temurin:26-jre-alpine`；开发机上 `JAVA_HOME` 指向 JDK 26 的安装目录，且那台机器**只装了 26 这一枚 JDK**（没有 25 可以拿来复验），`docker` 命令不存在（`command not found`）。
+- **判由**：把一个对外发布的基线钉在**已过厂商支持期**的非 LTS 版本上，外部用户既装不到也拉不到长期存在的镜像 tag，这是采纳度的硬伤；Boot 4.1 支持 17–26 全区间，25 LTS 支持到至少 2031-09，取中位偏保守的 LTS 最合适。
+- **落码动作（须人工放行＋一次构建窗，本轮没做）**：上述三处 `26`→`25`（pom 两枚属性、ci.yml、Dockerfile 基础镜像），`README.md:7` 的 `JDK-26` 徽章与 `:88` 的 "JDK | **26.0.1**（`maven.compiler.release=26`）" 同步。 README 刚加了一段英文 TL;DR（§8 第 ③ 项），这两个行号会随首屏改动继续漂移 ⇒ **改之前重新 `grep -n "badge/JDK"` 定位，别抄这里的数字**。
+- **判据**：CI 在 `java-version: '25'` 上 `mvn -DskipTests package` 绿；若编译不过（说明用到了 26 才有的 API），退一步只把 `maven.compiler.release` 设 25、`java.version` 维持 26，并把"用到哪个 26 API"逐条列出再裁。**本机无 JDK 25 也无 docker CLI ⇒ 这条判词未经运行验证，只能走 CI。**
+

@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+name: 缺陷报告 Bug report
+description: 报告一个可复现的问题
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        安全漏洞请**不要**开公开 Issue，见 [`SECURITY.md`](../../SECURITY.md)。
+        提单前请先看 `docs/getting-started.md` 第 7 节「已知启动坑」，其中 8 条覆盖了大半新手报错。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 现象描述。请写清是"界面显示异常"还是"数据落库异常"——这两类的根因位置完全不同。
+      placeholder: 提交报销单后审批待办列表为空
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: |
+        请给出可复制的步骤，包含：登录**哪个演示账号角色**、菜单入口路径、点了什么、填了什么。
+        例：`财务专员登录 → 共享作业 → 单据池 → 筛选状态=待审批 → 勾选第 1 条 → 派工`
+      value: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及业务域
+      description: 不确定就选"其它"，并附上接口 URL（URL 第二段就能定位域，如 `/api/tenant/expense/bill`）
+      options:
+        - 报销 expense
+        - 审批引擎 workflow
+        - 共享作业 sharing
+        - 合规/档案 compliance
+        - 总账凭证 glex / gl
+        - 应收 arflow / receivable
+        - 应付 apflow / payplan / treasury / bank
+        - 主数据 masterdata
+        - 影像/OCR image / invoice
+        - 预算 budget
+        - 资产存货 asset
+        - 系统管理/权限 system / auth / platform
+        - 报表 report
+        - AI 网关 ai
+        - 前端框架/构建
+        - 其它
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 证据（很重要，请尽量提供）
+      description: |
+        请贴以下任一项，能极大加快定位：
+        - 浏览器 Network 里那条请求的**完整响应体**（含 `code`/`msg`）——`code=4030` 表示缺权限而非无数据
+        - 后端日志片段（注意去掉真实个人信息）
+        - 数据库只读查询结果（表名 + 关键列）
+        - `git rev-parse HEAD` 或发行版本号、JDK/Node/MySQL 版本
+      render: shell
+  - type: checkboxes
+    id: env
+    attributes:
+      label: 环境确认
+      options:
+        - label: 我用的是干净代码 + `db/schema-baseline.sql` 新建的库（非历史遗留库）
+        - label: 我确认后端 `/actuator/health` 返回 UP
+        - label: 我用演示数据复现，不是生产数据
+        - label: 我已排除"其实是权限不足被显示成空数据"这种情况
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      render: shell
+      description: 请删掉任何真实姓名、工号、手机号、证件号、口令后再粘贴。
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: 我确认
+      options:
+        - label: 以上内容不含真实生产数据、客户名称或个人敏感信息
+          required: true

@@ -1,0 +1,38 @@
+FSSC · 集团财务共享服务平台
+Copyright 2026 The FSSC Project Authors
+
+本名称里的 "FSSC" 取 "Financial Shared Service Center"（财务共享服务中心）这一行业
+通用缩写，指本软件所服务的业务形态本身；本项目与任何同名或近名的商业软件、认证体系
+均无隶属或关联关系，也不包含其代码、界面素材或文档。
+
+贡献者保留其提交的著作权；本项目依据 Apache License 2.0 授予使用与专利许可。
+
+本产品包含或链接的第三方组件及其许可（节选，完整清单请运行 `mvn dependency:list`
+与 `npm licenses list` 生成，发布前须逐条核对协议兼容性）：
+
+  - Spring Boot (Apache-2.0)
+  - Flowable (Apache-2.0)
+  - MyBatis-Plus (Apache-2.0)
+  - jjwt (Apache-2.0)
+  - Lombok (MIT)
+  - Apache Commons Lang3 (Apache-2.0)
+  - springdoc-openapi (Apache-2.0)
+  - Vue 3 / Vue Router / Pinia (MIT)
+  - Element Plus (MIT)
+  - bpmn-js（包内 license 字段写的是 "SEE LICENSE IN LICENSE"，其 LICENSE 正文为 MIT 样式、
+    版权方 Camunda Services GmbH）/ bpmn-js-properties-panel、diagram-js、bpmn-moddle（MIT）
+  - ECharts (Apache-2.0)
+  - MySQL Connector/J (GPL-2.0 with FOSS exception)  ← 判定见下方专段
+  - Vite / Vitest (MIT)
+
+关于 MySQL Connector/J（GPL-2.0 with FOSS Exception）：
+  - 本发布包只含源码与 pom 里的声明式依赖（fssc-server/fssc-start/pom.xml），不含该驱动的二进制。
+  - MySQL 发行方公布的 FOSS Exception 所覆盖的独立作品许可清单里明确列有 Apache-2.0，本项目即以此许可发布，
+    因此"源码 + 声明依赖"这一路径由该例外覆盖；条件是你对该驱动本身在一切方面遵守 GPL。
+  - 由 `mvn clean package` 产出的 fat jar（或据此构建的镜像）会把该驱动打进 `BOOT-INF/lib/`。若你分发这类
+    构建物，请连同本 NOTICE 一并保留，并附 FOSS Exception 条文链接；闭源分发路径不在本项目的判断范围内，
+    请自行过法务。
+  - 未改用 MariaDB Connector/J（LGPL）：换驱动需重验 SQL 方言、认证插件、字符集与时区参数面，风险大于收益。
+
+本项目不捆绑任何第三方厂商的专有文档、界面素材、数据或软件；
+发票识别与查验能力通过可插拔 SPI 外接，本仓库不含任何厂商实现或凭据。

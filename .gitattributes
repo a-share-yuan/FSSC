@@ -1,0 +1,32 @@
+# 行尾与二进制规则（缺了它的后果已实测：载荷内 1,377 枚纯 LF ＋ 231 枚 CRLF 混排，
+# Windows 上默认 core.autocrlf=true 会把那 231 枚整片改行，diff 噪声淹没真实变更）
+# 口径：仓库内存 LF，检出也给 LF——不做"提交前人工转换"，交给 git 规范化。
+* text=auto eol=lf
+
+# Windows 批处理必须是 CRLF：LF 版 .bat 里 `call :label` 会报"找不到标签"（本机实案）
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell 脚本必须是 LF（CRLF 会让 bash 把 `\r` 当命令的一部分）
+*.sh text eol=lf
+
+# 二进制：永不改行尾，也不进 diff 统计
+*.jar binary
+*.war binary
+*.class binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.xls binary
+*.zip binary
+*.gz binary
+
+# 生成的事实表与依赖锁：不参与 blame 噪声，按需查看
+# （路径按"仓库根＝本目录内容 ＋ fssc/ ＋ bpmn-repo/"这个布局写，与发布册 §2 白名单一致）
+docs/_facts/facts.json linguist-generated=true
+fssc/fssc-web/package-lock.json linguist-generated=true

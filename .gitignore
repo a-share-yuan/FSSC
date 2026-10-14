@@ -1,0 +1,75 @@
+# ---- 构建产物 ----
+target/
+target_*/
+**/target/
+*.class
+*.jar
+!**/gradle/wrapper/*.jar
+dist/
+dist*/
+build/
+out/
+node_modules/
+__pycache__/
+*.pyc
+
+# ---- 运行时数据（含用户上传附件，绝不入库）----
+data/files/
+upload/
+/logs/
+**/logs/
+*.log
+*.out
+*.out.log
+.run/
+
+# ---- 数据库导出/备份（含真实业务数据，禁止提交）----
+db/backup/
+db/Dump*/
+*.dump
+*_full_*.sql
+*_rollback_*.jar
+backup/
+
+# ---- 本地配置与凭据 ----
+.env
+.env.*
+!.env.example
+application-local.yml
+application-*.local.yml
+*.p12
+*.jks
+settings-noproxy.xml
+
+# ---- 编辑器/OS ----
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.factorypath
+.settings/
+*.springBeans
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 会话/临时施工产物 ----
+.tmp*
+_tmp*
+temp_*
+_*.log
+_*.txt
+_*.json
+_*.sql
+login_resp*.json
+token.txt
+nul
+*.tmp
+.scanner/
+archive/graveyard*/
+releases/
+
+# ---- 施工目录（即使误拷也不入库）----
+bpmn-repo/drafts/
+output/

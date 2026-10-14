@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+name: 配置
+blank_issues_enabled: false
+#  发布前把 <owner>/<repo> 换成真实的 GitHub 命名空间（contact_links 的 url 必须是**绝对地址**，
+#    写成 ../../xxx 这种相对路径 GitHub 不会解析，点进去就是 404）。
+contact_links:
+  - name: 报告安全漏洞（请勿开公开 Issue）
+    url: https://github.com/<owner>/<repo>/security/advisories/new
+    about: 鉴权绕过、越权、注入、密钥泄漏等一律私密报告，见 SECURITY.md
+  - name: 使用问答与讨论
+    url: https://github.com/<owner>/<repo>/discussions
+    about: "跑不起来""这个功能怎么用""设计为什么这样"请发到 Discussions，Issue 只留缺陷与需求

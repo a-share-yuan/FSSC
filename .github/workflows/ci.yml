@@ -1,0 +1,111 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: 后端构建与测试
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fssc/fssc-server
+    steps:
+      - uses: actions/checkout@v4
+      #  发布前确认：JDK 26 在 actions/setup-java 的发行版支持情况。
+      #    若当时无 26，可退到官方镜像或改用容器 job；不要为了让 CI 变绿而把
+      #    maven.compiler.release 降到与 pom 不一致的版本。
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '26'
+          cache: maven
+      - name: Build
+        run: mvn -B -ntp clean package
+      - name: Test
+        run: mvn -B -ntp test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fssc-server-jar
+          path: fssc/fssc-server/fssc-start/target/fssc-server.jar
+          retention-days: 7
+
+  frontend:
+    name: 前端构建与单测
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fssc/fssc-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: fssc/fssc-web/package-lock.json
+      - run: npm ci
+      - run: npm run build -- --base=./
+      - run: npm run test
+      - name: 覆盖率摘要
+        if: always()
+        run: npm run test:coverage || true
+
+  hygiene:
+    name: 发布卫生检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # 词表只存在于 _tools/secret_scan.mjs，本文件不复制任何扫描词。
+      # 反例对照已本地验证：同一命令扫内部文档目录会报出命中，说明规则真的在跑。
+      - name: 对外文案禁现厂商名（阻断）
+        run: node _tools/secret_scan.mjs --root=. --docs-only --fail-on-hit --list=40
+      # 报告腿（不阻断）：全量扫描会抓到源码里的合成测试向量（脱敏单测的号码形态输入等），
+      # 那些是合法出现，所以只出报表供人工看趋势；等整改完再升成阻断。
+      - name: 全仓敏感形态报告（非阻断）
+        if: always()
+        continue-on-error: true
+        run: node _tools/secret_scan.mjs --root=. --list=15
+      # 阻断闸：文档里每条 `路径:行号` 必须能跳到真实文件、行号不越界，而且**不能指向发布排除项**
+      # （数据库转储 / backup 目录 / 构建产物在本地工作区里有，发布后没有 ⇒ 对外部读者是死链）。
+      # 文档最常见的失效方式就是"行号漂移"和"引了个不存在的文件"，这里把它变成机器判据。
+      # 本地基线（2026-10-13 实测）：742 条显式引用＋76 条句内裸写行号，全部通过。
+      # 布局口径：仓库根＝发布册目录内容 ＋ `fssc/` ＋ `bpmn-repo/`，所以本文件所有模块路径都带 `fssc/` 前缀（与册内引用一致）。
+      # 口径：只判存在性与行号边界，不判语义对错——语义仍要靠人读。
+      - name: 文档引用核对（阻断）
+        run: |
+          set -e
+          DOCS=$(find . -name '*.md' -not -path './node_modules/*' -not -path './_tools/*' -not -path './.git/*' | sort)
+          echo "参与核对的文档数：$(printf '%s\n' "$DOCS" | wc -l)"
+          node _tools/cite_check.mjs $DOCS
+      - name: 禁止提交的产物与数据
+        run: |
+          set -e
+          BAD=0
+          for pat in 'db/Dump' 'db/backup' '_full_' '\.jar$' '/target/' '/dist[0-9]' 'node_modules/' '\.env$' '_run_.*\.log'; do
+            HITS=$(git ls-files | grep -cE "$pat" || true)
+            if [ "$HITS" != "0" ]; then
+              echo "✗ 命中禁止提交的形态: $pat ($HITS 个文件)"
+              git ls-files | grep -E "$pat" | head -20
+              BAD=1
+            fi
+          done
+          # 口令类默认值不得出现在被跟踪的配置里（只查形态，不回显内容）
+          if git grep -nE '^( *(password|secret|api-key)): *"[^"$]{4,}"' -- '*.yml' '*.yaml' | grep -v '\${' ; then
+            echo "✗ 配置文件出现明文字面量凭据"; BAD=1
+          fi
+          [ "$BAD" = 0 ] && echo "✓ 卫生检查通过" || exit 1

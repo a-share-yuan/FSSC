@@ -1,0 +1,125 @@
+# 模块地图：找一个功能该改哪个文件
+
+> **校准状态**：域/文件/行数/控制器/端点/表/`@RequestMapping` 前缀全部由 `_tools/inventory.mjs` 从 `fssc-start/src/main/java/com/fssc` **实测抽取**（脚本与原始数据见 `docs/_facts/`）。"职责"列中标  的是根据包名、表名、API 前缀与控制器名推断，**尚未逐个读码确认**，改动前请先看该域代码。
+
+## 怎么读这张表
+
+后端一个域 = 一个垂直业务切片，目录结构高度统一：
+
+```
+com/fssc/<域>/
+├── controller/   ← HTTP 入口，类上 @RestController + @RequestMapping("/api/tenant/<域>/...")
+├── service/      ← 业务编排（接口 + impl）
+├── mapper/       ← MyBatis-Plus BaseMapper，自定义 SQL 在同名 XML
+├── entity/       ← @TableName("xxx") 映射表，字段驼峰自动对下划线
+├── dto/ vo/      ← 出入参对象
+└── 其它          ← 有的域多一层 action/ ops/ channel/ facade/
+```
+
+**跨域调用不走对方的 Controller**，走 `framework/facade`（11 个文件）或 Service 直接依赖。看到这个模式就别在 Controller 里找逻辑了。
+
+## 33 个域（按代码行排序）
+
+| 域 | 文件 | 行 | 控制器 | 端点 | Mapper | 表 | API 前缀（节选） | 职责 |
+|---|---:|---:|---:|---:|---:|---:|---|---|
+| `workflow` | 130 | 31,917 | 16 | 127 | 21 | 21 | `/api/tenant/wf{,/approval-item,/biz-flow,/config,/designer,/dev}` | 审批流程引擎：Flowable 接入 + 自研 `wf_*` 台账 + 在线 BPMN 设计器后端 + 审批动作 |
+| `sharing` | 70 | 15,067 | 10 | 122 | 19 | 19 | `/api/tenant/sharing{,/config,/delivery}`、`/api/tenant/pay{,/match,/recon}` | 共享中心作业运营：单据池/派工/交付/SLA/绩效；**付款与收付勾兑也在此域**  |
+| `compliance` | 67 | 8,135 | 16 | 137 | 15 | 15 | `/api/tenant/compliance{,/approval-rule,/dispatch,/expense-policy,/export}`、`/api/shared-ops` | 合规与规则：费用政策标准、审批规则、派工规则、会计档案（归档/借阅/销毁） |
+| `expense` | 42 | 7,990 | 8 | 34 | 11 | 11 | `/api/tenant/expense/{bill,detail,attach,mine,bill-trace-chain,bill/cold}` | 费用报销主线：单据头/明细/附件/我的报销/联查/冷数据 |
+| `system` | 90 | 6,391 | 15 | 101 | 27 | 27 | `/api/tenant/system/{config,dict,file,log,job,integration,ext-interface,...}` | 租户内系统管理：用户/角色/菜单/参数/字典/编号规则/文件/日志/定时作业/第三方接口 |
+| `glex` | 53 | 5,728 | 11 | 55 | 14 | 14 | `/api/tenant/glex{,/journal,/consolidate,/fx-reval,/inter-offset}`、`/api/tenant/gl`、`/api/tax` | 总账扩展引擎：凭证生成、合并、汇兑重估、内部往来对冲、税务 |
+| `arflow` | 43 | 5,663 | 5 | 73 | 11 | 11 | `/api/tenant/ar-flow{,/notes,/writeoff,/month-close,/reports}` | 应收流程：票据、核销、月结、报表 |
+| `framework` | 76 | 5,628 | 5 | 3 | 1 | 1 | `/api/health`、`/api/tenant/system/job-heartbeat` | **底座**：`security/`（JwtAuthFilter）、`tenant/`（多租户上下文与拦截）、`facade/`（跨域门面）、`config/`、`spi/`（`DistributedState` 可插拔）、`mask/`（脱敏） |
+| `masterdata` | 109 | 5,622 | 15 | 174 | 39 | 39 | `/api/tenant/masterdata/{bank-account,cost-center,currency,exchange-rate,city,config,...}` | 主数据：客商/银行账号/成本中心/币种汇率/城市等 45 张 `md_*` 表。**文件最多、端点最多（174）** |
+| `image` | 29 | 3,792 | 4 | 25 | 6 | 6 | `/api/tenant/image{,/setting}`、`/api/tenant/ocr-records` | 影像与 OCR：批次/文件/调阅设置 + `channel/` 内 OCR 通道 SPI（gateway/mock/http/paddle） |
+| `asset` | 29 | 3,631 | 4 | 40 | 9 | 9 | `/api/tenant/asset{,/category,/depr-batch}`、`/api/tenant/inventory` | 固定资产与存货：卡片、折旧批次、库存收发 |
+| `document` | 21 | 3,569 | 4 | 32 | 4 | 4 | `/api/tenant/compliance/archive*` | 单据中心与档案附件 （注意：其 API 挂在 `compliance` 前缀下） |
+| `budget` | 16 | 2,999 | 3 | 22 | 2 | 5 | `/api/tenant/budget{,/adjust,/occupy}` | 预算：编制、调整、**占用**（报销提交时扣减） |
+| `ai` | 15 | 2,661 | 3 | 13 | 3 | 3 | `/api/ai/gateway`、`/api/tenant/ai/{ask,confirm}` | AI 动作网关：目录白名单 + 红线 + 权限 + 一次性确认票据，动作回环走人侧 `/api/tenant/**` |
+| `invoice` | 17 | 2,647 | 2 | 23 | 2 | 5 | `/api/tenant/invoice{,/enhance}` | 进项/销项发票与查验（依赖外部发票能力网关） |
+| `receivable` | 22 | 2,282 | 4 | 19 | 5 | 6 | `/api/tenant/{receivable,receipt,bad-debt,collect-todo}` | 应收账款：台账、到账、坏账、催收待办 |
+| `platform` | 40 | 2,093 | 8 | 32 | 13 | 13 | `/api/platform/{tenant,saas,package,feature,config,dashboard}` | **平台运营端**（非租户）：租户开通、套餐、功能开关、平台看板 |
+| `treasury` | 17 | 1,900 | 5 | 27 | 4 | 4 | `/api/tenant/treasury/{position,fund-plan,transfer,credit-bill,bill-settle}` | 资金：头寸、资金计划、内部划转、票据 |
+| `apflow` | 11 | 1,768 | 2 | 25 | 5 | 3 | `/api/tenant/{ap-request,ap-month-close}` | 应付流程：付款申请、月结 |
+| `report` | 16 | 1,763 | 5 | 47 | 4 | 3 | `/api/tenant/{report,report-catalog,dashboard}` | 报表与管理看板 |
+| `collab` | 13 | 1,578 | 1 | 32 | 4 | 4 | `/api/tenant/collab` | 协同与消息：站内信 + 企微 webhook + 邮件多渠道 |
+| `bank` | 12 | 1,457 | 1 | 11 | 3 | 3 | `/api/tenant/bank/reconcile` | 银企直联：对账单、付款回单（默认 mock 网关） |
+| `purchase` | 9 | 1,423 | 1 | 11 | 3 | 3 | `/api/tenant/purchase` | 采购与 PO |
+| `returns` | 12 | 1,265 | 2 | 20 | 4 | 4 | `/api/tenant/{pur-returns,sale-returns}` | 采购/销售退单  |
+| `contract` | 10 | 844 | 2 | 19 | 3 | 3 | `/api/tenant/contract` | 合同 |
+| `auth` | 6 | 788 | 1 | 9 | 0 | 0 | `/api/auth` | 登录/登出/取用户信息，JWT 签发 |
+| `audit` | 9 | 783 | 2 | 6 | 2 | 2 | `/api/tenant/audit/{trail,reconcile}` | 审计留痕与勾稽核对 |
+| `payplan` | 7 | 651 | 1 | 4 | 2 | 2 | `/api/tenant/pay-plan` | 付款计划（与批次付款的核销回写联动） |
+| `gl` | 4 | 448 | 1 | 5 | 1 | 1 | `/api/tenant/gl` | 总账基础（与 `glex` 并存的薄层 ） |
+| `tracing` | 3 | 407 | 1 | 1 | 0 | 0 | `/api/tenant/doc-tracing` | 单据全链路联查 |
+| `match` | 4 | 291 | 1 | 2 | 1 | 1 | `/api/tenant/match` | 三单匹配容差（PO/入库/发票） |
+| `customer` | 4 | 222 | 1 | 6 | 1 | 1 | `/api/tenant/customer` | 客户基础  |
+| `FsscApplication` | 1 | 25 | — | — | — | — | — | 唯一启动类（在包根，不在子目录） |
+
+**合计**：1,007 文件 / 131,428 行 / 160 控制器 / 1,257 端点 / 244 Mapper 接口 / 243 张 `@TableName` 表
+
+## 有几个"巨无霸"文件：先知道，再决定要不要打开
+
+全仓 Java 平均 **130 行/文件**（131,428 ÷ 1,007）。下面这几个是数量级 outliers，**第一次读码不要从它们开始**，否则会把整个下午搭进去：
+
+| 文件 | 行数 | 为什么这么大 | 建议 |
+|---|---:|---|---|
+| `fssc-start/src/main/java/com/fssc/workflow/service/WfEngineFacade.java` | **6,359** | 审批引擎的统一门面：提交/审批/驳回/加签/转办/撤回/超时/绩效全在这一类里编排 | 只按方法名查你需要的那一个，别通读 |
+| `fssc-start/src/main/java/com/fssc/sharing/service/VoucherService.java` | 4,137 | 凭证生成 + 科目规则 + 多域制证入口 | 同上，按业务域定位方法 |
+| `fssc-start/src/main/java/com/fssc/expense/service/ExpenseBillService.java` | 2,210 | 报销单 CRUD + 状态机 + 校验 | — |
+| `fssc-start/src/main/java/com/fssc/workflow/service/NodeOrgResolver.java` | 1,780 | 节点审批人解析（各种分配模式的判定顺序都在这） | 想看"谁该审这张单"就读它 |
+| `fssc-start/src/main/java/com/fssc/sharing/service/PayBatchService.java` | 1,765 | 付款批次 | — |
+| `fssc-start/src/main/resources/ai/catalog-fssc.json` | **50,481**（1.3 MB） | AI 动作目录：每条业务动作的入参/权限/红线声明，机器生成物而非手写代码 |  别读，用 `docs/business-flows/README.md` 的口径理解它的用途 |
+
+前端同理：`src/views/system/FlowConfig.vue` **1,720 行**、`views/approval/Approval.vue` 1,261 行、`components/approval/ApprovalDialog.vue` 1,171 行、`views/h5/H5ExpenseCreate.vue` 1,060 行（`.vue` 合计 56,674 行）。
+
+**这是一类典型形态**：横切机制很薄（`framework/` 76 个文件），业务编排很厚（单个门面类几千行）。想改行为时，先确认你改的是"薄的那层"（配置/扩展点）还是"厚的那层"（硬编码编排）——后者往往需要在巨型方法里找分支条件，风险明显更高。
+
+## API 路径约定（新人最容易踩）
+
+```
+/api/auth/**          登录相关，免 token
+/api/tenant/**        租户端业务 —— 绝大多数接口都在这下面，需要 token + 权限
+/api/platform/**      平台运营端 —— 租户账号进不去（返回 403/4030）
+/api/health           探活
+/api/shared-ops/**     非规范（compliance 域），本应挂 /api/tenant/ 下
+/api/tax/**            非规范（glex 域）
+```
+
+约定含义：URL 第二段就是**鉴权域**。写新接口时先决定它属于 tenant 还是 platform，别自造第三段路径。上面两个  是历史遗留的破例，看到它们不要以为是框架问题。
+
+## 前端
+
+```
+fssc-web/src/
+├── router.js + router/     ← 路由即菜单（17 个路由定义文件，134 个 views 页面）
+├── views/<域>/*.vue         ← 页面，目录名与后端域名部分对应但不完全一致
+├── components/              ← 复用组件
+├── composables/             ← 组合式函数（逻辑复用）
+├── api.js + request.js      ← 请求层（axios），统一处理 code/msg 与 4030
+├── directives/              ← 权限指令
+├── stores (pinia)           ← 全局状态
+├── constants/               ← 枚举与显示文案映射（历史坑：枚举显示层写在 JS 里）
+├── i18n/                    ← 只有一个 bpmn-js 画布中文补丁；项目没接国际化框架
+└── styles/                  ← Element Plus 主题与全局样式
+```
+
+`views/` 目录页面数排序：flow 14 · expense 14 · system 12 · sharing 11 · pay 9 · master 9 · workflow 6 · common 6 · budget 6 · asset 6 · purchase 4 · image 4 · gl 4 · dashboard 4 · h5 3 · bank 3 · 其余各 1–3。
+
+**注意目录名不对齐**：前端 `views/flow/` 与 `views/workflow/` 并存、`views/pay/` 对应后端 `sharing`+`apflow`、`views/finance/` 对应 `glex`。判断某页面属于哪个后端域，**唯一可靠办法是看它 `request` 的 URL 前缀**。
+
+## H5 移动端
+
+`views/h5/`（3 个页面）承载移动报销端，与 PC 端**共用同一套 `/api/tenant/**` 接口**。历史上该端有独立核查与优化记录，改动前请确认 PC 与 H5 两侧表现。
+
+## 域外子项目
+
+| 目录 | 是什么 | 开源发布建议 |
+|---|---|---|
+| `fssc/image-service/` | 影像/OCR 相关服务（含 PaddleOCR 侧 `kb_ocr_server.py`） | 保留，标注为可选组件 |
+| `fssc/monitor/` | Prometheus 配置与告警规则 | 保留 |
+| `bpmn-repo/`（**工作区根目录**，实测：`publish/` 77 个已发布模型、`models/` 83 个模型编码 / 289 个版本 XML） | 流程模型真相源 |  发布 `publish/` + `models/`，**排除 `drafts/`（2,129 文件 / 224 MB 施工垃圾）** |
+| `fssc/sql/` | 205 个历史增量脚本 | **替换为 `schema-baseline.sql` + 归档**，见 `docs/release-checklist.md` |
+| `InvoiceGateway` | 发票能力网关，**独立闭源服务，不在本仓库** | README/SECURITY 已声明默认 OCR 通道对它的依赖 |
+
+ **端到端 UI 测试脚本不在这张表的任何一处**：`fssc/` 下实测没有这类目录（只有 `image-service/`、`monitor/`、`scripts/` 等），自动化脚本存放在**本项目之外**的另一处施工目录里，不在发布范围内。要补示例按 `docs/release-checklist.md` 第 2 节那段口径另制 `examples/api-smoke/`。
