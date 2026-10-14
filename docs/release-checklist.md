@@ -41,7 +41,7 @@
 | 10 | `vite.config.js` `outDir: dist36` + `emptyOutDir: false` |  待改 | 构建输出 `dist/` 且清空 |
 | 11 | CI 未接通 |  已备 yaml | 首个 PR 上 Actions 全绿 |
 | 12 | README 截图缺失 |  未做 | 5–8 张演示环境截图，已过脱敏 |
-| 13 | **许可头**：活树 1,056 个 `.java`（发布白名单内 1,049＝fssc-start 主源 1,007＋测试 27＋fssc-common 15）带 Apache 许可声明的 **0 个** |  副本侧已做完，末态＝候选发布包（10-13 17:4x 重做：包 1,840 件，**加头 1,608 枚各 +3 行**，六道复核全绿，四条构建腿 **224 例后端＋63 例前端全绿**，915 条引用按锚文本重算 0 条不符）； 活树仍 0 头＝**不随源码发布**，发版时按 `_tools/LICENSE-HEADERS.md` §四现做副本 | 执行记录与七步重跑手册＝`_tools/LICENSE-HEADERS.md`；剩余项＝行尾混排（包内 231 枚 CRLF）要不要统一转 LF，见该手册 §五第 5 条与 §2 那条 `.gitattributes` |
+| 13 | **许可头**（立项时 10-07 实测：活树 1,056 个 `.java`、随发布包走的 1,049 个带 Apache 逐文件声明的＝**0**） |  **已随发布仓库落地**（10-14 18:29 冻结：1,875 件，**加头 1,640 枚各 +3 行**，六道复核全绿；构建腿 `mvn test` **252/0/0 SUCCESS** ＋ `package` SUCCESS；前端以"仓库字节＝开发目录字节"等价链取证）。 "活树 0 头"这句已失效：施工区现有 **10 枚**带头文件（别家 i18n 产物拷回，5 枚在载荷内），幂等判据已正确跳过 | 执行记录与重跑手册＝`_tools/LICENSE-HEADERS.md`；剩余＝246 枚 CRLF 要不要物理转 LF（`.gitattributes` 已生效，见 §2 那条） |
 | 14 | 发布基线钉在**已过厂商支持期**的非 LTS JDK（26，End of Availability 2026-09） |  已代判降到 25 LTS（§8 第 ⑥ 项）， 未改码——本机无 JDK 25、无 docker CLI | CI 上 `java-version: '25'` 跑 `mvn -DskipTests package` 绿；pom `:20-21`、ci.yml `:28`、Dockerfile `:4`、README `:7`/`:88` 六处口径一致（ 这两枚 README 行号会随首屏改动漂移，动手前重新 `grep -n`） |
 | 15 | GitHub 命名空间还是占位 `<owner>/<repo>`：`.github/ISSUE_TEMPLATE/config.yml` 的两条 `contact_links`、`CHANGELOG.md` 末行链接 |  相对链接的坑已修（`config.yml` 原先写 `../../security/advisories/new` 这类**相对地址**，GitHub 不解析 ⇒ 点了就 404；已换成带占位的绝对地址） | 建仓后把三处 `<owner>/<repo>` 一次性替换成真名，再点一遍"报告安全漏洞""使用问答与讨论"两个入口 |
 | 16 | **会让 `git clone`／首个 PR 直接红的四件事**（10-13 18:0x 全部堵掉） |  ① `.gitattributes` 已补（`* text=auto eol=lf`，`.bat/.cmd` 强制 CRLF、`.sh` 强制 LF、二进制标 binary）——此前载荷内 1,377 枚 LF 与 231 枚 CRLF 混排且无归一规则；② 保留设备名 `nul`（开发目录实测 **6 枚**）已进 `_tools` 的文件层剔除规则 ⇒ 载荷内 **0 枚**；③ `ci.yml` 四处模块路径补上 `fssc/` 前缀（原写 `working-directory: fssc-server`/`fssc-web`、artifact `path:`、`cache-dependency-path:`，与册内 `fssc/...` 引用口径不一致 ⇒ 提到仓库根后这两步必红）；④ 4 条指向未发布历史 SQL 的引用降级为 provenance 说明（结论照写、不给跳不到的行号，可核部分换成现役代码锚） | 包根跑 `cite_check` **EXIT=0**（此前恒 1，唯一成因就是④）；开发侧同套闸 738/738 通过；`git ls-files` 里无 `nul`、无 `*.bak-*` |
@@ -249,11 +249,11 @@ node _tools/cite_check.mjs docs/*.md README.md   # 以工作区根为 cwd 跑
 
 ## 8. 六项待决：本轮全部代判（签字栏留空）
 
-判法约定：每项只给**一个**最佳解，两条锚——一条外部原文（附链接，可点开核对），一条本仓实测（`路径:行号` 或真机读数）。 代判≠代签：这六项涉及法律与产品定位，**下表"签字"一律留空**，须维护者（或法务）落名后才算生效。落码进度：②③④⑤ 的对外文字改动本轮已落（`CONTRIBUTING.md`／`README.md`／`NOTICE`／`docs/getting-started.md`）；**① 的逐文件许可头已在 staging 副本上做完**（10-07 08:5x，第四代副本，执行记录与重跑手册＝`_tools/LICENSE-HEADERS.md`；活树仍然 0 头＝发布时现做副本，不在活树上改，否则全仓 `file:line` 引用位移）；**⑥ 的 JDK 降线未改码**——本机无 JDK 25、无 docker CLI，须走 CI＋构建窗。
+判法约定：每项只给**一个**最佳解，两条锚——一条外部原文（附链接，可点开核对），一条本仓实测（`路径:行号` 或真机读数）。 代判≠代签：这六项涉及法律与产品定位，**下表"签字"一律留空**，须维护者（或法务）落名后才算生效。落码进度：②③④⑤ 的对外文字改动本轮已落（`CONTRIBUTING.md`／`README.md`／`NOTICE`／`docs/getting-started.md`）；**① 的逐文件许可头已随发布仓库落地**（10-07 首次做在 staging 副本上，10-14 冻结进 `FSSC-opensource` 并提交；执行记录与重跑手册＝`_tools/LICENSE-HEADERS.md`。为何不在开发目录里加：整段位移会让全仓 `file:line` 引用漂移而核对器只判"仍在范围内"＝假绿）；**⑥ 的 JDK 降线未改码**——本机无 JDK 25、无 docker CLI，须走 CI＋构建窗。
 
 | # | 事项 | 代判结论 | 落码状态 | 签字 |
 |---|---|---|---|---|
-| ① | 许可证 | **维持 Apache-2.0**，不换 MIT | 许可头已在第四代副本落地（1,597 个文件各 +3 行，六道复核全绿）；活树 0 头＝发布时现做副本 | ____ |
+| ① | 许可证 | **维持 Apache-2.0**，不换 MIT | 已随发布仓库落地（10-14 冻结＝1,640 个文件各 +3 行，六道复核全绿）； 施工区另有 10 枚带头文件（别家拷回，非发布所加） | ____ |
 | ② | 发布形态 | **仅源码**，`private: true` 保留不动 | 已落：`CONTRIBUTING.md` 新增"发布形态"段＋README 英文摘要同口径；`private: true` 未动 | ____ |
 | ③ | 主语言 | README **不做整篇英译**，只加一段英文 TL;DR | 已落：README 首屏 `<details>` 段＋`docs/getting-started.md` 明示"界面只有中文" | ____ |
 | ④ | 项目命名 | **不改**任何 `fssc` 标识符，只在 README/NOTICE 加一句缩写说明 | 说明句已加（见下）；商标检索仍待法务 | ____ |
