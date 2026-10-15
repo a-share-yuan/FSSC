@@ -1,16 +1,13 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div :class="['expense-hub', { tabless: isSingle }]">
     <el-tabs v-model="activeTab">
       <!-- 发起单据 -->
-      <el-tab-pane label="发起单据" name="create" lazy>
+      <el-tab-pane :label="$t('expense.shell.tabInitiated')" name="create" lazy>
         <ExpenseCreateTab ref="createTab" @submitted="onSubmitted" @saved="onSaved" />
       </el-tab-pane>
 
       <!-- 我的单据 -->
-      <el-tab-pane label="我的单据" name="my" lazy>
+      <el-tab-pane :label="$t('expense.common.tabMyBills')" name="my" lazy>
         <ExpenseBillListTab ref="billListTab" @view-voucher="onViewVoucher" />
       </el-tab-pane>
 
@@ -21,7 +18,7 @@
     <!-- 凭证预览：以抽屉呈现，避免单页模式（tab 导航隐藏）下切到隐藏的凭证 tab 后无法返回 -->
     <el-drawer
       v-model="voucherDrawer"
-      :title="`凭证预览${selected?.voucherNo ? ' ' + selected.voucherNo : ''}`"
+      :title="$t('expense.shell.ttlVoucherPreview', { v1: selected?.voucherNo ? ' ' + selected.voucherNo : '' })"
       direction="rtl"
       size="760px"
       :destroy-on-close="true"

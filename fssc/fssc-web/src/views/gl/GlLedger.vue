@@ -1,26 +1,23 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <template #header>
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
-        <b>总账（GL）</b>
+        <b>{{ $t('gl.ledger.pageTitle') }}</b>
         <el-tabs v-model="tab" style="flex: 1" :class="{ tabless: isSingle }">
-          <el-tab-pane label="总账分录" name="entry" />
-          <el-tab-pane label="科目余额表" name="balance" />
-          <el-tab-pane label="试算平衡" name="trial" />
-          <el-tab-pane label="凭证台账" name="voucher" />
+          <el-tab-pane :label="$t('gl.ledger.tabEntry')" name="entry" />
+          <el-tab-pane :label="$t('gl.ledger.tabBalance')" name="balance" />
+          <el-tab-pane :label="$t('gl.ledger.tabTrial')" name="trial" />
+          <el-tab-pane :label="$t('gl.ledger.tabVoucher')" name="voucher" />
         </el-tabs>
-        <el-select v-model="companyId" placeholder="公司" clearable style="width: 160px">
+        <el-select v-model="companyId" :placeholder="$t('gl.ledger.colCompany')" clearable style="width: 160px">
           <el-option v-for="c in companies" :key="c.id" :label="c.companyName" :value="c.id" />
         </el-select>
         <el-input-number v-model="year" :min="2000" :max="2100" controls-position="right" style="width: 130px" />
         <el-input-number v-model="month" :min="1" :max="12" controls-position="right" style="width: 120px" />
         <!-- D-DEC-168：本页唯一的「查询」入口（原凭证台账页签内还有一只同名同行为的重复按钮，已去除） -->
-        <el-button type="primary" size="small" @click="runQuery">查询</el-button>
+        <el-button type="primary" size="small" @click="runQuery">{{ $t('common.search') }}</el-button>
         <el-tag v-if="trial" :type="trial.balanced ? 'success' : 'danger'" effect="dark">
-          {{ trial.balanced ? '借贷平衡' : '不平衡' }}
+          {{ trial.balanced ? $t('gl.ledger.balancedPair') : $t('gl.ledger.unbalanced') }}
         </el-tag>
       </div>
     </template>
@@ -29,41 +26,41 @@
     <template v-if="tab === 'entry'">
       <el-row :gutter="12" style="margin-bottom: 10px">
         <el-col :span="6">
-          <el-select v-model="subjectId" placeholder="按科目筛选" clearable filterable style="width: 100%">
+          <el-select v-model="subjectId" :placeholder="$t('gl.ledger.phSubject')" clearable filterable style="width: 100%">
             <el-option v-for="s in subjects" :key="s.id" :label="s.subjectCode + ' ' + s.subjectName" :value="s.id" />
           </el-select>
         </el-col>
         <el-col :span="6">
-          <el-button size="small" @click="runQuery">筛选</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
+          <el-button size="small" @click="runQuery">{{ $t('gl.ledger.btnFilter') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('gl.ledger.btnExportCsv') }}</el-button>
+      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('gl.ledger.btnExportSel', { v1: selRows.length }) }}</el-button>
         </el-col>
       </el-row>
       <!-- R5-D-149：排序改服务端 custom（sortable="custom" + @sort-change 回后端白名单重排全量结果）——
            原裸 sortable 只排当前页 20 行，翻页即乱序，且与后端默认 id 升序矛盾 -->
       <el-table :data="rows" size="small" border stripe v-loading="loading" :max-height="520" @selection-change="handleSelectionChange" @row-dblclick="openVoucherDetail" @sort-change="onEntrySortChange">
         <el-table-column type="selection" width="45" />
-        <el-table-column prop="voucherNo" label="凭证号" width="150" fixed  sortable="custom" />
-        <el-table-column prop="voucherId" label="凭证ID" width="80"  sortable="custom" />
-        <el-table-column prop="subjectCode" label="科目编码" width="110"  sortable="custom" />
-        <el-table-column prop="subjectName" label="科目名称" min-width="140" show-overflow-tooltip  sortable="custom" />
-        <el-table-column prop="direction" label="方向" width="80" align="center" sortable="custom">
+        <el-table-column prop="voucherNo" :label="$t('gl.ledger.fieldVoucherNo')" width="150" fixed  sortable="custom" />
+        <el-table-column prop="voucherId" :label="$t('gl.ledger.fieldVoucherId')" width="80"  sortable="custom" />
+        <el-table-column prop="subjectCode" :label="$t('gl.ledger.fieldSubjectCode')" width="110"  sortable="custom" />
+        <el-table-column prop="subjectName" :label="$t('gl.ledger.fieldSubjectName')" min-width="140" show-overflow-tooltip  sortable="custom" />
+        <el-table-column prop="direction" :label="$t('gl.ledger.fieldDirection')" width="80" align="center" sortable="custom">
           <template #default="{ row }">
             <el-tag :type="row.direction === 'DEBIT' ? 'danger' : 'success'" size="small">
-              {{ row.direction === 'DEBIT' ? '借' : '贷' }}
+              {{ row.direction === 'DEBIT' ? t('gl.ledger.debitShort') : t('gl.ledger.creditShort') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="amount" label="金额" width="130" align="right" sortable="custom">
+        <el-table-column prop="amount" :label="$t('gl.ledger.fieldAmount')" width="130" align="right" sortable="custom">
           <template #default="{ row }"><span :class="row.direction === 'DEBIT' ? 'deb' : 'crd'">{{ fmt(row.amount) }}</span></template>
         </el-table-column>
-        <el-table-column prop="summary" label="摘要" min-width="180" show-overflow-tooltip  sortable="custom" />
-        <el-table-column label="业务类型" width="110">
+        <el-table-column prop="summary" :label="$t('gl.ledger.fieldSummary')" min-width="180" show-overflow-tooltip  sortable="custom" />
+        <el-table-column :label="$t('gl.ledger.colBizType')" width="110">
           <template #default="{ row }">{{ bizTypeLabel(row.bizType) }}</template>
         </el-table-column>
-        <el-table-column prop="bizId" label="业务单ID" width="90"  sortable="custom" />
+        <el-table-column prop="bizId" :label="$t('gl.ledger.fieldBizId')" width="90"  sortable="custom" />
       <template #empty>
-        <el-empty description="暂无数据" />
+        <el-empty :description="$t('common.empty')" />
       </template>
       </el-table>
       <el-pagination
@@ -79,39 +76,39 @@
     <!-- 科目余额表 -->
     <template v-else-if="tab === 'balance'">
       <el-alert type="info" :closable="false" style="margin-bottom: 10px"
-        title="期初 = 该科目在小于本期期间的全部发生净额（按方向归借或贷一边，与期末同口径）；期末 = 期初 + 本期借 − 本期贷；表内列出「本期有发生」与「只有期初余额」的全部科目，合计行分列核对（余额实时聚合）" />
+        :title="$t('gl.ledger.balanceRule')" />
       <!-- R5-D-149：本页签为不分页的完整聚合列表，列头 sortable 对全量数据前端排序即正确（无需服务端排序）；
            分页的总账分录/凭证台账两个页签已改服务端 custom 排序 -->
       <el-table :data="balance" size="small" border stripe v-loading="loading" :max-height="560"
                 show-summary :summary-method="balanceSummary" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="45" />
-        <el-table-column prop="subjectCode" label="科目编码" width="110" fixed  sortable />
-        <el-table-column prop="subjectName" label="科目名称" min-width="160" show-overflow-tooltip  sortable />
-        <el-table-column prop="openDebit" label="期初借方" width="130" align="right" sortable>
+        <el-table-column prop="subjectCode" :label="$t('gl.ledger.fieldSubjectCode')" width="110" fixed  sortable />
+        <el-table-column prop="subjectName" :label="$t('gl.ledger.fieldSubjectName')" min-width="160" show-overflow-tooltip  sortable />
+        <el-table-column prop="openDebit" :label="$t('gl.ledger.colOpenDebit')" width="130" align="right" sortable>
           <template #default="{ row }">{{ fmt(row.openDebit) }}</template>
         </el-table-column>
-        <el-table-column prop="openCredit" label="期初贷方" width="130" align="right" sortable>
+        <el-table-column prop="openCredit" :label="$t('gl.ledger.colOpenCredit')" width="130" align="right" sortable>
           <template #default="{ row }">{{ fmt(row.openCredit) }}</template>
         </el-table-column>
-        <el-table-column prop="periodDebit" label="本期借方" width="130" align="right" sortable>
+        <el-table-column prop="periodDebit" :label="$t('gl.ledger.colPeriodDebit')" width="130" align="right" sortable>
           <template #default="{ row }"><b>{{ fmt(row.periodDebit) }}</b></template>
         </el-table-column>
-        <el-table-column prop="periodCredit" label="本期贷方" width="130" align="right" sortable>
+        <el-table-column prop="periodCredit" :label="$t('gl.ledger.colPeriodCredit')" width="130" align="right" sortable>
           <template #default="{ row }"><b>{{ fmt(row.periodCredit) }}</b></template>
         </el-table-column>
-        <el-table-column label="期末方向" width="90" align="center">
+        <el-table-column :label="$t('gl.ledger.colEndDirection')" width="90" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.direction === 'DEBIT' ? 'danger' : 'success'" size="small">{{ row.direction === 'DEBIT' ? '借' : '贷' }}</el-tag>
+            <el-tag :type="row.direction === 'DEBIT' ? 'danger' : 'success'" size="small">{{ row.direction === 'DEBIT' ? t('gl.ledger.debitShort') : t('gl.ledger.creditShort') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="endDebit" label="期末借方" width="130" align="right" sortable>
+        <el-table-column prop="endDebit" :label="$t('gl.ledger.colEndDebit')" width="130" align="right" sortable>
           <template #default="{ row }">{{ fmt(row.endDebit) }}</template>
         </el-table-column>
-        <el-table-column prop="endCredit" label="期末贷方" width="130" align="right" sortable>
+        <el-table-column prop="endCredit" :label="$t('gl.ledger.colEndCredit')" width="130" align="right" sortable>
           <template #default="{ row }">{{ fmt(row.endCredit) }}</template>
         </el-table-column>
       <template #empty>
-        <el-empty description="暂无数据" />
+        <el-empty :description="$t('common.empty')" />
       </template>
       </el-table>
     </template>
@@ -120,42 +117,40 @@
     <template v-else-if="tab === 'voucher'">
       <el-row :gutter="12" style="margin-bottom: 10px; align-items: center">
         <el-col :span="8">
-          <el-select v-model="voucherStatus" placeholder="过账状态" clearable style="width: 100%" @change="runQuery">
-            <el-option label="未过账" value="DRAFT" />
-            <el-option label="已过账" value="POSTED" />
-            <el-option label="已作废" value="VOID" />
+          <el-select v-model="voucherStatus" :placeholder="$t('gl.ledger.colPostStatus')" clearable style="width: 100%" @change="runQuery">
+            <el-option :label="$t('gl.ledger.stUnposted')" value="DRAFT" />
+            <el-option :label="$t('gl.ledger.stPosted')" value="POSTED" />
+            <el-option :label="$t('gl.ledger.stVoided')" value="VOID" />
           </el-select>
         </el-col>
         <el-col :span="16">
           <!-- D-DEC-168：这里原本还有一只「查询」按钮（与表头那只同名、同 @click），同屏两只 → 已去除。
                过账状态、公司、年度、月度统一由表头「查询」提交；本页签改状态筛选时自动重取，少一次点击。 -->
-          <el-tooltip content="请先勾选未过账且非本人制单的凭证" placement="top" :disabled="postableRows.length > 0">
+          <el-tooltip :content="$t('gl.ledger.msgPickPostable')" placement="top" :disabled="postableRows.length > 0">
             <el-button type="success" size="small" :loading="batchPosting" :disabled="!postableRows.length" @click="batchPost">
-              批量过账({{ postableRows.length }})
-            </el-button>
+              {{ $t('gl.ledger.btnBatchPostN', { v1: postableRows.length }) }}</el-button>
           </el-tooltip>
-          <span style="margin-left: 8px; color: #909399; font-size: 12px">制审分离：制单人不可自审（悬停「制单人」列查看提示），已过账凭证不可重复过账</span>
-          <el-button size="small" type="danger" plain :disabled="!singleVoucher" @click="voidSel">作废</el-button>
-          <el-button size="small" type="warning" plain :disabled="!singleVoucher" @click="reverseSel">红字冲销</el-button>
+          <span style="margin-left: 8px; color: #909399; font-size: 12px">{{ $t('gl.ledger.selfAuditHint') }}</span>
+          <el-button size="small" type="danger" plain :disabled="!singleVoucher" @click="voidSel">{{ $t('gl.ledger.actVoid') }}</el-button>
+          <el-button size="small" type="warning" plain :disabled="!singleVoucher" @click="reverseSel">{{ $t('gl.ledger.actRedReverse') }}</el-button>
         </el-col>
       </el-row>
       <!-- D-DEC-288（X-49 乙）：仅当本页有"已记账而资金指令未下发"的凭证时出现；样式沿用上面那行次要文字（不新开弹窗） -->
       <div v-if="unsettledLegCount" style="margin: -2px 0 8px; color: #909399; font-size: 12px">
-        本页 {{ unsettledLegCount }} 张凭证已过账但资金指令未下发（款项尚未付出），账面已记账≠已结清；存量凭证的账务处置须财务另签。
-      </div>
+        {{ $t('gl.ledger.hintUnsettled', { v1: unsettledLegCount }) }}</div>
       <!-- R5-D-149：凭证台账排序同为服务端 custom（凭证号/摘要两列白名单） -->
       <el-table ref="voucherTableRef" :data="voucherRows" size="small" border stripe v-loading="loading" :max-height="520"
                 @selection-change="handleVoucherSelectionChange" @sort-change="onVoucherSortChange">
         <el-table-column type="selection" width="45" />
-        <el-table-column prop="voucherNo" label="凭证号" width="170" fixed sortable="custom" />
-        <el-table-column label="期间" width="100">
+        <el-table-column prop="voucherNo" :label="$t('gl.ledger.fieldVoucherNo')" width="170" fixed sortable="custom" />
+        <el-table-column :label="$t('gl.ledger.colPeriod')" width="100">
           <template #default="{ row }">{{ row.periodYear ? row.periodYear + '-' + String(row.periodMonth || '').padStart(2, '0') : '—' }}</template>
         </el-table-column>
-        <el-table-column prop="summary" label="摘要" min-width="180" show-overflow-tooltip sortable="custom" />
-        <el-table-column label="来源类型" width="110" show-overflow-tooltip>
+        <el-table-column prop="summary" :label="$t('gl.ledger.fieldSummary')" min-width="180" show-overflow-tooltip sortable="custom" />
+        <el-table-column :label="$t('gl.ledger.colSourceType')" width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ voucherSourceLabel(row.sourceType) }}</template>
         </el-table-column>
-        <el-table-column label="来源单据" width="160" show-overflow-tooltip>
+        <el-table-column :label="$t('gl.ledger.colSourceBill')" width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <!-- 费用族的 bill_id 才是费用单主键；其余来源 bill_id 是别域主键，只标来源域＋主键，不猜单号（D-DEC-244） -->
             <span v-if="row.sourceBillNo && isExpenseFamilyVoucherSource(row.sourceType)">{{ row.sourceBillNo }}</span>
@@ -163,31 +158,31 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="借方" width="120" align="right">
+        <el-table-column :label="$t('gl.ledger.debit')" width="120" align="right">
           <template #default="{ row }">{{ fmt(row.debitTotal) }}</template>
         </el-table-column>
-        <el-table-column label="贷方" width="120" align="right">
+        <el-table-column :label="$t('gl.ledger.credit')" width="120" align="right">
           <template #default="{ row }">{{ fmt(row.creditTotal) }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="120" align="center">
+        <el-table-column :label="$t('common.status')" width="120" align="center">
           <template #default="{ row }">
             <!-- 凭证 status：DRAFT=未过账 / POSTED=已过账 / VOID=已作废 -->
             <el-tag :type="row.status === 'POSTED' ? 'success' : row.status === 'VOID' ? 'info' : 'warning'" size="small">{{ voucherStatusLabel(row.status) }}</el-tag>
             <!-- D-DEC-288（X-49 乙）：付款腿凭证已记账而资金指令未下发——存量保持不动账，只在行上明示注记 -->
-            <div v-if="row.payLegUnsettled === true" style="color: #e6a23c; font-size: 12px; line-height: 1.4">资金指令未下发</div>
+            <div v-if="row.payLegUnsettled === true" style="color: #e6a23c; font-size: 12px; line-height: 1.4">{{ $t('gl.ledger.payNotIssued') }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="制单人" width="130" show-overflow-tooltip>
+        <el-table-column :label="$t('gl.ledger.colMaker')" width="130" show-overflow-tooltip>
           <template #default="{ row }">
             <!-- 制审分离：当前登录人 = 凭证 create_by 的行不可勾选过账，tooltip 提示 -->
-            <el-tooltip v-if="isSelfCreated(row)" content="制单人不可自审" placement="top">
-              <span style="color: #e6a23c">{{ creatorLabel(row) }}（本人）</span>
+            <el-tooltip v-if="isSelfCreated(row)" :content="$t('gl.ledger.selfCreatedTip')" placement="top">
+              <span style="color: #e6a23c">{{ $t('gl.ledger.selfSuffix', { v1: creatorLabel(row) }) }}</span>
             </el-tooltip>
             <span v-else>{{ creatorLabel(row) }}</span>
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty description="暂无数据" />
+          <el-empty :description="$t('common.empty')" />
         </template>
       </el-table>
       <el-pagination
@@ -205,20 +200,20 @@
       <el-row :gutter="20">
         <el-col :span="6">
           <el-card shadow="hover">
-            <el-statistic title="借方发生额合计" :value="Number(trial?.debitTotal || 0)" :precision="2" />
+            <el-statistic :title="$t('gl.ledger.colDebitTotal')" :value="Number(trial?.debitTotal || 0)" :precision="2" />
           </el-card>
         </el-col>
         <el-col :span="6">
           <el-card shadow="hover">
-            <el-statistic title="贷方发生额合计" :value="Number(trial?.creditTotal || 0)" :precision="2" />
+            <el-statistic :title="$t('gl.ledger.colCreditTotal')" :value="Number(trial?.creditTotal || 0)" :precision="2" />
           </el-card>
         </el-col>
         <el-col :span="6">
           <el-card shadow="hover">
-            <el-statistic title="借贷差异" :value="Number(trial?.diff || 0)" :precision="2">
+            <el-statistic :title="$t('gl.ledger.colDiff')" :value="Number(trial?.diff || 0)" :precision="2">
               <template #suffix>
-                <el-tag v-if="trial?.balanced" type="success" size="small">平衡</el-tag>
-                <el-tag v-else type="danger" size="small">差异</el-tag>
+                <el-tag v-if="trial?.balanced" type="success" size="small">{{ $t('gl.ledger.balanced') }}</el-tag>
+                <el-tag v-else type="danger" size="small">{{ $t('gl.ledger.diff') }}</el-tag>
               </template>
             </el-statistic>
           </el-card>
@@ -229,7 +224,7 @@
                  「截至期间」是 YYYY-MM 期间标识而非统计量，穿字符串会被当数值渲染成乱码/NaN；
                  期间语义改普通文本渲染（与同排三张统计卡视觉对齐）。 -->
             <div class="period-stat">
-              <div class="period-stat__title">截至期间</div>
+              <div class="period-stat__title">{{ $t('gl.ledger.asOfPeriod') }}</div>
               <div class="period-stat__value">{{ trialPeriod }}</div>
             </div>
           </el-card>
@@ -238,35 +233,35 @@
       <el-result
         v-if="trial?.balanced"
         icon="success"
-        title="试算平衡通过"
-        :sub-title="'期间 ' + (trial.periodYear || year) + '-' + (trial.periodMonth || month) + ' 借方 = 贷方，总分类账借贷一致。'">
+        :title="$t('gl.ledger.trialPass')"
+        :sub-title="$t('gl.ledger.subTitleTrial', { period: (trial.periodYear || year) + '-' + (trial.periodMonth || month) })">
       </el-result>
-      <el-result v-else icon="error" title="发现借贷差异"
-        :sub-title="'差异金额：' + fmt(Math.abs(Number(trial?.diff || 0))) + '，请核查该期间凭证落账情况。'">
+      <el-result v-else icon="error" :title="$t('gl.ledger.trialDiff')"
+        :sub-title="$t('gl.ledger.subTitleDiff', { diff: fmt(Math.abs(Number(trial?.diff || 0))) })">
         <template #extra>
-          <el-button type="primary" @click="load">重新试算</el-button>
+          <el-button type="primary" @click="load">{{ $t('gl.ledger.btnRetrial') }}</el-button>
         </template>
       </el-result>
     </template>
   </el-card>
 
   <!-- 凭证详情抽屉 -->
-  <el-drawer v-model="voucherDrawer" title="凭证详情" size="50%" direction="rtl">
+  <el-drawer v-model="voucherDrawer" :title="$t('gl.ledger.dlgDetail')" size="50%" direction="rtl">
     <el-descriptions :column="2" border size="small" v-if="voucherDetail">
-      <el-descriptions-item label="凭证号">{{ voucherDetail.voucherNo || '—' }}</el-descriptions-item>
-      <el-descriptions-item label="凭证ID">{{ voucherDetail.voucherId || '—' }}</el-descriptions-item>
-      <el-descriptions-item label="科目编码">{{ voucherDetail.subjectCode || '—' }}</el-descriptions-item>
-      <el-descriptions-item label="科目名称">{{ voucherDetail.subjectName || '—' }}</el-descriptions-item>
-      <el-descriptions-item label="方向">
-        <el-tag :type="voucherDetail.direction === 'DEBIT' ? 'danger' : 'success'" size="small">{{ voucherDetail.direction === 'DEBIT' ? '借' : '贷' }}</el-tag>
+      <el-descriptions-item :label="$t('gl.ledger.fieldVoucherNo')">{{ voucherDetail.voucherNo || '—' }}</el-descriptions-item>
+      <el-descriptions-item :label="$t('gl.ledger.fieldVoucherId')">{{ voucherDetail.voucherId || '—' }}</el-descriptions-item>
+      <el-descriptions-item :label="$t('gl.ledger.fieldSubjectCode')">{{ voucherDetail.subjectCode || '—' }}</el-descriptions-item>
+      <el-descriptions-item :label="$t('gl.ledger.fieldSubjectName')">{{ voucherDetail.subjectName || '—' }}</el-descriptions-item>
+      <el-descriptions-item :label="$t('gl.ledger.fieldDirection')">
+        <el-tag :type="voucherDetail.direction === 'DEBIT' ? 'danger' : 'success'" size="small">{{ voucherDetail.direction === 'DEBIT' ? t('gl.ledger.debitShort') : t('gl.ledger.creditShort') }}</el-tag>
       </el-descriptions-item>
-      <el-descriptions-item label="金额"><b>{{ fmt(voucherDetail.amount) }}</b></el-descriptions-item>
-      <el-descriptions-item label="摘要" :span="2">{{ voucherDetail.summary || '—' }}</el-descriptions-item>
-      <el-descriptions-item label="业务类型">{{ bizTypeLabel(voucherDetail.bizType) }}</el-descriptions-item>
-      <el-descriptions-item label="业务单ID">{{ voucherDetail.bizId || '—' }}</el-descriptions-item>
+      <el-descriptions-item :label="$t('gl.ledger.fieldAmount')"><b>{{ fmt(voucherDetail.amount) }}</b></el-descriptions-item>
+      <el-descriptions-item :label="$t('gl.ledger.fieldSummary')" :span="2">{{ voucherDetail.summary || '—' }}</el-descriptions-item>
+      <el-descriptions-item :label="$t('gl.ledger.colBizType')">{{ bizTypeLabel(voucherDetail.bizType) }}</el-descriptions-item>
+      <el-descriptions-item :label="$t('gl.ledger.fieldBizId')">{{ voucherDetail.bizId || '—' }}</el-descriptions-item>
     </el-descriptions>
     <div v-if="voucherDetail && voucherDetail.bizId" style="margin-top: 16px">
-      <el-button type="primary" size="small" @click="traceBill(voucherDetail)">追溯原始单据</el-button>
+      <el-button type="primary" size="small" @click="traceBill(voucherDetail)">{{ $t('gl.ledger.btnTrace') }}</el-button>
     </div>
   </el-drawer>
   <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" :biz-type="traceBizType" />
@@ -281,6 +276,9 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { bizTypeOfVoucherSource, voucherSourceLabel, isExpenseFamilyVoucherSource } from '../../utils/bizEntry'
 import { bizTypeLabel } from '@/constants/enums.js'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 凭证详情抽屉
 const voucherDrawer = ref(false)
@@ -311,31 +309,31 @@ const singleVoucher = computed(() => voucherSelRows.value.length === 1 ? voucher
 async function voidSel() {
   const v = singleVoucher.value
   if (!v) return
-  if (v.status !== 'DRAFT') { ElMessage.warning('仅未过账（草稿）凭证可作废'); return }
+  if (v.status !== 'DRAFT') { ElMessage.warning(t('gl.ledger.msgOnlyVoidDraft')); return }
   try {
-    await ElMessageBox.confirm(`确认作废凭证 ${v.voucherNo || v.id}？作废为终态，不可恢复。`, '作废', { type: 'warning' })
+    await ElMessageBox.confirm(t('gl.ledger.askVoid', { v1: v.voucherNo || v.id }), t('gl.ledger.actVoid'), { type: 'warning' })
   } catch { return }
   try {
     await glApi.voidVoucher(v.id)
-    ElMessage.success('已作废')
+    ElMessage.success(t('gl.ledger.stVoided'))
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
 async function reverseSel() {
   const v = singleVoucher.value
   if (!v) return
-  if (v.status !== 'POSTED') { ElMessage.warning('仅已过账凭证可做红字冲销'); return }
+  if (v.status !== 'POSTED') { ElMessage.warning(t('gl.ledger.msgOnlyRedReversal')); return }
   let reason = ''
   try {
-    const r = await ElMessageBox.prompt(`对凭证 ${v.voucherNo || v.id} 做红字冲销？将生成方向相反、金额相等的冲销凭证并落账。`, '红字冲销', {
-      inputPlaceholder: '冲销原因（必填留痕）',
-      inputValidator: (x) => (x && x.trim()) ? true : '请填写冲销原因',
+    const r = await ElMessageBox.prompt(t('gl.ledger.askRedReverse', { v1: v.voucherNo || v.id }), t('gl.ledger.actRedReverse'), {
+      inputPlaceholder: t('gl.ledger.phReversalReason'),
+      inputValidator: (x) => (x && x.trim()) ? true : t('gl.special.errFillReason'),
     })
     reason = (r.value || '').trim()
   } catch { return }
   try {
     const newId = await glApi.reverseVoucher(v.id, reason)
-    ElMessage.success(`已生成红字冲销凭证 #${newId}`)
+    ElMessage.success(t('gl.ledger.msgReversedVoucher', { v1: newId }))
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -372,12 +370,12 @@ function balanceSummary({ columns, data }) {
   BALANCE_SUM_PROPS.forEach((p) => {
     sum[p] = (data || []).reduce((s, r) => s + Number(r[p] || 0), 0)
   })
-  const pairs = [['openDebit', 'openCredit', '期初'], ['periodDebit', 'periodCredit', '本期'], ['endDebit', 'endCredit', '期末']]
+  const pairs = [['openDebit', 'openCredit', t('gl.ledger.sumOpen')], ['periodDebit', 'periodCredit', t('gl.ledger.sumPeriod')], ['endDebit', 'endCredit', t('gl.ledger.sumEnd')]]
   const bad = pairs.filter(([d, c]) => Math.abs(sum[d] - sum[c]) > 0.005).map(([, , n]) => n)
   return columns.map((col, idx) => {
-    if (idx === 0) return '合计'
+    if (idx === 0) return t('gl.ledger.sumTotal')
     if (col.property === 'subjectName') {
-      return bad.length ? `${bad.join('/')}借贷合计不平，口径需排查` : '期初·本期·期末 借贷三对均平'
+      return bad.length ? t('gl.ledger.trialUnbalPrefix', { v1: bad.join('/') }) : t('gl.ledger.trialAllBalanced')
     }
     return col.property && col.property in sum ? fmt(sum[col.property]) : ''
   })
@@ -385,8 +383,9 @@ function balanceSummary({ columns, data }) {
 
 // ---------------- 凭证台账：过账状态 + 批量过账 + 制审分离 
 // 凭证 status 映射（DRAFT=未过账 / POSTED=已过账，缺失取值原样回显）
-const VOUCHER_STATUS_LABEL = { DRAFT: '未过账', POSTED: '已过账', VOID: '已作废' }
-function voucherStatusLabel(s) { return VOUCHER_STATUS_LABEL[s] || s || '—' }
+// 用 computed 而非静态对象：静态对象在 setup 求值时就把语言固化，切语言后标签仍是旧语言
+const VOUCHER_STATUS_LABEL = computed(() => ({ DRAFT: t('gl.ledger.stUnposted'), POSTED: t('gl.ledger.stPosted'), VOID: t('gl.ledger.stVoided') }))
+function voucherStatusLabel(s) { return VOUCHER_STATUS_LABEL.value[s] || s || '—' }
 
 const voucherRows = ref([])
 const voucherTotal = ref(0)
@@ -413,7 +412,7 @@ function isSelfCreated(row) {
 // op_voucher.create_by 存的是 sys_user.id，后端按 id 回填 createByName；缺回填时兜底显示 #ID，避免裸数字像坏数据
 function creatorLabel(row) {
   if (row?.createByName) return row.createByName
-  return row?.createBy ? `用户#${row.createBy}` : '—'
+  return row?.createBy ? t('gl.ledger.ctxUser', { v1: row.createBy }) : '—'
 }
 // 可过账：未过账 且 非本人制单
 function canPostRow(row) { return row?.status !== 'POSTED' && !isSelfCreated(row) }
@@ -489,15 +488,15 @@ function onVoucherSortChange({ prop, order }) {
 // 任一方案落地后，把下面的 confirm 换回 prompt 并随 body.comment 送出即可（适配层按 body 透传 id）。
 async function batchPost() {
   const rows = postableRows.value
-  if (!rows.length) { ElMessage.warning('请先勾选未过账且非本人制单的凭证'); return }
+  if (!rows.length) { ElMessage.warning(t('gl.ledger.msgPickPostable')); return }
   try {
     await ElMessageBox.confirm(
-      `将对勾选的 ${rows.length} 张凭证批量过账（过账后落账总账）。确认继续？`,
-      '批量过账',
+      t('gl.ledger.askBatchPost', { v1: rows.length }),
+      t('gl.ledger.btnBatchPost'),
       {
         type: 'warning',
-        confirmButtonText: '确认过账',
-        cancelButtonText: '取消',
+        confirmButtonText: t('gl.ledger.btnConfirmPost'),
+        cancelButtonText: t('common.cancel'),
         closeOnClickModal: false,
         distinguishCancelAndClose: true,
       },
@@ -514,18 +513,18 @@ async function batchPost() {
     const declared = Number(res?.success)
     const okCount = Number.isFinite(declared) ? declared : Math.max(0, rows.length - failList.length)
     if (!failList.length) {
-      ElMessage.success(`批量过账完成：成功 ${okCount}/${rows.length} 张`)
+      ElMessage.success(t('gl.ledger.msgBatchOk', { v1: okCount, v2: rows.length }))
     } else {
-      ElMessage.warning(`批量过账完成：成功 ${okCount} 张，失败 ${failList.length} 张，明细见弹窗`)
+      ElMessage.warning(t('gl.ledger.msgBatchPart', { v1: okCount, v2: failList.length }))
       const lines = failList.map((f, i) => {
         const r = rows.find((x) => String(x.id) === String(f?.id))
-        const name = r?.voucherNo || '凭证 #' + (f?.id ?? i + 1)
-        return `${i + 1}. ${name}：${f?.reason || f?.msg || f?.message || '过账失败'}`
+        const name = r?.voucherNo || t('gl.ledger.voucherPrefix') + (f?.id ?? i + 1)
+        return `${i + 1}. ${name}：${f?.reason || f?.msg || f?.message || t('gl.ledger.msgPostFail')}`
       })
       ElMessageBox.alert(
         h('div', null, lines.map((l) => h('div', { style: 'margin:2px 0;line-height:1.6' }, l))),
-        `批量过账失败明细（${failList.length} 张）`,
-        { type: 'error', confirmButtonText: '知道了' },
+        t('gl.ledger.dlgBatchFail', { v1: failList.length }),
+        { type: 'error', confirmButtonText: t('common.gotIt') },
       ).catch(() => {})
     }
     voucherTableRef.value?.clearSelection()
@@ -534,9 +533,9 @@ async function batchPost() {
   } catch (e) {
     // 接口 404（后端未部署该路由）→ 给出可行动的契约提示而不是英文原文
     if (e?.status === 404 || /404/.test(String(e?.message))) {
-      ElMessage.error('批量过账功能暂不可用（后端接口未部署），请联系管理员')
+      ElMessage.error(t('gl.ledger.msgBatchPostUnavailable'))
     } else {
-      ElMessage.error(e?.message || '批量过账失败，请稍后重试')
+      ElMessage.error(e?.message || t('gl.ledger.msgBatchPostFail'))
     }
   } finally { batchPosting.value = false }
 }
@@ -577,8 +576,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'voucherNo', label: '凭证号' }, { prop: 'voucherId', label: '凭证ID' }, { prop: 'subjectCode', label: '科目编码' }, { prop: 'subjectName', label: '科目名称' }, { prop: 'direction', label: '方向' }, { prop: 'amount', label: '金额' }, { prop: 'summary', label: '摘要' }, { prop: 'bizId', label: '业务单ID' }]
+  if (!rows.value.length) { ElMessage.warning(t('gl.ledger.msgNoExportData')); return }
+  const cols = [{ prop: 'voucherNo', label: t('gl.ledger.fieldVoucherNo') }, { prop: 'voucherId', label: t('gl.ledger.fieldVoucherId') }, { prop: 'subjectCode', label: t('gl.ledger.fieldSubjectCode') }, { prop: 'subjectName', label: t('gl.ledger.fieldSubjectName') }, { prop: 'direction', label: t('gl.ledger.fieldDirection') }, { prop: 'amount', label: t('gl.ledger.fieldAmount') }, { prop: 'summary', label: t('gl.ledger.fieldSummary') }, { prop: 'bizId', label: t('gl.ledger.fieldBizId') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -592,16 +591,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `GlLedger_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('gl.ledger.msgExported'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('gl.ledger.msgPickExport')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('gl.ledger.msgNoColumns')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -616,7 +615,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `GlLedger_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(t('gl.ledger.msgExportedN', { v1: selRows.value.length }))
 }
 
 </script>

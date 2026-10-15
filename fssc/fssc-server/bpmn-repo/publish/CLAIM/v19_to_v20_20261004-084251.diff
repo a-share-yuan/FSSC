@@ -1,0 +1,29 @@
+--- bpmn:CLAIM v19
++++ bpmn:CLAIM v20
+@@ -34,7 +34,7 @@
+     <bpmn:sequenceFlow id="Flow_in_Gw_13" sourceRef="Gw_11" targetRef="Gw_13" />
+     <bpmn:userTask id="Task_13" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
+     <bpmn:sequenceFlow id="Flow_Gw_13_Task_13" sourceRef="Gw_13" targetRef="Task_13"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 5000000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+-    <bpmn:userTask id="Task_14" name="审核预制凭证【总账会计】" flowable:candidateGroups="FIN_GL" />
++    <bpmn:userTask id="Task_14" name="审核预制凭证【总账会计】" flowable:candidateGroups="GL_VOUCHER_REVIEW" />
+     <bpmn:sequenceFlow id="Flow_in_Task_14" sourceRef="Gw_13" targetRef="Task_14" />
+     <bpmn:sequenceFlow id="Flow_back_Task_8" sourceRef="Task_8" targetRef="Gw_9" />
+     <bpmn:sequenceFlow id="Flow_back_Task_9" sourceRef="Task_9" targetRef="Gw_11" />
+@@ -48,7 +48,7 @@
+     <bpmn:sequenceFlow id="Flow_ET_4" sourceRef="ET_3" targetRef="ET_4" />
+     <bpmn:userTask id="ET_5" name="高管决策审批【高管决策审批档】" flowable:candidateGroups="EXEC_APPROVER" />
+     <bpmn:sequenceFlow id="Flow_ET_5" sourceRef="ET_4" targetRef="ET_5" />
+-    <bpmn:userTask id="ET_7" name="审核预制凭证【总账会计】" flowable:candidateGroups="FIN_GL" />
++    <bpmn:userTask id="ET_7" name="审核预制凭证【总账会计】" flowable:candidateGroups="GL_VOUCHER_REVIEW" />
+     <bpmn:sequenceFlow id="Flow_ET_7" sourceRef="ET_5" targetRef="ET_7" />
+     <bpmn:sequenceFlow id="Flow_sgjoin_ET_7" sourceRef="ET_7" targetRef="EndEvent_1" />
+     <bpmn:userTask id="ETB_2" name="部门经理审核业务真实性【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+@@ -57,7 +57,7 @@
+     <bpmn:sequenceFlow id="Flow_ETB_3" sourceRef="ETB_2" targetRef="ETB_3" />
+     <bpmn:userTask id="ETB_4" name="总监级授权审批【中心/总监级审批档】" flowable:candidateGroups="CENTER_APPROVER" />
+     <bpmn:sequenceFlow id="Flow_ETB_4" sourceRef="ETB_3" targetRef="ETB_4" />
+-    <bpmn:userTask id="ETB_7" name="审核预制凭证【总账会计】" flowable:candidateGroups="FIN_GL" />
++    <bpmn:userTask id="ETB_7" name="审核预制凭证【总账会计】" flowable:candidateGroups="GL_VOUCHER_REVIEW" />
+     <bpmn:sequenceFlow id="Flow_ETB_7" sourceRef="ETB_4" targetRef="ETB_7" />
+     <bpmn:sequenceFlow id="Flow_sgjoin_ETB_7" sourceRef="ETB_7" targetRef="EndEvent_1" />
+     <bpmn:endEvent id="EndEvent_1" name="结束" />

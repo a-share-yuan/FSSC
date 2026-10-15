@@ -1,0 +1,11 @@
+--- bpmn:INVOICE_ISSUE v7
++++ bpmn:INVOICE_ISSUE v8
+@@ -4,7 +4,7 @@
+     <bpmn:startEvent id="StartEvent_1" name="开始" />
+     <bpmn:exclusiveGateway id="GW_INV" name="业务类型分档" default="Flow_in_Task_2" />
+     <bpmn:sequenceFlow id="Flow_start_gw" sourceRef="StartEvent_1" targetRef="GW_INV" />
+-    <bpmn:userTask id="Task_2" name="直线上级审核【直线上级】" flowable:candidateGroups="DIRECT_SUPERVISOR" />
++    <bpmn:userTask id="Task_2" name="直属上级审核【部门负责人】" flowable:candidateGroups="DIRECT_SUPERVISOR" />
+     <bpmn:sequenceFlow id="Flow_in_Task_2" sourceRef="GW_INV" targetRef="Task_2" />
+     <bpmn:userTask id="Task_3" name="基地财务经理审核【基地财务经理】" flowable:candidateGroups="BASE_FIN_MANAGER" />
+     <bpmn:sequenceFlow id="Flow_in_Task_3" sourceRef="Task_2" targetRef="Task_3" />

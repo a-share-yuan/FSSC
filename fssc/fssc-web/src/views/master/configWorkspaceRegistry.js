@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * 方案B（页面Tab化重构册 §乙）配置工作区注册表：一组＝一个工作区菜单＝一个 host。
  * 后续波次（W1~W5/W8）批准时只在这里加分组，菜单/路由各加一行。

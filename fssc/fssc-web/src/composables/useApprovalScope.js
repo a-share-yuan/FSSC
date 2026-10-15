@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  *
  * 背景（2026-09-17 缺陷整改）：

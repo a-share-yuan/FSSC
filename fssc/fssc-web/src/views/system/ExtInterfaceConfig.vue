@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="ext-interface-config">
     <el-tabs v-model="activeTab" @tab-change="loadData">
@@ -14,79 +11,77 @@
 
     <!-- 工具栏 -->
     <div v-else style="display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap">
-      <el-input v-model="keyword" placeholder="搜索接口名称/编码/服务商" clearable style="width: 280px"
+      <el-input v-model="keyword" :placeholder="$t('system.extInterface.phSearchIf')" clearable style="width: 280px"
                 @clear="loadData" @keyup.enter="loadData" />
-      <el-button type="primary" @click="loadData">查询</el-button>
-      <el-button v-if="canCreate" type="success" @click="openCreate">新增接口</el-button>
+      <el-button type="primary" @click="loadData">{{ $t('common.search') }}</el-button>
+      <el-button v-if="canCreate" type="success" @click="openCreate">{{ $t('system.extInterface.btnAddIf') }}</el-button>
       <router-link to="/system/integration-logs" style="margin-left: 8px">
-        <el-button type="info" link>调用日志 &gt;</el-button>
+        <el-button type="info" link>{{ $t('system.extInterface.lnkCallLogs') }}</el-button>
       </router-link>
       <span style="margin-left: auto; color: #909399; font-size: 13px">
-        共 {{ pager.total }} 条配置，启用 {{ enabledCount }} 条
-      </span>
+        {{ $t('system.extInterface.statSummary', { v1: pager.total, v2: enabledCount }) }}</span>
     </div>
 
     <!-- 表格 -->
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="pagedData" v-else border stripe style="width: 100%" @row-dblclick="openRowDetail" empty-text="暂无数据">
-      <el-table-column prop="interfaceName" label="接口名称" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="interfaceCode" label="接口编码" width="180" show-overflow-tooltip />
-      <el-table-column prop="provider" label="服务商" width="100">
+    <el-table :data="pagedData" v-else border stripe style="width: 100%" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
+      <el-table-column prop="interfaceName" :label="$t('system.extInterface.colIfName')" min-width="160" show-overflow-tooltip />
+      <el-table-column prop="interfaceCode" :label="$t('system.common.colIfCode')" width="180" show-overflow-tooltip />
+      <el-table-column prop="provider" :label="$t('system.extInterface.colProvider')" width="100">
         <template #default="{ row }">
           <el-tag size="small" :type="providerTagType(row.provider)">{{ providerText(row.provider) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="apiUrl" label="API 地址" min-width="250" show-overflow-tooltip>
+      <el-table-column prop="apiUrl" :label="$t('system.common.colApiUrl')" min-width="250" show-overflow-tooltip>
         <template #default="{ row }">
           <span v-if="row.apiUrl" style="font-size: 12px; color: #606266">{{ row.apiUrl }}</span>
-          <span v-else style="color: #c0c4cc">未配置</span>
+          <span v-else style="color: #c0c4cc">{{ $t('system.extInterface.stNotConfigured') }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="modelName" label="模型" width="150" show-overflow-tooltip>
+      <el-table-column prop="modelName" :label="$t('system.extInterface.colModel')" width="150" show-overflow-tooltip>
         <template #default="{ row }">
           {{ row.modelName || '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="90" align="center">
+      <el-table-column prop="status" :label="$t('common.status')" width="90" align="center">
         <template #default="{ row }">
           <el-tag :type="row.status === 'ENABLED' ? 'success' : 'info'" size="small">
-            {{ row.status === 'ENABLED' ? '已启用' : '已停用' }}
+            {{ row.status === 'ENABLED' ? t('system.common.stEnabled') : t('system.extInterface.stDeactivated') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="isDefault" label="默认" width="70" align="center">
+      <el-table-column prop="isDefault" :label="$t('system.extInterface.colDefault')" width="70" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.isDefault === 1" type="warning" size="small">默认</el-tag>
+          <el-tag v-if="row.isDefault === 1" type="warning" size="small">{{ $t('system.extInterface.colDefault') }}</el-tag>
           <span v-else style="color: #c0c4cc">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="测试结果" width="110" align="center">
+      <el-table-column :label="$t('system.extInterface.colTestResult')" width="110" align="center">
         <template #default="{ row }">
           <template v-if="row.lastTestResult">
             <el-tag :type="row.lastTestResult === 'SUCCESS' ? 'success' : 'danger'" size="small">
-              {{ row.lastTestResult === 'SUCCESS' ? '通过' : '失败' }}
+              {{ row.lastTestResult === 'SUCCESS' ? t('field.approve') : t('system.common.stFailed') }}
             </el-tag>
             <el-tooltip :content="row.lastTestTime + ' ' + (row.lastTestMsg || '')" placement="top">
               <el-icon style="margin-left: 4px; color: #909399; cursor: help"><InfoFilled /></el-icon>
             </el-tooltip>
           </template>
-          <span v-else style="color: #c0c4cc">未测试</span>
+          <span v-else style="color: #c0c4cc">{{ $t('system.extInterface.stNotTested') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column :label="$t('common.operation')" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="canUpdate" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+          <el-button v-if="canUpdate" link type="primary" size="small" @click="openEdit(row)">{{ $t('system.common.btnEdit') }}</el-button>
           <el-button v-if="canUpdate" link :type="row.status === 'ENABLED' ? 'warning' : 'success'" size="small"
                      @click="toggleStatus(row)">
-            {{ row.status === 'ENABLED' ? '停用' : '启用' }}
+            {{ row.status === 'ENABLED' ? t('system.common.btnDeactivate') : t('system.common.btnEnable') }}
           </el-button>
           <el-button v-if="canTest" link type="primary" size="small" :loading="testingId === row.id" @click="testConnection(row)">
-            测试连接
-          </el-button>
-          <el-button v-if="canUpdate && row.isDefault !== 1" link type="warning" size="small" @click="setDefault(row)">设默认</el-button>
-          <el-popconfirm v-if="canDelete" title="确定删除此接口配置？" @confirm="deleteRow(row)">
+            {{ $t('system.extInterface.btnTestConn') }}</el-button>
+          <el-button v-if="canUpdate && row.isDefault !== 1" link type="warning" size="small" @click="setDefault(row)">{{ $t('system.extInterface.btnSetDefault') }}</el-button>
+          <el-popconfirm v-if="canDelete" :title="$t('system.extInterface.askDeleteIf')" @confirm="deleteRow(row)">
             <template #reference>
-              <el-button link type="danger" size="small">删除</el-button>
+              <el-button link type="danger" size="small">{{ $t('system.common.btnDelete') }}</el-button>
             </template>
           </el-popconfirm>
         </template>
@@ -96,65 +91,65 @@
     <TablePager :pager="pager" @change="loadData" />
 
     <!-- 编辑/新增对话框 -->
-    <el-dialog v-model="dialogVisible" :title="editing.id ? '编辑接口配置' : '新增接口配置'" width="680px" @close="resetForm">
+    <el-dialog v-model="dialogVisible" :title="editing.id ? t('system.extInterface.dlgEditTitle') : t('system.extInterface.dlgCreateTitle')" width="680px" @close="resetForm">
       <el-form ref="formRef" :model="editing" :rules="extInterfaceRules" label-width="120px" style="padding-right: 20px">
-        <el-form-item label="接口分类">
+        <el-form-item :label="$t('system.extInterface.colIfCategory')">
           <el-tag>{{ categoryLabel(activeTab) }}</el-tag>
         </el-form-item>
-        <el-form-item label="接口名称" prop="interfaceName">
-          <el-input v-model="editing.interfaceName" placeholder="如：百度发票验真" />
+        <el-form-item :label="$t('system.extInterface.colIfName')" prop="interfaceName">
+          <el-input v-model="editing.interfaceName" :placeholder="$t('system.extInterface.phNameExample')" />
         </el-form-item>
-        <el-form-item label="接口编码" prop="interfaceCode">
-          <el-input v-model="editing.interfaceCode" placeholder="如：BAIDU_INVOICE_VERIFY"
+        <el-form-item :label="$t('system.common.colIfCode')" prop="interfaceCode">
+          <el-input v-model="editing.interfaceCode" :placeholder="$t('system.extInterface.phCodeExample')"
                     :disabled="!!editing.id" />
-          <div class="tip">租户内唯一，保存后不可修改</div>
+          <div class="tip">{{ $t('system.extInterface.hintCodeUnique') }}</div>
         </el-form-item>
-        <el-form-item label="服务商">
-          <el-select v-model="editing.provider" filterable placeholder="选择服务商" clearable style="width: 100%">
+        <el-form-item :label="$t('system.extInterface.colProvider')">
+          <el-select v-model="editing.provider" filterable :placeholder="$t('system.extInterface.phProvider')" clearable style="width: 100%">
             <el-option v-for="p in providerOptions" :key="p" :label="p" :value="p" />
           </el-select>
           <div v-if="activeTab === 'ERP'" class="tip">
-            ERP 品牌决定业务通道前缀：选择后需再按「{品牌}_动作」配置具体接口（如 EBS→EBS_AP 记账、EBS_ORDER_GET 订单获取）。
-            启用且设为默认后，AR/AP 协同记账、预付款订单校验自动路由到该品牌通道；未配置具体通道时保持模拟回退。
+            {{ $t('system.extInterface.hintErpBrandPrefix') }}
+            {{ $t('system.extInterface.hintDefaultRoute') }}
           </div>
         </el-form-item>
-        <el-form-item label="API 地址">
+        <el-form-item :label="$t('system.common.colApiUrl')">
           <el-input v-model="editing.apiUrl" placeholder="https://api.example.com/endpoint" clearable />
         </el-form-item>
         <el-form-item label="API Key">
           <el-input v-model="editing.apiKey" type="password" show-password
-                    :placeholder="editing.id && editing.apiKey ? '已保存（留空或保留掩码表示不修改）' : 'API Key / AppKey'" clearable />
+                    :placeholder="editing.id && editing.apiKey ? t('system.extInterface.hintKeySaved') : 'API Key / AppKey'" clearable />
         </el-form-item>
         <el-form-item label="API Secret">
           <el-input v-model="editing.apiSecret" type="password" show-password
-                    :placeholder="editing.id && editing.apiSecret ? '已保存（留空或保留掩码表示不修改）' : 'API Secret / SecretKey'" />
-          <div class="tip">出于安全考虑，已保存的密钥只回显末 4 位用于辨认；更换时请填入完整新值，留空或保留掩码都不会改动已保存的内容。</div>
+                    :placeholder="editing.id && editing.apiSecret ? t('system.extInterface.hintKeySaved') : 'API Secret / SecretKey'" />
+          <div class="tip">{{ $t('system.extInterface.hintSecretMasked') }}</div>
         </el-form-item>
-        <el-form-item v-if="activeTab === 'AI_MODEL'" label="模型名称">
-          <el-input v-model="editing.modelName" placeholder="如：ERNIE-4.0-Turbo-8K / gpt-4o / qwen-max" clearable />
+        <el-form-item v-if="activeTab === 'AI_MODEL'" :label="$t('system.common.colModelName')">
+          <el-input v-model="editing.modelName" :placeholder="$t('system.extInterface.phModelExample')" clearable />
         </el-form-item>
-        <el-form-item label="附加配置(JSON)">
+        <el-form-item :label="$t('system.extInterface.lblExtraJson')">
           <el-input v-model="editing.extraConfig" type="textarea" :rows="4"
-                    placeholder='{"timeout":10,"retry":3} 留空=无附加配置' />
+                    :placeholder="$t('system.extInterface.phExtraConfigJson')" />
           <div class="tip">
-            <el-button link type="primary" size="small" @click="validateJson">校验 JSON</el-button>
+            <el-button link type="primary" size="small" @click="validateJson">{{ $t('system.common.btnCheckJson') }}</el-button>
           </div>
         </el-form-item>
-        <el-form-item label="备注">
-          <el-select v-model="editing.remark" filterable allow-create default-first-option placeholder="请选择或输入备注" style="width: 100%"><el-option label="生产环境" value="生产环境" /><el-option label="测试环境" value="测试环境" /><el-option label="备用接口" value="备用接口" /><el-option label="临时配置" value="临时配置" /><el-option label="其他" value="其他" /></el-select>
+        <el-form-item :label="$t('common.remark')">
+          <el-select v-model="editing.remark" filterable allow-create default-first-option :placeholder="$t('system.extInterface.phRemark')" style="width: 100%"><el-option :label="$t('system.extInterface.optProd')" value="生产环境" /><el-option :label="$t('system.extInterface.optTest')" value="测试环境" /><el-option :label="$t('system.extInterface.optBackup')" value="备用接口" /><el-option :label="$t('system.extInterface.optTemp')" value="临时配置" /><el-option :label="$t('system.common.optOther')" value="其他" /></el-select>
         </el-form-item>
-        <el-form-item label="启用状态">
+        <el-form-item :label="$t('system.common.colEnabled')">
           <el-switch v-model="editing.status" active-value="ENABLED" inactive-value="DISABLED"
-                     active-text="启用" inactive-text="停用" />
+                     :active-text="$t('system.common.btnEnable')" :inactive-text="$t('system.common.btnDeactivate')" />
         </el-form-item>
-        <el-form-item label="设为默认">
+        <el-form-item :label="$t('system.extInterface.btnMarkDefault')">
           <el-switch v-model="editing.isDefault" :active-value="1" :inactive-value="0"
-                     active-text="默认" inactive-text="否" />
+                     :active-text="$t('system.extInterface.colDefault')" :inactive-text="$t('common.no')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="save">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -176,6 +171,9 @@ import { useTablePager } from '../../composables/useTablePager'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
 import OcrConfig from './OcrConfig.vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -187,7 +185,7 @@ function openTrace(row) {
 
 // 双击行：展示行数据详情
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('field.detail') })
 }
 
 const activeTab = ref('INVOICE_VERIFY')
@@ -264,11 +262,11 @@ const editing = reactive({
   remark: '',
 })
 
-const extInterfaceRules = reactive({
+const extInterfaceRules = computed(() => (reactive({
   // 接口名称/编码＝人工维护（编码租户内唯一、保存后不可改）；与后端 ExtInterfaceConfigService 同口径
-  interfaceName: commonRules.required('请输入接口名称'),
-  interfaceCode: commonRules.required('请输入接口编码'),
-})
+  interfaceName: commonRules.required(t('system.extInterface.phIfName')),
+  interfaceCode: commonRules.required(t('system.extInterface.phIfCode')),
+})))
 const formRef = ref(null)
 
 const providerOptions = computed(() => {
@@ -290,19 +288,19 @@ const providerTagType = (p) => ({
 })[p] || ''
 
 // R5-D-039：服务商枚举中文化（CUSTOM 直显 "CUSTOM" 对用户无意义）
-const providerText = (p) => (p === 'CUSTOM' ? '自定义' : (p || '-'))
+const providerText = computed(() => (p) => (p === 'CUSTOM' ? t('system.extInterface.catCustom') : (p || '-')))
 
 // R5-D-039：页签由 category 字典驱动（tabDefs 与会话内既有点位/图标一致），计数来自后端汇总
-const tabDefs = ref([
-  { name: 'INVOICE_VERIFY', label: '发票验真', icon: CircleCheck },
-  { name: 'INVOICE_CERTIFY', label: '发票认证', icon: Stamp },
-  { name: 'OCR', label: 'OCR 影像识别', icon: Picture },
-  { name: 'OCR_CHANNEL', label: 'OCR 通道设置', icon: SetUp },
-  { name: 'AI_MODEL', label: 'AI 大模型', icon: MagicStick },
-  { name: 'LINKU', label: 'LinkU 供应商协同', icon: Connection },
-  { name: 'BANK', label: '银企直连', icon: Wallet },
-  { name: 'ERP', label: 'ERP 总账对接', icon: OfficeBuilding },
-])
+const tabDefs = computed(() => (ref([
+  { name: 'INVOICE_VERIFY', label: t('system.extInterface.catInvoiceVerify'), icon: CircleCheck },
+  { name: 'INVOICE_CERTIFY', label: t('system.extInterface.catInvoiceAuth'), icon: Stamp },
+  { name: 'OCR', label: t('system.extInterface.catOcrImage'), icon: Picture },
+  { name: 'OCR_CHANNEL', label: t('system.extInterface.catOcrChannel'), icon: SetUp },
+  { name: 'AI_MODEL', label: t('system.extInterface.catAiModel'), icon: MagicStick },
+  { name: 'LINKU', label: t('system.extInterface.catLinkUSupp'), icon: Connection },
+  { name: 'BANK', label: t('system.extInterface.catBankDirect'), icon: Wallet },
+  { name: 'ERP', label: t('system.extInterface.catErpGl'), icon: OfficeBuilding },
+])))
 const visibleTabs = computed(() => (canList ? tabDefs.value : []))
 const catCounts = reactive({})
 const catCount = (name) => {
@@ -360,21 +358,21 @@ function resetForm() {
 
 function validateJson() {
   if (!editing.extraConfig || !editing.extraConfig.trim()) {
-    ElMessage.success('留空表示无附加配置')
+    ElMessage.success(t('system.extInterface.hintExtraEmpty'))
     return
   }
   try {
     JSON.parse(editing.extraConfig)
-    ElMessage.success('JSON 格式合法')
+    ElMessage.success(t('system.common.msgJsonValid'))
   } catch (e) {
-    ElMessage.error('JSON 不合法: ' + e.message)
+    ElMessage.error(t('system.extInterface.errJsonBad') + e.message)
   }
 }
 
 async function save() {
   if (!(await validateForms([formRef]))) return
   if (editing.extraConfig && editing.extraConfig.trim()) {
-    try { JSON.parse(editing.extraConfig) } catch (e) { ElMessage.error('附加配置 JSON 不合法'); return }
+    try { JSON.parse(editing.extraConfig) } catch (e) { ElMessage.error(t('system.extInterface.errExtraJson')); return }
   }
   saving.value = true
   try {
@@ -388,7 +386,7 @@ async function save() {
       delete body.id
       await extInterfaceApi.create(body)
     }
-    ElMessage.success('保存成功')
+    ElMessage.success(t('system.common.msgSaved'))
     dialogVisible.value = false
     await loadData()
   } catch (e) {
@@ -401,7 +399,7 @@ async function save() {
 async function toggleStatus(row) {
   try {
     await extInterfaceApi.toggleStatus(row.id, row.status === 'ENABLED' ? 'DISABLED' : 'ENABLED')
-    ElMessage.success(row.status === 'ENABLED' ? '已停用' : '已启用')
+    ElMessage.success(row.status === 'ENABLED' ? t('system.extInterface.stDeactivated') : t('system.common.stEnabled'))
     await loadData()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -409,7 +407,7 @@ async function toggleStatus(row) {
 async function setDefault(row) {
   try {
     await extInterfaceApi.setDefault(row.id)
-    ElMessage.success('已设为默认')
+    ElMessage.success(t('system.extInterface.msgSetDefault'))
     await loadData()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -419,9 +417,9 @@ async function testConnection(row) {
   try {
     const r = await extInterfaceApi.test(row.id)
     if (r.success) {
-      ElMessage.success('连接测试通过: ' + r.message)
+      ElMessage.success(t('system.extInterface.msgTestPass') + r.message)
     } else {
-      ElMessage.warning('连接测试失败: ' + r.message)
+      ElMessage.warning(t('system.extInterface.msgTestFail') + r.message)
     }
     await loadData()
   } catch (e) {
@@ -434,7 +432,7 @@ async function testConnection(row) {
 async function deleteRow(row) {
   try {
     await extInterfaceApi.delete(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('system.common.stDeleted'))
     await loadData()
   } catch (e) { ElMessage.error(e.message) }
 }

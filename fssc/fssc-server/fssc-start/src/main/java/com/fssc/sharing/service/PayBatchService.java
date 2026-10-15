@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -1528,7 +1525,17 @@ public class PayBatchService {
         }
         for (Map.Entry<Long, BigDecimal> e : plannedByBill.entrySet()) {
             ExpBill b = expBillMapper.selectById(e.getKey());
-            if (b == null || b.getPayableAmount() == null) continue;
+            // D-F1R-01：原跳过判据只认 null，而 exp_bill.payable_amount 的默认值是 0 不是 null。
+            // 「应付=0 却有 WAITING 付款记录」不是业务上的超付，而是单据应付/放款上限从未回写的数据缺陷
+            // （典型：借款放款腿，createLoanDisbursementPayment 已按借款额落了付款记录，
+            //   而历史上 handleApproved 的 EXP_LOAN 分支压根不写 payable_amount）。
+            // 若按旧文案报「超过应付 0.00」，操作人会误判成业务超付而放弃付款，钱永远付不出去。
+            if (b == null || b.getPayableAmount() == null || b.getPayableAmount().signum() <= 0) {
+                log.warn("D-F1R-01 付款批次 {} 单据 {} 应付金额为空或为 0，跳过防超付校验"
+                                + "（该单已落地一或多条付款记录，属应付未回写的数据缺陷，非业务超付）",
+                        batchNo, b == null ? e.getKey() : b.getBillNo());
+                continue;
+            }
             BigDecimal paid = expBillPaymentMapper.selectList(
                             new LambdaQueryWrapper<ExpBillPayment>()
                                     .eq(ExpBillPayment::getBillId, e.getKey())
@@ -1708,7 +1715,17 @@ public class PayBatchService {
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
                 bu.setPaidAmount(paid);
                 // P0-5 状态机：单据全部付款完成→APPROVED→PAID
-                if (bill.getPayableAmount() != null && paid.compareTo(bill.getPayableAmount()) >= 0
+                // D-F1R-01 例外：借款单（EXP_LOAN）放款付讫≠借款结清。借款的生命周期是
+                // 已批未放(APPROVED) → 已放款在贷(仍 APPROVED，loan_balance 挂账) → (部分/全额还款 → REPAID)。
+                // 放款成功就把这笔借款迁成 PAID，等于宣告借款已了结：借款台账、逾期/限额判定、
+                // 还款核销 FIFO 一律按 status ∈ {APPROVED, PARTIAL_REPAID} 认「在贷借款」，
+                // 于是 loan_balance 还挂着钱却无人可还（这笔借款从在贷池消失）。
+                // 借款的了结只有一个出口：repayLoan 按 loan_balance 归零置 REPAID。
+                // 注意 exp_bill.bill_type 库内取值是无前缀的 'LOAN'（'EXP_LOAN' 是流程侧 biz_type），
+                // 两种写法都判，避免将来单据类型编码换口径时静默失效。
+                String billType = bill.getBillType();
+                boolean isLoan = "LOAN".equalsIgnoreCase(billType) || "EXP_LOAN".equalsIgnoreCase(billType);
+                if (!isLoan && bill.getPayableAmount() != null && paid.compareTo(bill.getPayableAmount()) >= 0
                         && "APPROVED".equals(bill.getStatus())) {
                     bu.setStatus("PAID");
                     // TRC-E：exp_bill.pay_time 建表以来从未赋值，随 APPROVED→PAID 同写（幂等：已有值不覆盖）

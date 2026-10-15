@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -155,14 +152,26 @@ public class DashboardService {
 
     // ---------------- 部门排行 / 审批时效（join 聚合） ----------------
 
-    /** 部门报销排行（金额降序，① 按登录人公司隔离） */
+    /**
+     * 部门报销排行（金额降序）。
+     * D-F1R-04：原口径只按 {@code orgGuard.enforceCompany()} 做公司隔离，而接口只挂
+     * {@code dashboard:view}（没有额外数据权限）⇒ 任意持该权限的用户都看到全公司各部门排名，
+     * 10-15 实测报销员工 Y000885 与共享会计 Y000185 返回<b>逐行完全相同</b>的结果。
+     * 现改为公司 + 部门/本人三级收口，范围由 {@code @DataScope} 入口写入
+     * {@link DataScopeHolder}（控制器 {@code DashboardController#deptRanking} 已补注解）。
+     * 公司口径保持 {@link OrgGuard#enforceCompany()} 不变，避免回归 R5-D-026 的公司隔离。
+     */
     public List<Map<String, Object>> expenseByDept() {
-        return reportMapper.expenseByDept(orgGuard.enforceCompany());
+        Long companyId = orgGuard.enforceCompany();
+        ScopeArgs sc = scopeArgs();
+        return reportMapper.expenseByDept(companyId, sc.deptIds(), sc.userId());
     }
 
-    /** 审批时效：提交→审批通过平均分钟（按单据类型）。① 按登录人公司隔离（R5-D-026 扩展族收口） */
+    /** 审批时效：提交→审批通过平均分钟（按单据类型）。D-F1R-04 数据范围收口同 {@link #expenseByDept()} */
     public List<Map<String, Object>> approvalEfficiency() {
-        return reportMapper.approvalEfficiency(orgGuard.enforceCompany());
+        Long companyId = orgGuard.enforceCompany();
+        ScopeArgs sc = scopeArgs();
+        return reportMapper.approvalEfficiency(companyId, sc.deptIds(), sc.userId());
     }
 
     // ---------------- 费用概览 KPI（R5-D-020） ----------------
@@ -384,6 +393,32 @@ public class DashboardService {
      * 1 本租户全量不加条件；2 公司=companyCol；3 部门及以下/4 本部门=deptCol（无部门降级公司）；
      * 5 仅本人=ownerCol（无本人列降级公司）。
      */
+    /**
+     * D-F1R-04：把 {@link DataScopeHolder} 里的范围翻译成 Mapper 需要的两个入参。
+     * <p>只产出「部门集合 / 本人」，公司维由调用方按 {@link OrgGuard#enforceCompany()} 单独传 ——
+     * 公司口径是 R5-D-026 的既有行为，不与数据范围混算，避免改一处动两处。
+     * <p>scope=1（本租户全部）/ 2（本公司）时两个入参都为 null：Mapper 的 {@code <if test='... != null'>}
+     * 不会追加条件，行为与改前完全一致，只对 3/4/5 级（部门及以下/本部门/仅本人）收口。
+     */
+    private ScopeArgs scopeArgs() {
+        DataScopeHolder.Scope s = DataScopeHolder.get();
+        if (s == null) {
+            return new ScopeArgs(null, null);
+        }
+        if (s.getScope() <= DataScope.COMPANY.getCode()) {
+            return new ScopeArgs(null, null); // 1 租户全部 / 2 本公司：不收窄
+        }
+        if (s.getScope() == DataScope.SELF.getCode()) {
+            return new ScopeArgs(null, s.getUserId());
+        }
+        // 3 部门及以下 / 4 本部门：取 deptAndChild（无部门信息时按 null 处理＝不收窄）
+        return new ScopeArgs(s.getDeptAndChild(), null);
+    }
+
+    /** D-F1R-04 数据范围入参载体（部门集合 + 本人）。 */
+    private record ScopeArgs(Set<Long> deptIds, Long userId) {
+    }
+
     private void applyScope(QueryWrapper<?> qw, String companyCol, String deptCol, String ownerCol) {
         applyScope(qw, companyCol, deptCol, ownerCol, false);
     }

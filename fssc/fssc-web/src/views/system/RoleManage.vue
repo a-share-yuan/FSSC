@@ -1,35 +1,32 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="role-manage">
     <el-card>
       <!-- Toolbar -->
       <div class="toolbar">
-        <el-input v-model="query.keyword" placeholder="搜索角色编码/名称" clearable style="width:240px" @keyup.enter="loadList" />
-        <el-button type="primary" @click="onQuery">查询</el-button>
-        <el-button v-permission="'system:role:create'" type="success" @click="openCreate">新增角色</el-button>
+        <el-input v-model="query.keyword" :placeholder="$t('system.role.phSearchRole')" clearable style="width:240px" @keyup.enter="loadList" />
+        <el-button type="primary" @click="onQuery">{{ $t('common.search') }}</el-button>
+        <el-button v-permission="'system:role:create'" type="success" @click="openCreate">{{ $t('system.role.btnAddRole') }}</el-button>
       </div>
 
       <!-- Table -->
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
-      <el-table :data="list" v-else border stripe @row-dblclick="openRowDetail" empty-text="暂无数据">
-        <el-table-column prop="roleCode" label="角色编码" min-width="140" />
-        <el-table-column prop="roleName" label="角色名称" min-width="140" />
-        <el-table-column label="状态" width="90" align="center">
+      <el-table :data="list" v-else border stripe @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
+        <el-table-column prop="roleCode" :label="$t('system.role.colRoleCode')" min-width="140" />
+        <el-table-column prop="roleName" :label="$t('system.role.colRoleName')" min-width="140" />
+        <el-table-column :label="$t('common.status')" width="90" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'NORMAL' ? 'success' : 'info'">{{ row.status === 'NORMAL' ? '启用' : '禁用' }}</el-tag>
+            <el-tag :type="row.status === 'NORMAL' ? 'success' : 'info'">{{ row.status === 'NORMAL' ? $t('system.common.btnEnable') : $t('system.common.btnDisable') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" width="170" :formatter="(r, c, v) => formatDateTime(v)" />
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column prop="createTime" :label="$t('common.createTime')" width="170" :formatter="(r, c, v) => formatDateTime(v)" />
+        <el-table-column :label="$t('common.operation')" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'system:role:update'" link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button v-permission="'system:role:assignMenu'" link type="primary" @click="openAssignMenu(row)">分配菜单</el-button>
+            <el-button v-permission="'system:role:update'" link type="primary" @click="openEdit(row)">{{ $t('system.common.btnEdit') }}</el-button>
+            <el-button v-permission="'system:role:assignMenu'" link type="primary" @click="openAssignMenu(row)">{{ $t('system.role.btnAssignMenu') }}</el-button>
 <el-button v-permission="'system:role:update'" link :type="row.status === 'NORMAL' ? 'warning' : 'success'" @click="toggleEnable(row)">
-              {{ row.status === 'NORMAL' ? '禁用' : '启用' }}
+              {{ row.status === 'NORMAL' ? t('system.common.btnDisable') : t('system.common.btnEnable') }}
             </el-button>
-            <el-button v-permission="'system:role:delete'" link type="danger" @click="onDelete(row)">删除</el-button>
+            <el-button v-permission="'system:role:delete'" link type="danger" @click="onDelete(row)">{{ $t('system.common.btnDelete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -48,40 +45,39 @@
     </el-card>
 
     <!-- Create / Edit Dialog -->
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑角色' : '新增角色'" width="480px">
+    <el-dialog v-model="dialogVisible" :title="isEdit ? t('system.role.dlgEditTitle') : t('system.role.btnAddRole')" width="480px">
       <el-form :model="form" label-width="80px" ref="formRef" :rules="formRules">
-        <el-form-item label="角色编码" prop="roleCode">
+        <el-form-item :label="$t('system.role.colRoleCode')" prop="roleCode">
           <el-input v-model="form.roleCode" :disabled="isEdit" placeholder="ROLE_ADMIN" />
         </el-form-item>
-        <el-form-item label="角色名称" prop="roleName">
-          <el-input v-model="form.roleName" placeholder="角色名称" />
+        <el-form-item :label="$t('system.role.colRoleName')" prop="roleName">
+          <el-input v-model="form.roleName" :placeholder="$t('system.role.colRoleName')" />
         </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="角色描述" />
+        <el-form-item :label="$t('system.role.colDescription')">
+          <el-input v-model="form.description" type="textarea" :rows="2" :placeholder="$t('system.role.lblRoleDesc')" />
         </el-form-item>
-        <el-form-item label="启用状态">
+        <el-form-item :label="$t('system.common.colEnabled')">
           <el-switch v-model="form.status" :active-value="'NORMAL'" :inactive-value="'DISABLED'" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
+        <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="onSave">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="menuDialogVisible" title="分配菜单" width="920px" top="6vh">
+    <el-dialog v-model="menuDialogVisible" :title="$t('system.role.btnAssignMenu')" width="920px" top="6vh">
       <SkeletonDetail v-if="menuLoading" :rows="6" />
       <div v-else class="menu-assign">
         <div class="assign-tip">
-          为角色 <b>[{{ currentRole?.roleName }}]</b> 分配菜单权限——勾选目录自动带出其下全部子菜单与按钮；保存后重新登录生效。
-        </div>
+          {{ $t('system.role.txtForRole') }}<b>[{{ currentRole?.roleName }}]</b> {{ $t('system.role.hintAssignMenu') }}</div>
         <div class="assign-body">
           <!-- 左：菜单目录树 -->
           <div class="assign-left">
             <div class="tree-toolbar">
-              <el-input v-model="menuKeyword" placeholder="搜索菜单名称/权限码..." size="small" clearable :prefix-icon="Search" style="flex:1" />
-              <el-button size="small" @click="expandAllMenus(true)">展开</el-button>
-              <el-button size="small" @click="expandAllMenus(false)">收起</el-button>
+              <el-input v-model="menuKeyword" :placeholder="$t('system.role.phSearchMenu')" size="small" clearable :prefix-icon="Search" style="flex:1" />
+              <el-button size="small" @click="expandAllMenus(true)">{{ $t('system.role.btnExpand') }}</el-button>
+              <el-button size="small" @click="expandAllMenus(false)">{{ $t('system.role.btnCollapse') }}</el-button>
             </div>
             <el-tree
               ref="menuTreeRef"
@@ -105,14 +101,14 @@
           </div>
           <div class="assign-right">
             <div class="selected-head">
-              <span>已选权限（{{ checkedList.length }}）</span>
-              <el-button link type="danger" size="small" @click="clearMenuSelection">清空</el-button>
+              <span>{{ $t('system.role.statSelectedPerms', { v1: checkedList.length }) }}</span>
+              <el-button link type="danger" size="small" @click="clearMenuSelection">{{ $t('system.role.btnClear') }}</el-button>
             </div>
             <div class="selected-search">
-              <el-input v-model="rightKeyword" placeholder="搜索已选权限..." size="small" clearable :prefix-icon="Search" />
+              <el-input v-model="rightKeyword" :placeholder="$t('system.role.phSearchSelected')" size="small" clearable :prefix-icon="Search" />
             </div>
             <div class="selected-list">
-              <el-empty v-if="!checkedList.length" description="从左侧勾选菜单权限" :image-size="60" />
+              <el-empty v-if="!checkedList.length" :description="$t('system.role.hintPickPerms')" :image-size="60" />
               <template v-else>
                 <div v-for="g in filteredGroups" :key="g.name" class="sel-group">
                   <div class="sel-group-head" @click="toggleGroup(g.name)">
@@ -123,19 +119,19 @@
                   <div v-show="!foldedGroups.has(g.name)" class="sel-group-body">
                     <div v-for="m in g.items" :key="m.id" class="selected-item">
                       <span class="sel-name" :title="m.perms || m.menuName">{{ m.menuName }}</span>
-                      <el-icon class="sel-del" title="移除" @click="removeMenuChecked(m.id)"><Close /></el-icon>
+                      <el-icon class="sel-del" :title="$t('system.role.btnRemove')" @click="removeMenuChecked(m.id)"><Close /></el-icon>
                     </div>
                   </div>
                 </div>
-                <el-empty v-if="!filteredGroups.length" description="无匹配权限" :image-size="40" />
+                <el-empty v-if="!filteredGroups.length" :description="$t('system.role.emptyNoPermMatch')" :image-size="40" />
               </template>
             </div>
           </div>
         </div>
       </div>
       <template #footer>
-        <el-button @click="menuDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="menuSaving" @click="onSaveMenus">保存</el-button>
+        <el-button @click="menuDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="menuSaving" @click="onSaveMenus">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -151,6 +147,9 @@ import { roleApi, getMenuTree } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => loadList(),
@@ -164,7 +163,7 @@ const query = reactive({ keyword: '', pageNum: 1, pageSize: 10 })
 
 // 双击行：展示行数据详情
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('field.detail') })
 }
 
 /* ---- Create / Edit ---- */
@@ -181,10 +180,10 @@ const form = reactive({
   status: 'NORMAL',
 })
 
-const formRules = {
-  roleCode: [{ required: true, message: '请输入角色编码' }],
-  roleName: [{ required: true, message: '请输入角色名称' }],
-}
+const formRules = computed(() => ({
+  roleCode: [{ required: true, message: t('system.role.errRoleCodeRequired') }],
+  roleName: [{ required: true, message: t('system.role.errRoleNameRequired') }],
+}))
 
 /* ---- Menu Assignment ---- */
 const menuDialogVisible = ref(false)
@@ -251,7 +250,7 @@ const checkedGroups = computed(() => {
   menuTree.value.forEach((n, i) => walk([n], null, i))
   const groups = new Map()
   for (const m of checkedList.value) {
-    const info = rootOf.get(m.id) || { root: '其他', order: 999 }
+    const info = rootOf.get(m.id) || { root: t('system.common.optOther'), order: 999 }
     if (!groups.has(info.root)) groups.set(info.root, { name: info.root, order: info.order, items: [] })
     groups.get(info.root).items.push(m)
   }
@@ -293,7 +292,7 @@ async function loadList() {
     list.value = res.records || res.list || []
     total.value = res.total || 0
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(e.message || t('system.common.msgLoadFail'))
   } finally {
     loading.value = false
   }
@@ -326,15 +325,15 @@ async function onSave() {
   try {
     if (isEdit.value) {
       await roleApi.update({ id: form.id, roleCode: form.roleCode, roleName: form.roleName, description: form.description, status: form.status })
-      ElMessage.success('更新成功')
+      ElMessage.success(t('system.common.msgUpdated'))
     } else {
       await roleApi.create({ roleCode: form.roleCode, roleName: form.roleName, description: form.description, status: form.status })
-      ElMessage.success('创建成功')
+      ElMessage.success(t('system.common.msgCreated'))
     }
     dialogVisible.value = false
     loadList()
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e.message || t('system.common.msgSaveFail'))
   } finally {
     saving.value = false
   }
@@ -344,21 +343,21 @@ async function toggleEnable(row) {
   try {
     const isEnabled = row.status === 'NORMAL'
     await roleApi.enable(row.id, !isEnabled)
-    ElMessage.success(isEnabled ? '已禁用' : '已启用')
+    ElMessage.success(isEnabled ? t('system.common.stDisabled') : t('system.common.stEnabled'))
     row.status = isEnabled ? 'DISABLED' : 'NORMAL'
   } catch (e) {
-    ElMessage.error(e.message || '操作失败')
+    ElMessage.error(e.message || t('common.failed'))
   }
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(`确认删除角色 [${row.roleName}]？`, '删除确认', { type: 'warning' })
+  await ElMessageBox.confirm(t('system.role.askDeleteRole', { v1: row.roleName }), t('system.common.ttlDelete'), { type: 'warning' })
   try {
     await roleApi.delete(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('system.common.msgDeleteOk'))
     loadList()
   } catch (e) {
-    ElMessage.error(e.message || '删除失败')
+    ElMessage.error(e.message || t('system.common.msgDeleteFail'))
   }
 }
 
@@ -376,7 +375,7 @@ async function openAssignMenu(row) {
     // Load currently assigned menu IDs
     checkedIds = (await roleApi.menuIds(row.id)) || []
   } catch (e) {
-    ElMessage.error(e.message || '加载菜单失败')
+    ElMessage.error(e.message || t('system.role.msgMenuLoadFail'))
   } finally {
     // 先结束骨架屏，让 el-tree 真正挂载后再回显勾选
     //（否则 menuTreeRef 为 undefined，setCheckedKeys 被可选链静默跳过 → 已选权限恒为空）
@@ -397,10 +396,10 @@ async function onSaveMenus() {
   menuSaving.value = true
   try {
     await roleApi.assignMenus(currentRole.value.id, allIds)
-    ElMessage.success('菜单分配成功')
+    ElMessage.success(t('system.role.msgMenuAssigned'))
     menuDialogVisible.value = false
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e.message || t('system.common.msgSaveFail'))
   } finally {
     menuSaving.value = false
   }

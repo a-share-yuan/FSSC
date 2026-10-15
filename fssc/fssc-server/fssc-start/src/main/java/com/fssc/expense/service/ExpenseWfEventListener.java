@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.expense.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -36,6 +33,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -215,6 +214,15 @@ public class ExpenseWfEventListener implements WfBizAction {
                 upd.setId(bill.getId());
                 upd.setStatus("APPROVED");
                 upd.setLoanBalance(nvl(bill.getTotalAmount()));
+                // D-F1R-01：借款放款上限回写 payable_amount（＝借款本金）。
+                // 根因：本分支历史上只写 loan_balance 不写 payable_amount（＝恒 0，连草稿单都一样），
+                // 而 PayBatchService 防超付闸的跳过判据是 payableAmount **为空**而非等于 0，
+                // 于是「已付 0 ＋ 拟付 4000 ＞ 应付 0.00」把放款永久拦死 —— 借款放款腿两轮实测皆不通，
+                // 但借款凭证已过账（贷 1002 银行存款 4000）⇒ 账上记了支出、实际零支出的账实不符。
+                // 口径裁决：payable_amount 承载「放款上限」（资金闸语义），在贷余额仍由 loan_balance 承载，
+                // 状态机不扩 —— 放款付讫不得把借款单迁成 PAID（那等于笔借款已结清、会从在贷池消失），
+                // 由 PayBatchService#writeBackPayment 对 EXP_LOAN 豁免 PAID 迁移来保证。
+                upd.setPayableAmount(nvl(bill.getTotalAmount()));
                 upd.setExpectRepayDate(bill.getExpectRepayDate() == null
                         ? LocalDate.now().plusMonths(3) : bill.getExpectRepayDate());
                 expBillMapper.updateById(upd);
@@ -344,10 +352,12 @@ public class ExpenseWfEventListener implements WfBizAction {
                         // P1-A 报销→付款转换链：审批通过即核定应付并生成待付款记录（WAITING），
                         // 出纳在付款工作台组批执行；全额付讫后由 PayBatchService 回写 APPROVED→PAID
                         createClaimPayment(bill, payable);
-                    } else {
-                        // D-DEC-104 无现金腿分支：本单不会产生待付记录 ⇒ 此刻确认预算消耗
-                        settleBudgetOnNoCashLeg(bill);
-                    }
+                } else {
+                    // D-DEC-104 无现金腿分支：本单不会产生待付记录 ⇒ 此刻确认预算消耗
+                    // D-F1R-06：但<b>不能就在此刻执行</b>，见 settleBudgetOnNoCashLeg 的方法注释：
+                    // 必须等外层审批事务提交后（行锁已释放）再跑，否则内层 REQUIRES_NEW 自锁 50s 超时。
+                    scheduleSettleBudgetOnNoCashLeg(bill);
+                }
                     ExpBill claimUpd = new ExpBill();
                     claimUpd.setId(bill.getId());
                     claimUpd.setStatus("APPROVED");
@@ -1596,49 +1606,89 @@ public class ExpenseWfEventListener implements WfBizAction {
      * 这类单据的钱已经在借款那一腿付出，若不在审批收尾时确认消耗，占用就会永久悬空、把额度吃死。
      * 故只在这一个分支保留即时核销，其余一律等付款。</p>
      *
+     * <p><b>D-F1R-06 执行时机：必须挂到外层审批事务提交之后</b>。根因（10-13 与 10-14 两轮实证）：
+     * 本方法与同一条收尾链上的 {@code writeOffApplyOccupy}/{@code handleLoanClaimDiff} 同处外层事务，
+     * 而那些步骤已经动过同一枚 {@code bg_item} 行；{@code settleOccupyOnPaid} 是
+     * {@code REQUIRES_NEW}，要 {@code SELECT ... FOR UPDATE} 同一行 —— 外层未提交 ⇒ 内层<b>自锁</b>，
+     * 每次等满 {@code innodb_lock_wait_timeout}(50s) 才超时。日志实证：
+     * 23:55:41 收尾 → 23:56:31 撞锁① → 23:57:21 撞锁② → 23:58:12 放弃，
+     * 3 次共耗约 2 分半，占用仍悬空 3,900。<b>加重试在这里治不了病——锁住它的正是自己。</b>
+     * 挂 afterCommit 后外层一提交行锁即释放，内层立刻拿得到锁，正常一次成功。</p>
+     *
      * <p>幂等与失败口径与付款侧同一套：{@code settleOccupyOnPaid} 内部按 {@code bg_occupy}
      * 已核销流水判重；异常仅留痕，不阻断审批收尾（与凭证生成失败同处理）。</p>
      */
-    private void settleBudgetOnNoCashLeg(ExpBill bill) {
+    private void scheduleSettleBudgetOnNoCashLeg(ExpBill bill) {
+        // 注册前把需要的数据抽成标量：bill 是事务内实体，提交后不保证仍可用（游离态/延迟加载）
+        final Long billId = bill.getId();
+        final String billNo = bill.getBillNo();
+        final String billType = bill.getBillType();
+        final Long companyId = bill.getCompanyId();
+        final Long deptId = bill.getDeptId();
+        final Integer periodYear = bill.getPeriodYear();
+        // 租户上下文同样要在注册前抓住：MyBatis 租户拦截器靠 TenantContext 的 ThreadLocal 拼 tenant_id，
+        // afterCommit 跑在同一线程但请求链随时可能清理，届时不显式恢复会查询不到数据。
+        final Long tenantId = TenantContext.getTenantId();
+        // 事务外（事件重放/单测直调）没有同步器可用时，退化为立即执行，行为与改前一致
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            log.warn("报销单 {} 无事务同步上下文，预算消耗确认改为立即执行（D-F1R-06）", billNo);
+            TenantContext.callAs(tenantId, () ->
+                    doSettleBudgetOnNoCashLeg(billId, billNo, billType, companyId, deptId, periodYear));
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                TenantContext.callAs(tenantId, () ->
+                        doSettleBudgetOnNoCashLeg(billId, billNo, billType, companyId, deptId, periodYear));
+            }
+        });
+        log.info("报销单 {} 无现金腿（平账/报销<借款退款），预算消耗确认已挂到审批事务提交后执行（D-F1R-06）", billNo);
+    }
+
+    /** D-F1R-06：{@link #scheduleSettleBudgetOnNoCashLeg} 的实际执行体（跑在事务提交后）。 */
+    private void doSettleBudgetOnNoCashLeg(Long billId, String billNo, String billType,
+                                           Long companyId, Long deptId, Integer periodYear) {
         try {
             java.util.List<com.fssc.budget.service.BudgetService.SettleLine> lines = new java.util.ArrayList<>();
-            for (ExpBillLine line : linesOf(bill.getId())) {
+            for (ExpBillLine line : linesOf(billId)) {
                 lines.add(new com.fssc.budget.service.BudgetService.SettleLine(
                         line.getBudgetItemId(), line.getItemId(), line.getAmount()));
             }
             if (lines.isEmpty()) {
                 return;
             }
-            // D-V4R-39：本方法跑在审批收尾链尾部，与同一条链上"申请占用核销"等写点争同一枚 bg_item 行锁，
-            // 实测 16:18:41 报 Lock wait timeout ⇒ 占用永久悬空（而页面上没有任何地方能看出来）。
+            // D-V4R-39：提交后执行已消除自锁，重试仅作兜底（偶发的其它长事务仍可能撞锁）。
             // 有界重试是安全的：settleOccupyOnPaid 自带 countWriteOffForBill>0 即跳过的幂等闸
             // （BudgetService.java:1254），失败那趟整个事务回滚，不会补半次消耗。
             Exception last = null;
             for (int attempt = 1; attempt <= 3; attempt++) {
                 try {
-                    int done = budgetService.settleOccupyOnPaid(bill.getId(), bill.getBillNo(), bill.getBillType(),
-                            bill.getCompanyId(), bill.getDeptId(), bill.getPeriodYear(), lines);
-                    log.info("报销单 {} 无现金腿（平账/报销<借款退款），审批收尾即确认预算消耗 {} 行（D-DEC-104 例外分支，第 {} 次尝试）",
-                            bill.getBillNo(), done, attempt);
+                    int done = budgetService.settleOccupyOnPaid(billId, billNo, billType,
+                            companyId, deptId, periodYear, lines);
+                    log.info("报销单 {} 无现金腿（平账/报销<借款退款），确认预算消耗 {} 行（D-DEC-104 例外分支，第 {} 次尝试）",
+                            billNo, done, attempt);
                     return;
                 } catch (Exception ex) {
                     last = ex;
                     if (!isLockWait(ex) || attempt == 3) {
                         break;
                     }
+                    // D-F1R-06：退避给足。原 400ms×attempt 相对于 50s 的行锁等待等于没退，
+                    // 且重试本身每次仍要等满一次 50s 超时才返回，纯属空耗审批线程。
+                    long backoff = 1000L * attempt;
                     log.warn("报销单 {} 预算消耗确认撞行锁（第 {} 次），{}ms 后重试：{}",
-                            bill.getBillNo(), attempt, 400L * attempt, ex.getMessage());
-                    // 退避等待：LockSupport 不抛 InterruptedException；中断时提前返回（中断位保留，下一轮循环感知）
-                    com.fssc.common.util.Backoff.pauseMillis(400L * attempt);
+                            billNo, attempt, backoff, ex.getMessage());
+                    com.fssc.common.util.Backoff.pauseMillis(backoff);
                     if (Thread.currentThread().isInterrupted()) {
                         break;
                     }
                 }
             }
             log.error("报销单 {} 预算消耗确认失败（不影响审批收尾，请到 预算›占用 对该单点【核销】手工补）: {}",
-                    bill.getBillNo(), last == null ? "unknown" : last.getMessage(), last);
+                    billNo, last == null ? "unknown" : last.getMessage(), last);
         } catch (Exception ex) {
-            log.error("报销单 {} 预算消耗确认失败（不影响审批收尾，请到 预算›占用 对该单点【核销】手工补）: {}", bill.getBillNo(), ex.getMessage(), ex);
+            log.error("报销单 {} 预算消耗确认失败（不影响审批收尾，请到 预算›占用 对该单点【核销】手工补）: {}", billNo, ex.getMessage(), ex);
         }
     }
 

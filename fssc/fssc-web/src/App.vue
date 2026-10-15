@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="app-shell">
     <!-- 后端未连接：全局置顶横幅（登录页也可见，因为后端没起时登录同样调不通） -->

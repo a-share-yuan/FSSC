@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -69,6 +66,8 @@ public class VoucherService {
     private final OpVoucherLineMapper opVoucherLineMapper;
     private final ExpBillLineMapper expBillLineMapper;
     private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
+    /** D-F1R-02：按「借款冲抵」明细（而非表头混合口径的 offset_amount）定位真实冲借款金额 */
+    private final com.fssc.expense.mapper.ExpLoanOffsetMapper expLoanOffsetMapper;
     /** D-DEC-083：对公结算计提凭证按 bill.poId 反查供应商，补齐凭证行辅助核算 */
     private final com.fssc.purchase.mapper.PoOrderMapper poOrderMapper;
     /** D-DEC-123：aux_json 里带供应商名称（只读主档，不改供应商任何数据） */
@@ -515,16 +514,39 @@ public class VoucherService {
             }
         }
 
-        // --- 贷方兜底（当规则池没有任何 CREDIT 行命中或部分行未命中时，将差额汇总贷记 2241） ---
+        // --- 贷方兜底（当规则池没有任何 CREDIT 行命中或部分行未命中时，将差额汇总贷记应付科目） ---
+        // D-F1R-02：其中「已用借款冲抵」的那部分<b>不得</b>贷记应付报销款。那笔钱在借款时就已付出、
+        // 挂在「1221 其他应收款-员工借款」名下，报销冲抵的会计实质是<b>冲销应收</b>，不是新增一笔对员工的负债。
+        // 旧口径全额贷 2241 的后果（10-15 F4 实证）：报销单全额借款冲抵、公司一分现金未付，
+        // 账上却新增 3900 应付报销款，且与 D-F1R-03（付款凭证借的是 2202 而非 2241）叠加后 2241 只增不减，
+        // 表现为"应付员工报销款"永久挂账、与实际资金流完全脱节。
+        // 取数用 exp_loan_offset(offset_type='CLAIM') 明细而非表头 offset_amount：
+        // 后者是借款冲抵与预付冲销的混合口径，预付对应科目是 1123 而非 1221，混算会串科目。
         BigDecimal creditGap = debit.subtract(credit);
         if (creditGap.signum() > 0) {
-            Long creditSubjectId = findSubjectIdByCode("2241");
-            if (creditSubjectId == null) creditSubjectId = resolveSubjectId(null, null);
-            OpVoucherLine fallback = buildLine(tenantId, v.getId(), no++,
-                    "其他应付款-应付报销款", creditSubjectId,
-                    "2241", "其他应付款", "CREDIT", creditGap, bill.getDeptId());
-            opVoucherLineMapper.insert(fallback);
-            credit = credit.add(creditGap);
+            BigDecimal offset = loanOffsetAmountOf(bill.getId());
+            // 冲抵额不得超过待贷差额（超额冲抵或历史脏数据时按下限计，避免贷方出现负数行）
+            BigDecimal offsetPart = offset.min(creditGap);
+            BigDecimal payablePart = creditGap.subtract(offsetPart);
+            if (offsetPart.signum() > 0) {
+                Long loanSubjectId = findSubjectIdByCode("1221");
+                OpVoucherLine offLine = buildLine(tenantId, v.getId(), no++,
+                        "其他应收款-借款冲抵", loanSubjectId,
+                        "1221", "其他应收款", "CREDIT", offsetPart, bill.getDeptId());
+                opVoucherLineMapper.insert(offLine);
+                credit = credit.add(offsetPart);
+            }
+            if (payablePart.signum() > 0) {
+                Long creditSubjectId = findSubjectIdByCode("2241");
+                if (creditSubjectId == null) creditSubjectId = resolveSubjectId(null, null);
+                OpVoucherLine fallback = buildLine(tenantId, v.getId(), no++,
+                        "其他应付款-应付报销款", creditSubjectId,
+                        "2241", "其他应付款", "CREDIT", payablePart, bill.getDeptId());
+                opVoucherLineMapper.insert(fallback);
+                credit = credit.add(payablePart);
+            }
+            log.info("[VOUCHER] bill={} 贷方兜底：借款冲抵 {} 贷1221，应付报销款 {} 贷2241",
+                    bill.getBillNo(), offsetPart, payablePart);
         }
 
         OpVoucher update = new OpVoucher();
@@ -1032,21 +1054,31 @@ public class VoucherService {
         if (item != null) itemCandidates.add(item.getId());
         if (line.getItemId() != null) itemCandidates.add(line.getItemId());
         for (MdGlConfig c : dir) {
-            int s = 0;
             if (c.getItemId() != null) {
-                if (itemCandidates.contains(c.getItemId())) s += 1000;
-                else continue; // 费用项绑定不匹配直接剔除
+                if (!itemCandidates.contains(c.getItemId())) continue; // 费用项绑定不匹配直接剔除
             }
-            // 每个维度：规则维度未配置=通配(+1 避免裸 0)，规则维度配置后精确匹配 +10，否则 -1000(=无效)。
-            s += dimScore(c.getDimType(),    dimType);
-            s += dimScore(c.getDimCcType(),  ccType);
-            s += dimScore(c.getDimTravel(),  travel);
+            // D-F1R-02：维度「精确不匹配」必须是「硬剔除」，不能只扣负分。
+            // 原先只靠 dimScore 的 −1000 表达，而"同费用项命中"加的是 +1000，二者正好抵消
+            // （住宿费那条：1000+10+10+10+1−1000+4 = 35 ＞ 0 ⇒ 通过)"—— 于是
+            // dim_status='已付款' 的「贷 银行存款」规则，会压着一张一分钱没付的报销单命中，
+            // 表现为：全额借款冲抵、公司未付现金的报销单，凭证贷方竟然挂银行存款 2400（账实矛盾）。
+            // 这与本方法注释承诺的「任一配置维度精确不匹配直接剔除」不符，按注释本意改为硬剔除。
+            if (!dimMatches(c.getDimType(), dimType)) continue;
+            if (!dimMatches(c.getDimCcType(), ccType)) continue;
+            if (!dimMatches(c.getDimTravel(), travel)) continue;
+            if (!dimMatches(c.getDimSpecial(), special)) continue;
+            if (!dimMatches(c.getDimStatus(), status)) continue;
+            int s = 0;
+            if (c.getItemId() != null) s += 1000; // 同费用项优先
+            // 每个维度：规则维度未配置=通配(+1 避免裸 0)，规则维度配置后精确匹配 +10。
+            s += dimScore(c.getDimType(), dimType);
+            s += dimScore(c.getDimCcType(), ccType);
+            s += dimScore(c.getDimTravel(), travel);
             s += dimScore(c.getDimSpecial(), special);
-            s += dimScore(c.getDimStatus(),  status);
+            s += dimScore(c.getDimStatus(), status);
             // 维度越具体优先级越高（配置越多，通配越少）
             int configured = configured(c);
             s += configured;
-            if (s < 0) continue; // 任一配置维度精确不匹配直接剔除
             scored.add(new Score(c, s));
         }
         return scored.stream()
@@ -1059,6 +1091,16 @@ public class VoucherService {
         if (ruleDim == null || ruleDim.isEmpty()) return 1;       // 通配（弱正）
         if (ruleDim.equals(actualDim)) return 10;                 // 精确匹配
         return -1000;                                              // 配置维度不匹配 → 淘汰
+    }
+
+    /**
+     * D-F1R-02 维度硬匹配：规则未配置该维度＝通配（放行）；配置了就必须与单据实际维度精确相等。
+     * <p>与 {@link #dimScore} 的区别：dimScore 用于打分排序（不匹配只扣负分，会被"同费用项 +1000"抵消），
+     * 本方法用于<b>准入</b>——不通过即整条规则作废，不再参与排序。
+     */
+    private boolean dimMatches(String ruleDim, String actualDim) {
+        if (ruleDim == null || ruleDim.isEmpty()) return true;    // 通配
+        return ruleDim.equals(actualDim == null ? "" : actualDim);
     }
 
     private int configured(MdGlConfig c) {
@@ -1149,6 +1191,35 @@ public class VoucherService {
         if ("TRAIN".equals(sub) || title.contains("培训")) return "";
         return "";
     }
+    // -------------------- D-F1R-02 借款冲抵额 --------------------
+
+    /**
+     * D-F1R-02：报销单已发生的「借款冲抵」合计（凭证贷方据此拆出应冲销的 1221 应收部分）。
+     * <p>口径＝{@code exp_loan_offset} 中 {@code bill_id=本单} 且 {@code offset_type='CLAIM'} 的金额合计
+     * —— {@code bill_id} 侧存放的是<b>使用方</b>单据（报销单/还款单），
+     * {@code offset_type='REPAY'} 的行属于还款资金侧，不计入本单的费用冲抵。
+     * <p>取不到时返回 0：辅助查询失败不能阻断出证，此时按"无借款冲抵"处理（＝改前行为，全额贷 2241）。
+     */
+    private BigDecimal loanOffsetAmountOf(Long billId) {
+        if (billId == null) return BigDecimal.ZERO;
+        try {
+            List<com.fssc.expense.entity.ExpLoanOffset> offs = expLoanOffsetMapper.selectList(
+                    new LambdaQueryWrapper<com.fssc.expense.entity.ExpLoanOffset>()
+                            .eq(com.fssc.expense.entity.ExpLoanOffset::getBillId, billId)
+                            .eq(com.fssc.expense.entity.ExpLoanOffset::getOffsetType, "CLAIM"));
+            BigDecimal sum = BigDecimal.ZERO;
+            if (offs != null) {
+                for (com.fssc.expense.entity.ExpLoanOffset o : offs) {
+                    sum = sum.add(o.getOffsetAmount() == null ? BigDecimal.ZERO : o.getOffsetAmount());
+                }
+            }
+            return sum;
+        } catch (Exception ex) {
+            log.warn("借款冲抵额查询失败 billId={}，按无冲抵处理: {}", billId, ex.getMessage());
+            return BigDecimal.ZERO;
+        }
+    }
+
     private String dimStatus(ExpBill bill) {
         if (bill.getPaidAmount() != null && bill.getPaidAmount().signum() > 0
                 && bill.getPayableAmount() != null && bill.getPaidAmount().compareTo(bill.getPayableAmount()) >= 0) {
@@ -2816,21 +2887,58 @@ public class VoucherService {
         v.setStatus("DRAFT");
         opVoucherMapper.insert(v);
 
-        Long payableSubjectId = findSubjectIdByCode("2202");
+        // D-F1R-03：付款冲销科目必须与「该笔钱当初挂账时贷记的科目」同源。
+        // 旧口径批次凭证固定借 2202 应付账款，而员工报销单的费用凭证贷的是「2241 其他应付款-应付报销款」
+        // ⇒ 钱付出去了，2241 那笔贷方却始终没有对应借方来核销，应付报销款只增不减（10-15 F6 实证）。
+        // 现按批次内每条付款记录所属单据类型拆行：CLAIM（员工报销）→ 2241；其余（对公付款/预付/借款等）→ 2202。
+        java.util.Map<Long, BigDecimal> amtByPayment = new java.util.HashMap<>();
+        for (com.fssc.sharing.entity.OpPayBatchDetail d : details) {
+            if (d.getBillPaymentId() != null && d.getAmount() != null) {
+                amtByPayment.merge(d.getBillPaymentId(), d.getAmount(), BigDecimal::add);
+            }
+        }
+        BigDecimal claimAmt = BigDecimal.ZERO;
+        for (com.fssc.expense.entity.ExpBillPayment p : pays) {
+            if (p == null || p.getBillId() == null) continue;
+            BigDecimal lineAmt = amtByPayment.getOrDefault(p.getId(), BigDecimal.ZERO);
+            if (lineAmt.signum() == 0) continue;
+            ExpBill pb = expBillMapper.selectById(p.getBillId());
+            if (pb != null && "CLAIM".equalsIgnoreCase(pb.getBillType())) {
+                claimAmt = claimAmt.add(lineAmt);
+            }
+        }
+        // 明细归集与批次总额不一致时（部分明细无付款记录等）以批次额为准：差额并入对公侧，保证借贷平衡
+        if (claimAmt.compareTo(amt) > 0) claimAmt = amt;
+        BigDecimal otherAmt = amt.subtract(claimAmt);
+
         Long bankSubjectId = findSubjectIdByCode("1002");
         // D-DEC-123：出纳付款凭证同样要带供应商辅助；跨供应商合并组批取不到唯一收款方＝留空（不猜）
         Long batchSupplierId = batchSupplierIdOf(pays);
-        OpVoucherLine batchPayLine = buildLine(tenantId, v.getId(), 10,
-                "应付账款-付款", payableSubjectId, "2202", "应付账款", "DEBIT", amt, null);
-        batchPayLine.setSupplierId(batchSupplierId);
-        stampAuxJson(batchPayLine);
-        opVoucherLineMapper.insert(batchPayLine);
-        opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 20,
+        int lineNo = 10;
+        if (claimAmt.signum() > 0) {
+            Long claimedSubjectId = findSubjectIdByCode("2241");
+            OpVoucherLine empLine = buildLine(tenantId, v.getId(), lineNo,
+                    "其他应付款-应付报销款", claimedSubjectId, "2241", "其他应付款", "DEBIT", claimAmt, null);
+            opVoucherLineMapper.insert(empLine);
+            lineNo += 10;
+        }
+        if (otherAmt.signum() > 0) {
+            Long payableSubjectId = findSubjectIdByCode("2202");
+            OpVoucherLine globLine = buildLine(tenantId, v.getId(), lineNo,
+                    "应付账款-付款", payableSubjectId, "2202", "应付账款", "DEBIT", otherAmt, null);
+            // 供应商辅助只落在对公侧：员工报销的收款方是员工本人，挂供应商辅助会串辅助核算
+            globLine.setSupplierId(batchSupplierId);
+            stampAuxJson(globLine);
+            opVoucherLineMapper.insert(globLine);
+        }
+
+        // 贷方：银行存款（资金流出侧，与借方拆分金额合计恒等于批次总额）
+        opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 100,
                 "银行存款-付款", bankSubjectId, "1002", "银行存款", "CREDIT", amt, null));
 
         updateVoucherTotals(v.getId(), amt);
-        log.info("付款批次 {} 生成出纳凭证 {} 借应付账款({})/贷银行存款({}) 金额={}",
-                batch.getBatchNo(), v.getVoucherNo(), "2202", "1002", amt);
+        log.info("付款批次 {} 生成出纳凭证 {} 借应付报销款(2241){}/应付账款(2202){}/贷银行存款(1002) 金额={}",
+                batch.getBatchNo(), v.getVoucherNo(), claimAmt, otherAmt, amt);
         return v.getId();
     }
 

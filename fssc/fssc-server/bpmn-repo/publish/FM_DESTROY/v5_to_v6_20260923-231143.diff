@@ -1,0 +1,15 @@
+--- bpmn:FM_DESTROY v5
++++ bpmn:FM_DESTROY v6
+@@ -2,7 +2,11 @@
+ <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_FM_DESTROY" targetNamespace="http://fssc">
+   <bpmn:process id="FM_DESTROY" name="会计凭证销毁审批流程" isExecutable="true">
+     <bpmn:startEvent id="StartEvent_1" name="开始" />
+-    <bpmn:userTask id="Task_3" name="共享主管审核账面与档案一致性【共享主管】" flowable:candidateGroups="FSSC_SUPERVISOR" />
++    <bpmn:userTask id="Task_3" name="共享主管审核账面与档案一致性【共享主管】" flowable:assignee="${assignee}" flowable:candidateGroups="FSSC_SUPERVISOR">
++      <bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${Task_3_assignees}" flowable:elementVariable="assignee">
++        <bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${nrOfCompletedInstances == nrOfInstances}</bpmn:completionCondition>
++      </bpmn:multiInstanceLoopCharacteristics>
++    </bpmn:userTask>
+     <bpmn:userTask id="Task_2" name="内审经理监销复核销毁清单与到期合规【内审经理】" flowable:candidateGroups="INTERNAL_AUDITOR" />
+     <bpmn:userTask id="Task_5" name="财务总监审批档案销毁【财务总监】" flowable:candidateGroups="CFO" />
+     <bpmn:userTask id="Task_6" name="总裁审批档案销毁【总裁】" flowable:candidateGroups="PRESIDENT" />

@@ -1,10 +1,9 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.compliance.controller;
 
 import com.fssc.common.core.Result;
 import com.fssc.common.core.PageResult;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.FraudDetectionLog;
 import com.fssc.compliance.service.FraudDetectionService;
 import com.fssc.framework.log.OperLog;
@@ -73,7 +72,12 @@ public class FraudDetectionController {
     @OperLog(module = "FRAUD_DETECTION", operType = "UPDATE", desc = "审核欺诈检测记录")
     @PostMapping("/review/{id}")
     public Result<Void> review(@PathVariable Long id,
-                               @RequestBody Map<String, Object> req) {
+                               @RequestBody(required = false) Map<String, Object> req) {
+        // D-F1R-05：@RequestBody 未设 required=false 时，客户端漏发 body 会抛
+        // HttpMessageNotReadableException（"Required request body is missing"），被全局兜成 500「系统异常」；
+        // 置为可选后 req 可能为 null，若不解判又会 NPE 再兜 500。两者都属客户端请求格式问题，
+        // 必须给 400 并讲清期望的请求体，避免排查期误判成"复审/放行功能坏了"。
+        requireBody(req, "复审", "{action: RELEASE|BLOCK|REVIEW}");
         String action = req.get("action") != null ? req.get("action").toString() : "";
         fraudDetectionService.review(id, currentReviewerId(), action);
         return Result.success();
@@ -83,7 +87,8 @@ public class FraudDetectionController {
     @RequiresPerm("compliance:fraud:list")
     @OperLog(module = "FRAUD_DETECTION", operType = "UPDATE", desc = "欺诈风险申诉登记")
     @PostMapping("/{id}/appeal")
-    public Result<Void> appeal(@PathVariable Long id, @RequestBody Map<String, Object> req) {
+    public Result<Void> appeal(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> req) {
+        requireBody(req, "申诉登记", "{reason: 申诉原因}"); // D-F1R-05 同 review：漏 body 应给 400 而非 500
         fraudDetectionService.appeal(id, (String) req.get("reason"));
         return Result.success();
     }
@@ -92,7 +97,8 @@ public class FraudDetectionController {
     @RequiresPerm("compliance:fraud:review")
     @OperLog(module = "FRAUD_DETECTION", operType = "UPDATE", desc = "欺诈风险申诉复审")
     @PostMapping("/{id}/appeal-review")
-    public Result<Void> appealReview(@PathVariable Long id, @RequestBody Map<String, Object> req) {
+    public Result<Void> appealReview(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> req) {
+        requireBody(req, "申诉复审", "{approve: true|false, note: 复审意见}"); // D-F1R-05 同上
         boolean approve = Boolean.parseBoolean(String.valueOf(req.get("approve")));
         fraudDetectionService.appealReview(id, approve, (String) req.get("note"), currentReviewerId());
         return Result.success();
@@ -107,7 +113,8 @@ public class FraudDetectionController {
     @RequiresPerm("compliance:fraud:detect")
     @OperLog(module = "FRAUD_DETECTION", operType = "INSERT", desc = "执行增强反欺诈检测")
     @PostMapping("/enhanced-detect")
-    public Result<List<FraudDetectionLog>> enhancedDetect(@RequestBody Map<String, Object> req) {
+    public Result<List<FraudDetectionLog>> enhancedDetect(@RequestBody(required = false) Map<String, Object> req) {
+        requireBody(req, "增强检测", "{employeeId: 员工ID, billId: 单据ID, amount: 金额}"); // D-F1R-05 同上
         Long employeeId = req.get("employeeId") != null ? Long.valueOf(req.get("employeeId").toString()) : null;
         Long billId = req.get("billId") != null ? Long.valueOf(req.get("billId").toString()) : null;
         BigDecimal amount = req.get("amount") != null ? new BigDecimal(req.get("amount").toString()) : null;
@@ -134,9 +141,23 @@ public class FraudDetectionController {
             @RequestParam(required = false) Long employeeId,
             @RequestParam(required = false) String detectionType,
             @RequestParam(required = false) String actionTaken,
-            @RequestParam(required = false) Boolean unreviewed) {
+            @RequestParam(required = false) Boolean unreviewed,
+            @RequestParam(required = false) Boolean pendingRelease) {
         return Result.success(fraudDetectionService.page(pageNum, pageSize, detectionResult,
-                employeeId, detectionType, actionTaken, unreviewed));
+                employeeId, detectionType, actionTaken, unreviewed, pendingRelease));
+    }
+
+    /**
+     * D-F1R-05：请求体缺失的统一兜底。
+     * <p>本控制器对 body 一律按「可选接收 + 显式判空」处理，原因见 {@code review} 处注释；
+     * 缺失时抛 400 {@code PARAM_INVALID} 并把期望的 body 形态写进提示，
+     * 而不是让 {@code null.get()} 一路 NPE 到全局兜底成 500「系统异常」。
+     */
+    private void requireBody(Map<String, Object> req, String action, String expected) {
+        if (req == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "缺少请求体：" + action + "需要 JSON body，形如 " + expected);
+        }
     }
 
     private Long currentReviewerId() {

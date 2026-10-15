@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -80,6 +77,52 @@ public class WfCcService {
     private final WfNodeConfigResolver nodeConfigResolver;
     private final SysUserMapper sysUserMapper;
     private final com.fssc.framework.notify.NotifyService notifyService;
+    /**
+     * 不变量 II（2026-10-15）：抄送角色展开复用<b>取人侧</b>的 scope 口径——
+     * {@code COMPANY} 角色只投单据公司持有人、{@code GROUP} 角色投全局（本公司优先），
+     * 与 {@code NodeOrgResolver} 的指派/候选人查询完全同源，杜绝「审批收敛、抄送撒全网」的口径分裂。
+     */
+    private final NodeOrgResolver nodeOrgResolver;
+
+    /**
+     * 按<b>取人侧同口径</b>展开 {@code cc_roles} 为收件人集合（不变量 II，2026-10-15）。
+     *
+     * <p><b>为什么不能按角色编码直接反查全网用户</b>：指派链路（{@code NodeOrgResolver}）按
+     * {@code sys_role.org_scope} 收敛——{@code COMPANY} 角色只取<b>单据公司</b>持有人、
+     * {@code GROUP} 角色才取全网；而 {@code SysUserMapper.selectUserIdsByRoleCodes} 没有任何
+     * company/scope 条件。两套口径并存时，单公司单据会把抄送投给<b>所有公司</b>的同角色人员
+     * （实测：company 1 的应收单抄出 20 人、横跨 9 家公司 ⇒ 过度知会/信息越界）。
+     * 该缺陷在「角色 × 公司全覆盖」补位（278 账号）之后从偶发放大为必然，故必须与指派同源收敛。
+     *
+     * <p><b>口径</b>：逐角色走 {@link NodeOrgResolver#listRoleCandidatesInScope}——
+     * COMPANY→本公司持有人（单据公司解析不到时取空，<b>不做全局兜底</b>：宁可少抄，
+     * 也不在解析失败时把抄送撒满全租户）；GROUP→全局（本公司优先序）；附带排除停用与 admin。
+     * 单角色展开失败只跳过该角色，不影响其余角色与主链路（fail-soft，与 {@link #deliver} 整体一致）。
+     *
+     * <p>顺带说明：{@code wf_node_config} 键为 {@code model_key + node_key}，<b>没有公司维度</b>，
+     * 所以"各公司配各自抄送人"在配置层无法表达——收敛只能落在代码层，这也是本方法存在的理由。
+     */
+    private void expandRoleTargets(java.util.Set<Long> targets, WfNodeConfig cfg, WfInstance inst) {
+        List<String> roles = parseCodes(cfg.getCcRoles());
+        if (roles.isEmpty()) {
+            return;
+        }
+        Long billCompany = null;
+        try {
+            billCompany = nodeOrgResolver.companyIdOfBill(inst.getBizType(), inst.getBizId());
+        } catch (Exception ex) {
+            log.warn("抄送：单据公司解析失败 bizType={} bizId={}（COMPANY 角色按取人侧同语义取空）",
+                    inst.getBizType(), inst.getBizId(), ex);
+        }
+        for (String rc : roles) {
+            try {
+                // 发起人传 startUserId：DIRECT_SUPERVISOR 这类"人维度"角色在抄送语境下同样成立
+                targets.addAll(nodeOrgResolver.listRoleCandidatesInScope(billCompany, inst.getStartUserId(), rc));
+            } catch (Exception ex) {
+                log.warn("抄送：角色成员展开失败 role={}（跳过该角色，不影响其余）", rc, ex);
+            }
+        }
+    }
 
     /**
      * 按「节点配置 ∪ 运行时入参」投递抄送。
@@ -112,11 +155,7 @@ public class WfCcService {
                 WfNodeConfig cfg = nodeConfigResolver.resolve(inst.getModelKey(), nodeKey);
                 if (cfg != null) {
                     targets.addAll(parseUserIds(cfg.getCcUsers()));
-                    List<String> roles = parseCodes(cfg.getCcRoles());
-                    if (!roles.isEmpty()) {
-                        // 角色成员反查在岗用户；失败降级为「只投用户ID部分」，不影响主链路
-                        targets.addAll(sysUserMapper.selectUserIdsByRoleCodes(roles));
-                    }
+                    expandRoleTargets(targets, cfg, inst);
                 }
             } catch (Exception ex) {
                 log.warn("抄送：节点配置解析失败 procInst={} node={}", procInstId, nodeKey, ex);

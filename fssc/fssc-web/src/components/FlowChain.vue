@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <!--
   审批链全景条：把一单要走的每个节点平铺出来，标出已过/当前/待到达/已驳回。
   数据来自 GET /tenant/wf/query/chain（节点配置 + 审批历史 + 在办任务三源合一）。

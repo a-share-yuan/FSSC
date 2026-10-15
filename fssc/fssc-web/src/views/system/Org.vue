@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="org-page">
     <el-card>
@@ -10,11 +7,11 @@
         <el-col :span="7">
           <div class="left-panel">
             <div class="panel-header">
-              <span class="panel-title">公司目录树</span>
-              <el-button v-permission="'system:company:create'" type="primary" size="small" @click="open('company', null)">新增</el-button>
+              <span class="panel-title">{{ $t('system.org.ttlCompanyTree') }}</span>
+              <el-button v-permission="'system:company:create'" type="primary" size="small" @click="open('company', null)">{{ $t('system.common.btnAdd') }}</el-button>
             </div>
-            <el-input v-model="companyFilter" placeholder="搜索公司..." clearable size="small" style="margin-bottom:8px" />
-            <el-button size="small" @click="companyFilter = ''" style="margin-bottom:8px">重置</el-button>
+            <el-input v-model="companyFilter" :placeholder="$t('system.org.phSearchCompany')" clearable size="small" style="margin-bottom:8px" />
+            <el-button size="small" @click="companyFilter = ''" style="margin-bottom:8px">{{ $t('common.reset') }}</el-button>
             <el-tree
               ref="companyTreeRef"
               :data="companyTree"
@@ -29,8 +26,8 @@
                 <span class="tree-node">
                   <span>{{ data.companyName }} <small style="color:#999">{{ data.companyCode }}</small></span>
                   <span class="node-ops">
-                    <el-button v-permission="'system:company:update'" link type="primary" size="small" @click.stop="open('company', data)">编辑</el-button>
-                    <el-button v-permission="'system:company:delete'" link type="danger" size="small" @click.stop="remove('company', data)">删除</el-button>
+                    <el-button v-permission="'system:company:update'" link type="primary" size="small" @click.stop="open('company', data)">{{ $t('system.common.btnEdit') }}</el-button>
+                    <el-button v-permission="'system:company:delete'" link type="danger" size="small" @click.stop="remove('company', data)">{{ $t('system.common.btnDelete') }}</el-button>
                   </span>
                 </span>
               </template>
@@ -45,12 +42,12 @@
             <div class="dept-section">
               <div class="panel-header">
                 <span class="panel-title">
-                  部门目录树
+                  {{ $t('system.org.ttlDeptTree') }}
                   <el-tag v-if="selectedCompany" size="small" type="info" style="margin-left:8px">{{ selectedCompany.companyName }}</el-tag>
-                  <el-text v-else size="small" type="info" style="margin-left:8px">请从左侧选择公司</el-text>
+                  <el-text v-else size="small" type="info" style="margin-left:8px">{{ $t('system.org.hintPickCompanyLeft') }}</el-text>
                 </span>
                 <div>
-                  <el-button v-permission="'system:dept:create'" type="primary" size="small" :disabled="!selectedCompany" @click="open('dept', null)">新增部门</el-button>
+                  <el-button v-permission="'system:dept:create'" type="primary" size="small" :disabled="!selectedCompany" @click="open('dept', null)">{{ $t('system.org.btnDeptAdd') }}</el-button>
                 </div>
               </div>
               <el-tree
@@ -66,43 +63,43 @@
                   <span class="tree-node">
                     <span>{{ data.deptName }} <small style="color:#999">{{ data.deptCode }}</small></span>
                     <span class="node-ops">
-                      <el-button v-permission="'system:dept:update'" link type="primary" size="small" @click.stop="open('dept', data)">编辑</el-button>
-                      <el-button v-permission="'system:dept:delete'" link type="danger" size="small" @click.stop="remove('dept', data)">删除</el-button>
+                      <el-button v-permission="'system:dept:update'" link type="primary" size="small" @click.stop="open('dept', data)">{{ $t('system.common.btnEdit') }}</el-button>
+                      <el-button v-permission="'system:dept:delete'" link type="danger" size="small" @click.stop="remove('dept', data)">{{ $t('system.common.btnDelete') }}</el-button>
                     </span>
                   </span>
                 </template>
               </el-tree>
-              <el-empty v-else description="请从左侧选择公司后查看部门" :image-size="60" />
+              <el-empty v-else :description="$t('system.org.hintPickCompany')" :image-size="60" />
             </div>
 
             <!-- 右侧下方：岗位列表 -->
             <div class="post-section">
               <div class="panel-header">
                 <span class="panel-title">
-                  岗位列表
+                  {{ $t('system.org.ttlPostList') }}
                   <el-tag v-if="selectedDept" size="small" type="warning" style="margin-left:8px">{{ selectedDept.deptName }}</el-tag>
-                  <el-text v-else-if="selectedCompany" size="small" type="info" style="margin-left:8px">{{ selectedCompany.companyName }} 全部岗位</el-text>
-                  <el-text v-else size="small" type="info" style="margin-left:8px">请先选择公司</el-text>
+                  <el-text v-else-if="selectedCompany" size="small" type="info" style="margin-left:8px">{{ $t('system.org.textAllPosts', { v1: selectedCompany.companyName }) }}</el-text>
+                  <el-text v-else size="small" type="info" style="margin-left:8px">{{ $t('system.org.hintCompanyFirst') }}</el-text>
                 </span>
                 <div>
-                  <el-button v-permission="'system:post:create'" type="primary" size="small" :disabled="!selectedCompany" @click="open('post', null)">新增岗位</el-button>
-                  <el-button size="small" :disabled="!posts.length" @click="exportCsv">导出CSV</el-button>
+                  <el-button v-permission="'system:post:create'" type="primary" size="small" :disabled="!selectedCompany" @click="open('post', null)">{{ $t('system.org.btnPostAdd') }}</el-button>
+                  <el-button size="small" :disabled="!posts.length" @click="exportCsv">{{ $t('system.org.btnExportCsv') }}</el-button>
                 </div>
               </div>
               <SkeletonList v-if="loading" :rows="8" :cols="5" />
               <el-table :data="pagedData" size="small" stripe v-else max-height="280">
-                <el-table-column prop="postCode" label="编码" width="130" sortable />
-                <el-table-column prop="postName" label="名称" min-width="120" sortable />
-                <el-table-column prop="sort" label="排序" width="80" sortable />
-                <el-table-column prop="status" label="状态" width="90" sortable>
+                <el-table-column prop="postCode" :label="$t('system.common.colCode')" width="130" sortable />
+                <el-table-column prop="postName" :label="$t('system.common.colName')" min-width="120" sortable />
+                <el-table-column prop="sort" :label="$t('system.common.colSort')" width="80" sortable />
+                <el-table-column prop="status" :label="$t('common.status')" width="90" sortable>
                   <template #default="{ row }">
-                    <el-tag :type="row.status === 'NORMAL' ? 'success' : 'info'" size="small">{{ row.status === 'NORMAL' ? '正常' : '停用' }}</el-tag>
+                    <el-tag :type="row.status === 'NORMAL' ? 'success' : 'info'" size="small">{{ row.status === 'NORMAL' ? t('system.common.stNormal') : t('system.common.btnDeactivate') }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="140" fixed="right">
+                <el-table-column :label="$t('common.operation')" width="140" fixed="right">
                   <template #default="{ row }">
-                    <el-button v-permission="'system:post:update'" link type="primary" size="small" @click="open('post', row)">编辑</el-button>
-                    <el-button v-permission="'system:post:delete'" link type="danger" size="small" @click="remove('post', row)">删除</el-button>
+                    <el-button v-permission="'system:post:update'" link type="primary" size="small" @click="open('post', row)">{{ $t('system.common.btnEdit') }}</el-button>
+                    <el-button v-permission="'system:post:delete'" link type="danger" size="small" @click="remove('post', row)">{{ $t('system.common.btnDelete') }}</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -114,54 +111,54 @@
     </el-card>
 
     <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="visible" :title="editingId ? '编辑' : '新增' + typeLabel" width="520px" destroy-on-close>
+    <el-dialog v-model="visible" :title="editingId ? t('system.common.btnEdit') : $t('system.org.optNewType', { v1: typeLabel })" width="520px" destroy-on-close>
       <el-form ref="orgFormRef" :model="form" :rules="orgFormRules" label-width="110px" size="default">
         <template v-if="type === 'company'">
-          <el-form-item label="公司名称" prop="companyName"><el-input v-model="form.companyName" /></el-form-item>
-          <el-form-item label="公司编码" prop="companyCode"><el-input v-model="form.companyCode" /></el-form-item>
-          <el-form-item label="上级公司">
-            <el-select v-model="form.parentId" filterable clearable placeholder="无上级公司（顶级）" style="width:100%">
+          <el-form-item :label="$t('system.org.colCompanyName')" prop="companyName"><el-input v-model="form.companyName" /></el-form-item>
+          <el-form-item :label="$t('system.org.colCompanyCode')" prop="companyCode"><el-input v-model="form.companyCode" /></el-form-item>
+          <el-form-item :label="$t('system.org.lblParentCompany')">
+            <el-select v-model="form.parentId" filterable clearable :placeholder="$t('system.org.optNoParentCompany')" style="width:100%">
               <el-option v-for="c in flatCompanies.filter((c) => c.id !== form.id)" :key="c.id" :label="c.companyName" :value="c.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="统一信用代码"><el-input v-model="form.creditCode" /></el-form-item>
-          <el-form-item label="纳税人识别号"><el-input v-model="form.taxNo" /></el-form-item>
-          <el-form-item label="排序"><el-input-number v-model="form.sort" :min="0" style="width:100%" /></el-form-item>
+          <el-form-item :label="$t('system.org.colCreditCode')"><el-input v-model="form.creditCode" /></el-form-item>
+          <el-form-item :label="$t('system.org.colTaxNo')"><el-input v-model="form.taxNo" /></el-form-item>
+          <el-form-item :label="$t('system.common.colSort')"><el-input-number v-model="form.sort" :min="0" style="width:100%" /></el-form-item>
         </template>
         <template v-else-if="type === 'dept'">
-          <el-form-item label="部门名称" prop="deptName"><el-input v-model="form.deptName" /></el-form-item>
-          <el-form-item label="部门编码" prop="deptCode"><el-input v-model="form.deptCode" /></el-form-item>
-          <el-form-item label="所属公司" prop="companyId">
-            <el-select v-model="form.companyId" filterable style="width:100%" placeholder="选择公司">
+          <el-form-item :label="$t('system.org.colDeptName')" prop="deptName"><el-input v-model="form.deptName" /></el-form-item>
+          <el-form-item :label="$t('system.org.colDeptCode')" prop="deptCode"><el-input v-model="form.deptCode" /></el-form-item>
+          <el-form-item :label="$t('system.common.colCompany')" prop="companyId">
+            <el-select v-model="form.companyId" filterable style="width:100%" :placeholder="$t('system.common.phSelectCompany')">
               <el-option v-for="c in flatCompanies" :key="c.id" :label="c.companyName" :value="c.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="上级部门">
-            <el-select v-model="form.parentId" filterable clearable placeholder="无上级部门（顶级）" style="width:100%">
+          <el-form-item :label="$t('system.org.lblParentDept')">
+            <el-select v-model="form.parentId" filterable clearable :placeholder="$t('system.org.optNoParentDept')" style="width:100%">
               <el-option v-for="d in flatDepts.filter((d) => d.id !== form.id && d.companyId === form.companyId)" :key="d.id" :label="d.deptName" :value="d.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="排序"><el-input-number v-model="form.sort" :min="0" style="width:100%" /></el-form-item>
+          <el-form-item :label="$t('system.common.colSort')"><el-input-number v-model="form.sort" :min="0" style="width:100%" /></el-form-item>
         </template>
         <template v-else>
-          <el-form-item label="岗位名称" prop="postName"><el-input v-model="form.postName" /></el-form-item>
-          <el-form-item label="岗位编码" prop="postCode"><el-input v-model="form.postCode" /></el-form-item>
-          <el-form-item label="所属公司" prop="companyId">
-            <el-select v-model="form.companyId" filterable style="width:100%" placeholder="选择公司" @change="onFormCompanyChange">
+          <el-form-item :label="$t('system.org.colPostName')" prop="postName"><el-input v-model="form.postName" /></el-form-item>
+          <el-form-item :label="$t('system.org.colPostCode')" prop="postCode"><el-input v-model="form.postCode" /></el-form-item>
+          <el-form-item :label="$t('system.common.colCompany')" prop="companyId">
+            <el-select v-model="form.companyId" filterable style="width:100%" :placeholder="$t('system.common.phSelectCompany')" @change="onFormCompanyChange">
               <el-option v-for="c in flatCompanies" :key="c.id" :label="c.companyName" :value="c.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="所属部门">
-            <el-select v-model="form.deptId" filterable clearable style="width:100%" placeholder="不限部门（公司级岗位）">
+          <el-form-item :label="$t('system.common.colDept')">
+            <el-select v-model="form.deptId" filterable clearable style="width:100%" :placeholder="$t('system.org.optNoDept')">
               <el-option v-for="d in flatDepts.filter((d) => d.companyId === form.companyId)" :key="d.id" :label="d.deptName" :value="d.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="排序"><el-input-number v-model="form.sort" :min="0" style="width:100%" /></el-form-item>
+          <el-form-item :label="$t('system.common.colSort')"><el-input-number v-model="form.sort" :min="0" style="width:100%" /></el-form-item>
         </template>
       </el-form>
       <template #footer>
-        <el-button @click="visible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        <el-button @click="visible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="save">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -178,6 +175,9 @@ import { useTablePager } from '../../composables/useTablePager'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => loadCompanyTree(),
@@ -233,7 +233,7 @@ const visible = ref(false)
 const editingId = ref(null)
 const saving = ref(false)
 const type = ref('company')
-const typeLabel = ref('公司')
+const typeLabel = computed(() => (ref(t('field.company'))))
 const form = reactive({ companyName: '', companyCode: '', parentId: 0, creditCode: '', taxNo: '', sort: 0, deptName: '', deptCode: '', companyId: 0, parentId_dept: 0, postName: '', postCode: '', deptId: 0 })
 
 const orgFormRef = ref(null)
@@ -243,16 +243,16 @@ const requirePicked = (msg) => [{
   message: msg,
   validator: (rule, value, cb) => (!value || Number(value) === 0 ? cb(new Error(msg)) : cb()),
 }]
-const orgFormRules = reactive({
+const orgFormRules = computed(() => (reactive({
   // 与后端 SysCompany/SysDept/SysPost 服务同名断言（批次 2C）
-  companyName: commonRules.required('请输入公司名称'),
-  companyCode: commonRules.required('请输入公司编码'),
-  deptName: commonRules.required('请输入部门名称'),
-  deptCode: commonRules.required('请输入部门编码'),
-  companyId: requirePicked('请选择公司'),
-  postName: commonRules.required('请输入岗位名称'),
-  postCode: commonRules.required('请输入岗位编码'),
-})
+  companyName: commonRules.required(t('system.org.errCompanyNameRequired')),
+  companyCode: commonRules.required(t('system.org.errCompanyCodeRequired')),
+  deptName: commonRules.required(t('system.org.errDeptNameRequired')),
+  deptCode: commonRules.required(t('system.org.errDeptCodeRequired')),
+  companyId: requirePicked(t('system.org.errCompanyRequired')),
+  postName: commonRules.required(t('system.org.errPostNameRequired')),
+  postCode: commonRules.required(t('system.org.errPostCodeRequired')),
+})))
 
 // ========== 数据加载 ==========
 
@@ -313,9 +313,9 @@ function filterCompanyNode(value, data) {
 
 // ========== 弹窗 ==========
 
-function open(t, row) {
-  type.value = t
-  typeLabel.value = t === 'company' ? '公司' : t === 'dept' ? '部门' : '岗位'
+function open(kind, row) {
+  type.value = kind
+  typeLabel.value = kind === 'company' ? t('field.company') : kind === 'dept' ? t('field.dept') : t('system.org.optPost')
   editingId.value = row ? row.id : null
   Object.assign(form, {
     companyName: '', companyCode: '', parentId: 0, creditCode: '', taxNo: '', sort: 0,
@@ -323,20 +323,20 @@ function open(t, row) {
     postName: '', postCode: '', deptId: 0
   })
   // 新增部门时默认带入当前选中公司
-  if (t === 'dept' && !row && selectedCompany.value) {
+  if (kind === 'dept' && !row && selectedCompany.value) {
     form.companyId = selectedCompany.value.id
   }
   // 新增岗位时默认带入当前选中公司/部门
-  if (t === 'post' && !row) {
+  if (kind === 'post' && !row) {
     if (selectedCompany.value) form.companyId = selectedCompany.value.id
     if (selectedDept.value) form.deptId = selectedDept.value.id
   }
   if (row) {
-    if (t === 'company') {
+    if (kind === 'company') {
       form.companyName = row.companyName || ''; form.companyCode = row.companyCode || ''
       form.parentId = row.parentId ?? 0; form.creditCode = row.creditCode || ''
       form.taxNo = row.taxNo || ''; form.sort = row.sort ?? 0
-    } else if (t === 'dept') {
+    } else if (kind === 'dept') {
       form.deptName = row.deptName || ''; form.deptCode = row.deptCode || ''
       form.companyId = row.companyId ?? 0; form.parentId = row.parentId ?? 0; form.sort = row.sort ?? 0
     } else {
@@ -355,13 +355,13 @@ async function save() {
   if (!(await validateForms([orgFormRef]))) return
   saving.value = true
   try {
-    const t = type.value
+    const kind = type.value
     const isEdit = !!editingId.value
-    if (t === 'company') {
+    if (kind === 'company') {
       const body = { companyName: form.companyName, companyCode: form.companyCode, parentId: form.parentId, creditCode: form.creditCode, taxNo: form.taxNo, sort: form.sort }
       if (isEdit) await orgApi.companyUpdate({ id: editingId.value, ...body })
       else await orgApi.companyCreate(body)
-    } else if (t === 'dept') {
+    } else if (kind === 'dept') {
       const body = { deptName: form.deptName, deptCode: form.deptCode, companyId: form.companyId, parentId: form.parentId ?? 0, sort: form.sort }
       if (isEdit) await orgApi.deptUpdate({ id: editingId.value, ...body })
       else await orgApi.deptCreate(body)
@@ -370,27 +370,27 @@ async function save() {
       if (isEdit) await orgApi.postUpdate({ id: editingId.value, ...body })
       else await orgApi.postCreate(body)
     }
-    ElMessage.success('保存成功')
+    ElMessage.success(t('system.common.msgSaved'))
     visible.value = false
     // 刷新当前视图
-    if (t === 'company') { await loadCompanyTree() }
-    else if (t === 'dept' && selectedCompany.value) { await loadDeptAndPosts(selectedCompany.value.id) }
-    else if (t === 'post' && selectedDept.value) { await onDeptSelect(selectedDept.value) }
-    else if (t === 'post' && selectedCompany.value) { await loadPosts(selectedCompany.value.id, null) }
+    if (kind === 'company') { await loadCompanyTree() }
+    else if (kind === 'dept' && selectedCompany.value) { await loadDeptAndPosts(selectedCompany.value.id) }
+    else if (kind === 'post' && selectedDept.value) { await onDeptSelect(selectedDept.value) }
+    else if (kind === 'post' && selectedCompany.value) { await loadPosts(selectedCompany.value.id, null) }
   } catch (e) { ElMessage.error(e.message) } finally { saving.value = false }
 }
 
-async function remove(t, row) {
+async function remove(kind, row) {
   try {
-    await ElMessageBox.confirm(`确认删除该${typeLabel.value}？`, '删除确认', { type: 'warning' })
-    if (t === 'company') await orgApi.companyDelete(row.id)
-    else if (t === 'dept') await orgApi.deptDelete(row.id)
+    await ElMessageBox.confirm(t('system.org.askDeleteEntity', { v1: typeLabel.value }), t('system.common.ttlDelete'), { type: 'warning' })
+    if (kind === 'company') await orgApi.companyDelete(row.id)
+    else if (kind === 'dept') await orgApi.deptDelete(row.id)
     else await orgApi.postDelete(row.id)
-    ElMessage.success('已删除')
-    if (t === 'company') { selectedCompany.value = null; deptTreeData.value = []; posts.value = []; await loadCompanyTree() }
-    else if (t === 'dept' && selectedCompany.value) { selectedDept.value = null; await loadDeptAndPosts(selectedCompany.value.id) }
-    else if (t === 'post' && selectedDept.value) { await onDeptSelect(selectedDept.value) }
-    else if (t === 'post' && selectedCompany.value) { await loadPosts(selectedCompany.value.id, null) }
+    ElMessage.success(t('system.common.stDeleted'))
+    if (kind === 'company') { selectedCompany.value = null; deptTreeData.value = []; posts.value = []; await loadCompanyTree() }
+    else if (kind === 'dept' && selectedCompany.value) { selectedDept.value = null; await loadDeptAndPosts(selectedCompany.value.id) }
+    else if (kind === 'post' && selectedDept.value) { await onDeptSelect(selectedDept.value) }
+    else if (kind === 'post' && selectedCompany.value) { await loadPosts(selectedCompany.value.id, null) }
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
@@ -404,8 +404,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!posts.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'postCode', label: '编码' }, { prop: 'postName', label: '名称' }, { prop: 'sort', label: '排序' }, { prop: 'status', label: '状态' }]
+  if (!posts.value.length) { ElMessage.warning(t('system.common.msgNoExportData')); return }
+  const cols = [{ prop: 'postCode', label: t('system.common.colCode') }, { prop: 'postName', label: t('system.common.colName') }, { prop: 'sort', label: t('system.common.colSort') }, { prop: 'status', label: t('common.status') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = posts.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -419,7 +419,7 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `Org_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('system.common.msgExportedCsv'))
 }
 </script>
 

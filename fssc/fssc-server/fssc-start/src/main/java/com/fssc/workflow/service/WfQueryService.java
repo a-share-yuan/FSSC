@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -823,6 +820,10 @@ public class WfQueryService {
         h.setNodeName(nodeName);
         h.setAction(action);
         h.setComment(comment);
+        // wf_task_history.oper_time 是 NOT NULL，而旁路行没有登录上下文可派生（正路的 oper_time 由
+        // WfEngineFacade.writeHistory 落）。缺这一列 ⇒ 1048 ⇒ 整条 SKIP 冒泡成「镜像收口失败
+        // [WF-MIRROR-001]，已阻止引擎推进」，实例停在 RUNNING 且无 PENDING 行＝无人可办、无出口（D-V4R-70）。
+        h.setOperTime(java.time.LocalDateTime.now());
         WfInstance inst = (procInstId == null || procInstId.isBlank()) ? null : instanceByProcInstId(procInstId);
         h.setBizType(inst == null ? "UNKNOWN" : inst.getBizType());
         h.setBizId(inst == null || inst.getBizId() == null ? 0L : inst.getBizId());

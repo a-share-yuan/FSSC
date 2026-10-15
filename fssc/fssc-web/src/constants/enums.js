@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * 业务枚举 → 中文标签（全系统共用，禁止各页重复定义）。
  * 与 constants/billStatus.js（状态类枚举）并列：本文件收「非状态」枚举 —— 单据类型、业务类型、

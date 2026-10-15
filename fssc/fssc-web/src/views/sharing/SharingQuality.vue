@@ -1,71 +1,68 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="quality-page">
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="header-title">共享质检</span>
-          <el-button v-permission="'sharing:quality:create'" type="primary" size="small" @click="openDialog(null)">新增质检</el-button>
+          <span class="header-title">{{ $t('sharing.quality.pageTitle') }}</span>
+          <el-button v-permission="'sharing:quality:create'" type="primary" size="small" @click="openDialog(null)">{{ $t('sharing.quality.btnAdd') }}</el-button>
         </div>
       </template>
 
       <el-form :inline="true" :rules="qualitySearchRules" size="small" style="margin-bottom:12px">
-        <el-form-item label="单号">
-          <el-input v-model="q.billNo" placeholder="付款单号" clearable @keyup.enter="load" />
+        <el-form-item :label="$t('field.docNo')">
+          <el-input v-model="q.billNo" :placeholder="$t('sharing.quality.phPayBillNo')" clearable @keyup.enter="load" />
         </el-form-item>
-        <el-form-item label="质检结果">
+        <el-form-item :label="$t('sharing.quality.labResult')">
           <el-select v-model="q.result" clearable style="width:120px" @change="load">
-            <el-option label="合格" value="PASS" />
-            <el-option label="退回整改" value="BACK" />
+            <el-option :label="$t('sharing.quality.optPass')" value="PASS" />
+            <el-option :label="$t('sharing.quality.optBack')" value="BACK" />
           </el-select>
         </el-form-item>
-        <el-form-item label="抽检方式">
+        <el-form-item :label="$t('sharing.quality.labSampling')">
           <el-select v-model="q.checkType" clearable style="width:120px" @change="load">
-            <el-option label="随机抽检" value="RANDOM" />
-            <el-option label="全检" value="FULL" />
-            <el-option label="关键检查" value="KEY" />
+            <el-option :label="$t('sharing.quality.optRandom')" value="RANDOM" />
+            <el-option :label="$t('sharing.quality.optFull')" value="FULL" />
+            <el-option :label="$t('sharing.quality.optKey')" value="KEY" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="load">查询</el-button>
+          <el-button type="primary" @click="load">{{ $t('common.search') }}</el-button>
         </el-form-item>
       </el-form>
 
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
 <el-table :data="rows" v-else size="small" stripe border max-height="560" @row-dblclick="openRowDetail"
-        :row-class-name="rowClass" empty-text="暂无数据">
-        <el-table-column prop="billNo" label="单据编号" width="140" show-overflow-tooltip sortable />
-        <el-table-column label="抽检方式" width="100" align="center">
+        :row-class-name="rowClass" :empty-text="$t('common.empty')">
+        <el-table-column prop="billNo" :label="$t('sharing.common.colDocNoFull')" width="140" show-overflow-tooltip sortable />
+        <el-table-column :label="$t('sharing.quality.labSampling')" width="100" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="row.checkType === 'FULL' ? 'danger' : row.checkType === 'KEY' ? 'warning' : 'info'">
               {{ checkTypeText(row.checkType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="得分" width="80" align="center" sortable :sort-by="(r) => r.score">
+        <el-table-column :label="$t('sharing.quality.colScore')" width="80" align="center" sortable :sort-by="(r) => r.score">
           <template #default="{ row }">
             <span :style="{ color: row.score >= 80 ? '#67c23a' : row.score >= 60 ? '#e6a23c' : '#f56c6c', fontWeight: 700 }">
               {{ row.score }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="deductReason" label="扣分说明" min-width="160" show-overflow-tooltip />
-        <el-table-column label="质检结果" width="100" align="center">
+        <el-table-column prop="deductReason" :label="$t('sharing.quality.colDeduct')" min-width="160" show-overflow-tooltip />
+        <el-table-column :label="$t('sharing.quality.labResult')" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.result === 'PASS' ? 'success' : 'danger'" size="small">
-              {{ row.result === 'PASS' ? '合格' : '退回整改' }}
+              {{ row.result === 'PASS' ? t('sharing.quality.optPass') : t('sharing.quality.optBack') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="checkerId" label="质检员" width="80" />
-        <el-table-column prop="checkTime" label="质检时间" width="160" />
-        <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column prop="checkerId" :label="$t('sharing.quality.colChecker')" width="80" />
+        <el-table-column prop="checkTime" :label="$t('sharing.quality.colCheckTime')" width="160" />
+        <el-table-column prop="remark" :label="$t('common.remark')" min-width="120" show-overflow-tooltip />
+        <el-table-column :label="$t('common.operation')" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'sharing:quality:update'" link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
-            <el-button v-permission="'sharing:quality:delete'" link type="danger" size="small" @click="del(row)">删除</el-button>
+            <el-button v-permission="'sharing:quality:update'" link type="primary" size="small" @click="openDialog(row)">{{ $t('sharing.common.btnEdit') }}</el-button>
+            <el-button v-permission="'sharing:quality:delete'" link type="danger" size="small" @click="del(row)">{{ $t('sharing.common.btnDelete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -79,37 +76,37 @@
       />
     </el-card>
 
-    <el-dialog v-model="dialog.visible" :title="dialog.editing ? '编辑质检' : '新增质检'" width="560px" destroy-on-close>
+    <el-dialog v-model="dialog.visible" :title="dialog.editing ? t('sharing.quality.dlgEditTitle') : t('sharing.quality.btnAdd')" width="560px" destroy-on-close>
       <el-form ref="qualityFormRef" :model="dialog.form" :rules="qualityFormRules" label-width="100px" size="default">
-        <el-form-item label="单据编号" prop="billNo">
-          <el-input v-model="dialog.form.billNo" placeholder="付款单号" />
+        <el-form-item :label="$t('sharing.common.colDocNoFull')" prop="billNo">
+          <el-input v-model="dialog.form.billNo" :placeholder="$t('sharing.quality.phPayBillNo')" />
         </el-form-item>
-        <el-form-item label="抽检方式" prop="checkType">
+        <el-form-item :label="$t('sharing.quality.labSampling')" prop="checkType">
           <el-select v-model="dialog.form.checkType" style="width:100%">
-            <el-option label="随机抽检" value="RANDOM" />
-            <el-option label="全检" value="FULL" />
-            <el-option label="关键检查" value="KEY" />
+            <el-option :label="$t('sharing.quality.optRandom')" value="RANDOM" />
+            <el-option :label="$t('sharing.quality.optFull')" value="FULL" />
+            <el-option :label="$t('sharing.quality.optKey')" value="KEY" />
           </el-select>
         </el-form-item>
-        <el-form-item label="得分" prop="score">
+        <el-form-item :label="$t('sharing.quality.colScore')" prop="score">
           <el-input-number v-model="dialog.form.score" :min="0" :max="100" style="width:100%" />
         </el-form-item>
-        <el-form-item label="质检结果" prop="result">
+        <el-form-item :label="$t('sharing.quality.labResult')" prop="result">
           <el-select v-model="dialog.form.result" style="width:100%">
-            <el-option label="合格" value="PASS" />
-            <el-option label="退回整改" value="BACK" />
+            <el-option :label="$t('sharing.quality.optPass')" value="PASS" />
+            <el-option :label="$t('sharing.quality.optBack')" value="BACK" />
           </el-select>
         </el-form-item>
-        <el-form-item label="扣分说明">
+        <el-form-item :label="$t('sharing.quality.colDeduct')">
           <el-input v-model="dialog.form.deductReason" type="textarea" :rows="2" />
         </el-form-item>
-        <el-form-item label="备注">
+        <el-form-item :label="$t('common.remark')">
           <el-input v-model="dialog.form.remark" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialog.visible = false">取消</el-button>
-        <el-button v-permission="['sharing:quality:create', 'sharing:quality:update']" type="primary" :loading="dialog.saving" @click="save">保存</el-button>
+        <el-button @click="dialog.visible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button v-permission="['sharing:quality:create', 'sharing:quality:update']" type="primary" :loading="dialog.saving" @click="save">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -117,13 +114,16 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { opApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -146,13 +146,13 @@ const dialog = reactive({ visible: false, editing: null, form: {}, saving: false
 
 const qualitySearchRules = reactive({})
 const qualityFormRef = ref(null)
-const qualityFormRules = reactive({
+const qualityFormRules = computed(() => (reactive({
   // 质检记录的人工输入：单据编号＝被检单据的定位符（此处由质检员手工填写，非系统只读编号）
-  billNo: commonRules.required('请输入单据编号'),
-  checkType: commonRules.select('请选择抽检方式'),
-  score: [{ required: true, type: 'number', min: 0, max: 100, message: '请输入得分（0-100）' }],
-  result: commonRules.select('请选择质检结果'),
-})
+  billNo: commonRules.required(t('sharing.quality.errDocNo')),
+  checkType: commonRules.select(t('sharing.quality.errSampling')),
+  score: [{ required: true, type: 'number', min: 0, max: 100, message: t('sharing.quality.errScore') }],
+  result: commonRules.select(t('sharing.quality.errResult')),
+})))
 
 async function load() {
   loading.value = true
@@ -167,8 +167,8 @@ async function load() {
   }
 }
 
-function checkTypeText(t) {
-  return { RANDOM: '随机抽检', FULL: '全检', KEY: '关键检查' }[t] || t
+function checkTypeText(code) {
+  return { RANDOM: t('sharing.quality.optRandom'), FULL: t('sharing.quality.optFull'), KEY: t('sharing.quality.optKey') }[code] || code
 }
 
 function rowClass({ row }) {
@@ -192,7 +192,7 @@ async function save() {
     } else {
       await opApi.qualityCreate(dialog.form)
     }
-    ElMessage.success('保存成功')
+    ElMessage.success(t('sharing.common.msgSaved'))
     dialog.visible = false
     await load()
   } catch (e) {
@@ -204,9 +204,9 @@ async function save() {
 
 async function del(row) {
   try {
-    await ElMessageBox.confirm('确认删除该质检记录？', '删除', { type: 'warning' })
+    await ElMessageBox.confirm(t('sharing.quality.confirmDelete'), t('sharing.common.btnDelete'), { type: 'warning' })
     await opApi.qualityDelete(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('sharing.common.msgDelOk'))
     await load()
   } catch (e) {
     if (e !== 'cancel' && e?.message) ElMessage.error(e.message)

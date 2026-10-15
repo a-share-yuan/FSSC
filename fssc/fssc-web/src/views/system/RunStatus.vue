@@ -1,20 +1,17 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div>
     <el-card style="margin-bottom: 12px">
       <template #header>
         <div class="card-head">
-          <b>服务状态（系统监控 · /api/health 真实探活）</b>
-          <el-button size="small" :loading="probing" @click="probe">重新探测</el-button>
+          <b>{{ $t('system.runStatus.ttlHealth') }}</b>
+          <el-button size="small" :loading="probing" @click="probe">{{ $t('system.runStatus.btnRedetect') }}</el-button>
         </div>
       </template>
       <el-descriptions :column="3" border size="small">
-        <el-descriptions-item label="整体状态">
+        <el-descriptions-item :label="$t('system.runStatus.colOverall')">
           <el-tag :type="healthTag" size="small">{{ healthLabel }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="数据库">
+        <el-descriptions-item :label="$t('system.runStatus.colDatabase')">
           <el-tag size="small" :type="compTag(components.db)">{{ compText[components.db] || components.db || '—' }}</el-tag>
           <span v-if="components.dbError" class="err">{{ components.dbError }}</span>
         </el-descriptions-item>
@@ -22,30 +19,28 @@
           <el-tag size="small" :type="compTag(components.redis)">{{ compText[components.redis] || components.redis || '—' }}</el-tag>
           <span v-if="components.redisError" class="err">{{ components.redisError }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="磁盘">
+        <el-descriptions-item :label="$t('system.runStatus.colDisk')">
           <el-tag size="small" :type="compTag(components.disk)">{{ compText[components.disk] || components.disk || '—' }}</el-tag>
           <span v-if="components.diskTotalGb != null" class="meta">
-            剩余 {{ components.diskUsableGb }}GB / 共 {{ components.diskTotalGb }}GB（{{ components.diskPath }}）
-          </span>
+            {{ $t('system.runStatus.statDisk', { v1: components.diskUsableGb, v2: components.diskTotalGb, v3: components.diskPath }) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="JVM 堆">
+        <el-descriptions-item :label="$t('system.runStatus.colJvmHeap')">
           <span v-if="components.jvmHeapMaxMb != null" class="meta">
-            {{ components.jvmHeapUsedMb }}MB / {{ components.jvmHeapMaxMb }}MB · 线程 {{ components.jvmThreads }}
-          </span>
+            {{ $t('system.runStatus.statJvm', { v1: components.jvmHeapUsedMb, v2: components.jvmHeapMaxMb, v3: components.jvmThreads }) }}</span>
           <span v-else>—</span>
         </el-descriptions-item>
-        <el-descriptions-item label="运行时长">{{ uptimeText }}</el-descriptions-item>
-        <el-descriptions-item label="服务版本">{{ health.app || '—' }} v{{ health.version || '—' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('system.runStatus.colUptime')">{{ uptimeText }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('system.runStatus.colServiceVersion')">{{ health.app || '—' }} v{{ health.version || '—' }}</el-descriptions-item>
         <el-descriptions-item label="Java">{{ health.javaVersion || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="服务器时间">{{ formatDateTime(health.serverTime) || now }}</el-descriptions-item>
-        <el-descriptions-item label="租户">{{ store.user?.tenantId || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="登录用户">{{ user }}</el-descriptions-item>
-        <el-descriptions-item label="探测时间">{{ probedAt || '—' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('system.runStatus.colServerTime')">{{ formatDateTime(health.serverTime) || now }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('system.runStatus.colTenant')">{{ store.user?.tenantId || '—' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('system.runStatus.colLoggedInUser')">{{ user }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('system.runStatus.colDetectedAt')">{{ probedAt || '—' }}</el-descriptions-item>
       </el-descriptions>
     </el-card>
 
     <el-card>
-      <template #header><b>运营数据一览</b></template>
+      <template #header><b>{{ $t('system.runStatus.ttlOpsData') }}</b></template>
       <el-row :gutter="12">
         <el-col v-for="k in kpis" :key="k.kpi" :span="6" style="margin-bottom: 12px">
           <el-card shadow="hover" style="text-align: center">
@@ -54,7 +49,7 @@
           </el-card>
         </el-col>
       </el-row>
-      <el-empty v-if="!kpis.length" description="暂无运营数据" />
+      <el-empty v-if="!kpis.length" :description="$t('system.runStatus.emptyOpsData')" />
     </el-card>
   </div>
 </template>
@@ -65,6 +60,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { healthApi, reportApi, store } from '../../api'
 import { formatDateTime } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const probing = ref(false)
 const probedAt = ref('')
@@ -74,13 +72,13 @@ const user = ref(store.user?.realName || store.user?.username || '')
 const kpis = ref([])
 
 const components = computed(() => health.value.components || {})
-const healthLabel = computed(() => health.value.status || (probedAt.value ? 'DOWN' : '未探测'))
+const healthLabel = computed(() => health.value.status || (probedAt.value ? 'DOWN' : t('system.runStatus.stNotDetected')))
 const healthTag = computed(() => (health.value.status === 'UP' ? 'success' : 'danger'))
 const uptimeText = computed(() => {
   const s = Number(health.value.uptimeSeconds || 0)
   if (!s) return '—'
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60)
-  return (d ? `${d}天` : '') + (h ? `${h}时` : '') + `${m}分`
+  return (d ? t('system.runStatus.unitDays', { v1: d }) : '') + (h ? t('system.runStatus.unitHours', { v1: h }) : '') + t('system.runStatus.unitMinutes', { v1: m })
 })
 
 function compTag(st) {
@@ -90,7 +88,7 @@ function compTag(st) {
 }
 
 // R5-D-050：组件状态枚举中文化（UP/DOWN/DISABLED/UNKNOWN 原样出英文码对用户不可读）
-const compText = { UP: '正常', DOWN: '异常', DISABLED: '未启用', UNKNOWN: '未知' }
+const compText = computed(() => ({ UP: t('system.common.stNormal'), DOWN: t('system.runStatus.stAbnormal'), DISABLED: t('system.runStatus.stNotEnabled'), UNKNOWN: t('system.runStatus.stUnknown') }))
 
 async function probe() {
   probing.value = true

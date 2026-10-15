@@ -1,0 +1,15 @@
+--- bpmn:GL_MANUAL_VOUCHER v6
++++ bpmn:GL_MANUAL_VOUCHER v7
+@@ -3,9 +3,11 @@
+   <bpmn:process id="GL_MANUAL_VOUCHER" name="总账凭证审批流程（做账）" isExecutable="true">
+     <bpmn:startEvent id="StartEvent_1" name="开始" />
+     <bpmn:userTask id="GK_1" name="编制底稿/卡片摊销（按类型解析责任人）【共享会计】" flowable:candidateGroups="FIN_GL" />
++        <bpmn:userTask id="GK_1_R" name="底稿复核【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
+     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="GK_1" />
+     <bpmn:userTask id="GK_2" name="财务审核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
+-    <bpmn:sequenceFlow id="Flow_GK_2" sourceRef="GK_1" targetRef="GK_2" />
++    <bpmn:sequenceFlow id="Flow_GK_2" sourceRef="GK_1" targetRef="GK_1_R" />
++        <bpmn:sequenceFlow id="Flow_GK_2_r2" sourceRef="GK_1_R" targetRef="GK_2" />
+     <bpmn:userTask id="GK_3" name="总账记账复核【总账会计】" flowable:candidateGroups="FIN_GL" />
+         <bpmn:userTask id="GK_3_R" name="记账稽核复核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
+     <bpmn:sequenceFlow id="Flow_GK_3" sourceRef="GK_2" targetRef="GK_3" />

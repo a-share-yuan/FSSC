@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="flow-config-page">
     <el-row class="cm-target-flow" :gutter="16">
@@ -9,14 +6,14 @@
         <el-card class="cm-target-flow model-list-card" shadow="never">
           <template #header>
             <div class="panel-header">
-              <span class="panel-title">流程模型</span>
+              <span class="panel-title">{{ $t('system.flow.ttlModels') }}</span>
               <div>
-                <el-button v-if="canModelCreate" size="small" @click="importFlow">导入</el-button>
-                <el-button v-if="canModelCreate" type="primary" size="small" @click="openModelCreate">新增</el-button>
+                <el-button v-if="canModelCreate" size="small" @click="importFlow">{{ $t('system.flow.btnImport') }}</el-button>
+                <el-button v-if="canModelCreate" type="primary" size="small" @click="openModelCreate">{{ $t('system.common.btnAdd') }}</el-button>
               </div>
             </div>
           </template>
-          <el-input v-model="searchKey" placeholder="搜索模型编码/名称..." clearable size="small" style="margin-bottom:8px" @input="filterModels" />
+          <el-input v-model="searchKey" :placeholder="$t('system.flow.phSearchModel')" clearable size="small" style="margin-bottom:8px" @input="filterModels" />
           <SkeletonDetail v-if="loading.models" :rows="6" />
           <div class="model-list" v-else>
             <div
@@ -36,7 +33,7 @@
                 <span>v{{ m.version }}</span>
               </div>
             </div>
-            <el-empty v-if="!filteredModels.length && !loading.models" description="暂无流程模型" :image-size="60" />
+            <el-empty v-if="!filteredModels.length && !loading.models" :description="$t('system.flow.emptyModels')" :image-size="60" />
           </div>
         </el-card>
       </el-col>
@@ -46,84 +43,83 @@
         <!-- 页签被权限裁剪时给出明确原因（原实现直接静默隐藏，用户只看到"残缺页面"误以为功能缺失） -->
         <el-alert v-if="!canNodeList || !canConfigList || !canInstanceList" type="info" :closable="false" show-icon
                   class="perm-hint"
-                  title="当前账号的流程配置页签按权限显示"
+                  :title="$t('system.flow.hintPermTabs')"
                   :description="hiddenTabDesc" />
         <el-card v-if="selectedModel || modelDraft" shadow="never">
           <template #header>
             <div class="panel-header">
               <div class="model-detail-header">
-                <span class="panel-title">{{ selectedModel ? selectedModel.modelName : '新建流程模型' }}</span>
+                <span class="panel-title">{{ selectedModel ? selectedModel.modelName : t('system.flow.ttlNewModel') }}</span>
                 <el-tag v-if="selectedModel" size="small" type="info" style="margin-left:8px">{{ selectedModel.modelKey }}</el-tag>
                 <el-tag v-if="selectedModel && selectedModel.bizType" size="small" type="warning" style="margin-left:4px"
-                        :title="'业务单据类型编码：' + selectedModel.bizType">{{ bizTypeLabel(selectedModel.bizType) }}</el-tag>
+                        :title="$t('system.flow.bizTypeCodePrefix') + selectedModel.bizType">{{ bizTypeLabel(selectedModel.bizType) }}</el-tag>
                 <el-tag v-if="selectedModel && selectedModel.category" size="small" style="margin-left:4px">{{ modelCategoryLabel(selectedModel.category) }}</el-tag>
-                <el-tag v-if="modelDraft" size="small" type="warning" style="margin-left:8px">未保存</el-tag>
+                <el-tag v-if="modelDraft" size="small" type="warning" style="margin-left:8px">{{ $t('system.flow.stUnsaved') }}</el-tag>
               </div>
               <div v-if="selectedModel">
-                <el-button v-if="canModelUpdate" size="small" type="success" @click="validateModel">校验</el-button>
-                <el-button v-if="canModelUpdate" size="small" type="warning" @click="simulateModel">模拟</el-button>
-                <el-button v-if="canModelUpdate" size="small" type="primary" @click="publishModel">发布</el-button>
-                <el-button v-if="canModelUpdate" size="small" @click="openInFlight">在途影响</el-button>
-                <el-button v-if="canModelUpdate" size="small" @click="exportRepo">导出入仓</el-button>
-                <el-button v-if="canModelUpdate" size="small" @click="exportModel">导出</el-button>
-                <el-button v-if="canModelDelete" size="small" type="danger" @click="deleteModel">删除</el-button>
+                <el-button v-if="canModelUpdate" size="small" type="success" @click="validateModel">{{ $t('system.flow.btnValidate') }}</el-button>
+                <el-button v-if="canModelUpdate" size="small" type="warning" @click="simulateModel">{{ $t('system.flow.btnSimulate') }}</el-button>
+                <el-button v-if="canModelUpdate" size="small" type="primary" @click="publishModel">{{ $t('system.flow.btnPublish') }}</el-button>
+                <el-button v-if="canModelUpdate" size="small" @click="openInFlight">{{ $t('system.flow.btnInflightImpact') }}</el-button>
+                <el-button v-if="canModelUpdate" size="small" @click="exportRepo">{{ $t('system.flow.btnExportRepo') }}</el-button>
+                <el-button v-if="canModelUpdate" size="small" @click="exportModel">{{ $t('system.flow.btnExport') }}</el-button>
+                <el-button v-if="canModelDelete" size="small" type="danger" @click="deleteModel">{{ $t('system.common.btnDelete') }}</el-button>
               </div>
             </div>
           </template>
 
           <el-tabs v-model="detailTab" type="border-card" @tab-change="onTabChange">
             <!-- 基本信息 -->
-            <el-tab-pane v-if="canModelList" label="基本信息" name="info">
+            <el-tab-pane v-if="canModelList" :label="$t('system.flow.tabBasic')" name="info">
               <el-form ref="modelFormRef" :model="modelForm" :rules="modelFormRules" label-width="120px" size="default" style="max-width:700px">
-                <el-form-item label="模型编码" prop="modelKey">
+                <el-form-item :label="$t('system.flow.colModelCode')" prop="modelKey">
                   <el-input v-model="modelForm.modelKey" :disabled="!!modelForm.id" />
                 </el-form-item>
-                <el-form-item label="模型名称" prop="modelName">
+                <el-form-item :label="$t('system.common.colModelName')" prop="modelName">
                   <el-input v-model="modelForm.modelName" />
                 </el-form-item>
-                <el-form-item label="分类">
-                  <el-select v-model="modelForm.category" placeholder="选择业务域" style="width:100%">
+                <el-form-item :label="$t('system.common.colCategory')">
+                  <el-select v-model="modelForm.category" :placeholder="$t('system.flow.phSelectDomain')" style="width:100%">
                     <el-option v-for="(label, code) in WF_MODEL_CATEGORY" :key="code" :label="label" :value="code" />
                   </el-select>
                   <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-                    分类＝业务域，用于模型清单分组和"按域查询"，改动只影响分组、不影响流转（路由按模型编码绑定）。
-                    <b>未归类（模板导入）</b>不是一个域：后端按需求模板批量建流程时曾把「来源」的取值 <code>TEMPLATE</code>
-                    写进「分类」列，本账套 18 行已于 2026-09-24 归回真实业务域（脚本 seed_wfmodel_category_domain_fix_20260924.sql）；
-                    若在别的账套看到它，逐个改到真实业务域即可。新建/模板导入未指定域的模型显示为「未归类」。
+                    {{ $t('system.flow.hintCategoryIsDomain') }}
+                    <b>{{ $t('system.flow.optUnclassified') }}</b>{{ $t('system.flow.txtUnclassCause') }}<code>TEMPLATE</code>
+                    {{ $t('system.flow.txtUnclassRestored') }}
+                    {{ $t('system.flow.txtUnclassedFix') }}
                   </div>
                 </el-form-item>
-                <el-form-item label="业务单据类型">
+                <el-form-item :label="$t('system.flow.lblBizDocType')">
                   <el-select v-model="modelForm.bizType" filterable allow-create default-first-option
-                             placeholder="选择单据类型" style="width:100%">
+                             :placeholder="$t('system.flow.phSelectDocType')" style="width:100%">
                     <el-option v-for="o in bizTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
                   </el-select>
                   <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-                    选项＝全局业务单据类型字典（下拉可搜索，也可直接输入尚未登记的编码）。
-                    注意：单据提单时命中哪条流程按<b>模型编码</b>绑定，这一项是模型上的业务类型标注（清单标签、流程校验按它归集），改动不影响在途与新建单据的路由。
-                    若显示成全大写英文，说明该编码没登记进 <code>constants/enums.js</code> 的 BIZ_TYPE，补一行即恢复中文。
-                  </div>
+                    {{ $t('system.flow.hintDocTypeDict') }}
+                    {{ $t('system.flow.txtHitByPrefix') }}<b>{{ $t('system.flow.colModelCode') }}</b>{{ $t('system.flow.hintBizTypeLabelOnly') }}
+                    {{ $t('system.flow.txtUpperCodeTail') }} <code>constants/enums.js</code> {{ $t('system.flow.hintEnumSuffix') }}</div>
                 </el-form-item>
-                <el-form-item label="生效组织范围">
+                <el-form-item :label="$t('system.flow.lblScope')">
                   <el-select v-model="modelForm.orgScope" style="width:100%">
-                    <el-option label="全集团" value="ALL" />
-                    <el-option label="指定公司" value="ORG" />
+                    <el-option :label="$t('system.flow.optScopeAll')" value="ALL" />
+                    <el-option :label="$t('system.flow.optScopeCompany')" value="ORG" />
                   </el-select>
                 </el-form-item>
-                <el-form-item label="允许撤回">
+                <el-form-item :label="$t('system.flow.lblWithdrawable')">
                   <el-switch v-model="modelForm.allowWithdraw" />
                 </el-form-item>
-                <el-form-item label="驳回策略">
+                <el-form-item :label="$t('system.flow.lblRejectPolicy')">
                   <el-select v-model="modelForm.rejectStrategy" style="width:100%">
-                    <el-option label="驳回至发起人" value="TO_INITIATOR" />
-                    <el-option label="驳回至上一节点" value="TO_PREV" />
+                    <el-option :label="$t('system.flow.optRejectToInitiator')" value="TO_INITIATOR" />
+                    <el-option :label="$t('system.flow.optRejectToPrev')" value="TO_PREV" />
                   </el-select>
                 </el-form-item>
-                <el-form-item label="开启代理审批">
+                <el-form-item :label="$t('system.flow.lblDelegateOn')">
                   <el-switch v-model="modelForm.enableDelegate" />
                 </el-form-item>
                 <el-form-item>
-                  <el-button v-if="modelDraft ? canModelCreate : canModelUpdate" type="primary" :loading="saving" @click="saveModel">{{ modelDraft ? '创建模型' : '保存' }}</el-button>
-                  <el-button v-if="modelDraft" @click="cancelModelDraft">取消</el-button>
+                  <el-button v-if="modelDraft ? canModelCreate : canModelUpdate" type="primary" :loading="saving" @click="saveModel">{{ modelDraft ? t('system.flow.btnCreateModel') : t('common.save') }}</el-button>
+                  <el-button v-if="modelDraft" @click="cancelModelDraft">{{ $t('common.cancel') }}</el-button>
                 </el-form-item>
               </el-form>
             </el-tab-pane>
@@ -133,19 +129,19 @@
                  通用页引用（其 isFlow 分支要求 route.path === '/expense/flow'，而该路由由本页渲染）
                  → 图形化流程图在任何入口都打不开。
                  现直接在本页提供：有 bpmnXml 即渲染图形；无 wf:model:update 走只读 Viewer。 -->
-            <el-tab-pane v-if="canModelList && !modelDraft" label="流程图" name="diagram">
+            <el-tab-pane v-if="canModelList && !modelDraft" :label="$t('system.flow.tabDiagram')" name="diagram">
               <template v-if="selectedModel">
                 <!-- 无图形定义 + 无编辑权：给明确说明，不渲染假图 -->
                 <el-alert v-if="!selectedModel.bpmnXml && !canModelUpdate" type="warning" :closable="false" show-icon
-                          title="该流程模型尚未包含 BPMN 图形定义"
-                          description="请使用具备「流程建模」权限（wf:model:update）的账号导入或绘制流程图。" />
+                          :title="$t('system.flow.emptyDiagram')"
+                          :description="$t('system.flow.hintNeedModelPerm')" />
                 <template v-else>
                   <div class="diagram-tip">
-                    <span>模型 <b>{{ selectedModel.modelKey }}</b> · v{{ selectedModel.version }} · {{ modelStatusText(selectedModel) }}
-                      <span v-if="!canModelUpdate" class="ro">只读（无 wf:model:update）</span>
+                    <span>{{ $t('system.extInterface.colModel') }}<b>{{ selectedModel.modelKey }}</b> · v{{ selectedModel.version }} · {{ modelStatusText(selectedModel) }}
+                      <span v-if="!canModelUpdate" class="ro">{{ $t('system.flow.stReadOnly') }}</span>
                     </span>
                     <el-button size="small" :type="isDiagramFullscreen ? 'warning' : 'default'" @click="toggleDiagramFullscreen">
-                      {{ isDiagramFullscreen ? '退出全屏' : '全屏设计' }}
+                      {{ isDiagramFullscreen ? t('system.flow.btnExitFullscreen') : t('system.flow.btnFullscreenDesign') }}
                     </el-button>
                   </div>
                   <div ref="diagramWrapRef" class="diagram-wrap">
@@ -156,33 +152,33 @@
                   </div>
                 </template>
               </template>
-              <el-empty v-else description="请先从左侧选择一个流程模型，再查看其流程图" :image-size="70" />
+              <el-empty v-else :description="$t('system.flow.hintPickModelDiagram')" :image-size="70" />
             </el-tab-pane>
 
             <!-- 节点配置 -->
-            <el-tab-pane v-if="canNodeList && !modelDraft" label="节点配置" name="nodes">
+            <el-tab-pane v-if="canNodeList && !modelDraft" :label="$t('system.flow.tabNodes')" name="nodes">
               <div style="margin-bottom:12px">
-                <el-button v-if="canNodeCreate" type="primary" size="small" @click="openNodeDialog(null)">新增节点</el-button>
+                <el-button v-if="canNodeCreate" type="primary" size="small" @click="openNodeDialog(null)">{{ $t('system.flow.btnAddNode') }}</el-button>
               </div>
               <el-alert v-if="hasMultiInstanceNode" type="warning" :closable="false" show-icon style="margin-bottom:10px"
-                        title="本模型含会签/票签节点：改动「会签模式」后必须重新「发布」模型，多实例任务才会生成（保存节点配置本身不会部署 BPMN）。" />
+                        :title="$t('system.flow.hintMultistageRepublish')" />
               <SkeletonList v-if="loading.nodes" :rows="8" :cols="5" />
               <el-table class="cm-target-flow" :data="nodes" size="small" stripe v-else @row-dblclick="openRowDetail">
-                <el-table-column prop="nodeKey" label="节点编码" width="90" />
-                <el-table-column prop="nodeName" label="节点名称" min-width="140" />
-                <el-table-column prop="assignType" label="审批人类型" width="110">
+                <el-table-column prop="nodeKey" :label="$t('system.flow.colNodeCode')" width="90" />
+                <el-table-column prop="nodeName" :label="$t('system.flow.colNodeName')" min-width="140" />
+                <el-table-column prop="assignType" :label="$t('system.flow.lblApproverType')" width="110">
                   <template #default="{ row }">
                     <el-tag size="small" :type="assignTypeTag(row.assignType)">{{ assignTypeLabel(row.assignType) }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column prop="handlingMode" label="取人方式" width="100">
+                <el-table-column prop="handlingMode" :label="$t('system.flow.lblAssignMode')" width="100">
                   <template #default="{ row }">
                     <el-tag size="small" :type="handlingModeTag(row.handlingMode)">
                       {{ handlingModeLabel(row.handlingMode) }}
                     </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column prop="multiType" label="会签模式" width="130">
+                <el-table-column prop="multiType" :label="$t('system.flow.lblCountersign')" width="130">
                   <template #default="{ row }">
                     <el-tag size="small" :type="multiTypeTag(row.multiType)">
                       {{ multiTypeLabel(row.multiType) }}
@@ -192,12 +188,12 @@
                     </span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="assignValue" label="审批人取值" min-width="130" show-overflow-tooltip />
-                <el-table-column prop="timeoutHours" label="超时(h)" width="80" />
-                <el-table-column prop="timeoutAction" label="超时动作" width="120">
+                <el-table-column prop="assignValue" :label="$t('system.flow.lblApproverValue')" min-width="130" show-overflow-tooltip />
+                <el-table-column prop="timeoutHours" :label="$t('system.flow.colTimeoutH')" width="80" />
+                <el-table-column prop="timeoutAction" :label="$t('system.flow.lblTimeoutAction')" width="120">
                   <template #default="{ row }">{{ timeoutActionLabel(row.timeoutAction) }}</template>
                 </el-table-column>
-                <el-table-column prop="upLevel" label="升级层级" width="90">
+                <el-table-column prop="upLevel" :label="$t('system.flow.lblEscalateLevels')" width="90">
                   <template #default="{ row }">
                     <span v-if="row.assignType === 'DEPT_LEADER_UP' || isEscalateAction(row.timeoutAction) || row.emptyStrategy === 'ESCALATE'">
                       {{ upLevelLabel(row.upLevel) }}
@@ -205,94 +201,94 @@
                     <span v-else style="color:#c0c4cc">—</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="140" fixed="right">
+                <el-table-column :label="$t('common.operation')" width="140" fixed="right">
                   <template #default="{ row }">
-                    <el-button v-if="canNodeUpdate" link type="primary" size="small" @click="openNodeDialog(row)">编辑</el-button>
-                    <el-button v-if="canNodeDelete" link type="danger" size="small" @click="deleteNode(row)">删除</el-button>
+                    <el-button v-if="canNodeUpdate" link type="primary" size="small" @click="openNodeDialog(row)">{{ $t('system.common.btnEdit') }}</el-button>
+                    <el-button v-if="canNodeDelete" link type="danger" size="small" @click="deleteNode(row)">{{ $t('system.common.btnDelete') }}</el-button>
                   </template>
                 </el-table-column>
               </el-table>
             </el-tab-pane>
 
             <!-- 流程绑定 -->
-            <el-tab-pane v-if="canConfigList && !modelDraft" label="流程绑定" name="bindings">
+            <el-tab-pane v-if="canConfigList && !modelDraft" :label="$t('system.flow.tabBindings')" name="bindings">
               <div style="margin-bottom:12px">
-                <el-button v-if="canConfigCreate" type="primary" size="small" @click="openBindingDialog(null)">新增绑定</el-button>
+                <el-button v-if="canConfigCreate" type="primary" size="small" @click="openBindingDialog(null)">{{ $t('system.flow.btnAddBinding') }}</el-button>
               </div>
               <SkeletonList v-if="loading.bindings" :rows="8" :cols="5" />
               <el-table :data="bindings" size="small" stripe v-else @row-dblclick="openRowDetail">
-                <el-table-column prop="bizType" label="单据类型" width="120">
+                <el-table-column prop="bizType" :label="$t('field.billType')" width="120">
                   <template #default="{ row }">{{ flowTypeLabel(row.bizType) }}</template>
                 </el-table-column>
-                <el-table-column prop="configName" label="配置名称" min-width="140" />
-                <el-table-column prop="amountMin" label="金额下限" width="100" :formatter="(r,c,v) => formatMoney(v)" />
-                <el-table-column prop="amountMax" label="金额上限" width="100" :formatter="(r,c,v) => formatMoney(v)" />
-                <el-table-column prop="priority" label="优先级" width="80" />
-                <el-table-column prop="status" label="状态" width="90">
+                <el-table-column prop="configName" :label="$t('system.flow.colCfgName')" min-width="140" />
+                <el-table-column prop="amountMin" :label="$t('system.flow.colAmountMin')" width="100" :formatter="(r,c,v) => formatMoney(v)" />
+                <el-table-column prop="amountMax" :label="$t('system.flow.colAmountMax')" width="100" :formatter="(r,c,v) => formatMoney(v)" />
+                <el-table-column prop="priority" :label="$t('system.flow.colPriority')" width="80" />
+                <el-table-column prop="status" :label="$t('common.status')" width="90">
                   <template #default="{ row }">
-                    <el-tag size="small" :type="row.status === 'NORMAL' ? 'success' : 'danger'">{{ row.status === 'NORMAL' ? '启用' : '停用' }}</el-tag>
+                    <el-tag size="small" :type="row.status === 'NORMAL' ? 'success' : 'danger'">{{ row.status === 'NORMAL' ? t('system.common.btnEnable') : t('system.common.btnDeactivate') }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="140" fixed="right">
+                <el-table-column :label="$t('common.operation')" width="140" fixed="right">
                   <template #default="{ row }">
-                    <el-button v-if="canConfigUpdate" link type="primary" size="small" @click="openBindingDialog(row)">编辑</el-button>
-                    <el-button v-if="canConfigDelete" link type="danger" size="small" @click="deleteBinding(row)">删除</el-button>
+                    <el-button v-if="canConfigUpdate" link type="primary" size="small" @click="openBindingDialog(row)">{{ $t('system.common.btnEdit') }}</el-button>
+                    <el-button v-if="canConfigDelete" link type="danger" size="small" @click="deleteBinding(row)">{{ $t('system.common.btnDelete') }}</el-button>
                   </template>
                 </el-table-column>
               </el-table>
             </el-tab-pane>
 
             <!-- 全局配置 -->
-            <el-tab-pane v-if="canConfigList && !modelDraft" label="全局配置" name="configs">
+            <el-tab-pane v-if="canConfigList && !modelDraft" :label="$t('system.flow.tabGlobalCfg')" name="configs">
               <el-radio-group v-model="cfgType" size="small" style="margin-bottom:10px" @change="loadConfigs">
-                <el-radio-button value="THRESHOLD">金额阈值</el-radio-button>
-                <el-radio-button value="TIMEOUT">超时处理</el-radio-button>
-                <el-radio-button value="ACTION">审批动作</el-radio-button>
-                <el-radio-button value="INTEGRATION">外部集成</el-radio-button>
+                <el-radio-button value="THRESHOLD">{{ $t('system.flow.tabAmountRule') }}</el-radio-button>
+                <el-radio-button value="TIMEOUT">{{ $t('system.flow.tabTimeout') }}</el-radio-button>
+                <el-radio-button value="ACTION">{{ $t('system.flow.tabActions') }}</el-radio-button>
+                <el-radio-button value="INTEGRATION">{{ $t('system.flow.tabIntegration') }}</el-radio-button>
               </el-radio-group>
               <div style="margin-bottom:12px">
-                <el-button v-if="canConfigCreate" type="primary" size="small" @click="openConfigDialog(null)">新增配置</el-button>
+                <el-button v-if="canConfigCreate" type="primary" size="small" @click="openConfigDialog(null)">{{ $t('system.flow.ttlNewConfig') }}</el-button>
               </div>
               <SkeletonList v-if="loading.configs" :rows="8" :cols="5" />
               <el-table :data="configs" size="small" stripe v-else @row-dblclick="openRowDetail">
-                <el-table-column prop="cfgCode" label="编码" width="120" />
-                <el-table-column prop="cfgName" label="名称" min-width="140" />
-                <el-table-column prop="cfgJson" label="配置内容" min-width="240" show-overflow-tooltip>
+                <el-table-column prop="cfgCode" :label="$t('system.common.colCode')" width="120" />
+                <el-table-column prop="cfgName" :label="$t('system.common.colName')" min-width="140" />
+                <el-table-column prop="cfgJson" :label="$t('system.flow.colCfgContent')" min-width="240" show-overflow-tooltip>
                   <template #default="{ row }">
                     <span>{{ cfgSummary(row) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="status" label="状态" width="90">
+                <el-table-column prop="status" :label="$t('common.status')" width="90">
                   <template #default="{ row }">
-                    <el-tag size="small" :type="row.status === 'NORMAL' ? 'success' : 'danger'">{{ row.status === 'NORMAL' ? '正常' : '停用' }}</el-tag>
+                    <el-tag size="small" :type="row.status === 'NORMAL' ? 'success' : 'danger'">{{ row.status === 'NORMAL' ? t('system.common.stNormal') : t('system.common.btnDeactivate') }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="140" fixed="right">
+                <el-table-column :label="$t('common.operation')" width="140" fixed="right">
                   <template #default="{ row }">
-                    <el-button v-if="canConfigUpdate" link type="primary" size="small" @click="openConfigDialog(row)">编辑</el-button>
-                    <el-button v-if="canConfigDelete" link type="danger" size="small" @click="deleteConfig(row)">删除</el-button>
+                    <el-button v-if="canConfigUpdate" link type="primary" size="small" @click="openConfigDialog(row)">{{ $t('system.common.btnEdit') }}</el-button>
+                    <el-button v-if="canConfigDelete" link type="danger" size="small" @click="deleteConfig(row)">{{ $t('system.common.btnDelete') }}</el-button>
                   </template>
                 </el-table-column>
               </el-table>
             </el-tab-pane>
 
             <!-- 运行实例 -->
-            <el-tab-pane v-if="canInstanceList && !modelDraft" label="运行实例" name="instances">
+            <el-tab-pane v-if="canInstanceList && !modelDraft" :label="$t('system.flow.tabInstances')" name="instances">
               <SkeletonList v-if="loading.instances" :rows="8" :cols="5" />
               <el-table :data="instances" size="small" stripe v-else @row-dblclick="openRowDetail">
-                <el-table-column prop="id" label="实例ID" width="120" />
-                <el-table-column prop="bizType" label="业务类型" width="110">
+                <el-table-column prop="id" :label="$t('system.flow.colInstanceId')" width="120" />
+                <el-table-column prop="bizType" :label="$t('system.common.colBizType')" width="110">
                   <template #default="{ row }">{{ flowTypeLabel(row.bizType) }}</template>
                 </el-table-column>
-                <el-table-column prop="bizNo" label="单据号" width="140" />
-                <el-table-column prop="status" label="状态" width="100">
+                <el-table-column prop="bizNo" :label="$t('system.flow.colDocNo')" width="140" />
+                <el-table-column prop="status" :label="$t('common.status')" width="100">
                   <template #default="{ row }">
                     <el-tag size="small" :type="instanceStatusTag(row.status)">{{ instanceStatusText(row.status) }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column prop="currentNode" label="当前节点" width="120" />
-                <el-table-column prop="initiatorName" label="发起人" width="100" />
-                <el-table-column prop="startTime" label="发起时间" width="160" />
+                <el-table-column prop="currentNode" :label="$t('system.flow.colCurrentNode')" width="120" />
+                <el-table-column prop="initiatorName" :label="$t('system.flow.colInitiator')" width="100" />
+                <el-table-column prop="startTime" :label="$t('system.flow.colStartedAt')" width="160" />
               </el-table>
               <el-pagination
                 v-model:current-page="instPageNum"
@@ -307,29 +303,29 @@
             </el-tab-pane>
 
             <!-- 委托代理 -->
-            <el-tab-pane v-if="canDelegateList && !modelDraft" label="委托代理" name="delegates">
+            <el-tab-pane v-if="canDelegateList && !modelDraft" :label="$t('system.flow.tabDelegation')" name="delegates">
               <div style="margin-bottom:12px">
-                <el-button v-if="canDelegateCreate" type="primary" size="small" @click="openDelegateDialog(null)">新增委托</el-button>
+                <el-button v-if="canDelegateCreate" type="primary" size="small" @click="openDelegateDialog(null)">{{ $t('system.flow.btnAddDelegate') }}</el-button>
               </div>
               <SkeletonList v-if="loading.delegates" :rows="8" :cols="5" />
               <el-table :data="delegates" size="small" stripe v-else @row-dblclick="openRowDetail">
-                <el-table-column prop="fromUserName" label="委托人" width="120" />
-                <el-table-column prop="toUserName" label="代理人" width="120" />
-                <el-table-column prop="bizTypes" label="适用单据" min-width="180">
+                <el-table-column prop="fromUserName" :label="$t('system.flow.colDelegator')" width="120" />
+                <el-table-column prop="toUserName" :label="$t('system.flow.colDelegate')" width="120" />
+                <el-table-column prop="bizTypes" :label="$t('system.flow.colAppliesTo')" min-width="180">
                   <template #default="{ row }">{{ delegateScopeLabel(row.bizTypes) }}</template>
                 </el-table-column>
-                <el-table-column prop="beginTime" label="开始时间" width="150"
+                <el-table-column prop="beginTime" :label="$t('system.flow.colStartAt')" width="150"
                                  :formatter="(row, col) => formatDateTime(row[col.property])" />
-                <el-table-column prop="endTime" label="结束时间" width="150"
+                <el-table-column prop="endTime" :label="$t('system.flow.colEndAt')" width="150"
                                  :formatter="(row, col) => formatDateTime(row[col.property])" />
-                <el-table-column prop="status" label="状态" width="90">
+                <el-table-column prop="status" :label="$t('common.status')" width="90">
                   <template #default="{ row }">
-                    <el-tag size="small" :type="row.status === 'NORMAL' ? 'success' : row.status === 'EXPIRED' ? 'info' : 'danger'">{{ row.status === 'NORMAL' ? '启用' : row.status === 'EXPIRED' ? '已过期' : '停用' }}</el-tag>
+                    <el-tag size="small" :type="row.status === 'NORMAL' ? 'success' : row.status === 'EXPIRED' ? 'info' : 'danger'">{{ row.status === 'NORMAL' ? t('system.common.btnEnable') : row.status === 'EXPIRED' ? t('system.flow.stExpired') : t('system.common.btnDeactivate') }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="100" fixed="right">
+                <el-table-column :label="$t('common.operation')" width="100" fixed="right">
                   <template #default="{ row }">
-                    <el-button v-if="canDelegateUpdate" link type="danger" size="small" @click="cancelDelegate(row)">取消</el-button>
+                    <el-button v-if="canDelegateUpdate" link type="danger" size="small" @click="cancelDelegate(row)">{{ $t('common.cancel') }}</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -348,8 +344,8 @@
         </el-card>
 
         <el-card v-else shadow="never">
-          <el-empty v-if="canAnyDetail" description="请从左侧选择一个流程模型，查看其节点配置、流程绑定、运行实例等详情" :image-size="80" />
-          <el-empty v-else description="当前账号仅有流程模型查看权限，如需节点配置／流程绑定／运行实例等信息请联系数据配置管理员" :image-size="80" />
+          <el-empty v-if="canAnyDetail" :description="$t('system.flow.hintPickModel')" :image-size="80" />
+          <el-empty v-else :description="$t('system.flow.hintViewOnly')" :image-size="80" />
         </el-card>
       </el-col>
     </el-row>
@@ -357,322 +353,319 @@
     <!-- 模型新增/编辑弹窗已内联在基本信息Tab，此处省略 -->
 
     <!-- 节点编辑弹窗 -->
-    <el-dialog v-model="nodeDialog.visible" :title="nodeDialog.editing ? '编辑节点' : '新增节点'" width="600px" destroy-on-close>
+    <el-dialog v-model="nodeDialog.visible" :title="nodeDialog.editing ? t('system.flow.dlgEditNode') : t('system.flow.btnAddNode')" width="600px" destroy-on-close>
       <el-form ref="nodeFormRef" :model="nodeDialog.form" :rules="nodeFormRules" label-width="120px" size="default">
-        <el-form-item label="节点编码" prop="nodeKey"><el-input v-model="nodeDialog.form.nodeKey" /></el-form-item>
-        <el-form-item label="节点名称" prop="nodeName"><el-input v-model="nodeDialog.form.nodeName" /></el-form-item>
+        <el-form-item :label="$t('system.flow.colNodeCode')" prop="nodeKey"><el-input v-model="nodeDialog.form.nodeKey" /></el-form-item>
+        <el-form-item :label="$t('system.flow.colNodeName')" prop="nodeName"><el-input v-model="nodeDialog.form.nodeName" /></el-form-item>
         <!-- F1-6（体检 E-06b）：原「节点类型」下拉已摘除。wf_node_config 没有 node_type 列，
              后端也不消费该键（全仓 Java 检索仅 XML DOM 的 Node.getNodeType()），
              留着等于让配置员以为选「抄送」就能产生抄送。真正的抄送走下方「办结后抄送 / 抄送角色」。 -->
-        <el-form-item label="审批人类型">
+        <el-form-item :label="$t('system.flow.lblApproverType')">
           <el-select v-model="nodeDialog.form.assignType" style="width:100%" @change="onAssignTypeChange">
-            <el-option label="指定用户" value="USER" />
-            <el-option label="指定角色" value="ROLE" />
-            <el-option label="发起人" value="INITIATOR" />
-            <el-option label="逐级上级（沿汇报线上收 N 级）" value="DEPT_LEADER_UP" />
+            <el-option :label="$t('system.flow.optAssigneeUser')" value="USER" />
+            <el-option :label="$t('system.flow.optAssigneeRole')" value="ROLE" />
+            <el-option :label="$t('system.flow.colInitiator')" value="INITIATOR" />
+            <el-option :label="$t('system.flow.optAssigneeChain')" value="DEPT_LEADER_UP" />
           </el-select>
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            需要沿汇报线取人时，可用「指定角色」＋角色编码 DIRECT_SUPERVISOR（直线上级，固定 1 级），
-            或用「逐级上级」＋下方「升级层级」（向上第 N 级，跳过发起人本人与 admin，
-            级数不足取已到最高级，再退单据所属公司的组织负责人）。
+            {{ $t('system.flow.hintSupervisorRole') }}
+            {{ $t('system.flow.txtUseLeaderUp') }}
+            {{ $t('system.flow.txtLevelFallbackTail') }}
           </div>
         </el-form-item>
-        <el-form-item v-if="nodeDialog.form.assignType !== 'INITIATOR' && nodeDialog.form.assignType !== 'DEPT_LEADER_UP'" label="审批人取值" prop="assignValue">
+        <el-form-item v-if="nodeDialog.form.assignType !== 'INITIATOR' && nodeDialog.form.assignType !== 'DEPT_LEADER_UP'" :label="$t('system.flow.lblApproverValue')" prop="assignValue">
           <el-input v-model="nodeDialog.form.assignValue" :placeholder="assignValuePlaceholder" />
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">{{ assignValueHint }}</div>
           <RoleHolderHint v-if="nodeDialog.form.assignType === 'ROLE'" :role-code="firstAssignRole" />
         </el-form-item>
-        <el-form-item label="取人方式">
+        <el-form-item :label="$t('system.flow.lblAssignMode')">
           <el-select v-model="nodeDialog.form.handlingMode" style="width:100%">
-            <el-option label="自动指派（按上面的范围取一人）" value="AUTO" />
+            <el-option :label="$t('system.flow.optPickAuto')" value="AUTO" />
             <!-- 点名/任务池两个取值只在 ROLE 分支被消费；配到别的类型上是假功能，直接置灰 -->
-            <el-option label="上一环节指定（审批人从候选里点一人）" value="PICK"
+            <el-option :label="$t('system.flow.optPickPrev')" value="PICK"
                        :disabled="nodeDialog.form.assignType !== 'ROLE'" />
-            <el-option label="任务池领取（不自动指派，候选人自己领取锁定）" value="POOL"
+            <el-option :label="$t('system.flow.optPickPool')" value="POOL"
                        :disabled="nodeDialog.form.assignType !== 'ROLE'" />
           </el-select>
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            PICK 需总开关放行才生效：系统参数 approve.pick_mode.enabled=1 且本流程 model_key 在
-            approve.pick_mode.models 白名单内，否则一律按自动指派执行。
-            POOL＝任务池：节点不自动指派，任务停在「待领取」态，同池候选人在「我的待办」点「领取」锁定办理
-            （并发抢单只有一人成功），办不动可「释放」退回任务池；无人可领时仍按下面的空策略兜底。
-            候选人只有一人时不会弹选人框，只在审批弹窗里显示"将流转给谁"。
-            <span v-if="nodeDialog.form.assignType !== 'ROLE'">「上一环节指定」「任务池领取」仅适用于审批人类型=指定角色的节点。</span>
+            {{ $t('system.flow.hintPickNeedsSwitch') }}
+            {{ $t('system.flow.hintPickWhitelistTail') }}
+            {{ $t('system.flow.hintPoolMeaning') }}
+            {{ $t('system.flow.hintPoolFallbackTail') }}
+            {{ $t('system.flow.hintSingleCandidate') }}
+            <span v-if="nodeDialog.form.assignType !== 'ROLE'">{{ $t('system.flow.hintPickModes') }}</span>
           </div>
         </el-form-item>
-        <el-form-item label="会签模式">
+        <el-form-item :label="$t('system.flow.lblCountersign')">
           <!-- wf_node_config.multi_type：后端 WfBpmnTemplateService 只消费 ALL/SEQ/VOTE（P1，2026-09-23）。
                选中后本次「发布」会为该节点生成 BPMN multiInstanceLoopCharacteristics 多实例任务。 -->
           <el-select v-model="nodeDialog.form.multiType" style="width:100%">
-            <el-option label="任一通过（单人办理，默认）" value="ANY" />
-            <el-option label="会签（全员通过才流转）" value="ALL" />
-            <el-option label="顺序会签（按顺序逐个办理）" value="SEQ" />
-            <el-option label="票签（按比例通过）" value="VOTE" />
+            <el-option :label="$t('system.flow.optCsAny')" value="ANY" />
+            <el-option :label="$t('system.flow.optCsAll')" value="ALL" />
+            <el-option :label="$t('system.flow.optCsSequential')" value="SEQ" />
+            <el-option :label="$t('system.flow.optCsVote')" value="VOTE" />
           </el-select>
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            候选人来自上面的「审批人类型/取值」——会签只在<b>按角色取到多人</b>时才有意义；
-            取值只解析出 1 人时退化为单人办理。选「会签/顺序会签/票签」后<b>必须重新「发布」模型</b>
-            （save≠deploy）才会生成多实例任务，仅保存节点配置不会生效。
-            <br />「发布」只是把当前画布的 XML 原样部署一次：多实例写在 XML 里才会生效。若本模型画布不是由
-            节点配置生成的（导入/手绘），发布也不会补上多实例——需先在设计器里为该节点加上
-            multiInstanceLoopCharacteristics 再保存并发布。可在「设计器」中查看 XML 是否已包含。
+            {{ $t('system.flow.txtCsCandidateFrom') }}<b>{{ $t('system.flow.txtRoleMultiCandidates') }}</b>{{ $t('system.flow.txtCsMeaningTail') }}
+            {{ $t('system.flow.txtSingleFallback') }}<b>{{ $t('system.flow.txtRepublishRequired') }}</b>
+            {{ $t('system.flow.txtSaveNotDeployTail') }}
+            <br />{{ $t('system.flow.hintPublishDeploysXml') }}
+            {{ $t('system.flow.txtNotFromConfig') }}
+            {{ $t('system.flow.txtXmlCheckTail') }}
           </div>
         </el-form-item>
-        <el-form-item v-if="nodeDialog.form.multiType === 'VOTE'" label="票签阈值(%)">
+        <el-form-item v-if="nodeDialog.form.multiType === 'VOTE'" :label="$t('system.flow.lblVoteRatio')">
           <el-input-number v-model="nodeDialog.form.voteRatio" :min="1" :max="100" :step="5" style="width:100%" />
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            赞成票占比 ≥ 该阈值即<b>提前通过</b>并终止剩余投票任务；反对票占比 &gt; (100−该阈值) 即提前否决。
-            例：3 人节点阈值 50% ⇒ 2 票赞成即通过（无需等第 3 票）。缺省 50。
+            {{ $t('system.flow.txtVotePassHead') }}<b>{{ $t('system.flow.txtEarlyApprove') }}</b>{{ $t('system.flow.txtVoteRejectTail') }}
+            {{ $t('system.flow.txtVoteExample') }}
           </div>
         </el-form-item>
-        <el-form-item label="超时小时数">
+        <el-form-item :label="$t('system.flow.lblTimeoutHours')">
           <el-input-number v-model="nodeDialog.form.timeoutHours" :min="0" :step="1" style="width:100%" />
         </el-form-item>
-        <el-form-item label="超时动作">
+        <el-form-item :label="$t('system.flow.lblTimeoutAction')">
           <!-- WfTimeoutJob 真消费的三档。存量/外部拼写由服务端 WfTimeoutJob.normalizeAction 归一：
                AUTO_REMIND / REMIND / URGE / NOTIFY → 催办；TRANSFER / ESCALATE / AUTO_ESCALATE /
                REDISTRIBUTE / AUTO_TRANSFER → 升级；AUTO_PASS → 自动通过。 -->
           <el-select v-model="nodeDialog.form.timeoutAction" style="width:100%">
-            <el-option label="催办通知" value="NOTIFY" />
-            <el-option label="催办N次后升级（有缓冲期）" value="ESCALATE_AFTER_URGES" />
-            <el-option label="超时自动通过" value="AUTO_PASS" />
-            <el-option label="超时升级转办（ESCALATE，SLA一到立即升）" value="ESCALATE" />
+            <el-option :label="$t('system.flow.optActRemind')" value="NOTIFY" />
+            <el-option :label="$t('system.flow.optRemindEscalate')" value="ESCALATE_AFTER_URGES" />
+            <el-option :label="$t('system.flow.optTimeoutAuto')" value="AUTO_PASS" />
+            <el-option :label="$t('system.flow.optTimeoutEscalate')" value="ESCALATE" />
           </el-select>
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            四档都会真实执行：催办＝站内信发给办理人（未认领的候选组/任务池任务发给候选人，同一任务 24 小时内只催一次）；
-            催办N次后升级＝先催办，累计满 <code>sys_config.wf.timeout.escalate.after_urges</code>（缺省 3）次仍无人办理才升级；
-            自动通过＝写 AUTO_PASS 审批历史并给下一环节取人推进，且需命中 <code>wf.timeout.autopass.nodes</code> 白名单，否则降级为催办；
-            升级＝写 ESCALATE 历史、改派给沿汇报线的真实上级并同步待办。
-            升级解析不到真人时退化为催办，<b>绝不转给 admin</b>。
+            {{ $t('system.flow.hintTimeoutActsReal') }}
+            {{ $t('system.flow.txtUrgeThenEscalate') }} <code>sys_config.wf.timeout.escalate.after_urges</code>{{ $t('system.flow.txtEscalateAfterTail') }}
+            {{ $t('system.flow.txtAutoPassNeeds') }} <code>wf.timeout.autopass.nodes</code> {{ $t('system.flow.txtAutopassGateTail') }}
+            {{ $t('system.flow.txtEscalateMeans') }}
+            {{ $t('system.flow.txtEscalateNoPerson') }}<b>{{ $t('system.flow.txtNeverAdmin') }}</b>。
           </div>
         </el-form-item>
         <el-form-item
           v-if="nodeDialog.form.assignType === 'DEPT_LEADER_UP' || isEscalateAction(nodeDialog.form.timeoutAction) || nodeDialog.form.emptyStrategy === 'ESCALATE'"
-          label="升级层级">
+          :label="$t('system.flow.lblEscalateLevels')">
           <el-input-number v-model="nodeDialog.form.upLevel" :min="0" :max="10" :step="1" style="width:100%" />
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            沿部门汇报线向上取第几级真实负责人（跳过发起人本人、跳过 admin，同一人只计一次，最多 10 跳）。
-            0 或 1 都表示升 1 级；级数不足时取已到最高一级，再退单据所属公司的组织负责人。
-            <b>本字段同时被三处消费</b>：审批人类型=逐级上级（取人）、超时动作=升级、无候选空策略=升级。
+            {{ $t('system.flow.hintUpLevelScope') }}
+            {{ $t('system.flow.txtLevelZeroOne') }}
+            <b>{{ $t('system.flow.txtConsumedThree') }}</b>{{ $t('system.flow.txtThreeConsumersTail') }}
           </div>
         </el-form-item>
-        <el-form-item label="无候选空策略">
+        <el-form-item :label="$t('system.flow.lblEmptyPolicy')">
           <!-- NodeOrgResolver.applyEmptyStrategy 真消费的三档；ADMIN 档被写入闸拒绝（铁律：admin 禁入流程） -->
-          <el-select v-model="nodeDialog.form.emptyStrategy" style="width:100%" placeholder="缺省 ERROR">
-            <el-option label="报错阻断（默认：暴露缺配，人工补授权）" value="ERROR" />
-            <el-option label="沿汇报线升级到真实负责人" value="ESCALATE" />
-            <el-option label="自动跳过该节点" value="SKIP" />
+          <el-select v-model="nodeDialog.form.emptyStrategy" style="width:100%" :placeholder="$t('system.flow.lblEmptyDefault')">
+            <el-option :label="$t('system.flow.optEmptyBlock')" value="ERROR" />
+            <el-option :label="$t('system.flow.optEmptyEscalate')" value="ESCALATE" />
+            <el-option :label="$t('system.flow.optEmptySkip')" value="SKIP" />
           </el-select>
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            仅当按角色取人在本单据所属公司下解析不到任何候选办理人时触发；新建节点不填即 ERROR（报错阻断）。
-          </div>
+            {{ $t('system.flow.hintEmptyPolicy') }}</div>
         </el-form-item>
-        <el-form-item label="允许转办">
+        <el-form-item :label="$t('system.flow.lblAllowTransfer')">
           <el-switch v-model="nodeDialog.form.allowTransfer" :active-value="1" :inactive-value="0" />
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            关掉后本节点办理人不能把待办手工转给他人（服务端 transfer 直接拒绝）；确需换人由流程管理员「改派」处理。
-            超时自动转办不受此开关影响，它由上面的「超时动作」决定。缺省=允许。
+            {{ $t('system.flow.hintTransferOff') }}
+            {{ $t('system.flow.txtAutoTransferUnaffected') }}
           </div>
         </el-form-item>
-        <el-form-item label="允许加签">
+        <el-form-item :label="$t('system.flow.lblAllowAddSign')">
           <el-switch v-model="nodeDialog.form.allowAddsign" :active-value="1" :inactive-value="0" />
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            关掉后本节点不能发起前/后加签（服务端 addSign 直接拒绝，待办里的「加签」按钮同时隐藏）。
-            该开关需先由管理员打开灰度总闸 <code>approve.addsign_gate.enabled</code> 并把本流程列入
-            <code>approve.addsign_gate.models</code> 才生效。
-          </div>
+            {{ $t('system.flow.hintAddSignOff') }}
+            {{ $t('system.flow.txtNeedsGraySwitch') }} <code>approve.addsign_gate.enabled</code> {{ $t('system.flow.txtAddsignGateList') }}
+            <code>approve.addsign_gate.models</code> {{ $t('system.flow.txtGateSuffix') }}</div>
         </el-form-item>
-        <el-form-item label="提单即完成">
+        <el-form-item :label="$t('system.flow.lblSubmitDone')">
           <!-- F10（2026-09-24）：把"首节点不产生人工待办"从节点名猜测改为显式属性 first_node_auto_pass。
                后端 WfEngineFacade.autoSkipSelfConfirmFirstNode / firstApprovalNodeKeys 真消费本字段。
                不给「未配置」选项：存量行已由 V2.2.0_g4_governance_20260924.sql 显式 seed，
                后端对 null 不做更新（updateById 跳过 null），故「未配置」选项在已保存行上不可回退，
                只留 是/否 两态，未选择时由 placeholder 说明回退旧判据。 -->
           <el-select v-model="nodeDialog.form.firstNodeAutoPass" style="width:100%" clearable
-                     placeholder="未配置（按旧判据：节点名含「提交」）">
-            <el-option label="是：提单即完成，本节点不产生人工待办" :value="1" />
-            <el-option label="否：本节点必须人工办理" :value="0" />
+                     :placeholder="$t('system.flow.optLegacyJudge')">
+            <el-option :label="$t('system.flow.optSubmitDone')" :value="1" />
+            <el-option :label="$t('system.flow.optManualRequired')" :value="0" />
           </el-select>
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            只对<b>流程第一个用户任务</b>有意义：置「是」时发起流程即自动完成该节点、直接落到第二个节点，
-            提交人不需再点一次「提交」（原逻辑靠节点名含「提交」二字判定，属"节点名承载控制流"）。
-            留空＝未配置，仍按旧判据（节点名含「提交」）判定，保证上线行为零变化；
-            建议逐节点显式选择「是/否」，此后不再依赖节点名。POOL 任务池节点不受本开关影响（作业须留痕到人）。
+            {{ $t('system.flow.txtAppliesOnlyTo') }}<b>{{ $t('system.flow.txtFirstTask') }}</b>{{ $t('system.flow.txtAutoSubmitMeaning') }}
+            {{ $t('system.flow.txtNoExtraSubmit') }}
+            {{ $t('system.flow.txtBlankKeepsOld') }}
+            {{ $t('system.flow.txtSuggestExplicit') }}
           </div>
         </el-form-item>
         <!-- G2 传阅（2026-09-23）：节点办结后自动抄送。后端 WfCcService 真消费这两个字段；
              与上面的「办理人取值」不同——抄送人不参与取人、不影响流程走向，只往 wf_cc 投递记录。 -->
-        <el-form-item label="办结后抄送">
-          <el-input v-model="nodeDialog.form.ccUsers" placeholder="抄送人用户ID，英文逗号分隔，如 3892,3893（可留空）" />
+        <el-form-item :label="$t('system.flow.lblCcAfter')">
+          <el-input v-model="nodeDialog.form.ccUsers" :placeholder="$t('system.flow.phCcUserIds')" />
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            本节点<b>审批通过并推进</b>后，自动把单据抄送给这些人（出现在其「流程中心 · 我的抄送」）。
-            驳回不投递（驳回会终止实例，已有独立的终止通知链路）；抄送给操作人自己会被自动剔除。
-            同一实例同一节点对同一人只投递一次（库层唯一键兜底）。
+            {{ $t('system.flow.txtCcNodeHead') }}<b>{{ $t('system.flow.txtAdvance') }}</b>{{ $t('system.flow.txtCcNodeTail') }}
+            {{ $t('system.flow.txtRejectNotDelivered') }}
+            {{ $t('system.flow.txtOncePerPerson') }}
           </div>
         </el-form-item>
-        <el-form-item label="抄送角色">
-          <el-input v-model="nodeDialog.form.ccRoles" placeholder="角色编码，英文逗号分隔，如 FIN_AUDIT,FIN_MANAGER（可留空）" />
+        <el-form-item :label="$t('system.flow.lblCcRoles')">
+          <el-input v-model="nodeDialog.form.ccRoles" :placeholder="$t('system.flow.phCcRoleCodes')" />
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            运行期展开为该角色在本租户下的<b>在职</b>成员（含用户组派生角色），与「办结后抄送」的用户ID取并集后去重投递。
-            <b> 节点编码必须与已部署 BPMN 的 userTask id 完全一致</b>：配置表按设计位置连续编号 Task_1..N，
-            而真实 BPMN 的 userTask id 常常跳号（缺 Task_1/Task_5 等），编码对不上的行属「孤儿行」——
-            后端<b>精确匹配、不读其任何配置</b>（超时与抄送一并不生效）。配置前可先用
-            <code>scripts/_audit_timeout_action.py</code> 的 ⓪ 体检确认本节点不是孤儿。
-          </div>
+            {{ $t('system.flow.txtCcRoleExpandHead') }}<b>{{ $t('system.flow.txtOnDuty') }}</b>{{ $t('system.flow.txtCcRoleExpandTail') }}
+            <b>{{ $t('system.flow.warnNodeCode') }}</b>{{ $t('system.flow.txtNodeNoNumbering') }}
+            {{ $t('system.flow.txtOrphanRowsTail') }}
+            {{ $t('system.flow.txtBackendWord') }}<b>{{ $t('system.flow.txtExactOnly') }}</b>{{ $t('system.flow.txtOrphanTail') }}
+            <code>scripts/_audit_timeout_action.py</code> {{ $t('system.flow.txtAuditSuffix') }}</div>
         </el-form-item>
         <!-- G2 驳回产品化（2026-09-24）：把"谁能退、能退多远"从私有全局开关落到节点配置上。
               本控件替代了此前的三个死列 allow_reject / reject_to / reject_node
              （全仓零读取、本页原本也无控件，已在 V2.2.0_g2_reject_productize_20260924.sql 中摘除）。 -->
-        <el-form-item label="驳回范围">
+        <el-form-item :label="$t('system.flow.lblRejectRange')">
           <!-- 后端 WfEngineFacade.freeRejectScopeOf() 真消费本字段；生效条件是「本字段 ≠ NONE」且总闸开启 -->
           <el-select v-model="nodeDialog.form.rejectScope" style="width:100%">
-            <el-option label="不允许指定节点驳回（默认）" value="NONE" />
-            <el-option label="只允许退回上一节点" value="PREV_ONE" />
-            <el-option label="允许退回任一已完成节点" value="ANY_DONE" />
+            <el-option :label="$t('system.flow.optRejectNoTarget')" value="NONE" />
+            <el-option :label="$t('system.flow.optRejectPrev')" value="PREV_ONE" />
+            <el-option :label="$t('system.flow.optRejectAnyDone')" value="ANY_DONE" />
           </el-select>
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            指定节点驳回走 Flowable 的「搬执行」，会真实改动在办单据本体，故默认关闭。
-            <b>需同时满足总闸</b>：系统参数 <code>wf.reject.free.enabled=1</code>，否则本字段一律不生效（总闸保留作 kill-switch）。
-            「只允许退回上一节点」时后端会校验目标节点就是链上紧邻的上一已完成节点，越级退回直接报错。
+            {{ $t('system.flow.hintFreeRejectMoveExec') }}
+            <b>{{ $t('system.flow.txtNeedGate') }}</b>{{ $t('system.flow.txtNeedParamLead') }}<code>wf.reject.free.enabled=1</code>{{ $t('system.flow.txtNeedParamTail') }}
+            {{ $t('system.flow.txtRejectPrevCheck') }}
           </div>
         </el-form-item>
-        <el-form-item label="重新提交跳回本节点">
+        <el-form-item :label="$t('system.flow.lblResubmitBack')">
           <el-switch v-model="nodeDialog.form.resubmitJumpBack" :active-value="1" :inactive-value="0" />
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            开启后本节点驳回时把本节点编码记入流程实例变量 <code>rejectOriginNode</code>（可在
-            「驳回可选节点」接口回显中看到），供重新提交路径决定是否跳回本节点重办。缺省=关闭。
+            {{ $t('system.flow.txtRejectOriginHead') }}<code>rejectOriginNode</code>{{ $t('system.flow.txtRejectOriginParen') }}
+            {{ $t('system.flow.txtRejectNodeEcho') }}
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="nodeDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="nodeDialog.saving" @click="saveNode">保存</el-button>
+        <el-button @click="nodeDialog.visible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="nodeDialog.saving" @click="saveNode">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 绑定编辑弹窗 -->
-    <el-dialog v-model="bindingDialog.visible" :title="bindingDialog.editing ? '编辑绑定' : '新增绑定'" width="600px" destroy-on-close>
+    <el-dialog v-model="bindingDialog.visible" :title="bindingDialog.editing ? t('system.flow.dlgEditBinding') : t('system.flow.btnAddBinding')" width="600px" destroy-on-close>
       <el-form ref="bindingFormRef" :model="bindingDialog.form" :rules="bindingFormRules" label-width="120px" size="default">
-        <el-form-item label="单据类型" prop="bizType">
+        <el-form-item :label="$t('field.billType')" prop="bizType">
           <el-select v-model="bindingDialog.form.bizType" filterable allow-create default-first-option style="width:100%">
             <el-option v-for="o in bindingBizTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
           <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            取值必须<b>逐字等于业务代码发起审批时传入的业务类型</b>（如采购订单为 <code>PURCHASE_ORDER_REVIEW</code>），
-            与模型编码不同名时请手动输入；拼错的类型不会报错，只会让该单据永远路由不到流程。
+            {{ $t('system.flow.txtBizTypeValueLead') }}<b>{{ $t('system.flow.hintDocTypeExact') }}</b>{{ $t('system.flow.txtBizTypeExampleLead') }}<code>PURCHASE_ORDER_REVIEW</code>），
+            {{ $t('system.flow.txtBizTypeManual') }}
           </div>
         </el-form-item>
-        <el-form-item label="配置名称" prop="configName"><el-input v-model="bindingDialog.form.configName" /></el-form-item>
-        <el-form-item label="绑定流程模型">
+        <el-form-item :label="$t('system.flow.colCfgName')" prop="configName"><el-input v-model="bindingDialog.form.configName" /></el-form-item>
+        <el-form-item :label="$t('system.flow.lblBindModel')">
           <el-input :model-value="selectedModel?.modelKey" disabled />
         </el-form-item>
-        <el-form-item label="金额下限（含）">
+        <el-form-item :label="$t('system.flow.lblAmountMinIncl')">
           <el-input-number v-model="bindingDialog.form.amountMin" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
-        <el-form-item label="金额上限（不含）">
+        <el-form-item :label="$t('system.flow.lblAmountMaxExcl')">
           <el-input-number v-model="bindingDialog.form.amountMax" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
-        <el-form-item label="优先级">
+        <el-form-item :label="$t('system.flow.colPriority')">
           <el-input-number v-model="bindingDialog.form.priority" :min="0" :step="1" style="width:100%" />
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item :label="$t('common.status')">
           <el-select v-model="bindingDialog.form.status" style="width:100%">
-            <el-option label="启用" value="NORMAL" />
-            <el-option label="停用" value="DISABLED" />
+            <el-option :label="$t('system.common.btnEnable')" value="NORMAL" />
+            <el-option :label="$t('system.common.btnDeactivate')" value="DISABLED" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="bindingDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="bindingDialog.saving" @click="saveBinding">保存</el-button>
+        <el-button @click="bindingDialog.visible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="bindingDialog.saving" @click="saveBinding">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 全局配置编辑弹窗 -->
-    <el-dialog v-model="configDialog.visible" :title="configDialog.editing ? '编辑配置' : '新增配置'" width="600px" destroy-on-close>
+    <el-dialog v-model="configDialog.visible" :title="configDialog.editing ? t('system.flow.dlgEditConfig') : t('system.flow.ttlNewConfig')" width="600px" destroy-on-close>
       <el-form ref="configFormRef" :model="configDialog.form" :rules="configFormRules" label-width="120px" size="default">
-        <el-form-item label="配置类型" prop="cfgType">
+        <el-form-item :label="$t('system.flow.colCfgType')" prop="cfgType">
           <el-select v-model="configDialog.form.cfgType" style="width:100%" @change="onCfgTypeChange">
-            <el-option label="金额阈值" value="THRESHOLD" />
-            <el-option label="超时处理" value="TIMEOUT" />
-            <el-option label="审批动作" value="ACTION" />
-            <el-option label="外部集成" value="INTEGRATION" />
+            <el-option :label="$t('system.flow.tabAmountRule')" value="THRESHOLD" />
+            <el-option :label="$t('system.flow.tabTimeout')" value="TIMEOUT" />
+            <el-option :label="$t('system.flow.tabActions')" value="ACTION" />
+            <el-option :label="$t('system.flow.tabIntegration')" value="INTEGRATION" />
           </el-select>
         </el-form-item>
-        <el-form-item label="配置编码" prop="cfgCode"><el-input v-model="configDialog.form.cfgCode" /></el-form-item>
-        <el-form-item label="配置名称" prop="cfgName"><el-input v-model="configDialog.form.cfgName" /></el-form-item>
+        <el-form-item :label="$t('system.flow.colCfgCode')" prop="cfgCode"><el-input v-model="configDialog.form.cfgCode" /></el-form-item>
+        <el-form-item :label="$t('system.flow.colCfgName')" prop="cfgName"><el-input v-model="configDialog.form.cfgName" /></el-form-item>
 
         <!-- ===== 按配置类型动态渲染结构化表单 ===== -->
         <!-- 金额阈值 -->
         <template v-if="configDialog.form.cfgType === 'THRESHOLD'">
-          <el-form-item label="金额下限（含）">
+          <el-form-item :label="$t('system.flow.lblAmountMinIncl')">
             <el-input-number v-model="configDialog.cfgData.min" :min="0" :precision="2" :step="1000" style="width:100%" />
           </el-form-item>
-          <el-form-item label="金额上限（不含）">
+          <el-form-item :label="$t('system.flow.lblAmountMaxExcl')">
             <el-input-number v-model="configDialog.cfgData.max" :min="0" :precision="2" :step="1000" style="width:100%" />
           </el-form-item>
-          <el-form-item label="审批级别">
+          <el-form-item :label="$t('system.flow.lblApproveLevel')">
             <el-input-number v-model="configDialog.cfgData.level" :min="1" :max="10" :step="1" style="width:100%" />
-            <div class="cfg-hint">级别越高，审批链路越长</div>
+            <div class="cfg-hint">{{ $t('system.flow.hintLevelLonger') }}</div>
           </el-form-item>
         </template>
 
         <!-- 超时处理 -->
         <template v-else-if="configDialog.form.cfgType === 'TIMEOUT'">
-          <el-form-item label="超时小时数">
+          <el-form-item :label="$t('system.flow.lblTimeoutHours')">
             <el-input-number v-model="configDialog.cfgData.timeoutHours" :min="1" :max="720" :step="1" style="width:100%" />
           </el-form-item>
-          <el-form-item label="超时动作">
+          <el-form-item :label="$t('system.flow.lblTimeoutAction')">
             <!-- 全局规则走 WfTimeoutJob.handle 的 targetRole 分支；AUTO_APPROVE 无任何消费方，已摘除。
                  注意：AUTO_ESCALATE/REDISTRIBUTE 必须填目标角色编码才有效果（空角色=只留日志） -->
             <el-select v-model="configDialog.cfgData.action" style="width:100%">
-              <el-option label="通知负责人" value="NOTIFY" />
-              <el-option label="自动升级上一级（加候选角色）" value="AUTO_ESCALATE" />
-              <el-option label="自动转派备用岗（加候选角色）" value="REDISTRIBUTE" />
+              <el-option :label="$t('system.flow.optNotifyOwner')" value="NOTIFY" />
+              <el-option :label="$t('system.flow.optAutoEscalate')" value="AUTO_ESCALATE" />
+              <el-option :label="$t('system.flow.optAutoReassign')" value="REDISTRIBUTE" />
             </el-select>
           </el-form-item>
-          <el-form-item v-if="configDialog.cfgData.action === 'AUTO_ESCALATE' || configDialog.cfgData.action === 'REDISTRIBUTE'" label="目标角色编码">
-            <el-input v-model="configDialog.cfgData.targetRole" placeholder="如 FIN_MANAGER，为空则升级/转派不生效" />
+          <el-form-item v-if="configDialog.cfgData.action === 'AUTO_ESCALATE' || configDialog.cfgData.action === 'REDISTRIBUTE'" :label="$t('system.flow.lblTargetRoleCode')">
+            <el-input v-model="configDialog.cfgData.targetRole" :placeholder="$t('system.flow.phTargetRoleCode')" />
           </el-form-item>
-          <el-form-item label="通知用户">
-            <el-input v-model="configDialog.cfgData.notifyUsers" placeholder="多用户逗号分隔，如 zhangsan,lisi" />
+          <el-form-item :label="$t('system.flow.lblNotifyUsers')">
+            <el-input v-model="configDialog.cfgData.notifyUsers" :placeholder="$t('system.flow.phNotifyUsers')" />
           </el-form-item>
-          <el-form-item label="超时前提醒(h)">
+          <el-form-item :label="$t('system.flow.lblRemindBefore')">
             <el-input-number v-model="configDialog.cfgData.remindBefore" :min="0" :max="48" :step="1" style="width:100%" />
-            <div class="cfg-hint">提前多少小时提醒，0=不提醒</div>
+            <div class="cfg-hint">{{ $t('system.flow.hintRemindHours') }}</div>
           </el-form-item>
         </template>
 
         <!-- 审批动作 -->
         <template v-else-if="configDialog.form.cfgType === 'ACTION'">
-          <el-form-item label="审批动作">
+          <el-form-item :label="$t('system.flow.tabActions')">
             <el-select v-model="configDialog.cfgData.action" style="width:100%">
-              <el-option label="通过" value="APPROVE" />
-              <el-option label="驳回" value="REJECT" />
-              <el-option label="转办" value="TRANSFER" />
-              <el-option label="加签" value="ADDSIGN" />
+              <el-option :label="$t('field.approve')" value="APPROVE" />
+              <el-option :label="$t('field.reject')" value="REJECT" />
+              <el-option :label="$t('system.flow.optActionTransfer')" value="TRANSFER" />
+              <el-option :label="$t('system.flow.optActionAddSign')" value="ADDSIGN" />
             </el-select>
           </el-form-item>
-          <el-form-item label="自动通过">
+          <el-form-item :label="$t('system.flow.optActionAutoApprove')">
             <el-switch v-model="configDialog.cfgData.autoApprove" />
           </el-form-item>
-          <el-form-item label="允许撤回">
+          <el-form-item :label="$t('system.flow.lblWithdrawable')">
             <el-switch v-model="configDialog.cfgData.allowWithdraw" />
           </el-form-item>
-          <el-form-item label="默认备注">
-            <el-input v-model="configDialog.cfgData.comment" type="textarea" :rows="2" placeholder="审批时默认填入的备注" />
+          <el-form-item :label="$t('system.flow.lblDefaultRemark')">
+            <el-input v-model="configDialog.cfgData.comment" type="textarea" :rows="2" :placeholder="$t('system.flow.phDefaultRemark')" />
           </el-form-item>
         </template>
 
         <!-- 外部集成 -->
         <template v-else-if="configDialog.form.cfgType === 'INTEGRATION'">
-          <el-form-item label="系统名称">
-            <el-input v-model="configDialog.cfgData.systemName" placeholder="如 ERP、OA、HR" />
+          <el-form-item :label="$t('system.flow.lblSystemName')">
+            <el-input v-model="configDialog.cfgData.systemName" :placeholder="$t('system.flow.phSystemName')" />
           </el-form-item>
-          <el-form-item label="接口地址">
+          <el-form-item :label="$t('system.flow.lblEndpoint')">
             <el-input v-model="configDialog.cfgData.apiUrl" placeholder="https://..." />
           </el-form-item>
-          <el-form-item label="HTTP方法">
+          <el-form-item :label="$t('system.flow.lblHttpMethod')">
             <el-select v-model="configDialog.cfgData.method" style="width:100%">
               <el-option label="GET" value="GET" />
               <el-option label="POST" value="POST" />
@@ -680,144 +673,142 @@
               <el-option label="DELETE" value="DELETE" />
             </el-select>
           </el-form-item>
-          <el-form-item label="重试次数">
+          <el-form-item :label="$t('system.flow.lblRetryCount')">
             <el-input-number v-model="configDialog.cfgData.retryTimes" :min="0" :max="10" :step="1" style="width:100%" />
           </el-form-item>
-          <el-form-item label="超时秒数">
+          <el-form-item :label="$t('system.flow.lblTimeoutSeconds')">
             <el-input-number v-model="configDialog.cfgData.timeoutSeconds" :min="1" :max="300" :step="1" style="width:100%" />
           </el-form-item>
         </template>
 
         <!-- 未匹配的配置类型回退到 JSON textarea -->
-        <el-form-item v-else label="配置内容 JSON">
-          <el-input v-model="configDialog.form.cfgJson" type="textarea" :rows="6" placeholder='如 {"min":5000,"max":50000,"level":2}' />
+        <el-form-item v-else :label="$t('system.flow.lblConfigJson')">
+          <el-input v-model="configDialog.form.cfgJson" type="textarea" :rows="6" :placeholder="$t('system.flow.phCfgJsonFallback')" />
         </el-form-item>
 
-        <el-form-item label="状态">
+        <el-form-item :label="$t('common.status')">
           <el-select v-model="configDialog.form.status" style="width:100%">
-            <el-option label="正常" value="NORMAL" />
-            <el-option label="停用" value="DISABLED" />
+            <el-option :label="$t('system.common.stNormal')" value="NORMAL" />
+            <el-option :label="$t('system.common.btnDeactivate')" value="DISABLED" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="configDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="configDialog.saving" @click="saveConfig">保存</el-button>
+        <el-button @click="configDialog.visible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="configDialog.saving" @click="saveConfig">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 委托代理弹窗 -->
-    <el-dialog v-model="delegateDialog.visible" title="新增委托代理" width="600px" destroy-on-close>
+    <el-dialog v-model="delegateDialog.visible" :title="$t('system.flow.ttlNewDelegate')" width="600px" destroy-on-close>
       <el-form ref="delegateFormRef" :model="delegateDialog.form" :rules="delegateFormRules" label-width="120px" size="default">
-        <el-form-item label="委托人">
+        <el-form-item :label="$t('system.flow.colDelegator')">
           <!-- 后端硬校验「委托人必须是当前登录用户」⇒ 系统带出只读值，按 Q1 口径不加红星 -->
           <el-input :model-value="currentUserName" disabled />
         </el-form-item>
-        <el-form-item label="代理人" prop="toUserId">
+        <el-form-item :label="$t('system.flow.colDelegate')" prop="toUserId">
           <UserSelect v-model="delegateDialog.form.toUserId" show-dept />
         </el-form-item>
-        <el-form-item label="适用单据类型">
-          <el-input v-model="delegateDialog.form.bizTypes" placeholder="逗号分隔，空=全部。如 EXP_CLAIM,EXP_LOAN" />
+        <el-form-item :label="$t('system.flow.lblApplyDocTypes')">
+          <el-input v-model="delegateDialog.form.bizTypes" :placeholder="$t('system.flow.phApplyDocTypes')" />
         </el-form-item>
-        <el-form-item label="开始时间" prop="beginTime">
+        <el-form-item :label="$t('system.flow.colStartAt')" prop="beginTime">
           <!-- 后端 Jackson 只认 ISO 'T' 分隔，空格格式会 500（同 MyDelegate.vue） -->
           <el-date-picker v-model="delegateDialog.form.beginTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width:100%" />
         </el-form-item>
-        <el-form-item label="结束时间" prop="endTime">
+        <el-form-item :label="$t('system.flow.colEndAt')" prop="endTime">
           <el-date-picker v-model="delegateDialog.form.endTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width:100%" />
         </el-form-item>
-        <el-form-item label="委托原因">
+        <el-form-item :label="$t('system.flow.lblDelegateReason')">
           <el-input v-model="delegateDialog.form.reason" type="textarea" :rows="3" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="delegateDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="delegateDialog.saving" @click="saveDelegate">保存</el-button>
+        <el-button @click="delegateDialog.visible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="delegateDialog.saving" @click="saveDelegate">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 校验结果弹窗 -->
-    <el-dialog v-model="checkResult.visible" title="流程校验结果" width="500px">
-      <el-alert v-if="checkResult.data?.valid" type="success" :closable="false" title="校验通过" />
-      <el-alert v-else type="error" :closable="false" title="校验失败" :description="checkResult.data?.message || '未知错误'" />
+    <el-dialog v-model="checkResult.visible" :title="$t('system.flow.ttlCheckResult')" width="500px">
+      <el-alert v-if="checkResult.data?.valid" type="success" :closable="false" :title="$t('system.flow.stCheckPass')" />
+      <el-alert v-else type="error" :closable="false" :title="$t('system.flow.stCheckFail')" :description="checkResult.data?.message || t('system.flow.msgUnknownError')" />
       <div v-if="checkResult.data?.errors?.length" style="margin-top:12px">
         <div v-for="(e, i) in checkResult.data.errors" :key="i" style="color:#f56c6c;margin-bottom:4px">{{ e }}</div>
       </div>
     </el-dialog>
 
     <!-- 模拟结果弹窗 -->
-    <el-dialog v-model="simResult.visible" title="流程模拟" width="600px">
+    <el-dialog v-model="simResult.visible" :title="$t('system.flow.ttlSimulate')" width="600px">
       <el-form :model="simResult" :rules="simRules" label-width="100px" style="margin-bottom:16px">
-        <el-form-item label="模拟金额">
+        <el-form-item :label="$t('system.flow.lblSimAmount')">
           <el-input-number v-model="simResult.amount" :min="0" :precision="2" />
         </el-form-item>
-        <el-form-item label="费用项">
-          <el-input v-model="simResult.itemName" placeholder="可空" />
+        <el-form-item :label="$t('system.flow.lblExpenseItem')">
+          <el-input v-model="simResult.itemName" :placeholder="$t('system.flow.optNullable')" />
         </el-form-item>
-        <el-button type="primary" size="small" @click="runSimulate">执行模拟</el-button>
+        <el-button type="primary" size="small" @click="runSimulate">{{ $t('system.flow.btnRunSim') }}</el-button>
       </el-form>
       <div v-if="simResult.trace?.length">
         <el-timeline>
           <el-timeline-item v-for="(t, i) in simResult.trace" :key="i" :type="t.passed ? 'success' : 'primary'">
             <strong>{{ t.nodeName }}</strong> <small style="color:#999">{{ t.nodeKey }}</small>
-            <div v-if="t.assignee">审批人: {{ t.assignee }}</div>
-            <div v-if="t.action">动作: {{ wfActionLabel(t.action) }}</div>
+            <div v-if="t.assignee">{{ $t('system.flow.ctxApprover', { v1: t.assignee }) }}</div>
+            <div v-if="t.action">{{ $t('system.flow.ctxAction', { v1: wfActionLabel(t.action) }) }}</div>
           </el-timeline-item>
         </el-timeline>
       </div>
-      <el-empty v-else description="点击执行模拟查看路由轨迹" :image-size="60" />
+      <el-empty v-else :description="$t('system.flow.emptySimResult')" :image-size="60" />
     </el-dialog>
 
     <!-- G3-3/G3-4 发布影响面：在途旧实例清单 + 发布 diff 记录（抽屉，不挤占配置页） -->
-    <el-drawer v-model="inFlight.visible" :title="`发布影响面：${inFlight.modelName || ''}`" size="60%" direction="rtl">
+    <el-drawer v-model="inFlight.visible" :title="$t('system.flow.ttlPublishImpact', { v1: inFlight.modelName || '' })" size="60%" direction="rtl">
       <el-tabs v-model="inFlight.tab">
-        <el-tab-pane v-if="canInstanceList" label="在途旧实例" name="inflight">
+        <el-tab-pane v-if="canInstanceList" :label="$t('system.flow.lblStaleInstances')" name="inflight">
           <el-alert type="warning" :closable="false" style="margin-bottom: 10px"
-            :title="`该模型在途 ${inFlight.data?.runningTotal ?? 0} 单，其中 ${inFlight.data?.staleCount ?? 0} 单仍按旧版本流程执行`"
+            :title="$t('system.flow.alertInFlightStale', { v1: inFlight.data?.runningTotal ?? 0, v2: inFlight.data?.staleCount ?? 0 })"
             :description="inFlight.data?.note" />
           <div v-if="Object.keys(inFlight.data?.byProcDef || {}).length" style="margin-bottom:10px; font-size:12px; color:#606266">
-            按流程定义分布：
+            {{ $t('system.flow.lblByProcDefDist') }}
             <el-tag v-for="(c, k) in (inFlight.data?.byProcDef || {})" :key="k" size="small" effect="plain"
               :type="k === inFlight.data?.newProcDefId ? 'success' : 'info'" style="margin-right:6px">
-              {{ k }} · {{ c }} 单
-            </el-tag>
+              {{ $t('system.flow.statInflightCount', { v1: k, v2: c }) }}</el-tag>
           </div>
-          <el-table :data="inFlight.data?.items || []" size="small" stripe max-height="420" empty-text="无在途旧实例">
-            <el-table-column prop="bizNo" label="单号" width="150" show-overflow-tooltip />
-            <el-table-column prop="title" label="标题" min-width="150" show-overflow-tooltip />
-            <el-table-column prop="currentNode" label="当前节点" width="120" />
-            <el-table-column label="在办人" min-width="110">
+          <el-table :data="inFlight.data?.items || []" size="small" stripe max-height="420" :empty-text="$t('system.flow.emptyStale')">
+            <el-table-column prop="bizNo" :label="$t('field.docNo')" width="150" show-overflow-tooltip />
+            <el-table-column prop="title" :label="$t('system.flow.colDocTitle')" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="currentNode" :label="$t('system.flow.colCurrentNode')" width="120" />
+            <el-table-column :label="$t('system.flow.colAssignee')" min-width="110">
               <template #default="{ row }">{{ row.currentAssigneeNames || '—' }}</template>
             </el-table-column>
-            <el-table-column label="停留" width="90" align="right">
-              <template #default="{ row }">{{ row.stayMinutes != null ? row.stayMinutes + ' 分' : '—' }}</template>
+            <el-table-column :label="$t('system.flow.colDwell')" width="90" align="right">
+              <template #default="{ row }">{{ row.stayMinutes != null ? $t('system.flow.textMinutesSuffix', { v1: row.stayMinutes }) : '—' }}</template>
             </el-table-column>
-            <el-table-column label="版本" min-width="150">
+            <el-table-column :label="$t('system.flow.colVer')" min-width="150">
               <template #default="{ row }">
                 <el-tag size="small" :type="row.procDefId === inFlight.data?.newProcDefId ? 'success' : 'warning'" effect="plain">
-                  {{ row.procDefId === inFlight.data?.newProcDefId ? '新版' : '旧版' }}
+                  {{ row.procDefId === inFlight.data?.newProcDefId ? t('system.flow.stNewVer') : t('system.flow.stOldVer') }}
                 </el-tag>
                 <span style="margin-left:4px; font-size:11px; color:#909399">{{ row.procDefId }}</span>
               </template>
             </el-table-column>
           </el-table>
           <div v-if="inFlight.data?.truncated" style="font-size:12px; color:#e6a23c; margin-top:6px">
-            仅显示前 100 条，完整清单请到「流程监控 → 在途实例」按状态 RUNNING 查询。
-          </div>
+            {{ $t('system.flow.hintStaleLimit') }}</div>
         </el-tab-pane>
 
-        <el-tab-pane v-if="canModelUpdate" label="发布记录（diff）" name="history">
+        <el-tab-pane v-if="canModelUpdate" :label="$t('system.flow.ttlReleases')" name="history">
           <div style="font-size:12px; color:#909399; margin-bottom:8px">
-            每次真实部署都会把 BPMN 快照与统一 diff 写入服务端 BPMN 仓库目录（配置 <code>fssc.wf.bpmn-repo-dir</code>），
-            建议将该目录纳入代码仓库，流程变更即可 review / 回滚。
+            {{ $t('system.flow.hintBpmnRepoHead') }}<code>fssc.wf.bpmn-repo-dir</code>），
+            {{ $t('system.flow.txtRepoSuggest') }}
           </div>
-          <el-table :data="inFlight.history" size="small" stripe max-height="420" empty-text="暂无发布记录（发布一次后生成）">
-            <el-table-column prop="time" label="发布时间" width="160" />
-            <el-table-column prop="name" label="diff 文件" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="summary" label="增删" width="100" />
-            <el-table-column label="操作" width="90" fixed="right">
+          <el-table :data="inFlight.history" size="small" stripe max-height="420" :empty-text="$t('system.flow.emptyReleases')">
+            <el-table-column prop="time" :label="$t('system.flow.colPublishedAt')" width="160" />
+            <el-table-column prop="name" :label="$t('system.flow.colDiffFile')" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="summary" :label="$t('system.flow.colDiffCount')" width="100" />
+            <el-table-column :label="$t('common.operation')" width="90" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="loadDiff(row.name)">查看</el-button>
+                <el-button link type="primary" size="small" @click="loadDiff(row.name)">{{ $t('system.common.btnView') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -825,13 +816,13 @@
         </el-tab-pane>
       </el-tabs>
       <template #footer>
-        <el-button size="small" @click="inFlight.visible = false">关闭</el-button>
-        <el-button size="small" type="primary" @click="refreshInFlight">刷新</el-button>
+        <el-button size="small" @click="inFlight.visible = false">{{ $t('common.close') }}</el-button>
+        <el-button size="small" type="primary" @click="refreshInFlight">{{ $t('common.refresh') }}</el-button>
       </template>
     </el-drawer>
   </div>
 
-  <CoachMark ref="flowConfigCm" :guide-key="_guideKey" :selector="'.cm-target-flow'" title="流程配置" text="流程配置页面用于设置审批流程的节点、审批人和条件规则。" />
+  <CoachMark ref="flowConfigCm" :guide-key="_guideKey" :selector="'.cm-target-flow'" :title="$t('system.flow.ttlPage')" :text="$t('system.flow.hintPage')" />
 </template>
 
 <script setup>
@@ -850,11 +841,14 @@ import { formatMoney, formatDateTime, showRowDetail } from '@/utils/format'
 import { hasPerm } from '@/utils/perm'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 const flowConfigCm = ref(null)
 
 // 双击行：展示行数据详情
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('field.detail') })
 }
 
 // ========== 模型列表 ==========
@@ -898,10 +892,10 @@ const canAnyDetail = canNodeList || canConfigList || canInstanceList || canDeleg
 // 被权限裁剪掉的页签说明（拼给 alert 用：原实现静默隐藏，用户只看到"残缺页面"）
 const hiddenTabDesc = computed(() => {
   const miss = []
-  if (!canNodeList) miss.push('节点配置（wf:node:list）')
-  if (!canConfigList) miss.push('流程绑定 / 全局配置（wf:config:list）')
-  if (!canInstanceList) miss.push('运行实例（wf:instance:list）')
-  return '已隐藏 ' + miss.join('、') + '。这些权限当前仅授予「数据配置管理员」等配置类角色，如需查看请联系数据配置管理员开通。'
+  if (!canNodeList) miss.push(t('system.flow.tabNodesPerm'))
+  if (!canConfigList) miss.push(t('system.flow.tabBindingsPerm'))
+  if (!canInstanceList) miss.push(t('system.flow.tabInstancesPerm'))
+  return t('system.flow.stHidden') + miss.join('、') + '。这些权限当前仅授予「数据配置管理员」等配置类角色，如需查看请联系数据配置管理员开通。'
 })
 
 /**
@@ -915,15 +909,15 @@ const bizTypeOptions = computed(() =>
   Object.entries(BIZ_TYPE).map(([value, label]) => ({ value, label: label || value }))
 )
 
-const bindingBizTypes = [
-  { label: '员工费用报销', value: 'EXP_CLAIM' }, { label: '事前申请', value: 'EXP_APPLY' },
-  { label: '对公付款', value: 'EXP_PAY' }, { label: '员工借款', value: 'EXP_LOAN' },
-  { label: '员工还款', value: 'EXP_REPAY' }, { label: '资金付款', value: 'TR_PAY' },
-  { label: '资金调拨', value: 'TR_TRANSFER' }, { label: '资金收款', value: 'TR_RECEIPT' },
-  { label: '资金计划', value: 'TR_PLAN' }, { label: '资产新增', value: 'FA_ADD' },
-  { label: '资产处置', value: 'FA_DISPOSE' }, { label: '资产调拨', value: 'FA_TRANSFER' },
-  { label: '存货处置', value: 'INV_DISPOSE' }, { label: '应收收款', value: 'RECEIVABLE' },
-]
+const bindingBizTypes = computed(() => ([
+  { label: t('system.flow.docExpenseClaim'), value: 'EXP_CLAIM' }, { label: t('system.flow.docPreApplication'), value: 'EXP_APPLY' },
+  { label: t('system.flow.docVendorPayment'), value: 'EXP_PAY' }, { label: t('system.flow.docEmpLoan'), value: 'EXP_LOAN' },
+  { label: t('system.flow.docEmpRepay'), value: 'EXP_REPAY' }, { label: t('system.flow.docFundPayment'), value: 'TR_PAY' },
+  { label: t('system.flow.docFundTransfer'), value: 'TR_TRANSFER' }, { label: t('system.flow.docFundReceipt'), value: 'TR_RECEIPT' },
+  { label: t('system.flow.docCashPlan'), value: 'TR_PLAN' }, { label: t('system.flow.docAssetAdd'), value: 'FA_ADD' },
+  { label: t('system.flow.docAssetDisposal'), value: 'FA_DISPOSE' }, { label: t('system.flow.docAssetTransfer'), value: 'FA_TRANSFER' },
+  { label: t('system.flow.docInventoryDisposal'), value: 'INV_DISPOSE' }, { label: t('system.flow.docARReceipt'), value: 'RECEIVABLE' },
+]))
 
 // 后端写入的是 DEPLOYED（WfDesignerController 发布）/ DRAFT（新建草稿），种子导入的历史模型为 ACTIVE；
 // 原本只判 'PUBLISHED'（全库 0 行）→ 84 个已部署模型在列表里一律显示「草稿」。
@@ -931,8 +925,8 @@ const PUBLISHED_MODEL_STATUS = new Set(['DEPLOYED', 'ACTIVE', 'PUBLISHED'])
 function isModelPublished(m) { return PUBLISHED_MODEL_STATUS.has(m?.status) }
 /** 下线是与"未发布"完全不同的状态（不可发起，但历史实例仍在跑）——不能并入"草稿"显示，否则操作者会以为随手就能发布 */
 function modelStatusText(m) {
-  if (m?.status === 'OFFLINE') return '已下线'
-  return isModelPublished(m) ? '已发布' : '草稿'
+  if (m?.status === 'OFFLINE') return t('system.flow.stOffline')
+  return isModelPublished(m) ? t('system.flow.stPublished') : t('system.flow.stDraft')
 }
 function modelStatusType(m) {
   if (m?.status === 'OFFLINE') return 'danger'
@@ -943,7 +937,7 @@ function modelStatusType(m) {
 // 印鉴变更 TR_SEAL_CHANGE 等都选不到）→ 只能靠写库补绑定。故按已建流程模型动态补全，
 // 并配合 allow-create 允许手工输入尚未建模的类型编码。
 const bindingBizTypeOptions = computed(() => {
-  const map = new Map(bindingBizTypes.map(o => [o.value, o.label]))
+  const map = new Map(bindingBizTypes.value.map(o => [o.value, o.label]))
   for (const m of models.value) {
     const label = m.modelName || ''
     if (m.modelKey && !map.has(m.modelKey)) map.set(m.modelKey, label)
@@ -991,38 +985,38 @@ async function loadAllDetails(m) {
 // ========== 基本信息 ==========
 const modelForm = reactive({})
 
-const modelFormRules = {
-  modelKey: commonRules.required('请输入模型编码'),
-  modelName: commonRules.required('请输入模型名称'),
-}
+const modelFormRules = computed(() => ({
+  modelKey: commonRules.required(t('system.flow.errModelCodeRequired')),
+  modelName: commonRules.required(t('system.flow.errModelNameRequired')),
+}))
 const nodeFormRules = computed(() => ({
-  nodeKey: commonRules.required('请输入节点编码'),
-  nodeName: commonRules.required('请输入节点名称'),
+  nodeKey: commonRules.required(t('system.flow.errNodeCodeRequired')),
+  nodeName: commonRules.required(t('system.flow.errNodeNameRequired')),
   // 发起人与「直线上级+层级」两类不需要填审批人取值，故不挂 required（否则红星是假的）
   assignValue: ['INITIATOR', 'DEPT_LEADER_UP'].includes(nodeDialog.form.assignType) ? [] : [{
     required: true, validator: (rule, value, cb) => {
-    const t = nodeDialog.form.assignType
+    const asgnType = nodeDialog.form.assignType
     const v = String(value == null ? '' : value).trim()
-    if (!v) return cb(new Error(t === 'USER' ? '请填写用户ID（数字）' : '请填写角色编码'))
-    if (t === 'USER' && !/^\s*\d+(\s*,\s*\d+)*\s*$/.test(v)) return cb(new Error('用户ID须为数字，多个用英文逗号分隔'))
+    if (!v) return cb(new Error(asgnType === 'USER' ? t('system.flow.errUserIdRequired') : t('system.flow.errRoleCodeRequired')))
+    if (asgnType === 'USER' && !/^\s*\d+(\s*,\s*\d+)*\s*$/.test(v)) return cb(new Error(t('system.flow.errUserIdFormat')))
     cb()
   } }],
 }))
-const bindingFormRules = {
-  bizType: commonRules.select('请选择单据类型'),
-  configName: commonRules.required('请输入配置名称'),
-}
-const configFormRules = {
-  cfgType: commonRules.select('请选择配置类型'),
-  cfgCode: commonRules.required('请输入配置编码'),
-  cfgName: commonRules.required('请输入配置名称'),
-}
-const delegateFormRules = {
-  toUserId: commonRules.select('请选择代理人'),
+const bindingFormRules = computed(() => ({
+  bizType: commonRules.select(t('system.flow.errDocTypeRequired')),
+  configName: commonRules.required(t('system.flow.errCfgNameRequired')),
+}))
+const configFormRules = computed(() => ({
+  cfgType: commonRules.select(t('system.flow.errCfgTypeRequired')),
+  cfgCode: commonRules.required(t('system.flow.errCfgCodeRequired')),
+  cfgName: commonRules.required(t('system.flow.errCfgNameRequired')),
+}))
+const delegateFormRules = computed(() => ({
+  toUserId: commonRules.select(t('system.flow.errDelegateRequired')),
   // 委托生效判定只看时间区间（WfDelegateService.activeDelegateTo），区间留空＝一条永不生效的委托
-  beginTime: commonRules.date('请选择开始时间'),
-  endTime: commonRules.date('请选择结束时间'),
-}
+  beginTime: commonRules.date(t('system.flow.errStartRequired')),
+  endTime: commonRules.date(t('system.flow.errEndRequired')),
+}))
 const modelFormRef = ref(null)
 const nodeFormRef = ref(null)
 const bindingFormRef = ref(null)
@@ -1059,7 +1053,7 @@ async function saveModel() {
     } else {
       await flowApi.modelCreate({ ...modelForm })
     }
-    ElMessage.success('保存成功')
+    ElMessage.success(t('system.common.msgSaved'))
     await loadModels()
     // 重新选中
     const found = models.value.find(m => m.modelKey === modelForm.modelKey)
@@ -1093,20 +1087,20 @@ function onAssignTypeChange(v) {
 }
 
 const assignValuePlaceholder = computed(() => ({
-  USER: '用户ID（数字），如 3892；当前运行时仅指派列表第一个',
-  ROLE: '角色编码，多个用英文逗号分隔（任一人可办），如 FIN_AUDIT,FIN_MANAGER',
+  USER: t('system.flow.hintUserIdValue'),
+  ROLE: t('system.flow.hintRoleCodesValue'),
   INITIATOR: '',
 }[nodeDialog.form.assignType] || ''))
 const assignValueHint = computed(() => nodeDialog.form.assignType === 'ROLE'
-  ? '运行时按公司维度解析这些角色在本单据公司的成员；一个成员都没有时走下方「无候选空策略」。编码须与角色管理一致（如 DIRECT_SUPERVISOR=直线上级）。'
+  ? t('system.flow.hintRoleResolve')
   : nodeDialog.form.assignType === 'USER'
-    ? '指定用户为单人硬指派（忽略公司/角色）。'
+    ? t('system.flow.hintHardAssign')
     : '')
 /** 自动指派只取第一个角色码落地（见 WfEngineFacade 的 assignValue.split(",")[0]），故体检按它做 */
 const firstAssignRole = computed(() => (nodeDialog.form.assignValue || '').split(',')[0].trim())
 
 function openNodeDialog(row) {
-  if (!selectedModel.value) { ElMessage.warning('请先选择模型'); return }
+  if (!selectedModel.value) { ElMessage.warning(t('system.flow.msgNoModel')); return }
   nodeDialog.editing = !!row
   const form = row
     ? { ...row }
@@ -1141,7 +1135,7 @@ async function saveNode() {
   try {
     if (nodeDialog.editing) await flowApi.nodeUpdate({ ...nodeDialog.form })
     else await flowApi.nodeCreate({ ...nodeDialog.form })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('system.common.msgSaved'))
     nodeDialog.visible = false
     await loadNodes(selectedModel.value.modelKey)
   } catch (e) { ElMessage.error(e.message) } finally { nodeDialog.saving = false }
@@ -1149,9 +1143,9 @@ async function saveNode() {
 
 async function deleteNode(row) {
   try {
-    await ElMessageBox.confirm('确认删除该节点？', '删除', { type: 'warning' })
+    await ElMessageBox.confirm(t('system.flow.askDeleteNode'), t('system.common.btnDelete'), { type: 'warning' })
     await flowApi.nodeDelete(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('system.common.stDeleted'))
     await loadNodes(selectedModel.value.modelKey)
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
@@ -1173,7 +1167,7 @@ async function loadBindings(modelKey) {
 }
 
 function openBindingDialog(row) {
-  if (!selectedModel.value) { ElMessage.warning('请先选择模型'); return }
+  if (!selectedModel.value) { ElMessage.warning(t('system.flow.msgNoModel')); return }
   bindingDialog.editing = !!row
   Object.assign(bindingDialog, {
     visible: true, saving: false,
@@ -1194,7 +1188,7 @@ async function saveBinding() {
     if (form.amountMin === 0) form.amountMin = null
     if (bindingDialog.editing) await flowApi.processUpdate(form)
     else await flowApi.processCreate(form)
-    ElMessage.success('保存成功')
+    ElMessage.success(t('system.common.msgSaved'))
     bindingDialog.visible = false
     await loadBindings(selectedModel.value.modelKey)
   } catch (e) { ElMessage.error(e.message) } finally { bindingDialog.saving = false }
@@ -1202,9 +1196,9 @@ async function saveBinding() {
 
 async function deleteBinding(row) {
   try {
-    await ElMessageBox.confirm('确认删除该绑定？', '删除', { type: 'warning' })
+    await ElMessageBox.confirm(t('system.flow.askDeleteBinding'), t('system.common.btnDelete'), { type: 'warning' })
     await flowApi.processDelete(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('system.common.stDeleted'))
     await loadBindings(selectedModel.value.modelKey)
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
@@ -1264,13 +1258,13 @@ function cfgSummary(row) {
     for (const [k, v] of Object.entries(obj)) {
       if (v !== null && v !== '' && v !== undefined) {
         const labelMap = {
-          min: '下限', max: '上限', level: '级别',
-          timeoutHours: '超时(h)', action: '动作', notifyUsers: '通知',
-          targetRole: '目标角色',
-          remindBefore: '提前提醒(h)',
-          autoApprove: '自动通过', allowWithdraw: '可撤回', comment: '备注',
-          systemName: '系统', apiUrl: '接口', method: '方法',
-          retryTimes: '重试', timeoutSeconds: '超时(s)',
+          min: t('system.flow.colMinShort'), max: t('system.flow.colMaxShort'), level: t('system.flow.colLevel'),
+          timeoutHours: t('system.flow.colTimeoutH'), action: t('field.action'), notifyUsers: t('system.flow.colNotify'),
+          targetRole: t('system.flow.colTargetRole'),
+          remindBefore: t('system.flow.colRemindH'),
+          autoApprove: t('system.flow.optActionAutoApprove'), allowWithdraw: t('system.flow.colWithdrawable'), comment: t('common.remark'),
+          systemName: t('system.flow.colSystem'), apiUrl: t('field.api'), method: t('system.common.colMethod'),
+          retryTimes: t('system.flow.colRetry'), timeoutSeconds: t('system.flow.colTimeoutS'),
         }
         const label = labelMap[k] || k
         parts.push(`${label}: ${v}`)
@@ -1313,7 +1307,7 @@ async function saveConfig() {
     configDialog.form.cfgJson = serializeCfgData(configDialog.form.cfgType, configDialog.cfgData)
     if (configDialog.editing) await flowConfigApi.update({ ...configDialog.form })
     else await flowConfigApi.create({ ...configDialog.form })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('system.common.msgSaved'))
     configDialog.visible = false
     await loadConfigs()
   } catch (e) { ElMessage.error(e.message) } finally { configDialog.saving = false }
@@ -1321,9 +1315,9 @@ async function saveConfig() {
 
 async function deleteConfig(row) {
   try {
-    await ElMessageBox.confirm('确认删除该配置？', '删除', { type: 'warning' })
+    await ElMessageBox.confirm(t('system.flow.askDeleteConfig'), t('system.common.btnDelete'), { type: 'warning' })
     await flowConfigApi.delete(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('system.common.stDeleted'))
     await loadConfigs()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
@@ -1391,7 +1385,7 @@ function handleDlgCurrentChange(val) {
 // 委托契约是用户 ID（WfDelegate.fromUserId/toUserId）；委托人由后端硬校验必须是登录人，故系统带出
 const currentUserId = computed(() => store.user?.userId ?? store.user?.id ?? null)
 const currentUserName = computed(() => store.user?.realName || store.user?.nickName
-  || store.user?.username || store.user?.userName || '当前用户')
+  || store.user?.username || store.user?.userName || t('system.flow.optCurrentUser'))
 
 function openDelegateDialog() {
   Object.assign(delegateDialog, {
@@ -1405,7 +1399,7 @@ async function saveDelegate() {
   delegateDialog.saving = true
   try {
     await flowApi.delegateCreate({ ...delegateDialog.form })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('system.common.msgSaved'))
     delegateDialog.visible = false
     await loadDelegates()
   } catch (e) { ElMessage.error(e.message) } finally { delegateDialog.saving = false }
@@ -1413,9 +1407,9 @@ async function saveDelegate() {
 
 async function cancelDelegate(row) {
   try {
-    await ElMessageBox.confirm('确认取消该委托？', '确认', { type: 'warning' })
+    await ElMessageBox.confirm(t('system.flow.askCancelDelegate'), t('system.common.btnConfirm'), { type: 'warning' })
     await flowApi.delegateCancel(row.id)
-    ElMessage.success('已取消')
+    ElMessage.success(t('system.flow.msgCancelled'))
     await loadDelegates()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
@@ -1431,7 +1425,7 @@ async function validateModel() {
 
 const simResult = reactive({ visible: false, amount: 10000, itemName: '', trace: [] })
 function simulateModel() {
-  if (!selectedModel.value.bpmnXml) { ElMessage.warning('该模型未包含 BPMN 流程定义'); return }
+  if (!selectedModel.value.bpmnXml) { ElMessage.warning(t('system.flow.msgNoBpmn')); return }
   simResult.amount = 10000
   simResult.itemName = ''
   simResult.trace = []
@@ -1441,8 +1435,8 @@ async function runSimulate() {
   try {
     const r = await designerApi.simulate(selectedModel.value.bpmnXml, simResult.amount, simResult.itemName)
     simResult.trace = r?.trace || []
-    if (!simResult.trace.length) ElMessage.warning('模拟未返回路由轨迹')
-    else ElMessage.success('模拟完成，共 ' + simResult.trace.length + ' 步')
+    if (!simResult.trace.length) ElMessage.warning(t('system.flow.msgSimNoPath'))
+    else ElMessage.success(t('system.flow.msgSimDone') + simResult.trace.length + ' 步')
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -1450,25 +1444,25 @@ async function publishModel() {
   let warn = ''
   try {
     const f = await designerApi.inFlight(selectedModel.value.modelKey)
-    if (f?.staleCount) warn = `\n注意：当前有 ${f.staleCount} 单在途仍按旧版本执行，新版本只作用于之后发起的单据。`
+    if (f?.staleCount) warn = t('system.flow.warnInflightNote', { v1: f.staleCount })
   } catch (e) { /* 影响面查询失败不阻断发布 */ }
   try {
-    await ElMessageBox.confirm(`发布流程「${selectedModel.value.modelName}」？将生成新版本并立即生效${warn}`, '发布', { type: 'warning' })
+    await ElMessageBox.confirm(t('system.flow.askPublish', { v1: selectedModel.value.modelName, v2: warn }), t('system.flow.btnPublish'), { type: 'warning' })
     await designerApi.publish(selectedModel.value)
-    ElMessage.success('已发布')
+    ElMessage.success(t('system.flow.stPublished'))
     await loadModels()
     const found = models.value.find(m => m.id === selectedModel.value.id)
     if (found) { selectedModel.value = found; Object.assign(modelForm, { ...found }); clearModelValidate() }
     // 发布后直接把影响面摊开（在途旧实例清单 + 本次 diff），不再只提示"已发布"
     await openInFlight()
-  } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '发布失败') }
+  } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || t('system.flow.msgPublishFail')) }
 }
 
 // ========== G3-3/G3-4 发布影响面（在途旧实例 + BPMN 仓库化 diff） ==========
 const inFlight = reactive({ visible: false, tab: 'inflight', modelName: '', data: null, history: [], diff: '' })
 
 async function openInFlight() {
-  if (!selectedModel.value?.modelKey) { ElMessage.warning('请先选择流程模型'); return }
+  if (!selectedModel.value?.modelKey) { ElMessage.warning(t('system.flow.msgPickModelFirst')); return }
   inFlight.modelName = selectedModel.value.modelName || selectedModel.value.modelKey
   inFlight.diff = ''
   inFlight.visible = true
@@ -1487,14 +1481,14 @@ async function refreshInFlight() {
 async function loadDiff(name) {
   try {
     const r = await designerApi.publishDiff(selectedModel.value.modelKey, name)
-    inFlight.diff = r?.content || '（diff 文件不存在或已被清理）'
+    inFlight.diff = r?.content || t('system.flow.diffMissing')
   } catch (e) { ElMessage.error(e.message) }
 }
 
 async function exportRepo() {
   try {
     const r = await designerApi.exportRepo()
-    ElMessage.success(`已导出 ${r.exported}/${r.models} 个模型到 ${r.dir}`)
+    ElMessage.success(t('system.flow.msgExportedTo', { v1: r.exported, v2: r.models, v3: r.dir }))
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -1506,15 +1500,15 @@ async function exportModel() {
     a.href = URL.createObjectURL(blob)
     a.download = `${r.modelKey}_v${r.version}.bpmn20.xml`
     a.click(); URL.revokeObjectURL(a.href)
-    ElMessage.success('已导出')
+    ElMessage.success(t('system.flow.msgExportedShort'))
   } catch (e) { ElMessage.error(e.message) }
 }
 
 async function deleteModel() {
   try {
-    await ElMessageBox.confirm(`确认删除流程模型「${selectedModel.value.modelName}」？`, '删除', { type: 'warning' })
+    await ElMessageBox.confirm(t('system.flow.askDeleteModel', { v1: selectedModel.value.modelName }), t('system.common.btnDelete'), { type: 'warning' })
     await flowApi.modelDelete(selectedModel.value.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('system.common.stDeleted'))
     selectedModel.value = null
     await loadModels()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
@@ -1527,9 +1521,9 @@ async function onBpmnSaved(xml) {
     await flowApi.modelUpdate({ ...selectedModel.value, bpmnXml: xml })
     selectedModel.value = { ...selectedModel.value, bpmnXml: xml }
     Object.assign(modelForm, { ...modelForm, bpmnXml: xml })
-    ElMessage.success('流程图已保存')
+    ElMessage.success(t('system.flow.msgDiagramSaved'))
     await loadModels()
-  } catch (e) { ElMessage.error(e.message || '流程图保存失败') }
+  } catch (e) { ElMessage.error(e.message || t('system.flow.msgDiagramSaveFail')) }
 }
 
 async function importFlow() {
@@ -1543,19 +1537,19 @@ async function importFlow() {
     // 原生 prompt() 的按钮由浏览器渲染（英文 OK/Cancel），换成 ElMessageBox 保持中文与风格一致
     let key
     try {
-      ({ value: key } = await ElMessageBox.prompt('请输入模型编码（唯一）', '导入流程模型', {
+      ({ value: key } = await ElMessageBox.prompt(t('system.flow.phModelCodeUnique'), t('system.flow.ttlImport'), {
         inputValue: 'IMPORT_' + Date.now().toString().slice(-6),
         inputPattern: /^[A-Za-z][A-Za-z0-9_-]{1,49}$/,
-        inputErrorMessage: '编码须以字母开头，2-50 位字母、数字、下划线或连字符',
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
+        inputErrorMessage: t('system.flow.errCodeFormat'),
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
         closeOnClickModal: false,
       }))
     } catch { return }
     if (!key) return
     try {
       await designerApi.importModel({ modelKey: key, modelName: key, bpmnXml: text })
-      ElMessage.success('导入成功：' + key)
+      ElMessage.success(t('system.flow.msgImportOk') + key)
       await loadModels()
     } catch (e) { ElMessage.error(e.message) }
   }
@@ -1573,7 +1567,7 @@ function flowTypeLabel(v) {
 /** 委托的适用范围：库里存逗号分隔的单据类型编码，空＝全部单据（WfDelegateService 同口径） */
 function delegateScopeLabel(v) {
   const codes = String(v || '').split(',').map(s => s.trim()).filter(Boolean)
-  if (!codes.length) return '全部单据类型'
+  if (!codes.length) return t('system.flow.optAllDocTypes')
   return codes.map(c => bizTypeLabel(c)).join('、')
 }
 function assignTypeLabel(v) {
@@ -1597,7 +1591,7 @@ function isEscalateAction(v) {
 function upLevelLabel(v) {
   const n = v == null || v === '' ? 1 : Number(v)
   if (!Number.isFinite(n)) return '—'
-  return (n < 1 ? 1 : n) + ' 级'
+  return t('system.flow.textLevelSuffix', { v1: (n < 1 ? 1 : n) })
 }
 /** 取人方式：列/详情用。老后端不返回该字段时显示"自动指派"（等价 DB 默认值，不是缺数据） */
 function handlingModeLabel(v) {
@@ -1650,10 +1644,10 @@ function toggleDiagramFullscreen() {
     } else if (el.requestFullscreen) {
       el.requestFullscreen()
     } else {
-      ElMessage.warning('当前浏览器不支持全屏 API')
+      ElMessage.warning(t('system.flow.msgNoFullscreen'))
     }
   } catch (e) {
-    ElMessage.error('全屏失败：' + e.message)
+    ElMessage.error(t('system.flow.msgFullscreenFail') + e.message)
   }
 }
 

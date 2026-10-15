@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.report.controller;
 
 import com.fssc.common.core.Result;
@@ -64,12 +61,14 @@ public class DashboardController {
     }
 
     @RequiresPerm("dashboard:view")
+    @DataScope("部门报销排行数据范围") // D-F1R-04：原缺注解 ⇒ 普通员工看到与共享会计完全相同的全公司排名
     @GetMapping("/dept/ranking")
     public Result<List<Map<String, Object>>> deptRanking() {
         return Result.success(dashboardService.expenseByDept());
     }
 
     @RequiresPerm("dashboard:view")
+    @DataScope("审批时效数据范围") // D-F1R-04：同 deptRanking，缺注解即无部门/本人维收口
     @GetMapping("/approval/efficiency")
     public Result<List<Map<String, Object>>> approvalEfficiency() {
         return Result.success(dashboardService.approvalEfficiency());

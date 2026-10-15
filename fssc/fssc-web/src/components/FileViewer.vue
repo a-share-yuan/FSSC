@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-dialog v-model="visible" :title="title" width="92vw" top="3vh" append-to-body destroy-on-close>
     <div class="fv-wrap">

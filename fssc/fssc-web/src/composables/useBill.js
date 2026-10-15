@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 // 通用单据逻辑 composable：费用报销域所有单据页共享
 // 覆盖：草稿保存/提交、我的单据、凭证预览/记账、预算占用预览、附件上传、冲借款、关联事前申请
 import { reactive, ref, computed, watch, onMounted } from 'vue'

@@ -1,89 +1,84 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <template #header>
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
-        <b>对公付款凭证（付款 → 总账）</b>
-        <el-select v-model="sourceType" placeholder="业务类型" clearable style="width: 220px">
+        <b>{{ $t('pay.voucher.pageTitle') }}</b>
+        <el-select v-model="sourceType" :placeholder="$t('pay.voucher.colBizType')" clearable style="width: 220px">
           <!-- R5-D-078：默认口径＝对公付款族（页名与实际取数同口径，后端 page 已支持逗号族 IN 过滤）；
                选项按共享词表（= 库内实际枚举，bizEntry.VOUCHER_SOURCE_LABEL）动态生成——
                原先硬编码 4 值，20+ 类里 16+ 类既出现在列表又无法被筛出。 -->
-          <el-option label="对公付款族（默认）" value="EXPENSE_PAY,EXPENSE_SETTLE,TREASURY_PAY" />
+          <el-option :label="$t('pay.voucher.optFamilyDefault')" value="EXPENSE_PAY,EXPENSE_SETTLE,TREASURY_PAY" />
           <el-option v-for="(label, code) in VOUCHER_SOURCE_LABEL" :key="code" :label="label" :value="code" />
         </el-select>
-        <el-select v-model="status" placeholder="状态" clearable style="width: 140px">
-          <el-option label="草稿" value="DRAFT" />
-          <el-option label="已记账" value="POSTED" />
+        <el-select v-model="status" :placeholder="$t('common.status')" clearable style="width: 140px">
+          <el-option :label="$t('status.draft')" value="DRAFT" />
+          <el-option :label="$t('pay.shared.stPosted')" value="POSTED" />
         </el-select>
-<el-button type="primary" size="small" @click="load">查询</el-button>
+<el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
         <el-button v-if="selDraftIds.length" v-permission="'sharing:voucher:post'" type="success" size="small" :loading="batchPosting" @click="batchPost">
-          批量记账（{{ selDraftIds.length }}）
-        </el-button>
+          {{ $t('pay.voucher.btnBatchPost', { v1: selDraftIds.length }) }}</el-button>
         <span style="margin-left:auto; color:#909399; font-size:12px">
-          凭证过账后自动落总账；勾选凭证可查看或重新落账
-        </span>
+          {{ $t('pay.voucher.hintFlow') }}</span>
       </div>
     </template>
 
-    <el-table :data="rows" size="small" border stripe :max-height="420" highlight-current-row @current-change="onSelect" @selection-change="handleSelectionChange" empty-text="暂无数据" @row-dblclick="openTrace">
+    <el-table :data="rows" size="small" border stripe :max-height="420" highlight-current-row @current-change="onSelect" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')" @row-dblclick="openTrace">
         <el-table-column type="selection" width="45" />
-      <el-table-column prop="voucherNo" label="凭证号" width="170" fixed  sortable />
-      <el-table-column label="业务类型" width="120">
+      <el-table-column prop="voucherNo" :label="$t('pay.shared.colVoucherNo')" width="170" fixed  sortable />
+      <el-table-column :label="$t('pay.voucher.colBizType')" width="120">
         <template #default="{ row }"><el-tag size="small" :type="sourceTypeTag(row.sourceType)">{{ voucherSourceLabel(row.sourceType) }}</el-tag></template>
       </el-table-column>
-      <el-table-column prop="summary" label="摘要" min-width="180" show-overflow-tooltip  sortable />
-      <el-table-column label="期间" width="100">
+      <el-table-column prop="summary" :label="$t('field.summary')" min-width="180" show-overflow-tooltip  sortable />
+      <el-table-column :label="$t('field.period')" width="100">
         <template #default="{ row }">{{ row.periodYear }}-{{ String(row.periodMonth).padStart(2, '0') }}</template>
       </el-table-column>
-      <el-table-column label="借方" width="120" align="right">
+      <el-table-column :label="$t('pay.voucher.colDebit')" width="120" align="right">
         <template #default="{ row }">{{ fmt(row.debitTotal) }}</template>
       </el-table-column>
-      <el-table-column label="贷方" width="120" align="right">
+      <el-table-column :label="$t('pay.voucher.colCredit')" width="120" align="right">
         <template #default="{ row }">{{ fmt(row.creditTotal) }}</template>
       </el-table-column>
-      <el-table-column label="借贷平衡" width="90" align="center">
+      <el-table-column :label="$t('pay.voucher.colBalanced')" width="90" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.isBalanced === 1" type="success" size="small">平衡</el-tag>
-          <el-tag v-else type="danger" size="small">不平</el-tag>
+          <el-tag v-if="row.isBalanced === 1" type="success" size="small">{{ $t('pay.voucher.tagBalanced') }}</el-tag>
+          <el-tag v-else type="danger" size="small">{{ $t('pay.voucher.tagUnbalanced') }}</el-tag>
         </template>
       </el-table-column>
-<el-table-column label="状态" width="100" align="center">
+<el-table-column :label="$t('common.status')" width="100" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.status === BillStatus.POSTED" type="primary" size="small">已记账</el-tag>
-          <el-tag v-else type="info" size="small">草稿</el-tag>
+          <el-tag v-if="row.status === BillStatus.POSTED" type="primary" size="small">{{ $t('pay.shared.stPosted') }}</el-tag>
+          <el-tag v-else type="info" size="small">{{ $t('status.draft') }}</el-tag>
         </template>
       </el-table-column>
       <!-- P2-4 来源单据列：单据号 + 状态，随手核对来源（孤儿凭证显示—） -->
-      <el-table-column label="来源单据" width="150" show-overflow-tooltip>
+      <el-table-column :label="$t('pay.voucher.colSourceBill')" width="150" show-overflow-tooltip>
         <template #default="{ row }">
           <template v-if="row.sourceBillNo && isExpenseFamilyVoucherSource(row.sourceType)">
             <span>{{ row.sourceBillNo }}</span>
             <el-tag v-if="row.sourceBillStatus" size="small" :type="statusType(row.sourceBillStatus)" style="margin-left: 4px">{{ statusLabel(row.sourceBillStatus) }}</el-tag>
           </template>
           <!-- R5-D-076：来源列不直出裸主键（「#主键」外显＝与 R5-D-039 裸主键族同判据，跨域还易串号）。 -->
-          <span v-else-if="row.billId && !isExpenseFamilyVoucherSource(row.sourceType)" style="color: #909399">{{ voucherSourceLabel(row.sourceType) }}（来源单号按域追溯）</span>
+          <span v-else-if="row.billId && !isExpenseFamilyVoucherSource(row.sourceType)" style="color: #909399">{{ $t('pay.voucher.srcByDomain', { v1: voucherSourceLabel(row.sourceType) }) }}</span>
           <!-- 费用族查不到来源单据（或本就不带来源）＝真孤儿凭证，显「孤儿凭证」而非 #id -->
-          <span v-else style="color: #c45656">｜孤儿凭证</span>
+          <span v-else style="color: #c45656">{{ $t('pay.voucher.orphanVoucher') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="总账落账" width="100" align="center">
+      <el-table-column :label="$t('pay.voucher.colGlEntry')" width="100" align="center">
         <template #default="{ row }">
           <!-- R5-D-075：落账态来自列表接口一次性聚合（row.glEntryCount，后端 SQL 侧按 voucher_id 分组计数），
                不再由页内逐张探测；聚合缺失＝「校验失败」显式态（可点击重试），禁止降级显示成「未落账」 -->
-          <el-tag v-if="row.glEntryCount > 0" type="success" size="small">已落账</el-tag>
-          <el-tag v-else-if="row.glEntryCount === 0" type="warning" size="small">未落账</el-tag>
-          <el-tag v-else type="danger" size="small" style="cursor: pointer" title="列表未带回落账聚合结果，点击重试校验" @click="retryGlCheck(row)">校验失败</el-tag>
+          <el-tag v-if="row.glEntryCount > 0" type="success" size="small">{{ $t('pay.voucher.stPostedGl') }}</el-tag>
+          <el-tag v-else-if="row.glEntryCount === 0" type="warning" size="small">{{ $t('pay.voucher.stNotPostedGl') }}</el-tag>
+          <el-tag v-else type="danger" size="small" style="cursor: pointer" :title="$t('pay.voucher.hintRetryGlCheck')" @click="retryGlCheck(row)">{{ $t('pay.voucher.stCheckFailed') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="210" fixed="right">
+      <el-table-column :label="$t('common.operation')" width="210" fixed="right">
         <template #default="{ row }">
-          <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
-          <el-button v-if="row.status !== BillStatus.POSTED" v-permission="'sharing:voucher:post'" link type="primary" @click="post(row)">记账落账</el-button>
-          <el-button v-permission="'sharing:voucher:post'" link type="warning" @click="repost(row)">重新落账</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
+          <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('pay.shared.btnTrace') }}</el-button>
+          <el-button v-if="row.status !== BillStatus.POSTED" v-permission="'sharing:voucher:post'" link type="primary" @click="post(row)">{{ $t('pay.voucher.btnPost') }}</el-button>
+          <el-button v-permission="'sharing:voucher:post'" link type="warning" @click="repost(row)">{{ $t('pay.voucher.btnRepost') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('pay.shared.btnExportCsv') }}</el-button>
+      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('pay.shared.btnExportSelected', { v1: selRows.length }) }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -96,26 +91,26 @@
       @current-change="(p) => { pageNum = p; load() }" />
 
     <!-- 选中的凭证分录 -->
-    <el-card v-if="current" header="凭证分录明细" shadow="never" style="margin-top: 14px">
+    <el-card v-if="current" :header="$t('pay.voucher.ctxEntriesTitle')" shadow="never" style="margin-top: 14px">
       <el-descriptions :column="4" border size="small" style="margin-bottom: 10px">
-        <el-descriptions-item label="凭证号">{{ current.voucherNo }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('pay.shared.colVoucherNo')">{{ current.voucherNo }}</el-descriptions-item>
         <!-- R5-D-076：明细卡同样不直出裸主键；无可信单号时引导走「追溯」 -->
-        <el-descriptions-item label="来源单据">{{ current.sourceBillNo || '按域追溯' }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{ statusLabel(current.status) }}</el-descriptions-item>
-        <el-descriptions-item label="摘要">{{ current.summary }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('pay.voucher.colSourceBill')">{{ current.sourceBillNo || t('pay.voucher.lblTraceByDomain') }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('common.status')">{{ statusLabel(current.status) }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.summary')">{{ current.summary }}</el-descriptions-item>
       </el-descriptions>
-      <el-table :data="lines" size="small" border @selection-change="handleSelectionChange" empty-text="暂无数据">
+      <el-table :data="lines" size="small" border @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-        <el-table-column prop="lineNo" label="行" width="60"  sortable />
-        <el-table-column prop="subjectCode" label="科目编码" width="110"  sortable />
-        <el-table-column prop="subjectName" label="科目名称" min-width="150" show-overflow-tooltip  sortable />
-        <el-table-column prop="summary" label="摘要" min-width="170" show-overflow-tooltip  sortable />
-        <el-table-column label="方向" width="80" align="center">
+        <el-table-column prop="lineNo" :label="$t('pay.voucher.colLine')" width="60"  sortable />
+        <el-table-column prop="subjectCode" :label="$t('pay.voucher.colSubjectCode')" width="110"  sortable />
+        <el-table-column prop="subjectName" :label="$t('pay.voucher.colSubjectName')" min-width="150" show-overflow-tooltip  sortable />
+        <el-table-column prop="summary" :label="$t('field.summary')" min-width="170" show-overflow-tooltip  sortable />
+        <el-table-column :label="$t('field.direction')" width="80" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.direction === 'DEBIT' ? 'danger' : 'success'" size="small">{{ row.direction === 'DEBIT' ? '借' : '贷' }}</el-tag>
+            <el-tag :type="row.direction === 'DEBIT' ? 'danger' : 'success'" size="small">{{ row.direction === 'DEBIT' ? t('pay.voucher.sideDebit') : t('pay.voucher.sideCredit') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="amount" label="金额" width="130" align="right" sortable>
+        <el-table-column prop="amount" :label="$t('field.amount')" width="130" align="right" sortable>
           <template #default="{ row }">{{ fmt(row.amount) }}</template>
         </el-table-column>
       </el-table>
@@ -131,6 +126,9 @@ import { sharingApi, glApi } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { bizTypeOfVoucherSource, voucherSourceLabel, isExpenseFamilyVoucherSource } from '../../utils/bizEntry'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -185,7 +183,7 @@ async function retryGlCheck(row) {
   try {
     const ok = await glApi.posted(row.id)
     row.glEntryCount = ok ? 1 : 0
-  } catch (e) { ElMessage.error('落账校验失败，请重试：' + (e.message || '请求异常')) }
+  } catch (e) { ElMessage.error(t('pay.voucher.msgRepostCheckFailed') + (e.message || t('pay.voucher.msgRequestError'))) }
 }
 
 async function onSelect(row) {
@@ -199,7 +197,7 @@ async function onSelect(row) {
 async function post(row) {
   try {
     await sharingApi.voucherPost(row.id)
-    ElMessage.success('凭证已记账并入账总账')
+    ElMessage.success(t('pay.voucher.msgPostedToGl'))
     onSelect(row); load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -207,7 +205,7 @@ async function post(row) {
 async function repost(row) {
   try {
     const n = await glApi.repost(row.id)
-    ElMessage.success('重新落账完成，分录 ' + (n || 0) + ' 条')
+    ElMessage.success(t('pay.voucher.msgRepostedPrefix') + (n || 0) + ' 条')
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -217,20 +215,20 @@ const selDraftIds = ref([])
 const batchPosting = ref(false)
 
 async function batchPost() {
-  if (!selDraftIds.value.length) { ElMessage.warning('请先勾选未记账的凭证'); return }
+  if (!selDraftIds.value.length) { ElMessage.warning(t('pay.voucher.msgPickDraftVouchers')); return }
   batchPosting.value = true
   try {
     const map = await sharingApi.voucherBatchPost(selDraftIds.value)
     const ok = Object.keys(map).filter((k) => map[k] === 'OK')
     const fail = Object.keys(map).filter((k) => map[k] !== 'OK')
-    if (ok.length) ElMessage.success(`批量记账成功 ${ok.length} 张${fail.length ? '，失败 ' + fail.length + ' 张' : ''}`)
+    if (ok.length) ElMessage.success(t('pay.voucher.msgBatchPostOk', { v1: ok.length, v2: fail.length ? t('pay.voucher.msgFailSuffixZhang', { v1: fail.length }) : '' }))
     if (fail.length) {
       const detail = fail.map((k) => `#${k}: ${map[k]}`).join('；')
-      ElMessage.warning('失败明细：' + detail)
+      ElMessage.warning(t('pay.voucher.msgFailDetailPrefix') + detail)
     }
     selRows.value = []
     load()
-  } catch (e) { ElMessage.error(e.message || '批量记账失败') } finally { batchPosting.value = false }
+  } catch (e) { ElMessage.error(e.message || t('pay.voucher.msgBatchPostFail')) } finally { batchPosting.value = false }
 }
 
 onMounted(async () => {
@@ -239,8 +237,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!lines.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'lineNo', label: '行' }, { prop: 'subjectCode', label: '科目编码' }, { prop: 'subjectName', label: '科目名称' }, { prop: 'summary', label: '摘要' }, { prop: 'amount', label: '金额' }]
+  if (!lines.value.length) { ElMessage.warning(t('pay.shared.msgNoExportData')); return }
+  const cols = [{ prop: 'lineNo', label: t('pay.voucher.colLine') }, { prop: 'subjectCode', label: t('pay.voucher.colSubjectCode') }, { prop: 'subjectName', label: t('pay.voucher.colSubjectName') }, { prop: 'summary', label: t('field.summary') }, { prop: 'amount', label: t('field.amount') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = lines.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -254,16 +252,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `CorpPayVoucher_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('pay.shared.msgExportedCsv'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val; selDraftIds.value = val.filter((r) => r.status !== 'POSTED').map((r) => r.id) }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('pay.shared.msgPickExportRows')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('pay.shared.msgNoColumns')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -278,7 +276,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `CorpPayVoucher_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(t('pay.shared.msgExportedRows', { v1: selRows.value.length }))
 }
 
 </script>

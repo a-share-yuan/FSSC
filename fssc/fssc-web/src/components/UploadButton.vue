@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <span class="upload-btn-wrap" style="display:inline-flex;align-items:center;gap:8px">
     <el-upload :show-file-list="false" :http-request="doUpload" :accept="accept" :multiple="multiple" style="display:inline-block">

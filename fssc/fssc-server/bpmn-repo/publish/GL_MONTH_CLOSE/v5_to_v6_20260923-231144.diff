@@ -1,0 +1,15 @@
+--- bpmn:GL_MONTH_CLOSE v5
++++ bpmn:GL_MONTH_CLOSE v6
+@@ -4,7 +4,11 @@
+     <bpmn:startEvent id="StartEvent_1" name="开始" />
+     <bpmn:userTask id="Task_1" name="月结 12 项作业齐套：账务/折旧摊销/银行核对/库存事务/内部往来/税金计提/制造费用/劳务预提/完工测算/收入确认/重分类/过账（作业池）【财务专员】" flowable:candidateGroups="FIN_STAFF" />
+     <bpmn:userTask id="Task_7" name="核对内部往来差异【总账会计】" flowable:candidateGroups="FIN_GL" />
+-    <bpmn:userTask id="Task_9" name="制造费用分配复核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
++    <bpmn:userTask id="Task_9" name="制造费用分配复核【财务审核岗】" flowable:assignee="${assignee}" flowable:candidateGroups="FIN_AUDIT">
++      <bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${Task_9_assignees}" flowable:elementVariable="assignee">
++        <bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${nrOfCompletedInstances == nrOfInstances}</bpmn:completionCondition>
++      </bpmn:multiInstanceLoopCharacteristics>
++    </bpmn:userTask>
+     <bpmn:userTask id="Task_15" name="核对科目余额表【总账会计】" flowable:candidateGroups="FIN_GL" />
+     <bpmn:parallelGateway id="Pg_17" />
+     <bpmn:userTask id="Task_17_0" name="出具财务报表批准【财务总监】" flowable:candidateGroups="CFO" />

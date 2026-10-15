@@ -1,35 +1,32 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
-  <el-card v-if="!voucher.id" header="凭证预览">
-    <el-empty description="请在我的单据中选择带凭证号的单据查看" />
+  <el-card v-if="!voucher.id" :header="$t('expense.voucher.dlgPreview')">
+    <el-empty :description="$t('expense.voucher.hintPickBill')" />
   </el-card>
-  <el-card v-else :header="`凭证 ${voucher.voucherNo}（${voucher.status}）`">
-    <el-alert type="info" :closable="false" :title="`单据：${selected.billNo} ${selected.title}`" style="margin-bottom: 8px" />
+  <el-card v-else :header="$t('expense.voucher.ttlCardHeader', { v1: voucher.voucherNo, v2: voucher.status })">
+    <el-alert type="info" :closable="false" :title="$t('expense.voucher.ttlSourceBill', { v1: selected.billNo, v2: selected.title })" style="margin-bottom: 8px" />
     <div style="margin-bottom: 10px">
-      <el-button v-if="selected?.id" type="success" size="small" @click="viewVoucherBillImages">查看单据影像（穿透）</el-button>
-      <el-button v-if="selected?.id" type="warning" size="small" @click="openPrint('bill')">打印单据</el-button>
-      <el-button v-if="voucher.id" type="primary" size="small" @click="openPrint('voucher')">打印凭证</el-button>
+      <el-button v-if="selected?.id" type="success" size="small" @click="viewVoucherBillImages">{{ $t('expense.voucher.btnViewImages') }}</el-button>
+      <el-button v-if="selected?.id" type="warning" size="small" @click="openPrint('bill')">{{ $t('expense.voucher.btnPrintBill') }}</el-button>
+      <el-button v-if="voucher.id" type="primary" size="small" @click="openPrint('voucher')">{{ $t('expense.voucher.btnPrintVoucher') }}</el-button>
     </div>
     <el-table :data="voucherLines" size="small" border v-loading="loading" @row-dblclick="openRowDetail">
       <el-table-column type="selection" width="45" />
-      <el-table-column prop="lineNo" label="行" width="50" sortable />
-      <el-table-column prop="summary" label="摘要" min-width="200" show-overflow-tooltip sortable />
-      <el-table-column prop="subjectCode" label="科目码" width="90" sortable />
-      <el-table-column prop="subjectName" label="科目" width="140" sortable />
-      <el-table-column prop="direction" label="方向" width="70" sortable>
+      <el-table-column prop="lineNo" :label="$t('expense.common.colLine')" width="50" sortable />
+      <el-table-column prop="summary" :label="$t('field.summary')" min-width="200" show-overflow-tooltip sortable />
+      <el-table-column prop="subjectCode" :label="$t('expense.common.colAccountCode')" width="90" sortable />
+      <el-table-column prop="subjectName" :label="$t('field.subject')" width="140" sortable />
+      <el-table-column prop="direction" :label="$t('field.direction')" width="70" sortable>
         <template #default="{ row }">
-          <el-tag :type="row.direction === 'DEBIT' ? 'danger' : 'success'" size="small">{{ row.direction === 'DEBIT' ? '借' : '贷' }}</el-tag>
+          <el-tag :type="row.direction === 'DEBIT' ? 'danger' : 'success'" size="small">{{ row.direction === 'DEBIT' ? $t('expense.voucher.optDebit') : $t('expense.voucher.optCredit') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="amount" label="金额" width="110" sortable :formatter="(r,c,v) => fmt(v)" />
+      <el-table-column prop="amount" :label="$t('field.amount')" width="110" sortable :formatter="(r,c,v) => fmt(v)" />
     </el-table>
     <div style="margin-top: 10px">
-      <el-button type="primary" :disabled="voucher.status === BillStatus.POSTED" @click="postVoucher">记账（过账）</el-button>
-      <span style="margin-left: 12px; color: #909399">借方合计 {{ fmt(voucher.debitTotal) }} / 贷方合计 {{ fmt(voucher.creditTotal) }} / 平衡 {{ voucher.isBalanced === 1 ? '是' : '否' }}</span>
+      <el-button type="primary" :disabled="voucher.status === BillStatus.POSTED" @click="postVoucher">{{ $t('expense.voucher.btnPost') }}</el-button>
+      <span style="margin-left: 12px; color: #909399">{{ $t('expense.voucher.txtTrialBalance', { v1: fmt(voucher.debitTotal), v2: fmt(voucher.creditTotal), v3: voucher.isBalanced === 1 ? t('common.yes') : t('common.no') }) }}</span>
       <!-- D-DEC-288（X-49 乙）：已记账而资金指令未下发的付款腿凭证——只明示注记，不动账、不新开弹窗 -->
-      <div v-if="voucher.payLegUnsettled === true" style="margin-top: 6px; color: #e6a23c; font-size: 12px">资金指令未下发（账面已记账，款项尚未付出）</div>
+      <div v-if="voucher.payLegUnsettled === true" style="margin-top: 6px; color: #e6a23c; font-size: 12px">{{ $t('expense.voucher.hintPaymentNotIssued') }}</div>
     </div>
   </el-card>
 
@@ -46,6 +43,9 @@ import PrintDialog from '../../components/PrintDialog.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { formatMoney, showRowDetail } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -73,7 +73,7 @@ function fmt(v) { return formatMoney(v, '0.00') }
 
 async function loadVoucher() {
   if (!props.selected?.id) return
-  if (!props.selected.voucherNo) { ElMessage.info('该单据尚未生成凭证（需审批通过）'); return }
+  if (!props.selected.voucherNo) { ElMessage.info(t('expense.voucher.errNoVoucher')); return }
   loading.value = true
   try {
     const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50 })).list || []
@@ -88,7 +88,7 @@ async function loadVoucher() {
 async function postVoucher() {
   try {
     await sharingApi.voucherPost(voucher.id)
-    ElMessage.success('已记账')
+    ElMessage.success(t('expense.voucher.stPosted'))
     const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50 })).list || []
     const v = list.find((x) => x.id === voucher.id)
     if (v) Object.assign(voucher, v)
@@ -100,8 +100,8 @@ async function viewVoucherBillImages() {
   try {
     const d = await billApi.detail(props.selected.id)
     const fileIds = (d?.attaches || []).map((a) => a.fileId).filter((x) => x != null)
-    if (!fileIds.length) { ElMessage.info('该单据无影像/附件'); return }
-    attachViewer.value?.open(fileIds, '单据影像：' + (props.selected.billNo || ''))
+    if (!fileIds.length) { ElMessage.info(t('expense.voucher.errNoImage')); return }
+    attachViewer.value?.open(fileIds, t('expense.voucher.ctxImagePrefix') + (props.selected.billNo || ''))
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -123,7 +123,7 @@ watch(() => props.selected, (val) => {
 }, { deep: true })
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('field.detail') })
 }
 
 defineExpose({ loadVoucher })

@@ -1,47 +1,44 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <!-- ============ 冲销预付款（对公结算） ============ -->
-  <el-card header="冲销预付款（该供应商未冲销的预付款自动带出）" style="margin-top: 12px">
-    <el-button size="small" :disabled="!customerId" @click="loadPrepay">刷新该供应商预付款</el-button>
-    <el-table :data="offsets" size="small" border style="margin-top: 8px" empty-text="暂无数据">
-      <el-table-column prop="billNo" label="预付款单号" width="160" sortable />
-      <el-table-column label="预付款金额" width="110">
+  <el-card :header="$t('pay.offset.cardTitle')" style="margin-top: 12px">
+    <el-button size="small" :disabled="!customerId" @click="loadPrepay">{{ $t('pay.offset.btnRefreshPrepay') }}</el-button>
+    <el-table :data="offsets" size="small" border style="margin-top: 8px" :empty-text="$t('common.empty')">
+      <el-table-column prop="billNo" :label="$t('pay.offset.colPrepayNo')" width="160" sortable />
+      <el-table-column :label="$t('pay.offset.colPrepayAmount')" width="110">
         <template #default="{ row }">{{ fmt(row.totalAmount) }}</template>
       </el-table-column>
-      <el-table-column label="可冲销金额" width="110">
+      <el-table-column :label="$t('pay.offset.colOffsettableAmount')" width="110">
         <template #default="{ row }"><span style="color:#f59a23">{{ fmt(row.available) }}</span></template>
       </el-table-column>
-      <el-table-column label="本次冲销金额" width="150"><template #header><span style="color:#f56c6c">*</span>本次冲销金额</template>
+      <el-table-column :label="$t('pay.offset.colThisOffsetAmount')" width="150"><template #header><span style="color:#f56c6c">*</span>{{ $t('pay.offset.colThisOffsetAmount') }}</template>
         <template #default="{ row }">
           <el-input-number v-model="row.offsetAmount" :min="0" :max="Number(row.available) || 0" :precision="2" style="width: 100%" />
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="70">
+      <el-table-column :label="$t('common.operation')" width="70">
         <template #default="{ $index }">
-          <el-button link size="small" type="danger" @click="removePrepay($index)">删</el-button>
+          <el-button link size="small" type="danger" @click="removePrepay($index)">{{ $t('pay.shared.btnDeleteShort') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <el-alert type="info" :closable="false" title="冲销金额不能超过可冲销金额；提交后按冲销金额释放对应预付款占用的预算" style="margin-top: 6px" />
+    <el-alert type="info" :closable="false" :title="$t('pay.offset.hintRule')" style="margin-top: 6px" />
   </el-card>
 
   <!-- 预付款选择弹窗 -->
-  <el-dialog v-model="prepayDialog" title="选择该供应商未冲销的预付款" width="640px">
-    <el-table :data="prepayCandidates" size="small" @row-click="pickPrepay" highlight-current-row @selection-change="handleSelectionChange" empty-text="暂无数据">
+  <el-dialog v-model="prepayDialog" :title="$t('pay.offset.ctxPickTitle')" width="640px">
+    <el-table :data="prepayCandidates" size="small" @row-click="pickPrepay" highlight-current-row @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
       <el-table-column type="selection" width="45" />
-      <el-table-column prop="billNo" label="预付款单号" width="160" sortable />
-      <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip sortable />
-      <el-table-column prop="totalAmount" label="预付款金额" width="110" sortable :formatter="(r,c,v) => formatMoney(v)" />
-      <el-table-column label="可冲销" width="110">
+      <el-table-column prop="billNo" :label="$t('pay.offset.colPrepayNo')" width="160" sortable />
+      <el-table-column prop="title" :label="$t('pay.shared.colTitle')" min-width="200" show-overflow-tooltip sortable />
+      <el-table-column prop="totalAmount" :label="$t('pay.offset.colPrepayAmount')" width="110" sortable :formatter="(r,c,v) => formatMoney(v)" />
+      <el-table-column :label="$t('pay.offset.colOffsettable')" width="110">
         <template #default="{ row }">{{ fmt2(row) }}</template>
       </el-table-column>
     </el-table>
     <template #footer>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-      <el-button @click="prepayDialog = false">关闭</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('pay.shared.btnExportCsv') }}</el-button>
+      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('pay.shared.btnExportSelected', { v1: selRows.length }) }}</el-button>
+      <el-button @click="prepayDialog = false">{{ $t('common.close') }}</el-button>
     </template>
   </el-dialog>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
@@ -54,6 +51,9 @@ import { billApi } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { formatMoney } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -86,7 +86,7 @@ function fmt2(row) { return row.available == null ? '0.00' : Number(row.availabl
 function handleSelectionChange(val) { selRows.value = val }
 
 async function loadPrepay() {
-  if (!props.customerId) { ElMessage.warning('请先在右侧选择往来单位'); return }
+  if (!props.customerId) { ElMessage.warning(t('pay.offset.msgPickPartnerFirst')); return }
   const list = (await billApi.myPage({ pageNum: 1, pageSize: 100, billType: 'PAY', billSubType: 'PREPAY', status: 'APPROVED' })).list || []
   prepayCandidates.value = list.map((x) => ({
     id: x.id, billNo: x.billNo, title: x.title, totalAmount: Number(x.totalAmount || 0),
@@ -114,8 +114,8 @@ function removePrepay(i) {
 }
 
 function exportCsv() {
-  if (!prepayCandidates.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'billNo', label: '预付款单号' }, { prop: 'title', label: '标题' }, { prop: 'totalAmount', label: '预付款金额' }]
+  if (!prepayCandidates.value.length) { ElMessage.warning(t('pay.shared.msgNoExportData')); return }
+  const cols = [{ prop: 'billNo', label: t('pay.offset.colPrepayNo') }, { prop: 'title', label: t('pay.shared.colTitle') }, { prop: 'totalAmount', label: t('pay.offset.colPrepayAmount') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = prepayCandidates.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -129,13 +129,13 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `CorpPay_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('pay.shared.msgExportedCsv'))
 }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('pay.shared.msgPickExportRows')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('pay.shared.msgNoColumns')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -150,7 +150,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `CorpPay_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(t('pay.shared.msgExportedRows', { v1: selRows.value.length }))
 }
 
 defineExpose({ loadPrepay })

@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-tabs v-model="tab" :class="{ tabless: isSingle }">
     <!-- ============ 影像调阅评价 ============ -->

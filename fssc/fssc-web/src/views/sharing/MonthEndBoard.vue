@@ -1,19 +1,15 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="monthend-board">
     <!-- 权限门控（2026-09-16 P0）：本页是无菜单承载的全局入口（用户下拉「月结看板」+ /month-end），
          首屏主数据来自 gl:monthclose:list。无权限时给说明而非弹全局错误提示。 -->
     <div v-if="!canView" class="no-perm">
-      <el-empty description="无权限查看月结看板">
+      <el-empty :description="$t('sharing.monthEnd.noPermTitle')">
         <template #description>
-          <p class="np-title">无权限查看月结看板</p>
-          <p class="np-code">当前账号缺少权限：<code>gl:monthclose:list</code></p>
+          <p class="np-title">{{ $t('sharing.monthEnd.noPermTitle') }}</p>
+          <p class="np-code">{{ $t('sharing.monthEnd.labMissingPerm') }}<code>gl:monthclose:list</code></p>
           <p class="np-tip">
-            月结看板展示全公司月结任务进度与关账状态，属总账 / 共享运营岗职责。<br />
-            如需查看，请联系系统管理员申请授权。
-          </p>
+            {{ $t('sharing.monthEnd.hintBoardScope') }}<br />
+            {{ $t('sharing.monthEnd.noPermHint') }}</p>
         </template>
       </el-empty>
     </div>
@@ -22,11 +18,11 @@
     <!-- 顶部摘要 -->
     <div class="board-header">
       <div class="header-left">
-        <h2>月结进度看板</h2>
+        <h2>{{ $t('sharing.monthEnd.pageTitle') }}</h2>
         <span class="period">{{ period }}</span>
       </div>
       <div class="header-right">
-        <el-select v-model="selectedPeriod" placeholder="选择期间" style="width: 140px" @change="loadData">
+        <el-select v-model="selectedPeriod" :placeholder="$t('sharing.monthEnd.phSelectPeriod')" style="width: 140px" @change="loadData">
           <el-option v-for="p in periods" :key="p.value" :label="p.label" :value="p.value" />
         </el-select>
         <el-button :icon="Refresh" circle @click="loadData" />
@@ -49,7 +45,7 @@
     <!-- 总体进度条 -->
     <div class="progress-section">
       <div class="progress-title">
-        <span>月结总体进度</span>
+        <span>{{ $t('sharing.monthEnd.secOverall') }}</span>
         <span class="progress-percent">{{ overallProgress }}%</span>
       </div>
       <el-progress
@@ -63,11 +59,11 @@
     <!-- 图表区域 -->
     <div class="chart-row">
       <div class="chart-card">
-        <div class="chart-title">各模块完成状态</div>
+        <div class="chart-title">{{ $t('sharing.monthEnd.chartModules') }}</div>
         <div ref="statusChartRef" class="chart-body" />
       </div>
       <div class="chart-card">
-        <div class="chart-title">月结任务时间线</div>
+        <div class="chart-title">{{ $t('sharing.monthEnd.chartTimeline') }}</div>
         <div ref="timelineChartRef" class="chart-body" />
       </div>
     </div>
@@ -75,13 +71,13 @@
     <!-- 任务清单 -->
     <div class="task-section">
       <div class="task-header">
-        <span>月结任务清单</span>
+        <span>{{ $t('sharing.monthEnd.secTasks') }}</span>
         <el-radio-group v-model="taskFilter" size="small">
-          <el-radio-button value="all">全部</el-radio-button>
-          <el-radio-button value="pending">待处理</el-radio-button>
-          <el-radio-button value="doing">进行中</el-radio-button>
-          <el-radio-button value="done">已完成</el-radio-button>
-          <el-radio-button value="overdue">逾期</el-radio-button>
+          <el-radio-button value="all">{{ $t('common.all') }}</el-radio-button>
+          <el-radio-button value="pending">{{ $t('status.pending') }}</el-radio-button>
+          <el-radio-button value="doing">{{ $t('sharing.common.colDoing') }}</el-radio-button>
+          <el-radio-button value="done">{{ $t('sharing.common.colDone') }}</el-radio-button>
+          <el-radio-button value="overdue">{{ $t('sharing.common.colOverdue') }}</el-radio-button>
         </el-radio-group>
       </div>
       <!-- R5-11: 月末提醒 -->
@@ -96,35 +92,34 @@
       <!-- R5-11: 自动调度下一个任务 -->
       <el-alert
         v-if="nextTask"
-        :title="`下一个可执行任务: ${nextTask.name}（${nextTask.dept}）`"
+        :title="$t('sharing.monthEnd.alertNextTask', { v1: nextTask.name, v2: nextTask.dept })"
         type="info"
         show-icon
         :closable="false"
         style="margin-bottom: 8px"
       />
-      <el-table :data="pagedData" style="width: 100%" row-key="id" border empty-text="暂无数据">
-        <el-table-column prop="moduleName" label="模块" width="120" />
-        <el-table-column prop="taskName" label="任务" min-width="200" />
-        <el-table-column prop="owner" label="负责人" width="100" />
-        <el-table-column prop="planDate" label="计划完成日" width="120" />
-        <el-table-column prop="actualDate" label="实际完成日" width="120">
+      <el-table :data="pagedData" style="width: 100%" row-key="id" border :empty-text="$t('common.empty')">
+        <el-table-column prop="moduleName" :label="$t('sharing.monthEnd.colModule')" width="120" />
+        <el-table-column prop="taskName" :label="$t('sharing.common.colTask')" min-width="200" />
+        <el-table-column prop="owner" :label="$t('sharing.monthEnd.colOwner')" width="100" />
+        <el-table-column prop="planDate" :label="$t('sharing.monthEnd.colPlanDate')" width="120" />
+        <el-table-column prop="actualDate" :label="$t('sharing.monthEnd.colActualDate')" width="120">
           <template #default="{ row }">
             <span v-if="row.actualDate">{{ row.actualDate }}</span>
             <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="100">
+        <el-table-column :label="$t('common.status')" width="100">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">
               {{ statusLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100">
+        <el-table-column :label="$t('common.operation')" width="100">
           <template #default="{ row }">
             <el-button v-if="row.status !== 'done'" size="small" type="primary" link @click="markDone(row)">
-              标记完成
-            </el-button>
+              {{ $t('sharing.monthEnd.btnMarkDone') }}</el-button>
             <span v-else class="text-success">✓</span>
           </template>
         </el-table-column>
@@ -151,6 +146,9 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
 import TablePager from '../../components/common/TablePager.vue'
 import { useTablePager } from '../../composables/useTablePager'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => { try { loadData() } catch { /* noop */ } },
@@ -196,11 +194,11 @@ const overviewStats = computed(() => {
   const pending = tasks.value.filter(t => t.status === 'pending' || t.status === 'OPEN').length
   const overdue = tasks.value.filter(t => t.status === 'overdue' || t.status === 'OVERDUE').length
   return [
-    { label: '总任务', value: total, icon: DataAnalysis, color: '#409eff' },
-    { label: '已完成', value: done, icon: Document, color: '#67c23a' },
-    { label: '待处理', value: pending, icon: Bell, color: '#e6a23c' },
-    { label: '逾期', value: overdue, icon: Warning, color: '#f56c6c' },
-    { label: '完成率', value: total ? Math.round(done/total*100) + '%' : '0%', icon: Coin, color: '#409eff' },
+    { label: t('sharing.monthEnd.statTotal'), value: total, icon: DataAnalysis, color: '#409eff' },
+    { label: t('sharing.common.colDone'), value: done, icon: Document, color: '#67c23a' },
+    { label: t('status.pending'), value: pending, icon: Bell, color: '#e6a23c' },
+    { label: t('sharing.common.colOverdue'), value: overdue, icon: Warning, color: '#f56c6c' },
+    { label: t('sharing.monthEnd.statRate'), value: total ? Math.round(done/total*100) + '%' : '0%', icon: Coin, color: '#409eff' },
   ]
 })
 
@@ -238,8 +236,8 @@ function statusTagType(s) {
     CLOSED: 'success', OPEN: 'info', IN_PROGRESS: 'warning', OVERDUE: 'danger' }[s] || 'info'
 }
 function statusLabel(s) {
-  return { done: '已完成', pending: '待处理', doing: '进行中', overdue: '逾期',
-    CLOSED: '已完成', OPEN: '待处理', IN_PROGRESS: '进行中', OVERDUE: '逾期' }[s] || s
+  return { done: t('sharing.common.colDone'), pending: t('status.pending'), doing: t('sharing.common.colDoing'), overdue: t('sharing.common.colOverdue'),
+    CLOSED: t('sharing.common.colDone'), OPEN: t('status.pending'), IN_PROGRESS: t('sharing.common.colDoing'), OVERDUE: t('sharing.common.colOverdue') }[s] || s
 }
 
 // 图表
@@ -270,13 +268,13 @@ function renderStatusChart() {
   }))
   statusChart.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: ['已完成', '待处理'], top: 0 },
+    legend: { data: [t('sharing.common.colDone'), t('status.pending')], top: 0 },
     grid: { left: 80, right: 20, top: 40, bottom: 30 },
     xAxis: { type: 'value' },
     yAxis: { type: 'category', data: moduleStats.map(m => m.name), axisLabel: { fontSize: 11 } },
     series: [
-      { name: '已完成', type: 'bar', stack: 'total', data: moduleStats.map(m => m.done), itemStyle: { color: '#67c23a' } },
-      { name: '待处理', type: 'bar', stack: 'total', data: moduleStats.map(m => m.pending), itemStyle: { color: '#e6a23c' } },
+      { name: t('sharing.common.colDone'), type: 'bar', stack: 'total', data: moduleStats.map(m => m.done), itemStyle: { color: '#67c23a' } },
+      { name: t('status.pending'), type: 'bar', stack: 'total', data: moduleStats.map(m => m.pending), itemStyle: { color: '#e6a23c' } },
     ],
   })
 }
@@ -292,7 +290,7 @@ function renderTimelineChart() {
     tooltip: {
       formatter: p => {
         const d = p.data
-        return `${d[4]}<br/>计划: ${new Date(d[1]).toLocaleDateString()}<br/>实际: ${d[2] ? new Date(d[2]).toLocaleDateString() : '未完成'}`
+        return t('sharing.monthEnd.tipSchedule', { v1: d[4], v2: new Date(d[1]).toLocaleDateString(), v3: d[2] ? new Date(d[2]).toLocaleDateString() : t('sharing.monthEnd.txtNotDone') })
       }
     },
     grid: { left: 50, right: 20, top: 20, bottom: 50 },
@@ -312,7 +310,7 @@ async function loadPeriods() {
   const fallback = () => {
     const now = new Date()
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    periods.value = [{ label: `${now.getFullYear()}年${now.getMonth() + 1}月`, value: ym }]
+    periods.value = [{ label: t('sharing.monthEnd.periodLabel', { v1: now.getFullYear(), v2: now.getMonth() + 1 }), value: ym }]
   }
   // 无 md:period:list 直接兜底，不发请求（原实现会请求失败再进 catch，但全局 toast 已经弹出）
   if (!canLoadPeriods) return fallback()
@@ -331,7 +329,7 @@ async function loadPeriods() {
         if (!y || !m) return null
         const st = String(p.status || '').toUpperCase()
         if (st !== 'NORMAL' && st !== 'OPEN' && st !== 'CLOSED') return null
-        return { label: `${y}年${m}月`, value: `${y}-${String(m).padStart(2, '0')}`, raw: p }
+        return { label: t('sharing.monthEnd.periodLabel', { v1: y, v2: m }), value: `${y}-${String(m).padStart(2, '0')}`, raw: p }
       })
       .filter(Boolean)
       .reverse()
@@ -354,7 +352,7 @@ async function loadData() {
     // 按 moduleName 聚合
     const modMap = {}
     const taskList = list.map((item, idx) => {
-      const modName = item.moduleName || item.module || item.bizType || '总账'
+      const modName = item.moduleName || item.module || item.bizType || t('sharing.common.colGl')
       const st = mapStatus(item.status)
       if (!modMap[modName]) modMap[modName] = { name: modName, total: 0, done: 0 }
       modMap[modName].total++
@@ -365,7 +363,7 @@ async function loadData() {
       return {
         id: item.id || `${modName}-${idx}`,
         moduleName: modName,
-        taskName: item.taskName || item.name || item.summary || `${modName}-月结任务`,
+        taskName: item.taskName || item.name || item.summary || t('sharing.monthEnd.defaultTaskName', { v1: modName }),
         owner: item.owner || item.assignee || item.handlerName || '—',
         planDate: planDate || '',
         actualDate: item.actualDate || item.closeDate || '',
@@ -382,14 +380,14 @@ async function loadData() {
         const flowRes = await flowApi.instancePage({ pageNum: 1, pageSize: 200 }, { silent: true })
         const flowList = flowRes?.records || flowRes?.list || []
         flowList.forEach((f, idx) => {
-          const modName = '流程审批'
+          const modName = t('sharing.monthEnd.txtFlowApprove')
           const st = 'doing'
           if (!modMap[modName]) modMap[modName] = { name: modName, total: 0, done: 0 }
           modMap[modName].total++
           taskList.push({
             id: `flow-${f.id || idx}`,
             moduleName: modName,
-            taskName: f.bizType ? `${f.bizType}-${f.billNo || ''}` : (f.processDefinitionName || '审批中'),
+            taskName: f.bizType ? `${f.bizType}-${f.billNo || ''}` : (f.processDefinitionName || t('status.approving')),
             owner: f.assignee || '—',
             planDate: f.createTime ? f.createTime.slice(0, 10) : '',
             actualDate: '',

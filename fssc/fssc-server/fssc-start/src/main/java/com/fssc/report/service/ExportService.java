@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -79,10 +76,13 @@ public class ExportService {
         }
     }
 
-    /** 导出部门报销排行（① 导出口径：仅本登录人公司） */
+    /** 导出部门报销排行（① 导出口径：仅本登录人公司）
+     * D-F1R-04：补数据范围两参，与看板口径同源。本方法自身不标 @DataScope，
+     * 是否按部门/本人收口取决于调用链上的入口注解（有 @DataScope 才收口，否则传 null
+     * 即保持原"仅公司"导出行径，不改变既有导出行为）。 */
     public byte[] exportDeptRanking() {
         Long mine = orgGuard.enforceCompany();
-        List<Map<String, Object>> rows = reportMapper.expenseByDept(mine);
+        List<Map<String, Object>> rows = reportMapper.expenseByDept(mine, null, null);
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("部门报销排行");
             String[] heads = {"部门", "单据数", "报销金额"};

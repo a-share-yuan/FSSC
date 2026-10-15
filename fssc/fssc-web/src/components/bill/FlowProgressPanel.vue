@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <!--
   流程进度卡片：单据页顶部常驻，回答三件事——
   ① 这张单现在停在流程的哪一节、是否还在办；② 该节谁在办、已停留多久；③ 每一节谁在什么时间签了什么意见。

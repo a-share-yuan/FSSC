@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -334,7 +331,18 @@ public class NodeOrgResolver {
             // 资金族（TR_BILL/TR_RECEIPT/TR_TRANSFER/TR_UPLOAD/TR_PLAN/TR_PLAN_ADJUST）的
             // deny_self 与自审回避才第一次有真实取数来源。
             Map.entry("tr_bill_settle", "create_by"), Map.entry("tr_credit_bill", "create_by"),
-            Map.entry("tr_transfer", "create_by"), Map.entry("tr_fund_plan", "create_by"));
+            Map.entry("tr_transfer", "create_by"), Map.entry("tr_fund_plan", "create_by"),
+            // D-V4R-75（V5 册任务3 重跑 2026-10-15 实测）：应收/发票/对账这一族的表同样没有
+            // apply_user_id 列，未登记 ⇒ 每个节点解析提交人都抛一次 bad SQL grammar
+            // （日志原文「解析单据提交人失败 proc=… table=rc_receivable: … [SELECT apply_user_id FROM
+            // `rc_receivable` WHERE id = ?]，回落实例发起人」），deny_self 在 AR/发票域只能按最严口径拦。
+            // 普查件＝.tmp/v5-t3-applycol-census.cjs：源码 Map.entry 的表里共 33 张无 apply_user_id，
+            // 其中 26 张本方法已登记，剩这 7 张是漏网的。归属列取各表 service 实际写入的人（create_by），
+            // pay_plan 例外——它连 create_by 都没有，提单列就是 applicant_id。
+            Map.entry("rc_receivable", "create_by"), Map.entry("rc_bad_debt", "create_by"),
+            Map.entry("po_receipt", "create_by"), Map.entry("inv_invoice", "create_by"),
+            Map.entry("supplier_recon", "create_by"), Map.entry("ar_recon_record", "create_by"),
+            Map.entry("pay_plan", "applicant_id"));
 
     /**
      * 对任务执行办理人解析（BPMN candidateGroups 生成任务的统一入口，start 首节点与 complete 后续节点共用）。
@@ -1314,8 +1322,14 @@ public class NodeOrgResolver {
         if (roleCodes == null || roleCodes.isEmpty()) {
             return false;
         }
+        // DIRECT_SUPERVISOR 是「取人方式」不是岗位：节点办理人由 tryResolveAssignee 沿部门汇报线
+        // 精确解析为"发起人的直属上级"。若在此处放行，则任何绑定了该角色的账号都能凭 taskId
+        // 办理**任意发起人**的单据（跨人越权）。故候选组命中判定必须排除它——
+        // 即便数据层再次误绑，本层也不给越权通道（纵深防御，2026-10-15）。
         Set<String> hit = candidateGroups(task).stream()
-                .filter(roleCodes::contains).collect(Collectors.toSet());
+                .filter(roleCodes::contains)
+                .filter(g -> !"DIRECT_SUPERVISOR".equals(g))
+                .collect(Collectors.toSet());
         if (hit.isEmpty()) {
             return false;
         }

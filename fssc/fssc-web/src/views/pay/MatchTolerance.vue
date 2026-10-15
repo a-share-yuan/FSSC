@@ -1,57 +1,54 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>参数化容差引擎</b>
-        <span style="color:#909399; font-size:12px">按维度配置容差（百分比 / 固定金额），超容差冻结付款 / WARN 提示</span>
+        <b>{{ $t('pay.tolerance.pageTitle') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('pay.tolerance.hintByDim') }}</span>
         <span style="margin-left:auto; display:flex; gap:8px">
-          <el-button type="primary" size="small" @click="reload">刷新</el-button>
-      <el-button size="small" @click="exportCsv(rows, CSV_COLS, 'MatchTolerance')">导出 CSV</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="exportBatchCsv(selRows, 'MatchTolerance')">导出选中({{ selRows.length }})</el-button>
+          <el-button type="primary" size="small" @click="reload">{{ $t('common.refresh') }}</el-button>
+      <el-button size="small" @click="exportCsv(rows, CSV_COLS, 'MatchTolerance')">{{ $t('pay.shared.btnExportCsv') }}</el-button>
+      <el-button v-if="selRows.length" type="success" plain size="small" @click="exportBatchCsv(selRows, 'MatchTolerance')">{{ $t('pay.shared.btnExportSelected', { v1: selRows.length }) }}</el-button>
         </span>
       </div>
     </template>
 
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="rows" size="small" border stripe v-else @selection-change="handleSelectionChange" @row-dblclick="openRowDetail" empty-text="暂无数据">
+    <el-table :data="rows" size="small" border stripe v-else @selection-change="handleSelectionChange" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-      <el-table-column prop="dimensionCode" label="维度" width="220" sortable>
+      <el-table-column prop="dimensionCode" :label="$t('pay.tolerance.colDimension')" width="220" sortable>
         <template #default="{ row }">{{ dimText(row.dimensionCode) }}</template>
       </el-table-column>
-      <el-table-column label="容差类型" width="160">
+      <el-table-column :label="$t('pay.tolerance.colToleranceType')" width="160">
         <template #default="{ row }">
-          <el-select v-model="dim(row).toleranceType" placeholder="类型" size="small">
-            <el-option label="百分比(%)" value="PERCENT" />
-            <el-option label="固定金额(元)" value="FIXED" />
+          <el-select v-model="dim(row).toleranceType" :placeholder="$t('field.type')" size="small">
+            <el-option :label="$t('pay.tolerance.optPercent')" value="PERCENT" />
+            <el-option :label="$t('pay.tolerance.optFixedAmount')" value="FIXED" />
           </el-select>
         </template>
       </el-table-column>
-      <el-table-column label="容差值" width="180">
+      <el-table-column :label="$t('pay.tolerance.colToleranceValue')" width="180">
         <template #default="{ row }">
           <el-input-number v-model="dim(row).toleranceValue" :min="0" :precision="4" :step="0.5" size="small" style="width:150px" />
         </template>
       </el-table-column>
-      <el-table-column label="备注" min-width="150">
+      <el-table-column :label="$t('common.remark')" min-width="150">
         <template #default="{ row }">
-          <el-input v-model="dim(row).remark" placeholder="说明（当前生效规则）" size="small" :rows="1" />
+          <el-input v-model="dim(row).remark" :placeholder="$t('pay.tolerance.phRemarkCurrent')" size="small" :rows="1" />
         </template>
       </el-table-column>
-      <el-table-column label="生效日" width="150">
+      <el-table-column :label="$t('pay.tolerance.colEffectiveFrom')" width="150">
         <template #default="{ row }">
-          <el-date-picker v-model="dim(row).effectDate" type="date" value-format="YYYY-MM-DD" size="small" placeholder="立即" style="width:130px" />
+          <el-date-picker v-model="dim(row).effectDate" type="date" value-format="YYYY-MM-DD" size="small" :placeholder="$t('pay.tolerance.phEffectiveNow')" style="width:130px" />
         </template>
       </el-table-column>
-      <el-table-column label="失效日" width="150">
+      <el-table-column :label="$t('pay.tolerance.colEffectiveTo')" width="150">
         <template #default="{ row }">
-          <el-date-picker v-model="dim(row).expireDate" type="date" value-format="YYYY-MM-DD" size="small" placeholder="长期" style="width:130px" />
+          <el-date-picker v-model="dim(row).expireDate" type="date" value-format="YYYY-MM-DD" size="small" :placeholder="$t('pay.tolerance.phPermanent')" style="width:130px" />
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="100" align="center">
+      <el-table-column :label="$t('common.operation')" width="100" align="center">
         <template #default="{ row }">
-          <el-button type="primary" size="small" @click="save(row)">保存</el-button>
+          <el-button type="primary" size="small" @click="save(row)">{{ $t('common.save') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -69,67 +66,67 @@
 
     <!-- 41号审查 P2-13:差异化容差(按组织/供应商) -->
     <div class="scoped-head">
-      <b>差异化容差（组织 / 供应商级，未命中时回退上方通用配置）</b>
-      <el-button size="small" type="primary" plain @click="scopedVisible = true">新增差异化规则</el-button>
+      <b>{{ $t('pay.tolerance.secScoped') }}</b>
+      <el-button size="small" type="primary" plain @click="scopedVisible = true">{{ $t('pay.tolerance.btnAddScoped') }}</el-button>
     </div>
-    <el-table :data="scopedRows" size="small" border empty-text="暂无差异化配置">
-      <el-table-column label="维度" min-width="180">
+    <el-table :data="scopedRows" size="small" border :empty-text="$t('pay.tolerance.hintNoScoped')">
+      <el-table-column :label="$t('pay.tolerance.colDimension')" min-width="180">
         <template #default="{ row }">{{ dimText(row.dimensionCode) }}</template>
       </el-table-column>
-      <el-table-column prop="companyId" label="公司ID" width="90" align="center">
-        <template #default="{ row }">{{ row.companyId || '全部' }}</template>
+      <el-table-column prop="companyId" :label="$t('pay.tolerance.colCompanyId')" width="90" align="center">
+        <template #default="{ row }">{{ row.companyId || t('common.all') }}</template>
       </el-table-column>
-      <el-table-column prop="supplierId" label="供应商ID" width="90" align="center">
-        <template #default="{ row }">{{ row.supplierId || '全部' }}</template>
+      <el-table-column prop="supplierId" :label="$t('pay.tolerance.colSupplierId')" width="90" align="center">
+        <template #default="{ row }">{{ row.supplierId || t('common.all') }}</template>
       </el-table-column>
-      <el-table-column label="容差" width="110" align="right">
-        <template #default="{ row }">{{ row.toleranceValue }}{{ row.toleranceType === 'PERCENT' ? '%' : ' 元' }}</template>
+      <el-table-column :label="$t('pay.tolerance.colTolerance')" width="110" align="right">
+        <template #default="{ row }">{{ row.toleranceValue }}{{ row.toleranceType === 'PERCENT' ? '%' : t('pay.shared.unitYuan') }}</template>
       </el-table-column>
-      <el-table-column label="生效期" min-width="180">
-        <template #default="{ row }">{{ (row.effectDate || '立即') }} ~ {{ (row.expireDate || '长期') }}</template>
+      <el-table-column :label="$t('pay.tolerance.colEffectivePeriod')" min-width="180">
+        <template #default="{ row }">{{ (row.effectDate || t('pay.tolerance.phEffectiveNow')) }} ~ {{ (row.expireDate || t('pay.tolerance.phPermanent')) }}</template>
       </el-table-column>
-      <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
-      <el-table-column label="操作" width="70" align="center">
+      <el-table-column prop="remark" :label="$t('common.remark')" min-width="120" show-overflow-tooltip />
+      <el-table-column :label="$t('common.operation')" width="70" align="center">
         <template #default="{ row }">
-          <el-button link size="small" type="danger" @click="delScoped(row)">删除</el-button>
+          <el-button link size="small" type="danger" @click="delScoped(row)">{{ $t('pay.tolerance.btnDeleteScoped') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="scopedVisible" title="新增差异化容差规则" width="480px" destroy-on-close>
+    <el-dialog v-model="scopedVisible" :title="$t('pay.tolerance.ctxAddScopedTitle')" width="480px" destroy-on-close>
       <el-form ref="scopedFormRef" :model="scopedForm" :rules="scopedRules" label-width="100px" size="small">
-        <el-form-item label="维度" prop="dimensionCode">
+        <el-form-item :label="$t('pay.tolerance.colDimension')" prop="dimensionCode">
           <el-select v-model="scopedForm.dimensionCode" style="width:100%">
             <el-option v-for="(v, k) in DIMS" :key="k" :label="v" :value="k" />
           </el-select>
         </el-form-item>
-        <el-form-item label="公司ID"><el-input-number v-model="scopedForm.companyId" :min="1" style="width:100%" placeholder="空=全部组织" /></el-form-item>
-        <el-form-item label="供应商ID"><el-input-number v-model="scopedForm.supplierId" :min="1" style="width:100%" placeholder="空=全部供应商" /></el-form-item>
-        <el-form-item label="容差类型" prop="toleranceType">
+        <el-form-item :label="$t('pay.tolerance.colCompanyId')"><el-input-number v-model="scopedForm.companyId" :min="1" style="width:100%" :placeholder="$t('pay.tolerance.phAllOrgs')" /></el-form-item>
+        <el-form-item :label="$t('pay.tolerance.colSupplierId')"><el-input-number v-model="scopedForm.supplierId" :min="1" style="width:100%" :placeholder="$t('pay.tolerance.phAllSuppliers')" /></el-form-item>
+        <el-form-item :label="$t('pay.tolerance.colToleranceType')" prop="toleranceType">
           <el-select v-model="scopedForm.toleranceType" style="width:100%">
-            <el-option label="百分比(%)" value="PERCENT" />
-            <el-option label="固定金额(元)" value="FIXED" />
+            <el-option :label="$t('pay.tolerance.optPercent')" value="PERCENT" />
+            <el-option :label="$t('pay.tolerance.optFixedAmount')" value="FIXED" />
           </el-select>
         </el-form-item>
-        <el-form-item label="容差值" prop="toleranceValue"><el-input-number v-model="scopedForm.toleranceValue" :min="0" :precision="4" style="width:100%" /></el-form-item>
-        <el-form-item label="生效日"><el-date-picker v-model="scopedForm.effectDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
-        <el-form-item label="失效日"><el-date-picker v-model="scopedForm.expireDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
-        <el-form-item label="备注"><el-input v-model="scopedForm.remark" /></el-form-item>
+        <el-form-item :label="$t('pay.tolerance.colToleranceValue')" prop="toleranceValue"><el-input-number v-model="scopedForm.toleranceValue" :min="0" :precision="4" style="width:100%" /></el-form-item>
+        <el-form-item :label="$t('pay.tolerance.colEffectiveFrom')"><el-date-picker v-model="scopedForm.effectDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+        <el-form-item :label="$t('pay.tolerance.colEffectiveTo')"><el-date-picker v-model="scopedForm.expireDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+        <el-form-item :label="$t('common.remark')"><el-input v-model="scopedForm.remark" /></el-form-item>
       </el-form>
       <template #footer>
-        <el-button size="small" @click="scopedVisible = false">取消</el-button>
-        <el-button type="primary" size="small" @click="saveScoped">保存</el-button>
+        <el-button size="small" @click="scopedVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="saveScoped">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <el-alert style="margin-top:12px" type="info" :closable="false"
-      title="容差语义：PAY_VS_INVOICE=付款≤发票(硬约束,默认0即不允许超付)；INVOICE_VS_RECEIPT=发票≤收货(超容差ERROR冻结,容差内WARN)；RECEIPT_VS_PO=收货≤订单(超容差WARN)。回到三单匹配页重新检查即可生效。" />
+      :title="$t('pay.tolerance.hintSemantics')" />
   </el-card>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { showRowDetail } from '@/utils/format'
 import { p1Api } from '../../api'
@@ -138,6 +135,9 @@ import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import { exportCsv, exportBatchCsv } from '../../utils/csv'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -156,14 +156,14 @@ const pageNum = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 
-const CSV_COLS = [{ prop: 'dimensionCode', label: '维度' }]
+const CSV_COLS = computed(() => ([{ prop: 'dimensionCode', label: t('pay.tolerance.colDimension') }]))
 
-const DIMS = {
-  PAY_VS_INVOICE: '付款≤发票',
-  INVOICE_VS_RECEIPT: '发票≤收货',
-  RECEIPT_VS_PO: '收货≤订单',
-}
-const dimText = (k) => DIMS[k] || k
+const DIMS = computed(() => ({
+  PAY_VS_INVOICE: t('pay.tolerance.dimPayVsInvoice'),
+  INVOICE_VS_RECEIPT: t('pay.tolerance.dimInvoiceVsReceipt'),
+  RECEIPT_VS_PO: t('pay.tolerance.dimReceiptVsPo'),
+}))
+const dimText = (k) => DIMS.value[k] || k
 
 /** 返回可赋值的编辑对象（不存在则初始化），供 v-model 直接绑定 */
 function dim(row) {
@@ -214,7 +214,7 @@ async function save(row) {
       effectDate: e.effectDate || null,
       expireDate: e.expireDate || null,
     })
-    ElMessage.success('容差配置已保存：' + row.dimensionCode)
+    ElMessage.success(t('pay.tolerance.msgSaved') + row.dimensionCode)
     reload()
   } catch (err) { ElMessage.error(err.message || String(err)) }
 }
@@ -233,7 +233,7 @@ function handleCurrentChange(val) {
 onMounted(reload)
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('field.detail') })
 }
 
 function handleSelectionChange(val) { selRows.value = val }
@@ -249,7 +249,7 @@ const { submit: guardScoped } = useSubmitGuard(scopedFormRef)
 async function saveScoped() {
   await guardScoped(async () => {
     // 跨字段规则（不是单字段必填）：公司与供应商都为空＝通用配置，与页面上的通用行语义不同，故要求至少填一项
-    if (!scopedForm.companyId && !scopedForm.supplierId) { ElMessage.warning('至少填写公司ID或供应商ID之一(否则属通用配置)'); return }
+    if (!scopedForm.companyId && !scopedForm.supplierId) { ElMessage.warning(t('pay.tolerance.errNeedScope')); return }
     try {
       await p1Api.toleranceUpsert({
         dimensionCode: scopedForm.dimensionCode,
@@ -261,7 +261,7 @@ async function saveScoped() {
         expireDate: scopedForm.expireDate || null,
         remark: scopedForm.remark || null,
       })
-      ElMessage.success('差异化规则已保存')
+      ElMessage.success(t('pay.tolerance.msgScopedSaved'))
       scopedVisible.value = false
       reload()
     } catch (e) { ElMessage.error(e.message) }
@@ -269,10 +269,10 @@ async function saveScoped() {
 }
 
 async function delScoped(row) {
-  await ElMessageBox.confirm('确认删除该差异化容差规则?', '删除', { type: 'warning' })
+  await ElMessageBox.confirm(t('pay.tolerance.confirmDeleteScoped'), t('pay.tolerance.btnDeleteScoped'), { type: 'warning' })
   try {
     await p1Api.toleranceDelete(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('pay.tolerance.msgDeleted'))
     reload()
   } catch (e) { ElMessage.error(e.message) }
 }

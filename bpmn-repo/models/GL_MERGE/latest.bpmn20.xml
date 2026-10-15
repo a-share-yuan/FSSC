@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_GL_MERGE" targetNamespace="http://fssc">
   <bpmn:process id="GL_MERGE" name="合并报表（作业）" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="开始" />
     <bpmn:userTask id="GMG_1" name="合并底稿编制【总账会计】" flowable:candidateGroups="FIN_GL" />
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="GMG_1" />
     <bpmn:userTask id="GMG_2" name="合并复核【总账会计】" flowable:candidateGroups="FIN_GL" />
+        <bpmn:userTask id="GMG_2_R" name="合并复核【财务经理】" flowable:candidateGroups="FIN_MANAGER" />
     <bpmn:sequenceFlow id="Flow_GMG_2" sourceRef="GMG_1" targetRef="GMG_2" />
     <bpmn:endEvent id="EndEvent_1" name="结束" />
-    <bpmn:sequenceFlow id="Flow_end" sourceRef="GMG_2" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="GMG_2" targetRef="GMG_2_R" />
+        <bpmn:sequenceFlow id="Flow_end_r2" sourceRef="GMG_2_R" targetRef="EndEvent_1" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="GL_MERGE">

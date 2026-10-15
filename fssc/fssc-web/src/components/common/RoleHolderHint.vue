@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div v-if="lines.length" class="role-hint">
     <div v-for="(l, i) in lines" :key="i" :class="l.level">{{ l.text }}</div>

@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div>
     <!-- 概览统计卡片 -->
@@ -10,7 +7,7 @@
           <div style="display: flex; align-items: center; gap: 12px">
             <el-icon size="32" color="#409eff"><Document /></el-icon>
             <div>
-              <div style="font-size: 13px; color: #909399">付款单总数</div>
+              <div style="font-size: 13px; color: #909399">{{ $t('pay.match.statTotalBills') }}</div>
               <div style="font-size: 24px; font-weight: 700">{{ stats.total }}</div>
             </div>
           </div>
@@ -21,7 +18,7 @@
           <div style="display: flex; align-items: center; gap: 12px">
             <el-icon size="32" color="#67c23a"><CircleCheck /></el-icon>
             <div>
-              <div style="font-size: 13px; color: #909399">三单一致</div>
+              <div style="font-size: 13px; color: #909399">{{ $t('pay.match.stMatched') }}</div>
               <div style="font-size: 24px; font-weight: 700; color: #67c23a">{{ stats.matched }}</div>
             </div>
           </div>
@@ -32,7 +29,7 @@
           <div style="display: flex; align-items: center; gap: 12px">
             <el-icon size="32" color="#e6a23c"><Warning /></el-icon>
             <div>
-              <div style="font-size: 13px; color: #909399">差异预警</div>
+              <div style="font-size: 13px; color: #909399">{{ $t('pay.match.stWarnDiff') }}</div>
               <div style="font-size: 24px; font-weight: 700; color: #e6a23c">{{ stats.warn }}</div>
             </div>
           </div>
@@ -43,7 +40,7 @@
           <div style="display: flex; align-items: center; gap: 12px">
             <el-icon size="32" color="#f56c6c"><CircleClose /></el-icon>
             <div>
-              <div style="font-size: 13px; color: #909399">匹配失败（冻结）</div>
+              <div style="font-size: 13px; color: #909399">{{ $t('pay.match.stFailedFrozen') }}</div>
               <div style="font-size: 24px; font-weight: 700; color: #f56c6c">{{ stats.failed }}</div>
             </div>
           </div>
@@ -54,19 +51,19 @@
     <el-card>
       <template #header>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-          <b>三单匹配</b>
-          <el-input v-model="q.keyword" placeholder="单号/标题" clearable style="width: 160px" @keyup.enter="load" />
-          <el-select v-model="q.matchStatus" placeholder="匹配状态" clearable style="width: 140px" @change="load">
-            <el-option label="三单一致" value="MATCHED" />
-            <el-option label="差异预警" value="WARN" />
-            <el-option label="匹配失败" value="FAILED" />
+          <b>{{ $t('pay.match.pageTitle') }}</b>
+          <el-input v-model="q.keyword" :placeholder="$t('pay.match.phKeyword')" clearable style="width: 160px" @keyup.enter="load" />
+          <el-select v-model="q.matchStatus" :placeholder="$t('pay.match.colMatchStatus')" clearable style="width: 140px" @change="load">
+            <el-option :label="$t('pay.match.stMatched')" value="MATCHED" />
+            <el-option :label="$t('pay.match.stWarnDiff')" value="WARN" />
+            <el-option :label="$t('pay.match.stFailed')" value="FAILED" />
             <!-- D-DEC-077：手工匹配链办结后的终态，结论落 exp_bill.ext_json.matchVerdict，此前无处显形 -->
-            <el-option label="人工匹配已办结" value="MANUAL_MATCHED" />
+            <el-option :label="$t('pay.match.stManualClosed')" value="MANUAL_MATCHED" />
           </el-select>
-          <el-button type="primary" size="small" @click="load">查询</el-button>
-          <el-button size="small" @click="batchRecheck" :loading="batchLoading">批量重算</el-button>
-          <el-tooltip content="三单匹配：采购订单 → 收货单 → 发票 → 付款单（付款 ≤ 发票 ≤ 收货 ≤ 订单）" placement="left">
-            <el-button size="small" link>匹配规则说明</el-button>
+          <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
+          <el-button size="small" @click="batchRecheck" :loading="batchLoading">{{ $t('pay.match.btnBatchRecalc') }}</el-button>
+          <el-tooltip :content="$t('pay.match.hintRuleChain')" placement="left">
+            <el-button size="small" link>{{ $t('pay.match.btnRuleGuide') }}</el-button>
           </el-tooltip>
         </div>
       </template>
@@ -74,7 +71,7 @@
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
       <el-table class="cm-target-match" :data="rows" size="small" v-else max-height="520"
                 @row-click="openDetail" @selection-change="handleSelectionChange"
-                :row-class-name="matchRowClass" empty-text="暂无数据" @row-dblclick="openDetail">
+                :row-class-name="matchRowClass" :empty-text="$t('common.empty')" @row-dblclick="openDetail">
         <el-table-column type="selection" width="45" />
         <el-table-column type="expand">
           <template #default="{ row }">
@@ -92,14 +89,13 @@
                 </div>
               </div>
               <el-tag :type="statusType(row.matchStatus)" size="small" effect="dark" style="margin-top:6px">
-                {{ statusLabel(row.matchStatus) }} · {{ inlineChainNodes(row).filter(n => n.ok).length }}/4 环节就绪
-              </el-tag>
+                {{ $t('pay.match.chainReady', { v1: statusLabel(row.matchStatus), v2: inlineChainNodes(row).filter(n => n.ok).length }) }}</el-tag>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="billNo" label="付款单号" width="145" fixed  sortable />
-        <el-table-column prop="title" label="标题" min-width="110" show-overflow-tooltip  sortable />
-        <el-table-column label="匹配链路" width="160" align="center">
+        <el-table-column prop="billNo" :label="$t('pay.shared.colPayBillNo')" width="145" fixed  sortable />
+        <el-table-column prop="title" :label="$t('pay.shared.colTitle')" min-width="110" show-overflow-tooltip  sortable />
+        <el-table-column :label="$t('pay.match.colChain')" width="160" align="center">
           <template #default="{ row }">
             <div class="chain-dots">
               <el-tooltip v-for="d in chainDots(row)" :key="d.key" :content="d.tip" placement="top">
@@ -108,59 +104,59 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="采购订单" width="130">
+        <el-table-column :label="$t('pay.match.colPo')" width="130">
           <template #default="{ row }">
             <span v-if="row.poNo" style="color: #409eff">{{ row.poNo }}</span>
-            <el-tag v-else type="danger" size="small">未关联</el-tag>
+            <el-tag v-else type="danger" size="small">{{ $t('pay.match.stUnlinked') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="收货单" width="130">
+        <el-table-column :label="$t('pay.match.colGrn')" width="130">
           <template #default="{ row }">
             <span v-if="row.receiptNo">{{ row.receiptNo }}</span>
-            <el-tag v-else type="danger" size="small">未关联</el-tag>
+            <el-tag v-else type="danger" size="small">{{ $t('pay.match.stUnlinked') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="关联发票" width="100" align="right">
+        <el-table-column :label="$t('pay.match.colLinkedInvoice')" width="100" align="right">
           <template #default="{ row }">{{ fmt(row.invoiceAmount) }}</template>
         </el-table-column>
-        <el-table-column label="本次付款" width="100" align="right">
+        <el-table-column :label="$t('pay.match.colThisPayment')" width="100" align="right">
           <template #default="{ row }">
             <span :style="{ color: row.payAmount > (row.invoiceAmount || 0) ? '#f56c6c' : '' }">{{ fmt(row.payAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="匹配状态" width="100">
+        <el-table-column :label="$t('pay.match.colMatchStatus')" width="100">
           <template #default="{ row }">
             <el-tag :type="statusType(row.matchStatus)" size="small">{{ statusLabel(row.matchStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="冻结" width="60" align="center">
+        <el-table-column :label="$t('pay.match.colFrozen')" width="60" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.frozen" type="danger" size="small">冻结</el-tag>
+            <el-tag v-if="row.frozen" type="danger" size="small">{{ $t('pay.match.colFrozen') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="对账" width="65" align="center">
+        <el-table-column :label="$t('pay.match.colRecon')" width="65" align="center">
           <template #default="{ row }">
             <el-tag :type="row.reconStatus === 'CONFIRMED' ? 'success' : 'info'" size="small">
-              {{ row.reconStatus === 'CONFIRMED' ? '已确认' : '未确认' }}
+              {{ row.reconStatus === 'CONFIRMED' ? t('pay.shared.stConfirmed') : t('pay.match.stUnconfirmed') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="问题" width="55" align="center">
+        <el-table-column :label="$t('pay.match.colIssue')" width="55" align="center">
           <template #default="{ row }">
             <el-badge v-if="row.issues && row.issues.length" :value="row.issues.length" type="warning" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="300" fixed="right">
+        <el-table-column :label="$t('common.operation')" width="300" fixed="right">
           <template #default="{ row }">
-            <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
-            <el-button link size="small" type="primary" @click.stop="openDetail(row)">明细</el-button>
-            <el-button link size="small" type="warning" @click.stop="openLinkDialog(row)">关联单据</el-button>
+            <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('pay.shared.btnTrace') }}</el-button>
+            <el-button link size="small" type="primary" @click.stop="openDetail(row)">{{ $t('pay.shared.btnDetails') }}</el-button>
+            <el-button link size="small" type="warning" @click.stop="openLinkDialog(row)">{{ $t('pay.match.btnLinkBills') }}</el-button>
             <!-- D-DEC-077：人工匹配链已办结的行不再提供「派单」出口，否则终态会被重复派工淹没 -->
-            <el-button v-if="row.matchStatus !== 'MATCHED' && row.matchStatus !== 'MANUAL_MATCHED'" link size="small" type="danger" @click.stop="routeIssue(row)">派单</el-button>
-            <el-button link size="small" type="primary" @click.stop="manualMatch(row)">手工匹配</el-button>
-            <el-button link size="small" @click.stop="checkOne(row)">重算</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
+            <el-button v-if="row.matchStatus !== 'MATCHED' && row.matchStatus !== 'MANUAL_MATCHED'" link size="small" type="danger" @click.stop="routeIssue(row)">{{ $t('pay.match.btnRoute') }}</el-button>
+            <el-button link size="small" type="primary" @click.stop="manualMatch(row)">{{ $t('pay.match.btnManualMatch') }}</el-button>
+            <el-button link size="small" @click.stop="checkOne(row)">{{ $t('pay.match.btnRecalc') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('pay.shared.btnExportCsv') }}</el-button>
+      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('pay.shared.btnExportSelected', { v1: selRows.length }) }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -171,29 +167,28 @@
     </el-card>
 
     <!-- 三单匹配明细弹窗 -->
-    <el-dialog v-model="detailVisible" title="三单匹配明细" width="900px" top="5vh">
+    <el-dialog v-model="detailVisible" :title="$t('pay.match.ctxDetailTitle')" width="900px" top="5vh">
       <template v-if="detail">
         <!-- 付款单信息 -->
         <el-descriptions :column="3" border size="small" style="margin-bottom: 16px">
-          <el-descriptions-item label="付款单号">{{ detail.billNo }}</el-descriptions-item>
-          <el-descriptions-item label="标题">{{ detail.title }}</el-descriptions-item>
-          <el-descriptions-item label="单据状态">{{ billStatusText(detail.billStatus) }}</el-descriptions-item>
-          <el-descriptions-item label="本次付款金额">
+          <el-descriptions-item :label="$t('pay.shared.colPayBillNo')">{{ detail.billNo }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('pay.shared.colTitle')">{{ detail.title }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('pay.shared.colBillStatus')">{{ billStatusText(detail.billStatus) }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('pay.match.ctxThisPayAmount')">
             <span style="font-size: 16px; font-weight: 700; color: #409eff">{{ fmt(detail.payAmount) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="匹配状态">
+          <el-descriptions-item :label="$t('pay.match.colMatchStatus')">
             <el-tag :type="statusType(detail.matchStatus)" size="small">{{ statusLabel(detail.matchStatus) }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="付款冻结">
-            <el-tag :type="detail.frozen ? 'danger' : 'success'" size="small">{{ detail.frozen ? '已冻结' : '未冻结' }}</el-tag>
+          <el-descriptions-item :label="$t('pay.match.ctxPayFrozen')">
+            <el-tag :type="detail.frozen ? 'danger' : 'success'" size="small">{{ detail.frozen ? t('pay.match.stFrozen') : t('pay.match.stNotFrozen') }}</el-tag>
           </el-descriptions-item>
           <!-- D-DEC-077：人工匹配链的办结结论（此前终态零回写，判定意见无处留存） -->
-          <el-descriptions-item v-if="detail.matchStatus === 'MANUAL_MATCHED'" label="人工办结结论" :span="3">
-            <span style="color: #67c23a; font-weight: 600">{{ detail.manualVerdict || '人工匹配已办结' }}</span>
+          <el-descriptions-item v-if="detail.matchStatus === 'MANUAL_MATCHED'" :label="$t('pay.match.ctxManualVerdict')" :span="3">
+            <span style="color: #67c23a; font-weight: 600">{{ detail.manualVerdict || t('pay.match.stManualClosed') }}</span>
             <span v-if="detail.manualProcInstId" style="margin-left: 12px; color: #909399; font-size: 12px">
-              流程实例 {{ detail.manualProcInstId }}
-            </span>
-            <span v-else style="margin-left: 12px; color: #909399; font-size: 12px">流程实例未记录</span>
+              {{ $t('pay.match.procInst', { v1: detail.manualProcInstId }) }}</span>
+            <span v-else style="margin-left: 12px; color: #909399; font-size: 12px">{{ $t('pay.match.noProcInst') }}</span>
           </el-descriptions-item>
         </el-descriptions>
 
@@ -222,20 +217,16 @@
           <div class="chain-rules">
             <span class="rule-item" :class="rulePoGrn ? 'rule-ok' : 'rule-bad'">
               <el-icon size="12"><CircleCheck v-if="rulePoGrn" /><CircleClose v-else /></el-icon>
-              收货 ≤ PO
-            </span>
+              {{ $t('pay.match.ruleGrnVsPo') }}</span>
             <span class="rule-item" :class="ruleGrnInv ? 'rule-ok' : 'rule-bad'">
               <el-icon size="12"><CircleCheck v-if="ruleGrnInv" /><CircleClose v-else /></el-icon>
-              发票 ≤ 收货
-            </span>
+              {{ $t('pay.match.ruleInvVsGrn') }}</span>
             <span class="rule-item" :class="ruleInvPay ? 'rule-ok' : 'rule-bad'">
               <el-icon size="12"><CircleCheck v-if="ruleInvPay" /><CircleClose v-else /></el-icon>
-              付款 ≤ 发票
-            </span>
+              {{ $t('pay.match.rulePayVsInv') }}</span>
             <span class="rule-item" :class="ruleAllPresent ? 'rule-ok' : 'rule-bad'">
               <el-icon size="12"><CircleCheck v-if="ruleAllPresent" /><CircleClose v-else /></el-icon>
-              四单齐全
-            </span>
+              {{ $t('pay.match.ruleAllFour') }}</span>
           </div>
           <el-progress
             v-if="detail.matchStatus"
@@ -248,28 +239,28 @@
         </div>
 
         <!-- 三单对比表 -->
-        <el-table :data="comparisonRows" border size="small" style="margin-bottom: 16px" @selection-change="handleSelectionChange" empty-text="暂无数据">
+        <el-table :data="comparisonRows" border size="small" style="margin-bottom: 16px" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="label" label="对比维度" width="110"  sortable />
-          <el-table-column label="采购订单 (PO)" min-width="120">
+          <el-table-column prop="label" :label="$t('pay.match.colCompareDim')" width="110"  sortable />
+          <el-table-column :label="$t('pay.match.colPoFull')" min-width="120">
             <template #default="{ row }">
               <span v-if="row.po !== null && row.po !== undefined">{{ row.po }}</span>
               <span v-else style="color: #c0c4cc">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="收货单" min-width="120">
+          <el-table-column :label="$t('pay.match.colGrn')" min-width="120">
             <template #default="{ row }">
               <span v-if="row.receipt !== null && row.receipt !== undefined">{{ row.receipt }}</span>
               <span v-else style="color: #c0c4cc">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="发票" min-width="120">
+          <el-table-column :label="$t('pay.match.colInvoice')" min-width="120">
             <template #default="{ row }">
               <span v-if="row.invoice !== null && row.invoice !== undefined">{{ row.invoice }}</span>
               <span v-else style="color: #c0c4cc">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="付款单" min-width="120">
+          <el-table-column :label="$t('pay.match.colPayBill')" min-width="120">
             <template #default="{ row }">
               <span v-if="row.pay !== null && row.pay !== undefined" style="font-weight: 600">{{ row.pay }}</span>
               <span v-else style="color: #c0c4cc">—</span>
@@ -279,23 +270,23 @@
 
         <!-- 关联发票明细 -->
         <div v-if="invoiceList.length" style="margin-bottom: 16px">
-          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px">关联发票明细</div>
-          <el-table :data="invoiceList" border size="small" @selection-change="handleSelectionChange" empty-text="暂无数据">
+          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px">{{ $t('pay.match.secLinkedInvoices') }}</div>
+          <el-table :data="invoiceList" border size="small" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-            <el-table-column prop="invoiceNo" label="发票号" width="140"  sortable />
-            <el-table-column prop="invoiceCode" label="发票代码" width="120"  sortable />
-            <el-table-column prop="sellerName" label="销方名称" min-width="120" show-overflow-tooltip  sortable />
-            <el-table-column prop="invoiceDate" label="开票日期" width="110"  sortable :formatter="(row, col, val) => formatDate(val)" />
-            <el-table-column prop="netAmount" label="不含税金额" width="110" align="right" sortable>
+            <el-table-column prop="invoiceNo" :label="$t('pay.shared.colInvoiceNo')" width="140"  sortable />
+            <el-table-column prop="invoiceCode" :label="$t('pay.match.colInvoiceCode')" width="120"  sortable />
+            <el-table-column prop="sellerName" :label="$t('pay.match.colSellerName')" min-width="120" show-overflow-tooltip  sortable />
+            <el-table-column prop="invoiceDate" :label="$t('field.invoiceDate')" width="110"  sortable :formatter="(row, col, val) => formatDate(val)" />
+            <el-table-column prop="netAmount" :label="$t('pay.match.colNetAmount')" width="110" align="right" sortable>
               <template #default="{ row }">{{ fmt(row.netAmount) }}</template>
             </el-table-column>
-            <el-table-column prop="taxAmount" label="税额" width="90" align="right" sortable>
+            <el-table-column prop="taxAmount" :label="$t('field.taxAmount')" width="90" align="right" sortable>
               <template #default="{ row }">{{ fmt(row.taxAmount) }}</template>
             </el-table-column>
-            <el-table-column prop="totalAmount" label="价税合计" width="110" align="right" sortable>
+            <el-table-column prop="totalAmount" :label="$t('field.totalWithTax')" width="110" align="right" sortable>
               <template #default="{ row }">{{ fmt(row.totalAmount) }}</template>
             </el-table-column>
-            <el-table-column prop="amount" label="核销金额" width="100" align="right" sortable>
+            <el-table-column prop="amount" :label="$t('pay.match.colWriteOffAmount')" width="100" align="right" sortable>
               <template #default="{ row }"><span style="color: #409eff">{{ fmt(row.amount) }}</span></template>
             </el-table-column>
           </el-table>
@@ -303,19 +294,19 @@
 
         <!-- 差异/问题列表 -->
         <div v-if="detail.issues && detail.issues.length" style="margin-bottom: 16px">
-          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px; color: #e6a23c">差异与问题</div>
-          <el-table :data="detail.issues" border size="small" @selection-change="handleSelectionChange" empty-text="暂无数据">
+          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px; color: #e6a23c">{{ $t('pay.match.secDiffIssues') }}</div>
+          <el-table :data="detail.issues" border size="small" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-            <el-table-column label="级别" width="70" align="center">
+            <el-table-column :label="$t('pay.match.colLevel')" width="70" align="center">
               <template #default="{ row }">
-                <el-tag :type="row.level === 'ERROR' ? 'danger' : 'warning'" size="small">{{ row.level === 'ERROR' ? '硬异常' : '预警' }}</el-tag>
+                <el-tag :type="row.level === 'ERROR' ? 'danger' : 'warning'" size="small">{{ row.level === 'ERROR' ? t('pay.match.stHardError') : t('pay.match.stWarn') }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="code" label="差异类型" width="180" sortable>
+            <el-table-column prop="code" :label="$t('pay.shared.colDiffType')" width="180" sortable>
               <template #default="{ row }">{{ issueCodeText(row.code) }}</template>
             </el-table-column>
-            <el-table-column prop="msg" label="说明" min-width="250" show-overflow-tooltip  sortable />
-            <el-table-column label="责任岗位" width="100">
+            <el-table-column prop="msg" :label="$t('field.desc')" min-width="250" show-overflow-tooltip  sortable />
+            <el-table-column :label="$t('pay.match.colOwner')" width="100">
               <template #default="{ row }">{{ issueRouteText(row.code) }}</template>
             </el-table-column>
           </el-table>
@@ -323,12 +314,12 @@
 
         <!-- 合同信息（展示维度） -->
         <el-descriptions v-if="detail.contractNo" :column="2" border size="small" style="margin-bottom: 16px">
-          <el-descriptions-item label="关联合同">{{ detail.contractNo }}</el-descriptions-item>
-          <el-descriptions-item label="合同名称">{{ detail.contractName }}</el-descriptions-item>
-          <el-descriptions-item label="合同金额">{{ fmt(detail.contractAmount) }}</el-descriptions-item>
-          <el-descriptions-item label="应付对账（函）">
+          <el-descriptions-item :label="$t('pay.match.ctxLinkedContract')">{{ detail.contractNo }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('pay.shared.colContractName')">{{ detail.contractName }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('pay.shared.colContractAmount')">{{ fmt(detail.contractAmount) }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('pay.shared.secReconLetter')">
             <el-tag :type="detail.reconStatus === 'CONFIRMED' ? 'success' : 'info'" size="small">
-              {{ detail.reconStatus === 'CONFIRMED' ? '已确认' : (detail.supplierName ? '未确认' : '无法判定（未取到收款方）') }}
+              {{ detail.reconStatus === 'CONFIRMED' ? t('pay.shared.stConfirmed') : (detail.supplierName ? t('pay.match.stUnconfirmed') : t('pay.match.stUnknownPayee')) }}
             </el-tag>
             <span v-if="detail.supplierName" style="margin-left: 8px; color: #909399; font-size: 12px">{{ detail.supplierName }}</span>
           </el-descriptions-item>
@@ -336,54 +327,53 @@
       </template>
 
       <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
-        <el-button type="warning" @click="openLinkDialog(detail)">关联单据</el-button>
-        <el-button v-if="detail && detail.matchStatus !== 'MATCHED' && detail.matchStatus !== 'MANUAL_MATCHED'" type="danger" @click="routeIssue(detail)">异常派单</el-button>
+        <el-button @click="detailVisible = false">{{ $t('common.close') }}</el-button>
+        <el-button type="warning" @click="openLinkDialog(detail)">{{ $t('pay.match.btnLinkBills') }}</el-button>
+        <el-button v-if="detail && detail.matchStatus !== 'MATCHED' && detail.matchStatus !== 'MANUAL_MATCHED'" type="danger" @click="routeIssue(detail)">{{ $t('pay.shared.btnExceptionRoute') }}</el-button>
         <!-- D-DEC-077：人工匹配链办结后，派单/复审两个「未办结」出口必须收起，否则同一单据可被反复发起人工链 -->
-        <el-button v-if="detail && detail.matchStatus !== 'MATCHED' && detail.matchStatus !== 'MANUAL_MATCHED'" type="primary" @click="reviewBill(detail)">发起复审</el-button>
-        <el-button v-if="detail && detail.matchStatus !== 'MANUAL_MATCHED'" type="primary" plain @click="manualMatch(detail)">手工匹配</el-button>
-        <el-button v-if="detail && detail.matchStatus === 'MANUAL_MATCHED'" type="primary" plain @click="viewManualVerdict">查看人工办结记录</el-button>
+        <el-button v-if="detail && detail.matchStatus !== 'MATCHED' && detail.matchStatus !== 'MANUAL_MATCHED'" type="primary" @click="reviewBill(detail)">{{ $t('pay.match.btnStartReview') }}</el-button>
+        <el-button v-if="detail && detail.matchStatus !== 'MANUAL_MATCHED'" type="primary" plain @click="manualMatch(detail)">{{ $t('pay.match.btnManualMatch') }}</el-button>
+        <el-button v-if="detail && detail.matchStatus === 'MANUAL_MATCHED'" type="primary" plain @click="viewManualVerdict">{{ $t('pay.match.btnViewVerdict') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 手工关联PO/收货单弹窗 -->
-    <el-dialog v-model="linkVisible" title="手工关联采购订单/收货单" width="600px">
+    <el-dialog v-model="linkVisible" :title="$t('pay.match.ctxLinkTitle')" width="600px">
       <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-        选择采购订单和收货单进行三单匹配关联。关联后系统将自动重新执行匹配校验。
+        {{ $t('pay.match.hintMatchFlow') }}
       </el-alert>
       <el-form :model="linkForm" :rules="linkRules" label-width="100px" size="default">
-        <el-form-item label="付款单号">
+        <el-form-item :label="$t('pay.shared.colPayBillNo')">
           <el-input :model-value="linkRow?.billNo" disabled />
         </el-form-item>
-        <el-form-item label="采购订单">
-          <el-select v-model="linkForm.poId" filterable clearable placeholder="选择采购订单（PO）" style="width: 100%"
+        <el-form-item :label="$t('pay.match.colPo')">
+          <el-select v-model="linkForm.poId" filterable clearable :placeholder="$t('pay.shared.phPickPo')" style="width: 100%"
                      @change="onPoChange" :loading="poLoading">
             <el-option v-for="po in poOptions" :key="po.id"
                        :label="`${po.poNo} | ${po.supplierName || ''} | ${fmt(po.amount)}`"
                        :value="po.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="收货单">
-          <el-select v-model="linkForm.poReceiptId" filterable clearable placeholder="选择收货单" style="width: 100%"
+        <el-form-item :label="$t('pay.match.colGrn')">
+          <el-select v-model="linkForm.poReceiptId" filterable clearable :placeholder="$t('pay.match.phPickGrn')" style="width: 100%"
                      :loading="receiptLoading" :disabled="!linkForm.poId">
             <el-option v-for="rc in receiptOptions" :key="rc.id"
                        :label="`${rc.receiptNo} | ${rc.supplierName || ''} | ${fmt(rc.amount)}`"
                        :value="rc.id" />
           </el-select>
           <div v-if="linkForm.poId && !receiptOptions.length" style="color: #909399; font-size: 12px; margin-top: 4px">
-            当前采购订单暂无关联收货单
-          </div>
+            {{ $t('pay.match.hintNoGrn') }}</div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="linkVisible = false">取消</el-button>
-        <el-button type="primary" @click="doLink" :loading="linkLoading">确认关联并校验</el-button>
+        <el-button @click="linkVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="doLink" :loading="linkLoading">{{ $t('pay.match.btnConfirmLink') }}</el-button>
       </template>
     </el-dialog>
   </div>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" biz-type="INVOICE_MATCH" />
 
-  <CoachMark ref="matchCm" :guide-key="_guideKey" :selector="'.cm-target-match'" title="三单匹配" text="三单匹配页面可视化展示采购订单、入库单和发票的匹配状态。" />
+  <CoachMark ref="matchCm" :guide-key="_guideKey" :selector="'.cm-target-match'" :title="$t('pay.match.pageTitle')" :text="$t('pay.match.coachText')" />
 </template>
 
 <script setup>
@@ -398,6 +388,9 @@ import CoachMark from '@/components/CoachMark.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { STATUS_LABEL } from '@/constants/billStatus.js'
 import { formatDate, formatDateTime } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => location.reload(),
@@ -438,7 +431,7 @@ function statusType(s) {
 function statusLabel(s) {
   // D-DEC-077：MANUAL_MATCHED＝人工匹配链已办结并解除冻结（自动判定仍存在的差异在明细里照常列出，
   // 终态结论与原判定两件事都要看得见，故文案写"人工匹配已办结"而不是"三单一致"）
-  return { MATCHED: '三单一致', WARN: '差异预警', FAILED: '匹配失败', MANUAL_MATCHED: '人工匹配已办结' }[s] || s
+  return { MATCHED: t('pay.match.stMatched'), WARN: t('pay.match.stWarnDiff'), FAILED: t('pay.match.stFailed'), MANUAL_MATCHED: t('pay.match.stManualClosed') }[s] || s
 }
 
 // ========== 可视化匹配链路 ==========
@@ -452,13 +445,13 @@ function matchRowClass({ row }) {
 function chainDots(row) {
   const has = (v) => v != null && v !== '' && v !== 0
   return [
-    { key: 'po',  label: 'PO',  tip: row.poNo ? `采购订单 ${row.poNo}` : '未关联采购订单',
+    { key: 'po',  label: 'PO',  tip: row.poNo ? t('pay.match.tipPo', { v1: row.poNo }) : t('pay.match.noPoLinked'),
       cls: has(row.poNo) ? 'dot-green' : 'dot-red' },
-    { key: 'grn', label: 'GRN', tip: row.receiptNo ? `收货单 ${row.receiptNo}` : '未关联收货单',
+    { key: 'grn', label: 'GRN', tip: row.receiptNo ? t('pay.match.tipGrn', { v1: row.receiptNo }) : t('pay.match.noGrnLinked'),
       cls: has(row.receiptNo) ? 'dot-green' : 'dot-red' },
-    { key: 'inv', label: 'INV', tip: row.invoiceAmount ? `发票 ${fmt(row.invoiceAmount)}` : '未关联发票',
+    { key: 'inv', label: 'INV', tip: row.invoiceAmount ? t('pay.match.tipInv', { v1: fmt(row.invoiceAmount) }) : t('pay.match.noInvLinked'),
       cls: has(row.invoiceAmount) ? 'dot-green' : 'dot-red' },
-    { key: 'pay', label: 'PAY', tip: `付款 ${fmt(row.payAmount)}`,
+    { key: 'pay', label: 'PAY', tip: t('pay.match.tipPay', { v1: fmt(row.payAmount) }),
       cls: row.payAmount > (row.invoiceAmount || 0) ? 'dot-red'
          : row.matchStatus === 'MATCHED' ? 'dot-green'
          : row.matchStatus === 'WARN' ? 'dot-yellow' : 'dot-red' },
@@ -501,19 +494,19 @@ const chainNodes = computed(() => {
   }
 
   return [
-    { key: 'po', label: '采购订单', value: d.poNo || '未关联', ok: has(d.poNo),
+    { key: 'po', label: t('pay.match.colPo'), value: d.poNo || t('pay.match.stUnlinked'), ok: has(d.poNo),
       amount: has(d.poNo) && poAmt ? '¥ ' + fmt(poAmt) : '', amountColor: '#409eff',
       cls: nodeCls(has(d.poNo)), arrow: true, arrowCls: arrowCls(has(d.poNo)),
       varText: fmtVar(varPoGrn), varCls: varCls(varPoGrn) },
-    { key: 'grn', label: '收货单', value: d.receiptNo || '未关联', ok: has(d.receiptNo),
+    { key: 'grn', label: t('pay.match.colGrn'), value: d.receiptNo || t('pay.match.stUnlinked'), ok: has(d.receiptNo),
       amount: has(d.receiptNo) && grnAmt ? '¥ ' + fmt(grnAmt) : '', amountColor: '#909399',
       cls: nodeCls(has(d.receiptNo)), arrow: true, arrowCls: arrowCls(has(d.receiptNo) && has(d.poNo)),
       varText: fmtVar(varGrnInv), varCls: varCls(varGrnInv) },
-    { key: 'inv', label: '发票', value: has(d.invoiceAmount) ? fmt(d.invoiceAmount) + ' 元' : '未关联', ok: has(d.invoiceAmount),
+    { key: 'inv', label: t('pay.match.colInvoice'), value: has(d.invoiceAmount) ? fmt(d.invoiceAmount) + ' 元' : t('pay.match.stUnlinked'), ok: has(d.invoiceAmount),
       amount: has(d.invoiceAmount) ? '¥ ' + fmt(invAmt) : '', amountColor: '#e6a23c',
       cls: nodeCls(has(d.invoiceAmount)), arrow: true, arrowCls: arrowCls(has(d.invoiceAmount) && has(d.receiptNo)),
       varText: fmtVar(varInvPay), varCls: varCls(varInvPay) },
-    { key: 'pay', label: '付款单', value: fmt(d.payAmount) + ' 元', ok: amtOk(d.payAmount, d.invoiceAmount),
+    { key: 'pay', label: t('pay.match.colPayBill'), value: fmt(d.payAmount) + ' 元', ok: amtOk(d.payAmount, d.invoiceAmount),
       amount: '¥ ' + fmt(payAmt), amountColor: '#67c23a',
       cls: fullyMatched ? 'node-green' : amtOk(d.payAmount, d.invoiceAmount) ? 'node-yellow' : 'node-red',
       arrow: false, arrowCls: '', varText: '', varCls: '' },
@@ -565,28 +558,28 @@ function inlineChainNodes(row) {
 
   return [
     {
-      key: 'po', label: '采购订单', no: row.poNo || '—', amount: poAmt ? fmt(poAmt) : '',
+      key: 'po', label: t('pay.match.colPo'), no: row.poNo || '—', amount: poAmt ? fmt(poAmt) : '',
       ok: has(row.poNo), cls: has(row.poNo) ? 'ic-green' : 'ic-red',
       varText: has(row.poNo) && has(row.receiptNo) ? fmtVar(grnAmt - poAmt) : '',
       varCls: grnAmt - poAmt <= 0 ? 'var-ok' : 'var-warn',
       varIcon: grnAmt - poAmt > 0 ? 'ArrowDown' : 'Check',
     },
     {
-      key: 'grn', label: '收货单', no: row.receiptNo || '—', amount: grnAmt ? fmt(grnAmt) : '',
+      key: 'grn', label: t('pay.match.colGrn'), no: row.receiptNo || '—', amount: grnAmt ? fmt(grnAmt) : '',
       ok: has(row.receiptNo), cls: has(row.receiptNo) ? 'ic-green' : 'ic-red',
       varText: has(row.receiptNo) && has(row.invoiceAmount) ? fmtVar(invAmt - grnAmt) : '',
       varCls: invAmt - grnAmt <= 0 ? 'var-ok' : 'var-warn',
       varIcon: invAmt - grnAmt > 0 ? 'ArrowDown' : 'Check',
     },
     {
-      key: 'inv', label: '发票', no: invAmt ? fmt(invAmt) : '—', amount: '',
+      key: 'inv', label: t('pay.match.colInvoice'), no: invAmt ? fmt(invAmt) : '—', amount: '',
       ok: has(row.invoiceAmount), cls: has(row.invoiceAmount) ? 'ic-green' : 'ic-red',
       varText: has(row.invoiceAmount) ? fmtVar(payAmt - invAmt) : '',
       varCls: payAmt - invAmt <= 0 ? 'var-ok' : 'var-warn',
       varIcon: payAmt - invAmt > 0 ? 'ArrowDown' : 'Check',
     },
     {
-      key: 'pay', label: '付款', no: fmt(payAmt), amount: '',
+      key: 'pay', label: t('pay.match.legPay'), no: fmt(payAmt), amount: '',
       ok: row.matchStatus === 'MATCHED', cls: row.matchStatus === 'MATCHED' ? 'ic-green' : row.matchStatus === 'WARN' ? 'ic-yellow' : 'ic-red',
       varText: '', varCls: '', varIcon: '',
     },
@@ -614,27 +607,27 @@ const matchBarColor = computed(() => {
 function billStatusText(s) { return STATUS_LABEL[s] || s }
 function issueCodeText(code) {
   return {
-    NO_PO: '未关联采购订单',
-    NO_RECEIPT: '未关联收货单',
-    PAY_EXCEED_INVOICE: '超付（无发票覆盖）',
-    INVOICE_OVER_RECEIPT: '发票超收货',
-    INVOICE_IN_TOLERANCE: '发票超收货（容差内）',
-    RECEIPT_OVER_PO: '收货超订单',
-    RECEIPT_IN_TOLERANCE: '收货超订单（容差内）',
-    RECON_UNCONFIRMED: '应付对账（函）未确认',
+    NO_PO: t('pay.match.noPoLinked'),
+    NO_RECEIPT: t('pay.match.noGrnLinked'),
+    PAY_EXCEED_INVOICE: t('pay.match.codePayExceed'),
+    INVOICE_OVER_RECEIPT: t('pay.match.codeInvOverGrn'),
+    INVOICE_IN_TOLERANCE: t('pay.match.codeInvInTolerance'),
+    RECEIPT_OVER_PO: t('pay.match.codeGrnOverPo'),
+    RECEIPT_IN_TOLERANCE: t('pay.match.codeGrnInTolerance'),
+    RECON_UNCONFIRMED: t('pay.match.codeReconUnconfirmed'),
   }[code] || code
 }
 function issueRouteText(code) {
   return {
-    NO_PO: '采购经理',
-    RECEIPT_OVER_PO: '采购经理',
-    RECEIPT_IN_TOLERANCE: '采购经理',
-    NO_RECEIPT: '仓库管理员',
-    PAY_EXCEED_INVOICE: '应付会计',
-    INVOICE_OVER_RECEIPT: '应付会计',
-    INVOICE_IN_TOLERANCE: '应付会计',
-    RECON_UNCONFIRMED: '对账专员',
-  }[code] || '应付会计'
+    NO_PO: t('pay.match.rolePoManager'),
+    RECEIPT_OVER_PO: t('pay.match.rolePoManager'),
+    RECEIPT_IN_TOLERANCE: t('pay.match.rolePoManager'),
+    NO_RECEIPT: t('pay.match.roleWarehouse'),
+    PAY_EXCEED_INVOICE: t('pay.match.roleApAccountant'),
+    INVOICE_OVER_RECEIPT: t('pay.match.roleApAccountant'),
+    INVOICE_IN_TOLERANCE: t('pay.match.roleApAccountant'),
+    RECON_UNCONFIRMED: t('pay.match.roleReconClerk'),
+  }[code] || t('pay.match.roleApAccountant')
 }
 
 async function load() {
@@ -650,7 +643,7 @@ async function checkOne(row) {
   try {
     const d = await opApi.matchCheck(row.billId)
     Object.assign(row, d)
-    ElMessage.success('已重新计算：' + statusLabel(d.matchStatus))
+    ElMessage.success(t('pay.match.msgRecalcDone') + statusLabel(d.matchStatus))
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -665,7 +658,7 @@ async function batchRecheck() {
     } catch (e) { /* continue */ }
   }
   batchLoading.value = false
-  ElMessage.success(`批量重算完成：${ok}/${rows.value.length}`)
+  ElMessage.success(t('pay.match.msgBatchRecalcDone', { v1: ok, v2: rows.value.length }))
 }
 
 // ---- 明细弹窗 ----
@@ -686,11 +679,11 @@ const comparisonRows = computed(() => {
   if (!detail.value) return []
   const d = detail.value
   return [
-    { label: '单号', po: d.poNo, receipt: d.receiptNo, invoice: d.invoiceList?.length ? d.invoiceList.map(i => i.invoiceNo).join(', ') : '—', pay: d.billNo },
-    { label: '金额', po: d.poAmount != null ? fmt(d.poAmount) : null, receipt: d.receiptAmount != null ? fmt(d.receiptAmount) : null, invoice: d.invoiceAmount != null ? fmt(d.invoiceAmount) : null, pay: d.payAmount != null ? fmt(d.payAmount) : null },
-    { label: '已收货金额', po: d.poReceived != null ? fmt(d.poReceived) : null, receipt: null, invoice: null, pay: null },
-    { label: '数量', po: d.poQty != null ? d.poQty : null, receipt: d.receiptQty != null ? d.receiptQty : null, invoice: null, pay: null },
-    { label: '已开票金额', po: null, receipt: d.receiptInvoice != null ? fmt(d.receiptInvoice) : null, invoice: null, pay: null },
+    { label: t('field.docNo'), po: d.poNo, receipt: d.receiptNo, invoice: d.invoiceList?.length ? d.invoiceList.map(i => i.invoiceNo).join(', ') : '—', pay: d.billNo },
+    { label: t('field.amount'), po: d.poAmount != null ? fmt(d.poAmount) : null, receipt: d.receiptAmount != null ? fmt(d.receiptAmount) : null, invoice: d.invoiceAmount != null ? fmt(d.invoiceAmount) : null, pay: d.payAmount != null ? fmt(d.payAmount) : null },
+    { label: t('pay.match.lblPoReceivedAmount'), po: d.poReceived != null ? fmt(d.poReceived) : null, receipt: null, invoice: null, pay: null },
+    { label: t('pay.match.lblQty'), po: d.poQty != null ? d.poQty : null, receipt: d.receiptQty != null ? d.receiptQty : null, invoice: null, pay: null },
+    { label: t('pay.match.lblInvoicedAmount'), po: null, receipt: d.receiptInvoice != null ? fmt(d.receiptInvoice) : null, invoice: null, pay: null },
   ]
 })
 
@@ -699,10 +692,10 @@ const linkVisible = ref(false)
 const linkRow = ref(null)
 const linkForm = reactive({ poId: null, poReceiptId: null })
 
-const linkRules = {
-  poId: [{ required: true, message: '请选择采购订单' }],
-  poReceiptId: [{ required: true, message: '请选择收货单' }],
-}
+const linkRules = computed(() => ({
+  poId: [{ required: true, message: t('pay.match.errPickPo') }],
+  poReceiptId: [{ required: true, message: t('pay.match.errPickGrn') }],
+}))
 const poOptions = ref([])
 const receiptOptions = ref([])
 const poLoading = ref(false)
@@ -722,7 +715,7 @@ async function openLinkDialog(row) {
     const r = await purchaseApi.orderPage({ pageNum: 1, pageSize: 100 })
     // D-V4R-47 同族：三单匹配的 PO 候选同样出现已作废订单
     poOptions.value = (r.list || []).filter((p) => String((p && p.status) || '').toUpperCase() !== 'VOID')
-  } catch (e) { ElMessage.error('加载采购订单失败') } finally { poLoading.value = false }
+  } catch (e) { ElMessage.error(t('pay.match.msgLoadPoFail')) } finally { poLoading.value = false }
   // 如果有已选PO，加载对应收货单
   if (linkForm.poId) await onPoChange(linkForm.poId)
 }
@@ -740,13 +733,13 @@ async function onPoChange(poId) {
 
 async function doLink() {
   if (!linkForm.poId && !linkForm.poReceiptId) {
-    ElMessage.warning('请至少选择采购订单或收货单')
+    ElMessage.warning(t('pay.match.msgPickPoOrGrn'))
     return
   }
   linkLoading.value = true
   try {
     await opApi.matchLink(linkRow.value.billId, { poId: linkForm.poId, poReceiptId: linkForm.poReceiptId })
-    ElMessage.success('关联成功，正在重新校验...')
+    ElMessage.success(t('pay.match.msgLinkedRecheck'))
     // 重新校验
     const d = await opApi.matchCheck(linkRow.value.billId)
     Object.assign(linkRow.value, d)
@@ -759,14 +752,14 @@ async function doLink() {
 async function routeIssue(row) {
   try {
     await ElMessageBox.confirm(
-      `确认对付款单 ${row.billNo} 的三单匹配异常进行派单？\n系统将按差异类型路由到对应责任岗位。`,
-      '异常派单确认',
+      t('pay.match.ctxRouteConfirm', { v1: row.billNo }),
+      t('pay.match.ctxRouteTitle'),
       { type: 'warning' }
     )
     const r = await opApi.matchRoute(row.billId)
     const routing = r.routing || {}
-    const roles = Object.entries(routing).map(([k, v]) => `${roleName(k)}：${v.length}项`).join('；')
-    ElMessage.success(`派单成功：${roles}（流程实例：${r.procInstId}）`)
+    const roles = Object.entries(routing).map(([k, v]) => t('pay.match.routeSummary', { v1: roleName(k), v2: v.length })).join('；')
+    ElMessage.success(t('pay.match.msgRouteOk', { v1: roles, v2: r.procInstId }))
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message)
   }
@@ -776,12 +769,12 @@ async function routeIssue(row) {
 async function reviewBill(row) {
   try {
     await ElMessageBox.confirm(
-      `确认对付款单 ${row.billNo} 发起发票校验异常复审审批？`,
-      '发起复审确认',
+      t('pay.match.ctxReviewConfirm', { v1: row.billNo }),
+      t('pay.match.ctxReviewTitle'),
       { type: 'warning' }
     )
     const procInstId = await opApi.matchReview(row.billId)
-    ElMessage.success(`复审流程已发起（流程实例：${procInstId}）`)
+    ElMessage.success(t('pay.match.msgReviewStarted', { v1: procInstId }))
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message)
   }
@@ -793,17 +786,17 @@ async function manualMatch(row) {
   try {
     const { value } = await ElMessageBox.prompt(
       matched
-        ? `系统已判定付款单 ${row.billNo} 三单一致，发起手工匹配需填写人工判定理由。`
-        : `确认对付款单 ${row.billNo} 发起手工三单匹配审批？`,
-      '手工三单匹配',
+        ? t('pay.match.ctxManualAlreadyOk', { v1: row.billNo })
+        : t('pay.match.ctxManualConfirm', { v1: row.billNo }),
+      t('pay.match.ctxManualTitle'),
       {
         inputType: 'textarea',
-        inputPlaceholder: '人工判定理由（系统判定一致时必填）',
-        inputValidator: (v) => (matched && !(v || '').trim()) ? '系统判定为一致，必须填写人工判定理由' : true,
+        inputPlaceholder: t('pay.match.phManualReason'),
+        inputValidator: (v) => (matched && !(v || '').trim()) ? t('pay.match.errManualReason') : true,
       }
     )
     const procInstId = await opApi.matchManualReview(row.billId, (value || '').trim())
-    ElMessage.success(`手工匹配审批已发起（流程实例：${procInstId}）`)
+    ElMessage.success(t('pay.match.msgManualStarted', { v1: procInstId }))
     await load()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message)
@@ -811,14 +804,14 @@ async function manualMatch(row) {
 }
 
 function roleName(code) {
-  return { PURCHASE_MANAGER: '采购经理', WH_KEEPER: '仓库管理员', FIN_AP: '应付会计', RECON_CLERK: '对账专员' }[code] || code
+  return { PURCHASE_MANAGER: t('pay.match.rolePoManager'), WH_KEEPER: t('pay.match.roleWarehouse'), FIN_AP: t('pay.match.roleApAccountant'), RECON_CLERK: t('pay.match.roleReconClerk') }[code] || code
 }
 
 onMounted(load)
 
 function exportCsv() {
-  if (!invoiceList.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'invoiceNo', label: '发票号' }, { prop: 'invoiceCode', label: '发票代码' }, { prop: 'sellerName', label: '销方名称' }, { prop: 'invoiceDate', label: '开票日期' }, { prop: 'netAmount', label: '不含税金额' }, { prop: 'taxAmount', label: '税额' }, { prop: 'totalAmount', label: '价税合计' }, { prop: 'amount', label: '核销金额' }]
+  if (!invoiceList.value.length) { ElMessage.warning(t('pay.shared.msgNoExportData')); return }
+  const cols = [{ prop: 'invoiceNo', label: t('pay.shared.colInvoiceNo') }, { prop: 'invoiceCode', label: t('pay.match.colInvoiceCode') }, { prop: 'sellerName', label: t('pay.match.colSellerName') }, { prop: 'invoiceDate', label: t('field.invoiceDate') }, { prop: 'netAmount', label: t('pay.match.colNetAmount') }, { prop: 'taxAmount', label: t('field.taxAmount') }, { prop: 'totalAmount', label: t('field.totalWithTax') }, { prop: 'amount', label: t('pay.match.colWriteOffAmount') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = invoiceList.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -832,16 +825,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `MatchList_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('pay.shared.msgExportedCsv'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('pay.shared.msgPickExportRows')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('pay.shared.msgNoColumns')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -856,7 +849,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `MatchList_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(t('pay.shared.msgExportedRows', { v1: selRows.value.length }))
 }
 
 

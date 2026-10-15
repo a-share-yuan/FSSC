@@ -1,36 +1,33 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="integration-logs">
     <!-- R5-D-040：失败告警横幅——全失败红牌/部分类别失败黄牌，先于数字呈现在首屏 -->
     <el-alert v-if="allFail" type="error" show-icon :closable="false" style="margin-bottom: 12px"
-              title="全部调用失败：请检查外部网关连通性与接口配置" />
+              :title="$t('system.intLog.errAllFail')" />
     <el-alert v-else-if="failCats.length" type="warning" show-icon :closable="false" style="margin-bottom: 12px"
-              :title="`存在调用失败的接口类别：${failCatsText}`" />
+              :title="$t('system.intLog.warnFailedCategories', { v1: failCatsText })" />
     <!-- 统计卡片 -->
     <el-row :gutter="12" style="margin-bottom: 16px">
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card">
-          <div class="stat-label">总调用次数</div>
+          <div class="stat-label">{{ $t('system.intLog.statTotalCalls') }}</div>
           <div class="stat-value">{{ stats.total || 0 }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card">
-          <div class="stat-label">成功率</div>
+          <div class="stat-label">{{ $t('system.intLog.statSuccessRate') }}</div>
           <div class="stat-value" :style="{ color: successRateColor }">{{ stats.successRate || '—' }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card">
-          <div class="stat-label">失败次数</div>
+          <div class="stat-label">{{ $t('system.intLog.statFailCount') }}</div>
           <div class="stat-value" style="color: #f56c6c">{{ stats.failCount || 0 }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card">
-          <div class="stat-label">近24小时</div>
+          <div class="stat-label">{{ $t('system.intLog.labelLast24h') }}</div>
           <div class="stat-value">{{ stats.recent24h || 0 }}</div>
         </el-card>
       </el-col>
@@ -38,46 +35,46 @@
 
     <!-- 筛选 -->
     <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center">
-      <el-select v-model="filter.category" placeholder="全部分类" clearable style="width: 180px" @change="loadData">
+      <el-select v-model="filter.category" :placeholder="$t('system.intLog.optAllCategories')" clearable style="width: 180px" @change="loadData">
         <el-option v-for="(label, code) in EXT_INTERFACE_CATEGORY" :key="code" :label="label" :value="code" />
       </el-select>
-      <el-select v-model="filter.success" placeholder="全部状态" clearable style="width: 140px" @change="loadData">
-        <el-option label="成功" :value="1" />
-        <el-option label="失败" :value="0" />
+      <el-select v-model="filter.success" :placeholder="$t('system.intLog.optAllStatuses')" clearable style="width: 140px" @change="loadData">
+        <el-option :label="$t('system.common.stSuccess')" :value="1" />
+        <el-option :label="$t('system.common.stFailed')" :value="0" />
       </el-select>
-      <el-button type="primary" @click="loadData">查询</el-button>
-      <el-button @click="loadStats">刷新统计</el-button>
+      <el-button type="primary" @click="loadData">{{ $t('common.search') }}</el-button>
+      <el-button @click="loadStats">{{ $t('system.intLog.btnRefreshStats') }}</el-button>
     </div>
 
     <!-- 调用日志表格 -->
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="tableData" v-else border stripe style="width: 100%" @row-dblclick="openRowDetail" empty-text="暂无数据">
-      <el-table-column prop="createTime" label="时间" width="170" :formatter="(r, c, v) => formatDateTime(v)" />
-      <el-table-column prop="category" label="分类" width="130">
+    <el-table :data="tableData" v-else border stripe style="width: 100%" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
+      <el-table-column prop="createTime" :label="$t('field.time')" width="170" :formatter="(r, c, v) => formatDateTime(v)" />
+      <el-table-column prop="category" :label="$t('system.common.colCategory')" width="130">
         <template #default="{ row }">
           <el-tag size="small">{{ extCategoryLabel(row.category) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="interfaceCode" label="接口编码" width="160" show-overflow-tooltip />
-      <el-table-column prop="method" label="方法" width="70" />
-      <el-table-column prop="requestUrl" label="请求地址" min-width="250" show-overflow-tooltip />
-      <el-table-column prop="statusCode" label="状态码" width="80">
+      <el-table-column prop="interfaceCode" :label="$t('system.common.colIfCode')" width="160" show-overflow-tooltip />
+      <el-table-column prop="method" :label="$t('system.common.colMethod')" width="70" />
+      <el-table-column prop="requestUrl" :label="$t('system.common.colReqUrl')" min-width="250" show-overflow-tooltip />
+      <el-table-column prop="statusCode" :label="$t('system.intLog.colStatusCode')" width="80">
         <template #default="{ row }">
           <span :style="{ color: row.success ? '#67c23a' : '#f56c6c', fontWeight: 'bold' }">{{ row.statusCode || '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="durationMs" label="耗时(ms)" width="100" sortable>
+      <el-table-column prop="durationMs" :label="$t('system.common.colCostMs')" width="100" sortable>
         <template #default="{ row }">{{ row.durationMs ?? '—' }}</template>
       </el-table-column>
-      <el-table-column prop="errorMsg" label="错误信息" min-width="200" show-overflow-tooltip>
+      <el-table-column prop="errorMsg" :label="$t('system.intLog.colErrorMsg')" min-width="200" show-overflow-tooltip>
         <template #default="{ row }">
           <span v-if="row.errorMsg" style="color: #f56c6c">{{ row.errorMsg }}</span>
-          <span v-else style="color: #67c23a">无异常</span>
+          <span v-else style="color: #67c23a">{{ $t('system.intLog.stNoException') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="详情" width="80" fixed="right">
+      <el-table-column :label="$t('field.detail')" width="80" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="showDetail(row)">查看</el-button>
+          <el-button size="small" link type="primary" @click="showDetail(row)">{{ $t('system.common.btnView') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -94,27 +91,27 @@
     />
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="detailVisible" title="调用详情" width="800px" destroy-on-close>
+    <el-dialog v-model="detailVisible" :title="$t('system.intLog.ttlCallDetail')" width="800px" destroy-on-close>
       <template v-if="detailRow">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="时间">{{ detailRow.createTime }}</el-descriptions-item>
-          <el-descriptions-item label="分类">{{ extCategoryLabel(detailRow.category) }}</el-descriptions-item>
-          <el-descriptions-item label="接口编码">{{ detailRow.interfaceCode }}</el-descriptions-item>
-          <el-descriptions-item label="HTTP 方法">{{ detailRow.method }}</el-descriptions-item>
-          <el-descriptions-item label="请求地址" :span="2">{{ detailRow.requestUrl }}</el-descriptions-item>
-          <el-descriptions-item label="状态码">{{ detailRow.statusCode }}</el-descriptions-item>
-          <el-descriptions-item label="耗时">{{ detailRow.durationMs }}ms</el-descriptions-item>
-          <el-descriptions-item label="结果">
-            <el-tag :type="detailRow.success ? 'success' : 'danger'" size="small">{{ detailRow.success ? '成功' : '失败' }}</el-tag>
+          <el-descriptions-item :label="$t('field.time')">{{ detailRow.createTime }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('system.common.colCategory')">{{ extCategoryLabel(detailRow.category) }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('system.common.colIfCode')">{{ detailRow.interfaceCode }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('system.intLog.colHttpMethod')">{{ detailRow.method }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('system.common.colReqUrl')" :span="2">{{ detailRow.requestUrl }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('system.intLog.colStatusCode')">{{ detailRow.statusCode }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('system.common.colCost')">{{ detailRow.durationMs }}ms</el-descriptions-item>
+          <el-descriptions-item :label="$t('field.result')">
+            <el-tag :type="detailRow.success ? 'success' : 'danger'" size="small">{{ detailRow.success ? t('system.common.stSuccess') : t('system.common.stFailed') }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="错误信息" v-if="detailRow.errorMsg">{{ detailRow.errorMsg }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('system.intLog.colErrorMsg')" v-if="detailRow.errorMsg">{{ detailRow.errorMsg }}</el-descriptions-item>
         </el-descriptions>
         <div v-if="detailRow.requestBody" style="margin-top: 16px">
-          <div style="font-weight: 600; margin-bottom: 8px">请求体</div>
+          <div style="font-weight: 600; margin-bottom: 8px">{{ $t('system.intLog.lblReqBody') }}</div>
           <el-input type="textarea" :model-value="formatJson(detailRow.requestBody)" :rows="6" readonly />
         </div>
         <div v-if="detailRow.responseBody" style="margin-top: 16px">
-          <div style="font-weight: 600; margin-bottom: 8px">响应体</div>
+          <div style="font-weight: 600; margin-bottom: 8px">{{ $t('system.intLog.lblRespBody') }}</div>
           <el-input type="textarea" :model-value="formatJson(detailRow.responseBody)" :rows="8" readonly />
         </div>
       </template>
@@ -131,6 +128,9 @@ import { formatDateTime } from '@/utils/format'
 import { extCategoryLabel, EXT_INTERFACE_CATEGORY } from '@/constants/enums.js'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)

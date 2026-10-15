@@ -1,108 +1,105 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="quality-report">
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="header-title">任务质量报表</span>
+          <span class="header-title">{{ $t('sharing.qreport.pageTitle') }}</span>
           <div class="toolbar">
-            <span class="tb-label">统计窗口</span>
+            <span class="tb-label">{{ $t('sharing.qreport.labWindow') }}</span>
             <el-select v-model="days" size="small" style="width: 120px" @change="reloadAll">
-              <el-option :value="7" label="近 7 天" />
-              <el-option :value="30" label="近 30 天" />
-              <el-option :value="90" label="近 90 天" />
+              <el-option :value="7" :label="$t('sharing.qreport.optLast7')" />
+              <el-option :value="30" :label="$t('sharing.qreport.optLast30')" />
+              <el-option :value="90" :label="$t('sharing.qreport.optLast90')" />
             </el-select>
-            <el-button size="small" @click="reloadAll">刷新</el-button>
-            <el-tag v-if="summary?.note" type="info" size="small" effect="light">口径：wf_task_history.action='REJECT'</el-tag>
+            <el-button size="small" @click="reloadAll">{{ $t('common.refresh') }}</el-button>
+            <el-tag v-if="summary?.note" type="info" size="small" effect="light">{{ $t('sharing.qreport.tagCaliber') }}</el-tag>
           </div>
         </div>
       </template>
 
       <el-tabs v-model="tab" @tab-change="onTabChange">
-        <el-tab-pane label="质量总览" name="summary">
+        <el-tab-pane :label="$t('sharing.qreport.tabSummary')" name="summary">
           <div class="stat-row">
             <div class="stat-card">
               <div class="stat-val">{{ summary?.handledCount ?? ((summary?.approveCount || 0) + (summary?.rejectCount || 0)) }}</div>
-              <div class="stat-label">审批动作数</div>
+              <div class="stat-label">{{ $t('sharing.qreport.statActions') }}</div>
             </div>
             <div class="stat-card">
               <div class="stat-val">{{ formatPercent(summary?.rejectRate, false) }}</div>
-              <div class="stat-label">批退率</div>
+              <div class="stat-label">{{ $t('sharing.qreport.statRejectRate') }}</div>
             </div>
             <div class="stat-card">
               <div class="stat-val">{{ formatPercent(summary?.firstPassRate, false) }}</div>
-              <div class="stat-label">一次通过率</div>
+              <div class="stat-label">{{ $t('sharing.qreport.statFirstPass') }}</div>
             </div>
             <div class="stat-card">
               <div class="stat-val">{{ summary?.avgDwellMinutes ?? '-' }}</div>
-              <div class="stat-label">平均节点停留(分钟)</div>
+              <div class="stat-label">{{ $t('sharing.qreport.statAvgDwell') }}</div>
             </div>
             <div class="stat-card">
               <div class="stat-val">{{ summary?.instanceCount ?? 0 }}</div>
-              <div class="stat-label">涉及实例数</div>
+              <div class="stat-label">{{ $t('sharing.qreport.statInstances') }}</div>
             </div>
           </div>
           <el-alert v-if="summary?.note" :title="summary.note" type="info" :closable="false" show-icon style="margin-top: 10px" />
-          <el-divider content-position="left">批退原因 Top 榜</el-divider>
-          <el-table :data="summary?.topRejectReasons || []" size="small" stripe border max-height="320" empty-text="窗口内无批退">
-            <el-table-column prop="reason" label="批退原因" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="count" label="次数" width="100" align="right" />
+          <el-divider content-position="left">{{ $t('sharing.qreport.secTopReasons') }}</el-divider>
+          <el-table :data="summary?.topRejectReasons || []" size="small" stripe border max-height="320" :empty-text="$t('sharing.qreport.emptyNoReason')">
+            <el-table-column prop="reason" :label="$t('sharing.qreport.tabReason')" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="count" :label="$t('sharing.qreport.colCount')" width="100" align="right" />
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="按节点" name="nodes">
-          <el-table :data="nodeRows" v-loading="nodeLoading" size="small" stripe border max-height="520" empty-text="窗口内无数据">
-            <el-table-column prop="nodeName" label="节点" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="approveCount" label="通过" width="90" align="right" />
-            <el-table-column prop="rejectCount" label="批退" width="90" align="right" />
-            <el-table-column prop="handledCount" label="办理量" width="90" align="right" />
-            <el-table-column label="批退率" width="100" align="right">
+        <el-tab-pane :label="$t('sharing.qreport.tabByNode')" name="nodes">
+          <el-table :data="nodeRows" v-loading="nodeLoading" size="small" stripe border max-height="520" :empty-text="$t('sharing.qreport.emptyNoData')">
+            <el-table-column prop="nodeName" :label="$t('sharing.common.colNode')" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="approveCount" :label="$t('field.approve')" width="90" align="right" />
+            <el-table-column prop="rejectCount" :label="$t('sharing.qreport.colRejected')" width="90" align="right" />
+            <el-table-column prop="handledCount" :label="$t('sharing.qreport.colHandled')" width="90" align="right" />
+            <el-table-column :label="$t('sharing.qreport.statRejectRate')" width="100" align="right">
               <template #default="{ row }">{{ formatPercent(row.rejectRate, false) }}</template>
             </el-table-column>
-            <el-table-column prop="avgDwellMinutes" label="平均停留(分)" width="130" align="right" />
+            <el-table-column prop="avgDwellMinutes" :label="$t('sharing.qreport.colAvgDwell')" width="130" align="right" />
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="按办理人" name="handlers">
-          <el-table :data="handlerRows" v-loading="handlerLoading" size="small" stripe border max-height="520" empty-text="窗口内无数据">
-            <el-table-column prop="operUserName" label="办理人" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="approveCount" label="通过" width="90" align="right" />
-            <el-table-column prop="rejectCount" label="批退" width="90" align="right" />
-            <el-table-column prop="handledCount" label="办理量" width="90" align="right" />
-            <el-table-column label="批退率" width="100" align="right">
+        <el-tab-pane :label="$t('sharing.qreport.tabByHandler')" name="handlers">
+          <el-table :data="handlerRows" v-loading="handlerLoading" size="small" stripe border max-height="520" :empty-text="$t('sharing.qreport.emptyNoData')">
+            <el-table-column prop="operUserName" :label="$t('sharing.qreport.colHandler')" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="approveCount" :label="$t('field.approve')" width="90" align="right" />
+            <el-table-column prop="rejectCount" :label="$t('sharing.qreport.colRejected')" width="90" align="right" />
+            <el-table-column prop="handledCount" :label="$t('sharing.qreport.colHandled')" width="90" align="right" />
+            <el-table-column :label="$t('sharing.qreport.statRejectRate')" width="100" align="right">
               <template #default="{ row }">{{ formatPercent(row.rejectRate, false) }}</template>
             </el-table-column>
-            <el-table-column prop="avgDwellMinutes" label="平均停留(分)" width="130" align="right" />
+            <el-table-column prop="avgDwellMinutes" :label="$t('sharing.qreport.colAvgDwell')" width="130" align="right" />
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="批退原因" name="reasons">
+        <el-tab-pane :label="$t('sharing.qreport.tabReason')" name="reasons">
           <el-form :inline="true" size="small" style="margin-bottom: 10px">
-            <el-form-item label="节点 key"><el-input v-model="reasonQ.nodeKey" clearable placeholder="不限" style="width: 180px" @keyup.enter="loadReasons" /></el-form-item>
-            <el-form-item><el-button type="primary" @click="loadReasons">查询</el-button></el-form-item>
+            <el-form-item :label="$t('sharing.common.colNodeKey')"><el-input v-model="reasonQ.nodeKey" clearable :placeholder="$t('sharing.common.colAny')" style="width: 180px" @keyup.enter="loadReasons" /></el-form-item>
+            <el-form-item><el-button type="primary" @click="loadReasons">{{ $t('common.search') }}</el-button></el-form-item>
           </el-form>
-          <el-table :data="reasonRows" v-loading="reasonLoading" size="small" stripe border max-height="480" empty-text="窗口内无批退">
-            <el-table-column prop="reason" label="批退原因原文归桶" min-width="240" show-overflow-tooltip />
-            <el-table-column prop="count" label="次数" width="120" align="right" />
+          <el-table :data="reasonRows" v-loading="reasonLoading" size="small" stripe border max-height="480" :empty-text="$t('sharing.qreport.emptyNoReason')">
+            <el-table-column prop="reason" :label="$t('sharing.qreport.colReasonBucketRaw')" min-width="240" show-overflow-tooltip />
+            <el-table-column prop="count" :label="$t('sharing.qreport.colCount')" width="120" align="right" />
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="批退明细" name="detail">
+        <el-tab-pane :label="$t('sharing.qreport.tabDetail')" name="detail">
           <el-form :inline="true" size="small" style="margin-bottom: 10px">
-            <el-form-item label="节点 key"><el-input v-model="detailQ.nodeKey" clearable placeholder="不限" style="width: 160px" @keyup.enter="detailReset" /></el-form-item>
-            <el-form-item label="关键字"><el-input v-model="detailQ.keyword" clearable placeholder="单号/意见" style="width: 180px" @keyup.enter="detailReset" /></el-form-item>
-            <el-form-item><el-button type="primary" @click="detailReset">查询</el-button></el-form-item>
+            <el-form-item :label="$t('sharing.common.colNodeKey')"><el-input v-model="detailQ.nodeKey" clearable :placeholder="$t('sharing.common.colAny')" style="width: 160px" @keyup.enter="detailReset" /></el-form-item>
+            <el-form-item :label="$t('sharing.common.colKeyword')"><el-input v-model="detailQ.keyword" clearable :placeholder="$t('sharing.qreport.phBillNoComment')" style="width: 180px" @keyup.enter="detailReset" /></el-form-item>
+            <el-form-item><el-button type="primary" @click="detailReset">{{ $t('common.search') }}</el-button></el-form-item>
           </el-form>
-          <el-table :data="detailRows" v-loading="detailLoading" size="small" stripe border max-height="480" empty-text="窗口内无批退明细">
-            <el-table-column prop="bizType" label="单据类型" width="120" :formatter="(row, col, val) => bizTypeLabel(val)" />
-            <el-table-column prop="nodeName" label="节点" width="150" show-overflow-tooltip />
-            <el-table-column prop="operUserName" label="办理人" width="110" />
-            <el-table-column prop="reasonBucket" label="原因归桶" width="140" show-overflow-tooltip />
-            <el-table-column prop="comment" label="审批意见" min-width="200" show-overflow-tooltip />
-            <el-table-column prop="durationMinutes" label="停留(分)" width="100" align="right" />
-            <el-table-column prop="operTime" label="操作时间" width="160" :formatter="(r, c, v) => formatDateTime(v)" />
+          <el-table :data="detailRows" v-loading="detailLoading" size="small" stripe border max-height="480" :empty-text="$t('sharing.qreport.emptyNoDetail')">
+            <el-table-column prop="bizType" :label="$t('field.billType')" width="120" :formatter="(row, col, val) => bizTypeLabel(val)" />
+            <el-table-column prop="nodeName" :label="$t('sharing.common.colNode')" width="150" show-overflow-tooltip />
+            <el-table-column prop="operUserName" :label="$t('sharing.qreport.colHandler')" width="110" />
+            <el-table-column prop="reasonBucket" :label="$t('sharing.qreport.colReasonBucket')" width="140" show-overflow-tooltip />
+            <el-table-column prop="comment" :label="$t('sharing.qreport.colComment')" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="durationMinutes" :label="$t('sharing.qreport.colDwell')" width="100" align="right" />
+            <el-table-column prop="operTime" :label="$t('sharing.qreport.colOperTime')" width="160" :formatter="(r, c, v) => formatDateTime(v)" />
           </el-table>
           <TablePager :pager="detailPager" @change="loadDetail" />
         </el-tab-pane>

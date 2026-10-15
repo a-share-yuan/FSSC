@@ -1,55 +1,52 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card shadow="never">
     <template #header>
       <div class="toolbar">
         <el-tabs v-model="tab" style="flex: 1">
-          <el-tab-pane label="票据列表" name="list" />
-          <el-tab-pane label="到期未托收" name="due" />
+          <el-tab-pane :label="$t('flow.note.titleNoteList')" name="list" />
+          <el-tab-pane :label="$t('flow.note.tabDueUncollected')" name="due" />
         </el-tabs>
         <div class="ops">
-          <el-select v-model="q.noteType" size="small" style="width: 110px" placeholder="票据类型" clearable @change="load">
-            <el-option label="电子票据" value="ELECTRONIC" />
-            <el-option label="纸质票据" value="PAPER" />
+          <el-select v-model="q.noteType" size="small" style="width: 110px" :placeholder="$t('flow.report.colNoteType')" clearable @change="load">
+            <el-option :label="$t('flow.report.noteElectronic')" value="ELECTRONIC" />
+            <el-option :label="$t('flow.report.notePaper')" value="PAPER" />
           </el-select>
-          <el-select v-model="q.status" size="small" style="width: 120px" placeholder="状态" clearable @change="load">
+          <el-select v-model="q.status" size="small" style="width: 120px" :placeholder="$t('common.status')" clearable @change="load">
             <el-option v-for="(l, s) in AR_NOTE_STATUS" :key="s" :label="l" :value="s" />
           </el-select>
-          <el-input v-model="q.keyword" size="small" style="width: 150px" placeholder="票据编号/出票人/客户" clearable @keyup.enter="load" />
-          <el-button size="small" @click="load">刷新</el-button>
-          <el-button type="primary" size="small" @click="openRegister">票据登记</el-button>
+          <el-input v-model="q.keyword" size="small" style="width: 150px" :placeholder="$t('flow.note.phSearch')" clearable @keyup.enter="load" />
+          <el-button size="small" @click="load">{{ $t('common.refresh') }}</el-button>
+          <el-button type="primary" size="small" @click="openRegister">{{ $t('flow.note.btnNoteRegister') }}</el-button>
         </div>
       </div>
     </template>
 
     <el-table v-if="tab === 'list'" :data="rows" v-loading="loading" size="small" border stripe>
-      <el-table-column prop="noteNo" label="票据编号" min-width="150" show-overflow-tooltip />
-      <el-table-column label="类型" width="90">
+      <el-table-column prop="noteNo" :label="$t('flow.note.colNoteNo')" min-width="150" show-overflow-tooltip />
+      <el-table-column :label="$t('field.type')" width="90">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.noteType === 'PAPER' ? 'warning' : 'success'">{{ row.noteType === 'PAPER' ? '纸质' : '电子' }}</el-tag>
+          <el-tag size="small" :type="row.noteType === 'PAPER' ? 'warning' : 'success'">{{ row.noteType === 'PAPER' ? t('flow.note.valPaper') : t('flow.note.valElectronic') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="drawer" label="出票人" min-width="110" show-overflow-tooltip />
-      <el-table-column prop="customerName" label="客户" min-width="110" show-overflow-tooltip />
-      <el-table-column prop="amount" label="票面金额" width="105" align="right" />
-      <el-table-column prop="dueDate" label="到期日" width="100" />
-      <el-table-column label="状态" width="100">
+      <el-table-column prop="drawer" :label="$t('flow.note.colDrawer')" min-width="110" show-overflow-tooltip />
+      <el-table-column prop="customerName" :label="$t('field.customer')" min-width="110" show-overflow-tooltip />
+      <el-table-column prop="amount" :label="$t('flow.note.colFaceAmount')" width="105" align="right" />
+      <el-table-column prop="dueDate" :label="$t('flow.note.colDueDate')" width="100" />
+      <el-table-column :label="$t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag size="small" :type="{ REGISTERED: 'warning', IN_ACCOUNT: 'primary', COMPLETED: 'info', VOIDED: 'danger', DISCOUNTED: 'success', ENDORSED: 'success' }[row.status] || 'info'">
             {{ arNoteStatusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="贴现/托收" min-width="170">
+      <el-table-column :label="$t('flow.note.colDiscountCollect')" min-width="170">
         <template #default="{ row }">
-          <span v-if="row.discountAmount != null">贴息 {{ row.discountInterest }}，净额 {{ row.discountAmount }}</span>
+          <span v-if="row.discountAmount != null">{{ $t('flow.note.textDiscountInfo', { v1: row.discountInterest, v2: row.discountAmount }) }}</span>
           <span v-else-if="row.collectVoucherNo">{{ row.collectVoucherNo }}</span>
           <span v-else>{{ row.voucherNo || '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="330" fixed="right">
+      <el-table-column :label="$t('common.operation')" width="330" fixed="right">
         <template #default="{ row }">
           <el-button v-for="a in actions(row)" :key="a.key" link type="primary" size="small" @click="act(row, a)">{{ a.label }}</el-button>
         </template>
@@ -57,68 +54,68 @@
     </el-table>
 
     <el-table v-else :data="dueRows" v-loading="loading" size="small" border stripe>
-      <el-table-column prop="noteNo" label="票据编号" min-width="150" />
-      <el-table-column prop="drawer" label="出票人" min-width="120" show-overflow-tooltip />
-      <el-table-column prop="amount" label="票面金额" width="120" align="right" />
-      <el-table-column prop="dueDate" label="到期日" width="110" />
-      <el-table-column label="状态" width="120">
+      <el-table-column prop="noteNo" :label="$t('flow.note.colNoteNo')" min-width="150" />
+      <el-table-column prop="drawer" :label="$t('flow.note.colDrawer')" min-width="120" show-overflow-tooltip />
+      <el-table-column prop="amount" :label="$t('flow.note.colFaceAmount')" width="120" align="right" />
+      <el-table-column prop="dueDate" :label="$t('flow.note.colDueDate')" width="110" />
+      <el-table-column :label="$t('common.status')" width="120">
         <template #default="{ row }">{{ arNoteStatusLabel(row.status) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column :label="$t('common.operation')" width="160" fixed="right">
         <template #default="{ row }">
           <!-- 与后端 markDue 同一状态闸：仅「已入账/已保管」可到期提示；数据陈旧时按钮不出现，点了才报错的情况消除 -->
-          <el-button v-if="row.status === 'IN_ACCOUNT' || row.status === 'CUSTODY'" link type="primary" size="small" @click="act(row, { key: 'markDue' })">到期提示→待托收</el-button>
-          <span v-else style="color:#909399;font-size:12px">当前状态「{{ arNoteStatusLabel(row.status) }}」不可到期提示</span>
+          <el-button v-if="row.status === 'IN_ACCOUNT' || row.status === 'CUSTODY'" link type="primary" size="small" @click="act(row, { key: 'markDue' })">{{ $t('flow.note.btnMarkDue') }}</el-button>
+          <span v-else style="color:#909399;font-size:12px">{{ $t('flow.note.hintStatusNoPresent', { v1: arNoteStatusLabel(row.status) }) }}</span>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="registerVisible" title="票据登记" width="640px" destroy-on-close>
+    <el-dialog v-model="registerVisible" :title="$t('flow.note.btnNoteRegister')" width="640px" destroy-on-close>
       <el-form ref="registerFormRef" :model="form" :rules="registerRules" label-width="100px" size="small">
         <el-row :gutter="12">
-          <el-col :span="12"><el-form-item label="票据类型" prop="noteType">
+          <el-col :span="12"><el-form-item :label="$t('flow.report.colNoteType')" prop="noteType">
             <el-radio-group v-model="form.noteType">
-              <el-radio value="ELECTRONIC">电子票据</el-radio>
-              <el-radio value="PAPER">纸质票据</el-radio>
+              <el-radio value="ELECTRONIC">{{ $t('flow.report.noteElectronic') }}</el-radio>
+              <el-radio value="PAPER">{{ $t('flow.report.notePaper') }}</el-radio>
             </el-radio-group>
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="票据编号" prop="noteNo"><el-input v-model="form.noteNo" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="出票人"><el-input v-model="form.drawer" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="承兑人"><el-input v-model="form.acceptor" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="客户名称"><el-input v-model="form.customerName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="票据金额" prop="amount"><el-input v-model="form.amount" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="出票日"><el-date-picker v-model="form.issueDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="到期日" prop="dueDate"><el-date-picker v-model="form.dueDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.note.colNoteNo')" prop="noteNo"><el-input v-model="form.noteNo" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.note.colDrawer')"><el-input v-model="form.drawer" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.note.colAcceptor')"><el-input v-model="form.acceptor" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.collab.colCustomerName')"><el-input v-model="form.customerName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.note.formNoteAmount')" prop="amount"><el-input v-model="form.amount" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.note.colIssueDate')"><el-date-picker v-model="form.issueDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.note.colDueDate')" prop="dueDate"><el-date-picker v-model="form.dueDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
           <el-col v-if="form.noteType === 'PAPER'" :span="24">
-            <el-form-item label="影像扫描" prop="imageRef">
-              <el-input v-model="form.imageRef" placeholder="纸质票据必须影像扫描（影像批号/文件引用）" />
+            <el-form-item :label="$t('flow.note.formImageScan')" prop="imageRef">
+              <el-input v-model="form.imageRef" :placeholder="$t('flow.note.phImageScan')" />
             </el-form-item>
           </el-col>
-          <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item :label="$t('common.remark')"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>
-        <el-button size="small" @click="registerVisible = false">取消</el-button>
-        <el-button type="primary" size="small" @click="doRegister">登记（登记后请到「应收服务申请」手工建单）</el-button>
+        <el-button size="small" @click="registerVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doRegister">{{ $t('flow.note.btnRegisterConfirm') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="discountVisible" title="汇票贴现（贴现款与利息单独记账）" width="460px" destroy-on-close>
+    <el-dialog v-model="discountVisible" :title="$t('flow.note.dlgDiscount')" width="460px" destroy-on-close>
       <el-form label-width="100px" size="small">
-        <el-form-item label="贴现利率%"><el-input v-model="discountForm.rate" placeholder="年利率%，如 3.5" /></el-form-item>
-        <el-form-item label="贴现日期"><el-date-picker v-model="discountForm.date" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
+        <el-form-item :label="$t('flow.note.formDiscountRate')"><el-input v-model="discountForm.rate" :placeholder="$t('flow.note.phDiscountRate')" /></el-form-item>
+        <el-form-item :label="$t('flow.note.formDiscountDate')"><el-date-picker v-model="discountForm.date" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
       </el-form>
       <template #footer>
-        <el-button size="small" @click="discountVisible = false">取消</el-button>
-        <el-button type="primary" size="small" @click="doDiscount">贴现</el-button>
+        <el-button size="small" @click="discountVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doDiscount">{{ $t('flow.note.btnDiscount') }}</el-button>
       </template>
     </el-dialog>
 
     <el-dialog v-model="inputVisible" :title="inputTitle" width="420px" destroy-on-close>
-      <el-input v-model="inputText" :placeholder="inputKind === 'void' ? '作废原因（必填）' : '被背书人（银行名称，必填）'" />
+      <el-input v-model="inputText" :placeholder="inputKind === 'void' ? $t('flow.note.phVoidReasonRequired') : $t('flow.note.phEndorsee')" />
       <template #footer>
-        <el-button size="small" @click="inputVisible = false">取消</el-button>
-        <el-button type="primary" size="small" @click="doInput">确定</el-button>
+        <el-button size="small" @click="inputVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doInput">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -126,11 +123,14 @@
 
 <script setup>
 import { AR_NOTE_STATUS, arNoteStatusLabel } from '@/constants/enums'
-import { onMounted, reactive, ref } from 'vue'
+import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage } from 'element-plus'
 import { arGapApi } from '../../api'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 
 const tab = ref('list')
@@ -145,13 +145,13 @@ const current = ref(null)
 const form = reactive({ noteType: 'ELECTRONIC' })
 const registerFormRef = ref(null)
 // 票据编号是银行票据自身的号码（外部单号，人工按票面录入），与"系统取号"的单据编号不是一类，故保留必输
-const registerRules = {
-  noteType: commonRules.select('请选择票据类型'),
-  noteNo: commonRules.required('请输入票据编号'),
-  amount: commonRules.amountText('请输入票据金额'),
-  dueDate: commonRules.date('请选择到期日'),
-  imageRef: commonRules.required('纸质票据必须登记影像扫描（影像批号/文件引用）'),
-}
+const registerRules = computed(() => ({
+  noteType: commonRules.select(t('flow.note.errTypeRequired')),
+  noteNo: commonRules.required(t('flow.note.errNoteNoRequired')),
+  amount: commonRules.amountText(t('flow.note.errAmountRequired')),
+  dueDate: commonRules.date(t('flow.note.errDueDateRequired')),
+  imageRef: commonRules.required(t('flow.note.errImageScanRequired')),
+}))
 const discountForm = reactive({ rate: '', date: '' })
 const inputKind = ref('')
 const inputTitle = ref('')
@@ -160,17 +160,17 @@ const inputText = ref('')
 function actions(row) {
   switch (row.status) {
     case 'REGISTERED':
-      return [{ key: 'review', label: '审单入账' }, { key: 'void', label: '作废' }]
+      return [{ key: 'review', label: t('flow.note.opReviewPost') }, { key: 'void', label: t('field.void') }]
     case 'IN_ACCOUNT':
     case 'CUSTODY': {
       const ops = []
-      if (row.noteType === 'PAPER' && row.status === 'IN_ACCOUNT') ops.push({ key: 'handover', label: '移交出纳' })
-      ops.push({ key: 'endorse', label: '背书转让' }, { key: 'discount', label: '汇票贴现' })
-      if (row.dueDate && row.dueDate <= today()) ops.push({ key: 'markDue', label: '到期提示' })
+      if (row.noteType === 'PAPER' && row.status === 'IN_ACCOUNT') ops.push({ key: 'handover', label: t('flow.note.opHandoverCashier') })
+      ops.push({ key: 'endorse', label: t('flow.note.opEndorse') }, { key: 'discount', label: t('flow.note.opDiscountBill') })
+      if (row.dueDate && row.dueDate <= today()) ops.push({ key: 'markDue', label: t('flow.note.opMarkDue') })
       return ops
     }
     case 'COLLECTING':
-      return [{ key: 'collect', label: '托收到账' }]
+      return [{ key: 'collect', label: t('flow.note.opCollect') }]
     default:
       return []
   }
@@ -194,7 +194,7 @@ async function load() {
 
 async function api(fn, msg) {
   await fn()
-  ElMessage.success(msg || '操作成功')
+  ElMessage.success(msg || t('common.success'))
   await load()
 }
 
@@ -202,10 +202,10 @@ function act(row, a) {
   current.value = row
   const id = row.id
   const m = {
-    review: () => api(() => arGapApi.noteReview(id), '审单入账成功（借1121/贷1122）'),
-    handover: () => api(() => arGapApi.noteHandover(id, ''), '已移交出纳保管'),
-    markDue: () => api(() => arGapApi.noteMarkDue(id), '已进入待托收'),
-    collect: () => api(() => arGapApi.noteCollect(id), '托收入账成功（借1002/贷1121）'),
+    review: () => api(() => arGapApi.noteReview(id), t('flow.note.msgReviewedOk')),
+    handover: () => api(() => arGapApi.noteHandover(id, ''), t('flow.note.msgHandedOver')),
+    markDue: () => api(() => arGapApi.noteMarkDue(id), t('flow.note.msgInToCollect')),
+    collect: () => api(() => arGapApi.noteCollect(id), t('flow.note.msgCollectedOk')),
   }
   if (m[a.key]) return m[a.key]()
   if (a.key === 'discount') {
@@ -214,12 +214,12 @@ function act(row, a) {
     discountVisible.value = true
   } else if (a.key === 'endorse') {
     inputKind.value = 'endorse'
-    inputTitle.value = '背书转让给银行'
+    inputTitle.value = t('flow.note.dlgEndorseBank')
     inputText.value = ''
     inputVisible.value = true
   } else if (a.key === 'void') {
     inputKind.value = 'void'
-    inputTitle.value = '票据作废'
+    inputTitle.value = t('flow.note.dlgVoidNote')
     inputText.value = ''
     inputVisible.value = true
   }
@@ -227,17 +227,17 @@ function act(row, a) {
 
 async function doDiscount() {
   await api(() => arGapApi.noteDiscount(current.value.id, { annualRatePct: discountForm.rate, discountDate: discountForm.date }),
-    '贴现成功（贴现款与利息单独记账）')
+    t('flow.note.msgDiscountOk'))
   discountVisible.value = false
 }
 
 async function doInput() {
   // 背书要记被背书人、作废要记原因，两者都是后续追索/审计的依据，留空即无意义
   if (!inputText.value.trim()) {
-    return ElMessage.warning(inputKind.value === 'endorse' ? '请填写被背书人（银行名称）' : '请填写作废原因')
+    return ElMessage.warning(inputKind.value === 'endorse' ? t('flow.note.errEndorseeRequired') : t('flow.request.errVoidReason'))
   }
-  if (inputKind.value === 'endorse') await api(() => arGapApi.noteEndorse(current.value.id, inputText.value), '背书转让成功')
-  else await api(() => arGapApi.noteVoid(current.value.id, inputText.value), '已作废')
+  if (inputKind.value === 'endorse') await api(() => arGapApi.noteEndorse(current.value.id, inputText.value), t('flow.note.msgEndorsedOk'))
+  else await api(() => arGapApi.noteVoid(current.value.id, inputText.value), t('flow.collab.stVoided'))
   inputVisible.value = false
 }
 
@@ -249,7 +249,7 @@ function openRegister() {
 
 async function doRegister() {
   if (!(await validateForms([registerFormRef]))) return
-  await api(() => arGapApi.registerNote({ ...form }), '登记成功，待审单')
+  await api(() => arGapApi.registerNote({ ...form }), t('flow.note.msgRegisteredPending'))
   registerVisible.value = false
 }
 

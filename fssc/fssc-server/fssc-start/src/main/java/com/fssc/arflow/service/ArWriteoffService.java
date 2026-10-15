@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -117,6 +114,9 @@ public class ArWriteoffService {
         }
         q.gt(RcReceivable::getRemainAmount, BigDecimal.ZERO);
         q.ne(RcReceivable::getStatus, "DONE");
+        // D-V4R-71（与 RcReceiptService 同一处口径，2026-10-15 实测）：只排 DONE ⇒ 未确认（NONE，
+        // 含流程卡死件）与被驳回（REJECTED）的应收仍会进自动核销候选。
+        q.notIn(RcReceivable::getStatus, "NONE", "REJECTED");
         q.orderByAsc(RcReceivable::getDueDate).orderByAsc(RcReceivable::getId);
         return receivableMapper.selectList(q);
     }

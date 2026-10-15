@@ -1,41 +1,38 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="expense-apply-list">
     <div class="page-header" style="margin-bottom: 16px;">
-      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">事前申请</h2>
+      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">{{ $t('expense.preapply.tabRequisition') }}</h2>
     </div>
     <el-card>
       <!-- Toolbar -->
       <div class="toolbar">
-        <el-input v-model="query.keyword" placeholder="搜索单号/标题" clearable style="width:240px" @keyup.enter="loadList" />
-        <el-button type="primary" @click="onQuery">查询</el-button>
-        <el-button @click="query.keyword = ''; onQuery()">重置</el-button>
-        <el-button type="success" @click="openCreate">新增事前申请</el-button>
+        <el-input v-model="query.keyword" :placeholder="$t('expense.applyList.phSearch')" clearable style="width:240px" @keyup.enter="loadList" />
+        <el-button type="primary" @click="onQuery">{{ $t('common.search') }}</el-button>
+        <el-button @click="query.keyword = ''; onQuery()">{{ $t('common.reset') }}</el-button>
+        <el-button type="success" @click="openCreate">{{ $t('expense.preapply.btnNewRequisition') }}</el-button>
       </div>
 
       <!-- Table -->
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
-      <el-table class="cm-target-exp-list" :data="list" v-else border stripe empty-text="暂无数据" @row-dblclick="openRowDetail">
-        <el-table-column prop="billNo" label="单据编号" min-width="150" sortable />
-        <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="applyUserName" label="申请人" min-width="100" />
-        <el-table-column prop="totalAmount" label="金额" width="130" align="right" sortable>
+      <el-table class="cm-target-exp-list" :data="list" v-else border stripe :empty-text="$t('common.empty')" @row-dblclick="openRowDetail">
+        <el-table-column prop="billNo" :label="$t('expense.claim.colBillNoFull')" min-width="150" sortable />
+        <el-table-column prop="title" :label="$t('expense.common.colTitle')" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="applyUserName" :label="$t('expense.common.colApplicant')" min-width="100" />
+        <el-table-column prop="totalAmount" :label="$t('field.amount')" width="130" align="right" sortable>
           <template #default="{ row }">{{ formatMoney(row.totalAmount) }}</template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="110" align="center" sortable>
+        <el-table-column prop="status" :label="$t('common.status')" width="110" align="center" sortable>
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" width="170" sortable :formatter="(row, col, val) => formatDateTime(val)" />
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column prop="createTime" :label="$t('common.createTime')" width="170" sortable :formatter="(row, col, val) => formatDateTime(val)" />
+        <el-table-column :label="$t('common.operation')" width="180" fixed="right">
           <template #default="{ row }">          <InlineActions :visible="true" @view="onViewDetail(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="true" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
-          <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
-            <el-button v-if="canEditResubmit(row)" link size="small" type="warning" @click="onEdit(row)">{{ row.status === 'REJECTED' ? '编辑重提' : '编辑' }}</el-button>
-            <el-button v-if="row.status === BillStatus.APPROVED" link type="primary" @click="onConvert(row)">转报销</el-button>
-            <el-button link type="primary" @click="onViewDetail(row)">查看详情</el-button>
+          <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('expense.common.btnTrace') }}</el-button>
+            <el-button v-if="canEditResubmit(row)" link size="small" type="warning" @click="onEdit(row)">{{ row.status === 'REJECTED' ? t('expense.common.btnEditResubmit') : t('expense.common.btnEdit') }}</el-button>
+            <el-button v-if="row.status === BillStatus.APPROVED" link type="primary" @click="onConvert(row)">{{ $t('expense.applyList.btnToClaim') }}</el-button>
+            <el-button link type="primary" @click="onViewDetail(row)">{{ $t('expense.common.btnViewDetails') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -54,55 +51,55 @@
     </el-card>
 
     <!-- Create Dialog -->
-    <el-dialog v-model="createDialogVisible" title="新增事前申请" width="480px">
+    <el-dialog v-model="createDialogVisible" :title="$t('expense.preapply.btnNewRequisition')" width="480px">
       <el-form :model="createForm" label-width="80px" ref="createFormRef" :rules="createFormRules">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="createForm.title" placeholder="申请标题" />
+        <el-form-item :label="$t('expense.common.colTitle')" prop="title">
+          <el-input v-model="createForm.title" :placeholder="$t('expense.applyList.colApplyTitle')" />
         </el-form-item>
-        <el-form-item label="金额" prop="amount">
+        <el-form-item :label="$t('field.amount')" prop="amount">
           <el-input-number v-model="createForm.amount" :min="0" :precision="2" controls-position="right" style="width:100%" />
         </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="createForm.remark" type="textarea" :rows="3" placeholder="申请说明" />
+        <el-form-item :label="$t('common.remark')">
+          <el-input v-model="createForm.remark" type="textarea" :rows="3" :placeholder="$t('expense.applyList.colApplyNote')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="onCreate">保存草稿</el-button>
+        <el-button @click="createDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="onCreate">{{ $t('expense.common.btnSaveDraft') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- Detail Dialog -->
-    <el-dialog v-model="detailDialogVisible" title="事前申请详情" width="640px">
+    <el-dialog v-model="detailDialogVisible" :title="$t('expense.applyList.ctxRequisitionDetail')" width="640px">
       <SkeletonDetail v-if="detailLoading" :rows="6" />
       <div v-else>
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="单据编号">{{ detail.billNo }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
+          <el-descriptions-item :label="$t('expense.claim.colBillNoFull')">{{ detail.billNo }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('common.status')">
             <el-tag :type="statusType(detail.status)">{{ statusText(detail.status) }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="标题" :span="2">{{ detail.title }}</el-descriptions-item>
-          <el-descriptions-item label="申请人">{{ detail.applyUserName }}</el-descriptions-item>
-          <el-descriptions-item label="金额">{{ formatMoney(detail.totalAmount) }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间">{{ detail.createTime }}</el-descriptions-item>
-          <el-descriptions-item label="更新时间">{{ detail.updateTime }}</el-descriptions-item>
-          <el-descriptions-item label="备注" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('expense.common.colTitle')" :span="2">{{ detail.title }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('expense.common.colApplicant')">{{ detail.applyUserName }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('field.amount')">{{ formatMoney(detail.totalAmount) }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('common.createTime')">{{ detail.createTime }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('common.updateTime')">{{ detail.updateTime }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('common.remark')" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
         </el-descriptions>
       </div>
       <template #footer>
-        <el-button @click="detailDialogVisible = false">关闭</el-button>
+        <el-button @click="detailDialogVisible = false">{{ $t('common.close') }}</el-button>
       </template>
     </el-dialog>
   </div>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" biz-type="EXP_APPLY" />
 
-  <CoachMark ref="expApplyCm" :guide-key="_guideKey" :selector="'.cm-target-exp-list'" title="报销申请" text="报销申请列表展示所有费用报销单据，支持新建、查看和审批。" />
+  <CoachMark ref="expApplyCm" :guide-key="_guideKey" :selector="'.cm-target-exp-list'" :title="$t('expense.applyList.titleClaims')" :text="$t('expense.applyList.hintClaims')" />
   <ApprovalDialog ref="approvalRef" />
 </template>
 
 <script setup>
 
-import { onMounted, reactive, ref } from 'vue'
+import {onMounted, reactive, ref, computed} from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { billApi } from '../../api'
@@ -117,6 +114,9 @@ import { formatDate, formatDateTime } from '@/utils/format'
 import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
@@ -147,10 +147,10 @@ const createDialogVisible = ref(false)
 const saving = ref(false)
 const createFormRef = ref()
 const createForm = reactive({ title: '', amount: 0, remark: '' })
-const createFormRules = {
-  title: [{ required: true, message: '请输入标题' }],
-  amount: [{ required: true, message: '请输入金额' }],
-}
+const createFormRules = computed(() => ({
+  title: [{ required: true, message: t('expense.applyList.errTitleRequired') }],
+  amount: [{ required: true, message: t('expense.applyList.errAmountRequired') }],
+}))
 
 /* ---- Detail ---- */
 const detailDialogVisible = ref(false)
@@ -173,7 +173,7 @@ async function loadList() {
     list.value = res.records || res.list || []
     total.value = res.total || 0
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(e.message || t('expense.applyList.msgLoadFailed'))
   } finally {
     loading.value = false
   }
@@ -194,11 +194,11 @@ async function onCreate() {
   saving.value = true
   try {
     await billApi.saveDraft({ billType: 'APPLY', title: createForm.title, amount: createForm.amount, remark: createForm.remark })
-    ElMessage.success('草稿已保存')
+    ElMessage.success(t('expense.common.msgDraftSaved'))
     createDialogVisible.value = false
     loadList()
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e.message || t('expense.applyList.msgSaveFailed'))
   } finally {
     saving.value = false
   }
@@ -210,13 +210,13 @@ function onEdit(row) {
 }
 
 async function onConvert(row) {
-  await ElMessageBox.confirm(`确认将事前申请 [${row.billNo}] 转为报销单？`, '转报销', { type: 'warning' })
+  await ElMessageBox.confirm(t('expense.applyList.askConvert', { v1: row.billNo }), t('expense.applyList.btnToClaim'), { type: 'warning' })
   try {
     await billApi.convertApply(row.id)
-    ElMessage.success('已转为报销单')
+    ElMessage.success(t('expense.applyList.stConverted'))
     loadList()
   } catch (e) {
-    ElMessage.error(e.message || '转换失败')
+    ElMessage.error(e.message || t('expense.applyList.msgConvertFailed'))
   }
 }
 
@@ -227,7 +227,7 @@ async function onViewDetail(row) {
   try {
     detail.value = await billApi.detail(row.id) || {}
   } catch (e) {
-    ElMessage.error(e.message || '加载详情失败')
+    ElMessage.error(e.message || t('expense.applyList.msgLoadDetailFailed'))
   } finally {
     detailLoading.value = false
   }

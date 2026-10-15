@@ -1,26 +1,23 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="sharing-config-page">
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
           <span class="header-title">{{ pageTitle }}</span>
-          <el-button type="primary" size="small" @click="openDialog(null)">新增</el-button>
+          <el-button type="primary" size="small" @click="openDialog(null)">{{ $t('sharing.common.btnAdd') }}</el-button>
         </div>
       </template>
       <el-form :inline="true" :rules="searchRules" size="small" style="margin-bottom:12px">
-        <el-form-item label="关键词">
-          <el-input v-model="keyword" placeholder="搜索编码/名称..." clearable @keyup.enter="loadList" />
+        <el-form-item :label="$t('sharing.common.labKeyword')">
+          <el-input v-model="keyword" :placeholder="$t('sharing.cfg.phSearchCodeName')" clearable @keyup.enter="loadList" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="loadList">查询</el-button>
-          <el-button @click="keyword = ''; loadList()">重置</el-button>
+          <el-button type="primary" @click="loadList">{{ $t('common.search') }}</el-button>
+          <el-button @click="keyword = ''; loadList()">{{ $t('common.reset') }}</el-button>
         </el-form-item>
       </el-form>
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
-      <el-table :data="filteredList" v-else size="small" stripe border max-height="560" @row-dblclick="openRowDetail" empty-text="暂无数据">
+      <el-table :data="filteredList" v-else size="small" stripe border max-height="560" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
         <el-table-column
           v-for="col in columns" :key="col.prop"
           :prop="col.prop" :label="col.label" :width="col.width" :min-width="col.minWidth || 120"
@@ -35,10 +32,10 @@
             {{ groupNameById(row[col.prop]) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column :label="$t('common.operation')" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="del(row)">删除</el-button>
+            <el-button link type="primary" size="small" @click="openDialog(row)">{{ $t('sharing.common.btnEdit') }}</el-button>
+            <el-button link type="danger" size="small" @click="del(row)">{{ $t('sharing.common.btnDelete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -51,24 +48,24 @@
       />
     </el-card>
 
-    <el-dialog v-model="dialog.visible" :title="dialog.editing ? '编辑' : '新增'" width="560px" destroy-on-close>
+    <el-dialog v-model="dialog.visible" :title="dialog.editing ? t('sharing.common.btnEdit') : t('sharing.common.btnAdd')" width="560px" destroy-on-close>
       <el-form ref="dialogFormRef" :model="dialog.form" :rules="dialogRules" label-width="110px" size="default">
         <el-form-item v-for="col in columns" :key="col.prop" :label="col.label" :prop="col.prop">
-          <el-select v-if="col.options" v-model="dialog.form[col.prop]" style="width:100%" :placeholder="'请选择'">
+          <el-select v-if="col.options" v-model="dialog.form[col.prop]" style="width:100%" :placeholder="$t('sharing.cfg.phSelectOption')">
             <el-option v-for="o in col.options" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
           <!-- R5-D-253：目标分组下拉（选项来自分组管理 op_sh_group），只提交 id -->
-          <el-select v-else-if="col.dynamic === 'group'" v-model="dialog.form[col.prop]" filterable clearable style="width:100%" placeholder="请选择分组">
+          <el-select v-else-if="col.dynamic === 'group'" v-model="dialog.form[col.prop]" filterable clearable style="width:100%" :placeholder="$t('sharing.cfg.phSelectGroup')">
             <el-option v-for="g in groupOptions" :key="g.id" :label="g.groupName || g.groupCode || ('#' + g.id)" :value="g.id" />
           </el-select>
           <el-input-number v-else-if="col.type === 'number'" v-model="dialog.form[col.prop]" :controls="false" style="width:100%" />
           <el-date-picker v-else-if="col.type === 'date'" v-model="dialog.form[col.prop]" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-          <el-input v-else v-model="dialog.form[col.prop]" :placeholder="'请输入' + col.label" />
+          <el-input v-else v-model="dialog.form[col.prop]" :placeholder="$t('sharing.configTable.phRequiredField', { v1: col.label })" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="dialog.saving" @click="save">保存</el-button>
+        <el-button @click="dialog.visible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="dialog.saving" @click="save">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -85,6 +82,9 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => loadList(),
@@ -109,94 +109,94 @@ const props = defineProps({
   title: { type: String, default: '' },
 })
 
-const STATUS_OPTS = [
-  { label: '正常', value: 'NORMAL' },
-  { label: '停用', value: 'DISABLED' },
-]
+const STATUS_OPTS = computed(() => ([
+  { label: t('sharing.cfg.optNormal'), value: 'NORMAL' },
+  { label: t('sharing.common.colDisabled'), value: 'DISABLED' },
+]))
 
-const CONFIG_MAP = {
+const CONFIG_MAP = computed(() => ({
   job: {
-    title: '作业岗位设置',
+    title: t('sharing.cfg.titleJob'),
     api: { page: opsCfgApi.jobPage, create: opsCfgApi.jobCreate, update: opsCfgApi.jobUpdate, delete: opsCfgApi.jobDelete },
     columns: [
-      { prop: 'jobCode', label: '岗位编码', width: 120, required: true },
-      { prop: 'jobName', label: '岗位名称', minWidth: 140, required: true },
-      { prop: 'workItems', label: '作业项', minWidth: 160 },
-      { prop: 'status', label: '状态', width: 90, options: STATUS_OPTS, defaultValue: 'NORMAL' },
-      { prop: 'remark', label: '备注', minWidth: 120 },
+      { prop: 'jobCode', label: t('sharing.cfg.colJobCode'), width: 120, required: true },
+      { prop: 'jobName', label: t('sharing.cfg.colJobName'), minWidth: 140, required: true },
+      { prop: 'workItems', label: t('sharing.common.colWorkItem'), minWidth: 160 },
+      { prop: 'status', label: t('common.status'), width: 90, options: STATUS_OPTS.value, defaultValue: 'NORMAL' },
+      { prop: 'remark', label: t('common.remark'), minWidth: 120 },
     ],
   },
   group: {
-    title: '分组管理',
+    title: t('sharing.cfg.titleGroup'),
     api: { page: opsCfgApi.groupPage, create: opsCfgApi.groupCreate, update: opsCfgApi.groupUpdate, delete: opsCfgApi.groupDelete },
     columns: [
-      { prop: 'groupCode', label: '分组编码', width: 120, required: true },
-      { prop: 'groupName', label: '分组名称', minWidth: 140, required: true },
-      { prop: 'bizType', label: '业务类型', width: 110, options: [
-        { label: '费用组', value: 'EXPENSE' }, { label: '资金组', value: 'FUND' },
-        { label: '应收组', value: 'AR' }, { label: '应付组', value: 'AP' },
+      { prop: 'groupCode', label: t('sharing.cfg.colGroupCode'), width: 120, required: true },
+      { prop: 'groupName', label: t('sharing.cfg.colGroupName'), minWidth: 140, required: true },
+      { prop: 'bizType', label: t('sharing.common.colBizType'), width: 110, options: [
+        { label: t('sharing.cfg.optExpenseGroup'), value: 'EXPENSE' }, { label: t('sharing.cfg.optFundGroup'), value: 'FUND' },
+        { label: t('sharing.cfg.optArGroup'), value: 'AR' }, { label: t('sharing.cfg.optApGroup'), value: 'AP' },
       ]},
-      { prop: 'groupType', label: '组类型', width: 100, options: [
-        { label: '按类型', value: 'BY_TYPE' }, { label: '按金额', value: 'BY_AMOUNT' },
-        { label: '按法人', value: 'BY_LEGAL' }, { label: '按区域', value: 'BY_REGION' },
+      { prop: 'groupType', label: t('sharing.cfg.colGroupType'), width: 100, options: [
+        { label: t('sharing.cfg.optByType'), value: 'BY_TYPE' }, { label: t('sharing.cfg.optByAmount'), value: 'BY_AMOUNT' },
+        { label: t('sharing.cfg.optByLegal'), value: 'BY_LEGAL' }, { label: t('sharing.cfg.optByRegion'), value: 'BY_REGION' },
       ]},
-      { prop: 'taskMode', label: '提取方式', width: 90, options: [
-        { label: '手动', value: 'MANUAL' }, { label: '系统', value: 'SYSTEM' },
+      { prop: 'taskMode', label: t('sharing.cfg.colPullMode'), width: 90, options: [
+        { label: t('sharing.common.colManual'), value: 'MANUAL' }, { label: t('sharing.common.colSystem'), value: 'SYSTEM' },
       ]},
-      { prop: 'memberMin', label: '下限', width: 70, type: 'number' },
-      { prop: 'memberMax', label: '上限', width: 70, type: 'number' },
-      { prop: 'status', label: '状态', width: 90, options: STATUS_OPTS, defaultValue: 'NORMAL' },
-      { prop: 'remark', label: '备注', minWidth: 120 },
+      { prop: 'memberMin', label: t('sharing.cfg.colMin'), width: 70, type: 'number' },
+      { prop: 'memberMax', label: t('sharing.cfg.colMax'), width: 70, type: 'number' },
+      { prop: 'status', label: t('common.status'), width: 90, options: STATUS_OPTS.value, defaultValue: 'NORMAL' },
+      { prop: 'remark', label: t('common.remark'), minWidth: 120 },
     ],
   },
   calendar: {
-    title: '工作日历',
+    title: t('sharing.cfg.titleCalendar'),
     api: { page: opsCfgApi.calendarPage, create: opsCfgApi.calendarCreate, update: opsCfgApi.calendarUpdate, delete: opsCfgApi.calendarDelete },
     columns: [
-      { prop: 'calDate', label: '日期', width: 120, type: 'date', required: true },
-      { prop: 'dayType', label: '日期类型', width: 100, options: [
-        { label: '工作日', value: 'WORKDAY' }, { label: '休息日', value: 'REST' }, { label: '节假日', value: 'HOLIDAY' },
+      { prop: 'calDate', label: t('sharing.cfg.colDate'), width: 120, type: 'date', required: true },
+      { prop: 'dayType', label: t('sharing.cfg.colDayType'), width: 100, options: [
+        { label: t('sharing.cfg.optWorkday'), value: 'WORKDAY' }, { label: t('sharing.cfg.optRestday'), value: 'REST' }, { label: t('sharing.cfg.optHoliday'), value: 'HOLIDAY' },
       ], defaultValue: 'WORKDAY' },
-      { prop: 'year', label: '年', width: 70, type: 'number' },
-      { prop: 'month', label: '月', width: 70, type: 'number' },
-      { prop: 'workStart', label: '在岗开始', width: 90 },
-      { prop: 'workEnd', label: '在岗结束', width: 90 },
-      { prop: 'remark', label: '备注', minWidth: 120 },
+      { prop: 'year', label: t('sharing.cfg.colYear'), width: 70, type: 'number' },
+      { prop: 'month', label: t('sharing.cfg.colMonth'), width: 70, type: 'number' },
+      { prop: 'workStart', label: t('sharing.cfg.colShiftStart'), width: 90 },
+      { prop: 'workEnd', label: t('sharing.cfg.colShiftEnd'), width: 90 },
+      { prop: 'remark', label: t('common.remark'), minWidth: 120 },
     ],
   },
   'dispatch-rule': {
-    title: '抢派单规则',
+    title: t('sharing.cfg.titleDispatch'),
     api: { page: opsCfgApi.dispatchRulePage, create: opsCfgApi.dispatchRuleCreate, update: opsCfgApi.dispatchRuleUpdate, delete: opsCfgApi.dispatchRuleDelete },
     columns: [
-      { prop: 'ruleCode', label: '规则编码', width: 120, required: true },
-      { prop: 'ruleName', label: '规则名称', minWidth: 140, required: true },
-      { prop: 'taskType', label: '作业项', width: 100, options: [
-        { label: '审核', value: 'AUDIT' }, { label: '记账', value: 'BOOKKEEP' }, { label: '支付', value: 'PAY' },
+      { prop: 'ruleCode', label: t('sharing.common.colRuleCode'), width: 120, required: true },
+      { prop: 'ruleName', label: t('sharing.common.colRuleName'), minWidth: 140, required: true },
+      { prop: 'taskType', label: t('sharing.common.colWorkItem'), width: 100, options: [
+        { label: t('sharing.common.colAudit'), value: 'AUDIT' }, { label: t('sharing.common.colBookkeep'), value: 'BOOKKEEP' }, { label: t('sharing.cfg.colSettle'), value: 'PAY' },
       ]},
-      { prop: 'mode', label: '分派模式', width: 100, options: [
-        { label: '系统分派', value: 'SYSTEM' }, { label: '人工处理', value: 'MANUAL' },
+      { prop: 'mode', label: t('sharing.cfg.colDispatchMode'), width: 100, options: [
+        { label: t('sharing.cfg.optSystemDispatch'), value: 'SYSTEM' }, { label: t('sharing.cfg.optManualHandle'), value: 'MANUAL' },
         // R5-D-252：库中已有 AUTO 值（只读实测 op_dispatch_rule id=19），缺此标签会显示成裸码且编辑时选不回
-        { label: '自动分派', value: 'AUTO' },
+        { label: t('sharing.cfg.optAutoDispatch'), value: 'AUTO' },
       ], defaultValue: 'SYSTEM' },
       // R5-D-252：策略值域对齐引擎实认集（compliance DispatchService.selectReviewer 的 switch 分支：
       // ROUND_ROBIN/LOAD_BALANCE/SKILL_MATCH/CREDIT_BASED；库中亦有 CREDIT_BASED 实例）。
       // 原 LEAST_LOADED/RANDOM 引擎不识别（掉 default 分支），已从编辑选项移除，旧值经 optionLabel 兜底提示。
-      { prop: 'dispatchStrategy', label: '策略', width: 110, options: [
-        { label: '轮询', value: 'ROUND_ROBIN' }, { label: '负载均衡', value: 'LOAD_BALANCE' },
-        { label: '技能匹配', value: 'SKILL_MATCH' }, { label: '信用分驱动', value: 'CREDIT_BASED' },
+      { prop: 'dispatchStrategy', label: t('sharing.common.colStrategy'), width: 110, options: [
+        { label: t('sharing.cfg.optRoundRobin'), value: 'ROUND_ROBIN' }, { label: t('sharing.cfg.optLoadBalance'), value: 'LOAD_BALANCE' },
+        { label: t('sharing.cfg.optSkillMatch'), value: 'SKILL_MATCH' }, { label: t('sharing.cfg.optCreditBased'), value: 'CREDIT_BASED' },
       ]},
-      { prop: 'priority', label: '优先级', width: 80, type: 'number', defaultValue: 10 },
-      { prop: 'slaHours', label: 'SLA小时', width: 90, type: 'number' },
+      { prop: 'priority', label: t('sharing.common.colPriority'), width: 80, type: 'number', defaultValue: 10 },
+      { prop: 'slaHours', label: t('sharing.cfg.colSlaHours'), width: 90, type: 'number' },
       // R5-D-253：目标分组原为手填展示列（只读实测 id=1 的行名称为 NULL，页面空白）；
       // 改为 id 驱动的下拉列：编辑选分组、展示按 id 查名，保存只提交 target_group_id。
-      { prop: 'targetGroupId', label: '目标分组', minWidth: 140, dynamic: 'group' },
-      { prop: 'status', label: '状态', width: 90, options: STATUS_OPTS, defaultValue: 'NORMAL' },
-      { prop: 'remark', label: '备注', minWidth: 120 },
+      { prop: 'targetGroupId', label: t('sharing.cfg.colTargetGroup'), minWidth: 140, dynamic: 'group' },
+      { prop: 'status', label: t('common.status'), width: 90, options: STATUS_OPTS.value, defaultValue: 'NORMAL' },
+      { prop: 'remark', label: t('common.remark'), minWidth: 120 },
     ],
   },
-}
+}))
 
-const cfg = computed(() => CONFIG_MAP[props.configType] || CONFIG_MAP.job)
+const cfg = computed(() => CONFIG_MAP.value[props.configType] || CONFIG_MAP.value.job)
 const api = computed(() => cfg.value.api)
 const columns = computed(() => cfg.value.columns)
 const pageTitle = computed(() => props.title || cfg.value.title)
@@ -219,7 +219,7 @@ const dialogRules = computed(() => {
   columns.value.forEach((col) => {
     if (!col.required || !col.prop) return
     const isSelect = col.options || col.type === 'date'
-    r[col.prop] = commonRules.required((isSelect ? '请选择' : '请输入') + col.label)
+    r[col.prop] = commonRules.required((isSelect ? t('common.pleaseSelect') : t('common.pleaseInput')) + col.label)
   })
   return r
 })
@@ -250,7 +250,7 @@ function optionLabel(col, val) {
   // 空值给占位符，未知非空值给可行动文案。
   if (val == null || val === '') return '—'
   const o = (col.options || []).find(o => o.value === val)
-  return o ? o.label : '未识别值（联系管理员）'
+  return o ? o.label : t('sharing.cfg.labelUnknownValue')
 }
 function tagType(col, val) {
   if (val === 'NORMAL' || val === 'WORKDAY' || val === 'SYSTEM' || val === 'PASS') return 'success'
@@ -314,7 +314,7 @@ async function save() {
     } else {
       await api.value.create(stripDerivedCols(dialog.form))
     }
-    ElMessage.success('保存成功')
+    ElMessage.success(t('sharing.common.msgSaved'))
     dialog.visible = false
     await loadList()
   } catch (e) {
@@ -326,9 +326,9 @@ async function save() {
 
 async function del(row) {
   try {
-    await ElMessageBox.confirm('确认删除该记录？', '删除', { type: 'warning' })
+    await ElMessageBox.confirm(t('sharing.cfg.confirmDelete'), t('sharing.common.btnDelete'), { type: 'warning' })
     await api.value.delete(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('sharing.common.msgDelOk'))
     await loadList()
   } catch (e) {
     if (e !== 'cancel' && e?.message) ElMessage.error(e.message)

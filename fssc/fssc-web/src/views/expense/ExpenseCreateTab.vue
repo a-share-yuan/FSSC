@@ -1,9 +1,6 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div>
-    <el-card header="单据类型">
+    <el-card :header="$t('field.billType')">
       <el-radio-group v-model="form.bill.billType">
         <el-radio-button v-for="t in typeOptions" :key="t.label" :value="t.billType" :disabled="false" @click="pickType(t)">
           {{ t.label }}
@@ -13,79 +10,79 @@
 
     <el-row :gutter="16" style="margin-top: 12px">
       <el-col :xs="24" :md="14">
-        <el-card header="基本信息">
+        <el-card :header="$t('expense.create.secBasicInfo')">
           <el-form ref="formRef" :rules="formRules" :model="form.bill" label-width="90px" size="default">
-            <el-form-item label="标题" prop="title">
-              <el-input v-model="form.bill.title" :placeholder="currentType.label + '申请'" />
+            <el-form-item :label="$t('expense.common.colTitle')" prop="title">
+              <el-input v-model="form.bill.title" :placeholder="$t('expense.createTab.titleApply', { v1: currentType.label })" />
             </el-form-item>
-            <el-form-item label="申请日期" prop="applyDate">
+            <el-form-item :label="$t('expense.common.colApplyDate')" prop="applyDate">
               <el-date-picker v-model="form.bill.applyDate" type="date" value-format="YYYY-MM-DD" />
             </el-form-item>
-            <el-form-item label="币种" prop="currencyCode">
+            <el-form-item :label="$t('expense.common.colCurrency')" prop="currencyCode">
               <el-select v-model="form.bill.currencyCode" style="width: 120px">
-                <el-option label="人民币 CNY" value="CNY" />
-                <el-option label="美元 USD" value="USD" />
+                <el-option :label="$t('expense.common.curCny')" value="CNY" />
+                <el-option :label="$t('expense.common.curUsd')" value="USD" />
               </el-select>
             </el-form-item>
-<el-form-item v-if="currentType.pay" label="收款方">
-              <el-select v-model="form.bill.payeeName" filterable allow-create clearable style="width: 100%" placeholder="选择或输入收款方（供应商/单位）">
+<el-form-item v-if="currentType.pay" :label="$t('expense.create.colReceivingParty')">
+              <el-select v-model="form.bill.payeeName" filterable allow-create clearable style="width: 100%" :placeholder="$t('expense.create.phPickPayeeInput')">
                 <el-option v-for="p in payees" :key="p.id" :label="p.payeeName" :value="p.payeeName" />
               </el-select>
             </el-form-item>
-            <el-form-item v-if="currentType.pay" label="收款对象" prop="payTarget">
-              <el-select v-model="form.bill.payTarget" style="width: 100%" placeholder="请选择收款对象">
-                <el-option label="员工" value="EMPLOYEE" />
-                <el-option label="供应商" value="SUPPLIER" />
-                <el-option label="客户" value="CUSTOMER" />
+            <el-form-item v-if="currentType.pay" :label="$t('expense.claim.colPayeeType')" prop="payTarget">
+              <el-select v-model="form.bill.payTarget" style="width: 100%" :placeholder="$t('expense.common.phPickPayeeType')">
+                <el-option :label="$t('expense.claim.colEmployee')" value="EMPLOYEE" />
+                <el-option :label="$t('field.supplier')" value="SUPPLIER" />
+                <el-option :label="$t('field.customer')" value="CUSTOMER" />
               </el-select>
             </el-form-item>
-            <el-form-item v-if="currentType.pay" label="收款账号" prop="payeeAccountNo">
-              <el-input v-model="form.bill.payeeAccountNo" placeholder="按收款对象填写对应账号（必填）" />
+            <el-form-item v-if="currentType.pay" :label="$t('expense.common.colPayeeAccount')" prop="payeeAccountNo">
+              <el-input v-model="form.bill.payeeAccountNo" :placeholder="$t('expense.travelClaim.phPayeeAccountRequired')" />
             </el-form-item>
-            <el-form-item label="备注">
+            <el-form-item :label="$t('common.remark')">
               <el-input v-model="form.bill.remark" type="textarea" :rows="2" />
             </el-form-item>
           </el-form>
         </el-card>
 
-        <el-card header="费用明细（多行）" style="margin-top: 12px">
-          <el-table :data="form.lines" size="small" border empty-text="暂无数据" v-loading="loading" @selection-change="handleSelectionChange">
+        <el-card :header="$t('expense.create.secExpenseLines')" style="margin-top: 12px">
+          <el-table :data="form.lines" size="small" border :empty-text="$t('common.empty')" v-loading="loading" @selection-change="handleSelectionChange">
             <el-table-column type="selection" width="45" />
-            <el-table-column label="费用项" width="160">
+            <el-table-column :label="$t('expense.create.colExpenseItem')" width="160">
               <template #default="{ row }">
                 <el-select v-model="row.itemId" filterable style="width: 100%" @change="(id) => onItemChange(row, id)">
                   <el-option v-for="it in items" :key="it.id" :label="it.itemName" :value="it.id" />
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="费用日期" width="140">
+            <el-table-column :label="$t('expense.travelClaim.colExpenseDate')" width="140">
               <template #default="{ row }">
                 <el-date-picker v-model="row.expenseDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
               </template>
             </el-table-column>
-            <el-table-column label="金额" width="130">
+            <el-table-column :label="$t('field.amount')" width="130">
               <template #default="{ row }">
                 <el-input-number v-model="row.amount" :min="0" :precision="2" style="width: 100%" @change="recalcLine(row)" />
               </template>
             </el-table-column>
-            <el-table-column label="税率%" width="100">
+            <el-table-column :label="$t('expense.common.colTaxRate')" width="100">
               <template #default="{ row }">
                 <el-input-number v-model="row.taxRate" :min="0" :max="100" :precision="2" style="width: 100%" @change="recalcLine(row)" />
               </template>
             </el-table-column>
-            <el-table-column label="税额" width="90">
+            <el-table-column :label="$t('field.taxAmount')" width="90">
               <template #default="{ row }">{{ fmt(row.taxAmount) }}</template>
             </el-table-column>
-            <el-table-column label="发票号" width="150">
+            <el-table-column :label="$t('expense.create.colInvoiceNo')" width="150">
               <template #default="{ row }">{{ invOf(row)?.invoiceNo || '—' }}</template>
             </el-table-column>
-            <el-table-column label="开票日期" width="110">
+            <el-table-column :label="$t('field.invoiceDate')" width="110">
               <template #default="{ row }">{{ invOf(row)?.invoiceDate || '—' }}</template>
             </el-table-column>
-            <el-table-column label="销方" min-width="130">
+            <el-table-column :label="$t('expense.create.colSeller')" min-width="130">
               <template #default="{ row }">{{ invOf(row)?.sellerName || '—' }}</template>
             </el-table-column>
-            <el-table-column label="预算科目" width="120">
+            <el-table-column :label="$t('expense.common.colBudgetItem')" width="120">
               <template #default="{ row }">
                 <el-select v-model="row.budgetItemId" clearable filterable style="width: 100%">
                   <el-option v-if="row.budgetItemId != null && !budgets.some((x) => String(x.id) === String(row.budgetItemId))" :label="budgetUnseenLabel(row.budgetItemId)" :value="row.budgetItemId" />
@@ -93,201 +90,200 @@
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="标准/超标" min-width="120">
+            <el-table-column :label="$t('expense.claim.colStdOver')" min-width="120">
               <template #default="{ row }">
-                <span v-if="row.stdAmount != null">标准 {{ fmt(row.stdAmount) }}</span>
-                <el-tag v-if="row.overStd === 1" type="danger" size="small">超标</el-tag>
-                <span v-else-if="row.stdAmount != null" type="success">合规</span>
+                <span v-if="row.stdAmount != null">{{ $t('expense.create.txtStdLimit', { v1: fmt(row.stdAmount) }) }}</span>
+                <el-tag v-if="row.overStd === 1" type="danger" size="small">{{ $t('expense.claim.stOverLimit') }}</el-tag>
+                <span v-else-if="row.stdAmount != null" type="success">{{ $t('expense.claim.stCompliant') }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="60">
+            <el-table-column :label="$t('common.operation')" width="60">
               <template #default="{ $index }">
-                <el-button type="danger" link @click="removeLine($index)">删</el-button>
+                <el-button type="danger" link @click="removeLine($index)">{{ $t('expense.common.btnDeleteShort') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
-          <el-button size="small" style="margin-top: 8px" @click="form.lines.push(newLine())">+ 加一行</el-button>
-          <div style="margin-top: 8px">合计：<b>{{ fmt(sumAmount()) }}</b> 元（税额合计 {{ fmt(sumTax()) }}）</div>
-          <div style="margin-top: 4px; color: #606266">大写：{{ form.bill.amountCn || '待保存生成' }}</div>
+          <el-button size="small" style="margin-top: 8px" @click="form.lines.push(newLine())">{{ $t('expense.create.btnAddRow') }}</el-button>
+          <div style="margin-top: 8px">{{ $t('expense.create.labTotal') }}<b>{{ fmt(sumAmount()) }}</b> {{ $t('expense.create.txtGrossWithTax', { v1: fmt(sumTax()) }) }}</div>
+          <div style="margin-top: 4px; color: #606266">{{ $t('expense.create.txtAmountInWords', { v1: form.bill.amountCn || t('expense.createTab.txtAmountPending') }) }}</div>
         </el-card>
 
-        <el-card v-if="currentType.travel" header="差旅明细" style="margin-top: 12px">
-          <el-table :data="form.travels" size="small" border empty-text="暂无数据" v-loading="loading" @selection-change="handleSelectionChange">
+        <el-card v-if="currentType.travel" :header="$t('expense.create.colTravelLines')" style="margin-top: 12px">
+          <el-table :data="form.travels" size="small" border :empty-text="$t('common.empty')" v-loading="loading" @selection-change="handleSelectionChange">
             <el-table-column type="selection" width="45" />
-            <el-table-column label="出行人" width="120">
-              <template #default="{ row }"><el-input v-model="row.travelerName" placeholder="出行人姓名" /></template>
+            <el-table-column :label="$t('expense.travelClaim.colPassenger')" width="120">
+              <template #default="{ row }"><el-input v-model="row.travelerName" :placeholder="$t('expense.create.colPassengerName')" /></template>
             </el-table-column>
-            <el-table-column label="出发城市" width="140">
+            <el-table-column :label="$t('expense.create.colFromCity')" width="140">
               <template #default="{ row }">
                 <el-select v-model="row.fromCityId" filterable style="width: 100%">
                   <el-option v-for="c in cities" :key="c.id" :label="c.cityName" :value="c.id" />
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="到达城市" width="140">
+            <el-table-column :label="$t('expense.create.colToCity')" width="140">
               <template #default="{ row }">
                 <el-select v-model="row.toCityId" filterable style="width: 100%">
                   <el-option v-for="c in cities" :key="c.id" :label="c.cityName" :value="c.id" />
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="起/止" width="220">
+            <el-table-column :label="$t('expense.create.colDateRange')" width="220">
               <template #default="{ row }">
                 <el-date-picker v-model="row.beginDate" type="date" value-format="YYYY-MM-DD" style="width: 105px" />
                 <el-date-picker v-model="row.endDate" type="date" value-format="YYYY-MM-DD" style="width: 105px" />
               </template>
             </el-table-column>
-            <el-table-column label="交通方式" width="120">
+            <el-table-column :label="$t('expense.travelClaim.colTrafficMode')" width="120">
               <template #default="{ row }">
                 <el-select v-model="row.trafficType" style="width: 100%">
-                  <el-option label="高铁" value="RAIL" />
-                  <el-option label="飞机" value="AIR" />
-                  <el-option label="汽车" value="CAR" />
+                  <el-option :label="$t('expense.preapply.optHighSpeedRail')" value="RAIL" />
+                  <el-option :label="$t('expense.preapply.optPlane')" value="AIR" />
+                  <el-option :label="$t('expense.preapply.optCar')" value="CAR" />
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="住宿费" width="110">
+            <el-table-column :label="$t('expense.travelClaim.colHotel')" width="110">
               <template #default="{ row }"><el-input-number v-model="row.hotelAmount" :min="0" :precision="2" style="width: 100%" /></template>
             </el-table-column>
-            <el-table-column label="操作" width="60">
-              <template #default="{ $index }"><el-button type="danger" link @click="removeTravel($index)">删</el-button></template>
+            <el-table-column :label="$t('common.operation')" width="60">
+              <template #default="{ $index }"><el-button type="danger" link @click="removeTravel($index)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
             </el-table-column>
           </el-table>
-          <el-button size="small" style="margin-top: 8px" @click="form.travels.push(newTravel())">+ 加一行</el-button>
+          <el-button size="small" style="margin-top: 8px" @click="form.travels.push(newTravel())">{{ $t('expense.create.btnAddRow') }}</el-button>
         </el-card>
 
-        <el-card header="发票 / 附件" style="margin-top: 12px">
+        <el-card :header="$t('expense.create.tabInvoiceAttach')" style="margin-top: 12px">
           <div class="attach-row">
-            <UploadButton label="选择文件（发票自动识别解析）" accept=".jpg,.png,.jpeg,.bmp,.webp,.tif,.tiff,.ofd,.xml,.pdf" biz-type="INVOICE" :biz-id="form.bill.id || null" zone="TEMP" parse @done="onAttachUploaded" />
+            <UploadButton :label="$t('expense.create.btnUploadFiles')" accept=".jpg,.png,.jpeg,.bmp,.webp,.tif,.tiff,.ofd,.xml,.pdf" biz-type="INVOICE" :biz-id="form.bill.id || null" zone="TEMP" parse @done="onAttachUploaded" />
             <span v-if="form.attaches.length" class="attach-name">
-              已上传：{{ form.attaches.map((a) => a.fileName).join('、') }}
-              <el-button type="primary" link @click="previewAttach">预览</el-button>
-              <el-button type="danger" link @click="clearAttaches()">清除</el-button>
+              {{ $t('expense.createTab.txtUploaded', { v1: form.attaches.map((a) => a.fileName).join('、') }) }}<el-button type="primary" link @click="previewAttach">{{ $t('expense.create.btnPreview') }}</el-button>
+              <el-button type="danger" link @click="clearAttaches()">{{ $t('expense.create.btnClear') }}</el-button>
             </span>
           </div>
 
           <div style="margin-top: 12px">
-            <div style="font-weight: 600; margin-bottom: 6px">已解析发票 / 手工录入（勾选后自动填入费用明细行并合计）</div>
-            <el-table :data="form.invoices" size="small" border empty-text="暂无发票，请上传发票文件或新增发票行手录">
-              <el-table-column label="填单" width="52">
+            <div style="font-weight: 600; margin-bottom: 6px">{{ $t('expense.create.hintParsedInvoices') }}</div>
+            <el-table :data="form.invoices" size="small" border :empty-text="$t('expense.create.emptyInvoices')">
+              <el-table-column :label="$t('expense.create.colEntry')" width="52">
                 <template #default="{ row }">
                   <el-checkbox v-model="row.checked" @change="toggleInvoice(row)" />
                 </template>
               </el-table-column>
-              <el-table-column label="发票号" min-width="160">
-                <template #default="{ row }"><el-input v-model="row.invoiceNo" size="small" placeholder="发票号" /></template>
+              <el-table-column :label="$t('expense.create.colInvoiceNo')" min-width="160">
+                <template #default="{ row }"><el-input v-model="row.invoiceNo" size="small" :placeholder="$t('expense.create.colInvoiceNo')" /></template>
               </el-table-column>
-              <el-table-column label="开票日期" width="130">
+              <el-table-column :label="$t('field.invoiceDate')" width="130">
                 <template #default="{ row }"><el-date-picker v-model="row.invoiceDate" type="date" value-format="YYYY-MM-DD" size="small" style="width:100%" /></template>
               </el-table-column>
-              <el-table-column label="金额(价税)" width="120">
+              <el-table-column :label="$t('expense.create.colAmountGross')" width="120">
                 <template #default="{ row }"><el-input-number v-model="row.amount" :min="0" :precision="2" size="small" style="width:100%" @change="recalcInvoice(row); syncInvoiceLine(row)" /></template>
               </el-table-column>
-              <el-table-column label="税率%" width="110">
+              <el-table-column :label="$t('expense.common.colTaxRate')" width="110">
                 <template #default="{ row }"><el-input-number v-model="row.taxRate" :min="0" :max="100" :precision="2" size="small" style="width:100%" @change="recalcInvoice(row); syncInvoiceLine(row)" /></template>
               </el-table-column>
-              <el-table-column label="税额" width="90">
+              <el-table-column :label="$t('field.taxAmount')" width="90">
                 <template #default="{ row }">{{ fmt(row.taxAmount) }}</template>
               </el-table-column>
-              <el-table-column label="不含税" width="90">
+              <el-table-column :label="$t('expense.common.colNetAmount')" width="90">
                 <template #default="{ row }">{{ fmt(row.netAmount) }}</template>
               </el-table-column>
-              <el-table-column label="销方" min-width="130">
-                <template #default="{ row }"><el-input v-model="row.sellerName" size="small" placeholder="销方名称" @change="syncInvoiceLine(row)" /></template>
+              <el-table-column :label="$t('expense.create.colSeller')" min-width="130">
+                <template #default="{ row }"><el-input v-model="row.sellerName" size="small" :placeholder="$t('expense.create.colSellerName')" @change="syncInvoiceLine(row)" /></template>
               </el-table-column>
-              <el-table-column label="货物/服务名称" min-width="140">
-                <template #default="{ row }"><el-input v-model="row.primaryItemName" size="small" placeholder="解析自票面，可改后重匹配" @change="applyItemMatch(row)" /></template>
+              <el-table-column :label="$t('expense.create.colGoodsService')" min-width="140">
+                <template #default="{ row }"><el-input v-model="row.primaryItemName" size="small" :placeholder="$t('expense.create.hintParsedEditable')" @change="applyItemMatch(row)" /></template>
               </el-table-column>
-              <el-table-column label="类型" width="130">
+              <el-table-column :label="$t('field.type')" width="130">
                 <template #default="{ row }">
                   <el-select v-model="row.invoiceType" size="small" style="width: 100%" @change="syncInvoiceLine(row)">
                     <el-option v-for="t in INVOICE_TYPES" :key="t.code" :label="t.label" :value="t.code" />
                   </el-select>
                 </template>
               </el-table-column>
-              <el-table-column label="来源" width="120">
+              <el-table-column :label="$t('expense.create.colSource')" width="120">
                 <template #default="{ row }">
-                  <span v-if="row.parsed" class="attach-name">已解析</span>
-                  <el-tag v-else type="warning" size="small">手工</el-tag>
+                  <span v-if="row.parsed" class="attach-name">{{ $t('expense.create.stParsed') }}</span>
+                  <el-tag v-else type="warning" size="small">{{ $t('expense.create.optManual') }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="52">
-                <template #default="{ $index }"><el-button type="danger" link @click="removeInvoice($index)">删</el-button></template>
+              <el-table-column :label="$t('common.operation')" width="52">
+                <template #default="{ $index }"><el-button type="danger" link @click="removeInvoice($index)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
               </el-table-column>
             </el-table>
-            <el-button size="small" style="margin-top: 8px" @click="form.invoices.push(newInvoice())">+ 新增发票行（扫描件手工录入）</el-button>
+            <el-button size="small" style="margin-top: 8px" @click="form.invoices.push(newInvoice())">{{ $t('expense.create.btnAddInvoiceLine') }}</el-button>
           </div>
         </el-card>
       </el-col>
 
       <el-col :xs="24" :md="10">
-        <el-card header="预算占用预览">
-          <el-alert v-if="budgetWarn.length" type="warning" :closable="false" show-icon :title="`以下预算科目将超出可用额度（硬控拦截／软控提交时需填超支理由／预警仅提醒放行）`" style="margin-bottom: 8px" />
-          <el-table :data="budgetPreview" size="small" border empty-text="暂无数据" v-loading="loading">
-            <el-table-column prop="label" label="预算科目" min-width="120" show-overflow-tooltip sortable />
-            <el-table-column label="本次申请" width="110">
+        <el-card :header="$t('expense.create.secBudgetPreview')">
+          <el-alert v-if="budgetWarn.length" type="warning" :closable="false" show-icon :title="$t('expense.create.tipBudgetOverrunLevels')" style="margin-bottom: 8px" />
+          <el-table :data="budgetPreview" size="small" border :empty-text="$t('common.empty')" v-loading="loading">
+            <el-table-column prop="label" :label="$t('expense.common.colBudgetItem')" min-width="120" show-overflow-tooltip sortable />
+            <el-table-column :label="$t('expense.create.colThisRequest')" width="110">
               <template #default="{ row }">{{ fmt(row.used) }}</template>
             </el-table-column>
-            <el-table-column label="可用余额" width="110">
+            <el-table-column :label="$t('expense.create.colAvailableBalance')" width="110">
               <template #default="{ row }">{{ row.unknown ? '—' : fmt(row.available) }}</template>
             </el-table-column>
-            <el-table-column label="状态" width="80">
+            <el-table-column :label="$t('common.status')" width="80">
               <template #default="{ row }">
                 <el-tag :type="row.unknown ? 'warning' : row.over ? 'danger' : 'success'" size="small">
-                  {{ row.unknown ? '额度未知' : row.over ? '超预算' : '可支' }}
+                  {{ row.unknown ? t('expense.create.stQuotaUnknown') : row.over ? t('expense.create.stOverBudget') : t('expense.create.stWithinBudget') }}
                 </el-tag>
               </template>
             </el-table-column>
           </el-table>
         </el-card>
 
-        <el-card v-if="currentType.claim" header="冲销借款" style="margin-top: 12px">
-          <el-button size="small" @click="openLoanDialog">+ 选择借款单冲抵</el-button>
-          <el-table :data="form.loanOffsets" size="small" border style="margin-top: 8px" empty-text="暂无数据" v-loading="loading">
-            <el-table-column prop="loanBillNo" label="借款单号" width="140" sortable />
-            <el-table-column label="冲抵金额" width="120">
+        <el-card v-if="currentType.claim" :header="$t('expense.create.secLoanWriteOff')" style="margin-top: 12px">
+          <el-button size="small" @click="openLoanDialog">{{ $t('expense.create.btnPickLoanOffset') }}</el-button>
+          <el-table :data="form.loanOffsets" size="small" border style="margin-top: 8px" :empty-text="$t('common.empty')" v-loading="loading">
+            <el-table-column prop="loanBillNo" :label="$t('expense.create.colLoanBillNo')" width="140" sortable />
+            <el-table-column :label="$t('expense.create.colOffsetAmount')" width="120">
               <template #default="{ row }"><el-input-number v-model="row.offsetAmount" :min="0" :precision="2" style="width: 100%" /></template>
             </el-table-column>
-            <el-table-column label="操作" width="60">
-              <template #default="{ $index }"><el-button type="danger" link @click="removeLoanOffset($index)">删</el-button></template>
+            <el-table-column :label="$t('common.operation')" width="60">
+              <template #default="{ $index }"><el-button type="danger" link @click="removeLoanOffset($index)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
             </el-table-column>
           </el-table>
         </el-card>
 
-        <el-card v-if="currentType.claim" header="关联事前申请（自动带出分摊）" style="margin-top: 12px">
-          <el-button size="small" @click="openApplyDialog">+ 选择事前申请单</el-button>
-          <el-table :data="form.relations" size="small" border style="margin-top: 8px" empty-text="暂无数据" v-loading="loading">
-            <el-table-column prop="sourceBillNo" label="申请单号" width="140" sortable />
-            <el-table-column prop="useAmount" label="可冲抵金额" width="120" sortable />
-            <el-table-column label="操作" width="60">
-              <template #default="{ $index }"><el-button type="danger" link @click="removeRelation($index)">删</el-button></template>
+        <el-card v-if="currentType.claim" :header="$t('expense.create.secLinkRequisition')" style="margin-top: 12px">
+          <el-button size="small" @click="openApplyDialog">{{ $t('expense.create.btnPickRequisition') }}</el-button>
+          <el-table :data="form.relations" size="small" border style="margin-top: 8px" :empty-text="$t('common.empty')" v-loading="loading">
+            <el-table-column prop="sourceBillNo" :label="$t('expense.create.colApplyNo')" width="140" sortable />
+            <el-table-column prop="useAmount" :label="$t('expense.create.colOffsettable')" width="120" sortable />
+            <el-table-column :label="$t('common.operation')" width="60">
+              <template #default="{ $index }"><el-button type="danger" link @click="removeRelation($index)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
             </el-table-column>
           </el-table>
         </el-card>
 
-        <el-card header="操作" style="margin-top: 12px">
-          <el-button @click="saveDraft">保存草稿</el-button>
-          <el-button type="primary" @click="submit">提交审批</el-button>
-          <el-button v-if="form.bill.id" link @click="resetForm">新建空白单</el-button>
+        <el-card :header="$t('common.operation')" style="margin-top: 12px">
+          <el-button @click="saveDraft">{{ $t('expense.common.btnSaveDraft') }}</el-button>
+          <el-button type="primary" @click="submit">{{ $t('expense.create.btnSubmitApproval') }}</el-button>
+          <el-button v-if="form.bill.id" link @click="resetForm">{{ $t('expense.create.btnNewBlank') }}</el-button>
         </el-card>
       </el-col>
     </el-row>
 
     <!-- 借款单选择 -->
-    <el-dialog v-model="loanDialog" title="选择借款单冲抵" width="560px">
-      <el-table :data="loanCandidates" size="small" empty-text="暂无数据" v-loading="loading" @row-click="pickLoan" highlight-current-row>
-        <el-table-column prop="billNo" label="借款单号" width="150" sortable />
-        <el-table-column prop="totalAmount" label="借款额" width="100" sortable :formatter="(r,c,v) => fmt(v)" />
-        <el-table-column prop="loanBalance" label="未还余额" width="100" sortable :formatter="(r,c,v) => fmt(v)" />
+    <el-dialog v-model="loanDialog" :title="$t('expense.create.dlgPickLoanOffset')" width="560px">
+      <el-table :data="loanCandidates" size="small" :empty-text="$t('common.empty')" v-loading="loading" @row-click="pickLoan" highlight-current-row>
+        <el-table-column prop="billNo" :label="$t('expense.create.colLoanBillNo')" width="150" sortable />
+        <el-table-column prop="totalAmount" :label="$t('expense.create.colLoanAmt')" width="100" sortable :formatter="(r,c,v) => fmt(v)" />
+        <el-table-column prop="loanBalance" :label="$t('expense.ledger.colUnpaidBalance')" width="100" sortable :formatter="(r,c,v) => fmt(v)" />
       </el-table>
     </el-dialog>
 
     <!-- 事前申请选择 -->
-    <el-dialog v-model="applyDialog" title="选择事前申请单" width="560px">
-      <el-table :data="applyCandidates" size="small" empty-text="暂无数据" v-loading="loading" @row-click="pickApply" highlight-current-row>
-        <el-table-column prop="billNo" label="申请单号" width="150" sortable />
-        <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip sortable />
-        <el-table-column prop="totalAmount" label="申请金额" width="100" sortable :formatter="(r,c,v) => fmt(v)" />
+    <el-dialog v-model="applyDialog" :title="$t('expense.create.dlgPickRequisition')" width="560px">
+      <el-table :data="applyCandidates" size="small" :empty-text="$t('common.empty')" v-loading="loading" @row-click="pickApply" highlight-current-row>
+        <el-table-column prop="billNo" :label="$t('expense.create.colApplyNo')" width="150" sortable />
+        <el-table-column prop="title" :label="$t('expense.common.colTitle')" min-width="200" show-overflow-tooltip sortable />
+        <el-table-column prop="totalAmount" :label="$t('expense.create.colApplyAmount')" width="100" sortable :formatter="(r,c,v) => fmt(v)" />
       </el-table>
     </el-dialog>
   </div>
@@ -311,6 +307,9 @@ import { formatMoney, budgetLabel, budgetUnseenLabel } from '@/utils/format'
 import { pickBudgetLine } from '@/utils/budget'
 import { splitTaxInclusive } from '@/utils/tax'
 import { invoiceOutcome } from '@/utils/invoiceOutcome'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 const { autofill, saveFormHistory } = useAutoFill()
 const formRef = ref(null)
 const guard = useSubmitGuard(formRef)
@@ -356,14 +355,14 @@ const applyDialog = ref(false)
 const loanCandidates = ref([])
 const applyCandidates = ref([])
 
-const typeOptions = ref([
-  { label: '员工费用报销', billType: 'CLAIM', sub: '', travel: false, claim: true, pay: false },
-  { label: '差旅培训报销', billType: 'CLAIM', sub: 'TRAVEL', travel: true, claim: true, pay: false },
-  { label: '费用预付款', billType: 'PAY', sub: 'PREPAY', travel: false, claim: false, pay: true },
-  { label: '对公结算', billType: 'PAY', sub: 'SETTLE', travel: false, claim: false, pay: true },
-  { label: '代收代付', billType: 'PAY', sub: 'AGENCY', travel: false, claim: false, pay: true },
-  { label: '机票结算', billType: 'PAY', sub: 'AIR', travel: false, claim: false, pay: true },
-])
+const typeOptions = computed(() => (ref([
+  { label: t('expense.create.optEmpClaim'), billType: 'CLAIM', sub: '', travel: false, claim: true, pay: false },
+  { label: t('expense.create.optTravelTrainClaim'), billType: 'CLAIM', sub: 'TRAVEL', travel: true, claim: true, pay: false },
+  { label: t('expense.create.optPrepay'), billType: 'PAY', sub: 'PREPAY', travel: false, claim: false, pay: true },
+  { label: t('expense.create.optCorporateSettle'), billType: 'PAY', sub: 'SETTLE', travel: false, claim: false, pay: true },
+  { label: t('expense.create.optAgencyPay'), billType: 'PAY', sub: 'AGENCY', travel: false, claim: false, pay: true },
+  { label: t('expense.create.optAirSettle'), billType: 'PAY', sub: 'AIR', travel: false, claim: false, pay: true },
+])))
 const currentType = computed(() => typeOptions.value.find((t) => t.billType === form.bill.billType && t.sub === form.bill.billSubType) || typeOptions.value[0])
 
 function pickType(t) {
@@ -429,7 +428,7 @@ function newLineFromInvoice(inc) {
   line.amount = Number(inc.amount || 0)
   line.taxRate = Number(inc.taxRate || 0)
   recalcLine(line)
-  line.remark = inc.invoiceNo ? `发票 ${inc.invoiceNo}` : ''
+  line.remark = inc.invoiceNo ? t('expense.create.optInvoiceLine', { v1: inc.invoiceNo }) : ''
   line.invoice = { invoiceNo: inc.invoiceNo, invoiceDate: inc.invoiceDate, sellerName: inc.sellerName, sellerTaxNo: inc.sellerTaxNo, invoiceType: inc.invoiceType, primaryItemName: inc.primaryItemName || '', fileId: inc.fileId, amount: Number(inc.amount || 0), netAmount: line.netAmount, taxAmount: line.taxAmount }
   // 费用类型由发票货名智能匹配决定：命中才填，未命中留空待填（不再默认职工福利）
   applyItemMatch(inc)
@@ -442,7 +441,7 @@ function syncInvoiceLine(inc) {
   line.taxRate = Number(inc.taxRate || 0)
   recalcLine(line)
   line.expenseDate = inc.invoiceDate || line.expenseDate
-  line.remark = inc.invoiceNo ? `发票 ${inc.invoiceNo}` : line.remark
+  line.remark = inc.invoiceNo ? t('expense.create.optInvoiceLine', { v1: inc.invoiceNo }) : line.remark
   line.invoice = { invoiceNo: inc.invoiceNo, invoiceDate: inc.invoiceDate, sellerName: inc.sellerName, sellerTaxNo: inc.sellerTaxNo, invoiceType: inc.invoiceType, primaryItemName: inc.primaryItemName || '', fileId: inc.fileId, amount: Number(inc.amount || 0), netAmount: line.netAmount, taxAmount: line.taxAmount }
 }
 function toggleInvoice(inc) {
@@ -552,13 +551,13 @@ function onAttachUploaded(rec) {
     const out = invoiceOutcome(rec.invoice, { fileName: rec.fileName || '', end: 'pc' })
     ElMessage({ type: out.tone, duration: 6000, message: out.message })
   } else {
-    ElMessage.success(`附件已上传：${rec.fileName}`)
+    ElMessage.success(t('expense.create.msgAttachmentUploaded', { v1: rec.fileName }))
   }
 }
 function previewAttach() {
   const ids = form.attaches.map((a) => a.fileId)
   if (!ids.length) return
-  attachViewer.value?.open(ids, '发票/附件')
+  attachViewer.value?.open(ids, t('expense.create.colInvoiceAttach'))
 }
 
 async function saveDraft() {
@@ -581,7 +580,7 @@ async function saveDraft() {
     if (form.shares.length && hasPerm('exp:share:update')) await detailApi.replaceShares(id, form.shares)
     for (const o of form.loanOffsets) await detailApi.addLoanOffset(id, { ...o, billId: id })
     for (const r of form.relations) await detailApi.addRelation(r.sourceBillId, id)
-    ElMessage.success('草稿已保存')
+    ElMessage.success(t('expense.common.msgDraftSaved'))
     emit('saved')
     return id
   } catch (e) { ElMessage.error(e.message) }
@@ -592,18 +591,18 @@ async function submit() {
   try {
     // 表头必填由 formRules + guard 统一收口；明细/差旅的逐行规则在表格内，el-form 覆盖不到，仍在此校验
     await guard.submit(async () => {
-      if (!form.lines.filter((l) => l.itemId || Number(l.amount || 0) > 0).length) { ElMessage.warning('请至少添加一条费用明细（可勾选已解析发票或新增发票行）'); return }
+      if (!form.lines.filter((l) => l.itemId || Number(l.amount || 0) > 0).length) { ElMessage.warning(t('expense.create.errNeedExpenseLine')); return }
       // P1-1 提交前逐行校验：金额必须大于 0
       const badAmt = form.lines.find((l) => Number(l.amount || 0) <= 0)
-      if (badAmt) { ElMessage.warning('费用明细存在金额未填或为 0 的行，请补充金额'); return }
+      if (badAmt) { ElMessage.warning(t('expense.create.errAmountMissing')); return }
       // P1-1 差旅明细日期范围校验：止日不得早于起日
       const badTravel = form.travels.find((t) => t.beginDate && t.endDate && t.endDate < t.beginDate)
-      if (badTravel) { ElMessage.warning('差旅明细存在「到达日期早于出发日期」的行，请修正'); return }
+      if (badTravel) { ElMessage.warning(t('expense.create.errTravelDateOrder')); return }
       // P1-1 差旅明细交通/住宿金额不得为负
-      if (form.travels.some((t) => Number(t.hotelAmount) < 0 || Number(t.trafficAmount) < 0 || Number(t.allowanceAmount) < 0 || Number(t.otherAmount) < 0)) { ElMessage.warning('差旅明细存在负金额，请修正'); return }
+      if (form.travels.some((t) => Number(t.hotelAmount) < 0 || Number(t.trafficAmount) < 0 || Number(t.allowanceAmount) < 0 || Number(t.otherAmount) < 0)) { ElMessage.warning(t('expense.create.errTravelNegative')); return }
       const id = await saveDraft()
       await billApi.submit(id)
-      ElMessage.success('已提交，等待审批')
+      ElMessage.success(t('expense.create.msgSubmitted'))
       emit('submitted')
     })
   } catch (e) { ElMessage.error(e.message) }
@@ -648,31 +647,31 @@ function handleSelectionChange(val) { selRows.value = val }
 
 async function removeLine(i) {
   try {
-    await ElMessageBox.confirm('确认删除？此操作不可恢复。', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(t('expense.common.askDeleteRow'), t('expense.common.confirmDeleteTitle'), { type: 'warning' })
   } catch { return }
   form.lines.splice(i, 1)
 }
 async function removeTravel(i) {
   try {
-    await ElMessageBox.confirm('确认删除？此操作不可恢复。', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(t('expense.common.askDeleteRow'), t('expense.common.confirmDeleteTitle'), { type: 'warning' })
   } catch { return }
   form.travels.splice(i, 1)
 }
 async function removeLoanOffset(i) {
   try {
-    await ElMessageBox.confirm('确认删除？此操作不可恢复。', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(t('expense.common.askDeleteRow'), t('expense.common.confirmDeleteTitle'), { type: 'warning' })
   } catch { return }
   form.loanOffsets.splice(i, 1)
 }
 async function removeRelation(i) {
   try {
-    await ElMessageBox.confirm('确认删除？此操作不可恢复。', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(t('expense.common.askDeleteRow'), t('expense.common.confirmDeleteTitle'), { type: 'warning' })
   } catch { return }
   form.relations.splice(i, 1)
 }
 async function clearAttaches() {
   try {
-    await ElMessageBox.confirm('确认清除所有附件？此操作不可恢复。', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(t('expense.create.askClearAttachments'), t('expense.common.confirmDeleteTitle'), { type: 'warning' })
   } catch { return }
   form.attaches = []
 }

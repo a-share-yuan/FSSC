@@ -1,0 +1,15 @@
+--- bpmn:SETTLE v7
++++ bpmn:SETTLE v8
+@@ -12,7 +12,11 @@
+     <bpmn:userTask id="Task_9" name="基地总经理审核【基地总经理】" flowable:candidateGroups="BASE_GM" />
+     <bpmn:exclusiveGateway id="Gw_11" default="Flow_11_def" />
+     <bpmn:userTask id="Task_10" name="板块财务经理审核【板块财务经理】" flowable:candidateGroups="PLATE_FIN_MANAGER" />
+-    <bpmn:userTask id="Task_11" name="财务总监审核【财务总监】" flowable:candidateGroups="CFO" />
++    <bpmn:userTask id="Task_11" name="财务总监审核【财务总监】" flowable:assignee="${assignee}" flowable:candidateGroups="CFO">
++      <bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${Task_11_assignees}" flowable:elementVariable="assignee">
++        <bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${nrOfCompletedInstances == nrOfInstances}</bpmn:completionCondition>
++      </bpmn:multiInstanceLoopCharacteristics>
++    </bpmn:userTask>
+     <bpmn:userTask id="Task_12" name="板块分管领导审核【板块分管领导】" flowable:candidateGroups="PLATE_DIV_LEADER" />
+     <bpmn:exclusiveGateway id="Gw_13" default="Flow_13_def" />
+     <bpmn:userTask id="Task_13" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />

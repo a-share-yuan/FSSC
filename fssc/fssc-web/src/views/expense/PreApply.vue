@@ -1,66 +1,63 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <BillWorkbench ref="wb" :bill-type="'APPLY'" :sub-type="subType" :travel="isTravel" :before-submit="onBeforeSubmit">
     <template #create="b">
       <!-- ============ 单据概要 ============ -->
-      <el-card header="单据概要">
+      <el-card :header="$t('expense.claim.colBillSummary')">
         <el-form ref="formRef" :rules="formRules" :model="b.form.bill" label-width="110px" size="default">
           <el-row :gutter="12">
             <el-col :xs="24" :md="12">
-              <el-form-item label="单据编号">
-                <el-input :model-value="b.form.bill.billNo || '（保存后自动生成）'" disabled />
+              <el-form-item :label="$t('expense.claim.colBillNoFull')">
+                <el-input :model-value="b.form.bill.billNo || $t('expense.common.txtAutoAfterSave')" disabled />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="制单时间">
+              <el-form-item :label="$t('expense.claim.colMakeTime')">
                 <el-input :model-value="b.nowTs()" disabled />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="制单人">
+              <el-form-item :label="$t('expense.claim.colMaker')">
                 <el-input :model-value="currentUserName" disabled />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-<el-form-item label="申请人" prop="applyUserId">
+<el-form-item :label="$t('expense.common.colApplicant')" prop="applyUserId">
                 <UserSelect v-model="b.form.bill.applyUserId" :users="users" show-dept @change="(id) => onApplicantChange(b, id)" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="申请人部门">
+              <el-form-item :label="$t('expense.claim.colApplicantDept')">
                 <el-input :model-value="applicantDept" disabled />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="申请人公司">
+              <el-form-item :label="$t('expense.claim.colApplicantCompany')">
                 <el-input :model-value="applicantCompany" disabled />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-<el-form-item label="币种" prop="currencyCode">
+<el-form-item :label="$t('expense.common.colCurrency')" prop="currencyCode">
                 <el-select v-model="b.form.bill.currencyCode" style="width: 100%">
-                  <el-option label="人民币 CNY" value="CNY" />
-                  <el-option label="美元 USD" value="USD" />
+                  <el-option :label="$t('expense.common.curCny')" value="CNY" />
+                  <el-option :label="$t('expense.common.curUsd')" value="USD" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="总金额">
-                <span style="color: #f59a23; font-weight: 700; font-size: 15px">{{ b.fmt(totalAmount(b)) }} 元</span>
+              <el-form-item :label="$t('expense.common.colTotalAmount')">
+                <span style="color: #f59a23; font-weight: 700; font-size: 15px">{{ $t('expense.common.amtYuan', { v1: b.fmt(totalAmount(b)) }) }}</span>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-<el-form-item label="预算费用年度" prop="periodYear">
+<el-form-item :label="$t('expense.claim.colBudgetYear')" prop="periodYear">
                 <el-select v-model="b.form.bill.periodYear" style="width: 100%">
-                  <el-option v-for="y in years" :key="y" :label="y + ' 年'" :value="y" />
+                  <el-option v-for="y in years" :key="y" :label="$t('expense.claim.optYear')" :value="y" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="标题" prop="title">
-                <el-input v-model="b.form.bill.title" :placeholder="subTypeLabel + '标题'" />
+              <el-form-item :label="$t('expense.common.colTitle')" prop="title">
+                <el-input v-model="b.form.bill.title" :placeholder="$t('expense.preapply.phTitleBySubType')" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -68,256 +65,256 @@
           <!-- 出差申请特有：是否补申请 / 出差类型 / 出差事由 -->
           <el-row v-if="isTravel" :gutter="12">
             <el-col :xs="24" :md="8">
-<el-form-item label="是否补申请" prop="extJson.supplementApply">
+<el-form-item :label="$t('expense.preapply.lblRetroApply')" prop="extJson.supplementApply">
                 <el-select v-model="b.form.bill.extJson.supplementApply" style="width: 100%">
-                  <el-option label="否" :value="false" />
-                  <el-option label="是（不占用预算）" :value="true" />
+                  <el-option :label="$t('common.no')" :value="false" />
+                  <el-option :label="$t('expense.preapply.optYesNoBudget')" :value="true" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
-              <el-form-item label="出差类型" prop="extJson.travelType">
+              <el-form-item :label="$t('expense.travelClaim.colTripType')" prop="extJson.travelType">
                 <el-select v-model="b.form.bill.extJson.travelType" style="width: 100%">
-                  <el-option label="国内出差" value="DOMESTIC" />
-                  <el-option label="国外出差" value="ABROAD" />
-                  <el-option label="三地出差" value="TRIAREA" />
+                  <el-option :label="$t('expense.preapply.optDomesticTrip')" value="DOMESTIC" />
+                  <el-option :label="$t('expense.preapply.optAbroadTrip')" value="ABROAD" />
+                  <el-option :label="$t('expense.preapply.optThreeCityTrip')" value="TRIAREA" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
-              <el-form-item label="出差事由" prop="extJson.travelReason">
+              <el-form-item :label="$t('expense.preapply.lblTripReason')" prop="extJson.travelReason">
                 <el-input v-model="b.form.bill.extJson.travelReason" />
               </el-form-item>
             </el-col>
           </el-row>
 
 <!-- 单据说明（培训必填） -->
-          <el-form-item label="单据说明" :required="isTrain" prop="remark">
-            <el-input v-model="b.form.bill.remark" type="textarea" :rows="2" :placeholder="isTrain ? '必填' : '选填'" />
+          <el-form-item :label="$t('expense.claim.colBillDesc')" :required="isTrain" prop="remark">
+            <el-input v-model="b.form.bill.remark" type="textarea" :rows="2" :placeholder="isTrain ? $t('expense.preApply.phRequired') : $t('expense.preApply.phOptional')" />
           </el-form-item>
 
           <!-- 超标内容 / 超标说明 -->
-          <el-form-item label="超标内容">
+          <el-form-item :label="$t('expense.preapply.colOverContent')">
             <el-input :model-value="overContent(b)" disabled />
           </el-form-item>
-<el-form-item v-if="hasOverStd(b)" label="超标说明" prop="extJson.overReason">
-            <el-input v-model="b.form.bill.extJson.overReason" placeholder="超标准时必填" />
+<el-form-item v-if="hasOverStd(b)" :label="$t('expense.preapply.colOverNote')" prop="extJson.overReason">
+            <el-input v-model="b.form.bill.extJson.overReason" :placeholder="$t('expense.preapply.phRequiredOver')" />
           </el-form-item>
-          <el-alert type="info" :closable="false" title="提示：费用明细超出差旅标准后，将自动生成“超标内容”，并需填写“超标说明”" />
+          <el-alert type="info" :closable="false" :title="$t('expense.preapply.hintOverStdAuto')" />
         </el-form>
       </el-card>
 
       <!-- ============ 会议申请：会议信息 ============ -->
-      <el-card v-if="isMeeting" header="会议信息（费用详情）" style="margin-top: 12px">
+      <el-card v-if="isMeeting" :header="$t('expense.preapply.secMeetingInfo')" style="margin-top: 12px">
 <el-form ref="meetingFormRef" :model="b.form.bill.extJson" :rules="meetingRules" label-width="110px" size="default">
           <el-row :gutter="12">
             <el-col :xs="24" :md="12">
-              <el-form-item label="会议名称" prop="meetingName"><el-input v-model="b.form.bill.extJson.meetingName" /></el-form-item>
+              <el-form-item :label="$t('expense.preapply.lblMeetingName')" prop="meetingName"><el-input v-model="b.form.bill.extJson.meetingName" /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="会议地点" prop="meetingPlace"><el-input v-model="b.form.bill.extJson.meetingPlace" /></el-form-item>
+              <el-form-item :label="$t('expense.preapply.lblMeetingPlace')" prop="meetingPlace"><el-input v-model="b.form.bill.extJson.meetingPlace" /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="开始日期" prop="startDate"><el-date-picker v-model="b.form.bill.extJson.startDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
+              <el-form-item :label="$t('expense.preapply.colStartDate')" prop="startDate"><el-date-picker v-model="b.form.bill.extJson.startDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="结束日期" prop="endDate"><el-date-picker v-model="b.form.bill.extJson.endDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
+              <el-form-item :label="$t('expense.preapply.colEndDate')" prop="endDate"><el-date-picker v-model="b.form.bill.extJson.endDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="会议主题" prop="topic"><el-input v-model="b.form.bill.extJson.topic" /></el-form-item>
+              <el-form-item :label="$t('expense.preapply.lblMeetingTopic')" prop="topic"><el-input v-model="b.form.bill.extJson.topic" /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="参与人数" prop="attendees"><el-input-number v-model="b.form.bill.extJson.attendees" :min="1" style="width: 100%" /></el-form-item>
+              <el-form-item :label="$t('expense.preapply.colAttendees')" prop="attendees"><el-input-number v-model="b.form.bill.extJson.attendees" :min="1" style="width: 100%" /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="金额" prop="meetingAmount"><el-input-number v-model="b.form.bill.extJson.meetingAmount" :min="0" :precision="2" style="width: 100%" @change="syncMeetingLine(b)" /></el-form-item>
+              <el-form-item :label="$t('field.amount')" prop="meetingAmount"><el-input-number v-model="b.form.bill.extJson.meetingAmount" :min="0" :precision="2" style="width: 100%" @change="syncMeetingLine(b)" /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="备注" prop="note"><el-input v-model="b.form.bill.extJson.note" /></el-form-item>
+              <el-form-item :label="$t('common.remark')" prop="note"><el-input v-model="b.form.bill.extJson.note" /></el-form-item>
             </el-col>
           </el-row>
         </el-form>
       </el-card>
 
       <!-- ============ 出差申请：行程信息（费用详情） ============ -->
-      <el-card v-if="isTravel" header="行程信息（费用详情）" style="margin-top: 12px">
+      <el-card v-if="isTravel" :header="$t('expense.preapply.secTripInfoDetail')" style="margin-top: 12px">
         <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center">
-          <el-button size="small" type="primary" :loading="calcLoading" @click="autoCalcTravel(b)">按差旅标准自动计算住宿/餐补</el-button>
-          <span style="color:#909399;font-size:12px">按 城市等级×出差天数×标准金额 自动带出</span>
+          <el-button size="small" type="primary" :loading="calcLoading" @click="autoCalcTravel(b)">{{ $t('expense.preapply.btnAutoByPolicy') }}</el-button>
+          <span style="color:#909399;font-size:12px">{{ $t('expense.preapply.hintCityTierAuto') }}</span>
         </div>
-        <el-table :data="b.form.travels" size="small" border empty-text="暂无数据" @row-dblclick="openRowDetail">
-          <el-table-column label="出差人员" width="110"><template #header><span style="color:#f56c6c">*</span>出差人员</template>
-            <template #default="{ row, $index }"><el-select v-model="row.travelerName" filterable style="width: 100%" placeholder="选择出差人员"><el-option v-for="u in users" :key="u.id" :label="u.nickName || u.userName" :value="u.nickName || u.userName" :disabled="travelDup(b, $index, u.nickName || u.userName)" /></el-select></template>
+        <el-table :data="b.form.travels" size="small" border :empty-text="$t('common.empty')" @row-dblclick="openRowDetail">
+          <el-table-column :label="$t('expense.preapply.lblTraveler')" width="110"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.lblTraveler') }}</template>
+            <template #default="{ row, $index }"><el-select v-model="row.travelerName" filterable style="width: 100%" :placeholder="$t('expense.common.phPickTraveler')"><el-option v-for="u in users" :key="u.id" :label="u.nickName || u.userName" :value="u.nickName || u.userName" :disabled="travelDup(b, $index, u.nickName || u.userName)" /></el-select></template>
           </el-table-column>
-          <el-table-column label="出发地" width="110"><template #header><span style="color:#f56c6c">*</span>出发地</template>
+          <el-table-column :label="$t('expense.travelClaim.colDeparture')" width="110"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.travelClaim.colDeparture') }}</template>
             <template #default="{ row }"><el-select v-model="row.fromCityId" filterable style="width: 100%"><el-option v-for="c in b.cities" :key="c.id" :label="c.cityName" :value="c.id" /></el-select></template>
           </el-table-column>
-          <el-table-column label="目的地" width="110"><template #header><span style="color:#f56c6c">*</span>目的地</template>
+          <el-table-column :label="$t('expense.travelClaim.colDestination')" width="110"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.travelClaim.colDestination') }}</template>
             <template #default="{ row }"><el-select v-model="row.toCityId" filterable style="width: 100%"><el-option v-for="c in b.cities" :key="c.id" :label="c.cityName" :value="c.id" /></el-select></template>
           </el-table-column>
-          <el-table-column label="出发日期" width="120"><template #header><span style="color:#f56c6c">*</span>出发日期</template>
+          <el-table-column :label="$t('expense.preapply.colDepartDate')" width="120"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.colDepartDate') }}</template>
             <template #default="{ row }"><el-date-picker v-model="row.beginDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" @change="calcTravel(b, row)" /></template>
           </el-table-column>
-          <el-table-column label="结束日期" width="120"><template #header><span style="color:#f56c6c">*</span>结束日期</template>
+          <el-table-column :label="$t('expense.preapply.colEndDate')" width="120"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.colEndDate') }}</template>
             <template #default="{ row }"><el-date-picker v-model="row.endDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" @change="calcTravel(b, row)" /></template>
           </el-table-column>
-          <el-table-column label="交通工具" width="100"><template #header><span style="color:#f56c6c">*</span>交通工具</template>
+          <el-table-column :label="$t('expense.preapply.colTrafficType')" width="100"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.colTrafficType') }}</template>
             <template #default="{ row }">
               <el-select v-model="row.trafficType" style="width: 100%">
-                <el-option label="飞机" value="AIR" /><el-option label="高铁" value="RAIL" />
-                <el-option label="火车" value="TRAIN" /><el-option label="汽车" value="CAR" /><el-option label="轮船" value="SHIP" />
+                <el-option :label="$t('expense.preapply.optPlane')" value="AIR" /><el-option :label="$t('expense.preapply.optHighSpeedRail')" value="RAIL" />
+                <el-option :label="$t('expense.preapply.optTrain')" value="TRAIN" /><el-option :label="$t('expense.preapply.optCar')" value="CAR" /><el-option :label="$t('expense.preapply.optShip')" value="SHIP" />
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="座位等级" width="100"><template #header><span style="color:#f56c6c">*</span>座位等级</template>
+          <el-table-column :label="$t('expense.preapply.lblSeatClass')" width="100"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.lblSeatClass') }}</template>
             <template #default="{ row }">
               <el-select v-model="row.trafficClass" style="width: 100%">
-                <el-option label="经济舱" value="ECONOMY" /><el-option label="商务舱" value="BUSINESS" /><el-option label="头等舱" value="FIRST" />
-                <el-option label="二等座" value="SECOND" /><el-option label="一等座" value="FIRST_SEAT" />
+                <el-option :label="$t('expense.preapply.optEconomyClass')" value="ECONOMY" /><el-option :label="$t('expense.preapply.optBusinessClass')" value="BUSINESS" /><el-option :label="$t('expense.preapply.optFirstClass')" value="FIRST" />
+                <el-option :label="$t('expense.preapply.optSecondClassSeat')" value="SECOND" /><el-option :label="$t('expense.preapply.optFirstClassSeat')" value="FIRST_SEAT" />
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="是否往返" width="90"><template #header><span style="color:#f56c6c">*</span>是否往返</template>
+          <el-table-column :label="$t('expense.preapply.lblRoundTrip')" width="90"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.lblRoundTrip') }}</template>
             <template #default="{ row }">
-              <el-select v-model="row.roundTrip" style="width: 100%"><el-option label="单程" :value="false" /><el-option label="往返" :value="true" /></el-select>
+              <el-select v-model="row.roundTrip" style="width: 100%"><el-option :label="$t('expense.preapply.optOneWay')" :value="false" /><el-option :label="$t('expense.preapply.optRoundTrip')" :value="true" /></el-select>
             </template>
           </el-table-column>
-          <el-table-column label="长途交通费" width="100">
+          <el-table-column :label="$t('expense.travelClaim.colLongTrafficFee')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.trafficAmount" :min="0" :precision="2" style="width: 100%" @change="calcTravel(b, row)" /></template>
           </el-table-column>
-          <el-table-column label="住宿费" width="100">
+          <el-table-column :label="$t('expense.travelClaim.colHotel')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.hotelAmount" :min="0" :precision="2" style="width: 100%" @change="calcTravel(b, row)" /></template>
           </el-table-column>
-          <el-table-column label="餐饮补贴" width="100">
+          <el-table-column :label="$t('expense.preapply.colMealAllowance')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.allowanceAmount" :min="0" :precision="2" style="width: 100%" @change="calcTravel(b, row)" /></template>
           </el-table-column>
-          <el-table-column label="市内交通费" width="100">
+          <el-table-column :label="$t('expense.travelClaim.colLocalTrafficFee')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.localTrafficAmount" :min="0" :precision="2" style="width: 100%" @change="calcTravel(b, row)" /></template>
           </el-table-column>
-          <el-table-column label="其他费用" width="100">
+          <el-table-column :label="$t('expense.travelClaim.tabOtherFee')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.otherAmount" :min="0" :precision="2" style="width: 100%" @change="calcTravel(b, row)" /></template>
           </el-table-column>
-          <el-table-column label="住宿天数" width="80">
+          <el-table-column :label="$t('expense.preapply.lblHotelNights')" width="80">
             <template #default="{ row }">{{ row.days || 0 }}</template>
           </el-table-column>
-          <el-table-column label="小计" width="100">
+          <el-table-column :label="$t('expense.preapply.colSubtotal')" width="100">
             <template #default="{ row }"><span style="color:#f59a23;font-weight:600">{{ b.fmt(travelTotal(row)) }}</span></template>
           </el-table-column>
-          <el-table-column label="操作" width="110" fixed="right">
+          <el-table-column :label="$t('common.operation')" width="110" fixed="right">
             <template #default="{ $index }">
-              <el-button link size="small" @click="copyTravel(b, $index)">复制</el-button>
-              <el-button link size="small" type="danger" @click="b.form.travels.splice($index, 1)">删除</el-button>
+              <el-button link size="small" @click="copyTravel(b, $index)">{{ $t('expense.common.btnCopy') }}</el-button>
+              <el-button link size="small" type="danger" @click="b.form.travels.splice($index, 1)">{{ $t('expense.preapply.btnDelete') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
-        <el-button size="small" style="margin-top: 8px" @click="addTravel(b)">+ 添加行程</el-button>
+        <el-button size="small" style="margin-top: 8px" @click="addTravel(b)">{{ $t('expense.preapply.btnAddTrip') }}</el-button>
       </el-card>
 
 <!-- 出差申请：借款信息 -->
-      <el-card v-if="isTravel" header="借款信息" style="margin-top: 12px">
+      <el-card v-if="isTravel" :header="$t('expense.preapply.secLoanInfo')" style="margin-top: 12px">
         <el-form ref="loanFormRef" :model="b.form.bill.extJson" :rules="loanRules(b.form.bill.extJson)" label-width="110px" size="default">
           <el-row :gutter="12">
-            <el-col :xs="24" :md="8"><el-form-item label="借款金额"><el-input-number v-model="b.form.bill.extJson.loanAmount" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="账户类型"><el-input :model-value="'员工'" disabled /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="收款账户名称" prop="accountName"><el-input v-model="b.form.bill.extJson.accountName" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="收款账号" prop="accountNo"><el-input v-model="b.form.bill.extJson.accountNo" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="开户行" prop="bankName"><el-input v-model="b.form.bill.extJson.bankName" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="预计还款日期" prop="expectRepayDate"><el-date-picker v-model="b.form.bill.extJson.expectRepayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
-            <el-col :xs="24"><el-form-item label="借款说明"><el-input v-model="b.form.bill.extJson.loanRemark" type="textarea" :rows="2" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.loan.colLoanAmount')"><el-input-number v-model="b.form.bill.extJson.loanAmount" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.travelClaim.colAccountType')"><el-input :model-value="'员工'" disabled /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.colPayeeAccountName')" prop="accountName"><el-input v-model="b.form.bill.extJson.accountName" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colPayeeAccount')" prop="accountNo"><el-input v-model="b.form.bill.extJson.accountNo" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colBank')" prop="bankName"><el-input v-model="b.form.bill.extJson.bankName" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.loan.colExpectedRepayDate')" prop="expectRepayDate"><el-date-picker v-model="b.form.bill.extJson.expectRepayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+            <el-col :xs="24"><el-form-item :label="$t('expense.loan.colLoanRemark')"><el-input v-model="b.form.bill.extJson.loanRemark" type="textarea" :rows="2" /></el-form-item></el-col>
           </el-row>
         </el-form>
       </el-card>
 
       <!-- ============ 培训申请：培训信息 ============ -->
-      <el-card v-if="isTrain" header="培训信息" style="margin-top: 12px">
+      <el-card v-if="isTrain" :header="$t('expense.preapply.secTrainingInfo')" style="margin-top: 12px">
         <el-form ref="trainFormRef" :rules="trainRules" :model="b.form.bill.extJson" label-width="110px" size="default">
           <el-row :gutter="12">
-            <el-col :xs="24" :md="8"><el-form-item label="培训类型" prop="trainType"><el-select v-model="b.form.bill.extJson.trainType" style="width:100%"><el-option label="内训" value="INTERNAL" /><el-option label="外训" value="EXTERNAL" /><el-option label="公开课" value="PUBLIC" /></el-select></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="培训名称" prop="trainName"><el-input v-model="b.form.bill.extJson.trainName" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="培训地点" prop="trainPlace"><el-input v-model="b.form.bill.extJson.trainPlace" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="开始日期" prop="startDate"><el-date-picker v-model="b.form.bill.extJson.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" @change="calcTrain(b)" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="结束日期" prop="endDate"><el-date-picker v-model="b.form.bill.extJson.endDate" type="date" value-format="YYYY-MM-DD" style="width:100%" @change="calcTrain(b)" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="培训时长(天)" prop="duration"><el-input-number v-model="b.form.bill.extJson.duration" :min="1" style="width:100%" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="参与人数" prop="attendees"><el-input-number v-model="b.form.bill.extJson.attendees" :min="1" style="width:100%" @change="calcTrain(b)" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="合计成本"><span style="color:#f59a23;font-weight:600">{{ b.fmt(trainTotal(b)) }} 元</span></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="人均成本"><span style="color:#f59a23;font-weight:600">{{ b.fmt(trainTotal(b) / (b.form.bill.extJson.attendees || 1)) }} 元</span></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="是否计划内" prop="planFlag"><el-select v-model="b.form.bill.extJson.planFlag" style="width:100%"><el-option label="是" :value="true" /><el-option label="否" :value="false" /></el-select></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="是否涉及差旅" prop="travelFlag"><el-select v-model="b.form.bill.extJson.travelFlag" style="width:100%"><el-option label="是" :value="true" /><el-option label="否" :value="false" /></el-select></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="是否国外出差" prop="abroadFlag"><el-select v-model="b.form.bill.extJson.abroadFlag" style="width:100%"><el-option label="是" :value="true" /><el-option label="否" :value="false" /></el-select></el-form-item></el-col>
-            <el-col :xs="24"><el-form-item label="备注" prop="note"><el-input v-model="b.form.bill.extJson.note" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblTrainType')" prop="trainType"><el-select v-model="b.form.bill.extJson.trainType" style="width:100%"><el-option :label="$t('expense.preapply.optInternalTraining')" value="INTERNAL" /><el-option :label="$t('expense.preapply.optExternalTraining')" value="EXTERNAL" /><el-option :label="$t('expense.preapply.optPublicCourse')" value="PUBLIC" /></el-select></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblTrainName')" prop="trainName"><el-input v-model="b.form.bill.extJson.trainName" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblTrainPlace')" prop="trainPlace"><el-input v-model="b.form.bill.extJson.trainPlace" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.colStartDate')" prop="startDate"><el-date-picker v-model="b.form.bill.extJson.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" @change="calcTrain(b)" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.colEndDate')" prop="endDate"><el-date-picker v-model="b.form.bill.extJson.endDate" type="date" value-format="YYYY-MM-DD" style="width:100%" @change="calcTrain(b)" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblTrainDays')" prop="duration"><el-input-number v-model="b.form.bill.extJson.duration" :min="1" style="width:100%" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.colAttendees')" prop="attendees"><el-input-number v-model="b.form.bill.extJson.attendees" :min="1" style="width:100%" @change="calcTrain(b)" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.colTotalCost')"><span style="color:#f59a23;font-weight:600">{{ $t('expense.common.amtYuan', { v1: b.fmt(trainTotal(b)) }) }}</span></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.colCostPerPerson')"><span style="color:#f59a23;font-weight:600">{{ $t('expense.common.amtYuan', { v1: b.fmt(trainTotal(b) / (b.form.bill.extJson.attendees || 1)) }) }}</span></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblPlanned')" prop="planFlag"><el-select v-model="b.form.bill.extJson.planFlag" style="width:100%"><el-option :label="$t('common.yes')" :value="true" /><el-option :label="$t('common.no')" :value="false" /></el-select></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblHasTravel')" prop="travelFlag"><el-select v-model="b.form.bill.extJson.travelFlag" style="width:100%"><el-option :label="$t('common.yes')" :value="true" /><el-option :label="$t('common.no')" :value="false" /></el-select></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblAbroadTrip')" prop="abroadFlag"><el-select v-model="b.form.bill.extJson.abroadFlag" style="width:100%"><el-option :label="$t('common.yes')" :value="true" /><el-option :label="$t('common.no')" :value="false" /></el-select></el-form-item></el-col>
+            <el-col :xs="24"><el-form-item :label="$t('common.remark')" prop="note"><el-input v-model="b.form.bill.extJson.note" /></el-form-item></el-col>
           </el-row>
         </el-form>
       </el-card>
 
       <!-- 培训人员及费用详情 -->
-      <el-card v-if="isTrain" header="培训人员及费用详情" style="margin-top: 12px">
-        <el-table :data="persons" size="small" border empty-text="暂无数据" @row-dblclick="openRowDetail">
-          <el-table-column label="姓名" width="120"><template #header><span style="color:#f56c6c">*</span>姓名</template>
+      <el-card v-if="isTrain" :header="$t('expense.preapply.secTraineeExpense')" style="margin-top: 12px">
+        <el-table :data="persons" size="small" border :empty-text="$t('common.empty')" @row-dblclick="openRowDetail">
+          <el-table-column :label="$t('expense.preapply.colName')" width="120"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.colName') }}</template>
             <template #default="{ row, $index }"><el-select v-model="row.name" filterable allow-create default-first-option style="width:100%"><el-option v-for="u in users" :key="u.id" :label="u.nickName || u.userName" :value="u.nickName || u.userName" :disabled="persons.some((p, i) => i !== $index && p.name === (u.nickName || u.userName))" /></el-select></template>
           </el-table-column>
-          <el-table-column label="开始日期" width="130"><template #header><span style="color:#f56c6c">*</span>开始日期</template>
+          <el-table-column :label="$t('expense.preapply.colStartDate')" width="130"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.colStartDate') }}</template>
             <template #default="{ row }"><el-date-picker v-model="row.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" @change="calcPerson(b, row)" /></template>
           </el-table-column>
-          <el-table-column label="结束日期" width="130"><template #header><span style="color:#f56c6c">*</span>结束日期</template>
+          <el-table-column :label="$t('expense.preapply.colEndDate')" width="130"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.colEndDate') }}</template>
             <template #default="{ row }"><el-date-picker v-model="row.endDate" type="date" value-format="YYYY-MM-DD" style="width:100%" @change="calcPerson(b, row)" /></template>
           </el-table-column>
-          <el-table-column label="天数" width="70">
+          <el-table-column :label="$t('expense.preapply.colDays')" width="70">
             <template #default="{ row }">{{ row.days || 0 }}</template>
           </el-table-column>
-          <el-table-column v-if="b.form.bill.extJson.travelFlag" label="出发地" width="120"><template #header><span style="color:#f56c6c">*</span>出发地</template>
+          <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.travelClaim.colDeparture')" width="120"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.travelClaim.colDeparture') }}</template>
             <template #default="{ row }"><el-select v-model="row.fromCityId" filterable style="width:100%"><el-option v-for="c in b.cities" :key="c.id" :label="c.cityName" :value="c.id" /></el-select></template>
           </el-table-column>
-          <el-table-column v-if="b.form.bill.extJson.travelFlag" label="目的地" width="120"><template #header><span style="color:#f56c6c">*</span>目的地</template>
+          <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.travelClaim.colDestination')" width="120"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.travelClaim.colDestination') }}</template>
             <template #default="{ row }"><el-select v-model="row.toCityId" filterable style="width:100%"><el-option v-for="c in b.cities" :key="c.id" :label="c.cityName" :value="c.id" /></el-select></template>
           </el-table-column>
-          <el-table-column v-if="b.form.bill.extJson.travelFlag" label="出行方式" width="100"><template #header><span style="color:#f56c6c">*</span>出行方式</template>
-            <template #default="{ row }"><el-select v-model="row.trafficType" style="width:100%"><el-option label="飞机" value="AIR" /><el-option label="高铁" value="RAIL" /><el-option label="火车" value="TRAIN" /><el-option label="汽车" value="CAR" /></el-select></template>
+          <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.preapply.colTripMode')" width="100"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.colTripMode') }}</template>
+            <template #default="{ row }"><el-select v-model="row.trafficType" style="width:100%"><el-option :label="$t('expense.preapply.optPlane')" value="AIR" /><el-option :label="$t('expense.preapply.optHighSpeedRail')" value="RAIL" /><el-option :label="$t('expense.preapply.optTrain')" value="TRAIN" /><el-option :label="$t('expense.preapply.optCar')" value="CAR" /></el-select></template>
           </el-table-column>
-          <el-table-column v-if="b.form.bill.extJson.travelFlag" label="舱位等级" width="100"><template #header><span style="color:#f56c6c">*</span>舱位等级</template>
-            <template #default="{ row }"><el-select v-model="row.trafficClass" style="width:100%"><el-option label="经济舱" value="ECONOMY" /><el-option label="商务舱" value="BUSINESS" /><el-option label="二等座" value="SECOND" /></el-select></template>
+          <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.preapply.lblCabinClass')" width="100"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.lblCabinClass') }}</template>
+            <template #default="{ row }"><el-select v-model="row.trafficClass" style="width:100%"><el-option :label="$t('expense.preapply.optEconomyClass')" value="ECONOMY" /><el-option :label="$t('expense.preapply.optBusinessClass')" value="BUSINESS" /><el-option :label="$t('expense.preapply.optSecondClassSeat')" value="SECOND" /></el-select></template>
           </el-table-column>
-          <el-table-column label="培训费" width="100">
+          <el-table-column :label="$t('expense.travelClaim.tabTrainFee')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.trainFee" :min="0" :precision="2" style="width:100%" @change="syncTrainLine(b)" /></template>
           </el-table-column>
-          <el-table-column v-if="b.form.bill.extJson.travelFlag" label="长途交通" width="100">
+          <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.preapply.colLongTraffic')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.trafficFee" :min="0" :precision="2" style="width:100%" @change="syncTrainLine(b)" /></template>
           </el-table-column>
-          <el-table-column v-if="b.form.bill.extJson.travelFlag" label="住宿费" width="100">
+          <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.travelClaim.colHotel')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.hotelFee" :min="0" :precision="2" style="width:100%" @change="syncTrainLine(b)" /></template>
           </el-table-column>
-          <el-table-column v-if="b.form.bill.extJson.travelFlag" label="市内交通" width="100">
+          <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.preapply.colLocalTraffic')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.localTrafficFee" :min="0" :precision="2" style="width:100%" @change="syncTrainLine(b)" /></template>
           </el-table-column>
-          <el-table-column v-if="b.form.bill.extJson.travelFlag" label="餐饮补贴" width="100">
+          <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.preapply.colMealAllowance')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.allowanceFee" :min="0" :precision="2" style="width:100%" @change="syncTrainLine(b)" /></template>
           </el-table-column>
-          <el-table-column label="操作" width="70">
-            <template #default="{ $index }"><el-button link size="small" type="danger" @click="persons.splice($index, 1)">删</el-button></template>
+          <el-table-column :label="$t('common.operation')" width="70">
+            <template #default="{ $index }"><el-button link size="small" type="danger" @click="persons.splice($index, 1)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
           </el-table-column>
         </el-table>
-        <el-button size="small" style="margin-top: 8px" @click="persons.push(newPerson())">+ 添加培训人员</el-button>
-        <div style="margin-top: 6px; font-size: 12px; color: #909399">合计成本 = 培训费 +（涉及差旅时）长途交通/住宿/市内交通/餐饮补贴，按人员汇总</div>
+        <el-button size="small" style="margin-top: 8px" @click="persons.push(newPerson())">{{ $t('expense.preapply.btnAddTrainee') }}</el-button>
+        <div style="margin-top: 6px; font-size: 12px; color: #909399">{{ $t('expense.preapply.hintTotalCostFormula') }}</div>
       </el-card>
 
       <!-- ============ 分摊信息 ============ -->
       <!-- D-V4R-42：exp:share:* 只授予财务/共享/审批类角色，普通员工没有 ⇒ 原先这张卡对员工照常渲染、
            两列还挂必填红星，一保存就红字「缺少权限：exp:share:update」且分摊行不落库。
            现按权限渲染：能读才显示，能写才可编辑（与发票补录页签同手法）。 -->
-      <el-card v-if="canViewShares" header="分摊信息" style="margin-top: 12px">
+      <el-card v-if="canViewShares" :header="$t('expense.preapply.secAllocation')" style="margin-top: 12px">
         <el-form :model="b.form" label-width="110px" size="default">
           <!-- 单选组恒有默认值，不存在漏填，故不加红星 -->
-          <el-form-item label="费用承担类型">
+          <el-form-item :label="$t('expense.claim.colBearingType')">
             <el-radio-group v-model="shareType" :disabled="!canEditShares">
-              <el-radio-button value="COST_CENTER">成本中心承担</el-radio-button>
-              <el-radio-button value="PROJECT">项目承担</el-radio-button>
+              <el-radio-button value="COST_CENTER">{{ $t('expense.claim.optCostCenterBearing') }}</el-radio-button>
+              <el-radio-button value="PROJECT">{{ $t('expense.claim.optProjectBearing') }}</el-radio-button>
             </el-radio-group>
           </el-form-item>
         </el-form>
-        <el-table :data="b.form.shares" size="small" border empty-text="暂无数据" @row-dblclick="openRowDetail">
-          <el-table-column label="行编号" width="70">
+        <el-table :data="b.form.shares" size="small" border :empty-text="$t('common.empty')" @row-dblclick="openRowDetail">
+          <el-table-column :label="$t('expense.preapply.colLineNo')" width="70">
             <template #default="{ $index }">{{ $index + 1 }}</template>
           </el-table-column>
-          <el-table-column :label="shareType === 'COST_CENTER' ? '成本中心' : '项目'" min-width="120">
+          <el-table-column :label="shareType === 'COST_CENTER' ? t('expense.travelClaim.colCostCenter') : t('expense.travelClaim.colProject')" min-width="120">
             <template #default="{ row }">
               <el-select v-if="shareType === 'COST_CENTER'" v-model="row.costCenterId" :disabled="!canEditShares" filterable style="width: 100%">
                 <el-option v-for="c in b.costCenters" :key="c.id" :label="ccLabel(c)" :value="c.id" />
@@ -327,7 +324,7 @@
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="预算科目" min-width="120"><template #header><span v-if="canEditShares" style="color:#f56c6c">*</span>预算科目</template>
+          <el-table-column :label="$t('expense.common.colBudgetItem')" min-width="120"><template #header><span v-if="canEditShares" style="color:#f56c6c">*</span>{{ $t('expense.common.colBudgetItem') }}</template>
             <template #default="{ row }">
               <el-select v-model="row.budgetItemId" :disabled="!canEditShares" filterable style="width: 100%">
                 <el-option v-if="row.budgetItemId != null && !b.budgets.some((x) => String(x.id) === String(row.budgetItemId))" :label="budgetUnseenLabel(row.budgetItemId)" :value="row.budgetItemId" />
@@ -335,27 +332,26 @@
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="分摊金额" width="130"><template #header><span v-if="canEditShares" style="color:#f56c6c">*</span>分摊金额</template>
+          <el-table-column :label="$t('expense.preapply.colAllocAmount')" width="130"><template #header><span v-if="canEditShares" style="color:#f56c6c">*</span>{{ $t('expense.preapply.colAllocAmount') }}</template>
             <template #default="{ row }">
               <el-input-number v-model="row.shareAmount" :disabled="!canEditShares" :min="0" :precision="2" style="width: 100%" />
             </template>
           </el-table-column>
-          <el-table-column label="预算信息提示" min-width="140">
+          <el-table-column :label="$t('expense.preapply.secBudgetHint')" min-width="140">
             <template #default="{ row }">
               <span v-if="row.budgetItemId" :style="{ color: shareBudget(b, row).over ? '#f56c6c' : '#67c23a' }">
-                {{ shareBudget(b, row).over ? '超出可用额度' : '可支 ' + b.fmt(shareBudget(b, row).available) }}
+                {{ shareBudget(b, row).over ? t('expense.preapply.errOverQuota') : t('expense.create.stWithinBudget') + b.fmt(shareBudget(b, row).available) }}
               </span>
             </template>
           </el-table-column>
-          <el-table-column v-if="canEditShares" label="操作" width="70">
-            <template #default="{ $index }"><el-button link size="small" type="danger" @click="b.form.shares.splice($index, 1)">删</el-button></template>
+          <el-table-column v-if="canEditShares" :label="$t('common.operation')" width="70">
+            <template #default="{ $index }"><el-button link size="small" type="danger" @click="b.form.shares.splice($index, 1)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
           </el-table-column>
         </el-table>
-        <el-button v-if="canEditShares" size="small" style="margin-top: 8px" @click="b.form.shares.push(b.newShare())">+ 添加分摊行</el-button>
-        <div style="margin-top: 6px">分摊合计：<span style="color: #f59a23; font-weight: 600">{{ b.fmt(shareTotal(b)) }}</span> 元</div>
+        <el-button v-if="canEditShares" size="small" style="margin-top: 8px" @click="b.form.shares.push(b.newShare())">{{ $t('expense.preapply.btnAddShareLine') }}</el-button>
+        <div style="margin-top: 6px">{{ $t('expense.preapply.labShareTotal') }}<span style="color: #f59a23; font-weight: 600">{{ b.fmt(shareTotal(b)) }}</span> {{ $t('expense.common.unitYuan') }}</div>
         <div v-if="!canEditShares" style="margin-top: 6px; font-size: 12px; color: #909399">
-          本卡只读：当前账号没有「修改分摊」权限（exp:share:update），分摊由具备该权限的财务/共享岗维护。不影响提交，也不影响预算占用——无写权限时整单按费用类型的默认预算科目落账。
-        </div>
+          {{ $t('expense.preapply.hintShareReadonly') }}</div>
       </el-card>
     </template>
   </BillWorkbench>
@@ -377,6 +373,9 @@ import { ccLabel, showRowDetail, budgetLabel, budgetUnseenLabel } from '@/utils/
 import { userApi, masterApi, store } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { useAutoFill } from '@/composables/useAutoFill'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 const { saveFormHistory } = useAutoFill()
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -394,7 +393,7 @@ const wb = ref(null)
 const isMeeting = computed(() => props.subType === 'MEETING')
 const isTravel = computed(() => props.subType === 'TRAVEL')
 const isTrain = computed(() => props.subType === 'TRAIN')
-const subTypeLabel = computed(() => ({ MEETING: '会议申请', TRAVEL: '出差申请', TRAIN: '培训申请' })[props.subType] || '事前申请')
+const subTypeLabel = computed(() => ({ MEETING: t('expense.preapply.subMeeting'), TRAVEL: t('expense.preapply.subTravel'), TRAIN: t('expense.preapply.subTrain') })[props.subType] || t('expense.preapply.tabRequisition'))
 
 // D-V4R-42：分摊表 exp:share:* 的授权名册里只有财务/共享/审批类角色（普通员工不在册）。
 // 能读才显示这张卡、能写才可编辑——否则员工只会看到两列必填红星＋一发 4030。
@@ -405,32 +404,32 @@ const canViewShares = computed(() => canEditShares.value || hasPerm('exp:share:l
 const formRules = computed(() => ({
   ...billRules('APPLY', props.subType),
   remark: isTrain.value
-    ? [{ required: true, message: '单据说明为必填（培训申请）' }]
-    : [{ max: 2000, message: '最多 2000 个字符', trigger: 'blur' }],
-  'extJson.supplementApply': [{ required: true, message: '请选择是否补申请' }],
-  'extJson.travelType': [{ required: true, message: '请选择出差类型' }],
-  'extJson.travelReason': [{ required: true, message: '请输入出差事由' }],
-  'extJson.overReason': [{ required: true, message: '请输入超标说明' }],
+    ? [{ required: true, message: t('expense.preapply.errBillDescRequiredTrain') }]
+    : [{ max: 2000, message: t('expense.preapply.hintMax2000'), trigger: 'blur' }],
+  'extJson.supplementApply': [{ required: true, message: t('expense.preapply.errRetroFlagRequired') }],
+  'extJson.travelType': [{ required: true, message: t('expense.travelClaim.errTripTypeRequired') }],
+  'extJson.travelReason': [{ required: true, message: t('expense.preapply.errTripReasonRequired') }],
+  'extJson.overReason': [{ required: true, message: t('expense.preapply.errOverStdRequired') }],
 }))
-const meetingRules = {
-  meetingName: [{ required: true, message: '请输入会议名称' }],
-  meetingPlace: [{ required: true, message: '请输入会议地点' }],
-  startDate: [{ required: true, message: '请选择开始日期' }],
-  endDate: [{ required: true, message: '请选择结束日期' }],
-  topic: [{ required: true, message: '请输入会议主题' }],
-  attendees: [{ required: true, type: 'number', message: '请输入参与人数', trigger: 'change' }],
-  meetingAmount: [{ required: true, type: 'number', min: 0.01, message: '请输入会议金额（大于 0）', trigger: 'change' }],
-  note: [{ required: true, message: '请输入备注' }],
-}
+const meetingRules = computed(() => ({
+  meetingName: [{ required: true, message: t('expense.preapply.errMeetingNameRequired') }],
+  meetingPlace: [{ required: true, message: t('expense.preapply.errMeetingPlaceRequired') }],
+  startDate: [{ required: true, message: t('expense.preapply.errStartDateRequired') }],
+  endDate: [{ required: true, message: t('expense.preapply.errEndDateRequired') }],
+  topic: [{ required: true, message: t('expense.preapply.errMeetingTopicRequired') }],
+  attendees: [{ required: true, type: 'number', message: t('expense.preapply.errAttendeesRequired'), trigger: 'change' }],
+  meetingAmount: [{ required: true, type: 'number', min: 0.01, message: t('expense.preapply.errMeetingAmountRequired'), trigger: 'change' }],
+  note: [{ required: true, message: t('expense.preapply.errRemarkRequired') }],
+}))
 // 借款信息是出差申请的选填区块：未借款时不该拦提交，填了借款金额才要求还款日期与收款账户（防付错）
 function loanRules(extJson) {
   const needLoan = Number(extJson?.loanAmount) > 0
   const req = (msg) => needLoan ? commonRules.required(msg) : []
   return {
-    expectRepayDate: needLoan ? commonRules.date('有借款金额，请选择预计还款日期') : [],
-    accountName: req('有借款金额，请填写收款账户名称'),
-    accountNo: req('有借款金额，请填写收款账号（防付错）'),
-    bankName: req('有借款金额，请填写开户行'),
+    expectRepayDate: needLoan ? commonRules.date(t('expense.preapply.errRepayDateRequired')) : [],
+    accountName: req(t('expense.preapply.errPayeeNameRequired')),
+    accountNo: req(t('expense.preapply.errPayeeAccountRequired')),
+    bankName: req(t('expense.preapply.errBankRequired')),
   }
 }
 const formRef = ref(null)
@@ -438,19 +437,19 @@ const meetingFormRef = ref(null)
 const loanFormRef = ref(null)
 // 培训信息：此前只有裸 required（红星装饰，一条规则都不跑），现补规则并接入提交闸门
 const trainFormRef = ref(null)
-const trainRules = {
-  trainType: commonRules.select('请选择培训类型'),
-  trainName: commonRules.required('请输入培训名称'),
-  trainPlace: commonRules.required('请输入培训地点'),
-  startDate: commonRules.date('请选择开始日期'),
-  endDate: commonRules.date('请选择结束日期'),
-  duration: [{ required: true, type: 'number', message: '请输入培训时长', trigger: 'change' }],
-  attendees: [{ required: true, type: 'number', message: '请输入参与人数', trigger: 'change' }],
-  planFlag: commonRules.select('请选择是否计划内'),
-  travelFlag: commonRules.select('请选择是否涉及差旅'),
-  abroadFlag: commonRules.select('请选择是否国外出差'),
-  note: commonRules.required('请输入备注'),
-}
+const trainRules = computed(() => ({
+  trainType: commonRules.select(t('expense.preapply.errTrainTypeRequired')),
+  trainName: commonRules.required(t('expense.preapply.errTrainNameRequired')),
+  trainPlace: commonRules.required(t('expense.preapply.errTrainPlaceRequired')),
+  startDate: commonRules.date(t('expense.preapply.errStartDateRequired')),
+  endDate: commonRules.date(t('expense.preapply.errEndDateRequired')),
+  duration: [{ required: true, type: 'number', message: t('expense.preapply.errTrainDaysRequired'), trigger: 'change' }],
+  attendees: [{ required: true, type: 'number', message: t('expense.preapply.errAttendeesRequired'), trigger: 'change' }],
+  planFlag: commonRules.select(t('expense.preapply.errPlannedRequired')),
+  travelFlag: commonRules.select(t('expense.preapply.errTravelFlagRequired')),
+  abroadFlag: commonRules.select(t('expense.preapply.errAbroadFlagRequired')),
+  note: commonRules.required(t('expense.preapply.errRemarkRequired')),
+}))
 
 const users = ref([])
 const shareType = ref('COST_CENTER')
@@ -460,7 +459,7 @@ const stdCache = ref(null)
 
 // 差旅标准自动计算：按 城市等级×天数×标准金额 带出 住宿费/餐饮补贴
 async function autoCalcTravel(b) {
-  if (!b.form.travels.length) { ElMessage.warning('请先添加行程'); return }
+  if (!b.form.travels.length) { ElMessage.warning(t('expense.preapply.errAddTripFirst')); return }
   calcLoading.value = true
   try {
     if (!stdCache.value) {
@@ -479,10 +478,10 @@ async function autoCalcTravel(b) {
       calcTravel(b, t)
       filled++
     }
-    ElMessage.success(`已按标准计算 ${filled} 条行程（住宿/餐补）`)
+    ElMessage.success(t('expense.preapply.msgAutoTripCalculated', { v1: filled }))
   } catch (e) { ElMessage.error(e.message) } finally { calcLoading.value = false }
 }
-const currentUserName = ref(store.user?.username || store.user?.userName || '当前用户')
+const currentUserName = computed(() => (ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))))
 
 function newPerson() {
   return { name: '', startDate: '', endDate: '', days: 0, fromCityId: null, toCityId: null, trafficType: 'AIR', trafficClass: 'ECONOMY', trainFee: 0, trafficFee: 0, hotelFee: 0, localTrafficFee: 0, allowanceFee: 0 }
@@ -502,9 +501,9 @@ function calcTravel(b, row) {
   syncTravelLine(b)
 }
 function copyTravel(b, i) {
-  const t = b.form.travels[i]
+  const trip = b.form.travels[i]
   // 复制行清空日期：同人同日两段行程＝重复登记（D-TR-01），由用户填新段日期
-  b.form.travels.push({ ...t, id: null, beginDate: '', endDate: '', days: 0 })
+  b.form.travels.push({ ...trip, id: null, beginDate: '', endDate: '', days: 0 })
 }
 // D-TR-01 同类口径：同一人同一天出现两条行程＝重复登记（多段行程日期不同，不受影响）
 function travelDup(b, index, name) {
@@ -607,10 +606,10 @@ async function onBeforeSubmit(b) {
   if (isTravel.value) {
     // 出差行程行校验：人员/出发地/目的地/日期/交通/座位必填
     const bad = b.form.travels.find((t) => !t.travelerName || !t.fromCityId || !t.toCityId || !t.beginDate || !t.endDate || !t.trafficType || !t.trafficClass)
-    if (bad) { ElMessage.warning('出差行程必填项缺失（出差人员/出发地/目的地/日期/交通工具/座位等级）'); return false }
+    if (bad) { ElMessage.warning(t('expense.preapply.errTripRequiredMissing')); return false }
     // D-TR-01 同类口径：同人同日重复行程提交闸
     const dupT = b.form.travels.find((t, i) => travelDup(b, i, t.travelerName))
-    if (dupT) { ElMessage.warning(`出差人员「${dupT.travelerName}」同一天存在重复行程，请删除或改期`); return false }
+    if (dupT) { ElMessage.warning(t('expense.preapply.errDuplicateTrip', { v1: dupT.travelerName })); return false }
     if (!(await validateForms([loanFormRef]))) return false
   }
   if (isTrain.value && !(await validateForms([trainFormRef]))) return false
@@ -619,14 +618,14 @@ async function onBeforeSubmit(b) {
   if (isTrain.value) {
     // D-TR-01：姓名必填 + 同名唯一（同名重复会把人员费用直接翻倍进单据金额）
     const named = persons.value.map((p) => (p.name || '').trim()).filter(Boolean)
-    if (named.length < persons.value.length) { ElMessage.warning('培训人员姓名不能为空'); return false }
+    if (named.length < persons.value.length) { ElMessage.warning(t('expense.preapply.errTraineeNameRequired')); return false }
     const dup = named.find((n, i) => named.indexOf(n) !== i)
-    if (dup) { ElMessage.warning(`培训人员「${dup}」重复登记，同名人员只允许一行`); return false }
+    if (dup) { ElMessage.warning(t('expense.preapply.errDuplicateTrainee', { v1: dup })); return false }
     // RA-06 乙案：人数与人员清单不一致仅二次确认，不硬拦（按人头汇总一行是合法用法）
     const att = Number(b.form.bill.extJson.attendees || 0)
     if (att && att !== persons.value.length) {
       try {
-        await ElMessageBox.confirm(`参与人数 ${att} 与培训人员清单 ${persons.value.length} 人不一致，确认按当前人员清单提交？`, '人数不一致', { type: 'warning' })
+        await ElMessageBox.confirm(t('expense.preapply.askAttendeeMismatch', { v1: att, v2: persons.value.length }), t('expense.preapply.errHeadcountMismatch'), { type: 'warning' })
       } catch { return false }
     }
     syncTrainLine(b)
@@ -642,7 +641,7 @@ async function onBeforeSubmit(b) {
   // 多科目分摊或一页多行＝这一条预算线承载不了，当场拒提点名，静默择一科目把钱占进别的预算线。
   // D-V4R-42：只读态（无 exp:share:update）不下这条闸——用户改不动分摊行，拦他＝死路
   if (canEditShares.value && shareBudgetToLine(b.form.lines, b.form.shares).conflict) {
-    ElMessage.warning('事前申请整单只落一条预算线：分摊行的预算科目不一致（或多条费用明细行），请把分摊行改成同一科目或拆单后再提交')
+    ElMessage.warning(t('expense.preapply.errShareBudgetMixed'))
     return false
   }
   return true
@@ -652,9 +651,9 @@ async function onBeforeSubmit(b) {
 function overContent(b) {
   if (isTravel.value) {
     const overRows = b.form.travels.filter((t) => t.overStd === 1)
-    if (overRows.length) return `共 ${overRows.length} 条行程超出差旅标准，请填写超标说明`
+    if (overRows.length) return t('expense.preapply.errTripsOverStd', { v1: overRows.length })
   }
-  return b.form.lines.some((l) => l.overStd === 1) ? '费用明细超出报销标准，请填写超标说明' : ''
+  return b.form.lines.some((l) => l.overStd === 1) ? t('expense.preapply.errLinesOverStd') : ''
 }
 function hasOverStd(b) { return !!overContent(b) }
 
@@ -691,7 +690,7 @@ const applicantCompany = computed(() => {
 })
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('field.detail') })
 }
 
 const route = useRoute()
@@ -706,7 +705,7 @@ onMounted(async () => {
     }
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   await loadUsers()
-currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || '当前用户'
+currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
   // 默认申请人 = 当前登录人
   const b = wb.value && wb.value.b
 const uid = store.user?.userId ?? store.user?.id
@@ -719,7 +718,7 @@ const uid = store.user?.userId ?? store.user?.id
     } else {
       b.form.bill.applyUserId = null
       b.form.bill.applyUserName = ''
-      if (uid != null) ElMessage.warning('未在用户列表中匹配到当前登录人，请手动选择申请人')
+      if (uid != null) ElMessage.warning(t('expense.common.errApplicantNotMatched'))
     }
   }
   if (b && b.form.bill.title === '') b.form.bill.title = subTypeLabel.value

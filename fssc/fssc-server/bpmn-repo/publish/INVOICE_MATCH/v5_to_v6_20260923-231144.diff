@@ -1,0 +1,15 @@
+--- bpmn:INVOICE_MATCH v5
++++ bpmn:INVOICE_MATCH v6
+@@ -9,7 +9,11 @@
+     <bpmn:userTask id="Task_8" name="FSSC成本费用岗审核【成本费用岗】" flowable:candidateGroups="COST_STAFF" />
+     <bpmn:userTask id="Task_11" name="FSSC资产核算岗审核【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
+     <bpmn:parallelGateway id="Jg_8" />
+-    <bpmn:userTask id="Task_9" name="FSSC稽核核算岗终审【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
++    <bpmn:userTask id="Task_9" name="FSSC稽核核算岗终审【财务审核岗】" flowable:assignee="${assignee}" flowable:candidateGroups="FIN_AUDIT">
++      <bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${Task_9_assignees}" flowable:elementVariable="assignee">
++        <bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${nrOfCompletedInstances == nrOfInstances}</bpmn:completionCondition>
++      </bpmn:multiInstanceLoopCharacteristics>
++    </bpmn:userTask>
+     <bpmn:endEvent id="EndEvent_1" name="结束" />
+     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_4" />
+     <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_4" targetRef="Task_2" />

@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div>
     <!-- 流程进度：生命周期 + 当前节点 + 审批链全景，常驻顶部（三个页签都看得见） -->

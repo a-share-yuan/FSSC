@@ -1,101 +1,97 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center">
-        <b>任务池管理</b>
-        <el-tag v-if="overdueCount" type="danger" size="small" effect="light">本页逾期 {{ overdueCount }}</el-tag>
-        <el-select v-model="filter.poolStatus" placeholder="任务状态" clearable style="width: 150px" @change="load">
-          <el-option label="待认领" value="WAITING" />
-          <el-option label="已分派" value="RECEIVED" />
-          <el-option label="已办结" value="FINISHED" />
+        <b>{{ $t('sharing.taskPool.pageTitle') }}</b>
+        <el-tag v-if="overdueCount" type="danger" size="small" effect="light">{{ $t('sharing.taskPool.tagPageOverdue', { v1: overdueCount }) }}</el-tag>
+        <el-select v-model="filter.poolStatus" :placeholder="$t('sharing.taskPool.colTaskStatus')" clearable style="width: 150px" @change="load">
+          <el-option :label="$t('sharing.taskPool.optWaiting')" value="WAITING" />
+          <el-option :label="$t('sharing.taskPool.optAssigned')" value="RECEIVED" />
+          <el-option :label="$t('sharing.taskPool.optFinished')" value="FINISHED" />
           <!-- R5-D-236：未激活（实物未签收）任务此前在池中不可见也不可筛，现按 activeFlag='N' 落参过滤 -->
-          <el-option label="未激活（待实物签收）" value="INACTIVE" />
+          <el-option :label="$t('sharing.taskPool.optInactiveFilter')" value="INACTIVE" />
         </el-select>
-        <el-select v-model="filter.taskType" placeholder="作业项" clearable style="width: 130px" @change="load">
-          <el-option label="审核" value="AUDIT" />
-          <el-option label="记账" value="BOOKKEEP" />
-          <el-option label="付款" value="PAY" />
+        <el-select v-model="filter.taskType" :placeholder="$t('sharing.common.colWorkItem')" clearable style="width: 130px" @change="load">
+          <el-option :label="$t('sharing.common.colAudit')" value="AUDIT" />
+          <el-option :label="$t('sharing.common.colBookkeep')" value="BOOKKEEP" />
+          <el-option :label="$t('sharing.common.colPay')" value="PAY" />
         </el-select>
-        <el-input v-model="filter.keyword" placeholder="单号/标题" clearable style="width: 200px" @keyup.enter="load" />
-        <el-button type="primary" size="small" @click="load">查询</el-button>
-        <el-button v-if="filter.poolStatus !== 'WAITING'" size="small" @click="filter.poolStatus = 'WAITING'; load()">查看待认领</el-button>
+        <el-input v-model="filter.keyword" :placeholder="$t('sharing.common.phBillNoTitle')" clearable style="width: 200px" @keyup.enter="load" />
+        <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
+        <el-button v-if="filter.poolStatus !== 'WAITING'" size="small" @click="filter.poolStatus = 'WAITING'; load()">{{ $t('sharing.taskPool.btnViewWaiting') }}</el-button>
         <!-- P1-4 分组 + 批量抢单 -->
-        <el-select v-model="groupBy" placeholder="分组" clearable size="small" style="width: 120px" @change="applyGroup">
-          <el-option label="按作业项" value="taskType" />
-          <el-option label="按单据类型" value="billType" />
-          <el-option label="按状态" value="poolStatus" />
+        <el-select v-model="groupBy" :placeholder="$t('sharing.taskPool.phGroupBy')" clearable size="small" style="width: 120px" @change="applyGroup">
+          <el-option :label="$t('sharing.taskPool.optGroupWorkItem')" value="taskType" />
+          <el-option :label="$t('sharing.taskPool.optGroupDocType')" value="billType" />
+          <el-option :label="$t('sharing.taskPool.optGroupStatus')" value="poolStatus" />
         </el-select>
         <el-button v-if="selRows.length" type="success" size="small" @click="batchGrabVis = true">
-          批量抢单({{ selRows.length }})
-        </el-button>
+          {{ $t('sharing.taskPool.btnBatchGrabN', { v1: selRows.length }) }}</el-button>
         <!-- R5-D-246：列表导出归位到工具栏（原先错挂在「重新分配」弹窗页脚，且导出内容是凭证行） -->
-        <el-button size="small" @click="exportCsv">导出 CSV</el-button>
-        <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
+        <el-button size="small" @click="exportCsv">{{ $t('sharing.common.btnExportCsv') }}</el-button>
+        <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('sharing.common.btnExportSelected', { v1: selRows.length }) }}</el-button>
       </div>
     </template>
 
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
     <el-table class="cm-target-taskpool" :data="rows" size="small" stripe v-else max-height="520" :row-class-name="slaRowClass" @selection-change="handleSelectionChange" @row-dblclick="showBillDetail">
         <el-table-column type="selection" width="45" />
-      <el-table-column prop="billNo" label="单号" width="140"  sortable>
+      <el-table-column prop="billNo" :label="$t('field.docNo')" width="140"  sortable>
         <template #default="{ row }">
           <el-link v-if="row.billId" type="primary" @click="showBillDetail(row)">{{ row.billNo }}</el-link>
           <span v-else>{{ row.billNo || '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="类型" width="70">
+      <el-table-column :label="$t('field.type')" width="70">
         <template #default="{ row }">{{ docTypeLabel(row.billType) }}</template>
       </el-table-column>
-      <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip  sortable />
-      <el-table-column label="金额" width="100" align="right">
+      <el-table-column prop="title" :label="$t('sharing.common.colTitle')" min-width="140" show-overflow-tooltip  sortable />
+      <el-table-column :label="$t('field.amount')" width="100" align="right">
         <template #default="{ row }">{{ fmt(row.amount) }}</template>
       </el-table-column>
-      <el-table-column label="单据状态" width="100">
+      <el-table-column :label="$t('sharing.common.colDocStatus')" width="100">
         <template #default="{ row }">
           <el-tag v-if="row.billStatus" :type="billStatusType(row.billStatus)" size="small" effect="plain">{{ billStatusLabel(row.billStatus) }}</el-tag>
           <span v-else style="color: #c0c4cc; font-size: 12px">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="作业项" width="140">
+      <el-table-column :label="$t('sharing.common.colWorkItem')" width="140">
         <template #default="{ row }">
           <el-tag v-if="row.chainTotal > 1" size="small" :type="taskTypeTag(row.taskType)" effect="plain">
             {{ taskTypeLabel(row.taskType) }} {{ row.chainSeq }}/{{ row.chainTotal }}
           </el-tag>
           <el-tag v-else size="small" :type="taskTypeTag(row.taskType)" effect="plain">{{ taskTypeLabel(row.taskType) }}</el-tag>
-          <el-tag v-if="row.activeFlag === 'N'" size="small" type="info" style="margin-left:4px">未激活</el-tag>
+          <el-tag v-if="row.activeFlag === 'N'" size="small" type="info" style="margin-left:4px">{{ $t('sharing.taskPool.labelInactive') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column :label="$t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="stType(row.poolStatus)" size="small">{{ stLabel(row.poolStatus) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="认领人" width="100">
+      <el-table-column :label="$t('sharing.taskPool.colClaimer')" width="100">
         <template #default="{ row }">{{ userName(row.assigneeId) }}</template>
       </el-table-column>
-      <el-table-column prop="receiveTime" label="认领时间" width="160"  sortable :formatter="(r, c, v) => formatDateTime(v)" />
-      <el-table-column prop="slaTime" label="SLA 截止" width="180" sortable>
+      <el-table-column prop="receiveTime" :label="$t('sharing.common.colClaimTime')" width="160"  sortable :formatter="(r, c, v) => formatDateTime(v)" />
+      <el-table-column prop="slaTime" :label="$t('sharing.taskPool.colSlaDue')" width="180" sortable>
         <template #default="{ row }">
           <span v-if="!row.slaTime" style="color: #c0c4cc; font-size: 12px">—</span>
           <template v-else>
             <span :class="{ 'sla-overdue-text': isSlaOverdue(row) }">{{ formatDateTime(row.slaTime) }}</span>
-            <el-tag v-if="isSlaOverdue(row)" type="danger" size="small" style="margin-left:4px">逾期</el-tag>
+            <el-tag v-if="isSlaOverdue(row)" type="danger" size="small" style="margin-left:4px">{{ $t('sharing.common.colOverdue') }}</el-tag>
           </template>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="创建时间" width="160"  sortable :formatter="(r, c, v) => formatDateTime(v)" />
-      <el-table-column label="操作" width="260" fixed="right">
+      <el-table-column prop="createTime" :label="$t('common.createTime')" width="160"  sortable :formatter="(r, c, v) => formatDateTime(v)" />
+      <el-table-column :label="$t('common.operation')" width="260" fixed="right">
         <!-- 共享任务池是「作业员抢单/办理」视角，不承载流程审批（那是「我的待办」的职责）。
              原先 InlineActions 上挂的 approve/reject 实际触发的是「批量操作」函数（忽略行参数），已移除。 -->
         <template #default="{ row }">
           <InlineActions :visible="true" @view="preview(row)" :show-trace="true" @trace="openTrace(row)" />
-          <el-button v-if="row.poolStatus === 'WAITING' && row.activeFlag === 'Y'" v-prevent-double-click link type="success" size="small" @click="grab(row)">抢单</el-button>
-          <el-button v-if="row.poolStatus === 'RECEIVED'" v-prevent-double-click link type="warning" size="small" @click="withdraw(row)">撤回</el-button>
-          <el-button v-if="row.poolStatus !== 'FINISHED'" link type="primary" size="small" @click="openReassign(row)">重新分配</el-button>
-          <el-button link size="small" @click="preview(row)">凭证</el-button>
+          <el-button v-if="row.poolStatus === 'WAITING' && row.activeFlag === 'Y'" v-prevent-double-click link type="success" size="small" @click="grab(row)">{{ $t('sharing.common.btnGrab') }}</el-button>
+          <el-button v-if="row.poolStatus === 'RECEIVED'" v-prevent-double-click link type="warning" size="small" @click="withdraw(row)">{{ $t('sharing.common.btnWithdraw') }}</el-button>
+          <el-button v-if="row.poolStatus !== 'FINISHED'" link type="primary" size="small" @click="openReassign(row)">{{ $t('sharing.common.btnReassign') }}</el-button>
+          <el-button link size="small" @click="preview(row)">{{ $t('sharing.common.colVoucher') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -108,92 +104,92 @@
     />
 
     <!-- 重新分配：选择作业员 -->
-    <el-dialog v-model="reassignVis" title="重新分配" width="420px">
+    <el-dialog v-model="reassignVis" :title="$t('sharing.common.btnReassign')" width="420px">
       <el-form ref="reassignFormRef" :model="reassignForm" :rules="reassignFormRules" label-width="90px">
-        <el-form-item label="当前任务">{{ current?.billNo }}（{{ current?.title }}）</el-form-item>
-<el-form-item label="分配给人" prop="assigneeId">
-          <UserSelect v-model="reassignForm.assigneeId" :users="users" placeholder="请选择作业员" />
+        <el-form-item :label="$t('sharing.taskPool.labCurrentTask')">{{ current?.billNo }}（{{ current?.title }}）</el-form-item>
+<el-form-item :label="$t('sharing.taskPool.labAssignTo')" prop="assigneeId">
+          <UserSelect v-model="reassignForm.assigneeId" :users="users" :placeholder="$t('sharing.taskPool.phSelectOperator')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="reassignVis = false">取消</el-button>
-        <el-button type="primary" v-prevent-double-click @click="doReassign">确认分配</el-button>
+        <el-button @click="reassignVis = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" v-prevent-double-click @click="doReassign">{{ $t('sharing.taskPool.btnConfirmAssign') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 凭证预览 -->
-    <el-dialog v-model="voucherVis" title="凭证预览" width="640px" destroy-on-close>
+    <el-dialog v-model="voucherVis" :title="$t('sharing.taskPool.titleVoucherPreview')" width="640px" destroy-on-close>
       <el-table :data="voucherLines" size="small" border max-height="360" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="45" />
-        <el-table-column prop="lineNo" label="行号" width="60"  sortable />
-        <el-table-column prop="summary" label="摘要" min-width="120"  sortable />
-        <el-table-column prop="subjectCode" label="科目编码" width="100"  sortable />
-        <el-table-column prop="subjectName" label="科目名称" min-width="120"  sortable />
-        <el-table-column prop="direction" label="方向" width="60"  sortable :formatter="(row, col, val) => directionLabel(val)" />
-        <el-table-column prop="amount" label="金额" width="100" align="right" sortable>
+        <el-table-column prop="lineNo" :label="$t('sharing.common.colLineNo')" width="60"  sortable />
+        <el-table-column prop="summary" :label="$t('field.summary')" min-width="120"  sortable />
+        <el-table-column prop="subjectCode" :label="$t('sharing.common.colAcctCode')" width="100"  sortable />
+        <el-table-column prop="subjectName" :label="$t('sharing.common.colAcctName')" min-width="120"  sortable />
+        <el-table-column prop="direction" :label="$t('field.direction')" width="60"  sortable :formatter="(row, col, val) => directionLabel(val)" />
+        <el-table-column prop="amount" :label="$t('field.amount')" width="100" align="right" sortable>
           <template #default="{ row }">{{ fmt(row.amount) }}</template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!voucherLines.length" description="该任务未生成凭证" />
+      <el-empty v-if="!voucherLines.length" :description="$t('sharing.taskPool.emptyNoVoucher')" />
     </el-dialog>
 
     <!-- P1-4 批量抢单弹窗 -->
-    <el-dialog v-model="batchGrabVis" title="批量抢单" width="480px">
+    <el-dialog v-model="batchGrabVis" :title="$t('sharing.taskPool.btnBatchGrab')" width="480px">
       <el-alert type="info" :closable="false" style="margin-bottom: 12px">
-        将认领选中的 <b>{{ selRows.length }}</b> 条任务。只有「待认领」状态的任务可被抢单，其余会逐条列明失败原因。
+        {{ $t('sharing.taskPool.msgBatchGrabLead') }}<b>{{ selRows.length }}</b> {{ $t('sharing.taskPool.msgBatchGrabRule') }}
       </el-alert>
       <el-table :data="selRows" size="small" border max-height="200" style="margin-bottom: 12px">
-        <el-table-column prop="billNo" label="单号" width="140" />
-        <el-table-column prop="title" label="标题" min-width="120" show-overflow-tooltip />
-        <el-table-column label="作业项" width="80">
+        <el-table-column prop="billNo" :label="$t('field.docNo')" width="140" />
+        <el-table-column prop="title" :label="$t('sharing.common.colTitle')" min-width="120" show-overflow-tooltip />
+        <el-table-column :label="$t('sharing.common.colWorkItem')" width="80">
           <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="80">
+        <el-table-column :label="$t('common.status')" width="80">
           <template #default="{ row }">
             <el-tag :type="stType(row.poolStatus)" size="small">{{ stLabel(row.poolStatus) }}</el-tag>
           </template>
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button @click="batchGrabVis = false">取消</el-button>
-        <el-button type="primary" @click="doBatchGrab" :loading="batchLoading">确认抢单</el-button>
+        <el-button @click="batchGrabVis = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="doBatchGrab" :loading="batchLoading">{{ $t('sharing.taskPool.msgConfirmGrab') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 单据详情：双击行 / 点击单号均在当前页展示，不跳转修改页 -->
-    <el-dialog v-model="detailVis" :title="`单据详情 ${detailRow?.billNo || ''}`" width="560px" destroy-on-close>
+    <el-dialog v-model="detailVis" :title="$t('sharing.taskPool.titleBillDetail', { v1: detailRow?.billNo || '' })" width="560px" destroy-on-close>
       <el-descriptions v-if="detailRow" :column="2" border size="small">
-        <el-descriptions-item label="单号">{{ detailRow.billNo || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="单据类型">{{ docTypeLabel(detailRow.billType) }}</el-descriptions-item>
-        <el-descriptions-item label="标题" :span="2">{{ detailRow.title || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="金额">{{ fmt(detailRow.amount) }}</el-descriptions-item>
-        <el-descriptions-item label="单据状态">
+        <el-descriptions-item :label="$t('field.docNo')">{{ detailRow.billNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.billType')">{{ docTypeLabel(detailRow.billType) }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('sharing.common.colTitle')" :span="2">{{ detailRow.title || '—' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.amount')">{{ fmt(detailRow.amount) }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('sharing.common.colDocStatus')">
           <el-tag v-if="detailRow.billStatus" :type="billStatusType(detailRow.billStatus)" size="small" effect="plain">{{ billStatusLabel(detailRow.billStatus) }}</el-tag>
           <span v-else>—</span>
         </el-descriptions-item>
-        <el-descriptions-item label="作业项">
+        <el-descriptions-item :label="$t('sharing.common.colWorkItem')">
           <el-tag size="small" :type="taskTypeTag(detailRow.taskType)" effect="plain">{{ taskTypeLabel(detailRow.taskType) }}{{ detailRow.chainTotal > 1 ? ` ${detailRow.chainSeq}/${detailRow.chainTotal}` : '' }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="任务状态">
+        <el-descriptions-item :label="$t('sharing.taskPool.colTaskStatus')">
           <el-tag :type="stType(detailRow.poolStatus)" size="small">{{ stLabel(detailRow.poolStatus) }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="认领人">{{ userName(detailRow.assigneeId) }}</el-descriptions-item>
-        <el-descriptions-item label="认领时间">{{ formatDateTime(detailRow.receiveTime) || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="SLA 截止">
+        <el-descriptions-item :label="$t('sharing.taskPool.colClaimer')">{{ userName(detailRow.assigneeId) }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('sharing.common.colClaimTime')">{{ formatDateTime(detailRow.receiveTime) || '—' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('sharing.taskPool.colSlaDue')">
           <span :class="{ 'sla-overdue-text': isSlaOverdue(detailRow) }">{{ formatDateTime(detailRow.slaTime) || '—' }}</span>
-          <el-tag v-if="isSlaOverdue(detailRow)" type="danger" size="small" style="margin-left:4px">逾期</el-tag>
+          <el-tag v-if="isSlaOverdue(detailRow)" type="danger" size="small" style="margin-left:4px">{{ $t('sharing.common.colOverdue') }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ formatDateTime(detailRow.createTime) || '—' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('common.createTime')">{{ formatDateTime(detailRow.createTime) || '—' }}</el-descriptions-item>
       </el-descriptions>
       <template #footer>
-        <el-button @click="detailVis = false">关闭</el-button>
-        <el-button type="primary" @click="goBill(detailRow)">前往业务页</el-button>
+        <el-button @click="detailVis = false">{{ $t('common.close') }}</el-button>
+        <el-button type="primary" @click="goBill(detailRow)">{{ $t('sharing.taskPool.btnGoBiz') }}</el-button>
       </template>
     </el-dialog>
   </el-card>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" :biz-type="traceBizType" />
 
-  <CoachMark ref="taskPoolCm" :guide-key="_guideKey" :selector="'.cm-target-taskpool'" title="任务池" text="共享任务池汇总所有共享中心的待处理任务，支持按类型筛选和领取。" />
+  <CoachMark ref="taskPoolCm" :guide-key="_guideKey" :selector="'.cm-target-taskpool'" :title="$t('sharing.taskPool.cmTitle')" :text="$t('sharing.taskPool.cmText')" />
 </template>
 
 <script setup>
@@ -213,6 +209,9 @@ import InlineActions from '@/components/InlineActions.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => location.reload(),
@@ -260,9 +259,9 @@ const groupBy = ref('')
 const batchGrabVis = ref(false)
 const batchLoading = ref(false)
 
-const reassignFormRules = reactive({
-  assigneeId: commonRules.select('请选择作业员'),
-})
+const reassignFormRules = computed(() => (reactive({
+  assigneeId: commonRules.select(t('sharing.taskPool.phSelectOperator')),
+})))
 
 function applyGroup() {
   if (!groupBy.value) return
@@ -282,25 +281,25 @@ async function doBatchGrab() {
   const fails = []
   let ok = 0
   for (const [i, row] of selRows.value.entries()) {
-    const name = row.billNo || row.title || `第 ${i + 1} 条`
+    const name = row.billNo || row.title || t('sharing.taskPool.itemLabel', { v1: i + 1 })
     try {
-      if (row.poolStatus !== 'WAITING') throw new Error('任务已被他人认领，请刷新后重选')
+      if (row.poolStatus !== 'WAITING') throw new Error(t('sharing.taskPool.errGrabbed'))
       await sharingApi.receive(row.id)
       ok++
-    } catch (e) { fails.push(`${name}：${e?.message || '操作失败'}`) }
+    } catch (e) { fails.push(`${name}：${e?.message || t('common.failed')}`) }
   }
   batchLoading.value = false
   if (!fails.length) {
     batchGrabVis.value = false
-    ElMessage.success(`批量抢单完成：成功认领 ${ok} 条`)
+    ElMessage.success(t('sharing.taskPool.msgBatchAll', { v1: ok }))
   } else {
     // 有失败时保留弹窗与已选行，逐条列明原因，改完可直接重试
-    ElMessage.warning(`批量抢单完成：成功 ${ok} 条，失败 ${fails.length} 条，明细见弹窗`)
+    ElMessage.warning(t('sharing.taskPool.msgBatchPart', { v1: ok, v2: fails.length }))
     const lines = fails.map((l, i) => `${i + 1}. ${l}`)
     ElMessageBox.alert(
       h('div', null, lines.map((l) => h('div', { style: 'margin:2px 0;line-height:1.6' }, l))),
-      `批量抢单失败明细（${fails.length} 条）`,
-      { type: 'error', confirmButtonText: '知道了' },
+      t('sharing.taskPool.titleBatchFails', { v1: fails.length }),
+      { type: 'error', confirmButtonText: t('common.gotIt') },
     ).catch(() => {})
   }
   load()
@@ -311,7 +310,7 @@ function taskTypeTag(t) {
   return t === 'AUDIT' ? 'primary' : t === 'PAY' ? 'warning' : 'success'
 }
 function stLabel(s) {
-  return { WAITING: '待认领', RECEIVED: '已分派', FINISHED: '已办结' }[s] || s
+  return { WAITING: t('sharing.taskPool.optWaiting'), RECEIVED: t('sharing.taskPool.optAssigned'), FINISHED: t('sharing.taskPool.optFinished') }[s] || s
 }
 function stType(s) {
   return s === 'FINISHED' ? 'success' : s === 'RECEIVED' ? 'warning' : 'info'
@@ -325,8 +324,8 @@ function userName(id) {
 // SLA 逾期口径与流程侧「超时未办」一致：未办结 + 已过截止时间
 function isSlaOverdue(row) {
   if (!row.slaTime || row.poolStatus === 'FINISHED') return false
-  const t = new Date(String(row.slaTime).replace(' ', 'T')).getTime()
-  return Number.isFinite(t) && t < Date.now()
+  const stamp = new Date(String(row.slaTime).replace(' ', 'T')).getTime()
+  return Number.isFinite(stamp) && stamp < Date.now()
 }
 function slaRowClass({ row }) {
   return isSlaOverdue(row) ? 'sla-overdue-row' : ''
@@ -336,7 +335,7 @@ const overdueCount = computed(() => rows.value.filter(isSlaOverdue).length)
 // 跳转到单据详情（统一走共享 bizEntry：全量类型映射 + 携带单号 query 定位）
 function goBill(row) {
   const ok = goBizPage(router, row)
-  if (!ok) ElMessage.warning(`暂不支持 ${row.billType || '该类型'} 单据的直达跳转`)
+  if (!ok) ElMessage.warning(t('sharing.taskPool.msgNoJump', { v1: row.billType || t('sharing.taskPool.txtThisType') }))
 }
 
 async function load() {
@@ -355,21 +354,21 @@ async function load() {
 
 // 抢单：将待认领任务认领到自己名下
 function grab(row) {
-  ElMessageBox.confirm(`确认抢单 ${row.billNo}（${row.title}）？`, '抢单', { type: 'info', confirmButtonText: '确认抢单' })
+  ElMessageBox.confirm(t('sharing.taskPool.confirmGrab', { v1: row.billNo, v2: row.title }), t('sharing.common.btnGrab'), { type: 'info', confirmButtonText: t('sharing.taskPool.msgConfirmGrab') })
     .then(async () => {
       try {
         await sharingApi.receive(row.id)
-        ElMessage.success('抢单成功')
+        ElMessage.success(t('sharing.taskPool.msgGrabOk'))
         load()
       } catch (e) { ElMessage.error(e.message) }
     }).catch(() => {})
 }
 
 function withdraw(row) {
-  ElMessageBox.confirm(`撤回任务 ${row.billNo}？将退回任务池待认领`, '撤回', { type: 'warning' })
+  ElMessageBox.confirm(t('sharing.taskPool.confirmWithdraw', { v1: row.billNo }), t('sharing.common.btnWithdraw'), { type: 'warning' })
     .then(async () => {
       await sharingApi.withdraw(row.id)
-      ElMessage.success('已撤回')
+      ElMessage.success(t('sharing.common.colWithdrawn'))
       load()
     }).catch(() => {})
 }
@@ -384,7 +383,7 @@ async function openReassign(row) {
 async function doReassign() {
   if (!(await validateForms([reassignFormRef]))) return
   await sharingApi.reassign(current.value.id, reassignForm.assigneeId)
-  ElMessage.success('已重新分配')
+  ElMessage.success(t('sharing.taskPool.msgReassigned'))
   reassignVis.value = false
   load()
 }
@@ -410,8 +409,8 @@ onMounted(async () => {
 function exportCsv() {
   // R5-D-246：原实现导出的是 voucherLines（凭证行）、入口还错挂在「重新分配」弹窗页脚；
   // 现与「导出选中」并列在工具栏，列集对齐当前任务池表格。
-  if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'billNo', label: '单号' }, { prop: 'title', label: '标题' }, { prop: 'amount', label: '金额' }, { prop: 'billStatus', label: '单据状态' }, { prop: 'taskType', label: '作业项' }, { prop: 'poolStatus', label: '状态' }, { prop: 'receiveTime', label: '认领时间' }, { prop: 'createTime', label: '创建时间' }]
+  if (!rows.value.length) { ElMessage.warning(t('sharing.common.msgNothingToExport')); return }
+  const cols = [{ prop: 'billNo', label: t('field.docNo') }, { prop: 'title', label: t('sharing.common.colTitle') }, { prop: 'amount', label: t('field.amount') }, { prop: 'billStatus', label: t('sharing.common.colDocStatus') }, { prop: 'taskType', label: t('sharing.common.colWorkItem') }, { prop: 'poolStatus', label: t('common.status') }, { prop: 'receiveTime', label: t('sharing.common.colClaimTime') }, { prop: 'createTime', label: t('common.createTime') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -425,16 +424,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `TaskPool_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('sharing.common.msgCsvExported'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('sharing.common.msgPickRowsFirst')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('sharing.common.msgNoColumnInfo')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -449,7 +448,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `TaskPool_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(t('sharing.common.msgExportedCount', { v1: selRows.value.length }))
 }
 
 

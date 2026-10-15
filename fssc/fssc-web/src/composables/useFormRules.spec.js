@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * useFormRules.spec.js - useFormRules composable 单元测试 (R5-09)
  */

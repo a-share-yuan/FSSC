@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.workflow.action;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -147,7 +144,20 @@ public class PayBatchBizAction implements WfBizAction {
             if (Boolean.TRUE.equals(event.getApproved())) {
                 try {
                     // D-DEC-36：把本次审批实例号带进凭证，"提单→归档"链上凭证才可反查
-                    Long voucherId = voucherService.generateTreasuryPayVoucher(batch, event.getProcInstId());
+                    // D-F1R-08：借款放款批次（source_doc_type=EXP_LOAN）不出批次出纳凭证——
+                    // 借款审批通过时已生成 EXP_LOAN 凭证（借 1221 其他应收款 / 贷 1002 银行存款），
+                    // 放款执行若再出 TREASURY_PAY（借 2202 / 贷 1002），同一笔银行流出被记两次，
+                    // 且借方 2202 与借款的 1221 永远对不上（现网 PB202610140010 即此：两张 4000 凭证均 POSTED）。
+                    // 跳过只影响「批次级」凭证；单据级 EXP_LOAN 凭证仍会被 activeVouchersOfBatch
+                    // 算作批次名下活凭证，R5-D-079② 的「PAID 无凭证」校验不会误报。
+                    Long voucherId = null;
+                    if (isLoanPayoutBatch(batch)) {
+                        log.info("付款批次 {} 为借款放款（source_doc_type=EXP_LOAN），跳过批次出纳凭证："
+                                        + "资金腿已由借款审批的 EXP_LOAN 凭证（借1221/贷1002）承载（D-F1R-08）",
+                                batch.getBatchNo());
+                    } else {
+                        voucherId = voucherService.generateTreasuryPayVoucher(batch, event.getProcInstId());
+                    }
                     // D-DEC-114③：无论本批次出自己的证、还是被 P0-5 幂等跳过改由单据级凭证承载，
                     // 都把"本次 TR_PAY 实例 ↔ 承载凭证"这条对应关系落到数据上（见 linkVoucherToFlow）
                     linkVoucherToFlow(batch, event.getProcInstId(), voucherId);
@@ -170,6 +180,21 @@ public class PayBatchBizAction implements WfBizAction {
     /** 批次状态是否仍处于"可被审批终态改写"的白名单内（false＝fail-closed，不动状态） */
     private static boolean isPreSettlement(String status) {
         return status != null && PRE_SETTLEMENT_STATES.contains(status.trim().toUpperCase());
+    }
+
+    /**
+     * D-F1R-08：借款放款批次判定（{@code source_doc_type = EXP_LOAN}）。
+     *
+     * <p>借款审批通过时已生成 EXP_LOAN 凭证「借 1221 其他应收款 / 贷 1002 银行存款」，
+     * 放款腿（TR_PAY 审批通过 → 出纳执行）若再生成 TREASURY_PAY「借 2202 / 贷 1002」，
+     * 同一笔银行流出被记两次，且借方 2202 与借款侧 1221 永远对不上。</p>
+     *
+     * <p>现网实证：PB202610140010（借款单 JK202610140002 的 4,000 放款批次）名下
+     * JZ2026101400056(EXP_LOAN) 与 JZ2026101500009(TREASURY_PAY) 均 POSTED，各 4,000。</p>
+     */
+    private static boolean isLoanPayoutBatch(OpPayBatch batch) {
+        return batch != null && batch.getSourceDocType() != null
+                && "EXP_LOAN".equalsIgnoreCase(batch.getSourceDocType().trim());
     }
 
     /**
@@ -200,7 +225,14 @@ public class PayBatchBizAction implements WfBizAction {
             return;
         }
         try {
-            Long voucherId = voucherService.generateTreasuryPayVoucher(batch, event.getProcInstId());
+            // D-F1R-08：借款放款批次同正常审批通道，跳过批次出纳凭证（理由见上方审批通过分支）
+            Long voucherId = null;
+            if (isLoanPayoutBatch(batch)) {
+                log.info("付款批次 {} 为借款放款（source_doc_type=EXP_LOAN），审批终态后到通道跳过批次出纳凭证（D-F1R-08）",
+                        batch.getBatchNo());
+            } else {
+                voucherId = voucherService.generateTreasuryPayVoucher(batch, event.getProcInstId());
+            }
             // D-DEC-114③：先付后审的补账通道同样要落"审批流 ↔ 凭证"的对应关系（12-25 实测的正是这一路）
             linkVoucherToFlow(batch, event.getProcInstId(), voucherId);
         } catch (Exception vex) {

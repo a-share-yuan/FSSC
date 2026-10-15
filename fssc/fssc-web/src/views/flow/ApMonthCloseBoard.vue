@@ -1,174 +1,170 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card shadow="never">
     <template #header>
       <div class="toolbar">
         <span>
-          AP 月末关账（发起冻结协同 → 组长派工 → 检查项签认 → 关账/反关账；会计期间由总账月结结账）
-          <el-tag size="small" type="warning" style="margin-left:8px">进行中 {{ rows.filter(r => !['CLOSED', 'VOID'].includes(r.status)).length }}</el-tag>
-          <el-tag size="small" type="danger" style="margin-left:4px">协同冻结中 {{ rows.filter(r => r.scpFrozen === 1 && !['CLOSED', 'VOID'].includes(r.status)).length }}</el-tag>
+          {{ $t('flow.close.descApBoard') }}<el-tag size="small" type="warning" style="margin-left:8px">{{ $t('flow.close.stRunning', { v1: rows.filter(r => !['CLOSED', 'VOID'].includes(r.status)).length }) }}</el-tag>
+          <el-tag size="small" type="danger" style="margin-left:4px">{{ $t('flow.close.collabFreezing', { v1: rows.filter(r => r.scpFrozen === 1 && !['CLOSED', 'VOID'].includes(r.status)).length }) }}</el-tag>
         </span>
         <div class="ops">
-          <el-select v-model="q.companyId" size="small" style="width: 150px" placeholder="组织" clearable filterable @change="page.pageNum = 1">
+          <el-select v-model="q.companyId" size="small" style="width: 150px" :placeholder="$t('field.org')" clearable filterable @change="page.pageNum = 1">
             <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
-          <el-input v-model="q.period" size="small" style="width: 120px" placeholder="期间 yyyy-MM" clearable @keyup.enter="page.pageNum = 1" />
-          <el-select v-model="q.status" size="small" style="width: 120px" placeholder="状态" clearable @change="page.pageNum = 1">
+          <el-input v-model="q.period" size="small" style="width: 120px" :placeholder="$t('flow.close.colPeriodYm')" clearable @keyup.enter="page.pageNum = 1" />
+          <el-select v-model="q.status" size="small" style="width: 120px" :placeholder="$t('common.status')" clearable @change="page.pageNum = 1">
             <el-option v-for="(v, k) in AP_MC_STATUS" :key="k" :label="v" :value="k" />
           </el-select>
-          <el-button size="small" @click="load">刷新</el-button>
-          <el-button type="primary" size="small" @click="openInit">发起关账</el-button>
+          <el-button size="small" @click="load">{{ $t('common.refresh') }}</el-button>
+          <el-button type="primary" size="small" @click="openInit">{{ $t('flow.close.btnStartClose') }}</el-button>
         </div>
       </div>
     </template>
 
     <el-table :data="pagedRows" v-loading="loading" size="small" border stripe>
-      <el-table-column prop="closeNo" label="关账单号" min-width="180" show-overflow-tooltip />
-      <el-table-column label="组织" min-width="130" show-overflow-tooltip>
+      <el-table-column prop="closeNo" :label="$t('flow.close.colDocNo')" min-width="180" show-overflow-tooltip />
+      <el-table-column :label="$t('field.org')" min-width="130" show-overflow-tooltip>
         <template #default="{ row }">{{ companyName(row.companyId) }}</template>
       </el-table-column>
-      <el-table-column prop="period" label="期间" width="90" />
-      <el-table-column label="状态" width="105">
+      <el-table-column prop="period" :label="$t('field.period')" width="90" />
+      <el-table-column :label="$t('common.status')" width="105">
         <template #default="{ row }">
           <el-tag size="small" :type="row.status === 'CLOSED' ? 'success' : (row.status === 'VOID' ? 'info' : 'primary')">{{ apMcStatusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="协同冻结" width="100">
+      <el-table-column :label="$t('flow.close.collabFreeze')" width="100">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.scpFrozen === 1 && row.status !== 'CLOSED' ? 'danger' : 'info'">{{ row.scpFrozen === 1 && row.status !== 'CLOSED' ? '已冻结' : '已恢复' }}</el-tag>
+          <el-tag size="small" :type="row.scpFrozen === 1 && row.status !== 'CLOSED' ? 'danger' : 'info'">{{ row.scpFrozen === 1 && row.status !== 'CLOSED' ? t('flow.close.stFrozenDone') : t('flow.close.stRestored') }}</el-tag>
         </template>
       </el-table-column>
       <!-- R5-D-212：人员存工号，展示层映射花名（历史昵称数据原值回显） -->
-      <el-table-column label="组长" width="95" show-overflow-tooltip>
+      <el-table-column :label="$t('field.leader')" width="95" show-overflow-tooltip>
         <template #default="{ row }">{{ personLabel(row.groupLeader) }}</template>
       </el-table-column>
-      <el-table-column label="组员" min-width="120" show-overflow-tooltip>
+      <el-table-column :label="$t('field.member')" min-width="120" show-overflow-tooltip>
         <template #default="{ row }">{{ personsLabel(row.members) }}</template>
       </el-table-column>
-      <el-table-column label="检查进度" width="85">
+      <el-table-column :label="$t('flow.close.colCheckProgress')" width="85">
         <template #default="{ row }">{{ progress(row) }}</template>
       </el-table-column>
-      <el-table-column label="关账/反关账时间" width="155">
+      <el-table-column :label="$t('flow.close.colCloseTime')" width="155">
         <template #default="{ row }">
           <div>{{ row.closedTime ? formatDateTime(row.closedTime) : '—' }}</div>
-          <div v-if="row.reopenTime" class="reopen-time">反关账 {{ formatDateTime(row.reopenTime) }}</div>
+          <div v-if="row.reopenTime" class="reopen-time">{{ $t('flow.close.btnReopenN', { v1: formatDateTime(row.reopenTime) }) }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="270" fixed="right">
+      <el-table-column :label="$t('common.operation')" width="270" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="row.status === 'INIT'" link type="primary" size="small" @click="openDispatch(row)">组长派工</el-button>
-          <el-button v-if="!['INIT', 'CLOSED', 'VOID'].includes(row.status)" link type="primary" size="small" @click="openItems(row)">检查项维护</el-button>
-          <el-button v-if="row.status === 'CHECKING'" link type="success" size="small" @click="doClose(row)">总账关账</el-button>
-          <el-button v-if="row.status === 'CLOSED'" v-permission="'apflow:close:reopen'" link type="danger" size="small" @click="openReopen(row)">反关账</el-button>
+          <el-button v-if="row.status === 'INIT'" link type="primary" size="small" @click="openDispatch(row)">{{ $t('flow.close.dlgDispatch') }}</el-button>
+          <el-button v-if="!['INIT', 'CLOSED', 'VOID'].includes(row.status)" link type="primary" size="small" @click="openItems(row)">{{ $t('flow.close.maintainChecks') }}</el-button>
+          <el-button v-if="row.status === 'CHECKING'" link type="success" size="small" @click="doClose(row)">{{ $t('flow.close.btnGlClose') }}</el-button>
+          <el-button v-if="row.status === 'CLOSED'" v-permission="'apflow:close:reopen'" link type="danger" size="small" @click="openReopen(row)">{{ $t('flow.close.btnReopen') }}</el-button>
           <!-- R5-D-218：未关账的关账单可作废（终态 VOID，行止不删；已关账须走反关账） -->
-          <el-button v-if="!['CLOSED', 'VOID'].includes(row.status)" v-permission="'apflow:close:reopen'" link type="warning" size="small" @click="openVoid(row)">作废</el-button>
-          <el-button link type="info" size="small" @click="openTrace(row)">轨迹</el-button>
+          <el-button v-if="!['CLOSED', 'VOID'].includes(row.status)" v-permission="'apflow:close:reopen'" link type="warning" size="small" @click="openVoid(row)">{{ $t('field.void') }}</el-button>
+          <el-button link type="info" size="small" @click="openTrace(row)">{{ $t('field.trace') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
     <TablePager v-model:page="page.pageNum" v-model:size="page.pageSize" :total="filteredRows.length" />
 
     <!-- 发起关账：组织必选 + 组长选人组件（P0-1：废弃 companyId=1 硬编码与纯文本组长） -->
-    <el-dialog v-model="initVisible" title="发起月末关账" width="460px" destroy-on-close>
+    <el-dialog v-model="initVisible" :title="$t('flow.close.btnStartDlg')" width="460px" destroy-on-close>
       <el-form ref="initFormRef" :model="form" :rules="initRules" label-width="90px" size="small">
-        <el-form-item label="关账组织" prop="companyId">
-          <el-select v-model="form.companyId" filterable placeholder="请选择组织（公司）" style="width: 100%">
+        <el-form-item :label="$t('flow.close.labelOrg')" prop="companyId">
+          <el-select v-model="form.companyId" filterable :placeholder="$t('flow.close.phPickOrg')" style="width: 100%">
             <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="期间" prop="period"><el-date-picker v-model="form.period" type="month" value-format="YYYY-MM" style="width: 100%" /></el-form-item>
-        <el-form-item label="组长">
-          <UserSelect v-model="form.leaderId" @change="(id, u) => onLeaderChange(id, u)" placeholder="选择组长" />
+        <el-form-item :label="$t('field.period')" prop="period"><el-date-picker v-model="form.period" type="month" value-format="YYYY-MM" style="width: 100%" /></el-form-item>
+        <el-form-item :label="$t('field.leader')">
+          <UserSelect v-model="form.leaderId" @change="(id, u) => onLeaderChange(id, u)" :placeholder="$t('flow.close.phPickLeader')" />
         </el-form-item>
-        <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item :label="$t('common.remark')"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
-      <div class="tip">发起后协同冻结（付款/对账通道拦截发送凭证），关账完成自动恢复协同交互；会计期间的结账由「总账核算›月结」审批末节点联动。</div>
+      <div class="tip">{{ $t('flow.close.hintStart') }}</div>
       <template #footer>
-        <el-button size="small" @click="initVisible = false">取消</el-button>
-        <el-button type="primary" size="small" @click="doInit">发起</el-button>
+        <el-button size="small" @click="initVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doInit">{{ $t('flow.close.btnStart') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 组长派工：人员多选（P0-1：废弃 window.prompt） -->
-    <el-dialog v-model="dispatchVisible" title="组长派工" width="440px" destroy-on-close>
+    <el-dialog v-model="dispatchVisible" :title="$t('flow.close.dlgDispatch')" width="440px" destroy-on-close>
       <el-form ref="dispatchFormRef" :model="dispatchModel" :rules="dispatchRules" label-width="90px" size="small">
-        <el-form-item label="关账单">{{ dispatchRow?.closeNo }}</el-form-item>
-        <el-form-item label="组员" prop="memberIds">
-          <el-select v-model="memberIds" multiple filterable placeholder="选择组员（可多选）" style="width: 100%">
+        <el-form-item :label="$t('flow.close.colDoc')">{{ dispatchRow?.closeNo }}</el-form-item>
+        <el-form-item :label="$t('field.member')" prop="memberIds">
+          <el-select v-model="memberIds" multiple filterable :placeholder="$t('flow.close.phPickMembers')" style="width: 100%">
             <el-option v-for="u in users" :key="u.id" :label="u.nickName || u.userName" :value="u.id" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button size="small" @click="dispatchVisible = false">取消</el-button>
-        <el-button type="primary" size="small" @click="doDispatch">派工</el-button>
+        <el-button size="small" @click="dispatchVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doDispatch">{{ $t('field.dispatch') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 检查项维护：支持 通过/退回/挂起 + 处理说明 + 前置自动检查（P0-2/P1-6） -->
-    <el-dialog v-model="itemsVisible" title="关账检查项" width="860px" destroy-on-close>
+    <el-dialog v-model="itemsVisible" :title="$t('flow.close.colChecks')" width="860px" destroy-on-close>
       <div class="items-ops">
-        <el-button size="small" type="primary" plain :loading="autoChecking" @click="runAutoCheck">运行前置自动检查</el-button>
-        <span class="auto-tip">自动跑数（未审凭证/未匹配三单/未达账项），人工仅处理异常项</span>
+        <el-button size="small" type="primary" plain :loading="autoChecking" @click="runAutoCheck">{{ $t('flow.close.btnRunAutoCheck') }}</el-button>
+        <span class="auto-tip">{{ $t('flow.close.hintAutoCheck') }}</span>
       </div>
       <el-table :data="items" size="small" border>
-        <el-table-column prop="name" label="检查项" min-width="200" />
-        <el-table-column label="自动检查" min-width="150">
+        <el-table-column prop="name" :label="$t('field.checkItem')" min-width="200" />
+        <el-table-column :label="$t('flow.close.colAutoCheck')" min-width="150">
           <template #default="{ row }">
             <template v-if="row.auto">
               <el-tag size="small" :type="row.auto.ok ? 'success' : 'danger'">{{ row.auto.metric }} {{ row.auto.count }}</el-tag>
             </template>
-            <span v-else class="muted">未运行</span>
+            <span v-else class="muted">{{ $t('flow.close.stNotRun') }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="90">
+        <el-table-column :label="$t('common.status')" width="90">
           <template #default="{ row }">
             <el-tag size="small" :type="ITEM_ST[row.status]?.tag || 'warning'">{{ ITEM_ST[row.status]?.label || row.status }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="处理说明" min-width="160">
+        <el-table-column :label="$t('field.handleNote')" min-width="160">
           <template #default="{ row }">
-            <el-input v-model="row.note" size="small" placeholder="处理说明/凭据索引" />
+            <el-input v-model="row.note" size="small" :placeholder="$t('flow.close.colHandleProof')" />
           </template>
         </el-table-column>
-        <el-table-column prop="handler" label="处理人" width="90">
+        <el-table-column prop="handler" :label="$t('field.handler')" width="90">
           <template #default="{ row }"><el-input v-model="row.handler" size="small" :placeholder="me" /></template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column :label="$t('common.operation')" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status !== 'OK'" link type="success" size="small" @click="doItem(row, 'OK')">通过</el-button>
-            <el-button v-if="row.status !== 'REJECTED'" link type="danger" size="small" @click="doItem(row, 'REJECTED')">退回</el-button>
-            <el-button v-if="row.status !== 'SUSPENDED'" link type="warning" size="small" @click="doItem(row, 'SUSPENDED')">挂起</el-button>
-            <el-button v-if="row.status !== 'PENDING'" link type="primary" size="small" @click="doItem(row, 'PENDING')">重开</el-button>
+            <el-button v-if="row.status !== 'OK'" link type="success" size="small" @click="doItem(row, 'OK')">{{ $t('field.approve') }}</el-button>
+            <el-button v-if="row.status !== 'REJECTED'" link type="danger" size="small" @click="doItem(row, 'REJECTED')">{{ $t('field.returnBack') }}</el-button>
+            <el-button v-if="row.status !== 'SUSPENDED'" link type="warning" size="small" @click="doItem(row, 'SUSPENDED')">{{ $t('field.hold') }}</el-button>
+            <el-button v-if="row.status !== 'PENDING'" link type="primary" size="small" @click="doItem(row, 'PENDING')">{{ $t('field.reopen') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <div class="tip">全部检查项通过后出现「总账关账」入口；退回/挂起将把状态拉回「检查处理中」，关账入口随之关闭。</div>
+      <div class="tip">{{ $t('flow.close.hintChecks') }}</div>
     </el-dialog>
 
     <!-- 反关账：原因必填（P0-2） -->
-    <el-dialog v-model="reopenVisible" title="反关账（重开期间）" width="440px" destroy-on-close>
+    <el-dialog v-model="reopenVisible" :title="$t('flow.close.btnReopenFull')" width="440px" destroy-on-close>
       <el-alert type="warning" :closable="false" style="margin-bottom: 10px"
-        :title="`关账单 ${reopenRow?.closeNo}（期间 ${reopenRow?.period}）`"
-        description="反关账将：协同重新冻结、关账单回到检查处理中（会计期间状态不由本台改动，如需重开请到「总账核算›月结」反结账）。操作全程留痕。" />
-      <el-input v-model="reopenReason" type="textarea" :rows="3" placeholder="反关账原因（必填，审计留痕）" />
+        :title="$t('flow.close.dlgDocTitle', { v1: reopenRow?.closeNo, v2: reopenRow?.period })"
+        :description="$t('flow.close.hintReopen')" />
+      <el-input v-model="reopenReason" type="textarea" :rows="3" :placeholder="$t('flow.close.phReopenReason')" />
       <template #footer>
-        <el-button size="small" @click="reopenVisible = false">取消</el-button>
-        <el-button type="danger" size="small" @click="doReopen">确认反关账</el-button>
+        <el-button size="small" @click="reopenVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="danger" size="small" @click="doReopen">{{ $t('flow.close.btnConfirmReopen') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- R5-D-218 作废：原因必填留痕（终态 VOID，行止不删；解冻协同） -->
-    <el-dialog v-model="voidVisible" title="作废关账单" width="440px" destroy-on-close>
+    <el-dialog v-model="voidVisible" :title="$t('flow.close.btnVoid')" width="440px" destroy-on-close>
       <el-alert type="error" :closable="false" style="margin-bottom: 10px"
-        :title="`关账单 ${voidRow?.closeNo}（期间 ${voidRow?.period}）`"
-        description="作废为终态：单据保留不删行、原因入轨迹留痕、协同解冻；已关账的关账单须先反关账，不能直接作废。" />
-      <el-input v-model="voidReason" type="textarea" :rows="3" placeholder="作废原因（必填，审计留痕）" />
+        :title="$t('flow.close.dlgDocTitle', { v1: voidRow?.closeNo, v2: voidRow?.period })"
+        :description="$t('flow.close.voidIrreversible')" />
+      <el-input v-model="voidReason" type="textarea" :rows="3" :placeholder="$t('flow.close.phVoidReason')" />
       <template #footer>
-        <el-button size="small" @click="voidVisible = false">取消</el-button>
-        <el-button type="warning" size="small" @click="doVoid">确认作废</el-button>
+        <el-button size="small" @click="voidVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="warning" size="small" @click="doVoid">{{ $t('flow.close.btnConfirmVoid') }}</el-button>
       </template>
     </el-dialog>
 
@@ -176,8 +172,8 @@
     <el-drawer v-model="traceVisible" size="460px" destroy-on-close>
       <template #header>
         <div style="display:flex; justify-content:space-between; align-items:center">
-          <b>关账操作留痕</b>
-          <el-button size="small" type="primary" plain @click="exportReport">导出关账报告</el-button>
+          <b>{{ $t('flow.close.trailTitle') }}</b>
+          <el-button size="small" type="primary" plain @click="exportReport">{{ $t('flow.close.btnExportReport') }}</el-button>
         </div>
       </template>
       <el-timeline v-if="traceList.length" style="padding-left: 4px">
@@ -188,7 +184,7 @@
           </div>
         </el-timeline-item>
       </el-timeline>
-      <el-empty v-else description="暂无操作留痕" :image-size="60" />
+      <el-empty v-else :description="$t('flow.close.emptyTrail')" :image-size="60" />
     </el-drawer>
   </el-card>
 </template>
@@ -204,13 +200,16 @@ import { validateForms } from '@/composables/useSubmitGuard'
 import { exportCsv } from '../../utils/csv'
 import UserSelect from '../../components/common/UserSelect.vue'
 import TablePager from '../../components/common/TablePager.vue'
+import { useI18n } from 'vue-i18n'
 
-const ITEM_ST = {
-  OK: { label: '已通过', tag: 'success' },
-  PENDING: { label: '待处理', tag: 'warning' },
-  REJECTED: { label: '已退回', tag: 'danger' },
-  SUSPENDED: { label: '已挂起', tag: 'info' },
-}
+const { t } = useI18n()
+
+const ITEM_ST = computed(() => ({
+  OK: { label: t('field.passTag'), tag: 'success' },
+  PENDING: { label: t('flow.close.stPending'), tag: 'warning' },
+  REJECTED: { label: t('flow.close.stReturned'), tag: 'danger' },
+  SUSPENDED: { label: t('flow.close.stHeld'), tag: 'info' },
+}))
 const TRACE_TYPE = { CLOSE: 'success', REOPEN: 'danger', AUTO_CHECK: 'warning' }
 
 const rows = ref([])
@@ -232,15 +231,15 @@ const dispatchRow = ref(null)
 const reopenRow = ref(null)
 const form = reactive({ companyId: null, period: '', leaderId: null, leaderName: '', remark: '' })
 const initFormRef = ref(null)
-const initRules = {
-  companyId: commonRules.select('请选择关账组织'),
-  period: commonRules.date('请选择关账期间'),
-}
+const initRules = computed(() => ({
+  companyId: commonRules.select(t('flow.close.msgPickCloseOrg')),
+  period: commonRules.date(t('flow.close.msgPickClosePeriod')),
+}))
 const memberIds = ref([])
 const dispatchFormRef = ref(null)
 // 组员是独立的 ref，用只读视图包一层给 el-form 当 model，红星/闸门就能和其它页同源
 const dispatchModel = computed(() => ({ memberIds: memberIds.value }))
-const dispatchRules = { memberIds: commonRules.multiSelect('请选择组员') }
+const dispatchRules = computed(() => ({ memberIds: commonRules.multiSelect(t('flow.close.msgPickMember')) }))
 const items = ref([])
 const autoChecking = ref(false)
 const reopenReason = ref('')
@@ -258,7 +257,7 @@ const pagedRows = computed(() => filteredRows.value.slice((page.pageNum - 1) * p
 
 function companyName(id) {
   const c = companies.value.find((x) => x.id === id)
-  return c ? c.name : (id != null ? `公司${id}` : '—')
+  return c ? c.name : (id != null ? t('flow.close.companyLabel', { v1: id }) : '—')
 }
 
 // R5-D-212：库里存工号→显示花名；历史遗留的昵称/花名按原值回显（找不到不改写）
@@ -320,7 +319,7 @@ async function doInit() {
     groupLeader: form.leaderName || me,
     remark: form.remark,
   })
-  ElMessage.success('已发起并冻结协同')
+  ElMessage.success(t('flow.close.msgStarted'))
   initVisible.value = false
   await load()
 }
@@ -343,7 +342,7 @@ async function doDispatch() {
     return u ? (u.userName || u.nickName) : String(id)
   })
   await apFlowApi.monthCloseDispatch(dispatchRow.value.id, names.join(','))
-  ElMessage.success('派工成功')
+  ElMessage.success(t('flow.close.msgDispatched'))
   dispatchVisible.value = false
   await load()
 }
@@ -360,7 +359,7 @@ async function runAutoCheck() {
   try {
     const ret = await apFlowApi.monthCloseAutoCheck(current.value.id)
     items.value = ret.items || []
-    ElMessage.success('自动检查完成：' + ret.detail)
+    ElMessage.success(t('flow.close.msgAutoCheck') + ret.detail)
     await load()
   } catch (e) { ElMessage.error(e.message) } finally { autoChecking.value = false }
 }
@@ -373,7 +372,7 @@ async function doItem(item, status) {
       note: item.note || '',
       handler: item.handler || me,
     })
-    ElMessage.success('已更新')
+    ElMessage.success(t('field.updatedTag'))
     await load()
     const fresh = rows.value.find((r) => r.id === current.value.id)
     if (fresh) {
@@ -384,9 +383,9 @@ async function doItem(item, status) {
 
 // ---- 关账 / 反关账 ----
 async function doClose(row) {
-  await ElMessageBox.confirm(`确认对期间 ${row.period}（${companyName(row.companyId)}）执行关账？关账后协同恢复，会计期间的结账由「总账核算›月结」审批末节点联动。`, '总账关账', { type: 'warning' })
+  await ElMessageBox.confirm(t('flow.close.askClosePeriod', { v1: row.period, v2: companyName(row.companyId) }), t('flow.close.btnGlClose'), { type: 'warning' })
   await apFlowApi.monthCloseClose(row.id)
-  ElMessage.success('关账完成，协同已恢复（会计期间由总账月结结账）')
+  ElMessage.success(t('flow.close.msgClosed'))
   await load()
 }
 
@@ -397,9 +396,9 @@ function openReopen(row) {
 }
 
 async function doReopen() {
-  if (!reopenReason.value.trim()) return ElMessage.warning('反关账原因必填（审计留痕）')
+  if (!reopenReason.value.trim()) return ElMessage.warning(t('flow.close.errReopenReason'))
   await apFlowApi.monthCloseReopen(reopenRow.value.id, reopenReason.value.trim())
-  ElMessage.success('反关账完成：期间已重开、协同重新冻结')
+  ElMessage.success(t('flow.close.msgReopened'))
   reopenVisible.value = false
   await load()
 }
@@ -412,9 +411,9 @@ function openVoid(row) {
 }
 
 async function doVoid() {
-  if (!voidReason.value.trim()) return ElMessage.warning('作废原因必填（审计留痕）')
+  if (!voidReason.value.trim()) return ElMessage.warning(t('flow.close.errVoidReason'))
   await apFlowApi.monthCloseVoid(voidRow.value.id, voidReason.value.trim())
-  ElMessage.success('关账单已作废（协同已解冻，留痕不删行）')
+  ElMessage.success(t('flow.close.msgVoided'))
   voidVisible.value = false
   await load()
 }
@@ -429,33 +428,33 @@ function openTrace(row) {
 // P2-10 关账报告导出:关账信息 + 检查项结论(含自动检查) + 操作轨迹 三段式 CSV
 function exportReport() {
   const row = current.value
-  if (!row) return ElMessage.warning('请先选择关账单')
+  if (!row) return ElMessage.warning(t('flow.close.errPickDoc'))
   let items = []
   try { items = JSON.parse(row.checkItemsJson || '[]') } catch { items = [] }
   const out = []
   const info = [
-    ['关账单号', row.closeNo], ['组织', companyName(row.companyId)], ['期间', row.period],
-    ['状态', apMcStatusLabel(row.status)], ['组长', personLabel(row.groupLeader)], ['组员', personsLabel(row.members)],
-    ['协同冻结', row.scpFrozen === 1 && row.status !== 'CLOSED' ? '冻结中' : '已恢复'],
-    ['关账时间', row.closedTime || '—'], ['关账人', personLabel(row.closedBy)],
-    ['反关账时间', row.reopenTime || '—'], ['反关账原因', row.reopenReason || '—'], ['备注', row.remark || '—'],
+    [t('flow.close.colDocNo'), row.closeNo], [t('field.org'), companyName(row.companyId)], [t('field.period'), row.period],
+    [t('common.status'), apMcStatusLabel(row.status)], [t('field.leader'), personLabel(row.groupLeader)], [t('field.member'), personsLabel(row.members)],
+    [t('flow.close.collabFreeze'), row.scpFrozen === 1 && row.status !== 'CLOSED' ? t('flow.close.stFrozen') : t('flow.close.stRestored')],
+    [t('flow.report.colCloseTime'), row.closedTime || '—'], [t('flow.close.colClosedBy'), personLabel(row.closedBy)],
+    [t('flow.close.colReopenTime'), row.reopenTime || '—'], [t('flow.close.colReopenReason'), row.reopenReason || '—'], [t('common.remark'), row.remark || '—'],
   ]
-  info.forEach(([k, v]) => out.push({ sec: '一、关账信息', item: k, result: String(v), handler: '', time: '', note: '' }))
-  out.push({ sec: '二、检查项结论', item: '', result: '', handler: '', time: '', note: '' })
+  info.forEach(([k, v]) => out.push({ sec: t('flow.close.secInfo'), item: k, result: String(v), handler: '', time: '', note: '' }))
+  out.push({ sec: t('flow.close.secCheck'), item: '', result: '', handler: '', time: '', note: '' })
   for (const it of items) {
-    const auto = it.auto ? `${it.auto.metric}=${it.auto.count}${it.auto.ok ? '(正常)' : '(异常)'}` : ''
+    const auto = it.auto ? `${it.auto.metric}=${it.auto.count}${it.auto.ok ? t('flow.close.normalSuffix') : t('flow.close.abnormalSuffix')}` : ''
     out.push({
-      sec: '', item: it.name, result: ITEM_ST[it.status]?.label || it.status,
+      sec: '', item: it.name, result: ITEM_ST.value[it.status]?.label || it.status,
       handler: it.handler || '', time: (it.time || '').replace('T', ' ').slice(0, 16), note: [it.note, auto].filter(Boolean).join(' | '),
     })
   }
-  out.push({ sec: '三、操作轨迹', item: '', result: '', handler: '', time: '', note: '' })
+  out.push({ sec: t('flow.close.secTrail'), item: '', result: '', handler: '', time: '', note: '' })
   for (const t of traceList.value) {
     out.push({ sec: '', item: apMcTraceLabel(t.action), result: '', handler: t.oper || '', time: (t.time || '').replace('T', ' ').slice(0, 16), note: t.detail || '' })
   }
   exportCsv(out, [
-    { prop: 'sec', label: '段落' }, { prop: 'item', label: '项目/检查项' }, { prop: 'result', label: '结论/内容' },
-    { prop: 'handler', label: '处理人' }, { prop: 'time', label: '时间' }, { prop: 'note', label: '说明/凭据' },
+    { prop: 'sec', label: t('flow.close.secPara') }, { prop: 'item', label: t('flow.close.colProject') }, { prop: 'result', label: t('flow.close.colProof') },
+    { prop: 'handler', label: t('field.handler') }, { prop: 'time', label: t('field.time') }, { prop: 'note', label: t('flow.close.colDescProof') },
   ], `CloseReport_${row.closeNo}`)
 }
 

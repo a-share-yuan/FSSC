@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.receivable.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -104,6 +101,13 @@ public class RcReceiptService {
             List<RcReceivable> open = receivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                     .eq(RcReceivable::getCustomerId, e.getCustomerId())
                     .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
+                    // D-V4R-71（V5 册任务3 重跑 2026-10-15 实测）：候选只筛"余额>0"⇒ 一张从未确认
+                    // （status=NONE，含流程卡死件）的应收会被收款喂满转 DONE，而同额、已走完审批的
+                    // CONFIRMED 孪生单分文未收（实案：158,200 两笔收款把 RC…2259131/2259521/2300311
+                    // 三枚 NONE 结清，RC…2314441/2316491/2317271 三枚 CONFIRMED 仍挂全额）。
+                    // 口径与门户侧"已确认才进分母"对齐：未确认／被驳回的单不构成可收款债权。
+                    // 用排除式而非枚举式——NORMAL（开票自动生成腿）与 OVERDUE（到期转逾期）都是合法可核销态。
+                    .notIn(RcReceivable::getStatus, "NONE", "REJECTED")
                     .orderByAsc(RcReceivable::getDueDate)
                     .orderByAsc(RcReceivable::getId));
             BigDecimal rest0 = e.getAmount();

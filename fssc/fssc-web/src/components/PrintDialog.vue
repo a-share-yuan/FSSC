@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-dialog v-model="innerVisible" :title="mode === 'voucher' ? '凭证套打预览' : '单据打印预览'" width="720px" top="3vh"
              destroy-on-close append-to-body class="print-dialog">

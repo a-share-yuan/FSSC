@@ -1,61 +1,58 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center">
-        <b>合同付款查询</b>
-        <el-input v-model="kw" placeholder="合同号/名称" clearable style="width: 220px" @keyup.enter="search" />
-        <el-button type="primary" size="small" @click="search">查询</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-        <span style="color: #909399; font-size: 13px">报销单/付款单引用合同后支付记录自动更新；线下支付可手工添加</span>
+        <b>{{ $t('pay.contract.pageTitle') }}</b>
+        <el-input v-model="kw" :placeholder="$t('pay.contract.phSearch')" clearable style="width: 220px" @keyup.enter="search" />
+        <el-button type="primary" size="small" @click="search">{{ $t('common.search') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('pay.shared.btnExportCsv') }}</el-button>
+      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('pay.shared.btnExportSelected', { v1: selRows.length }) }}</el-button>
+        <span style="color: #909399; font-size: 13px">{{ $t('pay.contract.hintAutoRecords') }}</span>
       </div>
     </template>
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
     <el-table :data="pagedData" size="small" stripe v-else max-height="480" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
         <el-table-column type="selection" width="45" />
-      <el-table-column prop="contractNo" label="合同编号" width="150"  sortable />
-      <el-table-column prop="contractName" label="合同名称" min-width="150" show-overflow-tooltip  sortable />
-      <el-table-column label="类型" width="90">
+      <el-table-column prop="contractNo" :label="$t('pay.contract.colContractNo')" width="150"  sortable />
+      <el-table-column prop="contractName" :label="$t('pay.shared.colContractName')" min-width="150" show-overflow-tooltip  sortable />
+      <el-table-column :label="$t('field.type')" width="90">
         <template #default="{ row }">{{ contractTypeLabel(row.contractType) }}</template>
       </el-table-column>
-      <el-table-column prop="partyBName" label="乙方" width="120" show-overflow-tooltip  sortable />
-      <el-table-column prop="contractAmount" label="合同金额" width="110" align="right" sortable>
+      <el-table-column prop="partyBName" :label="$t('pay.contract.colPartyB')" width="120" show-overflow-tooltip  sortable />
+      <el-table-column prop="contractAmount" :label="$t('pay.shared.colContractAmount')" width="110" align="right" sortable>
         <template #default="{ row }">{{ fmt(row.contractAmount) }}</template>
       </el-table-column>
-      <el-table-column prop="paidAmount" label="已付款金额" width="110" align="right" sortable>
+      <el-table-column prop="paidAmount" :label="$t('pay.contract.colPaidAmount')" width="110" align="right" sortable>
         <template #default="{ row }">
           <span style="color: #f56c6c">{{ fmt(row.paidAmount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="100" sortable>
+      <el-table-column prop="status" :label="$t('common.status')" width="100" sortable>
         <template #default="{ row }">{{ statusLabel(row.status) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="110" fixed="right">
+      <el-table-column :label="$t('common.operation')" width="110" fixed="right">
         <template #default="{ row }">
-          <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
-          <el-button link size="small" type="primary" @click="showRecords(row)">支付记录</el-button>
+          <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('pay.shared.btnTrace') }}</el-button>
+          <el-button link size="small" type="primary" @click="showRecords(row)">{{ $t('pay.contract.btnRecords') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
     <TablePager :pager="pager" @change="load" />
 
-    <el-dialog v-model="recVis" :title="'支付记录 - ' + (current?.contractName || '')" width="640px" destroy-on-close>
+    <el-dialog v-model="recVis" :title="$t('pay.contract.titleRecords', { v1: current?.contractName || '' })" width="640px" destroy-on-close>
       <el-table :data="records" size="small" border max-height="360" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
         <el-table-column type="selection" width="45" />
-        <el-table-column prop="bizNo" label="单据号" width="150"  sortable />
-        <el-table-column label="单据类型" width="100">
+        <el-table-column prop="bizNo" :label="$t('pay.contract.colBizNo')" width="150"  sortable />
+        <el-table-column :label="$t('field.billType')" width="100">
           <template #default="{ row }">{{ bizTypeLabel(row.bizType) }}</template>
         </el-table-column>
-        <el-table-column prop="amount" label="付款金额" width="110" align="right" sortable>
+        <el-table-column prop="amount" :label="$t('pay.contract.colPayAmount')" width="110" align="right" sortable>
           <template #default="{ row }">{{ fmt(row.amount) }}</template>
         </el-table-column>
-        <el-table-column prop="payDate" label="支付日期" width="110"  sortable :formatter="(row, col, val) => formatDate(val)" />
-        <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip  sortable />
+        <el-table-column prop="payDate" :label="$t('pay.contract.colPayDate')" width="110"  sortable :formatter="(row, col, val) => formatDate(val)" />
+        <el-table-column prop="remark" :label="$t('common.remark')" min-width="120" show-overflow-tooltip  sortable />
       </el-table>
-      <el-empty v-if="!records.length" description="暂无支付记录" />
+      <el-empty v-if="!records.length" :description="$t('pay.contract.hintNoRecords')" />
     </el-dialog>
   </el-card>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" biz-type="CONTRACT_APPROVE" />
@@ -72,6 +69,9 @@ import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -126,8 +126,8 @@ async function showRecords(row) {
 onMounted(load)
 
 function exportCsv() {
-  if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'contractNo', label: '合同编号' }, { prop: 'contractName', label: '合同名称' }, { prop: 'partyBName', label: '乙方' }, { prop: 'contractAmount', label: '合同金额' }, { prop: 'paidAmount', label: '已付款金额' }, { prop: 'status', label: '状态' }]
+  if (!rows.value.length) { ElMessage.warning(t('pay.shared.msgNoExportData')); return }
+  const cols = [{ prop: 'contractNo', label: t('pay.contract.colContractNo') }, { prop: 'contractName', label: t('pay.shared.colContractName') }, { prop: 'partyBName', label: t('pay.contract.colPartyB') }, { prop: 'contractAmount', label: t('pay.shared.colContractAmount') }, { prop: 'paidAmount', label: t('pay.contract.colPaidAmount') }, { prop: 'status', label: t('common.status') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -141,20 +141,20 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `ContractPay_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('pay.shared.msgExportedCsv'))
 }
 
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('field.detail') })
 }
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('pay.shared.msgPickExportRows')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('pay.shared.msgNoColumns')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -169,7 +169,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `ContractPay_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(t('pay.shared.msgExportedRows', { v1: selRows.value.length }))
 }
 
 </script>

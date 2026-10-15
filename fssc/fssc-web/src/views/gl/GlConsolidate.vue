@@ -1,42 +1,39 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <b>合并报表底稿</b>
-        <el-date-picker v-model="f.period" type="month" placeholder="所属期" value-format="YYYYMM" clearable style="width: 140px" />
-        <el-select v-model="f.status" placeholder="状态" clearable style="width: 130px">
-          <el-option label="草稿" value="DRAFT" />
-          <el-option label="已合并" value="CONSOLIDATED" />
+        <b>{{ $t('gl.consolidate.pageTitle') }}</b>
+        <el-date-picker v-model="f.period" type="month" :placeholder="$t('gl.consolidate.colBelong')" value-format="YYYYMM" clearable style="width: 140px" />
+        <el-select v-model="f.status" :placeholder="$t('common.status')" clearable style="width: 130px">
+          <el-option :label="$t('gl.consolidate.stDraft')" value="DRAFT" />
+          <el-option :label="$t('gl.consolidate.stDone')" value="CONSOLIDATED" />
         </el-select>
-        <el-input v-model="f.keyword" placeholder="底稿编号/公司" clearable style="width: 170px" />
-        <el-button type="primary" size="small" @click="load(1)">查询</el-button>
-        <el-button size="small" @click="createVisible = true">新建底稿</el-button>
+        <el-input v-model="f.keyword" :placeholder="$t('gl.consolidate.phNo')" clearable style="width: 170px" />
+        <el-button type="primary" size="small" @click="load(1)">{{ $t('common.search') }}</el-button>
+        <el-button size="small" @click="createVisible = true">{{ $t('gl.consolidate.btnNewShort') }}</el-button>
       </div>
     </template>
 
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="rows" v-else size="small" empty-text="暂无数据">
-      <el-table-column prop="reportNo" label="底稿编号" width="170" sortable />
-      <el-table-column prop="period" label="所属期" width="90" sortable />
-      <el-table-column label="合并范围（公司）" min-width="200" show-overflow-tooltip>
+    <el-table :data="rows" v-else size="small" :empty-text="$t('common.empty')">
+      <el-table-column prop="reportNo" :label="$t('gl.consolidate.colNo')" width="170" sortable />
+      <el-table-column prop="period" :label="$t('gl.consolidate.colBelong')" width="90" sortable />
+      <el-table-column :label="$t('gl.consolidate.colScope')" min-width="200" show-overflow-tooltip>
         <!-- R5-D-150：公司 ID 串按 orgApi.companyTree 词表映射为公司名（取不到回落裸 ID，不造词） -->
         <template #default="{ row }">{{ companyRangeText(row) }}</template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column :label="$t('common.status')" width="100">
         <template #default="{ row }">
-          <el-tag :type="row.status === 'CONSOLIDATED' ? 'success' : 'info'" size="small">{{ row.status === 'CONSOLIDATED' ? '已合并' : '草稿' }}</el-tag>
+          <el-tag :type="row.status === 'CONSOLIDATED' ? 'success' : 'info'" size="small">{{ row.status === 'CONSOLIDATED' ? t('gl.consolidate.stDone') : t('gl.consolidate.stDraft') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="创建时间" width="160">
+      <el-table-column prop="createTime" :label="$t('common.createTime')" width="160">
         <template #default="{ row }">{{ String(row.createTime || '').replace('T', ' ').slice(0, 16) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column :label="$t('common.operation')" width="160" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="row.status === 'DRAFT'" size="small" type="primary" @click="runMerge(row.period)">执行合并</el-button>
-          <el-button v-if="row.status === 'DRAFT'" size="small" @click="openAdjust(row)">调整分录</el-button>
+          <el-button v-if="row.status === 'DRAFT'" size="small" type="primary" @click="runMerge(row.period)">{{ $t('gl.consolidate.btnRun') }}</el-button>
+          <el-button v-if="row.status === 'DRAFT'" size="small" @click="openAdjust(row)">{{ $t('gl.consolidate.colAdj') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -51,35 +48,35 @@
     />
 
     <!-- 新建底稿 -->
-    <el-dialog v-model="createVisible" title="新建合并底稿" width="460px">
+    <el-dialog v-model="createVisible" :title="$t('gl.consolidate.btnNew')" width="460px">
       <el-form :model="form" label-width="110px">
-        <el-form-item label="会计期间" required>
-          <el-date-picker v-model="form.period" type="month" value-format="YYYYMM" placeholder="所属期间" style="width: 100%" />
+        <el-form-item :label="$t('gl.consolidate.labelPeriod')" required>
+          <el-date-picker v-model="form.period" type="month" value-format="YYYYMM" :placeholder="$t('gl.consolidate.colPeriod')" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="合并范围公司">
-          <el-input v-model="form.companyIds" placeholder="公司ID，逗号分隔，如 1,33" />
+        <el-form-item :label="$t('gl.consolidate.limCompany')">
+          <el-input v-model="form.companyIds" :placeholder="$t('gl.consolidate.phCompany')" />
         </el-form-item>
-        <el-form-item label="抵消分录初稿">
-          <el-input v-model="form.rawRows" type="textarea" :rows="3" placeholder="可选：初始抵消分录（留空由汇总合并自动生成）" />
+        <el-form-item :label="$t('gl.consolidate.limElim')">
+          <el-input v-model="form.rawRows" type="textarea" :rows="3" :placeholder="$t('gl.consolidate.phElim')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" @click="doCreate">创建</el-button>
+        <el-button @click="createVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="doCreate">{{ $t('gl.consolidate.btnCreate') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 调整分录 -->
-    <el-dialog v-model="adjustVisible" title="合并调整分录" width="520px">
+    <el-dialog v-model="adjustVisible" :title="$t('gl.consolidate.secAdj')" width="520px">
       <el-form label-width="90px">
-        <el-form-item label="底稿编号"><el-input :model-value="adjustRow?.reportNo" disabled /></el-form-item>
-        <el-form-item label="调整分录">
-          <el-input v-model="adjustRaw" type="textarea" :rows="5" placeholder="调整分录（rawRows，按后端约定格式）" />
+        <el-form-item :label="$t('gl.consolidate.colNo')"><el-input :model-value="adjustRow?.reportNo" disabled /></el-form-item>
+        <el-form-item :label="$t('gl.consolidate.colAdj')">
+          <el-input v-model="adjustRaw" type="textarea" :rows="5" :placeholder="$t('gl.consolidate.phRawRows')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="adjustVisible = false">取消</el-button>
-        <el-button type="primary" @click="doAdjust">保存调整</el-button>
+        <el-button @click="adjustVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="doAdjust">{{ $t('gl.consolidate.btnSaveAdj') }}</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -90,6 +87,9 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { glexApi, orgApi } from '../../api'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const rows = ref([])
@@ -109,31 +109,31 @@ async function load(pageNum) {
     rows.value = (d && (d.records || d.list)) || []
     total.value = (d && d.total) || 0
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(e.message || t('gl.consolidate.msgLoadFail'))
   } finally {
     loading.value = false
   }
 }
 
 async function doCreate() {
-  if (!form.value.period) { ElMessage.warning('请选择会计期间'); return }
+  if (!form.value.period) { ElMessage.warning(t('gl.consolidate.pickPeriod')); return }
   try {
     await glexApi.consolidateCreate({ period: form.value.period, companyIds: form.value.companyIds, rawRows: form.value.rawRows })
-    ElMessage.success('底稿已创建（草稿）；执行合并将发起合并报表作业')
+    ElMessage.success(t('gl.consolidate.msgCreated'))
     createVisible.value = false
     load(1)
   } catch (e) {
-    ElMessage.error(e.message || '创建失败')
+    ElMessage.error(e.message || t('gl.consolidate.msgCreateFail'))
   }
 }
 
 async function runMerge(period) {
   try {
     await glexApi.consolidateRun(period)
-    ElMessage.success('汇总合并完成（期间 ' + period + '）')
+    ElMessage.success(t('gl.consolidate.msgDone', { period }))
     load()
   } catch (e) {
-    ElMessage.error(e.message || '执行合并失败')
+    ElMessage.error(e.message || t('gl.consolidate.msgRunFail'))
   }
 }
 
@@ -146,11 +146,11 @@ function openAdjust(row) {
 async function doAdjust() {
   try {
     await glexApi.consolidateAdjust(adjustRow.value.id, adjustRaw.value)
-    ElMessage.success('调整分录已保存')
+    ElMessage.success(t('gl.consolidate.msgAdjSaved'))
     adjustVisible.value = false
     load()
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e.message || t('gl.consolidate.msgSaveFail'))
   }
 }
 

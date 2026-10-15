@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="watermark-layer" v-if="enabled">
     <svg class="watermark-svg" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">

@@ -1,56 +1,53 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <!-- RA-PAGE-21 2.2：借款/还款双形态并入一个菜单（原 225 还款管理退册）——切换即跳对侧路由，整页重挂重建单据状态 -->
   <el-radio-group :model-value="mode" size="small" style="margin-bottom:8px" @change="onModeSwitch">
-    <el-radio-button value="LOAN">借款申请</el-radio-button>
-    <el-radio-button value="REPAY">还款登记</el-radio-button>
+    <el-radio-button value="LOAN">{{ $t('expense.loan.tabLoanApply') }}</el-radio-button>
+    <el-radio-button value="REPAY">{{ $t('expense.loan.tabRepayRegister') }}</el-radio-button>
   </el-radio-group>
   <BillWorkbench ref="wb" :bill-type="mode === 'LOAN' ? 'LOAN' : 'REPAY'" :sub-type="mode" :before-submit="onBeforeSubmit">
     <template #create="b">
       <!-- ============ 单据概要 ============ -->
-      <el-card header="单据概要">
+      <el-card :header="$t('expense.claim.colBillSummary')">
         <el-form ref="formRef" :rules="formRules" :model="b.form.bill" label-width="110px" size="default">
           <el-row :gutter="12">
             <el-col :xs="24" :md="12">
-              <el-form-item label="单据编号"><el-input :model-value="b.form.bill.billNo || '（保存后自动生成）'" disabled /></el-form-item>
+              <el-form-item :label="$t('expense.claim.colBillNoFull')"><el-input :model-value="b.form.bill.billNo || $t('expense.common.txtAutoAfterSave')" disabled /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="制单日期"><el-input :model-value="b.today()" disabled /></el-form-item>
+              <el-form-item :label="$t('expense.loan.colMakeDate')"><el-input :model-value="b.today()" disabled /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="制单人"><el-input :model-value="currentUserName" disabled /></el-form-item>
+              <el-form-item :label="$t('expense.claim.colMaker')"><el-input :model-value="currentUserName" disabled /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="制单人部门"><el-input :model-value="applicantDept" disabled /></el-form-item>
+              <el-form-item :label="$t('expense.loan.ctxMakerDept')"><el-input :model-value="applicantDept" disabled /></el-form-item>
             </el-col>
             <el-col v-if="mode === 'REPAY'" :xs="24" :md="12">
-              <el-form-item label="制单人公司"><el-input :model-value="applicantCompany" disabled /></el-form-item>
+              <el-form-item :label="$t('expense.loan.ctxMakerCompany')"><el-input :model-value="applicantCompany" disabled /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="币种" prop="currencyCode">
+              <el-form-item :label="$t('expense.common.colCurrency')" prop="currencyCode">
                 <el-select v-model="b.form.bill.currencyCode" style="width: 100%">
-                  <el-option label="人民币 CNY" value="CNY" />
-                  <el-option label="美元 USD" value="USD" />
+                  <el-option :label="$t('expense.common.curCny')" value="CNY" />
+                  <el-option :label="$t('expense.common.curUsd')" value="USD" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col v-if="mode === 'REPAY'" :xs="24" :md="12">
-              <el-form-item label="还款人" prop="applyUserId">
+              <el-form-item :label="$t('expense.loan.colRepayPerson')" prop="applyUserId">
                 <UserSelect v-model="b.form.bill.applyUserId" :users="users" @change="(id) => onRepayUserChange(b, id)" />
               </el-form-item>
             </el-col>
             <el-col v-if="mode === 'REPAY'" :xs="24" :md="12">
-              <el-form-item label="还款人部门"><el-input :model-value="repayUserDept" disabled /></el-form-item>
+              <el-form-item :label="$t('expense.loan.colRepayPersonDept')"><el-input :model-value="repayUserDept" disabled /></el-form-item>
             </el-col>
             <el-col :xs="24">
-              <el-form-item label="标题" prop="title">
-                <el-input v-model="b.form.bill.title" :placeholder="mode === 'LOAN' ? '借款申请标题' : '还款登记标题'" />
+              <el-form-item :label="$t('expense.common.colTitle')" prop="title">
+                <el-input v-model="b.form.bill.title" :placeholder="mode === 'LOAN' ? $t('expense.loan.titleLoanApply') : $t('expense.loan.titleRepayRegister')" />
               </el-form-item>
             </el-col>
             <el-col :xs="24">
-              <el-form-item label="单据说明" prop="remark">
+              <el-form-item :label="$t('expense.claim.colBillDesc')" prop="remark">
                 <el-input v-model="b.form.bill.remark" type="textarea" :rows="2" />
               </el-form-item>
             </el-col>
@@ -59,92 +56,92 @@
       </el-card>
 
       <!-- ============ 借款申请：借款详情 ============ -->
-      <el-card v-if="mode === 'LOAN'" header="借款详情" style="margin-top: 12px">
+      <el-card v-if="mode === 'LOAN'" :header="$t('expense.loan.secLoanDetail')" style="margin-top: 12px">
         <el-form ref="loanFormRef" :model="b.form.bill.extJson" :rules="loanRules" label-width="110px" size="default">
           <el-row :gutter="12">
             <el-col :xs="24" :md="8">
-              <el-form-item label="借款类型" prop="loanType">
+              <el-form-item :label="$t('expense.loan.colLoanType')" prop="loanType">
                 <el-select v-model="b.form.bill.extJson.loanType" style="width: 100%">
-                  <el-option label="借款" value="LOAN" />
-                  <el-option label="备用金" value="PETTY" />
+                  <el-option :label="$t('expense.ledger.optLoan')" value="LOAN" />
+                  <el-option :label="$t('expense.loan.optPettyCash')" value="PETTY" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
-              <el-form-item label="借款金额" prop="loanAmount">
+              <el-form-item :label="$t('expense.loan.colLoanAmount')" prop="loanAmount">
                 <el-input-number v-model="b.form.bill.extJson.loanAmount" :min="0" :precision="2" style="width: 100%" @change="syncLoanLine(b)" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
-              <el-form-item label="收款方式" prop="payMethod">
+              <el-form-item :label="$t('expense.claim.colPayMethod')" prop="payMethod">
                 <el-select v-model="b.form.bill.extJson.payMethod" style="width: 100%">
-                  <el-option label="银行转账" value="BANK" />
-                  <el-option label="现金" value="CASH" />
+                  <el-option :label="$t('expense.claim.optBankTransfer')" value="BANK" />
+                  <el-option :label="$t('expense.claim.optCash')" value="CASH" />
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="账户类型"><el-input :model-value="'员工'" disabled /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="账户名称" prop="accountName"><el-input v-model="b.form.bill.extJson.accountName" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="账号" prop="accountNo"><el-input v-model="b.form.bill.extJson.accountNo" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="开户行" prop="bankName"><el-input v-model="b.form.bill.extJson.bankName" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="预计还款日期"><el-date-picker v-model="b.form.bill.extJson.expectRepayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
-            <el-col :xs="24"><el-form-item label="借款说明"><el-input v-model="b.form.bill.extJson.loanRemark" type="textarea" :rows="2" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.travelClaim.colAccountType')"><el-input :model-value="'员工'" disabled /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colAccountName')" prop="accountName"><el-input v-model="b.form.bill.extJson.accountName" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colAccountNo')" prop="accountNo"><el-input v-model="b.form.bill.extJson.accountNo" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colBank')" prop="bankName"><el-input v-model="b.form.bill.extJson.bankName" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.loan.colExpectedRepayDate')"><el-date-picker v-model="b.form.bill.extJson.expectRepayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+            <el-col :xs="24"><el-form-item :label="$t('expense.loan.colLoanRemark')"><el-input v-model="b.form.bill.extJson.loanRemark" type="textarea" :rows="2" /></el-form-item></el-col>
           </el-row>
         </el-form>
       </el-card>
 
       <!-- ============ 借款申请：未冲销详情 ============ -->
-      <el-card v-if="mode === 'LOAN'" header="未冲销详情（历史借款）" style="margin-top: 12px">
+      <el-card v-if="mode === 'LOAN'" :header="$t('expense.loan.secOpenLoans')" style="margin-top: 12px">
         <div style="margin-bottom: 8px">
-      <el-button type="info" size="small" @click="exportCsv">导出 CSV</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
+      <el-button type="info" size="small" @click="exportCsv">{{ $t('expense.common.btnExportCsv') }}</el-button>
+      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('expense.common.btnExportSelected', { v1: selRows.length }) }}</el-button>
     </div>
-    <el-table :data="pagedData" size="small" border empty-text="暂无未冲销借款" v-loading="loading" @selection-change="handleSelectionChange">
+    <el-table :data="pagedData" size="small" border :empty-text="$t('expense.loan.emptyNoOpenLoans')" v-loading="loading" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="billNo" label="单号" width="160"  sortable />
-          <el-table-column label="状态" width="100">
-            <template #default="{ row }"><el-tag size="small" type="warning">{{ row.loanBalance > 0 ? '在途' : '未冲销' }}</el-tag></template>
+          <el-table-column prop="billNo" :label="$t('field.docNo')" width="160"  sortable />
+          <el-table-column :label="$t('common.status')" width="100">
+            <template #default="{ row }"><el-tag size="small" type="warning">{{ row.loanBalance > 0 ? $t('expense.loan.stInFlight') : $t('expense.loan.stNotWriteOff') }}</el-tag></template>
           </el-table-column>
-          <el-table-column label="借款金额" width="110"  sortable>
+          <el-table-column :label="$t('expense.loan.colLoanAmount')" width="110"  sortable>
             <template #default="{ row }">{{ formatMoney(row.totalAmount) }}</template>
           </el-table-column>
-          <el-table-column prop="loanBalance" label="未冲销金额" width="110"  sortable :formatter="(r,c,v) => formatMoney(v)" />
+          <el-table-column prop="loanBalance" :label="$t('expense.loan.colNotWriteOffAmount')" width="110"  sortable :formatter="(r,c,v) => formatMoney(v)" />
         </el-table>
         <TablePager :pager="pager" @change="loadOpenLoans" />
       </el-card>
 
       <!-- ============ 还款申请：还款详情 ============ -->
-      <el-card v-if="mode === 'REPAY'" header="还款详情（可同时冲销多笔借款）" style="margin-top: 12px">
-        <el-button type="primary" size="small" @click="openRepayLoan">+ 选择借款单冲销</el-button>
+      <el-card v-if="mode === 'REPAY'" :header="$t('expense.loan.secRepayDetail')" style="margin-top: 12px">
+        <el-button type="primary" size="small" @click="openRepayLoan">{{ $t('expense.loan.btnPickLoanWriteOff') }}</el-button>
         <el-table :data="b.form.loanOffsets" size="small" border style="margin-top: 8px" v-loading="loading">
-          <el-table-column prop="loanBillNo" label="单据编号" width="160"  sortable />
-          <el-table-column label="单据类型" width="110">
-            <template #default="{ row }"><el-tag size="small">{{ row.sourceType === 'APPLY' ? '申请单' : '借款单' }}</el-tag></template>
+          <el-table-column prop="loanBillNo" :label="$t('expense.claim.colBillNoFull')" width="160"  sortable />
+          <el-table-column :label="$t('field.billType')" width="110">
+            <template #default="{ row }"><el-tag size="small">{{ row.sourceType === 'APPLY' ? t('expense.loan.optRequisitionBill') : t('expense.loan.optLoanBill') }}</el-tag></template>
           </el-table-column>
-          <el-table-column label="借款说明" min-width="140">
+          <el-table-column :label="$t('expense.loan.colLoanRemark')" min-width="140">
             <template #default="{ row }"><el-input v-model="row.loanRemark" size="small" /></template>
           </el-table-column>
-          <el-table-column label="本次还款金额" width="150"><template #header><span style="color:#f56c6c">*</span>本次还款金额</template>
+          <el-table-column :label="$t('expense.loan.colRepayAmount')" width="150"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.loan.colRepayAmount') }}</template>
             <template #default="{ row }"><el-input-number v-model="row.offsetAmount" :min="0" :precision="2" style="width: 100%" @change="syncRepayLine(b)" /></template>
           </el-table-column>
-          <el-table-column label="操作" width="70">
-            <template #default="{ $index }"><el-button link size="small" type="danger" @click="removeOffset(b, $index)">删</el-button></template>
+          <el-table-column :label="$t('common.operation')" width="70">
+            <template #default="{ $index }"><el-button link size="small" type="danger" @click="removeOffset(b, $index)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
           </el-table-column>
         </el-table>
       </el-card>
 
       <!-- ============ 还款申请：公司收款账号 ============ -->
-      <el-card v-if="mode === 'REPAY'" header="公司收款账号信息" style="margin-top: 12px">
+      <el-card v-if="mode === 'REPAY'" :header="$t('expense.loan.secCompanyBankInfo')" style="margin-top: 12px">
         <el-form ref="companyFormRef" :model="b.form.bill.extJson" :rules="companyRules" label-width="110px" size="default">
           <el-row :gutter="12">
-            <el-col :xs="24" :md="8"><el-form-item label="户名" prop="companyAccountName"><el-input v-model="b.form.bill.extJson.companyAccountName" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="收款账号" prop="companyAccountNo"><el-input v-model="b.form.bill.extJson.companyAccountNo" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item label="开户行" prop="companyBankName"><el-input v-model="b.form.bill.extJson.companyBankName" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.loan.colAccountHolder')" prop="companyAccountName"><el-input v-model="b.form.bill.extJson.companyAccountName" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colPayeeAccount')" prop="companyAccountNo"><el-input v-model="b.form.bill.extJson.companyAccountNo" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colBank')" prop="companyBankName"><el-input v-model="b.form.bill.extJson.companyBankName" /></el-form-item></el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item label="还款方式" prop="repayMethod">
+              <el-form-item :label="$t('expense.loan.colRepayMethod')" prop="repayMethod">
                 <el-select v-model="b.form.bill.extJson.repayMethod" style="width: 100%">
-                  <el-option label="银行转账" value="BANK" />
-                  <el-option label="现金" value="CASH" />
+                  <el-option :label="$t('expense.claim.optBankTransfer')" value="BANK" />
+                  <el-option :label="$t('expense.claim.optCash')" value="CASH" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -155,12 +152,12 @@
   </BillWorkbench>
 
   <!-- 还款：选择借款单弹窗 -->
-  <el-dialog v-model="repayDialog" title="选择借款单冲销" width="600px">
+  <el-dialog v-model="repayDialog" :title="$t('expense.loan.dlgPickLoanWriteOff')" width="600px">
     <el-table :data="b_loanCandidates" size="small" v-loading="loading" @row-click="pickRepayLoan" highlight-current-row @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="45" />
-      <el-table-column prop="billNo" label="借款单号" width="160"  sortable />
-      <el-table-column prop="title" label="标题"  min-width="200" show-overflow-tooltip sortable />
-      <el-table-column prop="loanBalance" label="可冲销金额" width="120"  sortable :formatter="(r,c,v) => formatMoney(v)" />
+      <el-table-column prop="billNo" :label="$t('expense.create.colLoanBillNo')" width="160"  sortable />
+      <el-table-column prop="title" :label="$t('expense.common.colTitle')"  min-width="200" show-overflow-tooltip sortable />
+      <el-table-column prop="loanBalance" :label="$t('expense.loan.colWriteoffable')" width="120"  sortable :formatter="(r,c,v) => formatMoney(v)" />
     </el-table>
   </el-dialog>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
@@ -181,6 +178,9 @@ import { useAutoFill } from '@/composables/useAutoFill'
 import { billRules } from '@/constants/billRequired'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 const { saveFormHistory } = useAutoFill()
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -203,30 +203,30 @@ const openLoans = ref([])
 const formRules = computed(() => ({
   ...billRules(props.mode === 'LOAN' ? 'LOAN' : 'REPAY', ''),
   // 还款单上这个字段是「还款人」，提示语随场景改口
-  applyUserId: [{ required: true, message: '请选择还款人' }],
-  remark: commonRules.required('单据说明为必填'),
+  applyUserId: [{ required: true, message: t('expense.loan.errRepayPersonRequired') }],
+  remark: commonRules.required(t('expense.loan.errBillDescRequired')),
 }))
-const loanRules = {
-  loanType: [{ required: true, message: '请选择借款类型' }],
-  loanAmount: [{ required: true, type: 'number', min: 0.01, message: '请输入借款金额（大于 0）', trigger: 'change' }],
-  payMethod: [{ required: true, message: '请选择收款方式' }],
-  accountName: [{ required: true, message: '请输入账户名称' }],
-  accountNo: [{ required: true, message: '请输入账号' }],
-  bankName: [{ required: true, message: '请输入开户行' }],
-}
-const companyRules = {
-  companyAccountName: [{ required: true, message: '请输入户名' }],
-  companyAccountNo: [{ required: true, message: '请输入收款账号' }],
-  companyBankName: [{ required: true, message: '请输入开户行' }],
-  repayMethod: [{ required: true, message: '请选择还款方式' }],
-}
+const loanRules = computed(() => ({
+  loanType: [{ required: true, message: t('expense.loan.errLoanTypeRequired') }],
+  loanAmount: [{ required: true, type: 'number', min: 0.01, message: t('expense.loan.errLoanAmountRequired'), trigger: 'change' }],
+  payMethod: [{ required: true, message: t('expense.loan.errPayMethodRequired') }],
+  accountName: [{ required: true, message: t('expense.loan.errAccountNameRequired') }],
+  accountNo: [{ required: true, message: t('expense.loan.errAccountRequired') }],
+  bankName: [{ required: true, message: t('expense.loan.errBankRequired') }],
+}))
+const companyRules = computed(() => ({
+  companyAccountName: [{ required: true, message: t('expense.loan.errAccountHolderRequired') }],
+  companyAccountNo: [{ required: true, message: t('expense.loan.errPayeeAccountRequired') }],
+  companyBankName: [{ required: true, message: t('expense.loan.errBankRequired') }],
+  repayMethod: [{ required: true, message: t('expense.loan.errRepayMethodRequired') }],
+}))
 const formRef = ref(null)
 const loanFormRef = ref(null)
 const companyFormRef = ref(null)
 // P0 遗留专项：myPage 支持 minBalance 服务端过滤，未冲销借款列表切 server 模式
 const pager = useTablePager({ mode: 'server', storageKey: 'loan_apply' })
 const { pagedData } = pager
-const currentUserName = ref(store.user?.username || store.user?.userName || '当前用户')
+const currentUserName = computed(() => (ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))))
 const repayDialog = ref(false)
 const b_loanCandidates = ref([])
 
@@ -303,11 +303,11 @@ async function onBeforeSubmit(b) {
     b.form.bill.extJson.loanOffsets = b.form.loanOffsets.map((o) => ({ ...o }))
     // P1-1 还款：至少一条冲销记录
     if (!b.form.loanOffsets.length) {
-      ElMessage.warning('请至少选择一笔借款进行冲销'); return false
+      ElMessage.warning(t('expense.loan.errNeedLoanPick')); return false
     }
     // P1-1 还款：每笔冲销金额 > 0
     if (b.form.loanOffsets.some((o) => !(Number(o.offsetAmount) > 0))) {
-      ElMessage.warning('本次还款金额必须大于 0'); return false
+      ElMessage.warning(t('expense.loan.errRepayPositive')); return false
     }
     // P1-1 公司收款账号必填（户名/账号/开户行/还款方式）
     if (!(await validateForms([companyFormRef]))) return false
@@ -316,7 +316,7 @@ async function onBeforeSubmit(b) {
 }
 async function removeOffset(b, i) {
   try {
-    await ElMessageBox.confirm('确认删除？此操作不可恢复。', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(t('expense.common.askDeleteRow'), t('expense.common.confirmDeleteTitle'), { type: 'warning' })
   } catch { return }
   b.form.loanOffsets.splice(i, 1)
   syncRepayLine(b)
@@ -380,7 +380,7 @@ onMounted(async () => {
   try {
     const list = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || []
     users.value = list
-    currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || '当前用户'
+    currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
     const b = wb.value && wb.value.b
     const uid = store.user?.userId ?? store.user?.id
     if (b && !b.form.bill.applyUserId) {
@@ -392,7 +392,7 @@ onMounted(async () => {
       } else {
         b.form.bill.applyUserId = null
         b.form.bill.applyUserName = ''
-        if (uid != null) ElMessage.warning('未在用户列表中匹配到当前登录人，请手动选择申请人')
+        if (uid != null) ElMessage.warning(t('expense.common.errApplicantNotMatched'))
       }
     }
     if (props.mode === 'LOAN') {
@@ -402,8 +402,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!openLoans.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'billNo', label: '单号' }, { prop: 'totalAmount', label: '借款金额' }, { prop: 'loanBalance', label: '未冲销金额' }]
+  if (!openLoans.value.length) { ElMessage.warning(t('expense.loan.msgNoDataToExport')); return }
+  const cols = [{ prop: 'billNo', label: t('field.docNo') }, { prop: 'totalAmount', label: t('expense.loan.colLoanAmount') }, { prop: 'loanBalance', label: t('expense.loan.colNotWriteOffAmount') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = openLoans.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -417,7 +417,7 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `LoanApply_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('expense.loan.msgExportedCsv'))
 }
 
 
@@ -428,9 +428,9 @@ function formatMoney(val) {
 }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('expense.common.errPickExportRows')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('expense.loan.msgNoColumns')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -445,7 +445,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `LoanApply_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(t('expense.common.msgExportedRows', { v1: selRows.value.length }))
 }
 
 </script>

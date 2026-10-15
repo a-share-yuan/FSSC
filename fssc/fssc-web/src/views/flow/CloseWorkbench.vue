@@ -1,37 +1,34 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="close-workbench">
     <!-- 统一关账工作台头：AP 月末关账 + AR 应收月结合并入口（41号审查报告 P1-5） -->
     <el-card shadow="never" class="head-card">
       <div class="head">
         <div>
-          <div class="head-title">统一关账工作台</div>
-          <div class="head-sub">{{ scope === 'ar' ? 'AR 应收·成本月结' : scope === 'ap' ? 'AP 月末关账' : 'AP 月末关账 / AR 应收·成本月结 合并工作台' }}</div>
+          <div class="head-title">{{ $t('flow.closebench.title') }}</div>
+          <div class="head-sub">{{ scope === 'ar' ? $t('flow.closebench.scopeAr') : scope === 'ap' ? $t('flow.closebench.scopeAp') : $t('flow.closebench.scopeBoth') }}</div>
         </div>
         <div class="head-stats">
           <div class="stat">
             <div class="stat-num warn">{{ (apBoard?.rows || []).filter((r) => r.status !== 'CLOSED').length + (arBoard?.rows || []).filter((r) => r.status !== 'CLOSED').length }}</div>
-            <div class="stat-label">进行中关账/月结</div>
+            <div class="stat-label">{{ $t('flow.closebench.statInProgress') }}</div>
           </div>
           <div class="stat">
             <div class="stat-num danger">{{ frozenCount }}</div>
-            <div class="stat-label">协同冻结中</div>
+            <div class="stat-label">{{ $t('flow.closebench.statFrozen') }}</div>
           </div>
           <div class="stat">
             <div class="stat-num ok">{{ closedThisYear }}</div>
-            <div class="stat-label">本年已完成</div>
+            <div class="stat-label">{{ $t('flow.closebench.statDoneThisYear') }}</div>
           </div>
         </div>
       </div>
     </el-card>
 
     <el-tabs v-model="activeTab" class="close-tabs">
-      <el-tab-pane v-if="scope !== 'ar'" label="AP 月末关账" name="ap">
+      <el-tab-pane v-if="scope !== 'ar'" :label="$t('flow.closebench.scopeAp')" name="ap">
         <ApMonthCloseBoard ref="apBoard" />
       </el-tab-pane>
-      <el-tab-pane v-if="scope !== 'ap'" label="应收月结" name="ar">
+      <el-tab-pane v-if="scope !== 'ap'" :label="$t('flow.entryAr.tabMonthClose')" name="ar">
         <ArMonthCloseBoard ref="arBoard" />
       </el-tab-pane>
     </el-tabs>

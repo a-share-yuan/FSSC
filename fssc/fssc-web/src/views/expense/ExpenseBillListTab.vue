@@ -1,67 +1,64 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
       <el-select v-model="filterType" style="width: 160px" @change="loadBills">
-        <el-option label="全部" value="" />
-        <el-option label="报销" value="CLAIM" />
-        <el-option label="付款" value="PAY" />
-        <el-option label="借款" value="LOAN" />
-        <el-option label="事前申请" value="APPLY" />
+        <el-option :label="$t('common.all')" value="" />
+        <el-option :label="$t('expense.ledger.colClaim')" value="CLAIM" />
+        <el-option :label="$t('expense.ledger.colPayment')" value="PAY" />
+        <el-option :label="$t('expense.ledger.optLoan')" value="LOAN" />
+        <el-option :label="$t('expense.preapply.tabRequisition')" value="APPLY" />
       </el-select>
       <!-- P2-1 渠道筛选：走服务端 source 参数（myPage 等值过滤），不做前端本地筛——
            本地只能在已加载的 50 条里挑，挑出来的"0 条手机端"是假结论。 -->
       <el-select v-model="filterSource" style="width: 120px" @change="loadBills">
-        <el-option label="全部渠道" value="" />
-        <el-option label="电脑端" value="PC" />
-        <el-option label="手机端" value="H5" />
+        <el-option :label="$t('expense.ledger.phAllChannels')" value="" />
+        <el-option :label="$t('expense.ledger.optDesktop')" value="PC" />
+        <el-option :label="$t('expense.ledger.optMobile')" value="H5" />
       </el-select>
-      <el-input v-model="keyword" placeholder="单号/标题搜索" clearable size="small" style="width: 180px"
+      <el-input v-model="keyword" :placeholder="$t('expense.ledger.phSearchBill')" clearable size="small" style="width: 180px"
                 @keyup.enter="loadBills" @clear="loadBills" />
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-      <el-button size="small" @click="openLoanLedger">借款台账</el-button>
-      <el-button size="small" @click="openColdDialog">历史单据</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('expense.common.btnExportCsv') }}</el-button>
+      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('expense.common.btnExportSelected', { v1: selRows.length }) }}</el-button>
+      <el-button size="small" @click="openLoanLedger">{{ $t('expense.ledger.btnLoanLedger') }}</el-button>
+      <el-button size="small" @click="openColdDialog">{{ $t('expense.ledger.tabArchived') }}</el-button>
     </div>
     <el-table :data="displayBills" size="small" stripe @row-click="onRowClick" @selection-change="handleSelectionChange" @row-dblclick="openTrace">
       <el-table-column type="selection" width="45" />
-      <el-table-column prop="billNo" label="单号" width="150" sortable />
-      <el-table-column label="类型" width="80">
+      <el-table-column prop="billNo" :label="$t('field.docNo')" width="150" sortable />
+      <el-table-column :label="$t('field.type')" width="80">
         <template #default="{ row }">{{ billTypeLabel(row.billType) }}</template>
       </el-table-column>
       <!-- P2-1 渠道列：枚举取词表、禁中英直显（既有枚举治理约定）；未知值显「—」不猜 -->
-      <el-table-column label="渠道" width="72">
+      <el-table-column :label="$t('expense.ledger.colChannel')" width="72">
         <template #default="{ row }">{{ sourceLabel(row.source) }}</template>
       </el-table-column>
-      <el-table-column label="子类" width="90">
+      <el-table-column :label="$t('expense.ledger.colSubType')" width="90">
         <template #default="{ row }">{{ billSubTypeLabel(row.billSubType) }}</template>
       </el-table-column>
-      <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip sortable />
-      <el-table-column prop="totalAmount" label="金额" width="100" sortable :formatter="(r,c,v) => formatMoney(v)" />
-      <el-table-column label="状态" width="100">
+      <el-table-column prop="title" :label="$t('expense.common.colTitle')" min-width="200" show-overflow-tooltip sortable />
+      <el-table-column prop="totalAmount" :label="$t('field.amount')" width="100" sortable :formatter="(r,c,v) => formatMoney(v)" />
+      <el-table-column :label="$t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="voucherNo" label="凭证号" width="140" sortable />
-      <el-table-column label="操作" width="170" fixed="right">
+      <el-table-column prop="voucherNo" :label="$t('expense.ledger.colVoucherNo')" width="140" sortable />
+      <el-table-column :label="$t('common.operation')" width="170" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click.stop="view(row)">详情</el-button>
-          <el-button v-if="canEdit(row)" link type="warning" size="small" @click.stop="editBill(row)">{{ row.status === 'REJECTED' ? '编辑重提' : '编辑' }}</el-button>
-          <el-button link size="small" @click.stop="openTrace(row)">追溯</el-button>
+          <el-button link type="primary" size="small" @click.stop="view(row)">{{ $t('field.detail') }}</el-button>
+          <el-button v-if="canEdit(row)" link type="warning" size="small" @click.stop="editBill(row)">{{ row.status === 'REJECTED' ? t('expense.common.btnEditResubmit') : t('expense.common.btnEdit') }}</el-button>
+          <el-button link size="small" @click.stop="openTrace(row)">{{ $t('expense.common.btnTrace') }}</el-button>
           <!-- 高频操作内联，其余次要操作收进"更多"下拉，避免一列挤 7 个按钮 -->
           <!-- 「我的单据」= 申请人视角：仅保留本人可做的动作（撤回/作废/冲销预付/查看凭证）。
                审批通过/驳回属于审批人动作，只在「我的待办」出现，此处绝不提供（避免"自己审自己"）。 -->
           <el-dropdown v-if="hasMoreActions(row)" trigger="click" @command="(cmd) => onMoreCommand(row, cmd)">
-            <el-button link size="small" @click.stop>更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+            <el-button link size="small" @click.stop>{{ $t('expense.bill.btnMore') }}<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item v-if="row.billType === 'CLAIM' && (row.status === BillStatus.APPROVING || row.status === BillStatus.APPROVED)" command="offset">冲销预付</el-dropdown-item>
-                <el-dropdown-item v-if="row.status === BillStatus.DRAFT" command="void">作废</el-dropdown-item>
-                <el-dropdown-item v-if="canWithdraw(row)" command="withdraw">撤回</el-dropdown-item>
-                <el-dropdown-item v-if="row.voucherNo && hasPerm('sharing:voucher:list')" command="voucher">查看凭证</el-dropdown-item>
+                <el-dropdown-item v-if="row.billType === 'CLAIM' && (row.status === BillStatus.APPROVING || row.status === BillStatus.APPROVED)" command="offset">{{ $t('expense.bill.btnOffsetPrepay') }}</el-dropdown-item>
+                <el-dropdown-item v-if="row.status === BillStatus.DRAFT" command="void">{{ $t('field.void') }}</el-dropdown-item>
+                <el-dropdown-item v-if="canWithdraw(row)" command="withdraw">{{ $t('expense.bill.btnWithdraw') }}</el-dropdown-item>
+                <el-dropdown-item v-if="row.voucherNo && hasPerm('sharing:voucher:list')" command="voucher">{{ $t('expense.bill.btnViewVoucher') }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -71,62 +68,62 @@
   </el-card>
 
   <!-- 员工借款余额台账 -->
-  <el-dialog v-model="loanLedgerDialog" title="员工借款余额台账" width="720px">
+  <el-dialog v-model="loanLedgerDialog" :title="$t('expense.ledger.titleLoanLedger')" width="720px">
     <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px">
-      <span style="font-size: 13px; color: #606266">仅看逾期</span>
+      <span style="font-size: 13px; color: #606266">{{ $t('expense.ledger.btnOverdueOnly') }}</span>
       <el-switch v-model="onlyOverdue" @change="loadLoanLedger" />
     </div>
     <SkeletonList v-if="loanLedgerLoading" :rows="8" :cols="5" />
     <el-table v-else :data="loanLedgerRows" size="small" border :row-class-name="loanRowClass" max-height="420">
       <el-table-column type="selection" width="45" />
-      <el-table-column prop="applyUserName" label="借款人" width="120" sortable />
-      <el-table-column label="借款总额" width="120">
+      <el-table-column prop="applyUserName" :label="$t('expense.ledger.colBorrower')" width="120" sortable />
+      <el-table-column :label="$t('expense.ledger.colLoanTotal')" width="120">
         <template #default="{ row }">{{ fmt(row.loanTotal) }}</template>
       </el-table-column>
-      <el-table-column label="未还余额" width="120">
+      <el-table-column :label="$t('expense.ledger.colUnpaidBalance')" width="120">
         <template #default="{ row }">{{ fmt(row.balance) }}</template>
       </el-table-column>
-      <el-table-column label="预计还款日" width="130">
+      <el-table-column :label="$t('expense.ledger.colDueDate')" width="130">
         <template #default="{ row }">{{ row.expectRepayDate || row.earliestRepayDate || '\u2014' }}</template>
       </el-table-column>
-      <el-table-column label="逾期天数" width="100">
+      <el-table-column :label="$t('expense.ledger.colOverdueDays')" width="100">
         <template #default="{ row }">{{ row.overdue ? row.overdueDays : '\u2014' }}</template>
       </el-table-column>
-      <el-table-column label="状态" width="90">
+      <el-table-column :label="$t('common.status')" width="90">
         <template #default="{ row }">
-          <el-tag :type="row.overdue ? 'danger' : 'success'" size="small">{{ row.overdue ? '逾期' : '正常' }}</el-tag>
+          <el-tag :type="row.overdue ? 'danger' : 'success'" size="small">{{ row.overdue ? t('expense.ledger.stOverdue') : t('expense.ledger.stNormal') }}</el-tag>
         </template>
       </el-table-column>
     </el-table>
   </el-dialog>
 
   <!-- 历史（冷）单据查询 -->
-  <el-dialog v-model="coldDialog" title="历史单据（已归档）" width="920px">
+  <el-dialog v-model="coldDialog" :title="$t('expense.ledger.tabArchivedFull')" width="920px">
     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-      <el-input v-model="coldFilter.billNo" placeholder="单据号（模糊）" size="small" style="width: 180px" clearable />
-      <el-date-picker v-model="coldFilter.beginDate" type="date" value-format="YYYY-MM-DD" placeholder="申请日期起" size="small" style="width: 160px" />
-      <el-date-picker v-model="coldFilter.endDate" type="date" value-format="YYYY-MM-DD" placeholder="申请日期止" size="small" style="width: 160px" />
-      <el-button size="small" type="primary" @click="loadColdPage(1)">查询</el-button>
-      <el-button size="small" @click="resetColdFilter">重置</el-button>
+      <el-input v-model="coldFilter.billNo" :placeholder="$t('expense.ledger.phBillNoFuzzy')" size="small" style="width: 180px" clearable />
+      <el-date-picker v-model="coldFilter.beginDate" type="date" value-format="YYYY-MM-DD" :placeholder="$t('expense.ledger.phApplyDateStart')" size="small" style="width: 160px" />
+      <el-date-picker v-model="coldFilter.endDate" type="date" value-format="YYYY-MM-DD" :placeholder="$t('expense.ledger.phApplyDateEnd')" size="small" style="width: 160px" />
+      <el-button size="small" type="primary" @click="loadColdPage(1)">{{ $t('common.search') }}</el-button>
+      <el-button size="small" @click="resetColdFilter">{{ $t('common.reset') }}</el-button>
     </div>
     <SkeletonList v-if="coldLoading" :rows="8" :cols="5" />
     <el-table v-else :data="coldRows" size="small" border max-height="420"
-              empty-text="当前无已归档历史单据（归档任务默认关闭，可在系统参数中开启）">
+              :empty-text="$t('expense.ledger.hintNoArchived')">
       <el-table-column type="selection" width="45" />
-      <el-table-column prop="bill_no" label="单号" width="160" sortable />
-      <el-table-column label="类型" width="80">
+      <el-table-column prop="bill_no" :label="$t('field.docNo')" width="160" sortable />
+      <el-table-column :label="$t('field.type')" width="80">
         <template #default="{ row }">{{ billTypeLabel(row.bill_type) }}</template>
       </el-table-column>
-      <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip sortable />
-      <el-table-column label="金额" width="120">
+      <el-table-column prop="title" :label="$t('expense.common.colTitle')" min-width="200" show-overflow-tooltip sortable />
+      <el-table-column :label="$t('field.amount')" width="120">
         <template #default="{ row }">{{ fmt(row.total_amount) }}</template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="100" sortable>
+      <el-table-column prop="status" :label="$t('common.status')" width="100" sortable>
         <template #default="{ row }">
           <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="归档时间" width="180">
+      <el-table-column :label="$t('expense.ledger.colFiledAt')" width="180">
         <template #default="{ row }">{{ row.archived_at || '\u2014' }}</template>
       </el-table-column>
     </el-table>
@@ -139,29 +136,29 @@
   </el-dialog>
 
   <!-- 冲销预付款单 -->
-  <el-dialog v-model="offsetDialog" title="冲销预付款单" width="520px">
+  <el-dialog v-model="offsetDialog" :title="$t('expense.ledger.btnWriteOffPrepay')" width="520px">
     <el-form :rules="offsetFormRules" label-width="90px" size="default">
-      <el-form-item label="报销单">
+      <el-form-item :label="$t('expense.ledger.colClaimBill')">
         <span>{{ offsetTarget.billNo }} {{ offsetTarget.title }}</span>
       </el-form-item>
-      <el-form-item label="预付款单">
-        <el-select v-model="offsetForm.prepayBillId" filterable :loading="prepayLoading" style="width: 100%" placeholder="请选择预付款单（费用预付款）">
-          <el-option v-for="p in prepayOptions" :key="p.id" :label="`${p.billNo} ${p.title || ''}（金额 ${fmt(p.totalAmount)}）`" :value="p.id" />
+      <el-form-item :label="$t('expense.ledger.colPrepayBill')">
+        <el-select v-model="offsetForm.prepayBillId" filterable :loading="prepayLoading" style="width: 100%" :placeholder="$t('expense.ledger.phPickPrepay')">
+          <el-option v-for="p in prepayOptions" :key="p.id" :label="$t('expense.bill.optPrepayCandidate', { v1: p.billNo, v2: p.title || '', v3: fmt(p.totalAmount) })" :value="p.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="冲销金额">
+      <el-form-item :label="$t('expense.ledger.colWriteOffAmount')">
         <el-input-number v-model="offsetForm.amount" :min="0" :precision="2" style="width: 100%" />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="offsetDialog = false">取消</el-button>
-      <el-button type="primary" :loading="offsetSubmitting" @click="submitOffset">确定冲销</el-button>
+      <el-button @click="offsetDialog = false">{{ $t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="offsetSubmitting" @click="submitOffset">{{ $t('expense.ledger.btnConfirmWriteOff') }}</el-button>
     </template>
   </el-dialog>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" :biz-type="traceBizType" />
 
   <!-- 单据详情抽屉：与审批工作台「去处理」共用同一详情面板，字段口径一致 -->
-  <el-drawer v-model="detailVisible" :title="`单据详情 ${detailBillNo || ''}`" direction="rtl" size="820px" :destroy-on-close="true">
+  <el-drawer v-model="detailVisible" :title="$t('expense.bill.ttlBillDetail', { v1: detailBillNo || '' })" direction="rtl" size="820px" :destroy-on-close="true">
     <BillDetailPanel :bill-id="detailBillId" :bill-type="detailBillType" />
   </el-drawer>
 </template>
@@ -181,6 +178,9 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatMoney } from '@/utils/format'
 import { hasPerm } from '@/utils/perm'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => loadBills(),
@@ -214,7 +214,7 @@ const filterType = ref('')
 const filterSource = ref('')
 /** 渠道中文名词表：库里存枚举码、界面显中文（枚举治理约定：禁中英直显、缺失不猜） */
 function sourceLabel(v) {
-  return { PC: '电脑端', H5: '手机端' }[v] || '—'
+  return { PC: t('expense.ledger.optDesktop'), H5: t('expense.ledger.optMobile') }[v] || '—'
 }
 const keyword = ref('')
 const selRows = ref([])
@@ -251,10 +251,10 @@ const prepayOptions = ref([])
 const offsetForm = reactive({ prepayBillId: null, amount: 0 })
 
 // 表单校验规则
-const offsetFormRules = reactive({
-  prepayBillId: [{ required: true, message: '请选择预付款单' }],
-  amount: [{ required: true, message: '请输入冲销金额' }],
-})
+const offsetFormRules = computed(() => (reactive({
+  prepayBillId: [{ required: true, message: t('expense.ledger.errPrepayRequired') }],
+  amount: [{ required: true, message: t('expense.ledger.errWriteOffAmountRequired') }],
+})))
 
 function fmt(v) { return v == null ? '0.00' : Number(v).toFixed(2) }
 function statusType(s) { return _statusType(s) }
@@ -281,7 +281,7 @@ async function view(row) {
 
 /** 打开单据详情抽屉（供列表「详情」按钮与深链 ?billId= 共用） */
 function openDetailById(id, billType, billNo) {
-  if (id == null) { ElMessage.warning('该行缺少单据 ID，无法查看详情'); return }
+  if (id == null) { ElMessage.warning(t('expense.ledger.errNoBillId')); return }
   detailBillId.value = id
   detailBillType.value = billType || ''
   detailBillNo.value = billNo || ''

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -344,7 +341,8 @@ public class FraudDetectionService {
     /** P2-5: 分页查询检测记录（风控看板数据源；detectionResult=HIGH_RISK/SUSPICIOUS/NORMAL） */
     public PageResult<FraudDetectionLog> page(long pageNum, long pageSize, String detectionResult,
                                               Long employeeId, String detectionType,
-                                              String actionTaken, Boolean unreviewed) {
+                                              String actionTaken, Boolean unreviewed,
+                                              Boolean pendingRelease) {
         LambdaQueryWrapper<FraudDetectionLog> qw = new LambdaQueryWrapper<>();
         if (detectionResult != null && !detectionResult.isBlank()) {
             qw.eq(FraudDetectionLog::getDetectionResult, detectionResult);
@@ -358,9 +356,22 @@ public class FraudDetectionService {
         if (actionTaken != null && !actionTaken.isBlank()) {
             qw.eq(FraudDetectionLog::getActionTaken, actionTaken);
         }
-        // 人工待审队列：只看待复审的（reviewed_at 为空）
+        // D-F1R-07：待处置队列必须与付款闸 {@link #paymentBlockReason} <b>同源同判据</b>，
+        // 否则风控看到的"待复审"和真正卡住付款的那批记录不是同一批。
+        // 原判据只按 actionTaken 精确相等筛选，而记录落库时 actionTaken 的初值就是 'REVIEW'
+        // （＝转人工待审），既不是空也不是 'PENDING' ⇒ 按"未处置/空值"筛必然得到 0 条，
+        // 风控会误以为没有待办，付款却一直被拦。现在两条专用队列：
+        //  · pendingRelease=true → 正在阻断付款的记录（与 paymentBlockReason 逐条对齐）
+        //  · unreviewed=true      → 未做终局处置的记录（语义＝无终局处置人且未放行）
+        if (Boolean.TRUE.equals(pendingRelease)) {
+            qw.eq(FraudDetectionLog::getDetectionResult, "HIGH_RISK")
+                    .isNull(FraudDetectionLog::getReviewedBy)
+                    .ne(FraudDetectionLog::getActionTaken, "RELEASE");
+        }
         if (Boolean.TRUE.equals(unreviewed)) {
-            qw.isNull(FraudDetectionLog::getReviewedAt);
+            qw.isNull(FraudDetectionLog::getReviewedAt)
+                    .and(w -> w.isNull(FraudDetectionLog::getActionTaken)
+                            .or().ne(FraudDetectionLog::getActionTaken, "RELEASE"));
         }
         qw.orderByDesc(FraudDetectionLog::getId);
         Page<FraudDetectionLog> p = fraudDetectionLogMapper.selectPage(Page.of(pageNum, pageSize), qw);

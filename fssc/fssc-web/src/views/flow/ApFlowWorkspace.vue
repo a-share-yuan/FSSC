@@ -1,23 +1,20 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="flow-workspace">
     <div class="ws-head">
-      <h2 class="ws-title">应付工作台</h2>
-      <span class="ws-sub">应付域统一入口：付款服务申请 · 统计报表 · SCP/CCP 协同；关账走「统一关账工作台」，对账走「应付对账（函）」</span>
+      <h2 class="ws-title">{{ $t('flow.entry.apWorkspace') }}</h2>
+      <span class="ws-sub">{{ $t('flow.entry.apServiceDesc') }}</span>
       <div class="ws-links">
-        <el-button link type="primary" @click="$router.push('/apflow/ap-month-close')">统一关账工作台 →</el-button>
-        <el-button link type="primary" @click="$router.push('/pay/recon')">应付对账（函） →</el-button>
+        <el-button link type="primary" @click="$router.push('/apflow/ap-month-close')">{{ $t('flow.entry.monthCloseLink') }}</el-button>
+        <el-button link type="primary" @click="$router.push('/pay/recon')">{{ $t('flow.entry.apReconLink') }}</el-button>
       </div>
     </div>
     <el-tabs v-model="tab" class="ws-tabs">
-      <el-tab-pane label="付款服务申请" name="request" lazy>
+      <el-tab-pane :label="$t('flow.entry.apServiceTitle')" name="request" lazy>
         <ApRequestBoard v-if="canList" />
-        <el-empty v-else description="当前账号无付款服务申请查看权限，请联系管理员授权 apflow:request:list" />
+        <el-empty v-else :description="$t('flow.entry.noListPerm')" />
       </el-tab-pane>
-      <el-tab-pane label="统计报表" name="reports" lazy><ArApReportBoard /></el-tab-pane>
-      <el-tab-pane label="产业链协同" name="collab" lazy><ArApCollabBoard /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entry.reportTitle')" name="reports" lazy><ArApReportBoard /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAp.tabSupplyChain')" name="collab" lazy><ArApCollabBoard /></el-tab-pane>
     </el-tabs>
   </div>
 </template>

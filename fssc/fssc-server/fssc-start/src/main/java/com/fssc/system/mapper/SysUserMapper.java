@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.system.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -80,10 +77,12 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
     /**
      * G2 传阅（2026-09-23）：按角色编码集合反查<b>在职</b>用户ID。
      *
-     * <p>口径与 {@link #selectRoleCodes(Long)} 严格对称：直接角色 ∪ 用户组派生角色，
-     * 且只返回 {@code status='NORMAL'} 的启用用户 —— 抄送绝不投递给停用账号。
-     * 租户条件由拦截器注入（SQL 内<b>不</b>手写 tenant_id）。
+     * @deprecated 2026-10-15 起不再使用（唯一调用方 {@code WfCcService} 已改为走
+     * {@code NodeOrgResolver.listRoleCandidatesInScope} 按 {@code org_scope} + 单据公司收敛）。
+     * 本方法<b>无任何 company/scope 条件</b>，直接调用会造成「审批收敛、抄送撒全网」的跨公司过度知会
+     * （不变量 II）。保留声明仅为历史追溯，<b>禁止在新代码中调用</b>。
      */
+    @Deprecated
     @Select("<script>"
             + "select distinct u.id from sys_user u join ("
             + "  select ur.user_id as uid from sys_user_role ur "

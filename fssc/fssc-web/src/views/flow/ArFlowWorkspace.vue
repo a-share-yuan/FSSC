@@ -1,22 +1,19 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="flow-workspace">
     <div class="ws-head">
-      <h2 class="ws-title">应收工作台</h2>
-      <span class="ws-sub">应收域统一入口：服务申请 · 开票链 · 核销 · 票据 · 坏账 · 报表 · 协同 · 基础配置（审批走「我的待办」，作业走「任务池」）</span>
+      <h2 class="ws-title">{{ $t('flow.entryAr.arWorkspace') }}</h2>
+      <span class="ws-sub">{{ $t('flow.entryAr.arWorkspaceDesc') }}</span>
     </div>
     <el-tabs v-model="tab" class="ws-tabs">
-      <el-tab-pane label="应收服务申请" name="claims" lazy><ArClaimBoard /></el-tab-pane>
-      <el-tab-pane label="开票链工作台" name="billing" lazy><ArBillingBoard /></el-tab-pane>
-      <el-tab-pane label="核销工作台" name="writeoff" lazy><ArWriteoffBoard /></el-tab-pane>
-      <el-tab-pane label="票据管理" name="notes" lazy><ArNoteBoard /></el-tab-pane>
-      <el-tab-pane label="坏账管理" name="bad-debt" lazy><ArBadDebtBoard /></el-tab-pane>
-      <el-tab-pane label="应收月结" name="month-close" lazy><CloseWorkbench scope="ar" /></el-tab-pane>
-      <el-tab-pane label="应收统计报表" name="reports" lazy><ArApReportBoard /></el-tab-pane>
-      <el-tab-pane label="产业链协同" name="collab" lazy><ArApCollabBoard /></el-tab-pane>
-      <el-tab-pane label="汇率与核对容差" name="base-config" lazy><ArBaseConfigPage /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAr.tabServiceRequest')" name="claims" lazy><ArClaimBoard /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAr.tabBillingChain')" name="billing" lazy><ArBillingBoard /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAr.tabWriteoff')" name="writeoff" lazy><ArWriteoffBoard /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAr.tabNote')" name="notes" lazy><ArNoteBoard /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAr.tabBadDebt')" name="bad-debt" lazy><ArBadDebtBoard /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAr.tabMonthClose')" name="month-close" lazy><CloseWorkbench scope="ar" /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAr.tabReport')" name="reports" lazy><ArApReportBoard /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAp.tabSupplyChain')" name="collab" lazy><ArApCollabBoard /></el-tab-pane>
+      <el-tab-pane :label="$t('flow.entryAr.tabBaseConfig')" name="base-config" lazy><ArBaseConfigPage /></el-tab-pane>
     </el-tabs>
   </div>
 </template>

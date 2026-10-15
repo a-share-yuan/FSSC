@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.report.mapper;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -27,21 +24,30 @@ import java.util.Map;
 public interface ReportMapper {
 
     /** 部门报销排行（金额降序）。companyId 非 null 时仅统计该公司（① 导出口径）
-     *  R5-D-021：camelCase 别名为报表工作台的列绑定，snake_case 别名保留给导出与看板的既有读取，两者共存。 */
+     *  R5-D-021：camelCase 别名为报表工作台的列绑定，snake_case 别名保留给导出与看板的既有读取，两者共存。
+     *  D-F1R-04：补数据范围参数。原口径只按公司收口（companyId），而本接口挂 {@code dashboard:view}
+     *  ——普通员工与共享会计返回完全相同的全公司排名（10-15 实测两个账号结果逐行一致）。
+     *  scopeDeptIds/scopeUserId 与同文件 {@code loanBalance} 同一套语义：null 即不追加该维条件。 */
     @Select("<script>select b.dept_id as dept_id, d.dept_name as dept_name, count(*) as cnt, " +
             "sum(b.total_amount) as amount, " +
             "d.dept_name as deptName, count(*) as billCount, sum(b.total_amount) as totalAmount " + // R5-D-021
             "from exp_bill b left join sys_dept d on b.dept_id = d.id " +
             "where b.del_flag = 0 and b.dept_id is not null " +
             "<if test='companyId != null'>and b.company_id = #{companyId}</if> " +
+            "<if test='scopeDeptIds != null'>and b.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
+            "<if test='scopeUserId != null'>and b.apply_user_id = #{scopeUserId}</if> " +
             "group by b.dept_id, d.dept_name order by amount desc</script>")
-    List<Map<String, Object>> expenseByDept(@Param("companyId") Long companyId);
+    List<Map<String, Object>> expenseByDept(@Param("companyId") Long companyId,
+                                            @Param("scopeDeptIds") java.util.Collection<Long> scopeDeptIds,
+                                            @Param("scopeUserId") Long scopeUserId);
 
     /** 审批时效：提交(submit_time) → 审批通过(派工 create_time) 的平均分钟，按单据类型
      *  R5-D-115：报表工作台按「单据类型 + 小时」绑定，故补 camelCase 别名（avg/max 换算为小时）；
      *  snake_case 的分钟别名保留给看板的既有读取，两者共存。
      *  R5-D-026：补公司维收口——scopeCompanyId 由 DashboardService 按 orgGuard.enforceCompany()
-     *  传入（同文件 expenseByDept 现例）；exp_bill 有 company_id 列；null（集团级/无公司登录）不追加。 */
+     *  传入（同文件 expenseByDept 现例）；exp_bill 有 company_id 列；null（集团级/无公司登录）不追加。
+     *  D-F1R-04：再补部门/本人两维。原口径同样只按公司收口，而接口挂 {@code dashboard:view}
+     *  ⇒ 普通员工能看到全公司各部门审批时效，与共享会计无差异（10-15 实测）。 */
     @Select("<script>select b.bill_type as bill_type, count(*) as cnt, " +
             "round(avg(timestampdiff(MINUTE, b.submit_time, a.create_time)), 1) as avg_minutes, " +
             "b.bill_type as nodeName, " +
@@ -50,8 +56,12 @@ public interface ReportMapper {
             "from exp_bill b join op_audit_task a on b.id = a.bill_id " +
             "where a.task_type = 'AUDIT' and a.del_flag = 0 and b.del_flag = 0 and b.status = 'APPROVED' and b.submit_time is not null " +
             "<if test='scopeCompanyId != null'>and b.company_id = #{scopeCompanyId}</if> " +
+            "<if test='scopeDeptIds != null'>and b.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
+            "<if test='scopeUserId != null'>and b.apply_user_id = #{scopeUserId}</if> " +
             "group by b.bill_type</script>")
-    List<Map<String, Object>> approvalEfficiency(@Param("scopeCompanyId") Long scopeCompanyId);
+    List<Map<String, Object>> approvalEfficiency(@Param("scopeCompanyId") Long scopeCompanyId,
+                                                 @Param("scopeDeptIds") java.util.Collection<Long> scopeDeptIds,
+                                                 @Param("scopeUserId") Long scopeUserId);
 
     // ---------- 需求 11.4 借款余额汇总：员工借款金额/未冲销余额 ----------
     @Select("<script>select b.apply_user_id as applyUserId, max(ifnull(u.nick_name, b.apply_user_name)) as applyUserName, count(*) as billCnt, " +

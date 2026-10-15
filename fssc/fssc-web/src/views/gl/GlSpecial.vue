@@ -1,56 +1,51 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div :class="{ tabless: isSingle }">
     <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>GL 专项流程</b>
+        <b>{{ $t('gl.special.pageTitle') }}</b>
         <!-- R5-D-163：副标题原枚举六项漏第七个页签「合并报表」，按页签实有条数补齐 -->
-        <span style="color:#909399; font-size:12px">税金计提 / 薪酬发放 / 内部往来抵消 / 一般记账 / 月结 / 合并报表 / GL主数据 —— 生成即发起审批流并落账</span>
+        <span style="color:#909399; font-size:12px">{{ $t('gl.special.pageSub') }}</span>
         <!-- 本单上下文（D-DEC-127/139/148）：待办「去处理」带 ?billNo= 进来时，列表只展示被审的那一张 -->
         <el-tag v-if="deepKeyword" size="small" type="warning" closable @close="clearDeepLink">
-          已按单号定位：{{ deepKeyword }}
-        </el-tag>
-        <el-button size="small" style="margin-left:auto" @click="reload">刷新</el-button>
+          {{ $t('gl.special.locatedByNo', { v1: deepKeyword }) }}</el-tag>
+        <el-button size="small" style="margin-left:auto" @click="reload">{{ $t('common.refresh') }}</el-button>
       </div>
     </template>
 
     <el-tabs v-model="tab">
       <!-- 税金计提 -->
-      <el-tab-pane label="税金计提" name="tax">
+      <el-tab-pane :label="$t('gl.special.tabTaxProvision')" name="tax">
         <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center">
           <!-- R5-D-118：期间选择器原为空转控件（改选后列表请求 period 恒空）——现改选即按所选期间重查列表 -->
-          <el-date-picker v-model="taxPeriod" type="month" value-format="YYYYMM" placeholder="税金期间" style="width:130px" @change="loadTax" />
+          <el-date-picker v-model="taxPeriod" type="month" value-format="YYYYMM" :placeholder="$t('gl.special.colTaxPeriod')" style="width:130px" @change="loadTax" />
           <!-- D-DEC-140：默认期间的来源在界面写明，避免"没改就直接点到别的期间去" -->
           <span style="color:#909399; font-size:12px">
-            默认期间取{{ periodSource }}：{{ openPeriod || '取数中…' }}
-          </span>
-          <el-button type="success" @click="doProvision">计提税金（提交审批）</el-button>
+            {{ $t('gl.special.defaultPeriodFrom', { v1: periodSource, v2: openPeriod || t('gl.special.fetching') }) }}</span>
+          <el-button type="success" @click="doProvision">{{ $t('gl.special.btnProvisionTax') }}</el-button>
           <!-- R5-D-154：落账挂接核查——计提是否真落了账，本页可查（只读，不补记不改账） -->
-          <el-button v-if="canLinkCheck" type="primary" plain @click="openLinkCheck">落账挂接核查</el-button>
+          <el-button v-if="canLinkCheck" type="primary" plain @click="openLinkCheck">{{ $t('gl.special.btnPostingCheck') }}</el-button>
           <!-- D-DEC-440：缴纳税金属资金/出纳岗职能，计提审批通过只确立应付税额，缴款本身走对公付款通道；
                本页不再暴露"缴纳"发起入口（流程定义 GL_TAX_PAY 保留，供计提-缴纳联动与历史实例查询）。 -->
-          <span class="tax-pay-route">税金通过对公付款通道缴纳（付款单 / 资金付款流程），本页面只做计提</span>
+          <span class="tax-pay-route">{{ $t('gl.special.taxPayHint') }}</span>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
-        <el-table class="cm-target-gl" :data="taxData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据" @row-dblclick="handleView">
+        <el-table class="cm-target-gl" :data="taxData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')" @row-dblclick="handleView">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="provisionNo" label="计提单号" width="150"  sortable />
-          <el-table-column prop="period" label="期间(yyyyMM)" width="110"  sortable />
-          <el-table-column prop="taxType" label="税种" width="110"  sortable :formatter="(row, col, val) => taxTypeLabel(val)" />
-          <el-table-column label="计税基数" width="130" align="right"><template #default="{ row }">{{ fmt(row.baseAmount) }}</template></el-table-column>
-          <el-table-column label="税率" width="90" align="right"><template #default="{ row }">{{ row.rate }}%</template></el-table-column>
-          <el-table-column label="税额" width="130" align="right"><template #default="{ row }">{{ fmt(row.taxAmount) }}</template></el-table-column>
-          <el-table-column label="科目" width="120"><template #default="{ row }">{{ subjectName(row.subjectId) }}</template></el-table-column>
-          <el-table-column label="状态" width="100" align="center">
+          <el-table-column prop="provisionNo" :label="$t('gl.special.colProvisionNo')" width="150"  sortable />
+          <el-table-column prop="period" :label="$t('gl.special.phPeriodYm')" width="110"  sortable />
+          <el-table-column prop="taxType" :label="$t('gl.special.colTaxKind')" width="110"  sortable :formatter="(row, col, val) => taxTypeLabel(val)" />
+          <el-table-column :label="$t('gl.special.colTaxBase')" width="130" align="right"><template #default="{ row }">{{ fmt(row.baseAmount) }}</template></el-table-column>
+          <el-table-column :label="$t('gl.special.colRate')" width="90" align="right"><template #default="{ row }">{{ row.rate }}%</template></el-table-column>
+          <el-table-column :label="$t('gl.special.colTaxAmount')" width="130" align="right"><template #default="{ row }">{{ fmt(row.taxAmount) }}</template></el-table-column>
+          <el-table-column :label="$t('gl.special.tagSubject')" width="120"><template #default="{ row }">{{ subjectName(row.subjectId) }}</template></el-table-column>
+          <el-table-column :label="$t('common.status')" width="100" align="center">
             <template #default="{ row }">
               <el-tag :type="stTagType(row.status)" size="small">{{ stLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
           <!-- R5-D-153 -->
-          <el-table-column prop="voucherNo" label="记账凭证号" min-width="140" show-overflow-tooltip  sortable>
+          <el-table-column prop="voucherNo" :label="$t('gl.special.colVoucherNo')" min-width="140" show-overflow-tooltip  sortable>
             <template #default="{ row }">{{ row.voucherNo || '—' }}</template>
           </el-table-column>
         </el-table>
@@ -58,39 +53,39 @@
       </el-tab-pane>
 
       <!-- 薪酬发放 -->
-      <el-tab-pane label="薪酬发放" name="salary">
+      <el-tab-pane :label="$t('gl.special.tabPayroll')" name="salary">
         <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center">
-          <el-input v-model="salaryForm.period" placeholder="期间 yyyyMM" style="width:140px" />
-          <el-select v-model="salaryForm.deptId" filterable clearable placeholder="选择部门" style="width:180px">
+          <el-input v-model="salaryForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:140px" />
+          <el-select v-model="salaryForm.deptId" filterable clearable :placeholder="$t('gl.special.phSelectDept')" style="width:180px">
             <el-option v-for="d in depts" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
-          <el-input-number v-model="salaryForm.empCount" :min="1" placeholder="人数" style="width:120px" />
-          <el-button type="success" :disabled="salaryPeriodClosed" @click="doCalculate">核算薪酬（提交审批）</el-button>
-          <span v-if="salaryPeriodClosed" class="period-note">所选期间已结账（CLOSED），禁止提交</span>
-          <span v-else-if="!canLoadPeriod" class="period-note">当前账号不可读会计期间，无法校验期间状态，提交以服务端校验为准</span>
+          <el-input-number v-model="salaryForm.empCount" :min="1" :placeholder="$t('gl.special.colHeadcount')" style="width:120px" />
+          <el-button type="success" :disabled="salaryPeriodClosed" @click="doCalculate">{{ $t('gl.special.btnRunPayroll') }}</el-button>
+          <span v-if="salaryPeriodClosed" class="period-note">{{ $t('gl.special.errPeriodClosed') }}</span>
+          <span v-else-if="!canLoadPeriod" class="period-note">{{ $t('gl.special.warnNoPeriodRead') }}</span>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
-        <el-table :data="salaryData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据">
+        <el-table :data="salaryData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="runNo" label="批次号" width="150"  sortable />
-          <el-table-column prop="period" label="期间(yyyyMM)" width="110"  sortable />
-          <el-table-column label="部门" width="120"><template #default="{ row }">{{ deptName(row.deptId) }}</template></el-table-column>
-          <el-table-column prop="empCount" label="人数" width="70" align="center"  sortable />
-          <el-table-column label="应发工资" width="130" align="right"><template #default="{ row }">{{ fmt(row.salaryAmount) }}</template></el-table-column>
+          <el-table-column prop="runNo" :label="$t('gl.special.colBatchNo')" width="150"  sortable />
+          <el-table-column prop="period" :label="$t('gl.special.phPeriodYm')" width="110"  sortable />
+          <el-table-column :label="$t('gl.special.colDept')" width="120"><template #default="{ row }">{{ deptName(row.deptId) }}</template></el-table-column>
+          <el-table-column prop="empCount" :label="$t('gl.special.colHeadcount')" width="70" align="center"  sortable />
+          <el-table-column :label="$t('gl.special.colGross')" width="130" align="right"><template #default="{ row }">{{ fmt(row.salaryAmount) }}</template></el-table-column>
           <!-- D-DEC-143：deduction_amount（列注释「扣除合计（旷工/罚款等）」）此前不上列表，「其他扣除」对使用者不可见 -->
-          <el-table-column label="其他扣除" width="120" align="right"><template #default="{ row }">{{ fmt(row.deductionAmount) }}</template></el-table-column>
-          <el-table-column label="社保" width="120" align="right"><template #default="{ row }">{{ fmt(row.socialSecurityAmount) }}</template></el-table-column>
-          <el-table-column label="个税" width="110" align="right"><template #default="{ row }">{{ fmt(row.taxAmount) }}</template></el-table-column>
-          <el-table-column label="应付总额" width="130" align="right"><template #default="{ row }">{{ fmt(row.totalAmount) }}</template></el-table-column>
-          <el-table-column label="状态" width="110" align="center">
+          <el-table-column :label="$t('gl.special.colDeduction')" width="120" align="right"><template #default="{ row }">{{ fmt(row.deductionAmount) }}</template></el-table-column>
+          <el-table-column :label="$t('gl.special.colSocial')" width="120" align="right"><template #default="{ row }">{{ fmt(row.socialSecurityAmount) }}</template></el-table-column>
+          <el-table-column :label="$t('gl.special.colTax')" width="110" align="right"><template #default="{ row }">{{ fmt(row.taxAmount) }}</template></el-table-column>
+          <el-table-column :label="$t('gl.special.colTotalPayable')" width="130" align="right"><template #default="{ row }">{{ fmt(row.totalAmount) }}</template></el-table-column>
+          <el-table-column :label="$t('common.status')" width="110" align="center">
             <template #default="{ row }">
               <el-tag :type="stTagType(row.payStatus)" size="small">{{ stLabel(row.payStatus) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="110" fixed="right">
+          <el-table-column :label="$t('common.operation')" width="110" fixed="right">
             <template #default="{ row }">          <InlineActions :visible="true" @view="handleView(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="true" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
-          <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
-              <el-button v-if="row.payStatus !== BillStatus.PAID" link size="small" type="warning" @click="doPay(row)">发放</el-button>
+          <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('gl.special.colTrace') }}</el-button>
+              <el-button v-if="row.payStatus !== BillStatus.PAID" link size="small" type="warning" @click="doPay(row)">{{ $t('gl.special.btnPaySalary') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -98,121 +93,116 @@
       </el-tab-pane>
 
       <!-- 内部往来抵消 -->
-      <el-tab-pane label="内部往来抵消" name="inter">
+      <el-tab-pane :label="$t('gl.special.tabInterOffset')" name="inter">
         <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center">
-          <el-input v-model="interForm.period" placeholder="期间 yyyyMM" style="width:140px" />
-          <el-button type="success" :disabled="interPeriodClosed" @click="doGenerate">生成抵消（提交审批）</el-button>
-          <span v-if="interPeriodClosed" class="period-note">所选期间已结账（CLOSED），禁止提交</span>
-          <span v-else-if="!canLoadPeriod" class="period-note">当前账号不可读会计期间，无法校验期间状态，提交以服务端校验为准</span>
+          <el-input v-model="interForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:140px" />
+          <el-button type="success" :disabled="interPeriodClosed" @click="doGenerate">{{ $t('gl.special.btnGenOffset') }}</el-button>
+          <span v-if="interPeriodClosed" class="period-note">{{ $t('gl.special.errPeriodClosed') }}</span>
+          <span v-else-if="!canLoadPeriod" class="period-note">{{ $t('gl.special.warnNoPeriodRead') }}</span>
           <!-- X-52（D-DEC-294）手工成对录入口子：后端 POST /glex/inter-offset/create 早已就位，
                缺的只是本页入口。按本页既有风格在同页签内展开录入区，不叠弹窗。 -->
           <el-button v-if="canManualPair" type="primary" plain @click="toggleManualPair">
-            {{ manualVisible ? '收起手工录入' : '手工成对录入' }}
+            {{ manualVisible ? t('gl.special.btnCollapseManual') : t('gl.special.modeManual') }}
           </el-button>
           <span v-if="canManualPair" style="color:#909399; font-size:12px">
-            往来余额不匹配、需按实际业务手工录入一一对应的抵消分录时用此项
-          </span>
+            {{ $t('gl.special.manualOffsetHint') }}</span>
         </div>
         <!-- 手工成对录入：一条金额 → 来账(应收) + 往账(应付) 两条镜像分录，方向由表单固定，
              提交即成对相等，落后端 assertPairEqual；必填口径见 manualRules 注释。 -->
         <el-form v-if="canManualPair" v-show="manualVisible" ref="manualFormRef" :model="manualForm"
                  :rules="manualRules" inline style="margin-bottom:10px">
-          <el-form-item label="期间" prop="period">
-            <el-input v-model="manualForm.period" placeholder="期间 yyyyMM" style="width:120px" />
+          <el-form-item :label="$t('gl.ledger.colPeriod')" prop="period">
+            <el-input v-model="manualForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:120px" />
           </el-form-item>
-          <el-form-item label="应收方公司">
-            <el-select v-model="manualForm.receivableCompanyId" filterable clearable placeholder="来账方" style="width:170px">
+          <el-form-item :label="$t('gl.special.colReceivableCompany')">
+            <el-select v-model="manualForm.receivableCompanyId" filterable clearable :placeholder="$t('gl.special.colFromSide')" style="width:170px">
               <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="应付方公司">
-            <el-select v-model="manualForm.payableCompanyId" filterable clearable placeholder="往账方" style="width:170px">
+          <el-form-item :label="$t('gl.special.colPayableCompany')">
+            <el-select v-model="manualForm.payableCompanyId" filterable clearable :placeholder="$t('gl.special.colToSide')" style="width:170px">
               <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="抵消金额" prop="amount">
+          <el-form-item :label="$t('gl.special.colOffsetAmount')" prop="amount">
             <el-input-number v-model="manualForm.amount" :min="0.01" :precision="2" :controls="false"
-                              placeholder="双方同额" style="width:140px" />
+                              :placeholder="$t('gl.special.pairEqual')" style="width:140px" />
           </el-form-item>
           <el-form-item>
             <el-button type="success" :loading="manualSubmitting" @click="doManualPair">
-              提交成对分录（提交审批）
-            </el-button>
+              {{ $t('gl.special.btnSubmitPair') }}</el-button>
           </el-form-item>
-          <div style="color:#909399; font-size:12px; line-height:1.6">
-            提交后生成 2 条草稿抵消分录：来账（应收抵消，应收方→应付方）与往账（应付抵消，应付方→应收方），金额同为上填值；
-            审批通过后仍需在本列表「抵消记账」置为已抵消并出记账凭证号。期间与金额为必填（与后端一致），公司可留空。
-          </div>
+          <div style="color:#909399; font-size:12px; line-height:1.6">{{ $t('gl.special.offsetHint') }}</div>
         </el-form>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
-        <el-table :data="interData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据">
+        <el-table :data="interData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="offsetNo" label="抵消单号" width="150"  sortable />
-          <el-table-column prop="period" label="期间(yyyyMM)" width="110"  sortable />
-          <el-table-column label="来账公司" width="130"><template #default="{ row }">{{ companyName(row.fromCompanyId) }}</template></el-table-column>
-          <el-table-column label="往账公司" width="130"><template #default="{ row }">{{ companyName(row.toCompanyId) }}</template></el-table-column>
-          <el-table-column prop="interFlag" label="类型" width="110"  sortable :formatter="(row, col, val) => interFlagLabel(val)" />
-          <el-table-column label="抵消金额" width="130" align="right"><template #default="{ row }">{{ fmt(row.amount) }}</template></el-table-column>
-          <el-table-column label="状态" width="110" align="center">
+          <el-table-column prop="offsetNo" :label="$t('gl.special.colOffsetNo')" width="150"  sortable />
+          <el-table-column prop="period" :label="$t('gl.special.phPeriodYm')" width="110"  sortable />
+          <el-table-column :label="$t('gl.special.colFromCompany')" width="130"><template #default="{ row }">{{ companyName(row.fromCompanyId) }}</template></el-table-column>
+          <el-table-column :label="$t('gl.special.colToCompany')" width="130"><template #default="{ row }">{{ companyName(row.toCompanyId) }}</template></el-table-column>
+          <el-table-column prop="interFlag" :label="$t('gl.special.colType')" width="110"  sortable :formatter="(row, col, val) => interFlagLabel(val)" />
+          <el-table-column :label="$t('gl.special.colOffsetAmount')" width="130" align="right"><template #default="{ row }">{{ fmt(row.amount) }}</template></el-table-column>
+          <el-table-column :label="$t('common.status')" width="110" align="center">
             <template #default="{ row }">
               <el-tag :type="stTagType(row.offsetStatus)" size="small">{{ stLabel(row.offsetStatus) }}</el-tag>
             </template>
           </el-table-column>
           <!-- R5-D-153 -->
-          <el-table-column prop="voucherNo" label="记账凭证号" min-width="140" show-overflow-tooltip  sortable>
+          <el-table-column prop="voucherNo" :label="$t('gl.special.colVoucherNo')" min-width="140" show-overflow-tooltip  sortable>
             <template #default="{ row }">{{ row.voucherNo || '—' }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="110" fixed="right">
+          <el-table-column :label="$t('common.operation')" width="110" fixed="right">
             <template #default="{ row }">
-              <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
-              <el-button v-if="row.offsetStatus !== 'OFFSET'" link size="small" type="warning" @click="doPost(row)">抵消记账</el-button>
+              <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('gl.special.colTrace') }}</el-button>
+              <el-button v-if="row.offsetStatus !== 'OFFSET'" link size="small" type="warning" @click="doPost(row)">{{ $t('gl.special.postOffset') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
         <TablePager :pager="pagerInter" @change="loadInter" />
       </el-tab-pane>
     <!-- 一般总账记账 -->
-      <el-tab-pane label="一般记账" name="journal">
+      <el-tab-pane :label="$t('gl.special.postNormal')" name="journal">
         <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center; flex-wrap:wrap">
-          <el-input v-model="journalForm.period" placeholder="期间 yyyyMM" style="width:120px" />
-          <el-select v-model="journalForm.entryType" placeholder="记账类型" style="width:150px">
-            <el-option label="费用预提" value="ACCRUAL" />
-            <el-option label="费用待摊" value="DEFER" />
-            <el-option label="手工凭证" value="MANUAL" />
-            <el-option label="其他收款" value="OTHER_RECEIPT" />
+          <el-input v-model="journalForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:120px" />
+          <el-select v-model="journalForm.entryType" :placeholder="$t('gl.special.colPostType')" style="width:150px">
+            <el-option :label="$t('gl.special.postAccrual')" value="ACCRUAL" />
+            <el-option :label="$t('gl.special.postPrepaid')" value="DEFER" />
+            <el-option :label="$t('gl.special.postManualVoucher')" value="MANUAL" />
+            <el-option :label="$t('gl.special.postOtherReceipt')" value="OTHER_RECEIPT" />
           </el-select>
-          <el-input-number v-model="journalForm.amount" :min="1" placeholder="金额" style="width:120px" />
-          <el-input v-model="journalForm.summary" placeholder="摘要(可选)" style="width:160px" />
-          <el-button type="success" :disabled="journalPeriodClosed" @click="doJournal">记账（发起对应审批）</el-button>
-          <span v-if="journalPeriodClosed" class="period-note">所选期间已结账（CLOSED），禁止提交</span>
-          <span v-else-if="!canLoadPeriod" class="period-note">当前账号不可读会计期间，无法校验期间状态，提交以服务端校验为准</span>
+          <el-input-number v-model="journalForm.amount" :min="1" :placeholder="$t('gl.ledger.fieldAmount')" style="width:120px" />
+          <el-input v-model="journalForm.summary" :placeholder="$t('gl.special.phSummaryOpt')" style="width:160px" />
+          <el-button type="success" :disabled="journalPeriodClosed" @click="doJournal">{{ $t('gl.special.btnPost') }}</el-button>
+          <span v-if="journalPeriodClosed" class="period-note">{{ $t('gl.special.errPeriodClosed') }}</span>
+          <span v-else-if="!canLoadPeriod" class="period-note">{{ $t('gl.special.warnNoPeriodRead') }}</span>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
-        <el-table :data="journalData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据">
+        <el-table :data="journalData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="entryNo" label="记账单号" width="150"  sortable />
-          <el-table-column prop="period" label="期间(yyyyMM)" width="110"  sortable />
-          <el-table-column label="类型" width="120">
+          <el-table-column prop="entryNo" :label="$t('gl.special.colPostNo')" width="150"  sortable />
+          <el-table-column prop="period" :label="$t('gl.special.phPeriodYm')" width="110"  sortable />
+          <el-table-column :label="$t('gl.special.colType')" width="120">
             <template #default="{ row }">
               <el-tag size="small">{{ typeName(row.entryType) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="summary" label="摘要" min-width="150" show-overflow-tooltip  sortable />
-          <el-table-column label="金额" width="130" align="right"><template #default="{ row }">{{ fmt(row.amount) }}</template></el-table-column>
-          <el-table-column label="状态" width="100" align="center">
+          <el-table-column prop="summary" :label="$t('gl.ledger.fieldSummary')" min-width="150" show-overflow-tooltip  sortable />
+          <el-table-column :label="$t('gl.ledger.fieldAmount')" width="130" align="right"><template #default="{ row }">{{ fmt(row.amount) }}</template></el-table-column>
+          <el-table-column :label="$t('common.status')" width="100" align="center">
             <template #default="{ row }">
               <el-tag :type="stTagType(row.status)" size="small">{{ stLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
           <!-- R5-D-153 -->
-          <el-table-column prop="voucherNo" label="记账凭证号" min-width="140" show-overflow-tooltip  sortable>
+          <el-table-column prop="voucherNo" :label="$t('gl.special.colVoucherNo')" min-width="140" show-overflow-tooltip  sortable>
             <template #default="{ row }">{{ row.voucherNo || '—' }}</template>
           </el-table-column>
           <!-- R5-D-167：后端 GlJournalController POST /{id}/reverse（红字反向凭证/草稿作废，带守卫）原在 UI 无入口，
                本列补齐；仅 POSTED 行可冲销（服务端亦只放行 POSTED→REVERSED，原因必填留痕）。 -->
-          <el-table-column label="操作" width="90" fixed="right">
+          <el-table-column :label="$t('common.operation')" width="90" fixed="right">
             <template #default="{ row }">
-              <el-button v-if="row.status === 'POSTED'" link size="small" type="warning" @click="doJournalReverse(row)">冲销</el-button>
+              <el-button v-if="row.status === 'POSTED'" link size="small" type="warning" @click="doJournalReverse(row)">{{ $t('gl.special.btnReverse') }}</el-button>
               <span v-else style="color:#c0c4cc">—</span>
             </template>
           </el-table-column>
@@ -221,69 +211,69 @@
       </el-tab-pane>
 
       <!-- 月结 -->
-      <el-tab-pane label="月结" name="monthclose">
+      <el-tab-pane :label="$t('gl.special.btnMonthCloseShort')" name="monthclose">
         <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center; flex-wrap:wrap">
-          <el-input v-model="mcForm.period" placeholder="期间 yyyyMM" style="width:120px" />
-          <el-select v-model="mcForm.companyId" filterable clearable placeholder="选择公司" style="width:180px">
+          <el-input v-model="mcForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:120px" />
+          <el-select v-model="mcForm.companyId" filterable clearable :placeholder="$t('gl.special.phSelectCompany')" style="width:180px">
             <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
-          <el-button type="success" :disabled="mcPeriodClosed" @click="doMonthClose">月结（试算平衡并发起关账审批）</el-button>
-          <span v-if="mcPeriodClosed" class="period-note">所选期间已结账（CLOSED），禁止提交</span>
-          <span v-else-if="!canLoadPeriod" class="period-note">当前账号不可读会计期间，无法校验期间状态，提交以服务端校验为准</span>
+          <el-button type="success" :disabled="mcPeriodClosed" @click="doMonthClose">{{ $t('gl.special.btnMonthClose') }}</el-button>
+          <span v-if="mcPeriodClosed" class="period-note">{{ $t('gl.special.errPeriodClosed') }}</span>
+          <span v-else-if="!canLoadPeriod" class="period-note">{{ $t('gl.special.warnNoPeriodRead') }}</span>
           <!-- 反结账入口：输入期间 + 二次确认，回退后该期间重新开放记账；后端校验权限与下一期间状态 -->
-          <el-button type="warning" @click="doMonthUnclose">反结账</el-button>
+          <el-button type="warning" @click="doMonthUnclose">{{ $t('gl.special.btnUnclose') }}</el-button>
           <!-- 损益结转向导：选择期间 → 确认 → 展示后端返回结果（幂等拒绝时原样提示「该期间已结转」） -->
-          <el-button type="primary" plain @click="openProfitCarry">损益结转</el-button>
+          <el-button type="primary" plain @click="openProfitCarry">{{ $t('gl.special.tabCarry') }}</el-button>
         </div>
         <!-- R5-D-215：月结检查闸清单——后端三端点（生成清单 / 逐项完成 / 执行月结）接入本页 -->
         <div v-if="canCloseCheck" class="close-check">
           <div class="cc-head">
-            <b>月结检查闸清单</b>
-            <span class="cc-meta">期间 {{ checkPeriodLabel }} · 公司 {{ mcCompLabel }}</span>
+            <b>{{ $t('gl.special.checklistTitle') }}</b>
+            <span class="cc-meta">{{ $t('gl.special.ccMetaPeriodComp', { v1: checkPeriodLabel, v2: mcCompLabel }) }}</span>
             <el-progress v-if="closeCheck.length" :percentage="ccPercent" :stroke-width="10" style="width:150px" />
-            <span v-if="closeCheck.length" class="cc-meta">已办结 {{ ccDone }} / 共 {{ closeCheck.length }} 项</span>
-            <el-button size="small" :loading="ccLoading" @click="loadCloseCheck">刷新清单</el-button>
-            <el-button size="small" type="primary" plain :loading="ccSeeding" @click="seedCloseCheck()">生成检查清单</el-button>
+            <span v-if="closeCheck.length" class="cc-meta">{{ $t('gl.special.ccDoneOf', { v1: ccDone, v2: closeCheck.length }) }}</span>
+            <el-button size="small" :loading="ccLoading" @click="loadCloseCheck">{{ $t('gl.special.btnRefreshChecklist') }}</el-button>
+            <el-button size="small" type="primary" plain :loading="ccSeeding" @click="seedCloseCheck()">{{ $t('gl.special.btnGenChecklist') }}</el-button>
           </div>
           <el-alert v-if="!ccLoading && !closeCheck.length" type="warning" :closable="false" show-icon
-            title="该期间尚未建立月结检查清单——直接月结会被检查闸拦下。先点「生成检查清单」建立 8 项，再由各负责岗位逐项办结。" />
+            :title="$t('gl.special.hintNoChecklist')" />
           <el-table v-if="closeCheck.length" :data="closeCheck" size="small" border stripe v-loading="ccLoading">
-            <el-table-column label="办结" width="70" align="center">
+            <el-table-column :label="$t('gl.special.colClosed')" width="70" align="center">
               <template #default="{ row }">
                 <el-checkbox :model-value="isCcDone(row)" :disabled="ccTicking" @change="(v) => tickCloseCheck(row, v)" />
               </template>
             </el-table-column>
-            <el-table-column prop="itemName" label="检查项" min-width="220" show-overflow-tooltip />
-            <el-table-column label="负责岗位" width="110">
+            <el-table-column prop="itemName" :label="$t('gl.special.colCheckItem')" min-width="220" show-overflow-tooltip />
+            <el-table-column :label="$t('gl.special.colPosition')" width="110">
               <template #default="{ row }">{{ ccOwnerLabel(row.ownerRole) }}</template>
             </el-table-column>
-            <el-table-column label="状态" width="90" align="center">
+            <el-table-column :label="$t('common.status')" width="90" align="center">
               <template #default="{ row }">
-                <el-tag :type="isCcDone(row) ? 'success' : 'info'" size="small">{{ isCcDone(row) ? '已办结' : '待办结' }}</el-tag>
+                <el-tag :type="isCcDone(row) ? 'success' : 'info'" size="small">{{ isCcDone(row) ? t('gl.special.stClosed') : t('gl.special.stPendingClose') }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="办结人 / 办结时间" width="210">
+            <el-table-column :label="$t('gl.special.colClosedAt')" width="210">
               <template #default="{ row }">
                 {{ isCcDone(row) ? `${row.checker || '—'} / ${formatDateTime(row.checkTime)}` : '—' }}
               </template>
             </el-table-column>
-            <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="remark" :label="$t('common.remark')" min-width="140" show-overflow-tooltip />
           </el-table>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
-        <el-table :data="monthData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据">
+        <el-table :data="monthData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="closeNo" label="月结单号" width="150"  sortable />
-          <el-table-column prop="period" label="期间(yyyyMM)" width="110"  sortable />
-          <el-table-column label="借方合计" width="130" align="right"><template #default="{ row }">{{ fmt(row.debitTotal) }}</template></el-table-column>
-          <el-table-column label="贷方合计" width="130" align="right"><template #default="{ row }">{{ fmt(row.creditTotal) }}</template></el-table-column>
-          <el-table-column label="差异" width="110" align="right"><template #default="{ row }">{{ fmt(row.diff) }}</template></el-table-column>
-          <el-table-column label="平衡" width="80" align="center">
+          <el-table-column prop="closeNo" :label="$t('gl.special.colMonthCloseNo')" width="150"  sortable />
+          <el-table-column prop="period" :label="$t('gl.special.phPeriodYm')" width="110"  sortable />
+          <el-table-column :label="$t('gl.special.colDebitSum')" width="130" align="right"><template #default="{ row }">{{ fmt(row.debitTotal) }}</template></el-table-column>
+          <el-table-column :label="$t('gl.special.colCreditSum')" width="130" align="right"><template #default="{ row }">{{ fmt(row.creditTotal) }}</template></el-table-column>
+          <el-table-column :label="$t('gl.ledger.diff')" width="110" align="right"><template #default="{ row }">{{ fmt(row.diff) }}</template></el-table-column>
+          <el-table-column :label="$t('gl.ledger.balanced')" width="80" align="center">
             <template #default="{ row }">
-              <el-tag :type="row.balanced ? 'success' : 'danger'" size="small">{{ row.balanced ? '平衡' : '不平' }}</el-tag>
+              <el-tag :type="row.balanced ? 'success' : 'danger'" size="small">{{ row.balanced ? t('gl.ledger.balanced') : t('gl.special.stUnbalanced') }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="100" align="center">
+          <el-table-column :label="$t('common.status')" width="100" align="center">
             <template #default="{ row }">
               <el-tag :type="stTagType(row.status)" size="small">{{ stLabel(row.status) }}</el-tag>
             </template>
@@ -292,27 +282,27 @@
                （加列属 DDL 裁决，注释态 SQL 见 GlMonthClose 实体类尾），后端 page() 已按
                wf_instance(biz_type='GL_MONTH_CLOSE', biz_id=月结单ID) ＋ wf_task_history 末节点留痕
                做读侧富化，这里把两个方向摊开：这张月结单挂在哪条审批流上、谁在何时批的。 -->
-          <el-table-column label="审批流" width="150" align="center" show-overflow-tooltip>
+          <el-table-column :label="$t('gl.special.colFlowName')" width="150" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               <span v-if="row.wfProcInstId">{{ wfFlowLabel(row.wfFlowStatus) }} · {{ shortProc(row.wfProcInstId) }}</span>
-              <span v-else style="color:#c0c4cc">无审批流</span>
+              <span v-else style="color:#c0c4cc">{{ $t('gl.special.colNoFlow') }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="办结/末节复核" width="180">
+          <el-table-column :label="$t('gl.special.colClosedBy')" width="180">
             <template #default="{ row }">
               <span v-if="row.approveTime || row.auditTime">
                 <!-- R5-D-162：原直插 LocalDateTime ISO 串（2026-10-02T22:40:18），统一走 formatDateTime 全站格式 -->
-                {{ row.approveTime ? formatDateTime(row.approveTime) : '在途' }} / {{ row.auditTime ? formatDateTime(row.auditTime) : '—' }}
+                {{ row.approveTime ? formatDateTime(row.approveTime) : t('gl.special.stInFlight') }} / {{ row.auditTime ? formatDateTime(row.auditTime) : '—' }}
                 <span v-if="row.auditUserName" style="color:#909399">（{{ row.auditUserName }}）</span>
               </span>
               <span v-else style="color:#c0c4cc">—</span>
             </template>
           </el-table-column>
-          <el-table-column prop="resultMsg" label="说明" min-width="200" show-overflow-tooltip  sortable />
+          <el-table-column prop="resultMsg" :label="$t('gl.special.colDesc')" min-width="200" show-overflow-tooltip  sortable />
           <!-- R5-D-167：月结单挂 GL_MONTH_CLOSE 域追溯（TRACE_BIZ_BY_TAB 既有定义，零后端改动） -->
-          <el-table-column label="操作" width="90" fixed="right">
+          <el-table-column :label="$t('common.operation')" width="90" fixed="right">
             <template #default="{ row }">
-              <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
+              <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('gl.special.colTrace') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -320,22 +310,22 @@
       </el-tab-pane>
 
       <!-- 合并报表 -->
-      <el-tab-pane label="合并报表" name="consolidate">
+      <el-tab-pane :label="$t('gl.special.tabConsolidate')" name="consolidate">
         <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center; flex-wrap:wrap">
-          <el-input v-model="consForm.period" placeholder="期间 yyyyMM" style="width:120px" />
-          <el-button type="success" :disabled="consPeriodClosed" @click="doConsolidate">汇总合并（提交审批）</el-button>
-          <span v-if="consPeriodClosed" class="period-note">所选期间已结账（CLOSED），禁止提交</span>
-          <span v-else-if="!canLoadPeriod" class="period-note">当前账号不可读会计期间，无法校验期间状态，提交以服务端校验为准</span>
-          <span style="color:#909399; font-size:12px">合并底稿汇总抵消后发起合并报表审批流</span>
+          <el-input v-model="consForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:120px" />
+          <el-button type="success" :disabled="consPeriodClosed" @click="doConsolidate">{{ $t('gl.special.btnConsolidate') }}</el-button>
+          <span v-if="consPeriodClosed" class="period-note">{{ $t('gl.special.errPeriodClosed') }}</span>
+          <span v-else-if="!canLoadPeriod" class="period-note">{{ $t('gl.special.warnNoPeriodRead') }}</span>
+          <span style="color:#909399; font-size:12px">{{ $t('gl.special.consolidateHint') }}</span>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
-        <el-table :data="consolidateData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据">
+        <el-table :data="consolidateData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="reportNo" label="合并单号" width="150"  sortable />
-          <el-table-column prop="period" label="期间(yyyyMM)" width="110"  sortable />
+          <el-table-column prop="reportNo" :label="$t('gl.special.colConsolNo')" width="150"  sortable />
+          <el-table-column prop="period" :label="$t('gl.special.phPeriodYm')" width="110"  sortable />
           <!-- gl_consolidate 无金额列（底稿在 raw_rows JSON 里），缺值一律显示「—」而不是 0.00，避免把空读成零 -->
-          <el-table-column label="合并金额" width="130" align="right"><template #default="{ row }">{{ row.amount == null ? '—' : fmt(row.amount) }}</template></el-table-column>
-          <el-table-column label="状态" width="110" align="center">
+          <el-table-column :label="$t('gl.special.colConsolAmount')" width="130" align="right"><template #default="{ row }">{{ row.amount == null ? '—' : fmt(row.amount) }}</template></el-table-column>
+          <el-table-column :label="$t('common.status')" width="110" align="center">
             <template #default="{ row }">
               <el-tag :type="stTagType(row.status)" size="small">{{ stLabel(row.status) }}</el-tag>
             </template>
@@ -343,9 +333,9 @@
           <!-- R5-D-164：原「说明」列 prop="resultMsg" 而 gl_consolidate 列面无该列（恒空）⇒ 已删；
                底稿明细在 raw_rows JSON（表侧无说明语义）。monthclose 页签的说明列保留（gl_month_close 实有 result_msg）。 -->
           <!-- R5-D-167：合并单挂 GL_MERGE 域追溯（TRACE_BIZ_BY_TAB 既有定义） -->
-          <el-table-column label="操作" width="90" fixed="right">
+          <el-table-column :label="$t('common.operation')" width="90" fixed="right">
             <template #default="{ row }">
-              <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
+              <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('gl.special.colTrace') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -353,72 +343,72 @@
       </el-tab-pane>
 
       <!-- GL主数据维护 -->
-      <el-tab-pane label="GL主数据" name="master">
+      <el-tab-pane :label="$t('gl.special.tabGlMaster')" name="master">
         <el-form ref="masterFormRef" :model="masterForm" :rules="masterRules" inline style="margin-bottom: 10px">
-          <el-form-item label="期间" prop="period">
-            <el-input v-model="masterForm.period" placeholder="期间 yyyyMM" style="width:120px" />
+          <el-form-item :label="$t('gl.ledger.colPeriod')" prop="period">
+            <el-input v-model="masterForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:120px" />
           </el-form-item>
           <!-- 主数据类型/动作下拉恒有默认值且不可清空，不会出现未填态，故不加红星 -->
-          <el-form-item label="主数据">
-            <el-select v-model="masterForm.type" placeholder="主数据" style="width:130px">
-              <el-option label="科目" value="SUBJECT" />
-              <el-option label="成本中心" value="COST_CENTER" />
-              <el-option label="银行" value="BANK" />
-              <el-option label="其他" value="OTHER" />
+          <el-form-item :label="$t('gl.special.tagMaster')">
+            <el-select v-model="masterForm.type" :placeholder="$t('gl.special.tagMaster')" style="width:130px">
+              <el-option :label="$t('gl.special.tagSubject')" value="SUBJECT" />
+              <el-option :label="$t('gl.special.tagCostCenter')" value="COST_CENTER" />
+              <el-option :label="$t('gl.special.tagBank')" value="BANK" />
+              <el-option :label="$t('gl.special.tagOther')" value="OTHER" />
             </el-select>
           </el-form-item>
-          <el-form-item label="动作">
-            <el-select v-model="masterForm.action" placeholder="动作" style="width:100px">
-              <el-option label="新增" value="ADD" />
-              <el-option label="变更" value="MODIFY" />
-              <el-option label="停用" value="DELETE" />
+          <el-form-item :label="$t('gl.special.colAction')">
+            <el-select v-model="masterForm.action" :placeholder="$t('gl.special.colAction')" style="width:100px">
+              <el-option :label="$t('gl.special.tagAdd')" value="ADD" />
+              <el-option :label="$t('gl.special.tagChange')" value="MODIFY" />
+              <el-option :label="$t('gl.special.opDisable')" value="DELETE" />
             </el-select>
           </el-form-item>
-          <el-form-item label="科目编码" prop="subjectCode">
-            <el-input v-model="masterForm.subjectCode" placeholder="科目编码" style="width:110px" />
+          <el-form-item :label="$t('gl.ledger.fieldSubjectCode')" prop="subjectCode">
+            <el-input v-model="masterForm.subjectCode" :placeholder="$t('gl.ledger.fieldSubjectCode')" style="width:110px" />
           </el-form-item>
-          <el-form-item label="科目名称" prop="subjectName">
-            <el-input v-model="masterForm.subjectName" placeholder="科目名称" style="width:130px" />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="success" :disabled="masterPeriodClosed" @click="doMaster">提交审批</el-button>
-            <span v-if="masterPeriodClosed" class="period-note">所选期间已结账（CLOSED），禁止提交</span>
-            <span v-else-if="!canLoadPeriod" class="period-note">当前账号不可读会计期间，无法校验期间状态，提交以服务端校验为准</span>
+          <el-form-item :label="$t('gl.ledger.fieldSubjectName')" prop="subjectName">
+            <el-input v-model="masterForm.subjectName" :placeholder="$t('gl.ledger.fieldSubjectName')" style="width:130px" />
           </el-form-item>
           <el-form-item>
-            <el-button size="small" @click="exportCsv">导出 CSV</el-button>
-            <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
+            <el-button type="success" :disabled="masterPeriodClosed" @click="doMaster">{{ $t('gl.special.btnSubmitFlow') }}</el-button>
+            <span v-if="masterPeriodClosed" class="period-note">{{ $t('gl.special.errPeriodClosed') }}</span>
+            <span v-else-if="!canLoadPeriod" class="period-note">{{ $t('gl.special.warnNoPeriodRead') }}</span>
+          </el-form-item>
+          <el-form-item>
+            <el-button size="small" @click="exportCsv">{{ $t('gl.ledger.btnExportCsv') }}</el-button>
+            <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('gl.ledger.btnExportSel', { v1: selRows.length }) }}</el-button>
           </el-form-item>
         </el-form>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
-        <el-table :data="masterData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据">
+        <el-table :data="masterData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="reqNo" label="申请单号" width="150"  sortable />
-          <el-table-column prop="period" label="期间(yyyyMM)" width="110"  sortable />
-          <el-table-column label="类型" width="110">
+          <el-table-column prop="reqNo" :label="$t('gl.special.colApplyNo')" width="150"  sortable />
+          <el-table-column prop="period" :label="$t('gl.special.phPeriodYm')" width="110"  sortable />
+          <el-table-column :label="$t('gl.special.colType')" width="110">
             <template #default="{ row }">{{ masterTypeLabel(row.type) }}</template>
           </el-table-column>
-          <el-table-column label="动作" width="80" align="center">
+          <el-table-column :label="$t('gl.special.colAction')" width="80" align="center">
             <template #default="{ row }">
               <el-tag :type="row.action === 'ADD' ? 'success' : row.action === 'MODIFY' ? 'warning' : 'danger'" size="small">{{ masterActionLabel(row.action) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="subjectCode" label="科目编码" width="110"  sortable />
-          <el-table-column prop="subjectName" label="科目名称" min-width="130" show-overflow-tooltip  sortable />
-          <el-table-column prop="description" label="变更说明" min-width="160" show-overflow-tooltip  sortable />
-          <el-table-column label="状态" width="110" align="center">
+          <el-table-column prop="subjectCode" :label="$t('gl.ledger.fieldSubjectCode')" width="110"  sortable />
+          <el-table-column prop="subjectName" :label="$t('gl.ledger.fieldSubjectName')" min-width="130" show-overflow-tooltip  sortable />
+          <el-table-column prop="description" :label="$t('gl.special.colChangeNote')" min-width="160" show-overflow-tooltip  sortable />
+          <el-table-column :label="$t('common.status')" width="110" align="center">
             <template #default="{ row }">
               <el-tag :type="stTagType(row.status)" size="small">{{ stLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
           <!-- R5-D-153 -->
-          <el-table-column prop="voucherNo" label="记账凭证号" min-width="140" show-overflow-tooltip  sortable>
+          <el-table-column prop="voucherNo" :label="$t('gl.special.colVoucherNo')" min-width="140" show-overflow-tooltip  sortable>
             <template #default="{ row }">{{ row.voucherNo || '—' }}</template>
           </el-table-column>
           <!-- R5-D-167：主数据申请单挂 GL_SHARED_MASTER 域追溯（TRACE_BIZ_BY_TAB 既有定义） -->
-          <el-table-column label="操作" width="90" fixed="right">
+          <el-table-column :label="$t('common.operation')" width="90" fixed="right">
             <template #default="{ row }">
-              <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
+              <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('gl.special.colTrace') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -427,56 +417,61 @@
     </el-tabs>
 
     <!-- 损益结转向导 -->
-    <el-dialog v-model="pcVisible" title="损益结转" width="420px" destroy-on-close>
+    <el-dialog v-model="pcVisible" :title="$t('gl.special.tabCarry')" width="420px" destroy-on-close>
       <el-alert type="warning" :closable="false" style="margin-bottom: 12px"
-        title="将所选期间全部损益类科目发生额结转至本年利润，并生成结转凭证；重复执行同一期间会被拒绝。" />
+        :title="$t('gl.special.carryHint')" />
       <el-form ref="pcFormRef" :model="pcModel" :rules="pcRules" label-width="90px">
-        <el-form-item label="结转期间" prop="pcPeriod">
-          <el-date-picker v-model="pcPeriod" type="month" value-format="YYYYMM" placeholder="选择期间" style="width: 100%" />
+        <el-form-item :label="$t('gl.special.carryPeriod')" prop="pcPeriod">
+          <el-date-picker v-model="pcPeriod" type="month" value-format="YYYYMM" :placeholder="$t('gl.special.phSelectPeriod')" style="width: 100%" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="pcVisible = false">取消</el-button>
-        <el-button type="primary" :loading="pcLoading" @click="doProfitCarry">确认结转</el-button>
+        <el-button @click="pcVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="pcLoading" @click="doProfitCarry">{{ $t('gl.special.btnConfirmCarry') }}</el-button>
       </template>
     </el-dialog>
     <!-- R5-D-154：落账挂接核查（只读）——审批流 / 凭证 / 总账分录 / 缴款流逐条对照，未落账条数与金额如实报出 -->
-    <el-dialog v-model="lcVisible" title="税金计提落账挂接核查" width="920px" destroy-on-close>
+    <el-dialog v-model="lcVisible" :title="$t('gl.special.provisionCheckTitle')" width="920px" destroy-on-close>
       <el-alert :type="lcSummary.missingEntryCount || lcSummary.missingVoucherCount || lcSummary.missingFlowCount ? 'warning' : 'success'"
         :closable="false" show-icon style="margin-bottom: 10px"
-        :title="`期间 ${lcPeriod}：共 ${lcSummary.total || 0} 条计提；无审批流程 ${lcSummary.missingFlowCount || 0} 条（¥${fmt(lcSummary.missingFlowAmount)}）、未出凭证 ${lcSummary.missingVoucherCount || 0} 条（¥${fmt(lcSummary.missingVoucherAmount)}）、已入账但总账无分录 ${lcSummary.missingEntryCount || 0} 条（¥${fmt(lcSummary.missingEntryAmount)}）`" />
-      <el-table :data="lcRows" size="small" border stripe v-loading="lcLoading" empty-text="暂无数据">
-        <el-table-column prop="provisionNo" label="计提单号" width="150" />
-        <el-table-column label="税种" width="100"><template #default="{ row }">{{ taxTypeLabel(row.taxType) }}</template></el-table-column>
-        <el-table-column label="税额" width="120" align="right"><template #default="{ row }">{{ fmt(row.taxAmount) }}</template></el-table-column>
-        <el-table-column label="状态" width="100" align="center">
+        :title="t('gl.special.lcTitle', {
+          period: lcPeriod, total: lcSummary.total || 0,
+          mf: lcSummary.missingFlowCount || 0, mfa: fmt(lcSummary.missingFlowAmount),
+          mv: lcSummary.missingVoucherCount || 0, mva: fmt(lcSummary.missingVoucherAmount),
+          me: lcSummary.missingEntryCount || 0, mea: fmt(lcSummary.missingEntryAmount),
+        })" />
+      <el-table :data="lcRows" size="small" border stripe v-loading="lcLoading" :empty-text="$t('common.empty')">
+        <el-table-column prop="provisionNo" :label="$t('gl.special.colProvisionNo')" width="150" />
+        <el-table-column :label="$t('gl.special.colTaxKind')" width="100"><template #default="{ row }">{{ taxTypeLabel(row.taxType) }}</template></el-table-column>
+        <el-table-column :label="$t('gl.special.colTaxAmount')" width="120" align="right"><template #default="{ row }">{{ fmt(row.taxAmount) }}</template></el-table-column>
+        <el-table-column :label="$t('common.status')" width="100" align="center">
           <template #default="{ row }"><el-tag :type="stTagType(row.status)" size="small">{{ stLabel(row.status) }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="审批流程" width="100" align="center">
-          <template #default="{ row }"><el-tag :type="row.hasApproveFlow ? 'success' : 'danger'" size="small">{{ row.hasApproveFlow ? '已挂' : '未挂' }}</el-tag></template>
+        <el-table-column :label="$t('gl.special.colFlow')" width="100" align="center">
+          <template #default="{ row }"><el-tag :type="row.hasApproveFlow ? 'success' : 'danger'" size="small">{{ row.hasApproveFlow ? t('gl.special.stLinked') : t('gl.special.stNotLinked') }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="凭证" width="90" align="center">
-          <template #default="{ row }"><el-tag :type="row.hasVoucher ? 'success' : 'danger'" size="small">{{ row.hasVoucher ? '已出' : '未出' }}</el-tag></template>
+        <el-table-column :label="$t('gl.special.colVoucher')" width="90" align="center">
+          <template #default="{ row }"><el-tag :type="row.hasVoucher ? 'success' : 'danger'" size="small">{{ row.hasVoucher ? t('gl.special.stVoucherIssued') : t('gl.special.stVoucherMissing') }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="总账分录" width="100" align="center">
-          <template #default="{ row }"><el-tag :type="(row.entryCount || 0) > 0 ? 'success' : 'danger'" size="small">{{ (row.entryCount || 0) > 0 ? row.entryCount + ' 行' : '0 行' }}</el-tag></template>
+        <el-table-column :label="$t('gl.ledger.tabEntry')" width="100" align="center">
+          <template #default="{ row }"><el-tag :type="(row.entryCount || 0) > 0 ? 'success' : 'danger'" size="small">{{ (row.entryCount || 0) > 0 ? row.entryCount + ' 行' : t('gl.special.rowsZero') }}</el-tag></template>
         </el-table-column>
-        <el-table-column prop="voucherNo" label="记账凭证号" min-width="150" show-overflow-tooltip>
+        <el-table-column prop="voucherNo" :label="$t('gl.special.colVoucherNo')" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ row.voucherNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="缴款流程" width="100" align="center">
-          <template #default="{ row }"><el-tag :type="row.hasPayFlow ? 'success' : 'info'" size="small">{{ row.hasPayFlow ? '已挂' : '无' }}</el-tag></template>
+        <el-table-column :label="$t('gl.special.colPayFlow')" width="100" align="center">
+          <template #default="{ row }"><el-tag :type="row.hasPayFlow ? 'success' : 'info'" size="small">{{ row.hasPayFlow ? t('gl.special.stLinked') : t('gl.special.none') }}</el-tag></template>
         </el-table-column>
       </el-table>
       <template #footer>
-        <span style="color:#909399; font-size:12px; margin-right:12px">本核查为只读查询，不补记、不改账；未落账部分请按计提单号复核后重新计提，或联系管理员人工处理。</span>
-        <el-button @click="lcVisible = false">关闭</el-button>
+        <span style="color:#909399; font-size:12px; margin-right:12px">{{ $t('gl.special.hintAuditReadOnly') }}</span>
+        <el-button @click="lcVisible = false">{{ $t('common.close') }}</el-button>
       </template>
     </el-dialog>
   </el-card>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" :biz-type="traceBizType" />
 
-  <CoachMark ref="glSpecialCm" :guide-key="_guideKey" :selector="'.cm-target-gl'" title="总账特殊业务" text="总账特殊业务页面处理期末调账、结转损益等特殊凭证业务。" />
+  <CoachMark ref="glSpecialCm" :guide-key="_guideKey" :selector="'.cm-target-gl'" :title="$t('gl.special.title')" :text="$t('gl.special.hintGlSpecial')" />
   </div>
   <ApprovalDialog ref="approvalRef" />
 </template>
@@ -506,6 +501,9 @@ import TablePager from '../../components/common/TablePager.vue'
 import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
@@ -576,7 +574,7 @@ const taxPeriod = ref('')
 const openPeriod = ref('')
 const canLoadPeriod = hasPerm('md:period:list')
 // 默认期间的来源照实标注：取到开账期间 / 期间表全已关退回最后一期 / 无权限或取数失败退回系统当月
-const periodSource = ref('系统当月')
+const periodSource = ref(t('gl.special.periodSysMonth'))
 const tab = ref(props.tab || 'tax')
 const loading = ref(false)
 const depts = ref([])
@@ -621,7 +619,7 @@ function subjectName(id) {
   if (s) return s.subjectName || s.name || ''
   const byCode = subjects.value.find((x) => String(x.code ?? '') === key)
   if (byCode) return byCode.subjectName || byCode.name || ''
-  return `科目已失效（id ${id}）`
+  return t('gl.special.errSubjectInvalid', { v1: id })
 }
 
 // 状态中文映射
@@ -631,7 +629,7 @@ function stTagType(s) { return STATUS_TYPE[s] || 'info' }
 
 // D-DEC-191：GL_MONTH_CLOSE 审批流的读侧富化展示（实例号/流程状态/末节点复核人）
 function wfFlowLabel(s) {
-  return ({ RUNNING: '审批中', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已作废', TERMINATED: '已终止' })[s] || s || '—'
+  return ({ RUNNING: t('gl.refund.stApproving'), APPROVED: t('gl.special.stPassed'), REJECTED: t('gl.refund.stRejected'), CANCELLED: t('gl.ledger.stVoided'), TERMINATED: t('gl.special.stTerminated') })[s] || s || '—'
 }
 function shortProc(p) { return p && p.length > 8 ? p.slice(0, 8) : (p || '—') }
 // R5-D-169：六个页签的期间默认值一律留空，由 loadOpenPeriod() 用「当前打开期间」填（与税金页签同源）。
@@ -645,9 +643,9 @@ const masterForm = ref({ period: '', type: 'SUBJECT', action: 'ADD', subjectCode
 const masterFormRef = ref(null)
 // 与后端 GlSharedMasterService.submit 同口径：期间/编码必填，停用只需编码（名称可空）
 const masterRules = computed(() => ({
-  period: [...commonRules.required('请填写会计期间'), { pattern: /^\d{6}$/, message: '期间格式应为 yyyyMM', trigger: 'blur' }],
-  subjectCode: commonRules.required('请填写主数据编码（科目/成本中心/银行编码）'),
-  subjectName: masterForm.value.action === 'DELETE' ? [] : commonRules.required('请填写主数据名称'),
+  period: [...commonRules.required(t('gl.special.errPeriodRequired')), { pattern: /^\d{6}$/, message: t('gl.special.errPeriodFmt'), trigger: 'blur' }],
+  subjectCode: commonRules.required(t('gl.special.errMasterCode')),
+  subjectName: masterForm.value.action === 'DELETE' ? [] : commonRules.required(t('gl.special.errMasterName')),
 }))
 
 // R5-D-169：已结账（CLOSED）期间禁用提交。期间状态复用 loadOpenPeriod() 那一次 md_period 读数（不新发请求、
@@ -670,8 +668,8 @@ const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigit
 // 返回归一化后的 yyyyMM；为空或格式不符时提示并返回 null，调用方据此中止提交。
 function periodOrWarn(raw) {
   const p = String(raw ?? '').trim()
-  if (!p) { ElMessage.warning('请先填写会计期间（yyyyMM）'); return null }
-  if (!/^\d{6}$/.test(p)) { ElMessage.warning('会计期间格式应为 6 位 yyyyMM'); return null }
+  if (!p) { ElMessage.warning(t('gl.special.errPeriodFirst')); return null }
+  if (!/^\d{6}$/.test(p)) { ElMessage.warning(t('gl.special.errPeriodLen')); return null }
   return p
 }
 
@@ -683,7 +681,7 @@ function periodOrWarn(raw) {
 async function confirmWrite(title, lines) {
   try {
     await ElMessageBox.confirm(lines.filter(Boolean).join('；'), title,
-      { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '取消', closeOnClickModal: false })
+      { type: 'warning', confirmButtonText: t('gl.special.btnConfirmSubmit'), cancelButtonText: t('common.cancel'), closeOnClickModal: false })
     return true
   } catch { return false }
 }
@@ -715,23 +713,23 @@ async function doProvision() {
     const sel = period
     const open = String(openPeriod.value ?? '').trim()
     const sourceNote = !open
-      ? `当前账号不可读会计期间，无法与系统开账期间比对；本次计提期间以所选 ${period} 为准，请再次确认。`
+      ? t('gl.special.warnNoOpenPeriod', { v1: period })
       : (open === sel
-        ? `所选期间与系统当前开账期间（${openPeriod.value}）一致。`
-        : `所选期间 ${sel} 与系统当前开账期间（${openPeriod.value}）不一致，请确认无误后再继续。`)
+        ? t('gl.special.hintPeriodMatch', { v1: openPeriod.value })
+        : t('gl.special.warnPeriodMismatch', { v1: sel, v2: openPeriod.value }))
     await ElMessageBox.confirm(
-      `确认对期间 ${period} 执行税金计提？本次将一次生成 3 条计提记录（增值税 / 附加税 / 所得税）`
-      + `并同步发起税金计提审批流，记录生成后本页面不提供冲销入口。`
+      t('gl.special.askTaxProvision', { v1: period })
+      + t('gl.special.hintProvisionNoReverse')
       + sourceNote,
-      '确认计提税金',
-      { type: 'warning', confirmButtonText: open && open !== sel ? `确认在 ${sel} 计提` : '确认计提', cancelButtonText: '取消' })
+      t('gl.special.confirmProvisionTitle'),
+      { type: 'warning', confirmButtonText: open && open !== sel ? t('gl.special.askProvisionAt', { v1: sel }) : t('gl.special.btnConfirmProvision'), cancelButtonText: t('common.cancel') })
   } catch { return } // 用户取消：不产生任何写入
   provisioning = true
   try {
     const rows = await glexApi.taxProvision(period)
-    ElMessage.success('税金计提完成 ' + (rows ? rows.length : 0) + ' 条，已发起税金计提审批')
+    ElMessage.success(t('gl.special.taxProvisionDone') + (rows ? rows.length : 0) + ' 条，已发起税金计提审批')
     loadTax()
-  } catch (e) { ElMessage.error('税金计提失败：' + (e?.message || '未知错误')) } finally { provisioning = false }
+  } catch (e) { ElMessage.error(t('gl.special.taxProvisionFail') + (e?.message || t('gl.special.unknownError'))) } finally { provisioning = false }
 }
 // D-DEC-440：原「缴纳」入口（POST /glex/tax-provision/pay → GL_TAX_PAY）不再生成任何付款动作，
 // 缴款事实由对公付款通道产生 ⇒ 入口与调用腿一并摘掉，只留上方那句通道指引。
@@ -741,37 +739,37 @@ async function doCalculate() {
   const deptId = salaryForm.value.deptId || null
   const empCount = salaryForm.value.empCount || 1
   // R5-D-166：落账类写动作两步确认＋要素回显
-  if (!(await confirmWrite('确认薪酬核算', [
-    `期间 ${period}；部门 ${deptId ? deptName(deptId) : '未选'}；人数 ${empCount}`,
-    '将生成应付工资并发起工资计提审批',
+  if (!(await confirmWrite(t('gl.special.confirmPayroll'), [
+    t('gl.special.ctxPeriodDeptHead', { v1: period, v2: deptId ? deptName(deptId) : t('gl.special.notSelected'), v3: empCount }),
+    t('gl.special.bodyPayroll'),
   ]))) return
   try {
     const run = await glexApi.salaryCalculate(period, deptId, empCount)
-    ElMessage.success('薪酬核算完成，应付 ¥' + fmt(run.totalAmount) + '，已发起工资计提审批')
+    ElMessage.success(t('gl.special.salaryPayable') + fmt(run.totalAmount) + '，已发起工资计提审批')
     loadSalary()
   } catch (e) { ElMessage.error(e.message) }
 }
-async function doPay(row) { try { await glexApi.salaryPay(row.id); ElMessage.success('已发放'); loadSalary() } catch (e) { ElMessage.error(e.message) } }
+async function doPay(row) { try { await glexApi.salaryPay(row.id); ElMessage.success(t('gl.special.stPaid')); loadSalary() } catch (e) { ElMessage.error(e.message) } }
 
 async function doGenerate() {
   const period = periodOrWarn(interForm.value.period)
   if (!period) return
-  if (!(await confirmWrite('确认生成抵消', [
-    `期间 ${period}`,
-    '将按内部往来余额自动生成成对抵消分录并同步发起内部往来抵消审批（无余额时生成 0 条、不发起审批）',
+  if (!(await confirmWrite(t('gl.special.confirmGenOffset'), [
+    t('gl.special.ctxPeriod', { v1: period }),
+    t('gl.special.bodyGenOffset'),
   ]))) return
   try {
     const rows = await glexApi.interGenerate(period)
     // 整改(20260918): 生成 0 条时不应提示"已发起审批"，避免与实际不一致
     if (!rows || rows.length === 0) {
-      ElMessage.warning('该期间无内部往来余额，抵消分录生成 0 条，未发起审批')
+      ElMessage.warning(t('gl.special.msgNoInterbal'))
     } else {
-      ElMessage.success('抵消分录生成 ' + rows.length + ' 条，已发起内部往来抵消审批')
+      ElMessage.success(t('gl.special.genOffset') + rows.length + ' 条，已发起内部往来抵消审批')
     }
     loadInter()
   } catch (e) { ElMessage.error(e.message) }
 }
-async function doPost(row) { try { await glexApi.interPost(row.id); ElMessage.success('已抵消记账'); loadInter() } catch (e) { ElMessage.error(e.message) } }
+async function doPost(row) { try { await glexApi.interPost(row.id); ElMessage.success(t('gl.special.tabOffsetPost')); loadInter() } catch (e) { ElMessage.error(e.message) } }
 
 /**
  * X-52（D-DEC-294）内部往来对冲手工成对录入。
@@ -787,10 +785,10 @@ const manualVisible = ref(false)
 const manualSubmitting = ref(false)
 const manualFormRef = ref(null)
 const manualForm = ref({ period: '', receivableCompanyId: null, payableCompanyId: null, amount: null })
-const manualRules = {
-  period: [...commonRules.required('请填写会计期间'), { pattern: /^\d{6}$/, message: '期间格式应为 yyyyMM', trigger: 'blur' }],
-  amount: commonRules.amount('抵消金额必须大于 0'),
-}
+const manualRules = computed(() => ({
+  period: [...commonRules.required(t('gl.special.errPeriodRequired')), { pattern: /^\d{6}$/, message: t('gl.special.errPeriodFmt'), trigger: 'blur' }],
+  amount: commonRules.amount(t('gl.special.errOffsetAmount')),
+}))
 function toggleManualPair() {
   // 首次展开把期间预填为当前开账期间（与税金计提同一默认口径），不预填金额，也不代为提交
   if (!manualVisible.value && !manualForm.value.period) manualForm.value.period = openPeriod.value || ''
@@ -807,7 +805,7 @@ async function doManualPair() {
   // 两条镜像分录公司相同＝对自身抵消，属上下文矛盾的废单（存量已有 3 条同主体记录，含 0 元行）。
   // 公司留空（双 null）维持原口径不受影响，仍交后端按原逻辑处理。
   if (receivableCompanyId && payableCompanyId && String(receivableCompanyId) === String(payableCompanyId)) {
-    ElMessage.warning('应收方与应付方不能为同一家公司（自我抵消）；请修改后再提交')
+    ElMessage.warning(t('gl.special.errSelfOffset'))
     return
   }
   // 顺序即契约：pair[0]=来账(应收)、pair[1]=往账(应付)（GlInterOffsetController:45-50）
@@ -816,22 +814,23 @@ async function doManualPair() {
     { period, fromCompanyId: payableCompanyId, toCompanyId: receivableCompanyId, interFlag: 'PAYABLE', amount },
   ]
   // R5-D-166：写动作两步确认＋要素回显
-  if (!(await confirmWrite('确认提交成对分录', [
-    `期间 ${period}；金额 ¥${fmt(amount)}`,
-    `来账（应收）${receivableCompanyId ? companyName(receivableCompanyId) : '未指定'} / 往账（应付）${payableCompanyId ? companyName(payableCompanyId) : '未指定'}`,
-    '将生成 2 条草稿抵消分录并发起内部往来抵消审批',
+  if (!(await confirmWrite(t('gl.special.confirmPair'), [
+    t('gl.special.ctxPeriodAmount', { v1: period, v2: fmt(amount) }),
+    t('gl.special.pairInvoices', { v1: receivableCompanyId ? companyName(receivableCompanyId) : t('gl.special.notAssigned'), v2: payableCompanyId ? companyName(payableCompanyId) : t('gl.special.notAssigned') }),
+    t('gl.special.bodyPair'),
   ]))) return
   manualSubmitting.value = true
   try {
     const rows = await glexApi.interCreate(pair)
-    ElMessage.success('手工成对录入 ' + (rows ? rows.length : 0) + ' 条（草稿），已发起内部往来抵消审批')
+    ElMessage.success(t('gl.special.modeManual') + (rows ? rows.length : 0) + ' 条（草稿），已发起内部往来抵消审批')
     manualVisible.value = false
     loadInter()
   } catch (e) { ElMessage.error(e.message) } finally { manualSubmitting.value = false }
 }
 
-function typeName(t) {
-  return { ACCRUAL: '费用预提', DEFER: '费用待摊', MANUAL: '手工凭证', OTHER_RECEIPT: '其他收款' }[t] || t
+function typeName(code) {
+  // 形参不叫 t：与 useI18n() 的取词函数同名会让下面的 t('键') 变成"把字符串当函数调用"
+  return { ACCRUAL: t('gl.special.postAccrual'), DEFER: t('gl.special.postPrepaid'), MANUAL: t('gl.special.postManualVoucher'), OTHER_RECEIPT: t('gl.special.postOtherReceipt') }[code] || code
 }
 
 function loadJournal() {
@@ -847,17 +846,17 @@ async function doJournal() {
   const period = periodOrWarn(journalForm.value.period)
   if (!period) return
   const amount = Number(journalForm.value.amount)
-  if (!isFinite(amount) || amount <= 0) { ElMessage.warning('请填写记账金额（须大于 0）'); return }
+  if (!isFinite(amount) || amount <= 0) { ElMessage.warning(t('gl.special.errFillAmount')); return }
   // R5-D-166：写动作两步确认＋要素回显
-  if (!(await confirmWrite('确认记账', [
-    `期间 ${period}；类型 ${typeName(journalForm.value.entryType)}；金额 ¥${fmt(amount)}`,
-    journalForm.value.summary ? `摘要 ${journalForm.value.summary}` : '无摘要',
-    '将生成记账凭证并发起对应审批',
+  if (!(await confirmWrite(t('gl.special.confirmPost'), [
+    t('gl.special.ctxPeriodTypeAmount', { v1: period, v2: typeName(journalForm.value.entryType), v3: fmt(amount) }),
+    journalForm.value.summary ? t('gl.special.ctxSummary', { v1: journalForm.value.summary }) : t('gl.special.noSummary'),
+    t('gl.special.bodyPost'),
   ]))) return
   try {
     const e = await glexApi.journalGenerate(period, journalForm.value.entryType,
       journalForm.value.summary, amount)
-    ElMessage.success(typeName(e.entryType) + '记账完成 ¥' + fmt(e.amount) + '，已发起审批')
+    ElMessage.success(t('gl.special.ctxPosted', { kind: typeName(e.entryType), amount: fmt(e.amount) }))
     loadJournal()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -872,11 +871,11 @@ async function doJournalReverse(row) {
   let reason = ''
   try {
     const { value } = await ElMessageBox.prompt(
-      `确认冲销记账单 ${row.entryNo || row.id}（金额 ¥${fmt(row.amount)}）？冲销后单据置为 REVERSED 并生成红字反向凭证，请填写冲销原因（必填、留痕）。`,
-      '冲销记账',
+      t('gl.special.askReversePost', { v1: row.entryNo || row.id, v2: fmt(row.amount) }),
+      t('gl.special.btnReversePost'),
       {
-        inputPlaceholder: '冲销原因（必填）',
-        inputValidator: (v) => !!String(v || '').trim() || '请填写冲销原因',
+        inputPlaceholder: t('gl.special.phReverseReason2'),
+        inputValidator: (v) => !!String(v || '').trim() || t('gl.special.errFillReason'),
         closeOnClickModal: false,
         distinguishCancelAndClose: true,
         type: 'warning',
@@ -886,7 +885,7 @@ async function doJournalReverse(row) {
   } catch { return } // 用户取消：不产生任何写入
   try {
     await glexApi.journalReverse(row.id, reason)
-    ElMessage.success('记账单已冲销（REVERSED），红字反向凭证已生成')
+    ElMessage.success(t('gl.special.msgReversed'))
     loadJournal()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -906,16 +905,16 @@ async function doMonthClose() {
     const pending = list.filter((r) => !isCcDone(r))
     if (pending.length) {
       ElMessageBox.alert(
-        `期间 ${period} 的月结检查闸尚未通过：还有 ${pending.length} 项未办结——${pending.map((r) => r.itemName).join('、')}。`
-        + `请通知对应负责岗位在本页「月结检查闸清单」逐项办结后再执行月结。`,
-        '无法月结', { type: 'warning', confirmButtonText: '知道了' })
+        t('gl.special.errChecklistBlocked', { v1: period, v2: pending.length, v3: pending.map((r) => r.itemName).join('、') })
+        + t('gl.special.hintUnclosedPositions'),
+        '无法月结', { type: 'warning', confirmButtonText: t('common.gotIt') })
       return
     }
   }
   // R5-D-166：写动作两步确认＋要素回显（检查闸通过后、提交前）
-  if (!(await confirmWrite('确认发起月结', [
-    `期间 ${period}；公司 ${mcCompLabel.value}`,
-    '将执行试算平衡并发起关账审批；末节点审批通过后自动关账，期间在此之前保持开账',
+  if (!(await confirmWrite(t('gl.special.confirmMonthClose'), [
+    t('gl.special.ctxPeriodCompany', { v1: period, v2: mcCompLabel.value }),
+    t('gl.special.bodyMonthClose'),
   ]))) return
   try {
     const e = await glexApi.monthClose(period, mcForm.value.companyId)
@@ -924,10 +923,10 @@ async function doMonthClose() {
     // 「期间尚未关账——末节点通过后自动关账」）。原文案不分状态一律报「月结完成」，等于在提单同秒向
     // 总账会计宣称已关账，与先审后关口径矛盾，会让人据此停止记账、并误以为审批只是事后追认。
     const st = String(e?.status || '').toUpperCase()
-    if (st === 'CLOSED') ElMessage.success('月结完成（期间已关账）：' + (e.resultMsg || ''))
-    else if (st === 'RUNNING') ElMessage.success('月结审批已发起，期间尚未关账（末节点通过后自动关账）：' + (e.resultMsg || ''))
-    else if (st === 'DRAFT' || e?.balanced === false) ElMessage.warning('试算借贷不平，本次未进入月结审批、期间保持开账：' + (e.resultMsg || ''))
-    else ElMessage.success(`月结已受理（当前状态：${stLabel(st) || '—'}），是否关账以会计期间状态为准：` + (e.resultMsg || ''))
+    if (st === 'CLOSED') ElMessage.success(t('gl.special.msgMonthClosed') + (e.resultMsg || ''))
+    else if (st === 'RUNNING') ElMessage.success(t('gl.special.msgMonthCloseFlow') + (e.resultMsg || ''))
+    else if (st === 'DRAFT' || e?.balanced === false) ElMessage.warning(t('gl.special.msgTrialUnbalanced') + (e.resultMsg || ''))
+    else ElMessage.success(t('gl.special.msgMonthAccepted', { v1: stLabel(st) || '—' }) + (e.resultMsg || ''))
     loadMonthClose()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -952,19 +951,20 @@ const ccQuery = computed(() => {
   if (!/^\d{6}$/.test(p)) return null
   return mcForm.value.companyId ? { period: p, companyId: mcForm.value.companyId } : { period: p }
 })
-const checkPeriodLabel = computed(() => (ccQuery.value ? ccQuery.value.period : '未填期间'))
+const checkPeriodLabel = computed(() => (ccQuery.value ? ccQuery.value.period : t('gl.special.noPeriod')))
 const mcCompLabel = computed(() => {
   const id = mcForm.value.companyId || 1
   const c = companies.value.find((x) => String(x.id) === String(id))
-  return c ? c.name : '本公司'
+  return c ? c.name : t('gl.special.ownCompany')
 })
 function isCcDone(row) { return String(row?.status || '').toUpperCase() === 'DONE' }
 const ccDone = computed(() => closeCheck.value.filter((r) => isCcDone(r)).length)
 const ccPercent = computed(() => (closeCheck.value.length ? Math.round((ccDone.value * 100) / closeCheck.value.length) : 0))
 // 负责岗位显示名：取会计期间检查项的责任岗位编码对应的岗位名称（岗位名称与本仓 sys_role 种子一致），
 // 界面只出中文岗位名，不把岗位编码/权限码这类内部标识摆给业务用户看。
-const CC_OWNER_LABEL = { FIN_GL: '总账会计', CASHIER: '出纳', FIN_AR: '应收会计', FA_ASSET_ACCOUNT: '资产核算岗' }
-function ccOwnerLabel(code) { return CC_OWNER_LABEL[String(code || '').trim()] || '未指定岗位' }
+// computed：静态对象会在 setup 求值时固化语言（切语言后岗位名不换）
+const CC_OWNER_LABEL = computed(() => ({ FIN_GL: t('gl.special.posGlAccountant'), CASHIER: t('gl.special.posCashier'), FIN_AR: t('gl.special.posArAccountant'), FA_ASSET_ACCOUNT: t('gl.special.posAssetAccountant') }))
+function ccOwnerLabel(code) { return CC_OWNER_LABEL.value[String(code || '').trim()] || t('gl.special.noPosition') }
 
 async function fetchCloseCheck(q) {
   const query = q || ccQuery.value
@@ -980,18 +980,18 @@ async function loadCloseCheck() {
 }
 async function seedCloseCheck(q) {
   const query = q || ccQuery.value
-  if (!query) { ElMessage.warning('请先填写会计期间（yyyyMM）'); return }
+  if (!query) { ElMessage.warning(t('gl.special.errPeriodFirst')); return }
   try {
     await ElMessageBox.confirm(
-      `确认为期间 ${query.period}（公司：${mcCompLabel.value}）生成月结检查清单？本次生成 8 项待办结检查项，已存在的项不重复生成。`,
-      '生成月结检查清单', { type: 'warning', confirmButtonText: '生成清单', cancelButtonText: '取消' })
+      t('gl.special.askGenChecklist', { v1: query.period, v2: mcCompLabel.value }),
+      t('gl.special.dlgGenChecklist'), { type: 'warning', confirmButtonText: t('gl.special.btnGenList'), cancelButtonText: t('common.cancel') })
   } catch { return } // 用户取消：不产生任何写入
   ccSeeding.value = true
   try {
     const added = Number(await http.post('/tenant/gl/close-check/seed', null, { params: query, silent: true }))
     ElMessage.success(added > 0
-      ? `检查清单已生成 ${added} 项，请各负责岗位逐项办结后再执行月结`
-      : '该期间的检查清单已存在，无需重复生成，请直接逐项办结')
+      ? t('gl.special.msgChecklistGen', { v1: added })
+      : t('gl.special.msgChecklistExists'))
     await loadCloseCheck()
   } catch (e) { ElMessage.error(e.message) } finally { ccSeeding.value = false }
 }
@@ -1043,12 +1043,12 @@ async function doMonthUnclose() {
   let period = ''
   try {
     const { value } = await ElMessageBox.prompt(
-      '请输入要反结账的期间（yyyyMM）',
-      '反结账',
+      t('gl.special.phUnclosePeriod'),
+      t('gl.special.btnUnclose'),
       {
         inputValue: mcForm.value.period || openPeriod.value || '',
-        inputPlaceholder: '期间 yyyyMM',
-        inputValidator: (v) => /^\d{6}$/.test(String(v || '').trim()) || '请输入 6 位期间（yyyyMM）',
+        inputPlaceholder: t('gl.special.phPeriodYm2'),
+        inputValidator: (v) => /^\d{6}$/.test(String(v || '').trim()) || t('gl.special.errPeriod6'),
         closeOnClickModal: false,
         distinguishCancelAndClose: true,
         type: 'warning',
@@ -1059,14 +1059,14 @@ async function doMonthUnclose() {
   // 二次确认（警示文案：回退后该期间重新开放记账）
   try {
     await ElMessageBox.confirm(
-      `确认对期间 ${period} 反结账？回退后该期间将重新开放记账，已生成的结转/月结结果需人工复核！`,
-      '反结账二次确认',
-      { confirmButtonText: '确认反结账', cancelButtonText: '取消', type: 'warning', closeOnClickModal: false },
+      t('gl.special.askUnclose', { v1: period }),
+      t('gl.special.uncloseConfirmTitle'),
+      { confirmButtonText: t('gl.special.btnConfirmUnclose'), cancelButtonText: t('common.cancel'), type: 'warning', closeOnClickModal: false },
     )
   } catch (_) { return }
   try {
     await glApi.monthUnclose(period)
-    ElMessage.success(`期间 ${period} 已反结账，该期间重新开放记账`)
+    ElMessage.success(t('gl.special.msgUnclosed', { v1: period }))
     loadMonthClose()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -1077,7 +1077,8 @@ const pcPeriod = ref('')
 const pcLoading = ref(false)
 // 结转期间是弹窗唯一必输项（原裸 required 只出红星不校验），红星走 rules+prop+model 三件套
 const pcFormRef = ref(null)
-const pcRules = { pcPeriod: commonRules.date('请选择结转期间') }
+// computed：静态对象在 setup 求值时就把语言固化了，切语言后校验消息不换
+const pcRules = computed(() => ({ pcPeriod: commonRules.date(t('gl.special.phCarryPeriod')) }))
 const pcModel = computed(() => ({ pcPeriod: pcPeriod.value }))
 
 function openProfitCarry() {
@@ -1087,19 +1088,19 @@ function openProfitCarry() {
 
 // 展示后端返回结果（宽容读取常见字段，未知结构回退 JSON 原文）
 function profitCarrySummary(res) {
-  if (res == null) return '损益结转完成'
+  if (res == null) return t('gl.special.msgCarried')
   if (typeof res === 'string') return res
   if (typeof res === 'object') {
     const parts = []
-    if (res.voucherNo) parts.push('结转凭证 ' + res.voucherNo)
+    if (res.voucherNo) parts.push(t('gl.special.ctxCarryVoucher', { no: res.voucherNo }))
     if (res.resultMsg || res.msg || res.message) parts.push(res.resultMsg || res.msg || res.message)
     const amt = res.amount ?? res.totalAmount ?? res.carryAmount
-    if (amt != null) parts.push('结转金额 ' + fmt(amt))
-    if (Array.isArray(res.lines)) parts.push('分录 ' + res.lines.length + ' 条')
+    if (amt != null) parts.push(t('gl.special.ctxCarryAmount', { amount: fmt(amt) }))
+    if (Array.isArray(res.lines)) parts.push(t('gl.special.ctxEntryLines', { n: res.lines.length }))
     if (parts.length) return parts.join('；')
-    return '损益结转完成：' + JSON.stringify(res)
+    return t('gl.special.msgCarriedWith') + JSON.stringify(res)
   }
-  return '损益结转完成：' + String(res)
+  return t('gl.special.msgCarriedWith') + String(res)
 }
 
 async function doProfitCarry() {
@@ -1108,8 +1109,8 @@ async function doProfitCarry() {
   pcLoading.value = true
   try {
     const res = await glApi.profitCarry(period)
-    ElMessage.success(`期间 ${period} 损益结转完成`)
-    ElMessageBox.alert(profitCarrySummary(res), '损益结转结果', { type: 'success', confirmButtonText: '知道了' }).catch(() => {})
+    ElMessage.success(t('gl.special.msgCarryDone', { v1: period }))
+    ElMessageBox.alert(profitCarrySummary(res), t('gl.special.carryResultTitle'), { type: 'success', confirmButtonText: t('common.gotIt') }).catch(() => {})
     pcVisible.value = false
     loadMonthClose()
   } catch (e) {
@@ -1121,15 +1122,15 @@ async function doMaster() {
   if (!(await validateForms([masterFormRef]))) return
   const mf = masterForm.value
   // R5-D-166：写动作两步确认＋要素回显
-  if (!(await confirmWrite('确认提交主数据维护', [
-    `期间 ${mf.period}；类型 ${masterTypeLabel(mf.type)}；动作 ${masterActionLabel(mf.action)}`,
-    `编码 ${mf.subjectCode}${mf.subjectName ? '（' + mf.subjectName + '）' : ''}`,
-    '将发起 GL 主数据审批流',
+  if (!(await confirmWrite(t('gl.special.confirmGlMaster'), [
+    t('gl.special.ctxPeriodTypeAction', { v1: mf.period, v2: masterTypeLabel(mf.type), v3: masterActionLabel(mf.action) }),
+    t('gl.special.codeSuffix', { v1: mf.subjectCode, v2: mf.subjectName ? '（' + mf.subjectName + '）' : '' }),
+    t('gl.special.bodyGlMasterFlow'),
   ]))) return
   try {
     const r = await glexApi.sharedMasterSubmit(masterForm.value.period, masterForm.value.type,
       masterForm.value.action, masterForm.value.subjectCode, masterForm.value.subjectName, masterForm.value.description)
-    ElMessage.success('GL主数据维护已提交，已发起审批')
+    ElMessage.success(t('gl.special.msgGlMasterSubmitted'))
     loadMaster()
     return r
   } catch (e) { ElMessage.error(e.message) }
@@ -1141,13 +1142,13 @@ async function doConsolidate() {
   const period = periodOrWarn(consForm.value.period)
   if (!period) return
   // R5-D-166：写动作两步确认＋要素回显
-  if (!(await confirmWrite('确认汇总合并', [
-    `期间 ${period}`,
-    '将汇总抵消合并底稿并发起合并报表审批流',
+  if (!(await confirmWrite(t('gl.special.confirmConsolidate'), [
+    t('gl.special.ctxPeriod', { v1: period }),
+    t('gl.special.bodyConsolidate'),
   ]))) return
   try {
     await glexApi.consolidateRun(period)
-    ElMessage.success('合并报表已汇总，已发起合并报表审批')
+    ElMessage.success(t('gl.special.msgConsolSubmitted'))
     loadConsolidate()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -1265,16 +1266,16 @@ async function loadOpenPeriod() {
         const raw = list.find((p) => toYm(p) === s)
         return raw && String(raw.status || '').toUpperCase() !== 'CLOSED'
       })
-      if (opened.length) { ym = opened[0]; periodSource.value = '当前开账期间' }
+      if (opened.length) { ym = opened[0]; periodSource.value = t('gl.special.periodOpened') }
       // 全期已关：退回期间表最后一期。此时来源不能再自称「开账期间」，照实写清已结账，
       // 免得界面把一个人造的默认值说成系统事实（计提会落进已关期间，服务端会拒）。
-      else if (all.length) { ym = all[all.length - 1]; periodSource.value = '会计期间表最后一期（均已结账）' }
-      else periodSource.value = '系统当月'
+      else if (all.length) { ym = all[all.length - 1]; periodSource.value = t('gl.special.periodLastClosed') }
+      else periodSource.value = t('gl.special.periodSysMonth')
       // R5-D-169：同一份期间表读数顺带记下已结账期间（status=CLOSED），供六个页签提交钮的禁用态复用；
       // 无权限或取数失败时集合为空，按钮维持旧行为（服务端仍会拒）。
       closedPeriods.value = list.filter((p) => String(p.status || '').toUpperCase() === 'CLOSED')
         .map(toYm).filter((s) => /^\d{6}$/.test(s))
-    } catch { periodSource.value = '系统当月' /* 取数失败退回真实时钟当月，来源标注随之改口 */ }
+    } catch { periodSource.value = t('gl.special.periodSysMonth') /* 取数失败退回真实时钟当月，来源标注随之改口 */ }
   }
   openPeriod.value = ym
   if (!taxPeriod.value) taxPeriod.value = ym
@@ -1298,8 +1299,8 @@ onMounted(() => {
 })
 
 function exportCsv() {
-  if (!masters.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'reqNo', label: '申请单号' }, { prop: 'period', label: '期间(yyyyMM)' }, { prop: 'subjectCode', label: '科目编码' }, { prop: 'subjectName', label: '科目名称' }, { prop: 'description', label: '变更说明' }, { prop: 'voucherNo', label: '记账凭证号' }]
+  if (!masters.value.length) { ElMessage.warning(t('gl.ledger.msgNoExportData')); return }
+  const cols = [{ prop: 'reqNo', label: t('gl.special.colApplyNo') }, { prop: 'period', label: t('gl.special.phPeriodYm') }, { prop: 'subjectCode', label: t('gl.ledger.fieldSubjectCode') }, { prop: 'subjectName', label: t('gl.ledger.fieldSubjectName') }, { prop: 'description', label: t('gl.special.colChangeNote') }, { prop: 'voucherNo', label: t('gl.special.colVoucherNo') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = masters.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -1313,16 +1314,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `GlSpecial_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('gl.ledger.msgExported'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('gl.ledger.msgPickExport')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('gl.ledger.msgNoColumns')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -1337,7 +1338,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `GlSpecial_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(t('gl.ledger.msgExportedN', { v1: selRows.value.length }))
 }
 
 
@@ -1351,7 +1352,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => glSpecialCm.value
 const { approvalRef, handleApprove, handleReject } = useApprovalDialog({ taskIdOf, reload: reload })
 
 function handleView(row) {
-  ElMessage.info('批次：' + (row.runNo || row.id))
+  ElMessage.info(t('gl.special.batchLabel') + (row.runNo || row.id))
 }
 </script>
 

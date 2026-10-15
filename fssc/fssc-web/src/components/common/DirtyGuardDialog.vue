@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <!--
   DirtyGuardDialog —— 含表单的 el-dialog 通用「脏值守卫」薄封装（R5-D-107）。
 

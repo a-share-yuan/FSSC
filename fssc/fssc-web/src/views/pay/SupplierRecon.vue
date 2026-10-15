@@ -1,81 +1,77 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <b>应付对账（函）</b>
-        <el-select v-model="supplierId" placeholder="选择供应商" filterable clearable style="width: 220px">
+        <b>{{ $t('pay.shared.secReconLetter') }}</b>
+        <el-select v-model="supplierId" :placeholder="$t('pay.recon.phSupplier')" filterable clearable style="width: 220px">
           <el-option v-for="s in suppliers" :key="s.id" :label="s.supplierCode + ' ' + s.supplierName" :value="s.id" />
         </el-select>
-        <el-date-picker v-model="period" type="month" value-format="YYYYMM" placeholder="对账期间" style="width: 140px" />
-        <el-button type="primary" size="small" @click="generate">生成对账单</el-button>
-        <el-input v-model="q.keyword" placeholder="供应商名" clearable style="width: 140px" @keyup.enter="load" />
-        <el-select v-model="q.status" placeholder="状态" clearable style="width: 130px" @change="load">
-          <el-option label="已生成" value="DRAFT" />
-          <el-option label="已发函" value="SENT" />
-          <el-option label="已确认" value="CONFIRMED" />
-          <el-option label="有差异" value="DIFF" />
-          <el-option label="差异已处理" value="RESOLVED" />
+        <el-date-picker v-model="period" type="month" value-format="YYYYMM" :placeholder="$t('pay.recon.phPeriod')" style="width: 140px" />
+        <el-button type="primary" size="small" @click="generate">{{ $t('pay.recon.btnGenerate') }}</el-button>
+        <el-input v-model="q.keyword" :placeholder="$t('pay.recon.phSupplierName')" clearable style="width: 140px" @keyup.enter="load" />
+        <el-select v-model="q.status" :placeholder="$t('common.status')" clearable style="width: 130px" @change="load">
+          <el-option :label="$t('pay.recon.stGenerated')" value="DRAFT" />
+          <el-option :label="$t('pay.recon.stLetterSent')" value="SENT" />
+          <el-option :label="$t('pay.shared.stConfirmed')" value="CONFIRMED" />
+          <el-option :label="$t('pay.recon.stDiff')" value="DIFF" />
+          <el-option :label="$t('pay.recon.stDiffResolved')" value="RESOLVED" />
         </el-select>
-        <el-button size="small" @click="load">查询</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
+        <el-button size="small" @click="load">{{ $t('common.search') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('pay.shared.btnExportCsv') }}</el-button>
+      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('pay.shared.btnExportSelected', { v1: selRows.length }) }}</el-button>
         <span style="margin-left: auto; color: #909399; font-size: 13px">
-          生成对账单 → 自动勾对 → 发送对账函 → 供应商确认 → 差异处理 → 放行三单匹配
-        </span>
+          {{ $t('pay.recon.hintFlow') }}</span>
       </div>
     </template>
 
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="rows" size="small" stripe v-else max-height="520" @selection-change="handleSelectionChange" empty-text="暂无数据" @row-dblclick="openDetail">
+    <el-table :data="rows" size="small" stripe v-else max-height="520" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')" @row-dblclick="openDetail">
         <el-table-column type="selection" width="45" />
-      <el-table-column prop="reconNo" label="对账单号" width="160"  sortable />
-      <el-table-column prop="supplierName" label="供应商" min-width="130" show-overflow-tooltip  sortable />
-      <el-table-column prop="period" label="期间" width="75"  sortable />
-      <el-table-column label="期初余额" width="110" align="right">
+      <el-table-column prop="reconNo" :label="$t('field.reconNo')" width="160"  sortable />
+      <el-table-column prop="supplierName" :label="$t('field.supplier')" min-width="130" show-overflow-tooltip  sortable />
+      <el-table-column prop="period" :label="$t('field.period')" width="75"  sortable />
+      <el-table-column :label="$t('pay.recon.colOpeningBalance')" width="110" align="right">
         <template #default="{ row }">{{ fmt(row.openingBalance) }}</template>
       </el-table-column>
-      <el-table-column label="本期应付" width="110" align="right">
+      <el-table-column :label="$t('pay.recon.colPeriodPayable')" width="110" align="right">
         <template #default="{ row }">
           <span style="color: #e6a23c">{{ fmt(row.periodPayable) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="本期已付" width="110" align="right">
+      <el-table-column :label="$t('pay.recon.colPeriodPaid')" width="110" align="right">
         <template #default="{ row }">
           <span style="color: #67c23a">{{ fmt(row.periodPaid) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="期末余额" width="110" align="right">
+      <el-table-column :label="$t('pay.recon.colClosingBalance')" width="110" align="right">
         <template #default="{ row }">
           <b>{{ fmt(row.closingBalance) }}</b>
         </template>
       </el-table-column>
-      <el-table-column label="对账状态" width="100">
+      <el-table-column :label="$t('pay.recon.colStatus')" width="100">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="对账函" width="90">
+      <el-table-column :label="$t('pay.recon.colLetter')" width="90">
         <template #default="{ row }">
           <el-tag :type="letterTagType(row.letterStatus)" size="small" effect="plain">{{ letterLabel(row.letterStatus) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="供应商确认" width="100">
+      <el-table-column :label="$t('pay.recon.colSupplierConfirm')" width="100">
         <template #default="{ row }">
           <el-tag :type="confirmTagType(row.supplierConfirmStatus)" size="small" effect="plain">{{ confirmLabel(row.supplierConfirmStatus) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column :label="$t('common.operation')" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
-          <el-button link type="primary" size="small" @click="openDetail(row)">明细勾对</el-button>
-          <el-button v-if="row.letterStatus === 'NONE' || row.letterStatus === null" link type="warning" size="small" @click="sendLetter(row)">发送对账函</el-button>
-          <el-button v-if="row.supplierConfirmStatus === 'PENDING' && row.status !== 'CONFIRMED'" link type="success" size="small" @click="supplierConfirm(row, 'CONFIRMED')">确认一致</el-button>
-          <el-button v-if="row.supplierConfirmStatus === 'PENDING' && row.status !== 'DIFF'" link type="danger" size="small" @click="supplierConfirm(row, 'REJECTED')">有异议</el-button>
-          <el-button link size="small" @click="openDiffs(row)">差异</el-button>
-          <el-button v-if="linkuEnabled" link type="info" size="small" @click="syncLinkU(row)">查看LinkU状态</el-button>
+          <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('pay.shared.btnTrace') }}</el-button>
+          <el-button link type="primary" size="small" @click="openDetail(row)">{{ $t('pay.recon.btnDetailMatch') }}</el-button>
+          <el-button v-if="row.letterStatus === 'NONE' || row.letterStatus === null" link type="warning" size="small" @click="sendLetter(row)">{{ $t('pay.recon.btnSendLetter') }}</el-button>
+          <el-button v-if="row.supplierConfirmStatus === 'PENDING' && row.status !== 'CONFIRMED'" link type="success" size="small" @click="supplierConfirm(row, 'CONFIRMED')">{{ $t('pay.recon.btnConfirmAgreed') }}</el-button>
+          <el-button v-if="row.supplierConfirmStatus === 'PENDING' && row.status !== 'DIFF'" link type="danger" size="small" @click="supplierConfirm(row, 'REJECTED')">{{ $t('pay.recon.btnDispute') }}</el-button>
+          <el-button link size="small" @click="openDiffs(row)">{{ $t('pay.recon.btnDiffs') }}</el-button>
+          <el-button v-if="linkuEnabled" link type="info" size="small" @click="syncLinkU(row)">{{ $t('pay.recon.btnLinkuStatus') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -84,79 +80,78 @@
                    :total="total" :page-size="q.pageSize" :current-page="q.pageNum" @current-change="(n) => { q.pageNum = n; load() }" />
 
     <!-- 明细勾对弹窗 -->
-    <el-dialog v-model="detailVisible" :title="`对账明细 - ${currentRow?.supplierName || ''} (${currentRow?.period || ''})`" width="95%" top="3vh" destroy-on-close>
+    <el-dialog v-model="detailVisible" :title="$t('pay.recon.ttlDetailDialog', { v1: currentRow?.supplierName || '', v2: currentRow?.period || '' })" width="95%" top="3vh" destroy-on-close>
       <div v-if="summary" style="margin-bottom: 12px; display: flex; gap: 16px; flex-wrap: wrap">
-        <el-tag>发票 {{ summary.invoiceCount }} 笔</el-tag>
-        <el-tag type="success">付款 {{ summary.paymentCount }} 笔</el-tag>
-        <el-tag type="primary">已勾对 {{ summary.matchedCount }} 笔 / {{ fmt(summary.matchedAmount) }} 元</el-tag>
-        <el-tag type="warning">未勾对 {{ summary.unmatchedCount }} 笔</el-tag>
-        <el-tag v-if="summary.diffCount > 0" type="danger">差异 {{ summary.diffCount }} 条</el-tag>
-        <el-tag effect="plain">期初: {{ fmt(currentRow?.openingBalance) }}</el-tag>
-        <el-tag effect="plain">期末: {{ fmt(currentRow?.closingBalance) }}</el-tag>
+        <el-tag>{{ $t('pay.recon.tagInvoiceCount', { v1: summary.invoiceCount }) }}</el-tag>
+        <el-tag type="success">{{ $t('pay.recon.tagPaymentCount', { v1: summary.paymentCount }) }}</el-tag>
+        <el-tag type="primary">{{ $t('pay.recon.tagMatchedAmount', { v1: summary.matchedCount, v2: fmt(summary.matchedAmount) }) }}</el-tag>
+        <el-tag type="warning">{{ $t('pay.recon.tagUnmatchedCount', { v1: summary.unmatchedCount }) }}</el-tag>
+        <el-tag v-if="summary.diffCount > 0" type="danger">{{ $t('pay.recon.tagDiffCount', { v1: summary.diffCount }) }}</el-tag>
+        <el-tag effect="plain">{{ $t('pay.recon.tagOpening', { v1: fmt(currentRow?.openingBalance) }) }}</el-tag>
+        <el-tag effect="plain">{{ $t('pay.recon.tagClosing', { v1: fmt(currentRow?.closingBalance) }) }}</el-tag>
       </div>
       <div style="margin-bottom: 10px; display: flex; gap: 8px; align-items: center">
-        <el-button type="primary" size="small" @click="autoMatch" :loading="matchLoading">自动勾对</el-button>
+        <el-button type="primary" size="small" @click="autoMatch" :loading="matchLoading">{{ $t('pay.recon.btnAutoMatch') }}</el-button>
         <span v-if="selectedInvoice && selectedPayment" style="color: #409eff; font-size: 13px">
-          已选: {{ selectedInvoice.itemNo }} ↔ {{ selectedPayment.itemNo }}
-          <el-button type="success" size="small" style="margin-left: 8px" @click="manualMatch">确认勾对</el-button>
-          <el-button size="small" @click="clearSelection">取消选择</el-button>
+          {{ $t('pay.recon.textSelectedPair', { v1: selectedInvoice.itemNo, v2: selectedPayment.itemNo }) }}<el-button type="success" size="small" style="margin-left: 8px" @click="manualMatch">{{ $t('pay.recon.btnConfirmTie') }}</el-button>
+          <el-button size="small" @click="clearSelection">{{ $t('pay.recon.btnClearSelection') }}</el-button>
         </span>
-        <span v-else style="color: #909399; font-size: 13px">提示: 从左侧选一条发票, 右侧选一条付款, 然后点确认勾对</span>
+        <span v-else style="color: #909399; font-size: 13px">{{ $t('pay.recon.hintManualTie') }}</span>
       </div>
 
       <div style="display: flex; gap: 12px">
         <!-- 发票列表 -->
         <div style="flex: 1; min-width: 0">
-          <div style="font-weight: bold; margin-bottom: 6px; color: #e6a23c">发票（应付）</div>
+          <div style="font-weight: bold; margin-bottom: 6px; color: #e6a23c">{{ $t('pay.recon.secInvoice') }}</div>
           <el-table :data="invoiceDetails" size="small" stripe max-height="450" highlight-current-row
-                    @row-click="(row) => selectInvoice(row)" :row-class-name="detailRowClass" @selection-change="handleSelectionChange" empty-text="暂无数据">
+                    @row-click="(row) => selectInvoice(row)" :row-class-name="detailRowClass" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-            <el-table-column prop="itemNo" label="发票号" width="130" show-overflow-tooltip  sortable />
-            <el-table-column prop="itemDate" label="日期" width="100"  sortable :formatter="(row, col, val) => formatDate(val)" />
-            <el-table-column label="金额" width="110" align="right">
+            <el-table-column prop="itemNo" :label="$t('pay.shared.colInvoiceNo')" width="130" show-overflow-tooltip  sortable />
+            <el-table-column prop="itemDate" :label="$t('pay.recon.colDate')" width="100"  sortable :formatter="(row, col, val) => formatDate(val)" />
+            <el-table-column :label="$t('field.amount')" width="110" align="right">
               <template #default="{ row }">{{ fmt(row.amount) }}</template>
             </el-table-column>
-            <el-table-column label="状态" width="80">
+            <el-table-column :label="$t('common.status')" width="80">
               <template #default="{ row }">
                 <el-tag :type="row.matchStatus === 'MATCHED' ? 'success' : 'info'" size="small">
-                  {{ row.matchStatus === 'MATCHED' ? '已勾对' : '未勾对' }}
+                  {{ row.matchStatus === 'MATCHED' ? t('pay.recon.stTieMatched') : t('pay.recon.stTieUnmatched') }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="规则" width="80">
+            <el-table-column :label="$t('pay.recon.colRule')" width="80">
               <template #default="{ row }">{{ matchRuleLabel(row.matchRule) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="70">
+            <el-table-column :label="$t('common.operation')" width="70">
               <template #default="{ row }">
-                <el-button v-if="row.matchStatus === 'MATCHED'" link type="danger" size="small" @click.stop="unmatch(row)">取消</el-button>
+                <el-button v-if="row.matchStatus === 'MATCHED'" link type="danger" size="small" @click.stop="unmatch(row)">{{ $t('common.cancel') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
         </div>
         <!-- 付款列表 -->
         <div style="flex: 1; min-width: 0">
-          <div style="font-weight: bold; margin-bottom: 6px; color: #67c23a">付款（已付）</div>
+          <div style="font-weight: bold; margin-bottom: 6px; color: #67c23a">{{ $t('pay.recon.secPayment') }}</div>
           <el-table :data="paymentDetails" size="small" stripe max-height="450" highlight-current-row
-                    @row-click="(row) => selectPayment(row)" :row-class-name="detailRowClass" @selection-change="handleSelectionChange" empty-text="暂无数据">
+                    @row-click="(row) => selectPayment(row)" :row-class-name="detailRowClass" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-            <el-table-column prop="itemNo" label="流水号" width="130" show-overflow-tooltip  sortable />
-            <el-table-column prop="itemDate" label="日期" width="100"  sortable :formatter="(row, col, val) => formatDate(val)" />
-            <el-table-column label="金额" width="110" align="right">
+            <el-table-column prop="itemNo" :label="$t('pay.recon.colItemNo')" width="130" show-overflow-tooltip  sortable />
+            <el-table-column prop="itemDate" :label="$t('pay.recon.colDate')" width="100"  sortable :formatter="(row, col, val) => formatDate(val)" />
+            <el-table-column :label="$t('field.amount')" width="110" align="right">
               <template #default="{ row }">{{ fmt(row.amount) }}</template>
             </el-table-column>
-            <el-table-column label="状态" width="80">
+            <el-table-column :label="$t('common.status')" width="80">
               <template #default="{ row }">
                 <el-tag :type="row.matchStatus === 'MATCHED' ? 'success' : 'info'" size="small">
-                  {{ row.matchStatus === 'MATCHED' ? '已勾对' : '未勾对' }}
+                  {{ row.matchStatus === 'MATCHED' ? t('pay.recon.stTieMatched') : t('pay.recon.stTieUnmatched') }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="规则" width="80">
+            <el-table-column :label="$t('pay.recon.colRule')" width="80">
               <template #default="{ row }">{{ matchRuleLabel(row.matchRule) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="70">
+            <el-table-column :label="$t('common.operation')" width="70">
               <template #default="{ row }">
-                <el-button v-if="row.matchStatus === 'MATCHED'" link type="danger" size="small" @click.stop="unmatch(row)">取消</el-button>
+                <el-button v-if="row.matchStatus === 'MATCHED'" link type="danger" size="small" @click.stop="unmatch(row)">{{ $t('common.cancel') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -165,75 +160,75 @@
     </el-dialog>
 
     <!-- 差异调节弹窗 -->
-    <el-dialog v-model="diffVisible" :title="`差异调节 - ${currentRow?.supplierName || ''}`" width="80%" destroy-on-close>
+    <el-dialog v-model="diffVisible" :title="$t('pay.recon.ttlDiffDialog', { v1: currentRow?.supplierName || '' })" width="80%" destroy-on-close>
       <div style="margin-bottom: 10px; display: flex; gap: 8px; align-items: center">
-        <el-select v-model="newDiff.diffType" placeholder="差异类型" style="width: 160px">
-          <el-option label="金额差异" value="AMOUNT_DIFF" />
-          <el-option label="缺少发票" value="MISSING_INVOICE" />
-          <el-option label="缺少付款" value="MISSING_PAYMENT" />
-          <el-option label="时间性差异" value="TIMING_DIFF" />
-          <el-option label="其他" value="OTHER" />
+        <el-select v-model="newDiff.diffType" :placeholder="$t('pay.shared.colDiffType')" style="width: 160px">
+          <el-option :label="$t('pay.recon.typeAmountDiff')" value="AMOUNT_DIFF" />
+          <el-option :label="$t('pay.recon.typeMissingInvoice')" value="MISSING_INVOICE" />
+          <el-option :label="$t('pay.recon.typeMissingPayment')" value="MISSING_PAYMENT" />
+          <el-option :label="$t('pay.recon.typeTimingDiff')" value="TIMING_DIFF" />
+          <el-option :label="$t('pay.recon.typeOther')" value="OTHER" />
         </el-select>
-        <el-input-number v-model="newDiff.ourAmount" :precision="2" :min="0" placeholder="我方金额" style="width: 140px" />
-        <el-input-number v-model="newDiff.supplierAmount" :precision="2" :min="0" placeholder="供应商金额" style="width: 140px" />
-        <el-select v-model="newDiff.reason" filterable allow-create default-first-option placeholder="选择或输入差异原因" style="width: 200px"><el-option label="时间差异" value="时间差异" /><el-option label="金额差异" value="金额差异" /><el-option label="账务处理差异" value="账务处理差异" /><el-option label="未达账项" value="未达账项" /><el-option label="银行手续费" value="银行手续费" /><el-option label="汇率差异" value="汇率差异" /><el-option label="其他" value="其他" /></el-select>
-        <el-button type="primary" size="small" @click="addDiff">添加差异</el-button>
+        <el-input-number v-model="newDiff.ourAmount" :precision="2" :min="0" :placeholder="$t('pay.recon.phOurAmount')" style="width: 140px" />
+        <el-input-number v-model="newDiff.supplierAmount" :precision="2" :min="0" :placeholder="$t('pay.recon.phSupplierAmount')" style="width: 140px" />
+        <el-select v-model="newDiff.reason" filterable allow-create default-first-option :placeholder="$t('pay.recon.phDiffReason')" style="width: 200px"><el-option :label="$t('pay.recon.reasonTimeDiff')" value="时间差异" /><el-option :label="$t('pay.recon.typeAmountDiff')" value="金额差异" /><el-option :label="$t('pay.recon.reasonBookingDiff')" value="账务处理差异" /><el-option :label="$t('pay.recon.reasonOutstanding')" value="未达账项" /><el-option :label="$t('pay.recon.reasonBankFee')" value="银行手续费" /><el-option :label="$t('pay.recon.reasonFxDiff')" value="汇率差异" /><el-option :label="$t('pay.recon.typeOther')" value="其他" /></el-select>
+        <el-button type="primary" size="small" @click="addDiff">{{ $t('pay.recon.btnAddDiff') }}</el-button>
       </div>
-      <el-table :data="diffs" size="small" stripe max-height="400" @selection-change="handleSelectionChange" empty-text="暂无数据">
+      <el-table :data="diffs" size="small" stripe max-height="400" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-        <el-table-column label="类型" width="100">
+        <el-table-column :label="$t('field.type')" width="100">
           <template #default="{ row }">{{ diffTypeLabel(row.diffType) }}</template>
         </el-table-column>
-        <el-table-column label="我方金额" width="110" align="right">
+        <el-table-column :label="$t('pay.recon.phOurAmount')" width="110" align="right">
           <template #default="{ row }">{{ fmt(row.ourAmount) }}</template>
         </el-table-column>
-        <el-table-column label="供应商金额" width="110" align="right">
+        <el-table-column :label="$t('pay.recon.phSupplierAmount')" width="110" align="right">
           <template #default="{ row }">{{ fmt(row.supplierAmount) }}</template>
         </el-table-column>
-        <el-table-column label="差异金额" width="110" align="right">
+        <el-table-column :label="$t('pay.recon.colDiffAmount')" width="110" align="right">
           <template #default="{ row }">
             <span :style="{ color: row.diffAmount < 0 ? '#f56c6c' : '#e6a23c' }">{{ fmt(row.diffAmount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="reason" label="原因" min-width="150" show-overflow-tooltip  sortable />
-        <el-table-column label="调整方式" width="120">
+        <el-table-column prop="reason" :label="$t('pay.recon.colReason')" min-width="150" show-overflow-tooltip  sortable />
+        <el-table-column :label="$t('pay.recon.colAdjustType')" width="120">
           <template #default="{ row }">{{ adjustTypeLabel(row.adjustmentType) }}</template>
         </el-table-column>
-        <el-table-column prop="adjustmentVoucherNo" label="凭证号" width="120"  sortable />
-        <el-table-column label="状态" width="80">
+        <el-table-column prop="adjustmentVoucherNo" :label="$t('pay.shared.colVoucherNo')" width="120"  sortable />
+        <el-table-column :label="$t('common.status')" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'RESOLVED' ? 'success' : 'warning'" size="small">{{ row.status === 'RESOLVED' ? '已处理' : '待处理' }}</el-tag>
+            <el-tag :type="row.status === 'RESOLVED' ? 'success' : 'warning'" size="small">{{ row.status === 'RESOLVED' ? t('pay.recon.stResolved') : t('status.pending') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column :label="$t('common.operation')" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status === 'PENDING'" link type="primary" size="small" @click="openResolveDiff(row)">处理</el-button>
+            <el-button v-if="row.status === 'PENDING'" link type="primary" size="small" @click="openResolveDiff(row)">{{ $t('pay.recon.btnResolve') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <!-- 差异处理子弹窗 -->
-      <el-dialog v-model="resolveVisible" title="处理差异" width="500px" append-to-body destroy-on-close>
+      <el-dialog v-model="resolveVisible" :title="$t('pay.recon.ctxResolveTitle')" width="500px" append-to-body destroy-on-close>
         <el-form :model="resolveForm" :rules="resolveRules" label-width="90px">
-          <el-form-item label="差异金额">{{ fmt(resolvingDiff?.diffAmount) }}</el-form-item>
-          <el-form-item label="调整方式">
+          <el-form-item :label="$t('pay.recon.colDiffAmount')">{{ fmt(resolvingDiff?.diffAmount) }}</el-form-item>
+          <el-form-item :label="$t('pay.recon.colAdjustType')">
             <el-select v-model="resolveForm.adjustmentType" style="width: 100%">
-              <el-option label="无需调整" value="NONE" />
-              <el-option label="调整发票" value="ADJUST_INVOICE" />
-              <el-option label="调整付款" value="ADJUST_PAYMENT" />
-              <el-option label="核销" value="WRITE_OFF" />
+              <el-option :label="$t('pay.recon.adjNone')" value="NONE" />
+              <el-option :label="$t('pay.recon.adjInvoice')" value="ADJUST_INVOICE" />
+              <el-option :label="$t('pay.recon.adjPayment')" value="ADJUST_PAYMENT" />
+              <el-option :label="$t('pay.recon.adjWriteOff')" value="WRITE_OFF" />
             </el-select>
           </el-form-item>
-          <el-form-item label="凭证号">
-            <el-input v-model="resolveForm.voucherNo" placeholder="调整凭证号（如有）" />
+          <el-form-item :label="$t('pay.shared.colVoucherNo')">
+            <el-input v-model="resolveForm.voucherNo" :placeholder="$t('pay.recon.phAdjustVoucherNo')" />
           </el-form-item>
-          <el-form-item label="备注">
+          <el-form-item :label="$t('common.remark')">
             <el-input v-model="resolveForm.remark" type="textarea" :rows="2" />
           </el-form-item>
         </el-form>
         <template #footer>
-          <el-button @click="resolveVisible = false">取消</el-button>
-          <el-button type="primary" @click="resolveDiff">确认处理</el-button>
+          <el-button @click="resolveVisible = false">{{ $t('common.cancel') }}</el-button>
+          <el-button type="primary" @click="resolveDiff">{{ $t('pay.recon.btnConfirmResolve') }}</el-button>
         </template>
       </el-dialog>
     </el-dialog>
@@ -251,6 +246,9 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { BillStatus, STATUS_TYPE } from '@/constants/billStatus.js'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => loadDetails(),
@@ -280,13 +278,13 @@ const q = reactive({ pageNum: 1, pageSize: 20, keyword: '', status: '' })
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 
 function statusLabel(s) {
-  return { DRAFT: '已生成', SENT: '已发函', CONFIRMED: '已确认', DIFF: '有差异', RESOLVED: '差异已处理' }[s] || s || ''
+  return { DRAFT: t('pay.recon.stGenerated'), SENT: t('pay.recon.stLetterSent'), CONFIRMED: t('pay.shared.stConfirmed'), DIFF: t('pay.recon.stDiff'), RESOLVED: t('pay.recon.stDiffResolved') }[s] || s || ''
 }
 function statusTagType(s) {
   return { DRAFT: 'info', SENT: 'warning', CONFIRMED: 'success', DIFF: 'danger', RESOLVED: 'success' }[s] || 'info'
 }
 function letterLabel(s) {
-  return { NONE: '未发函', SENT: '已发送', RECEIVED: '已回函' }[s] || '未发函'
+  return { NONE: t('pay.recon.lblLetterNone'), SENT: t('pay.recon.lblLetterSent'), RECEIVED: t('pay.recon.lblLetterReplied') }[s] || t('pay.recon.lblLetterNone')
 }
 function letterTagType(s) {
   return { NONE: 'info', SENT: 'warning', RECEIVED: 'success' }[s] || 'info'
@@ -294,19 +292,19 @@ function letterTagType(s) {
 function confirmLabel(s) {
   // R5-D-074②：未发函（NONE/空）不显示「待确认」——那是发函后才存在的状态，
   // 一律显 '-'，杜绝「未发函却显示待确认/驳回」的状态机矛盾呈现。
-  return { NONE: '-', PENDING: '待确认', CONFIRMED: '确认一致', REJECTED: '有异议' }[s] || '-'
+  return { NONE: '-', PENDING: t('pay.recon.lblConfirmPending'), CONFIRMED: t('pay.recon.btnConfirmAgreed'), REJECTED: t('pay.recon.btnDispute') }[s] || '-'
 }
 function confirmTagType(s) {
   return { PENDING: 'info', CONFIRMED: 'success', REJECTED: 'danger' }[s] || 'info'
 }
 function matchRuleLabel(r) {
-  return { INVOICE_NO: '发票号', AMOUNT: '金额', PO_NO: 'PO号', MANUAL: '手工' }[r] || ''
+  return { INVOICE_NO: t('pay.shared.colInvoiceNo'), AMOUNT: t('field.amount'), PO_NO: t('pay.recon.rulePoNo'), MANUAL: t('pay.recon.ruleManual') }[r] || ''
 }
-function diffTypeLabel(t) {
-  return { AMOUNT_DIFF: '金额差异', MISSING_INVOICE: '缺少发票', MISSING_PAYMENT: '缺少付款', TIMING_DIFF: '时间性差异', OTHER: '其他' }[t] || t
+function diffTypeLabel(code) {
+  return { AMOUNT_DIFF: t('pay.recon.typeAmountDiff'), MISSING_INVOICE: t('pay.recon.typeMissingInvoice'), MISSING_PAYMENT: t('pay.recon.typeMissingPayment'), TIMING_DIFF: t('pay.recon.typeTimingDiff'), OTHER: t('pay.recon.typeOther') }[code] || code
 }
-function adjustTypeLabel(t) {
-  return { NONE: '无需调整', ADJUST_INVOICE: '调整发票', ADJUST_PAYMENT: '调整付款', WRITE_OFF: '核销' }[t] || t
+function adjustTypeLabel(code) {
+  return { NONE: t('pay.recon.adjNone'), ADJUST_INVOICE: t('pay.recon.adjInvoice'), ADJUST_PAYMENT: t('pay.recon.adjPayment'), WRITE_OFF: t('pay.recon.adjWriteOff') }[code] || code
 }
 
 async function load() {
@@ -319,10 +317,10 @@ async function load() {
 }
 
 async function generate() {
-  if (!supplierId.value || !period.value) { ElMessage.warning('请选择供应商和对账期间'); return }
+  if (!supplierId.value || !period.value) { ElMessage.warning(t('pay.recon.errPickSupplierPeriod')); return }
   try {
     const id = await opApi.reconGenerate({ supplierId: supplierId.value, period: period.value })
-    ElMessage.success('对账单已生成，明细已按期间过滤')
+    ElMessage.success(t('pay.recon.msgGenerated'))
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -379,17 +377,17 @@ async function autoMatch() {
   matchLoading.value = true
   try {
     const r = await opApi.reconAutoMatch(currentRow.value.id)
-    ElMessage.success(`自动勾对完成，匹配 ${r.matchedCount} 笔`)
+    ElMessage.success(t('pay.recon.msgAutoTied', { v1: r.matchedCount }))
     await loadDetails()
     await load()
   } catch (e) { ElMessage.error(e.message) } finally { matchLoading.value = false }
 }
 
 async function manualMatch() {
-  if (!selectedInvoice.value || !selectedPayment.value) { ElMessage.warning('请选择发票和付款'); return }
+  if (!selectedInvoice.value || !selectedPayment.value) { ElMessage.warning(t('pay.recon.errPickInvoicePayment')); return }
   try {
     await opApi.reconManualMatch(currentRow.value.id, selectedInvoice.value.id, selectedPayment.value.id)
-    ElMessage.success('手工勾对成功')
+    ElMessage.success(t('pay.recon.msgManualTieOk'))
     clearSelection()
     await loadDetails()
     await load()
@@ -398,9 +396,9 @@ async function manualMatch() {
 
 async function unmatch(row) {
   try {
-    await ElMessageBox.confirm('确认取消该笔勾对？', '取消勾对', { type: 'warning' })
+    await ElMessageBox.confirm(t('pay.recon.ctxUnmatchConfirm'), t('pay.recon.ctxUnmatchTitle'), { type: 'warning' })
     await opApi.reconUnmatch(row.id)
-    ElMessage.success('已取消勾对')
+    ElMessage.success(t('pay.recon.msgUnmatched'))
     await loadDetails()
     await load()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
@@ -409,26 +407,26 @@ async function unmatch(row) {
 // ---- 对账函 ----
 async function sendLetter(row) {
   try {
-    await ElMessageBox.confirm(`确认向「${row.supplierName}」发送对账函？`, '发送对账函', { type: 'warning' })
+    await ElMessageBox.confirm(t('pay.recon.ctxSendConfirm', { v1: row.supplierName }), t('pay.recon.btnSendLetter'), { type: 'warning' })
     const r = await opApi.reconSendLetter(row.id)
-    ElMessage.success(`对账函已发送，编号: ${r.letterNo}`)
+    ElMessage.success(t('pay.recon.msgLetterSent', { v1: r.letterNo }))
     load()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
 // ---- 供应商确认 ----
 async function supplierConfirm(row, status) {
-  const action = status === 'CONFIRMED' ? '确认一致' : '有异议'
+  const action = status === 'CONFIRMED' ? t('pay.recon.btnConfirmAgreed') : t('pay.recon.btnDispute')
   try {
     let remark = ''
     if (status === BillStatus.REJECTED) {
-      const r = await ElMessageBox.prompt(`请输入差异说明：`, '供应商有异议', { inputPlaceholder: '必填' })
+      const r = await ElMessageBox.prompt(t('pay.recon.ctxDisputePrompt'), t('pay.recon.ctxDisputeTitle'), { inputPlaceholder: t('pay.recon.phInputRequired') })
       remark = r.value
     } else {
-      await ElMessageBox.confirm(`确认与「${row.supplierName}」对账一致？确认后将放行三单匹配。`, '供应商确认', { type: 'warning' })
+      await ElMessageBox.confirm(t('pay.recon.ctxConfirmSupplier', { v1: row.supplierName }), t('pay.recon.colSupplierConfirm'), { type: 'warning' })
     }
     await opApi.reconSupplierConfirm(row.id, status, remark)
-    ElMessage.success(action + '已记录')
+    ElMessage.success(t('pay.recon.msgActionLogged', { v1: action }))
     load()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
@@ -441,9 +439,9 @@ const resolveVisible = ref(false)
 const resolvingDiff = ref(null)
 const resolveForm = reactive({ adjustmentType: 'NONE', voucherNo: '', remark: '' })
 
-const resolveRules = {
-  adjustmentType: [{ required: true, message: '请选择调整方式' }],
-}
+const resolveRules = computed(() => ({
+  adjustmentType: [{ required: true, message: t('pay.recon.errPickAdjustType') }],
+}))
 
 async function openDiffs(row) {
   currentRow.value = row
@@ -458,7 +456,7 @@ async function loadDiffs() {
 }
 
 async function addDiff() {
-  if (!newDiff.diffType || !newDiff.reason) { ElMessage.warning('请填写差异类型和原因'); return }
+  if (!newDiff.diffType || !newDiff.reason) { ElMessage.warning(t('pay.recon.errFillDiffTypeReason')); return }
   try {
     await opApi.reconAddDiff(currentRow.value.id, {
       diffType: newDiff.diffType,
@@ -466,7 +464,7 @@ async function addDiff() {
       supplierAmount: parseFloat(newDiff.supplierAmount) || 0,
       reason: newDiff.reason
     })
-    ElMessage.success('差异已添加')
+    ElMessage.success(t('pay.recon.msgDiffAdded'))
     newDiff.reason = ''; newDiff.ourAmount = ''; newDiff.supplierAmount = ''
     await loadDiffs()
     await load()
@@ -484,7 +482,7 @@ function openResolveDiff(row) {
 async function resolveDiff() {
   try {
     await opApi.reconResolveDiff(resolvingDiff.value.id, { ...resolveForm })
-    ElMessage.success('差异已处理')
+    ElMessage.success(t('pay.recon.stDiffResolved'))
     resolveVisible.value = false
     await loadDiffs()
     await load()
@@ -495,13 +493,13 @@ async function resolveDiff() {
 async function syncLinkU(row) {
   try {
     const r = await opApi.reconLinkUStatus(row.id)
-    const statusMap = { NONE: '未同步', SYNCED: '已同步', CONFIRMED: '已确认', REJECTED: '有异议' }
+    const statusMap = { NONE: t('pay.recon.stNotSynced'), SYNCED: t('pay.recon.stSynced'), CONFIRMED: t('pay.shared.stConfirmed'), REJECTED: t('pay.recon.btnDispute') }
     showRowDetail({
-      linkuReconId: r.linkuReconId || '无',
-      linkuSyncStatus: statusMap[r.linkuSyncStatus] || r.linkuSyncStatus || '未知',
+      linkuReconId: r.linkuReconId || t('pay.recon.lblNone'),
+      linkuSyncStatus: statusMap[r.linkuSyncStatus] || r.linkuSyncStatus || t('pay.recon.lblUnknown'),
       linkuSyncTime: r.linkuSyncTime,
-      note: 'FSSC 不主动推送数据到 LinkU，而是被动接收 LinkU 的 Webhook 回调',
-    }, { title: 'LinkU 同步状态', labels: { linkuReconId: '对账单ID', linkuSyncStatus: '同步状态', linkuSyncTime: '同步时间', note: '说明' } })
+      note: t('pay.recon.noteLinku'),
+    }, { title: t('pay.recon.ctxLinkuTitle'), labels: { linkuReconId: t('pay.recon.ctxStatementId'), linkuSyncStatus: t('pay.recon.ctxSyncStatus'), linkuSyncTime: t('pay.recon.ctxSyncTime'), note: t('field.desc') } })
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -521,8 +519,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'reconNo', label: '对账单号' }, { prop: 'supplierName', label: '供应商' }, { prop: 'period', label: '期间' }]
+  if (!rows.value.length) { ElMessage.warning(t('pay.shared.msgNoExportData')); return }
+  const cols = [{ prop: 'reconNo', label: t('field.reconNo') }, { prop: 'supplierName', label: t('field.supplier') }, { prop: 'period', label: t('field.period') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -536,16 +534,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `SupplierRecon_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('pay.shared.msgExportedCsv'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('pay.shared.msgPickExportRows')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('pay.shared.msgNoColumns')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -560,7 +558,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `SupplierRecon_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(t('pay.shared.msgExportedRows', { v1: selRows.value.length }))
 }
 
 </script>
