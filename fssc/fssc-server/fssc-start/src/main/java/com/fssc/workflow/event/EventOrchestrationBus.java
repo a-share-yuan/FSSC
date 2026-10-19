@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.event;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -26,7 +29,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *       触发时机（APPROVED/REJECTED/BOTH）、排序、启用/禁用</li>
  *   <li>自动发现：启动时扫描所有 {@link WfBizAction} Spring Bean，与配置表交叉校验</li>
  *   <li>零代码接入：新流程仅需在配置表 INSERT 一行 + 实现 WfBizAction Bean</li>
- *   <li>原子化执行：每个 Action 独立 try-catch，单个失败不中断其他动作</li>
+ *   <li>原子化执行：每个 Action 独立 try-catch，单个失败不中断其他动作
+ *       <br> <b>D-V4R-87 例外</b>：{@link com.fssc.common.exception.BizException}
+ *       （业务闸，例如三单匹配硬异常）必须冒泡，见 {@code onProcessEnded} 注释。</li>
  * </ul>
  *
  * @see WfBizAction
@@ -151,6 +156,29 @@ public class EventOrchestrationBus {
         //   - 或 MP 租户拦截器在无上下文时跳过 WHERE，造成串户风险。
         // 故在此据事件携带的 tenantId 重建上下文；tenantId 缺失则用 runIgnoreTenant 兜底（仍不串户）。
         Long tenantId = event.getTenantId();
+        // D-V4R-87：业务闸失败必须冒泡，技术异常仍按「原子化」吞掉。
+        //
+        // 【原缺陷】本层对所有 Action 一律 catch(Exception) 只记 ERROR 日志，而上游
+        //   WfEngineFacade:269-281 的设计意图明写「业务收尾事件…同样失败即冒泡」，
+        //   PROCESS_COMPLETED 监听器的 isFailOnException() 也已返回 true。
+        //   两层意图一致，却被这里截断 ⇒ InvoiceMatchBizAction.assertNoHardMatch
+        //   抛出的「三单匹配仍有硬异常」被吞成日志，POST /wf/approve 仍回 code=0、
+        //   wf_instance 照转 APPROVED、act_ru_task 清零 —— 审批人界面零红字，
+        //   闸有实体无出口。这正是 D-V4R-85「复审链点通过即绕过付款硬闸」的
+        //   另一半伤：修好了不放行，却让审批人以为自己办成了。
+        //
+        // 【为何只放 BizException 冒泡】两类异常的性质不同：
+        //   - BizException = 业务规则显式拒绝（如三单匹配有 PAY_EXCEED_INVOICE 硬异常）。
+        //     这是「闸」，必须让审批人看见红字并可改数据后重试，否则等于没闸。
+        //   - 其它 Exception = 技术故障（DB 抖动、编码异常、第三方超时）。
+        //     这些偶发问题若一并冒泡，会让整条审批链因一次网络抖动整体失败回滚，
+        //     与本类「原子化、单动作失败不中断其他」的既有契约冲突，风险更大。
+        //   故维持原行为：技术异常只记 ERROR、不阻断其余 Action。
+        //
+        // 【冒泡后的效果】事件在 PROCESS_COMPLETED 监听器内同步发布（见 WfEngineFacade:272），
+        // 异常上抛 ⇒ isFailOnException()=true ⇒ 回滚流程结束动作 ⇒ 审批接口回失败，
+        // 界面可见红字、wf_instance 停在在办、用户改完数据可重试。
+        final List<RuntimeException> gateFailures = new ArrayList<>();
         Runnable dispatch = () -> {
             for (ActionEntry entry : entries) {
                 if (!entry.shouldTrigger(approved)) {
@@ -158,6 +186,12 @@ public class EventOrchestrationBus {
                 }
                 try {
                     entry.action.execute(event);
+                } catch (com.fssc.common.exception.BizException be) {
+                    // 业务闸：记录后原样上抛，不中断后续 Action（让它们把该做的收口做完），
+                    // 循环结束后统一抛第一个，避免中途抛导致后续 Action 全不执行。
+                    log.error("EventOrchestrationBus: 业务闸拒绝收尾（将冒泡回滚流程结束） bizType={}, bean={}, error={}",
+                            event.getBizType(), entry.beanName, be.getMessage(), be);
+                    gateFailures.add(be);
                 } catch (Exception ex) {
                     log.error("EventOrchestrationBus: 收尾动作执行失败 bizType={}, bean={}, error={}",
                             event.getBizType(), entry.beanName, ex.getMessage(), ex);
@@ -170,6 +204,9 @@ public class EventOrchestrationBus {
             log.warn("EventOrchestrationBus: bizType={} 事件未携带 tenantId，以 runIgnoreTenant 兜底执行（请核查 WfEngineFacade 填充）",
                     event.getBizType());
             TenantContext.runIgnoreTenant(dispatch);
+        }
+        if (!gateFailures.isEmpty()) {
+            throw gateFailures.get(0);
         }
     }
 

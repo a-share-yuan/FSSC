@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
@@ -78,6 +81,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { customerApi } from '../../api'
 import { useCrud } from '../../composables/useCrud'
+import { useFormRules } from '../../composables/useFormRules'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { customerTypeLabel } from '@/constants/enums.js'
 
@@ -122,10 +126,9 @@ function handleCurrentChange(val) {
   crud.load()
 }
 
-const customerRules = {
-  customerName: [{ required: true, message: '请输入客户名称' }],
-  customerType: [{ required: true, message: '请选择往来类型' }],
-}
+// 第1批 P0：录入规则统一走中央框架 useFormRules('CUSTOMER')
+// （原页面本地 rules 只有名称/类型必填，联系电话与邮箱裸奔）
+const { rules: customerRules } = useFormRules('CUSTOMER')
 
 onMounted(crud.load)
 </script>

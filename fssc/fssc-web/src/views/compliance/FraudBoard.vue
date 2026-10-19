@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -104,7 +107,11 @@
             <el-button link size="small" type="success" @click="doAppealReview(row, true)">申诉通过</el-button>
             <el-button link size="small" type="danger" @click="doAppealReview(row, false)">申诉驳回</el-button>
           </template>
-          <template v-else-if="row.actionTaken === 'REVIEW'">
+          <!-- D-V5R-10（F-run-1017b 实测）：人工放行只对「会拦付款的行」渲染——与后端
+               paymentBlockReason / fraud/page pendingRelease 同口径（HIGH_RISK 且未复审且未人工放行）。
+               原实现按 actionTaken==='REVIEW' 渲染，预警行（WARN）与待审行的按钮混排，
+               按行文本定位极易点到预警行的【申诉】（实测首轮脚本就点错行）。 -->
+          <template v-else-if="isPendingRelease(row)">
             <el-button link size="small" type="success" @click="doReview(row, 'RELEASE')">人工放行</el-button>
             <el-button link size="small" type="danger" @click="doReview(row, 'BLOCK')">阻断</el-button>
             <el-button link size="small" type="warning" @click="openAppeal(row)">申诉</el-button>
@@ -185,6 +192,13 @@ async function doReview(row, action) {
 // P2-12 申诉闭环
 function hasPendingAppeal(row) {
   return !row.reviewedAt && (row.details || '').includes('[申诉待审')
+}
+
+/** D-V5R-10：是否「待人工放行」行——与后端 paymentBlockReason / /fraud/page pendingRelease 同口径：
+ *  HIGH_RISK 且未复审且未人工放行。只有这些行会拦付款，才给【人工放行/阻断】；
+ *  预警（WARN）/可疑（SUSPICIOUS）行不拦付款，只留【申诉】，避免两类按钮混排点错。 */
+function isPendingRelease(row) {
+  return row.detectionResult === 'HIGH_RISK' && !row.reviewedAt && row.actionTaken !== 'RELEASE'
 }
 
 function openAppeal(row) {

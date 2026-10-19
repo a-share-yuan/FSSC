@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /** 采购域路由（采购订单/付款计划/收货单/三单匹配容差） */
 export default [
   { path: 'purchase/order', component: () => import('../../views/purchase/PoOrder.vue'), meta: { title: '采购订单' } },

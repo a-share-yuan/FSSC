@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.receivable.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -122,8 +125,13 @@ public class RcReceiptService {
                 rest0 = rest0.subtract(pay);
             }
             if (rest0.compareTo(BigDecimal.ZERO) > 0) {
+                // D-N2-02（2026-10-18）：此处 rest0 是「自动核销后仍未被任何应收单吃下的余量」，
+                // 真实未核销余额 = 本次收款额 − rest0（等价于 open 各单 remain 合计）。
+                // 旧文案误写成 rest0 + e.getAmount()＝2×收款额 − 余额，把可用额虚增（N2 实证：
+                // 收款 85,000、真实可核销余额 0，却回显 170,000），会误导操作人以为还有额度。
                 throw new BizException(ErrorCode.PARAM_INVALID,
-                        "收款金额(" + e.getAmount() + ")超出该往来单位未核销应收余额(" + rest0.add(e.getAmount()) + ")");
+                        "收款金额(" + e.getAmount() + ")超出该往来单位未核销应收余额("
+                                + e.getAmount().subtract(rest0) + ")");
             }
         }
         receiptMapper.insert(e);

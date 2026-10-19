@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="wf-eac-page">
     <el-card shadow="never">
@@ -91,7 +94,7 @@
 
     <!-- 编辑弹窗：字段级白名单，只有启用状态与配置说明可写 -->
     <el-dialog v-model="edit.visible" title="编辑收尾动作配置" width="620px" destroy-on-close>
-      <el-form label-width="100px" size="default">
+      <el-form ref="editFormRef" :model="edit.form" :rules="editRules" label-width="100px" size="default">
         <el-form-item label="业务类型">
           <span class="eac-readonly">{{ bizTypeText(edit.row.bizType) }}（{{ edit.row.bizType }}）</span>
         </el-form-item>
@@ -109,7 +112,7 @@
                      active-text="启用" inactive-text="停用" />
           <div class="eac-hint">停用后该行动作不再被分发（引擎只加载启用行），但需应用重启才会反映到运行期；同一业务类型若还有其它启用行，收尾动作照常执行。</div>
         </el-form-item>
-        <el-form-item label="配置说明">
+        <el-form-item label="配置说明" prop="description">
           <el-input v-model="edit.form.description" type="textarea" :rows="3" maxlength="256" show-word-limit
                     placeholder="这条配置是给谁用的、改它要注意什么" />
           <div class="eac-hint">仅备注性质，不参与引擎判定；清空即不保留说明。</div>
@@ -158,6 +161,7 @@
  */
 import { reactive, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { commonRules, validateForm } from '../../composables/useFormRules'
 import { wfEventActionApi } from '../../api'
 import TablePager from '../../components/common/TablePager.vue'
 import { useTablePager } from '../../composables/useTablePager'
@@ -230,6 +234,9 @@ function openRowDetail(row) { return showRowDetail(row, { title: '收尾动作�
 
 // ---------------- 编辑 ----------------
 const edit = reactive({ visible: false, saving: false, row: {}, form: { enabled: 1, description: '' } })
+// 第2批：编辑弹窗接入——配置说明 256 字兜底；启用状态恒有值（1/0）不建规则
+const editFormRef = ref(null)
+const editRules = { description: commonRules.maxLength(256, '配置说明最多 256 个字符') }
 
 async function openEdit(row) {
   edit.row = { ...row }
@@ -248,6 +255,8 @@ async function openEdit(row) {
 async function saveEdit() {
   edit.saving = true
   try {
+    // 第2批：配置说明长度兜底（模板 maxlength 只限制输入，绕过 DOM 直接赋值可超长入库）
+    if (!(await validateForm(editFormRef.value))) return
     await wfEventActionApi.update({
       id: edit.row.id,
       enabled: edit.form.enabled,

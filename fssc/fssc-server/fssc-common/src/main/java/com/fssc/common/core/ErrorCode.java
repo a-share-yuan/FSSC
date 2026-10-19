@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.common.core;
 
 /**
@@ -9,6 +12,7 @@ package com.fssc.common.core;
  * 403x = 权限/功能开关/两级路由类
  * 4090 = 唯一键冲突（数据已存在，客户端可自解，非服务端故障）
  * 5xx  = 服务端异常
+ * 5001 = 工作流引擎异常（流程定义缺失/损坏，管理员介入，重试无效）
  */
 public enum ErrorCode {
 
@@ -42,6 +46,16 @@ public enum ErrorCode {
     CAPTCHA_REQUIRED(4011, "连续登录失败次数已达阈值，请输入图形验证码后重试"),
     /** 验证码不匹配/已过期/已被使用（一次性消费），需重新取图；不区分原因，防探测。 */
     CAPTCHA_INVALID(4012, "图形验证码错误或已失效，请重新输入"),
+
+    /**
+     * D-V4R-89：工作流引擎运行异常（FlowableException）专用码。
+     * 此前落兜底 500「系统异常，请稍后重试」，操作人无法区分"我填错了"与"系统坏了"，
+     * 于是反复重试同一笔。实测最典型的一次是清库误删 {@code act_ge_bytearray}（BPMN 资源字节流），
+     * 引擎起流程时读不到流程定义 → {@code deployment 'X' didn't put process definition 'Y' in the cache}，
+     * 界面只给一句"系统异常"，排查成本极高。
+     * 5xx 族但语义明确：<b>不是用户能靠重试解决的</b>，须管理员介入（重新部署流程或恢复引擎资源表）。
+     */
+    WORKFLOW_ENGINE_ERROR(5001, "审批流程启动失败：流程定义缺失或损坏，需管理员重新部署流程定义后重试（重试无效）"),
 
     SYSTEM_ERROR(500, "系统异常，请稍后重试");
 

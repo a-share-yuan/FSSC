@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.invoice.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -369,6 +372,24 @@ public class InvoiceService {
             if (lu != null) invoice.setCompanyId(lu.getCompanyId());
         }
         invoice.setSourceDocType("MANUAL");
+        // D3：购方信息在本表有两组语义重复的列，一组空则按该口径查询的报表必然漏行。
+        //   invoice_title  注释「购方名称」   ← 手工补录表单填这一组
+        //   buyer_name     注释「购方抬头」   ← OCR 链（OcrService#toPoolDto → InvoiceFacadeImpl）填这一组
+        // 两条链路各填一半，导致 5/5 张票 invoice_title 有值而 buyer_name 全空，
+        // 「按购买方过滤」的报表一条都查不到（create 方法头注释自认「购方抬头/税号落库」是 P1 遗留）。
+        // 此处按互补口径双向补齐：任一组有值就回填另一组，单条链路与未来新调用方都自动受益；
+        // 两组都空则保持 NULL（不臆造数据，缺失仍是缺失）。
+        // 注意必须放在 insert 之前，且不能覆盖对方已有的非空值。
+        if (isBlank(invoice.getBuyerName()) && !isBlank(invoice.getInvoiceTitle())) {
+            invoice.setBuyerName(invoice.getInvoiceTitle());
+        } else if (isBlank(invoice.getInvoiceTitle()) && !isBlank(invoice.getBuyerName())) {
+            invoice.setInvoiceTitle(invoice.getBuyerName());
+        }
+        if (isBlank(invoice.getBuyerTaxNo()) && !isBlank(invoice.getTaxNo())) {
+            invoice.setBuyerTaxNo(invoice.getTaxNo());
+        } else if (isBlank(invoice.getTaxNo()) && !isBlank(invoice.getBuyerTaxNo())) {
+            invoice.setTaxNo(invoice.getBuyerTaxNo());
+        }
         invInvoiceMapper.insert(invoice);
         // 入库后 upsert 全局索引（记录 first_tenant_id / last_invoice_id / 出现次数）
         upsertGlobalIndex(invoice, tenantId);

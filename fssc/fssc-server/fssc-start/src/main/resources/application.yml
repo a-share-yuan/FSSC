@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 server:
   port: 8089
   servlet:
@@ -149,6 +152,34 @@ fssc:
   # 为空（未配置）时 FSSC 直接拒绝所有 linku-* 回调（fail-fast，绝不静默放行）。
   linku-callback:
     secret: ${FSSC_LINKU_CALLBACK_SECRET:}
+  # ===== LinkU 开放接口（BCP → FSSC 数据通道 /api/open/linku/**）=====
+  # 《BCP-FSSC对接HTTP化改造方案》F-1~F-7：BCP 不再直连 FSSC 内网库，改为 HMAC 签名调用本组接口。
+  # 与 BCP 侧 bcp.adapter.fssc.http.secret 必须完全一致（同一把共享密钥）。
+  # 签名口径（与回调一致）：X-BCP-Signature = "sha256=" + hex(HMAC-SHA256(secret, timestamp + "." + rawBody))；
+  #                     GET 查询的 rawBody 为空串；POST 写入的 rawBody 为请求体原文。
+  # secret 为空时，全部开放端点以 401 拒绝（fail-closed）；未配本项时回退 fssc.linku-callback.secret。
+  linku:
+    secret: ${FSSC_LINKU_SECRET:}
+    # 请求体未携带 tenantId 时的缺省租户（开放端点为匿名白名单路径，租户由入参/本项显式决定）。
+    tenant-id: ${FSSC_LINKU_TENANT_ID:1}
+    # 验签时间窗（秒）：|now - X-BCP-Timestamp| 超过即 400（防重放）。
+    max-skew-seconds: ${FSSC_LINKU_MAX_SKEW_SECONDS:300}
+    # 单次查询/写入条数上限（防超大结果集拖垮内网）。
+    max-page-size: ${FSSC_LINKU_MAX_PAGE_SIZE:500}
+  # ===== BCP 出站通道（FSSC → BCP「BCP 异议审核」，走 BCP /api/open/linku/**）=====
+  # 反向出站：FSSC 的 AP/AR 岗在本系统审核供应商/客户提起的行级异议，
+  #   查待审清单 + 回写审核结论，均由 BcpOpenClient 以 HMAC 签名调用 BCP 门户。
+  # base-url：BCP 门户（bcp-portal）地址；本机联调默认 127.0.0.1:8501。
+  # secret：必须与 BCP 侧 bcp.linku.secret（环境变量 BCP_LINKU_SECRET）完全一致；
+  #   留空时 BcpOpenClient 直接抛错（fail-closed），不会静默放过。
+  # 签名口径与入站一致：X-BCP-Signature = "sha256=" + hex(HMAC-SHA256(secret, timestamp + "." + rawBody))；
+  #   查询（GET）的 rawBody 为空串；审核回写（POST）的 rawBody 为请求体原文。
+  bcp:
+    base-url: ${FSSC_BCP_BASE_URL:http://127.0.0.1:8501}
+    secret: ${FSSC_BCP_SECRET:}
+    max-skew-seconds: ${FSSC_BCP_MAX_SKEW_SECONDS:300}
+    connect-timeout-ms: ${FSSC_BCP_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${FSSC_BCP_READ_TIMEOUT_MS:15000}
   jwt:
     # 密钥外置：默认值仅供 dev/演示使用；生产环境必须通过环境变量 FSSC_JWT_SECRET 注入 >= 32 字节强随机密钥。
     # 非 dev profile 且仍为默认值时，TokenService 启动自检会 fail-fast 拒绝启动。

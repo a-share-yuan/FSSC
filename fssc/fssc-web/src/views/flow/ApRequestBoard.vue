@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -74,15 +77,15 @@
 
     <!-- 确认服务请求 -->
     <el-dialog v-model="confirmVisible" :title="$t('flow.request.confirmTip')" width="520px" destroy-on-close>
-      <el-form :model="confirmForm" label-width="110px" size="small">
-        <el-form-item :label="$t('field.account')"><el-input v-model="confirmForm.bankNo" /></el-form-item>
-        <el-form-item :label="$t('field.method')">
+      <el-form ref="confirmFormRef" :model="confirmForm" :rules="confirmRules" label-width="110px" size="small">
+        <el-form-item :label="$t('field.account')" prop="bankNo"><el-input v-model="confirmForm.bankNo" /></el-form-item>
+        <el-form-item :label="$t('field.method')" prop="paymentWay">
           <el-select v-model="confirmForm.paymentWay" style="width: 100%">
             <el-option :label="$t('flow.request.payMethodBankTransfer')" value="银行转账" /><el-option :label="$t('flow.request.colCheque')" value="支票" /><el-option :label="$t('flow.request.colApNote')" value="应付票据" />
           </el-select>
           <div class="tip">{{ $t('flow.request.hintMethodChange') }}</div>
         </el-form-item>
-        <el-form-item :label="$t('flow.request.colDiscount')"><el-input v-model="confirmForm.rebateAmount" /></el-form-item>
+        <el-form-item :label="$t('flow.request.colDiscount')" prop="rebateAmount"><el-input v-model="confirmForm.rebateAmount" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button size="small" @click="confirmVisible = false">{{ $t('common.cancel') }}</el-button>
@@ -141,6 +144,20 @@ const createRules = computed(() => ({
   expireDate: form.paymentWay === '应付票据' ? commonRules.date(t('flow.request.errNoteDueDate')) : [],
 }))
 const confirmForm = reactive({})
+// 第2批：确认服务请求弹窗（原无任何校验）——收款账号校银行账号格式（防付错账），
+// 付款方式必选，返利金额填了就必须是数字（现金折扣，允许留空）
+const confirmFormRef = ref(null)
+const confirmRules = {
+  bankNo: commonRules.bankAccount('收款账号应为 6-30 位数字'),
+  paymentWay: commonRules.select(t('flow.request.phPayMethod')),
+  rebateAmount: [{
+    validator: (rule, value, cb) => {
+      if (value == null || value === '') return cb()
+      if (!isFinite(Number(value))) return cb(new Error('返利金额必须为数字'))
+      cb()
+    },
+  }],
+}
 const reviewNote = ref('')
 const inputKind = ref('')
 const inputTitle = ref('')
@@ -211,6 +228,7 @@ async function doInput() {
 }
 
 async function doConfirm() {
+  if (!(await validateForms([confirmFormRef]))) return
   await api(() => apFlowApi.confirm(current.value.id, { ...confirmForm }))
   confirmVisible.value = false
 }

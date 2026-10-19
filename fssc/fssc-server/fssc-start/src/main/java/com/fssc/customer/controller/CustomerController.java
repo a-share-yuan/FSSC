@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.customer.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -8,6 +11,7 @@ import com.fssc.customer.service.CustomerService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,23 +28,45 @@ public class CustomerController {
 
     private final CustomerService service;
 
+    private final com.fssc.customer.service.CounterpartyCandidateService counterpartyCandidateService;
+
     // 只读查询放开给所有登录租户用户：对公付款等单据发起页往来单位下拉必用（写操作仍需权限）
     @GetMapping("/page")
     public Result<PageResult<CrmCustomer>> page(PageQuery query, String keyword) {
         return Result.success(service.page(query.getPageNum(), query.getPageSize(), keyword));
     }
 
+    /**
+     * D-V4R-96 修复：往来单位候选（客户档案 ∪ 供应商主数据）。
+     *
+     * <p>原 {@code /page} 只读 {@code crm_customer}，而供应商落在 {@code md_supplier} 且两表零同步
+     * ⇒ 对公结算的往来单位下拉里一个供应商都没有 ⇒ SETTLE 单据挂不上三单腿、根本提交不了。</p>
+     *
+     * <p>本端点把供应商按 {@code supplier_code} 幂等建档为往来单位档案，
+     * 返回的 {@code id} 是<b>语义正确的 crm_customer.id</b>（下游应收核销/坏账/对账都按这个解析），
+     * 并顺带补出 {@code accountNo}/{@code bankName}（原表无账号字段，导致收款账号必填永远填不上）。</p>
+     *
+     * <p>只读语义放开给所有登录租户用户（同 {@code /page}），建档走按需最小写入。</p>
+     */
+    @GetMapping("/candidates")
+    public Result<java.util.List<java.util.Map<String, Object>>> candidates(
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "onlySupplier", defaultValue = "false") boolean onlySupplier,
+            @RequestParam(value = "limit", defaultValue = "300") int limit) {
+        return Result.success(counterpartyCandidateService.listCandidates(keyword, onlySupplier, limit));
+    }
+
     @RequiresPerm("customer:create")
     @OperLog(module = "CUSTOMER", operType = "INSERT", desc = "新增客户")
     @PostMapping("/create")
-    public Result<Long> create(@RequestBody CrmCustomer e) {
+    public Result<Long> create(@Validated @RequestBody CrmCustomer e) {
         return Result.success(service.create(e));
     }
 
     @RequiresPerm("customer:update")
     @OperLog(module = "CUSTOMER", operType = "UPDATE", desc = "更新客户")
     @PostMapping("/update")
-    public Result<Void> update(@RequestBody CrmCustomer e) {
+    public Result<Void> update(@Validated @RequestBody CrmCustomer e) {
         service.update(e);
         return Result.success();
     }

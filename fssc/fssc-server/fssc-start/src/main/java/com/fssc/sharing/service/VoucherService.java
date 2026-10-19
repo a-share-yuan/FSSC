@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -126,6 +129,27 @@ public class VoucherService {
                 new LambdaQueryWrapper<OpVoucher>()
                         .eq(OpVoucher::getSourceType, sourceType)
                         .eq(OpVoucher::getSourceDocId, sourceDocId)
+                        .ne(OpVoucher::getStatus, "VOID")
+                        .orderByAsc(OpVoucher::getId)
+                        .last("limit 1"));
+        return one == null ? null : one.getId();
+    }
+
+    /**
+     * D-N3-01：正式入账凭证的成对幂等键（发票 × 收货单）。
+     * <p>与 {@link #existingVoucherId} 的区别只在多带一格 {@code bill_id}（入账凭证落库时写的是
+     * 收货单ID，见 {@code reverseEstimateOnInvoiceMatch} ②）。一张发票分两次部分关联到两张收货单时，
+     * 两腿各自成账；同一对（同发票同收货单）重放仍命中幂等。</p>
+     */
+    private Long existingInvoiceBookingId(Long invoiceId, Long receiptId) {
+        if (invoiceId == null || receiptId == null) {
+            return null;
+        }
+        OpVoucher one = opVoucherMapper.selectOne(
+                new LambdaQueryWrapper<OpVoucher>()
+                        .eq(OpVoucher::getSourceType, "RECEIPT_INVOICE")
+                        .eq(OpVoucher::getSourceDocId, invoiceId)
+                        .eq(OpVoucher::getBillId, receiptId)
                         .ne(OpVoucher::getStatus, "VOID")
                         .orderByAsc(OpVoucher::getId)
                         .last("limit 1"));
@@ -3747,6 +3771,22 @@ public class VoucherService {
             }
         }
         Long tenantId = TenantContext.getTenantId();
+        // D-V4R-86（P0）幂等：同一采购订单的应付确认凭证只允许存在一张。
+        //   此前每办结一条 INVOICE_MATCH / INVOICE_MATCH_MANUAL 链就无条件新建一张，没有任何判重，
+        //   实证（2026-10-16，V4 人工 N1-B 幕）：采购订单 PO1792118388635（id=24）产出
+        //   JZ2026101600012 / JZ2026101600017 / JZ2026101600018 三张各 100,000 的 DRAFT 凭证，
+        //   一旦批量过账即重复入账 300,000。这里按 source_doc_type + source_doc_id + tenant 判重，命中即复用原凭证。
+        OpVoucher existing = opVoucherMapper.selectOne(new LambdaQueryWrapper<OpVoucher>()
+                .eq(OpVoucher::getTenantId, tenantId)
+                .eq(OpVoucher::getSourceDocType, "INVOICE_MATCH")
+                .eq(OpVoucher::getSourceDocId, order.getId())
+                .eq(OpVoucher::getDelFlag, 0)
+                .last("LIMIT 1"));
+        if (existing != null) {
+            log.info("采购订单 {} 的应付确认凭证已存在（{}），不重复生成",
+                    order.getPoNo(), existing.getVoucherNo());
+            return existing.getId();
+        }
         LocalDate today = landingDate(order.getCompanyId(), null, null);
         OpVoucher v = new OpVoucher();
         v.setTenantId(tenantId);
@@ -4273,8 +4313,13 @@ public class VoucherService {
      *  <li>红字冲回暂估（借 暂估应付(2203) / 贷 存货(1405)）：source_type='ESTIMATE_REVERSE'，
      *      source_doc_id=收货单ID，同一收货单仅冲回一次（幂等）；</li>
      *  <li>正式入账（借 存货(1405) / 贷 应付账款(2202)）：source_type='RECEIPT_INVOICE'，
-     *      source_doc_id=发票ID，同一发票仅入账一次（幂等）；金额均取本次发票匹配金额。</li>
+     *      source_doc_id=发票ID × bill_id=收货单ID，同一「发票×收货单」仅入账一次（幂等）；
+     *      金额均取本次发票匹配金额。</li>
      * </ol>
+     * <p>D-N3-01（V4-run-1017b N3 3.15 实测）：原口径按「同一发票仅入账一次」判重，一张票分两次
+     * 部分关联到两张收货单时，第二次只出暂估冲回、不出入账 ⇒ 该票未入账部分（32,000）不进
+     * 存货借方/应付贷方，账实不符。入账幂等键改为「发票×收货单」成对，两张收货单各自成账；
+     * 同一对重放仍幂等（与冲回腿「按收货单」判重对称）。</p>
      * 暂估冲回要求暂估科目存在；不存在时仅生成正式入账分录并 warn。全部异常吞掉记日志，不阻断发票绑定主流程。
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
@@ -4334,10 +4379,11 @@ public class VoucherService {
             } else {
                 log.info("[暂估冲回] 收货单 {} 已存在冲回凭证 id={}，跳过（幂等）", receiptNo, reversed);
             }
-            // ② 正式入账（同一发票仅一次）
-            Long formal = existingVoucherId("RECEIPT_INVOICE", invoiceId);
+            // ② 正式入账（同一「发票×收货单」仅一次，D-N3-01）
+            Long formal = existingInvoiceBookingId(invoiceId, receiptId);
             if (formal != null) {
-                log.info("[正式入账] 发票 {} 已存在正式入账凭证 id={}，跳过（幂等）", invoiceNo, formal);
+                log.info("[正式入账] 发票 {} × 收货单 {} 已存在正式入账凭证 id={}，跳过（幂等）",
+                        invoiceNo, receiptNo, formal);
                 return;
             }
             Long payableId = findSubjectIdByCode(SUBJ_PAYABLE);

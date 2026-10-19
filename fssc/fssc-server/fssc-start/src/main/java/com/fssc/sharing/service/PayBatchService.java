@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -73,6 +76,8 @@ public class PayBatchService {
     private final com.fssc.workflow.service.BillCompletenessGuard billCompletenessGuard;
     /** D-DEC-268：自动组批时取本公司默认出账账户，不再写死不存在的外键 */
     private final com.fssc.masterdata.mapper.MdBankAccountMapper mdBankAccountMapper;
+    /** ⑨（D-V4R-49）：单据全额付讫（APPROVED→PAID）时收口其共享作业链残留池任务 */
+    private final SharingService sharingService;
     /**
      * D-DEC-088（X-39 丙）：收款账号取数收敛——供应商档案开户信息（{@code md_supplier_bank}）
      * 与 {@code md_payee} 一起构成"账号有没有档案支撑"的判据来源（只读）。
@@ -1725,14 +1730,22 @@ public class PayBatchService {
                 // 两种写法都判，避免将来单据类型编码换口径时静默失效。
                 String billType = bill.getBillType();
                 boolean isLoan = "LOAN".equalsIgnoreCase(billType) || "EXP_LOAN".equalsIgnoreCase(billType);
+                boolean billPaidNow = false;
                 if (!isLoan && bill.getPayableAmount() != null && paid.compareTo(bill.getPayableAmount()) >= 0
                         && "APPROVED".equals(bill.getStatus())) {
                     bu.setStatus("PAID");
                     // TRC-E：exp_bill.pay_time 建表以来从未赋值，随 APPROVED→PAID 同写（幂等：已有值不覆盖）
                     bu.setPayTime(bill.getPayTime() == null ? now : bill.getPayTime());
+                    billPaidNow = true;
                     log.info("[P0-5] 单据 {} 全额付款完成 APPROVED→PAID", bill.getBillNo());
                 }
                 expBillMapper.updateById(bu);
+                if (billPaidNow) {
+                    // ⑨（D-V4R-49）：钱已打出、单据付讫终态，作业链（票据审核/付款审核/记账归档）
+                    // 不会再有人办——收口未办结池任务，杜绝 BX202610160003 式「已付款仍挂审核待认领」。
+                    // 借款单不置 PAID（D-F1R-01），其作业链由还款结清裁定（settleLoanAfterRepay）收口。
+                    sharingService.closeOnBillTerminal(bill.getId(), "付款批次已执行、单据全额付讫");
+                }
                 // P1-3 实付入账：单据付讫（含刚刚迁移 PAID）后自动过账关联 DRAFT 凭证。
                 // 独立事务执行，凭证失败不回滚付款；失败可到凭证工作台批量记账补账。
                 try {

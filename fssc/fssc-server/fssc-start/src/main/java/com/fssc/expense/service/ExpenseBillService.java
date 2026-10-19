@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -78,6 +81,8 @@ public class ExpenseBillService {
 
     private final ExpBillMapper expBillMapper;
     private final ExpBillLineMapper expBillLineMapper;
+    /** 表单元数据引擎（V1.4.85）：必录/长度/数值规则从代码搬到配置，此处做权威校验 */
+    private final com.fssc.masterdata.service.FormMetaService formMetaService;
     private final ExpBillAttachMapper expBillAttachMapper;
     private final ExpBillRelationMapper expBillRelationMapper;
     private final ExpTravelMapper expTravelMapper;
@@ -334,6 +339,11 @@ public class ExpenseBillService {
             }
         }
         applyExchangePolicy(bill, lines);
+        // D-V4R-91：草稿路径补轻量行断言。原先 submit 有 validateAmountReconcile 全套强校验，
+        // 而【保存草稿】直落 replaceLines，零校验 —— 可批量造「金额 ≤ 0 / 费用项为空」的脏草稿，
+        // 它们在列表里显示正常，却永远提交不了，形成大量需人工清理的僵尸草稿。
+        // 草稿允许「不完整」（可暂缺附件/事由），但**不允许数值自相矛盾**。
+        assertDraftLinesSane(lines);
         replaceLines(bill.getId(), lines);
         replaceAttaches(bill.getId(), attaches);
         // 缺陷修复（H-0）：前端「先传附件再保存/提交」时附件随单据落库，
@@ -797,6 +807,12 @@ public class ExpenseBillService {
         // ①P0 单据强校验链（财务共享最佳实践：界面字段↔字段、字段↔表勾稽，提交即拦）
         assertHeaderRequired(bill);
         validateAmountReconcile(bill, lines);
+        // ①-元数据 权威校验（V1.4.85 阶段①闭环点）：
+        //     必录/长度/数值范围规则落 md_form_field + md_form_validation，不再只靠代码 if-else。
+        //     放在硬编码校验<b>之后</b>：元数据是「加严」不是「放宽」——
+        //     存量单据若某字段不满足新配的规则，先被硬编码校验拦下并给出原有文案（行为不变）；
+        //     硬编码放行后才由元数据补第二道闸。这样上线不会让存量单据突然提交不了。
+        validateByFormMeta(bill, lines);
 
         // ①-0 收款账户校验（P2 防付错）：pay_target 驱动收款账号必填
         assertPayeeAccount(bill);
@@ -1037,16 +1053,20 @@ public class ExpenseBillService {
     }
 
     /**
-     * 驳回单编辑重提（场景演示缺口修复）：REJECTED → DRAFT 并解除旧流程实例关联，
+     * 驳回/撤回单编辑重提（场景演示缺口修复）：REJECTED|WITHDRAWN → DRAFT 并解除旧流程实例关联，
      * 申请人可在发起页修改后重新提交；重新提交经 submit 走【新】流程实例（旧实例保留历史痕迹）。
+     *
+     * <p>D-V4R-79：原口径只认 REJECTED/DRAFT，而 WITHDRAWN（撤回）在前端无任何出口、后端
+     * {@link #voidBill} 也拒收 ⇒ 撤回的单既不能改、不能重提、也不能作废，成为永久脏数据，
      */
     public void returnToEdit(Long billId) {
         LoginUser u = UserContext.getRequired();
         ExpBill bill = requireMine(billId, u);
-        if (!"REJECTED".equals(bill.getStatus()) && !"DRAFT".equals(bill.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿/已驳回单据可编辑重提，当前状态: " + bill.getStatus());
+        if (!"REJECTED".equals(bill.getStatus()) && !"DRAFT".equals(bill.getStatus())
+                && !"WITHDRAWN".equals(bill.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿/已驳回/已撤回单据可编辑重提，当前状态: " + bill.getStatus());
         }
-        if ("REJECTED".equals(bill.getStatus())) {
+        if ("REJECTED".equals(bill.getStatus()) || "WITHDRAWN".equals(bill.getStatus())) {
             com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ExpBill> uw =
                     new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
             uw.eq(ExpBill::getId, billId)
@@ -1223,6 +1243,93 @@ public class ExpenseBillService {
      * <p>前端闸门挡在请求之前，这里挡的是绕过页面的调用（导入、开放接口、脚本）。
      * 单据编号由 {@code genBillNo} 在落库时取号，人工只读，故这里只验证它确实存在，不要求用户输入。
      */
+    /**
+     * 表单元数据校验（V1.4.85 阶段①：把「新增一种单据的字段校验」从改代码变成改配置）。
+     *
+     * <p><b>为什么是第二道闸而不是第一道</b>：
+     * <ul>
+     *   <li>第一道 {@link #assertHeaderRequired} 是历史硬编码规则，承载已上线的业务口径；</li>
+     *   <li>本方法是元数据规则，承载「后台可配」的新增要求；</li>
+     *   <li>顺序固定为「硬编码 → 元数据」：存量单据不会被新配规则突然拦住，
+     *       新增单据则自动获得元数据校验能力（无需改代码）。</li>
+     * </ul>
+     *
+     * <p>找不到对应表单配置时静默跳过（不因为缺配置就阻断生产单据）。
+     */
+    private void validateByFormMeta(ExpBill bill, List<ExpBillLine> lines) {
+        String formCode = formCodeOf(bill.getBillType(), bill.getBillSubType());
+        if (formCode == null) {
+            log.debug("元数据校验跳过：单据类型 {} 无对应表单配置", bill.getBillType());
+            return;
+        }
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("billNo", bill.getBillNo());
+        data.put("title", bill.getTitle());
+        data.put("applyUserId", bill.getApplyUserId());
+        data.put("applyUserName", bill.getApplyUserName());
+        data.put("applyDate", bill.getApplyDate());
+        data.put("currencyCode", bill.getCurrencyCode());
+        data.put("totalAmount", bill.getTotalAmount());
+        data.put("deptId", bill.getDeptId());
+        data.put("companyId", bill.getCompanyId());
+        data.put("payeeName", bill.getPayeeName());
+        data.put("paymentAmount", bill.getPayableAmount());
+        data.put("repayAmount", bill.getPayableAmount());
+        if (lines != null && !lines.isEmpty()) {
+            java.math.BigDecimal sum = lines.stream()
+                    .map(ExpBillLine::getAmount)
+                    .filter(java.util.Objects::nonNull)
+                    .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+            data.put("lineCount", lines.size());
+            data.put("lineAmountSum", sum);
+        }
+        formMetaService.validateOrThrow(formCode, data, "SAVE");
+    }
+
+    /**
+     * 单据类型 → 元数据表单编码。
+     *
+     * <p><b>口径以 md_form_config 实查为准</b>（2026-10-18 核库）：
+     * 现有 12 个表单里 CLAIM=EXP_CLAIM、LOAN=EXP_LOAN、REPAY=EXP_REPAY、
+     * APPLY=EXP_MEETING/EXP_TRAVEL/EXP_TRAIN、PAY=EXP_SETTLE/EXP_PREPAY/EXP_AIR 等。
+     * 一个单据类型可能对应多个表单（按子类型分流），这里取<b>该类型的第一张表</b>作为默认表单，
+     * 子类型细分由 {@link #formCodeOf(String, String)} 承接。
+     */
+    private String formCodeOf(String billType) {
+        return formCodeOf(billType, null);
+    }
+
+    /** 单据类型 + 子类型 → 元数据表单编码；无对应表单返回 null（跳过校验） */
+    private String formCodeOf(String billType, String billSubType) {
+        if (billType == null) {
+            return null;
+        }
+        // 子类型优先（与 md_form_config.bill_sub_type 对齐）
+        if (billSubType != null && !billSubType.isBlank()) {
+            String exact = switch (billType + "_" + billSubType) {
+                case "APPLY_TRAVEL", "CLAIM_TRAVEL" -> "EXP_TRAVEL";
+                case "APPLY_MEETING" -> "EXP_MEETING";
+                case "APPLY_TRAIN" -> "EXP_TRAIN";
+                case "CLAIM_AGENCY" -> "EXP_AGENCY";
+                case "PAY_AIR" -> "EXP_AIR";
+                case "PAY_PREPAY", "PAY_PREPAY_WRITEOFF" -> "EXP_PREPAY";
+                case "PAY_SETTLE" -> "EXP_SETTLE";
+                default -> null;
+            };
+            if (exact != null) {
+                return exact;
+            }
+        }
+        return switch (billType) {
+            case "CLAIM" -> "EXP_CLAIM";
+            case "LOAN" -> "EXP_LOAN";
+            case "REPAY" -> "EXP_REPAY";
+            case "APPLY" -> "EXP_TRAVEL";
+            case "PAY" -> "EXP_SETTLE";
+            default -> null;
+        };
+    }
+
     private void assertHeaderRequired(ExpBill bill) {
         if (bill.getBillNo() == null || bill.getBillNo().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据编号缺失（未正常落库），请重新保存草稿后再提交");
@@ -1498,6 +1605,50 @@ public class ExpenseBillService {
         return gross;
     }
 
+    /**
+     * D-V4R-91：草稿路径的轻量行断言。
+     *
+     * 背景：【提交】走 validateAmountReconcile 全套强校验（行金额非空、数量非负、量价勾稽、
+     * 费用项存在性、表头=Σ明细），但【保存草稿】此前**零校验**直落 replaceLines。
+     * 后果：脚本/误操作可批量造出「行金额 ≤ 0」「有金额无费用项」的脏草稿，
+     * 这些草稿在列表与草稿箱里显示完全正常，却永远提交不了（提交时才被拦），
+     * 形成大量需人工逐张清理的僵尸草稿；附件/发票关联/分摊都已挂在这些草稿上，
+     * 删除时若级联不全还会留孤儿发票占用记录。
+     *
+     * 口径：草稿允许「不完整」（可暂缺附件、事由、承担对象），但**不允许数值自相矛盾**——
+     * 一旦填了金额，就必须 > 0；一旦填了金额，费用项就必须选。
+     * 这与"草稿可以不填完"的直觉不冲突：不填就留空走 null 过滤，
+     * 填了就得填对。
+     */
+    private void assertDraftLinesSane(List<ExpBillLine> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < lines.size(); i++) {
+            ExpBillLine l = lines.get(i);
+            if (l == null) {
+                continue;
+            }
+            BigDecimal amt = l.getAmount();
+            boolean hasAmt = amt != null && amt.signum() != 0;
+            boolean hasItem = l.getItemId() != null;
+            // 过滤规则与前端 saveDraft 的 filter(l => l.itemId || Number(l.amount) > 0) 同口径
+            if (!hasAmt && !hasItem) {
+                continue;
+            }
+            int pos = i + 1;
+            if (hasAmt && amt.signum() < 0) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "第 " + pos + " 行明细金额不能为负数（当前 " + amt.toPlainString() + "）");
+            }
+            if (!hasItem) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "第 " + pos + " 行填了金额 " + amt.toPlainString()
+                                + " 却没选费用项；如只想留草稿占位，请把金额清空");
+            }
+        }
+    }
+
     private void validateAmountReconcile(ExpBill bill, List<ExpBillLine> lines) {
         BigDecimal sumLine = BigDecimal.ZERO;
         boolean priceTypeApplied = false; // #9 是否发生过价税拆分（表头按派生值重算，不做 R1 拦截）
@@ -1636,8 +1787,10 @@ public class ExpenseBillService {
     public void voidBill(Long billId) {
         LoginUser u = UserContext.getRequired();
         ExpBill bill = requireMine(billId, u);
-        if (!"DRAFT".equals(bill.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿可作废，当前状态: " + bill.getStatus());
+        // D-V4R-79：WITHDRAWN（撤回）与 DRAFT 同为「未走完审批链、无凭证」的态，允许一并作废，
+        // 否则撤回单无任何收口出口，只能烂在库里占单号与预算。
+        if (!"DRAFT".equals(bill.getStatus()) && !"WITHDRAWN".equals(bill.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿/已撤回单据可作废，当前状态: " + bill.getStatus());
         }
         ExpBill update = new ExpBill();
         update.setId(billId);
@@ -2249,7 +2402,14 @@ public class ExpenseBillService {
             // 实测 id=22 由 3867 上传却 upload_by=NULL，「谁上传谁负责」断链。
             // 入参带值（如影像系统/批量迁移已登记归属）时不覆盖；无登录人（引擎线程）时留空不假填。
             Long me = UserContext.get() == null ? null : UserContext.get().getUserId();
+            // D-V4R-44：同名文件服务端去重兜底——前端查重被绕过（脚本/并发双击）时，
+            // 同一文件名重复落库会在票覆盖/影像核验里虚增张数。同名首行保留、后续行丢弃。
+            java.util.Set<String> seenNames = new java.util.HashSet<>();
             for (ExpBillAttach a : attaches) {
+                String nameKey = a.getFileName() == null ? "" : a.getFileName().trim();
+                if (!nameKey.isEmpty() && !seenNames.add(nameKey)) {
+                    continue;
+                }
                 a.setId(null);
                 a.setBillId(billId);
                 if (a.getUploadBy() == null) {

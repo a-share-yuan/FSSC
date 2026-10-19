@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -292,8 +295,20 @@ public class ThreeWayMatchService {
      * 手工关联采购订单/收货单到付款单。
      * SAP MIRO 场景：用户在发票校验时手工选择 PO 和收货单进行匹配。
      */
+    /**
+     * 手工关联采购订单/收货单到付款单（向后兼容的两参重载）。
+     */
     @Transactional(rollbackFor = Exception.class)
     public String link(Long billId, Long poId, Long poReceiptId) {
+        return link(billId, poId, poReceiptId, null);
+    }
+
+    /**
+     * 手工关联采购订单/收货单/采购合同到付款单。
+     * <p>G2R-01（2026-10-19）：新增 contractId，补上合同腿的可达补挂入口（详见 Controller 注释）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public String link(Long billId, Long poId, Long poReceiptId, Long contractId) {
         ExpBill bill = expBillMapper.selectById(billId);
         if (bill == null) {
             throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "单据不存在");
@@ -311,6 +326,14 @@ public class ThreeWayMatchService {
                 throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "收货单不存在");
             }
             bill.setPoReceiptId(poReceiptId);
+        }
+        // G2R-01：合同腿补挂。传 null 表示本次不改合同（保持向后兼容）；传值则校验合同真实存在。
+        if (contractId != null) {
+            ContContract c = contractMapper.selectById(contractId);
+            if (c == null) {
+                throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "采购合同不存在");
+            }
+            bill.setContractId(contractId);
         }
         // D-DEC-051：手工关联改的是单据的匹配依据（po_id/po_receipt_id），属状态写点，操作人如实取登录人；
         // 无上下文（理论上不该发生，本入口只暴露给人工）则留 NULL 不顶替。
@@ -330,7 +353,7 @@ public class ThreeWayMatchService {
                 syncReceiptInvoiceColumn(rc.getId());
             }
         }
-        log.info("[三单匹配-手工关联] billId={} poId={} poReceiptId={}", billId, poId, poReceiptId);
+        log.info("[三单匹配-手工关联] billId={} poId={} poReceiptId={} contractId={}", billId, poId, poReceiptId, contractId);
         return "关联成功";
     }
 
@@ -653,16 +676,24 @@ public class ThreeWayMatchService {
                 r.setPoAmount(nz(po.getAmount()));
                 r.setPoReceived(nz(po.getReceivedAmount()));
                 r.setPoQty(sumOrderedQty(po.getId()));
-                // RECEIPT ≤ PO：收货超订单，容差内 WARN，超容差提示
+                // RECEIPT ≤ PO：收货超订单。
+                // 分批到货溢装在实务中是常态，整体拦会逼出"为过闸而压低收货"的反向作弊。
+                // 真正的资金风险是**为超收那部分付了钱**：钱出去了、订单上没有对应义务。
+                // 故这里保持 WARN（提示去补订单／办溢收手续），并把超收金额记下来，
+                // 由 {@link #assertPayNotBeyondOrder} 作为独立的 ERROR 硬闸承担拦截。
                 if (r.getPoReceived().compareTo(r.getPoAmount()) > 0) {
                     BigDecimal over = r.getPoReceived().subtract(r.getPoAmount());
+                    r.setReceiptOverPoAmount(over);
                     BigDecimal allow = tolerance("RECEIPT_VS_PO", r.getPoAmount(), bill.getCompanyId(), null);
                     if (over.compareTo(allow) > 0) {
                         issues.add(new MatchIssue("RECEIPT_OVER_PO", "WARN",
-                                "收货超订单：PO " + po.getPoNo() + " 累计收货 " + r.getPoReceived() + " > 订单 " + r.getPoAmount()));
+                                "收货超订单：" + po.getPoNo() + " 累计收货 " + r.getPoReceived() + " > 订单 " + r.getPoAmount()
+                                        + "（超 " + over + "，超容差部分须补订单或办溢收手续；"
+                                        + "付款金额不得超过订单额 " + r.getPoAmount() + "）"));
                     } else {
                         issues.add(new MatchIssue("RECEIPT_IN_TOLERANCE", "WARN",
-                                "收货超订单但在容差内：" + po.getPoNo() + " 超 " + over + "（容差 " + allow + "）"));
+                                "收货超订单但在容差内：" + po.getPoNo() + " 超 " + over + "（容差 " + allow
+                                        + "；付款金额不得超过订单额 " + r.getPoAmount() + "）"));
                     }
                 }
             }
@@ -686,7 +717,8 @@ public class ThreeWayMatchService {
                         && r.getReceiptQty().compareTo(r.getPoQty()) > 0) {
                     issues.add(new MatchIssue("RECEIPT_QTY_OVER_PO", "WARN",
                             "收货数量超订单：PO " + (r.getPoNo() == null ? "" : r.getPoNo())
-                                    + " 订购 " + r.getPoQty() + " < 本单已收 " + r.getReceiptQty()));
+                                    + " 订购 " + r.getPoQty() + " < 本单已收 " + r.getReceiptQty()
+                                    + "（数量溢出不单独冻结付款，金额侧由「付款不得超订单额」硬闸把关）"));
                 }
                 if (r.getPoNo() == null) {
                     r.setPoNo(rc.getPoNo());
@@ -725,6 +757,33 @@ public class ThreeWayMatchService {
             hasError = true;
             issues.add(new MatchIssue("PAY_EXCEED_INVOICE", "ERROR",
                     "超付：关联发票 " + invoiceAmt + " + 容差 " + payAllow + " < 本次付款 " + r.getPayAmount() + "（无发票覆盖）"));
+        }
+        // 上游把「收货超订单」定为 WARN 是有意的（超收是实务常态），但仅靠 WARN 等于
+        // "为超收那部分照样付钱"没有任何闸——钱出账、订单无对应义务，正是本项要堵的资金风险。
+        // 判据取 **PO 订单额**（非收货额）：收货额已被超收污染，用它当上限等于用超收数给自己批额度。
+        // 容差复用 RECEIPT_VS_PO（与超收同一把尺子，避免出现"超容差按收货拦、按订单不拦"的自相矛盾）。
+        // ★ D-N5-01 口径归一（2026-10-18）：与上方 D-V4-008「发票 ≤ 收货」同一类口径错配——
+        //   po_order.amount 是<b>不含税</b>入账额，而付款单 exp_bill.total_amount 是<b>价税合计</b>
+        //   （= 关联发票价税合计），拿价税付款直接比不含税订单，会把标准组合「净额订单 + 价税付款」
+        //   恒判超付（N5 实证：PO 50,000 vs 付款 56,500，超 6,500 恰为税额），付款链在 IM_2 办结放行
+        //   时被硬闸永久锁死（HTTP 400）。故这里把付款额折算到<b>不含税口径</b>再比，与发票/收货同尺：
+        //   付款净额 = 付款价税 − 关联发票税额（发票无税额信息时 linkedTax=0，退化为原口径，向后兼容）。
+        BigDecimal payNetAmount = r.getPayAmount().subtract(linkedTax).max(BigDecimal.ZERO);
+        if (r.getPoAmount() != null && r.getPoAmount().signum() > 0
+                && payNetAmount.compareTo(r.getPoAmount()) > 0) {
+            BigDecimal poAllow = tolerance("RECEIPT_VS_PO", r.getPoAmount(), bill.getCompanyId(), null);
+            if (payNetAmount.compareTo(r.getPoAmount().add(poAllow)) > 0) {
+                hasError = true;
+                issues.add(new MatchIssue("PAY_EXCEED_PO", "ERROR",
+                        "超付订单额（不含税口径）：本次付款净额 " + payNetAmount
+                                + "（价税 " + r.getPayAmount() + " − 税 " + linkedTax + "）> 采购订单 "
+                                + (r.getPoNo() == null ? "" : r.getPoNo()) + " 金额 " + r.getPoAmount()
+                                + (r.getReceiptOverPoAmount() != null && r.getReceiptOverPoAmount().signum() > 0
+                                        ? "（该订单收货已超单 " + r.getReceiptOverPoAmount() + "，超出部分无订单义务支撑）"
+                                        : "")
+                                + " + 容差 " + poAllow
+                                + " —— 须先补订单或办溢收手续后调整付款金额，不得为无订单覆盖的部分付款"));
+            }
         }
         //   发票 ≤ 收货： 容差参数化——收货金额 vs 发票金额容差改由 match_tolerance 参数表
         //   （公司级，amount_pct 百分比 + amount_abs 绝对值，容差金额 = max(收货×pct/100, abs)；
@@ -767,9 +826,39 @@ public class ThreeWayMatchService {
         Long supplierId = (pay != null && "SUPPLIER".equalsIgnoreCase(pay.getPayeeType()) && pay.getPayeeId() != null)
                 ? pay.getPayeeId()
                 : (poLeg == null ? null : poLeg.getSupplierId());
-        boolean reconConfirmed = supplierName != null
-                ? supplierReconService.hasConfirmedByName(supplierName)
-                : supplierReconService.hasConfirmed(supplierId);
+        // D-V4R-84：按名称查不到时，必须回退按供应商档案 id 再查一次。
+        //   门户对账单同步过来的 AUTO 行（recon_type='AUTO'、linku_recon_id 非空）只写了 supplier_id，
+        //   supplier_name 为 NULL；而 hasConfirmedByName 是按名字精确匹配 ⇒ 这类行即使
+        //   status='CONFIRMED' 也永远查不到，匹配台恒挂一条「应付对账（函）未确认」WARN，
+        //   正常单因此永远判不到「三单一致」。
+        //   实案（2026-10-16 V4 册 N1-B 幕 1B.10）：supplier_recon id=15 recon_no=BCP15-202610、
+        //   supplier_name=NULL、supplier_id=18、status=CONFIRMED、supplier_confirm_status=CONFIRMED，
+        //   而结算单 A 的匹配明细仍显示「应付对账（函）未确认」，判 差异预警 而非 MATCHED。
+        // D-1B-01 补链（2026-10-18）：D-V4R-84 的回退只在 supplierId 已有值时才生效，而「无 PO 腿
+        //   且付款记录未按 SUPPLIER 记 payee_id」的单据两侧键同时落空 ⇒ 仍恒挂误报。
+        //   实案（V4 册 N1-B 幕 1B.11）：异常样本单 B 无 PO/收货/合同，supplier_recon 唯一行
+        //   supplier_name=NULL、supplier_id=18、status=CONFIRMED，名称侧查不到、id 侧无值，
+        //   于是多报一条「应付对账（函）未确认」（实测 5 条 vs 手册 4 条）。
+        //   此处补一层「名称 → 供应商档案 id」桥（md_supplier 按名精确反查），把两端键打通后再查确认记录。
+        boolean reconConfirmed = supplierName != null && supplierReconService.hasConfirmedByName(supplierName);
+        if (!reconConfirmed) {
+            Long sid = supplierId;
+            if (sid == null && supplierName != null) {
+                try {
+                    MdSupplier archive = mdSupplierMapper.selectOne(new LambdaQueryWrapper<MdSupplier>()
+                            .eq(MdSupplier::getSupplierName, supplierName).last("limit 1"));
+                    if (archive != null) {
+                        sid = archive.getId();
+                    }
+                } catch (Exception ex) {
+                    // 档案反查属兜底桥，失败不得反噬对账判定本身，仅留痕
+                    log.warn("[三单匹配] 供应商档案按名反查失败（supplierName={}）: {}", supplierName, ex.getMessage());
+                }
+            }
+            if (sid != null) {
+                reconConfirmed = supplierReconService.hasConfirmed(sid);
+            }
+        }
         r.setReconStatus(reconConfirmed ? "CONFIRMED" : "NONE");
         r.setSupplierName(supplierName);
         if (!reconConfirmed) {
@@ -1038,6 +1127,12 @@ public class ThreeWayMatchService {
         private BigDecimal poReceived;
         /** 订购数量（po_order_line 合计） */
         private BigDecimal poQty;
+        /**
+         * D-V4R-99：收货超出订单的金额（{@code poReceived − poAmount}，无超收时为 null）。
+         * 供「付款不得超订单额」硬闸（{@code PAY_EXCEED_PO}）在文案里指明超收规模 ——
+         * 只报"付款 > 订单"用户不知道该去补哪一笔，报出超收额才能定位到要补的订单/溢收手续。
+         */
+        private BigDecimal receiptOverPoAmount;
         // 收货单
         private Long receiptId;
         private String receiptNo;

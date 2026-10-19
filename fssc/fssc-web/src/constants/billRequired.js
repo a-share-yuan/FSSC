@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * 单据表头必填登记表 —— 红星、前端规则、提交闸门的唯一口径来源（必填项治理 P1）。
  *

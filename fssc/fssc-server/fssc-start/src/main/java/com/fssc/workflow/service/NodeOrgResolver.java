@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -699,6 +702,18 @@ public class NodeOrgResolver {
                     if (!head.equals(applicant)) {
                         return head;
                     }
+                }
+            }
+            // D-V4R-43 补强（2026-10-16 F6.3 实测）：提单人＝本公司唯一 ORG_HEAD（顶级部门/公司负责人
+            // 自己提单）时，上面被跳过；若集团内其他公司（如基地公司）也有 ORG_HEAD 持有人，按公司维度
+            // 过滤会把他一并排除——兜底彻底落空，单据静默卡死（实测 黄天佑 company_id=33、单据公司=1）。
+            // 放宽为集团级 ORG_HEAD（仍排除发起人、仅认真实在岗人），与手册口径一致：
+            // 申请人＝部门负责人本人时，直属上级节上收给集团内单位/基地负责人。
+            for (Long head : userIdsGlobalWithRole("ORG_HEAD")) {
+                if (!head.equals(applicant) && isRealApprover(head)) {
+                    log.warn("ESCALATE 本公司无可用组织负责人，放宽至集团级 ORG_HEAD 兜底: proc={} -> userId={}",
+                            procInstId, head);
+                    return head;
                 }
             }
             return null;

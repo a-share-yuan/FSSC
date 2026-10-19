@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <div class="page-header" style="margin-bottom: 16px;">
@@ -100,7 +103,9 @@
               <el-switch v-model="form.noFixedAmount" :active-value="1" :inactive-value="0" active-text="是（不控制预算）" />
             </el-form-item>
           </el-col>
-          <el-col :md="12"><el-form-item label="币种"><el-select v-model="form.currencyCode" style="width: 120px"><el-option label="人民币 CNY" value="CNY" /><el-option label="美元 USD" value="USD" /><el-option label="欧元 EUR" value="EUR" /><el-option label="日元 JPY" value="JPY" /></el-select></el-form-item></el-col>
+          <el-col :md="12"><el-form-item label="币种"><el-select v-model="form.currencyCode" style="width: 120px">
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+</el-select></el-form-item></el-col>
           <el-col :md="12"><el-form-item label="签订公司"><el-select v-model="form.companyName" filterable allow-create placeholder="选择或输入签订公司" style="width:100%"><el-option v-for="c in companies" :key="c.id" :label="c.companyName || c.name" :value="c.companyName || c.name" /></el-select></el-form-item></el-col>
           <el-col :md="12"><el-form-item label="签约日"><el-date-picker v-model="form.signDate" type="date" value-format="YYYY-MM-DD" /></el-form-item></el-col>
           <el-col :md="12"><el-form-item label="合同有效期起"><el-date-picker v-model="form.beginDate" type="date" value-format="YYYY-MM-DD" /></el-form-item></el-col>
@@ -212,22 +217,22 @@
 
     <!-- 付款条件/支付记录 新增弹窗 -->
     <el-dialog v-model="condDialog" title="新增付款条件" width="480px" destroy-on-close>
-      <el-form :model="condForm" label-width="100px" size="default">
-        <el-form-item label="付款节点"><el-select v-model="condForm.payNode" filterable allow-create default-first-option placeholder="请选择或输入" style="width: 100%"><el-option label="预付款" value="预付款" /><el-option label="进度款" value="进度款" /><el-option label="验收款" value="验收款" /><el-option label="质保金" value="质保金" /><el-option label="尾款" value="尾款" /><el-option label="竣工结算款" value="竣工结算款" /></el-select></el-form-item>
-        <el-form-item label="支付金额"><el-input-number v-model="condForm.payAmount" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="预计付款日期"><el-date-picker v-model="condForm.planDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+      <el-form ref="condFormRef" :model="condForm" :rules="condRules" label-width="100px" size="default">
+        <el-form-item label="付款节点" prop="payNode"><el-select v-model="condForm.payNode" filterable allow-create default-first-option placeholder="请选择或输入" style="width: 100%"><el-option label="预付款" value="预付款" /><el-option label="进度款" value="进度款" /><el-option label="验收款" value="验收款" /><el-option label="质保金" value="质保金" /><el-option label="尾款" value="尾款" /><el-option label="竣工结算款" value="竣工结算款" /></el-select></el-form-item>
+        <el-form-item label="支付金额" prop="payAmount"><el-input-number v-model="condForm.payAmount" :min="0" :precision="2" style="width:100%" /></el-form-item>
+        <el-form-item label="预计付款日期" prop="planDate"><el-date-picker v-model="condForm.planDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="condForm.remark" placeholder="请输入备注" /></el-form-item>
       </el-form>
       <template #footer><el-button type="primary" @click="saveCondition">保存</el-button></template>
     </el-dialog>
     <el-dialog v-model="recDialog" title="新增支付记录" width="520px" destroy-on-close>
-      <el-form :model="recForm" label-width="100px" size="default">
-        <el-form-item label="实际付款金额"><el-input-number v-model="recForm.payAmount" :min="0" :precision="2" style="width:100%" /></el-form-item>
+      <el-form ref="recFormRef" :model="recForm" :rules="recRules" label-width="100px" size="default">
+        <el-form-item label="实际付款金额" prop="payAmount"><el-input-number v-model="recForm.payAmount" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="结算数量"><el-input-number v-model="recForm.settleQty" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="单价"><el-input-number v-model="recForm.unitPrice" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="单据号"><el-input v-model="recForm.billNo" placeholder="请输入单据号" /></el-form-item>
         <el-form-item label="单据类型"><el-select v-model="recForm.billType" style="width:100%"><el-option label="付款" value="PAY" /><el-option label="报销" value="CLAIM" /><el-option label="借款" value="LOAN" /></el-select></el-form-item>
-        <el-form-item label="支付日期"><el-date-picker v-model="recForm.payDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+        <el-form-item label="支付日期" prop="payDate"><el-date-picker v-model="recForm.payDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item label="状态">
           <el-select v-model="recForm.status" style="width:100%"><el-option label="已付" value="PAID" /><el-option label="处理中" value="IN_PROGRESS" /></el-select>
         </el-form-item>
@@ -251,7 +256,7 @@ import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '
 import { useAutoFill } from '@/composables/useAutoFill'
 import CoachMark from '@/components/CoachMark.vue'
 import InlineActions from '@/components/InlineActions.vue'
-import { useFormRules } from '@/composables/useFormRules'
+import { useFormRules, commonRules, validateForm } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
@@ -259,6 +264,7 @@ import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 // 合同审批/驳回按钮按接口权限码门控（后端 ContractController#approve 要求 contract:update）
 import { hasPerm } from '../../utils/perm'
+import { useCurrency } from '@/composables/useCurrency'
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+s': () => { try { save() } catch { /* noop */ } },
@@ -313,6 +319,18 @@ const condDialog = ref(false)
 const condForm = reactive({ payNode: '', payAmount: 0, planDate: '', remark: '' })
 const recDialog = ref(false)
 const recForm = reactive({ payAmount: 0, settleQty: 0, unitPrice: 0, billNo: '', billType: 'PAY', payDate: '', status: 'PAID' })
+// 第2批：付款条件/支付记录弹窗接入中央框架（原只有 toast 式必填，无格式/必填双闸）
+const condFormRef = ref(null)
+const recFormRef = ref(null)
+const condRules = {
+  payNode: commonRules.required('请填写付款节点'),
+  payAmount: [{ required: true, type: 'number', min: 0, message: '请输入支付金额（不能为负）' }],
+  planDate: commonRules.date('请选择预计付款日期'),
+}
+const recRules = {
+  payAmount: [{ required: true, type: 'number', min: 0.01, message: '请输入实际付款金额（须大于 0）' }],
+  payDate: commonRules.date('请选择支付日期'),
+}
 
 const payRate = computed(() => {
   const total = Number(budgetRow.contractAmount || 0)
@@ -561,7 +579,10 @@ async function loadRefs() {
     companies.value = compFlat
   } catch { /* ignore */ }
 }
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
+
 onMounted(() => {
+  loadCurrency()
   autofill(form, 'CONTRACT')
  load(); loadRefs() })
 
@@ -580,7 +601,8 @@ async function openDetail(row) {
     budgetRow.paidAmount = hit ? hit.paidAmount : 0
   } catch (e) { /* ignore */ }
 }
-function saveCondition() {
+async function saveCondition() {
+  if (!(await validateForm(condFormRef.value))) return
   if (!condForm.payNode) return ElMessage.warning('请填写付款节点')
   contractApi.conditionCreate({ contractId: detail.id, ...condForm })
     .then(async () => { ElMessage.success('已保存'); condDialog.value = false; Object.assign(condForm, { payNode: '', payAmount: 0, planDate: '', remark: '' }); conditions.value = await contractApi.conditions(detail.id) })
@@ -590,7 +612,8 @@ function delCondition(i) {
   const c = conditions.value[i]
   contractApi.conditionDelete(c.id).then(async () => { conditions.value = await contractApi.conditions(detail.id) }).catch((e) => ElMessage.error(e.message))
 }
-function saveRecord() {
+async function saveRecord() {
+  if (!(await validateForm(recFormRef.value))) return
   if (!recForm.payAmount) return ElMessage.warning('请填写实际付款金额')
   contractApi.recordCreate({ contractId: detail.id, ...recForm })
     .then(async () => { ElMessage.success('已保存'); recDialog.value = false; Object.assign(recForm, { payAmount: 0, settleQty: 0, unitPrice: 0, billNo: '', billType: 'PAY', payDate: '', status: 'PAID' }); records.value = await contractApi.records(detail.id) })

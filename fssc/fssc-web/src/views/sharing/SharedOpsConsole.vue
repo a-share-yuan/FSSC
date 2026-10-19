@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="ops-console">
     <el-card shadow="never">
@@ -215,9 +218,9 @@
           </el-descriptions>
 
           <el-dialog v-model="markVisible" :title="$t('sharing.ops.titleMark')" width="420px">
-            <el-form label-width="100px" size="small">
-              <el-form-item :label="$t('sharing.ops.labTaskRowId')"><el-input-number v-model="markForm.taskRowId" :min="0" :controls="false" style="width: 100%" /></el-form-item>
-              <el-form-item :label="$t('sharing.common.colPriority')">
+            <el-form ref="markFormRef" :model="markForm" :rules="markRules" label-width="100px" size="small">
+              <el-form-item :label="$t('sharing.ops.labTaskRowId')" prop="taskRowId"><el-input-number v-model="markForm.taskRowId" :min="0" :controls="false" style="width: 100%" /></el-form-item>
+              <el-form-item :label="$t('sharing.common.colPriority')" prop="priority">
                 <el-select v-model="markForm.priority" style="width: 100%">
                   <el-option :label="$t('sharing.common.colNormal')" value="NORMAL" />
                   <el-option :label="$t('sharing.common.colUrgent')" value="URGENT" />
@@ -574,6 +577,12 @@ const backfillLoading = ref(false)
 const markVisible = ref(false)
 const markLoading = ref(false)
 const markForm = reactive({ taskRowId: null, priority: 'NORMAL' })
+// 第2批：时限标记弹窗接入（原只有一句 toast）——任务行 ID 必须为正整数、优先级必选
+const markFormRef = ref(null)
+const markRules = {
+  taskRowId: [{ required: true, type: 'number', min: 1, message: '请输入任务行 ID（须大于 0）' }],
+  priority: commonRules.select(t('sharing.common.colPriority')),
+}
 
 async function loadDueScan() {
   dueLoading.value = true
@@ -591,6 +600,7 @@ async function loadScanReport() {
   try { scanReport.value = await wfOpsApi.timeLimitScanJobReport() } catch (e) { ElMessage.error(e.message) }
 }
 async function doMark() {
+  if (!(await validateForms([markFormRef]))) return
   if (!markForm.taskRowId) { ElMessage.warning(t('sharing.ops.errTaskRowId')); return }
   markLoading.value = true
   try {

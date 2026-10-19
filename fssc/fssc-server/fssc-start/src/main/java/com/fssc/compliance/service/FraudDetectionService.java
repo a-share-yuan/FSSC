@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -55,6 +58,42 @@ public class FraudDetectionService {
      * 未配置该 key / 配置为空 / 读取异常 → 空白名单（返回 false，行为与原先完全一致）。
      * 命中白名单的用户跳过 FREQUENCY/AMOUNT/SUPPLIER/TIME/GEOGRAPHY 等频次类规则（其他不合规项照常）。
      */
+    /**
+     * G2R-02（2026-10-19 真跑实证修复）：统计员工近 7 天<b>实际提交的单据数</b>，供 FREQUENCY 规则取数。
+     * <p>取数以 create_by 为提交人（历史数据缺失时回退 apply_user_id），按 create_time 圈近 7 天，
+     * 只数 exp_bill 主表行数（一张单一行），不含检测流水 —— 因此不会像旧实现那样被自身的检测记录放大。
+     * 取数异常不得反噬风控判定：回退为「检测流水按 bill_id 去重后的单据数」（仍与提交单据一一对应），
+     * 绝不退回「流水行数」口径。
+     */
+    private long countSubmittedBillsIn7Days(Long employeeId, LocalDateTime since) {
+        try {
+            LambdaQueryWrapper<ExpBill> w = new LambdaQueryWrapper<>();
+            w.eq(ExpBill::getCreateBy, employeeId).ge(ExpBill::getCreateTime, since);
+            long n = expBillMapper.selectCount(w);
+            if (n > 0) {
+                return n;
+            }
+            LambdaQueryWrapper<ExpBill> w2 = new LambdaQueryWrapper<>();
+            w2.eq(ExpBill::getApplyUserId, employeeId).ge(ExpBill::getCreateTime, since);
+            return expBillMapper.selectCount(w2);
+        } catch (Exception ex) {
+            log.warn("[反欺诈] 按提交单据统计近7天频次失败（employeeId={}），回退按检测流水去重: {}",
+                    employeeId, ex.getMessage());
+            try {
+                QueryWrapper<FraudDetectionLog> q = new QueryWrapper<>();
+                q.select("DISTINCT bill_id")
+                        .eq("employee_id", employeeId)
+                        .eq("detection_type", "FREQUENCY")
+                        .isNotNull("bill_id")
+                        .ge("create_time", since);
+                return fraudDetectionLogMapper.selectCount(q);
+            } catch (Exception ex2) {
+                log.warn("[反欺诈] 频次统计回退亦失败（employeeId={}）: {}", employeeId, ex2.getMessage());
+                return 0L;
+            }
+        }
+    }
+
     private boolean isFrequencyWhitelisted(Long employeeId) {
         if (employeeId == null) {
             return false;
@@ -178,10 +217,12 @@ public class FraudDetectionService {
         boolean whitelisted = isFrequencyWhitelisted(employeeId);
 
         LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
-        LambdaQueryWrapper<FraudDetectionLog> freqWrapper = new LambdaQueryWrapper<>();
-        freqWrapper.eq(FraudDetectionLog::getEmployeeId, employeeId)
-                .ge(FraudDetectionLog::getCreateTime, sevenDaysAgo);
-        long recentCount = whitelisted ? 0 : fraudDetectionLogMapper.selectCount(freqWrapper);
+        // G2R-02（2026-10-19 真跑实证修复）：此前 recentCount 统计的是 fraud_detection_log 的
+        // **流水行数**——而每一次 detectFraud() 会同时落 FREQUENCY/AMOUNT/GEOGRAPHY/VENDOR/TIME
+        // 等多条检测记录，于是「规则的输出在喂养规则的输入」：阈值 10 ⇒ 约 2 次检测必然命中，
+        // 且系统用得越久误拦率越高（实案：员工 3933 近 7 天"检测次数"达 63 次，付款链被硬拦）。
+        // 语义上本规则要管的是「员工近 7 天提交了多少张单」，故取数改为 exp_bill 的实际提交单据数。
+        long recentCount = whitelisted ? 0 : countSubmittedBillsIn7Days(employeeId, sevenDaysAgo);
         int threshold = frequencyThreshold();
 
         if (!whitelisted && recentCount >= threshold) {
@@ -191,7 +232,7 @@ public class FraudDetectionService {
             freqLog.setDetectionType("FREQUENCY");
             freqLog.setDetectionResult("HIGH_RISK");
             freqLog.setRiskScore(new BigDecimal("80"));
-            freqLog.setDetails("员工近7天内检测次数达 " + recentCount + " 次，超过阈值 " + threshold);
+            freqLog.setDetails("员工近7天内提交单据达 " + recentCount + " 张，超过阈值 " + threshold + " 张");
             // 三档语义（批次 1 ⑤）：高风险默认进人工待审队列（REVIEW），只有显式开回提单侧阻断才是 BLOCK
             freqLog.setActionTaken(isSubmitBlockEnabled() ? "BLOCK" : "REVIEW");
             fraudDetectionLogMapper.insert(freqLog);
@@ -203,7 +244,7 @@ public class FraudDetectionService {
             freqLog.setDetectionType("FREQUENCY");
             freqLog.setDetectionResult("SUSPICIOUS");
             freqLog.setRiskScore(new BigDecimal("50"));
-            freqLog.setDetails("员工近7天内检测次数达 " + recentCount + " 次，接近阈值");
+            freqLog.setDetails("员工近7天内提交单据达 " + recentCount + " 张，接近阈值");
             freqLog.setActionTaken("WARN");
             fraudDetectionLogMapper.insert(freqLog);
             logs.add(freqLog);

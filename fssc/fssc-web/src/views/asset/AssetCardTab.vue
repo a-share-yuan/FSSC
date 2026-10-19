@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
@@ -273,17 +276,17 @@
         <template #default="{ row }">{{ statusLabel(row.status) }}</template>
       </el-table-column>
     </el-table>
-    <el-form v-if="cipFlowSelected" :model="cipFlowForm" label-width="120px" size="small" style="margin-top:10px">
+    <el-form v-if="cipFlowSelected" ref="cipFlowFormRef" :model="cipFlowForm" :rules="cipFlowRules" label-width="120px" size="small" style="margin-top:10px">
       <el-form-item label="转固项目"><el-input :model-value="cipFlowSelected.cipName" disabled /></el-form-item>
-      <el-form-item label="固定资产类别" required>
+      <el-form-item label="固定资产类别" prop="categoryId">
         <el-select v-model="cipFlowForm.categoryId" filterable placeholder="请选择类别" style="width:100%">
           <el-option v-for="c in cipFlowCats" :key="c.id" :label="c.categoryName || c.name" :value="c.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="使用部门" required>
+      <el-form-item label="使用部门" prop="deptId">
         <el-tree-select v-model="cipFlowForm.deptId" :data="cipFlowDepts" check-strictly filterable placeholder="请选择部门" style="width:100%" />
       </el-form-item>
-      <el-form-item label="转固日期" required>
+      <el-form-item label="转固日期" prop="transferDate">
         <el-date-picker v-model="cipFlowForm.transferDate" type="date" value-format="YYYY-MM-DD" placeholder="购置日期/折旧起算" style="width:100%" />
       </el-form-item>
       <el-form-item label="折旧方法">
@@ -292,7 +295,7 @@
           <el-option label="加速折旧" value="ACCELERATED" />
         </el-select>
       </el-form-item>
-      <el-form-item label="折旧月数" required>
+      <el-form-item label="折旧月数" prop="depreciationMonths">
         <el-input-number v-model="cipFlowForm.depreciationMonths" :min="1" :max="600" style="width:100%" />
       </el-form-item>
       <el-form-item label="备注"><el-input v-model="cipFlowForm.remark" type="textarea" :rows="2" /></el-form-item>
@@ -313,13 +316,14 @@ import { statusLabel } from '@/constants/billStatus'
 import { assetStatusLabel } from '@/constants/enums'
 import { formatDateTime } from '@/utils/format'
 import { ref, inject, onMounted } from 'vue'
+import { useFormRules } from '@/composables/useFormRules'
+import { validateForm } from '@/composables/useFormRules'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { assetApi, cipFlowApi, orgApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import InlineActions from '@/components/InlineActions.vue'
 import BillTraceDrawer from '@/components/BillTraceDrawer.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
-import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
@@ -654,6 +658,9 @@ const cipFlowLoading = ref(false)
 const cipFlowSubmitting = ref(false)
 // D-DEC-296：transferToAsset 真实契约要素
 const cipFlowForm = ref({ categoryId: null, deptId: null, transferDate: '', depreciationMethod: 'LINEAR', depreciationMonths: 60, remark: '' })
+// 第2批：转固弹窗原为装饰红星（el-form-item required 无 prop），改挂中央框架 CIP_TRANSFER 规则集
+const cipFlowFormRef = ref(null)
+const { rules: cipFlowRules } = useFormRules('CIP_TRANSFER')
 const cipFlowCats = ref([])
 const cipFlowDepts = ref([])
 
@@ -698,10 +705,8 @@ async function confirmCipFlow() {
   try {
     await ElMessageBox.confirm(`确认将在建工程「${row.cipName || row.id}」转固为固定资产？`, '转固确认', { type: 'warning', closeOnClickModal: false })
   } catch (_) { return }
-  if (!cipFlowForm.value.categoryId) { ElMessage.warning('请选择固定资产类别'); return }
-  if (!cipFlowForm.value.deptId) { ElMessage.warning('请选择使用部门'); return }
-  if (!cipFlowForm.value.transferDate) { ElMessage.warning('请选择转固日期'); return }
-  if (!cipFlowForm.value.depreciationMonths || cipFlowForm.value.depreciationMonths <= 0) { ElMessage.warning('请填写折旧月数'); return }
+  // 第2批：装饰红星转真校验（原 4 个 toast 式 if 改为 EP 标准 validate，红字落字段）
+  if (!(await validateForm(cipFlowFormRef.value))) return
   cipFlowSubmitting.value = true
   try {
     await cipFlowApi.toAsset(row.id, {

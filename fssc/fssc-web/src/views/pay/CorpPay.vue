@@ -1,8 +1,11 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <!-- D-V3-146：sub-type 动态绑定路由 props（/corp-pay/settle → SETTLE）。
        原写死 PREPAY 导致 SETTLE 深链落单 bill_sub_type 恒 PREPAY；
        onTypeChange/onBeforeSubmit 既有 patch 逻辑保持不变，此处仅为初始化口径对齐。 -->
-  <BillWorkbench ref="wb" bill-type="PAY" :sub-type="subType" :pay="true" :before-submit="onBeforeSubmit" :on-counter-pick="onCounterChange">
+  <BillWorkbench ref="wb" bill-type="PAY" :sub-type="subType" :pay="true" :before-submit="onBeforeSubmit" :before-save-draft="onBeforeSaveDraft" :on-counter-pick="onCounterChange">
     <template #create="b">
       <!-- ============ 单据类型 ============ -->
       <el-card v-if="!isSingle" :header="$t('field.billType')">
@@ -48,20 +51,25 @@
             </el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('pay.corp.lblContractCompany')"><el-input :model-value="applicantCompany" disabled /></el-form-item></el-col>
             <el-col :xs="24" :md="8">
-              <el-form-item :label="$t('pay.corp.lblCurrency')" prop="currencyCode"><el-select v-model="b.form.bill.currencyCode" style="width: 100%"><el-option :label="$t('pay.corp.optCny')" value="CNY" /><el-option :label="$t('pay.corp.optUsd')" value="USD" /></el-select></el-form-item>
+              <el-form-item :label="$t('pay.corp.lblCurrency')" prop="currencyCode"><el-select v-model="b.form.bill.currencyCode" style="width: 100%">
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+</el-select></el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
-              <el-form-item :label="$t('pay.corp.lblBudgetYear')" prop="periodYear"><el-select v-model="b.form.bill.periodYear" style="width: 100%"><el-option v-for="y in years" :key="y" :label="$t('pay.corp.optYear')" :value="y" /></el-select></el-form-item>
+              <el-form-item :label="$t('pay.corp.lblBudgetYear')" prop="periodYear"><el-select v-model="b.form.bill.periodYear" style="width: 100%"><el-option v-for="y in years" :key="y" :label="$t('pay.corp.optYear', { y })" :value="y" /></el-select></el-form-item>
             </el-col>
             <!-- PREPAY / SETTLE: 付款类型 + 往来单位 -->
             <el-col v-if="subType === 'PREPAY' || subType === 'SETTLE'" :xs="24" :md="8">
+              <!-- 缺陷⑥（2026-10-19 修）：此处原装 BANK/TRANSFER/CASH/BILL —— 那是「付款方式」的值域，
+                   与「付款类型」（款项性质：预付款／结算款）无关，也与提交闸门
+                   constants/billRequired.js 的取值域 ['PREPAY','SETTLE'] 对不上，
+                   选什么都过不了校验（且默认值写死 BANK）。现在改回款项性质，并随 subType 带出。 -->
               <el-form-item :label="$t('pay.corp.lblPayType')" prop="extJson.payType">
                 <el-select v-model="b.form.bill.extJson.payType" style="width: 100%">
-                  <el-option :label="$t('pay.corp.optBankTransfer')" value="BANK" />
-                  <el-option :label="$t('pay.corp.optTelegraphic')" value="TRANSFER" />
-                  <el-option :label="$t('pay.corp.optCash')" value="CASH" />
-                  <el-option :label="$t('pay.corp.optInstrument')" value="BILL" />
+                  <el-option :label="$t('pay.corp.optPayTypePrepay')" value="PREPAY" />
+                  <el-option :label="$t('pay.corp.optPayTypeSettle')" value="SETTLE" />
                 </el-select>
+                <div style="color: #909399; font-size: 12px; margin-top: 4px">{{ $t('pay.corp.hintPayType') }}</div>
               </el-form-item>
             </el-col>
             <el-col v-if="subType === 'PREPAY' || subType === 'SETTLE'" :xs="24" :md="8">
@@ -120,7 +128,7 @@
               </el-form-item>
             </el-col>
             <el-col :xs="24">
-              <el-form-item :label="$t('pay.shared.colTitle')" prop="title"><el-input v-model="b.form.bill.title" :placeholder="$t('pay.corp.phTitleBySubType')" /></el-form-item>
+              <el-form-item :label="$t('pay.shared.colTitle')" prop="title"><el-input v-model="b.form.bill.title" :placeholder="$t('pay.corp.phTitleBySubType', { v1: subTypeLabel })" /></el-form-item>
             </el-col>
             <el-col :xs="24">
               <el-form-item :label="$t('pay.corp.lblBillDesc')" prop="remark"><el-input v-model="b.form.bill.remark" type="textarea" :rows="2" /></el-form-item>
@@ -134,9 +142,9 @@
 
       <!-- ============ 费用详情 ============ -->
       <el-card :header="$t('pay.corp.secExpenseDetail')" style="margin-top: 12px">
-        <el-form label-width="110px" size="default">
+        <el-form :model="shareForm" :rules="shareTypeRules" label-width="110px" size="default">
           <!-- 单选组恒有默认值，不存在漏填，故不加红星 -->
-          <el-form-item :label="$t('pay.corp.lblBearingType')">
+          <el-form-item :label="$t('pay.corp.lblBearingType')" prop="shareType">
             <el-radio-group v-model="shareType">
               <el-radio-button value="COST_CENTER">{{ $t('pay.corp.optCostCenter') }}</el-radio-button>
               <el-radio-button value="PROJECT">{{ $t('pay.corp.optProject') }}</el-radio-button>
@@ -170,7 +178,7 @@
             </template>
           </el-table-column>
           <el-table-column :label="$t('field.amount')" width="110"><template #header><span style="color:#f56c6c">*</span>{{ $t('field.amount') }}</template>
-            <template #default="{ row }"><el-input-number v-model="row.amount" :min="0" :precision="2" style="width: 100%" @change="recalcLine(b, row)" /></template>
+            <template #default="{ row }"><el-input-number v-model="row.amount" :min="0.01" :precision="2" style="width: 100%" @change="recalcLine(b, row)" /></template>
           </el-table-column>
           <!-- SETTLE: 原币金额/汇率 -->
           <el-table-column v-if="subType === 'SETTLE'" :label="$t('pay.corp.colOrigAmount')" width="110">
@@ -241,14 +249,16 @@
 <el-col :xs="24" :md="8">
               <el-form-item :label="$t('pay.corp.lblPayTarget')" prop="payTarget">
                 <el-select v-model="b.form.bill.payTarget" style="width: 100%" :placeholder="$t('pay.corp.phPickPayTarget')">
-                  <el-option :label="$t('pay.corp.optEmployee')" value="EMPLOYEE" /><el-option :label="$t('field.supplier')" value="SUPPLIER" /><el-option :label="$t('field.customer')" value="CUSTOMER" />
+<el-option v-for="o in payeeTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
+
+                  
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
               <el-form-item :label="subType === 'AGENCY' ? t('pay.corp.colPayMethod') : t('pay.corp.colReceiptMethod')" prop="extJson.payMethod">
                 <el-select v-model="b.form.bill.extJson.payMethod" style="width: 100%">
-                  <el-option :label="$t('pay.corp.optBankTransfer')" value="BANK" /><el-option :label="$t('pay.corp.optTelegraphic')" value="TELEGRAPHIC" /><el-option :label="$t('pay.corp.optAcceptanceDraft')" value="DRAFT" /><el-option :label="$t('pay.corp.optCash')" value="CASH" />
+                  <el-option v-for="o in payMethodOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -297,11 +307,20 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { useAutoFill } from '@/composables/useAutoFill'
 import { billRules } from '@/constants/billRequired'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { commonRules } from '@/composables/useFormRules'
 import { ccLabel, budgetLabel, budgetUnseenLabel } from '@/utils/format'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useI18n } from 'vue-i18n'
+import { useBaseDict, PAY_METHOD_LOCAL, PAY_METHOD_I18N_CORP, PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N } from '@/composables/useBaseDict'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
+
+// 付款/收款方式（2026-10-18 基础数据收口）。
+// 注：payMethod 走 pay_method 字典；上方 payType 是「款项性质」（PREPAY/SETTLE），
+//    值域与 pay_method 不同，属另一个业务维度（缺陷⑥ 已修正其选项与默认值）。
+const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CORP)
+const payMethodOptions = payMethodDict.options
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+s': () => { try { wb.value?.b?.saveDraft() } catch { /* noop */ } },
@@ -334,8 +353,12 @@ const formRef = ref(null)
 const payFormRef = ref(null)
 const formRules = computed(() => billRules('PAY', subType.value))
 const shareType = ref('COST_CENTER')
+// 第2批：分摊方式恒有默认值（COST_CENTER）——挂 rules 纳入中央框架视野；
+// computed 包装只为给 el-form 一个可校验 model，v-model 仍绑 shareType ref 不动
+const shareForm = computed(() => ({ shareType: shareType.value }))
+const shareTypeRules = { shareType: commonRules.select('请选择分摊方式') }
 const users = ref([])
-const currentUserName = computed(() => (ref(store.user?.username || store.user?.userName || t('pay.corp.lblCurrentUser'))))
+const currentUserName = ref(store.user?.username || store.user?.userName || t('pay.corp.lblCurrentUser'))
 const contracts = ref([])
 const years = [new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1]
 const blacklistHit = ref('')
@@ -564,6 +587,28 @@ async function onApplicantChange(b, id) {
   if (u) b.form.bill.applyUserName = u.nickName || u.userName
 }
 
+/**
+ * D-V4R-76：把 ext_json 上的三单腿（PO / 收货单 / 合同）镜像到 exp_bill 的顶层列位。
+ *
+ * 背景：下拉绑定的是 `ext_json.{poId,poReceiptId,contractId}`，但后端与匹配台/齐套闸读的是
+ * 顶层列 `po_id / po_receipt_id / contract_id`。原先这份拷贝只写在 `onBeforeSubmit` 里，
+ * 而「保存草稿」按钮直调 `useBill.saveDraft()`、根本不经过提交钩子
+ * ⇒ 草稿态三腿列恒空，只剩 `po_id` 因 `onPoPick` 的副作用而侥幸落库。
+ *
+ * 修法：抽成独立函数，由「提交前钩子」与新增的「保存草稿前钩子」共用一份口径，
+ * 避免两处各写一遍、日后再漂移。
+ */
+function syncSettleLegs(b) {
+  if (subType.value !== 'SETTLE') return
+  if (b.form.bill.extJson.poId) b.form.bill.poId = b.form.bill.extJson.poId
+  if (b.form.bill.extJson.poReceiptId) b.form.bill.poReceiptId = b.form.bill.extJson.poReceiptId
+  if (b.form.bill.extJson.contractId) b.form.bill.contractId = b.form.bill.extJson.contractId
+}
+
+async function onBeforeSaveDraft(b) {
+  syncSettleLegs(b)
+}
+
 async function onBeforeSubmit(b) {
   b.form.bill.billSubType = subType.value
   // P0-6 对公付款：extJson 收款账户字段同步到顶层 bill 字段（后端校验读取顶层 payeeAccountNo）
@@ -581,11 +626,33 @@ async function onBeforeSubmit(b) {
   // 提交前复核一次两个来源的主体指向，提示与页面当前状态保持同步（硬闸在服务端，此处只负责少跑一趟）
   refreshSubjectConflict(b)
   if (!b.form.lines.filter((l) => l.itemId).length) { ElMessage.warning(t('pay.corp.errNeedExpenseLine')); return false }
-  if (subType.value === 'SETTLE') {
-    if (b.form.bill.extJson.poId) b.form.bill.poId = b.form.bill.extJson.poId
-    if (b.form.bill.extJson.poReceiptId) b.form.bill.poReceiptId = b.form.bill.extJson.poReceiptId
-    if (b.form.bill.extJson.contractId) b.form.bill.contractId = b.form.bill.extJson.contractId
+  // D-V4R-91：补齐逐行校验（与 ClaimExpense.vue 的同名循环对齐）。
+  // 原先本处只判「至少一行有费用项」，行内金额可填 0 —— 而金额列有红星，
+  // 属"看起来必填、实际放行"：错误一路延后到服务端 submit 才被拦，用户无从知道是哪一行。
+  // 更实际的风险：shareAmount 取 l.amount || 0，0 元行会被写进 exp_bill_share，
+  // 出纳按分摊行汇总出付款批次时把零元行并进去；对公结算(SETTLE)挂三单腿时更是直接失真。
+  for (let i = 0; i < b.form.lines.length; i++) {
+    const l = b.form.lines[i]
+    if (!l.itemId) continue // 完全空白行忽略，交给上方"至少一条"校验
+    const pos = i + 1
+    if (!(Number(l.amount) > 0)) {
+      ElMessage.warning(`第 ${pos} 行费用金额必须大于 0（当前 ${l.amount || 0}）`)
+      return false
+    }
+    if (!l.budgetItemId) {
+      ElMessage.warning(`第 ${pos} 行预算科目必填（对公结算与费用报销同口径，缺了服务端会拒）`)
+      return false
+    }
+    if (shareType.value === 'COST_CENTER' && !l.costCenterId) {
+      ElMessage.warning(`第 ${pos} 行成本中心必填（当前承担方式为「成本中心承担」）`)
+      return false
+    }
+    if (shareType.value === 'PROJECT' && !l.projectId) {
+      ElMessage.warning(`第 ${pos} 行项目必填（当前承担方式为「项目承担」）`)
+      return false
+    }
   }
+  if (subType.value === 'SETTLE') syncSettleLegs(b)
   if (subType.value === 'AIR' && b.form.lines.some((l) => l.itemId && !(l.extJson && l.extJson.airPassenger))) {
     ElMessage.warning(t('pay.corp.errNeedPassenger')); return false
   }
@@ -603,7 +670,15 @@ async function onBeforeSubmit(b) {
   return true
 }
 
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency({ i18nKeys: { CNY: 'pay.corp.optCny', USD: 'pay.corp.optUsd' }, format: 'name-code' })
+
+const { options: payeeTypeOptions, load: loadPayeeType } = useBaseDict('enum_payee_type', PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N)
+
 onMounted(async () => {
+  loadPayeeType()
+  loadCurrency()
+  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
+  payMethodDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单，并把子类型切到单据实际类型
   try {
     const eb = route.query.editBillId
@@ -661,7 +736,8 @@ currentUserName.value = store.user?.realName || store.user?.nickName || store.us
     // 在 /corp-pay/settle 留空提交也拿预付款标题，与 bill_sub_type 矛盾污染凭证摘要/台账检索）
     if (b && b.form.bill.title === '') b.form.bill.title = subTypeLabel.value
     if (b) {
-if (b.form.bill.extJson.payType == null) b.form.bill.extJson.payType = 'BANK'
+// 缺陷⑥：默认随单据类型带出款项性质（原先硬编码 BANK，落在值域外）
+        if (b.form.bill.extJson.payType == null) b.form.bill.extJson.payType = (subType.value === 'SETTLE' ? 'SETTLE' : 'PREPAY')
       if (b.form.bill.extJson.counterType == null) b.form.bill.extJson.counterType = 'SUPPLIER'
       if (b.form.bill.payTarget == null) b.form.bill.payTarget = 'SUPPLIER'
     }
@@ -679,11 +755,25 @@ if (b.form.bill.extJson.payType == null) b.form.bill.extJson.payType = 'BANK'
         if (d.applyNo == null) d.applyNo = ''
       })
     }
-    const clist = (await contractApi.page({ pageNum: 1, pageSize: 100 })).list || []
-    const sums = (await reportApi.contractSummary()) || []
-    const sumMap = {}
-    sums.forEach((s) => { sumMap[s.contractNo] = Number(s.paidAmount || 0) })
-    contracts.value = clist.map((c) => ({ ...c, paidAmount: sumMap[c.contractNo] || 0 }))
+    // D-V4R-78（P0 根因修复）：合同下拉的数据源是 contractApi.page，而 paidAmount 只是选项标签上的
+    // 「已付合计」装饰。此前把两者串在一个 try 里、且 reportApi.contractSummary() 抛错被
+    // `catch { ignore }` 吞掉 ⇒ contracts 整行赋值不执行 ⇒ 「付款合同」下拉对所有未授 report:view
+    // 的角色（应付会计、普通员工）永久为空 ⇒ 三单/四单匹配的合同腿挂不上、付款齐套闸以「缺合同腿」
+    // 永久拦截。这是一条所有人无解的阻断缺陷，不是权限配置疏漏的表象。
+    // 修法：解耦——合同列表独立 try（失败才空），报表汇总独立 try（失败即按 paidAmount=0 兜底），
+    // 不再让「一个装饰性数字取不到」拖垮「合同腿能不能挂」这条主链路。
+    // 后续若要标签上的「已付」也准确，可让 contract/page 直接带出 paidAmount（需 DTO 改造），
+    // 但那属于锦上添花，不得再作为下拉可用性的前置条件。
+    const clist = (await contractApi.page({ pageNum: 1, pageSize: 100 }).catch(() => ({ list: [] }))).list || []
+    let sumMap = {}
+    try {
+      const sums = (await reportApi.contractSummary()) || []
+      sums.forEach((s) => { sumMap[s.contractNo] = Number(s.paidAmount || 0) })
+    } catch (e) {
+      // 缺 report:view 时只影响标签上的「已付」数字，下拉本身必须照常可用（余额标签退化为合同额全额）
+      console.warn('[D-V4R-78] contractSummary 取数失败，合同下拉降级为不含已付金额：', e?.message || e)
+    }
+    contracts.value = clist.map((c) => ({ ...c, paidAmount: sumMap[c.contractNo] ?? Number(c.paidAmount ?? 0) }))
     if (matchRouteRef.value) matchRouteRef.value.loadApprovedPays()
   } catch (e) { /* ignore */ }
 })

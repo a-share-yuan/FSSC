@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <BillWorkbench ref="wb" bill-type="CLAIM" sub-type="" :claim="true" :before-submit="onBeforeSubmit">
     <template #create="b">
@@ -28,8 +31,10 @@
             <el-col :xs="24" :md="8">
 <el-form-item :label="$t('expense.common.colCurrency')" prop="currencyCode">
                 <el-select v-model="b.form.bill.currencyCode" style="width: 100%">
-                  <el-option :label="$t('expense.common.curCny')" value="CNY" />
-                  <el-option :label="$t('expense.common.curUsd')" value="USD" />
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+
+                  
+                  
                 </el-select>
               </el-form-item>
             </el-col>
@@ -47,7 +52,7 @@
             <el-col :xs="24" :md="8">
 <el-form-item :label="$t('expense.claim.colBudgetYear')" prop="periodYear">
                 <el-select v-model="b.form.bill.periodYear" style="width: 100%">
-                  <el-option v-for="y in years" :key="y" :label="$t('expense.claim.optYear')" :value="y" />
+                  <el-option v-for="y in years" :key="y" :label="$t('expense.claim.optYear', { y })" :value="y" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -69,9 +74,9 @@
 
       <!-- ============ 费用详情 ============ -->
       <el-card :header="$t('expense.claim.colExpenseDetail')" style="margin-top: 12px">
-        <el-form label-width="110px" size="default">
+        <el-form :model="shareForm" :rules="shareTypeRules" label-width="110px" size="default">
           <!-- 单选组恒有默认值，不存在漏填，故不加红星 -->
-          <el-form-item :label="$t('expense.claim.colBearingType')">
+          <el-form-item :label="$t('expense.claim.colBearingType')" prop="shareType">
             <el-radio-group v-model="shareType">
               <el-radio-button value="COST_CENTER">{{ $t('expense.claim.optCostCenterBearing') }}</el-radio-button>
               <el-radio-button value="PROJECT">{{ $t('expense.claim.optProjectBearing') }}</el-radio-button>
@@ -209,16 +214,18 @@
             <el-col :xs="24" :md="8">
               <el-form-item :label="$t('expense.claim.colPayMethod')" prop="extJson.payMethod">
                 <el-select v-model="b.form.bill.extJson.payMethod" style="width: 100%">
-                  <el-option :label="$t('expense.claim.optBankTransfer')" value="BANK" /><el-option :label="$t('expense.claim.optCash')" value="CASH" /><el-option :label="$t('expense.claim.optCheque')" value="CHECK" />
+                  <el-option v-for="o in payMethodOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
               <el-form-item :label="$t('expense.claim.colPayeeType')" prop="payTarget">
                 <el-select v-model="b.form.bill.payTarget" style="width: 100%" :placeholder="$t('expense.common.phPickPayeeType')">
-                  <el-option :label="$t('expense.claim.colEmployee')" value="EMPLOYEE" />
-                  <el-option :label="$t('field.supplier')" value="SUPPLIER" />
-                  <el-option :label="$t('field.customer')" value="CUSTOMER" />
+<el-option v-for="o in payeeTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
+
+                  
+                  
+                  
                 </el-select>
               </el-form-item>
             </el-col>
@@ -283,10 +290,17 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { useAutoFill } from '@/composables/useAutoFill'
 import { billRules } from '@/constants/billRequired'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { commonRules } from '@/composables/useFormRules'
 import { budgetLabel, budgetUnseenLabel, entertainOfLine } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
+import { useBaseDict, PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM, PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N } from '@/composables/useBaseDict'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
+
+// 付款方式（2026-10-18 基础数据收口：字典定值域 + i18n 定文案）
+const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
+const payMethodOptions = payMethodDict.options
 const { saveFormHistory } = useAutoFill()
 
 // R4-02: BillTraceDrawer
@@ -302,7 +316,11 @@ const loading = ref(false)
 const users = ref([])
 const companies = ref([])
 const shareType = ref('COST_CENTER')
-const currentUserName = computed(() => (ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))))
+// 第2批：分摊方式恒有默认值（COST_CENTER）——挂 rules 纳入中央框架视野；
+// computed 包装只为给 el-form 一个可校验 model，v-model 仍绑 shareType ref 不动
+const shareForm = computed(() => ({ shareType: shareType.value }))
+const shareTypeRules = { shareType: commonRules.select('请选择分摊方式') }
+const currentUserName = ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))
 const years = [new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1]
 
 // ---------- 表头必填：红星/规则/提交闸门同源（constants/billRequired.js），两个 el-form 共用一份 rules ----------
@@ -461,11 +479,16 @@ function applyUserName(b) {
 }
 
 async function onBeforeSubmit(b) {
+  // D-V4R-46：页面级拦截原因同步写 b.submitHint（3 秒 toast 会消失，常驻横幅靠它显示具体原因）
+  const warnStop = (msg) => { b.submitHint = msg; ElMessage.warning(msg); return false }
   // 表头 + 结算必填闸门（红星同源，见 constants/billRequired.js）
-  if (!(await validateForms([formRef, settleFormRef]))) return false
+  if (!(await validateForms([formRef, settleFormRef]))) {
+    b.submitHint = t('expense.claim.errFormIncomplete') || '表头/结算信息存在未填项，请按表单红色提示补正'
+    return false
+  }
   // 校验：至少一条费用明细
   if (!b.form.lines.filter((l) => l.itemId).length) {
-    ElMessage.warning(t('expense.claim.errNeedExpenseLine')); return false
+    return warnStop(t('expense.claim.errNeedExpenseLine'))
   }
   // P0-6 防付错的后端兜底口径（assertPayeeAccount）：payTarget 驱动 payeeAccountNo，已由红星+闸门覆盖
   // 收款账号同步到 extJson（兼容既有打印/导出口径）
@@ -485,31 +508,31 @@ async function onBeforeSubmit(b) {
   for (const l of b.form.lines) {
     if (!l.itemId) continue // 完全空白行忽略，交给下方"至少一条"校验
     if (!(Number(l.amount) > 0)) {
-      ElMessage.warning(t('expense.claim.errOrigAmountMissing')); return false
+      return warnStop(t('expense.claim.errOrigAmountMissing'))
     }
     if (!l.budgetItemId) {
-      ElMessage.warning(t('expense.claim.errBudgetItemRequired')); return false
+      return warnStop(t('expense.claim.errBudgetItemRequired'))
     }
     // 承担对象按当前口径校验（单选成本中心或项目）
     if (shareType.value === 'COST_CENTER' && !l.costCenterId) {
-      ElMessage.warning(t('expense.claim.errCostCenterRequired')); return false
+      return warnStop(t('expense.claim.errCostCenterRequired'))
     }
     if (shareType.value === 'PROJECT' && !l.projectId) {
-      ElMessage.warning(t('expense.claim.errProjectRequired')); return false
+      return warnStop(t('expense.claim.errProjectRequired'))
     }
     if (isEntertain(b, l)) {
       // D-DEC-023：三项承载＝entertain_type 列 / attendees / person_count
       // D-DEC-373：历史草稿类型只在 ext_json 里，提交前回填进列，否则随单丢掉
       if (!l.entertainType && lineExt(l).entertainType) l.entertainType = lineExt(l).entertainType
-      if (!l.entertainType) { ElMessage.warning(t('expense.claim.errEntertainType')); return false }
-      if (!(Number(l.personCount) >= 1)) { ElMessage.warning(t('expense.claim.errEntertainHeadcount')); return false }
-      if (!(l.attendees || '').trim()) { ElMessage.warning(t('expense.claim.errEntertainGuests')); return false }
+      if (!l.entertainType) { return warnStop(t('expense.claim.errEntertainType')) }
+      if (!(Number(l.personCount) >= 1)) { return warnStop(t('expense.claim.errEntertainHeadcount')) }
+      if (!(l.attendees || '').trim()) { return warnStop(t('expense.claim.errEntertainGuests')) }
       syncPerCapitaExt(l)
     }
   }
   // 境外凭证合规⑤（V1.3.14）：境外收据/行程单必填中文说明（后端 submit 同口径兜底）
   if (b.form.lines.some((l) => l.itemId && needCnDesc(l) && !(l.cnDesc || '').trim())) {
-    ElMessage.warning(t('expense.claim.errAbroadCnDesc')); return false
+    return warnStop(t('expense.claim.errAbroadCnDesc'))
   }
   return true
 }
@@ -576,7 +599,15 @@ async function openRowDetail(row) {
 
 const route = useRoute()
 const router = useRouter()
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency({ i18nKeys: { CNY: 'expense.common.curCny', USD: 'expense.common.curUsd' }, format: 'name-code' })
+
+const { options: payeeTypeOptions, load: loadPayeeType } = useBaseDict('enum_payee_type', PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N)
+
 onMounted(async () => {
+  loadPayeeType()
+  loadCurrency()
+  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
+  payMethodDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单
   try {
     const eb = route.query.editBillId

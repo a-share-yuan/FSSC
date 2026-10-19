@@ -1,8 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -23,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -255,6 +260,13 @@ public class ExtInterfaceConfigService {
             saveTestResult(id, "FAIL", "未配置 API 地址");
             return result;
         }
+        // R5-D-039：自指配置先拦下（实测 id=2 曾把本服务的管理端点填成外部发票验真接口）
+        if (isSelfReference(url)) {
+            result.put("success", false);
+            result.put("message", "API 地址指向本服务自身（" + url + "），属配置错误，请填真实外部接口地址");
+            saveTestResult(id, "FAIL", result.get("message").toString());
+            return result;
+        }
 
         try {
             HttpClient client = HttpClient.newBuilder().connectTimeout(TEST_TIMEOUT).build();
@@ -275,12 +287,27 @@ public class ExtInterfaceConfigService {
             }
             HttpResponse<String> resp = client.send(builder.build(),
                     HttpResponse.BodyHandlers.ofString());
-            boolean ok = resp.statusCode() >= 200 && resp.statusCode() < 300;
+            boolean httpOk = resp.statusCode() >= 200 && resp.statusCode() < 300;
             String msg = scrubCredential("HTTP " + resp.statusCode() + (resp.body() != null && !resp.body().isBlank()
                     ? " (" + resp.body().substring(0, Math.min(resp.body().length(), 200)) + ")" : ""), c);
+
+            // R5-D-039 修正（2026-10-17 运行期实测）：原实现只看 HTTP 状态码，
+            // 而大量国内厂商接口在鉴权/参数错误时仍返回 HTTP 200，把业务错误写进 body
+            // （如百度 OCR `{"error_code":23,"error_msg":"IAM API-KEY authentication failed"}`）。
+            // ⇒ 2xx 被一律判为「连接成功」，运维据此认为通道已接通，实际一调就失败。
+            // 现在补业务错误识别：HTTP 层通过但 body 带业务错误码 ⇒ 判 FAIL。
+            String bizErr = httpOk ? detectBusinessError(resp.body()) : null;
+            boolean ok = httpOk && bizErr == null;
+            if (bizErr != null) {
+                msg = msg + " | 业务错误: " + bizErr;
+            }
+
             result.put("success", ok);
             result.put("message", msg);
             saveTestResult(id, ok ? "SUCCESS" : "FAIL", msg);
+            if (bizErr != null) {
+                log.warn("外部接口 HTTP 通过但业务报错 id={} url={}: {}", id, url, bizErr);
+            }
         } catch (Exception e) {
             String msg = scrubCredential("连接异常: " + e.getMessage(), c);
             result.put("success", false);
@@ -292,6 +319,64 @@ public class ExtInterfaceConfigService {
     }
 
     // ---------- private helpers ----------
+
+    /**
+     * 从响应体里识别「业务错误」，返回可读描述；没有则返回 {@code null}（视为成功）。
+     *
+     * <p>覆盖实测到的两类国内厂商约定：</p>
+     * <ul>
+     *   <li>{@code error_code != 0}（百度 OCR / 阿里云系）：如 {@code error_code:23} 鉴权失败；</li>
+     *   <li>{@code success=false} 或 {@code code != 0}（FSSC 自身响应包装，如误配成自指 URL
+     *       打到自己的登录拦截会返回 {@code {"code":401,"msg":"未登录…}}）。</li>
+     * </ul>
+     * 只认「能明确判定为失败」的情况，解析不了就返回 null 保持宽松，
+     * 避免把厂商的正常业务响应误判成失败。
+     */
+    private static String detectBusinessError(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        String b = body.trim();
+        try {
+            com.fasterxml.jackson.databind.JsonNode n =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(b);
+            if (n.isObject()) {
+                JsonNode ec = n.get("error_code");
+                if (ec != null && !ec.isNull() && ec.asInt() != 0) {
+                    return "error_code=" + ec.asInt()
+                            + (n.hasNonNull("error_msg") ? " " + n.get("error_msg").asText() : "");
+                }
+                JsonNode succ = n.get("success");
+                if (succ != null && succ.isBoolean() && !succ.asBoolean()) {
+                    return n.hasNonNull("msg") ? n.get("msg").asText() : "success=false";
+                }
+                JsonNode code = n.get("code");
+                if (code != null && code.isNumber() && code.asInt() != 0) {
+                    return "code=" + code.asInt()
+                            + (n.hasNonNull("msg") ? " " + n.get("msg").asText() : "");
+                }
+            }
+        } catch (Exception ignore) {
+            // 非 JSON（如 HTML 错误页）——解析不了就不判业务错误，HTTP 层已给出结论
+        }
+        return null;
+    }
+
+    /**
+     * 自指检测：配置的 apiUrl 指向本服务自身（历史脏数据里出现过
+     * {@code http://localhost:8089/api/tenant/system/ext-interface/2} 这类把管理端点
+     * 当外部接口填的配置）。这种配置 GET 回来必然是本服务的鉴权响应，会被判成「已连通」，
+     * 属配置错误而非通道可用，故直接拦下。
+     */
+    private static boolean isSelfReference(String url) {
+        if (url == null || url.isBlank()) {
+            return false;
+        }
+        String u = url.toLowerCase(Locale.ROOT);
+        return u.contains("localhost:8089")
+                || u.contains("127.0.0.1:8089")
+                || u.contains("/api/tenant/system/ext-interface");
+    }
 
     private void validateCategory(String category) {
         if (category == null || !VALID_CATEGORIES.contains(category)) {

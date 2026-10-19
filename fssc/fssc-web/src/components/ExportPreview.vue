@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-dialog v-model="visible" title="报表导出预览" width="900px" :destroy-on-close="true" class="export-dialog">
     <div class="export-toolbar">

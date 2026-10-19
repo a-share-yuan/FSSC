@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -125,7 +128,7 @@
   <el-dialog v-model="dlgBlock" :title="$t('pay.pay.titleBlocked', { v1: blockBatchNo })" width="1000px">
     <el-alert type="error" show-icon :closable="false" style="margin-bottom:10px"
       :title="$t('pay.batch.hintNoDebit')"
-      :description="$t('pay.batch.hintNoBypass')" />
+      :description="blockExitHint" />
     <el-alert v-if="blockSummaryMsg" type="info" show-icon :closable="false" style="margin-bottom:12px"
       :title="$t('pay.batch.labBackendVerbatim')" :description="blockSummaryMsg" />
     <div v-if="!blockRows.length" style="color:#909399;font-size:13px;padding:8px 0">
@@ -524,6 +527,19 @@ function blockChannels(b) {
   if (has('THREE_WAY_MATCH_FAILED') && out.length === 1) out.push(t('pay.batch.exitThreeWayFailed'))
   return out
 }
+
+/**
+ * G2R-03（2026-10-19）：顶部「处理出口」此前恒取 pay.batch.hintNoBypass（三单匹配口径），
+ * 反欺诈／供应商停用／账号未核档等非三单匹配闸被拦时，出纳按提示去补 PO／合同／发票，
+ * 永远解不掉闸。此处按后端拦截原文识别闸类型，给出对应的真出口。
+ */
+const blockExitHint = computed(() => {
+  const m = String(blockSummaryMsg.value || '')
+  if (/反欺诈|欺诈检测|风控/.test(m)) return t('pay.batch.hintBypassFraud')
+  if (/黑名单|已停用|停用/.test(m)) return t('pay.batch.hintBypassSupplier')
+  if (/账号|账户|档案/.test(m)) return t('pay.batch.hintBypassAccount')
+  return t('pay.batch.hintNoBypass')
+})
 
 async function openBlockReport(row, err) {
   blockBatchNo.value = row.batchNo || String(row.id || '')

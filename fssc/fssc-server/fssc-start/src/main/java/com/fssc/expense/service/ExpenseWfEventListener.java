@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -159,6 +162,8 @@ public class ExpenseWfEventListener implements WfBizAction {
         u.setStatus("REJECTED");
         u.setAuditRemark("防篡改拦截：" + reason);
         expBillMapper.updateById(u);
+        // ⑨（D-V4R-49）：防篡改拦截同样是死亡终态，作业链一并收口
+        sharingService.closeOnBillTerminal(bill.getId(), "防篡改拦截终态");
         auditTrailService.record(bill.getBillType(), bill.getId(), bill.getBillNo(), "exp_bill",
                 String.valueOf(bill.getId()), "TAMPER_REJECT", null, null, "防篡改拦截：" + reason);
     }
@@ -254,6 +259,11 @@ public class ExpenseWfEventListener implements WfBizAction {
                 // D-DEC-456：还款资金事实唯一载体＝exp_bill_receipt；旧腿 rc_receipt（D-DEC-107）已撤除
                 registerRepayFundReceipt(bill);
                 sharingService.createChain(bill, "EXP_REPAY");
+                // ⑨（D-V4R-49）：还款链的「收款核对→冲销账务归档」在上方 repayLoan（余额核销+结清裁定）
+                // 与 registerRepayFundReceipt（收款登记）已全部自动化办结，凭证亦已自动生成——
+                // 池任务再留只会成为终态单上的僵尸待认领（2026-10-16 晚间场 HK202610160001 实测）。
+                // 创建即收口：留 FINISHED 痕迹证明链走过，池里不再出现无意义工单。
+                sharingService.closeOnBillTerminal(bill.getId(), "还款已自动核销入账");
             }
             case "EXP_APPLY" -> {
                 // 事前申请通过：状态 APPROVED（事后报销可转单冲抵申请金额）。
@@ -357,6 +367,10 @@ public class ExpenseWfEventListener implements WfBizAction {
                     // D-F1R-06：但<b>不能就在此刻执行</b>，见 settleBudgetOnNoCashLeg 的方法注释：
                     // 必须等外层审批事务提交后（行锁已释放）再跑，否则内层 REQUIRES_NEW 自锁 50s 超时。
                     scheduleSettleBudgetOnNoCashLeg(bill);
+                    // ⑨（D-V4R-49）：无现金腿=钱不经付款批次（全额借款冲抵/退款了结），单据业务就此收官，
+                    // 上面刚建的作业链（票据审核/付款审核/记账归档）不会再有人办——立即收口，
+                    // 否则就是 BX202610160002 式「已核销平账却仍挂审核待认领」的僵尸工单。
+                    sharingService.closeOnBillTerminal(bill.getId(), "报销无现金腿（全额冲抵/退款），业务已了结");
                 }
                     ExpBill claimUpd = new ExpBill();
                     claimUpd.setId(bill.getId());
@@ -649,6 +663,11 @@ public class ExpenseWfEventListener implements WfBizAction {
             upd.setAuditRemark(remarkOf(comment));
         }
         expBillMapper.updateById(upd);
+        // ⑨（D-V4R-49）：驳回/撤回=死亡终态。正常时序下作业链要等审批通过才建（createChain 在
+        // handleApproved 内），此处通常无可收口；但反审批/补账等旁路可能留下未终态池任务——
+        // 一并收口，杜绝「单已死、工单还挂着等人认领」的孤儿。
+        sharingService.closeOnBillTerminal(bill.getId(),
+                withdrawn ? "单据已撤回终态" : "单据已驳回终态");
     }
 
     /** audit_remark 是 varchar(1000)，超长必须截，否则收尾整链（含状态）一起失败 */
@@ -823,6 +842,11 @@ public class ExpenseWfEventListener implements WfBizAction {
                 loanUpd.setStatus(target);
                 expBillMapper.updateById(loanUpd);
                 log.info("借款单 {} 结清终态裁定：{} → {}（余额 {}）", loan.getBillNo(), loan.getStatus(), target, bal);
+                if ("REPAID".equals(target)) {
+                    // ⑨（D-V4R-49）：借款结清=业务终态，合规审核/资金支付/账务处理链不会再有人办，全部收口
+                    //（借款的钱腿走付款批次但 D-F1R-01 口径下借款单不置 PAID，批次侧收口管不到它，只能在此收）
+                    sharingService.closeOnBillTerminal(loanBillId, "借款已结清终态");
+                }
             }
         }
         budgetService.alignLoanOccupy(loanBillId, actualOffset, repayBill.getBillNo(), null,

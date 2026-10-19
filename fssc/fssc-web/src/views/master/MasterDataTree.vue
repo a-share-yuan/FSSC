@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="md-tree-page">
     <!-- RA-PAGE-21 2.3：会计科目/成本中心双形态并入一个菜单（原 205 会计科目退册，宿主=206）——切换即跳对侧路由 -->

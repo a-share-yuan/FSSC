@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * useFormRules - 表单联动校验 composable
  * R5-06: 封装跨字段联动校验规则
@@ -75,6 +78,60 @@ export const commonRules = {
     { pattern: /^\d{6,30}$/, message: '银行账号应为 6-30 位数字', trigger: 'blur' },
   ],
   maxLength: (n, msg) => [{ max: n, message: msg || `最多 ${n} 个字符`, trigger: 'blur' }],
+  // 联行号（选填，填了就必须是 12 位数字）——async-validator 的 pattern 对空串也会判负，
+  // 故选填字段一律走自定义 validator：空值放行，非空才校验格式。
+  bankCode: (msg = '联行号应为 12 位数字') => [{
+    trigger: 'blur',
+    validator: (rule, value, cb) => {
+      if (isBlank(value)) return cb()
+      if (!/^\d{12}$/.test(String(value).trim())) return cb(new Error(msg))
+      cb()
+    },
+  }],
+  // 统一社会信用代码（18 位，GB 32100 字符集：数字 + 除 I/O/Z/S/V 外大写字母）——选填同 bankCode 处理
+  taxNo: (msg = '请输入正确的统一社会信用代码（18 位）') => [{
+    trigger: 'blur',
+    validator: (rule, value, cb) => {
+      if (isBlank(value)) return cb()
+      if (!/^[0-9A-HJ-NPQRTUWXY]{18}$/.test(String(value).trim().toUpperCase())) return cb(new Error(msg))
+      cb()
+    },
+  }],
+  // 纳税人识别号：15 位（旧版）/18 位（信用代码）/20 位（部分行业）——选填，填了才校验
+  taxNoAny: (msg = '税号应为 15/18/20 位数字或大写字母') => [{
+    trigger: 'blur',
+    validator: (rule, value, cb) => {
+      if (isBlank(value)) return cb()
+      if (!/^[0-9A-Z]{15}$|^[0-9A-HJ-NPQRTUWXY]{18}$|^[0-9A-Z]{20}$/.test(String(value).trim().toUpperCase())) return cb(new Error(msg))
+      cb()
+    },
+  }],
+  // 电话（手机或固话）：手机 1[3-9]xxxxxxxxx；固话 区号-号码（区号 3-4 位，号码 6-8 位，允许分机）
+  phoneOrTel: (msg = '请输入正确的电话号码') => [{
+    trigger: 'blur',
+    validator: (rule, value, cb) => {
+      if (isBlank(value)) return cb()
+      const v = String(value).trim()
+      if (!/^1[3-9]\d{9}$/.test(v) && !/^0\d{2,3}-?\d{6,8}(-\d{1,5})?$/.test(v)) return cb(new Error(msg))
+      cb()
+    },
+  }],
+  // 条件必填 / 依赖校验基元：predicate() 为真且字段为空才报错。
+  // 用法：rules.xxx = commonRules.requiredWhen(() => form.warehouse === 'SCRAP', '报废仓必须填写报废原因')
+  requiredWhen: (predicate, msg = '此字段在当前条件下为必填') => [{
+    validator: (rule, value, cb) => (predicate() && isBlank(value)) ? cb(new Error(msg)) : cb(),
+  }],
+  // 数值范围校验（金额/数量通用）：空值放行（是否必填由调用方另配 required），越界报错
+  amountRange: (min = 0, max = null, msg) => [{
+    validator: (rule, value, cb) => {
+      if (isBlank(value)) return cb()
+      const n = Number(value)
+      if (!isFinite(n)) return cb(new Error('请输入数字'))
+      if (n < min) return cb(new Error(msg || `不能小于 ${min}`))
+      if (max != null && n > max) return cb(new Error(msg || `不能大于 ${max}`))
+      cb()
+    },
+  }],
 }
 
 // 按表单类型的联动规则
@@ -319,6 +376,11 @@ const formTypeRules = {
   INVOICE_CERTIFY: {
     certifyPeriod: commonRules.date('请选择认证所属期'),
   },
+  // 合并底稿新建：期间 value-format=YYYYMM（6 位数字），后端 consolidateCreate 同口径要求非空
+  GLEX_CONSOLIDATE: {
+    period: [{ required: true, message: '请选择期间', validator: requiredValidator('请选择期间') },
+      { pattern: /^\d{6}$/, message: '期间格式应为 YYYYMM（如 202610）', trigger: 'blur' }],
+  },
   INVOICE_FILING: {
     summaryPeriod: commonRules.date('请选择申报期间'),
   },
@@ -334,6 +396,83 @@ const formTypeRules = {
     toleranceType: commonRules.select('请选择容差类型'),
     toleranceValue: [{ required: true, type: 'number', min: 0, message: '请输入容差值' }],
   },
+  // ================= 主数据（第1批 P0）：供应商 / 客户 / 供应商子表 =================
+  // 供应商基本信息 Tab：编码/名称必填；信用代码与税号「选填但填了就必须合规」——
+  // jakarta/前端 pattern 对空串天然放行，故基座侧只挂格式校验，必填由页面 rules 另配。
+  SUPPLIER: {
+    supplierCode: [{ required: true, message: '请输入供应商编码', validator: requiredValidator('请输入供应商编码') },
+      { max: 64, message: '供应商编码最多 64 个字符', trigger: 'blur' }],
+    supplierName: [{ required: true, message: '请输入供应商名称', validator: requiredValidator('请输入供应商名称') },
+      { max: 128, message: '供应商名称最多 128 个字符', trigger: 'blur' }],
+    creditCode: commonRules.taxNo('统一社会信用代码应为 18 位（数字+大写字母）'),
+    taxNo: commonRules.taxNoAny('税号应为 15/18/20 位数字或大写字母'),
+    tel: commonRules.phoneOrTel('请输入正确的电话号码（固话需含区号，如 0731-88888888）'),
+    address: commonRules.maxLength(255),
+  },
+  // 供应商子表-银行账户：账号格式 6-30 位数字（与 md_supplier_bank 后端 @Pattern 同口径）
+  SUPPLIER_BANK: {
+    bankName: [{ required: true, message: '请输入开户行', validator: requiredValidator('请输入开户行') }],
+    bankAccount: [{ required: true, message: '请输入银行账号', validator: requiredValidator('请输入银行账号') },
+      { pattern: /^\d{6,30}$/, message: '银行账号应为 6-30 位数字', trigger: 'blur' }],
+  },
+  // 供应商子表-联系人：电话/邮箱选填但填了就必须合规
+  SUPPLIER_CONTACT: {
+    contactName: [{ required: true, message: '请输入联系人姓名', validator: requiredValidator('请输入联系人姓名') }],
+    phone: commonRules.phoneOrTel('请输入正确的联系电话'),
+    email: commonRules.email('请输入正确的邮箱'),
+  },
+  // 供应商子表-资质证照：有效期至不得早于生效日（跨字段勾稽，闭包由页面注入）
+  SUPPLIER_QUAL: {
+    qualName: [{ required: true, message: '请输入证照名称', validator: requiredValidator('请输入证照名称') }],
+  },
+  // 客户/往来单位：编码系统生成只读；名称/类型必填；电话邮箱选填但校验格式
+  CUSTOMER: {
+    customerName: [{ required: true, message: '请输入客户名称', validator: requiredValidator('请输入客户名称') },
+      { max: 128, message: '客户名称最多 128 个字符', trigger: 'blur' }],
+    customerType: commonRules.select('请选择往来类型'),
+    contactPhone: commonRules.phoneOrTel('请输入正确的联系电话'),
+    email: commonRules.email('请输入正确的邮箱'),
+  },
+}
+
+/**
+ * 跑 el-form 校验，失败时错误自动落到对应表单项（EP 行为）。
+ * @returns {Promise<boolean>} true=通过；false=有字段不合法（已向用户展示）
+ * 与 BCP formRules.js 的 validateForm 同构（两仓同一套 API）。
+ */
+export async function validateForm(formRef) {
+  if (!formRef) return true
+  try {
+    await formRef.validate()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 发票价税勾稽（第1批 P0）：价税合计 = 未税金额 + 税额，容差 1 分。
+ * 后端 InvoiceService.requireManualHeader/create 已有同口径拦截，这里是第一道闸——
+ * 录入当时就告知，避免提交后拿 400。三元组互为依赖，勾稽 validator 同时挂三个字段，
+ * 任一项 blur 都会连带重校（async-validator 的 validator 拿不到 form 其他字段，故用闭包注入）。
+ */
+export function invoiceAmountMatch(getForm, msg) {
+  const check = (rule, value, cb) => {
+    const f = getForm() || {}
+    const a = Number(f.amount)
+    const n = Number(f.netAmount)
+    const t = Number(f.taxAmount)
+    if (![a, n, t].every((x) => Number.isFinite(x))) return cb() // 缺项交给各字段必填规则报
+    if (Math.abs(a - (n + t)) > 0.01) {
+      return cb(new Error(msg || `价税合计应为 未税金额+税额 = ${(n + t).toFixed(2)}，当前 ${a.toFixed(2)}`))
+    }
+    cb()
+  }
+  return {
+    amount: [{ validator: check }],
+    netAmount: [{ validator: check }],
+    taxAmount: [{ validator: check }],
+  }
 }
 
 export function useFormRules(formType) {

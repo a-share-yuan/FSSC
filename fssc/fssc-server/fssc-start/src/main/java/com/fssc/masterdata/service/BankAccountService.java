@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -96,6 +99,24 @@ public class BankAccountService {
                 .ne(e.getId() != null, MdBankAccount::getId, e.getId()));
     }
 
+    /**
+     * P0 资金路由：银行账号同租户唯一——Bean Validation 只能校验单字段形态，
+     * 「同号重复登记」必须查库，放这里兜底（与前后端格式校验构成唯一性闸）。
+     */
+    private void assertBankAccountUnique(MdBankAccount e) {
+        if (!StringUtils.hasText(e.getBankAccount())) {
+            return;
+        }
+        String acct = e.getBankAccount().trim();
+        long dup = mapper.selectCount(new LambdaQueryWrapper<MdBankAccount>()
+                .eq(MdBankAccount::getBankAccount, acct)
+                .ne(e.getId() != null, MdBankAccount::getId, e.getId()));
+        if (dup > 0) {
+            throw new BizException(ErrorCode.DATA_ALREADY_EXISTS,
+                    "银行账号 [" + acct + "] 已存在，同一账号不能重复登记（如确属换户请先停用原账户）");
+        }
+    }
+
     public Long create(MdBankAccount e) {
         e.setId(null);
         if (e.getStatus() == null) {
@@ -120,6 +141,7 @@ public class BankAccountService {
         if (!StringUtils.hasText(e.getBankAccount())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "银行账号(bankAccount)不能为空");
         }
+        assertBankAccountUnique(e);
         // D-DEC-158：账户性质必填 + 一司一基本户 + 默认账户唯一
         assertAccountType(e, e.getCompanyId(), true);
         enforceSingleDefault(e, e.getCompanyId());
@@ -155,6 +177,7 @@ public class BankAccountService {
         Long companyId = e.getCompanyId() != null ? e.getCompanyId() : (old == null ? null : old.getCompanyId());
         assertAccountType(e, companyId, false);
         enforceSingleDefault(e, companyId);
+        assertBankAccountUnique(e);
         mapper.updateById(e);
         if (old == null) {
             return;

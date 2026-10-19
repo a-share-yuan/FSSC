@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -57,6 +60,7 @@ public class SupplierService {
         AssertUtil.notBlank(e.getSupplierCode(), ErrorCode.PARAM_INVALID, "供应商编码必填");
         AssertUtil.notBlank(e.getSupplierName(), ErrorCode.PARAM_INVALID, "供应商名称必填");
         assertCodeUnique(e.getSupplierCode(), null);
+        assertTaxIdentityUnique(e, null);
         e.setId(null);
         // 建档落「未核准(PENDING)」状态位，不再发起 MD_MASTER 审批流；由持核准权限的岗位
         // 经 POST /{id}/approve 把状态位翻到 ACTIVE（页面「核准」按钮）。
@@ -79,6 +83,7 @@ public class SupplierService {
         if (StrUtil.isNotBlank(e.getSupplierCode())) {
             assertCodeUnique(e.getSupplierCode(), e.getId());
         }
+        assertTaxIdentityUnique(e, e.getId());
         mapper.updateById(e);
     }
 
@@ -88,6 +93,23 @@ public class SupplierService {
                 .eq(MdSupplier::getSupplierCode, code)
                 .ne(selfId != null, MdSupplier::getId, selfId));
         AssertUtil.isTrue(n == null || n == 0, ErrorCode.PARAM_INVALID, "供应商编码已存在: " + code);
+    }
+
+    /**
+     * 第1批 P0：税号/统一社会信用代码唯一（不含自身）——同一法人重复建档会导致
+     * 付款对象重复、对账串档、发票查验重复预警。选填字段只在非空时查重。
+     */
+    private void assertTaxIdentityUnique(MdSupplier e, Long selfId) {
+        assertOneFieldUnique(e.getTaxNo(), MdSupplier::getTaxNo, selfId, "税号");
+        assertOneFieldUnique(e.getCreditCode(), MdSupplier::getCreditCode, selfId, "统一社会信用代码");
+    }
+
+    private void assertOneFieldUnique(String value, com.baomidou.mybatisplus.core.toolkit.support.SFunction<MdSupplier, ?> col, Long selfId, String label) {
+        if (!StringUtils.hasText(value)) return; // 选填：留空不查重
+        Long n = mapper.selectCount(new LambdaQueryWrapper<MdSupplier>()
+                .eq(col, value.trim())
+                .ne(selfId != null, MdSupplier::getId, selfId));
+        AssertUtil.isTrue(n == null || n == 0, ErrorCode.PARAM_INVALID, label + "已被其他供应商档案占用: " + value.trim());
     }
 
     public void enable(Long id, boolean enable) {

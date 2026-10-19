@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="ext-interface-config">
     <el-tabs v-model="activeTab" @tab-change="loadData">
@@ -19,7 +22,7 @@
         <el-button type="info" link>{{ $t('system.extInterface.lnkCallLogs') }}</el-button>
       </router-link>
       <span style="margin-left: auto; color: #909399; font-size: 13px">
-        {{ $t('system.extInterface.statSummary', { v1: pager.total, v2: enabledCount }) }}</span>
+        {{ $t('system.extInterface.statSummary', { v1: pager.total.value, v2: enabledCount }) }}</span>
     </div>
 
     <!-- 表格 -->
@@ -291,7 +294,7 @@ const providerTagType = (p) => ({
 const providerText = computed(() => (p) => (p === 'CUSTOM' ? t('system.extInterface.catCustom') : (p || '-')))
 
 // R5-D-039：页签由 category 字典驱动（tabDefs 与会话内既有点位/图标一致），计数来自后端汇总
-const tabDefs = computed(() => (ref([
+const tabDefs = ref([
   { name: 'INVOICE_VERIFY', label: t('system.extInterface.catInvoiceVerify'), icon: CircleCheck },
   { name: 'INVOICE_CERTIFY', label: t('system.extInterface.catInvoiceAuth'), icon: Stamp },
   { name: 'OCR', label: t('system.extInterface.catOcrImage'), icon: Picture },
@@ -300,7 +303,7 @@ const tabDefs = computed(() => (ref([
   { name: 'LINKU', label: t('system.extInterface.catLinkUSupp'), icon: Connection },
   { name: 'BANK', label: t('system.extInterface.catBankDirect'), icon: Wallet },
   { name: 'ERP', label: t('system.extInterface.catErpGl'), icon: OfficeBuilding },
-])))
+])
 const visibleTabs = computed(() => (canList ? tabDefs.value : []))
 const catCounts = reactive({})
 const catCount = (name) => {

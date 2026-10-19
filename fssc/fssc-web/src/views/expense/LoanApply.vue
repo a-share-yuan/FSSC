@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <!-- RA-PAGE-21 2.2：借款/还款双形态并入一个菜单（原 225 还款管理退册）——切换即跳对侧路由，整页重挂重建单据状态 -->
   <el-radio-group :model-value="mode" size="small" style="margin-bottom:8px" @change="onModeSwitch">
@@ -28,8 +31,10 @@
             <el-col :xs="24" :md="12">
               <el-form-item :label="$t('expense.common.colCurrency')" prop="currencyCode">
                 <el-select v-model="b.form.bill.currencyCode" style="width: 100%">
-                  <el-option :label="$t('expense.common.curCny')" value="CNY" />
-                  <el-option :label="$t('expense.common.curUsd')" value="USD" />
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+
+                  
+                  
                 </el-select>
               </el-form-item>
             </el-col>
@@ -75,8 +80,7 @@
             <el-col :xs="24" :md="8">
               <el-form-item :label="$t('expense.claim.colPayMethod')" prop="payMethod">
                 <el-select v-model="b.form.bill.extJson.payMethod" style="width: 100%">
-                  <el-option :label="$t('expense.claim.optBankTransfer')" value="BANK" />
-                  <el-option :label="$t('expense.claim.optCash')" value="CASH" />
+                  <el-option v-for="o in payMethodOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -140,8 +144,7 @@
             <el-col :xs="24" :md="12">
               <el-form-item :label="$t('expense.loan.colRepayMethod')" prop="repayMethod">
                 <el-select v-model="b.form.bill.extJson.repayMethod" style="width: 100%">
-                  <el-option :label="$t('expense.claim.optBankTransfer')" value="BANK" />
-                  <el-option :label="$t('expense.claim.optCash')" value="CASH" />
+                  <el-option v-for="o in payMethodOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -179,8 +182,14 @@ import { billRules } from '@/constants/billRequired'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
+import { useBaseDict, PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM } from '@/composables/useBaseDict'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
+
+// 付款方式 / 偿还方式（2026-10-18 基础数据收口：二者同属 pay_method 字典）
+const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
+const payMethodOptions = payMethodDict.options
 const { saveFormHistory } = useAutoFill()
 // R4-02: BillTraceDrawer
 const traceVisible = ref(false)
@@ -226,7 +235,7 @@ const companyFormRef = ref(null)
 // P0 遗留专项：myPage 支持 minBalance 服务端过滤，未冲销借款列表切 server 模式
 const pager = useTablePager({ mode: 'server', storageKey: 'loan_apply' })
 const { pagedData } = pager
-const currentUserName = computed(() => (ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))))
+const currentUserName = ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))
 const repayDialog = ref(false)
 const b_loanCandidates = ref([])
 
@@ -367,7 +376,12 @@ function onModeSwitch(v) {
   if (v === props.mode) return
   router.push(v === 'REPAY' ? '/expense/repay' : '/expense/loan')
 }
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency({ i18nKeys: { CNY: 'expense.common.curCny', USD: 'expense.common.curUsd' }, format: 'name-code' })
+
 onMounted(async () => {
+  loadCurrency()
+  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
+  payMethodDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单（LOAN/REPAY 同组件，按单据实际类型载入）
   try {
     const eb = route.query.editBillId

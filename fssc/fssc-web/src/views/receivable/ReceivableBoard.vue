@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div :class="{ tabless: isSingle }">
     <el-card>
@@ -190,10 +193,12 @@
         <el-form-item label="应收金额" prop="amount"><el-input-number v-model="rForm.amount" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="币种" prop="currencyCode">
           <el-select v-model="rForm.currencyCode" style="width:100%">
-            <el-option label="人民币 CNY" value="CNY" />
-            <el-option label="美元 USD" value="USD" />
-            <el-option label="欧元 EUR" value="EUR" />
-            <el-option label="日元 JPY" value="JPY" />
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+
+            
+            
+            
+            
           </el-select>
         </el-form-item>
         <el-form-item label="到期日" prop="dueDate"><el-date-picker v-model="rForm.dueDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
@@ -243,6 +248,7 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
+import { useCurrency } from '@/composables/useCurrency'
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => { try { reload() } catch { /* noop */ } },
@@ -445,7 +451,10 @@ function reload() {
 // D-DEC-404 消费半：工作台「我的单据」台账跳转同写 kw 与 billNo/billId 两套取参口径（Workbench:269-275），
 // 本页此前完全不吃 URL——跳过来落的仍是全量首屏，"别的页面能定位到这一单"在此失明。
 const route = useRoute()
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
+
 onMounted(() => {
+  loadCurrency()
   const q = route.query || {}
   const deep = q.billNo || q.kw || q.billId
   if (deep) kw.value = String(deep)

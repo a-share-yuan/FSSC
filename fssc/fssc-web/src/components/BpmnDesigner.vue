@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="bpmn-designer">
     <!-- 只读提示：无编辑权限时给出明确说明，而不是让用户以为页面坏了 -->

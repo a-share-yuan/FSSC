@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -292,7 +295,11 @@ public class PayBatchBizAction implements WfBizAction {
             return;
         }
         try {
-            com.fssc.sharing.entity.OpVoucher v = opVoucherMapper.selectById(voucherId);
+            // ⑬（D-V4R-48，2026-10-16 PB202610160002 实测）：出证腿 generateTreasuryPayVoucher 是
+            // REQUIRES_NEW，其提交晚于本收尾事务（REPEATABLE READ）的快照——父事务里 selectById
+            // 恒读不到刚出的凭证行，误报「收尾凭证 id=x 查不到」并整段跳过关联落点。
+            // 与 GlBizAction（D-C2-2）同款修法：另起 REQUIRES_NEW 只读事务取新快照。
+            com.fssc.sharing.entity.OpVoucher v = voucherService.readVoucherCommitted(voucherId);
             if (v == null) {
                 log.warn("付款批次 {} 收尾凭证 id={} 查不到，跳过审批流↔凭证关联落点（D-DEC-114③）",
                         batch.getBatchNo(), voucherId);

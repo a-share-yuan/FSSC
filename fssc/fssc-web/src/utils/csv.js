@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * CSV 导出工具（P2-2 交互一致性：消除 26 页各自 copy-paste 的 CSV 逻辑）。
  * 所有自造 CRUD 页面统一调用此函数。

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="pc-wrap">
     <!-- 顶栏（平台端独立于租户 Layout：/api/tenant/** 对 PLATFORM Token 封闭，菜单树不可用） -->

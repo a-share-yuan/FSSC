@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <BillWorkbench ref="wb" :bill-type="'APPLY'" :sub-type="subType" :travel="isTravel" :before-submit="onBeforeSubmit">
     <template #create="b">
@@ -38,8 +41,10 @@
             <el-col :xs="24" :md="12">
 <el-form-item :label="$t('expense.common.colCurrency')" prop="currencyCode">
                 <el-select v-model="b.form.bill.currencyCode" style="width: 100%">
-                  <el-option :label="$t('expense.common.curCny')" value="CNY" />
-                  <el-option :label="$t('expense.common.curUsd')" value="USD" />
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+
+                  
+                  
                 </el-select>
               </el-form-item>
             </el-col>
@@ -51,13 +56,13 @@
             <el-col :xs="24" :md="12">
 <el-form-item :label="$t('expense.claim.colBudgetYear')" prop="periodYear">
                 <el-select v-model="b.form.bill.periodYear" style="width: 100%">
-                  <el-option v-for="y in years" :key="y" :label="$t('expense.claim.optYear')" :value="y" />
+                  <el-option v-for="y in years" :key="y" :label="$t('expense.claim.optYear', { y })" :value="y" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
               <el-form-item :label="$t('expense.common.colTitle')" prop="title">
-                <el-input v-model="b.form.bill.title" :placeholder="$t('expense.preapply.phTitleBySubType')" />
+                <el-input v-model="b.form.bill.title" :placeholder="$t('expense.preapply.phTitleBySubType', { v1: subTypeLabel })" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -75,9 +80,7 @@
             <el-col :xs="24" :md="8">
               <el-form-item :label="$t('expense.travelClaim.colTripType')" prop="extJson.travelType">
                 <el-select v-model="b.form.bill.extJson.travelType" style="width: 100%">
-                  <el-option :label="$t('expense.preapply.optDomesticTrip')" value="DOMESTIC" />
-                  <el-option :label="$t('expense.preapply.optAbroadTrip')" value="ABROAD" />
-                  <el-option :label="$t('expense.preapply.optThreeCityTrip')" value="TRIAREA" />
+                  <el-option v-for="o in travelTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -161,16 +164,14 @@
           <el-table-column :label="$t('expense.preapply.colTrafficType')" width="100"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.colTrafficType') }}</template>
             <template #default="{ row }">
               <el-select v-model="row.trafficType" style="width: 100%">
-                <el-option :label="$t('expense.preapply.optPlane')" value="AIR" /><el-option :label="$t('expense.preapply.optHighSpeedRail')" value="RAIL" />
-                <el-option :label="$t('expense.preapply.optTrain')" value="TRAIN" /><el-option :label="$t('expense.preapply.optCar')" value="CAR" /><el-option :label="$t('expense.preapply.optShip')" value="SHIP" />
+                <el-option v-for="o in trafficOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </template>
           </el-table-column>
           <el-table-column :label="$t('expense.preapply.lblSeatClass')" width="100"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.lblSeatClass') }}</template>
             <template #default="{ row }">
               <el-select v-model="row.trafficClass" style="width: 100%">
-                <el-option :label="$t('expense.preapply.optEconomyClass')" value="ECONOMY" /><el-option :label="$t('expense.preapply.optBusinessClass')" value="BUSINESS" /><el-option :label="$t('expense.preapply.optFirstClass')" value="FIRST" />
-                <el-option :label="$t('expense.preapply.optSecondClassSeat')" value="SECOND" /><el-option :label="$t('expense.preapply.optFirstClassSeat')" value="FIRST_SEAT" />
+                <el-option v-for="o in seatOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </template>
           </el-table-column>
@@ -229,7 +230,7 @@
       <el-card v-if="isTrain" :header="$t('expense.preapply.secTrainingInfo')" style="margin-top: 12px">
         <el-form ref="trainFormRef" :rules="trainRules" :model="b.form.bill.extJson" label-width="110px" size="default">
           <el-row :gutter="12">
-            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblTrainType')" prop="trainType"><el-select v-model="b.form.bill.extJson.trainType" style="width:100%"><el-option :label="$t('expense.preapply.optInternalTraining')" value="INTERNAL" /><el-option :label="$t('expense.preapply.optExternalTraining')" value="EXTERNAL" /><el-option :label="$t('expense.preapply.optPublicCourse')" value="PUBLIC" /></el-select></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblTrainType')" prop="trainType"><el-select v-model="b.form.bill.extJson.trainType" style="width:100%"><el-option v-for="o in trainingTypeOptions" :key="o.value" :label="o.label" :value="o.value" /></el-select></el-form-item></el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblTrainName')" prop="trainName"><el-input v-model="b.form.bill.extJson.trainName" /></el-form-item></el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.lblTrainPlace')" prop="trainPlace"><el-input v-model="b.form.bill.extJson.trainPlace" /></el-form-item></el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.preapply.colStartDate')" prop="startDate"><el-date-picker v-model="b.form.bill.extJson.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" @change="calcTrain(b)" /></el-form-item></el-col>
@@ -268,10 +269,10 @@
             <template #default="{ row }"><el-select v-model="row.toCityId" filterable style="width:100%"><el-option v-for="c in b.cities" :key="c.id" :label="c.cityName" :value="c.id" /></el-select></template>
           </el-table-column>
           <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.preapply.colTripMode')" width="100"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.colTripMode') }}</template>
-            <template #default="{ row }"><el-select v-model="row.trafficType" style="width:100%"><el-option :label="$t('expense.preapply.optPlane')" value="AIR" /><el-option :label="$t('expense.preapply.optHighSpeedRail')" value="RAIL" /><el-option :label="$t('expense.preapply.optTrain')" value="TRAIN" /><el-option :label="$t('expense.preapply.optCar')" value="CAR" /></el-select></template>
+            <template #default="{ row }"><el-select v-model="row.trafficType" style="width:100%"><el-option v-for="o in trafficOptions" :key="o.value" :label="o.label" :value="o.value" /></el-select></template>
           </el-table-column>
           <el-table-column v-if="b.form.bill.extJson.travelFlag" :label="$t('expense.preapply.lblCabinClass')" width="100"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.preapply.lblCabinClass') }}</template>
-            <template #default="{ row }"><el-select v-model="row.trafficClass" style="width:100%"><el-option :label="$t('expense.preapply.optEconomyClass')" value="ECONOMY" /><el-option :label="$t('expense.preapply.optBusinessClass')" value="BUSINESS" /><el-option :label="$t('expense.preapply.optSecondClassSeat')" value="SECOND" /></el-select></template>
+            <template #default="{ row }"><el-select v-model="row.trafficClass" style="width:100%"><el-option v-for="o in seatOptions" :key="o.value" :label="o.label" :value="o.value" /></el-select></template>
           </el-table-column>
           <el-table-column :label="$t('expense.travelClaim.tabTrainFee')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.trainFee" :min="0" :precision="2" style="width:100%" @change="syncTrainLine(b)" /></template>
@@ -301,9 +302,9 @@
            两列还挂必填红星，一保存就红字「缺少权限：exp:share:update」且分摊行不落库。
            现按权限渲染：能读才显示，能写才可编辑（与发票补录页签同手法）。 -->
       <el-card v-if="canViewShares" :header="$t('expense.preapply.secAllocation')" style="margin-top: 12px">
-        <el-form :model="b.form" label-width="110px" size="default">
+        <el-form :model="shareForm" :rules="shareTypeRules" label-width="110px" size="default">
           <!-- 单选组恒有默认值，不存在漏填，故不加红星 -->
-          <el-form-item :label="$t('expense.claim.colBearingType')">
+          <el-form-item :label="$t('expense.claim.colBearingType')" prop="shareType">
             <el-radio-group v-model="shareType" :disabled="!canEditShares">
               <el-radio-button value="COST_CENTER">{{ $t('expense.claim.optCostCenterBearing') }}</el-radio-button>
               <el-radio-button value="PROJECT">{{ $t('expense.claim.optProjectBearing') }}</el-radio-button>
@@ -374,6 +375,8 @@ import { userApi, masterApi, store } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { useAutoFill } from '@/composables/useAutoFill'
 import { useI18n } from 'vue-i18n'
+import { useBaseDict, TRAFFIC_LOCAL, TRAFFIC_I18N, SEAT_LOCAL, SEAT_I18N, TRAINING_LOCAL, TRAINING_I18N } from '@/composables/useBaseDict'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 const { saveFormHistory } = useAutoFill()
@@ -453,6 +456,10 @@ const trainRules = computed(() => ({
 
 const users = ref([])
 const shareType = ref('COST_CENTER')
+// 第2批：分摊方式恒有默认值（COST_CENTER）——挂 rules 纳入中央框架视野；
+// computed 包装只为给 el-form 一个可校验 model，v-model 仍绑 shareType ref 不动
+const shareForm = computed(() => ({ shareType: shareType.value }))
+const shareTypeRules = { shareType: commonRules.select('请选择分摊方式') }
 const persons = ref([newPerson()])
 const calcLoading = ref(false)
 const stdCache = ref(null)
@@ -481,7 +488,7 @@ async function autoCalcTravel(b) {
     ElMessage.success(t('expense.preapply.msgAutoTripCalculated', { v1: filled }))
   } catch (e) { ElMessage.error(e.message) } finally { calcLoading.value = false }
 }
-const currentUserName = computed(() => (ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))))
+const currentUserName = ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))
 
 function newPerson() {
   return { name: '', startDate: '', endDate: '', days: 0, fromCityId: null, toCityId: null, trafficType: 'AIR', trafficClass: 'ECONOMY', trainFee: 0, trafficFee: 0, hotelFee: 0, localTrafficFee: 0, allowanceFee: 0 }
@@ -695,7 +702,30 @@ function openRowDetail(row) {
 
 const route = useRoute()
 const router = useRouter()
+// 出差类型（travel_type）：字典定值域 + i18n 定文案
+const travelTypeDict = useBaseDict('travel_type',
+  { DOMESTIC: '境内', ABROAD: '境外', TRIAREA: '三地' },
+  { DOMESTIC: 'expense.preapply.optDomesticTrip', ABROAD: 'expense.preapply.optAbroadTrip', TRIAREA: 'expense.preapply.optThreeCityTrip' })
+const travelTypeOptions = travelTypeDict.options
+
+// 交通方式 / 舱位席别 / 培训类型（2026-10-18 基础数据收口，值域改为后台可维护）
+const trafficDict = useBaseDict('traffic_mode', TRAFFIC_LOCAL, TRAFFIC_I18N)
+const trafficOptions = trafficDict.options
+const seatDict = useBaseDict('seat_class', SEAT_LOCAL, SEAT_I18N)
+const seatOptions = seatDict.options
+const trainingTypeDict = useBaseDict('training_type', TRAINING_LOCAL, TRAINING_I18N)
+const trainingTypeOptions = trainingTypeDict.options
+
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency({ i18nKeys: { CNY: 'expense.common.curCny', USD: 'expense.common.curUsd' }, format: 'name-code' })
+
 onMounted(async () => {
+  loadCurrency()
+  travelTypeDict.load()
+  // 【2026-10-18 基础数据收口】交通方式/舱位席别/培训类型改为读 sys_dict，
+  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致。
+  trafficDict.load()
+  seatDict.load()
+  trainingTypeDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单（子类型页面壳由路由保证）
   try {
     const eb = route.query.editBillId

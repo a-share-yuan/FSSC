@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -293,6 +296,7 @@ public class SupplierReconController {
         }
         Map<String, Object> merged = mergeEnvelope(rawBody);
         Long linkuReconId = linkuId(merged);
+        String idemKey = callbackIdempotencyKey(req, merged, linkuReconId);
 
         // 0) 未配置 secret：拒绝所有回调（fail-fast）。错误体带自诊断口径，对端不必翻源码。
         if (!StringUtils.hasText(linkuSecret)) {
@@ -314,20 +318,20 @@ public class SupplierReconController {
             return Result.fail(status, sig.isTimestampError() ? "INVALID_LINKU_TIMESTAMP" : "INVALID_LINKU_SIGNATURE");
         }
 
-        // 2) 幂等：同事件同 linkuReconId 已成功处理过则跳过，避免重复副作用
-        if (alreadyProcessed(eventType, linkuReconId)) {
+        // 2) 幂等：同事件同幂等键已成功处理过则跳过，避免重复副作用
+        if (alreadyProcessed(eventType, idemKey, linkuReconId)) {
             return Result.success();
         }
 
         // 3) 执行业务（匿名租户上下文）
         try {
             TenantContext.runIgnoreTenant(() -> consumer.accept(merged));
-            writeLog(eventType, linkuReconId, merged, "SUCCESS", null, System.currentTimeMillis() - start);
+            writeLog(eventType, linkuReconId, idemKey, merged, "SUCCESS", null, System.currentTimeMillis() - start);
             return Result.success();
         } catch (Exception ex) {
             log.error("LinkU 回调处理失败 eventType={} linkuReconId={} err={}",
                     eventType, linkuReconId, ex.getMessage(), ex);
-            writeLog(eventType, linkuReconId, merged, "FAILED",
+            writeLog(eventType, linkuReconId, idemKey, merged, "FAILED",
                     String.valueOf(ex.getMessage()), System.currentTimeMillis() - start);
             resp.setStatus(500);
             return Result.fail(500, "LINKU_CALLBACK_FAILED");
@@ -418,12 +422,13 @@ public class SupplierReconController {
     }
 
     /** 落 linku_sync_log 审计留痕（仅在验签通过后的处理结果上调用） */
-    private void writeLog(String eventType, Long linkuReconId, Map<String, Object> m,
+    private void writeLog(String eventType, Long linkuReconId, String idempotencyKey, Map<String, Object> m,
                           String status, String errorMsg, long durationMs) {
         try {
             LinkuSyncLog log = new LinkuSyncLog();
             log.setEventType(eventType);
             log.setLinkuReconId(linkuReconId);
+            log.setIdempotencyKey(idempotencyKey);
             log.setSupplierId(parseSupplierId(m.get("partnerId")));
             log.setRequestBody(toJson(m));
             log.setResponseStatus(status);
@@ -431,19 +436,60 @@ public class SupplierReconController {
             log.setDurationMs((int) durationMs);
             log.setCreateTime(LocalDateTime.now());
             linkuSyncLogMapper.insert(log);
+        } catch (org.springframework.dao.DuplicateKeyException dup) {
+            // D-V5R-03：撞 uk_linku_sync_log_idem 说明"同一幂等键已有一条 SUCCESS 留痕"，
+            // 即本事件已被处理过一次（重复投递/并发投递）。这属于幂等命中，不是故障，
+            // 不能按普通异常吞掉 —— 否则"留痕丢失"会被伪装成"从未收到过该回调"。
+            log.info("[LinkU回调] 幂等命中：同一幂等键已有成功留痕，本次不再重复落库 eventType={} idemKey={}",
+                    eventType, idempotencyKey);
         } catch (Exception ex) {
             log.error("LinkU 回写 linku_sync_log 失败: {}", ex.getMessage(), ex);
         }
     }
 
-    private boolean alreadyProcessed(String eventType, Long linkuReconId) {
-        if (eventType == null || linkuReconId == null) {
+    /**
+     * 回调幂等键（D-V5R-03）。
+     *
+     * <p>取键顺序：① 信封 body 的 {@code idempotencyKey}；② BCP 投递头 {@code X-BCP-Event-Id}
+     * （每条发件箱事件唯一：重投同一事件取值相同 ⇒ 可去重；不同事件取值不同 ⇒ 不互撞）；
+     * ③ 回落到 {@code linkuReconId}。三者皆空才退化为"无幂等保护"。</p>
+     *
+     * <p>该键写入 {@code linku_sync_log.idempotency_key}，与 event_type 合成生成列
+     * {@code active_idem_key}。修复前该列恒为 NULL ⇒ 生成列恒等于
+     * {@code "RECON_MATCH:"}（冒号后为空），第二条成功记录必撞唯一键。</p>
+     */
+    private String callbackIdempotencyKey(HttpServletRequest req, Map<String, Object> m, Long linkuReconId) {
+        String k = str(m, "idempotencyKey");
+        if (!StringUtils.hasText(k)) {
+            k = req.getHeader("X-BCP-Event-Id");
+        }
+        if (!StringUtils.hasText(k) && linkuReconId != null) {
+            k = "R-" + linkuReconId;
+        }
+        if (!StringUtils.hasText(k)) {
+            return null;
+        }
+        // ':' 是 active_idem_key 的分隔符，键体内不得出现；列宽 128，留出 event_type 前缀余量
+        String normalized = k.replace(':', '-').trim();
+        return normalized.length() <= 110 ? normalized : normalized.substring(0, 110);
+    }
+
+    private boolean alreadyProcessed(String eventType, String idempotencyKey, Long linkuReconId) {
+        if (eventType == null) {
             return false;
         }
-        Long cnt = linkuSyncLogMapper.selectCount(new LambdaQueryWrapper<LinkuSyncLog>()
+        LambdaQueryWrapper<LinkuSyncLog> w = new LambdaQueryWrapper<LinkuSyncLog>()
                 .eq(LinkuSyncLog::getEventType, eventType)
-                .eq(LinkuSyncLog::getLinkuReconId, linkuReconId)
-                .eq(LinkuSyncLog::getResponseStatus, "SUCCESS"));
+                .eq(LinkuSyncLog::getResponseStatus, "SUCCESS");
+        if (StringUtils.hasText(idempotencyKey)) {
+            w.eq(LinkuSyncLog::getIdempotencyKey, idempotencyKey);
+        } else if (linkuReconId != null) {
+            w.eq(LinkuSyncLog::getLinkuReconId, linkuReconId);
+        } else {
+            // 既无幂等键也无对账单ID：无法判定是否重复，按"未处理"放行（后续照常落留痕）
+            return false;
+        }
+        Long cnt = linkuSyncLogMapper.selectCount(w);
         return cnt != null && cnt > 0;
     }
 

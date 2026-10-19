@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="flow-config-page">
     <el-row class="cm-target-flow" :gutter="16">
@@ -221,6 +224,15 @@
                   <template #default="{ row }">{{ flowTypeLabel(row.bizType) }}</template>
                 </el-table-column>
                 <el-table-column prop="configName" :label="$t('system.flow.colCfgName')" min-width="140" />
+                <el-table-column prop="modelKey" :label="$t('system.flow.colModelKey', '流程模型')" min-width="130" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    <span v-if="row.modelKey">{{ modelLabel(row.modelKey) }}</span>
+                    <el-tag v-else size="small" type="danger">未设模型</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="subType" :label="$t('system.flow.colSubType', '单据子类')" width="110">
+                  <template #default="{ row }">{{ row.subType || '全部' }}</template>
+                </el-table-column>
                 <el-table-column prop="amountMin" :label="$t('system.flow.colAmountMin')" width="100" :formatter="(r,c,v) => formatMoney(v)" />
                 <el-table-column prop="amountMax" :label="$t('system.flow.colAmountMax')" width="100" :formatter="(r,c,v) => formatMoney(v)" />
                 <el-table-column prop="priority" :label="$t('system.flow.colPriority')" width="80" />
@@ -559,6 +571,12 @@
         <el-form-item :label="$t('system.flow.lblBindModel')">
           <el-input :model-value="selectedModel?.modelKey" disabled />
         </el-form-item>
+        <el-form-item :label="$t('system.flow.colSubType', '单据子类')">
+          <el-input v-model="bindingDialog.form.subType" placeholder="留空=适用于该单据类型的全部子类；填值则仅该子类命中" />
+          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
+            {{ $t('system.flow.txtSubTypeRoute', '路由时子类精确命中优先于通配；同一优先级再按金额区间与优先级取第一条') }}
+          </div>
+        </el-form-item>
         <el-form-item :label="$t('system.flow.lblAmountMinIncl')">
           <el-input-number v-model="bindingDialog.form.amountMin" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
@@ -835,6 +853,27 @@ import SkeletonList from '../../components/SkeletonList.vue'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { enumLabel, bizTypeLabel, modelCategoryLabel, wfActionLabel, BIZ_TYPE, WF_MODEL_CATEGORY, ASSIGN_TYPE, TIMEOUT_ACTION, HANDLING_MODE, MULTI_TYPE } from '@/constants/enums.js'
+// 【2026-10-15枚举收口】字典读取层：标签「字典优先、本地常量兜底」，接口不可用时行为与改造前逐字一致
+import { useDict } from '@/composables/useDict.js'
+// 第1批：多实例相关标签走字典
+const multiTypeDict = useDict('wf_node_multi_type', MULTI_TYPE)
+// 第2批：取人方式 / 取人档位 / 超时处置三处也走字典（字典为 V1.4.69 灌入，取值与本地常量一致）
+//   —— 本地常量继续作为兜底常量传入，两边取值若有差异，以字典为准（运营可维护的权威源）
+const assignTypeDict = useDict('wf_assign_type', ASSIGN_TYPE)
+const handlingModeDict = useDict('wf_handling_mode', HANDLING_MODE)
+const timeoutActionDict = useDict('wf_timeout_action', TIMEOUT_ACTION)
+
+/** 统一触发本组件用到的全部枚举字典加载（第1批 1 个 + 第2批 3 个）。
+ *  useDict 内部有 inflight 去重与 fail-soft，这里只负责"一次触发、全部并发"。
+ *   不 await、不catch 抛出：字典不可用时标签函数已回落本地常量，界面零影响。 */
+function useDictsReady() {
+  return Promise.all([
+    multiTypeDict.load(),
+    assignTypeDict.load(),
+    handlingModeDict.load(),
+    timeoutActionDict.load(),
+  ])
+}
 import CoachMark from '@/components/CoachMark.vue'
 import RoleHolderHint from '@/components/common/RoleHolderHint.vue'
 import { formatMoney, formatDateTime, showRowDetail } from '@/utils/format'
@@ -931,6 +970,16 @@ function modelStatusText(m) {
 function modelStatusType(m) {
   if (m?.status === 'OFFLINE') return 'danger'
   return isModelPublished(m) ? 'success' : 'info'
+}
+
+/**
+ * 绑定列表里的「流程模型」列：modelKey 是路由目标（resolveModelKey 的返回值），
+ * 但键本身不直观（CLAIM / TR_SEAL_CHANGE…），补一个可读名。
+ * 找不到对应模型时如实回退为键本身并标红——那是脏数据，不该被静默显示成一个正常名字。
+ */
+function modelLabel(modelKey) {
+  const m = models.value.find(x => x.modelKey === modelKey)
+  return m ? (m.modelName || modelKey) : modelKey
 }
 
 // 原本下拉只有这 14 项，而业务代码发起审批时传入的类型有 75+（采购订单 PURCHASE_ORDER_REVIEW、
@@ -1172,7 +1221,7 @@ function openBindingDialog(row) {
   Object.assign(bindingDialog, {
     visible: true, saving: false,
     form: row ? { ...row } : {
-      modelKey: selectedModel.value.modelKey, bizType: '', configName: '',
+      modelKey: selectedModel.value.modelKey, bizType: '', configName: '', subType: '',
       amountMin: null, amountMax: null, priority: 0, status: 'NORMAL',
     },
   })
@@ -1571,7 +1620,8 @@ function delegateScopeLabel(v) {
   return codes.map(c => bizTypeLabel(c)).join('、')
 }
 function assignTypeLabel(v) {
-  return enumLabel(ASSIGN_TYPE, v)
+  // 【第2批】字典优先；字典未到/失败 ⇒回落本地常量，行为与改造前一致
+  return assignTypeDict.label(v) || enumLabel(ASSIGN_TYPE, v)
 }
 function assignTypeTag(v) {
   return { USER: 'success', ROLE: 'primary', DEPT_HEAD: 'warning', INITIATOR: 'info', LEADER: 'warning',
@@ -1595,7 +1645,8 @@ function upLevelLabel(v) {
 }
 /** 取人方式：列/详情用。老后端不返回该字段时显示"自动指派"（等价 DB 默认值，不是缺数据） */
 function handlingModeLabel(v) {
-  return enumLabel(HANDLING_MODE, v || 'AUTO')
+  // 【第2批】字典优先；字典未到/失败 ⇒ 回落本地常量
+  return handlingModeDict.label(v || 'AUTO') || enumLabel(HANDLING_MODE, v || 'AUTO')
 }
 /** POOL 用 primary 色：它意味着该节点会有"待领取"任务停在池里，是运维要盯的状态 */
 function handlingModeTag(v) {
@@ -1603,11 +1654,23 @@ function handlingModeTag(v) {
   return m === 'PICK' ? 'warning' : m === 'POOL' ? 'primary' : 'info'
 }
 function timeoutActionLabel(v) {
-  return enumLabel(TIMEOUT_ACTION, v) || '—'
+  // 【第2批】字典优先；字典未到/失败 ⇒ 回落本地常量。
+  //  TIMEOUT_ACTION 在前端是「别名多对一」映射（NOTIFY/REMIND/URGE 都标"催办通知"），
+  //    而字典只登记后端真正读的值（含库中存量 16 个节点的 NOTIFY 旧拼写）。
+  //    两边标签有差异（如 AUTO_TRANSFER：前端"超时升级转办"vs 字典无此项），
+  //    故字典没命中时必须回落本地常量，否则存量别名会显示成英文码。
+  return timeoutActionDict.label(v) || enumLabel(TIMEOUT_ACTION, v) || '—'
 }
-/** 会签模式：ANY 为列默认值（普通单任务），显示"任一通过"而非空白 */
+/** 会签模式：ANY 为列默认值（普通单任务），显示"任一通过"而非空白
+ *
+ *  【2026-10-15 第1批枚举收口】标签改为「字典优先、本地常量兜底」：
+ *   字典 wf_node_multi_type（V1.4.67 灌入 4 项）的文案比本地常量更贴合业务
+ *   （字典："或签（任一人办理即可）"／常量："任一通过（单人办理）"），且字典由运营可维护。
+ *    但字典是**运行时远程数据**，接口不可用时必须回落本地常量 —— 否则配置页一打开就空白。
+ *   useDict 内部已做 fail-soft：加载中/失败/未配置 ⇒ 一律用本地常量，界面零变化。
+ */
 function multiTypeLabel(v) {
-  return enumLabel(MULTI_TYPE, v || 'ANY')
+  return multiTypeDict.label(v || 'ANY') || enumLabel(MULTI_TYPE, v || 'ANY')
 }
 /** ALL/SEQ/VOTE 都是多实例任务（前端会签进度/投票界面要据此渲染），用 warning 色提示"与单任务不同" */
 function multiTypeTag(v) {
@@ -1661,6 +1724,10 @@ function onFullscreenChange() {
 
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFullscreenChange)
+  // 【2026-10-15】取枚举字典（第1批会签模式 + 第2批取人方式/档位/超时处置）。
+  //   失败不阻断页面（useDict内部 fail-soft 回落本地常量），也不 await 到阻塞首屏——
+  //   标签函数是同步的，字典回来后 computed 自动刷新。
+  useDictsReady()
   loadModels().then(() => {
     if (filteredModels.value.length) selectModel(filteredModels.value[0])
   })

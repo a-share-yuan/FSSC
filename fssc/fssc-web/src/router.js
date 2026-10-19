@@ -1,7 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { store } from './api'
-import { hasAnyPerm } from './utils/perm'
+import { store, getMenuTree } from './api'
+import { hasAnyPerm, isSuperPerm } from './utils/perm'
+import { ROUTE_PERMS } from './router/routePerms'
 
 // 按业务域拆分的路由模块
 import expenseRoutes from './router/routes/expense'
@@ -73,7 +77,45 @@ const routes = [
 ]
 const router = createRouter({ history: createWebHashHistory(), routes })
 
-router.beforeEach((to) => {
+// ---- 全站页面级权限拦截（2026-10-16，R5-D-251 的补全） ----
+// 背景：此前守卫只消费 meta.perms，而大量路由未声明 ⇒ 无权限账号可 URL 直达
+// （如普通员工直达 /system/ext-interface，页面可渲染，仅靠页内接口 4030 兜底）。
+// 判定链（任一命中即放行）：
+//   ① 超管（*:*:* / isAdmin）放行；
+//   ② meta.perms（路由自声明，最高优先级，历史口径不变）；
+//   ③ ROUTE_PERMS[to.path]（sys_menu 权威映射：perms 多码任一 / feature_code 功能开关），
+//      映射由 fssc 库 sys_menu(status=1) 生成，与后端菜单树过滤口径一致；
+//   ④ 菜单树兜底：登录后 /tenant/system/menu/tree 返回的路径集合（角色-菜单授权判定，
+//      覆盖映射表 menuOnly 路径）。拉取失败 fail-open（可用性优先，后端 API 权限闸仍在）。
+// 放行例外：H5 端页面（深链详情由后端按单据参与人校验）、工作台（拦截回落点，必须可达）、
+// 个人中心 / 流程导航地图（工作台卡片全员入口）。
+const OPEN_PATHS = new Set(['/workbench', '/profile', '/process-nav'])
+
+let _menuPathCache = { token: '', promise: null }
+function menuPathSet() {
+  if (_menuPathCache.token !== store.token) _menuPathCache = { token: store.token, promise: null }
+  if (!_menuPathCache.promise) {
+    _menuPathCache.promise = getMenuTree()
+      .then((tree) => {
+        const s = new Set()
+        const walk = (ns) => (ns || []).forEach((n) => {
+          if (n.path) s.add(String(n.path).startsWith('/') ? n.path : '/' + n.path)
+          walk(n.children)
+        })
+        walk(tree)
+        return s
+      })
+      .catch(() => null)
+  }
+  return _menuPathCache.promise
+}
+
+function denyToWorkbench(msg) {
+  ElMessage.warning(msg || '无权限访问该页面，请联系管理员')
+  return '/workbench'
+}
+
+router.beforeEach(async (to) => {
   // R5-D-053：已登录再访登录页——直接回工作台并提示（避免二次登录后会话被顶）
   if ((to.path === '/login' || to.path === '/platform/login') && store.token) {
     ElMessage.warning('已登录，已跳转工作台')
@@ -85,14 +127,27 @@ router.beforeEach((to) => {
     ElMessage.warning('该页面仅平台管理员可用，已返回工作台')
     return store.user ? '/workbench' : '/login'
   }
-  // R5-D-251/258②：全局消费 meta.perms —— 此前守卫只看 public/token/platform，
-  // 路由上声明的 perms 是死元数据（finance.js 亦有注释确认），无权限账号可直达页面，
-  // 再被页内每个请求连环 4030 顶回。这里做页面级前置闸：未命中任一码即挡回工作台并提示。
+  // ===== 页面级权限三级判定 =====
+  if (to.meta.terminal === 'H5' || OPEN_PATHS.has(to.path)) return true
+  if (isSuperPerm()) return true
+  // ② 路由自声明 meta.perms
   const need = to.meta?.perms
-  if (Array.isArray(need) && need.length && !hasAnyPerm(need)) {
-    ElMessage.warning('无权限访问该页面，请联系管理员')
-    return '/workbench'
+  if (Array.isArray(need) && need.length) {
+    return hasAnyPerm(need) ? true : denyToWorkbench()
   }
+  // ③ sys_menu 权威映射（perms 多码任一命中 / feature_code 功能开关）
+  const entry = ROUTE_PERMS[to.path]
+  if (entry && Array.isArray(entry.perms) && entry.perms.length) {
+    return hasAnyPerm(entry.perms) ? true : denyToWorkbench()
+  }
+  if (entry && entry.feature) {
+    const feats = store.user?.features || []
+    if (!feats.includes(entry.feature)) return denyToWorkbench('当前账号未开通该功能，已返回工作台')
+    return true
+  }
+  // ④ 菜单树兜底（含映射表 menuOnly 路径的角色授权判定）
+  const paths = await menuPathSet()
+  if (paths && paths.size && !paths.has(to.path)) return denyToWorkbench()
   return true
 })
 

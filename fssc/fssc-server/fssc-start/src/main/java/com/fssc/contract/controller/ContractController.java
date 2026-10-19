@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.contract.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -124,8 +127,9 @@ public class ContractController {
     @OperLog(module = "CONTRACT", operType = "INSERT", desc = "新增合同付款条件")
     @PostMapping("/condition/create")
     public Result<Long> conditionCreate(@RequestBody ContPayCondition c) {
-        conditionMapper.insert(c);
-        return Result.success(c.getId());
+        // D-V4R-91：原为 conditionMapper.insert(c) 裸写零校验，
+        // 可灌入计划额 99999999 / 金额为 0 / 挂到别的公司合同下的脏数据。改走 Service 校验。
+        return Result.success(service.createPayCondition(c));
     }
 
     @RequiresPerm("contract:update")
@@ -147,8 +151,8 @@ public class ContractController {
     @OperLog(module = "CONTRACT", operType = "INSERT", desc = "新增合同支付记录")
     @PostMapping("/record/create")
     public Result<Long> recordCreate(@RequestBody ContPayRecord r) {
-        recordMapper.insert(r);
-        return Result.success(r.getId());
+        // D-V4R-91：原为 recordMapper.insert(r) 裸写零校验，付款台账金额可任意填。改走 Service 校验。
+        return Result.success(service.createPayRecord(r));
     }
 
     @RequiresPerm("contract:update")

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.receivable.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -99,8 +102,18 @@ public class RcReceivableService {
             com.fssc.framework.security.LoginUser lu = UserContext.get();
             if (lu != null) e.setCompanyId(lu.getCompanyId());
         }
-        e.setSourceDocType("SALES_ORDER");
-        e.setSourceDocId(e.getOrderId());
+        // D-V5R-06：原两行无条件写死 sourceDocType="SALES_ORDER"、sourceDocId=orderId。
+        // 手工提单（未选销售订单 ⇒ orderId 为 null）也会被标成"销售订单来源"且 source_doc_id 为 null，
+        // 于是：① BCP 侧无法区分「手工单本就无订单」与「系统漏填」；
+        //      ② AR 对账明细订单腿四列全 NULL 时无从判读是否缺陷。
+        // 改为按 orderId 有无如实标注（实体注释既有 SALES_ORDER/MANUAL 两个枚举，此前从未写过 MANUAL）。
+        if (e.getOrderId() != null) {
+            e.setSourceDocType("SALES_ORDER");
+            e.setSourceDocId(e.getOrderId());
+        } else {
+            e.setSourceDocType("MANUAL");
+            e.setSourceDocId(null);
+        }
         mapper.insert(e);
         // P4：应收单生成后发起 OTC 收款审批流（OTC03 应收账款收款，bizType=RECEIVABLE），
         // procInstId 由 wf_instance 留存，审批通过后共享往来结算岗核销并推送 IFS 生成记账凭证。

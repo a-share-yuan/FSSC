@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="app-shell">
     <!-- 后端未连接：全局置顶横幅（登录页也可见，因为后端没起时登录同样调不通） -->
@@ -25,10 +28,34 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { BACKEND_TARGET, backend, probeBackend } from './api'
+import { BACKEND_TARGET, backend, probeBackend, store } from './api'
+import { preloadBuiltinDicts, PRELOAD_DICT_TYPES } from './composables/useDict.js'
+// 【2026-10-16 第 4 批】enums.js 的 66 个展示字典（enum_*）也要预热：
+// enumLabel() 同为纯同步函数，被各页直接调用，没有生命周期可挂。
+import { ENUM_DICT_TYPES } from './constants/enums.js'
 
 const retrying = ref(false)
 let timer = null
+
+/**
+ * 【2026-10-15 第 3 批】全局预热内置字典。
+ *
+ * 为什么挂在这里：billStatus.js 的 statusLabel()/statusType() 是**纯同步函数**，
+ * 被 55 个业务文件直接调用，没有组件生命周期可挂 onMounted —— 逐文件改造既不现实也无必要，
+ * 统一在根组件预热一次，后续所有同步调用共享内存缓存。
+ *
+ * 三点防护：
+ *   ① 未登录不请求（避免每次开登录页都吃一次 401）；
+ *   ② 后端离线不请求（后端都没起来，请求必然失败）；
+ *   ③ 失败完全静默 —— useDict 内部 fail-soft，界面回落本地常量，与改造前逐字一致。
+ */
+async function warmDicts() {
+  if (!store.token || !backend.online) return
+  try {
+    // 走批量通道：67 个字典合成 1 次往返（后端未部署批量端点时 useDict 自动回退逐个拉取）
+    await preloadBuiltinDicts([...PRELOAD_DICT_TYPES, ...ENUM_DICT_TYPES])
+  } catch { /* 预热失败不影响任何业务：纯增量的文案增强 */ }
+}
 
 async function retry() {
   retrying.value = true
@@ -41,6 +68,7 @@ async function retry() {
 }
 
 onMounted(() => {
+  warmDicts()
   // 断线期间每 10s 自动重探，后端起来后无需手动刷新
   timer = setInterval(() => {
     if (!backend.online && !retrying.value) probeBackend()
@@ -54,6 +82,25 @@ watch(() => backend.online, (v, old) => {
     setTimeout(() => location.reload(), 600)
   }
 })
+
+/**
+ * 【2026-10-16 修缺陷】登录成功后补一次预热。
+ *
+ * 根因：warmDicts() 原本只在 onMounted 调一次，而首次进入时用户**尚未登录**，
+ * `!store.token` 直接 return；登录动作只是把 token 写进内存，不触发任何生命周期
+ * ⇒ 第 3/4 批的 67 个字典在本次会话内**永远不会被预热**，statusLabel/enumLabel
+ * 全程走本地常量，字典化等于没生效（刷新页面才碰巧生效，因为刷新时 token 已从本地恢复）。
+ *
+ * 修法：监听 token 由空变非空，触发一次预热（已加载的类型在 useDict 内短路，不会重复请求）。
+ */
+//  不能用 watch(() => store.token)：store 是普通对象（getter/setter 直读 localStorage），
+//    不是 reactive，Vue 追踪不到依赖 ⇒ 监听永不触发。故改由 api.js 的 token setter 派发
+//    'fssc:auth' 事件（见 api.js:43 附近）来通知。
+function onAuth(e) {
+  if (e && e.detail && e.detail.token) warmDicts()
+}
+window.addEventListener('fssc:auth', onAuth)
+onBeforeUnmount(() => window.removeEventListener('fssc:auth', onAuth))
 </script>
 
 <style>

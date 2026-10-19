@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="close-workbench">
     <!-- 统一关账工作台头：AP 月末关账 + AR 应收月结合并入口（41号审查报告 P1-5） -->

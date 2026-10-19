@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.purchase.entity.PoOrder;
@@ -57,8 +60,20 @@ public class InvoiceMatchBizAction implements WfBizAction {
             log.warn("三单匹配收尾: 付款单 {} 未关联采购订单，跳过 INVOICED 迁移与应付确认凭证", bill.getBillNo());
             return;
         }
+        boolean approved = Boolean.TRUE.equals(event.getApproved());
+        // D-V4R-85（P0）办结前硬闸：付款单仍有三单匹配硬异常（超付/超容差 ⇒ frozen）时，**禁止**在本链办结放行。
+        //   此前本钩子对任意 approved 的 INVOICE_MATCH(_MANUAL) 链都无条件把结论写成 MANUAL_MATCHED，
+        //   等于「谁点通过谁放行」，付款硬闸形同虚设。实证（2026-10-16，V4 人工 N1-B 幕）：
+        //   付款单 FK202610160003（120,000 超付、无发票覆盖、缺合同腿）先被付款闸正确拦下
+        //   （code=400「三单匹配拦截：超付（关联发票 0＋容差 0.00 < 本次付款 120,000.00）」），
+        //   随后仅把该单的 INVOICE_MATCH 复审链点通过两节，结论即被改写为 MANUAL_MATCHED，
+        //   付款闸随即放行 → 异常单真的付了款（PB202610160004 PAID，回单 SER17921255826250）。
+        //   注意：本方法整体被外层 catch(Exception) 兜底，异常会被静默吞掉 ⇒ 硬拦必须抛在 try 之外。
+        if (approved) {
+            assertNoHardMatch(bill);
+        }
         try {
-            if (Boolean.TRUE.equals(event.getApproved())) {
+            if (approved) {
                 // D-DEC-077：先落人工/自动匹配链的<b>终态结论</b>（幂等覆盖，异常只 warn）——
                 // 此前本钩子只把 po_order 置 INVOICED，付款单侧的匹配结论没有任何落库载体，
                 // ThreeWayMatchService.check() 每次现算现判，办结后仍回显 FAILED 并继续冻结付款。
@@ -126,6 +141,39 @@ public class InvoiceMatchBizAction implements WfBizAction {
         } catch (Exception ex) {
             log.error("三单匹配 {} 审批收尾失败: {}", billId, ex.getMessage(), ex);
         }
+    }
+
+    /**
+     * D-V4R-85（P0）：三单匹配硬异常闸（办结前）。
+     *
+     * <p>判据＝{@link com.fssc.sharing.service.ThreeWayMatchService#check(Long)} 现算的 {@code frozen}：
+     * 超付、发票超收货超容差等 ERROR 级差异会把付款单冻住，此时付款执行接口会拒绝。
+     * 人工/复审链<b>不得</b>把这种单据放行——否则只要在链上点一次通过就能绕过付款硬闸。
+     * 取数失败同样不放行（无法确认可否放行时按保守处理）。
+     */
+    private void assertNoHardMatch(com.fssc.expense.entity.ExpBill bill) {
+        com.fssc.sharing.service.ThreeWayMatchService.MatchRow live;
+        try {
+            live = threeWayMatchService.check(bill.getId());
+        } catch (Exception ex) {
+            log.warn("三单匹配收尾：付款单 {} 实时判定取数失败，按不放行处理：{}",
+                    bill.getBillNo(), ex.getMessage());
+            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+                    "三单匹配实时判定取数失败，无法确认可否放行，请稍后重试或联系管理员：" + ex.getMessage());
+        }
+        if (live == null || !live.isFrozen()) {
+            return;
+        }
+        int issueCount = live.getIssues() == null ? 0 : live.getIssues().size();
+        throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+                "三单匹配仍有硬异常，禁止在本链办结放行：付款单 " + bill.getBillNo()
+                        + " 当前判定 " + live.getMatchStatus() + "（主异常码 " + live.getMatchCode()
+                        + "，异常明细 " + issueCount + " 条"
+                        + (live.getMsg() == null || live.getMsg().isBlank() ? "" : "，" + live.getMsg())
+                        + "）。处理出口：先在匹配台补齐单据——发票池「关联单据」补发票覆盖、"
+                        + "匹配台「关联单据」挂 PO·收货单、结算单挂采购合同；待自动判定回到 MATCHED"
+                        + "（或差异预警等非冻结档）后再办结本链。确需「票未到先付」的场景，"
+                        + "请改走付款计划/预付申请等正式通道，不得在本链点通过绕过付款硬闸。");
     }
 
     /**

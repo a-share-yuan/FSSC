@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * 暗色模式主题切换 composable
  * 使用 CSS 变量 + Element Plus dark class

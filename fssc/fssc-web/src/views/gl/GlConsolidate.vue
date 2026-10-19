@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -49,8 +52,8 @@
 
     <!-- 新建底稿 -->
     <el-dialog v-model="createVisible" :title="$t('gl.consolidate.btnNew')" width="460px">
-      <el-form :model="form" label-width="110px">
-        <el-form-item :label="$t('gl.consolidate.labelPeriod')" required>
+      <el-form ref="createFormRef" :model="form" :rules="createRules" label-width="110px">
+        <el-form-item :label="$t('gl.consolidate.labelPeriod')" prop="period">
           <el-date-picker v-model="form.period" type="month" value-format="YYYYMM" :placeholder="$t('gl.consolidate.colPeriod')" style="width: 100%" />
         </el-form-item>
         <el-form-item :label="$t('gl.consolidate.limCompany')">
@@ -68,9 +71,9 @@
 
     <!-- 调整分录 -->
     <el-dialog v-model="adjustVisible" :title="$t('gl.consolidate.secAdj')" width="520px">
-      <el-form label-width="90px">
+      <el-form ref="adjustFormRef" :model="adjustFormModel" :rules="adjustRules" label-width="90px">
         <el-form-item :label="$t('gl.consolidate.colNo')"><el-input :model-value="adjustRow?.reportNo" disabled /></el-form-item>
-        <el-form-item :label="$t('gl.consolidate.colAdj')">
+        <el-form-item :label="$t('gl.consolidate.colAdj')" prop="rawRows">
           <el-input v-model="adjustRaw" type="textarea" :rows="5" :placeholder="$t('gl.consolidate.phRawRows')" />
         </el-form-item>
       </el-form>
@@ -87,6 +90,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { glexApi, orgApi } from '../../api'
+import { useFormRules, commonRules, validateForm } from '../../composables/useFormRules'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -100,6 +104,13 @@ const form = ref({ period: '', companyIds: '', rawRows: '' })
 const adjustVisible = ref(false)
 const adjustRow = ref(null)
 const adjustRaw = ref('')
+// 第2批：新建底稿期间原为装饰红星（el-form-item required 无 prop，缺期间时只有一句 toast）
+const createFormRef = ref(null)
+const { rules: createRules } = useFormRules('GLEX_CONSOLIDATE')
+// 第2批：调整分录弹窗接入（空分录提交无意义）；computed 包装给 el-form 可校验 model
+const adjustFormRef = ref(null)
+const adjustFormModel = computed(() => ({ rawRows: adjustRaw.value }))
+const adjustRules = { rawRows: commonRules.required('请输入调整分录内容') }
 
 async function load(pageNum) {
   if (pageNum) f.value.pageNum = pageNum
@@ -116,7 +127,7 @@ async function load(pageNum) {
 }
 
 async function doCreate() {
-  if (!form.value.period) { ElMessage.warning(t('gl.consolidate.pickPeriod')); return }
+  if (!(await validateForm(createFormRef.value))) return
   try {
     await glexApi.consolidateCreate({ period: form.value.period, companyIds: form.value.companyIds, rawRows: form.value.rawRows })
     ElMessage.success(t('gl.consolidate.msgCreated'))
@@ -144,6 +155,7 @@ function openAdjust(row) {
 }
 
 async function doAdjust() {
+  if (!(await validateForm(adjustFormRef.value))) return
   try {
     await glexApi.consolidateAdjust(adjustRow.value.id, adjustRaw.value)
     ElMessage.success(t('gl.consolidate.msgAdjSaved'))

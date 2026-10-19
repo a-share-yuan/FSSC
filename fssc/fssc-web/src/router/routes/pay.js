@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /** 付款与对账域路由（出纳/三单匹配/对公支付/供应商对账） */
 export default [
   { path: 'pay', component: () => import('../../views/pay/Pay.vue'), meta: { title: '出纳付款' } },

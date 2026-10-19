@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <BillWorkbench ref="wb" bill-type="CLAIM" sub-type="TRAVEL" :claim="true" :travel="true" :before-submit="onBeforeSubmit" :on-apply-pick="onApplyPick">
     <template #create="b">
@@ -22,13 +25,15 @@
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.claim.colApplicantDept')"><el-input :model-value="applicantDept" disabled /></el-form-item></el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.claim.colApplicantCompany')"><el-input :model-value="applicantCompany" disabled /></el-form-item></el-col>
             <el-col :xs="24" :md="8">
-              <el-form-item :label="$t('expense.common.colCurrency')" prop="currencyCode"><el-select v-model="b.form.bill.currencyCode" style="width: 100%"><el-option :label="$t('expense.common.curCny')" value="CNY" /><el-option :label="$t('expense.common.curUsd')" value="USD" /></el-select></el-form-item>
+              <el-form-item :label="$t('expense.common.colCurrency')" prop="currencyCode"><el-select v-model="b.form.bill.currencyCode" style="width: 100%">
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+</el-select></el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
               <el-form-item :label="$t('expense.common.colTotalAmount')"><span style="color:#f59a23;font-weight:700;font-size:15px">{{ $t('expense.common.amtYuan', { v1: b.fmt(totalAmount(b)) }) }}</span></el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
-              <el-form-item :label="$t('expense.claim.colBudgetYear')" prop="periodYear"><el-select v-model="b.form.bill.periodYear" style="width: 100%"><el-option v-for="y in years" :key="y" :label="$t('expense.claim.optYear')" :value="y" /></el-select></el-form-item>
+              <el-form-item :label="$t('expense.claim.colBudgetYear')" prop="periodYear"><el-select v-model="b.form.bill.periodYear" style="width: 100%"><el-option v-for="y in years" :key="y" :label="$t('expense.claim.optYear', { y })" :value="y" /></el-select></el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
               <el-form-item :label="$t('expense.claim.colPaperCount')" prop="extJson.paperAttachCount"><el-input-number v-model="b.form.bill.extJson.paperAttachCount" :min="0" style="width: 100%" /></el-form-item>
@@ -45,7 +50,7 @@
             <el-col :xs="24" :md="8">
               <el-form-item :label="$t('expense.travelClaim.colTripType')" prop="extJson.travelType">
                 <el-select v-model="b.form.bill.extJson.travelType" style="width: 100%">
-                  <el-option :label="$t('expense.travelClaim.optDomestic')" value="DOMESTIC" /><el-option :label="$t('expense.travelClaim.optAbroad')" value="ABROAD" /><el-option :label="$t('expense.travelClaim.optThreeCities')" value="TRIAREA" />
+                  <el-option v-for="o in travelTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -189,7 +194,7 @@
             </template>
           </el-table-column>
           <el-table-column :label="$t('expense.travelClaim.colTrafficMode')" width="100">
-            <template #default="{ row }"><el-select v-model="row.trafficType" style="width: 100%"><el-option :label="$t('expense.preapply.optPlane')" value="AIR" /><el-option :label="$t('expense.preapply.optHighSpeedRail')" value="RAIL" /><el-option :label="$t('expense.preapply.optTrain')" value="TRAIN" /><el-option :label="$t('expense.preapply.optCar')" value="CAR" /></el-select></template>
+            <template #default="{ row }"><el-select v-model="row.trafficType" style="width: 100%"><el-option v-for="o in trafficOptions" :key="o.value" :label="o.label" :value="o.value" /></el-select></template>
           </el-table-column>
           <el-table-column :label="$t('expense.travelClaim.colHotel')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.hotelAmount" :min="0" :precision="2" style="width: 100%" /></template>
@@ -223,10 +228,12 @@
               </el-form-item>
             </el-col>
 <el-col :xs="24" :md="8">
-              <el-form-item :label="$t('expense.claim.colPayMethod')" prop="extJson.payMethod"><el-select v-model="b.form.bill.extJson.payMethod" style="width: 100%"><el-option :label="$t('expense.claim.optBankTransfer')" value="BANK" /><el-option :label="$t('expense.claim.optCash')" value="CASH" /></el-select></el-form-item>
+              <el-form-item :label="$t('expense.claim.colPayMethod')" prop="extJson.payMethod"><el-select v-model="b.form.bill.extJson.payMethod" style="width: 100%"><el-option v-for="o in payMethodOptions" :key="o.value" :label="o.label" :value="o.value" /></el-select></el-form-item>
             </el-col>
             <el-col :xs="24" :md="8">
-              <el-form-item :label="$t('expense.claim.colPayeeType')" prop="payTarget"><el-select v-model="b.form.bill.payTarget" style="width: 100%" :placeholder="$t('expense.common.phPickPayeeType')"><el-option :label="$t('expense.claim.colEmployee')" value="EMPLOYEE" /><el-option :label="$t('field.supplier')" value="SUPPLIER" /><el-option :label="$t('field.customer')" value="CUSTOMER" /></el-select></el-form-item>
+              <el-form-item :label="$t('expense.claim.colPayeeType')" prop="payTarget"><el-select v-model="b.form.bill.payTarget" style="width: 100%" :placeholder="$t('expense.common.phPickPayeeType')">
+<el-option v-for="o in payeeTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
+</el-select></el-form-item>
             </el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.travelClaim.colAccountType')"><el-input :model-value="b.form.bill.payTarget === 'SUPPLIER' || b.form.bill.payTarget === 'CUSTOMER' ? t('expense.travelClaim.optCorporateAccount') : t('expense.claim.colEmployee')" disabled /></el-form-item></el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colPayeeAccount')" prop="payeeAccountNo"><el-input v-model="b.form.bill.payeeAccountNo" :placeholder="$t('expense.travelClaim.phPayeeAccountRequired')" /></el-form-item></el-col>
@@ -254,6 +261,8 @@ import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { showRowDetail, budgetLabel, budgetUnseenLabel } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
+import { useBaseDict, TRAFFIC_LOCAL, TRAFFIC_I18N, PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM, PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N } from '@/composables/useBaseDict'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 const { saveFormHistory } = useAutoFill()
@@ -278,7 +287,7 @@ const formRules = computed(() => ({
 const loading = ref(false)
 const users = ref([])
 const activeCat = ref('ALL')
-const currentUserName = computed(() => (ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))))
+const currentUserName = ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))
 const years = [new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1]
 const cats = computed(() => ([
   { v: 'TRAIN_FEE', label: t('expense.travelClaim.tabTrainFee') }, { v: 'HOTEL', label: t('expense.travelClaim.colHotel') }, { v: 'TRAFFIC', label: t('expense.travelClaim.colLongTrafficFee') },
@@ -412,7 +421,29 @@ function openRowDetail(row) {
   })
 }
 
+// 出差类型（travel_type）：字典定值域 + i18n 定文案
+const travelTypeDict = useBaseDict('travel_type',
+  { DOMESTIC: '境内', ABROAD: '境外', TRIAREA: '三地' },
+  { DOMESTIC: 'expense.travelClaim.optDomestic', ABROAD: 'expense.travelClaim.optAbroad', TRIAREA: 'expense.travelClaim.optThreeCities' })
+const travelTypeOptions = travelTypeDict.options
+
+// 交通方式 / 付款方式（2026-10-18 基础数据收口）
+const trafficDict = useBaseDict('traffic_mode', TRAFFIC_LOCAL, TRAFFIC_I18N)
+const trafficOptions = trafficDict.options
+const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
+const payMethodOptions = payMethodDict.options
+
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency({ i18nKeys: { CNY: 'expense.common.curCny', USD: 'expense.common.curUsd' }, format: 'name-code' })
+
+const { options: payeeTypeOptions, load: loadPayeeType } = useBaseDict('enum_payee_type', PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N)
+
 onMounted(async () => {
+  loadPayeeType()
+  loadCurrency()
+  travelTypeDict.load()
+  // 字典不可用时自动回落到本地常量，界面与改造前逐字一致
+  trafficDict.load()
+  payMethodDict.load()
   try {
     const list = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || []
     users.value = list

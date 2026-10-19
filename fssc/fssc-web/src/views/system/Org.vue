@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="org-page">
     <el-card>
@@ -233,7 +236,7 @@ const visible = ref(false)
 const editingId = ref(null)
 const saving = ref(false)
 const type = ref('company')
-const typeLabel = computed(() => (ref(t('field.company'))))
+const typeLabel = ref(t('field.company'))
 const form = reactive({ companyName: '', companyCode: '', parentId: 0, creditCode: '', taxNo: '', sort: 0, deptName: '', deptCode: '', companyId: 0, parentId_dept: 0, postName: '', postCode: '', deptId: 0 })
 
 const orgFormRef = ref(null)

@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_GL_MANUAL_VOUCHER" targetNamespace="http://fssc">
   <bpmn:process id="GL_MANUAL_VOUCHER" name="总账凭证审批流程（做账）" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="开始" />
     <bpmn:userTask id="GK_1" name="编制底稿/卡片摊销（按类型解析责任人）【共享会计】" flowable:candidateGroups="FIN_GL" />
-        <bpmn:userTask id="GK_1_R" name="底稿复核【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="GK_1" />
     <bpmn:userTask id="GK_2" name="财务审核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
-    <bpmn:sequenceFlow id="Flow_GK_2" sourceRef="GK_1" targetRef="GK_1_R" />
-        <bpmn:sequenceFlow id="Flow_GK_2_r2" sourceRef="GK_1_R" targetRef="GK_2" />
+    <bpmn:sequenceFlow id="Flow_GK_2" sourceRef="GK_1" targetRef="GK_2" />
     <bpmn:userTask id="GK_3" name="总账记账复核【总账会计】" flowable:candidateGroups="FIN_GL" />
-        <bpmn:userTask id="GK_3_R" name="记账稽核复核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
     <bpmn:sequenceFlow id="Flow_GK_3" sourceRef="GK_2" targetRef="GK_3" />
     <bpmn:userTask id="GK_4" name="制证确认【总账会计】" flowable:candidateGroups="FIN_GL" />
-    <bpmn:sequenceFlow id="Flow_GK_4" sourceRef="GK_3" targetRef="GK_3_R" />
-        <bpmn:sequenceFlow id="Flow_GK_4_r2" sourceRef="GK_3_R" targetRef="GK_4" />
+    <bpmn:sequenceFlow id="Flow_GK_4" sourceRef="GK_3" targetRef="GK_4" />
     <bpmn:endEvent id="EndEvent_1" name="结束" />
     <bpmn:sequenceFlow id="Flow_end" sourceRef="GK_4" targetRef="EndEvent_1" />
   </bpmn:process>

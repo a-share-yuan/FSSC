@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * useAutoFill - 表单智能预填 composable
  * 根据历史数据、当前上下文自动预填表单字段

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="workbench">
     <!-- 业务入口卡片 -->
@@ -156,7 +159,7 @@
 
     <!-- 审批/驳回弹窗 -->
     <el-dialog v-model="approveVisible" :title="approveDecision === BillStatus.APPROVED ? '审批通过' : '驳回'" width="420px">
-      <el-form :model="{ comment: approveComment }" :rules="approveRules" label-width="80px">
+      <el-form ref="approveFormRef" :model="{ comment: approveComment, nextAssigneeUserId: nextPickUserId }" :rules="approveRules" label-width="80px">
         <el-form-item :label="approveDecision === BillStatus.APPROVED ? '审批意见' : '驳回原因'" :required="approveDecision === BillStatus.REJECTED" prop="comment">
           <el-select v-model="approveComment" filterable allow-create default-first-option :placeholder="approveDecision === BillStatus.APPROVED ? '请选择或输入审批意见' : '请选择或输入驳回原因'" style="width: 100%">
             <template v-if="approveDecision === BillStatus.APPROVED">
@@ -172,6 +175,19 @@
               <el-option label="费用不合理" value="费用不合理" />
               <el-option label="其他" value="其他" />
             </template>
+          </el-select>
+        </el-form-item>
+        <!-- ⑯（D-V4R-47）：下一环节为 PICK 取人时，本简易弹窗此前不查候选人、也不传
+             nextAssigneeUserId，提交必吃服务端「需指定办理人」红字且无处可选（UI 死路）。
+             此处对齐 ApprovalDialog 口径：PICK 档强制点名，唯一候选自动带出、可改派。 -->
+        <el-form-item v-if="approveDecision === BillStatus.APPROVED && nextPick" label="下一环节" prop="nextAssigneeUserId" :required="approveDecision === BillStatus.APPROVED && nextPick">
+          <div v-if="!nextPick.candidates.length" class="wb-next-empty">
+            节点「{{ nextPick.nodeName }}」当前无可选办理人（该岗位在本公司下无在职非管理员成员），
+            请到「系统管理 · 角色授权」补岗后再办理。
+          </div>
+          <el-select v-else v-model="nextPickUserId" filterable style="width: 100%"
+                     :placeholder="`请指定「${nextPick.nodeName}」办理人`">
+            <el-option v-for="c in nextPick.candidates" :key="c.userId" :value="c.userId" :label="c.name" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -190,6 +206,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { commonRules, validateForm } from '../../composables/useFormRules'
 import SkeletonList from '../../components/SkeletonList.vue'
 import {
   Money, Document, Wallet, CreditCard, Coin, Box, Files, DataAnalysis,
@@ -437,33 +454,76 @@ async function load() {
 
 const approveVisible = ref(false)
 const approving = ref(false)
+const approveFormRef = ref(null)
 const approveDecision = ref('')
 const approveComment = ref('')
 const approveRow = ref(null)
 
+// 第2批：装饰红星转真校验。comment 原为恒定 required——审批通过时也会被无脑拦下，
+// 故两条均改条件必填（requiredWhen）：驳回才要原因；下一环节办理人只在 APPROVED+下一节点 PICK 档
+// 且确有候选时必填（无候选场景放行给下方原闸门报"当前无可选办理人"，消息更精确）。
 const approveRules = reactive({
-  comment: [{ required: true, message: '请选择或输入审批意见' }],
+  comment: commonRules.requiredWhen(() => approveDecision.value === BillStatus.REJECTED, '驳回时请选择或输入驳回原因'),
+  nextAssigneeUserId: commonRules.requiredWhen(
+    () => approveDecision.value === BillStatus.APPROVED && !!nextPick.value && nextPick.value.candidates.length > 0,
+    '请指定下一环节办理人后再提交'),
 })
+
+// ⑯（D-V4R-47）：PICK 取人档状态。仅当下一节点 mode=PICK 时非空 ⇒ 弹窗渲染点名下拉。
+const nextPick = ref(null) // { nodeName, candidates: [{ userId, name }] }
+const nextPickUserId = ref(null)
 
 async function approve(row, decision) {
   approveRow.value = row
   approveDecision.value = decision
   approveComment.value = ''
+  nextPick.value = null
+  nextPickUserId.value = null
   approveVisible.value = true
+  // ⑯（D-V4R-47）：通过前预取下一环节取人方式；PICK 档渲染点名下拉（唯一候选自动带出、可改派）。
+  // silent：老后端无端点（404/403）时保持 null ⇒ 区块不渲染，提交仍由服务端兜底校验，绝不阻断。
+  if (decision === BillStatus.APPROVED && row?.taskId) {
+    try {
+      const n = await wfApi.nextCandidates(row.taskId, { silent: true })
+      if (n && n.mode === 'PICK') {
+        nextPick.value = { nodeName: n.nodeName || '下一环节', candidates: Array.isArray(n.candidates) ? n.candidates : [] }
+        if (nextPick.value.candidates.length === 1) nextPickUserId.value = nextPick.value.candidates[0].userId
+      }
+    } catch (_) { /* 静默降级 */ }
+  }
 }
 
 async function doApprove() {
   if (approving.value) return
+  // 第2批：先跑表单真校验（驳回原因/下一环节办理人），红字落字段；原手工闸门保留作双保险
+  if (!(await validateForm(approveFormRef.value))) return
   const decision = approveDecision.value
   const comment = approveComment.value
   if (decision === BillStatus.REJECTED && !comment.trim()) {
     ElMessage.warning('驳回时请选择或输入驳回原因')
     return
   }
+  // ⑯（D-V4R-47）：PICK 档提交闸——与服务端 enforcePickOnApprove 同口径，先在前端说破省得吃红字
+  if (decision === BillStatus.APPROVED && nextPick.value) {
+    if (!nextPick.value.candidates.length) {
+      ElMessage.warning(`节点「${nextPick.value.nodeName}」当前无可选办理人，无法通过`)
+      return
+    }
+    if (!nextPickUserId.value) {
+      ElMessage.warning('请指定下一环节办理人后再提交')
+      return
+    }
+  }
   approving.value = true
   try {
     // P0-3 决策字符串（APPROVED/REJECTED）映射为后端布尔 approved，避免 REJECTED 被忽略走默认通过
-    await wfApi.approve({ taskId: approveRow.value.taskId, approved: decision === BillStatus.APPROVED, comment })
+    await wfApi.approve({
+      taskId: approveRow.value.taskId,
+      approved: decision === BillStatus.APPROVED,
+      comment,
+      // ⑯（D-V4R-47）：PICK 点名随单上送；非 PICK/驳回传 null（契约：其余节点忽略此字段）
+      nextAssigneeUserId: decision === BillStatus.APPROVED && nextPick.value ? (nextPickUserId.value || null) : null,
+    })
     ElMessage.success('已处理')
     approveVisible.value = false
     await load()

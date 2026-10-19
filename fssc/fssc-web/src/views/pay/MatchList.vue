@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <!-- 概览统计卡片 -->
@@ -364,6 +367,17 @@
           <div v-if="linkForm.poId && !receiptOptions.length" style="color: #909399; font-size: 12px; margin-top: 4px">
             {{ $t('pay.match.hintNoGrn') }}</div>
         </el-form-item>
+        <!-- G2R-01：合同腿补挂入口（此前缺失，NO_CONTRACT 的出口文案指向了不存在的入口） -->
+        <el-form-item :label="$t('pay.match.colContract')">
+          <el-select v-model="linkForm.contractId" filterable clearable :placeholder="$t('pay.match.phPickContract')" style="width: 100%"
+                     :loading="contractLoading">
+            <el-option v-for="c in contractOptions" :key="c.id"
+                       :label="`${c.contractNo} | ${c.partyBName || c.contractName || ''} | ${fmt(c.amount)}`"
+                       :value="c.id" />
+          </el-select>
+          <div style="color: #909399; font-size: 12px; margin-top: 4px">
+            {{ $t('pay.match.hintContractLeg') }}</div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="linkVisible = false">{{ $t('common.cancel') }}</el-button>
@@ -381,7 +395,7 @@
 import { onMounted, reactive, ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, CircleCheck, Warning, CircleClose, ArrowRight, ArrowDown, Check } from '@element-plus/icons-vue'
-import { opApi, purchaseApi } from '../../api'
+import { opApi, purchaseApi, contractApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import CoachMark from '@/components/CoachMark.vue'
@@ -690,7 +704,7 @@ const comparisonRows = computed(() => {
 // ---- 手工关联PO/收货单 ----
 const linkVisible = ref(false)
 const linkRow = ref(null)
-const linkForm = reactive({ poId: null, poReceiptId: null })
+const linkForm = reactive({ poId: null, poReceiptId: null, contractId: null })
 
 const linkRules = computed(() => ({
   poId: [{ required: true, message: t('pay.match.errPickPo') }],
@@ -701,12 +715,16 @@ const receiptOptions = ref([])
 const poLoading = ref(false)
 const receiptLoading = ref(false)
 const linkLoading = ref(false)
+// G2R-01：合同腿候选（四单之合同腿此前无补挂入口，见 doLink 注释）
+const contractOptions = ref([])
+const contractLoading = ref(false)
 
 async function openLinkDialog(row) {
   if (!row) return
   linkRow.value = row
   linkForm.poId = row.poId || null
   linkForm.poReceiptId = row.receiptId || null
+  linkForm.contractId = row.contractId || null
   linkVisible.value = true
   detailVisible.value = false
   // 加载PO列表
@@ -716,6 +734,13 @@ async function openLinkDialog(row) {
     // D-V4R-47 同族：三单匹配的 PO 候选同样出现已作废订单
     poOptions.value = (r.list || []).filter((p) => String((p && p.status) || '').toUpperCase() !== 'VOID')
   } catch (e) { ElMessage.error(t('pay.match.msgLoadPoFail')) } finally { poLoading.value = false }
+  // 加载合同候选（G2R-01）
+  contractLoading.value = true
+  try {
+    const rc = await contractApi.page({ pageNum: 1, pageSize: 100 })
+    contractOptions.value = (rc.list || []).filter(
+      (c) => String((c && c.status) || '').toUpperCase() !== 'VOID')
+  } catch (e) { contractOptions.value = [] } finally { contractLoading.value = false }
   // 如果有已选PO，加载对应收货单
   if (linkForm.poId) await onPoChange(linkForm.poId)
 }
@@ -738,7 +763,7 @@ async function doLink() {
   }
   linkLoading.value = true
   try {
-    await opApi.matchLink(linkRow.value.billId, { poId: linkForm.poId, poReceiptId: linkForm.poReceiptId })
+    await opApi.matchLink(linkRow.value.billId, { poId: linkForm.poId, poReceiptId: linkForm.poReceiptId, contractId: linkForm.contractId || null })
     ElMessage.success(t('pay.match.msgLinkedRecheck'))
     // 重新校验
     const d = await opApi.matchCheck(linkRow.value.billId)

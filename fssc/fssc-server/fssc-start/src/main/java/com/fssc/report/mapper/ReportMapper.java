@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.report.mapper;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -27,12 +30,15 @@ public interface ReportMapper {
      *  R5-D-021：camelCase 别名为报表工作台的列绑定，snake_case 别名保留给导出与看板的既有读取，两者共存。
      *  D-F1R-04：补数据范围参数。原口径只按公司收口（companyId），而本接口挂 {@code dashboard:view}
      *  ——普通员工与共享会计返回完全相同的全公司排名（10-15 实测两个账号结果逐行一致）。
-     *  scopeDeptIds/scopeUserId 与同文件 {@code loanBalance} 同一套语义：null 即不追加该维条件。 */
+     *  scopeDeptIds/scopeUserId 与同文件 {@code loanBalance} 同一套语义：null 即不追加该维条件。
+     *  ⑮（D-V4R-50，2026-10-16 晚间场实测）：补生效状态过滤——原口径把 DRAFT/VOID/WITHDRAWN/REJECTED
+     *  一并计入，赵勇（本部门只有一张 0 元草稿申请）的部门排名渲染成「费用审核组 1 单 0.00」。 */
     @Select("<script>select b.dept_id as dept_id, d.dept_name as dept_name, count(*) as cnt, " +
             "sum(b.total_amount) as amount, " +
             "d.dept_name as deptName, count(*) as billCount, sum(b.total_amount) as totalAmount " + // R5-D-021
             "from exp_bill b left join sys_dept d on b.dept_id = d.id " +
             "where b.del_flag = 0 and b.dept_id is not null " +
+            "and b.status not in ('DRAFT','VOID','WITHDRAWN','REJECTED') " + // ⑮ D-V4R-50
             "<if test='companyId != null'>and b.company_id = #{companyId}</if> " +
             "<if test='scopeDeptIds != null'>and b.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
             "<if test='scopeUserId != null'>and b.apply_user_id = #{scopeUserId}</if> " +
@@ -53,8 +59,12 @@ public interface ReportMapper {
             "b.bill_type as nodeName, " +
             "round(avg(timestampdiff(MINUTE, b.submit_time, a.create_time)) / 60, 1) as avgHours, " + // R5-D-115
             "round(max(timestampdiff(MINUTE, b.submit_time, a.create_time)) / 60, 1) as maxHours " + // R5-D-115
+            // ⑮（D-V4R-50）：审批通过是终态迁移而非唯一终态——已付(PAID)/结清(REPAID)/办结(COMPLETED)
+            // 的单同样走完了 submit→AUDIT 全程，硬编码 status='APPROVED' 会把付款后的单从时效里剔除
+            //（晚间场实测：bill 7 已 PAID、bill 3 已 REPAID 均有 AUDIT 任务却不计入）
             "from exp_bill b join op_audit_task a on b.id = a.bill_id " +
-            "where a.task_type = 'AUDIT' and a.del_flag = 0 and b.del_flag = 0 and b.status = 'APPROVED' and b.submit_time is not null " +
+            "where a.task_type = 'AUDIT' and a.del_flag = 0 and b.del_flag = 0 " +
+            "and b.status in ('APPROVED','PAID','REPAID','COMPLETED','POSTED') and b.submit_time is not null " +
             "<if test='scopeCompanyId != null'>and b.company_id = #{scopeCompanyId}</if> " +
             "<if test='scopeDeptIds != null'>and b.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
             "<if test='scopeUserId != null'>and b.apply_user_id = #{scopeUserId}</if> " +

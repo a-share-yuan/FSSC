@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 import axios from 'axios'
 import { reactive } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -41,7 +44,16 @@ function setBackend(online, msg = '') {
 
 export const store = {
   get token() { return localStorage.getItem(TOKEN_KEY) || '' },
-  set token(v) { v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY) },
+  //  store 是**普通对象**（getter/setter 直接读写 localStorage），不是 reactive ⇒
+  //    Vue 的 watch(() => store.token) 追踪不到，登录不会触发任何回调。
+  //    故在 setter 里额外派发一个事件，供 App.vue 补做「登录成功后预热字典」。
+  //    （2026-10-16：修复"字典预热只在刷新页面时才发生"的缺陷）
+  set token(v) {
+    v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY)
+    try {
+      window.dispatchEvent(new CustomEvent('fssc:auth', { detail: { token: v || '' } }))
+    } catch { /* 非浏览器环境（如单测）忽略 */ }
+  },
   get user() {
     try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null') } catch { return null }
   },
@@ -472,6 +484,7 @@ export const numberApi = {
   ruleCreate: (body) => http.post('/tenant/system/number/rule/create', body),
   ruleUpdate: (body) => http.post('/tenant/system/number/rule/update', body),
   ruleDelete: (id) => http.post(`/tenant/system/number/rule/${id}/delete`),
+  ruleEnable: (id, enable) => http.post(`/tenant/system/number/rule/${id}/enable`, null, { params: { enable } }),
   next: (ruleCode) => http.post('/tenant/system/number/next', { ruleCode }),
 }
 
@@ -875,6 +888,12 @@ export const contractApi = {
 // ---------------- 客户 / 往来单位 ----------------
 export const customerApi = {
   page: (p) => http.get('/tenant/customer/page', { params: p }),
+  /**
+   * D-V4R-96：往来单位候选（客户档案 ∪ 供应商主数据）。
+   * 供应商会按 supplier_code 幂等建档为 crm_customer，返回的 id 是语义正确的 customer_id。
+   * 对公结算的往来单位下拉必须用这个，page() 只读 crm_customer 选不到供应商。
+   */
+  candidates: (p) => http.get('/tenant/customer/candidates', { params: p }),
   create: (b) => http.post('/tenant/customer/create', b),
   approve: (id) => http.post(`/tenant/customer/${id}/approve`),
   update: (b) => http.post('/tenant/customer/update', b),
@@ -933,6 +952,20 @@ export const dictApi = {
   typeUpdate: (body) => http.post('/tenant/system/dict/type/update', body),
   typeDelete: (id) => http.post(`/tenant/system/dict/type/${id}/delete`),
   dataList: (typeCode) => http.get('/tenant/system/dict/data/list', { params: { dictType: typeCode } }),
+  /**
+   * 【2026-10-15 前置A】内置字典免权限只读通道。
+   * 服务端闸门：仅 is_builtin=1 的类型可读，非内置返回空列表（不抛错）。
+   * 仍需登录（不在 JwtAuthFilter 白名单内），但**不需要 system:dict:list 权限**
+   * —— 该权限实测只授予 CONFIG_ADMIN/IT_ADMIN，业务角色 159 人读不到。
+   */
+  builtinDataList: (typeCode) => http.get('/tenant/system/dict/builtin/data/list', { params: { dictType: typeCode } }),
+  /**
+   * 【2026-10-16 第 4 批】内置字典**批量**免权限只读通道。
+   * 一次取回多个类型（后端按 is_builtin 闸门过滤，非内置类型不出现在返回 Map 里）。
+   * 用途：枚举收口后有 66 个 enum_* 展示字典要预热，逐个请求会打 66 次往返。
+   * @param {string[]} typeCodes dict_type 数组
+   */
+  builtinDataBatch: (typeCodes) => http.get('/tenant/system/dict/builtin/data/batch', { params: { types: (typeCodes || []).join(',') } }),
   dataCreate: (body) => http.post('/tenant/system/dict/data/create', body),
   dataUpdate: (body) => http.post('/tenant/system/dict/data/update', body),
   dataDelete: (id) => http.post(`/tenant/system/dict/data/delete/${id}`),
@@ -1080,6 +1113,37 @@ export const complianceApi = {
   satisfactionPage: (params) => http.get('/tenant/compliance/satisfaction', { params }),
   satisfactionSubmit: (body) => http.post('/tenant/compliance/satisfaction', body),
 }
+// ---------------- 费用标准（expense_policy 主表 + 标准明细 + 版本，2026-10-17 新增）----------------
+// 注：路径用后端 @RequestMapping 明确声明的 /expense-policy（实测 /policy 亦通，但不在 Controller 声明面内，
+//     按「未登记路径不可调用」的端点治理口径，统一走声明面路径）。
+export const expensePolicyApi = {
+  page: (params) => http.get('/tenant/compliance/expense-policy/page', { params }),
+  getById: (id) => http.get(`/tenant/compliance/expense-policy/${id}`),
+  create: (body) => http.post('/tenant/compliance/expense-policy/create', body),
+  update: (body) => http.post('/tenant/compliance/expense-policy/update', body),
+  enable: (id) => http.post(`/tenant/compliance/expense-policy/${id}/enable`),
+  disable: (id) => http.post(`/tenant/compliance/expense-policy/${id}/disable`),
+  remove: (id) => http.delete(`/tenant/compliance/expense-policy/${id}`),
+  effective: (params) => http.get('/tenant/compliance/expense-policy/effective', { params }),
+}
+
+export const policyStandardApi = {
+  list: (policyId) => http.get('/tenant/compliance/policy-standard/list', { params: { policyId } }),
+  create: (body) => http.post('/tenant/compliance/policy-standard/create', body),
+  update: (body) => http.post('/tenant/compliance/policy-standard/update', body),
+  remove: (id) => http.delete(`/tenant/compliance/policy-standard/${id}`),
+}
+
+export const policyVersionApi = {
+  list: (policyId) => http.get('/tenant/compliance/policy-version/list', { params: { policyId } }),
+  latest: (policyId) => http.get('/tenant/compliance/policy-version/latest', { params: { policyId } }),
+  create: (body) => http.post('/tenant/compliance/policy-version/create', body),
+  approve: (id, approverId) => http.post(`/tenant/compliance/policy-version/${id}/approve`, null, { params: { approverId } }),
+  activate: (id) => http.post(`/tenant/compliance/policy-version/${id}/activate`),
+  archive: (id) => http.post(`/tenant/compliance/policy-version/${id}/archive`),
+  remove: (id) => http.delete(`/tenant/compliance/policy-version/${id}`),
+}
+
 export const periodApi = {
   page: (params, cfg) => http.get('/tenant/masterdata/period/page', { params, ...cfg }),
   create: (body) => http.post('/tenant/masterdata/period/create', body),
@@ -1100,7 +1164,14 @@ function crud(base) {
   }
 }
 export const masterApi = {
-  currency: crud('currency'),
+  currency: {
+    ...crud('currency'),
+    /** 免权限只读下拉通道（后端 2026-10-18 新增）。
+     *  币种散落 12 个业务页面 40 处、且是录入必填项，若走带 md:currency:list 的 /page，
+     *  普通员工一律 4030，等于"要先有币种管理权才能填单"。本端点仅需登录，
+     *  只返回 status=NORMAL 且未删的展示字段。 */
+    options: () => http.get('/tenant/masterdata/currency/options'),
+  },
   project: crud('project'),
   bank: {
     ...crud('bank-account'),
@@ -1926,6 +1997,16 @@ export const collabApi = {
   invoiceWriteback: (preInvoiceId) => http.post(`/tenant/collab/ccp/invoice-writeback/${preInvoiceId}`),
   freezeStatus: (p) => http.get('/tenant/collab/freeze-status', { params: p }),
   syncLogs: (p) => http.get('/tenant/collab/sync-logs', { params: p }),
+}
+
+// ---------------- BCP 门户行级异议审核（/api/tenant/bcp-objection/**） ----------------
+// 供应商（AP）/ 客户（AR）在 BCP 门户对账明细行提起的数量、单价异议；FSSC 侧 AP/AR 岗
+// 经本组端点拉取待审清单并回写结论。后端再以 HMAC-SHA256 签名调用 BCP 门户的开放通道
+// （/api/open/linku/**），因此本组端点的可用性取决于两侧共享密钥是否同值。
+// 读 = bcp:objection:list，写 = bcp:objection:review。
+export const bcpObjectionApi = {
+  pending: (params) => http.get('/tenant/bcp-objection/pending', { params }),
+  review: (id, approve, remark) => http.post(`/tenant/bcp-objection/${id}/review`, { approve, remark }),
 }
 
 // ---------------- D-DEC-320 流程收尾动作配置面（wf_event_action_config） ----------------

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="sod-check">
     <!-- R5-D-034：SoD 检查页此前复用通用配置表格（无执行入口、列与返回体错位），改为独立页面 -->

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div ref="scrollRef" class="virtual-scroll-container" :style="{ height: typeof height === 'number' ? height + 'px' : height }" @scroll="onScroll">
     <div class="virtual-scroll-spacer" :style="{ height: totalHeight + 'px', position: 'relative' }">

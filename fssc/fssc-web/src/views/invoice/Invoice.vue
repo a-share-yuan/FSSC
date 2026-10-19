@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div :class="{ tabless: isSingle }">
     <el-card>
@@ -122,13 +125,20 @@
             <el-col :span="12"><el-form-item label="开票日期" prop="invoiceDate"><el-date-picker v-model="form.invoiceDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="销售方名称" prop="sellerName"><el-input v-model="form.sellerName" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="销售方税号"><el-input v-model="form.sellerTaxNo" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="购买方名称" prop="invoiceTitle"><el-input v-model="form.invoiceTitle" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="购买方税号"><el-input v-model="form.taxNo" /></el-form-item></el-col>
+            <!-- D3：购方信息此前只绑 form.invoiceTitle/form.taxNo，而 InvInvoice 上另有
+                 buyerName/buyerTaxNo 两列（注释分别为「购方名称」「购方抬头」）语义重复。
+                 结果：补录填的购方全落进 invoice_title/tax_no，buyer_name/buyer_tax_no 恒空，
+                 按 buyer_name 过滤的报表一条都查不到（实测 5/5 张票 buyer_name 为空）。
+                 这里两个框都双向同步，两套列同时有值，两种口径的查询都能命中。 -->
+            <el-col :span="12"><el-form-item label="购买方名称" prop="invoiceTitle"><el-input v-model="form.invoiceTitle" @input="form.buyerName = form.invoiceTitle" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="购买方税号"><el-input v-model="form.taxNo" @input="form.buyerTaxNo = form.taxNo" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="未税金额" prop="netAmount"><el-input-number v-model="form.netAmount" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="价税合计" prop="amount"><el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="税额" prop="taxAmount"><el-input-number v-model="form.taxAmount" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="发票校验码"><el-input v-model="form.checkCode" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="币种" prop="currencyCode"><el-select v-model="form.currencyCode" style="width: 100%"><el-option label="人民币 CNY" value="CNY" /><el-option label="美元 USD" value="USD" /><el-option label="欧元 EUR" value="EUR" /><el-option label="日元 JPY" value="JPY" /></el-select></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="币种" prop="currencyCode"><el-select v-model="form.currencyCode" style="width: 100%">
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+</el-select></el-form-item></el-col>
             <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item></el-col>
           </el-row>
           <el-form-item>
@@ -144,7 +154,7 @@
 
       <!-- ============ 7.3 销售开票（OTC02 INVOICE_ISSUE：登记发票并发起开票审批流） ============ -->
       <el-tab-pane v-if="canIssue" label="销售开票" name="issue">
-        <el-form ref="issueFormRef" :model="issueForm" :rules="formRules" label-width="110px" style="max-width: 720px" size="default">
+        <el-form ref="issueFormRef" :model="issueForm" :rules="issueRules" label-width="110px" style="max-width: 720px" size="default">
           <el-alert :closable="false" type="info" show-icon style="margin-bottom: 12px"
             title="销售发票开具登记：价税分离校验（价税合计 = 未税 + 税额）通过后，自动发起开票审批（应收会计 → 财务经理）" />
           <el-row :gutter="12">
@@ -155,7 +165,9 @@
             <el-col :span="12"><el-form-item label="未税金额" prop="netAmount"><el-input-number v-model="issueForm.netAmount" :min="0" :precision="2" style="width: 100%" @change="syncIssueAmount" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="税额" prop="taxAmount"><el-input-number v-model="issueForm.taxAmount" :min="0" :precision="2" style="width: 100%" @change="syncIssueAmount" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="价税合计" prop="amount"><el-input-number v-model="issueForm.amount" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="币种" prop="currencyCode"><el-select v-model="issueForm.currencyCode" style="width: 100%"><el-option label="人民币 CNY" value="CNY" /><el-option label="美元 USD" value="USD" /><el-option label="欧元 EUR" value="EUR" /><el-option label="日元 JPY" value="JPY" /></el-select></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="币种" prop="currencyCode"><el-select v-model="issueForm.currencyCode" style="width: 100%">
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+</el-select></el-form-item></el-col>
             <el-col :span="24"><el-form-item label="备注"><el-input v-model="issueForm.remark" type="textarea" :rows="2" /></el-form-item></el-col>
           </el-row>
           <el-form-item>
@@ -308,6 +320,11 @@
 
 const { rules: formRules } = useFormRules('INVOICE')
 const { rules: bindRules } = useFormRules('INVOICE_BIND')
+// 第1批 P0：价税勾稽（价税合计 = 未税金额 + 税额，容差 1 分）前置到录入/开票两个表单。
+// 后端 InvoiceService.requireManualHeader/create 已有同口径拦截，此处让用户录入当时就看到，
+// 而不是提交后拿 400。claim 表单只涉及 itemId，不挂金额三元组，继续复用 formRules。
+const entryRules = computed(() => ({ ...formRules.value, ...invoiceAmountMatch(() => form) }))
+const issueRules = computed(() => ({ ...formRules.value, ...invoiceAmountMatch(() => issueForm) }))
 import { onMounted, reactive, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -319,7 +336,7 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { useAutoFill } from '@/composables/useAutoFill'
 import CoachMark from '@/components/CoachMark.vue'
 import InlineActions from '@/components/InlineActions.vue'
-import { useFormRules } from '@/composables/useFormRules'
+import { useFormRules, invoiceAmountMatch } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
@@ -331,6 +348,7 @@ import InvoiceCertify from './InvoiceCertify.vue'
 import { hasPerm } from '@/utils/perm'
 // R5-D-121/122：发票类型/验真渠道词表统一走共享字典（一处定义，禁止组件内局部映射）
 import { invoiceTypeLabel, invoiceChannelLabel } from '@/constants/enums.js'
+import { useCurrency } from '@/composables/useCurrency'
 // G14: 逐 tab 权限门控
 const canList = computed(() => hasPerm('inv:list'))
 const canCreate = computed(() => hasPerm('inv:create'))
@@ -380,16 +398,24 @@ const props = defineProps({ tab: { type: String, default: '' }, direction: { typ
 const isSingle = computed(() => !!props.tab)
 const tab = ref(props.tab || 'pool')
 watch(() => props.tab, (v) => { if (v) tab.value = v })
-// G13: direction prop 变化时同步到查询条件并刷新发票池
-watch(() => props.direction, (v) => { if (v) { q.direction = v; loadPool(1) } }, { immediate: true })
 const rows = ref([])
 const total = ref(0)
 const loading = ref(false)
 const q = reactive({ pageNum: 1, pageSize: 20, invoiceNo: '', invoiceCode: '', sellerName: '', billNo: '',
   invoiceDate: [], scanDate: [], verifyStatus: '', direction: '' })
 
+// G13: direction prop 变化时同步到查询条件并刷新发票池
+// D-V4R-80（根因修复）：本 watch 原声明在 `const q = reactive(...)` **之前**且带 immediate:true，
+// immediate 回调在声明处同步执行 ⇒ 访问尚未初始化的 `q` 触发 TDZ ReferenceError，
+// setup 抛错 ⇒ `/invoice/input-pool`、`/invoice/output-pool` 直达时整页空白（只剩面包屑）。
+// `/invoice/query` 因 direction='' 短路未触发访问，故同文件另一路由正常，掩盖了这个 bug。
+// 修法：把 watch 移到 q 声明之后（loadPool 是函数声明，本就提升，无需等待）。
+watch(() => props.direction, (v) => { if (v) { q.direction = v; loadPool(1) } }, { immediate: true })
+
 const form = reactive({ invoiceCode: '', invoiceNo: '', invoiceType: 'VAT_SPECIAL', invoiceKind: 'SPECIAL', invoiceNature: 'BLUE', invoiceDate: '',
-  sellerName: '', sellerTaxNo: '', invoiceTitle: '', taxNo: '', netAmount: 0, amount: 0, taxAmount: 0, checkCode: '', currencyCode: 'CNY', remark: '' })
+  // D3：buyerName/buyerTaxNo 与 invoiceTitle/taxNo 语义重复但分属两组列，
+  // 补录时必须同时有值，否则按 buyer_name 过滤的报表查不到这张票（详见模板处注释）。
+  sellerName: '', sellerTaxNo: '', invoiceTitle: '', taxNo: '', buyerName: '', buyerTaxNo: '', netAmount: 0, amount: 0, taxAmount: 0, checkCode: '', currencyCode: 'CNY', remark: '' })
 const { autofill, saveFormHistory } = useAutoFill()
 const lastCreatedId = ref(null)
 
@@ -537,7 +563,7 @@ async function verifyBatch() {
 
 function resetForm() {
   Object.assign(form, { invoiceCode: '', invoiceNo: '', invoiceType: 'VAT_SPECIAL', invoiceKind: 'SPECIAL', invoiceNature: 'BLUE', invoiceDate: '',
-    sellerName: '', sellerTaxNo: '', invoiceTitle: '', taxNo: '', netAmount: 0, amount: 0, taxAmount: 0, checkCode: '', currencyCode: 'CNY', remark: '' })
+    sellerName: '', sellerTaxNo: '', invoiceTitle: '', taxNo: '', buyerName: '', buyerTaxNo: '', netAmount: 0, amount: 0, taxAmount: 0, checkCode: '', currencyCode: 'CNY', remark: '' })
 }
 
 async function saveCreate() {
@@ -756,7 +782,10 @@ async function runAuditFix() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
+
 onMounted(() => {
+  loadCurrency()
   autofill(form, 'INVOICE')
  loadPool(); loadVerify(); loadPendingInvs(); userApi.page({ pageNum: 1, pageSize: 200 }).then((d) => { users.value = d?.list || [] }).catch(() => {}) })
 

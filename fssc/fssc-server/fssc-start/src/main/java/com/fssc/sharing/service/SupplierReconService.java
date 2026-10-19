@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -140,9 +143,18 @@ public class SupplierReconService {
             upd.setPeriodPaid(periodPaid);
             upd.setClosingBalance(closingBalance);
             upd.setStatus("DRAFT");
-            // R5-D-074②：生成态一律 NONE（未发函不得出现「待确认/已驳回」），
+            // R5-D-074②：生成（覆盖）时一律 NONE（未发函不得出现「待确认/已驳回」），
             // 供应商确认状态只能由 sendLetter 后（letter_status SENT/RECEIVED）推进。
             upd.setSupplierConfirmStatus("NONE");
+            // D-V4R-77（状态机自锁修复）：生成时必须一并复位 letter_status 三兄弟。
+            // 原先只重置了 supplier_confirm_status，letter_status 仍停在 SENT/RECEIVED，
+            // 而前端「发送对账函」入口条件是 letterStatus==='NONE'、「确认一致」条件是
+            // supplierConfirmStatus==='PENDING' ⇒ 对同一供应商+期间重新生成后，
+            // 该行既不能重发函也不能确认，永久卡死（只能手工改库才能救）。
+            // 口径：重新生成 = 这一期重新走「发函 → 供应商确认」全流程，旧的函件信息全部作废。
+            upd.setLetterStatus("NONE");
+            upd.setLetterNo(null);
+            upd.setLetterSentTime(null);
             upd.setDiffRemark(null);
             upd.setUpdateBy(userId);
             upd.setUpdateTime(LocalDateTime.now());

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="budget-occupy-page">
     <el-card shadow="never">
@@ -91,16 +94,16 @@
 <el-dialog v-model="woVisible" title="核销预算占用" width="470px" destroy-on-close>
   <el-alert type="warning" :closable="false" show-icon style="margin-bottom:12px"
     title="核销＝把这笔占用转成已用（消耗）。只在系统自动结转失败、账本上出现「只有占用没有核销」的单子上用；操作会留流水，不可撤销。" />
-  <el-form :model="woForm" label-width="100px" size="small">
-    <el-form-item label="预算明细ID"><el-input-number v-model="woForm.budgetItemId" :min="1" style="width:100%" /></el-form-item>
-    <el-form-item label="核销金额"><el-input-number v-model="woForm.amount" :min="0.01" :precision="2" style="width:100%" /></el-form-item>
-    <el-form-item label="业务类型">
+  <el-form ref="woFormRef" :model="woForm" :rules="woRules" label-width="100px" size="small">
+    <el-form-item label="预算明细ID" prop="budgetItemId"><el-input-number v-model="woForm.budgetItemId" :min="1" style="width:100%" /></el-form-item>
+    <el-form-item label="核销金额" prop="amount"><el-input-number v-model="woForm.amount" :min="0.01" :precision="2" style="width:100%" /></el-form-item>
+    <el-form-item label="业务类型" prop="bizType">
       <el-select v-model="woForm.bizType" style="width:100%">
         <el-option v-for="t in bizTypes" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
     </el-form-item>
     <el-form-item label="单据号"><el-input v-model="woForm.bizNo" /></el-form-item>
-    <el-form-item label="单据ID"><el-input-number v-model="woForm.bizId" :min="1" style="width:100%" /></el-form-item>
+    <el-form-item label="单据ID" prop="bizId"><el-input-number v-model="woForm.bizId" :min="1" style="width:100%" /></el-form-item>
   </el-form>
   <template #footer>
     <el-button @click="woVisible = false">取消</el-button>
@@ -116,6 +119,7 @@ import { ElMessage } from 'element-plus'
 import { budgetApi } from '../../api'
 import { exportCsv } from '../../utils/csv'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { commonRules, validateForm } from '../../composables/useFormRules'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 
@@ -148,6 +152,14 @@ const bizTypes = [
 const woVisible = ref(false)
 const woBusy = ref(false)
 const woForm = reactive({ budgetItemId: null, amount: 0, bizType: null, bizId: null, bizNo: '' })
+// 第2批：预算核销弹窗接入中央框架（原只有一句组合 toast，字段级错误不落位）
+const woFormRef = ref(null)
+const woRules = {
+  budgetItemId: [{ required: true, type: 'number', min: 1, message: '请输入预算明细ID（须大于 0）' }],
+  amount: [{ required: true, type: 'number', min: 0.01, message: '请输入核销金额（须大于 0）' }],
+  bizType: commonRules.select('请选择业务类型'),
+  bizId: [{ required: true, type: 'number', min: 1, message: '请输入单据ID（须大于 0）' }],
+}
 function openWriteOff(row) {
   woForm.budgetItemId = row.budgetItemId
   woForm.amount = Math.abs(Number(row.amount || 0))
@@ -157,6 +169,7 @@ function openWriteOff(row) {
   woVisible.value = true
 }
 async function doWriteOff() {
+  if (!(await validateForm(woFormRef.value))) return
   if (!woForm.budgetItemId || !(Number(woForm.amount) > 0) || !woForm.bizType || !woForm.bizId) {
     ElMessage.warning('预算明细ID／核销金额／业务类型／单据ID 都要填齐才能核销')
     return

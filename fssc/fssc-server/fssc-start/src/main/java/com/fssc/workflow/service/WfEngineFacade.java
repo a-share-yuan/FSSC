@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.fssc.common.core.ErrorCode;
@@ -586,17 +589,26 @@ public class WfEngineFacade {
         //   SETTLE:PREPAY（唯一一条子类型域字面量）
         // 除最后一条，全部写在 <b>bizType 域</b>（＝wf_process_config.biz_type 登记值、＝wf_instance.biz_type 落库值）；
         // 而原实现在 subType 非空时<b>用它覆盖</b> billType，subType 取的是 exp_bill.bill_sub_type 域
-        // （REPAY/LOAN/TRAVEL/SETTLE/PREPAY）。两域不重合 ⇒ 条件恒 false：还款单（bizType=EXP_REPAY、
+        // （REPAY/LOAN/TRAVEL/SETTLE/PREPAY）。两域不重合 ⇒ <b>修复前</b>条件恒 false：还款单（bizType=EXP_REPAY、
         // subType=REPAY）在 GW_LN 的「还款反向档」永不命中，「出纳确认还款到账」「还款核销审核」两节
         // 被整体跳过＝单据绕过出纳与财务审核直接定论（389 正证，与"引擎伪配置"同族）。
         // <b>归一</b>：billType 一律取 bizType（条件字面量所在域）；单据子类型改由下方<b>新增</b>的
         // {@code subType} 变量承载——设计器分支面板（{@code WfDesignerController#simulate}）早已把
-        // subType 列为可用条件变量，但门面从未注入，谁写谁 "Cannot resolve identifier"，本次一并补齐。
-        //  必须同批改写的唯一一条：SETTLE 模型 GW_ST 的「预付核销档」条件
+        // subType 列为可用条件变量，但门面从未注入，谁写谁"Cannot resolve identifier"，本次一并补齐。
+        //
+        // 【2026-10-15 复核：上方"永不命中"说的是<b>归一修复之前</b>，勿据本段误判 RP_1/RP_2 是死配置】
+        //   归一已随本批落地（下方两行 put），实测<b>还款反向档现已正常可达</b>：
+        //   dev/start(bizType=EXP_REPAY) ⇒ modelKey=LOAN，首节点<b>直接落在 RP_1「出纳确认还款到账【出纳】」</b>
+        //   （LOAN 的 GW_LN 有 {@code Flow_GW_LN_RP_1: GW_LN -> RP_1} 直连分支，RP_2 紧随其后）。
+        //   反向佐证：RP_1/RP_2 的 {@code allow_addsign=0}（全库 11 条禁止档节点之一）已在该节点上
+        //   被加签闸口真实拦截并做��了"关闸放行/开闸拒绝"对照（见 addSign():3814）。
+        //   ⇒ 「引擎伪配置」在 LOAN 还款档已<b>不成立</b>；排查该链路请按"可达"处理，不要跳过。
+        //  仍待同批改写的唯一一条：SETTLE 模型 GW_ST 的「预付核销档」条件
         // {@code ${billType == 'PREPAY'}} 要改成 {@code ${subType == 'PREPAY'}}，否则预付单
         // （现网 1 支：bizType=EXP_PAY + bill_sub_type=PREPAY）会从预付核销档掉进默认流、漏掉
         // 「预付核销核对／预付复核」两节。该改写落在模型数据（wf_model.bpmn_xml）＋重新部署，
-        // 不属引擎面，已随本批以注释态 SQL 移交主窗发布窗口。
+        // 不属引擎面，已随本批以注释态 SQL 移交主窗发布窗口。<b>本条与上方 LOAN 不同，尚未改写</b>
+        //（LOAN 是引擎侧归一即生效，本条必须改模型数据，故仍以本注释标记待办）。
         vars.put("billType", bizType == null || bizType.isBlank() ? "" : bizType);
         vars.put("subType", subType == null || subType.isBlank() ? "" : subType);
         if (extraVars != null) {
@@ -842,8 +854,29 @@ public class WfEngineFacade {
             if (isFirstNodeAutoPass(firstNodeCfg)) {
                 log.info(" 流程 {} 首节点[{}]已勾选「提单即自动通过」（first_node_auto_pass=1），自动完成: procInstId={}, taskId={}",
                         processKey, firstTask.getName(), firstTask.getProcessInstanceId(), firstTask.getId());
-                complete(firstTask.getId(), true, "提交节点自动跳过（提单即触发）", approverUserIdOrDefault());
-                log.info(" 流程 {} 提交节点已自动通过: procInstId={}, taskId={}",
+                // D-V5R-07（F-run-1017b 实测，借款链 JK202610170001）：提交节点自动通过前必须把办理人
+                // 归位到发起人本人。角色取人（如 LOAN.Task_1 assign_type=ROLE/COMMON_EMP）会把首任务派给
+                // 「角色下 sys_user.id 最小的持有人」（实测派给共享会计 100002/赵勇，而非申请人 100001/丁宇轩），
+                // 机器办结后该持有人即在审批历史里留下「办过本实例一个节点」，后续其本人节点
+                // （Task_9 共享费用审核）被连办闸 approve.deny_serial_same_handler 误拦：
+                // 403「禁止同一人在同一审批流程中连续办理多个节点（连办/自审拦截）」，只能转办才走完。
+                // 「提单即自动通过」的语义是发起人的提交动作本身，办结人理应记发起人；
+                // 归位后镜像 wf_task/实例视图同步更新，双账一致。
+                Long initiator = approverUserIdOrDefault();
+                Long passOper = null;
+                if (initiator != null && initiator > 0) {
+                    passOper = initiator;
+                    if (!String.valueOf(initiator).equals(firstTask.getAssignee())) {
+                        String rolePicked = firstTask.getAssignee();
+                        taskService.setAssignee(firstTask.getId(), String.valueOf(initiator));
+                        syncTaskViewAfterAssigneeChange(firstTask, initiator, "提交节点归位发起人");
+                        log.info(" 流程 {} 提交节点[{}]办理人归位发起人({})（原角色取人={}）: procInstId={}, taskId={}",
+                                processKey, firstTask.getName(), initiator, rolePicked,
+                                firstTask.getProcessInstanceId(), firstTask.getId());
+                    }
+                }
+                autoPassByTimeout(firstTask.getId(), passOper, "提交节点自动跳过（提单即触发）");
+                log.info(" 流程 {} 提交节点已自动通过（配置 first_node_auto_pass=1，机器通道）: procInstId={}, taskId={}",
                         processKey, firstTask.getProcessInstanceId(), firstTask.getId());
                 return true;
             }
@@ -3109,6 +3142,16 @@ public class WfEngineFacade {
                 return;
             }
             if (wfQueryService.pendingTaskExists(task.getId())) {
+                // D-V4R-43：G1 监听器投影会先建 assignee 为空的镜像行；三级解析（empty_strategy ESCALATE）
+                // 补派出真人后必须回写 assignee，否则待办/看板/超时作业全部按镜像找人——单子在真人手里
+                // 却不在任何人待办里（实测 LOAN/CLAIM Task_2 卡死的最后一公里）。
+                com.fssc.workflow.entity.WfTask existing = wfQueryService.pendingTaskByTaskId(task.getId());
+                Long assigneeLate = toUserIdOrNull(task.getAssignee());
+                if (existing != null && existing.getAssigneeId() == null && assigneeLate != null) {
+                    wfQueryService.updateTaskAssignee(task.getId(), assigneeLate);
+                    log.info("待办视图补派回写: task={} node={} assignee={}",
+                            task.getId(), task.getTaskDefinitionKey(), assigneeLate);
+                }
                 return;
             }
             com.fssc.workflow.entity.WfInstance inst =
@@ -4315,8 +4358,14 @@ public class WfEngineFacade {
         for (int round = 0; round < 2; round++) {
             boolean progressed = false;
             for (Task t : openTasks(procInstId)) {
-                // 已有 PENDING 镜像＝此前已解析补账过，不重复改派
-                if (wfQueryService.pendingTaskExists(t.getId())) {
+                // D-V4R-43：G1 开关下监听器（TASK_CREATED 投影）会先于三级解析给新任务建 PENDING 镜像行
+                // （assignee 为空）。旧守卫「有 PENDING 镜像就跳过」把 assignApprover 的三级解析连同
+                // empty_strategy ESCALATE 兜底一起跳掉——候选组有组码、组内却解析不出真人时（实测：
+                // 提单人＝顶级部门负责人本人，DIRECT_SUPERVISOR 判「无上级」），ASSIGNEE_ 永远为空、
+                // 任务对所有人不可见、流程静默卡死（对账作业只报 WF-MIRROR-002 不修）。
+                // 改为：镜像已解析出真人（assignee_id 非空）才跳过；空 assignee 的镜像行仍走三级解析补派。
+                com.fssc.workflow.entity.WfTask mirror = wfQueryService.pendingTaskByTaskId(t.getId());
+                if (mirror != null && mirror.getAssigneeId() != null) {
                     continue;
                 }
                 assignApprover(processKey, t);

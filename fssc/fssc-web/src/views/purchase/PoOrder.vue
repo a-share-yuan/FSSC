@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -140,11 +143,13 @@
           <el-col :span="8">
             <el-form-item label="币种" prop="currency">
               <el-select v-model="form.currency" style="width: 100%">
-                <el-option label="人民币 CNY" value="CNY" />
-                <el-option label="美元 USD" value="USD" />
-                <el-option label="欧元 EUR" value="EUR" />
-                <el-option label="日元 JPY" value="JPY" />
-                <el-option label="港元 HKD" value="HKD" />
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+
+                
+                
+                
+                
+                
               </el-select>
             </el-form-item>
           </el-col>
@@ -243,8 +248,9 @@
             </template>
           </el-table-column>
           <el-table-column label="物料名称" min-width="150">
+            <template #header"><span style="color:#f56c6c">*</span>物料名称</template>
             <template #default="{ row }">
-              <el-input v-model="row.materialName" size="small" placeholder="物料/服务名称" />
+              <el-input v-model="row.materialName" size="small" placeholder="物料/服务名称（勿填金额）" />
             </template>
           </el-table-column>
           <el-table-column label="数量" width="90">
@@ -275,6 +281,11 @@
         </el-table>
         <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px">
           <el-button size="small" type="primary" plain @click="addLine">+ 添加行</el-button>
+          <!-- D-V4R-91：勾稽实时提示。原先行项目合计只作展示、与订单金额毫无比对，
+               导致「表头 60000 / 行合计 0」一路放行。 -->
+          <span v-if="amountMismatch" style="color: #f56c6c; font-size: 13px">
+             行项目合计 {{ fmt(lineTotal) }} 与订单金额 {{ fmt(Number(form.amount || 0)) }} 不一致，保存将被拒
+          </span>
           <span style="margin-left: auto; color: #909399; font-size: 13px">
             行项目合计：<b style="color: #409eff; font-size: 15px">{{ fmt(lineTotal) }}</b> {{ form.currency || 'CNY' }}
           </span>
@@ -286,7 +297,13 @@
       </el-form>
       <template #footer>
         <el-button @click="dlg = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button type="primary" @click="save(false)">保存</el-button>
+        <!-- D-V4R-89(P3-UI-01)：弹窗内补【保存并提交】，免去"关闭弹窗→回列表找行→点提交"三步跳转 -->
+        <el-button type="success" @click="save(true)">保存并提交</el-button>
+        <div style="flex:1"></div>
+        <span style="font-size:12px;color:#909399;margin-right:8px">
+          仅【保存】＝存为草稿（不进审批）；【保存并提交】＝直接进入采购经理审批流
+        </span>
       </template>
     </el-dialog>
 
@@ -350,6 +367,7 @@ import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
+import { useCurrency } from '@/composables/useCurrency'
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+s': () => { try { save() } catch { /* noop */ } },
@@ -430,6 +448,14 @@ const detailCipLabel = computed(() => {
 
 const lineTotal = computed(() => formLines.value.reduce((s, r) => s + Number(r.amount || 0), 0))
 
+// D-V4R-91：表头金额与行项目合计勾稽（容差 0.01，与后端 assertHeaderLineAmountConsistent 同口径）
+// 无行项目时不判（采购订单允许只录表头金额）
+const amountMismatch = computed(() => {
+  const header = Number(form.value?.amount || form.amount || 0)
+  const sum = Number(lineTotal.value || 0)
+  return sum > 0 && Math.abs(header - sum) > 0.01
+})
+
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 
 function addLine() {
@@ -487,18 +513,104 @@ function viewDetail(row) {
   dlgDetail.value = true
 }
 
-async function save() {
+/**
+ * D-V4R-91：行项目逐行校验（与后端 PurchaseService.assertOrderLine 同口径）。
+ * guardSubmit 只能校验带 prop 的表单项，行项目明细不在 el-form 内，
+ * 历史上从未被任何一层校验过——自动化脚本把 60000 填进「物料名称」、
+ * 数量/单价留默认值(1/0) 时照样落库，直到三单匹配才暴露。
+ * 后端为最终闸门，此处提前拦是为了让用户在点【保存】当场就看到红字，
+ * 而不是提交被拒后去猜哪一行错了。
+ */
+function validateLines() {
+  const lines = formLines.value || []
+  // 全空行忽略（模板新增的空行不算填写内容）
+  const active = lines.filter(l => l.materialName || l.materialCode
+    || Number(l.quantity || 0) !== 0 || Number(l.amount || 0) !== 0)
+  if (!active.length) return true // 无行项目：采购订单允许只录表头金额
+
+  for (let i = 0; i < active.length; i++) {
+    const l = active[i]
+    const pos = `第 ${i + 1} 行`
+    if (!String(l.materialName || '').trim()) {
+      ElMessage.warning(`${pos}物料名称必填（只有物料编码不够）`)
+      return false
+    }
+    const name = String(l.materialName).trim()
+    if (/^[0-9][0-9,]*(\.[0-9]+)?$/.test(name)) {
+      ElMessage.warning(`${pos}物料名称「${name}」是纯数字，疑似把数量/金额填进了名称栏，请填实际品名`)
+      return false
+    }
+    if (!(Number(l.quantity) > 0)) {
+      ElMessage.warning(`${pos}数量必须大于 0（当前 ${l.quantity}）`)
+      return false
+    }
+    if (!(Number(l.unitPrice) > 0)) {
+      ElMessage.warning(`${pos}单价必须大于 0（当前 ${l.unitPrice}）`)
+      return false
+    }
+    const expect = Number(l.quantity) * Number(l.unitPrice)
+    const actual = Number(l.amount || 0)
+    if (actual > 0 && Math.abs(expect - actual) > 0.01) {
+      ElMessage.warning(`${pos}量价勾稽不符：数量 × 单价 = ${expect.toFixed(2)}，行金额 = ${actual.toFixed(2)}`)
+      return false
+    }
+  }
+
+  // 表头与行合计勾稽（与后端 assertHeaderLineAmountConsistent 同口径）
+  const sum = active.reduce((s, l) => s + Number(l.amount || 0), 0)
+  const header = Number(form.value?.amount || form.amount || 0)
+  if (sum > 0 && Math.abs(header - sum) > 0.01) {
+    ElMessage.warning(`订单金额(${header.toFixed(2)}) ≠ 行项目合计(${sum.toFixed(2)})，请检查行明细`)
+    return false
+  }
+  return true
+}
+
+/**
+ * D-V4R-89：保存 / 保存并提交。
+ * 历史设计把「提交审批」只放在列表行内（PoOrder.vue 行操作列），弹窗底部只有【保存】，
+ * 新手按手册「→【保存】→【提交】」操作时会在弹窗里找不到提交键，误以为功能缺失
+ * （P3-UI-01）。此处补【保存并提交】：一次点击完成「保存 → 提交审批」，
+ * 省掉关闭弹窗、回列表找行、再点一次的三步跳转。
+ * 编辑态（form.id 已存在且已是草稿）同样允许——驳回重提场景也需要一键重提。
+ */
+async function save(thenSubmit = false) {
   saveFormHistory('PO_ORDER', form.value || form)
 
   await guardSubmit(async () => {
+    if (!validateLines()) return          // D-V4R-91：行项目闸门，先于请求发出
     try {
       const payload = { ...form, lines: formLines.value.filter(l => l.materialName || l.materialCode) }
-      if (form.id) await purchaseApi.orderUpdate(payload)
-      else await purchaseApi.orderCreate(payload)
-      ElMessage.success('已保存')
+      let saved
+      if (form.id) saved = await purchaseApi.orderUpdate(payload)
+      else saved = await purchaseApi.orderCreate(payload)
+
+      if (!thenSubmit) {
+        ElMessage.success('已保存')
+        dlg.value = false
+        load()
+        return
+      }
+
+      // 保存并提交：create 接口 Result<Long> 经 http 拦截器解包后直接是 id；
+      //              update 返回 void，故编辑态用回原 form.id。
+      const id = form.id ?? (typeof saved === 'number' ? saved : saved?.id ?? saved?.data?.id ?? null)
+      if (!id) {
+        ElMessage.warning('已保存，但未能取得单据标识，请到列表中点击【提交审批】')
+        dlg.value = false
+        load()
+        return
+      }
+      await purchaseApi.orderSubmit(id)
+      ElMessage.success('已保存并提交审批')
       dlg.value = false
       load()
-    } catch (e) { ElMessage.error(e.message) }
+    } catch (e) {
+      // 提交阶段失败但草稿已落库：明确告知"已保存为草稿"，避免用户重复建单
+      ElMessage.error(thenSubmit && (form.id || form.poNo)
+        ? `${e.message}（单据已保存为草稿，可在列表中重试【提交审批】）`
+        : e.message)
+    }
   })
 }
 
@@ -602,7 +714,10 @@ async function archiveOrderRow(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
+
 onMounted(async () => {
+  loadCurrency()
   autofill(form, 'PO_ORDER')
   try {
     const [s, ct] = await Promise.all([
@@ -660,3 +775,12 @@ function batchExport() {
 }
 
 </script>
+
+<style scoped>
+/* D-V4R-89：footer 内说明文案靠弹性占位推到右端 */
+:deep(.el-dialog__footer) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+</style>

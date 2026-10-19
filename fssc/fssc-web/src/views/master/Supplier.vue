@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="supplier-page">
     <el-card shadow="never">
@@ -189,8 +192,8 @@
         <template v-else-if="subDialog === 'contact'">
           <el-form-item label="姓名" prop="contactName"><el-input v-model="contactForm.contactName" /></el-form-item>
           <el-form-item label="职务"><el-input v-model="contactForm.position" /></el-form-item>
-          <el-form-item label="电话"><el-input v-model="contactForm.phone" /></el-form-item>
-          <el-form-item label="邮箱"><el-input v-model="contactForm.email" /></el-form-item>
+          <el-form-item label="电话" prop="phone"><el-input v-model="contactForm.phone" /></el-form-item>
+          <el-form-item label="邮箱" prop="email"><el-input v-model="contactForm.email" /></el-form-item>
           <el-form-item label="主要联系人"><el-switch v-model="contactForm.isPrimary" /></el-form-item>
         </template>
         <template v-else>
@@ -219,6 +222,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { supplierApi, configApi } from '../../api'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
+import { useFormRules } from '../../composables/useFormRules'
 import { exportCsv } from '../../utils/csv'
 import { hasPerm } from '@/utils/perm'
 
@@ -252,22 +256,30 @@ const basicFormRef = ref(null)
 const subFormRef = ref(null)
 const basicGuard = useSubmitGuard(basicFormRef)
 const subGuard = useSubmitGuard(subFormRef)
-const basicRules = {
-  supplierCode: [{ required: true, message: '请输入供应商编码' }],
-  supplierName: [{ required: true, message: '请输入供应商名称' }],
-}
-const SUB_RULES = {
-  bank: {
-    bankName: [{ required: true, message: '请输入开户行' }],
-    bankAccount: [{ required: true, message: '请输入银行账号' }],
-  },
-  contact: {
-    contactName: [{ required: true, message: '请输入联系人姓名' }],
-  },
-  qual: {
-    qualName: [{ required: true, message: '请输入证照名称' }],
-  },
-}
+// 第1批 P0：录入规则统一走中央框架 useFormRules（原页面本地 rules 只有编码/名称必填，
+// 税号/信用代码/电话/子表账号全部裸奔）。资质证照「有效期至不得早于生效日」是跨字段勾稽，
+// 用页面级 computed 追加一条闭包 validator（async-validator 的 validator 拿不到 form 其他字段）。
+const { rules: supplierRules } = useFormRules('SUPPLIER')
+const { rules: subBankRules } = useFormRules('SUPPLIER_BANK')
+const { rules: subContactRules } = useFormRules('SUPPLIER_CONTACT')
+const qualBase = useFormRules('SUPPLIER_QUAL').rules
+const qualRules = computed(() => ({
+  ...qualBase.value,
+  validTo: [{
+    validator: (rule, value, cb) => {
+      const from = qualForm.validFrom
+      if (from && value && new Date(value) < new Date(from)) {
+        return cb(new Error('有效期至不得早于生效日'))
+      }
+      cb()
+    },
+  }],
+}))
+const SUB_RULES = computed(() => ({
+  bank: subBankRules.value,
+  contact: subContactRules.value,
+  qual: qualRules.value,
+}))
 // 三个子表弹窗共用一个 el-form，:model 随当前弹窗类型切换
 const subForm = computed(() => (subDialog.value === 'bank' ? bankForm : subDialog.value === 'contact' ? contactForm : qualForm))
 

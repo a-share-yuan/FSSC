@@ -1,6 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.DispatchTask;
 import com.fssc.compliance.entity.OpSlaBreach;
 import com.fssc.compliance.entity.OpSlaConfig;
@@ -54,6 +59,87 @@ public class SlaMonitorService {
         return slaConfigMapper.selectList(
                 new LambdaQueryWrapper<OpSlaConfig>()
                         .orderByAsc(OpSlaConfig::getPriority));
+    }
+
+    // ---------------- 维护面（2026-10-17 补：此前只有 list/check，SLA 阈值改一次只能改库）----------------
+
+    /**
+     * 新增 SLA 配置。
+     *
+     * <p>{@code billType} 是业务唯一键（{@link #getConfigByBillType} 按它取配置，且
+     * {@code status='NORMAL'} 生效），重复配置会让运行期取到哪一条变得不确定 ⇒ 这里直接拒。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long create(OpSlaConfig cfg) {
+        normalize(cfg);
+        if (cfg.getBillType() != null && findByBillType(cfg.getBillType(), null) != null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "单据类型已存在 SLA 配置：" + cfg.getBillType() + "，请直接编辑该条");
+        }
+        cfg.setId(null);
+        slaConfigMapper.insert(cfg);
+        log.info("[sla] 新增配置 billType={} target={}h warn={}h",
+                cfg.getBillType(), cfg.getTargetHours(), cfg.getWarningHours());
+        return cfg.getId();
+    }
+
+    /** 更新 SLA 配置；{@code id} 为空视为新增，防止前端漏传 id 时静默插一条脏数据。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void update(OpSlaConfig cfg) {
+        if (cfg.getId() == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "缺少 SLA 配置 id，无法更新");
+        }
+        normalize(cfg);
+        if (cfg.getBillType() != null && findByBillType(cfg.getBillType(), cfg.getId()) != null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "单据类型已被其它 SLA 配置占用：" + cfg.getBillType());
+        }
+        slaConfigMapper.updateById(cfg);
+        log.info("[sla] 更新配置 id={} billType={}", cfg.getId(), cfg.getBillType());
+    }
+
+    /** 删除 SLA 配置。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long id) {
+        OpSlaConfig old = slaConfigMapper.selectById(id);
+        if (old == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "SLA 配置不存在：" + id);
+        }
+        slaConfigMapper.deleteById(id);
+        log.info("[sla] 删除配置 id={} billType={}", id, old.getBillType());
+    }
+
+    /** 查同一 billType 的其它配置（excludeId 用于更新时排除自身）。 */
+    private OpSlaConfig findByBillType(String billType, Long excludeId) {
+        return slaConfigMapper.selectOne(new LambdaQueryWrapper<OpSlaConfig>()
+                .eq(OpSlaConfig::getBillType, billType)
+                .ne(excludeId != null, OpSlaConfig::getId, excludeId)
+                .last("limit 1"));
+    }
+
+    /** 入库前归一：去空格、默认值、校验预警不晚于目标。 */
+    private void normalize(OpSlaConfig cfg) {
+        if (cfg.getBillType() != null) {
+            cfg.setBillType(cfg.getBillType().trim().toUpperCase());
+        }
+        if (cfg.getTargetHours() == null || cfg.getTargetHours() <= 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "SLA 目标时长（小时）必须为正数");
+        }
+        // 预警晚于目标 = 永远不预警，属于配置自相矛盾，直接拦下而不是静默生效
+        if (cfg.getWarningHours() != null && cfg.getWarningHours() >= cfg.getTargetHours()) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "SLA 预警时长（" + cfg.getWarningHours() + "h）必须小于目标时长（"
+                            + cfg.getTargetHours() + "h），否则永不触发预警");
+        }
+        if (cfg.getStatus() == null || cfg.getStatus().isBlank()) {
+            cfg.setStatus("NORMAL");
+        }
+        if (cfg.getPriority() == null) {
+            cfg.setPriority(0);
+        }
+        if (cfg.getEscalationEnabled() == null) {
+            cfg.setEscalationEnabled(0);
+        }
     }
 
     /**

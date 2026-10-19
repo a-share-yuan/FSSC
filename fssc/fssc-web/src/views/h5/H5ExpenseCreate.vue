@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="h5-page h5-page--bar">
     <header class="h5-header">
@@ -245,9 +248,7 @@
             <label for="h5-f-payTarget">收款对象</label>
             <select id="h5-f-payTarget" v-model="form.bill.payTarget" @change="onPayTargetChange">
               <option :value="''">请选择</option>
-              <option value="EMPLOYEE">员工（报给自己）</option>
-              <option value="SUPPLIER">供应商</option>
-              <option value="CUSTOMER">客户</option>
+              <option v-for="o in payeeTypeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
             </select>
           </div>
           <div v-if="errOf('payTarget')" class="h5-field__err">{{ errOf('payTarget') }}</div>
@@ -256,9 +257,7 @@
             <label for="h5-f-payMethod">收款方式</label>
             <select id="h5-f-payMethod" v-model="form.bill.extJson.payMethod">
               <option :value="''">请选择</option>
-              <option value="BANK">银行转账</option>
-              <option value="CASH">现金</option>
-              <option value="CHECK">支票</option>
+              <option v-for="o in payMethodOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
             </select>
           </div>
           <div v-if="errOf('payMethod')" class="h5-field__err">{{ errOf('payMethod') }}</div>
@@ -364,6 +363,25 @@ import { pickBudgetLine } from '../../utils/budget.js'
 import { splitTaxInclusive } from '../../utils/tax.js'
 import { budgetLabel, budgetUnseenLabel } from '../../utils/format'
 import { money, dayText, permDeniedOf, saveLocalDraft, loadLocalDraft, clearLocalDraft, pushRecentItems, recentItemIds, compressImage } from '@/utils/h5.js'
+// 收款方式改为读 sys_dict 的 pay_method（2026-10-18 基础数据收口）。
+//  本页全站唯一未接 i18n 的页面（文案直接写中文），故 label 直接用字典 label，不做 i18n 合成。
+//    字典不可用时 useDict 自动回落到本地兜底常量，界面与改造前一致。
+import { useDict } from '@/composables/useDict.js'
+import { PAY_METHOD_LOCAL, PAYEE_TYPE_LOCAL } from '@/composables/useBaseDict'
+
+// 收款方式下拉的选项来源（本地兜底常量，字典到位后被字典覆盖）
+const payMethodDict = useDict('pay_method', PAY_METHOD_LOCAL)
+const payMethodOptions = payMethodDict.options
+
+// 收款对象类型（enum_payee_type）。字典值域与本页原写死的 EMPLOYEE/SUPPLIER/CUSTOMER 一致。
+// EMPLOYEE 的「（报给自己）」是本页特有的业务提示（非字典文案），故在此拼接而非丢给字典。
+const payeeTypeDict = useDict('enum_payee_type', PAYEE_TYPE_LOCAL)
+//  useDict().options 是 computed ref（见 useDict.js:120），此处必须取 .value 再 map。
+// 直接 .map 会抛 "options.map is not a function"，导致 H5 制单页白屏（本轮实测暴露）。
+const payeeTypeOptions = computed(() => payeeTypeDict.options.value.map((o) => ({
+  value: o.value,
+  label: o.value === 'EMPLOYEE' ? `${o.label}（报给自己）` : o.label
+})))
 
 defineOptions({ name: 'H5ExpenseCreate' })
 
@@ -1009,6 +1027,8 @@ const recentChips = computed(() => recentItemIds(userId.value, 5)
   .filter(Boolean))
 
 async function boot() {
+  payMethodDict.load()
+  payeeTypeDict.load()
   resetSessionClock() // P2-6 埋点起点：本页本次打开（口径见 sessionOpenedAt 注释）
   bootLoading.value = true
   loadError.value = ''

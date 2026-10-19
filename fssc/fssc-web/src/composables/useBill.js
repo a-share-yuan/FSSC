@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 // 通用单据逻辑 composable：费用报销域所有单据页共享
 // 覆盖：草稿保存/提交、我的单据、凭证预览/记账、预算占用预览、附件上传、冲借款、关联事前申请
 import { reactive, ref, computed, watch, onMounted } from 'vue'
@@ -422,7 +425,18 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     const __fill = async (fn, onErr) => { try { await fn() } catch (e) { if (onErr) onErr() } }
     await Promise.all([
       __fill(async () => fillArr(contracts.value, ((await contractApi.page({ pageNum: 1, pageSize: 200 })) || {}).list || []), () => fillArr(contracts.value, [])),
-      __fill(async () => fillArr(customers.value, ((await customerApi.page({ pageNum: 1, pageSize: 200 })) || {}).list || []), () => fillArr(customers.value, [])),
+      // D-V4R-96：往来单位候选必须覆盖供应商。
+      // 原先只读 /customer/page（crm_customer 客户档案），而供应商在 md_supplier、两表零同步，
+      // 现役库 crm_customer 近乎空表 ⇒ 对公结算下拉里一个供应商都没有，
+      // SETTLE 单据挂不上 customer_id/po_id/po_receipt_id，三单匹配腿断裂、根本提交不了。
+      // 改用 /customer/candidates：后端把供应商按 supplier_code 幂等建档为往来单位档案，
+      // 返回的 id 是语义正确的 crm_customer.id（下游应收核销/坏账/对账都按这个解析），
+      // 并补出 accountNo/bankName（原档案表无账号字段，导致收款账号必填永远填不上）。
+      __fill(async () => {
+        const r = (await customerApi.candidates({ limit: 300 })) || {}
+        const list = Array.isArray(r) ? r : (r.data || r.list || [])
+        fillArr(customers.value, list)
+      }, () => fillArr(customers.value, [])),
       __fill(async () => fillArr(costCenters.value, ((await mdApi.costCenters({ pageNum: 1, pageSize: 200 })) || {}).list || []), () => fillArr(costCenters.value, [])),
       __fill(async () => fillArr(projects.value, ((await mdApi.projects({ pageNum: 1, pageSize: 200 })) || {}).list || []), () => fillArr(projects.value, [])),
       // FINAL-01: 费用类型→预算科目映射(选费用类型自动带出预算科目；失败不影响主数据)
@@ -454,7 +468,13 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     uploading.value = true
     try {
       const rec = await fileApi.upload(file, 'INVOICE', form.bill.id || null)
-      form.attaches = [{ fileId: rec.id, fileName: rec.fileName, attachType: 'INVOICE' }]
+      // D-V4R-44：同名查重（fileId 每次上传都是新值，按它查重防不住同一文件重复上传）
+      if (form.attaches.some((a) => (a.fileName || '') === (rec.fileName || ''))) {
+        ElMessage.warning(`附件「${rec.fileName}」已在本单据中，已跳过重复上传`)
+        return
+      }
+      // D-V4R-44 附带修复：原实现整表覆盖（form.attaches = [{...}]），多附件场景互相踩掉，改为追加
+      form.attaches = [...form.attaches, { fileId: rec.id, fileName: rec.fileName, attachType: 'INVOICE' }]
       ElMessage.success(`附件已上传：${rec.fileName}`)
     } catch (err) {
       ElMessage.error('上传失败：' + err.message)
@@ -468,6 +488,12 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   function onAttachUploaded(rec) {
     if (!rec) return
     const attach = { fileId: rec.id, fileName: rec.fileName, attachType: rec.attachType === 'INVOICE' ? 'INVOICE' : 'OTHER' }
+    // D-V4R-44：同名文件查重——fileId 每次上传都生成新值，旧守卫 find(fileId) 形同虚设，
+    // 同一发票文件可重复添加 N 次全部落库（实测 4 行同名 INVOICE 附件）。同名即拦截。
+    if (form.attaches.some((a) => (a.fileName || '') === (attach.fileName || ''))) {
+      ElMessage.warning(`附件「${attach.fileName}」已在本单据中，已跳过重复上传`)
+      return
+    }
     if (!form.attaches.find((a) => a.fileId === attach.fileId)) form.attaches = [...form.attaches, attach]
     if (rec.attachType === 'INVOICE' && rec.invoice) {
       const inc = newInvoice()
@@ -664,10 +690,18 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
           let reason = saved
           if (!reason) {
             try {
+              // D-V5R-09（F-run-1017b 实测）：inputType 显式改 textarea——ElMessageBox.prompt 默认渲染
+              // 单行 input，超支理由是长文本（要写清"为什么超、调剂口径"），单行既不好填也不好读；
+              // 且自动化/无障碍定位按 textarea 找，单行 input 让探针脚本永远抓不到输入框。
               const r = await ElMessageBox.prompt(
                 `${soft.length} 项预算超出可用额度，当前为软控方案：请填写超支理由（随单据留痕，服务端同口径校验）`,
                 '软控超支·需填写理由',
-                { type: 'warning', inputValidator: (v) => (v && v.trim() ? true : '超支理由不能为空') })
+                {
+                  type: 'warning',
+                  inputType: 'textarea',
+                  inputPlaceholder: '请填写超支原因与调剂口径（必填，随单据留痕）',
+                  inputValidator: (v) => (v && v.trim() ? true : '超支理由不能为空'),
+                })
               reason = String(r.value || '').trim()
             } catch { return } // 取消＝放弃本次提交
             form.bill.extJson = { ...(form.bill.extJson || {}), overrunReason: reason }
@@ -740,7 +774,9 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   async function loadBillForEdit(row) {
     try {
       let d = await billApi.detail(row.id)
-      if ((d.bill || {}).status === 'REJECTED') {
+      // D-V4R-79：撤回单（WITHDRAWN）与驳回单同轨——先转 DRAFT 并解除旧实例关联再载入，
+      // 否则前端拿到的仍是 WITHDRAWN，提交会被服务端拒；顺带消掉「撤回后无法重提」的死单。
+      if ((d.bill || {}).status === 'REJECTED' || (d.bill || {}).status === 'WITHDRAWN') {
         await billApi.editForResubmit(row.id)
         d = await billApi.detail(row.id)
       }

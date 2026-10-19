@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * D-DEC-461（10-05）＝票面识别结果的**唯一分档口**：「已识别」≠「已入发票池」。
  *

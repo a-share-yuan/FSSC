@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div :class="{ tabless: isSingle }">
     <el-card>
@@ -368,7 +371,9 @@
         <el-form-item label="账户名称" prop="accountName"><el-input v-model="accForm.accountName" placeholder="请输入账户名称" /></el-form-item>
         <el-form-item label="开户银行" prop="bankName"><el-select v-model="accForm.bankName" filterable allow-create default-first-option placeholder="请选择或输入开户银行" style="width:100%"><el-option label="工商银行" value="工商银行" /><el-option label="建设银行" value="建设银行" /><el-option label="农业银行" value="农业银行" /><el-option label="中国银行" value="中国银行" /><el-option label="交通银行" value="交通银行" /><el-option label="招商银行" value="招商银行" /><el-option label="邮储银行" value="邮储银行" /><el-option label="其他" value="其他" /></el-select></el-form-item>
         <el-form-item label="银行账号" prop="bankAccount"><el-input v-model="accForm.bankAccount" placeholder="请输入银行账号" /></el-form-item>
-        <el-form-item label="币种"><el-select v-model="accForm.currencyCode" style="width:100%"><el-option label="人民币 CNY" value="CNY" /><el-option label="美元 USD" value="USD" /><el-option label="欧元 EUR" value="EUR" /><el-option label="日元 JPY" value="JPY" /></el-select></el-form-item>
+        <el-form-item label="币种"><el-select v-model="accForm.currencyCode" style="width:100%">
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
+</el-select></el-form-item>
         <div style="color:#909399; font-size:12px; padding-left:2px">保存即发起 TR_BANK_MASTER 银行主数据审批流（资金岗经办→财务经理复核）</div>
       </el-form>
       <template #footer>
@@ -397,6 +402,7 @@ import CoachMark from '@/components/CoachMark.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
+import { useCurrency } from '@/composables/useCurrency'
 // R5-13: 快捷键
 useKeyboard({
   'ctrl+r': () => { try { reload() } catch { /* noop */ } },
@@ -849,7 +855,10 @@ async function loadMasters() {
     }
   } catch (e) { /* ignore */ }
 }
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
+
 onMounted(async () => { await loadMasters(); reload() })
+ loadCurrency()
 
 function exportCsv() {
   if (!credits.value.length) { ElMessage.warning('当前无数据可导出'); return }

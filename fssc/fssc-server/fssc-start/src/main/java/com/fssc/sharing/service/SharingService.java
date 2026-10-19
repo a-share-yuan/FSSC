@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -273,6 +276,49 @@ public class SharingService {
             act.setActiveFlag("Y");
             opAuditTaskMapper.updateById(act);
         }
+    }
+
+    /**
+     * ⑨（D-V4R-49，2026-10-16 晚间场实测）：单据到达业务终态时，收口其共享作业链上所有未办结任务。
+     *
+     * <p>缺陷现场：BX202610160002 已 APPROVED（凭证已过账、借款冲抵已核销），派工池仍挂着
+     * 「审核/待认领」——全库 11 条池任务全部是终态单上的僵尸行（0 认领 0 办结），且
+     * {@link #createChain} 的幂等查重（R5-D-242，只认 WAITING/RECEIVED）会让这些残留
+     * 永久占位。根因：业务侧的「钱/账/核销」闭环（付款批次执行、还款入账、无现金腿平账、
+     * 驳回/撤回）与共享作业链之间没有任何联动收口点。
+     *
+     * <p>收口口径：WAITING/RECEIVED 一并置 FINISHED（已认领未办结的说明办理人已接手，
+     * 单据终态后继续办理已无业务意义，remark 记录原因与原备注）。已 FINISHED 的不动。
+     * 不激活任何下一环节——收口即整链终止。
+     *
+     * @return 实际收口的任务条数（供调用方留痕）
+     */
+    public int closeOnBillTerminal(Long billId, String reason) {
+        if (billId == null) {
+            return 0;
+        }
+        List<OpAuditTask> open = opAuditTaskMapper.selectList(new LambdaQueryWrapper<OpAuditTask>()
+                .eq(OpAuditTask::getBillId, billId)
+                .in(OpAuditTask::getPoolStatus, "WAITING", "RECEIVED"));
+        if (open.isEmpty()) {
+            return 0;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (OpAuditTask t : open) {
+            OpAuditTask upd = new OpAuditTask();
+            upd.setId(t.getId());
+            upd.setPoolStatus("FINISHED");
+            upd.setFinishTime(now);
+            String remark = reason + "（单据终态自动收口）";
+            if (t.getRemark() != null && !t.getRemark().isBlank()) {
+                remark = remark + "；原备注：" + t.getRemark();
+            }
+            upd.setRemark(remark);
+            opAuditTaskMapper.updateById(upd);
+        }
+        log.info("单据 billId={} 到达业务终态，共享作业链自动收口 {} 条未办结任务：{}",
+                billId, open.size(), reason);
+        return open.size();
     }
 
     /** 智能审单驳回：回写单据状态为 REJECTED。 */

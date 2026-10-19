@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <!-- 流程进度：生命周期 + 当前节点 + 审批链全景，常驻顶部（三个页签都看得见） -->
@@ -23,13 +26,13 @@
         <!-- 右侧：通用区块（公司/部门/预算/附件/冲借款/关联/合同） -->
         <el-col :xs="24" :md="10">
           <el-card header="单据信息">
-            <el-form :model="b.form.bill" label-width="80px" size="default">
-              <el-form-item label="公司" required>
+            <el-form ref="billInfoFormRef" :model="b.form.bill" :rules="billInfoRules" label-width="80px" size="default">
+              <el-form-item label="公司" prop="companyId">
                 <el-select v-model="b.form.bill.companyId" filterable placeholder="选择公司" style="width:100%" @change="onCompanyChange">
                   <el-option v-for="c in b.companies" :key="c.id" :label="c.name" :value="c.id" />
                 </el-select>
               </el-form-item>
-              <el-form-item label="部门" required>
+              <el-form-item label="部门" prop="deptId">
                 <el-select v-model="b.form.bill.deptId" filterable placeholder="选择部门" style="width:100%">
                   <el-option v-for="d in filteredDepts" :key="d.id" :label="d.name" :value="d.id" />
                 </el-select>
@@ -151,7 +154,9 @@
           </el-card>
 
           <el-card v-if="pay" header="合同 / 往来单位" style="margin-top: 12px">
-            <el-form :model="b.form.bill" label-width="90px" size="default">
+            <!-- 合同/往来单位均为 clearable 选填引用（customerId 与主表单同源，由主表单校验），
+                 挂空规则数组只为纳入中央框架视野，不做强制校验 -->
+            <el-form ref="billExtraFormRef" :model="b.form.bill" :rules="billExtraRules" label-width="90px" size="default">
               <el-form-item label="合同">
                 <el-select v-model="b.form.bill.contractId" filterable clearable style="width:100%">
                   <el-option v-for="c in b.contracts" :key="c.id" :label="(c.contractNo||'')+' '+(c.contractName||'')" :value="c.id" />
@@ -230,7 +235,7 @@
 
       <!-- 底部操作栏 -->
       <el-card style="margin-top: 12px">
-        <el-button @click="b.saveDraft()">保存草稿</el-button>
+        <el-button @click="doSaveDraft">保存草稿</el-button>
         <el-button type="primary" :loading="b.submitting" @click="doSubmit">提交审批</el-button>
         <el-button v-if="b.form.bill.id" link @click="b.resetForm()">新建空白单</el-button>
       </el-card>
@@ -292,10 +297,13 @@
           <el-table-column label="操作" width="430" fixed="right">
             <template #default="{ row }">
               <el-button link size="small" @click.stop="b.openDetail(row)">详情</el-button>
-              <el-tooltip v-if="row.status === 'DRAFT' || row.status === 'REJECTED'" content="载入表单修改，重新提交走新流程实例" placement="top">
-                <el-button link size="small" type="primary" @click.stop="b.loadBillForEdit(row)">{{ row.status === 'REJECTED' ? '编辑重提' : '编辑' }}</el-button>
+              <!-- D-V4R-79：WITHDRAWN（撤回）此前不在可编辑/可作废集合内，前端只剩「详情/追溯」，
+                   后端 returnToEdit / voidBill 也只认 DRAFT/REJECTED ⇒ 撤回的单既不能改、不能重提、
+                   也不能作废，成为永久脏数据且白占单号与预算。口径对齐为：撤回 ≡ 退回草稿。 -->
+              <el-tooltip v-if="editableStatus(row)" content="载入表单修改，重新提交走新流程实例" placement="top">
+                <el-button link size="small" type="primary" @click.stop="b.loadBillForEdit(row)">{{ row.status === 'DRAFT' ? '编辑' : '编辑重提' }}</el-button>
               </el-tooltip>
-              <el-button v-if="row.status === 'DRAFT'" link size="small" type="danger" @click.stop="b.voidBill(row)">作废</el-button>
+              <el-button v-if="row.status === 'DRAFT' || row.status === 'WITHDRAWN'" link size="small" type="danger" @click.stop="b.voidBill(row)">作废</el-button>
               <el-button v-if="row.status === 'APPROVING'" link size="small" type="warning" @click.stop="b.withdraw(row)">撤回</el-button>
               <!-- E-10/F1-5：提单人的催办入口（服务端按发起人校验 + 同一环节 24 小时只催一次） -->
               <el-tooltip v-if="row.status === 'APPROVING'" content="给当前办理人发一次提醒；同一环节 24 小时内只催一次" placement="top">
@@ -501,6 +509,7 @@ import { entertainOfLine, hasEntertainLines } from '@/utils/format'
 import { INVOICE_TYPES } from '../../constants/invoiceType'
 import { rejectTypeLabel } from '@/constants/billStatus.js'
 import { ElMessage } from 'element-plus'
+import { commonRules } from '../../composables/useFormRules'
 
 const props = defineProps({
   billType: { type: String, required: true },
@@ -510,6 +519,10 @@ const props = defineProps({
   pay: { type: Boolean, default: false },
   // 提交前钩子：允许页面同步 extJson/明细行后再校验提交（返回 false 阻止）
   beforeSubmit: { type: Function, default: null },
+  // D-V4R-76：保存草稿前钩子（与 beforeSubmit 同形）。此前顶层列位的同步逻辑只挂在提交钩子上，
+  // 而「保存草稿」按钮直调 b.saveDraft() 完全绕过它 ⇒ 草稿态三单腿列（po_id/po_receipt_id/contract_id）
+  // 为空，被匹配台/手工关联/付款齐套闸读到就误判「缺腿」。此处补一个对称的前置钩子。
+  beforeSaveDraft: { type: Function, default: null },
   // 关联事前申请后钩子：允许页面把申请单费用详情/分摊带入本单
   onApplyPick: { type: Function, default: null },
   // D-V4R-45：右侧卡片「往来单位」变更钩子（与主表单同一套派生逻辑，由宿主页面注入）
@@ -559,16 +572,51 @@ function onInvoiceNoChange(row) {
  * 原因文案由 useBill 那一份给（缺项/预算/合规预检/首审未点名），submit 每拦一次写进 submitHint 一处，
  * 这里在失败分支原样带进横幅（⑤-Ⅳa）——toast 三秒就消失，"为什么没提上去"必须留在屏上可读。
  */
+/** D-V4R-79：可载入编辑的集合 = 草稿 / 已驳回 / 已撤回（撤回等同退回草稿，见台账） */
+function editableStatus(row) {
+  return row.status === 'DRAFT' || row.status === 'REJECTED' || row.status === 'WITHDRAWN'
+}
+
+/**
+ * D-V4R-76：保存草稿入口。先跑 beforeSaveDraft（页面对齐顶层列位），再落库。
+ * 不做返回值拦截——草稿允许半成品，钩子返回 false 也照常保存（与 doSubmit 的语义区别）。
+ */
+async function doSaveDraft() {
+  if (props.beforeSaveDraft) {
+    try { await props.beforeSaveDraft(b) } catch (e) { /* 钩子异常不阻断保存 */ }
+  }
+  await b.saveDraft()
+}
+
 const submitOutcome = ref(null)
+// 第2批：单据信息区（公司/部门）原为装饰性红星——el-form-item required 无 prop 不触发任何校验，
+// 缺公司/部门时 useBill 兜底只弹一句 toast，用户看不到是哪一项缺。现挂真 prop+rules，
+// doSubmit 入口先跑本区校验，红字直接落在字段上。
+const billInfoFormRef = ref(null)
+const billExtraFormRef = ref(null)
+const billInfoRules = {
+  companyId: commonRules.select('请选择公司'),
+  deptId: commonRules.select('请选择部门'),
+}
+// 合同/往来单位辅助区：选填（clearable），customerId 由主表单校验，此处不强制
+const billExtraRules = { contractId: [], customerId: [] }
 async function doSubmit() {
   submitOutcome.value = null
+  if (billInfoFormRef.value) {
+    try { await billInfoFormRef.value.validate() } catch { return }
+  }
   if (props.beforeSubmit) {
     const r = await props.beforeSubmit(b)
     if (r === false) {
+      // D-V4R-46：页面 beforeSubmit 的具体拦截原因此前只走 3 秒 toast（闪过即没），
+      // 常驻横幅只有一句写死的「本页校验未通过」，用户根本不知道哪一项没过。
+      // 页面各拦截点已同步写 b.submitHint，这里原样带进横幅。
+      const why = String(b.submitHint || '').trim()
       submitOutcome.value = {
         ok: false,
         title: '未提交：本页校验未通过',
-        desc: '本次没有向服务端发起提交，单据仍是草稿态，页首流程进度不变。请按表单上的红色提示补正后再次点击「提交审批」。',
+        desc: (why ? `未通过的校验项：${why}。\n` : '')
+          + '本次没有向服务端发起提交，单据仍是草稿态，页首流程进度不变。请按提示补正后再次点击「提交审批」。',
       }
       return
     }
@@ -584,6 +632,23 @@ async function doSubmit() {
       desc: `重复发票号 ${[...new Set(invDup)].join('、')}。已保留本单草稿内容，删除重复发票行后可重新提交。`,
     }
     return
+  }
+  // D-V4R-45 一致性闸：每个 INVOICE 附件都应有对应发票明细行（1 附件↔1 发票），
+  // 防止删附件不联动/手动乱序后，票面数据缺失还放行提交（票覆盖、影像核验都会缺票）。
+  const invAttaches = (b.form.attaches || []).filter((a) => a && a.attachType === 'INVOICE')
+  if (invAttaches.length) {
+    const invFileIds = new Set((b.form.invoices || []).map((x) => String((x && x.fileId) || '')))
+    const orphans = invAttaches.filter((a) => !invFileIds.has(String(a.fileId || '')))
+    if (orphans.length) {
+      const names = orphans.map((a) => a.fileName || ('#' + a.fileId)).join('、')
+      ElMessage.error(`附件与发票明细不一致：${names} 没有对应的发票明细行，请补录或删除多余附件后重新提交`)
+      submitOutcome.value = {
+        ok: false,
+        title: '未提交：附件与发票明细数量不一致',
+        desc: `以下 INVOICE 附件没有对应的发票明细行：${names}。请在「已解析发票 / 手工录入」区补齐发票行（或删除多余附件）后重新提交。`,
+      }
+      return
+    }
   }
   const billId = b.form.bill.id || null
   await b.submit()
@@ -692,6 +757,14 @@ function removeAttach(i) {
     delete ocrStatus[a.fileId]
   }
   b.form.attaches.splice(i, 1)
+  // D-V4R-45：联动删除由该附件解析产生的「已解析发票」行——旧实现只删附件行，
+  // 发票明细残留（实测删到 1 行附件、明细仍 5 行），附件↔发票数量从此对不上。
+  if (a && a.fileId) {
+    const before = (b.form.invoices || []).length
+    b.form.invoices = (b.form.invoices || []).filter((x) => String(x.fileId || '') !== String(a.fileId))
+    const removed = before - b.form.invoices.length
+    if (removed > 0) ElMessage.success(`已同步移除 ${removed} 行由该附件解析的发票明细`)
+  }
 }
 
 async function triggerOcr(a) {

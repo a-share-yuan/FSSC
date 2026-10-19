@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+// 【2026-10-16 第 4 批枚举收口】字典读取（同步、只读内存缓存，不发请求）
+// 依赖方向：enums.js → useDict.js → api.js，useDict 不反向引用本文件，无循环依赖。
+import { dictLabelOf } from '@/composables/useDict.js'
+
 /**
  * 业务枚举 → 中文标签（全系统共用，禁止各页重复定义）。
  * 与 constants/billStatus.js（状态类枚举）并列：本文件收「非状态」枚举 —— 单据类型、业务类型、
@@ -303,10 +310,112 @@ export const WF_ACTION_TYPE = {
   REJECT_TO: 'danger', REJECT_TO_DONE: 'danger',
 }
 
+// 【2026-10-16 第 4 批】容器对象 → 展示字典 dict_type 的注册表。
+// 惰性构建：容器有的定义在本文件后半段（如 MSG_TYPE/RULE_ACTION），直接 new Map 会踩 TDZ，
+// 故放在函数体内首次调用时才建。未注册的容器（如样式映射 WF_ACTION_TYPE）返回 undefined，
+// enumLabel 直接走本地常量 —— 样式值不是中文标签，本就不该进字典。
+/** 本文件已注册的展示字典 dict_type 全集（第 4 批：66 个 enum_*），供入口统一预热。
+ *   新增容器时请同步登记到上面的 DICT_OF 与这里的列表，否则该枚举仍走本地常量（不会报错，但改词仍需发版）。
+ */
+export const ENUM_DICT_TYPES = [
+  'enum_action', 'enum_adjust_type', 'enum_ap_mc_status', 'enum_ap_mc_trace', 'enum_ap_req_status', 'enum_ap_req_type',
+  'enum_archive_type', 'enum_ar_baddebt_status', 'enum_ar_billing_status', 'enum_ar_claim_status', 'enum_ar_claim_type', 'enum_ar_mc_status',
+  'enum_ar_note_status', 'enum_asset_status', 'enum_assign_type', 'enum_audit_action', 'enum_bill_sub_type', 'enum_bill_type',
+  'enum_biz_type', 'enum_cfg_type', 'enum_check_item', 'enum_contract_type', 'enum_control_type', 'enum_customer_type',
+  'enum_day_type', 'enum_delivery_status', 'enum_direction', 'enum_dispatch_mode', 'enum_ext_interface_category', 'enum_handling_mode',
+  'enum_image_status', 'enum_integrity_status', 'enum_inter_flag', 'enum_invoice_channel', 'enum_invoice_type', 'enum_master_action',
+  'enum_master_type', 'enum_mc_type', 'enum_msg_type', 'enum_multi_type', 'enum_oper_business_type', 'enum_oper_type',
+  'enum_org_scope', 'enum_payee_type', 'enum_pay_status', 'enum_period_type', 'enum_pool_status', 'enum_project_category',
+  'enum_rc_status', 'enum_recon_status', 'enum_reject_to', 'enum_return_mode', 'enum_return_status', 'enum_risk_level',
+  'enum_rule_action', 'enum_rule_category', 'enum_rule_type', 'enum_task_type', 'enum_tax_type', 'enum_timeout_action',
+  'enum_verify_status', 'enum_voucher_source', 'enum_wf_action', 'enum_wf_model_category', 'enum_wf_model_source', 'enum_writeoff_type'
+]
+
+let DICT_OF = null
+function dictTypeOf(map) {
+  if (!DICT_OF) {
+    DICT_OF = new Map([
+      [ACTION, 'enum_action'],
+      [ADJUST_TYPE, 'enum_adjust_type'],
+      [AP_MC_STATUS, 'enum_ap_mc_status'],
+      [AP_MC_TRACE, 'enum_ap_mc_trace'],
+      [AP_REQ_STATUS, 'enum_ap_req_status'],
+      [AP_REQ_TYPE, 'enum_ap_req_type'],
+      [ARCHIVE_TYPE, 'enum_archive_type'],
+      [AR_BADDEBT_STATUS, 'enum_ar_baddebt_status'],
+      [AR_BILLING_STATUS, 'enum_ar_billing_status'],
+      [AR_CLAIM_STATUS, 'enum_ar_claim_status'],
+      [AR_CLAIM_TYPE, 'enum_ar_claim_type'],
+      [AR_MC_STATUS, 'enum_ar_mc_status'],
+      [AR_NOTE_STATUS, 'enum_ar_note_status'],
+      [ASSET_STATUS, 'enum_asset_status'],
+      [ASSIGN_TYPE, 'enum_assign_type'],
+      [AUDIT_ACTION, 'enum_audit_action'],
+      [BILL_SUB_TYPE, 'enum_bill_sub_type'],
+      [BILL_TYPE, 'enum_bill_type'],
+      [BIZ_TYPE, 'enum_biz_type'],
+      [CFG_TYPE, 'enum_cfg_type'],
+      [CHECK_ITEM, 'enum_check_item'],
+      [CONTRACT_TYPE, 'enum_contract_type'],
+      [CONTROL_TYPE, 'enum_control_type'],
+      [CUSTOMER_TYPE, 'enum_customer_type'],
+      [DAY_TYPE, 'enum_day_type'],
+      [DELIVERY_STATUS, 'enum_delivery_status'],
+      [DIRECTION, 'enum_direction'],
+      [DISPATCH_MODE, 'enum_dispatch_mode'],
+      [EXT_INTERFACE_CATEGORY, 'enum_ext_interface_category'],
+      [HANDLING_MODE, 'enum_handling_mode'],
+      [IMAGE_STATUS, 'enum_image_status'],
+      [INTEGRITY_STATUS, 'enum_integrity_status'],
+      [INTER_FLAG, 'enum_inter_flag'],
+      [INVOICE_CHANNEL, 'enum_invoice_channel'],
+      [INVOICE_TYPE, 'enum_invoice_type'],
+      [MASTER_ACTION, 'enum_master_action'],
+      [MASTER_TYPE, 'enum_master_type'],
+      [MC_TYPE, 'enum_mc_type'],
+      [MSG_TYPE, 'enum_msg_type'],
+      [MULTI_TYPE, 'enum_multi_type'],
+      [OPER_BUSINESS_TYPE, 'enum_oper_business_type'],
+      [OPER_TYPE, 'enum_oper_type'],
+      [ORG_SCOPE, 'enum_org_scope'],
+      [PAYEE_TYPE, 'enum_payee_type'],
+      [PAY_STATUS, 'enum_pay_status'],
+      [PERIOD_TYPE, 'enum_period_type'],
+      [POOL_STATUS, 'enum_pool_status'],
+      [PROJECT_CATEGORY, 'enum_project_category'],
+      [RC_STATUS, 'enum_rc_status'],
+      [RECON_STATUS, 'enum_recon_status'],
+      [REJECT_TO, 'enum_reject_to'],
+      [RETURN_MODE, 'enum_return_mode'],
+      [RETURN_STATUS, 'enum_return_status'],
+      [RISK_LEVEL, 'enum_risk_level'],
+      [RULE_ACTION, 'enum_rule_action'],
+      [RULE_CATEGORY, 'enum_rule_category'],
+      [RULE_TYPE, 'enum_rule_type'],
+      [TASK_TYPE, 'enum_task_type'],
+      [TAX_TYPE, 'enum_tax_type'],
+      [TIMEOUT_ACTION, 'enum_timeout_action'],
+      [VERIFY_STATUS, 'enum_verify_status'],
+      [VOUCHER_SOURCE, 'enum_voucher_source'],
+      [WF_ACTION, 'enum_wf_action'],
+      [WF_MODEL_CATEGORY, 'enum_wf_model_category'],
+      [WF_MODEL_SOURCE, 'enum_wf_model_source'],
+      [WRITEOFF_TYPE, 'enum_writeoff_type'],
+    ])
+  }
+  return DICT_OF.get(map)
+}
 const warned = new Set()
 
 /** 通用取值：命中返回中文，未命中返回原码（不吞值）并在开发期告警 */
 export function enumLabel(map, v) {
+  // ① 字典（运营可维护的权威源，同步读 useDict 内存缓存）
+  const dt = dictTypeOf(map)
+  if (dt) {
+    const fromDict = dictLabelOf(dt, v)
+    if (fromDict) return fromDict
+  }
+  // ② 本地常量（兜底：字典未预热/未部署时行为与改造前逐字一致）
   const hit = map[v]
   if (hit) return hit
   if (v == null || v === '') return ''
@@ -376,9 +485,22 @@ export const interFlagLabel = (v) => enumLabel(INTER_FLAG, v)
  * 禁止组件内局部映射（Invoice.vue 原局部 map 漏 VAT/OTHER 两档导致直显英文）。
  * NORMAL/VATN 为普票历史拼法、SPECIAL 为专票简写，一并登记防回流。
  */
+/**
+ * 发票类型。【V1.4.72 修双词表缺陷】本容器此前只有 8 型，是没跟上 OCR 扩展的过时残本：
+ * 高铁/火车票/机票/出租车/网约车/定额/停车/医疗 8 类缺失，enumLabel 兜底把 RAIL_HIGH 等
+ * 英文码直接显示给用户；且 VAT_SPECIAL 作「增值税专用」，与 invoiceType.js 下拉的
+ * 「增值税专用发票」不一致 —— 同一条数据下拉一套词、列表另一套词。
+ * 现已按 V1.4.72 字典 enum_invoice_type 补全为 13 正式型 + 6 历史码（逐字一致）。
+ * 本常量只作字典不可用时的兜底；正常路径 enumLabel() 会优先读字典。
+ */
 export const INVOICE_TYPE = {
-  VAT_SPECIAL: '增值税专用', VAT_NORMAL: '增值税普通', SPECIAL: '增值税专用', NORMAL: '增值税普通',
-  ELECTRONIC: '电子发票', TOLL: '通行费', VATN: '增值税普通', VAT: '增值税普通', OTHER: '其他',
+  VAT_SPECIAL: '增值税专用发票', VAT_NORMAL: '增值税普通发票', ELECTRONIC: '电子发票',
+  RAIL_HIGH: '高铁 / 动车', TRAIN: '火车票', AIR: '航空运输电子客票', TAXI: '出租车',
+  RIDE_HALLING: '网约车', QUOTA: '定额发票', TOLL: '通行费 / ETC', PARKING: '停车费',
+  MEDICAL: '医疗收费票据', OTHER: '其他',
+  // 历史兼容码：仅回显旧数据（VAT 取 invoiceType.js 口径＝专票，与后端归一逻辑一致）
+  SPECIAL: '增值税专用发票', NORMAL: '增值税普通发票', VAT: '增值税专票', VATN: '增值税普票',
+  增专: '增值税专用发票', 增普: '增值税普通发票',
 }
 export const invoiceTypeLabel = (v) => enumLabel(INVOICE_TYPE, v)
 

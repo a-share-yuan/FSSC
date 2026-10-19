@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.contract.service;
 import com.fssc.framework.security.UserContext;
 
@@ -42,6 +45,9 @@ import java.math.BigDecimal;
 public class ContractService {
 
     private final ContContractMapper mapper;
+    /** D-V4R-91：付款条件/支付记录子表写入收口到本 Service，两个 Mapper 由 Controller 直连改为经此校验 */
+    private final com.fssc.contract.mapper.ContPayConditionMapper payConditionMapper;
+    private final com.fssc.contract.mapper.ContPayRecordMapper payRecordMapper;
     private final BudgetService budgetService;
     private final com.fssc.sharing.service.VoucherService voucherService;
     private final com.fssc.workflow.service.WfEngineFacade wfEngineFacade;
@@ -364,5 +370,107 @@ public class ContractService {
         u.setId(id);
         u.setStatus(s);
         mapper.updateById(u);
+    }
+
+    // ================= D-V4R-91：付款条件 / 支付记录子表入库校验 =================
+    // 背景：这两个子表此前由 ContractController 直接 conditionMapper.insert(c) /
+    //      recordMapper.insert(r) 裸写，**零校验**（同文件主表 create 却有完整断言），
+    //      可灌入「计划额 99999999」的付款条件或「付款金额 0 / 负数」的台账记录，
+    //      付款进度看板、供应商对账函、付款率全部失真且无人拦截。
+    //      此处把写入收口到 Service，并补齐四类断言：必填、金额>0、
+    //      合同归属（orgGuard，防跨公司挂靠）、计划额不超合同总额。
+
+    /** 合同付款条件新增：落库前必须过合同归属 + 节点必填 + 金额>0 + 不超合同总额 四道闸 */
+    public Long createPayCondition(com.fssc.contract.entity.ContPayCondition c) {
+        if (c.getContractId() == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "付款条件必须挂在某份合同下");
+        }
+        ContContract ctr = require(c.getContractId());   // 含 orgGuard 公司归属校验
+        if (!StringUtils.hasText(c.getPayNode())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "付款节点必填（如：预付款／进度款／验收款／尾款）");
+        }
+        if (c.getPayAmount() == null || c.getPayAmount().signum() <= 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "付款金额必须大于 0（当前 " + c.getPayAmount() + "）");
+        }
+        if (c.getPlanDate() == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "请选择计划付款日期");
+        }
+        // 本节点已有的计划额 + 本次 ≤ 合同总额（超额计划＝未来必然超付）
+        BigDecimal already = nzZero(payConditionSum(c.getContractId(), c.getId()));
+        BigDecimal total = already.add(c.getPayAmount());
+        BigDecimal contractAmount = nzZero(ctr.getAmount());
+        if (contractAmount.signum() > 0 && total.subtract(contractAmount).signum() > 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "付款条件计划额合计(" + total.toPlainString() + ") 已超合同总额("
+                            + contractAmount.toPlainString() + ")，请先调整既有付款条件");
+        }
+        c.setContractId(ctr.getId());
+        payConditionMapper.insert(c);
+        return c.getId();
+    }
+
+    /** 支付记录（台账）新增：金额>0 + 结算量/单价非负 + 合同归属 + 累计已付不超合同总额 */
+    public Long createPayRecord(com.fssc.contract.entity.ContPayRecord r) {
+        if (r.getContractId() == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "支付记录必须挂在某份合同下");
+        }
+        ContContract ctr = require(r.getContractId());
+        if (r.getPayAmount() == null || r.getPayAmount().signum() <= 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "付款金额必须大于 0（当前 " + r.getPayAmount() + "）");
+        }
+        if (r.getSettleQty() != null && r.getSettleQty().signum() < 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "结算数量不能为负数");
+        }
+        if (r.getUnitPrice() != null && r.getUnitPrice().signum() < 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "单价不能为负数");
+        }
+        if (r.getPayDate() == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "请选择付款日期");
+        }
+        BigDecimal paid = nzZero(payRecordSum(r.getContractId(), r.getId()));
+        BigDecimal total = paid.add(r.getPayAmount());
+        BigDecimal contractAmount = nzZero(ctr.getAmount());
+        if (contractAmount.signum() > 0 && total.subtract(contractAmount).signum() > 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "累计已付金额(" + total.toPlainString() + ") 已超合同总额("
+                            + contractAmount.toPlainString() + ")，请核对付款记录");
+        }
+        r.setContractId(ctr.getId());
+        payRecordMapper.insert(r);
+        return r.getId();
+    }
+
+    /** 既有付款条件计划额合计（excludeId 非空时排除自身，供编辑场景复用） */
+    private BigDecimal payConditionSum(Long contractId, Long excludeId) {
+        LambdaQueryWrapper<com.fssc.contract.entity.ContPayCondition> qw =
+                new LambdaQueryWrapper<com.fssc.contract.entity.ContPayCondition>()
+                        .eq(com.fssc.contract.entity.ContPayCondition::getContractId, contractId)
+                        .select(com.fssc.contract.entity.ContPayCondition::getPayAmount);
+        if (excludeId != null) {
+            qw.ne(com.fssc.contract.entity.ContPayCondition::getId, excludeId);
+        }
+        return payConditionMapper.selectList(qw).stream()
+                .map(com.fssc.contract.entity.ContPayCondition::getPayAmount)
+                .map(ContractService::nzZero)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** 既有支付记录已付合计（excludeId 非空时排除自身） */
+    private BigDecimal payRecordSum(Long contractId, Long excludeId) {
+        LambdaQueryWrapper<com.fssc.contract.entity.ContPayRecord> qw =
+                new LambdaQueryWrapper<com.fssc.contract.entity.ContPayRecord>()
+                        .eq(com.fssc.contract.entity.ContPayRecord::getContractId, contractId)
+                        .select(com.fssc.contract.entity.ContPayRecord::getPayAmount);
+        if (excludeId != null) {
+            qw.ne(com.fssc.contract.entity.ContPayRecord::getId, excludeId);
+        }
+        return payRecordMapper.selectList(qw).stream()
+                .map(com.fssc.contract.entity.ContPayRecord::getPayAmount)
+                .map(ContractService::nzZero)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private static BigDecimal nzZero(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
     }
 }

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="budget-item-page">
     <!-- R5-D-263：页面层权限门控（/item/page 端点按设计保持开放供引用预览，管理页在此收口） -->
@@ -162,9 +165,11 @@
         <el-form-item label="IFS科目码"><el-input v-model="dialog.form.ifsAccount" placeholder="如 4001" /></el-form-item>
         <el-form-item label="币种">
           <el-select v-model="dialog.form.currencyCode" style="width:100%">
-            <el-option label="CNY 人民币" value="CNY" />
-            <el-option label="USD 美元" value="USD" />
-            <el-option label="EUR 欧元" value="EUR" />
+<el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'code-name')" :value="o.value" />
+
+            
+            
+            
           </el-select>
         </el-form-item>
         <el-form-item label="备注"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" /></el-form-item>
@@ -199,6 +204,7 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import { useApprovalScope } from '../../composables/useApprovalScope'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 import { hasPerm } from '../../utils/perm'
+import { useCurrency } from '@/composables/useCurrency'
 
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
@@ -451,7 +457,10 @@ function getSummary({ columns, data }) {
   return sums
 }
 
+const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
+
 onMounted(async () => {
+  loadCurrency()
   if (!canList) return // R5-D-263：无查看权限不预载主数据与列表
   // 从URL参数获取schemeId
   if (route.query.schemeId) filter.schemeId = Number(route.query.schemeId)

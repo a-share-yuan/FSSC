@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -5,6 +8,7 @@ import com.fssc.arflow.entity.ArStatement;
 import com.fssc.arflow.mapper.ArStatementMapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.masterdata.service.ExchangeRateService;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
 import com.fssc.system.service.ConfigService;
@@ -36,6 +40,12 @@ public class ArStatementService {
     private final com.fssc.system.service.PeriodLockService periodLockService;
     private final RcReceivableMapper receivableMapper;
     private final ConfigService configService;
+
+    /**
+     * 汇率主数据（md_exchange_rate）：外币折 RMB 的<b>首选</b>来源。
+     * 2026-10-17 起替代 sys_config 硬编码键 {@code ar.fx.{ccy}}（见 {@link #applyFx}）。
+     */
+    private final ExchangeRateService exchangeRateService;
 
     /** P4-3 审计扩面：单据状态跃迁留痕 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
@@ -169,15 +179,53 @@ public class ArStatementService {
             bill.setRmbTaxAmount(bill.getTaxAmount());
             return;
         }
-        String rateStr = configService.getValue("ar.fx." + bill.getCcy());
-        if (rateStr == null || rateStr.isBlank()) {
-            throw new BizException(ErrorCode.PARAM_INVALID,
-                    "外币对账单必须维护 sys_config 参数 ar.fx." + bill.getCcy() + "（当期国税局汇率）");
-        }
-        BigDecimal rate = new BigDecimal(rateStr.trim());
+        BigDecimal rate = resolveFxRate(bill.getCcy(), bill.getCompanyId());
         bill.setFxRate(rate);
         bill.setRmbAmount(bill.getAmount().multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP));
         bill.setRmbTaxAmount(bill.getTaxAmount().multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP));
+    }
+
+    /**
+     * 解析外币→CNY 汇率（2026-10-17 改造：汇率表优先，硬编码键降级为兜底）。
+     *
+     * <p><b>改造前</b>：只读 {@code sys_config} 的 {@code ar.fx.{ccy}} —— 4 条写死参数，
+     * 无生效期、换汇比要改库、且与已有的汇率主数据表 {@code md_exchange_rate} 各干各的。</p>
+     *
+     * <p><b>改造后</b>取数顺序：
+     * <ol>
+     *   <li>汇率表 {@code md_exchange_rate}，按对账日期取当期生效价
+     *       （{@code ExchangeRateService.lookup} 内已支持直查→反向→经 CNY 交叉）；</li>
+     *   <li>汇率表无当期价时，回退到 {@code sys_config} 的 {@code ar.fx.{ccy}}（兼容存量，
+     *       并打 warn 提示该币种汇率表未维护）；</li>
+     *   <li>两者皆无才抛错，错误信息同时给出两条可操作的维护路径。</li>
+     * </ol>
+     * 这样"客户改汇率"从改库变成维护界面（汇率管理页已就绪），且历史单据不受影响
+     * ——因为每张单据都把当次 fxRate 快照进了 {@code bill.fx_rate}。
+     */
+    private BigDecimal resolveFxRate(String ccy, Long companyId) {
+        String cur = ccy == null ? "" : ccy.trim().toUpperCase();
+        java.time.LocalDate bizDate = java.time.LocalDate.now();
+
+        BigDecimal fromTable = null;
+        try {
+            fromTable = exchangeRateService.lookup(cur, "CNY", bizDate);
+        } catch (Exception e) {
+            log.warn("[fx] 汇率表查询异常 ccy={} date={}：{}", cur, bizDate, e.getMessage());
+        }
+        if (fromTable != null && fromTable.signum() > 0) {
+            log.debug("[fx] 汇率表命中 ccy={} date={} rate={}", cur, bizDate, fromTable);
+            return fromTable;
+        }
+
+        String rateStr = configService.getValue("ar.fx." + cur);
+        if (rateStr != null && !rateStr.isBlank()) {
+            log.warn("[fx] 汇率表未维护 {}，已回退 sys_config 参数 ar.fx.{}（建议改维护汇率表）", cur, cur);
+            return new BigDecimal(rateStr.trim());
+        }
+
+        throw new BizException(ErrorCode.PARAM_INVALID,
+                "外币对账单缺少 " + cur + "→CNY 汇率：请在「汇率管理」维护 " + cur + "/CNY 并设生效日期"
+                        + "（或临时维护全局参数 ar.fx." + cur + "）");
     }
 
     /** 容差：百分比（如 0.1 表示 0.1%），缺省严格 0。 */

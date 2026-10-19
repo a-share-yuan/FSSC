@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /** 系统设置与主数据域路由 */
 export default [
   // 方案B 配置工作区（页面Tab化重构册 §乙）：一工作区一菜单，页内 tab 复用通用表格组件；
@@ -69,6 +72,9 @@ export default [
   { path: 'compliance/service-catalog', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'service-catalog' }, meta: { title: '服务目录' } },
   { path: 'compliance/satisfaction', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'satisfaction' }, meta: { title: '满意度调查' } },
   { path: 'compliance/rule', component: () => import('../../views/master/ComplianceRule.vue'), meta: { title: '合规规则' } },
+  // 费用标准（expense_policy 主表 + expense_policy_standard 明细 + expense_policy_version 版本三层，
+  // 2026-10-17 新增专用页；此前只有 system/policy 复用通用表组件，只覆盖主表 3/18 字段且无子表）
+  { path: 'compliance/expense-policy', component: () => import('../../views/compliance/ExpensePolicyManage.vue'), meta: { title: '费用标准' } },
   // 审计
   { path: 'audit/reconcile', component: () => import('../../views/audit/AuditBoard.vue'), props: { activeTab: 'reconcile' }, meta: { title: '数据一致性' } },
   { path: 'audit/trail', component: () => import('../../views/audit/AuditBoard.vue'), props: { activeTab: 'trail' }, meta: { title: '审计轨迹' } },

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /** 共享运营域路由（派工/质检/档案/实物流/SLA/影像） */
 export default [
   // 共享运营

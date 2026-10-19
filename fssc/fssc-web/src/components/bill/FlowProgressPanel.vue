@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <!--
   流程进度卡片：单据页顶部常驻，回答三件事——
   ① 这张单现在停在流程的哪一节、是否还在办；② 该节谁在办、已停留多久；③ 每一节谁在什么时间签了什么意见。
@@ -41,7 +44,11 @@
           {{ showDetail ? '收起流程明细' : '展开流程明细（每节办理人/时间/意见）' }}
         </el-button>
       </div>
-      <FlowChain :nodes="nodes2" />
+      <!-- D-UI-03（2026-10-18）：横排平铺改纵向时间轴。
+           原实现在填单侧同样是把 7 个节点标签平铺换行，无连接线、各排参差，
+           「走到哪一节」只能靠上面的 fp-cur 那一格文字。本行改时间轴后，
+           节点再多也只是变长，且每节的序号/状态/办理人/时间/意见逐行对齐。 -->
+      <FlowChain :nodes="nodes2" mode="timeline" />
       <el-table v-if="showDetail" :data="nodes2" size="small" border class="fp-table">
         <el-table-column label="#" width="46">
           <template #default="{ $index }">{{ stepNoAt($index) || '—' }}</template>

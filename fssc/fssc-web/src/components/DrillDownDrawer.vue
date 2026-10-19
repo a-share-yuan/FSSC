@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-drawer v-model="visible" :title="title" direction="rtl" size="560px" :destroy-on-close="true">
     <div class="drill-content">

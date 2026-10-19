@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="bank-account-page">
     <el-card shadow="never">
@@ -88,7 +91,7 @@
         </div>
         <div class="form-row">
           <el-form-item label="银行账号" prop="bankAccount" class="half"><el-input v-model="form.bankAccount" /></el-form-item>
-          <el-form-item label="联行号" class="half"><el-input v-model="form.bankCode" /></el-form-item>
+          <el-form-item label="联行号" prop="bankCode" class="half"><el-input v-model="form.bankCode" /></el-form-item>
         </div>
         <div class="form-row">
           <el-form-item label="账户性质" prop="accountType" class="half">
@@ -96,7 +99,7 @@
               <el-option v-for="t in ACCOUNT_TYPES" :key="t.value" :label="t.label" :value="t.value" />
             </el-select>
           </el-form-item>
-          <el-form-item label="期初余额" class="half"><el-input-number v-model="form.balance" :precision="2" style="width:100%" /></el-form-item>
+          <el-form-item label="期初余额" prop="balance" class="half"><el-input-number v-model="form.balance" :precision="2" :min="0" style="width:100%" /></el-form-item>
         </div>
         <div class="form-row">
           <el-form-item label="默认账户" class="half"><el-switch v-model="form.isDefault" /></el-form-item>
@@ -123,6 +126,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { masterApi, orgApi } from '../../api'
 import { readBillDeepLink } from '../../utils/bizEntry'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
+import { commonRules } from '../../composables/useFormRules'
 import { exportCsv } from '../../utils/csv'
 import { maskAccount } from '../../utils/mask'
 import SkeletonList from '../../components/SkeletonList.vue'
@@ -163,7 +167,12 @@ const formRules = computed(() => ({
   accountName: [{ required: true, message: '请输入账户名称' }],
   companyId: [{ required: true, message: '请选择所属组织' }],
   bankName: [{ required: true, message: '请输入开户行' }],
-  bankAccount: [{ required: true, message: '请输入银行账号' }],
+  // P0 资金路由字段：银行账号必填 + 格式（6-30 位数字）；唯一性由后端兜底（同租户同号拒登记）
+  bankAccount: [...commonRules.required('请输入银行账号'), ...commonRules.bankAccount()],
+  // 联行号选填，填了就必须是 12 位数字
+  bankCode: commonRules.bankCode(),
+  // 期初余额不能为负（后端 @DecimalMin 兜底）
+  balance: commonRules.amountRange(0, null, '期初余额不能为负'),
   // D-DEC-158：账户性质是「一司一基本户」判据的来源，新增即必选；存量在册账户允许先改其它字段
   accountType: form.id ? [] : [{ required: true, message: '请选择账户性质' }],
 }))

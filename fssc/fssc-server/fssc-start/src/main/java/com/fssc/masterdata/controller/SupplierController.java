@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -8,6 +11,7 @@ import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.masterdata.entity.MdSupplier;
 import com.fssc.masterdata.service.SupplierService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,7 +37,7 @@ public class SupplierController {
     @RequiresPerm("md:supplier:create")
     @OperLog(module = "SUPPLIER", operType = "INSERT", desc = "新增Supplier")
     @PostMapping("/create")
-    public Result<Long> create(@RequestBody MdSupplier e) {
+    public Result<Long> create(@Validated @RequestBody MdSupplier e) {
         return Result.success(service.create(e));
     }
 
@@ -49,7 +53,7 @@ public class SupplierController {
     @RequiresPerm("md:supplier:update")
     @OperLog(module = "SUPPLIER", operType = "UPDATE", desc = "更新Supplier")
     @PostMapping("/update")
-    public Result<Void> update(@RequestBody MdSupplier e) {
+    public Result<Void> update(@Validated @RequestBody MdSupplier e) {
         service.update(e);
         return Result.success();
     }
@@ -81,7 +85,7 @@ public class SupplierController {
     @RequiresPerm("md:supplier:update")
     @OperLog(module = "SUPPLIER", operType = "INSERT", desc = "供应商新增银行账户")
     @PostMapping("/{id}/banks")
-    public Result<Long> addBank(@PathVariable Long id, @RequestBody com.fssc.masterdata.entity.MdSupplierBank b) {
+    public Result<Long> addBank(@PathVariable Long id, @Validated @RequestBody com.fssc.masterdata.entity.MdSupplierBank b) {
         b.setSupplierId(id);
         return Result.success(service.addBank(b));
     }
@@ -103,7 +107,7 @@ public class SupplierController {
     @RequiresPerm("md:supplier:update")
     @OperLog(module = "SUPPLIER", operType = "INSERT", desc = "供应商新增联系人")
     @PostMapping("/{id}/contacts")
-    public Result<Long> addContact(@PathVariable Long id, @RequestBody com.fssc.masterdata.entity.MdSupplierContact c) {
+    public Result<Long> addContact(@PathVariable Long id, @Validated @RequestBody com.fssc.masterdata.entity.MdSupplierContact c) {
         c.setSupplierId(id);
         return Result.success(service.addContact(c));
     }

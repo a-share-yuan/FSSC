@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.purchase.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -100,7 +103,8 @@ public class PurchaseService {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择法人主体（公司不能为空）");
         }
         orderMapper.insert(o);
-        saveLines(o.getId(), o.getTenantId(), o.getLines());
+        BigDecimal sumLine = saveLines(o.getId(), o.getTenantId(), o.getLines());
+        assertHeaderLineAmountConsistent(o, sumLine);
         // P1：采购订单审批（PTP02-02），amount 传入供"金额>200000 总经理审批"分支。
         // 显式 DRAFT（草稿）不发起审批——草稿仅占号，可编辑/删除，提交后再走审批。
         boolean draft = "DRAFT".equals(o.getStatus());
@@ -261,7 +265,8 @@ public class PurchaseService {
         o.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(o);
         // lines=null（老调用方不带行）时不动既有行；带行则整批重登（逻辑删除 + 重插）
-        saveLines(o.getId(), exist == null ? null : exist.getTenantId(), o.getLines());
+        BigDecimal sumLine = saveLines(o.getId(), exist == null ? null : exist.getTenantId(), o.getLines());
+        assertHeaderLineAmountConsistent(o, sumLine);
     }
 
     /**
@@ -364,9 +369,9 @@ public class PurchaseService {
      * 保存订单行项目：整批重登（既有有效行逻辑删除，再按本次提交重插）。
      * 与全系统"更正不物理删"的口径一致——改行留历史版本，供事后追溯"当初下的是什么"。
      */
-    private void saveLines(Long poId, Long tenantId, List<PoOrderLine> lines) {
+    private BigDecimal saveLines(Long poId, Long tenantId, List<PoOrderLine> lines) {
         if (poId == null || lines == null) {
-            return;
+            return BigDecimal.ZERO;
         }
         if (!lines.isEmpty()) {
             orderLineMapper.update(null, new LambdaUpdateWrapper<PoOrderLine>()
@@ -376,11 +381,17 @@ public class PurchaseService {
                     .set(PoOrderLine::getUpdateTime, LocalDateTime.now()));
         }
         int lineNo = 0;
+        BigDecimal sumAmount = BigDecimal.ZERO;
         for (PoOrderLine line : lines) {
             if (line == null || isBlankLine(line)) {
                 continue;
             }
             lineNo++;
+            // D-V4R-91：逐行硬校验。原先本方法只跳过"全空行"，对半填的行照单全收——
+            // 自动化脚本把 60000 填进「物料名称」、数量/单价留默认值(1/0) 时，
+            // materialName 非空即判为有效行，落库出 amount=0 的垃圾数据，
+            // 且表头 60000 与行合计 0 的勾稽断裂一路放过，直到三单匹配才暴露。
+            assertOrderLine(line, lineNo);
             line.setId(null);
             line.setPoId(poId);
             line.setTenantId(tenantId);
@@ -389,9 +400,52 @@ public class PurchaseService {
             if (line.getAmount() == null) {
                 line.setAmount(nz(line.getQuantity()).multiply(nz(line.getUnitPrice())));
             }
+            sumAmount = sumAmount.add(nz(line.getAmount()));
             orderLineMapper.insert(line);
         }
         log.info("采购订单 {} 行项目落库 {} 行", poId, lineNo);
+        return sumAmount;
+    }
+
+    /**
+     * D-V4R-91：行项目逐行校验（与前端 PoOrder.vue 的行内红星同口径，后端为最终闸门）。
+     * 四道断言：
+     * ① 物料名称必填 —— 只填了物料编码也算缺（名称是打印/对账/匹配的口径来源）
+     * ② 物料名称不得为纯数字 —— 防"金额误填进名称字段"这类字段串位
+     * ③ 数量 > 0、单价 > 0 —— 原口径允许 0，直通"行金额恒为 0"
+     * ④ 量价勾稽：数量 × 单价 必须等于行金额（容差 0.01），防三者各填各的
+     */
+    private void assertOrderLine(PoOrderLine line, int lineNo) {
+        String pos = "第 " + lineNo + " 行";
+        if (isBlank(line.getMaterialName())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    pos + "物料名称必填（只有物料编码不够，行项目名称是打印与对账口径）");
+        }
+        String name = line.getMaterialName().trim();
+        if (name.matches("^[0-9][0-9,]*(\\.[0-9]+)?$")) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    pos + "物料名称「" + name + "」是纯数字，疑似把数量/金额填进了名称栏，请填实际品名");
+        }
+        if (nz(line.getQuantity()).compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, pos + "数量必须大于 0（当前 "
+                    + line.getQuantity() + "）");
+        }
+        if (nz(line.getUnitPrice()).compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, pos + "单价必须大于 0（当前 "
+                    + line.getUnitPrice() + "），无价物料请走费用报销而非采购订单");
+        }
+        BigDecimal expect = nz(line.getQuantity()).multiply(nz(line.getUnitPrice()));
+        BigDecimal actual = nz(line.getAmount());
+        if (actual.compareTo(BigDecimal.ZERO) <= 0) {
+            actual = expect; // 金额未填时按量价推导后再判勾稽，下方 saveLines 会落该值
+            line.setAmount(expect);
+        }
+        if (expect.subtract(actual).abs().compareTo(LINE_AMT_TOLERANCE) > 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    pos + "量价勾稽不符：数量 × 单价 = " + expect.stripTrailingZeros().toPlainString()
+                            + "，行金额 = " + actual.stripTrailingZeros().toPlainString()
+                            + "（允许尾差 ≤ " + LINE_AMT_TOLERANCE.toPlainString() + "）");
+        }
     }
 
     /** 列表/详情回填行项目：一次 IN 查询按订单分组，不做 N+1。 */
@@ -739,6 +793,35 @@ public class PurchaseService {
     private void validateSupplier(PoOrder o) {
         if (o.getSupplierName() == null || o.getSupplierName().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "供应商必填");
+        }
+    }
+
+    /**
+     * D-V4R-91：金额勾稽尾差容差（元）。行金额与表头金额均为两位小数，
+     * 逐行累加的浮点误差上界远小于 0.01，故 0.01 即为最紧且不会误伤的口径
+     * （与 PurReturnService.validateLineSum / ExpenseBillService.validateAmountReconcile 同值）。
+     */
+    private static final BigDecimal LINE_AMT_TOLERANCE = new BigDecimal("0.01");
+
+    /**
+     * D-V4R-91：表头金额与行项目合计的一致性校验。
+     * 判据：只要提交了行项目，就必须与表头订单金额对得上（容差 0.01）。
+     * 无行项目时不校验 —— 采购订单允许只录表头金额（历史口径，行项目为选填）。
+     *
+     * 背景：表头 60000 / 行合计 0 的勾稽断裂原先无人拦截，一路同步到 BCP 门户，
+     * 直到三单匹配阶段才以"匹配不上"的形式暴露，返工需重建整条单据链。
+     */
+    private void assertHeaderLineAmountConsistent(PoOrder o, BigDecimal sumLine) {
+        if (sumLine == null || sumLine.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        BigDecimal header = nz(o.getAmount());
+        if (header.subtract(sumLine).abs().compareTo(LINE_AMT_TOLERANCE) > 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "订单金额(" + header.toPlainString() + ") ≠ 行项目合计("
+                            + sumLine.stripTrailingZeros().toPlainString() + ")"
+                            + "（允许尾差 ≤ " + LINE_AMT_TOLERANCE.toPlainString()
+                            + "）；若表头是对的，请逐行检查数量与单价是否漏填");
         }
     }
 

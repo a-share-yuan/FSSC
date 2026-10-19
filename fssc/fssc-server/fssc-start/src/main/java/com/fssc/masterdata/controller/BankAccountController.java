@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -8,6 +11,7 @@ import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.masterdata.entity.MdBankAccount;
 import com.fssc.masterdata.service.BankAccountService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,14 +37,14 @@ public class BankAccountController {
     @RequiresPerm("md:bankaccount:create")
     @OperLog(module = "BANK_ACCOUNT", operType = "INSERT", desc = "新增BankAccount")
     @PostMapping("/create")
-    public Result<Long> create(@RequestBody MdBankAccount e) {
+    public Result<Long> create(@Validated @RequestBody MdBankAccount e) {
         return Result.success(service.create(e));
     }
 
     @RequiresPerm("md:bankaccount:update")
     @OperLog(module = "BANK_ACCOUNT", operType = "UPDATE", desc = "更新BankAccount")
     @PostMapping("/update")
-    public Result<Void> update(@RequestBody MdBankAccount e) {
+    public Result<Void> update(@Validated @RequestBody MdBankAccount e) {
         service.update(e);
         return Result.success();
     }

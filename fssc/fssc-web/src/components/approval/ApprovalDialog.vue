@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <!--
   共享审批弹窗：把散落在 30+ 处的 ElMessageBox.confirm/prompt 单行框收敛成一个带上下文的对话框。
   用法（Promise 式，与 ElMessageBox 手感一致）：
@@ -17,7 +20,11 @@
   如实标注「未取到」，绝不再按 0 累加出一个看上去自洽的 ¥0.00；不传 items 的调用点零变化。
 -->
 <template>
-  <el-dialog v-model="st.visible" :title="st.title" :width="st.items.length ? '820px' : '560px'"
+  <!-- D-UI-01（2026-10-18）：宽度 560/820 → 760/1000。
+       原宽度下「查看全部节点」popover 与批量明细表都撑不下（实测节点多时内容溢出弹窗外，
+       审批人要先关窗才能看清自己批的是什么）。弹窗是本系统唯一需要并排看「摘要＋审批链＋
+       明细＋意见」的地方，压到 560px 等于逼审批人反复开关窗。 -->
+  <el-dialog v-model="st.visible" :title="st.title" :width="st.items.length ? '1000px' : '760px'"
              :close-on-click-modal="false" append-to-body destroy-on-close class="approval-dialog"
              @update:model-value="onVisibleChange" @opened="focusComment">
     <div v-if="st.summary.length" class="ad-summary">
@@ -73,12 +80,38 @@
     </div>
     <el-alert v-if="st.notice" :title="st.notice" type="warning" :closable="false" show-icon style="margin-bottom:12px" />
 
+    <!-- D-UI-02（2026-10-18）：审批链可视化重排。
+         原形态：一行文字「审批链 第2/3节｜三单【还款核销审核】」+ 一个「查看全部节点」链接，
+         popover 宽 520px 且无高度上限 —— 节点一多（实测 7 节、节点名带【角色】后缀很长）就换行溢出，
+         弹窗内也看不出"走到哪一节、还剩几节"。
+         现形态三件套：
+           ① 图形化进度条（已过/当前/待到达三态着色 + 比例），按钮旁边就能读出进度；
+           ② 折叠条：头尾各留 1 节，中间按状态折叠成「⋯N 节」，当前节点永不折叠；
+           ③ popover 内改用纵向时间轴（每节一行，含状态/办理人/时间/意见），并限高滚动，不再溢出。 -->
     <div v-if="st.chain.length" class="ad-chain">
-      审批链 {{ chainProgressText }}
-      <el-popover placement="bottom-start" :width="520" trigger="hover">
-        <template #reference><el-link type="primary" :underline="false">查看全部节点</el-link></template>
-        <FlowChain :nodes="st.chain" />
-      </el-popover>
+      <div class="ad-chain-head">
+        <span class="ad-chain-title">审批链</span>
+        <span class="ad-chain-prog">{{ chainProgressText }}</span>
+        <div class="ad-chain-bar" :title="chainBarTitle">
+          <span v-for="(b, i) in chainBars" :key="i" class="ad-chain-seg"
+                :class="'ad-chain-seg-' + b.state" />
+        </div>
+        <el-popover placement="bottom-start" :width="620" trigger="hover" popper-class="ad-chain-popper">
+          <template #reference>
+            <el-link type="primary" :underline="false" class="ad-chain-more">查看全部节点</el-link>
+          </template>
+          <div class="ad-chain-pop">
+            <div class="ad-chain-pop-head">
+              <span>全流程节点（{{ st.chain.length }} 节）</span>
+              <span class="ad-chain-pop-tip">每节含状态 / 办理人 / 时间 / 意见</span>
+            </div>
+            <div class="ad-chain-pop-body">
+              <FlowChain :nodes="st.chain" mode="timeline" />
+            </div>
+          </div>
+        </el-popover>
+      </div>
+      <FlowChain :nodes="st.chain" mode="inline" :max-inline="7" class="ad-chain-strip" />
     </div>
 
     <!-- 会签/票签进度（P1）：多实例节点显示"已投 x/n · 赞成 a 反对 r"。
@@ -262,8 +295,8 @@
 
     <!-- G2 传阅（2026-09-23）：审批通过后抄送给谁。
          仅当调用方显式传 allowCc=true 才渲染 —— 本组件被 30+ 处复用，默认零影响。
-         与后端的关系：提交时以逗号串 ccUserIds 传给 /wf/approve，后端再与节点配置
-         wf_node_config.cc_users/cc_roles 取并集后写入 wf_cc。 -->
+         与后端的关系：提交时以数组 ccUserIds 传给 /wf/approve（后端 List 反序列化后归一为逗号串），
+         后端再与节点配置 wf_node_config.cc_users/cc_roles 取并集后写入 wf_cc。 -->
     <div v-if="st.allowCc && st.decision === 'approve'" class="ad-cc">
       <div class="ad-cc-head">
         <span class="ad-cc-title">抄送给</span>
@@ -533,6 +566,28 @@ const chainProgressText = computed(() => {
   return hasTodo
     ? `已过 ${done} 节 · 当前【${cur}】`
     : `第 ${chainIndex.value}/${chainSeqTotal.value} 节 · 当前【${cur}】`
+})
+
+/**
+ * D-UI-02：审批链图形化进度条分段。
+ * 原界面只有一句「第 2/3 节」文字，审批人得自己在脑子里换算"还剩几节、有多长"；
+ * 这里把每一节按状态切成一格，宽度等分 ⇒ 不用读数字也能看出进度比例。
+ */
+const chainBars = computed(() =>
+  chainSteps.value.map((n) => ({
+    state: n.state === 'CURRENT' ? 'CURRENT'
+      : (n.state === 'DONE' ? 'DONE'
+        : (['REJECTED', 'VOID', 'WITHDRAWN', 'TERMINATED', 'CANCELLED'].includes(n.state) ? 'BAD' : 'TODO')),
+  })))
+/** 进度条悬浮说明：把颜色对应的节数说破，避免"颜色好看但不知道代表什么" */
+const chainBarTitle = computed(() => {
+  const b = chainBars.value
+  const n = (k) => b.filter((x) => x.state === k).length
+  const parts = [`已过 ${n('DONE')} 节`]
+  if (n('CURRENT')) parts.push(`当前 ${n('CURRENT')} 节`)
+  if (n('BAD')) parts.push(`异常/驳回 ${n('BAD')} 节`)
+  parts.push(`待到达 ${n('TODO')} 节`)
+  return parts.join(' · ')
 })
 
 /**
@@ -877,7 +932,7 @@ function batchNotice(batch, items) {
  * @param opts.submit     提交动作 (payload) => Promise；给了就由弹窗在关闭之前执行：
  *                        成功 ⇒ 关窗并 resolve；失败 ⇒ 弹窗保持打开、意见与选择保留、就地显示原因
  *                        （D-DEC-022）。不给 ⇒ 沿用旧手感（先关窗、resolve 后由调用方自己发请求）。
- * @returns Promise<{approved:boolean, comment:string, nextAssigneeUserId?:number, ccUserIds?:string,
+ * @returns Promise<{approved:boolean, comment:string, nextAssigneeUserId?:number, ccUserIds?:Array,
  *                   rejectToNodeKey?:string, approvalItemCode?:string} | null>
  *          approvalItemCode（①层审批项）：仅当后端在本节点配了启用中的审批项、且用户点选时才非空；
  *          携带时服务端按其类别（正向/驳回/终止）覆盖 approved 并写入 ActionResult 流程变量。
@@ -1025,8 +1080,9 @@ function submit() {
   const payload = {
     approved: st.decision === 'approve', comment,
     nextAssigneeUserId: st.decision === 'approve' ? st.nextUserId : null,
-    // G2 传阅：逗号串与后端 ApproveReq.ccUserIds 同形；驳回不投递故不带
-    ccUserIds: st.decision === 'approve' && st.ccUserIds.length ? st.ccUserIds.join(',') : null,
+    // G2 传阅：D-V3-148 后端按 List<Object> 反序列化（ccUserIdsNormalized 归一为逗号串）；
+    // Jackson 3（tools.jackson）严格模式不接受 "1,2" 字符串→List，必须传数组副本
+    ccUserIds: st.decision === 'approve' && st.ccUserIds.length ? st.ccUserIds.slice() : null,
     // G4 自由驳回：仅在驳回且用户显式选了级次时携带；不选 ⇒ 后端走原「终止本流程」路径
     rejectToNodeKey: st.decision === 'reject' ? (st.rejectToNodeKey || null) : null,
     // ①层审批项：选了自定义结果才携带；不选 ⇒ 后端完全不走审批项分支（逐字不变）
@@ -1078,10 +1134,29 @@ defineExpose({ open })
 .ad-sum-k { color: #909399; font-size: 12px; margin-right: 6px; }
 .ad-sum-v { color: #303133; font-size: 13px; word-break: break-all; }
 .ad-sum-v.ad-amt { font-weight: 600; color: #b8860b; }
-.ad-chain { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #606266;
+/* D-UI-02：审批链区块改为「标题行（文字进度＋图形进度条＋查看全部）＋ 下方折叠条」两行布局。
+   单行 flex 挤不下进度条与节点条，分两行后每行各司其职、互不挤压。 */
+.ad-chain {
   border: 1px solid #e4e7ed; border-left: 3px solid #409eff; border-radius: 4px;
-  padding: 7px 10px; margin-bottom: 12px; background: #fff; }
-.ad-chain b { color: #409eff; }
+  padding: 8px 10px; margin-bottom: 12px; background: #fff;
+}
+.ad-chain-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: #606266; }
+.ad-chain-title { color: #303133; font-weight: 600; }
+.ad-chain-prog { color: #606266; }
+/* 图形化进度条：一节一格，等宽，颜色即状态 */
+.ad-chain-bar { display: inline-flex; gap: 2px; align-items: center; margin-left: 2px; }
+.ad-chain-seg { width: 16px; height: 8px; border-radius: 2px; background: #ebeef5; }
+.ad-chain-seg-DONE { background: #67c23a; }
+.ad-chain-seg-CURRENT { background: #409eff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .18); }
+.ad-chain-seg-BAD { background: #f56c6c; }
+.ad-chain-more { margin-left: auto; white-space: nowrap; }
+.ad-chain-strip { margin-top: 8px; }
+/* popover 内容：限高 + 纵向滚动 —— 原实现无 max-height，节点一多直接溢出窗口 */
+.ad-chain-pop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #ebeef5; font-size: 13px;
+  font-weight: 600; color: #303133; }
+.ad-chain-pop-tip { font-size: 12px; font-weight: 400; color: #909399; }
+.ad-chain-pop-body { max-height: 46vh; overflow-y: auto; padding-right: 4px; }
 /* 会签/票签进度：与审批链同族边框，但用紫色区分"这是投票统计，不是流程位置" */
 .ad-mi { border: 1px solid #e4e7ed; border-left: 3px solid #9b59b6; border-radius: 4px;
   padding: 8px 10px; margin-bottom: 10px; background: #fff; }
@@ -1164,4 +1239,13 @@ defineExpose({ open })
 .ad-his-cmt { color: #909399; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .ad-footer { display: flex; align-items: center; gap: 8px; }
 .ad-footer-actions { margin-left: auto; display: flex; gap: 8px; }
+</style>
+
+<!--
+  popover 由 Element Plus teleport 到 body，scoped 选择器（带 [data-v-xxx]）匹配不到，
+  故此处单独开一个非 scoped 样式块，只给 .ad-chain-popper 定位样式，不污染其他弹层。
+-->
+<style>
+.ad-chain-popper.el-popper { max-width: 640px; }
+.ad-chain-popper .el-popper__body { padding: 12px 14px; }
 </style>

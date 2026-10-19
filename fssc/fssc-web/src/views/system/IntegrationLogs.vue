@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="integration-logs">
     <!-- R5-D-040：失败告警横幅——全失败红牌/部分类别失败黄牌，先于数字呈现在首屏 -->

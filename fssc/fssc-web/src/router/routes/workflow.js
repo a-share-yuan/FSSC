@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /** 流程中心（跨域统一流程门户）路由：流程概览 / 我的抄送 / 已办撤销预览 */
 export default [
   { path: 'flow-center', component: () => import('../../views/workflow/FlowCenter.vue'), meta: { title: '流程概览' } },

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card class="cm-target-table" header="我的待办审批">
     <div style="margin-bottom: 8px">
@@ -786,7 +789,9 @@ async function approve(row, approved) {
         // R5-D-191（写侧零反馈）：通过/退回被服务端拒绝（如作业池任务未领取 code 400「须先领取再办理」）时，
         // 必须显式落业务语义 toast（含单号/节点与可执行的下一步），再把异常原样抛回弹窗 ——
         // 弹窗保持打开、意见/点名保留，可原地重试；不再出现"点了没反应、零提示、易重复点"。
-        notifyRefused(payload.approved ? '通过' : '驳回', row, e)
+        // D-1B-02：本通道 silent=true ⇒ 拦截器不再回放后端原文，这里必须逐字补回（replayServerMsg=true），
+        // 否则硬闸类拒绝（如三单匹配冻结）只剩通用「处置」文案，原因被丢。
+        notifyRefused(payload.approved ? '通过' : '驳回', row, e, true)
         throw e
       }
       ElMessage.success(payload.approved ? '已通过' : '已驳回')
@@ -928,7 +933,13 @@ const billLabel = (row) => `【${row?.billNo || row?.title || '未关联单据'}
 /** 后端拒绝原文 → 可执行的下一步（判定顺序自严到宽，取第一条命中） */
 function refuseAdvice(msg) {
   const m = String(msg || '')
-  if (/自审|同一人在同一审批流程|连办/.test(m)) {
+  // D-V5R-08（F-run-1017b 实测）：原先把「自审/连办」三类归一成「本单是你自己提交的」，
+  // 实测连办闸命中时（同一人已办过本实例其他节点）文案指错方向，排查被带偏。
+  // 现按后端原文分流：连办优先（更具体），自审次之。
+  if (/同一人在同一审批流程|连办/.test(m)) {
+    return '你已在同一审批流程中办理过其他节点（连办/自审拦截）。请点「转办」把本节点交给同角色其他持有人，或联系流程管理员「改派」；反复点击不会放行。'
+  }
+  if (/自审|自己提交的|禁止审批自己/.test(m)) {
     return '本单是你自己提交的，内控闸口不允许自审自批。请点「转办」把本节点交给同角色其他人，或联系流程管理员「改派」；反复点击不会放行。'
   }
   // R5-D-191：审批提交侧闸口（下一环节须点名到人）——原先这条会漏进兜底文案，让人摸不到出口
@@ -974,14 +985,26 @@ function refuseAdvice(msg) {
   }
   return '请核对本任务当前状态与可走的合法出口（先领取 / 转办 / 改派），或联系流程管理员核对节点配置；不确定时不要反复重试同一动作。'
 }
-/** 拒绝原因＋单号/节点＋处置：一次说全，可手动关闭，停留 8 秒 */
-function notifyRefused(action, row, e) {
+/**
+ * 拒绝原因＋单号/节点＋处置：一次说全，可手动关闭，停留 8 秒。
+ *
+ * D-1B-02（V4-run-1017b 1B.16 实测）：审批提交链统一带 `{ silent: true }`（见 approve 的注释），
+ * 拦截器因此不再把后端原文 toast 出来；本函数原先又只渲染 refuseAdvice 推出的「处置」，
+ * 于是服务端红字（如三单匹配硬闸的拒付原因）永远到不了屏上——与 1B.24「执行付款拦停弹窗
+ * 原文回放」两条通道口径不一致。现对有服务端原文的通道（replayServerMsg=true）先逐字回放
+ * 服务端原文，再接「处置」建议；领取/释放等非 silent 通道原文已由拦截器给出，不重复回放。
+ */
+function notifyRefused(action, row, e, replayServerMsg = false) {
+  const raw = replayServerMsg ? String(e?.message || '').trim() : ''
+  // axios 无业务响应体时的通用文案（"Request failed with status code 400" 等）不是原因，
+  // 回放它反而把真原因挤没；只有拿到服务端 msg 才逐字显示。
+  const replayable = raw && !/^Request failed with status code|^Network Error|^timeout of|^网络错误/i.test(raw)
   ElMessage({
     type: 'error',
     duration: 8000,
     showClose: true,
     grouping: true,
-    message: `${billLabel(row)} ${action}未生效 —— 处置：${refuseAdvice(e?.message)}`,
+    message: `${billLabel(row)} ${action}未生效${replayable ? `：${raw}` : ''} —— 处置：${refuseAdvice(raw || e?.message)}`,
   })
 }
 

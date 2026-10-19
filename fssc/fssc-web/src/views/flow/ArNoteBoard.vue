@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -101,9 +104,9 @@
     </el-dialog>
 
     <el-dialog v-model="discountVisible" :title="$t('flow.note.dlgDiscount')" width="460px" destroy-on-close>
-      <el-form label-width="100px" size="small">
-        <el-form-item :label="$t('flow.note.formDiscountRate')"><el-input v-model="discountForm.rate" :placeholder="$t('flow.note.phDiscountRate')" /></el-form-item>
-        <el-form-item :label="$t('flow.note.formDiscountDate')"><el-date-picker v-model="discountForm.date" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
+      <el-form ref="discountFormRef" :model="discountForm" :rules="discountRules" label-width="100px" size="small">
+        <el-form-item :label="$t('flow.note.formDiscountRate')" prop="rate"><el-input v-model="discountForm.rate" :placeholder="$t('flow.note.phDiscountRate')" /></el-form-item>
+        <el-form-item :label="$t('flow.note.formDiscountDate')" prop="date"><el-date-picker v-model="discountForm.date" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button size="small" @click="discountVisible = false">{{ $t('common.cancel') }}</el-button>
@@ -153,6 +156,13 @@ const registerRules = computed(() => ({
   imageRef: commonRules.required(t('flow.note.errImageScanRequired')),
 }))
 const discountForm = reactive({ rate: '', date: '' })
+// 第2批：票据贴现弹窗（原无任何校验）——年化贴现率必须是 0-100 的数字、贴现日必选
+const discountFormRef = ref(null)
+const discountRules = {
+  rate: [...commonRules.required('请输入年化贴现率'),
+    { validator: (rule, value, cb) => { const n = Number(value); (!isFinite(n) || n < 0 || n > 100) ? cb(new Error('贴现率应为 0-100 之间的数字（百分比）')) : cb() } }],
+  date: commonRules.date('请选择贴现日'),
+}
 const inputKind = ref('')
 const inputTitle = ref('')
 const inputText = ref('')
@@ -226,6 +236,7 @@ function act(row, a) {
 }
 
 async function doDiscount() {
+  if (!(await validateForms([discountFormRef]))) return
   await api(() => arGapApi.noteDiscount(current.value.id, { annualRatePct: discountForm.rate, discountDate: discountForm.date }),
     t('flow.note.msgDiscountOk'))
   discountVisible.value = false

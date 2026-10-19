@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -82,6 +85,34 @@ public class SharedOpsController {
     @PostMapping("/sla/check")
     public Result<Void> slaCheck() {
         slaMonitorService.slaCheck();
+        return Result.success();
+    }
+
+    // SLA 维护面（2026-10-17 补：此前只有 list/check，SLA 阈值改一次只能改库）
+
+    @RequiresFeature("FSSC_SHARED")
+    @RequiresPerm("gl:sla:create")
+    @OperLog(module = "SLA_MONITOR", operType = "INSERT", desc = "新增SLA配置")
+    @PostMapping("/sla/config/create")
+    public Result<Long> slaConfigCreate(@RequestBody OpSlaConfig cfg) {
+        return Result.success(slaMonitorService.create(cfg));
+    }
+
+    @RequiresFeature("FSSC_SHARED")
+    @RequiresPerm("gl:sla:update")
+    @OperLog(module = "SLA_MONITOR", operType = "UPDATE", desc = "更新SLA配置")
+    @PostMapping("/sla/config/update")
+    public Result<Void> slaConfigUpdate(@RequestBody OpSlaConfig cfg) {
+        slaMonitorService.update(cfg);
+        return Result.success();
+    }
+
+    @RequiresFeature("FSSC_SHARED")
+    @RequiresPerm("gl:sla:delete")
+    @OperLog(module = "SLA_MONITOR", operType = "DELETE", desc = "删除SLA配置")
+    @PostMapping("/sla/config/{id}/delete")
+    public Result<Void> slaConfigDelete(@PathVariable Long id) {
+        slaMonitorService.delete(id);
         return Result.success();
     }
 
