@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
+import com.fssc.common.core.ErrorCode;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -104,7 +105,7 @@ public class SupplierReconController {
     @RequiresPerm("pay:recon:list")
     @PostMapping("/generate")
     public Result<Long> generate(@RequestBody Map<String, Object> body) {
-        Long supplierId = ((Number) body.get("supplierId")).longValue();
+        Long supplierId = requireLong(body, "supplierId");
         String period = (String) body.get("period");
         return Result.success(reconService.generate(supplierId, period));
     }
@@ -133,8 +134,8 @@ public class SupplierReconController {
     @RequiresPerm("pay:recon:list")
     @PostMapping("/{id}/manual-match")
     public Result<Void> manualMatch(@PathVariable("id") Long id, @RequestBody Map<String, Object> body) {
-        Long invoiceDetailId = ((Number) body.get("invoiceDetailId")).longValue();
-        Long paymentDetailId = ((Number) body.get("paymentDetailId")).longValue();
+        Long invoiceDetailId = requireLong(body, "invoiceDetailId");
+        Long paymentDetailId = requireLong(body, "paymentDetailId");
         reconService.manualMatch(id, invoiceDetailId, paymentDetailId);
         return Result.success();
     }
@@ -561,5 +562,17 @@ public class SupplierReconController {
     private List<Map<String, Object>> asList(Map<String, Object> m, String key) {
         Object v = m.get(key);
         return v instanceof List ? (List<Map<String, Object>>) v : null;
+    }
+
+    /** Map body 取必填 Long：缺参/类型不符一律 400，不让它变成 500（裸 ((Number)map.get(k)).longValue() 会NPE）。 */
+    private static Long requireLong(Map<String, Object> body, String key) {
+        Object v = body == null ? null : body.get(key);
+        if (v == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "缺少必填参数: " + key);
+        }
+        if (!(v instanceof Number)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "参数类型错误: " + key + " 应为数字");
+        }
+        return ((Number) v).longValue();
     }
 }

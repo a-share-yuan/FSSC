@@ -46,6 +46,8 @@ public class BudgetOccupyController {
     private final BudgetService budgetService;
     private final BgOccupyMapper bgOccupyMapper;
     private final SysUserMapper sysUserMapper;
+    /** D-BG-02：补销/释放需要读单据状态，费用单据只读查询。 */
+    private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
 
     /** 占用流水查询（需求 3.10 查看占用明细，真分页）。2026-09-17：支持 budgetItemId 穿透过滤 */
     @RequiresPerm("budget:occupy:list")
@@ -119,6 +121,8 @@ public class BudgetOccupyController {
     @OperLog(module = "BUDGET", operType = "UPDATE", desc = "释放预算")
     @PostMapping("/release")
     public Result<Void> release(@Validated @RequestBody OccupyReq req) {
+        // D-BG-02：释放只要求单据存在且未作废（占用本就该在作废/驳回时退回），不要求已 PAID。
+        assertBizBillState(req.getBizType(), req.getBizNo(), null);
         budgetService.release(req.getBudgetItemId(), req.getAmount(), req.getBizType(), req.getBizId(), req.getBizNo());
         return Result.success();
     }
@@ -127,8 +131,45 @@ public class BudgetOccupyController {
     @OperLog(module = "BUDGET", operType = "UPDATE", desc = "核销预算")
     @PostMapping("/write-off")
     public Result<Void> writeOff(@Validated @RequestBody OccupyReq req) {
+        // D-BG-02：手工补销口必须校验单据状态。流程内部核销（PayBatchBizAction 付款执行、
+        // ExpenseWfEventListener 报销核销）走 Service 直调，不经此入口，不受影响。
+        assertBizBillState(req.getBizType(), req.getBizNo(), "PAID");
         budgetService.writeOff(req.getBudgetItemId(), req.getAmount(), req.getBizType(), req.getBizId(), req.getBizNo());
         return Result.success();
+    }
+
+    /**
+     * D-BG-02：预算占用三动作的单据状态前置校验。
+     *
+     * <p>背景：补销口原先只认 {@code bizId} 落流水，完全不读单据状态，实测对
+     * {@code APPROVED}（钱尚未付）的对公结算单也能核销成功 ⇒ 预算在未付时转「已用」，
+     * 而 {@code writeOff} 只进不出，付款失败/退款没有回滚路径。
+     *
+     * <p>{@code requiredStatus} 为 null 时只做「存在 + 非作废」校验（释放动作适用：
+     * 占用本就该在单据作废/驳回时释放，PAID 不成立）。
+     */
+    private void assertBizBillState(String bizType, String bizNo, String requiredStatus) {
+        if (bizType == null || !bizType.startsWith("EXP_") || bizNo == null || bizNo.isBlank()) {
+            return; // 非费用域或未给单号，交由原有校验处理
+        }
+        com.fssc.expense.entity.ExpBill bill = expBillMapper.selectOne(
+                new LambdaQueryWrapper<com.fssc.expense.entity.ExpBill>()
+                        .eq(com.fssc.expense.entity.ExpBill::getBillNo, bizNo)
+                        .last("LIMIT 1"));
+        if (bill == null) {
+            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+                    "单据不存在：" + bizNo + "，无法执行预算" + ("PAID".equals(requiredStatus) ? "核销" : "释放"));
+        }
+        String st = bill.getStatus();
+        if ("VOID".equals(st) || "CANCELLED".equals(st)) {
+            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+                    "单据 " + bizNo + " 已作废（status=" + st + "），不允许再动预算；如需修正请先恢复单据");
+        }
+        if (requiredStatus != null && !requiredStatus.equals(st)) {
+            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+                    "单据 " + bizNo + " 当前状态为「" + st + "」，预算核销要求已「" + requiredStatus
+                            + "」：钱未付出去就核销会让预算被提前占用且无回滚路径。请先完成付款，或改用「释放」退回占用");
+        }
     }
 
     @Data
@@ -139,6 +180,12 @@ public class BudgetOccupyController {
         private BigDecimal amount;
         @NotBlank(message = "bizType 必填")
         private String bizType;
+        /**
+         * D-BG-04：{@code bizId} 实为必传（{@code writeOff}/{@code release} 都靠它归属占用流水，
+         * 缺传时在 Service 里对 null 解引用抛 NPE ⇒ 全局处理器包成 HTTP 500，调用方无从判断是参数问题）。
+         * 补上 {@code @NotNull} 让缺参在入口就被 400 挡下。
+         */
+        @NotNull(message = "bizId 必填（单据主键，用于归属占用流水）")
         private Long bizId;
         private String bizNo;
     }

@@ -51,6 +51,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SoDService {
 
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+
     private final SodRoleConflictMapper conflictMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SysRoleMapper roleMapper;
@@ -150,7 +153,123 @@ public class SoDService {
         String detectTime = LocalDateTime.now().format(SOD_TS);
         List<SodCheckRow> rows = new ArrayList<>(roleConflictRows(detectTime));
         rows.addAll(permConflictRows(detectTime));
+        // L2 不相容职责（**同一单据内经办轨迹**）、L3 轮岗。
+        // 本系统真正在拦 L2 的是两个闸门——approve.deny_self（自审）与
+        // approve.deny_serial_same_handler（同人连办），它们此前不在 SoD 报告里，
+        // 导致「报告 0 冲突」与「实际有单被拦」两套口径打架。
+        // 这里按「在途实例上的真实经办轨迹」反查，把闸门已拦/将拦的情形显式列出。
+        rows.addAll(activeDutySeparationRows(detectTime));
         return rows;
+    }
+
+    /**
+     *
+     * <p>判定口径（与 {@code WfEngineFacade} 的两道闸完全一致，不另立标准）：
+     * <ul>
+     *   <li><b>自审</b>：同一流程实例内，某人既是<b>发起人</b>又<b>办过至少一个节点</b>；</li>
+     *   <li><b>同人连办</b>：同一流程实例内，某人办过 <b>≥2 个不同 taskDefinitionKey</b> 的节点。</li>
+     * </ul>
+     * 两者均为「已实际发生」的历史轨迹（引擎当时放行或事后补办），
+     * 与配置层的 role/perm 冲突表互为补充：表是「可能冲突」，这里是「真的发生过」。
+     *
+     * <p>只读查询，不改任何流程数据。
+     */
+    private List<SodCheckRow> activeDutySeparationRows(String detectTime) {
+        List<SodCheckRow> rows = new ArrayList<>();
+        try {
+            // 同一实例内「人 → 不同节点 key 集合」
+            Map<String, Map<Long, Set<String>>> byInstance = new LinkedHashMap<>();
+            // 同一实例内的发起人
+            Map<String, Long> starterByInstance = new java.util.HashMap<>();
+            //  不要再 JOIN act_ru_execution：它是 Flowable 的「运行中执行」表，
+            // 流程一结束就清空（实测仅 6 行），而历史轨迹全在 act_hi_taskinst（288 行）。
+            // 直接用 act_hi_taskinst 自带的 PROC_INST_ID_ 分组即可。
+            for (Map<String, Object> h : jdbc.queryForList(
+                    "SELECT PROC_INST_ID_ AS inst, ASSIGNEE_ AS uid, TASK_DEF_KEY_ AS dk "
+                            + "FROM act_hi_taskinst "
+                            + "WHERE ASSIGNEE_ IS NOT NULL AND TASK_DEF_KEY_ IS NOT NULL")) {
+                //  JdbcTemplate 返回的列名按驱动/库大小写不定（实测 MySQL 返回大写 INST/UID/DK），
+                //   直接 get("inst") 会拿到 null ⇒ 全部数据聚到 "null" 键上，判据永远不命中。
+                String inst = String.valueOf(col(h, "inst"));
+                long uid = asLong(col(h, "uid"));
+                String dk = String.valueOf(col(h, "dk"));
+                byInstance.computeIfAbsent(inst, k -> new LinkedHashMap<>())
+                        .computeIfAbsent(uid, k -> new LinkedHashSet<>()).add(dk);
+            }
+            //  wf_instance 没有 del_flag 列（流程实例表靠 status 表达终态，不做逻辑删除），
+            //   带上它会直接 Unknown column 抛错、被外层 catch 吞掉 → 本项永远 0 条。
+            for (Map<String, Object> w : jdbc.queryForList(
+                    "SELECT proc_inst_id AS inst, start_user_id AS uid FROM wf_instance "
+                            + "WHERE start_user_id IS NOT NULL")) {
+                starterByInstance.put(String.valueOf(col(w, "inst")), asLong(col(w, "uid")));
+            }
+            for (Map.Entry<String, Map<Long, Set<String>>> e : byInstance.entrySet()) {
+                String inst = e.getKey();
+                Long starter = starterByInstance.get(inst);
+                for (Map.Entry<Long, Set<String>> per : e.getValue().entrySet()) {
+                    long uid = per.getKey();
+                    Set<String> keys = per.getValue();
+                    // L2-1 自审：发起人又办过节点
+                    if (starter != null && starter == uid) {
+                        rows.add(dutyRow(uid, "发起人自办本单审批节点",
+                                "L2-不相容职责/自审（approve.deny_self 在役闸门）", detectTime));
+                    }
+                    // L2-2 同人连办：办过 ≥2 个不同节点
+                    if (keys.size() >= 2) {
+                        rows.add(dutyRow(uid, "同一流程内办过 " + keys.size() + " 个不同节点（" + keys + "）",
+                                "L2-不相容职责/连办（approve.deny_serial_same_handler 在役闸门）", detectTime));
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            // fail-open：体检类查询异常不得让整个 SoD 报告失败；但必须留痕，否则"永远 0 条"无从排查
+            org.slf4j.LoggerFactory.getLogger(SoDService.class)
+                    .warn("SoD 不相容职责(L2)实况查询失败（本次该项返回空，不影响其它维度）: {}", ex.toString());
+            return rows;
+        }
+        return rows;
+    }
+
+    /**
+     * 安全转long：{@code act_hi_taskinst.ASSIGNEE_} 是 varchar，驱动可能返回 String，
+     * 直接 {@code (Number)} 强转会 ClassCastException ⇒ 整段被外层 catch 吞掉、永远 0 条。
+     */
+    private static long asLong(Object v) {
+        if (v == null) {
+            return 0L;
+        }
+        if (v instanceof Number) {
+            return ((Number) v).longValue();
+        }
+        String s = String.valueOf(v).trim();
+        return s.isEmpty() ? 0L : Long.parseLong(s);
+    }
+
+    /** JdbcTemplate 取值：列名大小写不敏感（MySQL 常返回大写，H2/PG 返回小写）。 */
+    private static Object col(Map<String, Object> row, String name) {
+        Object v = row.get(name);
+        if (v == null) {
+            v = row.get(name.toUpperCase());
+        }
+        if (v == null) {
+            v = row.get(name.toLowerCase());
+        }
+        return v;
+    }
+
+    private SodCheckRow dutyRow(long uid, String conflictDesc, String roleName, String detectTime) {
+        SodCheckRow r = new SodCheckRow();
+        r.setUserId(uid);
+        SysUser u = userMapper.selectById(uid);
+        if (u != null) {
+            r.setUserName(u.getNickName());
+            r.setEmpNo(u.getEmpNo());
+        }
+        r.setRoleName(roleName);
+        r.setConflictDesc(conflictDesc);
+        r.setDetectTime(detectTime);
+        r.setDimension("DUTY");
+        return r;
     }
 
     /** R5-D-034：检查结果分页（维度／关键词过滤在内存完成，总量恒为本租户口径） */

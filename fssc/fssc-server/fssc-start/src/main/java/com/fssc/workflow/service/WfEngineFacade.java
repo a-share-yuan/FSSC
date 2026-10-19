@@ -6137,6 +6137,28 @@ public class WfEngineFacade {
         } catch (Exception ex) {
             log.warn("POOL 锁定任务回捞失败 userId={}: {}", userId, ex.getMessage());
         }
+        // D-GL-02：AUTO 档同岗回捞。AUTO 节点激活即写死 assignee，Flowable 的 taskCandidateGroupIn
+        // 只回未指派任务 ⇒ 同岗位其他人在待办里看不到这条，但 approve 允许他们办（只看登录人权限与两道闸）。
+        // 结果是「能办却看不见」：工作台空白、单子静默停摆。此处补回捞，可见即可（能否办理仍由 approve 判定）。
+        try {
+            java.util.Map<String, String> autoRoleMap = wfNodeConfigResolver.autoNodeRoleMap();
+            if (!autoRoleMap.isEmpty()) {
+                java.util.Set<String> seen = new java.util.HashSet<>();
+                assigned.forEach(t -> seen.add(t.getId()));
+                group.forEach(t -> seen.add(t.getId()));
+                for (String tid : wfQueryService.autoTasksOfSameRole(userId, autoRoleMap, roleCodes)) {
+                    if (seen.contains(tid)) {
+                        continue;
+                    }
+                    Task extra = taskService.createTaskQuery().taskId(tid).includeProcessVariables().singleResult();
+                    if (extra != null && !String.valueOf(userId).equals(extra.getAssignee())) {
+                        group.add(extra);
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("AUTO 同岗任务回捞失败 userId={}: {}", userId, ex.getMessage());
+        }
         // 委托代理：当前用户是受托人（to_user）时，委托人（from_user）名下的待办也并入
         // （含 assignee 直接指定 + 委托人角色候选组任务，两类都转由受托人处理）
         java.util.List<Task> delegated = new java.util.ArrayList<>();

@@ -163,6 +163,72 @@ public class GlobalExceptionHandler {
                 ErrorCode.WORKFLOW_ENGINE_ERROR.getMessage());
     }
 
+    /**
+     * D-DATE-01：请求体反序列化失败（日期格式、字段名、类型不匹配）→ 400 + 可执行提示。
+     *
+     * <p>此前这类一律落到兜底 {@link #handleOther} 返回 500「系统异常，请稍后重试」，
+     * 把**调用方的参数问题**误导成系统故障。实测四例同源：
+     * {@code period='2026-10'}（列宽 varchar(6)）、缺 {@code bizId}（null 解引用）、
+     * {@code beginTime='2026-10-19 09:00:00'}（Jackson 只收 ISO 的 {@code T} 分隔）、
+     * 缺 {@code standardUnit}（NOT NULL 列）。
+     *
+     * <p>现在把 Jackson 的三类解析异常单独收口，并从 message 里抽出最可能的原因提示。
+     */
+    @ExceptionHandler({com.fasterxml.jackson.databind.exc.InvalidFormatException.class,
+            com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException.class,
+            org.springframework.http.converter.HttpMessageNotReadableException.class})
+    public Result<Void> handleJsonParse(Exception ex, HttpServletRequest req) {
+        log.warn("请求体解析失败 uri={} type={} msg={}", req.getRequestURI(),
+                ex.getClass().getSimpleName(), ex.getMessage());
+        return Result.fail(ErrorCode.PARAM_INVALID.getCode(),
+                "请求参数格式不正确：" + parseHint(ex.getMessage()) + "；日期时间请用 ISO 格式（如 2026-10-26T18:00:00）");
+    }
+
+    /**
+     * D-DATE-01：数据层「值放不进去」的异常（列太短 / 非空约束 / 类型越界）→ 400 + 可执行提示。
+     *
+     * <p>{@code BadSqlGrammarException} 里嵌的 {@code SQLSyntaxErrorException} 同属此类，
+     * 但真正的「列不存在 / 列名写错」要交给 500 + 详细日志（那是代码缺陷不是参数问题），
+     * 因此这里只兜「值不合法」三类：Data too long / cannot be null / Out of range / 精度截断。
+     */
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public Result<Void> handleDataIntegrity(org.springframework.dao.DataIntegrityViolationException ex,
+                                             HttpServletRequest req) {
+        log.warn("数据约束校验失败 uri={} msg={}", req.getRequestURI(), rootMsg(ex));
+        String m = rootMsg(ex);
+        String hint;
+        if (m.contains("Data too long")) {
+            hint = "有字段超出长度限制（常见于期间/编码类字段，本系统期间格式为 yyyyMM 六位）";
+        } else if (m.contains("cannot be null")) {
+            hint = "有必填字段未传（该字段在数据库为 NOT NULL）";
+        } else if (m.contains("Out of range") || m.contains("Truncated incorrect")) {
+            hint = "有数值超出字段允许范围或精度被截断";
+        } else {
+            hint = "提交的数据不满足数据库约束：" + m;
+        }
+        return Result.fail(ErrorCode.PARAM_INVALID.getCode(), hint);
+    }
+
+    /** 取最底层 cause 的消息（数据完整性异常的真正原因藏在 cause 链里） */
+    private static String rootMsg(Throwable ex) {
+        Throwable t = ex;
+        while (t.getCause() != null && t.getCause() != t) {
+            t = t.getCause();
+        }
+        return t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage();
+    }
+
+    /** 从 Jackson 异常里挑出对调用方最有用的那一句（原始 message 含路径与类名，噪音大） */
+    private static String parseHint(String raw) {
+        if (raw == null) {
+            return "请求体不是合法 JSON";
+        }
+        int at = raw.indexOf("through reference chain");
+        String head = at > 0 ? raw.substring(0, at) : raw;
+        head = head.replaceAll("\\s+", " ").trim();
+        return head.length() > 160 ? head.substring(0, 160) + "…" : head;
+    }
+
     /** 兜底：未预期异常，记详细日志但只回给前端模糊信息 */
     @ExceptionHandler(Exception.class)
     public Result<Void> handleOther(Exception ex, HttpServletRequest req) {

@@ -132,7 +132,7 @@ public class DeliveryController {
     @OperLog(module = "SHARING", operType = "INSERT", desc = "交单登记")
     public Result<Long> apply(@RequestBody Map<String, Object> body) {
         var u = UserContext.getRequired();
-        Long billId = ((Number) body.get("billId")).longValue();
+        Long billId = requireLong(body, "billId");
         String expressCompany = (String) body.get("expressCompany");
         String expressNo = (String) body.get("expressNo");
         Integer packageCount = body.get("packageCount") != null ? ((Number) body.get("packageCount")).intValue() : 1;
@@ -214,5 +214,17 @@ public class DeliveryController {
         String location = (String) body.get("location");
         barcodeService.shelve(barcode, location, u.getUserId(), u.getRealName());
         return Result.success();
+    }
+
+    /** Map body 取必填 Long：缺参/类型不符一律 400，不让它变成 500（裸 ((Number)map.get(k)).longValue() 会NPE）。 */
+    private static Long requireLong(Map<String, Object> body, String key) {
+        Object v = body == null ? null : body.get(key);
+        if (v == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "缺少必填参数: " + key);
+        }
+        if (!(v instanceof Number)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "参数类型错误: " + key + " 应为数字");
+        }
+        return ((Number) v).longValue();
     }
 }

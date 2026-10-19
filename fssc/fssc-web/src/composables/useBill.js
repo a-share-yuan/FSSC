@@ -763,9 +763,43 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       // 提交后把选中行指向这张单，顶部流程进度立刻显示「已提交/当前节点」，不用手点刷新
       focusRow(id)
     } catch (e) {
+      const msg = String(e?.message || '')
+      // 兜底（软控超支理由）：服务端是预算校验的权威。
+      // 前端 budgetPreview 只聚合 lines 中 budgetItemId 非空的金额；出差申请等场景该字段在提交前尚未
+      // 解析 ⇒ 预览为空 ⇒ 上方 SOFT 弹窗永不触发 ⇒ 直接提交被服务端拒。
+      // 这里捕获「需填写超支理由」报错：弹窗补填 → 随草稿落库 → 自动重试一次提交。
+      if (msg.includes('需填写超支理由')) {
+        try {
+          const r = await ElMessageBox.prompt(
+            '本单超出预算可用额度，当前为软控方案：请填写超支理由（随单据留痕，服务端同口径校验）',
+            '软控超支 · 需填写理由',
+            {
+              type: 'warning',
+              inputType: 'textarea',
+              inputPlaceholder: '请填写超支原因与调剂口径（必填，随单据留痕）',
+              inputValidator: (v) => (v && v.trim() ? true : '超支理由不能为空'),
+            })
+          const reason = String(r.value || '').trim()
+          if (!reason) return
+          form.bill.extJson = { ...(form.bill.extJson || {}), overrunReason: reason }
+          await saveDraft()   // 让 extJson 随单据落库（服务端 occupy 读 bill.ext_json.overrunReason）
+          const rid = form.bill.id
+          await billApi.submit(rid, null, firstPick.mode === 'PICK' ? firstPick.userId : null)
+          ElMessage.success('已提交，等待审批')
+          activeTab.value = 'my'
+          await loadBills()
+          focusRow(rid)
+          return
+        } catch (e2) {
+          // 用户取消不提示；重试仍失败则回显真实原因
+          const m2 = String((e2 && e2.message) || '')
+          if (m2 && m2 !== 'cancel') ElMessage.error(blockSubmit(m2))
+          return
+        }
+      }
       // 提交链路任何一步失败（合规预检/反欺诈拦截/收款账号校验/网络异常）都必须有可见错误提示，
       // 不允许把失败当成功流程继续。saveDraft 内部已提示过一次，这里同文案会被全局去重，不会双弹。
-      ElMessage.error(blockSubmit(e?.message || '提交失败，请稍后重试'))
+      ElMessage.error(blockSubmit(msg || '提交失败，请稍后重试'))
     } finally { submitting.value = false }
   }
   // 编辑草稿 / 驳回单编辑重提：把已有单据载入表单（保留 id，saveDraft 即更新，submit 走新流程实例）

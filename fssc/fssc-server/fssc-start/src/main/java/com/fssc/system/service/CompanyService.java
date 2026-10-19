@@ -18,8 +18,19 @@ public class CompanyService {
 
     private final SysCompanyMapper sysCompanyMapper;
 
+    /**
+     * 公司树（供单据发起页/X-Company-Id 切换下拉）。
+     *
+     * <p><b>只列启用公司</b>：{@code status='DISABLED'} 表示主体已建但尚未启用（无部门、无人员），
+     * 出现在下拉里会让用户选到一个必然无法发起任何单据的公司（无组织 ⇒ 组织健康 R1/R2必然红）。
+     * 管理端要看全部公司请走部门/公司管理页，不要依赖本方法。
+     *
+     * <p>与 {@code OrgHealthChecker} 的扫描口径一致（同样只取 NORMAL），
+     * 避免「体检说没问题、下拉却选得到」的两种口径打架。
+     */
     public List<SysCompany> tree() {
         return sysCompanyMapper.selectList(new LambdaQueryWrapper<SysCompany>()
+                .eq(SysCompany::getStatus, "NORMAL")
                 .orderByAsc(SysCompany::getAncestors).orderByAsc(SysCompany::getSort));
     }
 

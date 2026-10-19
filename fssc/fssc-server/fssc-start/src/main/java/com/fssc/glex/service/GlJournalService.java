@@ -28,6 +28,8 @@ import java.math.BigDecimal;
 public class GlJournalService {
 
     private final GlJournalEntryMapper mapper;
+    /** D-GL-03：按科目编码解析真实主键，并校验传入科目存在性（默认科目不再是幽灵 ID）。 */
+    private final com.fssc.masterdata.mapper.MdSubjectMapper subjectMapper;
     private final WfEngineFacade wfEngineFacade;
     private final com.fssc.framework.org.OrgGuard orgGuard;
     /** D-DEC-128：记账域冲销走凭证引擎的统一出口 */
@@ -35,9 +37,18 @@ public class GlJournalService {
     /** P4-3 审计扩面：冲销这类状态跃迁须留痕（与审批回写同口径） */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
-    /** 默认借贷科目（仅展示用，非外键约束；前端可用 md_subject 传入真实科目id）。 */
-    private static final Long DEFAULT_DEBIT = 6602L;
-    private static final Long DEFAULT_CREDIT = 2241L;
+    /**
+     * 默认借贷科目的<b>科目编码</b>（不是主键！）。
+     *
+     * <p>D-GL-03：原实现把 6602/2241 当主键写死（{@code DEFAULT_DEBIT=6602L}、{@code DEFAULT_CREDIT=2241L}），
+     * 而 md_subject 里 6602 的主键是 919、1002 是 967，<b>2241 更是查无此行</b>（幽灵 ID）。
+     * 结果未传科目的手工凭证会落成「借 6602 管理费用 / 贷 2241 其他应付款」——账实不符。
+     * 原注释「仅展示用，非外键约束」与实现不符：凭证引擎直接拿这两个值生成分录。
+     *
+     * <p>改为按编码查库解析真实主键，租户/公司换了 id 也不会错。
+     */
+    private static final String DEFAULT_DEBIT_CODE = "6602";
+    private static final String DEFAULT_CREDIT_CODE = "1002";
 
     public PageResult<GlJournalEntry> page(long pageNum, long pageSize, String period, String entryType, String keyword) {
         LambdaQueryWrapper<GlJournalEntry> qw = new LambdaQueryWrapper<>();
@@ -61,6 +72,63 @@ public class GlJournalService {
     }
 
     /**
+     * D-GL-04：会计期间归一化为 {@code yyyyMM}（底表列宽只有 6 位）。
+     * <p>容忍 {@code yyyy-MM} 输入并去掉横杠；月份越界或格式非法时抛 400 业务异常，
+     * 而不是让它一路走到 INSERT 变成「列长不足」的 HTTP 500。
+     */
+    private String normalizePeriod(String period) {
+        String s = period.trim();
+        if (s.matches("\\d{4}-\\d{2}")) {
+            s = s.replace("-", "");
+        }
+        if (!s.matches("\\d{6}")) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "会计期间格式不正确：" + period + "（应为 yyyyMM 如 202610，或 yyyy-MM 如 2026-10）");
+        }
+        int mm = Integer.parseInt(s.substring(4));
+        if (mm < 1 || mm > 12) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "会计期间月份非法：" + s.substring(4) + "（应在 01~12）");
+        }
+        return s;
+    }
+
+    /**
+     * D-GL-03：把科目主键解析成「库里真实存在的那个」。
+     * <p>{@code subjectId} 为空时按科目编码取默认科目（6602 管理费用 / 1002 银行存款）；
+     * 非空时必须能在 md_subject 命中，否则 400 拒绝——避免幽灵 ID 静默落库、直到生成凭证才暴露。
+     */
+    private Long resolveSubjectId(Long subjectId, String defaultCode, String side) {
+        if (subjectId != null) {
+            if (subjectById(subjectId) == null) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        side + "科目不存在（id=" + subjectId + "），请从会计科目表中选择");
+            }
+            return subjectId;
+        }
+        com.fssc.masterdata.entity.MdSubject def = subjectByCode(defaultCode);
+        if (def == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    side + "默认科目编码 " + defaultCode + " 在会计科目表中不存在，请显式指定科目");
+        }
+        return def.getId();
+    }
+
+    private com.fssc.masterdata.entity.MdSubject subjectById(Long id) {
+        return subjectMapper.selectById(id);
+    }
+
+    private com.fssc.masterdata.entity.MdSubject subjectByCode(String code) {
+        return subjectMapper.selectOne(new LambdaQueryWrapper<com.fssc.masterdata.entity.MdSubject>()
+                .eq(com.fssc.masterdata.entity.MdSubject::getSubjectCode, code)
+                .last("LIMIT 1"));
+    }
+
+    private String subjectName(Long id) {
+        com.fssc.masterdata.entity.MdSubject s = subjectMapper.selectById(id);
+        return s == null ? ("id=" + id) : (s.getSubjectCode() + " " + s.getSubjectName());
+    }
+
+    /**
      * 生成一般总账记账并置 APPROVING（不预造凭证号），随后按 entryType 发起对应审批流；
      * 审批办结才由 {@code GlBizAction} 置 POSTED 并回写凭证对象上的真实凭证号。
      */
@@ -70,6 +138,9 @@ public class GlJournalService {
         if (!StringUtils.hasText(period)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "会计期间不能为空");
         }
+        // D-GL-04：period 列是 varchar(6)=yyyyMM，传 yyyy-MM 会因列长不足触发 SQL 异常被包成 HTTP 500，
+        // 调用方无从判断是格式问题（与 D-INV-01 同源）。先归一化，非法格式显式 400 拒绝。
+        period = normalizePeriod(period);
         if (!StringUtils.hasText(entryType)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "记账类型不能为空");
         }
@@ -99,8 +170,12 @@ public class GlJournalService {
                     + "如需重新生成请先驳回原单");
         }
         e.setSummary(StringUtils.hasText(summary) ? summary : defaultSummary(entryType, period));
-        e.setDebitSubjectId(debitSubjectId != null ? debitSubjectId : DEFAULT_DEBIT);
-        e.setCreditSubjectId(creditSubjectId != null ? creditSubjectId : DEFAULT_CREDIT);
+        e.setDebitSubjectId(resolveSubjectId(debitSubjectId, DEFAULT_DEBIT_CODE, "借方"));
+        e.setCreditSubjectId(resolveSubjectId(creditSubjectId, DEFAULT_CREDIT_CODE, "贷方"));
+        if (e.getDebitSubjectId().equals(e.getCreditSubjectId())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "借方与贷方科目不能相同（当前都是「"
+                    + subjectName(e.getDebitSubjectId()) + "」），请选择两个不同的会计科目");
+        }
         e.setAmount(amount);
         e.setEntryNo("JRN" + period + String.format("%03d", seq));
         // D-DEC-291/292：发起≠记账。凭证号只能由办结时生成的凭证对象给出，此处不预造号、不置 POSTED。

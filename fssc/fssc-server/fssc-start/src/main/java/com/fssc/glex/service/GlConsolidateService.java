@@ -43,12 +43,36 @@ public class GlConsolidateService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
+    /**
+     * D-GL-04：会计期间归一化为 {@code yyyyMM}（底表列宽只有 6 位），容忍 {@code yyyy-MM} 输入。
+     * <p>月份越界/格式非法一律 400，绝不放行到 INSERT 变成 500。
+     */
+    private String normalizePeriod(String period) {
+        String s = period.trim();
+        if (s.matches("\\d{4}-\\d{2}")) {
+            s = s.replace("-", "");
+        }
+        if (!s.matches("\\d{6}")) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "会计期间格式不正确：" + period + "（应为 yyyyMM 如 202610，或 yyyy-MM 如 2026-10）");
+        }
+        int mm = Integer.parseInt(s.substring(4));
+        if (mm < 1 || mm > 12) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "会计期间月份非法：" + s.substring(4) + "（应在 01~12）");
+        }
+        return s;
+    }
+
     /** 创建合并底稿（DRAFT） */
     @Transactional(rollbackFor = Exception.class)
     public Long create(GlConsolidate e) {
         if (!StringUtils.hasText(e.getPeriod())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "会计期间不能为空");
         }
+        // D-GL-04：gl_consolidate.period 是 varchar(6)=yyyyMM，传 yyyy-MM 会在 INSERT 时
+        // 触发 "Data too long" 的 SQL 异常，被全局处理器包成 HTTP 500「系统异常」——
+        // 调用方只会当系统故障排查。先归一化，非法格式显式 400。
+        e.setPeriod(normalizePeriod(e.getPeriod()));
         e.setId(null);
         e.setTenantId(TenantContext.getTenantId());
         e.setReportNo(StringUtils.hasText(e.getReportNo())

@@ -470,6 +470,40 @@ public class WfQueryService {
                 .toList();
     }
 
+    /**
+     * D-GL-02：回捞「AUTO 档 + 同岗位角色 + assignee 是他人」的在途任务 id。
+     *
+     * <p>这批任务在 Flowable 侧因 {@code taskCandidateGroupIn} 只回未指派任务而查不到，
+     * 但服务端 {@code approve} 允许同岗位的人办理（只按登录人判权限与两道闸，不校验 assignee），
+     * 于是造成「能办却看不见」——用户工作台空白、单子静默停摆。
+     *
+     * <p>口径与 POOL 回捞一致：**只负责可见**，能否办理仍由 {@code approve} 的
+     * 连办闸/自审闸与 {@code canOperate} 决定，本方法不做任何放行。
+     *
+     * @param autoNodeRoleMap {@code modelKey:nodeKey -> 角色码}（见 WfNodeConfigResolver#autoNodeRoleMap）
+     * @param myRoles 我持有的角色码
+     */
+    public List<String> autoTasksOfSameRole(Long userId,
+                                            java.util.Map<String, String> autoNodeRoleMap,
+                                            java.util.Collection<String> myRoles) {
+        if (userId == null || autoNodeRoleMap == null || autoNodeRoleMap.isEmpty()
+                || myRoles == null || myRoles.isEmpty()) {
+            return List.of();
+        }
+        List<WfTask> rows = taskMapper.selectList(new LambdaQueryWrapper<WfTask>()
+                .eq(WfTask::getStatus, "PENDING")
+                .isNotNull(WfTask::getAssigneeId)
+                .ne(WfTask::getAssigneeId, userId)
+                .orderByDesc(WfTask::getId)
+                .last("limit 200"));
+        return rows.stream()
+                .filter(r -> r.getTaskId() != null && r.getModelKey() != null && r.getNodeKey() != null)
+                .filter(r -> myRoles.contains(autoNodeRoleMap.getOrDefault(
+                        r.getModelKey() + ":" + r.getNodeKey(), "")))
+                .map(WfTask::getTaskId)
+                .toList();
+    }
+
     /** 任务视图双写（WfEngineFacade 调用） */
     @Transactional(rollbackFor = Exception.class)
     public void recordTask(WfTask task) {

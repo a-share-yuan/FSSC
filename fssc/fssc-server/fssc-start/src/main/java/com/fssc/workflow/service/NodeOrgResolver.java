@@ -1099,18 +1099,92 @@ public class NodeOrgResolver {
         }
     }
 
-    /** 直线上级：申请人所在部门的负责人（负责人=申请人本人时视为无上级，避免自审） */
+    /**
+     * 直线上级：申请人所在部门的负责人（负责人=申请人本人时视为无上级，避免自审）。
+     *
+     * <p><b>D-WF-15（2026-10-19 人工测试 G 册实测修）</b>：原实现只取 {@code sys_dept.leader_id} 唯一一人，
+     * 且 leader 为提单人/未配时**直接返回 null**。而 {@code wf_node_config.assign_value=DIRECT_SUPERVISOR}
+     * 的节点（如 {@code INVOICE_ISSUE:Task_2「直属上级审核【部门负责人】」}）会因此
+     * <b>拿不到任何办理人</b> ⇒ 流程在该节点<b>必然死锁</b>（AUTO 档指派失败即断流）。
+     *
+     * <p>本次实测的公司33就是活样本：全公司 {@code ORG_HEAD} 仅黄天佑一人，
+     * 一旦他本人提交单据，该节点即无人可办。
+     *
+     * <p><b>修法（三级兜底，仍尊重自审）</b>：
+     * <ol>
+     *   <li>正常：部门 leader，且 <b>不是提单人本人</b>；</li>
+     *   <li>降级①：leader 缺失或恰为提单人 ⇒ 沿部门汇报线向上找第一个<b>不是提单人</b>的 leader；</li>
+     *   <li>降级②：汇报线上仍无 ⇒ 取<b>同公司其他</b>的单位负责人（{@code ORG_HEAD}），
+     *       排除提单人本人与 admin —— 保证「同公司至少有一个人能办」，
+     *       <b>不跨公司</b>（避免把单派给无关组织的人）。</li>
+     * </ol>
+     * 三级都落空才返回 null（此时确无任何人可依职责办理，属真实组织缺失，交empty_strategy 处置）。
+     */
     private Long directSupervisorOf(Long applicantUserId) {
         if (applicantUserId == null) {
             return null;
         }
         SysUser au = sysUserMapper.selectById(applicantUserId);
-        if (au == null || au.getDeptId() == null) {
+        if (au == null) {
             return null;
         }
-        SysDept dept = sysDeptMapper.selectById(au.getDeptId());
-        if (dept != null && dept.getLeaderId() != null && !dept.getLeaderId().equals(applicantUserId)) {
-            return dept.getLeaderId();
+        // ① 正常路径：本部门 leader（非提单人）
+        if (au.getDeptId() != null) {
+            SysDept dept = sysDeptMapper.selectById(au.getDeptId());
+            if (dept != null && dept.getLeaderId() != null && !dept.getLeaderId().equals(applicantUserId)) {
+                return dept.getLeaderId();
+            }
+        }
+        // 降级①：沿汇报线向上找第一个「不是提单人」的 leader
+        Long byChain = firstLeaderAlongChain(au.getDeptId(), applicantUserId);
+        if (byChain != null) {
+            log.info("直线上级降级①：部门 leader 缺失或即提单人，沿汇报线上收 applicant={} → {}", applicantUserId, byChain);
+            return byChain;
+        }
+        // 降级②：同公司其他单位负责人（D-WF-15：避免节点因「独苗负责人自审」而无人可办）
+        Long byOrgHead = otherOrgHeadOf(au.getCompanyId(), applicantUserId);
+        if (byOrgHead != null) {
+            log.info("直线上级降级②：汇报线无可用负责人，改派同公司其他单位负责人 applicant={} → {}", applicantUserId, byOrgHead);
+            return byOrgHead;
+        }
+        return null;
+    }
+
+    /** 沿部门汇报线自下而上取第一个「非提单人」的 leader（防环，最多 10 跳）。 */
+    private Long firstLeaderAlongChain(Long startDeptId, Long applicantUserId) {
+        if (startDeptId == null) {
+            return null;
+        }
+        java.util.Set<Long> visited = new java.util.HashSet<>();
+        Long deptId = startDeptId;
+        for (int i = 0; i < 10 && deptId != null && visited.add(deptId); i++) {
+            SysDept dept = sysDeptMapper.selectById(deptId);
+            if (dept == null) {
+                break;
+            }
+            Long leader = dept.getLeaderId();
+            if (leader != null && !leader.equals(applicantUserId) && isRealApprover(leader)) {
+                return leader;
+            }
+            deptId = dept.getParentId();
+        }
+        return null;
+    }
+
+    /** 同公司（不含跨公司）其他单位/基地负责人，排除提单人本人与 admin。 */
+    private Long otherOrgHeadOf(Long companyId, Long applicantUserId) {
+        if (companyId == null) {
+            return null;
+        }
+        try {
+            List<Long> heads = userIdsInCompanyWithRole(companyId, "ORG_HEAD");
+            for (Long id : heads) {
+                if (id != null && !id.equals(applicantUserId) && isRealApprover(id)) {
+                    return id;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("直线上级降级②：查同公司单位负责人失败 companyId={}: {}", companyId, e.getMessage());
         }
         return null;
     }

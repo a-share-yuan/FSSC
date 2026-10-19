@@ -86,6 +86,36 @@ public class WfNodeConfigResolver {
     }
 
     /**
+     * D-GL-02：AUTO（按角色自动指派）档节点的 {@code modelKey:nodeKey -> assign_value 角色码} 映射。
+     *
+     * <p>为什么需要：Flowable 的 {@code taskCandidateGroupIn} 只回「未指派」的任务，而 AUTO 档在节点
+     * 激活时就把 assignee 写死（实测 {@code act_ru_task.ASSIGNEE_} 有值、候选组 identityLink 失效）。
+     * 于是同岗位的其他人（如 FIN_AUDIT 的 B 角色）{@code /wf/todo} 里**看不到**这条任务，
+     * 但服务端 {@code approve} 只按登录人权限与两道闸放行、**不校验 assignee** ⇒
+     * 「能办但看不见」，真实用户打开工作台一片空白，单子静默停摆且无任何提示。
+     *
+     * <p>本映射供待办回捞使用：凡「AUTO 档 + 节点角色 ∈ 我的角色 + assignee 不是我」的任务
+     * 都要在我的待办里可见（可否办理仍由 {@code approve} 的两道闸与 canOperate 决定）。
+     */
+    public Map<String, String> autoNodeRoleMap() {
+        Map<String, String> out = new HashMap<>();
+        for (WfNodeConfig nc : wfNodeConfigMapper.selectList(new LambdaQueryWrapper<>())) {
+            if (nc.getModelKey() == null || nc.getNodeKey() == null) {
+                continue;
+            }
+            String mode = nc.getHandlingMode() == null ? "" : nc.getHandlingMode().trim();
+            if ("POOL".equalsIgnoreCase(mode)) {
+                continue; // POOL 已有 poolTasksClaimedByOthers 专门口径，不重复回捞
+            }
+            String role = nc.getAssignValue() == null ? "" : nc.getAssignValue().trim();
+            if (!role.isEmpty()) {
+                out.put(nc.getModelKey() + ":" + nc.getNodeKey(), role);
+            }
+        }
+        return out;
+    }
+
+    /**
      * 全部 {@code allow_addsign=0}（未开放加签）的节点键集合，形如 {@code modelKey:nodeKey}（F3-3）。
      *
      * <p>与 {@link #poolNodeKeys()} 同一做法：待办列表要按行决定「加签」按钮是否隐藏，

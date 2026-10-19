@@ -10,6 +10,8 @@ import com.fssc.invoice.entity.InvInvoiceLine;
 import com.fssc.invoice.entity.InvVerifyLog;
 import com.fssc.invoice.service.InvoiceEnhanceService;
 import lombok.RequiredArgsConstructor;
+import com.fssc.common.exception.BizException;
+import com.fssc.common.core.ErrorCode;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -74,7 +76,7 @@ public class InvoiceEnhanceController {
     @OperLog(module = "INV_VERIFY_LOG", operType = "INSERT", desc = "发票验真")
     @PostMapping("/verify/run")
     public Result<Void> runVerify(@RequestBody Map<String, Object> body) {
-        Long invoiceId = ((Number) body.get("invoiceId")).longValue();
+        Long invoiceId = requireLong(body, "invoiceId");
         String channel = (String) body.get("channel");
         String reqParam = (String) body.get("reqParam");
         String respContent = (String) body.get("respContent");
@@ -90,7 +92,7 @@ public class InvoiceEnhanceController {
     @OperLog(module = "INV_VERIFY_LOG", operType = "UPDATE", desc = "实时验真")
     @PostMapping("/verify/now")
     public Result<Void> verifyNow(@RequestBody Map<String, Object> body) {
-        Long invoiceId = ((Number) body.get("invoiceId")).longValue();
+        Long invoiceId = requireLong(body, "invoiceId");
         String result = (String) body.get("result");
         String msg = (String) body.get("msg");
         enhanceService.verifyNow(invoiceId, result, msg,
@@ -105,5 +107,17 @@ public class InvoiceEnhanceController {
     public Result<Integer> verifyBatch(@RequestBody List<Long> invoiceIds) {
         return Result.success(enhanceService.verifyBatch(invoiceIds,
                 UserContext.get() == null ? null : UserContext.get().getUserId()));
+    }
+
+    /** Map body 取必填 Long：缺参/类型不符一律 400，不让它变成 500（裸 ((Number)map.get(k)).longValue() 会NPE）。 */
+    private static Long requireLong(Map<String, Object> body, String key) {
+        Object v = body == null ? null : body.get(key);
+        if (v == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "缺少必填参数: " + key);
+        }
+        if (!(v instanceof Number)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "参数类型错误: " + key + " 应为数字");
+        }
+        return ((Number) v).longValue();
     }
 }
