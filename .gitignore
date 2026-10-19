@@ -14,8 +14,9 @@ __pycache__/
 *.pyc
 
 # ---- 运行时数据（含用户上传附件，绝不入库）----
-data/files/
-upload/
+# 用 **/ 前缀以覆盖任意目录深度（如 fssc/fssc-server/data/files/）
+**/data/files/
+**/upload/
 /logs/
 **/logs/
 *.log
