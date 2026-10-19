@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
@@ -25,7 +22,7 @@
       <el-button size="small" @click="openLoanLedger">{{ $t('expense.ledger.btnLoanLedger') }}</el-button>
       <el-button size="small" @click="openColdDialog">{{ $t('expense.ledger.tabArchived') }}</el-button>
     </div>
-    <el-table :data="displayBills" size="small" stripe @row-click="onRowClick" @selection-change="handleSelectionChange" @row-dblclick="openTrace">
+    <el-table :data="displayBills" size="small" stripe @row-click="onRowClick" @selection-change="handleSelectionChange" @row-dblclick="openTrace" style="cursor:pointer">
       <el-table-column type="selection" width="45" />
       <el-table-column prop="billNo" :label="$t('field.docNo')" width="150" sortable />
       <el-table-column :label="$t('field.type')" width="80">

@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <!--
   共享审批弹窗：把散落在 30+ 处的 ElMessageBox.confirm/prompt 单行框收敛成一个带上下文的对话框。
   用法（Promise 式，与 ElMessageBox 手感一致）：

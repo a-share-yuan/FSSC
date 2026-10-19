@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * 字典读取层（第 1 批收口基础设施，2026-10-15；第 3 批扩展：免权限通道 + 全局预热）
  *

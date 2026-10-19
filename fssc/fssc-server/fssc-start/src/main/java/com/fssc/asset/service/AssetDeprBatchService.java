@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.asset.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -74,8 +71,15 @@ public class AssetDeprBatchService {
         List<MdAsset> targets = eligibleAssets(ref);
         // D-AST-1：待计提数=0 显式拒绝，杜绝 0 资产空批（覆盖 /create、/submit、定时 Job 三入口）
         if (targets.isEmpty()) {
+            // D-AST-01（2026-10-19 G5 幕真跑发现）：原提示只讲「判定口径」不讲「怎么办」，
+            // 而手册 G5.6（购置日期=2026-10-16）+ G5.7（计提期=2026-10）的组合按此口径必然失败，
+            // 新手只能反复试。此处补两类成因的计数与可执行出路，避免把口径当故障。
             throw new BizException(ErrorCode.PARAM_INVALID, "计提期间 " + ref + " 无待计提资产（待计提数=0），不允许生成折旧批单"
-                    + "。判定口径：该期间已计提（最后计提日期不早于 " + ref.atDay(1) + "）、或该期间及之后才购置的资产不计入");
+                    + "。判定口径：该期间已计提（最后计提日期不早于 " + ref.atDay(1) + "）、或该期间及之后才购置的资产不计入"
+                    + "（当月购置当月不提折旧，会计惯例）。"
+                    + "处理办法：① 本期刚购置的资产请改计提下一期间；"
+                    + "② 若确需本期计提，请把资产购置日期调整到 " + ref.minusMonths(1) + " 或更早（资产卡片可改），再重试本期间"
+                    + "；③ 若资产已计提过，请确认是重复计提而非漏提。");
         }
         String p = ref.toString();
         AssetDeprBatch batch = new AssetDeprBatch();

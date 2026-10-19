@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-drawer v-model="visible" title="上下文帮助" direction="rtl" size="400px" :destroy-on-close="true">
     <div class="help-content">

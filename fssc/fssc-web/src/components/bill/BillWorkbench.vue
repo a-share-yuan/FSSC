@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div>
     <!-- 流程进度：生命周期 + 当前节点 + 审批链全景，常驻顶部（三个页签都看得见） -->
@@ -179,7 +176,7 @@
             <el-table :data="b.form.loanOffsets" size="small" border style="margin-top: 8px">
               <el-table-column prop="loanBillNo" label="借款单号" />
               <el-table-column label="冲抵金额" width="120">
-                <template #default="{ row }"><el-input-number v-model="row.offsetAmount" :min="0" :precision="2" style="width: 100%" /></template>
+                <template #default="{ row }"><el-input-number v-model="row.offsetAmount" :min="0" :max="row.maxAmount || undefined" :precision="2" style="width: 100%" /></template>
               </el-table-column>
               <el-table-column label="操作" width="60">
                 <template #default="{ $index }"><el-button type="danger" link @click="b.form.loanOffsets.splice($index, 1)">删</el-button></template>
@@ -255,7 +252,7 @@
           </el-select>
           <el-button size="small" @click="b.exportCsv">导出 CSV</el-button>
         </div>
-        <el-table :data="b.bills" size="small" stripe highlight-current-row
+        <el-table :data="b.bills" size="small" stripe highlight-current-row style="cursor:pointer"
                   @row-click="(row) => { b.selected = row }">
           <el-table-column prop="billNo" label="单号" width="150" />
           <el-table-column label="类型" width="80">
@@ -353,23 +350,22 @@
     </el-tab-pane>
   </el-tabs>
 
-  <!-- 借款单选择 -->
-  <el-dialog v-model="b.loanDialog" title="选择借款单冲抵" width="560px">
-    <el-table :data="b.loanCandidates" size="small" @row-click="b.pickLoan" highlight-current-row>
-      <el-table-column prop="billNo" label="借款单号" width="150" />
-      <el-table-column prop="totalAmount" label="借款额" width="100" :formatter="(r,c,v) => b.fmt(v)" />
-      <el-table-column prop="loanBalance" label="未还余额" width="100" :formatter="(r,c,v) => b.fmt(v)" />
-    </el-table>
-  </el-dialog>
+  <!-- 借款单选择（D-UI-01：勾选 + 可改冲抵金额 + 底部【确定】，统一走 CandidatePickerDialog） -->
+  <CandidatePickerDialog v-model="b.loanDialog" title="选择借款单冲抵"
+                        :rows="b.loanCandidates" max-field="availableBalance"
+                        no-label="借款单号" amount-label="借款额" max-label="可冲抵余额"
+                        input-label="本次冲抵金额"
+                        :picked-ids="loanOffsetIds"
+                        @confirm="b.confirmLoanPicks" />
 
-  <!-- 事前申请选择 -->
-  <el-dialog v-model="b.applyDialog" title="选择事前申请单" width="560px">
-    <el-table :data="b.applyCandidates" size="small" @row-click="b.pickApply" highlight-current-row>
-      <el-table-column prop="billNo" label="申请单号" width="150" />
-      <el-table-column prop="title" label="标题" />
-      <el-table-column prop="totalAmount" label="申请金额" width="100" :formatter="(r,c,v) => b.fmt(v)" />
-    </el-table>
-  </el-dialog>
+  <!-- 事前申请选择（D-UI-03：关联金额可改，支持部分关联） -->
+  <CandidatePickerDialog v-model="b.applyDialog" title="选择事前申请单"
+                        :rows="b.applyCandidates" max-field="totalAmount" :show-max-column="false"
+                        extra-prop="title" extra-label="标题"
+                        no-label="申请单号" amount-label="申请金额"
+                        input-label="本次关联金额"
+                        :picked-ids="relationIds"
+                        @confirm="b.confirmApplyPicks" />
 
   <!-- 单据详情抽屉 -->
   <el-drawer v-model="b.detailVisible" :title="`单据详情 ${b.detailData.bill.billNo || ''}`" size="560px">
@@ -502,6 +498,7 @@ import UploadButton from '../UploadButton.vue'
 import FileViewer from '../FileViewer.vue'
 import FlowProgressPanel from './FlowProgressPanel.vue'
 import BillTraceDrawer from '../BillTraceDrawer.vue'
+import CandidatePickerDialog from './CandidatePickerDialog.vue'
 import { fileApi, imageApi, flowApi } from '../../api'
 import { Picture, Document } from '@element-plus/icons-vue'
 import { wfActionLabel, wfActionType } from '@/constants/enums.js'
@@ -538,6 +535,10 @@ const b = reactive({
   pos: [],
   receipts: [],
 })
+
+// D-UI-01/D-UI-03：已入账的借款单/申请单 id —— 候选选择器里置灰，防同一张单重复入账
+const loanOffsetIds = computed(() => (b.form?.loanOffsets || []).map((o) => o.loanBillId))
+const relationIds = computed(() => (b.form?.relations || []).map((r) => r.sourceBillId))
 
 // D-DEC-380：全链路追溯抽屉状态（行 billType 直传 biz-type，与抽屉 (bizType,bizId) 锚点同口径）
 const traceVisible = ref(false)

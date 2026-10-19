@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.invoice.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -85,6 +82,11 @@ public class InvoiceService {
         if (period == null || period.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请指定勾选认证所属期(如 202608)");
         }
+        // D-INV-01（2026-10-19 G5 幕真跑发现）：period 原样落 certify_period 列（varchar(6)），
+        // 传 "2026-10" 这类带横杠格式会因列宽不足抛 DataTooLong → 整单 500「系统异常」，
+        // 调用方无法从错误信息判断是格式问题（易被当成系统故障排查）。
+        // 此处显式归一为 yyyyMM 并给出可执行提示，不再让格式问题走到 DB 层炸 500。
+        String certifyPeriod = normalizeCertifyPeriod(period);
         int n = 0;
         for (Long id : ids) {
             InvInvoice inv = requireInvoice(id);
@@ -102,13 +104,40 @@ public class InvoiceService {
             InvInvoice u = new InvInvoice();
             u.setId(id);
             u.setCertifyStatus("CERTIFIED");
-            u.setCertifyPeriod(period);
+            u.setCertifyPeriod(certifyPeriod);
             u.setCertifyDate(LocalDateTime.now());
             u.setDeductAmount(inv.getTaxAmount());
             invInvoiceMapper.updateById(u);
             n++;
         }
         return n;
+    }
+
+    /**
+     * D-INV-01：认证所属期归一化为 {@code yyyyMM}。
+     * <p>接受 {@code yyyy-MM}（界面/手册口径）与 {@code yyyyMM}（列宽口径），非法格式显式 400 拒绝——
+     * 整改前带横杠格式直接落 varchar(6) 列触发 DataTooLong，整单 500，调用方无从判断是格式问题。
+     */
+    private String normalizeCertifyPeriod(String period) {
+        String s = period.trim();
+        if (s.matches("\\d{6}")) {
+            return checkMonth(s.substring(0, 4), s.substring(4, 6), period);
+        }
+        if (s.matches("\\d{4}-\\d{2}")) {
+            return checkMonth(s.substring(0, 4), s.substring(5, 7), period);
+        }
+        throw new BizException(ErrorCode.PARAM_INVALID,
+                "认证所属期格式不正确：" + period + "（应为 yyyy-MM 如 2026-10，或 yyyyMM 如 202610）");
+    }
+
+    /** D-INV-01 补正：仅做格式归一会放行 {@code 2026-13} 这类不存在月份，归一后必须再校验月份范围。 */
+    private String checkMonth(String year, String month, String raw) {
+        int m = Integer.parseInt(month);
+        if (m < 1 || m > 12) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "认证所属期月份非法：" + raw + "（月份须为 01~12）");
+        }
+        return year + month;
     }
 
     /** 取消勾选：CERTIFIED → NOT_CERTIFIED，可抵扣税额清零（仅限尚未进项转出者）。 */

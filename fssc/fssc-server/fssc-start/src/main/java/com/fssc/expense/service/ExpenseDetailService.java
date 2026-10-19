@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.expense.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -308,6 +305,59 @@ public class ExpenseDetailService {
         return sum;
     }
 
+    /**
+     * 借款冲抵候选面（D-UI-03 配套，2026-10-19）：列出<b>本人名下</b>仍有可冲抵余额的借款单，
+     * 并吐出与放行闸同源的 {@code availableBalance = 账面余额 − 在途占用}。
+     *
+     * <p><b>修的是什么</b>：候选面此前直接给前端 {@code loanBalance}（账面余额，<b>不含在途占用</b>），
+     * 前端拿它当「可冲抵额」默认勾全额 ⇒ 第二张草稿必然撞本类 {@link #registerLoanOccupancy}
+     * 的超额闸（即类注释里登记的「已知在册残口①」）。现在把在途这层扣减<b>提前到候选面</b>，
+     * 前端的默认值/上限与服务端放行口径同源，用户不必白填一遍表再吃一次拒。</p>
+     *
+     * <p>口径：① 只列本人（{@code apply_user_id = 当前用户}）——服务端本就只允许冲销本人借款；
+     * ② 状态含 {@code APPROVED/PARTIAL_REPAID/REPAID}（D-DEC-396：借款被在途冲抵会迁 PARTIAL_REPAID，
+     * 单查 APPROVED 会立刻失明）；③ {@code availableBalance ≤ 0} 的不返回（无可冲抵）；
+     * ④ 公司维度按入参过滤（可空＝不过滤）。</p>
+     *
+     * @param companyId 公司ID（可空＝不过滤）
+     * @param limit     返回上限（空或 ≤0 取 50，上限 200）
+     */
+    public java.util.List<com.fssc.expense.dto.LoanCandidateDTO> loanCandidates(Long companyId, Integer limit) {
+        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        Long me = u == null ? null : u.getUserId();
+        int cap = (limit == null || limit <= 0) ? 50 : Math.min(limit, 200);
+        if (me == null) {
+            return java.util.Collections.emptyList();
+        }
+        List<ExpBill> loans = expBillMapper.selectList(new LambdaQueryWrapper<ExpBill>()
+                .eq(ExpBill::getBillType, "LOAN")
+                .eq(ExpBill::getApplyUserId, me)
+                .in(ExpBill::getStatus, "APPROVED", "PARTIAL_REPAID", "REPAID")
+                .gt(ExpBill::getLoanBalance, BigDecimal.ZERO)
+                .eq(companyId != null, ExpBill::getCompanyId, companyId)
+                .orderByAsc(ExpBill::getId)
+                .last("limit " + cap));
+        java.util.List<com.fssc.expense.dto.LoanCandidateDTO> out = new java.util.ArrayList<>(loans.size());
+        for (ExpBill loan : loans) {
+            BigDecimal book = nvl(loan.getLoanBalance());
+            BigDecimal transit = transitLoanOccupancy(loan.getId(), null);
+            BigDecimal available = book.subtract(transit);
+            if (available.signum() <= 0) {
+                continue;   // 已被在途占满：列出来也只能是死路
+            }
+            com.fssc.expense.dto.LoanCandidateDTO dto = new com.fssc.expense.dto.LoanCandidateDTO();
+            dto.setId(loan.getId());
+            dto.setBillNo(loan.getBillNo());
+            dto.setTitle(loan.getTitle());
+            dto.setTotalAmount(nvl(loan.getTotalAmount()));
+            dto.setLoanBalance(book);
+            dto.setAvailableBalance(available);
+            dto.setApplyDate(loan.getApplyDate());
+            out.add(dto);
+        }
+        return out;
+    }
+
     /** 冲抵额记入报销单表头：offset_amount 按差额累加、payable_amount 随之重算（借款冲抵与预付冲销共用口径）。 */
     private void applyOffsetToHeader(ExpBill bill, BigDecimal delta) {
         if (delta == null || delta.signum() == 0) {
@@ -463,12 +513,75 @@ public class ExpenseDetailService {
             }
             used = used.add(nvl(e.getUseAmount()));
         }
+        // D-G1R-17（2026-10-19 G1 幕真跑发现，上线阻断级）：原实现用 total_amount（借款总额）做上限，
+        // 而报销冲抵时 useAmount 由前端硬取全额（见 D-UI-01，pickLoan 里 offsetAmount = row.loanBalance），
+        // 于是「已占用」被记成整笔借款额、把尚未冲抵的差额一并锁死：
+        //   借款 5000 → 报销 4600（占用记 5000）→ 还款 400 时 used(5000)+400 > limit(5000) 被拒，
+        //   差额 400 永远还不了，借款单卡死在 PARTIAL_REPAID。
+        //
+        // 修正后的统一口径：LOAN_CLAIM（借款被占用/被冲销）一律以 **借款未还余额** 为上限，
+        // 且 used 只统计「非还款单」的占用——还款单本身是核销动作，不是对借款额度的再占用，
+        // 若把它算进 used 会出现 used(4600报销 + 400还款)=5000、再加本次 400 ⇒ 5400 > 400 恒被拒。
         BigDecimal limit = nvl(source.getTotalAmount());
+        if ("LOAN_CLAIM".equals(relationType)) {
+            // 借款额度的权威口径是「未还余额」：total_amount − 已实际冲抵（exp_loan_offset/CLAIM）− 在途还款占用。
+            //  这里**不能**再叠加旧的 used：used 是关系行口径（报销冲抵时曾被硬记成全额 5000），
+            //   与 repaid 指向同一笔钱，两者相加会把同一笔占用算两遍 ⇒ used(4600)+本次400 > limit(400) 恒被拒。
+            //   故 LOAN_CLAIM 分支彻底改用余额口径，used 不参与。
+            BigDecimal repaid = repaidAmountOfLoan(sourceBillId);
+            // 排除本单自身：本次动作所在的还款单在草稿阶段已写过关系行，计入会变成「自己占用自己」
+            BigDecimal pendingRepay = repaidAmountOfRepay(sourceBillId, targetBillId);
+            limit = nvl(source.getTotalAmount()).subtract(repaid).subtract(pendingRepay);
+            if (limit.signum() < 0) {
+                limit = BigDecimal.ZERO;
+            }
+            if (useAmount.compareTo(limit) > 0) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "本次冲销(" + useAmount + ")超出借款可还余额(" + limit
+                                + ")，借款总额 " + nvl(source.getTotalAmount())
+                                + " 已冲抵 " + repaid + "，在途还款占用 " + pendingRepay
+                                + "，可还 " + limit);
+            }
+            return;
+        }
         if (used.add(useAmount).compareTo(limit) > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "累计占用(" + used.add(useAmount) + ")超出" + typeName(relationType) + "金额(" + limit
                             + ")，已占用 " + used + "，本次 " + useAmount);
         }
+    }
+
+    /** D-G1R-17：借款已被报销实际冲抵的金额（exp_loan_offset 里 offset_type=CLAIM 的生效合计）。 */
+    private BigDecimal repaidAmountOfLoan(Long loanBillId) {
+        return nvl(expLoanOffsetMapper.selectList(new LambdaQueryWrapper<ExpLoanOffset>()
+                        .eq(ExpLoanOffset::getLoanBillId, loanBillId)
+                        .eq(ExpLoanOffset::getOffsetType, "CLAIM"))
+                .stream().map(ExpLoanOffset::getOffsetAmount)
+                .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    /** D-G1R-17：该借款单上尚未终结的还款单占用合计（还款＝核销动作，单独统计不与冲抵混算）。 */
+    private BigDecimal repaidAmountOfRepay(Long loanBillId, Long excludeTargetBillId) {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (ExpBillRelation e : expBillRelationMapper.selectList(
+                new LambdaQueryWrapper<ExpBillRelation>()
+                        .eq(ExpBillRelation::getSourceBillId, loanBillId)
+                        .eq(ExpBillRelation::getRelationType, "LOAN_CLAIM"))) {
+            if (excludeTargetBillId != null && excludeTargetBillId.equals(e.getTargetBillId())) {
+                continue; // 本单自身
+            }
+            ExpBill t = expBillMapper.selectById(e.getTargetBillId());
+            if (t == null || !"REPAY".equals(t.getBillType())) {
+                continue;
+            }
+            String st = t.getStatus() == null ? "DRAFT" : t.getStatus();
+            if ("REJECTED".equals(st) || "WITHDRAWN".equals(st)
+                    || "CANCELLED".equals(st) || "VOID".equals(st) || "CLOSED".equals(st)) {
+                continue;
+            }
+            sum = sum.add(nvl(e.getUseAmount()));
+        }
+        return sum;
     }
 
     private static String typeName(String relationType) {

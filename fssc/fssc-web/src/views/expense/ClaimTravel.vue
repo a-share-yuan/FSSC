@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <BillWorkbench ref="wb" bill-type="CLAIM" sub-type="TRAVEL" :claim="true" :travel="true" :before-submit="onBeforeSubmit" :on-apply-pick="onApplyPick">
     <template #create="b">

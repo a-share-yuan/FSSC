@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <!-- ============ 冲销预付款（对公结算） ============ -->
   <el-card :header="$t('pay.offset.cardTitle')" style="margin-top: 12px">
@@ -27,23 +24,24 @@
     <el-alert type="info" :closable="false" :title="$t('pay.offset.hintRule')" style="margin-top: 6px" />
   </el-card>
 
-  <!-- 预付款选择弹窗 -->
-  <el-dialog v-model="prepayDialog" :title="$t('pay.offset.ctxPickTitle')" width="640px">
-    <el-table :data="prepayCandidates" size="small" @row-click="pickPrepay" highlight-current-row @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
-      <el-table-column type="selection" width="45" />
-      <el-table-column prop="billNo" :label="$t('pay.offset.colPrepayNo')" width="160" sortable />
-      <el-table-column prop="title" :label="$t('pay.shared.colTitle')" min-width="200" show-overflow-tooltip sortable />
-      <el-table-column prop="totalAmount" :label="$t('pay.offset.colPrepayAmount')" width="110" sortable :formatter="(r,c,v) => formatMoney(v)" />
-      <el-table-column :label="$t('pay.offset.colOffsettable')" width="110">
-        <template #default="{ row }">{{ fmt2(row) }}</template>
-      </el-table-column>
-    </el-table>
-    <template #footer>
-      <el-button size="small" @click="exportCsv">{{ $t('pay.shared.btnExportCsv') }}</el-button>
-      <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('pay.shared.btnExportSelected', { v1: selRows.length }) }}</el-button>
-      <el-button @click="prepayDialog = false">{{ $t('common.close') }}</el-button>
+  <!-- 预付款选择弹窗（D-UI-05：勾选+可改冲抵金额+【确定】；导出按钮移入 toolbar，selection 语义不变） -->
+  <CandidatePickerDialog v-model="prepayDialog" :title="$t('pay.offset.ctxPickTitle')"
+                        :rows="prepayCandidates" max-field="available" :show-max-column="true"
+                        extra-prop="title" :extra-label="$t('pay.shared.colTitle')"
+                        :amount-label="$t('pay.offset.colPrepayAmount')"
+                        :max-label="$t('pay.offset.colOffsettable')"
+                        :input-label="$t('pay.offset.colThisOffsetAmount')"
+                        :empty-text="$t('common.empty')"
+                        :picked-ids="pickedPrepayIds"
+                        @confirm="confirmPrepayPicks"
+                        @selection-change="handleSelectionChange">
+    <template #toolbar>
+      <div style="display: flex; gap: 8px; margin-bottom: 6px">
+        <el-button size="small" @click="exportCsv">{{ $t('pay.shared.btnExportCsv') }}</el-button>
+        <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('pay.shared.btnExportSelected', { v1: selRows.length }) }}</el-button>
+      </div>
     </template>
-  </el-dialog>
+  </CandidatePickerDialog>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
 </template>
 
@@ -52,6 +50,7 @@ import { ref, computed, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 import { billApi } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import CandidatePickerDialog from '../../components/bill/CandidatePickerDialog.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { formatMoney } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
@@ -83,6 +82,8 @@ const offsets = computed(() => {
   if (!b.form.bill.extJson.prepayOffsets) b.form.bill.extJson.prepayOffsets = []
   return b.form.bill.extJson.prepayOffsets
 })
+/** 已入账的预付单 id —— 选择器里置灰，防同一张预付单重复入账（D-UI-05） */
+const pickedPrepayIds = computed(() => offsets.value.map((o) => o.billId))
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 function fmt2(row) { return row.available == null ? '0.00' : Number(row.available).toFixed(2) }
@@ -98,15 +99,27 @@ async function loadPrepay() {
   prepayDialog.value = true
 }
 
-function pickPrepay(row) {
+/**
+ * D-UI-05（2026-10-19）：【确定】后按对话框里改过的冲抵金额入账（默认=可用余额，可改，支持部分冲抵）。
+ * 改前是点任意行立刻按 available 全额入账并关窗；且该弹窗同时挂着「复选框（供导出）」与「行点入账」
+ * 两套语义、彼此不一致——现在统一为「勾选=要入账的行」。
+ */
+function confirmPrepayPicks(items) {
   const b = wb?.value?.b
   if (!b) return
   const arr = b.form.bill.extJson.prepayOffsets || []
-  if (!arr.find((o) => o.billId === row.id)) {
-    arr.push({ billId: row.id, billNo: row.billNo, totalAmount: row.totalAmount, available: row.available, offsetAmount: row.available })
-    emit('offset-change')
+  let added = 0
+  for (const { row, amount } of items || []) {
+    const exist = arr.find((o) => o.billId === row.id)
+    if (exist) {
+      exist.offsetAmount = amount
+    } else {
+      arr.push({ billId: row.id, billNo: row.billNo, totalAmount: row.totalAmount, available: row.available, offsetAmount: amount })
+      added++
+    }
   }
-  prepayDialog.value = false
+  emit('offset-change')
+  if (added) ElMessage.success(t('pay.offset.msgPrepayAdded', { v: added }))
 }
 
 function removePrepay(i) {

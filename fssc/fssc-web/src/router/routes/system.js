@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /** 系统设置与主数据域路由 */
 export default [
   // 方案B 配置工作区（页面Tab化重构册 §乙）：一工作区一菜单，页内 tab 复用通用表格组件；

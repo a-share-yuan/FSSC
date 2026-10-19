@@ -1,0 +1,55 @@
+-- ============================================================================
+-- V1.4.44 F4 委托语义（借资格 / 改派）—— 配置 seed（全部注释态，未执行）
+-- 生成时刻：2026-09-26；数据来源：fssc 库只读普查（mysql -e SELECT，零写入）
+-- 方案：流程引擎问题修复方案_20260926.md §5（F4）；裁决项：RA-F4a（委托语义 ①借资格 / ②改派 / ③只通知）
+--
+--  本文件在本轮演练中【一行都没有执行】。铁律：演练期 MySQL SELECT-only。
+--    开闸前必须由业务方裁决 RA-F4a；改派档会改变"待办落在谁手上"，属留痕归属变化，不可轻开。
+-- ============================================================================
+
+-- 【只读普查快照（2026-09-26 18:40 前后，mysql -N -e 实测）】
+--   sys_config 里 wf.delegate.* 键：0 行  ⇒ 代码缺省＝BORROW（借资格）＋灰度清单空＝改派整体熄火
+--   wf_delegate（del_flag=0）总 4 行，其中"此刻生效"（NORMAL 且 begin<=now<=end）仅 1 行：
+--       id=4，tenant_id=1，from_user_id=3805（委托人）→ to_user_id=3861（受托人），
+--       窗口 2026-09-26 06:00 ~ 2026-09-27 23:59，biz_types 为空＝全部单据类型
+--   wf_task 当前 PENDING 16 条，其中 assignee_id=3805 的：0 条
+--       ⇒ 今天打开改派档，"存量改派"实际移动 0 行；唯一可见效果是"委托期内新产生的任务直接落在受托人手上"
+--   wf_task_history 里 action IN (DELEGATE_TAKEOVER, DELEGATE_REVERT)：0 行 ⇒ 改派/回跳留痕为空集，历史数据零改写
+--   wf_model（del_flag=0）87 行，enable_delegate=0 的 0 行 ⇒ F3-3 接真后行为零变化
+--   sys_message 既有 DELEGATE_DONE 4 条（十二月演练真实委托办理产生），DELEGATE_NEW 0 条（本批新增类型，尚未发过）
+-- ============================================================================
+
+-- ---------- 1) sys_config：委托语义键（缺省值＝与改造前逐字一致） ----------
+--  tenant_id 必须是 1：sys_config 是租户表，读取走租户拦截器（WHERE tenant_id=<当前租户>），
+--    插 NULL/0 的行永远读不到＝假配置。列名口径对齐 V1.4.42/43（名称列是 config_name，无 config_desc）。
+-- 不 seed 也能跑：代码缺省即 BORROW + 空清单。seed 的作用是把"当前是哪一档"显式写进配置面，便于审计与交接班。
+-- INSERT IGNORE INTO sys_config (tenant_id, config_key, config_name, value_type, group_code, config_value, is_builtin, editable, remark)
+-- VALUES
+--  (1,'wf.delegate.mode','委托生效语义（BORROW=受托人借委托人资格办理，任务不搬家；REASSIGN=委托期内任务直接改派给受托人）','STRING','WORKFLOW','BORROW',
+--     0,1,'F4-1／体检 E-07「委托借资格」：现网默认档。两档都保留——②改派需 RA-F4a 裁决，因为它改变 wf_task.assignee_id 与留痕归属。'),
+--  (1,'wf.delegate.mode.models','改派档灰度白名单（model_key 逗号分隔，空＝即使 mode=REASSIGN 也全库不生效）','STRING','WORKFLOW','',
+--     0,1,'与 F2 齐套闸口 / F3 取人策略同一 fail-closed 范式：清单为空＝一行都不改派。逐模型收紧，出问题退一行即可。');
+
+-- ---------- 2) 开闸语句（RA-F4a 裁决为"②改派"后才执行） ----------
+-- UPDATE sys_config SET config_value='REASSIGN' WHERE tenant_id=1 AND config_key='wf.delegate.mode';
+-- UPDATE sys_config SET config_value='TR_PAY'  WHERE tenant_id=1 AND config_key='wf.delegate.mode.models';
+-- 生效面（三档判定，任一不满足即原样）：模式=REASSIGN ∧ 本流程在白名单 ∧ 该办理人此刻有生效委托。
+-- 改派覆盖的两条路径：
+--   (a) 期内新任务：WfEngineFacade 的 6 处取人结果经 delegateSubstitute 替换办理人，并补 DELEGATE_TAKEOVER 留痕；
+--   (b) 内存量待办：WfDelegateService.create() 立即 takeOverDelegatedTasks + WfDelegateExpireJob 每 10 分钟兜住"晚建/续期"。
+-- 取消/到期时由 revertDelegatedTasks 按 DELEGATE_TAKEOVER 留痕回跳（只读判定：任务当前办理人仍是受托人才回）。
+--  改派**不碰**只挂候选组、尚未指派的任务（那会把别人的活直接抢过来＝抢单），这类任务仍按借资格可办。
+
+-- ---------- 3) 不需要 DDL：代办归属列的替代口径（登记为需求，不在本文件执行） ----------
+-- 现状：wf_task 没有"这行是替谁办的"列，归属靠 wf_task_history 的 DELEGATE_TAKEOVER 反查
+--       （oper_user_id=委托人、target_user_id=受托人、时间落在委托窗口内）。
+--       待办列表的 delegatedFrom / delegatedFromName 即由此口径下发（NodeOrgResolver.delegatePrincipals）。
+-- 若业务要"归属直接可查/可统计"，需 DBA 执行下面的加列（新增可空列，不动既有行）：
+-- ALTER TABLE wf_task ADD COLUMN delegated_from BIGINT NULL COMMENT '委托改派时的原办理人（委托人）；NULL=非代办任务';
+--  加列后必须同步 com.fssc.workflow.entity.WfTask 的字段映射，否则 MyBatis-Plus 的 select 列集合与表不一致。
+--    本轮演练期为 MySQL SELECT-only，DDL 一律不执行 ⇒ 该需求以工单形式挂账（见交付文档 §挂账）。
+
+-- ---------- 4) 明确不做的事（避免把 F4 开成"第二个假开关"） ----------
+-- (a) 不把委托做成"绕过 deny_self 的后门"：受托人办理时自审判定仍按单据提单人算，委托不改变守卫。
+-- (b) 不放宽跨公司委托：建立环节仍按 delegate.cross_company.whitelist fail-closed 拒绝。
+-- (c) 不改 wf_delegate 表结构、不动历史委托行、不给到期回收加站内信（到期是委托的预期语义，推送只会造噪音）。

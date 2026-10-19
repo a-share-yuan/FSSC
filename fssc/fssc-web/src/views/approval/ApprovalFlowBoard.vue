@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div :class="{ tabless: isSingle }">
     <el-card>
@@ -52,7 +49,7 @@
     <el-tabs v-model="tab" @tab-change="() => { page = 1; load() }">
       <!-- 页签一：流程定义 -->
       <el-tab-pane v-if="hasPerm('wf:model:list')" label="流程定义" name="def">
-        <el-table :data="defs" size="small" border stripe v-loading="loading" @row-click="onPick" @selection-change="handleSelectionChange">
+        <el-table :data="defs" size="small" border stripe v-loading="loading" @row-click="onPick" @selection-change="handleSelectionChange" style="cursor:pointer">
         <el-table-column type="selection" width="45" />
           <el-table-column prop="flowCode" label="流程编码" width="150"  sortable />
           <el-table-column prop="flowName" label="流程名称" min-width="200" show-overflow-tooltip  sortable />

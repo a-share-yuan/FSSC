@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 // 【2026-10-16 第 4 批枚举收口】字典读取（同步、只读内存缓存，不发请求）
 // 依赖方向：enums.js → useDict.js → api.js，useDict 不反向引用本文件，无循环依赖。
 import { dictLabelOf } from '@/composables/useDict.js'

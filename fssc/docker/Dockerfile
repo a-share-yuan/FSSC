@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 # 维度8 STAB-08：FSSC 容器化部署
 # 构建：docker build -t fssc-server:1.0.0 -f docker/Dockerfile .
 # 运行：docker run -d -p 8089:8089 -e FSSC_DB_PASSWORD=xxx -v fssc-logs:/app/logs fssc-server:1.0.0

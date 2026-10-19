@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <!-- D-V3-146：sub-type 动态绑定路由 props（/corp-pay/settle → SETTLE）。
        原写死 PREPAY 导致 SETTLE 深链落单 bill_sub_type 恒 PREPAY；

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * FSSC 统一单据状态枚举
  * 全系统所有页面、组件共用此文件，禁止在各组件中重复定义。

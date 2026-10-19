@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <template #header>
@@ -107,7 +104,7 @@
         <div style="flex: 1; min-width: 0">
           <div style="font-weight: bold; margin-bottom: 6px; color: #e6a23c">{{ $t('pay.recon.secInvoice') }}</div>
           <el-table :data="invoiceDetails" size="small" stripe max-height="450" highlight-current-row
-                    @row-click="(row) => selectInvoice(row)" :row-class-name="detailRowClass" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
+                    @row-click="(row) => selectInvoice(row)" :row-class-name="detailRowClass" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')" style="cursor:pointer">
         <el-table-column type="selection" width="45" />
             <el-table-column prop="itemNo" :label="$t('pay.shared.colInvoiceNo')" width="130" show-overflow-tooltip  sortable />
             <el-table-column prop="itemDate" :label="$t('pay.recon.colDate')" width="100"  sortable :formatter="(row, col, val) => formatDate(val)" />
@@ -135,7 +132,7 @@
         <div style="flex: 1; min-width: 0">
           <div style="font-weight: bold; margin-bottom: 6px; color: #67c23a">{{ $t('pay.recon.secPayment') }}</div>
           <el-table :data="paymentDetails" size="small" stripe max-height="450" highlight-current-row
-                    @row-click="(row) => selectPayment(row)" :row-class-name="detailRowClass" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
+                    @row-click="(row) => selectPayment(row)" :row-class-name="detailRowClass" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')" style="cursor:pointer">
         <el-table-column type="selection" width="45" />
             <el-table-column prop="itemNo" :label="$t('pay.recon.colItemNo')" width="130" show-overflow-tooltip  sortable />
             <el-table-column prop="itemDate" :label="$t('pay.recon.colDate')" width="100"  sortable :formatter="(row, col, val) => formatDate(val)" />

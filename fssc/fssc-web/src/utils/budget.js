@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 // 预算明细行解析（D-P2-01）
 // md_item_budget_map 是「全租户单值」映射（费用项 itemId → 某一条 bg_item 主键），
 // 该主键可能属于其它公司/部门（实测 行政办公费 → id 20 = company33/一车间）。

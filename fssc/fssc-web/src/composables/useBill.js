@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 // 通用单据逻辑 composable：费用报销域所有单据页共享
 // 覆盖：草稿保存/提交、我的单据、凭证预览/记账、预算占用预览、附件上传、冲借款、关联事前申请
 import { reactive, ref, computed, watch, onMounted } from 'vue'
@@ -122,6 +119,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   const loanDialog = ref(false)
   const applyDialog = ref(false)
   const loanCandidates = ref([])
+  // D-UI-01：借款冲抵弹层的临时勾选与冲抵金额（支持部分冲抵，确定后才写入 form.loanOffsets）
   const applyCandidates = ref([])
   const detailVisible = ref(false)
   const detailData = reactive({ bill: {}, lines: [], shares: [], travels: [], loanOffsets: [], relations: [], attaches: [], wfTrace: [] })
@@ -844,27 +842,59 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   }
 
   // ---------------- 冲借款 / 关联事前申请 ----------------
+  // D-UI-01 / D-UI-03（2026-10-19 G1 幕真跑发现 + 全项目排查）：原实现点行即「按全额占用并关窗」——
+  // 没有可发现入口、键盘不可达、误点无确认；更关键是金额硬取 row.loanBalance / row.totalAmount，
+  // 只能全额：报销额小于借款额时差额被一并占掉，后续还款被后端「累计占用超出借款单金额」拦死；
+  // 事前申请关联额同样硬取全额且入表后不可编辑（连删掉重选都做不到部分关联）。
+  // 现统一到 CandidatePickerDialog：弹层内勾选 + 可改金额（支持部分冲抵/部分关联）+ 底部【确定】提交。
+  // 本 composable 只做「把对话框产出的 [{ row, amount }] 落进表单」，勾选与金额交互都在组件里，
+  // 金额合法性（> 0 且 ≤ 可冲抵余额）由 components/bill/candidateAmount.js 统一裁决。
   async function openLoanDialog() {
-    loanCandidates.value = (await billApi.myPage({ pageNum: 1, pageSize: 50, billType: 'LOAN', status: 'APPROVED' })).list || []
+    // D-UI-03：改用候选面接口——它给的 availableBalance 已扣掉在途占用，
+    // 与服务端放行闸同源（旧的 myPage 只给账面余额，默认勾全额必然被拒）。
+    loanCandidates.value = (await detailApi.loanCandidates({
+      companyId: form.bill.companyId, limit: 50,
+    })) || []
     loanDialog.value = true
   }
-  function pickLoan(row) {
-    if (!form.loanOffsets.find((o) => o.loanBillId === row.id)) {
-      form.loanOffsets.push({ loanBillId: row.id, loanBillNo: row.billNo, offsetAmount: Number(row.loanBalance || 0), offsetType: 'CLAIM' })
+  /** @param items {{row: object, amount: number}[]} 组件已按金额闸校验过 */
+  function confirmLoanPicks(items) {
+    let added = 0
+    for (const { row, amount } of items || []) {
+      const exist = form.loanOffsets.find((o) => o.loanBillId === row.id)
+      if (exist) {
+        exist.offsetAmount = amount
+      } else {
+        form.loanOffsets.push({
+          loanBillId: row.id, loanBillNo: row.billNo, offsetAmount: amount,
+          maxAmount: Number(row.availableBalance ?? row.loanBalance ?? 0), offsetType: 'CLAIM',
+        })
+        added++
+      }
     }
+    if (added) ElMessage.success(`已加入 ${added} 笔借款冲抵`)
     loanDialog.value = false
   }
   async function openApplyDialog() {
     applyCandidates.value = (await billApi.myPage({ pageNum: 1, pageSize: 50, billType: 'APPLY', status: 'APPROVED' })).list || []
     applyDialog.value = true
   }
-  function pickApply(row) {
-    if (!form.relations.find((r) => r.sourceBillId === row.id)) {
-      form.relations.push({ sourceBillId: row.id, sourceBillNo: row.billNo, useAmount: Number(row.totalAmount || 0) })
+  /** D-UI-03：关联金额可改（支持部分关联），保留「关联后自动带入费用详情/分摊」的页面钩子 */
+  function confirmApplyPicks(items) {
+    let added = 0
+    for (const { row, amount } of items || []) {
+      const exist = form.relations.find((r) => r.sourceBillId === row.id)
+      if (exist) {
+        exist.useAmount = amount
+      } else {
+        form.relations.push({ sourceBillId: row.id, sourceBillNo: row.billNo, useAmount: amount })
+        added++
+      }
+      // 关联申请单后自动带入费用详情/分摊（差旅培训报销等页面可覆写）
+      if (opts.onApplyPick) opts.onApplyPick(row, form)
     }
+    if (added) ElMessage.success(`已关联 ${added} 张事前申请`)
     applyDialog.value = false
-    // 关联申请单后自动带入费用详情/分摊（差旅培训报销等页面可覆写）
-    if (opts.onApplyPick) opts.onApplyPick(row, form)
   }
 
   // ---------------- 凭证 ----------------
@@ -1039,7 +1069,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     // actions
     loadMd, loadBills, onAttachChange, onAttachUploaded, saveDraft, submit, resetForm, loadBillForEdit, submitting,
     firstPick, loadFirstPick,
-    openLoanDialog, pickLoan, openApplyDialog, pickApply,
+    openLoanDialog, confirmLoanPicks, openApplyDialog, confirmApplyPicks,
     openVoucher, postVoucher, openDetail, copyBill, voidBill, withdraw, urge, closeApply, terminateApply, unaudit, exportCsv,
   }
 }

@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="monthend-board">
     <!-- 权限门控（2026-09-16 P0）：本页是无菜单承载的全局入口（用户下拉「月结看板」+ /month-end），

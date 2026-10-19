@@ -1,0 +1,88 @@
+-- ============================================================================
+-- V1.4.58_purchase_receipt_number_rule_seed.sql
+-- 关联缺陷：D-V4R-11（高·业务链断）——编号规则 PURCHASE_RECEIPT 缺失 ⇒ 分批交货无法登记第二批收货
+-- 类型：注释态登记件（registration-only）。可执行行＝0，本文件不产生任何 DDL/DML。
+-- 执行权＝运维/主数据岗人工裁决后放行；放行时逐条取消注释，先跑 §0 预检、后跑 §2 复点。
+-- 回滚件：V1.4.58_purchase_receipt_number_rule_rollback.sql
+--
+-- 【现象（10-11 人工测试实测）】
+--   N3 幕「晟泰 分批交货」：同一张采购订单 PO1791694135173 的第二张收货单创建返回 **400**
+--   「收货单自动取号失败：编号规则 PURCHASE_RECEIPT 缺失或停用，请先配置规则再建单」。
+--   手填收货单号同样 400（手填号先撞 uk(tenant_id,receipt_no)，撞键兜底路径又要回落到同一枚缺失规则）。
+--   证据锚：V4人工测试记录-20261011.md §四 3.8／§八 8.2 D-V4R-11 行；截图 N3/grn-after-PO1791694135173.png。
+--
+-- 【实测底料（只读盘，本文件写作时刻）】
+--   ① fssc.sys_number_rule 存活规则行数：tenant_id=1 → 27 枚、tenant_id=2 → 19 枚、tenant_id=3 → 19 枚；
+--      三租户**均无** rule_code='PURCHASE_RECEIPT'（查询见 §0.1／§0.2）。
+--   ② 同族采购/退货规则只在 tenant 1 预置：PUR_RETURN(id=64, 前缀 CT／yyyyMMdd／4／DAY／NORMAL)、
+--      SALE_RETURN(id=65, 前缀 XT／同参数)。本件播种口径与之同构。
+--   ③ fssc.po_receipt 存量 3 行全部 tenant_id=1，单号 GRN044384／GRN135173／GRN759422
+--      ＝前端预填形态「GRN + PO 号末 6 位」，非规则号形态（说明规则从来没被走到过）。
+--   ④ 代码面（不改，判据保持）：PurchaseService.java:788-795 nextReceiptNo() 一律走
+--      numberRuleService.next("PURCHASE_RECEIPT")，规则缺失/停用即显式 BizException——
+--      R5-D-069 已删除「降级 RCP+时间戳」兜底（判据：收货单号形态只有 rule 一种）。
+--      PurchaseService.java:486-495 插入级撞键兜底同样重走 nextReceiptNoUnique()。
+--      ⇒ 结论：本缺陷根因＝**数据侧规则未播种**，修复＝补播种，不得改回静默造号。
+--   ⑤ 前端 PoReceipt.vue:295 选中 PO 时预填 receiptNo='GRN'+PO末6位 ⇒ 同一 PO 的第二批收货
+--      必撞 uk(tenant_id,receipt_no)；规则补齐后该撞键会由 :490 的 DuplicateKeyException 分支
+--      自动重走规则取号（log.warn 留痕），业务不再中断。本件不动前端、不改码。
+--
+-- 【铁律】零 DELETE、零 DDL、零 UPDATE；只 INSERT 一枚规则行。
+--         重复执行由 §1 的 NOT EXISTS 守卫拦为 0 行变更（幂等）。
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- §0 前置只读校验（执行前逐条复算，任一不满足即停）
+-- ----------------------------------------------------------------------------
+-- 0.1 规则确实不存在（期望 0 行）
+-- SELECT id, tenant_id, rule_code, status, del_flag FROM fssc.sys_number_rule
+--  WHERE rule_code = 'PURCHASE_RECEIPT';
+-- 0.2 三租户规则总数（期望 tenant1=27 / tenant2=19 / tenant3=19，与 §0.1 同轮取数留底）
+-- SELECT tenant_id, COUNT(*) AS rules FROM fssc.sys_number_rule WHERE del_flag = 0 GROUP BY tenant_id;
+-- 0.3 同族口径锚点（期望 PUR_RETURN/SALE_RETURN 两行：CT/XT、yyyyMMdd、4、DAY、NORMAL）
+-- SELECT id, tenant_id, rule_code, prefix, date_format, seq_length, reset_cycle, step, status
+--   FROM fssc.sys_number_rule WHERE rule_code IN ('PUR_RETURN','SALE_RETURN');
+-- 0.4 目标号形不会与存量撞号（期望 0 行；GRN+yyyyMMdd+4 与 §实测③ 的 GRN+6 位形态不同长）
+-- SELECT id, tenant_id, receipt_no FROM fssc.po_receipt
+--  WHERE receipt_no REGEXP '^GRN[0-9]{8}[0-9]{4}$';
+-- 0.5 留底（改前快照，作回滚与追溯底料）
+-- SELECT * FROM fssc.sys_number_rule WHERE rule_code IN ('PUR_RETURN','SALE_RETURN','PURCHASE_RECEIPT');
+
+-- ----------------------------------------------------------------------------
+-- §1 主体：为 tenant_id=1 播种 PURCHASE_RECEIPT（未执行）
+--     口径与前缀族同构：前缀 GRN ＋ 期间 yyyyMMdd ＋ 定长 4 位序号，按日重置，步长 1，状态 NORMAL。
+--     取号样例：GRN202610110001（14 字符，po_receipt.receipt_no varchar(64) 容得下）。
+--     幂等守卫：NOT EXISTS 同 rule_code 行（含 del_flag=1 历史行——uk_tenant_rule_code 不认 del_flag）。
+-- ----------------------------------------------------------------------------
+-- INSERT INTO fssc.sys_number_rule
+--       (tenant_id, rule_code, rule_name, prefix, date_format, seq_length, reset_cycle, step, status, remark, create_by, create_time, update_by, update_time, del_flag)
+-- SELECT 1, 'PURCHASE_RECEIPT', '采购收货单(GRN)', 'GRN', 'yyyyMMdd', 4, 'DAY', 1, 'NORMAL',
+--        'V1.4.58 / D-V4R-11 补播种：分批交货第二批收货取号依赖本规则（PurchaseService.nextReceiptNo）',
+--        NULL, NOW(), NULL, NOW(), 0
+--   FROM DUAL
+--  WHERE NOT EXISTS (SELECT 1 FROM fssc.sys_number_rule r WHERE r.tenant_id = 1 AND r.rule_code = 'PURCHASE_RECEIPT');
+-- -- 影响行数期望 1（二次执行期望 0）
+
+-- ----------------------------------------------------------------------------
+-- §2 后置复点（执行后跑）
+-- ----------------------------------------------------------------------------
+-- 2.1 规则入册（期望 1 行，字段与 §1 一致）
+-- SELECT id, tenant_id, rule_code, rule_name, prefix, date_format, seq_length, reset_cycle, step, status, del_flag
+--   FROM fssc.sys_number_rule WHERE rule_code = 'PURCHASE_RECEIPT' AND tenant_id = 1;
+-- 2.2 规则总数递增 1（期望 tenant1=28，tenant2/3 不变）
+-- SELECT tenant_id, COUNT(*) AS rules FROM fssc.sys_number_rule WHERE del_flag = 0 GROUP BY tenant_id;
+-- 2.3 取号流水面（首次取号后期望 1 行，cycle_key=当日 yyyyMMdd、current_val=1）
+-- SELECT id, tenant_id, rule_code, cycle_key, current_val, update_time
+--   FROM fssc.sys_number_seq WHERE rule_code = 'PURCHASE_RECEIPT' ORDER BY id;
+-- 2.4 业务腿真跑判据（同一 PO 建第二张收货单）
+--     POST /api/tenant/purchase/receipt/create → 200；新行 receipt_no 形如 GRN2026101100NN（非 GRN+PO末6位）。
+--     SELECT id, tenant_id, receipt_no, po_no, amount, status FROM fssc.po_receipt ORDER BY id DESC LIMIT 3;
+
+-- ----------------------------------------------------------------------------
+-- §3 未纳入本件的两项（另登，避免范围虚高）
+--   ① tenant_id=2/3 同样缺 PURCHASE_RECEIPT：本库采购收货存量恒 tenant 1（实测③），
+--      多租户正式环境上线时按 §1 同口径逐租户补种，本件不代判。
+--   ② PO_ORDER 规则亦缺失（PurchaseService.java:818-824 nextPoNo 仍保留 "PO"+System.currentTimeMillis()
+--      时间戳降级 ⇒ po_order 存量号形 PO1791694135173 即由此产生）。同族缺陷但未阻断业务，
+--      登记为待裁项，不与本件混改（改它要同时决定历史 PO 号是否回填）。
+-- ----------------------------------------------------------------------------

@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card>
     <template #header>
@@ -220,7 +217,14 @@
         <el-table :data="formLines" size="small" border style="margin-bottom: 8px" max-height="240" @selection-change="handleSelectionChange" empty-text="暂无数据">
         <el-table-column type="selection" width="45" />
           <el-table-column label="行号" width="55" align="center">
-            <template #default="{ $index }">{{ $index + 1 }}</template>
+            <!-- D-UI-02（2026-10-19 G2 幕真跑发现）：行项目明细不在 el-form 内，guardSubmit 校验不到，
+                 validateLines 失败只弹一条 3 秒即逝的 ElMessage.warning ⇒ 点【保存并提交】毫无反应，
+                 自动化脚本与新手都抓不到原因。此处把出错行号染红，配合下方持久提示条形成可见反馈。 -->
+            <template #default="{ $index }">
+              <span :style="lineErrorAt($index) ? 'color:#f56c6c;font-weight:600' : ''">
+                {{ $index + 1 }}{{ lineErrorAt($index) ? ' ' : '' }}
+              </span>
+            </template>
           </el-table-column>
           <el-table-column label="物料编码" width="160">
             <template #default="{ row }">
@@ -281,6 +285,10 @@
         </el-table>
         <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px">
           <el-button size="small" type="primary" plain @click="addLine">+ 添加行</el-button>
+          <!-- D-UI-02：行项目校验失败的持久提示条（红色，不随时间消失） -->
+          <span v-if="lineError" style="color: #f56c6c; font-size: 13px; font-weight: 600">
+             {{ lineError }}（请修正标  的行后再提交）
+          </span>
           <!-- D-V4R-91：勾稽实时提示。原先行项目合计只作展示、与订单金额毫无比对，
                导致「表头 60000 / 行合计 0」一路放行。 -->
           <span v-if="amountMismatch" style="color: #f56c6c; font-size: 13px">
@@ -413,6 +421,12 @@ const formRef = ref(null)
 const { submit: guardSubmit } = useSubmitGuard(formRef)
 const { autofill, saveFormHistory } = useAutoFill()
 const formLines = ref([])
+// D-UI-02：行项目校验失败的持久提示（原文案只有 3 秒即逝的 toast，点【保存并提交】等于毫无反应）
+const lineError = ref('')
+const lineErrorRows = ref([])
+function lineErrorAt(rowIndex) {
+  return lineErrorRows.value.includes(rowIndex)
+}
 const detailLines = ref([])
 const materialOptions = ref([])
 const materialSearching = ref(false)
@@ -526,35 +540,46 @@ function validateLines() {
   // 全空行忽略（模板新增的空行不算填写内容）
   const active = lines.filter(l => l.materialName || l.materialCode
     || Number(l.quantity || 0) !== 0 || Number(l.amount || 0) !== 0)
+  // D-UI-02：active 是过滤后的下标，原实现按 active 下标提示「第 N 行」，
+  // 与表格实际行号可能错位（空行夹在中间时）。此处回填真实表格下标供行号染红用。
+  const activeIdx = []
+  lines.forEach((l, i) => {
+    if (l.materialName || l.materialCode || Number(l.quantity || 0) !== 0 || Number(l.amount || 0) !== 0) activeIdx.push(i)
+  })
+  const fail = (msg, activePos) => {
+    lineError.value = msg
+    lineErrorRows.value = [activeIdx[activePos] ?? -1]
+    ElMessage.warning(msg)
+    return false
+  }
+  lineError.value = ''
+  lineErrorRows.value = []
   if (!active.length) return true // 无行项目：采购订单允许只录表头金额
 
   for (let i = 0; i < active.length; i++) {
     const l = active[i]
     const pos = `第 ${i + 1} 行`
     if (!String(l.materialName || '').trim()) {
-      ElMessage.warning(`${pos}物料名称必填（只有物料编码不够）`)
-      return false
+      return fail(`${pos}物料名称必填（只有物料编码不够）`, i)
     }
     const name = String(l.materialName).trim()
     if (/^[0-9][0-9,]*(\.[0-9]+)?$/.test(name)) {
-      ElMessage.warning(`${pos}物料名称「${name}」是纯数字，疑似把数量/金额填进了名称栏，请填实际品名`)
-      return false
+      return fail(`${pos}物料名称「${name}」是纯数字，疑似把数量/金额填进了名称栏，请填实际品名`, i)
     }
     if (!(Number(l.quantity) > 0)) {
-      ElMessage.warning(`${pos}数量必须大于 0（当前 ${l.quantity}）`)
-      return false
+      return fail(`${pos}数量必须大于 0（当前 ${l.quantity}）`, i)
     }
     if (!(Number(l.unitPrice) > 0)) {
-      ElMessage.warning(`${pos}单价必须大于 0（当前 ${l.unitPrice}）`)
-      return false
+      return fail(`${pos}单价必须大于 0（当前 ${l.unitPrice}）`, i)
     }
     const expect = Number(l.quantity) * Number(l.unitPrice)
     const actual = Number(l.amount || 0)
     if (actual > 0 && Math.abs(expect - actual) > 0.01) {
-      ElMessage.warning(`${pos}量价勾稽不符：数量 × 单价 = ${expect.toFixed(2)}，行金额 = ${actual.toFixed(2)}`)
-      return false
+      return fail(`${pos}量价勾稽不符：数量 × 单价 = ${expect.toFixed(2)}，行金额 = ${actual.toFixed(2)}`, i)
     }
   }
+  lineError.value = ''
+  lineErrorRows.value = []
 
   // 表头与行合计勾稽（与后端 assertHeaderLineAmountConsistent 同口径）
   const sum = active.reduce((s, l) => s + Number(l.amount || 0), 0)

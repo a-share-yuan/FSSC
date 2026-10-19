@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-card v-if="!voucher.id" :header="$t('expense.voucher.dlgPreview')">
     <el-empty :description="$t('expense.voucher.hintPickBill')" />

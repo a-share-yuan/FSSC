@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.openapi.linku.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;

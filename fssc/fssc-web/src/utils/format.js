@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * 通用格式化工具：日期 + 金额 + 数量。
  * - 纯日期列显示 YYYY-MM-DD

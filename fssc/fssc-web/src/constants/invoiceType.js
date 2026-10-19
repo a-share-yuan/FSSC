@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 // 票据类型编码与中文标签（报销场景）。编码与后端 OcrLocalParsers.inferType 返回值对齐。
 // 新增类型需同步修改本文件 与 后端 OcrLocalParsers 的 inferType/常量。
 import { dictLabelOf } from '../composables/useDict.js'

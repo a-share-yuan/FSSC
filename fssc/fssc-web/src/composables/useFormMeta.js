@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * useFormMeta - 表单元数据驱动 composable（V1.4.85）
  * =============================================================================

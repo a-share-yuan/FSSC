@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * 移动报销端（H5）专用公共件 —— 只服务 /h5 路由族，PC 端不引用，避免把移动端收窄策略外溢。
  *

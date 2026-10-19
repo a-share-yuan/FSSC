@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-drawer v-model="visible" :title="title" direction="rtl" size="560px" :destroy-on-close="true">
     <div class="drill-content">
@@ -14,7 +11,7 @@
 
       <!-- 当前层级数据 -->
       <div class="drill-level" v-loading="loading">
-        <el-table :data="tableData" stripe size="small" @row-click="drillDeeper" highlight-current-row empty-text="暂无数据">
+        <el-table :data="tableData" stripe size="small" @row-click="drillDeeper" highlight-current-row empty-text="暂无数据" style="cursor:pointer">
           <el-table-column v-for="col in columns" :key="col.prop" :prop="col.prop" :label="col.label"
             :width="col.width" :align="col.align || 'left'" sortable>
             <template #default="{ row }">
@@ -23,9 +20,12 @@
               <span v-else>{{ row[col.prop] ?? '-' }}</span>
             </template>
           </el-table-column>
+          <!-- D-UI-06（2026-10-19）：这枚「钻取 →」此前只是装饰——模板里没有 @click，
+               键盘用户点了没反应、鼠标用户也只能靠整行点击（无可发现提示）。
+               现补上显式事件（.stop 防止冒泡再触发行点击导致钻两层），与行点击同源。 -->
           <el-table-column label="操作" width="80" v-if="canDrillDeeper">
-            <template #default>
-              <el-button link size="small" type="primary">钻取 →</el-button>
+            <template #default="{ row }">
+              <el-button link size="small" type="primary" @click.stop="drillDeeper(row)">钻取 →</el-button>
             </template>
           </el-table-column>
         </el-table>

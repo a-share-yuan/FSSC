@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 import axios from 'axios'
 import { reactive } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -831,6 +828,10 @@ export const detailApi = {
   saveTravels: (billId, list) => http.post(`/tenant/expense/detail/travels/${billId}`, list),
   loanOffsets: (billId) => http.get(`/tenant/expense/detail/loan-offset/${billId}`),
   addLoanOffset: (billId, body) => http.post(`/tenant/expense/detail/loan-offset/${billId}`, body),
+  // D-UI-03（2026-10-19）：借款冲抵候选面。返回 availableBalance＝账面余额−在途占用，
+  // 与服务端 registerLoanOccupancy 的放行闸同源；旧口径只给 loanBalance（账面），
+  // 前端默认勾全额必然被拒（ExpenseDetailService 类注释里的「已知在册残口①」）。
+  loanCandidates: (params) => http.get(`/tenant/expense/detail/loan-candidates`, { params }),
   // 报销单冲销预付款单（PAY/PREPAY）：body={prepayBillId, amount}，后端校验累计冲销≤预付余额
   prepayOffset: (billId, body) => http.post(`/tenant/expense/detail/prepay-offset/${billId}`, body),
   relations: (billId) => http.get(`/tenant/expense/detail/relation/${billId}`),

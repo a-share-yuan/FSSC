@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * 自定义调色板：覆盖默认「创建任务」(bpmn:Task)，改为直接创建「用户任务」(bpmn:UserTask 审批节点)。
  * 财务审批流全部是人工审批节点，统一类型避免出现「任务」节点（无人像、无审批人配置）。

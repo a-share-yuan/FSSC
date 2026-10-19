@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div>
     <el-card :header="$t('field.billType')">
@@ -274,23 +271,24 @@
       </el-col>
     </el-row>
 
-    <!-- 借款单选择 -->
-    <el-dialog v-model="loanDialog" :title="$t('expense.create.dlgPickLoanOffset')" width="560px">
-      <el-table :data="loanCandidates" size="small" :empty-text="$t('common.empty')" v-loading="loading" @row-click="pickLoan" highlight-current-row>
-        <el-table-column prop="billNo" :label="$t('expense.create.colLoanBillNo')" width="150" sortable />
-        <el-table-column prop="totalAmount" :label="$t('expense.create.colLoanAmt')" width="100" sortable :formatter="(r,c,v) => fmt(v)" />
-        <el-table-column prop="loanBalance" :label="$t('expense.ledger.colUnpaidBalance')" width="100" sortable :formatter="(r,c,v) => fmt(v)" />
-      </el-table>
-    </el-dialog>
+    <!-- 借款单选择（D-UI-02：勾选+可改金额+【确定】） -->
+    <CandidatePickerDialog v-model="loanDialog" :title="$t('expense.create.dlgPickLoanOffset')"
+                          :rows="loanCandidates" :loading="loading" max-field="availableBalance"
+                          :no-label="$t('expense.create.colLoanBillNo')"
+                          :amount-label="$t('expense.create.colLoanAmt')"
+                          max-label="可冲抵余额"
+                          input-label="冲抵金额" :picked-ids="loanOffsetIds"
+                          @confirm="confirmLoanPicks" />
 
-    <!-- 事前申请选择 -->
-    <el-dialog v-model="applyDialog" :title="$t('expense.create.dlgPickRequisition')" width="560px">
-      <el-table :data="applyCandidates" size="small" :empty-text="$t('common.empty')" v-loading="loading" @row-click="pickApply" highlight-current-row>
-        <el-table-column prop="billNo" :label="$t('expense.create.colApplyNo')" width="150" sortable />
-        <el-table-column prop="title" :label="$t('expense.common.colTitle')" min-width="200" show-overflow-tooltip sortable />
-        <el-table-column prop="totalAmount" :label="$t('expense.create.colApplyAmount')" width="100" sortable :formatter="(r,c,v) => fmt(v)" />
-      </el-table>
-    </el-dialog>
+    <!-- 事前申请选择（D-UI-03：关联金额可改，支持部分关联） -->
+    <CandidatePickerDialog v-model="applyDialog" :title="$t('expense.create.dlgPickRequisition')"
+                          :rows="applyCandidates" :loading="loading" max-field="totalAmount"
+                          :show-max-column="false"
+                          extra-prop="title" :extra-label="$t('expense.common.colTitle')"
+                          :no-label="$t('expense.create.colApplyNo')"
+                          :amount-label="$t('expense.create.colApplyAmount')"
+                          input-label="本次关联金额" :picked-ids="relationIds"
+                          @confirm="confirmApplyPicks" />
   </div>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
 </template>
@@ -304,6 +302,7 @@ import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import { hasPerm } from '../../utils/perm'
 import UploadButton from '../../components/UploadButton.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import CandidatePickerDialog from '../../components/bill/CandidatePickerDialog.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { INVOICE_TYPES } from '@/constants/invoiceType'
 import { useAutoFill } from '@/composables/useAutoFill'
@@ -631,28 +630,53 @@ function resetForm() {
 
 async function openLoanDialog() {
   try {
-    loanCandidates.value = (await billApi.myPage({ pageNum: 1, pageSize: 50, billType: 'LOAN', status: 'APPROVED' })).list || []
+    // D-UI-03：改用候选面接口——availableBalance 已扣在途占用，与服务端放行闸同源
+    loanCandidates.value = (await detailApi.loanCandidates({ companyId: form.bill.companyId, limit: 50 })) || []
     loanDialog.value = true
   } catch (e) { ElMessage.error(e.message) }
 }
-function pickLoan(row) {
-  if (!form.loanOffsets.find((o) => o.loanBillId === row.id)) {
-    form.loanOffsets.push({ loanBillId: row.id, loanBillNo: row.billNo, offsetAmount: Number(row.loanBalance || 0), offsetType: 'CLAIM' })
+/**
+ * D-UI-02（2026-10-19）：【确定】后按对话框里改过的金额入账（默认=未还余额，可改，支持部分冲抵）。
+ * 改前点任意行立刻按未还余额全额冲抵并关窗——误点即产生财务动作、无确认、键盘不可达。
+ */
+function confirmLoanPicks(items) {
+  let added = 0
+  for (const { row, amount } of items || []) {
+    const exist = form.loanOffsets.find((o) => o.loanBillId === row.id)
+    if (exist) exist.offsetAmount = amount
+    else {
+      form.loanOffsets.push({
+        loanBillId: row.id, loanBillNo: row.billNo, offsetAmount: amount,
+        maxAmount: Number(row.loanBalance || 0), offsetType: 'CLAIM',
+      })
+      added++
+    }
   }
-  loanDialog.value = false
+  if (added) ElMessage.success(t('expense.create.msgLoanOffsetAdded', { v: added }))
 }
+
+/** D-UI-03（2026-10-19）：申请关联金额改为可改（此前硬取申请全额且入表后不可编辑） */
+function confirmApplyPicks(items) {
+  let added = 0
+  for (const { row, amount } of items || []) {
+    const exist = form.relations.find((r) => r.sourceBillId === row.id)
+    if (exist) exist.useAmount = amount
+    else { form.relations.push({ sourceBillId: row.id, sourceBillNo: row.billNo, useAmount: amount }); added++ }
+  }
+  if (added) ElMessage.success(t('expense.create.msgApplyLinked', { v: added }))
+}
+/** 已入账的借款单/申请单 id —— 选择器里置灰，防重复入账 */
+const loanOffsetIds = computed(() => form.loanOffsets.map((o) => o.loanBillId))
+const relationIds = computed(() => form.relations.map((r) => r.sourceBillId))
+
 async function openApplyDialog() {
   try {
     applyCandidates.value = (await billApi.myPage({ pageNum: 1, pageSize: 50, billType: 'APPLY', status: 'APPROVED' })).list || []
     applyDialog.value = true
   } catch (e) { ElMessage.error(e.message) }
 }
-function pickApply(row) {
-  if (!form.relations.find((r) => r.sourceBillId === row.id)) {
-    form.relations.push({ sourceBillId: row.id, sourceBillNo: row.billNo, useAmount: Number(row.totalAmount || 0) })
-  }
-  applyDialog.value = false
-}
+// D-UI-03：旧的「点行即按申请全额关联并关窗」pickApply 已整体删除，由 confirmApplyPicks
+// （勾选 + 可改金额 + 【确定】）取代；模板中无残留引用（grep pickApply 在本文件为 0）。
 
 function handleSelectionChange(val) { selRows.value = val }
 

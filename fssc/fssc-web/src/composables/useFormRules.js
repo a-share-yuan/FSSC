@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * useFormRules - 表单联动校验 composable
  * R5-06: 封装跨字段联动校验规则

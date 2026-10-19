@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="budget-item-page">
     <!-- R5-D-263：页面层权限门控（/item/page 端点按设计保持开放供引用预览，管理页在此收口） -->

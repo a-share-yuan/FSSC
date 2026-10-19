@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <!-- RA-PAGE-21 2.2：借款/还款双形态并入一个菜单（原 225 还款管理退册）——切换即跳对侧路由，整页重挂重建单据状态 -->
   <el-radio-group :model-value="mode" size="small" style="margin-bottom:8px" @change="onModeSwitch">
@@ -126,7 +123,7 @@
             <template #default="{ row }"><el-input v-model="row.loanRemark" size="small" /></template>
           </el-table-column>
           <el-table-column :label="$t('expense.loan.colRepayAmount')" width="150"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.loan.colRepayAmount') }}</template>
-            <template #default="{ row }"><el-input-number v-model="row.offsetAmount" :min="0" :precision="2" style="width: 100%" @change="syncRepayLine(b)" /></template>
+            <template #default="{ row }"><el-input-number v-model="row.offsetAmount" :min="0" :max="row.maxAmount || undefined" :precision="2" style="width: 100%" @change="syncRepayLine(b)" /></template>
           </el-table-column>
           <el-table-column :label="$t('common.operation')" width="70">
             <template #default="{ $index }"><el-button link size="small" type="danger" @click="removeOffset(b, $index)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
@@ -154,15 +151,15 @@
     </template>
   </BillWorkbench>
 
-  <!-- 还款：选择借款单弹窗 -->
-  <el-dialog v-model="repayDialog" :title="$t('expense.loan.dlgPickLoanWriteOff')" width="600px">
-    <el-table :data="b_loanCandidates" size="small" v-loading="loading" @row-click="pickRepayLoan" highlight-current-row @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="45" />
-      <el-table-column prop="billNo" :label="$t('expense.create.colLoanBillNo')" width="160"  sortable />
-      <el-table-column prop="title" :label="$t('expense.common.colTitle')"  min-width="200" show-overflow-tooltip sortable />
-      <el-table-column prop="loanBalance" :label="$t('expense.loan.colWriteoffable')" width="120"  sortable :formatter="(r,c,v) => formatMoney(v)" />
-    </el-table>
-  </el-dialog>
+  <!-- 还款：选择借款单弹窗（D-UI-04：勾选+可改金额+【确定】，取代行点即全额冲抵并关窗） -->
+  <CandidatePickerDialog v-model="repayDialog" :title="$t('expense.loan.dlgPickLoanWriteOff')"
+                        :rows="b_loanCandidates" :loading="loading" max-field="availableBalance"
+                        extra-prop="title" :extra-label="$t('expense.common.colTitle')"
+                        :amount-label="$t('expense.loan.colLoanAmount')"
+                        max-label="可冲抵余额"
+                        :input-label="$t('expense.loan.colRepayAmount')"
+                        :picked-ids="loanOffsetIds"
+                        @confirm="confirmRepayLoans" />
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
 </template>
 
@@ -172,7 +169,8 @@ import { ref, computed, watch } from 'vue'
 import { onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BillWorkbench from '../../components/bill/BillWorkbench.vue'
-import { userApi, billApi, store } from '../../api'
+import CandidatePickerDialog from '../../components/bill/CandidatePickerDialog.vue'
+import { userApi, billApi, detailApi, store } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
@@ -271,6 +269,8 @@ function syncRepayLine(b) {
   b.form.lines[0].amount = Math.round(total * 100) / 100
   b.form.lines[0].itemId = loanItemId(b)
 }
+/** 已入账的借款单 id —— 选择器里置灰，防同一张借款单重复入账（D-UI-04） */
+const loanOffsetIds = computed(() => (wb.value?.b?.form?.loanOffsets || []).map((o) => o.loanBillId))
 function loanItemId(b) {
   const it = b.items.find((x) => (x.itemName || '').includes('借款') || (x.itemName || '').includes('备用'))
   return it ? it.id : (b.items[0] ? b.items[0].id : null)
@@ -332,27 +332,44 @@ async function removeOffset(b, i) {
 }
 
 /**
- * D-DEC-396：冲销候选面原按 status='APPROVED' 单值过滤、与余额口径不同源——借款一旦被在途冲抵
- * 迁到 PARTIAL_REPAID（ExpenseDetailService:224 提交期即迁档），本弹窗对它立刻失明而余额真实存在；
- * 后端读侧同族断链已按 {@code APPROVED／PARTIAL_REPAID／REPAID} 收口（ExpenseWfEventListener:639），
- * 此处取同一组状态口径，并以服务端 loan_balance>0（minBalance=0）为主判据。
+ * D-UI-03（2026-10-19）：候选面改走 /loan-candidates，一次查询取回。
+ *
+ * <p>此前这里按 {@code APPROVED／PARTIAL_REPAID／REPAID} 三次 myPage 再合并去重
+ * （D-DEC-396 的历史补丁：借款被在途冲抵会迁 PARTIAL_REPAID，单查 APPROVED 会失明）。
+ * 新接口在服务端一次取齐三态、并已把 {@code loan_balance ≤ 0} 的滤掉，三分支拼装随之删除。</p>
+ *
+ * <p>更要紧的是它给的是 {@code availableBalance}（账面余额 − <b>在途占用</b>）：
+ * 旧口径只给账面余额，前端默认勾全额必然撞服务端 {@code registerLoanOccupancy} 的超额闸
+ * （即 {@code ExpenseDetailService} 类注释里登记的「已知在册残口①」）。</p>
  */
-const LOAN_OPEN_STATUSES = ['APPROVED', 'PARTIAL_REPAID', 'REPAID']
 async function openRepayLoan() {
-  const pages = await Promise.all(LOAN_OPEN_STATUSES.map((s) =>
-    billApi.myPage({ pageNum: 1, pageSize: 50, billType: 'LOAN', status: s, minBalance: 0 })))
-  const seen = new Map()
-  for (const r of pages) for (const x of (r.list || [])) if (!seen.has(x.id)) seen.set(x.id, x)
-  b_loanCandidates.value = [...seen.values()]
+  b_loanCandidates.value = (await detailApi.loanCandidates({
+    companyId: b.form.bill.companyId, limit: 50,
+  })) || []
   repayDialog.value = true
 }
-function pickRepayLoan(row) {
+/**
+ * D-UI-04（2026-10-19）：【确定】后才入账，且金额以对话框里改过的值为准（支持部分冲抵）。
+ * 改前是点任意行立刻按未还余额全额冲抵并关窗——误点即产生财务动作、无确认、金额不可调。
+ */
+function confirmRepayLoans(items) {
   const b = wb.value && wb.value.b
   if (!b) return
-  if (!b.form.loanOffsets.find((o) => o.loanBillId === row.id)) {
-    b.form.loanOffsets.push({ loanBillId: row.id, loanBillNo: row.billNo, offsetAmount: Number(row.loanBalance || 0), offsetType: 'REPAY', sourceType: 'LOAN', loanRemark: row.title || '' })
+  let added = 0
+  for (const { row, amount } of items || []) {
+    const exist = b.form.loanOffsets.find((o) => o.loanBillId === row.id)
+    if (exist) {
+      exist.offsetAmount = amount
+    } else {
+      b.form.loanOffsets.push({
+        loanBillId: row.id, loanBillNo: row.billNo, offsetAmount: amount,
+        maxAmount: Number(row.loanBalance || 0),
+        offsetType: 'REPAY', sourceType: 'LOAN', loanRemark: row.title || '',
+      })
+      added++
+    }
   }
-  repayDialog.value = false
+  if (added) ElMessage.success(t('expense.loan.msgLoanWriteOffAdded', { v: added }))
   syncRepayLine(b)
 }
 function onRepayUserChange(b, id) {

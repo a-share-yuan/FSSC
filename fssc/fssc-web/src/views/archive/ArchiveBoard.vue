@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div :class="{ tabless: isSingle }">
     <el-card>
@@ -379,6 +376,7 @@
         max-height="380"
         @selection-change="onPickerSelection"
         @row-click="onPickerRowClick"
+        style="cursor:pointer"
         :row-key="(r) => r.id"
         ref="pickerTable"
       >

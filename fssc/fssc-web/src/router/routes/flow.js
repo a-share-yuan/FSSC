@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /** 应收应付蓝图落地域路由（付款服务申请/月末关账/开票链/应收服务申请/核销工作台/票据/坏账/月结/报表/基础配置） */
 export default [
   // 方案 A：蓝图 10 页 → 两域工作台（菜单挂这两条；下列旧子路由保留＝历史 URL/bizEntry 深链不断）

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 import { describe, it, expect } from 'vitest'
 import { requiredOf, billRules, missingBillField } from './billRequired'
 

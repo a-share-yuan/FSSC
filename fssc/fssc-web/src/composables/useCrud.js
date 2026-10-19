@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * useCrud — 通用 CRUD composable（P2-2 交互一致性）。
  * 消除 26 个自造 CRUD 页面重复的 load/create/update/delete/export/batch 逻辑。

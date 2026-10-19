@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.expense.controller;
 
 import com.fssc.common.core.Result;
@@ -86,5 +83,20 @@ public class ExpenseDetailController {
     @GetMapping("/relation/{billId}")
     public Result<List<ExpBillRelation>> relations(@PathVariable Long billId) {
         return Result.success(detailService.relations(billId));
+    }
+
+    /**
+     * 借款冲抵候选（D-UI-03 配套，2026-10-19）。
+     *
+     * <p>与 {@code /loan-offset/{billId}}（回读本单已登记的冲抵）配对：那个是「已选了什么」，
+     * 这个是「还能选什么」。返回里 {@code availableBalance} 已扣掉在途占用，
+     * 与 {@code addLoanOffset} 的放行闸同源，前端不必再拿账面余额硬勾全额然后被拒。</p>
+     */
+    @RequiresPerm("exp:bill:list")
+    @GetMapping("/loan-candidates")
+    public Result<List<com.fssc.expense.dto.LoanCandidateDTO>> loanCandidates(
+            @RequestParam(required = false) Long companyId,
+            @RequestParam(required = false) Integer limit) {
+        return Result.success(detailService.loanCandidates(companyId, limit));
     }
 }

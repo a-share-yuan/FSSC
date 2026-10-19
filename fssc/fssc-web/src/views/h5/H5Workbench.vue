@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="h5-page h5-page--tabbed">
     <!-- 顶栏：sticky（全页唯一滚动容器＝文档，AD-02/03）；右侧只放姓名，

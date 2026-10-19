@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <el-drawer v-model="visible" title="个人效率统计" direction="rtl" size="420px" :destroy-on-close="true">
     <div v-loading="loading" class="stats-content">

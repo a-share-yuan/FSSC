@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <template v-for="n in nodes" :key="n.id">
     <!-- 目录 / 含可点击子级 → 折叠子菜单（支持多级嵌套） -->

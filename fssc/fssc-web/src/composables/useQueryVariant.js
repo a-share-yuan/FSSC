@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 import { ref, reactive } from 'vue'
 import { queryVariantApi } from '@/api.js'
 import { ElMessage, ElMessageBox } from 'element-plus'

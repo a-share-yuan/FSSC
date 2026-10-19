@@ -4,5 +4,6 @@
 
 | 发布时间 | 版本 | 部署 ID | 流程定义 ID | 在途旧实例 | diff |
 | --- | --- | --- | --- | --- | --- |
-| 2026-09-22 20:29:44 | v2 → v3 | 4a96f6c1-b681-11f1-8af0-d8bbc1e55a1a | GL_MANUAL_VOUCHER:229:4aa352d4-b681-11f1-8af0-d8bbc1e55a1a | 0 | [v2_to_v3_20260922-202944.diff](./v2_to_v3_20260922-202944.diff) |
-| 2026-09-29 01:12:52 | v3 → v4 | d25810b1-bb5f-11f1-8f3d-d8bbc1e55a1a | GL_MANUAL_VOUCHER:230:d2e339b4-bb5f-11f1-8f3d-d8bbc1e55a1a | 0 | [v3_to_v4_20260929-011252.diff](./v3_to_v4_20260929-011252.diff) |
+| 2026-10-15 12:21:51 | v4 → v5 | ed44b351-c84f-11f1-9186-d8bbc1e55a1a | GL_MANUAL_VOUCHER:231:f12aa013-c84f-11f1-9186-d8bbc1e55a1a | 0 | [v4_to_v5_20261015-122151.diff](./v4_to_v5_20261015-122151.diff) |
+| 2026-10-15 12:21:53 | v5 → v6 | f32d26d4-c84f-11f1-9186-d8bbc1e55a1a | GL_MANUAL_VOUCHER:232:f352d746-c84f-11f1-9186-d8bbc1e55a1a | 0 | [v5_to_v6_20261015-122153.diff](./v5_to_v6_20261015-122153.diff) |
+| 2026-10-15 12:24:00 | v6 → v7 | 3eabef21-c850-11f1-9186-d8bbc1e55a1a | GL_MANUAL_VOUCHER:233:3eb3b753-c850-11f1-9186-d8bbc1e55a1a | 0 | [v6_to_v7_20261015-122400.diff](./v6_to_v7_20261015-122400.diff) |

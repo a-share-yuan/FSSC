@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 # 维度8 STAB-08：K8s 部署配置（Deployment+Service+探针+资源限额+滚动更新）
 apiVersion: apps/v1
 kind: Deployment

@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div>
     <!-- 概览统计卡片 -->
@@ -73,7 +70,7 @@
 
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
       <el-table class="cm-target-match" :data="rows" size="small" v-else max-height="520"
-                @row-click="openDetail" @selection-change="handleSelectionChange"
+                @row-click="openDetail" @selection-change="handleSelectionChange" style="cursor:pointer"
                 :row-class-name="matchRowClass" :empty-text="$t('common.empty')" @row-dblclick="openDetail">
         <el-table-column type="selection" width="45" />
         <el-table-column type="expand">

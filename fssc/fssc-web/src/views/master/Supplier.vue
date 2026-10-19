@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <template>
   <div class="supplier-page">
     <el-card shadow="never">
@@ -19,7 +16,7 @@
             <el-button size="small" type="primary" @click="search">查询</el-button>
           </div>
           <el-table :data="rows" v-loading="loading" size="small" border stripe highlight-current
-            max-height="560" @row-click="onSelect" :row-class-name="rowClass">
+            max-height="560" @row-click="onSelect" :row-class-name="rowClass" style="cursor:pointer">
             <el-table-column prop="supplierCode" label="编码" width="100" show-overflow-tooltip />
             <el-table-column prop="supplierName" label="名称" min-width="150" show-overflow-tooltip />
             <el-table-column label="状态" width="70" align="center">
@@ -29,8 +26,11 @@
                 <el-tag v-if="row.blacklist === 1" size="small" type="danger" style="margin-left:2px">黑</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="80" align="center">
+            <el-table-column label="操作" width="120" align="center">
               <template #default="{ row }">
+                <!-- D-UI-06（2026-10-19）：此前非 PENDING 行没有任何显式控件，选中/进编辑只能靠整行点击，
+                     键盘用户彻底不可达。补「编辑」按钮与 onSelect 同源（.stop 防冒泡再触发一次行点击）。 -->
+                <el-button v-if="row.status !== 'PENDING'" link size="small" type="primary" @click.stop="onSelect(row)">编辑</el-button>
                 <el-button v-if="row.status === 'PENDING'" v-permission="'md:supplier:approve'" type="success" size="small" @click="approveSupplier(row)">核准</el-button>
               </template>
             </el-table-column>

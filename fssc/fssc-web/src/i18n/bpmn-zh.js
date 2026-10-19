@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * bpmn-js / bpmn-js-properties-panel 中文化模块
  * 通过覆盖 diagram-js 的 translate 服务，将调色板、右键菜单、属性面板的英文文案替换为中文
