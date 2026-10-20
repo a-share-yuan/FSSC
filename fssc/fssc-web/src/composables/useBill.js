@@ -886,9 +886,14 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   async function openLoanDialog() {
     // D-UI-03：改用候选面接口——它给的 availableBalance 已扣掉在途占用，
     // 与服务端放行闸同源（旧的 myPage 只给账面余额，默认勾全额必然被拒）。
-    loanCandidates.value = (await detailApi.loanCandidates({
-      companyId: form.bill.companyId, limit: 50,
-    })) || []
+    //  新建单时 form.bill.companyId 为空，原样传会被序列化成字符串 "null"，
+    //   后端 @RequestParam Long companyId 转换失败返回 400，await 抛错把
+    //   loanDialog.value = true 一起吞掉 ⇒ 表现为「点了『选择借款单冲抵』毫无反应」。
+    //   故只在拿到有效 companyId 时才带该参数（后端 required=false，可省略）。
+    const lp = { limit: 50 }
+    const cid = form.bill.companyId
+    if (cid !== null && cid !== undefined && cid !== '') lp.companyId = cid
+    loanCandidates.value = (await detailApi.loanCandidates(lp)) || []
     loanDialog.value = true
   }
   /** @param items {{row: object, amount: number}[]} 组件已按金额闸校验过 */

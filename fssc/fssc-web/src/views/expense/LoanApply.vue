@@ -343,9 +343,20 @@ async function removeOffset(b, i) {
  * （即 {@code ExpenseDetailService} 类注释里登记的「已知在册残口①」）。</p>
  */
 async function openRepayLoan() {
-  b_loanCandidates.value = (await detailApi.loanCandidates({
-    companyId: b.form.bill.companyId, limit: 50,
-  })) || []
+  //  本函数原先直接写 `b.form.bill.companyId`，但脚本作用域里并没有裸的 `b`
+  //   （b 是 BillWorkbench 经 ref="wb" 暴露出来的，只能用 `wb.value && wb.value.b`
+  //     取得 —— 本文件其余 12 处函数都是这么写的）。
+  //   结果点按钮即抛 ReferenceError，loan-candidates 请求根本没发出、repayDialog
+  //   也永不置 true，表现为「点了『选择借款单冲销』毫无反应」。
+  const b = wb.value && wb.value.b
+  if (!b || !b.form || !b.form.bill) { ElMessage.warning('单据尚未初始化，请稍后重试'); return }
+  // 另外：新建还款单时 companyId 还是空值，原样传会被序列化成字符串 "null"，
+  // 后端 @RequestParam Long companyId 转换失败返回 400，await 抛错同样会把后半段吞掉。
+  // 故只在拿到有效 companyId 时才带该参数（后端 required=false，可省略）。
+  const params = { limit: 50 }
+  const cid = b.form.bill.companyId
+  if (cid !== null && cid !== undefined && cid !== '') params.companyId = cid
+  b_loanCandidates.value = (await detailApi.loanCandidates(params)) || []
   repayDialog.value = true
 }
 /**

@@ -5,10 +5,10 @@
 --       不插任何业务单据。业务单据由 scripts/seed_biz_data.py 生成。
 --
 -- 【为什么必须先补】造数前实测三处硬缺口（2026-10-18）：
---   缺口① sys_company 只有 id 1/31~38（爱共享集团 9 家），但
---          md_bank_account 有 87 条指向 100/101/102/104、md_project 全部 84 条指向 100。
---          这四个 company_id 是**外部真实法人（中集来福士系）**，FSSC 库里没有对应 sys_company 行
---          ⇒ 银行账户/项目挂不上合法法人，凭证与银企对账无法造。
+--   缺口① 已闭环：历史上 md_bank_account/md_project/gl_accounting_book 曾以 company_id
+--   100/101/102/104 指向中集来福士系外部法人，造成悬空外键；已在 2026-10-20 将归属
+--   迁移至爱共享主体(id=1)并删除中集公司壳。本文件不再补录中集法人，造数须直接归属
+--   爱共享 9 家(id=1/31~38)。
 --   缺口② crm_customer 57 行**全部是 SUPPLIER**，CUSTOMER 类型 = 0
 --          ⇒ AR 应收链路（rc_receivable/ar_statement/rc_collect_todo）没有交易对手。
 --   缺口③ md_subject 缺应交增值税销项/进项、主营业务成本明细等
@@ -26,45 +26,13 @@
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- 段① 法人公司补档（4 家外部真实法人，ID 与既有外键逐字对齐）
+-- 段① 法人公司补档（已移除）
 -- -----------------------------------------------------------------------------
-INSERT INTO `sys_company`
-  (`id`, `tenant_id`, `company_code`, `company_name`, `short_name`, `parent_id`, `ancestors`,
-   `credit_code`, `tax_no`, `tax_type`, `address`, `tel`, `legal_person`, `currency`,
-   `sort`, `status`, `remark`, `create_time`, `update_time`, `del_flag`)
-SELECT 100, 1, 'CIMC-YT', '烟台中集来福士海洋工程有限公司', '烟台来福士', 1, '0,1',
-       NULL, NULL, 'GENERAL', '山东省烟台市芝罘区', NULL, NULL, 'CNY',
-       101, 'NORMAL', '造数前置补档：md_bank_account.company_id=100 的法人主体(V1.4.80)', NOW(), NOW(), 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_company` WHERE `id` = 100);
+-- 企业主体为「爱共享集团」（sys_company id=1/31~38 共 9 家）。历史上为接住
+-- md_bank_account/md_project/gl_accounting_book 悬空外键而补录的中集来福士系公司壳
+-- (id=100/101/102/104) 已在 2026-10-20 清理：从属数据归属迁至爱共享主体(id=1)，
+-- 中集公司壳已删除。后续造数一律以爱共享公司 id 为归属，禁止写死 100/101/102/104。
 
-INSERT INTO `sys_company`
-  (`id`, `tenant_id`, `company_code`, `company_name`, `short_name`, `parent_id`, `ancestors`,
-   `credit_code`, `tax_no`, `tax_type`, `address`, `tel`, `legal_person`, `currency`,
-   `sort`, `status`, `remark`, `create_time`, `update_time`, `del_flag`)
-SELECT 101, 1, 'CIMC-HY', '海阳中集来福士海洋工程有限公司', '海阳来福士', 1, '0,1',
-       NULL, NULL, 'GENERAL', '山东省海阳市', NULL, NULL, 'CNY',
-       102, 'NORMAL', '造数前置补档：md_bank_account.company_id=101 的法人主体(V1.4.80)', NOW(), NOW(), 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_company` WHERE `id` = 101);
-
-INSERT INTO `sys_company`
-  (`id`, `tenant_id`, `company_code`, `company_name`, `short_name`, `parent_id`, `ancestors`,
-   `credit_code`, `tax_no`, `tax_type`, `address`, `tel`, `legal_person`, `currency`,
-   `sort`, `status`, `remark`, `create_time`, `update_time`, `del_flag`)
-SELECT 102, 1, 'CIMC-LK', '龙口中集来福士海洋工程有限公司', '龙口来福士', 1, '0,1',
-       NULL, NULL, 'GENERAL', '山东省龙口市', NULL, NULL, 'CNY',
-       103, 'NORMAL', '造数前置补档：md_bank_account.company_id=102 的法人主体(V1.4.80)', NOW(), NOW(), 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_company` WHERE `id` = 102);
-
-INSERT INTO `sys_company`
-  (`id`, `tenant_id`, `company_code`, `company_name`, `short_name`, `parent_id`, `ancestors`,
-   `credit_code`, `tax_no`, `tax_type`, `address`, `tel`, `legal_person`, `currency`,
-   `sort`, `status`, `remark`, `create_time`, `update_time`, `del_flag`)
-SELECT 104, 1, 'CIMC-RI', '中集海洋工程研究院有限公司', '海洋工程研究院', 1, '0,1',
-       NULL, NULL, 'GENERAL', '山东省烟台市', NULL, NULL, 'CNY',
-       104, 'NORMAL', '造数前置补档：md_bank_account.company_id=104 的法人主体(V1.4.80)', NOW(), NOW(), 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_company` WHERE `id` = 104);
-
--- -----------------------------------------------------------------------------
 -- 段② 客户主数据补档（12 家 CUSTOMER，AR 应收链路的交易对手）
 -- 口径：customer_code 沿用既有 C2xxx 段（C2002/C2003 已在库），从 C2101 起顺延
 -- -----------------------------------------------------------------------------

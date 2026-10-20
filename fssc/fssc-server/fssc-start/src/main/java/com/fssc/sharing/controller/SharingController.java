@@ -126,6 +126,17 @@ public class SharingController {
         if ("PAY".equals(bill.getBillType())) {
             return Result.success(voucherService.generatePtpPayment(bill));
         }
+        // 修复：借款（LOAN）与还款（REPAY）单据必须走模板口，否则会掉进 generate() 的报销单通用口径——
+        // generate() 按 exp_bill_line 取数并硬编码 sourceType="EXPENSE"，对无报销明细行的
+        // 借款/还款单会产出「借 6602 管理费用 / 贷 2241 其他应付款」这种错账凭证
+        // （LOAN 正确口径＝借 1221 其他应收款 / 贷 1002 银行存款，见 ExpenseWfEventListener#EXP_LOAN）。
+        // 审批回调走的就是 generateByTemplate，这里补齐同一分流，保证人工补生成与自动制证同口径。
+        if ("LOAN".equals(bill.getBillType())) {
+            return Result.success(voucherService.generateByTemplate(billId, "EXP_LOAN"));
+        }
+        if ("REPAY".equals(bill.getBillType())) {
+            return Result.success(voucherService.generateByTemplate(billId, "EXP_REPAY"));
+        }
         return Result.success(voucherService.generate(bill));
     }
 

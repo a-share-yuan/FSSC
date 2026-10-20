@@ -631,7 +631,12 @@ function resetForm() {
 async function openLoanDialog() {
   try {
     // D-UI-03：改用候选面接口——availableBalance 已扣在途占用，与服务端放行闸同源
-    loanCandidates.value = (await detailApi.loanCandidates({ companyId: form.bill.companyId, limit: 50 })) || []
+    //  同 LoanApply.vue / useBill.js：新建单时 companyId 为空会序列化成字符串 "null"
+    //   导致后端 400、await 抛错把下面的 loanDialog=true 一起吞掉（按钮点了没反应）。
+    const lp = { limit: 50 }
+    const cid = form.bill.companyId
+    if (cid !== null && cid !== undefined && cid !== '') lp.companyId = cid
+    loanCandidates.value = (await detailApi.loanCandidates(lp)) || []
     loanDialog.value = true
   } catch (e) { ElMessage.error(e.message) }
 }
