@@ -18,7 +18,7 @@
     </template>
 
     <!-- R5-D-072：无查看权限时显式无权限态（4030 不得被吞成「没数据」空表） -->
-    <el-empty v-if="!canList" description="当前账号无收货单查看权限，请联系管理员授权 po:receipt:list" />
+    <el-empty v-if="!canList" description="当前账号无收货单查看权限，请联系管理员开通" />
     <SkeletonList v-if="loading && canList" :rows="8" :cols="5" />
     <el-table v-else-if="canList" :data="rows" size="small" stripe max-height="520" border @selection-change="handleSelectionChange" @row-dblclick="openRowDetail" empty-text="暂无数据">
         <el-table-column type="selection" width="45" />

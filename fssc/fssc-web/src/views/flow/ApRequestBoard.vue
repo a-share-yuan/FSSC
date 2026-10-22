@@ -11,8 +11,8 @@
             <el-option v-for="(l, c) in AP_REQ_STATUS" :key="c" :label="l" :value="c" />
           </el-select>
           <el-button size="small" @click="load">{{ $t('common.refresh') }}</el-button>
-          <el-button type="primary" size="small" @click="openCreate">{{ $t('flow.request.btnNew') }}</el-button>
-          <el-upload :show-file-list="false" accept=".xlsx" :auto-upload="false" :on-change="doImportPlan">
+          <el-button v-if="hasPerm('apflow:request:create')" type="primary" size="small" @click="openCreate">{{ $t('flow.request.btnNew') }}</el-button>
+          <el-upload v-if="hasPerm('apflow:request:create')" :show-file-list="false" accept=".xlsx" :auto-upload="false" :on-change="doImportPlan">
             <el-button size="small" type="warning">{{ $t('flow.request.importExcelTitle') }}</el-button>
           </el-upload>
         </div>
@@ -37,7 +37,7 @@
       <el-table-column prop="voucherNo" :label="$t('flow.request.colErpVoucher')" width="150" show-overflow-tooltip />
       <el-table-column :label="$t('common.operation')" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button v-for="a in actions(row)" :key="a.key" link type="primary" size="small" @click="act(row, a)">{{ a.label }}</el-button>
+          <el-button v-for="a in actions(row)" v-show="canAct(a.key)" :key="a.key" link type="primary" size="small" @click="act(row, a)">{{ a.label }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -114,6 +114,7 @@ import { AP_REQ_TYPE, AP_REQ_STATUS, apReqTypeLabel, apReqStatusLabel } from '@/
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apFlowApi } from '../../api'
+import { hasPerm } from '@/utils/perm'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
@@ -161,6 +162,23 @@ const inputTitle = ref('')
 const inputText = ref('')
 
 const statusTag = (s) => ({ PAID: 'success', POSTED: 'success', COMPLETED: 'info', VOIDED: 'danger', GROUP_REVIEW: 'warning' }[s] || 'primary')
+
+// 动作按钮与后端码一一对应：无码只隐藏按钮，不制造“点了才报缺权限”
+const ACT_PERMS = {
+  dispatch: 'apflow:request:dispatch',
+  assign: 'apflow:request:dispatch',
+  claim: 'apflow:request:dispatch',
+  confirm: 'apflow:request:confirm',
+  review: 'apflow:request:review',
+  post: 'apflow:request:post',
+  pay: 'apflow:request:pay',
+  void: 'apflow:request:void',
+  close: 'apflow:request:void',
+}
+function canAct(key) {
+  const p = ACT_PERMS[key]
+  return !p || hasPerm(p)
+}
 
 function actions(row) {
   switch (row.status) {

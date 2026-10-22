@@ -176,6 +176,7 @@ public class WfTimeoutJob {
      * 无人认领 ⇒ 任务永久滞留；而 {@code wf_task_history} 里 32 条 ESCALATE 全部来自
      * {@code empty_strategy} 空策略兜底（comment="空策略兜底…"），<b>无一条来自超时升级</b>。
      *
+     * <p>本档语义＝<b>先催办，累计满阈值仍无人办理再升级</b>（参考行业做法"超时处理"的逐级上收）。
      * 与 {@code ESCALATE} 档的区别：ESCALATE 是 SLA 一到立即升级（无缓冲），本档给出缓冲期。
      *
      * <p> <b>改档必须逐节点进行</b>（业务决策）：本档只是新增一个可选取值，
@@ -442,6 +443,7 @@ public class WfTimeoutJob {
      * 取不到才用 {@code create_time + timeout_hours} 回算，且回算走工作日历（G2 第 3 条）。
      * 两处口径必须一致，否则"同一张单在定时器与兜底作业里到期时间不同"。
      *
+     * <p>回算时按单据所属<b>公司</b>取日历（参考行业做法"按组织取日历"）；{@link #orgOf} 解析不到组织时
      * 返回 {@code null}，日历服务会回落租户口径，与改造前逐字一致。
      */
     private LocalDateTime dueOf(WfTask t, long timeoutHours) {
@@ -564,10 +566,12 @@ public class WfTimeoutJob {
                        Integer upLevel) {
         switch (action) {
             case ACT_AUTO_PASS -> {
+                // 批次 1 ②（参考行业做法"启用超时处理…会签节点不支持超时自动处理"）：
                 // AUTO_PASS 改白名单制，默认一档都不放行＝退回催办；节点配置里写 AUTO_PASS 也不再"配了就敢自动过"。
                 String deny = autoPassDenial(t, ftask);
                 if (deny != null) {
                     // D-DEC-274：不放行时原先直接落回 handleNotify＝无限催办、无终局（实测 AR_REPORT 三个
+                    // 并行节点各催 50 次、超期 46 小时仍 PENDING）。行业方案超时策略两档都有终局——要么自动执行、
                     // 要么"超时后自动将任务转发给指定处理人"。⇒ 改走既有阶梯档：阈值内仍只催办（行为不变），
                     // 满 wf.timeout.escalate.after_urges 次后沿汇报线升级给真实负责人（绝不落 admin）。
                     log.info("超时自动通过未放行（{}），转阶梯档处理: taskId={}, node={}",
@@ -595,6 +599,7 @@ public class WfTimeoutJob {
      *      未配置/不含本节点 → 不放行。缺省空＝AUTO_PASS 全库不生效，等价于默认 NOTIFY；</li>
      *  <li><b>无金额敞口</b>：单据金额超 {@code wf.timeout.autopass.max_amount}（默认 5000）→ 不放行；</li>
      *  <li><b>节点未绑定单据操作</b>：任务池/共享池作业节点（付款、记账、归档等落地动作）→ 不放行，
+     *      同类系统同样只对纯审批节点做自动执行；</li>
      *  <li><b>非会签/并联会审</b>：Flowable 多实例节点（有 {@code nrOfInstances} 变量）→ 不放行。</li>
      * </ol>
      * 另加本系统铁律：机器路径留痕的办理人不得为 admin（零 admin）。
@@ -762,6 +767,7 @@ public class WfTimeoutJob {
             recordSlaBreach(t, reason);
         }
         // 批次 1 ①：作业节点（POOL）有人领取却办不动 → 催办满 {@value #POOL_RELEASE_AFTER_URGES} 次自动回收，
+        // 退回任务池让同池他人可领；单个人失手不再把整池卡死（共享作业有同样的超时回收档）。
         // 只挂在超时路径上：发起人手动催办（urgeByInitiator）不得顺带把在办任务退回池里。
         if (urged >= POOL_RELEASE_AFTER_URGES && t.getAssigneeId() != null && isWorkNode(t)) {
             Long owner = t.getAssigneeId();
@@ -1083,6 +1089,7 @@ public class WfTimeoutJob {
      * {@link com.fssc.workflow.service.NodeOrgResolver#escalateTarget(String)} 一套升级口径。
      */
     private void handleEscalate(WfTask t, Task ftask, String reason, String legacyTargetRole, Integer upLevel) {
+        // 批次 1 ②：升级后不再二次超时（行业方案"指定处理人"档明确"收到任务后没有处理时长的限制"）。
         // 判据用升级留痕本身（wf_task_history 的 ESCALATE 行），不加列、不改表；升级后仍会催办，
         // 但不再自动通过、也不再反复升级换人——否则一张单会在汇报线上一路踢上去。
         if (alreadyEscalated(t.getTaskId())) {

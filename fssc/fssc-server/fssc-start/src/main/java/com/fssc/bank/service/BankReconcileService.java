@@ -596,7 +596,11 @@ public class BankReconcileService {
         r.setBankAccountName(account == null ? null : account.getAccountName());
         r.setMonth(month);
 
-        // 银行对账单余额：该账户当月最后一条流水 balance；无流水则取账户维护余额
+        // 银行对账单余额：该账户当月**最后一条有余额快照的**流水 balance；全都没有则取账户维护余额。
+        // D-G5-06：原写法是「只要当月有流水就一律取 stmts.get(0).getBalance()，不再回落」，
+        // 而银行流水导入的 balance 是可选字段（可为 NULL）⇒ nz(NULL)=0
+        // ⇒ 调节表「银行余额」取 0，实测调节差额 −2,464,354（账户维护余额 2,491,474）。
+        // 0 是一个业务上极不可能的余额，会直接掩盖一切差异，故必须回落。
         String start = monthStart(month);
         String endEx = monthStart(nextMonth(month));
         List<OpBankStatement> stmts = statementMapper.selectList(new LambdaQueryWrapper<OpBankStatement>()
@@ -604,9 +608,18 @@ public class BankReconcileService {
                 .ge(OpBankStatement::getTransDate, start)
                 .lt(OpBankStatement::getTransDate, endEx)
                 .orderByDesc(OpBankStatement::getTransDate));
-        BigDecimal bankBalance = stmts.isEmpty()
-                ? (account == null ? BigDecimal.ZERO : nz(account.getBalance()))
-                : nz(stmts.get(0).getBalance());
+        BigDecimal bankBalance = null;
+        for (OpBankStatement s : stmts) {
+            // 按交易时间倒序遍历，取第一条 balance 非空的快照
+            if (s.getBalance() != null) {
+                bankBalance = s.getBalance();
+                break;
+            }
+        }
+        if (bankBalance == null) {
+            // 本期无任何余额快照（无流水，或流水的 balance 全为空）⇒ 用账户维护余额
+            bankBalance = account == null ? BigDecimal.ZERO : nz(account.getBalance());
+        }
         r.setBankBalance(bankBalance);
 
         // 银行已收企业未收 / 银行已付企业未付：当月未勾对流水（recon_status != MATCHED）
@@ -638,9 +651,15 @@ public class BankReconcileService {
         r.setEntOut(entOut); // 企业已付银行未付
         BigDecimal entOutAmt = entOut.stream().map(Item::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 企业已收银行未收：当月未与银行流水勾对(bank_matched=0)的收款核销单 rc_receipt
+        // 企业已收银行未收：当月**尚未全额与银行流水勾对**的收款核销单 rc_receipt。
+        // D-G5-04：原写法是「bank_matched=0 ⇒ 整张 amount 进未达」，但认领时
+        //   claimReceipt 从不回写 rc_receipt ⇒ 已认领勾对的收款单仍被整张列为未达
+        //   （实测：146,900 中已认领 65,540，未达项虚增 65,540）。
+        //  关键约束：不能只用布尔位判定。本例是「部分勾对」——146,900 只认领了 65,540，
+        //   若简单置 bank_matched=1 ⇒ 未认领的 81,360 会被误标为已勾对，反而漏计真实未达。
+        //   ⇒ 按「已勾对金额」算未达额：未达额 = amount − bank_matched_amount，
+        //     未达额 ≤ 0 的整条不进未达清单。
         List<RcReceipt> unmatchedReceipts = receiptMapper.selectList(new LambdaQueryWrapper<RcReceipt>()
-                .eq(RcReceipt::getBankMatched, 0)
                 .ge(RcReceipt::getReceiptDate, LocalDate.parse(start))
                 .lt(RcReceipt::getReceiptDate, LocalDate.parse(endEx)));
         // P1-2: N+1 → 批量查询往来单位名称
@@ -651,8 +670,19 @@ public class BankReconcileService {
                         .collect(Collectors.toMap(CrmCustomer::getId, CrmCustomer::getCustomerName));
         List<Item> entIn = new ArrayList<>();
         for (RcReceipt rc : unmatchedReceipts) {
+            BigDecimal receiptAmount = nz(rc.getAmount());
+            BigDecimal matchedAmount = nz(rc.getBankMatchedAmount());
+            BigDecimal unmatchedAmount = receiptAmount.subtract(matchedAmount);
+            if (unmatchedAmount.signum() <= 0) {
+                // 已全额勾对 ⇒ 不再是未达项
+                continue;
+            }
+            // 摘要注明已勾对部分，便于对账人员解释（部分勾对场景）
+            String memo = matchedAmount.signum() > 0
+                    ? "企业已收银行未收（已勾对 " + matchedAmount.toPlainString() + "，未达 " + unmatchedAmount.toPlainString() + "）"
+                    : "企业已收银行未收";
             entIn.add(new Item(rc.getBillNo(), receiptCustomerNameMap.get(rc.getCustomerId()), rc.getReceiptDate(),
-                    nz(rc.getAmount()), "企业已收银行未收", rc.getStatus(), "RECEIPT:" + rc.getId()));
+                    unmatchedAmount, memo, rc.getStatus(), "RECEIPT:" + rc.getId()));
         }
         r.setEntIn(entIn); // 企业已收银行未收
         BigDecimal entInAmt = entIn.stream().map(Item::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -915,6 +945,15 @@ public class BankReconcileService {
         }
         receivableMapper.updateById(recUpd);
 
+        // D-G5-04：回写收款单的「已勾对金额」。
+        // 认领腿挂在应收单（rc_receivable）上，而调节表 ENT_IN 取的是收款单（rc_receipt），
+        // 两者靠 rc_receipt.receivable_ids（核销的应收单 id 列表）关联。
+        // 此前 claimReceipt 只动 rc_receivable、不动 rc_receipt ⇒ 调节表把整张收款单
+        // （含已认领部分）都算作未达，实测虚增 65,540。
+        //  按「金额」而非「布尔位」回写：一张收款单可能被多次部分认领
+        //   （本次 146,900 只认领 65,540），置布尔位会把未认领部分误标为已勾对。
+        markReceiptMatched(rec, amt, st);
+
         // 勾对留痕
         BankReconcile r = new BankReconcile();
         r.setStatementId(st.getId());
@@ -948,6 +987,69 @@ public class BankReconcileService {
             log.warn("收款认领核销 D-DEC-420 复核提示：应收单 {} 由本人建单并本人核销", rec.getBillNo());
         }
         return rs;
+    }
+
+    /**
+     * D-G5-04：认领成功后回写收款单（rc_receipt）的「已勾对金额」。
+     *
+     * <p><b>为什么必须回写</b>：认领腿挂在应收单（rc_receivable）上，
+     * 而调节表「企业已收银行未收」取的是收款单（rc_receipt），
+     * 两者靠 {@code rc_receipt.receivable_ids}（该收款单核销的应收单 id 列表）关联。
+     * 此前认领只动应收单、不动收款单 ⇒ 已认领的收款单仍被整张列为未达项
+     * （实测 146,900 中已认领 65,540 ⇒ 未达项虚增 65,540）。
+     *
+     * <p><b>为什么按金额而非布尔位</b>：一张收款单可能被多次<b>部分</b>认领
+     * （本次 146,900 只认领了 65,540）。若只置 {@code bank_matched=1}，
+     * 未认领的 81,360 会被误标为已勾对 ⇒ 由「虚增 65,540」变成「漏计 81,360」，更糟。
+     * 故累计 {@code bank_matched_amount}，未达额 = amount − bank_matched_amount。
+     *
+     * <p><b>找不到对应收款单时不报错</b>：应收单可能由开票自动挂账（source_doc_type=INVOICE_ISSUE），
+     * 未经收款单核销 ⇒ 没有可回写的收款单，属正常情形（不阻断认领）。
+     */
+    private void markReceiptMatched(RcReceivable receivable, BigDecimal amount, OpBankStatement statement) {
+        Long receivableId = receivable.getId();
+        if (receivableId == null || amount == null || amount.signum() <= 0) {
+            return;
+        }
+        // receivable_ids 形如 "700000176,700000177"（逗号分隔的应收单 id）
+        List<RcReceipt> candidates = receiptMapper.selectList(new LambdaQueryWrapper<RcReceipt>()
+                .like(RcReceipt::getReceivableIds, String.valueOf(receivableId)));
+        for (RcReceipt rc : candidates) {
+            if (!receiptCovers(rc, receivableId)) {
+                continue; // like 是模糊匹配，必须逐条精确核对 id 边界
+            }
+            BigDecimal before = nz(rc.getBankMatchedAmount());
+            BigDecimal after = before.add(amount);
+            RcReceipt upd = new RcReceipt();
+            upd.setId(rc.getId());
+            upd.setBankMatchedAmount(after);
+            // bank_serial 记最近一次勾对流水号（便于溯源；多笔时以最近一次为准）
+            upd.setBankSerial(statement.getBankSerial());
+            // 派生布尔位：全额勾对才置 1；部分勾对保持 0（语义＝「未勾完」）
+            BigDecimal total = nz(rc.getAmount());
+            upd.setBankMatched(after.compareTo(total) >= 0 ? 1 : 0);
+            receiptMapper.updateById(upd);
+            log.info("D-G5-04 收款单已勾对金额回写：receipt={} 单号={} 已勾对 {} / 合计 {}",
+                    rc.getId(), rc.getBillNo(), after, total);
+        }
+    }
+
+    /**
+     * 判断收款单是否核销了指定应收单（精确按逗号分隔的 id 列表比对，
+     * 避免 like 模糊匹配把 70000017 误判为核销了 700000176）。
+     */
+    private boolean receiptCovers(RcReceipt receipt, Long receivableId) {
+        String ids = receipt.getReceivableIds();
+        if (ids == null || ids.isBlank()) {
+            return false;
+        }
+        String target = String.valueOf(receivableId);
+        for (String part : ids.split(",")) {
+            if (target.equals(part.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1059,6 +1161,47 @@ public class BankReconcileService {
                 .in(OpBankStatement::getTransType, CREDIT_TRANS_TYPES)
                 .orderByAsc(OpBankStatement::getId);
         Page<OpBankStatement> p = statementMapper.selectPage(Page.of(pageNum, pageSize), qw);
+        return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
+    }
+
+    /**
+     * D-G5-02：可认领应收单清单（<b>银行域专用</b>，权限随域走）。
+     *
+     * <p><b>为什么要有这个端点</b>：认领弹层（{@code views/bank/BankSlip.vue}）原先借
+     * <b>应收域</b>的通用分页接口 {@code GET /api/tenant/receivable/page} 取清单，
+     * 而该端点标 {@code @RequiresPerm("receivable:list")}（应收域）；
+     * 认领动作本身 {@code POST /api/tenant/bank/reconcile/claim} 只要求
+     * {@code bank:reconcile:list}（银行域）⇒ 后端放行、前端因跨域取数被 403 卡住，
+     * <b>纯银企对账岗做不了收款认领</b>（实测潘燕 100012 认领弹层恒空）。
+     *
+     * <p><b>本端点的口径</b>：只返回「有未收余额、可被流水认领」的应收单，
+     * 且按<b>可认领金额降序</b>（让大额单排在前面，便于优先核销）。
+     * 方向与金额的最终裁定权仍在服务端 {@code claimReceipt}（余额闸 + 方向闸），
+     * 本端点只做「候选清单」，不放开任何非法动作。
+     *
+     * <p>权限：{@code bank:reconcile:list}（银企对账域）——取数权限随域走，
+     * 符合行业方案「银行对账岗的应收清单是银行域的视图」的通行做法。
+     */
+    public PageResult<RcReceivable> claimableReceivables(long pageNum, long pageSize, String keyword) {
+        LambdaQueryWrapper<RcReceivable> qw = new LambdaQueryWrapper<RcReceivable>()
+                .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
+                .ne(RcReceivable::getStatus, "DONE");
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = keyword.trim();
+            // 客户名不在本表 ⇒ 先按客户名反查客户 id，再按 id 集合过滤；
+            // 不用 like(customerId, kw)（Long 列 like 无意义且会全表扫）。
+            List<Long> custIds = customerMapper.selectList(new LambdaQueryWrapper<CrmCustomer>()
+                            .like(CrmCustomer::getCustomerName, kw))
+                    .stream().map(CrmCustomer::getId).filter(Objects::nonNull).collect(Collectors.toList());
+            qw.and(w -> {
+                w.like(RcReceivable::getBillNo, kw);
+                if (!custIds.isEmpty()) {
+                    w.or().in(RcReceivable::getCustomerId, custIds);
+                }
+            });
+        }
+        qw.orderByDesc(RcReceivable::getRemainAmount).orderByAsc(RcReceivable::getId);
+        Page<RcReceivable> p = receivableMapper.selectPage(Page.of(pageNum, pageSize), qw);
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 

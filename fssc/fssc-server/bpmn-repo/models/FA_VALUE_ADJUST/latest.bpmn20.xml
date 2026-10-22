@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_FA_VALUE_ADJUST" targetNamespace="http://fssc">
+  <bpmn:process id="FA_VALUE_ADJUST" name="资产价值调整审批流程（原值/减值/跌价档）" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:userTask id="FV_1" name="调整底稿【资产管理员】" flowable:candidateGroups="FA_ASSET_ADMIN" />
+    <bpmn:sequenceFlow id="Flow_in_FV_1" sourceRef="StartEvent_1" targetRef="FV_1" />
+    <bpmn:userTask id="FV_2" name="使用部门确认【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+    <bpmn:sequenceFlow id="Flow_in_FV_2" sourceRef="FV_1" targetRef="FV_2" />
+    <bpmn:userTask id="FV_3" name="财务审核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
+    <bpmn:sequenceFlow id="Flow_in_FV_3" sourceRef="FV_2" targetRef="FV_3" />
+    <bpmn:exclusiveGateway id="GW_FAV_AMT" name="金额授权" default="Flow_in_FV_5" />
+    <bpmn:sequenceFlow id="Flow_in_GW_FAV_AMT" sourceRef="FV_3" targetRef="GW_FAV_AMT" />
+    <bpmn:userTask id="FV_4" name="财务总监审批【财务总监】" flowable:candidateGroups="CFO" />
+    <bpmn:sequenceFlow id="Flow_GW_FAV_AMT_FV_4" sourceRef="GW_FAV_AMT" targetRef="FV_4"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 500000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:userTask id="FV_5" name="账务生效确认【资产核算岗】" flowable:candidateGroups="FA_ASSET_ACCOUNT" />
+    <bpmn:sequenceFlow id="Flow_in_FV_5" sourceRef="GW_FAV_AMT" targetRef="FV_5" />
+    <bpmn:sequenceFlow id="Flow_back_FV_4" sourceRef="FV_4" targetRef="FV_5" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="FV_5" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="FA_VALUE_ADJUST">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FV_1_di" bpmnElement="FV_1"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FV_2_di" bpmnElement="FV_2"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FV_3_di" bpmnElement="FV_3"><dc:Bounds x="596" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="GW_FAV_AMT_di" bpmnElement="GW_FAV_AMT"><dc:Bounds x="786" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FV_4_di" bpmnElement="FV_4"><dc:Bounds x="741" y="240" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FV_5_di" bpmnElement="FV_5"><dc:Bounds x="886" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="1086" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_in_FV_1_di" bpmnElement="Flow_in_FV_1"><di:waypoint x="138" y="120" /><di:waypoint x="281" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_FV_2_di" bpmnElement="Flow_in_FV_2"><di:waypoint x="281" y="120" /><di:waypoint x="471" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_FV_3_di" bpmnElement="Flow_in_FV_3"><di:waypoint x="471" y="120" /><di:waypoint x="661" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_GW_FAV_AMT_di" bpmnElement="Flow_in_GW_FAV_AMT"><di:waypoint x="661" y="120" /><di:waypoint x="806" y="122" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_FAV_AMT_FV_4_di" bpmnElement="Flow_GW_FAV_AMT_FV_4"><di:waypoint x="806" y="122" /><di:waypoint x="806" y="280" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_FV_5_di" bpmnElement="Flow_in_FV_5"><di:waypoint x="806" y="122" /><di:waypoint x="951" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_back_FV_4_di" bpmnElement="Flow_back_FV_4"><di:waypoint x="806" y="280" /><di:waypoint x="951" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="951" y="120" /><di:waypoint x="1104" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

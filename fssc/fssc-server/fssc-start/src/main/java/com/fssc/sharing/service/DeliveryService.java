@@ -189,7 +189,6 @@ public class DeliveryService {
 
     /**
      * 分页查询签收单（支持多条件筛选）。
-     * 对标 SAP MM 收货清单、用友 U8 到货签收查询。
      */
     public PageResult<OpPhysicalDelivery> page(long pageNum, long pageSize,
                                                  String status, String billNo, String expressNo,
@@ -379,7 +378,6 @@ public class DeliveryService {
 
     /**
      * 员工交单登记（含快递信息录入）。
-     * 对标 SAP MM 交货单(Goods Issue)、用友 U8 发货登记。
      */
     @Transactional(rollbackFor = Exception.class)
     public Long applyDelivery(Long billId, String expressCompany, String expressNo,

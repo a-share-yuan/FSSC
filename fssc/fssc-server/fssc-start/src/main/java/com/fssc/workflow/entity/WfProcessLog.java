@@ -21,6 +21,7 @@ import lombok.EqualsAndHashCode;
  * </ul>
  *
  * <p><b>开关与零影响</b>：由 {@code sys_config.wf.log.detailed.enabled} 控制，缺省 {@code 0}（关闭，
+ * fail-closed，与行业方案"默认不勾选"一致）。关闭时监听器<b>一个字段都不写</b>（只做一次配置读取即返回），
  * 库中零新增行，性能与行为与改造前逐字一致。
  */
 @Data

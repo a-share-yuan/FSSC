@@ -51,6 +51,7 @@ public class CustomerService {
             assertCodeUnique(e.getCustomerCode(), null);
         }
         e.setId(null);
+        // V2.2.38 B-14（K130 参考行业做法客户"未核准/核准/禁用"状态位）：建档即 PENDING，核准走 approve()
         if (e.getStatus() == null || "NORMAL".equals(e.getStatus())) e.setStatus("PENDING");
         e.setTenantId(TenantContext.getTenantId());
         mapper.insert(e);

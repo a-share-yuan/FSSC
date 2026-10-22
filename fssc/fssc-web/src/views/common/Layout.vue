@@ -28,13 +28,12 @@
           </el-button>
           <!-- P0: 待办角标 + 搜索 + 通知 + 收藏 -->
           <HeaderBadges
-            ref="headerBadgesRef"
             @search="searchVisible = true"
-            @notify="notifyVisible = !notifyVisible"
             @todo="router.push('/approval')"
             @favorites="favVisible = true"
           />
-          <NotificationCenter v-model:visible="notifyVisible" />
+          <!-- 通知铃铛唯一入口：组件自带弹层触发器，头部不再另挂一个 -->
+          <NotificationCenter />
 
           <el-dropdown @command="onCommand">
             <span class="user">{{ user?.realName || user?.username || '用户' }}</span>
@@ -44,20 +43,20 @@
                 <!-- D-DEC-302：「角色化首页」入口已下架（路由与组件保留，直接访问 /role-dashboard 仍可用）。
                      原因＝四项 KPI 取数键与后端返回不符（恒 0）＋四项为写死的展示值（D-DEC-308），
                      真要修等于重做整页取数与角色模型，而重做后独有内容与报表看板/流程监控大屏重叠。 -->
-                <el-dropdown-item v-if="canFlowMonitor" command="flow-monitor">流程监控大屏</el-dropdown-item>
+                <el-dropdown-item v-if="canFlowMonitor && openable('/flow-monitor')" command="flow-monitor">流程监控大屏</el-dropdown-item>
                 <!-- G3 共享作业层新视图：同属「无 sys_menu 承载的入口页」，按各页首屏接口权限码收敛 -->
-                <el-dropdown-item v-if="canTaskPool" command="shared-pool">共享任务池（五视图）</el-dropdown-item>
-                <el-dropdown-item v-if="canFlowMonitor" command="shared-ops">共享作业控制台</el-dropdown-item>
-                <el-dropdown-item v-if="canFlowMonitor" command="task-quality">任务质量报表</el-dropdown-item>
-                <el-dropdown-item v-if="canFlowMonitor" command="flow-log">流程日志中心</el-dropdown-item>
-                <el-dropdown-item v-if="canFlowMonitor" command="handover">流程移交</el-dropdown-item>
-                <el-dropdown-item v-if="canBizProgress" command="biz-progress">业务进度看板</el-dropdown-item>
+                <el-dropdown-item v-if="canTaskPool && openable('/sharing/shared-pool')" command="shared-pool">共享任务池（五视图）</el-dropdown-item>
+                <el-dropdown-item v-if="canFlowMonitor && openable('/sharing/shared-ops')" command="shared-ops">共享作业控制台</el-dropdown-item>
+                <el-dropdown-item v-if="canFlowMonitor && openable('/sharing/task-quality')" command="task-quality">任务质量报表</el-dropdown-item>
+                <el-dropdown-item v-if="canFlowMonitor && openable('/flow-center/log')" command="flow-log">流程日志中心</el-dropdown-item>
+                <el-dropdown-item v-if="canFlowMonitor && openable('/flow-center/handover')" command="handover">流程移交</el-dropdown-item>
+                <el-dropdown-item v-if="canBizProgress && openable('/biz-progress')" command="biz-progress">业务进度看板</el-dropdown-item>
                 <el-dropdown-item divided command="my-stats">效率统计</el-dropdown-item>
                 <el-dropdown-item command="export-preview">导出预览</el-dropdown-item>
                 <el-dropdown-item command="toggle-watermark">{{ watermarkEnabled ? '关闭水印' : '开启水印' }}</el-dropdown-item>
                 <el-dropdown-item divided command="onboarding">新手引导</el-dropdown-item>
                 <el-dropdown-item command="help">帮助中心</el-dropdown-item>
-                <el-dropdown-item v-if="canMonthEnd" command="month-end">月结看板</el-dropdown-item>
+                <el-dropdown-item v-if="canMonthEnd && openable('/month-end')" command="month-end">月结看板</el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -69,8 +68,11 @@
       <div class="breadcrumb-bar">
         <el-breadcrumb :separator-icon="ArrowRight">
           <el-breadcrumb-item :to="{ path: '/dashboard' }">首页</el-breadcrumb-item>
-          <el-breadcrumb-item v-if="domainLabel">{{ domainLabel }}</el-breadcrumb-item>
-          <el-breadcrumb-item>{{ $route.meta.title || '当前页' }}</el-breadcrumb-item>
+          <el-breadcrumb-item
+            v-for="(item, i) in breadcrumbChain"
+            :key="i"
+            :to="i < breadcrumbChain.length - 1 && item.path ? { path: item.path } : undefined"
+          >{{ item.title }}</el-breadcrumb-item>
         </el-breadcrumb>
       </div>
 
@@ -90,7 +92,8 @@
     </el-container>
 
     <!-- 公告弹窗提醒 -->
-    <el-dialog v-model="noticeVisible" title="系统公告" width="520px" :close-on-click-modal="false">
+    <!-- append-to-body：遮罩独立挂到 body，关闭后彻底移除，避免嵌套在 flex .layout 内时遮罩层残留把整页盖成"内容全没了" -->
+    <el-dialog v-model="noticeVisible" title="系统公告" width="520px" :close-on-click-modal="false" append-to-body :close-on-press-escape="true" @closed="onNoticeClosed">
       <template v-if="currentNotice">
         <h3 style="margin: 0 0 8px">{{ currentNotice.noticeTitle }}</h3>
         <div style="color: #666; font-size: 13px; margin-bottom: 12px">
@@ -158,6 +161,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Key, Sunny, Moon } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { store, getMenuTree, logout, noticeApi } from '../../api'
+import { setMenuTree, collapseSingleLeafGroups, pathDenyReason } from '../../router/pathAccess'
 import MenuTree from '../../components/MenuTree.vue'
 import HeaderBadges from '../../components/HeaderBadges.vue'
 import SearchCommand from '../../components/SearchCommand.vue'
@@ -186,9 +190,7 @@ const searchVisible = ref(false)
 // R5-16: 弱网降级
 const { isSlowNetwork, degradationLevel, degradationConfig } = useNetworkDegradation()
 const netNoticeDismissed = ref(false)
-const notifyVisible = ref(false)
 const favVisible = ref(false)
-const headerBadgesRef = ref(null)
 const favoritesRef = ref(null)
 const statsVisible = ref(false)
 const exportVisible = ref(false)
@@ -220,6 +222,8 @@ const { isDark, toggle: toggleTheme } = useTheme()
  */
 const canFlowMonitor = hasPerm('wf:instance:list')
 const canMonthEnd = hasPerm('gl:monthclose:list')
+/** 入口是否真能打开：与路由守卫同一把钥匙（一个权限码管六个不同判据的页面会给出点得动却被弹回的假入口） */
+const openable = (p) => !pathDenyReason(p)
 // G3 任务池五视图是业务角色日常工作台，权限码为 wf:task:list（与 /wf/pool/mine 同族）
 const canTaskPool = hasPerm('wf:task:list')
 // D-DEC-303：业务进度看板的两条取数腿分别是 dashboard:view（付款进度）与 exp:bill:list（在途单量），
@@ -249,10 +253,10 @@ useKeyboard({
   'ctrl+e': () => { statsVisible.value = true },
   'ctrl+h': () => { toggleTheme() },
   'f1': () => { helpVisible.value = true },
-  'alt+1': () => { router.push('/dashboard') },
-  'alt+2': () => { router.push('/approval') },
-  'alt+3': () => { router.push('/sharing/task-pool') },
-  'alt+4': () => { if (canFlowMonitor) router.push('/flow-monitor') },
+  'alt+1': () => { if (openable('/dashboard')) router.push('/dashboard') },
+  'alt+2': () => { if (openable('/approval')) router.push('/approval') },
+  'alt+3': () => { if (openable('/sharing/task-pool')) router.push('/sharing/task-pool') },
+  'alt+4': () => { if (canFlowMonitor && openable('/flow-monitor')) router.push('/flow-monitor') },
 })
 
 function addCurrentPageToFav() {
@@ -266,9 +270,9 @@ function addCurrentPageToFav() {
   ElMessage.success('已收藏当前页面')
 }
 
-// 面包屑：路径首段 → 业务域标签
+// 面包屑以登录菜单树为准（菜单挂在哪，面包屑就走哪），仅菜单树无匹配时按路径首段兜底
 const PATH_DOMAIN_MAP = {
-  expense: '费用报账', approval: '费用报账', wf: '费用报账',
+  expense: '费用报账', approval: '流程中心', wf: '流程中心',
   pay: '付款与对账', 'corp-pay': '付款与对账', contract: '付款与对账',
   purchase: '采购管理', invoice: '发票管理',
   sharing: '共享运营',
@@ -278,9 +282,42 @@ const PATH_DOMAIN_MAP = {
   report: '管理报表', reports: '管理报表',
   op: '财务核算', glex: '财务核算', bank: '财务核算', customer: '主数据管理',
 }
-const domainLabel = computed(() => {
+
+function normMenuPath(p) {
+  if (!p) return ''
+  const s = String(p).split('?')[0].trim()
+  if (!s) return ''
+  return ('/' + s.replace(/^\/+/, '')).replace(/\/+$/, '') || '/'
+}
+
+function findMenuChain(nodes, targetPath) {
+  let best = null
+  const walk = (list, ancestors) => {
+    for (const n of list || []) {
+      const chain = [...ancestors, n]
+      const p = normMenuPath(n.path)
+      if (p && p === targetPath) return chain
+      if (p && (targetPath === p || targetPath.startsWith(p + '/'))) {
+        if (!best || p.length > normMenuPath(best[best.length - 1].path).length) best = chain
+      }
+      const hit = walk(n.children, chain)
+      if (hit) return hit
+    }
+    return null
+  }
+  return walk(nodes, []) || best
+}
+
+const breadcrumbChain = computed(() => {
+  const target = normMenuPath(route.path)
+  const chain = findMenuChain(menuTree.value, target)
+  if (chain && chain.length) {
+    return chain.map((n) => ({ title: n.menuName, path: normMenuPath(n.path) }))
+  }
   const seg = route.path.split('/')[1]
-  return PATH_DOMAIN_MAP[seg] || ''
+  const title = route.meta.title || '当前页'
+  const domain = PATH_DOMAIN_MAP[seg]
+  return domain && domain !== title ? [{ title: domain }, { title }] : [{ title }]
 })
 
 // 公告弹窗
@@ -291,6 +328,11 @@ const currentNotice = computed(() => notices.value[currentIdx.value] || null)
 
 function closeNotice() {
   noticeVisible.value = false
+  notices.value = []
+  currentIdx.value = 0
+}
+// 任意关闭路径（X / ESC / 关闭按钮）统一兜底清理，避免残留状态
+function onNoticeClosed() {
   notices.value = []
   currentIdx.value = 0
 }
@@ -309,8 +351,11 @@ onMounted(async () => {
   isMobile.value = mq.matches
   mq.addEventListener('change', onMq)
   try {
-    const raw = await getMenuTree()
+    // 只挂一个页面的分组就地收敛：侧栏与面包屑共用这一份，两处层级一致
+    const raw = collapseSingleLeafGroups(await getMenuTree())
     menuTree.value = raw
+    // 回灌给页面可达性判据（router/pathAccess），避免入口卡与守卫各判一套
+    setMenuTree(raw)
   } catch (e) {
     // 菜单树拉取失败不阻塞页面
     console.warn('菜单树加载失败', e.message)

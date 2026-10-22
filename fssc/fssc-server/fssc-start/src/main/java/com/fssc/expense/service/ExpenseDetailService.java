@@ -57,6 +57,7 @@ public class ExpenseDetailService {
         if (!"DRAFT".equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿可维护差旅行");
         }
+        assertTravelRows(travels);
         expTravelMapper.delete(new LambdaQueryWrapper<ExpTravel>().eq(ExpTravel::getBillId, billId));
         // 境外凭证合规⑤（V1.3.14）：开关关闭时补贴超标并入个税标记跳过（回退旧行为）
         boolean overseasCompliance = isOverseasComplianceEnabled();
@@ -113,6 +114,48 @@ public class ExpenseDetailService {
                 log.info("差旅行补贴按天自动核算 billId={} 共 {} 行按 天数×补贴/日 生成出差补贴", billId, allowanceAutoCount);
             }
         }
+    }
+
+    /**
+     * 服务端兜底：前端已禁用倒置日期，但接口直调仍可写入。
+     * 重复行程按「姓名优先、无姓名用 travelerId」判定，与 PreApply.travelDup 同口径。
+     */
+    private void assertTravelRows(List<ExpTravel> travels) {
+        if (travels == null || travels.isEmpty()) return;
+        for (int i = 0; i < travels.size(); i++) {
+            ExpTravel t = travels.get(i);
+            if (t.getBeginDate() != null && t.getEndDate() != null
+                    && t.getEndDate().isBefore(t.getBeginDate())) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "第 " + (i + 1) + " 行行程结束日期早于开始日期");
+            }
+        }
+        for (int i = 0; i < travels.size(); i++) {
+            ExpTravel a = travels.get(i);
+            String aKey = travelIdentity(a);
+            if (aKey == null || a.getBeginDate() == null) continue;
+            for (int j = i + 1; j < travels.size(); j++) {
+                ExpTravel b = travels.get(j);
+                String bKey = travelIdentity(b);
+                if (bKey == null || b.getBeginDate() == null) continue;
+                if (aKey.equals(bKey) && a.getBeginDate().equals(b.getBeginDate())) {
+                    throw new BizException(ErrorCode.PARAM_INVALID,
+                            "同一出差人同一天存在重复行程：" + travelDisplayName(a)
+                                    + "（" + a.getBeginDate() + "）");
+                }
+            }
+        }
+    }
+
+    private String travelIdentity(ExpTravel t) {
+        String name = t.getTravelerName();
+        if (name != null && !name.isBlank()) return "NAME:" + name.trim();
+        return t.getTravelerId() == null ? null : "ID:" + t.getTravelerId();
+    }
+
+    private String travelDisplayName(ExpTravel t) {
+        String name = t.getTravelerName();
+        return name == null || name.isBlank() ? String.valueOf(t.getTravelerId()) : name;
     }
 
     /**

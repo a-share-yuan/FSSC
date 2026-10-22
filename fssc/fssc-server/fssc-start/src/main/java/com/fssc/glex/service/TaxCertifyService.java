@@ -24,6 +24,7 @@ import java.util.List;
  * 管理进项发票认证全生命周期：
  * 待认证(PENDING) → 已认证(CERTIFIED) → 已抵扣(DEDUCTED) → [可转出(TRANSFERRED)]
  * <p>
+ * 参考行业做法税务云进项认证模块。
  */
 @Slf4j
 @Service

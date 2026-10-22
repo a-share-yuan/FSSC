@@ -94,7 +94,7 @@
     <el-dialog v-model="detailVisible" :title="$t('system.intLog.ttlCallDetail')" width="800px" destroy-on-close>
       <template v-if="detailRow">
         <el-descriptions :column="2" border>
-          <el-descriptions-item :label="$t('field.time')">{{ detailRow.createTime }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('field.time')">{{ formatDateTime(detailRow.createTime) }}</el-descriptions-item>
           <el-descriptions-item :label="$t('system.common.colCategory')">{{ extCategoryLabel(detailRow.category) }}</el-descriptions-item>
           <el-descriptions-item :label="$t('system.common.colIfCode')">{{ detailRow.interfaceCode }}</el-descriptions-item>
           <el-descriptions-item :label="$t('system.intLog.colHttpMethod')">{{ detailRow.method }}</el-descriptions-item>

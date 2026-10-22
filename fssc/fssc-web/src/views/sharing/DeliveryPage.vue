@@ -85,7 +85,7 @@
                    前端同口径隐藏入口并给出原因，避免"点了必失败"；billStatus 由服务端批量回填。 -->
               <template v-if="row.status === 'PENDING'">
                 <template v-if="!isDraftLike(row)">
-                  <el-button link type="primary" @click="sign(row)">{{ $t('sharing.delivery.btnSign') }}</el-button>
+                  <el-button link type="primary" v-prevent-double-click @click="sign(row)">{{ $t('sharing.delivery.btnSign') }}</el-button>
                   <el-button link type="danger" @click="openReject(row)">{{ $t('sharing.delivery.btnReject') }}</el-button>
                 </template>
                 <el-tooltip v-else placement="top" :content="$t('sharing.delivery.hintDraftBlocked', { v1: row.billStatus })">
@@ -231,7 +231,7 @@
           <el-table-column :label="$t('common.operation')" width="80" fixed="right">
             <template #default="{ row }">
               <!-- R5-D-245：档案上架入口（扫码/输入位置）——未上架条码可操作，已上架只读展示 -->
-              <el-button v-if="row.status !== 'SHELVED'" link type="primary" @click="shelveBarcode(row)">{{ $t('sharing.delivery.btnShelve') }}</el-button>
+              <el-button v-if="row.status !== 'SHELVED'" link type="primary" v-prevent-double-click @click="shelveBarcode(row)">{{ $t('sharing.delivery.btnShelve') }}</el-button>
               <span v-else style="color:#909399; font-size:12px">{{ $t('sharing.delivery.optShelved') }}</span>
             </template>
           </el-table-column>
@@ -434,26 +434,34 @@ function isDraftLike(row) {
   return ['DRAFT', 'CANCELLED'].includes(row?.billStatus)
 }
 
+// 签收与上架都用 ElMessageBox.prompt：连点两次会在 body 上叠出两层同款弹窗，
+// 确认后只关掉最上面一层，下面那层仍在（用户观感「点了确认签收对话框一直没关闭」）。
+// 用模块级锁拦住重入，不再另造弹窗机制。
+let signPromptOpen = false
 async function sign(row) {
-  // R5-D-241：后端签收已支持签收备注（signRemark），前端由 confirm 改为 prompt 收集留痕；
-  // 用户取消（undefined）时直接返回，不再把 cancel 当错误弹。
-  const { value: signRemark } = await ElMessageBox.prompt(
-    t('sharing.delivery.confirmSign', { v1: row.billNo }), t('sharing.delivery.titleSignConfirm'), {
-      inputType: 'textarea',
-      inputPlaceholder: t('sharing.delivery.phSignRemark'),
-      confirmButtonText: t('sharing.delivery.btnConfirmSign'),
-      cancelButtonText: t('common.cancel'),
-      inputValidator: (v) => ((v || '').length > 200 ? t('sharing.delivery.errSignRemark') : true),
-    }).catch(() => ({}))
-  if (signRemark === undefined) return // 用户取消
+  if (signPromptOpen) return
+  signPromptOpen = true
   try {
+    // R5-D-241：后端签收已支持签收备注（signRemark），前端由 confirm 改为 prompt 收集留痕；
+    // 用户取消（undefined）时直接返回，不再把 cancel 当错误弹。
+    const { value: signRemark } = await ElMessageBox.prompt(
+      t('sharing.delivery.confirmSign', { v1: row.billNo }), t('sharing.delivery.titleSignConfirm'), {
+        inputType: 'textarea',
+        inputPlaceholder: t('sharing.delivery.phSignRemark'),
+        confirmButtonText: t('sharing.delivery.btnConfirmSign'),
+        cancelButtonText: t('common.cancel'),
+        inputValidator: (v) => ((v || '').length > 200 ? t('sharing.delivery.errSignRemark') : true),
+      }).catch(() => ({}))
+    if (signRemark === undefined) return // 用户取消
     await deliveryApi.sign(row.id, { signRemark })
     ElMessage.success(t('sharing.delivery.msgSignedOk') + row.billNo)
     load()
   } catch (e) { ElMessage.error(e.message) }
+  finally { signPromptOpen = false }
 }
 
 async function doScanSign() {
+  if (scanLoading.value) return
   if (!scanValue.value?.trim()) {
     ElMessage.warning(t('sharing.delivery.errScanInput'))
     return
@@ -620,20 +628,24 @@ async function doGenerateBarcode() {
 }
 
 // R5-D-245：档案上架（扫码/输入位置），走后端 /barcode/shelve
+let shelvePromptOpen = false
 async function shelveBarcode(row) {
-  const { value: location } = await ElMessageBox.prompt(
-    t('sharing.delivery.promptShelve', { v1: row.barcode }), t('sharing.delivery.titleShelve'), {
-      inputPlaceholder: t('sharing.delivery.phShelveLocation'),
-      confirmButtonText: t('sharing.delivery.btnConfirmShelve'),
-      cancelButtonText: t('common.cancel'),
-      inputValidator: (v) => (!v || !v.trim() ? t('sharing.delivery.errShelveRequired') : (v.trim().length > 64 ? t('sharing.delivery.errShelveTooLong') : true)),
-    }).catch(() => ({}))
-  if (location === undefined) return // 用户取消
+  if (shelvePromptOpen) return
+  shelvePromptOpen = true
   try {
+    const { value: location } = await ElMessageBox.prompt(
+      t('sharing.delivery.promptShelve', { v1: row.barcode }), t('sharing.delivery.titleShelve'), {
+        inputPlaceholder: t('sharing.delivery.phShelveLocation'),
+        confirmButtonText: t('sharing.delivery.btnConfirmShelve'),
+        cancelButtonText: t('common.cancel'),
+        inputValidator: (v) => (!v || !v.trim() ? t('sharing.delivery.errShelveRequired') : (v.trim().length > 64 ? t('sharing.delivery.errShelveTooLong') : true)),
+      }).catch(() => ({}))
+    if (location === undefined) return // 用户取消
     await deliveryApi.shelve({ barcode: row.barcode, location: location.trim() })
     ElMessage.success(t('sharing.delivery.msgShelved') + row.barcode)
     loadBarcodes()
   } catch (e) { ElMessage.error(e.message) }
+  finally { shelvePromptOpen = false }
 }
 
 // ==================== Tab Change ====================

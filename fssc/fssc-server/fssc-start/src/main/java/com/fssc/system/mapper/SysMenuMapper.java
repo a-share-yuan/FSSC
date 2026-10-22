@@ -15,8 +15,14 @@ import java.util.List;
 @Mapper
 public interface SysMenuMapper extends BaseMapper<SysMenu> {
 
-    /** 用户经角色关联的菜单ID集合（直接角色 ∪ 用户组派生角色；租户条件由拦截器注入） */
+    /**
+     * 用户经角色关联的菜单ID集合（直接角色 ∪ 用户组派生角色；租户条件由拦截器注入）
+     * <p>★A-01a/A-01b：与 {@code SysUserMapper.selectPerms} 同口径 —— 只认启用角色
+     * 挂在启用且未软删菜单上的授权，避免「菜单树已过滤、勾选回显仍带出死节点」。
+     */
     @Select("select distinct rm.menu_id from sys_role_menu rm " +
+            "join sys_menu m on m.id = rm.menu_id and m.status = 1 and m.del_flag = 0 " +
+            "join sys_role r on r.id = rm.role_id and r.status = 'NORMAL' " +
             "where rm.role_id in (" +
             "  select role_id from sys_user_role where user_id = #{userId} " +
             "  union " +

@@ -1,8 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { store, getMenuTree } from './api'
-import { hasAnyPerm, isSuperPerm } from './utils/perm'
-import { ROUTE_PERMS } from './router/routePerms'
+import { store } from './api'
+import { OPEN_PATHS, pathDenyReason, ensureMenuPaths } from './router/pathAccess'
 
 // 按业务域拆分的路由模块
 import expenseRoutes from './router/routes/expense'
@@ -86,27 +85,9 @@ const router = createRouter({ history: createWebHashHistory(), routes })
 //      覆盖映射表 menuOnly 路径）。拉取失败 fail-open（可用性优先，后端 API 权限闸仍在）。
 // 放行例外：H5 端页面（深链详情由后端按单据参与人校验）、工作台（拦截回落点，必须可达）、
 // 个人中心 / 流程导航地图（工作台卡片全员入口）。
-const OPEN_PATHS = new Set(['/workbench', '/profile', '/process-nav'])
-
-let _menuPathCache = { token: '', promise: null }
-function menuPathSet() {
-  if (_menuPathCache.token !== store.token) _menuPathCache = { token: store.token, promise: null }
-  if (!_menuPathCache.promise) {
-    _menuPathCache.promise = getMenuTree()
-      .then((tree) => {
-        const s = new Set()
-        const walk = (ns) => (ns || []).forEach((n) => {
-          if (n.path) s.add(String(n.path).startsWith('/') ? n.path : '/' + n.path)
-          walk(n.children)
-        })
-        walk(tree)
-        return s
-      })
-      .catch(() => null)
-  }
-  return _menuPathCache.promise
-}
-
+// 「我的待办/已办/我发起的/我的抄送」属本人视角自助页：对应后端端点（/tenant/workbench/**、
+// /wf/query/cc/mine）按当前登录人过滤、不设权限码；其中 todo/done/cc 的 sys_menu 行已软删，
+// 菜单树兜底永不命中 ⇒ 非超管一律被拦。页面级无权可收，数据面由后端本人视角兜底。
 function denyToWorkbench(msg) {
   ElMessage.warning(msg || '无权限访问该页面，请联系管理员')
   return '/workbench'
@@ -124,28 +105,11 @@ router.beforeEach(async (to) => {
     ElMessage.warning('该页面仅平台管理员可用，已返回工作台')
     return store.user ? '/workbench' : '/login'
   }
-  // ===== 页面级权限三级判定 =====
-  if (to.meta.terminal === 'H5' || OPEN_PATHS.has(to.path)) return true
-  if (isSuperPerm()) return true
-  // ② 路由自声明 meta.perms
-  const need = to.meta?.perms
-  if (Array.isArray(need) && need.length) {
-    return hasAnyPerm(need) ? true : denyToWorkbench()
-  }
-  // ③ sys_menu 权威映射（perms 多码任一命中 / feature_code 功能开关）
-  const entry = ROUTE_PERMS[to.path]
-  if (entry && Array.isArray(entry.perms) && entry.perms.length) {
-    return hasAnyPerm(entry.perms) ? true : denyToWorkbench()
-  }
-  if (entry && entry.feature) {
-    const feats = store.user?.features || []
-    if (!feats.includes(entry.feature)) return denyToWorkbench('当前账号未开通该功能，已返回工作台')
-    return true
-  }
-  // ④ 菜单树兜底（含映射表 menuOnly 路径的角色授权判定）
-  const paths = await menuPathSet()
-  if (paths && paths.size && !paths.has(to.path)) return denyToWorkbench()
-  return true
+  // ===== 页面级权限判定：判据在 router/pathAccess.js，与页内入口卡共用同一把钥匙 =====
+  await ensureMenuPaths()
+  const deny = pathDenyReason(to.path, to.meta)
+  if (!deny) return true
+  return denyToWorkbench(deny === 'feature' ? '当前账号未开通该功能，已返回工作台' : undefined)
 })
 
 export default router

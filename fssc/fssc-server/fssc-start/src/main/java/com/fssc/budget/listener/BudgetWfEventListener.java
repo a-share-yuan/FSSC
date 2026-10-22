@@ -16,6 +16,7 @@ import java.util.Set;
 /**
  * 预算方案审批收尾（WfBizAction）：BG_SCHEME 流程结束后同步方案状态。
  * 缺陷修复（E2E 2026-09-17）：预算域此前无 ended 收尾——审批通过后 bg_scheme 滞留 APPROVING，
+ * 与 Flowable 已结束的事实不一致。对齐行业方案 预算管理：
  * 审批通过 → APPROVED（待下达，由预算管理员执行 schemeIssue 转 ISSUED）；
  * 审批驳回 → DRAFT（与 BudgetSchemeBizAction 同值幂等，可改后重新提交；
  * 不置 REJECTED——schemeSubmit 仅接受 DRAFT，REJECTED 会成为无出口死态）。

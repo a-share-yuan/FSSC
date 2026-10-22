@@ -83,7 +83,7 @@
 import { bizTypeLabel } from '@/constants/enums'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { imageApi, userApi } from '../../api'
+import { imageApi, userApi, store } from '../../api'
 import FileViewer from '../../components/FileViewer.vue'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
@@ -173,7 +173,8 @@ async function del(row) {
 }
 
 onMounted(() => {
-  userApi.page({ pageNum: 1, pageSize: 200 }).then((d) => { users.value = d?.list || [] }).catch(() => {})
+  // P0 修复（2026-10-21）：默认只加载同公司人员
+  userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId }).then((d) => { users.value = d?.list || [] }).catch(() => {})
   load()
 })
 

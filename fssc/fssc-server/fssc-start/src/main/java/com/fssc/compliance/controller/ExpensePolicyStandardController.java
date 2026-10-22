@@ -26,6 +26,7 @@ public class ExpensePolicyStandardController {
 
     /**
      *
+     * <p>同类系统的费用标准<b>没有 Version 表</b>——版本靠标准主表上的
      * {@code effective_date} 表达，查询时按期间取「当期已生效且最新」的一条。
      * 本库的 {@code expense_policy_standard} 已有 {@code effective_date}/{@code std_status} 两列，
      * 但缺「按期间选版本」的入口，导致手册 G7/POL 幕的「政策→标准→版本」第三层走不通。
@@ -91,6 +92,7 @@ public class ExpensePolicyStandardController {
         return a.compareTo(b);
     }
 
+    /** 解析 yyyyMM / yyyy-MM 为该期间最后一天（通行口径：期间内已生效即适用）。 */
     private static java.time.LocalDate parsePeriodEnd(String period) {
         String p = period.trim().replace("-", "");
         if (p.length() != 6) {

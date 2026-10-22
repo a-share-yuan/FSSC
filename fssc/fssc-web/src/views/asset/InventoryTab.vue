@@ -128,7 +128,7 @@
         <template #default="{ row }">{{ fmt(row.amount) }}</template>
       </el-table-column>
       <el-table-column prop="status" label="状态" width="90" align="center" />
-      <el-table-column prop="createTime" label="发生时间" width="160" />
+      <el-table-column prop="createTime" label="发生时间" width="160" :formatter="(r, c, v) => formatDateTime(v)" />
     </el-table>
     <TablePager :pager="movesPager" @change="loadMoves" />
   </el-drawer>
@@ -137,7 +137,7 @@
 <script setup>
 import { ref, computed, inject, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { showRowDetail } from '@/utils/format'
+import { showRowDetail, formatDateTime } from '@/utils/format'
 import { assetApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { useTablePager } from '../../composables/useTablePager'
@@ -264,7 +264,7 @@ async function doInvScrap(row) {
 async function doInvCheck(row) {
   try {
     const { value: diffQty } = await ElMessageBox.prompt('输入盘点差异数量（正=盘盈/负=盘亏）', '盘点差异处理（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^-?\d+(\.\d+)?$/, inputErrorMessage: '请输入数量' })
-    await assetApi.inventoryPhysicalCheck(invKey(row), Number(diffQty), '前端盘点差异')
+    await assetApi.inventoryPhysicalCheck(invKey(row), Number(diffQty), '实物盘点差异')
     ElMessage.success('盘点差异已提交审批'); loadInventory()
   } catch (e) { /* cancelled */ }
 }

@@ -52,6 +52,7 @@ public class TrTransferService {
             throw new BizException(ErrorCode.PARAM_INVALID, "调拨金额必须大于 0");
         }
         if (transfer.getStatus() == null) transfer.setStatus("DRAFT");
+        // 整改(20260917, DEV-008/VER-016)：创建即生成单号（行业方案最佳实践：单据创建即有业务主键），
         // 此前 transfer_no 恒为空导致 wf_instance.biz_no 无法回写。
         if (!StringUtils.hasText(transfer.getTransferNo())) {
             String date = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));

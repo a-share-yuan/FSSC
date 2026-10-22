@@ -33,9 +33,11 @@ import java.util.function.Supplier;
  *
  * <p><b>为什么需要它</b>：单据侧早有冷热分离（{@code exp_bill*_cold}，见 {@code ColdArchiveService}），
  * 流程侧一直<b>没有</b>对应机制——{@code wf_instance / wf_task / wf_task_history} 只增不减，
+ * 越滚越大。通行口径：归档"完成 X 月前"的流程数据，且 <b>X ≤ 3（强制上限）</b>。
  *
  * <p><b>搬移口径</b>：{@code wf_instance.status} 已终态（{@link #TERMINAL_STATUSES}）<b>且</b>
  * {@code end_time < now - N 个月}。N 取 {@code sys_config.wf.archive.months}，缺省 3、<b>硬钳 &le; 3</b>
+ * （即使配了 6 也只当 3 用——上限是通行口径的强制项，不是建议项）。
  *
  * <p><b>两道闸（缺省即关，零行为变化）</b>：
  * <ol>
@@ -70,6 +72,7 @@ public class WfInstanceArchiveJob {
     private static final String CFG_BATCH_LIMIT = "wf.archive.batch.limit";
 
     private static final int DEFAULT_MONTHS = 3;
+    /** 通行口径强制上限：X ≤ 3 */
     private static final int MAX_MONTHS = 3;
     private static final int DEFAULT_BATCH_LIMIT = 200;
 
@@ -273,6 +276,7 @@ public class WfInstanceArchiveJob {
         return sb.toString();
     }
 
+    /** 月数硬钳：通行口径 X ≤ 3，且至少 1 个月；非法/越界一律收敛到合法区间 */
     private int clampMonths(int raw) {
         if (raw < 1) {
             return DEFAULT_MONTHS;

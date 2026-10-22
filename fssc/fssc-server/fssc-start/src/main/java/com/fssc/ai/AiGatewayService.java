@@ -524,7 +524,7 @@ public class AiGatewayService {
         try {
             return objectMapper.readTree(json == null || json.isBlank() ? "{}" : json);
         } catch (Exception e) {
-            return objectMapper.createObjectNode().put("code", -1).put("msg", "响应非 JSON");
+            return objectMapper.createObjectNode().put("code", -1).put("msg", "服务返回内容无法解析");
         }
     }
 

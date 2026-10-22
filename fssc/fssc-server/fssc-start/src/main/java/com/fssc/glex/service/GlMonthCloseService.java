@@ -281,6 +281,7 @@ public class GlMonthCloseService {
 
         // 合规整改( )：月结前置校验——该期间+公司存在未过账(DRAFT)凭证时禁止月结，
         // 须先完成凭证审核过账（DRAFT→POSTED）再发起月结，防止未过账凭证漏出本期账。
+        // V2.2.38 K128/K129（参考行业做法结账中心"复选项全勾才可结账"）：月结前校验检查闸清单——
         // 该公司当期必须已建清单且全部 DONE，缺行/未勾齐一律拦截（清单由「月结反结账」同接口维护）。
         com.fssc.glex.entity.GlCloseCheckItem chkProbe = closeCheckItemMapper.selectOne(
                 new LambdaQueryWrapper<com.fssc.glex.entity.GlCloseCheckItem>()
@@ -654,6 +655,7 @@ public class GlMonthCloseService {
 
         // ③ 反结账顺序守卫（方案A·对齐厂商口径 2026-09-25）：仅要求「下一期间尚未结账」，
         //   须从最后已结账期间逐期回退；下期有凭证不再拦截（反结账后按期继续核算为常态，
+        //   原「下期零凭证」守卫超出同类系统/通行口径，致显式落期单据的补生成全链死锁 D-DEC-15）。
         int nextYear = month == 12 ? year + 1 : year;
         int nextMonth = month == 12 ? 1 : month + 1;
         var nextRec = periodService.periodOf(comp, nextYear, nextMonth);

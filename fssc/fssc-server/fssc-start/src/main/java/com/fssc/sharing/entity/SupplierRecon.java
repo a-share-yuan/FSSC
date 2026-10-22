@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 
 /**
  * 供应商对账单（supplier_recon）。
- * 参照金蝶K/3 Cloud应付管理 + SAP F.41 + 用友U8+应付管理最佳实践。
+ * 参照行业方案应付管理 + 供应商对账 + 行业方案应付管理最佳实践。
  * 状态流转：DRAFT 已生成 → SENT 对账函已发送 → CONFIRMED 双方确认 / DIFF 有差异 → RESOLVED 差异已处理。
  * 供应商确认：PENDING 待确认 → CONFIRMED 供应商确认一致 / REJECTED 供应商有异议。
  */

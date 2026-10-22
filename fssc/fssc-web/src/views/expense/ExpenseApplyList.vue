@@ -81,8 +81,8 @@
           <el-descriptions-item :label="$t('expense.common.colTitle')" :span="2">{{ detail.title }}</el-descriptions-item>
           <el-descriptions-item :label="$t('expense.common.colApplicant')">{{ detail.applyUserName }}</el-descriptions-item>
           <el-descriptions-item :label="$t('field.amount')">{{ formatMoney(detail.totalAmount) }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('common.createTime')">{{ detail.createTime }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('common.updateTime')">{{ detail.updateTime }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('common.createTime')">{{ formatDateTime(detail.createTime) }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('common.updateTime')">{{ formatDateTime(detail.updateTime) }}</el-descriptions-item>
           <el-descriptions-item :label="$t('common.remark')" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
         </el-descriptions>
       </div>
@@ -118,6 +118,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
+// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 // R5-13: 快捷键
@@ -225,7 +226,9 @@ async function onViewDetail(row) {
   detailLoading.value = true
   detail.value = {}
   try {
-    detail.value = await billApi.detail(row.id) || {}
+    const env = await billApi.detail(row.id) || {}
+    // 接口回的是信封 {attaches, bill, lines} ⇒ 详情按 bill 那层平铺取值（同仓惯例）
+    detail.value = env.bill || {}
   } catch (e) {
     ElMessage.error(e.message || t('expense.applyList.msgLoadDetailFailed'))
   } finally {

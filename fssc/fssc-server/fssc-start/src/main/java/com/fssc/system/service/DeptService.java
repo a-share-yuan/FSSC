@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.common.util.AssertUtil;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.OrgVisibility;
+import com.fssc.framework.security.UserContext;
 import com.fssc.system.entity.SysDept;
 import com.fssc.system.mapper.SysDeptMapper;
 import lombok.RequiredArgsConstructor;
@@ -18,13 +21,37 @@ public class DeptService {
 
     private final SysDeptMapper sysDeptMapper;
 
+    /**
+     * 全租户部门树（无公司参数时的入口）。
+     *
+     * <p>非"可跨公司"账号只返回本公司部门——改前任何登录用户都能拿到全部 55 个部门、
+     * 覆盖 9 家法人主体，组织选择器里因此能看到别家公司。</p>
+     */
     public List<SysDept> tree() {
-        return sysDeptMapper.selectList(new LambdaQueryWrapper<SysDept>()
-                .orderByAsc(SysDept::getCompanyId).orderByAsc(SysDept::getAncestors).orderByAsc(SysDept::getSort));
+        LoginUser u = UserContext.get();
+        LambdaQueryWrapper<SysDept> qw = new LambdaQueryWrapper<>();
+        if (!OrgVisibility.canSeeAllCompanies(u)) {
+            qw.eq(SysDept::getCompanyId, u.getCompanyId());
+        }
+        qw.orderByAsc(SysDept::getCompanyId).orderByAsc(SysDept::getAncestors).orderByAsc(SysDept::getSort);
+        return sysDeptMapper.selectList(qw);
     }
 
-    /** 按公司过滤部门树（左树右表联动用） */
+    /**
+     * 按公司过滤部门树（左树右表联动用）。
+     *
+     * <p>显式指定公司时先做归属校验：普通员工请求其他公司的部门树直接拒绝，
+     * 而不是返回一份不属于他的组织名单。</p>
+     */
     public List<SysDept> treeByCompany(Long companyId) {
+        if (companyId == null) {
+            return tree();
+        }
+        LoginUser u = UserContext.get();
+        if (!OrgVisibility.canSeeCompany(u, companyId)) {
+            throw new BizException(ErrorCode.PERMISSION_DENIED,
+                    "无权查看该公司的部门（companyId=" + companyId + "）");
+        }
         return sysDeptMapper.selectList(new LambdaQueryWrapper<SysDept>()
                 .eq(SysDept::getCompanyId, companyId)
                 .orderByAsc(SysDept::getAncestors).orderByAsc(SysDept::getSort));

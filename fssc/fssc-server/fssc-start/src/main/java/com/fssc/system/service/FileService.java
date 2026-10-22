@@ -285,6 +285,15 @@ public class FileService {
         return f;
     }
 
+    /** 批量按 ID 查文件记录（供分库列表回填文件名；缺失的 id 不报错，由调用方按 null 处理）。
+     *  分库改造：sys_file 在 master 库；NOT_SUPPORTED 挂起外层（可能为 image 库）事务后取 master 连接。 */
+    @FsscDataSource("master")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED, readOnly = true)
+    public java.util.List<SysFile> listByIds(java.util.Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) return java.util.List.of();
+        return fileMapper.selectBatchIds(ids);
+    }
+
     /** 文件列表分页（管理端） */
     public PageResult<SysFile> page(long pageNum, long pageSize, String bizType, Long bizId) {
         LambdaQueryWrapper<SysFile> qw = new LambdaQueryWrapper<>();

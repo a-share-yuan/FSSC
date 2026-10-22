@@ -450,6 +450,7 @@ public class WfQueryService {
      * POOL 软锁可见性（批次 1 ①）：镜像里"我是候选人、但已被同池他人领取"的 POOL 任务 id。
      *
      * <p>为什么单独查：Flowable 的候选组查询只回未指派的任务，于是任务一旦被同池某人领取，
+     * 就从其他人的待办里整行消失——同类系统的口径是"任务在别人列表里仍可见，只是不能处理，且能看到锁定者"，
      * 行都看不见就无从灰显。这里只按 POOL 节点口径回捞，AUTO/PICK 的可见性保持原样。
      */
     public List<String> poolTasksClaimedByOthers(Long userId, java.util.Set<String> poolNodeKeys) {

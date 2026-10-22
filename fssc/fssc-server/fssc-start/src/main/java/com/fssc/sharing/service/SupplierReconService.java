@@ -38,12 +38,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 供应商对账（对标金蝶K/3 Cloud应付管理 + SAP F.41/F.13 + 用友U8+应付管理）。
  *
  * 核心流程：
  * 1. 生成对账单：按期间过滤发票和付款，计算期初余额、本期发生额、期末余额，生成逐笔明细
- * 4. 对账函：生成对账函编号，标记已发送状态（SAP供应商确认函）
+ * 2. 自动勾对：按发票号/金额/PO号规则自动匹配发票与付款（行业方案自动勾对）
+ * 3. 手工勾对：用户逐笔选择发票与付款进行勾对（行业方案手工勾对）
+ * 4. 对账函：生成对账函编号，标记已发送状态（供应商对账函）
  * 5. 供应商确认：供应商签章回函/在线确认（预留LinkU门户接口）
+ * 6. 差异处理：差异调节表记录每一项差异及处理方式（余额调节表）
  * 7. 确认完成：双方确认一致后放行三单匹配
  *
  * 状态流转：DRAFT 已生成 → SENT 对账函已发送 → CONFIRMED 双方确认 / DIFF 有差异 → RESOLVED 差异已处理
@@ -221,6 +223,7 @@ public class SupplierReconService {
         return reconId;
     }
 
+    // ==================== 自动勾对（行业方案） ====================
 
     /**
      * 自动勾对：按发票号、金额、PO号规则自动匹配发票与付款。
@@ -286,6 +289,7 @@ public class SupplierReconService {
         return matchedCount;
     }
 
+    /** 手工勾对：用户指定一条发票和一条付款进行勾对（行业方案） */
     @Transactional(rollbackFor = Exception.class)
     public void manualMatch(Long reconId, Long invoiceDetailId, Long paymentDetailId) {
         SupplierReconDetail inv = detailMapper.selectById(invoiceDetailId);
@@ -348,11 +352,10 @@ public class SupplierReconService {
         detailMapper.updateById(updPay);
     }
 
-    // ==================== 对账函（SAP 供应商确认函） ====================
+    // ==================== 对账函（供应商对账函） ====================
 
     /**
      * 发送对账函：生成对账函编号，标记已发送状态。
-     * 对标SAP F.41供应商确认函 + 用友U8+对账函生成。
      */
     @Transactional(rollbackFor = Exception.class)
     public String sendLetter(Long reconId) {
@@ -377,7 +380,6 @@ public class SupplierReconService {
 
     /**
      * 供应商确认回函。
-     * 对标SAP供应商签章回函 + 票易通供应商门户在线确认（预留LinkU接口）。
      * @param confirmStatus CONFIRMED 确认一致 / REJECTED 有异议
      * @param remark 供应商确认备注
      */
@@ -427,6 +429,7 @@ public class SupplierReconService {
         }
     }
 
+    // ==================== 差异调节（余额调节表） ====================
 
     /** 添加差异记录 */
     @Transactional(rollbackFor = Exception.class)

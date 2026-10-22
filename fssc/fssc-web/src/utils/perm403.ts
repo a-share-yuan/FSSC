@@ -58,6 +58,12 @@ const ACTION_LABELS: Record<string, string> = {
   enhance: '增强',
 }
 
+// ── 权限码中间段（资源名）字典：只补"会弹给用户"的那几枚，其余原样透出 ──
+const RESOURCE_LABELS: Record<string, string> = {
+  share: '分摊',
+  file: '附件',
+}
+
 /**
  * 把权限码 `domain:resource:action` 翻译为中文标签。
  * 例：`report:finance:view` →「报表·财务·查看」
@@ -67,7 +73,7 @@ export function permCodeToLabel(code: string): string {
   if (!code) return ''
   const parts = code.split(':')
   const domain = DOMAIN_LABELS[parts[0]] || parts[0]
-  const resource = parts[1] || ''
+  const resource = RESOURCE_LABELS[parts[1]] || parts[1] || ''
   const action = parts[2] ? (ACTION_LABELS[parts[2]] || parts[2]) : ''
   const segs = [domain]
   if (resource) segs.push(resource)

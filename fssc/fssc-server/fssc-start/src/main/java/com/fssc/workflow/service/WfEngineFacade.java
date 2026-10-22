@@ -80,6 +80,7 @@ public class WfEngineFacade {
     /** G2 传阅投递（wf_cc 的唯一写入点；此前 recordCc 全仓零调用、表 0 行） */
     private final WfCcService wfCcService;
     /**
+     * G2 ①层「审批项」（2026-09-24）：{@code wf_approval_item} 的唯一消费点，参考行业做法「审批项」。
      * 只有 {@code complete()} 收到 {@code approvalItemCode} 时才读表——未传时连查询都不发生，
      * 存量调用方行为与改造前逐字一致。
      */
@@ -502,7 +503,7 @@ public class WfEngineFacade {
      * 为 NULL、抛异常一律放行，只拦 {@link #START_BLOCKED_MODEL_STATUS} 里的显式取值。
      *
      * <p>只管新发起：已在途的实例不受启停位影响（对齐厂商"启用流程／禁用流程"只管后续单据、
-     * 在途实例仍可干预办理的口径〔E·BOSEM·330/328〕）。
+     * 在途实例仍可干预办理的口径〔E·行业元数据规范·330/328〕）。
      */
     private void rejectIfModelOffline(String processKey) {
         if (processKey == null || processKey.isBlank()) {
@@ -655,6 +656,7 @@ public class WfEngineFacade {
             inst.setBizType(bizType);
             inst.setBizId(bizId);
             // 整改(20260917, DEV-008/VER-016)：发起即回写业务单据号(biz_no)。
+            // 行业方案最佳实践：流程实例必须携带业务主键，待办联查、单据追踪、报表反查不依赖查询侧二次回填。
             inst.setBizNo(bizNo);
             inst.setTitle(title);
             // D-DEC-063/055：调用方传入的单据真实金额必须落镜像。此前只写引擎变量 vars，wf_instance.amount 恒 NULL，
@@ -671,16 +673,27 @@ public class WfEngineFacade {
             if (!firstTasks.isEmpty()) {
                 inst.setCurrentNode(joinNodeNames(firstTasks));
                 inst.setCurrentAssignee(String.valueOf(approver));
-                // 节点配置覆盖：按 model_key+node_key 重设首任务审批人
-                for (Task t : firstTasks) {
-                    applyNodeConfig(processKey, t);
-                }
             }
             // G1（2026-09-24）：开关打开时门面停写 wf_instance，改由 WfMirrorProjectionListener 的
             // PROCESS_STARTED 投影建行（它在 startProcessInstanceByKey 内同步执行，故下面依赖
             // wf_instance 的 nodeOrgResolver.applyResolution 仍能读到该行）。旧写路径保留＝回滚路径。
+            //
+            // D-G46（2026-10-21 G 册实测修）：本行必须排在 applyNodeConfig 之前。首节点的 POOL 智能推送
+            // 在 applyNodeConfig 内同步发生，它经 listOperableUserIds → listRoleCandidates 反查 wf_instance
+            // 取单据公司；实例行尚未落库时 companyIdOfBill 恒为 null，两个后果都实测到了：
+            // ① COMPANY 档角色（FUND_STAFF／FA_ASSET_ADMIN）候选人取空 ⇒ 日志「无可用候选人（含连办闸预检
+            //    筛除），保持抢单池」，TR_PLAN `Task_2`／TR_PAY `TB_1`／FA_ADD `FK_1` 首节全部退化成人工领取；
+            // ② GROUP 档丢掉 D-DEC-413 甲案的「本公司优先」重排（companyFirst 在 companyId==null 时原样返回）
+            //    ⇒ 扫描岗五次推送全落 33 号公司的 3818/莫芳，而本公司首选是 3832/邱雨欣。
+            // 写入内容与原位置逐字相同（inst 各列在上面已填完，applyNodeConfig 不改 inst），只是提前可见。
             if (mirrorByFacade()) {
                 wfQueryService.recordInstance(inst);
+            }
+            if (!firstTasks.isEmpty()) {
+                // 节点配置覆盖：按 model_key+node_key 重设首任务审批人
+                for (Task t : firstTasks) {
+                    applyNodeConfig(processKey, t);
+                }
             }
             // ROOT-3 / D-TRC-01：审批/转办/撤回都有留痕，唯独「提单」这一段从不落 wf_task_history，
             // 于是从提单到归档的时间线天生缺第一段，联查只能从第一个审批节点开始。发起动作必须自己记账。
@@ -843,7 +856,7 @@ public class WfEngineFacade {
             // ═══ 首节点"提单即自动通过"：只认节点级显式属性，名称一律不参与判定 ═══
             // F10（G4 治理，2026-09-24）把语义挂到 wf_node_config.first_node_auto_pass；
             // RA-ROOT-16（2026-09-27 人工裁决第三轮）摘除"属性为 NULL 时回退节点名含'提交'"的过渡分支：
-            // 厂商把这类跳过写成节点级勾选且**默认不勾选**（〔E·BOSEM·436〕「没有参与人时跳过本节点…默认不勾选」），
+            // 厂商把这类跳过写成节点级勾选且**默认不勾选**（〔E·行业元数据规范·436〕「没有参与人时跳过本节点…默认不勾选」），
             // 名称从来不是判据；靠名称命中＝改个节点名就改了控制流，不可测试也不可审计。
             // "参与人为空时跳过"另有节点级列 empty_strategy=SKIP 承载，与本判据分列、互不代偿。
             WfNodeConfig firstNodeCfg = wfNodeConfigResolver.resolve(processKey,
@@ -905,7 +918,7 @@ public class WfEngineFacade {
      *
      * <p>只认节点级显式属性 {@code wf_node_config.first_node_auto_pass = 1}，<b>未配置＝不跳过</b>。
      * 此前"列为 NULL 时回退节点名含'提交'"的过渡分支已摘除：厂商把这类跳过做成节点级勾选、且原文写明
-     * <b>默认不勾选</b>（〔E·BOSEM·436〕「没有参与人时跳过本节点…默认不勾选」），名称从来不是判据。
+     * <b>默认不勾选</b>（〔E·行业元数据规范·436〕「没有参与人时跳过本节点…默认不勾选」），名称从来不是判据。
      *
      * <p>行为变更如实登记：NULL 且名称含"提交"的存量首节点，改前被静默跳过、改后产生真实人工待办。
      * 受影响面由 {@code 临时脚本/first_node_auto_pass_census_20260927.cjs} 只读普查给出。
@@ -1565,6 +1578,7 @@ public class WfEngineFacade {
                             String g = rc.trim();
                             if (!g.isBlank() && !have.contains(g)) taskService.addCandidateGroup(task.getId(), g);
                         }
+                        // V2.2.38 K123 智能推送（参考行业做法"优先分给处理中任务量最少的业务员"）：
                         // 开关 pool.autoDispatch=1 时，在候选人中按当前在办任务量最少自动指派；
                         // K124：unclaim 打了 pool_no_auto_assign 局部变量的任务不参与自动分配（回收后仅可人工领取）。
                         // 无候选人/推送失败 → 保持候选组抢单（兜底）。
@@ -2711,7 +2725,7 @@ public class WfEngineFacade {
         ProcessDefinition def = repositoryService.createProcessDefinitionQuery()
                 .processDefinitionKey(processKey).latestVersion().singleResult();
         if (def == null) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "流程定义未部署: " + processKey);
+            throw new BizException(ErrorCode.PARAM_INVALID, "流程定义尚未部署，请联系管理员");
         }
         List<String> keys = firstApprovalNodeKeys(def.getId(), processKey);
         if (keys.size() != 1) {
@@ -3449,6 +3463,7 @@ public class WfEngineFacade {
      *        <b>为空 ⇒ 走原「终止本流程」兜底，行为与改造前逐字一致</b>（默认路径零影响）；
      *        非空且开关 {@code sys_config.wf.reject.free.enabled}=1 时，改用 Flowable「搬执行」
      *        把在办执行搬回该上游节点 —— 单据在<b>同一实例内</b>继续流转、审批历史保留，
+     *        语义参考行业做法「允许选择驳回级次 / 默认驳回到开始节点」。
      *        <p> 执行面属"搬执行"（{@code ChangeActivityStateBuilder.moveActivityIdTo}），
      *        会真实改动在办单据本体；开关 fail-closed 默认关，<b>须先经
      *        {@code GET /wf/reject-targets} 只读预览核对影响面、并在重启窗口完成运行期验证后</b>
@@ -3554,6 +3569,7 @@ public class WfEngineFacade {
         if (!nodeOrgResolver.canOperate(task, operator)) {
             throw new BizException(ErrorCode.FORBIDDEN, operateDeniedMessage(task));
         }
+        // V2.2.38 K121（参考行业做法"处理类只是单纯的处理，没有审核通过、不通过"）：
         // 作业池任务不提供驳回语义——处理异常走该链的升级档节点或共享主管，不在这里打回。
         if (!approved && nodeOrgResolver.isPoolTask(task)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -3672,6 +3688,7 @@ public class WfEngineFacade {
         if (!approved) {
             vars.put("rejectType", "THROW_BACK".equals(rejectType) ? "THROW_BACK" : "GRADE_BY_GRADE");
         }
+        // === G2 ①层「审批结果变量」（2026-09-24，参考行业做法 ActionResult）===
         // 为什么必须有：改造前流转条件只能拿"这张单的静态属性"（金额/币种/是否境外）当参数，
         // 无法按"上一节点审出了什么结果"分流；而月度会签的"半数以上反对即转上级"这类规则
         // 根子上依赖审批结果。写入后 BPMN 排他网关可直接写 ${ActionResult == 'xxx'}。
@@ -4079,6 +4096,7 @@ public class WfEngineFacade {
      * 委托完成回执（方案 §1.4-4，2026-09-23 补）。
      *
      * <p><b>为什么补</b>：委托人把待办委托出去之后，原任务从自己的「我的待办」里消失（可见性交给
+     * 受托人），于是委托人**无从知道**是"受托人办了"还是"流程卡住了"。行业资料明确有
      * 「委托任务处理后通知委托人」；FSSC 此前只有委托建立/取消，缺完成回执。
      *
      * <p>判定口径与 {@code NodeOrgResolver.canOperate} 第 3 条（委托通道）**同源**：操作人作为受托人、
@@ -4685,7 +4703,7 @@ public class WfEngineFacade {
      * <p>与转办（L1）的差别只在**授权来源**：转办要求操作人是本节点办理人/候选人，改派要求操作人持
      * {@code wf:task:reassign} 权限点（Controller 的 {@code @RequiresPerm} 已校验），因此此处不做
      * {@code canOperate}，允许派给不在候选组的人——这正是"离职/换岗/唯一候选人是发起人本人"三条死路的出口
-     * （对应用友 NC {@code 流程移交}、SAP {@code Execute Work Items Without Agent Check}）。
+     * （对应行业方案 {@code 流程移交}、行业方案 {@code Execute Work Items Without Agent Check}）。
      *
      * <p>目标侧仍然硬校验：存在 / 在职 / 非 admin / 至少一个角色；并且 deny_self 开着时不派给该单据提交人
      * （否则落地即被自审拦截＝又做一个办不动的节点）；POOL 作业池档不适用（作业不属自审口径，2026-09-26 裁决）。
@@ -5472,7 +5490,7 @@ public class WfEngineFacade {
      * "支持驳回至开始节点、经理会签审批节点"（列举，非"任一节点"）。
      *
      * <p><b>会签节点不写死禁止</b>：它能否作目标，取决于是否出现在本集合内（默认档只有上一级与提单人节点，
-     * 放开须配置）。 原〔E·BOSEM·450〕"会签操作设置里没有打回"是<b>层级读错</b>（该页是节点内操作设置，
+     * 放开须配置）。 原〔E·行业元数据规范·450〕"会签操作设置里没有打回"是<b>层级读错</b>（该页是节点内操作设置，
      * 不是"会签不可被驳回为目标"），已按 参考册 §一 更正；本方法不据其写死禁止。
      *
      * <p><b>与厂商的结构差异（须在交付报告写明）</b>：我方无连线/边实体（{@code workflow/entity} 17 个类
@@ -5985,6 +6003,7 @@ public class WfEngineFacade {
         // ExpenseBillService.withdraw 自己有 requireMine 兜住，所以本闸**不改变任何现有行为**，
         // 补的是"引擎层裸通道"这一半：闸要落在被复用的方法里，不能指望每个调用方各自记得装。
         //
+        // 口径来源：同类系统 费用报销〔E·FSSC·360〕"审核中的单据，反审核人必须是工作流反审核节点
         // 对应的处理人"。**本轮只落"提单人本人"这一半**——我方节点模型没有"反审核节点"类型，
         // 所以"反审核节点处理人也可反审核"无对应物可实现，不写成已实现；待该节点类型落地后按同口径放开。
         //
@@ -6118,6 +6137,7 @@ public class WfEngineFacade {
         // V1.3.16 多分子公司路由：业务段角色按单据公司过滤，共享/集团角色跨公司可见
         group = nodeOrgResolver.filterGroupTasks(group, userId, roleCodes);
         // POOL 软锁可见性（批次 1 ①）：同池他人已领取的任务不在候选组查询结果里，按镜像口径回捞回来，
+        // 让它在待办中"可见但灰显"（锁定者口径），灰显与拒办由 lockedByOther/canOperate 负责。
         try {
             java.util.Set<String> poolKeys = wfNodeConfigResolver.poolNodeKeys();
             if (!poolKeys.isEmpty()) {

@@ -10,6 +10,11 @@
       </div>
     </template>
 
+    <!-- 页签常驻、只在这三个依赖系统参数的页签取数失败时明示原因：
+         把入口整个藏起来会让人以为功能不存在，比报一次错更难排查。 -->
+    <el-alert v-if="denied" type="warning" :closable="false" show-icon style="margin-bottom: 8px"
+      :title="$t('flow.baseCfg.deniedTip')" />
+
     <el-tabs v-model="tab">
       <el-tab-pane :label="$t('flow.baseCfg.tabFx')" name="fx">
         <el-alert type="info" :closable="false" style="margin-bottom: 8px"
@@ -78,8 +83,7 @@
           <el-button size="small" type="primary" @click="addRule">{{ $t('flow.baseCfg.btnAddRule') }}</el-button>
         </div>
         <el-table :data="ruleRows" v-loading="loading" size="small" border stripe>
-          <el-table-column prop="id" label="ID" width="60" />
-          <el-table-column prop="ruleName" :label="$t('flow.baseCfg.colRuleName')" min-width="130" />
+          <el-table-column prop="ruleName" :label="$t('flow.baseCfg.colRuleName')" min-width="150" />
           <el-table-column prop="claimType" :label="$t('flow.baseCfg.colType')" width="120" :formatter="(row, col, val) => writeoffTypeLabel(val)" />
           <el-table-column prop="customerPrefix" :label="$t('flow.baseCfg.colCustPrefix')" width="100" />
           <el-table-column prop="handlers" :label="$t('flow.baseCfg.colOwner')" min-width="140" />
@@ -136,7 +140,7 @@
 import { writeoffTypeLabel } from '@/constants/enums'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { configApi, arGapApi, userApi } from '../../api'
+import { configApi, arGapApi, userApi, store } from '../../api'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { exportCsv } from '../../utils/csv'
@@ -146,6 +150,7 @@ const { t } = useI18n()
 
 const tab = ref('fx')
 const loading = ref(false)
+const denied = ref(false)
 const configRows = ref([])
 const newCcy = ref('')
 const newRate = ref('')
@@ -156,6 +161,7 @@ const badDebtRows = computed(() => configRows.value.filter((r) => String(r.confi
 
 async function loadAll() {
   loading.value = true
+  denied.value = false
   try {
     const [fxPage, bdPage] = await Promise.all([
       configApi.page({ pageNum: 1, pageSize: 100, keyword: 'ar.' }),
@@ -164,6 +170,8 @@ async function loadAll() {
     const merged = [...(fxPage.list || fxPage.records || []), ...(bdPage.list || bdPage.records || [])]
     configRows.value = merged.map((r) => ({ ...r, _value: r.configValue }))
   } catch (e) {
+    // 4030＝缺 system:config:list：转成页内空态提示，不弹全局错误（页签本身仍要看派工规则）
+    if (e?.code === 4030) { denied.value = true; configRows.value = []; return }
     ElMessage.error(e.message)
   } finally {
     loading.value = false
@@ -197,8 +205,9 @@ const ruleRows = ref([])
 const ruleUserOptions = ref([])
 
 async function loadRuleUsers() {
+  // P0 修复（2026-10-21）：默认只加载同公司人员
   try {
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || []
+    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     ruleUserOptions.value = list.map((u) => u.nickName || u.userName).filter(Boolean)
   } catch { ruleUserOptions.value = [] }
 }

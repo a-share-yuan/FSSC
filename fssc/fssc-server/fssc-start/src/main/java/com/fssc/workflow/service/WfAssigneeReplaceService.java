@@ -20,6 +20,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
+ * 参与人批量替换（参考行业做法"流程设计中心-批量设置：查找参与人中设置的用户并替换"）。
  *
  * <p>为什么必须做成一个工具而不是一条 SQL：本系统同一节点的参与人有<b>两处真值</b>——
  * BPMN 的 {@code flowable:candidateGroups} 与 {@code wf_node_config.assign_value}，且

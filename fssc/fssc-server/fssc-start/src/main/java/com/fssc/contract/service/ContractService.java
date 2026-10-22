@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /**
  * 合同服务：CRUD + 审批状态机 + 台账深化（中集财务共享需求说明书-合同台账 v1.0）。
@@ -69,6 +70,18 @@ public class ContractService {
         DataScopeKit.apply(qw, ContContract::getCompanyId, null, null);
         qw.orderByDesc(ContContract::getId);
         Page<ContContract> p = mapper.selectPage(Page.of(pn, ps), qw);
+        // D-BIZ-07：批量填充流程在途标记，供前端隐藏直批按钮
+        for (ContContract c : p.getRecords()) {
+            if ("APPROVING".equals(c.getStatus())) {
+                try {
+                    c.setInFlow(wfEngineFacade.hasActiveTask(CONTRACT_BIZ_TYPE, c.getId()));
+                } catch (Exception ex) {
+                    c.setInFlow(true);
+                }
+            } else {
+                c.setInFlow(false);
+            }
+        }
         return PageResult.of(p.getRecords(), p.getTotal(), pn, ps);
     }
 
@@ -83,6 +96,7 @@ public class ContractService {
         if (e.getAmount() == null && !Integer.valueOf(1).equals(e.getNoFixedAmount())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "合同总额必填（勾选「无固定金额」时可留空）");
         }
+        assertDateOrder(e.getBeginDate(), e.getEndDate());
         // D-CON-1：前端「签订公司」下拉常只回传名称而 companyId 缺省 → cont_contract.company_id=NULL，
         // 列表按 DataScope 过滤公司，新建合同随即"隐身"。写守卫本就要求单据公司==登录公司，
         // 故缺省按当前登录人公司回填，杜绝 NULL 归属。
@@ -106,10 +120,22 @@ public class ContractService {
 
     public void update(ContContract e) {
         AssertUtil.notBlank(e.getContractName(), ErrorCode.PARAM_INVALID, "合同名称必填");
+        // 局部更新时补齐未传的一侧，防止只传 endDate 绕过倒置校验
+        ContContract existing = e.getId() == null ? null : mapper.selectById(e.getId());
+        assertDateOrder(
+                e.getBeginDate() != null ? e.getBeginDate() : (existing == null ? null : existing.getBeginDate()),
+                e.getEndDate() != null ? e.getEndDate() : (existing == null ? null : existing.getEndDate()));
         if (StrUtil.isNotBlank(e.getContractNo())) {
             assertNoUnique(e.getContractNo(), e.getId());
         }
         mapper.updateById(e);
+    }
+
+    /** 起止日期顺序兜底：前端已禁选倒置，接口直调仍可写入；倒置会让预算占用/付款计划/到期提醒全部错位 */
+    private void assertDateOrder(LocalDate begin, LocalDate end) {
+        if (begin != null && end != null && end.isBefore(begin)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "合同有效期止不得早于有效期起");
+        }
     }
 
     /** 合同号查重（前端可绕过，故服务端必须自己判一次唯一） */

@@ -290,7 +290,8 @@ public class ThreeWayMatchService {
 
     /**
      * 手工关联采购订单/收货单到付款单。
-     * SAP MIRO 场景：用户在发票校验时手工选择 PO 和收货单进行匹配。
+     * 发票校验 场景：用户在发票校验时手工选择 PO 和收货单进行匹配。
+     * 行业方案 场景：三单核对时手工选取采购订单、到货单进行关联。
      */
     /**
      * 手工关联采购订单/收货单到付款单（向后兼容的两参重载）。
@@ -519,7 +520,11 @@ public class ThreeWayMatchService {
             if (rc == null) {
                 return;
             }
-            BigDecimal linked = sumLinkedInvoiceAmount(receiptId);
+            // G#39：回写列与判据都取「勾稽净额（不含税）」。po_receipt.amount 是不含税入账额，
+            // 而 inv_bill_invoice.amount 是价税合计——旧实现拿价税直接比不含税收货额，
+            // 标准组合「净额收货＋价税开票」会被判成超收货（G2 实证：40,680 > 36,000，超 4,680 恰为税额）。
+            // 与 check() 的 invoiceNetAmt 同尺：勾稽价税合计 − 关联发票税额。
+            BigDecimal linked = sumLinkedInvoiceNetAmount(receiptId);
             // 与 PurchaseService.markInvoiced 同一绝对值重算口径（两者都只认 inv_bill_invoice 明细为真相源），
             // 互不叠加，因此两条路径都跑也不会把勾稽额算重；差别仅在 markInvoiced 还兜"明细为空时按入参累加"。
             if (nz(rc.getInvoiceAmount()).compareTo(linked) == 0
@@ -674,6 +679,7 @@ public class ThreeWayMatchService {
                 r.setPoReceived(nz(po.getReceivedAmount()));
                 r.setPoQty(sumOrderedQty(po.getId()));
                 // RECEIPT ≤ PO：收货超订单。
+                // D-V4R-99（通行口径，2026-10-16）：超收货本身**不冻结**——先收货后补订单、
                 // 分批到货溢装在实务中是常态，整体拦会逼出"为过闸而压低收货"的反向作弊。
                 // 真正的资金风险是**为超收那部分付了钱**：钱出去了、订单上没有对应义务。
                 // 故这里保持 WARN（提示去补订单／办溢收手续），并把超收金额记下来，
@@ -707,7 +713,8 @@ public class ThreeWayMatchService {
                 r.setReceiptNo(rc.getReceiptNo());
                 r.setReceiptAmount(nz(rc.getAmount()));
                 // 收货↔发票勾稽：以 inv_bill_invoice 明细现算为准（回写列可能是绑定早于关联的历史欠账）
-                BigDecimal liveInvoice = sumLinkedInvoiceAmount(rc.getId());
+                // G#39：与回写列同用不含税净额，避免同屏「已开票」显示价税、判据用净额的双口径
+                BigDecimal liveInvoice = sumLinkedInvoiceNetAmount(rc.getId());
                 r.setReceiptInvoice(liveInvoice.signum() > 0 ? liveInvoice : nz(rc.getInvoiceAmount()));
                 r.setReceiptQty(sumReceivedQty(rc.getId()));
                 if (r.getPoQty() != null && r.getPoQty().signum() > 0
@@ -735,14 +742,7 @@ public class ThreeWayMatchService {
         // （N5 实证：50,000 收货 vs 56,500 发票，超 6,500 恰为税额）。这里累计关联发票的
         // 税额，"发票 ≤ 收货"改按不含税口径比较：invoiceAmt − linkedTax ≤ receiptAmount。
         // 发票无税额信息（tax_amount=0/NULL，如非增值税票）时行为与旧口径一致（向后兼容）。
-        BigDecimal linkedTax = BigDecimal.ZERO;
-        for (InvBillInvoice link : links) {
-            if (link.getInvoiceId() == null) continue;
-            InvInvoice inv = invInvoiceMapper.selectById(link.getInvoiceId());
-            if (inv != null && inv.getTaxAmount() != null) {
-                linkedTax = linkedTax.add(inv.getTaxAmount());
-            }
-        }
+        BigDecimal linkedTax = linkedTaxOf(links);
         BigDecimal invoiceNetAmt = invoiceAmt.subtract(linkedTax).max(BigDecimal.ZERO);
         r.setInvoiceAmount(invoiceAmt);
         r.setInvoiceNetAmount(invoiceNetAmt);
@@ -755,6 +755,7 @@ public class ThreeWayMatchService {
             issues.add(new MatchIssue("PAY_EXCEED_INVOICE", "ERROR",
                     "超付：关联发票 " + invoiceAmt + " + 容差 " + payAllow + " < 本次付款 " + r.getPayAmount() + "（无发票覆盖）"));
         }
+        // ★ D-V4R-99（通行口径，2026-10-16 新增）：付款不得超过采购订单额。
         // 上游把「收货超订单」定为 WARN 是有意的（超收是实务常态），但仅靠 WARN 等于
         // "为超收那部分照样付钱"没有任何闸——钱出账、订单无对应义务，正是本项要堵的资金风险。
         // 判据取 **PO 订单额**（非收货额）：收货额已被超收污染，用它当上限等于用超收数给自己批额度。
@@ -1022,15 +1023,45 @@ public class ThreeWayMatchService {
 
     /** 收货单已开票金额＝指向该收货单的付款单所勾稽的发票金额合计（勾稽明细为真相源） */
     private BigDecimal sumLinkedInvoiceAmount(Long receiptId) {
+        return linkedInvoicesOf(receiptId).stream()
+                .map(x -> nz(x.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * G#39：收货单已开票<b>净额</b>（不含税）＝勾稽发票价税合计 − 关联发票税额。
+     * <p>po_receipt.amount 是不含税入账额，回写列与「开票 ≤ 收货」硬闸都必须用同一把不含税尺子；
+     * 发票无税额信息（tax_amount=0/NULL）时退化为价税合计，与旧口径向后兼容。
+     * 供本类 syncReceiptInvoiceColumn 与 PurchaseService.markInvoiced 共用，避免两处各算一套。
+     */
+    public BigDecimal sumLinkedInvoiceNetAmount(Long receiptId) {
+        List<InvBillInvoice> links = linkedInvoicesOf(receiptId);
+        BigDecimal gross = links.stream().map(x -> nz(x.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return gross.subtract(linkedTaxOf(links)).max(BigDecimal.ZERO);
+    }
+
+    /** 指向该收货单的付款单所勾稽的发票明细行 */
+    private List<InvBillInvoice> linkedInvoicesOf(Long receiptId) {
         List<Long> billIds = expBillMapper.selectList(new LambdaQueryWrapper<ExpBill>()
                         .eq(ExpBill::getPoReceiptId, receiptId))
                 .stream().map(ExpBill::getId).filter(java.util.Objects::nonNull).toList();
         if (billIds.isEmpty()) {
-            return BigDecimal.ZERO;
+            return List.of();
         }
         return billInvoiceMapper.selectList(new LambdaQueryWrapper<InvBillInvoice>()
-                        .in(InvBillInvoice::getBillId, billIds))
-                .stream().map(x -> nz(x.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
+                .in(InvBillInvoice::getBillId, billIds));
+    }
+
+    /** 勾稽明细对应发票的税额合计（发票缺失或无税额信息按 0） */
+    private BigDecimal linkedTaxOf(List<InvBillInvoice> links) {
+        BigDecimal tax = BigDecimal.ZERO;
+        for (InvBillInvoice link : links) {
+            if (link.getInvoiceId() == null) continue;
+            InvInvoice inv = invInvoiceMapper.selectById(link.getInvoiceId());
+            if (inv != null && inv.getTaxAmount() != null) {
+                tax = tax.add(inv.getTaxAmount());
+            }
+        }
+        return tax;
     }
 
     // ---------------- P1-6 容差配置（键值型，前端可调整） ----------------

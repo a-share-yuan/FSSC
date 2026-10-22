@@ -39,6 +39,7 @@ import java.util.Map;
  * <p><b>口径边界（G2 第 3 条已收口）</b>：到期时间改由 {@link WorkCalendarService} 按<b>工作小时</b>
  * 计算（跨周末/节假日顺延），与 BPMN 边界定时器共用同一份日历实现——此前"门面按自然小时算、
  * 定时器按 {@code PT{N}H} 算"的两处漂移即由此消除。
+ * <p><b>按组织取日历（参考行业做法）</b>：本类按单据所属<b>公司</b>（{@code NodeOrgResolver.companyIdOfBill}）
  * 把组织下传给日历服务；<b>解析不到组织（或组织列尚未建）时按 {@code null} 调用，回落租户口径</b>，
  * 与改造前逐字一致。组织维＝公司（见 {@code WfManageOrgScope} 类注释）；组织列由
  * {@code fssc/sql/V2.2.0_g2_calendar_org_20260924.sql} 新增，服务端在列不存在时自动降级。
@@ -79,6 +80,7 @@ public class TaskTimeLimitService {
     }
 
     /**
+     * 计算到期时间（<b>按组织（公司）取工作日历</b>，G2 第 3 条参考行业做法）。
      *
      * @param companyId 单据所属公司 ID；{@code null} = 解析不到组织，回落租户口径（与旧重载逐字一致）
      * @see #calcDueTime(LocalDateTime, BigDecimal)

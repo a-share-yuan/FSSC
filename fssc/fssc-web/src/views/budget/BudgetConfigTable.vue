@@ -25,7 +25,7 @@
           show-overflow-tooltip
         />
         <el-table-column label="操作" width="140" fixed="right">
-          <template #default="{ row }">          <InlineActions :visible="true" @view="openDialog(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
+          <template #default="{ row }">          <InlineActions :visible="true" @view="openDialog(row, true)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
             <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
             <el-button link type="danger" size="small" @click="del(row)">删除</el-button>
           </template>
@@ -41,8 +41,8 @@
     </el-card>
 
     <!-- 编辑弹窗 -->
-    <el-dialog v-model="dialog.visible" :title="dialog.editing ? '编辑' : '新增'" width="500px" destroy-on-close>
-      <el-form ref="formRef" :model="dialog.form" :rules="configFormRules" label-width="120px" size="default">
+    <el-dialog v-model="dialog.visible" :title="dialog.readonly ? '详情' : (dialog.editing ? '编辑' : '新增')" width="500px" destroy-on-close>
+      <el-form ref="formRef" :model="dialog.form" :rules="configFormRules" label-width="120px" size="default" :disabled="dialog.readonly">
         <el-form-item v-for="col in columns" :key="col.prop" :label="col.label" :prop="col.prop">
           <el-input v-if="col.type !== 'select'" v-model="dialog.form[col.prop]" />
           <el-select v-else v-model="dialog.form[col.prop]" style="width:100%">
@@ -51,8 +51,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="dialog.saving" @click="save">保存</el-button>
+        <el-button @click="dialog.visible = false">{{ dialog.readonly ? '关闭' : '取消' }}</el-button>
+        <el-button v-if="!dialog.readonly" type="primary" :loading="dialog.saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -73,6 +73,7 @@ import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 
+// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 
@@ -134,7 +135,7 @@ const columnsConfig = {
 const columns = computed(() => columnsConfig[props.configType] || columnsConfig.budgetCategory)
 
 const dialog = reactive({
-  visible: false, editing: false, saving: false,
+  visible: false, editing: false, saving: false, readonly: false,
   form: {},
 })
 const formRef = ref(null)
@@ -161,8 +162,9 @@ async function loadList() {
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
-function openDialog(row) {
+function openDialog(row, readonly = false) {
   dialog.editing = !!row
+  dialog.readonly = !!readonly && !!row
   dialog.form = row ? { ...row } : {}
   columns.value.forEach(col => {
     if (dialog.form[col.prop] === undefined) dialog.form[col.prop] = ''

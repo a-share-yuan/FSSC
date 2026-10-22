@@ -28,6 +28,7 @@ import java.util.Set;
  *
  * <p><b>注册策略（与镜像投影开关刻意不同）</b>：本监听器<b>无条件注册</b>，是否真正落库由
  * {@link WfProcessLogService#enabled()}（{@code sys_config.wf.log.detailed.enabled}）逐事件判定。
+ * 理由：行业方案该参数是"运行时勾选即生效"的参数，若像镜像投影那样在启动期决定是否注册，
  * 运营勾选后必须重启才生效——那又是"配置界面向业务承诺引擎没做的事"（方案 §一 症状 2）。
  * 代价是开关关闭时每个流程事件多一次 {@code sys_config} 单行查询，事件频率＝审批动作频率，可接受。
  *

@@ -9,7 +9,7 @@
               <el-form-item :label="$t('expense.claim.colBillNoFull')"><el-input :model-value="b.form.bill.billNo || $t('expense.common.txtAutoAfterSave')" disabled /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item :label="$t('expense.claim.colMakeTime')"><el-input :model-value="b.nowTs()" disabled /></el-form-item>
+              <el-form-item :label="$t('expense.claim.colMakeTime')"><el-input :model-value="b.form.bill.id ? formatDateTime(b.form.bill.createTime) : b.nowTs()" disabled /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
               <el-form-item :label="$t('expense.claim.colMaker')"><el-input :model-value="currentUserName" disabled /></el-form-item>
@@ -130,7 +130,7 @@
             </template>
           </el-table-column>
           <el-table-column :label="$t('field.time')" width="120">
-            <template #default="{ row }"><el-date-picker v-model="row.expenseDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></template>
+            <template #default="{ row }"><el-date-picker v-model="row.expenseDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" :disabled-date="blockFutureDate" /></template>
           </el-table-column>
           <el-table-column :label="$t('expense.claim.colExpenseReason')" min-width="110">
             <template #default="{ row }"><el-input v-model="row.remark" size="small" /></template>
@@ -190,7 +190,7 @@
           <el-table-column :label="$t('common.operation')" width="70">
             <template #default="{ $index }">
               <el-button link size="small" @click="copyLine(b, $index)">{{ $t('expense.common.btnCopy') }}</el-button>
-              <el-button link size="small" type="danger" @click="b.form.lines.splice($index, 1)">{{ $t('expense.common.btnDeleteShort') }}</el-button>
+              <el-button link size="small" type="danger" @click="removeLine(b, $index)">{{ $t('expense.common.btnDeleteShort') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -282,13 +282,13 @@ import { onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import BillWorkbench from '../../components/bill/BillWorkbench.vue'
-import { userApi, orgApi, masterApi, store } from '../../api'
+import { userApi, orgApi, masterApi, store, configApi } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { useAutoFill } from '@/composables/useAutoFill'
 import { billRules } from '@/constants/billRequired'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { commonRules } from '@/composables/useFormRules'
-import { budgetLabel, budgetUnseenLabel, entertainOfLine } from '@/utils/format'
+import { budgetLabel, budgetUnseenLabel, entertainOfLine, formatDateTime } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
 import { useBaseDict, PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM, PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N } from '@/composables/useBaseDict'
 import { useCurrency } from '@/composables/useCurrency'
@@ -457,6 +457,26 @@ function projectLabel(p) {
   if (!p) return ''
   return ((p.projectCode || '') + ' ' + (p.projectName || '')).trim()
 }
+// 费用日期默认不允许未来；系统参数 expense.claim.futureDateAllowed=1 时放开（缺省/读取失败按不允许）
+const futureExpenseDateAllowed = ref(false)
+function dayStr(d) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+function todayStr() { return dayStr(new Date()) }
+function blockFutureDate(d) { return !futureExpenseDateAllowed.value && dayStr(d) > todayStr() }
+// 行删除确认：只拦「已填内容」的行，空白行直接删
+async function removeLine(b, i) {
+  const l = b.form.lines[i]
+  if (!l) return
+  const has = l.itemId != null || Number(l.amount || 0) > 0 || !!b.invOf(l) || !!String(l.remark || '').trim()
+  if (has) {
+    try {
+      await ElMessageBox.confirm(t('expense.common.askDeleteRow'), t('expense.common.confirmDeleteTitle'), { type: 'warning' })
+    } catch { return }
+  }
+  b.form.lines.splice(i, 1)
+}
 // 修复：发票勾选生成的明细行（可能暂无费用类型 itemId，但金额/税额已自动填入）
 // 必须即时计入总金额/费用合计/收款金额，与 useBill.sumAmount 同口径，否则勾选后合计不动像"无反应"
 function totalAmount(b) {
@@ -486,6 +506,10 @@ async function onBeforeSubmit(b) {
   // 校验：至少一条费用明细
   if (!b.form.lines.filter((l) => l.itemId).length) {
     return warnStop(t('expense.claim.errNeedExpenseLine'))
+  }
+  if (!futureExpenseDateAllowed.value) {
+    const future = b.form.lines.find((l) => l.expenseDate && l.expenseDate > todayStr())
+    if (future) return warnStop(t('expense.claim.errExpenseDateFuture', { v1: future.expenseDate }))
   }
   // P0-6 防付错的后端兜底口径（assertPayeeAccount）：payTarget 驱动 payeeAccountNo，已由红星+闸门覆盖
   // 收款账号同步到 extJson（兼容既有打印/导出口径）
@@ -601,6 +625,10 @@ const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel
 const { options: payeeTypeOptions, load: loadPayeeType } = useBaseDict('enum_payee_type', PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N)
 
 onMounted(async () => {
+  // 费用日期未来口径：参数缺失/读取失败一律按「不允许未来」
+  configApi.value('expense.claim.futureDateAllowed').then((v) => {
+    futureExpenseDateAllowed.value = ['1', 'true', 'TRUE'].includes(String(v == null ? '' : v).trim())
+  }).catch(() => {})
   loadPayeeType()
   loadCurrency()
   // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
@@ -614,7 +642,8 @@ onMounted(async () => {
     }
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   try {
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || []
+    // P0 修复（2026-10-21）：默认只加载同公司人员，解决性能与安全问题
+    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
     const b = wb.value && wb.value.b

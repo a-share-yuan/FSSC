@@ -46,8 +46,8 @@
           <el-button v-if="row.status === BillStatus.DRAFT" link size="small" type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button v-if="row.status === BillStatus.REJECTED" link size="small" type="warning" @click="returnToEdit(row)">编辑重提</el-button>
           <el-button v-if="row.status === BillStatus.DRAFT" link size="small" type="primary" @click="act('submit', row)">提交</el-button>
-          <el-button v-if="row.status === BillStatus.APPROVING && hasPerm('contract:update')" link size="small" type="success" @click="act('approve', row)">通过</el-button>
-          <el-button v-if="row.status === BillStatus.APPROVING && hasPerm('contract:update')" link size="small" type="warning" @click="act('reject', row)">驳回</el-button>
+          <el-button v-if="row.status === BillStatus.APPROVING && !row.inFlow && hasPerm('contract:update')" link size="small" type="success" @click="act('approve', row)">通过</el-button>
+          <el-button v-if="row.status === BillStatus.APPROVING && !row.inFlow && hasPerm('contract:update')" link size="small" type="warning" @click="act('reject', row)">驳回</el-button>
           <el-button v-if="row.status === 'EFFECTIVE'" link size="small" @click="changeContract(row)">变更</el-button>
           <el-button v-if="row.status === 'EFFECTIVE'" link size="small" type="warning" @click="closeContract(row)">关闭</el-button>
           <el-button v-if="row.status !== BillStatus.VOID" link size="small" @click="act('supplement', row)">补充协议</el-button>

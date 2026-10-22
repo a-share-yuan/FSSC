@@ -16,6 +16,8 @@ import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
 import com.fssc.sharing.mapper.OpVoucherLineMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
+import com.fssc.system.service.MenuService;
+import com.fssc.system.service.MenuService.MenuNode;
 import com.fssc.workflow.entity.WfInstance;
 import com.fssc.workflow.entity.WfTask;
 import com.fssc.workflow.entity.WfTaskHistory;
@@ -30,6 +32,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * P0-6 统一收单工作台 Service
@@ -49,13 +52,19 @@ public class RequisitionWorkbenchService {
     private final WfTaskMapper wfTaskMapper;
     private final WfTaskHistoryMapper wfTaskHistoryMapper;
     private final WfInstanceMapper wfInstanceMapper;
+    private final MenuService menuService;
+    private final MyDocumentService myDocumentService;
 
     // ======================== 场景卡片 ========================
 
     /**
-     * 返回所有可发起单据的场景卡片
+     * 返回当前用户可发起单据的场景卡片（按菜单权限过滤）
+     * 参考行业做法"人人报账大厅"：一个页面按场景卡片发起所有单据
      */
     public List<Map<String, Object>> getScenes() {
+        // 提取当前用户的菜单路径集合
+        Set<String> menuPaths = extractMenuPaths();
+        
         return List.of(
             group("费用报销", List.of(
                 scene("CLAIM", "员工费用报销", "ExpenseClaim", "/expense/claim", "daily-reimbursement"),
@@ -86,7 +95,58 @@ public class RequisitionWorkbenchService {
                 scene("ASSET", "资产卡片", "AssetCard", "/asset", "asset"),
                 scene("DEPR_BATCH", "折旧计提", "DeprBatch", "/asset", "depreciation")
             ))
-        );
+        ).stream()
+         .map(g -> {
+             @SuppressWarnings("unchecked")
+             List<Map<String, Object>> items = (List<Map<String, Object>>) g.get("items");
+             List<Map<String, Object>> filtered = items.stream()
+                 .filter(item -> {
+                     String route = (String) item.get("route");
+                     return menuPaths.contains(route) || isChildOfMenuPath(route, menuPaths);
+                 })
+                 .collect(Collectors.toList());
+             Map<String, Object> fg = new LinkedHashMap<>(g);
+             fg.put("items", filtered);
+             return fg;
+         })
+         .filter(g -> !((List<?>) g.get("items")).isEmpty())
+         .collect(Collectors.toList());
+    }
+
+    /** 从 MenuService 提取当前用户的菜单路径集合 */
+    private Set<String> extractMenuPaths() {
+        var user = UserContext.get();
+        if (user == null) return Set.of();
+        Set<String> paths = new HashSet<>();
+        try {
+            var tree = menuService.myTree(user);
+            walkPaths(tree, paths);
+        } catch (Exception e) {
+            log.warn("getScenes: 菜单树查询失败，返回空路径集", e);
+        }
+        return paths;
+    }
+
+    /** 递归提取菜单树中的所有 path */
+    private void walkPaths(List<?> nodes, Set<String> paths) {
+        if (nodes == null) return;
+        for (Object node : nodes) {
+            if (!(node instanceof MenuNode)) continue;
+            MenuNode n = (MenuNode) node;
+            String path = n.getPath();
+            if (path != null && !path.isBlank()) {
+                paths.add(path.startsWith("/") ? path : "/" + path);
+            }
+            walkPaths(n.getChildren(), paths);
+        }
+    }
+
+    /** 判断 route 是否是某个菜单路径的子路径（处理 /expense/apply/meeting 这类深链） */
+    private boolean isChildOfMenuPath(String route, Set<String> menuPaths) {
+        for (String p : menuPaths) {
+            if (p.equals(route) || p.startsWith(route + "/")) return true;
+        }
+        return false;
     }
 
     private Map<String, Object> group(String label, List<Map<String, Object>> items) {
@@ -117,11 +177,27 @@ public class RequisitionWorkbenchService {
                 .and(w -> w.eq(WfTask::getAssigneeId, userId)
                         .or().like(WfTask::getCandidateIds, "," + userId + ",")));
 
-        // 我发起的（在途）——改前按 exp_bill 一表 status=APPROVING 计数，合同/采购/预算/总账的在途单
-        // 一个都不进这个数（与同页「我的单据」的承诺同病，D-CON-01）。改按流程实例统计＝天然全类型。
-        long mineCount = wfInstanceMapper.selectCount(new LambdaQueryWrapper<WfInstance>()
-                .eq(WfInstance::getStartUserId, userId)
-                .eq(WfInstance::getStatus, "RUNNING"));
+        // 我发起的单据总数（与「我的单据」列表同口径：MyDocumentService.myDocs().total）
+        // 改前按 wf_instance RUNNING 计数，导致卡片数字 0 而列表有 N 条的矛盾（用户感知"权限对不上"）。
+        // 现改为全类型 ownerCol 计数，数字与列表 total 一致。
+        long mineCount;
+        if (userId != null) {
+            try {
+                var pageQuery = new com.fssc.common.core.PageQuery();
+                pageQuery.setPageNum(1);
+                pageQuery.setPageSize(1);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> docsResult = myDocumentService.myDocs(pageQuery, null, null);
+                mineCount = ((Number) docsResult.getOrDefault("total", 0L)).longValue();
+            } catch (Exception e) {
+                log.warn("getDashboard: myDocs 查询失败，回退到 wf_instance 计数", e);
+                mineCount = wfInstanceMapper.selectCount(new LambdaQueryWrapper<WfInstance>()
+                        .eq(WfInstance::getStartUserId, userId)
+                        .eq(WfInstance::getStatus, "RUNNING"));
+            }
+        } else {
+            mineCount = 0;
+        }
 
         // wf_instance.status=COMPLETED 过滤，而该取值全库 0 行（终态实际写 APPROVED/REJECTED/CANCELLED）
         // ⇒ 卡片恒为 0，和 tab 里的列表自相矛盾。

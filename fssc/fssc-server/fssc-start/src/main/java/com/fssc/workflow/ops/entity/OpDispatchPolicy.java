@@ -32,9 +32,13 @@ public class OpDispatchPolicy extends TenantAuditBase {
     private String policyName;
     /** 分配策略：PICK抢单 / BALANCE_TIME均衡按时 / BALANCE_VOLUME均衡按量 / SMART智能 */
     private String strategy;
+    /** 普通任务时限（小时），通行口径默认 24h */
     private BigDecimal normalHours;
+    /** 加急任务时限（小时），通行口径默认 4h */
     private BigDecimal urgentHours;
+    /** 均衡·按时的分配间隔（小时），默认 1h 一分 */
     private BigDecimal balanceIntervalHours;
+    /** 均衡·按量的累积批大小（单），默认 10 单一分配 */
     private Integer balanceBatchSize;
     /** 智能策略权重：在手量 */
     private BigDecimal smartWeightVolume;

@@ -85,7 +85,7 @@
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colAccountName')" prop="accountName"><el-input v-model="b.form.bill.extJson.accountName" /></el-form-item></el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colAccountNo')" prop="accountNo"><el-input v-model="b.form.bill.extJson.accountNo" /></el-form-item></el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colBank')" prop="bankName"><el-input v-model="b.form.bill.extJson.bankName" /></el-form-item></el-col>
-            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.loan.colExpectedRepayDate')"><el-date-picker v-model="b.form.bill.extJson.expectRepayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.loan.colExpectedRepayDate')"><el-date-picker v-model="b.form.bill.extJson.expectRepayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" :disabled-date="(d) => dayBefore(d, b.form.bill.applyDate || b.today())" /></el-form-item></el-col>
             <el-col :xs="24"><el-form-item :label="$t('expense.loan.colLoanRemark')"><el-input v-model="b.form.bill.extJson.loanRemark" type="textarea" :rows="2" /></el-form-item></el-col>
           </el-row>
         </el-form>
@@ -120,7 +120,7 @@
             <template #default="{ row }"><el-tag size="small">{{ row.sourceType === 'APPLY' ? t('expense.loan.optRequisitionBill') : t('expense.loan.optLoanBill') }}</el-tag></template>
           </el-table-column>
           <el-table-column :label="$t('expense.loan.colLoanRemark')" min-width="140">
-            <template #default="{ row }"><el-input v-model="row.loanRemark" size="small" /></template>
+            <template #default="{ row }"><el-input v-model="row.remark" size="small" /></template>
           </el-table-column>
           <el-table-column :label="$t('expense.loan.colRepayAmount')" width="150"><template #header><span style="color:#f56c6c">*</span>{{ $t('expense.loan.colRepayAmount') }}</template>
             <template #default="{ row }"><el-input-number v-model="row.offsetAmount" :min="0" :max="row.maxAmount || undefined" :precision="2" style="width: 100%" @change="syncRepayLine(b)" /></template>
@@ -299,6 +299,11 @@ watch(() => {
   if (!b || props.mode !== 'REPAY' || !Array.isArray(v)) return
   if (JSON.stringify(b.form.loanOffsets) !== JSON.stringify(v)) b.form.loanOffsets = v.map((o) => ({ ...o }))
 }, { deep: true })
+function dayStr(d) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+function dayBefore(d, min) { return !!min && dayStr(d) < min }
 async function onBeforeSubmit(b) {
   // 表头必填闸门：提示具体漏填项并滚动定位
   if (!(await validateForms([formRef]))) return false
@@ -307,6 +312,12 @@ async function onBeforeSubmit(b) {
     b.form.bill.expectRepayDate = b.form.bill.extJson.expectRepayDate || null
     // P1-1 借款详情必填（类型/金额/收款方式/账户名称/账号/开户行）
     if (!(await validateForms([loanFormRef]))) return false
+    // 预计还款日不得早于借款申请日（前端禁选 + 提交兜底）
+    const applyDay = b.form.bill.applyDate || b.today()
+    const repayDay = b.form.bill.extJson.expectRepayDate
+    if (applyDay && repayDay && repayDay < applyDay) {
+      ElMessage.warning(t('expense.loan.errRepayBeforeApply')); return false
+    }
   } else {
     syncRepayLine(b)
     b.form.bill.extJson.loanOffsets = b.form.loanOffsets.map((o) => ({ ...o }))
@@ -375,7 +386,7 @@ function confirmRepayLoans(items) {
       b.form.loanOffsets.push({
         loanBillId: row.id, loanBillNo: row.billNo, offsetAmount: amount,
         maxAmount: Number(row.loanBalance || 0),
-        offsetType: 'REPAY', sourceType: 'LOAN', loanRemark: row.title || '',
+        offsetType: 'REPAY', sourceType: 'LOAN', remark: row.remark || '',
       })
       added++
     }
@@ -420,7 +431,8 @@ onMounted(async () => {
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   loading.value = true
   try {
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || []
+    // P0 修复（2026-10-21）：默认只加载同公司人员
+    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
     currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
     const b = wb.value && wb.value.b

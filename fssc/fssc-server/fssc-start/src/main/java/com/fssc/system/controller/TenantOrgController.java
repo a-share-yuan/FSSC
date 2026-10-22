@@ -37,13 +37,16 @@ public class TenantOrgController {
 
     // ---------- 公司 ----------
 
-    // 只读查询放开给所有登录租户用户：单据发起页公司信息必用（写操作仍需权限）
+    // 只读查询放开给所有登录租户用户：单据发起页公司信息必用（写操作仍需权限）。
+    // 但"放开读"≠"跨公司可见"：出参按登录人数据范围裁剪（普通员工只看本公司），
+    // 缓存仍存整租户全量以保持命中率，见 CompanyService#visibleForUser。
     @GetMapping("/company/tree")
-    public Result<List<SysCompany>> companyTree() {
+    public Result<List<SysCompany>> companyTree(
+            @RequestParam(required = false) Long companyId) {
         // P1-3 缓存分层：公司树按租户缓存 5 分钟，变更主动失效
         String key = "companyTree:" + com.fssc.framework.tenant.TenantContext.getTenantId();
-        List<SysCompany> list = com.fssc.framework.cache.CacheUtil.get(key, () -> companyService.tree());
-        return Result.success(list);
+        List<SysCompany> all = com.fssc.framework.cache.CacheUtil.get(key, () -> companyService.tree());
+        return Result.success(companyService.visibleForUser(all, companyId));
     }
 
     @RequiresPerm("system:company:create")

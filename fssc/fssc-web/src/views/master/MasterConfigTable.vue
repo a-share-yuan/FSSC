@@ -28,7 +28,7 @@
       <el-input v-if="!cfg.readOnly" v-model="searchForm.keyword" placeholder="搜索" clearable style="width: 240px" @keyup.enter="load" />
       <el-button v-if="!cfg.readOnly" type="primary" @click="load">查询</el-button>
       <el-button v-if="!cfg.readOnly" @click="resetSearch">重置</el-button>
-      <el-button v-if="!cfg.readOnly" type="success" @click="openCreate">新增</el-button>
+      <el-button v-if="canWrite('create')" type="success" @click="openCreate">新增</el-button>
       <el-button type="primary" plain @click="load">刷新</el-button>
       <span v-if="cfg.hint" style="color: #909399; font-size: 12px; margin-left: auto">{{ cfg.hint }}</span>
     </div>
@@ -36,7 +36,7 @@
     <!-- Table -->
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
     <el-table :data="rows" size="small" border stripe v-else @selection-change="onSelChange" empty-text="暂无数据">
-      <el-table-column v-if="!cfg.readOnly" type="selection" width="45" />
+      <el-table-column v-if="canWrite('update') || canWrite('delete')" type="selection" width="45" />
       <el-table-column v-for="col in cfg.columns" :key="col.prop" :prop="col.prop" :label="col.label" :width="col.width" :min-width="col.minWidth || 120" :align="col.align || 'left'" :sortable="col.sortable" show-overflow-tooltip>
         <!-- R5-D-032：formatter / optionLabel 的判断须在 #default 插槽作用域内求值，不得并列第二个 v-else-if 模板 -->
         <template #default="{ row }">
@@ -51,11 +51,11 @@
           <span v-else>{{ row[col.prop] }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="!cfg.readOnly" label="操作" width="180" fixed="right">
+      <el-table-column v-if="canWrite('update') || canWrite('delete')" label="操作" width="180" fixed="right">
         <template #default="{ row }">
-          <el-button link size="small" type="primary" @click="openEdit(row)">编辑</el-button>
-          <el-button v-if="cfg.api.enable" link size="small" :type="(row.enabled ?? ['NORMAL', 'ACTIVE', 'ENABLED'].includes(row.status)) ? 'warning' : 'success'" @click="toggleEnable(row)">{{ (row.enabled ?? ['NORMAL', 'ACTIVE', 'ENABLED'].includes(row.status)) ? '停用' : '启用' }}</el-button>
-          <el-button link size="small" type="danger" @click="del(row)">删除</el-button>
+          <el-button v-if="canWrite('update')" link size="small" type="primary" @click="openEdit(row)">编辑</el-button>
+          <el-button v-if="cfg.api.enable && canWrite('enable')" link size="small" :type="(row.enabled ?? ['NORMAL', 'ACTIVE', 'ENABLED'].includes(row.status)) ? 'warning' : 'success'" @click="toggleEnable(row)">{{ (row.enabled ?? ['NORMAL', 'ACTIVE', 'ENABLED'].includes(row.status)) ? '停用' : '启用' }}</el-button>
+          <el-button v-if="canWrite('delete')" link size="small" type="danger" @click="del(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -109,6 +109,7 @@ import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
 import { useQueryVariant } from '../../composables/useQueryVariant'
 import { maskAccount } from '@/utils/mask'
+import { hasPerm } from '@/utils/perm'
 
 const props = defineProps({
   configKey: { type: String, required: true },
@@ -123,9 +124,9 @@ const jobResultLabel = (v) => (v == null || v === '' ? '' : JOB_RESULT_LABEL[Str
 const MAX_CELL_ERR_LEN = 200
 /** 剥 SQL 语句正文：SQL [ ... ]（含被库侧 1000 字上限截断而未闭合的尾巴）与 ### SQL: 行整行替换为占位文案 */
 const stripSqlBodies = (s) => s
-  .replace(/SQL\s*\[[\s\S]*?\]/g, 'SQL [语句主体已省略]')
-  .replace(/SQL\s*\[[\s\S]*$/g, 'SQL [语句主体已省略]')
-  .replace(/###\s*SQL:[^\n]*/g, '### SQL: 语句主体已省略')
+  .replace(/SQL\s*\[[\s\S]*?\]/g, '（技术详情已省略）')
+  .replace(/SQL\s*\[[\s\S]*$/g, '（技术详情已省略）')
+  .replace(/###\s*SQL:[^\n]*/g, '（技术详情已省略）')
 const errSummary = (v) => {
   const t = stripSqlBodies(v == null ? '' : String(v))
   return t.length > MAX_CELL_ERR_LEN ? t.slice(0, MAX_CELL_ERR_LEN) + '…' : t
@@ -170,11 +171,11 @@ const REGISTRY = {
   // --- system pages ---
   dict: { title: '字典管理', api: { page: (p) => dictApi.typePage(p), create: (b) => dictApi.typeCreate(b), update: (b) => dictApi.typeUpdate(b), delete: (id) => dictApi.typeDelete(id) }, columns: [{ prop: 'dictType', label: '字典类型', width: 140 }, { prop: 'dictName', label: '字典名称', minWidth: 160 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'dictType', label: '字典类型', required: true }, { prop: 'dictName', label: '字典名称', required: true }] },
   'sys-config': { title: '全局参数', api: configApi, columns: [{ prop: 'configKey', label: '参数键', width: 180 }, { prop: 'configValue', label: '参数值', minWidth: 200 }, { prop: 'configName', label: '参数名称', minWidth: 200 }], formFields: [{ prop: 'configKey', label: '参数键', required: true }, { prop: 'configValue', label: '参数值', required: false }, { prop: 'configName', label: '参数名称', type: 'textarea' }] },
-  'sys-notice': { title: '公告管理', api: { page: (p) => noticeApi.page(p), create: (b) => noticeApi.create(b), update: (b) => noticeApi.update(b), delete: (id) => noticeApi.delete(id) }, columns: [{ prop: 'noticeTitle', label: '标题', minWidth: 200 }, { prop: 'status', label: '状态', width: 100, align: 'center', formatter: (v) => v === 'PUBLISHED' ? '已发布' : (v === 'CLOSED' ? '已关闭' : (v || '草稿')) }, { prop: 'publishTime', label: '发布时间', width: 160 }], formFields: [{ prop: 'noticeTitle', label: '标题', required: true }, { prop: 'noticeContent', label: '内容', type: 'textarea', rows: 4 }] },
+  'sys-notice': { title: '公告管理', perms: { create: 'system:notice:create', update: 'system:notice:update', delete: 'system:notice:delete' }, api: { page: (p) => noticeApi.page(p), create: (b) => noticeApi.create(b), update: (b) => noticeApi.update(b), delete: (id) => noticeApi.delete(id) }, columns: [{ prop: 'noticeTitle', label: '标题', minWidth: 200 }, { prop: 'status', label: '状态', width: 100, align: 'center', formatter: (v) => v === 'PUBLISHED' ? '已发布' : (v === 'CLOSED' ? '已关闭' : (v || '草稿')) }, { prop: 'publishTime', label: '发布时间', width: 160 }], formFields: [{ prop: 'noticeTitle', label: '标题', required: true }, { prop: 'noticeContent', label: '内容', type: 'textarea', rows: 4 }] },
   'sys-message': { title: '消息中心', api: { page: (p) => messageApi.page(p), delete: (id) => messageApi.delete(id) }, readOnly: true, columns: [{ prop: 'title', label: '标题', minWidth: 200 }, { prop: 'content', label: '内容', minWidth: 300 }, { prop: 'msgType', label: '类型', width: 100, formatter: (v) => msgTypeLabel(v) }, { prop: 'createTime', label: '时间', width: 160 }, { prop: 'isRead', label: '状态', width: 80, align: 'center', formatter: (v) => v ? '已读' : '未读' }] },
   'sys-file': { title: '文件管理', api: { page: (p) => fileApi.page(p), delete: (id) => fileApi.delete(id) }, readOnly: true, columns: [{ prop: 'fileName', label: '文件名', minWidth: 200 }, { prop: 'fileSize', label: '大小', width: 100, align: 'right', formatter: (v) => (v / 1024).toFixed(1) + ' KB' }, { prop: 'storageZone', label: '存储区域', width: 100, align: 'center' }, { prop: 'bizType', label: '业务类型', width: 100, formatter: (v) => docTypeLabel(v) }, { prop: 'createTime', label: '上传时间', width: 160 }] },
   'sys-policy': { title: '费用政策', hint: '标准明细与版本请用「费用标准」专用页维护', api: { page: (p) => expensePolicyApi.page(p), create: (b) => expensePolicyApi.create(b), update: (b) => expensePolicyApi.update(b), delete: (id) => expensePolicyApi.remove(id) }, columns: [{ prop: 'policyCode', label: '政策编码', width: 120 }, { prop: 'policyName', label: '政策名称', minWidth: 160 }, { prop: 'expenseType', label: '费用类型', width: 100 }, { prop: 'maxAmount', label: '金额上限', width: 120, align: 'right', formatter: 'money' }, { prop: 'submitDays', label: '提交时限(天)', width: 110, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: (v) => (v === 1 ? '启用' : '停用') }], formFields: [{ prop: 'policyCode', label: '政策编码', required: true }, { prop: 'policyName', label: '政策名称', required: true }, { prop: 'expenseType', label: '费用类型' }, { prop: 'expenseItemName', label: '费用项名称' }, { prop: 'maxAmount', label: '金额上限', type: 'number', required: true }, { prop: 'approveAboveAmount', label: '超额审批阈值', type: 'number' }, { prop: 'submitDays', label: '提交时限(天)', type: 'number', precision: 0 }, { prop: 'priority', label: '优先级', type: 'number', precision: 0 }, { prop: 'needInvoice', label: '需要发票', type: 'select', options: [{ label: '是', value: 1 }, { label: '否', value: 0 }] }, { prop: 'effectiveStart', label: '生效起', type: 'date' }, { prop: 'effectiveEnd', label: '生效止', type: 'date' }, { prop: 'remark', label: '备注', type: 'textarea', rows: 2 }] },
-  'sys-number': { title: '编号规则', hint: '改动后对新单据生效；已生成的存量单据号不变', api: { page: (p) => numberApi.rulePage(p), create: (b) => numberApi.ruleCreate(b), update: (b) => numberApi.ruleUpdate(b), delete: (id) => numberApi.ruleDelete(id), enable: (id, on) => numberApi.ruleEnable(id, on) }, columns: [{ prop: 'ruleCode', label: '规则编码', width: 130 }, { prop: 'ruleName', label: '规则名称', minWidth: 150 }, { prop: 'prefix', label: '前缀', width: 90 }, { prop: 'dateFormat', label: '日期格式', width: 100, formatter: (v) => v || '不含日期' }, { prop: 'seqLength', label: '序号长度', width: 90, align: 'center' }, { prop: 'resetCycle', label: '重置周期', width: 90, align: 'center', formatter: (v) => ({ NONE: '不重置', DAY: '按日', MONTH: '按月', YEAR: '按年' }[v] || v || '-') }, { prop: 'step', label: '步长', width: 70, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }, { prop: 'remark', label: '备注', minWidth: 140 }], formFields: [{ prop: 'ruleCode', label: '规则编码', required: true }, { prop: 'ruleName', label: '规则名称', required: true }, { prop: 'prefix', label: '前缀' }, { prop: 'dateFormat', label: '日期格式', placeholder: '如 yyyyMMdd，留空表示不含日期' }, { prop: 'seqLength', label: '序号长度', type: 'number', precision: 0 }, { prop: 'resetCycle', label: '重置周期', type: 'select', options: [{ label: '不重置', value: 'NONE' }, { label: '按日', value: 'DAY' }, { label: '按月', value: 'MONTH' }, { label: '按年', value: 'YEAR' }] }, { prop: 'step', label: '步长', type: 'number', precision: 0 }, { prop: 'status', label: '状态', type: 'select', options: [{ label: '启用', value: 'NORMAL' }, { label: '停用', value: 'DISABLED' }] }, { prop: 'remark', label: '备注', type: 'textarea', rows: 2 }] },
+  'sys-number': { title: '编号规则', hint: '改动后对新单据生效；已生成的存量单据号不变', perms: { create: 'system:number:create', update: 'system:number:update', delete: 'system:number:delete', enable: 'system:number:update' }, api: { page: (p) => numberApi.rulePage(p), create: (b) => numberApi.ruleCreate(b), update: (b) => numberApi.ruleUpdate(b), delete: (id) => numberApi.ruleDelete(id), enable: (id, on) => numberApi.ruleEnable(id, on) }, columns: [{ prop: 'ruleCode', label: '规则编码', width: 130 }, { prop: 'ruleName', label: '规则名称', minWidth: 150 }, { prop: 'prefix', label: '前缀', width: 90 }, { prop: 'dateFormat', label: '日期格式', width: 100, formatter: (v) => v || '不含日期' }, { prop: 'seqLength', label: '序号长度', width: 90, align: 'center' }, { prop: 'resetCycle', label: '重置周期', width: 90, align: 'center', formatter: (v) => ({ NONE: '不重置', DAY: '按日', MONTH: '按月', YEAR: '按年' }[v] || v || '-') }, { prop: 'step', label: '步长', width: 70, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }, { prop: 'remark', label: '备注', minWidth: 140 }], formFields: [{ prop: 'ruleCode', label: '规则编码', required: true }, { prop: 'ruleName', label: '规则名称', required: true }, { prop: 'prefix', label: '前缀' }, { prop: 'dateFormat', label: '日期格式', placeholder: '如 yyyyMMdd，留空表示不含日期' }, { prop: 'seqLength', label: '序号长度', type: 'number', precision: 0 }, { prop: 'resetCycle', label: '重置周期', type: 'select', options: [{ label: '不重置', value: 'NONE' }, { label: '按日', value: 'DAY' }, { label: '按月', value: 'MONTH' }, { label: '按年', value: 'YEAR' }] }, { prop: 'step', label: '步长', type: 'number', precision: 0 }, { prop: 'status', label: '状态', type: 'select', options: [{ label: '启用', value: 'NORMAL' }, { label: '停用', value: 'DISABLED' }] }, { prop: 'remark', label: '备注', type: 'textarea', rows: 2 }] },
   // --- supplier ---
   // R5-D-051 扫描结论：本页列表没有账号列（bankAccount 只出现在表单项，编辑框要回写全号不能打码），所以此处无打码落点；带账号列的是 bank / payee 两行。
   supplier: { title: '供应商', api: supplierApi, columns: [{ prop: 'supplierCode', label: '编码', width: 120 }, { prop: 'supplierName', label: '名称', minWidth: 160 }, { prop: 'contactName', label: '联系人', width: 100 }, { prop: 'contactPhone', label: '电话', width: 120 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'supplierCode', label: '编码', required: true }, { prop: 'supplierName', label: '名称', required: true }, { prop: 'contactName', label: '联系人' }, { prop: 'contactPhone', label: '电话' }, { prop: 'bankName', label: '开户行' }, { prop: 'bankAccount', label: '银行账号' }] },
@@ -190,6 +191,13 @@ const REGISTRY = {
 }
 
 const cfg = computed(() => REGISTRY[props.configKey] || { title: props.configKey, columns: [], formFields: [], api: {} })
+
+// 写按钮按后端真实权限码门控；未声明 perms 的配置沿用原 readOnly 口径，避免扩大本轮改动面。
+function canWrite(action) {
+  if (cfg.value.readOnly) return false
+  const code = cfg.value.perms?.[action]
+  return code ? hasPerm(code) : true
+}
 
 /**
  * 列未声明 formatter 时，用本页 formField 自带的 select 选项把原码换回中文。

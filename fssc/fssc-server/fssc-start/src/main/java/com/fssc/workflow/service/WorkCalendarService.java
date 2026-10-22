@@ -28,6 +28,7 @@ import java.util.Map;
  * 组织列 {@code company_id} 由 {@code fssc/sql/V2.2.0_g2_calendar_org_20260924.sql} 新增
  * （组织维＝公司，依据见 {@code WfManageOrgScope} 类注释与 {@code NodeOrgResolver.companyIdOfBill}）。
  *
+ * <p><b>按组织取日历 + 优雅降级（本类的核心约束）</b>：通行口径是"按组织取日历（该组织无日历则回退
  * 租户默认行）"。组织列属<b>尚未执行的结构变更</b>，故本类<b>绝不无条件 SELECT 该列</b>，按下列顺序取数：
  * <ol>
  *   <li><b>先探测列是否存在</b>（查 {@code INFORMATION_SCHEMA.COLUMNS}，结果缓存在本进程）；

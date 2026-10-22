@@ -13,6 +13,7 @@ import java.util.List;
 
 /**
  * 销售退货单（AR 退货退款冲减应收）。
+ * 参照行业方案行业方案「销售退货单」模型：金额表内存正数（对账口径由 BCP 适配层转负），
  * 状态机 DRAFT→PENDING→APPROVED→VOIDED，退货方式 REFUND（进对账）/EXCHANGE（换货补货，不进对账）。
  */
 @Data

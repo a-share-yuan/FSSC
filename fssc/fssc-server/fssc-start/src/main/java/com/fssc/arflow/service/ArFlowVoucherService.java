@@ -68,6 +68,7 @@ public class ArFlowVoucherService {
     }
 
     /**
+     * 其它业务对冲多行分录凭证（蓝图附件11.4.3，"多借多贷"做法）：
      * 解析单据 lines_json（[{debitCode,debitAmount,creditCode,creditAmount,summary,partnerCode}]），
      * 逐行生成借/贷分录；科目缺失 fail-closed；合计借贷强校验；同源判重幂等。
      */

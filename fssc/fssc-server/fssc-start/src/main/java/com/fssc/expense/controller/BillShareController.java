@@ -32,7 +32,10 @@ public class BillShareController {
         return Result.success(billShareService.page(query.getPageNum(), query.getPageSize(), billId));
     }
 
-    @RequiresPerm("exp:share:list")
+    // 按单回读＝"读自己这张单的一个字段"，守卫须与单据母表 /expense/bill/detail/{id} 同口径（exp:bill:list）。
+    // 原先挂 exp:share:list（分摊维护岗权限）⇒ 员工看得懂这张单却读不到它的分摊行，
+    // 编辑载入必吃一发 4030，而新建态不发这跳所以看着像"只有编辑坏"。跨单的分摊查询面（/page）仍留维护权限。
+    @RequiresPerm("exp:bill:list")
     @GetMapping("/byBill")
     public Result<List<ExpBillShare>> byBill(@RequestParam Long billId) {
         return Result.success(billShareService.listByBill(billId));

@@ -512,7 +512,7 @@ public class OcrService {
      * <p>设计要点：
      * <ul>
      *  <li><b>异常不丢弃</b>：OCR 入池是可补偿的业务动作，失败不等于作废，必须留下痕迹——
-     *      这是用友/金蝶/SAP/Concur 在票据自动化链路上的共同约定（票据池 + 异常队列 + 人工兜底），
+     *      这是行业方案 在票据自动化链路上的共同约定（票据池 + 异常队列 + 人工兜底），
      *      它们同样<b>不使用分布式事务</b>来保证这一步。</li>
      *  <li><b>同库写入</b>：image_exception 与 ocr_record 同在 image 库，随 recognizeBatch
      *      的 image 事务提交，不引入跨库事务。</li>

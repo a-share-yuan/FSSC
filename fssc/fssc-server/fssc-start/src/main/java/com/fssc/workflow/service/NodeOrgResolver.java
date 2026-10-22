@@ -407,6 +407,7 @@ public class NodeOrgResolver {
      *
      * <p>只覆盖 POOL：<b>AUTO/PICK 不设锁</b>——自动指派的节点一旦锁死，同角色同事就失去了
      * {@code canOperate} 的候选组通道，而这条通道正是「禁止审批自己提交」在现网已验证的绕行出口
+     * （见 {@code deny_self} 拦截后的处理路径）。同类系统同样只在作业型任务加锁，审批型走"择一/抢占"。
      */
     public String poolLockOwner(Task task) {
         if (task == null) {
@@ -422,6 +423,7 @@ public class NodeOrgResolver {
     /**
      * 待办列表的 POOL 软锁批量标注（批次 1 ①）：返回 {@code taskId -> 领取人用户ID}，
      * 只收录「作业节点 + 已被他人领取」的行。前端据此把「去处理」灰显并显示"XX 正在办理"，
+     * 与 {@link #canOperate} 的拒办口径一致（列表可见≠可办，行业方案同为"可见但锁定"）。
      *
      * <p>成本控制：一次载入全部 POOL 节点键，不逐行查配置表；判定异常返回空表（不加锁标注，
      * 服务端 {@code canOperate} 仍是硬闸）。
@@ -1599,6 +1601,7 @@ public class NodeOrgResolver {
 
     /**
      * 委托到期后"未办结任务是否返还原办理人"（A3，人工裁决 RA-F4a 前置）——厂商口径把它做成参数：
+     * 行业方案「委托结束后，受托人未处理完的任务是否还返还给原处理人，<b>通过参数来控制</b>…
      * "任务委托结束后未处理任务返还原处理人"」〔E·FSSC·104〕。
      *
      * <p>取值：{@code REVERT}（缺省）＝返还原办理人／{@code KEEP}＝留在受托人名下不再回跳。
@@ -1780,7 +1783,8 @@ public class NodeOrgResolver {
         }
         try {
             return sysRoleMapper.selectList(new LambdaQueryWrapper<SysRole>()
-                            .in(SysRole::getRoleCode, codes)).stream()
+                            .in(SysRole::getRoleCode, codes)
+                            .eq(SysRole::getStatus, "NORMAL")).stream()
                     .filter(r -> r.getRoleCode() != null)
                     .collect(Collectors.toMap(SysRole::getRoleCode,
                             r -> r.getOrgScope() == null ? "COMPANY" : r.getOrgScope(), (a, b) -> a));
@@ -1826,8 +1830,11 @@ public class NodeOrgResolver {
      * （单据本身不区分公司，只有建单人有），此前一律解析成 null ⇒ COMPANY 范围角色取人为空、
      * 且 {@link #canOperate} 在"单据公司为 null"时按放行处理（候选面被放宽到全租户）。
      * 这里改从 create_by 反查建单人公司，让"公司维度"在这些域第一次真实存在。
-     * 仍解析不到（表连 create_by 都没有，如 bank_reconcile / tr_bill_settle / tr_credit_bill）时返回 null
-     * 并留 warn——这类域<b>不得</b>使用 COMPANY 范围角色。
+     * 仍解析不到（表连 create_by 都没有，实测为 bank_reconcile / archive_access_log /
+     * archive_destroy_approval）时返回 null 并留 warn——这类域<b>不得</b>使用 COMPANY 范围角色。
+     * <p>2026-10-21 D-G47 更正：此处原写「tr_bill_settle / tr_credit_bill 连 create_by 都没有」，
+     * 与实测不符——两表都有 company_id 且有 create_by（create_by 系 D-DEC-298/420 补出），
+     * 已能正常解析；TR_BILL 原缺 companyTable 登记，见 {@link BillRouteRegistry}。
      */
     private Long creatorCompany(String bizType, String table, Long bizId) {
         try {

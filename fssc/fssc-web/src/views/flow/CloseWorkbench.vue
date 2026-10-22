@@ -25,10 +25,10 @@
     </el-card>
 
     <el-tabs v-model="activeTab" class="close-tabs">
-      <el-tab-pane v-if="scope !== 'ar'" :label="$t('flow.closebench.scopeAp')" name="ap">
+      <el-tab-pane v-if="scope !== 'ar' && hasPerm('apflow:close:list')" :label="$t('flow.closebench.scopeAp')" name="ap" lazy>
         <ApMonthCloseBoard ref="apBoard" />
       </el-tab-pane>
-      <el-tab-pane v-if="scope !== 'ap'" :label="$t('flow.entryAr.tabMonthClose')" name="ar">
+      <el-tab-pane v-if="scope !== 'ap' && hasPerm('arflow:monthclose:manage')" :label="$t('flow.entryAr.tabMonthClose')" name="ar" lazy>
         <ArMonthCloseBoard ref="arBoard" />
       </el-tab-pane>
     </el-tabs>
@@ -45,6 +45,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { hasPerm } from '@/utils/perm'
 import ApMonthCloseBoard from './ApMonthCloseBoard.vue'
 import ArMonthCloseBoard from './ArMonthCloseBoard.vue'
 
@@ -52,7 +53,10 @@ const props = defineProps({ scope: { type: String, default: '' } })
 const route = useRoute()
 const apBoard = ref(null)
 const arBoard = ref(null)
-const activeTab = ref(props.scope === 'ar' ? 'ar' : String(route.path || '').includes('arflow') ? 'ar' : 'ap')
+const canAp = hasPerm('apflow:close:list')
+const canAr = hasPerm('arflow:monthclose:manage')
+const preferAr = props.scope === 'ar' || String(route.path || '').includes('arflow')
+const activeTab = ref(preferAr ? (canAr ? 'ar' : 'ap') : (canAp ? 'ap' : 'ar'))
 
 const frozenCount = computed(() =>
   apBoard.value?.rows?.filter((r) => r.scpFrozen === 1 && r.status !== 'CLOSED').length

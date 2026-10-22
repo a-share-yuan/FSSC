@@ -134,7 +134,7 @@ public class FraudDetectionController {
     /** P2-5: 分页查询（风控看板 / 人工待审队列：actionTaken=REVIEW + unreviewed=true） */
     @RequiresPerm("compliance:fraud:list")
     @GetMapping("/page")
-    public Result<PageResult<FraudDetectionLog>> page(
+    public Result<PageResult<com.fssc.compliance.vo.FraudDetectionLogVO>> page(
             @RequestParam(defaultValue = "1") long pageNum,
             @RequestParam(defaultValue = "20") long pageSize,
             @RequestParam(required = false) String detectionResult,

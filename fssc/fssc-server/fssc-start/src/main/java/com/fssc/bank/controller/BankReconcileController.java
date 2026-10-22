@@ -10,6 +10,7 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.sharing.entity.OpBankStatement;
+import com.fssc.receivable.entity.RcReceivable;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -65,7 +66,7 @@ public class BankReconcileController {
 
     /** 自动勾对：返回本轮结果（勾对/未勾对条数与未勾对流水号，D-DEC-157） */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:list")
+    @RequiresPerm("bank:reconcile:execute")  // D-G5-03 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "自动勾对")
     @PostMapping("/run")
     public Result<Map<String, Object>> run() {
@@ -74,7 +75,7 @@ public class BankReconcileController {
 
     /** 人工勾对：手动将银行流水与付款记录关联 */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:list")
+    @RequiresPerm("bank:reconcile:execute")  // D-G5-03 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "人工勾对")
     @PostMapping("/manual-match")
     public Result<Void> manualMatch(@RequestBody ManualMatchReq req) {
@@ -96,7 +97,7 @@ public class BankReconcileController {
 
     /** 收款认领核销：银行贷方流水 → 关联应收单（含冲减余额/置DONE/勾对留痕） */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:list")
+    @RequiresPerm("bank:reconcile:execute")  // D-G5-03 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "收款认领核销")
     @PostMapping("/claim")
     public Result<BankReconcileService.ClaimResult> claim(@RequestBody ClaimReq req) {
@@ -105,7 +106,7 @@ public class BankReconcileController {
 
     /** 回单归档：关联回单影像文件并置回单状态 */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:list")
+    @RequiresPerm("bank:reconcile:execute")  // D-G5-03 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "回单归档")
     @PostMapping("/slip/archive")
     public Result<Void> archiveSlip(@RequestBody SlipReq req) {
@@ -122,11 +123,29 @@ public class BankReconcileController {
         return Result.success(reconcileService.pendingClaim(pageNum, pageSize));
     }
 
+    /**
+     * D-G5-02：可认领应收单清单（<b>银行域专用</b>）。
+     *
+     * <p>认领弹层原先借应收域的 {@code /api/tenant/receivable/page} 取清单，
+     * 该端点要求 {@code receivable:list}（应收域）⇒ 纯银企对账岗
+     * （只有 {@code bank:reconcile:list}）打开认领弹层时清单恒空、动作做不了。
+     * 本端点用<b>本域</b>权限码放行，取数权限随域走。
+     */
+    @RequiresFeature("FSSC_BANK")
+    @RequiresPerm("bank:reconcile:list")
+    @GetMapping("/claimable-receivables")
+    public Result<PageResult<RcReceivable>> claimableReceivables(
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String keyword) {
+        return Result.success(reconcileService.claimableReceivables(pageNum, pageSize, keyword));
+    }
+
     // ---------------- P1 剩余：余额快照（衔接未达账项调节表 / TR05） ----------------
 
     /** 保存账户余额快照（同一账户同一日期幂等覆盖） */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:list")
+    @RequiresPerm("bank:reconcile:execute")  // D-G5-03 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "INSERT", desc = "保存银行账户余额快照")
     @PostMapping("/balance/save")
     public Result<Long> saveBalance(@RequestBody BalanceReq req) {

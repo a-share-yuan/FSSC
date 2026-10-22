@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_AR_RECON" targetNamespace="http://fssc">
+  <bpmn:process id="AR_RECON" name="应收对账（作业）" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:userTask id="ARC_10" name="应收对账作业【应收会计】" flowable:candidateGroups="FIN_AR" />
+    <bpmn:sequenceFlow id="Flow_in_ARC_10" sourceRef="StartEvent_1" targetRef="ARC_10" />
+    <bpmn:userTask id="ARC_11" name="不平复核【财务经理】" flowable:candidateGroups="FIN_MANAGER" />
+    <bpmn:sequenceFlow id="Flow_in_ARC_11" sourceRef="ARC_10" targetRef="ARC_11" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="ARC_11" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="AR_RECON">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="ARC_10_di" bpmnElement="ARC_10"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="ARC_11_di" bpmnElement="ARC_11"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="606" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_in_ARC_10_di" bpmnElement="Flow_in_ARC_10"><di:waypoint x="138" y="120" /><di:waypoint x="281" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_ARC_11_di" bpmnElement="Flow_in_ARC_11"><di:waypoint x="281" y="120" /><di:waypoint x="471" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="471" y="120" /><di:waypoint x="624" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

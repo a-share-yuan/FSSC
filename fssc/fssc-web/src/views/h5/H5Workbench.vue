@@ -126,7 +126,7 @@
       </div>
       <div v-else class="h5-denied">
         <div class="h5-denied__t">当前没有可在手机上提报的单据类型</div>
-        <div class="h5-denied__d">提报清单由管理端配置，调整后这里会自动同步；下方类型的电脑端入口保持不变。</div>
+        <div class="h5-denied__d">可提报的单据类型由管理员在电脑端维护，调整后这里会自动更新；下方类型请继续在电脑端提报。</div>
       </div>
       <!-- 未启用类型明示列出并给去向，而不是从入口里静默消失（§4.2-② 移动启用清单） -->
       <div v-if="pcOnlyTypes.length" class="h5-card">
@@ -190,7 +190,7 @@
           <span>验真队列：{{ verifyPending }} 张待验</span>
           <button v-if="canRunVerify" class="h5-btn-ok h5-btn-ok--inline" @click="runVerify">立即验真</button>
         </div>
-        <div v-if="!canRunVerify" class="h5-tip h5-tip--left">当前账号无验真执行权限（inv:verify:run），验真由发票管理岗触发。</div>
+        <div v-if="!canRunVerify" class="h5-tip h5-tip--left">当前账号无发票验真执行权限，验真由发票管理岗触发。</div>
       </div>
 
       <div class="h5-section-title">我的票夹</div>
@@ -726,7 +726,7 @@ async function onScan(e) {
 }
 
 async function runVerify() {
-  if (!canRunVerify) { ElMessage.warning('当前账号无验真执行权限（inv:verify:run），验真请由发票管理岗触发'); return }
+  if (!canRunVerify) { ElMessage.warning('当前账号无发票验真执行权限，验真请由发票管理岗触发'); return }
   try {
     // D-DEC-117（顺带消一处未编号 500）：原先调 invoiceApi.verifyRun() 不带 body，而
     // /verify/run 是「单张验真结果登记」口，服务端取不到 invoiceId 即 NPE ⇒ 有权限的人点了反而必炸。

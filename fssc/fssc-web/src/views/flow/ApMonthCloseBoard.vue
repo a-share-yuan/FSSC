@@ -15,7 +15,7 @@
             <el-option v-for="(v, k) in AP_MC_STATUS" :key="k" :label="v" :value="k" />
           </el-select>
           <el-button size="small" @click="load">{{ $t('common.refresh') }}</el-button>
-          <el-button type="primary" size="small" @click="openInit">{{ $t('flow.close.btnStartClose') }}</el-button>
+          <el-button v-permission="'apflow:close:create'" type="primary" size="small" @click="openInit">{{ $t('flow.close.btnStartClose') }}</el-button>
         </div>
       </div>
     </template>
@@ -54,9 +54,9 @@
       </el-table-column>
       <el-table-column :label="$t('common.operation')" width="270" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="row.status === 'INIT'" link type="primary" size="small" @click="openDispatch(row)">{{ $t('flow.close.dlgDispatch') }}</el-button>
-          <el-button v-if="!['INIT', 'CLOSED', 'VOID'].includes(row.status)" link type="primary" size="small" @click="openItems(row)">{{ $t('flow.close.maintainChecks') }}</el-button>
-          <el-button v-if="row.status === 'CHECKING'" link type="success" size="small" @click="doClose(row)">{{ $t('flow.close.btnGlClose') }}</el-button>
+          <el-button v-if="row.status === 'INIT'" v-permission="'apflow:close:dispatch'" link type="primary" size="small" @click="openDispatch(row)">{{ $t('flow.close.dlgDispatch') }}</el-button>
+          <el-button v-if="!['INIT', 'CLOSED', 'VOID'].includes(row.status)" v-permission="'apflow:close:item'" link type="primary" size="small" @click="openItems(row)">{{ $t('flow.close.maintainChecks') }}</el-button>
+          <el-button v-if="row.status === 'CHECKING'" v-permission="'apflow:close:close'" link type="success" size="small" @click="doClose(row)">{{ $t('flow.close.btnGlClose') }}</el-button>
           <el-button v-if="row.status === 'CLOSED'" v-permission="'apflow:close:reopen'" link type="danger" size="small" @click="openReopen(row)">{{ $t('flow.close.btnReopen') }}</el-button>
           <!-- R5-D-218：未关账的关账单可作废（终态 VOID，行止不删；已关账须走反关账） -->
           <el-button v-if="!['CLOSED', 'VOID'].includes(row.status)" v-permission="'apflow:close:reopen'" link type="warning" size="small" @click="openVoid(row)">{{ $t('field.void') }}</el-button>
@@ -293,7 +293,8 @@ async function loadCompanies() {
 }
 
 async function loadUsers() {
-  try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || [] } catch { users.value = [] }
+  // P0 修复（2026-10-21）：月结负责人通常为本财务人员，按同公司过滤
+  try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch { users.value = [] }
 }
 
 // ---- 发起 ----
@@ -445,12 +446,12 @@ function exportReport() {
     const auto = it.auto ? `${it.auto.metric}=${it.auto.count}${it.auto.ok ? t('flow.close.normalSuffix') : t('flow.close.abnormalSuffix')}` : ''
     out.push({
       sec: '', item: it.name, result: ITEM_ST.value[it.status]?.label || it.status,
-      handler: it.handler || '', time: (it.time || '').replace('T', ' ').slice(0, 16), note: [it.note, auto].filter(Boolean).join(' | '),
+      handler: it.handler || '', time: formatDateTime(it.time), note: [it.note, auto].filter(Boolean).join(' | '),
     })
   }
   out.push({ sec: t('flow.close.secTrail'), item: '', result: '', handler: '', time: '', note: '' })
   for (const t of traceList.value) {
-    out.push({ sec: '', item: apMcTraceLabel(t.action), result: '', handler: t.oper || '', time: (t.time || '').replace('T', ' ').slice(0, 16), note: t.detail || '' })
+    out.push({ sec: '', item: apMcTraceLabel(t.action), result: '', handler: t.oper || '', time: formatDateTime(t.time), note: t.detail || '' })
   }
   exportCsv(out, [
     { prop: 'sec', label: t('flow.close.secPara') }, { prop: 'item', label: t('flow.close.colProject') }, { prop: 'result', label: t('flow.close.colProof') },

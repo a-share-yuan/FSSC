@@ -17,6 +17,7 @@ import java.util.Map;
 
 /**
  * P0-6 统一收单工作台（/api/tenant/workbench/**）
+ * 参考行业做法"人人报账大厅"：场景卡片发起所有单据 + 我的单据/待办/已办三视图 + 单据详情内联展示全链路
  */
 @RestController
 @RequestMapping("/api/tenant/workbench")

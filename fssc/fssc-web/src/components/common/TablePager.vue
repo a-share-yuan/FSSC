@@ -20,7 +20,7 @@
  *
  * 全项目此前仅 7/48 处分页器配置完整（缺 sizes / jumper）。
  * 本组件统一为「总数 + 每页条数 + 上下页 + 页码 + 跳页」完整布局，
- * 对齐 SAP / 用友 / 金蝶 的企业级列表标准。
+ * 对齐 同类系统的企业级列表标准。
  *
  * 用法（配合 useTablePager）：
  *   <TablePager :pager="pager" @change="load" />

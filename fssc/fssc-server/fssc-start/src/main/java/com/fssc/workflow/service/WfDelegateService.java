@@ -142,6 +142,7 @@ public class WfDelegateService {
                 || !delegate.getEndTime().isAfter(delegate.getBeginTime())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "委托时间区间不合法");
         }
+        // 委托代理的硬规则，取自行业方案「审批委托」的成文约束（方案 §11.2 A-4）：
         // ① 不能委托给自己 —— 否则"不能审自己提交的单"可被自己给自己代办合法绕开；
         // ② 受托人必须是可办理的真人（存在/在职/有角色/非 admin，铁律禁 admin 参与任何节点）；
         // ③ 同一时间只能委托给一个人（U9 原文："若委托给多人，系统只会给其中一人转发"——与其运行期挑一个，
@@ -267,7 +268,8 @@ public class WfDelegateService {
      * 受托人可用性校验（A2 第①条硬约束，人工裁决 RA-F4a 前置）：
      * 存在 + 本人可登录（status=NORMAL）+ 非 admin + <b>持有至少一个未停用的角色</b>。
      *
-     * （「代理人只可为『操作员』」〔丙·NC 开发指南〕）。只数 {@code sys_user_role} 的行数不够——
+     * <p>口径来源：〔E·BOSBCFG·8〕委托的资格是"借"给一个<b>能办事的操作员</b>；同类做法
+     * （「代理人只可为『操作员』」〔丙·开发指南〕）。只数 {@code sys_user_role} 的行数不够——
      * 角色本身可以停用（{@code sys_role.status=DISABLE}，现网 4 条 / 4 个用户持有），
      * 停用角色运行期取不到任何权限，委托过去等于把单据塞进一个谁也办不动的收件箱（静默吞单）。
      *

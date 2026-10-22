@@ -6,7 +6,7 @@
       <el-empty :description="$t('sharing.monthEnd.noPermTitle')">
         <template #description>
           <p class="np-title">{{ $t('sharing.monthEnd.noPermTitle') }}</p>
-          <p class="np-code">{{ $t('sharing.monthEnd.labMissingPerm') }}<code>gl:monthclose:list</code></p>
+          <p class="np-code">{{ $t('sharing.monthEnd.labMissingPerm') }}</p>
           <p class="np-tip">
             {{ $t('sharing.monthEnd.hintBoardScope') }}<br />
             {{ $t('sharing.monthEnd.noPermHint') }}</p>

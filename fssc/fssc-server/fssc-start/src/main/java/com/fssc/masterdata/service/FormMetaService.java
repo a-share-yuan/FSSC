@@ -128,7 +128,7 @@ public class FormMetaService {
             }
         }
 
-        // ② 规则表逐条执行（按 sortOrder 顺序，对齐 EAS 检查点配置的「执行顺序」）
+        // ② 规则表逐条执行（按 sortOrder 顺序，对齐 检查点配置的「执行顺序」）
         for (MdFormValidation r : rules) {
             Object raw = data.get(r.getFieldKey());
             MdFormField f = fieldMap.get(r.getFieldKey());

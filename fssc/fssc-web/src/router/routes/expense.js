@@ -1,5 +1,6 @@
 /** 费用报账域路由（事前申请/报销/借款/报账工作台） */
 export default [
+  // P0-6 统一收单工作台（参考行业做法"人人报账大厅"）
   { path: 'requisition', redirect: '/requisition/mine' },
   // 报账工作台各页签拆为独立菜单（见下）；父路径重定向到首个 tab，不再渲染"汇总全部 tab"的 hub 页
   { path: 'requisition/mine', component: () => import('../../views/expense/RequisitionWorkbench.vue'), props: { tab: 'mine' }, meta: { title: '我的单据' } },

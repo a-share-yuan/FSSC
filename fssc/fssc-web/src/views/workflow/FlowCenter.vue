@@ -24,6 +24,7 @@
       </el-col>
     </el-row>
 
+    <!-- 流程效率（管理驾驶舱）：口径全部来自 /wf/perf/overview 真实聚合。
          仅持 wf:instance:list 的财务管理层/共享运营岗可见——全员页门控铁律：无权限时
          不请求、不渲染、不弹提示（隐藏而非报错），避免业务角色看到全公司时效数据。 -->
     <el-card v-if="canViewPerf" shadow="never" class="fc-block fc-perf" :body-style="{ padding: '14px 20px' }">
@@ -116,7 +117,7 @@ const loading = reactive({ todo: false })
 
 const cards = computed(() => [
   { key: 'todo', label: '我的待办', value: stats.todo, path: '/requisition/todo', color: '#e6a23c' },
-  { key: 'mine', label: '我发起的', value: stats.mine, path: '/requisition/mine', color: '#409eff' },
+  { key: 'mine', label: '我发起的单据', value: stats.mine, path: '/requisition/mine', color: '#409eff' },
   { key: 'done', label: '我的已办', value: stats.done, path: '/requisition/done', color: '#67c23a' },
   { key: 'cc', label: '我的抄送', value: stats.cc, path: '/flow-center/cc', color: '#909399' },
 ])
@@ -192,7 +193,7 @@ function handle(row) {
     traceBillId.value = row.bizId || row.billId || row.id
     traceBizType.value = row.bizType || row.billType || null
     traceVisible.value = true
-    ElMessage.info('该单据类型暂未配置业务处理入口，已打开全链路追溯')
+    ElMessage.info('当前账号不能直接进入该单据的业务页面，已打开全链路追溯')
   }
 }
 

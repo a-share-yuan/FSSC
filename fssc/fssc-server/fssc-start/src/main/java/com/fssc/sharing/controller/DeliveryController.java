@@ -23,7 +23,6 @@ import java.util.Map;
 /**
  * P0-5 实物流签收（TC12：电子流 + 实物流双到达）。
  * 增强功能：条码扫描签收、批量签收、拒签退件、快递信息录入、交单登记。
- * 对标 SAP MM 收货、用友 U8 到货签收、金蝶 K3 Cloud 采收。
  */
 @RestController
 @RequestMapping("/api/tenant/sharing/delivery")
@@ -43,7 +42,6 @@ public class DeliveryController {
 
     /**
      * 签收单分页查询（支持多条件筛选：状态/单号/运单号/交付方式/关键词）。
-     * 对标 SAP MD04 收货清单筛选。
      */
     @GetMapping("/page")
     @RequiresPerm("sharing:delivery:pending")

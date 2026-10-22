@@ -50,7 +50,7 @@
 
       <div class="eac-summary">
         <span>当前账套可见 {{ options.total || 0 }} 条配置，其中启用 {{ options.enabledCount || 0 }} 条</span>
-        <span class="eac-tip">范围＝本账套自有配置行 + 全平台种子行（历史种子未标账套，引擎同样按它们在跑）</span>
+        <span class="eac-tip">包含当前账套的自有配置与平台预置配置，两者均会生效</span>
       </div>
 
       <el-table :data="rows" v-loading="loading" size="small" stripe border max-height="520"
@@ -73,7 +73,7 @@
         </el-table-column>
         <el-table-column label="归属" width="100" align="center">
           <template #default="{ row }">
-            <el-tag size="small" effect="plain" :type="isSeed(row) ? 'warning' : 'info'">{{ isSeed(row) ? '全平台种子' : '本账套' }}</el-tag>
+            <el-tag size="small" effect="plain" :type="isSeed(row) ? 'warning' : 'info'">{{ isSeed(row) ? '平台预置' : '本账套' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="description" label="配置说明" min-width="260" show-overflow-tooltip>

@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
-/** 凭证推送（/api/tenant/voucher/push/**）：推送凭证至 NC / IFS 外部财务系统 */
+/** 凭证推送（/api/tenant/voucher/push/**）：推送凭证至 同类系统 / IFS 外部财务系统 */
 @RestController
 @RequestMapping("/api/tenant/voucher/push")
 @RequiredArgsConstructor

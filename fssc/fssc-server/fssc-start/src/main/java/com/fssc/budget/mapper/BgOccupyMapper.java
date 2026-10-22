@@ -143,4 +143,27 @@ public interface BgOccupyMapper {
     @Select("select distinct biz_id from bg_occupy " +
             "where biz_type = 'EXP_REPAY' and biz_no = #{repayBillNo} and oper_type in ('RELEASE','OCCUPY')")
     List<Long> selectOffsetLoanBillsByRepayNo(@Param("repayBillNo") String repayBillNo);
+
+    /**
+     * 分页查询预算占用流水（带预算明细名称）。
+     * 关联 bg_item → md_expense_item 获取 item_name。
+     */
+    @Select("<script>" +
+            "select bo.*, ei.item_name as budgetItemName " +
+            "from bg_occupy bo " +
+            "left join bg_item bi on bo.budget_item_id = bi.id " +
+            "left join md_expense_item ei on bi.item_id = ei.id " +
+            "<where>" +
+            "<if test='budgetItemId != null'>and bo.budget_item_id = #{budgetItemId}</if> " +
+            "<if test='operType != null and operType != \"\"'>and bo.oper_type = #{operType}</if> " +
+            "<if test='bizType != null and bizType != \"\"'>and bo.biz_type = #{bizType}</if> " +
+            "<if test='keyword != null and keyword != \"\"'>and bo.biz_no like concat('%',#{keyword},'%')</if> " +
+            "</where> order by bo.id desc" +
+            "</script>")
+    com.baomidou.mybatisplus.core.metadata.IPage<com.fssc.budget.vo.BgOccupyVO> searchPageWithItemName(
+            com.baomidou.mybatisplus.core.metadata.IPage<com.fssc.budget.vo.BgOccupyVO> page,
+            @Param("budgetItemId") Long budgetItemId,
+            @Param("operType") String operType,
+            @Param("bizType") String bizType,
+            @Param("keyword") String keyword);
 }

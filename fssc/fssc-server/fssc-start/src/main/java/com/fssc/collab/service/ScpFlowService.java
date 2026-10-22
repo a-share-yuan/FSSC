@@ -297,6 +297,7 @@ public class ScpFlowService {
         boolean real = false;
         String result = "ERP通道未配置，模拟记账";
         // 多 ERP 解析（V1.4）：通道 = {PROVIDER}_AP（蓝图默认 EBS_AP）；
+        // 接口变体细分（参照同类系统报文字典/行业方案接口注册）：蓝字专用通道优先，未配置回落统一 {PROVIDER}_AP
         String channel = connector.resolveErpChannel("AP");
         String variantCategory = connector.getConfig(connector.resolveErpChannel("AP_BLUE")) != null
                 ? connector.resolveErpChannel("AP_BLUE") : channel;

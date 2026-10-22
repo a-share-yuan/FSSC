@@ -155,6 +155,49 @@ public class TrFundPlanService {
     }
 
     /**
+     * D-G5-05：作废资金计划（<b>不是物理删除</b>）。
+     *
+     * <p><b>为什么需要这个出口</b>：此前资金计划<b>没有删除/作废端点</b>，
+     * 跑测者想清理一张重复的草稿只能直接删表 ⇒ 产生两个后果：
+     * <ol>
+     *   <li>删表<b>不联动</b>终止流程实例 ⇒ {@code wf_instance} 仍 RUNNING、
+     *       {@code act_ru_task} 留一个<b>无 assignee</b> 的僵尸待办（实测 FP202610200001）；
+     *       手工清理引擎表还会撞外键（{@code act_ru_identitylink.TASK_ID_}→{@code act_ru_task.ID_}，报 1451）。</li>
+     *   <li>物理删除不留痕，事后无法追溯「这张单为什么没了」。</li>
+     * </ol>
+     *
+     * <p><b>本方法的口径</b>：单据置 {@code VOIDED}（留痕，不删行）＋
+     * <b>联动终止</b>该单名下所有 RUNNING 流程实例。
+     * 流程终止<b>不自己实现</b>，直接复用已验证可用的
+     * {@link WfEngineFacade#cancelRunningInstancesByBiz}（D-DEC-068 确立的标准收尾入口：
+     * 引擎实例删除＋wf_instance 置 CANCELLED＋wf_task 的 PENDING 置 CANCELLED＋双留痕）。
+     *
+     * <p><b>可作废的状态</b>：DRAFT / SELECTED / REJECTED（尚未进入实质执行）。
+     * 已 COMPLETED/PAID/CLOSED/ARCHIVED 的单据有后续凭证与账务影响，不允许作废。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void voidPlan(Long planId, String reason) {
+        TrFundPlan plan = requireExist(planId);
+        String status = plan.getStatus();
+        if (!"DRAFT".equals(status) && !"SELECTED".equals(status) && !"REJECTED".equals(status)) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "仅草稿/已选中/已驳回的资金计划可作废，当前状态: " + status);
+        }
+        // 流程收尾：作废必须同时终止在办流程，否则待办镜像滞留 PENDING、催办扫描持续空转
+        // （D-DEC-068 口径）。该方法幂等：无 RUNNING 实例返回 0，不抛错。
+        int cancelled = wfEngineFacade.cancelRunningInstancesByBiz("TR_PLAN", planId,
+                "资金计划作废（操作人 id=" + userId() + "）：" + (reason == null || reason.isBlank() ? "未填原因" : reason));
+        TrFundPlan upd = new TrFundPlan();
+        upd.setId(planId);
+        upd.setStatus("VOIDED");
+        upd.setUpdateBy(userId());
+        upd.setUpdateTime(java.time.LocalDateTime.now());
+        mapper.updateById(upd);
+        log.info("资金计划已作废：id={} 单号={} 原状态={} 终止流程实例数={} 原因={}",
+                planId, plan.getPlanNo(), status, cancelled, reason);
+    }
+
+    /**
      * 资金计划调整（T1）：在计划收/支基础上追加调整额，并发起 TR_PLAN_ADJUST 计划调整审批流。
      *
      * <p>缺陷修复（H-09 / DF-01）：原实现对调整额无任何校验，任意负数/超额数值都会直接并入计划。

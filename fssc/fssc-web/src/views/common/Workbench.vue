@@ -14,14 +14,14 @@
     <!-- 概览卡片（无权限的卡片不渲染，避免点了才报"缺少权限"） -->
     <el-row class="cm-target-workbench cards" :gutter="16">
       <el-col :span="statSpan"><el-card shadow="hover" class="stat-card" @click="go('/approval')"><div class="stat"><div class="num">{{ stats.todo }}</div><div class="label">我的待办</div></div></el-card></el-col>
-      <el-col :span="statSpan"><el-card shadow="hover" class="stat-card" @click="go('/requisition/mine')"><div class="stat"><div class="num">{{ stats.mine }}</div><div class="label">我发起(待审)</div></div></el-card></el-col>
+      <el-col :span="statSpan"><el-card shadow="hover" class="stat-card" @click="go('/requisition/mine')"><div class="stat"><div class="num">{{ stats.mine }}</div><div class="label">我发起的单据</div></div></el-card></el-col>
       <el-col v-if="canPool" :span="statSpan"><el-card shadow="hover" class="stat-card" @click="go('/sharing/task-pool')"><div class="stat"><div class="num">{{ stats.pool }}</div><div class="label">待派工</div></div></el-card></el-col>
       <el-col v-if="canPay" :span="statSpan"><el-card shadow="hover" class="stat-card" @click="go('/pay')"><div class="stat"><div class="num">{{ stats.pay }}</div><div class="label">付款待执行</div></div></el-card></el-col>
     </el-row>
 
     <el-row :gutter="16">
       <!-- 我的待办 -->
-      <el-col :span="canPool ? 12 : 24">
+      <el-col :span="12">
         <el-card header="我的待办">
           <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
             <el-button size="small" @click="exportTableCsv('todo')">导出 CSV</el-button>
@@ -58,32 +58,35 @@
         </el-card>
       </el-col>
 
-      <!-- 待派工任务池（共享运营，需 sharing:task:list） -->
-      <el-col v-if="canPool" :span="12">
-        <el-card header="待派工任务池（共享运营）">
-          <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
-            <el-button size="small" @click="exportTableCsv('pool')">导出 CSV</el-button>
-            <el-button v-if="poolSel.length" type="success" plain size="small" @click="exportSelected('pool')">导出选中({{ poolSel.length }})</el-button>
-          </div>
-          <SkeletonList v-if="loading.pool" :rows="8" :cols="5" />
-          <el-table :data="pagedPool" size="small" stripe v-else max-height="320" empty-text="暂无数据" v-loading="loading.pool" @selection-change="(val) => poolSel = val">
-            <el-table-column type="selection" width="45" />
-            <el-table-column prop="billNo" label="业务单号" width="150" sortable />
-            <el-table-column label="类型" width="110">
-              <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
+      <!-- 我的已办（本人视角自助页：后端按当前登录人过滤，不设权限码） -->
+      <el-col :span="12">
+        <el-card>
+          <template #header>
+            <div class="card-head">
+              <span>我的已办 <el-tag size="small" type="success">{{ stats.done }}</el-tag></span>
+              <el-button link type="primary" size="small" @click="go('/requisition/done')">查看全部</el-button>
+            </div>
+          </template>
+          <SkeletonList v-if="loading.done" :rows="8" :cols="5" />
+          <el-table :data="pagedDone" size="small" stripe v-else max-height="320" empty-text="暂无已办记录" v-loading="loading.done" @row-dblclick="openTrace">
+            <el-table-column label="单据类型" width="100">
+              <template #default="{ row }">{{ docTypeLabel(row.bizType) || row.bizType || '—' }}</template>
             </el-table-column>
-            <el-table-column label="状态" width="90">
-              <template #default="{ row }"><el-tag :type="row.poolStatus === 'WAITING' ? 'warning' : 'info'">{{ poolStatusLabel(row.poolStatus) }}</el-tag></template>
-            </el-table-column>
-            <el-table-column label="操作" width="190" fixed="right">
+            <el-table-column prop="taskName" label="办理节点" width="110" show-overflow-tooltip />
+            <el-table-column label="处理结果" width="90">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="goPoolWork(row)">去处理</el-button>
-                <el-button v-if="row.poolStatus === 'WAITING'" link type="success" size="small" @click="receive(row)">抢单</el-button>
-                <el-button v-if="row.poolStatus === 'RECEIVED'" link type="success" size="small" @click="finish(row)">完成</el-button>
+                <el-tag :type="row.action === 'APPROVE' ? 'success' : row.action === 'REJECT' ? 'danger' : 'info'" size="small">{{ wfActionLabel(row.action) || row.action }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="comment" label="意见" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="handleTime" label="办理时间" width="160" sortable :formatter="(row, col, val) => formatDateTime(val)" />
+            <el-table-column label="操作" width="70" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openTrace(row)">追溯</el-button>
               </template>
             </el-table-column>
           </el-table>
-          <TablePager :pager="pagerPool" @change="loadPool" />
+          <TablePager :pager="pagerDone" @change="loadDone" />
         </el-card>
       </el-col>
     </el-row>
@@ -154,6 +157,37 @@
       </el-col>
     </el-row>
 
+    <!-- 待派工任务池（共享运营，需 sharing:task:list） -->
+    <el-row v-if="canPool" :gutter="16" style="margin-top:16px">
+      <el-col :span="24">
+        <el-card header="待派工任务池（共享运营）">
+          <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
+            <el-button size="small" @click="exportTableCsv('pool')">导出 CSV</el-button>
+            <el-button v-if="poolSel.length" type="success" plain size="small" @click="exportSelected('pool')">导出选中({{ poolSel.length }})</el-button>
+          </div>
+          <SkeletonList v-if="loading.pool" :rows="8" :cols="5" />
+          <el-table :data="pagedPool" size="small" stripe v-else max-height="320" empty-text="暂无数据" v-loading="loading.pool" @selection-change="(val) => poolSel = val">
+            <el-table-column type="selection" width="45" />
+            <el-table-column prop="billNo" label="业务单号" width="150" sortable />
+            <el-table-column label="类型" width="110">
+              <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }"><el-tag :type="row.poolStatus === 'WAITING' ? 'warning' : 'info'">{{ poolStatusLabel(row.poolStatus) }}</el-tag></template>
+            </el-table-column>
+            <el-table-column label="操作" width="190" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="goPoolWork(row)">去处理</el-button>
+                <el-button v-if="row.poolStatus === 'WAITING'" link type="success" size="small" @click="receive(row)">抢单</el-button>
+                <el-button v-if="row.poolStatus === 'RECEIVED'" link type="success" size="small" @click="finish(row)">完成</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <TablePager :pager="pagerPool" @change="loadPool" />
+        </el-card>
+      </el-col>
+    </el-row>
+
     <!-- 审批/驳回弹窗 -->
     <el-dialog v-model="approveVisible" :title="approveDecision === BillStatus.APPROVED ? '审批通过' : '驳回'" width="420px">
       <el-form ref="approveFormRef" :model="{ comment: approveComment, nextAssigneeUserId: nextPickUserId }" :rules="approveRules" label-width="80px">
@@ -212,8 +246,10 @@ import {
 // D-DEC-406：billApi.myPage（费用域单表）已由 /tenant/workbench/my-documents 跨域取数替代，不再引入
 import { wfApi, flowApi, payApi, sharingApi, store, http } from '../../api'
 import { hasPerm } from '../../utils/perm'
+import { pathDenyReason, ensureMenuPaths } from '../../router/pathAccess'
 import { statusLabel as _billStatusLabel, statusType as _billStatusType, BillStatus } from '../../constants/billStatus'
-import { taskTypeLabel, poolStatusLabel, docTypeLabel } from '../../constants/enums'
+import { taskTypeLabel, poolStatusLabel, docTypeLabel, wfActionLabel } from '../../constants/enums'
+import { formatDateTime } from '../../utils/format'
 import CoachMark from '@/components/CoachMark.vue'
 import BillTraceDrawer from '@/components/BillTraceDrawer.vue'
 import { useTablePager } from '../../composables/useTablePager'
@@ -249,13 +285,13 @@ const ENTRIES = [
   { title: '管理报表', desc: '报表与分析', path: '/reports', icon: DataAnalysis, color: '#19be3b', perm: 'report:view' },
   { title: '流程导航地图', desc: '7 大域端到端链路', path: '/process-nav', icon: Connection, color: '#606266' },
 ]
-// 入口卡此前硬编码全量渲染，而路由守卫只校验 token 不校验权限，
-// 无权限用户点进去才吃报错；现按菜单权限码过滤，与侧边栏菜单可见性保持一致。
-const entries = ENTRIES.filter((e) => {
+// 入口卡两道闸：① 该入口对应菜单的业务权限码；② 路由守卫同一把钥匙（router/pathAccess）。
+// 只过①会漏——如「对公付款」有 exp:pay:list 却不在该角色的菜单树里，点卡片必被弹回工作台并提示无权限。
+const entries = computed(() => ENTRIES.filter((e) => {
   const need = e.perm
-  if (!need) return true
-  return Array.isArray(need) ? need.some(hasPerm) : hasPerm(need)
-})
+  if (need && !(Array.isArray(need) ? need.some(hasPerm) : hasPerm(need))) return false
+  return !pathDenyReason(e.path)
+}))
 function go(path) { router.push(path) }
 
 // P1-1：查看/全链路追溯统一走单据轨迹抽屉（此前 @view 绑到空函数、openTrace 未定义）
@@ -269,11 +305,21 @@ function openTrace(row) {
 }
 
 // 按单据类型进入对应业务处理页（携带 billNo/billId 供落地页定位）；未命中类型兜底打开追溯抽屉
+// D-BIZ-08：跳转前先按路由守卫同一把钥匙预判页面可达性（判据已抽到 router/pathAccess，
+// 含此前漏掉的「菜单树叶子兜底」一层——无 meta.perms 也无 ROUTE_PERMS 映射的路径靠菜单树裁决）。
+function billPageBlocked(path) {
+  if (!path) return false
+  let meta = {}
+  try { meta = router.resolve(path).meta || {} } catch { meta = {} }
+  return !!pathDenyReason(path, meta)
+}
+
 function goBiz(row) {
+  const blockedPath = resolveBillRoute(row?.billType || row?.bizType)
   // D-DEC-078：与 Approval.vue 同一落点闸——发票池数据面按 inv:list 门控，
   // 无权限岗不跳闸页（落地只会吃「暂无数据」＋一串「缺少权限」报错），改落全链路追溯。
-  if (!canInvPool && resolveBillRoute(row?.billType || row?.bizType) === '/invoice') {
-    ElMessage.info('当前账号无发票池查看权限（inv:list），已打开全链路追溯')
+  if (!canInvPool && blockedPath === '/invoice') {
+    ElMessage.info('当前账号没有发票池的查看权限，已打开全链路追溯')
     openTrace(row)
     return
   }
@@ -282,6 +328,11 @@ function goBiz(row) {
     // gl_journal_entry＝计提/待摊/其他收入/手工凭证四合一）后端宁缺勿错、不猜类型 ⇒ 行内 bizType 为空，
     // 按 billType 的映射表必然落空。这类行带的是**表级**台账坐标（ledgerRoute），跳台账并按单号定位。
     if (row.ledgerRoute) {
+      if (billPageBlocked(row.ledgerRoute)) {
+        ElMessage.info('当前账号没有该台账页面的查看权限，已打开全链路追溯；需办理请到 流程中心›我的待办')
+        openTrace(row)
+        return
+      }
       // 落地页取参有两套既有口径，且各页只认自己那套：
       //   ①kw——台账搜索框（Contract.vue:276／PoOrder.vue:367／PayPlan.vue:113）
       //   ②billNo/billId——readBillDeepLink（GlSpecial.vue:390／BankAccount／BankReconcile）
@@ -292,13 +343,18 @@ function goBiz(row) {
       router.push({ path: row.ledgerRoute, query: q })
       return
     }
-    ElMessage.info('该单据类型暂未配置业务处理入口，已打开全链路追溯')
+    ElMessage.info('当前账号不能直接进入该单据的业务页面，已打开全链路追溯')
     openTrace(row)
   }
 }
 
-// 派工池：跳到任务池管理页并按单号定位该任务
+// 派工池：跳到任务池管理页并按单号定位该任务（无该页权限时兜底打开全链路追溯，不弹回报错）
 function goPoolWork(row) {
+  if (billPageBlocked('/sharing/task-pool')) {
+    ElMessage.info('当前账号没有共享任务池的查看权限，已打开全链路追溯')
+    openTrace(row)
+    return
+  }
   router.push({ path: '/sharing/task-pool', query: row.billNo ? { keyword: row.billNo } : {} })
 }
 
@@ -308,7 +364,7 @@ function formatMoney(val) {
   return Number(val || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-const stats = reactive({ todo: 0, mine: 0, pool: 0, pay: 0 })
+const stats = reactive({ todo: 0, mine: 0, done: 0, pool: 0, pay: 0 })
 
 // D-DEC-406：跨域汇总的两条如实标注——无归属人列的类型（后端 unsupported）、单表取数封顶（approximate）
 const mineUnsupported = ref([])
@@ -334,15 +390,18 @@ const todos = ref([])
 const pools = ref([])
 const mines = ref([])
 const ccs = ref([])
+const doneRows = ref([])
 const pagerTodo = useTablePager({ mode: 'server', storageKey: 'wb_todo' })
 const pagerPool = useTablePager({ mode: 'server', storageKey: 'wb_pool' })
 const pagerMine = useTablePager({ mode: 'server', storageKey: 'wb_mine' })
 const pagerCc = useTablePager({ mode: 'server', storageKey: 'wb_cc' })
+const pagerDone = useTablePager({ mode: 'server', storageKey: 'wb_done' })
 const { pagedData: pagedTodo } = pagerTodo
 const { pagedData: pagedPool } = pagerPool
 const { pagedData: pagedMine } = pagerMine
 const { pagedData: pagedCc } = pagerCc
-const loading = reactive({ todo: false, pool: false, mine: false, cc: false })
+const { pagedData: pagedDone } = pagerDone
+const loading = reactive({ todo: false, pool: false, mine: false, cc: false, done: false })
 
 // 表格元数据：列定义 + 数据源 + selection + 文件名
 const TABLE_META = {
@@ -367,6 +426,18 @@ async function loadTodo() {
       return { list: todos.value, total: r?.total || todos.value.length }
     })
   } catch (e) { ElMessage.error(e.message) } finally { loading.todo = false }
+}
+
+async function loadDone() {
+  loading.done = true
+  try {
+    await pagerDone.load(async ({ pageNum, pageSize }) => {
+      const r = await http.get('/tenant/workbench/my-done', { params: { pageNum, pageSize } })
+      doneRows.value = r?.list || []
+      stats.done = Number(r?.total) || doneRows.value.length
+      return { list: doneRows.value, total: r?.total || doneRows.value.length }
+    })
+  } catch (e) { ElMessage.error(e.message) } finally { loading.done = false }
 }
 
 async function loadPool() {
@@ -423,7 +494,7 @@ async function loadCc() {
 
 async function load() {
   // 只加载当前身份有权访问的数据源：无权限的卡片不渲染、也不发请求
-  const jobs = [loadTodo(), loadMine(), loadCc()]
+  const jobs = [loadTodo(), loadDone(), loadMine(), loadCc()]
   if (canPool) jobs.push(loadPool())
   await Promise.all(jobs)
 
@@ -435,6 +506,7 @@ async function load() {
     // silent：概览计数属后台统计，失败静默（卡片照旧显示 0，不打断门户加载）
     const d = await http.get('/tenant/workbench/dashboard', { silent: true })
     stats.mine = Number(d?.mine) || 0
+    stats.done = Number(d?.done) || 0
   } catch { /* 概览失败不阻断工作台 */ }
 
   // 付款待执行（需 pay:batch:list；无权限角色直接跳过，避免误导性权限报错）
@@ -544,7 +616,7 @@ async function finish(row) {
   try { await sharingApi.finish(row.id, remark); ElMessage.success('已完成'); await load() } catch (e) { ElMessage.error(e.message) }
 }
 
-onMounted(load)
+onMounted(() => { ensureMenuPaths(); load() })
 
 // ---- 通用 CSV 导出（每个表格独立调用） ----
 
@@ -634,6 +706,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => wb.value?.show(),
 @media (max-width: 768px) {
   .biz-entries { grid-template-columns: repeat(2, 1fr); }
 }
+.card-head { display: flex; align-items: center; justify-content: space-between; }
 .cards { margin-bottom: 16px; }
 .stat-card { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
 .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; }

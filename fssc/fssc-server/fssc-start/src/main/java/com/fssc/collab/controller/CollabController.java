@@ -202,6 +202,7 @@ public class CollabController {
         return Result.success(scpFlowService.forceApply(id, (String) body.get("reason"), operator));
     }
 
+    /** R-18 审批通过（分级审批做法：差额≤阈值需一级 force-appr；超阈值由二级岗 force-appr-l2 审批即可；四眼：审批人≠申请人） */
     @PostMapping("/scp/bills/{id}/force-approve")
     public Result<ScpBill> forceApprove(@PathVariable Long id) {
         com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.getRequired();

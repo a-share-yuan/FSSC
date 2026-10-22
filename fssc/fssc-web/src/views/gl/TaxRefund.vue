@@ -47,7 +47,7 @@
         </template>
       </el-table-column>
       <el-table-column :label="$t('common.operation')" width="180" fixed="right">
-        <template #default="{ row }">          <InlineActions :visible="true" @view="openFlow(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="true" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
+        <template #default="{ row }">          <InlineActions :visible="true" @view="viewRefund(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="true" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
           <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('gl.special.colTrace') }}</el-button>
           <el-button v-if="row.status === BillStatus.DRAFT" size="small" type="primary" @click="submit(row)">{{ $t('common.submit') }}</el-button>
           <el-button size="small" @click="openFlow(row)">{{ $t('gl.refund.btnTransit') }}</el-button>
@@ -160,6 +160,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
+// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 // R5-13: 快捷键
@@ -298,6 +299,25 @@ async function submit(row) {
     ElMessage.success(t('gl.refund.msgSubmitted'))
     load(f.pageNum)
   } catch (e) { ElMessage.error(e.message) }
+}
+
+/** 行内「查看」只出只读详情；状态流转是能改账的写动作，入口留给行末「流转」按钮。 */
+function viewRefund(row) {
+  return showRowDetail({
+    refundNo: row.refundNo,
+    refundType: typeName(row.refundType),
+    period: row.period,
+    calc: calcDesc(row),
+    baseAmount: '￥' + fmt(row.baseAmount),
+    rate: fmt(row.rate),
+    taxAmount: '￥' + fmt(row.taxAmount),
+    refundedAmount: '￥' + fmt(row.refundedAmount),
+    status: statusName(row.status),
+  }, {
+    title: '退税详情',
+    labels: { refundNo: '退（抵）税单号', refundType: '退税类型', period: '所属期', calc: '计算口径',
+      baseAmount: '计税依据', rate: '退税率', taxAmount: '应退税额', refundedAmount: '已退税额', status: '状态' },
+  })
 }
 
 function openFlow(row) {

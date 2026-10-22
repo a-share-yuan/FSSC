@@ -39,8 +39,8 @@
         <el-button type="primary" size="small" :loading="running" @click="runReconcile">一键勾对</el-button>
         <el-button size="small" @click="loadReconcile">刷新</el-button>
         <el-button size="small" @click="searchKey = ''; filterStatus = ''; loadReconcile()">重置</el-button>
-        <el-button size="small" type="warning" @click="goSheet">调节表</el-button>
-        <el-button size="small" @click="goSlip">回单认领</el-button>
+        <el-button v-if="canOpenSheet()" size="small" type="warning" @click="goSheet">调节表</el-button>
+        <el-button v-if="canOpenSlip()" size="small" @click="goSlip">回单认领</el-button>
       </div>
     </el-card>
 
@@ -194,6 +194,11 @@ import { readBillDeepLink } from '../../utils/bizEntry'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import CoachMark from '@/components/CoachMark.vue'
+import { pathDenyReason } from '@/router/pathAccess'
+
+// 兄弟页深链：本账号打不开的就不给按钮（点了被弹回工作台并提示无权限，等于假入口）
+const canOpenSheet = () => !pathDenyReason('/bank/reconcile-sheet')
+const canOpenSlip = () => !pathDenyReason('/bank/slip')
 const reconcileCm = ref(null)
 
 // R4-02: BillTraceDrawer

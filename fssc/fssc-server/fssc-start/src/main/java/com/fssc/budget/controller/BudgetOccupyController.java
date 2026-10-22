@@ -52,12 +52,12 @@ public class BudgetOccupyController {
     /** 占用流水查询（需求 3.10 查看占用明细，真分页）。2026-09-17：支持 budgetItemId 穿透过滤 */
     @RequiresPerm("budget:occupy:list")
     @GetMapping("/page")
-    public Result<PageResult<BgOccupy>> page(PageQuery query,
+    public Result<PageResult<com.fssc.budget.vo.BgOccupyVO>> page(PageQuery query,
                                              @RequestParam(required = false) Long budgetItemId,
                                              @RequestParam(required = false) String operType,
                                              @RequestParam(required = false) String bizType,
                                              @RequestParam(required = false) String keyword) {
-        com.baomidou.mybatisplus.core.metadata.IPage<BgOccupy> p = bgOccupyMapper.searchPage(
+        com.baomidou.mybatisplus.core.metadata.IPage<com.fssc.budget.vo.BgOccupyVO> p = bgOccupyMapper.searchPageWithItemName(
                 com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(query.getPageNum(), query.getPageSize()),
                 budgetItemId, operType, bizType, keyword);
         fillOperatorNames(p.getRecords());
@@ -68,12 +68,12 @@ public class BudgetOccupyController {
      * R5-D-269：分页结果由后端一次批查 sys_user，把裸 user_id 补成「姓名/工号」可读口径（与审计轨迹同法）。
      * 查不到或异常时留空——前端回退显示裸 id，绝不臆造姓名。
      */
-    private void fillOperatorNames(List<BgOccupy> rows) {
+    private void fillOperatorNames(List<com.fssc.budget.vo.BgOccupyVO> rows) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
         Set<Long> ids = new LinkedHashSet<>();
-        for (BgOccupy r : rows) {
+        for (com.fssc.budget.vo.BgOccupyVO r : rows) {
             if (r.getOperUserId() != null) {
                 ids.add(r.getOperUserId());
             }
@@ -86,7 +86,7 @@ public class BudgetOccupyController {
             for (SysUser u : sysUserMapper.selectBatchIds(ids)) {
                 userMap.put(u.getId(), u);
             }
-            for (BgOccupy r : rows) {
+            for (com.fssc.budget.vo.BgOccupyVO r : rows) {
                 SysUser u = userMap.get(r.getOperUserId());
                 if (u == null) {
                     continue;

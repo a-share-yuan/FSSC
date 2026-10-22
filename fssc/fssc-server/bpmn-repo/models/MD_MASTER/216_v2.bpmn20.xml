@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_MD_MASTER" targetNamespace="http://fssc">
+  <bpmn:process id="MD_MASTER" name="主数据核准流程（客户/供应商/银行账户/印鉴/GL 五档）" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:userTask id="MDM_1" name="变更申请登记【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
+    <bpmn:sequenceFlow id="Flow_in_MDM_1" sourceRef="StartEvent_1" targetRef="MDM_1" />
+    <bpmn:userTask id="MDM_2" name="共享会计复核【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
+    <bpmn:sequenceFlow id="Flow_in_MDM_2" sourceRef="MDM_1" targetRef="MDM_2" />
+    <bpmn:userTask id="MDM_3" name="生效确认【总账会计】" flowable:candidateGroups="FIN_GL" />
+    <bpmn:sequenceFlow id="Flow_in_MDM_3" sourceRef="MDM_2" targetRef="MDM_3" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="MDM_3" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="MD_MASTER">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="MDM_1_di" bpmnElement="MDM_1"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="MDM_2_di" bpmnElement="MDM_2"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="MDM_3_di" bpmnElement="MDM_3"><dc:Bounds x="596" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="796" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_in_MDM_1_di" bpmnElement="Flow_in_MDM_1"><di:waypoint x="138" y="120" /><di:waypoint x="281" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_MDM_2_di" bpmnElement="Flow_in_MDM_2"><di:waypoint x="281" y="120" /><di:waypoint x="471" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_MDM_3_di" bpmnElement="Flow_in_MDM_3"><di:waypoint x="471" y="120" /><di:waypoint x="661" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="661" y="120" /><di:waypoint x="814" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

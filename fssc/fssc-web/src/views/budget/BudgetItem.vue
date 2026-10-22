@@ -71,7 +71,7 @@
           </template>
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
-          <template #default="{ row }">          <InlineActions :visible="true" @view="openDialog(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
+          <template #default="{ row }">          <InlineActions :visible="true" @view="openDialog(row, true)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
             <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
           </template>
         </el-table-column>
@@ -87,13 +87,13 @@
     <!-- R5-D-263：无 budget:item:list 权限给显式空态（不再渲染真实预算行） -->
     <el-card v-else shadow="never">
       <el-result icon="warning" title="暂无访问权限"
-        sub-title="当前账号缺少「预算明细」查看权限（budget:item:list）；如需查阅请向管理员申请授权。" />
+        sub-title="当前账号缺少「预算明细」查看权限，如需查阅请向管理员申请授权。" />
     </el-card>
 
     <!-- 导入 Excel 弹窗 -->
     <el-dialog v-model="importDlg.visible" title="导入预算明细" width="560px" destroy-on-close>
       <el-alert type="info" :closable="false" style="margin-bottom:12px"
-        title="模板列：预算年度/期间(全年或1-12)/公司编码或名称/部门编码或名称/费用项编码或名称/预算总额/币种/NC科目/IFS科目/备注。可直接导出后修改再导入；按「方案+维度键」幂等更新。" />
+        title="模板列：预算年度、期间（全年或 1-12）、公司、部门、费用项、预算总额、币种、预算科目对照码、备注。可先导出再修改导入；同一方案下按维度重复导入会覆盖更新。" />
       <el-form ref="importFormRef" :model="importDlg" :rules="importRules" label-width="90px">
         <el-form-item label="预算方案" prop="schemeId">
           <el-select v-model="importDlg.schemeId" placeholder="选择导入到的方案" filterable style="width:100%">
@@ -117,8 +117,8 @@
     </el-dialog>
 
     <!-- 录入/编辑弹窗 -->
-    <el-dialog v-model="dialog.visible" :title="dialog.editing ? '编辑预算明细' : '录入预算明细'" width="640px" destroy-on-close>
-      <el-form ref="formRef" :model="dialog.form" :rules="itemFormRules" label-width="120px" size="default">
+    <el-dialog v-model="dialog.visible" :title="dialog.readonly ? '预算明细详情' : (dialog.editing ? '编辑预算明细' : '录入预算明细')" width="640px" destroy-on-close>
+      <el-form ref="formRef" :model="dialog.form" :rules="itemFormRules" label-width="120px" size="default" :disabled="dialog.readonly">
         <el-form-item label="预算方案" prop="schemeId">
           <el-select v-model="dialog.form.schemeId" placeholder="选择方案" filterable style="width:100%">
             <el-option v-for="s in schemes" :key="s.id" :label="s.schemeName" :value="s.id" />
@@ -172,8 +172,8 @@
         <el-form-item label="备注"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="dialog.saving" @click="save">保存</el-button>
+        <el-button @click="dialog.visible = false">{{ dialog.readonly ? '关闭' : '取消' }}</el-button>
+        <el-button v-if="!dialog.readonly" type="primary" :loading="dialog.saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -203,6 +203,7 @@ import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 import { hasPerm } from '../../utils/perm'
 import { useCurrency } from '@/composables/useCurrency'
 
+// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 // R5-13: 快捷键
@@ -312,7 +313,7 @@ function renderTrend() {
 }
 
 const dialog = reactive({
-  visible: false, editing: false, saving: false,
+  visible: false, editing: false, saving: false, readonly: false,
   form: {},
 })
 
@@ -387,8 +388,9 @@ function resetFilter() {
   loadList()
 }
 
-function openDialog(row) {
+function openDialog(row, readonly = false) {
   dialog.editing = !!row
+  dialog.readonly = !!readonly && !!row
   dialog.form = row ? { ...row } : {
     schemeId: filter.schemeId, budgetYear: new Date().getFullYear(),
     budgetPeriod: 0, companyId: null, deptId: null, itemId: null,
@@ -504,7 +506,7 @@ async function handleApprove(row) {
   if (!approvalRef.value) { ElMessage.error('审批弹窗未就绪，请刷新页面后重试'); return }
   const res = await approvalRef.value.open({
     row, allowReject: false, allowComment: false,
-    notice: '预算调剂为业务确认动作，后端接口未提供审批意见字段，本次不记录意见。',
+    notice: '预算调剂为业务确认动作，本操作不记录审批意见。',
   })
   if (!res) return
   try {

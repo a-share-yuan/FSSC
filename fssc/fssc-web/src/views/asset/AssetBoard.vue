@@ -1,5 +1,5 @@
 <template>
-  <div :class="{ tabless: isSingle }">
+  <div>
     <el-card>
     <template #header>
       <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap">
@@ -29,7 +29,7 @@
 
 <script setup>
 
-import { ref, provide, onMounted, computed } from 'vue'
+import { ref, provide, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { assetApi, orgApi, mdApi } from '../../api'
 import AssetCardTab from './AssetCardTab.vue'
@@ -42,9 +42,10 @@ useKeyboard({
   'ctrl+r': () => { try { reload() } catch { /* noop */ } },
 })
 
-// P: tab 页拆分——由菜单深链进来时传入 tab，只显示该页并隐藏 tab 导航条（一 TAB = 一菜单）
+// D-BIZ-05：资产与存货在 sys_menu 里只有 3071「资产与存货」一条菜单行，四个子视图没有拆出的子菜单。
+// 原先按「一 TAB = 一菜单」的约定隐藏页签条 ⇒ 资产类别/存货收发存/税会差异只能手敲 URL。
+// 菜单未拆的页不藏页签：深链进来仍定位到指定页签，同时把其余页签露出来可点。
 const props = defineProps({ tab: { type: String, default: '' } })
-const isSingle = computed(() => !!props.tab)
 const tab = ref(props.tab || 'asset')
 const loading = ref(false)
 
@@ -53,6 +54,9 @@ const categories = ref([])
 const depts = ref([])
 const companies = ref([])
 const suppliers = ref([])
+// D-BIZ-03：供应商取数被 4030 拒时前端把错误吞成空列表，用户只看到「下拉是空的」。
+// 记下该标志，供建档弹窗把提示改成「无查看权限」而不是静默空表。
+const suppliersDenied = ref(false)
 const warehouses = ref([])
 
 // ========== 共享工具函数 ==========
@@ -67,7 +71,7 @@ function warehouseName(id) { const w = warehouses.value.find((x) => x.id === id)
 
 // provide 共享数据给所有子组件
 provide('assetShared', {
-  categories, depts, companies, suppliers, warehouses, loading,
+  categories, depts, companies, suppliers, suppliersDenied, warehouses, loading,
   fmt, fmt0, categoryName, deptName, companyName, supplierName, warehouseName,
 })
 
@@ -99,6 +103,9 @@ async function loadMasters() {
     }
     if (supplierRes.status === 'fulfilled') {
       suppliers.value = (supplierRes.value.list || []).map((s) => ({ id: s.id, supplierName: s.supplierName || s.name, name: s.name }))
+      suppliersDenied.value = false
+    } else {
+      suppliersDenied.value = supplierRes.reason?.code === 4030
     }
   } catch (e) { /* ignore */ }
 }
@@ -120,7 +127,3 @@ onMounted(async () => {
 })
 </script>
 
-<style scoped>
-/* 一 TAB = 一菜单：从菜单深链进来（tab 命中）时隐藏 tab 导航条，只显示该页 */
-.tabless :deep(.el-tabs__header) { display: none; }
-</style>

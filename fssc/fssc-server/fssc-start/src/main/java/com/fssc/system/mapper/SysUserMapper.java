@@ -49,9 +49,11 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
      * <p>上线前置闸＝必须先跑「活载体归位」数据腿（D-DEC-467），并用
      * {@code 临时脚本/菜单治理/D-DEC-468_部署前闸.sql} 证明「有持有人却无活载体的码＝0 行」，
      * 否则本条件会瞬时缩权。
+     * <p>★A-01a：追加启用角色条件 —— 停用角色即便仍有授权行也不再供码。
      */
     @Select("select distinct m.perms from sys_menu m " +
             "join sys_role_menu rm on m.id = rm.menu_id " +
+            "join sys_role r on r.id = rm.role_id and r.status = 'NORMAL' " +
             "where m.perms is not null and m.perms <> '' and m.status = 1 and m.del_flag = 0 " +
             "  and rm.role_id in (" +
             "    select role_id from sys_user_role where user_id = #{userId} " +

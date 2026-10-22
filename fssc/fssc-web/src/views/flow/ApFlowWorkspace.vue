@@ -4,18 +4,16 @@
       <h2 class="ws-title">{{ $t('flow.entry.apWorkspace') }}</h2>
       <span class="ws-sub">{{ $t('flow.entry.apServiceDesc') }}</span>
       <div class="ws-links">
-        <el-button link type="primary" @click="$router.push('/apflow/ap-month-close')">{{ $t('flow.entry.monthCloseLink') }}</el-button>
-        <el-button link type="primary" @click="$router.push('/pay/recon')">{{ $t('flow.entry.apReconLink') }}</el-button>
+        <el-button v-if="hasPerm('apflow:close:list')" link type="primary" @click="$router.push('/apflow/ap-month-close')">{{ $t('flow.entry.monthCloseLink') }}</el-button>
+        <el-button v-if="hasPerm('pay:recon:list')" link type="primary" @click="$router.push('/pay/recon')">{{ $t('flow.entry.apReconLink') }}</el-button>
       </div>
     </div>
-    <el-tabs v-model="tab" class="ws-tabs">
-      <el-tab-pane :label="$t('flow.entry.apServiceTitle')" name="request" lazy>
-        <ApRequestBoard v-if="canList" />
-        <el-empty v-else :description="$t('flow.entry.noListPerm')" />
-      </el-tab-pane>
-      <el-tab-pane :label="$t('flow.entry.reportTitle')" name="reports" lazy><ArApReportBoard /></el-tab-pane>
-      <el-tab-pane :label="$t('flow.entryAp.tabSupplyChain')" name="collab" lazy><ArApCollabBoard /></el-tab-pane>
+    <el-tabs v-if="visibleNames.length" v-model="tab" class="ws-tabs">
+      <el-tab-pane v-if="canList" :label="$t('flow.entry.apServiceTitle')" name="request" lazy><ApRequestBoard /></el-tab-pane>
+      <el-tab-pane v-if="hasPerm('arflow:report:view')" :label="$t('flow.entry.reportTitle')" name="reports" lazy><ArApReportBoard /></el-tab-pane>
+      <el-tab-pane v-if="hasPerm('collab:scp:list')" :label="$t('flow.entryAp.tabSupplyChain')" name="collab" lazy><ArApCollabBoard /></el-tab-pane>
     </el-tabs>
+    <el-empty v-else :description="$t('flow.entry.noListPerm')" />
   </div>
 </template>
 
@@ -32,7 +30,11 @@ const route = useRoute()
 const router = useRouter()
 // R5-D-106：无 apflow:request:list 权限时不挂载申请板（避免 4030 被吞成静默空表），显式无权限态引导授权
 const canList = hasPerm('apflow:request:list')
-const tab = ref(String(route.query.tab || 'request'))
+// 页签按内层接口码门控：报表＝arflow:report:view，协同＝collab:scp:list，无码不渲染以免点了才 403
+const visibleNames = ['request', 'reports', 'collab'].filter((n) =>
+  n === 'request' ? canList : n === 'reports' ? hasPerm('arflow:report:view') : hasPerm('collab:scp:list'))
+const q = String(route.query.tab || '')
+const tab = ref(visibleNames.includes(q) ? q : (visibleNames[0] || ''))
 watch(tab, (v) => { router.replace({ query: { ...route.query, tab: v } }) })
 </script>
 

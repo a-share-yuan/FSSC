@@ -19,9 +19,22 @@
               <el-steps v-if="getHistory(row).length" :active="getHistory(row).length" align-center finish-status="success" simple>
                 <el-step v-for="(h, i) in getHistory(row)" :key="h.id || i" :title="h.nodeName || '—'" :description="`${h.operUserName || ''} ${h.operTime ? h.operTime.substring(5, 16) : ''}`" />
               </el-steps>
-              <el-steps v-else :active="0" align-center simple>
-                <el-step title="提交" description="等待审批" />
-              </el-steps>
+              <!-- 无留痕时不再画一枚假的「提交」环节：展开区必须如实说明取数状态，
+                   否则「一个圆圈＋提交」会被读成"本单刚提交、后面还没人审"。 -->
+              <div v-else class="hist-placeholder">
+                <span v-if="histStateOf(row) === 'loading'">正在加载审批轨迹…</span>
+                <span v-else-if="histStateOf(row) === 'noperm'">当前账号无审批历史查看权限，暂不能展示轨迹。</span>
+                <span v-else-if="histStateOf(row) === 'nobill'">该待办未关联到业务单据，无法加载审批轨迹。</span>
+                <template v-else-if="histStateOf(row) === 'fail'">
+                  <span>审批轨迹加载失败：{{ histMsgOf(row) }}</span>
+                  <el-button link type="primary" size="small" @click="reloadHistory(row)">重试</el-button>
+                </template>
+                <template v-else-if="histStateOf(row) === 'empty'">
+                  <span>{{ histEmptyTip(row) }}</span>
+                  <el-button link type="primary" size="small" @click="reloadHistory(row)">重取</el-button>
+                </template>
+                <span v-else>正在加载审批轨迹…</span>
+              </div>
               <div v-if="getHistory(row).length" class="history-detail">
                 <!-- P1-6 耗时摘要 -->
                 <div class="duration-summary">
@@ -73,8 +86,8 @@
           <span v-if="row.assigneeName">{{ row.assigneeName }}</span>
           <!-- D-DEC-160①：领取成功但列表回读还没追上的窗口期，不能再挂着「待领取」骗人；
                本地动作覆盖层生效期间显示本人＋「列表同步中」，读数追上后自动交回服务端口径。 -->
-          <el-tooltip v-else-if="localOpOf(row)?.kind === 'claim'" content="本任务已由你领取成功，列表读数仍在同步；可直接点「通过/驳回」办理" placement="top">
-            <el-tag size="small" type="success" effect="plain">{{ myName() }}（本人 · 列表同步中）</el-tag>
+          <el-tooltip v-else-if="localOpOf(row)?.kind === 'claim'" content="本任务已由你领取成功，列表仍在刷新；可直接点「通过/驳回」办理" placement="top">
+            <el-tag size="small" type="success" effect="plain">{{ myName() }}（本人 · 列表刷新中）</el-tag>
           </el-tooltip>
           <el-tag v-else size="small" type="warning" effect="plain">待领取</el-tag>
           <!-- 委托归属（F4-1，治"两边都以为是对方在办"）：这行其实是委托人的单子，我作为受托人代他办。
@@ -87,6 +100,7 @@
                       :content="'本单已委托给 ' + row.delegatedToNames.join('、') + ' 代管，委托期内由他办理'" placement="top">
             <el-tag size="small" type="success" effect="plain" style="margin-left:6px">已委托</el-tag>
           </el-tooltip>
+          <!-- POOL 软锁（批次 1 ①，共享作业"任务被他人打开处理时其他用户看到锁定状态"）：
           <el-tooltip v-if="row.lockedByOther" content="共享作业任务同时只允许一人办理；如需接办请联系其释放，或由其转办" placement="top">
             <el-tag size="small" type="danger" effect="plain" style="margin-left:6px">{{ row.lockOwnerName || '他人' }} 正在办理</el-tag>
           </el-tooltip>
@@ -112,20 +126,20 @@
         <template #default="{ row }">
           <span v-if="getPrevApprovers(row).length" style="font-size:13px">{{ getPrevApprovers(row).join(' → ') }}</span>
           <el-tooltip v-else-if="histStateOf(row) === 'done'" placement="top"
-                      :content="`已取到 ${historyRawCount[row.billId] || 0} 条审批留痕，本节点之前没有人工办理行（多为系统自动动作留痕）`">
+                      :content="`共 ${historyRawCount[row.billId] || 0} 条审批留痕，本节点之前没有人工办理记录（多为系统自动处理）`">
             <span style="color:#c0c4cc;font-size:12px">本节点前无人工办理</span>
           </el-tooltip>
           <el-tooltip v-else-if="histStateOf(row) === 'empty'" placement="top" :content="histEmptyTip(row)">
-            <el-button link size="small" type="warning" @click="loadHistory(row, true)">无留痕·按单号重取</el-button>
+            <el-button link size="small" type="warning" @click="loadHistory(row, true)">无留痕·重新查询</el-button>
           </el-tooltip>
-          <span v-else-if="histStateOf(row) === 'loading'" style="color:#909399;font-size:12px">取数中…</span>
+          <span v-else-if="histStateOf(row) === 'loading'" style="color:#909399;font-size:12px">加载中…</span>
           <el-tooltip v-else-if="histStateOf(row) === 'noperm'" placement="top"
-                      content="当前账号无 wf:history:list 权限，取不到审批历史；此格不代表本单处于首节点">
+                      content="当前账号无审批历史查看权限，暂不能展示轨迹">
             <span style="color:#e6a23c;font-size:12px">无权限查看</span>
           </el-tooltip>
           <el-tooltip v-else-if="histStateOf(row) === 'fail'" placement="top"
-                      :content="`审批历史取数失败：${histMsgOf(row) || '接口未返回具体原因'}，点击重试`">
-            <el-button link size="small" type="warning" @click="loadHistory(row, true)">取数失败·重试</el-button>
+                      :content="`审批历史加载失败：${histMsgOf(row) || '系统未返回具体原因'}，点击重试`">
+            <el-button link size="small" type="warning" @click="loadHistory(row, true)">加载失败·重试</el-button>
           </el-tooltip>
           <el-tooltip v-else-if="histStateOf(row) === 'nobill'" placement="top"
                       content="该待办未关联到业务单据，无审批历史可取">
@@ -155,6 +169,7 @@
           <el-button type="warning" size="small" :disabled="!row.billId || row.lockedByOther" @click="openDeduct(row)">核减</el-button>
           <!-- 转办：改派给其他用户办理（被他人锁定时也禁用——转办权归领取人） -->
           <el-button type="info" size="small" :disabled="row.lockedByOther" @click="openTransfer(row)">转办</el-button>
+          <!-- 加签（G1）：临时插一道 —— 前加签=加签人先审，后加签=我审完后加签人再审；
                两种都自动回跳、流程走向不变。与转办的区别写在弹窗说明里，避免两者被混用。
                addSignAllowed=false 来自节点配置 allow_addsign=0（F3-3 接真，需先打开灰度总闸才下发该字段）：
                服务端同一份口径也会拒绝，这里隐藏按钮是为了不让人点了才知道不行。 -->
@@ -395,7 +410,7 @@ function goBiz(row) {
   if (billRouteOf(row) && goBizPage(router, row)) {
     return
   }
-  ElMessage.warning(`未识别的单据类型「${row.billType || '-'}」，已打开全链路联查`)
+  ElMessage.warning('当前账号不能直接进入该单据的业务页面，已打开全链路联查')
   openTrace(row)
 }
 
@@ -531,11 +546,11 @@ function histStateOf(row) {
 function histMsgOf(row) {
   return row?.billId != null ? (historyMsg[row.billId] || '') : ''
 }
-/** 空返回时的自证文案：把查询维度原样报出来，让人一眼看出是取数问题而不是业务结论 */
+/** 空返回时的说明：只报业务单号，不暴露内部查询口径 */
 function histEmptyTip(row) {
-  return `按单号「${row.billNo || '—'}」＋单据 ID ${row.billId}（单据类型 ${row.billType || '—'}）查询审批历史，`
-    + '接口正常返回但零条留痕。在途单至少会有「提交」一条，空返回通常是取数范围或数据范围权限问题，'
-    + '不代表本单处于首节点。可点此处按当前口径重取。'
+  return `按单号「${row.billNo || '—'}」查询审批历史时没有返回记录。`
+    + '在途单据至少应有一条提交记录，未返回通常是查询范围或权限问题，'
+    + '不代表本单还在第一个节点。点击可重新查询。'
 }
 
 function fmt(v) {
@@ -698,6 +713,11 @@ function onExpand(row, expandedRows) {
   }
 }
 
+/** 展开区「重试/重取」：失败与空返回都允许按当前口径强制重拉 */
+function reloadHistory(row) {
+  loadHistory(row, true)
+}
+
 async function loadHistory(row, force) {
   const k = row.billId
   if (k == null) return
@@ -705,7 +725,7 @@ async function loadHistory(row, force) {
   // 而不是把这格降级成「首节点」骗人（D-DEC-086）。
   if (!canViewHistory) {
     historyOwner[k] = row.billType || ''
-    historyState[k] = 'noperm'; historyMsg[k] = '当前账号无 wf:history:list 权限'; return
+    historyState[k] = 'noperm'; historyMsg[k] = '当前账号没有查看审批历史的权限'; return
   }
   if (!force && histOwned(row)) return
   historyMap[k] = [] // 占位，避免重复请求
@@ -734,7 +754,7 @@ async function loadHistory(row, force) {
     historyMap[k] = []
     historyOwner[k] = row.billType || ''
     historyState[k] = 'fail'
-    historyMsg[k] = e?.message || '审批历史接口未返回具体原因'
+    historyMsg[k] = e?.message || '系统未返回具体原因'
   }
 }
 
@@ -1112,7 +1132,7 @@ async function submitBatch(rows, payload) {
       // 后端已实现于 /api/tenant/workflow/task/batch-approve（WfTaskBatchController）；
       // 旧文案写的 /api/tenant/wf/batch-approve 在 WfTaskController 下并不存在，会把排障方向带偏。
       if (e?.status === 404 || /404/.test(String(e?.message))) {
-        throw new Error('批量审批接口未部署（404）：请确认后端已部署 POST /api/tenant/workflow/task/batch-approve（body: {taskIds, comment}）')
+        throw new Error('批量审批暂不可用，请改为逐单审批，或联系管理员核查')
       }
       throw e
     }
@@ -1297,6 +1317,7 @@ function batchExport() {
 <style scoped>
 .approval-pager { margin-top: 12px; display: flex; justify-content: flex-end; flex-wrap: wrap; }
 .expand-content { padding: 12px 20px; background: #fafafa; }
+.hist-placeholder { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 20px; color: #909399; }
 .history-detail { margin-top: 12px; max-height: 280px; overflow-y: auto; }
 .duration-summary { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .dur-badge {

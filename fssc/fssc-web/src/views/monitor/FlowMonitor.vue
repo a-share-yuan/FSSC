@@ -747,7 +747,7 @@ function renderHeatmap() {
 /** P1-3 一键跳转到单据对应业务处理页（复用 bizEntry 分发器） */
 function goBiz(row) {
   if (!goBizPage(router, row)) {
-    ElMessage.warning('暂不支持跳转到该业务类型')
+    ElMessage.warning('当前账号不能直接进入该单据的业务页面，请用行内「追溯」查看全链路')
   }
 }
 

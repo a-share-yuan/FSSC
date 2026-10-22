@@ -51,12 +51,12 @@ export const CONFIG_GROUPS = {
     title: '系统参数',
     sub: '全局参数 · 字典 · 编号规则 · 文件 · 公告 · 消息',
     tabs: [
-      { key: 'sys-config', label: '全局参数', comp: MasterConfigTable, props: { configKey: 'sys-config' } },
-      { key: 'dict', label: '字典管理', comp: MasterConfigTable, props: { configKey: 'dict' } },
-      { key: 'sys-number', label: '编号规则', comp: MasterConfigTable, props: { configKey: 'sys-number' } },
-      { key: 'sys-file', label: '文件管理', comp: MasterConfigTable, props: { configKey: 'sys-file' } },
-      { key: 'sys-notice', label: '公告管理', comp: MasterConfigTable, props: { configKey: 'sys-notice' } },
-      { key: 'sys-message', label: '消息中心', comp: MasterConfigTable, props: { configKey: 'sys-message' } },
+      { key: 'sys-config', label: '全局参数', comp: MasterConfigTable, props: { configKey: 'sys-config' }, perm: 'system:config:list' },
+      { key: 'dict', label: '字典管理', comp: MasterConfigTable, props: { configKey: 'dict' }, perm: 'system:dict:list' },
+      { key: 'sys-number', label: '编号规则', comp: MasterConfigTable, props: { configKey: 'sys-number' }, perm: 'system:number:list' },
+      { key: 'sys-file', label: '文件管理', comp: MasterConfigTable, props: { configKey: 'sys-file' }, perm: 'system:file:list' },
+      { key: 'sys-notice', label: '公告管理', comp: MasterConfigTable, props: { configKey: 'sys-notice' }, perm: 'system:notice:list' },
+      { key: 'sys-message', label: '消息中心', comp: MasterConfigTable, props: { configKey: 'sys-message' }, perm: 'system:message:list' },
     ],
   },
   finance: {
@@ -118,10 +118,10 @@ export const CONFIG_GROUPS = {
   },
   ops: {
     title: '运行监控与合规',
-    sub: '定时任务健康 · SoD 合规检查',
+    sub: '定时任务健康 · 不相容职责检查',
     tabs: [
       { key: 'job-heartbeat', label: '定时任务健康', comp: MasterConfigTable, props: { configKey: 'job-heartbeat' } },
-      { key: 'sod-check', label: 'SoD合规检查', comp: SoDCheck, perm: 'system:sod:list' },
+      { key: 'sod-check', label: '不相容职责检查', comp: SoDCheck, perm: 'system:sod:list' },
       // D-DEC-320：引擎钩子配置表补齐可见可控；按 wf:config:list 门控（无码角色不渲染页签，勿扩权）
       { key: 'wf-event-action', label: '流程收尾动作配置', comp: WfEventActionConfig, perm: 'wf:config:list' },
     ],
@@ -149,10 +149,11 @@ export const CONFIG_GROUPS = {
   },
   contract: {
     title: '合同管理',
-    sub: '合同台账 · 合同付款查询（原 2 页收敛）',
+    sub: '合同台账 · 合同付款查询',
     tabs: [
       { key: 'ledger', label: '合同台账', comp: Contract },
-      { key: 'pay-query', label: '合同付款查询', comp: ContractPay },
+      // 合同付款查询走报表接口（report:view）；多数合同角色只有 contract:list，无码不渲染页签
+      { key: 'pay-query', label: '合同付款查询', comp: ContractPay, perm: 'report:view' },
     ],
   },
   match: {
@@ -184,7 +185,7 @@ export const CONFIG_GROUPS = {
   },
   budgetManage: {
     title: '预算管理',
-    sub: '科目 · 方案 · 调整 · 占用（原 4 页收敛，逐页签按 budget 码门控；宿主直挂根＝不经过预算目录授权）',
+    sub: '科目 · 方案 · 调整 · 占用',
     tabs: [
       { key: 'item', label: '预算科目', comp: BudgetItem, perm: 'budget:item:list' },
       { key: 'scheme', label: '预算方案', comp: BudgetScheme, perm: 'budget:scheme:list' },
@@ -194,7 +195,7 @@ export const CONFIG_GROUPS = {
   },
   compliance: {
     title: '合规风控',
-    sub: '反欺诈风控 · 合规规则（原 2 页收敛，逐页签按 compliance 码门控）',
+    sub: '反欺诈风控 · 合规规则',
     tabs: [
       { key: 'fraud', label: '反欺诈风控', comp: FraudBoard, perm: 'compliance:fraud:list' },
       { key: 'rule', label: '合规规则', comp: ComplianceRule, perm: 'compliance:rule:list' },

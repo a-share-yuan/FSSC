@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.common.util.AssertUtil;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.OrgVisibility;
+import com.fssc.framework.security.UserContext;
 import com.fssc.system.entity.SysCompany;
 import com.fssc.system.mapper.SysCompanyMapper;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +35,34 @@ public class CompanyService {
         return sysCompanyMapper.selectList(new LambdaQueryWrapper<SysCompany>()
                 .eq(SysCompany::getStatus, "NORMAL")
                 .orderByAsc(SysCompany::getAncestors).orderByAsc(SysCompany::getSort));
+    }
+
+    /**
+     * 按登录人可见范围裁剪公司列表（出参侧过滤，不改缓存）。
+     *
+     * <p>缓存里保留"整租户全量"才能被所有用户共用；裁剪放在每次出参，既保住缓存命中，
+     * 又保证普通员工的下拉里不会出现其他法人主体（改前 9 家公司全员可见）。</p>
+     *
+     * @param all               已按租户缓存的全量启用公司
+     * @param overrideCompanyId 显式指定的公司（跨公司查看用），null＝按登录人范围
+     */
+    public List<SysCompany> visibleForUser(List<SysCompany> all, Long overrideCompanyId) {
+        if (all == null || all.isEmpty()) {
+            return all == null ? List.of() : all;
+        }
+        LoginUser u = UserContext.get();
+        if (overrideCompanyId != null) {
+            if (!OrgVisibility.canSeeCompany(u, overrideCompanyId)) {
+                throw new BizException(ErrorCode.PERMISSION_DENIED,
+                        "无权查看该公司（companyId=" + overrideCompanyId + "）");
+            }
+            return all.stream().filter(c -> overrideCompanyId.equals(c.getId())).toList();
+        }
+        if (OrgVisibility.canSeeAllCompanies(u)) {
+            return all;
+        }
+        Long mine = u.getCompanyId();
+        return all.stream().filter(c -> mine.equals(c.getId())).toList();
     }
 
     public Long create(SysCompany company) {

@@ -112,6 +112,15 @@ public class MdAssetService {
     /** 资产建档：按类别/方法计算月折旧额，初始累计折旧为 0、净值为原值。 */
     public Long create(MdAsset e) {
         e.setId(null);
+        // Q1 口径：资产编号属系统编码，创建时自动生成（缺规则时降级 FA+时间戳，不阻断建档）
+        if (!StringUtils.hasText(e.getAssetNo())) {
+            try {
+                e.setAssetNo(numberRuleService.next("FA_ASSET"));
+            } catch (Exception ex) {
+                e.setAssetNo("FA" + System.currentTimeMillis());
+                log.warn("资产编号生成失败，降级使用时间戳: {}", ex.getMessage());
+            }
+        }
         if (e.getOriginalAmount() == null) e.setOriginalAmount(ZERO);
         if (e.getResidualValue() == null) e.setResidualValue(ZERO);
         computeDepr(e);

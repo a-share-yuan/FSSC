@@ -712,7 +712,8 @@ onMounted(async () => {
     }
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   try {
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || []
+    // P0 修复（2026-10-21）：默认只加载同公司人员
+    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('pay.corp.lblCurrentUser')
     const b = wb.value && wb.value.b
@@ -764,7 +765,8 @@ currentUserName.value = store.user?.realName || store.user?.nickName || store.us
     const clist = (await contractApi.page({ pageNum: 1, pageSize: 100 }).catch(() => ({ list: [] }))).list || []
     let sumMap = {}
     try {
-      const sums = (await reportApi.contractSummary()) || []
+      // 仅装饰「已付合计」；无 report:view 时静默降级，不弹全局缺权提示
+      const sums = (await reportApi.contractSummary({ silent: true })) || []
       sums.forEach((s) => { sumMap[s.contractNo] = Number(s.paidAmount || 0) })
     } catch (e) {
       // 缺 report:view 时只影响标签上的「已付」数字，下拉本身必须照常可用（余额标签退化为合同额全额）

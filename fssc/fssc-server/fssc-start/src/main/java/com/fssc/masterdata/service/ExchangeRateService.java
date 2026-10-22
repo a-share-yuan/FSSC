@@ -55,7 +55,6 @@ public class ExchangeRateService {
     private static final String HOME_CURRENCY = "CNY";
 
     /**
-     * 取某日适用汇率（对标 SAP OB08 取数语义：按 币种对 + 生效日 匹配，取「≤业务日 最近一条」）：
      * 优先 MIDDLE，同日多类型时中间价优先。
      * <p>P0-C4 改造：区间列 expire_date 不再作为「查不到」的条件——原「区间包含」写法在月度汇率
      * 未续期时（实测 6 条全部止于月末）会让所有外币单据查不到价，调用方静默按 1:1 折算，

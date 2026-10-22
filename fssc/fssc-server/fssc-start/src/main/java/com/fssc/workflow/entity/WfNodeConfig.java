@@ -104,12 +104,14 @@ public class WfNodeConfig extends TenantAuditBase {
     private String rejectScope;
 
     /**
+     * G2「重新提交时跳回本节点」（行业方案"驳回类审批项可勾选重新提交时跳回本节点"）：
      * 1 = 本节点驳回后，把本节点 key 记入实例变量 {@code rejectOriginNode}；单据重新提交时跳回本节点重办。
      * 0 = 关闭（默认，行为与改造前一致）。
      */
     private Integer resubmitJumpBack;
 
     /**
+     * G2 票签取值方式（与 {@code vote_value} 配对，行业方案"确定/比例"维）：
      * {@code RATIO}（默认，按百分比）/ {@code COUNT}（按确定票数）。
      *
      * <p>与遗留列 {@code vote_ratio} 的关系：本列 + {@code voteValue} 存在时<b>优先</b>，
@@ -121,6 +123,7 @@ public class WfNodeConfig extends TenantAuditBase {
     private Integer voteValue;
 
     /**
+     * G2 票签分母口径（行业方案"票数/人数"维）：{@code BY_PERSON}（默认，分母＝参与人总数，即"应到"）/
      * {@code BY_VOTE}（分母＝已投票数，即"实到"）。
      */
     private String voteBasis;

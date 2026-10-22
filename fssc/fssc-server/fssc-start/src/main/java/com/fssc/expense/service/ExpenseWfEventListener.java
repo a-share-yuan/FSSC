@@ -1343,6 +1343,7 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
+     * P0-4 报销 vs 借款 3 种差额处理（行业方案/费用报销行业标准）：
      * <pre>
      *  报销单审批通过时，与其关联的借款单（exp_bill_relation.LOAN_CLAIM）一起结算：
      *    - 先用报销金额 FIFO 冲抵各借款单余额（落 exp_loan_offset，offsetType=CLAIM）；

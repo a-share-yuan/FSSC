@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * G3（2026-09-24）流程批量移交 ＋ 移交日志（参考行业做法「流程移交」，用于离职/换岗/工作交接）。
  *
  * <p><b>为什么走引擎既有改派/转办通道，而不是直接 {@code setAssignee}</b>：直接改受理人会漏掉三件事——
  * {@code wf_task} 镜像同步、{@code wf_task_history} 留痕、接收人通知，正是方案 §二 F1/F13 描述的
@@ -39,7 +40,7 @@ import java.util.Set;
  *       留 TRANSFER 痕，且尊重节点「允许转办」开关；</li>
  *   <li>操作人是流程管理员（代为移交）→ 走 {@code reassign}（改派通道）：转办通道的
  *       {@code canOperate} 必然拒绝管理员，改派是"离职/换岗/无人可办"的正式出口
- *       （对应用友 NC 流程移交、SAP Execute Work Items Without Agent Check）。</li>
+ *       （对应行业方案 流程移交、批量处理待办）。</li>
  * </ul>
  *
  * <p><b>不加 {@code @Transactional} 是刻意的</b>：批量移交必须"逐单独立成败"。

@@ -1,7 +1,7 @@
 <template>
-  <span class="upload-btn-wrap" style="display:inline-flex;align-items:center;gap:8px">
-    <el-upload :show-file-list="false" :http-request="doUpload" :accept="accept" :multiple="multiple" style="display:inline-block">
-      <el-button :type="type" size="small">{{ busy && parse ? '识别中…' : label }}</el-button>
+  <span class="upload-btn-wrap">
+    <el-upload class="upload-btn-upload" :show-file-list="false" :http-request="doUpload" :accept="accept" :multiple="multiple">
+      <el-button :type="type" size="small">{{ busy ? busyText : label }}</el-button>
     </el-upload>
     <!-- D-DEC-463（10-05）：识别是同步串行的长请求（扫描版 PDF 可达几十秒），给用户一个"不再等"的出口。
          按钮只说"取消等待"、不说"取消上传"——前端 abort() 并不会让服务端停手（识别链是 REQUIRES_NEW），
@@ -15,6 +15,7 @@ import { ref, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { fileApi, imageApi, isRequestCancelled } from '../api'
 import { abortedOutcome } from '../utils/invoiceOutcome'
+import { isInvoiceFile } from '../utils/attachKind'
 
 /**
  * 通用上传按钮（修复"点上传无反应"：改用 el-upload http-request 标准链路，走 axios 带 token）。
@@ -51,6 +52,12 @@ const MAX_SIZE_MB = 20
  * （10-05 登记时已把这条列为已知限制，本轮收掉）。
  */
 const busy = ref(false)
+/**
+ * 等待期按钮文案：只有发票类文件才叫「识别中」。
+ * 此前只要 parse=true 一律显示"识别中…"，传一份 .docx 合同也在喊识别——
+ * 后端对非发票格式直接 attachType=OTHER、根本不走识别（见 ExpenseAttachController）。
+ */
+const busyText = ref('上传中…')
 const controllers = []
 
 function newController() {
@@ -94,6 +101,7 @@ async function doUpload({ file, onSuccess, onError }) {
   }
   const controller = newController()
   busy.value = true
+  busyText.value = props.parse && isInvoiceFile(file && file.name) ? '识别中…' : '上传中…'
   try {
     let rec = null
     if (props.mode === 'image') {
@@ -129,3 +137,30 @@ async function doUpload({ file, onSuccess, onError }) {
   }
 }
 </script>
+
+<style scoped>
+.upload-btn-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  /* 定锚：原生 file 控件即使绝对定位，也只会落在按钮这一小块里，不会甩到页面左上盖住菜单 */
+  position: relative;
+}
+.upload-btn-upload { display: inline-block; }
+/*
+ * el-upload 依赖全局样式 .el-upload__input{display:none} 隐藏原生 file 控件。
+ * 全局 CSS 缺失/加载失败/被覆盖时，原生「选择文件」控件会以浏览器默认样式直接排在文档流里
+ * （2026-10-20 23:38 实测截图：它跑到页面左上，压住侧边菜单）。这里在组件内再兜一层，
+ * 四重隐藏 + 移出可视区，确保无论全局样式在不在，用户都看不到原生控件。
+ */
+.upload-btn-wrap :deep(.el-upload__input) {
+  display: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+}
+</style>

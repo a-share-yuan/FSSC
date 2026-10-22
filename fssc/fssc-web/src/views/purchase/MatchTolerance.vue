@@ -9,7 +9,7 @@
     </template>
 
     <el-alert v-if="loadFailed" type="warning" :closable="false" show-icon style="margin-bottom: 12px"
-      title="容差参数查询接口暂不可用（后端未部署或暂无该公司的配置），当前展示默认值；保存时若仍不可用会给出明确提示" />
+      title="暂时无法读取该公司的容差参数，当前展示默认值；保存时会再次核验并给出提示" />
 
     <el-form ref="formRef" :rules="formRules" :model="form" label-width="130px" size="default"
              style="max-width: 760px" v-loading="loading">

@@ -22,7 +22,7 @@ import java.util.Map;
 /**
  * 通用 HTTP 凭证推送通道（{@code voucher.push.channel=http} 时生效，java.net.http 零新依赖）。
  *
- * <p>对接 NC / IFS 只需配置、无需改代码：在「系统设置 → 全局参数」（sys_config）维护——</p>
+ * <p>对接 同类系统 / IFS 只需配置、无需改代码：在「系统设置 → 全局参数」（sys_config）维护——</p>
  * <ul>
  *   <li>{@code voucher.push.url}：推送接口地址（POST JSON，请求体即 {@code {target, voucher...}}）；</li>
  *   <li>{@code voucher.push.token}：鉴权令牌，非空时以请求头 {@code Authorization: Bearer <token>} 发送；</li>

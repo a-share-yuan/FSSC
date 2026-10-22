@@ -2,9 +2,9 @@
   <div class="bpmn-designer">
     <!-- 只读提示：无编辑权限时给出明确说明，而不是让用户以为页面坏了 -->
     <el-alert v-if="readonly" type="info" :closable="false" show-icon
-              title="只读预览：可拖动 / 缩放查看流程图。如需修改流程，请使用具备「流程建模」权限（wf:model:update）的账号。" />
+              title="只读预览：可拖动或缩放查看流程图。如需修改，请联系系统管理员开通流程建模权限。" />
 
-    <!-- ============ 专业工具栏（参照 SAP Workflow Builder / 用友 NC BPM） ============ -->
+    <!-- ============ 专业工具栏（参照主流流程设计器） ============ -->
     <div class="bpmn-toolbar" v-if="!readonly">
       <div class="toolbar-group">
         <el-tooltip content="保存流程" placement="bottom">
@@ -355,11 +355,11 @@ async function render(xml) {
         tryZoomFit()
         updateZoomState()
         updateElementCount()
-        error.value = '原 XML 缺少图形坐标(DI)，已载入示例流程，请重新设计后保存'
+        error.value = '原流程图缺少图形位置信息，已载入示例流程，请重新设计后保存'
         return
       } catch (e2) { /* fallthrough */ }
     }
-    error.value = 'BPMN 解析失败：' + (e.message || e)
+    error.value = '流程图解析失败：' + (e.message || e)
   }
 }
 
@@ -386,7 +386,8 @@ const roleOptions = ref([
 /** 合并 sys_role 全量到下拉（已存在的编码保留上面的中文简称，不覆盖） */
 async function loadRoleOptions() {
   try {
-    const res = await roleApi.page({ pageNum: 1, pageSize: 500 })
+    // 无 system:role:list 的流程配置者沿用内置名单，不在页面里弹「缺少权限」
+    const res = await roleApi.page({ pageNum: 1, pageSize: 500 }, { silent: true })
     const rows = (res && (res.records || res.list)) || []
     const merged = roleOptions.value.slice()
     for (const r of rows) {

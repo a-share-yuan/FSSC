@@ -143,6 +143,7 @@ public class WfTaskController {
             m.put("totalAmount", null);
             // 当前真实办理人（Flowable assignee）。为空表示该任务只挂了候选组/未被指派。
             m.put("assigneeId", t.getAssignee());
+            // POOL 软锁可见性（批次 1 ①，参考行业做法"任务被他人打开处理时显示锁定状态"）：
             // 作业节点已被同池他人领取 → 该行仍在列表内（可见），但「去处理」必须禁用，
             m.put("lockedByOther", locks.containsKey(t.getId()));
             // 业务行是否解析成功：由各批量回填方法置 true；为 false 时前端禁用「去处理」并提示
@@ -758,6 +759,7 @@ public class WfTaskController {
     }
 
     /**
+     * G2 ①层「审批项」（2026-09-24，参考行业做法）：当前任务节点上启用的自定义审批结果（只读）。
      *
      * <p>审批弹窗打开时调用；返回空数组即不渲染自定义按钮（与改造前完全一致）。
      * 与 {@code /approve} 的 {@code approvalItemCode} 同源同一解析器，不存在"看得见点不动"。
@@ -1068,6 +1070,7 @@ public class WfTaskController {
          *
          * <p>为空 ⇒ 走原「终止本流程」兜底，行为与改造前逐字一致；非空且开关
          * {@code sys_config.wf.reject.free.enabled}=1 时，改由引擎把执行退回该上游节点，
+         * 单据在同一实例内继续流转（参考行业做法「允许选择驳回级次」）。
          * 候选集从 {@code GET /wf/reject-targets} 只读预览获取。
          */
         private String rejectToNodeKey;

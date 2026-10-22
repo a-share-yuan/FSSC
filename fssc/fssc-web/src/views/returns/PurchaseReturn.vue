@@ -45,7 +45,7 @@
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="供应商代码" prop="vendorCode"><el-input v-model="form.vendorCode" placeholder="与 BCP 往来单位编码对齐" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="供应商名称"><el-input v-model="form.vendorName" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="公司ID"><el-input v-model="form.companyId" placeholder="1" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="所属公司" prop="companyId"><el-select v-model="form.companyId" filterable clearable placeholder="选择公司" style="width:100%"><el-option v-for="c in companyTree" :key="c.id" :label="c.companyName || c.name" :value="c.id" /></el-select></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="退货日期" prop="billDate">
             <el-date-picker v-model="form.billDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
           </el-form-item></el-col>
@@ -139,7 +139,7 @@
 import { RETURN_STATUS, RETURN_MODE, returnStatusLabel, returnModeLabel } from '@/constants/enums'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { returnApi, store } from '../../api'
+import { returnApi, orgApi, store } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
@@ -148,6 +148,7 @@ const REASONS = ['质量不合格', '破损', '错发', '多发', '合同取消'
 
 const rows = ref([])
 const loading = ref(false)
+const companyTree = ref([])
 const q = reactive({ pageNum: 1, pageSize: 20, vendorCode: '', keyword: '', status: '', billDateStart: '', billDateEnd: '', range: [] })
 const formVisible = ref(false)
 const detailVisible = ref(false)
@@ -221,7 +222,7 @@ async function load() {
 
 function openCreate() {
   editing.value = false
-  Object.assign(form, { id: null, vendorCode: '', vendorName: '', companyId: 1, billDate: '', amount: '', taxAmount: '', returnMode: 'REFUND', sourceDocType: '', sourceBillNo: '', returnReason: '', remark: '', lines: [emptyLine()] })
+  Object.assign(form, { id: null, vendorCode: '', vendorName: '', companyId: null, billDate: '', amount: '', taxAmount: '', returnMode: 'REFUND', sourceDocType: '', sourceBillNo: '', returnReason: '', remark: '', lines: [emptyLine()] })
   formVisible.value = true
 }
 
@@ -297,7 +298,10 @@ async function doReason() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-onMounted(load)
+onMounted(async () => {
+  try { companyTree.value = (await orgApi.companyTree()) || [] } catch (_) { /* 忽略 */ }
+  load()
+})
 </script>
 
 <style scoped>

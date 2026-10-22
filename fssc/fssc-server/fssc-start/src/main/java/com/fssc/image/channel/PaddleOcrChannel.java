@@ -125,10 +125,10 @@ public class PaddleOcrChannel implements OcrChannel {
         try {
             root = objectMapper.readTree(body);
         } catch (Exception e) {
-            return OcrResult.fail("PaddleOCR 响应非 JSON: " + trim(e.getMessage()));
+            return OcrResult.fail("图片识别结果无法解析：" + trim(e.getMessage()));
         }
         if (root == null || !root.isObject()) {
-            return OcrResult.fail("PaddleOCR 响应格式异常（非 JSON 对象）");
+            return OcrResult.fail("图片识别结果格式不正确，请重试");
         }
         if (!root.path("success").asBoolean(false)) {
             return OcrResult.fail("PaddleOCR 识别失败: " + trim(root.path("error").asText("")));

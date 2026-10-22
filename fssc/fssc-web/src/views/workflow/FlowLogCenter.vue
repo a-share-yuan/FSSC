@@ -108,7 +108,7 @@
             <el-descriptions-item label="预计归档总数">{{ archive.total ?? 0 }}</el-descriptions-item>
           </el-descriptions>
           <el-table :data="archive?.tenants || []" size="small" stripe border max-height="380" empty-text="暂无可归档实例">
-            <el-table-column prop="tenantId" label="租户ID" width="120" />
+            <el-table-column prop="tenantId" label="账套编号" width="120" />
             <el-table-column label="归档开关" width="110" align="center">
               <template #default="{ row }">
                 <el-tag size="small" :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '已启用' : '未启用' }}</el-tag>

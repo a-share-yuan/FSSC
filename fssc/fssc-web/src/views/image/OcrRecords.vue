@@ -16,9 +16,15 @@
 
     <SkeletonList v-if="loading" :rows="10" :cols="8" />
     <el-table v-else :data="pagedRecords" size="small" border stripe>
-      <el-table-column prop="id" label="ID" width="70" sortable />
-      <el-table-column prop="batchId" label="批次" width="90" sortable />
-      <el-table-column prop="imgFileId" label="页ID" width="80" />
+      <el-table-column label="序号" width="60" align="center">
+        <template #default="{ $index }">{{ $index + 1 }}</template>
+      </el-table-column>
+      <el-table-column prop="batchId" label="批次" width="90" sortable>
+        <template #default="{ row }">{{ row.batchNo || `批次#${row.batchId}` }}</template>
+      </el-table-column>
+      <el-table-column prop="imgFileId" label="影像页" width="100">
+        <template #default="{ row }">{{ row.fileName || `页#${row.imgFileId}` }}</template>
+      </el-table-column>
       <el-table-column prop="invoiceNo" label="发票号" min-width="150" show-overflow-tooltip>
         <template #default="{ row }">{{ row.invoiceNo || '—' }}</template>
       </el-table-column>

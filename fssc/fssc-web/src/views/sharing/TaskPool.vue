@@ -198,7 +198,7 @@ import { onMounted, reactive, ref, computed, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { formatDateTime } from '@/utils/format'
-import { sharingApi, userApi } from '../../api'
+import { sharingApi, userApi, store } from '../../api'
 import { statusLabel as billStatusLabel, statusType as billStatusType } from '../../constants/billStatus'
 import { docTypeLabel, taskTypeLabel, directionLabel } from '@/constants/enums'
 import { goBizPage } from '@/utils/bizEntry'
@@ -244,7 +244,7 @@ const selRows = ref([])
 const rows = ref([])
 const total = ref(0)
 const loading = ref(false)
-// 默认只显示待认领任务（SAP/用友标准做法：任务池默认展示待处理任务）
+// 默认只显示待认领任务（行业方案标准做法：任务池默认展示待处理任务）
 const filter = reactive({ pageNum: 1, pageSize: 20, poolStatus: 'WAITING', taskType: '', keyword: '' })
 const users = ref([])
 const reassignVis = ref(false)
@@ -374,7 +374,8 @@ function withdraw(row) {
 }
 
 async function openReassign(row) {
-  if (!users.value.length) users.value = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || []
+  // P0 修复（2026-10-21）：默认只加载同公司人员
+  if (!users.value.length) users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
   current.value = row
   reassignForm.assigneeId = row.assigneeId || null
   reassignVis.value = true
@@ -403,7 +404,8 @@ onMounted(async () => {
   if (route.query.keyword) filter.keyword = String(route.query.keyword)
   if (route.query.poolStatus) filter.poolStatus = String(route.query.poolStatus)
   load()
-  try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || [] } catch (e) { /* ignore */ }
+  // P0 修复（2026-10-21）：默认只加载同公司人员
+  try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch (e) { /* ignore */ }
 })
 
 function exportCsv() {

@@ -157,6 +157,7 @@ public class GlJournalService {
         e.setTenantId(tenantId);
         e.setPeriod(period);
         e.setEntryType(entryType);
+        // V2.2.38（K127 期间幂等，参考行业做法"一个会计期间只能生成一张凭证"）：同期间同类型
         // 已存在未驳回的记账单（APPROVING/APPROVED/POSTED）时拒绝重复生成——防重复提单重复入账；
         // 被驳回(REJECTED)的单不占闸，可修正后重新生成。
         GlJournalEntry dup = mapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<GlJournalEntry>()

@@ -5,6 +5,8 @@
  * 按 billType（兼容 EXP_ 前缀与裸类型）解析到对应业务模块路由，
  * 并携带 billNo / billId 查询参数，落地页据此自动定位目标记录。
  */
+import { ROUTE_PERMS } from '../router/routePerms'
+import { hasAnyPerm, isSuperPerm } from './perm'
 
 /**
  * 精确映射（类型统一转大写、去 EXP_ 前缀后命中）
@@ -154,6 +156,15 @@ export function goBizPage(router, row) {
   const billType = row?.billType || row?.bizType || ''
   const path = resolveBillRoute(billType)
   if (!path) return false
+  // D-BIZ-08: 路由权限预检——目标页可能不在当前角色授权范围内，
+  // 直接 router.push 会被全局守卫拦到 /workbench 并弹「无权限访问该页面」。
+  // 预检不通过时返回 false，让调用方降级为打开审批抽屉/全链路追溯。
+  if (!isSuperPerm()) {
+    const entry = ROUTE_PERMS[path]
+    if (entry && Array.isArray(entry.perms) && entry.perms.length && !hasAnyPerm(entry.perms)) {
+      return false
+    }
+  }
   const billNo = row?.billNo || row?.bizNo || ''
   const billId = row?.billId ?? row?.bizId ?? null
   const query = {}

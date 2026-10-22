@@ -49,7 +49,7 @@ public class ExtInterfaceConfigService {
             "INVOICE_VERIFY", "INVOICE_CERTIFY", "OCR", "AI_MODEL", "LINKU", "BANK",
             // 应收应付蓝图直连通道（任务3.1：接口配置功能，未配置走模拟回退）
             "EKP", "EBS", "GOLDEN_TAX", "ECDS", "GL_PUSH",
-            // 多 ERP 适配（V1.4，见 ErpChannelResolver）：ERP=租户级 ERP 实例声明（provider=EBS/SAP/YONYOU/KINGDEE/CUSTOM），
+            // 多 ERP 适配（V1.4，见 ErpChannelResolver）：ERP=租户级 ERP 实例声明（provider=EBS/行业方案/YONYOU/KINGDEE/CUSTOM），
             // {PROVIDER}_{ACTION} 为对应品牌的具体接口通道（如 SAP_AP / YONYOU_ORDER_GET）
             "ERP", "SAP", "YONYOU", "KINGDEE",
             "EBS_AP", "EBS_AP_BLUE", "EBS_ORDER_GET",

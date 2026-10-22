@@ -153,6 +153,7 @@ public class SoDService {
         String detectTime = LocalDateTime.now().format(SOD_TS);
         List<SodCheckRow> rows = new ArrayList<>(roleConflictRows(detectTime));
         rows.addAll(permConflictRows(detectTime));
+        // 同类系统的 SoD 分三层：L1 互斥岗（本类已有的 role/perm 冲突表）、
         // L2 不相容职责（**同一单据内经办轨迹**）、L3 轮岗。
         // 本系统真正在拦 L2 的是两个闸门——approve.deny_self（自审）与
         // approve.deny_serial_same_handler（同人连办），它们此前不在 SoD 报告里，

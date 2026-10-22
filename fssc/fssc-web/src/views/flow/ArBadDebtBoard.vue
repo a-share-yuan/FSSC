@@ -13,6 +13,8 @@
           <el-upload :show-file-list="false" accept=".xlsx" :auto-upload="false" :on-change="doImportWriteoffExcel" style="display:inline-block">
             <el-button type="warning" size="small">{{ $t('flow.badDebt.btnWriteoffExcel') }}</el-button>
           </el-upload>
+          <!-- AR_RECON 发起入口：原应收工作台坏账页签上的按钮，合并时一度丢失，此处接回 -->
+          <el-button type="primary" plain size="small" @click="doRecon">{{ $t('flow.badDebt.btnRecon') }}</el-button>
         </div>
       </div>
     </template>
@@ -79,7 +81,7 @@
 import { AR_BADDEBT_STATUS, arBaddebtStatusLabel } from '@/constants/enums'
 import { formatDate, formatMoney, formatPercent } from '../../utils/format'
 import {onMounted, reactive, ref, computed} from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { receivableApi as badDebtApi } from '../../api'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
@@ -162,6 +164,25 @@ async function doImportWriteoffExcel(uploadFile) {
   const res = await badDebtApi.badDebtWriteoffExcel(fd)
   ElMessage.success(t('flow.badDebt.msgExcelDone', { v1: res.writtenOff }) + (res.errors?.length ? t('flow.badDebt.msgExcelFailSuffix', { v1: res.errors.length, v2: res.errors[0] }) : ''))
   await load()
+}
+
+/**
+ * 对账发起走 AR_RECON 审批流，交互与原应收工作台坏账页签逐字一致（同 6 位期间、同判据、同文案）。
+ * 唯一差异＝接口调用不在 prompt 的 try 内：旧写法把「提交失败」和「用户取消」吞成同一种结果。
+ */
+async function doRecon() {
+  let period
+  try {
+    const r = await ElMessageBox.prompt(t('flow.badDebt.phReconPeriod'), t('flow.badDebt.dlgReconTitle'), {
+      confirmButtonText: t('common.submit'),
+      cancelButtonText: t('common.cancel'),
+      inputValue: String(q.period || '').replace('-', ''),
+      inputValidator: (v) => (v != null && String(v).trim().length >= 6) || t('flow.badDebt.errReconPeriod'),
+    })
+    period = r.value
+  } catch { return }
+  await badDebtApi.reconStart(period, null)
+  ElMessage.success(t('flow.badDebt.msgReconSubmitted'))
 }
 
 onMounted(load)

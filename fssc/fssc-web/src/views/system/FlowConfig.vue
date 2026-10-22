@@ -51,19 +51,27 @@
               <div class="model-detail-header">
                 <span class="panel-title">{{ selectedModel ? selectedModel.modelName : t('system.flow.ttlNewModel') }}</span>
                 <el-tag v-if="selectedModel" size="small" type="info" style="margin-left:8px">{{ selectedModel.modelKey }}</el-tag>
-                <el-tag v-if="selectedModel && selectedModel.bizType" size="small" type="warning" style="margin-left:4px"
-                        :title="$t('system.flow.bizTypeCodePrefix') + selectedModel.bizType">{{ bizTypeLabel(selectedModel.bizType) }}</el-tag>
+                <el-tag v-if="selectedModel && selectedModel.bizType" size="small" type="warning" style="margin-left:4px">{{ bizTypeLabel(selectedModel.bizType) }}</el-tag>
                 <el-tag v-if="selectedModel && selectedModel.category" size="small" style="margin-left:4px">{{ modelCategoryLabel(selectedModel.category) }}</el-tag>
                 <el-tag v-if="modelDraft" size="small" type="warning" style="margin-left:8px">{{ $t('system.flow.stUnsaved') }}</el-tag>
               </div>
-              <div v-if="selectedModel">
-                <el-button v-if="canModelUpdate" size="small" type="success" @click="validateModel">{{ $t('system.flow.btnValidate') }}</el-button>
+              <div v-if="selectedModel" class="model-actions">
+                <el-button v-if="canModelUpdate" size="small" @click="validateModel">{{ $t('system.flow.btnValidate') }}</el-button>
                 <el-button v-if="canModelUpdate" size="small" type="warning" @click="simulateModel">{{ $t('system.flow.btnSimulate') }}</el-button>
                 <el-button v-if="canModelUpdate" size="small" type="primary" @click="publishModel">{{ $t('system.flow.btnPublish') }}</el-button>
-                <el-button v-if="canModelUpdate" size="small" @click="openInFlight">{{ $t('system.flow.btnInflightImpact') }}</el-button>
-                <el-button v-if="canModelUpdate" size="small" @click="exportRepo">{{ $t('system.flow.btnExportRepo') }}</el-button>
-                <el-button v-if="canModelUpdate" size="small" @click="exportModel">{{ $t('system.flow.btnExport') }}</el-button>
-                <el-button v-if="canModelDelete" size="small" type="danger" @click="deleteModel">{{ $t('system.common.btnDelete') }}</el-button>
+                <el-dropdown v-if="canModelUpdate || canModelDelete" trigger="click" @command="onModelCommand">
+                  <el-button size="small">
+                    {{ $t('system.flow.btnMoreActions') }}<el-icon class="el-icon--right"><arrow-down /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item v-if="canModelUpdate" command="inflight">{{ $t('system.flow.btnInflightImpact') }}</el-dropdown-item>
+                      <el-dropdown-item v-if="canModelUpdate" command="exportRepo">{{ $t('system.flow.btnExportRepo') }}</el-dropdown-item>
+                      <el-dropdown-item v-if="canModelUpdate" command="export">{{ $t('system.flow.btnExport') }}</el-dropdown-item>
+                      <el-dropdown-item v-if="canModelDelete" command="delete" divided>{{ $t('system.common.btnDelete') }}</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </div>
           </template>
@@ -82,22 +90,14 @@
                   <el-select v-model="modelForm.category" :placeholder="$t('system.flow.phSelectDomain')" style="width:100%">
                     <el-option v-for="(label, code) in WF_MODEL_CATEGORY" :key="code" :label="label" :value="code" />
                   </el-select>
-                  <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-                    {{ $t('system.flow.hintCategoryIsDomain') }}
-                    <b>{{ $t('system.flow.optUnclassified') }}</b>{{ $t('system.flow.txtUnclassCause') }}<code>TEMPLATE</code>
-                    {{ $t('system.flow.txtUnclassRestored') }}
-                    {{ $t('system.flow.txtUnclassedFix') }}
-                  </div>
+                  <div class="field-hint">{{ $t('system.flow.hintCategoryBrief') }}</div>
                 </el-form-item>
                 <el-form-item :label="$t('system.flow.lblBizDocType')">
                   <el-select v-model="modelForm.bizType" filterable allow-create default-first-option
                              :placeholder="$t('system.flow.phSelectDocType')" style="width:100%">
                     <el-option v-for="o in bizTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
                   </el-select>
-                  <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-                    {{ $t('system.flow.hintDocTypeDict') }}
-                    {{ $t('system.flow.txtHitByPrefix') }}<b>{{ $t('system.flow.colModelCode') }}</b>{{ $t('system.flow.hintBizTypeLabelOnly') }}
-                    {{ $t('system.flow.txtUpperCodeTail') }} <code>constants/enums.js</code> {{ $t('system.flow.hintEnumSuffix') }}</div>
+                  <div class="field-hint">{{ $t('system.flow.hintDocTypeBrief') }}</div>
                 </el-form-item>
                 <el-form-item :label="$t('system.flow.lblScope')">
                   <el-select v-model="modelForm.orgScope" style="width:100%">
@@ -297,7 +297,8 @@
                 </el-table-column>
                 <el-table-column prop="currentNode" :label="$t('system.flow.colCurrentNode')" width="120" />
                 <el-table-column prop="initiatorName" :label="$t('system.flow.colInitiator')" width="100" />
-                <el-table-column prop="startTime" :label="$t('system.flow.colStartedAt')" width="160" />
+                <el-table-column prop="startTime" :label="$t('system.flow.colStartedAt')" width="160"
+                                 :formatter="(row, col) => formatDateTime(row[col.property])" />
               </el-table>
               <el-pagination
                 v-model:current-page="instPageNum"
@@ -361,190 +362,171 @@
 
     <!-- 模型新增/编辑弹窗已内联在基本信息Tab，此处省略 -->
 
-    <!-- 节点编辑弹窗 -->
-    <el-dialog v-model="nodeDialog.visible" :title="nodeDialog.editing ? t('system.flow.dlgEditNode') : t('system.flow.btnAddNode')" width="600px" destroy-on-close>
-      <el-form ref="nodeFormRef" :model="nodeDialog.form" :rules="nodeFormRules" label-width="120px" size="default">
-        <el-form-item :label="$t('system.flow.colNodeCode')" prop="nodeKey"><el-input v-model="nodeDialog.form.nodeKey" /></el-form-item>
-        <el-form-item :label="$t('system.flow.colNodeName')" prop="nodeName"><el-input v-model="nodeDialog.form.nodeName" /></el-form-item>
-        <!-- F1-6（体检 E-06b）：原「节点类型」下拉已摘除。wf_node_config 没有 node_type 列，
-             后端也不消费该键（全仓 Java 检索仅 XML DOM 的 Node.getNodeType()），
-             留着等于让配置员以为选「抄送」就能产生抄送。真正的抄送走下方「办结后抄送 / 抄送角色」。 -->
-        <el-form-item :label="$t('system.flow.lblApproverType')">
-          <el-select v-model="nodeDialog.form.assignType" style="width:100%" @change="onAssignTypeChange">
-            <el-option :label="$t('system.flow.optAssigneeUser')" value="USER" />
-            <el-option :label="$t('system.flow.optAssigneeRole')" value="ROLE" />
-            <el-option :label="$t('system.flow.colInitiator')" value="INITIATOR" />
-            <el-option :label="$t('system.flow.optAssigneeChain')" value="DEPT_LEADER_UP" />
-          </el-select>
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.hintSupervisorRole') }}
-            {{ $t('system.flow.txtUseLeaderUp') }}
-            {{ $t('system.flow.txtLevelFallbackTail') }}
-          </div>
-        </el-form-item>
-        <el-form-item v-if="nodeDialog.form.assignType !== 'INITIATOR' && nodeDialog.form.assignType !== 'DEPT_LEADER_UP'" :label="$t('system.flow.lblApproverValue')" prop="assignValue">
-          <el-input v-model="nodeDialog.form.assignValue" :placeholder="assignValuePlaceholder" />
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">{{ assignValueHint }}</div>
-          <RoleHolderHint v-if="nodeDialog.form.assignType === 'ROLE'" :role-code="firstAssignRole" />
-        </el-form-item>
-        <el-form-item :label="$t('system.flow.lblAssignMode')">
-          <el-select v-model="nodeDialog.form.handlingMode" style="width:100%">
-            <el-option :label="$t('system.flow.optPickAuto')" value="AUTO" />
-            <!-- 点名/任务池两个取值只在 ROLE 分支被消费；配到别的类型上是假功能，直接置灰 -->
-            <el-option :label="$t('system.flow.optPickPrev')" value="PICK"
-                       :disabled="nodeDialog.form.assignType !== 'ROLE'" />
-            <el-option :label="$t('system.flow.optPickPool')" value="POOL"
-                       :disabled="nodeDialog.form.assignType !== 'ROLE'" />
-          </el-select>
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.hintPickNeedsSwitch') }}
-            {{ $t('system.flow.hintPickWhitelistTail') }}
-            {{ $t('system.flow.hintPoolMeaning') }}
-            {{ $t('system.flow.hintPoolFallbackTail') }}
-            {{ $t('system.flow.hintSingleCandidate') }}
-            <span v-if="nodeDialog.form.assignType !== 'ROLE'">{{ $t('system.flow.hintPickModes') }}</span>
-          </div>
-        </el-form-item>
-        <el-form-item :label="$t('system.flow.lblCountersign')">
-          <!-- wf_node_config.multi_type：后端 WfBpmnTemplateService 只消费 ALL/SEQ/VOTE（P1，2026-09-23）。
-               选中后本次「发布」会为该节点生成 BPMN multiInstanceLoopCharacteristics 多实例任务。 -->
-          <el-select v-model="nodeDialog.form.multiType" style="width:100%">
-            <el-option :label="$t('system.flow.optCsAny')" value="ANY" />
-            <el-option :label="$t('system.flow.optCsAll')" value="ALL" />
-            <el-option :label="$t('system.flow.optCsSequential')" value="SEQ" />
-            <el-option :label="$t('system.flow.optCsVote')" value="VOTE" />
-          </el-select>
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.txtCsCandidateFrom') }}<b>{{ $t('system.flow.txtRoleMultiCandidates') }}</b>{{ $t('system.flow.txtCsMeaningTail') }}
-            {{ $t('system.flow.txtSingleFallback') }}<b>{{ $t('system.flow.txtRepublishRequired') }}</b>
-            {{ $t('system.flow.txtSaveNotDeployTail') }}
-            <br />{{ $t('system.flow.hintPublishDeploysXml') }}
-            {{ $t('system.flow.txtNotFromConfig') }}
-            {{ $t('system.flow.txtXmlCheckTail') }}
-          </div>
-        </el-form-item>
+    <!-- 节点编辑弹窗：按业务分组＋短提示，避免单页过长 -->
+    <el-dialog v-model="nodeDialog.visible" :title="nodeDialog.editing ? t('system.flow.dlgEditNode') : t('system.flow.btnAddNode')"
+               width="760px" top="6vh" destroy-on-close class="node-dialog">
+      <el-form ref="nodeFormRef" :model="nodeDialog.form" :rules="nodeFormRules" label-width="104px" size="default">
+        <div class="form-section-title">{{ $t('system.flow.secNodeBasic') }}</div>
+        <el-row :gutter="12">
+          <el-col :span="10">
+            <el-form-item :label="$t('system.flow.colNodeCode')" prop="nodeKey">
+              <el-input v-model="nodeDialog.form.nodeKey" :placeholder="$t('system.flow.phNodeCode')" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="14">
+            <el-form-item :label="$t('system.flow.colNodeName')" prop="nodeName">
+              <el-input v-model="nodeDialog.form.nodeName" :placeholder="$t('system.flow.phNodeName')" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <div class="form-section-title">{{ $t('system.flow.secApprover') }}</div>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblApproverType')">
+              <el-select v-model="nodeDialog.form.assignType" style="width:100%" @change="onAssignTypeChange">
+                <el-option :label="$t('system.flow.optAssigneeUser')" value="USER" />
+                <el-option :label="$t('system.flow.optAssigneeRole')" value="ROLE" />
+                <el-option :label="$t('system.flow.colInitiator')" value="INITIATOR" />
+                <el-option :label="$t('system.flow.optAssigneeChain')" value="DEPT_LEADER_UP" />
+              </el-select>
+              <div class="field-hint">{{ $t('system.flow.hintApproverTypeBrief') }}</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"
+                  v-if="nodeDialog.form.assignType !== 'INITIATOR' && nodeDialog.form.assignType !== 'DEPT_LEADER_UP'">
+            <el-form-item :label="$t('system.flow.lblApproverValue')" prop="assignValue">
+              <el-input v-model="nodeDialog.form.assignValue" :placeholder="assignValuePlaceholder" />
+              <div class="field-hint">{{ assignValueHint }}</div>
+              <RoleHolderHint v-if="nodeDialog.form.assignType === 'ROLE'" :role-code="firstAssignRole" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblAssignMode')">
+              <el-select v-model="nodeDialog.form.handlingMode" style="width:100%">
+                <el-option :label="$t('system.flow.optPickAuto')" value="AUTO" />
+                <el-option :label="$t('system.flow.optPickPrev')" value="PICK"
+                           :disabled="nodeDialog.form.assignType !== 'ROLE'" />
+                <el-option :label="$t('system.flow.optPickPool')" value="POOL"
+                           :disabled="nodeDialog.form.assignType !== 'ROLE'" />
+              </el-select>
+              <div class="field-hint">{{ $t('system.flow.hintAssignModeBrief') }}</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblCountersign')">
+              <el-select v-model="nodeDialog.form.multiType" style="width:100%">
+                <el-option :label="$t('system.flow.optCsAny')" value="ANY" />
+                <el-option :label="$t('system.flow.optCsAll')" value="ALL" />
+                <el-option :label="$t('system.flow.optCsSequential')" value="SEQ" />
+                <el-option :label="$t('system.flow.optCsVote')" value="VOTE" />
+              </el-select>
+              <div class="field-hint">{{ $t('system.flow.hintCountersignBrief') }}</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item v-if="nodeDialog.form.multiType === 'VOTE'" :label="$t('system.flow.lblVoteRatio')">
           <el-input-number v-model="nodeDialog.form.voteRatio" :min="1" :max="100" :step="5" style="width:100%" />
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.txtVotePassHead') }}<b>{{ $t('system.flow.txtEarlyApprove') }}</b>{{ $t('system.flow.txtVoteRejectTail') }}
-            {{ $t('system.flow.txtVoteExample') }}
-          </div>
+          <div class="field-hint">{{ $t('system.flow.hintVoteBrief') }}</div>
         </el-form-item>
-        <el-form-item :label="$t('system.flow.lblTimeoutHours')">
-          <el-input-number v-model="nodeDialog.form.timeoutHours" :min="0" :step="1" style="width:100%" />
-        </el-form-item>
-        <el-form-item :label="$t('system.flow.lblTimeoutAction')">
-          <!-- WfTimeoutJob 真消费的三档。存量/外部拼写由服务端 WfTimeoutJob.normalizeAction 归一：
-               AUTO_REMIND / REMIND / URGE / NOTIFY → 催办；TRANSFER / ESCALATE / AUTO_ESCALATE /
-               REDISTRIBUTE / AUTO_TRANSFER → 升级；AUTO_PASS → 自动通过。 -->
-          <el-select v-model="nodeDialog.form.timeoutAction" style="width:100%">
-            <el-option :label="$t('system.flow.optActRemind')" value="NOTIFY" />
-            <el-option :label="$t('system.flow.optRemindEscalate')" value="ESCALATE_AFTER_URGES" />
-            <el-option :label="$t('system.flow.optTimeoutAuto')" value="AUTO_PASS" />
-            <el-option :label="$t('system.flow.optTimeoutEscalate')" value="ESCALATE" />
-          </el-select>
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.hintTimeoutActsReal') }}
-            {{ $t('system.flow.txtUrgeThenEscalate') }} <code>sys_config.wf.timeout.escalate.after_urges</code>{{ $t('system.flow.txtEscalateAfterTail') }}
-            {{ $t('system.flow.txtAutoPassNeeds') }} <code>wf.timeout.autopass.nodes</code> {{ $t('system.flow.txtAutopassGateTail') }}
-            {{ $t('system.flow.txtEscalateMeans') }}
-            {{ $t('system.flow.txtEscalateNoPerson') }}<b>{{ $t('system.flow.txtNeverAdmin') }}</b>。
-          </div>
-        </el-form-item>
-        <el-form-item
-          v-if="nodeDialog.form.assignType === 'DEPT_LEADER_UP' || isEscalateAction(nodeDialog.form.timeoutAction) || nodeDialog.form.emptyStrategy === 'ESCALATE'"
-          :label="$t('system.flow.lblEscalateLevels')">
-          <el-input-number v-model="nodeDialog.form.upLevel" :min="0" :max="10" :step="1" style="width:100%" />
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.hintUpLevelScope') }}
-            {{ $t('system.flow.txtLevelZeroOne') }}
-            <b>{{ $t('system.flow.txtConsumedThree') }}</b>{{ $t('system.flow.txtThreeConsumersTail') }}
-          </div>
-        </el-form-item>
-        <el-form-item :label="$t('system.flow.lblEmptyPolicy')">
-          <!-- NodeOrgResolver.applyEmptyStrategy 真消费的三档；ADMIN 档被写入闸拒绝（铁律：admin 禁入流程） -->
-          <el-select v-model="nodeDialog.form.emptyStrategy" style="width:100%" :placeholder="$t('system.flow.lblEmptyDefault')">
-            <el-option :label="$t('system.flow.optEmptyBlock')" value="ERROR" />
-            <el-option :label="$t('system.flow.optEmptyEscalate')" value="ESCALATE" />
-            <el-option :label="$t('system.flow.optEmptySkip')" value="SKIP" />
-          </el-select>
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.hintEmptyPolicy') }}</div>
-        </el-form-item>
-        <el-form-item :label="$t('system.flow.lblAllowTransfer')">
-          <el-switch v-model="nodeDialog.form.allowTransfer" :active-value="1" :inactive-value="0" />
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.hintTransferOff') }}
-            {{ $t('system.flow.txtAutoTransferUnaffected') }}
-          </div>
-        </el-form-item>
-        <el-form-item :label="$t('system.flow.lblAllowAddSign')">
-          <el-switch v-model="nodeDialog.form.allowAddsign" :active-value="1" :inactive-value="0" />
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.hintAddSignOff') }}
-            {{ $t('system.flow.txtNeedsGraySwitch') }} <code>approve.addsign_gate.enabled</code> {{ $t('system.flow.txtAddsignGateList') }}
-            <code>approve.addsign_gate.models</code> {{ $t('system.flow.txtGateSuffix') }}</div>
-        </el-form-item>
-        <el-form-item :label="$t('system.flow.lblSubmitDone')">
-          <!-- F10（2026-09-24）：把"首节点不产生人工待办"从节点名猜测改为显式属性 first_node_auto_pass。
-               后端 WfEngineFacade.autoSkipSelfConfirmFirstNode / firstApprovalNodeKeys 真消费本字段。
-               不给「未配置」选项：存量行已由 V2.2.0_g4_governance_20260924.sql 显式 seed，
-               后端对 null 不做更新（updateById 跳过 null），故「未配置」选项在已保存行上不可回退，
-               只留 是/否 两态，未选择时由 placeholder 说明回退旧判据。 -->
-          <el-select v-model="nodeDialog.form.firstNodeAutoPass" style="width:100%" clearable
-                     :placeholder="$t('system.flow.optLegacyJudge')">
-            <el-option :label="$t('system.flow.optSubmitDone')" :value="1" />
-            <el-option :label="$t('system.flow.optManualRequired')" :value="0" />
-          </el-select>
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.txtAppliesOnlyTo') }}<b>{{ $t('system.flow.txtFirstTask') }}</b>{{ $t('system.flow.txtAutoSubmitMeaning') }}
-            {{ $t('system.flow.txtNoExtraSubmit') }}
-            {{ $t('system.flow.txtBlankKeepsOld') }}
-            {{ $t('system.flow.txtSuggestExplicit') }}
-          </div>
-        </el-form-item>
-        <!-- G2 传阅（2026-09-23）：节点办结后自动抄送。后端 WfCcService 真消费这两个字段；
-             与上面的「办理人取值」不同——抄送人不参与取人、不影响流程走向，只往 wf_cc 投递记录。 -->
+
+        <div class="form-section-title">{{ $t('system.flow.secTimeout') }}</div>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblTimeoutHours')">
+              <el-input-number v-model="nodeDialog.form.timeoutHours" :min="0" :step="1" style="width:100%" />
+              <div class="field-hint">{{ $t('system.flow.hintTimeoutHoursBrief') }}</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblTimeoutAction')">
+              <el-select v-model="nodeDialog.form.timeoutAction" style="width:100%">
+                <el-option :label="$t('system.flow.optActRemind')" value="NOTIFY" />
+                <el-option :label="$t('system.flow.optRemindEscalate')" value="ESCALATE_AFTER_URGES" />
+                <el-option :label="$t('system.flow.optTimeoutAuto')" value="AUTO_PASS" />
+                <el-option :label="$t('system.flow.optTimeoutEscalate')" value="ESCALATE" />
+              </el-select>
+              <div class="field-hint">{{ $t('system.flow.hintTimeoutActionBrief') }}</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12"
+                  v-if="nodeDialog.form.assignType === 'DEPT_LEADER_UP' || isEscalateAction(nodeDialog.form.timeoutAction) || nodeDialog.form.emptyStrategy === 'ESCALATE'">
+            <el-form-item :label="$t('system.flow.lblEscalateLevels')">
+              <el-input-number v-model="nodeDialog.form.upLevel" :min="0" :max="10" :step="1" style="width:100%" />
+              <div class="field-hint">{{ $t('system.flow.hintUpLevelBrief') }}</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblEmptyPolicy')">
+              <el-select v-model="nodeDialog.form.emptyStrategy" style="width:100%" :placeholder="$t('system.flow.lblEmptyDefault')">
+                <el-option :label="$t('system.flow.optEmptyBlock')" value="ERROR" />
+                <el-option :label="$t('system.flow.optEmptyEscalate')" value="ESCALATE" />
+                <el-option :label="$t('system.flow.optEmptySkip')" value="SKIP" />
+              </el-select>
+              <div class="field-hint">{{ $t('system.flow.hintEmptyBrief') }}</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <div class="form-section-title">{{ $t('system.flow.secPermissions') }}</div>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblAllowTransfer')">
+              <el-switch v-model="nodeDialog.form.allowTransfer" :active-value="1" :inactive-value="0" />
+              <div class="field-hint">{{ $t('system.flow.hintTransferBrief') }}</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblAllowAddSign')">
+              <el-switch v-model="nodeDialog.form.allowAddsign" :active-value="1" :inactive-value="0" />
+              <div class="field-hint">{{ $t('system.flow.hintAddSignBrief') }}</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblSubmitDone')">
+              <el-select v-model="nodeDialog.form.firstNodeAutoPass" style="width:100%" clearable
+                         :placeholder="$t('system.flow.optLegacyJudge')">
+                <el-option :label="$t('system.flow.optSubmitDone')" :value="1" />
+                <el-option :label="$t('system.flow.optManualRequired')" :value="0" />
+              </el-select>
+              <div class="field-hint">{{ $t('system.flow.hintFirstNodeBrief') }}</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <div class="form-section-title">{{ $t('system.flow.secCcReject') }}</div>
         <el-form-item :label="$t('system.flow.lblCcAfter')">
           <el-input v-model="nodeDialog.form.ccUsers" :placeholder="$t('system.flow.phCcUserIds')" />
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.txtCcNodeHead') }}<b>{{ $t('system.flow.txtAdvance') }}</b>{{ $t('system.flow.txtCcNodeTail') }}
-            {{ $t('system.flow.txtRejectNotDelivered') }}
-            {{ $t('system.flow.txtOncePerPerson') }}
-          </div>
+          <div class="field-hint">{{ $t('system.flow.hintCcUsersBrief') }}</div>
         </el-form-item>
         <el-form-item :label="$t('system.flow.lblCcRoles')">
           <el-input v-model="nodeDialog.form.ccRoles" :placeholder="$t('system.flow.phCcRoleCodes')" />
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.txtCcRoleExpandHead') }}<b>{{ $t('system.flow.txtOnDuty') }}</b>{{ $t('system.flow.txtCcRoleExpandTail') }}
-            <b>{{ $t('system.flow.warnNodeCode') }}</b>{{ $t('system.flow.txtNodeNoNumbering') }}
-            {{ $t('system.flow.txtOrphanRowsTail') }}
-            {{ $t('system.flow.txtBackendWord') }}<b>{{ $t('system.flow.txtExactOnly') }}</b>{{ $t('system.flow.txtOrphanTail') }}
-            <code>scripts/_audit_timeout_action.py</code> {{ $t('system.flow.txtAuditSuffix') }}</div>
+          <div class="field-hint">{{ $t('system.flow.hintCcRolesBrief') }}</div>
         </el-form-item>
-        <!-- G2 驳回产品化（2026-09-24）：把"谁能退、能退多远"从私有全局开关落到节点配置上。
-              本控件替代了此前的三个死列 allow_reject / reject_to / reject_node
-             （全仓零读取、本页原本也无控件，已在 V2.2.0_g2_reject_productize_20260924.sql 中摘除）。 -->
-        <el-form-item :label="$t('system.flow.lblRejectRange')">
-          <!-- 后端 WfEngineFacade.freeRejectScopeOf() 真消费本字段；生效条件是「本字段 ≠ NONE」且总闸开启 -->
-          <el-select v-model="nodeDialog.form.rejectScope" style="width:100%">
-            <el-option :label="$t('system.flow.optRejectNoTarget')" value="NONE" />
-            <el-option :label="$t('system.flow.optRejectPrev')" value="PREV_ONE" />
-            <el-option :label="$t('system.flow.optRejectAnyDone')" value="ANY_DONE" />
-          </el-select>
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.hintFreeRejectMoveExec') }}
-            <b>{{ $t('system.flow.txtNeedGate') }}</b>{{ $t('system.flow.txtNeedParamLead') }}<code>wf.reject.free.enabled=1</code>{{ $t('system.flow.txtNeedParamTail') }}
-            {{ $t('system.flow.txtRejectPrevCheck') }}
-          </div>
-        </el-form-item>
-        <el-form-item :label="$t('system.flow.lblResubmitBack')">
-          <el-switch v-model="nodeDialog.form.resubmitJumpBack" :active-value="1" :inactive-value="0" />
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.txtRejectOriginHead') }}<code>rejectOriginNode</code>{{ $t('system.flow.txtRejectOriginParen') }}
-            {{ $t('system.flow.txtRejectNodeEcho') }}
-          </div>
-        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblRejectRange')">
+              <el-select v-model="nodeDialog.form.rejectScope" style="width:100%">
+                <el-option :label="$t('system.flow.optRejectNoTarget')" value="NONE" />
+                <el-option :label="$t('system.flow.optRejectPrev')" value="PREV_ONE" />
+                <el-option :label="$t('system.flow.optRejectAnyDone')" value="ANY_DONE" />
+              </el-select>
+              <div class="field-hint">{{ $t('system.flow.hintRejectBrief') }}</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item :label="$t('system.flow.lblResubmitBack')">
+              <el-switch v-model="nodeDialog.form.resubmitJumpBack" :active-value="1" :inactive-value="0" />
+              <div class="field-hint">{{ $t('system.flow.hintResubmitBrief') }}</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
       <template #footer>
         <el-button @click="nodeDialog.visible = false">{{ $t('common.cancel') }}</el-button>
@@ -559,20 +541,15 @@
           <el-select v-model="bindingDialog.form.bizType" filterable allow-create default-first-option style="width:100%">
             <el-option v-for="o in bindingBizTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.txtBizTypeValueLead') }}<b>{{ $t('system.flow.hintDocTypeExact') }}</b>{{ $t('system.flow.txtBizTypeExampleLead') }}<code>PURCHASE_ORDER_REVIEW</code>），
-            {{ $t('system.flow.txtBizTypeManual') }}
-          </div>
+          <div class="field-hint">{{ $t('system.flow.hintBizTypeBrief') }}</div>
         </el-form-item>
         <el-form-item :label="$t('system.flow.colCfgName')" prop="configName"><el-input v-model="bindingDialog.form.configName" /></el-form-item>
         <el-form-item :label="$t('system.flow.lblBindModel')">
           <el-input :model-value="selectedModel?.modelKey" disabled />
         </el-form-item>
         <el-form-item :label="$t('system.flow.colSubType', '单据子类')">
-          <el-input v-model="bindingDialog.form.subType" placeholder="留空=适用于该单据类型的全部子类；填值则仅该子类命中" />
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:2px">
-            {{ $t('system.flow.txtSubTypeRoute', '路由时子类精确命中优先于通配；同一优先级再按金额区间与优先级取第一条') }}
-          </div>
+          <el-input v-model="bindingDialog.form.subType" :placeholder="$t('system.flow.phSubType')" />
+          <div class="field-hint">{{ $t('system.flow.hintSubTypeRoute') }}</div>
         </el-form-item>
         <el-form-item :label="$t('system.flow.lblAmountMinIncl')">
           <el-input-number v-model="bindingDialog.form.amountMin" :min="0" :precision="2" style="width:100%" />
@@ -722,7 +699,8 @@
           <el-input :model-value="currentUserName" disabled />
         </el-form-item>
         <el-form-item :label="$t('system.flow.colDelegate')" prop="toUserId">
-          <UserSelect v-model="delegateDialog.form.toUserId" show-dept />
+          <!-- P0 修复（2026-10-21）：默认只加载同公司人员 -->
+          <UserSelect v-model="delegateDialog.form.toUserId" scope="same-company" show-dept />
         </el-form-item>
         <el-form-item :label="$t('system.flow.lblApplyDocTypes')">
           <el-input v-model="delegateDialog.form.bizTypes" :placeholder="$t('system.flow.phApplyDocTypes')" />
@@ -747,32 +725,62 @@
     <!-- 校验结果弹窗 -->
     <el-dialog v-model="checkResult.visible" :title="$t('system.flow.ttlCheckResult')" width="500px">
       <el-alert v-if="checkResult.data?.valid" type="success" :closable="false" :title="$t('system.flow.stCheckPass')" />
-      <el-alert v-else type="error" :closable="false" :title="$t('system.flow.stCheckFail')" :description="checkResult.data?.message || t('system.flow.msgUnknownError')" />
-      <div v-if="checkResult.data?.errors?.length" style="margin-top:12px">
-        <div v-for="(e, i) in checkResult.data.errors" :key="i" style="color:#f56c6c;margin-bottom:4px">{{ e }}</div>
-      </div>
+      <el-alert v-else type="error" :closable="false" :title="$t('system.flow.stCheckFail')" :description="checkFailDesc" />
     </el-dialog>
 
-    <!-- 模拟结果弹窗 -->
-    <el-dialog v-model="simResult.visible" :title="$t('system.flow.ttlSimulate')" width="600px">
-      <el-form :model="simResult" :rules="simRules" label-width="100px" style="margin-bottom:16px">
+    <!-- 模拟结果弹窗：先给结论，再给审批路径和节点明细 -->
+    <el-dialog v-model="simResult.visible" :title="$t('system.flow.ttlSimulate')" width="720px" top="6vh">
+      <el-form :model="simResult" :rules="simRules" label-width="80px" inline class="sim-query">
         <el-form-item :label="$t('system.flow.lblSimAmount')">
-          <el-input-number v-model="simResult.amount" :min="0" :precision="2" />
+          <el-input-number v-model="simResult.amount" :min="0" :precision="2" style="width:150px" />
         </el-form-item>
         <el-form-item :label="$t('system.flow.lblExpenseItem')">
-          <el-input v-model="simResult.itemName" :placeholder="$t('system.flow.optNullable')" />
+          <el-input v-model="simResult.itemName" :placeholder="$t('system.flow.optNullable')" style="width:150px" />
         </el-form-item>
-        <el-button type="primary" size="small" @click="runSimulate">{{ $t('system.flow.btnRunSim') }}</el-button>
+        <el-form-item>
+          <el-button type="primary" :loading="simResult.running" @click="runSimulate">{{ $t('system.flow.btnRunSim') }}</el-button>
+        </el-form-item>
       </el-form>
-      <div v-if="simResult.trace?.length">
-        <el-timeline>
-          <el-timeline-item v-for="(t, i) in simResult.trace" :key="i" :type="t.passed ? 'success' : 'primary'">
-            <strong>{{ t.nodeName }}</strong> <small style="color:#999">{{ t.nodeKey }}</small>
-            <div v-if="t.assignee">{{ $t('system.flow.ctxApprover', { v1: t.assignee }) }}</div>
-            <div v-if="t.action">{{ $t('system.flow.ctxAction', { v1: wfActionLabel(t.action) }) }}</div>
-          </el-timeline-item>
-        </el-timeline>
-      </div>
+
+      <template v-if="simResult.ran">
+        <el-alert v-if="simResult.errors.length" type="error" :closable="false" show-icon
+                  :title="$t('system.flow.simHasErrors')" :description="simResult.errors.join('；')" />
+        <el-alert v-else type="success" :closable="false" show-icon
+                  :title="$t('system.flow.simSummary', { v1: simAmountText, v2: simApprovalCount, v3: simResult.trace.length })" />
+        <el-alert v-if="simResult.warnings.length" type="warning" :closable="false" show-icon class="sim-warn"
+                  :title="$t('system.flow.simWarnings')" :description="simResult.warnings.join('；')" />
+
+        <template v-if="simResult.trace.length">
+          <div class="sim-section-title">{{ $t('system.flow.simPathTitle') }}</div>
+          <div class="sim-path">
+            <template v-for="(t, i) in simResult.trace" :key="i">
+              <span v-if="i" class="sim-arrow">→</span>
+              <el-tag :type="simTagType(t.type)" effect="light" class="sim-path-node">{{ t.nodeName }}</el-tag>
+            </template>
+          </div>
+
+          <div class="sim-section-title">{{ $t('system.flow.simDetailTitle') }}</div>
+          <el-table :data="simResult.trace" size="small" border>
+            <el-table-column type="index" :label="$t('system.flow.colStep')" width="56" align="center" />
+            <el-table-column :label="$t('system.flow.colNodeType')" width="100">
+              <template #default="{ row }">
+                <el-tag size="small" :type="simTagType(row.type)">{{ simTypeLabel(row.type) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="nodeName" :label="$t('system.flow.colNodeName')" min-width="150" show-overflow-tooltip />
+            <el-table-column :label="$t('system.flow.colStepDesc')" min-width="220">
+              <template #default="{ row }">
+                <template v-if="row.type === 'task'">
+                  <span v-if="row.assignee">{{ $t('system.flow.simApproverLabel', { v1: row.assignee }) }}</span>
+                  <span v-else class="sim-muted">{{ $t('system.flow.simNoApprover') }}</span>
+                </template>
+                <span v-else>{{ row.tip }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
+        <el-empty v-else :description="$t('system.flow.msgSimNoPath')" :image-size="60" />
+      </template>
       <el-empty v-else :description="$t('system.flow.emptySimResult')" :image-size="60" />
     </el-dialog>
 
@@ -787,7 +795,7 @@
             {{ $t('system.flow.lblByProcDefDist') }}
             <el-tag v-for="(c, k) in (inFlight.data?.byProcDef || {})" :key="k" size="small" effect="plain"
               :type="k === inFlight.data?.newProcDefId ? 'success' : 'info'" style="margin-right:6px">
-              {{ $t('system.flow.statInflightCount', { v1: k, v2: c }) }}</el-tag>
+              {{ $t('system.flow.statInflightCount', { v1: k === inFlight.data?.newProcDefId ? t('system.flow.stNewVer') : t('system.flow.stOldVer'), v2: c }) }}</el-tag>
           </div>
           <el-table :data="inFlight.data?.items || []" size="small" stripe max-height="420" :empty-text="$t('system.flow.emptyStale')">
             <el-table-column prop="bizNo" :label="$t('field.docNo')" width="150" show-overflow-tooltip />
@@ -804,7 +812,6 @@
                 <el-tag size="small" :type="row.procDefId === inFlight.data?.newProcDefId ? 'success' : 'warning'" effect="plain">
                   {{ row.procDefId === inFlight.data?.newProcDefId ? t('system.flow.stNewVer') : t('system.flow.stOldVer') }}
                 </el-tag>
-                <span style="margin-left:4px; font-size:11px; color:#909399">{{ row.procDefId }}</span>
               </template>
             </el-table-column>
           </el-table>
@@ -813,12 +820,11 @@
         </el-tab-pane>
 
         <el-tab-pane v-if="canModelUpdate" :label="$t('system.flow.ttlReleases')" name="history">
-          <div style="font-size:12px; color:#909399; margin-bottom:8px">
-            {{ $t('system.flow.hintBpmnRepoHead') }}<code>fssc.wf.bpmn-repo-dir</code>），
-            {{ $t('system.flow.txtRepoSuggest') }}
+          <div class="field-hint" style="margin-bottom:8px">
+            {{ $t('system.flow.hintBpmnRepoHead') }}
           </div>
           <el-table :data="inFlight.history" size="small" stripe max-height="420" :empty-text="$t('system.flow.emptyReleases')">
-            <el-table-column prop="time" :label="$t('system.flow.colPublishedAt')" width="160" />
+            <el-table-column prop="time" :label="$t('system.flow.colPublishedAt')" width="160" :formatter="(r, c, v) => formatDateTime(v)" />
             <el-table-column prop="name" :label="$t('system.flow.colDiffFile')" min-width="220" show-overflow-tooltip />
             <el-table-column prop="summary" :label="$t('system.flow.colDiffCount')" width="100" />
             <el-table-column :label="$t('common.operation')" width="90" fixed="right">
@@ -849,7 +855,7 @@ const BpmnDesigner = defineAsyncComponent(() => import('../../components/BpmnDes
 import SkeletonList from '../../components/SkeletonList.vue'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
-import { enumLabel, bizTypeLabel, modelCategoryLabel, wfActionLabel, BIZ_TYPE, WF_MODEL_CATEGORY, ASSIGN_TYPE, TIMEOUT_ACTION, HANDLING_MODE, MULTI_TYPE } from '@/constants/enums.js'
+import { enumLabel, bizTypeLabel, modelCategoryLabel, BIZ_TYPE, WF_MODEL_CATEGORY, ASSIGN_TYPE, TIMEOUT_ACTION, HANDLING_MODE, MULTI_TYPE } from '@/constants/enums.js'
 // 【2026-10-15枚举收口】字典读取层：标签「字典优先、本地常量兜底」，接口不可用时行为与改造前逐字一致
 import { useDict } from '@/composables/useDict.js'
 // 第1批：多实例相关标签走字典
@@ -925,13 +931,14 @@ const canDelegateUpdate = hasPerm('wf:delegate:update')
 // 是否至少能看一个详情页签（否则右侧详情区直接给空态提示，不再发任何请求）
 const canAnyDetail = canNodeList || canConfigList || canInstanceList || canDelegateList
 
-// 被权限裁剪掉的页签说明（拼给 alert 用：原实现静默隐藏，用户只看到"残缺页面"）
+// 被权限裁剪掉的页签说明（原实现静默隐藏，用户只看到"残缺页面"）
 const hiddenTabDesc = computed(() => {
   const miss = []
-  if (!canNodeList) miss.push(t('system.flow.tabNodesPerm'))
-  if (!canConfigList) miss.push(t('system.flow.tabBindingsPerm'))
-  if (!canInstanceList) miss.push(t('system.flow.tabInstancesPerm'))
-  return t('system.flow.stHidden') + miss.join('、') + '。这些权限当前仅授予「数据配置管理员」等配置类角色，如需查看请联系数据配置管理员开通。'
+  if (!canNodeList) miss.push(t('system.flow.tabNodes'))
+  if (!canConfigList) miss.push(t('system.flow.tabGlobalCfg'))
+  if (!canInstanceList) miss.push(t('system.flow.tabInstances'))
+  if (!canDelegateList) miss.push(t('system.flow.tabDelegation'))
+  return t('system.flow.hintHiddenTabs', { v1: miss.join('、') })
 })
 
 /**
@@ -1462,6 +1469,11 @@ async function cancelDelegate(row) {
 
 // ========== 模型操作 ==========
 const checkResult = reactive({ visible: false, data: null })
+const checkFailDesc = computed(() => {
+  const errors = Array.isArray(checkResult.data?.errors) ? checkResult.data.errors.filter(Boolean) : []
+  if (errors.length) return errors.join('；')
+  return checkResult.data?.message || t('system.flow.msgUnknownError')
+})
 async function validateModel() {
   try {
     checkResult.data = await designerApi.validate(selectedModel.value.bpmnXml || '')
@@ -1469,21 +1481,68 @@ async function validateModel() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-const simResult = reactive({ visible: false, amount: 10000, itemName: '', trace: [] })
+const simResult = reactive({
+  visible: false, amount: 10000, itemName: '', running: false, ran: false,
+  trace: [], errors: [], warnings: [], approvalSteps: 0,
+})
+const simApprovalCount = computed(() =>
+  simResult.approvalSteps || simResult.trace.filter(x => x.type === 'task').length
+)
+const simAmountText = computed(() =>
+  Number(simResult.amount || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+)
+function simTagType(type) {
+  return { task: 'primary', gateway: 'warning', join: 'info', end: 'success', error: 'danger' }[type] || 'info'
+}
+function simTypeLabel(type) {
+  const key = { task: 'simTypeTask', gateway: 'simTypeGateway', join: 'simTypeJoin', end: 'simTypeEnd', error: 'simTypeError' }[type]
+  return key ? t('system.flow.' + key) : type
+}
+function normalizeSimTrace(t) {
+  const type = t?.type || ''
+  const tip = (t?.tip || '').trim()
+  return {
+    type,
+    nodeName: t?.name || t?.nodeName || t?.nodeKey || t('system.flow.simUnnamedNode'),
+    nodeKey: t?.nodeKey || '',
+    assignee: type === 'task' ? tip : '',
+    tip,
+    passed: t?.passed ?? type !== 'error',
+  }
+}
+function resetSim() {
+  simResult.ran = false
+  simResult.trace = []
+  simResult.errors = []
+  simResult.warnings = []
+  simResult.approvalSteps = 0
+}
 function simulateModel() {
   if (!selectedModel.value.bpmnXml) { ElMessage.warning(t('system.flow.msgNoBpmn')); return }
   simResult.amount = 10000
   simResult.itemName = ''
-  simResult.trace = []
+  resetSim()
   simResult.visible = true
 }
 async function runSimulate() {
+  simResult.running = true
   try {
     const r = await designerApi.simulate(selectedModel.value.bpmnXml, simResult.amount, simResult.itemName)
-    simResult.trace = r?.trace || []
+    simResult.trace = (r?.trace || []).map(normalizeSimTrace)
+    simResult.errors = Array.isArray(r?.errors) ? r.errors.filter(Boolean) : []
+    simResult.warnings = Array.isArray(r?.warnings) ? r.warnings.filter(Boolean) : []
+    simResult.approvalSteps = Number(r?.approvalSteps || 0)
+    simResult.ran = true
     if (!simResult.trace.length) ElMessage.warning(t('system.flow.msgSimNoPath'))
-    else ElMessage.success(t('system.flow.msgSimDone') + simResult.trace.length + ' 步')
-  } catch (e) { ElMessage.error(e.message) }
+    else ElMessage.success(t('system.flow.msgSimDone', { v1: simResult.trace.length }))
+  } catch (e) {
+    simResult.ran = true
+    simResult.trace = []
+    simResult.errors = [e.message || t('system.flow.msgUnknownError')]
+    simResult.warnings = []
+  } finally {
+    simResult.running = false
+  }
 }
 
 async function publishModel() {
@@ -1531,10 +1590,17 @@ async function loadDiff(name) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
+function onModelCommand(cmd) {
+  if (cmd === 'inflight') openInFlight()
+  else if (cmd === 'exportRepo') exportRepo()
+  else if (cmd === 'export') exportModel()
+  else if (cmd === 'delete') deleteModel()
+}
+
 async function exportRepo() {
   try {
     const r = await designerApi.exportRepo()
-    ElMessage.success(t('system.flow.msgExportedTo', { v1: r.exported, v2: r.models, v3: r.dir }))
+    ElMessage.success(t('system.flow.msgExportedTo', { v1: r.exported, v2: r.models }))
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -1744,8 +1810,10 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.valu
 <style scoped>
 .flow-config-page { min-height: 100%; }
 .model-list-card { height: 100%; }
-.panel-header { display: flex; justify-content: space-between; align-items: center; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .panel-title { font-size: 15px; font-weight: 600; color: #303133; }
+.model-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.model-actions .el-button + .el-button { margin-left: 0; }
 .model-list { max-height: 600px; overflow-y: auto; }
 .model-item { padding: 10px 12px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; margin-bottom: 6px; }
 .model-item:hover { background: #f5f7fa; border-color: #e4e7ed; }
@@ -1755,6 +1823,27 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.valu
 .model-meta { display: flex; gap: 12px; font-size: 12px; color: #909399; }
 .model-detail-header { display: flex; align-items: center; }
 .cfg-hint { font-size: 12px; color: #909399; line-height: 1.4; margin-top: 4px; }
+.field-hint { font-size: 12px; color: #909399; line-height: 18px; margin-top: 2px; }
+/* 节点弹窗：分组标题＋内容区限高，避免整页过长 */
+.node-dialog :deep(.el-dialog__body) { max-height: 70vh; overflow-y: auto; padding-top: 8px; }
+.form-section-title {
+  font-size: 13px; font-weight: 600; color: #303133;
+  margin: 4px 0 12px; padding-left: 8px; line-height: 16px;
+  border-left: 3px solid var(--el-color-primary);
+}
+.form-section-title:not(:first-child) { margin-top: 16px; }
+/* 模拟结果：结论→路径→明细 */
+.sim-query { margin-bottom: 4px; }
+.sim-query :deep(.el-form-item) { margin-bottom: 12px; }
+.sim-warn { margin-top: 8px; }
+.sim-section-title { font-size: 13px; font-weight: 600; color: #303133; margin: 16px 0 8px; }
+.sim-path {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 10px 12px; background: #f8f9fb; border-radius: 4px;
+}
+.sim-arrow { color: #c0c4cc; font-size: 12px; }
+.sim-path-node { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.sim-muted { color: #909399; }
 /* 页签权限裁剪提示 */
 .perm-hint { margin-bottom: 12px; }
 /* 流程图页签 */

@@ -51,8 +51,8 @@
         </template>
       </el-table-column>
       <el-table-column label="操作" width="170" fixed="right">
-        <template #default="{ row }">          <InlineActions :visible="true" @view="openClaim(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
-          <!-- R5-D-181：付款（借方）方向流水不做收款认领 ⇒ 界面不给这个入口（行内「查看」同样走 openClaim，内含同一判据）。
+        <template #default="{ row }">          <InlineActions :visible="true" @view="viewSlip(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
+          <!-- R5-D-181：付款（借方）方向流水不做收款认领 ⇒ 界面不给这个入口（「查看」只出只读详情，认领必须由本按钮进）。
                方向闸在服务端 claimReceipt 独立成立，这里只是不让非法动作变得"可点"。 -->
           <el-button v-if="canClaim(row)" link type="primary" size="small" @click="openClaim(row)">收款认领</el-button>
           <el-button v-else-if="row.reconStatus !== 'MATCHED'" link type="primary" size="small" :disabled="true"
@@ -116,7 +116,7 @@
 <script setup>
 import { onMounted, ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { p2Api, receivableApi } from '../../api'
+import { p2Api } from '../../api'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import UploadButton from '../../components/UploadButton.vue'
@@ -218,11 +218,16 @@ function requireSel() {
   return selRows.value
 }
 
-/** 取应收单清单：成功返回 true；失败清空清单并写明错误态后返回 false（不沿用上一条流水带来的旧清单） */
+/** 取应收单清单：成功返回 true；失败清空清单并写明错误态后返回 false（不沿用上一条流水带来的旧清单）
+ *  D-G5-02：改调银行域专用端点 bankClaimableReceivables。
+ *  原先借应收域的 receivableApi.page（要求 receivable:list 应收域权限），
+ *  纯银企对账岗（只有 bank:reconcile:list）打开认领弹层时清单恒空、认领做不了；
+ *  取数权限随域走，改调本域端点（同样由服务端做余额/方向裁定，前端不做业务过滤）。
+ */
 async function loadReceivables() {
   receivablesLoading.value = true
   try {
-    const d = await receivableApi.page({ pageNum: 1, pageSize: 1000 })
+    const d = await p2Api.bankClaimableReceivables({ pageNum: 1, pageSize: 1000 })
     receivables.value = d.list || []
     claimError.value = ''
     return true
@@ -235,9 +240,28 @@ async function loadReceivables() {
   }
 }
 
+/** 行内「查看」只出只读详情：收款认领弹窗是写动作，挂在查看图标上等于查看态仍给提交入口。 */
+function viewSlip(row) {
+  return showRowDetail({
+    bankSerial: row.bankSerial,
+    transDate: formatDateTime(row.transDate),
+    transType: transText(row.transType),
+    amount: fmt(row.amount),
+    oppositeName: row.oppositeName,
+    oppositeAccount: row.oppositeAccount,
+    reconStatus: row.reconStatus === 'MATCHED' ? '已勾对' : '未对账',
+    claimed: row.claimed ? '已认领' : '未认领',
+    slipStatus: slipText(row.slipStatus),
+  }, {
+    title: '银行流水详情',
+    labels: { bankSerial: '银行流水号', transDate: '交易时间', transType: '收/付', amount: '金额',
+      oppositeName: '对方单位', oppositeAccount: '对方账号', reconStatus: '勾对状态', claimed: '认领状态', slipStatus: '回单状态' },
+  })
+}
+
 async function openClaim(row) {
-  // R5-D-181：行内「查看」与「收款认领」按钮两条入口都在这里过同一判据；
-  // 付款（借方）方向流水不开弹窗——弹窗开着却能提交，就等于界面还在提供非法动作。
+  // R5-D-181：付款（借方）方向流水不做收款认领 ⇒ 界面不给这个入口；
+  // 弹窗一开就能提交，判据必须在这里再立一道（行内「查看」已改走只读详情 viewSlip）。
   if (!canClaim(row)) {
     ElMessage.warning(CLAIM_DIR_HINT)
     return

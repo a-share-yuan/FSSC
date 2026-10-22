@@ -171,7 +171,7 @@ export const WF_MODEL_CATEGORY = {
   EXPENSE: '费用', BUDGET: '预算', CONTRACT: '合同', PAYMENT: '付款',
   FA: '资产·存货', FM: '会计档案', GL: '总账', TR: '资金',
   PTP: '采购付款', OTC: '销售收款',
-  TEMPLATE: '未归类（模板导入）', OTHER: '其他',
+  TEMPLATE: '未归类', OTHER: '其他',
 }
 /** 模型来源（wf_model.source）：TEMPLATE 需求模板导入 / USER 用户在流程配置里新建 */
 export const WF_MODEL_SOURCE = { TEMPLATE: '需求模板', USER: '用户自定义' }
@@ -227,7 +227,7 @@ export const CHECK_ITEM = { VOUCHER: '凭证核对', PAYMENT: '付款核对', ST
  * 外部接口分类（ext_interface_config.category ＝ integration_call_log.category）。
  * 词表＝后端写入闸 ExtInterfaceConfigService.VALID_CATEGORIES ∪ 库内现值：
  * SMS / TAX_CERTIFY / TAX_DECLARE 三行是白名单机制落地前种子进来的历史值，仍会在列表里出现，故一并登记。
- * 这里出现 SAP/用友/金蝶/EBS 等是**接口通道的厂商取值**（配置页 tab 与 provider 下拉早就这么显示），
+ * 这里出现 EBS / SAP / YONYOU / KINGDEE 等是**接口通道的厂商取值**（配置页 tab 与 provider 下拉早就这么显示），
  */
 export const EXT_INTERFACE_CATEGORY = {
   INVOICE_VERIFY: '发票验真', INVOICE_CERTIFY: '发票认证', OCR: 'OCR 影像识别', AI_MODEL: 'AI 大模型',

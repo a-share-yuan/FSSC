@@ -52,7 +52,7 @@
             <el-tag :type="row.imageStatus === 'COMPLETE' ? 'success' : 'warning'" size="small">{{ imageStatusLabel(row.imageStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="approveTime" :label="$t('sharing.archive.colApproveTime')" width="160"  sortable />
+        <el-table-column prop="approveTime" :label="$t('sharing.archive.colApproveTime')" width="160"  sortable :formatter="(r, c, v) => formatDateTime(v)" />
         <el-table-column :label="$t('sharing.archive.colArchStatus')" width="90">
           <template #default="{ row }">
             <el-tag :type="row.archiveStatus === 'ARCHIVED' ? 'success' : 'info'" size="small">
@@ -104,7 +104,7 @@
             <span v-else style="color:#909399">{{ $t('sharing.archive.labelNotStarted') }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="filingTime" :label="$t('sharing.archive.colFilingTime')" width="160"  sortable />
+        <el-table-column prop="filingTime" :label="$t('sharing.archive.colFilingTime')" width="160"  sortable :formatter="(r, c, v) => formatDateTime(v)" />
         <el-table-column :label="$t('common.operation')" width="90" fixed="right">
           <template #default="{ row }">
             <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('sharing.common.btnTrace') }}</el-button>
@@ -125,7 +125,7 @@
 <script setup>
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { showRowDetail } from '@/utils/format'
+import { showRowDetail, formatDateTime } from '@/utils/format'
 import { opApi, billApi } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import FileViewer from '../../components/FileViewer.vue'

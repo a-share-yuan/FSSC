@@ -41,26 +41,36 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bell } from '@element-plus/icons-vue'
 import { messageApi, store } from '../api'
 import { msgTypeLabel } from '../constants/enums'
 
-const props = defineProps({ visible: Boolean })
-const emit = defineEmits(['update:visible'])
-
 const router = useRouter()
 
-const popoverVisible = ref(props.visible)
-watch(() => props.visible, (v) => { popoverVisible.value = v })
-watch(() => popoverVisible.value, (v) => emit('update:visible', v))
+const popoverVisible = ref(false)
+// 每次展开都重新拉一遍：读过的、别人代读的都不会残留旧角标
+watch(popoverVisible, (v) => { if (v) { fetchMessages(); fetchUnread() } })
 
 const activeTab = ref('all')
 const loading = ref(false)
 const messages = ref([])
 const unreadCount = ref(0)
 const uid = store.user?.userId ?? store.user?.id
+
+/**
+ * 角标口径＝服务端本人未读总数（messageApi.unreadCount），不再用「当前页 20 条里数出来的未读」。
+ * 原实现两处各挂一个铃铛：HeaderBadges 那个用服务端总数、这里用页内计数，
+ * 未读超过一页时两个数字会打架；现只留这一个铃铛，取权威口径。
+ */
+async function fetchUnread() {
+  if (!uid) return
+  try {
+    // silent：辅助角标拉取失败不弹全局错误（30s 轮询与下次展开兜底）
+    unreadCount.value = await messageApi.unreadCount(uid, { silent: true }) || 0
+  } catch { /* 忽略 */ }
+}
 
 // D-DEC-149/187：字段名按后端 SysMessage 实序列化键取 —— 已读位是 `isRead`（0/1）、类型位是 `msgType`。
 // 此前本组件读的是 `msg.readFlag`／`msg.category` 两个**不存在的键**（对照系统设置「消息中心」
@@ -77,7 +87,6 @@ async function fetchMessages() {
     // silent：消息中心为辅助功能，拉取失败不弹全局错误（可重开重试）
     const data = await messageApi.page({ pageNum: 1, pageSize: 20, receiverId: uid }, { silent: true })
     messages.value = data?.records || data?.list || []
-    unreadCount.value = messages.value.filter(m => !m.isRead).length
   } catch { /* 忽略 */ }
   loading.value = false
 }
@@ -95,7 +104,7 @@ async function onItemClick(msg) {
     try {
       await messageApi.read(msg.id)
       msg.isRead = 1
-      unreadCount.value = messages.value.filter(m => !m.isRead).length
+      fetchUnread()
     } catch { /* 忽略：与拉取同口径，辅助功能不弹错 */ }
   }
   if (msg.linkUrl) {
@@ -110,7 +119,7 @@ async function readAll() {
   try {
     await messageApi.readAll(uid)
     messages.value.forEach(m => { m.isRead = 1 })
-    unreadCount.value = 0
+    fetchUnread()
   } catch { /* 忽略 */ }
 }
 
@@ -139,7 +148,14 @@ function formatTime(t) {
   } catch { return t }
 }
 
-onMounted(() => { fetchMessages() })
+let unreadTimer = null
+onMounted(() => {
+  fetchMessages()
+  fetchUnread()
+  // 角标轮询从 HeaderBadges 搬来（那里已删掉重复铃铛），口径与间隔保持不变
+  unreadTimer = setInterval(fetchUnread, 30000)
+})
+onBeforeUnmount(() => clearInterval(unreadTimer))
 </script>
 
 <style scoped>

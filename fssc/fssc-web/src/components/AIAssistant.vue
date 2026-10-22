@@ -72,7 +72,7 @@
             <div class="tk-row">摘要：{{ short(msg.ticket.paramsDigest) }}｜过期：{{ fmt(msg.ticket.expireAt) }}</div>
             <div v-if="msg.ticket.missing" class="tk-row warn">我还缺：{{ msg.ticket.missing }}（主数据 ID 我不会编造，请补全或驳回）</div>
             <div class="tk-row">
-              现在请：换一位有 <code>ai:confirm:approve</code> 权限的真人登录，在本助手「待我确认」里点确认。
+              现在请：换一位有确认权限的同事登录，在本助手「待我确认」里点确认。
               确认后我以下令者本人的权限自动执行，无需您再操作。
             </div>
             <div v-if="msg.ticket.result" class="tk-row ok">

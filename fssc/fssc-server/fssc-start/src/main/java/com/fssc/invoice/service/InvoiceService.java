@@ -913,8 +913,10 @@ public class InvoiceService {
     }
 
     /**
+     * 反核销（D-V3-135 配套 · 行业方案"反"字链第一环）：解除发票-单据勾稽并解锁发票。
      *
      * <p>前置：本单据不存在 PAID 付款记录——付款落地后勾稽是既成资金事实的凭证线索，不得反；
+     * 资金差错走付款退款单（行业方案同口径）。</p>
      *
      * <p>语义：勾稽记录软删（del_flag=1，留痕不物理删）；发票 lock_status 解锁
      * （LOCKED_IN_USE → NONE，清占用溯源）；占用额度随之释放（remaining/used_count 均按

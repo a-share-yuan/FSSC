@@ -219,11 +219,14 @@ public final class BillRouteRegistry {
             Map.entry("TR_UPLOAD", f("tr_transfer", "transfer_no", "amount", "purpose", null)),
             Map.entry("TR_PAY", f("op_pay_batch", "batch_no", "total_amount", "batch_no", "op_pay_batch")),
             Map.entry("TR_PAY_FAIL", f("op_pay_batch", "batch_no", "total_amount", "batch_no", "op_pay_batch")),
-            // tr_credit_bill / tr_bill_settle 无 company_id ⇒ 公司解析取不到，companyTable 保持 null
-            // （启用＝收窄候选面，属授权裁决）。登记人列 {@code create_by} 已于 2026-10-02 补出
-            // （D-DEC-298/420，X-34 甲），提交人取数改走 NodeOrgResolver.APPLY_COLUMN 臂。
+            // 2026-10-21 D-G47：原注「tr_credit_bill / tr_bill_settle 无 company_id」与实测不符——
+            // 两表都有 company_id（tr_bill_settle 由 TrBillSettleService.orgGuard.currentCompany() 写入），
+            // create_by 亦已于 2026-10-02 补出（D-DEC-298/420，X-34 甲）。查无公司列的是 bank_reconcile。
+            // TR_BILL 在役实例 284（tr_bill_settle id=4, company_id=1）实测取人 null ⇒ COMPANY 范围角色
+            // 名单为空（NodeOrgResolver:1102）⇒ TB_1／TB_2 双 ESCALATE 到同一个人，再撞连办闸被迫转办。
+            // 故 TR_BILL 补登 tr_bill_settle；TR_RECEIPT 无在役实例，先留 null（同前提成立但未取证）。
             Map.entry("TR_RECEIPT", f("tr_credit_bill", "bill_no", "amount", "bill_no", null)),
-            Map.entry("TR_BILL", f("tr_bill_settle", "bill_no", "amount", "bill_no", null)),
+            Map.entry("TR_BILL", f("tr_bill_settle", "bill_no", "amount", "bill_no", "tr_bill_settle")),
             Map.entry("TR_PLAN", f("tr_fund_plan", "plan_no", "outcome_amount", "plan_no", "tr_fund_plan")),
             Map.entry("TR_PLAN_ADJUST", f("tr_fund_plan", "plan_no", "outcome_amount", "plan_no", "tr_fund_plan")),
             Map.entry("TR_BANK_RECON", f("bank_reconcile", "serial_no", null, "serial_no", null)),

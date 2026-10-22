@@ -96,9 +96,9 @@
               <el-option v-for="p in packages" :key="p.id" :label="p.packageName" :value="p.id" />
             </el-select>
             <el-button type="primary" size="small" :disabled="!matrix.length" :loading="fSaveLoading" @click="saveFeatures">
-              保存到套餐（set-features）
+              保存到套餐
             </el-button>
-            <span style="color: #909399; font-size: 13px">开关本体作用于套餐（packageId + featureCode 唯一），租户登录时经订购关系装载进 Token</span>
+            <span style="color: #909399; font-size: 13px">开关按套餐统一生效，用户登录后自动应用所属套餐的功能配置</span>
           </div>
         </template>
         <el-empty v-if="!matrix.length" description="请先选择套餐加载功能矩阵" />
@@ -139,7 +139,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { showRowDetail } from '@/utils/format'
+import { formatDateTime, showRowDetail } from '@/utils/format'
 import SkeletonList from '../../components/SkeletonList.vue'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
 // echarts 按需引入，用法与 views/Dashboard.vue 保持一致
@@ -164,11 +164,10 @@ const TENANT_STATUS = {
   REJECTED: { label: '已拒绝', type: 'danger' },
 }
 
-/** LocalDateTime 序列化兼容：ISO（含 T）或 yyyy-MM-dd HH:mm:ss */
+/** LocalDateTime 序列化兼容：统一走全站 formatDateTime（YYYY-MM-DD HH:mm） */
 function fmt(v) {
   if (!v) return '-'
-  const s = String(v)
-  return s.includes('T') ? s.replace('T', ' ').slice(0, 19) : s
+  return formatDateTime(v) || '-'
 }
 
 // 双击行：展示行数据详情

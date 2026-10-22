@@ -17,7 +17,7 @@ import { useRouter } from 'vue-router'
 /**
  * 下一跳行动条：根据单据状态 + 业务链缺口，计算流程当前「该去哪一步」，
  * 一键跳到下游真实页面。纯前端、零后端依赖，复用 billInfo.status 与 traceChain.summary。
- * 对齐 SAP/用友/金蝶 的「流程下一站」引导思想——让用户始终知道流程如何往下走。
+ * 对齐 同类系统的「流程下一站」引导思想——让用户始终知道流程如何往下走。
  */
 const props = defineProps({
   billInfo: { type: Object, default: null },

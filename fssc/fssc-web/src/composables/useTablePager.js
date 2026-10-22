@@ -29,7 +29,6 @@
 
 import { computed, ref, watch } from 'vue'
 
-/** 每页条数候选（对标 SAP/用友/金蝶：10/20/50/100/200） */
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200]
 
 /** 默认每页条数 */

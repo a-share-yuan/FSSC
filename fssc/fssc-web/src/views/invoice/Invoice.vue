@@ -65,6 +65,7 @@
               <el-button v-if="row.imgFileId" link type="success" size="small" @click="viewImage(row)">查看影像</el-button>
               <el-button v-if="dir(row) === 'INPUT' && row.verifyStatus !== 'SUCCESS'" v-permission="'inv:verify'" link type="primary" size="small" @click="verifyNow(row)">实时验真</el-button>
               <el-button v-if="dir(row) === 'INPUT'" v-permission="'inv:bind'" link size="small" @click="openBind(row)">关联单据</el-button>
+              <!-- 反核销（D-V3-135 配套 · 行业方案"反"字链第一环）：解除勾稽+解锁发票；付款已执行时服务端拒绝 -->
               <el-button v-if="dir(row) === 'INPUT' && row.lockStatus === 'LOCKED_IN_USE'" v-permission="'inv:unbind'" link size="small" type="danger" @click="unbindBill(row)">解除关联</el-button>
               <el-button v-permission="'inv:line:list'" link size="small" @click="showLines(row)">明细行</el-button>
               <!-- 销项发票作废/红冲：原因必填，后端校验当月/核销引用等条件，失败原样提示 -->
@@ -189,7 +190,9 @@
         </div>
         <SkeletonList v-if="vloading" :rows="8" :cols="5" />
         <el-table :data="vlogs" size="small" stripe v-else max-height="480">
-          <el-table-column prop="id" label="日志ID" width="80"  sortable />
+          <el-table-column label="序号" width="60" align="center">
+            <template #default="{ $index }">{{ $index + 1 }}</template>
+          </el-table-column>
           <el-table-column prop="invoiceNo" label="发票号码" width="130"  sortable />
           <el-table-column label="渠道" width="110">
             <template #default="{ row }">{{ channelLabel(row.channel) }}</template>
@@ -325,7 +328,7 @@ const issueRules = computed(() => ({ ...formRules.value, ...invoiceAmountMatch((
 import { onMounted, reactive, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { invoiceApi, billApi, mdApi, userApi } from '../../api'
+import { invoiceApi, billApi, mdApi, userApi, store } from '../../api'
 import { http } from '../../request'
 import FileViewer from '../../components/FileViewer.vue'
 import SkeletonList from '../../components/SkeletonList.vue'
@@ -353,6 +356,7 @@ const canIssue = computed(() => hasPerm('inv:issue'))
 const canVerifyList = computed(() => hasPerm('inv:verify:list'))
 const canCertify = computed(() => hasPerm('inv:certify'))
 
+// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 // R5-13: 快捷键
@@ -669,6 +673,8 @@ async function loadPendingInvs() {
 }
 
 async function loadVerify() {
+  // 验真记录页签按 inv:verify:list 收口；无该权限时不发请求，避免页面里弹「缺少权限」
+  if (!hasPerm('inv:verify:list')) return
   vloading.value = true
   try {
     const r = await invoiceApi.verifyPage({ pageNum: vq.pageNum, pageSize: vq.pageSize })
@@ -718,6 +724,7 @@ async function doBind() {
   })
 }
 
+// 反核销（D-V3-135 配套 · 行业方案"反"字链第一环）：解除勾稽+解锁发票，占用额度随之释放。
 // 仅 LOCKED_IN_USE 的发票显示入口；付款已执行时服务端拒绝（既成资金事实走付款退款单）。
 async function unbindBill(row) {
   try {
@@ -784,7 +791,8 @@ const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel
 onMounted(() => {
   loadCurrency()
   autofill(form, 'INVOICE')
- loadPool(); loadVerify(); loadPendingInvs(); userApi.page({ pageNum: 1, pageSize: 200 }).then((d) => { users.value = d?.list || [] }).catch(() => {}) })
+  // P0 修复（2026-10-21）：默认只加载同公司人员
+  loadPool(); loadVerify(); loadPendingInvs(); userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId }).then((d) => { users.value = d?.list || [] }).catch(() => {}) })
 
 function exportCsv() {
   if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }

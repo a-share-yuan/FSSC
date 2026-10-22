@@ -210,7 +210,7 @@
       <el-table-column :label="$t('field.amount')" width="110" align="right">
         <template #default="{ row }">{{ formatMoney(row.amount) }}<span v-if="row.currencyCode && row.currencyCode !== 'CNY'" style="color:#909399;font-size:12px"> {{ row.currencyCode }}</span></template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="$t('pay.batch.colGeneratedAt')" width="160" />
+      <el-table-column prop="createTime" :label="$t('pay.batch.colGeneratedAt')" width="160" :formatter="(r, c, v) => formatDateTime(v)" />
     </el-table>
     <el-pagination style="margin-top: 8px; justify-content: flex-end" layout="total, prev, pager, next"
                    :total="pickTotal" :page-size="pickQuery.pageSize" :current-page="pickQuery.pageNum"
@@ -256,6 +256,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
+// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 // R5-13: 快捷键

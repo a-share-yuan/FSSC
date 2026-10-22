@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 凭证推送服务：将已记账凭证推送至 NC / IFS 外部财务系统。
+ * 凭证推送服务：将已记账凭证推送至 同类系统 / IFS 外部财务系统。
  *
  * <p>P1-8 整改说明（消除 Mock 残留）：</p>
  * <ul>
@@ -58,7 +58,7 @@ public class VoucherPushService {
             throw new BizException(ErrorCode.PARAM_INVALID, "凭证未记账，无法推送至外部系统");
         }
 
-        // 推送目标：按来源类型选择（IFS 来源走 IFS，其余走 NC）
+        // 推送目标：按来源类型选择（IFS 来源走 IFS，其余走 同类系统）
         String target = "NC_SYSTEM";
         if (voucher.getSourceType() != null && voucher.getSourceType().contains("IFS")) {
             target = "IFS_SYSTEM";

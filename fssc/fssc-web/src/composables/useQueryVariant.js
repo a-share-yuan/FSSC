@@ -4,7 +4,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 /**
  * 查询方案（Variant）组合式函数。
- * P1-3：保存个人常用筛选组合，对标 SAP Variant / 用友查询方案。
  *
  * @param {string|Function} pageKey - 页面标识（如 expense_bill_list），或返回该标识的函数
  * @param {object} searchForm - 响应式搜索表单对象（reactive）

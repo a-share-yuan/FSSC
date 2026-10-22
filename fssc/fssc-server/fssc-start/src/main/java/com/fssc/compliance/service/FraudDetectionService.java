@@ -377,7 +377,7 @@ public class FraudDetectionService {
     }
 
     /** P2-5: 分页查询检测记录（风控看板数据源；detectionResult=HIGH_RISK/SUSPICIOUS/NORMAL） */
-    public PageResult<FraudDetectionLog> page(long pageNum, long pageSize, String detectionResult,
+    public PageResult<com.fssc.compliance.vo.FraudDetectionLogVO> page(long pageNum, long pageSize, String detectionResult,
                                               Long employeeId, String detectionType,
                                               String actionTaken, Boolean unreviewed,
                                               Boolean pendingRelease) {
@@ -412,7 +412,10 @@ public class FraudDetectionService {
                             .or().ne(FraudDetectionLog::getActionTaken, "RELEASE"));
         }
         qw.orderByDesc(FraudDetectionLog::getId);
-        Page<FraudDetectionLog> p = fraudDetectionLogMapper.selectPage(Page.of(pageNum, pageSize), qw);
+        
+        // 使用关联查询补充员工姓名和单据编号
+        com.baomidou.mybatisplus.core.metadata.IPage<com.fssc.compliance.vo.FraudDetectionLogVO> p = 
+            fraudDetectionLogMapper.selectPageWithRelations(Page.of(pageNum, pageSize), qw);
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 

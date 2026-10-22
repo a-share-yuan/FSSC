@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             targetNamespace="http://fssc/gtest">
+  <process id="GTEST_ADMIN_FLOW" name="管理测试流程" isExecutable="true">
+    <startEvent id="StartEvent_1" name="开始"/>
+    <sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1"/>
+    <userTask id="Task_1" name="管理测试节点"/>
+    <sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="Task_2"/>
+    <userTask id="Task_2" name="管理测试复核"/>
+    <sequenceFlow id="Flow_3" sourceRef="Task_2" targetRef="EndEvent_1"/>
+    <endEvent id="EndEvent_1" name="结束"/>
+  </process>
+</definitions>

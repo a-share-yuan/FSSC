@@ -38,6 +38,7 @@ import { ArrowRightBold } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { billApi, dashApi } from '../../api'
 import { hasAnyPerm } from '@/utils/perm'
+import { pathDenyReason } from '@/router/pathAccess'
 
 const router = useRouter()
 const trendRefs = ref([])
@@ -76,7 +77,7 @@ function showStat(v) {
 async function loadBillType(type, billType, label) {
   const biz = of(type)
   if (!hasAnyPerm([biz.routePerm].flat())) {
-    biz.note = `缺少 ${biz.routePerm} 权限，未取数`
+    biz.note = '当前账号没有该业务数据的查看权限，未取数'
     return
   }
   try {
@@ -163,9 +164,10 @@ function renderMiniTrends() {
 }
 
 function drillDown(biz) {
-  const needed = [biz.routePerm].flat()
-  if (!hasAnyPerm(needed)) {
-    ElMessage.warning(`无权限进入${biz.name}（缺少 ${needed.join(' 或 ')}）`)
+  // 判据与路由守卫同一把钥匙：只看业务权限码会漏掉「该页不在本角色菜单内」这一层，
+  // 结果是卡片点下去被守卫弹回工作台并提示「无权限访问该页面」。
+  if (pathDenyReason(biz.route)) {
+    ElMessage.warning(`当前账号不能进入「${biz.name}」，请联系管理员`)
     return
   }
   router.push(biz.route)

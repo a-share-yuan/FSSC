@@ -124,11 +124,16 @@ const ROUTE_PERM = {
   '/reports/summary': ['report:view'],
   '/reports/loan': ['report:view'],
   '/reports/budget': ['report:view'],
-  '/arflow/billing': [],
-  '/arflow/claims': [],
-  '/arflow/notes': [],
-  '/arflow/bad-debt': [],
-  '/arflow/reports': [],
+  // 应收工作台页签级页面：一域一台后无独立菜单行，码值与 ArFlowWorkspace.TAB_PERMS 同源
+  '/arflow/billing': ['arflow:billing:manage'],
+  '/arflow/claims': ['arflow:claim:manage'],
+  '/arflow/writeoff': ['arflow:writeoff:manage'],
+  '/arflow/notes': ['arflow:note:list'],
+  '/arflow/bad-debt': ['arflow:baddebt:manage'],
+  '/arflow/reports': ['arflow:report:view'],
+  '/arflow/collab': ['collab:scp:list'],
+  '/arflow/base-config': ['arflow:baseconfig:manage'],
+  '/arflow/ar-month-close': ['arflow:monthclose:manage'],
   '/reports/ar-aging': ['report:view'],
   '/bank/reconcile': ['bank:reconcile:list'],
   '/bank/slip': ['bank:reconcile:list'],
@@ -153,10 +158,18 @@ const ROUTE_PERM = {
   '/op/gl/entry': ['gl:entry:list', 'md:subject:list'],
   '/op/gl/balance': ['gl:entry:list', 'md:subject:list'],
   '/op/gl/trial': ['gl:entry:list', 'md:subject:list'],
-  '/expense/my': ['exp:bill:list'],
-  '/expense/voucher': ['exp:bill:list'],
+  '/expense/my': ['exp:bill:list'], // 遗留路由，已不再使用；真实入口为 /requisition/mine
+  '/expense/voucher': [], // 孤儿路由，已从 expense.js 删除
+  '/receivable/receivable': ['receivable:list'],
   '/receivable/receipt': ['receivable:list'],
   '/receivable/collect': ['receivable:list'],
+  // 资金管理各页：菜单只挂父项 /treasury，子页无独立菜单行 ⇒ 码值同 routePerms.js
+  '/treasury/plan': ['treasury:fundplan:list', 'treasury:creditbill:list'],
+  '/treasury/credit': ['treasury:fundplan:list', 'treasury:creditbill:list'],
+  '/treasury/transfer': ['treasury:fundplan:list', 'treasury:creditbill:list'],
+  '/treasury/settle': ['treasury:fundplan:list', 'treasury:creditbill:list'],
+  '/treasury/position': ['treasury:fundplan:list', 'treasury:creditbill:list'],
+  '/budget/execution': ['budget:scheme:list'],
   '/asset/asset': ['asset:list', 'inventory:list'],
   '/asset/category': ['asset:list', 'inventory:list'],
   '/asset/inventory': ['asset:list', 'inventory:list'],
@@ -193,8 +206,11 @@ const GLOBAL_ENTRIES = {
 // 当前用户能否访问该路由：
 //  ① 超管（*:*:* / is_admin）→ 全放行
 //  ② 菜单树已加载 → 与左侧菜单严格同源：命中菜单 path，或是某菜单的父路由
-//     （如 /expense/apply → /expense/apply/meeting），或是全局入口页
-//  ③ 降级 → 退回 ROUTE_PERM 权限码判定
+//     （如 /expense/apply → /expense/apply/meeting）
+//  ③ 菜单未命中 **不等于无权**：一域一台改造后，工作台的页签级页面（/arflow/billing 等）
+//     不再有独立菜单行，只在 ROUTE_PERM 里留码——此处必须回退按码判定，
+//     否则这些真实可打开的页面会被整片标成「无权限」＝新造的假阴性。
+//  ④ 既不在菜单、也没有登记码 → 视为不可达；全局入口页走 GLOBAL_ENTRIES 白名单。
 function canAccess(route) {
   if (isSuperPerm()) return true
   if (menuPaths.value) {
@@ -202,6 +218,8 @@ function canAccess(route) {
     for (const p of menuPaths.value) {
       if (p.startsWith(route + '/')) return true
     }
+    const need = ROUTE_PERM[route]
+    if (need && need.length) return hasAnyPerm(need)
     if (route in GLOBAL_ENTRIES) return hasAnyPerm(GLOBAL_ENTRIES[route])
     return false
   }
@@ -245,7 +263,7 @@ const domains = [
         { menu: '发票管理 / 发票补录', page: '发票补录', route: '/invoice/create' },
         { menu: '发票管理 / 发票验真记录', page: '发票验真记录', route: '/invoice/verify' },
         { menu: '发票管理 / 进项发票认证', page: '进项发票认证', route: '/invoice/certify' },
-        { menu: '影像管理', page: '影像管理', route: '/image' },
+        { menu: '影像管理 / 影像工作台', page: '影像采集批次', route: '/image' },
       ]},
       { stage: '三单匹配', steps: [
         { menu: '共享运营 / 对公三单匹配 / 匹配操作', page: '匹配操作', route: '/pay/match' },
@@ -280,13 +298,12 @@ const domains = [
         { menu: '费用报销 / 借款还款 / 还款管理', page: '还款管理', route: '/expense/repay' },
       ]},
       { stage: '审核', steps: [
-        { menu: '费用报销 / 我的单据', page: '我的单据', route: '/expense/my' },
+        { menu: '费用报销 / 我的单据', page: '我的单据', route: '/requisition/mine' },
         { menu: '共享运营 / 审批工作台', page: '审批工作台', route: '/approval' },
         { menu: '共享运营 / 任务池管理', page: '任务池管理', route: '/sharing/task-pool' },
         { menu: '共享运营 / 工单处理', page: '工单处理', route: '/sharing/task-work' },
       ]},
       { stage: '记账与档案', steps: [
-        { menu: '费用报销 / 凭证管理', page: '凭证管理', route: '/expense/voucher' },
         { menu: '总账核算 / 凭证台账', page: '凭证台账', route: '/op/gl/voucher' },
         { menu: '档案管理 / 档案归档', page: '档案归档', route: '/sharing/archive' },
       ]},
@@ -301,23 +318,24 @@ const domains = [
     key: 'o2c', name: '应收管理 (O2C)', icon: Wallet, color: '#e6a23c',
     stages: [
       { stage: '应收发起', steps: [
-        { menu: '应收管理 / 开票链工作台', page: '开票链工作台', route: '/arflow/billing' },
-        { menu: '应收管理 / 应收服务申请', page: '应收服务申请', route: '/arflow/claims' },
+        { menu: '应收管理 / 应收工作台 › 应收单', page: '应收单', route: '/receivable/receivable' },
+        { menu: '应收管理 / 应收工作台 › 开票链工作台', page: '开票链工作台', route: '/arflow/billing' },
+        { menu: '应收管理 / 应收工作台 › 应收服务申请', page: '应收服务申请', route: '/arflow/claims' },
         { menu: '资金管理 / 资金收款', page: '资金收款', route: '/treasury/credit' },
       ]},
       { stage: '收款与核销', steps: [
-        { menu: '应收管理 / 收款核销', page: '收款核销', route: '/receivable/receipt' },
-        { menu: '应收管理 / 催收待办', page: '催收待办', route: '/receivable/collect' },
-        { menu: '应收管理 / 票据管理', page: '票据管理', route: '/arflow/notes' },
+        { menu: '应收管理 / 应收工作台 › 收款核销', page: '收款核销', route: '/receivable/receipt' },
+        { menu: '应收管理 / 应收工作台 › 催收待办', page: '催收待办', route: '/receivable/collect' },
+        { menu: '应收管理 / 应收工作台 › 票据管理', page: '票据管理', route: '/arflow/notes' },
       ]},
       { stage: '记账与档案', steps: [
-        { menu: '应收管理 / 坏账管理', page: '坏账管理', route: '/arflow/bad-debt' },
+        { menu: '应收管理 / 应收工作台 › 坏账管理', page: '坏账管理', route: '/arflow/bad-debt' },
         { menu: '总账核算 / 凭证台账', page: '凭证台账', route: '/op/gl/voucher' },
         { menu: '档案管理 / 档案归档', page: '档案归档', route: '/sharing/archive' },
       ]},
       { stage: '出数', steps: [
         { menu: '管理报表 / 应收账龄分析', page: '应收账龄分析', route: '/reports/ar-aging' },
-        { menu: '应收管理 / 应收统计报表', page: '应收统计报表', route: '/arflow/reports' },
+        { menu: '应收管理 / 应收工作台 › 应收统计报表', page: '应收统计报表', route: '/arflow/reports' },
       ]},
     ],
   },
@@ -348,12 +366,12 @@ const domains = [
     key: 'asset', name: '资产与存货链', icon: Box, color: '#2db7f5',
     stages: [
       { stage: '资产发起', steps: [
-        { menu: '资产与存货 / 资产卡片', page: '资产卡片', route: '/asset/asset' },
-        { menu: '资产与存货 / 资产类别', page: '资产类别', route: '/asset/category' },
-        { menu: '资产与存货 / 存货收发存', page: '存货收发存', route: '/asset/inventory' },
+        { menu: '资产与存货 / 资产工作台 › 资产卡片', page: '资产卡片', route: '/asset/asset' },
+        { menu: '资产与存货 / 资产工作台 › 资产类别', page: '资产类别', route: '/asset/category' },
+        { menu: '资产与存货 / 资产工作台 › 存货收发存', page: '存货收发存', route: '/asset/inventory' },
       ]},
       { stage: '记账前审核', steps: [
-        { menu: '资产与存货 / 税会差异', page: '税会差异', route: '/asset/taxDiff' },
+        { menu: '资产与存货 / 资产工作台 › 税会差异', page: '税会差异', route: '/asset/taxDiff' },
         { menu: '资产与存货 / 折旧计提批', page: '折旧计提批', route: '/asset/depr-batch' },
         { menu: '共享运营 / 任务池管理', page: '任务池管理', route: '/sharing/task-pool' },
       ]},

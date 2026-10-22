@@ -84,7 +84,9 @@ import { ElMessage } from 'element-plus'
 import { arFlowApi } from '../../api'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 
 const rows = ref([])
 const loading = ref(false)

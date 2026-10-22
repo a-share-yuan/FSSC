@@ -23,8 +23,10 @@ import java.util.stream.Collectors;
  * 多账簿服务（V1.4.87）——闭环差距③「无账簿/准则/多本位币体系（多账簿零代码）」。
  *
  * <ul>
+ *   <li>行业方案「账簿类型分为主账簿和副账簿，一个核算组织在同一核算体系内仅能存在唯一的主账簿」
  *       → {@link #createBook} 显式校验 + {@code uk_gab_main} 唯一索引<b>双层兜底</b>
  *       （应用层给可读报错，数据库层防并发穿透）;</li>
+ *   <li>行业方案「按不同的会计准则与制度出具多套财务核算数据」
  *       → 同一 company 可在多个 standard 下各持一本 MAIN 账簿，
  *       {@link #listBooksOf} 按公司列出全部账簿即「多套核算数据」的载体;</li>
  *   <li>多本位币 → 账簿带 {@code baseCurrencyId}，
@@ -123,6 +125,7 @@ public class AccountingBookService {
      *       一个成功一个撞 1062，转成 BizException 后用户看到的是同一句话。</li>
      * </ol>
      * 注意：同一核算组织在<b>不同准则</b>下建 MAIN 账簿是<b>允许</b>的
+     * （对齐行业方案「按不同准则出具多套核算数据」）。
      */
     public Long createBook(GlAccountingBook book) {
         if (book.getCompanyId() == null || book.getStandardId() == null) {

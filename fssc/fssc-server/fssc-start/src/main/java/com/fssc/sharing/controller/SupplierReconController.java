@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * 供应商对账 REST API（对标金蝶K/3 Cloud + SAP F.41 + 用友U8+ + 票易通LinkU预留）。
  *
  * 接口分组：
  * 1. 对账单 CRUD：page / generate / summary

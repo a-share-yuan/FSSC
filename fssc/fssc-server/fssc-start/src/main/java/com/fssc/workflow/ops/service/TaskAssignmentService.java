@@ -38,6 +38,7 @@ import java.util.Set;
 /**
  * G3（2026-09-24）分配规则顺序解析 ＋ 自动分配执行 ＋ 自动分配日志。
  *
+ * <p>参考行业做法 {@code 分配规则表}「条件命中→处理人，多条件逐个解析直到命中」，
  * 复用既有 {@code op_dispatch_rule} 表（该表在 {@code fssc/db/Dump20260911/fssc_dispatch_rule}
  * 中已有真实列定义，本类不新增列）：
  * <ol>
@@ -252,6 +253,7 @@ public class TaskAssignmentService {
         if (decision.assigned()) {
             applyAssignee(task, decision.chosenUserId());
             applied = true;
+            // 时限落账（写 due_time + op_task_time_limit）：指派后立即起算，与行业方案"任务到达待办列表开始倒计时"同口径
             OpTaskTimeLimit limit = timeLimitService.applyTimeLimit(task, priority);
             out.put("dueTime", limit.getDueTime());
             out.put("limitHours", limit.getLimitHours());

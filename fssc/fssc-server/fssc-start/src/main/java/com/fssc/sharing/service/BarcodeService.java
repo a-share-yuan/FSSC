@@ -19,7 +19,6 @@ import java.util.List;
 /**
  * 条码管理服务。
  * 支持条码生成、打印、扫描签收、上架。
- * 对标 SAP MM-IM 条码管理、用友 U8 条码追溯、金蝶 K3 Cloud 批次条码。
  */
 @Slf4j
 @Service

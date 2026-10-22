@@ -37,8 +37,11 @@ public class WfApprovalItem extends TenantAuditBase {
 
     private static final long serialVersionUID = 1L;
 
+    /** 正向结果：审批通过并继续流转（行业方案「正向审批类型」） */
     public static final String CAT_POSITIVE = "POSITIVE";
+    /** 驳回结果：驳回（行业方案「驳回审批类型」，可逆向运行） */
     public static final String CAT_REJECT = "REJECT";
+    /** 终止结果：终止本流程实例（行业方案「终止审批类型」） */
     public static final String CAT_TERMINATE = "TERMINATE";
 
     /** 流程定义 key */
@@ -52,6 +55,7 @@ public class WfApprovalItem extends TenantAuditBase {
     /** 类别：POSITIVE 正向 / REJECT 驳回 / TERMINATE 终止 */
     private String category;
     /**
+     * 关联表单操作（行业方案「审批项可关联表单操作」）：SAVE 保存 / AUDIT 审核 / UNAUDIT 反审核 / SUBMIT 提交。
      *
      * <p><b>能力边界（如实标注）</b>：本列目前只落流程变量 {@code ActionOper} 供订阅方与审计读取，
      * <b>引擎侧不执行表单操作</b>——单据状态机的权威在业务域（如 {@code ExpenseWfEventListener}），

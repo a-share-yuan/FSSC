@@ -61,7 +61,7 @@
                  该组件的 showApprove/showReject **默认为 true**，故必须显式关掉，
                  否则图标仍在＝点了没有处理器的死按钮，且对无 compliance:archiveaccess:approve 的人构成假入口。 -->
             <template #default="{ row }">
-              <InlineActions :visible="true" :show-approve="false" :show-reject="false" @view="openArchive(row)" :show-trace="true" @trace="openTrace(row)" />
+              <InlineActions :visible="true" :show-approve="false" :show-reject="false" @view="viewAccess(row)" :show-trace="true" @trace="openTrace(row)" />
               <el-button v-if="canApproveAccess && row.approvalStatus === 'PENDING'" link size="small" type="primary" @click="approveAccess(row, true)">批准</el-button>
               <el-button v-if="canApproveAccess && row.approvalStatus === 'PENDING'" link size="small" type="danger" @click="approveAccess(row, false)">驳回</el-button>
               <!-- 批准过后才谈得上授予访问；已实际取阅（accessed_at 落值）则不再给入口 -->
@@ -130,7 +130,9 @@
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
         <el-table :data="pagedDispatch" size="small" border stripe v-else max-height="420" empty-text="暂无数据" v-loading="loading">
           <el-table-column prop="id" label="编号" width="80"  sortable />
-          <el-table-column prop="billId" label="单据标识" min-width="120" show-overflow-tooltip  sortable />
+          <el-table-column label="单据标识" min-width="140" show-overflow-tooltip  sortable>
+            <template #default="{ row }">{{ row.billNo || `单据#${row.billId}` }}</template>
+          </el-table-column>
           <el-table-column label="单据类型" width="110" align="center">
             <template #default="{ row }">
               <el-tag size="small">{{ billTypeLabel(row.billType) }}</el-tag>
@@ -177,7 +179,9 @@
           </el-table-column>
           <el-table-column prop="archiveYear" label="年度" width="80" align="center"  sortable />
           <el-table-column prop="archivePeriod" label="期间" width="90" align="center"  sortable />
-          <el-table-column prop="billId" label="关联单据" width="100"  sortable />
+          <el-table-column label="关联单据" width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.billNo || `单据#${row.billId}` }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="110" align="center">
             <template #default="{ row }">
               <el-tag :type="archTag(row.archiveStatus)" size="small">{{ archStatusLabel(row.archiveStatus) }}</el-tag>
@@ -264,14 +268,14 @@
       <el-form ref="dispatchFormRef" :model="dpForm" :rules="dispatchRules" label-width="100px" size="small">
         <el-form-item label="单据标识" prop="billId">
           <!-- R5-D-202：改前为纯手输框（placeholder 写「业务单据编号」，实际要的却是数字主键，
-               用户无从得知填什么）——现从「我的单据」列表选取（billApi.myPage），也允许直接输入数字ID -->
+               用户无从得知填什么）——现从「我的单据」列表选取（billApi.myPage），也允许直接输入 -->
           <el-select
             v-model="dpForm.billId"
             filterable
             allow-create
             default-first-option
             clearable
-            placeholder="请选择单据（从列表选择；也可直接输入数字单据ID，如 19）"
+            placeholder="请选择单据（从列表选择；也可直接输入单据编号或ID）"
             style="width:100%"
             @focus="ensureBillOptions"
           >
@@ -424,7 +428,7 @@ import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '
 import CoachMark from '@/components/CoachMark.vue'
 import InlineActions from '@/components/InlineActions.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
-import { formatDate, formatDateTime } from '@/utils/format'
+import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useTablePager } from '../../composables/useTablePager'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
@@ -824,8 +828,8 @@ async function saveAccess() {
       // 提交后的刷新属附带动作：失败只明示权限缺口，不改变"已提交"结论。
       try {
         await loadAccess(true)
-      } catch (refreshErr) {
-        ElMessage.warning(`调阅申请已提交成功；本账号无「调阅留痕」列表查询权限（compliance:archiveaccess:list），列表未刷新（${refreshErr?.message || refreshErr}）`)
+      } catch {
+        ElMessage.warning('调阅申请已提交成功；当前账号没有「调阅留痕」查询权限，列表暂未刷新')
       }
     } catch (e) { ElMessage.error(e.message) }
   })
@@ -952,6 +956,23 @@ async function loadArchive() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
+/** 调阅申请行的「查看」＝只读详情。原先挂的是 openArchive()（新建档案目录表单，且不接 row），点了查看出来一张空白写单。 */
+function viewAccess(row) {
+  return showRowDetail({
+    id: row.id,
+    archive: archiveLabel(row.archiveId),
+    accessType: accessTypeLabel(row.accessType),
+    accessReason: row.accessReason,
+    requester: personLabel(row.requesterName, row.requesterId),
+    approvalStatus: accessStatusLabel(row.approvalStatus),
+    grantTime: formatDateTime(row.approvedAt || row.accessedAt) || '—',
+  }, {
+    title: '调阅申请详情',
+    labels: { id: '申请编号', archive: '档案', accessType: '调阅类型', accessReason: '申请理由',
+      requester: '申请人', approvalStatus: '状态', grantTime: '授权时间' },
+  })
+}
+
 function openArchive() {
   arForm.value = { billId: '', archiveType: 'EXPENSE', archiveYear: new Date().getFullYear(), archivePeriod: '', retentionPeriod: 10 }
   dlgArchive.value = true
@@ -1034,8 +1055,9 @@ async function reload() {
 watch(tab, reload)
 
 async function loadUsers() {
+  // P0 修复（2026-10-21）：pageSize 从 500 降至 200，并按同公司过滤
   try {
-    const list = (await userApi.page({ pageNum: 1, pageSize: 500 })).list || []
+    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
   } catch (e) { /* ignore */ }
 }

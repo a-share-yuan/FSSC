@@ -40,8 +40,13 @@ public class RcReceipt extends TenantAuditBase {
     private String status;
     /** 勾对的银行流水号（收款方向未达账项判定用） */
     private String bankSerial;
-    /** 是否与银行流水勾对：0未勾对(企业已收银行未收) 1已勾对 */
+    /** 是否与银行流水勾对：0未勾对(企业已收银行未收) 1已勾对
+     *   D-G5-04：此位只表示「是否<b>全额</b>勾对」。一张收款单可能被多次部分认领，
+     *    部分勾对时本位仍为 0；精确口径一律用 {@link #bankMatchedAmount}。 */
     private Integer bankMatched;
+    /** D-G5-04：已与银行流水勾对的<b>金额</b>（部分勾对按金额累计，非布尔）。
+     *  未达额 = amount − bank_matched_amount；未达额 ≤ 0 即不再是未达项。 */
+    private BigDecimal bankMatchedAmount;
 
     /** 核销明细（#12，仅入参/回显，非表字段；落 rc_receipt_line） */
     @TableField(exist = false)

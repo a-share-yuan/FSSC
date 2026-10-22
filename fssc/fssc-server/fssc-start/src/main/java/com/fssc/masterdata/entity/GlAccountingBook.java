@@ -13,8 +13,10 @@ import java.time.LocalDateTime;
  *
  * <p><b>对齐口径</b>：
  * <ul>
+ *   <li>行业方案「账簿类型分为主账簿和副账簿，一个核算组织在同一核算体系内仅能存在唯一的主账簿」
  *       ⇒ 本表的 {@code uk_gab_main} 唯一索引（company+standard+year+book_type）
  *       是这条规则的<b>数据库级兜底</b>，不靠应用层 if-else；</li>
+ *   <li>行业方案「按不同的会计准则与制度出具多套财务核算数据」
  *       ⇒ 同一 company 在不同 standard 下各有一本 MAIN 账簿，互不冲突。</li>
  * </ul>
  */

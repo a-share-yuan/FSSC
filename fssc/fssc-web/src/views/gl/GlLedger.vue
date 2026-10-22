@@ -126,7 +126,7 @@
         <el-col :span="16">
           <!-- D-DEC-168：这里原本还有一只「查询」按钮（与表头那只同名、同 @click），同屏两只 → 已去除。
                过账状态、公司、年度、月度统一由表头「查询」提交；本页签改状态筛选时自动重取，少一次点击。 -->
-          <el-tooltip :content="$t('gl.ledger.msgPickPostable')" placement="top" :disabled="postableRows.length > 0">
+          <el-tooltip v-if="hasPerm('sharing:voucher:post')" :content="$t('gl.ledger.msgPickPostable')" placement="top" :disabled="postableRows.length > 0">
             <el-button type="success" size="small" :loading="batchPosting" :disabled="!postableRows.length" @click="batchPost">
               {{ $t('gl.ledger.btnBatchPostN', { v1: postableRows.length }) }}</el-button>
           </el-tooltip>
@@ -179,6 +179,16 @@
               <span style="color: #e6a23c">{{ $t('gl.ledger.selfSuffix', { v1: creatorLabel(row) }) }}</span>
             </el-tooltip>
             <span v-else>{{ creatorLabel(row) }}</span>
+          </template>
+        </el-table-column>
+        <!-- D-BIZ-09：凭证台账行内过账入口（制审分离 + 权限码 + 状态三重门控） -->
+        <el-table-column v-if="hasPerm('sharing:voucher:post')" :label="$t('common.action')" width="100" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button v-if="canPostRow(row)" link size="small" type="success" :loading="row._posting" @click="postOne(row)">过账</el-button>
+            <span v-else-if="row.status === 'POSTED'" style="color: #67c23a; font-size: 12px">已过账</span>
+            <el-tooltip v-else-if="isSelfCreated(row)" :content="$t('gl.ledger.selfCreatedTip')" placement="top">
+              <span style="color: #c0c4cc; font-size: 12px">不可自审</span>
+            </el-tooltip>
           </template>
         </el-table-column>
         <template #empty>
@@ -272,6 +282,7 @@
 import { onMounted, ref, watch, computed, h } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { glApi, mdApi, orgApi, sharingApi, store } from '../../api'
+import { hasPerm } from '../../utils/perm'
 import { useKeyboard } from '@/composables/useKeyboard'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { bizTypeOfVoucherSource, voucherSourceLabel, isExpenseFamilyVoucherSource } from '../../utils/bizEntry'
@@ -486,6 +497,28 @@ function onVoucherSortChange({ prop, order }) {
 //   B. 若要的是「每次过账一条独立入账理由」（不覆盖凭证备注、一次批量共用一条并留操作人），
 //      则需新列或新表 ⇒ DDL 变更，需人工裁决。
 // 任一方案落地后，把下面的 confirm 换回 prompt 并随 body.comment 送出即可（适配层按 body 透传 id）。
+// D-BIZ-09：行内单张过账入口
+async function postOne(row) {
+  if (!canPostRow(row)) return
+  try {
+    await ElMessageBox.confirm(
+      t('gl.ledger.askBatchPost', { v1: 1 }),
+      t('gl.ledger.btnBatchPost'),
+      { type: 'warning', confirmButtonText: t('gl.ledger.btnConfirmPost'), cancelButtonText: t('common.cancel') },
+    )
+  } catch (_) { return }
+  row._posting = true
+  try {
+    await sharingApi.voucherPost(row.id)
+    ElMessage.success('凭证 ' + row.voucherNo + ' 已过账')
+    await loadVouchers()
+  } catch (e) {
+    ElMessage.error(e.message || '过账失败')
+  } finally {
+    row._posting = false
+  }
+}
+
 async function batchPost() {
   const rows = postableRows.value
   if (!rows.length) { ElMessage.warning(t('gl.ledger.msgPickPostable')); return }

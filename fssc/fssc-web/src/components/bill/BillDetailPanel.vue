@@ -77,8 +77,10 @@
             <el-table-column prop="fileId" label="文件ID" width="80" align="center" />
             <el-table-column label="类型" width="80" align="center">
               <template #default="{ row }">
-                <el-tag size="small" :type="row.attachType === 'INVOICE' ? 'success' : 'info'">
-                  {{ row.attachType === 'INVOICE' ? '发票' : (row.attachType || '其他') }}
+                <!-- 定性口径统一在 utils/attachKind：attachType 缺失时按扩展名兜底，
+                     不再把老数据直接吐成 "OTHER" / "其他" 这种半英文 -->
+                <el-tag size="small" :type="attachKindOf(row) === 'INVOICE' ? 'success' : 'info'">
+                  {{ ATTACH_KIND_TEXT[attachKindOf(row)] }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -86,7 +88,7 @@
             <el-table-column label="上传人" width="90">
               <template #default="{ row }">{{ row.uploadByName || '—' }}</template>
             </el-table-column>
-            <el-table-column prop="createTime" label="上传时间" width="160" />
+            <el-table-column prop="createTime" label="上传时间" width="160" :formatter="(r, c, v) => formatDateTime(v)" />
             <el-table-column label="操作" width="150">
               <template #default="{ row }">
                 <el-button link type="primary" size="small" :disabled="!row.fileId" @click="preview(row)">预览</el-button>
@@ -137,13 +139,13 @@
         <!-- 审批历史 -->
         <el-tab-pane :label="`审批历史 (${history.length})`" name="history">
           <el-alert v-if="!canViewHistory" type="info" :closable="false" show-icon
-                    title="当前账号无查看审批历史的权限（需 wf:history:list）" />
+                    title="当前账号无查看审批历史的权限，请联系管理员开通。" />
           <!-- D-DEC-086：取数失败要说"取不到"，不能空着让人以为"没有" -->
           <el-alert v-else-if="historyError" type="error" :closable="false" show-icon
-                    :title="`审批历史取数失败：${historyError}`">
+                    :title="`审批历史加载失败：${historyError}`">
             <div style="font-size:12px; color:#606266; line-height:20px">
-              此处为空是取数失败，不代表本单没有审批留痕；请重试，仍失败时联系流程管理员按流程实例核对。
-              <div><el-button size="small" type="primary" plain style="margin-top:6px" @click="loadHistory(billId)">重试取数</el-button></div>
+              此处为空表示加载失败，不代表本单没有审批留痕；请重试，仍失败时联系流程管理员核对。
+              <div><el-button size="small" type="primary" plain style="margin-top:6px" @click="loadHistory(billId)">重新加载</el-button></div>
             </div>
           </el-alert>
           <el-timeline v-else-if="history.length">
@@ -180,7 +182,8 @@ import FileViewer from '../FileViewer.vue'
 import { statusLabel, statusType, rejectTypeLabel } from '@/constants/billStatus.js'
 import { wfActionLabel, wfActionType, billTypeLabel, billSubTypeLabel, verifyStatusLabel } from '@/constants/enums.js'
 import { hasPerm } from '@/utils/perm'
-import { entertainOfLine, hasEntertainLines } from '@/utils/format'
+import { entertainOfLine, hasEntertainLines, formatDateTime } from '@/utils/format'
+import { attachKindOf, ATTACH_KIND_TEXT } from '@/utils/attachKind'
 
 // 审批历史(wf:history:list) / 关联发票(inv:list) 为受控权限：无权限时不发请求，
 // 否则全局拦截器会对 4030 弹「缺少权限」错误（见 Y009154 工单）。

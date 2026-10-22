@@ -129,7 +129,7 @@
 import { arMcStatusLabel } from '@/constants/enums'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { arGapApi, orgApi, userApi } from '../../api'
+import { arGapApi, orgApi, userApi, store } from '../../api'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { formatDateTime, formatMoney } from '../../utils/format'
@@ -171,7 +171,8 @@ function personLabel(name) {
   return (u && (u.nickName || u.userName)) || name
 }
 async function loadUsers() {
-  try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || [] } catch { users.value = [] }
+  // P0 修复（2026-10-21）：月结负责人通常为本财务人员，按同公司过滤
+  try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch { users.value = [] }
 }
 
 const pagedRows = computed(() => rows.value.slice((page.pageNum - 1) * page.pageSize, page.pageNum * page.pageSize))

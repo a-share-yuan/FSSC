@@ -66,6 +66,7 @@
       </template>
     </el-dialog>
 
+    <!-- Menu Assignment Dialog（2026-09-17 重构：参照行业做法/同类系统——大弹窗，左目录树（搜索/展开收起）+ 右已选权限清单） -->
     <el-dialog v-model="menuDialogVisible" :title="$t('system.role.btnAssignMenu')" width="920px" top="6vh">
       <SkeletonDetail v-if="menuLoading" :rows="6" />
       <div v-else class="menu-assign">
@@ -99,6 +100,7 @@
               </template>
             </el-tree>
           </div>
+          <!-- 右：已选权限清单（按一级业务域分组，参照行业方案模块归类） -->
           <div class="assign-right">
             <div class="selected-head">
               <span>{{ $t('system.role.statSelectedPerms', { v1: checkedList.length }) }}</span>
@@ -236,6 +238,7 @@ function leafOnlyIds(ids) {
   return (ids || []).filter((id) => !parentIds.has(id))
 }
 
+/* ---- 右侧已选清单：按一级业务域分组（参照行业方案按模块归类） ---- */
 const rightKeyword = ref('')
 const foldedGroups = ref(new Set())
 

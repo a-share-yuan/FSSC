@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /** 主数据 City（/api/tenant/masterdata/city/**） */
 @RestController
 @RequestMapping("/api/tenant/masterdata/city")
@@ -28,6 +30,12 @@ public class CityController {
     @GetMapping("/page")
     public Result<PageResult<MdCity>> page(PageQuery query, String keyword) {
         return Result.success(service.page(query.getPageNum(), query.getPageSize(), keyword));
+    }
+
+    // 下拉专用：全部 NORMAL 城市（不分页）。单据发起页城市选择改用此接口，避免 /page 分页截断低 id 城市
+    @GetMapping("/list")
+    public Result<List<MdCity>> list() {
+        return Result.success(service.listNormal());
     }
 
     @RequiresPerm("md:city:create")

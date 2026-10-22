@@ -63,8 +63,6 @@ public class PurchaseService {
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
     /** 收货→存货移动台账（stock_move）写入点 */
     private final com.fssc.asset.mapper.StockMoveMapper stockMoveMapper;
-    /** 收货↔发票勾稽真相源（inv_bill_invoice）：回写 po_receipt.invoice_amount */
-    private final com.fssc.invoice.mapper.InvBillInvoiceMapper billInvoiceMapper;
     /** R5-D-070：开票回写超收货额时派 INVOICE_MATCH 异常单（ThreeWayMatchService 侧复用 #17 派单链）。
      *  @Lazy 打断 purchase ↔ sharing 潜在循环依赖（sharing 侧亦装配本域 Mapper 与 WfEngineFacade）。 */
     @org.springframework.context.annotation.Lazy
@@ -707,7 +705,9 @@ public class PurchaseService {
     public void markInvoiced(Long receiptId, BigDecimal invoiceAmount) {
         PoReceipt r = receiptMapper.selectById(receiptId);
         if (r == null) return;
-        BigDecimal linked = sumLinkedInvoiceAmount(receiptId);
+        // G#39：勾稽重算取不含税净额（勾稽价税合计 − 关联发票税额），与 po_receipt.amount 同尺；
+        // 旧实现拿价税合计直接比不含税收货额，标准组合「净额收货＋价税开票」被恒判超收货。
+        BigDecimal linked = threeWayMatchService.sumLinkedInvoiceNetAmount(receiptId);
         BigDecimal newInvoiceAmount = linked.signum() > 0 || nz(invoiceAmount).signum() == 0
                 ? linked : nz(r.getInvoiceAmount()).add(invoiceAmount);
         // R5-D-070 硬闸：累计开票超出「收货额 + 容差」→ 拒绝回写（库内值保持原样）+ 审计留痕 + 派 INVOICE_MATCH 异常单。
@@ -762,24 +762,6 @@ public class PurchaseService {
         auditAfter.put("invoiceAmount", newInvoiceAmount);
         auditTrailService.recordUpdate("PURCHASE", receiptId, r.getReceiptNo(), "po_receipt",
                 String.valueOf(receiptId), auditBefore, auditAfter, "收货单开票回写");
-    }
-
-    /** 指向该收货单的付款单所勾稽的发票金额合计（有效勾稽行；exp_bill 无逻辑删字段，按现存单取） */
-    private BigDecimal sumLinkedInvoiceAmount(Long receiptId) {
-        List<com.fssc.expense.entity.ExpBill> bills = expBillMapper.selectList(
-                new LambdaQueryWrapper<com.fssc.expense.entity.ExpBill>()
-                        .eq(com.fssc.expense.entity.ExpBill::getPoReceiptId, receiptId));
-        if (bills.isEmpty()) {
-            return BigDecimal.ZERO;
-        }
-        List<Long> billIds = bills.stream().map(com.fssc.expense.entity.ExpBill::getId)
-                .filter(java.util.Objects::nonNull).toList();
-        if (billIds.isEmpty()) {
-            return BigDecimal.ZERO;
-        }
-        return billInvoiceMapper.selectList(new LambdaQueryWrapper<com.fssc.invoice.entity.InvBillInvoice>()
-                        .in(com.fssc.invoice.entity.InvBillInvoice::getBillId, billIds))
-                .stream().map(x -> nz(x.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /** 按 ID 查收货单（发票匹配冲回时取单号，不存在返回 null） */

@@ -4,7 +4,7 @@
     <div v-if="!backend.online" class="backend-down">
       <span class="bd-dot" />
       <span class="bd-text">
-        {{ backend.msg || `后端服务未连接：无法访问 ${BACKEND_TARGET}，请先启动 fssc-server` }}
+        {{ backend.msg || '系统服务暂时无法连接，请稍后重试或联系管理员' }}
       </span>
       <el-button size="small" type="warning" plain :loading="retrying" @click="retry">重试</el-button>
     </div>
@@ -25,7 +25,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { BACKEND_TARGET, backend, probeBackend, store } from './api'
+import { backend, probeBackend, store } from './api'
 import { preloadBuiltinDicts, PRELOAD_DICT_TYPES } from './composables/useDict.js'
 // 【2026-10-16 第 4 批】enums.js 的 66 个展示字典（enum_*）也要预热：
 // enumLabel() 同为纯同步函数，被各页直接调用，没有生命周期可挂。
@@ -58,7 +58,7 @@ async function retry() {
   retrying.value = true
   try {
     await probeBackend()
-    if (!backend.online) ElMessage.warning('仍未连接上后端，请检查 fssc-server 是否已启动')
+    if (!backend.online) ElMessage.warning('系统服务暂时无法连接，请稍后重试或联系管理员')
   } finally {
     retrying.value = false
   }
@@ -75,7 +75,7 @@ onBeforeUnmount(() => clearInterval(timer))
 
 watch(() => backend.online, (v, old) => {
   if (v && old === false) {
-    ElMessage.success('后端已恢复连接，正在刷新页面…')
+    ElMessage.success('服务已恢复连接，正在刷新页面…')
     setTimeout(() => location.reload(), 600)
   }
 })
@@ -104,6 +104,19 @@ onBeforeUnmount(() => window.removeEventListener('fssc:auth', onAuth))
 html, body, #app { height: 100%; margin: 0; }
 body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f5f7fa; }
 .app-shell { height: 100%; }
+
+/* 原生 file 控件兜底隐藏：el-upload 依赖 .el-upload__input{display:none}，一旦全局样式
+   缺失/延迟就会露出「选择文件 未选择任何文件」并压住侧边菜单（2026-10-20 报销页实况截图）。
+   这里对所有 el-upload 生效，组件内 UploadButton 另有一层定向加固。 */
+.el-upload__input {
+  display: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+}
 
 /* 后端未连接横幅：置顶、不随页面滚动消失 */
 .backend-down {
@@ -156,11 +169,13 @@ body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f
 .row-detail-item:nth-child(odd) { background: #fafafa; }
 .rd-key {
   flex: none;
-  width: 130px;
+  width: 140px;
   color: #909399;
   padding-right: 8px;
   text-align: right;
-  word-break: break-all;
+  /* break-all 会把 "Allowance Amount" 切成 "Allowance Amoun / t"；中文标签过长时按词换行即可 */
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 .rd-val {
   flex: 1;

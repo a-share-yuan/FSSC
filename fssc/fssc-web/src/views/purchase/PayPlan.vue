@@ -53,7 +53,9 @@
           </el-select>
         </el-form-item>
         <el-form-item label="计划期间" prop="period">
-          <el-date-picker v-model="form.period" type="month" value-format="YYYYMM" style="width: 100%" />
+          <!-- D-BIZ-06：手输「2026-11」会被控件按自身格式解析后写进 value-format=YYYYMM 的模型，
+               落库期间就成了非预期值（实测能写出 2026-11 这类带横线值）。期间只允许从面板选。 -->
+          <el-date-picker v-model="form.period" type="month" value-format="YYYYMM" format="YYYY-MM" :editable="false" unlink-panels style="width: 100%" placeholder="请选择年月" />
         </el-form-item>
         <el-form-item label="计划金额" prop="amount">
           <el-input-number v-model="form.amount" :min="0.01" :precision="2" :step="10000" style="width: 100%" :controls="false" />

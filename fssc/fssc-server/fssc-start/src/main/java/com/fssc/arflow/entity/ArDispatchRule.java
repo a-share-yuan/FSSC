@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 /**
  * AR 派工规则（蓝图 5.2：公司/岗位/组别三维 + 客户十位码前缀路由 + 选单池）。
  * 命中优先级：customer_prefix 最长前缀 → claim_type 精确 → priority。
+ * handlers 多人：auto_balance=1 按在办量最少自动直派（同类系统负载均衡）；=0 进选单池（组内抢单）。
  */
 @Data
 @TableName("ar_dispatch_rule")

@@ -59,6 +59,7 @@ public class SupplierService {
         assertCodeUnique(e.getSupplierCode(), null);
         assertTaxIdentityUnique(e, null);
         e.setId(null);
+        // V2.2.38 B-14 落地（K130/K131/K133 参考行业做法：主数据零审批、状态位核准）：
         // 建档落「未核准(PENDING)」状态位，不再发起 MD_MASTER 审批流；由持核准权限的岗位
         // 经 POST /{id}/approve 把状态位翻到 ACTIVE（页面「核准」按钮）。
         if (e.getStatus() == null || "NORMAL".equals(e.getStatus())) {
@@ -209,6 +210,7 @@ public class SupplierService {
         }
     }
     /**
+     * V2.2.38 B-14 状态位核准（K130 参考行业做法"未核准→核准"）：PENDING→ACTIVE。
      * 权限 md:supplier:approve；幂等：已是 ACTIVE 跳过。审计留痕。
      */
     @Transactional(rollbackFor = Exception.class)

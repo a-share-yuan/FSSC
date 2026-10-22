@@ -11,8 +11,8 @@
       </div>
     </template>
 
-    <el-tabs v-model="tab" @tab-change="loadAll">
-      <el-tab-pane :label="$t('flow.collab.scpInvoiceChain')" name="scp">
+    <el-tabs v-model="tab">
+      <el-tab-pane v-if="hasPerm('collab:scp:list')" :label="$t('flow.collab.scpInvoiceChain')" name="scp">
         <div class="ops" style="margin-bottom: 8px">
           <el-select v-model="scpQuery.status" size="small" style="width: 120px" :placeholder="$t('common.status')" clearable @change="loadScp">
             <el-option v-for="(l, s) in SCP_STATUS" :key="s" :label="l" :value="s" />
@@ -128,7 +128,9 @@
           <el-button size="small" type="primary" @click="loadLogs">{{ $t('common.search') }}</el-button>
         </div>
         <el-table :data="logRows" v-loading="loading" size="small" border stripe>
-          <el-table-column prop="id" label="ID" width="70" />
+          <el-table-column label="序号" width="60" align="center">
+            <template #default="{ $index }">{{ $index + 1 }}</template>
+          </el-table-column>
           <el-table-column :label="$t('field.api')" min-width="170">
             <template #default="{ row }">{{ IFACES[row.ifaceCode] || row.ifaceCode }}</template>
           </el-table-column>
@@ -208,6 +210,9 @@ import { collabApi, store } from '../../api'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { hasPerm } from '@/utils/perm'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const SCP_STATUS = computed(() => ({
   WAIT_MATCH: t('flow.collab.stPendingMatch'), WAIT_SEND: t('flow.collab.stPendingMail'), MATCH_FAILED: t('flow.collab.stMatchFail'), WAIT_SIGN: t('flow.collab.stPendingSign'),
@@ -536,7 +541,13 @@ async function doInputCollab() {
   inputVisible.value = false
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  loadFreeze()
+  if (tab.value === 'scp') loadScp()
+  else if (tab.value === 'recon') loadRecons()
+  else if (tab.value === 'ccp') loadCcp()
+  else loadLogs()
+})
 </script>
 
 <style scoped>

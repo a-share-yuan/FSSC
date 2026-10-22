@@ -67,6 +67,7 @@ public class DispatchPolicyService {
     /** 全局默认行标识（model_key='*' AND node_key='*'） */
     public static final String GLOBAL_KEY = "*";
 
+    /** 内置兜底时限：通行口径 普通 24h / 加急 4h（库里无配置行时的最后一道防线） */
     private static final BigDecimal BUILTIN_NORMAL_HOURS = new BigDecimal("24");
     private static final BigDecimal BUILTIN_URGENT_HOURS = new BigDecimal("4");
 
@@ -212,6 +213,7 @@ public class DispatchPolicyService {
     /**
      * 按策略从候选池里挑出目标办理人，并给出可解释的决策说明。
      *
+     * <p>抢单模式（PICK）<b>不选人</b>：通行口径是"打开即锁定他人不可处理"，
      * 由池内候选人主动认领（{@code WfEngineFacade.claim}），系统抢单式指派反而破坏该语义。
      */
     public AssignmentDecision decide(OpDispatchPolicy policy, String priority,
@@ -341,6 +343,7 @@ public class DispatchPolicyService {
 
     /**
      * 均衡·按量的批量分配计划：把 {@code taskIds} 逐单派给"当前在手量 + 本轮已派量"最少的人，
+     * 等价于行业方案"累积 10 单一分配，3 人得 4/3/3"的结果。
      *
      * <p>只出计划不落库（落库由调用方决定），因此可作为"分配试算"直接给运营看。
      *

@@ -54,7 +54,7 @@
       <el-table-column :label="$t('system.sod.colDimension')" width="130" align="center">
         <template #default="{ row }">{{ dimensionLabel(row.dimension) }}</template>
       </el-table-column>
-      <el-table-column prop="detectTime" :label="$t('system.sod.colCheckedAt')" width="170" />
+      <el-table-column prop="detectTime" :label="$t('system.sod.colCheckedAt')" width="170" :formatter="(r, c, v) => formatDateTime(v)" />
     </el-table>
 
     <el-pagination
@@ -76,6 +76,7 @@ import { ElMessage } from 'element-plus'
 import { http } from '../../api'
 import { hasAnyPerm } from '../../utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { formatDateTime } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()

@@ -41,10 +41,37 @@ public class MenuService {
             if (ids.isEmpty()) {
                 return List.of();
             }
-            menus = sysMenuMapper.selectList(new LambdaQueryWrapper<SysMenu>()
-                    .in(SysMenu::getId, ids)
+            // ★导航完整性：只补祖先目录；页面(C)祖先仅在被授权的是页面时补，避免只授按钮(F)的用户
+            //   看到"点进去就 403"的幽灵菜单（仅用于成树，不追加 perms）
+            List<SysMenu> all = sysMenuMapper.selectList(new LambdaQueryWrapper<SysMenu>()
                     .eq(SysMenu::getStatus, 1)
                     .orderByAsc(SysMenu::getSort));
+            Map<Long, SysMenu> allById = new LinkedHashMap<>();
+            for (SysMenu m : all) {
+                allById.put(m.getId(), m);
+            }
+            Set<Long> visible = new java.util.LinkedHashSet<>(ids);
+            for (Long id : ids) {
+                SysMenu granted = allById.get(id);
+                if (granted == null) {
+                    continue;
+                }
+                boolean pageGrant = "C".equals(granted.getMenuType())
+                        && StringUtils.hasText(granted.getPath());
+                SysMenu cur = granted;
+                Set<Long> guard = new java.util.HashSet<>();
+                while (cur.getParentId() != null && cur.getParentId() != 0
+                        && guard.add(cur.getParentId())) {
+                    cur = allById.get(cur.getParentId());
+                    if (cur == null) {
+                        break;
+                    }
+                    if ("M".equals(cur.getMenuType()) || pageGrant) {
+                        visible.add(cur.getId());
+                    }
+                }
+            }
+            menus = all.stream().filter(m -> visible.contains(m.getId())).toList();
         }
         return buildTree(filterByFeature(menus, user.getFeatures()));
     }

@@ -75,13 +75,13 @@
     <!-- 占用/核销流水穿透抽屉 -->
     <el-drawer v-model="trace.visible" :title="trace.title" size="55%">
       <el-alert v-if="!canViewFlow" type="info" :closable="false"
-        title="您没有「budget:occupy:list」权限，无法查看占用流水明细，请联系管理员开通" style="margin-bottom:12px" />
+        title="您没有查看占用流水明细的权限，请联系管理员开通。" style="margin-bottom:12px" />
       <template v-else>
         <div style="margin-bottom:10px;color:#909399;font-size:12px">
           该预算明细的全部占用/释放/核销流水，按时间倒序
         </div>
         <el-table :data="trace.rows" size="small" stripe border v-loading="trace.loading" empty-text="该明细暂无占用流水">
-          <el-table-column prop="createTime" label="时间" width="160" />
+          <el-table-column prop="createTime" label="时间" width="160" :formatter="(r, c, v) => formatDateTime(v)" />
           <el-table-column prop="operType" label="类型" width="110" align="center">
             <template #default="{ row }">
               <el-tag size="small" :type="row.operType === 'OCCUPY' ? 'warning' : row.operType === 'WRITE_OFF' ? 'success' : 'info'">
@@ -109,6 +109,7 @@ import { ElMessage } from 'element-plus'
 import { budgetApi, mdApi, orgApi } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { formatDateTime } from '@/utils/format'
 
 const list = ref([])
 const loading = ref(false)

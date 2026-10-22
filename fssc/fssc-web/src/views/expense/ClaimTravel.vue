@@ -9,7 +9,7 @@
               <el-form-item :label="$t('expense.claim.colBillNoFull')"><el-input :model-value="b.form.bill.billNo || $t('expense.common.txtAutoAfterSave')" disabled /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
-              <el-form-item :label="$t('expense.claim.colMakeTime')"><el-input :model-value="b.nowTs()" disabled /></el-form-item>
+              <el-form-item :label="$t('expense.claim.colMakeTime')"><el-input :model-value="b.form.bill.id ? formatDateTime(b.form.bill.createTime) : b.nowTs()" disabled /></el-form-item>
             </el-col>
             <el-col :xs="24" :md="12">
               <el-form-item :label="$t('expense.claim.colMaker')"><el-input :model-value="currentUserName" disabled /></el-form-item>
@@ -120,8 +120,8 @@
           </el-table-column>
           <el-table-column v-if="isTrafficCat(row)" :label="$t('expense.travelClaim.colTripDates')" width="220">
             <template #default="{ row }">
-              <el-date-picker v-model="row.expenseDate" type="date" value-format="YYYY-MM-DD" style="width: 104px" />
-              <el-date-picker v-model="row.endDate" type="date" value-format="YYYY-MM-DD" style="width: 104px" />
+              <el-date-picker v-model="row.expenseDate" type="date" value-format="YYYY-MM-DD" style="width: 104px" :disabled-date="(d) => dayAfter(d, row.endDate)" />
+              <el-date-picker v-model="row.endDate" type="date" value-format="YYYY-MM-DD" style="width: 104px" :disabled-date="(d) => dayBefore(d, row.expenseDate)" />
             </template>
           </el-table-column>
           <el-table-column v-if="row && row.category === 'HOTEL'" :label="$t('expense.travelClaim.colStayRooms')" width="160">
@@ -161,7 +161,7 @@
           <el-table-column :label="$t('common.operation')" width="70">
             <template #default="{ $index }">
               <el-button link size="small" @click="copyLine(b, $index)">{{ $t('expense.common.btnCopy') }}</el-button>
-              <el-button link size="small" type="danger" @click="b.form.lines.splice($index, 1)">{{ $t('expense.common.btnDeleteShort') }}</el-button>
+              <el-button link size="small" type="danger" @click="removeLine(b, $index)">{{ $t('expense.common.btnDeleteShort') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -172,8 +172,8 @@
       <!-- ============ 行程信息（差旅/培训涉及出差时） ============ -->
       <el-card v-if="b.form.bill.extJson.reimburseType !== 'TRAIN'" :header="$t('expense.travelClaim.secTripInfo')" style="margin-top: 12px">
         <el-table :data="b.form.travels" size="small" border :empty-text="$t('common.empty')" v-loading="loading" @row-dblclick="openRowDetail">
-          <el-table-column :label="$t('expense.travelClaim.colPassenger')" width="100">
-            <template #default="{ row }"><el-select v-model="row.travelerName" filterable style="width: 100%" :placeholder="$t('expense.common.phPickTraveler')"><el-option v-for="u in users" :key="u.id" :label="u.nickName || u.userName" :value="u.nickName || u.userName" /></el-select></template>
+          <el-table-column :label="$t('expense.travelClaim.colPassenger')" width="110">
+            <template #default="{ row, $index }"><el-select v-model="row.travelerName" filterable style="width: 100%" :placeholder="$t('expense.common.phPickTraveler')" @change="onTravelerPick(row)"><el-option v-for="u in users" :key="u.id" :label="u.nickName || u.userName" :value="u.nickName || u.userName" :disabled="travelDup(b, $index, u.nickName || u.userName)" /></el-select></template>
           </el-table-column>
           <el-table-column :label="$t('expense.travelClaim.colDeparture')" width="110">
             <template #default="{ row }"><el-select v-model="row.fromCityId" filterable style="width: 100%"><el-option v-for="c in b.cities" :key="c.id" :label="c.cityName" :value="c.id" /></el-select></template>
@@ -186,12 +186,15 @@
           </el-table-column>
           <el-table-column :label="$t('expense.travelClaim.colStartEndDate')" width="220">
             <template #default="{ row }">
-              <el-date-picker v-model="row.beginDate" type="date" value-format="YYYY-MM-DD" style="width: 104px" @change="calcTravel(b, row)" />
-              <el-date-picker v-model="row.endDate" type="date" value-format="YYYY-MM-DD" style="width: 104px" @change="calcTravel(b, row)" />
+              <el-date-picker v-model="row.beginDate" type="date" value-format="YYYY-MM-DD" style="width: 104px" :disabled-date="(d) => dayAfter(d, row.endDate)" @change="calcTravel(b, row)" />
+              <el-date-picker v-model="row.endDate" type="date" value-format="YYYY-MM-DD" style="width: 104px" :disabled-date="(d) => dayBefore(d, row.beginDate)" @change="calcTravel(b, row)" />
             </template>
           </el-table-column>
           <el-table-column :label="$t('expense.travelClaim.colTrafficMode')" width="100">
-            <template #default="{ row }"><el-select v-model="row.trafficType" style="width: 100%"><el-option v-for="o in trafficOptions" :key="o.value" :label="o.label" :value="o.value" /></el-select></template>
+            <template #default="{ row }"><el-select v-model="row.trafficType" style="width: 100%" @change="onTrafficTypeChange(row)"><el-option v-for="o in trafficOptions" :key="o.value" :label="o.label" :value="o.value" /></el-select></template>
+          </el-table-column>
+          <el-table-column :label="$t('expense.preapply.lblSeatClass')" width="100">
+            <template #default="{ row }"><el-select v-model="row.trafficClass" clearable style="width: 100%"><el-option v-for="o in seatOptionsOf(row.trafficType)" :key="o.value" :label="o.label" :value="o.value" /></el-select></template>
           </el-table-column>
           <el-table-column :label="$t('expense.travelClaim.colHotel')" width="100">
             <template #default="{ row }"><el-input-number v-model="row.hotelAmount" :min="0" :precision="2" style="width: 100%" /></template>
@@ -206,7 +209,7 @@
             <template #default="{ row }">{{ row.days || 0 }}</template>
           </el-table-column>
           <el-table-column :label="$t('common.operation')" width="60">
-            <template #default="{ $index }"><el-button link size="small" type="danger" @click="b.form.travels.splice($index, 1)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
+            <template #default="{ $index }"><el-button link size="small" type="danger" @click="removeTravel(b, $index)">{{ $t('expense.common.btnDeleteShort') }}</el-button></template>
           </el-table-column>
         </el-table>
         <el-button size="small" style="margin-top: 8px" @click="b.form.travels.push(b.newTravel())">{{ $t('expense.preapply.btnAddTrip') }}</el-button>
@@ -256,9 +259,9 @@ import { useAutoFill } from '@/composables/useAutoFill'
 import { billRules } from '@/constants/billRequired'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
-import { showRowDetail, budgetLabel, budgetUnseenLabel } from '@/utils/format'
+import { showRowDetail, budgetLabel, budgetUnseenLabel, formatDateTime } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
-import { useBaseDict, TRAFFIC_LOCAL, TRAFFIC_I18N, PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM, PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N } from '@/composables/useBaseDict'
+import { useBaseDict, TRAFFIC_LOCAL, TRAFFIC_I18N, SEAT_LOCAL, SEAT_I18N, PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM, PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N } from '@/composables/useBaseDict'
 import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
@@ -306,8 +309,46 @@ function filteredLines(b) {
 }
 function calcTravel(b, row) {
   if (row.beginDate && row.endDate) {
-    row.days = Math.max(1, Math.round((new Date(row.endDate) - new Date(row.beginDate)) / 86400000) + 1)
+    const diff = Math.round((new Date(row.endDate) - new Date(row.beginDate)) / 86400000) + 1
+    // 结束早于开始时不再静默折成 1 天（会让倒置日期看起来"合法"）
+    row.days = diff > 0 ? diff : null
   }
+}
+function dayStr(d) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+function dayBefore(d, min) { return !!min && dayStr(d) < min }
+function dayAfter(d, max) { return !!max && dayStr(d) > max }
+// 与 PreApply 同口径：同一人同一天出现两条行程＝重复登记（多段行程日期不同，不受影响）
+function travelDup(b, index, name) {
+  const cur = b.form.travels[index]
+  if (!cur || !name) return false
+  return b.form.travels.some((t, i) => i !== index && t.travelerName === name && (t.beginDate || '') === (cur.beginDate || ''))
+}
+// 行删除确认：只拦「已填内容」的行，空白行直接删，不给高频操作加负担
+async function confirmRemoveRow(hasContent) {
+  if (!hasContent) return true
+  try {
+    await ElMessageBox.confirm(t('expense.common.askDeleteRow'), t('expense.common.confirmDeleteTitle'), { type: 'warning' })
+    return true
+  } catch { return false }
+}
+async function removeLine(b, i) {
+  const l = b.form.lines[i]
+  if (!l) return
+  const has = l.itemId != null || Number(l.amount || 0) > 0 || !!b.invOf(l) || !!String(l.remark || '').trim()
+  if (!(await confirmRemoveRow(has))) return
+  b.form.lines.splice(i, 1)
+}
+async function removeTravel(b, i) {
+  const t = b.form.travels[i]
+  if (!t) return
+  const has = !!t.beginDate || !!t.endDate || !!t.fromCityId || !!t.toCityId || !!t.destCountry
+    || !!t.trafficClass || !!String(t.remark || '').trim()
+    || [t.hotelAmount, t.trafficAmount, t.allowanceAmount, t.localTrafficAmount, t.otherAmount].some((n) => Number(n || 0) > 0)
+  if (!(await confirmRemoveRow(has))) return
+  b.form.travels.splice(i, 1)
 }
 // 同口径：发票勾选生成的明细行（暂无 itemId 但金额已填）即时计入合计
 function totalAmount(b) {
@@ -341,6 +382,23 @@ async function onBeforeSubmit(b) {
   // 境外凭证合规⑤（V1.3.14）：境外收据/行程单必填中文说明（后端 submit 同口径兜底）
   if (b.form.lines.some((l) => l.itemId && needCnDesc(l) && !(l.cnDesc || '').trim())) {
     ElMessage.warning(t('expense.claim.errAbroadCnDesc')); return false
+  }
+  // 行程信息：已填的行必须完整，且起止/费用日期不得倒置（倒置会被后端按异常日期拒绝或算错标准）
+  if (b.form.bill.extJson.reimburseType !== 'TRAIN') {
+    const incomplete = b.form.travels.find((r) => !r.travelerName || !r.fromCityId || !r.toCityId || !r.beginDate || !r.endDate || !r.trafficType)
+    if (incomplete) {
+      ElMessage.warning(t('expense.travelClaim.errTripIncomplete')); return false
+    }
+    if (b.form.travels.some((r) => r.beginDate && r.endDate && r.beginDate > r.endDate)) {
+      ElMessage.warning(t('expense.travelClaim.errTripDateOrder')); return false
+    }
+    const dupTrip = b.form.travels.find((r, i) => travelDup(b, i, r.travelerName))
+    if (dupTrip) {
+      ElMessage.warning(t('expense.preapply.errDuplicateTrip', { v1: dupTrip.travelerName })); return false
+    }
+  }
+  if (b.form.lines.some((l) => isTrafficCat(l) && l.expenseDate && l.endDate && l.expenseDate > l.endDate)) {
+    ElMessage.warning(t('expense.travelClaim.errLineDateOrder')); return false
   }
   b.form.bill.extJson.relations = b.form.relations.map((r) => ({ sourceBillId: r.sourceBillId, useAmount: r.useAmount }))
   return true
@@ -430,6 +488,27 @@ const trafficOptions = trafficDict.options
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
 const payMethodOptions = payMethodDict.options
 
+// 舱位席别（seat_class）：与事前申请同口径——字典定值域，按交通方式窄化，换方式即清掉错配值
+const seatDict = useBaseDict('seat_class', SEAT_LOCAL, SEAT_I18N)
+const seatOptions = seatDict.options
+const SEAT_CABIN = ['ECONOMY', 'BUSINESS', 'FIRST']
+const SEAT_RAIL = ['FIRST_SEAT', 'SECOND']
+function seatOptionsOf(trafficType) {
+  const all = seatOptions.value
+  if (trafficType === 'AIR' || trafficType === 'SHIP') return all.filter((o) => SEAT_CABIN.includes(o.value))
+  if (trafficType === 'RAIL' || trafficType === 'TRAIN') return all.filter((o) => SEAT_RAIL.includes(o.value))
+  return all
+}
+function onTrafficTypeChange(row) {
+  const keep = seatOptionsOf(row.trafficType)
+  if (row.trafficClass && !keep.some((o) => o.value === row.trafficClass)) row.trafficClass = ''
+}
+// 乘客姓名是显示值，落库要 travelerId（后端正据此校验同人同日重复行程）
+function onTravelerPick(row) {
+  const u = users.value.find((x) => (x.nickName || x.userName) === row.travelerName)
+  row.travelerId = u ? u.id : null
+}
+
 const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency({ i18nKeys: { CNY: 'expense.common.curCny', USD: 'expense.common.curUsd' }, format: 'name-code' })
 
 const { options: payeeTypeOptions, load: loadPayeeType } = useBaseDict('enum_payee_type', PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N)
@@ -440,9 +519,11 @@ onMounted(async () => {
   travelTypeDict.load()
   // 字典不可用时自动回落到本地常量，界面与改造前逐字一致
   trafficDict.load()
+  seatDict.load()
   payMethodDict.load()
   try {
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || []
+    // P0 修复（2026-10-21）：默认只加载同公司人员
+    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
     const b = wb.value && wb.value.b

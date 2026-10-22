@@ -142,6 +142,7 @@ public class InvoiceController {
     }
 
     /**
+     * 反核销（D-V3-135 配套 · 行业方案"反"字链第一环）：解除发票-单据勾稽并解锁发票。
      * 前置：本单据无 PAID 付款记录（付款已执行不可反）。权限用 inv:unbind（反核销独立授权）。
      */
     @RequiresPerm("inv:unbind")

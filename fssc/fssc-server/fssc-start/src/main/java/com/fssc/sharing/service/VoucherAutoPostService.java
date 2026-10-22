@@ -54,7 +54,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ol>
  * 不在本类处置的半条（属裁决面，见回报"需主窗裁决清单"）：制证时点本身是否参数化
  * （审批后即出 DRAFT 凭证 vs 付款后才出）——已由 D-DEC-288（X-48 甲）在 {@code VoucherService}
- * 一侧落成出纳参数，默认＝否＝现网行为不变；"归档早于付款"半条已按 EAS 205/207 判不修（RA-D288b）。
+ * 一侧落成出纳参数，默认＝否＝现网行为不变；"归档早于付款"半条已按 既有裁决 判不修（RA-D288b）。
  */
 @Slf4j
 @Service

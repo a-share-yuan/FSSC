@@ -25,6 +25,7 @@ public class ConfigService {
     /**
      * 平台属主参数键前缀（G4 参数权属显式化，2026-09-24）。
      *
+     * <p><b>为什么要有这道闸</b>：行业原文「工作流参数和组织无关，<b>必须由 administrator 用户设置</b>，
      * 一般有管理员权限的用户设置也不生效」。而改造前 {@code sys_config} 的写入口对 wf./approve. 这些
      * <b>全局流程语义开关</b>（如 {@code approve.deny_self}、{@code wf.timeout.autopass.nodes}）
      * 只校验 {@code editable} 列，任何持 {@code system:config:update} 的租户管理员都能改——

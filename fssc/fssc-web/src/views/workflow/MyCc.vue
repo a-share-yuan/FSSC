@@ -109,7 +109,7 @@ function open(row) {
       ElMessage.warning('该抄送记录缺少单据域或单据主键，无法定位全链路；请从原单据的「追溯」入口进入')
       return
     }
-    ElMessage.info('该单据类型暂未配置业务处理入口，已打开全链路追溯')
+    ElMessage.info('当前账号不能直接进入该单据的业务页面，已打开全链路追溯')
     traceBillId.value = bizId
     traceBizType.value = row.bizType
     traceVisible.value = true

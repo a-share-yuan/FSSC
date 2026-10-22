@@ -201,6 +201,7 @@ public interface ReportMapper {
                                                  @Param("scopeDeptIds") List<Long> scopeDeptIds,
                                                  @Param("scopeUserId") Long scopeUserId);
 
+    // ==================== 扩展报表（参考行业做法/同类系统财务共享最佳实践） ====================
 
     /** 1. 应付账龄分析：按供应商统计应付余额及账龄分布 */
     @Select("<script>select b.payee_name as payeeName, count(*) as billCnt, " +

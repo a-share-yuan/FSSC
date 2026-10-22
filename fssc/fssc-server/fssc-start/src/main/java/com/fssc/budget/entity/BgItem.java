@@ -38,6 +38,7 @@ public class BgItem extends TenantAuditBase {
     /** 已核销/已使用 */
     private BigDecimal usedAmount;
     private String currencyCode;
+    /** 双预算科目：科目编码（同类系统/同类系统 体系） */
     private String ncAccount;
     /** 双预算科目：IFS 科目码（IFS 体系） */
     private String ifsAccount;

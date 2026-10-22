@@ -57,7 +57,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="checkerId" :label="$t('sharing.quality.colChecker')" width="80" />
-        <el-table-column prop="checkTime" :label="$t('sharing.quality.colCheckTime')" width="160" />
+        <el-table-column prop="checkTime" :label="$t('sharing.quality.colCheckTime')" width="160" :formatter="(r, c, v) => formatDateTime(v)" />
         <el-table-column prop="remark" :label="$t('common.remark')" min-width="120" show-overflow-tooltip />
         <el-table-column :label="$t('common.operation')" width="140" fixed="right">
           <template #default="{ row }">
@@ -121,6 +121,7 @@ import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { formatDateTime } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()

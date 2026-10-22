@@ -33,7 +33,7 @@
         <el-card shadow="hover" :body-style="{ padding: '16px' }">
           <div class="stat" @click="activeTab = 'mine'">
             <div class="num" style="color:#409eff">{{ stats.mine }}</div>
-            <div class="label">{{ $t('expense.workbench.tabMineApproving') }}</div>
+            <div class="label">{{ $t('expense.workbench.tabMineDocuments') }}</div>
           </div>
         </el-card>
       </el-col>

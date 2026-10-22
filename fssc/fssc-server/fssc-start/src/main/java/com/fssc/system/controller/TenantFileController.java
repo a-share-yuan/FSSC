@@ -45,7 +45,9 @@ public class TenantFileController {
         return Result.success(fileService.upload(file, bizType, bizId, zone));
     }
 
-    @RequiresPerm("system:file:list")
+    // 单文件详情＝预览器取元信息用，边界由下面的 assertFileReadable（上传人／单据申请人／在途受理人／共享作业岗／管理员）判，
+    // 再叠一道 system:file:list：那是"跨单据全库文件列表"的管理面权限点，sys_menu 100 至今未授任何角色，
+    // 结果是谁都点不动【预览】——连看自己刚上传的那张发票都不行。跨单列表面（/page、/storageStats）的闸保持不变。
     @GetMapping("/{id}")
     public Result<SysFile> detail(@PathVariable Long id) {
         assertFileReadable(id);
@@ -60,12 +62,39 @@ public class TenantFileController {
         return Result.success(fileService.page(query.getPageNum(), query.getPageSize(), bizType, bizId));
     }
 
-    @RequiresPerm("system:file:delete")
+    /**
+     * 删除出口二选一（批次1 第 1 项，2026-10-20）：
+     *  ① 持有 system:file:delete ＝跨人清理附件的作业面权限（现授档案/财务经理岗），照旧可删；
+     *  ② 本人上传、且尚未被任何单据/冷表/电子档案引用的附件＝"传错了自己撤"的自助出口。
+     * 原先只有 ①，而该码全库仅 2 家角色持有 ⇒ 员工误传附件后没有正规退路（只能留着，或绕过界面删库）。
+     * 引用面按 information_schema 现读枚举：exp_bill_attach / exp_bill_attach_cold / op_archive，留下悬空引用。
+     */
     @OperLog(module = "SYSTEM_FILE", operType = "DELETE", desc = "删除文件")
     @PostMapping("/{id}/delete")
     public Result<Void> delete(@PathVariable Long id) {
+        assertFileDeletable(id);
         fileService.delete(id);
         return Result.success();
+    }
+
+    private void assertFileDeletable(Long fileId) {
+        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.getRequired();
+        java.util.Set<String> perms = u.getPerms() == null ? java.util.Set.of() : u.getPerms();
+        if (perms.contains("*:*:*") || perms.contains("system:file:delete")) return;
+        SysFile f = fileService.getById(fileId);
+        Long uid = u.getUserId();
+        if (f == null || uid == null || !uid.equals(f.getUploadBy())) {
+            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.FORBIDDEN,
+                    "无权删除该附件：仅上传人本人，或具备「附件删除」权限的岗位可删");
+        }
+        Integer refs = jdbc.queryForObject("SELECT ("
+                + "SELECT COUNT(*) FROM exp_bill_attach WHERE file_id=? AND del_flag=0) + ("
+                + "SELECT COUNT(*) FROM exp_bill_attach_cold WHERE file_id=? AND del_flag=0) + ("
+                + "SELECT COUNT(*) FROM op_archive WHERE file_id=? AND del_flag=0)", Integer.class, fileId, fileId, fileId);
+        if (refs != null && refs > 0) {
+            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.FORBIDDEN,
+                    "该附件已被单据或档案引用，请回到单据上删除附件行；已归档的附件须由具备「附件删除」权限的岗位处理");
+        }
     }
 
     /** 存储占用统计（MB） */
@@ -76,8 +105,12 @@ public class TenantFileController {
         return Result.success(java.util.Map.of("storageMb", mb));
     }
 
-    /** 第一步：申领一次性下载令牌（5 分钟有效） */
-    @RequiresPerm("system:file:download")
+    /**
+     * 第一步：申领一次性下载令牌（5 分钟有效）。
+     * 与 detail 同口径：边界由 assertFileReadable 判，再叠 system:file:download——
+     * 该码只授给 8 个角色，实测 87 名持角色在岗用户（含审批人、财务岗）没有，
+     * 叠上去＝申请人和审批人点自己的影像也 403。
+     */
     @PostMapping("/{id}/token")
     public Result<String> createToken(@PathVariable Long id) {
         assertFileReadable(id);

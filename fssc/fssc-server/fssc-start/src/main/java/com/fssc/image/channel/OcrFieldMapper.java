@@ -94,10 +94,10 @@ public final class OcrFieldMapper {
         try {
             root = JSON.readTree(responseJson);
         } catch (Exception e) {
-            return OcrResult.fail("OCR 响应非 JSON: " + trim(e.getMessage()));
+            return OcrResult.fail("识别结果无法解析：" + trim(e.getMessage()));
         }
         if (root == null || !root.isObject()) {
-            return OcrResult.fail("OCR 响应格式异常（非 JSON 对象）");
+            return OcrResult.fail("识别结果格式不正确，请重试或更换识别通道");
         }
         Map<String, String> mapping = parseMapping(mappingJson);
         OcrResult r = new OcrResult();

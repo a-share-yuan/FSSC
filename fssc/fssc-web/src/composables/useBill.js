@@ -10,6 +10,7 @@ import { pickBudgetLine } from '../utils/budget'
 import { splitTaxInclusive } from '../utils/tax'
 import { requiredOf, missingBillField } from '../constants/billRequired'
 import { invoiceOutcome } from '../utils/invoiceOutcome'
+import { isInvoiceFile } from '../utils/attachKind'
 
 
 // D-DEC-361：预填值必须与后端落库时区一致。`toISOString()` 给的是 UTC 串，东八区读出来恒差 −8h
@@ -148,7 +149,14 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   }
   function newTravel() {
     return {
-      travelerName: '', fromCityId: null, toCityId: null, destCountry: '', beginDate: '', endDate: '', days: 0,
+      // 出差人员默认＝当前登录人（同文件 81 行「申请人＝当前登录人」同源）。
+      // 留空会让下拉首位（userApi.page 第 0 行实测＝id 1/admin/系统管理员）被回车选中，且单据上不是本人。
+      travelerName: store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || '',
+      // 出差人员的外键：下拉只绑姓名 ⇒ traveler_id 恒 NULL（重名/改名即断，按 id 取标准的口径也拿不到）
+      travelerId: store.user?.userId ?? store.user?.id ?? null,
+      fromCityId: null, toCityId: null, destCountry: '', beginDate: '', endDate: '', days: 0,
+      // 是否往返：这栏参与 calcTravel 的天数口径（往返 +1 天），原先连键都没有 ⇒ 保存不落库、编辑回来是空的
+      roundTrip: false,
       trafficType: 'RAIL', trafficClass: '', hotelAmount: 0, trafficAmount: 0, allowanceAmount: 0,
       otherAmount: 0, totalAmount: 0, overStd: 0, remark: '',
     }
@@ -409,7 +417,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     const [it, bg, ct, py] = await Promise.all([
       safe(mdApi.expenseItems()),
       safe(mdApi.budgets({ pageNum: 1, pageSize: 200 })),
-      safe(mdApi.cities({ pageNum: 1, pageSize: 200 })),
+      safe(mdApi.cities({ pageNum: 1, pageSize: 2000 })),
       safe(mdApi.payees({ pageNum: 1, pageSize: 200 })),
     ])
     if (it !== null) fillArr(items.value, (it || []).filter((x) => x && x.itemName && x.itemName.trim()))
@@ -472,7 +480,9 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
         return
       }
       // D-V4R-44 附带修复：原实现整表覆盖（form.attaches = [{...}]），多附件场景互相踩掉，改为追加
-      form.attaches = [...form.attaches, { fileId: rec.id, fileName: rec.fileName, attachType: 'INVOICE' }]
+      // 类型按扩展名定性（原先无条件写 INVOICE，Office 附件也被当成发票，后续"必须有发票附件"的
+      // 校验会被假发票顶掉，附件列表还会给它挂「待识别」）
+      form.attaches = [...form.attaches, { fileId: rec.id, fileName: rec.fileName, attachType: isInvoiceFile(rec.fileName) ? 'INVOICE' : 'OTHER' }]
       ElMessage.success(`附件已上传：${rec.fileName}`)
     } catch (err) {
       ElMessage.error('上传失败：' + err.message)
@@ -578,6 +588,11 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     if (pc >= 1) {
       ext.entertainCount = pc
       if (amt > 0) ext.perCapita = Math.round((amt / pc) * 100) / 100
+    }
+    // 差旅报销明细另有五栏在 exp_bill_line 没有列（费用类别/房间数/出差止日/出发地/目的地，工厂见 ClaimTravel.vue:296）：
+    // 不镜像就是"界面填了、库里 {}"，且重载后 category 丢失会让住宿行的那组列整组换成交通行的列。
+    for (const k of ['category', 'roomCount', 'endDate', 'fromCityId', 'toCityId']) {
+      if (l[k] !== undefined && l[k] !== null && l[k] !== '') ext[k] = l[k]
     }
     return ext
   }
@@ -719,7 +734,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
           return it && Number(it.needInvoice) === 1
         })
         if (needInvoiceItem) {
-          ElMessage.error(blockSubmit('所选费用项要求必须附发票：请用「选择文件（发票自动识别解析）」上传发票影像后再提交（「新增发票行」手工录入只登记票面信息，不构成发票附件）'))
+          ElMessage.error(blockSubmit('所选费用项要求必须附发票：请用「选择文件」上传发票影像后再提交（「新增发票行」手工录入只登记票面信息，不构成发票附件）'))
           return
         }
       }
@@ -744,7 +759,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
         // ⑤-Ⅳa：服务端只说「当前未上传」，看不出下一步动作。预检入参是 billId ⇒ 附件行必须随草稿落库
         // 才被数到（上传时单据还没 id，附件行是挂在 billId=NULL 的孤儿行上的），故这里补可执行动作。
         if (fails.some((c) => c.code === 'INVOICE_REQUIRED' || c.code === 'APPLY_ATTACH_REQUIRED')) {
-          detail.push('下一步：请用「选择文件（发票自动识别解析）」上传发票影像，并点一次「保存草稿」让附件行随单据落库，再重新提交')
+          detail.push('下一步：请用「选择文件」上传发票影像，并点一次「保存草稿」把附件一并保存，再重新提交')
         }
         ElMessageBox.alert(blockSubmit(detail.join('\n')),
           `提交被拦截（${fails.length} 项不合规）`, { type: 'error', confirmButtonText: '知道了' })
@@ -817,12 +832,19 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       try { ext = typeof bl.extJson === 'string' ? JSON.parse(bl.extJson || '{}') : (bl.extJson || {}) } catch { ext = {} }
       form.bill = { ...form.bill, ...bl, id: bl.id, extJson: ext }
       if (Array.isArray(d.lines) && d.lines.length) {
-        form.lines = d.lines.map((l) => ({
-          ...newLine(), ...l, id: null,
-          // 数量/单价不随编辑回填（明细表格无此输入列）：留空则提交时跳过量价勾稽，避免"改了金额却改不了单价"的死锁
-          quantity: null, unitPrice: null,
-          extJson: typeof l.extJson === 'string' ? (() => { try { return JSON.parse(l.extJson || '{}') } catch { return {} } })() : (l.extJson || {}),
-        }))
+        form.lines = d.lines.map((l) => {
+          const ex = typeof l.extJson === 'string' ? (() => { try { return JSON.parse(l.extJson || '{}') } catch { return {} } })() : (l.extJson || {})
+          // 与 lineExtForSave 成对：那五栏只活在 ext_json 里，抬回行对象才看得见（房间数/止日/城市/类别）
+          const lifted = {}
+          for (const k of ['category', 'roomCount', 'endDate', 'fromCityId', 'toCityId']) if (ex[k] !== undefined) lifted[k] = ex[k]
+          return {
+            ...newLine(), ...l, id: null,
+            // 数量/单价不随编辑回填（明细表格无此输入列）：留空则提交时跳过量价勾稽，避免"改了金额却改不了单价"的死锁
+            quantity: null, unitPrice: null,
+            extJson: ex,
+            ...lifted,
+          }
+        })
       }
       if (Array.isArray(d.attaches)) {
         form.attaches = d.attaches.map((a) => ({ ...a, id: null }))
@@ -840,6 +862,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       }
       // D-V4R-34：分摊行也是独立成表、detail 不返回，这里原来漏读 ⇒ 编辑草稿时「分摊信息」整块空着，
       // 看不见也就改不了预算科目；科目已超预算的草稿于是永远出不了草稿态（库里 exp_bill_share 明明有行）。
+      // 这跳的守卫已由 exp:share:list（分摊维护岗权限）改为 exp:bill:list（读单权限），与单据母表同口径 ⇒ 无条件下发。
       form.shares = await detailApi.shares(bl.id).catch(() => []) || []
       const rels = await detailApi.relations(bl.id).catch(() => []) || []
       // LOAN_CLAIM 由「冲销借款」驱动，不回填进关联表，避免两条链路重复建关系
@@ -848,6 +871,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       const offs = await detailApi.loanOffsets(bl.id).catch(() => []) || []
       form.loanOffsets = (offs || []).map((o) => ({
         loanBillId: o.loanBillId, loanBillNo: o.loanBillNo, offsetAmount: Number(o.offsetAmount || 0), offsetType: o.offsetType || 'CLAIM',
+        remark: o.remark || '',
       }))
       activeTab.value = 'create'
       ElMessage.success(`已载入 ${bl.billNo || '单据'}，修改后可直接提交审批`)
@@ -1059,6 +1083,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       await billApi.terminateApply(row.id); ElMessage.success('已终止报销'); loadBills()
     } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
   }
+  // 反审核（D-V3-135 配套 · 行业方案"反"字链第二环）：APPROVED → DRAFT。
   // 前置校验（已制证/付款已执行/批次在途/存在有效勾稽）在服务层 fail-loud，此处透传文案。
   async function unaudit(row) {
     try {

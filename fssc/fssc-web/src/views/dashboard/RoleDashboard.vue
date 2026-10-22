@@ -215,13 +215,13 @@ const kpiScopeText = computed(() => `权限范围内 · 全部人员 · 近 ${kp
 const kpiNote = computed(() => {
   const d = kpiWindowDays.value
   if (!perf.value) {
-    return `口径＝${kpiScopeText.value}：今日完成／平均耗时／超时率取自流程绩效读数（需 wf:instance:list），`
-      + '当前账号未取得 ⇒ 显示「—」；系统状态＝后端探活实测。'
+    return `统计范围：${kpiScopeText.value}。今日完成／平均耗时／超时率取自流程绩效统计，当前账号无权查看，显示「—」；`
+      + '系统状态为实时检测结果。'
   }
   const m = Number(perf.value.slaMeasured || 0)
-  return `口径＝${kpiScopeText.value}（非个人读数）：今日完成＝今天办结的流程实例数；`
-    + `平均耗时＝近 ${d} 天审批事件的平均停留；超时率＝近 ${d} 天内未按节点 SLA 完成的占比（仅计可测的 ${m} 条事件）；`
-    + '系统状态＝后端探活实测。'
+  return `统计范围：${kpiScopeText.value}。今日完成＝今天办结的流程数；`
+    + `平均耗时＝近 ${d} 天审批环节的平均停留；超时率＝近 ${d} 天内超过办理时限的占比（可统计 ${m} 条）；`
+    + '系统状态为实时检测结果。'
 })
 
 const kpiCards = computed(() => {
@@ -300,11 +300,11 @@ function drillKpi(kpi) {
   const route = drillRoutes[kpi.key]
   // 无菜单承载的外跳页按各自权限码收敛（2026-09-16 P0）：无权限给提示，不跳进必然报错的页面
   if (route === '/flow-monitor' && !canFlowMonitor) {
-    ElMessage.warning('无权限查看流程监控大屏（缺少 wf:instance:list）')
+    ElMessage.warning('当前账号没有查看流程监控大屏的权限，请联系管理员开通')
     return
   }
   if (route === '/month-end' && !canMonthEnd) {
-    ElMessage.warning('无权限查看月结看板（缺少 gl:monthclose:list）')
+    ElMessage.warning('当前账号没有查看月结看板的权限，请联系管理员开通')
     return
   }
   if (route) router.push(route)

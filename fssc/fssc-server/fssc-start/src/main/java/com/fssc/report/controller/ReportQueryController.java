@@ -215,6 +215,7 @@ public class ReportQueryController {
         return Result.success(reportMapper.expenseComposition(itemName, f.companyId(), f.deptIds(), f.userId()));
     }
 
+    // ==================== 扩展报表（参考行业做法/同类系统财务共享最佳实践） ====================
 
     /** 1. 应付账龄分析 */
     @RequiresPerm("report:view")

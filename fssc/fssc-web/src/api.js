@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { reactive } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyPermError } from './utils/perm403'
 
 const TOKEN_KEY = 'fssc_token'
@@ -55,7 +55,22 @@ export const store = {
     try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null') } catch { return null }
   },
   set user(v) { v ? localStorage.setItem(USER_KEY, JSON.stringify(v)) : localStorage.removeItem(USER_KEY) },
-  logout() { this.token = ''; this.user = null },
+  logout() {
+    this.token = ''
+    this.user = null
+    clearGlobalOverlays()
+  },
+}
+
+/**
+ * 关闭所有挂在 body 上的全局浮层。
+ * 它们不属于 Layout，切换账号时不会随路由卸载 ⇒ 快速切换后新用户会继续看到
+ * 上一个会话的提示条／确认框，直到默认时长（3~5s）走完或手动关闭。
+ * 登出与登录成功两个边界都调用，保证"谁的会话只显示谁的提醒"。
+ */
+export function clearGlobalOverlays() {
+  try { ElMessage.closeAll() } catch { /* 非浏览器环境忽略 */ }
+  try { ElMessageBox.close() } catch { /* 无实例时忽略 */ }
 }
 
 // 导出供 request.js 再导出复用，统一全项目 axios 实例（原 request.js 为并行开发复制的第二套同款实例）
@@ -88,6 +103,17 @@ function toastBizError(msg) {
   try { ElMessage.error(msg || '请求失败') } catch { /* 提示组件异常不影响主流程 */ }
 }
 
+/**
+ * 401 文案归一：后端 BizException 的 message 形如「未登录或登录已过期：缺少认证 Token」。
+ * 直接展示会把实现细节漏给用户；登录页拿到的凭据错误也会被冠上「登录已过期」的假前提。
+ * 凭据类细节（用户名或密码错误）保留，Token 缺失/过期统一说人话。
+ */
+function friendlyAuthMsg(msg) {
+  const raw = String(msg || '')
+  if (!raw || raw.includes('缺少认证 Token')) return '登录已过期，请重新登录'
+  return raw.replace(/^未登录或登录已过期[：:]\s*/, '') || '登录已过期，请重新登录'
+}
+
 // ---------------- R5-08: API 性能监控打点 ----------------
 const PERF_THRESHOLD = 800 // 超过 800ms 记录慢请求
 const perfLog = reactive({ slowReqs: [], totalReqs: 0, totalErrors: 0, avgMs: 0 })
@@ -112,6 +138,9 @@ function isRetryableError(err) {
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)) }
 
 http.interceptors.request.use((cfg) => {
+  // 记录本次请求发出时是否已带身份：登出/登录切换瞬间在途的匿名请求不能在回包时
+  // 把"刚登录的新会话"当成过期会话踢掉，也不能把 401 弹成用户可见的报错。
+  cfg._hadToken = !!store.token
   if (store.token) cfg.headers.Authorization = 'Bearer ' + store.token
   // R5-08: 记录请求开始时间
   cfg._startTime = Date.now()
@@ -157,9 +186,14 @@ http.interceptors.response.use(
     }
     // 业务错误码统一提示（401 跳登录；按退出前的身份回对应登录页）
     if (body && body.code === 401) {
-      kickToLogin()
-      if (!res.config?.silent) toastBizError((body && body.msg) || '登录已过期，请重新登录')
-      return Promise.reject(new Error((body && body.msg) || '登录已过期，请重新登录'))
+      // 匿名请求的 401（登出瞬间在途的调用、登录页探活）不是"会话过期"：
+      // 不踢人也不弹错，否则会把刚登录成功的新会话顶掉，并在新用户页面上留下
+      // 「未登录或登录已过期：缺少认证 Token」的假报错。
+      if (res.config?._hadToken) {
+        kickToLogin()
+        if (!res.config?.silent) toastBizError(friendlyAuthMsg(body && body.msg))
+      }
+      return Promise.reject(new Error(friendlyAuthMsg(body && body.msg)))
     }
     // 业务错误（HTTP 200 + code!=0，如参数校验失败/反欺诈拦截/权限不足）统一弹错，
     // 不再依赖各页面自行 catch（吞错时用户会误以为操作成功）。blob 等非 JSON 响应无 code 字段，不在此弹。
@@ -191,9 +225,12 @@ http.interceptors.response.use(
 
     const status = err.response?.status
     if (status === 401) {
-      kickToLogin()
-      if (!err.config?.silent) toastBizError(err.response?.data?.msg || '登录已过期，请重新登录')
-      return Promise.reject(new Error(err.response?.data?.msg || '登录已过期，请重新登录'))
+      // 与业务码 401 同口径：匿名在途请求的回包不踢人、不弹错
+      if (err.config?._hadToken) {
+        kickToLogin()
+        if (!err.config?.silent) toastBizError(friendlyAuthMsg(err.response?.data?.msg))
+      }
+      return Promise.reject(new Error(friendlyAuthMsg(err.response?.data?.msg)))
     }
 
     // R5-07: 断网自动重试（仅对无响应/5xx，非探测请求）
@@ -226,11 +263,11 @@ http.interceptors.response.use(
       if (!err.config?.silent) {
         toastBizError(accepted
           ? '已提交：服务器处理较慢仍在处理中——请勿重复提交，稍后刷新列表确认结果'
-          : `服务器处理较慢（${Math.round(costMs / 1000)} 秒未回回执）：本次操作可能已在后端生效——请勿重复提交，稍后刷新列表确认结果`)
+          : `系统响应较慢（已等待 ${Math.round(costMs / 1000)} 秒）：本次操作可能已经生效——请勿重复提交，稍后刷新列表确认结果`)
       }
       const timeoutErr = new Error(accepted
         ? '已提交，处理中：请稍后刷新列表确认结果（请勿重复提交）'
-        : '请求超时：后端仍在处理，请勿重复提交，稍后刷新查看结果')
+        : '请求超时：系统仍在处理，请勿重复提交，稍后刷新查看结果')
       timeoutErr.timeout = true
       timeoutErr.accepted = accepted
       return Promise.reject(timeoutErr)
@@ -238,7 +275,7 @@ http.interceptors.response.use(
 
     // 无响应（连接被拒/超时）或网关类状态码（vite 代理转发失败）→ 判定后端不可达
     if (!status || status === 502 || status === 503 || status === 504) {
-      setBackend(false, err.response?.data?.msg || `后端服务未连接（${BACKEND_TARGET}），请先启动 fssc-server`)
+      setBackend(false, err.response?.data?.msg || '系统服务暂时无法连接，请稍后重试或联系管理员')
       // 后端不可达已有全局顶部横幅提示，不再重复弹 toast
     } else if (!err.config?.silent) {
       // G12: HTTP 403 权限不足用人话包裹
@@ -314,6 +351,7 @@ export const billApi = {
   saveDraft: (body, key) => http.post('/tenant/expense/bill/saveDraft', body, { headers: { 'X-Idempotency-Key': key || idemKey() } }),
   submit: (id, approverUserId, firstAssigneeUserId) => http.post(`/tenant/expense/bill/submit/${id}`, null, { params: { approverUserId, firstAssigneeUserId } }),
   withdraw: (id) => http.post(`/tenant/expense/bill/withdraw/${id}`),
+  // 反审核（D-V3-135 配套 · 行业方案"反"字链第二环）：APPROVED → DRAFT，前置校验在服务层
   unaudit: (id) => http.post(`/tenant/expense/bill/unaudit/${id}`),
   voidBill: (id) => http.post(`/tenant/expense/bill/void/${id}`),
   editForResubmit: (id) => http.post(`/tenant/expense/bill/edit/${id}`),
@@ -564,6 +602,11 @@ export const p2Api = {
   // P1-7 银企直连闭环：流水分页 / 收款认领核销 / 回单归档
   bankStatementPage: (params) => http.get('/tenant/bank/reconcile/statement/page', { params }),
   bankClaim: (statementId, receivableId) => http.post('/tenant/bank/reconcile/claim', { statementId, receivableId }),
+  // D-G5-02：可认领应收单清单（银行域专用端点）。
+  // 原先借应收域的 receivableApi.page 取清单，而该端点要求 receivable:list（应收域）
+  // ⇒ 纯银企对账岗（只有 bank:reconcile:list）打开认领弹层时清单恒空、动作做不了。
+  // 取数权限随域走：改调本域端点。
+  bankClaimableReceivables: (params) => http.get('/tenant/bank/reconcile/claimable-receivables', { params }),
   bankSlipArchive: (statementId, fileId) => http.post('/tenant/bank/reconcile/slip/archive', { statementId, fileId }),
   // R5-D-185：资金头寸页「登记余额」——余额快照保存（同账户同日期幂等覆盖，服务端 BankReconcileController#saveBalance）
   bankBalanceSave: (b) => http.post('/tenant/bank/reconcile/balance/save', b),
@@ -718,7 +761,6 @@ export const opApi = {
   matchRoute: (billId) => http.post(`/tenant/pay/match/${billId}/route`),
   matchReview: (billId) => http.post(`/tenant/pay/match/${billId}/review`),
   matchManualReview: (billId, reason) => http.post(`/tenant/pay/match/${billId}/manual-review`, null, { params: { reason } }),
-  // 供应商对账（对标金蝶K/3 Cloud + SAP F.41 + 用友U8+ + 票易通LinkU预留）
   reconPage: (params) => http.get('/tenant/pay/recon/page', { params }),
   reconGenerate: (body) => http.post('/tenant/pay/recon/generate', body),
   reconSummary: (id) => http.get(`/tenant/pay/recon/${id}/summary`),
@@ -817,8 +859,11 @@ export const mdApi = {
   costCenters: (params) => http.get('/tenant/masterdata/cost-center/page', { params }),
   projects: (params) => http.get('/tenant/masterdata/project/page', { params }),
   cities: (params) => http.get('/tenant/masterdata/city/page', { params }),
+  // 下拉专用：全部 NORMAL 城市（不分页）。单据发起页城市选择改用此接口，避免 /page 分页截断低 id 城市
+  cityList: () => http.get('/tenant/masterdata/city/list'),
   payees: (params) => http.get('/tenant/masterdata/payee/page', { params }),
-  suppliers: (params) => http.get('/tenant/masterdata/supplier/page', { params }),
+  // D-BIZ-08: 走 /select（无权限要求），资产建档等业务页选择供应商是基本功能
+  suppliers: (params) => http.get('/tenant/masterdata/supplier/select', { params }),
   customers: (params) => http.get('/tenant/customer/page', { params }),
 }
 
@@ -922,7 +967,7 @@ export const userApi = {
   },
 }
 export const roleApi = {
-  page: (params) => http.get('/tenant/system/role/page', { params }),
+  page: (params, cfg) => http.get('/tenant/system/role/page', Object.assign({ params }, cfg || {})),
   create: (body) => http.post('/tenant/system/role/create', body),
   update: (body) => http.post('/tenant/system/role/update', body),
   enable: (id, enable) => http.post(`/tenant/system/role/${id}/enable`, null, { params: { enable } }),
@@ -931,12 +976,18 @@ export const roleApi = {
   menuIds: (id) => http.get(`/tenant/system/role/${id}/menuIds`),
 }
 export const orgApi = {
-  companyTree: () => http.get('/tenant/system/org/company/tree'),
+  // cfg 是 axios 配置（silent 等）原样透传；早期实现不透传，导致 { silent: true } 被静默丢弃
+  companyTree: (cfg) => http.get('/tenant/system/org/company/tree', cfg || {}),
   companyCreate: (body) => http.post('/tenant/system/org/company/create', body),
   companyUpdate: (body) => http.post('/tenant/system/org/company/update', body),
   companyDelete: (id) => http.post(`/tenant/system/org/company/${id}/delete`),
   companyEnable: (id, enable) => http.post(`/tenant/system/org/company/${id}/enable`, null, { params: { enable } }),
-  deptTree: (companyId, cfg) => http.get('/tenant/system/org/dept/tree', { params: companyId ? { companyId } : {}, ...(cfg || {}) }),
+  // 兼容 deptTree({ silent: true }) 只传配置不传公司的调用：旧实现把对象当 companyId 拼进 query，
+  // 静默产出非法参数（companyId=[object Object]）⇒ 部门下拉可能空表
+  deptTree: (companyId, cfg) => {
+    if (companyId && typeof companyId === 'object') { cfg = companyId; companyId = null }
+    return http.get('/tenant/system/org/dept/tree', { params: companyId ? { companyId } : {}, ...(cfg || {}) })
+  },
   deptCreate: (body) => http.post('/tenant/system/org/dept/create', body),
   deptUpdate: (body) => http.post('/tenant/system/org/dept/update', body),
   deptDelete: (id) => http.post(`/tenant/system/org/dept/${id}/delete`),
@@ -1264,6 +1315,8 @@ export const configApi = {
   page: (params) => http.get('/tenant/system/config/page', { params }),
   create: (body) => http.post('/tenant/system/config/create', body),
   update: (body) => http.post('/tenant/system/config/update', body),
+  // 业务参数单键读取（后端白名单，登录即可；系统参数整表仍要 system:config:list）
+  value: (key) => http.get('/tenant/system/config/value', { params: { key }, silent: true }),
   ocrGet: () => http.get('/tenant/system/config/ocr'),
   ocrSave: (body) => http.post('/tenant/system/config/ocr', body),
 }
@@ -1365,6 +1418,7 @@ export const invoiceApi = {
   // 销售发票开具（OTC02 INVOICE_ISSUE）：价税分离校验后发起开票审批流
   issue: (body) => http.post('/tenant/invoice/issue', body),
   bind: (body) => http.post('/tenant/invoice/bind', body),
+  // 反核销（D-V3-135 配套 · 行业方案"反"字链第一环）：解除勾稽+解锁发票；body={billNo,invoiceId}
   unbind: (body) => http.post('/tenant/invoice/unbind', body),
   // cfg：移动端（H5 审批/提单页）把"本单已勾稽发票"当补充信息读，无权/失败时不该打断主流程，
   // 故允许传 { silent: true }（缺省不传＝行为与原来完全一致）。
@@ -1556,13 +1610,14 @@ export const reportApi = {
   deptRanking: () => http.get('/tenant/report/export/dept-ranking', { responseType: 'blob' }),
   budgetExecution: () => http.get('/tenant/report/export/budget-execution', { responseType: 'blob' }),
   loanBalance: () => http.get('/tenant/report/loan-balance'),
-  contractSummary: () => http.get('/tenant/report/contract-summary'),
+  contractSummary: (cfg) => http.get('/tenant/report/contract-summary', cfg || {}),
   contractSummaryPage: (params) => http.get('/tenant/report/contract-summary/page', { params }),
   expenseDetail: (kw) => http.get('/tenant/report/expense-detail', { params: { kw } }),
   opsStatistics: () => http.get('/tenant/report/ops-statistics'),
   expenseSummary: (p) => http.get('/tenant/report/expense-summary', { params: p }),
   monthlyTrend: () => http.get('/tenant/report/monthly-trend'),
   expenseComposition: (itemName) => http.get('/tenant/report/expense-composition', { params: { itemName } }),
+  // ---- 扩展报表（参考行业做法/同类系统财务共享最佳实践） ----
   apAging: () => http.get('/tenant/report/ap-aging'),
   arAging: () => http.get('/tenant/report/ar-aging'),
   cashFlowSummary: () => http.get('/tenant/report/cash-flow'),

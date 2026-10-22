@@ -32,6 +32,7 @@ import java.util.List;
  * <p><b>模式判定为什么要缓存 5 秒</b>：{@code queueModeEnabled()} 会被<b>每个流程事件</b>调用
  * （监听器用它决定"内联投影还是入队"），也要被门面 {@code mirrorByFacade()} 按动作调用。
  * 直读库会把这些热路径变成逐事件一次 {@code sys_config} 查询；而完全内存化又会把"参数"退化成
+ * "需要重启的编译期开关"（行业方案该参数的语义是勾选即生效）。折中：<b>5 秒 TTL 缓存</b>——
  * 勾选后 5 秒内生效、免重启，且查询量摊薄到"每 5 秒最多一次"。fail-closed：读不到/异常一律 SYNC。
  *
  * <p><b>零影响</b>：{@code SYNC} 时 {@link #enqueue} 在入口即返回（先判模式，不碰库），

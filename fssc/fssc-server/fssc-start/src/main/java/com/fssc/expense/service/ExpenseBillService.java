@@ -73,6 +73,9 @@ public class ExpenseBillService {
     /** P0-3：借款逾期允许再次借款的开关（会计年度内逾期 true=禁止再借，默认 true；可后续迁移字典） */
     public static final boolean LOAN_OVERDUE_BLOCK_NEW_LOAN = true;
 
+    /** P2-01：费用日期是否允许晚于今天（默认 0=不允许；与前端 expense.claim.futureDateAllowed 同键） */
+    public static final String FUTURE_EXPENSE_DATE_KEY = "expense.claim.futureDateAllowed";
+
     /** 缓存域：报销标准（与 ExpenseStandardService 写入口失效共用同一 key 前缀） */
     private static final String EXP_STD_DOMAIN = "expenseStandard";
 
@@ -88,6 +91,9 @@ public class ExpenseBillService {
     private final SysUserMapper sysUserMapper;
     private final SysConfigMapper sysConfigMapper;
     private final SysFileMapper sysFileMapper;
+    /** 1b（2026-10-20）：附件覆盖后回收孤儿文件登记，走与【删除附件】同一个出口（含令牌清理） */
+    private final com.fssc.system.service.FileService sysFileService;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final WfEngineFacade wfEngineFacade;
     private final com.fssc.workflow.mapper.WfInstanceMapper wfInstanceMapper;
     private final WfTaskMapper wfTaskMapper;
@@ -301,6 +307,8 @@ public class ExpenseBillService {
             if ("LOAN".equals(bill.getBillType()) && bill.getExpectRepayDate() == null && bill.getApplyDate() != null) {
                 bill.setExpectRepayDate(bill.getApplyDate().plusDays(DEFAULT_LOAN_REPAY_DAYS));
             }
+            // P2-01：预计还款日不得早于借款申请日（前端已禁选，服务端兜底 API 直写）
+            assertExpectRepayDate(bill.getBillType(), bill.getApplyDate(), bill.getExpectRepayDate());
             // P0-4：金额大写随总金额落库（打印/OA 用）
             bill.setAmountCn(AmountCnUtil.toCn(bill.getTotalAmount()));
             // 渠道留痕：前端显式传值，后端按白名单收口；未传时补 PC，与走列默认值的结果同值
@@ -320,6 +328,12 @@ public class ExpenseBillService {
             // 渠道留痕：编辑腿同样只认白名单；不传 source 时原样保留，避免把已登记的 H5 改写成 PC
             normalizeBillSource(bill, true);
             applyPayeeAuthority(bill, exist);
+            // P2-01：编辑腿按「传值优先、缺省保留原值」合并后复校，避免只改日期其一绕过
+            if ("LOAN".equals(bill.getBillType())) {
+                LocalDate apply = bill.getApplyDate() != null ? bill.getApplyDate() : exist.getApplyDate();
+                LocalDate repay = bill.getExpectRepayDate() != null ? bill.getExpectRepayDate() : exist.getExpectRepayDate();
+                assertExpectRepayDate(bill.getBillType(), apply, repay);
+            }
             expBillMapper.updateById(bill);
         }
         // R5-D-055：本币行原币金额/汇率兜底——历史前端只写 amount，orig_amount 缺失/为 0
@@ -341,6 +355,7 @@ public class ExpenseBillService {
         // 它们在列表里显示正常，却永远提交不了，形成大量需人工清理的僵尸草稿。
         // 草稿允许「不完整」（可暂缺附件/事由），但**不允许数值自相矛盾**。
         assertDraftLinesSane(lines);
+        assertExpenseDatesNotFuture(lines);
         replaceLines(bill.getId(), lines);
         replaceAttaches(bill.getId(), attaches);
         // 缺陷修复（H-0）：前端「先传附件再保存/提交」时附件随单据落库，
@@ -800,6 +815,9 @@ public class ExpenseBillService {
         if (lines.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "报销单至少需要一条费用明细");
         }
+        // P2-01：提交腿再校日期边界（草稿可能由旧版本或 API 直写落库）
+        assertExpenseDatesNotFuture(lines);
+        assertExpectRepayDate(bill.getBillType(), bill.getApplyDate(), bill.getExpectRepayDate());
 
         // ①P0 单据强校验链（财务共享最佳实践：界面字段↔字段、字段↔表勾稽，提交即拦）
         assertHeaderRequired(bill);
@@ -1029,6 +1047,7 @@ public class ExpenseBillService {
         // P0-2：金额防篡改校验和随提交落库（否则审批环节无法校验）
         update.setAmountChecksum(bill.getAmountChecksum());
         update.setProcInstId(procInstId);
+        // V2.2.38 K106（参考行业做法"信用高的提单人提交的单据可由系统自动审核通过，抽检保合规"）：
         // 小额报销（开关+阈值）系统自动审核通过并按比例进抽检池；留痕 oper=系统自动审核(sysauto)。
         autoAuditIfEligible(bill, billId, bizType, procInstId, total);
         update.setSubmitTime(java.time.LocalDateTime.now());
@@ -1055,6 +1074,7 @@ public class ExpenseBillService {
      *
      * <p>D-V4R-79：原口径只认 REJECTED/DRAFT，而 WITHDRAWN（撤回）在前端无任何出口、后端
      * {@link #voidBill} 也拒收 ⇒ 撤回的单既不能改、不能重提、也不能作废，成为永久脏数据，
+     * 还白占单号与预算。此处把「撤回」并入「退回草稿」同轨，与行业方案「撤回=取消单据」口径一致。</p>
      */
     public void returnToEdit(Long billId) {
         LoginUser u = UserContext.getRequired();
@@ -1392,6 +1412,7 @@ public class ExpenseBillService {
     /**
      * 审批核减：审批人核减报销金额，并分别核定付款额与退款额。
      *
+     * <p>三层勾稽（通行口径）：
      * <ul>
      *  <li>核定报销 ≤ 申请金额——审批只能核减，不能核增</li>
      *  <li>核定付款 ≤ 核定报销——付款不得突破核定口径</li>
@@ -1646,6 +1667,37 @@ public class ExpenseBillService {
         }
     }
 
+    /** P2-01：费用日期不得晚于今天；参数 expense.claim.futureDateAllowed=1/true 时放行 */
+    private void assertExpenseDatesNotFuture(List<ExpBillLine> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        String allowed = cfgOr(FUTURE_EXPENSE_DATE_KEY, "0");
+        if ("1".equals(allowed) || "true".equalsIgnoreCase(allowed)) {
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        for (int i = 0; i < lines.size(); i++) {
+            ExpBillLine l = lines.get(i);
+            if (l != null && l.getExpenseDate() != null && l.getExpenseDate().isAfter(today)) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "第 " + (i + 1) + " 行费用日期 " + l.getExpenseDate() + " 晚于今天；如业务允许未来费用，请开启参数 "
+                                + FUTURE_EXPENSE_DATE_KEY);
+            }
+        }
+    }
+
+    /** P2-01：借款预计还款日不得早于借款申请日（仅 LOAN 生效） */
+    private void assertExpectRepayDate(String billType, LocalDate applyDate, LocalDate repayDate) {
+        if (!"LOAN".equals(billType) || applyDate == null || repayDate == null) {
+            return;
+        }
+        if (repayDate.isBefore(applyDate)) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "预计还款日 " + repayDate + " 不得早于借款申请日 " + applyDate);
+        }
+    }
+
     private void validateAmountReconcile(ExpBill bill, List<ExpBillLine> lines) {
         BigDecimal sumLine = BigDecimal.ZERO;
         boolean priceTypeApplied = false; // #9 是否发生过价税拆分（表头按派生值重算，不做 R1 拦截）
@@ -1654,6 +1706,7 @@ public class ExpenseBillService {
             if (amt == null) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "明细金额为空，无法合计: 行 " + line.getLineNo());
             }
+            // #9 含税/不含税录入切换：按录入口径自动拆分价税（行业方案 2019 新政口径）
             //    TAX_IN 含税录入：录入值=含税 → 不含税=含税/(1+税率)，税额=含税−不含税
             //    TAX_EX 不含税录入：录入值=不含税 → 税额=不含税×税率，含税=不含税+税额
             //    仅当显式指定 price_type 且税率>0 时生效（纯增量，不影响历史单据）
@@ -1799,7 +1852,9 @@ public class ExpenseBillService {
     }
 
     /**
+     * 反审核（D-V3-135 配套 · 行业方案"反"字链第二环）：APPROVED → DRAFT，退回申请人修改后重提。
      *
+     * <p>前置（通行口径 fail-loud，逐条给可执行文案）：</p>
      * <ol>
      *   <li>仅 APPROVED 可反审；</li>
      *   <li>已制证（voucher_no 非空）不得反审——记账态先行，凭证须先作废；</li>
@@ -2394,6 +2449,15 @@ public class ExpenseBillService {
     }
 
     private void replaceAttaches(Long billId, List<ExpBillAttach> attaches) {
+        // 1b（2026-10-20）：本方法按"整组覆盖"落附件链路，前端附件行的【删除】只把行从表单里摘掉 ⇒
+        // 被移除的文件此前永远留在 sys_file（孤儿），且唯一能删文件的界面在配置面「文件管理」，员工进不去。
+        // 故先记下将被移除的文件，落库后回收其中"本人上传＋已无任何引用"的那部分（顺手删他人数据／留悬空引用）。
+        java.util.Set<Long> keep = new java.util.HashSet<>();
+        if (attaches != null) {
+            for (ExpBillAttach a : attaches) if (a.getFileId() != null) keep.add(a.getFileId());
+        }
+        List<ExpBillAttach> before = expBillAttachMapper.selectList(
+                new LambdaQueryWrapper<ExpBillAttach>().eq(ExpBillAttach::getBillId, billId));
         expBillAttachMapper.delete(new LambdaQueryWrapper<ExpBillAttach>().eq(ExpBillAttach::getBillId, billId));
         if (attaches != null) {
             // D-DEC-025：附件上传人留痕——exp_bill_attach.upload_by 此前从无写入点，
@@ -2415,6 +2479,34 @@ public class ExpenseBillService {
                 }
                 expBillAttachMapper.insert(a);
             }
+        }
+        reclaimDetachedFiles(before, keep);
+    }
+
+    /**
+     * 回收"本次被移除＋本人上传＋不再被任何单据/冷表/电子档案引用"的文件登记。
+     * 三个不放过：他人上传的 删；仍被任何在库单据引用的 删；已进冷表或电子档案的 删（档案完整性优先）。
+     * 无登录上下文（引擎线程/批量迁移）时整体跳过，把系统行为当成人在删文件。
+     */
+    private void reclaimDetachedFiles(List<ExpBillAttach> before, java.util.Set<Long> keep) {
+        Long me = UserContext.get() == null ? null : UserContext.get().getUserId();
+        if (me == null || before == null || before.isEmpty()) return;
+        for (ExpBillAttach old : before) {
+            Long fid = old.getFileId();
+            if (fid == null || keep.contains(fid)) continue;
+            SysFile f = sysFileMapper.selectById(fid);
+            if (f == null || !me.equals(f.getUploadBy())) continue;
+            Long liveRefs = expBillAttachMapper.selectCount(
+                    new LambdaQueryWrapper<ExpBillAttach>().eq(ExpBillAttach::getFileId, fid));
+            Long coldRefs = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM exp_bill_attach_cold WHERE file_id = ? AND del_flag = 0", Long.class, fid);
+            Long archRefs = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM op_archive WHERE file_id = ? AND del_flag = 0", Long.class, fid);
+            if ((liveRefs != null && liveRefs > 0) || (coldRefs != null && coldRefs > 0) || (archRefs != null && archRefs > 0)) {
+                continue;
+            }
+            sysFileService.delete(fid);
+            log.info("[1b] 附件回收：bill 覆盖后移除的孤儿文件已注销 sys_file#{}（上传人 {}，本次操作人 {}）", fid, f.getUploadBy(), me);
         }
     }
 

@@ -215,7 +215,6 @@
 <script setup>
 /**
  * 供应商专属档案页(41号审查 P1-8 主数据深化第一批)
- * 对标 SAP/用友/金蝶:基本信息 + 银行账户(N) + 联系人(N) + 资质证照(N) 多 Tab 档案,
  * 替代原 MasterConfigTable 3 列通用表;证照临期/过期自动预警着色。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -311,7 +310,8 @@ function search() { pageNum.value = 1; load() }
 
 async function loadCurrencies() {
   try {
-    const r = await configApi.page({ pageNum: 1, pageSize: 50, keyword: 'currency' })
+    // silent：币种候选是辅助下拉，取不到就退默认币种；无 system:config:list 的角色不该因此吃一条 403 提示
+    const r = await configApi.page({ pageNum: 1, pageSize: 50, keyword: 'currency' }, { silent: true })
     const list = r.list || r.records || []
     if (list.length) currencies.value = list.map((x) => x.configKey || x.configValue).filter(Boolean)
   } catch { /* 保持默认币种 */ }

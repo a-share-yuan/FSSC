@@ -133,7 +133,7 @@
           <template #content>
             <div class="ad-mi-tip">
               <div class="ad-mi-tip-who">{{ v.userName || v.userId }} · {{ v.action === 'REJECT' ? '反对' : '赞成' }}</div>
-              <div v-if="v.operTime" class="ad-mi-tip-time">{{ String(v.operTime).replace('T', ' ').slice(0, 16) }}</div>
+              <div v-if="v.operTime" class="ad-mi-tip-time">{{ formatDateTime(v.operTime) }}</div>
               <div v-if="v.comment" class="ad-mi-tip-cmt">意见：{{ v.comment }}</div>
             </div>
           </template>
@@ -150,6 +150,7 @@
       <el-radio-button value="reject">驳回</el-radio-button>
     </el-radio-group>
 
+    <!-- ①层「审批项」（2026-09-24）：本节点配了自定义审批结果才渲染。
          仅当后端返回非空候选才出现 —— 本组件被 30+ 处复用，表里没有行时行为与改造前完全一致。
          点选后服务端按类别（正向/驳回/终止）覆盖 approved 并写 ActionResult 流程变量，
          故上方的「通过/驳回」单选钮在此仅作默认值，界面的页签会被同步切换以保持一致。 -->
@@ -288,7 +289,7 @@
         {{ st.decision === 'approve' ? '请填写不少于 2 个字的审批意见' : '请填写不少于 2 个字的驳回原因' }}
       </div>
     </template>
-    <div v-else class="ad-nocmt">该确认动作由后端业务接口处理，不提供审批意见字段，本次不记录意见。</div>
+    <div v-else class="ad-nocmt">该确认动作不支持填写审批意见，本次不记录意见。</div>
 
     <!-- G2 传阅（2026-09-23）：审批通过后抄送给谁。
          仅当调用方显式传 allowCc=true 才渲染 —— 本组件被 30+ 处复用，默认零影响。
@@ -375,6 +376,7 @@ import FlowChain from '../FlowChain.vue'
 import { flowApi, wfApi, store } from '../../api'
 import { statusLabel } from '../../constants/billStatus'
 import { docTypeLabel } from '../../constants/enums'
+import { formatDateTime } from '../../utils/format'
 
 const emit = defineEmits(['detail'])
 const commentRef = ref(null)

@@ -330,8 +330,8 @@
     <el-dialog v-model="dlgTransfer" :title="tfMode === 'upload' ? '资金上存（上划集团）' : '发起资金调拨'" width="520px">
       <el-form ref="tfFormRef" :model="tfForm" :rules="transferFormRules" label-width="130px" size="small">
         <el-form-item label="调拨日期"><el-date-picker v-model="tfForm.transferDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
-        <el-form-item label="付款账户" prop="fromBankAccountId"><el-select v-model="tfForm.fromBankAccountId" filterable clearable placeholder="选择付款账户" style="width:100%"><el-option v-for="a in accounts" :key="a.id" :label="a.accountName + ' (' + (a.bankAccount || '') + ')'" :value="a.id" /></el-select></el-form-item>
-        <el-form-item label="收款账户" prop="toBankAccountId"><el-select v-model="tfForm.toBankAccountId" filterable clearable placeholder="选择收款账户" style="width:100%"><el-option v-for="a in accounts" :key="a.id" :label="a.accountName + ' (' + (a.bankAccount || '') + ')'" :value="a.id" /></el-select></el-form-item>
+        <el-form-item label="付款账户" prop="fromBankAccountId"><el-select v-model="tfForm.fromBankAccountId" filterable remote clearable :remote-method="searchBankAccount" placeholder="输入账户名/账号搜索" style="width:100%"><el-option v-for="a in accounts" :key="a.id" :label="a.accountName + ' (' + (a.bankAccount || '') + ')'" :value="a.id" /></el-select></el-form-item>
+        <el-form-item label="收款账户" prop="toBankAccountId"><el-select v-model="tfForm.toBankAccountId" filterable remote clearable :remote-method="searchBankAccount" placeholder="输入账户名/账号搜索" style="width:100%"><el-option v-for="a in accounts" :key="a.id" :label="a.accountName + ' (' + (a.bankAccount || '') + ')'" :value="a.id" /></el-select></el-form-item>
         <el-form-item label="所属公司"><el-select v-model="tfForm.companyId" filterable clearable placeholder="选择公司" style="width:100%"><el-option v-for="c in companies" :key="c.id" :label="c.companyName || c.name" :value="c.id" /></el-select></el-form-item>
         <el-form-item label="调拨金额" prop="amount"><el-input-number v-model="tfForm.amount" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="用途"><el-select v-model="tfForm.purpose" filterable allow-create default-first-option placeholder="请选择用途" style="width:100%"><el-option label="日常周转" value="日常周转" /><el-option label="归还借款" value="归还借款" /><el-option label="投资理财" value="投资理财" /><el-option label="采购付款" value="采购付款" /><el-option label="其他" value="其他" /></el-select></el-form-item>
@@ -754,6 +754,12 @@ const emptyAcc = () => ({ accountCode: '', accountName: '', bankName: '', bankAc
 const accForm = ref(emptyAcc())
 const dlgAccount = ref(false)
 function loadBank() { try { return pagers.bank.load(async ({ pageNum, pageSize }) => { const d = await masterApi.bank.page({ pageNum, pageSize }); accounts.value = d.list || []; return { list: accounts.value, total: d.total || 0 } }).catch((e) => ElMessage.error(e.message)) } catch (e) { /* noop */ } }
+async function searchBankAccount(keyword) {
+  try {
+    const d = await masterApi.bank.page({ pageNum: 1, pageSize: 200, keyword: keyword || '' })
+    accounts.value = d.list || []
+  } catch (_) { /* 忽略 */ }
+}
 function openAccount() { accForm.value = emptyAcc(); dlgAccount.value = true; accFormRef.value?.clearValidate?.() }
 async function saveAccount() {
   if (accSaving.value) return

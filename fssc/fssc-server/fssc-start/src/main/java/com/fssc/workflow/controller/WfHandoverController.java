@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
+ * G3（2026-09-24）流程批量移交 ＋ 移交日志（{@code /api/tenant/wf/handover/**}），参考行业做法「流程移交」。
  *
  * <p>典型场景：员工离职/换岗，把名下在办审批任务批量交给接手人。逐单独立成败，
  * 失败明细照实返回并落 {@code op_transfer_log.failed_detail}（见 {@link TaskHandoverService} 类注释）。

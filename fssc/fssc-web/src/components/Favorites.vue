@@ -37,6 +37,8 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Rank, Delete, InfoFilled, Document, DataAnalysis, Menu, Star } from '@element-plus/icons-vue'
 import { store } from '../api'
+import { ElMessage } from 'element-plus'
+import { pathDenyReason } from '../router/pathAccess'
 
 const props = defineProps({ modelValue: Boolean })
 const emit = defineEmits(['update:modelValue'])
@@ -69,6 +71,11 @@ function removeFav(item) {
 }
 
 function navigate(item) {
+  // 收藏夹存的是路径：角色调整后原收藏可能已不可达，直推会被守卫弹回并提示无权限
+  if (item.path && pathDenyReason(item.path)) {
+    ElMessage.warning('该页面当前账号无法访问，请联系管理员')
+    return
+  }
   if (item.path) router.push(item.path)
   visible.value = false
 }

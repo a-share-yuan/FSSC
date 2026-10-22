@@ -16,6 +16,7 @@ import lombok.EqualsAndHashCode;
  * 前端按元数据渲染表单，服务端按元数据做校验，字段权限矩阵可对本表做 JOIN。
  * 新增字段 = 插一行数据。
  *
+ * <p><b>字段属性对齐通行口径</b>：单据类型支持「布局、字段必录和锁定属性、
  * 业务流程以及打印的设置」—— 本表承载布局与必录/锁定，打印布局见
  * {@link MdPrintTemplateItem}。
  */
@@ -59,8 +60,10 @@ public class MdFormField extends TenantAuditBase {
     /** 选项配置 JSON（下拉选项树/参照表查询） */
     private String optionsJson;
 
+    /** 必录属性：1-必录（对应行业方案「字段必录属性」） */
     private Integer required;
 
+    /** 锁定属性：1-编辑时灰显不可改（对应行业方案「锁定属性」） */
     private Integer locked;
 
     /** 只读角色码（逗号分隔；命中角色即只读） */

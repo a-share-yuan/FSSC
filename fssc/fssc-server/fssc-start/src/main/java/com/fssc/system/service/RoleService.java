@@ -88,6 +88,7 @@ public class RoleService {
 
     /**
      * 报表域投影卡点：assignMenus 是全量替换，角色未来权限集 = 本次 menuIds 的 perms 并集。
+     * 规则（报表权限 = 业务域权限的投影，参照行业做法/同类系统"报表随模块走"）：
      *  - 菜单 path 以 /reports/ 开头视为报表菜单，按其 perms 中的域码 report:&lt;domain&gt;:view 解析归属域；
      *  - 未来权限集须命中该域任一判据码，或持有审计阅示码 report:audit:all；
      *  - 违反则整单拒绝（列出全部违规项，避免改一次报一次）。

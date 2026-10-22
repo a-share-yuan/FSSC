@@ -23,7 +23,7 @@
       <!-- 无查询权限：明确指引，而不是发请求后弹「缺少权限」 -->
       <el-empty
         v-if="!canList"
-        description="当前账号没有委托代理查询权限（wf:delegate:list），请联系数据配置管理员开通"
+        description="当前账号没有委托代理查询权限，请联系管理员开通"
         :image-size="80"
       />
       <template v-else>
@@ -82,7 +82,8 @@
           <el-input :model-value="currentUserName" disabled />
         </el-form-item>
         <el-form-item label="代理人" prop="toUserId">
-          <UserSelect v-model="dialog.form.toUserId" show-dept />
+          <!-- P0 修复（2026-10-21）：默认只加载同公司人员，解决全量加载的性能与安全问题 -->
+          <UserSelect v-model="dialog.form.toUserId" scope="same-company" show-dept />
         </el-form-item>
         <el-form-item label="适用单据类型">
           <el-input v-model="dialog.form.bizTypes" placeholder="逗号分隔，空=全部。如 EXP_CLAIM,EXP_LOAN" />

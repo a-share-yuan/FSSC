@@ -30,9 +30,9 @@
       </el-form>
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
       <el-table :data="list" v-else size="small" stripe border show-summary :summary-method="getSummary" empty-text="暂无数据" v-loading="loading" @row-dblclick="openRowDetail">
-        <el-table-column prop="budgetItemId" label="预算明细ID" width="120" sortable>
+        <el-table-column label="预算明细" width="150" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-link type="primary" :underline="false" @click="openBalance(row)">{{ row.budgetItemId }}</el-link>
+            <el-link type="primary" :underline="false" @click="openBalance(row)">{{ row.budgetItemName || `明细#${row.budgetItemId}` }}</el-link>
           </template>
         </el-table-column>
         <el-table-column prop="operType" label="操作类型" width="90">
@@ -92,15 +92,14 @@
   <el-alert type="warning" :closable="false" show-icon style="margin-bottom:12px"
     title="核销＝把这笔占用转成已用（消耗）。只在系统自动结转失败、账本上出现「只有占用没有核销」的单子上用；操作会留流水，不可撤销。" />
   <el-form ref="woFormRef" :model="woForm" :rules="woRules" label-width="100px" size="small">
-    <el-form-item label="预算明细ID" prop="budgetItemId"><el-input-number v-model="woForm.budgetItemId" :min="1" style="width:100%" /></el-form-item>
+    <el-form-item label="预算明细" prop="budgetItemId"><el-input v-model="woForm.budgetItemId" disabled placeholder="从占用记录带出" /></el-form-item>
     <el-form-item label="核销金额" prop="amount"><el-input-number v-model="woForm.amount" :min="0.01" :precision="2" style="width:100%" /></el-form-item>
     <el-form-item label="业务类型" prop="bizType">
       <el-select v-model="woForm.bizType" style="width:100%">
         <el-option v-for="t in bizTypes" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
     </el-form-item>
-    <el-form-item label="单据号"><el-input v-model="woForm.bizNo" /></el-form-item>
-    <el-form-item label="单据ID" prop="bizId"><el-input-number v-model="woForm.bizId" :min="1" style="width:100%" /></el-form-item>
+    <el-form-item label="关联单据"><el-input v-model="woForm.bizNo" disabled placeholder="从占用记录带出" /></el-form-item>
   </el-form>
   <template #footer>
     <el-button @click="woVisible = false">取消</el-button>
@@ -152,10 +151,10 @@ const woForm = reactive({ budgetItemId: null, amount: 0, bizType: null, bizId: n
 // 第2批：预算核销弹窗接入中央框架（原只有一句组合 toast，字段级错误不落位）
 const woFormRef = ref(null)
 const woRules = {
-  budgetItemId: [{ required: true, type: 'number', min: 1, message: '请输入预算明细ID（须大于 0）' }],
+  budgetItemId: [{ required: true, type: 'number', min: 1, message: '请选择预算明细' }],
   amount: [{ required: true, type: 'number', min: 0.01, message: '请输入核销金额（须大于 0）' }],
   bizType: commonRules.select('请选择业务类型'),
-  bizId: [{ required: true, type: 'number', min: 1, message: '请输入单据ID（须大于 0）' }],
+  bizId: [{ required: true, type: 'number', min: 1, message: '请确认关联单据' }],
 }
 function openWriteOff(row) {
   woForm.budgetItemId = row.budgetItemId
@@ -168,7 +167,7 @@ function openWriteOff(row) {
 async function doWriteOff() {
   if (!(await validateForm(woFormRef.value))) return
   if (!woForm.budgetItemId || !(Number(woForm.amount) > 0) || !woForm.bizType || !woForm.bizId) {
-    ElMessage.warning('预算明细ID／核销金额／业务类型／单据ID 都要填齐才能核销')
+    ElMessage.warning('预算明细、核销金额、业务类型、关联单据都要填齐才能核销')
     return
   }
   woBusy.value = true

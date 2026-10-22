@@ -25,10 +25,13 @@ public class WfProcessConfigService {
     private final WfProcessConfigMapper configMapper;
     private final WfModelMapper modelMapper;
 
-    public PageResult<WfProcessConfig> page(long pageNum, long pageSize, String bizType, String keyword) {
+    public PageResult<WfProcessConfig> page(long pageNum, long pageSize, String bizType, String keyword, String modelKey) {
         LambdaQueryWrapper<WfProcessConfig> qw = new LambdaQueryWrapper<>();
         if (bizType != null && !bizType.isBlank()) {
             qw.eq(WfProcessConfig::getBizType, bizType);
+        }
+        if (modelKey != null && !modelKey.isBlank()) {
+            qw.eq(WfProcessConfig::getModelKey, modelKey);
         }
         if (keyword != null && !keyword.isBlank()) {
             qw.like(WfProcessConfig::getConfigName, keyword);

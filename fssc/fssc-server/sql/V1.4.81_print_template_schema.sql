@@ -4,6 +4,7 @@
 -- 目的：闭环差距②「打印无套打设计器」。此前 print_template 全仓零命中，
 --       5 套打印模板硬编码在 fssc-web/src/composables/usePrintTemplate.js 的
 --       TEMPLATES 常量里 ⇒ 新增一种单据打印样式＝改前端代码并发版，改不了版就改不了。
+--       同类系统的做法是「对各业务领域几十种业务单据的套打设计」，模板是数据不是代码。
 --
 -- 【本件建 4 张表】
 --   md_print_template      打印模板头（业务类型 + 版式参数 + 启用状态）
@@ -13,6 +14,7 @@
 --
 -- 【设计要点】
 --   ① 模板=数据：版式、坐标、字段属性全部落库，前端只负责渲染引擎
+--   ② 字段属性对齐通行口径：必录 required、锁定 locked（打印时灰显不可改）
 --   ③ 数据源用 SpEL 式路径（head.xxx / lines[].yyy），与后端取数解耦
 --   ④ 版本号 version + 生效状态，支持「改模板不发版」与灰度
 --
@@ -52,7 +54,7 @@ CREATE TABLE IF NOT EXISTS `md_print_template` (
   UNIQUE KEY `uk_tenant_tpl_code` (`tenant_id`,`template_code`,`version`),
   KEY `idx_pt_tenant_biz` (`tenant_id`,`biz_type`,`status`),
   KEY `idx_pt_tenant_status` (`tenant_id`,`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='打印模板头（套打设计器载体，套打平台/单据设计器）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='打印模板头（套打设计器载体，对齐行业套打平台与单据设计器口径）';
 
 -- -----------------------------------------------------------------------------
 -- ② 打印模板字段项（布局坐标 + 字段属性）
@@ -75,7 +77,7 @@ CREATE TABLE IF NOT EXISTS `md_print_template_item` (
   `font_weight`   VARCHAR(8)   NOT NULL DEFAULT 'NORMAL' COMMENT 'NORMAL常规/BOLD加粗',
   `align`         VARCHAR(8)   NOT NULL DEFAULT 'LEFT' COMMENT 'LEFT/CENTER/RIGHT',
   `required`      TINYINT      NOT NULL DEFAULT 0 COMMENT '必录属性:1-必录(缺值时打印前拦截)',
-  `locked`        TINYINT      NOT NULL DEFAULT 0 COMMENT '锁定属性:1-打印时灰显不可改(口径)',
+  `locked`        TINYINT      NOT NULL DEFAULT 0 COMMENT '锁定属性:1-打印时灰显不可改(通行口径)',
   `visible`       TINYINT      NOT NULL DEFAULT 1 COMMENT '是否显示',
   `format_type`   VARCHAR(16)  NOT NULL DEFAULT 'TEXT' COMMENT 'TEXT文本/NUMBER金额/DATE日期/PERCENT百分比',
   `decimal_places` INT         NOT NULL DEFAULT 2 COMMENT '小数位(金额)',

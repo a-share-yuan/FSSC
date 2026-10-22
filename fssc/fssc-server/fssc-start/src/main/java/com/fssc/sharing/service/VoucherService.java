@@ -1486,6 +1486,7 @@ public class VoucherService {
                 String.valueOf(voucherId), auditBefore, auditAfter, "凭证作废（DRAFT → VOID）");
         // D-V3-147：作废凭证联动清源单表头 voucher_no 冗余引用——否则反审核前置校验
         // （ExpenseBillService.unaudit 按 exp_bill.voucher_no 非空判"已制证"）恒拦，
+        // "作废凭证→反审核"链在单据侧断头（通行口径：凭证先行作废后反审核应可走通）。
         // 仅清"表头引用仍指向本凭证"的单据，避免误伤已重制证挂新凭证的单。
         clearSourceBillVoucherRef(v);
     }
@@ -1564,6 +1565,7 @@ public class VoucherService {
             rl.setSubjectId(line.getSubjectId());
             rl.setSubjectCode(line.getSubjectCode());
             rl.setSubjectName(line.getSubjectName());
+            // 方向相反、金额相等（行业方案红字冲销口径）
             rl.setDirection("DEBIT".equals(line.getDirection()) ? "CREDIT" : "DEBIT");
             rl.setAmount(line.getAmount());
             rl.setCurrencyCode(line.getCurrencyCode());

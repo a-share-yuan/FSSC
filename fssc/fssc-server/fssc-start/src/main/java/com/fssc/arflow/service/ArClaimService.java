@@ -85,6 +85,7 @@ public class ArClaimService {
                         && (c.getRemark().contains("停车费") || c.getRemark().contains("三代税返还")));
         c.setStatus(noEkp ? ArClaim.ST_PENDING_DISPATCH : ArClaim.ST_EKP_REVIEW);
         mapper.insert(c);
+        // 蓝图5.2 自动派工（同类系统任务池/行业方案派工规则范式）：免EKP类型创建即按客户十位码路由
         if (noEkp) {
             arDispatchService.autoAssignClaim(c);
         }
@@ -225,6 +226,7 @@ public class ArClaimService {
         String voucherNo;
         if (ArClaim.T_OTHER_OFFSET.equals(c.getClaimType())
                 && c.getLinesJson() != null && c.getLinesJson().trim().startsWith("[")) {
+            // 其它业务对冲 Excel 引入的多行分录 → 多借多贷凭证（同类系统范式）
             voucherNo = voucherService.generateClaimMultiLineVoucher(c);
         } else {
             voucherNo = voucherService.generateClaimVoucher(c);

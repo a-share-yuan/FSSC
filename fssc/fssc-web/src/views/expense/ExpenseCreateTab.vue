@@ -157,7 +157,7 @@
 
         <el-card :header="$t('expense.create.tabInvoiceAttach')" style="margin-top: 12px">
           <div class="attach-row">
-            <UploadButton :label="$t('expense.create.btnUploadFiles')" accept=".jpg,.png,.jpeg,.bmp,.webp,.tif,.tiff,.ofd,.xml,.pdf" biz-type="INVOICE" :biz-id="form.bill.id || null" zone="TEMP" parse @done="onAttachUploaded" />
+            <UploadButton :label="$t('expense.create.btnUploadFiles')" :accept="ATTACH_ACCEPT" biz-type="INVOICE" :biz-id="form.bill.id || null" zone="TEMP" parse @done="onAttachUploaded" />
             <span v-if="form.attaches.length" class="attach-name">
               {{ $t('expense.createTab.txtUploaded', { v1: form.attaches.map((a) => a.fileName).join('、') }) }}<el-button type="primary" link @click="previewAttach">{{ $t('expense.create.btnPreview') }}</el-button>
               <el-button type="danger" link @click="clearAttaches()">{{ $t('expense.create.btnClear') }}</el-button>
@@ -308,6 +308,7 @@ import { INVOICE_TYPES } from '@/constants/invoiceType'
 import { useAutoFill } from '@/composables/useAutoFill'
 import { useFormRules } from '@/composables/useFormRules'
 import { formatMoney, budgetLabel, budgetUnseenLabel } from '@/utils/format'
+import { ATTACH_ACCEPT } from '@/utils/attachKind'
 import { pickBudgetLine } from '@/utils/budget'
 import { splitTaxInclusive } from '@/utils/tax'
 import { invoiceOutcome } from '@/utils/invoiceOutcome'
@@ -385,7 +386,8 @@ function newLine() {
   return { itemId: null, itemName: '', expenseDate: todayLocal(), amount: 0, taxRate: 0, taxAmount: 0, netAmount: 0, budgetItemId: null, stdAmount: null, overStd: 0, overReason: '', remark: '', invoice: null }
 }
 function newTravel() {
-  return { travelerName: '', fromCityId: null, toCityId: null, beginDate: '', endDate: '', days: 0, trafficType: 'RAIL', trafficClass: '', hotelAmount: 0, trafficAmount: 0, allowanceAmount: 0, otherAmount: 0, totalAmount: 0, overStd: 0, remark: '' }
+  // 同 useBill.js：出差人员默认本人，空值＋全员名单首位是平台管理员
+  return { travelerName: store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || '', fromCityId: null, toCityId: null, beginDate: '', endDate: '', days: 0, trafficType: 'RAIL', trafficClass: '', hotelAmount: 0, trafficAmount: 0, allowanceAmount: 0, otherAmount: 0, totalAmount: 0, overStd: 0, remark: '' }
 }
 function fmt(v) { return formatMoney(v, '0.00') }
 function recalcLine(row) {
@@ -516,10 +518,10 @@ async function loadMd() {
       maps.forEach((x) => { if (x?.itemId != null && x?.budgetItemId != null) m[String(x.itemId)] = x.budgetItemId })
       budgetMap.value = m
     } catch (e) { budgetMap.value = {} }
-    cities.value = (await mdApi.cities({ pageNum: 1, pageSize: 200 })).list || []
+    cities.value = (await mdApi.cities({ pageNum: 1, pageSize: 2000 })).list || []
     payees.value = (await mdApi.payees({ pageNum: 1, pageSize: 200 })).list || []
-    // P2-3 出差人受控选择：加载用户列表供出行人下拉
-    users.value = (await userApi.page({ pageNum: 1, pageSize: 200 })).list || []
+    // P2-3 出差人受控选择 + P0 修复（2026-10-21）：加载同公司用户列表供出行人下拉
+    users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
   } catch (e) { ElMessage.error(e.message) }
 }
 async function loadBillTypes() {

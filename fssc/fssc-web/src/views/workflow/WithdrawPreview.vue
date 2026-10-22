@@ -22,11 +22,11 @@
 
       <el-alert type="warning" :closable="false" show-icon class="wp-alert"
                 title="本页只读，不会修改任何流程数据"
-                description="「已办撤销回原节点」的执行面尚未开放：Flowable 8 无 ProcessInstanceModification，等价原语 moveActivityIdTo 属「搬执行」，会真实改动在办单据本体。本页仅列出可回退节点与影响面，供人工核对。" />
+                description="「已办撤销回原节点」的自动执行功能尚未开放。本页仅列出可回退的节点及其影响范围，供人工核对，不会改动任何在办单据。" />
 
       <div class="wp-query">
         <el-input v-model="keyword" clearable class="wp-input"
-                  placeholder="流程实例ID 或 任务ID（两者均可，后端自动识别）"
+                  placeholder="流程编号或任务编号"
                   @keyup.enter="load" />
         <el-button type="primary" :loading="loading" @click="load">查询</el-button>
       </div>

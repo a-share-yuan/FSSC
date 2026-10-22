@@ -63,7 +63,7 @@
             <el-button class="submit-btn" type="primary" size="large" :loading="loading" @click="doLogin">登 录</el-button>
             <el-alert v-if="error" :title="error" type="error" :closable="false" class="error-tip" />
             <div class="reg-link">
-              <el-link type="primary" :underline="false" @click="regVisible = true">企业还没有账号？注册新租户</el-link>
+              <el-link type="primary" :underline="false" @click="regVisible = true">企业还没有账号？立即注册</el-link>
             </div>
           </el-form>
         </div>
@@ -71,7 +71,7 @@
     </div>
 
     <!-- 企业自助注册弹窗 -->
-    <el-dialog v-model="regVisible" title="企业租户注册" width="480px" destroy-on-close>
+    <el-dialog v-model="regVisible" title="企业注册" width="480px" destroy-on-close>
       <el-form :model="reg" :rules="regRules" label-width="100px" size="default">
         <el-form-item label="企业编码" prop="tenantCode" required>
           <el-input v-model="reg.tenantCode" placeholder="2-20 位大写字母/数字/下划线，登录用" />
@@ -128,7 +128,7 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { OfficeBuilding, User, Lock, Tickets, Connection, Link, Money, Platform, Picture } from '@element-plus/icons-vue'
-import { login, registerTenant, store, getCaptcha, CAPTCHA_ERROR_CODES } from '../../api'
+import { login, registerTenant, store, getCaptcha, CAPTCHA_ERROR_CODES, clearGlobalOverlays } from '../../api'
 import { hasPerm } from '../../utils/perm'
 
 const router = useRouter()
@@ -197,6 +197,9 @@ async function doLogin() {
     const data = await login({ ...form, subjectType: 'TENANT' })
     store.token = data.token
     store.user = data.user
+    // 快速切换账号时，上一会话挂在 body 上的提示条/确认框不会随路由卸载：
+    // 登录成功即清场，避免新用户看到前任的提醒（本条「登录成功」在清场之后再弹）。
+    clearGlobalOverlays()
     ElMessage.success('登录成功')
     // USG-01: 落地页按权限分流 —— 无 dashboard:view 的角色落工作台,避免默认页触发6个无权限聚合调用
     // R5-D-035 同族第三处落点：判定必须走 hasPerm()，否则 admin 的 *:*:* 通配码被 includes() 误判为无权、

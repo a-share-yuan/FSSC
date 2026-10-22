@@ -134,6 +134,7 @@ public class ExpenseBillController {
     }
 
     /**
+     * 反审核（D-V3-135 配套 · 行业方案"反"字链第二环）：APPROVED → DRAFT，退回申请人修改后重提。
      * 仅制单人本人可反审本人单据（撤回同族，exp:bill:withdraw；SoD：财务不代制单人反审）；
      * 前置校验在服务层（已制证/付款已执行/批次在途/存在有效勾稽均拒绝，文案给可执行指引）。
      */

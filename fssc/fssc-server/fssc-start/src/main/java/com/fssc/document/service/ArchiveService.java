@@ -297,6 +297,7 @@ public class ArchiveService {
         // D-DEC-182：status 列不再由各写入点随手填，一律由真相源 archive_status 映射（同库默认 FILED 一致）
         archive.setStatus(dispositionOf(archive.getArchiveStatus()));
         archive.setIntegrityStatus("UNKNOWN");
+        // D-DEC-276a（A1，2026-09-28 已裁）：立卷动作本身必须留下"谁立的卷"。行业方案〔FSSC·1034/1033/1338〕
         // 的归档记录把「归档人/归档时间/创建人」做成固定栏位，而非事后备注；此前本方法从不写这两列，
         // 实测 archive_type='EXPENSE' 的 8 行 filing_user_id 全空（BILL 路径由 BillArchiveService 写）。
         // 无登录上下文时保持 NULL，不造假人。

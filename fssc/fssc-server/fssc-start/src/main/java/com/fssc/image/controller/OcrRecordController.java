@@ -22,20 +22,36 @@ import org.springframework.web.bind.annotation.*;
 public class OcrRecordController {
 
     private final OcrRecordMapper ocrRecordMapper;
+    private final com.fssc.system.service.FileService fileService;
 
-    /** 分页查询 OCR 记录 */
+    /** 分页查询 OCR 记录（带批次号和文件名） */
     @GetMapping
-    public Result<PageResult<OcrRecord>> page(
+    public Result<PageResult<com.fssc.image.vo.OcrRecordVO>> page(
             @RequestParam(defaultValue = "1") long pageNum,
             @RequestParam(defaultValue = "20") long pageSize,
             @RequestParam(required = false) Long batchId,
             @RequestParam(required = false) String invoiceNo) {
-        LambdaQueryWrapper<OcrRecord> qw = new LambdaQueryWrapper<>();
-        if (batchId != null) qw.eq(OcrRecord::getBatchId, batchId);
-        if (invoiceNo != null && !invoiceNo.isBlank()) qw.eq(OcrRecord::getInvoiceNo, invoiceNo);
-        qw.orderByDesc(OcrRecord::getId);
-        Page<OcrRecord> p = ocrRecordMapper.selectPage(Page.of(pageNum, pageSize), qw);
+        com.baomidou.mybatisplus.core.metadata.IPage<com.fssc.image.vo.OcrRecordVO> p = 
+            ocrRecordMapper.selectPageWithRelations(Page.of(pageNum, pageSize), batchId, invoiceNo);
+        fillFileNames(p.getRecords());
         return Result.success(PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize));
+    }
+
+    /** 文件名在 master 库的 sys_file（本类路由在 image 库）⇒ 单列回填，跨库 JOIN（D-F1R-11） */
+    private void fillFileNames(java.util.List<com.fssc.image.vo.OcrRecordVO> records) {
+        if (records == null || records.isEmpty()) return;
+        java.util.Set<Long> ids = records.stream()
+                .map(com.fssc.image.vo.OcrRecordVO::getFileId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (ids.isEmpty()) return;
+        java.util.Map<Long, String> names = fileService.listByIds(ids).stream()
+                .filter(f -> f.getId() != null && f.getFileName() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        com.fssc.system.entity.SysFile::getId,
+                        com.fssc.system.entity.SysFile::getFileName,
+                        (a, b) -> a));
+        records.forEach(r -> r.setFileName(names.get(r.getFileId())));
     }
 
     /** 按批次查询全部 OCR 记录 */

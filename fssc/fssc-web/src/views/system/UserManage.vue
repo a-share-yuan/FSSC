@@ -1,6 +1,7 @@
 <template>
   <div class="user-manage">
     <el-row :gutter="12">
+      <!-- ============ 左侧：机构目录树（公司 → 部门，参照行业做法/同类系统左树右表） ============ -->
       <el-col :span="5">
         <el-card shadow="never" class="org-tree-card">
           <template #header>
@@ -75,7 +76,7 @@
                   {{ row.status === 'NORMAL' ? t('system.common.btnDisable') : t('system.common.btnEnable') }}
                 </el-button>
                 <el-button v-permission="'system:user:resetPwd'" link type="primary" @click="onResetPwd(row)">{{ $t('system.user.btnResetPassword') }}</el-button>
-                <el-button link type="danger" @click="onDelete(row)">{{ $t('system.common.btnDelete') }}</el-button>
+                <el-button v-permission="'system:user:delete'" link type="danger" @click="onDelete(row)">{{ $t('system.common.btnDelete') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -337,6 +338,15 @@ const deptFormTree = ref([])
 function loadDeptFormTree(deptList) {
   deptFormTree.value = buildForest(deptList || [], (d) => d.id, (d) => (d.parentId && d.parentId !== 0 ? d.parentId : 0))
 }
+function findDeptNode(nodes, id) {
+  if (!id) return null
+  for (const n of nodes || []) {
+    if (n.id === id) return n
+    const hit = findDeptNode(n.children, id)
+    if (hit) return hit
+  }
+  return null
+}
 
 function resetForm() {
   Object.assign(form, { id: null, username: '', realName: '', deptId: null, phone: '', email: '', password: '', status: 'NORMAL' })
@@ -371,7 +381,20 @@ async function onSave() {
       await userApi.update({ id: form.id, nickName: form.realName, deptId: form.deptId, phone: form.phone, email: form.email, status: form.status })
       ElMessage.success(t('system.common.msgUpdated'))
     } else {
-      await userApi.create({ userName: form.username, nickName: form.realName, deptId: form.deptId, phone: form.phone, email: form.email, password: form.password, status: form.status })
+      const deptNode = findDeptNode(deptFormTree.value, form.deptId)
+      await userApi.create({
+        user: {
+          userName: form.username,
+          nickName: form.realName,
+          deptId: form.deptId,
+          companyId: deptNode?.companyId || null,
+          phone: form.phone,
+          email: form.email,
+          password: form.password,
+          status: form.status,
+        },
+        roleIds: [],
+      })
       ElMessage.success(t('system.common.msgCreated'))
     }
     dialogVisible.value = false
@@ -395,7 +418,7 @@ async function toggleEnable(row) {
 }
 
 async function onResetPwd(row) {
-  await ElMessageBox.confirm(t('system.user.askResetPwd', { v1: row.username }), t('system.user.btnResetPassword'), { type: 'warning' })
+  await ElMessageBox.confirm(t('system.user.askResetPwd', { v1: row.userName }), t('system.user.btnResetPassword'), { type: 'warning' })
   try {
     await userApi.resetPwd(row.id)
     ElMessage.success(t('system.user.msgPwdReset'))
@@ -405,7 +428,7 @@ async function onResetPwd(row) {
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(t('system.user.askDeleteUser', { v1: row.username }), t('system.common.ttlDelete'), { type: 'warning' })
+  await ElMessageBox.confirm(t('system.user.askDeleteUser', { v1: row.userName }), t('system.common.ttlDelete'), { type: 'warning' })
   try {
     await userApi.delete(row.id)
     ElMessage.success(t('system.common.msgDeleteOk'))

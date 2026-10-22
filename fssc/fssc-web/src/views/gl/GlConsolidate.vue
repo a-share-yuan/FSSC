@@ -27,9 +27,8 @@
           <el-tag :type="row.status === 'CONSOLIDATED' ? 'success' : 'info'" size="small">{{ row.status === 'CONSOLIDATED' ? t('gl.consolidate.stDone') : t('gl.consolidate.stDraft') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" :label="$t('common.createTime')" width="160">
-        <template #default="{ row }">{{ String(row.createTime || '').replace('T', ' ').slice(0, 16) }}</template>
-      </el-table-column>
+      <el-table-column prop="createTime" :label="$t('common.createTime')" width="160"
+                       :formatter="(r, c, v) => formatDateTime(v)" />
       <el-table-column :label="$t('common.operation')" width="160" fixed="right">
         <template #default="{ row }">
           <el-button v-if="row.status === 'DRAFT'" size="small" type="primary" @click="runMerge(row.period)">{{ $t('gl.consolidate.btnRun') }}</el-button>
@@ -87,6 +86,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { glexApi, orgApi } from '../../api'
+import { formatDateTime } from '@/utils/format'
 import { useFormRules, commonRules, validateForm } from '../../composables/useFormRules'
 import { useI18n } from 'vue-i18n'
 

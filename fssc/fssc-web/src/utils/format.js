@@ -161,7 +161,7 @@ export function hasEntertainLines(lines) {
  * dimKey 有两套写法都要认：落库口径为连字符式 `2026-COMPANY33-DEPT1311-ITEM331`
  * （bg_item 现存 1324 行全部是这一种），早期口径为冒号式 `DEPT:1_ITEM:5`。
  * 只认冒号式会让整列退化成原始 dimKey 串，用户无法判断选的是哪条预算线（D-P2-03）。
- * 解析失败再回退到 NC/IFS 科目码或 dimKey。
+ * 解析失败再回退到 同类系统/IFS 科目码或 dimKey。
  *
  * @param ctx 可选 {companies, projects}，用于解析 COMPANY/PROJECT 段
  */
@@ -209,7 +209,7 @@ export function budgetUnseenLabel(id) {
  * 友好化：隐藏内部/技术性字段，常见业务字段映射中文标签，金额用千分位，两列定义列表渲染。
  *
  * @param {object} row 行数据
- * @param {object} [opts] { title?, labels?: {field: '中文名'} }
+ * @param {object} [opts] { title?, labels?: {field: '中文名'}, enums?: {field: (v) => '中文值'} }
  */
 
 // 常见业务字段 → 中文标签（全系统共用，避免行详情弹窗显示英文键名"看着像 JSON"）
@@ -237,9 +237,35 @@ const COMMON_LABELS = {
   quantity: '数量', qty: '数量', taxRate: '税率', taxAmount: '税额', noTaxAmount: '不含税金额',
   settleMode: '结算方式', employeeName: '员工', departmentName: '部门',
   modelKey: '流程编码', modelVersion: '流程版本', procInstId: '流程实例ID', taskId: '任务ID',
+  // ---- 申请类单据（出差行程 / 培训人员 / 会议信息 / 分摊）行详情 ----
+  // 这些键此前没有中文标签，行详情弹窗会走 prettyKey() 回落成
+  // "Traffic Type / Allowance Amount / Round Trip" 这种英文标题，
+  // 中文界面里看着像半截 JSON。统一在此登记，凡是走 showRowDetail 的页面一律变中文。
+  travelerName: '出差人', personName: '姓名', employeeNo: '工号', empNo: '工号',
+  beginDate: '开始日期', endDate: '结束日期', startDate: '开始日期',
+  days: '天数', tripDays: '出差天数', nights: '住宿晚数',
+  trafficType: '交通方式', trafficClass: '舱位/席别', roundTrip: '是否往返', overStd: '是否超标',
+  hotelAmount: '住宿费', trafficAmount: '长途交通费', localTrafficAmount: '市内交通费',
+  allowanceAmount: '餐饮补贴', otherAmount: '其他费用', stdAmount: '标准金额',
+  hotelFee: '住宿费', trafficFee: '长途交通费', localTrafficFee: '市内交通费',
+  allowanceFee: '餐饮补贴', trainFee: '培训费', otherFee: '其他费用',
+  tripMode: '行程方式', seatClass: '舱位/席别',
+  trainType: '培训类型', trainName: '培训名称', trainPlace: '培训地点',
+  planFlag: '计划内', travelFlag: '含差旅', abroadFlag: '境外',
+  meetingName: '会议名称', meetingPlace: '会议地点', meetingAmount: '会议费用',
+  topic: '会议主题', attendees: '参会人数', personCount: '人数',
+  shareType: '分摊方式', shareValue: '分摊值', shareAmount: '分摊金额', sharePercent: '分摊比例',
 }
 
 // 字段 → 枚举字典：行详情弹窗的值若为枚举码，翻译成中文而不是原样输出英文
+// 兜底文案与 composables/useBaseDict.js 的 TRAFFIC_LOCAL / SEAT_LOCAL / TRAINING_LOCAL 逐字一致；
+// 页面若已加载后台字典，可通过 opts.enums 传入实时文案覆盖（见 showRowDetail）
+const TRAFFIC_MODE_LABEL = { AIR: '飞机', RAIL: '高铁', TRAIN: '火车', CAR: '汽车', SHIP: '轮船' }
+const SEAT_CLASS_LABEL = { ECONOMY: '经济舱', BUSINESS: '商务舱', FIRST: '头等舱', SECOND: '二等座', FIRST_SEAT: '一等座' }
+const TRAINING_TYPE_LABEL = { INTERNAL: '内训', EXTERNAL: '外训', PUBLIC: '公开课' }
+const yesNoLabel = (v) => (v === true || v === 1 || v === '1' || v === 'true' ? '是'
+  : v === false || v === 0 || v === '0' || v === 'false' ? '否' : '')
+
 const VALUE_ENUM_BY_KEY = {
   status: statusLabel, billStatus: statusLabel, poolStatus: statusLabel,
   verifyStatus: (v) => enumLabel(VERIFY_STATUS, v),
@@ -249,6 +275,13 @@ const VALUE_ENUM_BY_KEY = {
   operType: (v) => enumLabel(OPER_TYPE, v), assignType: (v) => enumLabel(ASSIGN_TYPE, v),
   multiType: (v) => enumLabel(MULTI_TYPE, v), timeoutAction: (v) => enumLabel(TIMEOUT_ACTION, v),
   rejectTo: (v) => enumLabel(REJECT_TO, v), orgScope: (v) => enumLabel(ORG_SCOPE, v),
+  // 申请类单据：交通方式 / 舱位席别 / 培训类型（字典 traffic_mode / seat_class / training_type）
+  trafficType: (v) => TRAFFIC_MODE_LABEL[v] || '', tripMode: (v) => TRAFFIC_MODE_LABEL[v] || '',
+  trafficClass: (v) => SEAT_CLASS_LABEL[v] || '', seatClass: (v) => SEAT_CLASS_LABEL[v] || '',
+  trainType: (v) => TRAINING_TYPE_LABEL[v] || '',
+  // 布尔语义标志位：数据库/接口给的是 true/false 或 1/0
+  roundTrip: yesNoLabel, planFlag: yesNoLabel, travelFlag: yesNoLabel, abroadFlag: yesNoLabel,
+  overStd: (v) => (Number(v) === 1 ? '超标' : '合规'),
 }
 
 // 技术性字段：无业务意义，行详情弹窗一律隐藏（页面通过 opts.labels 显式指定的除外）
@@ -257,9 +290,11 @@ function isTechField(k) {
   return TECH_KEY_RE.test(k)
 }
 
-// 行详情弹窗：数字值只有键名形如金额（*amount/*money/*price）才按金额格式化，
+// 行详情弹窗：数字值只有键名形如金额（*amount/*money/*price/*fee）才按金额格式化，
 // 其余数字（行号/数量/标志位等）原样字符串输出——曾有 create_by=3800 被写成「3,800.00」
-const MONEY_KEY_RE = /(amount|money|price)/i
+// fee：出差行程/培训人员行的 hotelFee/trafficFee/allowanceFee 等键名不带 amount，
+// 此前只落 String(v)，2400 显示成「2400」没有千分位与两位小数，与同屏 amount 列口径不一
+const MONEY_KEY_RE = /(amount|money|price|fee)/i
 // 行详情弹窗：字符串日期识别（纯日期 → formatDate；ISO 日期时间 → formatDateTime）
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
 const DATETIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/
@@ -268,31 +303,8 @@ export async function showRowDetail(row, opts = {}) {
   if (!row || Object.keys(row).length === 0) {
     return // 空行不弹窗
   }
-  const { title = '行详情', labels = {} } = opts
-  const items = Object.entries(row)
-    .filter(([k, v]) => {
-      if (k.startsWith('_')) return false // 内部字段
-      if (v === null || v === undefined || v === '') return false
-      if (typeof v === 'object') return false // 数组/对象
-      if (labels[k] || COMMON_LABELS[k]) return true // 有中文标签的业务字段保留
-      return !isTechField(k) // 隐藏技术字段，其余保留
-    })
-    .map(([k, v]) => {
-      const key = labels[k] || COMMON_LABELS[k] || prettyKey(k)
-      let val
-      if (typeof v === 'number') {
-        // 仅金额键走千分位金额，其余数字原样输出（行号/数量/标志位不再是「x.xx 金额」）
-        val = MONEY_KEY_RE.test(k) ? formatMoneyShort(v) : String(v)
-      } else if (typeof v === 'string' && DATETIME_RE.test(v)) {
-        val = formatDateTime(v)
-      } else if (typeof v === 'string' && DATE_ONLY_RE.test(v)) {
-        val = formatDate(v)
-      } else {
-        const enumOf = VALUE_ENUM_BY_KEY[k]
-        val = enumOf && typeof v === 'string' ? (enumOf(v) || v) : String(v)
-      }
-      return [key, val]
-    })
+  const { title = '行详情' } = opts
+  const items = rowDetailItems(row, opts)
   if (!items.length) return
   const [{ ElMessageBox }, { h }] = await Promise.all([import('element-plus'), import('vue')])
   // Element Plus 契约：alert 的 message 直接传 VNode（传入 {__isVNode, default} 对象会被
@@ -304,6 +316,49 @@ export async function showRowDetail(row, opts = {}) {
         h('span', { class: 'rd-val' }, v),
       ]))),
     title, { customClass: 'row-detail-dialog' })
+}
+
+/**
+ * 行详情弹窗的「字段名 + 值」列表（纯函数，供 showRowDetail 与单测共用）。
+ * 抽出来是为了能脱离 Element Plus 断言渲染结果——曾出现「编译通过但弹窗里仍是
+ * Traffic Type / RAIL / true」的英文裸码，只有断言渲染文本才拦得住。
+ */
+export function rowDetailItems(row, opts = {}) {
+  if (!row || Object.keys(row).length === 0) return []
+  const { labels = {}, enums = {} } = opts
+  return Object.entries(row)
+    .filter(([k, v]) => {
+      if (k.startsWith('_')) return false // 内部字段
+      if (v === null || v === undefined || v === '') return false
+      if (typeof v === 'object') return false // 数组/对象
+      if (labels[k] || COMMON_LABELS[k]) return true // 有中文标签的业务字段保留
+      return !isTechField(k) // 隐藏技术字段，其余保留
+    })
+    .map(([k, v]) => {
+      const key = labels[k] || COMMON_LABELS[k] || prettyKey(k)
+      // 页面显式传入的字典文案（opts.enums）优先；字典未加载/缺键时回落内置映射，
+      // 两处都翻不出来才原样输出码值（保证后台改字典后详情跟着变，且不因字典未到而退化成英文）
+      const dictEnum = enums[k]
+      const builtinEnum = VALUE_ENUM_BY_KEY[k]
+      const translated = (dictEnum && typeof dictEnum === 'function' ? dictEnum(v) : '')
+        || (builtinEnum ? builtinEnum(v) : '')
+      let val
+      if (translated) {
+        val = translated // 枚举/布尔码已翻译成中文，不再按金额或原码输出
+      } else if (typeof v === 'number') {
+        // 仅金额键走千分位金额，其余数字原样输出（行号/数量/标志位不再是「x.xx 金额」）
+        val = MONEY_KEY_RE.test(k) ? formatMoneyShort(v) : String(v)
+      } else if (typeof v === 'boolean') {
+        val = v ? '是' : '否'
+      } else if (typeof v === 'string' && DATETIME_RE.test(v)) {
+        val = formatDateTime(v)
+      } else if (typeof v === 'string' && DATE_ONLY_RE.test(v)) {
+        val = formatDate(v)
+      } else {
+        val = String(v)
+      }
+      return [key, val]
+    })
 }
 
 /** 把 snake_case/camelCase 键转成中文习惯的空格分隔 */

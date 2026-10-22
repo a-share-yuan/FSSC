@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
 
 /**
  * 供应商对账差异调节表（supplier_recon_diff）。
- * 对标用友U8+余额调节表 + SAP差异过账调整。
  * 记录对账过程中发现的每一项差异及其处理方式。
  */
 @Data

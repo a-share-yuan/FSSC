@@ -1,6 +1,7 @@
 package com.fssc.contract.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.fssc.common.entity.TenantAuditBase;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -56,4 +57,8 @@ public class ContContract extends TenantAuditBase {
     private String bidNote;
     /** 来源：MANUAL 手动 / IFS 同步 / IMPORT 导入 */
     private String source;
+
+    /** 流程在途标记（非持久化，列表查询时由 Service 填充，供前端控制直批按钮可见性） */
+    @TableField(exist = false)
+    private Boolean inFlow;
 }

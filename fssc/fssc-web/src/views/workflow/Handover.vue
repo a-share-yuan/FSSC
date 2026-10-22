@@ -13,10 +13,11 @@
             title="「指定任务ID」与「原办理人」二选一：都不传则报错。操作人取当前登录用户；操作人即原办理人时走转办通道，否则走改派通道。" />
           <el-form ref="handoverFormRef" :model="form" :rules="formRules" label-width="130px" size="small" style="max-width: 620px">
             <el-form-item label="接收人" prop="toUserId">
-              <UserSelect v-model="form.toUserId" placeholder="请选择接手人" />
+              <!-- P0 修复（2026-10-21）：默认只加载同公司人员 -->
+              <UserSelect v-model="form.toUserId" scope="same-company" placeholder="请选择接手人" />
             </el-form-item>
             <el-form-item label="原办理人">
-              <UserSelect v-model="form.fromUserId" placeholder="按其在办任务批量移交（可选）" />
+              <UserSelect v-model="form.fromUserId" scope="same-company" placeholder="按其在办任务批量移交（可选）" />
             </el-form-item>
             <el-form-item label="指定任务ID">
               <el-input v-model="form.taskIdsText" type="textarea" :rows="3" placeholder="Flowable taskId，逗号/空格/换行分隔；填写后忽略「原办理人」" />
@@ -49,10 +50,10 @@
         <el-tab-pane label="移交日志" name="log">
           <el-form :inline="true" size="small" style="margin-bottom: 10px">
             <el-form-item label="原办理人">
-              <div style="width: 180px"><UserSelect v-model="logQ.fromUserId" placeholder="全部" /></div>
+              <div style="width: 180px"><UserSelect v-model="logQ.fromUserId" scope="same-company" placeholder="全部" /></div>
             </el-form-item>
             <el-form-item label="接收人">
-              <div style="width: 180px"><UserSelect v-model="logQ.toUserId" placeholder="全部" /></div>
+              <div style="width: 180px"><UserSelect v-model="logQ.toUserId" scope="same-company" placeholder="全部" /></div>
             </el-form-item>
             <el-form-item><el-button type="primary" @click="logReset">查询</el-button></el-form-item>
           </el-form>

@@ -1,5 +1,5 @@
 <template>
-  <div :class="{ tabless: isSingle }">
+  <div>
     <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
@@ -234,7 +234,7 @@
 <script setup>
 import { rcStatusLabel } from '@/constants/enums'
 
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { receivableApi, mdApi } from '../../api'
@@ -285,9 +285,10 @@ function isHighRiskCustomer(id) {
 
 // 应收状态翻译
 
-// P: tab 页拆分——由菜单深链进来时传入 tab，只显示该页并隐藏 tab 导航条（一 TAB = 一菜单）
+// D-BIZ-05：四个子视图在 sys_menu 里只有 3070「应收管理」一条菜单行，没有拆出的子菜单。
+// 原先按「一 TAB = 一菜单」的约定隐藏页签条 ⇒ 收款核销/催收待办/坏账计提只能手敲 URL。
+// 菜单未拆的页不藏页签：深链进来仍定位到指定页签，同时把其余页签露出来可点。
 const props = defineProps({ tab: { type: String, default: '' } })
-const isSingle = computed(() => !!props.tab)
 const tab = ref(props.tab || 'receivable')
 const loading = ref(false)
 const kw = ref('')
@@ -507,6 +508,4 @@ function batchExport() {
 
 <style scoped>
 .pager { margin-top: 10px; justify-content: flex-end; }
-/* 一 TAB = 一菜单：从菜单深链进来（tab 命中）时隐藏 tab 导航条，只显示该页 */
-.tabless :deep(.el-tabs__header) { display: none; }
 </style>

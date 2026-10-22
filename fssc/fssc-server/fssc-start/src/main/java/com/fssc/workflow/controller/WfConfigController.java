@@ -101,8 +101,8 @@ public class WfConfigController {
 
     @RequiresPerm("wf:config:list")
     @GetMapping("/process/page")
-    public Result<PageResult<WfProcessConfig>> processPage(PageQuery query, String bizType, String keyword) {
-        return Result.success(processConfigService.page(query.getPageNum(), query.getPageSize(), bizType, keyword));
+    public Result<PageResult<WfProcessConfig>> processPage(PageQuery query, String bizType, String keyword, String modelKey) {
+        return Result.success(processConfigService.page(query.getPageNum(), query.getPageSize(), bizType, keyword, modelKey));
     }
 
     @RequiresPerm("wf:config:create")

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_FA_CER" targetNamespace="http://fssc">
+  <bpmn:process id="FA_CER" name="资本性支出申请(CER)审批流程" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:userTask id="Task_1" name="资产归口部门经办审核【资产管理员】" flowable:candidateGroups="FA_ASSET_ADMIN" />
+    <bpmn:userTask id="Task_3" name="板块归口部门经理审核【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+    <bpmn:userTask id="Task_7" name="基地财务经理审核【基地财务经理】" flowable:candidateGroups="BASE_FIN_MANAGER" />
+    <bpmn:userTask id="Task_8" name="共享中心资产核算岗审核【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
+    <bpmn:userTask id="Task_9" name="共享中心稽核岗复核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
+    <bpmn:exclusiveGateway id="Gw_10" default="Flow_10_def" />
+    <bpmn:userTask id="Task_5" name="基地总经理审批（超 50 万）【基地总经理】" flowable:candidateGroups="BASE_GM" />
+    <bpmn:exclusiveGateway id="Gw_11" default="Flow_11_def" />
+    <bpmn:userTask id="Task_4" name="板块分管领导审批（超 500 万）【板块分管领导】" flowable:candidateGroups="PLATE_DIV_LEADER" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="Task_3" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_3" targetRef="Task_7" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_7" targetRef="Task_8" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Task_8" targetRef="Task_9" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_9" targetRef="Gw_10" />
+    <bpmn:sequenceFlow id="Flow_10_cond" name="金额&gt;500000" sourceRef="Gw_10" targetRef="Task_5"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount > 500000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_10_def" name="金额不足/其他" sourceRef="Gw_10" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_10in" sourceRef="Task_5" targetRef="Gw_11" />
+    <bpmn:sequenceFlow id="Flow_11_cond" name="金额&gt;5000000" sourceRef="Gw_11" targetRef="Task_4"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount > 5000000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_11_def" name="金额不足/其他" sourceRef="Gw_11" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="Task_4" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="FA_CER">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_7_di" bpmnElement="Task_7"><dc:Bounds x="596" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_8_di" bpmnElement="Task_8"><dc:Bounds x="786" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_9_di" bpmnElement="Task_9"><dc:Bounds x="976" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Gw_10_di" bpmnElement="Gw_10"><dc:Bounds x="1166" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_5_di" bpmnElement="Task_5"><dc:Bounds x="1266" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Gw_11_di" bpmnElement="Gw_11"><dc:Bounds x="1456" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4"><dc:Bounds x="1556" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="1746" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="156" y="120" /><di:waypoint x="216" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="346" y="120" /><di:waypoint x="406" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="536" y="120" /><di:waypoint x="596" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4"><di:waypoint x="726" y="120" /><di:waypoint x="786" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5"><di:waypoint x="916" y="120" /><di:waypoint x="976" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6"><di:waypoint x="1106" y="120" /><di:waypoint x="1166" y="122" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_10_cond_di" bpmnElement="Flow_10_cond"><di:waypoint x="1206" y="122" /><di:waypoint x="1266" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_10_def_di" bpmnElement="Flow_10_def"><di:waypoint x="1186" y="142" /><di:waypoint x="1186" y="230" /><di:waypoint x="1764" y="230" /><di:waypoint x="1764" y="138" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_10in_di" bpmnElement="Flow_10in"><di:waypoint x="1396" y="120" /><di:waypoint x="1456" y="122" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_11_cond_di" bpmnElement="Flow_11_cond"><di:waypoint x="1496" y="122" /><di:waypoint x="1556" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_11_def_di" bpmnElement="Flow_11_def"><di:waypoint x="1476" y="142" /><di:waypoint x="1476" y="255" /><di:waypoint x="1764" y="255" /><di:waypoint x="1764" y="138" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="1686" y="120" /><di:waypoint x="1746" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

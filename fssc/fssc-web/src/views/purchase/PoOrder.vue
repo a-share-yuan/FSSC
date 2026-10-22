@@ -24,7 +24,7 @@
     </template>
 
     <!-- R5-D-072：无查看权限时显式无权限态（4030 不得被吞成「没数据」空表） -->
-    <el-empty v-if="!canList" description="当前账号无采购订单查看权限，请联系管理员授权 po:order:list" />
+    <el-empty v-if="!canList" description="当前账号无采购订单查看权限，请联系管理员开通" />
     <SkeletonList v-if="loading && canList" :rows="8" :cols="5" />
     <el-table v-else-if="canList" :data="rows" size="small" stripe max-height="520" border @selection-change="handleSelectionChange" @row-dblclick="viewDetail" empty-text="暂无数据">
         <el-table-column type="selection" width="45" />
@@ -112,7 +112,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="关联合同">
-              <el-select v-model="form.contractId" filterable clearable style="width: 100%" placeholder="选择框架协议合同（可选）">
+              <el-select v-model="form.contractId" filterable clearable style="width: 100%" :placeholder="contractsDenied ? '当前账号无合同查看权限，可留空' : '选择框架协议合同（可选）'">
                 <el-option v-for="c in contracts" :key="c.id" :label="c.contractNo + ' ' + c.contractName" :value="c.id" />
               </el-select>
             </el-form-item>
@@ -365,7 +365,7 @@ const { rules: formRules } = useFormRules('PO_ORDER')
 import { onMounted, reactive, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { purchaseApi, supplierApi, orgApi, masterApi, cipFlowApi, store } from '../../api'
+import { purchaseApi, supplierApi, orgApi, masterApi, cipFlowApi, contractApi, store } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
@@ -741,17 +741,33 @@ async function archiveOrderRow(row) {
 
 const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
 
+// D-BIZ-01：关联合同下拉恒空＝contracts 声明后从未取数。ContractController.page 按设计对所有登录用户
+// 开放（无 @RequiresPerm），故这里只按状态收口：草稿/审批中的合同不能作下单依据。
+const contractsDenied = ref(false)
+async function loadContracts() {
+  try {
+    const d = await contractApi.page({ pageNum: 1, pageSize: 200 })
+    contracts.value = (d.list || []).filter((c) => c.status === BillStatus.APPROVED || c.status === 'EFFECTIVE')
+  } catch (e) {
+    contracts.value = []
+    contractsDenied.value = e?.code === 4030
+  }
+}
+
 onMounted(async () => {
   loadCurrency()
   autofill(form, 'PO_ORDER')
   try {
-    const [s, ct] = await Promise.all([
+    const [s, ct, ct2] = await Promise.all([
       supplierApi.page({ pageNum: 1, pageSize: 100 }),
       orgApi.companyTree(),
+      contractApi.page({ pageNum: 1, pageSize: 100, status: 'EFFECTIVE' }),
     ])
     suppliers.value = s.list || []
     companyTree.value = ct || []
+    contracts.value = ct2.list || []
   } catch (e) { /* 忽略 */ }
+  loadContracts() // 独立取数：合同接口失败不得连累供应商/公司下拉
   loadCip() // CIP 项目下拉数据源（失败/404 静默隐藏字段）
   load()
 })

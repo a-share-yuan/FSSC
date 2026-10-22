@@ -78,6 +78,26 @@ public PageResult<SysUser> page(long pageNum, long pageSize, String keyword, Str
         }
         qw.orderByAsc(SysUser::getId);
         Page<SysUser> p = sysUserMapper.selectPage(Page.of(pageNum, pageSize), qw);
+        // 部门/公司名称按本次页内 ID 批量查（改前逐行 selectById：200 人 = 400 次往返，
+        // 人员下拉首屏实测 1.5~1.7s）
+        java.util.Set<Long> deptIdsOfPage = new java.util.HashSet<>();
+        java.util.Set<Long> companyIdsOfPage = new java.util.HashSet<>();
+        for (SysUser u : p.getRecords()) {
+            if (u.getDeptId() != null && u.getDeptId() > 0) deptIdsOfPage.add(u.getDeptId());
+            if (u.getCompanyId() != null && u.getCompanyId() > 0) companyIdsOfPage.add(u.getCompanyId());
+        }
+        Map<Long, String> deptNames = new java.util.HashMap<>();
+        if (!deptIdsOfPage.isEmpty()) {
+            for (SysDept d : sysDeptMapper.selectByIds(deptIdsOfPage)) {
+                deptNames.put(d.getId(), d.getDeptName());
+            }
+        }
+        Map<Long, String> companyNames = new java.util.HashMap<>();
+        if (!companyIdsOfPage.isEmpty()) {
+            for (SysCompany c : sysCompanyMapper.selectByIds(companyIdsOfPage)) {
+                companyNames.put(c.getId(), c.getCompanyName());
+            }
+        }
         // P1-3：列表出参对联系方式脱敏（HTTP 出参由 Boot4 的 Jackson3 序列化，
         // 不经过 Jackson2 的 @Sensitive 模块，故在此显式脱敏；明文走 /{id}/full 授权接口）
         for (SysUser u : p.getRecords()) {
@@ -85,16 +105,10 @@ public PageResult<SysUser> page(long pageNum, long pageSize, String keyword, Str
             u.setEmail(MaskUtil.email(u.getEmail()));
             // 填充部门名称、公司名称（前端报销页/申请页下拉时需要显示申请人部门公司）
             if (u.getDeptId() != null && u.getDeptId() > 0) {
-                SysDept dept = sysDeptMapper.selectById(u.getDeptId());
-                if (dept != null) {
-                    u.setDeptName(dept.getDeptName());
-                }
+                u.setDeptName(deptNames.get(u.getDeptId()));
             }
             if (u.getCompanyId() != null && u.getCompanyId() > 0) {
-                SysCompany comp = sysCompanyMapper.selectById(u.getCompanyId());
-                if (comp != null) {
-                    u.setCompanyName(comp.getCompanyName());
-                }
+                u.setCompanyName(companyNames.get(u.getCompanyId()));
             }
         }
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);

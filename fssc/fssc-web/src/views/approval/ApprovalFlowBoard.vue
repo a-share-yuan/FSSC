@@ -4,7 +4,6 @@
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
         <b>{{ isSingle ? (tab === 'inst' ? '流程实例监控' : '流程定义') : '审批流看板' }}</b>
-        <span v-if="!isSingle" style="color:#909399; font-size:12px">流程定义来自 wf_business_flow；实例来自 wf_instance（业务视图表）</span>
 <el-button type="info" size="small" style="margin-left:auto" @click="refreshAll">刷新</el-button>
       <el-button type="info" size="small" @click="exportCsv">导出 CSV</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
@@ -100,7 +99,7 @@
             </template>
           </div>
           <el-input v-if="templateXml" type="textarea" :model-value="templateXml"
-            :rows="8" readonly placeholder="BPMN XML（生成），可复制到设计器"/>
+            :rows="8" readonly placeholder="生成的流程定义（只读）"/>
         </el-card>
       </el-tab-pane>
 
@@ -148,7 +147,7 @@
             </template>
           </el-table-column>
           <el-table-column label="发起时间" width="150">
-            <template #default="{ row }">{{ row.startTime || '—' }}</template>
+            <template #default="{ row }">{{ formatDateTime(row.startTime) || '—' }}</template>
           </el-table-column>
           <el-table-column label="耗时(分)" width="100" align="right">
             <template #default="{ row }">{{ durMin(row.duration) }}</template>
@@ -180,7 +179,8 @@
         <el-form-item label="单据">{{ reassignRow?.bizNo }}</el-form-item>
         <el-form-item label="当前节点">{{ reassignRow?.currentNode }}（{{ reassignRow?.currentAssigneeNames || reassignRow?.currentAssignee || '候选组' }}）</el-form-item>
         <el-form-item label="新处理人" prop="target">
-          <UserSelect v-model="reassignForm.target" placeholder="选择接办人(任意在职真人)" />
+          <!-- P0 修复（2026-10-21）：默认只加载同公司人员，流程管理员改派也须遵循同公司原则 -->
+          <UserSelect v-model="reassignForm.target" scope="same-company" placeholder="选择接办人(任意在职真人)" />
         </el-form-item>
         <el-form-item label="改派原因" prop="reason"><el-input v-model="reassignForm.reason" type="textarea" :rows="2" placeholder="必填:如 原审批人离职/换岗/本节点无人可办(留痕)" /></el-form-item>
       </el-form>
@@ -205,6 +205,7 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { goBizPage } from '@/utils/bizEntry'
+import { formatDateTime } from '@/utils/format'
 // ---- MEDIUM 增强:催办 / 改派 ----
 import UserSelect from '../../components/common/UserSelect.vue'
 import { messageApi, wfApi, store } from '../../api'
@@ -383,7 +384,7 @@ async function reloadInst() {
 const router = useRouter()
 function goBiz(row) {
   if (!goBizPage(router, row)) {
-    ElMessage.warning('暂不支持跳转到该业务类型')
+    ElMessage.warning('当前账号不能直接进入该单据的业务页面，请用行内「追溯」查看全链路')
   }
 }
 

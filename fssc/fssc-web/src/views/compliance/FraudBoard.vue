@@ -91,9 +91,11 @@
           <el-tag size="small" effect="plain" :type="actionTag(row.actionTaken)">{{ ACTION_ST[row.actionTaken] || row.actionTaken || '—' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="employeeId" label="员工" width="70" align="center" />
-      <el-table-column prop="billId" label="单据" width="80" align="center">
-        <template #default="{ row }">{{ row.billId || '—' }}</template>
+      <el-table-column label="员工" width="100" align="center">
+        <template #default="{ row }">{{ row.employeeName || getUserName(row.employeeId) }}</template>
+      </el-table-column>
+      <el-table-column label="单据" width="120" align="center" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.billNo || `单据#${row.billId || '—'}` }}</template>
       </el-table-column>
       <el-table-column label="检测时间" width="150" sortable prop="createTime">
         <template #default="{ row }">{{ shortTime(row.createTime) }}</template>
@@ -133,6 +135,10 @@ import TablePager from '../../components/common/TablePager.vue'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { showRowDetail } from '@/utils/format'
 import { exportCsv } from '../../utils/csv'
+import { getUserName, preloadMappers } from '@/utils/idMapper'
+
+// 预加载主数据映射（用户、部门、公司）
+onMounted(() => { preloadMappers() })
 
 const summary = ref({})
 const byType = computed(() => summary.value?.byType || [])

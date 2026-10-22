@@ -60,8 +60,14 @@
 
           <el-card header="发票 / 附件" style="margin-top: 12px">
             <div class="attach-row">
-              <UploadButton label="选择文件（发票自动识别解析）" accept=".jpg,.png,.jpeg,.bmp,.webp,.tif,.tiff,.ofd,.xml,.pdf" biz-type="INVOICE" :biz-id="b.form.bill.id || null" zone="TEMP" parse :on-done="onAttachUploaded" />
+              <!-- accept 同时放行普通附件（doc/xls/ppt/zip/txt 等）：此前只列发票格式，用户要传合同、
+                   行程单一类附件得先在文件选择器里切「所有文件」，再挂上一个永远不会发生的「待识别」。
+                   上传后由后端按扩展名定性：发票类 attachType=INVOICE 才识别，其余落 OTHER。 -->
+              <UploadButton label="选择文件" :accept="ATTACH_ACCEPT" biz-type="INVOICE" :biz-id="b.form.bill.id || null" zone="TEMP" parse :on-done="onAttachUploaded" />
               <el-button v-if="b.form.attaches.length" size="small" type="primary" link @click="previewAll">预览全部</el-button>
+            </div>
+            <div class="attach-hint">
+              发票类（PDF / OFD / 数电票 XML / 图片）上传后自动识别票面；Office、压缩包等其它格式作为普通附件保存，不参与识别。
             </div>
             <!-- 缩略图网格 -->
             <div v-if="b.form.attaches.length" class="thumb-grid">
@@ -84,9 +90,10 @@
                     <el-icon size="28"><Document /></el-icon>
                     <span>{{ getFileExt(a.fileName) || 'FILE' }}</span>
                   </div>
-                  <!-- OCR 状态角标 -->
-                  <span class="ocr-badge" :class="ocrBadgeClass(a.fileId)">
-                    {{ ocrBadgeText(a.fileId) }}
+                  <!-- OCR 状态角标：只有发票影像才有"待识别/识别中/已识别/失败"，
+                       Office/压缩包等普通附件显示「普通附件」，不再挂着永远不会发生的"待识别" -->
+                  <span class="ocr-badge" :class="ocrBadgeClass(a)">
+                    {{ ocrBadgeText(a) }}
                   </span>
                 </div>
                 <div class="thumb-name" :title="a.fileName">{{ a.fileName }}</div>
@@ -307,6 +314,7 @@
                 <el-button link size="small" type="warning" @click.stop="b.urge(row)">催办</el-button>
               </el-tooltip>
               <el-button v-if="row.status === 'APPROVED'" link size="small" type="primary" @click.stop="b.copyBill(row)">复制</el-button>
+              <!-- 反审核（D-V3-135 配套 · 行业方案"反"字链第二环）：APPROVED → DRAFT，前置校验在服务层 -->
               <el-tooltip v-if="row.status === 'APPROVED'" content="退回草稿修改重提（已制证/付款已执行/批次在途/存在有效勾稽时服务端拒绝）" placement="top">
                 <el-button link size="small" type="danger" @click.stop="b.unaudit(row)">反审核</el-button>
               </el-tooltip>
@@ -503,6 +511,7 @@ import { fileApi, imageApi, flowApi } from '../../api'
 import { Picture, Document } from '@element-plus/icons-vue'
 import { wfActionLabel, wfActionType } from '@/constants/enums.js'
 import { entertainOfLine, hasEntertainLines } from '@/utils/format'
+import { attachKindOf, ATTACH_ACCEPT } from '@/utils/attachKind'
 import { INVOICE_TYPES } from '../../constants/invoiceType'
 import { rejectTypeLabel } from '@/constants/billStatus.js'
 import { ElMessage } from 'element-plus'
@@ -706,6 +715,10 @@ function isImage(name) {
   const ext = (name.split('.').pop() || '').toLowerCase()
   return IMG_EXTS.includes(ext)
 }
+/** 该附件是否"发票影像"（要识别）：后端 attachType 优先，缺失按扩展名（口径见 utils/attachKind） */
+function isInvoiceAttach(a) {
+  return attachKindOf(a) === 'INVOICE'
+}
 function getFileExt(name) {
   if (!name) return ''
   return (name.split('.').pop() || '').toUpperCase()
@@ -753,23 +766,43 @@ function previewDetailAttach(a) {
 }
 function removeAttach(i) {
   const a = b.form.attaches[i]
-  if (a && a.fileId) {
+  if (!a) return
+  const fid = a.fileId == null ? '' : String(a.fileId)
+  if (fid) {
     delete thumbUrls[a.fileId]
     delete ocrStatus[a.fileId]
   }
   b.form.attaches.splice(i, 1)
-  // D-V4R-45：联动删除由该附件解析产生的「已解析发票」行——旧实现只删附件行，
-  // 发票明细残留（实测删到 1 行附件、明细仍 5 行），附件↔发票数量从此对不上。
-  if (a && a.fileId) {
-    const before = (b.form.invoices || []).length
-    b.form.invoices = (b.form.invoices || []).filter((x) => String(x.fileId || '') !== String(a.fileId))
-    const removed = before - b.form.invoices.length
-    if (removed > 0) ElMessage.success(`已同步移除 ${removed} 行由该附件解析的发票明细`)
+  // D-V4R-45 + 10-20：删除附件必须同时带走它解析出的发票行与勾选生成的费用明细行。
+  // 旧实现只删发票行，明细行仍留在 form.lines，保存后成为「没有附件却有条目」的脏单。
+  if (!fid) return
+  const removedInvs = (b.form.invoices || []).filter((x) => String(x.fileId || '') === fid)
+  if (removedInvs.length) {
+    b.form.invoices = (b.form.invoices || []).filter((x) => String(x.fileId || '') !== fid)
+  }
+  const lineRefs = new Set(removedInvs.map((x) => x.lineRef).filter(Boolean))
+  const beforeLines = (b.form.lines || []).length
+  b.form.lines = (b.form.lines || []).filter((l) => {
+    if (lineRefs.has(l)) return false
+    const meta = b.invOf(l)
+    return !(meta && String(meta.fileId || '') === fid)
+  })
+  const removedLines = beforeLines - b.form.lines.length
+  if (removedInvs.length || removedLines) {
+    const parts = []
+    if (removedInvs.length) parts.push(`${removedInvs.length} 行发票`)
+    if (removedLines) parts.push(`${removedLines} 行费用明细`)
+    ElMessage.success(`已同步移除由该附件解析的 ${parts.join('、')}`)
   }
 }
 
 async function triggerOcr(a) {
   if (!a || !a.fileId) return
+  // 普通附件不识别：按钮原本只对图片显示，但拖拽/旧数据仍可能触发，这里兜一句明确原因
+  if (!isInvoiceAttach(a)) {
+    ElMessage.warning('该附件不是发票影像（' + (getFileExt(a.fileName) || '未知格式') + '），无需识别')
+    return
+  }
   ocrStatus[a.fileId] = 'processing'
   try {
     // 附件维度识别：后端按 fileId 解析所属影像批次（）
@@ -784,13 +817,33 @@ async function triggerOcr(a) {
   }
 }
 
-function ocrBadgeClass(fid) {
-  const s = ocrStatus[fid] || 'idle'
-  return { idle: 'ocr-idle', processing: 'ocr-processing', done: 'ocr-done', failed: 'ocr-failed' }[s] || 'ocr-idle'
+/**
+ * 附件角标状态。取值顺序（后者只在前者缺失时兜底）：
+ *  ① 非发票文件（Office/压缩包/文本…）→ 'other'，不参与识别，绝不显示"待识别"
+ *  ② 本次会话内的识别进度 ocrStatus（点了「OCR识别」或上传时后端已解析）
+ *  ③ 已解析出发票行（重新进页面 ocrStatus 已清空，用发票行的 parsed 反推，避免明明已识别却显示待识别）
+ *  ④ 其余发票文件 → 'idle'（待识别）
+ */
+function ocrStateOf(a) {
+  if (!a) return 'other'
+  if (!isInvoiceAttach(a)) return 'other'
+  const s = ocrStatus[a.fileId]
+  if (s) return s
+  const inv = (b.form.invoices || []).find((x) => String(x.fileId || '') === String(a.fileId || ''))
+  if (inv) return inv.parsed ? 'done' : 'failed'
+  return 'idle'
 }
-function ocrBadgeText(fid) {
-  const s = ocrStatus[fid] || 'idle'
-  return { idle: '待识别', processing: '识别中', done: '已识别', failed: '失败' }[s] || '待识别'
+function ocrBadgeClass(a) {
+  const s = ocrStateOf(a)
+  return {
+    idle: 'ocr-idle', processing: 'ocr-processing', done: 'ocr-done', failed: 'ocr-failed', other: 'ocr-other',
+  }[s] || 'ocr-idle'
+}
+function ocrBadgeText(a) {
+  const s = ocrStateOf(a)
+  return {
+    idle: '待识别', processing: '识别中', done: '已识别', failed: '失败', other: '普通附件',
+  }[s] || '待识别'
 }
 
 // 流程进度卡片：跟着「当前这张单」走（详情抽屉 > 当前页签的选中行/正在编辑的单，见 useBill.focusedBill）。
@@ -834,6 +887,7 @@ async function refreshProgress() {
 .bw-outcome :deep(.el-alert__title) { font-size: 14px; font-weight: 600; }
 .bw-outcome :deep(.el-alert__description) { font-size: 12px; line-height: 20px; margin-top: 4px; white-space: pre-line; }
 .attach-row { display: flex; align-items: center; gap: 8px; }
+.attach-hint { margin-top: 6px; font-size: 12px; color: #909399; line-height: 18px; }
 .attach-name { font-size: 12px; color: #67c23a; }
 .trace-node { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .trace-node-name { font-weight: 600; color: #303133; }
@@ -891,6 +945,8 @@ async function refreshProgress() {
 .ocr-processing { background: #e6a23c; animation: ocr-pulse 1s infinite; }
 .ocr-done { background: #67c23a; }
 .ocr-failed { background: #f56c6c; }
+/* 普通附件（Office/压缩包等）：不参与识别，用低饱和的蓝灰区分于"待识别"的灰 */
+.ocr-other { background: #7f8c9b; }
 @keyframes ocr-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }

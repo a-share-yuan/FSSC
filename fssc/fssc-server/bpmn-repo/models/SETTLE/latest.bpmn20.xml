@@ -23,6 +23,7 @@
     </bpmn:userTask>
     <bpmn:sequenceFlow id="Flow_GW_ST_AMT_Task_11" sourceRef="GW_ST_AMT" targetRef="Task_11"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 500000}</bpmn:conditionExpression></bpmn:sequenceFlow>
     <bpmn:userTask id="Task_14" name="付款制证与下推【总账会计】" flowable:candidateGroups="FIN_GL" />
+        <bpmn:userTask id="Task_14_R" name="付款凭证复核【预制凭证审核岗】" flowable:candidateGroups="GL_VOUCHER_REVIEW" />
     <bpmn:sequenceFlow id="Flow_in_Task_14" sourceRef="GW_ST_AMT" targetRef="Task_14" />
     <bpmn:sequenceFlow id="Flow_back_Task_13" sourceRef="Task_13" targetRef="Task_14" />
     <bpmn:sequenceFlow id="Flow_back_Task_11" sourceRef="Task_11" targetRef="Task_14" />
@@ -42,7 +43,8 @@
     <bpmn:sequenceFlow id="Flow_SS_2" sourceRef="SS_1" targetRef="SS_2" />
     <bpmn:sequenceFlow id="Flow_sgjoin_SS_2" sourceRef="SS_2" targetRef="Task_14" />
     <bpmn:endEvent id="EndEvent_1" name="结束" />
-    <bpmn:sequenceFlow id="Flow_end" sourceRef="Task_14" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="Task_14" targetRef="Task_14_R" />
+        <bpmn:sequenceFlow id="Flow_end_r2" sourceRef="Task_14_R" targetRef="EndEvent_1" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="SETTLE">

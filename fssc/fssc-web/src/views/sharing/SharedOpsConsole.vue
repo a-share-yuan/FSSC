@@ -577,7 +577,7 @@ const markForm = reactive({ taskRowId: null, priority: 'NORMAL' })
 // 第2批：时限标记弹窗接入（原只有一句 toast）——任务行 ID 必须为正整数、优先级必选
 const markFormRef = ref(null)
 const markRules = {
-  taskRowId: [{ required: true, type: 'number', min: 1, message: '请输入任务行 ID（须大于 0）' }],
+  taskRowId: [{ required: true, type: 'number', min: 1, message: '请确认任务行' }],
   priority: commonRules.select(t('sharing.common.colPriority')),
 }
 

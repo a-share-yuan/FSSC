@@ -7,11 +7,13 @@ import org.springframework.stereotype.Component;
 /**
  * ERP 通道解析器（多 ERP 适配层，V1.4）。
  *
- * <p>业务诉求：未来对接的 ERP 不止 EBS，还可能是 SAP / 用友 / 金蝶 / 自研 ERP，
+ * <p>业务诉求：未来对接的 ERP 不止 EBS，还可能是 行业方案 / 自研 ERP，
  * <ul>
- *   <li><b>SAP PI/PO（BTP Integration Suite）</b>：业务系统只投递消息到集成引擎，
+ *   <li><b>集成平台</b>：业务系统只投递消息到集成引擎，
  *       对端系统由「通信通道（Communication Channel）」配置决定，业务零感知；</li>
+ *   <li><b>行业方案 K3 Cloud WebAPI</b>：统一登录 + 统一操作集（Save/Submit/Audit/ExecuteBillQuery），
  *       按组织/账套切换连接实例；</li>
+ *   <li><b>ERP 开放接口</b>：统一 API 网关（app_key/app_secret 签名）+ 租户级路由。</li>
  * </ul>
  *
  * <p>落到 FSSC：租户在「外部接口配置」新增分类 {@code ERP}（每租户一条启用默认实例），

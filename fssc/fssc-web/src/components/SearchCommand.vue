@@ -71,6 +71,7 @@ import { ElMessage } from 'element-plus'
 import { billApi } from '../api'
 import { goBizPage } from '../utils/bizEntry'
 import { docTypeLabel } from '../constants/enums'
+import { pathDenyReason } from '../router/pathAccess'
 
 const props = defineProps({ visible: Boolean })
 const emit = defineEmits(['update:visible'])
@@ -105,9 +106,10 @@ const filteredResults = computed(() => {
   if (!kw) return []
   const results = []
 
-  // 菜单匹配
+  // 菜单匹配：只列本账号真能打开的页面（与路由守卫同一把钥匙），
+  // 否则搜得到、点进去被弹回工作台并提示无权限。
   const menuHits = menuIndex.filter(m =>
-    m.label.toLowerCase().includes(kw) || m.desc.toLowerCase().includes(kw)
+    !pathDenyReason(m.path) && (m.label.toLowerCase().includes(kw) || m.desc.toLowerCase().includes(kw))
   ).map(m => ({ ...m, key: m.key, label: m.label, group: 'menu' }))
   if (menuHits.length) results.push(...menuHits)
 
@@ -159,7 +161,7 @@ function selectItem(item) {
   // 跳过去只会得到一张空白新单（「搜到单据却看不到单据」的断链）。
   if (item.bill) {
     if (!goBizPage(router, item.bill)) {
-      ElMessage.warning('该单据类型暂无对应的业务处理页')
+      ElMessage.warning('当前账号不能直接进入该单据的业务页面，请用行内「追溯」查看全链路')
       return
     }
     close()

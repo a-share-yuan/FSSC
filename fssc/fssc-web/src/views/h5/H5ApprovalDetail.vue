@@ -133,7 +133,7 @@
                   <span>{{ h.assigneeName || h.userName || '—' }}</span>
                   <el-tag size="small" :type="histType(h.action)">{{ histLabel(h.action) }}</el-tag>
                 </div>
-                <div class="h5-card__meta">{{ h.taskName || h.nodeName || '' }}{{ (h.endTime || h.createTime) ? ' · ' + (h.endTime || h.createTime) : '' }}</div>
+                <div class="h5-card__meta">{{ h.taskName || h.nodeName || '' }}{{ (h.endTime || h.createTime) ? ' · ' + formatDateTime(h.endTime || h.createTime) : '' }}</div>
                 <div v-if="h.comment" class="h5-card__meta">意见：{{ h.comment }}</div>
               </div>
               <div v-if="!hist.length" class="h5-tip">还没有审批记录</div>
@@ -265,6 +265,7 @@ import { billApi, wfApi, invoiceApi, flowApi, fileApi, store } from '../../api'
 import { statusType as _statusType, statusLabel as _statusLabel } from '../../constants/billStatus'
 import { enumLabel, VERIFY_STATUS, docTypeLabel, wfActionLabel, wfActionType } from '../../constants/enums'
 import { money, dayText, permDeniedOf, isExpBillCarrier } from '@/utils/h5.js'
+import { formatDateTime } from '@/utils/format'
 
 defineOptions({ name: 'H5ApprovalDetail' })
 

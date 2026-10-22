@@ -16,7 +16,7 @@
       <el-table-column label="资产编号" width="140" sortable>
         <template #default="{ row }">
           <span v-if="row.assetNo">{{ row.assetNo }}</span>
-          <span v-else class="muted-no">—（按卡片 ID 追溯 #{{ row.id }}）</span>
+          <span v-else class="muted-no">—（待审批通过后生成）</span>
         </template>
       </el-table-column>
       <el-table-column prop="assetName" label="资产名称" min-width="150" show-overflow-tooltip sortable />
@@ -69,12 +69,12 @@
   </div>
 
   <!-- 资产建档/编辑弹窗 -->
-  <el-dialog v-model="dlgAsset" :title="aForm.id ? '编辑资产' : '资产建档'" width="620px" destroy-on-close>
-    <el-form ref="assetFormRef" :model="aForm" :rules="assetRules" label-width="120px" size="small">
+  <el-dialog v-model="dlgAsset" :title="cardReadonly ? '资产卡片详情' : (aForm.id ? '编辑资产' : '资产建档')" width="620px" destroy-on-close>
+    <el-form ref="assetFormRef" :model="aForm" :rules="assetRules" label-width="120px" size="small" :disabled="cardReadonly">
       <el-row :gutter="12">
         <el-col :span="12">
           <el-form-item label="资产编号">
-            <el-input v-model="aForm.assetNo" placeholder="可留空，保存后以卡片 ID 追溯" />
+            <el-input v-model="aForm.assetNo" placeholder="保存时自动生成" disabled />
           </el-form-item>
         </el-col>
         <el-col :span="12"><el-form-item label="资产名称" prop="assetName"><el-input v-model="aForm.assetName" /></el-form-item></el-col>
@@ -117,7 +117,7 @@
         </el-col>
         <el-col :span="12">
           <el-form-item label="供应商">
-            <el-select v-model="aForm.supplierId" filterable clearable placeholder="请选择供应商" style="width:100%">
+            <el-select v-model="aForm.supplierId" filterable clearable :placeholder="suppliersDenied ? '当前账号无供应商查看权限，可留空' : '请选择供应商'" style="width:100%">
               <el-option v-for="s in suppliers" :key="s.id" :label="s.supplierName || s.name" :value="s.id" />
             </el-select>
           </el-form-item>
@@ -126,8 +126,8 @@
       </el-row>
     </el-form>
     <template #footer>
-      <el-button @click="dlgAsset = false">取消</el-button>
-      <el-button type="primary" @click="saveAsset">保存</el-button>
+      <el-button @click="dlgAsset = false">{{ cardReadonly ? '关闭' : '取消' }}</el-button>
+      <el-button v-if="!cardReadonly" type="primary" @click="saveAsset">保存</el-button>
     </template>
   </el-dialog>
 
@@ -326,6 +326,7 @@ import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 
+// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 
@@ -342,7 +343,7 @@ function openTrace(row) {
   traceVisible.value = true
 }
 
-const { categories, depts, companies, suppliers, fmt, categoryName, deptName, loading } = inject('assetShared')
+const { categories, depts, companies, suppliers, suppliersDenied, fmt, categoryName, deptName, loading } = inject('assetShared')
 
 const kw = ref('')
 const assets = ref([])
@@ -362,6 +363,8 @@ function deprMethodName(m) { return { LINEAR: '直线法', ACCELERATED: '加速�
 const dlgAsset = ref(false)
 const emptyAsset = () => ({ id: null, assetNo: '', assetName: '', categoryId: null, deptId: null, companyId: null, purchaseDate: '', originalAmount: 0, residualValue: 0, depreciationMethod: 'LINEAR', depreciationMonths: 60, taxLifeMonths: null, supplierId: null, invoiceNo: '', status: 'INIT' })
 const aForm = ref(emptyAsset())
+/** 「查看」与「编辑」共用同一弹窗：无编辑意图时整表只读、不出保存按钮 */
+const cardReadonly = ref(false)
 
 // 数字框防呆：金额类上限 99,999,999,999、月数上限 600，失焦回读超限自动修正并提示
 // （自动化键入偶发串位 3000→300000，人工也可能误输多位；el-input-number 的 :max 在失焦时兜底截断）
@@ -463,12 +466,13 @@ async function openAsset(row, edit = false) {
     try {
       const d = await assetApi.detail(row.id)
       aForm.value = { ...emptyAsset(), ...(d || {}) }
+      cardReadonly.value = !edit
       dlgAsset.value = true
       if (edit) ElMessage.info(`编辑资产：${d?.assetNo || row.assetNo || ''} ${d?.assetName || row.assetName || ''}`)
     } catch (e) { ElMessage.error('载入资产卡片失败：' + e.message) }
     return
   }
-  aForm.value = emptyAsset(); dlgAsset.value = true
+  aForm.value = emptyAsset(); cardReadonly.value = false; dlgAsset.value = true
 }
 async function saveAsset() {
   await guardAsset(async () => {
@@ -514,7 +518,7 @@ async function confirmTransfer() {
   const f = transferForm.value
   await guardTransfer(async () => {
     try {
-      await assetApi.transfer(row.id, f.targetDeptId, f.targetCompanyId, f.remark || '前端调拨')
+      await assetApi.transfer(row.id, f.targetDeptId, f.targetCompanyId, f.remark || '手工调拨')
       ElMessage.success('调拨已提交审批'); dlgTransfer.value = false; loadAssets()
     } catch (e) { ElMessage.error(e.message) }
   })

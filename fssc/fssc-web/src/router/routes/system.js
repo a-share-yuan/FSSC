@@ -27,7 +27,7 @@ export default [
   { path: 'system/log', component: () => import('../../views/system/SysLog.vue'), meta: { title: '系统日志' } },
   { path: 'system/status', component: () => import('../../views/system/RunStatus.vue'), meta: { title: '运行状态' } },
   { path: 'system/job-heartbeat', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'job-heartbeat' }, meta: { title: '定时任务健康' } },
-  { path: 'system/sod-check', component: () => import('../../views/system/SoDCheck.vue'), meta: { title: 'SoD合规检查' } },
+  { path: 'system/sod-check', component: () => import('../../views/system/SoDCheck.vue'), meta: { title: '不相容职责检查' } },
   // D-DEC-320 流程收尾动作配置（wf_event_action_config）：常规入口在「运行监控与合规」工作区页签，本行为深链保留
   { path: 'system/wf-event-action', component: () => import('../../views/workflow/WfEventActionConfig.vue'), meta: { title: '流程收尾动作配置' } },
   // OCR通道配置已合并至「外部接口配置」→ OCR 通道设置 Tab（2026-09-17）

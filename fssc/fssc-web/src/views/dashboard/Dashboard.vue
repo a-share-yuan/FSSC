@@ -43,6 +43,13 @@ import { hasPerm } from '../../utils/perm'
 import DrillDownDrawer from '../../components/DrillDownDrawer.vue'
 import { docTypeLabel } from '@/constants/enums.js'
 import { statusLabel } from '@/constants/billStatus.js'
+import { pathDenyReason } from '@/router/pathAccess'
+
+/** 图表下钻统一入口：先按路由守卫同一把钥匙预判，避免点了图被弹回并吃一句「无权限访问该页面」。 */
+function drill(path) {
+  if (pathDenyReason(path)) { ElMessage.info('当前账号没有该业务页面的查看权限'); return }
+  router.push(path)
+}
 
 echarts.use([PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, GridComponent, CanvasRenderer])
 
@@ -175,7 +182,7 @@ function renderStatus(rows) {
       data: rows.map((r, i) => ({ name: `${docTypeLabel(r.bill_type)}/${statusLabel(r.status)}`, value: Number(r.cnt), itemStyle: { color: palette[i % 6] } })),
     }],
   })
-  chart.on('click', () => router.push('/expense'))
+  chart.on('click', () => drill('/expense'))
 }
 
 function renderPay() {
@@ -191,7 +198,7 @@ function renderPay() {
       ],
     }],
   })
-  chart.on('click', () => router.push('/pay'))
+  chart.on('click', () => drill('/pay'))
 }
 
 function renderEff(rows) {
@@ -203,7 +210,7 @@ function renderEff(rows) {
     yAxis: { type: 'value', name: '分钟', ...axisBase() },
     series: [{ name: '平均审批分钟', type: 'bar', barWidth: 30, data: rows.map((r) => Number(r.avg_minutes || 0)), itemStyle: { color: '#9b59b6' } }],
   })
-  chart.on('click', () => router.push('/approval'))
+  chart.on('click', () => drill('/approval'))
 }
 
 function renderTrend(rows) {
@@ -219,7 +226,7 @@ function renderTrend(rows) {
       { name: '金额', type: 'line', smooth: true, data: rows.map((r) => Number(r.amount)), itemStyle: { color: '#f56c6c' } },
     ],
   })
-  chart.on('click', () => router.push('/reports/trend'))
+  chart.on('click', () => drill('/reports/trend'))
 }
 
 function renderDept(rows) {
@@ -236,7 +243,7 @@ function renderDept(rows) {
       label: { show: true, position: 'right', formatter: '{c}', color: theme().text },
     }],
   })
-  chart.on('click', () => router.push('/reports/dept'))
+  chart.on('click', () => drill('/reports/dept'))
 }
 
 function renderBudget(rows) {
@@ -255,7 +262,7 @@ function renderBudget(rows) {
       label: { show: true, position: 'right', formatter: '{c}%', color: theme().text },
     }],
   })
-  chart.on('click', () => router.push('/reports/budget'))
+  chart.on('click', () => drill('/reports/budget'))
 }
 
 function resize() { charts.forEach((c) => c.resize()) }
