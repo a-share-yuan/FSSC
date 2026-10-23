@@ -6,7 +6,7 @@
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-blue) ![java](https://img.shields.io/badge/JDK-26-orange) ![spring-boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-green) ![vue](https://img.shields.io/badge/Vue-3.5-brightgreen) ![flowable](https://img.shields.io/badge/Flowable-8.0.0-yellow)
 
-> ** 发布前校准状态**：本 README 的代码事实（域/表/端点/版本）由脚本从源码实测抽取（见 `docs/_facts/`）；`docs/getting-started.md` 中的启动步骤**尚未在一台干净机器上端到端跑通验证**。在标记为"已验证"之前，请把 Quickstart 视为高置信度草案而非承诺。
+> ** 发布前校准状态**：本 README 的代码事实（域/表/端点/版本）由脚本从源码实测抽取（见 `docs/_facts/`）；**数据库导入已实测**（`db/import.sh` 在干净库上零错误导入，行数与 dump 一致），但「干净机器起后端 → 登录 → 提单 → 审批」的全栈步骤**尚未端到端验证**。在标记为"已验证"之前，请把 Quickstart 视为高置信度草案而非承诺。
 
 <details open>
 <summary><b>English TL;DR</b>（本仓库不做整篇中英对照，理由见下）</summary>
@@ -20,7 +20,7 @@
 **Honest caveats.**
 - **The UI is Chinese-only, and there is no i18n framework in this repo** (no `vue-i18n`, no `createI18n`, no `$t()`; `src/i18n/` holds a single bpmn-js canvas translation patch). Localising the interface is a separate, unfunded effort — don't go looking for a language switch.
 - **Source-only release.** The front-end package keeps `"private": true`; there is no npm package and no hosted demo. You build the jar/image yourself.
-- **No published database baseline yet** (`schema-baseline.sql` / `seed-demo.sql` are still missing), so a fresh install today is not verified to work end-to-end.
+- **Database ships as a verified demo dump.** `db/import.sh` (or `db\import.bat`) imports `db/demo-db/*.sql` — 323 per-table files covering both the `fssc` and `fssc_image` databases, including 315 already-deployed Flowable process definitions. The import was verified end-to-end on clean databases (0 errors, row counts match). What is *not* yet verified is a clean-machine run of the full stack (backend boot → login → submit a bill) — see `docs/release-checklist.md` §8.
 - The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — see `docs/release-checklist.md` §8 ⑥.
 - Substantial parts of this code were AI-generated and then hardened through long manual business drills; treat documented behaviour as *documented*, not *guaranteed*. Each doc states which claims were measured and which were only read off the code.
 
@@ -96,24 +96,22 @@ flowchart LR
 ### 三步跑起来
 
 ```bash
-# ① 建库（业务表基线 + 演示数据）
+# ① 建库 + 导入演示数据（表结构 + 演示主数据 + Flowable 已部署流程，开箱即可审批）
 mysql -uroot -p -e "CREATE DATABASE fssc DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
                     CREATE DATABASE fssc_image DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;"
-mysql -uroot -p fssc       < db/schema-baseline.sql
-mysql -uroot -p fssc       < db/seed-demo.sql
-# Flowable 的 ACT_* / FLW_* 表无需手工建：flowable.database-schema-update=true 会在首启时自动建表
+bash db/import.sh        # Windows 用 db\import.bat；等价于按序导入 db/demo-db/*.sql（视图/存储过程自动排最后）
 
 # ② 配环境
 cp .env.example .env      # 必填：FSSC_DB_PASSWORD、FSSC_JWT_SECRET
 
 # ③ 起后端 + 前端
-cd fssc-server && mvn -q clean package -DskipTests
+cd fssc/fssc-server && mvn -q clean package -DskipTests
 java -jar fssc-start/target/fssc-server.jar            # → http://localhost:8089
 
-cd ../fssc-web && npm install && npm run dev           # → http://localhost:8080
+cd fssc-web && npm install && npm run dev           # → http://localhost:8080
 ```
 
-浏览器打开 `http://localhost:8080`，用 `docs/demo-accounts.md` 里的演示账号登录，从「我的工作台 → 费用报销 → 新建」提一张单，走完审批 → 你就拥有了一个可演示的 FSSC。
+浏览器打开 `http://localhost:8080`，用 [`db/README.md`](db/README.md) 里的演示账号登录（`admin` / `123456`），从「我的工作台 → 费用报销 → 新建」提一张单，走完审批 → 你就拥有了一个可演示的 FSSC。
 
  端口、双库路由、OCR/银企 mock 通道、启动失败排查 → **[`docs/getting-started.md`](docs/getting-started.md)**
 
@@ -148,7 +146,7 @@ cd ../fssc-web && npm install && npm run dev           # → http://localhost:80
 | **第一次动手改代码，不知道要动哪几处**（加查询条件 / 加字段 / 加权限 / 改节点 / 改状态文案） | [`docs/workflow-engine.md`](docs/workflow-engine.md) §9，末尾 §10 是本文结论的可靠性清单 |
 | 权限怎么加、为什么 403 显示"暂无数据" | [`docs/permissions.md`](docs/permissions.md) |
 | 业务故事：这张单据是谁提的、谁审的、钱怎么出去 | [`docs/business-flows/`](docs/business-flows/) |
-| 部署到生产 | [`docs/deployment.md`](docs/deployment.md) |
+| 部署到生产 | [`docs/部署运维.md`](docs/部署运维.md) |
 | 提 PR 前必读 | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) |
 
 ## 项目是怎么来的（以及这意味着什么）

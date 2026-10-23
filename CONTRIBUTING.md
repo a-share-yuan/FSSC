@@ -25,6 +25,15 @@ cd ../fssc-web  && npm install && npm run dev
 | [`docs/permissions.md`](docs/permissions.md) | 多租户隔离靠拦截器；`@RequiresPerm` 多码是 **OR**；403 会被前端渲染成"暂无数据" |
 | [`docs/workflow-engine.md`](docs/workflow-engine.md) §9 与 §10 | 五件最常做的改动各要动哪几处、怎么验证；以及**本文档哪些结论还没被运行验证过**——先看清这两节再动手，能省掉大量白改 |
 
+## 贡献许可协议（License / DCO）
+
+提交 Pull Request 即表示你确认：
+
+1. 你有权按 **[Apache License 2.0](LICENSE)** 将你的贡献许可给本项目及其接收方；
+2. 你的贡献不侵犯任何第三方的知识产权；若包含第三方代码，该代码本身可按 Apache-2.0 或其兼容许可使用。
+
+（可选）若你所在组织要求，可在 PR 描述或提交信息中附 `Signed-off-by: 你的名字 <邮箱>`，以满足 DCO（Developer Certificate of Origin）。本项目不因接收 PR 而对你施加任何超出 Apache-2.0 的额外义务。
+
 ## 代码约定（跟现有代码保持一致）
 
 **后端**
@@ -79,7 +88,7 @@ cd fssc-server && mvn test           # 后端测试（surefire）
 
 ## 提问之前
 
-先看 `docs/getting-started.md` 第 7 节「已知启动坑」——8 条覆盖了大半新手报错，尤其第 1 条（后端没起）和第 4 条（403 看着像空数据）。
+先看 `docs/getting-started.md` 第 6 节「已知启动坑（启动失败排查）」——覆盖了大半新手报错，尤其第 1 条（后端没起）和第 4 条（403 看着像空数据）。
 
 ## 关于本项目的工程特点
 
