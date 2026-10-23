@@ -75,10 +75,22 @@
             </el-form-item>
             <el-form-item :label="$t('field.billType')"><el-input v-model="ruleForm.bizType" :placeholder="$t('sharing.ops.phBizTypeSample')" style="width: 150px" /></el-form-item>
             <el-form-item :label="$t('field.amount')"><el-input-number v-model="ruleForm.amount" :min="0" :precision="2" :controls="false" style="width: 130px" /></el-form-item>
-            <el-form-item :label="$t('sharing.ops.labCompanyId')"><el-input-number v-model="ruleForm.companyId" :min="0" :controls="false" style="width: 120px" /></el-form-item>
-            <el-form-item :label="$t('sharing.ops.labExpenseItemId')"><el-input-number v-model="ruleForm.expenseItemId" :min="0" :controls="false" style="width: 120px" /></el-form-item>
+            <el-form-item :label="$t('sharing.ops.labCompanyId')">
+              <el-select v-model="ruleForm.companyId" filterable clearable :placeholder="$t('common.all')" style="width: 170px">
+                <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item :label="$t('sharing.ops.labExpenseItemId')">
+              <el-select v-model="ruleForm.expenseItemId" filterable clearable :placeholder="$t('common.all')" style="width: 170px">
+                <el-option v-for="it in expenseItems" :key="it.id" :label="it.itemName" :value="it.id" />
+              </el-select>
+            </el-form-item>
             <el-form-item :label="$t('sharing.ops.labCurrency')"><el-input v-model="ruleForm.currencyCode" placeholder="CNY" style="width: 90px" /></el-form-item>
-            <el-form-item :label="$t('sharing.ops.labLegalEntityId')"><el-input-number v-model="ruleForm.legalEntityId" :min="0" :controls="false" style="width: 120px" /></el-form-item>
+            <el-form-item :label="$t('sharing.ops.labLegalEntityId')">
+              <el-select v-model="ruleForm.legalEntityId" filterable clearable :placeholder="$t('common.all')" style="width: 170px">
+                <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
+              </el-select>
+            </el-form-item>
             <el-form-item>
               <el-button type="primary" :loading="ruleLoading" @click="doRuleResolve">{{ $t('sharing.common.btnDryRun') }}</el-button>
             </el-form-item>
@@ -401,7 +413,7 @@
 import { dispatchModeLabel } from '@/constants/enums'
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { wfOpsApi, sharingApi } from '../../api'
+import { wfOpsApi, sharingApi, orgApi, mdApi } from '../../api'
 import TablePager from '../../components/common/TablePager.vue'
 import { useTablePager } from '../../composables/useTablePager'
 import { formatDateTime } from '@/utils/format'
@@ -515,6 +527,23 @@ async function doEffective() {
 const ruleForm = reactive({ taskType: '', bizType: '', amount: null, companyId: null, expenseItemId: null, currencyCode: '', legalEntityId: null })
 const ruleLoading = ref(false)
 const ruleResult = ref(null)
+// 试算入参里的公司/费项/法人是主键：给选择器，让运维同学在试算台上猜号
+const companies = ref([])
+const expenseItems = ref([])
+async function loadRuleRefs() {
+  try {
+    const flat = []
+    const walk = (arr) => { (arr || []).forEach((n) => { if (n) { flat.push({ id: n.id, name: n.companyName || n.name || n.label }); if (n.children?.length) walk(n.children) } }) }
+    walk(await orgApi.companyTree())
+    companies.value = flat
+  } catch { companies.value = [] }
+  try {
+    const tree = (await mdApi.expenseItems()) || []
+    const leaves = []
+    for (const it of tree) { if (it.children && it.children.length) leaves.push(...it.children); else leaves.push(it) }
+    expenseItems.value = leaves
+  } catch { expenseItems.value = [] }
+}
 async function doRuleResolve() {
   ruleLoading.value = true
   try {
@@ -610,6 +639,7 @@ async function doMark() {
 onMounted(() => {
   loadedTabs.add('policy')
   loadPolicy()
+  loadRuleRefs()
 })
 
 // ---------------- 5. 制证失败·执行结果视图（A12） ----------------

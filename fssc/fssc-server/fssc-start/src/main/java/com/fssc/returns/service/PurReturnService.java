@@ -1,6 +1,7 @@
 package com.fssc.returns.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -20,7 +21,9 @@ import com.fssc.returns.mapper.PurReturnMapper;
 import com.fssc.returns.support.ReturnLegMapping;
 import com.fssc.sharing.entity.SupplierRecon;
 import com.fssc.sharing.entity.SupplierReconDetail;
+import com.fssc.sharing.entity.SupplierReconDiff;
 import com.fssc.sharing.mapper.SupplierReconDetailMapper;
+import com.fssc.sharing.mapper.SupplierReconDiffMapper;
 import com.fssc.sharing.mapper.SupplierReconMapper;
 import com.fssc.system.entity.SysConfig;
 import com.fssc.system.mapper.SysConfigMapper;
@@ -60,6 +63,7 @@ public class PurReturnService {
     /** R5-D-084 下游腿：REFUND 退货退款 → 供应商对账域（负向明细行 + balance 重算），EXCHANGE 不写 */
     private final SupplierReconMapper supplierReconMapper;
     private final SupplierReconDetailMapper supplierReconDetailMapper;
+    private final SupplierReconDiffMapper supplierReconDiffMapper;
     /** R5-D-084 供应商解析：vendor_code → md_supplier（对账单以 supplier_id 挂账） */
     private final MdSupplierMapper mdSupplierMapper;
 
@@ -417,8 +421,68 @@ public class PurReturnService {
         d.setUpdateTime(LocalDateTime.now());
         supplierReconDetailMapper.insert(d);
         recalcReconFromDetails(recon);
+        invalidateReconConfirmation(r, recon, d.getAmount());
         log.info("[returns] 采购退货单 {} REFUND 分流：对账单 {} 写入负向行 {}，余额已重算",
                 r.getBillNo(), recon.getReconNo(), d.getAmount());
+    }
+
+    /**
+     * 已发函/已确认的对账单被退货冲减后，原供应商确认结论已不代表新余额：
+     * 置回待确认并清空确认时间，同时补一条差异记录，避免“余额变了、确认状态仍是已确认”。
+     * 未发函的草稿对账单不打断（本就未确认）。
+     */
+    private void invalidateReconConfirmation(PurReturn r, SupplierRecon recon, BigDecimal amount) {
+        String oldStatus = recon.getStatus();
+        String oldConfirm = recon.getSupplierConfirmStatus();
+        boolean letterLive = "SENT".equals(recon.getLetterStatus()) || "RECEIVED".equals(recon.getLetterStatus());
+        boolean wasConfirmed = "CONFIRMED".equals(oldStatus) || "DIFF".equals(oldStatus)
+                || "RESOLVED".equals(oldStatus)
+                || "CONFIRMED".equals(oldConfirm) || "REJECTED".equals(oldConfirm);
+        if (!wasConfirmed && !letterLive) {
+            return;
+        }
+        String newStatus = letterLive ? "SENT" : "DRAFT";
+        String newConfirm = letterLive ? "PENDING" : "NONE";
+        String note = "退货单 " + r.getBillNo() + " REFUND 冲减 " + amount
+                + "，原确认状态 " + oldStatus + "/" + oldConfirm + " 已失效，需重新确认";
+
+        supplierReconMapper.update(null, new LambdaUpdateWrapper<SupplierRecon>()
+                .eq(SupplierRecon::getId, recon.getId())
+                .set(SupplierRecon::getStatus, newStatus)
+                .set(SupplierRecon::getSupplierConfirmStatus, newConfirm)
+                .set(SupplierRecon::getSupplierConfirmTime, null)
+                .set(SupplierRecon::getSupplierConfirmRemark, null)
+                .set(SupplierRecon::getLetterReceivedTime, null)
+                .set(SupplierRecon::getConfirmTime, null)
+                .set(SupplierRecon::getConfirmBy, null)
+                .set(SupplierRecon::getDiffRemark, note)
+                .set(SupplierRecon::getUpdateBy, currentUserId())
+                .set(SupplierRecon::getUpdateTime, LocalDateTime.now()));
+
+        SupplierReconDiff diff = new SupplierReconDiff();
+        diff.setTenantId(TenantContext.getTenantId());
+        diff.setReconId(recon.getId());
+        diff.setDiffType("AMOUNT_DIFF");
+        diff.setOurAmount(amount);
+        diff.setSupplierAmount(BigDecimal.ZERO);
+        diff.setDiffAmount(amount);
+        diff.setReason("REFUND 退货冲减后需供应商重新确认：" + r.getBillNo());
+        diff.setAdjustmentType(ReturnLegMapping.PUR_RETURN_ITEM_TYPE);
+        diff.setStatus("PENDING");
+        diff.setRemark("采购退货单 " + r.getBillNo() + " 自动登记");
+        diff.setCreateBy(currentUserId());
+        diff.setCreateTime(LocalDateTime.now());
+        diff.setUpdateTime(LocalDateTime.now());
+        supplierReconDiffMapper.insert(diff);
+
+        auditTrailService.recordUpdate("SUPPLIER_RECON", recon.getId(), recon.getReconNo(), "supplier_recon",
+                String.valueOf(recon.getId()),
+                java.util.Map.of("status", oldStatus == null ? "" : oldStatus,
+                        "supplierConfirmStatus", oldConfirm == null ? "" : oldConfirm),
+                java.util.Map.of("status", newStatus, "supplierConfirmStatus", newConfirm),
+                note);
+        log.info("[returns] 退货单 {} 冲减对账单 {}：供应商确认状态 {}→{}，已补差异记录",
+                r.getBillNo(), recon.getReconNo(), oldConfirm, newConfirm);
     }
 
     /** vendor_code → md_supplier（对账单以 supplier_id 挂账；编码优先、名称兜底） */

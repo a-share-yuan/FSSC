@@ -177,6 +177,8 @@ export const WF_MODEL_CATEGORY = {
 export const WF_MODEL_SOURCE = { TEMPLATE: '需求模板', USER: '用户自定义' }
 export const modelCategoryLabel = (v) => (v ? enumLabel(WF_MODEL_CATEGORY, v) : '未归类')
 export const modelSourceLabel = (v) => enumLabel(WF_MODEL_SOURCE, v)
+/** 寄件常用快递公司（应收邮包与应付协同共用一份，各页面各抄一遍） */
+export const COURIER_COMPANIES = ['顺丰速运', '京东物流', '中通快递', '圆通速递', 'EMS', '德邦快递']
 // ASSIGN_TYPE（wf_node_config.assign_type）：词表以 DB 列注释为基准——
 // USER/ROLE/POST/DEPT_LEADER/DEPT_LEADER_UP/INITIATOR/SHARE_POOL/EXPRESSION。
 // DEPT_HEAD / LEADER 两个旧拼写在 DB 里并不存在（节点表单也从未提供），仅作存量展示兜底，勿再写入。

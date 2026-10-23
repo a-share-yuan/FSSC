@@ -177,12 +177,14 @@ public class RcReceiptService {
                 RcReceivable rec = receivableMapper.selectById(line.getReceivableId());
                 BigDecimal amt = line.getOffsetAmount();
                 BigDecimal received = (rec.getReceivedAmount() == null ? BigDecimal.ZERO : rec.getReceivedAmount()).add(amt);
-                BigDecimal remain = rec.getAmount().subtract(received);
+                // 余额必须按当前 remain 冲减：坏账核销会直接下调 remain，若按 amount-received 重算会把它加回来
+                BigDecimal balance = rec.getRemainAmount() == null ? BigDecimal.ZERO : rec.getRemainAmount();
+                BigDecimal remain = balance.subtract(amt).max(BigDecimal.ZERO);
                 RcReceivable upd = new RcReceivable();
                 upd.setId(rec.getId());
                 upd.setReceivedAmount(received);
-                upd.setRemainAmount(remain.max(BigDecimal.ZERO));
-                if (upd.getRemainAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                upd.setRemainAmount(remain);
+                if (remain.compareTo(BigDecimal.ZERO) <= 0) {
                     upd.setStatus("DONE");
                 }
                 receivableMapper.updateById(upd);

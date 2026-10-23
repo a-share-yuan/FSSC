@@ -1393,6 +1393,7 @@ public class PayBatchService {
             case "NO_PO" -> "缺采购订单（PO）";
             case "NO_RECEIPT" -> "缺收货单";
             case "NO_CONTRACT" -> "缺采购合同（四单缺合同腿）";
+            case "PAY_EXCEED_PO" -> "本次付款超采购订单金额（不含税口径）";
             case "PAY_EXCEED_INVOICE" -> "发票覆盖不足（本次付款 > 已关联发票＋容差）";
             case "INVOICE_OVER_RECEIPT" -> "发票金额超收货单且超容差";
             case "INVOICE_IN_TOLERANCE" -> "发票超收货（容差内，仅提示）";

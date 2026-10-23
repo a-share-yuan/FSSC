@@ -4,9 +4,9 @@
       <el-input v-model="kw" :placeholder="$t('flow.arRecv.phKw')" clearable style="width:220px" @keyup.enter="loadReceivable" />
       <el-button type="primary" @click="loadReceivable">{{ $t('common.search') }}</el-button>
       <el-button type="success" @click="openReceivable">{{ $t('flow.arRecv.btnGenFromSo') }}</el-button>
-      <!-- D-DEC-407：留空＝按系统当前日跑（旧行为）；业务期间晚于系统日时必须填期间，
+      <!-- D-DEC-407：留空＝按系统当前日跑（旧行为）；业务日期晚于系统日时必须选基准日，
            否则到期日永不早于基准日、逾期集恒空。与催收待办页签共用同一把尺子。 -->
-      <el-input v-model="overdueBaseline" :placeholder="$t('flow.arRecv.phBaseline')" clearable size="small" style="width:250px" />
+      <el-date-picker v-model="overdueBaseline" type="date" value-format="YYYY-MM-DD" :placeholder="$t('flow.arRecv.phBaseline')" clearable size="small" style="width:250px" />
       <el-button type="warning" @click="accrueOverdue">{{ $t('flow.arRecv.btnOverdueProvision') }}</el-button>
       <el-button size="small" @click="exportCsv">{{ $t('flow.arRecv.btnExportCsv') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('flow.arRecv.btnExportSelected', { v1: selRows.length }) }}</el-button>
@@ -57,9 +57,7 @@
     <el-dialog v-model="dlgReceivable" :title="$t('flow.arRecv.dlgGenTitle')" width="500px" destroy-on-close>
       <el-form ref="recvFormRef" :model="rForm" :rules="formRules" label-width="120px">
         <el-form-item :label="$t('flow.arRecv.labPartner')" prop="customerId">
-          <el-select v-model="rForm.customerId" filterable :placeholder="$t('flow.arRecv.phPartner')" style="width:100%">
-            <el-option v-for="c in customers" :key="c.id" :label="(c.customerName || c.supplierName || c.name || '') + '（' + c.id + '）'" :value="c.id" />
-          </el-select>
+          <CustomerSelect v-model="rForm.customerId" value-key="id" :placeholder="$t('flow.arRecv.phPartner')" />
         </el-form-item>
         <el-form-item :label="$t('flow.arRecv.labAmount')" prop="amount"><el-input-number v-model="rForm.amount" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item :label="$t('flow.arRecv.labCurrency')" prop="currencyCode">
@@ -90,6 +88,7 @@ import { ElMessage } from 'element-plus'
 import { receivableApi, mdApi } from '@/api'
 import SkeletonList from '@/components/SkeletonList.vue'
 import BillTraceDrawer from '@/components/BillTraceDrawer.vue'
+import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
@@ -171,18 +170,10 @@ async function saveReceivable() {
   })
 }
 
-/**
- * D-DEC-407：把界面填的基准日折成后端两个可选入参之一——
- * yyyyMM／yyyy-MM ＝期间（后端按期末日跑），yyyy-MM-dd／yyyy/MM/dd／yyyyMMdd ＝截止日（逐字取该日）；
- * 留空＝不传（后端回退系统当前日，与改造前逐字一致）；格式不认识时显式提示，不静默兜底。
- */
+/** D-DEC-407：界面按截点日期选择，留空＝后端回退系统当前日 */
 function overdueBaselineParams() {
   const v = String(overdueBaseline.value || '').trim()
-  if (!v) return {}
-  if (/^\d{6}$/.test(v) || /^\d{4}-\d{2}$/.test(v)) return { period: v }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return { asOfDate: v }
-  if (/^\d{8}$/.test(v)) return { asOfDate: `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}` }
-  throw new Error(t('flow.arRecv.errBaselineFormat', { v1: v }))
+  return v ? { asOfDate: v } : {}
 }
 
 function baselineSuffix(baseline) {

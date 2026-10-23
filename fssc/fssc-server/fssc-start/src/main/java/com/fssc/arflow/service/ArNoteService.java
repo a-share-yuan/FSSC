@@ -123,11 +123,12 @@ public class ArNoteService {
         if (!ArNote.ST_IN_ACCOUNT.equals(n.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "票据 " + n.getNoteNo() + " 当前状态不可移交出纳");
         }
+        if (!StringUtils.hasText(keeper)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "接收出纳必填");
+        }
         String auditOldStatus = n.getStatus();
         String auditOldRemark = n.getRemark();
-        if (StringUtils.hasText(keeper)) {
-            n.setRemark(appendNote(n.getRemark(), "移交出纳：" + keeper));
-        }
+        n.setRemark(appendNote(n.getRemark(), "移交出纳：" + keeper));
         n.setStatus(ArNote.ST_CUSTODY);
         mapper.updateById(n);
         java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();

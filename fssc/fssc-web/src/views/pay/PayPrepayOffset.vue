@@ -42,28 +42,18 @@
       </div>
     </template>
   </CandidatePickerDialog>
-<BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
 </template>
 
 <script setup>
 import { ref, computed, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 import { billApi } from '../../api'
-import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import CandidatePickerDialog from '../../components/bill/CandidatePickerDialog.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { formatMoney } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-
-// R4-02: BillTraceDrawer
-const traceVisible = ref(false)
-const traceBillId = ref(null)
-function openTrace(row) {
-  traceBillId.value = row.id || row.billId || row.bill_id
-  traceVisible.value = true
-}
 
 const props = defineProps({
   customerId: { type: [Number, String], default: null },
@@ -86,7 +76,6 @@ const offsets = computed(() => {
 const pickedPrepayIds = computed(() => offsets.value.map((o) => o.billId))
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
-function fmt2(row) { return row.available == null ? '0.00' : Number(row.available).toFixed(2) }
 function handleSelectionChange(val) { selRows.value = val }
 
 async function loadPrepay() {

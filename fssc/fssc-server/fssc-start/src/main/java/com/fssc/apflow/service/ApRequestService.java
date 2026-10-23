@@ -6,8 +6,14 @@ import com.fssc.apflow.entity.ApServiceRequest;
 import com.fssc.apflow.mapper.ApDispatchRuleMapper;
 import com.fssc.apflow.mapper.ApServiceRequestMapper;
 import com.fssc.audit.service.AuditTrailService;
+import com.fssc.bank.gateway.BankGateway;
+import com.fssc.bank.gateway.BankResult;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
+import com.fssc.system.entity.SysUser;
+import com.fssc.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,7 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +52,9 @@ public class ApRequestService {
     private final com.fssc.arflow.service.ArFlowVoucherService voucherService;
     private final com.fssc.connector.api.ConnectorFacade connector;
     private final com.fssc.collab.service.CollabSyncService collabSyncService;
+    /** 付款通道：与出纳付款批次共用 BankGateway；dev 默认模拟，生产 fssc.bank.gateway=http 切真实银企直联。 */
+    private final BankGateway bankGateway;
+    private final SysUserMapper sysUserMapper;
     /** P4-3 审计扩面：单据级状态跃迁留痕（接口级另有 @OperLog 双写） */
     private final AuditTrailService auditTrailService;
 
@@ -146,9 +158,10 @@ public class ApRequestService {
                 .last("LIMIT 1"));
         if (rule == null) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "未配置「" + r.getPaymentWay() + "」付款方法的派工规则，请共享运营岗手工派工（R-05）");
+                    "未配置「" + r.getPaymentWay() + "」付款方法的派工规则，请由共享运营岗手工派工");
         }
         List<String> handlers = split(rule.getHandlers());
+        assertRuleUsers(rule, handlers);
         r.setGroupLeader(rule.getGroupLeader());
         if (handlers.size() == 1) {
             r.setHandler(handlers.get(0));
@@ -291,17 +304,19 @@ public class ApRequestService {
 
     /** 组长审核（R-04）：通过/驳回均回上一责任人，通过后可过账，不通过必须填原因。 */
     @Transactional(rollbackFor = Exception.class)
-    public ApServiceRequest groupReview(Long id, boolean pass, String note, String reviewer) {
+    public ApServiceRequest groupReview(Long id, boolean pass, String note) {
         ApServiceRequest r = require(id);
         requireStatus(r, ApServiceRequest.ST_GROUP_REVIEW, "组长审核");
         if (!pass && (note == null || note.isBlank())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "审核不通过必须填写原因");
         }
+        String reviewer = currentUserName();
+        String reason = note == null ? "" : note.trim();
         Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("modifiedFlag", r.getModifiedFlag());
         r.setModifyNote((r.getModifyNote() == null ? "" : r.getModifyNote() + " | ")
-                + (pass ? "组长通过[" : "组长驳回[") + (reviewer == null ? "-" : reviewer) + "]：" + note);
+                + (pass ? "组长通过[" : "组长驳回[") + reviewer + "]：" + reason);
         r.setStatus(ApServiceRequest.ST_DISPATCHED);
         if (pass) {
             r.setModifiedFlag(0);
@@ -324,13 +339,15 @@ public class ApRequestService {
         ApServiceRequest r = require(id);
         requireStatus(r, ApServiceRequest.ST_DISPATCHED, "过账");
         if (r.getModifiedFlag() != null && r.getModifiedFlag() == 1) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "单据已修改待组长审核（R-03），审核通过后方可过账");
+            throw new BizException(ErrorCode.PARAM_INVALID, "单据已修改，须待组长审核通过后方可过账");
         }
         // 协同冻结门控（打通点7）：关账期间禁止发送数据产生凭证
         String period = r.getPaymentDate() == null ? null
                 : java.time.format.DateTimeFormatter.ofPattern("yyyy-MM").format(r.getPaymentDate());
         if (monthCloseService.isFrozen(r.getCompanyId(), period)) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "期间 " + period + " 月末关账中（协同冻结），禁止过账");
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    (period == null ? "付款日期为空，无法确定所属会计期间；" : "期间 " + period + " ")
+                            + "存在未完成的月末关账（协同冻结），禁止过账；请先填写付款日期或待关账完成");
         }
         // 真实分录凭证（补齐评估缺口2）：借2202应付账款/贷1002银行存款，失败阻断过账（fail-closed）
         Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
@@ -351,16 +368,38 @@ public class ApRequestService {
         return r;
     }
 
-    /** 资金付款（真实通道=外部接口配置 BANK 分类，未配置模拟）。 */
+    /**
+     * 资金付款：经 {@link BankGateway} 提交银行（dev 模拟 / 生产银企直联同一接口）。
+     * 银行失败只抛错、单据保持 POSTED 供重试，绝不先置 PAID；成功才回写银行流水号。
+     */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest pay(Long id) {
         ApServiceRequest r = require(id);
         requireStatus(r, ApServiceRequest.ST_POSTED, "付款");
+        if (r.getVoucherNo() == null || r.getVoucherNo().isBlank()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "单据尚无付款凭证，禁止发起资金付款");
+        }
+        if (r.getBankNo() == null || r.getBankNo().isBlank()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "收款账号为空，禁止发起资金付款");
+        }
+        String batchNo = r.getBillNo();
+        BankResult bank = bankGateway.submitBatch(batchNo, List.of(new BankGateway.PayItem(
+                r.getVendorName(), null, r.getBankNo(), r.getAmount(),
+                "付款服务申请 " + r.getPaymentWay()
+                        + (r.getPaymentDate() == null ? "" : "，付款日 " + r.getPaymentDate()))));
+        if (bank == null || !bank.isSuccess()) {
+            String reason = bank == null ? "银行通道无响应"
+                    : (notBlank(bank.getFailReason()) ? bank.getFailReason() : "银行返回失败");
+            log.warn("[AP付款] 单据 {} 银行付款失败：{}", r.getBillNo(), reason);
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "银行付款失败：" + reason + "；单据保持已过账，可修正后重试");
+        }
+        String serial = (bank.getSerialNos() == null || bank.getSerialNos().isEmpty())
+                ? null : bank.getSerialNos().get(0);
         Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("payVoucherNo", r.getPayVoucherNo());
-        r.setPayVoucherNo("FUND" + LocalDateTime.now()
-                .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
+        r.setPayVoucherNo(serial);
         r.setStatus(ApServiceRequest.ST_PAID);
         r.setPayTime(LocalDateTime.now());
         requestMapper.updateById(r);
@@ -368,7 +407,9 @@ public class ApRequestService {
         auditAfter.put("status", r.getStatus());
         auditAfter.put("payVoucherNo", r.getPayVoucherNo());
         auditTrailService.recordUpdate("AP_REQUEST", id, r.getBillNo(), "ap_service_request",
-                String.valueOf(id), auditBefore, auditAfter, "资金付款");
+                String.valueOf(id), auditBefore, auditAfter,
+                "资金付款（银行批次 " + batchNo + "，"
+                        + (serial == null ? "银行未返回流水号" : "流水号 " + serial) + "）");
         return r;
     }
 
@@ -439,22 +480,101 @@ public class ApRequestService {
     // ---------------- 派工规则 ----------------
 
     public java.util.List<ApDispatchRule> listRules() {
-        return ruleMapper.selectList(new LambdaQueryWrapper<ApDispatchRule>()
+        java.util.List<ApDispatchRule> rules = ruleMapper.selectList(new LambdaQueryWrapper<ApDispatchRule>()
                 .orderByAsc(ApDispatchRule::getId));
+        fillDisplayNames(rules);
+        rules.forEach(r -> r.setEditFingerprint(editFingerprint(r)));
+        return rules;
+    }
+
+    /**
+     * 派工是跨法人的共享岗配置，而人员分页接口按登录人公司强制收口 ⇒ 界面取不到别公司同事的姓名。
+     * 这里在读取时按 user_name 回查补齐只读显示名：只覆盖**已写进规则**的工号，借此放开人员目录、落库。
+     * 查不到（账号已删）时留空位，界面按纯工号显示。
+     */
+    private void fillDisplayNames(java.util.List<ApDispatchRule> rules) {
+        if (rules == null || rules.isEmpty()) {
+            return;
+        }
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        for (ApDispatchRule r : rules) {
+            names.addAll(split(r.getHandlers()));
+            if (notBlank(r.getGroupLeader())) {
+                names.add(r.getGroupLeader().trim());
+            }
+        }
+        if (names.isEmpty()) {
+            return;
+        }
+        Map<String, String> display = new HashMap<>();
+        for (SysUser u : sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                .in(SysUser::getUserName, names))) {
+            display.put(u.getUserName(), notBlank(u.getNickName()) ? u.getNickName() : u.getUserName());
+        }
+        for (ApDispatchRule r : rules) {
+            r.setHandlerNames(r.getHandlers() == null ? null : split(r.getHandlers()).stream()
+                    .map(n -> display.getOrDefault(n, n)).collect(java.util.stream.Collectors.joining(",")));
+            r.setGroupLeaderName(notBlank(r.getGroupLeader())
+                    ? display.getOrDefault(r.getGroupLeader().trim(), r.getGroupLeader().trim()) : null);
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
     public ApDispatchRule saveRule(ApDispatchRule rule) {
         if (rule.getHandlers() == null || rule.getHandlers().isBlank()) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "负责人清单必填（多负责人逗号分隔=选单池 R-02）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "负责人清单必填（多人即选单池）");
         }
+        assertRuleUsers(rule, split(rule.getHandlers()));
         if (rule.getId() == null) {
             rule.setId(null);
             ruleMapper.insert(rule);
         } else {
+            // 并发闸：规则是配置面，两人同开弹窗后各自保存会互覆盖且界面毫无察觉。
+            // 编辑分支先锁住当前行、用 listRules 下发的指纹重算比对，不符即拒＝后写的人必须刷新重来。
+            ApDispatchRule current = ruleMapper.selectOne(new LambdaQueryWrapper<ApDispatchRule>()
+                    .eq(ApDispatchRule::getId, rule.getId())
+                    .last("FOR UPDATE"));
+            if (current == null) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "派工规则不存在或已被删除，请刷新后重试");
+            }
+            if (rule.getEditFingerprint() == null || rule.getEditFingerprint().isBlank()) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "缺少编辑凭据，请关闭弹窗刷新后重试");
+            }
+            if (!rule.getEditFingerprint().equals(editFingerprint(current))) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "该派工规则已被他人修改，请关闭弹窗刷新后重试");
+            }
             ruleMapper.updateById(rule);
         }
+        rule.setEditFingerprint(null);
+        rule.setHandlerNames(null);
+        rule.setGroupLeaderName(null);
         return rule;
+    }
+
+    /**
+     * 编辑凭据＝ruleName/paymentWay/handlers/groupLeader/enabled/remark 六字段拼接后的 SHA-256（只读回显，不落库）。
+     * 选它而不选 version 列或全局乐观锁拦截器＝零 DDL、不外溢到其它 updateById 语义。
+     */
+    private String editFingerprint(ApDispatchRule r) {
+        String canonical = String.join("\u0001",
+                blankToEmpty(r.getRuleName()), blankToEmpty(r.getPaymentWay()), blankToEmpty(r.getHandlers()),
+                blankToEmpty(r.getGroupLeader()), String.valueOf(r.getEnabled()), blankToEmpty(r.getRemark()));
+        byte[] digest;
+        try {
+            digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 不可用", e);
+        }
+        StringBuilder sb = new StringBuilder(digest.length * 2);
+        for (byte b : digest) {
+            sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+        }
+        return sb.toString();
+    }
+
+    private static String blankToEmpty(String v) {
+        return v == null ? "" : v;
     }
 
     // ---------------- 校验（蓝图附录三） ----------------
@@ -529,6 +649,46 @@ public class ApRequestService {
         }
         return Arrays.stream(handlers.split("[,，]")).map(String::trim)
                 .filter(s -> !s.isEmpty()).toList();
+    }
+
+    /** 派工规则落地前校验账号真实存在且启用，避免生成无法认领的幽灵单池（F4）。 */
+    private void assertRuleUsers(ApDispatchRule rule, List<String> handlers) {
+        if (handlers.isEmpty()) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "派工规则「" + (rule.getRuleName() == null ? rule.getPaymentWay() : rule.getRuleName())
+                            + "」未配置负责人，请先修正规则或改用人工派工");
+        }
+        List<String> candidates = new ArrayList<>(handlers);
+        if (notBlank(rule.getGroupLeader())) {
+            candidates.add(rule.getGroupLeader());
+        }
+        List<SysUser> users = sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                .in(SysUser::getUserName, candidates));
+        List<String> missing = new ArrayList<>();
+        for (String c : candidates) {
+            boolean ok = users.stream().anyMatch(u -> c.equals(u.getUserName())
+                    && "NORMAL".equalsIgnoreCase(u.getStatus()));
+            if (!ok) {
+                missing.add(c);
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "派工规则「" + (rule.getRuleName() == null ? rule.getPaymentWay() : rule.getRuleName())
+                            + "」配置的负责人不存在或已停用：" + String.join("、", missing)
+                            + "；请先修正规则或改用人工派工");
+        }
+    }
+
+    private String currentUserName() {
+        LoginUser u = UserContext.get();
+        if (u == null) {
+            return "系统";
+        }
+        if (notBlank(u.getRealName())) {
+            return u.getRealName();
+        }
+        return notBlank(u.getUsername()) ? u.getUsername() : "系统";
     }
 
     private ApServiceRequest require(Long id) {

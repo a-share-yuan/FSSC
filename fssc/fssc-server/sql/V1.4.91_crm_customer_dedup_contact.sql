@@ -1,0 +1,126 @@
+-- =============================================================================
+-- V1.4.91 往来主数据去冗余：crm_customer 联系人三列清列 + 自动建档备注去编号
+-- =============================================================================
+-- 状态： 全文注释态，未执行。放行前必须先跑本文件末尾【执行前只读复点】三条，
+--        且三条读数须与「实测基线」一致；对不上就停，重新取数再判。
+--
+-- 背景（D-DEC-478 的第二条腿，方案见
+--        Ashare/邮包功能合并与往来主数据去冗余_方案_20261023.md §P2）：
+--   CounterpartyCandidateService.ensureCustomerArchive 把 md_supplier 的
+--   contact_name / contact_phone / address 逐列拷进 crm_customer，
+--   形成「同一往来单位两处存、以供应商侧为准」的影子列。
+--   478 已上线：写入侧停拷 + 读取侧（CustomerService.page）按编码回查补齐，
+--   出参口径不变 ⇒ 存量这三列没有任何唯一信息，可清。
+--
+-- 实测基线（2026-10-23 16:0x 首测；18:5x 复测修正，见下「2」；只读复点件 D:/tmp/jarwin-20261023/census-478.sql ＋ precheck-478.sql）：
+--   A_crm_total                = 63   （del_flag=0）
+--   B_shadow_matched           = 58   （customer_code 能在 md_supplier 命中同码）
+--   C_shadow_any_contact       = 54   （其中三列至少一列非空＝本次清列目标）
+--   D_all_three_identical      = 54   （且三列逐值全同 ⇒ C 与 D 相等＝零分歧）
+--   E_divergent_rows           = 0    （没有任何一行「拷了但和供应商侧不一样」）
+--   G_no_supplier_twin_contact = 5    （有联系人但无供应商同码＝真客户，不在清理范围）
+--   F_remark_devcode           = 58   （remark LIKE '%D-V4R-96%'＝界面可见开发腔，拆两段：57 ＋ 1）
+--   F1_auto_remark             = 57   （前缀「由供应商主数据自动建档（D-V4R-96:%」＝步骤 2 的改写面）
+--   F2_manual_remark           = 1    （id=1 SUP-006 弘毅贸易，人工备注「N1幕数据补齐：…（D-V4R-96）」＝步骤 2b 的改写面）
+--   ⇒ 清列 54 行零信息损失（读侧回查会原样补回同值）；5 行真客户列保持不动。
+--
+--   WHERE 前缀不匹配（步骤 2 只改 57 行），且步骤后复点 Q3c（'%D-V4R-96%' 应 = 0）永远差那 1 行
+--   ⇒ 该件原样放行必然不绿。现按两段口径拆开：Q2 = 57（自动串）／Q2b = 1（人工串，步骤 2b 单独改写）。
+--
+-- 为什么不做成「删列」：contact_name/contact_phone/address 仍是真客户的唯一载体
+--   （G 组 5 行），删列会毁掉自建客户的录入通道 ⇒ 只清影子值，不动 DDL。
+--
+-- 放行前置（10-23 D-DEC-478 ③b 补腿后新增的硬条件）：
+--   CustomerService.page 的关键字过滤里有 `or().like(contact_name, kw)`，只查 crm 本列。
+--   478 已给它加第四臂＝按 supplier_code 联查 md_supplier 的三列（exists + {0} 参数化 + 两侧锁 tenant_id），
+--   所以「按联系人姓名/电话/地址搜客户」在清列后仍可用。执行本件前必须确认在役包已含该臂，判据二选一：
+--     ① 接口复点：keyword=烟台 ⇒ total 应为 5（回落成 0＝第四臂不在役⇒本件先别跑）；
+--        该串只存在于供应商侧地址，crm 本列口径实测 0；keyword=经理 ⇒ 43（本列）/44（含联查）。
+--     ② 值面复点：unzip -p <在役 jar> BOOT-INF/classes/com/fssc/customer/service/CustomerService.class
+--        按 utf8 搜 'ms.supplier_code = crm_customer.customer_code' 必须命中。
+--   若两判据都不成立而本件已跑 ⇒ 43 行按联系人姓名搜索不可达（数据没坏，只是搜不到），需另立条目补臂。
+--
+-- 为什么合成一张 partner 表被否：见方案 §5，客户/供应商两套状态机与准入校验不同。
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- 步骤 0：留底（必须先跑，回滚件依赖这张表）
+-- -----------------------------------------------------------------------------
+-- CREATE TABLE fssc.bak_crm_customer_contact_v1491 AS
+-- SELECT id, customer_code, customer_name, contact_name, contact_phone, address, remark
+--   FROM fssc.crm_customer;
+-- -- 留底行数应 = 全表行数（含 del_flag=1），复点：
+-- -- SELECT (SELECT COUNT(*) FROM fssc.bak_crm_customer_contact_v1491) AS bak,
+-- --        (SELECT COUNT(*) FROM fssc.crm_customer) AS src;
+
+-- -----------------------------------------------------------------------------
+-- 步骤 1：清影子三列（只清「有供应商同码 且 三列逐值全同」的行）
+-- -----------------------------------------------------------------------------
+-- 预期影响行数 = 54（跑前用【执行前只读复点】Q1 复算，不等就停）
+-- 说明：跨表比串必须带 COLLATE，否则 1267 Illegal mix of collations；
+--       逐值比对用 <=>（NULL 安全），用 = 会让 NULL=NULL 变 NULL 而漏判。
+-- UPDATE fssc.crm_customer c
+--   JOIN fssc.md_supplier s
+--     ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code
+--    AND s.del_flag = 0
+--    SET c.contact_name  = NULL,
+--        c.contact_phone = NULL,
+--        c.address       = NULL
+--  WHERE c.del_flag = 0
+--    AND (c.contact_name <> '' OR c.contact_phone <> '' OR c.address <> '')
+--    AND c.contact_name  <=> s.contact_name
+--    AND c.contact_phone <=> s.contact_phone
+--    AND c.address       <=> s.address;
+
+-- -----------------------------------------------------------------------------
+-- 步骤 2：存量自动建档备注去需求编号（写入侧 478 已改，存量随之对齐）
+-- -----------------------------------------------------------------------------
+-- 预期影响行数 = 57（同上，跑前用 Q2 复算）
+-- UPDATE fssc.crm_customer
+--    SET remark = '由供应商主数据自动建档（联系方式取自供应商档案）'
+--  WHERE del_flag = 0
+--    AND remark LIKE '由供应商主数据自动建档（D-V4R-96：%';
+
+-- -----------------------------------------------------------------------------
+-- 步骤 2b：人工备注里那 1 条的需求编号（id=1 SUP-006 弘毅贸易）
+-- -----------------------------------------------------------------------------
+-- 为何要单列一条：那行不是自动建档产生的，是 N1 幕补数时人工写的，
+--   步骤 2 的前缀匹配打不到它 ⇒ 不补这一步，步骤后复点 Q3c（'%D-V4R-96%' 应 = 0）永远差 1。
+-- 改写只去掉括号里的需求编号，句子意思一字不动。
+-- 预期影响行数 = 1（跑前用 Q2b 复算）
+-- UPDATE fssc.crm_customer
+--    SET remark = 'N1幕数据补齐：供应商主数据在 md_supplier，往来单位下拉读 crm_customer'
+--  WHERE del_flag = 0
+--    AND remark = 'N1幕数据补齐：供应商主数据在 md_supplier，往来单位下拉读 crm_customer（D-V4R-96）';
+
+-- -----------------------------------------------------------------------------
+-- 步骤 3：执行后复点（三条全绿才算这一腿完成）
+-- -----------------------------------------------------------------------------
+-- Q3a 清列命中面应为 0：
+-- SELECT COUNT(*) FROM fssc.crm_customer c
+--   JOIN fssc.md_supplier s ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code AND s.del_flag=0
+--  WHERE c.del_flag=0 AND (c.contact_name<>'' OR c.contact_phone<>'' OR c.address<>'');
+-- Q3b 真客户的联系人不得被误清（应仍为 5）：
+-- SELECT COUNT(*) FROM fssc.crm_customer c
+--   LEFT JOIN fssc.md_supplier s ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code AND s.del_flag=0
+--  WHERE c.del_flag=0 AND s.id IS NULL AND (c.contact_name<>'' OR c.contact_phone<>'' OR c.address<>'');
+-- Q3c 带编号的备注应为 0（靠步骤 2 的 57 行 ＋ 步骤 2b 的 1 行一起达成，只跑步骤 2 必然差 1）：
+-- SELECT COUNT(*) FROM fssc.crm_customer WHERE del_flag=0 AND remark LIKE '%D-V4R-96%';
+
+-- =============================================================================
+-- 【执行前只读复点】——先单独跑这三条，读数对上基线才允许解开步骤 1/2 的注释
+--   Q1 应 = 54
+-- SELECT COUNT(*) FROM fssc.crm_customer c
+--   JOIN fssc.md_supplier s ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code AND s.del_flag=0
+--  WHERE c.del_flag=0 AND (c.contact_name<>'' OR c.contact_phone<>'' OR c.address<>'')
+--    AND c.contact_name<=>s.contact_name AND c.contact_phone<=>s.contact_phone AND c.address<=>s.address;
+--   Q2 应 = 57
+-- SELECT COUNT(*) FROM fssc.crm_customer WHERE del_flag=0 AND remark LIKE '由供应商主数据自动建档（D-V4R-96:%';
+--   Q2b 应 = 1
+-- SELECT COUNT(*) FROM fssc.crm_customer WHERE del_flag=0 AND remark = 'N1幕数据补齐：供应商主数据在 md_supplier，往来单位下拉读 crm_customer（D-V4R-96）';
+--   Q3 应 = 0（出现「拷了但不同值」的行 ⇒ 前提破了，本件作废改走逐行人工裁决）
+-- SELECT COUNT(*) FROM fssc.crm_customer c
+--   JOIN fssc.md_supplier s ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code AND s.del_flag=0
+--  WHERE c.del_flag=0 AND (c.contact_name<>'' OR c.contact_phone<>'' OR c.address<>'')
+--    AND NOT (c.contact_name<=>s.contact_name AND c.contact_phone<=>s.contact_phone AND c.address<=>s.address);
+-- =============================================================================

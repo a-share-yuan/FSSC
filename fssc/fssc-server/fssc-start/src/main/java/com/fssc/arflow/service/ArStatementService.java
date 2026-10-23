@@ -5,6 +5,8 @@ import com.fssc.arflow.entity.ArStatement;
 import com.fssc.arflow.mapper.ArStatementMapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.customer.entity.CrmCustomer;
+import com.fssc.customer.mapper.CrmCustomerMapper;
 import com.fssc.masterdata.service.ExchangeRateService;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
@@ -22,7 +24,7 @@ import java.util.UUID;
 
 /**
  * 客户对账单服务（蓝图 SCC_AR_01/02/03）：模板导入（必含客户代码）→
- * 容差核对（金额/税额，参数 ar.recon.tolerance-amt-pct / ar.recon.tolerance-tax-pct）→
+ * 容差核对（对账单价税合计 vs 该客户未清应收金额，参数 ar.recon.tolerance-amt-pct）→
  * 核对失败两路处理：重新导入 或 财务调整确认（EBS折扣/索赔/溢交调整后）。
  */
 @Slf4j
@@ -36,6 +38,7 @@ public class ArStatementService {
     private final ArStatementMapper mapper;
     private final com.fssc.system.service.PeriodLockService periodLockService;
     private final RcReceivableMapper receivableMapper;
+    private final CrmCustomerMapper customerMapper;
     private final ConfigService configService;
 
     /**
@@ -51,11 +54,13 @@ public class ArStatementService {
     @Transactional(rollbackFor = Exception.class)
     public ArStatement importBill(ArStatement bill) {
 
-        // 蓝图规则6.5：账期已被月结关闭时禁止录入当月业务
-        periodLockService.assertNotLocked(bill.getCompanyId(), java.time.YearMonth.now().toString(), "导入对账单");
         if (bill.getCustomerCode() == null || bill.getCustomerCode().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "对账单导入必须包含客户代码（蓝图批注强制要求）");
         }
+        // 共享服务操作人常跨公司作业：单据公司须取业务所属公司，不能沿用登录人公司
+        bill.setCompanyId(resolveStatementCompany(bill));
+        // 蓝图规则6.5：账期已被月结关闭时禁止录入当月业务
+        periodLockService.assertNotLocked(bill.getCompanyId(), java.time.YearMonth.now().toString(), "导入对账单");
         if (bill.getAmount() == null || bill.getTaxAmount() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "对账单金额与税额必填");
         }
@@ -75,27 +80,69 @@ public class ArStatementService {
         return bill;
     }
 
-    /** 数据核对：与该客户未清应收明细按容差比对金额/税额。 */
+    /**
+     * 对账单归属公司：调用方指定的公司确有该客户未清应收时沿用；
+     * 否则取该客户未清应收的唯一所属公司（共享服务跨公司录入场景）。
+     * 多公司并存时保留指定值，由核对环节报公司口径差异。
+     */
+    private Long resolveStatementCompany(ArStatement bill) {
+        CrmCustomer customer = customerMapper.selectOne(new LambdaQueryWrapper<CrmCustomer>()
+                .eq(CrmCustomer::getCustomerCode, bill.getCustomerCode())
+                .last("limit 1"));
+        if (customer == null) {
+            return bill.getCompanyId();
+        }
+        LambdaQueryWrapper<RcReceivable> qw = new LambdaQueryWrapper<RcReceivable>()
+                .select(RcReceivable::getCompanyId)
+                .eq(RcReceivable::getCustomerId, customer.getId())
+                .ne(RcReceivable::getStatus, "DONE");
+        if (bill.getCcy() != null && !bill.getCcy().isBlank()) {
+            qw.eq(RcReceivable::getCurrencyCode, bill.getCcy());
+        }
+        List<Long> companies = receivableMapper.selectList(qw).stream()
+                .map(RcReceivable::getCompanyId).filter(java.util.Objects::nonNull).distinct().toList();
+        if (companies.contains(bill.getCompanyId())) {
+            return bill.getCompanyId();
+        }
+        return companies.size() == 1 ? companies.get(0) : bill.getCompanyId();
+    }
+
+    /** 数据核对：对账单价税合计与该客户（同公司）未清应收金额按容差比对。 */
     @Transactional(rollbackFor = Exception.class)
     public ArStatement check(Long id) {
         ArStatement bill = require(id);
         if (ArStatement.ST_RECONCILED.equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "对账单 " + bill.getBillNo() + " 已对账完成");
         }
-        List<RcReceivable> receivables = receivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
-                .eq(RcReceivable::getCustomerId, bill.getCustomerCode())
-                .ne(RcReceivable::getStatus, "DONE"));
         List<String> issues = new ArrayList<>();
-        if (receivables.isEmpty()) {
-            // 客户编码在应收明细中以 customerId 承载；退化按金额零比对给出提示
-            issues.add("无该客户的未清应收明细（发运数据未接收？）");
+        // 对账单持客户编码，应收明细持 crm_customer.id：必须先经客户档案换算，直接比编码恒零行
+        CrmCustomer customer = customerMapper.selectOne(new LambdaQueryWrapper<CrmCustomer>()
+                .eq(CrmCustomer::getCustomerCode, bill.getCustomerCode())
+                .last("limit 1"));
+        if (customer == null) {
+            issues.add("客户代码 " + bill.getCustomerCode() + " 不存在于客户档案");
         } else {
-            BigDecimal sumAmount = receivables.stream()
-                    .map(r -> r.getAmount() == null ? BigDecimal.ZERO : r.getAmount())
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal sumTax = BigDecimal.ZERO;
-            compare("金额", bill.getAmount(), sumAmount, tolerance(CFG_TOL_AMT), issues);
-            compare("税额", bill.getTaxAmount(), sumTax, tolerance(CFG_TOL_TAX), issues);
+            LambdaQueryWrapper<RcReceivable> qw = new LambdaQueryWrapper<RcReceivable>()
+                    .eq(RcReceivable::getCustomerId, customer.getId())
+                    .ne(RcReceivable::getStatus, "DONE");
+            if (bill.getCompanyId() != null) {
+                qw.eq(RcReceivable::getCompanyId, bill.getCompanyId());
+            }
+            if (bill.getCcy() != null && !bill.getCcy().isBlank()) {
+                qw.eq(RcReceivable::getCurrencyCode, bill.getCcy());
+            }
+            List<RcReceivable> receivables = receivableMapper.selectList(qw);
+            if (receivables.isEmpty()) {
+                issues.add("无该客户的未清应收明细（发运数据未接收？）");
+            } else {
+                // 应收单金额为价税合计口径（无独立税额列），故与对账单价税合计整单比对
+                BigDecimal sumAmount = receivables.stream()
+                        .map(r -> r.getAmount() == null ? BigDecimal.ZERO : r.getAmount())
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal statementTotal = bill.getTotalAmount() != null
+                        ? bill.getTotalAmount() : bill.getAmount().add(bill.getTaxAmount());
+                compare("价税合计", statementTotal, sumAmount, tolerance(CFG_TOL_AMT), issues);
+            }
         }
         bill.setCheckTime(LocalDateTime.now());
         String auditOldStatus = bill.getStatus();

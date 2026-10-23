@@ -43,4 +43,16 @@ public class ApDispatchRule implements Serializable {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+
+    /** 只读显示名（与 handlers/groupLeader 逐位对齐，逗号分隔）：派工跨法人而人员分页按登录人公司收口，故读取时按 user_name 回查补齐；只覆盖已写进规则的工号，不借此放开人员目录，也不落库；查不到时回显工号。 */
+    @TableField(exist = false)
+    private String handlerNames;
+
+    /** 只读显示名（对应 groupLeader），口径同 handlerNames。 */
+    @TableField(exist = false)
+    private String groupLeaderName;
+
+    /** 编辑凭据（只读下发、保存原样回传）＝六个可编辑字段的 SHA-256，用于并发覆盖检测；落库。 */
+    @TableField(exist = false)
+    private String editFingerprint;
 }

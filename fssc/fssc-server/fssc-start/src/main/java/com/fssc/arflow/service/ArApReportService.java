@@ -1,8 +1,6 @@
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fssc.apflow.entity.ApMonthClose;
-import com.fssc.apflow.mapper.ApMonthCloseMapper;
 import com.fssc.arflow.entity.ArMonthClose;
 import com.fssc.arflow.entity.ArNote;
 import com.fssc.arflow.entity.ArPreInvoice;
@@ -26,8 +24,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AR/AP 统计报表（蓝图报表统计 9.1 序号21：开票/核销/票据/坏账/月结 5 张）。
+ * AR 统计报表（蓝图报表统计 9.1 序号21：开票/核销/票据/坏账/月结 5 张）。
  * 蓝图未定义列口径，按各域单据字段聚合：期间×状态分组给出单据数与金额合计。
+ * 月结只出 AR 行：AP 月末关账自有入口 /apflow/ap-month-close（CloseWorkbench scope=ap），
+ * 本接口挂在 arflow:report:view 下，混入 AP 行会让应收会计看到跨域数据、而应付会计看不到。
  */
 @Service
 @RequiredArgsConstructor
@@ -38,7 +38,6 @@ public class ArApReportService {
     private final ArNoteMapper noteMapper;
     private final RcBadDebtMapper badDebtMapper;
     private final ArMonthCloseMapper arMonthCloseMapper;
-    private final ApMonthCloseMapper apMonthCloseMapper;
 
     /** 开票统计：按期间×状态聚合预制发票（张数/金额/税额/价税合计）。 */
     public List<Map<String, Object>> invoicing(String customerName) {
@@ -124,7 +123,7 @@ public class ArApReportService {
         return new ArrayList<>(grouped.values());
     }
 
-    /** 月结统计：AR应收月结/成本月结 + AP月末关账 全清单（期间/类型/状态/差异/关账时间）。 */
+    /** 月结统计：AR 应收月结/成本月结清单（期间/类型/状态/差异/关账时间）。 */
     public List<Map<String, Object>> monthClose(String period) {
         List<Map<String, Object>> out = new ArrayList<>();
         LambdaQueryWrapper<ArMonthClose> arq = new LambdaQueryWrapper<>();
@@ -141,23 +140,6 @@ public class ArApReportService {
             m.put("amount", c.getPulledAmount());
             m.put("diffAmount", c.getDiffAmount());
             m.put("diffFlag", c.getDiffFlag());
-            m.put("closedTime", c.getClosedTime());
-            out.add(m);
-        }
-        LambdaQueryWrapper<ApMonthClose> apq = new LambdaQueryWrapper<>();
-        if (period != null && !period.isBlank()) {
-            apq.eq(ApMonthClose::getPeriod, period);
-        }
-        for (ApMonthClose c : apMonthCloseMapper.selectList(apq.orderByDesc(ApMonthClose::getId))) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("closeNo", c.getCloseNo());
-            m.put("period", c.getPeriod());
-            m.put("domain", "AP");
-            m.put("closeType", "AP_CLOSE");
-            m.put("status", c.getStatus());
-            m.put("amount", null);
-            m.put("diffAmount", null);
-            m.put("diffFlag", 0);
             m.put("closedTime", c.getClosedTime());
             out.add(m);
         }

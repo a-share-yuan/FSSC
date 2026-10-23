@@ -48,12 +48,21 @@
               <el-option v-for="(l, c) in AR_CLAIM_TYPE" :key="c" :label="l" :value="c" />
             </el-select>
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.collab.colCustomerName')"><el-input v-model="form.customerName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.collab.colCustomerCode')"><el-input v-model="form.customerCode" :placeholder="$t('flow.claim.balanceMatchHint')" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.claim.company')" prop="companyId">
+            <el-tree-select v-model="form.companyId" :data="companyTree" :props="{ label: 'companyName', value: 'id', children: 'children' }"
+              check-strictly style="width: 100%" />
+          </el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('field.customer')">
+            <CustomerSelect v-model="form.customerCode" @change="onClaimCustomer" />
+          </el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.claim.applyAmount')" prop="amount"><el-input v-model="form.amount" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.claim.costAmount')" prop="costAmount"><el-input v-model="form.costAmount" :placeholder="$t('flow.claim.customerClaimRequired')" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.claim.taxRate')"><el-input v-model="form.taxRate" :placeholder="$t('flow.claim.taxRateHint')" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.claim.plant')"><el-input v-model="form.factoryCode" :placeholder="$t('flow.claim.plantHint')" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.claim.plant')">
+            <el-select v-model="form.factoryCode" filterable clearable style="width: 100%" :placeholder="$t('flow.claim.plantHint')">
+              <el-option v-for="p in PLANT_OPTIONS" :key="p" :label="p" :value="p" />
+            </el-select>
+          </el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.claim.orderNo')" prop="orderNo"><el-input v-model="form.orderNo" :placeholder="$t('flow.claim.unholdRequired')" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.claim.debitAmount')" prop="debitAmount"><el-input v-model="form.debitAmount" :placeholder="$t('flow.claim.otherOffsetRequired')" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.claim.creditAmount')" prop="creditAmount"><el-input v-model="form.creditAmount" :placeholder="$t('flow.claim.dcBalanceHint')" /></el-form-item></el-col>
@@ -66,9 +75,44 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="acctVisible" :title="$t('flow.claim.supplementDialogTitle')" width="520px" destroy-on-close>
+      <el-form :model="acctForm" label-width="100px" size="small">
+        <el-form-item :label="$t('flow.claim.debitAccount')" required>
+          <el-select v-model="acctForm.debitAccount" filterable style="width: 100%" :placeholder="$t('flow.claim.subjectPickPh')">
+            <el-option v-for="s in subjectOptions" :key="s.id" :label="`${s.subjectCode} ${s.subjectName}`" :value="s.subjectCode" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('flow.claim.creditAccount')" required>
+          <el-select v-model="acctForm.creditAccount" filterable style="width: 100%" :placeholder="$t('flow.claim.subjectPickPh')">
+            <el-option v-for="s in subjectOptions" :key="s.id" :label="`${s.subjectCode} ${s.subjectName}`" :value="s.subjectCode" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('flow.claim.taxAccount')">
+          <el-select v-model="acctForm.taxAccount" filterable clearable style="width: 100%" :placeholder="$t('flow.claim.taxAccountPh')">
+            <el-option v-for="s in subjectOptions" :key="s.id" :label="`${s.subjectCode} ${s.subjectName}`" :value="s.subjectCode" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="acctVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doSaveAccounts">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="assignVisible" :title="$t('flow.claim.assignDialogTitle')" width="430px" destroy-on-close>
+      <el-form label-width="80px" size="small">
+        <el-form-item :label="$t('flow.claim.assignUser')" required>
+          <UserSelect v-model="assignUserId" :company-id="current?.companyId" show-dept @change="onAssignUser" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="assignVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doAssign">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="inputVisible" :title="inputTitle" width="420px" destroy-on-close>
-      <el-input v-model="inputText" :placeholder="inputKind === 'assign' ? $t('flow.request.colHandler') : $t('flow.bill.rejectReasonPh')"
-        :type="inputKind === 'assign' ? 'text' : 'textarea'" :rows="2" />
+      <el-input v-model="inputText" :placeholder="$t('flow.bill.rejectReasonPh')" type="textarea" :rows="2" />
       <template #footer>
         <el-button size="small" @click="inputVisible = false">{{ $t('common.cancel') }}</el-button>
         <el-button type="primary" size="small" @click="doInput">{{ $t('common.confirm') }}</el-button>
@@ -81,12 +125,17 @@
 import { AR_CLAIM_TYPE, arClaimTypeLabel, arClaimStatusLabel } from '@/constants/enums'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { arFlowApi } from '../../api'
+import { arFlowApi, orgApi, store } from '../../api'
+import CustomerSelect from '@/components/common/CustomerSelect.vue'
+import UserSelect from '@/components/common/UserSelect.vue'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+
+// 厂别取值来自 ArClaimAccounts.buAmount 的口径（00 不生成事业部凭证；2400/2500 折本位币）
+const PLANT_OPTIONS = ['00', '2400', '2500']
 
 const rows = ref([])
 const loading = ref(false)
@@ -96,12 +145,18 @@ const inputVisible = ref(false)
 const current = ref(null)
 const form = reactive({})
 const createFormRef = ref(null)
+const companyTree = ref([])
+const subjectOptions = ref([])
+const assignVisible = ref(false)
+const assignUserId = ref(null)
+const assignUserName = ref('')
 // 条件必输与后端 ArClaimService.create 同口径：索赔要成本金额、对冲要借贷金额、订单解挂要订单号
 const createRules = computed(() => {
   // 局部变量不叫 t：会遮蔽 useI18n() 的取词函数，落地器无法接线
   const ct = form.claimType
   return {
     claimType: commonRules.select(t('flow.request.phDocType')),
+    companyId: commonRules.select(t('flow.claim.company')),
     amount: commonRules.amountText(t('flow.claim.applyAmountPh')),
     costAmount: ct === 'CLAIM_OUT' ? commonRules.numberText(t('flow.claim.msgCostRequired')) : [],
     orderNo: ct === 'ORDER_UNFRZ' ? commonRules.required(t('flow.claim.msgOrderNoRequired')) : [],
@@ -109,15 +164,17 @@ const createRules = computed(() => {
     creditAmount: ct === 'OTHER_OFFSET' ? commonRules.numberText(t('flow.claim.msgCreditRequired')) : [],
   }
 })
-const inputKind = ref('')
 const inputTitle = ref('')
 const inputText = ref('')
+const acctVisible = ref(false)
+const acctForm = reactive({})
 
 function actions(row) {
   switch (row.status) {
     case 'EKP_REVIEW': return [{ key: 'approve', label: t('flow.claim.ekpApproved') }]
     case 'PENDING_DISPATCH': return [{ key: 'assign', label: t('flow.request.actManualDispatch') }]
-    case 'DISPATCHED': return [{ key: 'review', label: t('flow.claim.reviewPost') }, { key: 'reject', label: t('field.reject') }]
+    case 'DISPATCHED': return [{ key: 'accounts', label: t('flow.claim.supplementAccounts') },
+      { key: 'review', label: t('flow.claim.reviewPost') }, { key: 'reject', label: t('field.reject') }]
     case 'POSTED':
       return row.claimType === 'REVENUE_EST'
         ? [{ key: 'reverse', label: t('flow.claim.reverseAccrual') }, { key: 'complete', label: t('flow.bill.archive') }]
@@ -137,7 +194,7 @@ async function api(fn, msg) {
   await load()
 }
 
-function act(row, a) {
+async function act(row, a) {
   current.value = row
   const id = row.id
   const m = {
@@ -147,30 +204,76 @@ function act(row, a) {
     complete: () => api(() => arFlowApi.claimComplete(id)),
   }
   if (m[a.key]) return m[a.key]()
-  if (a.key === 'assign') { inputKind.value = 'assign'; inputTitle.value = t('flow.request.actManualDispatch'); inputText.value = ''; inputVisible.value = true }
-  else if (a.key === 'reject') { inputKind.value = 'reject'; inputTitle.value = t('field.reject'); inputText.value = ''; inputVisible.value = true }
+  if (a.key === 'accounts') {
+    Object.keys(acctForm).forEach((k) => delete acctForm[k])
+    acctForm.debitAccount = row.debitAccount || ''
+    acctForm.creditAccount = row.creditAccount || ''
+    acctForm.taxAccount = row.taxAccount || ''
+    await loadSubjects(row.companyId)
+    acctVisible.value = true
+    return
+  }
+  if (a.key === 'assign') {
+    assignUserId.value = null
+    assignUserName.value = ''
+    assignVisible.value = true
+  } else if (a.key === 'reject') {
+    inputTitle.value = t('field.reject'); inputText.value = ''; inputVisible.value = true
+  }
+}
+
+async function loadSubjects(companyId) {
+  try {
+    subjectOptions.value = (await arFlowApi.subjects({ companyId })) || []
+  } catch (e) {
+    subjectOptions.value = []
+    ElMessage.error(e.message)
+  }
+}
+
+function onClaimCustomer(c) {
+  form.customerName = c?.customerName || ''
+}
+
+function onAssignUser(id, u) {
+  assignUserName.value = u?.nickName || u?.userName || ''
+}
+
+async function doAssign() {
+  if (!assignUserId.value) return ElMessage.warning(t('flow.claim.msgHandlerRequired'))
+  await api(() => arFlowApi.claimAssign(current.value.id, assignUserName.value))
+  assignVisible.value = false
+}
+
+async function doSaveAccounts() {
+  if (!acctForm.debitAccount?.trim() || !acctForm.creditAccount?.trim()) {
+    return ElMessage.warning(t('flow.claim.msgAccountRequired'))
+  }
+  await api(() => arFlowApi.claimAccounts(current.value.id, {
+    debitAccount: acctForm.debitAccount, creditAccount: acctForm.creditAccount, taxAccount: acctForm.taxAccount,
+  }), t('flow.claim.msgAccountsSaved'))
+  acctVisible.value = false
 }
 
 async function doInput() {
-  const id = current.value.id
-  // 派工要有办理人、驳回要留原因（后端 ArClaimService「驳回必须填写原因」同口径）
+  // 驳回要留原因（后端 ArClaimService「驳回必须填写原因」同口径）
   if (!inputText.value.trim()) {
-    return ElMessage.warning(inputKind.value === 'assign' ? t('flow.claim.msgHandlerRequired') : t('flow.claim.msgRejectReasonRequired'))
+    return ElMessage.warning(t('flow.claim.msgRejectReasonRequired'))
   }
-  if (inputKind.value === 'assign') await api(() => arFlowApi.claimAssign(id, inputText.value))
-  else await api(() => arFlowApi.claimReject(id, inputText.value))
+  await api(() => arFlowApi.claimReject(current.value.id, inputText.value))
   inputVisible.value = false
 }
 
 /** 新建前清空上一次录入，避免带旧内容开单 */
 function openCreate() {
   Object.keys(form).forEach((k) => delete form[k])
+  form.companyId = store.user?.companyId
   createVisible.value = true
 }
 
 async function doCreate() {
   if (!(await validateForms([createFormRef]))) return
-  await api(() => arFlowApi.createClaim({ ...form, companyId: 1 }), t('flow.request.msgCreated'))
+  await api(() => arFlowApi.createClaim({ ...form, companyId: form.companyId || store.user?.companyId }), t('flow.request.msgCreated'))
   createVisible.value = false
 }
 
@@ -182,7 +285,13 @@ async function doImportOffsetExcel(uploadFile) {
   await load()
 }
 
-onMounted(load)
+async function loadCompanyTree() {
+  try { companyTree.value = (await orgApi.companyTree()) || [] } catch (e) { companyTree.value = [] }
+}
+
+onMounted(async () => {
+  await Promise.all([load(), loadCompanyTree()])
+})
 </script>
 
 <style scoped>

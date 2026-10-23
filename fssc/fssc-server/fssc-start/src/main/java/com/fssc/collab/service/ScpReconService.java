@@ -108,7 +108,7 @@ public class ScpReconService {
         // R5-D-101：入参兼容历史中文值与字典码，统一归一化为字典码入库（VAT_SPECIAL/VAT_NORMAL）
         invoiceType = "增专".equals(invoiceType) ? "VAT_SPECIAL" : ("增普".equals(invoiceType) ? "VAT_NORMAL" : invoiceType);
         if (!"VAT_SPECIAL".equals(invoiceType) && !"VAT_NORMAL".equals(invoiceType)) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "发票类型必须为增专或增普（R-30）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "发票类型必须为增专或增普");
         }
         r.setInvoiceType(invoiceType);
         if ("VAT_NORMAL".equals(invoiceType) && taxRatePct != null && taxRatePct.signum() >= 0) {

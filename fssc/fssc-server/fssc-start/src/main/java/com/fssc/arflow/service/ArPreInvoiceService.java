@@ -50,6 +50,26 @@ public class ArPreInvoiceService {
     /** P4-3 审计扩面：单据状态跃迁留痕 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
+    /** 换票重开时作废行仍占用预制发票号：从该对账单已用最大序号续编，避免撞 uk_pre_no。 */
+    private int nextSeq(String reconBillNo) {
+        List<ArPreInvoice> existing = mapper.selectList(new LambdaQueryWrapper<ArPreInvoice>()
+                .select(ArPreInvoice::getPreInvoiceNo)
+                .eq(ArPreInvoice::getReconBillNo, reconBillNo));
+        int max = 0;
+        for (ArPreInvoice p : existing) {
+            String no = p.getPreInvoiceNo();
+            if (no == null || no.length() <= reconBillNo.length()) {
+                continue;
+            }
+            try {
+                max = Math.max(max, Integer.parseInt(no.substring(reconBillNo.length())));
+            } catch (NumberFormatException ignored) {
+                // 历史非本规则编号：不参与续号
+            }
+        }
+        return max + 1;
+    }
+
     /** 拆分合并并生成预制发票。 */
     @Transactional(rollbackFor = Exception.class)
     public List<ArPreInvoice> generate(String reconBillNo) {
@@ -95,7 +115,7 @@ public class ArPreInvoiceService {
                 && "1".equals(configService.getValue(CFG_BIZ_CONFIRM));
 
         List<ArPreInvoice> result = new ArrayList<>();
-        int seq = 1;
+        int seq = nextSeq(reconBillNo);
         for (ArPreInvoiceSplitter.Group g : groups) {
             ArPreInvoice inv = new ArPreInvoice();
             inv.setPreInvoiceNo(ArPreInvoiceSplitter.preInvoiceNo(reconBillNo, seq++));

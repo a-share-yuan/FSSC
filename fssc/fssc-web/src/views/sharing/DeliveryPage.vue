@@ -1,5 +1,5 @@
 <template>
-  <div :class="{ tabless: isSingle }">
+  <div>
     <el-card>
     <template #header>
       <div style="display:flex; gap:10px; align-items:center">
@@ -352,9 +352,8 @@ function openRowDetail(row) {
 }
 
 // ==================== Common ====================
-// P: tab 页拆分——由菜单深链进来时传入 tab，只显示该页并隐藏 tab 导航条（一 TAB = 一菜单）
+// P: tab 页拆分——菜单深链传入 tab 时只作为默认页签，页签条保持可点（D-BIZ-05）
 const props = defineProps({ tab: { type: String, default: '' } })
-const isSingle = computed(() => !!props.tab)
 const activeTab = ref(props.tab || 'sign')
 
 function deliveryLabel(kind) {
@@ -698,8 +697,6 @@ function exportCsv() {
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
-/* 一 TAB = 一菜单：从菜单深链进来（tab 命中）时隐藏 tab 导航条，只显示该页 */
-.tabless :deep(.el-tabs__header) { display: none; }
 /* R5-D-243：草稿/已取消单据的签收/拒签被闸时的灰态说明（hover 出原因） */
 .sign-blocked-tip { color: #c0c4cc; font-size: 12px; cursor: not-allowed; }
 </style>

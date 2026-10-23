@@ -13,7 +13,7 @@
     <el-tabs v-model="tab" @tab-change="loadTab">
       <el-tab-pane :label="$t('flow.report.secInvoicing')" name="invoicing">
         <div class="ops" style="margin-bottom: 8px">
-          <el-input v-model="invCustomer" size="small" style="width: 180px" :placeholder="$t('flow.collab.colCustomerName')" clearable @keyup.enter="loadInvoicing" />
+          <CustomerSelect v-model="invCustomerCode" style="width: 220px" :placeholder="$t('flow.collab.phPickCustomer')" @change="onInvCustomer" />
           <el-button size="small" type="primary" @click="loadInvoicing">{{ $t('common.search') }}</el-button>
         </div>
         <el-table :data="invoicingRows" v-loading="loading" size="small" border stripe show-summary :summary-method="summaryAmounts">
@@ -30,7 +30,7 @@
 
       <el-tab-pane :label="$t('flow.report.secWriteOff')" name="writeoff">
         <div class="ops" style="margin-bottom: 8px">
-          <el-input v-model="woCustomer" size="small" style="width: 180px" :placeholder="$t('flow.collab.colCustomerName')" clearable @keyup.enter="loadWriteoff" />
+          <CustomerSelect v-model="woCustomerCode" style="width: 220px" :placeholder="$t('flow.collab.phPickCustomer')" @change="onWoCustomer" />
           <el-button size="small" type="primary" @click="loadWriteoff">{{ $t('common.search') }}</el-button>
         </div>
         <el-table :data="writeoffRows" v-loading="loading" size="small" border stripe>
@@ -61,7 +61,7 @@
 
       <el-tab-pane :label="$t('flow.report.secBadDebt')" name="badDebt">
         <div class="ops" style="margin-bottom: 8px">
-          <el-input v-model="bdPeriod" size="small" style="width: 150px" :placeholder="$t('flow.close.colPeriodYm')" clearable @keyup.enter="loadBadDebt" />
+          <el-date-picker v-model="bdPeriod" type="month" value-format="YYYY-MM" :placeholder="$t('flow.close.colPeriodYm')" style="width: 160px" @change="loadBadDebt" />
           <el-button size="small" type="primary" @click="loadBadDebt">{{ $t('common.search') }}</el-button>
         </div>
         <el-table :data="badDebtRows" v-loading="loading" size="small" border stripe>
@@ -77,7 +77,7 @@
 
       <el-tab-pane :label="$t('flow.report.secMonthClose')" name="monthClose">
         <div class="ops" style="margin-bottom: 8px">
-          <el-input v-model="mcPeriod" size="small" style="width: 150px" :placeholder="$t('flow.close.colPeriodYm')" clearable @keyup.enter="loadMonthClose" />
+          <el-date-picker v-model="mcPeriod" type="month" value-format="YYYY-MM" :placeholder="$t('flow.close.colPeriodYm')" style="width: 160px" @change="loadMonthClose" />
           <el-button size="small" type="primary" @click="loadMonthClose">{{ $t('common.search') }}</el-button>
         </div>
         <el-table :data="monthCloseRows" v-loading="loading" size="small" border stripe>
@@ -108,6 +108,7 @@ import { arBillingStatusLabel, writeoffTypeLabel, arNoteStatusLabel, arBaddebtSt
 import {onMounted, ref, computed} from 'vue'
 import { ElMessage } from 'element-plus'
 import { arGapApi } from '../../api'
+import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import { formatDateTime, formatMoney } from '../../utils/format'
 import { exportCsv } from '../../utils/csv'
 import { useI18n } from 'vue-i18n'
@@ -124,8 +125,18 @@ const badDebtRows = ref([])
 const monthCloseRows = ref([])
 const invCustomer = ref('')
 const woCustomer = ref('')
+const invCustomerCode = ref('')
+const woCustomerCode = ref('')
 const bdPeriod = ref('')
 const mcPeriod = ref('')
+
+function onInvCustomer(c) {
+  invCustomer.value = c?.customerName || ''
+}
+
+function onWoCustomer(c) {
+  woCustomer.value = c?.customerName || ''
+}
 
 const AMOUNT_COLS = ['amount', 'taxAmount', 'totalAmount', 'writeoffAmount', 'discountInterest', 'discountAmount', 'provisionAmount']
 const COUNT_COLS = ['count', 'autoCount']

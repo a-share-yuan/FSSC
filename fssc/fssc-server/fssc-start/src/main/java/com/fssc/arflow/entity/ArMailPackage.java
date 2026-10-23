@@ -28,11 +28,16 @@ public class ArMailPackage implements Serializable {
     private String customerCode;
     private String customerName;
     private String receiver;
+    private String receiverPhone;
+    private String receiverEmail;
+    /** 收件人地址簿 ID（选择地址簿时落库，便于后续邮件管理） */
+    private Long recipientId;
     private String address;
     private String courierCompany;
     private String courierNo;
     private String invoiceNosJson;
     private Integer mailNotified;
+    private LocalDateTime notifyTime;
     /** CREATED/SENT/SIGNED/ARCHIVED */
     private String status;
     private LocalDateTime signTime;

@@ -209,10 +209,11 @@ public class ArWriteoffService {
         fund.setCustomerId(customerId);
         fund.setCustomerName(customerName);
         fund.setFundAmount(amount);
-        fund.setRemainAmount(BigDecimal.ZERO);
+        // 对冲虚拟收付的"资金池"就是本次对冲金额本身：先入池再核销，核销后应归零置 EXHAUSTED
+        fund.setRemainAmount(amount);
         fund.setFundDate(LocalDate.now());
         fund.setAgreementNo(agreementNo);
-        fund.setStatus(ArWriteoffFund.ST_EXHAUSTED);
+        fund.setStatus(ArWriteoffFund.ST_AVAILABLE);
         fund.setRemark("对冲核销虚拟收付" + (agreementNo == null || agreementNo.isBlank() ? "" : "，抵消协议 " + agreementNo));
         fundMapper.insert(fund);
 
@@ -333,13 +334,13 @@ public class ArWriteoffService {
             }
         }
 
-        BigDecimal remain = fund.getRemainAmount().subtract(sum);
+        BigDecimal remain = fund.getRemainAmount().subtract(sum).max(BigDecimal.ZERO);
         ArWriteoffFund u = new ArWriteoffFund();
         u.setId(fund.getId());
         u.setRemainAmount(remain);
         String auditOldFundStatus = fund.getStatus();
         BigDecimal auditOldRemain = fund.getRemainAmount();
-        u.setStatus(remain.signum() == 0 ? ArWriteoffFund.ST_EXHAUSTED : ArWriteoffFund.ST_AVAILABLE);
+        u.setStatus(remain.signum() <= 0 ? ArWriteoffFund.ST_EXHAUSTED : ArWriteoffFund.ST_AVAILABLE);
         fundMapper.updateById(u);
         java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
         auditBefore.put("status", auditOldFundStatus);

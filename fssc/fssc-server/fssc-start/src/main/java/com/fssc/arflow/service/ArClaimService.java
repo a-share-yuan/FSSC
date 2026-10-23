@@ -5,6 +5,8 @@ import com.fssc.arflow.entity.ArClaim;
 import com.fssc.arflow.mapper.ArClaimMapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.customer.entity.CrmCustomer;
+import com.fssc.customer.mapper.CrmCustomerMapper;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +34,7 @@ public class ArClaimService {
 
     private final com.fssc.system.service.PeriodLockService periodLockService;
     private final RcReceivableMapper receivableMapper;
+    private final CrmCustomerMapper customerMapper;
     private final com.fssc.arflow.service.ArFlowVoucherService voucherService;
     private final com.fssc.workflow.service.WfEngineFacade wfEngineFacade;
 
@@ -215,7 +218,7 @@ public class ArClaimService {
             }
         }
         if (List.of(ArClaim.T_AR_AP_OFFSET, ArClaim.T_THING_ADJ).contains(c.getClaimType())) {
-            BigDecimal outstanding = receivableOutstanding(c.getCustomerCode());
+            BigDecimal outstanding = receivableOutstanding(c.getCompanyId(), c.getCustomerCode());
             if (outstanding.signum() > 0 && c.getAmount().compareTo(outstanding) > 0) {
                 throw new BizException(ErrorCode.PARAM_INVALID,
                         (ArClaim.T_AR_AP_OFFSET.equals(c.getClaimType()) ? "对冲金额" : "调整金额")
@@ -388,13 +391,51 @@ public class ArClaimService {
         c.setBuAmount(ArClaimAccounts.buAmount(c.getFactoryCode(), source, c.getCcy(), c.getFxRate()));
     }
 
-    private BigDecimal receivableOutstanding(String customerCode) {
+    /** 审单岗补录科目：非默认类型（向客户索赔/事务调整等）的借贷科目必须在过账前落单。 */
+    @Transactional(rollbackFor = Exception.class)
+    public ArClaim supplementAccounts(Long id, String debitAccount, String creditAccount, String taxAccount) {
+        ArClaim c = require(id);
+        requireStatus(c, ArClaim.ST_DISPATCHED, "补录科目");
+        if (debitAccount == null || debitAccount.isBlank() || creditAccount == null || creditAccount.isBlank()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "借方科目与贷方科目均不能为空");
+        }
+        String oldDebit = c.getDebitAccount();
+        String oldCredit = c.getCreditAccount();
+        String oldTax = c.getTaxAccount();
+        c.setDebitAccount(debitAccount.trim());
+        c.setCreditAccount(creditAccount.trim());
+        c.setTaxAccount(taxAccount == null || taxAccount.isBlank() ? null : taxAccount.trim());
+        mapper.updateById(c);
+        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        auditBefore.put("debitAccount", oldDebit);
+        auditBefore.put("creditAccount", oldCredit);
+        auditBefore.put("taxAccount", oldTax);
+        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        auditAfter.put("debitAccount", c.getDebitAccount());
+        auditAfter.put("creditAccount", c.getCreditAccount());
+        auditAfter.put("taxAccount", c.getTaxAccount());
+        auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
+                String.valueOf(c.getId()), auditBefore, auditAfter, "审单补录科目");
+        return c;
+    }
+
+    private BigDecimal receivableOutstanding(Long companyId, String customerCode) {
         if (customerCode == null || customerCode.isBlank()) {
             return BigDecimal.ZERO;
         }
-        List<RcReceivable> list = receivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
-                .eq(RcReceivable::getCustomerId, customerCode)
-                .ne(RcReceivable::getStatus, "DONE"));
+        CrmCustomer customer = customerMapper.selectOne(new LambdaQueryWrapper<CrmCustomer>()
+                .eq(CrmCustomer::getCustomerCode, customerCode)
+                .last("limit 1"));
+        if (customer == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "客户编码 " + customerCode + " 不存在于客户档案");
+        }
+        LambdaQueryWrapper<RcReceivable> qw = new LambdaQueryWrapper<RcReceivable>()
+                .eq(RcReceivable::getCustomerId, customer.getId())
+                .ne(RcReceivable::getStatus, "DONE");
+        if (companyId != null) {
+            qw.eq(RcReceivable::getCompanyId, companyId);
+        }
+        List<RcReceivable> list = receivableMapper.selectList(qw);
         return list.stream()
                 .map(r -> r.getRemainAmount() == null ? BigDecimal.ZERO : r.getRemainAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

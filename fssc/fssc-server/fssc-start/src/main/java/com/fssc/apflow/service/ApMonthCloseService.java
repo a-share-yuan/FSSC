@@ -50,6 +50,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ApMonthCloseService {
 
+    /** 有自动检查口径的检查项：关账前必须跑过自动检查，异常通过必须留处理说明。 */
+    private static final List<String> AUTO_ITEM_CODES =
+            List.of("BIZ_CHECK", "OFFSET_CHECK", "RELATED_CHECK");
+
     private final ApMonthCloseMapper mapper;
     private final CollabSyncService collabSyncService;
     private final SysCompanyMapper companyMapper;
@@ -141,6 +145,9 @@ public class ApMonthCloseService {
         for (Map<String, Object> item : items) {
             if (code.equals(String.valueOf(item.get("code")))) {
                 name = String.valueOf(item.get("name"));
+                if ("OK".equals(st)) {
+                    requireOverrideNote(item, note);
+                }
                 item.put("status", st);
                 item.put("note", note);
                 item.put("handler", handler);
@@ -244,6 +251,7 @@ public class ApMonthCloseService {
         if (!allOk) {
             throw new BizException(ErrorCode.PARAM_INVALID, "存在未完成的关账检查项，不可关账");
         }
+        assertAutoCheckCleared(items);
         c.setStatus(ApMonthClose.ST_CLOSED);
         c.setScpFrozen(0);
         c.setClosedTime(LocalDateTime.now());
@@ -415,6 +423,50 @@ public class ApMonthCloseService {
             list = new ArrayList<>(list.subList(list.size() - 200, list.size()));
         }
         c.setTraceJson(toJson(list));
+    }
+
+    /** 自动检查异常项人工通过时必须写处理说明，并随检查项快照留痕。 */
+    private void requireOverrideNote(Map<String, Object> item, String note) {
+        Object autoObj = item.get("auto");
+        if (!(autoObj instanceof Map)) {
+            return;
+        }
+        Map<?, ?> auto = (Map<?, ?>) autoObj;
+        if (Boolean.TRUE.equals(auto.get("ok"))) {
+            return;
+        }
+        if (note == null || note.isBlank()) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "检查项「" + item.get("name") + "」自动检查异常（" + auto.get("metric")
+                            + "=" + auto.get("count") + "），通过必须填写处理说明");
+        }
+        item.put("overrideNote", note.trim());
+        item.put("overrideTime", LocalDateTime.now().toString());
+    }
+
+    /** 关账前二次校验：自动检查必须已执行；异常项必须有处理说明（防绕过检查项直接改状态）。 */
+    private void assertAutoCheckCleared(List<Map<String, Object>> items) {
+        for (Map<String, Object> item : items) {
+            String code = String.valueOf(item.get("code"));
+            Object autoObj = item.get("auto");
+            if (AUTO_ITEM_CODES.contains(code) && autoObj == null) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "检查项「" + item.get("name") + "」尚未执行前置自动检查，不可关账");
+            }
+            if (!(autoObj instanceof Map)) {
+                continue;
+            }
+            Map<?, ?> auto = (Map<?, ?>) autoObj;
+            if (Boolean.TRUE.equals(auto.get("ok"))) {
+                continue;
+            }
+            Object overrideNote = item.get("overrideNote");
+            if (overrideNote == null || String.valueOf(overrideNote).isBlank()) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "检查项「" + item.get("name") + "」自动检查异常（" + auto.get("metric")
+                                + "=" + auto.get("count") + "），未填写处理说明，不可关账");
+            }
+        }
     }
 
     private static String normalizeItemStatus(String s) {

@@ -1,20 +1,34 @@
 <template>
   <div>
-    <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center">
-      <el-input-number v-model="overdueDays" :min="0" size="small" />
-      <el-input v-model="overdueBaseline" :placeholder="$t('flow.arColl.phBaseline')" clearable size="small" style="width:250px" />
+    <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center">
+      <el-input v-model="q.keyword" :placeholder="$t('flow.arColl.phKw')" clearable size="small" style="width:200px" />
+      <el-select v-model="q.status" size="small" style="width:120px" :placeholder="$t('common.status')" clearable>
+        <el-option :label="$t('flow.arColl.stPending')" value="PENDING" />
+        <el-option :label="$t('flow.arColl.stResolved')" value="RESOLVED" />
+      </el-select>
+      <el-input-number v-model="minOverdue" :min="0" size="small" style="width:130px" :placeholder="$t('flow.arColl.phMinOverdue')" :controls="false" />
+      <el-input-number v-model="overdueDays" :min="0" size="small" style="width:130px" :placeholder="$t('flow.arColl.phScanDays')" />
+      <el-date-picker v-model="overdueBaseline" type="date" value-format="YYYY-MM-DD" :placeholder="$t('flow.arColl.phBaseline')" clearable size="small" style="width:250px" />
       <el-button type="warning" size="small" @click="createOverdue">{{ $t('flow.arColl.btnScanOverdue') }}</el-button>
     </div>
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="collects" size="small" border stripe v-else @selection-change="handleSelectionChange" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
-      <el-table-column type="selection" width="45" />
+    <el-table :data="filtered" size="small" border stripe v-else @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
       <el-table-column prop="billNo" :label="$t('flow.arColl.colArDocNo')" min-width="180" show-overflow-tooltip sortable />
+      <el-table-column :label="$t('flow.arColl.colCustomer')" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }">{{ customerName(row.customerId) }}</template>
+      </el-table-column>
       <el-table-column prop="dueDate" :label="$t('flow.arColl.colDueDate')" width="110" sortable />
       <el-table-column prop="overdueDays" :label="$t('flow.arColl.colOverdueDays')" width="100" sortable />
       <el-table-column :label="$t('common.status')" width="90">
         <template #default="{ row }">{{ rcStatusLabel(row.status) }}</template>
       </el-table-column>
       <el-table-column prop="contactName" :label="$t('flow.arColl.colContact')" width="100" show-overflow-tooltip sortable />
+      <el-table-column :label="$t('flow.arColl.colContactPhone')" width="130" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.contactPhone || '—' }}</template>
+      </el-table-column>
+      <el-table-column :label="$t('flow.arColl.colNote')" min-width="160" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.note || '—' }}</template>
+      </el-table-column>
       <!-- D-DEC-410 乙：同人多岗只做复核提示，不拦办结——提示必须在界面看得见才算控制点 -->
       <el-table-column :label="$t('flow.arColl.colReview')" width="80" align="center">
         <template #default="{ row }">
@@ -37,9 +51,9 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { receivableApi } from '@/api'
+import { receivableApi, mdApi } from '@/api'
 import SkeletonList from '@/components/SkeletonList.vue'
 import BillTraceDrawer from '@/components/BillTraceDrawer.vue'
 import { showRowDetail } from '@/utils/format'
@@ -63,26 +77,43 @@ function openTrace(row) {
 
 const loading = ref(false)
 const collects = ref([])
+const customers = ref([])
+const q = reactive({ keyword: '', status: '' })
+const minOverdue = ref(null)
 const overdueDays = ref(30)
 const overdueBaseline = ref('')
 
+function customerName(id) { const c = customers.value.find((x) => x.id === id); return c ? (c.customerName || c.supplierName || c.name || '—') : (id ? '#' + id : '—') }
+
+const filtered = computed(() => collects.value.filter((r) => {
+  const kw = String(q.keyword || '').trim().toLowerCase()
+  if (kw) {
+    const hay = [r.billNo, customerName(r.customerId), r.contactName].map((v) => String(v || '').toLowerCase())
+    if (!hay.some((v) => v.includes(kw))) return false
+  }
+  if (q.status && r.status !== q.status) return false
+  if (minOverdue.value != null && Number(r.overdueDays || 0) < Number(minOverdue.value)) return false
+  return true
+}))
+
 function overdueBaselineParams() {
   const v = String(overdueBaseline.value || '').trim()
-  if (!v) return {}
-  if (/^\d{6}$/.test(v) || /^\d{4}-\d{2}$/.test(v)) return { period: v }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return { asOfDate: v }
-  if (/^\d{8}$/.test(v)) return { asOfDate: `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}` }
-  throw new Error(t('flow.arColl.errBaselineFormat', { v1: v }))
+  return v ? { asOfDate: v } : {}
 }
 
-// D-DEC-407：批处理基准日与原应收工作台同口径——留空＝系统当前日，填期间则按期末日跑
+// D-DEC-407：批处理基准日与原应收工作台同口径——留空＝系统当前日，选日期则按该日跑
 function baselineSuffix(baseline) {
   return baseline.period || baseline.asOfDate
     ? t('flow.arColl.msgBaselineSuffix', { v1: baseline.asOfDate || baseline.period })
     : ''
 }
 
-async function loadCollect() { try { collects.value = await receivableApi.collectList() } catch (e) { ElMessage.error(e.message) } }
+async function loadCollect() {
+  loading.value = true
+  try { collects.value = await receivableApi.collectList() }
+  catch (e) { ElMessage.error(e.message) }
+  finally { loading.value = false }
+}
 
 async function createOverdue() {
   let baseline
@@ -104,9 +135,8 @@ async function solveCollect(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-function reload() { loadCollect() }
-
-onMounted(() => { reload() })
-
-function handleSelectionChange(val) { /* no-op for selection */ }
+onMounted(() => {
+  mdApi.customers({ pageNum: 1, pageSize: 200 }).then((d) => { customers.value = d?.list || [] }).catch(() => {})
+  loadCollect()
+})
 </script>

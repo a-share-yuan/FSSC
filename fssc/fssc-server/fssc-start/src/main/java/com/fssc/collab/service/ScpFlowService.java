@@ -145,11 +145,11 @@ public class ScpFlowService {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + b.getBillNo() + " 当前状态不可强制匹配");
         }
         if (!StringUtils.hasText(reason)) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "强制匹配必须填写原因（R-18 需一级审批）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "强制匹配必须填写原因，该操作需一级审批");
         }
         b.setStatus(ScpBill.ST_WAIT_SEND);
         b.setFailReason(null);
-        b.setRemark(appendNote(b.getRemark(), "强制匹配（R-18）："));
+        b.setRemark(appendNote(b.getRemark(), "强制匹配："));
         mapper.updateById(b);
         syncService.log(CollabSyncLog.IF_SCP_MATCH_POST, "SCP_TO_EBS", b.getBillNo(),
                 CollabSyncLog.ST_MOCK, "R-18 强制匹配生效（需一级审批，简化留痕）：" + reason, null);
@@ -180,7 +180,7 @@ public class ScpFlowService {
     public ScpBill cancelMatch(Long id) {
         ScpBill b = require(id);
         if (!ScpBill.ST_WAIT_SEND.equals(b.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "仅待寄送状态可取消匹配（R-19），当前 " + b.getStatus());
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅待寄送状态可取消匹配，当前 " + b.getStatus());
         }
         b.setStatus(ScpBill.ST_WAIT_MATCH);
         mapper.updateById(b);
@@ -259,7 +259,7 @@ public class ScpFlowService {
             b.setFailReason(null);
         } else {
             b.setStatus(ScpBill.ST_CHECK_FAILED);
-            b.setFailReason("票核失败（R-20六要素）：" + String.join("；", issues));
+            b.setFailReason("票核失败（六要素校验）：" + String.join("；", issues));
         }
         mapper.updateById(b);
         return b;
@@ -374,7 +374,7 @@ public class ScpFlowService {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + b.getBillNo() + " 当前状态不可申请强制匹配");
         }
         if (!StringUtils.hasText(reason)) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "强制匹配原因必填（R-18 需一级审批）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "强制匹配原因必填，该操作需一级审批");
         }
         b.setForceStatus("PENDING");
         b.setForceReason(reason);

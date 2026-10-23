@@ -129,8 +129,13 @@
             <el-input v-model="row.note" size="small" :placeholder="$t('flow.close.colHandleProof')" />
           </template>
         </el-table-column>
-        <el-table-column prop="handler" :label="$t('field.handler')" width="90">
-          <template #default="{ row }"><el-input v-model="row.handler" size="small" :placeholder="me" /></template>
+        <el-table-column :label="$t('field.handler')" width="150">
+          <template #default="{ row }">
+            <!-- 处理人从「本单组长＋组员＋我自己」里选：检查项留痕要的是在岗的人，手输姓名会写出档案里不存在的人 -->
+            <el-select v-model="row.handler" size="small" filterable clearable :placeholder="me" style="width: 100%">
+              <el-option v-for="h in handlerOptions" :key="h" :label="personLabel(h)" :value="h" />
+            </el-select>
+          </template>
         </el-table-column>
         <el-table-column :label="$t('common.operation')" width="180" fixed="right">
           <template #default="{ row }">
@@ -271,6 +276,16 @@ function personsLabel(names) {
   return String(names).split(',').map((s) => s.trim()).filter(Boolean).map(personLabel).join('、')
 }
 
+// 检查项处理人候选：本单组长 + 组员 + 当前登录人（去重，全部按工号入库）
+const handlerOptions = computed(() => {
+  const set = new Set()
+  const row = current.value || {}
+  if (row.groupLeader) set.add(String(row.groupLeader).trim())
+  String(row.members || '').split(',').forEach((s) => s.trim() && set.add(s.trim()))
+  if (me) set.add(me)
+  return [...set].filter(Boolean)
+})
+
 function progress(row) {
   try {
     const list = JSON.parse(row.checkItemsJson || '[]')
@@ -366,6 +381,9 @@ async function runAutoCheck() {
 }
 
 async function doItem(item, status) {
+  if (status === 'OK' && item.auto && item.auto.ok === false && !String(item.note || '').trim()) {
+    return ElMessage.warning(t('flow.close.errOverrideNote'))
+  }
   try {
     await apFlowApi.monthCloseItem(current.value.id, {
       code: item.code,

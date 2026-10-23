@@ -147,7 +147,12 @@
               <el-option :value="1" label="是" /><el-option :value="0" label="否" />
             </el-select>
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="适用组织ID"><el-input v-model="form.orgId" placeholder="留空表示全组织" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="适用组织">
+            <!-- orgId 存公司主键：手输一个不存在的组织号，政策会静默不生效 -->
+            <el-tree-select v-model="form.orgId" :data="companyTree"
+                            :props="{ label: 'companyName', value: 'id', children: 'children' }"
+                            check-strictly filterable clearable placeholder="留空表示全组织" style="width:100%" />
+          </el-form-item></el-col>
           <el-col :span="12"><el-form-item label="生效起"><el-date-picker v-model="form.effectiveStart" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="生效止"><el-date-picker v-model="form.effectiveEnd" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item></el-col>
@@ -207,7 +212,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { expensePolicyApi, policyStandardApi, policyVersionApi } from '@/api'
+import { expensePolicyApi, policyStandardApi, policyVersionApi, orgApi } from '@/api'
 import { hasPerm } from '@/utils/perm'
 import SkeletonList from '@/components/SkeletonList.vue'
 
@@ -430,7 +435,12 @@ async function archiveVer(row) {
   catch (e) { ElMessage.error(e.message) }
 }
 
-onMounted(load)
+const companyTree = ref([])
+async function loadCompanyTree() {
+  try { companyTree.value = await orgApi.companyTree() } catch { companyTree.value = [] }
+}
+
+onMounted(() => { load(); loadCompanyTree() })
 </script>
 
 <style scoped>

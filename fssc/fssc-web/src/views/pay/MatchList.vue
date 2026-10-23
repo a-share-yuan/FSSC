@@ -442,7 +442,8 @@ function statusType(s) {
 function statusLabel(s) {
   // D-DEC-077：MANUAL_MATCHED＝人工匹配链已办结并解除冻结（自动判定仍存在的差异在明细里照常列出，
   // 终态结论与原判定两件事都要看得见，故文案写"人工匹配已办结"而不是"三单一致"）
-  return { MATCHED: t('pay.match.stMatched'), WARN: t('pay.match.stWarnDiff'), FAILED: t('pay.match.stFailed'), MANUAL_MATCHED: t('pay.match.stManualClosed') }[s] || s
+  // 状态全集＝后端 setMatchStatus 五值（MATCHED/WARN/FAILED/UNMATCHED/MANUAL_MATCHED），漏一枚就直显英文
+  return { MATCHED: t('pay.match.stMatched'), UNMATCHED: t('pay.match.stUnmatched'), WARN: t('pay.match.stWarnDiff'), FAILED: t('pay.match.stFailed'), MANUAL_MATCHED: t('pay.match.stManualClosed') }[s] || s
 }
 
 // ========== 可视化匹配链路 ==========
@@ -617,21 +618,30 @@ const matchBarColor = computed(() => {
 })
 function billStatusText(s) { return STATUS_LABEL[s] || s }
 function issueCodeText(code) {
+  // 差异码全集＝后端 ThreeWayMatchService 的 MatchIssue 码（12 枚）；缺映射会直显英文码，
+  // 兜底改「其他差异」，原始码仍可在「差异描述」列（后端中文）里看到，不丢信息。
   return {
     NO_PO: t('pay.match.noPoLinked'),
     NO_RECEIPT: t('pay.match.noGrnLinked'),
+    NO_CONTRACT: t('pay.match.codeNoContract'),
     PAY_EXCEED_INVOICE: t('pay.match.codePayExceed'),
+    PAY_EXCEED_PO: t('pay.match.codePayExceedPo'),
     INVOICE_OVER_RECEIPT: t('pay.match.codeInvOverGrn'),
     INVOICE_IN_TOLERANCE: t('pay.match.codeInvInTolerance'),
     RECEIPT_OVER_PO: t('pay.match.codeGrnOverPo'),
+    RECEIPT_QTY_OVER_PO: t('pay.match.codeGrnQtyOverPo'),
     RECEIPT_IN_TOLERANCE: t('pay.match.codeGrnInTolerance'),
     RECON_UNCONFIRMED: t('pay.match.codeReconUnconfirmed'),
-  }[code] || code
+    PAYEE_NOT_SUPPLIER: t('pay.match.codePayeeNotSupplier'),
+  }[code] || t('pay.match.codeOtherDiff')
 }
 function issueRouteText(code) {
+  // 与后端 ISSUE_ROUTE（ThreeWayMatchService:183）逐枚对齐；后端未登记的码 getOrDefault=FIN_AP，
   return {
     NO_PO: t('pay.match.rolePoManager'),
+    NO_CONTRACT: t('pay.match.rolePoManager'),
     RECEIPT_OVER_PO: t('pay.match.rolePoManager'),
+    RECEIPT_QTY_OVER_PO: t('pay.match.rolePoManager'),
     RECEIPT_IN_TOLERANCE: t('pay.match.rolePoManager'),
     NO_RECEIPT: t('pay.match.roleWarehouse'),
     PAY_EXCEED_INVOICE: t('pay.match.roleApAccountant'),

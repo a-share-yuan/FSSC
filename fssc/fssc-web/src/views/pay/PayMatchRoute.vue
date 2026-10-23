@@ -6,8 +6,7 @@
       <span style="color: #909399; font-size: 12px">{{ $t('pay.route.hintFlow') }}</span>
     </div>
     <SkeletonList v-if="routeLoading" :rows="8" :cols="5" />
-    <el-table :data="pagedData" size="small" stripe v-else :empty-text="$t('pay.route.hintNoApproved')" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
-      <el-table-column type="selection" width="45" />
+    <el-table :data="pagedData" size="small" stripe v-else :empty-text="$t('pay.route.hintNoApproved')" @row-dblclick="openRowDetail">
       <el-table-column prop="billNo" :label="$t('pay.shared.colPayBillNo')" width="160" sortable />
       <el-table-column prop="title" :label="$t('pay.shared.colTitle')" min-width="160" show-overflow-tooltip sortable />
       <el-table-column :label="$t('field.amount')" width="110" align="right">
@@ -33,8 +32,7 @@
     <el-alert :closable="false" show-icon style="margin-bottom: 10px"
       :type="routeResult.frozen ? 'warning' : 'success'"
       :title="routeResult.frozen ? t('pay.route.msgFrozen') : t('pay.route.msgNotFrozen')" />
-    <el-table :data="routeRows" size="small" border :empty-text="$t('pay.route.hintNoDiff')" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
-      <el-table-column type="selection" width="45" />
+    <el-table :data="routeRows" size="small" border :empty-text="$t('pay.route.hintNoDiff')" @row-dblclick="openRowDetail">
       <el-table-column prop="role" :label="$t('pay.route.colRole')" width="180" sortable />
       <el-table-column :label="$t('pay.route.colDiffReason')" min-width="260">
         <template #default="{ row }">{{ (row.reasons || []).join('、') || '—' }}</template>
@@ -83,12 +81,10 @@ const routeLoading = ref(false)
 const routeVis = ref(false)
 const routeResult = ref({ frozen: false })
 const routeRows = ref([])
-const selRows = ref([])
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 function payStatusLabel(s) { return STATUS_LABEL[s] || s }
 function payStatusType(s) { return STATUS_TYPE[s] || 'info' }
-function handleSelectionChange(val) { selRows.value = val }
 
 async function loadApprovedPays() {
   routeLoading.value = true

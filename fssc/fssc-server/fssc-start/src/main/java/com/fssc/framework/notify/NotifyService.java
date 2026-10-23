@@ -116,11 +116,23 @@ public class NotifyService {
         log.info("[企微通知] 已推送 webhook，content={}", text.substring(0, Math.min(text.length(), 50)));
     }
 
+    /** 邮件发送结果：SENT=已交由 SMTP 发送 / SIMULATED=未配置 SMTP（模拟）/ FAILED=发送失败 */
+    public record MailSendResult(String status, String message) {
+    }
+
+    /** 邮件：SMTP 取 sys_config notify.mail.host；未配置时模拟发送并返回 SIMULATED。 */
+    public MailSendResult sendMail(String to, String subject, String text) {
+        return sendMail(to, subject, text, getConfig("notify.mail.host", ""));
+    }
+
     /** 邮件：smtp host 未配置时记日志（模拟）；配置后按 sys_config notify.mail.* 动态构造 JavaMailSenderImpl 真发。 */
-    public void sendMail(String to, String subject, String text, String smtpHost) {
+    public MailSendResult sendMail(String to, String subject, String text, String smtpHost) {
+        if (to == null || to.isBlank()) {
+            return new MailSendResult("FAILED", "收件人邮箱为空");
+        }
         if (smtpHost == null || smtpHost.isBlank()) {
             log.info("[邮件通知-模拟] to={} subject={} content={}", to, subject, text);
-            return;
+            return new MailSendResult("SIMULATED", "未配置邮件服务器（notify.mail.host），已按模拟发送留痕");
         }
         String port = getConfig("notify.mail.port", "25");
         String username = getConfig("notify.mail.username", "");
@@ -152,8 +164,10 @@ public class NotifyService {
             helper.setText(text);
             sender.send(msg);
             log.info("[邮件通知] 已发送 smtp={} to={} subject={}", smtpHost, to, subject);
+            return new MailSendResult("SENT", null);
         } catch (Exception e) {
             log.warn("[邮件通知] 发送失败 smtp={} to={} 原因={}", smtpHost, to, e.getMessage());
+            return new MailSendResult("FAILED", e.getMessage());
         }
     }
 

@@ -167,18 +167,18 @@ public class CounterpartyCandidateService {
         c.setCustomerCode(s.getSupplierCode().trim());
         c.setCustomerName(StrUtil.isBlank(s.getSupplierName()) ? s.getSupplierCode() : s.getSupplierName());
         c.setCustomerType(TYPE_SUPPLIER);
-        c.setContactName(s.getContactName());
-        c.setContactPhone(s.getContactPhone());
-        c.setAddress(s.getAddress());
+        // 不再逐列拷 contact/phone/address：全仓普查（10-23 16:3x）＝这三列除本服务的自动建档写入点与 CustomerService 的关键字 LIKE 外零读点，纯影子数据。
+        // 供应商侧的联系方式改由 CustomerService.page 出参时按编码回查，界面「带出联系人」口径不变。
+        // 关键字侧的兜底＝CustomerService.SUPPLIER_CONTACT_EXISTS 联查供应商三列，影子行清空后按 联系人/电话/地址 仍搜得到。
         c.setStatus(STATUS_ACTIVE);
-        c.setRemark("由供应商主数据自动建档（D-V4R-96：往来单位下拉需覆盖供应商）");
+        c.setRemark("由供应商主数据自动建档（联系方式取自供应商档案）");
         customerMapper.insert(c);
         log.info("[往来单位候选] 供应商 {} 自动建档为往来单位 customer_id={}",
                 c.getCustomerCode(), c.getId());
         return c.getId();
     }
 
-    /** CrmCustomer → 候选 Map（字段名与既有前端用法对齐：id/customerName/customerType） */
+    /** CrmCustomer → 候选 Map（字段名与既有前端用法对齐：id/customerName/customerType）；联系人在此留空，由 {@code CustomerService#page} 的回查口径统一（两处各拷一份）。 */
     private Map<String, Object> toCandidate(CrmCustomer c) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", c.getId());

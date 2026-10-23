@@ -2,16 +2,21 @@ package com.fssc.arflow.controller;
 
 import com.fssc.arflow.entity.ArClaim;
 import com.fssc.arflow.entity.ArInvoiceRule;
+import com.fssc.arflow.entity.ArMailNotifyLog;
 import com.fssc.arflow.entity.ArMailPackage;
+import com.fssc.arflow.entity.ArMailRecipient;
 import com.fssc.arflow.entity.ArPreInvoice;
 import com.fssc.arflow.entity.ArStatement;
 import com.fssc.arflow.service.ArClaimService;
 import com.fssc.arflow.service.ArMailPackageService;
+import com.fssc.arflow.service.ArMailRecipientService;
 import com.fssc.arflow.service.ArPreInvoiceService;
 import com.fssc.arflow.service.ArStatementService;
 import com.fssc.common.core.Result;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.masterdata.entity.MdSubject;
+import com.fssc.masterdata.service.SubjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,6 +40,8 @@ public class ArFlowController {
     private final ArPreInvoiceService preInvoiceService;
     private final ArClaimService claimService;
     private final ArMailPackageService mailPackageService;
+    private final ArMailRecipientService mailRecipientService;
+    private final SubjectService subjectService;
     private final com.fssc.arflow.mapper.ArInvoiceRuleMapper ruleMapper;
     private final com.fssc.arflow.service.ArReceiptExcelService receiptExcelService;
     private final com.fssc.receivable.service.RcReceiptService rcReceiptService;
@@ -262,6 +269,15 @@ public class ArFlowController {
         return Result.success(claimService.review(id));
     }
 
+    /** 审单岗补录科目：非默认类型（向客户索赔等）过账前置 */
+    @OperLog(module = "AR_FLOW", operType = "UPDATE", desc = "AR服务申请补录科目")
+    @RequiresPerm("arflow:claim:manage")
+    @PostMapping("/claims/{id}/accounts")
+    public Result<ArClaim> supplementClaimAccounts(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        return Result.success(claimService.supplementAccounts(id,
+                (String) body.get("debitAccount"), (String) body.get("creditAccount"), (String) body.get("taxAccount")));
+    }
+
     @RequiresPerm("arflow:claim:manage")
     @PostMapping("/claims/{id}/reject")
     public Result<ArClaim> rejectClaim(@PathVariable Long id, @RequestBody Map<String, Object> body) {
@@ -320,6 +336,54 @@ public class ArFlowController {
     @PostMapping("/mail-packages/{id}/archive")
     public Result<ArMailPackage> archiveMail(@PathVariable Long id) {
         return Result.success(mailPackageService.archive(id));
+    }
+
+    // ---------------- 邮包收件人地址簿 / 邮件记录 ----------------
+
+    @RequiresPerm("arflow:billing:manage")
+    @GetMapping("/mail-recipients")
+    public Result<List<ArMailRecipient>> mailRecipients(@RequestParam(required = false) String keyword,
+                                                        @RequestParam(required = false) String customerCode) {
+        return Result.success(mailRecipientService.list(keyword, customerCode));
+    }
+
+    @OperLog(module = "AR_FLOW", operType = "ADD", desc = "新增邮包收件人")
+    @RequiresPerm("arflow:billing:manage")
+    @PostMapping("/mail-recipients")
+    public Result<ArMailRecipient> createMailRecipient(@RequestBody ArMailRecipient r) {
+        return Result.success(mailRecipientService.create(r));
+    }
+
+    @OperLog(module = "AR_FLOW", operType = "UPDATE", desc = "更新邮包收件人")
+    @RequiresPerm("arflow:billing:manage")
+    @PostMapping("/mail-recipients/update")
+    public Result<ArMailRecipient> updateMailRecipient(@RequestBody ArMailRecipient r) {
+        return Result.success(mailRecipientService.update(r));
+    }
+
+    @OperLog(module = "AR_FLOW", operType = "DELETE", desc = "删除邮包收件人")
+    @RequiresPerm("arflow:billing:manage")
+    @PostMapping("/mail-recipients/{id}/delete")
+    public Result<Void> deleteMailRecipient(@PathVariable Long id) {
+        mailRecipientService.delete(id);
+        return Result.success();
+    }
+
+    @RequiresPerm("arflow:billing:manage")
+    @GetMapping("/mail-notify-log")
+    public Result<List<ArMailNotifyLog>> mailNotifyLog(@RequestParam(required = false) String packageNo,
+                                                       @RequestParam(required = false) String status) {
+        return Result.success(mailPackageService.notifyLogs(packageNo, status));
+    }
+
+    // ---------------- 会计科目选项（应收补录科目等） ----------------
+
+    /** 可选叶子科目：本公司科目 ∪ 租户共享科目，仅启用状态；返回编码+名称供下拉。 */
+    @RequiresPerm({"arflow:billing:manage", "arflow:claim:manage"})
+    @GetMapping("/subjects")
+    public Result<List<MdSubject>> subjects(@RequestParam(required = false) Long companyId,
+                                            @RequestParam(required = false) String keyword) {
+        return Result.success(subjectService.options(companyId, keyword));
     }
 
     // ---------------- 客户开票规则 ----------------

@@ -10,6 +10,8 @@ import com.fssc.framework.tenant.TenantContext;
 import com.fssc.receivable.entity.ArReconRecord;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
+import com.fssc.workflow.entity.WfTask;
+import com.fssc.workflow.mapper.WfTaskMapper;
 import com.fssc.workflow.service.WfEngineFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,7 @@ public class RcReceivableService {
 
     private final RcReceivableMapper mapper;
     private final WfEngineFacade wfEngineFacade;
+    private final WfTaskMapper wfTaskMapper;
     private final com.fssc.framework.org.OrgGuard orgGuard;
     /** 应收对账/分析报告记录（AR_RECON/AR_REPORT 收尾载体，P0-1） */
     private final com.fssc.receivable.mapper.ArReconRecordMapper arReconRecordMapper;
@@ -50,7 +53,20 @@ public class RcReceivableService {
         }
         Long scopeC = orgGuard.enforceCompany();
         if (scopeC != null) {
-            qw.eq(RcReceivable::getCompanyId, scopeC);
+            // 共享服务角色可能被派到其它公司：待办中指派给我的单据必须可见，否则「去处理」是死端
+            Long uid = UserContext.get() == null ? null : UserContext.get().getUserId();
+            List<Long> assignedIds = uid == null ? List.of() : wfTaskMapper.selectList(new LambdaQueryWrapper<WfTask>()
+                            .select(WfTask::getBizId)
+                            .eq(WfTask::getBizType, "RECEIVABLE")
+                            .eq(WfTask::getAssigneeId, uid)
+                            .eq(WfTask::getStatus, "PENDING"))
+                    .stream().map(WfTask::getBizId).filter(java.util.Objects::nonNull).distinct().toList();
+            if (assignedIds.isEmpty()) {
+                qw.eq(RcReceivable::getCompanyId, scopeC);
+            } else {
+                qw.and(w -> w.eq(RcReceivable::getCompanyId, scopeC)
+                        .or().in(RcReceivable::getId, assignedIds));
+            }
         }
         qw.orderByDesc(RcReceivable::getId);
         Page<RcReceivable> p = mapper.selectPage(Page.of(pn, ps), qw);

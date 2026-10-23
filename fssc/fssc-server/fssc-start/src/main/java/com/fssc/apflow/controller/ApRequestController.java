@@ -93,14 +93,13 @@ public class ApRequestController {
         return Result.success(service.confirm(id, patch));
     }
 
-    /** 组长审核（R-04）：body {pass,note,reviewer} */
+    /** 组长审核（R-04）：body {pass,note}；审核人一律取当前登录人，不接受客户端传入 */
     @OperLog(module = "AP_REQUEST", operType = "APPROVE", desc = "服务申请单组长审核")
     @RequiresPerm("apflow:request:review")
     @PostMapping("/{id}/group-review")
     public Result<ApServiceRequest> groupReview(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         boolean pass = Boolean.parseBoolean(String.valueOf(body.get("pass")));
-        return Result.success(service.groupReview(id, pass,
-                (String) body.get("note"), (String) body.get("reviewer")));
+        return Result.success(service.groupReview(id, pass, (String) body.get("note")));
     }
 
     /** 过账（EBS付款凭证） */

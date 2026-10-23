@@ -2,24 +2,26 @@
   <el-card shadow="never">
     <template #header>
       <div class="toolbar">
-        <span>{{ $t('flow.collab.title') }}</span>
+        <span>{{ modeTitle }}</span>
         <div class="ops">
-          <el-tag v-if="freeze.frozen" type="danger" size="small">{{ freeze.period ? $t('flow.collab.frozenWithPeriod', { v1: freeze.period }) : $t('flow.collab.frozenNoPeriod') }}</el-tag>
-          <el-tag v-else type="success" size="small">{{ $t('flow.collab.tagDataExchangeOk') }}</el-tag>
+          <template v-if="!isAr">
+            <el-tag v-if="freeze.frozen" type="danger" size="small">{{ freeze.period ? $t('flow.collab.frozenWithPeriod', { v1: freeze.period }) : $t('flow.collab.frozenNoPeriod') }}</el-tag>
+            <el-tag v-else type="success" size="small">{{ $t('flow.collab.tagDataExchangeOk') }}</el-tag>
+          </template>
           <el-button size="small" @click="loadAll">{{ $t('common.refresh') }}</el-button>
         </div>
       </div>
     </template>
 
-    <el-tabs v-model="tab">
-      <el-tab-pane v-if="hasPerm('collab:scp:list')" :label="$t('flow.collab.scpInvoiceChain')" name="scp">
+    <el-tabs v-model="tab" @tab-change="loadAll">
+      <el-tab-pane v-if="!isAr && hasPerm('collab:scp:list')" :label="$t('flow.collab.scpInvoiceChain')" name="scp">
         <div class="ops" style="margin-bottom: 8px">
           <el-select v-model="scpQuery.status" size="small" style="width: 120px" :placeholder="$t('common.status')" clearable @change="loadScp">
             <el-option v-for="(l, s) in SCP_STATUS" :key="s" :label="l" :value="s" />
           </el-select>
           <el-input v-model="scpQuery.keyword" size="small" style="width: 190px" :placeholder="$t('flow.collab.phSearch')" clearable @keyup.enter="loadScp" />
           <el-button size="small" type="primary" @click="loadScp">{{ $t('common.search') }}</el-button>
-          <el-button size="small" type="success" @click="openCreate">{{ $t('flow.collab.tabInvLanding') }}</el-button>
+          <el-button v-if="hasPerm('collab:scp:supplier')" size="small" type="success" @click="openCreate">{{ $t('flow.collab.tabInvLanding') }}</el-button>
         </div>
         <el-table :data="scpRows" v-loading="loading" size="small" border stripe>
           <el-table-column prop="billNo" :label="$t('flow.collab.colScpNo')" min-width="165" show-overflow-tooltip />
@@ -91,7 +93,7 @@
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane v-if="hasPerm('collab:ccp:manage')" :label="$t('flow.collab.ccpShip')" name="ccp">
+      <el-tab-pane v-if="!isAp && hasPerm('collab:ccp:manage')" :label="$t('flow.collab.ccpShip')" name="ccp">
         <div class="ops" style="margin-bottom: 8px">
           <el-input v-model="ccpKeyword" size="small" style="width: 180px" :placeholder="$t('flow.collab.shipInvCustomer')" clearable @keyup.enter="loadCcp" />
           <el-button size="small" type="primary" @click="loadCcp">{{ $t('common.search') }}</el-button>
@@ -118,7 +120,7 @@
       <el-tab-pane v-if="hasPerm('collab:log:view')" :label="$t('flow.collab.tabApiLog')" name="logs">
         <div class="ops" style="margin-bottom: 8px">
           <el-select v-model="logQuery.ifaceCode" size="small" style="width: 190px" :placeholder="$t('field.api')" clearable @change="loadLogs">
-            <el-option v-for="(l, c) in IFACES" :key="c" :label="l" :value="c" />
+            <el-option v-for="(l, c) in visibleIfaces" :key="c" :label="l" :value="c" />
           </el-select>
           <el-select v-model="logQuery.status" size="small" style="width: 110px" :placeholder="$t('common.status')" clearable @change="loadLogs">
             <el-option :label="$t('flow.collab.stOk')" value="SUCCESS" />
@@ -151,8 +153,9 @@
       <el-form ref="createFormRef" :model="form" :rules="createRules" label-width="110px" size="small">
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item :label="$t('field.reconNo')" prop="reconBillNo"><el-input v-model="form.reconBillNo" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.collab.colSupplierCode')"><el-input v-model="form.supplierCode" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.request.colSupplierName')"><el-input v-model="form.supplierName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.request.colSupplierName')">
+            <SupplierSelect v-model="form.supplierCode" :placeholder="$t('flow.collab.phPickSupplier')" @change="onSupplier" />
+          </el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.request.colPoNo')"><el-input v-model="form.poNo" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('field.invoiceType')">
             <el-select v-model="form.invoiceType" style="width: 100%">
@@ -178,8 +181,9 @@
       <el-form ref="shipFormRef" :model="shipForm" :rules="shipRules" label-width="120px" size="small">
         <el-form-item :label="$t('flow.collab.colShipNo')" prop="shippingNo"><el-input v-model="shipForm.shippingNo" /></el-form-item>
         <el-form-item :label="$t('flow.collab.colErpInvNo')"><el-input v-model="shipForm.soInvoiceNo" /></el-form-item>
-        <el-form-item :label="$t('flow.collab.colCustomerCode')"><el-input v-model="shipForm.customerCode" /></el-form-item>
-        <el-form-item :label="$t('flow.collab.colCustomerName')"><el-input v-model="shipForm.customerName" /></el-form-item>
+        <el-form-item :label="$t('field.customer')">
+          <CustomerSelect v-model="shipForm.customerCode" :placeholder="$t('flow.collab.phPickCustomer')" @change="onShipCustomer" />
+        </el-form-item>
         <el-form-item :label="$t('flow.collab.colShipAmount')" prop="amount"><el-input v-model="shipForm.amount" /></el-form-item>
         <el-form-item :label="$t('field.taxAmount')"><el-input v-model="shipForm.taxAmount" /></el-form-item>
         <el-form-item :label="$t('flow.collab.colShipDate')"><el-date-picker v-model="shipForm.shippingDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
@@ -191,8 +195,34 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="invWbVisible" :title="$t('flow.collab.actInvWriteBack')" width="460px" destroy-on-close>
+      <el-form label-width="90px" size="small">
+        <el-form-item :label="$t('flow.collab.colPreInvNo')" required>
+          <el-select v-model="invWbId" filterable :placeholder="$t('flow.collab.phPickPreInv')" style="width: 100%">
+            <el-option v-for="p in preInvoiceOptions" :key="p.id" :value="p.id"
+              :label="`${p.preInvoiceNo}（${p.customerName || ''}）`" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="invWbVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doInvoiceWb">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="inputVisible" :title="inputTitle" width="440px" destroy-on-close>
-      <el-input v-model="inputText" :placeholder="inputPlaceholder" />
+      <!-- 创建邮包：快递公司＋单号分格（原为「快递公司,单号」逗号串，输错一个逗号就整条报废） -->
+      <el-form v-if="inputKind === 'send'" label-width="90px" size="small">
+        <el-form-item :label="$t('flow.bill.mailCourierCompany')">
+          <el-select v-model="sendForm.courierCompany" filterable allow-create default-first-option style="width: 100%" :placeholder="$t('flow.collab.phCourierCompany')">
+            <el-option v-for="c in COURIER_COMPANIES" :key="c" :label="c" :value="c" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('flow.bill.colTrackingNo')">
+          <el-input v-model="sendForm.courierNo" :placeholder="$t('flow.collab.phCourierNo')" />
+        </el-form-item>
+      </el-form>
+      <el-input v-else v-model="inputText" :placeholder="inputPlaceholder" />
       <template #footer>
         <el-button size="small" @click="inputVisible = false">{{ $t('common.cancel') }}</el-button>
         <el-button type="primary" size="small" @click="doInput">{{ $t('common.confirm') }}</el-button>
@@ -203,16 +233,32 @@
 
 <script setup>
 import { invoiceTypeLabel } from '@/constants/invoiceType'
+import { COURIER_COMPANIES } from '@/constants/enums'
 import { formatDateTime } from '../../utils/format'
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage } from 'element-plus'
-import { collabApi, store } from '../../api'
+import { collabApi, arFlowApi, store } from '../../api'
+import CustomerSelect from '@/components/common/CustomerSelect.vue'
+import SupplierSelect from '@/components/common/SupplierSelect.vue'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { hasPerm } from '@/utils/perm'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+
+/**
+ * 域归属（41-非费用域完成度审查 P1-5 后续）：
+ * SCP 是供应商发票链（应付方向），CCP 是客户发运/对账同步（应收方向），原先合并成一个 tab 挂在应收工作台，
+ * 默认页签还是 SCP ⇒ 应收角色打开看到应付内容、应付角色又因门控码错位看不到。
+ * 现按宿主拆分：'ap' 只渲染 SCP + SCP 日志，'ar' 只渲染 CCP + CCP 日志；'' 保留旧合并页形态。
+ */
+const props = defineProps({ mode: { type: String, default: '' } })
+const isAp = computed(() => props.mode === 'ap')
+const isAr = computed(() => props.mode === 'ar')
+const modeTitle = computed(() => (isAp.value
+  ? t('flow.collab.titleAp')
+  : isAr.value ? t('flow.collab.titleAr') : t('flow.collab.title')))
 
 const SCP_STATUS = computed(() => ({
   WAIT_MATCH: t('flow.collab.stPendingMatch'), WAIT_SEND: t('flow.collab.stPendingMail'), MATCH_FAILED: t('flow.collab.stMatchFail'), WAIT_SIGN: t('flow.collab.stPendingSign'),
@@ -233,7 +279,15 @@ const IFACES = computed(() => ({
 // R5-D-104：协同日志方向英文枚举→中文映射（未收录值原样兜底）
 const DIRECTION_LABEL = computed(() => ({ SCP_TO_AP: 'SCP→AP', AP_TO_SCP: 'AP→SCP', SCP_TO_EBS: 'SCP→EBS', EBS_TO_SHARED: t('flow.collab.ebsToShared'), SHARED_TO_EBS: t('flow.collab.sharedToEbs'), CCP_TO_SHARED: t('flow.collab.ccpToShared') }))
 
-const tab = ref('scp')
+// 日志接口码按域收口：接口前缀即方向（SCP_* 供应商链 / AR_* 客户端）
+const ifacePrefix = computed(() => (isAp.value ? 'SCP_' : isAr.value ? 'AR_' : ''))
+const visibleIfaces = computed(() => {
+  const all = IFACES.value
+  if (!ifacePrefix.value) return all
+  return Object.fromEntries(Object.entries(all).filter(([k]) => k.startsWith(ifacePrefix.value)))
+})
+
+const tab = ref(isAr.value ? 'ccp' : 'scp')
 const loading = ref(false)
 const scpRows = ref([])
 const ccpRows = ref([])
@@ -248,6 +302,9 @@ const reconQuery = reactive({ status: '', keyword: '' })
 const createVisible = ref(false)
 const shipVisible = ref(false)
 const inputVisible = ref(false)
+const invWbVisible = ref(false)
+const invWbId = ref(null)
+const preInvoiceOptions = ref([])
 const current = ref(null)
 const form = reactive({})
 const createFormRef = ref(null)
@@ -265,37 +322,48 @@ const shipRules = computed(() => ({
 const inputKind = ref('')
 const inputTitle = ref('')
 const inputText = ref('')
+const sendForm = reactive({ courierCompany: '', courierNo: '' })
 const inputPlaceholder = ref('')
 
 const today = () => new Date().toISOString().slice(0, 10)
 
+// 每个动作对应的后端 @RequiresPerm：无码不渲染，避免点开才 403
+const ACTION_PERM = {
+  match: 'collab:scp:supplier', cancelMatch: 'collab:scp:supplier', send: 'collab:scp:supplier', rematch: 'collab:scp:supplier',
+  manual: 'collab:scp:match:manual', force: 'collab:scp:force-appr',
+  forceApprove: 'collab:scp:force-appr', forceReject: 'collab:scp:force-appr',
+  sign: 'collab:scp:sign', scan: 'collab:scp:sign',
+  post: 'collab:scp:post', preCertify: 'collab:scp:certify', certify: 'collab:scp:certify', pay: 'collab:scp:pay',
+}
+
 function scpActions(row) {
-  switch (row.status) {
-    case 'WAIT_MATCH':
-    case 'MATCH_FAILED':
-      return [{ key: 'match', label: t('flow.collab.actAutoMatch') }, { key: 'manual', label: t('flow.collab.actManualMatch') },
-        { key: 'force', label: t('flow.collab.actApplyForce') }]
-    case 'FORCE_PENDING':
-      return hasPerm('collab:scp:force-appr')
-        ? [{ key: 'forceApprove', label: t('flow.collab.actApprovePass') }, { key: 'forceReject', label: t('field.reject') }]
-        : []
-    case 'WAIT_SEND':
-      return [{ key: 'send', label: t('flow.collab.actMailPackage') }, { key: 'cancelMatch', label: t('flow.collab.actCancelMatch') }]
-    case 'WAIT_SIGN':
-      return [{ key: 'sign', label: t('flow.collab.actSigned') }]
-    case 'WAIT_SCAN':
-      return [{ key: 'scan', label: t('flow.collab.actScanVerify') }]
-    case 'CHECK_FAILED':
-      return [{ key: 'rematch', label: t('flow.collab.actRematch') }]
-    case 'CHECK_OK':
-      return [{ key: 'post', label: t('flow.collab.actPostPush') }]
-    case 'POSTED':
-      return [{ key: 'preCertify', label: t('flow.collab.stPreCert') }, { key: 'certify', label: t('flow.collab.actCentralCert') }, { key: 'pay', label: t('flow.collab.actPayWriteBack') }]
-    case 'CERTIFIED':
-      return [{ key: 'pay', label: t('flow.collab.actPayWriteBack') }]
-    default:
-      return []
-  }
+  const actions = (() => {
+    switch (row.status) {
+      case 'WAIT_MATCH':
+      case 'MATCH_FAILED':
+        return [{ key: 'match', label: t('flow.collab.actAutoMatch') }, { key: 'manual', label: t('flow.collab.actManualMatch') },
+          { key: 'force', label: t('flow.collab.actApplyForce') }]
+      case 'FORCE_PENDING':
+        return [{ key: 'forceApprove', label: t('flow.collab.actApprovePass') }, { key: 'forceReject', label: t('field.reject') }]
+      case 'WAIT_SEND':
+        return [{ key: 'send', label: t('flow.collab.actMailPackage') }, { key: 'cancelMatch', label: t('flow.collab.actCancelMatch') }]
+      case 'WAIT_SIGN':
+        return [{ key: 'sign', label: t('flow.collab.actSigned') }]
+      case 'WAIT_SCAN':
+        return [{ key: 'scan', label: t('flow.collab.actScanVerify') }]
+      case 'CHECK_FAILED':
+        return [{ key: 'rematch', label: t('flow.collab.actRematch') }]
+      case 'CHECK_OK':
+        return [{ key: 'post', label: t('flow.collab.actPostPush') }]
+      case 'POSTED':
+        return [{ key: 'preCertify', label: t('flow.collab.stPreCert') }, { key: 'certify', label: t('flow.collab.actCentralCert') }, { key: 'pay', label: t('flow.collab.actPayWriteBack') }]
+      case 'CERTIFIED':
+        return [{ key: 'pay', label: t('flow.collab.actPayWriteBack') }]
+      default:
+        return []
+    }
+  })()
+  return actions.filter((a) => !ACTION_PERM[a.key] || hasPerm(ACTION_PERM[a.key]))
 }
 
 async function loadScp() {
@@ -315,7 +383,10 @@ async function loadCcp() {
 async function loadLogs() {
   loading.value = true
   try {
-    logRows.value = await collabApi.syncLogs({ ifaceCode: logQuery.ifaceCode || undefined, status: logQuery.status || undefined })
+    const rows = await collabApi.syncLogs({ ifaceCode: logQuery.ifaceCode || undefined, status: logQuery.status || undefined })
+    logRows.value = ifacePrefix.value
+      ? rows.filter((r) => String(r.ifaceCode || '').startsWith(ifacePrefix.value))
+      : rows
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
@@ -335,7 +406,7 @@ async function loadRecons() {
 }
 
 function loadAll() {
-  loadFreeze()
+  if (!isAr.value) loadFreeze()
   if (tab.value === 'scp') loadScp()
   else if (tab.value === 'recon') loadRecons()
   else if (tab.value === 'ccp') loadCcp()
@@ -364,8 +435,8 @@ function scpAct(row, a) {
   if (m[a.key]) return m[a.key]()
   if (a.key === 'send') {
     inputKind.value = 'send'; inputTitle.value = t('flow.collab.actMailPackage')
-    inputPlaceholder.value = t('flow.collab.phCourier')
-    inputText.value = ''; inputVisible.value = true
+    sendForm.courierCompany = ''; sendForm.courierNo = ''
+    inputVisible.value = true
   } else if (a.key === 'manual') {
     inputKind.value = 'manual'; inputTitle.value = t('flow.collab.actManualMatchDetail')
     inputPlaceholder.value = t('flow.collab.phAmounts')
@@ -394,9 +465,11 @@ function parts() {
 }
 
 async function doInput() {
-  const id = current.value.id
+  // 对账同步/发票回写是工具栏级动作，不依附选中行；按 row.id 取会整页 TypeError
+  const id = current.value?.id
   if (inputKind.value === 'send') {
-    const [c, n] = parts()
+    if (!sendForm.courierCompany || !sendForm.courierNo) return ElMessage.warning(t('flow.collab.errCourierBoth'))
+    const [c, n] = [sendForm.courierCompany.trim(), sendForm.courierNo.trim()]
     await api(() => collabApi.scpSend(id, { courierCompany: c, courierNo: n }), t('flow.collab.msgPacketCreated'))
   } else if (inputKind.value === 'scan') {
     const [invoiceNo, invoiceCode, amount, taxAmount, totalAmount, invoiceDate] = parts()
@@ -447,6 +520,14 @@ function openShipping() {
   Object.keys(shipForm).forEach((k) => delete shipForm[k])
   shipForm.shippingDate = today()
   shipVisible.value = true
+}
+
+function onSupplier(s) {
+  form.supplierName = s?.supplierName || ''
+}
+
+function onShipCustomer(c) {
+  shipForm.customerName = c?.customerName || ''
 }
 
 async function doPushShipping() {
@@ -517,15 +598,28 @@ async function doReconInput() {
 }
 
 async function openReconSync() {
+  current.value = null
   inputKind.value = 'reconSync'; inputTitle.value = t('flow.collab.actStatusSync')
   inputPlaceholder.value = t('flow.collab.phCustomerReconNo')
   inputText.value = ''; inputVisible.value = true
 }
 
 async function openInvoiceWb() {
-  inputKind.value = 'invoiceWb'; inputTitle.value = t('flow.collab.actInvWriteBack')
-  inputPlaceholder.value = t('flow.collab.phPreInvId')
-  inputText.value = ''; inputVisible.value = true
+  current.value = null
+  invWbId.value = null
+  preInvoiceOptions.value = []
+  try {
+    preInvoiceOptions.value = (await arFlowApi.preInvoices({ status: 'INVOICED' })) || []
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+  invWbVisible.value = true
+}
+
+async function doInvoiceWb() {
+  if (!invWbId.value) return ElMessage.warning(t('flow.collab.errPreInvId'))
+  await api(() => collabApi.invoiceWriteback(invWbId.value), t('flow.collab.msgInvWrittenBack'))
+  invWbVisible.value = false
 }
 
 async function doInputCollab() {
@@ -533,16 +627,12 @@ async function doInputCollab() {
     if (!inputText.value) return ElMessage.warning(t('flow.collab.errReconNoRequired'))
     const st = await collabApi.reconSync(inputText.value)
     ElMessage.success(t('flow.collab.msgStatusSync', { v1: st.status, v2: st.checkStatus }))
-  } else if (inputKind.value === 'invoiceWb') {
-    if (!inputText.value) return ElMessage.warning(t('flow.collab.errPreInvId'))
-    await collabApi.invoiceWriteback(inputText.value)
-    ElMessage.success(t('flow.collab.msgInvWrittenBack'))
   }
   inputVisible.value = false
 }
 
 onMounted(() => {
-  loadFreeze()
+  if (!isAr.value) loadFreeze()
   if (tab.value === 'scp') loadScp()
   else if (tab.value === 'recon') loadRecons()
   else if (tab.value === 'ccp') loadCcp()

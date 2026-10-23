@@ -43,13 +43,12 @@
 
       <el-tab-pane :label="$t('flow.wfo.tabPendingInvoices')" name="invoices">
         <div class="ops" style="margin-bottom: 8px">
-          <el-input v-model="invQuery.customerId" size="small" style="width: 160px" :placeholder="$t('flow.wfo.colCustomerId')" clearable @keyup.enter="loadInvoices" />
+          <CustomerSelect v-model="invQuery.customerId" value-key="id" style="width: 200px" clearable :placeholder="$t('flow.wfo.phPickCustomer')" @change="loadInvoices" />
           <el-input v-model="invQuery.keyword" size="small" style="width: 180px" :placeholder="$t('flow.badDebt.colArDocNo')" clearable @keyup.enter="loadInvoices" />
           <el-button size="small" type="primary" @click="loadInvoices">{{ $t('common.search') }}</el-button>
         </div>
         <el-table :data="invoices" v-loading="invLoading" size="small" border stripe>
           <el-table-column prop="billNo" :label="$t('flow.badDebt.colArDocNo')" min-width="170" show-overflow-tooltip />
-          <el-table-column prop="customerId" :label="$t('flow.wfo.colCustomerId')" width="90" />
           <el-table-column prop="billDate" :label="$t('flow.wfo.colDocDate')" width="105" />
           <el-table-column prop="dueDate" :label="$t('flow.note.colDueDate')" width="105" />
           <el-table-column prop="amount" :label="$t('flow.wfo.colReceivableAmount')" width="110" align="right" />
@@ -110,12 +109,17 @@
             </el-select>
           </el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.wfo.colFundNo')" prop="fundNo"><el-input v-model="fundForm.fundNo" :placeholder="$t('flow.wfo.phFundNo')" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.wfo.colCustomerId')" prop="customerId"><el-input v-model="fundForm.customerId" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.collab.colCustomerName')"><el-input v-model="fundForm.customerName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('field.customer')" prop="customerId">
+            <CustomerSelect v-model="fundForm.customerId" value-key="id" :placeholder="$t('flow.wfo.phPickCustomer')" @change="onFundCustomer" />
+          </el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.wfo.lblFundAmount')" prop="fundAmount"><el-input v-model="fundForm.fundAmount" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.wfo.lblFundDate')"><el-date-picker v-model="fundForm.fundDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.wfo.lblBankSerial')"><el-input v-model="fundForm.bankSerial" /></el-form-item></el-col>
-          <el-col v-if="fundForm.fundType === 'NOTE'" :span="12"><el-form-item :label="$t('flow.wfo.lblNoteId')" prop="noteId"><el-input v-model="fundForm.noteId" :placeholder="$t('flow.wfo.phNoteNo')" /></el-form-item></el-col>
+          <el-col v-if="fundForm.fundType === 'NOTE'" :span="12"><el-form-item :label="$t('flow.wfo.lblNoteId')" prop="noteId">
+            <el-select v-model="fundForm.noteId" filterable style="width: 100%" :placeholder="$t('flow.wfo.phPickNote')">
+              <el-option v-for="n in noteOptions" :key="n.id" :label="`${n.noteNo}（${n.customerName || n.drawer || ''}）`" :value="n.id" />
+            </el-select>
+          </el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>
@@ -143,8 +147,9 @@
 
     <el-dialog v-model="offsetVisible" :title="$t('flow.wfo.dlgOffsetTitle')" width="520px" destroy-on-close>
       <el-form ref="offsetFormRef" :model="offsetForm" :rules="offsetRules" label-width="110px" size="small">
-        <el-form-item :label="$t('flow.wfo.lblOffsetCustomerId')" prop="customerId"><el-input v-model="offsetForm.customerId" /></el-form-item>
-        <el-form-item :label="$t('flow.collab.colCustomerName')"><el-input v-model="offsetForm.customerName" /></el-form-item>
+        <el-form-item :label="$t('field.customer')" prop="customerId">
+          <CustomerSelect v-model="offsetForm.customerId" value-key="id" :placeholder="$t('flow.wfo.phPickCustomer')" @change="onOffsetCustomer" />
+        </el-form-item>
         <el-form-item :label="$t('flow.wfo.lblOffsetAmount')" prop="amount"><el-input v-model="offsetForm.amount" :placeholder="$t('flow.wfo.phOffsetAmountHint')" /></el-form-item>
         <el-form-item :label="$t('flow.wfo.lblAgreementNo')"><el-input v-model="offsetForm.agreementNo" :placeholder="$t('flow.wfo.phAgreementAttachNo')" /></el-form-item>
       </el-form>
@@ -161,6 +166,7 @@ import { WRITEOFF_TYPE, writeoffTypeLabel } from '@/constants/enums'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { arGapApi } from '../../api'
+import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
@@ -186,6 +192,7 @@ const fundVisible = ref(false)
 const manualVisible = ref(false)
 const offsetVisible = ref(false)
 const current = ref(null)
+const noteOptions = ref([])
 // R5-D-104：资金池类型词表（含 RECEIVABLE 历史/外部来源值），未收录值回落 enums 词表
 const FUND_TYPE_LABEL = computed(() => ({ RECEIPT: t('flow.wfo.fundTypeReceipt'), NOTE: t('flow.wfo.fundTypeNote'), OFFSET: t('flow.wfo.fundTypeOffset'), RECEIVABLE: t('flow.wfo.fundTypeReceipt'), PAYABLE: t('flow.wfo.fundTypePayment') }))
 const fundForm = reactive({ fundType: 'RECEIPT' })
@@ -240,12 +247,22 @@ function loadAll() {
 function openFund() {
   Object.keys(fundForm).forEach((k) => delete fundForm[k])
   fundForm.fundType = 'RECEIPT'
+  noteOptions.value = []
   fundVisible.value = true
+  arGapApi.notes({}).then((list) => { noteOptions.value = list || [] }).catch(() => { noteOptions.value = [] })
+}
+
+function onFundCustomer(c) {
+  fundForm.customerName = c?.customerName || ''
+}
+
+function onOffsetCustomer(c) {
+  offsetForm.customerName = c?.customerName || ''
 }
 
 async function doRegisterFund() {
   if (!(await validateForms([fundFormRef]))) return
-  await arGapApi.registerFund({ ...fundForm, noteId: fundForm.noteId || undefined })
+  await arGapApi.registerFund({ ...fundForm, noteId: fundForm.fundType === 'NOTE' ? fundForm.noteId : undefined })
   ElMessage.success(t('flow.wfo.msgFundRegistered'))
   fundVisible.value = false
   await loadFunds()

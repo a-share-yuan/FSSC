@@ -1,5 +1,5 @@
 <template>
-  <div :class="{ tabless: isSingle }">
+  <div>
     <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
@@ -1358,8 +1358,6 @@ function handleView(row) {
 </script>
 
 <style scoped>
-/* 一 TAB = 一菜单：从菜单深链进来（tab 命中）时隐藏 tab 导航条，只显示该页 */
-.tabless :deep(.el-tabs__header) { display: none; }
 .tax-pay-route { color: #e6a23c; font-size: 12px; }
 /* R5-D-169：六页签提交钮旁的期间提示（所选期间已结账禁提 / 期间状态不可读），沿用本页既有 12px 警示色 */
 .period-note { color: #e6a23c; font-size: 12px; }

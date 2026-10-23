@@ -5,7 +5,10 @@
         <b>OCR识别记录</b>
         <span style="color:#909399; font-size:12px">OCR 结构化票面识别结果 —— 发票号/购销方/价税明细/票面自洽校验</span>
         <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
-          <el-input v-model="q.batchId" placeholder="批次ID" clearable style="width:130px" size="small" @keyup.enter="search" />
+          <el-select v-if="canPickBatch" v-model="q.batchId" placeholder="按批次筛选" clearable filterable style="width:220px" size="small" @change="search">
+            <el-option v-for="b in batchOptions" :key="b.id" :label="b.batchNo || ('#' + b.id)" :value="b.id" />
+          </el-select>
+          <el-input v-else v-model="q.batchId" placeholder="批次ID" clearable style="width:130px" size="small" @keyup.enter="search" />
           <el-input v-model="q.invoiceNo" placeholder="发票号" clearable style="width:160px" size="small" @keyup.enter="search" />
           <el-button size="small" type="primary" @click="search">查询</el-button>
           <el-button size="small" @click="reset">重置</el-button>
@@ -85,10 +88,19 @@ import { exportCsv } from '../../utils/csv'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { hasPerm } from '@/utils/perm'
 
 const loading = ref(false)
 const records = ref([])
 const q = reactive({ batchId: '', invoiceNo: '' })
+
+// 批次下拉需要 image:batch:list；无该码时退回手输，不拿 403 换一个「看起来没数据」的下拉
+const canPickBatch = hasPerm('image:batch:list')
+const batchOptions = ref([])
+async function loadBatches() {
+  if (!canPickBatch) return
+  try { batchOptions.value = (await imageApi.batchList({})) || [] } catch { batchOptions.value = [] }
+}
 
 // P0 铁律：列表页必须 server 分页（sizes + jumper）
 const pager = useTablePager({ mode: 'server', storageKey: 'ocr_records' })
@@ -178,7 +190,7 @@ function shortTime(t) {
   if (!t) return ''
   try { return new Date(t).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) } catch { return t }
 }
-onMounted(load)
+onMounted(() => { load(); loadBatches() })
 </script>
 
 <style scoped>

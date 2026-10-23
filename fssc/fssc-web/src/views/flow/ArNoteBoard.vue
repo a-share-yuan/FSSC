@@ -82,7 +82,9 @@
           <el-col :span="12"><el-form-item :label="$t('flow.note.colNoteNo')" prop="noteNo"><el-input v-model="form.noteNo" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.note.colDrawer')"><el-input v-model="form.drawer" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.note.colAcceptor')"><el-input v-model="form.acceptor" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.collab.colCustomerName')"><el-input v-model="form.customerName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('field.customer')">
+            <CustomerSelect v-model="form.customerCode" :placeholder="$t('flow.note.phPickCustomer')" @change="onNoteCustomer" />
+          </el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.note.formNoteAmount')" prop="amount"><el-input v-model="form.amount" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.note.colIssueDate')"><el-date-picker v-model="form.issueDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.note.colDueDate')" prop="dueDate"><el-date-picker v-model="form.dueDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
@@ -111,6 +113,18 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="handoverVisible" :title="$t('flow.note.opHandoverCashier')" width="430px" destroy-on-close>
+      <el-form label-width="90px" size="small">
+        <el-form-item :label="$t('flow.note.phHandoverKeeper')" required>
+          <UserSelect v-model="handoverUserId" :company-id="current?.companyId" show-dept @change="onHandoverUser" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="handoverVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doHandover">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="inputVisible" :title="inputTitle" width="420px" destroy-on-close>
       <el-input v-model="inputText" :placeholder="inputKind === 'void' ? $t('flow.note.phVoidReasonRequired') : $t('flow.note.phEndorsee')" />
       <template #footer>
@@ -126,6 +140,8 @@ import { AR_NOTE_STATUS, arNoteStatusLabel } from '@/constants/enums'
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage } from 'element-plus'
 import { arGapApi } from '../../api'
+import CustomerSelect from '@/components/common/CustomerSelect.vue'
+import UserSelect from '@/components/common/UserSelect.vue'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
@@ -163,6 +179,9 @@ const discountRules = {
 const inputKind = ref('')
 const inputTitle = ref('')
 const inputText = ref('')
+const handoverVisible = ref(false)
+const handoverUserId = ref(null)
+const handoverUserName = ref('')
 
 function actions(row) {
   switch (row.status) {
@@ -210,12 +229,15 @@ function act(row, a) {
   const id = row.id
   const m = {
     review: () => api(() => arGapApi.noteReview(id), t('flow.note.msgReviewedOk')),
-    handover: () => api(() => arGapApi.noteHandover(id, ''), t('flow.note.msgHandedOver')),
     markDue: () => api(() => arGapApi.noteMarkDue(id), t('flow.note.msgInToCollect')),
     collect: () => api(() => arGapApi.noteCollect(id), t('flow.note.msgCollectedOk')),
   }
   if (m[a.key]) return m[a.key]()
-  if (a.key === 'discount') {
+  if (a.key === 'handover') {
+    handoverUserId.value = null
+    handoverUserName.value = ''
+    handoverVisible.value = true
+  } else if (a.key === 'discount') {
     discountForm.rate = ''
     discountForm.date = today()
     discountVisible.value = true
@@ -237,6 +259,20 @@ async function doDiscount() {
   await api(() => arGapApi.noteDiscount(current.value.id, { annualRatePct: discountForm.rate, discountDate: discountForm.date }),
     t('flow.note.msgDiscountOk'))
   discountVisible.value = false
+}
+
+function onNoteCustomer(c) {
+  form.customerName = c?.customerName || ''
+}
+
+function onHandoverUser(id, u) {
+  handoverUserName.value = u?.nickName || u?.userName || ''
+}
+
+async function doHandover() {
+  if (!handoverUserId.value) return ElMessage.warning(t('flow.note.errKeeperRequired'))
+  await api(() => arGapApi.noteHandover(current.value.id, handoverUserName.value), t('flow.note.msgHandedOver'))
+  handoverVisible.value = false
 }
 
 async function doInput() {

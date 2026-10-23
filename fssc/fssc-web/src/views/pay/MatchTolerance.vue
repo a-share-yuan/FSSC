@@ -73,11 +73,11 @@
       <el-table-column :label="$t('pay.tolerance.colDimension')" min-width="180">
         <template #default="{ row }">{{ dimText(row.dimensionCode) }}</template>
       </el-table-column>
-      <el-table-column prop="companyId" :label="$t('pay.tolerance.colCompanyId')" width="90" align="center">
-        <template #default="{ row }">{{ row.companyId || t('common.all') }}</template>
+      <el-table-column prop="companyId" :label="$t('pay.tolerance.colCompanyId')" width="150" align="center" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.companyId ? companyName(row.companyId) : t('common.all') }}</template>
       </el-table-column>
-      <el-table-column prop="supplierId" :label="$t('pay.tolerance.colSupplierId')" width="90" align="center">
-        <template #default="{ row }">{{ row.supplierId || t('common.all') }}</template>
+      <el-table-column prop="supplierId" :label="$t('pay.tolerance.colSupplierId')" width="150" align="center" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.supplierId ? supplierName(row.supplierId) : t('common.all') }}</template>
       </el-table-column>
       <el-table-column :label="$t('pay.tolerance.colTolerance')" width="110" align="right">
         <template #default="{ row }">{{ row.toleranceValue }}{{ row.toleranceType === 'PERCENT' ? '%' : t('pay.shared.unitYuan') }}</template>
@@ -100,8 +100,15 @@
             <el-option v-for="(v, k) in DIMS" :key="k" :label="v" :value="k" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="$t('pay.tolerance.colCompanyId')"><el-input-number v-model="scopedForm.companyId" :min="1" style="width:100%" :placeholder="$t('pay.tolerance.phAllOrgs')" /></el-form-item>
-        <el-form-item :label="$t('pay.tolerance.colSupplierId')"><el-input-number v-model="scopedForm.supplierId" :min="1" style="width:100%" :placeholder="$t('pay.tolerance.phAllSuppliers')" /></el-form-item>
+        <!-- 公司与供应商从档案选取：容差行的 companyId/supplierId 是外键，手输数字对不上档案就永远不生效 -->
+        <el-form-item :label="$t('pay.tolerance.colCompanyId')">
+          <el-select v-model="scopedForm.companyId" filterable clearable style="width:100%" :placeholder="$t('pay.tolerance.phAllOrgs')">
+            <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('pay.tolerance.colSupplierId')">
+          <SupplierSelect v-model="scopedForm.supplierId" value-key="id" clearable :placeholder="$t('pay.tolerance.phAllSuppliers')" />
+        </el-form-item>
         <el-form-item :label="$t('pay.tolerance.colToleranceType')" prop="toleranceType">
           <el-select v-model="scopedForm.toleranceType" style="width:100%">
             <el-option :label="$t('pay.tolerance.optPercent')" value="PERCENT" />
@@ -122,29 +129,35 @@
     <el-alert style="margin-top:12px" type="info" :closable="false"
       :title="$t('pay.tolerance.hintSemantics')" />
   </el-card>
-<BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
 </template>
 
 <script setup>
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { showRowDetail } from '@/utils/format'
-import { p1Api } from '../../api'
+import { mdApi, orgApi, p1Api } from '../../api'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import { exportCsv, exportBatchCsv } from '../../utils/csv'
 import SkeletonList from '../../components/SkeletonList.vue'
-import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import SupplierSelect from '@/components/common/SupplierSelect.vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
-const traceVisible = ref(false)
-const traceBillId = ref(null)
-function openTrace(row) {
-  traceBillId.value = row.id || row.billId || row.bill_id
-  traceVisible.value = true
+// 容差差异化行的公司/供应商列按档案回显名称（存的是外键 id，直显数字无人看得懂）
+const companies = ref([])
+const suppliers = ref([])
+function companyName(id) { return companies.value.find((c) => c.id === Number(id))?.name || `#${id}` }
+function supplierName(id) { return suppliers.value.find((s) => s.id === Number(id))?.supplierName || `#${id}` }
+async function loadOptions() {
+  try {
+    const flat = []
+    const walk = (arr) => { (arr || []).forEach((n) => { flat.push({ id: n.id, name: n.companyName || n.name || n.label }); if (n.children?.length) walk(n.children) }) }
+    walk(await orgApi.companyTree())
+    companies.value = flat
+  } catch { companies.value = [] }
+  try { suppliers.value = (await mdApi.suppliers({ pageNum: 1, pageSize: 500 }))?.list || [] } catch { suppliers.value = [] }
 }
 
 const selRows = ref([])
@@ -230,7 +243,7 @@ function handleCurrentChange(val) {
   reload()
 }
 
-onMounted(reload)
+onMounted(() => { reload(); loadOptions() })
 
 function openRowDetail(row) {
   return showRowDetail(row, { title: t('field.detail') })

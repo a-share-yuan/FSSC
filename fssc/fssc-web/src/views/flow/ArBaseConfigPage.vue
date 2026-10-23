@@ -115,11 +115,15 @@
         </el-form-item>
         <el-form-item :label="$t('flow.baseCfg.colCustPrefix')"><el-input v-model="ruleForm.customerPrefix" :placeholder="$t('flow.baseCfg.phCustPrefix')" /></el-form-item>
         <el-form-item :label="$t('flow.baseCfg.colOwner')" prop="handlerList">
-          <el-select v-model="ruleForm.handlerList" multiple filterable allow-create :placeholder="$t('flow.baseCfg.phOwnerMulti')" style="width:100%">
+          <el-select v-model="ruleForm.handlerList" multiple filterable :placeholder="$t('flow.baseCfg.phOwnerMulti')" style="width:100%">
             <el-option v-for="u in ruleUserOptions" :key="u" :label="u" :value="u" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="$t('field.leader')"><el-input v-model="ruleForm.groupLeader" :placeholder="$t('flow.baseCfg.phGroupLeader')" /></el-form-item>
+        <el-form-item :label="$t('field.leader')">
+          <el-select v-model="ruleForm.groupLeader" filterable clearable :placeholder="$t('flow.baseCfg.phGroupLeader')" style="width:100%">
+            <el-option v-for="u in ruleUserOptions" :key="u" :label="u" :value="u" />
+          </el-select>
+        </el-form-item>
         <el-form-item :label="$t('flow.baseCfg.colMultiMode')">
           <el-radio-group v-model="ruleForm.autoBalance">
             <el-radio :value="0">{{ $t('flow.baseCfg.optWorkPool') }}</el-radio>

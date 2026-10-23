@@ -10,10 +10,17 @@ import com.fssc.common.util.AssertUtil;
 import com.fssc.common.util.StrUtil;
 import com.fssc.customer.entity.CrmCustomer;
 import com.fssc.customer.mapper.CrmCustomerMapper;
+import com.fssc.masterdata.entity.MdSupplier;
+import com.fssc.masterdata.mapper.MdSupplierMapper;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.service.NumberRuleService;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,19 +32,35 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class CustomerService {
 
+    /**
+     * 关键字过滤的第四臂＝供应商侧联查。影子行的联系人已不再落 crm 列（V1.4.91 清存量后全空），
+     * 让「按联系人姓名/电话/地址搜客户」这条既有手感在清列那天静默失效。
+     * 参数一律走 {0} 占位（拼接用户输入）；两侧都锁自家 tenant_id，不依赖拦截器是否会下推进子查询。
+     */
+    private static final String SUPPLIER_CONTACT_EXISTS =
+            "exists (select 1 from md_supplier ms where ms.del_flag = 0"
+                    + " and ms.tenant_id = crm_customer.tenant_id"
+                    + " and ms.supplier_code = crm_customer.customer_code"
+                    + " and (ms.contact_name like concat('%', {0}, '%')"
+                    + " or ms.contact_phone like concat('%', {0}, '%')"
+                    + " or ms.address like concat('%', {0}, '%')))";
+
     private final CrmCustomerMapper mapper;
     private final WfEngineFacade wfEngineFacade;
     private final NumberRuleService numberRuleService;
+    private final MdSupplierMapper supplierMapper;
 
     public PageResult<CrmCustomer> page(long pn, long ps, String kw) {
         LambdaQueryWrapper<CrmCustomer> qw = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(kw)) {
             qw.and(w -> w.like(CrmCustomer::getCustomerCode, kw)
                     .or().like(CrmCustomer::getCustomerName, kw)
-                    .or().like(CrmCustomer::getContactName, kw));
+                    .or().like(CrmCustomer::getContactName, kw)
+                    .or().apply(SUPPLIER_CONTACT_EXISTS, kw));
         }
         qw.orderByDesc(CrmCustomer::getId);
         Page<CrmCustomer> p = mapper.selectPage(Page.of(pn, ps), qw);
+        fillContactFromSupplier(p.getRecords());
         return PageResult.of(p.getRecords(), p.getTotal(), pn, ps);
     }
 
@@ -104,4 +127,47 @@ public class CustomerService {
         mapper.updateById(upd);
     }
 
+    /**
+     * 供应商影子行的联系人三列（contactName/contactPhone/address）按编码回查 md_supplier 补齐。
+     * crm_customer 建档不再拷这三列（同编码 54 行三列逐值全同＝纯冗余），出参口径保持不变，界面「带出联系人」照旧。
+     * 每页只发一条 IN 查询（客户下拉每页都走这里，逐行回查）；只填空缺，人工在客户档案上改过的值不覆盖。
+     * 关键字侧另有第四臂＝SUPPLIER_CONTACT_EXISTS 联查供应商侧三列，影子行清空后按 联系人/电话/地址 仍搜得到。
+     */
+    private void fillContactFromSupplier(List<CrmCustomer> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        Set<String> codes = new LinkedHashSet<>();
+        for (CrmCustomer c : rows) {
+            boolean anyBlank = StrUtil.isBlank(c.getContactName())
+                    || StrUtil.isBlank(c.getContactPhone())
+                    || StrUtil.isBlank(c.getAddress());
+            if (anyBlank && StrUtil.isNotBlank(c.getCustomerCode())) {
+                codes.add(c.getCustomerCode().trim());
+            }
+        }
+        if (codes.isEmpty()) {
+            return;
+        }
+        Map<String, MdSupplier> byCode = supplierMapper.selectList(new LambdaQueryWrapper<MdSupplier>()
+                        .in(MdSupplier::getSupplierCode, codes))
+                .stream()
+                .filter(s -> s.getSupplierCode() != null)
+                .collect(Collectors.toMap(s -> s.getSupplierCode().trim(), s -> s, (a, b) -> a));
+        for (CrmCustomer c : rows) {
+            MdSupplier s = c.getCustomerCode() == null ? null : byCode.get(c.getCustomerCode().trim());
+            if (s == null) {
+                continue;
+            }
+            if (StrUtil.isBlank(c.getContactName())) {
+                c.setContactName(s.getContactName());
+            }
+            if (StrUtil.isBlank(c.getContactPhone())) {
+                c.setContactPhone(s.getContactPhone());
+            }
+            if (StrUtil.isBlank(c.getAddress())) {
+                c.setAddress(s.getAddress());
+            }
+        }
+    }
 }

@@ -136,6 +136,24 @@ public class SubjectService {
         return s == null || s.getScope() > com.fssc.common.enums.DataScope.TENANT.getCode();
     }
 
+    /**
+     * 下拉可选科目：仅启用叶子科目，按公司维度（本公司 ∪ 租户共享）与 data_scope 收口。
+     * 供业务单据的科目选择器使用，避免手工输入科目编码。
+     */
+    @DataScope("会计科目选项数据范围")
+    public java.util.List<MdSubject> options(Long companyId, String keyword) {
+        LambdaQueryWrapper<MdSubject> qw = new LambdaQueryWrapper<>();
+        applyCompanyDimension(qw, companyId);
+        qw.eq(MdSubject::getStatus, "NORMAL").eq(MdSubject::getIsLeaf, 1);
+        if (StringUtils.hasText(keyword)) {
+            String k = keyword.trim();
+            qw.and(w -> w.like(MdSubject::getSubjectCode, k).or().like(MdSubject::getSubjectName, k));
+        }
+        DataScopeKit.apply(qw, MdSubject::getCompanyId, null, null);
+        qw.orderByAsc(MdSubject::getSubjectCode);
+        return mapper.selectList(qw.last("LIMIT 300"));
+    }
+
     public Long create(MdSubject e) {
         // R5-D-043／R5-D-158：company_id 为空＝无归属行（存量 86 行 NULL 归属待人工体检回填，见人工回填单）。
         // 新增口禁止再产 NULL 归属：前端「新增」弹窗不携带该字段，先按登录主体回填（与 PeriodService 的

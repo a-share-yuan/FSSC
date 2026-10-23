@@ -19,7 +19,7 @@
       <el-tab-pane v-if="tabVisible('bad-debt')" :label="$t('flow.entryAr.tabBadDebt')" name="bad-debt" lazy><ArBadDebtBoard /></el-tab-pane>
       <el-tab-pane v-if="tabVisible('month-close')" :label="$t('flow.entryAr.tabMonthClose')" name="month-close" lazy><CloseWorkbench scope="ar" /></el-tab-pane>
       <el-tab-pane v-if="tabVisible('reports')" :label="$t('flow.entryAr.tabReport')" name="reports" lazy><ArApReportBoard /></el-tab-pane>
-      <el-tab-pane v-if="tabVisible('collab')" :label="$t('flow.entryAp.tabSupplyChain')" name="collab" lazy><ArApCollabBoard /></el-tab-pane>
+      <el-tab-pane v-if="tabVisible('collab')" :label="$t('flow.entryAr.tabSupplyChain')" name="collab" lazy><ArApCollabBoard mode="ar" /></el-tab-pane>
       <el-tab-pane v-if="tabVisible('base-config')" :label="$t('flow.entryAr.tabBaseConfig')" name="base-config" lazy><ArBaseConfigPage /></el-tab-pane>
     </el-tabs>
     <el-empty v-else :description="$t('flow.entry.noListPerm')" />
@@ -62,7 +62,7 @@ const TAB_PERMS = {
   'bad-debt': 'arflow:baddebt:manage',
   'month-close': 'arflow:monthclose:manage',
   reports: 'arflow:report:view',
-  collab: 'collab:scp:list',
+  collab: 'collab:ccp:manage',
   'base-config': 'arflow:baseconfig:manage',
 }
 const tabVisible = (name) => hasPerm(TAB_PERMS[name])

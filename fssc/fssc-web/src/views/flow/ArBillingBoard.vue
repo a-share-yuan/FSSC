@@ -11,13 +11,16 @@
             <el-radio-button value="rule">{{ $t('flow.bill.invoiceRule') }}</el-radio-button>
           </el-radio-group>
           <el-button size="small" @click="load">{{ $t('common.refresh') }}</el-button>
-          <el-button v-if="tab === 'statement'" type="primary" size="small" @click="importVisible = true">{{ $t('flow.bill.importStatement') }}</el-button>
+          <el-button v-if="tab === 'statement'" type="primary" size="small" @click="openImport">{{ $t('flow.bill.importStatement') }}</el-button>
           <el-button v-if="tab === 'statement'" size="small" @click="openEbsAdjust">{{ $t('flow.bill.erpAdjustPush') }}</el-button>
-          <el-button v-if="tab === 'preinvoice'" size="small" @click="openRedPush">{{ $t('flow.bill.erpNegativePush') }}</el-button>
+          <el-button v-if="tab === 'pre'" size="small" @click="openRedPush">{{ $t('flow.bill.erpNegativePush') }}</el-button>
           <el-upload v-if="tab === 'statement'" :show-file-list="false" accept=".xlsx" :auto-upload="false" :on-change="doImportExcel" style="display:inline-block">
             <el-button type="success" size="small">{{ $t('flow.bill.excelTemplateImport') }}</el-button>
           </el-upload>
           <el-button v-if="tab === 'pre'" type="primary" size="small" @click="genVisible = true">{{ $t('flow.bill.splitMergeGenerate') }}</el-button>
+          <el-button v-if="tab === 'mail'" type="primary" size="small" @click="openMailCreate">{{ $t('flow.bill.createMail') }}</el-button>
+          <el-button v-if="tab === 'mail'" size="small" @click="openRecipientManage">{{ $t('flow.bill.recipientManage') }}</el-button>
+          <el-button v-if="tab === 'mail'" size="small" @click="openMailLog()">{{ $t('flow.bill.mailLog') }}</el-button>
         </div>
       </div>
     </template>
@@ -76,6 +79,12 @@
     <el-table v-show="tab === 'mail'" :data="mails" v-loading="loading" size="small" border stripe>
       <el-table-column prop="packageNo" :label="$t('flow.bill.colMailNo')" min-width="185" />
       <el-table-column prop="customerName" :label="$t('field.customer')" min-width="130" />
+      <el-table-column :label="$t('flow.bill.mailReceiver')" min-width="150">
+        <template #default="{ row }">
+          <div>{{ row.receiver || '—' }}</div>
+          <div class="sub">{{ row.receiverPhone || '' }} {{ row.receiverEmail || '' }}</div>
+        </template>
+      </el-table-column>
       <el-table-column prop="courierNo" :label="$t('flow.bill.colTrackingNo')" min-width="130" />
       <el-table-column :label="$t('flow.bill.colNotify')" width="80">
         <template #default="{ row }">{{ row.mailNotified === 1 ? t('flow.bill.notified') : t('flow.bill.notNotified') }}</template>
@@ -83,12 +92,13 @@
       <el-table-column :label="$t('common.status')" width="90">
         <template #default="{ row }">{{ { CREATED: t('flow.bill.mailCreated'), SENT: t('flow.bill.mailSent'), SIGNED: t('flow.bill.mailSigned'), ARCHIVED: t('flow.bill.mailArchived') }[row.status] || row.status }}</template>
       </el-table-column>
-      <el-table-column :label="$t('common.operation')" width="240" fixed="right">
+      <el-table-column :label="$t('common.operation')" width="300" fixed="right">
         <template #default="{ row }">
           <el-button v-if="row.status === 'CREATED'" link type="primary" size="small" @click="mailAct(row, 'send')">{{ $t('flow.bill.send') }}</el-button>
           <el-button v-if="row.status === 'SENT' && !row.mailNotified" link type="warning" size="small" @click="mailAct(row, 'notify')">{{ $t('flow.bill.emailNotify') }}</el-button>
           <el-button v-if="row.status === 'SENT'" link type="primary" size="small" @click="mailAct(row, 'sign')">{{ $t('flow.bill.signReceipt') }}</el-button>
           <el-button v-if="row.status === 'SIGNED'" link type="success" size="small" @click="mailAct(row, 'archive')">{{ $t('flow.bill.archive') }}</el-button>
+          <el-button link type="info" size="small" @click="openMailLog(row.packageNo)">{{ $t('flow.bill.mailLog') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -116,12 +126,18 @@
     <el-dialog v-model="importVisible" :title="$t('flow.bill.importDialogTitle')" width="560px" destroy-on-close>
       <el-form ref="stFormRef" :model="stForm" :rules="stRules" label-width="110px" size="small">
         <el-row :gutter="12">
-          <el-col :span="12"><el-form-item :label="$t('flow.collab.colCustomerCode')" prop="customerCode"><el-input v-model="stForm.customerCode" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.collab.colCustomerName')"><el-input v-model="stForm.customerName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.collab.colCustomerName')" prop="customerCode">
+            <CustomerSelect v-model="stForm.customerCode" @change="onStatementCustomer" />
+          </el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.collab.colCustomerCode')"><el-input v-model="stForm.customerCode" disabled /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('field.amount')" prop="amount"><el-input v-model="stForm.amount" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('field.taxAmount')" prop="taxAmount"><el-input v-model="stForm.taxAmount" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.bill.colCurrency')"><el-input v-model="stForm.ccy" :placeholder="$t('flow.bill.ccyPlaceholder')" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.bill.importUser')"><el-input v-model="stForm.importUser" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.bill.colCurrency')">
+            <el-select v-model="stForm.ccy" style="width: 100%">
+              <el-option v-for="c in ['CNY', 'USD', 'EUR', 'HKD', 'JPY']" :key="c" :label="c" :value="c" />
+            </el-select>
+          </el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.bill.importUser')"><el-input v-model="stForm.importUser" disabled /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>
@@ -130,8 +146,167 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="genVisible" :title="$t('flow.bill.genDialogTitle')" width="420px" destroy-on-close>
-      <el-input v-model="genBillNo" :placeholder="$t('flow.bill.genBillNoPlaceholder')" />
+    <el-dialog v-model="mailVisible" :title="$t('flow.bill.createMailTitle')" width="560px" destroy-on-close>
+      <el-form ref="mailFormRef" :model="mailForm" :rules="mailRules" label-width="100px" size="small">
+        <el-form-item :label="$t('flow.bill.mailInvoices')" prop="invoiceNos">
+          <el-select v-model="mailForm.invoiceNos" multiple filterable style="width: 100%" :placeholder="$t('flow.bill.mailInvoicesPh')">
+            <el-option v-for="i in mailInvoiceOptions" :key="i.preInvoiceNo"
+              :label="`${i.preInvoiceNo} · ${i.customerName || ''} · ${i.totalAmount}`" :value="i.preInvoiceNo" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('field.customer')">
+          <CustomerSelect v-model="mailForm.customerCode" @change="onMailCustomerPick" />
+          <div v-if="mailForm.customerCode" style="color:#909399;font-size:12px">{{ $t('flow.bill.hintPickedFromProfile') }}</div>
+        </el-form-item>
+        <el-form-item :label="$t('flow.bill.recipientPick')">
+          <el-select v-model="mailForm.recipientId" filterable clearable style="width: 100%" :placeholder="$t('flow.bill.recipientPickPh')" @change="onRecipientChange">
+            <el-option v-for="r in mailRecipients" :key="r.id" :value="r.id"
+              :label="`${r.recipientName}${r.customerName ? ' · ' + r.customerName : ''}${r.email ? ' · ' + r.email : ''}`" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('flow.bill.mailReceiver')" prop="receiver"><el-input v-model="mailForm.receiver" :placeholder="$t('flow.bill.mailReceiverPh')" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailPhone')"><el-input v-model="mailForm.receiverPhone" :placeholder="$t('flow.bill.mailPhonePh')" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailEmail')" prop="receiverEmail"><el-input v-model="mailForm.receiverEmail" :placeholder="$t('flow.bill.mailEmailPh')" />
+          <div v-if="mailForm.customerCode && !mailForm.receiverEmail" style="color:#e6a23c;font-size:12px">{{ $t('flow.bill.hintNoEmailInProfile') }}</div>
+        </el-form-item>
+        <el-form-item :label="$t('flow.bill.mailAddress')" prop="address"><el-input v-model="mailForm.address" type="textarea" :rows="2" :placeholder="$t('flow.bill.mailAddressPh')" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="mailVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doCreateMail">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 寄送：快递公司 + 单号 -->
+    <el-dialog v-model="courierVisible" :title="$t('flow.bill.mailDialogTitle')" width="420px" destroy-on-close>
+      <el-form label-width="90px" size="small">
+        <el-form-item :label="$t('flow.bill.mailCourierCompany')">
+          <el-select v-model="courierForm.courierCompany" style="width: 100%" filterable allow-create default-first-option>
+            <el-option v-for="c in COURIER_COMPANIES" :key="c" :label="c" :value="c" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('flow.bill.colTrackingNo')">
+          <el-input v-model="courierForm.courierNo" :placeholder="$t('flow.bill.trackingNoPh')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="courierVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doSendMail">{{ $t('flow.bill.confirmSend') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 收件人管理 -->
+    <el-dialog v-model="recipientVisible" :title="$t('flow.bill.recipientManage')" width="960px" destroy-on-close>
+      <div class="ops" style="margin-bottom: 8px">
+        <el-input v-model="recipientQuery.keyword" size="small" style="width: 220px" :placeholder="$t('flow.bill.recipientSearchPh')" clearable @keyup.enter="loadRecipients" />
+        <el-button size="small" @click="loadRecipients">{{ $t('common.search') }}</el-button>
+        <el-button type="primary" size="small" @click="openRecipientForm()">{{ $t('flow.bill.recipientAdd') }}</el-button>
+      </div>
+      <el-table :data="recipientRows" size="small" border stripe max-height="420">
+        <el-table-column prop="recipientName" :label="$t('flow.bill.mailReceiver')" width="110" />
+        <el-table-column prop="customerName" :label="$t('field.customer')" min-width="130" />
+        <el-table-column prop="phone" :label="$t('flow.bill.mailPhone')" width="120" />
+        <el-table-column prop="email" :label="$t('flow.bill.mailEmail')" min-width="160" />
+        <el-table-column prop="address" :label="$t('flow.bill.mailAddress')" min-width="200" show-overflow-tooltip />
+        <el-table-column :label="$t('flow.bill.recipientDefault')" width="80">
+          <template #default="{ row }">{{ row.isDefault === 1 ? $t('common.yes') : '—' }}</template>
+        </el-table-column>
+        <el-table-column :label="$t('common.operation')" width="120" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openRecipientForm(row)">{{ $t('common.edit') }}</el-button>
+            <el-button link type="danger" size="small" @click="deleteRecipient(row)">{{ $t('common.delete') }}</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="recipientFormVisible" :title="recipientForm.id ? $t('flow.bill.recipientEdit') : $t('flow.bill.recipientAdd')" width="560px" destroy-on-close>
+      <el-form ref="recipientFormRef" :model="recipientForm" :rules="recipientRules" label-width="100px" size="small">
+        <el-form-item :label="$t('field.customer')">
+          <CustomerSelect v-model="recipientForm.customerCode" @change="onRecipientCustomer" />
+        </el-form-item>
+        <el-form-item :label="$t('flow.bill.mailReceiver')" prop="recipientName"><el-input v-model="recipientForm.recipientName" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailPhone')"><el-input v-model="recipientForm.phone" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailEmail')" prop="email"><el-input v-model="recipientForm.email" />
+          <div v-if="recipientForm.customerCode && !recipientForm.email" style="color:#e6a23c;font-size:12px">{{ $t('flow.bill.hintNoEmailInProfile') }}</div>
+        </el-form-item>
+        <el-form-item :label="$t('flow.bill.mailAddress')"><el-input v-model="recipientForm.address" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.recipientDefault')"><el-switch v-model="recipientForm.isDefault" :active-value="1" :inactive-value="0" /></el-form-item>
+        <el-form-item :label="$t('common.remark')"><el-input v-model="recipientForm.remark" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="recipientFormVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="saveRecipient">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 邮件记录 -->
+    <el-dialog v-model="logVisible" :title="$t('flow.bill.mailLog')" width="960px" destroy-on-close>
+      <div class="ops" style="margin-bottom: 8px">
+        <el-input v-model="logQuery.packageNo" size="small" style="width: 220px" :placeholder="$t('flow.bill.mailLogSearchPh')" clearable @keyup.enter="loadMailLog" />
+        <el-select v-model="logQuery.status" size="small" style="width: 140px" clearable :placeholder="$t('common.status')">
+          <el-option label="SENT" value="SENT" />
+          <el-option label="SIMULATED" value="SIMULATED" />
+          <el-option label="FAILED" value="FAILED" />
+        </el-select>
+        <el-button size="small" @click="loadMailLog">{{ $t('common.search') }}</el-button>
+      </div>
+      <el-table :data="mailLogs" size="small" border stripe max-height="420">
+        <el-table-column prop="sendTime" :label="$t('flow.bill.mailLogTime')" width="170" />
+        <el-table-column prop="packageNo" :label="$t('flow.bill.colMailNo')" width="190" />
+        <el-table-column prop="receiver" :label="$t('flow.bill.mailReceiver')" width="100" />
+        <el-table-column prop="email" :label="$t('flow.bill.mailEmail')" min-width="170" />
+        <el-table-column :label="$t('common.status')" width="110">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.sendStatus === 'FAILED' ? 'danger' : row.sendStatus === 'SENT' ? 'success' : 'info'">{{ row.sendStatus }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="errorMsg" :label="$t('flow.bill.mailLogResult')" min-width="220" show-overflow-tooltip />
+      </el-table>
+    </el-dialog>
+
+    <!-- ERP 财务调整推送 -->
+    <el-dialog v-model="ebsVisible" :title="$t('flow.bill.erpAdjustBoxTitle')" width="560px" destroy-on-close>
+      <el-form :model="ebsForm" label-width="110px" size="small">
+        <el-form-item :label="$t('flow.bill.erpAdjustNo')" required><el-input v-model="ebsForm.adjustNo" :placeholder="$t('flow.bill.erpAdjustNoPh')" /></el-form-item>
+        <el-form-item :label="$t('field.customer')"><CustomerSelect v-model="ebsForm.customerCode" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.erpAdjustType')" required><el-input v-model="ebsForm.adjustType" :placeholder="$t('flow.bill.erpAdjustTypePh')" /></el-form-item>
+        <el-form-item :label="$t('field.amount')"><el-input v-model="ebsForm.amount" /></el-form-item>
+        <el-form-item :label="$t('field.taxAmount')"><el-input v-model="ebsForm.taxAmount" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.erpStatement')">
+          <el-select v-model="ebsForm.statementNo" filterable clearable style="width: 100%" :placeholder="$t('flow.bill.erpStatementPh')">
+            <el-option v-for="s in statements" :key="s.id" :value="s.billNo" :label="`${s.billNo} · ${s.customerName || ''} · ${s.status}`" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="ebsVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doEbsAdjust">{{ $t('field.pushBtn') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ERP 负数发票（红字来源）推送 -->
+    <el-dialog v-model="redPushVisible" :title="$t('flow.bill.erpNegativeBoxTitle')" width="520px" destroy-on-close>
+      <el-form label-width="110px" size="small">
+        <el-form-item :label="$t('flow.bill.erpMemoNo')" required><el-input v-model="redPushForm.ebsCreditMemoNo" :placeholder="$t('flow.bill.erpMemoNoPh')" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailInvoices')" required>
+          <el-select v-model="redPushForm.preInvoiceNo" filterable style="width: 100%" :placeholder="$t('flow.bill.erpInvoicePickPh')">
+            <el-option v-for="i in invoices" :key="i.preInvoiceNo" :value="i.preInvoiceNo"
+              :label="`${i.preInvoiceNo} · ${i.customerName || ''} · ${i.invoiceNo || ''}`" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="redPushVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" size="small" @click="doRedPush">{{ $t('field.pushBtn') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="genVisible" :title="$t('flow.bill.genDialogTitle')" width="460px" destroy-on-close>
+      <el-select v-model="genBillNo" filterable style="width: 100%" :placeholder="$t('flow.bill.genBillNoPlaceholder')">
+        <el-option v-for="s in reconciledStatements" :key="s.id" :value="s.billNo"
+          :label="`${s.billNo} · ${s.customerName || ''} · ${s.amount}`" />
+      </el-select>
       <div class="tip">{{ $t('flow.bill.genTip') }}</div>
       <template #footer>
         <el-button size="small" @click="genVisible = false">{{ $t('common.cancel') }}</el-button>
@@ -150,8 +325,9 @@
 </template>
 
 <script setup>
-import { arBillingStatusLabel } from '@/constants/enums'
+import { arBillingStatusLabel, COURIER_COMPANIES } from '@/constants/enums'
 import { invoiceTypeLabel } from '@/constants/invoiceType'
+import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { arFlowApi, arGapApi, store } from '../../api'
@@ -173,12 +349,44 @@ const inputVisible = ref(false)
 const current = ref(null)
 const stForm = reactive({ ccy: 'CNY' })
 const stFormRef = ref(null)
+const mailVisible = ref(false)
+const mailFormRef = ref(null)
+const mailForm = reactive({ invoiceNos: [], receiver: '', receiverPhone: '', receiverEmail: '', address: '', recipientId: null })
+const mailInvoiceOptions = ref([])
+const mailRecipients = ref([])
+const courierVisible = ref(false)
+const courierForm = reactive({ courierCompany: '', courierNo: '' })
+const currentMail = ref(null)
+const recipientVisible = ref(false)
+const recipientRows = ref([])
+const recipientQuery = reactive({ keyword: '' })
+const recipientFormVisible = ref(false)
+const recipientFormRef = ref(null)
+const recipientForm = reactive({})
+const logVisible = ref(false)
+const mailLogs = ref([])
+const logQuery = reactive({ packageNo: '', status: '' })
+const ebsVisible = ref(false)
+const ebsForm = reactive({})
+const redPushVisible = ref(false)
+const redPushForm = reactive({})
 // 客户编码是对账单归到哪家客户的唯一依据，缺失则导入的行无法核对
 const stRules = computed(() => ({
   customerCode: commonRules.required(t('flow.bill.customerCodePh')),
   amount: commonRules.numberText(t('flow.request.phAmount')),
   taxAmount: commonRules.numberText(t('flow.bill.taxAmountPh')),
 }))
+const mailRules = computed(() => ({
+  invoiceNos: commonRules.multiSelect(t('flow.bill.mailInvoicesPh')),
+  receiver: commonRules.required(t('flow.bill.mailReceiverPh')),
+  receiverEmail: [...commonRules.required(t('flow.bill.mailEmailPh')), ...commonRules.email()],
+  address: commonRules.required(t('flow.bill.mailAddressPh')),
+}))
+const recipientRules = computed(() => ({
+  recipientName: commonRules.required(t('flow.bill.mailReceiverPh')),
+  email: [...commonRules.required(t('flow.bill.mailEmailPh')), ...commonRules.email()],
+}))
+const reconciledStatements = computed(() => (statements.value || []).filter((s) => s.status === 'RECONCILED'))
 const genBillNo = ref('')
 const inputKind = ref('')
 const inputTitle = ref('')
@@ -284,18 +492,22 @@ async function simple(row, action) {
 
 async function mailAct(row, action) {
   if (action === 'send') {
-    // 41号审查 P0-1 同源整改：window.prompt -> ElMessageBox.prompt（必填校验）
-    const { value: no } = await ElMessageBox.prompt(t('flow.bill.colTrackingNo'), t('flow.bill.mailDialogTitle'), {
-      inputPlaceholder: t('flow.bill.trackingNoPh'),
-      inputValidator: (v) => (v && v.trim() ? true : t('flow.bill.msgTrackingRequired')),
-      confirmButtonText: t('flow.bill.confirmSend'), cancelButtonText: t('common.cancel'),
-    }).catch(() => ({}))
-    if (!no) return
-    await arFlowApi.sendMail(row.id, { courierNo: no })
-  } else {
-    await arFlowApi[action](row.id)
+    currentMail.value = row
+    courierForm.courierCompany = ''
+    courierForm.courierNo = ''
+    courierVisible.value = true
+    return
   }
+  await arFlowApi[action](row.id)
   ElMessage.success(t('common.success'))
+  await load()
+}
+
+async function doSendMail() {
+  if (!courierForm.courierNo?.trim()) return ElMessage.warning(t('flow.bill.msgTrackingRequired'))
+  await arFlowApi.sendMail(currentMail.value.id, { courierCompany: courierForm.courierCompany, courierNo: courierForm.courierNo })
+  ElMessage.success(t('common.success'))
+  courierVisible.value = false
   await load()
 }
 
@@ -303,6 +515,134 @@ async function saveRule(rule) {
   await arFlowApi.saveRule(rule)
   ElMessage.success(t('flow.bill.msgSaved'))
   await load()
+}
+
+function openImport() {
+  Object.keys(stForm).forEach((k) => delete stForm[k])
+  stForm.ccy = 'CNY'
+  // 导入人默认当前登录人，留空的对账单导入无法追溯经手人
+  stForm.importUser = store.user?.realName || store.user?.username || ''
+  importVisible.value = true
+}
+
+async function openMailCreate() {
+  Object.keys(mailForm).forEach((k) => delete mailForm[k])
+  mailForm.invoiceNos = []
+  mailForm.recipientId = null
+  try {
+    const [list, recips] = await Promise.all([
+      arFlowApi.preInvoices({ status: 'INVOICED' }),
+      arFlowApi.mailRecipients({}),
+    ])
+    mailInvoiceOptions.value = (list || []).filter((i) => i.printedFlag)
+    mailRecipients.value = recips || []
+  } catch (e) {
+    mailInvoiceOptions.value = []
+    mailRecipients.value = []
+    ElMessage.error(e.message)
+  }
+  mailVisible.value = true
+}
+
+function onRecipientChange(id) {
+  const r = mailRecipients.value.find((x) => x.id === id)
+  if (!r) return
+  mailForm.receiver = r.recipientName || ''
+  mailForm.receiverPhone = r.phone || ''
+  mailForm.receiverEmail = r.email || ''
+  mailForm.address = r.address || ''
+}
+
+// 新建邮包时直接选往来单位：四项从客户档案带出，已填过的不覆盖（允许就地改成本次的实际收件人）
+function onMailCustomerPick(c) {
+  if (!c) return
+  if (!mailForm.receiver) mailForm.receiver = c.contactName || ''
+  if (!mailForm.receiverPhone) mailForm.receiverPhone = c.contactPhone || ''
+  if (!mailForm.receiverEmail) mailForm.receiverEmail = c.email || ''
+  if (!mailForm.address) mailForm.address = c.address || ''
+}
+
+async function doCreateMail() {
+  if (!(await validateForms([mailFormRef]))) return
+  await arFlowApi.createMail({
+    recipientId: mailForm.recipientId || null,
+    receiver: mailForm.receiver,
+    receiverPhone: mailForm.receiverPhone,
+    receiverEmail: mailForm.receiverEmail,
+    address: mailForm.address,
+  }, mailForm.invoiceNos.join(','))
+  ElMessage.success(t('flow.bill.msgMailCreated'))
+  mailVisible.value = false
+  await load()
+}
+
+// ---------------- 收件人管理 / 邮件记录 ----------------
+
+function openRecipientManage() {
+  recipientVisible.value = true
+  loadRecipients()
+}
+
+async function loadRecipients() {
+  try {
+    recipientRows.value = await arFlowApi.mailRecipients({ keyword: recipientQuery.keyword || undefined })
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
+
+function openRecipientForm(row) {
+  Object.keys(recipientForm).forEach((k) => delete recipientForm[k])
+  Object.assign(recipientForm, row ? { ...row } : { isDefault: 0 })
+  recipientFormVisible.value = true
+}
+
+// 选往来单位＝把客户档案里的联系人/电话/邮箱/地址带进地址簿表单；已填过的不覆盖，改完只落到地址簿，回写客户主数据
+function onRecipientCustomer(c) {
+  recipientForm.customerName = c?.customerName || ''
+  if (!c) return
+  if (!recipientForm.recipientName) recipientForm.recipientName = c.contactName || ''
+  if (!recipientForm.phone) recipientForm.phone = c.contactPhone || ''
+  if (!recipientForm.email) recipientForm.email = c.email || ''
+  if (!recipientForm.address) recipientForm.address = c.address || ''
+}
+
+async function saveRecipient() {
+  if (!(await validateForms([recipientFormRef]))) return
+  if (recipientForm.id) await arFlowApi.updateMailRecipient({ ...recipientForm })
+  else await arFlowApi.createMailRecipient({ ...recipientForm })
+  ElMessage.success(t('flow.bill.msgRecipientSaved'))
+  recipientFormVisible.value = false
+  await loadRecipients()
+}
+
+async function deleteRecipient(row) {
+  try {
+    await ElMessageBox.confirm(t('flow.bill.recipientDeleteConfirm', { v1: row.recipientName }), t('common.tip'), { type: 'warning' })
+  } catch (e) {
+    return
+  }
+  await arFlowApi.deleteMailRecipient(row.id)
+  ElMessage.success(t('common.success'))
+  await loadRecipients()
+}
+
+async function openMailLog(packageNo) {
+  logQuery.packageNo = packageNo || ''
+  logQuery.status = ''
+  logVisible.value = true
+  await loadMailLog()
+}
+
+async function loadMailLog() {
+  try {
+    mailLogs.value = await arFlowApi.mailNotifyLog({
+      packageNo: logQuery.packageNo || undefined,
+      status: logQuery.status || undefined,
+    })
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
 }
 
 async function doImport() {
@@ -321,42 +661,46 @@ async function doImportExcel(uploadFile) {
   await load()
 }
 
+function onStatementCustomer(c) {
+  stForm.customerName = c?.customerName || ''
+}
+
 function openEbsAdjust() {
-  // 41号审查 P0-1 同源整改：window.prompt -> ElMessageBox.prompt（必填校验）
-  ElMessageBox.prompt(t('flow.bill.erpAdjustPromptTitle'), t('flow.bill.erpAdjustBoxTitle'), {
-    inputPlaceholder: t('flow.bill.erpAdjustFormat'),
-    inputValidator: (v) => {
-      if (!v || !v.trim()) return t('flow.bill.msgContentRequired')
-      const parts = v.split(',').map((x) => x.trim())
-      if (parts.length < 5) return t('flow.bill.msgAdjustFieldsRequired')
-      return true
-    },
-    confirmButtonText: t('field.pushBtn'), cancelButtonText: t('common.cancel'),
-  }).then(({ value: input }) => {
-    if (!input) return
-    const [adjustNo, customerCode, adjustType, amount, tax, stmtNo] = input.split(',').map((s) => s.trim())
-    return arGapApi.pushEbsAdjust({ adjustNo, customerCode, adjustType, amount, taxAmount: tax || 0, statementNo: stmtNo || null })
-      .then(async (r) => {
-        ElMessage.success(t('flow.bill.msgAdjustReceived', { v1: r.status }) + (r.statementNo ? t('flow.bill.msgAutoRecheck') : ''))
-        await load()
-      }).catch((e) => ElMessage.error(e.message))
-  }).catch(() => {})
+  Object.keys(ebsForm).forEach((k) => delete ebsForm[k])
+  ebsVisible.value = true
+}
+
+async function doEbsAdjust() {
+  if (!ebsForm.adjustNo?.trim()) return ElMessage.warning(t('flow.bill.erpAdjustNoPh'))
+  if (!ebsForm.adjustType?.trim()) return ElMessage.warning(t('flow.bill.erpAdjustTypePh'))
+  const r = await arGapApi.pushEbsAdjust({
+    adjustNo: ebsForm.adjustNo,
+    customerCode: ebsForm.customerCode || null,
+    adjustType: ebsForm.adjustType,
+    amount: ebsForm.amount || 0,
+    taxAmount: ebsForm.taxAmount || 0,
+    statementNo: ebsForm.statementNo || null,
+  })
+  ElMessage.success(t('flow.bill.msgAdjustReceived', { v1: r.status }) + (r.statementNo ? t('flow.bill.msgAutoRecheck') : ''))
+  ebsVisible.value = false
+  await load()
 }
 
 function openRedPush() {
-  // 41号审查 P0-1 同源整改：window.prompt -> ElMessageBox.prompt（必填校验）
-  ElMessageBox.prompt(t('flow.bill.erpNegativePromptTitle'), t('flow.bill.erpNegativeBoxTitle'), {
-    inputPlaceholder: t('flow.bill.erpNegativeFormat'),
-    inputValidator: (v) => (v && v.includes(',') ? true : t('flow.bill.erpNegativeHint')),
-    confirmButtonText: t('field.pushBtn'), cancelButtonText: t('common.cancel'),
-  }).then(({ value: input }) => {
-    if (!input) return
-    const [memo, inv] = input.split(',').map((s) => s.trim())
-    return arGapApi.pushRedInvoice({ ebsCreditMemoNo: memo, preInvoiceNo: inv }).then(async () => {
-      ElMessage.success(t('flow.bill.msgNegativeReceived'))
-      await load()
-    }).catch((e) => ElMessage.error(e.message))
-  }).catch(() => {})
+  Object.keys(redPushForm).forEach((k) => delete redPushForm[k])
+  redPushVisible.value = true
+}
+
+async function doRedPush() {
+  if (!redPushForm.ebsCreditMemoNo?.trim()) return ElMessage.warning(t('flow.bill.erpMemoNoPh'))
+  if (!redPushForm.preInvoiceNo) return ElMessage.warning(t('flow.bill.erpInvoicePickPh'))
+  await arGapApi.pushRedInvoice({
+    ebsCreditMemoNo: redPushForm.ebsCreditMemoNo,
+    preInvoiceNo: redPushForm.preInvoiceNo,
+  })
+  ElMessage.success(t('flow.bill.msgNegativeReceived'))
+  redPushVisible.value = false
+  await load()
 }
 
 onMounted(load)
@@ -366,4 +710,5 @@ onMounted(load)
 .toolbar { display: flex; justify-content: space-between; align-items: center; }
 .ops { display: flex; gap: 6px; align-items: center; }
 .tip { font-size: 12px; color: #e6a23c; margin-top: 6px; }
+.sub { font-size: 11px; color: #909399; }
 </style>

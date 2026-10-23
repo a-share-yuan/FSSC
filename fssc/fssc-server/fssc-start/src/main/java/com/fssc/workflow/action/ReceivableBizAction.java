@@ -45,9 +45,11 @@ public class ReceivableBizAction implements WfBizAction {
             if (Boolean.TRUE.equals(event.getApproved())) {
                 // P4-3 审计扩面：改状态前采集旧值
                 String oldStatus = rec.getStatus();
+                // 已核销终态 DONE 不得被审批回退成 CONFIRMED（收款腿先完成、审批后到的真实时序）
+                String newStatus = "DONE".equals(oldStatus) ? "DONE" : "CONFIRMED";
                 RcReceivable upd = new RcReceivable();
                 upd.setId(recId);
-                upd.setStatus("CONFIRMED");
+                upd.setStatus(newStatus);
                 rcReceivableMapper.updateById(upd);
                 java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
                 auditBefore.put("status", oldStatus);
@@ -56,7 +58,7 @@ public class ReceivableBizAction implements WfBizAction {
                 auditTrailService.recordUpdate(event.getBizType(), recId, rec.getBillNo(), "rc_receivable",
                         String.valueOf(recId), auditBefore, auditAfter,
                         "审批通过" + (event.getComment() == null || event.getComment().isBlank() ? "" : "：" + event.getComment()));
-                log.info("应收单 {} 审批通过: NONE → CONFIRMED", rec.getBillNo());
+                log.info("应收单 {} 审批通过: {} → {}", rec.getBillNo(), oldStatus, newStatus);
                 // P0-2: 生成应收确认凭证
                 try {
                     voucherService.generateReceivableVoucher(rec);

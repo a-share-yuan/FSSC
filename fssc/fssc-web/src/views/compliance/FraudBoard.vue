@@ -62,7 +62,7 @@
       <el-select v-model="q.detectionType" placeholder="检测类型" clearable style="width:180px" size="small" @change="search">
         <el-option v-for="(v, k) in TYPE_ST" :key="k" :label="v" :value="k" />
       </el-select>
-      <el-input v-model="q.employeeId" placeholder="员工ID" clearable style="width:130px" size="small" @keyup.enter="search" />
+      <UserSelect v-model="q.employeeId" placeholder="按员工筛选" style="width:200px" size="small" @change="search" />
       <el-select v-model="q.actionTaken" placeholder="处置动作" clearable style="width:150px" size="small" @change="search">
         <el-option v-for="(v, k) in ACTION_ST" :key="k" :label="v" :value="k" />
       </el-select>
@@ -133,6 +133,7 @@ import { complianceApi } from '../../api'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 import SkeletonList from '../../components/SkeletonList.vue'
+import UserSelect from '@/components/common/UserSelect.vue'
 import { showRowDetail } from '@/utils/format'
 import { exportCsv } from '../../utils/csv'
 import { getUserName, preloadMappers } from '@/utils/idMapper'
