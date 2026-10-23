@@ -1,19 +1,17 @@
 /** 财务核算域路由（总账/资产/应收/资金/银行/档案/合同/报表） */
 export default [
-  // P0-7 FA 资产与存货：父路径渲染 Board 宿主（全页签可见），成员深链 /asset/* 保留单页模式
-  // D-BIZ-05 修复：原 redirect → /asset/asset（带 tab prop）导致页签条永久隐藏，用户无法切换子视图
-  { path: 'asset', component: () => import('../../views/asset/AssetBoard.vue'), meta: { title: '资产与存货管理' } },
+  // P0-7 FA 资产与存货：父路径重定向到首个 tab，不渲染汇总的 hub 页
+  { path: 'asset', redirect: '/asset/asset' },
   { path: 'asset/asset', component: () => import('../../views/asset/AssetBoard.vue'), props: { tab: 'asset' }, meta: { title: '资产卡片' } },
   { path: 'asset/category', component: () => import('../../views/asset/AssetBoard.vue'), props: { tab: 'category' }, meta: { title: '资产类别' } },
   { path: 'asset/inventory', component: () => import('../../views/asset/AssetBoard.vue'), props: { tab: 'inventory' }, meta: { title: '存货收发存' } },
   { path: 'asset/taxDiff', component: () => import('../../views/asset/AssetBoard.vue'), props: { tab: 'taxDiff' }, meta: { title: '税会差异' } },
   { path: 'asset/depr-batch', component: () => import('../../views/asset/DeprBatch.vue'), meta: { title: '折旧计提批' } },
-  // P0-8 TR 资金管理：父路径渲染 Board 宿主（全页签可见），成员深链 /treasury/* 保留单页模式
-  // D-BIZ-05 修复：原 redirect → /treasury/plan（带 tab prop）导致页签条永久隐藏，用户无法切换子视图
+  // P0-8 TR 资金管理：父路径重定向到首个 tab，不渲染汇总的 hub 页
   // R5-D-186：treasury 七路由补 meta.perms（router.js 全局守卫消费；读码与后端 @RequiresPerm 逐一对齐：
   // treasury:fundplan/creditbill/transfer/billsettle/position、bank=md:bankaccount:list、bankRecon=bank:reconcile:list）。
   // 无权限账号 URL 直达不再渲染带写按钮的空壳；后端守卫保持现状。
-  { path: 'treasury', component: () => import('../../views/treasury/TreasuryBoard.vue'), meta: { title: '资金管理' } },
+  { path: 'treasury', redirect: '/treasury/plan' },
   { path: 'treasury/plan', component: () => import('../../views/treasury/TreasuryBoard.vue'), props: { tab: 'plan' }, meta: { title: '资金计划', perms: ['treasury:fundplan:list'] } },
   { path: 'treasury/credit', component: () => import('../../views/treasury/TreasuryBoard.vue'), props: { tab: 'credit' }, meta: { title: '资金收款', perms: ['treasury:creditbill:list'] } },
   { path: 'treasury/transfer', component: () => import('../../views/treasury/TreasuryBoard.vue'), props: { tab: 'transfer' }, meta: { title: '资金调拨', perms: ['treasury:transfer:list'] } },
@@ -21,9 +19,8 @@ export default [
   { path: 'treasury/bank', component: () => import('../../views/treasury/TreasuryBoard.vue'), props: { tab: 'bank' }, meta: { title: '银行主数据', perms: ['md:bankaccount:list'] } },
   { path: 'treasury/bankRecon', component: () => import('../../views/treasury/TreasuryBoard.vue'), props: { tab: 'bankRecon' }, meta: { title: '银行对账', perms: ['bank:reconcile:list'] } },
   { path: 'treasury/position', component: () => import('../../views/treasury/TreasuryBoard.vue'), props: { tab: 'position' }, meta: { title: '资金头寸', perms: ['treasury:position:list', 'treasury:fundplan:list', 'treasury:creditbill:list'] } },
-  // P0-6 OTC 应收管理：父路径渲染 Board 宿主（全页签可见），成员深链 /receivable/* 保留单页模式
-  // D-BIZ-05 修复：原 redirect → /receivable/receivable（带 tab prop）导致页签条永久隐藏，用户无法切换子视图
-  { path: 'receivable', component: () => import('../../views/receivable/ReceivableBoard.vue'), meta: { title: '应收管理' } },
+  // P0-6 OTC 应收管理：父路径重定向到首个 tab，不渲染汇总的 hub 页
+  { path: 'receivable', redirect: '/receivable/receivable' },
   { path: 'receivable/receivable', component: () => import('../../views/receivable/ReceivableBoard.vue'), props: { tab: 'receivable' }, meta: { title: '应收单' } },
   { path: 'receivable/receipt', component: () => import('../../views/receivable/ReceivableBoard.vue'), props: { tab: 'receipt' }, meta: { title: '收款核销' } },
   { path: 'receivable/collect', component: () => import('../../views/receivable/ReceivableBoard.vue'), props: { tab: 'collect' }, meta: { title: '催收待办' } },

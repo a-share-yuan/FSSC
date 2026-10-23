@@ -1,5 +1,5 @@
 <template>
-  <div :class="{ tabless: isSingle }">
+  <div>
     <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
@@ -183,7 +183,7 @@
           <el-table-column prop="paymentNo" label="付款单号" width="110"  sortable />
           <el-table-column label="金额" width="120" align="right"><template #default="{ row }">{{ fmt(row.amount) }}</template></el-table-column>
           <el-table-column prop="accountNo" label="往来账号" width="170" show-overflow-tooltip  sortable />
-          <el-table-column prop="matchTime" label="勾对时间" min-width="160"  sortable />
+          <el-table-column prop="matchTime" label="勾对时间" min-width="160"  sortable :formatter="(r, c, v) => formatDateTime(v)" />
           <el-table-column label="勾对状态" width="100" align="center">
             <template #default="{ row }">
               <el-tag :type="tagType(row.matchStatus)" size="small">{{ stLabel(reconStMap, row.matchStatus) }}</el-tag>
@@ -252,7 +252,7 @@
         <el-form-item label="余额日期" prop="balanceDate"><el-date-picker v-model="balanceForm.balanceDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width:100%" /></el-form-item>
         <el-form-item label="余额" prop="balance"><el-input-number v-model="balanceForm.balance" :precision="2" :step="1000" style="width:100%" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="balanceForm.remark" placeholder="选填，如对账依据/来源" /></el-form-item>
-        <div style="color:#909399; font-size:12px; padding-left:2px">同一账户同一日期重复登记将幂等覆盖；保存后头寸页余额与余额表日立即刷新</div>
+        <div style="color:#909399; font-size:12px; padding-left:2px">同一账户同一日期重复登记会覆盖此前录入；保存后头寸页余额与余额表立即刷新</div>
       </el-form>
       <template #footer>
         <el-button @click="dlgBalance = false">取消</el-button>
@@ -330,8 +330,8 @@
     <el-dialog v-model="dlgTransfer" :title="tfMode === 'upload' ? '资金上存（上划集团）' : '发起资金调拨'" width="520px">
       <el-form ref="tfFormRef" :model="tfForm" :rules="transferFormRules" label-width="130px" size="small">
         <el-form-item label="调拨日期"><el-date-picker v-model="tfForm.transferDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
-        <el-form-item label="付款账户" prop="fromBankAccountId"><el-select v-model="tfForm.fromBankAccountId" filterable remote clearable :remote-method="searchBankAccount" placeholder="输入账户名/账号搜索" style="width:100%"><el-option v-for="a in accounts" :key="a.id" :label="a.accountName + ' (' + (a.bankAccount || '') + ')'" :value="a.id" /></el-select></el-form-item>
-        <el-form-item label="收款账户" prop="toBankAccountId"><el-select v-model="tfForm.toBankAccountId" filterable remote clearable :remote-method="searchBankAccount" placeholder="输入账户名/账号搜索" style="width:100%"><el-option v-for="a in accounts" :key="a.id" :label="a.accountName + ' (' + (a.bankAccount || '') + ')'" :value="a.id" /></el-select></el-form-item>
+        <el-form-item label="付款账户" prop="fromBankAccountId"><el-select v-model="tfForm.fromBankAccountId" filterable clearable placeholder="选择付款账户" style="width:100%"><el-option v-for="a in accountOptions" :key="a.id" :label="a.accountName + ' (' + (a.bankAccount || '') + ')'" :value="a.id" /></el-select></el-form-item>
+        <el-form-item label="收款账户" prop="toBankAccountId"><el-select v-model="tfForm.toBankAccountId" filterable clearable placeholder="选择收款账户" style="width:100%"><el-option v-for="a in accountOptions" :key="a.id" :label="a.accountName + ' (' + (a.bankAccount || '') + ')'" :value="a.id" /></el-select></el-form-item>
         <el-form-item label="所属公司"><el-select v-model="tfForm.companyId" filterable clearable placeholder="选择公司" style="width:100%"><el-option v-for="c in companies" :key="c.id" :label="c.companyName || c.name" :value="c.id" /></el-select></el-form-item>
         <el-form-item label="调拨金额" prop="amount"><el-input-number v-model="tfForm.amount" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="用途"><el-select v-model="tfForm.purpose" filterable allow-create default-first-option placeholder="请选择用途" style="width:100%"><el-option label="日常周转" value="日常周转" /><el-option label="归还借款" value="归还借款" /><el-option label="投资理财" value="投资理财" /><el-option label="采购付款" value="采购付款" /><el-option label="其他" value="其他" /></el-select></el-form-item>
@@ -394,6 +394,7 @@ import { commonRules } from '@/composables/useFormRules'
 import { treasuryApi, masterApi, p2Api, orgApi, customerApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import { formatDateTime } from '@/utils/format'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import CoachMark from '@/components/CoachMark.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
@@ -431,9 +432,10 @@ function openTrace(row) {
 }
 
 const selRows = ref([])
-// P: tab 页拆分——由菜单深链进来时传入 tab，只显示该页并隐藏 tab 导航条（一 TAB = 一菜单）
+// D-BIZ-05：资金管理在 sys_menu 里只有 3072「资金调拨」一条菜单行，七个子视图没有拆出的子菜单。
+// 原先按「一 TAB = 一菜单」的约定隐藏页签条 ⇒ 收款/调拨/票据/银行主数据/对账/头寸只能手敲 URL。
+// 菜单未拆的页不藏页签：深链进来仍定位到指定页签，同时把其余页签露出来可点。
 const props = defineProps({ tab: { type: String, default: '' } })
-const isSingle = computed(() => !!props.tab)
 const tab = ref(props.tab || 'plan')
 const loading = ref(false)
 const plans = ref([])
@@ -441,6 +443,9 @@ const credits = ref([])
 const transfers = ref([])
 const settles = ref([])
 const accounts = ref([])
+// D-BIZ-04：调拨弹窗原先直接吃「银行主数据」分页器的当前页（20 条），目标账户不在该页就永远搜不到。
+// 弹窗与行内账户名查找改用独立全量取数，与主数据表格的分页互不牵制。
+const accountOptions = ref([])
 const recons = ref([])
 // P1-4 资金头寸（非分页聚合，不做 server pager → activePager 自动为 null 隐藏 TablePager）
 const position = ref(null)
@@ -469,7 +474,7 @@ const companies = ref([])
 const customers = ref([])
 
 // 名称查找
-function bankAccName(id) { const a = accounts.value.find((x) => x.id === id); return a ? a.accountName : (id || '—') }
+function bankAccName(id) { const a = accountOptions.value.find((x) => x.id === id) || accounts.value.find((x) => x.id === id); return a ? a.accountName : (id || '—') }
 function companyName(id) { const c = companies.value.find((x) => x.id === id); return c ? c.name : (id || '—') }
 function customerName(id) { const c = customers.value.find((x) => x.id === id); return c ? c.customerName : (id || '—') }
 
@@ -753,13 +758,20 @@ async function collect(row) { try { await treasuryApi.billSettleCollection(row.i
 const emptyAcc = () => ({ accountCode: '', accountName: '', bankName: '', bankAccount: '', currencyCode: 'CNY', status: 'NORMAL' })
 const accForm = ref(emptyAcc())
 const dlgAccount = ref(false)
-function loadBank() { try { return pagers.bank.load(async ({ pageNum, pageSize }) => { const d = await masterApi.bank.page({ pageNum, pageSize }); accounts.value = d.list || []; return { list: accounts.value, total: d.total || 0 } }).catch((e) => ElMessage.error(e.message)) } catch (e) { /* noop */ } }
-async function searchBankAccount(keyword) {
+// 调拨/上存弹窗的账户全量候选：按 200/页翻到底（上限 20 页＝4,000 条，现盘 113 条），只留启用账户
+async function loadAccountOptions() {
   try {
-    const d = await masterApi.bank.page({ pageNum: 1, pageSize: 200, keyword: keyword || '' })
-    accounts.value = d.list || []
-  } catch (_) { /* 忽略 */ }
+    let all = [], pageNum = 1, total = 0
+    do {
+      const d = await masterApi.bank.page({ pageNum, pageSize: 200 })
+      all = all.concat(d.list || [])
+      total = Number(d.total || 0)
+      pageNum++
+    } while (all.length < total && pageNum <= 20)
+    accountOptions.value = all.filter((a) => !a.status || a.status === 'NORMAL')
+  } catch (e) { /* 无 md:bankaccount:list 时留空，由后端写闸兜底 */ }
 }
+function loadBank() { try { return pagers.bank.load(async ({ pageNum, pageSize }) => { const d = await masterApi.bank.page({ pageNum, pageSize }); accounts.value = d.list || []; return { list: accounts.value, total: d.total || 0 } }).catch((e) => ElMessage.error(e.message)) } catch (e) { /* noop */ } }
 function openAccount() { accForm.value = emptyAcc(); dlgAccount.value = true; accFormRef.value?.clearValidate?.() }
 async function saveAccount() {
   if (accSaving.value) return
@@ -838,7 +850,7 @@ async function runBankRecon() {
   catch (e) { ElMessage.error(e.message) }
 }
 
-function reload() { loadPlan(); loadCredit(); loadTransfer(); loadSettle(); loadBank(); loadRecon(); loadPosition() }
+function reload() { loadPlan(); loadCredit(); loadTransfer(); loadSettle(); loadBank(); loadAccountOptions(); loadRecon(); loadPosition() }
 
 // 加载公司和客户主数据（用于下拉选择）
 async function loadMasters() {
@@ -929,6 +941,4 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => treasuryCm.value?
 .pos-label { color: #909399; font-size: 12px; margin-bottom: 4px; }
 .pos-value { font-size: 20px; font-weight: 600; color: #303133; }
 .pos-sub { font-size: 12px; font-weight: 400; color: #909399; margin-left: 4px; }
-/* 一 TAB = 一菜单：从菜单深链进来（tab 命中）时隐藏 tab 导航条，只显示该页 */
-.tabless :deep(.el-tabs__header) { display: none; }
 </style>

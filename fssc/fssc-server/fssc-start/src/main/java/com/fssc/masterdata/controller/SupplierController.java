@@ -31,14 +31,6 @@ public class SupplierController {
         return Result.success(service.page(query.getPageNum(), query.getPageSize(), keyword));
     }
 
-    /** D-BIZ-08 供应商下拉选择（供资产建档/采购等业务页选择供应商，不需要 md:supplier:list 权限）。
-     *  与 /page 同服务逻辑，但不挂 @RequiresPerm——资产建档页面选择供应商是基本功能，
-     *  不应要求用户持有供应商主数据管理权限。 */
-    @GetMapping("/select")
-    public Result<PageResult<MdSupplier>> select(PageQuery query, String keyword) {
-        return Result.success(service.page(query.getPageNum(), query.getPageSize(), keyword));
-    }
-
     @RequiresPerm("md:supplier:create")
     @OperLog(module = "SUPPLIER", operType = "INSERT", desc = "新增Supplier")
     @PostMapping("/create")

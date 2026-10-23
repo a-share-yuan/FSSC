@@ -126,7 +126,7 @@
         <el-col :span="16">
           <!-- D-DEC-168：这里原本还有一只「查询」按钮（与表头那只同名、同 @click），同屏两只 → 已去除。
                过账状态、公司、年度、月度统一由表头「查询」提交；本页签改状态筛选时自动重取，少一次点击。 -->
-          <el-tooltip v-if="hasPerm('sharing:voucher:post')" :content="$t('gl.ledger.msgPickPostable')" placement="top" :disabled="postableRows.length > 0">
+          <el-tooltip v-if="canPost" :content="$t('gl.ledger.msgPickPostable')" placement="top" :disabled="postableRows.length > 0">
             <el-button type="success" size="small" :loading="batchPosting" :disabled="!postableRows.length" @click="batchPost">
               {{ $t('gl.ledger.btnBatchPostN', { v1: postableRows.length }) }}</el-button>
           </el-tooltip>
@@ -181,14 +181,12 @@
             <span v-else>{{ creatorLabel(row) }}</span>
           </template>
         </el-table-column>
-        <!-- D-BIZ-09：凭证台账行内过账入口（制审分离 + 权限码 + 状态三重门控） -->
-        <el-table-column v-if="hasPerm('sharing:voucher:post')" :label="$t('common.action')" width="100" align="center" fixed="right">
+        <!-- D-BIZ-09：此前过账只有一条「勾选若干行→工具栏批量过账」的路，行上没有任何入口，
+             台账里那批自动生成的凭证因此看不见「怎么过账」。补按行入口，与批量口同一个权限码、同一道制审分离闸。 -->
+        <el-table-column v-if="canPost" :label="$t('gl.ledger.colAction')" width="90" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="canPostRow(row)" link size="small" type="success" :loading="row._posting" @click="postOne(row)">过账</el-button>
-            <span v-else-if="row.status === 'POSTED'" style="color: #67c23a; font-size: 12px">已过账</span>
-            <el-tooltip v-else-if="isSelfCreated(row)" :content="$t('gl.ledger.selfCreatedTip')" placement="top">
-              <span style="color: #c0c4cc; font-size: 12px">不可自审</span>
-            </el-tooltip>
+            <el-button v-if="canPostRow(row)" link size="small" type="success" @click="postOne(row)">{{ $t('gl.ledger.btnPost') }}</el-button>
+            <span v-else style="color: #c0c4cc; font-size: 12px">—</span>
           </template>
         </el-table-column>
         <template #empty>
@@ -427,6 +425,10 @@ function creatorLabel(row) {
 }
 // 可过账：未过账 且 非本人制单
 function canPostRow(row) { return row?.status !== 'POSTED' && !isSelfCreated(row) }
+// D-BIZ-09：过账码与后端同闸（SharingController 的 /voucher/{id}/post、/voucher/batch-post 都是
+// @RequiresPerm("sharing:voucher:post")）。有权才放行内【过账】与工具栏【批量过账】，
+// 无权账号不再看见「点了必吃 4030」的入口。
+const canPost = hasPerm('sharing:voucher:post')
 // 勾选区中可过账的行（按钮计数与提交均以此为准）
 const postableRows = computed(() => (voucherSelRows.value || []).filter(canPostRow))
 // D-DEC-288（X-49 乙）：后端读侧打标的"已过账而资金指令未下发"行数（只注记、不动账，判据＝行上 payLegUnsettled === true）
@@ -497,26 +499,19 @@ function onVoucherSortChange({ prop, order }) {
 //   B. 若要的是「每次过账一条独立入账理由」（不覆盖凭证备注、一次批量共用一条并留操作人），
 //      则需新列或新表 ⇒ DDL 变更，需人工裁决。
 // 任一方案落地后，把下面的 confirm 换回 prompt 并随 body.comment 送出即可（适配层按 body 透传 id）。
-// D-BIZ-09：行内单张过账入口
+// D-BIZ-09：单张过账走 /tenant/sharing/voucher/{id}/post（后端同码闸＋实付闸＋制审分离闸）
 async function postOne(row) {
-  if (!canPostRow(row)) return
+  const label = row.voucherNo || (t('gl.ledger.voucherPrefix') + row.id)
   try {
-    await ElMessageBox.confirm(
-      t('gl.ledger.askBatchPost', { v1: 1 }),
-      t('gl.ledger.btnBatchPost'),
-      { type: 'warning', confirmButtonText: t('gl.ledger.btnConfirmPost'), cancelButtonText: t('common.cancel') },
-    )
+    await ElMessageBox.confirm(t('gl.ledger.askPost', { v1: label }), t('gl.ledger.btnPost'), {
+      type: 'warning', confirmButtonText: t('gl.ledger.btnConfirmPost'), cancelButtonText: t('common.cancel'),
+    })
   } catch (_) { return }
-  row._posting = true
   try {
     await sharingApi.voucherPost(row.id)
-    ElMessage.success('凭证 ' + row.voucherNo + ' 已过账')
-    await loadVouchers()
-  } catch (e) {
-    ElMessage.error(e.message || '过账失败')
-  } finally {
-    row._posting = false
-  }
+    ElMessage.success(t('gl.ledger.msgPostOk', { v1: label }))
+    loadVouchers()
+  } catch (e) { ElMessage.error(e?.message || t('gl.ledger.msgPostFail')) }
 }
 
 async function batchPost() {

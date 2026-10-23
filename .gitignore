@@ -79,3 +79,5 @@ output/
 *.prebak*
 **/vsd_*.py
 **/check_crud*.py
+tmp*_resp.json
+D:tmp*_resp.json

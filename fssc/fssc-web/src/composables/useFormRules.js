@@ -223,11 +223,7 @@ const formTypeRules = {
   PAY_PLAN: {
     planType: commonRules.select('请选择计划类型'),
     supplierId: commonRules.select('请选择供应商'),
-    // D-BIZ-06: 期间 value-format=YYYYMM（6 位数字），仅判必填时 el-date-picker
-    // 手动输入 2026-11 等非 YYYYMM 格式不会被拦（非空即过），提交后后端静默拒绝
-    // （弹窗不关、无红字、无提示、无请求）。增加格式校验，格式不对时即时红字提示。
-    period: [{ required: true, message: '请选择计划期间', validator: requiredValidator('请选择计划期间') },
-      { pattern: /^\d{6}$/, message: '期间格式应为 YYYYMM（如 202611）', trigger: 'blur' }],
+    period: commonRules.required('请选择计划期间'),
     amount: commonRules.amount('请输入计划金额（须大于 0）'),
     purpose: commonRules.required('请填写用途说明'),
   },

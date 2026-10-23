@@ -114,7 +114,7 @@ fssc:
   # ===== 流程引擎（workflow 包）=====
   wf:
     # BPMN 仓库化根目录（G3-4）：wf_model.bpmn_xml 的版本快照、latest 与发布 diff 落在这里。
-    # 指向代码仓库子目录（如 D:/SourceCode/Ashare/bpmn-repo 或部署机上的仓库工作副本）后一起 git 提交，
+    # 指向代码仓库子目录（如 ./bpmn-repo 或部署机上的仓库工作副本）后一起 git 提交，
     # 流程设计就获得了 review/回溯能力；留默认值 ./bpmn-repo 时落在进程工作目录，仅本地留痕。
     # 全量导出：POST /api/tenant/wf/designer/export-repo（发布动作会自动补写单模型快照）。
     bpmn-repo-dir: ${FSSC_BPMN_REPO_DIR:./bpmn-repo}

@@ -8,7 +8,7 @@ import java.nio.file.Paths;
 /** 临时诊断：解析指定目录下所有发票文件，输出解析结果与关键文本 */
 public class DiagPdf {
     public static void main(String[] args) throws Exception {
-        String dir = args.length > 0 ? args[0] : "D:/SourceCode/Ashare/测试发票";
+        String dir = args.length > 0 ? args[0] : "测试发票";
         Path d = Paths.get(dir);
         if (Files.isRegularFile(d)) {
             runOne(d);
@@ -57,12 +57,12 @@ public class DiagPdf {
             if (r.getSellerName() == null || r.getSellerName().isEmpty()) {
                 System.out.println("  [RAW全文] " + compact.substring(0, Math.min(compact.length(), 900)));
                 try {
-                    Files.write(Paths.get("D:/SourceCode/Ashare/测试发票/_diag_raw.txt"),
+                    Files.write(Paths.get("_diag_raw.txt"),
                             ("===== " + fn + " =====\n" + raw).getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 } catch (Exception ignore) { }
             }
             try {
-                Files.write(Paths.get("D:/SourceCode/Ashare/测试发票/_diag_last.txt"),
+                Files.write(Paths.get("_diag_last.txt"),
                         ("===== " + fn + " =====\n" + raw).getBytes(java.nio.charset.StandardCharsets.UTF_8));
             } catch (Exception ignore) { }
         }

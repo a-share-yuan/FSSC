@@ -38,16 +38,17 @@
         <template #default="{ row }"><el-tag :type="stType(row.status)" size="small">{{ contractStatusLabel(row.status) }}</el-tag></template>
       </el-table-column>
       <el-table-column label="操作" width="300">
-        <!-- 合同审批是模块状态机动作（接口权限码 contract:update），不由流程待办驱动，
-             故用「权限码 + 状态」双重门控；同时移除与下方「通过/驳回」重复的 InlineActions 审批按钮。 -->
+        <!-- D-BIZ-07：合同提交即发起 CONTRACT 流程（ContractService.submit 尾行 wfEngineFacade.start），
+             审批中的合同必有在途任务，而 ContractService.approve 首行 assertNotInFlow 一律拒绝直批，
+             故这里的【通过】【驳回】对任何账号都是「点了必失败」的误导入口（后端拦、数据不变）。
+             办理入口只有 流程中心›我的待办（或 #/approval）。原「模块状态机直批」的注释口径已不成立。 -->
         <template #default="{ row }">
           <InlineActions :visible="true" @view="openDetail(row)" :show-trace="true" @trace="openTrace(row)"
             :show-approve="false" :show-reject="false" />
           <el-button v-if="row.status === BillStatus.DRAFT" link size="small" type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button v-if="row.status === BillStatus.REJECTED" link size="small" type="warning" @click="returnToEdit(row)">编辑重提</el-button>
           <el-button v-if="row.status === BillStatus.DRAFT" link size="small" type="primary" @click="act('submit', row)">提交</el-button>
-          <el-button v-if="row.status === BillStatus.APPROVING && !row.inFlow && hasPerm('contract:update')" link size="small" type="success" @click="act('approve', row)">通过</el-button>
-          <el-button v-if="row.status === BillStatus.APPROVING && !row.inFlow && hasPerm('contract:update')" link size="small" type="warning" @click="act('reject', row)">驳回</el-button>
+          <span v-if="row.status === BillStatus.APPROVING" style="color:#909399;font-size:12px">审批中·请到我的待办办理</span>
           <el-button v-if="row.status === 'EFFECTIVE'" link size="small" @click="changeContract(row)">变更</el-button>
           <el-button v-if="row.status === 'EFFECTIVE'" link size="small" type="warning" @click="closeContract(row)">关闭</el-button>
           <el-button v-if="row.status !== BillStatus.VOID" link size="small" @click="act('supplement', row)">补充协议</el-button>
@@ -105,8 +106,8 @@
 </el-select></el-form-item></el-col>
           <el-col :md="12"><el-form-item label="签订公司"><el-select v-model="form.companyName" filterable allow-create placeholder="选择或输入签订公司" style="width:100%"><el-option v-for="c in companies" :key="c.id" :label="c.companyName || c.name" :value="c.companyName || c.name" /></el-select></el-form-item></el-col>
           <el-col :md="12"><el-form-item label="签约日"><el-date-picker v-model="form.signDate" type="date" value-format="YYYY-MM-DD" /></el-form-item></el-col>
-          <el-col :md="12"><el-form-item label="合同有效期起"><el-date-picker v-model="form.beginDate" type="date" value-format="YYYY-MM-DD" /></el-form-item></el-col>
-          <el-col :md="12"><el-form-item label="合同有效期止"><el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" /></el-form-item></el-col>
+          <el-col :md="12"><el-form-item label="合同有效期起"><el-date-picker v-model="form.beginDate" type="date" value-format="YYYY-MM-DD" :disabled-date="(d) => dayAfter(d, form.endDate)" /></el-form-item></el-col>
+          <el-col :md="12"><el-form-item label="合同有效期止"><el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" :disabled-date="(d) => dayBefore(d, form.beginDate)" /></el-form-item></el-col>
           <el-col :md="12"><el-form-item label="是否同比价格递减">
             <el-switch v-model="form.priceDecrease" :active-value="1" :inactive-value="0" />
           </el-form-item></el-col>
@@ -259,8 +260,6 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
-// 合同审批/驳回按钮按接口权限码门控（后端 ContractController#approve 要求 contract:update）
-import { hasPerm } from '../../utils/perm'
 import { useCurrency } from '@/composables/useCurrency'
 // R5-13: 快捷键
 useKeyboard({
@@ -492,7 +491,16 @@ async function closeContract(row) {
     await load()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
+function dayStr(d) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+function dayBefore(d, min) { return !!min && dayStr(d) < min }
+function dayAfter(d, max) { return !!max && dayStr(d) > max }
 async function save() {
+  if (form.beginDate && form.endDate && form.beginDate > form.endDate) {
+    ElMessage.error('合同有效期止不得早于有效期起'); return
+  }
   saveFormHistory('CONTRACT', form.value || form)
 
   try {
@@ -648,7 +656,6 @@ function batchExport() {
 // R4-06: Show guide on first visit
 const _guideKey = 'fssc_guide_contractCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => contractCm.value?.show(), 800) } } catch {}
-// 合同审批/驳回统一走 act('approve'|'reject')（带权限码门控），此处不再单独实现 approve/reject 处理函数。
 </script>
 
 <style scoped>

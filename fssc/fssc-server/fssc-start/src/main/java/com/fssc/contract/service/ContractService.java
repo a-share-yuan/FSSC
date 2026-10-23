@@ -25,7 +25,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 合同服务：CRUD + 审批状态机 + 台账深化（中集财务共享需求说明书-合同台账 v1.0）。
+ * 合同服务：CRUD + 审批状态机 + 台账深化（财务共享需求规格-合同台账）。
  * <ul>
  *   <li>固定金额合同审批通过 → 按费用类型映射的预算科目冻结（占用）合同总额</li>
  *   <li>手工关闭 / 变更完成 → 释放冻结预算</li>
@@ -70,18 +70,6 @@ public class ContractService {
         DataScopeKit.apply(qw, ContContract::getCompanyId, null, null);
         qw.orderByDesc(ContContract::getId);
         Page<ContContract> p = mapper.selectPage(Page.of(pn, ps), qw);
-        // D-BIZ-07：批量填充流程在途标记，供前端隐藏直批按钮
-        for (ContContract c : p.getRecords()) {
-            if ("APPROVING".equals(c.getStatus())) {
-                try {
-                    c.setInFlow(wfEngineFacade.hasActiveTask(CONTRACT_BIZ_TYPE, c.getId()));
-                } catch (Exception ex) {
-                    c.setInFlow(true);
-                }
-            } else {
-                c.setInFlow(false);
-            }
-        }
         return PageResult.of(p.getRecords(), p.getTotal(), pn, ps);
     }
 

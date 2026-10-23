@@ -13,9 +13,9 @@
 --   SELECT city_code FROM md_city WHERE city_code LIKE 'B%' ORDER BY city_code DESC LIMIT 1; -- 实测 B12
 --   SELECT company_id, COUNT(*), SUM(is_default=1) FROM md_bank_account
 --    WHERE del_flag=0 GROUP BY company_id;
---     -- 实测：1→25户/1默认、32→1户/1默认、100→58户/0、101→12户/0、102→6户/0、104→11户/0
+--     -- 实测：各公司默认账户覆盖情况已登记于当期执行记录（数值从略）
 --   SELECT id,account_name,bank_account,account_code FROM md_bank_account WHERE id=162;
---     -- 实测：162 | 烟台中集来福士海洋工程有限公司 银行账户 | 账号 | AC_账号（表头行仍在库）
+--     -- 实测：162 | 某开户主体 银行账户 | 账号 | AC_账号（表头行仍在库）
 --   执行窗口若上述读数已变化（并行窗可能已补默认），对应语句作废并以新读数重写。
 --
 -- §1 D-DEC-006 长沙 seed

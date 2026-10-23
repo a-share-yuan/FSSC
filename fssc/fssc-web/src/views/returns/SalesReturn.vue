@@ -43,7 +43,11 @@
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="客户代码" prop="customerCode"><el-input v-model="form.customerCode" placeholder="与 BCP 往来单位编码对齐" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="客户名称"><el-input v-model="form.customerName" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="所属公司" prop="companyId"><el-select v-model="form.companyId" filterable clearable placeholder="选择公司" style="width:100%"><el-option v-for="c in companyTree" :key="c.id" :label="c.companyName || c.name" :value="c.id" /></el-select></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="所属公司">
+            <el-select v-model="form.companyId" filterable clearable placeholder="请选择公司" style="width:100%">
+              <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
+            </el-select>
+          </el-form-item></el-col>
           <el-col :span="8"><el-form-item label="退货日期" prop="billDate">
             <el-date-picker v-model="form.billDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
           </el-form-item></el-col>
@@ -126,7 +130,7 @@
 import { RETURN_STATUS, RETURN_MODE, returnStatusLabel, returnModeLabel } from '@/constants/enums'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { returnApi, orgApi, store } from '../../api'
+import { returnApi, store, orgApi } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
@@ -134,9 +138,23 @@ import DirtyGuardDialog from '@/components/common/DirtyGuardDialog.vue'
 
 const REASONS = ['质量不合格', '破损', '错发', '客户取消', '合同终止', '其他']
 
+// 公司列表（用于下拉选择）
+const companies = ref([])
+// D-BIZ-02（同族）：orgApi 没有 companyList，可选链把「方法不存在」吞成 undefined ⇒ 下拉恒空无提示。
+async function loadCompanies() {
+  try {
+    const tree = await orgApi.companyTree()
+    const flat = []
+    const walk = (arr) => (arr || []).forEach((n) => { flat.push({ id: n.id, name: n.companyName || n.name || n.label }); if (n.children?.length) walk(n.children) })
+    walk(tree)
+    companies.value = flat
+  } catch (e) {
+    console.warn('加载公司列表失败', e)
+  }
+}
+
 const rows = ref([])
 const loading = ref(false)
-const companyTree = ref([])
 const q = reactive({ pageNum: 1, pageSize: 20, customerCode: '', keyword: '', status: '', billDateStart: '', billDateEnd: '', range: [] })
 const formVisible = ref(false)
 const detailVisible = ref(false)
@@ -218,7 +236,7 @@ async function load() {
 
 function openCreate() {
   editing.value = false
-  Object.assign(form, { id: null, customerCode: '', customerName: '', companyId: null, billDate: '', amount: '', taxAmount: '', returnMode: 'REFUND', sourceDocType: '', sourceBillNo: '', returnReason: '', remark: '', lines: [emptyLine()] })
+  Object.assign(form, { id: null, customerCode: '', customerName: '', companyId: 1, billDate: '', amount: '', taxAmount: '', returnMode: 'REFUND', sourceDocType: '', sourceBillNo: '', returnReason: '', remark: '', lines: [emptyLine()] })
   snapshotForm()
   formVisible.value = true
 }
@@ -287,10 +305,7 @@ async function doReason() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-onMounted(async () => {
-  try { companyTree.value = (await orgApi.companyTree()) || [] } catch (_) { /* 忽略 */ }
-  load()
-})
+onMounted(() => { load(); loadCompanies() })
 </script>
 
 <style scoped>

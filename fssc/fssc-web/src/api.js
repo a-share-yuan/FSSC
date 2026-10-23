@@ -862,8 +862,7 @@ export const mdApi = {
   // 下拉专用：全部 NORMAL 城市（不分页）。单据发起页城市选择改用此接口，避免 /page 分页截断低 id 城市
   cityList: () => http.get('/tenant/masterdata/city/list'),
   payees: (params) => http.get('/tenant/masterdata/payee/page', { params }),
-  // D-BIZ-08: 走 /select（无权限要求），资产建档等业务页选择供应商是基本功能
-  suppliers: (params) => http.get('/tenant/masterdata/supplier/select', { params }),
+  suppliers: (params) => http.get('/tenant/masterdata/supplier/page', { params }),
   customers: (params) => http.get('/tenant/customer/page', { params }),
 }
 

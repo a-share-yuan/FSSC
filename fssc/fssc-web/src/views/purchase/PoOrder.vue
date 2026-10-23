@@ -758,14 +758,12 @@ onMounted(async () => {
   loadCurrency()
   autofill(form, 'PO_ORDER')
   try {
-    const [s, ct, ct2] = await Promise.all([
+    const [s, ct] = await Promise.all([
       supplierApi.page({ pageNum: 1, pageSize: 100 }),
       orgApi.companyTree(),
-      contractApi.page({ pageNum: 1, pageSize: 100, status: 'EFFECTIVE' }),
     ])
     suppliers.value = s.list || []
     companyTree.value = ct || []
-    contracts.value = ct2.list || []
   } catch (e) { /* 忽略 */ }
   loadContracts() // 独立取数：合同接口失败不得连累供应商/公司下拉
   loadCip() // CIP 项目下拉数据源（失败/404 静默隐藏字段）

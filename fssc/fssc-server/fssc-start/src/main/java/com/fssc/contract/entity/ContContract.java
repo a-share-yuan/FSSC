@@ -1,7 +1,6 @@
 package com.fssc.contract.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.fssc.common.entity.TenantAuditBase;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -31,7 +30,7 @@ public class ContContract extends TenantAuditBase {
     /** DRAFT/APPROVING/EFFECTIVE/CHANGING/REJECTED/VOID/CLOSED */
     private String status;
     private String remark;
-    // ---------- 合同台账深化字段（中集财务共享需求说明书-合同台账 v1.0） ----------
+    // ---------- 合同台账深化字段（财务共享需求规格-合同台账） ----------
     /** 关联客商（crm_customer） */
     private Long customerId;
     /** 签订公司 */
@@ -57,8 +56,4 @@ public class ContContract extends TenantAuditBase {
     private String bidNote;
     /** 来源：MANUAL 手动 / IFS 同步 / IMPORT 导入 */
     private String source;
-
-    /** 流程在途标记（非持久化，列表查询时由 Service 填充，供前端控制直批按钮可见性） */
-    @TableField(exist = false)
-    private Boolean inFlow;
 }

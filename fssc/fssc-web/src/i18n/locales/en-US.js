@@ -2882,6 +2882,7 @@ export default {
       tabFlowTrail: 'Workflow Trail',
       tabImages: 'Images & Attachments ({v1})',
       tabMineApproving: 'Started by Me (In Approval)',
+      tabMineDocuments: 'My Documents',
       tabMyDone: 'Handled by Me',
       tabMyTodo: 'My To-Do',
       tabPayments: 'Payment Records',
