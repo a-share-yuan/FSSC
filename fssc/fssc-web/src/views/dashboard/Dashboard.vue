@@ -24,7 +24,10 @@
       :columns="drillColumns"
       :data="drillData"
       :drill-key="drillKey"
-      :drill-labels="drillLabels"
+      :label-formatter="drillLabelFormatter"
+      :child-key="drillChildKey"
+      :child-label="drillChildLabel"
+      :child-formatter="drillChildFormatter"
     />
   </div>
 </template>
@@ -73,25 +76,43 @@ const drillTitle = ref('数据钻取')
 const drillColumns = ref([])
 const drillData = ref([])
 const drillKey = ref('')
-const drillLabels = ref(['汇总'])
+const drillLabelFormatter = ref(null)
+const drillChildKey = ref('')
+const drillChildLabel = ref('明细')
+const drillChildFormatter = ref(null)
 const rawData = { stats: [], trend: [], budget: [], pay: {}, dept: [], eff: [] }
 
+/** 抽屉打开前的统一复位：没有真实下一层的入口不摆「钻取 →」 */
+function resetDrill() {
+  drillLabelFormatter.value = null
+  drillChildKey.value = ''
+  drillChildLabel.value = '明细'
+  drillChildFormatter.value = null
+}
+function openDrill() {
+  drillVisible.value = true
+}
+
 function drillStatus() {
+  resetDrill()
   drillTitle.value = '报销统计 - 按状态明细'
   drillKey.value = 'bill_type'
-  drillLabels.value = ['汇总', '单据类型']
   drillColumns.value = [
     { prop: 'bill_type', label: '单据类型', formatter: (v) => docTypeLabel(v) },
     { prop: 'status', label: '状态', formatter: (v) => statusLabel(v) },
     { prop: 'cnt', label: '数量', numeric: true, align: 'right' },
   ]
   drillData.value = rawData.stats
-  drillVisible.value = true
+  drillLabelFormatter.value = (v) => docTypeLabel(v)
+  drillChildKey.value = 'status'
+  drillChildLabel.value = '状态'
+  drillChildFormatter.value = (v) => statusLabel(v)
+  openDrill()
 }
 function drillPay() {
+  resetDrill()
   drillTitle.value = '付款进度 - 明细'
   drillKey.value = 'name'
-  drillLabels.value = ['汇总']
   drillColumns.value = [
     { prop: 'name', label: '付款状态' },
     { prop: 'value', label: '笔数', numeric: true, align: 'right' },
@@ -100,23 +121,24 @@ function drillPay() {
     { name: '已付', value: Number(rawData.pay.paidCnt || 0) },
     { name: '待付', value: Number(rawData.pay.waitingCnt || 0) },
   ]
-  drillVisible.value = true
+  openDrill()
 }
 function drillEff() {
+  resetDrill()
   drillTitle.value = '审批时效 - 按单据类型'
   drillKey.value = 'bill_type'
-  drillLabels.value = ['汇总', '单据类型']
   drillColumns.value = [
     { prop: 'bill_type', label: '单据类型', formatter: (v) => docTypeLabel(v) },
     { prop: 'avg_minutes', label: '平均审批分钟', numeric: true, align: 'right' },
   ]
   drillData.value = rawData.eff
-  drillVisible.value = true
+  drillLabelFormatter.value = (v) => docTypeLabel(v)
+  openDrill()
 }
 function drillTrend() {
+  resetDrill()
   drillTitle.value = '月度趋势 - 明细'
   drillKey.value = 'period_month'
-  drillLabels.value = ['汇总', '月份']
   drillColumns.value = [
     { prop: 'period_year', label: '年' },
     { prop: 'period_month', label: '月' },
@@ -124,30 +146,32 @@ function drillTrend() {
     { prop: 'amount', label: '金额', numeric: true, align: 'right' },
   ]
   drillData.value = rawData.trend
-  drillVisible.value = true
+  // F-15：类目拼「年-月」，不再出现裸数字 1..6
+  drillLabelFormatter.value = (v, row) => `${row.period_year}-${String(v).padStart(2, '0')}`
+  openDrill()
 }
 function drillDept() {
+  resetDrill()
   drillTitle.value = '部门报销排行 - 明细'
   drillKey.value = 'dept_name'
-  drillLabels.value = ['汇总', '部门']
   drillColumns.value = [
     { prop: 'dept_name', label: '部门名称' },
     { prop: 'dept_id', label: '部门ID' },
     { prop: 'amount', label: '报销金额', numeric: true, align: 'right' },
   ]
   drillData.value = rawData.dept
-  drillVisible.value = true
+  openDrill()
 }
 function drillBudget() {
+  resetDrill()
   drillTitle.value = '预算执行率 - 明细'
   drillKey.value = 'itemName'
-  drillLabels.value = ['汇总', '预算项']
   drillColumns.value = [
     { prop: 'itemName', label: '预算项' },
     { prop: 'executionRate', label: '执行率(%)', numeric: true, align: 'right' },
   ]
   drillData.value = rawData.budget
-  drillVisible.value = true
+  openDrill()
 }
 
 // 大屏（暗色）文字/分隔线配色，普通模式跟随页面浅色

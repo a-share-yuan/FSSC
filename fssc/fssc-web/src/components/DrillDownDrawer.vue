@@ -1,5 +1,5 @@
 <template>
-  <el-drawer v-model="visible" :title="title" direction="rtl" size="560px" :destroy-on-close="true">
+  <el-drawer v-model="visible" :title="title" direction="rtl" size="560px" :destroy-on-close="true" @opened="onOpened">
     <div class="drill-content">
       <!-- 面包屑钻取路径 -->
       <div class="drill-crumbs">
@@ -10,9 +10,9 @@
       </div>
 
       <!-- 当前层级数据 -->
-      <div class="drill-level" v-loading="loading">
-        <el-table :data="tableData" stripe size="small" @row-click="drillDeeper" highlight-current-row empty-text="暂无数据" style="cursor:pointer">
-          <el-table-column v-for="col in columns" :key="col.prop" :prop="col.prop" :label="col.label"
+      <div class="drill-level" :class="{ 'can-drill': canDrillDeeper }">
+        <el-table :data="tableData" stripe size="small" @row-click="onRowClick" highlight-current-row empty-text="暂无数据">
+          <el-table-column v-for="col in visibleColumns" :key="col.prop" :prop="col.prop" :label="col.label"
             :width="col.width" :align="col.align || 'left'" sortable>
             <template #default="{ row }">
               <span v-if="col.formatter" v-html="col.formatter(row[col.prop], row)"></span>
@@ -20,9 +20,7 @@
               <span v-else>{{ row[col.prop] ?? '-' }}</span>
             </template>
           </el-table-column>
-          <!-- D-UI-06（2026-10-19）：这枚「钻取 →」此前只是装饰——模板里没有 @click，
-               键盘用户点了没反应、鼠标用户也只能靠整行点击（无可发现提示）。
-               现补上显式事件（.stop 防止冒泡再触发行点击导致钻两层），与行点击同源。 -->
+          <!-- 只有存在真实下一层（传入 childKey）时才给「钻取 →」，否则不摆无动作的按钮 -->
           <el-table-column label="操作" width="80" v-if="canDrillDeeper">
             <template #default="{ row }">
               <el-button link size="small" type="primary" @click.stop="drillDeeper(row)">钻取 →</el-button>
@@ -30,7 +28,7 @@
           </el-table-column>
         </el-table>
 
-        <!-- 迷你趋势图 -->
+        <!-- 迷你趋势图（按当前层数值列绘制，类目文案由 labelFormatter 提供） -->
         <div v-if="trendData.length > 0" class="drill-trend">
           <div class="trend-title">趋势分析</div>
           <div ref="trendRef" class="trend-chart"></div>
@@ -55,8 +53,13 @@ const props = defineProps({
   title: { type: String, default: '数据钻取' },
   columns: { type: Array, default: () => [] },
   data: { type: Array, default: () => [] },
-  drillKey: { type: String, default: '' }, // 钻取字段
-  drillLabels: { type: Array, default: () => [] }, // 各层标签
+  drillKey: { type: String, default: '' }, // 第一层分组字段
+  /** 首列/类目文案格式化 (value, row) => string，缺省直接显示原值 */
+  labelFormatter: { type: Function, default: null },
+  /** 下一层分组字段：有值才提供真实钻取，否则不摆「钻取 →」 */
+  childKey: { type: String, default: '' },
+  childLabel: { type: String, default: '明细' },
+  childFormatter: { type: Function, default: null },
 })
 const emit = defineEmits(['update:modelValue', 'drill', 'back'])
 
@@ -65,7 +68,6 @@ const visible = computed({
   set: (v) => emit('update:modelValue', v),
 })
 
-const loading = ref(false)
 const crumbs = ref([{ label: '汇总' }])
 const currentLevel = ref(0)
 const tableData = ref([])
@@ -73,31 +75,65 @@ const trendData = ref([])
 const trendRef = ref(null)
 let chart = null
 
-const canDrillDeeper = computed(() => currentLevel.value < (props.drillLabels.length - 1))
+const valueColumn = computed(() => props.columns.find((c) => c.numeric) || null)
+const canDrillDeeper = computed(() => !!props.childKey && currentLevel.value === 0)
+
+const visibleColumns = computed(() => {
+  if (currentLevel.value === 0) return props.columns
+  const num = valueColumn.value
+  return [
+    { prop: props.childKey, label: props.childLabel, formatter: props.childFormatter },
+    ...(num ? [{ prop: num.prop, label: num.label, numeric: true, align: 'right' }] : []),
+  ]
+})
+
+/** 以指定分组字段生成迷你柱状图；数值列取表格里的数值列（不再猜"第一个数字字段"） */
+function buildTrend(rows, key, formatter) {
+  const prop = valueColumn.value?.prop
+  if (!prop || !key) { trendData.value = []; return }
+  trendData.value = (rows || []).slice(0, 12).map((d, i) => ({
+    name: formatter ? formatter(d[key], d) : (d[key] ?? `项${i + 1}`),
+    value: Number(d[prop]) || 0,
+  }))
+}
 
 function loadData() {
-  loading.value = true
   tableData.value = props.data
-  trendData.value = props.data.slice(0, 12).map((d, i) => ({
-    name: d[props.drillKey] || `项${i + 1}`,
-    value: Object.values(d).find(v => typeof v === 'number') || 0,
-  }))
-  loading.value = false
-  renderTrend()
+  buildTrend(props.data, props.drillKey, props.labelFormatter)
+  return nextTick().then(renderTrend)
+}
+
+function onRowClick(row) {
+  if (canDrillDeeper.value) drillDeeper(row)
 }
 
 function drillDeeper(row) {
   if (!canDrillDeeper.value) return
-  const label = row[props.drillKey] || `层级${currentLevel.value + 1}`
-  crumbs.value.push({ label, data: row })
-  currentLevel.value++
-  emit('drill', { level: currentLevel.value, row })
+  const rawVal = row[props.drillKey]
+  crumbs.value.push({ label: props.labelFormatter ? props.labelFormatter(rawVal, row) : (rawVal ?? '明细'), raw: rawVal })
+  currentLevel.value = 1
+  const prop = valueColumn.value?.prop || 'value'
+  const agg = new Map()
+  props.data.forEach((r) => {
+    if (String(r[props.drillKey]) !== String(rawVal)) return
+    const k = r[props.childKey]
+    const cur = agg.get(k) || { [props.childKey]: k, [prop]: 0 }
+    cur[prop] += Number(r[prop]) || 0
+    agg.set(k, cur)
+  })
+  tableData.value = [...agg.values()].sort((a, b) => (b[prop] || 0) - (a[prop] || 0))
+  buildTrend(tableData.value, props.childKey, props.childFormatter)
+  renderTrend()
+  emit('drill', { level: 1, row })
 }
 
 function goBack(index) {
-  if (index === crumbs.value.length - 1) return
+  if (index >= crumbs.value.length - 1) return
   crumbs.value = crumbs.value.slice(0, index + 1)
   currentLevel.value = index
+  tableData.value = props.data
+  buildTrend(props.data, props.drillKey, props.labelFormatter)
+  renderTrend()
   emit('back', { level: index })
 }
 
@@ -108,25 +144,42 @@ function formatNum(v) {
 
 function renderTrend() {
   if (!trendRef.value || trendData.value.length === 0) return
+  // 抽屉 destroy-on-close：DOM 重建后旧实例指向已移除节点，必须重建
+  if (chart && chart.getDom() !== trendRef.value) {
+    chart.dispose()
+    chart = null
+  }
   if (!chart) chart = echarts.init(trendRef.value)
   chart.setOption({
     grid: { left: 40, right: 10, top: 20, bottom: 30 },
-    xAxis: { type: 'category', data: trendData.value.map(d => d.name), axisLabel: { fontSize: 10, rotate: 30 } },
+    xAxis: { type: 'category', data: trendData.value.map((d) => d.name), axisLabel: { fontSize: 10, rotate: 30 } },
     yAxis: { type: 'value', axisLabel: { fontSize: 10 } },
     series: [{
-      type: 'bar', data: trendData.value.map(d => d.value),
+      type: 'bar', data: trendData.value.map((d) => d.value),
       itemStyle: { color: '#409eff', borderRadius: [4, 4, 0, 0] },
     }],
     tooltip: { trigger: 'axis' },
-  })
+  }, true)
+}
+
+/** 首开时 watch 里的 nextTick 早于抽屉内容挂载，这里在打开动画结束后补渲染（F-12） */
+function onOpened() {
+  if (currentLevel.value === 0) loadData()
+  else renderTrend()
 }
 
 watch(() => props.modelValue, (v) => {
-  if (v) {
-    crumbs.value = [{ label: '汇总' }]
-    currentLevel.value = 0
-    nextTick(() => loadData())
-  }
+  if (!v) return
+  crumbs.value = [{ label: '汇总' }]
+  currentLevel.value = 0
+  tableData.value = props.data
+  buildTrend(props.data, props.drillKey, props.labelFormatter)
+  nextTick(renderTrend)
+})
+
+watch(() => props.data, () => {
+  if (!props.modelValue || currentLevel.value !== 0) return
+  loadData()
 })
 
 onBeforeUnmount(() => chart?.dispose())
@@ -138,6 +191,7 @@ onBeforeUnmount(() => chart?.dispose())
 .crumb-item { display: flex; align-items: center; gap: 4px; cursor: pointer; color: #409eff; }
 .crumb-item:last-child { color: #303133; cursor: default; font-weight: 600; }
 .drill-level { flex: 1; }
+.drill-level.can-drill :deep(.el-table__row) { cursor: pointer; }
 .drill-trend { margin-top: 16px; }
 .trend-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .trend-chart { height: 200px; }

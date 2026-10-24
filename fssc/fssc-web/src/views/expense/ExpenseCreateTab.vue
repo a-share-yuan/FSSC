@@ -274,6 +274,7 @@
     <!-- 借款单选择（D-UI-02：勾选+可改金额+【确定】） -->
     <CandidatePickerDialog v-model="loanDialog" :title="$t('expense.create.dlgPickLoanOffset')"
                           :rows="loanCandidates" :loading="loading" max-field="availableBalance"
+                          extra-prop="title" :extra-label="$t('expense.common.colTitle')"
                           :no-label="$t('expense.create.colLoanBillNo')"
                           :amount-label="$t('expense.create.colLoanAmt')"
                           max-label="可冲抵余额"

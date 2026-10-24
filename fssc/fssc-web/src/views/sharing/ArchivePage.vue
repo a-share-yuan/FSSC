@@ -89,6 +89,15 @@
         <el-table-column prop="refNo" :label="$t('sharing.archive.colBizNo')" width="150"  sortable />
         <el-table-column prop="archiveType" :label="$t('field.type')" width="80" :formatter="enumFormatter(ARCHIVE_TYPE)" sortable />
         <el-table-column prop="retentionYears" :label="$t('sharing.archive.colRetention')" width="90"  sortable />
+        <!-- V1.4.92（AMC-05）：非集中模式原件留原单位，登记保管单位与存放位置；集中模式原件已寄送共享中心 -->
+        <el-table-column :label="$t('sharing.archive.colPaperKeeper')" min-width="170" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.paperKeeperCompanyId">
+              {{ companyName(row.paperKeeperCompanyId) }}<span v-if="row.paperLocation"> · {{ row.paperLocation }}</span>
+            </span>
+            <span v-else style="color:#909399">{{ $t('sharing.archive.labelPaperCentral') }}</span>
+          </template>
+        </el-table-column>
         <el-table-column :label="$t('sharing.archive.colArchStatus')" width="110">
           <template #default="{ row }">
             <!-- D-DEC-182：判定列取真相源 archive_status（归档流程轴）。原取 status 镜像列，
@@ -126,7 +135,7 @@
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { showRowDetail, formatDateTime } from '@/utils/format'
-import { opApi, billApi } from '../../api'
+import { opApi, billApi, orgApi } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import FileViewer from '../../components/FileViewer.vue'
 import SkeletonList from '../../components/SkeletonList.vue'
@@ -158,6 +167,17 @@ const pendingRows = ref([])
 const pendingTotal = ref(0)
 const archiveRows = ref([])
 const archiveTotal = ref(0)
+// V1.4.92（AMC-05）：原件保管单位 id → 公司名（companyTree 只读接口，普通用户仅见本公司）
+const companyNames = ref({})
+const companyName = (id) => companyNames.value[id] || t('sharing.archive.labelCompanyId', { v1: id })
+async function loadCompanies() {
+  try {
+    const list = await orgApi.companyTree()
+    const m = {}
+    ;(list || []).forEach((c) => { m[c.id] = c.companyName })
+    companyNames.value = m
+  } catch { /* 名称不可得时回落显示公司编号，不阻断归档列表 */ }
+}
 const selected = ref([])
 const fileViewer = ref(null)
 const q = reactive({ pageNum: 1, pageSize: 20, keyword: '', archiveStatus: '' })
@@ -253,7 +273,7 @@ async function viewArchive(row) {
   fileViewer.value?.open(fileIds, t('sharing.archive.titleArchiveImages') + (row.archiveNo || row.title || ''))
 }
 
-onMounted(load)
+onMounted(() => { load(); loadCompanies() })
 
 function exportCsv() {
   if (!archiveRows.value.length) { ElMessage.warning(t('sharing.common.msgNothingToExport')); return }

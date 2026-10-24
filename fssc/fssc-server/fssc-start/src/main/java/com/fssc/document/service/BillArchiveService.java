@@ -59,6 +59,11 @@ public class BillArchiveService {
      * 本类的影像归档链路复用同一个方法，不再自写第二套谓词（D-DEC-095 的成因就是各写一套）。
      */
     private final ArchiveService archiveService;
+    /**
+     * V1.4.92：档案非集中管理公司（archive_mode=NON_CENTRAL）不产生实物流，
+     * R5-D-244 的「实物未签收不得归档」前置闸对这类公司不适用（模式判定复用 DeliveryService 单一读点）。
+     */
+    private final com.fssc.sharing.service.DeliveryService deliveryService;
 
     /** 待归档单据：审批完成（APPROVED/PAID/CLOSED）+ 影像完整（PARTIAL/COMPLETE）；archiveStatus 空＝只看未归档，ARCHIVED＝已归档，ALL＝不限（D-DEC-276b/B1） */
     public PageResult<BillArchiveDTO> pendingBills(long pageNum, long pageSize, String billType, String keyword,
@@ -95,7 +100,9 @@ public class BillArchiveService {
             if ("ARCHIVED".equals(bill.getArchiveStatus())) {
                 continue; // 幂等：已归档跳过
             }
-            if ("UNSIGNED".equals(bill.getDeliveryStatus())) {
+            // V1.4.92：非集中管理公司无实物流，UNSIGNED 不构成阻断（集中公司行为不变）
+            if ("UNSIGNED".equals(bill.getDeliveryStatus())
+                    && !deliveryService.isNonCentralArchive(bill.getCompanyId())) {
                 unsignedBills.add(bill.getBillNo() == null ? ("单据#" + billId) : bill.getBillNo());
                 log.warn("归档跳过：单据 {} 实物未签收（delivery_status=UNSIGNED），归档前置未满足", bill.getBillNo());
                 continue;
@@ -177,6 +184,8 @@ public class BillArchiveService {
             a.setStatus(ArchiveService.dispositionOf(a.getArchiveStatus()));
             a.setCreateTime(now);
             a.setUpdateTime(now);
+            // V1.4.92（AMC-05）：非集中模式原件留原单位 ⇒ 补「原件保管单位」；集中模式保持 NULL
+            archiveService.applyPaperKeeperDefault(a);
             archiveMapper.insert(a);
             // D-DEC-180：档案主键入库后才算快照（id 是可区分要素），回写 integrity_hash
             String integrityHash = archiveIntegrityService.snapshot(a);
@@ -291,7 +300,9 @@ public class BillArchiveService {
         }
         // R5-D-244：归档前置闸与 doArchive 同一把尺——实物未签收（UNSIGNED）时不得登记待归档，
         // 防「签收沦为事后补章」；事件语义按跳过并记日志处理（不抛异常），NULL=历史未纳管放行。
-        if ("UNSIGNED".equals(bill.getDeliveryStatus())) {
+        // V1.4.92：非集中管理公司无实物流，UNSIGNED 不构成阻断（与 doArchive 同一把尺）
+        if ("UNSIGNED".equals(bill.getDeliveryStatus())
+                && !deliveryService.isNonCentralArchive(bill.getCompanyId())) {
             log.info("电子归档跳过: 单据 {} 实物未签收（delivery_status=UNSIGNED），归档前置未满足", bill.getBillNo());
             return 0;
         }
@@ -360,6 +371,8 @@ public class BillArchiveService {
                 ? "无凭证" : ("凭证号 " + bill.getVoucherNo());
         a.setRemark("电子归档立卷（无纸质件，审批通过自动登记为待归档，须执行归档经 FM_ARCHIVE 审批；附件 "
                 + attachFileIds.size() + " 个；" + voucherInfo + "）");
+        // V1.4.92（AMC-05）：电子单据也可能属于非集中公司（无影像但原件在单位）⇒ 同口径补保管单位
+        archiveService.applyPaperKeeperDefault(a);
         archiveMapper.insert(a);
         log.info("电子归档立卷: 单据 {} → 档案 {}（附件 {} 个，{}）→ 待归档 PENDING，未置归档终态",
                 bill.getBillNo(), a.getArchiveNo(), attachFileIds.size(), voucherInfo);

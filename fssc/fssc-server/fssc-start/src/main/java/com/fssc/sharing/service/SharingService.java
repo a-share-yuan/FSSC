@@ -85,6 +85,12 @@ public class SharingService {
             log.info("单据 {} 关联发票均为电子介质，自动无纸化豁免实物签收", bill.getBillNo());
         }
 
+        // V1.4.92：档案非集中管理公司整段实物流不发生（原件留原单位），单据侧留痕 NOT_REQUIRED。
+        // 走 registerIfNeeded 的既有豁免分支，不另写一套状态写入。
+        if (deliveryService.isNonCentralArchive(bill.getCompanyId())) {
+            deliveryService.registerIfNeeded(bill);
+        }
+
         // P0-5 实物流门控（TC12）：无纸化单据免签收；需实物且未签收 → 登记签收单并挂起首环节
         boolean sendable = deliveryService.canEnterSharedPool(bill.getId());
         if (!sendable) {

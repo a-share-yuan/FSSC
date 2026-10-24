@@ -128,6 +128,10 @@
               />
             </el-select>
           </el-form-item>
+          <!-- V1.4.92（AMC-01）：非集中档案管理公司的纸质原件留原单位，后端 applyDelivery 必拒，前端同口径前置说明 -->
+          <el-form-item v-if="applyNonCentral">
+            <el-alert type="info" :closable="false" show-icon :title="$t('sharing.delivery.hintNonCentralArchive')" />
+          </el-form-item>
           <el-form-item :label="$t('sharing.delivery.colCourier')" v-if="applyForm.deliveryType === 'POST'">
             <el-select v-model="applyForm.expressCompany" :placeholder="$t('sharing.delivery.phPickCourier')" clearable style="width:220px">
               <el-option :label="$t('sharing.delivery.optSf')" value="SF" />
@@ -157,7 +161,7 @@
             <el-select v-model="applyForm.remark" filterable allow-create default-first-option :placeholder="$t('sharing.delivery.phRemarkOptions')" style="width: 100%"><el-option :label="$t('sharing.delivery.optNormalHandover')" value="正常交接" /><el-option :label="$t('sharing.delivery.optRush')" value="加急处理" /><el-option :label="$t('sharing.delivery.optExtraDocs')" value="补充资料" /><el-option :label="$t('sharing.delivery.optSpecial')" value="特殊说明" /><el-option :label="$t('sharing.common.colOther')" value="其他" /></el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="doApply" :loading="applyLoading">{{ $t('sharing.delivery.btnSubmitApply') }}</el-button>
+            <el-button type="primary" @click="doApply" :loading="applyLoading" :disabled="applyNonCentral">{{ $t('sharing.delivery.btnSubmitApply') }}</el-button>
           </el-form-item>
         </el-form>
 
@@ -326,7 +330,7 @@
 <script setup>
 import { onMounted, ref, nextTick, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { deliveryApi, billApi } from '../../api'
+import { deliveryApi, billApi, orgApi } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { BillStatus, STATUS_TYPE } from '@/constants/billStatus.js'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
@@ -540,6 +544,22 @@ const myTotal = ref(0)
 const myPageNum = ref(1)
 const billOptions = ref([])
 const billSearching = ref(false)
+// V1.4.92（AMC-01）：公司档案管理模式（companyTree 返回 SysCompany.archiveMode）
+const companyById = ref({})
+const applyBill = ref(null)
+const applyNonCentral = computed(() => {
+  const c = applyBill.value && companyById.value[applyBill.value.companyId]
+  return c?.archiveMode === 'NON_CENTRAL'
+})
+
+async function loadCompanies() {
+  try {
+    const list = await orgApi.companyTree()
+    const m = {}
+    ;(list || []).forEach((c) => { m[c.id] = c })
+    companyById.value = m
+  } catch { /* 模式信息不可得时按集中处理，交单链路由后端同一判据兜底 */ }
+}
 
 async function searchBills(query) {
   if (!query) { billOptions.value = []; return }
@@ -553,15 +573,18 @@ async function searchBills(query) {
 
 function onBillSelect(id) {
   applyForm.value.billId = id
+  applyBill.value = billOptions.value.find((b) => b.id === id) || null
 }
 
 async function doApply() {
   if (!(await validateForms([applyFormRef]))) return
+  if (applyNonCentral.value) { ElMessage.warning(t('sharing.delivery.hintNonCentralArchive')); return }
   applyLoading.value = true
   try {
     await deliveryApi.apply(applyForm.value)
     ElMessage.success(t('sharing.delivery.msgApplyOk'))
     applyForm.value = { billId: null, expressCompany: '', expressNo: '', packageCount: 1, deliveryType: 'POST', remark: '' }
+    applyBill.value = null
     applyFormRef.value?.clearValidate()
     loadMyDeliveries()
   } catch (e) { ElMessage.error(e.message) }
@@ -660,6 +683,7 @@ function onTabChange(tab) {
 onMounted(() => {
   onTabChange(activeTab.value)
   nextTick(() => scanInputRef.value?.focus?.())
+  loadCompanies()
 })
 
 function exportCsv() {

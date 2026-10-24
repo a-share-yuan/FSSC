@@ -244,7 +244,7 @@ public class WfPerfService {
         Map<String, Integer> layer = new HashMap<>();
         List<String> ordered = new ArrayList<>(firstSteps.keySet());
         Comparator<String> byStep = Comparator
-                .comparingInt((String n) -> avg(firstSteps.get(n)))
+                .comparingDouble((String n) -> avg(firstSteps.get(n)))
                 .thenComparing(n -> -hits.getOrDefault(n, 0));
         ordered.sort(byStep);
         for (int i = 0; i < ordered.size(); i++) {
@@ -1195,7 +1195,12 @@ public class WfPerfService {
         return Math.round(v * 100.0) / 100.0;
     }
 
-    private int avg(List<Integer> values) {
+    /**
+     * F-09：首次出现步序的均值必须是实数——原实现 {@code (int)(sum / size)} 向下取整，
+     * 1.5 与 1.0 并列，节点分层排序把真实流转边判成回边丢掉（桑基少一条
+     * 「扫描单据→直属上级审核」）。改为 double 比较，只影响层号排序，不参与展示。
+     */
+    private double avg(List<Integer> values) {
         if (values == null || values.isEmpty()) {
             return 0;
         }
@@ -1203,7 +1208,7 @@ public class WfPerfService {
         for (int v : values) {
             sum += v;
         }
-        return (int) (sum / values.size());
+        return (double) sum / values.size();
     }
 
     /** 单节点聚合中间态。 */

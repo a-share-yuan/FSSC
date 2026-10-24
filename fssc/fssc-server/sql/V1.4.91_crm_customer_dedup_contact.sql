@@ -3,6 +3,9 @@
 -- =============================================================================
 -- 状态： 全文注释态，未执行。放行前必须先跑本文件末尾【执行前只读复点】三条，
 --        且三条读数须与「实测基线」一致；对不上就停，重新取数再判。
+--  纪律（21:5x 追加）：库可被并行窗**整体重建**（20:03:56~20:23:45 实况：1,099 张表
+--        DROP+CREATE 后重灌）⇒ 本件里的基线数字**只作沿革**，放行判据必须
+--        **临放行即时复点**（不得引用本文件的旧数字直接解注释执行）。
 --
 -- 背景（D-DEC-478 的第二条腿，方案见
 --        Ashare/邮包功能合并与往来主数据去冗余_方案_20261023.md §P2）：
@@ -12,20 +15,33 @@
 --   478 已上线：写入侧停拷 + 读取侧（CustomerService.page）按编码回查补齐，
 --   出参口径不变 ⇒ 存量这三列没有任何唯一信息，可清。
 --
--- 实测基线（2026-10-23 16:0x 首测；18:5x 复测修正，见下「2」；只读复点件 D:/tmp/jarwin-20261023/census-478.sql ＋ precheck-478.sql）：
+-- 实测基线（**以「现盘（21:3x）」为准**；16:0x 首测与 18:5x 复测的数字均已作废，保留仅作沿革）：
+-- 现盘（2026-10-23 21:3x，只读复点件 D:/tmp/jarwin-20261023/precheck-478b.sql）：
 --   A_crm_total                = 63   （del_flag=0）
 --   B_shadow_matched           = 58   （customer_code 能在 md_supplier 命中同码）
---   C_shadow_any_contact       = 54   （其中三列至少一列非空＝本次清列目标）
---   D_all_three_identical      = 54   （且三列逐值全同 ⇒ C 与 D 相等＝零分歧）
---   E_divergent_rows           = 0    （没有任何一行「拷了但和供应商侧不一样」）
+--   C_shadow_any_contact       = 54   （有供应商同码 且 三列至少一列非空）
+--   D_all_three_identical      = 51   （其中三列逐值全同＝**本次清列目标**）
+--   E_divergent_rows           = 3    （拷了但和供应商侧不一样＝挂起，见下「3」）
 --   G_no_supplier_twin_contact = 5    （有联系人但无供应商同码＝真客户，不在清理范围）
 --   F_remark_devcode           = 58   （remark LIKE '%D-V4R-96%'＝界面可见开发腔，拆两段：57 ＋ 1）
 --   F1_auto_remark             = 57   （前缀「由供应商主数据自动建档（D-V4R-96:%」＝步骤 2 的改写面）
 --   F2_manual_remark           = 1    （id=1 SUP-006 弘毅贸易，人工备注「N1幕数据补齐：…（D-V4R-96）」＝步骤 2b 的改写面）
---   ⇒ 清列 54 行零信息损失（读侧回查会原样补回同值）；5 行真客户列保持不动。
+--   ⇒ 清列 51 行零信息损失（读侧回查会原样补回同值）；5 行真客户列保持不动；3 行分叉行挂起不动。
 --
 --   WHERE 前缀不匹配（步骤 2 只改 57 行），且步骤后复点 Q3c（'%D-V4R-96%' 应 = 0）永远差那 1 行
 --   ⇒ 该件原样放行必然不绿。现按两段口径拆开：Q2 = 57（自动串）／Q2b = 1（人工串，步骤 2b 单独改写）。
+--
+-- 3（21:3x 第二次复测自纠，在 2 之后）：16:26 的读数已作废——**并行窗在 20:03:56~20:23:45
+--   把整个 fssc 库重建了**（binlog `EBORE-bin.000070` ROW 格式解出 **1,099 张表** DROP+CREATE，
+--   随后逐表重灌：crm_customer INSERT 189 行、md_supplier 重灌一遍），两表按**各自来路的种子**
+--   重灌 ⇒ 同码公司名对不上 ⇒ 其中 3 行的联系人姓名分叉：
+--     id=46 SUP-002 锐仪智能集团  crm「杭州锐仪」 vs md「杭州金卡」
+--     id=45 SUP-003 浙华仪表集团  crm「浙华仪表」 vs md「苍南仪表」
+--     id=48 SUP-004 潇湘燃气设备  crm「潇湘设备」 vs md「华润设备」
+--   代判（签字栏留空）：这 3 行**不列本次清列**。理由＝清了就等于让这 3 行的联系人显示改成
+--     另一家公司的简称，而客户档案里的公司名仍是旧公司 ⇒ 显示自相矛盾；正解是数据侧把这 5 家的
+--     主体对齐后另立条目。故步骤 1 的 WHERE **保持原语义不变**（三列全同），只清 51 行。
+--   ⇒ 放行复点随之改口径：Q1 应 = 51（不是 54）；执行后 Q3a 应 = 3（= 挂起那 3 行），不是 0。
 --
 -- 为什么不做成「删列」：contact_name/contact_phone/address 仍是真客户的唯一载体
 --   （G 组 5 行），删列会毁掉自建客户的录入通道 ⇒ 只清影子值，不动 DDL。
@@ -56,7 +72,7 @@
 -- -----------------------------------------------------------------------------
 -- 步骤 1：清影子三列（只清「有供应商同码 且 三列逐值全同」的行）
 -- -----------------------------------------------------------------------------
--- 预期影响行数 = 54（跑前用【执行前只读复点】Q1 复算，不等就停）
+-- 预期影响行数 = 51（跑前用【执行前只读复点】Q1 复算，不等就停；3 后由 54 改 51）
 -- 说明：跨表比串必须带 COLLATE，否则 1267 Illegal mix of collations；
 --       逐值比对用 <=>（NULL 安全），用 = 会让 NULL=NULL 变 NULL 而漏判。
 -- UPDATE fssc.crm_customer c
@@ -96,7 +112,7 @@
 -- -----------------------------------------------------------------------------
 -- 步骤 3：执行后复点（三条全绿才算这一腿完成）
 -- -----------------------------------------------------------------------------
--- Q3a 清列命中面应为 0：
+-- Q3a 清列命中面应为 3（3 后不是 0）：执行后仍非空的正好是挂起的那 3 行分叉行（SUP-002/003/004）
 -- SELECT COUNT(*) FROM fssc.crm_customer c
 --   JOIN fssc.md_supplier s ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code AND s.del_flag=0
 --  WHERE c.del_flag=0 AND (c.contact_name<>'' OR c.contact_phone<>'' OR c.address<>'');
@@ -109,7 +125,7 @@
 
 -- =============================================================================
 -- 【执行前只读复点】——先单独跑这三条，读数对上基线才允许解开步骤 1/2 的注释
---   Q1 应 = 54
+--   Q1 应 = 51（3 后由 54 改 51＝三列逐值全同的 51 行）
 -- SELECT COUNT(*) FROM fssc.crm_customer c
 --   JOIN fssc.md_supplier s ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code AND s.del_flag=0
 --  WHERE c.del_flag=0 AND (c.contact_name<>'' OR c.contact_phone<>'' OR c.address<>'')
@@ -118,7 +134,7 @@
 -- SELECT COUNT(*) FROM fssc.crm_customer WHERE del_flag=0 AND remark LIKE '由供应商主数据自动建档（D-V4R-96:%';
 --   Q2b 应 = 1
 -- SELECT COUNT(*) FROM fssc.crm_customer WHERE del_flag=0 AND remark = 'N1幕数据补齐：供应商主数据在 md_supplier，往来单位下拉读 crm_customer（D-V4R-96）';
---   Q3 应 = 0（出现「拷了但不同值」的行 ⇒ 前提破了，本件作废改走逐行人工裁决）
+--   Q3 应 = 3（3 后：现盘 3 行分叉＝已代判挂起、**不列本次清列**；Q3 > 3 时本件作废改走逐行人工裁决）
 -- SELECT COUNT(*) FROM fssc.crm_customer c
 --   JOIN fssc.md_supplier s ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code AND s.del_flag=0
 --  WHERE c.del_flag=0 AND (c.contact_name<>'' OR c.contact_phone<>'' OR c.address<>'')

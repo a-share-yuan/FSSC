@@ -53,6 +53,12 @@ public class ArchiveService {
     private final java.util.List<ArchiveCarrierResolver> carrierResolvers;
 
     /**
+     * V1.4.92（AMC-05）：档案非集中管理判定复用 {@code DeliveryService.isNonCentralArchive}
+     * （模式的唯一读点），此处只为给「原件保管单位」落默认值，不另读 {@code sys_company.archive_mode}。
+     */
+    private final com.fssc.sharing.service.DeliveryService deliveryService;
+
+    /**
      * 档案类型权威词表（RA-D255a，2026-09-27 REF-C 判类＝<b>闭集枚举</b>）：
      * 前 8 项与前端 {@code ArchiveBoard.vue} 的 {@code archiveTypeLabel} 同一套；D-DEC-005 加的
      * {@code BANK_SLIP}/{@code SUPPLIER} 两类是「非单据载体」登记用，前端标签暂缺（列表回落显示原码），
@@ -325,6 +331,8 @@ public class ArchiveService {
             fillCatalogFromCarrier(archive, resolveCarrier(archiveType, billId));
             fillPeriodFromArchivePeriod(archive);
         }
+        // V1.4.92（AMC-05）：公司已解析完成，再按模式补「原件保管单位」
+        applyPaperKeeperDefault(archive);
         archiveCatalogMapper.insert(archive);
         log.info("创建档案: id={}, billId={}, archiveType={}, 保管至 {}", archive.getId(), billId, archiveType,
                 archive.getDestroyDate());
@@ -710,6 +718,8 @@ public class ArchiveService {
         // 落在目录要素补齐<b>之后</b>，因为 archive_year/period_year 到这一步才取得到来源真值。
         archive.setDestroyDate(destroyDateOf(archive.getArchiveYear(), archive.getPeriodYear(),
                 archive.getRetentionYears()));
+        // V1.4.92（AMC-05）：同人工立卷口径，按公司模式补「原件保管单位」
+        applyPaperKeeperDefault(archive);
         archiveCatalogMapper.insert(archive);
 
         // D-DEC-180：主键入库之后才算快照（id 是可区分要素），随后回写 integrity_hash
@@ -983,6 +993,20 @@ public class ArchiveService {
         // 无单据（非费用域立卷／单号输错）时，会计年度月份仍可从档案期间折出来，
         // 消掉「archive_period 有值而 period_year/month 全空」这组同页二源
         fillPeriodFromArchivePeriod(archive);
+    }
+
+    /**
+     * V1.4.92（AMC-05）：非集中档案模式下纸质原件留原单位 ⇒ 原件保管单位默认落档案归属公司；
+     * 集中模式原件已寄送共享中心，两列保持 NULL（不写"共享中心"占位，保管地点属人工登记口径）。
+     * 只补空、不覆盖人工已填值；两条人工/自动立卷入口与影像归档链路共用。
+     */
+    void applyPaperKeeperDefault(OpArchive archive) {
+        if (archive == null || archive.getCompanyId() == null || archive.getPaperKeeperCompanyId() != null) {
+            return;
+        }
+        if (deliveryService.isNonCentralArchive(archive.getCompanyId())) {
+            archive.setPaperKeeperCompanyId(archive.getCompanyId());
+        }
     }
 
     /** D-DEC-005：单据/载体两条立卷路径共用的期间回落（archive_period yyyy-MM → period_year/period_month） */

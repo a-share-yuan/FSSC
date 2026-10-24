@@ -1206,7 +1206,7 @@ public class WfEngineFacade {
     private String resolveExpenseType(String processKey, Long bizId) {
         if (processKey == null || bizId == null) return null;
         if (!"CLAIM".equals(processKey) && !"CLAIM_TRAVEL".equals(processKey)
-                && !"CLAIM_G1".equals(processKey)) return null;
+                && !"CLAIM_G1".equals(processKey) && !"CLAIM_NC".equals(processKey)) return null;
         try {
             java.util.List<com.fssc.expense.entity.ExpBillLine> lines = expBillLineMapper.selectList(
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.expense.entity.ExpBillLine>()

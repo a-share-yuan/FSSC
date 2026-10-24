@@ -103,6 +103,15 @@ public class OpArchive implements Serializable {
     /** 保管年限 */
     private Integer retentionYears;
 
+    /**
+     * 原件保管单位（V1.4.92，AMC-05）：档案非集中管理时纸质原件的保管法人公司 id；
+     * 集中管理（原件已寄送共享中心）为空。
+     */
+    private Long paperKeeperCompanyId;
+
+    /** 原件存放位置（V1.4.92，AMC-05）：非集中模式下的具体存放地点，集中模式为空 */
+    private String paperLocation;
+
     /** 到期销毁日期 */
     private LocalDate destroyDate;
 

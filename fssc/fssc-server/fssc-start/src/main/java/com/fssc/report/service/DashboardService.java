@@ -79,9 +79,15 @@ public class DashboardService {
         }
         applyScope(qw, "company_id", "dept_id", "apply_user_id");
         qw.gt("period_month", 0);
-        qw.groupBy("period_year", "period_month").orderByAsc("period_year").orderByAsc("period_month");
+        // F-02：原按 period 升序取前 N 条＝取到"最早 N 个期间"（22 期里返回 2025-01..2025-06）。
+        // 改为倒序取最近 N 期，再翻回升序供图表按时间轴展示。
+        qw.groupBy("period_year", "period_month").orderByDesc("period_year").orderByDesc("period_month");
         List<Map<String, Object>> rows = expBillMapper.selectMaps(qw);
-        return rows.stream().limit(Math.max(months, 1)).collect(Collectors.toList());
+        List<Map<String, Object>> recent = rows.stream()
+                .limit(Math.max(months, 1))
+                .collect(Collectors.toCollection(java.util.ArrayList::new));
+        java.util.Collections.reverse(recent);
+        return recent;
     }
 
     // ---------------- 预算执行率 ----------------
@@ -95,7 +101,8 @@ public class DashboardService {
         qw.groupBy("item_id");
         List<Map<String, Object>> rows = bgItemMapper.selectMaps(qw);
         return rows.stream().map(row -> {
-            Map<String, Object> out = new HashMap<>();
+            // F-14：原用 HashMap，序列化键序不稳定；改 LinkedHashMap 让下钻抽屉按固定字段序取值
+            Map<String, Object> out = new java.util.LinkedHashMap<>();
             Long itemId = toLong(row.get("item_id"));
             out.put("itemId", itemId);
             String itemName = itemNameOf(itemId);
@@ -411,7 +418,12 @@ public class DashboardService {
         if (s.getScope() == DataScope.SELF.getCode()) {
             return new ScopeArgs(null, s.getUserId());
         }
-        // 3 部门及以下 / 4 本部门：取 deptAndChild（无部门信息时按 null 处理＝不收窄）
+        if (s.getScope() == DataScope.DEPT.getCode()) {
+            // F-04：4 档（本部门）只取本部门，与 DataScopeKit.apply／ReportQueryController.resolveScope
+            // 同口径；原与 3 档共用 deptAndChild，导致 scope=4 的用户在部门排行/审批时效里看见子部门数据。
+            return new ScopeArgs(s.getDeptId() == null ? null : Set.of(s.getDeptId()), null);
+        }
+        // 3 部门及以下：取 deptAndChild（无部门信息时按 null 处理＝不收窄）
         return new ScopeArgs(s.getDeptAndChild(), null);
     }
 

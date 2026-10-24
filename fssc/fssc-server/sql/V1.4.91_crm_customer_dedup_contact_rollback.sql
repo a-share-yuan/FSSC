@@ -22,6 +22,9 @@
 --     OR b.remark LIKE '%D-V4R-96%';
 
 -- 步骤 2R：复点——影子列应回到 54（若执行期间有新自动建档行，会 ≥54，属正常）
+-- 3（21:3x，与正向件同步）：正向件现在只清 **51** 行（分叉的 3 行 SUP-002/003/004 不在清列范围），
+--   ⇒ 正向执行后该计数会掉到 **3**（＝挂起那 3 行），回滚后应回到 **54**（3 分叉行 ＋ 51 还原行）。
+--   留底表是执行前那一瞬的快照 ⇒ 若库在此期间被并行窗整体重建，本件不可用（按 md_supplier 现值重拷三列）。
 -- SELECT COUNT(*) FROM fssc.crm_customer c
 --   JOIN fssc.md_supplier s ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code AND s.del_flag=0
 --  WHERE c.del_flag=0 AND (c.contact_name<>'' OR c.contact_phone<>'' OR c.address<>'');

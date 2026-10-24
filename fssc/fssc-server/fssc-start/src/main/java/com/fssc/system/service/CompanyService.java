@@ -75,6 +75,10 @@ public class CompanyService {
         }
         company.setId(null);
         company.setAncestors(calcAncestors(company.getParentId()));
+        // 默认集中模式：前端会显式提交 CENTRAL，这里兜住直调 API 的空值/非法值，
+        // 避免落成空串（空串同样被 DeliveryService 当集中处理，但数据页显示为空）
+        String mode = normalizeArchiveMode(company.getArchiveMode(), "CENTRAL");
+        company.setArchiveMode(mode);
         sysCompanyMapper.insert(company);
         return company.getId();
     }
@@ -87,7 +91,24 @@ public class CompanyService {
         // 整单更新（前端提交完整对象），故与 create 同口径拦空；enable() 走独立对象不受影响
         AssertUtil.notBlank(company.getCompanyName(), ErrorCode.PARAM_INVALID, "请输入公司名称");
         AssertUtil.notBlank(company.getCompanyCode(), ErrorCode.PARAM_INVALID, "请输入公司编码");
+        // 更新时「未提交」不得被当成「改回集中」：留 null 让 MP 跳过该列，避免把非集中公司静默改回集中
+        company.setArchiveMode(normalizeArchiveMode(company.getArchiveMode(), null));
         sysCompanyMapper.updateById(company);
+    }
+
+    /**
+     * 档案管理模式取值收口（V1.4.92）：空值按 defaultMode 处理（create 传 CENTRAL、update 传 null＝不改）；
+     * 非空必须是 CENTRAL/NON_CENTRAL，防止脏值绕过 DeliveryService 的等值判定。
+     */
+    private String normalizeArchiveMode(String mode, String defaultMode) {
+        String m = mode == null ? "" : mode.trim().toUpperCase(java.util.Locale.ROOT);
+        if (m.isEmpty()) {
+            return defaultMode;
+        }
+        if (!"CENTRAL".equals(m) && !"NON_CENTRAL".equals(m)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "档案管理模式取值非法: " + mode);
+        }
+        return m;
     }
 
     public void enable(Long id, boolean enable) {

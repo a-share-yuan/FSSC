@@ -123,6 +123,13 @@
           </el-form-item>
           <el-form-item :label="$t('system.org.colCreditCode')"><el-input v-model="form.creditCode" /></el-form-item>
           <el-form-item :label="$t('system.org.colTaxNo')"><el-input v-model="form.taxNo" /></el-form-item>
+          <!-- V1.4.92（AMC-01）：档案管理模式决定纸质原件是否寄送共享中心（非集中＝原件留原单位、不产生实物流） -->
+          <el-form-item :label="$t('system.org.colArchiveMode')">
+            <el-select v-model="form.archiveMode" style="width:100%">
+              <el-option :label="$t('system.org.optArchiveCentral')" value="CENTRAL" />
+              <el-option :label="$t('system.org.optArchiveNonCentral')" value="NON_CENTRAL" />
+            </el-select>
+          </el-form-item>
           <el-form-item :label="$t('system.common.colSort')"><el-input-number v-model="form.sort" :min="0" style="width:100%" /></el-form-item>
         </template>
         <template v-else-if="type === 'dept'">
@@ -234,7 +241,7 @@ const editingId = ref(null)
 const saving = ref(false)
 const type = ref('company')
 const typeLabel = ref(t('field.company'))
-const form = reactive({ companyName: '', companyCode: '', parentId: 0, creditCode: '', taxNo: '', sort: 0, deptName: '', deptCode: '', companyId: 0, parentId_dept: 0, postName: '', postCode: '', deptId: 0 })
+const form = reactive({ companyName: '', companyCode: '', parentId: 0, creditCode: '', taxNo: '', archiveMode: 'CENTRAL', sort: 0, deptName: '', deptCode: '', companyId: 0, parentId_dept: 0, postName: '', postCode: '', deptId: 0 })
 
 const orgFormRef = ref(null)
 // 公司/部门下拉「未选」在本页是 0 而不是 null，required 校验器会放行 0 ⇒ 显式把 0 也判为未选
@@ -318,7 +325,7 @@ function open(kind, row) {
   typeLabel.value = kind === 'company' ? t('field.company') : kind === 'dept' ? t('field.dept') : t('system.org.optPost')
   editingId.value = row ? row.id : null
   Object.assign(form, {
-    companyName: '', companyCode: '', parentId: 0, creditCode: '', taxNo: '', sort: 0,
+    companyName: '', companyCode: '', parentId: 0, creditCode: '', taxNo: '', archiveMode: 'CENTRAL', sort: 0,
     deptName: '', deptCode: '', companyId: 0, parentId_dept: 0,
     postName: '', postCode: '', deptId: 0
   })
@@ -336,6 +343,7 @@ function open(kind, row) {
       form.companyName = row.companyName || ''; form.companyCode = row.companyCode || ''
       form.parentId = row.parentId ?? 0; form.creditCode = row.creditCode || ''
       form.taxNo = row.taxNo || ''; form.sort = row.sort ?? 0
+      form.archiveMode = row.archiveMode || 'CENTRAL'
     } else if (kind === 'dept') {
       form.deptName = row.deptName || ''; form.deptCode = row.deptCode || ''
       form.companyId = row.companyId ?? 0; form.parentId = row.parentId ?? 0; form.sort = row.sort ?? 0
@@ -358,7 +366,7 @@ async function save() {
     const kind = type.value
     const isEdit = !!editingId.value
     if (kind === 'company') {
-      const body = { companyName: form.companyName, companyCode: form.companyCode, parentId: form.parentId, creditCode: form.creditCode, taxNo: form.taxNo, sort: form.sort }
+      const body = { companyName: form.companyName, companyCode: form.companyCode, parentId: form.parentId, creditCode: form.creditCode, taxNo: form.taxNo, archiveMode: form.archiveMode || 'CENTRAL', sort: form.sort }
       if (isEdit) await orgApi.companyUpdate({ id: editingId.value, ...body })
       else await orgApi.companyCreate(body)
     } else if (kind === 'dept') {

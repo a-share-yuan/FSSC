@@ -24,4 +24,9 @@ public class SysCompany extends TenantAuditBase {
     private Integer sort;
     /** NORMAL正常 / DISABLED停用 */
     private String status;
+    /**
+     * 档案管理模式（V1.4.92）：CENTRAL 集中（纸质原件寄送共享中心）／NON_CENTRAL 非集中（原件留原单位，
+     * 不产生实物流）。默认 CENTRAL＝改造前行为；判定入口见 {@code DeliveryService}。
+     */
+    private String archiveMode;
 }

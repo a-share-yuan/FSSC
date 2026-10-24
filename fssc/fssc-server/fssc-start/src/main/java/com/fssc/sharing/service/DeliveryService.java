@@ -44,13 +44,28 @@ public class DeliveryService {
     private final BarcodeService barcodeService;
     /** R5-D-239：交付人姓名统一取 nick_name */
     private final SysUserMapper sysUserMapper;
+    /** 档案管理模式读点（V1.4.92）：公司级 CENTRAL／NON_CENTRAL，缺省按 CENTRAL */
+    private final com.fssc.system.mapper.SysCompanyMapper sysCompanyMapper;
 
     /**
      * 判定单据是否需要实物签收：
-     * 无纸化单据（paperless=Y）免实物；其余（N/未设，含纸质交单传统模式）需签收。
+     * 无纸化单据（paperless=Y）免实物；档案非集中管理公司（archive_mode=NON_CENTRAL）整段实物流不发生；
+     * 其余（N/未设，含纸质交单传统模式）需签收。
      */
     public boolean requiresDelivery(ExpBill bill) {
-        return !"Y".equals(bill.getPaperless());
+        return !"Y".equals(bill.getPaperless()) && !isNonCentralArchive(bill.getCompanyId());
+    }
+
+    /**
+     * 公司是否走档案非集中管理（原件留原单位、纸质件不寄共享中心）。
+     * 公司不存在、未设值、读取异常一律返回 false（＝按集中处理，保持改造前行为）。
+     */
+    public boolean isNonCentralArchive(Long companyId) {
+        if (companyId == null) {
+            return false;
+        }
+        com.fssc.system.entity.SysCompany c = sysCompanyMapper.selectById(companyId);
+        return c != null && "NON_CENTRAL".equalsIgnoreCase(c.getArchiveMode());
     }
 
     /**
@@ -67,7 +82,7 @@ public class DeliveryService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "单据处于草稿/已取消状态，不可登记实物流（请先提交单据）");
         }
-        if ("Y".equals(bill.getPaperless())) {
+        if (!requiresDelivery(bill)) {
             if (!"NOT_REQUIRED".equals(bill.getDeliveryStatus())) {
                 ExpBill upd = new ExpBill();
                 upd.setId(bill.getId());
@@ -393,6 +408,11 @@ public class DeliveryService {
         if ("DRAFT".equals(bill.getStatus()) || "CANCELLED".equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "单据处于草稿/已取消状态，不可交单登记（请先提交单据）");
+        }
+        // V1.4.92：非集中管理公司不产生实物流，交单入口直接拒绝（否则会造出无签收意义的幽灵签收单）
+        if (isNonCentralArchive(bill.getCompanyId())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "该公司为档案非集中管理，纸质原件留原单位保管，无需登记实物流");
         }
         // R5-D-239：交付人姓名统一取 sys_user.nick_name（此前存裸工号如 Y005713，与人员列治理同批）
         Long effectiveDeliverBy = deliverBy != null ? deliverBy : bill.getApplyUserId();

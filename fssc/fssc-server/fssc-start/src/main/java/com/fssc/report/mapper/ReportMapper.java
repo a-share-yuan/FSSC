@@ -23,6 +23,14 @@ import java.util.Map;
 @Mapper
 public interface ReportMapper {
 
+    /**
+     * 费用类报表的统一生效状态白名单（F-06）：审批通过／已付／已结清／已办结／已过账。
+     * 原 expenseSummary／monthlyTrend／expenseComposition／expenseAnalysis 四处只写
+     * {@code APPROVED,POSTED}，已付款（PAID）的单会整张从费用口径里漏掉——与 approvalEfficiency
+     * 的五终态口径对齐，四处共用一份，避免再次漂移。
+     */
+    String EXPENSE_EFFECTIVE_STATUS = "'APPROVED','PAID','REPAID','COMPLETED','POSTED'";
+
     /** 部门报销排行（金额降序）。companyId 非 null 时仅统计该公司（① 导出口径）
      *  R5-D-021：camelCase 别名为报表工作台的列绑定，snake_case 别名保留给导出与看板的既有读取，两者共存。
      *  D-F1R-04：补数据范围参数。原口径只按公司收口（companyId），而本接口挂 {@code dashboard:view}
@@ -120,17 +128,24 @@ public interface ReportMapper {
                                                    @Param("scopeDeptIds") List<Long> scopeDeptIds);
 
     // ---------- 需求 11.7 费用明细表：按单据+明细行查询 ----------
+    // F-03：原 `order by b.id desc limit 300` 是行级截断——边界单只出一半明细，且同单各行在并列排序下
+    // 保留哪几行不确定（BX382025100006 曾只剩劳动保护费、差旅费被截掉）。改为单据粒度：
+    // 先取最近 100 单（关键字/数据范围全部下推到单据），再取这些单的全部明细，单内按行 id 定序。
     @Select("<script>select b.bill_no as billNo, b.bill_type as billType, b.bill_sub_type as billSubType, " +
             "b.apply_user_name as applyUserName, b.apply_date as applyDate, b.dept_id as deptId, " +
             "l.item_name as itemName, l.amount, b.status, b.voucher_no as voucherNo " +
             "from exp_bill b join exp_bill_line l on l.bill_id = b.id where l.item_id is not null " +
             "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
-            "<if test='kw != null and kw != \"\"'>and (b.bill_no like concat('%',#{kw},'%') " +
-            "or b.apply_user_name like concat('%',#{kw},'%') or l.item_name like concat('%',#{kw},'%'))</if> " +
-            "<if test='scopeCompanyId != null'>and b.company_id = #{scopeCompanyId}</if> " +
-            "<if test='scopeDeptIds != null'>and b.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
-            "<if test='scopeUserId != null'>and b.apply_user_id = #{scopeUserId}</if> " +
-            "order by b.id desc limit 300</script>")
+            "and b.id in (select t.id from (select b2.id from exp_bill b2 where b2.del_flag = 0 " +
+            "<if test='kw != null and kw != \"\"'>and (b2.bill_no like concat('%',#{kw},'%') " +
+            "or b2.apply_user_name like concat('%',#{kw},'%') or exists (select 1 from exp_bill_line l2 " +
+            "where l2.bill_id = b2.id and l2.del_flag = 0 and l2.item_id is not null " +
+            "and l2.item_name like concat('%',#{kw},'%')))</if> " +
+            "<if test='scopeCompanyId != null'>and b2.company_id = #{scopeCompanyId}</if> " +
+            "<if test='scopeDeptIds != null'>and b2.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
+            "<if test='scopeUserId != null'>and b2.apply_user_id = #{scopeUserId}</if> " +
+            "order by b2.id desc limit 100) t) " +
+            "order by b.id desc, l.id</script>")
     List<Map<String, Object>> expenseDetail(@Param("kw") String kw,
                                             @Param("scopeCompanyId") Long scopeCompanyId,
                                             @Param("scopeDeptIds") List<Long> scopeDeptIds,
@@ -154,7 +169,7 @@ public interface ReportMapper {
     @Select("<script>select l.item_name as itemName, l.item_id as itemId, count(distinct b.id) as billCnt, " +
             "count(*) as lineCnt, sum(l.amount) as totalAmount " +
             "from exp_bill b join exp_bill_line l on l.bill_id = b.id " +
-            "where b.status in ('APPROVED','POSTED') and b.period_year is not null " +
+            "where b.status in (" + EXPENSE_EFFECTIVE_STATUS + ") and b.period_year is not null " +
             "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
             "<if test='year != null'>and b.period_year = #{year}</if> " +
             "<if test='month != null'>and b.period_month = #{month}</if> " +
@@ -173,7 +188,7 @@ public interface ReportMapper {
     @Select("<script>select b.period_year as year, b.period_month as month, l.item_name as itemName, " +
             "sum(l.amount) as totalAmount " +
             "from exp_bill b join exp_bill_line l on l.bill_id = b.id " +
-            "where b.status in ('APPROVED','POSTED') and b.period_year is not null " +
+            "where b.status in (" + EXPENSE_EFFECTIVE_STATUS + ") and b.period_year is not null " +
             "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
             "<if test='scopeCompanyId != null'>and b.company_id = #{scopeCompanyId}</if> " +
             "<if test='scopeDeptIds != null'>and b.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
@@ -188,7 +203,7 @@ public interface ReportMapper {
     @Select("<script>select b.company_id as companyId, b.period_year as year, b.period_month as month, " +
             "sum(l.amount) as totalAmount " +
             "from exp_bill b join exp_bill_line l on l.bill_id = b.id " +
-            "where b.status in ('APPROVED','POSTED') and b.period_year is not null " +
+            "where b.status in (" + EXPENSE_EFFECTIVE_STATUS + ") and b.period_year is not null " +
             "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
             "<if test='itemName != null and itemName != \"\"'>and l.item_name like concat('%',#{itemName},'%')</if> " +
             "<if test='scopeCompanyId != null'>and b.company_id = #{scopeCompanyId}</if> " +
@@ -332,7 +347,8 @@ public interface ReportMapper {
             "round(ifnull(sum(p.total_amount), 0) * 100.0 / nullif(c.amount, 0), 1) as executionRate, " +
             "c.status, c.end_date as endDate " +
             "from cont_contract c " +
-            "left join exp_bill p on p.contract_id = c.id and p.bill_type = 'PAY' " +
+            // F-05：补 p.del_flag = 0——原口径把已软删的付款腿计入已付额，与本文件 contractSummary 不一致
+            "left join exp_bill p on p.contract_id = c.id and p.del_flag = 0 and p.bill_type = 'PAY' " +
             "and p.status in ('APPROVED','POSTED') " +
             "where c.del_flag = 0 " +
             "<if test='scopeCompanyId != null'>and c.company_id = #{scopeCompanyId}</if> " +
@@ -443,7 +459,7 @@ public interface ReportMapper {
             "join exp_bill_line l on l.bill_id = b.id " +
             "left join sys_company sc on b.company_id = sc.id " +
             "left join sys_dept d on b.dept_id = d.id " +
-            "where b.status in ('APPROVED','POSTED') and b.period_year is not null " +
+            "where b.status in (" + EXPENSE_EFFECTIVE_STATUS + ") and b.period_year is not null " +
             "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
             "<if test='year != null'>and b.period_year = #{year}</if> " +
             "<if test='companyId != null'>and b.company_id = #{companyId}</if> " +
@@ -472,7 +488,9 @@ public interface ReportMapper {
             // R5-D-296：期间过滤改索引可用区间条件（禁 date_format 包裹日期列；&gt;/&lt; 为 XML 实体）
             "<if test='period != null and period != \"\"'>and bs.trans_date &gt;= str_to_date(concat(#{period}, '-01'), '%Y-%m-%d') and bs.trans_date &lt; date_add(str_to_date(concat(#{period}, '-01'), '%Y-%m-%d'), interval 1 month)</if> " +
             "<if test='scopeCompanyId != null'>and bs.company_id = #{scopeCompanyId}</if> " +
-            "order by bs.trans_date desc limit 500</script>")
+            // F-01：同刻多笔（9 行同 timestamp）时仅按 trans_date 排序无法定序，limit 500 的截断边界
+            // 每次取到的行集合不同 ⇒ 补主键作唯一键兜底
+            "order by bs.trans_date desc, bs.id desc limit 500</script>")
     List<Map<String, Object>> treasuryFlow(@Param("bankAccount") String bankAccount,
                                             @Param("period") String period,
                                             @Param("scopeCompanyId") Long scopeCompanyId);

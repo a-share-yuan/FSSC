@@ -225,6 +225,9 @@ echarts.use([BarChart, LineChart, TooltipComponent, GridComponent, LegendCompone
 
 const route = useRoute()
 const list = ref([])
+// F-10：趋势图必须吃"筛选条件下的全量行"，不能吃当前页（原实现只聚合 list 的 10 行，
+// 翻页图形就漂移）。trendRows 单独拉全量，与表格分页解耦。
+const trendRows = ref([])
 const loading = ref(false)
 const schemes = ref([])
 const expenseItems = ref([])
@@ -249,7 +252,7 @@ function renderTrend() {
   const budgetData = Array(12).fill(0)   // 预算（含调整）
   const occupyData = Array(12).fill(0)  // 已占用
   const usedData = Array(12).fill(0)     // 已核销
-  list.value.forEach((r) => {
+  trendRows.value.forEach((r) => {
     const m = Number(r.budgetPeriod || 0)
     if (m >= 1 && m <= 12) {
       budgetData[m - 1] += Number(r.totalAmount || 0) + Number(r.adjustAmount || 0)
@@ -258,7 +261,7 @@ function renderTrend() {
     }
   })
   // 全年(period=0)的数据均摊到 12 月
-  list.value.filter((r) => Number(r.budgetPeriod || 0) === 0).forEach((r) => {
+  trendRows.value.filter((r) => Number(r.budgetPeriod || 0) === 0).forEach((r) => {
     const total = Number(r.totalAmount || 0) + Number(r.adjustAmount || 0)
     const avg = total / 12
     const occAvg = Number(r.occupyAmount || 0) / 12
@@ -360,6 +363,18 @@ const itemFormRules = reactive({
 })
 const formRef = ref(null)
 
+async function loadTrend() {
+  try {
+    const r = await budgetApi.itemPage({
+      pageNum: 1, pageSize: 9999,
+      schemeId: filter.schemeId, itemId: filter.itemId,
+    })
+    trendRows.value = r?.list || r?.records || []
+  } catch {
+    trendRows.value = []
+  }
+}
+
 async function loadList() {
   if (!canList) return // R5-D-263：无查看权限不发列表请求
   loading.value = true
@@ -370,6 +385,7 @@ async function loadList() {
     })
     list.value = r?.list || r?.records || []
     page.total = r?.total || 0
+    await loadTrend()
     await nextTick()
     renderTrend()
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }

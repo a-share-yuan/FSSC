@@ -6,6 +6,7 @@ import com.fssc.budget.mapper.BgItemMapper;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.framework.org.OrgGuard;
+import com.fssc.framework.security.DataScopeHolder;
 import com.fssc.framework.security.DataScopeKit;
 import com.fssc.framework.security.annotation.DataScope;
 import com.fssc.report.mapper.ReportMapper;
@@ -77,12 +78,14 @@ public class ExportService {
     }
 
     /** 导出部门报销排行（① 导出口径：仅本登录人公司）
-     * D-F1R-04：补数据范围两参，与看板口径同源。本方法自身不标 @DataScope，
-     * 是否按部门/本人收口取决于调用链上的入口注解（有 @DataScope 才收口，否则传 null
-     * 即保持原"仅公司"导出行径，不改变既有导出行为）。 */
+     * F-07：补 {@code @DataScope} 与部门/本人两参——原方法只做公司隔离，部门/本人两参恒 null，
+     * scope=5 的账号导出件里出现本人部门以外的其他部门（屏幕 31 单 vs 导出 166 单）。
+     * 范围口径与 DashboardService.scopeArgs／ReportQueryController.resolveScope 一致。 */
+    @DataScope("部门排行导出数据范围")
     public byte[] exportDeptRanking() {
         Long mine = orgGuard.enforceCompany();
-        List<Map<String, Object>> rows = reportMapper.expenseByDept(mine, null, null);
+        ScopeArgs sc = reportScopeArgs();
+        List<Map<String, Object>> rows = reportMapper.expenseByDept(mine, sc.deptIds(), sc.userId());
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("部门报销排行");
             String[] heads = {"部门", "单据数", "报销金额"};
@@ -112,7 +115,9 @@ public class ExportService {
                         BgItem::getAdjustAmount,
                         BgItem::getOccupyAmount,
                         BgItem::getUsedAmount);
-        DataScopeKit.apply(qw, BgItem::getCompanyId, BgItem::getDeptId, null);
+        // F-08：改 applyWithNullDept——bg_item 公司级下达行 dept_id 为 NULL，原 apply 的
+        // dept_id = 本人部门 会把它们整批滤掉（屏幕 6 行 / 导出 0 行）。
+        DataScopeKit.applyWithNullDept(qw, BgItem::getCompanyId, BgItem::getDeptId, null);
         List<Map<String, Object>> rows = bgItemMapper.selectMaps(qw);
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("预算执行率");
@@ -138,6 +143,31 @@ public class ExportService {
         } catch (IOException e) {
             throw new RuntimeException("导出预算执行率失败", e);
         }
+    }
+
+    /**
+     * 部门/本人两维的数据范围入参（F-07），口径与 {@code DashboardService.scopeArgs}、
+     * {@code ReportQueryController.resolveScope} 一致：1/2 档不收窄；3 档取本部门及以下；
+     * 4 档只取本部门；5 档取本人（无本人维时由调用方降级公司）。
+     */
+    private ScopeArgs reportScopeArgs() {
+        DataScopeHolder.Scope s = DataScopeHolder.get();
+        if (s == null) {
+            return new ScopeArgs(null, null);
+        }
+        if (s.getScope() <= com.fssc.common.enums.DataScope.COMPANY.getCode()) {
+            return new ScopeArgs(null, null);
+        }
+        if (s.getScope() == com.fssc.common.enums.DataScope.SELF.getCode()) {
+            return new ScopeArgs(null, s.getUserId());
+        }
+        if (s.getScope() == com.fssc.common.enums.DataScope.DEPT.getCode()) {
+            return new ScopeArgs(s.getDeptId() == null ? null : List.of(s.getDeptId()), null);
+        }
+        return new ScopeArgs(s.getDeptAndChild(), null);
+    }
+
+    private record ScopeArgs(java.util.Collection<Long> deptIds, Long userId) {
     }
 
     private byte[] toBytes(XSSFWorkbook wb) throws IOException {

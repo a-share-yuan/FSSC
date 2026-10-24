@@ -361,6 +361,7 @@
   <!-- 借款单选择（D-UI-01：勾选 + 可改冲抵金额 + 底部【确定】，统一走 CandidatePickerDialog） -->
   <CandidatePickerDialog v-model="b.loanDialog" title="选择借款单冲抵"
                         :rows="b.loanCandidates" max-field="availableBalance"
+                        extra-prop="title" extra-label="标题"
                         no-label="借款单号" amount-label="借款额" max-label="可冲抵余额"
                         input-label="本次冲抵金额"
                         :picked-ids="loanOffsetIds"
