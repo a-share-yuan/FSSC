@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * FSSC 统一单据状态枚举
  * 全系统所有页面、组件共用此文件，禁止在各组件中重复定义。
@@ -42,8 +45,8 @@ export const STATUS_LABEL = {
   VOID: '已作废',
   CLOSED: '已关闭',
   TERMINATED: '已终止',
-  // 记账域红字冲销/作废后的单据终态（gl_journal_entry.status=REVERSED，D-DEC-128）；
-  // 缺键时列表直显英文码，故在此登记（与汇兑重估反冲 REVERSED 同码同义）
+  // 记账域红字冲销/作废后的单据最终状态（gl_journal_entry.status=REVERSED，D-DEC-128）；
+  // 缺键时列表直接显示英文码，故在此登记（与汇兑重估反冲 REVERSED 同码同义）
   REVERSED: '已冲销',
   // 流程实例（wf_instance.status）
   RUNNING: '运行中',
@@ -75,7 +78,7 @@ export const STATUS_LABEL = {
   // 归档/反归档与档案立卷态（exp_bill.archive_status / op_archive.status）
   UNARCHIVED: '未归档',
   FILED: '已立卷',
-  // 在建工程转固态（md_cip.status）；缺 IN_PROGRESS 时看板「状态」列直显英文码
+  // 在建工程转固态（md_cip.status）；缺 IN_PROGRESS 时看板「状态」列直接显示英文码
   IN_PROGRESS: '进行中',
   TRANSFERRING: '转固审批中',
   TRANSFERRED: '已转固',
@@ -87,10 +90,13 @@ export const STATUS_LABEL = {
   // 采购收货态（po_receipt.status / quality_status）
   RECEIVED: '已收货',
   PASSED: '已验收',
-  // 批次级富化哨兵：一个批次覆盖多张单据且状态不一致时，后端置 MIXED（D-DEC-252）
+  // 批次级补充哨兵：一个批次覆盖多张单据且状态不一致时，后端置 MIXED（D-DEC-252）
   MIXED: '状态不一',
   // 合同生命周期（cont_contract.status=EFFECTIVE，变更/关闭按钮的判据）
   EFFECTIVE: '已生效',
+  // 合同执行态（cont_contract.status 库内现值 SIGNED/EXECUTING，10-25 报表走查实测直接显示英文后补登）
+  SIGNED: '已签约',
+  EXECUTING: '执行中',
   // 报表定义启停（rpt_report_def.status=ACTIVE/INACTIVE）
   INACTIVE: '已停用',
   // 总账会计期间关账态（gl_month_close.status=UNCLOSED/CLOSED）
@@ -100,18 +106,20 @@ export const STATUS_LABEL = {
   // 角色停用态：界面开关写 DISABLED，历史种子用的是 DISABLE
   DISABLE: '已停用',
   // —— 跨域「我发起的单据」汇总进来的各域本表状态码（D-DEC-406：工作台该卡由费用单表改跨域归并后，
-  //    这些列值第一次被喂进统一 statusLabel，缺键即直显英文）——
+  //    这些列值第一次被喂进统一 statusLabel，缺键即直接显示英文）——
   // 采购：po_order／po_receipt 关联发票后 RECEIVED/APPROVED→INVOICED，冲销后回退（PurchaseService:636-648）
   INVOICED: '已开票',
   // 合并报表已出表（gl_consolidate.status，GlConsolidateService:75）
   CONSOLIDATED: '已合并',
   // 内部往来抵消已记账（gl_inter_offset.offset_status，GlInterOffsetService:148/246 写入 OFFSET；
-  // R5-D-161 补：此前词表无此键，GL 专项页签状态列直显英文 OFFSET）
+  // R5-D-161 补：此前名称表无此键，GL 专项页签状态列直接显示英文 OFFSET）
   OFFSET: '已抵消',
   // 供应商对账不平（supplier_recon.status，SupplierReconService:386/433/596）
   DIFF: '有差异',
   // 坏账准备已计提（rc_bad_debt.status＝PROVISIONED/REVERSED/WRITTEN_OFF 之首）
   PROVISIONED: '已计提',
+  // 催收待办（rc_collect_todo.status=DOING，实测 442 行；全库仅这一列用此码）
+  DOING: '催收中',
 }
 
 // 状态 → el-tag type
@@ -149,8 +157,10 @@ export const STATUS_TYPE = {
   PROCESSING: 'warning',
   OVERDUE: 'warning',
   EXPIRED: 'warning',
-  // R5-D-161：内部往来抵消已记账态与「已合并」同色（成功终态）
+  // R5-D-161：内部往来抵消已记账态与「已合并」同色（成功最终状态）
   OFFSET: 'success',
+  // 催收进行中（rc_collect_todo.status=DOING）
+  DOING: 'warning',
   FAIL: 'danger',
   FAILED: 'danger',
 }
@@ -160,7 +170,7 @@ export const STATUS_TYPE = {
  * 未登记的状态码仍返回原码（保证不吞值），但会在开发期告警，避免英文码静默泄露到界面。
  */
 /**
- * 【2026-10-15 第 3 批枚举收口】状态码 → 中文，改为「字典优先、本地常量兜底」。
+ * 【2026-10-15 第 3 批枚举办结】状态码 → 中文，改为「字典优先、本地常量默认处理」。
  *
  * 为什么能零风险切换：
  *   字典是运行时远程数据，可能未部署/未登录/未预热/网络不通；
@@ -174,7 +184,7 @@ export const STATUS_TYPE = {
  *
  *  用扁平字典 bill_status_display 而非按域拆的 15 个字典：
  *    statusLabel 是**全局单一映射**，调用方不带域上下文，
- *    CLOSED/DRAFT/NORMAL 等跨义键无法判定归属 ⇒ 展示口径另立一套扁平字典。
+ *    CLOSED/DRAFT/NORMAL 等跨义键无法判定归属 ⇒ 展示规则另立一套扁平字典。
  *    域字典用于下拉可选值，本字典用于列表展示，两者职责不同、互不覆盖。
  */
 const DICT_DISPLAY = 'bill_status_display'
@@ -184,7 +194,7 @@ export function statusLabel(s) {
   // ① 字典（运营可维护的权威源）
   const fromDict = dictLabelOf(DICT_DISPLAY, s)
   if (fromDict) return fromDict
-  // ② 本地常量（兜底，保证改造前后行为一致）
+  // ② 本地常量（默认处理，保证改造前后行为一致）
   if (STATUS_LABEL[s]) return STATUS_LABEL[s]
   if (import.meta.env.DEV && s && !warnedStatus.has(s)) {
     warnedStatus.add(s)
@@ -204,7 +214,7 @@ export function statusType(s) {
 
 /**
  * 驳回类型（exp_bill.reject_type，P0-5）→ 中文 label。
- * 取值口径与写侧一致（ExpenseWfEventListener:628 只落 THROW_BACK / GRADE_BY_GRADE 两值），
+ * 取值规则与写侧一致（ExpenseWfEventListener:628 只落 THROW_BACK / GRADE_BY_GRADE 两值），
  * 未登记值原样返回，避免静默吞值。
  */
 export const REJECT_TYPE_LABEL = {

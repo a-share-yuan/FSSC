@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.auth;
 
 import java.awt.Color;
@@ -26,7 +29,7 @@ import org.springframework.stereotype.Service;
  * 接口形态一致（一次性 captchaId + base64 dataURL 图片）。
  *
  * <p><b>部署语义</b>：进程内 Map 即"单实例可见"（与 BCP 现状、与
- * {@code com.fssc.framework.security.LoginGuardService} 未启用 Redis 时的口径相同）。
+ * {@code com.fssc.framework.security.LoginGuardService} 未启用 Redis 时的规则相同）。
  * 多实例部署时把 {@link #store} 换成 {@code DistributedState}／Redis 即可——
  * generate/validate 两步语义已收敛，替换零改动。
  *
@@ -143,7 +146,7 @@ public class CaptchaService {
         store.entrySet().removeIf(en -> en.getValue().expiresAt <= now);
     }
 
-    /** 超容量兜底：先清过期，仍超限则淘汰最早到期的一半（与 LocalDistributedState 同口径） */
+    /** 超容量默认处理：先清过期，仍超限则淘汰最早到期的一半（与 LocalDistributedState 同一规则） */
     private void trimIfOverCapacity() {
         purgeExpired();
         if (store.size() <= MAX_ENTRIES) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -170,7 +173,7 @@ public class SmartFillService {
             }
         }
 
-        // 兜底：取第一个可用的费用项
+        // 默认处理：取第一个可用的费用项
         List<MdExpenseItem> defaultItems = mdExpenseItemMapper.selectList(
                 new LambdaQueryWrapper<MdExpenseItem>()
                         .eq(MdExpenseItem::getStatus, "NORMAL")

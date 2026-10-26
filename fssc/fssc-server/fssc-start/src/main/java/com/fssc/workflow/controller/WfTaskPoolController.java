@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -18,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * G3（2026-09-24）任务池五视图（{@code /api/tenant/wf/pool/**}）。
  *
  * <p>五个视图：我的待办 / 可认领 / 被他人锁定 / 我已认领 / 池内全部（语义与取舍见
  * {@link TaskPoolQueryService} 类注释）。<b>超时列读 {@code wf_task.due_time} 真值</b>，

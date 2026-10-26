@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.treasury.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -37,7 +40,7 @@ public class TrBillSettleService {
         }
         if (settle.getStatus() == null) settle.setStatus("STOCK");
         if (settle.getEndorseFlag() == null) settle.setEndorseFlag(Boolean.FALSE);
-        // 整改(20260917, DEV-008/VER-016)：创建即生成票据单号（最佳实践：单据创建即有业务主键）。
+        // 整改(20260917, DEV-008/VER-016)：创建即生成票据单号（口径：单据创建即有业务主键）。
         if (!StringUtils.hasText(settle.getBillNo())) {
             String date = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
             long seq = mapper.selectCount(new LambdaQueryWrapper<TrBillSettle>()

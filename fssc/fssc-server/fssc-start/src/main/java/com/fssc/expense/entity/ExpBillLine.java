@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -28,7 +31,7 @@ public class ExpBillLine extends TenantAuditBase {
     private BigDecimal exchangeRate;
     /** 原币金额 */
     private BigDecimal origAmount;
-    /** 行录入口径：TAX_IN含税录入/TAX_EX不含税录入（#9；缺省继承表头 exp_bill.price_type） */
+    /** 行录入规则：TAX_IN含税录入/TAX_EX不含税录入（#9；缺省继承表头 exp_bill.price_type） */
     private String priceType;
     /** 本位币金额 */
     private BigDecimal amount;

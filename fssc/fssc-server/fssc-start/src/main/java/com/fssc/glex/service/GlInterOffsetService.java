@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -146,7 +149,7 @@ public class GlInterOffsetService {
         }
         e.setVoucherNo(realNo);
         e.setOffsetStatus("OFFSET");
-        // R5-D-160：post 也是状态写入，记账人须落库
+        // R5-D-160：post 也是状态写入，记账人须写入数据库
         e.setUpdateBy(userId());
         mapper.updateById(e);
         log.info("内部往来抵消 {} 记账完成，凭证 {}（凭证状态 {}）",
@@ -158,7 +161,7 @@ public class GlInterOffsetService {
     }
 
     /** P0-3 往来抵消强校验：抵消金额必须 > 0，方向必须为 RECEIVABLE/PAYABLE。
-     *  内部往来抵消要求同一公司对的应收/应付金额相等（镜像勾销），此处做数据合法性兜底。 */
+     *  内部往来抵消要求同一公司对的应收/应付金额相等（镜像勾销），此处做数据合法性默认处理。 */
     private static void assertOffset(BigDecimal amount, String interFlag) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "抵消金额必须 > 0: " + amount);
@@ -175,7 +178,7 @@ public class GlInterOffsetService {
         }
     }
 
-    /** R5-D-159：内部抵消公司对必须跨主体——同一公司自我抵消无业务意义（存量 3 条脏数据含 0.00 元行），前后端双拦。 */
+    /** R5-D-159：内部抵消公司对必须跨主体——同一公司自我抵消无业务意义（历史 3 条脏数据含 0.00 元行），前后端双拦。 */
     public static void assertDistinctCompanies(Long fromCompanyId, Long toCompanyId) {
         if (fromCompanyId != null && fromCompanyId.equals(toCompanyId)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -197,7 +200,7 @@ public class GlInterOffsetService {
         assertOffset(in.getAmount(), in.getInterFlag());
         // 手工录入路径同样调用成对相等断言（复用 assertPairEqual）
         assertPairEqual(in.getAmount(), out.getAmount());
-        // R5-D-159：拒绝 from==to 自我抵消（来账/往账两腿各自校验，同主体直拦）
+        // R5-D-159：拒绝 from==to 自我抵消（来账/往账两环节各自校验，同主体直拦）
         assertDistinctCompanies(in.getFromCompanyId(), in.getToCompanyId());
         assertDistinctCompanies(out.getFromCompanyId(), out.getToCompanyId());
         Long tenantId = TenantContext.getTenantId();
@@ -224,7 +227,7 @@ public class GlInterOffsetService {
         }
         mapper.insert(in);
         mapper.insert(out);
-        // BUG-10 修复：手工成对录入与自动生成同口径，发起 GL_OFFSET 内部往来抵消审批流
+        // BUG-10 修复：手工成对录入与自动生成同一规则，发起 GL_OFFSET 内部往来抵消审批流
         // 总额取单侧金额（镜像对来账=往账，双计会把审批额放大一倍）
         try {
             BigDecimal total = in.getAmount() != null ? in.getAmount()
@@ -243,7 +246,7 @@ public class GlInterOffsetService {
                                    String interFlag, BigDecimal amount, long seq) {
         GlInterOffset e = new GlInterOffset();
         e.setTenantId(tenantId);
-        // R5-D-160：审计人取服务端登录态，与同族 gl_tax_provision/gl_month_close 同口径；
+        // R5-D-160：审计人取服务端登录态，与同族 gl_tax_provision/gl_month_close 同一规则；
         // 缺这一步时 create_by/update_by 全 NULL，事后无法回答「谁做的抵消」。
         Long uid = userId();
         e.setCreateBy(uid);
@@ -325,7 +328,7 @@ public class GlInterOffsetService {
                 .map(i -> i.getAmount() == null ? BigDecimal.ZERO : i.getAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // toId 方的应收余额（未结清的应收单余额合计；状态口径与资金头寸一致 NORMAL/OVERDUE/PARTIAL，
+        // toId 方的应收余额（未结清的应收单余额合计；状态规则与资金头寸一致 NORMAL/OVERDUE/PARTIAL，
         // 原值 'NONE' 在状态枚举中不存在 → 应收恒 0 → 抵消永远静默跳过）
         List<RcReceivable> receivables = rcReceivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .eq(RcReceivable::getCompanyId, toId)

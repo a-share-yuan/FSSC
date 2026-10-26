@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.apflow.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -39,13 +42,13 @@ public class ApMonthClose implements Serializable {
     /** 1=关账期间协同冻结（SCP禁止发送数据至总账） */
     private Integer scpFrozen;
     private LocalDateTime closedTime;
-    /** 关账操作人（关账完成/反关账留痕） */
+    /** 关账操作人（关账完成/反关账记录） */
     private String closedBy;
     /** 反关账时间（非空=该单发生过反关账重开期间） */
     private LocalDateTime reopenTime;
     /** 反关账原因 */
     private String reopenReason;
-    /** 全程操作留痕JSON：[{action,oper,time,detail}] */
+    /** 全程操作记录JSON：[{action,oper,time,detail}] */
     private String traceJson;
     private String remark;
 
@@ -59,6 +62,6 @@ public class ApMonthClose implements Serializable {
     public static final String ST_DISPATCHED = "DISPATCHED";
     public static final String ST_CHECKING = "CHECKING";
     public static final String ST_CLOSED = "CLOSED";
-    /** R5-D-218：作废终态（留痕不删行，解冻协同与期间锁的出口态） */
+    /** R5-D-218：作废最终状态（记录不删行，解冻协同与期间锁的出口态） */
     public static final String ST_VOID = "VOID";
 }

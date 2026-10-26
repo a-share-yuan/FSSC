@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -38,7 +41,7 @@ public class GlTaxProvisionController {
     }
 
     // D-DEC-440（X-42 甲）：原 POST /pay（发起 GL_TAX_PAY 缴款审批）已作废删除——独立缴款流不出付款动作、
-    // 不出缴纳凭证。税金缴款走对公付款通道（付款单／付款批次），本控制器只保留计提腿。
+    // 不出缴纳凭证。税金缴款走对公付款通道（付款单／付款批次），本控制器只保留计提环节。
     // 历史 GL_TAX_PAY 实例仍可由下方挂接核查 /link-check 读出。
 
     /**

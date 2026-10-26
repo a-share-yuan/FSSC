@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -66,7 +69,7 @@ public class PostService {
     }
 
     /**
-     * 必填收口（批次 2C，与前端 Org.vue「岗位名称/岗位编码/请选择公司」同口径）。
+     * 必填办结（批次 2C，与前端 Org.vue「岗位名称/岗位编码/请选择公司」同一规则）。
      * dept_id 不拦：岗位可为公司级（现有 20 条岗位全部无部门），拦空等于让这 20 条无法再编辑。
      */
     private void validate(SysPost post) {

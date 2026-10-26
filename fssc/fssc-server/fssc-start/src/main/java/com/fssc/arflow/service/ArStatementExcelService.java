@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.fssc.common.core.ErrorCode;
@@ -130,7 +133,7 @@ public class ArStatementExcelService {
         }
     }
 
-    /** 导入并落库（每客户一张对账单，走既有容差校验逻辑）。返回 {created, errors, billNos}。 */
+    /** 导入并写入数据库（每客户一张对账单，走既有容差校验逻辑）。返回 {created, errors, billNos}。 */
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Map<String, Object> importAndSave(MultipartFile file, Long companyId) {
         ParseResult parsed = parse(file);

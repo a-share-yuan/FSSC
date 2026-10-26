@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.facade.dto;
 
 import lombok.Data;
@@ -17,7 +20,7 @@ public class ArchiveRegisterDTO {
     private String title;
     private Long fileId;
     private Long filingUserId;
-    /** R5-D-210：来源公司（回单立卷等跨域登记必须带公司，档案读面按公司数据域收口） */
+    /** R5-D-210：来源公司（回单立卷等跨域登记必须带公司，档案读面按公司数据域办结） */
     private Long companyId;
     private String archiveStatus;
     private String status;

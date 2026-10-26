@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -276,10 +279,10 @@ const IFACES = computed(() => ({
   AR_IF10_RECON_SYNC: t('flow.collab.actStatusSync'),
 }))
 
-// R5-D-104：协同日志方向英文枚举→中文映射（未收录值原样兜底）
-const DIRECTION_LABEL = computed(() => ({ SCP_TO_AP: 'SCP→AP', AP_TO_SCP: 'AP→SCP', SCP_TO_EBS: 'SCP→EBS', EBS_TO_SHARED: t('flow.collab.ebsToShared'), SHARED_TO_EBS: t('flow.collab.sharedToEbs'), CCP_TO_SHARED: t('flow.collab.ccpToShared') }))
+// R5-D-104：协同日志方向英文枚举→中文映射（未收录值原样默认处理）
+const DIRECTION_LABEL = computed(() => ({ SCP_TO_AP: 'SCP→AP', AP_TO_SCP: 'AP→SCP', SCP_TO_EBS: 'SCP→ERP', EBS_TO_SHARED: t('flow.collab.ebsToShared'), SHARED_TO_EBS: t('flow.collab.sharedToEbs'), CCP_TO_SHARED: t('flow.collab.ccpToShared') }))
 
-// 日志接口码按域收口：接口前缀即方向（SCP_* 供应商链 / AR_* 客户端）
+// 日志接口码按域办结：接口前缀即方向（SCP_* 供应商链 / AR_* 客户端）
 const ifacePrefix = computed(() => (isAp.value ? 'SCP_' : isAr.value ? 'AR_' : ''))
 const visibleIfaces = computed(() => {
   const all = IFACES.value
@@ -574,7 +577,7 @@ function openGoods() {
 async function doReconInput() {
   const id = current.value.id
   if (inputKind.value === 'confirm') {
-    // 解构变量不叫 t：会遮蔽 useI18n() 的取词函数（本轮接线闸拦下的正是这种写法）
+    // 解构变量不叫 t：会遮蔽 useI18n() 的取词函数（本轮接线校验拦下的正是这种写法）
     const [tok, r] = inputText.value.split(',').map((s) => s.trim())
     await api(() => collabApi.scpConfirmRecon(id, { invoiceType: { 增专: 'VAT_SPECIAL', 增普: 'VAT_NORMAL' }[tok] || tok || 'VAT_SPECIAL', taxRatePct: r || undefined }), t('flow.collab.msgStatementConfirmed'))
   } else if (inputKind.value === 'objection') {

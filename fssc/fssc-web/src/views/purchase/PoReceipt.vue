@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -11,7 +14,7 @@
           <el-option label="已关闭" value="CLOSED" />
         </el-select>
         <el-button size="small" @click="load">查询</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         <span style="margin-left: auto; color: #909399; font-size: 12px">收货金额 <= 采购订单剩余可收（自动校验并回写累计收货）</span>
       </div>
@@ -163,7 +166,7 @@
         <el-descriptions-item label="收货日期">{{ detailRow.receiptDate }}</el-descriptions-item>
         <el-descriptions-item label="收货金额">{{ fmt(detailRow.amount) }}</el-descriptions-item>
         <el-descriptions-item label="累计开票">{{ fmt(detailRow.invoiceAmount) }}</el-descriptions-item>
-        <!-- R5-D-070：详情与列表同口径——负值红字并示"超额 xx" -->
+        <!-- R5-D-070：详情与列表同一规则——负值红字并示"超额 xx" -->
         <el-descriptions-item label="未开票">
           <span v-if="unInvoicedOf(detailRow) < 0" style="color:#f56c6c;font-weight:600">超额 {{ fmt(-unInvoicedOf(detailRow)) }}</span>
           <span v-else>{{ fmt(unInvoicedOf(detailRow)) }}</span>
@@ -182,7 +185,7 @@
     </el-dialog>
   </el-card>
 <!-- D-DEC-334：声明单据域 PO_RECEIPT——不声明则收货主键会被后端按 exp_bill.id 解释（D-TRC-04 跨域串号）。
-     后端已配无审批流配对锚点（BillRouteRegistry.isNoFlowVoucherDomain⇒pairOnlyChain 直读凭证段），行内「追溯」入口已开。 -->
+     后端已配无审批流配对关联点（BillRouteRegistry.isNoFlowVoucherDomain⇒pairOnlyChain 直读凭证段），行内「追溯」入口已开。 -->
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" biz-type="PO_RECEIPT" />
 </template>
 
@@ -238,7 +241,7 @@ const { submit: guardSubmit } = useSubmitGuard(formRef)
 const { autofill, saveFormHistory } = useAutoFill()
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
-// R5-D-070：未开票口径＝收货额 − 累计开票；为负即累计开票超收货额（后端已设硬闸拒绝回写，历史/异常数据仍须显性提示）
+// R5-D-070：未开票规则＝收货额 − 累计开票；为负即累计开票超收货额（后端已设强制校验拒绝回写，历史/异常数据仍须显性提示）
 function unInvoicedOf(row) { return Number(row.amount || 0) - Number(row.invoiceAmount || 0) }
 function qualityTag(s) { return s === 'PASSED' ? 'success' : s === 'FAILED' ? 'danger' : 'warning' }
 function qualityLabel(s) { return ({ PENDING: '待检', PASSED: '合格', FAILED: '不合格' })[s] || '待检' }
@@ -249,7 +252,7 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 // 收货日期统一归一为后端 LocalDate 可解析的 'YYYY-MM-DD' 字符串
-//（日期选择器 value-format 已是字符串，但清空得 null、历史值可能是 Date/ISO，统一收口避免反序列化失败）
+//（日期选择器 value-format 已是字符串，但清空得 null、历史值可能是 Date/ISO，统一办结避免反序列化失败）
 function normalizeDate(v) {
   if (v instanceof Date && !isNaN(v.getTime())) {
     return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
@@ -300,7 +303,7 @@ async function save() {
   saveFormHistory('PO_RECEIPT', form.value || form)
 
   await guardSubmit(async () => {
-    // 必填闸门已保证 supplierId/收货日期/金额>0；收货单号后端支持留空自动取号（PURCHASE_RECEIPT 规则），
+    // 必填校验已保证 supplierId/收货日期/金额>0；收货单号后端支持留空自动取号（PURCHASE_RECEIPT 规则），
     // 故不列入必填。
     const supplierName = String(form.supplierName || '').trim()
     const amount = Number(form.amount)
@@ -342,7 +345,7 @@ onMounted(async () => {
     ])
     suppliers.value = s.list || []
     pos.value = p.list || []
-  } catch (e) { /* 失败已由 api.js 拦截器全局弹错（），此处仅兜底防止未捕获拒绝；下拉为空时用户可感知 */ }
+  } catch (e) { /* 失败已由 api.js 拦截器全局弹错，此处仅默认处理防止未捕获拒绝；下拉为空时用户可感知 */ }
   load()
 })
 

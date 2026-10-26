@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -40,7 +43,7 @@ public class ExpBill extends TenantAuditBase {
     private String applyUserName;
     /**
      * 代理人（代他人报销，代填单）。D-DEC-179 甲：本列此前全仓零生产端写入，
-     * 现由 ExpenseBillService 保存/提交腿显式落值——代理人恒等于填单登录人，且与报销人（apply_user_id）不同人。
+     * 现由 ExpenseBillService 保存/提交环节显式落值——代理人恒等于填单登录人，且与报销人（apply_user_id）不同人。
      */
     private Long agentUserId;
     /** 共享审核人（AUDIT 环节完成经办人，D-DEC-179；此前实体无字段致列恒空） */
@@ -51,17 +54,17 @@ public class ExpBill extends TenantAuditBase {
     private Integer periodYear;
     private Integer periodMonth;
     private String currencyCode;
-    /** 录入口径：TAX_IN含税录入(默认)/TAX_EX不含税录入（#9；行未指定时继承表头） */
+    /** 录入规则：TAX_IN含税录入(默认)/TAX_EX不含税录入（#9；行未指定时继承表头） */
     private String priceType;
     private BigDecimal exchangeRate;
     private BigDecimal totalAmount;
-    /** 金额大写（中文大写，打印/OA 用；P0-4 新增，随 totalAmount 落库） */
+    /** 金额大写（中文大写，打印/OA 用；P0-4 新增，随 totalAmount 写入数据库） */
     private String amountCn;
     private BigDecimal taxAmount;
     private BigDecimal netAmount;
     /** 审批核定金额（核定报销） */
     private BigDecimal approvedAmount;
-    /** 核定付款金额：≤核定报销，付款控制口径（P2 核定三层） */
+    /** 核定付款金额：≤核定报销，付款控制规则（P2 核定三层） */
     private BigDecimal approvedPayAmount;
     /** 核定退款金额：=核定报销 − 核定付款（P2 核定三层） */
     private BigDecimal approvedRefundAmount;
@@ -99,15 +102,15 @@ public class ExpBill extends TenantAuditBase {
     private String voucherNo;
     private LocalDate voucherDate;
     private Integer urgent;
-    /** 单据渠道。落库白名单只有 PC / H5 两值（校验点见 ExpenseBillService#normalizeBillSource）；
+    /** 单据渠道。写入数据库白名单只有 PC / H5 两值（校验点见 ExpenseBillService#normalizeBillSource）；
      *  APP 为原生端预留码，当前全仓零产生方，传入会被回落成 PC——开通 APP 端时要连同该白名单与列表筛选一起扩。 */
     private String source;
-    /** 以下为查询回填字段（不落库）：当前流程名 + 当前节点（单据流程感知） */
+    /** 以下为查询回填字段（不写入数据库）：当前流程名 + 当前节点（单据流程感知） */
     @TableField(exist = false)
     private String flowName;
     @TableField(exist = false)
     private String currentNode;
-    /** 查询回填字段（不落库）：是否已被关联核销（机票查询页：exp_bill_relation 中出现即已核销） */
+    /** 查询回填字段（不写入数据库）：是否已被关联核销（机票查询页：exp_bill_relation 中出现即已核销） */
     @TableField(exist = false)
     private Boolean relationUsed;
     private Long sourceBillId;

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -25,7 +28,7 @@ import java.util.UUID;
 /**
  * 客户对账单服务（蓝图 SCC_AR_01/02/03）：模板导入（必含客户代码）→
  * 容差核对（对账单价税合计 vs 该客户未清应收金额，参数 ar.recon.tolerance-amt-pct）→
- * 核对失败两路处理：重新导入 或 财务调整确认（EBS折扣/索赔/溢交调整后）。
+ * 核对失败两路处理：重新导入 或 财务调整确认（ERP折扣/索赔/溢交调整后）。
  */
 @Slf4j
 @Service
@@ -47,7 +50,7 @@ public class ArStatementService {
      */
     private final ExchangeRateService exchangeRateService;
 
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /** 导入对账单：必含客户代码；外币按 sys_config 汇率 ar.fx.{ccy} 折RMB。 */
@@ -83,7 +86,7 @@ public class ArStatementService {
     /**
      * 对账单归属公司：调用方指定的公司确有该客户未清应收时沿用；
      * 否则取该客户未清应收的唯一所属公司（共享服务跨公司录入场景）。
-     * 多公司并存时保留指定值，由核对环节报公司口径差异。
+     * 多公司并存时保留指定值，由核对环节报公司范围差异。
      */
     private Long resolveStatementCompany(ArStatement bill) {
         CrmCustomer customer = customerMapper.selectOne(new LambdaQueryWrapper<CrmCustomer>()
@@ -135,7 +138,7 @@ public class ArStatementService {
             if (receivables.isEmpty()) {
                 issues.add("无该客户的未清应收明细（发运数据未接收？）");
             } else {
-                // 应收单金额为价税合计口径（无独立税额列），故与对账单价税合计整单比对
+                // 应收单金额为价税合计规则（无独立税额列），故与对账单价税合计整单比对
                 BigDecimal sumAmount = receivables.stream()
                         .map(r -> r.getAmount() == null ? BigDecimal.ZERO : r.getAmount())
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -230,16 +233,16 @@ public class ArStatementService {
     }
 
     /**
-     * 解析外币→CNY 汇率（2026-10-17 改造：汇率表优先，硬编码键降级为兜底）。
+     * 解析外币→CNY 汇率（2026-10-17 改造：汇率表优先，硬编码键降级为默认处理）。
      *
      * <p><b>改造前</b>：只读 {@code sys_config} 的 {@code ar.fx.{ccy}} —— 4 条写死参数，
      * 无生效期、换汇比要改库、且与已有的汇率主数据表 {@code md_exchange_rate} 各干各的。</p>
      *
-     * <p><b>改造后</b>取数顺序：
+     * <p><b>改造后</b>查询顺序：
      * <ol>
      *   <li>汇率表 {@code md_exchange_rate}，按对账日期取当期生效价
      *       （{@code ExchangeRateService.lookup} 内已支持直查→反向→经 CNY 交叉）；</li>
-     *   <li>汇率表无当期价时，回退到 {@code sys_config} 的 {@code ar.fx.{ccy}}（兼容存量，
+     *   <li>汇率表无当期价时，回退到 {@code sys_config} 的 {@code ar.fx.{ccy}}（兼容历史，
      *       并打 warn 提示该币种汇率表未维护）；</li>
      *   <li>两者皆无才抛错，错误信息同时给出两条可操作的维护路径。</li>
      * </ol>

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.facade.dto;
 
 import lombok.Data;
@@ -20,10 +23,10 @@ public class ArchiveInfoDTO {
     private String archivePeriod;
     private Long refId;
     private Long billId;
-    /** D-TRC-05：来源单据的审批流程实例ID（非费用域联查的唯一档案锚点） */
+    /** D-TRC-05：来源单据的审批流程实例ID（非费用域联查的唯一档案关联点） */
     private String procInstId;
     /**
-     * D-DEC-028／D-DEC-185：本卷<b>归档审批流（FM_ARCHIVE）自身</b>的实例号（读侧富化，非表列）。
+     * D-DEC-028／D-DEC-185：本卷<b>归档审批流（FM_ARCHIVE）自身</b>的实例号（读侧补充，非表列）。
      * 与上一列语义不同，跨域联查两侧都拿得到，不必再靠 {@code op_archive.proc_inst_id} 反推。
      */
     private String archiveProcInstId;

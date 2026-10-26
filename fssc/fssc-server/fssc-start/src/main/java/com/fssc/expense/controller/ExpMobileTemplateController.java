@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.controller;
 
 import com.fssc.common.core.Result;
@@ -22,7 +25,7 @@ import java.util.List;
  * {@code ExpenseMineStatController} 同码）：这是移动端提单入口本来就需要的权限，
  * 能看自己单据列表的人就能看提单清单——<b>不新增授权项</b>、不为移动端另发权限。</p>
  *
- * <p><b>无 {@code @OperLog}</b>：读一次清单不是业务动作，记进操作日志只会淹没真实留痕。</p>
+ * <p><b>无 {@code @OperLog}</b>：读一次清单不是业务动作，记进操作日志只会淹没真实记录。</p>
  */
 @RestController
 @RequestMapping("/api/tenant/expense/mobile")

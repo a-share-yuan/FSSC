@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.ops.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -23,8 +26,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * G3（2026-09-24）批退原因 / 任务质量报表（退单原因分析、作业质量看板）。
  *
- * <p><b>口径来源与边界（如实说明）</b>：本报表的唯一数据源是 {@code wf_task_history}：
+ * <p><b>规则来源与边界（如实说明）</b>：本报表的唯一数据源是 {@code wf_task_history}：
  * <ul>
  *   <li>批退 = {@code action='REJECT'}（驳回），办理 = {@code action='APPROVE'}；
  *       <b>依赖 G2 驳回语义</b>——G2 之前的驳回是"终止本流程"，语义上更接近撤销，
@@ -114,7 +118,7 @@ public class TaskQualityReportService {
         out.put("avgDwellMinutes", durationCount == 0 ? null
                 : BigDecimal.valueOf(durationSum).divide(BigDecimal.valueOf(durationCount * 60000L), 1, RoundingMode.HALF_UP));
         out.put("topRejectReasons", topReasons(reasonBuckets, 10));
-        out.put("note", "批退口径为 wf_task_history.action='REJECT'（依赖 G2 驳回语义）；"
+        out.put("note", "批量退回按 wf_task_history.action='REJECT'（依赖 G2 驳回语义）；"
                 + "rejectRate=REJECT/(APPROVE+REJECT)，firstPassRate=窗口内无任何 REJECT 的流程实例占比");
         return out;
     }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.exception;
 
 import com.fssc.common.core.ErrorCode;
@@ -51,7 +54,7 @@ public class GlobalExceptionHandler {
 
     /**
      * 上传体积超限：Spring multipart 在进入 Controller 之前就抛，业务代码无法感知，
-     * 若落到兜底分支前端只会看到"系统异常"（的 15MB 附件"静默拒绝"）。
+     * 若落到默认分支前端只会看到"系统异常"（的 15MB 附件"静默拒绝"）。
      * 这里显式返回体积上限提示，让用户知道压缩后重试。
      */
     @ExceptionHandler({MaxUploadSizeExceededException.class, MultipartException.class})
@@ -84,9 +87,9 @@ public class GlobalExceptionHandler {
     /**
      * 路径/查询参数类型不匹配（V5 人工测试 OBS-01）：
      * 实测 {@code POST /api/tenant/pay/batch/{id}/confirm} 的 {@code {id}} 传批次号字符串
-     * {@code PB202610190001}（应传数字主键）时，此前落到下方兜底分支回
+     * {@code PB202610190001}（应传数字主键）时，此前落到下方默认分支回
      * {@code code=500「系统异常，请稍后重试」}，调用方无法区分"把单号当主键传了"与"服务端坏了"，
-     * 会盲目重试同一笔。与本类既有 405 / 404 / 4090 分支同口径，此处显式回 400 并点出参数名与实参。
+     * 会盲目重试同一笔。与本类既有 405 / 404 / 4090 分支同一规则，此处显式回 400 并点出参数名与实参。
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public Result<Void> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest req) {
@@ -102,7 +105,7 @@ public class GlobalExceptionHandler {
 
     /**
      * 请求动词与端点不符（如对 @PostMapping 发 GET）。
-     * 不显式接管就会落到下方兜底分支变成"系统异常"，调用方无法区分"动作选错了"和"服务端坏了"，
+     * 不显式接管就会落到下方默认分支变成"系统异常"，调用方无法区分"动作选错了"和"服务端坏了"，
      * 会自动重试或误报故障——AI 网关按 A2 判据断言时尤其致命，故原样带出该端点支持的动词。
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
@@ -115,10 +118,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 路径本身不存在（D-N19）：Spring Boot 3 对未映射请求走静态资源兜底，抛
-     * {@link NoResourceFoundException}；不显式接管就会落到下方兜底分支变成
+     * 路径本身不存在（D-N19）：Spring Boot 3 对未映射请求走静态资源默认处理，抛
+     * {@link NoResourceFoundException}；不显式接管就会落到下方默认分支变成
      * {@code code=500「系统异常」}——调用方（尤其 AI 选型编出来的端点）无法区分
-     * "路径我编错了"与"服务端坏了"，会误报故障或盲目重试。此处与 405 分支同口径显式回 404。
+     * "路径我编错了"与"服务端坏了"，会误报故障或盲目重试。此处与 405 分支同一规则显式回 404。
      */
     @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
     public Result<Void> handleNotFound(Exception ex, HttpServletRequest req) {
@@ -129,7 +132,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 唯一键冲突（R5-D-110）：此前落到下方兜底分支变成 {@code code=500「系统异常」}，
+     * 唯一键冲突（R5-D-110）：此前落到下方默认分支变成 {@code code=500「系统异常」}，
      * 而 {@code sys_oper_log.error_msg} 又把整段 SQL 原文带回页面（既暴露库面结构，又让
      * 调用方以为服务端坏了、去重试同一笔）。这里显式回 4090 业务可读文案——
      * SQL 原文、索引名、mapper 路径只落服务端日志，绝不出现在响应里。
@@ -144,7 +147,7 @@ public class GlobalExceptionHandler {
 
     /**
      * D-V4R-89：工作流引擎异常（FlowableException / BpmnModelException 等）单独接管。
-     * 此前落兜底 500「系统异常，请稍后重试」，操作人无从判断是自己填错了还是系统坏了，
+     * 此前落默认处理 500「系统异常，请稍后重试」，操作人无从判断是自己填错了还是系统坏了，
      * 于是反复重试同一笔——而这类故障（流程定义缺失/损坏、部署缓存为空）重试永远无效。
      * 典型现场（2026-10-16 D-V4R-88）：清库误删 {@code act_ge_bytearray}（BPMN 资源字节流），
      * 点【提交审批】报
@@ -166,13 +169,13 @@ public class GlobalExceptionHandler {
     /**
      * D-DATE-01：请求体反序列化失败（日期格式、字段名、类型不匹配）→ 400 + 可执行提示。
      *
-     * <p>此前这类一律落到兜底 {@link #handleOther} 返回 500「系统异常，请稍后重试」，
+     * <p>此前这类一律落到默认处理 {@link #handleOther} 返回 500「系统异常，请稍后重试」，
      * 把**调用方的参数问题**误导成系统故障。实测四例同源：
      * {@code period='2026-10'}（列宽 varchar(6)）、缺 {@code bizId}（null 解引用）、
      * {@code beginTime='2026-10-19 09:00:00'}（Jackson 只收 ISO 的 {@code T} 分隔）、
      * 缺 {@code standardUnit}（NOT NULL 列）。
      *
-     * <p>现在把 Jackson 的三类解析异常单独收口，并从 message 里抽出最可能的原因提示。
+     * <p>现在把 Jackson 的三类解析异常单独办结，并从 message 里抽出最可能的原因提示。
      */
     @ExceptionHandler({com.fasterxml.jackson.databind.exc.InvalidFormatException.class,
             com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException.class,
@@ -229,7 +232,7 @@ public class GlobalExceptionHandler {
         return head.length() > 160 ? head.substring(0, 160) + "…" : head;
     }
 
-    /** 兜底：未预期异常，记详细日志但只回给前端模糊信息 */
+    /** 默认处理：未预期异常，记详细日志但只回给前端模糊信息 */
     @ExceptionHandler(Exception.class)
     public Result<Void> handleOther(Exception ex, HttpServletRequest req) {
         log.error("系统异常 uri={}", req.getRequestURI(), ex);

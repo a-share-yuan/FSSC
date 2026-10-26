@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.facade;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -41,9 +44,9 @@ public class BillFacadeImpl implements BillFacade {
         qw.in(ExpBill::getStatus, "APPROVED", "PAID", "CLOSED")
                 .in(ExpBill::getImageStatus, "PARTIAL", "COMPLETE");
         // D-DEC-276b（B1，2026-09-28 已裁）：原先无条件 `ne ARCHIVED` 把已归档单据从清单里彻底抹掉
-        // ⇒ 归档后无法在同一页面核对"归到哪一档、谁归的"，也让去重只能靠运气。行业方案〔FSSC·1034〕的
+        // ⇒ 归档后无法在同一页面核对"归到哪一档、谁归的"，也让去重只能靠运气。
         // 归档记录序时簿是**状态四值筛选**（已归档/未归档/归档中/不限），已归档项仍在列表内。
-        // 故改为按入参筛选，默认（空值）＝只看未归档，与页面原行为一致；重复立卷由 ArchiveService 的状态机硬闸拦（B2）。
+        // 故改为按入参筛选，默认（空值）＝只看未归档，与页面原行为一致；重复立卷由 ArchiveService 的状态机强制校验拦（B2）。
         // 未归档一侧仍写 ne＋isNull：库里 archive_status 为 NULL 的历史行不该因三值逻辑凭空消失。
         String st = archiveStatus == null ? "" : archiveStatus.trim();
         if ("ARCHIVED".equalsIgnoreCase(st)) {
@@ -116,7 +119,7 @@ public class BillFacadeImpl implements BillFacade {
         dto.setStatus(bill.getStatus());
         dto.setArchiveStatus(bill.getArchiveStatus());
         dto.setImageStatus(bill.getImageStatus());
-        // R5-D-244：实物流交付状态外传（归档前置闸：未签收不得归档）
+        // R5-D-244：实物流交付状态外传（归档前置校验：未签收不得归档）
         dto.setDeliveryStatus(bill.getDeliveryStatus());
         dto.setCompanyId(bill.getCompanyId());
         dto.setPeriodYear(bill.getPeriodYear());

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -28,7 +31,9 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="itemType" :label="$t('flow.bcpObjection.colItemType')" min-width="100" show-overflow-tooltip />
+      <el-table-column prop="itemType" :label="$t('flow.bcpObjection.colItemType')" min-width="100" show-overflow-tooltip>
+        <template #default="{ row }">{{ reconItemTypeLabel(row.itemType) }}</template>
+      </el-table-column>
       <el-table-column prop="sourceBillNo" :label="$t('flow.bcpObjection.colSourceBill')" min-width="150" show-overflow-tooltip />
       <el-table-column :label="$t('flow.bcpObjection.colOrigQty')" width="110" align="right">
         <template #default="{ row }">{{ fmtNum(row.origQuantity) }}</template>
@@ -64,7 +69,7 @@
       </template>
     </el-table>
 
-    <!-- 审核结论：同意＝以伙伴提交值替换该对账明细行；驳回＝明细行不变。两者都写审核意见留痕。 -->
+    <!-- 审核结论：同意＝以伙伴提交值替换该对账明细行；驳回＝明细行不变。两者都写审核意见记录。 -->
     <el-dialog v-model="dialog.visible" width="560px" destroy-on-close
                :title="dialog.approve ? $t('flow.bcpObjection.approveTitle') : $t('flow.bcpObjection.rejectTitle')">
       <el-descriptions v-if="dialog.row" :column="2" size="small" border style="margin-bottom: 12px">
@@ -95,6 +100,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { bcpObjectionApi } from '../../api'
+import { reconItemTypeLabel } from '@/constants/enums.js'
 import { formatDateTime } from '../../utils/format'
 
 const { t } = useI18n()

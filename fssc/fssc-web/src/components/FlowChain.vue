@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <!--
   审批链渲染（两种模式，2026-10-18 重构）
   ============================================================================
@@ -49,7 +52,7 @@
             <div v-if="n.addSigns && n.addSigns.length" class="fc-tip-addsign">
               <div class="fc-tip-addsign-title">加签 {{ n.addSigns.length }} 道（临时插一道，不占本链序号）</div>
               <div v-for="(s, j) in n.addSigns" :key="'as' + j" class="fc-tip-cmt">
-                {{ j + 1 }}. {{ s.handler || '（系统留痕）' }}{{ s.time ? ' · ' + fmtT(s.time) : '' }}<template v-if="s.phase === 'DONE'">（审结）</template>
+                {{ j + 1 }}. {{ s.handler || '（系统记录）' }}{{ s.time ? ' · ' + fmtT(s.time) : '' }}<template v-if="s.phase === 'DONE'">（审结）</template>
                 <template v-if="s.comment">：{{ s.comment }}</template>
               </div>
             </div>

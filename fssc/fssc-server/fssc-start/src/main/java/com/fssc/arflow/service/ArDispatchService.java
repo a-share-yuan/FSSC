@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -23,10 +26,10 @@ import com.fssc.framework.tenant.TenantContext;
 import com.fssc.framework.security.UserContext;
 
 /**
- * AR 自动派工服务（蓝图 5.2，参照同类系统共享任务池/行业方案派工规则范式）：
+ * AR 自动派工服务（蓝图 5.2，共享任务池/派工规则范式）：
  * 规则命中：customer_prefix 最长前缀 → claim_type 精确 → priority；
  * 命中后：单人直派（可按在办量最少负载均衡）／多人进选单池（组内抢单）；
- * SLA 超时未处理自动升级组长（定时兜底）。
+ * SLA 超时未处理自动升级组长（定时默认处理）。
  */
 @Slf4j
 @Service
@@ -36,7 +39,7 @@ public class ArDispatchService {
     private final ArDispatchRuleMapper ruleMapper;
     private final ArClaimMapper claimMapper;
 
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /** 规则列表（维护页）。 */
@@ -106,7 +109,7 @@ public class ArDispatchService {
         u.setId(c.getId());
         u.setGroupLeader(rule.getGroupLeader());
         if (handlers.size() == 1 || Integer.valueOf(1).equals(rule.getAutoBalance())) {
-            // 单人直派 / 负载均衡：在办量最少者优先（同类系统共享任务池范式）
+            // 单人直派 / 负载均衡：在办量最少者优先
             String picked = handlers.size() == 1 ? handlers.get(0) : leastBusy(handlers);
             u.setHandler(picked);
             u.setHandlerPool(null);
@@ -114,7 +117,7 @@ public class ArDispatchService {
             u.setDispatchTime(LocalDateTime.now());
             log.info("[ar-dispatch] 单据 {} 自动派工至 {}（规则 {}）", c.getBillNo(), picked, rule.getRuleName());
         } else {
-            // 多人：进选单池（组内抢单，行业方案派工规则范式）
+            // 多人：进选单池（组内抢单）
             u.setHandler(null);
             u.setHandlerPool(String.join(",", handlers));
             log.info("[ar-dispatch] 单据 {} 进选单池 {}（规则 {}）", c.getBillNo(), handlers, rule.getRuleName());
@@ -151,7 +154,7 @@ public class ArDispatchService {
         return String.valueOf(u.getUserId());
     }
 
-    /** SLA 超时升级（定时兜底）：DISPATCHED 且超 sla_hours 的单据备注升级并记组长。 */
+    /** SLA 超时升级（定时默认处理）：DISPATCHED 且超 sla_hours 的单据备注升级并记组长。 */
     @Scheduled(fixedDelay = 300_000, initialDelay = 120_000)
     public void escalateSla() {
         // 整改(20260918)：定时任务线程无租户上下文，需跨租户扫描。

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -63,7 +66,7 @@ public class WfProcessConfigService {
     }
 
     /**
-     * 必填收口（批次 2C，与前端 FlowConfig「流程绑定」/ GenericList 单据类型配置弹窗同口径）：
+     * 必填办结（批次 2C，与前端 FlowConfig「流程绑定」/ GenericList 单据类型配置弹窗同一规则）：
      * bizType 是路由入口、modelKey 是命中的流程，留空即「有规则但永远解析不出流程」。
      */
     private void validate(WfProcessConfig cfg) {
@@ -93,7 +96,7 @@ public class WfProcessConfigService {
         if (rules.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "未配置流程规则: " + bizType);
         }
-        // 排序：子类型精确命中优先于通配（sub_type 为空的规则兜底），同级保持 priority 降序
+        // 排序：子类型精确命中优先于通配（sub_type 为空的规则默认处理），同级保持 priority 降序
         List<WfProcessConfig> ordered = new java.util.ArrayList<>(rules);
         ordered.sort(java.util.Comparator.comparingInt(
                 r -> (subType != null && !subType.isBlank() && subType.equalsIgnoreCase(r.getSubType())) ? 0 : 1));

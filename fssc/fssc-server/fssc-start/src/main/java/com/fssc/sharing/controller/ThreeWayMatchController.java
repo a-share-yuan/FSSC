@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.controller;
 
 import com.fssc.common.core.PageResult;
@@ -52,10 +55,10 @@ public class ThreeWayMatchController {
         return Result.success(matchService.review(billId));
     }
 
-    /** P3-补链：IFS 手工三单匹配审批（INVOICE_MATCH_MANUAL），走人工匹配审批链路 */
+    /** P3-补链：手工三单匹配审批（INVOICE_MATCH_MANUAL），走人工匹配审批链路 */
     @RequiresPerm("pay:match:review")
     @PostMapping("/{billId}/manual-review")
-    @OperLog(module = "PTP", operType = "INSERT", desc = "IFS手工三单匹配发起审批")
+    @OperLog(module = "PTP", operType = "INSERT", desc = "手工三单匹配发起审批")
     public Result<String> manualReview(@PathVariable Long billId,
                                       @RequestParam(required = false) String reason) {
         return Result.success(matchService.manualReview(billId, reason));
@@ -73,8 +76,8 @@ public class ThreeWayMatchController {
      * 手工关联采购订单/收货单/采购合同到付款单（三单匹配选单操作）。
      * <p>G2R-01（2026-10-19）：原实现只接收 poId / poReceiptId，而 NO_CONTRACT 的处理出口文案
      * 明确要求「到 三单匹配 / 采购订单 补挂合同」——出口指向了一个不存在的入口，
-     * 已生成的结算单（其 PO 已审批、无法再编辑挂合同）永远消不掉合同腿 WARN。
-     * 此处补齐 contractId 参数，让合同腿具备可达的补挂路径。
+     * 已生成的结算单（其 PO 已审批、无法再编辑挂合同）永远消不掉合同环节 WARN。
+     * 此处补齐 contractId 参数，让合同环节具备可达的补挂路径。
      */
     @RequiresPerm("pay:match:review")
     @PostMapping("/{billId}/link")

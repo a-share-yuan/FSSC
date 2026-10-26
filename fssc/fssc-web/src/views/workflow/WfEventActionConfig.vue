@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="wf-eac-page">
     <el-card shadow="never">
@@ -141,7 +144,7 @@
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button size="small" :loading="snapLoading" @click="loadSnapshot">重新取数</el-button>
+        <el-button size="small" :loading="snapLoading" @click="loadSnapshot">重新加载</el-button>
         <el-button size="small" type="primary" @click="snap.visible = false">关闭</el-button>
       </template>
     </el-dialog>
@@ -151,7 +154,7 @@
 <script setup>
 /**
  * D-DEC-320：流程收尾动作配置管理面（wf_event_action_config）。
- * 表原本只有引擎读腿、没有任何 Controller 与页面，配置只能靠 SQL 手改。
+ * 表原本只有引擎读环节、没有任何 Controller 与页面，配置只能靠 SQL 手改。
  * 本页＝只读清单（可按状态/收尾动作/业务类型筛）＋字段级有限编辑（启用状态、配置说明）
  * ＋运行期生效快照（引擎启动时构建的分发映射投影）。
  * 不提供新增/删除，也不开放业务类型、收尾动作、触发时机、执行顺序四列——它们决定引擎走向，属评审面。
@@ -170,13 +173,13 @@ const PERM_LIST = 'wf:config:list'
 const PERM_UPDATE = 'wf:config:update'
 const canUpdate = hasPerm(PERM_UPDATE)
 
-// 触发时机直显英文码不可读，页内自建小映射（枚举主词表由主窗在管，不改它）
+// 触发时机直接显示英文码不可读，页内自建小映射（枚举主名称表由主窗在管，不改它）
 const TRIGGER_WHEN_TEXT = { APPROVED: '仅审批通过', REJECTED: '仅审批驳回', BOTH: '通过与驳回均触发' }
 function triggerWhenText(v) {
   const key = String(v == null ? '' : v).trim().toUpperCase()
   return TRIGGER_WHEN_TEXT[key] || (key || '—')
 }
-/** 业务类型：命中全局词表出中文，未命中回原码（引擎口径以库为准） */
+/** 业务类型：命中全局名称表出中文，未命中回原码（引擎规则以库为准） */
 function bizTypeText(v) {
   if (!v) return '—'
   const label = bizTypeLabel(v)
@@ -231,7 +234,7 @@ function openRowDetail(row) { return showRowDetail(row, { title: '收尾动作�
 
 // ---------------- 编辑 ----------------
 const edit = reactive({ visible: false, saving: false, row: {}, form: { enabled: 1, description: '' } })
-// 第2批：编辑弹窗接入——配置说明 256 字兜底；启用状态恒有值（1/0）不建规则
+// 第2批：编辑弹窗接入——配置说明 256 字默认处理；启用状态恒有值（1/0）不建规则
 const editFormRef = ref(null)
 const editRules = { description: commonRules.maxLength(256, '配置说明最多 256 个字符') }
 
@@ -252,7 +255,7 @@ async function openEdit(row) {
 async function saveEdit() {
   edit.saving = true
   try {
-    // 第2批：配置说明长度兜底（模板 maxlength 只限制输入，绕过 DOM 直接赋值可超长入库）
+    // 第2批：配置说明长度默认处理（模板 maxlength 只限制输入，绕过 DOM 直接赋值可超长入库）
     if (!(await validateForm(editFormRef.value))) return
     await wfEventActionApi.update({
       id: edit.row.id,

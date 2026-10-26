@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.receivable.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -11,7 +14,7 @@ import java.time.LocalDate;
 
 /**
  * 坏账计提（rc_bad_debt，带 tenant_id，逻辑删除 del_flag）。
- * 按逾期账龄计提坏账准备并落库，同一应收单同一期仅计提一次。
+ * 按逾期账龄计提坏账准备并写入数据库，同一应收单同一期仅计提一次。
  * 状态：PROVISIONED 已计提 / REVERSED 已转回。
  */
 @Data

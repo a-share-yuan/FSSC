@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.controller;
 
 import com.fssc.common.core.PageResult;
@@ -43,7 +46,7 @@ public class SoDCheckController {
         return Result.success(soDService.checkPage(dimension, keyword, pageNum, pageSize));
     }
 
-    /** R5-D-034：执行 SoD 检查（两维度一次跑完，操作留痕） */
+    /** R5-D-034：执行 SoD 检查（两维度一次跑完，操作记录） */
     @RequiresPerm({"system:sod:scan", "system:sod:list"})
     @OperLog(module = "COMPLIANCE", operType = "OTHER", desc = "执行职责分离检查")
     @PostMapping("/check/run")

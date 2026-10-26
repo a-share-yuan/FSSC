@@ -1,8 +1,11 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <div style="display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap">
       <el-button type="primary" @click="loadTaxDiff">刷新税会差异</el-button>
-      <el-button @click="doExport">导出 CSV</el-button>
+      <el-button @click="doExport">导出</el-button>
       <span style="color: #909399; font-size: 12px">会计折旧与税法折旧差异汇总，支撑企业所得税 A105080「固定资产折旧纳税调整」</span>
     </div>
     <SkeletonList v-if="taxDiffLoading" :rows="8" :cols="5" />

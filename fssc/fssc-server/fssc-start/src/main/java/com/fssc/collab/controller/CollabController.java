@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.collab.controller;
 
 import com.fssc.apflow.service.ApMonthCloseService;
@@ -100,7 +103,7 @@ public class CollabController {
     }
 
     /** 记账（打通点3，受 R-14 关账冻结拦截） */
-    @OperLog(module = "COLLAB", operType = "UPDATE", desc = "SCP三单匹配记账推送EBS")
+    @OperLog(module = "COLLAB", operType = "UPDATE", desc = "SCP三单匹配记账推送外部财务系统")
     @RequiresPerm("collab:scp:post")
     @PostMapping("/scp/bills/{id}/post")
     public Result<ScpBill> post(@PathVariable Long id) {
@@ -250,7 +253,7 @@ public class CollabController {
         return Result.success(scpFlowService.preCertify(id));
     }
 
-    /** 发票替换（蓝图 EBS 接口6）：旧票作废，同对账单生成新票（R-31）；body {reason} */
+    /** 发票替换（蓝图 ERP 接口6）：旧票作废，同对账单生成新票（R-31）；body {reason} */
     @OperLog(module = "COLLAB", operType = "UPDATE", desc = "SCP发票替换")
     @RequiresPerm("collab:scp:replace")
     @PostMapping("/scp/bills/{id}/replace")
@@ -258,14 +261,14 @@ public class CollabController {
         return Result.success(scpFlowService.replaceBill(id, body == null ? null : (String) body.get("reason")));
     }
 
-    /** 冲销凭证（蓝图 EBS 接口7）：记账成功回待匹配；body {reason} */
+    /** 冲销凭证（蓝图 ERP 接口7）：记账成功回待匹配；body {reason} */
     @RequiresPerm("collab:scp:post")
     @PostMapping("/scp/bills/{id}/reverse-voucher")
     public Result<ScpBill> reverseVoucher(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
         return Result.success(scpFlowService.reverseVoucher(id, body == null ? null : (String) body.get("reason")));
     }
 
-    /** 直接扣款入账（蓝图 EBS 接口8）：body {deductAmount, reason} */
+    /** 直接扣款入账（蓝图 ERP 接口8）：body {deductAmount, reason} */
     @RequiresPerm("collab:scp:pay")
     @PostMapping("/scp/bills/{id}/direct-deduct")
     public Result<ScpBill> directDeduct(@PathVariable Long id, @RequestBody Map<String, Object> body) {
@@ -283,8 +286,8 @@ public class CollabController {
         return Result.success(ccpFlowService.shippings(status, keyword));
     }
 
-    /** 接口1：EBS 发运数据推送（CCP/定时抓取入口） */
-    @OperLog(module = "COLLAB", operType = "ADD", desc = "EBS发运数据推送接收")
+    /** 接口1：ERP 发运数据推送（CCP/定时抓取入口） */
+    @OperLog(module = "COLLAB", operType = "ADD", desc = "外部财务系统发运数据推送接收")
     @RequiresPerm("collab:ccp:manage")
     @PostMapping("/ccp/shippings")
     public Result<CcpShipping> pushShipping(@RequestBody CcpShipping shipping) {
@@ -298,7 +301,7 @@ public class CollabController {
         return Result.success(ccpFlowService.reconSync(statementNo));
     }
 
-    /** 接口2/3：预制发票信息回写 EBS（失败人工重推入口） */
+    /** 接口2/3：预制发票信息回写 ERP（失败人工重推入口） */
     @RequiresPerm("collab:ccp:manage")
     @PostMapping("/ccp/invoice-writeback/{preInvoiceId}")
     public Result<Object> invoiceWriteback(@PathVariable Long preInvoiceId) {
@@ -317,7 +320,7 @@ public class CollabController {
         m.put("companyId", companyId == null ? 1L : companyId);
         m.put("period", period);
         m.put("frozen", frozen);
-        m.put("rule", frozen ? "R-14 关账期间禁止发送数据至EBS产生凭证" : "数据交互正常");
+        m.put("rule", frozen ? "R-14 关账期间禁止发送数据至外部财务系统产生凭证" : "数据交互正常");
         return Result.success(m);
     }
 

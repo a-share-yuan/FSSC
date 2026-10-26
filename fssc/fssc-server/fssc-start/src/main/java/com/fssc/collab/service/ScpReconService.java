@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.collab.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -26,7 +29,7 @@ import java.util.UUID;
 
 /**
  * SCP 供应商对账管理（AP 蓝图 SCC_AP_01/02，外网对账单管理，页面 9.1 序号 1~3，E1~E6）：
- * 收货信息导入（E1，EBS→协同平台 mock）→ 创建预制对账单（E4）→ 异议反馈/处理（E5）→
+ * 收货信息导入（E1，ERP→协同平台 mock）→ 创建预制对账单（E4）→ 异议反馈/处理（E5）→
  * 确认对账单（E6，R-30 增专不调整/增普重算税额）→ 申请开票（打通点2 → ScpFlowService 落地 ScpBill）。
  */
 @Slf4j
@@ -49,7 +52,7 @@ public class ScpReconService {
             throw new BizException(ErrorCode.PARAM_INVALID, "供应商代码必填");
         }
         if (r.getLinesJson() == null || r.getLinesJson().isBlank()) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "收货/折扣/索赔明细行不能为空（EBS收货信息导入）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "收货/折扣/索赔明细行不能为空（外部收货信息导入）");
         }
         computeTotals(r, null);
         r.setId(null);
@@ -82,7 +85,7 @@ public class ScpReconService {
         return r;
     }
 
-    /** E5 异议处理（内网对账员）：判责后关闭异议，可暂挂（备注留痕）。 */
+    /** E5 异议处理（内网对账员）：判责后关闭异议，可暂挂（备注记录）。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpRecon resolveObjection(Long id, String note) {
         ScpRecon r = require(id);

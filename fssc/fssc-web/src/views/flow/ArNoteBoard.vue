@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -63,7 +66,7 @@
       </el-table-column>
       <el-table-column :label="$t('common.operation')" width="160" fixed="right">
         <template #default="{ row }">
-          <!-- 与后端 markDue 同一状态闸：仅「已入账/已保管」可到期提示；数据陈旧时按钮不出现，点了才报错的情况消除 -->
+          <!-- 与后端 markDue 同一状态校验：仅「已入账/已保管」可到期提示；数据陈旧时按钮不出现，点了才报错的情况消除 -->
           <el-button v-if="row.status === 'IN_ACCOUNT' || row.status === 'CUSTODY'" link type="primary" size="small" @click="act(row, { key: 'markDue' })">{{ $t('flow.note.btnMarkDue') }}</el-button>
           <span v-else style="color:#909399;font-size:12px">{{ $t('flow.note.hintStatusNoPresent', { v1: arNoteStatusLabel(row.status) }) }}</span>
         </template>

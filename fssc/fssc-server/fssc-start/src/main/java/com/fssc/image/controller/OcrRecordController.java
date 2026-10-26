@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -12,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * P2-5 OCR 识别结果查询。
- * 提供按批次/发票号查询 OCR 落库记录的能力。
+ * 提供按批次/发票号查询 OCR 写入数据库记录的能力。
  * 分库改造：直连 OcrRecordMapper，类级路由 fssc_image 库。
  */
 @RestController

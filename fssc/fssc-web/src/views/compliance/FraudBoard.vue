@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -5,7 +8,7 @@
         <b>反欺诈风控</b>
         <span style="color:#909399; font-size:12px">三档处置：提示 → 人工待审（进队列不挡流程） → 阻断（硬阻断位在付款指令执行前） —— 风险概览 + 检测记录 + 人工复审</span>
         <div style="margin-left:auto; display:flex; gap:8px">
-          <el-button size="small" @click="doExport">导出 CSV</el-button>
+          <el-button size="small" @click="doExport">导出</el-button>
           <el-button size="small" @click="loadAll">刷新</el-button>
         </div>
       </div>
@@ -107,7 +110,7 @@
             <el-button link size="small" type="danger" @click="doAppealReview(row, false)">申诉驳回</el-button>
           </template>
           <!-- D-V5R-10（F-run-1017b 实测）：人工放行只对「会拦付款的行」渲染——与后端
-               paymentBlockReason / fraud/page pendingRelease 同口径（HIGH_RISK 且未复审且未人工放行）。
+               paymentBlockReason / fraud/page pendingRelease 同一规则（HIGH_RISK 且未复审且未人工放行）。
                原实现按 actionTaken==='REVIEW' 渲染，预警行（WARN）与待审行的按钮混排，
                按行文本定位极易点到预警行的【申诉】（实测首轮脚本就点错行）。 -->
           <template v-else-if="isPendingRelease(row)">
@@ -198,7 +201,7 @@ function hasPendingAppeal(row) {
   return !row.reviewedAt && (row.details || '').includes('[申诉待审')
 }
 
-/** D-V5R-10：是否「待人工放行」行——与后端 paymentBlockReason / /fraud/page pendingRelease 同口径：
+/** D-V5R-10：是否「待人工放行」行——与后端 paymentBlockReason / /fraud/page pendingRelease 同一规则：
  *  HIGH_RISK 且未复审且未人工放行。只有这些行会拦付款，才给【人工放行/阻断】；
  *  预警（WARN）/可疑（SUSPICIOUS）行不拦付款，只留【申诉】，避免两类按钮混排点错。 */
 function isPendingRelease(row) {
@@ -206,7 +209,7 @@ function isPendingRelease(row) {
 }
 
 function openAppeal(row) {
-  ElMessageBox.prompt('申诉原因(必填,留痕)', '风险申诉登记', {
+  ElMessageBox.prompt('申诉原因(必填,将记录)', '风险申诉登记', {
     inputType: 'textarea',
     inputValidator: (v) => (v && v.trim() ? true : '申诉原因必填'),
     confirmButtonText: '提交申诉', cancelButtonText: '取消',

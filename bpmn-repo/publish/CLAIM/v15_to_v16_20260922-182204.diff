@@ -1,0 +1,11 @@
+--- bpmn:CLAIM v15
++++ bpmn:CLAIM v16
+@@ -17,7 +17,7 @@
+     <bpmn:userTask id="Task_12" name="板块分管领导审核【板块分管领导】" flowable:candidateGroups="PLATE_DIV_LEADER" />
+     <bpmn:exclusiveGateway id="Gw_13" default="Flow_13_def" />
+     <bpmn:userTask id="Task_13" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
+-    <bpmn:userTask id="Task_14" name="审核预制凭证【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
++    <bpmn:userTask id="Task_14" name="审核预制凭证【总账会计】" flowable:candidateGroups="FIN_GL" />
+     <bpmn:endEvent id="EndEvent_1" name="结束" />
+     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_2" />
+     <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_2" targetRef="Task_4" />

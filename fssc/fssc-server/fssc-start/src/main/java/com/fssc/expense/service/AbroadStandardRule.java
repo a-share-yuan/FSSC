@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.service;
 
 import com.fssc.masterdata.entity.MdExpenseStandard;
@@ -16,7 +19,7 @@ import java.util.List;
  */
 public final class AbroadStandardRule {
 
-    /** 国内识别词表：目的地命中任一则视为国内，不触发境外标准（含官方全称与港澳台、常见英文写法） */
+    /** 国内识别名称表：目的地命中任一则视为国内，不触发境外标准（含官方全称与港澳台、常见英文写法） */
     private static final String[] DOMESTIC_KEYWORDS = {
             "中国", "中华人民共和国", "香港", "澳门", "台湾", "china", "prc", "macau", "hong kong", "taiwan"
     };
@@ -25,9 +28,9 @@ public final class AbroadStandardRule {
     }
 
     /**
-     * 出国判定：任一差旅行目的地国家非空且不属于国内词表 → true。
+     * 出国判定：任一差旅行目的地国家非空且不属于国内名称表 → true。
      * 与 exp_bill.ext_json.abroadFlag（WfEngineFacade.resolveAbroad 读）并存互补：
-     * abroadFlag 驱动流程分流，本判定驱动标准/补贴取数换源。
+     * abroadFlag 驱动流程分流，本判定驱动标准/补贴查询换源。
      */
     public static boolean resolveAbroad(Iterable<String> destCountries) {
         if (destCountries == null) {
@@ -41,7 +44,7 @@ public final class AbroadStandardRule {
         return false;
     }
 
-    /** 国内判定：命中国内词表任一关键字（大小写不敏感，兼容"中华人民共和国"/港澳台/CHINA 等写法）。 */
+    /** 国内判定：命中国内名称表任一关键字（大小写不敏感，兼容"中华人民共和国"/港澳台/CHINA 等写法）。 */
     public static boolean isDomestic(String country) {
         if (country == null || country.isBlank()) {
             return true; // 空=留空即国内
@@ -58,7 +61,7 @@ public final class AbroadStandardRule {
     /**
      * 境外标准档位匹配：在 abroad=1 候选集中先取 country_tier 精确档，
      * 无匹配退回境外通用档（country_tier=NULL），再无返回 null（由调用方回退国内标准）。
-     * 注：国家→档位（DEV/EMG/OTH）映射规则暂由调用方兜底传 DEV，
+     * 注：国家→档位（DEV/EMG/OTH）映射规则暂由调用方默认处理传 DEV，
      * 留待 md_sys_config 配置化后替换。
      */
     public static MdExpenseStandard pickStandard(List<MdExpenseStandard> abroadCandidates, String countryTier) {
@@ -96,7 +99,7 @@ public final class AbroadStandardRule {
 
     /**
      * 补贴按天核算：allowance = days × allowance_daily（本位币，2 位小数四舍五入）。
-     * 任一为空或非正返回 null（调用方跳过、不报错——无境外补贴标准时保持人工填报口径）。
+     * 任一为空或非正返回 null（调用方跳过、不报错——无境外补贴标准时保持人工填报规则）。
      */
     public static BigDecimal calcAllowance(BigDecimal days, BigDecimal allowanceDaily) {
         if (days == null || allowanceDaily == null

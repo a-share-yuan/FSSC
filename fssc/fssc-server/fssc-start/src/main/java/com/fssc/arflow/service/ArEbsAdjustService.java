@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,11 +24,11 @@ import java.util.Map;
 
 /**
  * AR 接口 2/4 服务（蓝图 7.1/7.2）：
- * 接口2 财务调整数据推送（EBS→协同，7.2接口6）：折扣/索赔/溢交调整后推送，
- *       落库并自动重核关联对账单（对账异常→重核→通过自动 RECONCILED，应收调整单做法）；
- * 接口4 负数发票推送（EBS→协同，7.2接口7）：EBS 贷项凭证后推负数发票数据，
- *       生成红字前置（red_pending=1，行业方案贷项单→红字申请范式），人工补红字通知单号后走既有 /red。
- * 幂等：adjust_no / ebs_credit_memo_no；日志：AR_IF06 / AR_IF07（不随业务事务回滚）。
+ * 接口2 财务调整数据推送（ERP→协同，7.2接口6）：折扣/索赔/溢交调整后推送，
+ *       写入数据库并自动重核关联对账单（对账异常→重核→通过自动 RECONCILED，应收调整单做法）；
+ * 接口4 负数发票推送（ERP→协同，7.2接口7）：ERP 贷项凭证后推负数发票数据，
+ *       生成红字前置（red_pending=1，贷项单→红字申请范式），人工补红字通知单号后走既有 /red。
+ * 去重：adjust_no / ebs_credit_memo_no；日志：AR_IF06 / AR_IF07（不随业务事务回滚）。
  */
 @Slf4j
 @Service
@@ -38,20 +41,20 @@ public class ArEbsAdjustService {
     private final ArStatementService statementService;
     private final CollabSyncService syncService;
 
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
-    /** 接口2：EBS 财务调整推送。body 见 V1.3.7 ar_ebs_adjust。 */
+    /** 接口2：ERP 财务调整推送。body 见 V1.3.7 ar_ebs_adjust。 */
     @Transactional(rollbackFor = Exception.class)
     public ArEbsAdjust pushAdjust(Map<String, Object> body) {
         String adjustNo = str(body.get("adjustNo"));
         if (!StringUtils.hasText(adjustNo)) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "ERP调整单号必填（幂等键）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "ERP调整单号必填（唯一标识）");
         }
         Long dup = adjustMapper.selectCount(new LambdaQueryWrapper<ArEbsAdjust>()
                 .eq(ArEbsAdjust::getAdjustNo, adjustNo));
         if (dup != null && dup > 0) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "调整单 " + adjustNo + " 已推送，勿重复（幂等）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "调整单 " + adjustNo + " 已推送，请勿重复");
         }
         ArEbsAdjust a = new ArEbsAdjust();
         a.setAdjustNo(adjustNo);
@@ -99,14 +102,14 @@ public class ArEbsAdjustService {
     }
 
     /**
-     * 接口4：EBS 负数发票推送（红字来源）。body {ebsCreditMemoNo, preInvoiceNo|invoiceNo}。
+     * 接口4：ERP 负数发票推送（红字来源）。body {ebsCreditMemoNo, preInvoiceNo|invoiceNo}。
      * 置 red_pending=1（待补红字通知单号），人工补录后走既有 /red 推金税。
      */
     @Transactional(rollbackFor = Exception.class)
     public ArPreInvoice pushRedInvoice(Map<String, Object> body) {
         String memoNo = str(body.get("ebsCreditMemoNo"));
         if (!StringUtils.hasText(memoNo)) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "ERP贷项凭证号必填（幂等键）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "ERP贷项凭证号必填（唯一标识）");
         }
         String preInvoiceNo = str(body.get("preInvoiceNo"));
         String invoiceNo = str(body.get("invoiceNo"));
@@ -118,7 +121,7 @@ public class ArEbsAdjustService {
             throw new BizException(ErrorCode.PARAM_INVALID, "预制发票不存在（preInvoiceNo/invoiceNo 二选一）");
         }
         if (Integer.valueOf(1).equals(inv.getRedPending())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "该发票已接收负数推送，勿重复（幂等）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "该发票已接收负数推送，请勿重复");
         }
         if (!ArPreInvoice.ST_INVOICED.equals(inv.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,

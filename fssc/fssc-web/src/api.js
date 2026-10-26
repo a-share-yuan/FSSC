@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 import axios from 'axios'
 import { reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -81,13 +84,13 @@ export const http = axios.create({ baseURL: '/api', timeout: 20000 })
  * 实测 archive-destroy/create 与 archive/{id}/archive 前端均在 20s 断连（st 0/20006ms），
  * 而服务端其实已建 wf_instance（数据 128），用户看到「没反应」、重试即重复起流程。
  * 处置：起流程类写端点做端点级超时覆盖（全局默认 20s 保持不变，不动普通端点面）；
- * longWrite 标记另供响应拦截器把超时口径从「接口失败」改成「已提交，处理中，请稍后刷新」显式提示。
+ * longWrite 标记另供响应拦截器把超时规则从「接口失败」改成「已提交，处理中，请稍后刷新」显式提示。
  */
 const LONG_WRITE_TIMEOUT = 60000
 const longWrite = { timeout: LONG_WRITE_TIMEOUT, longWrite: true }
 
-// R5-D-294：写端点幂等键 —— 服务端已成功而客户端超时（≥15s 慢尾族）后的用户重试，
-// 服务端按 X-Idempotency-Key 去重，避免二次落库；键缺省即时生成，旧调用点行为逐字不变。
+// R5-D-294：写端点唯一键 —— 服务端已成功而客户端超时（≥15s 慢尾族）后的用户重试，
+// 服务端按 X-Idempotency-Key 去重，避免二次写入数据库；键缺省即时生成，旧调用点行为逐字不变。
 const idemKey = () => `idem-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 
 // ---------------- : 业务错误全局可见提示 
@@ -125,8 +128,8 @@ const RETRY_DELAY = 1000 // 1s
 
 function isRetryableError(err) {
   // F1 重复提交根因：写请求超时（axios timeout 20s）时服务端往往已经处理完，
-  // 只前端没等到回执 —— 此时自动重试＝把同一张单再提交一次（实测 57s/40s 两笔各落 2 行）。
-  // 因此 POST/PATCH 一律不自动重试，由用户按结果横幅自行判断；GET/PUT/DELETE 仍按原口径重试。
+  // 只前端没等到响应 —— 此时自动重试＝把同一张单再提交一次（实测 57s/40s 两笔各落 2 行）。
+  // 因此 POST/PATCH 一律不自动重试，由用户按结果横幅自行判断；GET/PUT/DELETE 仍按原规则重试。
   const method = String(err.config?.method || '').toLowerCase()
   if (method === 'post' || method === 'patch') return false
   // 无响应（网络断开/超时）或 5xx 网关错误才重试；401/4xx 不重试
@@ -225,7 +228,7 @@ http.interceptors.response.use(
 
     const status = err.response?.status
     if (status === 401) {
-      // 与业务码 401 同口径：匿名在途请求的回包不踢人、不弹错
+      // 与业务码 401 同一规则：匿名在途请求的回包不踢人、不弹错
       if (err.config?._hadToken) {
         kickToLogin()
         if (!err.config?.silent) toastBizError(friendlyAuthMsg(err.response?.data?.msg))
@@ -245,20 +248,20 @@ http.interceptors.response.use(
     }
 
     // D-DEC-459：超时 ≠ 掉线。axios 20s 到点时服务端往往已经处理完（实测一笔 44,120ms 的审批
-    // 已落 wf_task=DONE、实例 APPROVED），旧口径把 ECONNABORTED 与真·连接拒绝一并渲染成
-    // 「后端服务未连接」并挂全局横幅 ⇒ 成功回执丢失、界面反像失败，诱导重复提交（§9.29 T9 重复单的客户端面）。
+    // 已落 wf_task=DONE、实例 APPROVED），旧规则把 ECONNABORTED 与真·连接拒绝一并渲染成
+    // 「后端服务未连接」并挂全局横幅 ⇒ 成功响应丢失、界面反像失败，诱导重复提交（§9.29 T9 重复单的客户端面）。
     // 慢打点旧时只在成功分支（:103），超时请求走 error 分支＝控制台零痕迹，这里一并补上。
     const isTimeout = err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT'
     const costMs = err.config?._startTime ? Date.now() - err.config._startTime : 0
     if (isTimeout && costMs > PERF_THRESHOLD) {
       perfLog.slowReqs.unshift({ url: err.config?.url, method: err.config?.method, duration: costMs, time: new Date().toLocaleTimeString() })
       if (perfLog.slowReqs.length > 50) perfLog.slowReqs.pop()
-      console.warn(`[Slow API] ${costMs}ms ${String(err.config?.method).toUpperCase()} ${err.config?.url}（超时未回回执）`)
+      console.warn(`[Slow API] ${costMs}ms ${String(err.config?.method).toUpperCase()} ${err.config?.url}（等待服务响应超时）`)
     }
     if (isTimeout) {
-      // R5-D-200：长耗时写端点（longWrite）超时＝服务端多半已受理、只是回执慢——
+      // R5-D-200：长耗时写端点（longWrite）超时＝服务端多半已受理、只是响应慢——
       // 继续报「失败」会诱导用户重试同一动作（实测 20006ms 断连时 wf_instance 已建）；
-      // 一律按「已提交，处理中，请稍后刷新」口径显式提示，通用端点维持原口径。
+      // 一律按「已提交，处理中，请稍后刷新」规则显式提示，通用端点维持原规则。
       const accepted = !!err.config?.longWrite
       if (!err.config?.silent) {
         toastBizError(accepted
@@ -347,11 +350,11 @@ export function getMenuTree() { return http.get('/tenant/system/menu/tree') }
 
 // ---------------- 报销 ----------------
 export const billApi = {
-  // R5-D-294：draft 保存为「服务端成功/客户端超时」高发族（P95 21s）——带幂等键去重
+  // R5-D-294：draft 保存为「服务端成功/客户端超时」高发族（P95 21s）——带唯一键去重
   saveDraft: (body, key) => http.post('/tenant/expense/bill/saveDraft', body, { headers: { 'X-Idempotency-Key': key || idemKey() } }),
   submit: (id, approverUserId, firstAssigneeUserId) => http.post(`/tenant/expense/bill/submit/${id}`, null, { params: { approverUserId, firstAssigneeUserId } }),
   withdraw: (id) => http.post(`/tenant/expense/bill/withdraw/${id}`),
-  // 反审核（D-V3-135 配套 · 行业方案"反"字链第二环）：APPROVED → DRAFT，前置校验在服务层
+  // 反审核（D-V3-135 配套 · 单据反操作链第二环）：APPROVED → DRAFT，前置校验在服务层
   unaudit: (id) => http.post(`/tenant/expense/bill/unaudit/${id}`),
   voidBill: (id) => http.post(`/tenant/expense/bill/void/${id}`),
   editForResubmit: (id) => http.post(`/tenant/expense/bill/edit/${id}`),
@@ -359,7 +362,7 @@ export const billApi = {
   terminateApply: (id) => http.post(`/tenant/expense/bill/terminate/${id}`),
   detail: (id, cfg) => http.get(`/tenant/expense/bill/detail/${id}`, cfg || {}),
   // P2-1 单据全链路联查：单据→审批→付款→批次→凭证（含分录）→档案→审批轨迹
-  // D-TRC-06：bizType 决定后端取哪个域的锚点；不传＝按费用单据主键解释 id（历史口径）。
+  // D-TRC-06：bizType 决定后端取哪个域的关联点；不传＝按费用单据主键解释 id（历史规则）。
   traceChain: (id, params, cfg) => http.get(`/tenant/expense/bill-trace-chain/${id}`, { params, ...cfg }),
   myPage: (params) => http.get('/tenant/expense/bill/myPage', { params }),
   // P1-9「我的」页四数（借款余额/笔数、在途、打回）：库里 SUM 聚合，不受分页条数截断。
@@ -368,7 +371,7 @@ export const billApi = {
   mineStat: () => http.get('/tenant/expense/mine/stat', { silent: true }),
   // P2-3 甲案「移动端单据启用清单」（库里表 exp_mobile_template，只读、无入参、全量下发含未启用行）。
   // silent=true——同 mineStat：后端未发版时该路径回 404，调用方（H5Workbench#loadDocTypes）回落
-  // utils/h5.js 的 H5_DOC_TYPES 常量兜底，不该因为"配置接口还没上线"在提报页弹一次全局错误条。
+  // utils/h5.js 的 H5_DOC_TYPES 常量默认处理，不该因为"配置接口还没上线"在提报页弹一次全局错误条。
   mobileTemplates: () => http.get('/tenant/expense/mobile/templates', { silent: true }),
   airTicketPage: (params) => http.get('/tenant/expense/bill/air-ticket/page', { params }),
   convertApply: (applyId) => http.post(`/tenant/expense/bill/apply/convert/${applyId}`),
@@ -394,7 +397,7 @@ export const wfApi = {
   todoPage: (params) => http.get('/tenant/wf/todo/page', { params }),
   // cfg 可选（D-DEC-198 增量）：批量审批改走逐单通道时，逐条失败由调用方聚合成明细回显，
   // 不能再让全局拦截器每条弹一次 toast；不传 cfg 的 30+ 既有调用点行为逐字不变。
-  // R5-D-294：approve 为慢尾族（≥15s 6 条）——带幂等键去重；cfg 语义逐字不变（silent 等原样透传）
+  // R5-D-294：approve 为慢尾族（≥15s 6 条）——带唯一键去重；cfg 语义逐字不变（silent 等原样透传）
   approve: (body, cfg, key) => http.post('/tenant/wf/approve', body, { ...cfg, headers: { ...((cfg || {}).headers || {}), 'X-Idempotency-Key': key || idemKey() } }),
   /**
    * 下一环节候选办理人（审批弹窗「下一步处理人」区块）。
@@ -411,6 +414,7 @@ export const wfApi = {
   miProgress: (taskId, cfg) => http.get('/tenant/wf/mi-progress', { params: { taskId }, ...cfg }),
   /**
    * 提单态首审环节候选人（G2-3 提单选人）。单据必须已保存草稿（bizId 必填，候选人按单据公司过滤）。
+   * bizType 用后端提交时的同一规则（EXP_CLAIM/EXP_APPLY/EXP_LOAN/EXP_REPAY/EXP_PAY），
    * 否则流程 key 解析会与真实提交不一致，预览的落点就不是实际落点。
    * silent：老后端无此端点时静默降级为"不显示选人区"。
    */
@@ -440,9 +444,10 @@ export const wfApi = {
     http.post('/tenant/wf/approve-bill', null, { params: { bizType, bizId, approved, comment } }),
   /** 转办：把待办任务改派给其他用户 */
   transfer: (body) => http.post('/tenant/wf/transfer', body),
-  // 本节点可转办名单（与 /transfer 目标校验同口径）；名单空＝找流程管理员改派
+  // 本节点可转办名单（与 /transfer 目标校验同一规则）；名单空＝找流程管理员改派
   taskCandidates: (params) => http.get('/tenant/wf/task-candidates', { params }),
   /**
+   * 加签（G1）：position=BEFORE 前加签 / AFTER 后加签；signUsers 为逗号分隔用户ID。
    * 与转办的区别＝临时插一道，加签人审完自动回跳，流程走向不变（同一任务同时只允许一组加签）。
    */
   addSign: (body) => http.post('/tenant/wf/add-sign', body),
@@ -462,6 +467,7 @@ export const wfApi = {
    */
   rejectTargets: (params, cfg) => http.get('/tenant/wf/reject-targets', { params, ...cfg }),
   /**
+   * ①层「审批项」只读候选（2026-09-24）：给定当前待办任务，
    * 返回该节点上启用中的自定义审批结果 `[{ itemCode, itemName, category, linkedOper, targetNode }]`。
    * category：POSITIVE 正向 / REJECT 驳回 / TERMINATE 终止（服务端按类别覆盖 approved）。
    * 返回空数组 ⇒ 不渲染审批项区（与改造前完全一致）。
@@ -503,7 +509,7 @@ export const fileApi = {
     fd.append('file', file)
     if (bizId != null) fd.append('billId', bizId)
     // 图片发票走图像 OCR 通道（后端允许 120s），全局 20s 超时会误杀合法慢识别
-    // R5-D-294：attach/upload 为「服务端成功/客户端超时」最大族（≥15s 9 条）——带幂等键去重
+    // R5-D-294：attach/upload 为「服务端成功/客户端超时」最大族（≥15s 9 条）——带唯一键去重
     return http.post('/tenant/expense/attach/upload', fd,
       { headers: { 'Content-Type': 'multipart/form-data', 'X-Idempotency-Key': key || idemKey() }, timeout: 120000, signal })
   },
@@ -576,10 +582,11 @@ export const designerApi = {
   publishDiff: (modelKey, name) => http.get('/tenant/wf/designer/publish-diff', { params: { modelKey, name } }),
 }
 
-/** P0 系统级可靠性：一致性对账 + 审计留痕 */
+/** P0 系统级可靠性：一致性对账 + 审计记录 */
 export const auditApi = {
   reconcilePage: (params) => http.get('/tenant/audit/reconcile/page', { params }),
-  reconcileRun: () => http.post('/tenant/audit/reconcile/run'),
+  // 全量逐单对账为同步长任务（1,587 单实测 50.8s），全局 20s 超时会假报失败
+  reconcileRun: () => http.post('/tenant/audit/reconcile/run', null, { timeout: 180000, longWrite: true }),
   reconcileResolve: (id, body) => http.post(`/tenant/audit/reconcile/${id}/resolve`, body),
   trailPage: (params) => http.get('/tenant/audit/trail/page', { params }),
 }
@@ -605,10 +612,10 @@ export const p2Api = {
   // D-G5-02：可认领应收单清单（银行域专用端点）。
   // 原先借应收域的 receivableApi.page 取清单，而该端点要求 receivable:list（应收域）
   // ⇒ 纯银企对账岗（只有 bank:reconcile:list）打开认领弹层时清单恒空、动作做不了。
-  // 取数权限随域走：改调本域端点。
+  // 查询权限随域走：改调本域端点。
   bankClaimableReceivables: (params) => http.get('/tenant/bank/reconcile/claimable-receivables', { params }),
   bankSlipArchive: (statementId, fileId) => http.post('/tenant/bank/reconcile/slip/archive', { statementId, fileId }),
-  // R5-D-185：资金头寸页「登记余额」——余额快照保存（同账户同日期幂等覆盖，服务端 BankReconcileController#saveBalance）
+  // R5-D-185：资金头寸页「登记余额」——余额快照保存（同账户同日期去重覆盖，服务端 BankReconcileController#saveBalance）
   bankBalanceSave: (b) => http.post('/tenant/bank/reconcile/balance/save', b),
 }
 
@@ -651,10 +658,10 @@ export const flowApi = {
    * 返回 [{ userId, name, userName }]，限本租户在职用户并排除管理员，上限 500 条。
    */
   ccCandidates: (params, cfg) => http.get('/tenant/wf/query/cc/candidates', { params, ...cfg }),
-  // 流程绩效与积压（G3-2 真口径）：桑基走实例真实路径、热力走 task_history 节点命中，
+  // 流程绩效与积压（G3-2 真规则）：桑基走实例真实路径、热力走 task_history 节点命中，
   // 另含 SLA 达成率、积压账龄、按人时效与超时未办榜。cfg 传 { silent: true } 供轮询页使用。
   perfOverview: (days = 30, cfg) => http.get('/tenant/wf/perf/overview', { params: { days }, ...cfg }),
-  // R5-D-036：实例状态全量计数（/wf/board 顶部四卡口径源，前端从当前页切片现算）
+  // R5-D-036：实例状态全量计数（/wf/board 顶部四卡规则源，前端从当前页切片现算）
   perfInstanceStatus: (cfg) => http.get('/tenant/wf/perf/instance-status', { ...(cfg || {}) }),
   perfPaths: (days = 30, cfg) => http.get('/tenant/wf/perf/paths', { params: { days }, ...cfg }),
   perfNodeDwell: (days = 30, cfg) => http.get('/tenant/wf/perf/node-dwell', { params: { days }, ...cfg }),
@@ -665,6 +672,7 @@ export const flowApi = {
 }
 
 /**
+ * G3 共享作业层（2026-09-24 新接口集）——任务池 / 分配策略 / 自动分配日志 / 质量报表。
  *
  * URL / 方法与权限码均以后端控制器源码为准：
  *  - 任务池五视图        WfTaskPoolController      /api/tenant/wf/pool/**           wf:task:list（POOL_ALL 为 wf:instance:list）
@@ -686,7 +694,7 @@ export const wfOpsApi = {
   // ---- 2. 分配策略四模式（PICK / BALANCE_TIME / BALANCE_VOLUME / SMART） ----
   policyPage: (params) => http.get('/tenant/wf/ops/policy/page', { params }),          // params: { keyword, strategy }, PageQuery
   policyGet: (id) => http.get(`/tenant/wf/ops/policy/${id}`),
-  /** 某节点当前生效策略（只读试算：节点级 → 全局默认 → 内置兜底） */
+  /** 某节点当前生效策略（只读试算：节点级 → 全局默认 → 内置默认处理） */
   policyEffective: (params, cfg) => http.get('/tenant/wf/ops/policy/effective', { params, ...cfg }), // params: { modelKey, nodeKey }
   policyCreate: (body) => http.post('/tenant/wf/ops/policy/create', body),
   policyUpdate: (body) => http.post('/tenant/wf/ops/policy/update', body),
@@ -741,7 +749,7 @@ export const wfOpsApi = {
 export const wfTimeoutApi = {
   // stats → { totalPending, overdueCount, withinSlaCount, avgProcessingHours }；silent 供页面静默重试
   stats: (cfg) => http.get('/tenant/wf/timeout/stats', { ...(cfg || {}) }),
-  // params: { pageNum, pageSize }（PageQuery 口径，后端返回全部 PENDING 待办，靠 overdueHours 区分是否超时）
+  // params: { pageNum, pageSize }（PageQuery 规则，后端返回全部 PENDING 待办，靠 overdueHours 区分是否超时）
   overdueList: (params) => http.get('/tenant/wf/timeout/overdue-list', { params }),
   // config/{modelKey} → [{ nodeKey, nodeName, timeoutHours, timeoutAction }]
   config: (modelKey, cfg) => http.get(`/tenant/wf/timeout/config/${encodeURIComponent(modelKey)}`, { ...(cfg || {}) }),
@@ -761,6 +769,7 @@ export const opApi = {
   matchRoute: (billId) => http.post(`/tenant/pay/match/${billId}/route`),
   matchReview: (billId) => http.post(`/tenant/pay/match/${billId}/review`),
   matchManualReview: (billId, reason) => http.post(`/tenant/pay/match/${billId}/manual-review`, null, { params: { reason } }),
+  // 供应商对账（预留第三方对账平台接口）
   reconPage: (params) => http.get('/tenant/pay/recon/page', { params }),
   reconGenerate: (body) => http.post('/tenant/pay/recon/generate', body),
   reconSummary: (id) => http.get(`/tenant/pay/recon/${id}/summary`),
@@ -835,7 +844,7 @@ export const payApi = {
   batchReturnToEdit: (id) => http.post(`/tenant/pay/batch/${id}/edit`),
   execute: (id) => http.post(`/tenant/pay/batch/${id}/execute`),
   /**
-   * D-DEC-438：执行付款被硬闸拦下后，逐条取回「哪条明细 / 缺哪一腿 / 去哪儿补」的结构化拦口报告。
+   * D-DEC-438：执行付款被强制校验拦下后，逐条取回「哪条明细 / 缺哪一环节 / 去哪儿补」的结构化拦口报告。
    * 后端复用 execute() 同一条判据（不新增校验），只读。cfg 传 { silent: true } —— 拦口详情由
    * 页面弹窗呈现，不再叠一条全局 toast。
    */
@@ -850,7 +859,7 @@ export const mdApi = {
   expenseItems: () => http.get('/tenant/masterdata/expense-item/tree'),
   // 按发票「货物或应税劳务、服务名称」智能匹配费用类型（命中返回规则，未命中返回 null）
   invoiceRuleMatch: (name) => http.get('/tenant/masterdata/invoice-rule/match', { params: { name } }),
-  // D-DEC-042：单据发起页的「预算科目」红星取数改走引用选择口径 /item/pick（按公司/法人放行）。
+  // D-DEC-042：单据发起页的「预算科目」红星查询改走引用选择规则 /item/pick（按公司/法人放行）。
   // 旧 /item/page 套个人 data_scope 五级——普通员工 COMMON_EMP=4(本部门) 而 bg_item.dept_id 实测恒 NULL，
   // 命中 0 行 ⇒ 分摊/费用行永远选不出合规科目。管理侧预算明细列表仍用 budgetApi.itemPage(/item/page)，不受影响。
   budgets: (params) => http.get('/tenant/budget/item/pick', { params }),
@@ -873,8 +882,8 @@ export const detailApi = {
   loanOffsets: (billId) => http.get(`/tenant/expense/detail/loan-offset/${billId}`),
   addLoanOffset: (billId, body) => http.post(`/tenant/expense/detail/loan-offset/${billId}`, body),
   // D-UI-03（2026-10-19）：借款冲抵候选面。返回 availableBalance＝账面余额−在途占用，
-  // 与服务端 registerLoanOccupancy 的放行闸同源；旧口径只给 loanBalance（账面），
-  // 前端默认勾全额必然被拒（ExpenseDetailService 类注释里的「已知在册残口①」）。
+  // 与服务端 registerLoanOccupancy 的放行校验同源；旧规则只给 loanBalance（账面），
+  // 前端默认勾全额必然被拒（ExpenseDetailService 类注释里的「已知现有残口①」）。
   loanCandidates: (params) => http.get(`/tenant/expense/detail/loan-candidates`, { params }),
   // 报销单冲销预付款单（PAY/PREPAY）：body={prepayBillId, amount}，后端校验累计冲销≤预付余额
   prepayOffset: (billId, body) => http.post(`/tenant/expense/detail/prepay-offset/${billId}`, body),
@@ -935,7 +944,7 @@ export const customerApi = {
   page: (p) => http.get('/tenant/customer/page', { params: p }),
   /**
    * D-V4R-96：往来单位候选（客户档案 ∪ 供应商主数据）。
-   * 供应商会按 supplier_code 幂等建档为 crm_customer，返回的 id 是语义正确的 customer_id。
+   * 供应商会按 supplier_code 去重建档为 crm_customer，返回的 id 是语义正确的 customer_id。
    * 对公结算的往来单位下拉必须用这个，page() 只读 crm_customer 选不到供应商。
    */
   candidates: (p) => http.get('/tenant/customer/candidates', { params: p }),
@@ -1005,15 +1014,15 @@ export const dictApi = {
   dataList: (typeCode) => http.get('/tenant/system/dict/data/list', { params: { dictType: typeCode } }),
   /**
    * 【2026-10-15 前置A】内置字典免权限只读通道。
-   * 服务端闸门：仅 is_builtin=1 的类型可读，非内置返回空列表（不抛错）。
+   * 服务端校验：仅 is_builtin=1 的类型可读，非内置返回空列表（不抛错）。
    * 仍需登录（不在 JwtAuthFilter 白名单内），但**不需要 system:dict:list 权限**
    * —— 该权限实测只授予 CONFIG_ADMIN/IT_ADMIN，业务角色 159 人读不到。
    */
   builtinDataList: (typeCode) => http.get('/tenant/system/dict/builtin/data/list', { params: { dictType: typeCode } }),
   /**
    * 【2026-10-16 第 4 批】内置字典**批量**免权限只读通道。
-   * 一次取回多个类型（后端按 is_builtin 闸门过滤，非内置类型不出现在返回 Map 里）。
-   * 用途：枚举收口后有 66 个 enum_* 展示字典要预热，逐个请求会打 66 次往返。
+   * 一次取回多个类型（后端按 is_builtin 校验过滤，非内置类型不出现在返回 Map 里）。
+   * 用途：枚举办结后有 66 个 enum_* 展示字典要预热，逐个请求会打 66 次往返。
    * @param {string[]} typeCodes dict_type 数组
    */
   builtinDataBatch: (typeCodes) => http.get('/tenant/system/dict/builtin/data/batch', { params: { types: (typeCodes || []).join(',') } }),
@@ -1049,7 +1058,7 @@ export const imageApi = {
   exceptionCreate: (b) => http.post('/tenant/image/exception/create', b),
   exceptionFix: (id, remark) => http.post(`/tenant/image/exception/${id}/fix`, null, { params: { remark } }),
   exceptionDelete: (id) => http.post(`/tenant/image/exception/${id}/delete`),
-  // P2-5 OCR 识别记录（结构化票面落库查询）
+  // P2-5 OCR 识别记录（结构化票面写入数据库查询）
   ocrRecordPage: (p) => http.get('/tenant/ocr-records', { params: p }),
   ocrRecordByBatch: (batchId) => http.get(`/tenant/ocr-records/batch/${batchId}`),
 }
@@ -1082,9 +1091,9 @@ export const purchaseApi = {
   orderDelete: (id) => http.post(`/tenant/purchase/order/${id}/delete`),
   /** 作废采购订单：body={orderId, reason}；后端拒绝已收货/已付款订单并返回错误原因 */
   orderVoid: (body) => http.post('/tenant/purchase/order/void', body),
-  /** 终止采购订单（人工终态，权限码 po:order:update）：body={reason}；已收货/已挂付款但不履约的单走这里 */
+  /** 终止采购订单（人工最终状态，权限码 po:order:update）：body={reason}；已收货/已挂付款但不履约的单走这里 */
   orderTerminate: (id, body) => http.post(`/tenant/purchase/order/${id}/terminate`, body),
-  /** 归档采购订单（人工终态，权限码 po:order:update）：CLOSED → ARCHIVED */
+  /** 归档采购订单（人工最终状态，权限码 po:order:update）：CLOSED → ARCHIVED */
   orderArchive: (id) => http.post(`/tenant/purchase/order/${id}/archive`),
   /** 批次1：草稿采购订单提交审批 DRAFT → OPEN + 起 PURCHASE_ORDER_REVIEW */
   orderSubmit: (id) => http.post(`/tenant/purchase/order/${id}/submit`),
@@ -1166,7 +1175,7 @@ export const complianceApi = {
 }
 // ---------------- 费用标准（expense_policy 主表 + 标准明细 + 版本，2026-10-17 新增）----------------
 // 注：路径用后端 @RequestMapping 明确声明的 /expense-policy（实测 /policy 亦通，但不在 Controller 声明面内，
-//     按「未登记路径不可调用」的端点治理口径，统一走声明面路径）。
+//     按「未登记路径不可调用」的端点治理规则，统一走声明面路径）。
 export const expensePolicyApi = {
   page: (params) => http.get('/tenant/compliance/expense-policy/page', { params }),
   getById: (id) => http.get(`/tenant/compliance/expense-policy/${id}`),
@@ -1359,7 +1368,7 @@ export const sharingApi = {
   pool: (params, cfg) => http.get('/tenant/sharing/task/pool', { params, ...cfg }),
   mine: (params) => http.get('/tenant/sharing/task/mine', { params }),
   receive: (id) => http.post(`/tenant/sharing/task/${id}/receive`),
-  // D-DEC-024/D-DEC-030：办结备注随请求提交（remark → op_audit_task.remark 留痕）
+  // D-DEC-024/D-DEC-030：办结备注随请求提交（remark → op_audit_task.remark 记录）
   finish: (id, remark) => http.post(`/tenant/sharing/task/${id}/finish`, null, { params: { remark } }),
   manage: (params) => http.get('/tenant/sharing/task/manage', { params }),
   withdraw: (id) => http.post(`/tenant/sharing/task/${id}/withdraw`),
@@ -1417,12 +1426,12 @@ export const invoiceApi = {
   // 销售发票开具（OTC02 INVOICE_ISSUE）：价税分离校验后发起开票审批流
   issue: (body) => http.post('/tenant/invoice/issue', body),
   bind: (body) => http.post('/tenant/invoice/bind', body),
-  // 反核销（D-V3-135 配套 · 行业方案"反"字链第一环）：解除勾稽+解锁发票；body={billNo,invoiceId}
+  // 反核销（D-V3-135 配套 · 单据反操作链第一环）：解除勾稽+解锁发票；body={billNo,invoiceId}
   unbind: (body) => http.post('/tenant/invoice/unbind', body),
   // cfg：移动端（H5 审批/提单页）把"本单已勾稽发票"当补充信息读，无权/失败时不该打断主流程，
   // 故允许传 { silent: true }（缺省不传＝行为与原来完全一致）。
   billInvoices: (billId, cfg) => http.get('/tenant/invoice/bill-invoices', { params: { billId }, ...(cfg || {}) }),
-  // 发票「关联单据」候选单据（D-DEC-113）：按操作权限取数、不限提单人，附本单已勾稽发票额与缺口
+  // 发票「关联单据」候选单据（D-DEC-113）：按操作权限查询、不限提单人，附本单已勾稽发票额与缺口
   bindableBills: (params) => http.get('/tenant/invoice/bindable-bills', { params }),
   // 验真增强
   verifyPage: (params) => http.get('/tenant/invoice/enhance/verify/page', { params }),
@@ -1452,9 +1461,9 @@ export const glApi = {
   /** 科目余额表 */
   balance: (companyId, year, month) =>
     http.get('/tenant/op/gl/balance', { params: { companyId, year, month } }),
-  /** 试算平衡 */
-  trial: (companyId, year, month) =>
-    http.get('/tenant/op/gl/trial', { params: { companyId, year, month } }),
+  /** 试算平衡（includeUnposted=true 时并入本期间未过账凭证；默认只统计已过账分录） */
+  trial: (companyId, year, month, includeUnposted) =>
+    http.get('/tenant/op/gl/trial', { params: { companyId, year, month, includeUnposted } }),
   /** 查询凭证是否已落账 */
   posted: (voucherId) =>
     http.get('/tenant/op/gl/posted', { params: { voucherId } }),
@@ -1468,10 +1477,10 @@ export const glApi = {
    * silent：接口由后端并行部署中，404 时由调用方（GlLedger 凭证台账）给出友好提示，对齐 wfApi.batchApprove 模式。
    *
    * D-DEC-165：端点签名就是 @RequestBody List<Long> ids，body.comment（过账说明）发出去也会被丢弃——
-   * 因此调用方不得再把它设为必填；入账理由要留痕需后端把值写进 op_voucher.remark（红字冲销已在用该列）。
+   * 因此调用方不得再把它设为必填；入账理由要记录需后端把值写进 op_voucher.remark（红字冲销已在用该列）。
    * D-DEC-166（2026-10-01 整改，待编译部署验证）：制审分离已改由后端强制——
    * VoucherService.post() 校验"过账人 ≠ 凭证 create_by"，自制自过直接拒绝（批量口逐张回显 reason 进 failed[]）。
-   * GlLedger.vue 的 canPostRow/postableRows 因此降级为体验层（少点几次按钮），不再是唯一闸门；
+   * GlLedger.vue 的 canPostRow/postableRows 因此降级为体验层（少点几次按钮），不再是唯一校验；
    * 此前的「制审分离由前端勾选控制，后端二次校验」在整改前属不实声明。
    */
   // 整改(20260918, 契约断裂修复): 批量过账统一走已实现的后端端点 /tenant/sharing/voucher/batch-post,
@@ -1486,7 +1495,7 @@ export const glApi = {
   },
   /** 反结账：body={ period }；后端校验权限与下一期间状态，失败原样提示（回退后该期间重新开放记账） */
   monthUnclose: (period) => http.post('/tenant/gl/month/unclose', { period }),
-  /** 损益结转：body={ period }；幂等拒绝时后端返回「该期间已结转」，调用方原样提示 */
+  /** 损益结转：body={ period }；去重拒绝时后端返回「该期间已结转」，调用方原样提示 */
   profitCarry: (period) => http.post('/tenant/gl/profit-carry', { period }),
 }
 
@@ -1592,17 +1601,21 @@ export const dashApi = {
 }
 // AI 平权 P3：问数入口（服务端编排→AI 网关→目录内只读动作）
 export const aiApi = {
-  ask: (question) => http.post('/tenant/ai/ask', { question }, { timeout: 60000, silent: true }),
+  ask: (question, sessionId) => http.post('/tenant/ai/ask', { question, sessionId }, { timeout: 60000, silent: true }),
   actions: () => http.get('/tenant/ai/ask/actions', { silent: true }),
   // 指令通道：只读动作即时执行，写动作返回待确认票据（不执行）
-  instruct: (question) => http.post('/tenant/ai/ask/instruct', { question }, { timeout: 60000, silent: true }),
-  // 执行一律走网关那套闸门（红线/权限/幂等/票据），前端不自行调业务端点
+  instruct: (question, sessionId) => http.post('/tenant/ai/ask/instruct', { question, sessionId }, { timeout: 60000, silent: true }),
+  // 执行一律走网关那套校验（红线/权限/去重/票据），前端不自行调业务端点
   execute: (payload, idempotencyKey) => http.post('/ai/gateway/execute', payload, {
     timeout: 60000, silent: true, headers: idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {},
   }),
   myTickets: () => http.get('/tenant/ai/confirm/mine', { silent: true }),
   pendingTickets: () => http.get('/tenant/ai/confirm/pending', { silent: true }),
   approveTicket: (id, approve, reason) => http.post(`/tenant/ai/confirm/${id}`, { approve, reason }, { silent: true }),
+  cancelTicket: (id) => http.post(`/tenant/ai/confirm/${id}/cancel`, {}, { silent: true }),
+  skills: () => http.get('/tenant/ai/skills', { silent: true }),
+  health: () => http.get('/tenant/ai/health', { silent: true }),
+  feedback: (payload) => http.post('/tenant/ai/feedback', payload, { silent: true }),
 }
 export const reportApi = {
   bills: () => http.get('/tenant/report/export/bills', { responseType: 'blob' }),
@@ -1616,7 +1629,7 @@ export const reportApi = {
   expenseSummary: (p) => http.get('/tenant/report/expense-summary', { params: p }),
   monthlyTrend: () => http.get('/tenant/report/monthly-trend'),
   expenseComposition: (itemName) => http.get('/tenant/report/expense-composition', { params: { itemName } }),
-  // ---- 扩展报表（参考行业做法/同类系统财务共享最佳实践） ----
+  // ---- 扩展报表 ----
   apAging: () => http.get('/tenant/report/ap-aging'),
   arAging: () => http.get('/tenant/report/ar-aging'),
   cashFlowSummary: () => http.get('/tenant/report/cash-flow'),
@@ -1677,7 +1690,7 @@ export const assetApi = {
   depreciate: (id) => http.post(`/tenant/asset/${id}/depreciate`),
   depreciateMonth: () => http.post('/tenant/asset/depreciate/batch'),
   netValue: (id) => http.get(`/tenant/asset/${id}/netValue`),
-  // X-06（D-DEC-431）读取腿：单卡变动台账（原值调整/盘点差异的原因＋前后镜像＋审批终态）
+  // X-06（D-DEC-431）读取环节：单卡变动台账（原值调整/盘点差异的原因＋前后镜像＋审批最终状态）
   changeLogs: (id) => http.get(`/tenant/asset/${id}/change-logs`),
   // FA 业务审批流入口（P1 补齐）：调拨/外销处置/盘点差异/原值调整/减值 → 均发起对应审批流
   transfer: (id, targetDeptId, targetCompanyId, remark) => http.post(`/tenant/asset/${id}/transfer`, null, { params: { targetDeptId, targetCompanyId, remark } }),
@@ -1771,7 +1784,7 @@ export const archiveDestroyApi = {
   // R5-D-200：销毁申请＝起流程类长耗时写端点（实测 20s 断连时服务端已建 wf_instance），端点级放宽超时
   create: (archiveIds, reason, applicantId) => http.post('/tenant/compliance/archive-destroy/create', { archiveIds, reason, applicantId }, { ...longWrite }),
   approve: (id, approverId, approved) => http.post(`/tenant/compliance/archive-destroy/${id}/approve`, { approverId, approved }),
-  // R5-D-200：销毁执行是重事务长写，同族放宽（超时按「已提交，处理中」口径）
+  // R5-D-200：销毁执行是重事务长写，同族放宽（超时按「已提交，处理中」规则）
   execute: (id) => http.post(`/tenant/compliance/archive-destroy/${id}/execute`, null, { ...longWrite }),
   list: (approvalStatus) => http.get('/tenant/compliance/archive-destroy/list', { params: { approvalStatus } }),
   listPage: (params) => http.get('/tenant/compliance/archive-destroy/list/page', { params }),
@@ -1901,14 +1914,14 @@ export const apFlowApi = {
   monthCloseDispatch: (id, members) => http.post(`/tenant/ap-month-close/${id}/dispatch`, { members }),
   monthCloseItem: (id, b) => http.post(`/tenant/ap-month-close/${id}/complete-item`, b),
   monthCloseClose: (id) => http.post(`/tenant/ap-month-close/${id}/close-period`),
-  // P0-2 反关账（重开期间，原因必填留痕）；P1-6 关账前置自动检查
+  // P0-2 反关账（重开期间，原因必填记录）；P1-6 关账前置自动检查
   monthCloseReopen: (id, reason) => http.post(`/tenant/ap-month-close/${id}/reopen`, { reason }),
   monthCloseAutoCheck: (id) => http.post(`/tenant/ap-month-close/${id}/auto-check`),
-  // R5-D-218 作废（终态 VOID，原因必填留痕；解冻协同、行止不删）
+  // R5-D-218 作废（最终状态 VOID，原因必填记录；解冻协同、行止不删）
   monthCloseVoid: (id, reason) => http.post(`/tenant/ap-month-close/${id}/void`, { reason }),
 }
 
-// ---------------- 退货管理（采购退货单/销售退货单，BCP勾选式对账一期退货数据腿） ----------------
+// ---------------- 退货管理（采购退货单/销售退货单，BCP勾选式对账一期退货数据环节） ----------------
 export const returnApi = {
   // 采购退货单
   purPage: (p) => http.get('/tenant/pur-returns', { params: p }),
@@ -2007,9 +2020,9 @@ export const arGapApi = {
   monthClosePostGl: (id) => http.post(`/tenant/ar-flow/month-close/${id}/post-gl`),
   monthCloseReconcile: (id) => http.post(`/tenant/ar-flow/month-close/${id}/reconcile`),
   monthCloseClose: (id) => http.post(`/tenant/ar-flow/month-close/${id}/close-period`),
-  // P0-2 同源整改：反月结（重开账期，原因必填留痕）
+  // P0-2 同源整改：反月结（重开账期，原因必填记录）
   monthCloseReopen: (id, reason) => http.post(`/tenant/ar-flow/month-close/${id}/reopen`, { reason }),
-  // R5-D-218 作废（终态 VOID，原因必填留痕；未关闭账期可作废）
+  // R5-D-218 作废（最终状态 VOID，原因必填记录；未关闭账期可作废）
   monthCloseVoid: (id, reason) => http.post(`/tenant/ar-flow/month-close/${id}/void`, { reason }),
   // 统计报表（开票/核销/票据/坏账/月结 5 张）
   reportInvoicing: (p) => http.get('/tenant/ar-flow/reports/invoicing', { params: p }),
@@ -2072,7 +2085,7 @@ export const bcpObjectionApi = {
 }
 
 // ---------------- D-DEC-320 流程收尾动作配置面（wf_event_action_config） ----------------
-// 表原本只有引擎读腿、无任何端点与页面；这里补齐只读清单 + 字段级编辑（启用状态 / 配置说明）。
+// 表原本只有引擎读环节、无任何端点与页面；这里补齐只读清单 + 字段级编辑（启用状态 / 配置说明）。
 // 读 = wf:config:list，写 = wf:config:update（沿用 wf 域既有码，不发明新码）。
 export const wfEventActionApi = {
   page: (params) => http.get('/tenant/wf/event-action-config/page', { params }),

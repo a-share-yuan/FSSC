@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.fssc.common.core.Result;
@@ -12,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 流程绩效与积压分析（/api/tenant/wf/perf/**，方案 G3-2 真口径）。
+ * 流程绩效与积压分析（/api/tenant/wf/perf/**，方案 G3-2 真规则）。
  *
  * <p>权限与监控大屏同一档（{@code wf:instance:list}）：这里给的是全公司在途/办结的聚合读数，
  * 业务角色不需要、也不应该看到别人的时效。
@@ -32,7 +35,7 @@ public class WfPerfController {
      * 流程实例归档预览：按当前配置回答"当前会归档多少条、N 是多少"。
      *
      * <p>纯只读：只做 COUNT，不搬移、不删除任何数据。权限与监控大屏同一档（{@code wf:instance:list}），
-     * 因为返回的是流程侧归档口径读数。
+     * 因为返回的是流程侧归档规则读数。
      */
     @RequiresPerm("wf:instance:list")
     @GetMapping("/archive-preview")
@@ -55,9 +58,9 @@ public class WfPerfController {
     }
 
     /**
-     * R5-D-036：实例状态<b>全量</b>计数（{@code /wf/board} 顶部四卡的口径源）。
+     * R5-D-036：实例状态<b>全量</b>计数（{@code /wf/board} 顶部四卡的规则源）。
      *
-     * <p>与 {@code /overview} 同一把权限闸（该页的实例列表本就要求 {@code wf:instance:list}），
+     * <p>与 {@code /overview} 同一把权限校验（该页的实例列表本就要求 {@code wf:instance:list}），
      * 因此本端点不引入新的授权面；只做 5 次 COUNT，不跑 SLA/桑基的重聚合。</p>
      */
     @RequiresPerm("wf:instance:list")

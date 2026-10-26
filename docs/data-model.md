@@ -1,107 +1,160 @@
-# 数据模型（data-model）
+# 数据模型
 
-## 1. 库表分布
+> **校准状态**：243 张表名与所属域由脚本从源码 `@TableName` 注解**实测抽取**（完整清单 `docs/_facts/tables.txt`）。列级信息取自实体注解与 MyBatis XML，**未经与真实库 `INFORMATION_SCHEMA` 逐列比对**；表注释与实际注释可能有偏差。字段含义中带  的为推断。
 
-| 库 | 表数 | 内容 |
+## 1. 两个库，一类引擎表
+
+| 库 | 内容 | 建立方式 |
 |---|---|---|
-| `fssc` | 316 | 全部业务表 + 平台表 + Flowable 引擎表（`act_*`/`flw_*` 43 张） |
-| `fssc_image` | 6 | 影像独立库：`img_batch`/`img_file`/`img_setting`/`image_exception`/`image_review`/`ocr_record` |
+| `fssc` | 全部业务表（243+）+ 平台表 + Flowable 引擎表 | 业务表需**基线脚本**；`ACT_*`/`FLW_*` 由 Flowable `database-schema-update=true` 首启自动建 |
+| `fssc_image` | 影像域 5 张 + `ocr_record`：`img_batch` `img_file` `img_setting` `image_exception` `image_review` `ocr_record` | 独立数据源，`@FsscDataSource("image")` + AOP 路由 |
 
-业务表约 270 张，按前缀分族：
+字符集统一 `utf8mb4` / `utf8mb4_general_ci`，时区参数 `serverTimezone=Asia/Shanghai`。
+
+>  **`@TableName` 只覆盖有实体的表**。库里还存在无实体映射的表/视图/临时表，真实表数 > 243。发布基线时以 `mysqldump --no-data` 的结果为准，不要用这份清单当 schema。
+
+## 2. 表名前缀 → 域图例
+
+| 前缀 | 张数 | 归属域 | 代表表 |
+|---|---:|---|---|
+| `md_` | 45 | `masterdata` 主数据 | `md_supplier` `md_cost_center` `md_subject` `md_period` `md_expense_standard` `md_exchange_rate` |
+| `op_` | 27 | `sharing` 共享作业 + `glex` 凭证 | `op_voucher` `op_voucher_line` `op_voucher_template` `op_pay_batch(_detail)` `op_dispatch_rule` `op_sla_config` `op_archive` `op_job` |
+| `sys_` | 23 | `system` 租户内系统管理 | `sys_user` `sys_role` `sys_menu` `sys_role_menu` `sys_user_role` `sys_config` `sys_dict_data` `sys_number_rule` `sys_oper_log` `sys_login_log` `sys_file` |
+| `wf_` | 17 | `workflow` 审批引擎台账 | `wf_model` `wf_instance` `wf_task` `wf_task_history` `wf_node_config` `wf_assignee_scheme` `wf_add_sign` `wf_delegate` `wf_cc` `wf_process_log` `wf_process_outbox` |
+| `pf_` | 13 | `platform` 平台运营 | `pf_tenant` `pf_tenant_package` `pf_package` `pf_package_feature` `pf_feature` `pf_user` `pf_order` `pf_bill` `pf_config` |
+| `ar_` | 12 | `arflow` 应收流程 | `ar_claim` `ar_note` `ar_statement` `ar_recon_record` `ar_writeoff_record` `ar_writeoff_fund` `ar_month_close` |
+| `exp_` | 11 | `expense` 报销主线 | `exp_bill` `exp_bill_line` `exp_bill_attach` `exp_bill_payment` `exp_bill_receipt` `exp_bill_trace` `exp_bill_share` `exp_travel` `exp_loan_offset` |
+| `gl_` | 10 | `glex` 总账扩展 | `gl_journal_entry` `gl_month_close` `gl_close_check_item` `gl_consolidate` `gl_fx_revaluation` `gl_inter_offset` `gl_tax_provision` |
+| `bg_` | 5 | `budget` 预算 | 预算编制/占用类 |
+| `inv_` | 5 | `invoice` 发票 | `inv_invoice` `inv_invoice_line` `inv_bill_invoice` `inv_invoice_global` `inv_verify_log` |
+| `rc_` | 5 | `receivable` 应收 | `rc_receivable` `rc_receipt` `rc_receipt_line` `rc_bad_debt` `rc_collect_todo` |
+| `img_` / `image_` | 3+2 | `image` |  **在 `fssc_image` 库**；同域两前缀并存 |
+| `collab_` | 4 | `collab` 消息协同 | |
+| `tax_` | 4 | `glex` 税务 | |
+| `tr_` | 4 | `treasury` 资金 | `tr_fund_plan` `tr_transfer` `tr_credit_bill` `tr_bill_settle` |
+| `ai_` | 3 | `ai` 网关 | |
+| `ap_` | 3 | `apflow` 应付流程 | `ap_service_request` `ap_month_close` `ap_dispatch_rule` |
+| `archive_` | 3 | `compliance`/`document` 会计档案 | |
+| `bank_` | 3 | `bank` 银企 | |
+| `cont_` | 3 | `contract` 合同 | |
+| `expense_` | 3 |  与 `exp_` 并存 |  同域两前缀 |
+| `po_` | 3 | `purchase` 采购 | |
+| `rpt_` | 3 | `report` 报表 | |
+| `supplier_` | 3 | `masterdata` 供应商扩展 |  语义与 `md_supplier` 重叠 |
+| 各 2 张 | 12 组 | `audit` `image` `purchase`(`pur_`/`sale_`) `stock` `sod_` | |
+| 各 1 张 | 15 组 | `asset` `fa_` `crm` `dispatch` `employee` `ext` `cip`? `fraud` `integration` `linku` `match` `ocr` `pay` `precheck` `reviewer` `satisfaction` `service` | |
+
+**同域多前缀并存**（新人最容易懵，也是提问高频点）：
+
+| 并存对 | 观察事实 | 处理建议 |
+|---|---|---|
+| `exp_` ↔ `expense_` | 前者是报销单主体族，后者 3 张  | 新表统一用 `exp_`；动 `expense_` 前先确认它被谁读 |
+| `gl_` ↔ `op_voucher*` ↔ `glex` 域 ↔ `gl` 域 | 凭证主数据在 `op_voucher(_line)`，总账扩展在 `gl_*`；代码里 `gl`（4 文件）与 `glex`（53 文件）两个包并存 | 找"凭证"先看 `op_voucher`，找"月结/合并/重估"看 `gl_*` + `glex` |
+| `ar_` ↔ `arflow` 域 ↔ `rc_` | `arflow` 是流程动作族，`receivable` 域用 `rc_` 台账族 | 应收问题两处都要查 |
+| `ap_` ↔ `apflow` ↔ `pay`/`op_pay_batch` | 应付申请 / 付款批次 / 计划回写分属三处 | 沿"申请→批次→回写"顺序查 |
+| `img_` ↔ `image_` | 影像主档 `img_*`，异常与复核 `image_exception` / `image_review` | 分库内，注意数据源注解 |
+| `md_supplier` ↔ `supplier_*` | 主数据供应商 + 供应商扩展三张 | 新增供应商属性先定归属 |
+
+## 3. 核心表：一条报销单的旅程
+
+```mermaid
+erDiagram
+  pf_tenant ||--o{ sys_user : "租户归属"
+  sys_user ||--o{ exp_bill : "提单人"
+  exp_bill ||--|{ exp_bill_line : "明细"
+  exp_bill ||--o{ exp_bill_attach : "附件→sys_file"
+  exp_bill ||--o{ inv_bill_invoice : "关联发票"
+  exp_bill ||--o{ wf_instance : "流程实例"
+  wf_instance ||--|{ wf_task : "待办"
+  wf_task ||--o{ wf_task_history : "已办留痕"
+  exp_bill ||--o{ exp_bill_payment : "付款"
+  exp_bill_payment }o--|| op_pay_batch : "批量付款"
+  op_pay_batch ||--o{ op_pay_batch_detail : "行"
+  exp_bill ||--o{ op_voucher : "生成凭证"
+  op_voucher ||--|{ op_voucher_line : "分录"
+  op_voucher ||--o| gl_journal_entry : "过账"
+  exp_bill ||--o{ img_batch : "影像"
+  exp_bill ||--o{ op_archive : "归档"
+  exp_bill ||--o{ exp_bill_trace : "全链路联查"
+  budget占用 }o--|| exp_bill_line : "bg_*"
+```
+
+按顺序读这 8 组表，等于读完整条主线：
+
+| 阶段 | 表 | 关键字段要看什么 |
+|---|---|---|
+| ① 提单 | `exp_bill` + `exp_bill_line` + `exp_bill_attach` | 单据状态、金额合计、费用项（`md_expense_item`）、成本中心、预算占用结果 |
+| ② 合规/预算 | `md_compliance_rule`、`md_expense_standard`、`bg_*` | 命中了哪条规则、占用与释放 |
+| ③ 审批 | `wf_instance` `wf_task` `wf_task_history` `wf_node_config` `wf_add_sign` `wf_delegate` `wf_cc` + Flowable `ACT_RU_*`/`ACT_HI_*` | **两套账**：引擎态在 `ACT_`，业务台账在 `wf_`，不一致就是缺陷 |
+| ④ 发票 | `inv_invoice` `inv_invoice_line` `inv_verify_log` | 查验结果与来源通道 |
+| ⑤ 付款 | `exp_bill_payment` → `op_pay_batch(_detail)` → `op_plan_paid_log` | 批次状态、收款账户（`md_bank_account`）、计划回写幂等键 |
+| ⑥ 凭证 | `op_voucher` `op_voucher_line` `op_voucher_template` → `gl_journal_entry` | 模板驱动的分录生成；`DRAFT` → 过账 |
+| ⑦ 影像 | `fssc_image`.`img_batch/img_file` | 与 `sys_file` 的关系、原件存储区（temp/business/archive） |
+| ⑧ 归档与联查 | `op_archive`、`archive_*`、`exp_bill_trace` | 归档后不可变更；联查是"这单每一环"的聚合视图 |
+
+## 4. 通用列约定
+
+绝大多数业务表共享下列列（由实体基类 / MyBatis-Plus 自动填充实现）：
+
+| 列 | 含义 | 注意事项 |
+|---|---|---|
+| `id` | 主键 | 部分表为自增 `bigint`，部分为 `uuid`/雪花 —— **不要假设统一**，跨表传 id 前先确认类型（曾出现 uuid 传给 bigint 参数被静默截断） |
+| `tenant_id` | 租户隔离列 | 由拦截器自动注入 WHERE。**裸 JDBC/原生 SQL 不受保护** |
+| `del_flag` | 逻辑删除 | 查询冷数据/统计时必须补 `del_flag=0`，否则数字对不上 |
+| `create_by` / `create_time` | 创建人/时间 | **两种机理**：带 `@TableField(fill=...)` 的字段无登录态时落 0/当前时间；**裸字段无注解则该列根本不进 INSERT，落库为 NULL**。写批量造数脚本前先确认字段有无 fill 注解 |
+| `update_by` / `update_time` | 修改人/时间 | 同上 |
+| `status` | 状态 |  同名不同义很常见：`sys_oper_log.status` 在租户口径与平台口径下**含义相反**（一处 1=失败，另一处 1=成功）。跨域统计前先读该表定义 |
+| `remark` / `ext_json` | 备注/扩展 | 扩展信息常塞 JSON 串，别指望它是列 |
+
+### 取数时会踩的列名坑（工程事实，非猜测）
+
+1. **不能凭直觉猜列名**。`SHOW COLUMNS` 是免费的，猜错一次浪费的时间更多。
+2. MySQL **保留字**：`groups` 之类做列名必须反引号，否则报错信息会误导你怀疑表不存在。
+3. `sys_menu.perms` 是**逗号分隔多权限串**，用整串等值比较会得出"权限不存在"的假阴性；要用 `FIND_IN_SET` 或应用侧解析。
+4. 全角空格/不可见字符会让 `WHERE` 条件**静默不匹配**（数据来自历史 Excel/文档导入时高发）。
+5. 跨库/跨域 `UNION` 时逐列 `CAST(... AS CHAR)`，否则列类型不一致直接报错。
+6. `INFORMATION_SCHEMA` 查询**必须钉 `TABLE_SCHEMA`**，否则多个同名库（`fssc` 与演练库）会造成"幻影列"。
+7. 中文列内容用 CLI 查时须 `--default-character-set=utf8mb4`，否则乱码让你误判数据有问题。
+8. `@OperLog.desc` 之类的描述不落独立列，检索操作日志要靠 `title` 与 `oper_url`。
+
+## 5. Flowable 引擎表与业务表的分工
 
 ```
-md_   (53) 主数据        exp_  (18) 费用报销      op_  (28) 共享运营
-sys_  (27) 平台管理      gl_   (16) 总账          wf_  (21) 流程配置
-act_  (39) 流程引擎      ar_   (14) 应收流程      pf_  (13) 租户套餐
-rc_    (5) 应收执行      inv_   (5) 发票          tr_   (4) 资金
-bg_    (5) 预算          tax_  (4) 税务          img_  (3) 影像桥接
-其余: cont_/bank_/po_/so_/rpt_/collab_/supplier_/archive_/fa_/sod_ ...
+ACT_RE_*   流程定义/部署      ←→  wf_model（本项目自己的模型台账 + bpmn_xml 快照 + 版本）
+ACT_RU_*   运行时实例/任务/定时器/作业  ←→  wf_instance / wf_task（业务视图与待办）
+ACT_HI_*   历史（含 DELETE_REASON_ 等）  ←→  wf_task_history / wf_process_log（业务留痕）
 ```
 
-## 2. 命名规范
+- **真相源是 BPMN 定义 + 引擎**，但业务侧列表页读的是 `wf_*`。两者不同步时表现为"待办列表有、进详情报错"或反之。
+- `ACT_HI_*` 保留 6 个月（`fssc.wf.history-retention-months`），每周日 03:00 清理；`wf_*` **永不清理**。做历史报表要意识到这个口径差异。
 
-| 前缀 | 含义 | 例 |
-|---|---|---|
-| `md_` | master data，主数据/配置 | `md_expense_item` |
-| `exp_` | 费用报销单据族 | `exp_bill`/`exp_bill_line` |
-| `_cold` 后缀 | 冷归档表（结构同热表，逐列同序） | `exp_bill_cold` |
-| `bak_` 前缀 | 施工备份表（**不属于正式模型**） | `bak_sys_user_20261019c` |
-| `act_`/`flw_` | Flowable 引擎表，勿手工改 | `act_ru_task` |
+## 6. 生成发布基线（`schema-baseline.sql`）
 
-**冷热归档铁律**：`INSERT INTO 冷表 SELECT *, NOW() FROM 热表` 依赖**逐列同序**。
-热表加列必须同步冷表，否则归档失败；两边列数相同但列名不同更毒（顺序巧合对齐时
-静默写错列）。
+现在仓库里是 `sql/` 下 **205 个按施工顺序累积的增量脚本**，且项目**未引入 Flyway/Liquibase**——外人无法据此重建数据库。必须转成基线：
 
-## 3. 公共字段（每张业务表都有）
+```bash
+# 1) 在一个已建好的开发库上导出结构（不含任何业务数据）
+mysqldump -uroot -p --no-data --skip-comments --routines --triggers \
+          --default-character-set=utf8mb4 fssc       > /tmp/s1.sql
+mysqldump -uroot -p --no-data --skip-comments --routines --triggers \
+          --default-character-set=utf8mb4 fssc_image > /tmp/s2.sql
 
-| 字段 | 说明 |
-|---|---|
-| `id` | 自增主键（**本域主键**，联查时注意不是业务单号） |
-| `tenant_id` | 租户隔离列，拦截器自动注入/重写 |
-| `create_by`/`create_time`/`update_by`/`update_time` | 审计列 |
-| `del_flag` | 逻辑删除（0 正常，1 删除，2 软删待审） |
+# 2) 剔除 Flowable 自建表（ACT_/FLW_ 交给引擎自动建，避免版本错配）
+sed -E '/^-- Table structure for table .?(ACT_|FLW_)/,/;;/d' /tmp/s1.sql > db/schema-baseline.sql
+cp /tmp/s2.sql db/schema-image.sql
 
-## 4. 多租户隔离机制
+# 3) 校验：空库执行 0 报错 + 表数与预期一致
+mysql -e "CREATE DATABASE fssc_check ..."; mysql fssc_check < db/schema-baseline.sql
+mysql -N -e "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='fssc_check' AND TABLE_NAME NOT LIKE 'ACT\\_%'"
 
-- 拦截器解析 JWT 拿租户上下文，对所有 SQL 自动追加 `tenant_id = ?`；
-- 跨租户访问没有"查不到"这种温柔报错，直接空结果；
-- 租户套餐（`pf_feature`）与角色权限取交集，两个闸门任一不过即 403；
-- **演示库**：租户 `DEMO1`（爱共享公司），`tenant_id = 1`。
-
-## 5. 核心实体关系（报销主链）
-
-```
-exp_bill (报销单头)
- ├── exp_bill_line      明细行（费用项/金额/票据）
- ├── exp_bill_payment   付款记录
- ├── exp_bill_share     分摊明细
- ├── exp_bill_receipt   票据关联
- ├── exp_bill_trace     全链路时间线（联查入口）
- └── exp_bill_cold      冷归档
-
-wf_instance ── wf_task ── wf_approval_item ── wf_node_config ── act_ru_task
-                                                              （引擎执行态）
-
-inv_invoice ── inv_invoice_line（发票/明细）
-op_pay_batch ── op_pay_batch_detail（付款批次）
-gl_book_voucher ── gl_book_voucher_line（凭证）
+# 4) 演示数据另出一份（只含演示租户，绝不含真实生产数据）
+mysqldump -uroot -p --no-create-info --default-character-set=utf8mb4 fssc <核心配置表> > db/seed-demo.sql
 ```
 
-**联查注意**：`billId` 是本域自增主键，不等于业务单号字段；全链路时间线的唯一
-真相源是流程实例的 `chain.summary.reached`。
+**验收标准**：一台全新机器 → 执行这两份脚本 → 启动后端 → 能登录并提出单据。做不到就不要发布。
 
-## 6. 号段与单据编号
+> 后续增量怎么办：把 `sql/` 归档到 `docs/history-sql/`（只作施工记录），新的 schema 变更建议引入 **Flyway**（Boot 4 用 `flyway-core` + `flyway-mysql`），命名 `V2.0.0__xxx.sql` 起；在引入之前，仍按 `fssc/sql/` 现有 `V<版本>_<摘要>.sql` 手工按序执行。这是本项目工程化最该补的一课。
 
-- `sys_number_rule`（号段规则）+ `sys_number_seq`（序列）双表驱动；
-- 规则可配前缀/日期格式/流水位数/重置周期，租户级隔离；
-- **空库造数后必须核对号段序列**，否则正式单会撞演示单号。
+## 7. 表清单
 
-## 7. 字典体系（三层，勿跨域复用）
-
-| 层 | 表/载体 | 作用 |
-|---|---|---|
-| 域字典 | `bill_sub_type` 等域内码表 | 下拉可选值口径 |
-| 展示字典 | `sys_dict_data`/`sys_dict_type`（`enum_*` 类型） | 列表展示口径 |
-| 状态字典 | `bill_status_display` | 单据状态扁平展示 |
-
-**同一码在不同域含义不同是常态**（如 `IN` 在现金流量码=流入、收支设置=收入）。
-字典按域建，跨域复用必出展示错乱。
-
-## 8. 演示库数据规模
-
-| 表 | 行数 | 说明 |
-|---|---|---|
-| `sys_user` | 460 | 含 admin 与各岗位演示账号（口令 123456） |
-| `sys_menu` | 694 | 全量菜单 |
-| `md_bank_account` | 113 | 银行账户（脱敏后为虚构号） |
-| `crm_customer` | 63 | 客户/供应商主数据 |
-| `act_re_procdef` | 315 | 已部署流程定义 |
-| `wf_node_config` | — | 节点配置（**约四成 node_key 是孤儿行，引用统计前先扣**） |
-
-完整清单与导入方式见 `db/README.md`。
-
-## 9. 数据脱敏口径（本开源包）
-
-演示库已整体脱敏：企业名全部虚构（爱共享系）、银行账号为 `622202` 前缀虚构号、
-手机号为 `1380013xxxx` 保留测试号段、邮箱域名 `example.com`、
-`sys_config` 中口令/令牌类配置为空值或 demo 值。生产凭据一律走环境变量。
+完整 243 张表名（按字母序）见 [`_facts/tables.txt`](_facts/tables.txt)；按域分组见 [`_facts/tables-by-domain.md`](_facts/tables-by-domain.md)。

@@ -6,7 +6,7 @@
 
 ![license](https://img.shields.io/badge/license-Apache--2.0-blue) ![java](https://img.shields.io/badge/JDK-26-orange) ![spring-boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-green) ![vue](https://img.shields.io/badge/Vue-3.5-brightgreen) ![flowable](https://img.shields.io/badge/Flowable-8.0.0-yellow)
 
-> ** 发布前校准状态**：本 README 的代码事实（域/表/端点/版本）由脚本从源码实测抽取（见 `docs/_facts/`）；**数据库导入已实测**（`db/import.sh` 在干净库上零错误导入，行数与 dump 一致），但「干净机器起后端 → 登录 → 提单 → 审批」的全栈步骤**尚未端到端验证**。在标记为"已验证"之前，请把 Quickstart 视为高置信度草案而非承诺。
+> ** 发布前校准状态**：本 README 的代码事实（域/表/端点/版本）由脚本从源码实测抽取（见 `docs/_facts/`）；`docs/getting-started.md` 中的启动步骤**尚未在一台干净机器上端到端跑通验证**。在标记为"已验证"之前，请把 Quickstart 视为高置信度草案而非承诺。
 
 <details open>
 <summary><b>English TL;DR</b>（本仓库不做整篇中英对照，理由见下）</summary>
@@ -15,14 +15,14 @@
 
 **Stack.** JDK 26 + Spring Boot 4.1 + Flowable 8 + MyBatis-Plus (245 mappers, **no Mapper XML**) on MySQL 8; Vue 3.5 + Vite 6 + Element Plus + bpmn-js 16.5 for the front end and the process designer.
 
-**Read this first.** `docs/how-to-read-this-code.md` (how to orient in an AI-generated codebase), then `docs/module-map.md`, `docs/data-model.md`, `docs/permissions.md`, `docs/workflow-engine.md` §9 ("I need to change something — where do I touch?"). Every `path:line` citation in the docs is checked by `_tools/cite_check.mjs` in CI.
+**Read this first.** `docs/how-to-read-this-code.md` (how to orient in a large codebase), then `docs/module-map.md`, `docs/data-model.md`, `docs/permissions.md`, `docs/workflow-engine.md` §9 ("I need to change something — where do I touch?"). Every `path:line` citation in the docs is checked by `_tools/cite_check.mjs` in CI.
 
 **Honest caveats.**
 - **The UI is Chinese-only, and there is no i18n framework in this repo** (no `vue-i18n`, no `createI18n`, no `$t()`; `src/i18n/` holds a single bpmn-js canvas translation patch). Localising the interface is a separate, unfunded effort — don't go looking for a language switch.
 - **Source-only release.** The front-end package keeps `"private": true`; there is no npm package and no hosted demo. You build the jar/image yourself.
-- **Database ships as a verified demo dump.** `db/import.sh` (or `db\import.bat`) imports `db/demo-db/*.sql` — 323 per-table files covering both the `fssc` and `fssc_image` databases, including 315 already-deployed Flowable process definitions. The import was verified end-to-end on clean databases (0 errors, row counts match). What is *not* yet verified is a clean-machine run of the full stack (backend boot → login → submit a bill) — see `docs/release-checklist.md` §8.
+- **No published database baseline yet** (`schema-baseline.sql` / `seed-demo.sql` are still missing), so a fresh install today is not verified to work end-to-end.
 - The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — see `docs/release-checklist.md` §8 ⑥.
-- Substantial parts of this code were AI-generated and then hardened through long manual business drills; treat documented behaviour as *documented*, not *guaranteed*. Each doc states which claims were measured and which were only read off the code.
+- This code has been hardened through long manual business drills; treat documented behaviour as *documented*, not *guaranteed*. Each doc states which claims were measured and which were only read off the code.
 
 </details>
 
@@ -96,22 +96,24 @@ flowchart LR
 ### 三步跑起来
 
 ```bash
-# ① 建库 + 导入演示数据（表结构 + 演示主数据 + Flowable 已部署流程，开箱即可审批）
+# ① 建库（业务表基线 + 演示数据）
 mysql -uroot -p -e "CREATE DATABASE fssc DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
                     CREATE DATABASE fssc_image DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;"
-bash db/import.sh        # Windows 用 db\import.bat；等价于按序导入 db/demo-db/*.sql（视图/存储过程自动排最后）
+mysql -uroot -p fssc       < db/schema-baseline.sql
+mysql -uroot -p fssc       < db/seed-demo.sql
+# Flowable 的 ACT_* / FLW_* 表无需手工建：flowable.database-schema-update=true 会在首启时自动建表
 
 # ② 配环境
 cp .env.example .env      # 必填：FSSC_DB_PASSWORD、FSSC_JWT_SECRET
 
 # ③ 起后端 + 前端
-cd fssc/fssc-server && mvn -q clean package -DskipTests
+cd fssc-server && mvn -q clean package -DskipTests
 java -jar fssc-start/target/fssc-server.jar            # → http://localhost:8089
 
-cd fssc-web && npm install && npm run dev           # → http://localhost:8080
+cd ../fssc-web && npm install && npm run dev           # → http://localhost:8080
 ```
 
-浏览器打开 `http://localhost:8080`，用 [`db/README.md`](db/README.md) 里的演示账号登录（`admin` / `123456`），从「我的工作台 → 费用报销 → 新建」提一张单，走完审批 → 你就拥有了一个可演示的 FSSC。
+浏览器打开 `http://localhost:8080`，用 `docs/demo-accounts.md` 里的演示账号登录，从「我的工作台 → 费用报销 → 新建」提一张单，走完审批 → 你就拥有了一个可演示的 FSSC。
 
  端口、双库路由、OCR/银企 mock 通道、启动失败排查 → **[`docs/getting-started.md`](docs/getting-started.md)**
 
@@ -146,16 +148,16 @@ cd fssc-web && npm install && npm run dev           # → http://localhost:8080
 | **第一次动手改代码，不知道要动哪几处**（加查询条件 / 加字段 / 加权限 / 改节点 / 改状态文案） | [`docs/workflow-engine.md`](docs/workflow-engine.md) §9，末尾 §10 是本文结论的可靠性清单 |
 | 权限怎么加、为什么 403 显示"暂无数据" | [`docs/permissions.md`](docs/permissions.md) |
 | 业务故事：这张单据是谁提的、谁审的、钱怎么出去 | [`docs/business-flows/`](docs/business-flows/) |
-| 部署到生产 | [`docs/部署运维.md`](docs/部署运维.md) |
+| 部署到生产 | [`docs/deployment.md`](docs/deployment.md) |
 | 提 PR 前必读 | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) |
 
 ## 项目是怎么来的（以及这意味着什么）
 
-本系统历经长期真实业务演练与缺陷治理：真跑覆盖 40+ 业务流程、数百条缺陷台账、以及大量逐能力的行业实践核对记录（这些核对材料本身属内部分析，**不随本仓库发布**）。工程侧价值在于**业务域完整性与状态机细节**，而非代码优雅度。
+本系统按财务共享业务域分层建设，历经长期真实业务演练与缺陷治理：真跑覆盖 40+ 业务流程、数百条缺陷台账、以及逐能力的功能核对记录（这些核对材料本身属内部分析，**不随本仓库发布**）。工程侧价值在于**业务域完整性与状态机细节**，而非代码优雅度。
 
 由此产生两条你需要知道的事：
 
-1. **文档里的"配置项"不保证生效。** 常见"配置读进来了但没人用"。我们在 `docs/workflow-engine.md` 等处标注了**已验证生效 / 仅登记未接线**的区分，改动前请先看该文档。
+1. **文档里的"配置项"不保证生效。** 大型代码库常见"配置读进来了但没人用"。我们在 `docs/workflow-engine.md` 等处标注了**已验证生效 / 仅登记未接线**的区分，改动前请先看该文档。
 2. **判断"哪份代码是活的"要用构建产物，别看文件名。** 仓库历史上存在同名多版本文件（不同 `dist*`、`*_v3.md` 与 `*_v3.0_*`）。发布版已剔除产物，源码树单一。
 
 ## 成熟度声明
@@ -164,9 +166,10 @@ cd fssc-web && npm install && npm run dev           # → http://localhost:8080
 |---|---|
 |  已实现且真实运行验证 | 报销主线、多级审批与会签、凭证生成、多租户与权限、影像与 OCR 通道框架、共享作业池、单据联查 |
 |  已实现，功能验证有限 | 资产折旧与存货、资金计划与银企（mock）、预算控制细则、合规规则引擎多数规则、AI 动作网关 |
-|  需要自行扩展才能生产 | 真实 OCR/发票查验厂商接入、银企直联真实实现、对象存储、SSO/LDAP、短信渠道 |
+|  需要自行扩展才能生产 | 真实 OCR/发票查验通道接入、银企直联真实实现、对象存储、SSO/LDAP、短信渠道 |
 |  明确不具备 | 生产级高可用验证（未经大规模压测）、财务报表准则级审计背书、多语言界面（**没有接国际化框架**，界面文案就是中文字面量） |
 
+本项目**不适合**直接当生产财务系统上线，适合作为二次开发底座、教学参考或同类系统能力研究。
 
 ## 参与
 

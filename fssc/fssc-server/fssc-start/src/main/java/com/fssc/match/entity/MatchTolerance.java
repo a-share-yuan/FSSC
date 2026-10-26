@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.match.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -13,7 +16,7 @@ import java.time.LocalDateTime;
  * 三单匹配容差参数表（match_tolerance，公司级）。
  * 收货金额 vs 发票金额的匹配容差参数化：百分比（amount_pct）+ 绝对值（amount_abs）双轨，
  * 供 MatchToleranceService / ThreeWayMatchService 做容差判定（区别于 md_match_tolerance 的维度键值型配置）。
- * 判定口径：差异 ≤ max(收货金额 × amount_pct / 100, amount_abs) 视为容差内。
+ * 判定规则：差异 ≤ max(收货金额 × amount_pct / 100, amount_abs) 视为容差内。
  * 无公司配置或 status=DISABLED 时按默认参数 0.5% / 100 元处理。
  */
 @Data

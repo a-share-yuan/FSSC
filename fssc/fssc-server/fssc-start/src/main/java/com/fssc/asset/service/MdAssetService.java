@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -46,11 +49,11 @@ public class MdAssetService {
     private final com.fssc.budget.service.BudgetService budgetService;
     private final com.fssc.budget.mapper.BgItemMapper bgItemMapper;
     private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
     /**
      * X-06（D-DEC-431）：资产变动台账＝原值调整/盘点差异的原因与前后幅度载体。
-     * 卡片 {@code md_asset} 只有末值，历史镜像一律落本表（写入点见 {@code writeChangeLog}）。
+     * 卡片 {@code md_asset} 只有末值，历史镜像一律落本表（写入位置见 {@code writeChangeLog}）。
      */
     private final com.fssc.asset.mapper.MdAssetChangeLogMapper changeLogMapper;
 
@@ -76,7 +79,7 @@ public class MdAssetService {
      *
      * <p>刻意不放进 {@link #create} —— 采购收货转固（{@code PurchaseService#createAssetFromReceipt}）
      * 与在建工程转固（{@link #buildForCip}）都以机器身份走同一个 create，它们天然没有类别/使用部门，
-     * 守卫写在服务里会把自动化链路一起拦死。资产编号按口径 Q1 属系统编码、人工只读，故不校验。
+     * 守卫写在服务里会把自动化链路一起拦死。资产编号按规则 Q1 属系统编码、人工只读，故不校验。
      */
     public void requireManualCard(MdAsset e) {
         if (e == null) {
@@ -112,7 +115,7 @@ public class MdAssetService {
     /** 资产建档：按类别/方法计算月折旧额，初始累计折旧为 0、净值为原值。 */
     public Long create(MdAsset e) {
         e.setId(null);
-        // Q1 口径：资产编号属系统编码，创建时自动生成（缺规则时降级 FA+时间戳，不阻断建档）
+        // Q1 规则：资产编号属系统编码，创建时自动生成（缺规则时降级 FA+时间戳，不阻断建档）
         if (!StringUtils.hasText(e.getAssetNo())) {
             try {
                 e.setAssetNo(numberRuleService.next("FA_ASSET"));
@@ -128,7 +131,7 @@ public class MdAssetService {
         // 登记人必须显式赋值：本表既有 FieldFill.INSERT 字段会让 FsscMetaObjectHandler 在 createBy 为 null 时补 0L 而非 NULL，0 是无效用户 id、deny_self 取到它就永不命中
         e.setCreateBy(userId());
         mapper.insert(e);
-        // P4-3 口径：本方法新建落库、无旧值，不接入审计（不伪造 before）
+        // P4-3 规则：本方法新建写入数据库、无旧值，不接入审计（不伪造 before）
         // P7：资产新增即发起 FA03 资产新增审批流（资产管理员→部门经理→资产管理岗→财务经理(>200000)）
         try {
             wfEngineFacade.start("FA_ADD", e.getId(), userId(),
@@ -155,7 +158,7 @@ public class MdAssetService {
         if (e.getDepreciationMonths() == null || e.getDepreciationMonths() <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "折旧月数必须大于0");
         }
-        // #16 税务口径：税法年限若填写须为正（未填视为与会计年限一致）
+        // #16 税务规则：税法年限若填写须为正（未填视为与会计年限一致）
         assertTaxLifeMonths(e.getTaxLifeMonths());
         BigDecimal base = e.getOriginalAmount().subtract(e.getResidualValue()); // 应计折旧额（原值-残值）
         BigDecimal factor = "ACCELERATED".equals(e.getDepreciationMethod()) ? TWO : BigDecimal.ONE;
@@ -167,7 +170,7 @@ public class MdAssetService {
     }
 
     /**
-     * 由在建工程转固建卡：按调用方传入的折旧口径计算初始折旧，落一张 status=CIP 的资产卡片。
+     * 由在建工程转固建卡：按调用方传入的折旧规则计算初始折旧，落一张 status=CIP 的资产卡片。
      * 不发起 FA_ADD 审批（转固走 FA_CIP_TO_ASSET），由调用方随后触发转固审批链。
      */
     public Long buildForCip(MdAsset e) {
@@ -178,7 +181,7 @@ public class MdAssetService {
         e.setStatus("CIP");
         e.setCreateBy(userId());
         mapper.insert(e);
-        // P4-3 口径：本方法新建落库、无旧值，不接入审计（不伪造 before）
+        // P4-3 规则：本方法新建写入数据库、无旧值，不接入审计（不伪造 before）
         return e.getId();
     }
 
@@ -188,10 +191,10 @@ public class MdAssetService {
      * {@code net_amount} 冲至残值、{@code status} 置 SCRAP，然后才 {@code start(FA_DISPOSE)}，
      * 而本类无 REJECTED 回冲路径 ⇒ ①任何人驳回也回不来；②"补提到顶"抹掉真实折旧轨迹
      * （本月只该提 4,591.67，累计列却跳到 501,000）；③后续处置凭证的借方累计折旧用的是这次
-     * 预写值，折旧与清理两件事被合并进一笔、口径不可追；④卡片"已报废"与流程"在办"并存。
-     * <p>现改账整体移到审批通过腿 {@code AssetWfEventListener.handleDisposeEnded}
+     * 预写值，折旧与清理两件事被合并进一笔、规则不可追；④卡片"已报废"与流程"在办"并存。
+     * <p>现改账整体移到审批通过环节 {@code AssetWfEventListener.handleDisposeEnded}
      * （与 D-DEC-319 部门间调拨"发起侧不预写、通过侧落值"同法）：驳回即天然零改动，无需回冲。
-     * 重复点「报废」会并起第二条 FA_DISPOSE，但通过腿写的是绝对值（补提到顶＝幂等）、
+     * 重复点「报废」会并起第二条 FA_DISPOSE，但通过环节写的是绝对值（补提到顶＝去重）、
      * 处置凭证按 {@code existingVoucherId} 判重，故重放不会产生第二笔账。
      */
     public void scrap(Long id) {
@@ -216,7 +219,7 @@ public class MdAssetService {
 
     /**
      * 资本性支出申请（FA01 FA_CER）：立项申请即发起资本性支出审批流，不落资产卡片（购建/调拨后建档）。
-     * 兼容旧签名（未指定预算科目 → 自动取综合预算兜底科目）。
+     * 兼容旧签名（未指定预算科目 → 自动取综合预算默认处理科目）。
      */
     public void capitalRequest(BigDecimal amount, String assetName, Long deptId, Long companyId, String remark) {
         capitalRequest(amount, assetName, deptId, companyId, remark, null);
@@ -225,14 +228,14 @@ public class MdAssetService {
     /**
      * 资本性支出申请（FA01 FA_CER）—— 预算集成改造：
      * <ol>
-     *  <li>发起时对指定预算科目做准入判定（D-DEC-424 乙）：超出只回结论与金额并随申请说明留痕，申请照常成立；</li>
+     *  <li>发起时对指定预算科目做准入判定（D-DEC-424 乙）：超出只回结论与金额并随申请说明记录，申请照常成立；</li>
      *  <li>落一条 fa_cer_request 简化申请记录（原实现 bizId=null，无业务单据表：审批结束事件收不到 bizId
      *      不发布 → 资产域监听器收不到回写（DA-01），预算也无法占用/核销）；</li>
      *  <li>以 {@code bizId=fa_cer_request.id} 启动 FA_CER 审批流；审批通过后由
      *      AssetWfEventListener 占用预算并置 APPROVED，驳回置 REJECTED（如已占用则释放）。</li>
      * </ol>
      *
-     * @param budgetItemId 预算科目（bg_item.id），为空时自动取综合预算兜底科目
+     * @param budgetItemId 预算科目（bg_item.id），为空时自动取综合预算默认处理科目
      */
     public void capitalRequest(BigDecimal amount, String assetName, Long deptId, Long companyId, String remark,
                                Long budgetItemId) {
@@ -255,7 +258,7 @@ public class MdAssetService {
             throw new BizException(ErrorCode.PARAM_INVALID, "请输入申请说明");
         }
         Long bid = budgetItemId != null ? budgetItemId : defaultCerBudgetItem();
-        // D-DEC-424 乙：发起位只出「超出」结论与金额，不再打挂申请（扣减闸在审批通过腿按档位执行）
+        // D-DEC-424 乙：发起位只出「超出」结论与金额，不再打挂申请（扣减校验在审批通过环节按档位执行）
         com.fssc.budget.service.BudgetService.OccupyCheckResult ck = budgetService.checkOccupyResult(bid, amount);
         com.fssc.asset.entity.FaCerRequest cer = new com.fssc.asset.entity.FaCerRequest();
         cer.setRequestNo(nextCerNo());
@@ -264,14 +267,14 @@ public class MdAssetService {
         cer.setBudgetItemId(bid);
         cer.setDeptId(deptId);
         cer.setCompanyId(companyId);
-        // ★超出不得静默：结论随申请说明留痕（fa_cer_request.remark 既有列，上限 500 超长截尾保新痕）
+        // ★超出不得静默：结论随申请说明记录（fa_cer_request.remark 既有列，上限 500 超长截尾保新痕）
         cer.setRemark(ck.isOver() ? capRemark(remark + "；【预算超出·可继续】" + ck.getMessage()) : remark);
         cer.setStatus("APPLYING");
         var u = com.fssc.framework.security.UserContext.get();
         cer.setApplyUserId(u == null ? null : u.getUserId());
         cer.setApplyUserName(u == null ? null : u.getUsername());
         cerRequestMapper.insert(cer);
-        // P4-3 口径：本方法新建落库、无旧值，不接入审计（不伪造 before）
+        // P4-3 规则：本方法新建写入数据库、无旧值，不接入审计（不伪造 before）
         String title = "资本性支出-" + (assetName == null || assetName.isBlank() ? cer.getRequestNo() : assetName);
         try {
             String procInst = wfEngineFacade.start("FA_CER", cer.getId(), userId(), title, amount);
@@ -285,7 +288,7 @@ public class MdAssetService {
         }
     }
 
-    /** CER 默认预算科目：取当前租户预算总额最大的科目（综合预算兜底，id=19 场景） */
+    /** CER 默认预算科目：取当前租户预算总额最大的科目（综合预算默认处理，id=19 场景） */
     private Long defaultCerBudgetItem() {
         java.util.List<com.fssc.budget.entity.BgItem> items = bgItemMapper.selectList(
                 new LambdaQueryWrapper<com.fssc.budget.entity.BgItem>()
@@ -307,7 +310,7 @@ public class MdAssetService {
         }
     }
 
-    /** fa_cer_request.remark 上限 500，超长截尾（保住后贴的超出留痕） */
+    /** fa_cer_request.remark 上限 500，超长截尾（保住后贴的超出记录） */
     private static String capRemark(String v) {
         if (v == null) {
             return null;
@@ -315,7 +318,7 @@ public class MdAssetService {
         return v.length() <= 500 ? v : v.substring(v.length() - 500);
     }
 
-    /** 变动原因截断：change_reason 上限 500，原因为人工输入的正文，超长保头截尾（与 capRemark 的保尾口径相反） */
+    /** 变动原因截断：change_reason 上限 500，原因为人工输入的正文，超长保头截尾（与 capRemark 的保尾规则相反） */
     private static String capReason(String v) {
         if (v == null || v.isBlank()) {
             return null;
@@ -324,9 +327,9 @@ public class MdAssetService {
     }
 
     /**
-     * X-06（D-DEC-431）：单卡变动台账读取腿——原值调整/盘点差异的原因、前后镜像与终态。
+     * X-06（D-DEC-431）：单卡变动台账读取环节——原值调整/盘点差异的原因、前后镜像与最终状态。
      * <p>写侧在 {@code writeChangeLog}，此前库里只有行、界面无任何消费者，故该表实质上是只写不读的哑台账。
-     * <p>口径与 {@code page} 一致：受组织范围约束的账号只能看本公司卡片的变动行，防止跨法人取数。
+     * <p>规则与 {@code page} 一致：受组织范围约束的账号只能看本公司卡片的变动行，防止跨法人查询。
      */
     public List<MdAssetChangeLog> changeLogs(Long assetId) {
         require(assetId);
@@ -342,7 +345,7 @@ public class MdAssetService {
      * 卡片只留末值，事后无从回查"为什么改、从多少改到多少"。
      *
      * <p>调用时点＝{@code wfEngineFacade.start} 返回之后：start 五个重载都回 procInstId（本域 FA_CER 已有
-     * {@code :262} 取用先例），台账行因此天然带流程号，审批终态按 proc_inst_id 回写状态即可，
+     * {@code :262} 取用先例），台账行因此天然带流程号，审批最终状态按 proc_inst_id 回写状态即可，
      * 不必按 asset_id 猜哪一条在途。起流失败时方法不会走到这里（上方 catch 已冒泡），不留孤儿台账行。
      * <p>台账写失败只记 ERROR，不把已发起的流程一起退掉——流程在途时回退单据比缺一行台账更伤业务。
      */
@@ -356,9 +359,9 @@ public class MdAssetService {
             row.setCompanyId(asset.getCompanyId());
             row.setDeptId(asset.getDeptId());
             row.setChangeType(changeType);
-            // D-DEC-431 取值域（X-06 读取腿同窗定档）：change_type 记"变了什么"，本列记"怎么变的"——
+            // D-DEC-431 取值域（X-06 读取环节同窗定档）：change_type 记"变了什么"，本列记"怎么变的"——
             // 有流程号＝审批流变动(WF)，无流程号＝不经审批的直接改账(DIRECT)。
-            // 现两个写入方（盘点差异/原值调整）都先起流再落台账，⇒值面只会出 WF；DIRECT 臂待直改腿接入。
+            // 现两个写入方（盘点差异/原值调整）都先起流再落台账，⇒值面只会出 WF；DIRECT 臂待直改环节接入。
             row.setChangeMethod(StringUtils.hasText(procInstId) ? "WF" : "DIRECT");
             row.setChangeReason(capReason(reason));
             row.setBeforeOriginalAmount(beforeOriginal);
@@ -384,15 +387,15 @@ public class MdAssetService {
     public void transfer(Long id, Long targetDeptId, Long targetCompanyId, String remark) {
         MdAsset a = require(id);
         // 必填守卫（批次 2B）：原先 targetDeptId 为空时只是「什么都不改」，
-        // 却照样落库并发起一条调拨审批——审批人看到的是一张目标部门为空的调拨单。
+        // 却照样写入数据库并发起一条调拨审批——审批人看到的是一张目标部门为空的调拨单。
         if (targetDeptId == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择目标部门");
         }
         boolean cross = targetCompanyId != null && a.getCompanyId() != null
                 && !targetCompanyId.equals(a.getCompanyId());
-        // D-DEC-319（批次0 P-4 / A1 收尾腿三件套）：调拨改账挪到审批通过后执行——
-        // 此处不再预写 dept_id/company_id（此前先落库再起流：驳回不回滚＝脏账，起流失败不反弹）。
-        // 目标值经流程变量传递，assetBizAction 在 APPROVED 时落库；驳回侧资产零改动（R-4 回滚半径=0）。
+        // D-DEC-319（批次0 P-4 / A1 收尾环节三件套）：调拨改账挪到审批通过后执行——
+        // 此处不再预写 dept_id/company_id（此前先写入数据库再起流：驳回不回滚＝脏账，起流失败不反弹）。
+        // 目标值经流程变量传递，assetBizAction 在 APPROVED 时写入数据库；驳回侧资产零改动（R-4 回滚半径=0）。
         java.util.Map<String, Object> extra = new java.util.HashMap<>();
         extra.put("targetDeptId", targetDeptId);
         extra.put("targetCompanyId", targetCompanyId);
@@ -421,7 +424,7 @@ public class MdAssetService {
         MdAsset upd = new MdAsset();
         upd.setId(id);
         upd.setStatus("USING");
-        // 必填守卫（批次 2B）：转固日期就是这张卡片的购置日期 / 折旧起算口径。
+        // 必填守卫（批次 2B）：转固日期就是这张卡片的购置日期 / 折旧起算规则。
         // 此前留空静默沿用建卡时的旧值、格式错误直接 ignore，两种情况都会让卡片带着错误的起算日进入折旧。
         if (!StringUtils.hasText(transferDate)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择转固日期");
@@ -473,8 +476,8 @@ public class MdAssetService {
             log.error("资产 {} 发起盘点差异审批失败: {}", id, ex.getMessage(), ex);
             throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
-        // X-06（D-DEC-431）：remark 原先在方法体内完全丢弃＝差异说明零载体，现随台账落库。
-        // R5-D-194：前后镜像四列按「申请时刻卡片现值」落库（before=after=现值快照）——本审批只做差异确认、
+        // X-06（D-DEC-431）：remark 原先在方法体内完全丢弃＝差异说明零载体，现随台账写入数据库。
+        // R5-D-194：前后镜像四列按「申请时刻卡片现值」写入数据库（before=after=现值快照）——本审批只做差异确认、
         // 不改卡片（结转凭证走总账 GL_CHECK_DIFF，D-DEC-322），四列如实记录申请时点的账面现值，
         // 不再四列全 NULL（旧式让台账行无任何金额镜像可比对，等于镜像列形同虚设）。
         BigDecimal orig = nvl(a.getOriginalAmount());
@@ -490,7 +493,7 @@ public class MdAssetService {
             throw new BizException(ErrorCode.PARAM_INVALID, "新原值必须大于0");
         }
         BigDecimal delta = newOriginalAmount.subtract(nvl(a.getOriginalAmount()));
-        // D-DEC-319（批次0 P-4 / A1）：原值/净值改账挪到审批通过后（assetBizAction 按流程变量落库），
+        // D-DEC-319（批次0 P-4 / A1）：原值/净值改账挪到审批通过后（assetBizAction 按流程变量写入数据库），
         // 此处不再预写——驳回/起流失败资产零改动。新值经变量传递，审批人看标题金额=调整额。
         java.util.Map<String, Object> extra = new java.util.HashMap<>();
         extra.put("newOriginalAmount", newOriginalAmount);
@@ -506,8 +509,8 @@ public class MdAssetService {
             log.error("资产 {} 发起原值调整审批失败: {}", id, ex.getMessage(), ex);
             throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
-        // X-06（D-DEC-431）：原因＋前后镜像落变动台账。after 取的就是上面传给审批腿的两个目标值，
-        // 同口径不同表——改账仍只在审批通过时发生，台账行只记录"这次要把原值从 X 改成 Y、为什么改"。
+        // X-06（D-DEC-431）：原因＋前后镜像落变动台账。after 取的就是上面传给审批环节的两个目标值，
+        // 同规则不同表——改账仍只在审批通过时发生，台账行只记录"这次要把原值从 X 改成 Y、为什么改"。
         writeChangeLog(a, "VALUE_ADJUST", reason, procInstId,
                 nvl(a.getOriginalAmount()), newOriginalAmount, nvl(a.getNetAmount()), targetNet, delta, null);
     }
@@ -621,7 +624,7 @@ public class MdAssetService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "净值勾稽不符：净值(" + e.getNetAmount() + ") ≠ 原值(" + orig + ") - 累计折旧(" + accum + ") = " + orig.subtract(accum));
         }
-        // #16 税务口径：税法年限若填写须为正（未填视为与会计年限一致）
+        // #16 税务规则：税法年限若填写须为正（未填视为与会计年限一致）
         if (e.getTaxLifeMonths() != null) {
             assertTaxLifeMonths(e.getTaxLifeMonths());
         }
@@ -629,7 +632,7 @@ public class MdAssetService {
     }
 
     /**
-     * #16 税会差异（A105080 资产折旧摊销纳税调整口径）：按税法年限计算税法折旧，与会计折旧比对。
+     * #16 税会差异（A105080 资产折旧摊销纳税调整规则）：按税法年限计算税法折旧，与会计折旧比对。
      *
      * <p>会计折旧 &gt; 税法折旧 → 纳税调增（会计多扣，税法不认）；
      * 会计折旧 &lt; 税法折旧 → 纳税调减。税法年限未设置时视为与会计年限一致（差异为 0）。

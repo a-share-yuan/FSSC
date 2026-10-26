@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.fssc.common.core.PageQuery;
@@ -13,11 +16,11 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 
 /**
- * 「我的单据」全类型读侧聚合（D-CON-01 收口）。
+ * 「我的单据」全类型读侧聚合（D-CON-01 办结）。
  *
  * <p>改前 {@code RequisitionWorkbenchService.myBills()} 只查 {@code exp_bill}，接口注释却写"全类型"
  * ⇒ 合同/采购/预算/总账/档案的驳回单在工作台里根本看不见，用户只能新建（＝D-CON-01 的死循环）。
- * 这里按 {@link BillRouteRegistry} 的"bizType→业务主表→归属人列"逐表取数后内存归并，
+ * 这里按 {@link BillRouteRegistry} 的"bizType→业务主表→归属人列"逐表查询后内存归并，
  * 覆盖范围由注册表决定，不再另立一份表清单。
  *
  * <h3>三条刻意的设计</h3>
@@ -42,7 +45,7 @@ public class MyDocumentService {
 
     private final JdbcTemplate jdbcTemplate;
 
-    /** 每表取数上限：翻页再深也不让单表把内存吃掉（超出部分归并后自然落选） */
+    /** 每表查询上限：翻页再深也不让单表把内存吃掉（超出部分归并后自然落选） */
     private static final int PER_TABLE_CAP = 300;
 
     /** 列元数据缓存：表名 → 小写列名集合（空集＝表不存在；null＝元数据查询失败，不校验） */
@@ -56,7 +59,7 @@ public class MyDocumentService {
                     + "apply_date AS applyDate, apply_user_name AS applyUserName");
 
     /**
-     * 费用族可按人筛的类型＝工作台场景卡片的 docType（口径与 {@code appendExpenseTypeCond} 一致，
+     * 费用族可按人筛的类型＝工作台场景卡片的 docType（规则与 {@code appendExpenseTypeCond} 一致，
      * 卡片入口和筛选下拉是同一套词）。不含 {@code APPLY} 裸值：库里 APPLY 只配
      * {@code bill_sub_type} 用，裸筛会把出差/培训一并混进来。
      */
@@ -68,7 +71,7 @@ public class MyDocumentService {
     private static final String TABLE_FILTER_PREFIX = "table:";
 
     /**
-     * 业务主表 → 该表在注册表里的全部 bizType（口径与取数一致：只看有归属人列的可取行）。
+     * 业务主表 → 该表在注册表里的全部 bizType（规则与查询一致：只看有归属人列的可取行）。
      * 多值＝行内没有类型列、无法判定某一行属于哪一种。
      */
     private static final Map<String, Set<String>> TABLE_BIZ_TYPES = indexTableBizTypes();
@@ -82,7 +85,7 @@ public class MyDocumentService {
         return Map.copyOf(m);
     }
 
-    /** 一张业务主表的一条取数口径（同表多 bizType 时列名一致，取首行的列配置） */
+    /** 一张业务主表的一条查询范围（同表多 bizType 时列名一致，取首行的列配置） */
     private record Source(String table, String filterKey, String bizType, String ownerCol,
                           String noCol, String amtCol, String titleCol) {
     }
@@ -92,7 +95,7 @@ public class MyDocumentService {
     /**
      * 我登记的全类型单据。
      *
-     * @param bizType 场景卡片词表的类型（{@code CLAIM}/{@code APPLY_MEETING}/{@code CONTRACT}…），
+     * @param bizType 场景卡片名称表的类型（{@code CLAIM}/{@code APPLY_MEETING}/{@code CONTRACT}…），
      *                或 {@code table:<表名>}（一表多类型时按表筛，见 {@link #supportedTypes()}）；
      *                空＝全部可支持的类型
      * @param status  单据状态（DRAFT/APPROVING/REJECTED/…）；空＝全部
@@ -131,7 +134,7 @@ public class MyDocumentService {
 
         result.put("records", page);
         result.put("total", countTotal(sources, userId, tenantId, type, status, merged.size()));
-        // 单表取数封顶 ⇒ 归并后的次序可能不含该表更靠后的行，总数只能算近似
+        // 单表查询封顶 ⇒ 归并后的次序可能不含该表更靠后的行，总数只能算近似
         result.put("approximate", capped);
         result.put("types", supportedTypes());
         result.put("unsupported", unsupported());
@@ -139,12 +142,12 @@ public class MyDocumentService {
     }
 
     /**
-     * 可按人检索的筛选项（供前端类型下拉，口径＝注册表，不再另立清单）。
+     * 可按人检索的筛选项（供前端类型下拉，规则＝注册表，不再另立清单）。
      *
      * <p>费用族逐别名（行内有 {@code bill_type + bill_sub_type}，能精确到卡片那几类）；
      * 其余表若一表只对应一种 bizType 就用该 bizType，一表多 bizType（{@code gl_journal_entry}
      * ＝计提/待摊/其他收入/手工凭证、{@code po_order}＝PO/PURCHASE/评审）只能用 {@code table:} 键——
-     * 按其中某个 bizType 筛会把同表其它类型的行一起返回，等于给了个错口径。
+     * 按其中某个 bizType 筛会把同表其它类型的行一起返回，等于给了个错规则。
      */
     private List<Map<String, Object>> supportedTypes() {
         List<Map<String, Object>> types = new ArrayList<>();
@@ -208,7 +211,7 @@ public class MyDocumentService {
         return s.isEmpty() ? b : s + "," + b;
     }
 
-    // ======================== 取数 ========================
+    // ======================== 查询 ========================
 
     /** 按 bizType/status 过滤出本轮要查的表；同一张表只查一次 */
     private List<Source> selectSources(String bizType, String status) {
@@ -296,27 +299,27 @@ public class MyDocumentService {
                 // 共表族的真类型在行内（bill_type），拿路由键当类型＝把差旅报销说成还款（错值比空值危险）
                 row.put("bizType", expense ? row.get("billType") : s.bizType());
                 row.put("typeLabel", label);
-                // 只有费用族的填单页在工作台内联（旧 /my-bills 口径），其余域一律跳台账编辑
+                // 只有费用族的填单页在工作台内联（旧 /my-bills 规则），其余域一律跳台账编辑
                 row.put("editable", expense);
                 row.put("ledgerRoute", ledger);
             }
             return rows;
         } catch (Exception ex) {
-            warnOnce("Q" + s.table(), "我的单据取数失败 表={}（该域本轮不展示）: {}", s.table(), ex.getMessage());
+            warnOnce("Q" + s.table(), "我的单据加载失败 表={}（该域本轮不展示）: {}", s.table(), ex.getMessage());
             return List.of();
         }
     }
 
     /**
      * 费用族场景别名 → exp_bill 的 bill_type/bill_sub_type 条件。
-     * 别名口径＝场景卡片（{@code RequisitionWorkbenchService.getScenes()}）的 docType，
+     * 别名规则＝场景卡片（{@code RequisitionWorkbenchService.getScenes()}）的 docType，
      * 保证"卡片入口"与"我的单据筛选"是同一套词。
      */
     private void appendExpenseTypeCond(StringBuilder sql, List<Object> args, String bizType) {
         if (!EXP_BILL.equals(bizTypeTable(bizType))) return;
         switch (bizType) {
             case "CLAIM" -> {
-                // 库里 bill_sub_type 有三种存量写法（NULL/''/'-'＝日常，'TRAVEL'＝差旅）⇒ 只把差旅分出去
+                // 库里 bill_sub_type 有三种历史写法（NULL/''/'-'＝日常，'TRAVEL'＝差旅）⇒ 只把差旅分出去
                 sql.append(" AND bill_type = 'CLAIM' AND (bill_sub_type IS NULL OR bill_sub_type <> 'TRAVEL')");
             }
             case "CLAIM_TRAVEL" -> sql.append(" AND bill_type = 'CLAIM' AND bill_sub_type = 'TRAVEL'");
@@ -369,7 +372,7 @@ public class MyDocumentService {
         }
     }
 
-    // ======================== 列元数据（同 WfTaskController 的逐列降级口径） ========================
+    // ======================== 列元数据（同 WfTaskController 的逐列降级规则） ========================
 
     private Set<String> columnsOf(String table) {
         if (table == null || table.isBlank()) return Set.of();
@@ -406,6 +409,7 @@ public class MyDocumentService {
         return "NULL AS " + alias;
     }
 
+    /** 无 update_time 的表（archive_access_log 等）回落 create_time；统一格式化成字符串，排序/展示同一规则 */
     private String timeExpr(String table) {
         boolean hasUpdate = hasColumn(table, "update_time");
         boolean hasCreate = hasColumn(table, "create_time");

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -8,6 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
+ * 流程加签（wf_add_sign，带 tenant_id）—— 前/后加签。
  *
  * <p><b>能力边界（务必先读）</b>：Flowable 8 <b>没有</b> Activiti 风格的
  * {@code ProcessInstanceModification}，无法在运行期动态插入 BPMN 节点

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -52,7 +55,7 @@ public class ArMonthCloseService {
     private final ConfigService configService;
     private final PeriodLockService periodLockService;
 
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /** 发起月结：同一公司同一期间同一类型不允许存在未完成月结单。 */
@@ -89,7 +92,7 @@ public class ArMonthCloseService {
         return c;
     }
 
-    /** 清接口行（仅应收月结）：清理 EBS 接口表临时数据——模拟清点当期未推送成功的旧接口行。 */
+    /** 清接口行（仅应收月结）：清理 ERP 接口表临时数据——模拟清点当期未推送成功的旧接口行。 */
     @Transactional(rollbackFor = Exception.class)
     public ArMonthClose clearInterface(Long id) {
         ArMonthClose c = require(id);
@@ -187,7 +190,7 @@ public class ArMonthCloseService {
         return c;
     }
 
-    /** 过总账：生成账期汇总凭证（借1122/贷6001，模拟推送 EBS 总账）。 */
+    /** 过总账：生成账期汇总凭证（借1122/贷6001，模拟推送 ERP 总账）。 */
     @Transactional(rollbackFor = Exception.class)
     public ArMonthClose postGl(Long id) {
         ArMonthClose c = require(id);
@@ -306,7 +309,7 @@ public class ArMonthCloseService {
 
     /**
      * 反月结（41号审查报告 P0-2 同源整改）：CLOSED → RECONCILED，
-     * 账期解锁（ar.period.lock），原因必填并追加进 remark 留痕（D-V4R-65：不再动 md_period）。
+     * 账期解锁（ar.period.lock），原因必填并追加进 remark 记录（D-V4R-65：不再动 md_period）。
      */
     @Transactional(rollbackFor = Exception.class)
     public ArMonthClose unClose(Long id, String reason) {
@@ -315,7 +318,7 @@ public class ArMonthCloseService {
             throw new BizException(ErrorCode.PARAM_INVALID, "月结单 " + c.getCloseNo() + " 未关闭账期，无需反月结");
         }
         if (reason == null || reason.isBlank()) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "反月结必须填写原因（审计留痕要求）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "反月结必须填写原因（审计记录要求）");
         }
         String auditOldStatus = c.getStatus();
         String auditOldRemark = c.getRemark();
@@ -326,7 +329,7 @@ public class ArMonthCloseService {
         mapper.updateById(c);
         // R5-D-214：反月结须清位关账人/关账时间（operator/closed_time）——updateById 对 null 值一律跳过，
         // 残留会让读面把"已重开"的单项继续显示成"某时刻已关闭账期"；清列走 UpdateWrapper.set(null)，
-        // 操作与原因已并入 remark 留痕（不删行，可回溯反月结历史）。
+        // 操作与原因已并入 remark 记录（不删行，可回溯反月结历史）。
         mapper.update(null, new LambdaUpdateWrapper<ArMonthClose>()
                 .eq(ArMonthClose::getId, c.getId())
                 .set(ArMonthClose::getClosedTime, null)
@@ -346,8 +349,8 @@ public class ArMonthCloseService {
     }
 
     /**
-     * R5-D-218 作废（终态 VOID）：未关闭账期的月结单整体废弃——置 VOID、原因并入 remark
-     * 留痕（不删行）；已关闭账期须先反月结，不能直接作废（账期锁/期间联动只在关闭账期
+     * R5-D-218 作废（最终状态 VOID）：未关闭账期的月结单整体废弃——置 VOID、原因并入 remark
+     * 记录（不删行）；已关闭账期须先反月结，不能直接作废（账期锁/期间联动只在关闭账期
      * 时建立，故作废路径无需解锁，也避免误放同期间他单的锁）。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -360,7 +363,7 @@ public class ArMonthCloseService {
             throw new BizException(ErrorCode.PARAM_INVALID, "月结单 " + c.getCloseNo() + " 已关闭账期，须先反月结，不能直接作废");
         }
         if (reason == null || reason.isBlank()) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "作废必须填写原因（审计留痕要求）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "作废必须填写原因（审计记录要求）");
         }
         String auditOldStatus = c.getStatus();
         String auditOldRemark = c.getRemark();

@@ -1,0 +1,1542 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-26T03:19:57.838Z",
+  "catalogGeneratedAt": "2026-10-26T00:44:31.954Z",
+  "sourceHash": "c2422bdfac7671bf",
+  "stats": {
+    "read": 23,
+    "write": 3,
+    "knowledge": 2,
+    "nav": 1
+  },
+  "skills": [
+    {
+      "name": "wf.todo",
+      "type": "read",
+      "title": "我的待办",
+      "description": "查询需要我处理的审批待办任务，含单据号、节点、金额、到期时间",
+      "examples": [
+        "我今天有多少待办",
+        "我的待办有哪些",
+        "待我审批的单子"
+      ],
+      "keywords": [
+        "待办",
+        "待审",
+        "待我审批",
+        "待我处理",
+        "待审批",
+        "待办事项",
+        "要处理的任务",
+        "处理的任务"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "提交",
+        "流程",
+        "制度"
+      ],
+      "priority": 95,
+      "backing": [
+        "controller.WfTaskPool.mine"
+      ],
+      "args": {
+        "view": "MY_TODO",
+        "pageNum": 1,
+        "pageSize": 50
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "wf:task:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/wf/pool/mine"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "wf.claimable",
+      "type": "read",
+      "title": "可领取任务",
+      "description": "任务池里当前可领取、尚未被他人锁定的任务",
+      "examples": [
+        "有哪些可以领取的任务",
+        "可领取的待办"
+      ],
+      "keywords": [
+        "可领取",
+        "可以领取",
+        "可接",
+        "可以接",
+        "能接",
+        "领取任务",
+        "抢单"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写"
+      ],
+      "priority": 92,
+      "backing": [
+        "controller.WfTaskPool.mine"
+      ],
+      "args": {
+        "view": "CLAIMABLE",
+        "pageNum": 1,
+        "pageSize": 50
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "wf:task:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/wf/pool/mine"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "wf.my_claimed",
+      "type": "read",
+      "title": "我已领取的任务",
+      "description": "我已经从任务池领取、正在办理的任务",
+      "examples": [
+        "我领了哪些任务",
+        "我已领取的任务"
+      ],
+      "keywords": [
+        "已领取",
+        "我领的",
+        "我领取"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写"
+      ],
+      "priority": 90,
+      "backing": [
+        "controller.WfTaskPool.mine"
+      ],
+      "args": {
+        "view": "MY_CLAIMED",
+        "pageNum": 1,
+        "pageSize": 50
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "wf:task:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/wf/pool/mine"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "wf.pool_all",
+      "type": "read",
+      "title": "全部在池任务",
+      "description": "共享任务池里的全部任务（含已锁定）",
+      "examples": [
+        "任务池里一共有多少任务",
+        "全部在池任务"
+      ],
+      "keywords": [
+        "在池",
+        "全部任务",
+        "任务总览"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建"
+      ],
+      "priority": 80,
+      "backing": [
+        "controller.WfTaskPool.all"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 50
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "wf:instance:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/wf/pool/all"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "task.pool",
+      "type": "read",
+      "title": "共享任务池（未派工）",
+      "description": "共享服务中心尚未派工的任务，含对账任务",
+      "examples": [
+        "我司未派工的对账任务有多少条",
+        "共享任务池还有多少"
+      ],
+      "keywords": [
+        "未派工",
+        "派工",
+        "对账任务",
+        "任务池",
+        "共享任务"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "领取",
+        "我的共享任务"
+      ],
+      "priority": 93,
+      "backing": [
+        "controller.Sharing.pool"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 50
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "sharing:task:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/sharing/task/pool"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "task.mine",
+      "type": "read",
+      "title": "我的共享任务",
+      "description": "分配给我办理的共享服务任务",
+      "examples": [
+        "我的共享任务",
+        "我手上有多少任务"
+      ],
+      "keywords": [
+        "我的任务",
+        "我的共享任务",
+        "我手上的任务"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写"
+      ],
+      "priority": 88,
+      "backing": [
+        "controller.Sharing.mine"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 50
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "sharing:task:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/sharing/task/mine"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "bill.my_list",
+      "type": "read",
+      "title": "我的单据",
+      "description": "查询我提交的单据，可按期间、状态、单号筛选",
+      "examples": [
+        "帮我查单据",
+        "我最近有哪些单",
+        "查一下草稿单"
+      ],
+      "keywords": [
+        "单据",
+        "我的单",
+        "我的申请",
+        "查单"
+      ],
+      "verbs": [
+        "查",
+        "看",
+        "有哪些",
+        "多少",
+        "列表",
+        "列出",
+        "显示",
+        "最近",
+        "我的"
+      ],
+      "exclude": [
+        "报销",
+        "借款",
+        "还款",
+        "付款",
+        "创建",
+        "新建",
+        "填写",
+        "提交"
+      ],
+      "priority": 60,
+      "backing": [
+        "controller.ExpenseBill.myPage"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "range",
+      "dateStartField": "startDate",
+      "dateEndField": "endDate",
+      "statusField": "status",
+      "keywordField": "keyword",
+      "derived": {
+        "permCodes": [
+          "exp:bill:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/expense/bill/myPage"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "bill.claim_list",
+      "type": "read",
+      "title": "我的报销单",
+      "description": "查询我提交的费用报销单，可按期间、状态、单号筛选",
+      "examples": [
+        "我上个月的报销单有哪些",
+        "2025年12月的报销单",
+        "已批准的报销单"
+      ],
+      "keywords": [
+        "报销单",
+        "报销",
+        "报账",
+        "费用单"
+      ],
+      "verbs": [
+        "查",
+        "看",
+        "有哪些",
+        "多少",
+        "列表",
+        "列出",
+        "显示",
+        "最近",
+        "我的"
+      ],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "提交",
+        "流程",
+        "制度",
+        "标准",
+        "怎么",
+        "如何",
+        "发票",
+        "凭证"
+      ],
+      "priority": 70,
+      "backing": [
+        "controller.ExpenseBill.myPage"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "billType": "CLAIM",
+      "dateStyle": "range",
+      "dateStartField": "startDate",
+      "dateEndField": "endDate",
+      "statusField": "status",
+      "keywordField": "keyword",
+      "allowWhenDated": true,
+      "derived": {
+        "permCodes": [
+          "exp:bill:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/expense/bill/myPage"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "bill.loan_list",
+      "type": "read",
+      "title": "我的借款单",
+      "description": "查询我提交的借款/借支单",
+      "examples": [
+        "我的借款单",
+        "上个月的借款有哪些"
+      ],
+      "keywords": [
+        "借款单",
+        "借款",
+        "借支单",
+        "借支",
+        "备用金"
+      ],
+      "verbs": [
+        "查",
+        "看",
+        "有哪些",
+        "多少",
+        "列表",
+        "列出",
+        "显示",
+        "最近",
+        "我的"
+      ],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "提交",
+        "还款",
+        "余额",
+        "台账",
+        "流程",
+        "标准"
+      ],
+      "priority": 70,
+      "backing": [
+        "controller.ExpenseBill.myPage"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "billType": "LOAN",
+      "dateStyle": "range",
+      "dateStartField": "startDate",
+      "dateEndField": "endDate",
+      "statusField": "status",
+      "keywordField": "keyword",
+      "allowWhenDated": true,
+      "derived": {
+        "permCodes": [
+          "exp:bill:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/expense/bill/myPage"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "bill.repay_list",
+      "type": "read",
+      "title": "我的还款单",
+      "description": "查询我提交的借款还款单",
+      "examples": [
+        "我的还款单",
+        "还款记录有哪些"
+      ],
+      "keywords": [
+        "还款单",
+        "还款记录",
+        "还款"
+      ],
+      "verbs": [
+        "查",
+        "看",
+        "有哪些",
+        "多少",
+        "列表",
+        "列出",
+        "显示",
+        "最近",
+        "我的"
+      ],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "提交",
+        "流程",
+        "标准",
+        "余额"
+      ],
+      "priority": 70,
+      "backing": [
+        "controller.ExpenseBill.myPage"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "billType": "REPAY",
+      "dateStyle": "range",
+      "dateStartField": "startDate",
+      "dateEndField": "endDate",
+      "statusField": "status",
+      "keywordField": "keyword",
+      "allowWhenDated": true,
+      "derived": {
+        "permCodes": [
+          "exp:bill:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/expense/bill/myPage"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "invoice.list",
+      "type": "read",
+      "title": "发票列表",
+      "description": "查询公司发票，可按开票日期、号码、销方、查验状态筛选",
+      "examples": [
+        "查一下发票",
+        "本月有哪些发票",
+        "发票列表"
+      ],
+      "keywords": [
+        "发票"
+      ],
+      "verbs": [
+        "查",
+        "看",
+        "有哪些",
+        "多少",
+        "列表",
+        "列出",
+        "显示",
+        "最近",
+        "我的"
+      ],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "查验",
+        "流程",
+        "标准",
+        "抵扣"
+      ],
+      "priority": 65,
+      "backing": [
+        "controller.Invoice.page"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "range",
+      "dateStartField": "invoiceDateFrom",
+      "dateEndField": "invoiceDateTo",
+      "keywordField": "keyword",
+      "allowWhenDated": true,
+      "derived": {
+        "permCodes": [
+          "inv:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/invoice/page"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "voucher.list",
+      "type": "read",
+      "title": "凭证列表",
+      "description": "查询共享中心生成的会计凭证",
+      "examples": [
+        "查凭证",
+        "本月生成了多少凭证"
+      ],
+      "keywords": [
+        "凭证"
+      ],
+      "verbs": [
+        "查",
+        "看",
+        "有哪些",
+        "多少",
+        "列表",
+        "列出",
+        "显示",
+        "最近",
+        "我的"
+      ],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "生成凭证",
+        "流程"
+      ],
+      "priority": 65,
+      "backing": [
+        "controller.Sharing.voucherPage"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "period",
+      "yearField": "periodYear",
+      "monthField": "periodMonth",
+      "allowWhenDated": true,
+      "derived": {
+        "permCodes": [
+          "sharing:voucher:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/sharing/voucher/page"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "wf.cc",
+      "type": "read",
+      "title": "我的抄送",
+      "description": "查询抄送给我的流程单据",
+      "examples": [
+        "我的抄送",
+        "抄送给我哪些单"
+      ],
+      "keywords": [
+        "抄送",
+        "抄给我的"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写"
+      ],
+      "priority": 85,
+      "backing": [
+        "controller.WfQuery.myCc"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "wf:cc:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/wf/query/cc/mine"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "wf.history",
+      "type": "read",
+      "title": "流程审批历史",
+      "description": "按单据号查询流程审批历史",
+      "examples": [
+        "BX012025120003 的审批历史",
+        "这张单走到哪了"
+      ],
+      "keywords": [
+        "审批历史",
+        "流程历史",
+        "审批记录",
+        "走到哪",
+        "流转记录"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写"
+      ],
+      "priority": 84,
+      "backing": [
+        "controller.WfQuery.historyPage"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "none",
+      "keywordField": "bizNo",
+      "derived": {
+        "permCodes": [
+          "wf:history:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/wf/query/history/page"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "loan.ledger",
+      "type": "read",
+      "title": "借款台账",
+      "description": "查询我的借款台账与未还借款（可只看逾期）",
+      "examples": [
+        "我的借款余额是多少",
+        "我有没有逾期借款",
+        "借款台账"
+      ],
+      "keywords": [
+        "借款台账",
+        "借款余额",
+        "未还借款",
+        "逾期借款",
+        "欠款"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "提交",
+        "报表"
+      ],
+      "priority": 86,
+      "backing": [
+        "controller.ExpenseBill.loanLedger"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "none",
+      "flags": [
+        {
+          "contains": "逾期",
+          "field": "onlyOverdue",
+          "value": true
+        }
+      ],
+      "derived": {
+        "permCodes": [
+          "exp:bill:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/expense/bill/loan-ledger"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "budget.execution",
+      "type": "read",
+      "title": "预算执行情况",
+      "description": "查询预算执行进度，可按期间、部门筛选",
+      "examples": [
+        "预算执行情况怎么样",
+        "本季度预算用了多少"
+      ],
+      "keywords": [
+        "预算执行",
+        "预算进度",
+        "预算用了",
+        "预算余额"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "调整"
+      ],
+      "priority": 82,
+      "backing": [
+        "controller.Budget.execution"
+      ],
+      "args": {},
+      "dateStyle": "monthPeriod",
+      "periodField": "period",
+      "derived": {
+        "permCodes": [
+          "budget:scheme:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/budget/execution"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "pay.batch",
+      "type": "read",
+      "title": "付款批次",
+      "description": "查询付款批次及其状态",
+      "examples": [
+        "付款批次有哪些",
+        "本周的付款批次"
+      ],
+      "keywords": [
+        "付款批次",
+        "支付批次",
+        "批次"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "执行",
+        "确认"
+      ],
+      "priority": 80,
+      "backing": [
+        "controller.Pay.batchPage"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "pay:batch:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/pay/batch/page"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "pay.waiting",
+      "type": "read",
+      "title": "待付款单据",
+      "description": "查询等待付款的单据",
+      "examples": [
+        "还有多少待付款",
+        "待付款的单子"
+      ],
+      "keywords": [
+        "待付款",
+        "等待付款",
+        "待支付"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "执行"
+      ],
+      "priority": 83,
+      "backing": [
+        "controller.Pay.waitingPayments"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "pay:batch:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/pay/payment/waiting-page"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "expense.my_stat",
+      "type": "read",
+      "title": "我的费用统计",
+      "description": "查询我本人的费用统计数据",
+      "examples": [
+        "我的费用统计",
+        "我今年花了多少"
+      ],
+      "keywords": [
+        "费用统计",
+        "我的费用",
+        "花了多少",
+        "费用汇总"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "报销单"
+      ],
+      "priority": 78,
+      "backing": [
+        "controller.ExpenseMineStat.stat"
+      ],
+      "args": {},
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "exp:bill:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/expense/mine/stat"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "report.expense_summary",
+      "type": "read",
+      "title": "费用汇总报表",
+      "description": "按年月查询公司费用汇总报表",
+      "examples": [
+        "今年的费用汇总",
+        "2025年12月费用汇总"
+      ],
+      "keywords": [
+        "费用汇总报表",
+        "费用汇总",
+        "费用报表"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写"
+      ],
+      "priority": 76,
+      "backing": [
+        "controller.ReportQuery.expenseSummary"
+      ],
+      "args": {},
+      "dateStyle": "yearMonth",
+      "yearField": "year",
+      "monthField": "month",
+      "derived": {
+        "permCodes": [
+          "report:view"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/report/expense-summary"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "report.loan_overdue",
+      "type": "read",
+      "title": "逾期借款报表",
+      "description": "查询公司范围内逾期未还的借款报表",
+      "examples": [
+        "逾期借款报表",
+        "公司有多少逾期借款"
+      ],
+      "keywords": [
+        "逾期借款报表",
+        "借款逾期报表"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写"
+      ],
+      "priority": 77,
+      "backing": [
+        "controller.ReportQuery.loanOverdue"
+      ],
+      "args": {},
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "report:view"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/report/loan-overdue"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "archive.list",
+      "type": "read",
+      "title": "档案列表",
+      "description": "查询已归档/待归档的会计档案",
+      "examples": [
+        "查一下档案",
+        "本月归档了多少"
+      ],
+      "keywords": [
+        "档案",
+        "归档"
+      ],
+      "verbs": [
+        "查",
+        "看",
+        "有哪些",
+        "多少",
+        "列表",
+        "列出",
+        "显示",
+        "最近"
+      ],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "流程",
+        "制度",
+        "销毁"
+      ],
+      "priority": 72,
+      "backing": [
+        "controller.Archive.page"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "none",
+      "keywordField": "keyword",
+      "derived": {
+        "permCodes": [
+          "compliance:archive:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/compliance/archive/page"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "invoice.verify",
+      "type": "read",
+      "title": "发票查验记录",
+      "description": "查询发票查验/验真记录",
+      "examples": [
+        "发票查验记录",
+        "这张发票验真了吗"
+      ],
+      "keywords": [
+        "查验记录",
+        "验真",
+        "发票查验"
+      ],
+      "verbs": [],
+      "exclude": [
+        "创建",
+        "新建",
+        "填写",
+        "怎么操作",
+        "如何操作"
+      ],
+      "priority": 74,
+      "backing": [
+        "controller.InvoiceEnhance.verifyPage"
+      ],
+      "args": {
+        "pageNum": 1,
+        "pageSize": 20
+      },
+      "dateStyle": "none",
+      "derived": {
+        "permCodes": [
+          "inv:verify:list"
+        ],
+        "risk": [
+          "LOW"
+        ],
+        "urls": [
+          "GET /api/tenant/invoice/enhance/verify/page"
+        ],
+        "kinds": [
+          "read"
+        ]
+      }
+    },
+    {
+      "name": "bill.draft.loan",
+      "type": "write",
+      "title": "新建借款草稿",
+      "description": "按金额新建一张借款/借支草稿（只落表头，行明细与事由需人工补全）",
+      "examples": [
+        "帮我填写1000块的借款",
+        "建一张5000元的借支单"
+      ],
+      "keywords": [
+        "借款",
+        "借支",
+        "备用金",
+        "借钱",
+        "借"
+      ],
+      "verbs": [
+        "填写",
+        "填一张",
+        "填个",
+        "填",
+        "建",
+        "新建",
+        "创建",
+        "申请",
+        "录入",
+        "来一张",
+        "开一张",
+        "帮我填",
+        "我要借",
+        "我想借",
+        "帮我借",
+        "借一笔",
+        "借点"
+      ],
+      "exclude": [
+        "查",
+        "看",
+        "多少",
+        "哪些",
+        "列表",
+        "台账",
+        "余额",
+        "有没有",
+        "流程",
+        "怎么",
+        "制度",
+        "标准",
+        "审批",
+        "还款"
+      ],
+      "priority": 88,
+      "backing": [
+        "controller.ExpenseBill.saveDraft"
+      ],
+      "billType": "LOAN",
+      "amountRequired": true,
+      "titlePrefix": "借款",
+      "derived": {
+        "permCodes": [
+          "exp:bill:save"
+        ],
+        "risk": [
+          "MEDIUM"
+        ],
+        "urls": [
+          "POST /api/tenant/expense/bill/saveDraft"
+        ],
+        "kinds": [
+          "write"
+        ]
+      }
+    },
+    {
+      "name": "bill.draft.claim",
+      "type": "write",
+      "title": "新建费用报销草稿",
+      "description": "按金额新建一张费用报销草稿（只落表头，费用项与行明细需人工补全）",
+      "examples": [
+        "帮我填写一个1200块的报销单据",
+        "报一笔800元的差旅费"
+      ],
+      "keywords": [
+        "报销",
+        "报账",
+        "费用报销",
+        "报"
+      ],
+      "verbs": [
+        "填写",
+        "填一张",
+        "填个",
+        "填",
+        "建",
+        "新建",
+        "创建",
+        "申请",
+        "录入",
+        "来一张",
+        "开一张",
+        "帮我填",
+        "我要报",
+        "我想报",
+        "帮我报",
+        "报一笔",
+        "报点",
+        "报个"
+      ],
+      "exclude": [
+        "查",
+        "看",
+        "多少",
+        "哪些",
+        "列表",
+        "流程",
+        "怎么",
+        "制度",
+        "标准",
+        "审批",
+        "发票",
+        "凭证",
+        "驳回"
+      ],
+      "priority": 88,
+      "backing": [
+        "controller.ExpenseBill.saveDraft"
+      ],
+      "billType": "CLAIM",
+      "amountRequired": true,
+      "titlePrefix": "费用报销",
+      "derived": {
+        "permCodes": [
+          "exp:bill:save"
+        ],
+        "risk": [
+          "MEDIUM"
+        ],
+        "urls": [
+          "POST /api/tenant/expense/bill/saveDraft"
+        ],
+        "kinds": [
+          "write"
+        ]
+      }
+    },
+    {
+      "name": "bill.draft.repay",
+      "type": "write",
+      "title": "新建还款草稿",
+      "description": "按金额新建一张借款还款草稿（目标借款与冲销关系需人工确认）",
+      "examples": [
+        "帮我填写800块的还款",
+        "还500元借款"
+      ],
+      "keywords": [
+        "还款",
+        "还借款",
+        "冲销借款",
+        "还"
+      ],
+      "verbs": [
+        "填写",
+        "填一张",
+        "填个",
+        "填",
+        "建",
+        "新建",
+        "创建",
+        "申请",
+        "录入",
+        "来一张",
+        "开一张",
+        "帮我填",
+        "我要还",
+        "我想还",
+        "帮我还",
+        "还一笔",
+        "还点"
+      ],
+      "exclude": [
+        "查",
+        "看",
+        "多少",
+        "哪些",
+        "列表",
+        "台账",
+        "余额",
+        "流程",
+        "怎么",
+        "制度",
+        "标准",
+        "审批"
+      ],
+      "priority": 88,
+      "backing": [
+        "controller.ExpenseBill.saveDraft"
+      ],
+      "billType": "REPAY",
+      "amountRequired": true,
+      "titlePrefix": "还款",
+      "derived": {
+        "permCodes": [
+          "exp:bill:save"
+        ],
+        "risk": [
+          "MEDIUM"
+        ],
+        "urls": [
+          "POST /api/tenant/expense/bill/saveDraft"
+        ],
+        "kinds": [
+          "write"
+        ]
+      }
+    },
+    {
+      "name": "kb.flow",
+      "type": "knowledge",
+      "title": "流程与操作说明",
+      "description": "回答业务流程、操作方法、菜单入口、快捷键等说明性问题",
+      "examples": [
+        "报销流程是什么",
+        "快捷键有哪些",
+        "差旅报销怎么操作"
+      ],
+      "keywords": [
+        "流程",
+        "步骤",
+        "怎么走",
+        "如何办理",
+        "怎么办理",
+        "怎么操作",
+        "怎么生成",
+        "如何生成",
+        "怎么产生",
+        "如何产生",
+        "在哪",
+        "入口",
+        "菜单",
+        "怎么用",
+        "快捷键",
+        "是什么流程"
+      ],
+      "verbs": [],
+      "exclude": [
+        "我的待办",
+        "我的单据",
+        "帮我填",
+        "帮我建",
+        "新建"
+      ],
+      "priority": 72,
+      "topics": [
+        "flow",
+        "operation"
+      ]
+    },
+    {
+      "name": "kb.policy",
+      "type": "knowledge",
+      "title": "制度与标准",
+      "description": "回答费用标准、制度规定、额度、时限等政策性问题，答案必须带文档出处",
+      "examples": [
+        "差旅住宿标准是多少",
+        "借款多久必须还",
+        "招待费有什么规定"
+      ],
+      "keywords": [
+        "标准",
+        "规定",
+        "制度",
+        "政策",
+        "额度",
+        "上限",
+        "时限",
+        "多久",
+        "几天",
+        "比例",
+        "要求",
+        "合规",
+        "住宿",
+        "差旅费标准",
+        "不能",
+        "允许"
+      ],
+      "verbs": [],
+      "exclude": [
+        "我的待办",
+        "帮我填",
+        "帮我建",
+        "新建",
+        "查一下我的"
+      ],
+      "priority": 71,
+      "topics": [
+        "policy",
+        "standard"
+      ]
+    },
+    {
+      "name": "nav.open",
+      "type": "nav",
+      "title": "打开页面",
+      "description": "按业务名打开对应功能页面（只给入口，不执行业务写）",
+      "examples": [
+        "打开审批页面",
+        "进入发票查询菜单"
+      ],
+      "keywords": [
+        "页面",
+        "菜单",
+        "模块",
+        "功能"
+      ],
+      "verbs": [
+        "打开",
+        "进入",
+        "跳转到",
+        "导航到",
+        "去",
+        "在哪个",
+        "在哪",
+        "在哪儿",
+        "哪里"
+      ],
+      "exclude": [
+        "填写",
+        "新建",
+        "创建",
+        "审批通过",
+        "删除"
+      ],
+      "priority": 40,
+      "routes": {
+        "审批": "#/approval",
+        "待办": "#/approval",
+        "报销": "#/expense/bill",
+        "单据": "#/expense/bill",
+        "借款": "#/expense/bill",
+        "发票": "#/invoice",
+        "凭证": "#/sharing/voucher",
+        "任务池": "#/sharing/task",
+        "共享任务": "#/sharing/task",
+        "对账": "#/sharing/task",
+        "任务": "#/sharing/task",
+        "档案": "#/compliance/archive",
+        "付款": "#/pay/batch",
+        "预算": "#/budget",
+        "报表": "#/report"
+      }
+    }
+  ]
+}

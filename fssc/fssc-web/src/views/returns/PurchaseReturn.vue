@@ -1,16 +1,19 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
       <div class="toolbar">
         <span>采购退货单（AP 退货退款冲减应付）</span>
         <div class="ops">
-          <el-input v-model="q.vendorCode" size="small" style="width: 130px" placeholder="供应商代码" clearable @keyup.enter="load" />
-          <el-input v-model="q.keyword" size="small" style="width: 130px" placeholder="单号/供应商名" clearable @keyup.enter="load" />
-          <el-select v-model="q.status" size="small" style="width: 110px" placeholder="状态" clearable @change="load">
+          <el-input v-model="q.vendorCode" size="small" style="width: 130px" placeholder="供应商代码" clearable @keyup.enter="search" />
+          <el-input v-model="q.keyword" size="small" style="width: 130px" placeholder="单号/供应商名" clearable @keyup.enter="search" />
+          <el-select v-model="q.status" size="small" style="width: 110px" placeholder="状态" clearable @change="search">
             <el-option v-for="(l, c) in RETURN_STATUS" :key="c" :label="l" :value="c" />
           </el-select>
           <el-date-picker v-model="q.range" type="daterange" size="small" value-format="YYYY-MM-DD" range-separator="~" start-placeholder="退货起" end-placeholder="退货止" @change="onRange" style="width: 220px" />
-          <el-button size="small" @click="load">查询</el-button>
+          <el-button size="small" @click="search">查询</el-button>
           <el-button type="primary" size="small" @click="openCreate" v-if="can('returns:pur:create')">新建退货单</el-button>
         </div>
       </div>
@@ -40,11 +43,21 @@
       </el-table-column>
     </el-table>
 
+    <TablePager v-model:page="q.pageNum" v-model:size="q.pageSize" :total="total" @change="load" />
+
     <el-dialog v-model="formVisible" :title="editing ? '编辑采购退货单' : '新建采购退货单'" width="820px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="96px" size="small">
         <el-row :gutter="12">
-          <el-col :span="12"><el-form-item label="供应商代码" prop="vendorCode"><el-input v-model="form.vendorCode" placeholder="与 BCP 往来单位编码对齐" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="供应商名称"><el-input v-model="form.vendorName" /></el-form-item></el-col>
+          <!-- D-H2-02：供应商代码由纯输入框改远程检索下拉（与合同/付款计划同组件）。
+               原实现任意字符串都能提交（如 XXX-999），名称留空则 vendor_name 落空串⇒列表「供应商」列空白。
+               名称改只读：一律以供应商主数据为准（后端 PurReturnService.assertVendorInMaster 同一规则），
+               手填名称与现有名称分叉会让同一供应商在单据上出现两种写法。 -->
+          <el-col :span="12"><el-form-item label="供应商代码" prop="vendorCode">
+            <SupplierSelect v-model="form.vendorCode" value-key="code" placeholder="检索已有供应商（代码/名称）" @change="onVendorChange" />
+          </el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="供应商名称">
+            <el-input v-model="form.vendorName" readonly placeholder="选供应商代码后按主数据自动带出" />
+          </el-form-item></el-col>
           <el-col :span="8"><el-form-item label="所属公司">
             <el-select v-model="form.companyId" filterable clearable placeholder="请选择公司" style="width:100%">
               <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
@@ -65,8 +78,8 @@
           </el-form-item></el-col>
           <el-col :span="12"><el-form-item label="源单号"><el-input v-model="form.sourceBillNo" placeholder="对账明细追溯用" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="退货原因">
-            <el-select v-model="form.returnReason" clearable style="width: 100%" placeholder="质量不合格/破损/错发/多发/合同取消/其他">
-              <el-option v-for="r in REASONS" :key="r" :label="r" :value="r" />
+            <el-select v-model="form.returnReason" clearable style="width: 100%" placeholder="选择退货原因">
+              <el-option v-for="r in reasonOptions" :key="r.value" :label="r.label" :value="r.value" />
             </el-select>
           </el-form-item></el-col>
         </el-row>
@@ -76,6 +89,9 @@
           <el-table-column label="物料编码" width="130"><template #default="{ row }"><el-input v-model="row.itemCode" /></template></el-table-column>
           <el-table-column label="物料名称" min-width="140"><template #default="{ row }"><el-input v-model="row.itemName" /></template></el-table-column>
           <el-table-column label="数量" width="100"><template #default="{ row }"><el-input v-model="row.qty" /></template></el-table-column>
+          <!-- D-H2-07：明细补「单位」列（原 uom 恒 NULL，行级追溯断在单位）。
+               留空时后端按物料编码从采购订单行回填单位，填了以人工为准。 -->
+          <el-table-column label="单位" width="80"><template #default="{ row }"><el-input v-model="row.uom" placeholder="台/个" /></template></el-table-column>
           <el-table-column label="单价" width="110"><template #default="{ row }"><el-input v-model="row.price" @change="recalc(row)" /></template></el-table-column>
           <el-table-column label="税率%" width="90"><template #default="{ row }"><el-input v-model="row.taxRate" /></template></el-table-column>
           <el-table-column label="金额" width="120"><template #default="{ row }"><el-input v-model="row.amount" /></template></el-table-column>
@@ -83,7 +99,7 @@
         </el-table>
         <div class="line-sum">
           明细合计：<b>{{ lineSum() }}</b>
-          <!-- R5-D-085：税额/价税合计为只读派生（含税口径：税额=Σ amount×taxRate/(100+taxRate)，
+          <!-- R5-D-085：税额/价税合计为只读派生（含税规则：税额=Σ amount×taxRate/(100+taxRate)，
                与后端 PurReturnService.deriveTaxAmount 同式；保存时按明细汇总回写表头 tax_amount） -->
           <span style="margin-left:12px">税额（派生）：<b>{{ derivedTax() }}</b></span>
           <span style="margin-left:12px">价税合计（派生）：<b>{{ derivedInclusive() }}</b></span>
@@ -110,7 +126,7 @@
         <el-descriptions-item label="方式">{{ returnModeLabel(detail.returnMode) }}</el-descriptions-item>
         <el-descriptions-item label="源单">{{ detail.sourceBillNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="退货原因">{{ detail.returnReason || '—' }}</el-descriptions-item>
-        <!-- R5-D-086：审核留痕外显（approver/approve_time/void_reason/create_time 列已在库，纯显示收口） -->
+        <!-- R5-D-086：审核记录外显（approver/approve_time/void_reason/create_time 列已在库，纯显示办结） -->
         <el-descriptions-item label="审核人">{{ detail.approver || '—' }}</el-descriptions-item>
         <el-descriptions-item label="审核时间">{{ formatDateTime(detail.approveTime) || '—' }}</el-descriptions-item>
         <el-descriptions-item label="作废/驳回原因">{{ detail.voidReason || '—' }}</el-descriptions-item>
@@ -122,7 +138,7 @@
         <el-table-column prop="qty" label="数量" width="90" />
         <el-table-column prop="price" label="单价" width="110" />
         <el-table-column prop="amount" label="金额" width="110" />
-        <!-- R5-D-086：明细补 税率/单位/税额 三列（税额按含税口径派生，与 lineTax 同式） -->
+        <!-- R5-D-086：明细补 税率/单位/税额 三列（税额按含税规则派生，与 lineTax 同式） -->
         <el-table-column prop="taxRate" label="税率%" width="80" />
         <el-table-column prop="uom" label="单位" width="80" />
         <el-table-column label="税额" width="100"><template #default="{ row }">{{ lineTax(row).toFixed(2) }}</template></el-table-column>
@@ -130,7 +146,7 @@
     </el-dialog>
 
     <el-dialog v-model="reasonVisible" :title="reasonTitle" width="420px" destroy-on-close>
-      <el-input v-model="reasonText" type="textarea" :rows="2" :placeholder="reasonKind === 'void' ? '作废原因（必填，退出对账口径留痕）' : '驳回原因（必填）'" />
+      <el-input v-model="reasonText" type="textarea" :rows="2" :placeholder="reasonKind === 'void' ? '作废原因（必填，退出对账需记录）' : '驳回原因（必填）'" />
       <template #footer>
         <el-button size="small" @click="reasonVisible = false">取消</el-button>
         <el-button type="primary" size="small" @click="doReason">确定</el-button>
@@ -141,15 +157,33 @@
 
 <script setup>
 import { RETURN_STATUS, RETURN_MODE, returnStatusLabel, returnModeLabel } from '@/constants/enums'
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { returnApi, store, orgApi } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { formatDateTime } from '@/utils/format'
+import TablePager from '@/components/common/TablePager.vue'
+import SupplierSelect from '@/components/common/SupplierSelect.vue'
+import { useDict } from '@/composables/useDict'
 
-const REASONS = ['质量不合格', '破损', '错发', '多发', '合同取消', '其他']
+/**
+ * D-H2-05：退货原因改字典驱动（dict_type=enum_return_reason_pur，采购域单列，
+ * 与销售域 enum_return_reason_sale 不共用一套——两域原因集本就不同：采购有「多发/合同取消」，
+ * 销售有「客户取消/合同终止」）。
+ * 下面这份本地常量是 useDict 的默认处理：字典未配置/接口不通时逐字回落成改造前的六项，界面零变化。
+ */
+const REASON_FALLBACK = {
+  质量不合格: '质量不合格', 破损: '破损', 错发: '错发', 多发: '多发', 合同取消: '合同取消', 其他: '其他',
+}
+const reasonDict = useDict('enum_return_reason_pur', REASON_FALLBACK)
+const reasonOptions = reasonDict.options
+
+/** D-H2-02：选中供应商后按主数据带出名称（名称框只读；后端保存时还会以主数据为准再覆盖一次） */
+function onVendorChange(sup) {
+  form.vendorName = sup ? (sup.supplierName || sup.shortName || '') : ''
+}
 
 // 公司列表（用于下拉选择）
 const companies = ref([])
@@ -168,6 +202,7 @@ async function loadCompanies() {
 }
 
 const rows = ref([])
+const total = ref(0)
 const loading = ref(false)
 const q = reactive({ pageNum: 1, pageSize: 20, vendorCode: '', keyword: '', status: '', billDateStart: '', billDateEnd: '', range: [] })
 const formVisible = ref(false)
@@ -199,13 +234,15 @@ const hiddenBySelf = (row) =>
 function onRange(v) {
   q.billDateStart = v && v[0] ? v[0] : ''
   q.billDateEnd = v && v[1] ? v[1] : ''
-  load()
+  search()
 }
+
+function search() { q.pageNum = 1; load() }
 
 function actions(row) {
   const denied = isMine(row) ? (SELF_DENIED[row.status] || []) : []
   // R5-D-087：带 need 的动作必须过 can(a.need)——原只滤「本人制单」，无 void 权限的角色仍见【作废】，
-  // 点击被后端 4030 拦＝看得见做不了；此处与授权同口径（can 与 :14 openCreate 同函数）
+  // 点击被后端 4030 拦＝看得见做不了；此处与授权同一规则（can 与 :14 openCreate 同函数）
   return rawActions(row).filter((a) => !denied.includes(a.key) && can(a.need))
 }
 
@@ -232,11 +269,16 @@ function rawActions(row) {
 
 const lineSum = () => (form.lines || []).reduce((s, l) => s + (Number(l.amount) || 0), 0).toFixed(2)
 
+// D-H2-01：明细变更即把合计回填表头金额（原表头为纯手输、仅校验 >0，易与明细合计不符）。
+// 表头仍可手改，doSave 再做等式强校验（与后端 validateLineSum 同一规则，尾差 ≤0.01）。
+watch(() => form.lines, () => { form.amount = lineSum() }, { deep: true })
+
 async function load() {
   loading.value = true
   try {
     const r = await returnApi.purPage({ ...q, vendorCode: q.vendorCode || undefined, status: q.status || undefined, keyword: q.keyword || undefined })
     rows.value = r.list || []
+    total.value = Number(r.total) || 0
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
@@ -247,9 +289,10 @@ function openCreate() {
 }
 
 function addLine() { form.lines.push(emptyLine()) }
-function emptyLine() { return { itemCode: '', itemName: '', qty: 1, price: '', taxRate: 13, amount: '' } }
+// D-H2-07：单位随行提交（原 emptyLine 无 uom 字段⇒后端恒收不到，pur_return_line.uom 全表 NULL）
+function emptyLine() { return { itemCode: '', itemName: '', qty: 1, uom: '', price: '', taxRate: 13, amount: '' } }
 function recalc(row) { row.amount = (Number(row.qty) * Number(row.price) || 0).toFixed(2) }
-/** R5-D-085：行税额（含税口径，与后端 PurReturnService.deriveTaxAmount 同式）：amount×rate/(100+rate) */
+/** R5-D-085：行税额（含税规则，与后端 PurReturnService.deriveTaxAmount 同式）：amount×rate/(100+rate) */
 const lineTax = (l) => {
   const a = Number(l.amount) || 0
   const r = Number(l.taxRate) || 0
@@ -260,9 +303,16 @@ const derivedInclusive = () => (form.lines || []).reduce((s, l) => s + (Number(l
 
 async function doSave() {
   await guardSubmit(async () => {
-    // 明细行闸门与后端 validateLineSum 同口径（后端还会比对"合计=表头金额，尾差≤0.01"）
+    // 明细行校验与后端 validateLineSum 同一规则（后端还会比对"合计=表头金额，尾差≤0.01"）
     const filled = (form.lines || []).filter(l => (l.itemName || l.itemCode) && Number(l.amount) > 0)
     if (!filled.length) { ElMessage.warning('请至少填写一行退货明细（物料＋金额）'); return }
+    // D-H2-01：表头金额＝明细合计的等式强校验（前端先拦，后端 validateLineSum 再拦一道）
+    const headAmt = Number(form.amount) || 0
+    const sumAmt = Number(lineSum())
+    if (Math.abs(headAmt - sumAmt) > 0.01) {
+      ElMessage.warning(`表头金额（${headAmt.toFixed(2)}）须等于明细合计（${sumAmt.toFixed(2)}），尾差 ≤0.01`)
+      return
+    }
     const lines = (form.lines || []).map(l => ({ ...l, amount: Number(l.amount) || 0, qty: Number(l.qty) || 0, price: Number(l.price) || 0, taxRate: Number(l.taxRate) || 0 }))
     // R5-D-085：表头税额不再吃空输入框（原 form.taxAmount 无输入框恒兜 0），按明细派生回写
     const body = { ...form, amount: Number(form.amount) || 0, taxAmount: Number(derivedTax()) || 0, companyId: Number(form.companyId) || 1, lines }
@@ -304,7 +354,7 @@ async function act(row, a) {
 }
 
 async function doReason() {
-  // 与后端 reject/void 的原因断言同口径（原因会写进 void_reason 作为留痕，不能空）
+  // 与后端 reject/void 的原因断言同一规则（原因会写进 void_reason 作为记录，不能空）
   if (!reasonText.value || !reasonText.value.trim()) {
     ElMessage.warning(reasonKind.value === 'void' ? '请填写作废原因' : '请填写驳回原因'); return
   }
@@ -318,7 +368,7 @@ async function doReason() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-onMounted(() => { load(); loadCompanies() })
+onMounted(() => { load(); loadCompanies(); reasonDict.load() })
 </script>
 
 <style scoped>

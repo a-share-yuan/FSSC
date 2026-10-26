@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.invoice.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -66,7 +69,7 @@ public class InvoiceService {
     private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
     private final com.fssc.expense.mapper.ExpBillPaymentMapper expBillPaymentMapper;
     private final com.fssc.purchase.service.PurchaseService purchaseService;
-    /** 发票与收货单匹配时自动生成暂估冲回 + 正式入账凭证（内部 REQUIRES_NEW + 全量兜底） */
+    /** 发票与收货单匹配时自动生成暂估冲回 + 正式入账凭证（内部 REQUIRES_NEW + 全量默认处理） */
     private final com.fssc.sharing.service.VoucherService voucherService;
 
     // ---------------- P1-5 进项发票全生命周期：认证勾选 / 进项转出 / 票账比对·申报 ----------------
@@ -115,7 +118,7 @@ public class InvoiceService {
 
     /**
      * D-INV-01：认证所属期归一化为 {@code yyyyMM}。
-     * <p>接受 {@code yyyy-MM}（界面/手册口径）与 {@code yyyyMM}（列宽口径），非法格式显式 400 拒绝——
+     * <p>接受 {@code yyyy-MM}（界面/手册规则）与 {@code yyyyMM}（列宽规则），非法格式显式 400 拒绝——
      * 整改前带横杠格式直接落 varchar(6) 列触发 DataTooLong，整单 500，调用方无从判断是格式问题。
      */
     private String normalizeCertifyPeriod(String period) {
@@ -211,7 +214,7 @@ public class InvoiceService {
         BigDecimal outputVat = vat.stream()
                 .map(x -> x.getTaxAmount() == null ? BigDecimal.ZERO : x.getTaxAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        // 票账比对：发票税额总额 vs 计提销项（供发现差异；此处为抵扣口径展示）
+        // 票账比对：发票税额总额 vs 计提销项（供发现差异；此处为抵扣规则展示）
         BigDecimal invoiceTax = certified.stream()
                 .map(x -> x.getTaxAmount() == null ? BigDecimal.ZERO : x.getTaxAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -279,10 +282,10 @@ public class InvoiceService {
                     "价税不符：价税合计 " + invoice.getAmount() + " ≠ 不含税 " + invoice.getNetAmount()
                             + " + 税额 " + invoice.getTaxAmount());
         }
-        // R5-D-109 票号级幂等（超时重试防重）：外部网关慢（实测 45.9s）而前端 20s 超时重试，
-        // 同租户同票号已开票成功即直接返回既有票（最早一张）id +「已开票成功」语义，不再重复落库、
-        // 不再调外部网关；tenant_id 由 FsscTenantLineHandler 自动追加（与 existsInPool 同口径），
-        // 竞态兜底仍靠 uk_tenant_inv + 4090（GlobalExceptionHandler）。
+        // R5-D-109 票号级去重（超时重试防重）：外部网关慢（实测 45.9s）而前端 20s 超时重试，
+        // 同租户同票号已开票成功即直接返回既有票（最早一张）id +「已开票成功」语义，不再重复写入数据库、
+        // 不再调外部网关；tenant_id 由 FsscTenantLineHandler 自动追加（与 existsInPool 同一规则），
+        // 竞态默认处理仍靠 uk_tenant_inv + 4090（GlobalExceptionHandler）。
         InvInvoice existed = invInvoiceMapper.selectOne(new LambdaQueryWrapper<InvInvoice>()
                 .eq(InvInvoice::getInvoiceNo, invoice.getInvoiceNo())
                 .orderByAsc(InvInvoice::getId)
@@ -303,7 +306,7 @@ public class InvoiceService {
             if (lu != null) invoice.setCompanyId(lu.getCompanyId());
         }
         invoice.setSourceDocType("SALES_INVOICE");
-        // uxfix W1（C1 方向闸）：经开票链产生的票一律销项，进项动作（关联/报销/认证）后端硬拒
+        // uxfix W1（C1 方向校验）：经开票链产生的票一律销项，进项动作（关联/报销/认证）后端硬拒
         invoice.setDirection("OUTPUT");
         invInvoiceMapper.insert(invoice);
         Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
@@ -318,14 +321,14 @@ public class InvoiceService {
     }
 
     /**
-     * 人工录入发票的票头必填守卫（必填项治理批次 2B，口径 Q2「前端 + 后端兜底」）。
+     * 人工录入发票的票头必填守卫（必填项治理批次 2B，规则 Q2「前端 + 后端默认处理」）。
      * <p>只给手工入口调用（{@code POST /api/tenant/invoice/create}、{@code /issue}）：
-     * {@link #create} 同时是 OCR 识别入池的落库通道（{@code InvoiceFacadeImpl#poolFromOcr}），
+     * {@link #create} 同时是 OCR 识别入池的写入数据库通道（{@code InvoiceFacadeImpl#poolFromOcr}），
      * 机器识别的票面要素天然可能残缺，把校验写进 create 会把影像路径整单打回，
      * 故本方法守在人工边界而非 create 内部。文案与前端 INVOICE 规则逐字对齐。
      */
     public void requireManualHeader(InvInvoice invoice) {
-        // 发票号码＝外部票据号（口径 Q1 人工必输例外）；发票代码在数电票下不存在，不设为必填
+        // 发票号码＝外部票据号（规则 Q1 人工必输例外）；发票代码在数电票下不存在，不设为必填
         if (isBlank(invoice.getInvoiceNo())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请输入发票号码");
         }
@@ -333,7 +336,7 @@ public class InvoiceService {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择开票日期");
         }
         // R5-D-123：开票日期不得晚于当前系统日期——未来票入池后会被定时作业当场验真，
-        // 落出「验真时间早于开票日期」的怪证据（存量 25000001/25000002 两行即此）。
+        // 落出「验真时间早于开票日期」的怪证据（历史 25000001/25000002 两行即此）。
         if (invoice.getInvoiceDate().isAfter(java.time.LocalDate.now())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "开票日期不得晚于当前日期，请核实后重新录入");
         }
@@ -355,7 +358,7 @@ public class InvoiceService {
         return s == null || s.isBlank();
     }
 
-    /** 录入发票（价税分离校验）；P1 剩余：红冲/销方黑名单自动标记异常、购方抬头/税号落库。
+    /** 录入发票（价税分离校验）；P1 剩余：红冲/销方黑名单自动标记异常、购方抬头/税号写入数据库。
      * 分库改造：inv_invoice 在 master 库；被 OcrService（image 库独立事务）调用时
      * REQUIRES_NEW 挂起外层 image 事务、绑定 master 连接。原无事务注解（靠调用方
      * 事务或逐条自动提交），补显式事务后多步写入原子性更有保障。 */
@@ -365,7 +368,7 @@ public class InvoiceService {
         orgGuard.assertCompanyAllowed(invoice.getCompanyId());
         invoice.setId(null);
         // 全电票无发票代码：NULL 归一为空串（V1.3.4 列已 NOT NULL DEFAULT ''），
-        // 使 uk_tenant_inv 租户内查重对全电票生效，且与 inv_invoice_global 空串口径一致
+        // 使 uk_tenant_inv 租户内查重对全电票生效，且与 inv_invoice_global 空串规则一致
         if (invoice.getInvoiceCode() == null) {
             invoice.setInvoiceCode("");
         }
@@ -401,12 +404,12 @@ public class InvoiceService {
             if (lu != null) invoice.setCompanyId(lu.getCompanyId());
         }
         invoice.setSourceDocType("MANUAL");
-        // D3：购方信息在本表有两组语义重复的列，一组空则按该口径查询的报表必然漏行。
+        // D3：购方信息在本表有两组语义重复的列，一组空则按该规则查询的报表必然漏行。
         //   invoice_title  注释「购方名称」   ← 手工补录表单填这一组
         //   buyer_name     注释「购方抬头」   ← OCR 链（OcrService#toPoolDto → InvoiceFacadeImpl）填这一组
         // 两条链路各填一半，导致 5/5 张票 invoice_title 有值而 buyer_name 全空，
-        // 「按购买方过滤」的报表一条都查不到（create 方法头注释自认「购方抬头/税号落库」是 P1 遗留）。
-        // 此处按互补口径双向补齐：任一组有值就回填另一组，单条链路与未来新调用方都自动受益；
+        // 「按购买方过滤」的报表一条都查不到（create 方法头注释自认「购方抬头/税号写入数据库」是 P1 遗留）。
+        // 此处按互补规则双向补齐：任一组有值就回填另一组，单条链路与未来新调用方都自动受益；
         // 两组都空则保持 NULL（不臆造数据，缺失仍是缺失）。
         // 注意必须放在 insert 之前，且不能覆盖对方已有的非空值。
         if (isBlank(invoice.getBuyerName()) && !isBlank(invoice.getInvoiceTitle())) {
@@ -429,12 +432,12 @@ public class InvoiceService {
     }
 
     /**
-     * D-DEC-463（幂等腿②·主域实现）：这张「发票代码＋号码」是否已在当前租户的发票池里。
+     * D-DEC-463（去重环节②·主域实现）：这张「发票代码＋号码」是否已在当前租户的发票池里。
      *
      * <p>给 OCR 链的入池前置判定用（见 {@code OcrService#recognizeAndRecord}）。命中即跳过入池，
      * 不再靠 {@link #create} 里的 {@code assertNotDuplicateEntry} 抛异常后被调用方误记成"入池失败"。
      *
-     * <p>过滤口径与 {@code assertNotDuplicateEntry} 的②（精确重复）一致：
+     * <p>过滤规则与 {@code assertNotDuplicateEntry} 的②（精确重复）一致：
      * {@code tenant_id} 由 {@code FsscTenantLineHandler} 自动追加、{@code del_flag=0} 由实体的
      * {@code @TableLogic} 自动追加，故此处再手工拼 tenant/del_flag（会变成重复条件、且无上下文时反被拦）。
      * 全电票的 {@code invoice_code} 在库里是空串（V1.3.4 列 NOT NULL DEFAULT ''），入参须已由调用方归一。
@@ -462,7 +465,7 @@ public class InvoiceService {
      *      → 报「发票已存在于单据X，不得重复补录」；</li>
      *  <li>同 发票代码+号码 在发票池已存在（未占用）→ 友好报错替代原先 uk_tenant_inv 撞唯一键的裸 500。</li>
      * </ol>
-     * 口径与提交侧判重统一：VOID 单据的勾稽不算占用，其余（在途/已批/已付）均算。
+     * 规则与提交侧判重统一：VOID 单据的勾稽不算占用，其余（在途/已批/已付）均算。
      */
     private void assertNotDuplicateEntry(InvInvoice invoice) {
         String no = invoice.getInvoiceNo();
@@ -473,7 +476,7 @@ public class InvoiceService {
         List<InvInvoice> sameNo = invInvoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()
                 .eq(InvInvoice::getInvoiceNo, no.trim()));
         for (InvInvoice exist : sameNo) {
-            // 已作废(INPUT 补录录错额后走 /invoice/void 留痕作废)的池内记录不再占号：
+            // 已作废(INPUT 补录录错额后走 /invoice/void 记录作废)的池内记录不再占号：
             // 不放开这条，操作人作废自己那张错票后就再也录不回来（"作废→重录"这条纠错通道会断在第二步）。
             // 原记录仍留在池里（status=VOID、del_flag=0）可追溯，占用判定仍由下面①兜着。
             if ("VOID".equals(exist.getStatus())) {
@@ -570,7 +573,7 @@ public class InvoiceService {
         }
     }
 
-    /** 解析税务经理角色用户；该角色无用户时回退租户全部激活用户（与 InvoiceAbnormalAlertJob 同口径）。 */
+    /** 解析税务经理角色用户；该角色无用户时回退租户全部激活用户（与 InvoiceAbnormalAlertJob 同一规则）。 */
     private List<Long> taxManagerUsers(Long tenantId) {
         SysRole role = sysRoleMapper.selectOne(new LambdaQueryWrapper<SysRole>()
                 .eq(SysRole::getRoleCode, "TAX_MANAGER")
@@ -672,7 +675,7 @@ public class InvoiceService {
     /**
      * uxfix W1（2026-10-08）：销项票判定＝direction 列 或 开票链推导
      * （sourceDocType=SALES_INVOICE/RED_FLUSH、状态 ISSUING/ISSUED/RED_FLUSHED/RED_FLUSH）。
-     * 推导项是为覆盖 direction 列 DDL 之前/旧 jar 代次差窗内产生的存量票。
+     * 推导项是为覆盖 direction 列 DDL 之前/旧 jar 代次差窗内产生的历史票。
      */
     public static boolean isOutputInvoice(InvInvoice inv) {
         if (inv == null) {
@@ -710,7 +713,7 @@ public class InvoiceService {
 
     @Transactional(rollbackFor = Exception.class)
     public Long bindToBill(Long billId, Long lineId, Long invoiceId, BigDecimal amount) {
-        // 必填兜底（治理批次 2B）：billId 为空历史上会在下面的占用累计计算处 billId.equals(...) 抛 NPE（裸 500），
+        // 必填默认处理（治理批次 2B）：billId 为空历史上会在下面的占用累计计算处 billId.equals(...) 抛 NPE（裸 500），
         // 并会插入 bill_id 为空的孤儿勾稽记录，使发票被计为「已占用」却无任何单据可追溯。
         if (invoiceId == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择发票");
@@ -735,7 +738,7 @@ public class InvoiceService {
                             + " 为" + ("RED".equalsIgnoreCase(invoice.getInvoiceNature()) ? "红字" : "作废")
                             + "发票，禁止绑定占用/报销");
         }
-        // uxfix W1（C1 静默坏数据闸）：销项票＝本公司开出去的票，不得被采购/报销单据关联占用，
+        // uxfix W1（C1 静默坏数据校验）：销项票＝本公司开出去的票，不得被采购/报销单据关联占用，
         // 否则三单匹配金额虚增、虚报路径打通（发票池同族扫描 2026-10-08 · 判据 C1）。
         // direction 列是 2026-10-08 DDL 新加，代次差窗内旧链路产生的票列值恒默认 INPUT ⇒ 叠加开票链推导。
         if (isOutputInvoice(invoice)) {
@@ -787,12 +790,12 @@ public class InvoiceService {
                 purchaseService.markInvoiced(bill.getPoReceiptId(), occupyAmount);
                 log.info("[PTP] 发票 {} 绑定付款单 {} → 回写收货单 {} 开票金额 {}", invoiceId, billId, bill.getPoReceiptId(), occupyAmount);
                 // 发票与收货单匹配登记点——红字冲回暂估（借 暂估应付/贷 存货）+ 正式入账（借 存货/贷 应付），
-                // 幂等（冲回按收货单、入账按发票），科目缺失/异常仅 warn 不阻断发票绑定
+                // 去重（冲回按收货单、入账按发票），科目缺失/异常仅 warn 不阻断发票绑定
                 com.fssc.purchase.entity.PoReceipt matchedReceipt = null;
                 try {
                     matchedReceipt = purchaseService.receiptById(bill.getPoReceiptId());
                 } catch (Exception ignore) {
-                    // 收货单缺失时冲回仍按 ID 幂等生成
+                    // 收货单缺失时冲回仍按 ID 去重生成
                 }
                 voucherService.reverseEstimateOnInvoiceMatch(
                         bill.getPoReceiptId(),
@@ -814,7 +817,7 @@ public class InvoiceService {
                 .last("limit 1"));
     }
 
-    /** 不再接受发票勾稽占用的单据终态（三单匹配候选窗口排除项，D-DEC-113） */
+    /** 不再接受发票勾稽占用的单据最终状态（三单匹配候选窗口排除项，D-DEC-113） */
     private static final List<String> BIND_DEAD_BILL_STATUS = List.of("VOID", "TERMINATED", "REJECTED", "WITHDRAWN");
 
     /**
@@ -826,12 +829,12 @@ public class InvoiceService {
      * （{@code PAY_EXCEED_INVOICE}＝关联发票 0 < 本次付款）唯一的解法就是「补录发票 → 关联单据」，
      * 出口本身不可达 ⇒ 批次判超付后永久停在执行环节（{@code PayBatchService.execute} 每次现算现拦）。</p>
      *
-     * <p><b>口径变更</b>：候选单据按<b>操作权限</b>取数（能绑票＝能选单，端点权限码 {@code inv:bind}），
-     * 不再按提单人取数。组织维度仍受 {@link com.fssc.framework.org.OrgGuard} 约束——
+     * <p><b>规则变更</b>：候选单据按<b>操作权限</b>查询（能绑票＝能选单，端点权限码 {@code inv:bind}），
+     * 不再按提单人查询。组织维度仍受 {@link com.fssc.framework.org.OrgGuard} 约束——
      * 集团级账号（无公司）跨公司可见，普通账号只见本公司单据 + 无公司维度的历史单据 + 本人提的单，
-     * 与 {@code OrgGuard.assertVisible} 同一套 fail-open 口径，不放宽越权面。</p>
+     * 与 {@code OrgGuard.assertVisible} 同一套 fail-open 规则，不放宽越权面。</p>
      *
-     * <p>每行附带发票腿差额（{@code invoiceBound}＝本单已勾稽发票占用合计，
+     * <p>每行附带发票环节差额（{@code invoiceBound}＝本单已勾稽发票占用合计，
      * {@code invoiceGap}＝应付额 − 已覆盖额），使经办在绑票前就能看清"还差多少票"，
      * 绑完再跑一次三单匹配即知是否解开。</p>
      *
@@ -868,6 +871,7 @@ public class InvoiceService {
         Page<ExpBill> p = expBillMapper.selectPage(Page.of(pageNum, pageSize), qw);
         List<ExpBill> records = p.getRecords();
 
+        // 发票环节现算：一页 ≤ 若干行，一次 in 查询取回勾稽占用合计（与三单匹配同一规则 inv_bill_invoice）
         Map<Long, BigDecimal> boundByBill = new HashMap<>();
         if (!records.isEmpty()) {
             List<Long> ids = records.stream().map(ExpBill::getId).filter(java.util.Objects::nonNull)
@@ -885,7 +889,7 @@ public class InvoiceService {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (ExpBill b : records) {
             BigDecimal bound = boundByBill.getOrDefault(b.getId(), BigDecimal.ZERO);
-            // 与三单匹配的付款腿同口径：核定付款额优先，退回单头合计额
+            // 与三单匹配的付款环节同一规则：核定付款额优先，退回单头合计额
             BigDecimal pay = b.getApprovedPayAmount() != null ? b.getApprovedPayAmount() : nzAmt(b.getTotalAmount());
             BigDecimal gap = pay.subtract(bound);
             Map<String, Object> m = new LinkedHashMap<>();
@@ -913,12 +917,12 @@ public class InvoiceService {
     }
 
     /**
-     * 反核销（D-V3-135 配套 · 行业方案"反"字链第一环）：解除发票-单据勾稽并解锁发票。
+     * 反核销（D-V3-135 配套 · 单据反操作链第一环）：解除发票-单据勾稽并解锁发票。
      *
      * <p>前置：本单据不存在 PAID 付款记录——付款落地后勾稽是既成资金事实的凭证线索，不得反；
-     * 资金差错走付款退款单（行业方案同口径）。</p>
+     * 资金差错走付款退款单（同一规则）。</p>
      *
-     * <p>语义：勾稽记录软删（del_flag=1，留痕不物理删）；发票 lock_status 解锁
+     * <p>语义：勾稽记录软删（del_flag=1，记录不物理删）；发票 lock_status 解锁
      * （LOCKED_IN_USE → NONE，清占用溯源）；占用额度随之释放（remaining/used_count 均按
      * del_flag=0 重算）。反核销后单据可正常重提或做差额重审。</p>
      *
@@ -1024,7 +1028,7 @@ public class InvoiceService {
 
     /**
      * 销项发票作废（当月作废）：仅当月（开票日期与当前同月）且未被收款核销/单据占用引用时
-     * 可作废，status 置 VOID、remark 留痕（原因+操作人+时间）、异常标记置 INVALID。
+     * 可作废，status 置 VOID、remark 记录（原因+操作人+时间）、异常标记置 INVALID。
      * 不满足条件抛明确业务异常。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -1037,7 +1041,7 @@ public class InvoiceService {
         if ("VOID".equals(status)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "发票 " + noOf(inv) + " 已作废，请勿重复操作");
         }
-        // 进项「发票补录」录错额（典型＝税额填 0，被三单匹配按不含税口径误判超收货）也要有正规出口：
+        // 进项「发票补录」录错额（典型＝税额填 0，被三单匹配按不含税规则误判超收货）也要有正规出口：
         // 这类票 direction=INPUT、status=NORMAL，从未走开具流程 ⇒ 与销项 ISSUED 同列可作废集。
         // 下面「当月」与「未被勾稽引用」两道前置照旧拦，所以放宽只放开纠错通道、不放开已核销资金。
         boolean apEntryCorrectable = "INPUT".equals(inv.getDirection()) && "NORMAL".equals(status);
@@ -1075,7 +1079,7 @@ public class InvoiceService {
      * 进项「发票补录」金额更正（D-V4R-46 的出口）：补录时把税额填成 0，会让三单匹配按
      * 「价税 − 税额」折算后判成「发票超收货超容差」，而票号上有 uk_tenant_inv 唯一键 ⇒ 作废后同号码录不回来，
      * 光补 inv:void/inv:unbind 两道门并不能纠错。这里给一张<b>未被占用</b>的进项票一个改额通道：
-     * 只改三个金额字段并把 VOID/NORMAL 归位成 NORMAL，票号、销方、日期、影像一律不动，留痕追加进 remark。
+     * 只改三个金额字段并把 VOID/NORMAL 归位成 NORMAL，票号、销方、日期、影像一律不动，记录追加进 remark。
      */
     public void correctEntry(Long invoiceId, java.math.BigDecimal netAmount, java.math.BigDecimal taxAmount,
                              java.math.BigDecimal amount, String reason) {
@@ -1126,7 +1130,7 @@ public class InvoiceService {
     /**
      * 销项发票跨月红冲：生成负数金额的红字发票记录（新 id，invoice_no=原号+R 后缀，
      * amount/net/tax 取负，original_id 关联原票，status=RED_FLUSH、invoice_nature=RED），
-     * 原票状态置 RED_FLUSHED、remark 留痕。仅 ISSUED 原票可红冲；已红冲的拒绝重复操作。
+     * 原票状态置 RED_FLUSHED、remark 记录。仅 ISSUED 原票可红冲；已红冲的拒绝重复操作。
      */
     @Transactional(rollbackFor = Exception.class)
     public Long redFlush(Long invoiceId, String reason) {
@@ -1183,7 +1187,7 @@ public class InvoiceService {
         red.setTenantId(TenantContext.getTenantId());
         red.setRemark(appendRemark(null, "【红冲】原票 " + noOf(origin) + "；原因：" + reason.trim()));
         invInvoiceMapper.insert(red);
-        // 原票置 RED_FLUSHED + 留痕
+        // 原票置 RED_FLUSHED + 记录
         InvInvoice upd = new InvInvoice();
         upd.setId(origin.getId());
         upd.setStatus("RED_FLUSHED");
@@ -1197,7 +1201,7 @@ public class InvoiceService {
         return red.getId();
     }
 
-    /** remark 留痕追加（500 长度保护，超长保留尾部） */
+    /** remark 记录追加（500 长度保护，超长保留尾部） */
     private String appendRemark(String base, String addition) {
         String merged = (base == null || base.isBlank() ? "" : base + "；") + addition;
         return merged.length() > 500 ? merged.substring(merged.length() - 500) : merged;

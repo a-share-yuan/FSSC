@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-popover
     v-model:visible="popoverVisible"
@@ -60,14 +63,14 @@ const unreadCount = ref(0)
 const uid = store.user?.userId ?? store.user?.id
 
 /**
- * 角标口径＝服务端本人未读总数（messageApi.unreadCount），不再用「当前页 20 条里数出来的未读」。
+ * 角标规则＝服务端本人未读总数（messageApi.unreadCount），不再用「当前页 20 条里数出来的未读」。
  * 原实现两处各挂一个铃铛：HeaderBadges 那个用服务端总数、这里用页内计数，
- * 未读超过一页时两个数字会打架；现只留这一个铃铛，取权威口径。
+ * 未读超过一页时两个数字会打架；现只留这一个铃铛，取权威规则。
  */
 async function fetchUnread() {
   if (!uid) return
   try {
-    // silent：辅助角标拉取失败不弹全局错误（30s 轮询与下次展开兜底）
+    // silent：辅助角标拉取失败不弹全局错误（30s 轮询与下次展开默认处理）
     unreadCount.value = await messageApi.unreadCount(uid, { silent: true }) || 0
   } catch { /* 忽略 */ }
 }
@@ -105,7 +108,7 @@ async function onItemClick(msg) {
       await messageApi.read(msg.id)
       msg.isRead = 1
       fetchUnread()
-    } catch { /* 忽略：与拉取同口径，辅助功能不弹错 */ }
+    } catch { /* 忽略：与拉取同一规则，辅助功能不弹错 */ }
   }
   if (msg.linkUrl) {
     popoverVisible.value = false
@@ -123,7 +126,7 @@ async function readAll() {
   } catch { /* 忽略 */ }
 }
 
-/** 类型标签配色：与枚举 MSG_TYPE 的中文标签同源，未登记的新类型落 'info' 直显原码 */
+/** 类型标签配色：与枚举 MSG_TYPE 的中文标签同源，未登记的新类型落 'info' 直接显示原码 */
 function msgTypeTag(t) {
   const map = {
     APPROVAL: 'warning', APPROVAL_URGE: 'warning', CC_NOTICE: 'primary',
@@ -152,7 +155,7 @@ let unreadTimer = null
 onMounted(() => {
   fetchMessages()
   fetchUnread()
-  // 角标轮询从 HeaderBadges 搬来（那里已删掉重复铃铛），口径与间隔保持不变
+  // 角标轮询从 HeaderBadges 搬来（那里已删掉重复铃铛），规则与间隔保持不变
   unreadTimer = setInterval(fetchUnread, 30000)
 })
 onBeforeUnmount(() => clearInterval(unreadTimer))

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.document.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -33,7 +36,7 @@ import java.util.stream.Collectors;
  * 提醒其发起销毁审批或办理延期。此前 {@code ArchiveService.listExpiringSoon(int)}
  * 虽已实现查询，但无定时任务、无推送、无前端入口，档案到期无人感知。
  *
- * <p>【幂等】到期是持续状态（不同于"新增异常"这类一次性事件），故以
+ * <p>【去重】到期是持续状态（不同于"新增异常"这类一次性事件），故以
  * {@code 租户+日期} 为键记录已推送，保证同一天最多推一次，避免重启后重复轰炸。
  *
  * <p>【租户上下文】调度线程无 {@link TenantContext}，op_archive 为租户过滤表，

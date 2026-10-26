@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -27,7 +30,7 @@ public class MdIoTemplate extends TenantAuditBase {
     /** IMPORT 导入 / EXPORT 导出 / BOTH 双向 */
     private String direction;
 
-    /** 落库/取数目标表（EXPORT 必填） */
+    /** 写入数据库/查询目标表（EXPORT 必填） */
     private String targetTable;
 
     /** Excel 工作表名 */

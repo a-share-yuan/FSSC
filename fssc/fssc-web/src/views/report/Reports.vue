@@ -1,15 +1,18 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div :class="['reports', { tabless: isSingle }]">
     <el-card header="费用概览">
-      <!-- R5-D-020：四格只摆服务端概览接口的真返回值；取数失败如实标「本次未刷新成功」，不再拿 0 顶数 -->
+      <!-- R5-D-020：四格只摆服务端概览接口的真返回值；查询失败如实标「本次未刷新成功」，不再拿 0 顶数 -->
       <el-alert v-if="overviewError" type="error" :closable="false" show-icon style="margin-bottom:12px"
         title="本次未刷新成功：费用概览未取到服务端数据" />
       <el-row :gutter="16">
         <el-col :span="6" v-for="s in overview" :key="s.label">
-          <el-statistic v-if="s.value != null" :title="s.label" :value="s.value" />
+          <el-statistic v-if="s.value != null" :title="s.label" :value="s.value" :precision="s.precision" :suffix="s.suffix" />
           <div v-else class="overview-missing">
             <div class="overview-missing-label">{{ s.label }}</div>
-            <div class="overview-missing-value">{{ overviewError ? '本次未刷新成功' : '取数中…' }}</div>
+            <div class="overview-missing-value">{{ overviewError ? '本次未刷新成功' : '加载中…' }}</div>
           </div>
         </el-col>
       </el-row>
@@ -58,7 +61,7 @@
           <BaseChart :option="effChart" height="280px" style="margin-bottom:12px" />
           <el-table :data="paged.effRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" empty-text="暂无数据">
         <el-table-column type="selection" width="45" />
-            <el-table-column prop="nodeName" label="单据类型"  width="120" sortable />
+            <el-table-column prop="nodeName" label="单据类型"  width="120" sortable :formatter="(row, col, val) => billTypeLabel(val)" />
             <el-table-column prop="avgHours" label="平均耗时(时)" width="140"  sortable />
             <el-table-column prop="maxHours" label="最长耗时(时)" width="140"  sortable />
           </el-table>
@@ -280,6 +283,13 @@
           <el-table :data="paged.taxRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" empty-text="暂无数据">
         <el-table-column type="selection" width="45" />
             <el-table-column prop="period" label="期间" width="100"  sortable />
+            <!-- D-H10-01：手册 H10.4a 期望表头「税种/税基/税额/税负率」，原页只有三个税额列。
+                 税种＝增值税（inv_invoice 全量为 VAT/VAT_NORMAL，本系统无其它税种）；
+                 税基＝销项不含税金额（后端 taxBurdenAnalysis 新增 taxBase）；税负率＝应纳税额/税基。 -->
+            <el-table-column label="税种" width="90">
+              <template #default>增值税</template>
+            </el-table-column>
+            <el-table-column prop="taxBase" label="税基" width="130" align="right" sortable :formatter="(r,c,v) => formatMoney(v)" />
             <el-table-column prop="inputTax" label="进项税额" width="120" sortable>
               <template #default="{ row }"><span style="color:#67c23a">{{ formatMoney(row.inputTax) }}</span></template>
             </el-table-column>
@@ -288,6 +298,9 @@
             </el-table-column>
             <el-table-column prop="netTax" label="应纳税额" width="120" sortable>
               <template #default="{ row }"><span style="color:#f59a23;font-weight:600">{{ formatMoney(row.netTax) }}</span></template>
+            </el-table-column>
+            <el-table-column label="税负率" width="100" align="right">
+              <template #default="{ row }">{{ taxBurdenRate(row) }}</template>
             </el-table-column>
           </el-table>
         </el-tab-pane>
@@ -307,7 +320,7 @@
           <BaseChart :option="qualityChart" height="280px" style="margin-bottom:12px" />
           <el-table :data="paged.qualityRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" empty-text="暂无数据">
         <el-table-column type="selection" width="45" />
-            <el-table-column prop="checkType" label="抽检类型" width="120"  sortable :formatter="(row, col, val) => checkItemLabel(val)" />
+            <el-table-column prop="checkType" label="抽检方式" width="120"  sortable :formatter="(row, col, val) => checkSamplingLabel(val)" />
             <el-table-column prop="totalCnt" label="抽检总数" width="100"  sortable />
             <el-table-column prop="passCnt" label="合格数" width="100"  sortable />
             <el-table-column prop="passRate" label="合格率(%)" width="120" sortable>
@@ -396,7 +409,7 @@
 </template>
 
 <script setup>
-import { taskTypeLabel, checkItemLabel, bizTypeLabel, voucherSourceLabel, contractTypeLabel } from '@/constants/enums'
+import { taskTypeLabel, checkSamplingLabel, billTypeLabel, bizTypeLabel, voucherSourceLabel, contractTypeLabel } from '@/constants/enums'
 import { onMounted, reactive, ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { dashApi, reportApi, orgApi, http, store } from '../../api'
@@ -474,9 +487,16 @@ const REPORT_GROUPS = [
 ]
 const loading = ref(false)
 // R5-D-020：概览四格的值一律来自服务端概览接口；取不到即置 overviewError，界面上摆「本次未刷新成功」，
-// 不再用 ?? 0 把「没取到」说成「金额为 0」。初值为 null（渲染「取数中…」），成功回填后才出数。
+// 不再用 ?? 0 把「没取到」说成「金额为 0」。初值为 null（渲染「查询中…」），成功回填后才出数。
 const overviewError = ref(false)
-const overview = reactive([{ label: '本月报销总额', value: null }, { label: '待审单据', value: null }, { label: '已付金额', value: null }, { label: '预算执行率', value: null }])
+// 预算执行率由服务端回两位小数的百分数（如 81.55），裸渲染会被统计卡按默认精度抹成「81」，
+// 故该格单列 precision/suffix；金额与单数保持整数千分位。10-25 视觉走查实测。
+const overview = reactive([
+  { label: '本月报销总额', value: null },
+  { label: '待审单据', value: null },
+  { label: '已付金额', value: null },
+  { label: '预算执行率', value: null, precision: 2, suffix: '%' },
+])
 const deptRows = ref([])
 const budgetRows = ref([])
 const effRows = ref([])
@@ -570,7 +590,7 @@ const effChart = computed(() => {
     tooltip: { trigger: 'axis' },
     legend: { data: ['平均耗时', '最长耗时'], top: 0 },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: rows.map(r => r.nodeName), axisLabel: { rotate: 30, interval: 0 } },
+    xAxis: { type: 'category', data: rows.map(r => billTypeLabel(r.nodeName)), axisLabel: { rotate: 30 } },
     yAxis: { type: 'value', name: '小时' },
     series: [
       { name: '平均耗时', type: 'bar', data: rows.map(r => r.avgHours), itemStyle: { color: '#409eff' } },
@@ -634,7 +654,12 @@ const apAgingChart = computed(() => {
     tooltip: { trigger: 'axis' },
     legend: { data: ['0-30天', '31-60天', '61-90天', '90天以上'], top: 0 },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: rows.map(r => r.payeeName), axisLabel: { rotate: 30, interval: 0 } },
+    // 1366 宽屏下供应商名较长且家数多，旋转+全画会把标签挤成一片；改横排并按空间自动抽稀，
+    // 超宽标签截断（overflow:truncate 只影响轴标签，tooltip 与表格仍是全称）。
+    xAxis: {
+      type: 'category', data: rows.map(r => r.payeeName),
+      axisLabel: { interval: 'auto', hideOverlap: true, width: 72, overflow: 'truncate' },
+    },
     yAxis: { type: 'value', name: '金额' },
     series: [
       { name: '0-30天', type: 'bar', stack: 'aging', data: rows.map(r => r.d0_30), itemStyle: { color: '#67c23a' } },
@@ -659,12 +684,18 @@ const taxBurdenChart = computed(() => {
     ],
   }
 })
+// D-H10-01：税负率＝应纳税额 / 税基（销项不含税金额）。分母为 0 时无从计算，显式「—」而非 0%。
+function taxBurdenRate(row) {
+  const base = Number(row?.taxBase || 0)
+  if (!base) return '—'
+  return ((Number(row?.netTax || 0) / base) * 100).toFixed(2) + '%'
+}
 const qualityChart = computed(() => {
   const rows = qualityRows.value || []
   return {
     tooltip: { trigger: 'axis', formatter: (p) => `${p[0].name}<br/>合格率: ${p[0].value}%` },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: rows.map(r => r.checkType), axisLabel: { rotate: 30, interval: 0 } },
+    xAxis: { type: 'category', data: rows.map(r => checkSamplingLabel(r.checkType)), axisLabel: { rotate: 30 } },
     yAxis: { type: 'value', name: '合格率(%)', max: 100 },
     series: [{
       type: 'bar', barMaxWidth: 36,
@@ -694,16 +725,16 @@ const budgetAlertChart = computed(() => {
 })
 
 // ===================== R5-D-323：报表按需加载（波次十八） =====================
-// 口径取自报表平台对 Tab 块的既有做法——「首次加载第一个 Tab 块，后续点哪个 Tab 块即加载哪个」，
+// 规则取自报表平台对 Tab 块的既有做法——「首次加载第一个 Tab 块，后续点哪个 Tab 块即加载哪个」，
 // 预加载其余 Tab 是可选项而非默认项（FineReport 帮助文档《决策报表新自适应》）。
-// 旧口径一次挂载并发 26 请求、同屏渲染 50 张表；改为「公司列表＋费用概览＋当前页签」3 枚起量，
+// 旧规则一次挂载并发 26 请求、同屏渲染 50 张表；改为「公司列表＋费用概览＋当前页签」3 枚起量，
 // 其余页签首次点亮时才取自己那一枚，取过的不重复请求（筛选条件变化由「查询/重置」强制重取）。
-// G1（2026-10-09 权限治理）的 403 不连坐口径原样保留：allSettled 逐枚独立，缺权只落空值兜底。
-// 每枚报表＝{ get 请求, empty 兜底, put 落值 }；枚名与 el-tab-pane 的 name 一一对应，ensureTab 按名直取。
+// G1（2026-10-09 权限治理）的 403 不连坐规则原样保留：allSettled 逐枚独立，缺权只落空值默认处理。
+// 每枚报表＝{ get 请求, empty 默认处理, put 落值 }；枚名与 el-tab-pane 的 name 一一对应，ensureTab 按名直取。
 const REPORTS = {
   overview: {
     // R5-D-020：概览四格改指服务端真汇总（单枚 camelCase Map），不再拿分组明细数组去凑。
-    // 取数失败或缺任一指标都置错误态，界面直说「本次未刷新成功」；原 ?? 0 的兜底已删。
+    // 查询失败或缺任一指标都置错误态，界面直说「本次未刷新成功」；原 ?? 0 的默认处理已删。
     get: () => http.get('/tenant/dashboard/expense/overview').catch((e) => { overviewError.value = true; throw e }),
     empty: null, put: (v) => {
     if (!v) { overviewError.value = true; return }
@@ -739,7 +770,7 @@ const REPORTS = {
   voucherStats: { get: () => reportApi.voucherStats(), empty: [], put: (v) => { voucherRows.value = v } },
 }
 const fetchedReports = new Set()
-/** 权限类失败（HTTP 403 / 业务码 4030）：拦截器已出提示，页内不再补弹，空值兜底即可 */
+/** 权限类失败（HTTP 403 / 业务码 4030）：拦截器已出提示，页内不再补弹，空值默认处理即可 */
 function isPermErr(e) { return e?.code === 4030 || e?.status === 403 }
 
 async function fetchReports(names, force) {
@@ -751,7 +782,7 @@ async function fetchReports(names, force) {
     results.forEach((r, i) => {
       const spec = REPORTS[todo[i]]
       if (r.status === 'fulfilled') { spec.put(r.value ?? spec.empty); fetchedReports.add(todo[i]); return }
-      // 缺权＝该域本就不该看到这张表：兜底并标记已取，避免每次点亮重放同一记 403
+      // 缺权＝该域本就不该看到这张表：默认处理并标记已取，避免每次点亮重放同一记 403
       if (isPermErr(r.reason)) { spec.put(spec.empty); fetchedReports.add(todo[i]) }
       // 其余失败（超时/服务异常）不落标记：重新点亮该页签即重试
     })
@@ -764,7 +795,8 @@ watch(tab, (v) => ensureTab(v))
 
 // 「查询/重置」按钮＝条件已变，强制重取该枚（绕过 fetchedReports 去重）
 async function loadSummary() {
-  // R5-D-323 同期加的第一道查询闸门：费用发生汇总按年度取数，年度为空即查询＝跨年全表扫描，
+  // R5-D-323 同期加的第一道查询校验：费用发生汇总按年度查询，年度为空即查询＝跨年全表扫描，
+  // 与报表平台「参数界面的不能为空校验需要在查询按钮中设置」同一规则（先拦再查，不放行空参查询）。
   if (!sumYear.value) { ElMessage.warning('请先选择年度后再查询'); return }
   await fetchReports(['summary'], true)
 }
@@ -834,7 +866,7 @@ function batchExport() {
 
 <style scoped>
 .toolbar { margin-bottom: 12px; }
-/* R5-D-020：概览格在「取数中／本次未刷新成功」两态下的占位样式，与 el-statistic 同排不跳版 */
+/* R5-D-020：概览格在「查询中／本次未刷新成功」两态下的占位样式，与 el-statistic 同排不跳版 */
 .overview-missing { padding: 0; }
 .overview-missing-label { font-size: 14px; color: #909399; line-height: 24px; }
 .overview-missing-value { margin-top: 8px; font-size: 18px; font-weight: 500; color: #f56c6c; }

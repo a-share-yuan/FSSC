@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.collab.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -13,7 +16,7 @@ import java.time.LocalDateTime;
 /**
  * 协同平台接口同步日志（蓝图异常处理范式：接口失败记日志，定时重试/人工处理）。
  * 覆盖：SCP打通点3(三单匹配记账)/5(付款回写)/6(认证)/7(关账冻结通知)、
- * AR接口1(EBS发运推送)/接口2-3(发票回写EBS)/对账状态同步。
+ * AR接口1(ERP发运推送)/接口2-3(发票回写ERP)/对账状态同步。
  */
 @Data
 @TableName("collab_sync_log")

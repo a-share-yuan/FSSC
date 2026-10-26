@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="quality-report">
     <el-card shadow="never">
@@ -119,7 +122,7 @@ import { formatDateTime, formatPercent } from '@/utils/format'
 
 /**
  * 任务质量报表（G3）：数据源 WfSharedOpsController /api/tenant/wf/ops/quality/**（权限 wf:instance:list）。
- * 口径见后端 TaskQualityReportService：批退 = wf_task_history.action='REJECT'。
+ * 规则见后端 TaskQualityReportService：批退 = wf_task_history.action='REJECT'。
  */
 const days = ref(30)
 const tab = ref('summary')

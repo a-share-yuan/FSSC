@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -110,7 +113,7 @@
       <el-table-column prop="invoiceType" :label="$t('field.type')" width="65" :formatter="(row, col, val) => invoiceTypeLabel(val)" />
       <el-table-column prop="limitAmount" :label="$t('flow.bill.colPerInvoiceLimit')" width="110" align="right" />
       <el-table-column prop="maxLines" :label="$t('flow.bill.colMaxLines')" width="85" align="right" />
-      <el-table-column prop="splitDim" :label="$t('flow.bill.colSplitDim')" width="95" />
+      <el-table-column prop="splitDim" :label="$t('flow.bill.colSplitDim')" width="95" :formatter="(row, col, val) => arSplitDimLabel(val)" />
       <el-table-column :label="$t('flow.bill.bizConfirm')" width="90">
         <template #default="{ row }">{{ row.needBizConfirm === 1 ? t('flow.bill.needed') : t('flow.bill.notNeeded') }}</template>
       </el-table-column>
@@ -275,7 +278,7 @@
         <el-form-item :label="$t('field.taxAmount')"><el-input v-model="ebsForm.taxAmount" /></el-form-item>
         <el-form-item :label="$t('flow.bill.erpStatement')">
           <el-select v-model="ebsForm.statementNo" filterable clearable style="width: 100%" :placeholder="$t('flow.bill.erpStatementPh')">
-            <el-option v-for="s in statements" :key="s.id" :value="s.billNo" :label="`${s.billNo} · ${s.customerName || ''} · ${s.status}`" />
+            <el-option v-for="s in statements" :key="s.id" :value="s.billNo" :label="`${s.billNo} · ${s.customerName || ''} · ${arStatementStatusLabel(s.status)}`" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -325,7 +328,7 @@
 </template>
 
 <script setup>
-import { arBillingStatusLabel, COURIER_COMPANIES } from '@/constants/enums'
+import { arBillingStatusLabel, arStatementStatusLabel, arSplitDimLabel, COURIER_COMPANIES } from '@/constants/enums'
 import { invoiceTypeLabel } from '@/constants/invoiceType'
 import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import {onMounted, reactive, ref, computed} from 'vue'

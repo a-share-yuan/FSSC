@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.budget.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -26,9 +29,9 @@ public class BgScheme extends TenantAuditBase {
     /** 1 结余结转下期 */
     private Integer carryOver;
     /**
-     * DRAFT草稿 / APPROVING审批中 / ISSUED已下达 / ACTIVE启用(存量口径，等效已下达) / CLOSED关闭
+     * DRAFT草稿 / APPROVING审批中 / ISSUED已下达 / ACTIVE启用(历史规则，等效已下达) / CLOSED关闭
      * 新增状态机 DRAFT→APPROVING→ISSUED；既有 ACTIVE 方案保持有效，
-     * 预算硬控/占用引用口径为 status IN ('ACTIVE','ISSUED')。
+     * 预算硬控/占用引用规则为 status IN ('ACTIVE','ISSUED')。
      */
     private String status;
     private String remark;

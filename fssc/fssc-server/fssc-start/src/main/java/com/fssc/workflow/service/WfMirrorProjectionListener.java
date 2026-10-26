@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.fssc.framework.tenant.TenantContext;
@@ -27,7 +30,7 @@ import java.util.Map;
  *
  * <p><b>它解决什么</b>：方案 §二 F1~F4 认定"镜像写点分散 + 无事务 + 失败吞掉 + 引擎旁路"是全部问题的根——
  * {@code wf_instance}/{@code wf_task} 的"何时推进"由 {@code WfEngineFacade} 里约 30 处手工调用决定，
- * 任何一处漏写就产生幽灵待办/实例滞留。G1 把这两张表的写路径<b>收口</b>：Flowable 是唯一执行真值，
+ * 任何一处漏写就产生幽灵待办/实例滞留。G1 把这两张表的写路径<b>办结</b>：Flowable 是唯一执行真值，
  * 本监听器把引擎事件翻译成投影事件。
  *
  * <p><b>本类只做两件事</b>（投影动作本身在 {@link WfProjectionService}，全系统仅此一份）：
@@ -58,7 +61,7 @@ import java.util.Map;
  * <h3>字段级映射清单（方案 §六 G1 要求）</h3>
  *
  * <p>字段来源优先级：<b>流程变量优先</b>（{@code runtimeService.getVariables}），缺失回退 {@code wf_instance}
- * 镜像行（变量会被引擎清理，视图行不会）；两者皆无的 NOT NULL 列按兜底值写入。{@code bizNo} 由门面
+ * 镜像行（变量会被引擎清理，视图行不会）；两者皆无的 NOT NULL 列按默认值写入。{@code bizNo} 由门面
  * {@code start()} 新注入变量（此前它只在门面里现算、不落变量），故监听器能取到。
  *
  * <p><b>本次搬迁的一处刻意修复（WF-PROCLOG-001 同源）</b>：原实现取 {@code pi.getId()} 作为流程实例 ID，
@@ -69,13 +72,13 @@ import java.util.Map;
  * <p><b>已知取舍（不粉饰）</b>：
  * <ol>
  *   <li>{@code current_node}/{@code current_assignee} 是"最后一条任务"的近似值，不等价于门面
- *       {@code joinNodeNames} 的并联合集口径；门面对应写点被守卫跳过后，并联节点在实例视图上只显示其一。</li>
+ *       {@code joinNodeNames} 的并联合集规则；门面对应写点被守卫跳过后，并联节点在实例视图上只显示其一。</li>
  *   <li>{@code wf_task_history} 在过渡期<b>双写</b>：门面仍写（并在 comment 打来源标记），投影也写。
  *       两行内容相近，属方案允许的过渡态，由 G0 对账器比对。</li>
  *   <li>历史行的 {@code action}：投影只认得"通过/驳回"两态（{@code approved} 变量），
  *       机器路径的 {@code AUTO_PASS}/{@code ESCALATE}/{@code TIMEOUT_RELEASE} 精细化动作
- *       仍由门面双写那一行承载——过渡期不丢信息；等门面停写历史后再单独收口。</li>
- *   <li>{@code TIMER_FIRED} 只留痕：当前架构超时走 {@code WfTimeoutJob} 轮询镜像表，引擎定时器未启用
+ *       仍由门面双写那一行承载——过渡期不丢信息；等门面停写历史后再单独办结。</li>
+ *   <li>{@code TIMER_FIRED} 只记录：当前架构超时走 {@code WfTimeoutJob} 轮询镜像表，引擎定时器未启用
  *       （方案 §二 F5/F7），此处仅把事件记下来供可观测，不做镜像投影、也不入队。</li>
  *   <li>{@code TASK_DELETED} 在方案里是"任务删除"语义，Flowable 8 的 {@code FlowableEngineEventType}
  *       没有该常量，实际由通用 {@code ENTITY_DELETED} 承载，故注册的是后者、在监听器内按实体类型
@@ -90,7 +93,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
 
-    /** {@code wf_task.candidate_ids} 列宽 varchar(1000)，与门面同一截断口径 */
+    /** {@code wf_task.candidate_ids} 列宽 varchar(1000)，与门面同一截断规则 */
     private static final int CANDIDATE_MAX_LEN = 990;
 
     private final RuntimeService runtimeService;
@@ -155,7 +158,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
                 projectionService.apply(envelope);
             }
         } catch (Exception ex) {
-            // G0 口径：投影写失败"记缺陷 + 冒泡"。上下文不可恢复的分支已在构造期 return，
+            // G0 规则：投影写失败"记缺陷 + 冒泡"。上下文不可恢复的分支已在构造期 return，
             // 走到这里的都是可恢复的失败（唯一键冲突、租户拦截、库不可用），必须让界面看得见。
             mirrorDefectRecorder.record(WfMirrorDefectRecorder.CODE_MIRROR_WRITE_FAILED,
                     "WfMirrorProjectionListener." + type, null, "entity=" + describe(entity), ex);
@@ -169,7 +172,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
 
     @Override
     public boolean isFailOnException() {
-        // 与门面 PROCESS_COMPLETED 监听器同口径：投影失败即让引擎命令失败、界面可见、可重试。
+        // 与门面 PROCESS_COMPLETED 监听器同一规则：投影失败即让引擎命令失败、界面可见、可重试。
         // 唯一的不可恢复分支（取不到租户）已记缺陷后 return，不会在此冒泡成死循环。
         return true;
     }
@@ -215,7 +218,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
             e.setAmount(decVar(vars, "amount", null));
             e.setStartUserId(currentUserId());
         } else {
-            // 结束：只判结果（approved 变量）；变量可能已被引擎清理，此时按 REJECTED 口径与原实现一致
+            // 结束：只判结果（approved 变量）；变量可能已被引擎清理，此时按 REJECTED 规则与原实现一致
             e.setApproved(Boolean.TRUE.equals(vars == null ? null : vars.get("approved")));
         }
         return e;
@@ -244,7 +247,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
         e.setOperUserName(currentUserName());
         e.setComment(strVar(vars, "comment", null));
         e.setApproved(Boolean.TRUE.equals(vars == null ? null : vars.get("approved")));
-        // 业务归属：变量优先 → 镜像实例行回退（与改造前 buildTaskRow 的取数口径逐字一致）
+        // 业务归属：变量优先 → 镜像实例行回退（与改造前 buildTaskRow 的查询范围逐字一致）
         e.setBizType(strVar(vars, "bizType", inst == null ? null : inst.getBizType()));
         e.setBizId(longVar(vars, "bizId", inst == null ? null : inst.getBizId()));
         e.setBizNo(strVar(vars, "bizNo", inst == null ? null : inst.getBizNo()));
@@ -287,6 +290,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
 
     // ---------------- 解析工具 ----------------
 
+    /** 候选组任务的可办理人（与门面 {@code recordTaskMirror} 同一规则与同一列宽截断） */
     private String resolveCandidateIds(Task task) {
         List<Long> operable = nodeOrgResolver.listOperableUserIds(task);
         if (operable == null || operable.isEmpty()) {
@@ -304,7 +308,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
     }
 
     /**
-     * 到期时刻（epoch 毫秒）：{@code wf_node_config.timeout_hours}，与门面同一份口径。
+     * 到期时刻（epoch 毫秒）：{@code wf_node_config.timeout_hours}，与门面同一份规则。
      * 解析失败/未配置返回 null（不阻断投影，与改造前 {@code log.debug} 后继续一致）。
      */
     private Long resolveDueTimeMillis(String modelKey, String nodeKey, LocalDateTime createTime) {
@@ -364,7 +368,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
                 "procInstId=" + procInstId + "（引擎已清理上下文，投影跳过）", null);
     }
 
-    /** 变量取数容错：引擎已清理变量时返回 null（调用方回退镜像实例行）。 */
+    /** 变量查询容错：引擎已清理变量时返回 null（调用方回退镜像实例行）。 */
     private Map<String, Object> varsQuietly(String procInstId) {
         if (procInstId == null) {
             return null;
@@ -429,7 +433,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
         }
     }
 
-    /** 任务创建时间为 null 时兜底为 now（与改造前 {@code toLocalDateTime} 同口径）。 */
+    /** 任务创建时间为 null 时默认处理为 now（与改造前 {@code toLocalDateTime} 同一规则）。 */
     private static LocalDateTime toLocalDateTime(Date date) {
         return date == null ? LocalDateTime.now()
                 : LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault());
@@ -444,7 +448,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
         return procDefId == null ? null : procDefId.split(":")[0];
     }
 
-    /** 当前登录用户 ID，无则 0（与门面 approverUserIdOrDefault 同口径） */
+    /** 当前登录用户 ID，无则 0（与门面 approverUserIdOrDefault 同一规则） */
     private static Long currentUserId() {
         com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
         return u == null || u.getUserId() == null ? 0L : u.getUserId();
@@ -456,11 +460,11 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
      * <p>D-DEC-161：这里原来直取 {@code getUsername()}，而 {@code username} 在本系统是<b>工号</b>
      * （sys_user.user_name，如 Y000147），写进 {@code wf_task_history.oper_user_name} 后
      * 审批链上就显示成一串工号；读侧 {@code WfQueryService#namesByIds} 早已是
-     * 「nick_name（姓名）优先、空则回落 user_name（工号）」，两条口径不一致会让同一份历史
-     * 里既有人名又有工号。改为同口径：realName（=nick_name）优先，空白才回落 username。
+     * 「nick_name（姓名）优先、空则回落 user_name（工号）」，两条规则不一致会让同一份历史
+     * 里既有人名又有工号。改为同一规则：realName（=nick_name）优先，空白才回落 username。
      *
      * <p>登录态缺失仍返回 null（D-DEC-280）：定时任务/引擎回调等没有 UserContext 的链路
-     * 不能拿工号或姓名冒充经办人，宁可留空由读侧按 oper_user_id 兜底。
+     * 不能拿工号或姓名冒充经办人，宁可留空由读侧按 oper_user_id 默认处理。
      */
     private static String currentUserName() {
         com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();

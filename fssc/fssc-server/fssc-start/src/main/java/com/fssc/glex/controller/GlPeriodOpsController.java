@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.controller;
 
 import com.fssc.common.core.Result;
@@ -21,7 +24,7 @@ import java.util.Map;
 /**
  * 总账期间操作（ 反结账 / 损益结转独立动作，2026-09-14）。
  * <p>
- * 端点口径按需求指定：
+ * 端点规则按需求指定：
  * <ul>
  *  <li>POST /api/tenant/gl/month/unclose — 反结账（CFO/租户管理员）</li>
  *  <li>POST /api/tenant/gl/profit-carry — 损益结转独立动作</li>
@@ -58,13 +61,13 @@ public class GlPeriodOpsController {
     public static class PeriodReq {
         /** 会计期间 yyyyMM */
         private String period;
-        /** 结账/结转公司（空则默认 1，与月结 close 同口径） */
+        /** 结账/结转公司（空则默认 1，与月结 close 同一规则） */
         private Long companyId;
     }
 
-    // ---------------- V2.2.38 K128/K129 月结检查闸清单 ----------------
+    // ---------------- V2.2.38 K128/K129 月结检查校验清单 ----------------
 
-    /** 检查闸清单：GET /close-check/list?period=202611&companyId=1（公司缺省取登录上下文，与月结 close 同口径） */
+    /** 检查校验清单：GET /close-check/list?period=202611&companyId=1（公司缺省取登录上下文，与月结 close 同一规则） */
     // R5-D-215
     @RequiresPerm("gl:monthclose:close")
     @GetMapping("/close-check/list")
@@ -138,15 +141,15 @@ public class GlPeriodOpsController {
 
     // R5-D-215
     /**
-     * 检查闸清单的建/查公司口径与月结 close 逐字对齐（GlMonthCloseService:248 comp = companyId != null ? companyId : 1L）：
-     * 显式入参 → 1。此处若改成取登录主体公司，清单会建在 A 公司、闸门口查的是 B 公司，闸门永远过不去。
+     * 检查校验清单的建/查公司范围与月结 close 逐字对齐（GlMonthCloseService:248 comp = companyId != null ? companyId : 1L）：
+     * 显式入参 → 1。此处若改成取登录主体公司，清单会建在 A 公司、校验口查的是 B 公司，校验永远过不去。
      */
     private Long resolveCheckCompany(Long companyId) {
         return companyId != null ? companyId : 1L;
     }
 
     // R5-D-215
-    /** 期间必输且必须是 6 位 yyyyMM（gl_close_check_item.period varchar(6)，与月结入库口径一致） */
+    /** 期间必输且必须是 6 位 yyyyMM（gl_close_check_item.period varchar(6)，与月结入库规则一致） */
     private String requireCheckPeriod(String period) {
         String p = period == null ? "" : period.trim();
         if (!p.matches("\\d{6}")) {

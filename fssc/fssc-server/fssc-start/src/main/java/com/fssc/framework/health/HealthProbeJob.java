@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.health;
 
 import com.fssc.framework.job.JobHeartbeatService;
@@ -11,7 +14,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 健康探针定时任务（P0-B1）。
+ * 健康检查定时任务（P0-B1）。
  *
  * <p>为什么需要它：健康端点只解决「有人来问才知道」。无人问津的深夜，数据库掉线不会有人发现。
  * 本任务每 5 分钟主动探测一次，仅在<b>状态翻转</b>时告警（UP→DOWN 报故障、DOWN→UP 报恢复），
@@ -47,13 +50,13 @@ public class HealthProbeJob {
             }
             if ("DOWN".equals(now)) {
                 opsAlertService.alert("ERROR",
-                        "健康探针：服务组件不可用",
+                        "健康检查：服务组件不可用",
                         "探测结果：" + now + "\n组件明细：" + detail.get("components")
                                 + "\n版本：" + detail.get("version")
                                 + "\n建议：立即检查数据库/Redis 连通性与连接池，必要时执行 P0-B2 回滚预案。");
             } else {
                 opsAlertService.alert("INFO",
-                        "健康探针：服务已恢复",
+                        "健康检查：服务已恢复",
                         "探测结果：" + now + "（上一状态 " + prev + "）\n组件明细：" + detail.get("components")
                                 + "\n运行时长：" + detail.get("uptimeSeconds") + " 秒");
             }

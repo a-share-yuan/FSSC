@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.apflow.controller;
 
 import com.fssc.apflow.entity.ApMonthClose;
@@ -67,7 +70,7 @@ public class ApMonthCloseController {
         return Result.success(service.autoCheck(id));
     }
 
-    /** EBS关账（恢复协同 + 联动会计期间结账） */
+    /** ERP关账（恢复协同 + 联动会计期间结账） */
     @RequiresPerm("apflow:close:close")
     @OperLog(module = "AP_MONTH_CLOSE", operType = "UPDATE", desc = "总账关账并联动结账期间")
     @PostMapping("/{id}/close-period")
@@ -75,7 +78,7 @@ public class ApMonthCloseController {
         return Result.success(service.closePeriod(id));
     }
 
-    /** 反关账（重开期间）：body {reason}，原因必填留痕；联动 md_period 恢复开账 */
+    /** 反关账（重开期间）：body {reason}，原因必填记录；联动 md_period 恢复开账 */
     @RequiresPerm("apflow:close:reopen")
     @OperLog(module = "AP_MONTH_CLOSE", operType = "UPDATE", desc = "反关账重开期间")
     @PostMapping("/{id}/reopen")
@@ -83,7 +86,7 @@ public class ApMonthCloseController {
         return Result.success(service.unClose(id, (String) body.get("reason")));
     }
 
-    /** R5-D-218 作废（终态 VOID）：body {reason}，原因必填留痕；解冻协同、行止不删 */
+    /** R5-D-218 作废（最终状态 VOID）：body {reason}，原因必填记录；解冻协同、行止不删 */
     @RequiresPerm("apflow:close:reopen")
     @OperLog(module = "AP_MONTH_CLOSE", operType = "UPDATE", desc = "作废关账单")
     @PostMapping("/{id}/void")

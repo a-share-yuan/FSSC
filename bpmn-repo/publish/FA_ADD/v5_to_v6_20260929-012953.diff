@@ -1,0 +1,11 @@
+--- bpmn:FA_ADD v5
++++ bpmn:FA_ADD v6
+@@ -10,7 +10,7 @@
+     <bpmn:sequenceFlow id="Flow_in_FK_2" sourceRef="FK_1" targetRef="FK_2" />
+     <bpmn:userTask id="FK_3" name="资产账套过账【资产核算岗】" flowable:candidateGroups="FA_ASSET_ACCOUNT" />
+     <bpmn:sequenceFlow id="Flow_in_FK_3" sourceRef="FK_2" targetRef="FK_3" />
+-    <bpmn:exclusiveGateway id="GW_FAADD_AMT" name="金额授权" default="Flow_GW_FAADD_AMT_def" />
++    <bpmn:exclusiveGateway id="GW_FAADD_AMT" name="金额授权" default="Flow_end" />
+     <bpmn:sequenceFlow id="Flow_in_GW_FAADD_AMT" sourceRef="FK_3" targetRef="GW_FAADD_AMT" />
+     <bpmn:userTask id="FK_6" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
+     <bpmn:sequenceFlow id="Flow_GW_FAADD_AMT_FK_6" sourceRef="GW_FAADD_AMT" targetRef="FK_6"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 5000000}</bpmn:conditionExpression></bpmn:sequenceFlow>

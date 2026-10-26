@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.payplan.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -52,6 +55,7 @@ public class PayPlan implements Serializable {
     private Long applicantId;
     /** 状态：APPROVING/APPROVED/REJECTED；付款批次核销全额后置 DONE（见 PlanWritebackService，D6） */
     private String status;
+    /** 累计已核销金额（付款批次执行成功后由 PlanWritebackService 回写计划已付款） */
     private BigDecimal paidAmount;
     /** 备注 */
     private String remark;

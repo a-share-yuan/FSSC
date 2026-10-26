@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -43,16 +46,16 @@ import java.util.function.Supplier;
  * <ol>
  *   <li>{@code ACT_RU_TASK} ↔ {@code wf_task(status=PENDING)}：在办任务是否都能被待办列表看见；</li>
  *   <li>{@code ACT_HI_PROCINST} ↔ {@code wf_instance}：历史流程实例是否都有业务实例视图；</li>
- *   <li>{@code ACT_HI_TASKINST} ↔ {@code wf_task_history}：引擎任务历史是否都有审批留痕。
- *       <b>双向口径收窄（2026-09-25）</b>：本向量要比较的是「任务级<b>办结</b>留痕」，两侧都必须先剥掉
+ *   <li>{@code ACT_HI_TASKINST} ↔ {@code wf_task_history}：引擎任务历史是否都有审批记录。
+ *       <b>双向规则收窄（2026-09-25）</b>：本向量要比较的是「任务级<b>办结</b>记录」，两侧都必须先剥掉
  *       「过程态」行，否则差集恒不为零、真信号会被噪声埋掉（单侧收窄时告警还会从反向向量反扑）。
  *       <ul>
  *         <li><b>引擎侧</b>只取「已办结且非删除」（{@code endTime != null} 且 {@code deleteReason} 为空）：
  *             引擎在任务<b>创建时</b>即写历史行，任务被取消/驳回跳转删除后该行仍保留（带
- *             {@code DELETE_REASON_}），这类行天然没有镜像留痕。<b>收窄前实测固定误报 27 条
+ *             {@code DELETE_REASON_}），这类行天然没有镜像记录。<b>收窄前实测固定误报 27 条
  *             （5 条在途 + 22 条被删除），其中真漂移 0 条。</b></li>
  *         <li><b>业务侧</b>只取办结类动作（见 {@link #MIRROR_DONE_ACTIONS}）：{@code wf_task_history}
- *             是「任务级留痕 + 过程动作」混表——{@code URGE}/{@code ESCALATE}/{@code CLAIM}
+ *             是「任务级记录 + 过程动作」混表——{@code URGE}/{@code ESCALATE}/{@code CLAIM}
  *             /{@code ASSIGN}/{@code UNCLAIM}/{@code TRANSFER}/{@code REASSIGN} 都带 {@code task_id}
  *             但只是过程动作，任务本身还在办；{@code REJECT_TO}/{@code REJECT_TO_DONE} 是驳回跳转，
  *             引擎把该任务<b>删除</b>（{@code DELETE_REASON_=Change activity to ...}）而非办结。
@@ -68,6 +71,7 @@ import java.util.function.Supplier;
  * 最近一次报告驻留内存，经 {@code GET /api/tenant/wf/perf/ledger-reconcile} 查看。
  *
  * <p>跨租户扫描：本作业在调度线程运行（无租户上下文），所有 {@code wf_*} 查询一律包在
+ * {@link TenantContext#runIgnoreTenant} 内，与 {@code WfTimeoutJob} 同一规则。
  */
 @Slf4j
 @Component
@@ -91,14 +95,14 @@ public class WfLedgerReconcileJob {
     private static final int HISTORY_SCAN_LIMIT = 20000;
 
     /**
-     * 业务账 {@code wf_task_history.action} 中属于「任务级办结留痕」的动作白名单（口径收窄 2026-09-25）。
+     * 业务账 {@code wf_task_history.action} 中属于「任务级办结记录」的动作白名单（规则收窄 2026-09-25）。
      *
-     * <p><b>为什么必须按动作白名单</b>：{@code wf_task_history} 是「任务级留痕 + 过程动作」混表，
+     * <p><b>为什么必须按动作白名单</b>：{@code wf_task_history} 是「任务级记录 + 过程动作」混表，
      * 过程动作也带 {@code task_id}——催办 {@code URGE}、升级 {@code ESCALATE}、认领 {@code CLAIM}、
      * 派单 {@code ASSIGN}、释放 {@code UNCLAIM}、转办 {@code TRANSFER}、改派 {@code REASSIGN}
      * 记录的是「谁对还在办的任务做了什么」，任务本身并未办结；{@code REJECT_TO}/{@code REJECT_TO_DONE}
      * 是驳回跳转，引擎把该任务<b>删除</b>（{@code DELETE_REASON_ = Change activity to ...}）而非办结。
-     * 这些行若也算作留痕，会与引擎侧的「已办结且非删除」判据错位，反向向量恒不为零。
+     * 这些行若也算作记录，会与引擎侧的「已办结且非删除」判据错位，反向向量恒不为零。
      *
      * <p>下列动作对应的引擎任务必然落在「{@code endTime != null} 且 {@code deleteReason} 为空」里：
      * <ul>
@@ -106,7 +110,7 @@ public class WfLedgerReconcileJob {
      *   <li>{@code AUTO_PASS}：超时自动通过（{@code WfTimeoutJob}）与空策略 SKIP
      *       （{@code NodeOrgResolver}），引擎侧同样走 {@code taskService.complete()} 办结。</li>
      * </ul>
-     * <b>新增办结类动作时必须同步本白名单</b>，否则会出现 v3a 误报（引擎已办结却"缺留痕"）。
+     * <b>新增办结类动作时必须同步本白名单</b>，否则会出现 v3a 误报（引擎已办结却"缺记录"）。
      */
     private static final Set<String> MIRROR_DONE_ACTIONS = Set.of("APPROVE", "REJECT", "AUTO_PASS");
 
@@ -126,8 +130,8 @@ public class WfLedgerReconcileJob {
                         + "，幽灵待办=" + vectorCount(report, "mirrorPendingMissingInEngine")
                         + "，实例缺视图=" + vectorCount(report, "engineProcInstMissingInMirror")
                         + "，视图缺引擎实例=" + vectorCount(report, "mirrorInstanceMissingInEngine")
-                        + "，历史缺留痕=" + vectorCount(report, "engineTaskInstMissingInHistory")
-                        + "，留痕缺引擎任务=" + vectorCount(report, "historyMissingInEngine")
+                        + "，历史缺记录=" + vectorCount(report, "engineTaskInstMissingInHistory")
+                        + "，记录缺引擎任务=" + vectorCount(report, "historyMissingInEngine")
                         + "\n本作业只报不修：请查系统日志（错误码 " + WfMirrorDefectRecorder.CODE_LEDGER_DRIFT
                         + "）核对样本 ID 后再人工处置。";
                 opsAlertService.alert("WARN", "流程双账对账发现差异", content);
@@ -160,7 +164,7 @@ public class WfLedgerReconcileJob {
         Set<String> engineHistTaskIds = new LinkedHashSet<>();
         for (HistoricTaskInstance h : historyService.createHistoricTaskInstanceQuery()
                 .listPage(0, HISTORY_SCAN_LIMIT)) {
-            // 口径收窄（2026-09-25）：镜像的任务级留痕只在办结时写，故只有「已办结且非删除」的
+            // 规则收窄（2026-09-25）：镜像的任务级记录只在办结时写，故只有「已办结且非删除」的
             // 历史任务才应当有镜像行；在途任务（endTime 为空）与被删除任务（deleteReason 非空，
             // 如取消、驳回跳转、流程取消）天然无行，不构成本向量的漂移。
             if (h.getEndTime() == null) {
@@ -194,9 +198,9 @@ public class WfLedgerReconcileJob {
         Set<String> mirrorHistTaskIds = new LinkedHashSet<>();
         Map<String, Long> tenantByHistTask = new HashMap<>();
         for (WfTaskHistory h : histories == null ? List.<WfTaskHistory>of() : histories) {
-            // taskId 为空的留痕是事件级行（SUBMIT / APPROVED / REJECTED），不参与任务级比对
+            // taskId 为空的记录是事件级行（SUBMIT / APPROVED / REJECTED），不参与任务级比对
             if (h.getTaskId() == null) continue;
-            // 口径收窄（2026-09-25）：只认办结类动作；催办/升级/认领/转办/驳回跳转等过程动作行
+            // 规则收窄（2026-09-25）：只认办结类动作；催办/升级/认领/转办/驳回跳转等过程动作行
             // 虽带 task_id，但任务本身未办结，计入即与引擎侧判据错位（详见 MIRROR_DONE_ACTIONS）。
             if (!MIRROR_DONE_ACTIONS.contains(h.getAction())) continue;
             mirrorHistTaskIds.add(h.getTaskId());
@@ -227,7 +231,7 @@ public class WfLedgerReconcileJob {
         long driftTotal = v1a.size() + v1b.size() + v2a.size() + v2b.size() + v3a.size() + v3b.size();
         report.put("driftTotal", driftTotal);
 
-        // ---------- 缺陷留痕（按租户聚合，只报不修） ----------
+        // ---------- 缺陷记录（按租户聚合，只报不修） ----------
         recordDrift("engineTaskMissingInMirror", v1a);
         recordDrift("mirrorPendingMissingInEngine", v1b);
         recordDrift("engineProcInstMissingInMirror", v2a);

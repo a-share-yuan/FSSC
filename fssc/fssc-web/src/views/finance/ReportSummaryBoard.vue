@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="report-summary-board">
     <el-card>
@@ -12,7 +15,7 @@
           <el-option v-for="m in 12" :key="m" :label="m + '月'" :value="m" />
         </el-select>
         <el-button type="primary" :loading="refreshing" @click="onRefresh">刷新预聚合</el-button>
-        <el-button @click="doExport">导出 CSV</el-button>
+        <el-button @click="doExport">导出</el-button>
       </div>
 
       <!-- Stats Cards -->
@@ -229,9 +232,13 @@ function openRowDetail(row) {
 // 41号审查 P1-9：导出当前期间费用类别分解
 function doExport() {
   // R5-D-035
+  // D-H10-02：导出列与页面列同源同序（原缺「占比」列，页面 5 列导出只有 4 列）。
+  // 导出取 summary.breakdown 全集而非分页切片，与页面「导出全部」语义一致。
   exportCsv(summary.breakdown || [], [
     { prop: 'category', label: '单据类型' }, { prop: 'billCount', label: '单据数' },
-    { prop: 'amount', label: '金额' }, { prop: 'refreshText', label: '最近刷新' },
+    { prop: 'amount', label: '金额' },
+    { value: (row) => formatPercent(row.amount, summary.totalAmount), label: '占比' },
+    { prop: 'refreshText', label: '最近刷新' },
   ], `ReportSummary_${periodKey(year.value, month.value)}`)
 }
 

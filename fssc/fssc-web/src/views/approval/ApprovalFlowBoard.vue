@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div :class="{ tabless: isSingle }">
     <el-card>
@@ -5,7 +8,7 @@
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
         <b>{{ isSingle ? (tab === 'inst' ? '流程实例监控' : '流程定义') : '审批流看板' }}</b>
 <el-button type="info" size="small" style="margin-left:auto" @click="refreshAll">刷新</el-button>
-      <el-button type="info" size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button type="info" size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
       </div>
     </template>
@@ -15,7 +18,7 @@
       <el-col v-if="!isSingle" :span="4">
         <el-card shadow="hover"><el-statistic title="已上线流程定义" :value="defs.length" /></el-card>
       </el-col>
-      <!-- R5-D-036：实例统计改走服务端聚合口；取数中/失败时显示「-」而非 0，避免空数被读成真实读数 -->
+      <!-- R5-D-036：实例统计改走服务端聚合口；查询中/失败时显示「-」而非 0，避免空数被读成真实读数 -->
       <el-col :span="4">
         <el-card shadow="hover">
           <el-statistic v-if="!instStatsNoData" title="实例总数" :value="instStats.total" />
@@ -173,7 +176,7 @@
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 改派（L2 管理员通道，需 wf:task:reassign）：派给任意真人，原因必填留痕 -->
+    <!-- 改派（L2 管理员通道，需 wf:task:reassign）：派给任意真人，原因必填记录 -->
     <el-dialog v-model="reassignVisible" title="改派（流程管理员通道）" width="440px" destroy-on-close>
       <el-form ref="reassignFormRef" :model="reassignForm" :rules="reassignFormRules" label-width="90px" size="small">
         <el-form-item label="单据">{{ reassignRow?.bizNo }}</el-form-item>
@@ -182,7 +185,7 @@
           <!-- P0 修复（2026-10-21）：默认只加载同公司人员，流程管理员改派也须遵循同公司原则 -->
           <UserSelect v-model="reassignForm.target" scope="same-company" placeholder="选择接办人(任意在职真人)" />
         </el-form-item>
-        <el-form-item label="改派原因" prop="reason"><el-input v-model="reassignForm.reason" type="textarea" :rows="2" placeholder="必填:如 原审批人离职/换岗/本节点无人可办(留痕)" /></el-form-item>
+        <el-form-item label="改派原因" prop="reason"><el-input v-model="reassignForm.reason" type="textarea" :rows="2" placeholder="必填:如 原审批人离职/换岗/本节点无人可办(将记录)" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button size="small" @click="reassignVisible = false">取消</el-button>
@@ -214,7 +217,7 @@ import { hasPerm } from '@/utils/perm'
 /**
  * 改派入口是否可见：要 wf:task:reassign 权限点，且**排除 admin 账号**。
  * 铁律"任何流程节点都不允许 admin 参与"——改派是流程动作的一种（替别人决定谁来办），
- * admin 虽然因 *:*:* 通配过 hasPerm，也不该看到这个入口（后端另有目标侧硬拦，此处是入口侧收口）。
+ * admin 虽然因 *:*:* 通配过 hasPerm，也不该看到这个入口（后端另有目标侧硬拦，此处是入口侧办结）。
  */
 const canReassign = computed(() => hasPerm('wf:task:reassign') && store?.user?.isAdmin !== 1)
 
@@ -223,8 +226,8 @@ const reassignRow = ref(null)
 const reassignSaving = ref(false)
 const reassignFormRef = ref(null)
 const reassignForm = ref({ target: null, reason: '' })
-// 与后端 WfEngineFacade.reassign 同口径：接办人 + 留痕原因（≥2 字）都是硬性输入
-const REASON_MSG = '请填写改派原因（≥2 字，进审批留痕）'
+// 与后端 WfEngineFacade.reassign 同一规则：接办人 + 记录原因（≥2 字）都是硬性输入
+const REASON_MSG = '请填写改派原因（≥2 字，记入审批记录）'
 const reassignFormRules = {
   target: commonRules.select('请选择新处理人'),
   reason: [{
@@ -478,7 +481,7 @@ function batchExport() {
 <style scoped>
 /* 一 TAB = 一菜单：从菜单深链进来（tab 命中）时隐藏 tab 导航条，只显示该页 */
 .tabless :deep(.el-tabs__header) { display: none; }
-/* R5-D-036：统计口取数中/失败时的兜底形态——沿用 el-statistic 的字号与标题样式 */
+/* R5-D-036：统计口查询中/失败时的默认处理形态——沿用 el-statistic 的字号与标题样式 */
 .st-fallback { display: flex; flex-direction: column; }
 .st-fallback .st-title { font-size: 12px; color: var(--el-text-color-secondary); line-height: 1.2; margin-bottom: 4px; }
 .st-fallback .st-dash { font-size: 22px; color: var(--el-text-color-placeholder); line-height: 1; }

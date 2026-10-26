@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.fssc.common.core.Result;
@@ -44,11 +47,11 @@ public class WfDevController {
     /**
      * ST-03：取消僵尸流程实例（测试数据卫生；PROCESS_CANCELLED 不触发业务收尾事件）
      *
-     * <p>D-DEC-455：本方法曾与类注释宣称的收口不一致——{@code /start} 与
-     * {@code /instance/refresh-biz-no} 都挂了权限闸，唯独这条「取消任意实例」的腿裸奔，
-     * 任何登录用户都能作废他人 in-flight 流程。现与同族端点同码收口，并补 {@code @OperLog}
+     * <p>D-DEC-455：本方法曾与类注释宣称的办结不一致——{@code /start} 与
+     * {@code /instance/refresh-biz-no} 都挂了权限校验，唯独这条「取消任意实例」的环节裸奔，
+     * 任何登录用户都能作废他人 in-flight 流程。现与同族端点同码办结，并补 {@code @OperLog}
      * 让作废动作进 {@code sys_oper_log}（此前只在 {@code wf_task_history} 留 CANCEL，
-     * 平台侧留痕零痕迹）。业务单据的正当作废出口＝D-DEC-454 的 {@code pay-plan/{id}/void}，
+     * 平台侧记录零痕迹）。业务单据的正当作废出口＝D-DEC-454 的 {@code pay-plan/{id}/void}，
      * 该端点会同步回写单据状态，不需要走这里。</p>
      */
     @RequiresPerm({"wf:design:update", "wf:model:update"})
@@ -67,7 +70,7 @@ public class WfDevController {
     private static final AtomicLong ID_SEQ = new AtomicLong(System.currentTimeMillis() % 100000000L + 8000000000L);
 
     /**
-     * 批次3 R3-C（D-B3-03）：按实例补救业务单据号（幂等，单实例）。
+     * 批次3 R3-C（D-B3-03）：按实例补救业务单据号（去重，单实例）。
      *
      * <p>请求体：{@code instanceId}（{@code wf_instance.id}）。行为与发起时同源：重新解析单据号，
      * 只在"解析得到且与现值不同"时写回 {@code wf_instance.biz_no}（并同步 {@code wf_task.biz_no} 冗余列）；
@@ -75,7 +78,7 @@ public class WfDevController {
      *
      * <p>不提供批量入口，也不自动回填 2026-09-23 之前的 32 条历史 NULL——那批属裁决项（V1.4.37 备而未执行）。
      * 为什么放在 dev 工具下：它写的是流程侧展示列，不改业务表、不改流转状态，但可被用来伪造单号列，
-     * 故与 {@code /start} 同级收口在 {@code wf:model:update} + {@code dev-tool-enabled} 之后。</p>
+     * 故与 {@code /start} 同级办结在 {@code wf:model:update} + {@code dev-tool-enabled} 之后。</p>
      *
      * @return instanceId / updated（0 或 1；0 的原因见服务端日志）
      */

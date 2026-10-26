@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.invoice.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -30,12 +33,12 @@ import java.util.stream.Collectors;
  * 按租户聚合后通过 {@link NotifyService} 多渠道（站内信+企微+邮件）推送至税务经理(TAX_MANAGER)；
  * 该角色无用户时回退推送给租户全部激活用户，保证演示/冒烟可感知。
  *
- * <p>幂等：已推送过的发票 id 记录进进程内 {@link #alerted}，跨调度不重复轰炸；
+ * <p>去重：已推送过的发票 id 记录进进程内 {@link #alerted}，跨调度不重复轰炸；
  * 仅对新增异常发票重新告警（重启后按需重推属预期）。
  *
  * <p>【租户上下文】定时任务跑在 Spring 调度线程，无 {@link TenantContext}。
  * inv_invoice/sys_role 为租户过滤表，直接查询会触发 fail-closed 抛 TENANT_CONTEXT_MISSING。
- * 故扫描用 {@code runIgnoreTenant} 聚合（仅扫描不落库），逐租户推送时用 {@code callAs(tenantId)} 恢复上下文。
+ * 故扫描用 {@code runIgnoreTenant} 聚合（仅扫描不写入数据库），逐租户推送时用 {@code callAs(tenantId)} 恢复上下文。
  */
 @Slf4j
 @Component
@@ -59,7 +62,7 @@ public class InvoiceAbnormalAlertJob {
     public void scanAndAlert() {
         jobHeartbeatService.run("InvoiceAbnormalAlertJob", () -> {
         try {
-            // 跨租户扫描异常发票（仅扫描不落库）
+            // 跨租户扫描异常发票（仅扫描不写入数据库）
             List<InvInvoice>[] holder = new List[1];
             TenantContext.runIgnoreTenant(() ->
                     holder[0] = invoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.spi;
 
 import org.slf4j.Logger;
@@ -26,7 +29,7 @@ import javax.sql.DataSource;
  *   <li>缓存：收编原 TenantCache 的 ConcurrentHashMap TTL map——命中未过期直返，
  *       并发允许重复加载，粗容量 {@value #MAX_ENTRIES} 条超限清最旧一半；返回值按"只读"约定使用。</li>
  *   <li>限流：收编原 LoginGuardService 的 IP 计数 map——原子递增 + 窗口过期（窗口自首次递增起算，
- *       原实现为自然分钟分桶，判定口径"窗口内超 maxCount 拒绝"不变）。</li>
+ *       原实现为自然分钟分桶，判定规则"窗口内超 maxCount 拒绝"不变）。</li>
  *   <li>锁：走 MySQL {@code GET_LOCK(name, 0)}/{@code RELEASE_LOCK}，<b>取锁与解锁必须落在同一条连接上</b>
  *       （会话级锁，详见 {@link #tryLock} 的类内注释）；持有中若连接被服务端掐断，检测到后<b>销毁</b>该连接
  *       （{@link #discardQuietly}，不可 close 归还，否则池会把死连接再借回来）并重新竞争；
@@ -39,7 +42,7 @@ public class LocalDistributedState implements DistributedState {
 
     private static final Logger log = LoggerFactory.getLogger(LocalDistributedState.class);
 
-    /** 粗容量上限：超限按写入时间清最旧一半（原 TenantCache 口径，非严格 LRU） */
+    /** 粗容量上限：超限按写入时间清最旧一半（原 TenantCache 规则，非严格 LRU） */
     private static final int MAX_ENTRIES = 500;
 
     private final JdbcTemplate jdbcTemplate; // 可为 null（无 DataSource 的纯逻辑环境）
@@ -52,7 +55,7 @@ public class LocalDistributedState implements DistributedState {
     /** 标记存储（令牌黑名单等仅"存在/不存在"的语义）：key → 过期时间戳（毫秒） */
     private final Map<String, Long> marks = new ConcurrentHashMap<>();
 
-    /** 纯逻辑环境（静态兜底/单测）：无 JdbcTemplate，锁退化为无锁直通 */
+    /** 纯逻辑环境（静态默认处理/单测）：无 JdbcTemplate，锁退化为无锁直通 */
     public LocalDistributedState() {
         this.jdbcTemplate = null;
     }
@@ -91,7 +94,7 @@ public class LocalDistributedState implements DistributedState {
         cache.keySet().removeIf(k -> k.startsWith(prefix));
     }
 
-    /** 运维兜底：清空进程内缓存（仅本地实现有全量视图；对应原 TenantCache.clear） */
+    /** 运维默认处理：清空进程内缓存（仅本地实现有全量视图；对应原 TenantCache.clear） */
     public void clearCache() {
         cache.clear();
     }
@@ -135,7 +138,7 @@ public class LocalDistributedState implements DistributedState {
         return true;
     }
 
-    /** 标记超容量时先清过期项，仍超限则淘汰最早到期的一半（与 clearCache 同口径，防内存泄漏） */
+    /** 标记超容量时先清过期项，仍超限则淘汰最早到期的一半（与 clearCache 同一规则，防内存泄漏） */
     private void trimMarksIfOverCapacity() {
         if (marks.size() <= MAX_ENTRIES) return;
         long now = System.currentTimeMillis();
@@ -189,7 +192,7 @@ public class LocalDistributedState implements DistributedState {
      * 其中含 G0 双账对账作业——它被饿死时双账漂移整段时间不可见。
      *
      * <p><b>代价</b>：持锁期间占用池中 1 条连接（主库池 {@code maximum-pool-size: 40}）；
-     * 任务体与心跳另有连接，不影响 30 并发口径（PERF-01）。
+     * 任务体与心跳另有连接，不影响 30 并发规则（PERF-01）。
      */
     private final Map<String, HeldLock> heldLocks = new ConcurrentHashMap<>();
 

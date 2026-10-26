@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.ai.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -26,7 +29,7 @@ public class AiToolCallLog {
     /** 用户原始指令文本（AI 侧透传，审计回放的第一现场） */
     private String instructionText;
 
-    /** 调用的模型标识（客户端自报，仅留痕不作信任依据） */
+    /** 调用的模型标识（客户端自报，仅记录不作信任依据） */
     private String model;
 
     /** 目录动作码，如 expense.ExpenseClaimController.submit */
@@ -58,7 +61,7 @@ public class AiToolCallLog {
     /** 高风险写：绑定的确认票据（P4）；一次性，票据变了参数即作废 */
     private Long confirmId;
 
-    /** 幂等键（写类动作必填，重放不产生第二张单） */
+    /** 唯一键（写类动作必填，重放不产生第二张单） */
     private String idempotencyKey;
 
     private String clientIp;

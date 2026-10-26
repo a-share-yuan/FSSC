@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -66,7 +69,7 @@ public class NodeOrgResolver {
     private final org.flowable.engine.TaskService flowTaskService;
     private final WfDelegateMapper wfDelegateMapper;
     /**
-     * 节点配置解析器（V1.3.21）：空策略兜底需读 wf_node_config.empty_strategy。
+     * 节点配置解析器（V1.3.21）：空策略默认处理需读 wf_node_config.empty_strategy。
      * 经它解析而非直接按 node_key 精确查——BPMN 生成的 taskDefinitionKey 为 {@code Task_N}，
      * 与配置表的业务节点编码不同形，精确匹配恒不命中（见 WfNodeConfigResolver 类注释）。
      */
@@ -74,31 +77,32 @@ public class NodeOrgResolver {
     /**
      * G0 止血（方案 §二 F3，2026-09-24）：空策略 SKIP 直接调 {@code flowTaskService.complete()}
      * 推引擎、绕开 {@code WfEngineFacade.complete()}，镜像（wf_task / wf_task_history）会缺账。
-     * 本解析器是最了解该旁路上下文的地方，故由它补齐镜像收口与留痕。
+     * 本解析器是最了解该旁路上下文的地方，故由它补齐镜像办结与记录。
      */
     private final WfQueryService wfQueryService;
     private final WfMirrorDefectRecorder mirrorDefectRecorder;
     /**
-     * 取人策略开关（F3-1）与委托总闸（F3-3）读 {@code sys_config}：直连 mapper、不带租户过滤，
+     * 取人策略开关（F3-1）与委托总开关（F3-3）读 {@code sys_config}：直连 mapper、不带租户过滤，
+     * 与 {@code approve.pick_mode.*} / {@code approve.transfer_strict.*} / 齐套校验同一规则。
      */
     private final SysConfigMapper sysConfigMapper;
-    /** LEAST_LOADED 的负载口径：{@code wf_task} 当前 PENDING 快照（与待办视图同一张镜像表） */
+    /** LEAST_LOADED 的负载规则：{@code wf_task} 当前 PENDING 快照（与待办视图同一张镜像表） */
     private final WfTaskMapper wfTaskMapper;
     /** {@code wf_model.enable_delegate} 读取（F3-3：该列为 0 的流程不支持委托代办） */
     private final com.fssc.workflow.mapper.WfModelMapper wfModelMapper;
 
     /** 取人策略（sys_config）：{@code FIRST_ID|LEAST_LOADED|ROUND_ROBIN}，未配置＝FIRST_ID＝改造前行为 */
     static final String ASSIGN_STRATEGY_KEY = "wf.assign.strategy";
-    /** 取人策略灰度清单（逗号分隔 modelKey）：<b>空＝全库不生效</b>，与齐套闸口同一灰度范式 */
+    /** 取人策略灰度清单（逗号分隔 modelKey）：<b>空＝全库不生效</b>，与齐套校验同一灰度范式 */
     static final String ASSIGN_MODELS_KEY = "wf.assign.strategy.models";
     /**
      * 委托语义（F4-1 / 体检 E-07）：{@code BORROW}＝借资格（改造前行为，缺省）；
-     * {@code REASSIGN}＝改派（委托生效即把委托人存量待办改指受托人，期内新任务直接落受托人）。
+     * {@code REASSIGN}＝改派（委托生效即把委托人历史待办改指受托人，期内新任务直接落受托人）。
      * 界面原文承诺"待办自动转给代理人"，而现实现只是把委托人的待办<b>并入</b>受托人视图、
      * 委托人自己照样能办——本键是让"自动转到受托人"这条承诺可以被真正兑现的唯一出口。
      */
     static final String DELEGATE_MODE_KEY = "wf.delegate.mode";
-    /** 委托改派灰度清单（逗号分隔 modelKey）：<b>空＝全库不生效</b>（与取人策略同一范式，防止一刀切改动留痕归属） */
+    /** 委托改派灰度清单（逗号分隔 modelKey）：<b>空＝全库不生效</b>（与取人策略同一范式，防止一刀切改动记录归属） */
     static final String DELEGATE_MODE_MODELS_KEY = "wf.delegate.mode.models";
     /** 委托到期回跳参数（A3）：{@code REVERT}（缺省）／{@code KEEP}，见 {@link #delegateRevertOnEndEnabled()} */
     static final String DELEGATE_REVERT_ON_END_KEY = "wf.delegate.revert.on.end";
@@ -181,7 +185,7 @@ public class NodeOrgResolver {
      * </ol>
      * <b>fail-closed 铁律（2026-08-31）</b>：登录校验已在门面（complete）保证，故此处不再对
      * {@code task==null / userId==null} 或任何解析异常做 fail-open 放行——一律返回 false（拒绝），
-     * 并记 error 留痕。原则：无法判定归属时，宁可拒办，不可越权放行。
+     * 并记 error 记录。原则：无法判定归属时，宁可拒办，不可越权放行。
      */
     public boolean canOperate(Task task, Long userId) {
         if (task == null || userId == null) {
@@ -203,6 +207,7 @@ public class NodeOrgResolver {
                 return false;
             }
             // 1.5) POOL 软锁：作业节点已被同池他人领取 → 关闭候选组通道，只认领取人（及其受托人）。
+            // AUTO/PICK 与未领取态不受影响；"任务被打开处理时其他用户看到锁定状态"。
             String lockOwner = poolLockOwner(task);
             if (lockOwner != null) {
                 for (Long fromId : delegateFromUserIds(task, userId)) {
@@ -244,7 +249,7 @@ public class NodeOrgResolver {
         String table = applyTable(inst.getBizType());
         if (table == null) {
             // D-B3-25（P0 止血）：原本静默返回 null ⇒ deny_self 在整域失效且零痕迹。
-            // 提升为 warn，让"内控规则取不到数"在运维侧可见；闸口侧按最严口径 fail-closed。
+            // 提升为 warn，让"内控规则取不到数"在运维侧可见；校验侧按最严规则 fail-closed。
             log.warn("提交人不可解析：bizType={} 无单据表取数映射（companyTable 未登记、单据主表亦无已核对的提交人列），"
                     + "回落实例发起人 proc={}", inst.getBizType(), procInstId);
             return inst.getStartUserId();
@@ -254,25 +259,25 @@ public class NodeOrgResolver {
                     "SELECT " + applyColumn(table) + " FROM `" + table + "` WHERE id = ?", Long.class, inst.getBizId());
             Long applyUser = ids.isEmpty() ? null : ids.get(0);
             // D-DEC-200：列取到空值（如 op_archive.filing_user_id 未回填）同样回落发起人，
-            // 否则闸口会把"兜底路径"说成"取不到提交人列"，用户无法据理由自查。
+            // 否则校验会把"默认处理路径"说成"取不到提交人列"，用户无法据理由自查。
             // D-DEC-298/420：0 也要回落——{@code FsscMetaObjectHandler.fillAudit} 在无登录上下文时
             // 把 create_by 填成 **0L 而非 NULL**，0 是占位不是人；若当成提交人交给 deny_self，
-            // 闸口会拿"用户 0"去比候选⇒永不命中，静默失效（比 NULL 回落更坏）。
+            // 校验会拿"用户 0"去比候选⇒永不命中，静默失效（比 NULL 回落更坏）。
             return applyUser != null && applyUser != 0L ? applyUser : inst.getStartUserId();
         } catch (Exception e) {
-            // D-B3-25：debug→warn，"查不存在的列/查不到行"必须留痕（原为静默失效主因之一）
+            // D-B3-25：debug→warn，"查不存在的列/查不到行"必须记录（原为静默失效主因之一）
             log.warn("解析单据提交人失败 proc={} table={}: {}，回落实例发起人", procInstId, table, e.getMessage());
             return inst.getStartUserId();
         }
     }
 
     /**
-     * 提交人取数表：公司解析表（{@link #companyTable}）优先；未登记时回落该 bizType 的<b>单据主表</b>，
+     * 提交人查询表：公司解析表（{@link #companyTable}）优先；未登记时回落该 bizType 的<b>单据主表</b>，
      * 且只对已核对过列名的表回落。
      *
      * <p>为什么不复用公司面白名单（D-DEC-150）：{@code TR_BANK_RECON} 的 companyTable 刻意留空
      * （补值＝收窄候选面，属授权裁决，见 {@link BillRouteRegistry} 类注释），但 deny_self 仍需知道
-     * "这单是谁登记的"。两件事共用一张表会让内控闸门被授权裁决连带绑死。
+     * "这单是谁登记的"。两件事共用一张表会让内控校验被授权裁决连带绑死。
      */
     private static String applyTable(String bizType) {
         String table = companyTable(bizType);
@@ -296,7 +301,7 @@ public class NodeOrgResolver {
 
     /**
      * 已核对过真实列名的单据表（列名取自各表实体类，未核对的表按 {@code apply_user_id} 默认列查）。
-     * 新增一域只补一行；漏补的后果是 deny_self 与自审回避取数一起失效（D-DEC-150）。
+     * 新增一域只补一行；漏补的后果是 deny_self 与自审回避查询一起失效（D-DEC-150）。
      */
     private static final Map<String, String> APPLY_COLUMN = Map.ofEntries(
             Map.entry("tax_refund", "apply_by"),
@@ -304,7 +309,7 @@ public class NodeOrgResolver {
             Map.entry("archive_destroy_approval", "applicant_id"),
             Map.entry("archive_access_log", "requester_id"),
             // D-DEC-20/44：op_archive 既无 apply_user_id 也无 create_by（实体 OpArchive 已核），立卷人＝filing_user_id。
-            // 此前恒查 apply_user_id ⇒ bad SQL grammar、日志反复刷，且闸口只能按最严口径拦。
+            // 此前恒查 apply_user_id ⇒ bad SQL grammar、日志反复刷，且校验只能按最严规则拦。
             Map.entry("op_archive", "filing_user_id"),
             // D-DEC-150：bank_reconcile 是勾对流水平，无登记人列；编制人＝提单人＝match_by
             // （BankReconcileService 同一 userId 既写 match_by 又作 start 的 approver）。
@@ -329,13 +334,13 @@ public class NodeOrgResolver {
             // （tr_bill_settle/tr_credit_bill/tr_transfer/tr_fund_plan 的 create_by 由本次 ALTER 补出），
             // 未登记 ⇒ 恒查不存在的 apply_user_id ⇒ 只能回落实例发起人。补列后登记本臂，
             // 资金族（TR_BILL/TR_RECEIPT/TR_TRANSFER/TR_UPLOAD/TR_PLAN/TR_PLAN_ADJUST）的
-            // deny_self 与自审回避才第一次有真实取数来源。
+            // deny_self 与自审回避才第一次有真实查询来源。
             Map.entry("tr_bill_settle", "create_by"), Map.entry("tr_credit_bill", "create_by"),
             Map.entry("tr_transfer", "create_by"), Map.entry("tr_fund_plan", "create_by"),
             // D-V4R-75（V5 册任务3 重跑 2026-10-15 实测）：应收/发票/对账这一族的表同样没有
             // apply_user_id 列，未登记 ⇒ 每个节点解析提交人都抛一次 bad SQL grammar
             // （日志原文「解析单据提交人失败 proc=… table=rc_receivable: … [SELECT apply_user_id FROM
-            // `rc_receivable` WHERE id = ?]，回落实例发起人」），deny_self 在 AR/发票域只能按最严口径拦。
+            // `rc_receivable` WHERE id = ?]，回落实例发起人」），deny_self 在 AR/发票域只能按最严规则拦。
             // 普查件＝.tmp/v5-t3-applycol-census.cjs：源码 Map.entry 的表里共 33 张无 apply_user_id，
             // 其中 26 张本方法已登记，剩这 7 张是漏网的。归属列取各表 service 实际写入的人（create_by），
             // pay_plan 例外——它连 create_by 都没有，提单列就是 applicant_id。
@@ -346,7 +351,7 @@ public class NodeOrgResolver {
 
     /**
      * 对任务执行办理人解析（BPMN candidateGroups 生成任务的统一入口，start 首节点与 complete 后续节点共用）。
-     * 已有 assignee 跳过；解析成功仅"设置首选办理人"，保留候选组——集团级账号/同公司同角色仍可办理（兜底不断流）。
+     * 已有 assignee 跳过；解析成功仅"设置首选办理人"，保留候选组——集团级账号/同公司同角色仍可办理（默认处理不断流）。
      */
     public void applyResolution(Task task) {
         try {
@@ -359,6 +364,7 @@ public class NodeOrgResolver {
                 return;
             }
             // POOL 任务池档：不做"取角色首个持有人"的自动指派，任务停在仅候选组态，由候选人主动领取锁定。
+            // 与 WfEngineFacade.applyNodeConfig 的 ROLE+POOL 分支同一规则，两处都要拦：前者负责把候选组装上，
             // 此处负责<b>别把它又指派掉</b>（纯 BPMN 候选组任务不走节点配置，只能在这里拦）。
             if (isPoolTask(task)) {
                 log.info("节点办理人动态解析跳过（POOL 任务池，待领取）task={} groups={}", task.getId(), groups);
@@ -407,7 +413,7 @@ public class NodeOrgResolver {
      *
      * <p>只覆盖 POOL：<b>AUTO/PICK 不设锁</b>——自动指派的节点一旦锁死，同角色同事就失去了
      * {@code canOperate} 的候选组通道，而这条通道正是「禁止审批自己提交」在现网已验证的绕行出口
-     * （见 {@code deny_self} 拦截后的处理路径）。同类系统同样只在作业型任务加锁，审批型走"择一/抢占"。
+     * （见 {@code deny_self} 拦截后的处理路径）。同样只在作业型任务加锁，审批型走"择一/抢占"。
      */
     public String poolLockOwner(Task task) {
         if (task == null) {
@@ -423,10 +429,10 @@ public class NodeOrgResolver {
     /**
      * 待办列表的 POOL 软锁批量标注（批次 1 ①）：返回 {@code taskId -> 领取人用户ID}，
      * 只收录「作业节点 + 已被他人领取」的行。前端据此把「去处理」灰显并显示"XX 正在办理"，
-     * 与 {@link #canOperate} 的拒办口径一致（列表可见≠可办，行业方案同为"可见但锁定"）。
+     * 与 {@link #canOperate} 的拒办规则一致（列表可见≠可办，同为"可见但锁定"）。
      *
      * <p>成本控制：一次载入全部 POOL 节点键，不逐行查配置表；判定异常返回空表（不加锁标注，
-     * 服务端 {@code canOperate} 仍是硬闸）。
+     * 服务端 {@code canOperate} 仍是强制校验）。
      */
     public Map<String, Long> poolLockedByOthers(List<Task> tasks, Long viewerId) {
         Map<String, Long> out = new HashMap<>();
@@ -465,7 +471,7 @@ public class NodeOrgResolver {
 
     /**
      * 零 admin 铁律判定（批次 1 ②）：该用户是否为系统管理员账号（{@code user_name='admin'} 或
-     * {@code is_admin=1}）。超时自动通过等机器路径的留痕办理人不得是这类账号。
+     * {@code is_admin=1}）。超时自动通过等机器路径的记录办理人不得是这类账号。
      * 查询异常一律按"是 admin"返回（fail-closed：宁可少自动过一单，不可让 admin 出现在节点上）。
      */
     public boolean isAdministrator(Long userId) {
@@ -482,7 +488,7 @@ public class NodeOrgResolver {
     }
 
     /**
-     * 空策略兜底（V1.3.21 补实现），处置"节点找不到审批人"。
+     * 空策略默认处理（V1.3.21 补实现），处置"节点找不到审批人"。
      *
      * <p><b>为什么必须有它</b>：BPMN 动态生成的 userTask 只带 {@code flowable:candidateGroups}
      * （角色），运行时待办按「角色范围 × 单据公司」过滤（见 {@link #filterGroupTasks}）。当某公司
@@ -493,21 +499,21 @@ public class NodeOrgResolver {
      * （见建表注释「找不到审批人时:ADMIN转管理员/SKIP自动跳过/ERROR报错阻断」），但此前
      * 全仓无任何代码读取该字段，属设计已定义、实现遗漏。
      *
-     * <p><b>判定口径</b>：仅当任务无 assignee，且其候选组<b>在本单据公司内一个可办人都解析不出</b>
+     * <p><b>判定规则</b>：仅当任务无 assignee，且其候选组<b>在本单据公司内一个可办人都解析不出</b>
      * 时触发；条条候选组都解析不出才算空（候选组为空视为无约束节点，不处置）。守门逻辑与
      * {@link #tryResolveAssignee} 一致——GROUP 范围角色跨公司可见，返回首个持有人，故不会误触发。
      *
      * <p><b>"解析不出"有两种成因，别只当一种查（D-DEC-280）</b>：① 该公司在该角色下确实无人（主数据缺口，
      * 补人即可）；② <b>角色有人、但唯一持有人就是本单提单人</b>——{@code tryResolveAssignee} 按 D-FAM3-05
-     * 先剔提单人（AUTO 指派命中提单人会让该节点谁都办不动），剔完为空同样落到本兜底。
-     * 现网 ESCALATE 留痕里相当比例属②，是<b>设计行为不是取人 bug</b>；把它当①去补人会凭空多出岗位权限。
-     * 因此下面的日志/留痕文案统一写"无可办理的持有人（含自审回避）"，不再写"无候选办理人"。
+     * 先剔提单人（AUTO 指派命中提单人会让该节点谁都办不动），剔完为空同样落到本默认处理。
+     * 现网 ESCALATE 记录里相当比例属②，是<b>设计行为不是取人 bug</b>；把它当①去补人会凭空多出岗位权限。
+     * 因此下面的日志/记录文案统一写"无可办理的持有人（含自审回避）"，不再写"无候选办理人"。
      *
      * <p><b>处置</b>：SKIP 自动完成该节点；ERROR（<b>缺省</b>，2026-09-19 用户铁律：所有流程节点
      * 不允许 admin 参与，必须由真实岗位办理）抛业务异常阻断，把问题在审批入口暴露给用户而非静默滞留；
      * ESCALATE 沿提交人部门汇报线向上按节点 {@code up_level} 取真实负责人（缺省 1 级）、再退单据公司
      * 组织负责人（ORG_HEAD），<b>绝不落到 admin</b>，
-     * 定位不到即按 ERROR 抛异常；ADMIN 转租户管理员兜底仅在节点配置显式声明时允许（不推荐，违反「节点禁入 admin」口径）。
+     * 定位不到即按 ERROR 抛异常；ADMIN 转租户管理员默认处理仅在节点配置显式声明时允许（不推荐，违反「节点禁入 admin」规则）。
      *
      * @return 实际执行的动作：{@code ADMIN} / {@code ESCALATE} / {@code SKIP} / 无需处置或处置失败返回 {@code null}
      */
@@ -533,7 +539,7 @@ public class NodeOrgResolver {
             }
             // 作业池（POOL）不因"唯一在岗持有人＝提单人"（自审回避）而升级/跳过/报错：任务应停在候选组态，
             // 由本人领取（2026-09-26 人工裁决：POOL 不走 deny_self，提单人是合法候选人就能办；
-            // 复核控制点在下一节点的另一岗）。指派人出去反而破坏"池内谁做、留痕到人"（D-DEC-20/44 复审）。
+            // 复核控制点在下一节点的另一岗）。指派人出去反而破坏"池内谁做、记录到人"（D-DEC-20/44 复审）。
             // 岗位在本公司确实无人时仍按下面的 empty_strategy 处置，不给卡单留新出口。
             if (isPoolTask(task) && onlyHolderIsApplicant(task.getProcessInstanceId(), groups)) {
                 log.info("空策略不适用（作业池＋自审回避）：节点「{}」唯一在岗持有人即提单人，留池待领取 task={} groups={}",
@@ -547,7 +553,7 @@ public class NodeOrgResolver {
                 case "SKIP" -> {
                     log.warn("空策略 SKIP：节点「{}」无候选办理人，自动跳过 task={} groups={}",
                             task.getName(), task.getId(), groups);
-                    // G0 止血（F3）：先补镜像（wf_task 置 DONE + wf_task_history 留痕）再推引擎。
+                    // G0 止血（F3）：先补镜像（wf_task 置 DONE + wf_task_history 记录）再推引擎。
                     // 顺序不能反——complete() 一旦让流程结束，PROCESS_COMPLETED 监听器会把该实例的
                     // PENDING 行统一置 CANCELLED，届时再补就分不清"被跳过"与"被取消"。
                     // 镜像写失败即冒泡（BizException 由本方法外层 catch 原样抛出），缺陷已落 sys_oper_log。
@@ -561,7 +567,7 @@ public class NodeOrgResolver {
                                 "NodeOrgResolver.applyEmptyStrategy.SKIP",
                                 null, "taskId=" + task.getId() + " procInstId=" + task.getProcessInstanceId(), ex);
                         throw new BizException(ErrorCode.SYSTEM_ERROR,
-                                "空策略跳过节点时镜像收口失败[" + WfMirrorDefectRecorder.CODE_MIRROR_WRITE_FAILED
+                                "空策略跳过节点时同步更新失败[" + WfMirrorDefectRecorder.CODE_MIRROR_WRITE_FAILED
                                         + "]，已阻止引擎推进以避免双账漂移：taskId=" + task.getId());
                     }
                     flowTaskService.complete(task.getId());
@@ -581,6 +587,7 @@ public class NodeOrgResolver {
                     return "ADMIN";
                 }
                 case "ESCALATE" -> {
+                    // P2：与超时升级同一规则，按节点 up_level 上收第 N 级（此前固定 1 级，up_level 为死列）
                     Long target = escalateTarget(task.getProcessInstanceId(), cfg == null ? null : cfg.getUpLevel());
                     if (target == null) {
                         log.error("空策略 ESCALATE 兜底失败：节点「{}」沿汇报线及公司组织负责人均未定位到真实办理人 task={} groups={}",
@@ -610,7 +617,7 @@ public class NodeOrgResolver {
         }
     }
 
-    /** 租户管理员（兜底办理人）：优先 is_admin=1，其次 user_name='admin'；均无返回 null */
+    /** 租户管理员（默认处理办理人）：优先 is_admin=1，其次 user_name='admin'；均无返回 null */
     private Long tenantAdminId() {
         try {
             List<SysUser> admins = sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
@@ -633,11 +640,11 @@ public class NodeOrgResolver {
     }
 
     /**
-     * ESCALATE 升级对象（绝不落到 admin），<b>固定 1 级</b>口径：先沿提交人所在部门的汇报线向上取
+     * ESCALATE 升级对象（绝不落到 admin），<b>固定 1 级</b>规则：先沿提交人所在部门的汇报线向上取
      * 首个真实负责人（跳过提交人本人、跳过 admin、防环最多 10 级）；取不到再退"单据所属公司的组织负责人"
      * （ORG_HEAD 角色持有人，按公司维度）。全部落空返回 null，由调用方按 ERROR 抛异常处理。
      *
-     * <p>public：超时自动转办（{@code WfTimeoutJob} 的 AUTO_TRANSFER）复用同一升级口径，
+     * <p>public：超时自动转办（{@code WfTimeoutJob} 的 AUTO_TRANSFER）复用同一升级规则，
      * 避免两处各写一套"往上报"的规则（方案 §11.2 A 五处之第 3 条）。
      *
      * <p>保留此单参重载仅为向后兼容：需要按节点配置 {@code up_level} 升到第 N 级的调用方，
@@ -650,7 +657,7 @@ public class NodeOrgResolver {
     /**
      * ESCALATE 升级对象（带层级，{@code wf_node_config.up_level} 的消费点）。
      *
-     * <p><b>为什么需要 up_level</b>：升级口径原来固定"沿汇报线取<b>第一个</b>真实负责人"，
+     * <p><b>为什么需要 up_level</b>：升级规则原来固定"沿汇报线取<b>第一个</b>真实负责人"，
      * 而 {@code wf_node_config.up_level} 有 607 行配 1 级、3 行配 2 级、2 行配 3 级——后 5 行配的是
      * "往上第 2/3 级"，引擎却一律升到第 1 级，等于那几行配置<b>从未生效</b>（死列）。
      * 典型危害：某节点超时本应升到分管副总，实际只升到部门经理 → 部门经理同样无权处置，
@@ -662,7 +669,7 @@ public class NodeOrgResolver {
      * 汇报线一级都取不到时再退"单据所属公司的组织负责人 ORG_HEAD"，全部落空返回 null，
      * 由调用方按"无可用对象"降级处理。
      *
-     * @param upLevel 升级层级；null / &lt;1 一律按 1 级处理（与旧口径逐字一致，向后兼容）
+     * @param upLevel 升级层级；null / &lt;1 一律按 1 级处理（与旧规则逐字一致，向后兼容）
      */
     public Long escalateTarget(String procInstId, Integer upLevel) {
         int level = (upLevel == null || upLevel < 1) ? 1 : upLevel;
@@ -705,8 +712,8 @@ public class NodeOrgResolver {
             }
             // D-V4R-43 补强（2026-10-16 F6.3 实测）：提单人＝本公司唯一 ORG_HEAD（顶级部门/公司负责人
             // 自己提单）时，上面被跳过；若集团内其他公司（如基地公司）也有 ORG_HEAD 持有人，按公司维度
-            // 过滤会把他一并排除——兜底彻底落空，单据静默卡死（实测 黄天佑 company_id=33、单据公司=1）。
-            // 放宽为集团级 ORG_HEAD（仍排除发起人、仅认真实在岗人），与手册口径一致：
+            // 过滤会把他一并排除——默认处理彻底落空，单据静默卡死（实测 黄天佑 company_id=33、单据公司=1）。
+            // 放宽为集团级 ORG_HEAD（仍排除发起人、仅认真实在岗人），与手册规则一致：
             // 申请人＝部门负责人本人时，直属上级节上收给集团内单位/基地负责人。
             for (Long head : userIdsGlobalWithRole("ORG_HEAD")) {
                 if (!head.equals(applicant) && isRealApprover(head)) {
@@ -726,7 +733,7 @@ public class NodeOrgResolver {
      * 「解析不出人」是否只因自审回避（D-DEC-280）：候选角色在本公司/集团内确有在岗持有人，
      * 但持有人<b>全部</b>＝本单提单人 ⇒ {@code tryResolveAssignee} 按 D-FAM3-05 剔完提单人后为空。
      *
-     * <p>只用于把成因写进日志与提示，不参与任何判定；取数异常一律按"不是自审回避"返回 false
+     * <p>只用于把成因写进日志与提示，不参与任何判定；查询异常一律按"不是自审回避"返回 false
      * （fail-safe 回原文案，绝不因旁支信息盖掉主判定）。
      */
     private boolean onlyHolderIsApplicant(String procInstId, Set<String> groups) {
@@ -873,7 +880,7 @@ public class NodeOrgResolver {
                     .getOrDefault(roleCode, "COMPANY");
             if ("GROUP".equalsIgnoreCase(scope)) {
                 // 集团/共享角色：跨公司候选组。当前运行模式下候选组待办对持有人不可见（Flowable 7 候选组查询
-                // 未命中），改为"全局首个持有人"直接指派，保证流程按节点推进不断流；候选组仍保留可兜底。
+                // 未命中），改为"全局首个持有人"直接指派，保证流程按节点推进不断流；候选组仍保留可默认处理。
                 // D-DEC-413 甲案：先本公司、本公司无人再回落全网（见 companyFirst）。
                 return pickByStrategy(inst.getModelKey(), roleCode, companyFirst(
                         userIdsGlobalWithRole(roleCode), resolveCompany(procInstId), roleCode), applicant);
@@ -908,7 +915,7 @@ public class NodeOrgResolver {
      * GROUP 档"本公司优先"重排（D-DEC-413 甲案）：把单据所属公司的持有人排到全网持有人名单前面。
      *
      * <p><b>只改顺序、不改成员</b>——资格名单仍是跨公司全集，因此本公司有人时首个指派落在本公司，
-     * 本公司无人（或单据没有公司口径）时顺序与改造前逐字相同，不会造出"无人可办"的死节点。
+     * 本公司无人（或单据没有公司范围）时顺序与改造前逐字相同，不会造出"无人可办"的死节点。
      * 同档内保持 {@code userIdsGlobalWithRole} 的 id 升序（List.sort 稳定）。
      */
     private List<Long> companyFirst(List<Long> holders, Long companyId, String roleCode) {
@@ -937,9 +944,9 @@ public class NodeOrgResolver {
      *
      * <p>三条不变量，缺省路径逐条守：
      * <ol>
-     *  <li><b>先剔提单人</b>：所有策略都在"非提单人"子集里选，与改造前 {@code firstExcept} 同口径
+     *  <li><b>先剔提单人</b>：所有策略都在"非提单人"子集里选，与改造前 {@code firstExcept} 同一规则
      *      （D-FAM3-05：AUTO 指派命中提单人会让该节点谁都办不动）；剔完为空返回 null，
-     *      落回候选组 + {@code empty_strategy} 兜底，行为不变；</li>
+     *      落回候选组 + {@code empty_strategy} 默认处理，行为不变；</li>
      *  <li><b>不改候选资格</b>：只改"给谁"，不改"谁能办"，{@code canOperate} 与候选组一律不动；</li>
      *  <li><b>缺省＝现行为</b>：策略为 FIRST_ID、模型不在灰度清单、候选人 ≤1、或读取配置失败，
      *      一律走 id 升序首个——负载均衡是叠加能力，不是新风险面。</li>
@@ -970,7 +977,7 @@ public class NodeOrgResolver {
         return picked;
     }
 
-    /** 负载最轻者：按 {@code wf_task} 当前 PENDING 数一次批量取，并列时按 id 升序（＝FIRST_ID 口径） */
+    /** 负载最轻者：按 {@code wf_task} 当前 PENDING 数一次批量取，并列时按 id 升序（＝FIRST_ID 规则） */
     private Long leastLoaded(String modelKey, List<Long> eligible) {
         Map<Long, Integer> load = new HashMap<>();
         for (Long id : eligible) {
@@ -989,7 +996,7 @@ public class NodeOrgResolver {
                 }
             }
         } catch (Exception e) {
-            // 负载读不到就退回原口径：宁可压在老落点上，也不因统计失败把单子派给不确定的人
+            // 负载读不到就退回原规则：宁可压在老落点上，也不因统计失败把单子派给不确定的人
             log.warn("取人负载统计失败，回落 FIRST_ID 口径 model={}: {}", modelKey, e.getMessage());
             return eligible.get(0);
         }
@@ -1005,7 +1012,7 @@ public class NodeOrgResolver {
      * <p>游标放进程内而不走 {@code DistributedState}：该 SPI 只有缓存/限流/标记/锁四种语义，
      * 没有"自增并返回"的计数语义（{@code tryAcquireRate} 返回的是放行与否，拿不到序号），
      * 而现网单实例部署（{@code fssc.redis.enabled=false}）。重启后游标归零只影响下一轮起点，
-     * 不影响正确性；多实例部署时轮询退化为"各自轮询"，仍不会削弱候选口径。
+     * 不影响正确性；多实例部署时轮询退化为"各自轮询"，仍不会削弱候选规则。
      */
     private Long roundRobin(String modelKey, String roleCode, List<Long> eligible) {
         String key = com.fssc.framework.tenant.TenantContext.getTenantId() + "|" + modelKey + "|" + roleCode;
@@ -1052,7 +1059,7 @@ public class NodeOrgResolver {
     }
 
     /**
-     * 只读：某角色在当前单据口径下的<b>全部</b>有效候选人。口径与
+     * 只读：某角色在当前单据规则下的<b>全部</b>有效候选人。规则与
      * {@link #tryResolveAssignee} 完全同源（GROUP 跨公司 / COMPANY 按单据公司 / 排除停用与 admin），
      * 唯一区别是返回整份名单而非第一个。
      *
@@ -1074,7 +1081,7 @@ public class NodeOrgResolver {
     }
 
     /**
-     * 无运行实例口径的节点候选人（提单态"下一环节给谁"用）：公司取草稿单据所属公司、直线上级取提单人，
+     * 无运行实例规则的节点候选人（提单态"下一环节给谁"用）：公司取草稿单据所属公司、直线上级取提单人，
      * 其余与 {@link #listRoleCandidates} 完全同源（GROUP 跨公司 / COMPANY 按公司 / 排除停用与 admin）。
      *
      * <p>为什么不能直接复用按 {@code procInstId} 的那份：点名发生在 {@code startProcessInstance} <b>之前</b>，
@@ -1092,6 +1099,7 @@ public class NodeOrgResolver {
             String scope = roleScopes(Collections.singletonList(roleCode))
                     .getOrDefault(roleCode, "COMPANY");
             if ("GROUP".equalsIgnoreCase(scope)) {
+                // D-DEC-413 甲案：与指派同一规则的"本公司优先"排序，名单仍是全网全集（不收窄资格）。
                 return companyFirst(userIdsGlobalWithRole(roleCode), companyId, roleCode);
             }
             return companyId == null ? List.of() : userIdsInCompanyWithRole(companyId, roleCode);
@@ -1112,7 +1120,7 @@ public class NodeOrgResolver {
      * <p>本次实测的公司33就是活样本：全公司 {@code ORG_HEAD} 仅黄天佑一人，
      * 一旦他本人提交单据，该节点即无人可办。
      *
-     * <p><b>修法（三级兜底，仍尊重自审）</b>：
+     * <p><b>修法（三级默认处理，仍尊重自审）</b>：
      * <ol>
      *   <li>正常：部门 leader，且 <b>不是提单人本人</b>；</li>
      *   <li>降级①：leader 缺失或恰为提单人 ⇒ 沿部门汇报线向上找第一个<b>不是提单人</b>的 leader；</li>
@@ -1192,7 +1200,7 @@ public class NodeOrgResolver {
     }
 
     /**
-     * 本节点<b>实际可办理</b>的真人名单：任务的候选组逐个走 {@link #listRoleCandidates}（同公司口径、
+     * 本节点<b>实际可办理</b>的真人名单：任务的候选组逐个走 {@link #listRoleCandidates}（同公司范围、
      * 排除停用与 admin）后取并集。与 {@link #canOperate} 的角色分支同源，因此"名单里的人"＝
      * "改派/转办过去之后一定办得动的人"，不会出现派过去却无人可办的悬空任务。
      *
@@ -1215,18 +1223,18 @@ public class NodeOrgResolver {
     }
 
     /**
-     * 转办（L1）目标名单：{@link #listOperableUserIds} 的<b>口径补全</b>版，与 {@link #canOperate} 对齐。
+     * 转办（L1）目标名单：{@link #listOperableUserIds} 的<b>规则补全</b>版，与 {@link #canOperate} 对齐。
      *
      * <p>缺陷原貌：TR_PAY「唯一办理人」节点里候选岗位在单据公司只有操作人自己，窄名单去掉本人后为空 ⇒
-     * {@code approve.transfer_strict} 开闸时弹窗显示"本节点没有其他人可办理"、服务端拒绝任何目标，
+     * {@code approve.transfer_strict} 开启时弹窗显示"本节点没有其他人可办理"、服务端拒绝任何目标，
      * 待办列表却照旧渲染「转办」按钮（点得动、转不成）。窄名单漏掉的正是 canOperate 本来就放行的三类人：
      * ① 单据公司解析不到时（{@code roleHit} 的"无公司维度放行"）COMPANY 范围角色的全网持有人；
      * ② {@code company_id} 为空的集团级持有人（{@code roleHit} 的"集团级放行"）；
      * ③ 名单内人员与操作人<b>当前生效委托</b>的受托人（canOperate 第 3 步的借资格通道，
-     * 同受 {@code wf_model.enable_delegate} 那道闸约束）。
+     * 同受 {@code wf_model.enable_delegate} 那道校验约束）。
      *
      * <p>不会因此造出死节点：转办落点是 {@code setAssignee}，目标人之后走"直接办理人"通道，必办得动。
-     * 领取（claim）与智能推送、改派（L2）仍用窄名单——它们各自是收权口径，不随本方法放宽。
+     * 领取（claim）与智能推送、改派（L2）仍用窄名单——它们各自是收权规则，不随本方法放宽。
      */
     public List<Long> listTransferTargets(Task task, Long operator) {
         List<Long> out = new ArrayList<>(listOperableUserIds(task));
@@ -1240,7 +1248,7 @@ public class NodeOrgResolver {
                 Long billCompany = resolveCompany(task.getProcessInstanceId());
                 for (String g : groups) {
                     if (g == null || "GROUP".equalsIgnoreCase(scopes.getOrDefault(g, "COMPANY"))) {
-                        continue; // GROUP 域窄名单已是跨公司口径
+                        continue; // GROUP 域窄名单已是跨公司范围
                     }
                     for (Long id : (billCompany == null ? userIdsGlobalWithRole(g)
                             : userIdsWithNoCompanyAndRole(g))) {
@@ -1284,6 +1292,7 @@ public class NodeOrgResolver {
         return out;
     }
 
+    /** 集团级持有人（{@code company_id} 为空）：与 {@code roleHit} 的"集团级放行"同一规则，任何公司的单据都能办。 */
     private List<Long> userIdsWithNoCompanyAndRole(String roleCode) {
         SysRole role = sysRoleMapper.selectOne(new LambdaQueryWrapper<SysRole>()
                 .eq(SysRole::getRoleCode, roleCode).last("limit 1"));
@@ -1311,9 +1320,10 @@ public class NodeOrgResolver {
      *
      * <p>为什么做这个而不是"候选人人数预览"：本轮实测 544 个 ROLE 节点里 356 个（65%）候选≥2 人，
      * {@code COMMON_EMP}（121 人）被当审批人挂在 21 个节点，配置时谁都没发现——落点由 {@code sys_user.id}
-     * 哪些公司 ≥2 人（落点靠主键顺序）。不需要单据上下文，因此绕开了"配置弹窗没有公司口径"的死结。
+     * 升序取首个决定。本接口把同一规则变成配置页保存时的默认提示：哪些公司 0 人（单据会走 empty_strategy）、
+     * 哪些公司 ≥2 人（落点靠主键顺序）。不需要单据上下文，因此绕开了"配置弹窗没有公司范围"的死结。
      *
-     * <p>持有人口径与 {@link #userIdsGlobalWithRole} 一致：status=NORMAL、排除 admin 与 is_admin=1。
+     * <p>持有人规则与 {@link #userIdsGlobalWithRole} 一致：status=NORMAL、排除 admin 与 is_admin=1。
      */
     public Map<String, Object> roleHolderMatrix(String roleCode) {
         Map<String, Object> out = new java.util.LinkedHashMap<>();
@@ -1397,7 +1407,7 @@ public class NodeOrgResolver {
             out.put("activeCompanies", sysCompanyMapper.selectCount(new LambdaQueryWrapper<com.fssc.system.entity.SysCompany>()
                     .eq(com.fssc.system.entity.SysCompany::getStatus, "NORMAL")));
         } catch (Exception e) {
-            // 活跃公司查询失败降级为 null（调用方按「无数据」渲染），不因单点取数失败中断节点解析
+            // 活跃公司查询失败降级为 null（调用方按「无数据」渲染），不因单点查询失败中断节点解析
             out.put("activeCompanies", null);
         }
         return out;
@@ -1475,7 +1485,7 @@ public class NodeOrgResolver {
             return true;
         }
         WfInstance inst = findInstance(task.getProcessInstanceId());
-        // 解析不到实例/模型时按"允许"处理：这是功能开关而非权限判定，不该因取数失败收紧可办人
+        // 解析不到实例/模型时按"允许"处理：这是功能开关而非权限判定，不该因查询失败收紧可办人
         return inst == null || inst.getModelKey() == null || !off.contains(inst.getModelKey());
     }
 
@@ -1562,7 +1572,7 @@ public class NodeOrgResolver {
      * 候选组角色命中与借资格通道一并关闭。
      *
      * <p>缺省（模式非 REASSIGN 或灰度清单为空）在读快照后立刻返回 false，
-     * <b>不查实例、不改任何可办性</b>；只在灰度模型内生效，与取人替换同一份口径。
+     * <b>不查实例、不改任何可办性</b>；只在灰度模型内生效，与取人替换同一份规则。
      */
     private boolean delegateTakenOverFrom(Task task, Long userId) {
         DelegateMode m = delegateModeSnapshot();
@@ -1577,7 +1587,7 @@ public class NodeOrgResolver {
         return modelKey != null && m.models().contains(modelKey) && !delegateDisabledModels().contains(modelKey);
     }
 
-    /** 任务所属模型 key（排他判定用）；解析不到实例/模型返回 null＝不排他（功能开关不该因取数失败收紧可办人）。 */
+    /** 任务所属模型 key（排他判定用）；解析不到实例/模型返回 null＝不排他（功能开关不该因查询失败收紧可办人）。 */
     private String modelKeyOf(Task task) {
         try {
             WfInstance inst = task == null ? null : findInstance(task.getProcessInstanceId());
@@ -1600,13 +1610,13 @@ public class NodeOrgResolver {
     }
 
     /**
-     * 委托到期后"未办结任务是否返还原办理人"（A3，人工裁决 RA-F4a 前置）——厂商口径把它做成参数：
-     * 行业方案「委托结束后，受托人未处理完的任务是否还返还给原处理人，<b>通过参数来控制</b>…
+     * 委托到期后"未办结任务是否返还原办理人"（A3，人工裁决 RA-F4a 前置）——该行为由参数控制：
+     * 「委托结束后，受托人未处理完的任务是否还返还给原处理人，<b>通过参数来控制</b>…
      * "任务委托结束后未处理任务返还原处理人"」〔E·FSSC·104〕。
      *
      * <p>取值：{@code REVERT}（缺省）＝返还原办理人／{@code KEEP}＝留在受托人名下不再回跳。
      *
-     * <p><b>默认值属我方自定</b>：厂商只写"有这一参数"，两家都未给缺省取值。我方取保守侧——
+     * <p><b>默认值属我方自定</b>：现有资料只写"有这一参数"，未给缺省取值。我方取保守侧——
      * 到期后单子回到委托人待办里，绝不因"参数没配"而永久滞留在别人的收件箱（那正是体检 E-07 的病相）。
      *
      * <p>只管到期：人工撤销（{@code WfDelegateService.cancel}）不受本参数控制——那是一次显式收回
@@ -1617,7 +1627,7 @@ public class NodeOrgResolver {
         return v == null || v.isBlank() || !"KEEP".equalsIgnoreCase(v.trim());
     }
 
-    /** 当前生效的「委托人 → 受托人」映射（同一委托人有多条生效委托时取 id 最大的一条，与 {@code activeDelegateTo} 同口径）。 */
+    /** 当前生效的「委托人 → 受托人」映射（同一委托人有多条生效委托时取 id 最大的一条，与 {@code activeDelegateTo} 同一规则）。 */
     private Map<Long, Long> activeDelegateMap() {
         try {
             java.time.LocalDateTime now = java.time.LocalDateTime.now();
@@ -1648,7 +1658,7 @@ public class NodeOrgResolver {
      * <p>三重收窄，任一不满足都原样返回（＝与改造前逐字一致）：
      * 模式非 REASSIGN / 该模型不在灰度清单 / 该人此刻没有生效委托。
      *
-     * <p><b>刻意不做的事</b>：不改候选组口径（{@link #canOperate} 的委托通道仍按"借资格"放行），
+     * <p><b>刻意不做的事</b>：不改候选组规则（{@link #canOperate} 的委托通道仍按"借资格"放行），
      * 也不因为改派而放宽任何守卫——受托人办理时 {@code deny_self} 依旧按单据提单人判定，
      * 跨公司委托依旧 fail-closed 拦在建立环节。
      */
@@ -1744,7 +1754,7 @@ public class NodeOrgResolver {
      * 集团/共享角色（GROUP 域）：跨公司解析全部有效持有人（按用户 id 升序，保证确定性指派）。
      *
      * <p>公开给超时卡单聚合告警取"某角色全网在岗真人"（F3-2 收件人＝流程管理员 WF_ADMIN，
-     * 该角色 {@code org_scope=COMPANY}，走 {@link #listRoleCandidatesInScope} 会因没有公司口径而空）。
+     * 该角色 {@code org_scope=COMPANY}，走 {@link #listRoleCandidatesInScope} 会因没有公司范围而空）。
      */
     public List<Long> userIdsGlobalWithRole(String roleCode) {
         SysRole role = sysRoleMapper.selectOne(new LambdaQueryWrapper<SysRole>()
@@ -1825,7 +1835,7 @@ public class NodeOrgResolver {
     }
 
     /**
-     * 建单人所属公司兜底（批次3 C2）：`asset_depr_batch` / `crm_customer` / `md_supplier` /
+     * 建单人所属公司默认处理（批次3 C2）：`asset_depr_batch` / `crm_customer` / `md_supplier` /
      * `gl_inter_offset` / `gl_consolidate` / `gl_shared_master` 这批表<b>根本没有 company_id 列</b>
      * （单据本身不区分公司，只有建单人有），此前一律解析成 null ⇒ COMPANY 范围角色取人为空、
      * 且 {@link #canOperate} 在"单据公司为 null"时按放行处理（候选面被放宽到全租户）。
@@ -1860,14 +1870,14 @@ public class NodeOrgResolver {
     /**
      * bizType → 单据表（有 company_id 列，或可由 create_by 反查建单人公司）；不在表白名单内返回 null。
      *
-     * <p>批次3 R3-B（D-B3-02 收口）：本方法原先是一份 117 行的 switch，与 {@code WfEngineFacade.BIZ_NO_TABLES}
+     * <p>批次3 R3-B（D-B3-02 办结）：本方法原先是一份 117 行的 switch，与 {@code WfEngineFacade.BIZ_NO_TABLES}
      * （起流单号）、{@code WfTaskController.fillBillInfoBatch}（待办回填）三处各写一遍同一件事；
      * round 1 实测到的正是这三处互相漂移（{@code RECEIVABLE_COLLECT} 前两处已改对 {@code rc_receivable}，
      * 取人侧一度还写 {@code rc_collect_todo}）。现三处合并进 {@link BillRouteRegistry}，改一个 bizType 只改一行。
      *
      * <p>两件事不要顺手做：①<b>"返回 null 的 bizType" 不要顺手补值</b>——null 时 {@code canOperate()}
      * 对 null 公司放宽放行（候选面＝全租户），填上表即收窄候选面，属授权裁决（注册表里逐行注明了现状）；
-     * ②档案四链（FM_BORROW/FM_DESTROY/FM_DOC_FLOW）与无 company_id 的几张 {@code gl_*} 表靠 create_by 兜底，
+     * ②档案四链（FM_BORROW/FM_DESTROY/FM_DOC_FLOW）与无 company_id 的几张 {@code gl_*} 表靠 create_by 默认处理，
      * 结构上取不到公司的表不得挂 COMPANY 范围角色（D-B3-06）。
      */
     private static String companyTable(String bt) {

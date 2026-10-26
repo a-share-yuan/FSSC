@@ -1,4 +1,7 @@
-// 【2026-10-16 第 4 批枚举收口】字典读取（同步、只读内存缓存，不发请求）
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
+// 【2026-10-16 第 4 批枚举办结】字典读取（同步、只读内存缓存，不发请求）
 // 依赖方向：enums.js → useDict.js → api.js，useDict 不反向引用本文件，无循环依赖。
 import { dictLabelOf } from '@/composables/useDict.js'
 
@@ -16,6 +19,9 @@ export const BIZ_TYPE = {
   ASSET: '资产', BUDGET: '预算', AUDIT: '审核组', OTHER: '其他',
   EXP_CLAIM: '费用报销', EXP_APPLY: '事前申请', EXP_PAY: '对公付款', EXP_LOAN: '借款',
   EXP_REPAY: '员工还款', AGENCY: '代收代付', AIR: '机票结算', MEETING: '会议事前申请',
+  // 事前申请三场景：后端 RequisitionWorkbenchService 的场景码 / MyDocumentService 的费用族筛选键
+  // 用的就是这三个（不是裸 APPLY），工作台「我的单据」按类型筛选与不支持类型提示都会回显出它们。
+  APPLY_MEETING: '会议申请', APPLY_TRAVEL: '出差申请', APPLY_TRAIN: '培训申请',
   CLAIM_TRAVEL: '差旅培训报销', CLAIM_G1: '招待费付款', CONTRACT_APPROVE: '合同审批',
   // 流程模型业务类型（wf_model.model_key 全集，标签取自 wf_model.model_name，去「审批流程」后缀）
   AR_CLAIM: 'AR服务申请', AR_RECON: '应收对账', AR_REPORT: '应收分析报告',
@@ -41,24 +47,29 @@ export const BIZ_TYPE = {
   TR_BANK_MASTER: '银行主数据', TR_BANK_RECON: '银行对账', TR_BILL: '票据结算',
   TR_PAY: '资金付款', TR_PAY_FAIL: '支付失败处理', TR_PLAN: '资金计划编制', TR_PLAN_ADJUST: '资金计划调整',
   TR_RECEIPT: '资金收款确认', TR_TRANSFER: '资金上存/调拨', TR_UPLOAD: '资金上存',
-  // 应付域主数据（2026-09-24 补：wf_model.biz_type 有 SUPPLIER_ADD 但字典缺，页面上直显英文码）
+  // 应付域主数据（2026-09-24 补：wf_model.biz_type 有 SUPPLIER_ADD 但字典缺，页面上直接显示英文码）
   SUPPLIER_ADD: '供应商新增准入',
-  // 非流程域的业务码（2026-09-28 枚举直显普查补）：出现在 audit_trail.biz_type／op_gl_entry.biz_type，
-  // 但从未在 wf_model 里建模，故原先字典查不到 ⇒ 审计轨迹、总账分录联查直显英文。
+  // 非流程域的业务码（2026-09-28 枚举直接显示普查补）：出现在 audit_trail.biz_type／op_gl_entry.biz_type，
+  // 但从未在 wf_model 里建模，故原先字典查不到 ⇒ 审计轨迹、总账分录联查直接显示英文。
   ARCHIVE: '档案', BANK_RECON: '银企对账', PURCHASE: '采购', TREASURY_PAY: '资金付款',
-  // 采购订单审批（D-DEC-265 补：wf_instance.biz_type=PURCHASE_ORDER_REVIEW 有 7 行实例，字典缺键 ⇒ 联查抽屉头直显英文域码；
+  // D-UI-07（2026-10-26 全站枚举普查）：audit_trail.biz_type 实测还有三枚无键值 ⇒ 审计轨迹页「业务类型」直显英文
+  // （RC_RECEIVABLE 444 行、SALE_RETURN 4、PUR_RETURN 3）；标签取业务单据名，不另造域分组词。
+  RC_RECEIVABLE: '应收单据', SALE_RETURN: '销售退货', PUR_RETURN: '采购退货',
+  // wf_event_action_config.biz_type 的引擎侧业务类型（各 1 行）：收尾动作配置页主标签回落原码，按既有 GL_* 族补全
+  GL_CHECK_DIFF: '总账勾稽差异', GL_FX_REVAL: '汇兑重估', GL_SALARY: '工资', GL_TAX: '税金',
+  // 采购订单审批（D-DEC-265 补：wf_instance.biz_type=PURCHASE_ORDER_REVIEW 有 7 行实例，字典缺键 ⇒ 联查抽屉头直接显示英文域码；
   // 该域在 wf_model 里挂的是 model_key=PTP02-02，标签取其 model_name）
   PURCHASE_ORDER_REVIEW: '采购订单审批',
-  // 编号型需求模板落库的 biz_type（wf_model.biz_type 列注释即「业务单据类型(模板模型)」）：
+  // 编号型需求模板写入数据库的 biz_type（wf_model.biz_type 列注释即「业务单据类型(模板模型)」）：
   // 标签取 model_name；与上面 INV_*/GL_* 的正式编码是两套并行编码，勿混用（模板版仅 1 节点，属早期简化流程）。
   'FA11-01': '存货领用出库（模板）', 'FA11-04': '存货处置（模板）', 'GL6-7': '税金计提与支付（模板）',
   'GL8': '薪酬计提与发放（模板）', 'OTC06': '坏账计提与确认（模板）', 'PTP02-02': '采购订单（模板）',
   'TR01-02': '银行印鉴变更（模板）',
   // 工作流引擎自检用的模型（P1 会签 / P2 超时 / G4 自由驳回 批次留下的），并不是业务单据类型；
-  // 登记在此只为了让流程配置页不再直显英文码。标签一律带「引擎测试」后缀，勿拿去做业务分流。
+  // 登记在此只为了让流程配置页不再直接显示英文码。标签一律带「引擎测试」后缀，勿拿去做业务分流。
   MI_SEQ: '顺序会签（引擎测试）', MI_TEST: '会签（引擎测试）', MI_VOTE: '票签（引擎测试）',
   P2_TO: '超时升级（引擎测试）', P4_G4: '自由驳回复验（引擎测试）',
-  // R5-D-056/150（2026-10-11 补）：自动凭证 biz_type 直显英文普查——op_gl_entry.biz_type 实测
+  // R5-D-056/150（2026-10-11 补）：自动凭证 biz_type 直接显示英文普查——op_gl_entry.biz_type 实测
   // RECEIPT_INVOICE/ESTIMATE_REVERSE（凭证台账同列）与 ASSET_DEPRECIATION/ESTIMATE/EXPENSE_SETTLE（分录页），
   // 标签与凭证摘要既有措辞对齐（发票入账-xxx／暂估冲回-xxx），勿另造词。
   RECEIPT_INVOICE: '发票入账', ESTIMATE_REVERSE: '暂估冲回', ASSET_DEPRECIATION: '资产折旧',
@@ -88,8 +99,8 @@ export const TASK_TYPE = {
 }
 /**
  * 档案类型（op_archive.archive_type）。历史库内仅 BILL/EXPENSE（31 行），但归档码表实集更宽：
- * ArchiveBoard 八键词表（D-DEC-255 主面）含 VOUCHER/CONTRACT/INVOICE/REPORT/OTHER，
- * 本表被 ArchivePage/BillTraceDrawer 的 enumFormatter 复用（D-DEC-255 残口：VOUCHER 行曾直显英文）。
+ * ArchiveBoard 八键名称表（D-DEC-255 主面）含 VOUCHER/CONTRACT/INVOICE/REPORT/OTHER，
+ * 本表被 ArchivePage/BillTraceDrawer 的 enumFormatter 复用（D-DEC-255 残口：VOUCHER 行曾直接显示英文）。
  * 增量补齐，不改既有键值。
  */
 export const ARCHIVE_TYPE = { BILL: '单据', EXPENSE: '费用', VOUCHER: '凭证', CONTRACT: '合同', INVOICE: '发票', REPORT: '报表', OTHER: '其他' }
@@ -105,14 +116,15 @@ export const DELIVERY_STATUS = { UNSIGNED: '未签收', SIGNED: '已签收' }
  */
 export const DISPATCH_MODE = { SYSTEM: '系统自动', AUTO: '自动派工', MANUAL: '手工派工' }
 /**
- * 合同类型（cont_contract.contract_type）。词表以库内现值为准（PURCHASE/SERVICE/MAINT/FRAMEWORK/OUTSOURCE）
- * 再加各页历史下拉里的 LEASE/CONSTRUCTION/OTHER 兜底存量显示。
+ * 合同类型（cont_contract.contract_type）。名称表以库内现值为准（PURCHASE/SERVICE/SALES/MAINT/FRAMEWORK/OUTSOURCE）
+ * 再加各页历史下拉里的 LEASE/CONSTRUCTION/OTHER 默认处理历史显示。SALES（销售合同）为 10-25 报表走查
+ * 实测库内 132 行直接显示英文后补入。
  */
 export const CONTRACT_TYPE = {
-  PURCHASE: '采购合同', SERVICE: '服务合同', LEASE: '租赁合同', CONSTRUCTION: '工程合同',
-  MAINT: '维保合同', FRAMEWORK: '框架合同', OUTSOURCE: '外包合同', OTHER: '其他',
+  PURCHASE: '采购合同', SERVICE: '服务合同', SALES: '销售合同', LEASE: '租赁合同',
+  CONSTRUCTION: '工程合同', MAINT: '维保合同', FRAMEWORK: '框架合同', OUTSOURCE: '外包合同', OTHER: '其他',
 }
-/** 资产状态（md_asset.status）。原为 AssetCardTab 本地 map，并入共用以免各页词表分叉。 */
+/** 资产状态（md_asset.status）。原为 AssetCardTab 本地 map，并入共用以免各页名称表分叉。 */
 export const ASSET_STATUS = {
   INIT: '草拟', CIP: '在建工程', USING: '使用中', SCRAP: '已报废',
   DISPOSED: '已处置', TRANSFERRED: '已调拨',
@@ -125,16 +137,23 @@ export const RECON_STATUS = {
   MATCHED: '已勾对', UNMATCHED: '未勾对', UNRECON: '未对账', PENDING: '待处理',
   IGNORED: '已忽略', CONFIRMED: '已确认',
 }
-/** 应收账款状态（rc_receivable.status ∪ 催收/核销各页历史词表）。库内现值 NONE/NORMAL。 */
+/** 应收账款状态（rc_receivable.status ∪ 催收/核销各页历史名称表）。库内现值 NONE/NORMAL。 */
 export const RC_STATUS = {
   NONE: '未开始', NORMAL: '正常', INIT: '初始化', CONFIRMED: '已确认', PARTIAL: '部分收款',
   DONE: '已结清', OVERDUE: '逾期', WRITE_OFF: '已核销', APPLIED: '已核销',
-  // D-DEC-423⑤：收款单登记腿写的是 WRITTEN_OFF（rc_receipt.status），原词表只有 WRITE_OFF/APPLIED
-  // 两个同义词、独独缺这一个 ⇒ 「收款核销」tab 状态列直显英文 WRITTEN_OFF（枚举直显族）。
-  // 补同义词而不是改后端写值：存量行零订正，读侧即刻出中文。
+  // D-DEC-423⑤：收款单登记环节写的是 WRITTEN_OFF（rc_receipt.status），原名称表只有 WRITE_OFF/APPLIED
+  // 两个同义词、独独缺这一个 ⇒ 「收款核销」tab 状态列直接显示英文 WRITTEN_OFF（枚举直接显示族）。
+  // 补同义词而不是改后端写值：历史行零订正，读侧即刻出中文。
   WRITTEN_OFF: '已核销',
   PROVISIONED: '已计提', CONFIRMED_WO: '已确认坏账', REVERSED: '已转回',
+  // 催收待办（rc_collect_todo.status 注释即「DOING催收中/RESOLVED已解决」）：原表只有 RESOLVED，
+  // 缺 DOING ⇒ 应收单 › 催收待办 tab 状态列直显英文，实测 442/442 行全是它。
+  DOING: '催收中',
   RESOLVED: '已解决', PENDING: '待处理',
+  // D-H3-07（2026-10-24 H 册）：应收单全额收款后 rc_receivable.status 写 RECEIVED，
+  // 原名称表只有 DONE（已结清）而无 RECEIVED ⇒ 应收列表状态列直接显示英文，实测影响 714/1179 行。
+  // 与 DONE 同为「款项已收齐」最终状态，措辞取「已收款」以区别于核销规则的「已结清」。
+  RECEIVED: '已收款',
 }
 /** 税种（gl_tax_provision.tax_type）。库内现值 INCOME/SURCHARGE/VAT。 */
 export const TAX_TYPE = { INCOME: '企业所得税', SURCHARGE: '附加税费', VAT: '增值税', OTHER: '其他' }
@@ -143,13 +162,15 @@ export const ACTION = {
   APPROVE: '审批通过', REJECT: '驳回/撤回', WITHDRAW: '撤回', UPDATE: '修改',
   INSERT: '新增', DELETE: '删除', CHECKSUM: '校验失败', PAY: '付款', URGE: '催办',
   TRANSFER: '转办', ADDSIGN: '加签',
+  // 费用单还款到账时登记的收款事实（ExpenseWfEventListener:1078 写 audit_trail.action）
+  FUND_RECEIPT_REGISTER: '收款登记',
 }
 
 export const DIRECTION = { DEBIT: '借', CREDIT: '贷', IN: '入库', OUT: '出库' }
 
 export const PERIOD_TYPE = { ANNUAL: '年度', QUARTER: '季度', MONTHLY: '月度', MONTH: '月度', YEAR: '年度', WEEKLY: '周度' }
 export const DAY_TYPE = { WORKDAY: '工作日', REST: '休息日', HOLIDAY: '节假日' }
-/** 预算/费控的控制方式。后端写入点 BudgetService:564-567 只认 HARD/SOFT/WARN（非法值 fail-closed 成 HARD）；
+/** 预算/费控的控制方式。后端写入位置 BudgetService:564-567 只认 HARD/SOFT/WARN（非法值 fail-closed 成 HARD）；
  *  STRICT/FLEX/WARNING 是早期种子与部分页面下拉用的同义旧码，两套都留着才能覆盖库内实值。 */
 export const CONTROL_TYPE = { HARD: '硬控', SOFT: '软控', WARN: '预警', STRICT: '刚性控制', FLEX: '柔性控制', WARNING: '预警控制' }
 export const ADJUST_TYPE = { INCREASE: '调增', DECREASE: '调减', TRANSFER: '调剂' }
@@ -164,13 +185,15 @@ export const ORG_SCOPE = { ORG: '指定公司', ALL: '全集团' }
  * `m.setCategory("TEMPLATE")`，把**来源**列的取值写进了**分类**列。本账套 18 行已于 2026-09-24
  * 归回真实业务域（权限治理/seed_wfmodel_category_domain_fix_20260924.sql，备份点
  * _bak_wfmodel_category_domain_20260924），后端写入侧同步改为留空。
- * 此键保留是给别的账套/历史数据兜底显示，别再往这列写它。
+ * 此键保留是给别的账套/历史数据默认处理显示，别再往这列写它。
  * BUDGET/CONTRACT/PAYMENT/OTHER 为归域后可用的取值。
  */
 export const WF_MODEL_CATEGORY = {
   EXPENSE: '费用', BUDGET: '预算', CONTRACT: '合同', PAYMENT: '付款',
   FA: '资产·存货', FM: '会计档案', GL: '总账', TR: '资金',
   PTP: '采购付款', OTC: '销售收款',
+  // wf_model.category 实测还有 MD（主数据，1 行）无键 ⇒ 流程配置页模型分类直显英文
+  MD: '主数据',
   TEMPLATE: '未归类', OTHER: '其他',
 }
 /** 模型来源（wf_model.source）：TEMPLATE 需求模板导入 / USER 用户在流程配置里新建 */
@@ -179,9 +202,9 @@ export const modelCategoryLabel = (v) => (v ? enumLabel(WF_MODEL_CATEGORY, v) : 
 export const modelSourceLabel = (v) => enumLabel(WF_MODEL_SOURCE, v)
 /** 寄件常用快递公司（应收邮包与应付协同共用一份，各页面各抄一遍） */
 export const COURIER_COMPANIES = ['顺丰速运', '京东物流', '中通快递', '圆通速递', 'EMS', '德邦快递']
-// ASSIGN_TYPE（wf_node_config.assign_type）：词表以 DB 列注释为基准——
+// ASSIGN_TYPE（wf_node_config.assign_type）：名称表以 DB 列注释为基准——
 // USER/ROLE/POST/DEPT_LEADER/DEPT_LEADER_UP/INITIATOR/SHARE_POOL/EXPRESSION。
-// DEPT_HEAD / LEADER 两个旧拼写在 DB 里并不存在（节点表单也从未提供），仅作存量展示兜底，勿再写入。
+// DEPT_HEAD / LEADER 两个旧拼写在 DB 里并不存在（节点表单也从未提供），仅作历史展示默认处理，勿再写入。
 // DEPT_LEADER_UP 已由 WfEngineFacade.applyNodeConfig 真实消费（沿汇报线取第 up_level 级负责人），
 // DEPT_LEADER 同分支（固定 1 级）。
 export const ASSIGN_TYPE = {
@@ -195,7 +218,7 @@ export const HANDLING_MODE = { AUTO: '自动指派', PICK: '上一环节指定',
 // MULTI_TYPE（wf_node_config.multi_type）：**后端已真实消费**（2026-09-23 P1 落地）。
 // WfBpmnTemplateService.build() 对 ALL/SEQ/VOTE 生成 BPMN multiInstanceLoopCharacteristics
 // （isSequential / completionCondition），WfEngineFacade 启动期注入 <nodeKey>_assignees 候选集合并计票。
-// 词表严格对齐 wf_node_config.multi_type 列注释与 WfNodeConfigService.MULTI_TYPES 写入闸：
+// 名称表严格对齐 wf_node_config.multi_type 列注释与 WfNodeConfigService.MULTI_TYPES 写入校验：
 // 曾误写 SEQUENTIAL（后端不识别 ⇒ 静默退化为单人审批），已移除该拼写，勿再使用。
 export const MULTI_TYPE = {
   ANY: '任一通过（单人办理）',
@@ -203,12 +226,12 @@ export const MULTI_TYPE = {
   SEQ: '顺序会签（逐个办理）',
   VOTE: '票签（按比例通过）',
 }
-// REJECT_TO：后端无消费方，节点表单已摘除；映射仅为存量数据详情兜底展示，勿再接入编辑控件
+// REJECT_TO：后端无消费方，节点表单已摘除；映射仅为历史数据详情默认处理展示，勿再接入编辑控件
 export const REJECT_TO = { INITIATOR: '发起人', PREV: '上一节点' }
 // 超时动作三档真语义（G3-1）：服务端 WfTimeoutJob.normalizeAction 把下列所有拼法归一后执行——
 // 催办（NOTIFY/AUTO_REMIND/REMIND/URGE）、自动通过（AUTO_PASS，写审批历史并给下一环节取人）、
 // 升级转办（AUTO_TRANSFER/TRANSFER/ESCALATE/AUTO_ESCALATE/REDISTRIBUTE，沿汇报线派给真实上级）。
-// 存量库里只有 NOTIFY 一种值；配置页下拉写回的也是这三个规范值。
+// 历史库里只有 NOTIFY 一种值；配置页下拉写回的也是这三个规范值。
 // <b>批次 1 ②（白名单制）</b>：AUTO_PASS 还需同时满足 sys_config.wf.timeout.autopass.nodes 含本节点
 // （modelKey:nodeKey，缺省为空＝不放行）、单据金额 ≤ wf.timeout.autopass.max_amount、节点非任务池/共享池
 // 作业档、非多实例会签，四条门槛任一不过即降级为催办。所以"配了 AUTO_PASS 但没进白名单"是预期行为。
@@ -226,20 +249,31 @@ export const TIMEOUT_ACTION = {
 export const CFG_TYPE = { THRESHOLD: '金额阈值', TIMEOUT: '超时处理', ACTION: '审批动作', INTEGRATION: '外部集成' }
 export const CHECK_ITEM = { VOUCHER: '凭证核对', PAYMENT: '付款核对', STATUS: '状态核对' }
 /**
+ * 质检抽检方式（op_quality.check_type）。名称表与共享质检页创建表单同源
+ * （SharingQuality.vue 的 RANDOM/FULL/KEY 下拉），报表页不得各自直接显示英文码。
+ */
+export const CHECK_SAMPLING = { RANDOM: '随机抽检', FULL: '全检', KEY: '关键检查' }
+/**
  * 外部接口分类（ext_interface_config.category ＝ integration_call_log.category）。
- * 词表＝后端写入闸 ExtInterfaceConfigService.VALID_CATEGORIES ∪ 库内现值：
+ * 名称表＝后端写入校验 ExtInterfaceConfigService.VALID_CATEGORIES ∪ 库内现值：
  * SMS / TAX_CERTIFY / TAX_DECLARE 三行是白名单机制落地前种子进来的历史值，仍会在列表里出现，故一并登记。
- * 这里出现 EBS / SAP / YONYOU / KINGDEE 等是**接口通道的厂商取值**（配置页 tab 与 provider 下拉早就这么显示），
+ * 其余英文缩写是**接口通道的外部系统取值**（配置页 tab 与 provider 下拉按取值映射为中性名称显示），
+ * 属取值类例外，不计入文案规则。
  */
 export const EXT_INTERFACE_CATEGORY = {
   INVOICE_VERIFY: '发票验真', INVOICE_CERTIFY: '发票认证', OCR: 'OCR 影像识别', AI_MODEL: 'AI 大模型',
   LINKU: 'LinkU 供应商协同', BANK: '银企直连', SMS: '短信服务',
   TAX_CERTIFY: '税务认证', TAX_DECLARE: '税务申报', GOLDEN_TAX: '金税系统',
-  ERP: 'ERP 总账对接', GL_PUSH: '总账凭证推送', EKP: 'EKP 审批回调', ECDS: 'ECDS 电票',
-  EBS: 'EBS 通道', SAP: 'SAP 通道', YONYOU: '用友通道', KINGDEE: '金蝶通道',
+  ERP: 'ERP 总账对接', GL_PUSH: '总账凭证推送', EKP: 'OA 审批回调', ECDS: 'ECDS 电票',
+  EBS: '外部财务系统（标准）', SAP: '外部财务系统（备用一）', YONYOU: '外部财务系统（备用二）', KINGDEE: '外部财务系统（备用三）',
 }
 /** {PROVIDER}_{ACTION}＝某个 ERP 品牌的具体业务通道（见 ErpChannelResolver），拼成「品牌 动作 通道」。 */
-const ERP_BRAND = { EBS: 'EBS', SAP: 'SAP', YONYOU: '用友', KINGDEE: '金蝶', CUSTOM: '自定义' }
+const ERP_BRAND = { EBS: '标准', SAP: '备用一', YONYOU: '备用二', KINGDEE: '备用三', CUSTOM: '自定义' }
+/** ERP 对接商取值 → 界面中性名称（取值入库不变） */
+export const ERP_PROVIDER_LABEL = { EBS: '标准通道', SAP: '备用通道一', YONYOU: '备用通道二', KINGDEE: '备用通道三', CUSTOM: '自定义' }
+export function erpProviderLabel(p) {
+  return ERP_PROVIDER_LABEL[p] || p || ''
+}
 const ERP_ACTION = { AP_BLUE: '应付（蓝图）', AP: '应付', ORDER_GET: '订单查询' }
 export function extCategoryLabel(v) {
   if (!v) return ''
@@ -252,51 +286,73 @@ export function extCategoryLabel(v) {
   }
   return enumLabel(EXT_INTERFACE_CATEGORY, v)
 }
-// 发票验真：后端两套词表并存（OCR 侧 PASS/FAIL，验真服务侧 SUCCESS/FAILED，影像侧 NONE/REPLACED）
+// 发票验真：后端两套名称表并存（OCR 侧 PASS/FAIL，验真服务侧 SUCCESS/FAILED，影像侧 NONE/REPLACED）
 export const VERIFY_STATUS = {
   NONE: '未验真', PENDING: '验真中', PASS: '验真通过', SUCCESS: '验真通过',
   FAIL: '验真失败', FAILED: '验真失败', REJECT: '验真未通过', REPLACED: '已被替换',
+  // 历史取值：inv_invoice 现存 3,327 行 verify_status=VERIFIED（verify_time/verify_msg 全空，
+  // 当前代码已无写入方）。原样显示英文会被当成系统故障；但它没有验真时间与验真日志佐证，
+  // 不能并入「验真通过」，故单列并标注历史。
+  VERIFIED: '已验真（历史）',
 }
-/** 验真状态取中文：空值才是"未验真"，字典外的编码原样显示（BillDetailPanel 曾把未知码一律说成"未验真"）。 */
-export const verifyStatusLabel = (v) => (v == null || v === '' || v === 'NONE' ? '未验真' : enumLabel(VERIFY_STATUS, v))
+/** 验真状态取中文：空值才是"未验真"；字典外编码一律显示「其他状态」，不再原样输出英文（VERIFIED 曾直显过英文）。 */
+export const verifyStatusLabel = (v) => {
+  if (v == null || v === '' || v === 'NONE') return '未验真'
+  const label = enumLabel(VERIFY_STATUS, v)
+  // enumLabel 对未登记值会退回原码；这里挡住英文回显，具体编码在 DEV 控制台仍有 [enums] 告警可查
+  return /^[A-Za-z][A-Za-z0-9_]*$/.test(label) ? '其他状态' : label
+}
 /**
- * 凭证来源类型（op_voucher.source_type）。词表＝DB 列注释全集 + 库内实际出现的 ESTIMATE
+ * 凭证来源类型（op_voucher.source_type）。名称表＝DB 列注释全集 + 库内实际出现的 ESTIMATE
  * （列注释里没写它，但暂估凭证确实往这列写 ESTIMATE）。
- * 另注意 CorpPayVoucher 的同名字段存的是**单据类型**（EXPENSE_PAY/EXP_TRAVEL/…），走 BILL_TYPE 口径。
+ * 另注意 CorpPayVoucher 的同名字段存的是**单据类型**（EXPENSE_PAY/EXP_TRAVEL/…），走 BILL_TYPE 规则。
  */
 export const VOUCHER_SOURCE = {
   EXPENSE: '费用报账', EXPENSE_PAY: '费用付款', PURCHASE: '采购入库', RECEIVABLE: '应收确认',
   RECEIVABLE_COLLECT: '应收收款', TREASURY_PAY: '出纳付款', BANK_RECON: '银行对账',
   ASSET_DEPRECIATION: '资产折旧', CONTRACT: '合同', ESTIMATE: '暂估',
-  // 2026-09-28 只读普查（op_voucher.source_type 实测 15 个取值，缺键即直显英文）：
-  // 报销族走单据类型口径，GL 族由 glex 各 Service 写入。
+  // 2026-09-28 只读普查（op_voucher.source_type 实测 15 个取值，缺键即直接显示英文）：
+  // 报销族走单据类型规则，GL 族由 glex 各 Service 写入。
   EXP_LOAN: '借款', EXP_REPAY: '还款', INVOICE_MATCH: '发票校验',
   GL_ACCRUAL: '费用预提', GL_DEFER: '费用待摊', GL_TAX_PROV: '税金计提', GL_TAX_PAY: '税金支付',
   GL_SALARY_PROV: '工资计提', GL_SALARY_PAY: '工资发放',
-  // R5-D-150（2026-10-11 补）：凭证台账「来源类型」列实测 RECEIPT_INVOICE/ESTIMATE_REVERSE 直显英文，
+  // R5-D-150（2026-10-11 补）：凭证台账「来源类型」列实测 RECEIPT_INVOICE/ESTIMATE_REVERSE 直接显示英文，
   // EXPENSE_SETTLE 同域预留；措辞与 BIZ_TYPE 同名键对齐（发票入账／暂估冲回／费用结算）。
   RECEIPT_INVOICE: '发票入账', ESTIMATE_REVERSE: '暂估冲回', EXPENSE_SETTLE: '费用结算',
+  // D-H8-03（2026-10-24 H 册）：资产凭证 source_type 直写 bizType（VoucherService.generateAssetVoucher:3928），
+  // 三支会落 op_voucher 的资产族此前均缺键 ⇒ 来源类型列直接显示英文（实测 FA_ADD）。
+  // 措辞取后端凭证摘要 prefix 同字（VoucherService:3931-3935），不另造词。
+  //  本键集不是唯一出处：凭证台账（pay/CorpPayVoucher）与总账（gl/GlLedger）取词走
+  //   utils/bizEntry.js 的 VOUCHER_SOURCE_LABEL，补键必须两边同时补，否则界面上照旧直接显示英文
+  //   （本轮 FA_ADD 就只补了这边 ⇒ 已同步补 bizEntry 侧）。两张表另有 5 处措辞不一致
+  //   （EXPENSE/INVOICE_MATCH/GL_ACCRUAL/GL_SALARY_PROV/GL_SALARY_PAY），统一措辞属规则裁决项，在此擅改。
+  FA_ADD: '资产新增', FA_CIP_TO_ASSET: '在建工程转固', FA_DISPOSE: '资产处置',
+  // 同族补（实测 op_voucher 198 行直接显示英文）：产品代码无该 source_type 写出口，摘要一律「费用重分类」
+  // ⇒ 判为报表数据模拟写入的数据侧枚举，措辞从数据；详见 bizEntry.js 同名键注释。
+  EXPENSE_REIM: '费用重分类',
+  // D-UI-07（2026-10-26 普查）：op_voucher.source_doc_type 实测 PO_RECEIPT(3)/INV_INVOICE(1) 无键 ⇒ 凭证台账来源列直显英文
+  PO_RECEIPT: '采购收货', INV_INVOICE: '发票入账',
 }
 export const voucherSourceLabel = (v) => enumLabel(VOUCHER_SOURCE, v)
 
 /**
  * 工作流审批动作（ACT_HI / wf_task_history.action）。
- * 注意与 ACTION（操作日志 operType）不是一套词表：这里是流程节点上的动作。
+ * 注意与 ACTION（操作日志 operType）不是一套名称表：这里是流程节点上的动作。
  */
 export const WF_ACTION = {
-  // D-DEC-363：APPROVED 是实例级终态动作码（SRV WfQueryService.TERMINAL_ACTIONS/INSTANCE_LEVEL_ACTIONS），
-  // 与人工票 APPROVE 不是一回事——旧词表两者同显「同意」同色 success，审批轨迹里终态行与投票行混成一列。
-  SUBMIT: '提交', APPROVE: '同意', APPROVED: '流程终态·已通过', REJECT: '驳回', TRANSFER: '转办', ADDSIGN: '加签',
+  // D-DEC-363：APPROVED 是实例级最终状态动作码（SRV WfQueryService.TERMINAL_ACTIONS/INSTANCE_LEVEL_ACTIONS），
+  // 与人工票 APPROVE 不是一回事——旧名称表两者同显「同意」同色 success，审批轨迹里最终状态行与投票行混成一列。
+  SUBMIT: '提交', APPROVE: '同意', APPROVED: '流程结束·已通过', REJECT: '驳回', TRANSFER: '转办', ADDSIGN: '加签',
   // D-DEC-065：加签审结行自此与发起行分码（SRV WfQueryService.ACTION_ADDSIGN_DONE）。
-  // 词表必须先备好：存量老行仍是 ADDSIGN（显「加签」），新行的审结才显「加签审结」。
+  // 名称表必须先备好：历史老行仍是 ADDSIGN（显「加签」），新行的审结才显「加签审结」。
   ADDSIGN_DONE: '加签审结',
   CANCEL: '撤销', URGE: '催办', AUTO_PASS: '自动通过', TERMINATE: '终止', ASSIGN: '指派',
   REASSIGN: '改派', ESCALATE: '超时升级', WITHDRAW: '撤回',
-  // 批次 1：节点空策略兜底的两类系统动作 + 任务池领取/释放 + 作业任务超时回收
+  // 批次 1：节点空策略默认处理的两类系统动作 + 任务池领取/释放 + 作业任务超时回收
   AUTO_SKIP: '自动跳过', CLAIM: '领取任务', UNCLAIM: '释放任务', TIMEOUT_RELEASE: '超时回收',
   // D-DEC-275：待办视图作废（实例终止/会签兄弟清理时的未办理任务）——不是办理、也不是用户撤销
   VOID: '作废',
-  // 自由驳回（G4）两段留痕：REJECT_TO＝搬执行前的试探记录（带目标节点），REJECT_TO_DONE＝搬迁已完成
+  // 自由驳回（G4）两段记录：REJECT_TO＝搬执行前的试探记录（带目标节点），REJECT_TO_DONE＝搬迁已完成
   REJECT_TO: '驳回至指定节点', REJECT_TO_DONE: '驳回搬迁完成',
 }
 export const WF_ACTION_TYPE = {
@@ -414,7 +470,7 @@ export function enumLabel(map, v) {
     const fromDict = dictLabelOf(dt, v)
     if (fromDict) return fromDict
   }
-  // ② 本地常量（兜底：字典未预热/未部署时行为与改造前逐字一致）
+  // ② 本地常量（默认处理：字典未预热/未部署时行为与改造前逐字一致）
   const hit = map[v]
   if (hit) return hit
   if (v == null || v === '') return ''
@@ -454,8 +510,24 @@ export const wfActionLabel = (v) => enumLabel(WF_ACTION, v)
 export const wfActionType = (v) => WF_ACTION_TYPE[v] || 'info'
 
 /**
+ * 审批链节点状态名称表（/wf/query/chain 的 state 取值域）。
+ * 取值域＝后端 WfQueryService.chain() 产出的节点状态；与填单侧 FlowProgressPanel 同一套，
+ * 故收在本文件（枚举治理约定：中文名不在各页各写一份）。
+ */
+export const WF_NODE_STATE = {
+  DONE: '已通过', CURRENT: '当前节点', REJECTED: '曾驳回', VOID: '已作废',
+  TODO: '尚未到达', SKIPPED: '未经过（他档分支）', ADDSIGN: '加签（临时插一道）',
+}
+export const WF_NODE_STATE_TYPE = {
+  DONE: 'success', CURRENT: 'primary', REJECTED: 'danger', VOID: 'warning',
+  TODO: 'info', SKIPPED: 'info', ADDSIGN: 'warning',
+}
+export const wfNodeStateLabel = (v) => enumLabel(WF_NODE_STATE, v)
+export const wfNodeStateType = (v) => WF_NODE_STATE_TYPE[v] || 'info'
+
+/**
  * 单据/业务类型统一取中文：待办的 billType 实际存的是流程 bizType（如 FA_DISPOSE），
- * 报销类又走 BILL_TYPE 词表，故先查 BILL_TYPE 再查 BIZ_TYPE，避免落到「原样显示英文」。
+ * 报销类又走 BILL_TYPE 名称表，故先查 BILL_TYPE 再查 BIZ_TYPE，避免落到「原样显示英文」。
  */
 export function docTypeLabel(v) {
   if (v == null || v === '') return ''
@@ -463,9 +535,9 @@ export function docTypeLabel(v) {
 }
 
 /* ============================================================================
- * 域内状态/类型词表（2026-09-28 枚举直显英文普查后并入）
+ * 域内状态/类型名称表（2026-09-28 枚举直接显示英文普查后并入）
  * 背景：这些编码原先在 2~3 个页面各写一份本地 map，取值漏一个就静默露出英文
- * （Workbench 的 taskType 露 "BOOKKEEP" 即此根因）。词表以「后端写入点 ∪ DB 实测取值」为准，
+ * （Workbench 的 taskType 露 "BOOKKEEP" 即此根因）。名称表以「后端写入位置 ∪ DB 实测取值」为准，
  * 新增取值须同步补这里，不要再回到页面里手写。
  * ==========================================================================*/
 
@@ -475,29 +547,29 @@ export const PAY_STATUS = {
 }
 export const payStatusLabel = (v) => enumLabel(PAY_STATUS, v)
 
-/** 内部往来抵消方向（gl_inter_offset.inter_flag，写入闸 GlInterOffsetService:141） */
+/** 内部往来抵消方向（gl_inter_offset.inter_flag，写入校验 GlInterOffsetService:141） */
 export const INTER_FLAG = { RECEIVABLE: '应收抵消', PAYABLE: '应付抵消' }
 export const interFlagLabel = (v) => enumLabel(INTER_FLAG, v)
 
 /**
  * 发票类型（inv_invoice.invoice_type）。R5-D-121：池／认证／验真三页共用一处定义，
- * 禁止组件内局部映射（Invoice.vue 原局部 map 漏 VAT/OTHER 两档导致直显英文）。
+ * 禁止组件内局部映射（Invoice.vue 原局部 map 漏 VAT/OTHER 两档导致直接显示英文）。
  * NORMAL/VATN 为普票历史拼法、SPECIAL 为专票简写，一并登记防回流。
  */
 /**
- * 发票类型。【V1.4.72 修双词表缺陷】本容器此前只有 8 型，是没跟上 OCR 扩展的过时残本：
- * 高铁/火车票/机票/出租车/网约车/定额/停车/医疗 8 类缺失，enumLabel 兜底把 RAIL_HIGH 等
+ * 发票类型。【V1.4.72 修双名称表缺陷】本容器此前只有 8 型，是没跟上 OCR 扩展的过时残本：
+ * 高铁/火车票/机票/出租车/网约车/定额/停车/医疗 8 类缺失，enumLabel 默认处理把 RAIL_HIGH 等
  * 英文码直接显示给用户；且 VAT_SPECIAL 作「增值税专用」，与 invoiceType.js 下拉的
  * 「增值税专用发票」不一致 —— 同一条数据下拉一套词、列表另一套词。
  * 现已按 V1.4.72 字典 enum_invoice_type 补全为 13 正式型 + 6 历史码（逐字一致）。
- * 本常量只作字典不可用时的兜底；正常路径 enumLabel() 会优先读字典。
+ * 本常量只作字典不可用时的默认处理；正常路径 enumLabel() 会优先读字典。
  */
 export const INVOICE_TYPE = {
   VAT_SPECIAL: '增值税专用发票', VAT_NORMAL: '增值税普通发票', ELECTRONIC: '电子发票',
   RAIL_HIGH: '高铁 / 动车', TRAIN: '火车票', AIR: '航空运输电子客票', TAXI: '出租车',
   RIDE_HALLING: '网约车', QUOTA: '定额发票', TOLL: '通行费 / ETC', PARKING: '停车费',
   MEDICAL: '医疗收费票据', OTHER: '其他',
-  // 历史兼容码：仅回显旧数据（VAT 取 invoiceType.js 口径＝专票，与后端归一逻辑一致）
+  // 历史兼容码：仅回显旧数据（VAT 取 invoiceType.js 规则＝专票，与后端归一逻辑一致）
   SPECIAL: '增值税专用发票', NORMAL: '增值税普通发票', VAT: '增值税专票', VATN: '增值税普票',
   增专: '增值税专用发票', 增普: '增值税普通发票',
 }
@@ -517,7 +589,7 @@ export const invoiceChannelLabel = (v) => enumLabel(INVOICE_CHANNEL, v)
 export const INTEGRITY_STATUS = { SKIP: '未校验', VERIFIED: '已校验', FAILED: '校验失败' }
 export const integrityStatusLabel = (v) => enumLabel(INTEGRITY_STATUS, v)
 
-/** 应收服务申请类型（ar_claim.claim_type，写入点 ArClaimBoard 表单 ∪ ArFlowController 查询） */
+/** 应收服务申请类型（ar_claim.claim_type，写入位置 ArClaimBoard 表单 ∪ ArFlowController 查询） */
 export const AR_CLAIM_TYPE = {
   CLAIM_IN: '客户索赔', CLAIM_OUT: '向客户索赔', REVENUE_EST: '收入暂估', THING_ADJ: '应收事物调整',
   AR_AP_OFFSET: '应收应付对冲', NOTE_DISCOUNT: '汇票贴息', OTHER_REV: '其它业务收入',
@@ -527,7 +599,7 @@ export const arClaimTypeLabel = (v) => enumLabel(AR_CLAIM_TYPE, v)
 
 /** 应收服务申请流转状态（ar_claim.status） */
 export const AR_CLAIM_STATUS = {
-  EKP_REVIEW: 'EKP审批中', PENDING_DISPATCH: '待派工', DISPATCHED: '已派工',
+  EKP_REVIEW: 'OA审批中', PENDING_DISPATCH: '待派工', DISPATCHED: '已派工',
   POSTED: '已过账', REJECTED: '已驳回', COMPLETED: '已完成',
 }
 export const arClaimStatusLabel = (v) => enumLabel(AR_CLAIM_STATUS, v)
@@ -542,6 +614,14 @@ export const AR_BILLING_STATUS = {
   INVOICED: '已开票', VOIDED: '已作废', RED_INVOICED: '已红冲',
 }
 export const arBillingStatusLabel = (v) => enumLabel(AR_BILLING_STATUS, v)
+
+/**
+ * 应收账款对账单状态（ar_statement.status，实体注释即 IMPORTED/RECONCILED/ABNORMAL）。
+ * D-UI-07：对账单本身没有状态列，但 EBS 调整单的「关联对账单」下拉把 status 拼进了选项文案，
+ * 缺键时下拉里直接出现 IMPORTED。
+ */
+export const AR_STATEMENT_STATUS = { IMPORTED: '已导入', RECONCILED: '已核对', ABNORMAL: '异常' }
+export const arStatementStatusLabel = (v) => enumLabel(AR_STATEMENT_STATUS, v)
 
 /** 应收票据状态（ar_note.status） */
 export const AR_NOTE_STATUS = {
@@ -592,7 +672,7 @@ export const AP_REQ_STATUS = {
 }
 export const apReqStatusLabel = (v) => enumLabel(AP_REQ_STATUS, v)
 
-/** 退货单状态（pur/sal_return.status）——与单据主生命周期不同：这里是「待审核/已审核」口径 */
+/** 退货单状态（pur/sal_return.status）——与单据主生命周期不同：这里是「待审核/已审核」规则 */
 export const RETURN_STATUS = {
   DRAFT: '草稿', PENDING: '待审核', APPROVED: '已审核', REJECTED: '已驳回', VOIDED: '已作废',
 }
@@ -602,26 +682,27 @@ export const returnStatusLabel = (v) => enumLabel(RETURN_STATUS, v)
 export const RETURN_MODE = { REFUND: '退货退款', EXCHANGE: '退货补货' }
 export const returnModeLabel = (v) => enumLabel(RETURN_MODE, v)
 
-/** 抽检类型（op_quality.check_type ＝ 质检计划检查项，写入点 QualityCheckService） */
+/** 核对项（CHECK_ITEM 名称表，非 op_quality.check_type） */
 export const checkItemLabel = (v) => enumLabel(CHECK_ITEM, v)
+export const checkSamplingLabel = (v) => enumLabel(CHECK_SAMPLING, v)
 
-/** 总账共享主数据类别/动作（gl_shared_master.type / .action，写入点 GlSharedMasterService） */
+/** 总账共享主数据类别/动作（gl_shared_master.type / .action，写入位置 GlSharedMasterService） */
 export const MASTER_TYPE = { SUBJECT: '科目', COST_CENTER: '成本中心', BANK: '银行', OTHER: '其他' }
 export const MASTER_ACTION = { ADD: '新增', MODIFY: '变更', DELETE: '停用' }
 export const masterTypeLabel = (v) => enumLabel(MASTER_TYPE, v)
 export const masterActionLabel = (v) => enumLabel(MASTER_ACTION, v)
 
 /**
- * 审计轨迹动作（audit_trail.action）。与流程动作（wf_task_history.action，走 WF_ACTION）是两套词表：
- * 这里是数据变更留痕，UPDATE 由 AuditTrailService.recordUpdate 写死，CHECKSUM 由 recordChecksumFailure 写，
- * VOUCHER_GEN_FAILED 由 ExpenseWfEventListener 写。审计轨迹页此前把原码直显。
+ * 审计轨迹动作（audit_trail.action）。与流程动作（wf_task_history.action，走 WF_ACTION）是两套名称表：
+ * 这里是数据变更记录，UPDATE 由 AuditTrailService.recordUpdate 写死，CHECKSUM 由 recordChecksumFailure 写，
+ * VOUCHER_GEN_FAILED 由 ExpenseWfEventListener 写。审计轨迹页此前把原码直接显示。
  */
 export const AUDIT_ACTION = {
   UPDATE: '变更', APPROVE: '同意', REJECT: '驳回', CHECKSUM: '校验和封存', VOUCHER_GEN_FAILED: '凭证生成失败',
 }
 export const auditActionLabel = (v) => enumLabel(AUDIT_ACTION, v)
 
-/** 站内消息类型（sys_message.msg_type，写入点 notifyUser/notifyService 各调用方） */
+/** 站内消息类型（sys_message.msg_type，写入位置 notifyUser/notifyService 各调用方） */
 export const MSG_TYPE = {
   APPROVAL: '审批通知', APPROVAL_URGE: '审批催办', ALERT: '预警',
   TIMEOUT_REMINDER: '超时催办', TIMEOUT_ESCALATED: '超时升级', WF_STUCK_ALERT: '卡单预警',
@@ -636,8 +717,46 @@ export const PAYEE_TYPE = { EMPLOYEE: '员工', SUPPLIER: '供应商', CUSTOMER:
 export const payeeTypeLabel = (v) => enumLabel(PAYEE_TYPE, v)
 
 /** 往来主体类型（crm_customer.customer_type，库内实值 CUSTOMER/SUPPLIER/CORPORATE/CORP） */
-export const CUSTOMER_TYPE = { CUSTOMER: '客户', SUPPLIER: '供应商', VENDOR: '服务商', CORPORATE: '企业法人', CORP: '企业法人' }
+export const CUSTOMER_TYPE = {
+  CUSTOMER: '客户', SUPPLIER: '供应商', VENDOR: '服务商', CORPORATE: '企业法人', CORP: '企业法人',
+  // crm_customer.customer_type 实测 1 行取 GENERAL（C2001 万宸精工，历史种子）⇒ 客户管理「类型」列直显英文
+  GENERAL: '通用往来',
+}
 export const customerTypeLabel = (v) => enumLabel(CUSTOMER_TYPE, v)
+
+/** 开票规则拆票维度（ar_invoice_rule.split_dim；库内现值 PO，10/10 行） */
+export const AR_SPLIT_DIM = { PO: '采购订单' }
+export const arSplitDimLabel = (v) => enumLabel(AR_SPLIT_DIM, v)
+
+/** 共享服务目录类别（service_catalog.category；库内现值 IT，3 行） */
+export const SERVICE_CATEGORY = { IT: '信息技术' }
+export const serviceCategoryLabel = (v) => enumLabel(SERVICE_CATEGORY, v)
+
+/** 文件存储区域（sys_file.storage_zone；TEMP 6 / ARCHIVE 3 / BUSINESS 2） */
+export const FILE_STORAGE_ZONE = { TEMP: '临时区', BUSINESS: '业务区', ARCHIVE: '归档区' }
+export const fileStorageZoneLabel = (v) => enumLabel(FILE_STORAGE_ZONE, v)
+
+/** 金融机构类型（md_bank.bank_type；种子 61 行存 BANK，运营新建时可填中文，中文原样放行） */
+export const FIN_INST_TYPE = { BANK: '银行' }
+export const finInstTypeLabel = (v) => enumLabel(FIN_INST_TYPE, v)
+
+/** 发票识别通道（fssc_image.ocr_record.channel_name；后端 fssc.ocr.channel 取值 gateway/mock/http/paddle，库内为小写） */
+export const OCR_CHANNEL = { gateway: '能力网关', mock: '模拟通道', http: '直连通道', paddle: '本地识别' }
+export const ocrChannelLabel = (v) => enumLabel(OCR_CHANNEL, v == null ? v : String(v).trim().toLowerCase())
+
+/** 派单规则条件维度（op_dispatch_rule.dispatch_dimension / RuleHit.dimension；库内现值 TYPE 2 行） */
+export const DISPATCH_DIMENSION = {
+  TYPE: '单据类型', AMOUNT: '金额', LEGAL: '法人主体', COMPLEXITY: '复杂度', REGION: '区域',
+  COMPANY: '公司', EXPENSE_ITEM: '费用项', CURRENCY: '币种', TASK_TYPE: '任务类型', ALL: '全部',
+}
+export const dispatchDimensionLabel = (v) => enumLabel(DISPATCH_DIMENSION, v)
+
+/** 对账明细单据类型（bcp_recon_detail.item_type；实测 PAYABLE/PUR_RECEIPT/PAYMENT/RECEIVABLE/RECEIPT/PRE_INVOICE，FSSC 侧另有 INVOICE/PUR_RETURN/SALE_RETURN） */
+export const RECON_ITEM_TYPE = {
+  PAYABLE: '应付单', PUR_RECEIPT: '采购入库单', PAYMENT: '付款单', RECEIVABLE: '应收单', RECEIPT: '收款单',
+  PRE_INVOICE: '预开票', INVOICE: '发票', PUR_RETURN: '采购退货单', SALE_RETURN: '销售退货单',
+}
+export const reconItemTypeLabel = (v) => enumLabel(RECON_ITEM_TYPE, v)
 
 /** 操作日志的业务动作（sys_oper_log.business_type，库内实值含 PUBLISH/SUBMIT/VOID，种子与运行时两套码并存） */
 export const OPER_BUSINESS_TYPE = {

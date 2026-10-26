@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <el-card>
@@ -54,7 +57,7 @@ const categories = ref([])
 const depts = ref([])
 const companies = ref([])
 const suppliers = ref([])
-// D-BIZ-03：供应商取数被 4030 拒时前端把错误吞成空列表，用户只看到「下拉是空的」。
+// D-BIZ-03：供应商查询被 4030 拒时前端把错误吞成空列表，用户只看到「下拉是空的」。
 // 记下该标志，供建档弹窗把提示改成「无查看权限」而不是静默空表。
 const suppliersDenied = ref(false)
 const warehouses = ref([])

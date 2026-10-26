@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.ops.dto;
 
 /**
  * G3（2026-09-24）分配策略候选人的负载画像。
  *
- * <p>三种策略都只看这三个数，口径只有一份（避免"均衡·按时"与"均衡·按量"各算一套）：
+ * <p>三种策略都只看这三个数，规则只有一份（避免"均衡·按时"与"均衡·按量"各算一套）：
  * <ul>
  *   <li>{@code pendingCount} 在手待办数 —— 均衡·按量的判据；</li>
  *   <li>{@code expectedMinutes} 在手任务预计耗时合计 —— 均衡·按时的判据（同数量但节点轻重不同时不再等价）；</li>

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.job;
 
 import com.fssc.framework.job.JobHeartbeatService;
@@ -13,7 +16,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>周期扫描 {@code integration_call_log} 中 success=0 且未达重试上限的记录，逐条在原租户上下文内重投，
  * 复用同一 log 行（retry_count 自增封顶），避免无限重试；重投安全护栏由
- * {@link IntegrationGateway#retryFailed(int, int)} 内联实现（只读类通道或带幂等键的记录才纳入）。</p>
+ * {@link IntegrationGateway#retryFailed(int, int)} 内联实现（只读类通道或带唯一键的记录才纳入）。</p>
  *
  * <p><b>默认关闭</b>（{@code fssc.connector.retry.enabled=false}）：本 Job 会主动向第三方发起外呼，
  * 属对外部系统的副作用动作，按"对外动作先确认"原则默认不启用；确认联调环境就绪后置 true 开启，

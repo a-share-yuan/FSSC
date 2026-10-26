@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -64,7 +67,7 @@ public class WfAddSignService {
      * <p>只取 {@link WfAddSign#STATUS_ACTIVE}：前加签在发起时就把记录绑到被改派的任务上，
      * 后加签则在推进生效时绑到新任务上（{@code applyPendingAfterAddSign}）——两种加签人在
      * 待办里看到的那一行都命中本查询。审结/取消后记录转 DONE/CANCELLED ⇒ 标识自动消失，
-     * 原办理人的待办回到"普通环节"口径，不会长期挂着加签角标。
+     * 原办理人的待办回到"普通环节"规则，不会长期挂着加签角标。
      */
     public List<WfAddSign> activeByTaskIds(java.util.Collection<String> taskIds) {
         if (taskIds == null || taskIds.isEmpty()) {
@@ -150,7 +153,7 @@ public class WfAddSignService {
         return all.get(next);
     }
 
-    /** 落终态（DONE / CANCELLED / FAILED）。 */
+    /** 落最终状态（DONE / CANCELLED / FAILED）。 */
     public void markStatus(Long id, String status) {
         if (id == null) {
             return;

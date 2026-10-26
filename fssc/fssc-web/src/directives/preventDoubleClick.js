@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * P2-5 全局防重复提交指令 v-prevent-double-click
  *
@@ -6,7 +9,7 @@
  *
  * 行为：点击后在指定窗口期（默认 1500ms）内禁用按钮，
  *       避免用户快速连点造成重复提交/重复审批。
- * 说明：这是一层兜底防抖，业务侧（如 doApprove 的 approving 锁）仍是第一道防线。
+ * 说明：这是一层默认处理防抖，业务侧（如 doApprove 的 approving 锁）仍是第一道防线。
  */
 export const preventDoubleClickDirective = {
   mounted(el, binding) {

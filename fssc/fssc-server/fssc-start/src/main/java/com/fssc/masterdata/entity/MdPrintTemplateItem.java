@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -10,13 +13,13 @@ import java.math.BigDecimal;
 /**
  * 打印模板字段项（V1.4.81）。
  *
- * <p><b>字段属性对齐通行口径</b>：单据类型支持「布局、字段必录和锁定属性、业务流程以及打印的设置」。
+ * <p><b>字段属性对齐通行规则</b>：单据类型支持「布局、字段必录和锁定属性、业务流程以及打印的设置」。
  * 本表承载布局（row/col/span/mm）、必录（required）、锁定（locked）三项，
  * 打印引擎据此在打印前做必录校验、对锁定字段灰显处理。
  *
- * <p><b>数据源路径语法</b>（由前端渲染引擎解析，与后端取数解耦）：
+ * <p><b>数据源路径语法</b>（由前端渲染引擎解析，与后端查询解耦）：
  * <ul>
- *   <li>{@code head.billNo} —— 取数对象 head 的 billNo 属性</li>
+ *   <li>{@code head.billNo} —— 查询对象 head 的 billNo 属性</li>
  *   <li>{@code lines[].amount} —— 明细数组每一行的 amount（由 LINE_DETAIL 区域驱动循环）</li>
  *   <li>{@code system.today} —— 系统变量（今天/当前用户/公司名等）</li>
  * </ul>

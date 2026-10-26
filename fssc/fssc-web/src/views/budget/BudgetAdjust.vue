@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="budget-adjust-page">
     <el-card class="cm-target-dialog" shadow="never">
@@ -113,7 +116,7 @@
       </template>
     </el-dialog>
 
-    <!-- 调整单详情：草稿可编辑（改类型/方案/原因/明细行），已审批只读——参照行业方案调整单范式 -->
+    <!-- 调整单详情：草稿可编辑（改类型/方案/原因/明细行），已审批只读——调整单范式 -->
     <!-- D-DEC-375 乙案：同新建弹窗，遮罩穿透防残留拦截 -->
     <el-dialog v-model="detailDialog.visible" :title="detailDialog.editable ? '调整单编辑（草稿）' : '调整明细'" width="860px" destroy-on-close modal-penetrable>
       <el-descriptions :column="3" border size="small" style="margin-bottom:12px">
@@ -374,7 +377,7 @@ async function approve(row) {
 
 async function viewDetail(row) {
   detailDialog.row = row
-  // 草稿且有建单权限 → 编辑模式；其余只读（参照行业方案：草稿可改，审批后锁定）
+  // 草稿且有建单权限 → 编辑模式；其余只读（草稿可改，审批后锁定）
   detailDialog.editable = row.status === BillStatus.DRAFT && hasPerm('budget:adjust:create')
   detailDialog.form = { adjustType: row.adjustType, schemeId: row.schemeId, reason: row.reason }
   detailDialog.lines = []

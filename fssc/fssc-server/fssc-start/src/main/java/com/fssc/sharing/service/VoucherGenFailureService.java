@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -30,8 +33,8 @@ import java.util.regex.Pattern;
  * 财务侧在界面上看不见、点数也说不清。本视图把「失败事件」变成一等公民：
  * 状态筛选（默认不限）／异常行明细／补生成入口／按来源事件计数。
  *
- * <p><b>只读</b>：不写任何业务表，不新增列，不改历史留痕。补生成动作仍由既有
- * {@code POST /api/tenant/sharing/voucher/generate/{billId}} 完成（幂等在 VoucherService 内）。
+ * <p><b>只读</b>：不写任何业务表，不新增列，不改历史记录。补生成动作仍由既有
+ * {@code POST /api/tenant/sharing/voucher/generate/{billId}} 完成（去重在 VoucherService 内）。
  *
  * <p><b>数据源边界（v1）</b>：事件载体是 {@code sys_oper_log} 中 title=
  * {@link #FAILURE_LOG_TITLE} 的行，而该 title 目前只有一个生产者——费用域审批收尾
@@ -39,6 +42,7 @@ import java.util.regex.Pattern;
  * EXP_LOAN / EXP_REPAY）自动制证失败；采购、合同、总账等域的制证失败仅记文件日志，
  * 无事件行可查（已登记为遗留项，不在本视图伪造）。
  *
+ * <p><b>差异说明（明写自定，不冒充外部依据）</b>：外部资料的作业监控是「机器人 + 预置事件 + 固定
  * 收件人」自动跑；本 v1 只做「结果视图 + 人工重推」，事件预置与自动通知留下一批。
  */
 @Slf4j
@@ -60,9 +64,10 @@ public class VoucherGenFailureService {
             "sourceType=(\\S+)\\s+billNo=(\\S+)\\s+billId=(\\d+)(?:\\s+companyId=(\\S+?))?\\s*\\|\\s*(.*)",
             Pattern.DOTALL);
 
-    /** 与 VoucherService 各 generate* 入口的 P0-4 状态闸同口径 */
+    /** 与 VoucherService 各 generate* 入口的 P0-4 状态校验同一规则 */
     private static final Set<String> BILL_STATUS_OK_FOR_VOUCHER = Set.of("APPROVED", "PAID", "CLOSED");
 
+    /** 来源类型中文名（仅显示层，界面不出现产品名或对比字样） */
     private static final Map<String, String> SOURCE_TYPE_NAMES = Map.of(
             "EXPENSE", "费用报销",
             "EXPENSE_PAY", "对公付款",
@@ -86,7 +91,7 @@ public class VoucherGenFailureService {
     /**
      * 失败事件分页视图。
      *
-     * @param status     PENDING（未补生成）/ RESOLVED（已补生成）；<b>传空＝不限</b>（默认口径）
+     * @param status     PENDING（未补生成）/ RESOLVED（已补生成）；<b>传空＝不限</b>（默认规则）
      * @param sourceType EXPENSE / EXPENSE_PAY / EXP_LOAN / EXP_REPAY；传空＝不限
      * @param billNo     单据号模糊匹配；传空＝不限
      */
@@ -171,7 +176,7 @@ public class VoucherGenFailureService {
         return rows;
     }
 
-    /** 一次批量取单据，避免逐行 selectById（同 VoucherService#fillSourceBill 口径） */
+    /** 一次批量取单据，避免逐行 selectById（同 VoucherService#fillSourceBill 规则） */
     private Map<Long, ExpBill> loadBills(Set<Long> billIds) {
         Map<Long, ExpBill> byId = new HashMap<>();
         if (billIds.isEmpty()) {
@@ -183,7 +188,7 @@ public class VoucherGenFailureService {
         return byId;
     }
 
-    /** 幂等键与 VoucherService#existingVoucherId 完全一致：source_type + source_doc_id，VOID 除外 */
+    /** 唯一键与 VoucherService#existingVoucherId 完全一致：source_type + source_doc_id，VOID 除外 */
     private Map<String, OpVoucher> loadVouchers(Set<Long> billIds) {
         Map<String, OpVoucher> byKey = new HashMap<>();
         if (billIds.isEmpty()) {
@@ -267,7 +272,7 @@ public class VoucherGenFailureService {
         row.put("resultName", resolved ? "已补生成" : "未补生成");
         if (!resolved && bill != null && bill.getVoucherNo() != null && !bill.getVoucherNo().isBlank()) {
             row.put("inconsistency", "单据已回填凭证号 " + bill.getVoucherNo()
-                    + "，但按来源 " + p.sourceType + " 未查到有效凭证（幂等键不一致，需人工核对）");
+                    + "，但按来源 " + p.sourceType + " 未查到有效凭证（来源对应关系不一致，需人工核对）");
         }
         if (p.malformed) {
             row.put("retriable", false);
@@ -283,9 +288,9 @@ public class VoucherGenFailureService {
      *
      * <p>{@code POST /voucher/generate/{billId}} 按 billType 派发：PAY → generatePtpPayment
      * （来源 EXPENSE_PAY），其余一律 generate（来源写死 EXPENSE）。所以
-     * EXP_LOAN / EXP_REPAY 的失败单走该入口会落错来源、并绕过 EXP_LOAN/EXP_REPAY 幂等键，
+     * EXP_LOAN / EXP_REPAY 的失败单走该入口会落错来源、并绕过 EXP_LOAN/EXP_REPAY 唯一键，
      * 结果是「补出一张费用凭证 + 借款凭证仍然缺」；本视图对这类行直接判定不可重推并说明原因，
-     * 不把错口径的按钮递给财务（D-DEC-271）。
+     * 不把错规则的按钮递给财务（D-DEC-271）。
      */
     private void applyRetryGate(Map<String, Object> row, Parsed p, ExpBill bill) {
         if (bill == null) {
@@ -317,7 +322,7 @@ public class VoucherGenFailureService {
             return;
         }
         row.put("retriable", true);
-        row.put("retryHint", "可通过「共享中心→记账凭证→生成凭证」补生成（同源已有凭证则幂等返回）");
+        row.put("retryHint", "可通过「共享中心→记账凭证→生成凭证」补生成（同一来源已有凭证则直接返回已有凭证）");
     }
 
     private List<Map<String, Object>> filter(List<Map<String, Object>> rows, String status,

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.fssc.framework.tenant.TenantContext;
@@ -33,7 +36,7 @@ import java.time.ZoneId;
  * 计数为 0，镜像写与引擎推进本就不在同一事务）。本类内置事务会改变"投影失败是否回滚引擎命令"的语义，
  * 属夹带变更，故不做。
  *
- * <p><b>失败语义</b>：写失败一律"记缺陷 + 冒泡"（G0 口径）——镜像缺行会造成幽灵待办等真实业务后果。
+ * <p><b>失败语义</b>：写失败一律"记缺陷 + 冒泡"（G0 规则）——镜像缺行会造成幽灵待办等真实业务后果。
  * 唯一例外是"上下文不可恢复"（{@link WfProjectionEvent#getTenantId()} 为 null）：记缺陷后 {@code return}，
  * 绝不抛，否则该实例永远无法收尾（死循环）。
  */
@@ -88,7 +91,7 @@ public class WfProjectionService {
         if (e.getProcInstId() == null) {
             return;
         }
-        // 幂等：开关切换窗口内门面可能已写过同一实例（instanceByProcInstId 判重）
+        // 去重：开关切换窗口内门面可能已写过同一实例（instanceByProcInstId 判重）
         if (wfQueryService.instanceByProcInstId(e.getProcInstId()) != null) {
             return;
         }
@@ -113,7 +116,7 @@ public class WfProjectionService {
         if (e.getTaskId() == null) {
             return;
         }
-        // 幂等：uk_tenant_task_id 唯一键会拒绝重复插入，先判 PENDING 行是否存在
+        // 去重：uk_tenant_task_id 唯一键会拒绝重复插入，先判 PENDING 行是否存在
         if (wfQueryService.pendingTaskExists(e.getTaskId())) {
             return;
         }
@@ -164,27 +167,27 @@ public class WfProjectionService {
         wfQueryService.recordHistory(h);
     }
 
-    /** TASK_DELETED（实体删除）→ wf_task 置 CANCELLED + 节点级作废留痕（只动 PENDING 行，已 DONE 的不受影响）。 */
+    /** TASK_DELETED（实体删除）→ wf_task 置 CANCELLED + 节点级作废记录（只动 PENDING 行，已 DONE 的不受影响）。 */
     private void onTaskDeleted(WfProjectionEvent e) {
         if (e.getTaskId() == null) {
             return;
         }
-        // D-DEC-275：只翻状态不写留痕 ⇒ 追溯链上这一节凭空消失（判「尚未到达」）。
+        // D-DEC-275：只翻状态不写记录 ⇒ 追溯链上这一节凭空消失（判「尚未到达」）。
         // 引擎删除的因由不在投影契约里（信封无 deleteReason），故按"未办理即作废"如实记，
         // 具体死因由同实例的实例级行（CANCEL / WITHDRAW / REJECTED / APPROVED）对读。
         wfQueryService.markTaskCancelled(e.getTaskId(),
                 "引擎任务已删除（实例终止、会签同节点兄弟清理或改道搬执行），本节任务未办理即作废");
     }
 
-    /** PROCESS_COMPLETED → 更新 wf_instance 状态 + 关闭该实例 PENDING 任务并落作废留痕。 */
+    /** PROCESS_COMPLETED → 更新 wf_instance 状态 + 关闭该实例 PENDING 任务并落作废记录。 */
     private void onProcessCompleted(WfProjectionEvent e) {
         if (e.getProcInstId() == null) {
             return;
         }
         wfQueryService.updateInstanceStatus(e.getProcInstId(),
                 Boolean.TRUE.equals(e.getApproved()) ? "APPROVED" : "REJECTED", LocalDateTime.now());
-        // 幽灵待办收口：实例结束后会签/票签同节点兄弟任务被引擎删除，wf_task 的 PENDING 行须同步关闭
-        // D-DEC-275：关闭动作配一行作废留痕，否则该节在审批链/追溯链上判「尚未到达」
+        // 幽灵待办办结：实例结束后会签/票签同节点兄弟任务被引擎删除，wf_task 的 PENDING 行须同步关闭
+        // D-DEC-275：关闭动作配一行作废记录，否则该节在审批链/追溯链上判「尚未到达」
         wfQueryService.closePendingTasksByInstance(e.getProcInstId(),
                 Boolean.TRUE.equals(e.getApproved())
                         ? "流程已办结，同节点未办理的会签/票签任务自动作废"
@@ -194,7 +197,7 @@ public class WfProjectionService {
     // ---------------- 投影构造与工具 ----------------
 
     /**
-     * 由事件信封构造 wf_task 投影行（字段口径与改造前监听器的 {@code buildTaskRow} 逐字一致，
+     * 由事件信封构造 wf_task 投影行（字段含义与改造前监听器的 {@code buildTaskRow} 逐字一致，
      * 差异只在"变量/实例行回退已在监听器构造信封时完成"）。
      *
      * @return 构造好的行；实例归属（biz_type NOT NULL）无法回填时返回 {@code null}（已记缺陷）

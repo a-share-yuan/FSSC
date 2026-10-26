@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -26,8 +29,8 @@ public class InvoiceRuleController {
 
     // 分页列表：管理员维护规则用
     // D-DEC-310：本类两个读口原先零注解——菜单已登记 md:invoiceRule:list（sys_menu 3395，
-    // 在册且只有 CONFIG_ADMIN/IT_ADMIN 持有），但该码在 Java 侧零消费，等于"有码、无"。
-    // 现按同包既有写口的授码口径（create/update/delete 各用其码，不新造码）把列表口挂上 list 码。
+    // 现有且只有 CONFIG_ADMIN/IT_ADMIN 持有），但该码在 Java 侧零消费，等于"有码、无"。
+    // 现按同包既有写口的授码规则（create/update/delete 各用其码，不新造码）把列表口挂上 list 码。
     //
     // 【match 不加注解，是刻意的】/match 是报销页勾选发票时的费用类型预填助手
     // （fssc-web src/composables/useBill.js、views/expense/ExpenseCreateTab.vue 调用），

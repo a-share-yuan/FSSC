@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -71,18 +74,18 @@ public class TenantDictController {
     }
 
     /**
-     * 【2026-10-15 枚举收口前置A】内置字典**免权限**只读通道。
+     * 【2026-10-15 枚举办结前置A】内置字典**免权限**只读通道。
      *
      * 为什么需要它：
      *   {@code system:dict:list} 没有独立权限节点，只挂在菜单 3615「系统参数」的复合 perms 里，
      *   实测只授予了 CONFIG_ADMIN(2人)/IT_ADMIN(1人) —— 而 COMMON_EMP 154 人、SCAN_STAFF 5 人
-     *   全都读不到。前端枚举收口要覆盖 55 个业务页面（billStatus.js 的 statusLabel），
-     *   若走带权限端点，普通用户每开一页都会吃一次 4030 + 一条 warn，收口等于白做。
+     *   全都读不到。前端枚举办结要覆盖 55 个业务页面（billStatus.js 的 statusLabel），
+     *   若走带权限端点，普通用户每开一页都会吃一次 4030 + 一条 warn，办结等于白做。
      *
-     * 安全性（三道闸门，缺一不可）：
+     * 安全性（三道校验，缺一不可）：
      *   ① **仍需登录**：本端点不在 JwtAuthFilter 的 WHITE_LIST 内，未携带 token 一律 401；
-     *   ② **仅暴露 is_builtin=1**：闸门在 DictService#builtinDataList，非内置类型返回空列表，
-     *      租户自定义字典（可能含业务敏感词表）**绝不会**从这条通道泄漏；
+     *   ② **仅暴露 is_builtin=1**：校验在 DictService#builtinDataList，非内置类型返回空列表，
+     *      租户自定义字典（可能含业务敏感名称表）**绝不会**从这条通道泄漏；
      *   ③ **只读**：无任何写方法，且不带 @OperLog（读操作不入审计流水，避免刷屏）。
      *
      * 语义边界（易混淆，特此写明）：
@@ -100,8 +103,8 @@ public class TenantDictController {
     /**
      * 【2026-10-16 第 4 批】内置字典**批量**免权限只读通道（供前端一次性预热 66 个 enum_* 展示字典）。
      *
-     * 与 {@link #builtinDataList(String)} 完全同一套闸门：需登录、仅 is_builtin=1、只读。
-     * 请求里夹带的非内置类型被静默剔除（不报错），返回的 Map 只含通过闸门的类型。
+     * 与 {@link #builtinDataList(String)} 完全同一套校验：需登录、仅 is_builtin=1、只读。
+     * 请求里夹带的非内置类型被静默剔除（不报错），返回的 Map 只含通过校验的类型。
      *
      * @param types 逗号分隔的 dict_type，如 {@code enum_biz_type,enum_msg_type}
      */

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.collab.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,9 +24,9 @@ import java.util.List;
 
 /**
  * CCP 客户协同打通服务（AR 蓝图）：
- * 接口1 EBS发运数据推送（DB视图定时抓取，本处提供推送入口）→ 应收明细数据落库；
+ * 接口1 ERP发运数据推送（DB视图定时抓取，本处提供推送入口）→ 应收明细数据写入数据库；
  * 对账状态同步（CCP 对账状态与 AR 开票状态实时同步，链路步骤⑩）；
- * 接口2/3 发票信息回写 EBS（金税开票完成后自动回写，失败记日志人工处理）。
+ * 接口2/3 发票信息回写 ERP（金税开票完成后自动回写，失败记日志人工处理）。
  */
 @Slf4j
 @Service
@@ -35,7 +38,7 @@ public class CcpFlowService {
     private final ArPreInvoiceMapper preInvoiceMapper;
     private final CollabSyncService syncService;
 
-    /** 接口1：EBS 发运/系统发票数据推送落库（定时抓取的模拟入口），失败即抛由调用方重试。 */
+    /** 接口1：ERP 发运/系统发票数据推送写入数据库（定时抓取的模拟入口），失败即抛由调用方重试。 */
     @Transactional(rollbackFor = Exception.class)
     public CcpShipping pushShipping(CcpShipping s) {
         if (!StringUtils.hasText(s.getShippingNo())) {
@@ -92,7 +95,7 @@ public class CcpFlowService {
     }
 
     /**
-     * 接口2/3 发票信息回写 EBS：对已开票（INVOICED）的预制发票补发回写
+     * 接口2/3 发票信息回写 ERP：对已开票（INVOICED）的预制发票补发回写
      * （正常链路由开票完成自动触发；本入口用于失败后的人工重推）。
      */
     @Transactional(rollbackFor = Exception.class)

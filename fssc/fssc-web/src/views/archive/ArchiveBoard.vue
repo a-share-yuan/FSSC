@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div :class="{ tabless: isSingle }">
     <el-card>
@@ -15,15 +18,15 @@
         <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap">
           <el-button type="success" @click="openAccess">发起调阅申请</el-button>
           <el-button type="info" plain @click="loadAccess()">刷新列表</el-button>
-          <!-- D-DEC-257：调阅留痕原本只出 PENDING，已批准/已驳回的历史行界面永不可见（库里 3 行只见 1 行）。
-               端点已加 status 入参，这里默认「全部状态」把留痕摊开；审批动作仍只对 PENDING 行给入口。 -->
+          <!-- D-DEC-257：调阅记录原本只出 PENDING，已批准/已驳回的历史行界面永不可见（库里 3 行只见 1 行）。
+               端点已加 status 入参，这里默认「全部状态」把记录摊开；审批动作仍只对 PENDING 行给入口。 -->
           <el-select v-model="accessStatusFilter" size="small" style="width:130px" @change="loadAccess">
             <el-option label="全部状态" value="ALL" />
             <el-option label="仅待审批" value="PENDING" />
             <el-option label="仅已批准" value="APPROVED" />
             <el-option label="仅已驳回" value="REJECTED" />
           </el-select>
-          <!-- RA-D248b：申请人一律以姓名为准，工号列默认隐藏、可勾出（对齐厂商"内码列默认隐藏"的列语义） -->
+          <!-- RA-D248b：申请人一律以姓名为准，工号列默认隐藏、可勾出（对齐外部系统"内码列默认隐藏"的列语义） -->
           <el-checkbox v-model="showUserNameCols" size="small" label="显示工号列" />
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -124,7 +127,7 @@
         <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap">
           <el-button type="success" @click="openDispatch">发起单据流转</el-button>
           <el-button type="info" plain @click="loadDispatch">刷新</el-button>
-      <el-button type="info" size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button type="info" size="small" @click="exportCsv">导出</el-button>
           <span style="color:#909399; font-size:12px">派单 -> 审核组 -> 完成/升级</span>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -318,9 +321,9 @@
       <el-form ref="archiveFormRef" :model="arForm" :rules="archiveFormRules" label-width="100px" size="small">
         <el-form-item label="档案类型" prop="archiveType">
           <el-select v-model="arForm.archiveType" style="width:100%">
-            <!-- RA-D255a：选项集与 archiveTypeLabel 词表对齐（8 项）。改前只给 4 项，
+            <!-- RA-D255a：选项集与 archiveTypeLabel 名称表对齐（8 项）。改前只给 4 项，
                  而现网占多数的是 BILL（单据档案）——库里能存、列表能显示、新建却选不到。
-                 权威词表由后端白名单把守（ArchiveService.ARCHIVE_TYPES），前端不再自造第 9 个值。 -->
+                 权威名称表由后端白名单把守（ArchiveService.ARCHIVE_TYPES），前端不再自造第 9 个值。 -->
             <el-option label="单据档案" value="BILL" />
             <el-option label="凭证档案" value="VOUCHER" />
             <el-option label="报销凭证" value="EXPENSE" />
@@ -360,7 +363,7 @@
     <el-dialog v-model="dlgPicker" :title="pickerMode === 'multi' ? '选择档案（可多选）' : '选择档案'" width="780px" append-to-body>
       <div style="margin-bottom:12px; display:flex; gap:8px; align-items:center">
         <!-- D-DEC-256（核实册:325）：检索臂＝卷号/编码/关联单号/标题/类型，本地零命中还会下推到服务端查全量；
-             提示语跟着改口径，别再只说"档案编码"（那一列历史上恒空，正是 047/254 的成因）。 -->
+             提示语跟着改规则，别再只说"档案编码"（那一列历史上恒空，正是 047/254 的成因）。 -->
         <el-input v-model="pickerSearch" placeholder="搜索档案号/单号/标题" clearable size="small" style="width:260px" @input="filterArchives" />
         <el-select v-model="pickerTypeFilter" placeholder="档案类型" clearable size="small" style="width:140px" @change="filterArchives">
           <el-option label="单据档案" value="BILL" />
@@ -457,7 +460,7 @@ const isSingle = computed(() => !!props.tab)
 const tab = ref(props.tab || 'access')
 const loading = ref(false)
 const accesses = ref([])
-// D-DEC-257：调阅留痕状态筛选（ALL=全部，端点默认值 PENDING 保持不变）
+// D-DEC-257：调阅记录状态筛选（ALL=全部，端点默认值 PENDING 保持不变）
 const accessStatusFilter = ref('ALL')
 const destroys = ref([])
 const dispatches = ref([])
@@ -532,7 +535,7 @@ function billOptionLabel(b) {
 const dlgArchive = ref(false)
 const arForm = ref({ billId: '', archiveType: 'EXPENSE', archiveYear: new Date().getFullYear(), archivePeriod: '', retentionPeriod: 10 })
 
-// 校验规则唯一口径＝中央登记表（useFormRules）；页面不再本地手写规则对象
+// 校验规则唯一规则＝中央登记表（useFormRules）；页面不再本地手写规则对象
 const accessFormRef = ref(null)
 const destroyFormRef = ref(null)
 const dispatchFormRef = ref(null)
@@ -553,7 +556,7 @@ const destroyModel = computed(() => ({
 
 /**
  * R5-D-200（假失败＋重复起流程）：长耗时写动作（起流程类）在途锁。
- * 提交在飞或慢回执窗口里连点两次，会把同一批档案起两条流程（实证：前端 20s 断连的
+ * 提交在飞或慢响应窗口里连点两次，会把同一批档案起两条流程（实证：前端 20s 断连的
  * archive-destroy/create 服务端其实已建 wf_instance）；useSubmitGuard 只管必填校验、无在途态，
  * 这里按「动作＋对象」维度补上：整批动作（销毁申请）一个 key，逐行动作（执行归档/执行销毁）每行一个 key。
  */
@@ -573,7 +576,7 @@ function accessStatusLabel(s) { return STATUS_LABEL[s] || s || '未知' }
 
 /**
  * 后端对 access_type 无白名单（历史接口写入过 VIEW 等越词值），故未知值原样显示，不并入「复制」。
- * D-DEC-263：VIEW 是 2026-09-24 探针经 /request 写入的历史值（申请弹窗只会产生 READ/COPY），语义与 READ 同为线上查阅；
+ * D-DEC-263：VIEW 是 2026-09-24 检查经 /request 写入的历史值（申请弹窗只会产生 READ/COPY），语义与 READ 同为线上查阅；
  * 原先缺键把英文码直出到列表，且 tag 取空串触发 ElementPlus 校验告警。
  */
 function accessTypeLabel(t) { return ({ READ: '查阅', VIEW: '查阅', COPY: '复制副本' })[t] || t || '—' }
@@ -592,7 +595,7 @@ function archTag(s) { return s === BillStatus.ARCHIVED ? 'success' : s === 'DISP
 function archStatusLabel(s) { return ({ ARCHIVED: '已归档', ARCHIVING: '归档中', DISPOSED: '已销毁', PENDING: '待归档' })[s] || s || '未知' }
 
 function integrityTag(s) { return s === 'VERIFIED' ? 'success' : s === 'MISMATCH' ? 'danger' : s === 'UNVERIFIABLE' ? 'warning' : 'info' }
-// R5-D-209：销毁终态 NOT_APPLICABLE 独立成像（已按制度销毁 ⇒ 完整性"不适用"），
+// R5-D-209：销毁最终状态 NOT_APPLICABLE 独立成像（已按制度销毁 ⇒ 完整性"不适用"），
 // 不再与真实篡改的 MISMATCH 混成同一个"不一致"标记
 // R5-D-208：UNVERIFIABLE（历史档案未固化哈希，无法校验）独立成像，不再冒充"被篡改"
 function integrityLabel(s) {
@@ -608,7 +611,7 @@ function archiveTypeTag(t) { return ({ BILL: 'info', VOUCHER: 'info', EXPENSE: '
 
 // ===================== 档案编号显示（D-DEC-047／D-DEC-254 同根） =====================
 /**
- * 档案目录缓存：调阅留痕表与销毁申请表上只有裸 archive_id，「档案编码」列此前只能拿
+ * 档案目录缓存：调阅记录表与销毁申请表上只有裸 archive_id，「档案编码」列此前只能拿
  * archives（＝凭证归档 tab 的<b>当前页</b>，而 D-DEC-266 之后别的 tab 根本不加载它）本地 join，
  * 于是恒退化成「#12」——列上没有过真档案号，这就是 047 记的"档案编码列全空"在调阅/销毁两页的形态。
  * 现按需拉一次档案目录（与选择器同一端点、同一份数据）作为回落源。
@@ -633,7 +636,7 @@ function findArchiveRow(id) {
 }
 
 /**
- * D-DEC-047（12-16:59，沿 D-DEC-254 定案）：取<b>真档案号</b>的唯一口径。
+ * D-DEC-047（12-16:59，沿 D-DEC-254 定案）：取<b>真档案号</b>的唯一规则。
  * 优先序 archive_no → archive_code（184 已把它做成编号镜像，老卷仍 NULL）→ 目录回落；
  * 全都取不到时返回<b>空串</b>，由调用方整段不显号——绝不再把 null/undefined 拼进文案。
  */
@@ -665,11 +668,12 @@ function archiveLabel(id) {
 function userLabel(id) {
   if (!id) return '—'
   const u = users.value.find((x) => x.id === id)
+  // 与全仓其它页面同一规则：昵称优先、缺失才退登录号（原先只取 userName ⇒ 列显示工号，D-DEC/D248b）
   return u ? (u.nickName || u.userName) : `用户#${id}`
 }
 
 /**
- * RA-D248b：申请人以**后端富化好的姓名**为主，前端本地 join 只作兜底（历史脏 ID / 姓名缺失）。
+ * RA-D248b：申请人以**后端补充好的姓名**为主，前端本地 join 只作默认处理（历史脏 ID / 姓名缺失）。
  * 工号不混进姓名，另走「显示工号列」开关。
  */
 function personLabel(name, id) {
@@ -796,8 +800,8 @@ async function loadAccess(quiet) {
       accesses.value = r.list || []
       return { list: accesses.value, total: r.total || 0 }
     })
-    // D-DEC-047：调阅留痕行只有裸 archive_id，「档案编码」列要靠档案目录才能出真号
-    //（D-DEC-266 改按 tab 取数后 archives 在本 tab 根本不加载，列就恒退化成 #ID）
+    // D-DEC-047：调阅记录行只有裸 archive_id，「档案编码」列要靠档案目录才能出真号
+    //（D-DEC-266 改按 tab 查询后 archives 在本 tab 根本不加载，列就恒退化成 #ID）
     await ensureArchiveDir()
   } catch (e) {
     // D-DEC-444：quiet 严格判 true——本函数被 @click/@change/TablePager 直接绑定时会收到事件对象，
@@ -823,13 +827,13 @@ async function saveAccess() {
       await archiveAccessApi.request(body)
       ElMessage.success('调阅申请已提交')
       dlgAccess.value = false
-      // D-DEC-444：request 已成功，随后的留痕刷新才撞 compliance:archiveaccess:list 缺权——
+      // D-DEC-444：request 已成功，随后的记录刷新才撞 compliance:archiveaccess:list 缺权——
       // 原样 ElMessage.error 会把成功报成失败（真跑实测：建单成功＋同秒弹「缺少权限」）。
       // 提交后的刷新属附带动作：失败只明示权限缺口，不改变"已提交"结论。
       try {
         await loadAccess(true)
       } catch {
-        ElMessage.warning('调阅申请已提交成功；当前账号没有「调阅留痕」查询权限，列表暂未刷新')
+        ElMessage.warning('调阅申请已提交成功；当前账号没有「调阅记录」查询权限，列表暂未刷新')
       }
     } catch (e) { ElMessage.error(e.message) }
   })
@@ -875,7 +879,7 @@ async function saveDestroy() {
       } catch (e) {
         if (e?.timeout) {
           // R5-D-200：起流程类长写超时≠失败——服务端多半已受理建单（实证 20006ms 断连时 wf_instance 已落）。
-          // 拦截器已按「已提交，处理中」口径显式提示；这里收口：关窗＋回读列表，堵住"再点一次"的重复起流程窗口。
+          // 拦截器已按「已提交，处理中」规则显式提示；这里办结：关窗＋回读列表，堵住"再点一次"的重复起流程窗口。
           dlgDestroy.value = false
           loadDestroy()
         } else { ElMessage.error(e.message) }
@@ -898,7 +902,7 @@ async function executeDestroy(row) {
       loadDestroy()
     } catch (e) {
       if (e === 'cancel' || e === 'close') return // 用户取消，静默
-      // R5-D-200：原实现把真实失败也当 cancelled 静默吞掉；超时按「已提交，处理中」口径收口（拦截器已提示），回读列表
+      // R5-D-200：原实现把真实失败也当 cancelled 静默吞掉；超时按「已提交，处理中」规则办结（拦截器已提示），回读列表
       if (e?.timeout) { loadDestroy(); return }
       ElMessage.error(e.message)
     }
@@ -1001,7 +1005,7 @@ async function doArchive(row) {
     } catch (e) {
       if (e === 'cancel' || e === 'close') return // 用户取消，静默
       // R5-D-200：超时≠失败（服务端多半已起流程，实证 20s 断连时 wf_instance 已落），
-      // 拦截器已按「已提交，处理中，请稍后刷新」口径提示；回读列表确认，不引导重复起流程
+      // 拦截器已按「已提交，处理中，请稍后刷新」规则提示；回读列表确认，不引导重复起流程
       if (e?.timeout) { loadArchive(); return }
       ElMessage.error(e.message)
     }
@@ -1021,13 +1025,13 @@ function destroyArchive(row) {
 /**
  * R5-D-199（读端点写库）：校验结论会落 integrity_status（写动作），必须走显式 POST——
  * 改前走 GET `/{id}/verify`，而 GET 却带写副作用：反复点「校验」即反复写状态、审计时间列被
- * 污染（GET 不幂等）。现走 api.js 既有 fmApi.archiveVerify（POST /{id}/verify），
+ * 污染（GET 不去重）。现走 api.js 既有 fmApi.archiveVerify（POST /{id}/verify），
  * 服务端持久化后回读列表刷新完整性状态列。
  */
 async function verifyArchive(row) {
   try {
     const r = await fmApi.archiveVerify(row.id)
-    // R5-D-208：三态回执（VERIFIED/MISMATCH/UNVERIFIABLE）随回执返回三句文案；
+    // R5-D-208：三态响应（VERIFIED/MISMATCH/UNVERIFIABLE）随响应返回三句文案；
     // 老包（未发布新服务端）只回布尔时按二态回落，且此时无法区分"未固化哈希"
     const status = r && typeof r === 'object' ? r.status : (r ? 'VERIFIED' : 'MISMATCH')
     row.integrityStatus = status
@@ -1039,8 +1043,8 @@ async function verifyArchive(row) {
 }
 
 // ===================== 初始化 =====================
-// D-DEC-266：原先四个页签在挂载时并发取数，只有「档案调阅」权限的人一进页面就吃两次
-// 「缺少权限：compliance:dispatch:list」红色报错（数据没用到，请求却已经发了）。改为按当前页签取数。
+// D-DEC-266：原先四个页签在挂载时并发查询，只有「档案调阅」权限的人一进页面就吃两次
+// 「缺少权限：compliance:dispatch:list」红色报错（数据没用到，请求却已经发了）。改为按当前页签查询。
 const TAB_LOADERS = { access: loadAccess, destroy: loadDestroy, dispatch: loadDispatch, archive: loadArchive }
 
 async function reload() {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -43,14 +46,17 @@ import java.util.Set;
 public class ExtInterfaceConfigService {
 
     private final ExtInterfaceConfigMapper configMapper;
+    /** 仅用于 AI 模型连通性测试的最小报文序列化（单例、无状态）。 */
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
     private static final Duration TEST_TIMEOUT = Duration.ofSeconds(10);
     private static final Set<String> VALID_CATEGORIES = Set.of(
             "INVOICE_VERIFY", "INVOICE_CERTIFY", "OCR", "AI_MODEL", "LINKU", "BANK",
             // 应收应付蓝图直连通道（任务3.1：接口配置功能，未配置走模拟回退）
             "EKP", "EBS", "GOLDEN_TAX", "ECDS", "GL_PUSH",
-            // 多 ERP 适配（V1.4，见 ErpChannelResolver）：ERP=租户级 ERP 实例声明（provider=EBS/行业方案/YONYOU/KINGDEE/CUSTOM），
-            // {PROVIDER}_{ACTION} 为对应品牌的具体接口通道（如 SAP_AP / YONYOU_ORDER_GET）
+            // 多 ERP 适配（V1.4，见 ErpChannelResolver）：ERP=租户级 ERP 实例声明（provider 由租户配置，含 CUSTOM），
+            // {PROVIDER}_{ACTION} 为对应通道的具体接口（如 {PROVIDER}_AP / {PROVIDER}_ORDER_GET）
             "ERP", "SAP", "YONYOU", "KINGDEE",
             "EBS_AP", "EBS_AP_BLUE", "EBS_ORDER_GET",
             "SAP_AP", "SAP_AP_BLUE", "SAP_ORDER_GET",
@@ -118,11 +124,11 @@ public class ExtInterfaceConfigService {
     /** 新增 */
     @Transactional(rollbackFor = Exception.class)
     public Long create(ExtInterfaceConfig config) {
-        // 必填收口（批次 2C，与前端 ExtInterfaceConfig 弹窗同口径）：名称/编码人工维护，编码租户内唯一
+        // 必填办结（批次 2C，与前端 ExtInterfaceConfig 弹窗同一规则）：名称/编码人工维护，编码租户内唯一
         AssertUtil.notBlank(config.getInterfaceName(), ErrorCode.PARAM_INVALID, "请输入接口名称");
         AssertUtil.notBlank(config.getInterfaceCode(), ErrorCode.PARAM_INVALID, "请输入接口编码");
         validateCategory(config.getCategory());
-        // R5-D-038 新增场景掩码串不是可用凭据，落库即坏数据，直接拦下
+        // R5-D-038 新增场景掩码串不是可用凭据，写入数据库即坏数据，直接拦下
         rejectMaskedCredential(config.getApiKey(), "API Key");
         rejectMaskedCredential(config.getApiSecret(), "API Secret");
         if (ExtInterfaceConfig.hasMaskedSecretMember(config.getExtraConfig())) {
@@ -158,7 +164,7 @@ public class ExtInterfaceConfigService {
         if (exist == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "接口配置不存在: " + config.getId());
         }
-        // 弹窗提交完整对象，故与 create 同口径拦空
+        // 弹窗提交完整对象，故与 create 同一规则拦空
         AssertUtil.notBlank(config.getInterfaceName(), ErrorCode.PARAM_INVALID, "请输入接口名称");
         AssertUtil.notBlank(config.getInterfaceCode(), ErrorCode.PARAM_INVALID, "请输入接口编码");
         if (config.getCategory() != null) {
@@ -269,8 +275,7 @@ public class ExtInterfaceConfigService {
             HttpClient client = HttpClient.newBuilder().connectTimeout(TEST_TIMEOUT).build();
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .timeout(TEST_TIMEOUT)
-                    .GET();
+                    .timeout(TEST_TIMEOUT);
             // Add Authorization header if apiKey is present
             if (c.getApiKey() != null && !c.getApiKey().isBlank()) {
                 // R5-D-038 库里存了掩码占位（历史脏数据）时不做无谓外发
@@ -282,14 +287,37 @@ public class ExtInterfaceConfigService {
                 }
                 builder.header("Authorization", "Bearer " + c.getApiKey());
             }
-            HttpResponse<String> resp = client.send(builder.build(),
-                    HttpResponse.BodyHandlers.ofString());
+            // AI 模型通道是 chat/completions：GET 会被网关判为参数缺失（"model missing"），
+            // 把"模型不可用/未订购"误报成"配置填错"。这里按真实协议发最小补全请求。
+            boolean aiModel = "AI_MODEL".equalsIgnoreCase(c.getCategory())
+                    || url.toLowerCase(Locale.ROOT).contains("/chat/completions");
+            HttpResponse<String> resp;
+            if (aiModel) {
+                if (c.getModelName() == null || c.getModelName().isBlank()) {
+                    result.put("success", false);
+                    result.put("message", "未填写模型名称（modelName），无法测试 AI 通道");
+                    saveTestResult(id, "FAIL", "未填写模型名称（modelName），无法测试 AI 通道");
+                    return result;
+                }
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("model", c.getModelName());
+                body.put("messages", List.of(Map.of("role", "user", "content", "ping")));
+                body.put("max_tokens", 1);
+                body.put("temperature", 0);
+                builder.header("Content-Type", "application/json");
+                resp = client.send(builder.POST(HttpRequest.BodyPublishers.ofString(
+                                objectMapper.writeValueAsString(body))).build(),
+                        HttpResponse.BodyHandlers.ofString());
+            } else {
+                resp = client.send(builder.GET().build(),
+                        HttpResponse.BodyHandlers.ofString());
+            }
             boolean httpOk = resp.statusCode() >= 200 && resp.statusCode() < 300;
             String msg = scrubCredential("HTTP " + resp.statusCode() + (resp.body() != null && !resp.body().isBlank()
                     ? " (" + resp.body().substring(0, Math.min(resp.body().length(), 200)) + ")" : ""), c);
 
             // R5-D-039 修正（2026-10-17 运行期实测）：原实现只看 HTTP 状态码，
-            // 而大量国内厂商接口在鉴权/参数错误时仍返回 HTTP 200，把业务错误写进 body
+            // 而大量国内接口在鉴权/参数错误时仍返回 HTTP 200，把业务错误写进 body
             // （如百度 OCR `{"error_code":23,"error_msg":"IAM API-KEY authentication failed"}`）。
             // ⇒ 2xx 被一律判为「连接成功」，运维据此认为通道已接通，实际一调就失败。
             // 现在补业务错误识别：HTTP 层通过但 body 带业务错误码 ⇒ 判 FAIL。
@@ -320,14 +348,14 @@ public class ExtInterfaceConfigService {
     /**
      * 从响应体里识别「业务错误」，返回可读描述；没有则返回 {@code null}（视为成功）。
      *
-     * <p>覆盖实测到的两类国内厂商约定：</p>
+     * <p>覆盖实测到的两类国内接口约定：</p>
      * <ul>
      *   <li>{@code error_code != 0}（百度 OCR / 阿里云系）：如 {@code error_code:23} 鉴权失败；</li>
      *   <li>{@code success=false} 或 {@code code != 0}（FSSC 自身响应包装，如误配成自指 URL
      *       打到自己的登录拦截会返回 {@code {"code":401,"msg":"未登录…}}）。</li>
      * </ul>
      * 只认「能明确判定为失败」的情况，解析不了就返回 null 保持宽松，
-     * 避免把厂商的正常业务响应误判成失败。
+     * 避免把正常业务响应误判成失败。
      */
     private static String detectBusinessError(String body) {
         if (body == null || body.isBlank()) {
@@ -422,14 +450,14 @@ public class ExtInterfaceConfigService {
         return v.length() <= 4 ? "****" : v.substring(0, 2) + "****" + v.substring(v.length() - 2);
     }
 
-    /** R5-D-038 新增场景：掩码串不是可用凭据，拦下避免落库脏数据 */
+    /** R5-D-038 新增场景：掩码串不是可用凭据，拦下避免写入数据库脏数据 */
     private void rejectMaskedCredential(String value, String label) {
         if (ExtInterfaceConfig.looksMasked(value)) {
             throw new BizException(ErrorCode.PARAM_INVALID, label + " 请填入真实值，掩码占位不能被保存");
         }
     }
 
-    /** R5-D-038 上游可能回显我们发出的凭据，落库／回显／打日志前先替换成掩码 */
+    /** R5-D-038 上游可能回显我们发出的凭据，写入数据库／回显／打日志前先替换成掩码 */
     private String scrubCredential(String text, ExtInterfaceConfig c) {
         if (text == null || text.isEmpty()) {
             return text;

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -24,14 +27,14 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 凭证推送服务：将已记账凭证推送至 同类系统 / IFS 外部财务系统。
+ * 凭证推送服务：将已记账凭证推送至 外部财务系统。
  *
  * <p>P1-8 整改说明（消除 Mock 残留）：</p>
  * <ul>
  *   <li>传输方式改为可插拔通道 SPI（{@link VoucherPushChannelRouter}，
  *       sys_config {@code voucher.push.channel} 控制 local/http），业务不感知具体实现；</li>
  *   <li>删除原实现的 {@code Thread.sleep(150)} 人为网络延迟；</li>
- *   <li>推送记录由进程内 Map 改为落库 {@code op_voucher_push_log}，
+ *   <li>推送记录由进程内 Map 改为写入数据库 {@code op_voucher_push_log}，
  *       支持审计、多实例一致、重启不丢。</li>
  * </ul>
  */
@@ -47,7 +50,7 @@ public class VoucherPushService {
 
     /**
      * 推送单张凭证至外部系统。
-     * 校验凭证状态为 POSTED → 选择通道 → 推送 → 落库推送日志。
+     * 校验凭证状态为 POSTED → 选择通道 → 推送 → 写入数据库推送日志。
      */
     public Map<String, Object> pushToExternal(Long voucherId) {
         OpVoucher voucher = opVoucherMapper.selectById(voucherId);
@@ -58,13 +61,13 @@ public class VoucherPushService {
             throw new BizException(ErrorCode.PARAM_INVALID, "凭证未记账，无法推送至外部系统");
         }
 
-        // 推送目标：按来源类型选择（IFS 来源走 IFS，其余走 同类系统）
+        // 推送目标：按来源类型选择（外部财务系统来源走外部财务系统，其余走统一通道）
         String target = "NC_SYSTEM";
         if (voucher.getSourceType() != null && voucher.getSourceType().contains("IFS")) {
             target = "IFS_SYSTEM";
         }
 
-        // P0-2 幂等：同一凭证 + 同一目标已成功推送过则回放，不再外呼（防重复点击/超时重发致外部重复建账）。
+        // P0-2 去重：同一凭证 + 同一目标已成功推送过则回放，不再外呼（防重复点击/超时重发致外部重复建账）。
         // 失败记录不在此拦截，仍可重推。
         OpVoucherPushLog prior = pushLogMapper.selectOne(new LambdaQueryWrapper<OpVoucherPushLog>()
                 .eq(OpVoucherPushLog::getVoucherId, voucherId)
@@ -93,7 +96,7 @@ public class VoucherPushService {
         VoucherPushChannel channel = channelRouter.current();
         VoucherPushResult r = channel.push(target, payload);
 
-        // 落库推送日志（独立写入，不在外部调用期间占用事务连接）
+        // 写入数据库推送日志（独立写入，不在外部调用期间占用事务连接）
         OpVoucherPushLog logRow = new OpVoucherPushLog();
         logRow.setVoucherId(voucherId);
         logRow.setVoucherNo(voucher.getVoucherNo());

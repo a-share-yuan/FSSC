@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.ops.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -26,21 +29,22 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * G3（2026-09-24）任务池五视图。
  *
- * <p>通行口径的五视图是「待办／已办／流程消息／待分配任务／我管理的任务」；
+ * <p>通行规则的五视图是「待办／已办／流程消息／待分配任务／我管理的任务」；
  * 本系统"流程消息"已由 {@code wf_cc} 独立承载、"已办"已由 {@code wf_task_history} 承载，
  * 而共享作业最缺的是"池"这一层，因此按 G3 要求落成<b>作业语义</b>的五视图：
  * <ol>
  *   <li>{@code MY_TODO} 我的待办：PENDING 且（受理人=我 或 我是候选人）——含池内未锁定的；</li>
  *   <li>{@code CLAIMABLE} 可认领：PENDING 且未指派 且 我是候选人 且 节点是任务池（POOL）——真正能抢的；</li>
  *   <li>{@code LOCKED_BY_OTHERS} 被他人锁定：PENDING 且已指派给他人 且 我是候选人（POOL 软锁可见性，
- *       与 {@code WfQueryService.poolTasksClaimedByOthers} 同口径：行看得见、办不了、看得到锁定者）；</li>
+ *       与 {@code WfQueryService.poolTasksClaimedByOthers} 同一规则：行看得见、办不了、看得到锁定者）；</li>
  *   <li>{@code MY_CLAIMED} 我已认领：PENDING 且受理人=我 且 节点是 POOL；</li>
  *   <li>{@code POOL_ALL} 池内全部：PENDING 且节点是 POOL（不限候选人，供共享中心主管总览）。</li>
  * </ol>
  *
  * <p><b>超时判定读 {@code wf_task.due_time} 真值</b>（G3 双时限落地），不再用 create_time 现算；
- * 尚无 due_time 的历史存量行按"未判超时"处理并单独标注 {@code dueTimeMissing=true}，
+ * 尚无 due_time 的历史历史行按"未判超时"处理并单独标注 {@code dueTimeMissing=true}，
  * 避免把"没落时限"静默当成"没超时"。
  */
 @Slf4j
@@ -112,7 +116,7 @@ public class TaskPoolQueryService {
     /**
      * 限定"节点是任务池（POOL）"。
      *
-     * <p>为什么用嵌套 OR 而不是一次 IN：{@code wf_node_config} 的节点口径是
+     * <p>为什么用嵌套 OR 而不是一次 IN：{@code wf_node_config} 的节点规则是
      * {@code model_key:node_key} 复合键，SQL 里没有这一列可 IN；按 model_key 分组后展开成
      * {@code (model_key=? AND node_key IN (…)) OR …}，与 {@code WfNodeConfigResolver.poolNodeKeys()}
      * 的判定完全同源（不另立一套 POOL 定义）。

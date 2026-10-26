@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -8,13 +11,14 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
+ * 打印模板头（V1.4.81，套打平台 / 单据设计器）。
  *
  * <p><b>为什么建这张表</b>：此前全仓 print_template 零命中，5 套打印模板硬编码在
  * {@code fssc-web/src/composables/usePrintTemplate.js} 的 TEMPLATES 常量里。
  * 那意味着「新增一种单据的打印样式」＝改前端代码＋发版，模板不是数据而是代码，
- * 业务人员无法自助调整版式。本表把版式参数落库，把「模板」变回可配置数据。
+ * 业务人员无法自助调整版式。本表把版式参数写入数据库，把「模板」变回可配置数据。
  *
- * <p><b>版式口径</b>：{@code grid_rows} × {@code grid_cols} 构成设计网格，
+ * <p><b>版式规则</b>：{@code grid_rows} × {@code grid_cols} 构成设计网格，
  * 字段项在网格上占位（见 {@link MdPrintTemplateItem}），
  * 前端渲染引擎按毫米把网格换算成绝对坐标，支持 A4/A5/自定义纸张与横纵向。
  */

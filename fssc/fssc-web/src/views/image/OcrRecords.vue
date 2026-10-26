@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -12,7 +15,7 @@
           <el-input v-model="q.invoiceNo" placeholder="发票号" clearable style="width:160px" size="small" @keyup.enter="search" />
           <el-button size="small" type="primary" @click="search">查询</el-button>
           <el-button size="small" @click="reset">重置</el-button>
-          <el-button size="small" @click="doExport">导出 CSV</el-button>
+          <el-button size="small" @click="doExport">导出</el-button>
         </div>
       </div>
     </template>
@@ -50,10 +53,25 @@
       <el-table-column prop="buyerName" label="购方" min-width="160" show-overflow-tooltip>
         <template #default="{ row }">{{ row.buyerName || '—' }}</template>
       </el-table-column>
-      <el-table-column prop="channelName" label="识别通道" width="90" align="center" />
+      <el-table-column prop="channelName" label="识别通道" width="110" align="center">
+        <template #default="{ row }">{{ ocrChannelLabel(row.channelName) || '—' }}</template>
+      </el-table-column>
+      <!-- D-H7-01：识别失败此前不落本表 ⇒ 记录页对一次失败恒 0 行、无从复核。
+           现失败也有一行（recognizeStatus=FAILED），本列区分成功/失败，失败原因见下一列。 -->
+      <el-table-column label="识别结果" width="90" align="center">
+        <template #default="{ row }">
+          <el-tag v-if="row.recognizeStatus === 'FAILED'" type="danger" size="small">失败</el-tag>
+          <el-tag v-else type="success" size="small">成功</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="失败原因" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.recognizeStatus === 'FAILED' ? (row.failReason || '—') : '—' }}</template>
+      </el-table-column>
       <el-table-column label="票面自洽" width="90" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.consistent === 1" type="success" size="small">通过</el-tag>
+          <!-- 失败行没有票面，自洽位恒 0，直译成「超差」会被读成"金额对不上" ⇒ 显示 — -->
+          <el-tag v-if="row.recognizeStatus === 'FAILED'" type="info" size="small">—</el-tag>
+          <el-tag v-else-if="row.consistent === 1" type="success" size="small">通过</el-tag>
           <el-tag v-else-if="row.consistent === 0" type="danger" size="small">超差</el-tag>
           <el-tag v-else type="info" size="small">—</el-tag>
         </template>
@@ -84,6 +102,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { imageApi, fileApi } from '../../api'
 import { invoiceTypeLabel } from '../../constants/invoiceType'
+import { ocrChannelLabel } from '@/constants/enums.js'
 import { exportCsv } from '../../utils/csv'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
@@ -154,7 +173,7 @@ async function reRecognize(row) {
   } catch (e) { ElMessage.error(e.message) } finally { reRecognizing.value = null }
 }
 
-// 附件原图地址(与影像管理页同口径:file detail → 图片后缀校验 → 下载 token)
+// 附件原图地址(与影像管理页同一规则:file detail → 图片后缀校验 → 下载 token)
 const IMG_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'jfif']
 async function getFileUrl(fileId) {
   if (!fileId) return null

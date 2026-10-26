@@ -1,9 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 import { ref, reactive } from 'vue'
 import { queryVariantApi } from '@/api.js'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 /**
  * 查询方案（Variant）组合式函数。
+ * P1-3：保存个人常用筛选组合，参考常用查询方案。
  *
  * @param {string|Function} pageKey - 页面标识（如 expense_bill_list），或返回该标识的函数
  * @param {object} searchForm - 响应式搜索表单对象（reactive）

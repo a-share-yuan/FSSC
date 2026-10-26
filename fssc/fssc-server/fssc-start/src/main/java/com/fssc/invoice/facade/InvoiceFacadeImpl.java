@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.invoice.facade;
 
 import com.fssc.framework.facade.InvoiceFacade;
@@ -51,7 +54,7 @@ public class InvoiceFacadeImpl implements InvoiceFacade {
     }
 
     /**
-     * D-DEC-463（幂等腿②）：入池前的"已在池"判定，装配口径与本类的查重列一致——
+     * D-DEC-463（去重环节②）：入池前的"已在池"判定，装配规则与本类的查重列一致——
      * 全电票的 invoiceCode 归一为空串（{@code create} 里同样把 NULL 归一为 ''，否则 {@code = ''} 永不命中）。
      */
     @Override

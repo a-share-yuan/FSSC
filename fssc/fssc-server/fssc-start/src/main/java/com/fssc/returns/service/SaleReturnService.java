@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.returns.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,7 +24,9 @@ import com.fssc.returns.mapper.SaleReturnLineMapper;
 import com.fssc.returns.mapper.SaleReturnMapper;
 import com.fssc.returns.support.ReturnLegMapping;
 import com.fssc.system.entity.SysConfig;
+import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysConfigMapper;
+import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.system.service.NumberRuleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +36,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -52,13 +60,21 @@ public class SaleReturnService {
     private final NumberRuleService numberRuleService;
     /** 租户参数（sys_config）：审核/驳回/作废读 approve.deny_self 自审禁止开关，与 Flowable 路径共用同一开关 */
     private final SysConfigMapper sysConfigMapper;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** R5-D-089 下游腿：REFUND 退货退款 → 应收域（红字贷项 + FIFO 冲减 + 客户对账基础表），EXCHANGE 不写 */
+    /** R5-D-089 下游环节：REFUND 退货退款 → 应收域（红字贷项 + FIFO 冲减 + 客户对账基础表），EXCHANGE 不写 */
     private final RcReceivableMapper rcReceivableMapper;
     private final ArStatementMapper arStatementMapper;
     /** R5-D-089 客户解析：customer_code → crm_customer（应收单以 customer_id 挂账） */
     private final CrmCustomerMapper crmCustomerMapper;
+    /** D-H3-04：红字应收（贷项）走应收族同一制证钩子——RECEIVABLE 族本就有制证写入位置
+     *  （应收审批收尾 ReceivableBizAction、开票收尾 InvoiceIssueBizAction 都出证），
+     *  唯独本环节自建的红字应收不制证 ⇒ 应收侧账面净额与总账差一笔退货额（实测 −5,000 零凭证）。 */
+    private final com.fssc.sharing.service.VoucherService voucherService;
+    /** D-H2-03：company_code/company_name 按 company_id 补充（原两列恒 NULL） */
+    private final com.fssc.system.mapper.SysCompanyMapper sysCompanyMapper;
+    /** D-H2-04（历史行）：读时把 approver 工号换成真名 */
+    private final SysUserMapper sysUserMapper;
 
     // ---------------- 创建 ----------------
 
@@ -76,6 +92,8 @@ public class SaleReturnService {
         if (r.getReturnMode() == null || r.getReturnMode().isBlank()) {
             r.setReturnMode(SaleReturn.MODE_REFUND);
         }
+        assertCustomerInMaster(r);   // D-H2-02
+        fillCompanyCoords(r);        // D-H2-03
         List<SaleReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
         // R5-D-091：表头税额按明细整算回写（不信任前端 taxAmount）
@@ -103,13 +121,15 @@ public class SaleReturnService {
             throw new BizException(ErrorCode.PARAM_INVALID, "退货金额必须大于0");
         }
         // 编辑是整单覆盖（下面直接 set 到 old），不校验就会把 NOT NULL 的 customer_code/bill_date 置空，
-        // 变成 500 而不是友好提示——与 create 同口径补齐。
+        // 变成 500 而不是友好提示——与 create 同一规则补齐。
         if (r.getCustomerCode() == null || r.getCustomerCode().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "客户代码必填");
         }
         if (r.getBillDate() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "退货日期必填");
         }
+        assertCustomerInMaster(r);   // D-H2-02（与 create 同校验：编辑改客户代码同样要现有）
+        fillCompanyCoords(r);        // D-H2-03
         List<SaleReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
         // R5-D-091：编辑整单覆盖时税额同样按明细整算回写
@@ -179,11 +199,11 @@ public class SaleReturnService {
         auditAfter.put("approveTime", r.getApproveTime());
         auditTrailService.recordUpdate("SALE_RETURN", id, r.getBillNo(), "sale_return",
                 String.valueOf(id), auditBefore, auditAfter, "审核通过");
-        // R5-D-089（D-V4-005 边界）：APPROVED 收尾下游腿——按 return_mode 分流（ReturnLegMapping 为
+        // R5-D-089（D-V4-005 边界）：APPROVED 收尾下游环节——按 return_mode 分流（ReturnLegMapping 为
         // 采购/销售两域共用映射表）：REFUND 退货退款 ⇒ 生成红字应收（贷项，amount 取负）并 FIFO 冲减
         // 对应 rc_receivable.remain_amount，「进对账」写入客户对账基础表（ar_statement 且置
         // check_status=UNCHECKED 待核对）；EXCHANGE 退货补货 ⇒ 不进对账。与审核同事务收尾
-        // （复用 D-DEC-334 收尾事件口径），不另建定时任务。
+        // （复用 D-DEC-334 收尾事件规则），不另建定时任务。
         if (ReturnLegMapping.entersRecon(r.getReturnMode())) {
             postRefundToAr(r);
         }
@@ -223,7 +243,7 @@ public class SaleReturnService {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + r.getBillNo() + " 当前状态不可作废");
         }
         if (reason == null || reason.isBlank()) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "作废必须填写原因（退出对账口径留痕）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "作废必须填写原因（退出对账需记录）");
         }
         // 作废「已审核」单 = 反审核（抹掉一条已生效的冲减记录），禁止本人操作；
         // 草稿/在途/驳回态本人作废属流程内清理，无控制被绕过，故不拦。
@@ -260,6 +280,7 @@ public class SaleReturnService {
         SaleReturn r = require(id);
         r.setLines(lineMapper.selectList(new LambdaQueryWrapper<SaleReturnLine>()
                 .eq(SaleReturnLine::getReturnId, id).orderByAsc(SaleReturnLine::getLineNo)));
+        fillApproverNames(java.util.Collections.singletonList(r));
         return r;
     }
 
@@ -268,7 +289,7 @@ public class SaleReturnService {
      *
      * <p>D-N22：原实现只按入参过滤，既无数据范围也不封顶；{@code /export} 传
      * {@code Integer.MAX_VALUE} 调用本方法，等于"凭一个 companyId 就能整表拉走"。
-     * 现按 data_scope 五级收口（退货单无部门/经办人列，故只到公司级，其余级别降级本公司）。</p>
+     * 现按 data_scope 五级办结（退货单无部门/经办人列，故只到公司级，其余级别降级本公司）。</p>
      */
     @DataScope("销售退货列表数据范围")
     public PageResult<SaleReturn> page(long pageNum, long pageSize, Long companyId, String customerCode,
@@ -286,10 +307,39 @@ public class SaleReturnService {
         q.orderByDesc(SaleReturn::getId);
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<SaleReturn> p =
                 mapper.selectPage(new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(pageNum, pageSize), q);
+        fillApproverNames(p.getRecords());
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
     // ---------------- 内部工具 ----------------
+
+    /**
+     * D-H2-04（历史行补齐）：读取时把 approver 的工号批量换成真名。
+     * <p>写入侧 {@link #currentUserName()} 只对"本次审批"生效；审批发生在修复前的老单据
+     * 仍存工号（实测 sale_return.approver='100002'），列表「审核人」列因此直接显示数字。
+     * 与应付域 {@code ApRequestService.fillDisplayNames} 同一读时解析规则，写入数据库值不动。</p>
+     */
+    private void fillApproverNames(List<SaleReturn> rows) {
+        if (rows == null || rows.isEmpty()) return;
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        for (SaleReturn r : rows) {
+            if (r.getApprover() != null && !r.getApprover().isBlank()) codes.add(r.getApprover().trim());
+        }
+        if (codes.isEmpty()) return;
+        Map<String, String> display = new HashMap<>();
+        for (SysUser u : sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                .in(SysUser::getUserName, codes))) {
+            if (u.getNickName() != null && !u.getNickName().isBlank()) {
+                display.put(u.getUserName(), u.getNickName());
+            }
+        }
+        if (display.isEmpty()) return;
+        for (SaleReturn r : rows) {
+            if (r.getApprover() != null) {
+                r.setApprover(display.getOrDefault(r.getApprover().trim(), r.getApprover()));
+            }
+        }
+    }
 
     private List<SaleReturnLine> normalizeLines(SaleReturn r) {
         List<SaleReturnLine> lines = r.getLines();
@@ -302,10 +352,48 @@ public class SaleReturnService {
             ln.setReturnId(r.getId());
             if (ln.getLineNo() == null) ln.setLineNo(no);
             if (ln.getAmount() == null) ln.setAmount(BigDecimal.ZERO);
+            // D-H2-07：单位由界面明细行带入（销售域无订单行模型可派生：so_order/so_order_line 实测 0 行），
+            // 这里只做去空白归一，避免写入数据库成 ' ' 这种"看着有值其实没有"的脏数据。
+            if (ln.getUom() != null) {
+                String u = ln.getUom().trim();
+                ln.setUom(u.isEmpty() ? null : u);
+            }
             out.add(ln);
             no++;
         }
         return out;
+    }
+
+    /**
+     * D-H2-02：客户代码必须在客户主数据（{@code crm_customer}）现有，名称一律以主数据为准回填。
+     * <p>与采购侧同缺陷同修：原实现代码是纯输入框、名称手填 ⇒ 任意字符串可入库，
+     * {@code customer_name} 落空串，列表「客户」列空白，下游对账/函证缺关键字段。
+     * <p>原先只有审核收尾环节 {@link #postRefundToAr} 才做客户解析（解析不到就报"无法挂账进对账"），
+     * 等于把校验推迟到审核那一刻——草稿期就该拦下来。
+     */
+    private void assertCustomerInMaster(SaleReturn r) {
+        CrmCustomer cust = crmCustomerMapper.selectOne(new LambdaQueryWrapper<CrmCustomer>()
+                .eq(CrmCustomer::getCustomerCode, r.getCustomerCode())
+                .last("limit 1"));
+        if (cust == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "客户代码 " + r.getCustomerCode() + " 不在客户主数据中：请先在【客户管理】建档，或改用在册代码");
+        }
+        r.setCustomerName(cust.getCustomerName());
+    }
+
+    /**
+     * D-H2-03：按 company_id 补充 company_code/company_name（原两列恒 NULL，台账/导出只有 id 无从对号）。
+     * 公司 id 不现有时如实报错，不静默留空。
+     */
+    private void fillCompanyCoords(SaleReturn r) {
+        if (r.getCompanyId() == null) return;
+        com.fssc.system.entity.SysCompany c = sysCompanyMapper.selectById(r.getCompanyId());
+        if (c == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "所属公司不存在: " + r.getCompanyId());
+        }
+        r.setCompanyCode(c.getCompanyCode());
+        r.setCompanyName(c.getCompanyName());
     }
 
     private void saveLines(Long returnId, List<SaleReturnLine> lines) {
@@ -338,14 +426,14 @@ public class SaleReturnService {
         }
     }
 
-    // ---------------- R5-D-089 下游腿（APPROVED 收尾按 return_mode 分流） ----------------
+    // ---------------- R5-D-089 下游环节（APPROVED 收尾按 return_mode 分流） ----------------
 
     /**
      * REFUND 退货退款 → 应收域（与采购侧 R5-D-084 同一套 ReturnLegMapping 映射）：
      * 1）红字应收（贷项）：rc_receivable 新增负向行（amount 取负、sourceDocType=SALE_RETURN）；
-     * 2）冲减：对该客户未清应收按到期日 FIFO 冲减 remain_amount（减为 0 置 DONE，口径同收款核销）；
+     * 2）冲减：对该客户未清应收按到期日 FIFO 冲减 remain_amount（减为 0 置 DONE，规则同收款核销）；
      * 3）进对账：写入客户对账基础表 ar_statement 并置 check_status=UNCHECKED（待核对）。
-     * EXCHANGE 不进入本方法。幂等：同退货单已生成红字贷项行则跳过。
+     * EXCHANGE 不进入本方法。去重：同退货单已生成红字贷项行则跳过。
      */
     private void postRefundToAr(SaleReturn r) {
         CrmCustomer cust = resolveCustomer(r);
@@ -361,11 +449,14 @@ public class SaleReturnService {
             return;
         }
         BigDecimal amount = ReturnLegMapping.negate(r.getAmount());
-        // —— 2) 冲减对应未清应收（收款核销同口径：客户 + remain>0 + 非 DONE + 到期日/ID 升序）
+        // —— 2) 冲减对应未清应收（收款核销同一规则：客户 + remain>0 + 非 DONE + 到期日/ID 升序）
         BigDecimal rest = r.getAmount() == null ? BigDecimal.ZERO : r.getAmount();
         BigDecimal offset = BigDecimal.ZERO;
         List<RcReceivable> open = rcReceivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .eq(RcReceivable::getCustomerId, cust.getId())
+                // D-H3-02 同族：冲减候选限定在本退货单所属法人主体内。客户主数据全租户共享，
+                // 不限主体就会拿本公司的一笔退货去冲他公司的应收（与收款环节 H3.4 实测同一形态的串账）。
+                .eq(r.getCompanyId() != null, RcReceivable::getCompanyId, r.getCompanyId())
                 .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
                 .ne(RcReceivable::getStatus, "DONE")
                 .orderByAsc(RcReceivable::getDueDate)
@@ -416,6 +507,27 @@ public class SaleReturnService {
         credit.setSourceDocType("SALE_RETURN");
         credit.setSourceDocId(r.getId());
         rcReceivableMapper.insert(credit);
+        // —— D-H3-04：红字应收出证（借 1122 应收账款／贷 6001 主营业务收入，金额取负＝红字冲销）。
+        // 走应收族既有钩子 generateReceivableVoucher：它按 rec 的 companyId/币种/单号建头、
+        // 分录金额直接取 amount（负数即红字），凭证四键落在派生应收单上 ⇒ 应收侧联查能取到这张证。
+        // 出证失败不回滚退货审核（该环节是 REQUIRES_NEW，且退货本身已合规成立），但必须记录不得静默：
+        // 写审计流水 VOUCHER_GEN_FAIL，单据追溯抽屉与运营巡检都能看到并事后补生成。
+        try {
+            Long voucherId = voucherService.generateReceivableVoucher(credit);
+            log.info("[returns] 销售退货单 {} 红字应收 {} 已出证 voucherId={}", r.getBillNo(), credit.getBillNo(), voucherId);
+        } catch (Exception vex) {
+            log.error("[returns] 销售退货单 {} 红字应收 {} 出证失败（退货审核不回滚，已留痕待补生成）: {}",
+                    r.getBillNo(), credit.getBillNo(), vex.getMessage(), vex);
+            // afterJson 手拼（不引 ObjectMapper）：只放固定键，异常文本一律走 remark，避免转义把 JSON 拼坏
+            try {
+                auditTrailService.record("RECEIVABLE", credit.getId(), credit.getBillNo(), "op_voucher",
+                        String.valueOf(credit.getId()), "VOUCHER_GEN_FAIL", null,
+                        "{\"voucherGenerated\":false,\"sourceType\":\"RECEIVABLE\",\"sourceDocId\":" + credit.getId() + "}",
+                        "销售退货红字应收自动生成凭证未出证：" + vex.getMessage());
+            } catch (Exception tex) {
+                log.warn("[returns] 红字应收 {} 出证失败留痕写入失败: {}", credit.getBillNo(), tex.getMessage());
+            }
+        }
         // —— 3) 客户对账基础表：写入红字对账行并置 check_status（UNCHECKED 待核对）
         ArStatement stmt = new ArStatement();
         stmt.setTenantId(TenantContext.getTenantId());
@@ -446,7 +558,7 @@ public class SaleReturnService {
                 r.getBillNo(), credit.getBillNo(), offset, stmt.getBillNo());
     }
 
-    /** customer_code → crm_customer（应收单以 customer_id 挂账；编码优先、名称兜底） */
+    /** customer_code → crm_customer（应收单以 customer_id 挂账；编码优先、名称默认处理） */
     private CrmCustomer resolveCustomer(SaleReturn r) {
         CrmCustomer cust = crmCustomerMapper.selectOne(new LambdaQueryWrapper<CrmCustomer>()
                 .eq(CrmCustomer::getCustomerCode, r.getCustomerCode())
@@ -474,7 +586,11 @@ public class SaleReturnService {
     private String currentUserName() {
         try {
             LoginUser u = UserContext.get();
-            return u == null ? null : u.getUserName();
+            if (u == null) return null;
+            // D-H2-04：审核人列直接显示工号（实测 sale_return.approver='100002'）——真名在 nickName，
+            // getUserName() 是登录账号；与应付域 ApRequestService、采购退货侧同一规则。
+            String real = u.getNickName();
+            return real != null && !real.isBlank() ? real : u.getUserName();
         } catch (Exception e) {
             return null;
         }
@@ -517,7 +633,7 @@ public class SaleReturnService {
      * 单据级「操作人 ≠ 制单人」拦截 —— 第二道防线，与「角色审批/制单分离」互补。
      * <p>角色隔离挡的是「授权时把两侧码塞给同一角色/同一人」；本方法挡的是「运行期单据归属」，
      * 两者缺一不可：超级权限（{@code *:*:*}）与未来授权回退都会绕过前者。
-     * <p>{@code create_by} 为空（历史/外部导入数据）时无法判定归属，放行以免误伤存量数据。
+     * <p>{@code create_by} 为空（历史/外部导入数据）时无法判定归属，放行以免误伤历史数据。
      */
     private void assertNotSelf(SaleReturn r, String action) {
         if (!isDenySelfEnabled()) {

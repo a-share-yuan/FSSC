@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.invoice.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -29,7 +32,7 @@ import java.util.Map;
 /**
  * 发票定时验真（需求 7.1）：每 5 分钟扫描待验发票（verify_status IN NONE/PENDING/FAILED）自动验真。
  *
- * <p>验真通道由「外部接口配置」页面统一管理（category=INVOICE_VERIFY），并新增<b>发票能力网关</b>缺省腿：
+ * <p>验真通道由「外部接口配置」页面统一管理（category=INVOICE_VERIFY），并新增<b>发票能力网关</b>缺省环节：
  * <ul>
  *   <li>配置已启用（status=ENABLED）：调用该配置指定的真实外部验真接口（HTTP POST + Bearer Auth），
  *       按响应 JSON 的 result/pass 字段判定 PASS/FAIL——管理员显式配置优先；</li>
@@ -51,13 +54,13 @@ import java.util.Map;
  * 不满足前置谓词的行留在原状态（NONE=未验真 / PENDING=验真中），等人工补影像后自然进入队列；
  * 取值一律用 {@code constants/enums.js} 与 inv_invoice 既有 verify_status 语义，不新增枚举。
  *
- * <p>幂等：已 SUCCESS 的不重复处理；队列为空时直接跳过。
+ * <p>去重：已 SUCCESS 的不重复处理；队列为空时直接跳过。
  *
  * <p>【租户上下文】定时任务跑在 Spring 调度线程上，无 {@link TenantContext}。
  * inv_invoice 为租户过滤表，直接查询会触发 fail-closed 抛
  * {@code TENANT_CONTEXT_MISSING}。故：
  * <ol>
- *   <li>待验扫描用 {@code runIgnoreTenant} 跨租户聚合（仅扫描，不落库）；</li>
+ *   <li>待验扫描用 {@code runIgnoreTenant} 跨租户聚合（仅扫描，不写入数据库）；</li>
  *   <li>逐张验真时用 {@code callAs(该发票 tenantId)} 恢复其归属租户上下文，
  *       保证 verifyNow 的 UPDATE/日志落入正确租户，杜绝串户。</li>
  * </ol>
@@ -74,21 +77,22 @@ public class InvoiceVerifyScheduler {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(15);
-    /** 网关腿超时：上游查验含税局往返，与网关 OCR/验真的读超时口径一致留足余量 */
+    /** 网关环节超时：上游查验含税局往返，与网关 OCR/验真的读超时规则一致留足余量 */
     private static final Duration GATEWAY_TIMEOUT = Duration.ofSeconds(30);
 
-    // ===== 发票能力网关（InvoiceGateway）缺省验真腿：三系统统一键名 =====
+    // ===== 发票能力网关（InvoiceGateway）缺省验真环节：三系统统一键名 =====
     @Value("${invoice.gateway.base-url:http://127.0.0.1:8096}")
     private String gatewayBaseUrl;
 
     @Value("${invoice.gateway.api-key:}")
     private String gatewayApiKey;
 
-    /** 总开关：false 时验真退回「无 ENABLED 外部配置即不判定」的旧口径（D-DEC-115） */
+    /** 总开关：false 时验真退回「无 ENABLED 外部配置即不判定」的旧规则（D-DEC-115） */
     @Value("${fssc.gateway.enabled:true}")
     private boolean gatewayEnabled;
 
     /**
+     * D-DEC-074 前置谓词（SQL 片段，与 {@link #isVerifiableByJob} 同一规则，改一处必改两处）：
      * 有影像 且 来源非手工补录，才允许由定时作业给出验真结论。
      */
     private static final String VERIFIABLE_SQL =
@@ -98,7 +102,7 @@ public class InvoiceVerifyScheduler {
     public void autoVerifyPending() {
         jobHeartbeatService.run("InvoiceVerifyScheduler", () -> {
         try {
-            // 待验扫描：跨租户聚合（runIgnoreTenant 关闭租户过滤；仅扫描不落库）
+            // 待验扫描：跨租户聚合（runIgnoreTenant 关闭租户过滤；仅扫描不写入数据库）
             List<InvInvoice>[] holder = new List[1];
             TenantContext.runIgnoreTenant(() ->
                     holder[0] = invoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()
@@ -135,7 +139,7 @@ public class InvoiceVerifyScheduler {
                 // 管理员在「外部接口配置」显式启用了 INVOICE_VERIFY 时仍以上面的配置优先。
                 log.info("[定时验真] 默认通道=发票能力网关 {}（逐张查验并落报文证据链）", gatewayBase());
             } else {
-                // 网关被显式关闭且无 ENABLED 外部配置 ⇒ 沿用 D-DEC-115 旧口径：不产出任何验真结论。
+                // 网关被显式关闭且无 ENABLED 外部配置 ⇒ 沿用 D-DEC-115 旧规则：不产出任何验真结论。
                 // 旧行为是「回退模拟 PASS」并把 50 张票刷成 SUCCESS（verify_msg=定时验真(系统自动)通过），
                 // 系统内没有一条外部报文支撑该状态，却成为下游发票覆盖/合规审核/归档的准入依据。
                 log.warn("[定时验真] 验真通道不可用（category=INVOICE_VERIFY 无 ENABLED 配置，"
@@ -147,7 +151,7 @@ public class InvoiceVerifyScheduler {
             }
 
             for (InvInvoice inv : pending) {
-                // 兜底闸：扫描口径与逐行口径不一致时，宁可跳过也不给无凭据的发票造结论
+                // 默认处理校验：扫描规则与逐行规则不一致时，宁可跳过也不给无凭据的发票造结论
                 if (!isVerifiableByJob(inv)) {
                     log.info("[定时验真] 发票 {} 跳过：{}（不判定验真结果，保持原状态）",
                             inv.getId(), unverifiableReason(inv));
@@ -174,7 +178,7 @@ public class InvoiceVerifyScheduler {
                             return;
                         }
                         // 结论出自网关的真实查验通道 ⇒ 走「带报文」的出口进 inv_verify_log；
-                        // channel 取该列既有词表 TAX（税局口径查验），作业留痕由 sys_job_heartbeat/verify_msg 承担。
+                        // channel 取该列既有名称表 TAX（税局规则查验），作业记录由 sys_job_heartbeat/verify_msg 承担。
                         enhanceService.applyVerifyConclusion(inv.getId(), vr.pass(),
                                 "定时验真(发票能力网关)·" + vr.message(), "TAX",
                                 vr.request(), vr.rawResponse(), null);
@@ -187,7 +191,7 @@ public class InvoiceVerifyScheduler {
         });
     }
 
-    /** D-DEC-074：与 {@link #VERIFIABLE_SQL} 同口径的 Java 侧前置谓词 */
+    /** D-DEC-074：与 {@link #VERIFIABLE_SQL} 同一规则的 Java 侧前置谓词 */
     private static boolean isVerifiableByJob(InvInvoice inv) {
         return unverifiableReason(inv) == null;
     }
@@ -292,15 +296,15 @@ public class InvoiceVerifyScheduler {
         }
     }
 
-    // ===================== 发票能力网关验真腿（默认通道） =====================
+    // ===================== 发票能力网关验真环节（默认通道） =====================
 
     /**
-     * 网关腿是否可用：总开关开启且基址非空。
+     * 网关环节是否可用：总开关开启且基址非空。
      *
-     * <p>本腿取值只认 yml/环境变量（{@code invoice.gateway.*} 与 {@code fssc.gateway.enabled}）：
+     * <p>本环节取值只认 yml/环境变量（{@code invoice.gateway.*} 与 {@code fssc.gateway.enabled}）：
      * 定时作业跨租户跑，sys_config 是租户级且落在 master 库，把它当验真开关会造成
      * 「A 租户的配置影响 B 租户发票」的串户判定。租户级即时切换请走管理面：
-     * 在「外部接口配置」启用 category=INVOICE_VERIFY（优先级高于网关腿），
+     * 在「外部接口配置」启用 category=INVOICE_VERIFY（优先级高于网关环节），
      * 或停用网关进程本身。</p>
      */
     private boolean gatewayAvailable() {
@@ -325,10 +329,10 @@ public class InvoiceVerifyScheduler {
     }
 
     /**
-     * 默认腿：调用发票能力网关的真伪查验门面 {@code POST {base}/api/tax/v1/verify/invoices}。
+     * 默认环节：调用发票能力网关的真伪查验门面 {@code POST {base}/api/tax/v1/verify/invoices}。
      *
      * <p>只使用网关的中性契约字段（invoiceCode / invoiceNumber / invoiceDate / totalWithTax / checkCode），
-     * 上游厂商的路径、字段名与签名一律不泄漏到 FSSC。判定取 {@code data.results[0].passed}；
+     * 上游接口的路径、字段名与签名一律不泄漏到 FSSC。判定取 {@code data.results[0].passed}；
      * 请求体与返回原文一并返回，供 inv_verify_log 复核。</p>
      *
      * <p>【不臆造结论】网络异常、非 2xx、{@code success=false}、无 results 元素——都归为
@@ -389,7 +393,7 @@ public class InvoiceVerifyScheduler {
         }
     }
 
-    /** 报文入证据链前的长度收口（inv_verify_log 的 req_param/resp_content 为 text，仍防单行失控） */
+    /** 报文入证据链前的长度办结（inv_verify_log 的 req_param/resp_content 为 text，仍防单行失控） */
     private static String truncate(String s) {
         if (s == null) {
             return null;

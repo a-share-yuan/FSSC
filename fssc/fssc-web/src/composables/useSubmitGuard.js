@@ -1,5 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
- * useSubmitGuard — 表单提交前的必填闸门（必填项治理 P1）。
+ * useSubmitGuard — 表单提交前的必填校验（必填项治理 P1）。
  *
  * 存在的原因：实测 77 个含表单页面里只有 11 个真的调用了 formRef.validate()，
  * 另有两个反模式——① `el-form-item` 上裸写 `required` 但不给 `prop`，于是红星照显示、

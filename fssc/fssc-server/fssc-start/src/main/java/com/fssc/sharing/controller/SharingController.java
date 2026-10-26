@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -30,7 +33,7 @@ public class SharingController {
 
     private final SharingService sharingService;
     private final VoucherService voucherService;
-    /** D-DEC-288：人工过账口的实付闸（付款腿凭证未实付不得记账） */
+    /** D-DEC-288：人工过账口的实付校验（付款环节凭证未实付不得记账） */
     private final com.fssc.sharing.service.VoucherAutoPostService voucherAutoPostService;
     /** A12（RA-ROOT-09）：自动制证失败事件的只读视图 */
     private final com.fssc.sharing.service.VoucherGenFailureService voucherGenFailureService;
@@ -122,15 +125,15 @@ public class SharingController {
                     + (bill.getStatus() == null ? "null" : bill.getStatus()));
         }
         // 对公付款单（PAY：SETTLE/PREPAY/AGENCY/AIR）走付款凭证语义：借 2202 / 贷 1002，
-        // generatePtpPayment 内置 P0-5 幂等判重与 voucher_no 兜底回写，可安全补生成。
+        // generatePtpPayment 内置 P0-5 去重判重与 voucher_no 默认处理回写，可安全补生成。
         if ("PAY".equals(bill.getBillType())) {
             return Result.success(voucherService.generatePtpPayment(bill));
         }
-        // 修复：借款（LOAN）与还款（REPAY）单据必须走模板口，否则会掉进 generate() 的报销单通用口径——
-        // generate() 按 exp_bill_line 取数并硬编码 sourceType="EXPENSE"，对无报销明细行的
+        // 修复：借款（LOAN）与还款（REPAY）单据必须走模板口，否则会掉进 generate() 的报销单通用规则——
+        // generate() 按 exp_bill_line 查询并硬编码 sourceType="EXPENSE"，对无报销明细行的
         // 借款/还款单会产出「借 6602 管理费用 / 贷 2241 其他应付款」这种错账凭证
-        // （LOAN 正确口径＝借 1221 其他应收款 / 贷 1002 银行存款，见 ExpenseWfEventListener#EXP_LOAN）。
-        // 审批回调走的就是 generateByTemplate，这里补齐同一分流，保证人工补生成与自动制证同口径。
+        // （LOAN 正确规则＝借 1221 其他应收款 / 贷 1002 银行存款，见 ExpenseWfEventListener#EXP_LOAN）。
+        // 审批回调走的就是 generateByTemplate，这里补齐同一分流，保证人工补生成与自动制证同一规则。
         if ("LOAN".equals(bill.getBillType())) {
             return Result.success(voucherService.generateByTemplate(billId, "EXP_LOAN"));
         }
@@ -141,10 +144,10 @@ public class SharingController {
     }
 
     /**
-     * 凭证台账列表。D-DEC-168 后端腿：补「公司／年度／月度」三个可空筛选参数——
+     * 凭证台账列表。D-DEC-168 后端环节：补「公司／年度／月度」三个可空筛选参数——
      * 原先签名里没有这三项，页面筛选与查询按钮对返回结果完全无效。
-     * 三个参数一律 {@code required = false}，不传＝不加条件＝改前口径；数据范围仍由服务层
-     * {@code @DataScope} 注入（本接口未绕过可见性闸）。
+     * 三个参数一律 {@code required = false}，不传＝不加条件＝改前规则；数据范围仍由服务层
+     * {@code @DataScope} 注入（本接口未绕过可见性校验）。
      */
     @RequiresPerm("sharing:voucher:list")
     @GetMapping("/voucher/page")
@@ -160,15 +163,15 @@ public class SharingController {
                                                      @RequestParam(required = false) String order) {
         PageResult<OpVoucher> page = voucherService.page(query.getPageNum(), query.getPageSize(), status, sourceType,
                 companyId, periodYear, periodMonth, orderBy, order);
-        // D-DEC-288（X-49 乙）：读侧打标"资金指令未下发"（payLegUnsettled）——已记账但款未付出的存量付款腿凭证
-        // 保持不动账，只在凭证台账明示注记；纯只读，不改 status、不写库、不拦记账（记账闸仍是 assertPaymentLegSettled）。
+        // D-DEC-288（X-49 乙）：读侧打标"资金指令未下发"（payLegUnsettled）——已记账但款未付出的历史付款环节凭证
+        // 保持不动账，只在凭证台账明示注记；纯只读，不改 status、不写库、不拦记账（记账校验仍是 assertPaymentLegSettled）。
         voucherAutoPostService.fillPayLegUnsettledFlag(page.getList());
         return Result.success(page);
     }
 
     /**
      * A12 执行结果视图（RA-ROOT-09）：审批通过后自动制证失败的<b>事件</b>列表，只读、零写。
-     * status 传空＝不限（默认口径）；PENDING＝至今未补生成，RESOLVED＝已按同源补出凭证。
+     * status 传空＝不限（默认规则）；PENDING＝至今未补生成，RESOLVED＝已按同源补出凭证。
      * 覆盖范围仅费用族，理由见 {@link com.fssc.sharing.service.VoucherGenFailureService} 类注释。
      */
     @RequiresPerm("sharing:voucher:list")
@@ -200,9 +203,9 @@ public class SharingController {
     @OperLog(module = "SHARING", operType = "UPDATE", desc = "凭证记账")
     @PostMapping("/voucher/{id}/post")
     public Result<Void> voucherPost(@PathVariable Long id) {
-        // D-DEC-288：人工过账口的实付闸——付款腿凭证（贷 银行存款）在款项实际付出前不得置 POSTED。
+        // D-DEC-288：人工过账口的实付校验——付款环节凭证（贷 银行存款）在款项实际付出前不得置 POSTED。
         // 自动通道只在银行指令成功后推（PayBatchService.writeBackPayment／PayBatchBizAction 的 paid 判定），
-        // 而本口原先只闸制审分离（D-DEC-166），实测 4 张未付款的付款腿凭证由此被人工记账（现库凭证 14/15/16/23）。
+        // 而本口原先只校验制审分离（D-DEC-166），实测 4 张未付款的付款环节凭证由此被人工记账（现库凭证 14/15/16/23）。
         voucherAutoPostService.assertPaymentLegSettled(id);
         voucherService.post(id, com.fssc.framework.security.UserContext.getRequired().getUserId());
         return Result.success();
@@ -234,8 +237,8 @@ public class SharingController {
     @PostMapping("/voucher/batch-post")
     public Result<java.util.Map<Long, String>> voucherBatchPost(
             @org.springframework.web.bind.annotation.RequestBody java.util.List<Long> ids) {
-        // D-DEC-288：批量口逐张给原因（与 batchPost 的"单张失败不影响其余"同口径），
-        // 未实付的付款腿凭证不进过账队列、原因原样回给界面。
+        // D-DEC-288：批量口逐张给原因（与 batchPost 的"单张失败不影响其余"同一规则），
+        // 未实付的付款环节凭证不进过账队列、原因原样回给界面。
         java.util.Map<Long, String> blocked = voucherAutoPostService.findUnsettledPaymentLegs(ids);
         java.util.List<Long> postable = ids == null ? java.util.List.of()
                 : ids.stream().filter(java.util.Objects::nonNull).filter(x -> !blocked.containsKey(x)).toList();

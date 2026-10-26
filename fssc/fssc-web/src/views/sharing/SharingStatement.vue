@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="statement-page">
     <el-card shadow="never">
@@ -47,7 +50,7 @@
         :row-class-name="rowClass" :empty-text="denied ? t('sharing.statement.emptyNoPerm') : t('common.empty')">
         <el-table-column prop="bankSerial" :label="$t('sharing.statement.phBankSerial')" width="150" show-overflow-tooltip sortable />
         <!-- D-DEC-159：此列原先直挂 prop，后端 LocalDateTime 序列化成 `2026-12-24T10:50:31` 原样上屏。
-             现走全站唯一日期口径 formatDateTime（YYYY-MM-DD HH:mm），与同族页 BankSlip.vue 一致。 -->
+             现走全站唯一日期规则 formatDateTime（YYYY-MM-DD HH:mm），与同族页 BankSlip.vue 一致。 -->
         <el-table-column prop="transDate" :label="$t('sharing.statement.colTransTime')" width="160" sortable :formatter="(row, col, val) => formatDateTime(val)" />
         <el-table-column :label="$t('field.direction')" width="70" align="center">
           <template #default="{ row }">
@@ -145,7 +148,7 @@ const statementSearchRules = reactive({})
 async function load() {
   loading.value = true
   try {
-    // 同族于 D-DEC-168「前端腿」的一处裸错（本域未登记新条目，随手随 159 一并如实修正并回报）：
+    // 同族于 D-DEC-168「前端环节」的一处裸错（本域未登记新条目，随手随 159 一并如实修正并回报）：
     // 原发的是 page/size，而后端 PageQuery 只认 pageNum/pageSize ⇒ 两个名字从未生效，
     // 每页条数下拉（10/20/50）与翻页点击都被打回默认第 1 页 10 条，列表看着"翻不动、切了没反应"。
     const p = { pageNum: page.current, pageSize: page.size }
@@ -206,14 +209,14 @@ function downloadTemplate() {
   URL.revokeObjectURL(url)
 }
 
-// D-DEC-159：金额/余额统一走全站金额口径 formatMoney（千分位 + 2 位小数），
+// D-DEC-159：金额/余额统一走全站金额定义 formatMoney（千分位 + 2 位小数），
 // 并修掉「余额列把 NULL 显示成 0.00」——op_bank_statement.balance 是可空列（导入时不填即 NULL），
 // 原先本地 fmt 的 `Number(v || 0)` 会把"没有余额"渲染成"余额 0.00"，看着像一笔真余额。
 const fmt = (v) => formatMoney(v, '—')
 
 // 41号审查 P1-9：导出当前查询结果
 function doExport() {
-  // D-DEC-159 同口径导出：原先把 transDate 原样写进 CSV，导出件里仍是 `2026-12-24T10:50:31`，
+  // D-DEC-159 同一规则导出：原先把 transDate 原样写进 CSV，导出件里仍是 `2026-12-24T10:50:31`，
   // 与本文件自带的导入模板（"交易时间格式 yyyy-MM-dd HH:mm:ss"）对不上，导出→再导入是回环脏值。
   const data = (rows.value || []).map((r) => ({ ...r, transDate: formatDateTime(r.transDate) }))
   exportCsv(data, [
@@ -223,11 +226,13 @@ function doExport() {
     { prop: 'reconStatus', label: t('sharing.statement.colReconStatus') }, { prop: 'slipStatus', label: t('sharing.statement.colSlipStatus') },
   ], 'SharingStatement')
 }
+// 勾对状态有三个同义码在写：本页 markRecon 写 RECONED、银行对账模块写 MATCHED、历史种子行是 RECON
+// （实测 op_bank_statement：RECON 1,665 行 / UNRECON 711 行）⇒ 名称表必须同时认三者，否则 RECON 行直显英文。
 function reconText(s) {
-  return { UNRECON: t('sharing.statement.optUnrecon'), RECONED: t('sharing.statement.optReconed'), DIFF: t('sharing.statement.optDiff') }[s] || s
+  return { UNRECON: t('sharing.statement.optUnrecon'), RECON: t('sharing.statement.optReconed'), RECONED: t('sharing.statement.optReconed'), MATCHED: t('sharing.statement.optReconed'), DIFF: t('sharing.statement.optDiff') }[s] || s
 }
 function reconTag(s) {
-  return { RECONED: 'success', DIFF: 'warning', UNRECON: 'danger' }[s] || 'info'
+  return { RECON: 'success', RECONED: 'success', MATCHED: 'success', DIFF: 'warning', UNRECON: 'danger' }[s] || 'info'
 }
 function slipText(s) {
   return { NONE: t('sharing.statement.optSlipNone'), DOWNLOADED: t('sharing.statement.optSlipDownloaded'), ARCHIVED: t('sharing.common.colArchived') }[s] || s
@@ -236,7 +241,7 @@ function slipTag(s) {
   return { ARCHIVED: 'success', DOWNLOADED: '', NONE: 'info' }[s] || 'info'
 }
 function rowClass({ row }) {
-  if (row.reconStatus === 'RECONED') return 'row-green'
+  if (row.reconStatus === 'RECONED' || row.reconStatus === 'RECON' || row.reconStatus === 'MATCHED') return 'row-green'
   if (row.reconStatus === 'DIFF') return 'row-yellow'
   if (row.reconStatus === 'UNRECON') return 'row-red'
   return ''

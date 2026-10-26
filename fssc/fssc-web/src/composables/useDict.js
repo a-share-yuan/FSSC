@@ -1,20 +1,23 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
- * 字典读取层（第 1 批收口基础设施，2026-10-15；第 3 批扩展：免权限通道 + 全局预热）
+ * 字典读取层（第 1 批办结基础设施，2026-10-15；第 3 批扩展：免权限通道 + 全局预热）
  *
  * 目标：让前端枚举可切到数据库字典，同时**保证接口不可用时行为与改造前逐字一致**。
  *
  * 为什么必须有这一层（这是切字典的核心风险）：
  *   本地常量（enums.js/billStatus.js）是**编译期常量**，同步可得、永不失败；
  *   字典是**运行时远程数据**，异步、可能超时/401/网络不通/后端未部署。
- *   若直接改成 `await dict` 渲染，接口一抖状态列就整列空白 —— 比不收口更糟。
- *   故口径固定为：
+ *   若直接改成 `await dict` 渲染，接口一抖状态列就整列空白 —— 比不办结更糟。
+ *   故规则固定为：
  *     · 同步返回，永不阻塞渲染（首帧用本地常量，字典回来后原位刷新）；
  *     · 加载中/失败/未配置 ⇒ **一律回落到本地常量**，界面零变化；
  *     · 字典与本地常量冲突时**以字典为准**（字典是运营可维护的权威源），
  *       但缺键时回落本地常量，不把英文码放上台面。
  *
  * 用法（Vue3 setup）：
- *   const dict = useDict('wf_node_multi_type', MULTI_TYPE)   // 传入本地常量作兜底
+ *   const dict = useDict('wf_node_multi_type', MULTI_TYPE)   // 传入本地常量作默认处理
  *   dict.label(v)          // 取标签（同步，永不返回 undefined）
  *   dict.load()            // 挂载时调一次（或用 onMounted(dict.load)）
  *   dict.options           // 下拉用 [{value,label,cssClass}]，字典未到时来自本地常量
@@ -32,7 +35,7 @@
 import { ref, computed } from 'vue'
 import { dictApi } from '@/api.js'
 
-/** dict_type → 本地兜底常量的全局缓存（同一 dict_type 只请求一次） */
+/** dict_type → 本地默认处理常量的全局缓存（同一 dict_type 只请求一次） */
 const store = ref({})
 const inflight = {}
 const loaded = {}
@@ -44,7 +47,7 @@ const failed = {}
  *  **字段名必须兼容驼峰与下划线两种形态**（2026-10-15 实测踩过）：
  *   后端 `/dict/data/list` 返回的是 **Jackson 默认驼峰**（dictValue/dictLabel/cssClass/delFlag），
  *   而库里列名是下划线（dict_value/dict_label/css_class/del_flag）。
- *   只按下划线取值 ⇒ 全部读成 undefined ⇒ 字典项全空 ⇒ 界面比不收口更糟。
+ *   只按下划线取值 ⇒ 全部读成 undefined ⇒ 字典项全空 ⇒ 界面比不办结更糟。
  */
 function toOptions(rows) {
   return (rows || [])
@@ -110,7 +113,7 @@ async function fetchDict(dictType) {
 
 /**
  * @param {string} dictType 字典类型，如 'wf_node_multi_type'
- * @param {object} fallback 本地兜底常量（必填 —— 它是"零风险"的保障）
+ * @param {object} fallback 本地默认处理常量（必填 —— 它是"零风险"的保障）
  */
 export function useDict(dictType, fallback) {
   const fbOptions = constToOptions(fallback)
@@ -141,7 +144,7 @@ export function useDict(dictType, fallback) {
     if (inflight[dictType]) return inflight[dictType]
     inflight[dictType] = fetchDict(dictType)
       .then((rows) => {
-        // 空数组视为"该字典未配置" ⇒ 保持本地兜底，不让下拉变空
+        // 空数组视为"该字典未配置" ⇒ 保持本地默认处理，不让下拉变空
         if (rows.length) {
           store.value = { ...store.value, [dictType]: rows }
           loaded[dictType] = true
@@ -203,7 +206,7 @@ export async function preloadBuiltinDicts(types) {
         ok++
       }
     }
-    // 批量没覆盖到的（该类型被闸门剔除 / 后端版本较旧）⇒ 逐个补拉
+    // 批量没覆盖到的（该类型被校验剔除 / 后端版本较旧）⇒ 逐个补拉
     const rest = list.filter((t) => !loaded[t])
     if (!rest.length) return ok
     return ok + await loadOneByOne(rest)
@@ -216,7 +219,7 @@ export async function preloadBuiltinDicts(types) {
 }
 
 /**
- * 逐个拉取（批量通道不可用时的兜底，也是改造前的原有行为）。
+ * 逐个拉取（批量通道不可用时的默认处理，也是改造前的原有行为）。
  *
  *  必须**限并发**：第 4 批后待预热的有 67 个字典，Promise.all 一把梭就是 67 个并发请求，
  *    登录首屏直接把浏览器连接池和后端打满（表现为其它接口排队、首屏明显变慢）。
@@ -244,7 +247,7 @@ async function loadOneByOne(list) {
   return ok
 }
 
-/** 需要全局预热的内置字典（第 3 批：状态展示口径） */
+/** 需要全局预热的内置字典（第 3 批：状态展示规则） */
 export const PRELOAD_DICT_TYPES = ['bill_status_display']
 
 /**

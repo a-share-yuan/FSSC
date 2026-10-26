@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * useKeyboard - 全局快捷键 composable
  * 支持注册全局快捷键，自动清理监听

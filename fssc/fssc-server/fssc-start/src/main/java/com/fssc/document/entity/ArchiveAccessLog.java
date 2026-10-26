@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.document.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -26,7 +29,7 @@ public class ArchiveAccessLog implements Serializable {
     /** 档案ID */
     private Long archiveId;
 
-    /** 访问类型：以 {@code ArchiveAccessService.ACCESS_TYPES}（READ/COPY/VIEW）为准，列注释里的 DOWNLOAD/PRINT 无写入点 */
+    /** 访问类型：以 {@code ArchiveAccessService.ACCESS_TYPES}（READ/COPY/VIEW）为准，列注释里的 DOWNLOAD/PRINT 无写入位置 */
     private String accessType;
 
     /** 访问原因 */

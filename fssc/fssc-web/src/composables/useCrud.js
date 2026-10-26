@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * useCrud — 通用 CRUD composable（P2-2 交互一致性）。
  * 消除 26 个自造 CRUD 页面重复的 load/create/update/delete/export/batch 逻辑。
@@ -88,7 +91,11 @@ export function useCrud(opts) {
 
   async function toggle(row) {
     try {
-      await api.enable(row.id, row.status === 'NORMAL')
+      // api.enable(id, enable) 的第二个参数是「目标状态」而不是「当前是否启用」：原写法把
+      // status==='NORMAL' 直接传进去，启用行传 true、停用行传 false ⇒ 两侧都写回原值，按钮点了不变。
+      // ACTIVE/ENABLED 是同类启用码（客户核准写 ACTIVE），一并视为已启用。
+      const active = ['NORMAL', 'ACTIVE', 'ENABLED'].includes(row.status)
+      await api.enable(row.id, !active)
       ElMessage.success('已更新')
       await load()
     } catch (e) {

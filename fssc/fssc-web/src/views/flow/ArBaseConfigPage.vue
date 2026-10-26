@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -10,7 +13,7 @@
       </div>
     </template>
 
-    <!-- 页签常驻、只在这三个依赖系统参数的页签取数失败时明示原因：
+    <!-- 页签常驻、只在这三个依赖系统参数的页签查询失败时明示原因：
          把入口整个藏起来会让人以为功能不存在，比报一次错更难排查。 -->
     <el-alert v-if="denied" type="warning" :closable="false" show-icon style="margin-bottom: 8px"
       :title="$t('flow.baseCfg.deniedTip')" />

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 单据冷热分离归档服务：把终态超期的报销单从 {@code exp_bill*} 热表整体搬到 {@code exp_bill*_cold}
+ * 单据冷热分离归档服务：把最终状态超期的报销单从 {@code exp_bill*} 热表整体搬到 {@code exp_bill*_cold}
  * 冷表，并落 {@code exp_cold_archive_log} 归档流水。
  *
  * <h3>租户上下文</h3>
@@ -46,7 +49,7 @@ public class ColdArchiveService {
 
     /** 归档月数阈值配置键 */
     private static final String CFG_COLD_MONTHS = "archive.cold_months";
-    /** 归档终态集合配置键（逗号分隔） */
+    /** 归档最终状态集合配置键（逗号分隔） */
     private static final String CFG_TERMINAL_STATUS = "archive.terminal_status";
     /** 归档开关配置键（0=关，1=开） */
     private static final String CFG_ENABLED = "archive.enabled";
@@ -72,7 +75,7 @@ public class ColdArchiveService {
     // ---------------- dryRun ----------------
 
     /**
-     * 按当前配置返回各租户"可搬"终态超期单据数（只 SELECT COUNT，不搬）。
+     * 按当前配置返回各租户"可搬"最终状态超期单据数（只 SELECT COUNT，不搬）。
      * 返回结构：{@code {total, tenants:[{tenantId,enabled,coldMonths,count}, ...]}}。
      */
     public Map<String, Object> dryRunCount() {

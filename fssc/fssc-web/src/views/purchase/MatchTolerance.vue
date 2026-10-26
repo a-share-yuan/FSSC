@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -75,7 +78,7 @@ const loadFailed = ref(false)
 const formRef = ref(null)
 const form = reactive({ companyId: null, amountPct: 0, amountAbs: 0, status: 'NORMAL' })
 
-// 校验规则唯一口径＝中央登记表（useFormRules）；页面不再本地手写规则对象
+// 校验规则唯一规则＝中央登记表（useFormRules）；页面不再本地手写规则对象
 const { rules: formRules } = useFormRules('MATCH_TOLERANCE')
 const { submit: guardSave } = useSubmitGuard(formRef)
 
@@ -125,7 +128,7 @@ function reload() {
 }
 
 onMounted(async () => {
-  // 公司树扁平化（与费用报销页同口径），供公司下拉选择
+  // 公司树扁平化（与费用报销页同一规则），供公司下拉选择
   try {
     const tree = (await orgApi.companyTree()) || []
     const flat = []

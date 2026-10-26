@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.receivable.controller;
 
 import com.fssc.common.core.Result;
@@ -61,7 +64,7 @@ public class RcBadDebtController {
      * 坏账核销（蓝图流程22，AR-16-2）：body {amount, reason, basisNo}。
      * 核销金额不能超过该客户已计提坏账准备余额；生成 借1231/贷1122 凭证并冲减应收余额。
      */
-    /** 坏账核销模板 Excel 导入（附件11.4.2，9列；EKP 仅推申请人，明细由模板导入——蓝图流程22） */
+    /** 坏账核销模板 Excel 导入（附件11.4.2，9列；OA 仅推申请人，明细由模板导入——蓝图流程22） */
     @RequiresPerm("receivable:overdue")
     @OperLog(module = "BAD_DEBT", operType = "INSERT", desc = "坏账核销模板Excel导入")
     @PostMapping(value = "/writeoff-import-excel", consumes = {"multipart/form-data"})

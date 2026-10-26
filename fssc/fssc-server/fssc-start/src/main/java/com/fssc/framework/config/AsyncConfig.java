@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.config;
 
 import org.springframework.context.annotation.Bean;
@@ -8,7 +11,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * 异步执行配置：为操作审计日志落库提供专用线程池，把 INSERT 从请求线程剥离出去，
+ * 异步执行配置：为操作审计日志写入数据库提供专用线程池，把 INSERT 从请求线程剥离出去，
  * 削平高并发下的写库热点（原 {@code OperLogAspect} 在请求线程内同步写 sys_oper_log/pf_oper_log）。
  *
  * <p>拒绝策略用 {@link ThreadPoolExecutor.CallerRunsPolicy}：队列满时回退到调用线程同步执行，

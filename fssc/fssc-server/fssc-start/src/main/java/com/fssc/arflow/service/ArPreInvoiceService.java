@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -47,7 +50,7 @@ public class ArPreInvoiceService {
     private final ConnectorFacade connector;
     private final com.fssc.system.service.ConfigService configService;
 
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /** 换票重开时作废行仍占用预制发票号：从该对账单已用最大序号续编，避免撞 uk_pre_no。 */
@@ -215,7 +218,7 @@ public class ArPreInvoiceService {
             payload.put("amount", inv.getAmount());
             payload.put("taxAmount", inv.getTaxAmount());
             payload.put("totalAmount", inv.getTotalAmount());
-            // P0-2 幂等键：同一预制发票号重复推送（如超时重发）不重复开票，回放首次结果
+            // P0-2 唯一键：同一预制发票号重复推送（如超时重发）不重复开票，回放首次结果
             ChannelResponse resp = connector.invokeWrite(GOLDEN_TAX_CATEGORY, payload,
                     "GOLDEN_TAX:" + com.fssc.framework.tenant.TenantContext.getTenantId() + ":" + inv.getPreInvoiceNo());
             if (resp == null || !resp.isOk()) {
@@ -243,7 +246,7 @@ public class ArPreInvoiceService {
         return inv;
     }
 
-    /** 金税回写（发票号/代码/日期回写并同步EBS）。 */
+    /** 金税回写（发票号/代码/日期回写并同步ERP）。 */
     @Transactional(rollbackFor = Exception.class)
     public ArPreInvoice writeback(Long id, String invoiceNo, String invoiceCode, LocalDate invoiceDate) {
         ArPreInvoice inv = require(id);
@@ -285,7 +288,7 @@ public class ArPreInvoiceService {
     public ArPreInvoice voidInvoice(Long id, String reason) {
         ArPreInvoice inv = require(id);
         if (List.of(ArPreInvoice.ST_VOIDED, ArPreInvoice.ST_RED_INVOICED).contains(inv.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "预制发票 " + inv.getPreInvoiceNo() + " 已是终态");
+            throw new BizException(ErrorCode.PARAM_INVALID, "预制发票 " + inv.getPreInvoiceNo() + " 已是最终状态");
         }
         String auditOldStatus = inv.getStatus();
         String auditOldRemark = inv.getRemark();
@@ -330,7 +333,7 @@ public class ArPreInvoiceService {
     /** 换票（蓝图 SCC_AR_06）：作废原票并按原对账单重新生成。 */
     @Transactional(rollbackFor = Exception.class)
     public List<ArPreInvoice> exchange(Long id, String reason) {
-        // 换票要说明原因，原票作废记录与重开新票都要能对上（税务稽核看这条留痕）
+        // 换票要说明原因，原票作废记录与重开新票都要能对上（税务稽核看这条记录）
         if (reason == null || reason.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "换票原因必填");
         }

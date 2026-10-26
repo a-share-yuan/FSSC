@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.audit.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,7 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 审计留痕服务（P0-3）。
+ * 审计记录服务（P0-3）。
  * 记录关键业务变更 before/after，只追加不更新；提供分页查询与按单据导出。
  */
 @Slf4j

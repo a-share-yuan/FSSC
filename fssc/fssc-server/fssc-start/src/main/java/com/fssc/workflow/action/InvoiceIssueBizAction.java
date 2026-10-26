@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.invoice.entity.InvInvoice;
@@ -31,7 +34,7 @@ public class InvoiceIssueBizAction implements WfBizAction {
     private final RcReceivableMapper receivableMapper;
     private final VoucherService voucherService;
     private final com.fssc.customer.mapper.CrmCustomerMapper crmCustomerMapper;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override

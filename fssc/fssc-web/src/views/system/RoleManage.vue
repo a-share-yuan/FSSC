@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="role-manage">
     <el-card>
@@ -66,7 +69,7 @@
       </template>
     </el-dialog>
 
-    <!-- Menu Assignment Dialog（2026-09-17 重构：参照行业做法/同类系统——大弹窗，左目录树（搜索/展开收起）+ 右已选权限清单） -->
+    <!-- Menu Assignment Dialog（2026-09-17 重构：大弹窗，左目录树（搜索/展开收起）+ 右已选权限清单） -->
     <el-dialog v-model="menuDialogVisible" :title="$t('system.role.btnAssignMenu')" width="920px" top="6vh">
       <SkeletonDetail v-if="menuLoading" :rows="6" />
       <div v-else class="menu-assign">
@@ -100,7 +103,7 @@
               </template>
             </el-tree>
           </div>
-          <!-- 右：已选权限清单（按一级业务域分组，参照行业方案模块归类） -->
+          <!-- 右：已选权限清单（按一级业务域分组，模块归类） -->
           <div class="assign-right">
             <div class="selected-head">
               <span>{{ $t('system.role.statSelectedPerms', { v1: checkedList.length }) }}</span>
@@ -238,7 +241,7 @@ function leafOnlyIds(ids) {
   return (ids || []).filter((id) => !parentIds.has(id))
 }
 
-/* ---- 右侧已选清单：按一级业务域分组（参照行业方案按模块归类） ---- */
+/* ---- 右侧已选清单：按一级业务域分组（按模块归类） ---- */
 const rightKeyword = ref('')
 const foldedGroups = ref(new Set())
 
@@ -396,6 +399,14 @@ async function onSaveMenus() {
   const checked = menuTreeRef.value?.getCheckedKeys() || []
   const halfChecked = menuTreeRef.value?.getHalfCheckedKeys() || []
   const allIds = [...checked, ...halfChecked]
+  // 零授权角色会让绑定它的账号登录即被 fail-closed 拒绝（权限码为空 + 有角色），先拦一次
+  if (!allIds.length) {
+    try {
+      await ElMessageBox.confirm(
+        `角色 [${currentRole.value?.roleName}] 未勾选任何菜单权限。保存后，仅拥有该角色的账号将无法登录（提示“权限加载异常”）。确认继续？`,
+        t('system.role.btnAssignMenu'), { type: 'warning', confirmButtonText: t('common.save'), cancelButtonText: t('common.cancel') })
+    } catch { return }
+  }
   menuSaving.value = true
   try {
     await roleApi.assignMenus(currentRole.value.id, allIds)

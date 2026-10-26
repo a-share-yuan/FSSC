@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -141,13 +144,14 @@ public class ImageService {
     private void publishBillImageEvent(String bizType, Long bizId, String imageStatus) {
         // 缺陷修复（H-0）：原仅 bizType=EXP_CLAIM 发布事件，报销/付款/申请等单据
         // （CLAIM/TRAVEL/TRAIN/PREPAY/SETTLE/LOAN/REPAY/PAY/APPLY...）影像上传后
-        // exp_bill.image_status 恒 NONE。现对所有 exp_bill 域单据类型发布（幂等：监听器仍按 billId 回写）。
+        // exp_bill.image_status 恒 NONE。现对所有 exp_bill 域单据类型发布（去重：监听器仍按 billId 回写）。
         if (bizId == null || !isExpBillBizType(bizType)) {
             return;
         }
         eventPublisher.publishEvent(new BillImageEvent(bizId, imageStatus, bizType));
     }
 
+    /** 该 bizType 的业务单据是否落在 exp_bill 表（与 WfTaskController.EXP_BILL_TYPES 同一规则，另含 EXP_CLAIM 别名） */
     public static boolean isExpBillBizType(String bizType) {
         if (bizType == null) {
             return false;
@@ -196,6 +200,7 @@ public class ImageService {
         imgBatchMapper.updateById(update);
     }
 
+    /** 调阅审核合法最终状态/回退值（与影像任务页前端、replaceScan 回写同一规则） */
     private static final List<String> REVIEW_STATUS_ALLOWED = List.of("PENDING", "OK", "REJECTED");
 
     /**
@@ -205,8 +210,8 @@ public class ImageService {
      * ② 存在性校验——批次不存在时不再"静默成功"；
      * ③ 状态机——OK/REJECTED 只允许从「待审核」判定，已判定批次不可重复判定
      *    （需更正请走影像替扫/重采集，replaceScan 会回写 PENDING 重新进入待审核）；
-     *    PENDING 回退仅内部链路使用，回退不产生终态语义，放行；
-     * ④ 留痕——判定时记录审核人/审核时间（checkUserId/checkTime），
+     *    PENDING 回退仅内部链路使用，回退不产生最终状态语义，放行；
+     * ④ 记录——判定时记录审核人/审核时间（checkUserId/checkTime），
      *    操作层另有 @OperLog 影像任务调阅审核回写日志。
      */
     public void setReviewStatus(Long batchId, String reviewStatus) {
@@ -244,7 +249,7 @@ public class ImageService {
 
     /**
      * P0-5 影像替扫（TC10）：扫描件错误时的替换链路。
-     * 旧影像页面标记 REPLACED（文件本体保留在文件存储，留痕可审计），
+     * 旧影像页面标记 REPLACED（文件本体保留在文件存储，记录可审计），
      * 新影像上传后以相同批次/页码插入，供审批流后续可见。
      * @return 新影像页 ID；@param toReplaceId 被替换的旧影像页 ID
      */
@@ -257,7 +262,7 @@ public class ImageService {
         if (newFile == null || newFile.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "未选择新的影像文件");
         }
-        // 1. 旧影像留痕：置 REPLACED，保留原 fileId 指向的原文件（不物理删除）
+        // 1. 旧影像记录：置 REPLACED，保留原 fileId 指向的原文件（不物理删除）
         ImgFile oldUpd = new ImgFile();
         oldUpd.setId(old.getId());
         oldUpd.setVerifyStatus("REPLACED");

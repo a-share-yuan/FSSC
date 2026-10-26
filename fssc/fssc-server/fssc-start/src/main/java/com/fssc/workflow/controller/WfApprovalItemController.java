@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
+ * 流程审批项（{@code /api/tenant/wf/approval-item/**}）。
  *
  * <p><b>权限码的选择</b>：审批项是流程节点配置的一部分，与 {@code wf_node_config} 同族，
  * 故复用 {@code wf:config:list} / {@code wf:config:update}，<b>不新造</b> {@code wf:approval-item:*}

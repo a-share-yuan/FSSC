@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <el-card>
@@ -108,7 +111,7 @@
             {{ $t('gl.special.manualOffsetHint') }}</span>
         </div>
         <!-- 手工成对录入：一条金额 → 来账(应收) + 往账(应付) 两条镜像分录，方向由表单固定，
-             提交即成对相等，落后端 assertPairEqual；必填口径见 manualRules 注释。 -->
+             提交即成对相等，落后端 assertPairEqual；必填规则见 manualRules 注释。 -->
         <el-form v-if="canManualPair" v-show="manualVisible" ref="manualFormRef" :model="manualForm"
                  :rules="manualRules" inline style="margin-bottom:10px">
           <el-form-item :label="$t('gl.ledger.colPeriod')" prop="period">
@@ -199,7 +202,7 @@
             <template #default="{ row }">{{ row.voucherNo || '—' }}</template>
           </el-table-column>
           <!-- R5-D-167：后端 GlJournalController POST /{id}/reverse（红字反向凭证/草稿作废，带守卫）原在 UI 无入口，
-               本列补齐；仅 POSTED 行可冲销（服务端亦只放行 POSTED→REVERSED，原因必填留痕）。 -->
+               本列补齐；仅 POSTED 行可冲销（服务端亦只放行 POSTED→REVERSED，原因必填记录）。 -->
           <el-table-column :label="$t('common.operation')" width="90" fixed="right">
             <template #default="{ row }">
               <el-button v-if="row.status === 'POSTED'" link size="small" type="warning" @click="doJournalReverse(row)">{{ $t('gl.special.btnReverse') }}</el-button>
@@ -222,10 +225,10 @@
           <span v-else-if="!canLoadPeriod" class="period-note">{{ $t('gl.special.warnNoPeriodRead') }}</span>
           <!-- 反结账入口：输入期间 + 二次确认，回退后该期间重新开放记账；后端校验权限与下一期间状态 -->
           <el-button type="warning" @click="doMonthUnclose">{{ $t('gl.special.btnUnclose') }}</el-button>
-          <!-- 损益结转向导：选择期间 → 确认 → 展示后端返回结果（幂等拒绝时原样提示「该期间已结转」） -->
+          <!-- 损益结转向导：选择期间 → 确认 → 展示后端返回结果（去重拒绝时原样提示「该期间已结转」） -->
           <el-button type="primary" plain @click="openProfitCarry">{{ $t('gl.special.tabCarry') }}</el-button>
         </div>
-        <!-- R5-D-215：月结检查闸清单——后端三端点（生成清单 / 逐项完成 / 执行月结）接入本页 -->
+        <!-- R5-D-215：月结检查校验清单——后端三端点（生成清单 / 逐项完成 / 执行月结）接入本页 -->
         <div v-if="canCloseCheck" class="close-check">
           <div class="cc-head">
             <b>{{ $t('gl.special.checklistTitle') }}</b>
@@ -280,8 +283,8 @@
           </el-table-column>
           <!-- D-DEC-191（证据 12-31:169）：gl_month_close 表上没有 proc_inst_id/approve_time/audit_time 三列
                （加列属 DDL 裁决，注释态 SQL 见 GlMonthClose 实体类尾），后端 page() 已按
-               wf_instance(biz_type='GL_MONTH_CLOSE', biz_id=月结单ID) ＋ wf_task_history 末节点留痕
-               做读侧富化，这里把两个方向摊开：这张月结单挂在哪条审批流上、谁在何时批的。 -->
+               wf_instance(biz_type='GL_MONTH_CLOSE', biz_id=月结单ID) ＋ wf_task_history 末节点记录
+               做读侧补充，这里把两个方向摊开：这张月结单挂在哪条审批流上、谁在何时批的。 -->
           <el-table-column :label="$t('gl.special.colFlowName')" width="150" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               <span v-if="row.wfProcInstId">{{ wfFlowLabel(row.wfFlowStatus) }} · {{ shortProc(row.wfProcInstId) }}</span>
@@ -483,7 +486,7 @@ import { useRoute } from 'vue-router'
 import { readBillDeepLink } from '../../utils/bizEntry'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { glexApi, glApi, orgApi, mdApi, masterApi, periodApi } from '../../api'
-// R5-D-215 / R5-D-154：月结检查闸三端点与计提落账挂接核查端点未收进 api.js（该文件为多页共享面，本轮不改），
+// R5-D-215 / R5-D-154：月结检查校验三端点与计提落账挂接核查端点未收进 api.js（该文件为多页共享面，本轮不改），
 // 走本仓既有的复用路径——request.js 再导出的同一个 http 实例（baseURL /api、鉴权头、响应解包与 api.js 完全一致），
 // TaxDiffTab/ArchiveBoard/CorpPay 等页即用此法。
 import { http } from '../../request'
@@ -505,7 +508,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
+// 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 const glSpecialCm = ref(null)
@@ -515,7 +518,7 @@ const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
 /**
- * 页签 → 单据域（D-DEC-127/139/148 的「追溯」半）：追溯抽屉按 (bizType, bizId) 锚 wf_instance，
+ * 页签 → 单据域（D-DEC-127/139/148 的「追溯」半）：追溯抽屉按 (bizType, bizId) 关联 wf_instance，
  * 缺了域就只能让服务端拿裸主键去猜单据（那正是 152 把别人的报销单渲染出来的路径）。
  * GL 专项一张表可能挂多个流程域 ⇒ 单靠页签定不下来的（journal 按 entry_type 分 5 域、
  * salary 的计提/发放共用同一行）见 {@link traceBizOf}。
@@ -574,7 +577,7 @@ const isSingle = computed(() => !!props.tab)
 const taxPeriod = ref('')
 const openPeriod = ref('')
 const canLoadPeriod = hasPerm('md:period:list')
-// 默认期间的来源照实标注：取到开账期间 / 期间表全已关退回最后一期 / 无权限或取数失败退回系统当月
+// 默认期间的来源照实标注：取到开账期间 / 期间表全已关退回最后一期 / 无权限或查询失败退回系统当月
 const periodSource = ref(t('gl.special.periodSysMonth'))
 const tab = ref(props.tab || 'tax')
 const loading = ref(false)
@@ -611,7 +614,7 @@ const consolidateData = computed(() => pagerConsolidate.pagedData.value)
 function deptName(id) { const d = depts.value.find((x) => x.id === id); return d ? d.name : (id || '—') }
 function companyName(id) { const c = companies.value.find((x) => x.id === id); return c ? c.name : (id || '—') }
 // R5-D-157：业务表历史数据里「科目」列混存 id 与编码（journal 侧存的是编码串），原实现只按 id 查、
-// 查不到直接回吐裸值。现按 id → 编码两腿查找，都取不到才如实报「科目已失效」——界面不再出现
+// 查不到直接回吐裸值。现按 id → 编码两环节查找，都取不到才如实报「科目已失效」——界面不再出现
 // 222105 这类无上下文的裸码。历史 code 串一次性映射回 id 属数据治理，见报告转人工清单。
 function subjectName(id) {
   const key = id == null ? '' : String(id)
@@ -628,7 +631,7 @@ const statusMap = STATUS_LABEL
 function stLabel(s) { return statusMap[s] || s }
 function stTagType(s) { return STATUS_TYPE[s] || 'info' }
 
-// D-DEC-191：GL_MONTH_CLOSE 审批流的读侧富化展示（实例号/流程状态/末节点复核人）
+// D-DEC-191：GL_MONTH_CLOSE 审批流的读侧补充展示（实例号/流程状态/末节点复核人）
 function wfFlowLabel(s) {
   return ({ RUNNING: t('gl.refund.stApproving'), APPROVED: t('gl.special.stPassed'), REJECTED: t('gl.refund.stRejected'), CANCELLED: t('gl.ledger.stVoided'), TERMINATED: t('gl.special.stTerminated') })[s] || s || '—'
 }
@@ -642,7 +645,7 @@ const mcForm = ref({ period: '', companyId: null })
 const consForm = ref({ period: '' })
 const masterForm = ref({ period: '', type: 'SUBJECT', action: 'ADD', subjectCode: '', subjectName: '', description: '' })
 const masterFormRef = ref(null)
-// 与后端 GlSharedMasterService.submit 同口径：期间/编码必填，停用只需编码（名称可空）
+// 与后端 GlSharedMasterService.submit 同一规则：期间/编码必填，停用只需编码（名称可空）
 const masterRules = computed(() => ({
   period: [...commonRules.required(t('gl.special.errPeriodRequired')), { pattern: /^\d{6}$/, message: t('gl.special.errPeriodFmt'), trigger: 'blur' }],
   subjectCode: commonRules.required(t('gl.special.errMasterCode')),
@@ -665,7 +668,7 @@ const masterPeriodClosed = computed(() => isClosedPeriod(masterForm.value.period
 
 const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// 期间类必填项闸门：不得用 || '202609' 兜底代填（会让用户以为提交的是当前期间，实际写进历史期间）。
+// 期间类必填项校验：不得用 || '202609' 默认处理代填（会让用户以为提交的是当前期间，实际写进历史期间）。
 // 返回归一化后的 yyyyMM；为空或格式不符时提示并返回 null，调用方据此中止提交。
 function periodOrWarn(raw) {
   const p = String(raw ?? '').trim()
@@ -677,7 +680,7 @@ function periodOrWarn(raw) {
 /**
  * R5-D-166：落账／关账类写动作的统一二次确认（除计提外，本页写按钮原先一键即发，误点即成账）。
  * 期间／金额／类型等关键要素在框内回显（ElMessageBox 不渲染换行，故单行以「；」拼接）；
- * 用户取消返回 false，调用方立即 return，不产生任何写入。与 R5-D-152 的确认口径同族。
+ * 用户取消返回 false，调用方立即 return，不产生任何写入。与 R5-D-152 的确认规则同族。
  */
 async function confirmWrite(title, lines) {
   try {
@@ -687,7 +690,7 @@ async function confirmWrite(title, lines) {
   } catch { return false }
 }
 
-// R5-D-118：列表查询带上「税金期间」选择值（为空不传，服务端按原口径返回；后端 GlTaxProvisionService.page
+// R5-D-118：列表查询带上「税金期间」选择值（为空不传，服务端按原规则返回；后端 GlTaxProvisionService.page
 // 以 StringUtils.hasText(period) 判存，空串与 null 等价不附加过滤）。
 function loadTax() {
   try { return pagerTax.load(async ({ pageNum, pageSize }) => { const d = await glexApi.taxPage(pageNum, pageSize, String(taxPeriod.value ?? '').trim(), '', deepKeyword.value); taxs.value = d.list || []; return { list: d.list || [], total: d.total || 0 } }).catch((e) => ElMessage.error(e.message)) } catch (e) { /* noop */ }
@@ -708,8 +711,8 @@ async function doProvision() {
   // 界面侧没有冲销出口，属不可回滚的业务事实，故必须先二次确认，
   // 并把「落到哪个期间、生成几条、会起流程」在框内讲清（原先无任何确认，误点即成账）。
   try {
-    // R5-D-119：出处句必须与「所选期间」同源——原句直接引用 periodSource/openPeriod 的默认值口径，
-    // 与用户改选后的 period 各说各话（如默认 202610 而所选 202612），框内成账口径自相矛盾会误导确认。
+    // R5-D-119：出处句必须与「所选期间」同源——原句直接引用 periodSource/openPeriod 的默认值规则，
+    // 与用户改选后的 period 各说各话（如默认 202610 而所选 202612），框内成账规则自相矛盾会误导确认。
     // 三态：open 不可读（显式免责，不硬禁用）/ 与所选一致 / 与所选不一致（确认按钮点名所选期间）。
     const sel = period
     const open = String(openPeriod.value ?? '').trim()
@@ -733,7 +736,7 @@ async function doProvision() {
   } catch (e) { ElMessage.error(t('gl.special.taxProvisionFail') + (e?.message || t('gl.special.unknownError'))) } finally { provisioning = false }
 }
 // D-DEC-440：原「缴纳」入口（POST /glex/tax-provision/pay → GL_TAX_PAY）不再生成任何付款动作，
-// 缴款事实由对公付款通道产生 ⇒ 入口与调用腿一并摘掉，只留上方那句通道指引。
+// 缴款事实由对公付款通道产生 ⇒ 入口与调用环节一并摘掉，只留上方那句通道指引。
 async function doCalculate() {
   const period = periodOrWarn(salaryForm.value.period)
   if (!period) return
@@ -775,7 +778,7 @@ async function doPost(row) { try { await glexApi.interPost(row.id); ElMessage.su
 /**
  * X-52（D-DEC-294）内部往来对冲手工成对录入。
  * 权限码取后端真值：GlInterOffsetController.create 的 @RequiresPerm("gl:inter:offset")（与"生成抵消""抵消记账"同一码）。
- * 必填口径与后端一致、不另立规则：GlInterOffsetService.create:155-166 只校验
+ * 必填规则与后端一致、不另立规则：GlInterOffsetService.create:155-166 只校验
  *   ① 期间非空（本页期间统一 yyyyMM，沿用本页 periodOrWarn/masterRules 的同一格式判定）
  *   ② 两条分录金额 > 0 且成对相等 —— 表单只有一个金额字段，镜像两条分录共用它，结构上必然相等
  *   ③ 方向 ∈ {RECEIVABLE, PAYABLE} —— 由表单固定，不由用户选
@@ -791,7 +794,7 @@ const manualRules = computed(() => ({
   amount: commonRules.amount(t('gl.special.errOffsetAmount')),
 }))
 function toggleManualPair() {
-  // 首次展开把期间预填为当前开账期间（与税金计提同一默认口径），不预填金额，也不代为提交
+  // 首次展开把期间预填为当前开账期间（与税金计提同一默认规则），不预填金额，也不代为提交
   if (!manualVisible.value && !manualForm.value.period) manualForm.value.period = openPeriod.value || ''
   manualVisible.value = !manualVisible.value
 }
@@ -802,9 +805,9 @@ async function doManualPair() {
   const amount = Number(manualForm.value.amount)
   const receivableCompanyId = manualForm.value.receivableCompanyId || null
   const payableCompanyId = manualForm.value.payableCompanyId || null
-  // R5-D-159：同主体自我抵消拦在界面侧（后端 create 同批加 assertDistinctCompanies 兜底）——
-  // 两条镜像分录公司相同＝对自身抵消，属上下文矛盾的废单（存量已有 3 条同主体记录，含 0 元行）。
-  // 公司留空（双 null）维持原口径不受影响，仍交后端按原逻辑处理。
+  // R5-D-159：同主体自我抵消拦在界面侧（后端 create 同批加 assertDistinctCompanies 默认处理）——
+  // 两条镜像分录公司相同＝对自身抵消，属上下文矛盾的废单（历史已有 3 条同主体记录，含 0 元行）。
+  // 公司留空（双 null）维持原规则不受影响，仍交后端按原逻辑处理。
   if (receivableCompanyId && payableCompanyId && String(receivableCompanyId) === String(payableCompanyId)) {
     ElMessage.warning(t('gl.special.errSelfOffset'))
     return
@@ -864,7 +867,7 @@ async function doJournal() {
 
 /**
  * R5-D-167：一般记账冲销入口。后端 GlJournalController POST /{id}/reverse（GlJournalService.reverse）
- * 仅放行 POSTED（→ REVERSED，红字反向凭证作废原凭证），原因必填并写入审计留痕。
+ * 仅放行 POSTED（→ REVERSED，红字反向凭证作废原凭证），原因必填并写入审计记录。
  * 权限码暂复用 gl:journal:generate（独立码 gl:journal:reverse 待 sys_menu 种子扩码，见报告裁决项）。
  */
 async function doJournalReverse(row) {
@@ -893,8 +896,8 @@ async function doJournalReverse(row) {
 async function doMonthClose() {
   const period = periodOrWarn(mcForm.value.period)
   if (!period) return
-  // R5-D-215：月结前先过检查闸——清单为空则先引导「生成检查清单」后中止，有未办结项则列出未完成项并中止。
-  // 服务端 GlMonthCloseService 的闸门硬校验一字未改，这里不放宽、不绕过，只是把拦阻原因提前讲清、把办结入口给到岗位。
+  // R5-D-215：月结前先过检查校验——清单为空则先引导「生成检查清单」后中止，有未办结项则列出未完成项并中止。
+  // 服务端 GlMonthCloseService 的校验硬校验一字未改，这里不放宽、不绕过，只是把拦阻原因提前讲清、把办结入口给到岗位。
   if (canCloseCheck) {
     let list = []
     try { list = await fetchCloseCheck() } catch (e) { ElMessage.error(e.message); return }
@@ -912,7 +915,7 @@ async function doMonthClose() {
       return
     }
   }
-  // R5-D-166：写动作两步确认＋要素回显（检查闸通过后、提交前）
+  // R5-D-166：写动作两步确认＋要素回显（检查校验通过后、提交前）
   if (!(await confirmWrite(t('gl.special.confirmMonthClose'), [
     t('gl.special.ctxPeriodCompany', { v1: period, v2: mcCompLabel.value }),
     t('gl.special.bodyMonthClose'),
@@ -922,7 +925,7 @@ async function doMonthClose() {
     // D-DEC-189 的前端半（登记归 189 连带，不占新号）：本按钮只做「试算平衡 + 发起 GL_MONTH_CLOSE 审批」，
     // 关账时点在末节点审批通过之后（服务端 GlMonthCloseService 发起态已置 RUNNING，resultMsg 也写明
     // 「期间尚未关账——末节点通过后自动关账」）。原文案不分状态一律报「月结完成」，等于在提单同秒向
-    // 总账会计宣称已关账，与先审后关口径矛盾，会让人据此停止记账、并误以为审批只是事后追认。
+    // 总账会计宣称已关账，与先审后关规则矛盾，会让人据此停止记账、并误以为审批只是事后追认。
     const st = String(e?.status || '').toUpperCase()
     if (st === 'CLOSED') ElMessage.success(t('gl.special.msgMonthClosed') + (e.resultMsg || ''))
     else if (st === 'RUNNING') ElMessage.success(t('gl.special.msgMonthCloseFlow') + (e.resultMsg || ''))
@@ -933,20 +936,20 @@ async function doMonthClose() {
 }
 
 /**
- * R5-D-215：月结检查闸清单（生成清单 → 逐项完成 → 执行月结）。
+ * R5-D-215：月结检查校验清单（生成清单 → 逐项完成 → 执行月结）。
  * 后端三端点已就位（GlPeriodOpsController，权限码与月结同码 gl:monthclose:close）：
  *   GET  /api/tenant/gl/close-check/list?period&companyId  当期清单
  *   POST /api/tenant/gl/close-check/seed?period&companyId  生成 8 项（同名项已存在则跳过，可重复点）
  *   POST /api/tenant/gl/close-check/check  body={id,done}  勾项 / 回退
- * 公司口径必须与月结一致（未选公司即后端默认 1），三端点与「月结」按钮传同一个值——
- * 否则清单建在 A 公司、闸门查的是 B 公司，检查闸永远过不去（GlMonthCloseService:248/285-300）。
+ * 公司范围必须与月结一致（未选公司即后端默认 1），三端点与「月结」按钮传同一个值——
+ * 否则清单建在 A 公司、校验查的是 B 公司，检查校验永远过不去（GlMonthCloseService:248/285-300）。
  */
 const canCloseCheck = hasPerm('gl:monthclose:close')
 const closeCheck = ref([])
 const ccLoading = ref(false)
 const ccSeeding = ref(false)
 const ccTicking = ref(false)
-// 清单跟随月结表单的期间与公司；期间未满 6 位时不发请求（与 periodOrWarn 同口径）
+// 清单跟随月结表单的期间与公司；期间未满 6 位时不发请求（与 periodOrWarn 同一规则）
 const ccQuery = computed(() => {
   const p = String(mcForm.value.period ?? '').trim()
   if (!/^\d{6}$/.test(p)) return null
@@ -1015,7 +1018,7 @@ watch([() => mcForm.value.period, () => mcForm.value.companyId], () => { loadClo
  * R5-D-154：税金计提落账挂接核查（只读）。
  * 后端 GET /api/tenant/glex/tax-provision/link-check?period（GlTaxProvisionService.linkCheck，权限 gl:taxprov:list）
  * 逐条报出 ①审批流 ②凭证 ③总账分录行数 ④缴款流，并给出「已入账但总账无分录」的条数与金额；
- * 本页只呈现，不补记、不改账——存量应落未落的处置由人工裁决腿负责。
+ * 本页只呈现，不补记、不改账——历史应落未落的处置由人工裁决环节负责。
  */
 const canLinkCheck = hasPerm('gl:taxprov:list')
 const lcVisible = ref(false)
@@ -1115,7 +1118,7 @@ async function doProfitCarry() {
     pcVisible.value = false
     loadMonthClose()
   } catch (e) {
-    // 幂等拒绝（该期间已结转）等后端校验失败原样提示，不关闭弹窗便于改期间重试
+    // 去重拒绝（该期间已结转）等后端校验失败原样提示，不关闭弹窗便于改期间重试
     ElMessage.error(e.message)
   } finally { pcLoading.value = false }
 }
@@ -1193,7 +1196,7 @@ async function reload() {
   } finally {
     loading.value = false
   }
-  loadCloseCheck() // R5-D-215：刷新时同步带回当期检查闸清单
+  loadCloseCheck() // R5-D-215：刷新时同步带回当期检查校验清单
 }
 
 /**
@@ -1243,7 +1246,7 @@ async function loadMasters() {
 }
 /**
  * D-DEC-140：解析「当前开账期间」（yyyyMM）。
- * 口径：md_period 中状态非 CLOSED 的最早一期＝仍在入账的期间（月结是自前往后关账）；
+ * 规则：md_period 中状态非 CLOSED 的最早一期＝仍在入账的期间（月结是自前往后关账）；
  * 全期已关时退回最后一期，接口不可用/无权限时退回真实时钟当月。
  * 只用于填默认值，不改变 periodOrWarn 的必填校验，也不代为提交。
  */
@@ -1256,7 +1259,7 @@ async function loadOpenPeriod() {
       const list = res?.list || res?.records || []
       // R5-D-169：期间字段名按 MdPeriod 实体真身为 periodYear / periodMonth（会计期间表列 period_year/period_month）；
       // 原读 p.year / p.month 恒为 undefined ⇒ toYm 产出 "undefinedundefined"、被 /^\d{6}$/ 全滤掉，
-      // 于是本函数永远退回「系统当月」，六个页签根本拿不到当前打开期间。year/month 仅作容错兜底保留。
+      // 于是本函数永远退回「系统当月」，六个页签根本拿不到当前打开期间。year/month 仅作容错默认处理保留。
       const toYm = (p) => {
         const y = Number(p.periodYear ?? p.year)
         const m = Number(p.periodMonth ?? p.month)
@@ -1273,10 +1276,10 @@ async function loadOpenPeriod() {
       else if (all.length) { ym = all[all.length - 1]; periodSource.value = t('gl.special.periodLastClosed') }
       else periodSource.value = t('gl.special.periodSysMonth')
       // R5-D-169：同一份期间表读数顺带记下已结账期间（status=CLOSED），供六个页签提交钮的禁用态复用；
-      // 无权限或取数失败时集合为空，按钮维持旧行为（服务端仍会拒）。
+      // 无权限或查询失败时集合为空，按钮维持旧行为（服务端仍会拒）。
       closedPeriods.value = list.filter((p) => String(p.status || '').toUpperCase() === 'CLOSED')
         .map(toYm).filter((s) => /^\d{6}$/.test(s))
-    } catch { periodSource.value = t('gl.special.periodSysMonth') /* 取数失败退回真实时钟当月，来源标注随之改口 */ }
+    } catch { periodSource.value = t('gl.special.periodSysMonth') /* 查询失败退回真实时钟当月，来源标注随之改口 */ }
   }
   openPeriod.value = ym
   if (!taxPeriod.value) taxPeriod.value = ym
@@ -1288,9 +1291,9 @@ async function loadOpenPeriod() {
 }
 
 // R5-D-148：首屏不再串行等主数据。依赖核对过两件事——
-// 1) reload() 的七枚表腿（税金/薪酬/内部往来/记账/月结/GL主数据/合并报表）只传分页＋关键字，
-//    既不读 openPeriod 也不读 depts/companies/subjects，故表格取数不依赖主数据与期间；
-// 2) 唯一吃期间的末腿 loadCloseCheck() 取的是 mcForm.period，而本页已 watch 该字段，
+// 1) reload() 的七枚表环节（税金/薪酬/内部往来/记账/月结/GL主数据/合并报表）只传分页＋关键字，
+//    既不读 openPeriod 也不读 depts/companies/subjects，故表格查询不依赖主数据与期间；
+// 2) 唯一吃期间的末环节 loadCloseCheck() 取的是 mcForm.period，而本页已 watch 该字段，
 //    loadOpenPeriod() 回填期间后它会自动补跑，selects／期间默认值都会在各自请求落地后补齐。
 // 故三枚发起并行：期间调用仍排在最前，主数据不再 await，表格立即起量。
 onMounted(() => {
@@ -1361,7 +1364,7 @@ function handleView(row) {
 .tax-pay-route { color: #e6a23c; font-size: 12px; }
 /* R5-D-169：六页签提交钮旁的期间提示（所选期间已结账禁提 / 期间状态不可读），沿用本页既有 12px 警示色 */
 .period-note { color: #e6a23c; font-size: 12px; }
-/* R5-D-215：月结检查闸清单区（沿用本页「头部一行 + el-table」的既有排布，不引新样式体系） */
+/* R5-D-215：月结检查校验清单区（沿用本页「头部一行 + el-table」的既有排布，不引新样式体系） */
 .close-check { border: 1px solid #ebeef5; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; background: #fafcff; }
 .cc-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .cc-meta { color: #909399; font-size: 12px; }

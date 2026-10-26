@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -11,7 +14,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/** EBS 财务调整数据推送（AR 接口2/7.2接口6）：调整后推送共享并自动重核关联对账单。 */
+/** ERP 财务调整数据推送（AR 接口2/7.2接口6）：调整后推送共享并自动重核关联对账单。 */
 @Data
 @TableName("ar_ebs_adjust")
 public class ArEbsAdjust implements Serializable {
@@ -24,7 +27,7 @@ public class ArEbsAdjust implements Serializable {
     @TableField(fill = FieldFill.INSERT)
     private Long tenantId;
 
-    /** EBS 调整单号（幂等键） */
+    /** ERP 调整单号（唯一键） */
     private String adjustNo;
     private String customerCode;
     /** 折扣/索赔/溢交 */

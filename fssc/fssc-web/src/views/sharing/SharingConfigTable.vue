@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="sharing-config-page">
     <el-card shadow="never">
@@ -180,7 +183,7 @@ const CONFIG_MAP = computed(() => ({
       ], defaultValue: 'SYSTEM' },
       // R5-D-252：策略值域对齐引擎实认集（compliance DispatchService.selectReviewer 的 switch 分支：
       // ROUND_ROBIN/LOAD_BALANCE/SKILL_MATCH/CREDIT_BASED；库中亦有 CREDIT_BASED 实例）。
-      // 原 LEAST_LOADED/RANDOM 引擎不识别（掉 default 分支），已从编辑选项移除，旧值经 optionLabel 兜底提示。
+      // 原 LEAST_LOADED/RANDOM 引擎不识别（掉 default 分支），已从编辑选项移除，旧值经 optionLabel 默认处理提示。
       { prop: 'dispatchStrategy', label: t('sharing.common.colStrategy'), width: 110, options: [
         { label: t('sharing.cfg.optRoundRobin'), value: 'ROUND_ROBIN' }, { label: t('sharing.cfg.optLoadBalance'), value: 'LOAD_BALANCE' },
         { label: t('sharing.cfg.optSkillMatch'), value: 'SKILL_MATCH' }, { label: t('sharing.cfg.optCreditBased'), value: 'CREDIT_BASED' },

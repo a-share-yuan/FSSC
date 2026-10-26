@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -49,11 +52,11 @@ public class WfTaskController {
     private final JdbcTemplate jdbcTemplate;
     private final WfTaskMapper wfTaskMapper;
     private final WfNodeConfigResolver wfNodeConfigResolver;
-    /** 催办的发信/限频/留痕通道（超时作业与发起人催办共用同一实现，见 E-10 / F1-5） */
+    /** 催办的发信/限频/记录通道（超时作业与发起人催办共用同一实现，见 E-10 / F1-5） */
     private final com.fssc.workflow.job.WfTimeoutJob wfTimeoutJob;
-    /** 待办代办标识（F4-1）：委托关系读取走取人解析器的同一份口径 */
+    /** 待办代办标识（F4-1）：委托关系读取走取人解析器的同一份规则 */
     private final com.fssc.workflow.service.NodeOrgResolver nodeOrgResolver;
-    /** D-DEC-229：只读预览端点的归属闸（换 ID 即读他人单据全链，写路径的 canOperate 管不到读路径） */
+    /** D-DEC-229：只读预览端点的归属校验（换 ID 即读他人单据全链，写路径的 canOperate 管不到读路径） */
     private final com.fssc.workflow.service.WfReadGuard wfReadGuard;
     /** D-DEC-065：待办「加签」标识的读侧数据源（wf_add_sign 只读，不参与任何指派/回跳判定） */
     private final com.fssc.workflow.service.WfAddSignService wfAddSignService;
@@ -108,7 +111,7 @@ public class WfTaskController {
         Map<String, Map<Long, Map<String, Object>>> needFill = new HashMap<>();
         // procInstId -> 行（旧数据无 bizId，按流程实例回退）
         Map<String, Map<String, Object>> needFallback = new HashMap<>();
-        // 运行态变量缺失时的历史变量兜底（业务行被清理 / 变量被删的场景）
+        // 运行态变量缺失时的历史变量默认处理（业务行被清理 / 变量被删的场景）
         Map<String, Map<String, Object>> hisVars = loadHistoricalVars(tasks);
         // POOL 软锁标注：一次判定（一次节点配置查询），不在按行循环里反复查库
         Map<String, Long> locks;
@@ -143,8 +146,9 @@ public class WfTaskController {
             m.put("totalAmount", null);
             // 当前真实办理人（Flowable assignee）。为空表示该任务只挂了候选组/未被指派。
             m.put("assigneeId", t.getAssignee());
-            // POOL 软锁可见性（批次 1 ①，参考行业做法"任务被他人打开处理时显示锁定状态"）：
+            // POOL 软锁可见性（批次 1 ①：任务被他人打开处理时显示锁定状态）：
             // 作业节点已被同池他人领取 → 该行仍在列表内（可见），但「去处理」必须禁用，
+            // 服务端 canOperate 同一规则硬拦。姓名复用下方 assigneeName。
             m.put("lockedByOther", locks.containsKey(t.getId()));
             // 业务行是否解析成功：由各批量回填方法置 true；为 false 时前端禁用「去处理」并提示
             m.put("bizResolved", false);
@@ -162,7 +166,7 @@ public class WfTaskController {
         annotateAddSignGate(list);
         annotateAddSignTodo(list);
         annotateDelegation(list);
-        // 收口：仍无法识别单据的行给出可读标题
+        // 办结：仍无法识别单据的行给出可读标题
 
         for (Map<String, Object> m : list) {
             if (isBlank(m.get("title"))) {
@@ -208,7 +212,7 @@ public class WfTaskController {
         }
         // D-DEC-160②：节点取人方式（handling_mode）一次查完，供「释放」按钮按行标注。
         // 判据与 NodeOrgResolver.isPoolTask 逐字一致（poolNodeKeys() 就是该判据的批量形态，
-        // 同一份 handling_mode=POOL 口径；见 WfNodeConfigResolver.poolNodeKeys 注释「待办列表批量判定」）。
+        // 同一份 handling_mode=POOL 规则；见 WfNodeConfigResolver.poolNodeKeys 注释「待办列表批量判定」）。
         // 失败退空集 = 全部按"非池"标注，按钮少给不误给，服务端 unclaim 仍会硬拦。
         Set<String> poolKeys;
         try {
@@ -223,14 +227,14 @@ public class WfTaskController {
         for (Map<String, Object> m : rows) {
             Long a = toUserId(m.get("assigneeId"));
             m.put("assigneeName", a == null ? "" : names.getOrDefault(a, UNKNOWN_USER));
-            // 任务池按钮：本列表已按「办理人/候选组 × 公司范围 × 委托」过滤过（todo() 的口径），
+            // 任务池按钮：本列表已按「办理人/候选组 × 公司范围 × 委托」过滤过（todo() 的规则），
             // 因此出现在列表里就代表"我有资格办"；无人认领的行即待领取，服务端 claim 再校验一次。
             boolean pool = isPoolNode(poolKeys, str(m.get("modelKey")), str(m.get("nodeKey")));
             m.put("poolTask", pool);
             m.put("canClaim", a == null);
-            // D-DEC-160（②按钮腿，与门面 unclaim 同判据）：原先只看 Flowable assignee 是否等于我，
+            // D-DEC-160（②按钮环节，与门面 unclaim 同判据）：原先只看 Flowable assignee 是否等于我，
             // 于是 AUTO/PICK 节点「按配置直接指派到我」也回 canUnclaim=true——这类节点本没有任务池，
-            // 点「释放」只会把已指派到人的单子打回无人可办（①领取后徽标不刷新属另一腿，见回报）。
+            // 点「释放」只会把已指派到人的单子打回无人可办（①领取后徽标不刷新属另一环节，见回报）。
             m.put("canUnclaim", a != null && a.equals(me) && pool);
             // 被他人锁定的作业任务：把领取人姓名给前端做灰显提示（批次 1 ①）
             if (Boolean.TRUE.equals(m.get("lockedByOther"))) {
@@ -254,12 +258,12 @@ public class WfTaskController {
      * 本行节点是否任务池（{@code handling_mode=POOL}）。
      *
      * <p>D-DEC-160②：键形态 {@code modelKey:nodeKey} 与 {@link com.fssc.workflow.service.WfNodeConfigResolver#poolNodeKeys()}、
-     * {@code NodeOrgResolver.isPoolTask(Task)} 完全同源（同一配置列、同一 trim + equalsIgnoreCase 口径），
+     * {@code NodeOrgResolver.isPoolTask(Task)} 完全同源（同一配置列、同一 trim + equalsIgnoreCase 规则），
      * 只是列表侧手上没有 Flowable {@code Task}、只有行字段，故走批量集合而不是逐行 resolve。
      *
      * <p><b>刻意不含 {@code assign_type=SHARE_POOL}</b>：那是 {@code WfTimeoutJob.isWorkNode} 的「作业档」双条件，
      * 与本处的「有没有任务池」不是同一件事；若把它并进 {@code isPoolTask} 的判据，会连带改动
-     * claim() 的 {@code deny_self} 自审闸语义（POOL 不走 deny_self 是 09-26 裁决，不得回退）。
+     * claim() 的 {@code deny_self} 自审限制语义（POOL 不走 deny_self 是 09-26 裁决，不得回退）。
      * 现网 {@code wf_node_config} 亦无 SHARE_POOL 行（AUTO/POOL/PICK × ROLE/USER/INITIATOR）。
      */
     private static boolean isPoolNode(Set<String> poolKeys, String modelKey, String nodeKey) {
@@ -272,10 +276,10 @@ public class WfTaskController {
     private static final String UNKNOWN_USER = "（账号已停用或注销）";
 
     /**
-     * 「加签闸口」标注（F3-3 / UR-12）：总闸 {@code approve.addsign_gate.enabled} 打开后，
+     * 「加签校验」标注（F3-3 / UR-12）：总开关 {@code approve.addsign_gate.enabled} 打开后，
      * 灰度模型内 {@code allow_addsign=0} 的待办行下发 {@code addSignAllowed=false}，前端据此隐藏「加签」按钮。
      *
-     * <p>缺省（总闸关）时<b>一个字段都不下发、一次库都不查</b>——前端拿不到该字段即按"可加签"渲染，
+     * <p>缺省（总开关关）时<b>一个字段都不下发、一次库都不查</b>——前端拿不到该字段即按"可加签"渲染，
      * 与改造前逐字一致。服务端 {@code addSign()} 里的拒绝判定读的是同一份配置，不会出现"看得见却办不动"。
      */
     private void annotateAddSignGate(List<Map<String, Object>> rows) {
@@ -309,7 +313,7 @@ public class WfTaskController {
      *
      * <p><b>真值源</b>＝{@code wf_add_sign} 上绑定本任务且 {@code status=ACTIVE} 的记录，与
      * {@code complete} 里的加签回跳钩子（{@code WfAddSignService.activeByTaskAndUser}）同一张表、
-     * 同一状态口径，不另立第二套判据。审结/取消后记录转 DONE/CANCELLED ⇒ 角标随之消失，
+     * 同一状态规则，不另立第二套判据。审结/取消后记录转 DONE/CANCELLED ⇒ 角标随之消失，
      * 原办理人的待办回到"普通环节"呈现。
      *
      * <p><b>缺省零变化</b>：本页没有任何进行中的加签时，一个字段都不下发，返回体与改造前逐字一致。
@@ -379,7 +383,7 @@ public class WfTaskController {
      * 能不能办仍由 {@code NodeOrgResolver.canOperate} 与服务端守卫说了算。
      *
      * <p>刻意<b>不</b>按 {@code wf.delegate.mode} 收窄：借资格档（现网默认）才是归属最容易混的档位，
-     * 标注在两种模式下语义相同。取数走 {@code wf_delegate} 的按人索引查询，与待办过滤同一份口径。
+     * 标注在两种模式下语义相同。查询走 {@code wf_delegate} 的按人索引查询，与待办过滤同一份规则。
      */
     private void annotateDelegation(List<Map<String, Object>> rows) {
         if (rows.isEmpty()) {
@@ -456,7 +460,7 @@ public class WfTaskController {
     }
 
     /**
-     * 历史变量兜底：运行态变量（ACT_RU_VARIABLE）缺失时，回读 ACT_HI_VARINST 里的
+     * 历史变量默认处理：运行态变量（ACT_RU_VARIABLE）缺失时，回读 ACT_HI_VARINST 里的
      * bizType / bizId / title。
      *
      * <p>典型场景：流程实例仍在跑，但业务行被清理（测试数据删除 / 归档搬运），
@@ -525,9 +529,9 @@ public class WfTaskController {
             }
         }
         // 2) 其它业务类型：每个 bizType 各一次 IN 查询。
-        // 批次3 R3-B（D-B3-02 收口）：这里原先是 50 多行手写的 fillBySql，与 {@code NodeOrgResolver.companyTable()}
+        // 批次3 R3-B（D-B3-02 办结）：这里原先是 50 多行手写的 fillBySql，与 {@code NodeOrgResolver.companyTable()}
         // 的 117 行 switch、{@code WfEngineFacade.BIZ_NO_TABLES} 三处各写一遍"bizType→表/列"，
-        // round 1 实测的三处漂移（RECEIVABLE_COLLECT/FA_CER/FA_DEPRECIATION 取人侧与取数侧不一致）就是这么来的。
+        // round 1 实测的三处漂移（RECEIVABLE_COLLECT/FA_CER/FA_DEPRECIATION 取人侧与查询侧不一致）就是这么来的。
         // 现在唯一真值在 {@link BillRouteRegistry}，本方法只负责遍历；表/列名与改前一一对应（差异见注册表逐行注释）。
         // 跳过两类：fillTable=null（改前不回填，或由 fillBadDebt 这类特例承担）、费用族（上面 mapper 成对匹配已覆盖）。
         // 遗留死映射 TREASURY→treasury_transfer、ASSET→asset_card 目标表在库里不存在（D-B3-05，全库无发起点），
@@ -759,7 +763,7 @@ public class WfTaskController {
     }
 
     /**
-     * G2 ①层「审批项」（2026-09-24，参考行业做法）：当前任务节点上启用的自定义审批结果（只读）。
+     * G2 ①层「审批项」（2026-09-24）：当前任务节点上启用的自定义审批结果（只读）。
      *
      * <p>审批弹窗打开时调用；返回空数组即不渲染自定义按钮（与改造前完全一致）。
      * 与 {@code /approve} 的 {@code approvalItemCode} 同源同一解析器，不存在"看得见点不动"。
@@ -788,7 +792,7 @@ public class WfTaskController {
      * （退回到它将作废哪些后续节点），<b>不修改任何流程数据</b>。
      *
      * <p>与 {@code /withdraw-preview} 的区别：撤销是发起人视角（退回后自己重办），
-     * 本接口是审批人视角（驳回时选级次）。候选集两条口径同源（{@code wfQueryService.chain}），
+     * 本接口是审批人视角（驳回时选级次）。候选集两条规则同源（{@code wfQueryService.chain}），
      * 不允许分叉。前端仅在 {@code enabled=true} 时渲染级次选择器（开关未开时连 UI 都不出现，
      * 避免再造悬空配置）。
      */
@@ -832,7 +836,7 @@ public class WfTaskController {
      * 下一环节候选办理人（审批弹窗打开时调用）：返回下一人工节点的取人方式（AUTO/PICK）、
      * 候选人名单与 required 标志，前端据此决定是否显示必选下拉。
      *
-     * <p>与 {@code /approve} 同一套校验口径（{@code WfEngineFacade.nextCandidates} 内做 canOperate 校验），
+     * <p>与 {@code /approve} 同一套校验规则（{@code WfEngineFacade.nextCandidates} 内做 canOperate 校验），
      * 因此即使有人绕开弹窗直接提交点名，也只会在 complete 时被拒绝，不会越权指派。
      */
     @GetMapping("/next-candidates")
@@ -867,7 +871,7 @@ public class WfTaskController {
     }
 
     /**
-     * P0 治理闸③：分支变量实算透出（只读，不写库、不发起实例）。给定 bizType + bizId，
+     * P0 治理校验③：分支变量实算透出（只读，不写库、不发起实例）。给定 bizType + bizId，
      * 返回该单会注入引擎的全部分支变量真值（amount / orgType / expenseType / hasLoan / outOfPlan /
      * overLimit / hasContract / abroad / ...），便于运维在设计器外核查"这张单的分支会怎么走"——
      * 尤其是此前被写死 FALSE 的 4 个变量，现在是否真实生效一目了然。
@@ -891,7 +895,7 @@ public class WfTaskController {
         return Result.success();
     }
 
-    /**  转办：把当前待办改派给其他用户办理（受理人变更，留痕 TRANSFER） */
+    /**  转办：把当前待办改派给其他用户办理（受理人变更，记录 TRANSFER） */
     @OperLog(module = "WF_TASK", operType = "UPDATE", desc = "转办")
     @PostMapping("/transfer")
     public Result<Void> transfer(@Validated @RequestBody TransferReq req) {
@@ -901,6 +905,7 @@ public class WfTaskController {
     }
 
     /**
+     * 加签（前/后加签，G1）：把当前任务临时交给加签人先审（BEFORE）或后审（AFTER），
      * 加签人办完<b>自动回跳</b>，不改变流程走向。
      *
      * <p>与 {@code /transfer} 的区别：转办是「受理人永久变更」；加签是「临时插一道」——
@@ -940,6 +945,7 @@ public class WfTaskController {
     }
 
     /**
+     * 本节点可转办名单（转办弹窗数据源）：与 {@code /transfer} 的目标校验同一规则，
      * 因此弹窗里能选到的人，提交时一定通过。名单为空时前端提示"请联系流程管理员改派"。
      */
     @GetMapping("/task-candidates")
@@ -951,13 +957,13 @@ public class WfTaskController {
      * G13 字段级节点权限（P3，2026-09-23）：按任务解析当前节点 {@code wf_node_config.form_perm}，
      * 返回 {@code field -> H|R|W}（H 隐藏 / R 只读 / W 可编辑），供审批页渲染（隐藏/禁用字段）。
      *
-     * <p>口径与 {@code /task-candidates} 一致——本节点可办场景才谈得上字段权限；解析逻辑集中在
+     * <p>规则与 {@code /task-candidates} 一致——本节点可办场景才谈得上字段权限；解析逻辑集中在
      * {@link WfNodeConfigResolver#resolveFormFieldPerm}（取严不取宽 H&gt;R&gt;W，fail-open：
      * 未配置/损坏返回空 Map，即不裁剪，保持历史行为）。此前该列只有实体字段、零消费。
      */
     @GetMapping("/task-form-perm")
     public Result<Map<String, Object>> taskFormPerm(@RequestParam String taskId) {
-        // B1 扩点（2026-10-14）：补读护栏，与 /approval-items、/mi-progress、/reject-targets 同口径——
+        // B1 扩点（2026-10-14）：补读护栏，与 /approval-items、/mi-progress、/reject-targets 同一规则——
         // 本端点可读出节点字段级权限结构（哪些字段被隐藏/只读），属任务敏感信息，
         // 仅本节点可办场景（办理人/候选人）可读，杜绝越权探知他人节点的表单裁剪配置。
         wfReadGuard.assertTaskReadable(taskId);
@@ -1015,8 +1021,8 @@ public class WfTaskController {
      * 发起人催办（体检 E-10 / 方案 F1-5）：提单人问一句"我这单卡在哪"。
      *
      * <p>此前催办只有超时作业会触发，提单人侧零入口；审批工作台的催办视图又是流程管理员视角。
-     * 鉴权、24 小时限频、站内信投递与 {@code URGE} 留痕都在 {@code WfTimeoutJob.urgeAsInitiator}，
-     * 与超时催办共用同一发信通道，口径不漂移。命中限频时以业务异常返回（界面需要明确文案，
+     * 鉴权、24 小时限频、站内信投递与 {@code URGE} 记录都在 {@code WfTimeoutJob.urgeAsInitiator}，
+     * 与超时催办共用同一发信通道，规则不漂移。命中限频时以业务异常返回（界面需要明确文案，
      * 而不是"催办成功"却什么都没发）。
      *
      * @return 本次实际催办的任务数（并行/会签多环节时 &gt; 1）
@@ -1048,7 +1054,7 @@ public class WfTaskController {
          * （数字或字符串元素均有），按 String 反序列化直接 HttpMessageNotReadable → 500，
          * 传阅功能整链不可用。改为 List 反序列化、入口处归一为逗号分隔串，
          * 字符串逗号分隔的旧调用方同样兼容（Jackson 对 String→List 单元素也兼容，
-         * 统一在 ccUserIdsNormalized() 收口）。
+         * 统一在 ccUserIdsNormalized() 办结）。
          */
         private java.util.List<Object> ccUserIds;
 
@@ -1068,9 +1074,9 @@ public class WfTaskController {
         /**
          * G4 自由驳回：驳回时指定的目标节点 key（仅 approved=false 时生效），可空。
          *
-         * <p>为空 ⇒ 走原「终止本流程」兜底，行为与改造前逐字一致；非空且开关
+         * <p>为空 ⇒ 走原「终止本流程」默认处理，行为与改造前逐字一致；非空且开关
          * {@code sys_config.wf.reject.free.enabled}=1 时，改由引擎把执行退回该上游节点，
-         * 单据在同一实例内继续流转（参考行业做法「允许选择驳回级次」）。
+         * 单据在同一实例内继续流转（可选驳回级次）。
          * 候选集从 {@code GET /wf/reject-targets} 只读预览获取。
          */
         private String rejectToNodeKey;

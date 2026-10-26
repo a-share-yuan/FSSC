@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /** 共享运营域路由（派工/质检/档案/实物流/SLA/影像） */
 export default [
   // 共享运营
@@ -15,7 +18,7 @@ export default [
   { path: 'sharing/task-pool', component: () => import('../../views/sharing/TaskPool.vue'), meta: { title: '任务池' } },
   { path: 'sharing/task-work', component: () => import('../../views/sharing/TaskWork.vue'), meta: { title: '工单处理' } },
   // G3 共享作业层（2026-09-24 新视图，数据源 /api/tenant/wf/pool|ops/**）
-  // R5-D-258②：三个视图页补 perms 前置闸（码集=其端点实需码的并集；全局守卫在 router.js 消费）：
+  // R5-D-258②：三个视图页补 perms 前置校验（码集=其端点实需码的并集；全局守卫在 router.js 消费）：
   // shared-pool：/wf/pool/views|mine 需 wf:task:list、/wf/pool/all 需 wf:instance:list
   { path: 'sharing/shared-pool', component: () => import('../../views/sharing/SharedPool.vue'), meta: { title: '共享任务池（五视图）', perms: ['wf:task:list', 'wf:instance:list'] } },
   // shared-ops：/wf/ops/** 读 wf:config:list|wf:instance:list（含 policy/dispatch-log/quality/time-limit）
@@ -35,6 +38,6 @@ export default [
   { path: 'image/exception', component: () => import('../../views/image/ImageReview.vue'), props: { tab: 'exc' }, meta: { title: '影像异常处理' } },
   { path: 'image/task', component: () => import('../../views/image/ImageTask.vue'), meta: { title: '影像任务' } },
   { path: 'image/ocr-records', component: () => import('../../views/image/OcrRecords.vue'), meta: { title: 'OCR识别记录' } },
-  // R5-D-251：页面级 perms 前置闸（ImageSettingController 全端点需 image:setting:list/update）
+  // R5-D-251：页面级 perms 前置校验（ImageSettingController 全端点需 image:setting:list/update）
   { path: 'image/setting', component: () => import('../../views/system/ImageSetting.vue'), meta: { title: '系统设置', perms: ['image:setting:list'] } },
 ]

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -22,14 +25,14 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * G3（2026-09-24）流程批量移交 ＋ 移交日志（{@code /api/tenant/wf/handover/**}），参考行业做法「流程移交」。
+ * G3（2026-09-24）流程批量移交 ＋ 移交日志（{@code /api/tenant/wf/handover/**}）。
  *
  * <p>典型场景：员工离职/换岗，把名下在办审批任务批量交给接手人。逐单独立成败，
  * 失败明细照实返回并落 {@code op_transfer_log.failed_detail}（见 {@link TaskHandoverService} 类注释）。
  *
  * <p>权限：G4 治理三权分立后归<b>流程管理中心</b>——{@code wf:manage:intervene}（移交/改派/在途干预）
  * 与 {@code wf:manage:instance}（管理读视图）。同时保留旧码 {@code wf:task:reassign} /
- * {@code wf:instance:list}（多码 OR），故存量授权（IT_ADMIN）上线后不会 403；
+ * {@code wf:instance:list}（多码 OR），故历史授权（IT_ADMIN）上线后不会 403；
  * 新码授权到位后再摘旧码，避免"因新造权限码导致大面积 403"。
  */
 @Slf4j

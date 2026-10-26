@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -29,7 +32,7 @@ import java.util.Map;
  *  <li>W（可编辑）/ 未配置：放行。</li>
  * </ul>
  *
- * <p><b>fail-open 边界</b>（与解析器同口径，保持历史行为零变更）：
+ * <p><b>fail-open 边界</b>（与解析器同一规则，保持历史行为零变更）：
  * 无流程实例 / 无在办任务 / 任务缺 {@code modelKey:nodeKey} / form_perm 为空 → <b>直接放行</b>。
  * 因此本校验<b>只在显式配置了 form_perm 的节点上生效</b>；全库当前 form_perm 为空 ⇒ 接入后零行为差异。
  */

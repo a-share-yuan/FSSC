@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.connector.api;
 
 import lombok.AllArgsConstructor;
@@ -10,7 +13,7 @@ import lombok.NoArgsConstructor;
  * <p>核心字段对齐既有 {@code GatewayResponse}：{@code isOk() = success && statusCode == 200}。
  * 另带两个域语义字段：</p>
  * <ul>
- *   <li>{@code duplicate}：幂等命中回放——本次<b>未真实外呼</b>，直接回放首次结果；</li>
+ *   <li>{@code duplicate}：去重命中回放——本次<b>未真实外呼</b>，直接回放首次结果；</li>
  *   <li>{@code retryable}：该次调用是否可安全重试，由能力域只读/变更属性决定。</li>
  * </ul>
  *
@@ -37,7 +40,7 @@ public class ChannelResponse {
     /** 调用耗时（毫秒） */
     private long durationMs;
 
-    /** 幂等命中回放：true 表示本次未真实外呼 */
+    /** 去重命中回放：true 表示本次未真实外呼 */
     private boolean duplicate;
 
     /** 该次调用是否可安全重试（只读能力为 true） */
@@ -48,7 +51,7 @@ public class ChannelResponse {
         return success && statusCode == 200;
     }
 
-    /** 截断响应体供留痕（最多 4000 字符）。 */
+    /** 截断响应体供记录（最多 4000 字符）。 */
     public String bodyForLog() {
         if (body == null) {
             return "";
@@ -56,7 +59,7 @@ public class ChannelResponse {
         return body.length() > 4000 ? body.substring(0, 4000) : body;
     }
 
-    /** 连接失败 / 未配置 / 入参非法的兜底响应。 */
+    /** 连接失败 / 未配置 / 入参非法的默认处理响应。 */
     public static ChannelResponse fail(String error) {
         return new ChannelResponse(false, 0, null, error, 0L, false, false);
     }

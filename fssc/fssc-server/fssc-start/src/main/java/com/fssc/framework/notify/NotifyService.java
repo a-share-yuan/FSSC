@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.notify;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -71,7 +74,7 @@ public class NotifyService {
      *
      * @param bizType 业务域标识，取 {@code wf_task.biz_type}/{@code wf_cc.biz_type} 原值
      *                （{@code EXP_CLAIM}/{@code SUPPLIER_ADD}/…），与 {@code bizId} 成对使用：
-     *                {@code (biz_type, biz_id)} 才唯一定位一张单据（D-DEC-162 的 biz_id 口径统一）
+     *                {@code (biz_type, biz_id)} 才唯一定位一张单据（D-DEC-162 的 biz_id 规则统一）
      */
     public void notifyUser(Long userId, String msgType, String title, String content,
                            String bizType, Long bizId, String linkUrl) {

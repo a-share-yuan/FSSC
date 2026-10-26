@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.gl.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -44,7 +47,7 @@ public class GlService {
     private final SysUserMapper sysUserMapper;
 
     /**
-     * 凭证 POSTED 落账，按凭证明细行逐行写入总账。幂等：同凭证先清理再写入。
+     * 凭证 POSTED 落账，按凭证明细行逐行写入总账。去重：同凭证先清理再写入。
      *
      * <p>过账人从凭证头 {@code post_user_id} 取（见 {@link #postVoucherToGl(Long, Long)}）。
      */
@@ -67,14 +70,14 @@ public class GlService {
         if (v == null) {
             return 0;
         }
-        // 幂等：重复 POSTED/重跑先清旧行
+        // 去重：重复 POSTED/重跑先清旧行
         glEntryMapper.delete(new LambdaQueryWrapper<GlEntry>().eq(GlEntry::getVoucherId, voucherId));
         List<OpVoucherLine> lines = opVoucherLineMapper.selectByVoucherId(voucherId);
         if (lines == null || lines.isEmpty()) {
             return 0;
         }
         LocalDateTime now = LocalDateTime.now();
-        // D-DEC-167：过账人落到每一行分录上（列未落库前这两个值不会写库，见 GlEntry 的注释态 DDL）
+        // D-DEC-167：过账人落到每一行分录上（列未写入数据库前这两个值不会写库，见 GlEntry 的注释态 DDL）
         Long poster = operatorId != null ? operatorId : v.getPostUserId();
         String posterName = poster == null ? null : userName(poster);
         for (OpVoucherLine ln : lines) {
@@ -135,6 +138,7 @@ public class GlService {
      * 返回整页读数，供凭证列表接口一次性带回落账态（{@code glEntryCount}），取代页面逐张
      * /op/gl/posted 的 N+1 串行探测（该探测失败还曾被降级显示成「未落账」，R5-D-075 根因）。
      *
+     * <p>租户过滤由框架层拦截器自动追加（与 {@link #isPostedToGl} 同一张表、同一规则）；
      * 未出现在结果里的凭证＝库内没有落账分录，由调用方按 0（未落账）落值——
      * 与"逐张探测得 0 行"语义一致，但一页只发一条 SQL。
      *
@@ -240,11 +244,11 @@ public class GlService {
      * 期初借 414,191.67 ≠ 期初贷 1,726,500.00；换到本期无发生的期间更是<b>整表空白</b>）。
      * 现改为<b>科目全集 = 本期发生 ∪ 期初余额</b>，两边都有的合并成一行。
      *
-     * <p>同轮把<b>期初也按科目方向规范化</b>（净额落借或贷一边，与期末同口径）：
+     * <p>同轮把<b>期初也按科目方向规范化</b>（净额落借或贷一边，与期末同一规则）：
      * 原先期初借/期初贷直接取发生额合计，同一科目两边同时挂数（如 1602 累计折旧期初借 501,000 又贷 4,591.67），
-     * 资产类科目还会出现"期初贷方余额"这种方向异常读数——那是<b> gross 发生额被当成余额</b>的口径错，
+     * 资产类科目还会出现"期初贷方余额"这种方向异常读数——那是<b> gross 发生额被当成余额</b>的规则错，
      * 不是账错了。净额化后 {@code 期初借合计 = 期初贷合计}（每份凭证借贷等额、且全部科目都在表内 ⇒
-     * 各科目净额之和恒为 0），期末同理，本期发生额保持借贷分列的 gross 口径（报表惯例）。
+     * 各科目净额之和恒为 0），期末同理，本期发生额保持借贷分列的 gross 规则（报表惯例）。
      *
      * <p>行数放大是有意的：科目余额表本来就该列出所有有余额的科目。净额化不改变任何科目的
      * {@code 期末}（{@code 期初借-期初贷} 的差不变量），故唯一下游
@@ -316,6 +320,19 @@ public class GlService {
      * 借贷合计相等且差异为 0 即平衡。
      */
     public Map<String, Object> trialBalance(Long companyId, int year, int month) {
+        return trialBalance(companyId, year, month, false);
+    }
+
+    /**
+     * 试算平衡（可含未过账凭证）。
+     *
+     * <p>{@code op_gl_entry} 只在凭证过账时写入，故默认口径＝本期已过账分录合计。
+     * {@code includeUnposted} 为 true 时，另把本期间内状态为 DRAFT 的凭证借贷合计
+     * 分别加到两侧，并把未过账金额与张数单独回传，供界面明示"两个来源"。
+     *
+     * @param includeUnposted true＝含未过账凭证；默认 false（月结校验沿用此默认）
+     */
+    public Map<String, Object> trialBalance(Long companyId, int year, int month, boolean includeUnposted) {
         QueryWrapper<GlEntry> qw = new QueryWrapper<GlEntry>()
                 .eq("company_id", companyId)
                 .eq("period_year", year)
@@ -323,11 +340,29 @@ public class GlService {
                 .select("SUM(CASE WHEN direction='DEBIT' THEN amount ELSE 0 END) debit",
                         "SUM(CASE WHEN direction='CREDIT' THEN amount ELSE 0 END) credit",
                         "COUNT(*) AS `rows`");
-        Map<String, Object> r = glEntryMapper.selectMaps(qw).isEmpty()
-                ? Map.of("debit", ZERO, "credit", ZERO)
-                : glEntryMapper.selectMaps(qw).get(0);
-        BigDecimal debit = dec(r.get("debit"));
-        BigDecimal credit = dec(r.get("credit"));
+        List<Map<String, Object>> postedRows = glEntryMapper.selectMaps(qw);
+        Map<String, Object> r = postedRows.isEmpty() ? Map.of("debit", ZERO, "credit", ZERO) : postedRows.get(0);
+        BigDecimal postedDebit = dec(r.get("debit"));
+        BigDecimal postedCredit = dec(r.get("credit"));
+        BigDecimal unpostedDebit = ZERO;
+        BigDecimal unpostedCredit = ZERO;
+        long unpostedVouchers = 0L;
+        if (includeUnposted) {
+            QueryWrapper<OpVoucher> vq = new QueryWrapper<OpVoucher>()
+                    .eq("company_id", companyId)
+                    .eq("period_year", year)
+                    .eq("period_month", month)
+                    .eq("status", "DRAFT")
+                    .select("SUM(debit_total) debit", "SUM(credit_total) credit", "COUNT(*) AS `rows`");
+            List<Map<String, Object>> draftRows = opVoucherMapper.selectMaps(vq);
+            Map<String, Object> d = draftRows.isEmpty() ? Map.of() : draftRows.get(0);
+            unpostedDebit = dec(d.get("debit"));
+            unpostedCredit = dec(d.get("credit"));
+            Object cnt = d.get("rows");
+            unpostedVouchers = cnt instanceof Number n ? n.longValue() : 0L;
+        }
+        BigDecimal debit = postedDebit.add(unpostedDebit);
+        BigDecimal credit = postedCredit.add(unpostedCredit);
         BigDecimal diff = debit.subtract(credit);
         Map<String, Object> out = new HashMap<>();
         out.put("companyId", companyId);
@@ -337,6 +372,12 @@ public class GlService {
         out.put("creditTotal", credit);
         out.put("diff", diff);
         out.put("balanced", diff.compareTo(BigDecimal.ZERO) == 0);
+        out.put("includeUnposted", includeUnposted);
+        out.put("postedDebitTotal", postedDebit);
+        out.put("postedCreditTotal", postedCredit);
+        out.put("unpostedDebitTotal", unpostedDebit);
+        out.put("unpostedCreditTotal", unpostedCredit);
+        out.put("unpostedVoucherCount", unpostedVouchers);
         return out;
     }
 

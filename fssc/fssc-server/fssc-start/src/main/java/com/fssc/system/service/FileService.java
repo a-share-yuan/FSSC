@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -38,7 +41,7 @@ import org.springframework.util.StringUtils;
  * 存储路径：{local-root}/{zone}/{tenantId}/{bizType}/{yyyyMM}/{billId}/{uuid}.{ext}（租户目录物理隔离；
  * bizType 空或含非法字符时该段为 COMMON，见 {@link #sanitizeSegment}）。
  * <p>
- * 落盘口径（C-11）：磁盘文件名 = 随机 UUID + 净化后的后缀（只留 [a-z0-9]、至多 8 位），
+ * 落盘规则（C-11）：磁盘文件名 = 随机 UUID + 净化后的后缀（只留 [a-z0-9]、至多 8 位），
  * 客户端给的原始名只存 {@code sys_file.file_name} 供展示与下载，不参与拼路径；
  * 落盘前再判一次"目标必须在 local-root 之内"，所以原始名里的 {@code ../}、
  * {@code .jsp.}、{@code .html} 之类线索既拼不出根外路径，也不会留下可按名字处理的文件。
@@ -90,7 +93,7 @@ public class FileService {
     private static final int MAX_SUFFIX_LEN = 8;
 
     /**
-     * C-11：配置放不开的下限表——按 BCP 侧 {@code FileUploadPolicy.FORBIDDEN_EXTENSIONS} 的口径取
+     * C-11：配置放不开的下限表——按 BCP 侧 {@code FileUploadPolicy.FORBIDDEN_EXTENSIONS} 的规则取
      * FSSC 用得到的那一段（网页/主动内容、脚本、可执行与载体、Office 宏文档；编译产物 {@code .o/.a}
      * 这类业务上不会出现的项未列）。
      * <p>{@code fssc.file.allowed-extensions} 是白名单：它被外部配置成空值时不校验（fail-open）。
@@ -141,7 +144,7 @@ public class FileService {
 
     /**
      * C-11：目录段净化（bizType 由调用方传入，可能带 "/"、".."）。空或全非法时归入 COMMON，
-     * 与改造前的默认段名一致，历史文件的读取口径不变。
+     * 与改造前的默认段名一致，历史文件的读取规则不变。
      */
     private static String sanitizeSegment(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -162,8 +165,8 @@ public class FileService {
 
     /** 上传文件（默认业务正式影像区 business），返回文件记录。
      *  分库改造：sys_file 在 master 库；REQUIRES_NEW 使被 image 域事务调用时
-     *  挂起外层 image 事务、绑定 master 连接独立提交（文件落库不再随影像批次回滚，
-     *  跨库不可 ACID 为分库既定代价，孤儿文件由存储对账兜底）。 */
+     *  挂起外层 image 事务、绑定 master 连接独立提交（文件写入数据库不再随影像批次回滚，
+     *  跨库不可 ACID 为分库既定代价，孤儿文件由存储对账默认处理）。 */
     @FsscDataSource("master")
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public SysFile upload(MultipartFile multipartFile, String bizType, Long bizId) {
@@ -195,7 +198,7 @@ public class FileService {
         // 这样即使 fssc.file.allowed-extensions 被外部配置成空（该键空值即不校验，fail-open），
         // 落盘名仍是"UUID + 干净后缀"，不会因为客户端给的文件名而失控。
         String suffix = sanitizeSuffix(original);
-        // C-11 下限闸：先于白名单判，且不依赖任何配置项——白名单被外部清空时这一条仍然成立。
+        // C-11 下限校验：先于白名单判，且不依赖任何配置项——白名单被外部清空时这一条仍然成立。
         if (FORBIDDEN_SUFFIXES.contains(suffix)) {
             log.warn("upload rejected by forbidden extension floor: original={}, suffix={}", original, suffix);
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -227,9 +230,9 @@ public class FileService {
                 + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMM")) + "/" + billSegment;
         String relPath = relDir + "/" + storageName;
 
-        // C-11：目录闸。落盘目标 normalize 后必须仍在 local-root 之内 ——
+        // C-11：目录校验。落盘目标 normalize 后必须仍在 local-root 之内 ——
         // bizType 由调用方传入、zone 由配置给出，任一含 ".." 都能把文件写到根外，
-        // 后缀净化只保住文件名，这一段保住目录。越界即拒绝落库与落盘。
+        // 后缀净化只保住文件名，这一段保住目录。越界即拒绝写入数据库与落盘。
         Path root = Paths.get(localRoot).toAbsolutePath().normalize();
         Path target = root.resolve(relPath).normalize();
         if (!target.startsWith(root)) {
@@ -314,7 +317,7 @@ public class FileService {
      * 删除文件（逻辑删；同时作废未使用的令牌）
      *
      * <p>两表成对写（sys_file_token + sys_file），缺一侧会留下"文件已删但令牌仍有效"的半截状态
-     * （ROOT-11 已裁口径：跨表写成对者补边界；自定，无厂商条款）。
+     * （ROOT-11 已裁规则：跨表写成对者补边界；自定，无外部依据）。
      */
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
@@ -415,7 +418,7 @@ public class FileService {
 
     /**
      * 归档迁移：文件从当前存储区移动到目标区（如 business → archive），
-     * 物理移动 + 更新 file_path/storage_zone。已处于目标区则跳过（幂等）。
+     * 物理移动 + 更新 file_path/storage_zone。已处于目标区则跳过（去重）。
      */
     @Transactional(rollbackFor = Exception.class)
     public SysFile moveZone(Long fileId, String targetZone) {
@@ -427,7 +430,7 @@ public class FileService {
         String curDir = f.getFilePath().substring(0, f.getFilePath().indexOf('/'));
         if (curDir.equals(targetDir)) {
             f.setStorageZone(targetZone == null ? "BUSINESS" : targetZone.toUpperCase());
-            return f; // 已在该区域，幂等跳过
+            return f; // 已在该区域，去重跳过
         }
         // 新路径：替换首段目录
         String newPath = targetDir + f.getFilePath().substring(f.getFilePath().indexOf('/'));
@@ -453,7 +456,7 @@ public class FileService {
 
     // ---------- 工具 ----------
 
-    /** 当前登录用户ID（可能为 null，仅用于留痕，不参与鉴权） */
+    /** 当前登录用户ID（可能为 null，仅用于记录，不参与鉴权） */
     private Long userId() {
         var u = com.fssc.framework.security.UserContext.get();
         return u == null ? null : u.getUserId();

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.apflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -55,7 +58,7 @@ public class ApRequestService {
     /** 付款通道：与出纳付款批次共用 BankGateway；dev 默认模拟，生产 fssc.bank.gateway=http 切真实银企直联。 */
     private final BankGateway bankGateway;
     private final SysUserMapper sysUserMapper;
-    /** P4-3 审计扩面：单据级状态跃迁留痕（接口级另有 @OperLog 双写） */
+    /** P4-3 审计扩面：单据级状态跃迁记录（接口级另有 @OperLog 双写） */
     private final AuditTrailService auditTrailService;
 
     // ---------------- 创建 ----------------
@@ -96,7 +99,7 @@ public class ApRequestService {
     }
 
     /**
-     * R-09 订单信息获取（蓝图 EBS 接口12，SCC_AP_15）：预付款创建时按 PO 编号到 ERP 校验
+     * R-09 订单信息获取（蓝图 ERP 接口12，SCC_AP_15）：预付款创建时按 PO 编号到 ERP 校验
      * 供应商代码/币种/付款方法；通道 = {PROVIDER}_ORDER_GET（多 ERP 解析，见 ErpChannelResolver），
      * 未配置则 MOCK 跳过（离线可跑）。
      */
@@ -119,7 +122,7 @@ public class ApRequestService {
                 "R-09 PO 校验通过（PO " + r.getPoNo() + "）", null);
     }
 
-    /** EKP作废后重拉覆盖：单号不变（R-10）。 */
+    /** OA作废后重拉覆盖：单号不变（R-10）。 */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest repull(Long id, ApServiceRequest fresh) {
         ApServiceRequest r = require(id);
@@ -413,7 +416,7 @@ public class ApRequestService {
         return r;
     }
 
-    /** 作废（终止付款；预付款作废后可在EKP调整重拉覆盖 R-10）。 */
+    /** 作废（终止付款；预付款作废后可在OA调整重拉覆盖 R-10）。 */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest voidRequest(Long id, String reason) {
         ApServiceRequest r = require(id);
@@ -488,8 +491,8 @@ public class ApRequestService {
     }
 
     /**
-     * 派工是跨法人的共享岗配置，而人员分页接口按登录人公司强制收口 ⇒ 界面取不到别公司同事的姓名。
-     * 这里在读取时按 user_name 回查补齐只读显示名：只覆盖**已写进规则**的工号，借此放开人员目录、落库。
+     * 派工是跨法人的共享岗配置，而人员分页接口按登录人公司强制办结 ⇒ 界面取不到别公司同事的姓名。
+     * 这里在读取时按 user_name 回查补齐只读显示名：只覆盖**已写进规则**的工号，借此放开人员目录、写入数据库。
      * 查不到（账号已删）时留空位，界面按纯工号显示。
      */
     private void fillDisplayNames(java.util.List<ApDispatchRule> rules) {
@@ -529,7 +532,7 @@ public class ApRequestService {
             rule.setId(null);
             ruleMapper.insert(rule);
         } else {
-            // 并发闸：规则是配置面，两人同开弹窗后各自保存会互覆盖且界面毫无察觉。
+            // 并发校验：规则是配置面，两人同开弹窗后各自保存会互覆盖且界面毫无察觉。
             // 编辑分支先锁住当前行、用 listRules 下发的指纹重算比对，不符即拒＝后写的人必须刷新重来。
             ApDispatchRule current = ruleMapper.selectOne(new LambdaQueryWrapper<ApDispatchRule>()
                     .eq(ApDispatchRule::getId, rule.getId())
@@ -552,7 +555,7 @@ public class ApRequestService {
     }
 
     /**
-     * 编辑凭据＝ruleName/paymentWay/handlers/groupLeader/enabled/remark 六字段拼接后的 SHA-256（只读回显，不落库）。
+     * 编辑凭据＝ruleName/paymentWay/handlers/groupLeader/enabled/remark 六字段拼接后的 SHA-256（只读回显，不写入数据库）。
      * 选它而不选 version 列或全局乐观锁拦截器＝零 DDL、不外溢到其它 updateById 语义。
      */
     private String editFingerprint(ApDispatchRule r) {

@@ -1,16 +1,20 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-dialog v-model="innerVisible" :title="mode === 'voucher' ? '凭证套打预览' : '单据打印预览'" width="720px" top="3vh"
              destroy-on-close append-to-body class="print-dialog">
     <div class="print-area">
       <!-- ===== 单据打印 ===== -->
       <template v-if="mode === 'bill' && bill">
-        <h2 class="print-title">{{ bill.billType === 'APPLY' ? '费用申请单' : bill.billType === 'LOAN' ? '借款单' : bill.billType === 'REPAY' ? '还款单' : bill.billType === 'PAY' ? '付款单' : '报销单' }}</h2>
+        <h2 class="print-title">{{ billTitle }}</h2>
         <table class="p-head">
-          <tr><td>单号：{{ bill.billNo }}</td><td>制单日期：{{ bill.applyDate }}</td></tr>
-          <tr><td>申请人：{{ bill.applyUserName || bill.applyUserId }}</td><td>部门：{{ bill.deptName || '' }}</td></tr>
-          <tr><td>公司：{{ bill.companyName || bill.companyId }}</td><td>状态：{{ statusLabel(bill.status) }}</td></tr>
+          <tr><td>单号：{{ bill.billNo }}</td><td>制单日期：{{ bill.applyDate || '-' }}</td></tr>
+          <tr><td>申请人：{{ bill.applyUserName || '-' }}</td><td>部门：{{ bill.deptName || '-' }}</td></tr>
+          <tr><td>公司：{{ bill.companyName || '-' }}</td><td>状态：{{ statusLabel(bill.status) }}</td></tr>
         </table>
         <table class="p-detail" border="1" cellspacing="0">
+          <colgroup><col style="width:22%"><col style="width:58%"><col style="width:20%"></colgroup>
           <thead><tr><th>费用项</th><th>摘要</th><th>金额</th></tr></thead>
           <tbody>
             <tr v-for="(l, i) in billLines" :key="i">
@@ -21,7 +25,7 @@
           </tbody>
           <tfoot><tr><td colspan="2" class="num">合计</td><td class="num">{{ fmt(bill.totalAmount) }}</td></tr></tfoot>
         </table>
-        <p class="p-foot">审批：{{ statusLabel(bill.status) }}　　制单人：{{ bill.createBy }}　　打印日期：{{ today }}</p>
+        <p class="p-foot">审批：{{ statusLabel(bill.status) }}　　制单人：{{ makerName }}　　打印日期：{{ today }}</p>
       </template>
 
       <!-- ===== 凭证套打 ===== -->
@@ -58,6 +62,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { statusLabel } from '@/constants/billStatus.js'
+import { billTypeLabel } from '@/constants/enums.js'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -77,6 +82,17 @@ const innerVisible = computed({
 
 const today = new Date().toLocaleDateString('zh-CN')
 
+const billTitle = computed(() => {
+  const t = billTypeLabel(props.bill?.billType)
+  return t ? `${t}单` : '单据'
+})
+
+const makerName = computed(() => {
+  const b = props.bill || {}
+  if (b.createByName) return b.createByName
+  return b.createBy != null && b.createBy === b.applyUserId ? (b.applyUserName || '-') : '-'
+})
+
 function fmt(v) {
   return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
 }
@@ -86,7 +102,8 @@ function doPrint() {
   if (!html) return
   const w = window.open('', '_blank', 'width=820,height=600')
   if (!w) return
-  w.document.write(`<html><head><title>打印</title><style>
+  w.document.write(`<html><head><title>${billTitle.value || '打印'}</title><style>
+    @page { size: A4; margin: 12mm; }
     body { font-family: SimSun, serif; font-size: 13px; color: #000; margin: 24px; }
     .print-title { text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 4px; margin-bottom: 12px; }
     table { width: 100%; border-collapse: collapse; }
@@ -101,3 +118,14 @@ function doPrint() {
   setTimeout(() => w.close(), 500)
 }
 </script>
+
+<style scoped>
+.print-area .print-title { text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 4px; margin: 6px 0 12px; }
+.print-area .p-head,
+.print-area .p-detail { width: 100%; border-collapse: collapse; }
+.print-area .p-head td { padding: 3px 6px; }
+.print-area .p-detail th,
+.print-area .p-detail td { border: 1px solid #000; padding: 4px 6px; text-align: left; }
+.print-area .p-detail .num { text-align: right; }
+.print-area .p-foot { margin-top: 12px; }
+</style>

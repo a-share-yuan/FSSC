@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.mapper;
 
 import com.fssc.system.entity.SysOperLog;
@@ -45,7 +48,7 @@ public interface SysOperLogMapper {
     /**
      * A12 执行结果视图（RA-ROOT-09）：按标题倒序取最近 {@code limit} 条失败事件。
      * 只读——本 Mapper 的审计铁律仍是「只提供 insert/查询」；tenant_id 由租户拦截器注入。
-     * limit 是扫描上限而非精确口径，调用方须把 scanned/truncated 如实回给界面。
+     * limit 是扫描上限而非精确规则，调用方须把 scanned/truncated 如实回给界面。
      */
     @Select("select id, tenant_id, title, business_type, method, oper_user_id, oper_user_name, " +
             "status, error_msg, oper_time from sys_oper_log " +

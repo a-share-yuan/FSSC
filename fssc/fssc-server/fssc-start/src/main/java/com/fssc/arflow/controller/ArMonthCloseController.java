@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.controller;
 
 import com.fssc.arflow.entity.ArMonthClose;
@@ -87,7 +90,7 @@ public class ArMonthCloseController {
         return Result.success(monthCloseService.closePeriod(id));
     }
 
-    /** 反月结（重开账期）：body {reason}，原因必填留痕；解锁账期并恢复会计期间开账 */
+    /** 反月结（重开账期）：body {reason}，原因必填记录；解锁账期并恢复会计期间开账 */
     @OperLog(module = "AR_FLOW", operType = "UPDATE", desc = "AR月结反月结重开账期")
     @RequiresPerm("arflow:monthclose:manage")
     @PostMapping("/{id}/reopen")
@@ -95,7 +98,7 @@ public class ArMonthCloseController {
         return Result.success(monthCloseService.unClose(id, (String) body.get("reason")));
     }
 
-    /** R5-D-218 作废（终态 VOID）：body {reason}，原因必填留痕；未关闭账期的月结单可作废 */
+    /** R5-D-218 作废（最终状态 VOID）：body {reason}，原因必填记录；未关闭账期的月结单可作废 */
     @OperLog(module = "AR_FLOW", operType = "UPDATE", desc = "AR月结作废")
     @RequiresPerm("arflow:monthclose:manage")
     @PostMapping("/{id}/void")

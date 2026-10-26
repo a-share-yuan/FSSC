@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.invoice.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -86,7 +89,7 @@ public class InvoiceEnhanceService {
         qw.orderByDesc(InvVerifyLog::getId);
         Page<InvVerifyLog> p = verifyLogMapper.selectPage(Page.of(pageNum, pageSize), qw);
         // R5-D-122：inv_verify_log 无 invoice_no 列（审计表按真实列声明，加列属 DDL 裁决）——
-        // 列表取数后按 invoiceId 一次批查发票号码，回填到实体 transient 列供「发票号码」列按票稽核
+        // 列表查询后按 invoiceId 一次批查发票号码，回填到实体 transient 列供「发票号码」列按票稽核
         List<InvVerifyLog> records = p.getRecords();
         if (!records.isEmpty()) {
             java.util.Set<Long> invIds = records.stream()
@@ -107,14 +110,14 @@ public class InvoiceEnhanceService {
     /**
      * 记录一次验真（税务/第三方/人工渠道；审计表不提供更新/删除）。
      *
-     * <p><b>D-DEC-174 写腿补齐</b>：本表两个"人/时间"列此前全程无人赋值，
+     * <p><b>D-DEC-174 写环节补齐</b>：本表两个"人/时间"列此前全程无人赋值，
      * 验真记录页的「验真时间」「验真人」因此恒空——
      * <ul>
      *   <li>{@code verify_time}：实体上写的是 {@code @TableField(fill = FieldFill.INSERT)}，
      *       而 {@code FsscMetaObjectHandler} 只填充 createBy/updateBy/createTime/updateTime/delFlag/tenantId
      *       六个名字，不认识 verifyTime ⇒ 填充列被 INSERT 无条件写成 NULL（连表默认值都跳过）。
      *       现改为写侧显式取当前时间（注解同步摘除，见实体注释）。</li>
-     *   <li>{@code verify_user_id}：HTTP 入口（{@code /verify/run}）本就传登录人，但服务层没有兜底，
+     *   <li>{@code verify_user_id}：HTTP 入口（{@code /verify/run}）本就传登录人，但服务层没有默认处理，
      *       任何新调用方漏传即静默无痕；现调用方未传时回落到 {@link UserContext} 当前登录人。
      *       <b>系统作业（定时验真）无登录人 ⇒ 保持 NULL</b>，不拿 0/"system" 冒充某个具体经办人，
      *       该行的归属由 {@code channel=SYSTEM} 表达。</li>
@@ -144,7 +147,7 @@ public class InvoiceEnhanceService {
     }
 
     /**
-     * 验真结论落库（<b>唯一</b>能把 verify_status 写成 SUCCESS/FAILED 的出口）。
+     * 验真结论写入数据库（<b>唯一</b>能把 verify_status 写成 SUCCESS/FAILED 的出口）。
      *
      * <p>调用前提：本次结论来自<b>真实通道</b>（外部验真接口/人工对照税局查验），且拿得到请求与返回报文。
      * 报文随结论一起进 {@code inv_verify_log}，事后能被复核；没有报文的模拟请求请走
@@ -152,7 +155,7 @@ public class InvoiceEnhanceService {
      *
      * @param pass        通道给出的判定
      * @param msg         说明（空值时按判定给默认文案）
-     * @param channel     验真渠道，取 {@code inv_verify_log.channel} 既有词表；为空按 {@code SYSTEM}（系统作业）
+     * @param channel     验真渠道，取 {@code inv_verify_log.channel} 既有名称表；为空按 {@code SYSTEM}（系统作业）
      * @param reqParam    请求报文（为空回落 invoiceNo）
      * @param respContent 返回报文（真实通道的证据本体）
      */
@@ -184,12 +187,12 @@ public class InvoiceEnhanceService {
      * 的<b>无中生有的报文</b>；于是「补录一张任意发票 + 点一次按钮」就能凑出验真事实，
      * 而这条状态又被下游当准入依据（发票覆盖、合规审核、归档检查）。
      *
-     * <p>现口径（取值全部用现有枚举，见 {@code constants/enums.js} 的 VERIFY_STATUS 与 inv_invoice 列注释）：
+     * <p>现规则（取值全部用现有枚举，见 {@code constants/enums.js} 的 VERIFY_STATUS 与 inv_invoice 列注释）：
      * <ul>
      *   <li>自报失败（result=FAIL/FAILED）⇒ 照旧落 {@code FAILED}，从严方向不受影响；</li>
      *   <li>其余（含 PASS/空）⇒ 只推进到 {@code PENDING}（验真中），verify_time 不动，
-     *       并写明未判定原因；<b>不写 SUCCESS，也不落 inv_verify_log</b>——该表 result 列词表只有
-     *       PASS/FAIL，没有「未判定」一格，写进去等于再造一条假证据，发起动作的留痕由
+     *       并写明未判定原因；<b>不写 SUCCESS，也不落 inv_verify_log</b>——该表 result 列名称表只有
+     *       PASS/FAIL，没有「未判定」一格，写进去等于再造一条假证据，发起动作的记录由
      *       {@code sys_oper_log}（@OperLog）与 verify_msg 承担；</li>
      *   <li>要拿到「验真通过」，必须由真实通道给结论：见 {@link #applyVerifyConclusion}，
      *       定时作业已改为只在「外部接口配置」存在 ENABLED 的 INVOICE_VERIFY 通道时逐张调用并落报文。</li>
@@ -222,7 +225,7 @@ public class InvoiceEnhanceService {
     }
 
     /**
-     * 批量验真（发票列表多选 → 一键验真）：逐张走 {@link #verifyNow} 的发起口径并返回受理张数。
+     * 批量验真（发票列表多选 → 一键验真）：逐张走 {@link #verifyNow} 的发起规则并返回受理张数。
      *
      * <p>D-DEC-115：旧实现在这里硬编码 {@code result="PASS"}（注释自陈「当前模拟 PASS」），
      * 每张被点选的发票都直接变成 SUCCESS；真实通道接入前不产出通过结论。

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -43,7 +46,7 @@ public class ExpBillShare implements Serializable {
     private BigDecimal shareRatio;
     /** 分摊金额 */
     private BigDecimal shareAmount;
-    /** 分摊口径：COST_CENTER 成本中心承担/PROJECT 项目承担（与单据页「费用承担类型」同码，D-DEC-374） */
+    /** 分摊规则：COST_CENTER 成本中心承担/PROJECT 项目承担（与单据页「费用承担类型」同码，D-DEC-374） */
     private String shareType;
     private String remark;
 

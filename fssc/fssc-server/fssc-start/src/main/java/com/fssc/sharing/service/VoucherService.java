@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -66,7 +69,7 @@ public class VoucherService {
     private final OpVoucherLineMapper opVoucherLineMapper;
     private final ExpBillLineMapper expBillLineMapper;
     private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
-    /** D-F1R-02：按「借款冲抵」明细（而非表头混合口径的 offset_amount）定位真实冲借款金额 */
+    /** D-F1R-02：按「借款冲抵」明细（而非表头混合规则的 offset_amount）定位真实冲借款金额 */
     private final com.fssc.expense.mapper.ExpLoanOffsetMapper expLoanOffsetMapper;
     /** D-DEC-083：对公结算计提凭证按 bill.poId 反查供应商，补齐凭证行辅助核算 */
     private final com.fssc.purchase.mapper.PoOrderMapper poOrderMapper;
@@ -84,7 +87,7 @@ public class VoucherService {
     private final VoucherPushService voucherPushService;
     private final com.fssc.gl.service.GlService glService;
     private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P4-3 审计扩面（D 类）：凭证修改/作废路径留痕 */
+    /** P4-3 审计扩面（D 类）：凭证修改/作废路径记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /**
@@ -133,10 +136,10 @@ public class VoucherService {
     }
 
     /**
-     * D-N3-01：正式入账凭证的成对幂等键（发票 × 收货单）。
-     * <p>与 {@link #existingVoucherId} 的区别只在多带一格 {@code bill_id}（入账凭证落库时写的是
+     * D-N3-01：正式入账凭证的成对唯一键（发票 × 收货单）。
+     * <p>与 {@link #existingVoucherId} 的区别只在多带一格 {@code bill_id}（入账凭证写入数据库时写的是
      * 收货单ID，见 {@code reverseEstimateOnInvoiceMatch} ②）。一张发票分两次部分关联到两张收货单时，
-     * 两腿各自成账；同一对（同发票同收货单）重放仍命中幂等。</p>
+     * 两环节各自成账；同一对（同发票同收货单）重放仍命中去重。</p>
      */
     private Long existingInvoiceBookingId(Long invoiceId, Long receiptId) {
         if (invoiceId == null || receiptId == null) {
@@ -161,7 +164,7 @@ public class VoucherService {
     /**
      * D-C2-2：以独立事务读取已提交凭证。
      * <p>审批收尾（{@code GlBizAction}）运行在「流程结束事件」的事务里；MySQL 默认 REPEATABLE READ 下，
-     * 该父事务的快照早于出证腿（{@code REQUIRES_NEW}）的提交。若在父事务内直接 {@code selectById}，
+     * 该父事务的快照早于出证环节（{@code REQUIRES_NEW}）的提交。若在父事务内直接 {@code selectById}，
      * 恒读不到刚出证的凭证行 → voucher_no 回写在「凭证对象不可读」分支被跳过
      * （实测表现：单据 status=POSTED 但 voucher_no 为空）。
      * 另起一个 REQUIRES_NEW 事务读取，其快照晚于出证提交，才能取到真实凭证号。
@@ -174,7 +177,7 @@ public class VoucherService {
     }
 
     /**
-     * P0-1 公司归属兜底：部分资金域实体（tr_credit_bill / tr_bill_settle）无 company_id 字段，
+     * P0-1 公司归属默认处理：部分资金域实体（tr_credit_bill / tr_bill_settle）无 company_id 字段，
      * 但 op_voucher.company_id 为 NOT NULL。当实体缺 companyId 时，按租户取该租户首家公司
      * （id 最小）作为凭证归属公司；仍取不到则回退 1L（演示租户 DEMO1 主公司）。
      * <p>须在租户上下文内调用（bus 已 callAs(tenantId)），否则 sys_company 查询不命中租户。
@@ -196,13 +199,13 @@ public class VoucherService {
     }
 
     /**
-     * D-B3-24（P0 止血）凭证落期统一口径：所有 generate* 的落期不再用裸 {@code LocalDate.now()}。
+     * D-B3-24（P0 止血）凭证落期统一规则：所有 generate* 的落期不再用裸 {@code LocalDate.now()}。
      *
      * <ul>
      *   <li>单据自带显式期间（periodYear/periodMonth）→ 用该期间，并强制 {@code assertOpen}（已关即拒）；
      *       凭证日期落在该期间内（当期→今天，否则→期间首日）。</li>
      *   <li>无显式期间 → 从当期起前滚（跨年，至多 24 期）找第一个开账期间落账；
-     *       期间行不存在视同开账（与 {@link PeriodService#assertOpen} 同口径）。永不向后落期。</li>
+     *       期间行不存在视同开账（与 {@link PeriodService#assertOpen} 同一规则）。永不向后落期。</li>
      *   <li>未来 24 期全部已关 → 拒绝生成。</li>
      * </ul>
      * companyId 为 null 时不做期间校验（与原行为一致，仅回退当天）。
@@ -237,7 +240,7 @@ public class VoucherService {
     }
 
     /**
-     * D-B3-24：GL 域 String period 解析为 [year, month]，非法/空返回 null（交给前滚兜底）。
+     * D-B3-24：GL 域 String period 解析为 [year, month]，非法/空返回 null（交给前滚默认处理）。
      * D-DEC-137：GL 域期间字段实测为无分隔的 yyyyMM（前端 ^\d{6}$ 强校验、月结服务亦按 length()==6 判定），
      * 而原实现 split("[^0-9]+") 后要求 parts>=2，导致 "202612" 恒解析为 null 并前滚落到系统当期，凭证整月落错期间。
      */
@@ -281,41 +284,41 @@ public class VoucherService {
     /**
      * D-DEC-397：给「由别的单据派生出来的凭证」补流程回链时，只读回查 wf_instance
      * （biz_type + biz_id ⇒ proc_inst_id）。本服务对 wf_instance <b>只 SELECT、零写入</b>，
-     * 判据与单据联查取凭证的那条腿（{@code source_doc_type+source_doc_id} 或 {@code proc_inst_id}）同源。
+     * 判据与单据联查取凭证的那条环节（{@code source_doc_type+source_doc_id} 或 {@code proc_inst_id}）同源。
      */
     private final com.fssc.workflow.mapper.WfInstanceMapper wfInstanceMapper;
     /**
-     * D-DEC-398：开票派生的应收确认凭证要按<b>票面真值</b>拆价税腿，只读 inv_invoice 的
+     * D-DEC-398：开票派生的应收确认凭证要按<b>票面真值</b>拆价税环节，只读 inv_invoice 的
      * net_amount/tax_amount；发票域的数据本服务一律不改。
      */
     private final com.fssc.invoice.mapper.InvInvoiceMapper invInvoiceMapper;
     /**
-     * D-DEC-288（X-48 甲）：出纳参数「付款完成后才允许生成付款腿凭证」走既有配置通道
+     * D-DEC-288（X-48 甲）：出纳参数「付款完成后才允许生成付款环节凭证」走既有配置通道
      * （sys_config / {@code ConfigService.getValue}），本服务<b>只读</b>该参数，不写参数、不插参数行。
      */
     private final com.fssc.system.service.ConfigService configService;
-    /** D-DEC-288（X-48 甲）：批次级付款腿的实付证据只读回查 op_pay_batch.status（零写入） */
+    /** D-DEC-288（X-48 甲）：批次级付款环节的实付证据只读回查 op_pay_batch.status（零写入） */
     private final com.fssc.sharing.mapper.OpPayBatchMapper opPayBatchMapper;
     /**
-     * D-DEC-409（X-28 甲）：核销腿出证前的「到账载体」判据只读 rc_receipt / rc_receipt_line，
+     * D-DEC-409（X-28 甲）：核销环节出证前的「到账载体」判据只读 rc_receipt / rc_receipt_line，
      * 收款域的数据本服务一律不改（与 D-DEC-398 只读 inv_invoice 同一处置法）。
      */
     private final com.fssc.receivable.mapper.RcReceiptMapper rcReceiptMapper;
     private final com.fssc.receivable.mapper.RcReceiptLineMapper rcReceiptLineMapper;
 
     /**
-     * D-DEC-288（X-48 甲）：出纳参数键——「付款完成后才允许生成付款腿凭证」。
+     * D-DEC-288（X-48 甲）：出纳参数键——「付款完成后才允许生成付款环节凭证」。
      * <p>值 {@code 1/true/Y/是}＝是；其余（含读不到、读失败）＝<b>否</b>＝保持现网行为
-     * （审批通过回调照长出付款腿 DRAFT 凭证）。本轮<b>不向库里插参数行</b>，故默认恒为否。
+     * （审批通过回调照长出付款环节 DRAFT 凭证）。本轮<b>不向库里插参数行</b>，故默认恒为否。
      */
     private static final String CFG_PAY_LEG_AFTER_PAYMENT = "voucher.generate.pay-leg-after-payment";
 
-    /** D-DEC-288：受 {@link #CFG_PAY_LEG_AFTER_PAYMENT} 约束的付款腿来源族（贷 1002 银行存款）。 */
+    /** D-DEC-288：受 {@link #CFG_PAY_LEG_AFTER_PAYMENT} 约束的付款环节来源族（贷 1002 银行存款）。 */
     private static final Set<String> PAY_LEG_SOURCE_TYPES =
             Set.of("EXPENSE_PAY", "CIP_PAY", "TREASURY_PAY", "CIP_PAY_BATCH");
 
     /**
-     * D-DEC-288（X-48 甲）：出纳参数是否要求"付款完成后才生成付款腿凭证"。
+     * D-DEC-288（X-48 甲）：出纳参数是否要求"付款完成后才生成付款环节凭证"。
      * <p>读不到 / 读异常 ＝ 否 ⇒ 增量零影响（默认值方向必须是"否"）。
      */
     private boolean payLegRequiresSettledPayment() {
@@ -336,7 +339,7 @@ public class VoucherService {
     /**
      * D-DEC-288（X-48 甲）：款项是否已经真的付出。
      * <p>批次级族（TREASURY_PAY／CIP_PAY_BATCH）看 {@code op_pay_batch.status=PAID}；
-     * 单据级族（EXPENSE_PAY／CIP_PAY）看本单 {@code exp_bill_payment} 里有无 PAID 腿
+     * 单据级族（EXPENSE_PAY／CIP_PAY）看本单 {@code exp_bill_payment} 里有无 PAID 环节
      * （一条付款记录都没有＝钱还没走，判为未付出，这正是本参数要拦的那一格）。
      * <p>证据读不到（异常）时按"已付出"处理——本参数是收紧项，不能让读库抖动反过来挡进出证。
      */
@@ -362,7 +365,7 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-288（X-48 甲）：付款腿出证前置闸——参数为"否"（默认）时恒放行＝现网行为逐字不变；
+     * D-DEC-288（X-48 甲）：付款环节出证前置校验——参数为"否"（默认）时恒放行＝现网行为逐字不变；
      * 参数为"是"且款项未付出时<b>不出证</b>，只留结构化痕（付款完成后可由补生成入口/批次通道补出）。
      *
      * @return true＝本次应跳过出证
@@ -377,16 +380,16 @@ public class VoucherService {
         log.info("出纳参数「付款完成后才允许生成付款腿凭证」＝是，{} {} 款项尚未付出，本次不生成付款腿凭证",
                 sourceType, bizNo);
         recordGenFailureTrace(sourceType, docId, bizNo,
-                "按出纳参数「付款完成后才允许生成付款腿凭证」暂不出证：款项尚未实际付出；"
+                "按出纳参数「付款完成后才允许生成付款凭证」暂不出证：款项尚未实际付出；"
                         + "付款执行完成后到 凭证工作台/补生成入口 重推即可");
         return true;
     }
 
     /**
-     * D-DEC-409（X-28 甲）：核销腿出证前置闸——先有到账载体，后有「借 银行存款／贷 应收账款」。
+     * D-DEC-409（X-28 甲）：核销环节出证前置校验——先有到账载体，后有「借 银行存款／贷 应收账款」。
      * <p>载体＝挂在本次核销所属应收单上的收款核销单（{@code rc_receipt_line.receivable_id}
-     * 或旧口径的 {@code rc_receipt.receivable_ids} 逗号串），与 {@code ArWriteoffService}
-     * 的核销落库腿同一张表；只 SELECT、零写入，也不回改历史凭证。
+     * 或旧规则的 {@code rc_receipt.receivable_ids} 逗号串），与 {@code ArWriteoffService}
+     * 的核销写入数据库环节同一张表；只 SELECT、零写入，也不回改历史凭证。
      */
     private boolean hasArrivalCarrier(Long receivableId) {
         if (receivableId == null) {
@@ -418,18 +421,18 @@ public class VoucherService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "仅已审批通过的单据可生成凭证，当前状态: " + (bill.getStatus() == null ? "null" : bill.getStatus()));
         }
-        // R5-D-041：内存态闸门之外再做库内真值复核（防事件重放「内存 APPROVED／库内已 VOID」残留活凭证）
+        // R5-D-041：内存态校验之外再做库内真值复核（防事件重放「内存 APPROVED／库内已 VOID」残留活凭证）
         assertBillGeneratable(bill);
         if (bill.getCompanyId() != null && bill.getPeriodYear() != null && bill.getPeriodMonth() != null) {
             periodService.assertOpen(bill.getCompanyId(), bill.getPeriodYear(), bill.getPeriodMonth());
         }
         // P0-5 同源判重（P0 整改 2026-09-21）：本方法是全部 generate* 入口中唯一没有查重的一条
         // （其余 14+ 处均已用 existingVoucherId），审批回调重放即产生双凭证双计。
-        // 判重置于期间校验之后、取明细之前，使「已制证 + 期间已关」的重放也幂等返回既有凭证。
+        // 判重置于期间校验之后、取明细之前，使「已制证 + 期间已关」的重放也去重返回既有凭证。
         Long existed = existingVoucherId("EXPENSE", bill.getId());
         if (existed != null) {
             log.warn("单据 {} 已存在凭证 id={}，跳过重复生成（P0-5 幂等）", bill.getBillNo(), existed);
-            // 兜底回写凭证号：历史 REQUIRES_NEW 回滚会留下「凭证在、单据号为空」的悬挂态
+            // 默认处理回写凭证号：历史 REQUIRES_NEW 回滚会留下「凭证在、单据号为空」的悬挂态
             if (bill.getVoucherNo() == null || bill.getVoucherNo().isBlank()) {
                 OpVoucher v0 = opVoucherMapper.selectById(existed);
                 if (v0 != null && v0.getVoucherNo() != null && !v0.getVoucherNo().isBlank()) {
@@ -468,13 +471,13 @@ public class VoucherService {
         v.setSourceDocType("EXPENSE");
         v.setSourceDocId(bill.getId());
         v.setProcInstId(bill.getProcInstId());
-        // #3b：摘要取收款人主体名（服务端反查落库），收款人为空才回落标题；标题是手填文本、不跟往来单位变
+        // #3b：摘要取收款人主体名（服务端反查写入数据库），收款人为空才回落标题；标题是手填文本、不跟往来单位变
         v.setSummary(payeeNameOrTitle(bill));
         v.setStatus("DRAFT");
         opVoucherMapper.insert(v);
 
         // --- 先按「待付款」生成所有明细分录 ---
-        // dim_status 在规则里：部分行要求"待付款/已付款"两条都出现；凭证生成默认按待付款口径。
+        // dim_status 在规则里：部分行要求"待付款/已付款"两条都出现；凭证生成默认按待付款规则。
         String billStatus = dimStatus(bill);
         String travelDim = travelFromBill(bill);
         int no = 1;
@@ -500,7 +503,7 @@ public class VoucherService {
             String ccType = ccTypeOf(line, ccCache);
             String travel = travelOf(line, item, travelDim);
             String special = specialOf(line, projCache);
-            // --- 借方：按 md_gl_config 最佳匹配；未命中则按旧兜底 ---
+            // --- 借方：按 md_gl_config 最佳匹配；未命中则按旧默认处理 ---
             MdGlConfig bestDr = bestMatch(rulePool, line, item, "DEBIT", dimType, ccType, travel, special, billStatus);
             Long drSubjectId; String drCode; String drName;
             if (bestDr != null && debitSubjectId(bestDr) != null) {
@@ -521,7 +524,7 @@ public class VoucherService {
             debit = debit.add(amt);
 
             // --- 贷方：优先按 md_gl_config 行内 CREDIT 规则（一条借方对应一条贷方，不汇总）；
-            //    若规则未提供，则按旧行为汇总后一笔贷记 2241 兜底（由循环外处理）。
+            //    若规则未提供，则按旧行为汇总后一笔贷记 2241 默认处理（由循环外处理）。
             MdGlConfig bestCr = bestMatch(rulePool, line, item, "CREDIT", dimType, ccType, travel, special, billStatus);
             if (bestCr != null && creditSubjectId(bestCr) != null) {
                 String crCode = pickNotEmpty(bestCr.getSubjectCode(), bestCr.getAuxRule(), "2241");
@@ -535,14 +538,14 @@ public class VoucherService {
             }
         }
 
-        // --- 贷方兜底（当规则池没有任何 CREDIT 行命中或部分行未命中时，将差额汇总贷记应付科目） ---
+        // --- 贷方默认处理（当规则池没有任何 CREDIT 行命中或部分行未命中时，将差额汇总贷记应付科目） ---
         // D-F1R-02：其中「已用借款冲抵」的那部分<b>不得</b>贷记应付报销款。那笔钱在借款时就已付出、
         // 挂在「1221 其他应收款-员工借款」名下，报销冲抵的会计实质是<b>冲销应收</b>，不是新增一笔对员工的负债。
-        // 旧口径全额贷 2241 的后果（10-15 F4 实证）：报销单全额借款冲抵、公司一分现金未付，
+        // 旧规则全额贷 2241 的后果（10-15 F4 实证）：报销单全额借款冲抵、公司一分现金未付，
         // 账上却新增 3900 应付报销款，且与 D-F1R-03（付款凭证借的是 2202 而非 2241）叠加后 2241 只增不减，
         // 表现为"应付员工报销款"永久挂账、与实际资金流完全脱节。
-        // 取数用 exp_loan_offset(offset_type='CLAIM') 明细而非表头 offset_amount：
-        // 后者是借款冲抵与预付冲销的混合口径，预付对应科目是 1123 而非 1221，混算会串科目。
+        // 查询用 exp_loan_offset(offset_type='CLAIM') 明细而非表头 offset_amount：
+        // 后者是借款冲抵与预付冲销的混合规则，预付对应科目是 1123 而非 1221，混算会串科目。
         BigDecimal creditGap = debit.subtract(credit);
         if (creditGap.signum() > 0) {
             BigDecimal offset = loanOffsetAmountOf(bill.getId());
@@ -593,7 +596,7 @@ public class VoucherService {
      *
      * <p>D-DEC-083：对公结算（billSubType=SETTLE）不走本模板——审批通过那一刻只确认了应付，
      * 单据 paid_amount=0、pay_time=NULL，直接贷记银行存款属"钱未付先减银行"；结算单改由
-     * {@link #generateSettlementAccrual} 出计提应付凭证，付款腿交给出纳批次凭证
+     * {@link #generateSettlementAccrual} 出计提应付凭证，付款环节交给出纳批次凭证
      * {@link #generateTreasuryPayVoucher}（借 2202／贷 1002）。
      *
      * @param bill 已审批通过的对公付款单
@@ -610,11 +613,11 @@ public class VoucherService {
         if (isSettlementBill(bill)) {
             return generateSettlementAccrual(bill);
         }
-        // P0-5 对公付款凭证判重：同源已存在凭证（VOID 除外）幂等返回，防止单据级/批次级重复入账
+        // P0-5 对公付款凭证判重：同源已存在凭证（VOID 除外）去重返回，防止单据级/批次级重复入账
         Long existed = existingVoucherId("EXPENSE_PAY", bill.getId());
         if (existed != null) {
             log.warn("对公付款单 {} 已存在凭证 id={}，跳过重复生成（P0-5 幂等）", bill.getBillNo(), existed);
-            // 【修复 2026-09-14】幂等返回前兜底回写 voucher_no：
+            // 【修复 2026-09-14】去重返回前默认处理回写 voucher_no：
             // 历史缺陷（REQUIRES_NEW 行锁超时回滚）可能留下"凭证已在、单据 voucher_no 为空"的悬挂态
             if (bill.getId() != null && (bill.getVoucherNo() == null || bill.getVoucherNo().isBlank())) {
                 try {
@@ -633,7 +636,7 @@ public class VoucherService {
             }
             return existed;
         }
-        // D-DEC-288（X-48 甲）：出纳参数＝"是"时，款项未付出先不出这张付款腿凭证（借 2202／贷 1002）；
+        // D-DEC-288（X-48 甲）：出纳参数＝"是"时，款项未付出先不出这张付款环节凭证（借 2202／贷 1002）；
         // 参数读不到＝否＝默认，此处恒放行，制证时点与改前逐字一致（调用点不搬）。
         if (payLegNotYetPayable("EXPENSE_PAY", bill.getId(), bill.getBillNo())) {
             return null;
@@ -710,13 +713,13 @@ public class VoucherService {
     }
 
     /**
-     * #3b：凭证摘要的取名口径——收款人优先、为空回落标题（全仓各摘要位共用一份）。
+     * #3b：凭证摘要的取名规则——收款人优先、为空回落标题（全仓各摘要位共用一份）。
      *
-     * <p>摘要要说清"这笔钱涉及谁"，取数只能落在服务端反查主数据后写进
+     * <p>摘要要说清"这笔钱涉及谁"，查询只能落在服务端反查主数据后写进
      * {@code exp_bill.payee_name} 的那个户名上；单据标题（{@code title}）是用户手填文本、
      * 页面换往来单位时不跟着变，一旦进摘要就会让凭证指向另一家的往来账。
      * 仅当收款人为空（无往来单位也无采购订单的老单据/子类型，或按合同生成的伪单据）时
-     * 才回落标题，保证摘要非空、且这类单据的行为与本口径改前逐字一致。
+     * 才回落标题，保证摘要非空、且这类单据的行为与本规则改前逐字一致。
      */
     private static String payeeNameOrTitle(ExpBill bill) {
         String payee = bill == null ? null : bill.getPayeeName();
@@ -731,24 +734,24 @@ public class VoucherService {
      * D-DEC-083 对公结算「计提应付」凭证：审批通过＝确认应付，钱还没付。
      * <ul>
      *  <li>借：费用科目——逐条费用行取行科目/费用项绑定科目（缺省 6602 管理费用）；
-     *      无行或行合计≠应付口径（核定核减、含税差）时按单据口径出一笔 6602，保证借贷必等于应付额</li>
+     *      无行或行合计≠应付规则（核定核减、含税差）时按单据规则出一笔 6602，保证借贷必等于应付额</li>
      *  <li>贷：应付账款(2202)，金额 = payable_amount（已扣预付冲销）否则 total_amount</li>
      *  <li>辅助核算：凭证行补 project_id（单据/费用行）与 supplier_id（bill.poId → po_order.supplier_id，取不到留空不猜）</li>
      * </ul>
-     * 付款腿（借 2202／贷 1002）由出纳批次凭证 {@link #generateTreasuryPayVoucher} 承担，
+     * 付款环节（借 2202／贷 1002）由出纳批次凭证 {@link #generateTreasuryPayVoucher} 承担，
      * 与 paid_amount/pay_time 的实际支付时点一致。
      *
      * <p>source_type 用独立值 {@code EXPENSE_SETTLE}：批次凭证的跨类型判重按
      * {@code source_type='EXPENSE_PAY' + source_doc_id=billId} 命中即跳过批次出证
      * （{@code generateTreasuryPayVoucher} P0-5），若计提应付也写 EXPENSE_PAY，
-     * 结算单的付款腿会被永久吞掉。source_doc_type 仍写 {@code EXPENSE_PAY}，
-     * 单据→凭证联查（按 source_doc_type 过滤）口径不变。
+     * 结算单的付款环节会被永久吞掉。source_doc_type 仍写 {@code EXPENSE_PAY}，
+     * 单据→凭证联查（按 source_doc_type 过滤）规则不变。
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public Long generateSettlementAccrual(ExpBill bill) {
         // R5-D-041：出证前库内真值复核——VOID 单据禁止生成凭证（防事件重放残留活凭证）
         assertBillGeneratable(bill);
-        // P0-5 同源判重（计提应付专用幂等键）
+        // P0-5 同源判重（计提应付专用唯一键）
         Long existed = existingVoucherId(SOURCE_SETTLE, bill.getId());
         if (existed != null) {
             log.warn("对公结算单 {} 已存在计提应付凭证 id={}，跳过重复生成（P0-5 幂等）", bill.getBillNo(), existed);
@@ -795,8 +798,8 @@ public class VoucherService {
         v.setSourceDocType("EXPENSE_PAY");
         v.setSourceDocId(bill.getId());
         v.setProcInstId(bill.getProcInstId());
-        // 摘要取收款人主体名（复用 #3b 口径）：标题是用户手填的文本，可能沿用上一次打开的单据没改，
-        // 而计提凭证要说清"这笔应付是谁家的"，只能取服务端落库的收款人名；收款人为空才回落标题。
+        // 摘要取收款人主体名（复用 #3b 规则）：标题是用户手填的文本，可能沿用上一次打开的单据没改，
+        // 而计提凭证要说清"这笔应付是谁家的"，只能取服务端写入数据库的收款人名；收款人为空才回落标题。
         String accrualPayee = payeeNameOrTitle(bill);
         v.setSummary("对公结算计提应付-" + accrualPayee);
         v.setStatus("DRAFT");
@@ -833,7 +836,7 @@ public class VoucherService {
                 debit = debit.add(lamt);
             }
         } else {
-            // 无费用行 / 行合计与应付口径不一致（核定核减、税差、预付冲销）：按单据口径一笔计提，避免借贷不平
+            // 无费用行 / 行合计与应付规则不一致（核定核减、税差、预付冲销）：按单据规则一笔计提，避免借贷不平
             Long expenseSubjectId = resolveSubjectId(null, null);
             MdSubject s = expenseSubjectId == null ? null : mdSubjectMapper.selectById(expenseSubjectId);
             OpVoucherLine dr = buildLine(tenantId, v.getId(), no++,
@@ -881,7 +884,7 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-083 结算凭证供应商辅助核算取数：exp_bill 无供应商列（结算单的对手方挂在采购订单上），
+     * D-DEC-083 结算凭证供应商辅助核算查询：exp_bill 无供应商列（结算单的对手方挂在采购订单上），
      * 故按 bill.poId → po_order.supplier_id 间接取；poId 为空或订单查不到一律返回 null，
      * 不用 payeeName/contractId 猜一个填上去（错填辅助项比留空更难看）。
      */
@@ -900,17 +903,17 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-123（证据 12-25:87）：付款单凭证的供应商辅助取数。
+     * D-DEC-123（证据 12-25:87）：付款单凭证的供应商辅助查询。
      * <ul>
-     *   <li>① {@code bill.poId → po_order.supplier_id}——与 D-DEC-083 结算凭证同一条腿；</li>
+     *   <li>① {@code bill.poId → po_order.supplier_id}——与 D-DEC-083 结算凭证同一个环节；</li>
      *   <li>② 无采购订单时退 {@code bill.contractId → cont_contract.customer_id}。合同侧「往来单位」
      *       在本仓就是按供应商维度使用的（合同凭证 {@code generateByTemplate} 写的就是
      *       {@code setSupplierId(contract.getCustomerId())}），付款记录也按同一列回查合同，
      *       所以这是<b>沿用既有映射</b>而不是新造一条；</li>
-     *   <li>③ 两条都取不到＝留空，绝不按 {@code payee_name} 文本猜一个供应商挂上去（083 同口径）。</li>
+     *   <li>③ 两条都取不到＝留空，绝不按 {@code payee_name} 文本猜一个供应商挂上去（083 同一规则）。</li>
      * </ul>
-     * 与 {@link #resolveSettleSupplierId} 刻意分成两个方法：结算凭证（083 在册行为）只认采购订单那一条腿，
-     * 不受本条扩腿影响。
+     * 与 {@link #resolveSettleSupplierId} 刻意分成两个方法：结算凭证（083 现有行为）只认采购订单那一个环节，
+     * 不受本条扩环节影响。
      */
     private Long resolvePayeeSupplierId(ExpBill bill) {
         if (bill == null) {
@@ -934,7 +937,7 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-123：单据 → 供应商 ID 的对外只读口径（付款记录 {@code exp_bill_payment.payee_id} 回填用，
+     * D-DEC-123：单据 → 供应商 ID 的对外只读规则（付款记录 {@code exp_bill_payment.payee_id} 回填用，
      * 见 {@code ExpenseWfEventListener.createPaymentRecord}）。取不到返回 null，调用方保持留空。
      */
     public Long billSupplierIdOf(ExpBill bill) {
@@ -971,11 +974,11 @@ public class VoucherService {
 
     /**
      * D-DEC-123：把分录上<b>已解析出的</b>辅助核算维度连同名称写进 {@code op_voucher_line.aux_json}
-     * （库表第 19 列，自建表以来恒 NULL——实体列映射是本轮补的，写入点就是这里）。
-     * 键名沿用 {@code md_subject.aux_items} 的词表（dept/project/supplier/customer/employee），
+     * （库表第 19 列，自建表以来恒 NULL——实体列映射是本轮补的，写入位置就是这里）。
+     * 键名沿用 {@code md_subject.aux_items} 的名称表（dept/project/supplier/customer/employee），
      * 值形如 {@code {"id":9,"name":"上海恒润精密机械有限公司"}}；只写实际有值的维度。
      *
-     * <p>定位：纯<b>留痕附加列</b>——权威辅助仍是 dept_id/project_id/supplier_id 那几列，
+     * <p>定位：纯<b>记录附加列</b>——权威辅助仍是 dept_id/project_id/supplier_id 那几列，
      * 本列只让"这行辅助取的是哪个往来单位/项目"在凭证行上自解释，免于回查单据与主数据。
      * 一个维度都没有时<b>保持 NULL</b>（不写空 JSON），序列化失败也只记日志，绝不影响出证。
      * {@code dept} 只给 ID 不给名称（本服务未注入部门主档，为此新添一条依赖不值）。
@@ -1019,7 +1022,7 @@ public class VoucherService {
 
     /**
      * D-DEC-123：出纳批次凭证的供应商辅助——批次内付款记录指向<b>唯一</b>收款方时才落 supplier_id，
-     * 跨供应商合并组批则留空（与 {@code op_pay_batch.proc_inst_id}「多实例不可归一 ⇒ 留 NULL」同口径，
+     * 跨供应商合并组批则留空（与 {@code op_pay_batch.proc_inst_id}「多实例不可归一 ⇒ 留 NULL」同一规则，
      * 不把多家的账混挂到一家名下）。收款方 ID 取付款记录的 {@code payee_id}（SUPPLIER 类型）。
      */
     private Long batchSupplierIdOf(
@@ -1038,7 +1041,7 @@ public class VoucherService {
 
     // ============== 多辅助维度规则匹配工具 ==============
 
-    /** 每条明细行构建一条 OpVoucherLine（不含落库） */
+    /** 每条明细行构建一条 OpVoucherLine（不含写入数据库） */
     private OpVoucherLine buildLine(Long tenantId, Long vId, int no, String summary,
                                     Long subjectId, String code, String name, String dir,
                                     BigDecimal amt, Long deptId) {
@@ -1216,7 +1219,7 @@ public class VoucherService {
 
     /**
      * D-F1R-02：报销单已发生的「借款冲抵」合计（凭证贷方据此拆出应冲销的 1221 应收部分）。
-     * <p>口径＝{@code exp_loan_offset} 中 {@code bill_id=本单} 且 {@code offset_type='CLAIM'} 的金额合计
+     * <p>规则＝{@code exp_loan_offset} 中 {@code bill_id=本单} 且 {@code offset_type='CLAIM'} 的金额合计
      * —— {@code bill_id} 侧存放的是<b>使用方</b>单据（报销单/还款单），
      * {@code offset_type='REPAY'} 的行属于还款资金侧，不计入本单的费用冲抵。
      * <p>取不到时返回 0：辅助查询失败不能阻断出证，此时按"无借款冲抵"处理（＝改前行为，全额贷 2241）。
@@ -1323,13 +1326,13 @@ public class VoucherService {
      * 记账：DRAFT → POSTED。
      * <p><b>D-DEC-166（2026-10-01）制审分离改为后端强制</b>：本方法原有序列做了 8 项校验
      * （凭证存在、公司可见、非 POSTED、期间开账、分录非空、末级科目、辅助核算、借贷平衡），
-     * 独缺"过账人 ≠ 制单人"。整改前该闸门只存在于浏览器（`GlLedger.vue` 的 canPostRow/postableRows
+     * 独缺"过账人 ≠ 制单人"。整改前该校验只存在于浏览器（`GlLedger.vue` 的 canPostRow/postableRows
      * 纯客户端过滤），任何持 `sharing:voucher:post` 的人直接调
      * `POST /api/tenant/sharing/voucher/{id}/post`、`POST .../voucher/batch-post` 即可自提自过。
      * 现在后端拦截，前端过滤降级为"少点几次按钮"的体验优化。
      *
      * @param systemInitiated 系统自动过账豁免（见 {@link #postSystem}）。<b>只能由调用方显式声明，
-     *                        不从"操作人为空"反推</b>——否则伪造一个无上下文调用就能绕过闸门。
+     *                        不从"操作人为空"反推</b>——否则伪造一个无上下文调用就能绕过校验。
      */
     public void post(Long voucherId, Long userId, boolean systemInitiated) {
         OpVoucher v = opVoucherMapper.selectById(voucherId);
@@ -1340,7 +1343,7 @@ public class VoucherService {
         if ("POSTED".equals(v.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "凭证已记账");
         }
-        // ② 制审分离（D-DEC-166）：制单人不可自审自过；系统过账豁免必须留痕
+        // ② 制审分离（D-DEC-166）：制单人不可自审自过；系统过账豁免必须记录
         if (systemInitiated) {
             log.warn("凭证 {} 走系统自动过账，豁免制审分离闸门（D-DEC-166，操作人 {}）——" +
                     "仅限损益结转/实付入账等无人工审核环节的路径", v.getVoucherNo(), userId);
@@ -1384,7 +1387,7 @@ public class VoucherService {
         // 系统自动过账通道（VoucherAutoPostService→batchPost，以及 PayBatchBizAction:216/225 直传 null）
         // 的 userId 就是 null，而 MP 的 updateById 会忽略实体里的 null 字段 ⇒ post_time 写了、
         // post_user_id 恒 NULL，"谁记的账"这一列在自动过账的凭证上永远空着。
-        // 口径：优先调用方显式传入的过账人；没有则取当前登录人；再没有按本仓系统作业惯例记 0
+        // 规则：优先调用方显式传入的过账人；没有则取当前登录人；再没有按本仓系统作业惯例记 0
         // （与 FsscMetaObjectHandler.fillAudit 的 0/"system" 同一约定）——留 0 是"系统干的"这个事实，
         // 留 NULL 才是缺陷。人工过账口（SharingController /post、/batch-post）传的是真人，不受影响。
         Long poster = userId != null ? userId : systemPosterId();
@@ -1397,7 +1400,7 @@ public class VoucherService {
         // P2：POSTED 凭证落账总账（EER 报销 / PTP 对公付款统一入账）
         try {
             // D-DEC-167：非系统路径把操作人带进分录；系统自动过账（postSystem，userId 可为空）走 1 参重载，
-            // 让 GlService 回退凭证头 post_user_id——把 null 当参数传下去只会掩盖这条回退腿。
+            // 让 GlService 回退凭证头 post_user_id——把 null 当参数传下去只会掩盖这条回退环节。
             if (userId == null) {
                 glService.postVoucherToGl(voucherId);
             } else {
@@ -1410,7 +1413,7 @@ public class VoucherService {
     }
 
     /**
-     * 系统自动过账（豁免制审分离闸门）。
+     * 系统自动过账（豁免制审分离校验）。
      * <p>仅用于<b>没有人工审核环节参与</b>的自动生成凭证入账路径：
      * <ul>
      *   <li>{@code GlProfitCarryService} 损益结转——结转凭证由总账会计当场生成并当场入账，
@@ -1428,7 +1431,7 @@ public class VoucherService {
 
     /**
      * 制审分离校验（D-DEC-166）：过账人等于凭证制单人（op_voucher.create_by）即拒绝。
-     * <p>口径与流程侧「禁止审批自己提交的单据」一致；制单人留痕缺失（历史数据/系统生成凭证）时
+     * <p>规则与流程侧「禁止审批自己提交的单据」一致；制单人记录缺失（历史数据/系统生成凭证）时
      * 无从判定，放行并告警——不能把"缺失"当作"另有其人"的证据，也不能因数据缺痕把账堵死。
      */
     private void assertMakerCheckerSeparation(OpVoucher v, Long userId) {
@@ -1445,12 +1448,12 @@ public class VoucherService {
     }
 
     /**
-     * 过账人兜底口径（D-DEC-093）：调用方没显式传 userId 时，先取当前登录人，
+     * 过账人默认处理规则（D-DEC-093）：调用方没显式传 userId 时，先取当前登录人，
      * 仍无登录态（定时/自动过账通道）则按本仓系统作业惯例记 0——
      * 与 {@code FsscMetaObjectHandler.fillAudit} 对 Long 型审计列填 0、String 型填 "system" 同一约定，
      * 不是"造一个操作人"，而是把"这次是系统干的"写成事实而不是留 NULL。
-     * <p>注意：本方法只填 post_user_id（留痕列），不参与 D-DEC-166 制审分离判定
-     * （那条闸门看的是 create_by，系统豁免走 {@link #postSystem} 并留 warn 日志）。
+     * <p>注意：本方法只填 post_user_id（记录列），不参与 D-DEC-166 制审分离判定
+     * （那条校验看的是 create_by，系统豁免走 {@link #postSystem} 并留 warn 日志）。
      */
     private static Long systemPosterId() {
         com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
@@ -1464,9 +1467,9 @@ public class VoucherService {
      * 因此"自制自过"在批量口同样被拦，原因逐张回显而非整批失败。
      */
     /**
-     * GAP-01(20260921)：凭证作废——仅 DRAFT 可作废，作废留痕不可逆
+     * GAP-01(20260921)：凭证作废——仅 DRAFT 可作废，作废记录不可逆
      *
-     * <p>业务写＋留痕写成对（ROOT-11 已裁口径的字面对象）：缺边界时"凭证已 VOID 而查不到谁作废的"。
+     * <p>业务写＋记录写成对（ROOT-11 已裁规则的字面对象）：缺边界时"凭证已 VOID 而查不到谁作废的"。
      */
     @Transactional(rollbackFor = Exception.class)
     public void voidVoucher(Long voucherId, Long userId) {
@@ -1486,7 +1489,7 @@ public class VoucherService {
                 String.valueOf(voucherId), auditBefore, auditAfter, "凭证作废（DRAFT → VOID）");
         // D-V3-147：作废凭证联动清源单表头 voucher_no 冗余引用——否则反审核前置校验
         // （ExpenseBillService.unaudit 按 exp_bill.voucher_no 非空判"已制证"）恒拦，
-        // "作废凭证→反审核"链在单据侧断头（通行口径：凭证先行作废后反审核应可走通）。
+        // "作废凭证→反审核"链在单据侧断头（通行规则：凭证先行作废后反审核应可走通）。
         // 仅清"表头引用仍指向本凭证"的单据，避免误伤已重制证挂新凭证的单。
         clearSourceBillVoucherRef(v);
     }
@@ -1544,7 +1547,7 @@ public class VoucherService {
         rev.setCreditTotal(src.getCreditTotal());
         rev.setStatus("POSTED");
         rev.setRemark(reason == null || reason.isBlank() ? "红字冲销原凭证 " + src.getVoucherNo() : "红字冲销：" + reason);
-        // D-DEC-093：红字凭证同样是"直接 POSTED"的建行，过账人缺登录态时与本方法上方 post() 同口径
+        // D-DEC-093：红字凭证同样是"直接 POSTED"的建行，过账人缺登录态时与本方法上方 post() 同一规则
         // 兜到当前登录人／系统作业 0，不再留一张"已记账却无人过账"的红字。
         rev.setPostUserId(userId != null ? userId : systemPosterId());
         rev.setPostTime(java.time.LocalDateTime.now());
@@ -1565,13 +1568,13 @@ public class VoucherService {
             rl.setSubjectId(line.getSubjectId());
             rl.setSubjectCode(line.getSubjectCode());
             rl.setSubjectName(line.getSubjectName());
-            // 方向相反、金额相等（行业方案红字冲销口径）
+            // 方向相反、金额相等（红字冲销规则）
             rl.setDirection("DEBIT".equals(line.getDirection()) ? "CREDIT" : "DEBIT");
             rl.setAmount(line.getAmount());
             rl.setCurrencyCode(line.getCurrencyCode());
             opVoucherLineMapper.insert(rl);
         }
-        // 红字凭证同步落总账（与 post 同口径），否则冲销分录不进余额
+        // 红字凭证同步落总账（与 post 同一规则），否则冲销分录不进余额
         try {
             glService.postVoucherToGl(rev.getId());
         } catch (Exception ex) {
@@ -1585,10 +1588,10 @@ public class VoucherService {
      * <p>按来源单据（source_type + source_doc_id）定位它那张有效凭证，再按凭证当时状态分两走：
      * <ul>
      *   <li><b>已记账（POSTED）</b>：账面已有数，出红字反向凭证（借贷方向对调、等额，直接过账并落总账）
-     *       —— 即 {@link #reverseVoucher} 既有口径；</li>
+     *       —— 即 {@link #reverseVoucher} 既有规则；</li>
      *   <li><b>仍是草稿（DRAFT）</b>：办结已出证、记账岗尚未过账，账面上根本没有这笔数，
      *       此时红字反向等于凭空造两张不进余额的凭证；正确动作是把草稿凭证作废
-     *       （{@link #voidVoucher} DRAFT→VOID，审计已留痕），单据回到可重办状态。</li>
+     *       （{@link #voidVoucher} DRAFT→VOID，审计已记录），单据回到可重办状态。</li>
      * </ul>
      * 凭证台账的「红字冲销」按钮前置 {@code status==='POSTED'}，草稿凭证一律置灰
      * （证据 12-28:75：预提单凭证 id=24 停在 DRAFT → 全系统无任何冲销出口），
@@ -1619,7 +1622,7 @@ public class VoucherService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "来源单据未生成有效凭证（source_type=" + sourceType + ", id=" + sourceDocId + "），无可冲销账");
         }
-        orgGuard.assertVisible(src.getCompanyId(), null); // ① 写路径公司归属校验（与 post 同口径）
+        orgGuard.assertVisible(src.getCompanyId(), null); // ① 写路径公司归属校验（与 post 同一规则）
         Map<String, Object> ret = new LinkedHashMap<>();
         ret.put("originVoucherId", src.getId());
         ret.put("originVoucherNo", src.getVoucherNo());
@@ -1648,22 +1651,23 @@ public class VoucherService {
     }
 
     /**
-     * R5-D-041（作废即级联）：源单作废时，同批收口它名下的全部非 VOID 凭证。
+     * R5-D-041（作废即级联）：源单作废时，同批办结它名下的全部非 VOID 凭证。
      *
      * <p>抬头形态：exp_bill 作成 VOID 后仍挂活凭证（DRAFT/POSTED），/audit/reconcile 的
      * 「凭证一致性」就会报「借贷合计 vs 单据 0」这类账实差异，且单据已死、凭证仍上账。
      * 由 {@code ExpenseBillService.voidBill} 在同一事务内调用，逐张分派到本类既有机制，不另造第二套：
      * <ul>
-     *   <li>DRAFT → {@link #voidVoucher}（DRAFT→VOID，auditTrail 留痕，并联动回清源单 voucher_no）；</li>
+     *   <li>DRAFT → {@link #voidVoucher}（DRAFT→VOID，auditTrail 记录，并联动回清源单 voucher_no）；</li>
      *   <li>POSTED → {@link #reverseVoucher}（账面已有数：出红字反向并落总账。直接置 VOID 会留下
+     *       未冲销的分录，与 {@link #reverseBySource} 的 POSTED 环节同一规则）；</li>
      *   <li>其余状态（理论不可达）→ 抛错 fail-loud，绝不放任何一张哑状态凭证继续挂着。</li>
      * </ul>
-     * 查询按 bill_id 且仅限 {@link #EXPENSE_BILL_SOURCES} 族来源（D-DEC-244 串号闸同源），
+     * 查询按 bill_id 且仅限 {@link #EXPENSE_BILL_SOURCES} 族来源（D-DEC-244 串号校验同源），
      * 不误伤同号他域凭证、也不会二次命中冲销产生的红字凭证（红字不写 bill_id）。
      *
      * @param bill   已作成 VOID 的源单（调用方已在同事务内落状态）
      * @param userId 操作人（作废审计／红字凭证 post_user_id）
-     * @return 收口的凭证张数（幂等：重复调用时已无非 VOID 凭证，自然为空操作）
+     * @return 办结的凭证张数（去重：重复调用时已无非 VOID 凭证，自然为空操作）
      */
     @Transactional(rollbackFor = Exception.class)
     public int cascadeVoidBySourceBill(ExpBill bill, Long userId) {
@@ -1680,7 +1684,7 @@ public class VoucherService {
             if ("DRAFT".equals(v.getStatus())) {
                 voidVoucher(v.getId(), userId);
             } else if ("POSTED".equals(v.getStatus())) {
-                // 与 reverseBySource 的 POSTED 腿同闸：落期已关时不冲销（否则红字记进已关期间）
+                // 与 reverseBySource 的 POSTED 环节同校验：落期已关时不冲销（否则红字记进已关期间）
                 if (v.getCompanyId() != null && v.getPeriodYear() != null && v.getPeriodMonth() != null) {
                     periodService.assertOpen(v.getCompanyId(), v.getPeriodYear(), v.getPeriodMonth());
                 }
@@ -1698,11 +1702,11 @@ public class VoucherService {
     }
 
     /**
-     * R5-D-041 写侧闸门（生成侧·正面清单）：非有效状态单据一律禁止出证。
+     * R5-D-041 写侧校验（生成侧·正面清单）：非有效状态单据一律禁止出证。
      *
-     * <p>除与 {@link #generate} 的 P0-4 同口径外，再以<b>库内真值</b>复核一次：审批回调会把
-     * 内存状态先置 APPROVED 再过闸（见 ExpenseWfEventListener 的时序注释），事件重放时库里
-     * 单据可能已 VOID——只信入参就会放行出证，造出「VOID 单＋活凭证」残留（本闸的正面对象）。
+     * <p>除与 {@link #generate} 的 P0-4 同一规则外，再以<b>库内真值</b>复核一次：审批回调会把
+     * 内存状态先置 APPROVED 再过校验（见 ExpenseWfEventListener 的时序注释），事件重放时库里
+     * 单据可能已 VOID——只信入参就会放行出证，造出「VOID 单＋活凭证」残留（本校验的正面对象）。
      */
     private void assertBillGeneratable(ExpBill bill) {
         if (bill == null) {
@@ -1723,7 +1727,7 @@ public class VoucherService {
     }
 
     /**
-     * R5-D-041 写侧闸门（模板出证口·负面清单）：库内已死状态禁止再出证。
+     * R5-D-041 写侧校验（模板出证口·负面清单）：库内已死状态禁止再出证。
      * <p>与 {@link #assertBillGeneratable} 分开：EXP_LOAN/EXP_REPAY 在审批回调里出证，此刻库内
      * 状态仍是 APPROVING（APPROVED 的回写在外层事务之后），故本口只负面排除死态，
      * 不套正面清单，避免把合法时序一并拦掉。
@@ -1741,7 +1745,7 @@ public class VoucherService {
     }
 
     /**
-     * 批量过账（D-DEC-166：与单张同一道制审分离闸门）。
+     * 批量过账（D-DEC-166：与单张同一道制审分离校验）。
      *
      * @param systemInitiated 系统自动过账豁免，语义同 {@link #postSystem}；
      *                        仅供实付入账等无人工审核环节的路径显式声明，人工入口一律传 false。
@@ -1777,18 +1781,18 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-168 后端腿：凭证台账的「公司／年度／月度」三个筛选条件与查询按钮走的是同一个入口，
+     * D-DEC-168 后端环节：凭证台账的「公司／年度／月度」三个筛选条件与查询按钮走的是同一个入口，
      * 但此前方法签名里<b>根本没有这三个参数</b>，控制器也不接 ⇒ 页面上选了公司、选了 2026 年 11 月，
      * 后端照旧返回全量倒序列表（一屏还有两个「查询」按钮是前端面，另记 S1／WEB）。
      * <p>本重载只做<b>加法</b>：不改动原 4 参签名（外部引用不改），参数全部可空，
-     * 空＝不加条件＝与改前逐字一致的历史口径，老调用方行为零变化。
+     * 空＝不加条件＝与改前逐字一致的历史规则，老调用方行为零变化。
      * <ul>
      *  <li>{@code companyId} 只作<b>收窄</b>——与 {@link DataScopeKit} 注入的 data_scope 五级条件是 AND，
      *     选了范围外的公司只会得到空列表，<b>绝不因此放宽可见性</b>；</li>
      *  <li>{@code periodYear}/{@code periodMonth} 按 {@code op_voucher.period_year/period_month} 等值匹配，
      *     越界月份（如 0/13）自然零命中，不做猜测式纠正；</li>
-     *  <li>数据范围闸 {@code @DataScope} 与 {@code DataScopeKit.apply} 的 AND 语义原样保留（本方法同样挂注解，
-     *     控制器直接调它时照样过闸）。</li>
+     *  <li>数据范围校验 {@code @DataScope} 与 {@code DataScopeKit.apply} 的 AND 语义原样保留（本方法同样挂注解，
+     *     控制器直接调它时照样过校验）。</li>
      * </ul>
      */
     @DataScope("凭证列表数据范围")
@@ -1798,20 +1802,20 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-168 后端腿：凭证台账的「公司／年度／月度」三个筛选条件与查询按钮走的是同一个入口，
+     * D-DEC-168 后端环节：凭证台账的「公司／年度／月度」三个筛选条件与查询按钮走的是同一个入口，
      * 但此前方法签名里<b>根本没有这三个参数</b>，控制器也不接 ⇒ 页面上选了公司、选了 2026 年 11 月，
      * 后端照旧返回全量倒序列表（一屏还有两个「查询」按钮是前端面，另记 S1／WEB）。
      * <p>本重载只做<b>加法</b>：不改动原 4 参签名（外部引用不改），参数全部可空，
-     * 空＝不加条件＝与改前逐字一致的历史口径，老调用方行为零变化。
+     * 空＝不加条件＝与改前逐字一致的历史规则，老调用方行为零变化。
      * <ul>
      *  <li>{@code companyId} 只作<b>收窄</b>——与 {@link DataScopeKit} 注入的 data_scope 五级条件是 AND，
      *     选了范围外的公司只会得到空列表，<b>绝不因此放宽可见性</b>；</li>
      *  <li>{@code periodYear}/{@code periodMonth} 按 {@code op_voucher.period_year/period_month} 等值匹配，
      *     越界月份（如 0/13）自然零命中，不做猜测式纠正；</li>
-     *  <li>数据范围闸 {@code @DataScope} 与 {@code DataScopeKit.apply} 的 AND 语义原样保留（本方法同样挂注解，
-     *     控制器直接调它时照样过闸）。</li>
+     *  <li>数据范围校验 {@code @DataScope} 与 {@code DataScopeKit.apply} 的 AND 语义原样保留（本方法同样挂注解，
+     *     控制器直接调它时照样过校验）。</li>
      * </ul>
-     * <p><b>R5-D-149 腿（列头服务端排序）</b>：前端列头原为裸 {@code sortable}——element-plus 只对
+     * <p><b>R5-D-149 环节（列头服务端排序）</b>：前端列头原为裸 {@code sortable}——element-plus 只对
      * 「当前页 20 行」做前端排序，翻页即乱序。{@code orderBy} 为前端列 prop（camelCase），
      * <b>仅白名单列</b>映射到实体 getter（{@link #sortColumnOf}），非白名单值忽略回退历史默认（id 倒序）；
      * {@code order} 仅识别 desc（其余按 asc）。排序值不进任何 SQL 字面量拼接，无注入面。
@@ -1836,7 +1840,7 @@ public class VoucherService {
                 qw.eq(OpVoucher::getSourceType, sourceTypes.get(0));
             }
         }
-        // D-DEC-168：公司/年度/月度三个筛选参数（null＝不参与过滤，保持原口径）
+        // D-DEC-168：公司/年度/月度三个筛选参数（null＝不参与过滤，保持原规则）
         if (companyId != null) {
             qw.eq(OpVoucher::getCompanyId, companyId);
         }
@@ -1846,7 +1850,7 @@ public class VoucherService {
         if (periodMonth != null) {
             qw.eq(OpVoucher::getPeriodMonth, periodMonth);
         }
-        // R5-D-149：列头排序（白名单：凭证号 voucherNo / 摘要 summary；缺省 id 倒序＝历史口径）
+        // R5-D-149：列头排序（白名单：凭证号 voucherNo / 摘要 summary；缺省 id 倒序＝历史规则）
         SFunction<OpVoucher, ?> sortCol = sortColumnOf(orderBy);
         if (sortCol != null) {
             boolean asc = !"desc".equalsIgnoreCase(order);
@@ -1907,7 +1911,7 @@ public class VoucherService {
         }
     }
 
-    /** 制单人姓名回填：op_voucher.create_by 走 TenantAuditBase 的 Long 口径（存用户 ID），列表需要人名 */
+    /** 制单人姓名回填：op_voucher.create_by 走 TenantAuditBase 的 Long 规则（存用户 ID），列表需要人名 */
     private void fillCreator(java.util.List<OpVoucher> vouchers) {
         if (vouchers == null || vouchers.isEmpty()) {
             return;
@@ -1934,15 +1938,15 @@ public class VoucherService {
     /**
      * D-DEC-083：对公结算计提应付凭证的来源类型（bill_id/source_doc_id 仍是 exp_bill 主键）。
      * <p>不复用 EXPENSE_PAY：批次出纳凭证按 {@code source_type='EXPENSE_PAY' + source_doc_id=billId}
-     * 跨类型判重（{@code generateTreasuryPayVoucher} P0-5），复用会让结算单的付款腿永久不出证。
+     * 跨类型判重（{@code generateTreasuryPayVoucher} P0-5），复用会让结算单的付款环节永久不出证。
      */
     public static final String SOURCE_SETTLE = "EXPENSE_SETTLE";
 
     /**
      * bill_id 是跨域裸主键（合同凭证写 contractId、采购入库/应付确认写 po_order.id、资金调拨写 tr_transfer.id、
      * 期末类写各业务表自身主键），只有下列费用族来源的 bill_id 才是 exp_bill 主键。
-     * 不加这道闸，非费用域凭证会拿同号的费用单号顶上（D-DEC-244：4 例串号）。
-     * 同口径也供出纳付款批次富化反向按 bill_id 查凭证使用（PayBatchService，D-DEC-252），避免两处集合各改一半。
+     * 不加这道校验，非费用域凭证会拿同号的费用单号顶上（D-DEC-244：4 例串号）。
+     * 同一规则也供出纳付款批次补充反向按 bill_id 查凭证使用（PayBatchService，D-DEC-252），避免两处集合各改一半。
      */
     public static final java.util.Set<String> EXPENSE_BILL_SOURCES = java.util.Set.of(
             "EXPENSE", "EXPENSE_PAY", SOURCE_SETTLE, "EXP_LOAN", "EXP_REPAY");
@@ -1973,7 +1977,7 @@ public class VoucherService {
         }
     }
 
-    /** 科目解析：行科目 → 费用项绑定科目（须真实存在）→ 租户 6602 管理费用兜底（NOT NULL 约束） */
+    /** 科目解析：行科目 → 费用项绑定科目（须真实存在）→ 租户 6602 管理费用默认处理（NOT NULL 约束） */
     private Long resolveSubjectId(Long lineSubjectId, MdExpenseItem item) {
         Long candidate = lineSubjectId;
         if (candidate == null && item != null) {
@@ -2021,10 +2025,10 @@ public class VoucherService {
 
     /**
      * D-DEC-397／335 凭证流程回链：按「来源单据域 + 来源单据主键」只读回查 wf_instance，取最近一条的
-     * {@code proc_inst_id}。用于<b>派生单据的出证腿</b>——凭证的直接对象是新建的派生单（应收单/应付确认），
+     * {@code proc_inst_id}。用于<b>派生单据的出证环节</b>——凭证的直接对象是新建的派生单（应收单/应付确认），
      * 而它自己没有流程实例，审批链挂在<b>源单据</b>上（开票单／付款单），于是按源单据联查永远取不到凭证。
-     * <p>口径与 D-DEC-36 一致：单据级凭证回链的就是<b>触发它的那条源单据流</b>，不是猜一条别的链。
-     * 查不到、或解析异常一律返回 null（宁缺勿错锚，与 D-TRC-05「无实例时自然留 NULL，不猜测归属」同口径）。
+     * <p>规则与 D-DEC-36 一致：单据级凭证回链的就是<b>触发它的那条源单据流</b>，不是猜一条别的链。
+     * 查不到、或解析异常一律返回 null（宁缺勿错关联，与 D-TRC-05「无实例时自然留 NULL，不猜测归属」同一规则）。
      */
     private String resolveProcInstIdOf(Long bizId, String... bizTypes) {
         if (bizId == null || bizTypes == null || bizTypes.length == 0) {
@@ -2046,11 +2050,11 @@ public class VoucherService {
 
     /**
      * D-DEC-398：应收单是否为「开票审批派生」——判据只用应收单自己登记的来源列
-     * （{@code rc_receivable.source_doc_type/source_doc_id}，由开票收尾腿写入），不按单号格式猜。
+     * （{@code rc_receivable.source_doc_type/source_doc_id}，由开票收尾环节写入），不按单号格式猜。
      */
     private static final String SOURCE_INVOICE_ISSUE = "INVOICE_ISSUE";
 
-    /** 只读取应收单派生自的那张发票（非开票派生／查不到 ⇒ null，凭证退回全额单腿的既有行为） */
+    /** 只读取应收单派生自的那张发票（非开票派生／查不到 ⇒ null，凭证退回全额单环节的既有行为） */
     private com.fssc.invoice.entity.InvInvoice sourceInvoiceOf(com.fssc.receivable.entity.RcReceivable rec) {
         if (rec == null || !SOURCE_INVOICE_ISSUE.equals(rec.getSourceDocType()) || rec.getSourceDocId() == null) {
             return null;
@@ -2069,7 +2073,7 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-335：PO 域凭证的「付款单侧坐标」——{@code bill_id} 是 exp_bill 口径的单据外键
+     * D-DEC-335：PO 域凭证的「付款单侧坐标」——{@code bill_id} 是 exp_bill 规则的单据外键
      * （见 {@link #EXPENSE_BILL_SOURCES} 与 D-DEC-244），只有按 {@code exp_bill.po_id} 反查<b>唯一命中</b>
      * 时才认得出这张 PO 对应的付款单；多条或零条一律 null（不猜，维持原坐标）。
      */
@@ -2090,18 +2094,18 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-272 非费用域制证失败的结构化留痕：这些分支历来只有一条 {@code log.*}（跑在服务端日志里，
-     * 界面看不见、点数说不清）。本方法<b>只加留痕、不改控制流</b>——原有的 warn/info/error 一律保留，
-     * 原有的抛错分支<b>不接这里</b>：出证腿带 {@code REQUIRES_NEW}，抛错时整个内层事务回滚，
+     * D-DEC-272 非费用域制证失败的结构化记录：这些分支历来只有一条 {@code log.*}（跑在服务端日志里，
+     * 界面看不见、点数说不清）。本方法<b>只加记录、不改控制流</b>——原有的 warn/info/error 一律保留，
+     * 原有的抛错分支<b>不接这里</b>：出证环节带 {@code REQUIRES_NEW}，抛错时整个内层事务回滚，
      * 里写的 audit_trail 一起消失（{@link com.fssc.audit.service.AuditTrailService} 自身无事务传播），
-     * 那类失败的结构化留痕只能在调用方的 catch 里补（已列移交项）。
+     * 那类失败的结构化记录只能在调用方的 catch 里补（已列移交项）。
      * <p>因此本方法只服务于<b>吞掉异常／静默跳过</b>这两类"库没写、事务照提交"的分支。
      * <p>载体复用既存结构化面 {@code audit_trail}（{@link com.fssc.audit.service.AuditTrailService} 已注入，
      * 且其写入失败只 warn、绝不反噬出证）；A12 费用域视图（{@code VoucherGenFailureService}）覆盖不到非费用域，
-     * 本留痕与之互补，不冒充它的口径。
+     * 本记录与之互补，不冒充它的规则。
      *
-     * @param voucherGenerated 凭证本身是否已经出：{@code false}＝整张未出证；{@code true}＝凭证出了但<b>缺一条腿</b>
-     *                         （如价税分离腿未拆），如实分开记，免把"部分出证"点成"零出证"
+     * @param voucherGenerated 凭证本身是否已经出：{@code false}＝整张未出证；{@code true}＝凭证出了但<b>缺一个环节</b>
+     *                         （如价税分离环节未拆），如实分开记，免把"部分出证"点成"零出证"
      */
     private void recordGenFailureTrace(String sourceType, Long sourceDocId, String bizNo,
                                        boolean voucherGenerated, String reason) {
@@ -2114,7 +2118,7 @@ public class VoucherService {
             auditTrailService.record(sourceType, sourceDocId, bizNo, "op_voucher", null,
                     voucherGenerated ? "VOUCHER_LEG_MISSING" : "VOUCHER_GEN_FAIL", null,
                     AUX_OM.writeValueAsString(after),
-                    (voucherGenerated ? "自动生成凭证缺腿：" : "自动生成凭证未出证：") + reason);
+                    (voucherGenerated ? "自动生成凭证缺少分录：" : "自动生成凭证未出证：") + reason);
         } catch (Exception ex) {
             log.warn("制证失败留痕写入失败 sourceType={} sourceDocId={}: {}",
                     sourceType, sourceDocId, ex.getMessage());
@@ -2142,7 +2146,7 @@ public class VoucherService {
     /**
      * 工单处理（需求 8.2.3）：修改凭证分录（科目/金额/方向/辅助信息），凭证未记账才可改
      *
-     * <p>本方法是"先删全部分录→逐行插入→回写表头合计→留痕"四段写，缺事务边界时中途失败会留下
+     * <p>本方法是"先删全部分录→逐行插入→回写表头合计→记录"四段写，缺事务边界时中途失败会留下
      * <b>分录被清空却插了一半</b>的凭证（比"头有行无"更糟：表头合计与行合计不再勾稽，却能过账）。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -2243,7 +2247,7 @@ public class VoucherService {
                             "detail", "凭证号重复 " + c.getKey() + " × " + c.getValue()));
                 }
             }
-            // 连续序号检测（仅当可提取数字序号；时间戳号如 13 位毫秒无连续性意义，跳过）
+            // 连续序号检测（仅当可提查询字序号；时间戳号如 13 位毫秒无连续性意义，跳过）
             java.util.List<Long> seqs = new java.util.ArrayList<>();
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)").matcher(String.join(",", nos));
             while (m.find()) {
@@ -2389,7 +2393,7 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-326②：审批收尾腿把流程实例号带进来，回填凭证 {@code proc_inst_id} 回溯列——
+     * D-DEC-326②：审批收尾环节把流程实例号带进来，回填凭证 {@code proc_inst_id} 回溯列——
      * 此前合同凭证（现库 id=7）该列恒 NULL，追溯链的 proc_inst_id 备臂与别名臂同时落空＝两臂皆空。
      * {@code procInstId} 为空（如生效直调通道）保持原行为留 NULL，不猜测归属。
      */
@@ -2623,32 +2627,32 @@ public class VoucherService {
     }
 
     /**
-     * P0-2 应收确认凭证（D-DEC-397／398／399 三条账面缺陷在此收口）。
+     * P0-2 应收确认凭证（D-DEC-397／398／399 三条账面缺陷在此办结）。
      *
-     * <p><b>D-DEC-397 联查断在「单据→凭证」</b>：开票审批的收尾腿先新建应收单、再就地出证，
+     * <p><b>D-DEC-397 联查断在「单据→凭证」</b>：开票审批的收尾环节先新建应收单、再就地出证，
      * 凭证四键里 {@code source_type/source_doc_type/source_doc_id/bill_id} 全是<b>派生应收单</b>的坐标，
-     * 而开票单抽屉按 {@code INVOICE_ISSUE + inv_invoice.id} 取数 ⇒ 发票抽屉永远「记账凭证 0 张」，
+     * 而开票单抽屉按 {@code INVOICE_ISSUE + inv_invoice.id} 查询 ⇒ 发票抽屉永远「记账凭证 0 张」，
      * 展开体文案「无凭证（未审核通过或非凭证域单据）」两个判据同时为假。
-     * 本条不改那四键的归属（应收才是这笔收入确认的入账对象，§4.2 应收侧联查也按它取数），
-     * 而是补上联查已有的第二条腿：{@code proc_inst_id} 回链<b>触发出证的那条源单据流</b>（＝开票审批流），
-     * 口径与 D-DEC-36 一致、载体是 D-TRC-05 为本目的增设的列；发票侧与应收侧两条臂由此同时命中。
+     * 本条不改那四键的归属（应收才是这笔收入确认的入账对象，§4.2 应收侧联查也按它查询），
+     * 而是补上联查已有的第二条环节：{@code proc_inst_id} 回链<b>触发出证的那条源单据流</b>（＝开票审批流），
+     * 规则与 D-DEC-36 一致、载体是 D-TRC-05 为本目的增设的列；发票侧与应收侧两条臂由此同时命中。
      *
      * <p><b>D-DEC-398 价税未分离</b>：全额贷 6001 会让主营业务收入虚增一个税额、销项税零入账，
-     * 且两侧同取全额 ⇒ {@code is_balanced} 恒为 1、掩盖问题。现按<b>票面真值</b>拆两腿
+     * 且两侧同取全额 ⇒ {@code is_balanced} 恒为 1、掩盖问题。现按<b>票面真值</b>拆两环节
      * （贷 6001＝{@code net_amount}／贷 应交税费＝{@code tax_amount}），三条硬约束保证不外溢：
      * ①只有应收单自己登记了派生来源（{@code source_doc_type=INVOICE_ISSUE}）才回查发票；
-     * ②票面 {@code 未税+税额} 与应收金额<b>分文不差</b>才拆（对不上就按原样全额出证并留痕）；
-     * ③销项科目在主数据真实在册才拆（优先 {@code 2221} 下的销项税明细科目，实测库内只有
+     * ②票面 {@code 未税+税额} 与应收金额<b>分文不差</b>才拆（对不上就按原样全额出证并记录）；
+     * ③销项科目在主数据真实现有才拆（优先 {@code 2221} 下的销项税明细科目，实测库内只有
      * {@code 2221 应交税费}（末级、可过账）⇒ 落它）。非开票派生的应收单行为逐字不变。
      *
      * <p><b>D-DEC-399 借方科目码写死 1131</b>：{@code md_subject} 实测无 1131（应收账款＝1122），
      * 此前同一行「id 指向 1122、编码写 1131、日志再打印第三个值」⇒ 编码与名称一律取解析结果
-     * （{@link #subjectCoords}），日志同源；在册判词收窄史（§4.3 已推翻「核销腿必复现 1131」）
-     * 已确认本方法就是<b>唯一落库错位腿</b>，核销腿 {@link #generateCollectVoucher} 只错日志，另记 411。
+     * （{@link #subjectCoords}），日志同源；现有判词收窄史（§4.3 已推翻「核销环节必复现 1131」）
+     * 已确认本方法就是<b>唯一写入数据库错位环节</b>，核销环节 {@link #generateCollectVoucher} 只错日志，另记 411。
      *
-     * @param procInstId 触发本凭证的流程实例号；调用方（开票／应收收尾腿）手头有终态事件时<b>显式传入</b>，
+     * @param procInstId 触发本凭证的流程实例号；调用方（开票／应收收尾环节）手头有最终状态事件时<b>显式传入</b>，
      *                   传 null 则由本法按「{@code INVOICE_ISSUE} + 发票主键」只读回查补链；
-     *                   仍查不到＝留 NULL（D-TRC-05 口径，宁缺勿错锚）。
+     *                   仍查不到＝留 NULL（D-TRC-05 规则，宁缺勿错关联）。
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public Long generateReceivableVoucher(com.fssc.receivable.entity.RcReceivable rec, String procInstId) {
@@ -2690,7 +2694,7 @@ public class VoucherService {
         stampAuxJson(drLine);   // D-DEC-123 同法：辅助维度连同键名落 aux_json
         opVoucherLineMapper.insert(drLine);
 
-        // D-DEC-398：价税分离腿——只有票面「未税＋税额＝应收金额」分文不差、且销项科目在册才拆
+        // D-DEC-398：价税分离环节——只有票面「未税＋税额＝应收金额」分文不差、且销项科目现有才拆
         BigDecimal[] vat = splitVatOf(rec, amt);
         BigDecimal tax = vat == null ? null : vat[0];
         BigDecimal net = vat == null ? null : vat[1];
@@ -2706,7 +2710,7 @@ public class VoucherService {
                 log.warn("应收单 {} 票面税额 {} 可拆，但销项税科目（2221 应交税费）不在册，收入凭证退回全额单腿（贷 {} {}）",
                         rec.getBillNo(), tax, rev[0], rev[1]);
                 recordGenFailureTrace("RECEIVABLE", rec.getId(), rec.getBillNo(), true,
-                        "价税分离腿未出：销项税科目（2221 应交税费/销项税明细）不在册，主营业务收入按全额 " + amt + " 入账");
+                        "价税分开入账未完成：销项税科目（2221 应交税费/销项税明细）不在册，主营业务收入按全额 " + amt + " 入账");
             }
             opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 20,
                     "主营业务收入", revenueSubjectId, rev[0], rev[1], "CREDIT", amt, null));
@@ -2721,8 +2725,8 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-398：从票面取价税拆分值——{@code [0]=税额, [1]=未税}；不满足拆分条件时返回 null（调用方按全额单腿出证）。
-     * <p>判据全部来自落库事实：应收单自己登记的派生来源 + 发票自己的 net/tax 列 + 与应收金额的分文不差。
+     * D-DEC-398：从票面取价税拆分值——{@code [0]=税额, [1]=未税}；不满足拆分条件时返回 null（调用方按全额单环节出证）。
+     * <p>判据全部来自写入数据库事实：应收单自己登记的派生来源 + 发票自己的 net/tax 列 + 与应收金额的分文不差。
      */
     private BigDecimal[] splitVatOf(com.fssc.receivable.entity.RcReceivable rec, BigDecimal amt) {
         com.fssc.invoice.entity.InvInvoice inv = sourceInvoiceOf(rec);
@@ -2745,23 +2749,23 @@ public class VoucherService {
 
     /**
      * P0-2 收款核销凭证。
-     * 借：银行存款  贷：应收账款，金额取<b>本次核销金额</b>（应收余额）；两腿科目码一律取主数据真码。
+     * 借：银行存款  贷：应收账款，金额取<b>本次核销金额</b>（应收余额）；两环节科目码一律取主数据真码。
      * source_type = RECEIVABLE_COLLECT
      *
      * <p>D-DEC-409（甲）：金额形参是新增的——原先本方法自己取 {@code rec.getAmount()}（票面全额），
      * 而 javadoc 与调用方注释都写着「取应收余额」，实现与声明相反⇒重放/部分收款后出证金额翻倍。
-     * 现在核销额由调用方（收款认领收尾腿）按余额算好传入，本方法只负责出证，不再自行解释金额。
+     * 现在核销额由调用方（收款认领收尾环节）按余额算好传入，本方法只负责出证，不再自行解释金额。
      *
      * <p>D-DEC-409（乙）：同一应收单已有未作废凭证时不再重复出证（P0-5 {@code generateTreasuryPayVoucher}
-     * 同款幂等判重）。本域与 §4.5 到账腿（{@code VoucherService.generateReceiptVoucher} 一侧）科目方向相同，
-     * 审批事件重放或两条腿并行都会留下「同笔两份借银行存款」的凭证。
+     * 同款去重判重）。本域与 §4.5 到账环节（{@code VoucherService.generateReceiptVoucher} 一侧）科目方向相同，
+     * 审批事件重放或两个环节并行都会留下「同笔两份借银行存款」的凭证。
      *
-     * <p>D-DEC-411（新不符 A）：本腿落库的应收账款科目码一直是主数据里的 {@code 1122}（id 与编码自洽），
-     * 但日志文案硬编码打印 {@code 1131}，按日志对账会错一整条科目。修法＝日志与落库同源：
-     * 编码经 {@link #subjectCoords} 从 {@code md_subject} 解析出来，落库与打印共用同一份读数，
-     * 以后主数据改码也不会再出现两个口径。
+     * <p>D-DEC-411（新不符 A）：本环节写入数据库的应收账款科目码一直是主数据里的 {@code 1122}（id 与编码自洽），
+     * 但日志文案硬编码打印 {@code 1131}，按日志对账会错一整条科目。修法＝日志与写入数据库同源：
+     * 编码经 {@link #subjectCoords} 从 {@code md_subject} 解析出来，写入数据库与打印共用同一份读数，
+     * 以后主数据改码也不会再出现两个规则。
      *
-     * <p>D-DEC-409（X-28 甲·本轮）：本腿此前<b>不查任何到账载体</b>就出「借 1002 银行存款／贷 1122 应收账款」。
+     * <p>D-DEC-409（X-28 甲·本轮）：本环节此前<b>不查任何到账载体</b>就出「借 1002 银行存款／贷 1122 应收账款」。
      * 现收紧＝出证前必须先在 {@code rc_receipt}/{@code rc_receipt_line} 里有挂本应收单的到账记录
      * （{@link #hasArrivalCarrier}），否则抛业务异常「尚无到账记录，不能生成核销凭证」。
      */
@@ -2779,9 +2783,9 @@ public class VoucherService {
         if (amt.signum() == 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "本次核销金额为 0，无法生成凭证");
         }
-        // D-DEC-409（X-28 甲）：先有到账载体，再出「借 1002／贷 1122」——本腿此前不查 rc_receipt，
-        // 于是应收单在钱未到账时被凭空记进银行存款。只闸本次新出证，不回改历史凭证；
-        // 已存在的同源凭证由上面的幂等腿原样返回。调用方（收款认领收尾腿）已 try/catch 本异常，
+        // D-DEC-409（X-28 甲）：先有到账载体，再出「借 1002／贷 1122」——本环节此前不查 rc_receipt，
+        // 于是应收单在钱未到账时被凭空记进银行存款。只校验本次新出证，不回改历史凭证；
+        // 已存在的同源凭证由上面的去重环节原样返回。调用方（收款认领收尾环节）已 try/catch 本异常，
         // 拒出证只落一条业务原因，不会把审批回调变成 500。
         if (!hasArrivalCarrier(rec.getId())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -2829,7 +2833,7 @@ public class VoucherService {
      * 借：应付账款(2202)  贷：银行存款(1002)，金额取 op_pay_batch.totalAmount。
      * source_type = TREASURY_PAY
      *
-     * <p>{@code procInstId} 是触发本凭证的 <b>TR_PAY 流程实例号</b>（D-DEC-36）：由审批终态事件原样带过来，
+     * <p>{@code procInstId} 是触发本凭证的 <b>TR_PAY 流程实例号</b>（D-DEC-36）：由审批最终状态事件原样带过来，
      * 凭证据此回链审批链。不要改从 {@code op_pay_batch.proc_inst_id} 取——批次上那一列存的是源单据的实例，
      * 不是资金付款审批的实例（同一批缺陷里已登记）。缺省 null＝不携带（历史行为不变）。
      */
@@ -2885,8 +2889,8 @@ public class VoucherService {
         if (amt.signum() == 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "付款金额为 0，无法生成凭证");
         }
-        // D-DEC-288（X-48 甲）：批次出纳付款腿同受出纳参数约束（默认＝否＝此处恒放行，行为不变）。
-        // 批次状态以库内读数为准——调用方（TR_PAY 收尾腿）传的是回写前的批次行，状态仍是审批中。
+        // D-DEC-288（X-48 甲）：批次出纳付款环节同受出纳参数约束（默认＝否＝此处恒放行，行为不变）。
+        // 批次状态以库内读数为准——调用方（TR_PAY 收尾环节）传的是回写前的批次行，状态仍是审批中。
         if (payLegNotYetPayable("TREASURY_PAY", batch.getId(), batch.getBatchNo())) {
             return null;
         }
@@ -2911,7 +2915,7 @@ public class VoucherService {
         opVoucherMapper.insert(v);
 
         // D-F1R-03：付款冲销科目必须与「该笔钱当初挂账时贷记的科目」同源。
-        // 旧口径批次凭证固定借 2202 应付账款，而员工报销单的费用凭证贷的是「2241 其他应付款-应付报销款」
+        // 旧规则批次凭证固定借 2202 应付账款，而员工报销单的费用凭证贷的是「2241 其他应付款-应付报销款」
         // ⇒ 钱付出去了，2241 那笔贷方却始终没有对应借方来核销，应付报销款只增不减（10-15 F6 实证）。
         // 现按批次内每条付款记录所属单据类型拆行：CLAIM（员工报销）→ 2241；其余（对公付款/预付/借款等）→ 2202。
         java.util.Map<Long, BigDecimal> amtByPayment = new java.util.HashMap<>();
@@ -3012,7 +3016,7 @@ public class VoucherService {
     }
 
     /**
-     * P0-2 资金调拨/上存凭证（流程终态生成凭证扩域）。
+     * P0-2 资金调拨/上存凭证（流程最终状态生成凭证扩域）。
      * TR_TRANSFER / TR_UPLOAD 审批通过 → 借 银行存款(1002, 转入方) 贷 银行存款(1002, 转出方)。
      * source_type = bizType（TR_TRANSFER / TR_UPLOAD），金额取 tr_transfer.amount。
      */
@@ -3067,7 +3071,7 @@ public class VoucherService {
     }
 
     /**
-     * P0-2 资金收款凭证（流程终态生成凭证扩域）。
+     * P0-2 资金收款凭证（流程最终状态生成凭证扩域）。
      * TR_RECEIPT 审批通过（核销）→ 借 银行存款 贷 应收账款，科目码取主数据真码。
      * source_type = TR_RECEIPT，金额取 tr_credit_bill.amount。
      *
@@ -3078,7 +3082,7 @@ public class VoucherService {
     }
 
     /**
-     * D-DEC-419：收款凭证「贷 1122 追不到任何应收」的两段在本腿收口。
+     * D-DEC-419：收款凭证「贷 1122 追不到任何应收」的两段在本环节办结。
      *
      * <p>①<b>辅助维度</b>：两条 {@code buildLine} 原先末参传 null，且凭证行从不写 {@code customer_id}，
      * 而收款单本身带着 {@code tr_credit_bill.customer_id}＝有客户却不带 ⇒ 按客户／按单据查 1122 明细账取不到这笔。
@@ -3088,15 +3092,15 @@ public class VoucherService {
      *
      * <p>②<b>流程回链</b>：原 {@code proc_inst_id} 恒 NULL ⇒ 流程侧与账侧断链。{@code tr_credit_bill} 无该列
      * （另记 420），故按 D-DEC-36「单据级凭证回链源单据流」的语义，取触发本凭证的那条 TR_RECEIPT 审批流实例号：
-     * 调用方（资金域通过腿）传入优先，缺省时用 {@code bill.id} 只读回查 {@code wf_instance}；
-     * 查不到保持 NULL（宁缺勿错锚），不影响出证。
+     * 调用方（资金域通过环节）传入优先，缺省时用 {@code bill.id} 只读回查 {@code wf_instance}；
+     * 查不到保持 NULL（宁缺勿错关联），不影响出证。
      *
-     * <p>④<b>期间口径未动</b>：本腿仍按 {@code landingDate} 的「系统当期＋已结账则前滚」落期，
+     * <p>④<b>期间范围未动</b>：本环节仍按 {@code landingDate} 的「系统当期＋已结账则前滚」落期，
      * 业务期间（收款单 {@code receive_date}）与账期不一致的换算另记（改期会撞上 {@code assertOpen} 的结账硬拦，
-     * 属跨期间口径裁决，不在本条处置面）。
+     * 属跨期间范围裁决，不在本条处置面）。
      *
      * <p>四键中 {@code bill_id/source_type/source_doc_type/source_doc_id} 维持收款单坐标不变：
-     * 资金收款抽屉（bizType=TR_RECEIPT）的读腿就按 {@code source_doc_type/id} 匹配，改指被核销的应收单
+     * 资金收款抽屉（bizType=TR_RECEIPT）的读环节就按 {@code source_doc_type/id} 匹配，改指被核销的应收单
      * 会把本流唯一的绿色样本读断（甲档后半「两键并存＋新增 writeoff_doc 列」需加列，另议）。
      *
      * @param procInstId 触发本凭证的 TR_RECEIPT 流程实例号；null／空＝本服务只读回查补齐
@@ -3158,7 +3162,7 @@ public class VoucherService {
     }
 
     /**
-     * P0-2 票据结算凭证（流程终态生成凭证扩域）。
+     * P0-2 票据结算凭证（流程最终状态生成凭证扩域）。
      * TR_BILL 审批通过（票据入托/登记确认）→ 借 应收票据(1121) 贷 应收账款(1122)。
      * source_type = TR_BILL，金额取 tr_bill_settle.amount。
      */
@@ -3211,7 +3215,7 @@ public class VoucherService {
     }
 
     /**
-     * P0-2 一般总账记账凭证（流程终态生成凭证扩域）。
+     * P0-2 一般总账记账凭证（流程最终状态生成凭证扩域）。
      * GL_ACCRUAL 费用预提 / GL_DEFER 费用待摊 / GL_MANUAL_VOUCHER 手工凭证 / GL_OTHER_RECEIPT 其他收款。
      * <p>借贷科目直接取 gl_journal_entry 自身已存的 debit_subject_id / credit_subject_id
      * （演示数据存的是科目编码），经 md_subject 解析为科目 id；金额取 entry.amount。零臆测。
@@ -3274,12 +3278,12 @@ public class VoucherService {
     }
 
     /**
-     * P0-2 税金凭证（流程终态生成凭证扩域，V1.3.22 补科目 2221/6403/6801）。
+     * P0-2 税金凭证（流程最终状态生成凭证扩域，V1.3.22 补科目 2221/6403/6801）。
      * <ul>
      *  <li><b>GL_TAX_PROV 税金计提</b>：借 税金及附加(6403)【企业所得税 INCOME → 所得税费用(6801)】
      *      　贷 应交税费(2221)，金额 = gl_tax_provision.tax_amount</li>
      * </ul>
-     * D-DEC-440（X-42 甲）：税金缴纳不经独立流程，走对公付款通道 ⇒ 原 GL_TAX_PAY 缴纳腿作废，本方法仅受理计提腿。
+     * D-DEC-440（X-42 甲）：税金缴纳不经独立流程，走对公付款通道 ⇒ 原 GL_TAX_PAY 缴纳环节作废，本方法仅受理计提环节。
      * 说明：演示简化，未细分增值税"转出未交增值税"及附加税明细子目。
      * source_type = bizType（仅 GL_TAX_PROV），source_doc_id = gl_tax_provision.id。
      */
@@ -3288,7 +3292,7 @@ public class VoucherService {
         if (e == null || e.getId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "税金计提记录不存在");
         }
-        // D-DEC-440：税金缴纳不经独立流程，走对公付款通道（付款批次执行后出付款腿凭证），此处不再出缴纳凭证
+        // D-DEC-440：税金缴纳不经独立流程，走对公付款通道（付款批次执行后出付款环节凭证），此处不再出缴纳凭证
         if ("GL_TAX_PAY".equals(bizType)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "税金缴纳不经独立缴纳流程，请通过对公付款通道发起付款");
@@ -3342,12 +3346,12 @@ public class VoucherService {
     }
 
     /**
-     * P0-2 薪酬凭证（流程终态生成凭证扩域，V1.3.22 补科目 2211）。
+     * P0-2 薪酬凭证（流程最终状态生成凭证扩域，V1.3.22 补科目 2211）。
      * <ul>
      *  <li><b>GL_SALARY_PROV 薪酬计提</b>：借 管理费用(6602)　贷 应付职工薪酬(2211)，
-     *      金额 = gl_salary_run.salary_amount（应发工资口径）</li>
+     *      金额 = gl_salary_run.salary_amount（应发工资规则）</li>
      *  <li><b>GL_SALARY_PAY 薪酬发放</b>：借 应付职工薪酬(2211)　贷 银行存款(1002)，
-     *      金额 = gl_salary_run.total_amount（实发口径，差额为代扣社保/个税）</li>
+     *      金额 = gl_salary_run.total_amount（实发规则，差额为代扣社保/个税）</li>
      * </ul>
      * 说明：演示简化，计提借方统一计入管理费用，未按部门拆分成本/费用。
      * source_type = bizType（GL_SALARY_PROV / GL_SALARY_PAY），source_doc_id = gl_salary_run.id。
@@ -3423,7 +3427,7 @@ public class VoucherService {
      * 没有任何一张凭证承接，2211 的贷借差额永久挂账（证据 12-30:170：80,000 计提 − 65,000 发放 ＝ 15,000 无出口）。
      * <ul>
      *  <li>借 应付职工薪酬(2211) ＝ 代扣合计</li>
-     *  <li>贷 应交税费(2221) ＝ 代扣个税（待申报缴纳，缴纳腿走对公付款通道，D-DEC-440）</li>
+     *  <li>贷 应交税费(2221) ＝ 代扣个税（待申报缴纳，缴纳环节走对公付款通道，D-DEC-440）</li>
      *  <li>贷 其他应付款(2241) ＝ 代扣社保 + 其他扣除（个人承担部分，待转付社保机构/发还）</li>
      * </ul>
      * 承接科目 2221/2241 在 md_subject 种子中已存在（id 1592/920），但无代扣专用子目
@@ -3510,7 +3514,7 @@ public class VoucherService {
     }
 
     /**
-     * P0-2 内部往来抵消凭证（GL_OFFSET 流程终态生成凭证扩域）。
+     * P0-2 内部往来抵消凭证（GL_OFFSET 流程最终状态生成凭证扩域）。
      * <p>抵销内部应收应付：借 应付账款(2202)　贷 应收账款(1122)，金额 = gl_inter_offset.amount。
      * <p>bizId 指向往账(PAYABLE)分录；同一公司对的来账(RECEIVABLE)金额由
      * {@code GlInterOffsetService.assertPairEqual} 强制相等，故单边金额即可配平。
@@ -3573,13 +3577,13 @@ public class VoucherService {
     }
 
     /**
-     * P0-2 退税凭证（GL_TAX_REFUND 流程终态生成凭证扩域，V1.3.23 补流程定义）。
+     * P0-2 退税凭证（GL_TAX_REFUND 流程最终状态生成凭证扩域，V1.3.23 补流程定义）。
      * <p>税务核准退税（增值税三场景：出口免抵退 EXPORT_REFUND / 留抵退税 CREDIT_REFUND /
      * 即征即退 IMMEDIATE_REFUND）：借 其他应收款-应收退税款(1221)　贷 应交税费(2221)，
      * 金额 = tax_refund.tax_amount。
-     * <p>口径说明：按权责发生制，<b>核准（APPROVED）时确认应收退税款</b>；
+     * <p>规则说明：按权责发生制，<b>核准（APPROVED）时确认应收退税款</b>；
      * 实际到账（REFUNDED）时另需 借 银行存款(1002) 贷 其他应收款(1221) 一笔，
-     * 该笔由到账登记（changeStatus→REFUNDED）触发，不属于流程终态收尾。
+     * 该笔由到账登记（changeStatus→REFUNDED）触发，不属于流程最终状态收尾。
      * source_type = GL_TAX_REFUND，source_doc_id = tax_refund.id。
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
@@ -3649,7 +3653,7 @@ public class VoucherService {
     }
 
     /**
-     * P1-B 坏账凭证（流程终态生成凭证扩域）。
+     * P1-B 坏账凭证（流程最终状态生成凭证扩域）。
      * <ul>
      *  <li>BAD_DEBT_PROV 计提：借 信用减值损失(6113)  贷 坏账准备(1231)</li>
      *  <li>BAD_DEBT_CONFIRM 核销：借 坏账准备(1231)  贷 应收账款(1122)（挂客户辅助核算）</li>
@@ -3726,20 +3730,20 @@ public class VoucherService {
     /**
      * D-DEC-335：应付确认凭证的 {@code bill_id} 不再塞采购订单主键。
      *
-     * <p>本凭证在单据侧的挂靠对象是<b>付款单</b>（{@code exp_bill}）——{@code bill_id} 那一列的口径就是
+     * <p>本凭证在单据侧的挂靠对象是<b>付款单</b>（{@code exp_bill}）——{@code bill_id} 那一列的规则就是
      * exp_bill 主键（见 {@link #EXPENSE_BILL_SOURCES}／D-DEC-244：只有费用族来源的 bill_id 才是费用单主键，
      * 别的域写进去就是跨域撞号）。此前 {@code v.setBillId(order.getId())} 把 {@code po_order.id} 写进这一列，
      * 实测 {@code op_voucher} id=10 的 bill_id=2、id=13 的 bill_id=3 都指到了<b>别的采购单的付款单</b>上
-     * （{@code exp_bill} 里 id=2 的 po_id=3、id=1 的 po_id=2）⇒ 追溯抽屉「记账凭证 0 张」而凭证早已平衡落库。
+     * （{@code exp_bill} 里 id=2 的 po_id=3、id=1 的 po_id=2）⇒ 追溯抽屉「记账凭证 0 张」而凭证早已平衡写入数据库。
      *
      * <p>甲档修法＝{@code bill_id} 改写付款单 id（本单链有唯一确定值时），<b>PO 坐标留在
-     * {@code source_doc_type/source_doc_id}</b>（那是本凭证真正的来源单据，244／252 的口径不动）。
-     * 反查判据只用 {@code exp_bill.po_id}，<b>唯一命中</b>才认；零条或多条一律留 NULL（不猜锚，
-     * 与 D-TRC-05 同口径），留空只是少一条可读挂靠，绝不再挂错单。
+     * {@code source_doc_type/source_doc_id}</b>（那是本凭证真正的来源单据，244／252 的规则不动）。
+     * 反查判据只用 {@code exp_bill.po_id}，<b>唯一命中</b>才认；零条或多条一律留 NULL（不猜关联，
+     * 与 D-TRC-05 同一规则），留空只是少一条可读挂靠，绝不再挂错单。
      *
      * <p>{@code proc_inst_id} 取<b>三单匹配审批流</b>的实例号（D-DEC-36：单据级凭证回链触发它的源单据流）：
      * 该流的 {@code wf_instance.biz_id} 就是付款单 id，故调用方传入优先，缺省按付款单 id 只读回查
-     * {@code INVOICE_MATCH／INVOICE_MATCH_MANUAL}。这一列是抽屉读腿里唯一能命中本凭证的臂
+     * {@code INVOICE_MATCH／INVOICE_MATCH_MANUAL}。这一列是抽屉读环节里唯一能命中本凭证的臂
      * （费用域白名单 {@code VOUCHER_SOURCE_EXPENSE} 不含 INVOICE_MATCH，见移交项）。
      *
      * @param payBillId 本次三单匹配所依据的付款单（exp_bill）主键；null＝按 {@code exp_bill.po_id} 反查唯一命中
@@ -3770,7 +3774,7 @@ public class VoucherService {
             }
         }
         Long tenantId = TenantContext.getTenantId();
-        // D-V4R-86（P0）幂等：同一采购订单的应付确认凭证只允许存在一张。
+        // D-V4R-86（P0）去重：同一采购订单的应付确认凭证只允许存在一张。
         //   此前每办结一条 INVOICE_MATCH / INVOICE_MATCH_MANUAL 链就无条件新建一张，没有任何判重，
         //   实证（2026-10-16，V4 人工 N1-B 幕）：采购订单 PO1792118388635（id=24）产出
         //   JZ2026101600012 / JZ2026101600017 / JZ2026101600018 三张各 100,000 的 DRAFT 凭证，
@@ -3823,9 +3827,9 @@ public class VoucherService {
      * 借：管理费用(6602)  贷：累计折旧(1602)，金额取 md_asset.monthlyDepr。
      * source_type = ASSET_DEPRECIATION
      *
-     * <p>R5-D-192：落期口径改为<b>批单期间</b>（原实现传 null/null 走前滚兜底，
+     * <p>R5-D-192：落期规则改为<b>批单期间</b>（原实现传 null/null 走前滚默认处理，
      * 实测 2026-11 批单生成 2026-10 期凭证）。期间不可解析时才回退前滚；
-     * 凭证日期取期间末日（折旧为月末计提口径）。</p>
+     * 凭证日期取期间末日（折旧为月末计提规则）。</p>
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public Long generateDepreciationVoucher(com.fssc.asset.entity.MdAsset asset, String period) {
@@ -3839,7 +3843,7 @@ public class VoucherService {
         }
         Long tenantId = TenantContext.getTenantId();
         int[] ym = parsePeriodYm(period);
-        // 已关账期间由 landingDate 内的 assertOpen 拒绝，与其余 generate* 同口径
+        // 已关账期间由 landingDate 内的 assertOpen 拒绝，与其余 generate* 同一规则
         LocalDate landing = landingDate(asset.getCompanyId(), ym == null ? null : ym[0], ym == null ? null : ym[1]);
         LocalDate voucherDate = ym == null ? landing
                 : LocalDate.of(ym[0], ym[1], 1).plusMonths(1).minusDays(1);
@@ -3878,12 +3882,12 @@ public class VoucherService {
     }
 
     /**
-     * 合规整改( ) 资产域凭证（流程终态生成凭证扩域）。
+     * 合规整改( ) 资产域凭证（流程最终状态生成凭证扩域）。
      * <ul>
-     *  <li>FA_ADD 通过 → 借 固定资产(1601) 贷 银行存款(1002)，金额=资产原值（购置新增口径）</li>
+     *  <li>FA_ADD 通过 → 借 固定资产(1601) 贷 银行存款(1002)，金额=资产原值（购置新增规则）</li>
      *  <li>FA_CIP_TO_ASSET 通过 → 借 固定资产(1601) 贷 在建工程(1604，兼容 160400000)，金额=资产原值</li>
      *  <li>FA_DISPOSE 通过（报废处置）→ 借 累计折旧(1602) + 借 资产处置损益(6117，缺省回落 6711/6721
-     *      营业外收支口径，金额=原值-累计折旧净值差额) 贷 固定资产(1601)，金额=资产原值</li>
+     *      营业外收支规则，金额=原值-累计折旧净值差额) 贷 固定资产(1601)，金额=资产原值</li>
      * </ul>
      * source_type = bizType，source_doc_id = md_asset.id，existingVoucherId 同源判重防重复生成。
      * 科目缺失（findSubjectIdByCode 为 null）时记 WARN 跳过凭证生成，不阻断审批收尾。
@@ -3907,7 +3911,7 @@ public class VoucherService {
         Long fixedSubjectId = findSubjectIdByCode("1601");
         if (fixedSubjectId == null) {
             log.warn("固定资产科目(1601)缺失，资产 {} 跳过{}凭证生成（请先在科目字典维护）", asset.getAssetNo(), bizType);
-            // D-DEC-272：静默跳过要有结构化留痕
+            // D-DEC-272：静默跳过要有结构化记录
             recordGenFailureTrace(bizType, asset.getId(), asset.getAssetNo(),
                     "固定资产科目 1601 缺失，" + bizType + " 凭证未出");
             return null;
@@ -4163,7 +4167,7 @@ public class VoucherService {
     }
 
     /**
-     * 归档写腿取凭证ID（D-DEC-315／#56 甲档）：bill_id 与 voucher_no 双条件唯一命中才返回。
+     * 归档写环节取凭证ID（D-DEC-315／#56 甲档）：bill_id 与 voucher_no 双条件唯一命中才返回。
      * op_voucher.bill_id 是跨域裸主键（41 行里 15 行对不上 exp_bill），单靠它会把别的域凭证配过来；
      * 命中 0 条或多条一律返回 null，由调用方留空而不是猜。
      */
@@ -4219,7 +4223,7 @@ public class VoucherService {
      * 借 存货(1405) / 贷 暂估应付(2203)，金额=收货金额；source_type='ESTIMATE'，source_doc_id=收货单ID。
      * 收货单挂 CIP（cipId 从采购订单继承）时借方改为在建工程(1604)，成本自动归集 CIP。
      * <ul>
-     *  <li>幂等：同一收货单已存在 ESTIMATE 凭证（VOID 除外）则跳过；</li>
+     *  <li>去重：同一收货单已存在 ESTIMATE 凭证（VOID 除外）则跳过；</li>
      *  <li>金额为 0 跳过；暂估/存货科目不存在时跳过并 warn（不阻断收货主流程）；</li>
      *  <li>所有内部异常吞掉仅记日志——凭证缺失可人工补录，不影响收货单本身。</li>
      * </ul>
@@ -4245,7 +4249,7 @@ public class VoucherService {
             if (inventoryId == null || estimateId == null) {
                 log.warn("[暂估] 收货单 {} 暂估凭证跳过：科目缺失（{}存货={} / {}暂估应付={}），请先维护科目（见 sql/impl-cl-20260914.sql）",
                         receipt.getReceiptNo(), SUBJ_INVENTORY, inventoryId, SUBJ_ESTIMATE_PAYABLE, estimateId);
-                // D-DEC-272：静默跳过也要有结构化留痕（本分支不抛错、事务照提交）
+                // D-DEC-272：静默跳过也要有结构化记录（本分支不抛错、事务照提交）
                 recordGenFailureTrace("ESTIMATE", receipt.getId(), receipt.getReceiptNo(),
                         "收货暂估凭证未出：科目缺失（" + SUBJ_INVENTORY + "存货/" + SUBJ_ESTIMATE_PAYABLE + "暂估应付）");
                 return;
@@ -4297,7 +4301,7 @@ public class VoucherService {
         } catch (Exception ex) {
             log.error("[暂估] 收货单 {} 自动暂估凭证生成失败（不阻断收货主流程）: {}",
                     receipt == null ? null : receipt.getReceiptNo(), ex.getMessage(), ex);
-            // D-DEC-272：异常在本腿被吞掉（不反噬收货），但"吞掉"不等于"无痕"——异常同样落结构化留痕。
+            // D-DEC-272：异常在本环节被吞掉（不反噬收货），但"吞掉"不等于"无痕"——异常同样落结构化记录。
             // 注意：此 catch 已是本方法的最后一环、不再抛错，故 audit_trail 能随收货事务提交。
             if (receipt != null) {
                 recordGenFailureTrace("ESTIMATE", receipt.getId(), receipt.getReceiptNo(),
@@ -4310,15 +4314,15 @@ public class VoucherService {
      * 发票与收货单匹配时的冲回+正式入账（PurchaseService.markInvoiced 触发）：
      * <ol>
      *  <li>红字冲回暂估（借 暂估应付(2203) / 贷 存货(1405)）：source_type='ESTIMATE_REVERSE'，
-     *      source_doc_id=收货单ID，同一收货单仅冲回一次（幂等）；</li>
+     *      source_doc_id=收货单ID，同一收货单仅冲回一次（去重）；</li>
      *  <li>正式入账（借 存货(1405) / 贷 应付账款(2202)）：source_type='RECEIPT_INVOICE'，
-     *      source_doc_id=发票ID × bill_id=收货单ID，同一「发票×收货单」仅入账一次（幂等）；
+     *      source_doc_id=发票ID × bill_id=收货单ID，同一「发票×收货单」仅入账一次（去重）；
      *      金额均取本次发票匹配金额。</li>
      * </ol>
-     * <p>D-N3-01（V4-run-1017b N3 3.15 实测）：原口径按「同一发票仅入账一次」判重，一张票分两次
+     * <p>D-N3-01（V4-run-1017b N3 3.15 实测）：原规则按「同一发票仅入账一次」判重，一张票分两次
      * 部分关联到两张收货单时，第二次只出暂估冲回、不出入账 ⇒ 该票未入账部分（32,000）不进
-     * 存货借方/应付贷方，账实不符。入账幂等键改为「发票×收货单」成对，两张收货单各自成账；
-     * 同一对重放仍幂等（与冲回腿「按收货单」判重对称）。</p>
+     * 存货借方/应付贷方，账实不符。入账唯一键改为「发票×收货单」成对，两张收货单各自成账；
+     * 同一对重放仍去重（与冲回环节「按收货单」判重对称）。</p>
      * 暂估冲回要求暂估科目存在；不存在时仅生成正式入账分录并 warn。全部异常吞掉记日志，不阻断发票绑定主流程。
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
@@ -4336,9 +4340,9 @@ public class VoucherService {
             Long estimateId = findSubjectIdByCode(SUBJ_ESTIMATE_PAYABLE);
             if (inventoryId == null) {
                 log.warn("[暂估冲回] 收货单 {} 存货科目 {} 缺失，跳过暂估冲回/正式入账", receiptNo, SUBJ_INVENTORY);
-                // D-DEC-272：静默跳过要有结构化留痕
+                // D-DEC-272：静默跳过要有结构化记录
                 recordGenFailureTrace("ESTIMATE_REVERSE", receiptId, receiptNo,
-                        "存货科目 " + SUBJ_INVENTORY + " 缺失，暂估冲回与发票正式入账两条腿均未出");
+                        "存货科目 " + SUBJ_INVENTORY + " 缺失，暂估冲回与发票正式入账两笔分录均未生成");
                 return;
             }
             // ① 红字冲回暂估（同一收货单仅一次）
@@ -4388,7 +4392,7 @@ public class VoucherService {
             Long payableId = findSubjectIdByCode(SUBJ_PAYABLE);
             if (payableId == null) {
                 log.warn("[正式入账] 发票 {} 应付账款科目 {} 缺失，跳过正式入账", invoiceNo, SUBJ_PAYABLE);
-                // D-DEC-272：静默跳过要有结构化留痕
+                // D-DEC-272：静默跳过要有结构化记录
                 recordGenFailureTrace("RECEIPT_INVOICE", invoiceId, invoiceNo,
                         "发票正式入账凭证未出：应付账款科目 " + SUBJ_PAYABLE + " 缺失");
                 return;
@@ -4434,12 +4438,12 @@ public class VoucherService {
      * CIP 付款凭证：付款单/付款批次引用在建工程（exp_bill.extJson.cipId 或
      * 付款批次 source_doc_type=CIP）且付款审批通过后调用。
      * 借 在建工程(1604) / 贷 银行存款(1002)，并回写 md_cip.paid_amount。
-     * 幂等：sourceType+sourceDocId 已有凭证（VOID 除外）则跳过；失败仅记日志不阻断审批收尾。
+     * 去重：sourceType+sourceDocId 已有凭证（VOID 除外）则跳过；失败仅记日志不阻断审批收尾。
      *
      * @param cip          在建工程项目
      * @param amount       本次付款金额
      * @param sourceDocId  源单据ID（付款单=exp_bill.id / 付款批次=op_pay_batch.id）
-     * @param sourceType   幂等键类型（CIP_PAY 付款单 / CIP_PAY_BATCH 付款批次）
+     * @param sourceType   唯一键类型（CIP_PAY 付款单 / CIP_PAY_BATCH 付款批次）
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void generateCipPaymentVoucher(com.fssc.masterdata.entity.MdCip cip, BigDecimal amount,
@@ -4458,7 +4462,7 @@ public class VoucherService {
                 log.info("[CIP付款] 源单据 {} 已存在 CIP 付款凭证 id={}，跳过（幂等）", sourceDocId, existed);
                 return;
             }
-            // D-DEC-288（X-48 甲）：CIP 付款腿（借 1604／贷 1002）同受出纳参数约束，默认＝否＝恒放行
+            // D-DEC-288（X-48 甲）：CIP 付款环节（借 1604／贷 1002）同受出纳参数约束，默认＝否＝恒放行
             if (payLegNotYetPayable(sourceType, sourceDocId, cip.getCipCode())) {
                 return;
             }
@@ -4467,7 +4471,7 @@ public class VoucherService {
             if (cipSubjectId == null || bankSubjectId == null) {
                 log.warn("[CIP付款] 在建工程 {} 凭证跳过：科目缺失（{}在建工程={} / 1002银行存款={}）",
                         cip.getCipCode(), SUBJ_CIP, cipSubjectId, bankSubjectId);
-                // D-DEC-272：静默跳过要有结构化留痕
+                // D-DEC-272：静默跳过要有结构化记录
                 recordGenFailureTrace(sourceType, sourceDocId, cip.getCipCode(),
                         "在建工程付款凭证未出：科目缺失（" + SUBJ_CIP + "在建工程/1002银行存款）");
                 return;
@@ -4496,7 +4500,7 @@ public class VoucherService {
             updateVoucherTotals(v.getId(), amt);
             log.info("[CIP付款] 在建工程 {} 生成付款凭证 {} 借在建工程({})/贷银行存款(1002) 金额={}",
                     cip.getCipCode(), v.getVoucherNo(), SUBJ_CIP, amt);
-            // 回写 CIP 项目已付款金额（幂等由上方凭证判重保证）
+            // 回写 CIP 项目已付款金额（去重由上方凭证判重保证）
             cipPaymentWriteBack(cip.getId(), amt);
         } catch (Exception ex) {
             log.error("[CIP付款] 在建工程 {} CIP 付款凭证生成失败（不阻断付款审批收尾）: {}",

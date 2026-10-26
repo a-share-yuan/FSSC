@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card v-if="!voucher.id" :header="$t('expense.voucher.dlgPreview')">
     <el-empty :description="$t('expense.voucher.hintPickBill')" />
@@ -25,7 +28,7 @@
     <div style="margin-top: 10px">
       <el-button type="primary" :disabled="voucher.status === BillStatus.POSTED" @click="postVoucher">{{ $t('expense.voucher.btnPost') }}</el-button>
       <span style="margin-left: 12px; color: #909399">{{ $t('expense.voucher.txtTrialBalance', { v1: fmt(voucher.debitTotal), v2: fmt(voucher.creditTotal), v3: voucher.isBalanced === 1 ? t('common.yes') : t('common.no') }) }}</span>
-      <!-- D-DEC-288（X-49 乙）：已记账而资金指令未下发的付款腿凭证——只明示注记，不动账、不新开弹窗 -->
+      <!-- D-DEC-288（X-49 乙）：已记账而资金指令未下发的付款环节凭证——只明示注记，不动账、不新开弹窗 -->
       <div v-if="voucher.payLegUnsettled === true" style="margin-top: 6px; color: #e6a23c; font-size: 12px">{{ $t('expense.voucher.hintPaymentNotIssued') }}</div>
     </div>
   </el-card>

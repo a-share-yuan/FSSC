@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -32,7 +35,7 @@ public class TenantMessageController {
     @OperLog(module = "SYSTEM_MESSAGE", operType = "INSERT", desc = "发送消息")
     @PostMapping("/send")
     public Result<Long> send(@RequestBody SendReq req) {
-        // 必填收口（批次 2C，与前端 GenericList「发送站内消息」弹窗同口径）。
+        // 必填办结（批次 2C，与前端 GenericList「发送站内消息」弹窗同一规则）。
         // 拦在控制器而非 MessageService.send：内部链路 NotifyService 也走同一方法，其模板允许无正文。
         AssertUtil.notNull(req.getReceiverId(), ErrorCode.PARAM_INVALID, "请选择接收人");
         AssertUtil.notBlank(req.getTitle(), ErrorCode.PARAM_INVALID, "请输入标题");
@@ -42,9 +45,9 @@ public class TenantMessageController {
     }
 
     /**
-     * 消息分页（D-DEC-149 通知出口可达性收口）。
+     * 消息分页（D-DEC-149 通知出口可达性办结）。
      *
-     * <p>原口径：无论查谁都要求 {@code system:message:list}。收件人读<b>自己的</b>站内信是个人视角，
+     * <p>原规则：无论查谁都要求 {@code system:message:list}。收件人读<b>自己的</b>站内信是个人视角，
      * 与 {@code /wf/query/cc/mine} 同型——该码在授权表里并非人人有（现网 COMMON_EMP 持，
      * 但 FSSC_SUPERVISOR 单岗用户不持），一旦抄送提醒发给了一个不持该码的岗位，
      * 前端 {@code silent:true} 把 403 吞成「暂无通知」＝写了 sys_message 却仍然没有出口。
@@ -64,7 +67,7 @@ public class TenantMessageController {
                 receiverId, msgType, isRead));
     }
 
-    /** 未读数：本人视角免权限码（铃铛徽标），查他人仍需 {@code system:message:list}。口径同 {@link #page} */
+    /** 未读数：本人视角免权限码（铃铛徽标），查他人仍需 {@code system:message:list}。规则同 {@link #page} */
     @GetMapping("/unreadCount")
     public Result<Long> unreadCount(@RequestParam Long receiverId) {
         com.fssc.framework.security.LoginUser me = com.fssc.framework.security.UserContext.getRequired();
@@ -77,7 +80,7 @@ public class TenantMessageController {
     /**
      * 标记已读（D-DEC-149/187 已读回写链路）。
      *
-     * <p>原口径只认 {@code system:message:update}，而 FIND_IN_SET 反查授权表＝该码<b>仅 IT_ADMIN 一岗</b>
+     * <p>原规则只认 {@code system:message:update}，而 FIND_IN_SET 反查授权表＝该码<b>仅 IT_ADMIN 一岗</b>
      * （sys_menu id=3319）。业务岗位读不到也清不掉 ⇒ 抄送/待办提醒发出后永久停在未读态，
      * 徽标按整页计数越积越多，"有出口"退化成"一屏过期噪声"（前端 {@code catch{}} 还会把 403 吞掉，
      * 用户连失败都看不见）。现改为：<b>收件人本人免权限码</b>，代他人标记仍需该码。
@@ -98,7 +101,7 @@ public class TenantMessageController {
         return Result.success();
     }
 
-    /** 全部标记已读：本人视角免权限码，代他人清空仍需 {@code system:message:update}。口径同 {@link #markRead} */
+    /** 全部标记已读：本人视角免权限码，代他人清空仍需 {@code system:message:update}。规则同 {@link #markRead} */
     @OperLog(module = "SYSTEM_MESSAGE", operType = "UPDATE", desc = "全部已读")
     @PostMapping("/readAll")
     public Result<Void> markAllRead(@RequestParam Long receiverId) {

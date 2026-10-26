@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -121,13 +124,13 @@ public class PayController {
     /**
      * D-DEC-438 执行期拦口逐条透出（只读）。
      *
-     * <p>「执行付款」被硬闸拦下时，{@link #execute} 抛的是拼好的字符串，前端只能弹一条 toast，
-     * 出纳看不出是哪条明细、缺哪一腿、去哪儿补，页面无解拦出口 ⇒ 批次锁死在已审批态。
+     * <p>「执行付款」被强制校验拦下时，{@link #execute} 抛的是拼好的字符串，前端只能弹一条 toast，
+     * 出纳看不出是哪条明细、缺哪一环节、去哪儿补，页面无解拦出口 ⇒ 批次锁死在已审批态。
      * 本端点复用 {@code execute()} 的同一条判据（{@code ThreeWayMatchService.check}），把每个拦口
-     * 结构化返回：明细坐标 + 金额链 + 类型化差异码 + 缺腿清单 + 处理出口。
+     * 结构化返回：明细坐标 + 金额链 + 类型化差异码 + 缺环节清单 + 处理出口。
      *
      * <p>读权限挂 {@code pay:batch:list}（sys_menu id=3261）而非 execute——本接口不产生任何付款动作，
-     * 也不放宽那道闸；闸本身对不对、要不要给"财务主管解拦放行"的出口，属闸口策略／权限裁决面，未在此实现。
+     * 也不放宽那道校验；校验本身对不对、要不要给"财务主管解拦放行"的出口，属校验策略／权限裁决面，未在此实现。
      */
     @RequiresPerm("pay:batch:list")
     @GetMapping("/batch/{id}/block-report")

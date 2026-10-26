@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -31,7 +34,7 @@ import java.util.regex.Pattern;
  * </ol>
  *
  * <p><b>与前端的分工</b>：前端渲染 + 体验性提示；服务端做<b>权威校验</b>。
- * 二者读同一份元数据，不会出现「前端显示必填、后端没校验」的口径分裂。
+ * 二者读同一份元数据，不会出现「前端显示必填、后端没校验」的规则分裂。
  */
 @Slf4j
 @Service
@@ -220,7 +223,7 @@ public class FormMetaService {
                         ? null : "身份证格式不正确";
             }
             case "UNIQUE" -> {
-                // 唯一性需要查库，此处只做「已填」检查；真正的唯一性由 DB 唯一索引兜底
+                // 唯一性需要查库，此处只做「已填」检查；真正的唯一性由 DB 唯一索引默认处理
                 return null;
             }
             case "CUSTOM_EXPRESSION" -> {

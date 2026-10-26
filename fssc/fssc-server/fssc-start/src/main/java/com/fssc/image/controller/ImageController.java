@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -71,7 +74,7 @@ public class ImageController {
     /** 上传后自动触发 OCR（识别失败不阻塞上传，页面可手动重试） */
     private void autoOcr(Long batchId) {
         try {
-            // D-DEC-009：未识别现在是 warning（页态 FAILED＋异常池留痕），不再以抛错收场 ⇒ 日志如实记生成了几张
+            // D-DEC-009：未识别现在是 warning（页态 FAILED＋异常池记录），不再以抛错收场 ⇒ 日志如实记生成了几张
             int pooled = ocrService.recognizeBatch(batchId);
             log.info("影像批次 {} 上传后自动OCR完成：生成发票 {} 张", batchId, pooled);
         } catch (Exception e) {
@@ -127,7 +130,7 @@ public class ImageController {
     }
 
     /**
-     * 按附件触发 OCR（ ）：附件列表持有的是 fileId，前端不应把它当 batchId 传。
+     * 按附件触发 OCR：附件列表持有的是 fileId，前端不应把它当 batchId 传。
      * 后端按 fileId 解析出所属影像批次后执行识别。
      */
     @RequiresPerm("image:ocr:run")

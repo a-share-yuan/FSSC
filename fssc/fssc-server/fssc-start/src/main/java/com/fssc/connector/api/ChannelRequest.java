@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.connector.api;
 
 /**
- * 统一连接请求（形态 B：业务侧只投递本对象，不感知厂商与协议）。
+ * 统一连接请求（形态 B：业务侧只投递本对象，不感知通道与协议）。
  *
  * <p>字段与既有 {@code IntegrationGateway} 语义一一对应，只是收敛到域契约：
  * {@code capability} 即 {@code ext_interface_config.category}（如 OCR / GOLDEN_TAX / EBS_AP），
@@ -17,12 +20,12 @@ public record ChannelRequest(String capability, ChannelType type, String method,
         method = (method == null || method.isBlank()) ? POST : method.trim().toUpperCase();
     }
 
-    /** 只读能力调用（POST + 业务体，无幂等键）。 */
+    /** 只读能力调用（POST + 业务体，无唯一键）。 */
     public static ChannelRequest read(String capability, Object payload) {
         return new ChannelRequest(capability, null, POST, payload, null);
     }
 
-    /** 变更能力调用（POST + 业务体 + 幂等键）。 */
+    /** 变更能力调用（POST + 业务体 + 唯一键）。 */
     public static ChannelRequest write(String capability, Object payload, String idempotencyKey) {
         return new ChannelRequest(capability, null, POST, payload, idempotencyKey);
     }
@@ -32,12 +35,12 @@ public record ChannelRequest(String capability, ChannelType type, String method,
         return type != null ? type : ChannelType.of(capability);
     }
 
-    /** 是否变更类调用（无幂等键时应由治理层拒绝自动重试）。 */
+    /** 是否变更类调用（无唯一键时应由治理层拒绝自动重试）。 */
     public boolean isMutating() {
         return resolvedType().isMutating();
     }
 
-    /** 是否携带幂等键。 */
+    /** 是否携带唯一键。 */
     public boolean hasIdempotencyKey() {
         return idempotencyKey != null && !idempotencyKey.isBlank();
     }

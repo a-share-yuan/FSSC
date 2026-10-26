@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.controller;
 
 import com.fssc.common.core.Result;
@@ -66,7 +69,7 @@ public class FraudDetectionController {
 
     /**
      * 人工复审：复审人以登录态为准，不接受前端传值 —— 旧实现由前端传 reviewerId，
-     * 页面固定传 0，留痕全记成匿名/管理员，审计链等于没有。
+     * 页面固定传 0，记录全记成匿名/管理员，审计链等于没有。
      */
     @RequiresPerm("compliance:fraud:review")
     @OperLog(module = "FRAUD_DETECTION", operType = "UPDATE", desc = "审核欺诈检测记录")
@@ -83,7 +86,7 @@ public class FraudDetectionController {
         return Result.success();
     }
 
-    /** 41号审查 P2-12 申诉登记：body {reason}，原因必填留痕，处置状态不变待复审 */
+    /** 41号审查 P2-12 申诉登记：body {reason}，原因必填记录，处置状态不变待复审 */
     @RequiresPerm("compliance:fraud:list")
     @OperLog(module = "FRAUD_DETECTION", operType = "UPDATE", desc = "欺诈风险申诉登记")
     @PostMapping("/{id}/appeal")
@@ -148,10 +151,10 @@ public class FraudDetectionController {
     }
 
     /**
-     * D-F1R-05：请求体缺失的统一兜底。
+     * D-F1R-05：请求体缺失的统一默认处理。
      * <p>本控制器对 body 一律按「可选接收 + 显式判空」处理，原因见 {@code review} 处注释；
      * 缺失时抛 400 {@code PARAM_INVALID} 并把期望的 body 形态写进提示，
-     * 而不是让 {@code null.get()} 一路 NPE 到全局兜底成 500「系统异常」。
+     * 而不是让 {@code null.get()} 一路 NPE 到全局默认处理成 500「系统异常」。
      */
     private void requireBody(Map<String, Object> req, String action, String expected) {
         if (req == null) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -109,7 +112,7 @@ public class ExpenseBillController {
         return Result.success(expenseBillService.convertApply(applyId));
     }
 
-    /** 发票池→报销草稿自动填单：按票面生成 CLAIM 草稿（含税口径）并自动占用发票，返回 {billId, billNo} */
+    /** 发票池→报销草稿自动填单：按票面生成 CLAIM 草稿（含税规则）并自动占用发票，返回 {billId, billNo} */
     @RequiresPerm("exp:bill:save")
     @OperLog(module = "EXPENSE_BILL", operType = "INSERT", desc = "发票生成报销草稿")
     @PostMapping("/from-invoice/{invoiceId}")
@@ -134,7 +137,7 @@ public class ExpenseBillController {
     }
 
     /**
-     * 反审核（D-V3-135 配套 · 行业方案"反"字链第二环）：APPROVED → DRAFT，退回申请人修改后重提。
+     * 反审核（D-V3-135 配套 · 单据反操作链第二环）：APPROVED → DRAFT，退回申请人修改后重提。
      * 仅制单人本人可反审本人单据（撤回同族，exp:bill:withdraw；SoD：财务不代制单人反审）；
      * 前置校验在服务层（已制证/付款已执行/批次在途/存在有效勾稽均拒绝，文案给可执行指引）。
      */

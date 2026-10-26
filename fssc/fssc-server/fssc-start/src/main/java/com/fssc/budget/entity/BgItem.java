@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.budget.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -38,14 +41,14 @@ public class BgItem extends TenantAuditBase {
     /** 已核销/已使用 */
     private BigDecimal usedAmount;
     private String currencyCode;
-    /** 双预算科目：科目编码（同类系统/同类系统 体系） */
+    /** 双预算科目：科目编码 */
     private String ncAccount;
-    /** 双预算科目：IFS 科目码（IFS 体系） */
+    /** 双预算科目：外部财务系统科目码 */
     private String ifsAccount;
     private String remark;
 
     /** D-DEC-372：控制方式（HARD/SOFT/WARN）在方案表 bg_scheme.control_type，本表无列；
-     *  pick 接口按 BudgetService.controlTypeOf 同口径批量解析后带出，供前端闸门分档（非表列）。 */
+     *  pick 接口按 BudgetService.controlTypeOf 同一规则批量解析后带出，供前端校验分档（非表列）。 */
     @TableField(exist = false)
     private String controlType;
 

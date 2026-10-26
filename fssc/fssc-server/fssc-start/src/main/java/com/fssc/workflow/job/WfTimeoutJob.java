@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -27,17 +30,17 @@ import java.util.Map;
 /**
  * 审批超时治理（需求31 附录B + 改造方案 G3-1）。
  *
- * <p><b>G2 第 3 条后本类的定位：从「主机制」降为「兜底」</b>——超时的第一触发点是
+ * <p><b>G2 第 3 条后本类的定位：从「主机制」降为「默认处理」</b>——超时的第一触发点是
  * {@code WfBpmnTemplateService} 为 {@code timeout_hours > 0} 的节点生成的 BPMN 边界定时器
  * （{@code WfTimeoutBoundaryDelegate}）。但边界定时器是<b>一次性</b>的：它只唤醒一次，
  * 之后"催办→阶梯升级"这类需要反复推进的档位、以及定时器触发时尚未到 {@code due_time}
  * （工作日历把到期日推到节后）的情形，都需要有人继续扫。本类保留 {@code @Scheduled} 60 秒扫描，
- * 承担这两件兜底事；两条路径共用同一个单任务处置方法 {@link #handleTimeoutTask}，语义绝不漂移。
+ * 承担这两件默认处理事；两条路径共用同一个单任务处置方法 {@link #handleTimeoutTask}，语义绝不漂移。
  *
  * <p>每分钟扫描 {@code wf_task} 的 PENDING 待办，按节点配置 {@code wf_node_config.timeout_hours /
  * timeout_action} 执行三档语义：<b>AUTO_REMIND</b> 催办（站内信给真实责任方）、
  * <b>AUTO_PASS</b> 自动通过、<b>ESCALATE</b> 升级转办给上级。后两档一律走
- * {@link WfEngineFacade} 的机器路径收口（留痕 + 双账 + 下一节点取人），不在本类直连引擎。
+ * {@link WfEngineFacade} 的机器路径办结（记录 + 双账 + 下一节点取人），不在本类直连引擎。
  *
  * <p><b>为什么此前整套超时"名存实亡"（2026-09-22 只读勘查）</b>：
  * <ol>
@@ -51,7 +54,7 @@ import java.util.Map;
  *  <li>AUTO_PASS 直连 {@code taskService.complete()}，推进出的下一节点没人取人、也没有镜像行，
  *      单子"自动通过后失踪"，且不留审批历史。</li>
  * </ol>
- * 本轮四点全部收口。
+ * 本轮四点全部办结。
  */
 @Slf4j
 @Component
@@ -62,21 +65,21 @@ public class WfTimeoutJob {
     private final WfTaskMapper wfTaskMapper;
     private final WfFlowConfigMapper wfFlowConfigMapper;
     private final WfNodeConfigMapper wfNodeConfigMapper;
-    /** 升级留痕读取：判断本任务是否已被超时升级过（升级后不再二次超时） */
+    /** 升级记录读取：判断本任务是否已被超时升级过（升级后不再二次超时） */
     private final com.fssc.workflow.mapper.WfTaskHistoryMapper wfTaskHistoryMapper;
     /** AUTO_PASS 白名单与金额阈值来源（sys_config） */
     private final com.fssc.system.service.ConfigService configService;
-    /** 节点键解析（含 Task_N 兜底映射），与超时监控接口共用同一实现，避免两处规则漂移 */
+    /** 节点键解析（含 Task_N 默认处理映射），与超时监控接口共用同一实现，避免两处规则漂移 */
     private final com.fssc.workflow.service.WfNodeConfigResolver wfNodeConfigResolver;
     private final NotifyService notifyService;
     private final JobHeartbeatService jobHeartbeatService;
-    /** 超时转办的升级对象解析：与 empty_strategy=ESCALATE 同一套"沿汇报线往上报、绝不落 admin"口径 */
+    /** 超时转办的升级对象解析：与 empty_strategy=ESCALATE 同一套"沿汇报线往上报、绝不落 admin"规则 */
     private final com.fssc.workflow.service.NodeOrgResolver nodeOrgResolver;
     /** 催办限频（跨进程一致状态）：同一任务 URGE_INTERVAL 内只催一次 */
     private final com.fssc.framework.spi.DistributedState distributedState;
-    /** 超时推进/升级的执行通道：与人工审批同一套双账收口与留痕 */
+    /** 超时推进/升级的执行通道：与人工审批同一套双账办结与记录 */
     private final WfEngineFacade wfEngineFacade;
-    /** 镜像表统一收口：催办次数不再由本类直写 wf_task（G2 第 3 条） */
+    /** 镜像表统一办结：催办次数不再由本类直写 wf_task（G2 第 3 条） */
     private final com.fssc.workflow.service.WfQueryService wfQueryService;
     /** 工作日历：due_time 缺失时按"工作小时"而非自然小时回算到期时间（G2 第 3 条） */
     private final com.fssc.workflow.service.WorkCalendarService workCalendarService;
@@ -84,15 +87,16 @@ public class WfTimeoutJob {
     private final com.fssc.system.mapper.SysUserMapper sysUserMapper;
     /** 卡单聚合告警的跨重启去重：读 {@code sys_message} 已有的 {@value #STUCK_ALERT_MSG_TYPE} 行（D-DEC-118） */
     private final com.fssc.system.mapper.SysMessageMapper sysMessageMapper;
+    /** R5-D-068 催办校验·单据环节：单据最终状态判定（作废/关闭/归档）——单已收尾就不再催（与待办查询共用同一规则） */
     private final com.fssc.workflow.service.BillTerminalChecker billTerminalChecker;
-    /** R5-D-068 违约留痕：审批超时违约落 {@code op_sla_breach} 一行（复用 compliance 现有写入点与列口径） */
+    /** R5-D-068 违约记录：审批超时违约落 {@code op_sla_breach} 一行（复用 compliance 现有写入位置与列规则） */
     private final com.fssc.compliance.mapper.OpSlaBreachMapper slaBreachMapper;
 
     /** 同一任务的催办最小间隔 */
     private static final java.time.Duration URGE_INTERVAL = java.time.Duration.ofHours(24);
 
     /**
-     * 本轮兜底扫描的「同一收件人 → 待发超时提醒」缓冲（D-DEC-162 风暴收口）。
+     * 本轮默认处理扫描的「同一收件人 → 待发超时提醒」缓冲（D-DEC-162 风暴办结）。
      *
      * <p>只在 {@link #processTimeout()} 的整轮范围内建立与清空：边界定时器路径（
      * {@link #handleTimeoutTask} 由 {@code WfTimeoutBoundaryDelegate} 单任务调入）与发起人人工催办
@@ -125,7 +129,7 @@ public class WfTimeoutJob {
     }
 
     /**
-     * 超时升级留痕的文案前缀（与 {@code empty_strategy} 兜底升级区分开，见 {@link #alreadyEscalated}）：
+     * 超时升级记录的文案前缀（与 {@code empty_strategy} 默认处理升级区分开，见 {@link #alreadyEscalated}）：
      * 既是写入侧的唯一出处，也是读取侧的判据，两处不得各写一遍字面量。
      */
     static final String ESCALATE_COMMENT_PREFIX = "超时升级";
@@ -134,7 +138,7 @@ public class WfTimeoutJob {
     static final String STUCK_ALERT_ROLE = "WF_ADMIN";
     /** 卡单聚合告警的站内信类型（{@code sys_message.msg_type}），同时是跨重启去重的判据 */
     static final String STUCK_ALERT_MSG_TYPE = "WF_STUCK_ALERT";
-    /** 催办留痕的动作码（{@code wf_task_history.action}），同时是跨重启限频的判据 */
+    /** 催办记录的动作码（{@code wf_task_history.action}），同时是跨重启限频的判据 */
     private static final String HISTORY_URGE = "URGE";
     /** 催办/超时提醒的跳转页：与待办视图同页，杜绝 {@code link_url} 为 NULL 的"点不动的催办"（D-DEC-162） */
     private static final String URGE_LINK = "/approval";
@@ -142,7 +146,7 @@ public class WfTimeoutJob {
     private static final java.time.Duration STUCK_ALERT_INTERVAL = java.time.Duration.ofHours(24);
     /** 告警正文最多列几条，其余只报总数 */
     private static final int STUCK_ALERT_LINES = 10;
-    /** 单人多条超时提醒合并后正文最多列几条（D-DEC-162 风暴收口，与卡单告警同一折叠口径） */
+    /** 单人多条超时提醒合并后正文最多列几条（D-DEC-162 风暴办结，与卡单告警同一折叠规则） */
     private static final int URGE_DIGEST_LINES = 10;
     /** {@code sys_message.content} 列宽 varchar(1000)，留余量后的截断阈值 */
     private static final int CONTENT_MAX_LEN = 950;
@@ -174,13 +178,13 @@ public class WfTimeoutJob {
      * 即处置档（AUTO_PASS / ESCALATE）<b>零配置</b>，于是"超时"在现网只等于"一直催"。
      * 实测 LOAN 单「部门经理审核【部门经理】」催办 <b>10 次</b>仍 PENDING、候选 {@code ,3875,3887,}
      * 无人认领 ⇒ 任务永久滞留；而 {@code wf_task_history} 里 32 条 ESCALATE 全部来自
-     * {@code empty_strategy} 空策略兜底（comment="空策略兜底…"），<b>无一条来自超时升级</b>。
+     * {@code empty_strategy} 空策略默认处理（comment="空策略默认处理…"），<b>无一条来自超时升级</b>。
      *
-     * <p>本档语义＝<b>先催办，累计满阈值仍无人办理再升级</b>（参考行业做法"超时处理"的逐级上收）。
+     * <p>本档语义＝<b>先催办，累计满阈值仍无人办理再升级</b>（超时逐级上收）。
      * 与 {@code ESCALATE} 档的区别：ESCALATE 是 SLA 一到立即升级（无缓冲），本档给出缓冲期。
      *
      * <p> <b>改档必须逐节点进行</b>（业务决策）：本档只是新增一个可选取值，
-     * <b>不改任何存量节点的行为</b>——配了 NOTIFY 的 357 个节点仍只催办。
+     * <b>不改任何历史节点的行为</b>——配了 NOTIFY 的 357 个节点仍只催办。
      * 治理清点与逐节点建议见 {@code scripts/_audit_timeout_action.py}。
      */
     static final String ACT_ESCALATE_LADDER = "ESCALATE_AFTER_URGES";
@@ -191,7 +195,7 @@ public class WfTimeoutJob {
      */
     static final String ESCALATE_AFTER_URGES_KEY = "wf.timeout.escalate.after_urges";
     static final int ESCALATE_AFTER_URGES_DEFAULT = 3;
-    /** 升级留痕的动作名（{@code wf_task_history.action}，与 WfEngineFacade.escalateByTimeout 同源） */
+    /** 升级记录的动作名（{@code wf_task_history.action}，与 WfEngineFacade.escalateByTimeout 同源） */
     private static final String HISTORY_ESCALATE = "ESCALATE";
 
     @Scheduled(fixedDelay = 60_000, initialDelay = 30_000)
@@ -204,7 +208,7 @@ public class WfTimeoutJob {
             if (pending == null || pending.isEmpty()) {
                 return;
             }
-            // 旧 wf_flow_config TIMEOUT 规则只是可选叠加层（现网 0 行）：节点配置才是主口径，
+            // 旧 wf_flow_config TIMEOUT 规则只是可选叠加层（现网 0 行）：节点配置才是主规则，
             // 规则表空不空都不能跳过整轮扫描。
             List<WfFlowConfig> rules = ignoreTenant(() -> wfFlowConfigMapper.selectList(
                     new LambdaQueryWrapper<WfFlowConfig>()
@@ -216,7 +220,7 @@ public class WfTimeoutJob {
             try {
                 for (WfTask t : pending) {
                     try {
-                        // 扫描跨租户，处置必须回到该待办自己的租户：节点配置读取、催办落库、引擎推进
+                        // 扫描跨租户，处置必须回到该待办自己的租户：节点配置读取、催办写入数据库、引擎推进
                         // 全是租户表，缺上下文会被 fail-closed 拦下（2026-09-22 现网：每轮整批抛错，三档动作零触发）
                         Long tenantId = t.getTenantId();
                         List<WfFlowConfig> taskRules = rules == null ? List.of() : rules;
@@ -249,11 +253,11 @@ public class WfTimeoutJob {
      * <b>一条</b>站内信发给流程管理员（{@value #STUCK_ALERT_ROLE}），一天最多一条。
      *
      * <p><b>明确不做</b>：不改派、不自动通过、不动 {@code assignee}（是否升级属业务决策，走阶梯档
-     * {@code ESCALATE_AFTER_URGES} 逐节点改档，见方案 §4.2 与 RA-F3b）。看板的红牌标记同为派生态，不落库。
+     * {@code ESCALATE_AFTER_URGES} 逐节点改档，见方案 §4.2 与 RA-F3b）。看板的红牌标记同为派生态，不写入数据库。
      *
      * <p>收件人为空时只记 warn 不静默丢弃——"告警发不出去"本身就是要暴露的配置缺陷（E-15 单点岗同族）。
      *
-     * <p>阈值（sys_config）、收件人（sys_role/sys_user）、站内信落库（sys_message）<b>全是租户表</b>，
+     * <p>阈值（sys_config）、收件人（sys_role/sys_user）、站内信写入数据库（sys_message）<b>全是租户表</b>，
      * 而本轮扫描是跨租户跑的，所以整段必须回到该租户的上下文里执行；放在外面会被租户拦截器 fail-closed
      * 拦下（实测抛「租户上下文缺失」，阈值永远读不到、只能按默认值跑，配了也不生效＝假配置）。
      */
@@ -286,7 +290,7 @@ public class WfTimeoutJob {
         }
         List<WfTask> stuck = new ArrayList<>();
         for (WfTask t : tasks) {
-            // R5-D-068：卡单告警同样要过双条件闸——对已作废/已终结单据"出声上报"与继续催办是同一种打扰
+            // R5-D-068：卡单告警同样要过双条件校验——对已作废/已终结单据"出声上报"与继续催办是同一种打扰
             if (wfQueryService.isStuck(t.getUrgedCount()) && urgeEligible(t)) {
                 stuck.add(t);
             }
@@ -296,7 +300,7 @@ public class WfTimeoutJob {
         }
         String dedupKey = "wf:timeout:stuck:alert:" + tenantId;
         // D-DEC-118：与催办限频同理——内存键重启即清零，实测 07:58 一轮 18 条、08:05:56 重启后又一轮
-        // 同样 18 条／同 11 人。去重真值改读已发出的告警本身（站内信落库即凭据），跨重启、跨实例一致。
+        // 同样 18 条／同 11 人。去重真值改读已发出的告警本身（站内信写入数据库即凭据），跨重启、跨实例一致。
         if (distributedState.marked(dedupKey) || stuckAlertSentRecently()) {
             return;
         }
@@ -370,9 +374,9 @@ public class WfTimeoutJob {
     }
 
     /**
-     * 单个任务的超时处置（<b>可复用入口</b>）：边界定时器 Delegate 与 60 秒兜底扫描共用本方法，
-     * 保证两条触发路径的三档语义、白名单门槛、留痕口径完全一致（抽方法而非复制一份逻辑）。
-     * <p>调用前提：当前线程已带该任务所属租户上下文（节点配置/催办落库/引擎推进都是租户表）。
+     * 单个任务的超时处置（<b>可复用入口</b>）：边界定时器 Delegate 与 60 秒默认处理扫描共用本方法，
+     * 保证两条触发路径的三档语义、白名单门槛、记录规则完全一致（抽方法而非复制一份逻辑）。
+     * <p>调用前提：当前线程已带该任务所属租户上下文（节点配置/催办写入数据库/引擎推进都是租户表）。
      *
      * @param rules 旧 {@code wf_flow_config} TIMEOUT 规则（可选叠加层）；定时器路径传空表即可
      */
@@ -380,9 +384,9 @@ public class WfTimeoutJob {
         if (t == null || t.getCreateTime() == null) {
             return;
         }
-        // R5-D-068 双条件闸：催办扫描只处置「实例 RUNNING 且单据非终态」的在办任务。
+        // R5-D-068 双条件校验：催办扫描只处置「实例 RUNNING 且单据非最终状态」的在办任务。
         // 作废单（VOID）此前流程未终止、镜像行滞留 PENDING，每分钟被本扫描空转催办（实测 po_order 14/15）。
-        // 闸在处置入口而非仅扫描循环：边界定时器路径同样受约束，两条触发路径口径一致。
+        // 校验在处置入口而非仅扫描循环：边界定时器路径同样受约束，两条触发路径规则一致。
         if (!urgeEligible(t)) {
             return;
         }
@@ -393,15 +397,15 @@ public class WfTimeoutJob {
     }
 
     /**
-     * R5-D-068 催办/超时处置双条件闸（(1) AND (2) 全真才放行）：
+     * R5-D-068 催办/超时处置双条件校验（(1) AND (2) 全真才放行）：
      * <ol>
-     *  <li><b>实例 RUNNING</b>：按 {@code proc_inst_id} 读 wf_instance，终态（CANCELLED/APPROVED/REJECTED）
+     *  <li><b>实例 RUNNING</b>：按 {@code proc_inst_id} 读 wf_instance，最终状态（CANCELLED/APPROVED/REJECTED）
      *      或查无实例（幽灵待办）一律跳过——对已死实例催办只会打扰人。</li>
-     *  <li><b>单据非终态</b>：{@link #billTerminal} 现按采购订单面收口（VOID/CLOSED/ARCHIVED）。</li>
+     *  <li><b>单据非最终状态</b>：{@link #billTerminal} 现按采购订单面办结（VOID/CLOSED/ARCHIVED）。</li>
      * </ol>
-     * 读取取向：实例腿 fail-closed（状态不可判定宁可跳过本轮，宁可不催不漏判）；单据腿 fail-open
+     * 读取取向：实例环节 fail-closed（状态不可判定宁可跳过本轮，宁可不催不漏判）；单据环节 fail-open
      * （读失败不阻断催办，与限频设施"宁可多催不漏催"的历史取向一致）。跳过只记 debug：
-     * 终态单会在一分钟内被反复扫到，info 会刷屏。
+     * 最终状态单会在一分钟内被反复扫到，info 会刷屏。
      */
     private boolean urgeEligible(WfTask t) {
         if (t == null) {
@@ -431,8 +435,9 @@ public class WfTimeoutJob {
     }
 
     /**
-     * 业务单据是否已收尾（终态）。判定真值表统一收口在 {@link com.fssc.workflow.service.BillTerminalChecker}
-     * 其余 bizType 返回 false＝维持改造前行为（放行）。读取失败按非终态放行（不阻断催办）。
+     * 业务单据是否已收尾（最终状态）。判定真值表统一办结在 {@link com.fssc.workflow.service.BillTerminalChecker}
+     * （与待办查询 WfQueryService.myTodo / WfEngineFacade.todo 共用同一规则，杜绝多处分写漂移）；
+     * 其余 bizType 返回 false＝维持改造前行为（放行）。读取失败按非最终状态放行（不阻断催办）。
      */
     private boolean billTerminal(WfTask t) {
         return billTerminalChecker.isBillTerminal(t.getBizType(), t.getBizId());
@@ -441,10 +446,10 @@ public class WfTimeoutJob {
     /**
      * 到期时刻真值：<b>优先 {@code wf_task.due_time}</b>（G3 已把该列做成真值），
      * 取不到才用 {@code create_time + timeout_hours} 回算，且回算走工作日历（G2 第 3 条）。
-     * 两处口径必须一致，否则"同一张单在定时器与兜底作业里到期时间不同"。
+     * 两处规则必须一致，否则"同一张单在定时器与默认处理作业里到期时间不同"。
      *
-     * <p>回算时按单据所属<b>公司</b>取日历（参考行业做法"按组织取日历"）；{@link #orgOf} 解析不到组织时
-     * 返回 {@code null}，日历服务会回落租户口径，与改造前逐字一致。
+     * <p>回算时按单据所属<b>公司</b>取日历（按组织取日历）；{@link #orgOf} 解析不到组织时
+     * 返回 {@code null}，日历服务会回落租户规则，与改造前逐字一致。
      */
     private LocalDateTime dueOf(WfTask t, long timeoutHours) {
         if (t.getDueTime() != null) {
@@ -459,8 +464,8 @@ public class WfTimeoutJob {
     }
 
     /**
-     * 单据所属组织（公司）：{@code bizType/bizId} → 单据表 company_id（取不到再按建单人兜底）。
-     * 解析不到一律返回 {@code null}，由日历服务回落租户口径（零影响）。
+     * 单据所属组织（公司）：{@code bizType/bizId} → 单据表 company_id（取不到再按建单人默认处理）。
+     * 解析不到一律返回 {@code null}，由日历服务回落租户规则（零影响）。
      */
     private Long orgOf(WfTask t) {
         if (t == null) {
@@ -479,7 +484,7 @@ public class WfTimeoutJob {
      * 匹配节点名含"直接主管"）。命中即由本方法处置，不再叠加节点配置。
      *
      * <p>规则里的 action 与节点配置是两套拼写、语义重叠（NOTIFY / AUTO_ESCALATE / REDISTRIBUTE），
-     * 现统一归一到三档口径执行。原 AUTO_ESCALATE 只是"给候选组加一个角色"——加完没人认领还是没人办，
+     * 现统一归一到三档规则执行。原 AUTO_ESCALATE 只是"给候选组加一个角色"——加完没人认领还是没人办，
      * 现按 ESCALATE 真语义落到具体人头上；解析不到真人时不放开候选组，只催办。
      */
     private boolean handleByLegacyRule(WfTask t, List<WfFlowConfig> rules) {
@@ -503,7 +508,7 @@ public class WfTimeoutJob {
             if (hours <= 0) {
                 continue;
             }
-            // G2：到期真值优先取 wf_task.due_time（含工作日历口径），取不到才按自然/工作小时回算
+            // G2：到期真值优先取 wf_task.due_time（含工作日历规则），取不到才按自然/工作小时回算
             LocalDateTime due = dueOf(t, hours);
             if (LocalDateTime.now().isBefore(due)) {
                 continue;
@@ -531,7 +536,7 @@ public class WfTimeoutJob {
         if (t.getModelKey() == null || t.getNodeKey() == null) {
             return;
         }
-        // 节点键解析（wf_task.node_key 为 Flowable Task_N，须经 Task_N→业务节点兜底映射才能命中配置）
+        // 节点键解析（wf_task.node_key 为 Flowable Task_N，须经 Task_N→业务节点默认处理映射才能命中配置）
         WfNodeConfig nodeConfig = wfNodeConfigResolver.resolve(t.getModelKey(), t.getNodeKey());
         if (nodeConfig == null) {
             return;
@@ -541,7 +546,7 @@ public class WfTimeoutJob {
         if (timeoutHours == null || timeoutHours <= 0 || timeoutAction == null || timeoutAction.isBlank()) {
             return;
         }
-        // G2：到期真值优先取 wf_task.due_time（含工作日历口径），取不到才按工作小时回算
+        // G2：到期真值优先取 wf_task.due_time（含工作日历规则），取不到才按工作小时回算
         LocalDateTime due = dueOf(t, timeoutHours);
         if (LocalDateTime.now().isBefore(due)) {
             return;
@@ -566,12 +571,12 @@ public class WfTimeoutJob {
                        Integer upLevel) {
         switch (action) {
             case ACT_AUTO_PASS -> {
-                // 批次 1 ②（参考行业做法"启用超时处理…会签节点不支持超时自动处理"）：
+                // 批次 1 ②（启用超时处理；会签节点不支持超时自动处理）：
                 // AUTO_PASS 改白名单制，默认一档都不放行＝退回催办；节点配置里写 AUTO_PASS 也不再"配了就敢自动过"。
                 String deny = autoPassDenial(t, ftask);
                 if (deny != null) {
                     // D-DEC-274：不放行时原先直接落回 handleNotify＝无限催办、无终局（实测 AR_REPORT 三个
-                    // 并行节点各催 50 次、超期 46 小时仍 PENDING）。行业方案超时策略两档都有终局——要么自动执行、
+                    // 并行节点各催 50 次、超期 46 小时仍 PENDING）。超时策略两档都有终局——要么自动执行、
                     // 要么"超时后自动将任务转发给指定处理人"。⇒ 改走既有阶梯档：阈值内仍只催办（行为不变），
                     // 满 wf.timeout.escalate.after_urges 次后沿汇报线升级给真实负责人（绝不落 admin）。
                     log.info("超时自动通过未放行（{}），转阶梯档处理: taskId={}, node={}",
@@ -593,16 +598,16 @@ public class WfTimeoutJob {
     /**
      * AUTO_PASS 放行判定（批次 1 ②）。返回 {@code null} 表示允许自动通过，否则返回拒因（写进催办文案与日志）。
      *
-     * <p>四道门槛，全部来自 2026-09-22 裁决与厂商取证（方案 §8.2 ②）：
+     * <p>四道门槛，全部来自 2026-09-22 裁决与规则取证（方案 §8.2 ②）：
      * <ol>
      *  <li><b>白名单</b>：{@code sys_config.wf.timeout.autopass.nodes}（逗号分隔 {@code modelKey:nodeKey}）
      *      未配置/不含本节点 → 不放行。缺省空＝AUTO_PASS 全库不生效，等价于默认 NOTIFY；</li>
      *  <li><b>无金额敞口</b>：单据金额超 {@code wf.timeout.autopass.max_amount}（默认 5000）→ 不放行；</li>
      *  <li><b>节点未绑定单据操作</b>：任务池/共享池作业节点（付款、记账、归档等落地动作）→ 不放行，
-     *      同类系统同样只对纯审批节点做自动执行；</li>
+     *      同样只对纯审批节点做自动执行；</li>
      *  <li><b>非会签/并联会审</b>：Flowable 多实例节点（有 {@code nrOfInstances} 变量）→ 不放行。</li>
      * </ol>
-     * 另加本系统铁律：机器路径留痕的办理人不得为 admin（零 admin）。
+     * 另加本系统铁律：机器路径记录的办理人不得为 admin（零 admin）。
      */
     private String autoPassDenial(WfTask t, Task ftask) {
         String key = t.getModelKey() + ":" + t.getNodeKey();
@@ -646,7 +651,7 @@ public class WfTimeoutJob {
     /**
      * 是否 Flowable 多实例节点（真会签/并联会审）。引擎在多实例执行上放
      * {@code nrOfInstances / nrOfCompletedInstances} 系统变量，据此判定；
-     * 判定失败按"非多实例"处理（白名单本身已是主闸，不因变量读取失败而放开不该放的节点）。
+     * 判定失败按"非多实例"处理（白名单本身已是主校验，不因变量读取失败而放开不该放的节点）。
      */
     private boolean isMultiInstance(Task ftask) {
         try {
@@ -710,15 +715,15 @@ public class WfTimeoutJob {
     }
 
     /**
-     * 超时动作别名归一（G3-1）。库内存量只写过 {@code NOTIFY}，但配置页/文档/旧规则里出现过
+     * 超时动作别名归一（G3-1）。库内历史只写过 {@code NOTIFY}，但配置页/文档/旧规则里出现过
      * AUTO_REMIND、REMIND、URGE、TRANSFER、ESCALATE、AUTO_ESCALATE、REDISTRIBUTE 等拼法；
-     * 不归一则这些配置整档失效。归一后只有三档，且 {@code NOTIFY} 继续可用（602 行存量语义不变）。
+     * 不归一则这些配置整档失效。归一后只有三档，且 {@code NOTIFY} 继续可用（602 行历史语义不变）。
      *
      * <p>新增阶梯档别名（2026-09-23）：{@code ESCALATE_AFTER_URGES} /
      * {@code URGE_THEN_ESCALATE} / {@code REMIND_THEN_ESCALATE} 归一为
      * {@link #ACT_ESCALATE_LADDER}。
      *
-     * @return 规范值，无法识别返回 null（由调用方兜底为催办）
+     * @return 规范值，无法识别返回 null（由调用方默认处理为催办）
      */
     static String normalizeAction(String raw) {
         if (raw == null) {
@@ -762,8 +767,8 @@ public class WfTimeoutJob {
         int before = t.getUrgedCount() == null ? 0 : t.getUrgedCount();
         int urged = sendUrge(t, ftask, "TIMEOUT_REMINDER", "审批超时催办通知", content, "超时催办", reason, null);
         if (urged > before) {
-            // R5-D-068 违约留痕：催办真正发出（未被 24h 限频拦下）＝本任务 SLA 违约成立，
-            // 复用 compliance 现有写入点落 op_sla_breach 一行；限频即天然去重，同一窗口不重复落行。
+            // R5-D-068 违约记录：催办真正发出（未被 24h 限频拦下）＝本任务 SLA 违约成立，
+            // 复用 compliance 现有写入位置落 op_sla_breach 一行；限频即天然去重，同一窗口不重复落行。
             recordSlaBreach(t, reason);
         }
         // 批次 1 ①：作业节点（POOL）有人领取却办不动 → 催办满 {@value #POOL_RELEASE_AFTER_URGES} 次自动回收，
@@ -785,7 +790,7 @@ public class WfTimeoutJob {
 
     /**
      * R5-D-068 违约落行：审批任务超时（SLA 违约）时向 {@code op_sla_breach} 写一条记录，
-     * 复用 compliance 既有的写入点与列口径（{@code SlaMonitorService} 同表写入：task_id 挂任务主键、
+     * 复用 compliance 既有的写入位置与列规则（{@code SlaMonitorService} 同表写入：task_id 挂任务主键、
      * bill_id/bill_type 挂业务单据、breach_type=BREACH、breach_time=检测时刻）。
      *
      * <p>去重：只在 {@link #handleNotify} 的催办真正发出时写入，天然继承 {@code URGE_INTERVAL}（24h）
@@ -809,25 +814,25 @@ public class WfTimeoutJob {
             slaBreachMapper.insert(breach);
             log.info("SLA 违约落行: taskId={}, billType={}, billId={}", t.getTaskId(), t.getBizType(), t.getBizId());
         } catch (Exception e) {
-            // 违约留痕是附加可观测性：写失败只 warn，绝不阻断催办主链路（与站内信容错同口径）
+            // 违约记录是附加可观测性：写失败只 warn，绝不阻断催办主链路（与站内信容错同一规则）
             log.warn("SLA 违约落行失败（不阻断催办）taskId={}: {}", t.getTaskId(), e.getMessage());
         }
     }
 
     /**
-     * 催办的唯一发信通道：限频判定 → 站内信 → 计次 → 时间线留痕。
-     * 超时作业与发起人催办（E-10）共用，两处口径不会漂移；而 POOL 回收这类"顺带改任务归属"的
+     * 催办的唯一发信通道：限频判定 → 站内信 → 计次 → 时间线记录。
+     * 超时作业与发起人催办（E-10）共用，两处规则不会漂移；而 POOL 回收这类"顺带改任务归属"的
      * 副作用留在超时调用方，人工催办不触发。
      *
-     * <p><b>限频是两段式的（D-DEC-118 收口）</b>：内存标记只是同一进程内的快路径，
-     * <b>真值是 {@code wf_task_history} 上这条任务最近一次 {@code URGE} 留痕的时刻</b>——
-     * 留痕与发信本就是同一动作的两面（下面第 4 步写的就是它），因此限频状态天然跨重启、跨实例，
+     * <p><b>限频是两段式的（D-DEC-118 办结）</b>：内存标记只是同一进程内的快路径，
+     * <b>真值是 {@code wf_task_history} 上这条任务最近一次 {@code URGE} 记录的时刻</b>——
+     * 记录与发信本就是同一动作的两面（下面第 4 步写的就是它），因此限频状态天然跨重启、跨实例，
      * 不需要新表。改造前只有内存那一段：08:01:35 催办成功置 24h 键，08:05:05 重启清零，
      * 08:07:22 同一节点再催一次，6 分 47 秒打扰两遍。
      *
      * @param historyLabel 写进 {@code wf_task_history} 的前缀（"超时催办" / "发起人催办"）
-     * @param reason       催办缘由，随次数一起落进留痕
-     * @param operUserId   催办发起人；超时作业传 null（无人身后可归因），人工催办必须带，否则留痕答不出"谁催的"
+     * @param reason       催办缘由，随次数一起落进记录
+     * @param operUserId   催办发起人；超时作业传 null（无人身后可归因），人工催办必须带，否则记录答不出"谁催的"
      * @return 该任务的累计催办次数（命中 24 小时限频时返回当前值，不重复发信）
      */
     private int sendUrge(WfTask t, Task ftask, String msgType, String title, String content,
@@ -869,13 +874,13 @@ public class WfTimeoutJob {
             log.warn("催办限频标记失败 taskId={}: {}", t.getTaskId(), e.getMessage());
         }
         int urged = t.getUrgedCount() != null ? t.getUrgedCount() + 1 : 1;
-        // G2 收口：催办次数改走 WfQueryService（原 wfTaskMapper.updateById 绕过了镜像表的统一写入口，
-        // 与"镜像表写路径只有一个收口点"的约束冲突）。
+        // G2 办结：催办次数改走 WfQueryService（原 wfTaskMapper.updateById 绕过了镜像表的统一写入口，
+        // 与"镜像表写路径只有一个办结点"的约束冲突）。
         wfQueryService.bumpUrgedCount(t.getTaskId(), urged);
         log.info("{}: taskId={}, node={}, 对象数={}, urgedCount={}",
                 historyLabel, t.getTaskId(), t.getNodeName(), targets.size(), urged);
-        // ROOT-3：催办动作补进时间线（作业线程无登录人，显式带租户上下文才写得进留痕）
-        // 这条 URGE 留痕同时是 {@link #urgedWithinInterval} 的限频真值，两者不得拆成两处口径。
+        // ROOT-3：催办动作补进时间线（作业线程无登录人，显式带租户上下文才写得进记录）
+        // 这条 URGE 记录同时是 {@link #urgedWithinInterval} 的限频真值，两者不得拆成两处规则。
         TenantContext.callAs(t.getTenantId(), () -> wfEngineFacade.recordJobAction(t.getProcInstId(),
                 t.getTaskId(), t.getNodeKey(), t.getNodeName(), HISTORY_URGE, operUserId, t.getAssigneeId(),
                 historyLabel + "（第 " + urged + " 次）：" + reason));
@@ -883,9 +888,9 @@ public class WfTimeoutJob {
     }
 
     /**
-     * 本任务在 {@link #URGE_INTERVAL} 内是否已被催办过 —— 读 {@code wf_task_history} 的 {@code URGE} 留痕。
+     * 本任务在 {@link #URGE_INTERVAL} 内是否已被催办过 —— 读 {@code wf_task_history} 的 {@code URGE} 记录。
      *
-     * <p>留痕按 {@code (tenant_id, proc_inst_id)} 走 {@code idx_tenant_inst}，再按 {@code task_id + oper_time}
+     * <p>记录按 {@code (tenant_id, proc_inst_id)} 走 {@code idx_tenant_inst}，再按 {@code task_id + oper_time}
      * 收窄（{@code oper_time} 是分区列，带上它即只扫近期分区）。
      *
      * <p>读取失败一律返回 {@code false}（放行）：与改造前"限频设施不可用则宁可多催"的 fail-open 取向逐字一致，
@@ -979,8 +984,8 @@ public class WfTimeoutJob {
      *
      * <p>命中限频抛业务异常而不是静默返回 0——界面必须让用户知道"这一催没发出去"。
      *
-     * @param initiatorId   发起人用户 id，落进 URGE 留痕的 oper_user_id
-     * @param initiatorName 发起人姓名，进通知文案与 URGE 留痕
+     * @param initiatorId   发起人用户 id，落进 URGE 记录的 oper_user_id
+     * @param initiatorName 发起人姓名，进通知文案与 URGE 记录
      * @return 本次实际催办的任务数（并行/会签多任务时 &gt; 1）
      */
     private int urgeByInitiator(String procInstId, Long initiatorId, String initiatorName) {
@@ -1013,7 +1018,7 @@ public class WfTimeoutJob {
     }
 
     /**
-     * 发起人催办的鉴权入口（控制器只递 procInstId + 当前登录人，判定口径集中在本类）。
+     * 发起人催办的鉴权入口（控制器只递 procInstId + 当前登录人，判定规则集中在本类）。
      *
      * <p>鉴权看 {@code wf_instance.start_user_id}：催办的语义是"我问一句我这张单怎么样了"，
      * 别人问就没有依据——非发起人调用一律 403，不做静默通过。
@@ -1033,13 +1038,13 @@ public class WfTimeoutJob {
     }
 
     /**
-     * 本任务是否已被<b>超时</b>升级过（读升级留痕，批次 1 ②"升级后不再二次超时"）。
+     * 本任务是否已被<b>超时</b>升级过（读升级记录，批次 1 ②"升级后不再二次超时"）。
      * 读取失败按"未升级过"处理：宁可再升一次级，也不要把超时治理整体关掉。
      *
-     * <p>D-B4UI-03（本次收口）：判据此前只有 {@code action = ESCALATE}，而 {@code empty_strategy}
-     * 取人兜底也借用同一个动作码写留痕（现网 54 行 ESCALATE 里 53 行是"空策略兜底"），于是任务一落地
+     * <p>D-B4UI-03（本次办结）：判据此前只有 {@code action = ESCALATE}，而 {@code empty_strategy}
+     * 取人默认处理也借用同一个动作码写记录（现网 54 行 ESCALATE 里 53 行是"空策略默认处理"），于是任务一落地
      * 就被判成"已升级过"，阶梯升级与 AUTO_PASS 退路档被永久短路。{@code action} 分不开这两个机制，
-     * 只有文案前缀分得开 ⇒ 收窄为"超时升级"留痕。
+     * 只有文案前缀分得开 ⇒ 收窄为"超时升级"记录。
      */
     private boolean alreadyEscalated(String taskId) {
         try {
@@ -1068,7 +1073,7 @@ public class WfTimeoutJob {
             out.add(t.getAssigneeId());
             return out;
         }
-        // 与待办视图同一份候选人解析口径（,1,2,3, 包裹、非数字段跳过）
+        // 与待办视图同一份候选人解析规则（,1,2,3, 包裹、非数字段跳过）
         out.addAll(com.fssc.workflow.service.WfQueryService.parseCandidateIds(t.getCandidateIds()));
         if (out.isEmpty()) {
             for (Long id : nodeOrgResolver.listOperableUserIds(ftask)) {
@@ -1085,12 +1090,12 @@ public class WfTimeoutJob {
      *
      * <p>旧实现是 {@code addCandidateGroup(task, "admin")}：既违背"任何流程节点都不允许 admin 参与"的铁律，
      * 且 {@code sys_role} 里没有裸 {@code ADMIN} 这个 role_code，按 {@code canOperate} 的
-     * "候选组 ∩ 用户角色"口径没人命中＝任务悬空。现与 {@code empty_strategy=ESCALATE} 共用
-     * {@link com.fssc.workflow.service.NodeOrgResolver#escalateTarget(String)} 一套升级口径。
+     * "候选组 ∩ 用户角色"规则没人命中＝任务悬空。现与 {@code empty_strategy=ESCALATE} 共用
+     * {@link com.fssc.workflow.service.NodeOrgResolver#escalateTarget(String)} 一套升级规则。
      */
     private void handleEscalate(WfTask t, Task ftask, String reason, String legacyTargetRole, Integer upLevel) {
-        // 批次 1 ②：升级后不再二次超时（行业方案"指定处理人"档明确"收到任务后没有处理时长的限制"）。
-        // 判据用升级留痕本身（wf_task_history 的 ESCALATE 行），不加列、不改表；升级后仍会催办，
+        // 批次 1 ②：升级后不再二次超时（"指定处理人"档明确"收到任务后没有处理时长的限制"）。
+        // 判据用升级记录本身（wf_task_history 的 ESCALATE 行），不加列、不改表；升级后仍会催办，
         // 但不再自动通过、也不再反复升级换人——否则一张单会在汇报线上一路踢上去。
         if (alreadyEscalated(t.getTaskId())) {
             log.info("审批任务已升级过，本轮不再二次升级，仅催办: taskId={}, node={}", t.getTaskId(), t.getNodeName());
@@ -1122,7 +1127,7 @@ public class WfTimeoutJob {
      * <p>先按催办档发通知并累加 {@code urged_count}；累计满
      * {@code sys_config.wf.timeout.escalate.after_urges}（默认 {@value #ESCALATE_AFTER_URGES_DEFAULT}）
      * 仍无人办理时，升级给沿汇报线第 {@code up_level} 级真实负责人（绝不落 admin，
-     * 复用 {@link #handleEscalate} 的同一套口径与"升级后不再二次升级"约束）。
+     * 复用 {@link #handleEscalate} 的同一套规则与"升级后不再二次升级"约束）。
      *
      * <p>与 {@code ESCALATE} 档的区别：ESCALATE 是 SLA 一到立即升级（无缓冲），本档给出缓冲期。
      * 作业节点（POOL/共享池）不在本档升级：它们走 {@link #POOL_RELEASE_AFTER_URGES} 的自动回收档，
@@ -1145,7 +1150,7 @@ public class WfTimeoutJob {
      * 否则沿汇报线按 {@code up_level} 上收。
      *
      * <p>注意点名角色分支<b>不受 up_level 影响</b>：配置者既已明确指名角色，就不该再被层级规则改写；
-     * up_level 只在"沿汇报线自动找上级"这条兜底路径上生效。
+     * up_level 只在"沿汇报线自动找上级"这条默认处理路径上生效。
      */
     private Long roleHolderOf(WfTask t, String legacyTargetRole, Integer upLevel) {
         if (legacyTargetRole != null && !legacyTargetRole.isBlank()) {
@@ -1170,7 +1175,7 @@ public class WfTimeoutJob {
         return t.getAssigneeId();
     }
 
-    /** 已超时小时数（整除，用于提示文案与统计口径一致）。 */
+    /** 已超时小时数（整除，用于提示文案与统计方式一致）。 */
     private long overdueHours(WfTask t) {
         return Duration.between(t.getCreateTime(), LocalDateTime.now()).toHours();
     }

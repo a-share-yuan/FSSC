@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="ops-console">
     <el-card shadow="never">
@@ -106,8 +109,12 @@
             <el-table-column prop="priority" :label="$t('sharing.common.colPriority')" width="80" align="center" />
             <el-table-column prop="ruleCode" :label="$t('sharing.common.colRuleCode')" width="150" show-overflow-tooltip />
             <el-table-column prop="ruleName" :label="$t('sharing.common.colRuleName')" min-width="140" show-overflow-tooltip />
-            <el-table-column prop="dimension" :label="$t('sharing.ops.colDimension')" width="130" />
-            <el-table-column prop="condition" :label="$t('sharing.ops.colCondition')" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="dimension" :label="$t('sharing.ops.colDimension')" width="130">
+              <template #default="{ row }">{{ dispatchDimensionLabel(row.dimension) }}</template>
+            </el-table-column>
+            <el-table-column prop="condition" :label="$t('sharing.ops.colCondition')" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }">{{ ruleConditionText(row) }}</template>
+            </el-table-column>
             <el-table-column :label="$t('sharing.common.colHit')" width="72" align="center">
               <template #default="{ row }">
                 <el-tag size="small" :type="row.matched ? 'success' : 'info'">{{ row.matched ? t('sharing.common.colHit') : t('sharing.ops.labelMiss') }}</el-tag>
@@ -410,7 +417,7 @@
 </template>
 
 <script setup>
-import { dispatchModeLabel } from '@/constants/enums'
+import { dispatchModeLabel, dispatchDimensionLabel, billTypeLabel, taskTypeLabel } from '@/constants/enums'
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { wfOpsApi, sharingApi, orgApi, mdApi } from '../../api'
@@ -435,6 +442,19 @@ const STRATEGIES = computed(() => ([
 ]))
 const STRATEGY_MAP = Object.fromEntries(STRATEGIES.value.map((s) => [s.value, s.label]))
 function strategyLabel(s) { return STRATEGY_MAP[s] || s || '—' }
+/**
+ * 规则试算「条件」列：dimension=TYPE 时后端拿 match_condition 与 bizType/taskType 择一比较
+ * （TaskAssignmentService 138~144），所以这里先按单据类型、再按作业项换中文；其余维度是
+ * 金额/公司等自由值，原样展示。
+ */
+function ruleConditionText(row) {
+  const c = row?.condition
+  if (c == null || String(c).trim() === '') return '—'
+  const s = String(c).trim()
+  if (String(row?.dimension || '').toUpperCase() !== 'TYPE') return s
+  const byBill = billTypeLabel(s)
+  return byBill !== s ? byBill : taskTypeLabel(s)
+}
 function strategyTag(s) {
   return s === 'PICK' ? 'info' : s === 'SMART' ? 'success' : 'warning'
 }
@@ -708,7 +728,7 @@ function openVfDetail(row) {
 }
 
 /**
- * 补生成＝调用既有记账凭证生成接口（同源已有凭证时后端幂等返回，不会重复入账）。
+ * 补生成＝调用既有记账凭证生成接口（同源已有凭证时后端去重返回，不会重复入账）。
  * 仅对后端判定 retriable 的行开放：借款/还款的来源走该入口会落错来源，见 D-DEC-271。
  */
 async function doVfRetry(row) {

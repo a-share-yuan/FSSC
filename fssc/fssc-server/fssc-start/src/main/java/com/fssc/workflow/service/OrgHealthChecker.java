@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import lombok.RequiredArgsConstructor;
@@ -12,7 +15,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 组织健康体检（OrgHealthChecker）——把「上线前必须固化的 4 条红线」<b>变成可自动执行的闸门</b>。
+ * 组织健康体检（OrgHealthChecker）——把「上线前必须固化的 4 条红线」<b>变成可自动执行的校验</b>。
  *
  * <h3>为什么要有这个类</h3>
  * 2026-10-19 人工测试 G 册实测发现：红线条目此前只是文档里的「注意事项」，
@@ -21,19 +24,20 @@ import java.util.Set;
  * 靠人工逐公司补人/补部门树不可持续——<b>每新增一家公司都会重犯</b>。
  * ⇒ 只能做成<b>每日自动巡检 + 可查询的体检报告</b>。
  *
- * <h3>五条红线（判据口径收口在此，一处定义）</h3>
+ * <h3>五条红线（判据规则办结在此，一处定义）</h3>
  * <ol>
  *   <li><b>R1 岗位独苗</b>：凡有 {@code assign_value='DIRECT_SUPERVISOR'} 节点的流程，
  *       所在公司的 {@code ORG_HEAD} 人数须 ≥ 2 —— 否则「leader 恰为提单人」时节点无办理人、必然死锁。
- *       <b>推广口径：每个公司只要配了 leader_id，就至少要有 2 名负责人</b>。</li>
+ *       <b>推广规则：每个公司只要配了 leader_id，就至少要有 2 名负责人</b>。</li>
  *   <li><b>R2 汇报线断裂</b>：公司内部门<b>不得全部 {@code parent_id=0}</b> ——
  *       断在第一层时 {@code escalateTarget} 与 {@code empty_strategy=ESCALATE} 全部失效。</li>
  *   <li><b>R3 leader 即提单人</b>：某部门 leader 若同时是该部门主要提单人，
- *       他本人发起的单在该节点必然无人可办（本项目已由 D-WF-15 三级降级兜底，
+ *       他本人发起的单在该节点必然无人可办（本项目已由 D-WF-15 三级降级默认处理，
  *       但组织上仍应避免，属<b>提醒级</b>）。</li>
  *   <li><b>R4 leader 跨公司</b>：{@code sys_dept.leader_id} 指向的人不属于本公司 ⇒
- *       「直属上级」跨公司，本地公司的事务由外公司人审批。<b>本项目代码当前不校验此项（R4 属组织治理口径）</b>，
+ *       「直属上级」跨公司，本地公司的事务由外公司人审批。<b>本项目代码当前不校验此项（R4 属组织治理规则）</b>，
  *       但体检要报出来供裁决。</li>
+ *   <li><b>R5 节点名一致性</b>（2026-10-19 E-1 新增）：流程已部署的节点显示名与
  *       {@code wf_node_config.node_name} 失配。引擎按 {@code taskDefinitionKey} 取人故
  *       <b>功能不受影响</b>，但按显示名排查必然取错角色 ⇒ 只报警、不自动改
  *       （BPMN 已部署，改任一侧都牵动另一侧）。</li>
@@ -64,7 +68,7 @@ public class OrgHealthChecker {
         int checked = 0;
         try {
             // 只体检「启用中」的公司：status='DISABLED' 表示主体已建但尚未启用（无部门无人员），
-            // 纳入体检必然全红，属噪声。与 CompanyService.tree() 的口径保持一致。
+            // 纳入体检必然全红，属噪声。与 CompanyService.tree() 的规则保持一致。
             List<Map<String, Object>> comps = jdbc.queryForList(
                     "SELECT id, company_name FROM sys_company WHERE status = 'NORMAL' ORDER BY id");
             checked = comps.size();
@@ -109,7 +113,7 @@ public class OrgHealthChecker {
                 issues.add(issue("R3", "WARN", str(r.get("dept_name")),
                         "部门负责人「" + str(r.get("nick_name")) + "」(" + str(r.get("emp_no"))
                                 + ") 近 30 天在本部门发起过单据：他本人发起的单在该节点无人可办",
-                        "已由 D-WF-15 三级降级兜底不阻断流程；组织上建议由副职代发，或将该节点改派给上级"));
+                        "已由 D-WF-15 三级降级备用处理，不阻断流程；组织上建议由副职代发，或将该节点改派给上级"));
             }
             // ── R4 leader 跨公司（WARN）──
             for (Map<String, Object> r : jdbc.queryForList(
@@ -121,8 +125,9 @@ public class OrgHealthChecker {
                         "「" + str(r.get("nick_name")) + "」(" + str(r.get("emp_no")) + ") 是本部门负责人，"
                                 + "但其公司归属为 " + num(r.get("leader_co")) + "，与部门所属公司 "
                                 + num(r.get("company_id")) + " 不一致：「直属上级」跨公司",
-                        "改派为本公司负责人（本项目代码当前不校验此项，属组织治理口径，请业务裁决）"));
+                        "改派为本公司负责人（本项目代码当前不校验此项，属组织管理规则，请业务决定）"));
             }
+            // ── R5 节点名一致性（E-1，WARN）──
             issues.addAll(nodeNameMismatchIssues());
         } catch (Exception ex) {
             // fail-open：体检异常不得让接口 500，也不得被读成「不合规」
@@ -154,6 +159,7 @@ public class OrgHealthChecker {
     }
 
     /**
+     * E-1：流程已部署节点名 与 {@code wf_node_config.node_name} 的一致性巡检。
      *
      * <p>流程设计器里「节点名称」（给人看）与「处理人角色」（给引擎）是两个字段，
      * 但导出部署时必做一致性校验。本项目缺这道校验，实测已出现：
@@ -195,7 +201,7 @@ public class OrgHealthChecker {
                                     + "请业务确认哪一侧名称为准后人工同步部署流程与节点配置（两侧都勿由脚本自动改）"));
                 } else if (!nameHit) {
                     out.add(issue("R5", "WARN", bt,
-                            "节点显示名与配置不一致（功能正常，仅排查口径偏差）：运行时「" + nm
+                            "节点显示名与配置不一致（功能正常，仅是排查标准不同）：运行时「" + nm
                                     + "」vs 配置「" + names.stream()
                                     .filter(x -> keys != null && keys.contains(x)).findFirst().orElse("(按 key 命中)")
                                     + "」(key=" + dk + ")",
@@ -239,10 +245,10 @@ public class OrgHealthChecker {
                 "汇报线断在第一层时 escalateTarget 与 empty_strategy=ESCALATE 全部失效"));
         c.add(rule("R3", "leader 即提单人", "WARN",
                 "部门 leader 近 30 天在本部门发起过单据",
-                "已由 D-WF-15 三级降级兜底不阻断流程，属组织口径提醒"));
+                "已由 D-WF-15 三级降级备用处理，不阻断流程，属组织管理提醒"));
         c.add(rule("R4", "leader 跨公司", "WARN",
                 "sys_dept.leader_id 指向的人应属本公司",
-                "「直属上级」跨公司，本地公司的事务由外公司人审批（本项目代码不校验，属治理口径）"));
+                "「直属上级」跨公司，本地公司的事务由外公司人审批（本项目代码不校验，属管理规则）"));
         c.add(rule("R5", "节点名一致性", "WARN",
                 "流程已部署节点名与 wf_node_config.node_name 应一致（按 key 或 name 至少一处命中）",
                 "节点名与处理人角色分离，但导出时仍应做一致性校验；本项只报警不改"));

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -23,6 +26,7 @@ import java.util.Map;
 /**
  * P0-5 实物流签收（TC12：电子流 + 实物流双到达）。
  * 增强功能：条码扫描签收、批量签收、拒签退件、快递信息录入、交单登记。
+ * 采购收货、到货签收与批次采收的处理规则。
  */
 @RestController
 @RequestMapping("/api/tenant/sharing/delivery")
@@ -42,6 +46,7 @@ public class DeliveryController {
 
     /**
      * 签收单分页查询（支持多条件筛选：状态/单号/运单号/交付方式/关键词）。
+     * 参考收货清单的筛选方式。
      */
     @GetMapping("/page")
     @RequiresPerm("sharing:delivery:pending")

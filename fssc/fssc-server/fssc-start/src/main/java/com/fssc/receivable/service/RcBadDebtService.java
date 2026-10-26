@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.receivable.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -48,9 +51,9 @@ public class RcBadDebtService {
     private final SysCompanyMapper sysCompanyMapper;
     private final com.fssc.system.service.NumberRuleService numberRuleService;
     private final com.fssc.system.service.ConfigService configService;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** R5-D-097：公司维度读取守卫（坏账计提列表接 OrgGuard，与应收单同口径） */
+    /** R5-D-097：公司维度读取守卫（坏账计提列表接 OrgGuard，与应收单同一规则） */
     private final com.fssc.framework.org.OrgGuard orgGuard;
     /** R5-D-094：客户主数据解析（列表补客户名称，前端不裸出 FK id） */
     private final CrmCustomerMapper crmCustomerMapper;
@@ -381,7 +384,7 @@ public class RcBadDebtService {
         return res;
     }
 
-    /** 坏账核销凭证：借 1231 坏账准备 / 贷 1122 应收账款（EBS坏账核销账务处理） */
+    /** 坏账核销凭证：借 1231 坏账准备 / 贷 1122 应收账款（ERP坏账核销账务处理） */
     private String createWriteoffVoucher(RcBadDebt d, BigDecimal amount, String basisNo) {
         OpVoucher dup = voucherMapper.selectOne(new LambdaQueryWrapper<OpVoucher>()
                 .eq(OpVoucher::getSourceType, "BAD_DEBT_WRITEOFF")
@@ -422,8 +425,8 @@ public class RcBadDebtService {
     public List<RcBadDebt> listByPeriod(String period) {
         LambdaQueryWrapper<RcBadDebt> qw = new LambdaQueryWrapper<>();
         if (period != null && !period.isEmpty()) {
-            // R5-D-098：账期入参归一——yyyyMM/yyyy-MM-dd/yyyyMMdd 与库内 yyyy-MM/yyyyMM 两种存量形态对齐；
-            // 原实现按原样 eq，前端 YYYYMM 直查 yyyy-MM 存量行恒空。
+            // R5-D-098：账期入参归一——yyyyMM/yyyy-MM-dd/yyyyMMdd 与库内 yyyy-MM/yyyyMM 两种历史形态对齐；
+            // 原实现按原样 eq，前端 YYYYMM 直查 yyyy-MM 历史行恒空。
             String digits = period.replaceAll("[^0-9]", "");
             if (digits.length() >= 6) {
                 String ym = digits.substring(0, 4) + "-" + digits.substring(4, 6);
@@ -433,7 +436,7 @@ public class RcBadDebtService {
                 qw.eq(RcBadDebt::getPeriod, period);
             }
         }
-        // R5-D-097：公司维度读取过滤，与 RcReceivableService.page 同款守卫同口径（rc_bad_debt.company_id 为直接列）
+        // R5-D-097：公司维度读取过滤，与 RcReceivableService.page 同款守卫同一规则（rc_bad_debt.company_id 为直接列）
         Long scopeC = orgGuard.enforceCompany();
         if (scopeC != null) {
             qw.eq(RcBadDebt::getCompanyId, scopeC);

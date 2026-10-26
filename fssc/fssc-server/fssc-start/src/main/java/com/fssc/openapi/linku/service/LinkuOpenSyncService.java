@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.openapi.linku.service;
 
 import com.fssc.common.exception.BizException;
@@ -22,16 +25,16 @@ import java.util.UUID;
  * LinkU 开放接口写入服务（F-3 / F-7）。语义逐条移植自 {@code FsscArApAdapter} 的回写路径。
  *
  * <h3>原子性</h3>
- * 每个入口方法以 {@code @Transactional} 包裹：一次回写（头表 + 明细 + 差异 + 余额 + 留痕）
+ * 每个入口方法以 {@code @Transactional} 包裹：一次回写（头表 + 明细 + 差异 + 余额 + 记录）
  * 要么全部生效、要么整体回滚，杜绝「头表写了、差异没写」的半成功。
  * 失败必抛异常 → 由守卫返回非 2xx → BCP 侧按可重试处理（与 {@code ArApDataProvider} 契约一致）。
  *
- * <h3>幂等</h3>
- * 幂等由守卫在入口按 {@code (eventType, idempotencyKey)} 去重；服务内部再叠加
- * <b>自然键幂等</b>（{@code supplier_recon} 按 tenant+supplier+period、明细按 item_no、
+ * <h3>去重</h3>
+ * 去重由守卫在入口按 {@code (eventType, idempotencyKey)} 去重；服务内部再叠加
+ * <b>自然键去重</b>（{@code supplier_recon} 按 tenant+supplier+period、明细按 item_no、
  * 差异按 reason 去重插入），使「重放」与「重跑对账」都不会产生重复副作用。
  *
- * <h3>OTC 代的结构性能力缺口（诚实登记，与原直连实现同口径）</h3>
+ * <h3>OTC 代的结构性能力缺口（诚实登记，与原直连实现同一规则）</h3>
  * OTC 代 AP 真实付款与 AP 付款状态在 FSSC 无单据级写回目标（付款执行在 {@code pay_plan → op_pay_batch}），
  * 记 WARN 后正常返回而非报错 —— 对任何单据恒定不适用，报错只会产生无法补偿的审计噪音。
  */
@@ -61,7 +64,7 @@ public class LinkuOpenSyncService {
         return writeApRecon(body, tenantId);
     }
 
-    /** AR 应收单／对账头：收敛为 AR 对账回写（{@code ar_recon_record}），与原直连口径一致。 */
+    /** AR 应收单／对账头：收敛为 AR 对账回写（{@code ar_recon_record}），与原直连规则一致。 */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> syncReceivable(Map<String, Object> body) {
         return writeArRecon(body, tenantId(body));
@@ -73,7 +76,7 @@ public class LinkuOpenSyncService {
             reconId = asLong(body.get("reconId"));
         }
         if (reconId == null) {
-            throw new BizException(400, "缺少 linkuReconId，无法建立 supplier_recon.linku_recon_id 幂等键");
+            throw new BizException(400, "缺少 linkuReconId，无法建立 supplier_recon.linku_recon_id 唯一对应关系");
         }
         String partnerCode = str(body.get("partnerId"));
         Long supplierId = mapper.selectSupplierIdByCode(tenantId, partnerCode);
@@ -227,7 +230,7 @@ public class LinkuOpenSyncService {
 
     // ==================== 核销（AR / AP 共用入口） ====================
 
-    /** 核销回写：AR → 收款核销／对冲；AP → 应付单终态（蓝图代）或结构性跳过（OTC 代）。 */
+    /** 核销回写：AR → 收款核销／对冲；AP → 应付单最终状态（蓝图代）或结构性跳过（OTC 代）。 */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> syncWriteoff(Map<String, Object> body) {
         Long tenantId = tenantId(body);
@@ -267,7 +270,7 @@ public class LinkuOpenSyncService {
         return Map.of("receiptItems", items.size());
     }
 
-    /** AR 核销结果与应收应付对冲留痕：{@code rc_receivable} 余额 + {@code gl_inter_offset}。 */
+    /** AR 核销结果与应收应付对冲记录：{@code rc_receivable} 余额 + {@code gl_inter_offset}。 */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> syncArWriteoff(Map<String, Object> body) {
         Long tenantId = tenantId(body);
@@ -277,8 +280,8 @@ public class LinkuOpenSyncService {
     }
 
     /**
-     * AR/AP 对冲留痕：仅调应收余额 + 写 {@code gl_inter_offset}，<b>不</b>生成收款单
-     * （对冲无现金流入，写成收款会虚增当期收款）。与原直连 OTC 口径一致。
+     * AR/AP 对冲记录：仅调应收余额 + 写 {@code gl_inter_offset}，<b>不</b>生成收款单
+     * （对冲无现金流入，写成收款会虚增当期收款）。与原直连 OTC 规则一致。
      */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> syncOffsetTrace(Map<String, Object> body) {
@@ -395,7 +398,7 @@ public class LinkuOpenSyncService {
             String status = isOffset ? "COMPLETED" : "PAID";
             int affected = mapper.updateApServiceRequestStatus(tenantId, companyId, billNo, status, now);
             if (affected == 0) {
-                // 0 行有两种成因：单据不存在（真失败）与已是目标值（幂等重放）。
+                // 0 行有两种成因：单据不存在（真失败）与已是目标值（去重重放）。
                 // 只能靠存在性查询区分，不能用影响行数（MySQL affectedRows 语义）。
                 if (mapper.countApServiceRequest(tenantId, companyId, billNo) == 0) {
                     throw new BizException(400, "应付单不存在，核销状态未回写 billNo=" + billNo
@@ -409,7 +412,7 @@ public class LinkuOpenSyncService {
 
     /**
      * 发票写入：现役库（OTC 代）无 {@code ar_pre_invoice}，此时不落业务表，
-     * 仅由守卫审计留痕（避免为不存在的表写死数据）。表存在（蓝图代）时回写验真状态。
+     * 仅由守卫审计记录（避免为不存在的表写死数据）。表存在（蓝图代）时回写验真状态。
      */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> syncInvoice(Map<String, Object> body) {

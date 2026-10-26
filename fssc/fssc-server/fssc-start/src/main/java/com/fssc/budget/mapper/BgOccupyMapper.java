@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.budget.mapper;
 
 import com.fssc.budget.entity.BgOccupy;
@@ -38,13 +41,13 @@ public interface BgOccupyMapper {
             @Param("bizType") String bizType,
             @Param("keyword") String keyword);
 
-    /** 按业务单据汇总净占用额（OCCUPY 为正、RELEASE 为负），用于 CER 占用幂等与驳回释放 */
+    /** 按业务单据汇总净占用额（OCCUPY 为正、RELEASE 为负），用于 CER 占用去重与驳回释放 */
     @Select("select coalesce(sum(amount), 0) from bg_occupy where biz_type = #{bizType} and biz_id = #{bizId}")
     java.math.BigDecimal sumAmountByBiz(@Param("bizType") String bizType, @Param("bizId") Long bizId);
 
     /**
      * R5-D-265：某预算行的全行流水净占用（bg_occupy.amount 代数和，OCCUPY 正 / RELEASE、WRITE_OFF 负）。
-     * 供提交链路「表头 occupy_amount vs 流水净额」一致性闸逐行对点（bg_occupy 只增不改，是本行的真相账本）。
+     * 供提交链路「表头 occupy_amount vs 流水净额」一致性校验逐行对点（bg_occupy 只增不改，是本行的真相账本）。
      */
     @Select("select coalesce(sum(amount), 0) from bg_occupy where budget_item_id = #{budgetItemId}")
     java.math.BigDecimal sumNetOccupyByItem(@Param("budgetItemId") Long budgetItemId);
@@ -120,7 +123,7 @@ public interface BgOccupyMapper {
      * 还款单对某借款单的冲减/回补台账（D-DEC-105，逐预算行一行）。
      * <p>冲减流水（RELEASE，负数）与回补流水（OCCUPY，正数）都归户在<b>借款单</b> biz_id 上、
      * biz_no 记<b>还款单号</b>，因此"本还款单在这行冲了多少 / 又补回多少"一次查得，
-     * 结清重放与驳回回补都按它做幂等，绝不新增第二笔占用。
+     * 结清重放与驳回回补都按它做去重，绝不新增第二笔占用。
      *
      * @return 每行含 budgetItemId / offsetAmount（已冲减，正数）/ restoreAmount（已回补，正数）
      */
@@ -138,7 +141,7 @@ public interface BgOccupyMapper {
      * 某还款单冲减过哪些借款单的预算占用（D-DEC-105 驳回/撤回回补的自寻址入口）。
      * <p>回补只需要「当初冲在哪些借款单上」，这一个事实已经完整记在 {@code bg_occupy}
      * （biz_type=EXP_REPAY + biz_no=还款单号，biz_id=借款单 id）里，
-     * 无需再回查 {@code exp_loan_offset}／FIFO 分配，避免两处口径分叉。
+     * 无需再回查 {@code exp_loan_offset}／FIFO 分配，避免两处规则分叉。
      */
     @Select("select distinct biz_id from bg_occupy " +
             "where biz_type = 'EXP_REPAY' and biz_no = #{repayBillNo} and oper_type in ('RELEASE','OCCUPY')")

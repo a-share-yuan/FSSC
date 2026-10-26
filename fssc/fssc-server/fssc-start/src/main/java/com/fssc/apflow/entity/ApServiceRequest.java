@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.apflow.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -66,7 +69,7 @@ public class ApServiceRequest implements Serializable {
     private String poNo;
     /** 发票编号（XXXXXX01-10 连续 / 逗号非连续） */
     private String invoiceNo;
-    /** EKP流水号（参考） */
+    /** OA流水号（参考） */
     private String ekpNo;
     /** 付款计划表单号 */
     private String planTableNo;
@@ -83,11 +86,11 @@ public class ApServiceRequest implements Serializable {
     /** 确认时是否修改 1是（修改付款方式转审 R-03） */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Integer modifiedFlag;
-    /** 修改/审核说明（留痕） */
+    /** 修改/审核说明（记录） */
     private String modifyNote;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String voidReason;
-    /** EBS付款凭证号 */
+    /** ERP付款凭证号 */
     private String voucherNo;
     /** 资金付款凭证号 */
     private String payVoucherNo;

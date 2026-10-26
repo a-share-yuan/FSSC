@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -102,8 +105,8 @@ public class GlTaxProvisionService {
             // P0-3 税金金额公式强校验：taxAmount = baseAmount × rate / 100（四舍五入取 2 位）
             e.setTaxAmount(calcTaxAmount(spec.baseAmount, spec.rate));
             e.setProvisionNo("TX" + period + String.format("%03d", seq++));
-            // D-DEC-136：提交只建在途态——旧写法 insert 前硬置 POSTED＋预造 GLTX 号＝提交瞬间即终态、
-            // 审批链退化为事后追认。终态（POSTED/APPROVED/REJECTED）与凭证真号（JZ…）由
+            // D-DEC-136：提交只建在途态——旧写法 insert 前硬置 POSTED＋预造 GLTX 号＝提交瞬间即最终状态、
+            // 审批链退化为事后追认。最终状态（POSTED/APPROVED/REJECTED）与凭证真号（JZ…）由
             // GlBizAction.handleTax 在流程办结时回写。
             e.setStatus("APPROVING");
             e.setVoucherNo(null);
@@ -156,7 +159,7 @@ public class GlTaxProvisionService {
 
     /**
      * 计提挂接核查（D-DEC-135 的"可见、可查、不静默"面）：按期间列出每条计提记录的
-     * ①审批流程（wf_instance GL_TAX_PROV，在途/已通过）②凭证（op_voucher source_doc_id）③缴款流程（GL_TAX_PAY，同上口径）
+     * ①审批流程（wf_instance GL_TAX_PROV，在途/已通过）②凭证（op_voucher source_doc_id）③缴款流程（GL_TAX_PAY，同上规则）
      * 挂接情况，并给出未挂接计数。历史上"只挂第 1 条"留下的无流程/无凭证行在此一览可查。
      *
      * @param period 会计期间 yyyyMM（必输，防全表扫）
@@ -180,7 +183,7 @@ public class GlTaxProvisionService {
         java.util.Map<Long, Long> voucherIdByDoc = new java.util.HashMap<>();
         java.util.Map<Long, Integer> entryCountByVoucher = new java.util.HashMap<>();
         if (!ids.isEmpty()) {
-            // 口径与发起侧一致：只有「在途/已通过」的实例才算挂上（LIVE_FLOW_STATUS）。
+            // 规则与发起侧一致：只有「在途/已通过」的实例才算挂上（LIVE_FLOW_STATUS）。
             // 已驳回/已撤回的流程按未挂处理——该行自身的 status（REJECTED）仍在明细里，不丢信息。
             for (WfInstance wi : wfInstanceMapper.selectList(new LambdaQueryWrapper<WfInstance>()
                     .in(WfInstance::getBizId, ids)
@@ -300,14 +303,14 @@ public class GlTaxProvisionService {
         return UserContext.get() == null ? null : UserContext.get().getUserId();
     }
 
-    /** 缴款流"已挂"判定口径：只算在途/已通过的实例。已驳回（REJECTED）/已撤回（CANCELLED）/已终止
-     *  （TERMINATED）的缴款流不算挂过——挂接核查按本口径报「已挂缴款流程」，历史在途缴款流才看得见。 */
+    /** 缴款流"已挂"判定规则：只算在途/已通过的实例。已驳回（REJECTED）/已撤回（CANCELLED）/已终止
+     *  （TERMINATED）的缴款流不算挂过——挂接核查按本规则报「已挂缴款流程」，历史在途缴款流才看得见。 */
     private static final List<String> LIVE_FLOW_STATUS = Arrays.asList("RUNNING", "APPROVED");
 
-    // D-DEC-440（X-42 甲）：原 pay(period) 缴款发起腿已删除——GL_TAX_PAY 那条独立缴款流既不产生付款动作
-    // 也不出缴纳凭证（VoucherService.generateTaxVoucher 同批收口），留下的只会是一条「审批通过、什么也没发生」
+    // D-DEC-440（X-42 甲）：原 pay(period) 缴款发起环节已删除——GL_TAX_PAY 那条独立缴款流既不产生付款动作
+    // 也不出缴纳凭证（VoucherService.generateTaxVoucher 同批办结），留下的只会是一条「审批通过、什么也没发生」
     // 的僵尸流。税金缴款的真相由对公付款通道承载：应付税额的付款单／付款批次执行后才出「借 2221／贷 1002」。
-    // 页面入口（GlSpecial.vue「缴纳」按钮）与前端调用腿（api.js glexApi）同步删除；库里 wf_model 的 GL_TAX_PAY
+    // 页面入口（GlSpecial.vue「缴纳」按钮）与前端调用环节（api.js glexApi）同步删除；库里 wf_model 的 GL_TAX_PAY
     // 模型行与 bpmn-repo 流程定义属数据/文件面，未随本轮改动（历史实例仍须可查，摘模型行需另裁）。
     private long countByPeriod(String period) {
         return mapper.selectCount(new LambdaQueryWrapper<GlTaxProvision>().eq(GlTaxProvision::getPeriod, period));

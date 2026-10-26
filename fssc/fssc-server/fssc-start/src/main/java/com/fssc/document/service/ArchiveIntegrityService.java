@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.document.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -29,7 +32,7 @@ import java.util.TreeSet;
  *   <li><b>两套算式并存 ⇒ 同单异值（误报）</b>：整改前 {@code ArchiveService} 里有
  *       {@code computeIntegrityHash(archiveNo|refId|archiveType|fileId+文件MD5)} 与
  *       {@code calculateIntegrityHash(archiveCode+archiveType+billId+voucherId+附件清单)} 两个私有方法，
- *       前者被「执行归档／校验／定稿闸口」用，后者被「自动归档／verifyFull」用；
+ *       前者被「执行归档／校验／定稿校验」用，后者被「自动归档／verifyFull」用；
  *       {@code BillArchiveService.doArchive} 更省事，直接把<b>主文件的裸 MD5</b> 当哈希写进
  *       {@code integrity_hash}（第三种算式）。于是同一卷档案经不同入口得到三个值，
  *       校验时按其中一种重算必然与另一种不符 ⇒ 界面报「可能被篡改」。
@@ -63,19 +66,19 @@ import java.util.TreeSet;
  *       状态列（{@code archive_status/status/integrity_status}）、归属列（{@code company_id/tenant_id}）
  *       与文案列（{@code title/remark}）。理由＝它们要么被后续环节改写
  *       （{@code archive_status/integrity_status/archived_at} 由 FM_ARCHIVE 审批闭环写、
- *       {@code filing_user_id/filing_time} 由 {@code ArchiveFacadeImpl.handleArchiveApproval} 兜底补写），
+ *       {@code filing_user_id/filing_time} 由 {@code ArchiveFacadeImpl.handleArchiveApproval} 默认处理补写），
  *       进算式就会把「正常回写」算成「篡改」；要么与内容无关。
  *       归属/标题若要改，走 {@code D-DEC-184} 的建档补齐（在 insert 之前），不影响已固化快照。</li>
- *   <li><b>清单排序后入算</b>：{@code related_ids} 的存储顺序取决于取数顺序（附件表/影像表 join），
+ *   <li><b>清单排序后入算</b>：{@code related_ids} 的存储顺序取决于查询顺序（附件表/影像表 join），
  *       不排序就会出现「内容没变、顺序变了 ⇒ 哈希变了」的假阳性，故一律升序去重。</li>
  * </ul>
  *
  * <p><b>版本前缀的作用</b>：v2 串里带 {@code ARCHIVE-HASH-V2}，历史行的旧哈希（含裸文件 MD5）
  * 与新值必然不符 ⇒ 重算前先 {@code MISMATCH} 是<b>预期行为</b>而不是新缺陷。
- * 存量重算属数据轨（需一次 Java 窗口按卷调 {@link #snapshot(OpArchive)} 回灌，SQL 无法算 MD5 串），
+ * 历史重算属数据轨（需一次 Java 窗口按卷调 {@link #snapshot(OpArchive)} 回灌，SQL 无法算 MD5 串），
  * 本轮不执行、不改写历史行（演练数据保留铁律）。
  *
- * <p>取数失败（sys_file 查不到／附件表异常）不抛异常——完整性哈希是附加能力，
+ * <p>查询失败（sys_file 查不到／附件表异常）不抛异常——完整性哈希是附加能力，
  * 档案主链路（立卷/审批/检索）不得因它中断；此时以占位段 {@code file:<id>:no-md5} 入算，
  * 保证同一卷重算结果稳定。
  */

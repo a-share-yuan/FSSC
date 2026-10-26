@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /** 发票域路由（发票管理/进项认证）
  *  G13: 菜单按进项/销项分组，新增 input-pool / output-pool 深链路由
  *  通过 direction prop 预设发票池过滤方向

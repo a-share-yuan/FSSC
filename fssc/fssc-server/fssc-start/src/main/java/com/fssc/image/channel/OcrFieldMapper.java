@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.channel;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -185,7 +188,7 @@ public final class OcrFieldMapper {
         try {
             return LocalDate.parse(s, LOOSE_DATE).format(ISO_DATE);
         } catch (Exception e) {
-            return text; // 无法识别的格式保留原文，交由票面校验/人工复核兜底
+            return text; // 无法识别的格式保留原文，交由票面校验/人工复核默认处理
         }
     }
 

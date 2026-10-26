@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.platform.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -42,7 +45,7 @@ public class PlatformTenantPackageController {
 
     /**
      * 设置某套餐的功能开关矩阵：逐条 upsert pf_package_feature。
-     * tenantId 仅用于审计留痕（开关本体作用于 packageId）。
+     * tenantId 仅用于审计记录（开关本体作用于 packageId）。
      */
     @RequiresPerm("platform:package:update")
     @OperLog(module = "TENANT_PACKAGE", operType = "UPDATE", desc = "设置套餐功能开关")
@@ -107,7 +110,7 @@ public class PlatformTenantPackageController {
 
     @Data
     public static class SetFeaturesReq {
-        /** 租户ID（业务外键，仅审计留痕） */
+        /** 租户ID（业务外键，仅审计记录） */
         private Long tenantId;
         private Long packageId;
         private List<FeatureSwitch> features;

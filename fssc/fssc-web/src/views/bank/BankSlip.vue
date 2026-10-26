@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -7,7 +10,7 @@
         <span style="margin-left:auto; display:flex; gap:8px">
           <el-select v-model="reconStatus" placeholder="对账状态" clearable size="small" style="width:140px" @change="reload">
             <el-option label="未对账" value="UNRECON" />
-            <el-option label="已对账" value="MATCHED" />
+            <el-option label="已对账" value="RECON" />
             <el-option label="全部" value="ALL" />
           </el-select>
           <el-button type="primary" size="small" @click="reload">刷新</el-button>
@@ -21,7 +24,7 @@
 
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
     <el-table :data="rows" size="small" border stripe v-if="!loading" empty-text="暂无数据" @selection-change="s => selRows = s" @row-dblclick="openRowDetail">
-      <el-table-column type="selection" width="45" :selectable="row => row.reconStatus !== 'MATCHED'" />
+      <el-table-column type="selection" width="45" :selectable="row => !isReconciled(row.reconStatus)" />
       <el-table-column prop="bankSerial" label="银行流水号" width="170" show-overflow-tooltip  sortable />
       <el-table-column prop="transDate" label="交易时间" width="150"  sortable :formatter="(row, col, val) => formatDateTime(val)" />
       <el-table-column label="收/付" width="70" align="center">
@@ -36,10 +39,10 @@
       <el-table-column prop="oppositeAccount" label="对方账号" width="140"  sortable />
       <el-table-column label="勾对状态" width="110" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.reconStatus === 'MATCHED' ? 'success' : 'info'" size="small">{{ row.reconStatus === 'MATCHED' ? '已勾对' : '未对账' }}</el-tag>
+          <el-tag :type="isReconciled(row.reconStatus) ? 'success' : 'info'" size="small">{{ isReconciled(row.reconStatus) ? '已勾对' : '未对账' }}</el-tag>
         </template>
       </el-table-column>
-      <!-- R5-D-179：勾对（recon_status=MATCHED）与认领（bank_reconcile 留痕 match_status=CLAIMED 派生的 claimed 富化）是两件事，分列各自呈现 -->
+      <!-- R5-D-179：勾对（recon_status=MATCHED）与认领（bank_reconcile 记录 match_status=CLAIMED 派生的 claimed 补充）是两件事，分列各自呈现 -->
       <el-table-column label="认领状态" width="110" align="center">
         <template #default="{ row }">
           <el-tag :type="row.claimed ? 'success' : 'info'" size="small">{{ row.claimed ? '已认领' : '未认领' }}</el-tag>
@@ -53,11 +56,11 @@
       <el-table-column label="操作" width="170" fixed="right">
         <template #default="{ row }">          <InlineActions :visible="true" @view="viewSlip(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
           <!-- R5-D-181：付款（借方）方向流水不做收款认领 ⇒ 界面不给这个入口（「查看」只出只读详情，认领必须由本按钮进）。
-               方向闸在服务端 claimReceipt 独立成立，这里只是不让非法动作变得"可点"。 -->
+               方向校验在服务端 claimReceipt 独立成立，这里只是不让非法动作变得"可点"。 -->
           <el-button v-if="canClaim(row)" link type="primary" size="small" @click="openClaim(row)">收款认领</el-button>
-          <el-button v-else-if="row.reconStatus !== 'MATCHED'" link type="primary" size="small" :disabled="true"
+          <el-button v-else-if="!isReconciled(row.reconStatus)" link type="primary" size="small" :disabled="true"
                      :title="CLAIM_DIR_HINT">收款认领</el-button>
-          <!-- R5-D-179：禁点按钮文案与行事实同源——claimed（认领留痕）为真显示「已认领」，否则只说明已勾对 -->
+          <!-- R5-D-179：禁点按钮文案与行事实同源——claimed（认领记录）为真显示「已认领」，否则只说明已勾对 -->
           <el-button v-else link type="success" size="small" :disabled="true">{{ row.claimed ? '已认领' : '已勾对' }}</el-button>
           <el-button link type="warning" size="small" @click="openArchive(row)">回单归档</el-button>
         </template>
@@ -68,7 +71,7 @@
 
     <!-- 收款认领核销弹窗 -->
     <el-dialog v-model="dlgClaim" title="收款认领核销（贷方流水 → 应收单）" width="560px" destroy-on-close>
-      <!-- R5-D-180：清单取数失败 / 认领被拒都要在弹窗内留下可见错误态，弹窗不静默关闭、行状态不动 -->
+      <!-- R5-D-180：清单查询失败 / 认领被拒都要在弹窗内留下可见错误态，弹窗不静默关闭、行状态不动 -->
       <el-alert v-if="claimError" :title="claimError" type="error" show-icon class="err-bar" />
       <el-form ref="claimFormRef" :model="claimModel" :rules="claimRules" label-width="110px">
         <el-form-item label="银行流水">
@@ -129,6 +132,7 @@ import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 
+// 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 
@@ -166,7 +170,7 @@ const claimError = ref('')
 const slipError = ref('')
 const receivablesLoading = ref(false)
 
-// 校验规则唯一口径＝中央登记表；散落的单选值组一个只读模型供 el-form 解析 prop
+// 校验规则唯一规则＝中央登记表；散落的单选值组一个只读模型供 el-form 解析 prop
 const { rules: claimRules } = useFormRules('BANK_CLAIM')
 const { rules: slipRules } = useFormRules('BANK_SLIP')
 const claimFormRef = ref(null)
@@ -179,6 +183,13 @@ const { submit: guardArchive } = useSubmitGuard(slipFormRef)
 const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 const transText = (t) => ({ CREDIT: '收', DEBIT: '付', RECEIPT: '收', IN: '收', OUT: '付' }[t] || t || '—')
 const slipText = (s) => ({ NONE: '未生成', DOWNLOADED: '已下载', ARCHIVED: '已归档' }[s] || s || '—')
+/**
+ * 勾对口径：库里并存两族写法——历史导入落 RECON（实测 1,665 行），
+ * 勾对作业落 MATCHED（BankReconcileService），旧注释还提过 RECONED。
+ * 只认 MATCHED 曾让 RECON 行整片显示「未对账」且「已对账」筛选恒空。
+ */
+const RECON_CODES = ['MATCHED', 'RECON', 'RECONED']
+const isReconciled = (s) => RECON_CODES.includes(String(s || '').trim().toUpperCase())
 
 // R5-D-181：收款（贷方）方向的实测值集——与服务端 BankReconcileService 里的同名值集逐字一致
 //（trans_type 取 CREDIT／RECEIPT／IN 者为收款，DEBIT 为付款方向，大小写不敏感）。
@@ -186,13 +197,13 @@ const CREDIT_TRANS_TYPES = ['CREDIT', 'RECEIPT', 'IN']
 const isReceiptDir = (t) => !!t && CREDIT_TRANS_TYPES.some(c => c.toLowerCase() === String(t).toLowerCase())
 /**
  * 收款认领入口的唯一判据：该流水尚未认领 且 属收款方向。
- * 服务端 claimReceipt 另有与本页无关的独立方向闸（真正的防线），本判据只负责不把非法动作摆到界面上。
+ * 服务端 claimReceipt 另有与本页无关的独立方向校验（真正的防线），本判据只负责不把非法动作摆到界面上。
  */
-const canClaim = (row) => !!row && row.reconStatus !== 'MATCHED' && isReceiptDir(row.transType)
+const canClaim = (row) => !!row && !isReconciled(row.reconStatus) && isReceiptDir(row.transType)
 const CLAIM_DIR_HINT = '该流水不是收款方向，不可收款认领'
 
-// R5-D-180：错误文案只取后端回传的业务消息本身（拦截器已把权限类消息换成中文口径），
-// 前端不臆造成因、不写"后端不可达"这类与既有兜底口径冲突的话。
+// R5-D-180：错误文案只取后端回传的业务消息本身（拦截器已把权限类消息换成中文规则），
+// 前端不臆造成因、不写"后端不可达"这类与既有默认规则冲突的话。
 const errText = (e) => (e && (e.message || e.msg)) || '操作未完成'
 
 async function load() {
@@ -222,7 +233,7 @@ function requireSel() {
  *  D-G5-02：改调银行域专用端点 bankClaimableReceivables。
  *  原先借应收域的 receivableApi.page（要求 receivable:list 应收域权限），
  *  纯银企对账岗（只有 bank:reconcile:list）打开认领弹层时清单恒空、认领做不了；
- *  取数权限随域走，改调本域端点（同样由服务端做余额/方向裁定，前端不做业务过滤）。
+ *  查询权限随域走，改调本域端点（同样由服务端做余额/方向裁定，前端不做业务过滤）。
  */
 async function loadReceivables() {
   receivablesLoading.value = true
@@ -249,7 +260,7 @@ function viewSlip(row) {
     amount: fmt(row.amount),
     oppositeName: row.oppositeName,
     oppositeAccount: row.oppositeAccount,
-    reconStatus: row.reconStatus === 'MATCHED' ? '已勾对' : '未对账',
+    reconStatus: isReconciled(row.reconStatus) ? '已勾对' : '未对账',
     claimed: row.claimed ? '已认领' : '未认领',
     slipStatus: slipText(row.slipStatus),
   }, {
@@ -275,7 +286,7 @@ async function openClaim(row) {
 }
 
 async function doClaim() {
-  // R5-D-180：整段动作（校验闸 → 请求 → 成功后的收尾）都在 try 里；
+  // R5-D-180：整段动作（校验校验 → 请求 → 成功后的收尾）都在 try 里；
   // 失败时弹窗保持打开、claimError 显式可见、行状态与列表不改写、不刷新——
   // 只有认领确实成功才关弹窗并刷新列表（避免把未生效的行照成"已认领"）。
   try {
@@ -316,6 +327,7 @@ function onSlipUploaded(rec) {
 }
 
 async function doArchive() {
+  // R5-D-180：与认领同一规则——失败留显式错误态、不关弹窗、不刷新列表
   try {
     await guardArchive(async () => {
       saving.value = true

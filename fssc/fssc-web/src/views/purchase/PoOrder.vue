@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -17,7 +20,7 @@
           <el-option label="已作废" value="VOID" />
         </el-select>
         <el-button type="primary" size="small" @click="load">查询</el-button>
-      <el-button type="info" size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button type="info" size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         <span style="margin-left: auto; color: #909399; font-size: 12px">采购订单 -> 收货(GRN) -> 三单匹配 -> 发票校验 -> 付款</span>
       </div>
@@ -70,13 +73,13 @@
           <el-button link type="info" size="small" @click="viewDetail(row)">详情</el-button>
           <!-- 删除：仅草稿(DRAFT)且无下游关联可删，逻辑删除 -->
           <el-button v-if="row.status === 'DRAFT'" link type="danger" size="small" @click="removeOrder(row)">删除</el-button>
-          <!-- 作废：非终态（含已驳回）可作废，需填写作废原因；与后端 voidOrder 同口径 -->
+          <!-- 作废：非最终状态（含已驳回）可作废，需填写作废原因；与后端 voidOrder 同一规则 -->
           <el-button v-if="['DRAFT','OPEN','APPROVED','REJECTED'].includes(row.status)" link type="danger" size="small" @click="voidOrder(row)">作废</el-button>
-          <!-- 终态机人工腿（X-20）：「权限码 + 状态」双重门控，状态口径同 PurchaseService.terminateOrder
+          <!-- 最终状态机人工环节（X-20）：「权限码 + 状态」双重门控，状态规则同 PurchaseService.terminateOrder
                （非 VOID 且非 PAID/CLOSED/ARCHIVED）。与「作废」并列可见：作废拦在下游收货/付款数据上，
-               那种单改走「终止」，谁能点由后端状态前置兜底。 -->
+               那种单改走「终止」，谁能点由后端状态前置默认处理。 -->
           <el-button v-if="['OPEN','APPROVED','REJECTED','INVOICED'].includes(row.status) && hasPerm('po:order:update')" link type="danger" size="small" @click="terminateOrderRow(row)">终止</el-button>
-          <!-- 归档：仅已关闭(CLOSED)可归档，落终态 ARCHIVED 后不可再变更；口径同 PurchaseService.archiveOrder -->
+          <!-- 归档：仅已关闭(CLOSED)可归档，落最终状态 ARCHIVED 后不可再变更；规则同 PurchaseService.archiveOrder -->
           <el-button v-if="row.status === 'CLOSED' && hasPerm('po:order:update')" link type="warning" size="small" @click="archiveOrderRow(row)">归档</el-button>
         </template>
       </el-table-column>
@@ -91,7 +94,7 @@
         <el-divider content-position="left">基本信息</el-divider>
         <el-row :gutter="16">
           <el-col :span="12">
-            <!-- 订单号＝系统取号（后端留空自动生成 PO+年月+序号），按治理口径 Q1 人工只读字段不加红星 -->
+            <!-- 订单号＝系统取号（后端留空自动生成 PO+年月+序号），按治理规则 Q1 人工只读字段不加红星 -->
             <el-form-item label="订单号">
               <el-input v-model="form.poNo" placeholder="留空则由系统自动取号" />
             </el-form-item>
@@ -178,7 +181,7 @@
                 <el-option label="已关闭" value="CLOSED" />
               </el-select>
               <div style="font-size:12px;color:#909399">草稿单不发起审批，可直接删除；执行中保存即发起订单审批</div>
-              <div v-if="form.id" style="font-size:12px;color:#909399">已保存订单的状态由审批/收货/付款/终态动作推进，编辑单据不改变状态</div>
+              <div v-if="form.id" style="font-size:12px;color:#909399">已保存订单的状态由审批/收货/付款/结束等操作推进，编辑单据不改变状态</div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -405,9 +408,9 @@ const dlg = ref(false)
 const dlgDetail = ref(false)
 const detailRow = ref(null)
 const q = reactive({ pageNum: 1, pageSize: 20, keyword: route.query.kw ? String(route.query.kw) : '', status: '' })
-// 列表显示口径（业务确认 2026-09-21）：「执行中」只对应状态 OPEN；
+// 列表显示规则（业务确认 2026-09-21）：「执行中」只对应状态 OPEN；
 // 其余状态一律走 billStatus 统一映射（APPROVED=已审批、DRAFT=草稿、CLOSED=已关闭、VOID=已作废），
-// 不再用行内三元兜底把未列举状态误渲染为「已关闭」。
+// 不再用行内三元默认处理把未列举状态误渲染为「已关闭」。
 function poListLabel(s) {
   if (s === 'OPEN') return '执行中'
   return statusLabel(s)
@@ -462,7 +465,7 @@ const detailCipLabel = computed(() => {
 
 const lineTotal = computed(() => formLines.value.reduce((s, r) => s + Number(r.amount || 0), 0))
 
-// D-V4R-91：表头金额与行项目合计勾稽（容差 0.01，与后端 assertHeaderLineAmountConsistent 同口径）
+// D-V4R-91：表头金额与行项目合计勾稽（容差 0.01，与后端 assertHeaderLineAmountConsistent 同一规则）
 // 无行项目时不判（采购订单允许只录表头金额）
 const amountMismatch = computed(() => {
   const header = Number(form.value?.amount || form.amount || 0)
@@ -474,6 +477,18 @@ function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractio
 
 function addLine() {
   formLines.value.push({ materialCode: '', materialName: '', quantity: 1, unit: '', unitPrice: 0, amount: 0 })
+}
+
+/**
+ * D-H2-09：判断一行是否仍是 addLine() 追加时的原样空行。
+ * 旧「全空行忽略」判据按 quantity!==0 认定已填写，而空行的默认数量恰是 1 ⇒ 自动追加的空行
+ * 被当成有效行，行项目校验报「物料名称必填」拦下【保存并提交】（save 的 payload 又会把该行丢掉），
+ * 用户看到的就是"点了没反应"。判据改为与默认值逐字段一致才算空行；
+ * 用户只要动过任一字段（含只填了数量），仍按未填完的行走红字提示，不静默丢数据。
+ */
+function isBlankLine(l) {
+  return !l.materialName && !l.materialCode && !l.unit
+    && !Number(l.unitPrice || 0) && !Number(l.amount || 0) && Number(l.quantity || 0) === 1
 }
 
 function calcLineAmt(row) {
@@ -528,24 +543,21 @@ function viewDetail(row) {
 }
 
 /**
- * D-V4R-91：行项目逐行校验（与后端 PurchaseService.assertOrderLine 同口径）。
+ * D-V4R-91：行项目逐行校验（与后端 PurchaseService.assertOrderLine 同一规则）。
  * guardSubmit 只能校验带 prop 的表单项，行项目明细不在 el-form 内，
  * 历史上从未被任何一层校验过——自动化脚本把 60000 填进「物料名称」、
- * 数量/单价留默认值(1/0) 时照样落库，直到三单匹配才暴露。
- * 后端为最终闸门，此处提前拦是为了让用户在点【保存】当场就看到红字，
+ * 数量/单价留默认值(1/0) 时照样写入数据库，直到三单匹配才暴露。
+ * 后端为最终校验，此处提前拦是为了让用户在点【保存】当场就看到红字，
  * 而不是提交被拒后去猜哪一行错了。
  */
 function validateLines() {
   const lines = formLines.value || []
   // 全空行忽略（模板新增的空行不算填写内容）
-  const active = lines.filter(l => l.materialName || l.materialCode
-    || Number(l.quantity || 0) !== 0 || Number(l.amount || 0) !== 0)
+  const active = lines.filter(l => !isBlankLine(l))
   // D-UI-02：active 是过滤后的下标，原实现按 active 下标提示「第 N 行」，
   // 与表格实际行号可能错位（空行夹在中间时）。此处回填真实表格下标供行号染红用。
   const activeIdx = []
-  lines.forEach((l, i) => {
-    if (l.materialName || l.materialCode || Number(l.quantity || 0) !== 0 || Number(l.amount || 0) !== 0) activeIdx.push(i)
-  })
+  lines.forEach((l, i) => { if (!isBlankLine(l)) activeIdx.push(i) })
   const fail = (msg, activePos) => {
     lineError.value = msg
     lineErrorRows.value = [activeIdx[activePos] ?? -1]
@@ -581,7 +593,7 @@ function validateLines() {
   lineError.value = ''
   lineErrorRows.value = []
 
-  // 表头与行合计勾稽（与后端 assertHeaderLineAmountConsistent 同口径）
+  // 表头与行合计勾稽（与后端 assertHeaderLineAmountConsistent 同一规则）
   const sum = active.reduce((s, l) => s + Number(l.amount || 0), 0)
   const header = Number(form.value?.amount || form.amount || 0)
   if (sum > 0 && Math.abs(header - sum) > 0.01) {
@@ -603,7 +615,7 @@ async function save(thenSubmit = false) {
   saveFormHistory('PO_ORDER', form.value || form)
 
   await guardSubmit(async () => {
-    if (!validateLines()) return          // D-V4R-91：行项目闸门，先于请求发出
+    if (!validateLines()) return          // D-V4R-91：行项目校验，先于请求发出
     try {
       const payload = { ...form, lines: formLines.value.filter(l => l.materialName || l.materialCode) }
       let saved
@@ -631,7 +643,7 @@ async function save(thenSubmit = false) {
       dlg.value = false
       load()
     } catch (e) {
-      // 提交阶段失败但草稿已落库：明确告知"已保存为草稿"，避免用户重复建单
+      // 提交阶段失败但草稿已写入数据库：明确告知"已保存为草稿"，避免用户重复建单
       ElMessage.error(thenSubmit && (form.id || form.poNo)
         ? `${e.message}（单据已保存为草稿，可在列表中重试【提交审批】）`
         : e.message)
@@ -675,7 +687,7 @@ async function removeOrder(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// 作废采购订单：仅 DRAFT/OPEN 等非终态可作废，必填作废原因（≥2字）；
+// 作废采购订单：仅 DRAFT/OPEN 等非最终状态可作废，必填作废原因（≥2字）；
 // 后端会拒绝已收货/已付款订单，错误信息经 request 统一拦截器+此处 catch 原样展示（不吞错）
 async function voidOrder(row) {
   let reason = ''
@@ -699,8 +711,8 @@ async function voidOrder(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// 终止采购订单（终态机人工腿，权限码 po:order:update）：处理已收货/已挂付款但不再履约的单，
-// 与「作废」的分工由后端同口径把关；终止原因必填（≥2字），落终态后不可恢复
+// 终止采购订单（最终状态机人工环节，权限码 po:order:update）：处理已收货/已挂付款但不再履约的单，
+// 与「作废」的分工由后端同一规则把关；终止原因必填（≥2字），落最终状态后不可恢复
 async function terminateOrderRow(row) {
   let reason = ''
   try {
@@ -723,11 +735,11 @@ async function terminateOrderRow(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// 归档采购订单（终态机人工腿，权限码 po:order:update）：仅已关闭(CLOSED)单可归档，落终态 ARCHIVED
+// 归档采购订单（最终状态机人工环节，权限码 po:order:update）：仅已关闭(CLOSED)单可归档，落最终状态 ARCHIVED
 async function archiveOrderRow(row) {
   try {
     await ElMessageBox.confirm(
-      `确认归档订单 ${row.poNo}（${row.supplierName || ''}）？归档后进入终态，不可再变更`,
+      `确认归档订单 ${row.poNo}（${row.supplierName || ''}）？归档后不可再变更`,
       '归档采购订单',
       { type: 'warning', confirmButtonText: '归档', cancelButtonText: '取消' },
     )
@@ -741,8 +753,8 @@ async function archiveOrderRow(row) {
 
 const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
 
-// D-BIZ-01：关联合同下拉恒空＝contracts 声明后从未取数。ContractController.page 按设计对所有登录用户
-// 开放（无 @RequiresPerm），故这里只按状态收口：草稿/审批中的合同不能作下单依据。
+// D-BIZ-01：关联合同下拉恒空＝contracts 声明后从未查询。ContractController.page 按设计对所有登录用户
+// 开放（无 @RequiresPerm），故这里只按状态办结：草稿/审批中的合同不能作下单依据。
 const contractsDenied = ref(false)
 async function loadContracts() {
   try {
@@ -765,7 +777,7 @@ onMounted(async () => {
     suppliers.value = s.list || []
     companyTree.value = ct || []
   } catch (e) { /* 忽略 */ }
-  loadContracts() // 独立取数：合同接口失败不得连累供应商/公司下拉
+  loadContracts() // 独立查询：合同接口失败不得连累供应商/公司下拉
   loadCip() // CIP 项目下拉数据源（失败/404 静默隐藏字段）
   load()
 })

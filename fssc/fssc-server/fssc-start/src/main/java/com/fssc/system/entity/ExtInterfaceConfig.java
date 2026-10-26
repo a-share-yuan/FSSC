@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -24,7 +27,7 @@ public class ExtInterfaceConfig extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
 
-    // R5-D-038 出参凭据掩码口径：固定长度星号 + 后 4 位供人工识别，不泄露原文长度
+    // R5-D-038 出参凭据掩码规则：固定长度星号 + 后 4 位供人工识别，不泄露原文长度
     /** 凭据掩码前缀（定长） */
     public static final String CRED_MASK = "********";
     /** 掩码保留的尾部可读位数 */
@@ -95,7 +98,7 @@ public class ExtInterfaceConfig extends BaseEntity {
 
     // ---------- R5-D-038 凭据掩码 / 反掩码工具（仅供出参与写侧判等使用，不参与持久化） ----------
 
-    /** R5-D-038 出参掩码：空值返空串，短凭据只出全星，其余定长星号 + 后 4 位；幂等 */
+    /** R5-D-038 出参掩码：空值返空串，短凭据只出全星，其余定长星号 + 后 4 位；去重 */
     public static String maskCredential(String v) {
         if (v == null || v.isBlank()) {
             return "";

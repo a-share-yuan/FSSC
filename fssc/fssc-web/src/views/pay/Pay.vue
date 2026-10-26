@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -50,7 +53,7 @@
           </div>
           <span v-else style="color: #c0c4cc; font-size: 12px">—</span>
           <!-- R5-D-079③：账证勾稽红标——「已作废却仍挂已记账凭证」「已付款却查无凭证」两组合给红色标记，
-               并禁止再次付款（按钮侧由下方 !row.voucherAnomaly 门控＋executeBatch 守卫，服务端 execute 另有同源硬闸） -->
+               并禁止再次付款（按钮侧由下方 !row.voucherAnomaly 门控＋executeBatch 守卫，服务端 execute 另有同源强制校验） -->
           <el-tooltip v-if="row.voucherAnomaly" :content="voucherAnomalyHint(row.voucherAnomaly)" placement="top">
             <div style="display: inline-flex; align-items: center; gap: 2px; margin-top: 2px">
               <el-icon color="#f56c6c" size="13"><WarningFilled /></el-icon>
@@ -65,9 +68,9 @@
           <el-button v-if="canConfirm && row.status === BillStatus.DRAFT" link type="primary" @click="confirmBatch(row)">{{ $t('pay.batch.btnConfirm') }}</el-button>
           <el-button v-if="canVoid && row.status === BillStatus.DRAFT" link type="danger" @click="voidBatch(row)">{{ $t('field.void') }}</el-button>
           <el-button v-if="canExecute && row.status === BillStatus.APPROVED && !row.voucherAnomaly" link type="success" @click="executeBatch(row)">{{ $t('pay.batch.btnExecute') }}</el-button>
-          <!-- D-DEC-037：CONFIRMED＝出纳已确认、TR_PAY 审批仍在途。服务端已有两道闸（D-DEC-287 前置收窄为
+          <!-- D-DEC-037：CONFIRMED＝出纳已确认、TR_PAY 审批仍在途。服务端已有两道校验（D-DEC-287 前置收窄为
                APPROVED/FAILED ＋ D-DEC-199 打款前 hasActiveTask("TR_PAY") 复确认），此处同步撤下「执行付款」
-               按钮改只读提示＝按钮，不再给出纳一个点了必被拒的付款入口（不新建闸，只对齐既有闸）。 -->
+               按钮改只读提示＝按钮，不再给出纳一个点了必被拒的付款入口（不新建校验，只对齐既有校验）。 -->
           <el-tag v-if="row.status === 'CONFIRMED'" type="warning" size="small" effect="plain">{{ $t('pay.batch.tagApproving') }}</el-tag>
           <el-button v-if="canExecute && row.status === 'FAILED' && !row.voucherAnomaly" link type="warning" @click="executeBatch(row)">{{ $t('pay.batch.btnRetryPayment') }}</el-button>
           <el-button v-if="canCreate && row.status === 'REJECTED'" link type="warning" @click="returnBatchToEdit(row)">{{ $t('pay.batch.btnEditResubmit') }}</el-button>
@@ -84,6 +87,7 @@
 
   </el-card>
 
+  <!-- 批次明细弹窗（表格展示） -->
   <el-dialog v-model="dlgDetails" :title="$t('pay.pay.titleBatchDetail', { v1: detailBatchNo })" width="900px">
     <el-table :data="detailRows" size="small" border stripe v-loading="detailLoading" :empty-text="$t('pay.batch.hintNoDetails')" max-height="440">
       <el-table-column type="index" label="#" width="50" align="center" />
@@ -119,9 +123,9 @@
     </template>
   </el-dialog>
 
-  <!-- D-DEC-438：执行付款被拦时的拦口详情。真缺陷是「闸无出口」——原来只有一条拼好的 toast，
-       出纳看不出是哪条明细、缺哪一腿、该去哪个界面补，批次原地锁死在已审批态。
-       本弹窗把后端同一条判据的结构化结果逐条列出：拦口原因 + 缺腿清单 + 处理出口。 -->
+  <!-- D-DEC-438：执行付款被拦时的拦口详情。真缺陷是「校验无出口」——原来只有一条拼好的 toast，
+       出纳看不出是哪条明细、缺哪一环节、该去哪个界面补，批次原地锁死在已审批态。
+       本弹窗把后端同一条判据的结构化结果逐条列出：拦口原因 + 缺环节清单 + 处理出口。 -->
   <el-dialog v-model="dlgBlock" :title="$t('pay.pay.titleBlocked', { v1: blockBatchNo })" width="1000px">
     <el-alert type="error" show-icon :closable="false" style="margin-bottom:10px"
       :title="$t('pay.batch.hintNoDebit')"
@@ -256,7 +260,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
+// 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 // R5-13: 快捷键
@@ -284,7 +288,7 @@ const groupNotice = ref('')
 
 // R5-D-079③：账证不符红标映射与解说出处（与后端 voucherAnomaly 判据同源，两组合：
 // 已作废却仍挂已记账凭证 / 已付款却查无任何凭证）。红标行禁止再次付款——按钮门控＋executeBatch 守卫，
-// 服务端 execute 入口另有同源硬闸兜底。
+// 服务端 execute 入口另有同源强制校验默认处理。
 const VOUCHER_ANOMALY_LABEL = computed(() => ({
   VOID_WITH_POSTED_VOUCHER: t('pay.batch.anomalyVoidWithPosted'),
   PAID_WITHOUT_VOUCHER: t('pay.batch.anomalyPaidNoVoucher'),
@@ -331,7 +335,7 @@ async function load() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// D-DEC-099：手工兜底的组批入口（显式点击才写数据）。服务端收尾已覆盖常态，
+// D-DEC-099：手工默认处理的组批入口（显式点击才写数据）。服务端收尾已覆盖常态，
 // 这里只处理历史遗留/收尾异常留下的 WAITING 记录。
 async function groupNow() {
   if (!canCreate) return
@@ -347,8 +351,8 @@ async function groupNow() {
 }
 
 // ---------- D-DEC-277（C1）：选待付记录一步成批 ----------
-// 原先这里是"先建空批次（账户取本公司任一账户兜底）→ 再逐笔挂明细"，而挂明细接口 payApi.addDetail
-// 在本页从未被调用过，所以手工建出的批次永远是 0 笔、确认时被空批闸口拒掉，等于没有出口。
+// 原先这里是"先建空批次（账户取本公司任一账户默认处理）→ 再逐笔挂明细"，而挂明细接口 payApi.addDetail
+// 在本页从未被调用过，所以手工建出的批次永远是 0 笔、确认时被空批校验拒掉，等于没有出口。
 // 现在改为在待付清单里勾选记录、一次请求成批；出账账户可显式选择，不选就用本公司默认账户，
 // 两者都没有时后端直接拒建并把原因返到界面（不再悄悄建出一张付不出去的批次）。
 const dlgPick = ref(false)
@@ -450,15 +454,15 @@ async function voidBatch(row) {
 }
 
 async function executeBatch(row) {
-  // R5-D-079③：账证不符（红标）批次禁止再次付款——前端硬停（服务端 execute 入口有同源硬闸，
+  // R5-D-079③：账证不符（红标）批次禁止再次付款——前端硬停（服务端 execute 入口有同源强制校验，
   // 此处只是把白跑一趟的网络往返与后端异常提示前置）。核对补平后红标消失，自然恢复可付。
   if (row.voucherAnomaly) {
     ElMessageBox.alert(voucherAnomalyHint(row.voucherAnomaly), t('pay.batch.ctxAnomalyTitle'), { type: 'error' })
     return
   }
   // D-DEC-438：执行付款被拦时（后端抛 BizException → code!=0 → api.js 拦截器 reject），
-  // 不再只留一条 toast：额外调只读拦口报告，把「哪条明细 / 缺哪一腿 / 去哪儿补」逐条摆出来。
-  // 本改动不放宽那道闸，只是给它一个看得见的出口。
+  // 不再只留一条 toast：额外调只读拦口报告，把「哪条明细 / 缺哪一环节 / 去哪儿补」逐条摆出来。
+  // 本改动不放宽那道校验，只是给它一个看得见的出口。
   try {
     const result = await payApi.execute(row.id)
     // D-DEC-088（X-39 丙）：DEFERRED＝收款账号未经供应商档案核对，整批<b>未提交银企</b>、
@@ -482,7 +486,7 @@ const blockRows = ref([])
 const blockBatchNo = ref('')
 const blockSummaryMsg = ref('')
 
-/** 缺腿名优先用后端给的人话（含金额类差异），老包只回差异码时按码翻档 */
+/** 缺环节名优先用后端给的人话（含金额类差异），老包只回差异码时按码翻档 */
 const LEG_NAME_BY_CODE = computed(() => ({
   NO_PO: t('pay.batch.blkNoPo'),
   NO_RECEIPT: t('pay.batch.blkNoGrn'),
@@ -501,7 +505,7 @@ function missingLegNames(b) {
 }
 
 /**
- * D-DEC-438：拦口 → 可走的正式通道。闸本身不提供放行出口，所以每条拦口都要落到
+ * D-DEC-438：拦口 → 可走的正式通道。校验本身不提供放行出口，所以每条拦口都要落到
  * 「补齐后重试」之外的真路子：发票未到的可先付（费用预付款，票到冲销），
  * 按合同/发票到期日排期的走采购付款计划。
  */
@@ -527,9 +531,9 @@ function blockChannels(b) {
 }
 
 /**
- * G2R-03（2026-10-19）：顶部「处理出口」此前恒取 pay.batch.hintNoBypass（三单匹配口径），
- * 反欺诈／供应商停用／账号未核档等非三单匹配闸被拦时，出纳按提示去补 PO／合同／发票，
- * 永远解不掉闸。此处按后端拦截原文识别闸类型，给出对应的真出口。
+ * G2R-03（2026-10-19）：顶部「处理出口」此前恒取 pay.batch.hintNoBypass（三单匹配规则），
+ * 反欺诈／供应商停用／账号未核档等非三单匹配校验被拦时，出纳按提示去补 PO／合同／发票，
+ * 永远解不掉校验。此处按后端拦截原文识别校验类型，给出对应的真出口。
  */
 const blockExitHint = computed(() => {
   const m = String(blockSummaryMsg.value || '')
@@ -584,11 +588,11 @@ function openVoucher(row) {
   }
 }
 
-// D-DEC-026＋102（枚举直显·第三类根因＝列配置写在 JS）：
+// D-DEC-026＋102（枚举直接显示·第三类根因＝列配置写在 JS）：
 // 表格里的状态列已经过 billStatusLabel 翻档，但本页两处导出走的是 JS 列配置——
 // 单元格直接把库中枚举码（CONFIRMED/APPROVED/PAID/FAILED…）写进 CSV，出纳拿到的文件仍是英文，
-// 同一份数据在屏上中文、在导出里英文＝两套口径。这里只在显示层映射，库里存的值不动。
-// 凭证列单列口径：op_voucher.status 只有 DRAFT/POSTED 两态，语义是「待记账/已记账」，
+// 同一份数据在屏上中文、在导出里英文＝两套规则。这里只在显示层映射，库里存的值不动。
+// 凭证列单列规则：op_voucher.status 只有 DRAFT/POSTED 两态，语义是「待记账/已记账」，
 // 不能套单据状态的「草稿」，故与表格里的文案（已记账/待记账）保持一致。
 const CSV_ENUM_LABEL = computed(() => ({
   status: (v) => billStatusLabel(v),

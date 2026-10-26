@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-drawer
     v-model="visible"
@@ -13,7 +16,7 @@
         <div class="trace-bill-meta">
           <el-tag size="small" :type="statusType(billInfo.status)">{{ headStatusLabel(billInfo.status) }}</el-tag>
           <!-- D-DEC-265：原先非费用域直出 billType 原码（采购订单审批抽屉头显示 PURCHASE_ORDER_REVIEW）；
-               docTypeLabel 先查 BILL_TYPE 再查 BIZ_TYPE，费用域口径不变。 -->
+               docTypeLabel 先查 BILL_TYPE 再查 BIZ_TYPE，费用域规则不变。 -->
           <span class="trace-type">{{ docTypeLabel(billInfo.billType) }}</span>
           <span class="trace-amount" v-if="billInfo.totalAmount != null">金额 ¥{{ fmt(billInfo.totalAmount) }}</span>
           <span class="trace-amount" v-if="billInfo.paidAmount > 0">已付 ¥{{ fmt(billInfo.paidAmount) }}</span>
@@ -21,20 +24,20 @@
       </div>
 
       <!-- D-DEC-148：一张单据表可挂多条流程域（gl_salary_run 同一行既挂计提链也挂发放链）。
-           入口声明的域在该行没有实例时，后端只在「同表域族」内纠正取数并如实标注，
+           入口声明的域在该行没有实例时，后端只在「同表业务域」内纠正查询并如实标注，
            避免把「本轮走的是另一条域」显示成「本单没有流程」。跨表撞号（D-DEC-152）不走此路径。 -->
       <el-alert
         v-if="chain && supported && chain.summary?.bizTypeCorrected"
         type="warning" :closable="false" show-icon
         :title="`本单实际走「${docTypeLabel(chain.summary.scope)}」流程链`"
-        :description="`入口声明的单据域 ${chain.summary.declaredBizType} 下此单没有流程实例，已按同表域族改以 ${chain.summary.scope} 取数；如需看 ${chain.summary.declaredBizType} 链，请从该域的入口进入。`"
+        :description="`入口声明的单据类型 ${chain.summary.declaredBizType} 下此单没有流程记录，已按同一业务范围改为按 ${chain.summary.scope} 加载数据；如需查看 ${chain.summary.declaredBizType} 业务记录，请从该业务的入口进入。`"
         style="margin:0 0 10px" />
 
-      <!-- 方案 A：下一跳行动条（按状态+链缺口算下一步；口径是费用单据状态机，他域不渲染） -->
+      <!-- 方案 A：下一跳行动条（按状态+链缺口算下一步；规则是费用单据状态机，他域不渲染） -->
       <NextActionBar v-if="billInfo && isExpense" :billInfo="billInfo" :chain="chain" />
       <!-- 方案 A：业务链时间线（可点击展开下游明细） -->
       <BillChainTimeline v-if="chain" :chain="chain" :status="billInfo?.status" @select="openSeg" />
-      <!-- 锚点未命中：明确告知未接入，不用别单数据画半真半假的时间线 -->
+      <!-- 关联点未命中：明确告知未接入，不用别单数据画半真半假的时间线 -->
       <el-alert
         v-if="chain && !supported"
         type="info" :closable="false" show-icon
@@ -45,7 +48,7 @@
       <!-- D-DEC-446 甲-1：删除 status 驱动的生命周期步进条。
            它与上方 BillChainTimeline 在同一抽屉里并存且互相打架（前者读 exp_bill.status，
            后者读各段证据），且第 5/6 格取的列（op_voucher.status / op_archive.archive_status）
-           根本不由 exp_bill.status 承载 ⇒ 结构性永灰。进度口径统一走证据链时间线。 -->
+           根本不由 exp_bill.status 承载 ⇒ 结构性永灰。进度规则统一走证据链时间线。 -->
 
       <!-- P2-1 联查明细（五段链路） -->
       <el-collapse v-if="chain && supported" v-model="openSections" class="chain-collapse">
@@ -100,7 +103,7 @@
               </el-table-column>
               <!-- D-DEC-355：op_voucher_line.direction 实测只有 DEBIT／CREDIT（43/42 行），
                    原先写 row.direction === 'D' ⇒ 借方行恒落 else，两行都显示「贷」，
-                   与同卡片「借 80,000.00 = 贷 80,000.00」自相矛盾。改走共用词表 DIRECTION。 -->
+                   与同卡片「借 80,000.00 = 贷 80,000.00」自相矛盾。改走共用名称表 DIRECTION。 -->
               <el-table-column label="方向" width="55" align="center">
                 <template #default="{ row }"><el-tag size="small" :type="dirTag(row.direction)" effect="plain">{{ directionLabel(row.direction) }}</el-tag></template>
               </el-table-column>
@@ -158,7 +161,7 @@ const props = defineProps({
   modelValue: Boolean,
   billId: { type: [String, Number], default: null },
   /**
-   * D-TRC-06：单据域。后端据此选择联查锚点（exp_bill 主键 vs 本域 bizType+bizId）。
+   * D-TRC-06：单据域。后端据此选择联查关联点（exp_bill 主键 vs 本域 bizType+bizId）。
    * 各业务页传的是本域自增主键，与 exp_bill.id 不是同一坐标系——不声明就只能按费用单解释，
    * 撞号时会读到别人的单据（D-TRC-04 / D-PO-03）。未声明时后端宁缺勿错、不猜域。
    */
@@ -175,7 +178,7 @@ const billInfo = ref(null)
 // P2-1 全链路联查数据
 const chain = ref(null)
 const openSections = ref([])
-// 后端是否取得了本单据的链路数据（锚点未命中 → NOT_SUPPORTED）
+// 后端是否取得了本单据的链路数据（关联点未命中 → NOT_SUPPORTED）
 const supported = computed(() => chain.value?.summary?.scope !== 'NOT_SUPPORTED')
 // 费用域专属交互（下一跳行动条 / 生命周期步骤条 / 付款记录段）的开关
 const isExpense = computed(() => chain.value?.summary?.scope === 'EXPENSE')
@@ -190,14 +193,14 @@ function openSeg(key) {
   if (sec && !openSections.value.includes(sec)) openSections.value.push(sec)
 }
 const ARC_ST = { PENDING: '待归档', ARCHIVING: '归档中', ARCHIVED: '已归档', DISPOSED: '已处置' }
-/** 他域单据头部取的是流程实例状态，不在费用单据状态词表里 */
+/** 他域单据头部取的是流程实例状态，不在费用单据状态名称表里 */
 const WF_ST = { RUNNING: '在办', APPROVED: '已审批', COMPLETED: '已完成', REJECTED: '已驳回', CANCELLED: '已撤销', TERMINATED: '已终止' }
 function headStatusLabel(s) {
   if (!s) return ''
   return isExpense.value ? statusLabel(s) : (WF_ST[s] || statusLabel(s))
 }
 function payTag(s) { return s === 'PAID' ? 'success' : (s === 'FAILED' ? 'danger' : 'warning') }
-/** 分录方向标色：借＝danger、贷＝primary；词表外的值走中性 info，不再默认成「贷」 */
+/** 分录方向标色：借＝danger、贷＝primary；名称表外的值走中性 info，不再默认成「贷」 */
 function dirTag(d) { return d === 'DEBIT' ? 'danger' : (d === 'CREDIT' ? 'primary' : 'info') }
 
 const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -232,13 +235,13 @@ watch(() => [props.modelValue, props.billId, props.bizType], async ([v, bid]) =>
       return Array.isArray(data) && data.length > 0
     })
   } catch (e) {
-    // 声明了单据域之后，被归属闸拒（403）不再等于「什么都没发生」：
+    // 声明了单据域之后，被归属校验拒（403）不再等于「什么都没发生」：
     // 把后端原话落到 NOT_SUPPORTED 空态上，否则抽屉只剩一片空白，看着像坏了。
     chain.value = { summary: { scope: 'NOT_SUPPORTED', reason: (e && e.message) || '联查失败' } }
   }
-  // 兜底：只有「后端确认这是费用域、且链路响应里确实没带头部」才回退费用单详情接口。
+  // 默认处理：只有「后端确认这是费用域、且链路响应里确实没带头部」才回退费用单详情接口。
   // D-DEC-197/D-TRC-04：他域主键（抄送记录 id、方案 id…）与 exp_bill.id 不是同一坐标系，
-  // 锚点未命中（NOT_SUPPORTED）或已按他域解析时再拿这个数字去查详情，就会把别人的报销单头贴进来。
+  // 关联点未命中（NOT_SUPPORTED）或已按他域解析时再拿这个数字去查详情，就会把别人的报销单头贴进来。
   const scope = chain.value?.summary?.scope
   if (!billInfo.value && scope === 'EXPENSE') {
     try {

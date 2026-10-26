@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -76,7 +79,7 @@
             </el-select>
           </el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.request.colSupplierName')" prop="vendorName">
-            <!-- 供应商从档案选取：手输名称会与应付对账/发票三单匹配的客户口径对不上 -->
+            <!-- 供应商从档案选取：手输名称会与应付对账/发票三单匹配的客户规则对不上 -->
             <SupplierSelect v-model="form.vendorCode" :placeholder="$t('flow.request.phPickSupplier')" @change="onVendor" />
           </el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.request.colBu')"><el-input v-model="form.sbu" /></el-form-item></el-col>
@@ -174,7 +177,7 @@
       <el-empty v-else :description="$t('common.empty')" />
     </el-drawer>
 
-    <!-- 派工规则维护：GET/POST /ap-request/dispatch-rules 此前只有读腿（供派工下拉候选），规则只能改库 -->
+    <!-- 派工规则维护：GET/POST /ap-request/dispatch-rules 此前只有读环节（供派工下拉候选），规则只能改库 -->
     <el-dialog v-model="rulesVisible" :title="$t('flow.request.rulesDialogTitle')" width="820px" destroy-on-close>
       <div class="toolbar">
         <el-button type="primary" size="small" @click="openRuleForm()">{{ $t('flow.request.btnRuleNew') }}</el-button>
@@ -265,7 +268,7 @@ const form = reactive({})
 const createFormRef = ref(null)
 const companies = ref([])
 const users = ref([])
-// 条件必输与后端 ApRequestService.validateForms 同口径：预付款要有 PO 编号，付款方法=应付票据要有汇票到期日
+// 条件必输与后端 ApRequestService.validateForms 同一规则：预付款要有 PO 编号，付款方法=应付票据要有汇票到期日
 const createRules = computed(() => ({
   reqType: commonRules.select(t('flow.request.phDocType')),
   paymentWay: commonRules.select(t('flow.request.phPayMethod')),
@@ -326,7 +329,7 @@ const ruleFormRules = computed(() => ({
   handlerList: commonRules.multiSelect(t('flow.request.errRuleHandlers')),
 }))
 // 处理人候选＝工号（后端 assertRuleUsers 按 sys_user.user_name 校验，存姓名会让派工在保存后报「负责人不存在或已停用」）。
-// 人员分页口按登录人公司强制收口（许娜 330017 实测 44 人、取不到公司 1 的 100110），故并入现有规则里已在岗的工号，
+// 人员分页口按登录人公司强制办结（许娜 330017 实测 44 人、取不到公司 1 的 100110），故并入现有规则里已在岗的工号，
 // 否则编辑既有跨公司规则时会在下拉里看不见、保存即把人丢掉。
 const ruleUserOptions = computed(() => {
   const map = new Map()
@@ -382,7 +385,7 @@ async function saveRuleForm() {
     await loadRulesLoading()
   } catch (e) {
     ElMessage.error(e.message)
-    // 保存失败多半是并发闸拦下（他人已改），凭据随之失效 ⇒ 立刻重取列表，界面显示他人版本，改后的值留在弹窗里可复制
+    // 保存失败多半是并发校验拦下（他人已改），凭据随之失效 ⇒ 立刻重取列表，界面显示他人版本，改后的值留在弹窗里可复制
     if (ruleForm.id) await loadRulesLoading()
   }
 }

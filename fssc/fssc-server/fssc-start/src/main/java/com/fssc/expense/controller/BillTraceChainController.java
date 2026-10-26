@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -71,22 +74,22 @@ import java.util.stream.Collectors;
  *       叠加抽屉另一路详情接口被「仅限本人单据」守卫拦截导致 billInfo 为空，
  *       就出现「提单灰、审批通过灰、生成凭证绿」这种看似跳过环节的错乱时间线。</li>
  * </ol>
- * 因此分派口径为（D-TRC-06 乙：按单据域分派锚点，复用 {@link BillRouteRegistry} 而不是继续特判费用域）：
+ * 因此分派规则为（D-TRC-06 乙：按单据域分派关联点，复用 {@link BillRouteRegistry} 而不是继续特判费用域）：
  * <ul>
- *   <li>声明了 {@code bizType} 且<b>不是</b>费用域 ⇒ 只走该域锚点（{@code wf_instance(bizType,bizId)}），
+ *   <li>声明了 {@code bizType} 且<b>不是</b>费用域 ⇒ 只走该域关联点（{@code wf_instance(bizType,bizId)}），
  *       <b>绝不回落 exp_bill</b>；</li>
- *   <li><b>未声明</b>（D-DEC-152 收口）⇒ 先用 {@code wf_instance.biz_type}＋{@code wf_task_history.biz_type}
- *       解析这张主键<b>实际所属的域</b>，再按域取数：唯一域且非费用 ⇒ 走该域锚点；
+ *   <li><b>未声明</b>（D-DEC-152 办结）⇒ 先用 {@code wf_instance.biz_type}＋{@code wf_task_history.biz_type}
+ *       解析这张主键<b>实际所属的域</b>，再按域查询：唯一域且非费用 ⇒ 走该域关联点；
  *       同号多域且跨域 ⇒ {@code NOT_SUPPORTED} 并列出候选域（宁缺勿错）；
- *       解析不出域（尚未起流的草稿）才按 {@code exp_bill} 主键取数——<b>任何情况下都不拿裸 biz_id
+ *       解析不出域（尚未起流的草稿）才按 {@code exp_bill} 主键查询——<b>任何情况下都不拿裸 biz_id
  *       去 exp_bill 撞号再说成"这单批完了"</b>；</li>
- *   <li>两路都查不到本域锚点 ⇒ {@code scope=NOT_SUPPORTED} + 全空集合，<b>宁缺勿错</b>，
+ *   <li>两路都查不到本域关联点 ⇒ {@code scope=NOT_SUPPORTED} + 全空集合，<b>宁缺勿错</b>，
  *       绝不用其它单据的数据填补，也不按数字大小/前缀猜域。</li>
  * </ul>
  *
  * <p><b>【"已批"以单据主流程实例为准（D-DEC-060）】</b>同一 biz_id 可挂多枚实例（报销主流程＋三单匹配派单链），
  * 此前摘要取 {@code id} 最大的那一枚 ⇒「派单链跑完」被显示成「这单已批」，而主流程真实卡点从响应里丢失。
- * 现在摘要一律锚在<b>主流程实例</b>（{@code exp_bill.proc_inst_id} 回写列 → 单据自身类型 → 排除派单类），
+ * 现在摘要一律关联在<b>主流程实例</b>（{@code exp_bill.proc_inst_id} 回写列 → 单据自身类型 → 排除派单类），
  * 派单/子流程实例另行列在 {@code summary.subInstances}（每枚带 {@code subChain} 标其是否派单类），
  * 两条事实并存而不是互相顶替。
  *
@@ -108,11 +111,11 @@ public class BillTraceChainController {
     /** 负面末态：显式驳回/撤回/作废，优先级高于「下游已发生」的推断 */
     private static final Set<String> STATUS_NEGATIVE = Set.of(
             "REJECTED", "WITHDRAWN", "VOID", "TERMINATED", "CANCELLED");
-    /** 流程实例终态：已审批/已完成 */
+    /** 流程实例最终状态：已审批/已完成 */
     private static final Set<String> INST_APPROVED = Set.of("APPROVED", "COMPLETED");
     /**
      * D-DEC-446 甲-2：费用域内「付款/组批」段的载体适用性。
-     * 报销(CLAIM)与付款(PAY)有 exp_bill_payment 腿；借款/还款的拨付与收款在真跑中实测零载体
+     * 报销(CLAIM)与付款(PAY)有 exp_bill_payment 环节；借款/还款的拨付与收款在真跑中实测零载体
      * （余额于提交期扣减），费用申请单(APPLY)后续才付款 ⇒ 这三型不画该段，
      * 否则时间线把「本域无此环节」显示成「这一步没做」。未知类型按适用处理（不因显示层收窄数据）。
      */
@@ -130,7 +133,7 @@ public class BillTraceChainController {
 
     private final ExpBillMapper expBillMapper;
     private final ExpBillPaymentMapper expBillPaymentMapper;
-    /** D-TRC-06 / RA-TRC-03 乙：状态轨迹直读 wf_task_history；exp_bill_trace 全库无写入点、已标注废弃 */
+    /** D-TRC-06 / RA-TRC-03 乙：状态轨迹直读 wf_task_history；exp_bill_trace 全库无写入位置、已标注废弃 */
     private final WfTaskHistoryMapper wfTaskHistoryMapper;
     private final WfTaskMapper wfTaskMapper;
     private final OpPayBatchMapper opPayBatchMapper;
@@ -139,7 +142,7 @@ public class BillTraceChainController {
     private final WfInstanceMapper wfInstanceMapper;
     private final ArchiveFacade archiveFacade;
     private final com.fssc.framework.org.OrgGuard orgGuard;
-    /** D-TRC-06：非费用域锚点的公司归属解析（与取人侧同源，见 NodeOrgResolver.companyIdOfBill） */
+    /** D-TRC-06：非费用域关联点的公司归属解析（与取人侧同源，见 NodeOrgResolver.companyIdOfBill） */
     private final NodeOrgResolver nodeOrgResolver;
 
     @RequiresPerm("exp:bill:list")
@@ -149,12 +152,12 @@ public class BillTraceChainController {
                                              @RequestParam(value = "bizType", required = false) String bizType) {
         String declared = bizType == null || bizType.isBlank() ? null : bizType.trim();
 
-        // ============ 0) 锚点分派：声明了他域类型就只走他域，绝不回落 exp_bill ============
+        // ============ 0) 关联点分派：声明了他域类型就只走他域，绝不回落 exp_bill ============
         if (declared != null && !isExpenseAnchor(declared)) {
             return Result.success(genericChain(declared, billId));
         }
 
-        // ============ 0′) 未声明域：先解析这张主键真实所属的域，再决定锚点（D-DEC-152） ============
+        // ============ 0′) 未声明域：先解析这张主键真实所属的域，再决定关联点（D-DEC-152） ============
         // 判据与 BillRouteRegistry / 凭证来源列（D-DEC-244）同族：域只能来自库里的事实
         // （wf_instance.biz_type、wf_task_history.biz_type），不能来自"这个数字在 exp_bill 里查得到"。
         if (declared == null) {
@@ -167,19 +170,19 @@ public class BillTraceChainController {
             } else if (resolved.size() > 1 && resolved.stream().anyMatch(t -> !isExpenseAnchor(t))) {
                 return Result.success(unsupported(null,
                         "该主键同时属于多个单据域（" + String.join("、", resolved)
-                        + "），无法从数字判断要看哪一张。为避免跨域串号不回落任何域取数——请从业务页的「追溯」入口进入"
+                        + "），无法从数字判断要看哪一张。为避免跨域串号不回到其他业务范围查询——请从业务页的「追溯」入口进入"
                         + "（入口会声明 bizType），或为本页的追溯入口补传单据域。"));
             }
         }
 
-        // ============ 1) 费用域锚点（未起流的草稿单据只能按 exp_bill 主键解释＝历史行为） ============
+        // ============ 1) 费用域关联点（未起流的草稿单据只能按 exp_bill 主键解释＝历史行为） ============
         ExpBill bill = expBillMapper.selectById(billId);
         if (bill == null) {
             return Result.success(unsupported(declared,
                     "exp_bill 中不存在该主键，且未声明可路由的单据域（bizType）。为避免跨域串号，本接口不按数字猜域。"));
         }
-        // D-TRC-04：本接口把凭证分录、付款账号、档案一次性吐出，此前只有 exp:bill:list 权限闸、
-        // 无归属闸 → 同租户内任何人换 billId 即可读他公司/他人单据全链。改用与详情接口同源的可见性守卫。
+        // D-TRC-04：本接口把凭证分录、付款账号、档案一次性吐出，此前只有 exp:bill:list 权限校验、
+        // 无归属校验 → 同租户内任何人换 billId 即可读他公司/他人单据全链。改用与详情接口同源的可见性守卫。
         orgGuard.assertVisible(bill.getCompanyId(), bill.getApplyUserId());
 
         // 流程实例＝本单的多轮审批。未声明时只认费用域 biz_type，避免同 id 的他域流程混进轨迹与判定。
@@ -241,13 +244,13 @@ public class BillTraceChainController {
         return Result.success(out);
     }
 
-    // ---------------- 非费用域锚点（D-TRC-06） ----------------
+    // ---------------- 非费用域关联点（D-TRC-06） ----------------
 
     /**
-     * 他域单据全链路：锚点＝{@code wf_instance(biz_type,biz_id)}（租户拦截器天然过滤 tenant_id），
+     * 他域单据全链路：关联点＝{@code wf_instance(biz_type,biz_id)}（租户拦截器天然过滤 tenant_id），
      * 下游凭证/批次/档案一律经 D-TRC-05 的 {@code proc_inst_id} 回溯列或
      * {@code source_doc_type + source_doc_id} 成对精确匹配关联——<b>任何一段都不按裸主键跨域关联</b>。
-     * 归属校验与费用域同源（TRC-B 口径），否则扩面即放大 D-TRC-04。
+     * 归属校验与费用域同源（TRC-B 规则），否则扩面即放大 D-TRC-04。
      */
     private Map<String, Object> genericChain(String declared, Long bizId) {
         List<WfInstance> instances = instancesOf(bizId, declared::equals);
@@ -268,17 +271,17 @@ public class BillTraceChainController {
             }
         }
         if (instances.isEmpty()) {
-            // D-DEC-334 后端锚点半：无审批流、只以（source_doc_type, 本域主键）配对存在的域
-            // （PO_RECEIPT——wf_instance biz_type 普查 36 型没有它，而 op_voucher 5 行在册）⇒
-            // 通用链"实例锚点必空"≠"此单无凭证"，按配对直读凭证/档案段，不再回 NOT_SUPPORTED。
+            // D-DEC-334 后端关联点半：无审批流、只以（source_doc_type, 本域主键）配对存在的域
+            // （PO_RECEIPT——wf_instance biz_type 普查 36 型没有它，而 op_voucher 5 行现有）⇒
+            // 通用链"实例关联点必空"≠"此单无凭证"，按配对直读凭证/档案段，不再回 NOT_SUPPORTED。
             if (BillRouteRegistry.isNoFlowVoucherDomain(declared)) {
                 return pairOnlyChain(declared, bizId);
             }
             return unsupported(declared, "该单据在本域没有流程实例（未发起，或传入主键不属于 " + declared + " 域）。"
-                    + "为避免跨域串号，不回落其它域取数。");
+                    + "为避免跨域串号，不回到其他业务范围查询。");
         }
         assertGenericVisible(domain, bizId, instances);
-        // 实际命中域（＝声明域，或纠正后的同表兄弟域）；下游各段一律按它取数，声明值只在摘要里如实留痕。
+        // 实际命中域（＝声明域，或纠正后的同表兄弟域）；下游各段一律按它查询，声明值只在摘要里如实记录。
         final String bizType = domain;
 
         WfInstance latest = instances.get(instances.size() - 1);
@@ -320,7 +323,7 @@ public class BillTraceChainController {
         // 4) 凭证：source_doc_type + source_doc_id 成对精确匹配，或 D-TRC-05 回溯列命中本单流程。
         //    D-DEC-326/D-DEC-430 甲案读侧半：bizType 与凭证写侧域名可能不同名
         //    （CONTRACT_APPROVE vs CONTRACT／FA_DEPRECIATION vs ASSET_DEPRECIATION，现库凭证 7/34 实证）⇒
-        //    成对匹配并入 BillRouteRegistry 登记的写侧别名，消灭"凭证在册、页面 0 张"的假灰。
+        //    成对匹配并入 BillRouteRegistry 登记的写侧别名，消灭"凭证现有、页面 0 张"的假灰。
         //    仍按（域, 本域主键）配对＋回溯臂，不引入裸主键跨域关联。
         java.util.Set<String> voucherDomains = com.fssc.workflow.service.BillRouteRegistry.voucherSourceDomainsOf(bizType);
         List<OpVoucher> vouchers = opVoucherMapper.selectList(
@@ -342,7 +345,7 @@ public class BillTraceChainController {
         // 5) 档案：只认 proc_inst_id（op_archive.bill_id / ref_id 是跨域裸主键，他域借用即串号）。
         //    例外＝「单据即档案」域（FM_ARCHIVE 的 bizId 就是 op_archive.id）：op_archive.proc_inst_id 存的是
         //    被归档那张单的审批流程，不是归档审批自己的流程实例 ⇒ 单靠回溯必然 0 命中（D-DEC-240）。
-        //    按本域主键补上这一行，与 BATCH_IS_BILL 同口径，不引入跨域关联。
+        //    按本域主键补上这一行，与 BATCH_IS_BILL 同一规则，不引入跨域关联。
         List<ArchiveInfoDTO> archives = new ArrayList<>(archiveFacade.findByProcInstIds(pis));
         if (isArchiveAnchor(bizType)) {
             ArchiveInfoDTO self = archiveFacade.findById(bizId);
@@ -370,8 +373,8 @@ public class BillTraceChainController {
 
     /**
      * D-DEC-334：无审批流域的配对链（PO_RECEIPT 首用）。
-     * 段集如实收窄＝单据头（按凭证回显）＋凭证＋分录＋档案；审批轨迹/付款/批次结构性无腿，
-     * 给空数组而不是编造。归属闸不 fail-open：能解析公司就走 OrgGuard，解析不出收紧为集团岗。
+     * 段集如实收窄＝单据头（按凭证回显）＋凭证＋分录＋档案；审批轨迹/付款/批次结构性无环节，
+     * 给空数组而不是编造。归属校验不 fail-open：能解析公司就走 OrgGuard，解析不出收紧为集团岗。
      */
     private Map<String, Object> pairOnlyChain(String domain, Long bizId) {
         List<OpVoucher> vouchers = opVoucherMapper.selectList(
@@ -406,7 +409,7 @@ public class BillTraceChainController {
         summary.put("billMatched", !vouchers.isEmpty());
         summary.put("approved", false);
         summary.put("noApprovalFlow", true);
-        summary.put("note", "本域没有审批流（收货由采购订单审批通过后下推产生），联查只给凭证/档案段；审批轨迹结构性无腿。");
+        summary.put("note", "本域没有审批流（收货由采购订单审批通过后下推产生），联查只给凭证/档案段；审批轨迹中不会有这一环节。");
         out.put("summary", summary);
         Long company = vouchers.stream().map(OpVoucher::getCompanyId).filter(Objects::nonNull).findFirst().orElse(null);
         if (company != null) {
@@ -424,7 +427,7 @@ public class BillTraceChainController {
     }
 
     /**
-     * 他域归属校验（TRC-B 同口径）：能解析出公司 ⇒ 走 OrgGuard（本公司/本人单据/集团岗放行）；
+     * 他域归属校验（TRC-B 同一规则）：能解析出公司 ⇒ 走 OrgGuard（本公司/本人单据/集团岗放行）；
      * 解析不出公司（该域表既无 company_id 也无 create_by 可回溯，见 D-B3-06）⇒ 收紧为
      * 「集团级或本单流程参与人可见」，而不是 fail-open 把 58 个视图全放开。
      */
@@ -453,7 +456,7 @@ public class BillTraceChainController {
     }
 
     /**
-     * 本单实际留痕人（只认已发生的操作/被转办记录，不含仅挂名的候选人）—— D-DEC-327
+     * 本单实际记录人（只认已发生的操作/被转办记录，不含仅挂名的候选人）—— D-DEC-327
      * 跨公司协办时，公司可解析分支原先只问 OrgGuard，会把真办过这单的人挡在门外。
      */
     private boolean hasActualTrace(Long userId, List<WfInstance> instances) {
@@ -491,7 +494,7 @@ public class BillTraceChainController {
     /**
      * 该 bizType 是否以 exp_bill 为单据表：{@code EXP_} 前缀、注册表 fillTable/起流单号表/公司表为 exp_bill。
      * INVOICE_MATCH、PTP03、MEETING 这类"借 exp_bill 存单"的类型也算——它们的 bizId 就是 exp_bill.id，
-     * 走费用锚点才是对的。
+     * 走费用关联点才是对的。
      */
     private static boolean isExpenseAnchor(String bizType) {
         if (bizType == null || bizType.isBlank()) {
@@ -529,7 +532,7 @@ public class BillTraceChainController {
     /**
      * 未声明域时的<b>所属域解析</b>（D-DEC-152）：这张数字主键在流程账上到底属于哪些域。
      *
-     * <p>两张留痕表都带 {@code biz_type}，取并集而不是只读一张——已起流但镜像行被清理、
+     * <p>两张记录表都带 {@code biz_type}，取并集而不是只读一张——已起流但镜像行被清理、
      * 或反过来只落了实例没有历史的边界情况都能覆盖；两张都空＝从未起流（草稿），
      * 调用方只能按费用单据主键解释，保持历史行为。
      *
@@ -556,21 +559,21 @@ public class BillTraceChainController {
     }
 
     /**
-     * 单据主流程实例（D-DEC-060）：摘要里的 instStatus / currentNode / "已批"证据锚定在这一枚，
+     * 单据主流程实例（D-DEC-060）：摘要里的 instStatus / currentNode / "已批"证据关联在这一枚，
      * 而不是 {@code id} 最大的那一枚。12-18:74 的实测形态就是被后者坑的——
      * 单据 26 名下 SETTLE(98, {@code bill.proc_inst_id}, RUNNING, 停在扫描岗) 与
      * INVOICE_MATCH(99, APPROVED)，取 99 就把「派单批完」显示成「这单已批」。
      *
-     * <p>判据按可靠性递减，用了哪一档随 {@code summary.mainInstBy} 一起透出（不假装永远锚得准）：
+     * <p>判据按可靠性递减，用了哪一档随 {@code summary.mainInstBy} 一起透出（不假装永远关联得准）：
      * <ol>
      *   <li>{@code BILL_PROC_INST_ID}——命中 {@code exp_bill.proc_inst_id} 回写列：提交主流程时由
-     *       {@code ExpenseBillService} 写入，是单据自己的权威锚点；</li>
+     *       {@code ExpenseBillService} 写入，是单据自己的权威关联点；</li>
      *   <li>{@code BILL_TYPE}——实例 bizType 与单据自身类型一致（含 {@code EXP_} 前缀归一）；</li>
      *   <li>{@code EXCLUDE_SUB_CHAIN}——排除 {@link BillRouteRegistry#isSubChainOnBill 派单/子流程类}后取最新一轮；</li>
      *   <li>{@code FALLBACK_LATEST}——前三档都落空（名下全是派单类型）才退回最新一轮，
      *       该档会在摘要里附带 {@code mainInstUncertain=true}，前端与人工复核据此识别。</li>
      * </ol>
-     * 同类型多轮次（驳回重提）在该档内取 {@code id} 最大＝最新一轮，与原口径一致。
+     * 同类型多轮次（驳回重提）在该档内取 {@code id} 最大＝最新一轮，与原规则一致。
      */
     private static MainInst mainInstanceOf(ExpBill bill, List<WfInstance> instances) {
         if (instances.isEmpty()) {
@@ -607,7 +610,7 @@ public class BillTraceChainController {
         return new MainInst(instances.get(instances.size() - 1), "FALLBACK_LATEST", true);
     }
 
-    /** 主流程实例判据结果：实例 + 用了哪一档 + 该档是否为兜底 */
+    /** 主流程实例判据结果：实例 + 用了哪一档 + 该档是否为默认处理 */
     private record MainInst(WfInstance inst, String by, boolean uncertain) {
     }
 
@@ -621,7 +624,7 @@ public class BillTraceChainController {
     }
 
     /**
-     * 派单/子流程实例视图：主流程锚点收窄后，这些实例的事实不能丢，单独列进摘要给前端展示。
+     * 派单/子流程实例视图：主流程关联点收窄后，这些实例的事实不能丢，单独列进摘要给前端展示。
      * {@code subChain} 标出该枚是否属 {@link BillRouteRegistry#isSubChainOnBill 派单/子流程类}
      * ⇒ 前端可把「派单已办结」与「同 biz_id 的重提旧轮次」分开计数（12-18:74 要求两条事实并存而不混算）。
      */
@@ -644,11 +647,11 @@ public class BillTraceChainController {
     }
 
     /**
-     * 终态抑制取值器（D-DEC-072）：实例已进终态（非 RUNNING，判据与 D-DEC-121 清列同一把尺子
+     * 最终状态抑制取值器（D-DEC-072）：实例已进最终状态（非 RUNNING，判据与 D-DEC-121 清列同一把尺子
      * {@link WfQueryService#isTerminalInstanceStatus}）时，「当前节/当前办理人」这类"在办指针"
      * 一律返回 {@code null}，联查不再把已结流程显示成还挂在某一节等人办。
      *
-     * <p>只作用于<b>展示</b>：库内列值不动（存量回刷 SQL 已在裁决册，本批不重复出）。
+     * <p>只作用于<b>展示</b>：库内列值不动（历史回刷 SQL 已在裁决册，本批不重复出）。
      */
     private static String suppressWhenTerminal(WfInstance inst,
                                                java.util.function.Function<WfInstance, String> getter) {
@@ -710,7 +713,7 @@ public class BillTraceChainController {
                                               List<OpVoucher> vouchers, List<ArchiveInfoDTO> archives,
                                               List<WfTaskHistory> traces) {
         String billStatus = bill.getStatus();
-        // D-DEC-060：状态/卡点/"已批"证据锚在单据主流程实例上，而不是 id 最大（＝最后完成）的那一枚。
+        // D-DEC-060：状态/卡点/"已批"证据关联在单据主流程实例上，而不是 id 最大（＝最后完成）的那一枚。
         MainInst main = mainInstanceOf(bill, instances);
         WfInstance inst = main.inst();
 
@@ -743,9 +746,9 @@ public class BillTraceChainController {
         summary.put("approved", approved);
         summary.put("approvalEvidence", evidence);
         summary.put("instStatus", inst == null ? null : inst.getStatus());
-        // D-DEC-072（＝D-DEC-056 的联查透出腿）：实例已终态 ⇒ 抑制「当前节/当前办理人」。
-        // D-DEC-121 已把清列收口在 updateInstanceStatus，但①存量行未回刷（回刷 SQL 已入裁决册）、
-        // ②终态判定与展示之间还隔着一次读数——联查是「已办结却显示仍在某节待办」的直接出口
+        // D-DEC-072（＝D-DEC-056 的联查透出环节）：实例已最终状态 ⇒ 抑制「当前节/当前办理人」。
+        // D-DEC-121 已把清列办结在 updateInstanceStatus，但①历史行未回刷（回刷 SQL 已入裁决册）、
+        // ②最终状态判定与展示之间还隔着一次读数——联查是「已办结却显示仍在某节待办」的直接出口
         // （12-18:86 实测 summary.currentNode='FSSC稽核核算岗终审【财务审核岗】'）。
         // 展示层再抑制一次，用的是同一个 isTerminalInstanceStatus 判据（不另写一把尺子）。
         summary.put("currentNode", suppressWhenTerminal(inst, WfInstance::getCurrentNode));
@@ -754,7 +757,7 @@ public class BillTraceChainController {
             summary.put("currentNodeSuppressedBy", "INSTANCE_TERMINAL:" + inst.getStatus());
         }
         summary.put("rounds", instances.size());
-        // D-DEC-060：主流程实例锚点口径透出，并把派单/子流程实例单列——
+        // D-DEC-060：主流程实例关联点规则透出，并把派单/子流程实例单列——
         // 「匹配链已批完」与「本单主流程还在扫描岗」是两条并存的事实，不是一条顶替另一条。
         summary.put("mainInstBy", main.by());
         summary.put("mainInstUncertain", main.uncertain());
@@ -766,7 +769,7 @@ public class BillTraceChainController {
         summary.put("voucherCount", vouchers.size());
         summary.put("archiveCount", archives.size());
         summary.put("traceCount", traces.size());
-        // D-DEC-446 乙-2/乙-3：各段终态计数（判据用）＋存在计数（副标题用），两套并存不互相顶替
+        // D-DEC-446 乙-2/乙-3：各段最终状态计数（判据用）＋存在计数（副标题用），两套并存不互相顶替
         int posted = postedVoucherCount(vouchers);
         int payPaid = paidPaymentCount(payments);
         int batchSettled = settledBatchCount(batches);
@@ -792,7 +795,7 @@ public class BillTraceChainController {
      * P3：单据侧「凭证待补生成」标记（{@code exp_bill.ext_json.voucherPending}，写入侧见
      * {@code ExpenseWfEventListener#markVoucherPending}）。
      *
-     * <p>判定口径＝{@code voucher_no 为空 且 标记存在}：补生成成功后 {@code voucher_no} 有值，
+     * <p>判定规则＝{@code voucher_no 为空 且 标记存在}：补生成成功后 {@code voucher_no} 有值，
      * 标记即自然失效、无需回写清除（避免多写点同步）。解析失败按"无标记"处理，绝不影响主链路。
      */
     private static Map<String, Object> voucherPendingOf(ExpBill bill) {
@@ -820,7 +823,7 @@ public class BillTraceChainController {
         }
     }
 
-    /** 他域链路摘要：没有本域单据实体可判状态，审批结论只看流程实例终态 + 下游反推 */
+    /** 他域链路摘要：没有本域单据实体可判状态，审批结论只看流程实例最终状态 + 下游反推 */
     private Map<String, Object> genericSummary(String bizType, List<WfInstance> instances, WfInstance latest,
                                                List<OpPayBatch> batches, List<OpVoucher> vouchers,
                                                List<ArchiveInfoDTO> archives, List<WfTaskHistory> traces) {
@@ -848,6 +851,7 @@ public class BillTraceChainController {
         summary.put("approved", approved);
         summary.put("approvalEvidence", evidence);
         summary.put("instStatus", latest.getStatus());
+        // D-DEC-072：他域链路同样抑制最终状态实例的"在办指针"（与费用域 summary 同一规则）
         summary.put("currentNode", suppressWhenTerminal(latest, WfInstance::getCurrentNode));
         summary.put("rounds", instances.size());
         // payments 段对他域不适用（exp_bill_payment 属费用域专属表），前端据此不画该环节
@@ -870,12 +874,12 @@ public class BillTraceChainController {
     }
 
     /**
-     * 六段链路到达位（费用域与他域共用，保证前端时间线两路口径一致）。
+     * 六段链路到达位（费用域与他域共用，保证前端时间线两路规则一致）。
      *
-     * <p>D-DEC-446 乙-1：形参一律是「终态计数」而非「存在计数」。此前拿 {@code voucherCount>0} 判达，
+     * <p>D-DEC-446 乙-1：形参一律是「最终状态计数」而非「存在计数」。此前拿 {@code voucherCount>0} 判达，
      * 于是 DRAFT 凭证、PENDING 档案也亮绿——假绿。真正的到达判据是：凭证存在 {@code status='POSTED'} 行、
      * 付款存在 {@code pay_status='PAID'} 行、批次已出账、档案 {@code archive_status='ARCHIVED'}。
-     * 「存在但未终态」由前端副标题按两套计数差额明示，不在这里收窄。
+     * 「存在但未最终状态」由前端副标题按两套计数差额明示，不在这里收窄。
      */
     private static List<String> reached(boolean approved, int postedVoucherCount, int paidPaymentCount,
                                         int settledBatchCount, int archivedCount) {
@@ -959,7 +963,7 @@ public class BillTraceChainController {
         return out;
     }
 
-    /** 锚点未命中：明确返回「未接入」，全空集合，绝不用其它单据数据填补 */
+    /** 关联点未命中：明确返回「未接入」，全空集合，绝不用其它单据数据填补 */
     private Map<String, Object> unsupported(String bizType, String reason) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("bill", null);

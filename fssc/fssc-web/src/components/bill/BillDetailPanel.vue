@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div v-loading="loading" class="bdp">
     <el-alert
@@ -12,7 +15,10 @@
     <template v-if="bill">
       <!-- 单据头 -->
       <div class="bdp-head">
-        <div class="bdp-no">{{ bill.billNo || '-' }}</div>
+        <div class="bdp-no">
+          <span>{{ bill.billNo || '-' }}</span>
+          <el-button size="small" type="primary" plain @click="printVisible = true">打印</el-button>
+        </div>
         <div class="bdp-meta">
           <el-tag size="small" :type="statusType(bill.status)">{{ statusLabel(bill.status) }}</el-tag>
           <span class="bdp-type">{{ billTypeLabel(bill.billType) }}{{ bill.billSubType ? ' / ' + billSubTypeLabel(bill.billSubType) : '' }}</span>
@@ -77,7 +83,7 @@
             <el-table-column prop="fileId" label="文件ID" width="80" align="center" />
             <el-table-column label="类型" width="80" align="center">
               <template #default="{ row }">
-                <!-- 定性口径统一在 utils/attachKind：attachType 缺失时按扩展名兜底，
+                <!-- 定性规则统一在 utils/attachKind：attachType 缺失时按扩展名默认处理，
                      不再把老数据直接吐成 "OTHER" / "其他" 这种半英文 -->
                 <el-tag size="small" :type="attachKindOf(row) === 'INVOICE' ? 'success' : 'info'">
                   {{ ATTACH_KIND_TEXT[attachKindOf(row)] }}
@@ -140,11 +146,11 @@
         <el-tab-pane :label="`审批历史 (${history.length})`" name="history">
           <el-alert v-if="!canViewHistory" type="info" :closable="false" show-icon
                     title="当前账号无查看审批历史的权限，请联系管理员开通。" />
-          <!-- D-DEC-086：取数失败要说"取不到"，不能空着让人以为"没有" -->
+          <!-- D-DEC-086：查询失败要说"取不到"，不能空着让人以为"没有" -->
           <el-alert v-else-if="historyError" type="error" :closable="false" show-icon
                     :title="`审批历史加载失败：${historyError}`">
             <div style="font-size:12px; color:#606266; line-height:20px">
-              此处为空表示加载失败，不代表本单没有审批留痕；请重试，仍失败时联系流程管理员核对。
+              此处为空表示加载失败，不代表本单没有审批记录；请重试，仍失败时联系流程管理员核对。
               <div><el-button size="small" type="primary" plain style="margin-top:6px" @click="loadHistory(billId)">重新加载</el-button></div>
             </div>
           </el-alert>
@@ -171,6 +177,7 @@
     <el-empty v-else-if="!loading" description="无法加载单据详情" />
   </div>
 
+  <PrintDialog v-model:visible="printVisible" mode="bill" :bill="printBill" :bill-lines="printLines" />
   <FileViewer ref="viewer" />
 </template>
 
@@ -179,6 +186,7 @@ import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { billApi, flowApi, imageApi, invoiceApi } from '../../api'
 import FileViewer from '../FileViewer.vue'
+import PrintDialog from '../PrintDialog.vue'
 import { statusLabel, statusType, rejectTypeLabel } from '@/constants/billStatus.js'
 import { wfActionLabel, wfActionType, billTypeLabel, billSubTypeLabel, verifyStatusLabel } from '@/constants/enums.js'
 import { hasPerm } from '@/utils/perm'
@@ -196,7 +204,7 @@ const canViewInvoice = hasPerm('inv:list')
  * 用途：
  *   1) 审批工作台「去处理」→ ApprovalDetailDrawer（抽屉 + 通过/驳回/核减）；
  *   2) 我的单据列表「详情」→ ExpenseBillListTab（抽屉只读）；
- *   3) 任何需要「让人看得见单据」的场合，避免各自实现一份导致字段口径不一。
+ *   3) 任何需要「让人看得见单据」的场合，避免各自实现一份导致字段含义不一。
  *
  * 契约：GET /tenant/expense/bill/detail/{id} → { bill, lines, attaches }
  *       GET /tenant/wf/query/history/page?bizId=&bizType= → 审批历史（注意参数是 bizId，不是 billId）
@@ -242,13 +250,13 @@ const bill = ref(null)
 const lines = ref([])
 const attaches = ref([])
 const history = ref([])
-// D-DEC-086：审批历史取数失败的原因（空＝没失败过）。取数失败与"真的没有记录"必须分开呈现，
-// 否则前序环节明明有留痕，界面却对谁说"暂无审批记录"。
+// D-DEC-086：审批历史查询失败的原因（空＝没失败过）。查询失败与"真的没有记录"必须分开呈现，
+// 否则前序环节明明有记录，界面却对谁说"暂无审批记录"。
 const historyError = ref('')
 const invoices = ref([])
 const ocrBusy = ref(null)
 
-// 审批动作 → 中文/类型：词表收口到 constants/enums，与审批列表、H5 审批历史共用一份
+// 审批动作 → 中文/类型：名称表办结到 constants/enums，与审批列表、H5 审批历史共用一份
 function actionLabel(a) { return a ? wfActionLabel(a) : '—' }
 function actionType(a) { return wfActionType(a) }
 
@@ -280,7 +288,7 @@ function sumLine({ columns, data }) {
 }
 
 /**
- * D-DEC-023：招待三项（接待对象 / 接待人数 / 人均标准）详情渲染，取数口径见 utils/format.js。
+ * D-DEC-023：招待三项（接待对象 / 接待人数 / 人均标准）详情渲染，查询范围见 utils/format.js。
  */
 const hasEntertainLine = computed(() => hasEntertainLines(lines.value))
 
@@ -304,7 +312,7 @@ async function runOcr(row) {
   }
 }
 
-/** 关联发票（识别结果的结构化落库形态）：先取单据-发票绑定，再补齐票面信息 */
+/** 关联发票（识别结果的结构化写入数据库形态）：先取单据-发票绑定，再补齐票面信息 */
 async function loadInvoices(billId) {
   invoices.value = []
   if (billId == null) return
@@ -346,7 +354,7 @@ async function load() {
 }
 
 /**
- * 审批历史取数（D-DEC-086）。
+ * 审批历史查询（D-DEC-086）。
  * 与旧实现的区别：失败不再等价于「暂无审批记录」——把原因留在时间线位置上，给一句实话和重试入口，
  * 让办理人能自证"是取不到，不是没有"。
  */
@@ -367,6 +375,14 @@ async function loadHistory(billId) {
 
 defineExpose({ reload: load })
 
+const printVisible = ref(false)
+const printBill = computed(() => bill.value || null)
+const printLines = computed(() => (lines.value || []).map((l) => ({
+  ...l,
+  expenseItemName: l.expenseItemName || l.itemName || '',
+  summary: l.summary || l.remark || '',
+})))
+
 watch(() => props.billId, (v) => { if (v != null) load() }, { immediate: true })
 watch(() => props.taskId, (v) => { void loadFieldPerm(v || '') })
 </script>
@@ -374,7 +390,7 @@ watch(() => props.taskId, (v) => { void loadFieldPerm(v || '') })
 <style scoped>
 .bdp { min-height: 120px; }
 .bdp-head { margin-bottom: 8px; }
-.bdp-no { font-size: 18px; font-weight: 700; }
+.bdp-no { font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .bdp-title { font-size: 14px; font-weight: 600; margin-top: 6px; color: #303133; }
 .bdp-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .bdp-type { font-size: 13px; color: #909399; }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -36,7 +39,7 @@ public class ArNoteService {
     /** R5-D-095：客户主数据解析（登记按客户名解析 customer_code，解析失败显式拦截） */
     private final CrmCustomerMapper crmCustomerMapper;
 
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /** 票据登记：生成服务请求语义的 REGISTERED 待审单；纸质票据强制影像扫描（流程19规则）。 */

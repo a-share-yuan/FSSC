@@ -1,12 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.returns.support;
 
 import java.math.BigDecimal;
 import java.util.Locale;
 
 /**
- * 退货下游腿分流映射表 —— 采购退货（R5-D-084）与销售退货（R5-D-089）共用同一套口径。
+ * 退货下游环节分流映射表 —— 采购退货（R5-D-084）与销售退货（R5-D-089）共用同一套规则。
  *
- * <p>与实体 javadoc、界面下拉文案同源的口径：</p>
+ * <p>与实体 javadoc、界面下拉文案同源的规则：</p>
  * <ul>
  *   <li>{@code REFUND} 退货退款：冲减往来款并进对账——采购侧向 {@code supplier_recon_detail}
  *       落 {@code PUR_RETURN} 负向行（amount 取负）并重算对账单余额；销售侧生成红字应收（贷项）
@@ -16,7 +19,7 @@ import java.util.Locale;
  * </ul>
  *
  * <p>两域服务只准消费本表，禁止各自另写一份模式判断（R5-D-089 修法与 R5-D-084 落在同一套
- * 映射表上，避免两域口径漂移、各修一次）。</p>
+ * 映射表上，避免两域规则漂移、各修一次）。</p>
  */
 public final class ReturnLegMapping {
 
@@ -42,7 +45,7 @@ public final class ReturnLegMapping {
         return MODE_REFUND.equals(returnMode.trim().toUpperCase(Locale.ROOT));
     }
 
-    /** 下游取负：退货单金额表内存正数（恒正），对账/应收口径按负数落。 */
+    /** 下游取负：退货单金额表内存正数（恒正），对账/应收规则按负数落。 */
     public static BigDecimal negate(BigDecimal amount) {
         return amount == null ? BigDecimal.ZERO : amount.negate();
     }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -6,7 +9,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
-/** OCR 识别结果落库 Mapper */
+/** OCR 识别结果写入数据库 Mapper */
 @Mapper
 public interface OcrRecordMapper extends BaseMapper<OcrRecord> {
 

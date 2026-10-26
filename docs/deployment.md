@@ -1,0 +1,103 @@
+# 部署手册（Deployment）
+
+> **校准状态**：本文的镜像构建、探针、资源限额、日志与健康检查行为均从 `docker/Dockerfile`、`docker/k8s-fssc.yaml`、`application.yml` **实测读取**。**尚未经容器实机验证**（本机 `docker` 命令不存在；jar 名缺陷已于 2026-10-07 07:40 修好，见第 2 节）。
+
+## 1. 拓扑
+
+```
+                    ┌── Nginx / 网关（TLS 终结、/api 反代）
+浏览器/H5 ──────────┤
+                    ├── fssc-web 静态资源（Vue 构建产物 dist/）
+                    └── fssc-server × N（:8089，无状态）
+                             ├── MySQL 主库 fssc（业务 + Flowable）
+                             ├── MySQL 影像库 fssc_image
+                             ├── Redis（多实例才需要）
+                             └── 可选：发票网关 :8096 / PaddleOCR :8087 / SMTP / 企微 webhook
+```
+
+## 2. 容器
+
+ 两条命令的**工作目录不同**（实测：聚合 pom 在 `fssc/fssc-server/pom.xml:12`，`docker/` 与 `.dockerignore` 在 `fssc/` 这一层，`fssc/fssc-server/docker` 不存在）：
+
+```bash
+cd fssc/fssc-server && mvn clean package -DskipTests   # 产出 fssc-start/target/fssc-server.jar
+cd ..                                                  # 回到 fssc/ —— 这里才是 build 上下文
+docker build -t fssc-server:1.0.0 -f docker/Dockerfile .
+docker run -d -p 8089:8089 \
+  -e FSSC_DB_PASSWORD='...' -e FSSC_JWT_SECRET='...' \
+  -v fssc-data:/app/data -v fssc-logs:/app/logs \
+  fssc-server:1.0.0
+```
+
+Dockerfile 现状（`eclipse-temurin:26-jre-alpine`）：
+- 以**非 root** 用户 `fssc` 运行，`EXPOSE 8089`
+- `JAVA_OPTS=-Xms4g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/heapdump/ -XX:+ExitOnOutOfMemoryError`
+- OOM 时留 heapdump 后退出（配合 K8s 重启策略）
+- 上下文瘦身靠 `fssc/.dockerignore`（内容为 `*` ＋ `!fssc-server/fssc-start/target/fssc-server.jar`）：**没有这个文件的话**，`target/`（实测 4.5 G）、`logs/`、`fssc-web/node_modules`、`dist*` 会被整体上传给 daemon
+
+>  **已修**（2026-10-07 07:40 实测复核）：原先 `COPY` 的目标是 `fssc-start-1.0.0.jar`，与 `<finalName>fssc-server</finalName>`（`fssc/fssc-server/fssc-start/pom.xml:178`）产出的 `fssc-server.jar` 不一致，**当时 `docker build` 必然失败**；现在 `fssc/docker/Dockerfile:8` 已对上。 但**仍未实跑 `docker build`**（本机 `docker: command not found`），本节所有容器行为都还是"读码＋读文件"级别的结论。
+> 建议同时把 `Dockerfile:12` 的 `-Xms4g -Xmx4g` 改为 `-XX:MaxRAMPercentage=70`，让小内存实例也能跑；基础镜像（`Dockerfile:4`）随 `docs/release-checklist.md` §8 第 ⑥ 项降到 25 LTS。
+
+## 3. Kubernetes（`docker/k8s-fssc.yaml` 实测内容）
+
+| 项 | 配置 |
+|---|---|
+| 副本 | `replicas: 2`，滚动更新 `maxSurge: 1 / maxUnavailable: 0`（发布期不减可用实例） |
+| 资源 | requests `2C / 4Gi`，limits `4C / 8Gi` |
+| 存活探针 | `GET /actuator/health/liveness`，`initialDelaySeconds: 60`，每 10s |
+| 就绪探针 | `GET /actuator/health/readiness`，`initialDelaySeconds: 40`，每 10s |
+| 指标采集 | Pod 注解 `prometheus.io/scrape=true`、`path=/actuator/prometheus`、`port=8089` |
+| 密钥 | `FSSC_DB_PASSWORD` / `FSSC_JWT_SECRET` 由 `secretKeyRef`（Secret `fssc-secrets`）注入 |
+| 文档端点 | `FSSC_OPENAPI_ENABLED: "false"`（生产关闭 Swagger，正确做法） |
+| 日志卷 | `emptyDir: {}`  Pod 重建即丢，生产换 PVC 或接采集器 |
+| Service | ClusterIP，`port: 8089 → targetPort: 8089` |
+
+**启用这两项的前置条件**（`docs/getting-started.md` 第 4 节解释原理）：
+
+1. 多副本 ⇒ 必须 `FSSC_REDIS_ENABLED=true`。否则主数据缓存、登录防刷计数、调度锁都是**进程内**的，两个 Pod 会各自为政（重复跑定时任务、限流被绕过）。
+2. 配了 SMTP ⇒ 把 `management.health.mail.enabled` 改回 `true`；启用 Redis ⇒ 把 `management.health.redis.enabled` 改回 `true`。这两个开关默认关是为避免"组件未启用被误判 DOWN"。
+3. 优雅停机窗口 30s ⇒ K8s 的 `terminationGracePeriodSeconds` 要 ≥ 35s，否则在途请求仍会被切。
+
+## 4. 发布（滚动）流程
+
+```bash
+# 1) 数据库变更先行（本项目未接 Flyway：先执行基线 schema-baseline.sql，再按序跑 fssc/sql/ 增量，见 docs/release-checklist.md §5）
+# 2) 构建并推镜像
+# 3) 分批替换
+kubectl set image deployment/fssc-server fssc-server=<registry>/fssc-server:1.0.1 -n <ns>
+kubectl rollout status deployment/fssc-server -n <ns>          # 阻塞到就绪
+curl -fsS http://<svc>:8089/actuator/health/readiness           # 确认 READY 再切下一批
+```
+
+回滚：`kubectl rollout undo deployment/fssc-server`。**应用可回滚，数据库不一定可回滚** —— 迁移脚本必须成对（变更 + 回滚），且回滚脚本要先验证。
+
+## 5. 备份与留存
+
+| 对象 | 位置 | 注意 |
+|---|---|---|
+| 业务库 `fssc` | MySQL | 含 Flowable 引擎表；备份时一并（否则流程实例与业务台账割裂） |
+| 影像库 `fssc_image` | MySQL | 体积增长快，与原件目录同生命周期 |
+| 附件原件 | `fssc.file.local-root` = `./data/files`，下分 `temp` / `business` / `archive` 三区 | **未做对象存储加密**，需 OS 层访问控制 + 独立备份。路径是相对路径，随启动 cwd 变化，容器里务必挂载 |
+| Flowable 历史 | `ACT_HI_*` | 保留 6 个月（`fssc.wf.history-retention-months`），每周日 03:00 清理；**业务台账 `wf_*` 不清** |
+| 归档会计档案 | `op_archive` / `archive_*` | 按你的会计档案法定留存年限设定策略 |
+| 日志 | dev profile 打开 MyBatis `StdOutImpl` → **SQL 与业务参数进标准输出** | 生产必须把该 logger 降级，否则日志即数据泄漏面 |
+
+## 6. 上线安全核对（逐条打勾）
+
+- [ ] `FSSC_JWT_SECRET` 为 ≥32 字节随机串，且**所有实例同值**（不一致表现为"刚登录就被踢"）
+- [ ] 数据库账号无 DDL 权限（Flowable 的建表动作已在预生产完成）
+- [ ] `FSSC_OPENAPI_ENABLED=false`；Swagger 不对公网
+- [ ] Actuator 仅 `health,info,metrics,prometheus`；`env/beans/configprops/heapdump/threaddump/shutdown` 保持不暴露
+- [ ] `/actuator/prometheus` 需带 token —— 用网络策略限制抓取来源，不要为方便而免鉴权
+- [ ] 演示账号全部改密或删除；`fssc.self-registration.enabled=false` 保持
+- [ ] `fssc.login.captcha-enabled`：注意**验证码本体未实现**，别把它当作防脚本措施，登录限速要靠网关
+- [ ] `FSSC_LINKU_CALLBACK_SECRET` 已注入（留空则所有回调被拒，这是 fail-fast 设计）
+- [ ] HTTPS 终结在网关，`/api` 反代不泄漏内部地址
+- [ ] `data/files` 挂载持久卷并有备份，权限最小化
+- [ ] 时区一致：JDBC `serverTimezone=Asia/Shanghai`、容器 `TZ`、MySQL 三处对齐（surefire/日志口径差异见 CONTRIBUTING）
+
+## 7. 容量与性能基线（诚实说明）
+
+配置里能看到为并发做过的调整（Hikari `maximum-pool-size` 由 20 提到 40，以消除 30 并发下的池排队；G1 暂停目标 200ms；`max-http-request-header-size: 64KB` 应对大 token）。
+
+**但本项目没有公开发布过压测报告**，请勿把上述参数当作已验证的容量承诺。上线前你需要用自己的工作负载实测：提单 TPS、审批待办列表 P95、凭证生成批处理时长、影像上传体积分布。`docs/performance.md` 因此暂缺，属于欢迎贡献的一块。

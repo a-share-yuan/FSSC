@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -67,7 +70,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ExpenseBillService {
 
-    /** P0-3：借款默认归还天数（TCL FSSC 行业约定 = 45 天；可后续迁移为 md_sys_config 配置项） */
+    /** P0-3：借款默认归还天数（取值 45 天；可后续迁移为 md_sys_config 配置项） */
     public static final int DEFAULT_LOAN_REPAY_DAYS = 45;
 
     /** P0-3：借款逾期允许再次借款的开关（会计年度内逾期 true=禁止再借，默认 true；可后续迁移字典） */
@@ -116,14 +119,14 @@ public class ExpenseBillService {
     private final com.fssc.customer.mapper.CrmCustomerMapper crmCustomerMapper;
     /** 采购订单（po_order）——payee_name 的服务端权威来源之二，与往来单位互为交叉校验 */
     private final com.fssc.purchase.mapper.PoOrderMapper poOrderMapper;
-    /** R5-D-041：作废即级联——本单作废时同批收口名下非 VOID 凭证（复用既有作废/红冲机制，不另造） */
+    /** R5-D-041：作废即级联——本单作废时同批办结名下非 VOID 凭证（复用既有作废/红冲机制，不另造） */
     private final com.fssc.sharing.service.VoucherService voucherService;
     private final com.fssc.masterdata.service.ExchangeRateService exchangeRateService;
     private final com.fssc.framework.org.OrgGuard orgGuard;
     /**
-     * X-40（D-DEC-384/391 甲）：借款冲抵的减记既已收敛到审批通过腿
+     * X-40（D-DEC-384/391 甲）：借款冲抵的减记既已收敛到审批通过环节
      * （{@code ExpenseWfEventListener.repayLoan / offsetLoansByClaim}），
-     * 反审核作为该腿的逆操作必须把已扣的额反冲回去 —— 复用同一条回退算式
+     * 反审核作为该环节的逆操作必须把已扣的额反冲回去 —— 复用同一条回退算式
      * （{@code ExpenseWfEventListener.rollbackLoanLedgerOnUnaudit}），不在本类另写一套余额加减。
      * 同包注入，无环（本类只被 ExpenseBillController 依赖）。
      */
@@ -132,7 +135,7 @@ public class ExpenseBillService {
     // ---------------- 草稿 ----------------
 
     /**
-     * D-DEC-049（payee 腿）：申请人显示名统一取<b>姓名</b>（{@code sys_user.nick_name}），姓名为空才回落工号。
+     * D-DEC-049（payee 环节）：申请人显示名统一取<b>姓名</b>（{@code sys_user.nick_name}），姓名为空才回落工号。
      *
      * <p><b>根因</b>：{@code exp_bill.apply_user_name} 原先写 {@code LoginUser.getUsername()}＝<b>工号</b>
      * （实测 13 张单里 2/3/6/7/9/10/13 存 Y00xxxx，1/4/5/8/11/12 存姓名——两套写法并存），
@@ -141,7 +144,7 @@ public class ExpenseBillService {
      * {@code op_pay_batch_detail.payee_name} ⇒ 出纳付款批次明细的「收款方」显示成工号
      * （12-16 实测 Y003739，真实收款人是王慧），银企报文与对账单同样带工号出门。
      *
-     * <p><b>只改写入点、不动存量</b>：显示层取名口径与共享审核腿
+     * <p><b>只改写入位置、不动历史</b>：显示层取名规则与共享审核环节
      * （{@code fillAttachUploadNames} 的 nick_name 优先、回落 user_name）逐字一致。
      * 收款对象判定不受影响——{@code resolvePayToEmployee} 的回退比对同时认工号/登录账号/姓名
      * （经 sys_user 反查），本列改写姓名后仍按 {@code apply_user_id} 与反查结果命中「付给本人」。
@@ -158,7 +161,7 @@ public class ExpenseBillService {
     /**
      * D-DEC-179 甲（代报销正式写入）：把「报销人／代理人」两个身份显式落到 exp_bill。
      *
-     * <p>列语义（沿用实体既有口径，不新建代理关系表/列）：
+     * <p>列语义（沿用实体既有规则，不新建代理关系表/列）：
      * <ul>
      *  <li>{@code apply_user_id}＝报销人＝被代理人，款项归属人；{@code agent_user_id}＝代理人＝替他人填单的人；</li>
      *  <li><b>代理人只能是被代理那个单的实际填单人</b>：显式带上 agent_user_id 时必须等于当前登录人，
@@ -168,11 +171,11 @@ public class ExpenseBillService {
      *  <li>登记人 {@code create_by/update_by} 与代理身份是两回事，各写各列，不混用。</li>
      * </ul>
      *
-     * <p>编辑腿（{@code exist != null}）：报销人以存量为准，客户端改写即拒绝；代理只可<b>补登</b>不可撤登
+     * <p>编辑环节（{@code exist != null}）：报销人以历史为准，客户端改写即拒绝；代理只可<b>补登</b>不可撤登
      * （JSON 无法区分「未带」与「置空」，且 MP updateById 不写 NULL 列），要撤代理请重填草稿。
      *
-     * @param bill  请求携带的单据头（身份列在此归一后再落库）
-     * @param exist 存量行；null＝新建
+     * @param bill  请求携带的单据头（身份列在此归一后再写入数据库）
+     * @param exist 历史行；null＝新建
      */
     private void registerApplicantIdentity(ExpBill bill, ExpBill exist, LoginUser u) {
         Long me = u.getUserId();
@@ -211,7 +214,7 @@ public class ExpenseBillService {
         bill.setApplyUserId(storedApplicant);
         bill.setApplyUserName(exist.getApplyUserName());
         if (reqAgent == null || Objects.equals(storedApplicant, me)) {
-            // 未带代理身份，或报销人就是登录人本人 ⇒ 维持存量（同人不算代理）
+            // 未带代理身份，或报销人就是登录人本人 ⇒ 维持历史（同人不算代理）
             bill.setAgentUserId(exist.getAgentUserId());
             return;
         }
@@ -242,6 +245,7 @@ public class ExpenseBillService {
 
     /**
      * 代报销的公司边界（D-DEC-179 甲的另一半）：代理人只能在自己的公司内替他人报销。
+     * 代理报销「代理人只能在报销人主职位所在公司代理报销」的边界语义；
      * 我方没有"显式代理授权档案"这张表（新建载体＝待授权，见答题卡§8.3），先以组织边界收敛越权面。
      * 任一方的 company_id 为空（集团岗/脏数据）不拦——缺维度时拒绝会把集团岗挡在门外。
      */
@@ -255,7 +259,7 @@ public class ExpenseBillService {
         }
     }
 
-    /** 取名口径与 D-DEC-049/D-DEC-025 一致：nick_name 优先、回落 user_name */
+    /** 取名规则与 D-DEC-049/D-DEC-025 一致：nick_name 优先、回落 user_name */
     private static String userDisplayName(SysUser su) {
         if (su == null) {
             return null;
@@ -294,7 +298,7 @@ public class ExpenseBillService {
             if (bill.getImageStatus() == null) {
                 bill.setImageStatus("NONE");
             }
-            // 按申请日期自动填会计期间（看板月度趋势依赖）；年/月分别兜底，防只传其一时 R4 勾稽失真
+            // 按申请日期自动填会计期间（看板月度趋势依赖）；年/月分别默认处理，防只传其一时 R4 勾稽失真
             if (bill.getApplyDate() != null) {
                 if (bill.getPeriodYear() == null) {
                     bill.setPeriodYear(bill.getApplyDate().getYear());
@@ -307,11 +311,11 @@ public class ExpenseBillService {
             if ("LOAN".equals(bill.getBillType()) && bill.getExpectRepayDate() == null && bill.getApplyDate() != null) {
                 bill.setExpectRepayDate(bill.getApplyDate().plusDays(DEFAULT_LOAN_REPAY_DAYS));
             }
-            // P2-01：预计还款日不得早于借款申请日（前端已禁选，服务端兜底 API 直写）
+            // P2-01：预计还款日不得早于借款申请日（前端已禁选，服务端默认处理 API 直写）
             assertExpectRepayDate(bill.getBillType(), bill.getApplyDate(), bill.getExpectRepayDate());
-            // P0-4：金额大写随总金额落库（打印/OA 用）
+            // P0-4：金额大写随总金额写入数据库（打印/OA 用）
             bill.setAmountCn(AmountCnUtil.toCn(bill.getTotalAmount()));
-            // 渠道留痕：前端显式传值，后端按白名单收口；未传时补 PC，与走列默认值的结果同值
+            // 渠道记录：前端显式传值，后端按白名单办结；未传时补 PC，与走列默认值的结果同值
             normalizeBillSource(bill, false);
             applyPayeeAuthority(bill, null);
             expBillMapper.insert(bill);
@@ -320,15 +324,15 @@ public class ExpenseBillService {
             if (!"DRAFT".equals(exist.getStatus())) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿可编辑，当前状态: " + exist.getStatus());
             }
-            // D-DEC-179 甲：编辑腿同样归一身份列（只可补登代理，不接受把单改到第三人名下）
+            // D-DEC-179 甲：编辑环节同样归一身份列（只可补登代理，不接受把单改到第三人名下）
             registerApplicantIdentity(bill, exist, u);
-            // 登记人显式赋值（改动人），不靠 MP 无上下文时的 0L 兜底
+            // 登记人显式赋值（改动人），不靠 MP 无上下文时的 0L 默认处理
             bill.setUpdateBy(u.getUserId());
             bill.setAmountCn(AmountCnUtil.toCn(bill.getTotalAmount()));
-            // 渠道留痕：编辑腿同样只认白名单；不传 source 时原样保留，避免把已登记的 H5 改写成 PC
+            // 渠道记录：编辑环节同样只认白名单；不传 source 时原样保留，避免把已登记的 H5 改写成 PC
             normalizeBillSource(bill, true);
             applyPayeeAuthority(bill, exist);
-            // P2-01：编辑腿按「传值优先、缺省保留原值」合并后复校，避免只改日期其一绕过
+            // P2-01：编辑环节按「传值优先、缺省保留原值」合并后复校，避免只改日期其一绕过
             if ("LOAN".equals(bill.getBillType())) {
                 LocalDate apply = bill.getApplyDate() != null ? bill.getApplyDate() : exist.getApplyDate();
                 LocalDate repay = bill.getExpectRepayDate() != null ? bill.getExpectRepayDate() : exist.getExpectRepayDate();
@@ -336,8 +340,8 @@ public class ExpenseBillService {
             }
             expBillMapper.updateById(bill);
         }
-        // R5-D-055：本币行原币金额/汇率兜底——历史前端只写 amount，orig_amount 缺失/为 0
-        // 会让原币口径汇总少计；与前端本币分支回写形成双侧保证
+        // R5-D-055：本币行原币金额/汇率默认处理——历史前端只写 amount，orig_amount 缺失/为 0
+        // 会让原币规则汇总少计；与前端本币分支回写形成双侧保证
         if (lines != null) {
             for (ExpBillLine l : lines) {
                 if (!isForeign(l.getCurrencyCode()) && (l.getOrigAmount() == null || l.getOrigAmount().signum() == 0)
@@ -358,17 +362,17 @@ public class ExpenseBillService {
         assertExpenseDatesNotFuture(lines);
         replaceLines(bill.getId(), lines);
         replaceAttaches(bill.getId(), attaches);
-        // 缺陷修复（H-0）：前端「先传附件再保存/提交」时附件随单据落库，
+        // 缺陷修复（H-0）：前端「先传附件再保存/提交」时附件随单据写入数据库，
         // 但影像状态仍为初始 NONE。保存后按附件存在性同步 image_status（NONE → COMPLETE）。
         syncImageStatus(bill.getId());
         return bill.getId();
     }
 
     /**
-     * 单据渠道（exp_bill.source）白名单收口：只认 PC / H5 两个字面值，其余一律回落列默认 PC。
+     * 单据渠道（exp_bill.source）白名单办结：只认 PC / H5 两个字面值，其余一律回落列默认 PC。
      * 取值一律由前端显式传入、后端校验——不做 UA 嗅探、不加拦截器、不改自动填充。
-     * keepBlank=true（编辑腿）时空值原样不动，交给 MP 的空值忽略策略保留既有渠道；
-     * false（新建腿）时空值补 PC，与不写该列、由 DB 默认值得到的结果同值。
+     * keepBlank=true（编辑环节）时空值原样不动，交给 MP 的空值忽略策略保留既有渠道；
+     * false（新建环节）时空值补 PC，与不写该列、由 DB 默认值得到的结果同值。
      */
     private static void normalizeBillSource(ExpBill bill, boolean keepBlank) {
         String src = bill.getSource();
@@ -384,24 +388,24 @@ public class ExpenseBillService {
     }
 
     /**
-     * 收款方名称与标题的服务端权威口径（仅 billType=PAY，即对公支付/对公结算）。
+     * 收款方名称与标题的服务端权威规则（仅 billType=PAY，即对公支付/对公结算）。
      *
      * <p>WHY：payee_name 此前原样落前端回传的户名串，服务端从不按「往来单位 / 采购订单」反查主数据，
      * 于是页面换了往来单位、单上户名仍是上一张单的那家（exp_bill.customer_id 与 po_id 各自都对，
      * 只有户名不跟着变）。它是三处的唯一读源——凭证摘要（VoucherService）、出纳付款户名
      * （ExpenseWfEventListener#createPaymentRecord）、三单匹配拦截文案（ThreeWayMatchService），
-     * 户名错指会让同族付款的支付闸门被不相干主体的对账状态掩盖，所以名称必须在服务端定源。
+     * 户名错指会让同族付款的支付校验被不相干主体的对账状态掩盖，所以名称必须在服务端定源。
      *
-     * <p>口径：往来单位取 crm_customer.customer_name，采购订单取 po_order.supplier_name，
+     * <p>规则：往来单位取 crm_customer.customer_name，采购订单取 po_order.supplier_name，
      * 两者都有值即互为交叉校验——指向不同主体时当场拒绝并点名两个来源，不静默取其一；
-     * 只有一个有值时按该来源落库。两个来源都为空的子类型（代收代付/机票结算无往来单位选择）
-     * 保留原值，行为与本口径无关。
+     * 只有一个有值时按该来源写入数据库。两个来源都为空的子类型（代收代付/机票结算无往来单位选择）
+     * 保留原值，行为与本规则无关。
      *
      * <p>title 只认用户输入原文；为空时按「对公付款-单据编号」生成（沿用既有「业务名-标识」自动标题式），
      * 编号每单唯一，故不会沿用上一张单的标题。
      *
-     * @param bill   本次要落库的单据头
-     * @param legacy 编辑腿的库中现单；新建腿传 null。前端未回传的字段按 updateById 的空值忽略语义取库中现值
+     * @param bill   本次要写入数据库的单据头
+     * @param legacy 编辑环节的库中现单；新建环节传 null。前端未回传的字段按 updateById 的空值忽略语义取库中现值
      */
     private void applyPayeeAuthority(ExpBill bill, ExpBill legacy) {
         if (!"PAY".equals(bill.getBillType())) {
@@ -412,11 +416,11 @@ public class ExpenseBillService {
         Long poId = bill.getPoId() != null ? bill.getPoId()
                 : (legacy == null ? null : legacy.getPoId());
         // D-V4R-27：前端「采购订单」下拉把选中项主键写进 ext_json.poId，而 exp_bill.po_id 列的取值源
-        // 是上面的 bill.getPoId()（顶层字段）。保存草稿腿不经 onBeforeSubmit 的顶层镜像（CorpPay.vue 仅
-        // 在「提交审批」时把 ext_json.poId 拷进 bill.poId），于是列位为空 ⇒ 本闸看不到 PO 可比、
-        // 两源不同家也照放（实测冲突单被放过即此因）。这里用请求 ext_json.poId 兜底：取到即用，
-        // 既让交叉校验看到「真正要落库的那条 PO」，又把该主键回写列位，
-        // 使「闸比较的 po_id」与「insert/update 落库的 po_id」恒等于用户在下拉里选中那条的主键。
+        // 是上面的 bill.getPoId()（顶层字段）。保存草稿环节不经 onBeforeSubmit 的顶层镜像（CorpPay.vue 仅
+        // 在「提交审批」时把 ext_json.poId 拷进 bill.poId），于是列位为空 ⇒ 本校验看不到 PO 可比、
+        // 两源不同家也照放（实测冲突单被放过即此因）。这里用请求 ext_json.poId 默认处理：取到即用，
+        // 既让交叉校验看到「真正要写入数据库的那条 PO」，又把该主键回写列位，
+        // 使「校验比较的 po_id」与「insert/update 写入数据库的 po_id」恒等于用户在下拉里选中那条的主键。
         if (poId == null) {
             Long fromExt = poIdFromExtJson(bill.getExtJson());
             if (fromExt != null) {
@@ -461,7 +465,7 @@ public class ExpenseBillService {
 
     /**
      * D-V4R-27：从单据扩展字段 {@code ext_json.poId} 里取「用户在下拉里选中那条采购订单的主键」。
-     * 兼容数字与字符串两种写法；ext_json 非法/无该键一律返回 null（交由既有校验兜底，绝不猜测）。
+     * 兼容数字与字符串两种写法；ext_json 非法/无该键一律返回 null（交由既有校验默认处理，绝不猜测）。
      */
     private static Long poIdFromExtJson(String extJson) {
         if (extJson == null || extJson.isBlank()) {
@@ -479,14 +483,14 @@ public class ExpenseBillService {
             String s = n.asText().trim();
             return s.isEmpty() ? null : Long.valueOf(s);
         } catch (Exception ignore) {
-            // ext_json 非 JSON 或 poId 非数字：视为未携带 PO，与改前「列位为空、本闸不看 PO」同结果
+            // ext_json 非 JSON 或 poId 非数字：视为未携带 PO，与改前「列位为空、本校验不看 PO」同结果
             return null;
         }
     }
 
     /**
      * 影像状态同步（H-0）：单据存在任一附件/发票时，image_status 由 NONE 升级为 COMPLETE
-     * （枚举沿用 ExpBill 注释口径 NONE/PARTIAL/COMPLETE）；只升级不降级，失败不阻断保存。
+     * （枚举沿用 ExpBill 注释规则 NONE/PARTIAL/COMPLETE）；只升级不降级，失败不阻断保存。
      */
     private void syncImageStatus(Long billId) {
         try {
@@ -588,7 +592,7 @@ public class ExpenseBillService {
     /**
      * 提交时把明细行 extJson.invoice（OCR/版式解析结果）登记进发票池并建立单票关联，
      * 随后做跨单判重：同一发票号若已关联其他在途/已批单据，直接拦截提交。
-     * 幂等：池中已有同号发票则复用；本单已有关联则跳过。
+     * 去重：池中已有同号发票则复用；本单已有关联则跳过。
      */
     private void registerAndCheckDuplicateInvoices(ExpBill bill, List<ExpBillLine> lines) {
         com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -622,8 +626,8 @@ public class ExpenseBillService {
                 continue;
             }
             // 跨单判重：发票号已被其他单据关联（在途/已批）→ 拦截
-            // 【口径统一 2026-09-14】已作废（VOID）单据的勾稽不算占用（原实现把 VOID 也算，
-            // 作废重报被误拦）；其余状态（在途/已批/已付）均算占用，与手工补录入口同口径。
+            // 【规则统一 2026-09-14】已作废（VOID）单据的勾稽不算占用（原实现把 VOID 也算，
+            // 作废重报被误拦）；其余状态（在途/已批/已付）均算占用，与手工补录入口同一规则。
             List<InvInvoice> same = invInvoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()
                     .eq(InvInvoice::getInvoiceNo, no));
             for (InvInvoice exist : same) {
@@ -679,7 +683,7 @@ public class ExpenseBillService {
                     invId = again.getId();
                 }
             }
-            // 本单关联（幂等）
+            // 本单关联（去重）
             if (invId != null && invBillInvoiceMapper.selectCount(new LambdaQueryWrapper<com.fssc.invoice.entity.InvBillInvoice>()
                     .eq(com.fssc.invoice.entity.InvBillInvoice::getBillId, bill.getId())
                     .eq(com.fssc.invoice.entity.InvBillInvoice::getInvoiceId, invId)) == 0) {
@@ -734,7 +738,7 @@ public class ExpenseBillService {
                     "发票 " + inv.getInvoiceNo() + " 已锁定或占用满（面额 " + inv.getAmount()
                             + "，已占用 " + occupied + "），无法生成报销草稿");
         }
-        // 表头：CLAIM + 含税口径，总金额=票面价税合计（applyDate/期间/币种由 saveDraft 补齐）
+        // 表头：CLAIM + 含税规则，总金额=票面价税合计（applyDate/期间/币种由 saveDraft 补齐）
         ExpBill bill = new ExpBill();
         bill.setBillType("CLAIM");
         bill.setTitle(title == null || title.isBlank()
@@ -791,8 +795,8 @@ public class ExpenseBillService {
         if (!"DRAFT".equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿可提交，当前状态: " + bill.getStatus());
         }
-        // D-DEC-179 甲：提交腿复核代理身份——报销人与代理人同人即视为未代理，撤掉代理列后再进审批链
-        // （存量脏行/绕过保存腿的写入在此收口；报销人与代理人的其余组合已由保存腿校验）。
+        // D-DEC-179 甲：提交环节复核代理身份——报销人与代理人同人即视为未代理，撤掉代理列后再进审批链
+        // （历史脏行/绕过保存环节的写入在此办结；报销人与代理人的其余组合已由保存环节校验）。
         if (bill.getAgentUserId() != null && bill.getAgentUserId().equals(bill.getApplyUserId())) {
             expBillMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ExpBill>()
                     .eq(ExpBill::getId, billId)
@@ -801,7 +805,7 @@ public class ExpenseBillService {
             log.info("D-DEC-179 单据 {} 报销人与代理人同人，提交前撤销代理登记（agent_user_id 置空）", bill.getBillNo());
         }
         assertPersonsUnique(bill.getExtJson());
-        // BUG-18 后端幂等：以「DRAFT→APPROVING」条件更新原子认领提交权。
+        // BUG-18 后端去重：以「DRAFT→APPROVING」条件更新原子认领提交权。
         // 并发双击时后到请求更新 0 行即被拒，杜绝同单双流程实例；后续任一校验失败整事务回滚，状态自动还原 DRAFT。
         int claimed = expBillMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ExpBill>()
                 .eq(ExpBill::getId, billId)
@@ -815,18 +819,18 @@ public class ExpenseBillService {
         if (lines.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "报销单至少需要一条费用明细");
         }
-        // P2-01：提交腿再校日期边界（草稿可能由旧版本或 API 直写落库）
+        // P2-01：提交环节再校日期边界（草稿可能由旧版本或 API 直写写入数据库）
         assertExpenseDatesNotFuture(lines);
         assertExpectRepayDate(bill.getBillType(), bill.getApplyDate(), bill.getExpectRepayDate());
 
-        // ①P0 单据强校验链（财务共享最佳实践：界面字段↔字段、字段↔表勾稽，提交即拦）
+        // ①P0 单据强校验链（财务共享口径：界面字段↔字段、字段↔表勾稽，提交即拦）
         assertHeaderRequired(bill);
         validateAmountReconcile(bill, lines);
         // ①-元数据 权威校验（V1.4.85 阶段①闭环点）：
         //     必录/长度/数值范围规则落 md_form_field + md_form_validation，不再只靠代码 if-else。
         //     放在硬编码校验<b>之后</b>：元数据是「加严」不是「放宽」——
-        //     存量单据若某字段不满足新配的规则，先被硬编码校验拦下并给出原有文案（行为不变）；
-        //     硬编码放行后才由元数据补第二道闸。这样上线不会让存量单据突然提交不了。
+        //     历史单据若某字段不满足新配的规则，先被硬编码校验拦下并给出原有文案（行为不变）；
+        //     硬编码放行后才由元数据补第二道校验。这样上线不会让历史单据突然提交不了。
         validateByFormMeta(bill, lines);
 
         // ①-0 收款账户校验（P2 防付错）：pay_target 驱动收款账号必填
@@ -862,7 +866,7 @@ public class ExpenseBillService {
         BigDecimal total = BigDecimal.ZERO;
         boolean needInvoice = false;
         // 海外报账②（V1.3.10）出国判定：任一差旅行 dest_country 非空且不含"中国" → 境外标准档。
-        // countryTier 暂固定 DEV 兜底；国家→档位(DEV/EMG/OTH)映射规则留待 md_sys_config 配置化后替换。
+        // countryTier 暂固定 DEV 默认处理；国家→档位(DEV/EMG/OTH)映射规则留待 md_sys_config 配置化后替换。
         boolean abroad = AbroadStandardRule.resolveAbroad(travelDestCountries(billId));
         String countryTier = "DEV";
         // 境外凭证合规⑤（V1.3.14，2016年19号公告）：abroad 且开关开启时执行收据中文说明必填、
@@ -958,17 +962,17 @@ public class ExpenseBillService {
         //   超支理由取自单据扩展字段 extJson.overrunReason（软控方案超预算时必填）
         String overrunReason = overrunReasonOf(bill.getExtJson());
         // 缺陷修复（H-1）：对公付款（billType=PAY，PREPAY/SETTLE）原不走预算占用，
-        // 行上无显式预算科目时按 md_item_budget_map（费用类型→预算科目映射，与合同域同口径）解析，
+        // 行上无显式预算科目时按 md_item_budget_map（费用类型→预算科目映射，与合同域同一规则）解析，
         // 解析到即与报销单同链路 occupy（HARD/SOFT/WARN 由方案配置决定），biz_type 取 EXP_PAY。
-        // D-DEC-105（P1）：还款单在提单落库瞬间向预算「新增占用」，且无释放 ⇒ 同一笔借款双重占用。
+        // D-DEC-105（P1）：还款单在提单写入数据库瞬间向预算「新增占用」，且无释放 ⇒ 同一笔借款双重占用。
         // 还款在业务上是资金回流，预算侧应当是「冲减借款单既有占用」，不是再占一次。
         // 现 REPAY 单完全不走 occupy()（也就不会触发 HARD/SOFT/WARN 判定与零下达额度放行），
-        // 改为按当时的在贷余额做与 repayLoan 同口径的 FIFO 预分配，逐借款单写 RELEASE 负数流水。
+        // 改为按当时的在贷余额做与 repayLoan 同一规则的 FIFO 预分配，逐借款单写 RELEASE 负数流水。
         boolean isRepayBill = "REPAY".equals(bill.getBillType());
-        // P0-B7 无预算收口：解析不到预算行不再静默跳过（原仅 PAY 有 warn、CLAIM 完全无声，
+        // P0-B7 无预算办结：解析不到预算行不再静默跳过（原仅 PAY 有 warn、CLAIM 完全无声，
         // 实测 211 个费用项只有 8 个有预算行 → 约 2/3 报销金额游离于预算控制之外且无人知晓）。
-        // 现统一留痕并按服务端策略（sys_config: budget.no_budget_policy）决定是否拒绝提交。
-        // 还款单不参与该收口：它本就不占用预算，无预算科目不构成拒提理由。
+        // 现统一记录并按服务端策略（sys_config: budget.no_budget_policy）决定是否拒绝提交。
+        // 还款单不参与该办结：它本就不占用预算，无预算科目不构成拒提理由。
         List<String> noBudgetLines = new ArrayList<>();
         BigDecimal noBudgetAmount = BigDecimal.ZERO;
         java.util.LinkedHashSet<Long> repayBudgetItems = new java.util.LinkedHashSet<>();
@@ -1002,8 +1006,9 @@ public class ExpenseBillService {
                 repayBudgetItems.add(budgetItemId);
                 continue;
             }
-            // D-DEC-105 附带点：原口径对 LOAN/APPLY/REPAY 一律记 EXP_CLAIM，
+            // D-DEC-105 附带点：原规则对 LOAN/APPLY/REPAY 一律记 EXP_CLAIM，
             // 于是 bg_occupy 里 EXP_LOAN／EXP_REPAY 永远 0 行，按业务类型读占用台账全部失真。
+            // 统一取 BudgetService.occupyBizTypeOf —— 与驳回释放、反审批回冲同一规则。
             budgetService.occupy(budgetItemId, line.getAmount(),
                     com.fssc.budget.service.BudgetService.occupyBizTypeOf(bill.getBillType()),
                     billId, bill.getBillNo(), overrunReason);
@@ -1038,21 +1043,21 @@ public class ExpenseBillService {
         ExpBill update = new ExpBill();
         update.setId(billId);
         update.setStatus("APPROVING");
-        // 表头合计/价税在提交时按 Σ明细 重算（R1/#9 拆分），必须随收尾落库，
+        // 表头合计/价税在提交时按 Σ明细 重算（R1/#9 拆分），必须随收尾写入数据库，
         // 否则校验和(按重算值生成)与库值不符，审批环节会误报"已被篡改"
         update.setTotalAmount(bill.getTotalAmount());
         update.setNetAmount(bill.getNetAmount());
         update.setTaxAmount(bill.getTaxAmount());
         update.setAmountCn(AmountCnUtil.toCn(bill.getTotalAmount()));
-        // P0-2：金额防篡改校验和随提交落库（否则审批环节无法校验）
+        // P0-2：金额防篡改校验和随提交写入数据库（否则审批环节无法校验）
         update.setAmountChecksum(bill.getAmountChecksum());
         update.setProcInstId(procInstId);
-        // V2.2.38 K106（参考行业做法"信用高的提单人提交的单据可由系统自动审核通过，抽检保合规"）：
-        // 小额报销（开关+阈值）系统自动审核通过并按比例进抽检池；留痕 oper=系统自动审核(sysauto)。
+        // V2.2.38 K106（"信用高的提单人提交的单据可由系统自动审核通过，抽检保合规"）：
+        // 小额报销（开关+阈值）系统自动审核通过并按比例进抽检池；记录 oper=系统自动审核(sysauto)。
         autoAuditIfEligible(bill, billId, bizType, procInstId, total);
         update.setSubmitTime(java.time.LocalDateTime.now());
         expBillMapper.updateById(update);
-        // F5-②（方案 §6 步骤 1 普查结论的收口）：驳回方式描述的是"上一轮被怎么退的"，重提后它已不是
+        // F5-②（方案 §6 步骤 1 普查结论的办结）：驳回方式描述的是"上一轮被怎么退的"，重提后它已不是
         // 本单的当前状态。现网实测 biz_id=3/20/27 三枚单据 驳回→重提→已付/已批，该列仍留 GRADE_BY_GRADE，
         // 于是任何按它统计"在途驳回单"的报表都会把已付单据算成刚被驳回。
         // updateById 忽略 null 字段（MyBatis-Plus 默认非空更新），清列必须走条件更新显式 set null。
@@ -1061,7 +1066,7 @@ public class ExpenseBillService {
                     new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ExpBill>()
                             .eq(ExpBill::getId, billId)
                             .set(ExpBill::getRejectType, null)
-                            // D-DEC-460：驳回意见随 reject_type 同一条腿清（两者只在驳回路径成对写入），
+                            // D-DEC-460：驳回意见随 reject_type 同一个环节清（两者只在驳回路径成对写入），
                             // 否则重提后移动端卡片仍显示上一轮的「审批意见」。
                             // 只由核减写入的 remark（reject_type 为 NULL）不进这个分支，不会被误清。
                             .set(ExpBill::getAuditRemark, null));
@@ -1072,9 +1077,9 @@ public class ExpenseBillService {
      * 驳回/撤回单编辑重提（场景演示缺口修复）：REJECTED|WITHDRAWN → DRAFT 并解除旧流程实例关联，
      * 申请人可在发起页修改后重新提交；重新提交经 submit 走【新】流程实例（旧实例保留历史痕迹）。
      *
-     * <p>D-V4R-79：原口径只认 REJECTED/DRAFT，而 WITHDRAWN（撤回）在前端无任何出口、后端
+     * <p>D-V4R-79：原规则只认 REJECTED/DRAFT，而 WITHDRAWN（撤回）在前端无任何出口、后端
      * {@link #voidBill} 也拒收 ⇒ 撤回的单既不能改、不能重提、也不能作废，成为永久脏数据，
-     * 还白占单号与预算。此处把「撤回」并入「退回草稿」同轨，与行业方案「撤回=取消单据」口径一致。</p>
+     * 还白占单号与预算。此处把「撤回」并入「退回草稿」同轨，与「撤回=取消单据」规则一致。</p>
      */
     public void returnToEdit(Long billId) {
         LoginUser u = UserContext.getRequired();
@@ -1097,12 +1102,13 @@ public class ExpenseBillService {
     /**
      * 还款单提交时的预算<b>冲减</b>（D-DEC-105，替代原「新增占用」）。
      *
-     * <p><b>分配口径</b>：还款单与借款单之间没有显式关联（{@code exp_bill_relation} 只有
+     * <p><b>分配规则</b>：还款单与借款单之间没有显式关联（{@code exp_bill_relation} 只有
      * APPLY_CLAIM／LOAN_CLAIM／PREPAY_CLAIM 三类），还款核销一直是「按申请人在贷借款单 id 升序 FIFO」。
-     * （否则第二次还款看不到第一批未结清的借款，D-DEC-106 的在贷口径）。
+     * 本方法在提单期做<b>同一规则</b>的预分配，只多一处：状态判据含 {@code PARTIAL_REPAID}
+     * （否则第二次还款看不到第一批未结清的借款，D-DEC-106 的在贷规则）。
      *
      * <p>预分配额只是提单期的净额判据；审批收尾（结清）时按 {@code exp_loan_offset} 的
-     * 实际冲抵额经 {@code BudgetService.alignLoanOccupy} 校准，两腿对不上时以实际额为准。
+     * 实际冲抵额经 {@code BudgetService.alignLoanOccupy} 校准，两环节对不上时以实际额为准。
      * 冲减本身由 {@code BudgetService.offsetLoanOccupy} 逐借款单、逐预算行封顶在
      * 「该借款单在该行的净占用」内，天然不会冲掉别人的占用，也不会超额释放。
      */
@@ -1171,7 +1177,7 @@ public class ExpenseBillService {
                 aw.eq(MdExpenseStandard::getItemId, itemId)
                         .eq(MdExpenseStandard::getAbroad, 1);
                 if (companyId != null) {
-                    // 公司专属优先，NULL=全局标准兜底（存量种子均为全局口径）
+                    // 公司专属优先，NULL=全局标准默认处理（历史种子均为全局规则）
                     aw.and(w -> w.eq(MdExpenseStandard::getCompanyId, companyId)
                             .or().isNull(MdExpenseStandard::getCompanyId));
                 }
@@ -1180,7 +1186,7 @@ public class ExpenseBillService {
                 if (picked != null) {
                     return picked;
                 }
-                // 无境外档可配 → 回退国内标准（不改变旧口径）
+                // 无境外档可配 → 回退国内标准（不改变旧规则）
             }
             LambdaQueryWrapper<MdExpenseStandard> w = new LambdaQueryWrapper<>();
             w.eq(MdExpenseStandard::getItemId, itemId);
@@ -1220,13 +1226,13 @@ public class ExpenseBillService {
     /** 境外凭证合规开关配置键（sys_config，租户级） */
     private static final String OVERSEAS_COMPLIANCE_KEY = "overseas.compliance_enabled";
 
-    /** 无预算策略配置键（sys_config）：WARN=放行并留痕（默认，灰度中），BLOCK=拒绝提交 */
+    /** 无预算策略配置键（sys_config）：WARN=放行并记录（默认，灰度中），BLOCK=拒绝提交 */
     private static final String NO_BUDGET_POLICY_KEY = "budget.no_budget_policy";
     /** BLOCK 取值 */
     private static final String NO_BUDGET_POLICY_BLOCK = "BLOCK";
 
     /**
-     * P0-B7 无预算策略：读 sys_config {@code budget.no_budget_policy}，缺省/异常一律 WARN（放行留痕）。
+     * P0-B7 无预算策略：读 sys_config {@code budget.no_budget_policy}，缺省/异常一律 WARN（放行记录）。
      * <p>取值须先在「补预算行 + 配预算科目」后按主体灰度切 BLOCK，否则 211 个费用项中仅 8 个有预算行，
      * 直接 BLOCK 会拦住绝大多数报销/付款提交。
      */
@@ -1244,7 +1250,7 @@ public class ExpenseBillService {
     }
 
     /**
-     * P0 单据强校验链（财务共享最佳实践：表头↔明细、价税、汇率、期间勾稽）。
+     * P0 单据强校验链（财务共享口径：表头↔明细、价税、汇率、期间勾稽）。
      * 仅在相关字段已填时校验，避免影响未启用价税/外币/跨期场景的单据：
      * R1 表头总金额 = Σ明细金额（原值不符即拦，不再静默覆盖）；
      * R2 价税勾稽　不含税 + 税额 = 金额（头、行级一致）；
@@ -1255,19 +1261,19 @@ public class ExpenseBillService {
      * @param lines 明细行（数据库实落行）
      */
     /**
-     * 表头必填守卫（必填项治理 P1，后端兜底层）：与前端 constants/billRequired.js 的 COMMON 同口径。
+     * 表头必填守卫（必填项治理 P1，后端默认处理层）：与前端 constants/billRequired.js 的 COMMON 同一规则。
      *
-     * <p>前端闸门挡在请求之前，这里挡的是绕过页面的调用（导入、开放接口、脚本）。
-     * 单据编号由 {@code genBillNo} 在落库时取号，人工只读，故这里只验证它确实存在，不要求用户输入。
+     * <p>前端校验挡在请求之前，这里挡的是绕过页面的调用（导入、开放接口、脚本）。
+     * 单据编号由 {@code genBillNo} 在写入数据库时取号，人工只读，故这里只验证它确实存在，不要求用户输入。
      */
     /**
      * 表单元数据校验（V1.4.85 阶段①：把「新增一种单据的字段校验」从改代码变成改配置）。
      *
-     * <p><b>为什么是第二道闸而不是第一道</b>：
+     * <p><b>为什么是第二道校验而不是第一道</b>：
      * <ul>
-     *   <li>第一道 {@link #assertHeaderRequired} 是历史硬编码规则，承载已上线的业务口径；</li>
+     *   <li>第一道 {@link #assertHeaderRequired} 是历史硬编码规则，承载已上线的业务规则；</li>
      *   <li>本方法是元数据规则，承载「后台可配」的新增要求；</li>
-     *   <li>顺序固定为「硬编码 → 元数据」：存量单据不会被新配规则突然拦住，
+     *   <li>顺序固定为「硬编码 → 元数据」：历史单据不会被新配规则突然拦住，
      *       新增单据则自动获得元数据校验能力（无需改代码）。</li>
      * </ul>
      *
@@ -1306,7 +1312,7 @@ public class ExpenseBillService {
     /**
      * 单据类型 → 元数据表单编码。
      *
-     * <p><b>口径以 md_form_config 实查为准</b>（2026-10-18 核库）：
+     * <p><b>规则以 md_form_config 实查为准</b>（2026-10-18 核库）：
      * 现有 12 个表单里 CLAIM=EXP_CLAIM、LOAN=EXP_LOAN、REPAY=EXP_REPAY、
      * APPLY=EXP_MEETING/EXP_TRAVEL/EXP_TRAIN、PAY=EXP_SETTLE/EXP_PREPAY/EXP_AIR 等。
      * 一个单据类型可能对应多个表单（按子类型分流），这里取<b>该类型的第一张表</b>作为默认表单，
@@ -1349,7 +1355,7 @@ public class ExpenseBillService {
 
     private void assertHeaderRequired(ExpBill bill) {
         if (bill.getBillNo() == null || bill.getBillNo().isBlank()) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "单据编号缺失（未正常落库），请重新保存草稿后再提交");
+            throw new BizException(ErrorCode.PARAM_INVALID, "单据编号缺失（未正常保存），请重新保存草稿后再提交");
         }
         if (bill.getTitle() == null || bill.getTitle().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "标题必填：请填写能说明本笔业务事项的单据标题");
@@ -1412,13 +1418,13 @@ public class ExpenseBillService {
     /**
      * 审批核减：审批人核减报销金额，并分别核定付款额与退款额。
      *
-     * <p>三层勾稽（通行口径）：
+     * <p>三层勾稽（通行规则）：
      * <ul>
      *  <li>核定报销 ≤ 申请金额——审批只能核减，不能核增</li>
-     *  <li>核定付款 ≤ 核定报销——付款不得突破核定口径</li>
+     *  <li>核定付款 ≤ 核定报销——付款不得突破核定规则</li>
      *  <li>核定退款 = 核定报销 − 核定付款</li>
      * </ul>
-     * 核减后应付金额 payable_amount 按「核定付款 − 已冲抵」重算，使防超付基于核定口径而非申请口径。
+     * 核减后应付金额 payable_amount 按「核定付款 − 已冲抵」重算，使防超付基于核定规则而非申请规则。
      *
      * <p>此前系统仅有 approved_amount 单列，且只在流程监听里被动累加，
      * 没有任何审批人主动核减入口，故「核定三层」实际未上线。
@@ -1487,7 +1493,7 @@ public class ExpenseBillService {
             }
             if (pay.compareTo(base) > 0) {
                 throw new BizException(ErrorCode.PARAM_INVALID,
-                        "核定付款(" + pay + ")超出核定报销(" + base + ")，付款不得突破核定口径");
+                        "核定付款(" + pay + ")超出核定报销(" + base + ")，付款不得超出核定金额");
             }
         }
         if (refund != null) {
@@ -1507,16 +1513,16 @@ public class ExpenseBillService {
     /**
      * 员工借款余额台账（#18）：按员工聚合「Σ借款 − Σ已冲销/已还」，供资金岗催收。
      *
-     * <p>口径：借款单的 loan_balance 是 exp_loan_offset 台账的净额投影
-     * （D-DEC-384/391 甲②：还款/报销冲抵一律在流程终态腿按「借款额 − Σ现存冲抵流水」绝对量重算，
-     * 报销冲抵不再于提单期扣减；归零置 REPAID 同样只在终态腿落），
+     * <p>规则：借款单的 loan_balance 是 exp_loan_offset 台账的净额投影
+     * （D-DEC-384/391 甲②：还款/报销冲抵一律在流程最终状态环节按「借款额 − Σ现存冲抵流水」绝对量重算，
+     * 报销冲抵不再于提单期扣减；归零置 REPAID 同样只在最终状态环节落），
      * 故未还余额直接取 Σloan_balance，已冲销额 = Σ借款金额 − Σ未还余额，
-     * 无需再关联 exp_loan_offset，避免与台账口径分叉。
-     * <b>在途（未生效）的报销冲抵不在此口径内</b>：它只登记在 exp_bill_relation(LOAN_CLAIM).use_amount，
+     * 无需再关联 exp_loan_offset，避免与台账规则分叉。
+     * <b>在途（未生效）的报销冲抵不在此规则内</b>：它只登记在 exp_bill_relation(LOAN_CLAIM).use_amount，
      * 台账页显示的仍是"账面未还余额"，不是"可冲抵余额"（后者还要再扣在途占用）。
      *
      * <p>D-N20：本方法原先是全租户台账（无数据范围），跨公司/跨部门可见即等于"人人可看全集团欠款人"。
-     * 现按 data_scope 五级收口（公司→部门→本人，逐级降级），口径与单据列表完全同源；
+     * 现按 data_scope 五级办结（公司→部门→本人，逐级降级），规则与单据列表完全同源；
      * 因聚合维度是 apply_user_id，owner 列取 {@code ExpBill::getApplyUserId}。</p>
      *
      * @param onlyOverdue true=仅返回已逾期（预计还款日已过且仍有余额）的员工
@@ -1579,7 +1585,7 @@ public class ExpenseBillService {
         return rows;
     }
 
-    /** 应付 = 核定口径 − 已冲抵（下限 0）。核定付款优先，其次核定报销，最后申请金额。 */
+    /** 应付 = 核定规则 − 已冲抵（下限 0）。核定付款优先，其次核定报销，最后申请金额。 */
     public static BigDecimal calcPayable(BigDecimal base, BigDecimal offset) {
         BigDecimal b = base == null ? BigDecimal.ZERO : base;
         BigDecimal o = offset == null ? BigDecimal.ZERO : offset;
@@ -1588,7 +1594,7 @@ public class ExpenseBillService {
     }
 
     /**
-     * #9 含税/不含税录入切换：按录入口径自动拆分价税，返回（可能变化的）含税金额。
+     * #9 含税/不含税录入切换：按录入规则自动拆分价税，返回（可能变化的）含税金额。
      *
      * <p>行 price_type 缺省时继承表头；两者皆无则原样返回，保持现有行为不变。
      * 税率以小数形式存储（0.06 表示 6%）。
@@ -1604,7 +1610,7 @@ public class ExpenseBillService {
         }
         boolean taxEx = "TAX_EX".equalsIgnoreCase(pt);
         if (!taxEx && !"TAX_IN".equalsIgnoreCase(pt)) {
-            return amount; // 未知口径不处理
+            return amount; // 未知规则不处理
         }
         BigDecimal net, tax, gross;
         if (taxEx) {
@@ -1633,7 +1639,7 @@ public class ExpenseBillService {
      * 形成大量需人工逐张清理的僵尸草稿；附件/发票关联/分摊都已挂在这些草稿上，
      * 删除时若级联不全还会留孤儿发票占用记录。
      *
-     * 口径：草稿允许「不完整」（可暂缺附件、事由、承担对象），但**不允许数值自相矛盾**——
+     * 规则：草稿允许「不完整」（可暂缺附件、事由、承担对象），但**不允许数值自相矛盾**——
      * 一旦填了金额，就必须 > 0；一旦填了金额，费用项就必须选。
      * 这与"草稿可以不填完"的直觉不冲突：不填就留空走 null 过滤，
      * 填了就得填对。
@@ -1650,7 +1656,7 @@ public class ExpenseBillService {
             BigDecimal amt = l.getAmount();
             boolean hasAmt = amt != null && amt.signum() != 0;
             boolean hasItem = l.getItemId() != null;
-            // 过滤规则与前端 saveDraft 的 filter(l => l.itemId || Number(l.amount) > 0) 同口径
+            // 过滤规则与前端 saveDraft 的 filter(l => l.itemId || Number(l.amount) > 0) 同一规则
             if (!hasAmt && !hasItem) {
                 continue;
             }
@@ -1706,7 +1712,7 @@ public class ExpenseBillService {
             if (amt == null) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "明细金额为空，无法合计: 行 " + line.getLineNo());
             }
-            // #9 含税/不含税录入切换：按录入口径自动拆分价税（行业方案 2019 新政口径）
+            // #9 含税/不含税录入切换：按录入规则自动拆分价税（2019 年价税分离规则）
             //    TAX_IN 含税录入：录入值=含税 → 不含税=含税/(1+税率)，税额=含税−不含税
             //    TAX_EX 不含税录入：录入值=不含税 → 税额=不含税×税率，含税=不含税+税额
             //    仅当显式指定 price_type 且税率>0 时生效（纯增量，不影响历史单据）
@@ -1742,7 +1748,7 @@ public class ExpenseBillService {
                                         + ")×单价(" + line.getUnitPrice() + ")=" + calc + " ≠ 金额(" + amt + ")");
                     }
                 } else if (line.getUnitPrice() == null) {
-                    // 金额优先反算单价：单价 = 金额 / 数量（保留 4 位防精度流失），金额为权威口径
+                    // 金额优先反算单价：单价 = 金额 / 数量（保留 4 位防精度流失），金额为权威规则
                     BigDecimal unit = amt.divide(line.getQuantity(), 4, java.math.RoundingMode.HALF_UP);
                     line.setUnitPrice(unit);
                     expBillLineMapper.updateById(line);
@@ -1766,7 +1772,7 @@ public class ExpenseBillService {
                 (l.getNetAmount() != null && l.getNetAmount().signum() != 0)
                         || (l.getTaxAmount() != null && l.getTaxAmount().signum() != 0));
         // R1 表头总金额 = Σ明细（不匹配即拦，从前端回传值判定勾稽是否失真）
-        // #9 例外：发生过 TAX_EX/TAX_IN 拆分时，表头录入值为不含税口径，属派生值 → 自动重算不拦截
+        // #9 例外：发生过 TAX_EX/TAX_IN 拆分时，表头录入值为不含税规则，属派生值 → 自动重算不拦截
         //    表头为 0/null 视为客户端未提供合计（派生场景），以 Σ明细 重算，不拦截
         if (bill.getTotalAmount() != null && bill.getTotalAmount().signum() > 0
                 && bill.getTotalAmount().subtract(sumLine).abs().compareTo(CNY_AMT_TOLERANCE) > 0
@@ -1829,16 +1835,16 @@ public class ExpenseBillService {
         wfEngineFacade.withdraw(bill.getProcInstId(), u.getUserId());
     }
 
-    /** 作废：仅草稿。R5-D-041（作废即级联）：同批把该单名下非 VOID 凭证收口——
+    /** 作废：仅草稿。R5-D-041（作废即级联）：同批把该单名下非 VOID 凭证办结——
      *  DRAFT→作废（voidVoucher）、POSTED→红字冲销（reverseVoucher），复用既有机制不另造；
-     *  整条链一个事务，任何一张收口失败整单回滚，杜绝「VOID 单＋活凭证」残留。
-     *  留痕：控制器 @OperLog ＋ voidVoucher 审计留痕 ＋ 红字凭证 remark。 */
+     *  整条链一个事务，任何一张办结失败整单回滚，杜绝「VOID 单＋活凭证」残留。
+     *  记录：控制器 @OperLog ＋ voidVoucher 审计记录 ＋ 红字凭证 remark。 */
     @Transactional(rollbackFor = Exception.class)
     public void voidBill(Long billId) {
         LoginUser u = UserContext.getRequired();
         ExpBill bill = requireMine(billId, u);
         // D-V4R-79：WITHDRAWN（撤回）与 DRAFT 同为「未走完审批链、无凭证」的态，允许一并作废，
-        // 否则撤回单无任何收口出口，只能烂在库里占单号与预算。
+        // 否则撤回单无任何办结出口，只能烂在库里占单号与预算。
         if (!"DRAFT".equals(bill.getStatus()) && !"WITHDRAWN".equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿/已撤回单据可作废，当前状态: " + bill.getStatus());
         }
@@ -1846,15 +1852,15 @@ public class ExpenseBillService {
         update.setId(billId);
         update.setStatus("VOID");
         expBillMapper.updateById(update);
-        // R5-D-041：作废即级联——同批收口该单名下非 VOID 凭证（口径与方法注释见 VoucherService）
+        // R5-D-041：作废即级联——同批办结该单名下非 VOID 凭证（规则与方法注释见 VoucherService）
         int cascaded = voucherService.cascadeVoidBySourceBill(bill, u.getUserId());
         log.info("单据 {} 作废完成（VOID），级联收口凭证 {} 张（R5-D-041）", bill.getBillNo(), cascaded);
     }
 
     /**
-     * 反审核（D-V3-135 配套 · 行业方案"反"字链第二环）：APPROVED → DRAFT，退回申请人修改后重提。
+     * 反审核（D-V3-135 配套 · 单据反操作链第二环）：APPROVED → DRAFT，退回申请人修改后重提。
      *
-     * <p>前置（通行口径 fail-loud，逐条给可执行文案）：</p>
+     * <p>前置（通行规则 fail-loud，逐条给可执行文案）：</p>
      * <ol>
      *   <li>仅 APPROVED 可反审；</li>
      *   <li>已制证（voucher_no 非空）不得反审——记账态先行，凭证须先作废；</li>
@@ -1863,9 +1869,9 @@ public class ExpenseBillService {
      *   <li>存在有效发票勾稽须先反核销（发票池→解除关联）。</li>
      * </ol>
      *
-     * <p>动作：作废 WAITING 付款记录（pay_status=VOID，留痕不物理删）；按行回冲预算——
+     * <p>动作：作废 WAITING 付款记录（pay_status=VOID，记录不物理删）；按行回冲预算——
      * 该行发生过 writeOff 走 {@link BudgetService#reverseWriteOff}（回冲已用），否则走
-     * {@link BudgetService#release}（释放占用；提交占用、执行转核销的双态口径）；状态置 DRAFT，
+     * {@link BudgetService#release}（释放占用；提交占用、执行转核销的双态规则）；状态置 DRAFT，
      * 申请人重新编辑提交（重提重新占用预算并新建流程实例，与驳回/撤回重提同轨）。</p>
      */
     @Transactional(rollbackFor = Exception.class)
@@ -1907,7 +1913,7 @@ public class ExpenseBillService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "该单据存在有效发票勾稽 " + bindCnt + " 笔，请先在发票池解除关联（反核销）再反审核");
         }
-        // WAITING 付款记录作废留痕（重提后由审批事件重新生成）
+        // WAITING 付款记录作废记录（重提后由审批事件重新生成）
         for (com.fssc.expense.entity.ExpBillPayment p : pays) {
             if ("WAITING".equals(p.getPayStatus())) {
                 com.fssc.expense.entity.ExpBillPayment upd = new com.fssc.expense.entity.ExpBillPayment();
@@ -1918,14 +1924,14 @@ public class ExpenseBillService {
                 expBillPaymentMapper.updateById(upd);
             }
         }
-        // 预算回冲（双态口径：单据级判据——发生过 writeOff 全部走 reverseWriteOff 回冲已用，否则 release 释放占用）
+        // 预算回冲（双态规则：单据级判据——发生过 writeOff 全部走 reverseWriteOff 回冲已用，否则 release 释放占用）
         // D-DEC-105 附带点：占用类型按 billType 还原（原 LOAN/APPLY 也被记成 EXP_CLAIM，
-        // 释放口径与占用口径必须同名，否则 bg_occupy 台账按类型读数继续失真）。
+        // 释放规则与占用规则必须同名，否则 bg_occupy 台账按类型读数继续失真）。
         String occupyBizType = com.fssc.budget.service.BudgetService.occupyBizTypeOf(bill.getBillType());
         if ("EXP_REPAY".equals(occupyBizType)) {
             // 还款单在预算侧没有「本单 biz_id 的占用」（D-DEC-105 修复后它只冲减借款单的占用），
             // 按行 release 会给从未占用的 biz_id 再记一笔负数 → 第二次失真。
-            // 预算侧维持"只留痕"：借款单占用由 BudgetService.offsetLoanOccupy 的净额判据自校验
+            // 预算侧维持"只记录"：借款单占用由 BudgetService.offsetLoanOccupy 的净额判据自校验
             //（驳回/撤回后重提能再冲、不双冲），本方法不动它。
             log.warn("还款单 {} 反审核：预算侧无本单占用可释放，bg_occupy 未做变更"
                     + "（借款台账的反冲见下方 rollbackLoanLedgerOnUnaudit）", bill.getBillNo());
@@ -1944,18 +1950,18 @@ public class ExpenseBillService {
                 }
             }
         }
-        // X-40（D-DEC-384/391 甲②③配套·成对腿）：借款冲抵/还款的减记已收敛到审批通过腿
+        // X-40（D-DEC-384/391 甲②③配套·成对环节）：借款冲抵/还款的减记已收敛到审批通过环节
         //（exp_loan_offset 流水 + loan_balance 绝对量重算 + REPAID/PARTIAL_REPAID 翻档，
         //  落点 ExpenseWfEventListener.repayLoan / offsetLoansByClaim），
         // 反审核把单据退回未生效态 DRAFT，就必须在同一次调用里把已扣的额反冲回去，
-        // 否则「单未生效、账已结清」——本号要治的形态——在反审核腿上原样重现。
-        // 回退算式复用驳回腿那一条（作废流水 + 按台账重算），不另写加减：
+        // 否则「单未生效、账已结清」——本号要治的形态——在反审核环节上原样重现。
+        // 回退算式复用驳回环节那一条（作废流水 + 按台账重算），不另写加减：
         // exp_bill_relation(LOAN_CLAIM) 关系行保留不删，单据回 DRAFT 后其登记额自动重新计入
-        // "在途占用"口径（ExpenseDetailService.transitLoanOccupancy 只计 DRAFT/APPROVING），
+        // "在途占用"规则（ExpenseDetailService.transitLoanOccupancy 只计 DRAFT/APPROVING），
         // 重提走「本次 − 已登记」差额算式，既不双扣也不双冲。
-        // 本号不动的两条腿如实写：①凭证腿——方法开头的 voucher_no 闸已把已制证的单挡在门外；
-        //   ②收款单腿（rc_receipt，D-DEC-107 还款到账登记）——它是已发生的资金事实，
-        //   反审核是否连带冲销收款属产品口径，仍留原状待主窗裁。
+        // 本号不动的两个环节如实写：①凭证环节——方法开头的 voucher_no 校验已把已制证的单挡在门外；
+        //   ②收款单环节（rc_receipt，D-DEC-107 还款到账登记）——它是已发生的资金事实，
+        //   反审核是否连带冲销收款属产品规则，仍留原状待主窗裁。
         BigDecimal restoredLoan = expenseBizAction.rollbackLoanLedgerOnUnaudit(bill);
         if (restoredLoan.signum() > 0) {
             log.info("单据 {} 反审核：借款台账已反冲 {}（冲抵流水作废＋余额/翻档按台账重算，X-40 甲成对腿）",
@@ -2026,13 +2032,13 @@ public class ExpenseBillService {
         ExpBill update = new ExpBill();
         update.setId(billId);
         update.setStatus("PAID");
-        // TRC-E：手工/级联付讫同样回填 pay_time（幂等：已有值不覆盖）
+        // TRC-E：手工/级联付讫同样回填 pay_time（去重：已有值不覆盖）
         update.setPayTime(bill.getPayTime() == null ? java.time.LocalDateTime.now() : bill.getPayTime());
         expBillMapper.updateById(update);
         log.info("单据 {} 状态 APPROVED→PAID", bill.getBillNo());
     }
 
-    /** P0-5：报销单/对公付款单 PAID→CLOSED（关账，终态前的最后一步） */
+    /** P0-5：报销单/对公付款单 PAID→CLOSED（关账，最终状态前的最后一步） */
     @Transactional(rollbackFor = Exception.class)
     public void closeClaim(Long billId) {
         LoginUser u = UserContext.getRequired();
@@ -2123,7 +2129,7 @@ public class ExpenseBillService {
     /**
      * D-DEC-025 显示面：exp_bill_attach.upload_by 存 sys_user.id，直接给前端只显数字（写入侧补痕见
      * replaceAttaches）；回显批量反查 sys_user 填 uploadByName（nick_name 优先、回落 user_name，
-     * 与审批轨迹取名同口径），一次 IN 查询禁逐行。存量 upload_by=NULL 的行保持空，前端显「—」。
+     * 与审批轨迹取名同一规则），一次 IN 查询禁逐行。历史 upload_by=NULL 的行保持空，前端显「—」。
      */
     private void fillAttachUploadNames(List<ExpBillAttach> list) {
         Set<Long> userIds = list.stream().map(ExpBillAttach::getUploadBy)
@@ -2147,13 +2153,13 @@ public class ExpenseBillService {
      * keyword：单号/标题服务端模糊过滤——「事前申请」页的搜索框一直在发这个参数而后端签名里没有它，
      * 输入等于无效；「我的单据」页原先只在已加载的前 50 条里做前端过滤，单据一多就搜不到（D-DEC-245 遗留第 3 项）。
      * startDate/endDate：申请日期（apply_date）闭区间，两端各自可缺；source：渠道（PC/H5）等值筛选。
-     * 三者均沿用本仓既有口径——String 直传、空值不加条件，老前端不传时结果与改前逐字相同。
+     * 三者均沿用本仓既有规则——String 直传、空值不加条件，老前端不传时结果与改前逐字相同。
      */
     public PageResult<ExpBill> myPage(long pageNum, long pageSize, String billType, String status,
                                       java.math.BigDecimal minBalance, String keyword,
                                       String startDate, String endDate, String source) {
         LoginUser u = UserContext.getRequired();
-        // D-DEC-179 甲（读侧补齐，与 requireMine/requireViewable 同口径）：所有人＝报销人 ∪ 该单登记的代理人。
+        // D-DEC-179 甲（读侧补齐，与 requireMine/requireViewable 同一规则）：所有人＝报销人 ∪ 该单登记的代理人。
         // 只按 apply_user_id 过滤时，代理人看不到自己代填的单——代填单在他自己的「我的单据」里整片消失，
         // 且「冲销借款 / 关联事前申请」两个候选面（同用本方法）取不到被代理人名下的借款单与事前申请单，
         // 代填的报销单无法冲抵那笔借款。外溢风险由写侧兜住：addLoanOffset 仍要求
@@ -2179,7 +2185,7 @@ public class ExpenseBillService {
             qw.eq(ExpBill::getSource, source.trim());
         }
         // 申请日期闭区间，两端各自可缺（只传 startDate 即只限下界）；apply_date 为 date 列，
-        // 与 InvoiceService 的日期区间过滤同口径：String 直传、由 ge/le 拼进条件，缺失即整段不加
+        // 与 InvoiceService 的日期区间过滤同一规则：String 直传、由 ge/le 拼进条件，缺失即整段不加
         if (startDate != null && !startDate.isBlank()) {
             qw.ge(ExpBill::getApplyDate, startDate.trim());
         }
@@ -2283,7 +2289,7 @@ public class ExpenseBillService {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据不存在: " + billId);
         }
         // D-DEC-179 甲：代报销单的写权＝报销人（被代理人）∪ 该单登记的代理人，其余他人单据照旧拒绝。
-        // 代理列由保存腿校验「代理人＝填单登录人本人、且与报销人不同人」，故本谓词不会把写权外溢到第三人。
+        // 代理列由保存环节校验「代理人＝填单登录人本人、且与报销人不同人」，故本谓词不会把写权外溢到第三人。
         // （原实现 bill.getApplyUserId().equals(...) 对 apply_user_id 为 NULL 的历史行直接 NPE→500，改判等。）
         if (!Objects.equals(bill.getApplyUserId(), u.getUserId())
                 && !Objects.equals(bill.getAgentUserId(), u.getUserId())) {
@@ -2297,7 +2303,7 @@ public class ExpenseBillService {
      *
      * <p>原 detail() 直接走 {@link #requireMine}，只认 exp_bill.apply_user_id，于是审批链末节点办理人
      * （如总账会计）在审批工作台点「去处理」被拒「无权操作他人单据」，看不到任何单据信息只能盲签。
-     * 归属改为按 wf_task 的办理人口径判定（与 WfQueryService.myTodo 同款谓词：
+     * 归属改为按 wf_task 的办理人规则判定（与 WfQueryService.myTodo 同款谓词：
      * assignee_id = 我 或 candidate_ids 含 ,我,），即「谁有待办/办过，谁能看」。
      *
      * <p>写路径（草稿/提交/撤回/删除/作废等）继续用 requireMine，本方法只放开只读详情，
@@ -2400,9 +2406,9 @@ public class ExpenseBillService {
     }
 
     /**
-     * D-LN-01：明细只带 itemId 时 itemName 落库为空，详情/台账整列空白（借款单尤甚，
-     * 前端借款行由 syncLoanLine 只写 itemId）。落库前按 itemId 批量反查主数据补齐；
-     * 查不到不阻断保存，读取侧还有 formatter 兜底。
+     * D-LN-01：明细只带 itemId 时 itemName 写入数据库为空，详情/台账整列空白（借款单尤甚，
+     * 前端借款行由 syncLoanLine 只写 itemId）。写入数据库前按 itemId 批量反查主数据补齐；
+     * 查不到不阻断保存，读取侧还有 formatter 默认处理。
      */
     private void fillLineItemNames(List<ExpBillLine> lines) {
         List<Long> missing = lines.stream()
@@ -2445,13 +2451,13 @@ public class ExpenseBillService {
             }
         } catch (BizException be) {
             throw be;
-        } catch (Exception ignore) { /* extJson 非法交由其他校验兜底 */ }
+        } catch (Exception ignore) { /* extJson 非法交由其他校验默认处理 */ }
     }
 
     private void replaceAttaches(Long billId, List<ExpBillAttach> attaches) {
         // 1b（2026-10-20）：本方法按"整组覆盖"落附件链路，前端附件行的【删除】只把行从表单里摘掉 ⇒
         // 被移除的文件此前永远留在 sys_file（孤儿），且唯一能删文件的界面在配置面「文件管理」，员工进不去。
-        // 故先记下将被移除的文件，落库后回收其中"本人上传＋已无任何引用"的那部分（顺手删他人数据／留悬空引用）。
+        // 故先记下将被移除的文件，写入数据库后回收其中"本人上传＋已无任何引用"的那部分（顺手删他人数据／留悬空引用）。
         java.util.Set<Long> keep = new java.util.HashSet<>();
         if (attaches != null) {
             for (ExpBillAttach a : attaches) if (a.getFileId() != null) keep.add(a.getFileId());
@@ -2460,12 +2466,12 @@ public class ExpenseBillService {
                 new LambdaQueryWrapper<ExpBillAttach>().eq(ExpBillAttach::getBillId, billId));
         expBillAttachMapper.delete(new LambdaQueryWrapper<ExpBillAttach>().eq(ExpBillAttach::getBillId, billId));
         if (attaches != null) {
-            // D-DEC-025：附件上传人留痕——exp_bill_attach.upload_by 此前从无写入点，
+            // D-DEC-025：附件上传人记录——exp_bill_attach.upload_by 此前从无写入位置，
             // 实测 id=22 由 3867 上传却 upload_by=NULL，「谁上传谁负责」断链。
             // 入参带值（如影像系统/批量迁移已登记归属）时不覆盖；无登录人（引擎线程）时留空不假填。
             Long me = UserContext.get() == null ? null : UserContext.get().getUserId();
-            // D-V4R-44：同名文件服务端去重兜底——前端查重被绕过（脚本/并发双击）时，
-            // 同一文件名重复落库会在票覆盖/影像核验里虚增张数。同名首行保留、后续行丢弃。
+            // D-V4R-44：同名文件服务端去重默认处理——前端查重被绕过（脚本/并发双击）时，
+            // 同一文件名重复写入数据库会在票覆盖/影像核验里虚增张数。同名首行保留、后续行丢弃。
             java.util.Set<String> seenNames = new java.util.HashSet<>();
             for (ExpBillAttach a : attaches) {
                 String nameKey = a.getFileName() == null ? "" : a.getFileName().trim();
@@ -2543,7 +2549,7 @@ public class ExpenseBillService {
     /**
      * V2.2.38 K106 小额自动审核＋抽检：
      * 开关 expense.autoaudit.enabled=1 且 total ≤ expense.autoaudit.maxamount 且 billType=CLAIM 时，
-     * 以系统身份（sysauto）依次通过链上全部节点至终态；并按 expense.autoaudit.samplerate 概率打
+     * 以系统身份（sysauto）依次通过链上全部节点至最终状态；并按 expense.autoaudit.samplerate 概率打
      * 「进抽检池」标记（ext_json.autoAuditSample=true），抽检列表按此查询。任何异常只降级为不自动审。
      */
     private void autoAuditIfEligible(ExpBill bill, Long billId, String bizType, String procInstId, java.math.BigDecimal total) {

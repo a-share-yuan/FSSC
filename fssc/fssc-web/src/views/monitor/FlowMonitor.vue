@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="flow-monitor">
     <!-- 权限门控（P0 权限治理 2026-09-16）：
@@ -78,7 +81,7 @@
 
             <!-- 节点热力图：真实节点名 × 实际停留分桶 -->
             <div class="chart-card">
-              <div class="chart-title">节点停留热力图（按审批留痕统计）
+              <div class="chart-title">节点停留热力图（按审批记录统计）
                 <span class="chart-sub">行名截断，格内只标非 0</span>
               </div>
               <div v-show="hasDwell" ref="heatmapRef" class="chart-body" :style="{ height: heatHeight + 'px' }"></div>
@@ -111,14 +114,14 @@
                 <el-table-column prop="node" label="节点" min-width="160" show-overflow-tooltip>
                   <template #default="{ row }">
                     {{ row.node }}
-                    <!-- D-DEC-210：与时效榜同一处理——缺名留痕如实标，不并成伪节点 -->
-                    <el-tag v-if="row.unnamedTrace" size="small" type="info">留痕缺名</el-tag>
+                    <!-- D-DEC-210：与时效榜同一处理——缺名记录如实标，不并成伪节点 -->
+                    <el-tag v-if="row.unnamedTrace" size="small" type="info">记录缺名</el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column prop="count" label="在办" width="70" />
                 <el-table-column label="已超时" width="90">
                   <template #default="{ row }">
-                    <!-- D-DEC-206：本列按 due_time 实算；行尾括注＝其中没有 due_time、走兜底口径的条数 -->
+                    <!-- D-DEC-206：本列按 due_time 实算；行尾括注＝其中没有 due_time、走默认处理规则的条数 -->
                     <span :class="row.overdue ? 'text-danger' : ''">{{ row.overdue }}</span>
                     <span v-if="row.overdueFallback" class="basis-mark">（†{{ row.overdueFallback }}）</span>
                   </template>
@@ -126,7 +129,7 @@
                 <el-table-column label="最长账龄" width="100">
                   <template #default="{ row }">{{ formatDuration(row.maxAgeHours * 60) }}</template>
                 </el-table-column>
-                <!-- D-DEC-208：该节点配置的处置档 + 落在该档的在办数 + 催办/卡单口径 -->
+                <!-- D-DEC-208：该节点配置的处置档 + 落在该档的在办数 + 催办/卡单规则 -->
                 <el-table-column label="处置档" width="120">
                   <template #default="{ row }">{{ tierLabel(row.timeoutAction) }}</template>
                 </el-table-column>
@@ -156,8 +159,8 @@
                 <el-table-column prop="node" label="节点" min-width="130" show-overflow-tooltip>
                   <template #default="{ row }">
                     {{ row.node }}
-                    <!-- D-DEC-210：留痕没写节点名的行如实标出来（后端有 key 显 key，全无则标缺名），不当真节点 -->
-                    <el-tag v-if="row.unnamedTrace" size="small" type="info">留痕缺名</el-tag>
+                    <!-- D-DEC-210：记录没写节点名的行如实标出来（后端有 key 显 key，全无则标缺名），不当真节点 -->
+                    <el-tag v-if="row.unnamedTrace" size="small" type="info">记录缺名</el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column prop="bizNo" label="单据号" width="130" show-overflow-tooltip />
@@ -166,7 +169,7 @@
                   <template #default="{ row }">
                     <span class="text-danger">{{ row.overdueHours }}h</span>
                     <el-tooltip v-if="row.overdueBasis === 'CREATE_PLUS_SLA'" placement="top"
-                                content="该单据没有到期时间，超时按「账龄 − 节点办理时限」推算得出（口径已在表下说明）">
+                                content="该单据没有到期时间，超时按「账龄 − 节点办理时限」推算得出（计算方式已在表下说明）">
                       <span class="basis-mark">†</span>
                     </el-tooltip>
                     <span v-else-if="row.overdueBasis === 'NO_DUE_NO_SLA'" class="text-muted">不可测</span>
@@ -183,7 +186,7 @@
                   <template #default="{ row }">{{ tierLabel(row.timeoutAction) }}</template>
                 </el-table-column>
               </el-table>
-              <!-- D-DEC-206：口径写 in 页面，不再让读者拿「停留」去反算「已超时」 -->
+              <!-- D-DEC-206：规则写 in 页面，不再让读者拿「停留」去反算「已超时」 -->
               <!-- R5-D-036 -->
               <div class="perf-note">
                 已超时＝现在 − 该单据的到期时间（与超时提醒、任务池看待的是同一个到期时点），
@@ -191,7 +194,7 @@
                 <template v-if="backlog.noDueTimeTasks">
                   本快照有 {{ backlog.noDueTimeTasks }} 条在办没有到期时间（行标 † 者），按「发起时间＋节点办理时限」推算；
                 </template>
-                <template v-if="backlog.noDueTimeTasks === 0">当前全部在办都有到期时间，没有一行走推算口径。</template>
+                <template v-if="backlog.noDueTimeTasks === 0">当前全部在办都有到期时间，没有一行需要按推算处理。</template>
               </div>
             </div>
           </div>
@@ -248,8 +251,8 @@
               <el-table-column prop="node" label="节点" min-width="220" show-overflow-tooltip>
                 <template #default="{ row }">
                   {{ row.node }}
-                  <!-- D-DEC-210：这一行不是节点，是 wf_task_history 没写 node_name 的留痕 -->
-                  <el-tag v-if="row.unnamedTrace" size="small" type="info">留痕缺名</el-tag>
+                  <!-- D-DEC-210：这一行不是节点，是 wf_task_history 没写 node_name 的记录 -->
+                  <el-tag v-if="row.unnamedTrace" size="small" type="info">记录缺名</el-tag>
                 </template>
               </el-table-column>
               <el-table-column prop="events" label="审批事件" width="100" />
@@ -284,7 +287,7 @@
               </el-table-column>
               <el-table-column prop="escalateEvents" label="升级行数" width="100" />
             </el-table>
-            <div class="perf-note">{{ dwellNote }}<template v-if="droppedNodes">（另有 {{ droppedNodes }} 个低命中节点未列入热力图）</template><template v-if="unnamedEvents">·本窗口 {{ unnamedEvents }} 条留痕无节点名（{{ unnamedRows }} 行），已如实标注、未造名</template></div>
+            <div class="perf-note">{{ dwellNote }}<template v-if="droppedNodes">（另有 {{ droppedNodes }} 个低命中节点未列入热力图）</template><template v-if="unnamedEvents">·本窗口 {{ unnamedEvents }} 条记录无节点名（{{ unnamedRows }} 行），已如实标注、未造名</template></div>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -323,10 +326,10 @@
         </el-table-column>
       </el-table>
       <TablePager :pager="pager" @change="fetchData" />
-      <!-- D-DEC-206：接口侧 WfQueryService.fillStay 已合入 due_time 优先口径（主窗移交合入完成），
-           本页与上方两表同源；无 due_time 的实例双方同走「create_time+节点 SLA」推算兜底 -->
+      <!-- D-DEC-206：接口侧 WfQueryService.fillStay 已合入 due_time 优先规则（主窗移交合入完成），
+           本页与上方两表同源；无 due_time 的实例双方同走「create_time+节点 SLA」推算默认处理 -->
       <div class="perf-note">
-        本表「停留时长 / 超时」口径＝<b>按单据到期时间实算优先</b>，没有到期时间的才按节点配置的超时时长推算，与上方「超时未办 Top 榜」同源。
+        本表「停留时长 / 超时」的计算方式＝<b>按单据到期时间实算优先</b>，没有到期时间的才按节点配置的超时时长推算，与上方「超时未办 Top 榜」同源。
       </div>
     </div>
     </template>
@@ -408,12 +411,12 @@ const handlerRecon = computed(() => {
   return r && (r.pendingTasks || 0) > 0 ? r : null
 })
 const droppedNodes = ref(0)
-// D-DEC-210：无名留痕的规模（后端 node-dwell 的 unnamedNodeRows/Events），页面上如实交代
+// D-DEC-210：无名记录的规模（后端 node-dwell 的 unnamedNodeRows/Events），页面上如实交代
 const unnamedEvents = ref(0)
 const unnamedRows = ref(0)
 // D-DEC-208：超时处置档台账（后端 /wf/perf/{overview,paths,node-dwell,backlog} 同一份聚合，任一应答取用）
 const tierLedger = ref({})
-/** 台账对应的回看天数（由后端应答携带，避免卡片标题与窗口口径错配） */
+/** 台账对应的回看天数（由后端应答携带，避免卡片标题与窗口规则错配） */
 const tierDays = ref(0)
 const TIER_LABELS = {
   AUTO_REMIND: '催办提醒',
@@ -460,7 +463,7 @@ const tierRows = computed(() => {
       nodes: cfg[tier] ?? 0,
       withSla: sla[tier] ?? 0,
       fired: firedKeys.reduce((s, k) => s + (fired[k] ?? 0), 0),
-      // 五档同口径出数；仅在后端没有 byTier 时才回退旧的两个具名键，再退不到才是 '-'
+      // 五档同一规则出数；仅在后端没有 byTier 时才回退旧的两个具名键，再退不到才是 '-'
       onHand: on ? on.tasks : legacyTierCount(tier, infl, 'tasks'),
       stuck: on ? on.stuck : legacyTierCount(tier, infl, 'stuck'),
     }
@@ -479,8 +482,8 @@ const tierNote = computed(() => {
     ? `对账：五档在办合计 ${tierCellSum.value} + 无配置行 ${tierUnclassified.value} ＝ 待办任务 ${tierPendingTotal.value}（＝顶部卡片，同一份待办快照）。`
     : ''
   // R5-D-036
-  return '口径：配置节点数＝按节点超时处置配置归类后的节点计数（改档后此处即时可见）；'
-    + '动作行数＝窗口内审批留痕里的系统自动动作次数（催满后升级与直接升级同记为升级动作，两档合并计入）；'
+  return '统计方式：配置节点数＝按节点超时处置配置归类后的节点计数（改档后此处即时可见）；'
+    + '动作行数＝窗口内审批记录里的系统自动动作次数（催满后升级与直接升级同记为升级动作，两档合并计入）；'
     + '卡单＝已催办满 ' + (infl.stuckAfterUrges ?? '-') + ' 次仍在办（催办提醒阈值与升级阈值可各自配置、默认同为 3 次，故本列≠已升级）。'
     + recon
     + '本表只数不改：不触发升级、不触发自动通过。'
@@ -490,7 +493,7 @@ function pickTierLedger(...payloads) {
   for (const p of payloads) {
     if (p && p.timeoutActions) {
       tierLedger.value = p.timeoutActions
-      // 台账自带窗口天数（积压档的机器动作窗口固定 30 天），卡片标题跟着台账走，避免口径错标
+      // 台账自带窗口天数（积压档的机器动作窗口固定 30 天），卡片标题跟着台账走，避免规则错标
       if (p.days) tierDays.value = p.days
       return
     }
@@ -597,7 +600,7 @@ async function loadCharts() {
     dwellBuckets.value = d?.buckets || []
     dwellNote.value = d?.note || ''
     droppedNodes.value = d?.droppedNodes || 0
-    // D-DEC-210：无名留痕规模（SLA 明细档的表下说明用）
+    // D-DEC-210：无名记录规模（SLA 明细档的表下说明用）
     unnamedEvents.value = d?.unnamedNodeEvents || 0
     unnamedRows.value = d?.unnamedNodeRows || 0
     pickTierLedger(d, p)
@@ -648,7 +651,7 @@ async function loadPerf() {
   } catch {
     perfFailed.value = true
   }
-  // 概览档的台账与页面窗口同口径（积压档固定 30 天），只在概览没取到时退回用积压档的
+  // 概览档的台账与页面窗口同一规则（积压档固定 30 天），只在概览没取到时退回用积压档的
   await loadOverview()
   pickTierLedger(overview.value, b)
 }
@@ -811,7 +814,7 @@ function onResize() {
 .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .chart-title .chart-sub { margin-left: 8px; font-size: 11px; font-weight: 400; color: #c0c4cc; }
 .chart-body { height: 300px; }
-/* D-DEC-206：兜底口径的行内标注（†），与表下的口径说明成对出现 */
+/* D-DEC-206：默认处理规则的行内标注（†），与表下的规则说明成对出现 */
 .basis-mark { margin-left: 2px; color: #e6a23c; font-weight: 600; font-size: 11px; }
 .perf-note code {
   background: #f4f4f5; padding: 0 4px; border-radius: 3px;

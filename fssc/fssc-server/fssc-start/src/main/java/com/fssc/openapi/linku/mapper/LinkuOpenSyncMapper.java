@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.openapi.linku.mapper;
 
 import org.apache.ibatis.annotations.Insert;
@@ -14,14 +17,14 @@ import java.util.List;
 /**
  * LinkU 开放接口 <b>写入</b> Mapper（F-3 / F-7）。替代原 BCP 直连 FSSC 库的写语句。
  *
- * <p>全部语句逐条移植自 {@code FsscArApAdapter}（现役库 OTC 代口径），语义与守卫完全一致：</p>
+ * <p>全部语句逐条移植自 {@code FsscArApAdapter}（现役库 OTC 代规则），语义与守卫完全一致：</p>
  * <ul>
- *   <li>AP 对账 → {@code supplier_recon}(+detail/diff)，幂等键 {@code (tenant_id, supplier_id, period)}，
+ *   <li>AP 对账 → {@code supplier_recon}(+detail/diff)，唯一键 {@code (tenant_id, supplier_id, period)}，
  *       并回填 {@code linku_recon_id}/{@code linku_partner_id}/{@code linku_sync_status='SYNCED'}；</li>
  *   <li>{@code status} 归属守卫：仅当现值属 {@code DRAFT}/{@code DIFF} 时由 BCP 改写（对方已推进则保留）；</li>
- *   <li>AR 对账 → {@code ar_recon_record}（{@code record_type='RECON'}）按 (company, customer, period) 幂等 UPSERT；</li>
+ *   <li>AR 对账 → {@code ar_recon_record}（{@code record_type='RECON'}）按 (company, customer, period) 去重 UPSERT；</li>
  *   <li>AR 收款核销 → {@code rc_receipt}+{@code rc_receipt_line}，并回写 {@code rc_receivable} 余额（含余额守卫）；</li>
- *   <li>AR/AP 对冲留痕 → {@code gl_inter_offset}（无资金流入，故不生成收款单）。</li>
+ *   <li>AR/AP 对冲记录 → {@code gl_inter_offset}（无资金流入，故不生成收款单）。</li>
  * </ul>
  *
  * <p>调用方须保证整批写入在同一事务内（{@code @Transactional}），保证「头表 + 明细 + 差异」全成或全败。</p>
@@ -187,7 +190,7 @@ public interface LinkuOpenSyncMapper {
                             @Param("now") LocalDateTime now);
 
     /**
-     * 应收余额回写（第13轮口径）：{@code status} 必须是第一个赋值（读原始 remain_amount），
+     * 应收余额回写（第13轮规则）：{@code status} 必须是第一个赋值（读原始 remain_amount），
      * 且带余额守卫，允许「正好结清」（差额 ≤ 0.01），禁止超额。
      */
     @Update("UPDATE rc_receivable "
@@ -202,7 +205,7 @@ public interface LinkuOpenSyncMapper {
                                @Param("amount") BigDecimal amount,
                                @Param("now") LocalDateTime now);
 
-    // ==================== 对冲留痕（gl_inter_offset） ====================
+    // ==================== 对冲记录（gl_inter_offset） ====================
 
     @Insert("INSERT INTO gl_inter_offset (tenant_id, offset_no, period, from_company_id, to_company_id, "
             + "inter_flag, amount, offset_status, create_time, update_time, del_flag) "
@@ -245,7 +248,7 @@ public interface LinkuOpenSyncMapper {
                                      @Param("status") String status,
                                      @Param("now") LocalDateTime now);
 
-    /** 通用探针：表是否存在（用于 {@code ar_pre_invoice} 等代际相关表的优雅降级）。 */
+    /** 通用检查：表是否存在（用于 {@code ar_pre_invoice} 等代际相关表的优雅降级）。 */
     @Select("SELECT COUNT(1) FROM information_schema.tables "
             + "WHERE table_schema = DATABASE() AND LOWER(table_name) = LOWER(#{tableName})")
     int tableExists(@Param("tableName") String tableName);

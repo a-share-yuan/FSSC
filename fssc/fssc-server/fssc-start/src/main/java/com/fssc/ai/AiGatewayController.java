@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.ai;
 
 import com.fssc.ai.entity.AiInspectRule;
@@ -60,7 +63,7 @@ public class AiGatewayController {
                 .toList());
     }
 
-    /** 执行一个登记动作。未登记/红线/无权限/缺幂等键/缺票据 → 403/400，且全部留痕。 */
+    /** 执行一个登记动作。未登记/红线/无权限/缺唯一键/缺票据 → 403/400，且全部记录。 */
     @PostMapping("/execute")
     public Result<Map<String, Object>> execute(@RequestBody AiGatewayService.GatewayRequest req,
                                                HttpServletRequest http) {

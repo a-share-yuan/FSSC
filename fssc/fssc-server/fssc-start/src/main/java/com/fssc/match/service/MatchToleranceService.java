@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.match.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -32,7 +35,7 @@ import java.time.LocalDateTime;
 public class MatchToleranceService {
 
     private final MatchToleranceMapper toleranceMapper;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /** 默认金额容差百分比：0.5 = 0.5% */
@@ -47,7 +50,7 @@ public class MatchToleranceService {
 
     /**
      * 按公司查容差参数。companyId 为空时回退当前登录用户所属公司；仍为空、无配置、
-     * 配置停用或读取异常时，返回默认参数（amountPct=0.5、amountAbs=100，id 为空表示默认值未落库）。
+     * 配置停用或读取异常时，返回默认参数（amountPct=0.5、amountAbs=100，id 为空表示默认值未写入数据库）。
      */
     public MatchTolerance getTolerance(Long companyId) {
         Long cid = companyId;
@@ -98,9 +101,9 @@ public class MatchToleranceService {
 
     /**
      * 按租户+公司 upsert 容差参数（POST /api/tenant/match-tolerance，唯一调用方是页面保存，无机器写入路径）。
-     * 必填守卫（批次 2B，与前端 MATCH_TOLERANCE 登记表同口径）：公司/百分比/绝对值三项都是参数本身，
-     * 原实现把空值静默补成默认 0.5%/100 元——用户没填却落库一条"看起来填过"的参数，故改为直接拒绝。
-     * 读取侧 {@link #getTolerance(Long)} 的默认兜底保留（匹配引擎必须拿到可用容差）。
+     * 必填守卫（批次 2B，与前端 MATCH_TOLERANCE 登记表同一规则）：公司/百分比/绝对值三项都是参数本身，
+     * 原实现把空值静默补成默认 0.5%/100 元——用户没填却写入数据库一条"看起来填过"的参数，故改为直接拒绝。
+     * 读取侧 {@link #getTolerance(Long)} 的默认默认处理保留（匹配引擎必须拿到可用容差）。
      */
     @Transactional(rollbackFor = Exception.class)
     public MatchTolerance upsert(MatchTolerance in) {
@@ -156,7 +159,7 @@ public class MatchToleranceService {
         toleranceMapper.updateById(exist);
         log.info(" 更新三单匹配容差参数 companyId={} pct={} abs={} status={}",
                 exist.getCompanyId(), exist.getAmountPct(), exist.getAmountAbs(), exist.getStatus());
-        // P4-3 审计留痕：容差参数变更（状态/百分比/绝对值）
+        // P4-3 审计记录：容差参数变更（状态/百分比/绝对值）
         java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
         auditBefore.put("status", prevStatus);
         auditBefore.put("amountPct", prevAmountPct);
@@ -170,7 +173,7 @@ public class MatchToleranceService {
         return exist;
     }
 
-    /** 默认容差参数（未落库，仅内存表示）：0.5% / 100 元 */
+    /** 默认容差参数（未写入数据库，仅内存表示）：0.5% / 100 元 */
     private MatchTolerance defaultTolerance(Long companyId) {
         MatchTolerance t = new MatchTolerance();
         t.setCompanyId(companyId);

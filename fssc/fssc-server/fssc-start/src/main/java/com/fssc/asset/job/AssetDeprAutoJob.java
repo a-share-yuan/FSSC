@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.job;
 
 import com.fssc.asset.entity.AssetDeprBatch;
@@ -25,7 +28,7 @@ import java.util.stream.Collectors;
  * 替代此前只能靠人工调接口触发的问题，接通"投资到资产"循环的自动化最后一环。
  *
  * <p>多租户处理：扫描有在用资产的租户，逐租户发起计提。
- * 幂等由 {@link AssetDeprBatchService#createAndSubmit} 的批单状态 + 资产 lastDeprDate 保障。
+ * 去重由 {@link AssetDeprBatchService#createAndSubmit} 的批单状态 + 资产 lastDeprDate 保障。
  */
 @Slf4j
 @Component

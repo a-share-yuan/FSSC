@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.health;
 
 import com.fssc.common.core.ErrorCode;
@@ -15,13 +18,13 @@ import java.util.Map;
  * <p>与 Actuator 的分工：
  * <ul>
  *   <li>{@code /api/health}（本类）：业务自描述的轻量探活，回显 DB/Redis 组件状态与版本，
- *       字段口径由业务定义，可直接给人看；</li>
- *   <li>{@code /actuator/health}：标准 Actuator 探活 + k8s liveness/readiness 探针。</li>
+ *       字段含义由业务定义，可直接给人看；</li>
+ *   <li>{@code /actuator/health}：标准 Actuator 探活 + k8s liveness/readiness 检查。</li>
  * </ul>
- * 两者都已在 JwtAuthFilter 白名单放行，无需 Token（探针不可能持有业务 Token）。
+ * 两者都已在 JwtAuthFilter 白名单放行，无需 Token（检查不可能持有业务 Token）。
  *
  * <p>响应约定：沿用全平台「HTTP 200 + body.code」，健康时 code=0，不健康时 code=500，
- * 探针按 body.code 判定即可（与项目既有约定一致，不引入裸 HTTP 5xx）。
+ * 检查按 body.code 判定即可（与项目既有约定一致，不引入裸 HTTP 5xx）。
  */
 @RestController
 @RequestMapping("/api/health")

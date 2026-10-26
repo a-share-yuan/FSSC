@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.openapi.linku.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
@@ -22,30 +25,30 @@ import java.util.Map;
  *       tenantId 由入参显式决定（与回调实现同范式）。</li>
  * </ol>
  *
- * <p>取数口径与原 BCP Mapper 逐条对齐（见 {@code com.unierp.bcp.adapter.fssc.mapper}），
- * 含各类「不成立的终态」排除（VOID 采购订单 / REJECTED 应收单等）。</p>
+ * <p>查询范围与原 BCP Mapper 逐条对齐（见 {@code com.unierp.bcp.adapter.fssc.mapper}），
+ * 含各类「不成立的最终状态」排除（VOID 采购订单 / REJECTED 应收单等）。</p>
  */
 @Mapper
 public interface LinkuOpenQueryMapper {
 
     /**
-     * 应付锚点腿（AP）—— {@code po_order}（现役库 OTC 代）。
-     * 返回 {@code amount} 与 {@code receivedAmount}，未清口径交由 BCP 侧按自身配置推导
+     * 应付关联点环节（AP）—— {@code po_order}（现役库 OTC 代）。
+     * 返回 {@code amount} 与 {@code receivedAmount}，未清规则交由 BCP 侧按自身配置推导
      * （{@code bcp.adapter.fssc.ap-outstanding-mode}），保持与原直连行为一致。
      *
-     * <p><b>G2R-10（2026-10-19 真跑实证，口径统一）</b>：{@code po_order.amount} 是<b>不含税</b>数
-     * （该表根本没有税额列，无从换算），而付款腿 {@code exp_bill_payment.amount} 是<b>价税合计</b>。
+     * <p><b>G2R-10（2026-10-19 真跑实证，规则统一）</b>：{@code po_order.amount} 是<b>不含税</b>数
+     * （该表根本没有税额列，无从换算），而付款环节 {@code exp_bill_payment.amount} 是<b>价税合计</b>。
      * 两把尺子放在同一张对账单上 ⇒ 应付 96,000 vs 实付 108,480，核销永远核不平，
      * 对账单被判 SETTLED 时其实只结掉了部分。
      *
-     * <p>此处把应付锚点腿统一到<b>价税合计</b>口径：已开票的 PO 取该 PO 名下发票的
+     * <p>此处把应付关联点环节统一到<b>价税合计</b>规则：已开票的 PO 取该 PO 名下发票的
      * {@code inv_invoice.amount}（价税合计）之和；未开票的 PO 仍退回 {@code po_order.amount}
-     * （此时它本身就是含税口径，无税可加）。{@code receivedAmount} 按同一比例缩放，
+     * （此时它本身就是含税规则，无税可加）。{@code receivedAmount} 按同一比例缩放，
      * 保证 {@code MINUS_RECEIVED} 模式下两列同尺，不会算出一个"税额差"当未执行额。</p>
      */
     @Select("SELECT o.id AS id, o.po_no AS sourceBillNo, o.company_id AS companyId, "
             + "s.supplier_code AS partnerId, o.supplier_name AS partnerName, "
-            // G2R-10：有发票 ⇒ 价税合计；无发票 ⇒ 原值（未开票的订单额本身就是含税口径）
+            // G2R-10：有发票 ⇒ 价税合计；无发票 ⇒ 原值（未开票的订单额本身就是含税规则）
             + "CASE WHEN inv.gross IS NOT NULL AND inv.gross > 0 THEN inv.gross ELSE o.amount END AS amount, "
             + "CASE WHEN inv.gross IS NOT NULL AND inv.gross > 0 AND o.amount IS NOT NULL AND o.amount > 0 "
             + "     THEN ROUND(COALESCE(o.received_amount, 0) * inv.gross / o.amount, 2) "
@@ -77,8 +80,8 @@ public interface LinkuOpenQueryMapper {
                                              @Param("limit") int limit);
 
     /**
-     * AP 付款腿 —— {@code exp_bill_payment}（实付登记台账，D-V4R-97 权威取数面）。
-     * 仅 {@code pay_status IN ('PAID','PAYING')}。伙伴编码三重口径与原 Mapper 一致。
+     * AP 付款环节 —— {@code exp_bill_payment}（实付登记台账，D-V4R-97 权威查询面）。
+     * 仅 {@code pay_status IN ('PAID','PAYING')}。伙伴编码三重规则与原 Mapper 一致。
      */
     @Select("SELECT bp.id AS id, b.bill_no AS sourceBillNo, b.company_id AS companyId, "
             + "COALESCE(c.customer_code, s.supplier_code, bp.payee_name) AS partnerId, "
@@ -102,7 +105,7 @@ public interface LinkuOpenQueryMapper {
                                              @Param("partnerCode") String partnerCode,
                                              @Param("limit") int limit);
 
-    /** AP 付款腿兜底 —— {@code pay_plan}（付款计划；仅当实付台账取不到时使用）。 */
+    /** AP 付款环节默认处理 —— {@code pay_plan}（付款计划；仅当实付台账取不到时使用）。 */
     @Select("SELECT p.id AS id, p.plan_no AS sourceBillNo, p.company_id AS companyId, "
             + "COALESCE(s.supplier_code, p.supplier) AS partnerId, p.amount AS amount, p.status AS status, "
             + "DATE_FORMAT(STR_TO_DATE(CONCAT(LEFT(REPLACE(IFNULL(p.period,''),'-',''),6),'01'), '%Y%m%d'), "
@@ -119,7 +122,7 @@ public interface LinkuOpenQueryMapper {
                                                     @Param("partnerCode") String partnerCode,
                                                     @Param("limit") int limit);
 
-    /** AP 入库腿 —— {@code po_receipt}（自带 supplier_id，公司维度经 po_order 关联）。 */
+    /** AP 入库环节 —— {@code po_receipt}（自带 supplier_id，公司维度经 po_order 关联）。 */
     @Select("SELECT r.id AS id, r.receipt_no AS sourceBillNo, o.company_id AS companyId, "
             + "s.supplier_code AS partnerId, r.supplier_name AS partnerName, r.amount AS amount, "
             + "r.status AS status, DATE_FORMAT(r.receipt_date, '%Y-%m-%d') AS receiptDate, "
@@ -138,7 +141,7 @@ public interface LinkuOpenQueryMapper {
                                                      @Param("partnerCode") String partnerCode,
                                                      @Param("limit") int limit);
 
-    /** AP 退货腿 —— {@code pur_return}（仅 REFUND+APPROVED 冲减应付；原 Mapper 双码口径）。 */
+    /** AP 退货环节 —— {@code pur_return}（仅 REFUND+APPROVED 冲减应付；原 Mapper 双码规则）。 */
     @Select("SELECT r.id AS id, r.bill_no AS sourceBillNo, r.company_id AS companyId, "
             + "r.vendor_code AS partnerId, r.vendor_name AS partnerName, r.amount AS amount, "
             + "r.status AS status, DATE_FORMAT(r.bill_date, '%Y-%m-%d') AS receiptDate "
@@ -155,7 +158,7 @@ public interface LinkuOpenQueryMapper {
                                                     @Param("unifiedCode") String unifiedCode,
                                                     @Param("limit") int limit);
 
-    /** AR 应收腿 —— {@code rc_receivable}（未清取原生 remain_amount；排除 REJECTED）。 */
+    /** AR 应收环节 —— {@code rc_receivable}（未清取原生 remain_amount；排除 REJECTED）。 */
     @Select("SELECT r.id AS id, r.bill_no AS sourceBillNo, r.company_id AS companyId, "
             + "c.customer_code AS partnerId, r.amount AS amount, "
             + "IFNULL(r.remain_amount, r.amount) AS outstanding, r.currency_code AS currency, "
@@ -176,7 +179,7 @@ public interface LinkuOpenQueryMapper {
                                                 @Param("period") String period,
                                                 @Param("limit") int limit);
 
-    /** AR 收款腿 —— {@code rc_receipt}（公司维度经核销关系 EXISTS 关联，两代载体并集）。 */
+    /** AR 收款环节 —— {@code rc_receipt}（公司维度经核销关系 EXISTS 关联，两代载体并集）。 */
     @Select("SELECT r.id AS id, r.bill_no AS sourceBillNo, c.customer_code AS partnerId, "
             + "c.customer_name AS partnerName, r.amount AS amount, r.status AS status, "
             + "DATE_FORMAT(r.receipt_date, '%Y-%m-%d') AS receiptDate, "
@@ -201,7 +204,7 @@ public interface LinkuOpenQueryMapper {
                                              @Param("partnerCode") String partnerCode,
                                              @Param("limit") int limit);
 
-    /** AR 预制发票腿（三单匹配中间腿）—— {@code ar_pre_invoice}（蓝图代表，缺失时由服务层降级为空）。 */
+    /** AR 预制发票环节（三单匹配中间环节）—— {@code ar_pre_invoice}（蓝图代表，缺失时由服务层降级为空）。 */
     @Select("SELECT id AS id, pre_invoice_no AS sourceBillNo, company_id AS companyId, "
             + "customer_code AS partnerId, amount AS amount, status AS status, "
             + "DATE_FORMAT(invoice_date, '%Y-%m-%d') AS receiptDate "
@@ -216,7 +219,7 @@ public interface LinkuOpenQueryMapper {
                                                 @Param("limit") int limit);
 
     /**
-     * AR 销售订单腿（P0-C《AR 三单匹配改造》）—— 候选表 {@code so_order} + {@code so_order_line}。
+     * AR 销售订单环节（P0-C《AR 三单匹配改造》）—— 候选表 {@code so_order} + {@code so_order_line}。
      *
      * <p>ERP／销售模块物化表。现役 FSSC 库<b>不存在</b>该表（全仓 {@code so_order}/{@code sales_order}
      * 零命中），由服务层 {@link LinkuOpenQueryService#salesOrders} 先做表存在性探测，
@@ -251,9 +254,9 @@ public interface LinkuOpenQueryMapper {
                                                     @Param("limit") int limit);
 
     /**
-     * AR 销售出库发货腿（P0-C）—— 候选表 {@code so_shipment}。
+     * AR 销售出库发货环节（P0-C）—— 候选表 {@code so_shipment}。
      *
-     * <p>发货腿→订单腿的桥为 {@code so_no}（列别名 {@code soNo}）。现役库缺失，服务层探测后降级为空。</p>
+     * <p>发货环节→订单环节的桥为 {@code so_no}（列别名 {@code soNo}）。现役库缺失，服务层探测后降级为空。</p>
      */
     @Select("SELECT s.id AS id, s.ship_no AS sourceBillNo, s.company_id AS companyId, "
             + "c.customer_code AS partnerId, s.customer_name AS partnerName, s.amount AS amount, "

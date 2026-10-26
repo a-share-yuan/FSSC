@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.match.controller;
 
 import com.fssc.common.core.Result;
@@ -35,7 +38,7 @@ public class MatchToleranceController {
         return Result.success(matchToleranceService.getTolerance(companyId));
     }
 
-    // D-N32（人工裁决）：容差阈值是"三单匹配"这道付款前合规闸的可调参数 ⇒ 保存动作与查询动作
+    // D-N32（人工裁决）：容差阈值是"三单匹配"这道付款前合规校验的可调参数 ⇒ 保存动作与查询动作
     // 分权：读仍是 pay:match:list，写改为 pay:match:config（写规则＝配置面，与 §6 红线 6 同界）。
     // 注意：上线前需保证 pay:match:config 已绑定到原本持 pay:match:list 的角色，否则真人会失去保存能力。
     @RequiresPerm("pay:match:config")

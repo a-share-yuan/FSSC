@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.receivable.entity.RcBadDebt;
@@ -23,7 +26,7 @@ public class BadDebtBizAction implements WfBizAction {
 
     private final RcBadDebtMapper rcBadDebtMapper;
     private final com.fssc.sharing.service.VoucherService voucherService;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -60,7 +63,7 @@ public class BadDebtBizAction implements WfBizAction {
                     String.valueOf(badDebtId), auditBefore, auditAfter,
                     "审批通过" + (event.getComment() == null || event.getComment().isBlank() ? "" : "：" + event.getComment()));
             log.info("坏账 {} 审批通过: → {}", badDebtId, targetStatus);
-            // P1-B 流程终态生成凭证：计提/核销均为会计事件，审批通过即生成凭证（失败不阻断状态迁移）
+            // P1-B 流程最终状态生成凭证：计提/核销均为会计事件，审批通过即生成凭证（失败不阻断状态迁移）
             try {
                 Long vid = voucherService.generateBadDebtVoucher(badDebt, event.getBizType());
                 log.info("坏账 {} 自动生成{}凭证: {}", badDebt.getPeriod(),

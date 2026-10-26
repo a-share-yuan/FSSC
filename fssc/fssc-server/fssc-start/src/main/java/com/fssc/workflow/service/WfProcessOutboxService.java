@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -19,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
+ * 流程投影事件发件箱（{@code wf_process_outbox}）——流程配置「流程处理模式」参数的
  * 「消息队列（推荐）」一档：<b>事务性发件箱 + 调度消费</b>（不引入外部中间件，方案 §四 4.2）。
  *
  * <p><b>三段职责</b>：
@@ -32,7 +36,7 @@ import java.util.List;
  * <p><b>模式判定为什么要缓存 5 秒</b>：{@code queueModeEnabled()} 会被<b>每个流程事件</b>调用
  * （监听器用它决定"内联投影还是入队"），也要被门面 {@code mirrorByFacade()} 按动作调用。
  * 直读库会把这些热路径变成逐事件一次 {@code sys_config} 查询；而完全内存化又会把"参数"退化成
- * "需要重启的编译期开关"（行业方案该参数的语义是勾选即生效）。折中：<b>5 秒 TTL 缓存</b>——
+ * "需要重启的编译期开关"（该参数的语义是勾选即生效）。折中：<b>5 秒 TTL 缓存</b>——
  * 勾选后 5 秒内生效、免重启，且查询量摊薄到"每 5 秒最多一次"。fail-closed：读不到/异常一律 SYNC。
  *
  * <p><b>零影响</b>：{@code SYNC} 时 {@link #enqueue} 在入口即返回（先判模式，不碰库），
@@ -135,10 +139,11 @@ public class WfProcessOutboxService {
     /**
      * 投递一条投影事件（在事件当场、与业务同事务调用）。
      *
-     * <p><b>幂等</b>：唯一键 {@code uk_wpo_idem} 拒绝重复投递——重复到达是"同一事件被投两次"，
+     * <p><b>去重</b>：唯一键 {@code uk_wpo_idem} 拒绝重复投递——重复到达是"同一事件被投两次"，
      * 不是错误（引擎在重试/补偿时会重复发事件），故捕获 {@link DuplicateKeyException} 后静默返回。
      *
      * <p><b>失败语义</b>：唯一键冲突之外写失败＝事件丢失＝镜像缺行，必须可见——
+     * 记缺陷（WF-MIRROR-001）后<b>冒泡</b>，与 G0/G1 同一规则（让引擎命令失败、界面可见、可重试）。
      */
     public void enqueue(WfProjectionEvent e) {
         if (e == null || e.getEventType() == null) {
@@ -163,7 +168,7 @@ public class WfProcessOutboxService {
             try {
                 outboxMapper.insert(row);
             } catch (DuplicateKeyException dup) {
-                // 同一事件重复投递：幂等，不是错误
+                // 同一事件重复投递：去重，不是错误
                 log.debug("投影事件重复投递（幂等忽略）: key={}", row.getIdempotencyKey());
             } catch (Exception ex) {
                 mirrorDefectRecorder.record(WfMirrorDefectRecorder.CODE_MIRROR_WRITE_FAILED,
@@ -178,7 +183,7 @@ public class WfProcessOutboxService {
     }
 
     /**
-     * 幂等键：任务级事件按 taskId（改派再加办理人，使"改派到不同人"不被判重），
+     * 唯一键：任务级事件按 taskId（改派再加办理人，使"改派到不同人"不被判重），
      * 流程级事件按 procInstId。
      */
     static String idempotencyKey(WfProjectionEvent e) {
@@ -290,7 +295,7 @@ public class WfProcessOutboxService {
     // ==================== 观测 ====================
 
     /**
-     * 投递观测（方案 §六 G5「六列台账」口径）：积压深度 / 最老未消费年龄 / 失败率。
+     * 投递观测（方案 §六 G5「六列台账」规则）：积压深度 / 最老未消费年龄 / 失败率。
      *
      * <p>三项都是<b>从本表直接算出来的</b>（这正是选发件箱而非外部 MQ 的理由之一：
      * 队列状态就是一张能 SQL 查的表，不需要额外的 MQ 监控面板）。
@@ -323,7 +328,7 @@ public class WfProcessOutboxService {
         r.put("dead", dead);
         r.put("total", total);
         r.put("oldestPendingAgeSeconds", Math.max(oldestAgeSeconds, 0));
-        // 失败率＝死信/总量（死信是终态失败；PENDING 里含未开始的，不算失败）
+        // 失败率＝死信/总量（死信是最终状态失败；PENDING 里含未开始的，不算失败）
         r.put("failureRate", total == 0 ? 0.0d
                 : java.math.BigDecimal.valueOf(dead * 1.0d / total)
                         .setScale(4, java.math.RoundingMode.HALF_UP).doubleValue());

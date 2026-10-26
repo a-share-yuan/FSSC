@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="pc-wrap">
     <!-- 顶栏（平台端独立于租户 Layout：/api/tenant/** 对 PLATFORM Token 封闭，菜单树不可用） -->
@@ -89,7 +92,7 @@
         <template #header>
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
             <b>套餐功能开关</b>
-            <el-select v-model="fq.tenantId" placeholder="选择租户（审计留痕）" clearable filterable style="width: 220px">
+            <el-select v-model="fq.tenantId" placeholder="选择租户（审计记录）" clearable filterable style="width: 220px">
               <el-option v-for="t in tenantsAll" :key="t.id" :label="t.tenantName" :value="t.id" />
             </el-select>
             <el-select v-model="fq.packageId" placeholder="选择套餐" style="width: 200px" @change="loadMatrix">

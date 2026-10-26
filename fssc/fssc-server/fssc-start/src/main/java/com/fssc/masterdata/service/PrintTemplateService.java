@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -39,6 +42,7 @@ import java.util.stream.Collectors;
  *       新增单据打印样式＝建数据，不改代码不发版；</li>
  *   <li><b>毫米换算只在服务端做一次</b>：网格坐标 → 绝对毫米坐标由本类算好下发，
  *       避免每个前端页面各写一套换算导致版式漂移；</li>
+ *   <li><b>必录属性真的会拦</b>：字段必录与锁定属性，
  *       {@code required=1} 的字段缺值时 {@link PrintDto.RenderResult#getBlocked()} 为 true，
  *       前端据此拦截，不放行打印。</li>
  * </ol>
@@ -114,7 +118,7 @@ public class PrintTemplateService {
     /**
      * 取字段项并把网格坐标换算成毫米绝对坐标。
      *
-     * <p>换算口径：可用宽 = 页宽 − 左右边距；单格宽 = 可用宽 / gridCols；
+     * <p>换算规则：可用宽 = 页宽 − 左右边距；单格宽 = 可用宽 / gridCols；
      * 单格高 = （页高 − 上下边距） / gridRows。字段未显式给宽高时按跨列/跨行均分。
      */
     private List<PrintDto.ItemView> buildItems(MdPrintTemplate tpl) {

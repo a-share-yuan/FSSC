@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.purchase.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -7,7 +10,7 @@ import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 
-/** 采购订单行项目（po_order_line，带 tenant_id）：金额与表头同口径，均为不含税。 */
+/** 采购订单行项目（po_order_line，带 tenant_id）：金额与表头同一规则，均为不含税。 */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("po_order_line")

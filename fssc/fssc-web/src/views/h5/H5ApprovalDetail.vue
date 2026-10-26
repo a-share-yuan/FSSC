@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="h5-page h5-page--bar">
     <header class="h5-header">
@@ -98,7 +101,7 @@
             <div class="h5-section-title h5-flush">关联发票</div>
             <div v-if="invDenied" class="h5-denied">
               <div class="h5-denied__t">发票台账对当前账号不开放</div>
-              <div class="h5-denied__d">缺权码：{{ invDenied.permKey || 'inv:list' }}。上面附件区里的票据影像仍可查看，不依赖这个权限。</div>
+              <div class="h5-denied__d">发票台账属发票管理岗权限。上面附件区里的票据影像仍可查看、照常审核，不依赖这个权限；需要核对票面要素时请到电脑端由发票岗协查。</div>
             </div>
             <div v-else-if="invError" class="h5-error">
               <div class="h5-error__d">{{ invError }}</div>
@@ -116,28 +119,77 @@
             </template>
           </div>
 
-          <!-- 审批历史（同域第三处 4030 面板：/wf/query/history/page，实测提报岗被拒） -->
+          <!-- 审批记录（D-H5M-02/03：改走 /wf/query/chain）
+               旧实现传 businessKey，后端无此入参 ⇒ 落进「只查本人参与过的全部留痕」分支，
+               面板里混入别的单据、别的域的节点（D-H5M-02）；
+               而该端点挂 wf:history:list，提单岗等业务账号直接被拒（D-H5M-03）。
+               /chain 按本单实例取数、以「能读这张单据即可读这张单据的轨迹」守卫，
           <div class="h5-card">
             <div class="h5-section-title h5-flush">审批记录</div>
             <div v-if="histDenied" class="h5-denied">
-              <div class="h5-denied__t">审批记录对当前账号不开放</div>
-              <div class="h5-denied__d">缺权码：{{ histDenied.permKey || 'wf:history:list' }}。你仍可在这张单上办理自己的那一道审批。</div>
+              <div class="h5-denied__t">这张单的审批记录对你不开放</div>
+              <div class="h5-denied__d">{{ histDenied.msg || '你不是本单的办理人，也没有本单的数据可见范围。' }}</div>
             </div>
             <div v-else-if="histError" class="h5-error">
               <div class="h5-error__d">{{ histError }}</div>
               <button class="h5-btn h5-btn--sub h5-mt-10" @click="loadHistory">重试</button>
             </div>
             <template v-else>
-              <div v-for="h in hist" :key="h.id || h.taskId" class="h5-row-sub h5-row-sub--block">
+              <div v-for="(h, i) in hist" :key="(h.nodeKey || h.nodeName || '') + i" class="h5-row-sub h5-row-sub--block">
                 <div class="h5-card__row">
-                  <span>{{ h.assigneeName || h.userName || '—' }}</span>
-                  <el-tag size="small" :type="histType(h.action)">{{ histLabel(h.action) }}</el-tag>
+                  <span>{{ h.handler || '—' }}</span>
+                  <el-tag size="small" :type="h.action ? histType(h.action) : stateType(h.state)">
+                    {{ h.action ? histLabel(h.action) : stateLabel(h.state) }}
+                  </el-tag>
                 </div>
-                <div class="h5-card__meta">{{ h.taskName || h.nodeName || '' }}{{ (h.endTime || h.createTime) ? ' · ' + formatDateTime(h.endTime || h.createTime) : '' }}</div>
+                <div class="h5-card__meta">{{ h.nodeName || '' }}{{ h.time ? ' · ' + formatDateTime(h.time) : '' }}</div>
                 <div v-if="h.comment" class="h5-card__meta">意见：{{ h.comment }}</div>
               </div>
               <div v-if="!hist.length" class="h5-tip">还没有审批记录</div>
             </template>
+          </div>
+
+          <!-- 下一环节办理人（D-H5M-01）
+               服务端 enforcePickOnApprove：点名档节点必须由本环节指定下一环节办理人，
+               未点名直接拒收提交。移动端原先没有这一区 ⇒ 点名环节在 H5 永远办不下去。
+               规则与电脑端 ApprovalDialog 逐条对齐：候选唯一自动带出、候选多名必须手选、
+               池节点与自动取人节点只说明不阻断。 -->
+          <div v-if="canApprove && nextBlock" class="h5-card">
+            <div class="h5-section-title h5-flush">下一环节</div>
+            <div class="h5-card__row">
+              <span class="no">{{ nextBlock.nodeName }}</span>
+              <el-tag size="small" :type="nextBlock.pick ? 'warning' : (nextBlock.pool ? 'primary' : 'info')">
+                {{ nextBlock.pick ? '需指定办理人' : (nextBlock.pool ? '任务池领取' : '自动指派') }}
+              </el-tag>
+            </div>
+            <template v-if="nextBlock.pick">
+              <div v-if="!nextBlock.candidates.length" class="h5-denied">
+                <div class="h5-denied__t">该节点当前没有可选办理人</div>
+                <div class="h5-denied__d">节点角色在本单所属公司下没有在职成员。请先在「系统管理 · 角色授权」补岗，否则单据会卡在这一节。</div>
+              </div>
+              <template v-else>
+                <button v-for="c in nextBlock.candidates" :key="c.userId" class="h5-pick"
+                        :class="{ on: String(nextUserId) === String(c.userId) }" @click="pickNext(c.userId)">
+                  <span class="h5-flex-1">
+                    <span>{{ c.name }}</span>
+                    <span class="h5-card__meta h5-card__meta--block">
+                      {{ c.deptName || '—' }}<template v-if="c.pendingCount"> · 手上 {{ c.pendingCount }} 条</template>
+                    </span>
+                  </span>
+                  <span class="h5-flag" :class="String(nextUserId) === String(c.userId) ? 'h5-flag--ok' : 'h5-flag--info'">
+                    {{ String(nextUserId) === String(c.userId) ? '已选' : '选他' }}
+                  </span>
+                </button>
+                <div class="h5-tip h5-tip--left">这一节由你指定办理人，提交后即流转给所选的人。</div>
+                <div v-if="nextErr" class="h5-tip h5-tip--left">请先指定下一环节办理人再提交（服务端会拒收未点名的提交）。</div>
+              </template>
+            </template>
+            <div v-else-if="nextBlock.pool" class="h5-tip h5-tip--left">
+              该节点由共享任务池承接，提交后不指派到具体人，谁先「领取」谁办理<template v-if="nextBlock.candidates.length">（本单公司下 {{ nextBlock.candidates.length }} 人可办）</template>。
+            </div>
+            <div v-else class="h5-tip h5-tip--left">
+              该节点按配置自动取人<template v-if="nextBlock.candidates.length">：{{ nextBlock.candidates.map((c) => c.name).join('、') }}</template>。
+            </div>
           </div>
 
           <!-- 审批意见 + 动作（吸底） -->
@@ -218,7 +270,7 @@
             <div class="h5-field h5-field--col h5-mt-8">
               <label for="h5-pick-reason">{{ pickMode === 'transfer' ? '转办说明' : '加签理由' }}</label>
               <textarea id="h5-pick-reason" v-model="pickReason" class="h5-textarea" rows="2"
-                        :placeholder="pickMode === 'transfer' ? '为什么转给他（留痕，审批人会看到）' : '请他看什么（必填）'"></textarea>
+                        :placeholder="pickMode === 'transfer' ? '为什么转给他（将记录，审批人会看到）' : '请他看什么（必填）'"></textarea>
             </div>
             <button class="h5-btn h5-mt-12" :disabled="busy || !picked.length"
                     :aria-busy="busy ? 'true' : 'false'" @click="confirmPick">
@@ -248,7 +300,7 @@
 /**
  * 移动报销端 · 审批详情页（P0-1/P0-6/P0-7 + P1-3/P1-6 落点）
  *
- * 改造前的第一条就是致命腿：`wfApi.approve({ taskId: Number(taskId) })`。
+ * 改造前的第一条就是致命环节：`wfApi.approve({ taskId: Number(taskId) })`。
  * /wf/todo 下发的 taskId 是 **UUID 字符串**（ApproveReq.taskId 是 @NotBlank String），
  * Number(uuid)＝NaN ⇒ JSON 序列化成 {taskId:null} ⇒ 服务端 PARAM_INVALID/500，
  * 也就是"移动端从来没有批成功过一张单"。现原样传字符串。
@@ -262,8 +314,9 @@ import { computed, nextTick, onActivated, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { billApi, wfApi, invoiceApi, flowApi, fileApi, store } from '../../api'
+import { hasPerm } from '../../utils/perm'
 import { statusType as _statusType, statusLabel as _statusLabel } from '../../constants/billStatus'
-import { enumLabel, VERIFY_STATUS, docTypeLabel, wfActionLabel, wfActionType } from '../../constants/enums'
+import { verifyStatusLabel, docTypeLabel, wfActionLabel, wfActionType, wfNodeStateLabel, wfNodeStateType } from '../../constants/enums'
 import { money, dayText, permDeniedOf, isExpBillCarrier } from '@/utils/h5.js'
 import { formatDateTime } from '@/utils/format'
 
@@ -286,7 +339,7 @@ const myName = computed(() => store.user?.realName || store.user?.nickName || st
 const taskId = computed(() => route.query.taskId ? String(route.query.taskId) : '')
 const billId = computed(() => route.params.id)
 const billType = computed(() => route.query.billType || '')
-// 工作台跳转时带过来的两条真实判据（刷新页面会丢，丢了也只是回到"只看 taskId"的原口径）
+// 工作台跳转时带过来的两条真实判据（刷新页面会丢，丢了也只是回到"只看 taskId"的原规则）
 const lockedByOther = computed(() => route.query.lk === '1')
 const bizUnresolved = computed(() => route.query.bz === '0')
 const addSignAllowed = computed(() => route.query.as !== '0')
@@ -304,7 +357,7 @@ const blockedReason = computed(() => {
 const canApprove = computed(() => !!taskId.value && !blockedReason.value)
 const opinionPlaceholder = computed(() => '请填写审批意见（必填，不少于 2 个字）')
 
-// 异常单据横幅：只认显式负面状态（REPAID 这类「已还清」的正常终态不能被当成异常）
+// 异常单据横幅：只认显式负面状态（REPAID 这类「已还清」的正常最终状态不能被当成异常）
 const ABNORMAL_STATUS = ['REJECTED', 'WITHDRAWN', 'VOID', 'TERMINATED', 'CANCELLED']
 const abnormalText = computed(() => {
   const s = bill.value?.status
@@ -370,11 +423,25 @@ const invError = ref('')
 const histDenied = ref(null)
 const histError = ref('')
 
+/**
+ * 「关联发票」面板的数据源是 /invoice/bill-invoices，后端挂 inv:list——
+ * 该码只授发票、税务、共享三岗（实测七个 H5 岗位只有共享会计赵勇持），
+ * 于是提报岗与审批岗每次进详情页都会被全局拦截器弹一次「您没有「发票·list」权限，请联系管理员开通」。
+ * 面板本就分「缺权／出错／真没票」三态呈现（把缺权渲染成「暂无」＝假空，见 D-TRC 系列），
+ * 所以无权时不必先撞一次再降级：直接落缺权态。有权才取数，并带 silent——
+ * 服务端还有权限依赖闭包等第二道口径可能拒，那一次也不该在审批中途弹出来。
+ * 票据影像走 fileApi（无权限闸），与本面板无关，审批照常可看。
+ */
 async function loadInvoices() {
   invDenied.value = null
   invError.value = ''
+  if (!hasPerm('inv:list')) {
+    invDenied.value = { msg: '', permKey: 'inv:list' }
+    invoices.value = []
+    return
+  }
   try {
-    invoices.value = (await invoiceApi.billInvoices(billId.value)) || []
+    invoices.value = (await invoiceApi.billInvoices(billId.value, { silent: true })) || []
   } catch (e) {
     // 实测：提报岗在发票/验真/历史三个面板都是 code:4030，之前一律渲染成「暂无」＝假空
     const d = permDeniedOf(e)
@@ -385,15 +452,61 @@ async function loadInvoices() {
 async function loadHistory() {
   histDenied.value = null
   histError.value = ''
+  // D-H5M-02/03：改走 /wf/query/chain（按本单实例取数，按单据可读性守卫）。
+  // 旧实现传 businessKey ⇒ 后端落进「只查本人参与过的全部留痕」分支（混入别的单据），
+  // 且该端点挂 wf:history:list ⇒ 多数业务账号直接 4030 看不到面板。
+  const pid = bill.value?.procInstId
+  if (!pid) { hist.value = []; return }
   try {
-    const d = await flowApi.historyPage({ businessKey: billId.value, pageNum: 1, pageSize: 50 })
-    hist.value = (d && d.list) || (Array.isArray(d) ? d : [])
+    const d = await flowApi.chain(pid, { silent: true })
+    hist.value = Array.isArray(d) ? d : ((d && d.list) || [])
   } catch (e) {
     const x = permDeniedOf(e)
     if (x) histDenied.value = x
     else histError.value = e.message || '审批记录加载失败'
   }
 }
+
+/* ---------------- 下一环节办理人（D-H5M-01） ---------------- */
+const nextInfo = ref(null)
+const nextUserId = ref(null)
+const nextErr = ref(false)
+
+/** 与电脑端 ApprovalDialog.nextBlock 同一判定：PICK 需点名、POOL 先到先得、其余自动取人 */
+const nextBlock = computed(() => {
+  const n = nextInfo.value
+  if (!n) return null
+  return {
+    nodeName: n.nodeName || '—',
+    pick: n.mode === 'PICK',
+    pool: n.mode === 'POOL',
+    candidates: Array.isArray(n.candidates) ? n.candidates : [],
+  }
+})
+/**
+ * 候选预览（只读）。静默失败即不显示这一区——审批本身不依赖它，
+ * 服务端 complete() 仍会独立校验点名（绕开界面直接调接口只会收到可读的 BizException）。
+ */
+async function loadNext() {
+  nextInfo.value = null
+  nextUserId.value = null
+  nextErr.value = false
+  if (!taskId.value) return
+  try {
+    const res = await wfApi.nextCandidates(taskId.value, { silent: true })
+    if (!res || typeof res !== 'object') return
+    nextInfo.value = res
+    // 候选唯一：自动带出，避免"看起来没得选却被判未指定"（与电脑端同一处理）
+    if (res.mode === 'PICK' && Array.isArray(res.candidates) && res.candidates.length === 1) {
+      nextUserId.value = res.candidates[0].userId
+    }
+  } catch { /* 端点未部署/无权：静默不显示，审批照旧 */ }
+}
+function pickNext(userId) {
+  nextUserId.value = userId
+  nextErr.value = false
+}
+
 async function loadDetail() {
   loading.value = true
   loadError.value = ''
@@ -406,6 +519,7 @@ async function loadDetail() {
     buildFileView()
     loadInvoices()
     loadHistory()
+    loadNext()
   } catch (e) {
     // R5-D-052：拦截器已 toast 一次，closeAll 去重——本页只留 loadError 正文一处
     ElMessage.closeAll()
@@ -429,6 +543,20 @@ function requireOpinion(ok) {
 async function decide(ok) {
   const c = requireOpinion(ok)
   if (!c) return
+  // D-H5M-01：点名环节必须带上下一环节办理人（服务端 enforcePickOnApprove 拒收未点名的提交）。
+  // 与电脑端同一判定：候选为空＝该节无人可派（提示补岗，不再让提交去吃红字）；候选非空未选＝拦回。
+  if (ok && nextBlock.value?.pick) {
+    if (!nextBlock.value.candidates.length) {
+      nextErr.value = true
+      ElMessage.warning('下一环节没有可选办理人，请先在「系统管理 · 角色授权」补岗')
+      return
+    }
+    if (!nextUserId.value) {
+      nextErr.value = true
+      ElMessage.warning('请先指定下一环节办理人')
+      return
+    }
+  }
   try {
     await ElMessageBox.confirm(
       ok ? `通过后单据进入下一环节（本单 ￥${money(bill.value?.totalAmount)}）。` : `驳回后单据退回提单人修改，请确认理由已写清。`,
@@ -439,7 +567,12 @@ async function decide(ok) {
   busy.value = true
   try {
     // P0-1：taskId 原样传字符串（UUID），不再 Number()
-    await wfApi.approve({ taskId: taskId.value, approved: ok, comment: c })
+    await wfApi.approve({
+      taskId: taskId.value,
+      approved: ok,
+      comment: c,
+      nextAssigneeUserId: ok && nextUserId.value ? nextUserId.value : null,
+    })
     ElMessage.success(ok ? '已通过' : '已驳回')
     router.replace('/h5')
   } catch (e) {
@@ -515,7 +648,10 @@ function statusType(s) { return _statusType(s) }
 function statusLabel(s) { return _statusLabel(s) }
 function histType(a) { return wfActionType(a) }
 function histLabel(a) { return a ? wfActionLabel(a) : '—' }
-function verifyLabel(v) { return enumLabel(VERIFY_STATUS, v) || '—' }
+/** 审批链节点状态（/chain 的 state）：无 action 的节点（当前/未到达/作废）用它显示 */
+function stateType(s) { return wfNodeStateType(s) }
+function stateLabel(s) { return wfNodeStateLabel(s) || '—' }
+function verifyLabel(v) { return v == null || v === '' ? '—' : verifyStatusLabel(v) }
 function verifyTagType(v) {
   if (v === 'PASS' || v === 'SUCCESS') return 'success'
   if (v === 'FAIL' || v === 'FAILED' || v === 'REJECT') return 'danger'

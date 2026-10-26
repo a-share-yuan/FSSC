@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-container class="layout">
     <!-- PC 侧边栏（≥768px 显示） -->
@@ -41,8 +44,8 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">个人中心</el-dropdown-item>
                 <!-- D-DEC-302：「角色化首页」入口已下架（路由与组件保留，直接访问 /role-dashboard 仍可用）。
-                     原因＝四项 KPI 取数键与后端返回不符（恒 0）＋四项为写死的展示值（D-DEC-308），
-                     真要修等于重做整页取数与角色模型，而重做后独有内容与报表看板/流程监控大屏重叠。 -->
+                     原因＝四项 KPI 查询键与后端返回不符（恒 0）＋四项为写死的展示值（D-DEC-308），
+                     真要修等于重做整页查询与角色模型，而重做后独有内容与报表看板/流程监控大屏重叠。 -->
                 <el-dropdown-item v-if="canFlowMonitor && openable('/flow-monitor')" command="flow-monitor">流程监控大屏</el-dropdown-item>
                 <!-- G3 共享作业层新视图：同属「无 sys_menu 承载的入口页」，按各页首屏接口权限码收敛 -->
                 <el-dropdown-item v-if="canTaskPool && openable('/sharing/shared-pool')" command="shared-pool">共享任务池（五视图）</el-dropdown-item>
@@ -226,7 +229,7 @@ const canMonthEnd = hasPerm('gl:monthclose:list')
 const openable = (p) => !pathDenyReason(p)
 // G3 任务池五视图是业务角色日常工作台，权限码为 wf:task:list（与 /wf/pool/mine 同族）
 const canTaskPool = hasPerm('wf:task:list')
-// D-DEC-303：业务进度看板的两条取数腿分别是 dashboard:view（付款进度）与 exp:bill:list（在途单量），
+// D-DEC-303：业务进度看板的两条查询环节分别是 dashboard:view（付款进度）与 exp:bill:list（在途单量），
 // 两码皆无者进来只会看到空卡，故入口同样按首屏接口权限码收敛。
 const canBizProgress = hasPerm('dashboard:view') || hasPerm('exp:bill:list')
 
@@ -270,7 +273,7 @@ function addCurrentPageToFav() {
   ElMessage.success('已收藏当前页面')
 }
 
-// 面包屑以登录菜单树为准（菜单挂在哪，面包屑就走哪），仅菜单树无匹配时按路径首段兜底
+// 面包屑以登录菜单树为准（菜单挂在哪，面包屑就走哪），仅菜单树无匹配时按路径首段默认处理
 const PATH_DOMAIN_MAP = {
   expense: '费用报账', approval: '流程中心', wf: '流程中心',
   pay: '付款与对账', 'corp-pay': '付款与对账', contract: '付款与对账',
@@ -331,7 +334,7 @@ function closeNotice() {
   notices.value = []
   currentIdx.value = 0
 }
-// 任意关闭路径（X / ESC / 关闭按钮）统一兜底清理，避免残留状态
+// 任意关闭路径（X / ESC / 关闭按钮）统一默认处理清理，避免残留状态
 function onNoticeClosed() {
   notices.value = []
   currentIdx.value = 0

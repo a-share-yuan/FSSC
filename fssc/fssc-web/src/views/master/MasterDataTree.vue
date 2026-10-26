@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="md-tree-page">
     <!-- RA-PAGE-21 2.3：会计科目/成本中心双形态并入一个菜单（原 205 会计科目退册，宿主=206）——切换即跳对侧路由 -->
@@ -15,11 +18,11 @@
               <div>
                 <el-button size="small" @click="expandAll">展开</el-button>
                 <el-button size="small" @click="collapseAll">收起</el-button>
-                <el-button type="primary" size="small" @click="addRoot">新增根节点</el-button>
+                <el-button v-if="canCreate" type="primary" size="small" @click="addRoot">新增根节点</el-button>
               </div>
             </div>
           </template>
-          <!-- R5-D-042（公司维度缺失）：公司筛选与弹窗「所属公司」同源（orgApi.companyTree 词表，不另造清单）；
+          <!-- R5-D-042（公司维度缺失）：公司筛选与弹窗「所属公司」同源（orgApi.companyTree 名称表，不另造清单）；
                选中值随树请求入服务端 query.companyId，服务端再叠加登录人 data_scope（选了公司只会更窄） -->
           <el-select v-model="query.companyId" placeholder="公司" clearable filterable size="small"
                      style="width:100%;margin-bottom:8px" @change="loadTree">
@@ -45,10 +48,10 @@
                   <span>{{ node.label }}</span>
                   <span class="tree-node-code" v-if="getCode(nodeData)">[{{ getCode(nodeData) }}]</span>
                   <el-tag v-if="nodeData.status === 'DISABLED'" size="small" type="danger" style="margin-left:4px">停用</el-tag>
-                  <!-- R5-D-042：行归属公司——值取服务端 nodeData.companyId，名称按 orgApi.companyTree 词表翻译
+                  <!-- R5-D-042：行归属公司——值取服务端 nodeData.companyId，名称按 orgApi.companyTree 名称表翻译
                        （md_subject／md_cost_center 均无 company_name 列，加列＝DDL，禁） -->
                   <span class="tree-node-company" v-if="companyLabel(nodeData)">[{{ companyLabel(nodeData) }}]</span>
-                  <span class="tree-node-actions">
+                  <span v-if="canCreate" class="tree-node-actions">
                     <el-button link type="primary" size="small" @click.stop="addChild(nodeData)">子级</el-button>
                   </span>
                 </span>
@@ -64,23 +67,23 @@
         <el-card shadow="never">
           <template #header>
             <div class="card-header">
-              <span class="header-title">{{ selectedNode ? (selectedNode.id ? '编辑' : '新增') : '详情' }}</span>
+              <span class="header-title">{{ selectedNode ? (canUpdate ? (selectedNode.id ? '编辑' : '新增') : '详情') : '详情' }}</span>
               <div v-if="selectedNode">
-                <el-button type="primary" size="small" :loading="saving" @click="save">保存</el-button>
-                <el-button v-if="selectedNode.id" size="small" :type="selectedNode.status === 'NORMAL' ? 'warning' : 'success'" @click="toggleEnable">
+                <el-button v-if="canUpdate" type="primary" size="small" :loading="saving" @click="save">保存</el-button>
+                <el-button v-if="selectedNode.id && canUpdate" size="small" :type="selectedNode.status === 'NORMAL' ? 'warning' : 'success'" @click="toggleEnable">
                   {{ selectedNode.status === 'NORMAL' ? '停用' : '启用' }}
                 </el-button>
-                <el-button v-if="selectedNode.id" type="danger" size="small" @click="del">删除</el-button>
+                <el-button v-if="selectedNode.id && canDelete" type="danger" size="small" @click="del">删除</el-button>
               </div>
             </div>
           </template>
 
           <!-- 会计科目表单 -->
-          <el-form v-if="mode === 'subject' && selectedNode" ref="formRef" :model="selectedNode" :rules="subjectRules" label-width="120px" size="default" style="max-width:600px">
+          <el-form v-if="mode === 'subject' && selectedNode" ref="formRef" :model="selectedNode" :rules="subjectRules" :disabled="!canUpdate" label-width="120px" size="default" style="max-width:600px">
             <el-form-item label="上级科目">
               <el-input :model-value="selectedNode.parentId ? findName(selectedNode.parentId) : '（根节点）'" disabled />
             </el-form-item>
-            <!-- R5-D-042：只读展示行归属公司（建档时的公司主体由后端按登录主体落，不在本页改口径） -->
+            <!-- R5-D-042：只读展示行归属公司（建档时的公司主体由后端按登录主体落，不在本页改规则） -->
             <el-form-item v-if="selectedNode.id" label="所属公司">
               <el-input :model-value="companyLabel(selectedNode) || '（未定）'" disabled />
             </el-form-item>
@@ -118,7 +121,7 @@
           </el-form>
 
           <!-- 成本中心表单 -->
-          <el-form v-if="mode === 'costCenter' && selectedNode" ref="formRef" :model="selectedNode" :rules="costCenterRules" label-width="120px" size="default" style="max-width:600px">
+          <el-form v-if="mode === 'costCenter' && selectedNode" ref="formRef" :model="selectedNode" :rules="costCenterRules" :disabled="!canUpdate" label-width="120px" size="default" style="max-width:600px">
             <el-form-item label="上级成本中心">
               <el-input :model-value="selectedNode.parentId ? findName(selectedNode.parentId) : '（根节点）'" disabled />
             </el-form-item>
@@ -156,6 +159,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 // R5-D-042：http/orgApi 直取——masterApi.subject.tree／costCenter.tree 是无参闭包（api.js 不在本缺陷改动面内），
 // 公司维度必须随请求入服务端，故本页按同一 /tenant/masterdata/** 前缀自行带参调用，不改公共 api 层
 import { masterApi, orgApi, http } from '../../api'
+import { hasPerm } from '../../utils/perm'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
@@ -166,6 +170,9 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const canCreate = computed(() => hasPerm(props.mode === 'subject' ? 'md:subject:create' : 'md:costcenter:create'))
+const canUpdate = computed(() => hasPerm(props.mode === 'subject' ? 'md:subject:update' : 'md:costcenter:update'))
+const canDelete = computed(() => hasPerm(props.mode === 'subject' ? 'md:subject:delete' : 'md:costCenter:delete'))
 // 科目⇄成本中心切换（RA-PAGE-21 2.3）
 function onModeSwitch(v) {
   if (v === props.mode) return
@@ -186,12 +193,12 @@ const api = computed(() => props.mode === 'subject' ? masterApi.subject : master
 
 // ---------------- R5-D-042：公司维度（列表/树归属可见＋可筛） ----------------
 // 筛选值走服务端（?companyId=），服务端 SubjectService.tree(Long) 已按 md_subject.company_id 落谓词并叠 @DataScope；
-// 未选＝不带参，由服务端按登录人 data_scope 收口。SubjectController.tree() 已补绑 companyId（R5-D-043/158 顺带修，
+// 未选＝不带参，由服务端按登录人 data_scope 办结。SubjectController.tree() 已补绑 companyId（R5-D-043/158 顺带修，
 // 见其控制器注解）；CostCenterController.tree() 暂不绑（不在本次改动面），故下方另做一道「按 id 精确」的可见集
-// 收口兜底——它只收窄、不放宽，控制器补参后与服务端结果同口径（幂等），不会掩盖越权数据。
+// 办结默认处理——它只收窄、不放宽，控制器补参后与服务端结果同一规则（去重），不会掩盖越权数据。
 const query = reactive({ companyId: null })
 const treeUrl = computed(() => `/tenant/masterdata/${props.mode === 'subject' ? 'subject' : 'cost-center'}/tree`)
-// 词表＝orgApi.companyTree 摊平（与 BankAccount.vue 同一机制），不硬编码公司清单
+// 名称表＝orgApi.companyTree 摊平（与 BankAccount.vue 同一机制），不硬编码公司清单
 const companies = ref([])
 
 function flattenCompanies(nodes, out = []) {
@@ -206,17 +213,17 @@ async function loadCompanies() {
   if (companies.value.length) return
   try {
     companies.value = flattenCompanies(await orgApi.companyTree() || [])
-  } catch { /* 词表为空时列显示裸 companyId，不影响服务端收口 */ }
+  } catch { /* 名称表为空时列显示裸 companyId，不影响服务端办结 */ }
 }
 
-/** 公司名翻译：只查词表，绝不拼「公司+id」之类字符串冒充归属（那是把未知说成已知） */
+/** 公司名翻译：只查名称表，绝不拼「公司+id」之类字符串冒充归属（那是把未知说成已知） */
 function companyName(id) {
   if (id == null) return ''
   const c = companies.value.find((x) => x.id === id)
   return c ? (c.companyName || c.companyCode || '') : String(id)
 }
 
-/** 行归属文案：md_subject.company_id 为空＝租户级共用科目表（实体注释口径），成本中心无此语义则留空 */
+/** 行归属文案：md_subject.company_id 为空＝租户级共用科目表（实体注释规则），成本中心无此语义则留空 */
 function companyLabel(data) {
   if (!data) return ''
   if (data.companyId == null) return props.mode === 'subject' ? '租户共用' : ''
@@ -224,7 +231,7 @@ function companyLabel(data) {
 }
 
 /**
- * 兜底可见集收口（仅按 id 精确判定，不做公司名模糊匹配）：
+ * 默认处理可见集办结（仅按 id 精确判定，不做公司名模糊匹配）：
  * 科目＝本公司 ∪ 租户共用；成本中心＝仅本公司（无共用语义）。
  */
 function withinCompany(rows) {
@@ -234,9 +241,9 @@ function withinCompany(rows) {
   return rows.filter((r) => r.companyId === cid)
 }
 
-// 编码/名称＝主数据业务键，人工维护（非系统取号，不适用口径 Q1）；与后端 SubjectService / CostCenterService 同口径。
+// 编码/名称＝主数据业务键，人工维护（非系统取号，不适用规则 Q1）；与后端 SubjectService / CostCenterService 同一规则。
 // R5-D-043／R5-D-158：科目编码加「仅 ASCII」规则（与后端 CODE_PATTERN 同源：以数字开头、只含数字与 . - _、≤30 位），
-// 拦掉中文/全角/空格（存量 265 行把中文名写进编码列）；名称 required（存量 216 行空名，后端 assertWritable 已同判）。
+// 拦掉中文/全角/空格（历史 265 行把中文名写进编码列）；名称 required（历史 216 行空名，后端 assertWritable 已同判）。
 const SUBJECT_CODE_ASCII = /^[0-9][0-9._-]{0,29}$/
 const subjectRules = {
   subjectCode: [
@@ -266,7 +273,7 @@ function findName(id) {
 async function loadTree() {
   loading.value = true
   try {
-    // R5-D-042：公司维度入请求（服务端谓词＋data_scope 为权威口径），返回后再按 id 精确收口兜底
+    // R5-D-042：公司维度入请求（服务端谓词＋data_scope 为权威规则），返回后再按 id 精确办结默认处理
     const data = await http.get(treeUrl.value, {
       params: query.companyId != null ? { companyId: query.companyId } : {},
     })
@@ -402,7 +409,7 @@ function collapseAll() {
 }
 
 onMounted(async () => {
-  // R5-D-042：先取公司词表（只用于「公司」归属翻译），再拉树（树数据本身由服务端按公司维度收口）
+  // R5-D-042：先取公司名称表（只用于「公司」归属翻译），再拉树（树数据本身由服务端按公司维度办结）
   await loadCompanies()
   loadTree()
 })

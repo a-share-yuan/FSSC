@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.treasury.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -47,7 +50,7 @@ public class TrFundPlan implements Serializable {
     private Long ownerId;
     /** DRAFT草稿/SELECTED已入选/APPROVED已审批/COMPLETED已完成/PAID已付款/CLOSED已关闭/ARCHIVED已归档 */
     private String status;
-    /** 登记人（D-DEC-298/420 补列。owner_id＝资金负责人是业务责任人，不是登记人，不可当提交人取数） */
+    /** 登记人（D-DEC-298/420 补列。owner_id＝资金负责人是业务责任人，不是登记人，不可当提交人查询） */
     @TableField(fill = FieldFill.INSERT)
     private Long createBy;
 

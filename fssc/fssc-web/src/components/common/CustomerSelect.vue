@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-select
     :model-value="modelValue"
@@ -27,7 +30,7 @@
  * props:
  *   modelValue 选中值（默认客户编码；valueKey='id' 时为客户ID）
  *   valueKey   'code'（默认）/ 'id'
- *   pageSize   拉取数量（默认 300）
+ *   pageSize   拉查询量（默认 300）
  *   clearable / disabled / placeholder
  *
  * emits:

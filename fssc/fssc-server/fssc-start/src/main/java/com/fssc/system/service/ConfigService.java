@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -25,13 +28,13 @@ public class ConfigService {
     /**
      * 平台属主参数键前缀（G4 参数权属显式化，2026-09-24）。
      *
-     * <p><b>为什么要有这道闸</b>：行业原文「工作流参数和组织无关，<b>必须由 administrator 用户设置</b>，
+     * <p><b>为什么要有这道校验</b>：行业原文「工作流参数和组织无关，<b>必须由 administrator 用户设置</b>，
      * 一般有管理员权限的用户设置也不生效」。而改造前 {@code sys_config} 的写入口对 wf./approve. 这些
      * <b>全局流程语义开关</b>（如 {@code approve.deny_self}、{@code wf.timeout.autopass.nodes}）
      * 只校验 {@code editable} 列，任何持 {@code system:config:update} 的租户管理员都能改——
      * 一处误改即改变全租户的审批控制流，且无属主可追。
      *
-     * <p>闸门只作用于这两个前缀，<b>其它域配置的现有行为完全不变</b>（本类其余方法亦不改）。
+     * <p>校验只作用于这两个前缀，<b>其它域配置的现有行为完全不变</b>（本类其余方法亦不改）。
      */
     private static final java.util.List<String> PLATFORM_OWNED_PREFIXES = java.util.List.of("wf.", "approve.");
 
@@ -63,7 +66,7 @@ public class ConfigService {
         if (exist == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "参数不存在: " + config.getId());
         }
-        // 属主闸：改键与改值都要过（否则可"先改名绕闸、再改值"）
+        // 属主校验：改键与改值都要过（否则可"先改名绕校验、再改值"）
         assertPlatformOwned(exist.getConfigKey());
         assertPlatformOwned(config.getConfigKey());
         if (exist.getEditable() != null && exist.getEditable() == 0) {
@@ -91,9 +94,9 @@ public class ConfigService {
      *
      * <p><b>administrator 的真实判定依据（库内实测）</b>：{@code sys_user.is_admin = 1}
      * —— 当前库中同时满足 {@code user_name='admin'} 与 {@code is_admin=1} 的账号只有一个
-     * （id=1 / tenant_id=1），与 {@code NodeOrgResolver.isAdministrator()} 全仓口径一致
+     * （id=1 / tenant_id=1），与 {@code NodeOrgResolver.isAdministrator()} 全仓规则一致
      * （is_admin=1 <b>或</b> user_name='admin'）；此外 {@code LoginUser.isAdmin()}（perms 含
-     * {@code *:*:*}）亦视为平台超管。三者取并集，避免出现"铁律判定说他是 admin、参数闸说不算"的漂移。</p>
+     * {@code *:*:*}）亦视为平台超管。三者取并集，避免出现"铁律判定说他是 admin、参数校验说不算"的漂移。</p>
      */
     private void assertPlatformOwned(String configKey) {
         if (!isPlatformOwned(configKey)) {

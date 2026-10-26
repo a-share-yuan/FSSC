@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.tracing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -37,6 +40,7 @@ import java.util.stream.Collectors;
 /**
  * 单据全链路溯源服务（P2-1 页面勾稽联查）。
  * 给定 sourceDocType + sourceDocId，返回单据→发票→凭证→付款→银行对账→档案全链路。
+ * 联查、单据追溯。
  */
 @Slf4j
 @Service
@@ -249,7 +253,7 @@ public class DocTracingService {
         return n;
     }
 
-    /** 收款事实（exp_bill_receipt）只在费用域单据类型下按 bill_id 取数 */
+    /** 收款事实（exp_bill_receipt）只在费用域单据类型下按 bill_id 查询 */
     private static final List<String> EXP_BILL_DOC_TYPES = Arrays.asList(
             "EXP_BILL", "EXPENSE", "EXPENSE_PAY", "EXPENSE_REIM",
             "EXP_LOAN", "EXPENSE_LOAN", "EXP_REPAY", "EXPENSE_REPAY");

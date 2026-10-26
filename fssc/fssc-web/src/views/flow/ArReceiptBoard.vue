@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center">
@@ -30,7 +33,7 @@
       <el-table-column :label="$t('flow.arRcpt.colOperator')" width="110" show-overflow-tooltip>
         <template #default="{ row }">{{ operatorName(row.operatorId) }}</template>
       </el-table-column>
-      <!-- 银行勾对口径取 bankMatchedAmount（部分认领时布尔位仍为 0，只有金额位能算出真实未达额） -->
+      <!-- 银行勾对规则取 bankMatchedAmount（部分认领时布尔位仍为 0，只有金额位能算出真实未达额） -->
       <el-table-column :label="$t('flow.arRcpt.colBankMatch')" min-width="170" show-overflow-tooltip>
         <template #default="{ row }">
           <span v-if="row.bankSerial">{{ row.bankSerial }} · {{ $t('flow.arRcpt.textMatched', { v1: fmt(row.bankMatchedAmount || 0) }) }}</span>
@@ -42,19 +45,19 @@
       </el-table-column>
       <el-table-column :label="$t('common.operation')" width="170" fixed="right">
         <template #default="{ row }">
-          <!-- D-DEC-423④：登记即冲减（D-V3-143），终态行不再给「先进先出核销」按钮，避免重复核销 -->
+          <!-- D-DEC-423④：登记即冲减（D-V3-143），最终状态行不再给「先进先出核销」按钮，避免重复核销 -->
           <el-button v-if="!receiptAppliedStatuses.includes(row.status)" link size="small" type="primary" @click="applyReceipt(row)">{{ $t('flow.arRcpt.btnFifoApply') }}</el-button>
           <el-tag v-else size="small" type="success" effect="plain">{{ $t('flow.arRcpt.tagAppliedOnRegister') }}</el-tag>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dlgReceipt" :title="$t('flow.arRcpt.dlgRegisterTitle')" width="480px" destroy-on-close>
+    <el-dialog v-model="dlgReceipt" :title="$t('flow.arRcpt.dlgRegisterTitle')" :width="woMode === 'MANUAL' ? '760px' : '480px'" destroy-on-close>
       <el-form ref="receiptFormRef" :model="rcForm" :rules="receiptRules" label-width="120px">
         <el-form-item :label="$t('flow.arRcpt.labPartner')" prop="customerId">
-          <CustomerSelect v-model="rcForm.customerId" value-key="id" :placeholder="$t('flow.arRcpt.phPartner')" />
+          <CustomerSelect v-model="rcForm.customerId" value-key="id" :placeholder="$t('flow.arRcpt.phPartner')" @change="onRcCustomerChange" />
         </el-form-item>
-        <el-form-item :label="$t('flow.arRcpt.labAmount')" prop="amount"><el-input-number v-model="rcForm.amount" :min="0" :precision="2" style="width:100%" /></el-form-item>
+        <el-form-item :label="$t('flow.arRcpt.labAmount')" prop="amount"><el-input-number v-model="rcForm.amount" :min="0" :precision="2" style="width:100%" @change="onAmountChange" /></el-form-item>
         <el-form-item :label="$t('flow.arRcpt.labReceiptDate')" prop="receiptDate"><el-date-picker v-model="rcForm.receiptDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item :label="$t('flow.arRcpt.labPayMethod')">
           <el-select v-model="rcForm.payMethod" style="width:100%" clearable :placeholder="$t('flow.arRcpt.phPayMethod')">
@@ -64,7 +67,38 @@
           </el-select>
         </el-form-item>
         <el-form-item :label="$t('flow.arRcpt.labBankSerial')"><el-input v-model="rcForm.bankSerial" :placeholder="$t('flow.arRcpt.phBankSerial')" /></el-form-item>
+        <!-- D-H3-02：核销方式二选一。原对话框只有自动先进先出一条路，操作人无法把一笔收款
+             指定冲某几张应收（后端 /receipt/create 的 lines 通道早已支持，界面无入口）；
+             自动路径又会跨法人主体串账（H3.4 实测：公司 1 的收款冲了 company_id=35 的 2025 年应收）。
+             后端已加公司校验，这里把手工指定通道也开出来，并明示自动路径的取单规则。 -->
+        <el-form-item :label="$t('flow.arRcpt.labWriteoffMode')">
+          <el-radio-group v-model="woMode" @change="onWoModeChange">
+            <el-radio-button value="AUTO">{{ $t('flow.arRcpt.modeAuto') }}</el-radio-button>
+            <el-radio-button value="MANUAL">{{ $t('flow.arRcpt.modeManual') }}</el-radio-button>
+          </el-radio-group>
+          <div class="rc-wo-tip">{{ woMode === 'AUTO' ? $t('flow.arRcpt.tipAuto') : $t('flow.arRcpt.tipManual') }}</div>
+        </el-form-item>
       </el-form>
+      <div v-if="woMode === 'MANUAL'" class="rc-wo">
+        <el-table :data="recvCandidates" size="small" border max-height="260" :empty-text="recvLoading ? $t('common.loading') : $t('flow.arRcpt.msgNoOpenRecv')"
+                  @selection-change="onRecvPick">
+          <el-table-column type="selection" width="42" />
+          <el-table-column prop="billNo" :label="$t('flow.arRcpt.colRecvNo')" width="160" show-overflow-tooltip />
+          <el-table-column prop="dueDate" :label="$t('flow.arRcpt.colRecvDue')" width="104" />
+          <el-table-column :label="$t('flow.arRcpt.colRecvRemain')" width="120" align="right">
+            <template #default="{ row }">{{ fmt(row.remainAmount) }}</template>
+          </el-table-column>
+          <el-table-column :label="$t('flow.arRcpt.colRecvOffset')" min-width="150" align="right">
+            <template #default="{ row }">
+              <el-input-number v-model="offsetOf[row.id]" size="small" :min="0" :max="Number(row.remainAmount || 0)"
+                               :precision="2" controls-position="right" style="width:140px" />
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="rc-wo-sum">
+          {{ $t('flow.arRcpt.textWoSum', { v1: fmt(offsetSum), v2: fmt(rcForm.amount), v3: fmt(Math.max(Number(rcForm.amount || 0) - offsetSum, 0)) }) }}
+        </div>
+      </div>
       <template #footer>
         <el-button @click="dlgReceipt = false">{{ $t('common.cancel') }}</el-button>
         <el-button type="primary" @click="saveReceipt">{{ $t('common.save') }}</el-button>
@@ -108,7 +142,7 @@ const dateRange = ref([])
 function customerName(id) { const c = customers.value.find((x) => x.id === id); return c ? (c.customerName || c.supplierName || c.name || '—') : (id ? '#' + id : '—') }
 function operatorName(id) { const u = users.value.find((x) => x.id === id); return u ? (u.nickName || u.userName) : (id ? '#' + id : '—') }
 
-// D-DEC-423④：收款单"已核销"终态词表（后端 RcReceiptService.APPLIED_RECEIPT_STATUSES 同口径）
+// D-DEC-423④：收款单"已核销"最终状态名称表（后端 RcReceiptService.APPLIED_RECEIPT_STATUSES 同一规则）
 const receiptAppliedStatuses = ['WRITTEN_OFF', 'WRITE_OFF', 'APPLIED']
 
 const filtered = computed(() => receipts.value.filter((r) => {
@@ -142,18 +176,89 @@ const receiptFormRef = ref(null)
 const { rules: receiptRules } = useFormRules('RECEIPT')
 const { submit: guardReceipt } = useSubmitGuard(receiptFormRef)
 
+/**
+ * D-H3-02：手工指定应收单核销（后端 /receipt/create 的 lines 通道）。
+ * 候选＝该往来单位在**本法人主体**下的未清应收（后端 listByCustomer 已加公司校验，
+ * 且排序＝到期日+id 升序，与自动 FIFO 同序）；status 排除 NONE/REJECTED 与后端候选规则一致。
+ */
+const woMode = ref('AUTO')
+const recvLoading = ref(false)
+const recvCandidates = ref([])
+const recvPicked = ref([])
+const offsetOf = reactive({})
+const offsetSum = computed(() => recvPicked.value.reduce((a, r) => a + Number(offsetOf[r.id] || 0), 0))
+
+async function loadRecvCandidates() {
+  const cid = rcForm.value.customerId
+  recvCandidates.value = []
+  recvPicked.value = []
+  if (!cid) return
+  recvLoading.value = true
+  try {
+    const rows = await receivableApi.listByCustomer(cid)
+    recvCandidates.value = (rows || []).filter((r) =>
+      Number(r.remainAmount || 0) > 0 && !['NONE', 'REJECTED'].includes(r.status))
+  } catch (e) { ElMessage.error(e.message) } finally { recvLoading.value = false }
+}
+
+/** 勾选变化：新勾上的行按 FIFO 顺序把剩余收款额摊进去（每行不超过该单余额） */
+function onRecvPick(rows) {
+  const added = rows.filter((r) => !recvPicked.value.some((x) => x.id === r.id))
+  recvPicked.value = rows
+  if (added.length) refill()
+}
+
+/** 按候选顺序（到期日先者先得）重摊本次核销额，合计＝收款金额；超出余额的行封顶在余额 */
+function refill() {
+  let rest = Number(rcForm.value.amount || 0)
+  for (const r of recvCandidates.value) {
+    if (!recvPicked.value.some((x) => x.id === r.id)) { offsetOf[r.id] = 0; continue }
+    const cap = Number(r.remainAmount || 0)
+    const v = Math.min(cap, Math.max(rest, 0))
+    offsetOf[r.id] = Number(v.toFixed(2))
+    rest -= v
+  }
+}
+
+function onRcCustomerChange() { if (woMode.value === 'MANUAL') loadRecvCandidates() }
+function onAmountChange() { if (woMode.value === 'MANUAL' && recvPicked.value.length) refill() }
+function onWoModeChange(v) { if (v === 'MANUAL') loadRecvCandidates() }
+
 // 收款日期字段名对齐实体 RcReceipt.receiptDate（原绑 payDate，实体无此属性⇒选的日期从未生效）
 function openReceipt() {
   rcForm.value = { customerId: null, amount: 0, receiptDate: new Date().toISOString().slice(0, 10), payMethod: '', bankSerial: '' }
+  woMode.value = 'AUTO'
+  recvCandidates.value = []
+  recvPicked.value = []
   dlgReceipt.value = true
 }
 async function saveReceipt() {
   await guardReceipt(async () => {
+    const payload = { ...rcForm.value }
+    if (woMode.value === 'MANUAL') {
+      // 前端先按后端同一套勾稽校验，避免用户填错后只能靠 500 级报错回退
+      const lines = recvPicked.value
+        .map((r) => ({ receivableId: r.id, offsetAmount: Number(offsetOf[r.id] || 0) }))
+        .filter((l) => l.offsetAmount > 0)
+      if (!lines.length) { ElMessage.warning(t('flow.arRcpt.msgPickRecv')); return }
+      const sum = lines.reduce((a, l) => a + l.offsetAmount, 0)
+      // 金额比较留半分容差：el-input-number 逐行四舍五入后直接 !== 会假红
+      if (Math.abs(sum - Number(payload.amount || 0)) > 0.005) {
+        ElMessage.warning(t('flow.arRcpt.msgOffsetSumMismatch', { v1: fmt(sum), v2: fmt(payload.amount) })); return
+      }
+      payload.lines = lines
+    }
     try {
-      await receivableApi.receiptCreate(rcForm.value)
+      const newId = await receivableApi.receiptCreate(payload)
       ElMessage.success(t('flow.arRcpt.msgRegistered'))
       dlgReceipt.value = false
-      loadReceipt()
+      // D-H3-06：保存即刷新，并复核新行是否真的进了视野。
+      // 原实现 fire-and-forget 调 loadReceipt()，一旦新行被工具条检索条件（关键字/日期区间/银行勾对）
+      // 过滤掉或不在本账号可见范围内，列表看起来"没变化"，操作人会误判成没写入数据库（H3.3 本轮即如此）。
+      await loadReceipt()
+      if (newId && !filtered.value.some((r) => r.id === newId)) {
+        ElMessage.warning(t('flow.arRcpt.msgRegisteredNotListed'))
+      }
     } catch (e) { ElMessage.error(e.message) }
   })
 }
@@ -183,3 +288,9 @@ onMounted(() => {
   loadReceipt()
 })
 </script>
+
+<style scoped>
+.rc-wo-tip { font-size: 12px; color: #909399; line-height: 18px; margin-top: 4px; }
+.rc-wo { padding: 0 4px 4px; }
+.rc-wo-sum { font-size: 12px; color: #606266; margin-top: 6px; }
+</style>

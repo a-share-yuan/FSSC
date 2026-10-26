@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.channel;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -32,9 +35,9 @@ import java.util.Map;
  *
  * <p>本类<b>只对接自家网关的中性契约</b>（{@code POST {base}/api/tax/v1/ocr/recognize}，
  * 请求体 {@code {imageBase64, fileName}}，响应 {@code {success, code, message, data:{invoices[]}}}）：
- * 上游厂商的接口路径、字段名、签名与令牌全部收敛在网关进程内，FSSC 侧不感知、也不得出现。</p>
+ * 上游接口的路径、字段名、签名与令牌全部收敛在网关进程内，FSSC 侧不感知、也不得出现。</p>
  *
- * <p>配置项（与验真/认证抵扣/开票共用同一组键，三系统统一口径）：
+ * <p>配置项（与验真/认证抵扣/开票共用同一组键，三系统统一规则）：
  * <ul>
  *   <li>{@code invoice.gateway.base-url}：yml 默认 {@code http://127.0.0.1:8096}；
  *       sys_config {@code invoice.gateway.base-url} 可按租户覆盖；置空即不启用。</li>
@@ -118,7 +121,7 @@ public class QxyGatewayOcrChannel implements OcrChannel {
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (resp.statusCode() / 100 != 2) {
                 // 网关侧未配置上游凭证/上游异常都会走到这里（如 503 UPSTREAM_NOT_CONFIGURED）：
-                // 只回失败原因，不退化成 mock 识别，与 D-DEC-115「没有真实凭据就不给结论」同口径。
+                // 只回失败原因，不退化成 mock 识别，与 D-DEC-115「没有真实凭据就不给结论」同一规则。
                 return OcrResult.fail("发票能力网关 HTTP " + resp.statusCode() + ": " + brief(resp.body()));
             }
             JsonNode root = objectMapper.readTree(resp.body());
@@ -167,7 +170,7 @@ public class QxyGatewayOcrChannel implements OcrChannel {
         r.setBuyerTaxNo(text(inv, "buyerTaxNo"));
         JsonNode items = inv.path("items");
         r.setPrimaryItemName(items.isArray() && !items.isEmpty() ? text(items.get(0), "name") : "");
-        // 票面类型：优先按票种名称走既有推断词表（与前端 constants/invoiceType.js 对齐）
+        // 票面类型：优先按票种名称走既有推断名称表（与前端 constants/invoiceType.js 对齐）
         String typeName = text(inv, "invoiceTypeName");
         r.setInvoiceType(typeName != null && !typeName.isBlank()
                 ? OcrLocalParsers.inferType(typeName) : OcrLocalParsers.T_OTHER);
@@ -248,7 +251,7 @@ public class QxyGatewayOcrChannel implements OcrChannel {
      * 开票日期归一为 yyyy-MM-dd。R5-D-224：原实现对取不到日期的杂串（发票号等）原样透传、
      * 或截成伪日期，与"invoice_date 存成发票号"的错乱互为因果；现改为严格校验——
      * 取前 8 位数字组成日期并做真实月日校验，非法一律返回 null（宁可留空、不得存错），
-     * 后续由 OcrService 的要素硬闸拦住不判「通过」。
+     * 后续由 OcrService 的要素强制校验拦住不判「通过」。
      */
     private static String normalizeDate(String raw) {
         if (raw == null || raw.isBlank()) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.connector.callback;
 
 import com.fssc.common.util.HmacSignatures;
@@ -10,7 +13,7 @@ import org.springframework.stereotype.Component;
  * 秘钥与校验逻辑。算法与既有 BCP / LinkU 实现完全一致（HMAC-SHA256 + 时间窗 + 常量时间比较），
  * 当前委托 {@link HmacSignatures}（中立包工具），因此<b>行为零变化</b>。</p>
  *
- * <p>后续接入新的外部系统回调（银行 / 税局 / ERP 回执）时，只在此扩展签名算法分支即可，
+ * <p>后续接入新的外部系统回调（银行 / 税局 / ERP 响应）时，只在此扩展签名算法分支即可，
  * 回调端点无需各写一套秘钥与时间窗判断。</p>
  */
 @Component

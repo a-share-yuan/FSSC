@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.fssc.framework.log.OperLogWriter;
@@ -37,7 +40,7 @@ public class WfMirrorDefectRecorder {
     public static final String CODE_MIRROR_WRITE_FAILED = "WF-MIRROR-001";
     /** 双账对账发现差异（引擎账 ACT_* vs 镜像账 wf_*），只报不修 */
     public static final String CODE_LEDGER_DRIFT = "WF-MIRROR-002";
-    /** 引擎旁路推进（未过门面收口，F3） */
+    /** 引擎旁路推进（未过门面办结，F3） */
     public static final String CODE_ENGINE_BYPASS = "WF-MIRROR-003";
 
     /** {@code sys_oper_log.error_msg} 列宽 varchar(2000)，留出余量 */
@@ -62,7 +65,7 @@ public class WfMirrorDefectRecorder {
         Long tid = resolveTenantId(tenantId);
         if (tid == null) {
             // 租户上下文缺失（调度线程 / 忽略租户聚合）：sys_oper_log.tenant_id NOT NULL，
-            // 无法落库；日志已留痕，且对账作业会在下一轮扫描把它重新暴露出来。
+            // 无法写入数据库；日志已记录，且对账作业会在下一轮扫描把它重新暴露出来。
             return;
         }
         SysOperLog row = new SysOperLog();

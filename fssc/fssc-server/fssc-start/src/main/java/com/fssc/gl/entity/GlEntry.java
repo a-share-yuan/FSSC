@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.gl.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -19,8 +22,8 @@ import java.time.LocalDateTime;
  * {@code op_voucher.post_user_id} 一处 ⇒ 从分录这一侧看到"借 2211 应付职工薪酬 65,000"，
  * 却答不出"谁、在哪个动作下把它入账"（{@code create_time} 由 {@code postVoucherToGl} 用
  * {@code LocalDateTime.now()} 直填，且无 {@code create_by}），审计必须再跳一层凭证表。
- * 写入点代码已就位（{@code GlService.postVoucherToGl(voucherId, operatorId)}），
- * <b>下面两个字段目前是 {@code exist=false}</b>：列未落库前不参与 SQL，行为与改造前逐字一致。
+ * 写入位置代码已就位（{@code GlService.postVoucherToGl(voucherId, operatorId)}），
+ * <b>下面两个字段目前是 {@code exist=false}</b>：列未写入数据库前不参与 SQL，行为与改造前逐字一致。
  *
  * <pre>
  * --  需人工裁决：以下 DDL 未执行、也不得由缺陷修复批次执行。
@@ -30,11 +33,11 @@ import java.time.LocalDateTime;
  * --   ADD COLUMN post_user_id   BIGINT      NULL COMMENT '过账人ID（D-DEC-167，取自 op_voucher.post_user_id 或落账触发人）' AFTER biz_type,
  * --   ADD COLUMN post_user_name VARCHAR(64) NULL COMMENT '过账人姓名（冗余，防离职后查不到）' AFTER post_user_id;
  * --
- * -- 回填存量（同一裁决里一起做，否则老分录仍是空值）：
+ * -- 回填历史（同一裁决里一起做，否则老分录仍是空值）：
  * -- UPDATE op_gl_entry e JOIN op_voucher v ON v.id = e.voucher_id
  * --    SET e.post_user_id = v.post_user_id WHERE e.post_user_id IS NULL;
  * -- 取不到的（历史凭证 post_user_id 亦空）再退 v.create_by 对应的 sys_user.id，仍取不到就保持为空——
- * -- 宁可空，也不给分录编一个"当时恰好点按钮的人"（同 D-DEC-280 口径）。
+ * -- 宁可空，也不给分录编一个"当时恰好点按钮的人"（同 D-DEC-280 规则）。
  * --
  * -- 同族未一并处理的（本批次范围外，登记备查）：D-DEC-155 op_bank_statement 无操作人列、D-DEC-161。
  * </pre>

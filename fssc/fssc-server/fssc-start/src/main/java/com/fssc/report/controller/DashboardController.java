@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.report.controller;
 
 import com.fssc.common.core.Result;
@@ -68,7 +71,7 @@ public class DashboardController {
     }
 
     @RequiresPerm("dashboard:view")
-    @DataScope("审批时效数据范围") // D-F1R-04：同 deptRanking，缺注解即无部门/本人维收口
+    @DataScope("审批时效数据范围") // D-F1R-04：同 deptRanking，缺注解即无部门/本人维办结
     @GetMapping("/approval/efficiency")
     public Result<List<Map<String, Object>>> approvalEfficiency() {
         return Result.success(dashboardService.approvalEfficiency());

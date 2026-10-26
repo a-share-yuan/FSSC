@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.report.controller;
 
 import com.fssc.common.core.Result;
@@ -10,6 +13,7 @@ import java.util.List;
 
 /**
  * 报表目录控制器：预置报表注册表 + 用户收藏管理。
+ * 报表中心与报表导航。
  */
 @RestController
 @RequestMapping("/api/tenant/report-catalog")

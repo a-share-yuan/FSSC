@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.bank.gateway;
 
 import com.fssc.system.entity.ExtInterfaceConfig;
@@ -18,7 +21,7 @@ import java.util.Map;
  * account, amount, postscript}]}}。响应按最小契约解析：body 含 {@code "serialNos":[...]} 则取之，
  * 否则由调用方降级为占位流水号。</p>
  *
- * <p>本类是<b>兜底 provider</b>：即使某银行尚未提供专属编解码器，只要通道配置的 provider
+ * <p>本类是<b>默认处理 provider</b>：即使某银行尚未提供专属编解码器，只要通道配置的 provider
  * 留空或填 {@code GENERIC}，都会落到这里，行为与 R1/R2 完全一致。</p>
  */
 @Slf4j

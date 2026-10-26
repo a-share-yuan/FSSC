@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -6,7 +9,7 @@
         <el-button type="primary" size="small" @click="openDialog()">+ 新建付款计划</el-button>
         <el-input v-model="q.keyword" placeholder="单号/供应商/用途" clearable style="width: 180px" @keyup.enter="load" />
         <el-button size="small" @click="load">查询</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         <span style="margin-left: auto; color: #909399; font-size: 13px">
           合同/采购订单签订后提交付款计划 → 审批通过后流转付款申请
@@ -54,7 +57,7 @@
         </el-form-item>
         <el-form-item label="计划期间" prop="period">
           <!-- D-BIZ-06：手输「2026-11」会被控件按自身格式解析后写进 value-format=YYYYMM 的模型，
-               落库期间就成了非预期值（实测能写出 2026-11 这类带横线值）。期间只允许从面板选。 -->
+               写入数据库期间就成了非预期值（实测能写出 2026-11 这类带横线值）。期间只允许从面板选。 -->
           <el-date-picker v-model="form.period" type="month" value-format="YYYYMM" format="YYYY-MM" :editable="false" unlink-panels style="width: 100%" placeholder="请选择年月" />
         </el-form-item>
         <el-form-item label="计划金额" prop="amount">
@@ -169,7 +172,7 @@ async function resubmitPlan(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// D-DEC-454：在途计划的正当出口。按钮只对提单人本人出现（服务端同闸＝第二道），
+// D-DEC-454：在途计划的正当出口。按钮只对提单人本人出现（服务端同校验＝第二道），
 // 已核销行由服务端拦下；作废会同步终止审批链，单据不再挂在审批池里。
 function canVoid(row) {
   const uid = store.user?.userId ?? store.user?.id

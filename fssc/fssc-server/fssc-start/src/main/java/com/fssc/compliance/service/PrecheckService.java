@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -195,7 +198,7 @@ public class PrecheckService {
                     }
                 }
             } catch (Exception ex) {
-                // 跨库查询故障不作为预检失败（与票面键组装同口径降级）
+                // 跨库查询故障不作为预检失败（与票面键组装同一规则降级）
                 log.warn("OCR 票号查重执行失败(跳过): {}", ex.getMessage());
             }
         }

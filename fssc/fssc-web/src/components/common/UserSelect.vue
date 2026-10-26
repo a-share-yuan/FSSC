@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-select
     :model-value="modelValue"
@@ -36,7 +39,7 @@
  *
  * props:
  *   modelValue       选中用户 id（v-model）
- *   pageSize         拉取数量（默认 200）
+ *   pageSize         拉查询量（默认 200）
  *   showDept         是否在标签后附加（部门名）
  *   scope            可见范围：'same-company'（同公司，缺省）/ 'same-dept'（同部门）/ 'all'（全量，需权限）
  *   companyId        手动指定公司 ID（覆盖自动推断）

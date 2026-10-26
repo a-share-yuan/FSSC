@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.connector.adapter.tax;
 
 import com.fssc.connector.adapter.ChannelAdapter;
@@ -23,7 +26,7 @@ import org.springframework.stereotype.Component;
  *   <li><b>报文形态归网关</b>：本类<b>原样透传</b>业务侧 payload（中性契约字段，如
  *       {@code orderNumber}/{@code invoiceTypeCode}/{@code seller}/{@code buyer}/{@code lines}），
  *       <b>不翻译成任何上游格式</b>——企享云/乐企的报文与签名只在网关进程内存在；</li>
- *   <li><b>上游凭证归网关</b>：厂商密钥（{@code QXY_APP_KEY} 等）与乐企税控盘证书
+ *   <li><b>上游凭证归网关</b>：接口密钥（{@code QXY_APP_KEY} 等）与乐企税控盘证书
  *       <b>绝不进入 FSSC</b> 的代码/配置/日志/数据库；本类只经
  *       {@code ext_interface_config} 的通道配置指向网关地址；</li>
  *   <li><b>无凭据不给结论</b>：网关缺上游凭据时返回 <b>503 {@code UPSTREAM_NOT_CONFIGURED}</b>，
@@ -35,7 +38,7 @@ import org.springframework.stereotype.Component;
  * 新增/切换上游只改网关内部，业务侧只加一条 {@code ext_interface_config} 通道配置。</p>
  *
  * <p><b>不得抛穿异常</b>（{@link ChannelAdapter} 契约）：税务失败以 {@code isOk()=false} 返回，
- * 由业务侧决定标失败或人工复核；请求/响应原文经网关留痕于 {@code integration_call_log}，
+ * 由业务侧决定标失败或人工复核；请求/响应原文经网关记录于 {@code integration_call_log}，
  * 作为失败时的证据链。</p>
  */
 @Slf4j
@@ -60,7 +63,7 @@ public class TaxInvoiceAdapter implements ChannelAdapter {
             ChannelResponse resp = ChannelResponseMapper.adapt(r, type());
             if (resp != null && !resp.isOk()) {
                 // 缺上游凭据（503 UPSTREAM_NOT_CONFIGURED）与业务失败同样透传，
-                // 只记日志不兜底：不伪造票面、不给正向结论（对齐交付说明不变量 3）。
+                // 只记日志不默认处理：不伪造票面、不给正向结论（对齐交付说明不变量 3）。
                 log.warn("[税务] 通道调用未成功 capability={} status={} key={} err={}",
                         capability, resp.getStatusCode(), request.idempotencyKey(), resp.getError());
             }

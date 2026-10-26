@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="timeout-board">
     <el-card shadow="never" class="head-card">
@@ -185,7 +188,7 @@ function onSizeChange(s) {
   loadList()
 }
 
-// 后端返回空数组＝真没有；取数失败＝另一回事，文案分开，避免把故障说成"无数据"
+// 后端返回空数组＝真没有；查询失败＝另一回事，文案分开，避免把故障说成"无数据"
 const cfgEmptyText = computed(() => {
   if (cfgFailed.value) return t('flow.wfTimeout.msgCfgFailed')
   return cfgQueried.value ? t('flow.wfTimeout.msgCfgEmpty') : t('flow.wfTimeout.hintQueryByKey')

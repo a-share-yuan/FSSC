@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -20,7 +23,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 参与人批量替换（参考行业做法"流程设计中心-批量设置：查找参与人中设置的用户并替换"）。
+ * 参与人批量替换：查找参与人中设置的用户并替换。
  *
  * <p>为什么必须做成一个工具而不是一条 SQL：本系统同一节点的参与人有<b>两处真值</b>——
  * BPMN 的 {@code flowable:candidateGroups} 与 {@code wf_node_config.assign_value}，且
@@ -28,7 +31,7 @@ import java.util.regex.Pattern;
  * 只改配置不改 XML，被停用的老角色仍作为候选组可见可办（越权）；只改 XML 不改配置，
  * 配置会把 XML 盖掉。所以两侧必须同批替换，且改完立即 publish（版本+1）。
  *
- * <p>写库口径沿用本仓库纪律：默认 {@code dryRun=true} 只出清单；真正落库时逐模型 publish，
+ * <p>写库规则沿用本仓库纪律：默认 {@code dryRun=true} 只出清单；真正写入数据库时逐模型 publish，
  * 并同步 UPDATE {@code wf_node_config.assign_value}（回滚＝同工具反向替换 to→from）。
  */
 @Slf4j

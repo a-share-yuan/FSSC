@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <!-- ============ 三单匹配 · 异常派单 ============ -->
   <el-card :header="$t('pay.route.cardTitle')" style="margin-top: 12px">

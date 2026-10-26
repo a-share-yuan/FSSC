@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.auth;
 
 import com.fssc.auth.AuthController.ProfileUpdateReq;
@@ -252,10 +255,10 @@ public class AuthService {
         return new LoginResult(token, u);
     }
 
-    // ---------------- 图形验证码闸门（C-3） ----------------
+    // ---------------- 图形验证码校验（C-3） ----------------
 
     /**
-     * 验证码闸门：<b>失败阈值触发</b>，不是无条件强校验。
+     * 验证码校验：<b>失败阈值触发</b>，不是无条件强校验。
      * <ul>
      *   <li>总开关 {@code fssc.login.captcha-enabled=false}（默认）或未达阈值 ⇒ 直接放行，
      *       登录链零改动（01 册冒烟脚本 S1-01~S1-25 的程序化登录不受影响）；</li>
@@ -263,7 +266,7 @@ public class AuthService {
      *       {@link ErrorCode#CAPTCHA_REQUIRED}，携带但不对（过期/重复提交/输错）回
      *       {@link ErrorCode#CAPTCHA_INVALID}；两种情形<b>都不计一次凭据失败</b>
      *       （验证码打错不该把用户推向 {@code LoginGuardService} 的 5 次锁定），
-     *       但会按既有口径留一条 FAIL 登录日志。</li>
+     *       但会按既有规则留一条 FAIL 登录日志。</li>
      * </ul>
      * 一次一用由 {@link CaptchaService#validate} 保证：无论对错，取用即从缓存删除，防重放。
      *

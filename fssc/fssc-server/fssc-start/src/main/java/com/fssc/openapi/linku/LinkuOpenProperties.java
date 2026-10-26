@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.openapi.linku;
 
 import jakarta.annotation.PostConstruct;
@@ -41,7 +44,7 @@ public class LinkuOpenProperties {
     @Value("${fssc.linku.max-page-size:500}")
     private int maxPageSize;
 
-    /** 密钥未注入时的运维提示口径（与既有回调保持一致，便于照提示自查；不含密钥值） */
+    /** 密钥未注入时的运维提示规则（与既有回调保持一致，便于照提示自查；不含密钥值） */
     private static final String SECRET_HINT =
             "未注入 LinkU 共享密钥：配置 fssc.linku.secret（或回退项 fssc.linku-callback.secret）为空";
 

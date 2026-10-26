@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.facade.dto;
 
 import lombok.Data;
@@ -16,7 +19,7 @@ public class BillArchiveDTO {
     private String status;
     private String archiveStatus;
     private String imageStatus;
-    /** R5-D-244：实物流交付状态（NULL/UNSIGNED/SIGNED/NOT_REQUIRED），归档前置闸读取 */
+    /** R5-D-244：实物流交付状态（NULL/UNSIGNED/SIGNED/NOT_REQUIRED），归档前置校验读取 */
     private String deliveryStatus;
     private Long companyId;
     private Integer periodYear;

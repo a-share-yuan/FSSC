@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,7 +24,7 @@ import java.util.function.Supplier;
  * 委托代理到期自动回收（方案 §1.4-1，2026-09-23 补）。
  *
  * <p><b>为什么需要它</b>：{@code wf_delegate} 的状态列只有 {@code NORMAL}（启用）与
- * {@code DISABLED}（人工取消）两个写入点——<b>没有任何代码路径会写 {@code EXPIRED}</b>。
+ * {@code DISABLED}（人工取消）两个写入位置——<b>没有任何代码路径会写 {@code EXPIRED}</b>。
  *
  * <p>功能上"到期即失效"其实已经成立：两处生效判定
  * （{@code WfDelegateService.activeDelegateTo} / {@code NodeOrgResolver.activeDelegateFromUserIds}）
@@ -30,20 +33,20 @@ import java.util.function.Supplier;
  * <ol>
  *   <li>前端「我的委托代理」页永远显示「启用」——而 {@code MyDelegate.vue} 早已写好
  *       {@code EXPIRED → 「已过期」} 的标签分支，属于"前端就绪、后端不产出"的镜像缺口；</li>
- *   <li>运维/审计按状态列盘点时，把"早已失效"的行算成"生效中"，口径与实际不符；</li>
+ *   <li>运维/审计按状态列盘点时，把"早已失效"的行算成"生效中"，规则与实际不符；</li>
  *   <li>用户看不到"什么时候失效的"，只能靠肉眼比对时间区间。</li>
  * </ol>
  *
  * <p>本 Job 每 10 分钟把 {@code status=NORMAL 且 end_time < now} 的行置为 {@code EXPIRED}，
- * 使状态列与真实生效面一致。<b>不改变任何功能行为</b>（过期行本就查不出），只修正口径与展示。
+ * 使状态列与真实生效面一致。<b>不改变任何功能行为</b>（过期行本就查不出），只修正规则与展示。
  *
  * <p><b>为何不给用户发通知</b>：到期是委托的**预期语义**（用户在建立委托时就选定了结束时间），
- * 逐个推送只会制造噪音；此处仅落日志 + 心跳留痕。需要"到期提醒"属产品决策，如后续要加，
+ * 逐个推送只会制造噪音；此处仅落日志 + 心跳记录。需要"到期提醒"属产品决策，如后续要加，
  * 建议改为"到期前 1 天提醒"而非"到期后告知"。
  *
  * <p><b>与超时 Job 的关系</b>：本 Job 的第二段（F4-1 委托改派）确实会动 Flowable 的办理人，
  * 但只在 {@code wf.delegate.mode=REASSIGN} 且该流程在灰度清单内时；缺省（该键库里不存在）
- * 两段都短路返回，行为与改造前逐字一致。回跳/改派一律经引擎 {@code setAssignee} + 镜像同步 + 留痕，
+ * 两段都短路返回，行为与改造前逐字一致。回跳/改派一律经引擎 {@code setAssignee} + 镜像同步 + 记录，
  * 绝不直写 {@code wf_task}。
  */
 @Slf4j
@@ -53,7 +56,7 @@ public class WfDelegateExpireJob {
 
     private final WfDelegateMapper delegateMapper;
     private final JobHeartbeatService jobHeartbeatService;
-    /** 委托到期时的待办回跳通道（F4-1，与"取消委托"同一实现，避免两处口径漂移） */
+    /** 委托到期时的待办回跳通道（F4-1，与"取消委托"同一实现，避免两处规则漂移） */
     private final com.fssc.workflow.service.WfEngineFacade wfEngineFacade;
     /** 改派档是否启用（缺省关＝本 Job 的委托改派两段全部短路） */
     private final com.fssc.workflow.service.NodeOrgResolver nodeOrgResolver;
@@ -139,13 +142,13 @@ public class WfDelegateExpireJob {
     }
 
     /**
-     * 委托窗口开启时的存量改派扫描（F4-1 的第二段）。
+     * 委托窗口开启时的历史改派扫描（F4-1 的第二段）。
      *
      * <p><b>为什么需要</b>：委托可以在窗口尚未开始时就建立（例如 06:47 建、09-27 00:00 才开始生效）。
-     * 只在"建立委托那一刻"改派会漏掉这类预约——窗口开了一直没人把存量待办转过去，
+     * 只在"建立委托那一刻"改派会漏掉这类预约——窗口开了一直没人把历史待办转过去，
      * 表现正是体检 E-07 的"承诺自动转办、实际永远不转"。本扫描每 10 分钟把已开窗口内的委托各补做一次。
      *
-     * <p>改派天然幂等：一条待办被转走后其 assignee 就不再等于委托人，下一轮查不出来＝不会二次改派。
+     * <p>改派天然去重：一条待办被转走后其 assignee 就不再等于委托人，下一轮查不出来＝不会二次改派。
      *
      * <p>缺省（{@code wf.delegate.mode} 不存在或非 REASSIGN）时，每行都在租户内被
      * {@link com.fssc.workflow.service.NodeOrgResolver#delegateReassignActive()} 短路，

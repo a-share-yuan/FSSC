@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -53,7 +56,7 @@ public class ArPreInvoice implements Serializable {
     /** 换票原票 */
     private String originNo;
     private Integer printedFlag;
-    /** 1=EBS负数发票已推送待补红字通知单号（AR接口4） */
+    /** 1=ERP负数发票已推送待补红字通知单号（AR接口4） */
     private Integer redPending;
     /** 提前开票核对 NONE/PENDING/DONE */
     private String preCheckFlag;

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.contract.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -62,7 +65,7 @@ public class ContractImportController {
                 errors.add("第" + (i + 1) + "行列数不足");
                 continue;
             }
-            // 必填项行级校验：导入通道与表单同口径，否则空合同号/空名称会绕过一切前端校验入库
+            // 必填项行级校验：导入通道与表单同一规则，否则空合同号/空名称会绕过一切前端校验入库
             if (f[0].trim().isEmpty()) {
                 errors.add("第" + (i + 1) + "行合同编号必填");
                 continue;

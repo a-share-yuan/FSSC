@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -85,7 +88,7 @@ public class SharingService {
             log.info("单据 {} 关联发票均为电子介质，自动无纸化豁免实物签收", bill.getBillNo());
         }
 
-        // V1.4.92：档案非集中管理公司整段实物流不发生（原件留原单位），单据侧留痕 NOT_REQUIRED。
+        // V1.4.92：档案非集中管理公司整段实物流不发生（原件留原单位），单据侧记录 NOT_REQUIRED。
         // 走 registerIfNeeded 的既有豁免分支，不另写一套状态写入。
         if (deliveryService.isNonCentralArchive(bill.getCompanyId())) {
             deliveryService.registerIfNeeded(bill);
@@ -191,7 +194,7 @@ public class SharingService {
         int total = chain.size();
         for (int i = 0; i < total; i++) {
             String[] seg = chain.get(i); // {taskType, taskName}
-            // R5-D-242：链生成幂等——同 bill_id+task_type 已有未终态（WAITING/RECEIVED）任务即跳过重建
+            // R5-D-242：链生成去重——同 bill_id+task_type 已有未最终状态（WAITING/RECEIVED）任务即跳过重建
             // （此前 3 张单各出现两套 AUDIT/PAY/BOOKKEEP，认领量/SLA/质量报表分母虚高；
             //  DDL 唯一索引 uk(bill_id,task_type,chain_seq,del_flag) 已注释态待放行 M-20）
             Long dup = opAuditTaskMapper.selectCount(new LambdaQueryWrapper<OpAuditTask>()
@@ -253,7 +256,7 @@ public class SharingService {
         com.fssc.expense.entity.ExpBill upd = new com.fssc.expense.entity.ExpBill();
         upd.setId(task.getBillId());
         upd.setAuditTime(LocalDateTime.now());
-        // D-DEC-179：audit_user_id 同刻随审核人落值；自动完成腿无认领人时留空不冒充
+        // D-DEC-179：audit_user_id 同刻随审核人落值；自动完成环节无认领人时留空不冒充
         if (task.getAssigneeId() != null) {
             upd.setAuditUserId(task.getAssigneeId());
         }
@@ -282,19 +285,19 @@ public class SharingService {
     }
 
     /**
-     * ⑨（D-V4R-49，2026-10-16 晚间场实测）：单据到达业务终态时，收口其共享作业链上所有未办结任务。
+     * ⑨（D-V4R-49，2026-10-16 晚间场实测）：单据到达业务最终状态时，办结其共享作业链上所有未办结任务。
      *
      * <p>缺陷现场：BX202610160002 已 APPROVED（凭证已过账、借款冲抵已核销），派工池仍挂着
-     * 「审核/待认领」——全库 11 条池任务全部是终态单上的僵尸行（0 认领 0 办结），且
-     * {@link #createChain} 的幂等查重（R5-D-242，只认 WAITING/RECEIVED）会让这些残留
-     * 永久占位。根因：业务侧的「钱/账/核销」闭环（付款批次执行、还款入账、无现金腿平账、
-     * 驳回/撤回）与共享作业链之间没有任何联动收口点。
+     * 「审核/待认领」——全库 11 条池任务全部是最终状态单上的僵尸行（0 认领 0 办结），且
+     * {@link #createChain} 的去重查重（R5-D-242，只认 WAITING/RECEIVED）会让这些残留
+     * 永久占位。根因：业务侧的「钱/账/核销」闭环（付款批次执行、还款入账、无现金环节平账、
+     * 驳回/撤回）与共享作业链之间没有任何联动办结点。
      *
-     * <p>收口口径：WAITING/RECEIVED 一并置 FINISHED（已认领未办结的说明办理人已接手，
-     * 单据终态后继续办理已无业务意义，remark 记录原因与原备注）。已 FINISHED 的不动。
-     * 不激活任何下一环节——收口即整链终止。
+     * <p>办结规则：WAITING/RECEIVED 一并置 FINISHED（已认领未办结的说明办理人已接手，
+     * 单据最终状态后继续办理已无业务意义，remark 记录原因与原备注）。已 FINISHED 的不动。
+     * 不激活任何下一环节——办结即整链终止。
      *
-     * @return 实际收口的任务条数（供调用方留痕）
+     * @return 实际办结的任务条数（供调用方记录）
      */
     public int closeOnBillTerminal(Long billId, String reason) {
         if (billId == null) {
@@ -312,7 +315,7 @@ public class SharingService {
             upd.setId(t.getId());
             upd.setPoolStatus("FINISHED");
             upd.setFinishTime(now);
-            String remark = reason + "（单据终态自动收口）";
+            String remark = reason + "（单据结束时自动办结）";
             if (t.getRemark() != null && !t.getRemark().isBlank()) {
                 remark = remark + "；原备注：" + t.getRemark();
             }
@@ -410,8 +413,8 @@ public class SharingService {
     /**
      * 完成（审核通过；串行作业链自动激活下一环节）。
      * D-DEC-024/D-DEC-030：办结备注（审计口语）必须落 op_audit_task.remark——此前请求不带备注、
-     * 服务端也不写列，三张工单（AUDIT/PAY/BOOKKEEP）办结后 remark 恒 NULL，留痕全丢。
-     * 备注为选填：空白不覆盖既有值（避免把退单原因等历史留痕擦掉）。
+     * 服务端也不写列，三张工单（AUDIT/PAY/BOOKKEEP）办结后 remark 恒 NULL，记录全丢。
+     * 备注为选填：空白不覆盖既有值（避免把退单原因等历史记录擦掉）。
      */
     public void finish(Long taskId, String remark) {
         LoginUser u = UserContext.getRequired();
@@ -481,7 +484,7 @@ public class SharingService {
         // 排序：最新任务排在最前面（按创建时间降序 + ID降序）
         w.orderByDesc(OpAuditTask::getCreateTime).orderByDesc(OpAuditTask::getId);
         Page<OpAuditTask> p = opAuditTaskMapper.selectPage(Page.of(pageNum, pageSize), w);
-        // R5-D-237：分页 VO 补 billStatus（UI「单据状态」列此前全「—」，同页同批收口）
+        // R5-D-237：分页 VO 补 billStatus（UI「单据状态」列此前全「—」，同页同批办结）
         enrichBillStatus(p.getRecords());
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
@@ -525,7 +528,7 @@ public class SharingService {
     /** 重新分配（需求 8.2.2）：改派给指定作业员（assigneeId），状态保持 RECEIVED */
     public void reassign(Long taskId, Long assigneeId) {
         OpAuditTask task = require(taskId);
-        // 必填收口（批次 2C，与前端 TaskPool「分配给人」同口径）：留空会把任务置为 RECEIVED 却无人认领
+        // 必填办结（批次 2C，与前端 TaskPool「分配给人」同一规则）：留空会把任务置为 RECEIVED 却无人认领
         AssertUtil.notNull(assigneeId, ErrorCode.PARAM_INVALID, "请选择作业员");
         if (task.getPoolStatus().equals("FINISHED")) {
             throw new BizException(ErrorCode.PARAM_INVALID, "已办结任务不能重新分配");
@@ -544,9 +547,9 @@ public class SharingService {
         if (!"RECEIVED".equals(task.getPoolStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "仅已认领任务可退单，当前: " + task.getPoolStatus());
         }
-        // R5-D-235：退单原因必填双闸（与前端红星+行内校验同口径）——此前直连接口可空原因退单
+        // R5-D-235：退单原因必填双校验（与前端红星+行内校验同一规则）——此前直连接口可空原因退单
         AssertUtil.notBlank(reason, ErrorCode.PARAM_INVALID, "请填写退单原因");
-        // 与 withdraw 同口径（R5-D-234）：updateById 的实体在默认 NOT_NULL 字段策略下会跳过 null 字段，
+        // 与 withdraw 同一规则（R5-D-234）：updateById 的实体在默认 NOT_NULL 字段策略下会跳过 null 字段，
         // 表现是"退单成功、状态回池了，但认领人/认领时间还挂在原人名下"（任务池同行同时显示「待认领」＋认领人）。
         opAuditTaskMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update
                 .LambdaUpdateWrapper<OpAuditTask>()
@@ -558,7 +561,7 @@ public class SharingService {
     }
 
     /**
-     * 办结备注归一（D-DEC-024/D-DEC-030）：去首尾空白、加「办结: 」前缀与「退单: 」留痕区分；
+     * 办结备注归一（D-DEC-024/D-DEC-030）：去首尾空白、加「办结: 」前缀与「退单: 」记录区分；
      * op_audit_task.remark 为 varchar(500)，超限明确拒绝而不是静默截断（截断会让审计口语变味）。
      */
     private String normalizeFinishRemark(String remark) {

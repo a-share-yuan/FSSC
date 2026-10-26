@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.job;
 
 import com.fssc.framework.config.AsyncConfig;
@@ -28,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p><b>执行顺序（方案 §四 4.3）</b>：按 {@code id ASC} 领取、<b>单线程串行消费</b>
  * （{@link AsyncConfig#wfOutboxExecutor} 为 core=max=1），因此"同一实例的事件"
- * 天然按投递顺序投影，不会出现 {@code TASK_ASSIGNED} 先于 {@code TASK_CREATED} 落库的倒挂。
+ * 天然按投递顺序投影，不会出现 {@code TASK_ASSIGNED} 先于 {@code TASK_CREATED} 写入数据库的倒挂。
  *
  * <p><b>为什么不用 {@code applicationTaskExecutor}</b>：那是 Flowable 引擎异步作业的执行器，
  * 共用会让"投影消费"与"引擎推进"互相抢线程（见 {@code AsyncConfig.wfOutboxExecutor} 注释）。

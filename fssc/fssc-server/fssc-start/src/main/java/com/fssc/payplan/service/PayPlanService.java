@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.payplan.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -42,9 +45,9 @@ public class PayPlanService {
     private final PayPlanMapper mapper;
     private final WfEngineFacade wfEngineFacade;
     private final OrgGuard orgGuard;
-    /** P4-3 审计：驳回重提状态跃迁留痕 */
+    /** P4-3 审计：驳回重提状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** D-DEC-453 幂等闸载体（与 TrFundPlanService B6 同用 DistributedState） */
+    /** D-DEC-453 去重校验载体（与 TrFundPlanService B6 同用 DistributedState） */
     private final com.fssc.framework.spi.DistributedState distributedState;
 
     public PageResult<PayPlan> page(long pn, long ps, String keyword, String planType) {
@@ -84,8 +87,8 @@ public class PayPlanService {
         plan.setCreateTime(LocalDateTime.now());
         plan.setUpdateTime(LocalDateTime.now());
 
-        // D-DEC-453（F1 后端腿，与 B6/TrFundPlanService 同型）：一次点击被重试机制原样重发的第二笔，
-        // 在这里撞防重窗口或锁。签名不能用 planNo——genNo 带秒级时间戳＋随机数，重发两笔必然不同号，拿它去重等于不设闸。
+        // D-DEC-453（F1 后端环节，与 B6/TrFundPlanService 同型）：一次点击被重试机制原样重发的第二笔，
+        // 在这里撞防重窗口或锁。签名不能用 planNo——genNo 带秒级时间戳＋随机数，重发两笔必然不同号，拿它去重等于不设校验。
         String submitKey = submitSignature(plan, uid);
         if (distributedState.marked(submitKey)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -118,7 +121,7 @@ public class PayPlanService {
     }
 
     /**
-     * 提交幂等签名（租户＋公司＋期间＋供应商＋金额＋用途＋经办人）。
+     * 提交去重签名（租户＋公司＋期间＋供应商＋金额＋用途＋经办人）。
      * 末段 MD5：本地实现取 MySQL GET_LOCK，锁名上限 64 字符（实测超长报 4163 把接口打成 500）。
      * 供应商优先取档案 id，档案缺失时退供应商名（D-DEC-348 允许 supplier_id 为 NULL）。
      */
@@ -133,7 +136,7 @@ public class PayPlanService {
 
     /**
      * D-DEC-454：提单人作废在途付款计划 APPROVING → VOID。此前 APPROVING 单没有任何出口，
-     * 只能任其挂在审批池，或由引擎开发端点裸作废实例（D-DEC-455：那条腿不写业务状态、不留痕）。
+     * 只能任其挂在审批池，或由引擎开发端点裸作废实例（D-DEC-455：那条环节不写业务状态、不记录）。
      * 前置＝提单人本人＋APPROVING＋未发生核销；审批链由 cancelInstance 同步终止，失败冒泡回滚（ROOT-2）。
      * ★D-DEC-476：若审批链此前已被引擎开发端点"裸作废"（该端点按设计只终结流程、不回写业务态），
      * cancelInstance 会抛「实例不存在或已结束」＝这条单永远废不掉＝死单。现只对该种异常放行、照常落 VOID。
@@ -163,8 +166,8 @@ public class PayPlanService {
         if (StringUtils.hasText(plan.getProcInstId())) {
             // D-DEC-476：审批面可能已被"裸作废"终结（引擎开发端点 cancelInstance 只删流程实例＋回写
             // wf_instance，按设计不触发业务收尾），于是业务单仍挂 APPROVING、待办却一条不剩＝既办不了也废不掉。
-            // 这里把"引擎终止"做成幂等臂：只吞「实例不存在或已结束」这一种 PARAM_INVALID，其余异常照旧冒泡
-            // （ROOT-2「流程失败不得静默」语义不变），业务侧 VOID＋audit_trail 照常收口。
+            // 这里把"引擎终止"做成去重臂：只吞「实例不存在或已结束」这一种 PARAM_INVALID，其余异常照旧冒泡
+            // （ROOT-2「流程失败不得静默」语义不变），业务侧 VOID＋audit_trail 照常办结。
             try {
                 wfEngineFacade.cancelInstance(plan.getProcInstId(), "提单人作废 " + plan.getPlanNo() + "：" + reason);
             } catch (BizException ex) {
@@ -187,7 +190,7 @@ public class PayPlanService {
                 String.valueOf(planId),
                 java.util.Collections.singletonMap("status", "APPROVING"),
                 java.util.Collections.singletonMap("status", "VOID"),
-                "提单人作废：" + reason + (engineAlreadyEnded ? "（审批面此前已由运维终结，本次仅收口业务态）" : ""));
+                "提单人作废：" + reason + (engineAlreadyEnded ? "（审批面此前已由运维终结，本次仅办结业务状态）" : ""));
         log.info("付款计划 {} 作废: APPROVING→VOID（原因：{}{}）", plan.getPlanNo(), reason,
                 engineAlreadyEnded ? "，审批面此前已终结" : "");
     }

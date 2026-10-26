@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.security;
 
 import com.fssc.common.core.ErrorCode;
@@ -43,7 +46,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final AntPathMatcher M = new AntPathMatcher();
 
     private static final List<String> WHITE_LIST = List.of(
-            // P0-B1 健康探活：K8s 探针 / SLB / 监控系统不可能持有业务 Token，必须免鉴权
+            // P0-B1 健康探活：K8s 检查 / SLB / 监控系统不可能持有业务 Token，必须免鉴权
             "/api/health",
             "/actuator/health",
             "/actuator/health/**",
@@ -63,7 +66,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/api/tenant/pay/recon/linku-recon-confirmed",
             "/api/tenant/pay/recon/linku-invoice-verified",
             // LinkU 开放接口（BCP → FSSC 数据通道）：外部系统匿名调用，
-            // 安全由 HMAC 验签 + 时间窗 + 幂等把关（LinkuOpenGuard），白名单只免除 Token 必填。
+            // 安全由 HMAC 验签 + 时间窗 + 去重把关（LinkuOpenGuard），白名单只免除 Token 必填。
             "/api/open/linku/**",
             "/error",
             "/favicon.ico"

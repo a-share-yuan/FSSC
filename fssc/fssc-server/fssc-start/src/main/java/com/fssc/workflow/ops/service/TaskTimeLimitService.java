@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.ops.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -33,17 +36,17 @@ import java.util.Map;
  *   <li><b>写</b>：按优先级（NORMAL/URGENT）取节点级策略的时限，算出 {@code due_time} 并写回
  *       {@code wf_task.due_time}，同时在 {@code op_task_time_limit} 留一份可核对的副本；</li>
  *   <li><b>读</b>：{@link #dueScan} 与任务池视图都<b>直接读 {@code due_time}</b> 判超时，
- *       不再用 create_time 现算（口径漂移的根源就是"两处各算一遍"）。</li>
+ *       不再用 create_time 现算（规则漂移的根源就是"两处各算一遍"）。</li>
  * </ol>
  *
- * <p><b>口径边界（G2 第 3 条已收口）</b>：到期时间改由 {@link WorkCalendarService} 按<b>工作小时</b>
+ * <p><b>规则边界（G2 第 3 条已办结）</b>：到期时间改由 {@link WorkCalendarService} 按<b>工作小时</b>
  * 计算（跨周末/节假日顺延），与 BPMN 边界定时器共用同一份日历实现——此前"门面按自然小时算、
  * 定时器按 {@code PT{N}H} 算"的两处漂移即由此消除。
- * <p><b>按组织取日历（参考行业做法）</b>：本类按单据所属<b>公司</b>（{@code NodeOrgResolver.companyIdOfBill}）
- * 把组织下传给日历服务；<b>解析不到组织（或组织列尚未建）时按 {@code null} 调用，回落租户口径</b>，
+ * <p><b>按组织取日历</b>：本类按单据所属<b>公司</b>（{@code NodeOrgResolver.companyIdOfBill}）
+ * 把组织下传给日历服务；<b>解析不到组织（或组织列尚未建）时按 {@code null} 调用，回落租户规则</b>，
  * 与改造前逐字一致。组织维＝公司（见 {@code WfManageOrgScope} 类注释）；组织列由
  * {@code fssc/sql/V2.2.0_g2_calendar_org_20260924.sql} 新增，服务端在列不存在时自动降级。
- * <p>代价（如实说明）：解析组织需按 {@code bizType/bizId} 反查单据表（公司列，取不到再按建单人兜底），
+ * <p>代价（如实说明）：解析组织需按 {@code bizType/bizId} 反查单据表（公司列，取不到再按建单人默认处理），
  * 单任务路径一次查询可接受；{@link #backfillMissingDueTime} 批量补账时逐任务解析，属一次性维护动作
  * （上限 2000 条），成本可接受但非零。
  */
@@ -59,7 +62,7 @@ public class TaskTimeLimitService {
     private final com.fssc.workflow.service.WorkCalendarService workCalendarService;
     /**
      * G2 第 3 条：单据所属组织（公司）解析——{@code companyIdOfBill} 为全库唯一组织维解析入口
-     * （口径同 NodeOrgResolver/WfManageOrgScope）。解析不到返回 null，日历服务会回落租户口径。
+     * （规则同 NodeOrgResolver/WfManageOrgScope）。解析不到返回 null，日历服务会回落租户规则。
      */
     private final com.fssc.workflow.service.NodeOrgResolver nodeOrgResolver;
 
@@ -69,7 +72,7 @@ public class TaskTimeLimitService {
 
     /**
      * 计算到期时间：{@code 任务创建时间 + 该优先级的时限工作小时}。
-     * 创建时间为空时用当前时间兜底（宁可给出一个偏晚的到期时间，也不留空导致"永不超时"）。
+     * 创建时间为空时用当前时间默认处理（宁可给出一个偏晚的到期时间，也不留空导致"永不超时"）。
      *
      * <p>G2 第 3 条：分钟数交由 {@link WorkCalendarService} 按工作日历推进（休息日/节假日整天跳过，
      * 每日只在在岗时段内计工时），而不是简单 {@code plusMinutes}。日历读取失败时该服务内部已
@@ -80,9 +83,9 @@ public class TaskTimeLimitService {
     }
 
     /**
-     * 计算到期时间（<b>按组织（公司）取工作日历</b>，G2 第 3 条参考行业做法）。
+     * 计算到期时间（<b>按组织（公司）取工作日历</b>，G2 第 3 条）。
      *
-     * @param companyId 单据所属公司 ID；{@code null} = 解析不到组织，回落租户口径（与旧重载逐字一致）
+     * @param companyId 单据所属公司 ID；{@code null} = 解析不到组织，回落租户规则（与旧重载逐字一致）
      * @see #calcDueTime(LocalDateTime, BigDecimal)
      */
     public LocalDateTime calcDueTime(LocalDateTime createTime, BigDecimal limitHours, Long companyId) {
@@ -93,8 +96,8 @@ public class TaskTimeLimitService {
     }
 
     /**
-     * 单据所属组织（公司）：{@code bizType/bizId} → 单据表 company_id（取不到再按建单人兜底）；
-     * 解析不到一律返回 {@code null}，调用方按租户口径处理（零影响）。
+     * 单据所属组织（公司）：{@code bizType/bizId} → 单据表 company_id（取不到再按建单人默认处理）；
+     * 解析不到一律返回 {@code null}，调用方按租户规则处理（零影响）。
      */
     private Long resolveOrg(WfTask task) {
         if (task == null) {
@@ -109,7 +112,7 @@ public class TaskTimeLimitService {
     }
 
     /**
-     * 给任务打优先级并落双时限（幂等：同一任务重复调用只更新不改写历史）。
+     * 给任务打优先级并落双时限（去重：同一任务重复调用只更新不改写历史）。
      *
      * <p>做三件事：① 解析该节点的生效策略；② 按优先级取时限算出 due_time；
      * ③ 写回 {@code wf_task.due_time}（既有列，成为真值）＋ upsert {@code op_task_time_limit}（可核对副本）。
@@ -135,7 +138,7 @@ public class TaskTimeLimitService {
         String p = OpTaskTimeLimit.normalizePriority(priority);
         OpDispatchPolicy policy = policyService.resolvePolicy(task.getModelKey(), task.getNodeKey());
         BigDecimal hours = policyService.limitHours(policy, p);
-        // G2 第 3 条：按单据所属公司取工作日历；解析不到组织时 resolveOrg 返回 null → 回落租户口径
+        // G2 第 3 条：按单据所属公司取工作日历；解析不到组织时 resolveOrg 返回 null → 回落租户规则
         LocalDateTime due = calcDueTime(task.getCreateTime(), hours, resolveOrg(task));
 
         // 写回 wf_task.due_time —— 死列变真值的唯一写点
@@ -201,7 +204,7 @@ public class TaskTimeLimitService {
      * 超时扫描（<b>直接读 {@code wf_task.due_time} 真值</b>，不再 create_time 现算）。
      *
      * <p>只报不修：返回超时任务清单与统计，是否催办/升级由既有 {@code WfTimeoutJob} 链路决定。
-     * {@code due_time} 为空的行单独计数——它们是"尚未落时限"的历史存量，
+     * {@code due_time} 为空的行单独计数——它们是"尚未落时限"的历史历史，
      * 由 {@code /ops/time-limit/backfill} 补账，不在这里静默补。
      */
     public Map<String, Object> dueScan(int limit) {
@@ -242,13 +245,13 @@ public class TaskTimeLimitService {
         out.put("noDueTimeCount", noDue);
         out.put("overdue", overdue.size() > cap ? overdue.subList(0, cap) : overdue);
         out.put("note", noDue > 0
-                ? "有 " + noDue + " 条 PENDING 任务尚无 due_time（历史存量），请调用 /api/tenant/wf/ops/time-limit/backfill 补账"
+                ? "有 " + noDue + " 条「待处理」任务尚无应完成时间（历史遗留），请调用 /api/tenant/wf/ops/time-limit/backfill 补账"
                 : "全部 PENDING 任务均有 due_time，超时判定以该列为唯一真值");
         return out;
     }
 
     /**
-     * 补账：给尚无 {@code due_time} 的 PENDING 任务按当前策略补算时限（幂等，可重复执行）。
+     * 补账：给尚无 {@code due_time} 的 PENDING 任务按当前策略补算时限（去重，可重复执行）。
      * 上限 {@code cap} 条，避免一次请求扫全表。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -266,7 +269,7 @@ public class TaskTimeLimitService {
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("backfilled", done);
-        out.put("note", "按节点生效策略的普通/加急时限补算 due_time；本接口幂等，可重复调用直到 0 条");
+        out.put("note", "按节点生效策略的普通/加急时限补算 due_time；本接口可重复调用，直到返回 0 条");
         return out;
     }
 }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.receivable.entity.RcReceivable;
@@ -24,7 +27,7 @@ public class ReceivableBizAction implements WfBizAction {
 
     private final RcReceivableMapper rcReceivableMapper;
     private final VoucherService voucherService;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -45,7 +48,7 @@ public class ReceivableBizAction implements WfBizAction {
             if (Boolean.TRUE.equals(event.getApproved())) {
                 // P4-3 审计扩面：改状态前采集旧值
                 String oldStatus = rec.getStatus();
-                // 已核销终态 DONE 不得被审批回退成 CONFIRMED（收款腿先完成、审批后到的真实时序）
+                // 已核销最终状态 DONE 不得被审批回退成 CONFIRMED（收款环节先完成、审批后到的真实时序）
                 String newStatus = "DONE".equals(oldStatus) ? "DONE" : "CONFIRMED";
                 RcReceivable upd = new RcReceivable();
                 upd.setId(recId);

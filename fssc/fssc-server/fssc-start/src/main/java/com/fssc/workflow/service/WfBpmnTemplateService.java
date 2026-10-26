@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -107,7 +110,7 @@ public class WfBpmnTemplateService {
         ROLE_MAP.put("资金支付岗", "FUND_PAY_STAFF");                 // GL_SALARY_PAY 网银录入/审核
         // V1.2.1 全量 node_json 按 sys_role.role_name 重建（sync_all_bizflow）补 6 角色中文名
         ROLE_MAP.put("业务财务经理", "BIZ_FIN_MANAGER");              // LOAN 业务财务经理节点
-        ROLE_MAP.put("普通员工", "COMMON_EMP");                       // 员工默认角色（CLAIAM 兜底）
+        ROLE_MAP.put("普通员工", "COMMON_EMP");                       // 员工默认角色（CLAIAM 默认处理）
         ROLE_MAP.put("成本费用岗", "COST_STAFF");                     // LOAN/费用成本核算
         ROLE_MAP.put("板块财务总监", "FIN_DIRECTOR");                 // GL/FA 板块财务总监审批
         ROLE_MAP.put("项目经理/费用承担部门负责人", "PROJECT_MANAGER"); // FA/INV 项目费用承担部门
@@ -133,7 +136,7 @@ public class WfBpmnTemplateService {
         String voteMode;      // RATIO 比例（默认）/ COUNT 确定票数
         Integer voteValue;    // RATIO 时百分比 1~100；COUNT 时所需票数
         String voteBasis;     // BY_PERSON 分母=参与人总数(应到，默认) / BY_VOTE 分母=已投票数(实到)
-        String voteFallback;  // 不达票兜底：REJECT（默认）/ PASS
+        String voteFallback;  // 不达票默认处理：REJECT（默认）/ PASS
         // —— G2 第 3 条「超时」：timeout_hours > 0 时生成边界定时器（仅非多实例 userTask）
         Integer timeoutHours;
         String timeoutAction;
@@ -145,7 +148,7 @@ public class WfBpmnTemplateService {
         public final String multiType;
         public final Integer voteRatio;
         public final String roleCode; // 该节点的角色编码（用于运行时候选解析），可能为空
-        // G2 票＋人双维与不达票兜底：与 BPMN 完成条件、WfEngineFacade 收口裁决同一套口径
+        // G2 票＋人双维与不达票默认处理：与 BPMN 完成条件、WfEngineFacade 办结裁决同一套规则
         public final String voteMode;
         public final Integer voteValue;
         public final String voteBasis;
@@ -247,7 +250,7 @@ public class WfBpmnTemplateService {
                 if (n.multiType != null) {
                     // —— P1 会签/票签：userTask + multiInstanceLoopCharacteristics ——
                     // 集合=运行期注入的候选用户列表（<taskId>_assignees），每实例 one assignee=${assignee}。
-                    // ALL=并行全批 / SEQ=顺序全批 / VOTE=比例通过（同时按通过/否决双条件提前收口）。
+                    // ALL=并行全批 / SEQ=顺序全批 / VOTE=比例通过（同时按通过/否决双条件提前办结）。
                     String coll = taskId + "_assignees";
                     boolean seq = "SEQ".equals(n.multiType);
                     StringBuilder mi = new StringBuilder();
@@ -257,9 +260,9 @@ public class WfBpmnTemplateService {
                             .append(" flowable:collection=\"${").append(coll).append("}\" flowable:elementVariable=\"assignee\"");
                     if ("VOTE".equals(n.multiType)) {
                         // P1 票签计票：计数变量按节点 id 前缀隔离，避免同一流程内多个票签节点互相污染。
-                        // 计数由 WfEngineFacade.complete() 在每次投票后累加，达标即触发 completionCondition 提前收口。
+                        // 计数由 WfEngineFacade.complete() 在每次投票后累加，达标即触发 completionCondition 提前办结。
                         // G2：条件改由 voteCompletionCondition 生成（票＋人双维 + 不达票硬终止），
-                        // 未配新列的存量行仍产出与改造前一致的表达式。
+                        // 未配新列的历史行仍产出与改造前一致的表达式。
                         mi.append(">\n        <bpmn:completionCondition xsi:type=\"bpmn:tFormalExpression\">")
                                 .append(voteCompletionCondition(n, taskId))
                                 .append("</bpmn:completionCondition>\n")
@@ -384,7 +387,7 @@ public class WfBpmnTemplateService {
     }
 
     /**
-     * 按 node_key 从 wf_node_config 读取本节点配置，标记：多签类型（ALL/SEQ/VOTE）、票签口径
+     * 按 node_key 从 wf_node_config 读取本节点配置，标记：多签类型（ALL/SEQ/VOTE）、票签规则
      * （vote_mode/vote_value/vote_basis/vote_fallback，缺省回退遗留 vote_ratio）、超时（timeout_hours）。
      * 无配置或查询失败 → 保持单办理人、不生成边界定时器（<b>零行为变更</b>）。
      */
@@ -403,7 +406,7 @@ public class WfBpmnTemplateService {
                 n.multiType = cfg.getMultiType().toUpperCase();
                 if ("VOTE".equals(n.multiType)) {
                     // 遗留列仅作回退：新列（vote_mode/vote_value/vote_basis/vote_fallback）存在时优先，
-                    // 保证存量"只配了 vote_ratio"的行生成与改造前逐字一致的完成条件。
+                    // 保证历史"只配了 vote_ratio"的行生成与改造前逐字一致的完成条件。
                     n.voteMode = blankToNull(cfg.getVoteMode());
                     n.voteValue = cfg.getVoteValue();
                     n.voteBasis = blankToNull(cfg.getVoteBasis());
@@ -433,16 +436,16 @@ public class WfBpmnTemplateService {
      *
      * <p><b>为什么必须带硬终止项</b>：改造前不达票<b>没有任何语义</b>——条件永不满足时多实例既可能卡死、
      * 也可能被引擎默认收敛，两种结果都不可解释。现固定为
-     * {@code <阈值条件> || nrOfCompletedInstances == nrOfInstances}：阈值只是<b>提前收口</b>，
+     * {@code <阈值条件> || nrOfCompletedInstances == nrOfInstances}：阈值只是<b>提前办结</b>，
      * 全部实例办完一定终止，随后由 {@code WfEngineFacade} 按 {@code vote_fallback} 落默认审批项。
      *
-     * <p>三种口径（与运行期裁决同一套公式，避免"XML 与 Java 各算一遍"漂移）：
+     * <p>三种规则（与运行期裁决同一套公式，避免"XML 与 Java 各算一遍"漂移）：
      * <ul>
      *   <li>{@code COUNT}：{@code 赞成票 >= 所需票数}；</li>
      *   <li>{@code RATIO + BY_PERSON}：{@code 赞成*100 >= 百分比*nrOfInstances}（分母＝应到人数）；</li>
      *   <li>{@code RATIO + BY_VOTE}：{@code 赞成*100 >= 百分比*(赞成+反对)}（分母＝实到票数）。</li>
      * </ul>
-     * 遗留行（未配新列）：保留原「否决提前收口」项 {@code 反对*100 > (100-百分比)*nrOfInstances}。
+     * 遗留行（未配新列）：保留原「否决提前办结」项 {@code 反对*100 > (100-百分比)*nrOfInstances}。
      */
     private String voteCompletionCondition(Node n, String taskId) {
         String ack = taskId + "_approvedCount";
@@ -477,11 +480,11 @@ public class WfBpmnTemplateService {
      * 并被 {@code WfModelService.initSync()} 用"内容是否相同"判断要不要升版本——若时长依赖
      * {@code now()}（工作日历推算），每次启动内容都不同 ⇒ 版本号会被无意义地反复 +1。
      * 故这里只放确定的自然小时数；<b>真正的到期真值是 {@code wf_task.due_time}</b>，
-     * 由 {@code WorkCalendarService} 算出、由 Delegate 与兜底作业在触发时优先读取
+     * 由 {@code WorkCalendarService} 算出、由 Delegate 与默认处理作业在触发时优先读取
      * （定时器在此仅充当"唤醒"，未到 due_time 时 Delegate 不动作，由安全网补齐）。
      *
-     * <p>多实例（会签/票签）节点不挂边界定时器：票签的收口由完成条件与
-     * {@code WfEngineFacade.resolveVoteOutcome} 负责，混入定时器只会让两条收口路径互相干扰。
+     * <p>多实例（会签/票签）节点不挂边界定时器：票签的办结由完成条件与
+     * {@code WfEngineFacade.resolveVoteOutcome} 负责，混入定时器只会让两条办结路径互相干扰。
      */
     private void appendTimeout(StringBuilder tasks, StringBuilder shapes, StringBuilder edges,
                                StringBuilder flows, Node n, String taskId, double taskX) {

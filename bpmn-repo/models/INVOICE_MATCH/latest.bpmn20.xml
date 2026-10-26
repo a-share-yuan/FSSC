@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_INVOICE_MATCH" targetNamespace="http://fssc">
+  <bpmn:process id="INVOICE_MATCH" name="发票校验复审（作业）" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:userTask id="IM_1" name="发票匹配结果确认【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
+    <bpmn:sequenceFlow id="Flow_in_IM_1" sourceRef="StartEvent_1" targetRef="IM_1" />
+    <bpmn:userTask id="IM_2" name="例外复审【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
+    <bpmn:sequenceFlow id="Flow_in_IM_2" sourceRef="IM_1" targetRef="IM_2" />
+    <bpmn:exclusiveGateway id="GW_IM" name="金额授权" default="Flow_end" />
+    <bpmn:sequenceFlow id="Flow_in_GW_IM" sourceRef="IM_2" targetRef="GW_IM" />
+    <bpmn:userTask id="IM_3" name="财务总监复核【财务总监】" flowable:candidateGroups="CFO" />
+    <bpmn:sequenceFlow id="Flow_GW_IM_IM_3" sourceRef="GW_IM" targetRef="IM_3"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 500000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_back_IM_3" sourceRef="IM_3" targetRef="EndEvent_1" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="GW_IM" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="INVOICE_MATCH">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="IM_1_di" bpmnElement="IM_1"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="IM_2_di" bpmnElement="IM_2"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="GW_IM_di" bpmnElement="GW_IM"><dc:Bounds x="596" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="IM_3_di" bpmnElement="IM_3"><dc:Bounds x="551" y="240" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="706" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_in_IM_1_di" bpmnElement="Flow_in_IM_1"><di:waypoint x="138" y="120" /><di:waypoint x="281" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_IM_2_di" bpmnElement="Flow_in_IM_2"><di:waypoint x="281" y="120" /><di:waypoint x="471" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_GW_IM_di" bpmnElement="Flow_in_GW_IM"><di:waypoint x="471" y="120" /><di:waypoint x="616" y="122" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_IM_IM_3_di" bpmnElement="Flow_GW_IM_IM_3"><di:waypoint x="616" y="122" /><di:waypoint x="616" y="280" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_back_IM_3_di" bpmnElement="Flow_back_IM_3"><di:waypoint x="616" y="280" /><di:waypoint x="724" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="616" y="122" /><di:waypoint x="724" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

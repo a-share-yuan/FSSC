@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -14,7 +17,7 @@ import java.time.LocalDateTime;
 
 /**
  * 单据收款事实（exp_bill_receipt，带 tenant_id）＝资金流入侧载体，镜像 {@link ExpBillPayment} 的反方向。
- * D-DEC-394（X-05 甲-1）：还款 80,000 的现金流入原先零载体，追溯链「收款」腿无从读数。
+ * D-DEC-394（X-05 甲-1）：还款 80,000 的现金流入原先零载体，追溯链「收款」环节无从读数。
  * <p>{@code createBy/updateBy} 为裸字段（无 fill 注解）⇒ 写入方必须显式 {@code setCreateBy(...)}，否则落 DB NULL。
  */
 @Data
@@ -39,7 +42,7 @@ public class ExpBillReceipt implements Serializable {
     private String payerName;
     private String bankName;
     private String bankAccount;
-    /** BANK/现金/票据，取值域沿用单据侧收款方式口径 */
+    /** BANK/现金/票据，取值域沿用单据侧收款方式规则 */
     private String receiveMethod;
     /** 公司收款账户（md_bank_account） */
     private Long receiveAccountId;

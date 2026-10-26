@@ -1,8 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * 列表页行内审批（InlineActions 的 ✓ / ✗）统一入口。
  *
  * 取代原先 11 个列表页各写一遍的两处反模式：
- *   - 「确认审批通过？」confirm + 硬编码 comment:'审批通过'（意见等于没写，留痕无价值）
+ *   - 「确认审批通过？」confirm + 硬编码 comment:'审批通过'（意见等于没写，记录无价值）
  *   - 无校验的「请输入驳回原因」prompt（空串也放行）
  *
  * 页面接入三步：

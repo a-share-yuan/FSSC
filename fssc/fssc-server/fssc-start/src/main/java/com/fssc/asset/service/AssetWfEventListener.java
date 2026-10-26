@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -27,7 +30,7 @@ import java.util.Set;
  *  <li>FA_TRANSFER_CROSS 通过 → 资产归属公司更新为目标公司（此时审批链已走完，公司维度不再影响后续）</li>
  *  <li>FA_TRANSFER_CROSS 驳回 → 资产公司未动；部门已改需人工处理（记录日志提示）</li>
  *  <li>合规整改( )：FA_ADD / FA_CIP_TO_ASSET / FA_DISPOSE 审批通过 → 生成资产凭证落 op_voucher
- *      （借固定资产/贷银行存款或在建工程；处置借累计折旧+处置损益贷固定资产），幂等防重、科目缺失记 WARN 跳过不阻断审批</li>
+ *      （借固定资产/贷银行存款或在建工程；处置借累计折旧+处置损益贷固定资产），去重防重、科目缺失记 WARN 跳过不阻断审批</li>
  * </ul>
  * <p>
  * 原 @EventListener 已移除，由 {@link com.fssc.workflow.event.EventOrchestrationBus} 统一分发。
@@ -47,19 +50,19 @@ public class AssetWfEventListener implements WfBizAction {
     private final com.fssc.budget.service.BudgetService budgetService;
     private final com.fssc.budget.mapper.BgOccupyMapper bgOccupyMapper;
     private final com.fssc.workflow.service.WfQueryService wfQueryService;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** X-06（D-DEC-431）：变动台账终态回写（发起侧 MdAssetService 插行，本类只把 APPROVING 改成终态） */
+    /** X-06（D-DEC-431）：变动台账最终状态回写（发起侧 MdAssetService 插行，本类只把 APPROVING 改成最终状态） */
     private final com.fssc.asset.mapper.MdAssetChangeLogMapper changeLogMapper;
 
     @Override
     public Set<String> bizTypes() {
         // D-DEC-319（批次0 P-4）：新增 FA_TRANSFER / FA_VALUE_ADJUST / FA_IMPAIRMENT——
         // 这三条此前"先改账再起流、驳回不回滚"（MdAssetService 零 @Transactional），
-        // 现发起侧只传目标值入流程变量，改账统一挪到本监听器 APPROVED 腿（驳回侧资产零改动）。
+        // 现发起侧只传目标值入流程变量，改账统一挪到本监听器 APPROVED 环节（驳回侧资产零改动）。
         // D-DEC-322（批次2）：FA_ALIENATE 并档进 FA_DISPOSE 载体（B 案 T-FA-3），事件 bizType 不变，
-        // 对外销售通过侧复用处置凭证腿（§1.4 无腿 #3 消除）。
-        // D-DEC-322（批次2）：+FA_CHECK_DIFF 盘点差异作业确认闭环留痕（结转凭证走 GL_CHECK_DIFF 做账档，账务分离）
+        // 对外销售通过侧复用处置凭证环节（§1.4 无环节 #3 消除）。
+        // D-DEC-322（批次2）：+FA_CHECK_DIFF 盘点差异作业确认闭环记录（结转凭证走 GL_CHECK_DIFF 做账档，账务分离）
         return Set.of("FA_DEPRECIATION", "FA_TRANSFER_CROSS", "FA_TRANSFER", "FA_VALUE_ADJUST", "FA_IMPAIRMENT",
                 "FA_ADD", "FA_CIP_TO_ASSET", "FA_DISPOSE", "FA_ALIENATE", "FA_CER", "FA_CHECK_DIFF");
     }
@@ -138,7 +141,7 @@ public class AssetWfEventListener implements WfBizAction {
                 log.info("跨法人调拨审批通过，资产 {} 归属公司 {} → {}",
                         assetId, asset.getCompanyId(), targetCompanyId);
             } else {
-                // 驳回：资产归属公司未变（transfer 未落库）；部门可能已调整，提示人工核对
+                // 驳回：资产归属公司未变（transfer 未写入数据库）；部门可能已调整，提示人工核对
                 log.warn("跨法人调拨 {} 审批驳回，资产 {} 归属公司保持 {}（部门如已调整请人工核对）",
                         event.getComment() == null ? "" : event.getComment(), assetId, asset.getCompanyId());
             }
@@ -149,7 +152,7 @@ public class AssetWfEventListener implements WfBizAction {
 
     /**
      * FA_DEPRECIATION 月度折旧计提审批结束收尾：通过 → 执行实际计提（阶段二）；驳回 → 批单置 REJECTED。
-     * 幂等由 AssetDeprBatchService.executeDepr 以 lastDeprDate/DONE 状态保障。
+     * 去重由 AssetDeprBatchService.executeDepr 以 lastDeprDate/DONE 状态保障。
      */
     private void handleDepreciationEnded(WfProcessEndedEvent event) {
         Long batchId = event.getBizId();
@@ -170,7 +173,7 @@ public class AssetWfEventListener implements WfBizAction {
 
     /**
      * FA_CER 资本性支出申请审批结束收尾（合规整改 ，联动 DA-01 修复）：
-     * 通过 → 按申请金额占用预算科目（幂等：已有 OCCUPY 流水跳过）并置 APPROVED；
+     * 通过 → 按申请金额占用预算科目（去重：已有 OCCUPY 流水跳过）并置 APPROVED；
      * 驳回 → 置 REJECTED；若此前已发生占用（异常时序/重复事件）则释放，正常时序未占用不动预算（防负占用）。
      */
     private void handleFaCerEnded(WfProcessEndedEvent event) {
@@ -186,7 +189,7 @@ public class AssetWfEventListener implements WfBizAction {
         }
         try {
             // DA-01 补充：驳回走 deleteProcessInstance(PROCESS_CANCELLED)，不触发 PROCESS_COMPLETED
-            // 的统一状态回写，这里按事件结果补写 wf_instance 终态（APPROVED 幂等覆盖无害）
+            // 的统一状态回写，这里按事件结果补写 wf_instance 最终状态（APPROVED 去重覆盖无害）
             if (event.getProcInstId() != null && !event.getProcInstId().isBlank()) {
                 try {
                     wfQueryService.updateInstanceStatus(event.getProcInstId(),
@@ -247,7 +250,7 @@ public class AssetWfEventListener implements WfBizAction {
         }
     }
 
-    /** 汇总 FA_CER 申请已发生的预算占用(OCCUPY−RELEASE 净额)，用于幂等占用与驳回释放 */
+    /** 汇总 FA_CER 申请已发生的预算占用(OCCUPY−RELEASE 净额)，用于去重占用与驳回释放 */
     private java.math.BigDecimal cerOccupyAmount(Long cerId) {
         java.math.BigDecimal net = bgOccupyMapper.sumAmountByBiz("FA_CER", cerId);
         return net == null ? java.math.BigDecimal.ZERO : net;
@@ -257,7 +260,7 @@ public class AssetWfEventListener implements WfBizAction {
      * FA_ADD 资产新增审批结束收尾（FA03-D1 修复）：
      * 通过 → 状态 INIT→USING 并生成资产编号 asset_no（FA+yyyyMM+4位序号，当月递增）；
      * 驳回 → 保持 INIT，可修正后重新发起新增。
-     * 幂等：仅对仍处于 INIT 的资产执行收尾，重复事件不会重复编号。
+     * 去重：仅对仍处于 INIT 的资产执行收尾，重复事件不会重复编号。
      */
     private void handleAssetAddEnded(WfProcessEndedEvent event) {
         Long assetId = event.getBizId();
@@ -273,7 +276,7 @@ public class AssetWfEventListener implements WfBizAction {
         try {
             if (Boolean.TRUE.equals(event.getApproved())) {
                 // 合规整改( )：资产新增审批通过 → 生成资产增加凭证（借固定资产1601/贷银行存款1002）。
-                // 幂等：existingVoucherId 同源判重；失败仅记日志，不阻断状态收尾。
+                // 去重：existingVoucherId 同源判重；失败仅记日志，不阻断状态收尾。
                 try {
                     voucherService.generateAssetVoucher(asset, "FA_ADD");
                 } catch (Exception vex) {
@@ -292,7 +295,7 @@ public class AssetWfEventListener implements WfBizAction {
                     upd.setAssetNo(assetNo);
                 }
                 assetMapper.updateById(upd);
-                // P4-3 审计扩面：本次实际变化为 status（INIT→USING），资产编号为空时一并留痕
+                // P4-3 审计扩面：本次实际变化为 status（INIT→USING），资产编号为空时一并记录
                 java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
                 auditBefore.put("status", asset.getStatus());
                 java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
@@ -317,7 +320,7 @@ public class AssetWfEventListener implements WfBizAction {
     /**
      * FA_CIP_TO_ASSET 在建工程转固审批结束收尾：
      * 通过 → 补资产编号（若空），并在建工程置"已转固"；驳回 → 在建工程回到可重新发起状态。
-     * 幂等：仅当资产编号为空才补号，md_cip 更新以 asset_id 回链定位。
+     * 去重：仅当资产编号为空才补号，md_cip 更新以 asset_id 回链定位。
      */
     private void handleCipToAssetEnded(WfProcessEndedEvent event) {
         Long assetId = event.getBizId();
@@ -361,10 +364,10 @@ public class AssetWfEventListener implements WfBizAction {
      * FA_DISPOSE 资产处置（报废）审批结束收尾（合规整改 + D-DEC-428 甲案改账时点后移）：
      * <p>通过 → 此刻才改账（累计折旧补提到顶＝原值−残值、账面净值冲至残值、状态置 SCRAP），
      * 再生成处置凭证（借 累计折旧+处置净损失 贷 固定资产，金额=资产原值）；
-     * 驳回 → <b>卡片零改动</b>，只留痕（发起侧已不预写，故无需回冲路径）。
+     * 驳回 → <b>卡片零改动</b>，只记录（发起侧已不预写，故无需回冲路径）。
      * <p>原形态＝发起瞬间预写改账（{@code MdAssetService.scrap}）＋驳回无回冲，本类因此出现
      * 「折旧与清理被合并进一笔、借方累计折旧取的是发起时的预写值」；现折旧轨迹与清理时点同源。
-     * <p>幂等：补提取"绝对值到顶"写法且已在顶时跳过更新；凭证按 existingVoucherId(bizType, assetId)
+     * <p>去重：补提取"绝对值到顶"写法且已在顶时跳过更新；凭证按 existingVoucherId(bizType, assetId)
      * 同源判重，重复事件不会重复生成。
      */
     private void handleDisposeEnded(WfProcessEndedEvent event) {
@@ -406,9 +409,9 @@ public class AssetWfEventListener implements WfBizAction {
                     after.put("netAmount", original.subtract(newAccum));
                     auditTrailService.recordUpdate(event.getBizType(), assetId, asset.getAssetNo(), "md_asset",
                             String.valueOf(assetId), before, after,
-                            "处置审批通过，累计折旧补提至残值口径并转 SCRAP"
+                            "处置审批通过，累计折旧补提至残值并转为报废（SCRAP）"
                                     + (event.getComment() == null || event.getComment().isBlank() ? "" : "：" + event.getComment()));
-                    // 凭证按改账后的口径出（借方累计折旧＝本次真实补提后的累计额）
+                    // 凭证按改账后的规则出（借方累计折旧＝本次真实补提后的累计额）
                     asset.setStatus("SCRAP");
                     asset.setAccumDepr(newAccum);
                     asset.setNetAmount(original.subtract(newAccum));
@@ -432,8 +435,8 @@ public class AssetWfEventListener implements WfBizAction {
     /**
      * FA_TRANSFER 部门间（同公司）调拨收尾（D-DEC-319，批次0 P-4 / A1）：
      * 发起侧（MdAssetService.transfer）不再预写 dept/company，目标值经流程变量传递；
-     * 通过 → 落 targetDeptId（targetCompanyId 非空且不同时一并落，防御性）；驳回 → 资产零改动，只留痕。
-     * 幂等：目标值与现值一致时跳过更新（重复事件无害）。
+     * 通过 → 落 targetDeptId（targetCompanyId 非空且不同时一并落，防御性）；驳回 → 资产零改动，只记录。
+     * 去重：目标值与现值一致时跳过更新（重复事件无害）。
      */
     private void handleTransferEnded(WfProcessEndedEvent event) {
         Long assetId = event.getBizId();
@@ -489,7 +492,7 @@ public class AssetWfEventListener implements WfBizAction {
      */
     private void handleValueAdjustEnded(WfProcessEndedEvent event) {
         Long assetId = event.getBizId();
-        // X-06（D-DEC-431）：台账终态回写放在资产判空之前——卡片缺失也不该让台账行永远停在 APPROVING
+        // X-06（D-DEC-431）：台账最终状态回写放在资产判空之前——卡片缺失也不该让台账行永远停在 APPROVING
         markChangeLogTerminated(event);
         MdAsset asset = assetId == null ? null : assetMapper.selectById(assetId);
         if (asset == null) {
@@ -572,12 +575,12 @@ public class AssetWfEventListener implements WfBizAction {
 
     /**
      * FA_CHECK_DIFF 盘点差异作业确认闭环（D-DEC-322，批次2 B-12）：
-     * 作业侧只留痕不记科目——差异结转凭证由总账凭证载体（GL_CHECK_DIFF 盘点结转档）依记账单生成，
-     * 作业与账务分离（P-2 口径），此处保证审批终态有留痕可溯。
+     * 作业侧只记录不记科目——差异结转凭证由总账凭证载体（GL_CHECK_DIFF 盘点结转档）依记账单生成，
+     * 作业与账务分离（P-2 规则），此处保证审批最终状态有记录可溯。
      */
     private void handleCheckDiffEnded(WfProcessEndedEvent event) {
         Long assetId = event.getBizId();
-        // X-06（D-DEC-431）：差异说明的载体＝变动台账行（发起侧 MdAssetService#checkDiff 插入），此处回写终态
+        // X-06（D-DEC-431）：差异说明的载体＝变动台账行（发起侧 MdAssetService#checkDiff 插入），此处回写最终状态
         markChangeLogTerminated(event);
         try {
             MdAsset asset = assetId == null ? null : assetMapper.selectById(assetId);
@@ -595,12 +598,12 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * X-06（D-DEC-431）：按 proc_inst_id 把变动台账从 APPROVING 回写为终态（通过 APPROVED／驳回 REJECTED）。
+     * X-06（D-DEC-431）：按 proc_inst_id 把变动台账从 APPROVING 回写为最终状态（通过 APPROVED／驳回 REJECTED）。
      *
-     * <p>只回写状态，不改卡片——改账腿各自保持原口径（D-DEC-319 原值调整、D-DEC-322 盘点差异作业与账务分离），
+     * <p>只回写状态，不改卡片——改账环节各自保持原规则（D-DEC-319 原值调整、D-DEC-322 盘点差异作业与账务分离），
      * 本方法解决的是"这次变动最后成没成"在库里没有答案。
      * <p>键＝proc_inst_id（发起侧起流后拿到的返回值），不用 asset_id 猜在途行；
-     * 幂等＝只更新 status 仍为 APPROVING 的行，重复事件第二次 0 行命中。
+     * 去重＝只更新 status 仍为 APPROVING 的行，重复事件第二次 0 行命中。
      * <p>{@code update_by} 是裸字段（无 fill 注解）⇒ 本回写不填更新人：审批事件线程里拿不到可靠操作人，
      * 填 0L 哨兵会把"系统回写"谎报成"某个用户改的"，留 NULL 更诚实；{@code update_time} 由注解回填＝回写时刻。
      */
@@ -665,7 +668,7 @@ public class AssetWfEventListener implements WfBizAction {
         }
     }
 
-    /** 从流程历史变量读 BigDecimal（D-DEC-319）：同上 fail-soft 口径 */
+    /** 从流程历史变量读 BigDecimal（D-DEC-319）：同上 fail-soft 规则 */
     private java.math.BigDecimal readDecimalVar(String procInstId, String name) {
         Object v = readVarRaw(procInstId, name);
         if (v == null) return null;

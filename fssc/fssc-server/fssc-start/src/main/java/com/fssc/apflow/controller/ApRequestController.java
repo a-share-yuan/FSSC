@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.apflow.controller;
 
 import com.fssc.apflow.entity.ApDispatchRule;
@@ -45,7 +48,7 @@ public class ApRequestController {
         return Result.success(service.get(id));
     }
 
-    /** 创建（EKP自动触发数据/共享手工录入） */
+    /** 创建（OA自动触发数据/共享手工录入） */
     @OperLog(module = "AP_REQUEST", operType = "ADD", desc = "创建付款服务申请单")
     @RequiresPerm("apflow:request:create")
     @PostMapping("/create")
@@ -53,7 +56,7 @@ public class ApRequestController {
         return Result.success(service.create(r));
     }
 
-    /** EKP作废后重拉覆盖（单号不变 R-10） */
+    /** OA作废后重拉覆盖（单号不变 R-10） */
     @OperLog(module = "AP_REQUEST", operType = "UPDATE", desc = "重拉覆盖服务申请单")
     @RequiresPerm("apflow:request:create")
     @PostMapping("/{id}/repull")
@@ -102,7 +105,7 @@ public class ApRequestController {
         return Result.success(service.groupReview(id, pass, (String) body.get("note")));
     }
 
-    /** 过账（EBS付款凭证） */
+    /** 过账（ERP付款凭证） */
     @OperLog(module = "AP_REQUEST", operType = "UPDATE", desc = "服务申请单过账")
     @RequiresPerm("apflow:request:post")
     @PostMapping("/{id}/post")

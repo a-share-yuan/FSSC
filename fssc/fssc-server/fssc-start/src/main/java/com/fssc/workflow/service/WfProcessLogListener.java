@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.fssc.framework.tenant.TenantContext;
@@ -20,15 +23,16 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * 流程处理详细日志监听器（G4 ④层治理，2026-09-24）——流程配置「详细日志开关」参数 4.3。
  *
  * <p><b>为什么挂在 Flowable 全局事件上，而不是在门面里插桩</b>：方案 §二 F3/F4 明确指出存在
  * <b>引擎旁路</b>——{@code empty_strategy=SKIP} 直连 {@code taskService.complete()}、
  * 超时 AUTO_PASS 与空节点跳过"不经过本方法"。门面插桩会<b>漏记这些旁路</b>，
- * 而"卡住的单子"恰恰经常死在旁路上。事件监听器与投影监听器同口径：<b>一个挂点，全路径覆盖</b>。
+ * 而"卡住的单子"恰恰经常死在旁路上。事件监听器与投影监听器同一规则：<b>一个挂点，全路径覆盖</b>。
  *
- * <p><b>注册策略（与镜像投影开关刻意不同）</b>：本监听器<b>无条件注册</b>，是否真正落库由
+ * <p><b>注册策略（与镜像投影开关刻意不同）</b>：本监听器<b>无条件注册</b>，是否真正写入数据库由
  * {@link WfProcessLogService#enabled()}（{@code sys_config.wf.log.detailed.enabled}）逐事件判定。
- * 理由：行业方案该参数是"运行时勾选即生效"的参数，若像镜像投影那样在启动期决定是否注册，
+ * 理由：该参数是"运行时勾选即生效"的参数，若像镜像投影那样在启动期决定是否注册，
  * 运营勾选后必须重启才生效——那又是"配置界面向业务承诺引擎没做的事"（方案 §一 症状 2）。
  * 代价是开关关闭时每个流程事件多一次 {@code sys_config} 单行查询，事件频率＝审批动作频率，可接受。
  *
@@ -183,7 +187,7 @@ public class WfProcessLogListener extends AbstractFlowableEventListener {
 
     /**
      * 构造基础行：租户从镜像实例行取（事件可能脱离请求上下文，如作业线程），
-     * 取不到再回退当前线程租户；两者皆无则写空租户（{@link WfProcessLogService#write} 内会兜底，
+     * 取不到再回退当前线程租户；两者皆无则写空租户（{@link WfProcessLogService#write} 内会默认处理，
      * 租户拦截器拦下时只 warn 不冒泡——日志行丢一条，不影响业务）。
      */
     private WfProcessLog base(String procInstId) {

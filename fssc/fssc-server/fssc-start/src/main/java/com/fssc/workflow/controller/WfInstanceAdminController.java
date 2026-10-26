@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.fssc.common.core.ErrorCode;
@@ -40,7 +43,7 @@ import java.util.Map;
  *       语义＝「我还没提交完/填错了，先把流程撤回来改」；
  *   <li>{@code POST /api/tenant/wf/instance/{bizType}/{bizId}/admin-cancel}
  *       ——<b>管理员强制撤销</b>，需 {@code wf:instance:admin} 权限，<b>必须填原因</b>，
- *       原因进流程留痕（{@code WfEngineFacade#cancelInstance} 的 reason 参数）。</li>
+ *       原因进流程记录（{@code WfEngineFacade#cancelInstance} 的 reason 参数）。</li>
  * </ol>
  *
  * <h3>安全约束</h3>
@@ -48,12 +51,12 @@ import java.util.Map;
  *   <li>只撤<b>RUNNING</b> 的实例（已办结/已驳回的不动，否则等于抹掉审计痕迹）；</li>
  *   <li><b>发起人校验</b>：withdraw 只允许 {@code startUserId == 当前登录人}，
  *       否则 403——防止 A 撤回 B 的单；</li>
- *   <li>不触发业务收尾（单据状态不变），与 dev 工具口径一致；</li>
+ *   <li>不触发业务收尾（单据状态不变），与 dev 工具规则一致；</li>
  *   <li>管理员入口<b>强制填原因</b>，空原因直接 400，保证撤销可追溯。</li>
  * </ul>
  *
  * <p><b>与 D-WF-14 的分工</b>：本类是<b>人工按需</b>撤销；
- * {@code WfZombieReconcileJob} 是<b>每日自动</b>收口「单据已终态/未提交却仍 RUNNING」的脱节实例。
+ * {@code WfZombieReconcileJob} 是<b>每日自动</b>办结「单据已最终状态/未提交却仍 RUNNING」的脱节实例。
  */
 @Slf4j
 @RestController
@@ -98,7 +101,7 @@ public class WfInstanceAdminController {
     /**
      * ② 管理员强制撤销（需 {@code wf:instance:admin} 权限，<b>必须填原因</b>）。
      *
-     * @param body 至少包含 {@code reason}（撤销事由，进流程留痕）
+     * @param body 至少包含 {@code reason}（撤销事由，进流程记录）
      */
     @RequiresPerm("wf:instance:admin")
     @OperLog(module = "WF", operType = "CANCEL", desc = "管理员强制撤销流程实例")
@@ -108,7 +111,7 @@ public class WfInstanceAdminController {
         String reason = body == null ? null : String.valueOf(body.get("reason"));
         if (reason == null || reason.isBlank() || "null".equals(reason)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "管理员撤销必须填写原因（reason）：将写入流程留痕，便于事后追溯");
+                    "管理员撤销必须填写原因（reason）：将写入流程记录，便于事后追溯");
         }
         List<WfInstance> running = runningInstances(bizType, bizId);
         if (running.isEmpty()) {

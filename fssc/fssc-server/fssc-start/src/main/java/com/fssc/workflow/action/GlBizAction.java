@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -69,8 +72,8 @@ public class GlBizAction implements WfBizAction {
     private final TaxRefundMapper taxRefundMapper;
     private final VoucherService voucherService;
     // D-C2-2：凭证号回写改由 VoucherService.readVoucherCommitted（独立事务）读取，
-    // 原 opVoucherMapper.selectById 直读受父事务 REPEATABLE READ 快照隔离，读不到出证腿刚提交的凭证行
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    // 原 opVoucherMapper.selectById 直读受父事务 REPEATABLE READ 快照隔离，读不到出证环节刚提交的凭证行
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
     /** D-DEC-189：月结「末节点通过才关账」的回写落点（业务判定全在 GlMonthCloseService，本类只做路由） */
     private final com.fssc.glex.service.GlMonthCloseService glMonthCloseService;
@@ -88,7 +91,7 @@ public class GlBizAction implements WfBizAction {
                 // 其余总账业务（收尾确认闭环）
                 "GL_MERGE", "GL_MONTH_CLOSE", "GL_SHARED_MASTER", "GL_FX_REVAL",
                 // 遗留流程定义（wf_business_flow 中仅有定义、无代码发起；_PROV/_PAY 拆分前的旧模板）
-                // 注册为兜底以免将来被发起时静默无收尾
+                // 注册为默认处理以免将来被发起时静默无收尾
                 "GL_TAX", "GL_SALARY");
     }
 
@@ -127,7 +130,7 @@ public class GlBizAction implements WfBizAction {
     }
 
     /**
-     * 月结（GL_MONTH_CLOSE）审批终态回写 —— D-DEC-189。
+     * 月结（GL_MONTH_CLOSE）审批最终状态回写 —— D-DEC-189。
      * <p>
      * 发起审批时月结单只是 RUNNING、md_period 依旧 NORMAL；真正的「关账」必须等最后一个节点通过。
      * 判定与写库都在 {@code GlMonthCloseService.applyApprovalOutcome}，本方法只做路由，
@@ -157,8 +160,8 @@ public class GlBizAction implements WfBizAction {
         }
         String prev = e.getStatus();
         if (!approved) {
-            // D-DEC-291：发起时已不再预置 POSTED，非通过终态须显性落到"不可入账"，界面才看得出单子死在哪一步。
-            // ROOT-17：撤回（申请人自己收回）与驳回（审批人否决）同落 REJECTED —— 该态在期间幂等闸
+            // D-DEC-291：发起时已不再预置 POSTED，非通过最终状态须显性落到"不可入账"，界面才看得出单子死在哪一步。
+            // ROOT-17：撤回（申请人自己收回）与驳回（审批人否决）同落 REJECTED —— 该态在期间去重校验
             // （APPROVING/APPROVED/POSTED）之外，修正后可重新制单；但日志与审计必须分开写，
             // 把"我撤回了"记成"被驳回了"会让审批轨迹失真。
             boolean withdrawn = event.withdrawn();
@@ -192,7 +195,7 @@ public class GlBizAction implements WfBizAction {
             }
             // 凭证默认落 DRAFT，过账由记账岗在凭证工作台完成（D-DEC-166 制审分离的人工控制点，
             // 月结侧 GlMonthCloseService.applyApprovalOutcome 会以"存在未过账凭证"拦关账）。
-            // 留痕须写明账面此刻有没有这笔数，否则单据 POSTED 会被读成"总账里已经有了"。
+            // 记录须写明账面此刻有没有这笔数，否则单据 POSTED 会被读成"总账里已经有了"。
             postedFlag = v == null ? "（凭证对象不可读）"
                     : "DRAFT".equals(v.getStatus()) ? "·凭证待过账" : "·凭证已过账";
         }
@@ -206,12 +209,12 @@ public class GlBizAction implements WfBizAction {
     }
 
     /**
-     * 税金族：末节点通过 → 生成 op_voucher（计提/缴纳两套分录）→ 回写终态与真实凭证号。
+     * 税金族：末节点通过 → 生成 op_voucher（计提/缴纳两套分录）→ 回写最终状态与真实凭证号。
      *
      * <p>D-DEC-136（与 D-DEC-125/291/292 同一回写机制）：计提记录在 {@code GlTaxProvisionService.provision}
-     * 的 insert 前就硬置 POSTED 并预造 {@code GLTX…} 号，流程随后才起 —— 提交瞬间即终态、审批链零回写。
+     * 的 insert 前就硬置 POSTED 并预造 {@code GLTX…} 号，流程随后才起 —— 提交瞬间即最终状态、审批链零回写。
      * 该文件属 tax 计提 job（他人独占面），本收尾不动它的置位语句，只把「状态置位」与「制证」解耦，
-     * 在末节点回写钩子上做实终态：
+     * 在末节点回写钩子上做实最终状态：
      * <ul>
      *   <li>计提链通过且出证成功 → POSTED ＋ 用凭证对象上的真号（JZ…）替换预造号（两轨号并存问题在此消解）；</li>
      *   <li>计提链通过但出证失败 → 退回 APPROVED（已审批·未入账），不冒充 POSTED；</li>
@@ -235,7 +238,7 @@ public class GlBizAction implements WfBizAction {
         String prev = e.getStatus();
         boolean withdrawn = event.withdrawn();
         if (!approved) {
-            // 驳回/撤回收口：落前置态，不留"无凭证却顶着入账态"
+            // 驳回/撤回办结：落前置态，不留"无凭证却顶着入账态"
             GlTaxProvision rej = new GlTaxProvision();
             rej.setId(id);
             if (payChain) {
@@ -297,15 +300,15 @@ public class GlBizAction implements WfBizAction {
                         : " 凭证号=" + upd.getVoucherNo());
     }
 
-    /** P4-3 审计扩面：税金族状态跃迁留痕（改前/改后只带 status，不整实体 JSON） */
+    /** P4-3 审计扩面：税金族状态跃迁记录（改前/改后只带 status，不整实体 JSON） */
     private void recordTaxAudit(WfProcessEndedEvent event, Long id, String bizNo, String before, String after, boolean approved) {
         recordStatusAudit(event, id, bizNo, "gl_tax_provision", before, after,
                 (approved ? "审批通过" : "审批驳回") + withComment(event));
     }
 
     /**
-     * P4-3 审计扩面：审批终态引起的单据状态跃迁统一留痕（总账记账族/薪酬族此前只有税金有，
-     * 三族同走一个回写钩子却留痕不齐，事后核查只能看出"变过"看不出"被谁审批变成这样"）。
+     * P4-3 审计扩面：审批最终状态引起的单据状态跃迁统一记录（总账记账族/薪酬族此前只有税金有，
+     * 三族同走一个回写钩子却记录不齐，事后核查只能看出"变过"看不出"被谁审批变成这样"）。
      *
      * @param before 改前状态（取事件到达时读到的单据原值）
      * @param after  改后状态
@@ -320,17 +323,17 @@ public class GlBizAction implements WfBizAction {
         auditTrailService.recordUpdate(event.getBizType(), id, bizNo, table, String.valueOf(id), b, a, note);
     }
 
-    /** 留痕附加审批意见（可空；与税金族既有留痕口径一致） */
+    /** 记录附加审批意见（可空；与税金族既有记录规则一致） */
     private static String withComment(WfProcessEndedEvent event) {
         String c = event.getComment();
         return c == null || c.isBlank() ? "" : "：" + c;
     }
 
     /**
-     * 薪酬族：末节点通过 → 生成 op_voucher（计提/发放两套分录）→ 回写终态。
+     * 薪酬族：末节点通过 → 生成 op_voucher（计提/发放两套分录）→ 回写最终状态。
      *
-     * <p>D-DEC-141（同一回写机制）：计提落库即 payStatus=PAID、发放提交瞬间又置 PAID，
-     * 两链共 8 节审批对单据零回写。现口径：
+     * <p>D-DEC-141（同一回写机制）：计提写入数据库即 payStatus=PAID、发放提交瞬间又置 PAID，
+     * 两链共 8 节审批对单据零回写。现规则：
      * <ul>
      *   <li>计提链（GL_SALARY_PROV）通过且出证成功 → POSTED（已计提入账·未发放）；出证失败 → APPROVED；驳回 → REJECTED；</li>
      *   <li>发放链（GL_SALARY_PAY）通过且出证成功 → PAID，并成对补出代扣缴纳凭证（D-DEC-142，
@@ -419,7 +422,7 @@ public class GlBizAction implements WfBizAction {
             log.info("薪酬批次 {}（GL_SALARY_PAY）审批通过 → PAID，发放凭证 {}；{}",
                     e.getRunNo(), v == null ? String.valueOf(voucherId) : v.getVoucherNo(), withholdDesc);
             // D-DEC-145：薪酬的预算「占用 → 已用」挂在这个时点——工资真发出去了（发放凭证已出、状态 PAID）
-            // 才确认消耗，计提链通过（POSTED）时只保留占用。时点口径与 D-DEC-104 一致。
+            // 才确认消耗，计提链通过（POSTED）时只保留占用。时点规则与 D-DEC-104 一致。
             settleSalaryBudgetQuietly(id, e.getRunNo());
             return;
         }
@@ -441,7 +444,7 @@ public class GlBizAction implements WfBizAction {
         recordStatusAudit(event, id, e.getRunNo(), "gl_salary_run", prev, upd.getPayStatus(),
                 "计提审批通过·已入账" + withComment(event));
         // D-DEC-145：计提通过 → 预算侧仍只是占用（OCCUPIED），本步骤刻意不做消耗确认：
-        // 账上认了成本、钱却还没出去，转已用就是 D-DEC-104 要修的旧口径。
+        // 账上认了成本、钱却还没出去，转已用就是 D-DEC-104 要修的旧规则。
         OpVoucher v = voucherService.readVoucherCommitted(voucherId);
         String provVoucherNo = v == null || v.getVoucherNo() == null ? String.valueOf(voucherId) : v.getVoucherNo();
         // gl_salary_run 无 voucher_no 列：真实凭证号只能按 op_voucher.source_doc_id 反查（补列＝DDL 裁决项）
@@ -486,14 +489,14 @@ public class GlBizAction implements WfBizAction {
             return;
         }
         if (!approved) {
-            // 驳回/撤回收口：自动对生成即 OFFSET（语义"已抵消"），驳回后无凭证却顶着已抵消态；
+            // 驳回/撤回办结：自动对生成即 OFFSET（语义"已抵消"），驳回后无凭证却顶着已抵消态；
             // 手工录入行为 DRAFT。统一落 REJECTED。成对录入的另一行（同期间、方向对换、同金额）
             // 能唯一定位时一并回收；定位不到唯一行只标本行并告警——不凭猜测改第二行。
             String prev = e.getOffsetStatus();
             boolean withdrawn = event.withdrawn();
             e.setOffsetStatus("REJECTED");
             glInterOffsetMapper.updateById(e);
-            // D-DEC-291：本族收尾留痕补齐——记账族/税金族/薪酬族的终态跃迁早已统一走 recordStatusAudit，
+            // D-DEC-291：本族收尾记录补齐——记账族/税金族/薪酬族的最终状态跃迁早已统一走 recordStatusAudit，
             // 内部往来抵消是同一个钩子里唯一"改了单据却零审计行"的一支（实测 audit_trail 无任何 GL_OFFSET 行），
             // 事后按审计表复核抵消轨迹只能回查 wf_task_history。只增审计行，不动单据语义。
             recordStatusAudit(event, id, e.getOffsetNo(), "gl_inter_offset", prev, "REJECTED",
@@ -531,7 +534,7 @@ public class GlBizAction implements WfBizAction {
         // D-DEC-138（12-29:88 的"自写号 vs 真号"双轨在内部往来域同样成立）：
         // gl_inter_offset.voucher_no 由 GlInterOffsetService 自写（GLIO+期间+序号），真实凭证号
         // 另由 VoucherService.nextVoucherNo() 发一套 ⇒ 界面那串号在凭证台账按号查 0 命中。
-        // 按 D-DEC-292/136（记账族/税金族）既有回写口径，用凭证对象上的真号替换自写号；
+        // 按 D-DEC-292/136（记账族/税金族）既有回写规则，用凭证对象上的真号替换自写号；
         // 出证失败就保持原号不动——既不冒充已出证，也不把已有号抹成空。
         Long voucherId = null;
         try {
@@ -565,7 +568,7 @@ public class GlBizAction implements WfBizAction {
 
     /**
      * 税务退税（GL_TAX_REFUND）：审批通过 APPLYING→APPROVED 并生成退税凭证；
-     * 驳回 APPLYING→REJECTED。仅当当前状态为 APPLYING 时才流转，避免覆盖 REFUNDING/REFUNDED 终态。
+     * 驳回 APPLYING→REJECTED。仅当当前状态为 APPLYING 时才流转，避免覆盖 REFUNDING/REFUNDED 最终状态。
      */
     private void handleTaxRefund(WfProcessEndedEvent event, boolean approved) {
         Long id = event.getBizId();

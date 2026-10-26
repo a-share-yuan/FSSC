@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.channel;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -107,8 +110,8 @@ public class HttpOcrChannel implements OcrChannel {
     /**
      * P0-1 凭据读取路径收敛：优先取统一凭据表 {@code ext_interface_config(category=OCR)}——
      * 集中托管、出参自动掩码（R5-D-038），凭据不再只散落在 sys_config 明文；
-     * 该分类未配置时回退 sys_config {@code ocr.api.token}，兼容存量配置、行为不变。
-     * 取值顺序：api_secret（Bearer 令牌）→ api_key → sys_config 兜底。
+     * 该分类未配置时回退 sys_config {@code ocr.api.token}，兼容历史配置、行为不变。
+     * 取值顺序：api_secret（Bearer 令牌）→ api_key → sys_config 默认处理。
      */
     private String resolveCredential() {
         try {

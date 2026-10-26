@@ -1,8 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * 账号/卡号展示层脱敏（R5-D-051）。
  *
  * 只改屏上呈现，不改接口原值：列表列绑这个函数，编辑表单与导出仍是全号，
- * 前端打码可被绕过（DevTools／直接调接口），后端出参侧的同类收口是本条目的剩余腿。
+ * 前端打码可被绕过（DevTools／直接调接口），后端出参侧的同类办结是本条目的剩余环节。
  */
 
 /** 保留的段长：首尾各 4 位——够辨认是哪户，又不足以拼出可用全号 */

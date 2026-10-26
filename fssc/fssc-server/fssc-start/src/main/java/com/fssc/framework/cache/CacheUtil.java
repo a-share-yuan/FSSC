@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.cache;
 
 import java.util.Map;
@@ -50,7 +53,7 @@ public final class CacheUtil {
         CACHE.keySet().removeIf(k -> k.startsWith(prefix));
     }
 
-    /** 清空全部（运维/租户切换兜底） */
+    /** 清空全部（运维/租户切换默认处理） */
     public static void clear() {
         CACHE.clear();
     }

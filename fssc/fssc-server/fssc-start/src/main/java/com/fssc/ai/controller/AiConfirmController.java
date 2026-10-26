@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.ai.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -57,7 +60,7 @@ public class AiConfirmController {
     /**
      * 我申请的票据（含各状态）：下令侧轮询用 —— 出票后不再只能凭 confirmId 盲等（D-N05/A-4 补配）。
      * 无 {@code @RequiresPerm}：可见范围由 applicant_user_id=本人 天然圈死，属"个人域读"，不扩权。
-     * 未过期却仍未消耗的票按 TTL 事实回显为 EXPIRED（只改写返回值、不落库），否则前端轮询链会永远等一张死票。
+     * 未过期却仍未消耗的票按 TTL 事实回显为 EXPIRED（只改写返回值、不写入数据库），否则前端轮询链会永远等一张死票。
      */
     @GetMapping("/mine")
     public Result<List<AiActionConfirm>> mine() {
@@ -83,5 +86,15 @@ public class AiConfirmController {
         boolean approve = Boolean.TRUE.equals(body.get("approve"));
         String reason = body.get("reason") == null ? null : String.valueOf(body.get("reason"));
         return Result.success(gatewayService.confirmTicket(id, approve, reason, UserContext.getRequired()));
+    }
+
+    /**
+     * 申请人撤回自己尚未被确认的票（会话修正「改成1200」、或用户主动取消）。
+     * 无 {@code @RequiresPerm}：可见/可动范围由 applicant_user_id=本人 圈死，属个人域操作。
+     */
+    @PostMapping("/{id}/cancel")
+    @OperLog(module = "AI治理", operType = "UPDATE", desc = "申请人撤回 AI 动作票据")
+    public Result<AiActionConfirm> cancel(@PathVariable Long id) {
+        return Result.success(gatewayService.cancelTicket(id, "申请人撤回", UserContext.getRequired()));
     }
 }

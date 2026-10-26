@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -17,7 +20,7 @@ import lombok.EqualsAndHashCode;
  *  <li>{@code exp_bill.bill_type}/{@code bill_sub_type} 是本表 {@code billType}/{@code billSubType}
  *      的取值来源，同一套码，<b>不另造枚举</b>（库内实测只有 APPLY/CLAIM/LOAN/REPAY/PAY 五型）；</li>
  *  <li>本表管「能不能在手机上提」，<b>不管</b>「谁能提」——权限仍走 {@code exp:bill:*} 那套授权，
- *      不在这里挂第二道权限闸（两道闸的真实面迟早分叉）；</li>
+ *      不在这里挂第二道权限校验（两道校验的真实面迟早分叉）；</li>
  *  <li>类型中文名（label）不在本表：仍由前端常量映射。两处定义同一份文案必然漂移。</li>
  * </ul>
  *

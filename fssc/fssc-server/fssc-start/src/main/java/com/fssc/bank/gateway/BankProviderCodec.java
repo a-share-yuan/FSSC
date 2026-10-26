@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.bank.gateway;
 
 import com.fssc.system.entity.ExtInterfaceConfig;
@@ -8,7 +11,7 @@ import java.util.Map;
 /**
  * 银行报文编解码器（域3 · R3 多银行 provider 分派）。
  *
- * <p><b>解决的问题</b>：R1/R2 把银企直联收编进 connector 后，通道语义（幂等/凭据/留痕/熔断）
+ * <p><b>解决的问题</b>：R1/R2 把银企直联收编进 connector 后，通道语义（去重/凭据/记录/熔断）
  * 已统一，但<b>报文形态仍是各家银行一套</b>。R3 的目标是让「新增一家银行」不再需要改
  * {@code HttpBankGateway} 里的那段 if/else。</p>
  *
@@ -42,7 +45,7 @@ public interface BankProviderCodec {
     /**
      * 按该银行形态组装付款批次报文底稿。
      *
-     * @param batchNo 付款批次号（幂等键组成部分）
+     * @param batchNo 付款批次号（唯一键组成部分）
      * @param items   付款明细
      * @param cfg     当前通道配置（可读 {@code extraConfig} 做字段映射/开关）
      * @return 交给通用网关外呼的请求体

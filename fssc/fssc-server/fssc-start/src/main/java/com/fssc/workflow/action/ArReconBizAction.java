@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.receivable.entity.ArReconRecord;
@@ -25,7 +28,7 @@ import java.util.Set;
 public class ArReconBizAction implements WfBizAction {
 
     private final ArReconRecordMapper arReconRecordMapper;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -40,7 +43,7 @@ public class ArReconBizAction implements WfBizAction {
         boolean approved = Boolean.TRUE.equals(event.getApproved());
         Long id = event.getBizId();
         if (id == null) {
-            // 历史以 bizId=NULL 发起的流程：无业务记录可翻转，仅记录闭环（流程完成已在 wf_instance 留痕）
+            // 历史以 bizId=NULL 发起的流程：无业务记录可翻转，仅记录闭环（流程完成已在 wf_instance 记录）
             log.info("{} 流程结束（无业务记录 bizId=NULL）：approved={}，无状态需翻转", cn, approved);
             return;
         }

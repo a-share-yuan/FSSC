@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div v-if="lines.length" class="role-hint">
     <div v-for="(l, i) in lines" :key="i" :class="l.level">{{ l.text }}</div>
@@ -25,7 +28,7 @@ watch(() => props.roleCode, async (code) => {
   }
 }, { immediate: true })
 
-/** 后端 roleHolderMatrix → 红/黄/灰三档提示（方案 §11.2 C-2 口径） */
+/** 后端 roleHolderMatrix → 红/黄/灰三档提示（方案 §11.2 C-2 规则） */
 function describe(code, r) {
   if (!r) return []
   const out = []

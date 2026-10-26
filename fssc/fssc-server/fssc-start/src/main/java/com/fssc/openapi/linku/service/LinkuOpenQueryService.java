@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.openapi.linku.service;
 
 import com.fssc.openapi.linku.LinkuOpenProperties;
@@ -22,7 +25,7 @@ import java.util.Map;
  * 本服务的全部 SQL 以入参 {@code tenantId} 显式过滤。</p>
  *
  * <p><b>代际优雅降级</b>：{@code ar_pre_invoice} 等蓝图代专有表在现役库不存在时，
- * 查询直接返回空列表（AR 三单匹配退化为两单匹配，不误判差异），与原直连实现同口径。</p>
+ * 查询直接返回空列表（AR 三单匹配退化为两单匹配，不误判差异），与原直连实现同一规则。</p>
  */
 @Slf4j
 @Service
@@ -44,7 +47,7 @@ public class LinkuOpenQueryService {
         if (!paid.isEmpty()) {
             return paid;
         }
-        // 兜底：实付台账无数据时回退付款计划（与原直连适配器 D-V4R-97 口径一致）
+        // 默认处理：实付台账无数据时回退付款计划（与原直连适配器 D-V4R-97 规则一致）
         log.info("[LinkU开放接口] exp_bill_payment 无数据（company={}, partner={}），回退 pay_plan 付款计划腿",
                 companyId, partnerCode);
         return queryMapper.selectPayPlanFallback(tenantId, companyId, partnerCode, l);
@@ -69,7 +72,7 @@ public class LinkuOpenQueryService {
         return queryMapper.selectReceipts(tenantId, companyId, partnerCode, bound(limit));
     }
 
-    /** AR 预制发票腿：表缺失（OTC 代）时返回空，与原直连实现同口径。 */
+    /** AR 预制发票环节：表缺失（OTC 代）时返回空，与原直连实现同一规则。 */
     public List<Map<String, Object>> preInvoices(Long tenantId, Long companyId, String partnerCode,
                                                  Integer limit) {
         if (!tableAvailable("ar_pre_invoice")) {
@@ -85,10 +88,10 @@ public class LinkuOpenQueryService {
     }
 
     /**
-     * AR 销售订单腿（P0-C《AR 三单匹配改造》）：候选表 {@code so_order}(+行) 缺失时返回空并告警。
+     * AR 销售订单环节（P0-C《AR 三单匹配改造》）：候选表 {@code so_order}(+行) 缺失时返回空并告警。
      *
-     * <p>与 {@link #preInvoices} 同口径：表不存在不抛错、返回空列表 ——
-     * 让 BCP 侧 AR 三单匹配判定为"缺订单腿 → 不自动通过"，<b>不回退采购订单</b>（回退即错配）。</p>
+     * <p>与 {@link #preInvoices} 同一规则：表不存在不抛错、返回空列表 ——
+     * 让 BCP 侧 AR 三单匹配判定为"缺订单环节 → 不自动通过"，<b>不回退采购订单</b>（回退即错配）。</p>
      */
     public List<Map<String, Object>> salesOrders(Long tenantId, Long companyId, String partnerCode,
                                                  String period, Integer limit) {
@@ -105,7 +108,7 @@ public class LinkuOpenQueryService {
         }
     }
 
-    /** AR 销售出库发货腿（P0-C）：候选表 {@code so_shipment} 缺失时返回空并告警。 */
+    /** AR 销售出库发货环节（P0-C）：候选表 {@code so_shipment} 缺失时返回空并告警。 */
     public List<Map<String, Object>> saleShipments(Long tenantId, Long companyId, String partnerCode,
                                                    Integer limit) {
         if (!tableAvailable("so_shipment")) {
@@ -137,7 +140,7 @@ public class LinkuOpenQueryService {
 
     /**
      * 期间冻结状态：{@code gl_month_close} 该期间最新一条记录 {@code status='CLOSED'} 即视为冻结
-     * （与 {@code bcp.adapter.fssc.otc-freeze-on-month-close} 口径一致；口径比蓝图代更严格）。
+     * （与 {@code bcp.adapter.fssc.otc-freeze-on-month-close} 规则一致；规则比蓝图代更严格）。
      */
     public Map<String, Object> periodStatus(Long tenantId, Long companyId, String period) {
         Map<String, Object> out = new HashMap<>();

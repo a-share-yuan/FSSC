@@ -1,11 +1,14 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
       <div style="display: flex; gap: 10px; align-items: center">
         <b>合规规则配置</b>
         <span style="color:#909399; font-size:12px">重复发票 / 费用不一致 / 超标 / 黑名单四类风险规则</span>
-      <el-button type="primary" size="small" style="margin-left:auto" @click="openCreate">新增规则</el-button>
-      <el-button size="small" @click="exportCsv(allRows, CSV_COLS, 'ComplianceRule')">导出 CSV</el-button>
+      <el-button v-permission="'compliance:rule:edit'" type="primary" size="small" style="margin-left:auto" @click="openCreate">新增规则</el-button>
+      <el-button size="small" @click="exportCsv(allRows, CSV_COLS, 'ComplianceRule')">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="exportBatchCsv(selRows, 'ComplianceRule')">导出选中({{ selRows.length }})</el-button>
       </div>
     </template>
@@ -35,12 +38,12 @@
       <el-table-column prop="sortNo" label="排序" width="60" align="center"  sortable />
       <el-table-column label="状态" width="90" align="center">
         <template #default="{ row }">
-          <el-switch :model-value="row.status === 'ENABLED'" @change="(v) => toggle(row)" />
+          <el-switch :model-value="row.status === 'ENABLED'" :disabled="!canEdit" @change="(v) => toggle(row)" />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="120" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+          <el-button v-permission="'compliance:rule:edit'" link type="primary" @click="openEdit(row)">编辑</el-button>
         </template>
       </el-table-column>
       <template #empty>
@@ -120,6 +123,9 @@ import { exportCsv, exportBatchCsv } from '../../utils/csv'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
 import { ruleTypeLabel, riskLevelLabel, ruleActionLabel } from '@/constants/enums.js'
+import { hasPerm } from '../../utils/perm'
+
+const canEdit = computed(() => hasPerm('compliance:rule:edit'))
 
 const selRows = ref([])
 const loading = ref(false)
@@ -150,7 +156,7 @@ const form = reactive({ id: null, ruleCode: '', ruleName: '', ruleType: 'DUPLICA
 
 const formRef = ref(null)
 
-// 规则编码/名称＝人工维护的业务键（非系统取号，不适用口径 Q1）；与后端 ComplianceRuleService 同口径
+// 规则编码/名称＝人工维护的业务键（非系统取号，不适用规则 Q1）；与后端 ComplianceRuleService 同一规则
 const complianceRules = {
   ruleCode: commonRules.required('请输入规则编码'),
   ruleName: commonRules.required('请输入规则名称'),
@@ -179,7 +185,7 @@ async function load() {
     const maxPage = Math.max(1, Math.ceil(allRows.value.length / pageSize.value))
     if (pageNum.value > maxPage) pageNum.value = maxPage
   } catch (e) {
-    // R5-D-033：取数失败置空并转空态，不透出后端原文
+    // R5-D-033：查询失败置空并转空态，不透出后端原文
     allRows.value = []
     loadError.value = true
     ElMessage.error('合规规则未能加载，请重新进入本页或稍后重试')

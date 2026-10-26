@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -37,13 +40,13 @@ import java.math.BigDecimal;
  * --   run_id                 BIGINT        NOT NULL                COMMENT '薪酬发放批次ID（gl_salary_run.id）',
  * --   run_no                 VARCHAR(64)   NULL                    COMMENT '发放批次号（冗余展示，D-DEC-143）',
  * --   period                 VARCHAR(16)   NULL                    COMMENT '会计期间 yyyyMM',
- * --   company_id             BIGINT        NULL                    COMMENT '记账公司（与 gl_salary_run.company_id 同口径）',
+ * --   company_id             BIGINT        NULL                    COMMENT '记账公司（与 gl_salary_run.company_id 同一规则）',
  * --   dept_id                BIGINT        NULL                    COMMENT '部门 sys_dept.id',
  * --   employee_id            BIGINT        NULL                    COMMENT '员工ID（有薪酬台账/人事主数据后填；现库无来源，留 NULL）',
- * --   emp_no                 VARCHAR(64)   NULL                    COMMENT '员工编号（sys_user.emp_no 同口径；取不到留 NULL，不臆造）',
+ * --   emp_no                 VARCHAR(64)   NULL                    COMMENT '员工编号（sys_user.emp_no 同一规则；取不到留 NULL，不臆造）',
  * --   emp_name               VARCHAR(128)  NULL                    COMMENT '员工姓名（同上，取不到留 NULL）',
  * --   salary_amount          DECIMAL(18,2) NULL                    COMMENT '本人应发工资（求和须等于 gl_salary_run.salary_amount）',
- * --   deduction_amount       DECIMAL(18,2) NULL                    COMMENT '本人其他扣除（旷工/罚款等，D-DEC-143 口径＝批次 deduction_amount 的到人分项）',
+ * --   deduction_amount       DECIMAL(18,2) NULL                    COMMENT '本人其他扣除（旷工/罚款等，D-DEC-143 规则＝批次 deduction_amount 的到人分项）',
  * --   social_security_amount DECIMAL(18,2) NULL                    COMMENT '本人社保个人部分（求和＝批次 social_security_amount）',
  * --   tax_amount             DECIMAL(18,2) NULL                    COMMENT '本人个人所得税（求和＝批次 tax_amount）',
  * --   net_amount             DECIMAL(18,2) NULL                    COMMENT '本人实发＝应发−其他扣除−社保−个税（与 P0-3 assertSalaryFormula 同式）',
@@ -60,16 +63,16 @@ import java.math.BigDecimal;
  * --   KEY idx_gl_sal_det_period (tenant_id, period)
  * -- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='薪酬发放人员级明细（D-DEC-143）';
  * --
- * -- 存量回灌：现库无人员级薪酬来源，本表建好时是空表，gl_salary_run 的 3 个历史批次
+ * -- 历史回灌：现库无人员级薪酬来源，本表建好时是空表，gl_salary_run 的 3 个历史批次
  * --（SR202612001 emp_count=10／SR202609001、SR202609002 emp_count=2）不予回填——
  * -- 从"人数 × 人均标准"反推到人＝造数。历史批次长期处于 checkEmpCountConsistency 的"明细 0 行"WARN 下，
- * -- 直到接入真实薪酬台账（见下"建档写入点前置条件"）。
+ * -- 直到接入真实薪酬台账（见下"建档写入位置前置条件"）。
  * --
- * -- 建档写入点的前置条件（缺一条都不落写入代码，避免把参数伪装成证据）：
+ * -- 建档写入位置的前置条件（缺一条都不落写入代码，避免把参数伪装成证据）：
  * --   ① 上面的 DDL 经人工裁决执行；
  * --   ② 出现行级来源——人事薪酬台账，或 md_employee 一类的员工主数据（现库没有，只有职级字典 md_employee_level）；
  * --   届时在 GlSalaryRunService.calculateRun 的 insert 之后、occupyBudgetForRun 之前按人建行，
- * --   并让人均标准 4 个 sys_config 参数退化为"无台账批计"兜底口径。
+ * --   并让人均标准 4 个 sys_config 参数退化为"无台账批计"默认处理规则。
  * -- </pre>
  *
  * @see com.fssc.glex.service.GlSalaryRunService#listDetailOfRun
@@ -92,7 +95,7 @@ public class GlSalaryRunDetail extends TenantAuditBase {
     private Long deptId;
     /** 员工ID（现库无人员级来源，取不到留 NULL） */
     private Long employeeId;
-    /** 员工编号（sys_user.emp_no 同口径；取不到留 NULL，不臆造） */
+    /** 员工编号（sys_user.emp_no 同一规则；取不到留 NULL，不臆造） */
     private String empNo;
     /** 员工姓名 */
     private String empName;

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.job;
 
 import com.fssc.framework.job.JobHeartbeatService;
@@ -33,15 +36,15 @@ import java.util.List;
  *
  * <h3>根因</h3>
  * 「作废/回退」类收尾都调了 {@link WfEngineFacade#cancelRunningInstancesByBiz}，
- * 但<b>单据从别的路径走到终态</b>时没有任何一方回调流程；且流程发起后单据退回草稿也无回收。
+ * 但<b>单据从别的路径走到最终状态</b>时没有任何一方回调流程；且流程发起后单据退回草稿也无回收。
  * ⇒ 流程与单据之间<b>缺少双向收敛机制</b>，只能靠人工定期清理。
  *
- * <h3>修法（自动收口 + 双向探测）</h3>
+ * <h3>修法（自动办结 + 双向探测）</h3>
  * 每日凌晨低峰扫描 RUNNING 实例，逐条用
- * {@link BillTerminalChecker#isBillTerminal}（终态）/ {@link BillTerminalChecker#isBillNotSubmitted}（未提交）判定：
+ * {@link BillTerminalChecker#isBillTerminal}（最终状态）/ {@link BillTerminalChecker#isBillNotSubmitted}（未提交）判定：
  * <ol>
- *   <li>单据已终态 ⇒ 撤销流程（留痕「单据已终态，自动收口」）；</li>
- *   <li>单据仍未提交 ⇒ 撤销流程（留痕「单据尚未提交，自动收口」）。</li>
+ *   <li>单据已最终状态 ⇒ 撤销流程（记录「单据已最终状态，自动办结」）；</li>
+ *   <li>单据仍未提交 ⇒ 撤销流程（记录「单据尚未提交，自动办结」）。</li>
  * </ol>
  *
  * <h3>安全设计（三条硬约束）</h3>
@@ -85,19 +88,19 @@ public class WfZombieReconcileJob {
     /**
      * 运维手工触发（管理端调用，权限 {@code wf:instance:admin}）。
      *
-     * <p><b>为什么必须有这个入口</b>：本Job 是唯一的自动收口手段，但它每天只跑一次（03:40）。
+     * <p><b>为什么必须有这个入口</b>：本Job 是唯一的自动办结手段，但它每天只跑一次（03:40）。
      * 一旦线上出现批量僵尸实例、或 Job 自身报错停摆，运维需要一个<b>立即执行</b>的通道——
      * 否则只能改cron 或重启服务，都太重。
      *
      * <p>与自动路径<b>共用同一段doReconcile 逻辑</b>，不存在「手工版和自动版行为不一致」的问题。
      *
-     * @return 收口结果（终态收口数／未提交收口数／跳过数）
+     * @return 办结结果（最终状态办结数／未提交办结数／跳过数）
      */
     @PostMapping("/api/tenant/wf/zombie-reconcile/run")
     @RequiresPerm("wf:instance:admin")
     @OperLog(module = "WF", operType = "OTHER", desc = "手工触发僵尸流程实例对账")
     public com.fssc.common.core.Result<java.util.Map<String, Object>> runNow() {
-        int[] stat = new int[3]; // [0]=终态收口 [1]=未提交收口 [2]=跳过
+        int[] stat = new int[3]; // [0]=最终状态办结 [1]=未提交办结 [2]=跳过
         jobHeartbeatService.run("WfZombieReconcileJob", () -> doReconcile(stat));
         return com.fssc.common.core.Result.success(java.util.Map.of(
                 "terminalClosed", stat[0],
@@ -125,7 +128,7 @@ public class WfZombieReconcileJob {
     }
 
     /**
-     * @param stat 可选的结果回填数组（长度 3：终态收口／未提交收口／跳过）；传 null 即纯定时任务路径
+     * @param stat 可选的结果回填数组（长度 3：最终状态办结／未提交办结／跳过）；传 null 即纯定时任务路径
      */
     private void doReconcile(int[] stat) {
         int ageMinutes = stat == null ? Math.max(minAgeMinutes, 1) : 0;
@@ -150,7 +153,7 @@ public class WfZombieReconcileJob {
         int draftClosed = 0;
         int skipped = 0;
         for (WfInstance inst : candidates) {
-            String procInstId = inst.getProcInstId(); // 仅用于日志定位；实际收口走 cancelRunningInstancesByBiz（按 bizType+bizId，能容错半脱节）
+            String procInstId = inst.getProcInstId(); // 仅用于日志定位；实际办结走 cancelRunningInstancesByBiz（按 bizType+bizId，能容错半脱节）
             String bizType = inst.getBizType();
             Long bizId = inst.getBizId();
             if (procInstId == null || procInstId.isBlank() || bizType == null || bizId == null) {
@@ -159,12 +162,12 @@ public class WfZombieReconcileJob {
             }
             try {
                 if (billTerminalChecker.isBillTerminal(bizType, bizId)) {
-                    // A类：单据已终态（PAID/APPROVED/VOID…），流程没跟上。
+                    // A类：单据已最终状态（PAID/APPROVED/VOID…），流程没跟上。
                     // 用 cancelRunningInstancesByBiz 而非 cancelInstance：它对
-                    // 「引擎实例已被删、视图仍 RUNNING」有补收口容错（ROOT-2口径），
+                    // 「引擎实例已被删、视图仍 RUNNING」有补办结容错（ROOT-2规则），
                     // 直接调 cancelInstance 会在这种半脱节状态下抛「实例不存在或已结束」。
                     int n = wfEngineFacade.cancelRunningInstancesByBiz(bizType, bizId,
-                            "D-WF-14 自动收口：单据 " + bizType + "#" + bizId + " 已进入终态，流程实例自动撤销");
+                            "D-WF-14 自动办结：单据 " + bizType + "#" + bizId + " 已结束，流程实例自动撤销");
                     terminalClosed += n;
                     if (n > 0) {
                         log.info("[僵尸实例对账] 终态收口 bizType={}, bizId={}, 撤销实例 {} 个", bizType, bizId, n);
@@ -172,7 +175,7 @@ public class WfZombieReconcileJob {
                 } else if (billTerminalChecker.isBillNotSubmitted(bizType, bizId)) {
                     // B 类：单据还没提交，挂在待办里点进去是空的
                     int n = wfEngineFacade.cancelRunningInstancesByBiz(bizType, bizId,
-                            "D-WF-14 自动收口：单据 " + bizType + "#" + bizId + " 尚未提交（草稿态），流程实例自动撤销");
+                            "D-WF-14 自动办结：单据 " + bizType + "#" + bizId + " 尚未提交（草稿态），流程实例自动撤销");
                     draftClosed += n;
                     if (n > 0) {
                         log.info("[僵尸实例对账] 未提交收口 bizType={}, bizId={}, 撤销实例 {} 个", bizType, bizId, n);
@@ -181,7 +184,7 @@ public class WfZombieReconcileJob {
                     skipped++;
                 }
             } catch (Exception e) {
-                // 单条失败不中断整轮：留待下轮重试，不影响其它实例收口
+                // 单条失败不中断整轮：留待下轮重试，不影响其它实例办结
                 skipped++;
                 log.warn("[僵尸实例对账] 单条处理失败 procInstId={}: {}", procInstId, e.getMessage());
             }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.service;
 
 import com.fssc.expense.entity.ExpBillLine;
@@ -6,7 +9,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * ⑤ 境外凭证合规纯规则集（V1.3.14，国家税务总局 2016年19号公告口径）：
+ * ⑤ 境外凭证合规纯规则集（V1.3.14，国家税务总局 2016年19号公告规则）：
  * 收据/行程单中文说明必填 / 境外票据无进项抵扣 / 差旅补贴超标并入个税判定。
  *
  * <p>全部静态纯函数，不依赖 Spring 与数据库，供 ExpenseBillService（提交校验链）、
@@ -46,8 +49,8 @@ public final class OverseasVoucherRule {
 
     /**
      * 境外无进项抵扣判定：abroad → true（境外收据/行程单非增值税扣税凭证，
-     * deduct_amount 应置 0、税率视为 0 口径）。已填 taxAmount/taxRate 且价税勾稽成立的不做重算，
-     * 仅在可抵扣税额层面归零（处理在调用方，便于留痕 log）。
+     * deduct_amount 应置 0、税率视为 0 规则）。已填 taxAmount/taxRate 且价税勾稽成立的不做重算，
+     * 仅在可抵扣税额层面归零（处理在调用方，便于记录 log）。
      */
     public static boolean forceNoDeduct(boolean abroad, ExpBillLine line) {
         return abroad && line != null;

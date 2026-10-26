@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -33,13 +36,13 @@ public class PeriodService {
      *
      * <p>原实现只按关键字过滤，同租户内 9 个法人公司的期间行互相全量可见（库内实测
      * md_period 覆盖 company_id=1/31~38），页面既看不出某行属于哪家公司，也筛不动。
-     * 现按本仓库既有口径接 {@code @DataScope} + {@link DataScopeKit}（与 R5-D-026 的
+     * 现按本仓库既有规则接 {@code @DataScope} + {@link DataScopeKit}（与 R5-D-026 的
      * {@code BankAccountService.page}、退货列表 {@code PurReturnService.page} 同法）：
      * md_period 无部门／经办人列，2~5 档一律降级到本公司；载体为空（注解未生效）时
      * {@link DataScopeKit} 不追加条件，故本方法必须始终挂在 {@code @DataScope} 之下。</p>
      *
      * <p>显式 {@code companyId} 筛选与数据范围是 <b>AND 叠加</b>，只会更窄，绝不放宽到
-     * 调用人范围之外；md_period.company_id 为 NOT NULL，直接等值，不涉及"租户共用"口径。</p>
+     * 调用人范围之外；md_period.company_id 为 NOT NULL，直接等值，不涉及"租户共用"规则。</p>
      */
     @DataScope("会计期间列表数据范围")
     public PageResult<MdPeriod> page(long pageNum, long pageSize, String keyword, Long companyId) {
@@ -84,7 +87,7 @@ public class PeriodService {
     public void update(MdPeriod e) {
         // D-DEC-111：通用编辑口带着 status（非 CLOSED）提交时，MyBatis-Plus 只更新非 null 字段，
         // 库里的 close_time/close_by 会原地残留 ⇒ 又造出「status=NORMAL 却带关账时间」的二源行。
-        // 本口不担当关账/反结账（那是 close/reopen 的职责），故显式清痕，保持「关账留痕只属于 CLOSED」。
+        // 本口不担当关账/反结账（那是 close/reopen 的职责），故显式清痕，保持「关账记录只属于 CLOSED」。
         if (e.getId() != null && e.getStatus() != null && !"CLOSED".equals(e.getStatus())) {
             mapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<MdPeriod>()
                     .eq(MdPeriod::getId, e.getId())
@@ -97,8 +100,8 @@ public class PeriodService {
     public void enable(Long id, boolean enable) {
         // D-DEC-111（残留写点取证结论）：本口是 reopen/reopenByPeriod 之外唯一把 status 写回
         // NORMAL 的地方，原实现只 set status —— 对已结账期间点「启用」即得「NORMAL + 关账时间/关账人」
-        // 的矛盾行（实测 md_period id=12、id=217 即此形态）。同 delete() 的口径：关账态不许经这里绕行
-        // 解锁（反结账另有入口 /{id}/reopen）；改状态时一并显式清空关账留痕。
+        // 的矛盾行（实测 md_period id=12、id=217 即此形态）。同 delete() 的规则：关账态不许经这里绕行
+        // 解锁（反结账另有入口 /{id}/reopen）；改状态时一并显式清空关账记录。
         MdPeriod exist = require(id);
         if ("CLOSED".equals(exist.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -146,7 +149,7 @@ public class PeriodService {
             throw new BizException(ErrorCode.PARAM_INVALID, "该期间未结账，无法反结账");
         }
         // D-DEC-189 配套：原实现用 updateById 置 null，MyBatis-Plus 默认忽略 null 字段
-        // ⇒ close_time/close_by 残留，重开后的期间带着"已关账时间/关账人"，状态与留痕二源。
+        // ⇒ close_time/close_by 残留，重开后的期间带着"已关账时间/关账人"，状态与记录二源。
         // 与 reopenByPeriod 同改：显式 set null。
         mapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<MdPeriod>()
                 .eq(MdPeriod::getId, id)
@@ -181,7 +184,7 @@ public class PeriodService {
     /**
      * 按 公司+期间 联动结账：月结试算平衡后调用，将 md_period 置 CLOSED。
      * D-VC-2：期间未建档时抛出业务异常（不再静默跳过——否则月结"成功"却没有任何期间被真正关闭，
-     * 属于假成功）；已结账时幂等跳过（重复月结不报错）。
+     * 属于假成功）；已结账时去重跳过（重复月结不报错）。
      */
     @Transactional(rollbackFor = Exception.class)
     public void closeByPeriod(Long companyId, int periodYear, int periodMonth) {
@@ -193,8 +196,8 @@ public class PeriodService {
      *
      * <p>关账时点后移到「月结审批末节点通过」后，回写发生在流程收尾线程里，那里<b>没有登录上下文</b>
      * （{@code UserContext} 为空），若仍只取 UserContext，md_period.close_by 会整列为 NULL
-     * ——期间被谁关闭无从追责。本重载允许调用方把审批人（末节点 APPROVE 留痕人）显式带进来；
-     * 传 null 时保持原口径取当前登录用户（人工直连结账路径行为不变）。
+     * ——期间被谁关闭无从追责。本重载允许调用方把审批人（末节点 APPROVE 记录人）显式带进来；
+     * 传 null 时保持原规则取当前登录用户（人工直连结账路径行为不变）。
      *
      * @param operatorId 关账操作人（审批人）；null 表示取登录上下文
      */
@@ -224,7 +227,7 @@ public class PeriodService {
 
     /**
      * 按 公司+期间 联动反结账：月结 unclose 通过校验后调用，将 md_period 由 CLOSED 回退 NORMAL（开账）。
-     * 期间不存在时抛业务异常；未结账时静默跳过（幂等）。清除关账时间/人。
+     * 期间不存在时抛业务异常；未结账时静默跳过（去重）。清除关账时间/人。
      */
     @Transactional(rollbackFor = Exception.class)
     public void reopenByPeriod(Long companyId, int periodYear, int periodMonth) {

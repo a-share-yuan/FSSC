@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.gateway;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -36,12 +39,12 @@ import java.util.UUID;
  * <p>Production can override with a @Primary bean that adds retry, circuit-breaker,
  * message transformation, or ESB routing — business services are agnostic.</p>
  *
- * <p><b>P0-2 幂等键强制化</b>：{@link #post(String, Object, String)} 同 (租户, 幂等键) 只真实外呼一次，
- * 之后回放首次 {@code response_body} 并落 {@code is_duplicate=1} 留痕，防重复付款/重复推送。</p>
+ * <p><b>P0-2 唯一键强制化</b>：{@link #post(String, Object, String)} 同 (租户, 唯一键) 只真实外呼一次，
+ * 之后回放首次 {@code response_body} 并落 {@code is_duplicate=1} 记录，防重复付款/重复推送。</p>
  *
- * <p><b>P0-3 失败留痕与重试</b>：每次外呼记录 {@code trace_id}/{@code retry_count}；只读类通道
+ * <p><b>P0-3 失败记录与重试</b>：每次外呼记录 {@code trace_id}/{@code retry_count}；只读类通道
  * （AI_MODEL/OCR/INVOICE_VERIFY/INVOICE_CERTIFY，以及 ERP 查询动作 {PROVIDER}_{ACTION} 中
- * {@code *_GET}/{@code *_QUERY}）失败可有界重试，变更类无幂等键时禁止自动重试；
+ * {@code *_GET}/{@code *_QUERY}）失败可有界重试，变更类无唯一键时禁止自动重试；
  * 历史失败由 {@link #retryFailed(int, int)} 供扫描 Job 串行重投。</p>
  *
  * <p><b>零回归</b>：鉴权头语义（apiKey→{@code Authorization: Bearer}、apiSecret→{@code X-API-Secret}）、
@@ -58,8 +61,8 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
             Set.of("AI_MODEL", "OCR", "INVOICE_VERIFY", "INVOICE_CERTIFY");
 
     /**
-     * P0-3 ERP 只读动作后缀：多 ERP 通道分类为 {PROVIDER}_{ACTION}（如 EBS_ORDER_GET /
-     * SAP_ORDER_QUERY），动作后缀命中即为查询类，无副作用，可与固定分类一样安全重试。
+     * P0-3 ERP 只读动作后缀：多 ERP 通道分类为 {PROVIDER}_{ACTION}（如 {PROVIDER}_ORDER_GET /
+     * {PROVIDER}_ORDER_QUERY），动作后缀命中即为查询类，无副作用，可与固定分类一样安全重试。
      */
     private static final List<String> READ_ONLY_SUFFIXES = List.of("_GET", "_QUERY");
 
@@ -74,7 +77,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
     private final CredentialResolver credentialResolver;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /** F 步：报文留痕体积上限（字符）；≤0 表示不截断（全量）。默认 4000，与改造前一致。 */
+    /** F 步：报文记录体积上限（字符）；≤0 表示不截断（全量）。默认 4000，与改造前一致。 */
     @Value("${fssc.connector.log.body-max:4000}")
     private int logBodyMax = 4000;
 
@@ -213,7 +216,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
     }
 
     /**
-     * Core HTTP call method: 幂等判定 → 有界重试 → 留痕。
+     * Core HTTP call method: 去重判定 → 有界重试 → 记录。
      */
     private GatewayResponse doCall(ExtInterfaceConfig cfg, String method, String jsonBody, String idempotencyKey) {
         String url = cfg.getApiUrl();
@@ -223,7 +226,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
             return resp;
         }
 
-        // P0-2 幂等命中：不重复外呼，回放首次结果
+        // P0-2 去重命中：不重复外呼，回放首次结果
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             IntegrationCallLog prev = findPrior(cfg, idempotencyKey);
             if (prev != null) {
@@ -262,7 +265,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
         return result;
     }
 
-    /** 纯外呼：不含幂等/留痕/重试逻辑，首呼与重投共用；请求头与错误识别保持原实现语义 */
+    /** 纯外呼：不含去重/记录/重试逻辑，首呼与重投共用；请求头与错误识别保持原实现语义 */
     private GatewayResponse sendOnce(ExtInterfaceConfig cfg, String method, String url, String jsonBody) {
         if (url == null || url.isBlank()) {
             return new GatewayResponse(0, null, 0, false, "API URL not configured");
@@ -327,7 +330,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
         }
     }
 
-    /** P0-2 查询首次调用记录（is_duplicate=0），用于幂等回放 */
+    /** P0-2 查询首次调用记录（is_duplicate=0），用于去重回放 */
     private IntegrationCallLog findPrior(ExtInterfaceConfig cfg, String idempotencyKey) {
         try {
             Long tenantId = TenantContext.getTenantId();
@@ -346,7 +349,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
 
     /**
      * P0-3 内联重试次数：优先读 extra_config.retry；未配置时只读类默认 2 次、变更类默认 0 次。
-     * 安全护栏：非只读类（付款/凭证推送）且无幂等键时一律 0 次，防重复提交。
+     * 安全护栏：非只读类（付款/凭证推送）且无唯一键时一律 0 次，防重复提交。
      */
     private int resolveMaxRetry(ExtInterfaceConfig cfg, String idempotencyKey) {
         boolean hasIdem = idempotencyKey != null && !idempotencyKey.isBlank();
@@ -477,7 +480,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
         return s.length() > max ? s.substring(0, max) : s;
     }
 
-    /** F 步：按配置留痕；max<=0 表示不截断（全量留痕）。 */
+    /** F 步：按配置记录；max<=0 表示不截断（全量记录）。 */
     private String truncateMaybe(String s, int max) {
         if (s == null || max <= 0) {
             return s;

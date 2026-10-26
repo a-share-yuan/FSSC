@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -27,7 +30,7 @@ public class MdGlConfig extends TenantAuditBase {
     private Long creditSubjectId;
     /** 贷方科目编码 */
     private String creditSubjectCode;
-    /** 会计科目名称（单行分录分支用，存 IFS 规则原文） */
+    /** 会计科目名称（单行分录分支用，存外部财务系统规则原文） */
     private String subjectName;
     /** 会计科目编码（单行分录分支用） */
     private String subjectCode;

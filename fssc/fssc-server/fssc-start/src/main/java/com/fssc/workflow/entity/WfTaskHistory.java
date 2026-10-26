@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -57,7 +60,7 @@ public class WfTaskHistory implements Serializable {
      * <p>定论行原先直接抄末位审批人的意见全文，与真实办理行只差一个 action、时间还早 1 秒，
      * 联查把它原样透出时看起来像"同一段签署内容留了两次"（12-18 #651/#652、12-21 #655/#656）。
      * 写侧判据已改为只记实例级结论；本字段让前端<b>无需再按 action 白名单自行推断</b>，
-     * 可把定论行归到"整单结论"栏而不是"第 N 节办理"栏。由读数侧（联查）赋值，落库不涉及。
+     * 可把定论行归到"整单结论"栏而不是"第 N 节办理"栏。由读数侧（联查）赋值，写入数据库不涉及。
      */
     @TableField(exist = false)
     private Boolean instanceLevel;

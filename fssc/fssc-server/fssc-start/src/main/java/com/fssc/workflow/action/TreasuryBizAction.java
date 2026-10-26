@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.masterdata.entity.MdBankAccount;
@@ -26,7 +29,7 @@ import java.util.Set;
  * <p>
  * 覆盖 TR_TRANSFER / TR_UPLOAD / TR_RECEIPT / TR_BILL / TR_PAY_FAIL /
  * TR_BANK_MASTER / TR_SEAL_CHANGE / TR_PLAN_ADJUST 八类资金域流程。
- * 审批通过：翻转业务单据终态 + 生成资金凭证；审批驳回：记录日志，无对应驳回态则保持原态。
+ * 审批通过：翻转业务单据最终状态 + 生成资金凭证；审批驳回：记录日志，无对应驳回态则保持原态。
  * <p>
  * 实体与状态语义：
  * <ul>
@@ -51,7 +54,7 @@ public class TreasuryBizAction implements WfBizAction {
     private final MdBankAccountMapper mdBankAccountMapper;
     private final VoucherService voucherService;
     private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -144,7 +147,7 @@ public class TreasuryBizAction implements WfBizAction {
                 upd.setId(id);
                 upd.setStatus("RECONCILED");
                 // D-DEC-421 甲案：状态翻档同处补写核销双列——此前薄更新只带 id＋status，
-                // recon_flag/recon_time 恒 0/NULL，按这两列取数的报表与幂等判断永远看不到这笔到账
+                // recon_flag/recon_time 恒 0/NULL，按这两列查询的报表与去重判断永远看不到这笔到账
                 upd.setReconFlag(Boolean.TRUE);
                 upd.setReconTime(java.time.LocalDateTime.now());
                 trCreditBillMapper.updateById(upd);
@@ -263,7 +266,7 @@ public class TreasuryBizAction implements WfBizAction {
         }
     }
 
-    /** 资金计划调整：审批通过 SELECTED/DRAFT→APPROVED；驳回保持原态。plan_no 为空时兜底回填（H-06/DF-03） */
+    /** 资金计划调整：审批通过 SELECTED/DRAFT→APPROVED；驳回保持原态。plan_no 为空时默认处理回填（H-06/DF-03） */
     private void handlePlanAdjust(WfProcessEndedEvent event, boolean approved) {
         Long id = event.getBizId();
         if (id == null) return;
@@ -279,7 +282,7 @@ public class TreasuryBizAction implements WfBizAction {
                 TrFundPlan upd = new TrFundPlan();
                 upd.setId(id);
                 upd.setStatus("APPROVED");
-                // 缺陷修复（H-06 / DF-03）：历史计划创建时未取号，审批结束兜底回填 plan_no
+                // 缺陷修复（H-06 / DF-03）：历史计划创建时未取号，审批结束默认处理回填 plan_no
                 if (plan.getPlanNo() == null || plan.getPlanNo().isBlank()) {
                     upd.setPlanNo(nextPlanNo());
                     log.info("资金计划 {} 调整审批结束兜底回填 plan_no={}", id, upd.getPlanNo());
@@ -289,7 +292,7 @@ public class TreasuryBizAction implements WfBizAction {
                 auditBefore.put("status", oldStatus);
                 java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
-                // 本次实际变化：plan_no 兜底回填时一并留痕
+                // 本次实际变化：plan_no 默认处理回填时一并记录
                 if (upd.getPlanNo() != null) {
                     auditBefore.put("planNo", plan.getPlanNo());
                     auditAfter.put("planNo", upd.getPlanNo());

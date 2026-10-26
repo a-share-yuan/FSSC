@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -160,7 +163,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
+// 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 // R5-13: 快捷键
@@ -208,7 +211,7 @@ const flow = reactive({ id: null, src: '', to: '', remark: '', tax: null, refund
 const formRef = ref(null)
 const flowFormRef = ref(null)
 
-// 与后端 changeStatus 同口径：→REFUNDED 必须登记实际到账金额，允许 0、不可为负，上限由 el-input-number max 兜
+// 与后端 changeStatus 同一规则：→REFUNDED 必须登记实际到账金额，允许 0、不可为负，上限由 el-input-number max 兜
 const flowRules = computed(() => ({
   to: commonRules.select(t('gl.refund.errTargetStatus')),
   refundedAmount: flow.to === 'REFUNDED'
@@ -315,7 +318,7 @@ function viewRefund(row) {
     status: statusName(row.status),
   }, {
     title: '退税详情',
-    labels: { refundNo: '退（抵）税单号', refundType: '退税类型', period: '所属期', calc: '计算口径',
+    labels: { refundNo: '退（抵）税单号', refundType: '退税类型', period: '所属期', calc: '计算方式',
       baseAmount: '计税依据', rate: '退税率', taxAmount: '应退税额', refundedAmount: '已退税额', status: '状态' },
   })
 }

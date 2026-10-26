@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.bank.gateway;
 
 import com.fssc.system.entity.ExtInterfaceConfig;
@@ -28,7 +31,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class BankChannelResolver {
 
-    /** ext_interface_config.category：银行通道（与历史口径一致，配置零迁移）。 */
+    /** ext_interface_config.category：银行通道（与历史规则一致，配置零迁移）。 */
     public static final String CATEGORY_BANK = "BANK";
 
     private final IntegrationGateway integrationGateway;
@@ -37,7 +40,7 @@ public class BankChannelResolver {
 
     private volatile Map<String, BankProviderCodec> registry;
 
-    /** provider（大写）→ 编解码器。未注册返回 null（由 activeCodec 兜底）。 */
+    /** provider（大写）→ 编解码器。未注册返回 null（由 activeCodec 默认处理）。 */
     public BankProviderCodec codecOf(String provider) {
         if (provider == null || provider.isBlank()) {
             return null;

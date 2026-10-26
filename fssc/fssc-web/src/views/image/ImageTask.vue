@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -17,7 +20,7 @@
           <el-option label="已质检" value="CHECKED" />
         </el-select>
         <el-button type="primary" size="small" @click="load">查询</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         <span style="margin-left: auto; color: #909399; font-size: 13px">
           采集来源：80 扫描客户端 / 81 手机 / 82 人工上传 / 83 第三方系统

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -19,7 +22,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 流程传阅（G2）投递服务 —— {@code wf_cc} 的<b>唯一写入点</b>（P3，2026-09-23）。
+ * 流程传阅（G2）投递服务 —— {@code wf_cc} 的<b>唯一写入位置</b>（P3，2026-09-23）。
  *
  * <p><b>为什么需要它</b>：复核发现 G2 是「三缺一之三」的彻底空壳 ——
  * 表 / 实体 / Mapper / 查询（{@code ccPage}）/ 已读标记 / 3 个 Controller 端点 /
@@ -32,7 +35,7 @@ import java.util.Set;
  * <ol>
  *   <li><b>节点级配置</b>：{@code wf_node_config.cc_users}（用户ID）∪ {@code cc_roles}
  *       （角色编码，运行期展开为在职成员）。按 {@code model_key + node_key} <b>精确匹配</b>
- *       —— 与 timeout_hours / up_level 同一条口径，<b>孤儿行配置一律不读</b>
+ *       —— 与 timeout_hours / up_level 同一条规则，<b>孤儿行配置一律不读</b>
  *       （当前配置表约 42.7% 的行 node_key 不在已部署 BPMN 的 userTask 集合内）。</li>
  *   <li><b>运行时入参</b>：审批人在审批弹窗临时指定的「抄送给」，不依赖任何配置，
  *       因而完全不受孤儿行问题影响。</li>
@@ -41,7 +44,7 @@ import java.util.Set;
  * <p><b>投递时机</b>：仅在审批<b>通过并推进</b>后投递（驳回会终止实例，且已有独立终止通知链路；
  * 给已终止的实例挂抄送点击价值低）。若后续需要「驳回也抄送」，在此处放开即可。
  *
- * <p><b>通知出口（D-DEC-119/149/187，2026-10-01 收口）</b>：投递成功后逐条发 {@code sys_message}
+ * <p><b>通知出口（D-DEC-119/149/187，2026-10-01 办结）</b>：投递成功后逐条发 {@code sys_message}
  * 站内信（{@value #CC_MSG_TYPE}）。此前本服务只写 {@code wf_cc}，而 {@code wf_cc} 不是任何人会主动去翻的
  * 地方 —— 抄送在数据层成立、在运营层失效，被抄送人永远不知道有单可看。站内信与 {@code wf_cc} 行
  * <b>同一条据</b>：{@code (biz_type, biz_id)} 直接取 {@code wf_cc} 上的业务域与单据主键，
@@ -52,8 +55,8 @@ import java.util.Set;
  *
  * <p><b>默认零影响</b>：两路来源皆空时不写任何行，{@code complete()} 行为与改造前逐字一致。
  *
- * <p><b>幂等</b>：库层 {@code wf_cc.uk_proc_node_user (proc_inst_id, from_node, cc_user_id)}
- * 兜底，重复投递（如驳回后重走同一节点）静默跳过，绝不因重复键中断审批。
+ * <p><b>去重</b>：库层 {@code wf_cc.uk_proc_node_user (proc_inst_id, from_node, cc_user_id)}
+ * 默认处理，重复投递（如驳回后重走同一节点）静默跳过，绝不因重复键中断审批。
  *
  * <p><b>失败不阻断</b>：调用方（{@code WfEngineFacade.complete}）已整体 try/catch；
  * 本类内部亦逐条 catch —— 传阅是附加可观测性，不允许影响审批主链路。
@@ -78,24 +81,24 @@ public class WfCcService {
     private final SysUserMapper sysUserMapper;
     private final com.fssc.framework.notify.NotifyService notifyService;
     /**
-     * 不变量 II（2026-10-15）：抄送角色展开复用<b>取人侧</b>的 scope 口径——
+     * 不变量 II（2026-10-15）：抄送角色展开复用<b>取人侧</b>的 scope 规则——
      * {@code COMPANY} 角色只投单据公司持有人、{@code GROUP} 角色投全局（本公司优先），
-     * 与 {@code NodeOrgResolver} 的指派/候选人查询完全同源，杜绝「审批收敛、抄送撒全网」的口径分裂。
+     * 与 {@code NodeOrgResolver} 的指派/候选人查询完全同源，杜绝「审批收敛、抄送撒全网」的规则分裂。
      */
     private final NodeOrgResolver nodeOrgResolver;
 
     /**
-     * 按<b>取人侧同口径</b>展开 {@code cc_roles} 为收件人集合（不变量 II，2026-10-15）。
+     * 按<b>取人侧同一规则</b>展开 {@code cc_roles} 为收件人集合（不变量 II，2026-10-15）。
      *
      * <p><b>为什么不能按角色编码直接反查全网用户</b>：指派链路（{@code NodeOrgResolver}）按
      * {@code sys_role.org_scope} 收敛——{@code COMPANY} 角色只取<b>单据公司</b>持有人、
      * {@code GROUP} 角色才取全网；而 {@code SysUserMapper.selectUserIdsByRoleCodes} 没有任何
-     * company/scope 条件。两套口径并存时，单公司单据会把抄送投给<b>所有公司</b>的同角色人员
+     * company/scope 条件。两套规则并存时，单公司单据会把抄送投给<b>所有公司</b>的同角色人员
      * （实测：company 1 的应收单抄出 20 人、横跨 9 家公司 ⇒ 过度知会/信息越界）。
      * 该缺陷在「角色 × 公司全覆盖」补位（278 账号）之后从偶发放大为必然，故必须与指派同源收敛。
      *
-     * <p><b>口径</b>：逐角色走 {@link NodeOrgResolver#listRoleCandidatesInScope}——
-     * COMPANY→本公司持有人（单据公司解析不到时取空，<b>不做全局兜底</b>：宁可少抄，
+     * <p><b>规则</b>：逐角色走 {@link NodeOrgResolver#listRoleCandidatesInScope}——
+     * COMPANY→本公司持有人（单据公司解析不到时取空，<b>不做全局默认处理</b>：宁可少抄，
      * 也不在解析失败时把抄送撒满全租户）；GROUP→全局（本公司优先序）；附带排除停用与 admin。
      * 单角色展开失败只跳过该角色，不影响其余角色与主链路（fail-soft，与 {@link #deliver} 整体一致）。
      *
@@ -209,14 +212,14 @@ public class WfCcService {
                 ok++;
                 delivered.add(cc);
             } catch (DuplicateKeyException ex) {
-                // uk_proc_node_user 幂等命中：同实例同来源节点同人已投递过。
+                // uk_proc_node_user 去重命中：同实例同来源节点同人已投递过。
                 // 不再补发提醒——提醒与抄送行同生同灭，重复投递正是"同一份抄送不要打扰两次"的信号。
                 log.debug("抄送已存在，跳过 procInst={} node={} uid={}", procInstId, nodeKey, uid);
             } catch (Exception ex) {
                 log.warn("抄送投递失败 procInst={} node={} uid={}", procInstId, nodeKey, uid, ex);
             }
         }
-        // ⑥ 通知出口（D-DEC-119/149/187）：抄送行落库后补发站内信，被抄送人才可能知道有单可看。
+        // ⑥ 通知出口（D-DEC-119/149/187）：抄送行写入数据库后补发站内信，被抄送人才可能知道有单可看。
         //    整段独立 try/catch——传阅提醒失败绝不回滚已成的抄送，也绝不阻断审批。
         for (WfCc cc : delivered) {
             notifyCc(cc);
@@ -246,7 +249,7 @@ public class WfCcService {
     }
 
     /**
-     * 抄送已读回写（D-DEC-187，2026-10-01 收口）。
+     * 抄送已读回写（D-DEC-187，2026-10-01 办结）。
      *
      * <p><b>为什么改</b>：{@code wf_cc.is_read} 是<b>收件人的个人状态</b>，不是流程管理动作，
      * 而端点此前挂 {@code wf:cc:update}——该码在授权表里只授 CONFIG_ADMIN／FIN_MANAGER／IT_ADMIN 三岗
@@ -257,7 +260,7 @@ public class WfCcService {
      * 与 D-DEC-187 登记的「5 条未读」同因，只是行数随投递增加）。
      * 光补通知（D-DEC-149）不解决这一半：提醒发得出去，已读状态仍永远翻不过来。
      *
-     * <p><b>口径</b>：与 {@code GET /cc/mine} 的「本人视角免权限码」一致——自己的抄送行不需要权限码；
+     * <p><b>规则</b>：与 {@code GET /cc/mine} 的「本人视角免权限码」一致——自己的抄送行不需要权限码；
      * 持 {@code wf:cc:update}（或通配 {@code *:*:*}）者仍可代人标记，原维护通道不缩。
      *
      * <p><b>归属校验必须留着</b>：去掉权限码不等于去掉。{@code wf_cc.id} 是自增主键、可枚举，
@@ -265,7 +268,7 @@ public class WfCcService {
      * 跨租户由 MyBatis-Plus 租户拦截器在 {@code selectById} 上天然收敛。
      *
      * @param operator 当前登录人（控制器传入，不接受裸 userId——需要它的 perms 判维护通道）
-     * @return {@code true} 本次真的把该行从 unread 置为 read；{@code false} 该行本就已是已读（重复点击幂等）
+     * @return {@code true} 本次真的把该行从 unread 置为 read；{@code false} 该行本就已是已读（重复点击去重）
      */
     public boolean markRead(Long id, com.fssc.framework.security.LoginUser operator) {
         if (id == null) {
@@ -305,7 +308,7 @@ public class WfCcService {
      * 抄送候选人（只读）：供审批弹窗「抄送给」做多选/远程搜索。
      *
      * <p>范围＝本租户 {@code status='NORMAL'} 的用户，<b>排除管理员</b>（与「admin 禁入业务审批节点」
-     * 同口径，抄送同样不往 admin 投）。租户条件由 MyBatis-Plus 拦截器注入。
+     * 同一规则，抄送同样不往 admin 投）。租户条件由 MyBatis-Plus 拦截器注入。
      *
      * @param keyword 姓名或登录名模糊匹配，可空
      * @param limit   返回上限，缺省 200、硬顶 500（抄送是辅助动作，不允许拉全量表）

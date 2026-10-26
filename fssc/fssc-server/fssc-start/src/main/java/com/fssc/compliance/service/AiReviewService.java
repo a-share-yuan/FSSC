@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,7 +34,7 @@ import java.util.Map;
  * <p>
  * D-DEC-018（X-31，乙）：现网 {@code AI_MODEL} 配的是会话补全接口（chat/completions），与本请求体不同型，
  * 调用恒失败 ⇒ 本类不再每单刷一条 WARN（改按时间窗聚合、累计计数），失败结论由调用方落
- * 「AI 未采纳·回退规则引擎（检查点）」业务留痕；真接 AI 属另一裁，本轮不启用、AI 结论也不得进 AUTO_PASS 链路。
+ * 「AI 未采纳·回退规则引擎（检查点）」业务记录；真接 AI 属另一裁，本轮不启用、AI 结论也不得进 AUTO_PASS 链路。
  */
 @Slf4j
 @Service

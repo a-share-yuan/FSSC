@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.treasury.entity.TrFundPlan;
@@ -15,8 +18,8 @@ import java.util.Set;
  * <p>
  * TR_PLAN 审批通过 → tr_fund_plan.status: DRAFT → APPROVED
  * <p>
- * 缺陷修复（H-06 / DF-03）：审批结束兜底回填 plan_no——历史单据创建时未取号导致
- * tr_fund_plan.plan_no=NULL、审批待办/列表单据号列恒空；已有编号则幂等跳过。
+ * 缺陷修复（H-06 / DF-03）：审批结束默认处理回填 plan_no——历史单据创建时未取号导致
+ * tr_fund_plan.plan_no=NULL、审批待办/列表单据号列恒空；已有编号则去重跳过。
  */
 @Slf4j
 @Component("treasuryPlanBizAction")
@@ -25,7 +28,7 @@ public class TreasuryPlanBizAction implements WfBizAction {
 
     private final TrFundPlanMapper trFundPlanMapper;
     private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -57,7 +60,7 @@ public class TreasuryPlanBizAction implements WfBizAction {
             auditBefore.put("status", oldStatus);
             java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
             auditAfter.put("status", upd.getStatus());
-            // 本次实际变化：plan_no 兜底回填时一并留痕
+            // 本次实际变化：plan_no 默认处理回填时一并记录
             if (upd.getPlanNo() != null) {
                 auditBefore.put("planNo", plan.getPlanNo());
                 auditAfter.put("planNo", upd.getPlanNo());

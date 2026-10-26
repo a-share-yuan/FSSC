@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.controller;
 
 import com.fssc.common.core.Result;
@@ -21,7 +24,7 @@ import java.util.Map;
 /**
  * 用户组管理（/api/tenant/system/group/**）—— 权限治理 v2。
  * 权限码 system:group:*（管理员经 *:*:* 直通；非管理员需菜单/授权下发后可用）。
- * 用户级 SoD 存量巡检另见 /sod/scan-perm（system:sod:scan）。
+ * 用户级 SoD 历史巡检另见 /sod/scan-perm（system:sod:scan）。
  */
 @RestController
 @RequiredArgsConstructor
@@ -77,7 +80,7 @@ public class TenantUserGroupController {
         return Result.success();
     }
 
-    /** 用户级 SoD 存量巡检（权限码并集维度），供定期复核页面/脚本消费 */
+    /** 用户级 SoD 历史巡检（权限码并集维度），供定期复核页面/脚本消费 */
     @RequiresPerm("system:sod:scan")
     @GetMapping("/api/tenant/system/sod/scan-perm")
     public Result<List<SoDService.SodViolation>> scanPermViolations() {

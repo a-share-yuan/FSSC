@@ -1,7 +1,10 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="user-manage">
     <el-row :gutter="12">
-      <!-- ============ 左侧：机构目录树（公司 → 部门，参照行业做法/同类系统左树右表） ============ -->
+      <!-- ============ 左侧：机构目录树（公司 → 部门，左树右表） ============ -->
       <el-col :span="5">
         <el-card shadow="never" class="org-tree-card">
           <template #header>
@@ -245,7 +248,7 @@ async function loadOrgTree() {
       label: d.deptName || d.deptCode || t('field.deptNo', { v1: d.id }),
       children: (d.children || []).map((c) => wrapDept(c)),
     })
-    // 未挂公司的部门兜底为根级"未分配部门"
+    // 未挂公司的部门默认处理为根级"未分配部门"
     const orphanDepts = forestOf(0)
     orgTree.value = [
       ...attachDepts(companyNodes),

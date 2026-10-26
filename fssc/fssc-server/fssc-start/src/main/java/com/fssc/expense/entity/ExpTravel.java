@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -38,7 +41,7 @@ public class ExpTravel implements Serializable {
     private LocalDate endDate;
     /** 天数 */
     private BigDecimal days;
-    /** 是否往返：1=往返 0=单程 NULL＝历史行未记录。界面「是否往返」栏参与住宿天数口径（PreApply.calcTravel 含往返 +1 天） */
+    /** 是否往返：1=往返 0=单程 NULL＝历史行未记录。界面「是否往返」栏参与住宿天数规则（PreApply.calcTravel 含往返 +1 天） */
     private Boolean roundTrip;
     /** 交通方式：FLIGHT/TRAIN/CAR/TAXI */
     private String trafficType;

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.controller;
 
 import com.fssc.asset.entity.MdAsset;
@@ -48,7 +51,7 @@ public class MdAssetController {
         return Result.success(service.get(id));
     }
 
-    /** X-06（D-DEC-431）读取腿：单卡变动台账（原值调整/盘点差异的原因、前后镜像、审批终态），最新在前 */
+    /** X-06（D-DEC-431）读取环节：单卡变动台账（原值调整/盘点差异的原因、前后镜像、审批最终状态），最新在前 */
     @RequiresPerm("asset:list")
     @GetMapping("/{id}/change-logs")
     public Result<List<com.fssc.asset.entity.MdAssetChangeLog>> changeLogs(@PathVariable Long id) {
@@ -147,7 +150,7 @@ public class MdAssetController {
     @PostMapping("/capitalRequest")
     public Result<Void> capitalRequest(BigDecimal amount, String assetName, Long deptId, Long companyId, String remark,
                                        Long budgetItemId) {
-        // budgetItemId 可选（为空自动取综合预算兜底科目）；发起即硬控校验，审批通过后占用
+        // budgetItemId 可选（为空自动取综合预算默认处理科目）；发起即硬控校验，审批通过后占用
         service.capitalRequest(amount, assetName, deptId, companyId, remark, budgetItemId);
         return Result.success();
     }
@@ -159,7 +162,7 @@ public class MdAssetController {
     }
 
     /**
-     * #16 税会差异清单（A105080 口径）：仅返回会计年限与税法年限不同、存在折旧差异的资产。
+     * #16 税会差异清单（A105080 规则）：仅返回会计年限与税法年限不同、存在折旧差异的资产。
      * diffAmount > 0（会计折旧 > 税法折旧）→ 纳税调增；< 0 → 纳税调减。
      */
     @RequiresPerm("asset:list")

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -30,7 +33,7 @@ public class ArMailPackage implements Serializable {
     private String receiver;
     private String receiverPhone;
     private String receiverEmail;
-    /** 收件人地址簿 ID（选择地址簿时落库，便于后续邮件管理） */
+    /** 收件人地址簿 ID（选择地址簿时写入数据库，便于后续邮件管理） */
     private Long recipientId;
     private String address;
     private String courierCompany;

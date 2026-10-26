@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.tracing.controller;
 
 import com.fssc.common.core.Result;
@@ -8,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * 单据全链路溯源控制器（P2-1 页面勾稽联查）。
+ * 联查、单据追溯。
  */
 @RestController
 @RequestMapping("/api/tenant/doc-tracing")

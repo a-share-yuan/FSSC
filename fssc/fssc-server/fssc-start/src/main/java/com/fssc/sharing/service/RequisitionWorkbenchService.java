@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -59,7 +62,7 @@ public class RequisitionWorkbenchService {
 
     /**
      * 返回当前用户可发起单据的场景卡片（按菜单权限过滤）
-     * 参考行业做法"人人报账大厅"：一个页面按场景卡片发起所有单据
+     * 统一收单大厅：一个页面按场景卡片发起所有单据
      */
     public List<Map<String, Object>> getScenes() {
         // 提取当前用户的菜单路径集合
@@ -177,7 +180,7 @@ public class RequisitionWorkbenchService {
                 .and(w -> w.eq(WfTask::getAssigneeId, userId)
                         .or().like(WfTask::getCandidateIds, "," + userId + ",")));
 
-        // 我发起的单据总数（与「我的单据」列表同口径：MyDocumentService.myDocs().total）
+        // 我发起的单据总数（与「我的单据」列表同一规则：MyDocumentService.myDocs().total）
         // 改前按 wf_instance RUNNING 计数，导致卡片数字 0 而列表有 N 条的矛盾（用户感知"权限对不上"）。
         // 现改为全类型 ownerCol 计数，数字与列表 total 一致。
         long mineCount;
@@ -199,9 +202,10 @@ public class RequisitionWorkbenchService {
             mineCount = 0;
         }
 
-        // wf_instance.status=COMPLETED 过滤，而该取值全库 0 行（终态实际写 APPROVED/REJECTED/CANCELLED）
+        // 我的已办——与「我的已办」tab 同一规则（wf_task_history 由我办理），改前按
+        // wf_instance.status=COMPLETED 过滤，而该取值全库 0 行（最终状态实际写 APPROVED/REJECTED/CANCELLED）
         // ⇒ 卡片恒为 0，和 tab 里的列表自相矛盾。
-        // D-DEC-109：终态收尾行自本轮起也带 oper_user_id（"谁的最后一票定论"），但它不是"我办了这一节"，
+        // D-DEC-109：最终状态收尾行自本轮起也带 oper_user_id（"谁的最后一票定论"），但它不是"我办了这一节"，
         // 计入就是把同一节数两遍（同 D-DEC-275 对作废行的处理），故与 tab 一并排除。
         long doneCount = wfTaskHistoryMapper.selectCount(new LambdaQueryWrapper<WfTaskHistory>()
                 .eq(WfTaskHistory::getOperUserId, userId)
@@ -218,7 +222,7 @@ public class RequisitionWorkbenchService {
     // ======================== 我的单据（费用域 exp_bill 一表） ========================
 
     /**
-     * 旧口径：只查 exp_bill（10+ 种 bill_type 都在这一张表，但合同/采购/预算/总账都不在）。
+     * 旧规则：只查 exp_bill（10+ 种 bill_type 都在这一张表，但合同/采购/预算/总账都不在）。
      * 全类型见 {@code MyDocumentService.myDocs()}（批次5 / D-CON-01）；本方法保留一个版本给旧入口。
      */
     public PageResult<Map<String, Object>> myBills(PageQuery query, String billType, String status) {
@@ -306,7 +310,7 @@ public class RequisitionWorkbenchService {
 
         LambdaQueryWrapper<WfTaskHistory> qw = new LambdaQueryWrapper<WfTaskHistory>()
                 .eq(WfTaskHistory::getOperUserId, userId)
-                // D-DEC-109：与上方卡片同口径——终态收尾行不算"我办理的某一节"
+                // D-DEC-109：与上方卡片同一规则——最终状态收尾行不算"我办理的某一节"
                 .notIn(WfTaskHistory::getAction, WfQueryService.TERMINAL_ACTIONS)
                 .orderByDesc(WfTaskHistory::getId);
 
@@ -335,8 +339,9 @@ public class RequisitionWorkbenchService {
 
     /**
      * 聚合单据全链路：单据基础 + 流程轨迹 + 凭证 + 付款 + 影像 + 档案
+     * 参考方案 P0-6 "单据详情内联展示流程轨迹 + 凭证 + 付款 + 影像 + 档案"
      *
-     * <p>本方法按 <b>exp_bill 主键</b>取数。"我的单据"扩到全类型后（批次5），各域 id 空间互不相干
+     * <p>本方法按 <b>exp_bill 主键</b>查询。"我的单据"扩到全类型后（批次5），各域 id 空间互不相干
      * （合同 id=7 与报销单 id=7 同时存在），故只有<b>明确是费用域</b>的类型才放行——
      * 类型缺失或非费用域一律拒绝：回一份同主键的报销单详情，比回空更危险。
      * 影像同样按 bizId 查（{@code img_file} 无类型维度），跨域时一并给空而不是给别人的影像。
@@ -350,7 +355,7 @@ public class RequisitionWorkbenchService {
             result.put("images", Collections.emptyList());
             result.put("imageCount", 0);
             result.put("error", (known ? "「" + bizType + "」不是费用域单据" : "未指明单据类型")
-                    + "，本详情接口按报销单(exp_bill)主键取数（各域 id 空间互不相干，跨域同 id 会撞号）"
+                    + "，本详情接口按报销单(exp_bill)主键查询（各域 id 空间互不相干，跨域同 id 会撞号）"
                     + "⇒ 请到该域的台账页查看");
             return result;
         }

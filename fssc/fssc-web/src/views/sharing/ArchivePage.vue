@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -25,7 +28,7 @@
       <div style="margin-bottom: 8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
         <!-- D-DEC-046：归档执行面（POST /tenant/sharing/enhance/archive/do-archive）服务端要
              op:archive:create，而本页菜单按 op:archive:list 授权 ⇒ 档案岗"看得见、点得动、必失败"。
-             可见性口径改为与接口一致：无执行码不渲染按钮，只留一句去向说明，避免误点后零反馈。 -->
+             可见性规则改为与接口一致：无执行码不渲染按钮，只留一句去向说明，避免误点后零反馈。 -->
         <el-button v-if="canArchive" type="primary" size="small" :disabled="!selected.length || q.archiveStatus !== ''"
                    :title="q.archiveStatus === '' ? '' : t('sharing.archive.hintOnlyUnarchived')"
                    @click="doArchive">{{ $t('sharing.archive.btnArchiveSel', { v1: selected.length }) }}</el-button>
@@ -107,7 +110,7 @@
         </el-table-column>
         <el-table-column :label="$t('sharing.archive.colArchFlow')" width="150" show-overflow-tooltip>
           <template #default="{ row }">
-            <!-- D-DEC-185／D-DEC-028：这一列是本卷 FM_ARCHIVE 归档审批流自身的实例号（后端读侧富化），
+            <!-- D-DEC-185／D-DEC-028：这一列是本卷 FM_ARCHIVE 归档审批流自身的实例号（后端读侧补充），
                  与 row.procInstId（被归档那张单的审批流）不是一回事，两列并存在此才可核对"哪次审批定的稿"。 -->
             <span v-if="row.archiveProcInstId">{{ archFlowLabel(row.archiveFlowStatus) }} · {{ shortProc(row.archiveProcInstId) }}</span>
             <span v-else style="color:#909399">{{ $t('sharing.archive.labelNotStarted') }}</span>
@@ -187,7 +190,7 @@ const canArchive = hasPerm('op:archive:create')
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 
-// D-DEC-182：归档流程轴词表（与后端 op_archive.archive_status 列注释、
+// D-DEC-182：归档流程轴名称表（与后端 op_archive.archive_status 列注释、
 // ArchiveBoard.vue 的 archStatusLabel 同一套，三处必须一起改）
 const ARCH_STATUS_LABEL = computed(() => ({ PENDING: t('sharing.archive.labelPending'), ARCHIVING: t('sharing.archive.labelArchiving'), ARCHIVED: t('sharing.common.colArchived'), DISPOSED: t('sharing.archive.labelDestroyed') }))
 const archLabel = computed(() => (s) => ARCH_STATUS_LABEL.value[s] || s || t('sharing.archive.labelUnknown'))

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -70,7 +73,7 @@ public class WfFlowConfigController {
         return Result.success();
     }
 
-    /** 必填收口（批次 2C，与前端 FlowConfig「全局配置」/ GenericList 流程配置弹窗同口径）。 */
+    /** 必填办结（批次 2C，与前端 FlowConfig「全局配置」/ GenericList 流程配置弹窗同一规则）。 */
     private void validate(WfFlowConfig c) {
         com.fssc.common.util.AssertUtil.notBlank(c.getCfgType(),
                 com.fssc.common.core.ErrorCode.PARAM_INVALID, "请选择配置类型");

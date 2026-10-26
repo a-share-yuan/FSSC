@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="ai-assistant">
     <!-- 悬浮触发按钮 -->
@@ -24,6 +27,7 @@
           <el-button link size="small" @click="switchTab('confirm')">
             待我确认<template v-if="confirmList.length">（{{ confirmList.length }}）</template>
           </el-button>
+          <el-button link size="small" @click="switchTab('skills')">能力</el-button>
           <el-button link size="small" @click="visible = false">
             <el-icon :size="18"><Close /></el-icon>
           </el-button>
@@ -44,8 +48,9 @@
             <b>票据 #{{ t.id }}</b>
             <el-tag size="small" :type="ticketTagType(t.status)">{{ ticketText(t.status) }}</el-tag>
           </div>
-          <div class="tk-row">动作：{{ t.actionCode }}</div>
+          <div class="tk-row">动作：<code>{{ t.actionCode }}</code></div>
           <div class="tk-row">{{ t.actionMethod }} {{ t.actionUrl }}</div>
+          <div v-if="t.argsText" class="tk-row">参数：<code>{{ t.argsText }}</code></div>
           <div class="tk-row">参数摘要：{{ short(t.paramsDigest) }}</div>
           <div class="tk-row">过期：{{ fmt(t.expireAt) }}</div>
           <div class="tk-actions">
@@ -58,29 +63,102 @@
         <div v-if="!confirmList.length && !confirmError" class="empty-tip">当前没有等您背书的票据。</div>
       </div>
 
+      <!-- 能力地图：服务端按本人权限剪枝，越权技能不出现 -->
+      <div v-else-if="tab === 'skills'" class="ai-messages">
+        <el-alert
+          v-if="skillsError"
+          :title="skillsError"
+          type="info"
+          :closable="false"
+          style="margin-bottom: 8px"
+        />
+        <div v-for="g in skillGroups" :key="g.type" class="skill-group">
+          <div class="skill-group-title">{{ g.label }}（{{ g.items.length }}）</div>
+          <div v-for="s in g.items" :key="s.name" class="skill-card">
+            <div class="skill-name">{{ s.title }}</div>
+            <div class="skill-desc">{{ s.description }}</div>
+            <div v-if="s.examples && s.examples.length" class="skill-example">例：{{ s.examples[0] }}</div>
+          </div>
+        </div>
+        <div v-if="!skillGroups.length && !skillsError" class="empty-tip">暂无可用能力。</div>
+      </div>
+
       <!-- 下令者视角：对话 + 指令执行链 -->
       <div v-else ref="msgList" class="ai-messages">
         <div v-for="(msg, i) in messages" :key="i" class="msg-item" :class="msg.role">
           <el-avatar v-if="msg.role === 'ai'" :size="28" class="msg-avatar">AI</el-avatar>
-          <div v-if="msg.ticket" class="ticket-card">
-            <div class="tk-head">
-              <b>票据 #{{ msg.ticket.confirmId }}</b>
-              <el-tag size="small" :type="ticketTagType(msg.ticket.status)">{{ ticketText(msg.ticket.status) }}</el-tag>
+          <div class="msg-body">
+            <div v-if="msg.text" class="msg-bubble">{{ msg.text }}</div>
+
+            <!-- 数据卡：只读查询的结构化结果 -->
+            <div v-if="msg.data" class="data-card">
+              <div class="dc-head">
+                <b>数据结果</b>
+                <span v-if="msg.data.total != null" class="dc-total">共 {{ msg.data.total }} 条</span>
+              </div>
+              <table v-if="rowsOf(msg.data).length" class="dc-table">
+                <thead>
+                  <tr><th v-for="c in colsOf(rowsOf(msg.data))" :key="c">{{ c }}</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(r, ri) in rowsOf(msg.data)" :key="ri">
+                    <td v-for="c in colsOf(rowsOf(msg.data))" :key="c">{{ cell(r, c) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else class="dc-empty">接口没有返回可展示的列表。</div>
             </div>
-            <div class="tk-row">动作：<code>{{ msg.ticket.action }}</code>（风险档 {{ riskLevelLabel(msg.ticket.riskLevel) }}）</div>
-            <div class="tk-row">参数：<code>{{ JSON.stringify(msg.ticket.args) }}</code></div>
-            <div class="tk-row">摘要：{{ short(msg.ticket.paramsDigest) }}｜过期：{{ fmt(msg.ticket.expireAt) }}</div>
-            <div v-if="msg.ticket.missing" class="tk-row warn">我还缺：{{ msg.ticket.missing }}（主数据 ID 我不会编造，请补全或驳回）</div>
-            <div class="tk-row">
-              现在请：换一位有确认权限的同事登录，在本助手「待我确认」里点确认。
-              确认后我以下令者本人的权限自动执行，无需您再操作。
+
+            <!-- 票据卡：写动作只出票，不执行 -->
+            <div v-for="t in msg.tickets" :key="t.confirmId" class="ticket-card">
+              <div class="tk-head">
+                <b>票据 #{{ t.confirmId }}</b>
+                <el-tag size="small" :type="ticketTagType(t.status)">{{ ticketText(t.status) }}</el-tag>
+              </div>
+              <div v-if="t.preview" class="tk-row tk-preview">{{ t.preview }}</div>
+              <div class="tk-row">动作：<code>{{ t.action }}</code>（风险档 {{ riskLevelLabel(t.riskLevel) }}）</div>
+              <div class="tk-row">参数：<code>{{ JSON.stringify(t.args) }}</code></div>
+              <div class="tk-row">摘要：{{ short(t.paramsDigest) }}｜过期：{{ fmt(t.expireAt) }}</div>
+              <div v-if="t.missing" class="tk-row warn">我还缺：{{ t.missing }}（主数据 ID 我不会编造，请补全或驳回）</div>
+              <div v-if="t.status === 'PENDING'" class="tk-row">
+                现在请：换一位有确认权限的同事登录，在本助手「待我确认」里点确认。
+                确认后我以下令者本人的权限自动执行，无需您再操作。
+              </div>
+              <div v-if="t.result" class="tk-row ok">执行成功，结果：<code>{{ JSON.stringify(t.result).slice(0, 300) }}</code></div>
+              <div v-if="t.error" class="tk-row bad">执行失败：{{ t.error }}</div>
+              <div v-if="t.status === 'PENDING'" class="tk-actions">
+                <el-button size="small" @click="cancelTicket(t)">撤回这张票</el-button>
+              </div>
             </div>
-            <div v-if="msg.ticket.result" class="tk-row ok">
-              执行成功，结果：<code>{{ JSON.stringify(msg.ticket.result).slice(0, 300) }}</code>
+
+            <!-- 知识出处 -->
+            <div v-if="msg.citations && msg.citations.length" class="cite-card">
+              <div class="cite-title">出处</div>
+              <div v-for="(c, ci) in msg.citations" :key="ci" class="cite-row">
+                <b>[{{ ci + 1 }}]</b> 《{{ c.title }}》
+                <span v-if="c.heading"> · {{ c.heading }}</span>
+                <div class="cite-path">{{ c.docPath }}</div>
+              </div>
             </div>
-            <div v-if="msg.ticket.error" class="tk-row bad">执行失败：{{ msg.ticket.error }}</div>
+
+            <!-- 导航落点 -->
+            <div v-if="msg.route" class="nav-card">
+              入口：<a :href="msg.route">{{ msg.route }}</a>
+            </div>
+
+            <!-- 反馈：只用于运营评测，不参与执行 -->
+            <div v-if="msg.role === 'ai' && msg.traceId" class="feedback-row">
+              <template v-if="!msg.feedback">
+                <el-button link size="small" @click="sendFeedback(msg, 1, '有帮助')"> 有帮助</el-button>
+                <el-button link size="small" @click="sendFeedback(msg, -1, '不准')"> 不准</el-button>
+                <el-button link size="small" @click="sendFeedback(msg, -1, '没查到')">没查到</el-button>
+                <el-button link size="small" @click="sendFeedback(msg, -1, '不是我要的')">不是我要的</el-button>
+              </template>
+              <span v-else class="feedback-done">{{ msg.feedback }}</span>
+            </div>
+
+            <div v-if="msg.meta" class="msg-meta">{{ msg.meta }}</div>
           </div>
-          <div v-else class="msg-bubble" v-html="msg.text"></div>
         </div>
         <div v-if="loading" class="msg-item ai">
           <el-avatar :size="28" class="msg-avatar">AI</el-avatar>
@@ -114,13 +192,11 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, nextTick, onUnmounted } from 'vue'
 import { ChatRound, Close, Promotion } from '@element-plus/icons-vue'
-import { billApi, wfApi, aiApi } from '../api'
+import { aiApi } from '../api'
 import { riskLevelLabel } from '@/constants/enums.js'
 
-const route = useRoute()
 const visible = ref(false)
 const tab = ref('chat')
 const input = ref('')
@@ -131,6 +207,12 @@ const confirmList = ref([])
 const confirmError = ref('')
 const busy = ref(null)
 
+const skillsError = ref('')
+const skillList = ref([])
+
+/** 会话号：同标签页内保持，服务端按 租户+用户 再圈一次；"改成1200/再填一张"靠它继承上下文。 */
+const sessionId = ref(newSessionId())
+
 /** 等待他人背书的票据（下令侧会话跟踪，5s 轮询自己的票据状态） */
 const tracked = ref([])
 const executedIds = new Set()
@@ -139,17 +221,32 @@ let pollTimer = null
 const messages = ref([
   {
     role: 'ai',
-    text: '<b>你好！我是 FSSC AI 助手</b><br/>我能做两件事：<br/>① 查数（只读、按你本人的权限取，立即出结果）；<br/>② 办事（写操作）——我会先出<b>确认票据</b>，请另一位真人背书后才执行，绝不自行落地。<br/>试试：<i>我今天有多少待办？</i> 或 <i>建一张 800 元的差旅报销单</i>',
+    text: '你好！我是 FSSC AI 助手。\n我能做两件事：\n① 查数：只读、按你本人的权限取，立即出结果；\n② 办事：先出确认票据，另一位真人背书后才执行，我不自行落地。\n试试：我今天有多少待办？ 或 帮我填写1000块的借款，再填写一个1200块的报销单据',
   },
 ])
 
 const quickQuestions = [
   '我今天有多少待办？',
-  '我司未派工的对账任务有多少条？',
-  '帮我查单据',
+  '帮我填写1000块的借款，再填写一个1200块的报销单据',
+  '上个月的报销单有哪些？',
   '报销流程是什么？',
-  '快捷键有哪些？',
 ]
+
+function newSessionId() {
+  const key = 'fssc-ai-session'
+  try {
+    let v = sessionStorage.getItem(key)
+    if (!v) {
+      v = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `s-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      sessionStorage.setItem(key, v)
+    }
+    return v
+  } catch (e) {
+    return `s-${Date.now()}`
+  }
+}
 
 function scrollToBottom() {
   nextTick(() => {
@@ -159,18 +256,75 @@ function scrollToBottom() {
 
 function short(d) { return d ? String(d).slice(0, 12) + '…' : '-' }
 function fmt(t) { return t ? String(t).replace('T', ' ').slice(0, 19) : '-' }
+
+/** 服务端回答含少量 <b>/<br> 排版标记；这里统一转为纯文本渲染，面板不再有 v-html 注入面。 */
+function stripHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(b|strong|i|em|p|div|small)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function ticketText(s) {
-  return ({ PENDING: '等待他人确认', CONFIRMED: '已确认·正在执行', USED: '已执行（票据已消耗）', EXPIRED: '已过期作废', REJECTED: '已被驳回', FAILED: '执行失败', EXECUTED: '已执行' })[s] || s
+  return ({
+    PENDING: '等待他人确认', CONFIRMED: '已确认·正在执行', USED: '已执行（票据已消耗）',
+    EXPIRED: '已过期作废', REJECTED: '已被驳回', FAILED: '执行失败', EXECUTED: '已执行',
+    CANCELLED: '已撤回',
+  })[s] || s
 }
 function ticketTagType(s) {
   if (s === 'USED' || s === 'EXECUTED') return 'success'
   if (s === 'EXPIRED' || s === 'REJECTED' || s === 'FAILED') return 'danger'
+  if (s === 'CANCELLED') return 'info'
   return 'warning'
+}
+
+const SKILL_TYPE_LABEL = { read: '查数能力', write: '办事能力（先出票）', knowledge: '知识问答', nav: '页面导航' }
+// 必须是 computed：写成普通函数时模板里的 v-for 拿不到数组（renderList 不接函数），
+// 而 `skillGroups.length` 取到的是函数的形参个数（0），于是能力地图永远显示"暂无可用能力"。
+const skillGroups = computed(() => {
+  const map = {}
+  for (const s of skillList.value) {
+    const type = s.type || 'other'
+    if (!map[type]) map[type] = { type, label: SKILL_TYPE_LABEL[type] || type, items: [] }
+    map[type].items.push(s)
+  }
+  return Object.values(map)
+})
+
+function rowsOf(data) {
+  if (!data) return []
+  if (Array.isArray(data.top5)) return data.top5
+  if (Array.isArray(data)) return data
+  return []
+}
+
+const PREFERRED_COLS = [
+  'billNo', 'invoiceNo', 'voucherNo', 'code', 'name', 'title', 'nodeName',
+  'statusName', 'status', 'amount', 'totalAmount', 'createTime', 'applyDate', 'dueTime',
+]
+function colsOf(rows) {
+  const present = new Set()
+  for (const r of rows.slice(0, 3)) {
+    if (r && typeof r === 'object') Object.keys(r).forEach((k) => present.add(k))
+  }
+  const cols = PREFERRED_COLS.filter((k) => present.has(k))
+  if (cols.length) return cols.slice(0, 5)
+  return Array.from(present).slice(0, 4)
+}
+function cell(row, key) {
+  const v = row == null ? null : row[key]
+  if (v == null) return '-'
+  if (typeof v === 'object') return JSON.stringify(v).slice(0, 40)
+  return String(v)
 }
 
 function switchTab(t) {
   tab.value = t
   if (t === 'confirm') loadConfirms()
+  if (t === 'skills') loadSkills()
 }
 
 async function loadConfirms() {
@@ -183,6 +337,16 @@ async function loadConfirms() {
   }
 }
 
+async function loadSkills() {
+  skillsError.value = ''
+  try {
+    skillList.value = (await aiApi.skills()) || []
+  } catch (e) {
+    skillList.value = []
+    skillsError.value = '读取能力地图失败：' + (e.message || '稍后再试')
+  }
+}
+
 async function decide(id, approve) {
   busy.value = id
   try {
@@ -190,7 +354,7 @@ async function decide(id, approve) {
     await loadConfirms()
     // 让下令侧轮询立刻看到状态翻转，不必等下一个 5s
     pollTracked()
-  } catch (e) { /* 拦截器已弹错 */ }
+  } catch (e) { /* 拦截器已提示 */ }
   busy.value = null
 }
 
@@ -208,110 +372,114 @@ async function send() {
   loading.value = true
   scrollToBottom()
 
-  let answer = ''
-  let ticket = null
   try {
     const out = await processQuery(q)
-    answer = out.text
-    if (out.ticket) ticket = { ...out.ticket, question: q, status: 'PENDING' }
+    messages.value.push({
+      role: 'ai',
+      text: stripHtml(out.text),
+      data: out.data,
+      citations: out.citations,
+      route: out.route,
+      tickets: out.tickets,
+      traceId: out.traceId,
+      sessionId: out.sessionId,
+      skill: out.skill,
+      question: q,
+      meta: out.meta,
+    })
+    for (const t of out.tickets) trackTicket(t)
   } catch (e) {
-    answer = `抱歉，查询出错：${e.message}`
+    messages.value.push({ role: 'ai', text: `本次没有执行任何系统操作：${e.message || '通道异常'}` })
   }
 
   loading.value = false
-  messages.value.push({ role: 'ai', text: answer, ticket })
-  // 渲染与轮询必须指向同一个对象，票据状态翻转才会在对话里长出来
-  if (ticket) trackTicket(ticket)
   scrollToBottom()
 }
 
-/** 只读动作直接出结果；写动作返回票据对象，交由轮询链在确认后执行。 */
+/** 只读动作直接出结果；写动作返回票据（可能一次多张），交由轮询链在确认后执行。 */
 async function processQuery(q) {
-  let instructErr = null
-  try {
-    const r = await aiApi.instruct(q)
-    if (r && (r.answer || r.data)) {
-      let out = `<b>${r.answer}</b>`
-      if (r.data) out += `<br/><pre class="ai-data">${JSON.stringify(r.data, null, 1).slice(0, 600)}</pre>`
-      if (r.action) out += `<br/><small>动作=${r.action}｜权限码=${r.permCode || '-'}｜引擎=${r.engine || '-'}｜traceId=${r.traceId || '-'}</small>`
-      if (r.engine === 'local-rule') {
-        out += `<br/><small class="warn">本轮由本地规则匹配选型（大模型通道不可用），换说法可能识别不到。</small>`
-      }
-      if (r.needsConfirm) {
-        return {
-          text: '',
-          ticket: {
-            confirmId: r.confirmId, action: r.action, args: r.args || {}, riskLevel: r.riskLevel,
-            paramsDigest: r.paramsDigest, expireAt: r.expireAt, engine: r.engine, missing: r.missing,
-          },
-        }
-      }
-      return { text: out }
-    }
-  } catch (e) { instructErr = e }
+  const r = await aiApi.instruct(q, sessionId.value)
+  if (!r) throw new Error('服务端没有返回结果')
+  if (r.sessionId) sessionId.value = r.sessionId
 
-  const local = await localRule(q)
-  if (!instructErr) return { text: local }
-  // 兜底可以答，但不能把"通道报错"粉饰成"没听懂这句话"
-  return { text: `<small class="warn">指令通道本轮报错：${instructErr.message}（以下为离线参考回答，未执行系统操作）</small><br/>${local}` }
+  const tickets = []
+  const fromStep = (s) => ({
+    confirmId: s.confirmId,
+    action: s.action,
+    args: s.args || {},
+    riskLevel: s.riskLevel,
+    paramsDigest: s.paramsDigest,
+    expireAt: s.expireAt,
+    skill: s.skill,
+    preview: s.preview,
+    missing: s.missing,
+    status: 'PENDING',
+    question: s.question || q,
+  })
+  if (Array.isArray(r.steps) && r.steps.length) {
+    for (const s of r.steps) if (s.needsConfirm) tickets.push(fromStep(s))
+  } else if (r.needsConfirm) {
+    tickets.push({
+      confirmId: r.confirmId,
+      action: r.action,
+      args: r.args || {},
+      riskLevel: r.riskLevel,
+      paramsDigest: r.paramsDigest,
+      expireAt: r.expireAt,
+      skill: r.skill,
+      preview: r.preview,
+      missing: r.missing,
+      status: 'PENDING',
+      question: q,
+    })
+  }
+
+  const metaParts = []
+  if (r.action) metaParts.push(`动作=${r.action}`)
+  if (r.permCode) metaParts.push(`权限码=${r.permCode}`)
+  if (r.skill) metaParts.push(`技能=${r.skill}`)
+  if (r.engine) metaParts.push(`引擎=${r.engine}`)
+  if (r.traceId) metaParts.push(`traceId=${r.traceId}`)
+  if (r.channelError) metaParts.push(`大模型通道不可用：${r.channelError}`)
+
+  return {
+    text: r.answer || '',
+    data: r.data,
+    citations: r.citations,
+    route: r.route,
+    tickets,
+    traceId: r.traceId,
+    sessionId: r.sessionId || sessionId.value,
+    skill: r.skill,
+    meta: metaParts.join('｜'),
+  }
 }
 
-/** 网关/目录未就绪时的本地兜底问答（与后端 local-rule 同源思路，纯前端可答的三问）。 */
-async function localRule(q) {
-  if (q.includes('待办') || q.includes('审批') || q.toLowerCase().includes('todo')) {
-    try {
-      const todo = await wfApi.todo()
-      const cnt = Array.isArray(todo) ? todo.length : 0
-      if (cnt === 0) return '你当前<b>没有待办审批</b>，一切处理完毕！'
-      const types = {}
-      todo.forEach(t => { types[t.billType || '其他'] = (types[t.billType || '其他'] || 0) + 1 })
-      let detail = Object.entries(types).map(([k, v]) => `${k}: ${v}件`).join('，')
-      return `你有 <b>${cnt}</b> 条待办审批。<br/>分类：${detail}<br/><a href="#/approval">点击前往审批</a>`
-    } catch (e) { return '查询待办失败，请稍后重试。' }
+async function sendFeedback(msg, rating, reason) {
+  try {
+    await aiApi.feedback({
+      traceId: msg.traceId,
+      sessionId: msg.sessionId,
+      skill: msg.skill,
+      question: msg.question,
+      answer: msg.text,
+      rating,
+      reason,
+    })
+    msg.feedback = rating === 1 ? '已记录：有帮助' : `已记录：${reason}`
+  } catch (e) {
+    msg.feedback = '反馈失败：' + (e.message || '稍后再试')
   }
+}
 
-  if (q.includes('报销') && (q.includes('流程') || q.includes('怎么'))) {
-    return `<b>报销流程：</b><br/>
-      1. 填写报销单（费用报账 > 新建）<br/>
-      2. 上传发票附件（支持OCR自动识别）<br/>
-      3. 提交审批，进入工作流<br/>
-      4. 审批人通过/驳回/核减<br/>
-      5. 审批通过后自动生成凭证<br/>
-      6. 进入付款流程<br/>
-      7. 付款完成后归档`
+async function cancelTicket(t) {
+  try {
+    await aiApi.cancelTicket(t.confirmId)
+    t.status = 'CANCELLED'
+    pollTracked()
+  } catch (e) {
+    t.error = e.message || '撤回失败'
   }
-
-  if (q.includes('快捷键') || q.toLowerCase().includes('shortcut')) {
-    return `<b>快捷键：</b><br/>
-      Ctrl+K: 全局搜索<br/>
-      Ctrl+/: 快捷键帮助<br/>
-      Ctrl+D: 收藏当前页<br/>
-      Ctrl+B: 打开收藏夹<br/>
-      Ctrl+E: 效率统计<br/>
-      Ctrl+H: 切换深/浅色<br/>
-      Alt+1~4: 快速导航<br/>
-      Esc: 关闭弹窗`
-  }
-
-  if (q.includes('查') && q.includes('单')) {
-    try {
-      const res = await billApi.myPage({ pageNum: 1, pageSize: 5 })
-      const list = res.list || []
-      if (list.length === 0) return '未找到你的单据。'
-      let rows = list.map(b => `${b.billNo || b.id} (${b.billType || '-'}) - ${b.status || '-'}`).join('<br/>')
-      return `你的最近 5 条单据：<br/>${rows}`
-    } catch (e) { return '查询单据失败，请稍后重试。' }
-  }
-
-  if (q.includes('当前') || q.includes('这是哪')) {
-    return `当前页面：<b>${route.meta?.title || route.path}</b><br/>路径：${route.path}`
-  }
-
-  return `我没能把这句话对到目录里的动作上。<br/>可以换个说法，或直接问：<br/>
-    - 查询待办审批<br/>
-    - 查询最近单据<br/>
-    - 解释报销流程<br/>
-    我不会替你发明一个系统里不存在的操作。`
 }
 
 // ------------------------------------------------ 票据状态轮询 → 确认后自动执行
@@ -342,20 +510,20 @@ async function pollTracked() {
     if (row.status === 'CONFIRMED') {
       w.status = 'CONFIRMED'
       await runConfirmed(w)
-    } else if (['USED', 'EXPIRED', 'REJECTED'].includes(row.status)) {
+    } else if (['USED', 'EXPIRED', 'REJECTED', 'CANCELLED'].includes(row.status)) {
       w.status = row.status
     }
   }
 }
 
-/** 已确认票据 → 走网关执行（同一条闸门；带幂等键，重放不产生第二张单）。 */
+/** 已确认票据 → 走网关执行（同一条校验；带唯一键，重放不产生第二张单）。 */
 async function runConfirmed(w) {
   if (executedIds.has(w.confirmId)) return
   executedIds.add(w.confirmId)
   try {
     const res = await aiApi.execute(
-      { instruction: w.question, model: w.engine || 'web-assistant', action: w.action, args: w.args, confirmId: Number(w.confirmId) },
-      `AIUI-${w.confirmId}-${Date.now()}`,
+      { instruction: w.question, model: 'web-assistant', action: w.action, args: w.args, confirmId: Number(w.confirmId) },
+      `AIUI-${w.confirmId}`,
     )
     w.result = res
     w.status = 'USED'
@@ -376,7 +544,7 @@ onUnmounted(() => {
 .ai-fab { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
 .ai-panel {
   position: fixed; bottom: 24px; right: 24px;
-  width: 400px; height: 560px;
+  width: 420px; height: 600px;
   background: #fff; border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   display: flex; flex-direction: column; overflow: hidden;
@@ -388,29 +556,53 @@ onUnmounted(() => {
 .msg-item { display: flex; gap: 8px; margin-bottom: 12px; }
 .msg-item.user { flex-direction: row-reverse; }
 .msg-avatar { background: #409eff; color: #fff; font-size: 11px; flex-shrink: 0; }
+.msg-body { max-width: 82%; display: flex; flex-direction: column; gap: 6px; }
+.msg-item.user .msg-body { align-items: flex-end; }
 .msg-bubble {
-  max-width: 75%; padding: 8px 12px; border-radius: 10px;
+  padding: 8px 12px; border-radius: 10px;
   font-size: 13px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
 }
 .msg-item.ai .msg-bubble { background: #f5f7fa; color: #303133; border-top-left-radius: 2px; }
 .msg-item.user .msg-bubble { background: #409eff; color: #fff; border-top-right-radius: 2px; }
-.msg-bubble a { color: #409eff; }
-.ai-data { background: #f8f9fb; border-radius: 6px; padding: 6px 8px; font-size: 11px; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 4px 0; }
+.msg-meta { font-size: 11px; color: #909399; word-break: break-all; }
+.data-card { width: 100%; border: 1px solid #dcdfe6; border-radius: 8px; padding: 8px 10px; background: #fff; }
+.dc-head { display: flex; justify-content: space-between; font-size: 12px; color: #303133; margin-bottom: 6px; }
+.dc-total { color: #409eff; }
+.dc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.dc-table th, .dc-table td { border-bottom: 1px solid #f0f2f5; padding: 4px 3px; text-align: left; vertical-align: top; word-break: break-all; }
+.dc-table th { color: #909399; font-weight: 500; }
+.dc-empty { font-size: 12px; color: #909399; }
+.cite-card { width: 100%; border-left: 3px solid #409eff; background: #f4f8ff; border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+.cite-title { font-weight: 600; margin-bottom: 4px; }
+.cite-row { color: #606266; margin-bottom: 4px; }
+.cite-path { color: #909399; font-size: 11px; word-break: break-all; }
+.nav-card { font-size: 12px; }
+.nav-card a { color: #409eff; }
 .typing { display: flex; gap: 4px; align-items: center; }
 .typing .dot { width: 6px; height: 6px; border-radius: 50%; background: #909399; animation: bounce 1s infinite; }
 @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
 .quick-questions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-top: 1px solid #f5f5f5; }
 .ai-input-area { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #ebeef5; align-items: flex-end; }
 .ticket-card {
-  flex: 1; border: 1px solid #e6a23c33; background: #fdf6ec; border-radius: 8px;
-  padding: 8px 10px; font-size: 12px; line-height: 1.6; margin-bottom: 12px;
+  width: 100%; border: 1px solid #e6a23c33; background: #fdf6ec; border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; line-height: 1.6; margin-bottom: 4px;
 }
 .tk-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .tk-row { color: #606266; word-break: break-all; }
+.tk-preview { color: #303133; font-weight: 500; }
 .tk-row code { background: #fff; padding: 0 3px; border-radius: 3px; }
 .tk-row.ok { color: #67c23a; }
 .tk-row.bad { color: #f56c6c; }
 .tk-actions { display: flex; gap: 6px; margin-top: 6px; }
+.feedback-row { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; }
+.feedback-done { font-size: 11px; color: #909399; }
+.skill-group { margin-bottom: 12px; }
+.skill-group-title { font-size: 12px; font-weight: 600; color: #409eff; margin-bottom: 4px; }
+.skill-card { border: 1px solid #ebeef5; border-radius: 6px; padding: 6px 8px; margin-bottom: 4px; }
+.skill-name { font-size: 12px; font-weight: 600; color: #303133; }
+.skill-desc { font-size: 11px; color: #606266; }
+.skill-example { font-size: 11px; color: #909399; }
 .empty-tip { color: #909399; font-size: 12px; text-align: center; padding: 24px 0; }
 .warn { color: #e6a23c; }
 </style>

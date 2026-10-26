@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -58,6 +61,7 @@ public class ImageReviewController {
         return Result.success(PageResult.of(p.getRecords(), p.getTotal(), q.getPageNum(), q.getPageSize()));
     }
 
+    /** 影像评价合法动作（与前端 evaluate 调用同一规则） */
     private static final Set<String> REVIEW_ACTIONS = Set.of("OK", "RE_COLLECT", "RESCAN", "REJECT");
 
     @RequiresPerm("image:review")
@@ -84,13 +88,13 @@ public class ImageReviewController {
             review.setReviewStatus("PENDING");
             reviewMapper.insert(review);
         } else if (!"PENDING".equals(review.getReviewStatus())) {
-            // 状态机：已评价记录不可重复评价（前端只在 PENDING 行渲染评价按钮，服务端同口径拦截）
+            // 状态机：已评价记录不可重复评价（前端只在 PENDING 行渲染评价按钮，服务端同一规则拦截）
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "该影像记录已评价为「" + review.getReviewStatus() + "」，不可重复评价；如需更正请走整单重采集/补采集");
         }
         review.setReviewStatus(req.getAction());
         review.setReviewTime(LocalDateTime.now());
-        // R5-D-225：评价留痕回填评价人（此前 review_user_id 恒 NULL，审核责任不可追溯）
+        // R5-D-225：评价记录回填评价人（此前 review_user_id 恒 NULL，审核责任不可追溯）
         review.setReviewUserId(UserContext.getRequired().getUserId());
         review.setRemark(req.getRemark());
         reviewMapper.updateById(review);
@@ -108,7 +112,7 @@ public class ImageReviewController {
     @OperLog(module = "IMAGE", operType = "INSERT", desc = "录入待评价影像")
     @PostMapping("/review/create")
     public Result<Long> reviewCreate(@RequestBody ImgReview review) {
-        // R5-D-226：服务端非空校验（与前端 reviewRules 同口径，双侧失效→双侧收口）
+        // R5-D-226：服务端非空校验（与前端 reviewRules 同一规则，双侧失效→双侧办结）
         AssertUtil.notBlank(review.getBatchNo(), ErrorCode.PARAM_INVALID, "请填写影像批次号");
         AssertUtil.notBlank(review.getBizNo(), ErrorCode.PARAM_INVALID, "请填写业务单号");
         review.setReviewStatus("PENDING");
@@ -124,10 +128,10 @@ public class ImageReviewController {
         if (review == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "影像评价记录不存在: " + id);
         }
-        // 已评价记录＝评价留痕，只允许删未评价的录入（与前端按钮闸同口径，W3 配套）
+        // 已评价记录＝评价记录，只允许删未评价的录入（与前端按钮校验同一规则，W3 配套）
         if (!"PENDING".equals(review.getReviewStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "该记录已评价为「" + review.getReviewStatus() + "」，评价结果属留痕，不可删除；仅待评价记录可删");
+                    "该记录已评价为「" + review.getReviewStatus() + "」，评价结果属于记录，不可删除；仅待评价记录可删");
         }
         reviewMapper.deleteById(id);
         return Result.success();
@@ -171,7 +175,7 @@ public class ImageReviewController {
         }
         e.setStatus("FIXED");
         e.setHandleTime(LocalDateTime.now());
-        // R5-D-225：处理留痕回填处理人（此前 handle_user_id 恒 NULL）
+        // R5-D-225：处理记录回填处理人（此前 handle_user_id 恒 NULL）
         e.setHandleUserId(UserContext.getRequired().getUserId());
         if (remark != null) e.setRemark(remark);
         exceptionMapper.updateById(e);

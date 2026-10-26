@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.controller;
 
 import com.fssc.asset.entity.AssetDeprBatch;
@@ -19,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 折旧计提批单（/api/tenant/asset/depr-batch/**，FA_DEPRECIATION 审批载体）。
  *
  * <p>月度折旧计提两阶段：先生成批单并发起 FA_DEPRECIATION 审批流（create/submit），
- * 审批通过事件回调自动执行实际计提；execute 为幂等兜底入口。</p>
+ * 审批通过事件回调自动执行实际计提；execute 为去重默认处理入口。</p>
  */
 @RestController
 @RequestMapping("/api/tenant/asset/depr-batch")
@@ -67,7 +70,7 @@ public class AssetDeprBatchController {
         return Result.success();
     }
 
-    /** 幂等兜底：审批通过后手动执行计提落账 */
+    /** 去重默认处理：审批通过后手动执行计提落账 */
     @RequiresPerm("asset:update")
     @OperLog(module = "ASSET", operType = "UPDATE", desc = "执行折旧批单计提")
     @PostMapping("/{id}/execute")

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -19,7 +22,7 @@ import java.util.List;
  * <p><b>为什么返回全量（含 {@code mobileEnabled=0} 的行）而不是只返回启用的</b>：
  * 页面上「以下类型请在电脑端提报」那块明示区用的正是这些 0 值行。只下发 1 值行会让不可提的类型
  * 从入口里静默消失——用户无法区分"这个业务不存在"和"这个业务存在但要去电脑端办"，
- * 前者会让人重复提单或干脆放弃。故排序口径是 {@code mobileEnabled} 降序 + {@code sort} 升序：
+ * 前者会让人重复提单或干脆放弃。故排序规则是 {@code mobileEnabled} 降序 + {@code sort} 升序：
  * 可提的排前面，明示区保持 seed 原序。</p>
  *
  * <p><b>两道条件不在本类手写</b>（与本仓既有做法一致）：
@@ -33,10 +36,10 @@ import java.util.List;
  * <p><b>读失败不抛给页面（取舍，写清楚）</b>：表未建、SQL 异常、租户上下文缺失等一律 catch 后
  * 返回空清单。理由是清单是<b>展示面</b>而非<b>校验面</b>——它不决定一张单能不能提交、
  * 也不参与任何金额或审批判断，把"配置读不到"升级成"提报页整片打不开"是 disproportionate 的失败。
- * 代价如实记两条：①空清单在页面上与"库里真的一行没有"不可区分，前端必须保留常量兜底，
- * 不能把空数组渲染成"移动端暂不支持任何类型"；②降级只在日志里留痕（warn），界面无提示。
+ * 代价如实记两条：①空清单在页面上与"库里真的一行没有"不可区分，前端必须保留常量默认处理，
+ * 不能把空数组渲染成"移动端暂不支持任何类型"；②降级只在日志里记录（warn），界面无提示。
  * 若将来本表被任何写侧/校验侧（例如提交时拦越权类型）消费，<b>该 try-catch 必须一并重评</b>：
- * 那时读失败返回空＝闸门全开，是不能接受的。</p>
+ * 那时读失败返回空＝校验全开，是不能接受的。</p>
  *
  * <p>只读：本类不含任何 INSERT/UPDATE/DELETE，不记操作日志。</p>
  */
@@ -49,7 +52,7 @@ public class ExpMobileTemplateService {
 
     /**
      * 移动端单据启用清单（全量，含未启用行）。
-     * 排序＝{@code mobile_enabled} 降序 + {@code sort} 升序 + {@code id} 升序（末位兜底：
+     * 排序＝{@code mobile_enabled} 降序 + {@code sort} 升序 + {@code id} 升序（末位默认处理：
      * {@code sort} 允许运营填同值，不加 id 则同值行的相对次序不稳定，前端列表会闪跳）。
      * 任何异常返回空列表，不向上抛。
      */

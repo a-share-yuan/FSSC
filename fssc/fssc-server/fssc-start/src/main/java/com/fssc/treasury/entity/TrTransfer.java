@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.treasury.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -61,10 +64,10 @@ public class TrTransfer implements Serializable {
     /** execute() 是否已跑（status=PAID） */
     @TableField(exist = false)
     private Boolean executed;
-    /** 账户余额是否已变动——execute() 是改 md_bank_account.balance 的唯一腿 */
+    /** 账户余额是否已变动——execute() 是改 md_bank_account.balance 的唯一环节 */
     @TableField(exist = false)
     private Boolean balanceMoved;
-    /** 是否已登记现金/银行日记账——本域无日记账登记腿，恒 false */
+    /** 是否已登记现金/银行日记账——本域无日记账登记环节，恒 false */
     @TableField(exist = false)
     private Boolean journalBooked;
     /** 三态码：NOT_APPROVED／APPROVED_NOT_EXECUTED／EXECUTED */
@@ -82,7 +85,17 @@ public class TrTransfer implements Serializable {
     /** 账证侧：凭证状态 DRAFT／POSTED */
     @TableField(exist = false)
     private String voucherStatus;
-    /** 下一步动作提示（乙案保持人工执行腿，审批通过不自动动账） */
+    /** 下一步动作提示（乙案保持人工执行环节，审批通过不自动动账） */
     @TableField(exist = false)
     private String nextActionText;
+
+    /**
+     * D-H4-02：执行人真名（非表列）——由 {@code update_by} 批查 sys_user 解析，
+     * 与执行时间 {@code update_time} 配对，供列表页外显"执行"两列。
+     * <p>执行记录此前只能去 {@code sys_oper_log} 里翻（H4 真跑实测），而 execute() 是
+     * {@code tr_transfer} 唯一的 PAID 写环节 ⇒ status=PAID 时 update_by/update_time 就是执行人/执行时刻。
+     * 真名规则＝nickName 优先、空则回落 userName（工号），与应付域/退货域同一套。
+     */
+    @TableField(exist = false)
+    private String executorName;
 }

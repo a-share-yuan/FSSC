@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -24,7 +27,7 @@ import java.util.Map;
  *
  * <p><b>G4 治理：三权分立</b>——本类只属<b>流程设计中心</b>（改 BPMN 模型本身），权限码由粗粒度
  * {@code wf:model} 迁移到 {@code wf:design:*}。迁移期用 {@code @RequiresPerm} 的<b>多码 OR 语义</b>
- * 并保留旧码 {@code wf:model}，故存量授权（CONFIG_ADMIN / IT_ADMIN）上线后不会 403。
+ * 并保留旧码 {@code wf:model}，故历史授权（CONFIG_ADMIN / IT_ADMIN）上线后不会 403。
  *
  * <p><b>2026-10-02 摘旧码（写读分面收尾）</b>：OR 语义下"留旧码"等于"旧码单独开全族"，实测
  * 只持 3358 {@code wf:model} 的 FSSC_SUPERVISOR（2 人）可直接调 {@code /publish} 越过界面发版，
@@ -411,7 +414,7 @@ public class WfDesignerController {
      *
      * <p>用途＝金额网关新规则的回归基线：规则改前/改后各跑一次逐格比对，在用模型的 error 必须零新增
      * ——网关出口顺序动一下就可能把整个流程族挡在发布门外，而这里是只读的，不碰任何单据。
-     * 与 {@code /validate} 用的是同一个 checker，所以体检结论就等于下一次发布的闸门结论。
+     * 与 {@code /validate} 用的是同一个 checker，所以体检结论就等于下一次发布的校验结论。
      */
     @RequiresPerm({"wf:design:list", "wf:model"})
     @GetMapping("/audit-models")

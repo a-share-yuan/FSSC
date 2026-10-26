@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.budget.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -51,7 +54,7 @@ public class BgOccupy implements Serializable {
     @TableField(exist = false)
     private String operUserName;
 
-    /** R5-D-269：操作人工号（非表列，取 sys_user.emp_no），供「姓名（工号）」可读口径展示与导出。 */
+    /** R5-D-269：操作人工号（非表列，取 sys_user.emp_no），供「姓名（工号）」可读规则展示与导出。 */
     @TableField(exist = false)
     private String operUserNo;
 }

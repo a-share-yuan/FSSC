@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.gateway;
 
 import lombok.Data;
@@ -28,7 +31,7 @@ public class GatewayResponse {
     /** Error message if connection failed or non-2xx */
     private String error;
 
-    /** P0-2 幂等命中回放：true 表示本次未真实外呼，直接回放首次结果 */
+    /** P0-2 去重命中回放：true 表示本次未真实外呼，直接回放首次结果 */
     private boolean duplicate;
 
     /**

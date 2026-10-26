@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -37,7 +40,7 @@ public class FxRevalController {
         return Result.success(service.revalMonth(period));
     }
 
-    /** 重估试算（只算不落库）：返回各桶期末汇率与预计差异，确认后正式执行 */
+    /** 重估试算（只算不写入数据库）：返回各桶期末汇率与预计差异，确认后正式执行 */
     @RequiresPerm("glex:fxreval:list")
     @GetMapping("/trial")
     public Result<Map<String, Object>> trial(@RequestParam String period) {

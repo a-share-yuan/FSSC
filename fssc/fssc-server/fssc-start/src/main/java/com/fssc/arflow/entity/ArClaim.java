@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -57,7 +60,7 @@ public class ArClaim implements Serializable {
     /** 厂别（附件四） */
     private String factoryCode;
     private String orderNo;
-    /** 解冻结果（EBS返回） */
+    /** 解冻结果（ERP返回） */
     private String unfreezeResult;
     /** 暂估冲回 1是 */
     private Integer reverseFlag;
@@ -68,7 +71,7 @@ public class ArClaim implements Serializable {
     private String handlerPool;
     /** AR组长（SLA升级） */
     private String groupLeader;
-    /** 审核/派工留痕 */
+    /** 审核/派工记录 */
     private String modifyNote;
     private String voucherNo;
     /** Flowable流程实例ID（EKP_REVIEW审批流，任务2补强接线） */

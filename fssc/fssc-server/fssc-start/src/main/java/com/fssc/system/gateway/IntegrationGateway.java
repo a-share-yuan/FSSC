@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.gateway;
 
 import com.fssc.system.entity.ExtInterfaceConfig;
@@ -50,11 +53,11 @@ public interface IntegrationGateway {
     GatewayResponse testConnection(Long configId);
 
     /**
-     * P0-2 幂等调用：带幂等键的外呼。同 (租户, 幂等键) 已有首次记录时不再外呼，
+     * P0-2 去重调用：带唯一键的外呼。同 (租户, 唯一键) 已有首次记录时不再外呼，
      * 直接回放首次结果，并落一条 {@code is_duplicate=1} 的记录。
-     * 默认实现退化为无幂等（{@code post(category, body)}），保持既有实现零改动。
+     * 默认实现退化为无去重（{@code post(category, body)}），保持既有实现零改动。
      *
-     * @param idempotencyKey {domain}:{tenantId}:{businessNo}[:{detail}]，为空则等价无幂等
+     * @param idempotencyKey {domain}:{tenantId}:{businessNo}[:{detail}]，为空则等价无去重
      */
     default GatewayResponse post(String category, Object body, String idempotencyKey) {
         return post(category, body);

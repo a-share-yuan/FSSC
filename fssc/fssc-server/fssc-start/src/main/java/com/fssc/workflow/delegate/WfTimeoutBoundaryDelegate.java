@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.delegate;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -23,8 +26,8 @@ import java.util.List;
  * ① 从 {@code currentActivityId} 反解出节点键（服务任务 id 生成为 {@code TimeoutAct_<userTaskId>}）；
  * ② 找到该节点在办的 Flowable 任务与 {@code wf_task} 镜像行；
  * ③ 交回 {@link WfTimeoutJob#handleTimeoutTask} 执行三档语义（催办 / 自动通过 / 升级转办）。
- * 这样"定时器触发"与"兜底轮询触发"走的是同一段代码，白名单门槛、零 admin 铁律、
- * {@code due_time} 优先口径全都一致。
+ * 这样"定时器触发"与"默认处理轮询触发"走的是同一段代码，白名单门槛、零 admin 铁律、
+ * {@code due_time} 优先规则全都一致。
  *
  * <p><b>为什么定时器是非中断的</b>：三档动作都不需要打断原任务——催办只发通知、
  * 转办只改办理人、自动通过由门面走机器路径完成。若用中断式边界事件，任务会被引擎直接取消，
@@ -32,7 +35,7 @@ import java.util.List;
  *
  * <p><b>为什么不向外抛异常</b>：本 Delegate 由 Flowable 异步执行器调用，抛异常会让作业进入重试队列
  * （反复重试同一张单，甚至触发引擎的"死信"策略）。超时处置本身是"尽力而为的治理动作"，
- * 失败记日志即可；真正的兜底由 {@code WfTimeoutJob} 的 60 秒扫描承担。
+ * 失败记日志即可；真正的默认处理由 {@code WfTimeoutJob} 的 60 秒扫描承担。
  */
 @Slf4j
 @Component("wfTimeoutBoundaryDelegate")
@@ -71,7 +74,7 @@ public class WfTimeoutBoundaryDelegate implements JavaDelegate {
                             .eq(WfTask::getTaskId, ftask.getId())
                             .last("LIMIT 1")));
             if (mirror == null) {
-                // 镜像行缺失（投影延迟/历史数据）：交给兜底扫描与双账对账，这里不猜
+                // 镜像行缺失（投影延迟/历史数据）：交给默认处理扫描与双账对账，这里不猜
                 log.warn("超时边界触发但缺 wf_task 镜像行 taskId={}", ftask.getId());
                 return;
             }

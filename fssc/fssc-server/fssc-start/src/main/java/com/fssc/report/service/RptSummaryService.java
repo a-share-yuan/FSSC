@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -22,7 +25,7 @@ import java.util.Map;
 /**
  * 报表预聚合（P2-3，需求文档 12.9）。
  * 按 租户+期间+维度（单据类型/公司/部门）预计算单据量与金额合计，替代实时 selectMaps 聚合。
- * 定时每日刷新近 3 个月 + 手动触发；查询读预聚合表，无数据回源实时聚合兜底。
+ * 定时每日刷新近 3 个月 + 手动触发；查询读预聚合表，无数据回源实时聚合默认处理。
  */
 @Slf4j
 @Service

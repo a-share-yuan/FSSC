@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.ops.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -38,6 +41,7 @@ import java.util.Set;
 /**
  * G3（2026-09-24）共享作业分配策略：配置读取 ＋ 四模式策略解析器 ＋ 普通/加急双时限。
  *
+ * <p><b>分配规则</b>（方案 §三 ③ 共享作业层，{@code 分配策略表}）：
  * <ul>
  *   <li><b>抢单 PICK</b>：任务进池，池内谁先打开谁锁定他人不可处理 —— 本类不选人，只出"进池"决策；</li>
  *   <li><b>均衡·按时 BALANCE_TIME</b>：默认每 1h 一分，选当前<b>在办任务预计耗时</b>最少者；</li>
@@ -47,7 +51,7 @@ import java.util.Set;
  *
  * <p><b>为什么预计耗时按节点历史平均停留估算</b>：{@code wf_task_history.duration} 是既有真值
  * （每个节点办理的真实停留毫秒），比"给所有人一个固定系数"更贴近"按时均衡"的本意；
- * 该节点无历史样本时退回"时限的 1/3"作兜底，并在决策理由里如实标注估算来源。
+ * 该节点无历史样本时退回"时限的 1/3"作默认处理，并在决策理由里如实标注估算来源。
  *
  * <p><b>死配置教训</b>（方案 §二 F6~F8）：本类的每一个配置列都有读取点——
  * {@code strategy} 进 {@link #decide}，{@code normalHours/urgentHours} 进
@@ -67,7 +71,7 @@ public class DispatchPolicyService {
     /** 全局默认行标识（model_key='*' AND node_key='*'） */
     public static final String GLOBAL_KEY = "*";
 
-    /** 内置兜底时限：通行口径 普通 24h / 加急 4h（库里无配置行时的最后一道防线） */
+    /** 内置默认处理时限：通行规则 普通 24h / 加急 4h（库里无配置行时的最后一道防线） */
     private static final BigDecimal BUILTIN_NORMAL_HOURS = new BigDecimal("24");
     private static final BigDecimal BUILTIN_URGENT_HOURS = new BigDecimal("4");
 
@@ -157,13 +161,13 @@ public class DispatchPolicyService {
     }
 
     // ------------------------------------------------------------------
-    // 2. 配置解析：节点级 → 全局默认行 → 内置兜底
+    // 2. 配置解析：节点级 → 全局默认行 → 内置默认处理
     // ------------------------------------------------------------------
 
     /**
      * 解析某节点的生效策略：先按 {@code modelKey:nodeKey} 精确匹配（与
-     * {@code WfNodeConfigResolver} 同一"精确键、不位置兜底"的契约），未命中再取全局默认行，
-     * 仍无则返回内置兜底对象（抢单 + 24h/4h）。<b>不返回 null</b>——调用方无需到处判空。
+     * {@code WfNodeConfigResolver} 同一"精确键、不位置默认处理"的契约），未命中再取全局默认行，
+     * 仍无则返回内置默认处理对象（抢单 + 24h/4h）。<b>不返回 null</b>——调用方无需到处判空。
      */
     public OpDispatchPolicy resolvePolicy(String modelKey, String nodeKey) {
         if (modelKey != null && !modelKey.isBlank() && nodeKey != null && !nodeKey.isBlank()) {
@@ -187,7 +191,7 @@ public class DispatchPolicyService {
         OpDispatchPolicy builtin = new OpDispatchPolicy();
         builtin.setModelKey(GLOBAL_KEY);
         builtin.setNodeKey(GLOBAL_KEY);
-        builtin.setPolicyName("内置兜底策略");
+        builtin.setPolicyName("内置默认策略");
         builtin.setStrategy("PICK");
         builtin.setNormalHours(BUILTIN_NORMAL_HOURS);
         builtin.setUrgentHours(BUILTIN_URGENT_HOURS);
@@ -213,7 +217,7 @@ public class DispatchPolicyService {
     /**
      * 按策略从候选池里挑出目标办理人，并给出可解释的决策说明。
      *
-     * <p>抢单模式（PICK）<b>不选人</b>：通行口径是"打开即锁定他人不可处理"，
+     * <p>抢单模式（PICK）<b>不选人</b>：通行规则是"打开即锁定他人不可处理"，
      * 由池内候选人主动认领（{@code WfEngineFacade.claim}），系统抢单式指派反而破坏该语义。
      */
     public AssignmentDecision decide(OpDispatchPolicy policy, String priority,
@@ -343,9 +347,9 @@ public class DispatchPolicyService {
 
     /**
      * 均衡·按量的批量分配计划：把 {@code taskIds} 逐单派给"当前在手量 + 本轮已派量"最少的人，
-     * 等价于行业方案"累积 10 单一分配，3 人得 4/3/3"的结果。
+     * 等价于"累积 10 单一分配，3 人得 4/3/3"的结果。
      *
-     * <p>只出计划不落库（落库由调用方决定），因此可作为"分配试算"直接给运营看。
+     * <p>只出计划不写入数据库（写入数据库由调用方决定），因此可作为"分配试算"直接给运营看。
      *
      * @return taskId → 用户ID（保持入参顺序，同序输出便于前端逐行展示）
      */
@@ -368,7 +372,7 @@ public class DispatchPolicyService {
     }
 
     // ------------------------------------------------------------------
-    // 5. 候选人负载画像（三种策略共用的唯一口径）
+    // 5. 候选人负载画像（三种策略共用的唯一规则）
     // ------------------------------------------------------------------
 
     /**

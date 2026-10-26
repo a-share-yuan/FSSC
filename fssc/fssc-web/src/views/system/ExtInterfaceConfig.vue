@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="ext-interface-config">
     <el-tabs v-model="activeTab" @tab-change="loadData">
@@ -106,7 +109,7 @@
         </el-form-item>
         <el-form-item :label="$t('system.extInterface.colProvider')">
           <el-select v-model="editing.provider" filterable :placeholder="$t('system.extInterface.phProvider')" clearable style="width: 100%">
-            <el-option v-for="p in providerOptions" :key="p" :label="p" :value="p" />
+            <el-option v-for="p in providerOptions" :key="p" :label="erpProviderLabel(p)" :value="p" />
           </el-select>
           <div v-if="activeTab === 'ERP'" class="tip">
             {{ $t('system.extInterface.hintErpBrandPrefix') }}
@@ -163,7 +166,7 @@ import { showRowDetail } from '@/utils/format'
 import { CircleCheck, Stamp, Picture, SetUp, MagicStick, InfoFilled, Connection, Wallet, OfficeBuilding } from '@element-plus/icons-vue'
 import { extInterfaceApi, http } from '../../api'
 import { hasPerm } from '@/utils/perm'
-import { extCategoryLabel } from '@/constants/enums.js'
+import { extCategoryLabel, erpProviderLabel } from '@/constants/enums.js'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import TablePager from '../../components/common/TablePager.vue'
@@ -199,14 +202,14 @@ const dialogVisible = ref(false)
 const saving = ref(false)
 const testingId = ref(null)
 
-// R5-D-038 入口显隐收口（hasPerm 已处理通配码，管理员不会被误隐藏）
+// R5-D-038 入口显隐办结（hasPerm 已处理通配码，管理员不会被误隐藏）
 const canList = hasPerm('system:extiface:list')
 const canCreate = hasPerm('system:extiface:create')
 const canUpdate = hasPerm('system:extiface:update')
 const canDelete = hasPerm('system:extiface:delete')
 const canTest = hasPerm('system:extiface:test')
 
-// R5-D-038 出参凭据掩码口径：定长星号 + 后 4 位，与后端 ExtInterfaceConfig.maskCredential 同型
+// R5-D-038 出参凭据掩码规则：定长星号 + 后 4 位，与后端 ExtInterfaceConfig.maskCredential 同型
 const CRED_MASK = '*'.repeat(8)
 const CRED_TAIL = 4
 const CRED_MIN_LEN = 8
@@ -263,7 +266,7 @@ const editing = reactive({
 })
 
 const extInterfaceRules = computed(() => (reactive({
-  // 接口名称/编码＝人工维护（编码租户内唯一、保存后不可改）；与后端 ExtInterfaceConfigService 同口径
+  // 接口名称/编码＝人工维护（编码租户内唯一、保存后不可改）；与后端 ExtInterfaceConfigService 同一规则
   interfaceName: commonRules.required(t('system.extInterface.phIfName')),
   interfaceCode: commonRules.required(t('system.extInterface.phIfCode')),
 })))
@@ -277,8 +280,8 @@ const providerOptions = computed(() => {
 
 const enabledCount = computed(() => tableData.value.filter(r => r.status === 'ENABLED').length)
 
-// 分类中文名收口到全局字典 constants/enums.js（原来这里是 7 项局部映射，日志页/筛选器各写一份，
-// SMS、TAX_* 与 {PROVIDER}_{ACTION} 通道系列都没覆盖，会直显英文码）
+// 分类中文名办结到全局字典 constants/enums.js（原来这里是 7 项局部映射，日志页/筛选器各写一份，
+// SMS、TAX_* 与 {PROVIDER}_{ACTION} 通道系列都没覆盖，会直接显示英文码）
 const categoryLabel = (cat) => extCategoryLabel(cat)
 
 const providerTagType = (p) => ({
@@ -287,8 +290,8 @@ const providerTagType = (p) => ({
   EBS: 'warning', SAP: 'primary', YONYOU: 'success', KINGDEE: 'warning', CUSTOM: '',
 })[p] || ''
 
-// R5-D-039：服务商枚举中文化（CUSTOM 直显 "CUSTOM" 对用户无意义）
-const providerText = computed(() => (p) => (p === 'CUSTOM' ? t('system.extInterface.catCustom') : (p || '-')))
+// R5-D-039：服务商枚举中文化（CUSTOM 直接显示 "CUSTOM" 对用户无意义）
+const providerText = computed(() => (p) => (p === 'CUSTOM' ? t('system.extInterface.catCustom') : erpProviderLabel(p) || '-'))
 
 // R5-D-039：页签由 category 字典驱动（tabDefs 与会话内既有点位/图标一致），计数来自后端汇总
 const tabDefs = ref([
@@ -321,7 +324,7 @@ async function loadData() {
   try {
     await pager.load(async ({ pageNum, pageSize }) => {
       const d = await extInterfaceApi.page({ pageNum, pageSize, category: activeTab.value, keyword: keyword.value })
-      // R5-D-038 兜底脱敏：即使出参未掩码，行数据/详情弹层也不会拿到凭据原文
+      // R5-D-038 默认处理脱敏：即使出参未掩码，行数据/详情弹层也不会拿到凭据原文
       tableData.value = (d.list || []).map(desensitize)
       return { list: tableData.value, total: d.total || tableData.value.length }
     })

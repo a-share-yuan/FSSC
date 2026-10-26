@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <el-card>
@@ -47,7 +50,7 @@
         <div style="display:flex; gap:8px; margin-bottom:10px">
           <el-button type="success" @click="openCreditBill">渠道流水认领</el-button>
           <el-button type="warning" @click="autoRecon">收款流水自动核销</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -79,7 +82,7 @@
           <el-button type="success" @click="openTransfer('transfer')">发起调拨</el-button>
           <el-button type="warning" @click="openTransfer('upload')">资金上存</el-button>
           <!-- D-DEC-439：审批放行是授权、动账是另一件事，界面不写破就会被读成"批了钱就到账了" -->
-          <span class="tf-leg-note">人工执行腿：审批通过只完成授权，款项在两个账户间划转仍需出纳点「执行」</span>
+          <span class="tf-leg-note">审批通过只完成授权，款项在两个账户间划转仍需出纳点「执行」</span>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
         <el-table :data="pagedTransfers" size="small" border stripe v-else @selection-change="handleSelectionChange" empty-text="暂无数据">
@@ -99,6 +102,14 @@
                 {{ journalText(row) }}
               </div>
             </template>
+          </el-table-column>
+          <!-- D-H4-02：执行记录外显——执行前（DRAFT/APPROVED）显示「—」，执行后（PAID）显示执行人与执行时间。
+               executorName 由后端按 update_by 解析真名回填（与「真名审核人」同族）；updateTime 即 execute() 落账时刻。 -->
+          <el-table-column label="执行人" width="100" align="center">
+            <template #default="{ row }">{{ row.status === BillStatus.PAID ? (row.executorName || '—') : '—' }}</template>
+          </el-table-column>
+          <el-table-column label="执行时间" width="150" align="center">
+            <template #default="{ row }">{{ row.status === BillStatus.PAID ? (formatDateTime(row.updateTime) || '—') : '—' }}</template>
           </el-table-column>
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
@@ -143,7 +154,12 @@
 
       <!-- 银行主数据（T1：TR_BANK_MASTER） -->
       <el-tab-pane label="银行主数据" name="bank">
-        <div style="display:flex; gap:8px; margin-bottom:10px">
+        <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center">
+          <!-- D-H4-03：本页 113 个账户而默认每页条数小，复核某个账户余额只能一页页翻。
+               补关键字检索（账号/户名/开户行，与「银行账户管理」页同一后端 keyword 规则）。 -->
+          <el-input v-model="bankKeyword" size="small" style="width:220px" placeholder="账号/户名/开户行" clearable
+                    @keyup.enter="searchBank" @clear="searchBank" />
+          <el-button size="small" type="primary" @click="searchBank">查询</el-button>
           <el-button type="success" @click="openAccount">新增账户</el-button>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -153,7 +169,8 @@
           <el-table-column prop="accountName" label="账户名称" min-width="160" show-overflow-tooltip  sortable />
           <el-table-column prop="bankName" label="开户银行" min-width="140" show-overflow-tooltip  sortable />
           <el-table-column prop="bankAccount" label="账号" width="180" show-overflow-tooltip  sortable />
-          <el-table-column label="余额" width="120" align="right"><template #default="{ row }">{{ fmt(row.balance) }}</template></el-table-column>
+          <!-- D-H4-03：余额列补排序（复核调拨前后余额时按金额定位账户） -->
+          <el-table-column prop="balance" label="余额" width="120" align="right" sortable><template #default="{ row }">{{ fmt(row.balance) }}</template></el-table-column>
           <el-table-column label="状态" width="100" align="center">
             <template #default="{ row }">
               <el-tag :type="tagType(row.status)" size="small">{{ stLabel(accStMap, row.status) }}</el-tag>
@@ -413,7 +430,7 @@ const traceBillId = ref(null)
 const traceBizType = ref(null)
 /**
  * 页签 → 单据域（D-DEC-152 最后一个未声明域的追溯入口就在 bankRecon 页签）。
- * 追溯抽屉按 (bizType, bizId) 锚 wf_instance：不声明域时服务端只能拿裸主键去猜单据，
+ * 追溯抽屉按 (bizType, bizId) 关联 wf_instance：不声明域时服务端只能拿裸主键去猜单据，
  * 12-30 实测 TR_BANK_RECON 的 biz_id=20 被当作 exp_bill.id=20，整单渲染了别人的报销单。
  * position 页签是聚合视图（非单据列表）⇒ 无追溯入口，不在本表。
  */
@@ -444,7 +461,7 @@ const transfers = ref([])
 const settles = ref([])
 const accounts = ref([])
 // D-BIZ-04：调拨弹窗原先直接吃「银行主数据」分页器的当前页（20 条），目标账户不在该页就永远搜不到。
-// 弹窗与行内账户名查找改用独立全量取数，与主数据表格的分页互不牵制。
+// 弹窗与行内账户名查找改用独立全量查询，与主数据表格的分页互不牵制。
 const accountOptions = ref([])
 const recons = ref([])
 // P1-4 资金头寸（非分页聚合，不做 server pager → activePager 自动为 null 隐藏 TablePager）
@@ -490,8 +507,8 @@ function tagType(s) { return STATUS_TYPE[s] || 'info' }
 
 /**
  * D-DEC-439：审批/动账/登账三件事各自取值。优先用接口明示位（execStateText／journalText），
- * 老包没带时按 status 兜底推导——execute() 是改 md_bank_account.balance 的唯一腿，
- * 而本域没有日记账登记腿，故非 PAID 即"余额未变"、任何状态都"未登账"。
+ * 老包没带时按 status 默认处理推导——execute() 是改 md_bank_account.balance 的唯一环节，
+ * 而本域没有日记账登记环节，故非 PAID 即"余额未变"、任何状态都"未登账"。
  */
 function execStateText(row) {
   if (row.execStateText) return row.execStateText
@@ -507,12 +524,12 @@ const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigit
 
 // Form rules
 // B6：此前七个 rules 对象全为 `{}` 且 el-form 无 model/prop、提交不校验＝死规则三缺。
-// 点名波 T1：六支同型一并收口，并订正 B6 自写的一支——
+// 点名波 T1：六支同型一并办结，并订正 B6 自写的一支——
 // 原 `{ required, message, trigger }` 三键规则会让 async-validator 改走 string 校验器，
 // 于是 companyId（下拉选中的数字）被判非法＝**填齐也提交不过**（假拦，见 requiredRules.spec.js 断言）。
 // 现统一取 `commonRules.*`（自定义 validator，类型无关且仍带红星）。
-// 必填集口径＝逐支只镜像各自服务端**已有**的断言；服务端没拦的字段不在前端加码
-//（前端单方加码＝假拦，且绕过界面仍是脏数据＝与"星号＝拦截"口径相反）。
+// 必填集规则＝逐支只镜像各自服务端**已有**的断言；服务端没拦的字段不在前端加码
+//（前端单方加码＝假拦，且绕过界面仍是脏数据＝与"星号＝拦截"规则相反）。
 const planFormRules = {
   period: commonRules.required('请选择计划期间'),
   planDate: commonRules.required('请选择计划日期'),
@@ -553,7 +570,7 @@ const settleFormRules = {
   ticketNo: commonRules.required('票据号不能为空'),
 }
 // BankAccountService.create:104~113＝账户名称/开户银行/银行账号非空；
-// 账户编码按 Q1 口径＝系统取号、人工只读⇒不加红星
+// 账户编码按 Q1 规则＝系统取号、人工只读⇒不加红星
 const accountFormRules = {
   accountName: commonRules.required('账户名称不能为空'),
   bankName: commonRules.required('开户银行不能为空'),
@@ -577,7 +594,7 @@ const planForm = ref(emptyPlan())
 const planFormRef = ref(null)
 const planSaving = ref(false)
 const dlgPlan = ref(false)
-// 点名波 T1：六支弹窗的 el-form ref＋提交在途位（F1 防连点的第②条前端腿）
+// 点名波 T1：六支弹窗的 el-form ref＋提交在途位（F1 防连点的第②条前端环节）
 const combineFormRef = ref(null)
 const adjustFormRef = ref(null)
 const creditFormRef = ref(null)
@@ -618,7 +635,7 @@ const dlgTransfer = ref(false)
 const emptySt = () => ({ ticketNo: '', ticketType: '银承', issuerBank: '', amount: 0, issueDate: '', dueDate: '', beneficiary: '', status: 'STOCK' })
 const stForm = ref(emptySt())
 const dlgSettle = ref(false)
-// R5-D-185：余额快照登记（头寸页→bank_balance；服务端 BankReconcileService#saveBalance 三非空＋同账户同日期幂等覆盖）
+// R5-D-185：余额快照登记（头寸页→bank_balance；服务端 BankReconcileService#saveBalance 三非空＋同账户同日期去重覆盖）
 const dlgBalance = ref(false)
 const balanceFormRef = ref(null)
 const balanceSaving = ref(false)
@@ -637,8 +654,8 @@ function loadSettle() { try { return pagers.settle.load(async ({ pageNum, pageSi
 
 async function openPlan() { planForm.value = emptyPlan(); dlgPlan.value = true; planFormRef.value?.clearValidate?.() }
 async function savePlan() {
-  // B6：F1 重复提交的两条前端腿——①必填闸门（缺期间/日期/公司不再发请求）
-  //     ②一次提交未完成前不再接受第二次点击（:loading + in-flight 兜底）。
+  // B6：F1 重复提交的两条前端环节——①必填校验（缺期间/日期/公司不再发请求）
+  //     ②一次提交未完成前不再接受第二次点击（:loading + in-flight 默认处理）。
   if (planSaving.value) return
   if (!(await validateForms([planFormRef]))) return
   planSaving.value = true
@@ -720,7 +737,9 @@ async function submitTransfer(row) {
 }
 async function approveTransfer(row) { try { await treasuryApi.transferApprove(row.id); ElMessage.success('已审批'); loadTransfer() } catch (e) { ElMessage.error(e.message) } }
 async function executeTransfer(row) {
-  try { await ElMessageBox.confirm('执行后款项余额将直接落账，且进入后续审批流转，确认执行？', '执行调拨', { type: 'warning' }) } catch { return }
+  // D-H4-01：删除「且进入后续审批流转」——调拨执行发生在实例已 APPROVED 之后，执行动作只落账、
+  // 不再新起任何审批节点（实测 sys_oper_log 有记录而 wf_task_history 无新行）。原文案误导用户以为还有后续审批。
+  try { await ElMessageBox.confirm('执行后款项余额将直接落账、不可直接撤销，确认执行？', '执行调拨', { type: 'warning' }) } catch { return }
   try { await treasuryApi.transferExecute(row.id); ElMessage.success('已执行，余额已落账'); loadTransfer() } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -769,9 +788,12 @@ async function loadAccountOptions() {
       pageNum++
     } while (all.length < total && pageNum <= 20)
     accountOptions.value = all.filter((a) => !a.status || a.status === 'NORMAL')
-  } catch (e) { /* 无 md:bankaccount:list 时留空，由后端写闸兜底 */ }
+  } catch (e) { /* 无 md:bankaccount:list 时留空，由后端写校验默认处理 */ }
 }
-function loadBank() { try { return pagers.bank.load(async ({ pageNum, pageSize }) => { const d = await masterApi.bank.page({ pageNum, pageSize }); accounts.value = d.list || []; return { list: accounts.value, total: d.total || 0 } }).catch((e) => ElMessage.error(e.message)) } catch (e) { /* noop */ } }
+// D-H4-03：银行主数据页签的关键字检索（后端 masterApi.bank.page 的 keyword 与「银行账户管理」页同一规则）
+const bankKeyword = ref('')
+function searchBank() { pagers.bank.resetPage(); loadBank() }
+function loadBank() { try { return pagers.bank.load(async ({ pageNum, pageSize }) => { const d = await masterApi.bank.page({ pageNum, pageSize, keyword: bankKeyword.value || undefined }); accounts.value = d.list || []; return { list: accounts.value, total: d.total || 0 } }).catch((e) => ElMessage.error(e.message)) } catch (e) { /* noop */ } }
 function openAccount() { accForm.value = emptyAcc(); dlgAccount.value = true; accFormRef.value?.clearValidate?.() }
 async function saveAccount() {
   if (accSaving.value) return

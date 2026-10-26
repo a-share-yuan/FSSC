@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.document.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -37,12 +40,12 @@ public class ArchiveDestroyService {
     private final ObjectMapper objectMapper;
     private final com.fssc.system.service.NumberRuleService numberRuleService;
     private final WfEngineFacade wfEngineFacade;
-    /** RA-D248b：申请人姓名/工号回查（显示层富化，不改任何存量行） */
+    /** RA-D248b：申请人姓名/工号回查（显示层补充，不改任何历史行） */
     private final com.fssc.system.mapper.SysUserMapper sysUserMapper;
 
     @Transactional(rollbackFor = Exception.class)
     public Long createDestroyRequest(List<Long> archiveIds, String reason, Long applicantId) {
-        // 必填守卫（与前端 ARCHIVE_DESTROY 登记表同口径）：销毁理由是审批与追溯的唯一依据，
+        // 必填守卫（与前端 ARCHIVE_DESTROY 登记表同一规则）：销毁理由是审批与追溯的唯一依据，
         // 控制器把缺失值兜成空串会写出无意义的申请单。
         if (reason == null || reason.trim().isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请填写销毁理由");
@@ -83,7 +86,7 @@ public class ArchiveDestroyService {
     /**
      * 销毁审批（#4 双人复核双签）。
      *
-     * <p>档案销毁不可逆且需永久留痕，按《会计档案管理办法》要求双人复核：
+     * <p>档案销毁不可逆且需永久记录，按《会计档案管理办法》要求双人复核：
      * 第一人签署通过 → 状态仍为 PENDING（待第二人复核）；第二人（须为不同人）通过 → APPROVED。
      * 任一人否决 → 直接 REJECTED，流程终止。同一人不能完成双签，防止自签自审。
      */
@@ -95,7 +98,7 @@ public class ArchiveDestroyService {
         }
         if (!"PENDING".equals(approval.getApprovalStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "该销毁申请已终态（" + approval.getApprovalStatus() + "），不可再签署: " + destroyId);
+                    "该销毁申请已结束（" + approval.getApprovalStatus() + "），不可再签署: " + destroyId);
         }
         if (approverId == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "签署人不能为空");
@@ -162,11 +165,11 @@ public class ArchiveDestroyService {
             OpArchive archive = archiveCatalogMapper.selectById(archiveId);
             if (archive != null) {
                 archive.setArchiveStatus("DISPOSED");
-                // D-DEC-182：两列由同一处、按同一映射写（本方法就是"同源"的样板，其余写入点已并入此口径）
+                // D-DEC-182：两列由同一处、按同一映射写（本方法就是"同源"的样板，其余写入位置已并入此规则）
                 archive.setStatus(ArchiveService.dispositionOf(archive.getArchiveStatus()));
                 archive.setDestroyedAt(LocalDateTime.now());
-                // R5-D-209：销毁是独立业务终态，完整性列写"不适用"专用值——
-                // 旧口径硬写不一致值，把"已按制度销毁"与"检出被篡改"两件事混成同一个标记。
+                // R5-D-209：销毁是独立业务最终状态，完整性列写"不适用"专用值——
+                // 旧规则硬写不一致值，把"已按制度销毁"与"检出被篡改"两件事混成同一个标记。
                 archive.setIntegrityStatus("NOT_APPLICABLE");
                 archiveCatalogMapper.updateById(archive);
                 // R5-D-207：销毁不可逆 ⇒ 同事务级联关闭该卷仍挂起的调阅申请（REJECTED＋原因），
@@ -178,8 +181,8 @@ public class ArchiveDestroyService {
     }
 
     /**
-     * R5-D-207：销毁事务的级联关闭腿——该卷 PENDING 调阅一律置 REJECTED，
-     * 并在原因列追加级联关闭备注（留痕不删行，事后可查"为什么被关"）。
+     * R5-D-207：销毁事务的级联关闭环节——该卷 PENDING 调阅一律置 REJECTED，
+     * 并在原因列追加级联关闭备注（记录不删行，事后可查"为什么被关"）。
      */
     private void closePendingAccessRequests(Long archiveId, LocalDateTime closedAt) {
         List<ArchiveAccessLog> pendings = archiveAccessLogMapper.selectList(new LambdaQueryWrapper<ArchiveAccessLog>()
@@ -263,6 +266,7 @@ public class ArchiveDestroyService {
     }
 
     /**
+     * 申请人姓名/工号回填（RA-D248b，与 ArchiveAccessService.fillRequesters 同一规则）：
      * 前端「申请人」列此前只能拿裸 applicant_id 本地 join，显示出来是工号。
      */
     private void fillApplicants(List<ArchiveDestroyApproval> rows) {

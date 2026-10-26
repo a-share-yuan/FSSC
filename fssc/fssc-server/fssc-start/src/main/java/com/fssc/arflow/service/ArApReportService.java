@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -25,7 +28,7 @@ import java.util.Map;
 
 /**
  * AR 统计报表（蓝图报表统计 9.1 序号21：开票/核销/票据/坏账/月结 5 张）。
- * 蓝图未定义列口径，按各域单据字段聚合：期间×状态分组给出单据数与金额合计。
+ * 蓝图未定义列规则，按各域单据字段聚合：期间×状态分组给出单据数与金额合计。
  * 月结只出 AR 行：AP 月末关账自有入口 /apflow/ap-month-close（CloseWorkbench scope=ap），
  * 本接口挂在 arflow:report:view 下，混入 AP 行会让应收会计看到跨域数据、而应付会计看不到。
  */

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.report.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -28,12 +31,12 @@ import java.util.Set;
  * 管理报表查询（需求文档 11 章）：借款余额汇总 / 合同汇总 / 费用明细表。
  * 只读聚合，租户拦截器自动注入 tenant_id。
  *
- * <p><b>数据权限（R5-D-026）</b>：本控制器 24 个取数端点补 {@code @DataScope}，由
+ * <p><b>数据权限（R5-D-026）</b>：本控制器 24 个查询端点补 {@code @DataScope}，由
  * {@code PermissionAspect.aroundDataScope} 把登录人 data_scope 写入 {@link DataScopeHolder}，
  * 再由 {@link #resolveScope} 翻译成 {@link ScopeFilter} 三元组传给 ReportMapper 的
  * {@code <if>} 动态条件。未挂注解的 4 个端点（ops-statistics／ops-efficiency／quality-pass-rate／
  * image-statistics）的驱动表没有公司列（op_audit_task／op_quality 实体无 company_id）或走跨库
- * Facade（img_batch 在影像库），本次不收口，理由写在对应 mapper 方法注释处。</p>
+ * Facade（img_batch 在影像库），本次不办结，理由写在对应 mapper 方法注释处。</p>
  */
 @RestController
 @RequestMapping("/api/tenant/report")
@@ -52,7 +55,7 @@ public class ReportQueryController {
      * {@link #resolveScope(boolean, boolean)} 按 data_scope 档位与目标表可用列决定。
      *
      * <p>DENY 用 {@code company_id = -1} 作收紧哨兵（库内不存在该组织主键 ⇒ 结果为空），
-     * 与 {@code WfManageOrgScope} 的 {@code id = -1} 既有口径一致，避免"拿不到范围就放开"。</p>
+     * 与 {@code WfManageOrgScope} 的 {@code id = -1} 既有规则一致，避免"拿不到范围就放开"。</p>
      */
     private record ScopeFilter(Long companyId, List<Long> deptIds, Long userId) {
 
@@ -69,13 +72,13 @@ public class ReportQueryController {
     /**
      * 把 {@link DataScopeHolder} 里的 data_scope 翻译成报表 SQL 能表达的过滤三元组。
      * 语义逐条对齐 {@code DataScopeKit.apply}（1 不加条件／2 公司／3·4 部门，无部门列降级公司／
-     * 5 本人，无本人列降级公司），并补两处比 DataScopeKit 更严的收口：
+     * 5 本人，无本人列降级公司），并补两处比 DataScopeKit 更严的办结：
      * <ul>
      *   <li>载体为 null（{@code @DataScope} 未生效）→ DENY，而非 DataScopeKit 的"原样放行"；</li>
      *   <li>降级目标列也不存在（company_id 为 null）→ DENY，而非不加条件。</li>
      * </ul>
      * 通配管理员（{@code perms} 含 {@code *:*:*}，即 {@code is_admin=1} 的登录注入）与平台端
-     * 取全量：与 {@code PermissionAspect.aroundPerm} 的通配口径一致，不把管理员锁死。
+     * 取全量：与 {@code PermissionAspect.aroundPerm} 的通配规则一致，不把管理员锁死。
      *
      * @param hasDeptCol 目标表是否有部门列（false 时部门档位降级到公司）
      * @param hasSelfCol 目标表是否有本人列（false 时本人档位降级到公司）
@@ -172,7 +175,7 @@ public class ReportQueryController {
 
     /** 11.8 运营数据统计：共享作业情况（派工/凭证/付款/质检 + 影像）。
      *  分库改造：影像批次计数在 fssc_image 库，经 ImageFacade 应用层拼接，行结构 {kpi, val} 不变。
-     *  R5-D-026：本端点不收口——op_audit_task/op_quality 无公司列，且共享作业 KPI 为跨公司集中办理口径。 */
+     *  R5-D-026：本端点不办结——op_audit_task/op_quality 无公司列，且共享作业 KPI 为跨公司集中办理规则。 */
     @RequiresPerm("report:view")
     @ReportDomain("SHARING")
     @GetMapping("/ops-statistics")
@@ -215,7 +218,7 @@ public class ReportQueryController {
         return Result.success(reportMapper.expenseComposition(itemName, f.companyId(), f.deptIds(), f.userId()));
     }
 
-    // ==================== 扩展报表（参考行业做法/同类系统财务共享最佳实践） ====================
+    // ==================== 扩展报表 ====================
 
     /** 1. 应付账龄分析 */
     @RequiresPerm("report:view")
@@ -270,7 +273,7 @@ public class ReportQueryController {
     /** 6. 进项发票统计 */
     @RequiresPerm("report:view")
     @DataScope("进项发票统计数据范围")
-    // R5-D-114：发票族统计读侧仅凭报表基础码 report:view 放行；域闸（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域闸致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
+    // R5-D-114：发票族统计读侧仅凭报表基础码 report:view 放行；域校验（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域校验致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
     @GetMapping("/input-invoice")
     public Result<List<Map<String, Object>>> inputInvoiceStats() {
         ScopeFilter f = resolveScope(false, false);
@@ -280,7 +283,7 @@ public class ReportQueryController {
     /** 7. 销项发票统计 */
     @RequiresPerm("report:view")
     @DataScope("销项发票统计数据范围")
-    // R5-D-114：发票族统计读侧仅凭报表基础码 report:view 放行；域闸（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域闸致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
+    // R5-D-114：发票族统计读侧仅凭报表基础码 report:view 放行；域校验（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域校验致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
     @GetMapping("/output-invoice")
     public Result<List<Map<String, Object>>> outputInvoiceStats() {
         ScopeFilter f = resolveScope(false, false);
@@ -290,14 +293,14 @@ public class ReportQueryController {
     /** 8. 税负分析 */
     @RequiresPerm("report:view")
     @DataScope("税负分析数据范围")
-    // R5-D-114：发票族统计读侧仅凭报表基础码 report:view 放行；域闸（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域闸致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
+    // R5-D-114：发票族统计读侧仅凭报表基础码 report:view 放行；域校验（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域校验致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
     @GetMapping("/tax-burden")
     public Result<List<Map<String, Object>>> taxBurdenAnalysis() {
         ScopeFilter f = resolveScope(false, false);
         return Result.success(reportMapper.taxBurdenAnalysis(f.companyId()));
     }
 
-    /** 9. 运营效率分析。R5-D-026：本端点不收口——op_audit_task 无公司列（共享作业池跨公司口径）。 */
+    /** 9. 运营效率分析。R5-D-026：本端点不办结——op_audit_task 无公司列（共享作业池跨公司范围）。 */
     @RequiresPerm("report:view")
     @ReportDomain("SHARING")
     @GetMapping("/ops-efficiency")
@@ -305,7 +308,7 @@ public class ReportQueryController {
         return Result.success(reportMapper.opsEfficiency());
     }
 
-    /** 10. 质检合格率。R5-D-026：本端点不收口——op_quality 无任何组织列（全中心口径）。 */
+    /** 10. 质检合格率。R5-D-026：本端点不办结——op_quality 无任何组织列（全中心规则）。 */
     @RequiresPerm("report:view")
     @ReportDomain("SHARING")
     @GetMapping("/quality-pass-rate")
@@ -315,7 +318,7 @@ public class ReportQueryController {
 
     /** 11. 影像统计。
      *  分库改造：img_batch 在 fssc_image 库，改经 ImageFacade 查询（列结构不变）。
-     *  R5-D-026：本端点不收口——跨库 Facade 出数，收口需改 ImageFacade（非本文件面）。 */
+     *  R5-D-026：本端点不办结——跨库 Facade 出数，办结需改 ImageFacade（非本文件面）。 */
     @RequiresPerm("report:view")
     @ReportDomain("IMAGE")
     @GetMapping("/image-statistics")
@@ -339,7 +342,7 @@ public class ReportQueryController {
     @ReportDomain("BUDGET")
     @GetMapping("/budget-overrun")
     public Result<List<Map<String, Object>>> budgetOverrunAlert() {
-        // 只按公司维收口（hasDeptCol=false）：公司级预算 dept_id 常为 NULL，见 ReportMapper 同处说明
+        // 只按公司维办结（hasDeptCol=false）：公司级预算 dept_id 常为 NULL，见 ReportMapper 同处说明
         ScopeFilter f = resolveScope(false, false);
         return Result.success(reportMapper.budgetOverrunAlert(f.companyId()));
     }
@@ -393,7 +396,7 @@ public class ReportQueryController {
     @ReportDomain("BUDGET")
     @GetMapping("/budget-execution-detail")
     public Result<List<Map<String, Object>>> budgetExecutionDetail(@RequestParam(required = false) Integer budgetYear) {
-        // 只按公司维收口，理由同预算超支预警
+        // 只按公司维办结，理由同预算超支预警
         ScopeFilter f = resolveScope(false, false);
         return Result.success(reportMapper.budgetExecutionDetail(budgetYear, f.companyId()));
     }
@@ -405,7 +408,7 @@ public class ReportQueryController {
     @GetMapping("/expense-analysis")
     public Result<List<Map<String, Object>>> expenseAnalysis(@RequestParam(required = false) Integer year,
                                                              @RequestParam(required = false) Long companyId) {
-        // 前端可传 companyId 作查询条件，与本次的范围收口是 AND 关系：越界公司传进来也会被 scope 再拦一道
+        // 前端可传 companyId 作查询条件，与本次的范围办结是 AND 关系：越界公司传进来也会被 scope 再拦一道
         ScopeFilter f = resolveScope(true, true);
         return Result.success(reportMapper.expenseAnalysis(year, companyId,
                 f.companyId(), f.deptIds(), f.userId()));

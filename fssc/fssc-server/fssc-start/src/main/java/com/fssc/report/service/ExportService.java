@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -24,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 报表 Excel 导出（POI）。租户拦截器自动隔离；只读导出不落库。
+ * 报表 Excel 导出（POI）。租户拦截器自动隔离；只读导出不写入数据库。
  */
 @Service
 @RequiredArgsConstructor
@@ -33,12 +36,12 @@ public class ExportService {
     private final ExpBillMapper expBillMapper;
     private final BgItemMapper bgItemMapper;
     private final ReportMapper reportMapper;
-    /** 组织合法性守卫（V1.3.20 安全审计①）：导出口径公司隔离 */
+    /** 组织合法性守卫（V1.3.20 安全审计①）：导出规则公司隔离 */
     private final OrgGuard orgGuard;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    /** 导出报销单据列表（① 导出口径 + ③ data_scope：仅导出登录人数据范围内的单据） */
+    /** 导出报销单据列表（① 导出规则 + ③ data_scope：仅导出登录人数据范围内的单据） */
     @DataScope("报销导出数据范围")
     public byte[] exportBills(String billType, String status) {
         LambdaQueryWrapper<ExpBill> qw = new LambdaQueryWrapper<>();
@@ -77,10 +80,10 @@ public class ExportService {
         }
     }
 
-    /** 导出部门报销排行（① 导出口径：仅本登录人公司）
+    /** 导出部门报销排行（① 导出规则：仅本登录人公司）
      * F-07：补 {@code @DataScope} 与部门/本人两参——原方法只做公司隔离，部门/本人两参恒 null，
      * scope=5 的账号导出件里出现本人部门以外的其他部门（屏幕 31 单 vs 导出 166 单）。
-     * 范围口径与 DashboardService.scopeArgs／ReportQueryController.resolveScope 一致。 */
+     * 范围规则与 DashboardService.scopeArgs／ReportQueryController.resolveScope 一致。 */
     @DataScope("部门排行导出数据范围")
     public byte[] exportDeptRanking() {
         Long mine = orgGuard.enforceCompany();
@@ -106,7 +109,7 @@ public class ExportService {
         }
     }
 
-    /** 导出预算执行率（① 导出口径 + ③ data_scope：仅本登录人数据范围） */
+    /** 导出预算执行率（① 导出规则 + ③ data_scope：仅本登录人数据范围） */
     @DataScope("预算导出数据范围")
     public byte[] exportBudgetExecution() {
         LambdaQueryWrapper<BgItem> qw = new LambdaQueryWrapper<BgItem>()
@@ -146,7 +149,7 @@ public class ExportService {
     }
 
     /**
-     * 部门/本人两维的数据范围入参（F-07），口径与 {@code DashboardService.scopeArgs}、
+     * 部门/本人两维的数据范围入参（F-07），规则与 {@code DashboardService.scopeArgs}、
      * {@code ReportQueryController.resolveScope} 一致：1/2 档不收窄；3 档取本部门及以下；
      * 4 档只取本部门；5 档取本人（无本人维时由调用方降级公司）。
      */

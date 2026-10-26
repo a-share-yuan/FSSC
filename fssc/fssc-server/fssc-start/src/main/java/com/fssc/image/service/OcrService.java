@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -73,10 +76,10 @@ public class OcrService {
     /** #15 OCR 票面金额容差 */
     private static final BigDecimal OCR_AMT_TOLERANCE = new BigDecimal("0.01");
 
-    /** D-DEC-009（X-30，乙）：真路之一＝手工录入（与影像页提示同口径，一处收口） */
+    /** D-DEC-009（X-30，乙）：真路之一＝手工录入（与影像页提示同一规则，一处办结） */
     private static final String MANUAL_ENTRY_HINT = "；或在「发票管理 › 发票补录」手工录入发票要素";
 
-    /** D-DEC-009（X-30，乙）：识别不出时真路只有这两条（换版式文件重传 / 手工录入要素），失败文案在此收口 */
+    /** D-DEC-009（X-30，乙）：识别不出时真路只有这两条（换版式文件重传 / 手工录入要素），失败文案在此办结 */
     private static final String NO_INVOICE_HINT = "；可改传 XML/OFD 版式文件重新上传" + MANUAL_ENTRY_HINT;
 
     /** D-DEC-009：演示通道不产出票面要素——它给的"确定性票面"是造出来的，不得计入已识别 */
@@ -118,22 +121,25 @@ public class OcrService {
                     // R5-D-232②：说明列只放业务话术（网关 JSON/环境变量名/traceId 只进下方 log.warn）
                     recordException(batch, "OCR_NOT_RECOGNIZED", page.getPageNo(), String.format(
                             "第 %d 页未识别出正式发票票面%s（技术详情见运维日志）", page.getPageNo(), NO_INVOICE_HINT));
+                    // D-H7-01：失败也落 ocr_record（recognize_status=FAILED），OCR 记录页才可复核"识别过、没识别出来"
+                    saveOcrFailure(page, null, channelName, String.format(
+                            "第 %d 页未识别出正式发票票面%s", page.getPageNo(), NO_INVOICE_HINT));
                     log.warn("页面 {} OCR 未识别（通道 {}）：{}", page.getId(), channelName, nvl(result.getErrorMsg()));
                     continue;
                 }
                 page.setOcrText(objectMapper.writeValueAsString(result));
-                // #15 OCR 票面一致性校验：价税合计 = 不含税 + 税额（容差 0.01）；R5-D-224 硬闸：
+                // #15 OCR 票面一致性校验：价税合计 = 不含税 + 税额（容差 0.01）；R5-D-224 强制校验：
                 //    关键要素（发票号/开票日期/购方名称/价税三项）任一缺失一律判不自洽。
                 //    OCR 结果无明细行，故以"价税三项自洽"等价于"行合计 vs 封面合计"校验；
                 //    超差或要素缺失说明识别有误 → 标记 NEED_REVIEW 进人工复核，不再自动置 PASS 直接入库。
                 boolean consistent = checkAmountConsistent(result);
-                // P2-5: OCR 结果落库（结构化票面字段持久化到 ocr_record，不再仅存 JSON blob）
+                // P2-5: OCR 结果写入数据库（结构化票面字段持久化到 ocr_record，不再仅存 JSON blob）
                 saveOcrRecord(page, null, result, channelName, consistent);
                 if (result.getInvoiceNo() != null) {
                     if (consistent) {
                         // 自动入池：复用 create 全校验链（价税强校验、租户内硬查重、全局跨租户查重预警、异常检测）。
                         // 入池失败（如发票号撞 uk_tenant_inv 查重）只影响发票台账，不得回滚 ocr_record 识别记录——
-                        // 否则重复上传同一票面时，落库记录被连带吞掉，P2-5 落库语义失效。
+                        // 否则重复上传同一票面时，写入数据库记录被连带吞掉，P2-5 写入数据库语义失效。
                         try {
                             invoiceFacade.poolFromOcr(toPoolDto(page, result, tenantId));
                             created++;
@@ -170,6 +176,9 @@ public class OcrService {
                 // R5-D-232②：异常原文只进上方 log.warn，说明列用业务话术
                 recordException(batch, "OCR_NOT_RECOGNIZED", page.getPageNo(), String.format(
                         "第 %d 页识别异常，未识别出正式发票票面%s（技术详情见运维日志）", page.getPageNo(), NO_INVOICE_HINT));
+                // D-H7-01：识别抛异常同样落 ocr_record 失败行（异常原文只进运维日志）
+                saveOcrFailure(page, null, channelName, String.format(
+                        "第 %d 页识别异常，未识别出正式发票票面%s（技术详情见运维日志）", page.getPageNo(), NO_INVOICE_HINT));
             }
         }
         // D-DEC-367（X-25，甲-1）：改前"0 张即抛错"会连带回滚整批 REQUIRES_NEW 事务里刚落的 ocr_record 与页态 ⇒
@@ -197,10 +206,10 @@ public class OcrService {
      * 业务附件直传图片发票的识别入口（费用报销 /expense/attach/upload 的图片分支等）。
      *
      * <p>报销单上传 .jpg/.png 发票时无影像批次/页面，此前 attachType 恒 OTHER、不做任何识别
-     * （ ：IMG 域图片发票 OCR 为空）。本方法调可插拔图像通道（paddle→本地 PaddleOCR
-     * /invoice_ocr）结构化识别，并走与 {@link #recognizeBatch} 相同的落库链：</p>
+     * （此前 IMG 域图片发票 OCR 为空）。本方法调可插拔图像通道（paddle→本地 PaddleOCR
+     * /invoice_ocr）结构化识别，并走与 {@link #recognizeBatch} 相同的写入数据库链：</p>
      * <ul>
-     *  <li>ocr_record 结构化落库（batch_id/img_file_id 为空，file_id=附件 sys_file.id）；</li>
+     *  <li>ocr_record 结构化写入数据库（batch_id/img_file_id 为空，file_id=附件 sys_file.id）；</li>
      *  <li>票面金额自洽且有发票号 → 自动入池 inv_invoice（撞 uk_tenant_inv 查重等只 log 不阻断上传）；</li>
      * </ul>
      * 失败不抛穿：ok=false + errorMsg，由上传接口以 invoice.ok=false 提示手工补录。
@@ -219,11 +228,11 @@ public class OcrService {
     }
 
     /**
-     * 识别结果落库链：ocr_record 结构化落库 ＋ 票面自洽且有发票号则自动入池 inv_invoice。
+     * 识别结果写入数据库链：ocr_record 结构化写入数据库 ＋ 票面自洽且有发票号则自动入池 inv_invoice。
      * 识别不成功时原样返回失败结果，不写库。
      *
-     * <p>D-DEC-474：图片发票与「扫描版 PDF（本地解析渲染出的首页 PNG）」共用这一条落库链 ⇒ 报销附件腿上
-     * 两条 OCR 分支的落库／入池口径合一，不再出现"图片识别会入池、扫描票识别了不入池"的第二套事实。
+     * <p>D-DEC-474：图片发票与「扫描版 PDF（本地解析渲染出的首页 PNG）」共用这一条写入数据库链 ⇒ 报销附件环节上
+     * 两条 OCR 分支的写入数据库／入池规则合一，不再出现"图片识别会入池、扫描票识别了不入池"的第二套事实。
      *
      * <p><b>D-DEC-461（"已识别"≠"已入池"⇒ 结论如实透出）</b>：改前入池抛错被 catch 吞成一条 {@code log.warn}，
      * 方法仍返回 {@code ok=true} ⇒ {@code ExpenseAttachController} 把"成功"交给前端、界面弹「已识别发票」，
@@ -232,21 +241,29 @@ public class OcrService {
      * 未入池的真实原因写进 {@code errorMsg}；前端只读 {@code ok}／{@code inPool}／{@code errorMsg} 三格，
      * 不在前端重算金额自洽（判据两源会漂移）。
      *
-     * <p><b>D-DEC-463（幂等腿）</b>：本腿是「上传＋识别」同一请求串行，而 {@code REQUIRES_NEW} 让客户端断开
-     * 并不终止服务端写入（实测 18:33:27 浏览器已关，18:33:33 仍落 ocr_record、18:33:37 仍入池＝零回执幽灵票）。
+     * <p><b>D-DEC-463（去重环节）</b>：本环节是「上传＋识别」同一请求串行，而 {@code REQUIRES_NEW} 让客户端断开
+     * 并不终止服务端写入（实测 18:33:27 浏览器已关，18:33:33 仍落 ocr_record、18:33:37 仍入池＝零响应幽灵票）。
      * 现按两把键收敛：①同一 {@code fileId} 已有 {@code ocr_record} ⇒ 复用、不再叠记；
      * ②入池前按「发票代码＋号码」查池，命中 ⇒ 跳过 {@code poolFromOcr} 并按"已在池"如实透出
      * （改前这条会撞 {@code assertNotDuplicateEntry} 抛"已存在于发票池"，被本方法当入池失败记成坏票）。
      *
-     * @param what 日志主体标签（图片发票／扫描版PDF／版式文件），仅影响留痕文案
+     * @param what 日志主体标签（图片发票／扫描版PDF／版式文件），仅影响记录文案
      */
     private OcrResult recognizeAndRecord(OcrResult result, Long fileId, String channelName, String what) {
         if (!result.isOk()) {
             result.setInPool(null);
+            // D-H7-01：附件直传环节识别失败此前只回一个 fail 结果、本表零行 ⇒ OCR 记录页看不出"识别过没有"。
+            // 现失败也落一行（recognize_status=FAILED）；同一附件已有任何记录时不叠记（与成功环节同一把唯一键），
+            // 技术详情仍只进运维日志。
+            if (!hasOcrRecordForFile(fileId, false)) {
+                saveOcrFailure(null, fileId, channelName,
+                        what + "识别失败：未识别出正式发票票面" + NO_INVOICE_HINT + "（技术详情见运维日志）");
+            }
+            log.warn("{} fileId={} 识别失败：{}", what, fileId, nvl(result.getErrorMsg()));
             return result;
         }
         boolean consistent = checkAmountConsistent(result);
-        if (hasOcrRecordForFile(fileId)) {
+        if (hasOcrRecordForFile(fileId, true)) {
             log.info("{} fileId={} 已有 OCR 识别记录，按 fileId 幂等复用（不重复写 ocr_record）", what, fileId);
         } else {
             saveOcrRecord(null, fileId, result, channelName, consistent);
@@ -290,19 +307,26 @@ public class OcrService {
     }
 
     /**
-     * D-DEC-463（幂等腿①）：同一附件（{@code ocr_record.file_id}）是否已有识别记录。
+     * D-DEC-463（去重环节①）：同一附件（{@code ocr_record.file_id}）是否已有识别记录。
      *
      * <p>租户维度由 {@code FsscTenantLineHandler} 自动追加，此处手工拼 tenant_id。
      * 问不出结果时（查询异常）一律按"没有"处置＝退回改前"必写一条"的行为，
-     * 不得让幂等判定本身把上传打断（{@code saveOcrRecord} 自身也是 catch-only 的留痕腿）。
+     * 不得让去重判定本身把上传打断（{@code saveOcrRecord} 自身也是 catch-only 的记录环节）。
+     *
+     * @param onlySuccess true＝只数成功行（{@code recognize_status<>'FAILED'}），供<b>成功环节</b>用：
+     *                    D-H7-01 之后失败也落行，若把 FAILED 行当去重命中，"先失败后重传成功"那次的
+     *                    票面就永远不写入数据库（识别记录停在失败态）；
+     *                    false＝任何行都算，供<b>失败环节</b>用：同一附件反复重传失败不叠记多条。
+     *                    （recognize_status 由 V1.4.96 建为 NOT NULL DEFAULT 'SUCCESS'，无 NULL 行）
      */
-    private boolean hasOcrRecordForFile(Long fileId) {
+    private boolean hasOcrRecordForFile(Long fileId, boolean onlySuccess) {
         if (fileId == null) {
             return false;
         }
         try {
             Long hits = ocrRecordMapper.selectCount(new LambdaQueryWrapper<OcrRecord>()
-                    .eq(OcrRecord::getFileId, fileId));
+                    .eq(OcrRecord::getFileId, fileId)
+                    .ne(onlySuccess, OcrRecord::getRecognizeStatus, "FAILED"));
             return hits != null && hits > 0;
         } catch (Exception e) {
             log.warn("OCR 幂等判定失败 fileId={}: {}（按无记录处置，仍写一条 ocr_record）", fileId, e.getMessage());
@@ -311,14 +335,14 @@ public class OcrService {
     }
 
     /**
-     * D-DEC-474：发票文件字节 → 结构化票面的**统一分派**（报销附件腿与影像批次腿同一优先级次序）。
+     * D-DEC-474：发票文件字节 → 结构化票面的**统一分派**（报销附件环节与影像批次环节同一优先级次序）。
      * <ol>
-     *  <li>图片发票（{@link #IMAGE_EXTS}）→ 交可插拔图像 OCR 通道，维持 {@link #recognizeImageBytes} 原口径；</li>
+     *  <li>图片发票（{@link #IMAGE_EXTS}）→ 交可插拔图像 OCR 通道，维持 {@link #recognizeImageBytes} 原规则；</li>
      *  <li>PDF／OFD／数电票 XML 且 {@code ocr.local_parse_enabled} 开启（缺省开）⇒ <b>先本地版式解析，全程不发 OCR 请求</b>；</li>
      *  <li><b>扫描版 PDF</b>（无文本层）：解析器已渲染首页 PNG ⇒ <b>转图像 OCR 通道</b>真识别，
-     *      并与图片发票走同一条落库链（ocr_record ＋ 入池）。
-     *      改前这步回退只存在于影像批次腿 {@code recognizeOne}，报销附件腿把已经渲染好的 PNG 直接丢了
-     *      （＝D-DEC-474 断腿：同一张扫描票两个入口结果劈裂，用户被引导去"电脑端补录"，而电脑端走同一条腿）；</li>
+     *      并与图片发票走同一条写入数据库链（ocr_record ＋ 入池）。
+     *      改前这步回退只存在于影像批次环节 {@code recognizeOne}，报销附件环节把已经渲染好的 PNG 直接丢了
+     *      （＝D-DEC-474 断环节：同一张扫描票两个入口结果劈裂，用户被引导去"电脑端补录"，而电脑端走同一个环节）；</li>
      *  <li>总开关关闭时版式文件也交可插拔通道（带真实字节，像 {@code recognizeOne} 那样送 null）；</li>
      *  <li>其余解析失败（含数电票 XML 机器文件）⇒ 返回失败结果，不降级假票面（D-DEC-009）。</li>
      * </ol>
@@ -345,7 +369,7 @@ public class OcrService {
         try {
             local = OcrLocalParsers.parse(bytes, fileName);
         } catch (Throwable t) {
-            // 用 Throwable 兜底：解析异常不得把 500「系统异常」抛穿给用户（与上传接口原口径一致）
+            // 用 Throwable 默认处理：解析异常不得把 500「系统异常」抛穿给用户（与上传接口原规则一致）
             return OcrResult.fail("上传成功但解析失败：" + t.getMessage());
         }
         if (local.isOk()) {
@@ -378,7 +402,7 @@ public class OcrService {
      * 按附件（sys_file）ID 触发 OCR：附件挂在影像批次的页上，先定位其批次再走整批识别。
      *
      * <p>前端附件列表持有的是 fileId，而识别入口原先是 batchId（{@code POST /image/batch/{id}/ocr}），
-     * 两者语义不同——直接拿 fileId 当 batchId 调用必然 "影像批次不存在" 而静默失败（）。
+     * 两者语义不同——直接拿 fileId 当 batchId 调用必然 "影像批次不存在" 而静默失败。
      * 这里补齐 fileId → batchId 的解析，让"对某个附件单独识别"成为受支持的调用方式。
      *
      * @return 本次新入池的发票数
@@ -429,7 +453,7 @@ public class OcrService {
                             + "PDF / OFD / 数电票 XML 可直接解析" + MANUAL_ENTRY_HINT);
                 }
                 // 图片发票：携带影像字节交可插拔通道（paddle=http 本地 PaddleOCR / http=通用真通道）真识别。
-                // 此前图片恒以 image=null 调通道，真通道拿到的是空字节——图片发票 OCR 恒不可用（）。
+                // 此前图片恒以 image=null 调通道，真通道拿到的是空字节——图片发票 OCR 恒不可用。
                 if (isImageInvoice(fileName)) {
                     byte[] bytes = fileService.readBytes(sf);
                     log.info("图片发票 {} 交图像OCR通道({})识别，{} 字节", fileName, channelName, bytes.length);
@@ -512,7 +536,7 @@ public class OcrService {
      * <p>设计要点：
      * <ul>
      *  <li><b>异常不丢弃</b>：OCR 入池是可补偿的业务动作，失败不等于作废，必须留下痕迹——
-     *      这是行业方案 在票据自动化链路上的共同约定（票据池 + 异常队列 + 人工兜底），
+     *      这是票据自动化链路上的通行约定（票据池 + 异常队列 + 人工默认处理），
      *      它们同样<b>不使用分布式事务</b>来保证这一步。</li>
      *  <li><b>同库写入</b>：image_exception 与 ocr_record 同在 image 库，随 recognizeBatch
      *      的 image 事务提交，不引入跨库事务。</li>
@@ -521,8 +545,8 @@ public class OcrService {
      */
     private void recordException(ImgBatch batch, String type, Integer pageNo, String desc) {
         try {
-            // R5-D-232①：按（批次＋类型＋页码）幂等去重——同一次失败重复执行不再写两行；
-            // 页码编码在说明列前缀「第 N 页」（image_exception 无页码列，零加列口径）
+            // R5-D-232①：按（批次＋类型＋页码）去重去重——同一次失败重复执行不再写两行；
+            // 页码编码在说明列前缀「第 N 页」（image_exception 无页码列，零加列规则）
             if (pageNo != null) {
                 Long dup = imgExceptionMapper.selectCount(new LambdaQueryWrapper<ImgException>()
                         .eq(ImgException::getImgBatchId, batch.getId())
@@ -571,7 +595,7 @@ public class OcrService {
         return dto;
     }
 
-    /** P2-5: OCR 识别结果结构化落库到 ocr_record 表（batch/imgFile 可空——业务附件直传场景无影像批次） */
+    /** P2-5: OCR 识别结果结构化写入数据库到 ocr_record 表（batch/imgFile 可空——业务附件直传场景无影像批次） */
     private void saveOcrRecord(ImgFile page, Long fileId, OcrResult result, String channelName, boolean consistent) {
         try {
             OcrRecord record = new OcrRecord();
@@ -592,20 +616,50 @@ public class OcrService {
             record.setRawText(result.getRawText());
             record.setChannelName(channelName);
             record.setConsistent(consistent ? 1 : 0);
+            // D-H7-01：本表自此同时承载成功与失败两类行，成功环节显式落 SUCCESS（列缺省值也是 SUCCESS）
+            record.setRecognizeStatus("SUCCESS");
             // OcrRecord 为独立实体（非 TenantAuditBase），MetaObjectHandler 不自动填时间列，须显式赋值
             record.setCreatedAt(java.time.LocalDateTime.now());
             ocrRecordMapper.insert(record);
         } catch (Exception e) {
             // D-DEC-367：附件直传路径 page 恒为 null，改前此处取 page.getId() 必抛 NPE，
-            // 把"落库失败留痕"升级成"整个上传失败"——解析结果反而彻底没了。
+            // 把"写入数据库失败记录"升级成"整个上传失败"——解析结果反而彻底没了。
             log.warn("OCR 结果落库失败 imgFileId={} fileId={}: {}",
                     page == null ? null : page.getId(), fileId, e.getMessage());
         }
     }
 
     /**
+     * D-H7-01：识别**失败**也落一行 ocr_record（recognize_status=FAILED + fail_reason），
+     * 使「OCR 识别记录」页对失败同样可复核——此前失败只写 log 与异常池，本表恒 0 行
+     * （2026-10-24 H7 实测 img_batch=1／img_file=1(ocr_status=FAILED)／ocr_record=0）。
+     * <p>记录环节自身 catch-only：列尚未建（V1.4.96 未执行）或库不通时只落一条 warn，
+     * 不得把"失败记录"升级成"识别流程再抛一次"（与 {@link #saveOcrRecord} 同一处置规则）。
+     * <p>{@code img_file.ocr_text} 仍**不写**失败 JSON：影像页「识别失败」面板的判据就是无 OCR 数据
+     * （D-DEC-009／D-DEC-367 既有裁定，本环节不动它）。
+     * <p>fail_reason 只写业务话术，网关 JSON／环境变量名／traceId 等技术详情仍只进运维日志（R5-D-232②）。
+     */
+    private void saveOcrFailure(ImgFile page, Long fileId, String channelName, String reason) {
+        try {
+            OcrRecord record = new OcrRecord();
+            record.setBatchId(page == null ? null : page.getBatchId());
+            record.setImgFileId(page == null ? null : page.getId());
+            record.setFileId(page == null ? fileId : (page.getFileId() != null ? page.getFileId() : fileId));
+            record.setChannelName(channelName);
+            record.setConsistent(0);
+            record.setRecognizeStatus("FAILED");
+            record.setFailReason(reason == null ? null : (reason.length() > 500 ? reason.substring(0, 500) : reason));
+            record.setCreatedAt(java.time.LocalDateTime.now());
+            ocrRecordMapper.insert(record);
+        } catch (Exception e) {
+            log.warn("OCR 失败留痕未落库 imgFileId={} fileId={}: {}",
+                    page == null ? null : page.getId(), fileId, e.getMessage());
+        }
+    }
+
+    /**
      * #15 票面金额自洽校验：|（不含税 + 税额）− 价税合计| ≤ 0.01。
-     * R5-D-224 硬闸：关键要素（发票号码/开票日期/购方名称/不含税/税额/价税合计）任一缺失即不得判「通过」，
+     * R5-D-224 强制校验：关键要素（发票号码/开票日期/购方名称/不含税/税额/价税合计）任一缺失即不得判「通过」，
      * 防止字段错位或残缺的记录（如 invoice_date 存成发票号、buyer_name 存成单字符、价税为 NULL）
      * 被 consistent=1 放行入池；改前此分支"字段不全返回 true"，正是错乱数据仍显示「通过」的放行口。
      */
@@ -621,7 +675,7 @@ public class OcrService {
         return sum.subtract(r.getAmount()).abs().compareTo(OCR_AMT_TOLERANCE) <= 0;
     }
 
-    /** R5-D-224 硬闸配套：票面关键要素的缺失面，null 与空串同判 */
+    /** R5-D-224 强制校验配套：票面关键要素的缺失面，null 与空串同判 */
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
     }

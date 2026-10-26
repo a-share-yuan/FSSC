@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.ai.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -32,7 +35,7 @@ public class AiInspectRule {
     /** 动作参数模板 JSON（固定参数或 {{today}} 类占位） */
     private String argsTemplate;
 
-    /** 结果判据：$.list/$.total 取数后的比较 */
+    /** 结果判据：$.list/$.total 查询后的比较 */
     private String jsonPath;
     /** LT / LTE / GT / GTE / EQ / NOT_EMPTY / EMPTY */
     private String op;

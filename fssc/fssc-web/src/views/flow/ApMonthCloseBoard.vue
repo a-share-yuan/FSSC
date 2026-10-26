@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -58,7 +61,7 @@
           <el-button v-if="!['INIT', 'CLOSED', 'VOID'].includes(row.status)" v-permission="'apflow:close:item'" link type="primary" size="small" @click="openItems(row)">{{ $t('flow.close.maintainChecks') }}</el-button>
           <el-button v-if="row.status === 'CHECKING'" v-permission="'apflow:close:close'" link type="success" size="small" @click="doClose(row)">{{ $t('flow.close.btnGlClose') }}</el-button>
           <el-button v-if="row.status === 'CLOSED'" v-permission="'apflow:close:reopen'" link type="danger" size="small" @click="openReopen(row)">{{ $t('flow.close.btnReopen') }}</el-button>
-          <!-- R5-D-218：未关账的关账单可作废（终态 VOID，行止不删；已关账须走反关账） -->
+          <!-- R5-D-218：未关账的关账单可作废（最终状态 VOID，行止不删；已关账须走反关账） -->
           <el-button v-if="!['CLOSED', 'VOID'].includes(row.status)" v-permission="'apflow:close:reopen'" link type="warning" size="small" @click="openVoid(row)">{{ $t('field.void') }}</el-button>
           <el-button link type="info" size="small" @click="openTrace(row)">{{ $t('field.trace') }}</el-button>
         </template>
@@ -131,7 +134,7 @@
         </el-table-column>
         <el-table-column :label="$t('field.handler')" width="150">
           <template #default="{ row }">
-            <!-- 处理人从「本单组长＋组员＋我自己」里选：检查项留痕要的是在岗的人，手输姓名会写出档案里不存在的人 -->
+            <!-- 处理人从「本单组长＋组员＋我自己」里选：检查项记录要的是在岗的人，手输姓名会写出档案里不存在的人 -->
             <el-select v-model="row.handler" size="small" filterable clearable :placeholder="me" style="width: 100%">
               <el-option v-for="h in handlerOptions" :key="h" :label="personLabel(h)" :value="h" />
             </el-select>
@@ -161,7 +164,7 @@
       </template>
     </el-dialog>
 
-    <!-- R5-D-218 作废：原因必填留痕（终态 VOID，行止不删；解冻协同） -->
+    <!-- R5-D-218 作废：原因必填记录（最终状态 VOID，行止不删；解冻协同） -->
     <el-dialog v-model="voidVisible" :title="$t('flow.close.btnVoid')" width="440px" destroy-on-close>
       <el-alert type="error" :closable="false" style="margin-bottom: 10px"
         :title="$t('flow.close.dlgDocTitle', { v1: voidRow?.closeNo, v2: voidRow?.period })"
@@ -173,7 +176,7 @@
       </template>
     </el-dialog>
 
-    <!-- 全程操作留痕（P0-2）/ 关账报告导出（P2-10） -->
+    <!-- 全程操作记录（P0-2）/ 关账报告导出（P2-10） -->
     <el-drawer v-model="traceVisible" size="460px" destroy-on-close>
       <template #header>
         <div style="display:flex; justify-content:space-between; align-items:center">
@@ -242,7 +245,7 @@ const initRules = computed(() => ({
 }))
 const memberIds = ref([])
 const dispatchFormRef = ref(null)
-// 组员是独立的 ref，用只读视图包一层给 el-form 当 model，红星/闸门就能和其它页同源
+// 组员是独立的 ref，用只读视图包一层给 el-form 当 model，红星/校验就能和其它页同源
 const dispatchModel = computed(() => ({ memberIds: memberIds.value }))
 const dispatchRules = computed(() => ({ memberIds: commonRules.multiSelect(t('flow.close.msgPickMember')) }))
 const items = ref([])
@@ -343,7 +346,7 @@ async function doInit() {
 // ---- 派工 ----
 function openDispatch(row) {
   dispatchRow.value = row
-  // R5-D-212：优先按工号回填（历史昵称/花名数据兜底按昵称匹配）
+  // R5-D-212：优先按工号回填（历史昵称/花名数据默认处理按昵称匹配）
   memberIds.value = (row.members || '').split(',').map((s) => s.trim()).filter(Boolean)
     .map((name) => (users.value.find((u) => u.userName === name) || users.value.find((u) => u.nickName === name))?.id)
     .filter((id) => id != null)
@@ -422,7 +425,7 @@ async function doReopen() {
   await load()
 }
 
-// ---- 作废（R5-D-218 终态 VOID） ----
+// ---- 作废（R5-D-218 最终状态 VOID） ----
 function openVoid(row) {
   voidRow.value = row
   voidReason.value = ''

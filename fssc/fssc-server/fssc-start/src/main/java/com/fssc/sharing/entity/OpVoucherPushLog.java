@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -26,7 +29,7 @@ public class OpVoucherPushLog extends TenantAuditBase {
     private String channel;
     /** 推送结果：SUCCESS / FAILED */
     private String status;
-    /** 外部系统回执单号 */
+    /** 外部系统返回单号 */
     private String externalNo;
     /** 推送时间 */
     private LocalDateTime pushTime;

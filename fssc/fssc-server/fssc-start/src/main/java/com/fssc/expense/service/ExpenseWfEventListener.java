@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -70,7 +73,7 @@ public class ExpenseWfEventListener implements WfBizAction {
     private final com.fssc.sharing.service.VoucherService voucherService;
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
     private final ApplicationEventPublisher eventPublisher;
-    /** 付款审批通过预算执行核销所需（执行流水幂等判定） */
+    /** 付款审批通过预算执行核销所需（执行流水去重判定） */
     private final com.fssc.budget.mapper.BgOccupyMapper bgOccupyMapper;
     /** 付款单挂 CIP（extJson.cipId）时自动生成在建工程付款凭证 */
     private final com.fssc.masterdata.mapper.MdCipMapper mdCipMapper;
@@ -80,14 +83,14 @@ public class ExpenseWfEventListener implements WfBizAction {
      * 恒为 false，未指定 pay_target 的报销单全部被打成供应商款（付错对象）。
      */
     private final com.fssc.system.mapper.SysUserMapper sysUserMapper;
-    /** P3：凭证自动生成失败的流程/系统侧留痕（sys_oper_log，与 WfMirrorDefectRecorder 同口径） */
+    /** P3：凭证自动生成失败的流程/系统侧记录（sys_oper_log，与 WfMirrorDefectRecorder 同一规则） */
     private final OperLogWriter operLogWriter;
     /** P3：凭证自动生成失败的运维侧主动告警（企微/邮件，未配置则退化为日志） */
     private final OpsAlertService opsAlertService;
     /**
      * D-DEC-394（X-05 甲-1）：还款资金流入侧唯一载体 {@code exp_bill_receipt}。
-     * <p>旧腿 {@code rc_receipt}（D-DEC-107）已按 D-DEC-456 撤除＝员工还款在该表只能出「无客户收款单」噪声，
-     * 且两腿幂等键分叉（{@code bill_no} vs {@code bill_id}）＝一笔到账两行；报表/联查不得把两侧相加。
+     * <p>旧环节 {@code rc_receipt}（D-DEC-107）已按 D-DEC-456 撤除＝员工还款在该表只能出「无客户收款单」噪声，
+     * 且两环节唯一键分叉（{@code bill_no} vs {@code bill_id}）＝一笔到账两行；报表/联查不得把两侧相加。
      */
     private final ExpBillReceiptMapper expBillReceiptMapper;
 
@@ -112,7 +115,7 @@ public class ExpenseWfEventListener implements WfBizAction {
         try {
             if (Boolean.TRUE.equals(event.getApproved())) {
                 // P0-2 金额防篡改：审批通过前校验关键字段校验和。
-                // fail-closed：校验不通过一律拦截（置 REJECTED + 留痕），绝不进入通过分支——
+                // fail-closed：校验不通过一律拦截（置 REJECTED + 记录），绝不进入通过分支——
                 // 修复前异常被外层 catch 吞掉，篡改后流程照样走完，防篡改形同虚设。
                 try {
                     verifyChecksum(bill);
@@ -122,17 +125,17 @@ public class ExpenseWfEventListener implements WfBizAction {
                     return;
                 }
                 handleApproved(bizType, bill);
-                // 断点7：审批通过后发布单据终态事件，档案域 BillTerminalEventListener 接收
+                // 断点7：审批通过后发布单据最终状态事件，档案域 BillTerminalEventListener 接收
                 publishTerminalEventIfTerminal(billId);
             } else {
                 // P0-5：驳回时记录驳回类型（THROW_BACK 漏单驳回 / GRADE_BY_GRADE 逐级驳回）
                 // ROOT-17：撤回判据改读事件上的显式 endType。原先是
                 // "申请人撤回".equals(event.getComment())——拿给人看的文案当业务开关，
                 // 文案一改（含错别字、含将来允许撤回填原因）撤回就被记成驳回：单据状态、
-                // reject_type 落库、留痕动作三处一起错，且不报错。
+                // reject_type 写入数据库、记录动作三处一起错，且不报错。
                 handleRejected(bizType, bill, event.withdrawn(), event.getRejectType(), event.getComment());
             }
-            // P0-3 审计留痕：流程结束（审批通过/驳回/撤回）
+            // P0-3 审计记录：流程结束（审批通过/驳回/撤回）
             boolean approved = Boolean.TRUE.equals(event.getApproved());
             auditTrailService.record(bill.getBillType(), bill.getId(), bill.getBillNo(), "exp_bill",
                     String.valueOf(bill.getId()),
@@ -144,13 +147,13 @@ public class ExpenseWfEventListener implements WfBizAction {
                             + (event.getComment() == null ? "" : "（" + event.getComment() + "）"));
             log.info("单据 {} 流程收尾: bizType={}, approved={}", billId, bizType, event.getApproved());
         } catch (Exception ex) {
-            // 事件收尾失败要留痕（后续可对账重放），不让异常中断
+            // 事件收尾失败要记录（后续可对账重放），不让异常中断
             log.error("单据 {} 流程收尾失败: {}", billId, ex.getMessage(), ex);
         }
     }
 
     /**
-     * 防篡改 fail-closed：校验和不通过时把单据置为 REJECTED 并留痕，阻断"篡改后照常通过"。
+     * 防篡改 fail-closed：校验和不通过时把单据置为 REJECTED 并记录，阻断"篡改后照常通过"。
      * 不抛异常（避免被外层"收尾异常不中断"分支吞掉），但状态与审计可见。
      */
     private void rejectTamperedBill(ExpBill bill, String reason) {
@@ -159,8 +162,8 @@ public class ExpenseWfEventListener implements WfBizAction {
         u.setStatus("REJECTED");
         u.setAuditRemark("防篡改拦截：" + reason);
         expBillMapper.updateById(u);
-        // ⑨（D-V4R-49）：防篡改拦截同样是死亡终态，作业链一并收口
-        sharingService.closeOnBillTerminal(bill.getId(), "防篡改拦截终态");
+        // ⑨（D-V4R-49）：防篡改拦截同样是死亡最终状态，作业链一并办结
+        sharingService.closeOnBillTerminal(bill.getId(), "防篡改拦截，流程已结束");
         auditTrailService.record(bill.getBillType(), bill.getId(), bill.getBillNo(), "exp_bill",
                 String.valueOf(bill.getId()), "TAMPER_REJECT", null, null, "防篡改拦截：" + reason);
     }
@@ -209,7 +212,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                     }
                     log.info("借款单 {} 审批通过自动生成借款凭证: {}", bill.getBillNo(), loanVoucherId);
                 } catch (Exception vex) {
-                    // 失败已由 handleVoucherGenFailure 统一留痕（置失败态+原因），此处不再上抛以免打断审批收尾
+                    // 失败已由 handleVoucherGenFailure 统一记录（置失败态+原因），此处不再上抛以免打断审批收尾
                     handleVoucherGenFailure(bill, "EXP_LOAN", vex);
                 }
                 ExpBill upd = new ExpBill();
@@ -218,10 +221,10 @@ public class ExpenseWfEventListener implements WfBizAction {
                 upd.setLoanBalance(nvl(bill.getTotalAmount()));
                 // D-F1R-01：借款放款上限回写 payable_amount（＝借款本金）。
                 // 根因：本分支历史上只写 loan_balance 不写 payable_amount（＝恒 0，连草稿单都一样），
-                // 而 PayBatchService 防超付闸的跳过判据是 payableAmount **为空**而非等于 0，
-                // 于是「已付 0 ＋ 拟付 4000 ＞ 应付 0.00」把放款永久拦死 —— 借款放款腿两轮实测皆不通，
+                // 而 PayBatchService 防超付校验的跳过判据是 payableAmount **为空**而非等于 0，
+                // 于是「已付 0 ＋ 拟付 4000 ＞ 应付 0.00」把放款永久拦死 —— 借款放款环节两轮实测皆不通，
                 // 但借款凭证已过账（贷 1002 银行存款 4000）⇒ 账上记了支出、实际零支出的账实不符。
-                // 口径裁决：payable_amount 承载「放款上限」（资金闸语义），在贷余额仍由 loan_balance 承载，
+                // 规则裁决：payable_amount 承载「放款上限」（资金校验语义），在贷余额仍由 loan_balance 承载，
                 // 状态机不扩 —— 放款付讫不得把借款单迁成 PAID（那等于笔借款已结清、会从在贷池消失），
                 // 由 PayBatchService#writeBackPayment 对 EXP_LOAN 豁免 PAID 迁移来保证。
                 upd.setPayableAmount(nvl(bill.getTotalAmount()));
@@ -245,7 +248,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                     }
                     log.info("还款单 {} 审批通过自动生成还款凭证: {}", bill.getBillNo(), repayVoucherId);
                 } catch (Exception vex) {
-                    // 同上：借款退款凭证生成失败经 handleVoucherGenFailure 留痕，不重复抛出
+                    // 同上：借款退款凭证生成失败经 handleVoucherGenFailure 记录，不重复抛出
                     handleVoucherGenFailure(bill, "EXP_REPAY", vex);
                 }
                 ExpBill upd = new ExpBill();
@@ -253,13 +256,13 @@ public class ExpenseWfEventListener implements WfBizAction {
                 upd.setStatus("APPROVED");
                 expBillMapper.updateById(upd);
                 repayLoan(bill);
-                // D-DEC-456：还款资金事实唯一载体＝exp_bill_receipt；旧腿 rc_receipt（D-DEC-107）已撤除
+                // D-DEC-456：还款资金事实唯一载体＝exp_bill_receipt；旧环节 rc_receipt（D-DEC-107）已撤除
                 registerRepayFundReceipt(bill);
                 sharingService.createChain(bill, "EXP_REPAY");
                 // ⑨（D-V4R-49）：还款链的「收款核对→冲销账务归档」在上方 repayLoan（余额核销+结清裁定）
                 // 与 registerRepayFundReceipt（收款登记）已全部自动化办结，凭证亦已自动生成——
-                // 池任务再留只会成为终态单上的僵尸待认领（2026-10-16 晚间场 HK202610160001 实测）。
-                // 创建即收口：留 FINISHED 痕迹证明链走过，池里不再出现无意义工单。
+                // 池任务再留只会成为最终状态单上的僵尸待认领（2026-10-16 晚间场 HK202610160001 实测）。
+                // 创建即办结：留 FINISHED 痕迹证明链走过，池里不再出现无意义工单。
                 sharingService.closeOnBillTerminal(bill.getId(), "还款已自动核销入账");
             }
             case "EXP_APPLY" -> {
@@ -269,7 +272,7 @@ public class ExpenseWfEventListener implements WfBizAction {
             }
             case "EXP_PAY" -> {
                 // 付款单通过：状态 APPROVED + 待付款记录 + 共享作业链（三单匹配→付款→记账）
-                // P0-2 回写 payable_amount：核定付款优先，否则按总额；付款批次防超付以该口径预检
+                // P0-2 回写 payable_amount：核定付款优先，否则按总额；付款批次防超付以该规则预检
                 // 【修复 2026-09-09 E2E-007】对公结算(SETTLE)冲销预付：应付 = 核定/总额 − 冲销预付合计，
                 // 否则冲销形同虚设会按全额重复付款（预付已付 + 结算又全额付）。同时回写被冲销预付单
                 // offset_amount，防止预付被再次冲销。
@@ -283,18 +286,18 @@ public class ExpenseWfEventListener implements WfBizAction {
                 // 若外层事务（Flowable complete 事务）已先更新过 exp_bill（status/payable），
                 // 内层事务回写 voucher_no 会被外层行锁阻塞 50s 后 Lock wait timeout 整体回滚——
                 // 表现为"生成凭证节点通过后 op_voucher 无记录、单据 voucher_no 为空"（S02c SETTLE 复现）。
-                // 对齐 EXP_CLAIM 的时序：先在内存置状态/应付并生成凭证，再统一落库。
+                // 对齐 EXP_CLAIM 的时序：先在内存置状态/应付并生成凭证，再统一写入数据库。
                 bill.setStatus("APPROVED");
                 bill.setPayableAmount(payable);
                 // P2：对公付款单自动生成对公付款凭证（借 应付账款/贷 银行存款），POSTED 后入总账
                 // D-DEC-083：结算单（PAY/SETTLE）此处出的是「借 6602 费用／贷 2202 应付账款」计提应付凭证，
-                // 付款腿由出纳批次凭证出；失败留痕的 sourceType 必须与实际将落的来源一致，
-                // 否则「记账失败补生成」视图按幂等键回查永远显示未补生成（VoucherGenFailureService#loadVouchers）。
+                // 付款环节由出纳批次凭证出；失败记录的 sourceType 必须与实际将落的来源一致，
+                // 否则「记账失败补生成」视图按唯一键回查永远显示未补生成（VoucherGenFailureService#loadVouchers）。
                 try {
                     Long vid = voucherService.generatePtpPayment(bill);
                     log.info("对公付款单 {} 审批通过自动生成付款凭证: {}", bill.getBillNo(), vid);
                 } catch (Exception ex) {
-                    // 同上：付款/结算凭证生成失败经 handleVoucherGenFailure 留痕，不重复抛出
+                    // 同上：付款/结算凭证生成失败经 handleVoucherGenFailure 记录，不重复抛出
                     boolean settle = "SETTLE".equalsIgnoreCase(bill.getBillSubType());
                     handleVoucherGenFailure(bill,
                             settle ? com.fssc.sharing.service.VoucherService.SOURCE_SETTLE : "EXPENSE_PAY", ex);
@@ -306,11 +309,11 @@ public class ExpenseWfEventListener implements WfBizAction {
                 expBillMapper.updateById(payUpd);
                 // 付款单挂 CIP（extJson.cipId，与 extJson.poId 并列的可选挂载）时，
                 // 审批通过自动生成「借 在建工程(1604) / 贷 银行存款(1002)」凭证并回写 md_cip.paid_amount。
-                // 幂等：source_type=CIP_PAY + source_doc_id=billId；失败仅记日志不阻断审批收尾。
+                // 去重：source_type=CIP_PAY + source_doc_id=billId；失败仅记日志不阻断审批收尾。
                 generateCipPayVoucherIfLinked(bill, payable);
                 // 回写被冲销预付单的已冲销金额（核销）
                 writeBackPrepayOffsets(bill);
-                // P0-2 用回写后的最新单据生成付款记录，保证付款记录金额与防超付口径一致
+                // P0-2 用回写后的最新单据生成付款记录，保证付款记录金额与防超付规则一致
                 ExpBill freshPay = expBillMapper.selectById(bill.getId());
                 createPaymentRecord(freshPay != null ? freshPay : bill);
                 sharingService.createChain(bill, "EXP_PAY");
@@ -318,14 +321,14 @@ public class ExpenseWfEventListener implements WfBizAction {
                 // 付款单审批通过时钱还没走（exp_bill_payment 只是 WAITING，批次仍在出纳手上），
                 // 此刻计消耗＝"款未付即计消耗"。转已用下移到 PayBatchService.execute 打款成功后按单确认。
                 // 占用仍在（提交时已 occupy），额度不会失控；反审批回冲由 ExpenseBillService 的
-                // hasWriteOff 双态口径自动选 release（未付）/ reverseWriteOff（已付），无需改动。
+                // hasWriteOff 双态规则自动选 release（未付）/ reverseWriteOff（已付），无需改动。
             }
             default -> {
                 // EXP_CLAIM：自动生成凭证（可预览修改）→ 核销占用 + 共享作业链（票据审核→付款审核→记账归档）
                 // 修复（2026-09-08）：generate 要求 status ∈ {APPROVED, PAID, CLOSED}，而本方法末尾才将
                 // 库存状态置 APPROVED（提交后一直是 APPROVING），审批通过时直接调用 generate 必然校验失败
                 // 被 catch 吞掉，导致凭证不生成。此处先把内存状态置 APPROVED 通过校验，
-                // 真实落库 APPROVED 仍由下方 claimUpd.updateById 统一完成，行为不变。
+                // 真实写入数据库 APPROVED 仍由下方 claimUpd.updateById 统一完成，行为不变。
                 bill.setStatus("APPROVED");
                 try {
                     Long vid = voucherService.generate(bill);
@@ -335,11 +338,11 @@ public class ExpenseWfEventListener implements WfBizAction {
                     // 失败必须留下单据/流程侧可见痕迹与可重试入口，不得只留一行 log。
                     handleVoucherGenFailure(bill, "EXPENSE", ex);
                 }
-                // D-DEC-104：审批通过不再把预算占用直接转已用（原口径＝款未付票未得即计消耗）。
+                // D-DEC-104：审批通过不再把预算占用直接转已用（原规则＝款未付票未得即计消耗）。
                 // 占用在提交时已按行 occupy（ExpenseBillService），审批通过只让它继续"挂着"，
                 // 转已用的动作下移到 PayBatchService.execute 打款成功（settleOccupyOnPaid）。
-                // 例外：本单没有任何现金腿（全额由借款冲抵平账 / 报销<借款只产生退款记录）时，
-                // 钱已经在借款那一腿出去，此刻就地确认消耗，否则占用会永久悬空（见下方 payable 判定）。
+                // 例外：本单没有任何现金环节（全额由借款冲抵平账 / 报销<借款只产生退款记录）时，
+                // 钱已经在借款那一环节出去，此刻就地确认消耗，否则占用会永久悬空（见下方 payable 判定）。
                 // 分多次报销（需求 4.2.2 页面规则 7/8）：按关联金额核销事前申请占用，
                 // 累计已报销达到申请金额 → 申请单 COMPLETED（报销完毕）
                 writeOffApplyOccupy(bill);
@@ -360,14 +363,14 @@ public class ExpenseWfEventListener implements WfBizAction {
                         // 出纳在付款工作台组批执行；全额付讫后由 PayBatchService 回写 APPROVED→PAID
                         createClaimPayment(bill, payable);
                 } else {
-                    // D-DEC-104 无现金腿分支：本单不会产生待付记录 ⇒ 此刻确认预算消耗
+                    // D-DEC-104 无现金环节分支：本单不会产生待付记录 ⇒ 此刻确认预算消耗
                     // D-F1R-06：但<b>不能就在此刻执行</b>，见 settleBudgetOnNoCashLeg 的方法注释：
                     // 必须等外层审批事务提交后（行锁已释放）再跑，否则内层 REQUIRES_NEW 自锁 50s 超时。
                     scheduleSettleBudgetOnNoCashLeg(bill);
-                    // ⑨（D-V4R-49）：无现金腿=钱不经付款批次（全额借款冲抵/退款了结），单据业务就此收官，
-                    // 上面刚建的作业链（票据审核/付款审核/记账归档）不会再有人办——立即收口，
+                    // ⑨（D-V4R-49）：无现金环节=钱不经付款批次（全额借款冲抵/退款了结），单据业务就此收官，
+                    // 上面刚建的作业链（票据审核/付款审核/记账归档）不会再有人办——立即办结，
                     // 否则就是 BX202610160002 式「已核销平账却仍挂审核待认领」的僵尸工单。
-                    sharingService.closeOnBillTerminal(bill.getId(), "报销无现金腿（全额冲抵/退款），业务已了结");
+                    sharingService.closeOnBillTerminal(bill.getId(), "报销无实际付款（全额冲抵/退款），业务已了结");
                 }
                     ExpBill claimUpd = new ExpBill();
                     claimUpd.setId(bill.getId());
@@ -383,12 +386,12 @@ public class ExpenseWfEventListener implements WfBizAction {
         // TRC-E：exp_bill.approve_time 建表以来 14/14 全 NULL（五个 case 各自只写 status）。
         // 统一在分支收尾回填一次，且以库内最新状态为准——EXP_CLAIM 可能被智能审单驳回/撤回，不能盲写。
         markApproveTime(bill.getId());
-        // D-DEC-049 同意腿（12-16:61「付款后金额确认列仍 NULL」）：与 approve_time 同一个收尾点，
+        // D-DEC-049 同意环节（12-16:61「付款后金额确认列仍 NULL」）：与 approve_time 同一个收尾点，
         // 把"审批人直接同意、没做核减"这一路的核定报销额落进库里。见方法注释的判据与排除项。
         confirmApprovedAmountOnAgree(bizType, bill.getId());
     }
 
-    /** TRC-E：仅当单据确为 APPROVED 且该列仍为空时写入审批通过时刻（幂等，重放事件不改写首时刻） */
+    /** TRC-E：仅当单据确为 APPROVED 且该列仍为空时写入审批通过时刻（去重，重放事件不改写首时刻） */
     private void markApproveTime(Long billId) {
         ExpBill cur = expBillMapper.selectById(billId);
         if (cur == null || cur.getApproveTime() != null || !"APPROVED".equals(cur.getStatus())) {
@@ -401,13 +404,13 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * D-DEC-049（12-16:61）同意腿：审批通过而<b>无人做过核减</b>时，把核定报销金额按申请金额落列。
+     * D-DEC-049（12-16:61）同意环节：审批通过而<b>无人做过核减</b>时，把核定报销金额按申请金额落列。
      *
      * <p><b>缺陷</b>：{@code exp_bill.approved_amount} 在全仓只有两个写点——人工核减口
      * {@code ExpenseBillService#approveDeduct}（{@code :1032}，入口 {@code ExpenseBillController:67}）
      * 与 {@code writeOffApplyOccupy}（{@code :1045}，申请单累计，语义不同，见下方排除项）。
      * 审批人在审批台点「同意」而不改金额时前者不触发 ⇒ 实测本库 {@code approved_amount} 18/18 全 NULL
-     * （含已 PAID 的 3 单），付款之后"金额确认列"空白，核定口径与申请/实付三口径无法对账。
+     * （含已 PAID 的 3 单），付款之后"金额确认列"空白，核定规则与申请/实付三规则无法对账。
      *
      * <p><b>判据＝未核减时核定金额＝申请金额</b>，不是"造一个数"：系统本来就是这么算的——
      * 下游取报销核定额的三处（{@code :797}/{@code :1075}/{@code :1140}）与
@@ -425,9 +428,9 @@ public class ExpenseWfEventListener implements WfBizAction {
      * <p><b>复核人（{@code audit_user_id}）本批不写</b>：该列建表即在（{@code SHOW COLUMNS exp_bill}）
      * 但 {@code ExpBill} 实体未映射、全仓零写点，在独占面内既取不到"当次办理人"也不能落列
      * （{@code WfProcessEndedEvent} 无操作人字段，从 {@code wf_task_history} 反查又会踩
-     * 「末节 APPROVE 行晚于事件落库」的时序坑，取到上一节的人＝伪造）⇒ 作为移交项出。
+     * 「末节 APPROVE 行晚于事件写入数据库」的时序坑，取到上一节的人＝伪造）⇒ 作为移交项出。
      *
-     * <p>幂等：只在该列为空时写；重读库内最新行，避免覆盖并发核减；异常只降级不影响审批收尾主链路。
+     * <p>去重：只在该列为空时写；重读库内最新行，避免覆盖并发核减；异常只降级不影响审批收尾主链路。
      */
     private void confirmApprovedAmountOnAgree(String bizType, Long billId) {
         try {
@@ -459,16 +462,16 @@ public class ExpenseWfEventListener implements WfBizAction {
 
     /** P3 错误码：单据自动生成凭证失败（可补生成）；供「系统日志」页筛选与巡检脚本按码统计 */
     public static final String CODE_VOUCHER_GEN_FAILED = "EXP-VOUCHER-001";
-    /** 补生成入口提示（与 SharingController#generate 同源，幂等：已生成不会重复） */
+    /** 补生成入口提示（与 SharingController#generate 同源，去重：已生成不会重复） */
     private static final String VOUCHER_RETRY_ENTRY =
             "共享中心→记账凭证→生成凭证（POST /api/tenant/sharing/voucher/generate/{billId}）";
-    /** sys_oper_log.error_msg 列宽 varchar(2000)，留出余量（与 WfMirrorDefectRecorder 同口径） */
+    /** sys_oper_log.error_msg 列宽 varchar(2000)，留出余量（与 WfMirrorDefectRecorder 同一规则） */
     /** exp_bill.audit_remark 列宽 varchar(1000)（D-DEC-460 驳回意见回写用，超长截断） */
     private static final int AUDIT_REMARK_MAX = 1000;
     private static final int OPER_LOG_MSG_MAX = 1900;
 
     /**
-     * 凭证自动生成失败的统一留痕——<b>不再是一行 log 就消失</b>。
+     * 凭证自动生成失败的统一记录——<b>不再是一行 log 就消失</b>。
      *
      * <p><b>为什么不按方案原文"冒泡"</b>：本方法由 {@code EventOrchestrationBus} 在 Flowable
      * 引擎线程上异步分发，且总线对每个 Action 自带 try/catch（单个失败只记日志、不中断其它动作）。
@@ -476,16 +479,17 @@ public class ExpenseWfEventListener implements WfBizAction {
      * 中途抛出——把它之后的预算核销、付款记录、共享作业链等全部收尾动作一并跳过，<b>让链条断得更多</b>。
      * 故此处按"失败必须留下可见、可查、可重试的痕迹"落地，而不是抛异常。
      *
-     * <p>三条留痕（同一事实的三个视角，缺一不可）：
+     * <p>三条记录（同一事实的三个视角，缺一不可）：
      * <ol>
      *   <li><b>单据侧</b>：{@code exp_bill.ext_json.voucherPending} 标记（错误码/来源/原因/时间），
      *       单据详情与全链路联查返回的 bill 行直接带出；并写一条
      *       {@code audit_trail}(action=VOUCHER_GEN_FAILED) 供按单号查审计轨迹；</li>
      *   <li><b>流程/系统侧</b>：{@code sys_oper_log}（status=1 失败 + 固定错误码），
+     *       在「系统日志」页可查、可被巡检脚本按码统计（与 {@code WfMirrorDefectRecorder} 同一规则）；</li>
      *   <li><b>运维侧</b>：{@link OpsAlertService} 主动告警（企微/邮件，未配置则退化为 ERROR 日志）。</li>
      * </ol>
      *
-     * <p>本方法自身<b>绝不抛异常</b>：任一条留痕失败只降级为日志，收尾链必须继续走完。
+     * <p>本方法自身<b>绝不抛异常</b>：任一条记录失败只降级为日志，收尾链必须继续走完。
      */
     private void handleVoucherGenFailure(ExpBill bill, String sourceType, Exception ex) {
         String reason = voucherFailReason(bill, ex);
@@ -499,15 +503,15 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * 失败原因归一。<b>「会计期间已结账」单独成一类</b>——它是可操作的口径（反结账或改落期），
+     * 失败原因归一。<b>「会计期间已结账」单独成一类</b>——它是可操作的规则（反结账或改落期），
      * 不能把 {@code 参数校验失败：会计期间 2026-09 已结账，禁止操作} 原样抛给用户自己猜。
      */
     private String voucherFailReason(ExpBill bill, Exception ex) {
         String msg = ex == null ? null : ex.getMessage();
         if (msg != null && msg.contains("已结账")) {
-            return "会计期间 " + periodLabel(bill) + " 已结账，凭证未生成。处置口径："
+            return "会计期间 " + periodLabel(bill) + " 已结账，凭证未生成。处理方式："
                     + "①「主数据→期间管理」对该期间反结账（恢复开账）后，再经补生成入口重制；"
-                    + "②或按公司当期开账期间重新落期（VoucherService 落期前滚口径）后重制。"
+                    + "②或按公司当期开账期间重新落期（VoucherService 按期次前滚的规则）后重制。"
                     + "两种处置均不影响单据已完成的审批结论，仅为补记总账。";
         }
         if (msg == null || msg.isBlank()) {
@@ -526,7 +530,7 @@ public class ExpenseWfEventListener implements WfBizAction {
     /**
      * 单据侧标记：{@code ext_json.voucherPending}。<b>保留既有键</b>（prepayOffsets/cipId/poId…）只增不改。
      *
-     * <p>标记不主动清除：判定口径＝{@code voucher_no 为空 且 该标记存在}——补生成成功后
+     * <p>标记不主动清除：判定规则＝{@code voucher_no 为空 且 该标记存在}——补生成成功后
      * {@code voucher_no} 有值，标记即自然失效（无需回写，避免多写点同步）。
      */
     private void markVoucherPending(ExpBill bill, String sourceType, String reason) {
@@ -550,7 +554,7 @@ public class ExpenseWfEventListener implements WfBizAction {
             upd.setExtJson(OM.writeValueAsString(root));
             expBillMapper.updateById(upd);
         } catch (Exception markEx) {
-            // 标记写失败不得反过来阻断收尾链（审计/系统日志/告警三处留痕此时已完成）
+            // 标记写失败不得反过来阻断收尾链（审计/系统日志/告警三处记录此时已完成）
             log.warn("单据 {} 写 ext_json.voucherPending 标记失败: {}", bill.getBillNo(), markEx.getMessage());
         }
     }
@@ -572,7 +576,7 @@ public class ExpenseWfEventListener implements WfBizAction {
         Long tenantId = (TenantContext.hasContext() && !TenantContext.isIgnoreTenant())
                 ? TenantContext.getTenantId() : null;
         if (tenantId == null) {
-            // sys_oper_log.tenant_id NOT NULL：总线以 runIgnoreTenant 兜底时无法落库，只留文件日志
+            // sys_oper_log.tenant_id NOT NULL：总线以 runIgnoreTenant 默认处理时无法写入数据库，只留文件日志
             log.warn("[{}] 无租户上下文，凭证失败未落 sys_oper_log，单据 {}（billId={}）",
                     CODE_VOUCHER_GEN_FAILED, bill.getBillNo(), bill.getId());
             return;
@@ -613,11 +617,11 @@ public class ExpenseWfEventListener implements WfBizAction {
 
     /** 驳回/撤回分支 */
     private void handleRejected(String bizType, ExpBill bill, boolean withdrawn, String rejectType, String comment) {
-        // D-DEC-105（P1）还款单的预算腿与其余单据相反：提交时它不占用，而是<b>冲减借款单的占用</b>，
+        // D-DEC-105（P1）还款单的预算环节与其余单据相反：提交时它不占用，而是<b>冲减借款单的占用</b>，
         // 所以驳回/撤回要做的是把那次冲减<b>等额回补</b>（还款没办成，额度不该少）。
         // 原实现按行 release(biz_id=还款单) 既释放不出任何东西（还款单从未以自身 biz_id 占用），
         // 又把一笔不存在的占用记成负数流水 —— 实测 12-24 还款单驳回路径 0 行回补即源于此。
-        // 回补对象从 bg_occupy 反查（当初冲在哪些借款单上），不重算 FIFO，两腿同源。
+        // 回补对象从 bg_occupy 反查（当初冲在哪些借款单上），不重算 FIFO，两环节同源。
         if ("REPAY".equals(bill.getBillType())) {
             budgetService.restoreLoanOccupyByRepayNo(bill.getBillNo(),
                     withdrawn ? "还款单撤回回补借款占用" : "还款单驳回回补借款占用");
@@ -625,8 +629,8 @@ public class ExpenseWfEventListener implements WfBizAction {
             // P0-C2 配套：提交时占用对所有单据类型一视同仁（ExpenseBillService:612 按 billType 映射），
             // 而本方法原先只在 bizType=EXP_CLAIM 时释放 →
             // APPLY/LOAN/PAY 单被驳回或撤回后占用永久悬挂，额度还不回去（bizType 是流程类型，
-            // 与占用类型不同名，必须按 billType 还原占用口径）。
-            // D-DEC-105 附带点：还原口径统一到 BudgetService.occupyBizTypeOf，
+            // 与占用类型不同名，必须按 billType 还原占用规则）。
+            // D-DEC-105 附带点：还原规则统一到 BudgetService.occupyBizTypeOf，
             // 否则 LOAN 单占用记 EXP_LOAN、释放记 EXP_CLAIM，台账按类型读继续对不上。
             String occupyBizType = com.fssc.budget.service.BudgetService.occupyBizTypeOf(bill.getBillType());
             for (ExpBillLine line : linesOf(bill.getId())) {
@@ -636,18 +640,18 @@ public class ExpenseWfEventListener implements WfBizAction {
                 }
             }
         }
-        // D-DEC-106（P1）：结清腿原先只由 addLoanOffset（提单期）写过一次，驳回/撤回无人回补
+        // D-DEC-106（P1）：结清环节原先只由 addLoanOffset（提单期）写过一次，驳回/撤回无人回补
         // ⇒ 借款单余额永久停在 0。此处按本还款单已落的 exp_loan_offset(REPAY) 反向回补余额与状态。
         if ("REPAY".equals(bill.getBillType())) {
             restoreLoanBalanceOnReject(bill, withdrawn);
         }
         // D-DEC-384/391（P1·X-40 甲③）：报销单驳回/撤回同样要释放借款冲抵占用。
-        // 新口径下在途量登记在 exp_bill_relation(LOAN_CLAIM)（按目标单状态判占用，转入驳回/撤回即释放），
-        // 这里另清发布边界前"提单期就落了 CLAIM 流水并扣余额"的存量单，否则这类单的余额照样回不来。
+        // 新规则下在途量登记在 exp_bill_relation(LOAN_CLAIM)（按目标单状态判占用，转入驳回/撤回即释放），
+        // 这里另清发布边界前"提单期就落了 CLAIM 流水并扣余额"的历史单，否则这类单的余额照样回不来。
         if ("CLAIM".equals(bill.getBillType())) {
             releaseLoanClaimOnReject(bill, withdrawn);
         }
-        // P0-5：驳回类型落库（漏单驳回=电子流直送我，只能重传影像/改简字段；逐级驳回=字段可全改）
+        // P0-5：驳回类型写入数据库（漏单驳回=电子流直送我，只能重传影像/改简字段；逐级驳回=字段可全改）
         ExpBill upd = new ExpBill();
         upd.setId(bill.getId());
         upd.setStatus(withdrawn ? "WITHDRAWN" : "REJECTED");
@@ -655,16 +659,16 @@ public class ExpenseWfEventListener implements WfBizAction {
             upd.setRejectType(rejectType != null
                     ? ("THROW_BACK".equals(rejectType) ? "THROW_BACK" : "GRADE_BY_GRADE")
                     : "GRADE_BY_GRADE");
-            // D-DEC-460（P1）：驳回意见此前只进流程历史与审计留痕，单据本体零落库 ⇒ 移动端卡片
+            // D-DEC-460（P1）：驳回意见此前只进流程历史与审计记录，单据本体零写入数据库 ⇒ 移动端卡片
             // 「审批意见：—」。原先 remark 的写者只有核减与防篡改拦截两处，驳回路径无人写。
             upd.setAuditRemark(remarkOf(comment));
         }
         expBillMapper.updateById(upd);
-        // ⑨（D-V4R-49）：驳回/撤回=死亡终态。正常时序下作业链要等审批通过才建（createChain 在
-        // handleApproved 内），此处通常无可收口；但反审批/补账等旁路可能留下未终态池任务——
-        // 一并收口，杜绝「单已死、工单还挂着等人认领」的孤儿。
+        // ⑨（D-V4R-49）：驳回/撤回=死亡最终状态。正常时序下作业链要等审批通过才建（createChain 在
+        // handleApproved 内），此处通常无可办结；但反审批/补账等旁路可能留下未最终状态池任务——
+        // 一并办结，杜绝「单已死、工单还挂着等人认领」的孤儿。
         sharingService.closeOnBillTerminal(bill.getId(),
-                withdrawn ? "单据已撤回终态" : "单据已驳回终态");
+                withdrawn ? "单据已撤回" : "单据已驳回");
     }
 
     /** audit_remark 是 varchar(1000)，超长必须截，否则收尾整链（含状态）一起失败 */
@@ -676,18 +680,18 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * 还款核销（流程终态回写）：把借款人的借款余额减掉、落 {@code exp_loan_offset(offsetType=REPAY)} 流水，
-     * 并统一裁定 REPAID／PARTIAL_REPAID 终态。
+     * 还款核销（流程最终状态回写）：把借款人的借款余额减掉、落 {@code exp_loan_offset(offsetType=REPAY)} 流水，
+     * 并统一裁定 REPAID／PARTIAL_REPAID 最终状态。
      *
-     * <p><b>D-DEC-384/391（X-40 甲①·还款腿落点）</b>：提单期原先在这里之外另有一处写点
+     * <p><b>D-DEC-384/391（X-40 甲①·还款环节落点）</b>：提单期原先在这里之外另有一处写点
      * （{@code ExpenseDetailService.addLoanOffset} 的 REPAY 分支，登记流水＋增量减记＋APPROVED→PARTIAL_REPAID
-     * 翻档一次做完），审批腿因此被 {@code 已登记满额 ⇒ remain=0} 顶成空转（§3.7 真跑正证：
+     * 翻档一次做完），审批环节因此被 {@code 已登记满额 ⇒ remain=0} 顶成空转（§3.7 真跑正证：
      * {@code exp_loan_offset} 终值仍 1 条、{@code create_by} NULL、借款单在提交同一秒已 REPAID）。
-     * 现提交腿只登记在途占用（{@code exp_bill_relation(LOAN_CLAIM).use_amount}），
+     * 现提交环节只登记在途占用（{@code exp_bill_relation(LOAN_CLAIM).use_amount}），
      * <b>本方法与 {@code offsetLoansByClaim} 成为冲抵流水与余额减记的唯一写点</b>：
      * ①读现存流水 → ②-a 先按提交期登记的那张借款单补差落流水（用户勾的是哪张就冲哪张，不再被 FIFO 换单）
-     * → ②-b 登记缺失的存量/只填金额路径退回溯 FIFO → ③终态裁定与预算对齐。
-     * 报销冲抵与还款冲抵由此同一条腿、同一算式（关系＝在途应冲额、流水＝已生效额、余额＝Σ流水）。
+     * → ②-b 登记缺失的历史/只填金额路径退回溯 FIFO → ③最终状态裁定与预算对齐。
+     * 报销冲抵与还款冲抵由此同一个环节、同一算式（关系＝在途应冲额、流水＝已生效额、余额＝Σ流水）。
      *
      * <p><b>D-DEC-106（P1）结清时点错位修复</b>：
      * <ol>
@@ -696,22 +700,22 @@ public class ExpenseWfEventListener implements WfBizAction {
      *      ⇒ 本方法对已提交的还款单一律"空转"，借款是否结清实际由制单人提单那一下决定，
      *      三个审批节点对「已结清」不具任何控制力（12-24 实测 00:17:10 借款单 23 已 REPAID，
      *      出纳到账确认 00:19:07、板块审批 00:24:29）。现判据改为 {@code APPROVED／PARTIAL_REPAID／REPAID}，
-     *      并在末尾由本方法（终态）统一裁定 REPAID／PARTIAL_REPAID。</li>
-     *  <li><b>幂等</b>：先读本还款单已登记的 {@code exp_loan_offset(REPAY)} 台账，只对
+     *      并在末尾由本方法（最终状态）统一裁定 REPAID／PARTIAL_REPAID。</li>
+     *  <li><b>去重</b>：先读本还款单已登记的 {@code exp_loan_offset(REPAY)} 台账，只对
      *      「还款额 − 已登记额」的差额补冲抵。原实现对未空转的单会再插一批冲抵、
      *      把已经扣过的余额<b>二次减记</b>（§3.7 同族：余额在提交期就扣）。</li>
-     *  <li><b>不新增枚举</b>：在途中间态复用既有 {@code PARTIAL_REPAID}，REPAID 只在这里（链路终态）落。</li>
+     *  <li><b>不新增枚举</b>：在途中间态复用既有 {@code PARTIAL_REPAID}，REPAID 只在这里（链路最终状态）落。</li>
      * </ol>
      *
-     * <p><b>D-DEC-105（P1）结清腿</b>：提单期的预算冲减按当时在贷余额做 FIFO 预分配，
+     * <p><b>D-DEC-105（P1）结清环节</b>：提单期的预算冲减按当时在贷余额做 FIFO 预分配，
      * 审批期借款池可能已变；此处按实际冲抵额调 {@code BudgetService.alignLoanOccupy} 校准台账净额，
-     * 相等时不追加流水（幂等）。
+     * 相等时不追加流水（去重）。
      */
     private void repayLoan(ExpBill repayBill) {
         if (repayBill.getApplyUserId() == null) {
             return;
         }
-        // ① 已登记的冲抵台账（本方法上一次收尾重放写入，或发布边界前提交期写入的存量）
+        // ① 已登记的冲抵台账（本方法上一次收尾重放写入，或发布边界前提交期写入的历史）
         java.util.Map<Long, BigDecimal> bookedByLoan = new java.util.LinkedHashMap<>();
         BigDecimal booked = BigDecimal.ZERO;
         for (ExpLoanOffset o : expLoanOffsetMapper.selectList(new LambdaQueryWrapper<ExpLoanOffset>()
@@ -730,7 +734,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                     repayBill.getBillNo(), booked, repayBill.getTotalAmount());
             remain = BigDecimal.ZERO;
         }
-        // ②-a 提交期登记的在途占用优先（甲①后 REPAY 腿提单期只剩这一份证据）：
+        // ②-a 提交期登记的在途占用优先（甲①后 REPAY 环节提单期只剩这一份证据）：
         //      应冲额取关系行 use_amount，扣掉已登记流水后补差，冲的就是用户勾的那张借款单。
         if (remain.signum() > 0) {
             List<ExpBillRelation> rels = expBillRelationMapper.selectList(new LambdaQueryWrapper<ExpBillRelation>()
@@ -748,13 +752,13 @@ public class ExpenseWfEventListener implements WfBizAction {
                 BigDecimal already = bookedByLoan.getOrDefault(loan.getId(), BigDecimal.ZERO);
                 BigDecimal gap = nvl(rel.getUseAmount()).subtract(already);
                 if (gap.signum() <= 0) {
-                    continue;   // 该登记已足额落成流水（收尾重放/发布边界前的提交期存量），幂等跳过
+                    continue;   // 该登记已足额落成流水（收尾重放/发布边界前的提交期历史），去重跳过
                 }
                 BigDecimal loanBal = nvl(loan.getLoanBalance());
                 BigDecimal plan = gap.min(remain).min(loanBal.signum() < 0 ? BigDecimal.ZERO : loanBal);
                 if (plan.signum() <= 0) {
                     // 甲①后在途不锁台账 ⇒ "提交时够、通过时不够"是可能的（同名单张借款被先批掉的
-                    // 报销/还款冲走）。此处一笔不冲，但登记额仍进表头 offset_amount 口径 ⇒ 必须 WARN 供对账。
+                    // 报销/还款冲走）。此处一笔不冲，但登记额仍进表头 offset_amount 规则 ⇒ 必须 WARN 供对账。
                     log.warn("还款单 {} 登记冲销借款单 {} 应冲 {}，但该借款单台账余额为 {}（已被其他还款/报销冲抵），"
                             + "本登记零冲抵，请核对是否少核销（D-DEC-384/391）",
                             repayBill.getBillNo(), loan.getBillNo(), gap, loanBal);
@@ -767,7 +771,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 o.setOffsetAmount(plan);
                 o.setOffsetType("REPAY");
                 o.setOffsetDate(LocalDate.now());
-                // D-DEC-391③：减记既已挪到本腿，登记人就在本腿取当前登录人（审批链办理人），
+                // D-DEC-391③：减记既已挪到本环节，登记人就在本环节取当前登录人（审批链办理人），
                 // 取不到（异步收尾线程/无会话）回落借款申请人。该列无 fill 注解，不显式 set 即 NULL。
                 o.setCreateBy(currentUserOr(loan.getApplyUserId()));
                 expLoanOffsetMapper.insert(o);
@@ -778,7 +782,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                         repayBill.getBillNo(), loan.getBillNo(), plan, loanBal);
             }
         }
-        // ②-b 登记缺失（历史单/未选借款单只填金额）时，按申请人在贷的 LOAN 单 id 升序 FIFO 补齐（原口径）
+        // ②-b 登记缺失（历史单/未选借款单只填金额）时，按申请人在贷的 LOAN 单 id 升序 FIFO 补齐（原规则）
         if (remain.signum() > 0) {
             var loans = expBillMapper.selectList(new LambdaQueryWrapper<ExpBill>()
                     .eq(ExpBill::getApplyUserId, repayBill.getApplyUserId())
@@ -802,9 +806,9 @@ public class ExpenseWfEventListener implements WfBizAction {
                 o.setOffsetType("REPAY");
                 o.setOffsetDate(LocalDate.now());
                 o.setCreateBy(currentUserOr(loan.getApplyUserId()));
-                // D-DEC-108 只登记人缺失，本方法是新增腿，直接带上经办人
+                // D-DEC-108 只登记人缺失，本方法是新增环节，直接带上经办人
                 expLoanOffsetMapper.insert(o);
-                // 余额按台账绝对量重算（D-DEC-384/391 甲②）；结清终态仍由 ③ 的 settleLoanAfterRepay 裁定
+                // 余额按台账绝对量重算（D-DEC-384/391 甲②）；结清最终状态仍由 ③ 的 settleLoanAfterRepay 裁定
                 recalcLoanBalance(loan.getId());
                 bookedByLoan.merge(loan.getId(), offset, BigDecimal::add);
                 remain = remain.subtract(offset);
@@ -813,15 +817,15 @@ public class ExpenseWfEventListener implements WfBizAction {
                 log.warn("还款 {} 超出在贷余额 {}，余量未核销", repayBill.getBillNo(), remain);
             }
         }
-        // ③ 终态裁定 + 预算冲减对齐（只有走到这里才有权置 REPAID）
+        // ③ 最终状态裁定 + 预算冲减对齐（只有走到这里才有权置 REPAID）
         for (java.util.Map.Entry<Long, BigDecimal> en : bookedByLoan.entrySet()) {
             settleLoanAfterRepay(en.getKey(), repayBill, en.getValue());
         }
     }
 
     /**
-     * 结清终态裁定：按借款单当前余额把状态定为 REPAID（已结清）／PARTIAL_REPAID（仍在贷），
-     * 并把本还款单对该借款单的预算冲减对齐到实际冲抵额（D-DEC-105 结清腿）。
+     * 结清最终状态裁定：按借款单当前余额把状态定为 REPAID（已结清）／PARTIAL_REPAID（仍在贷），
+     * 并把本还款单对该借款单的预算冲减对齐到实际冲抵额（D-DEC-105 结清环节）。
      */
     private void settleLoanAfterRepay(Long loanBillId, ExpBill repayBill, BigDecimal actualOffset) {
         ExpBill loan = expBillMapper.selectById(loanBillId);
@@ -840,9 +844,9 @@ public class ExpenseWfEventListener implements WfBizAction {
                 expBillMapper.updateById(loanUpd);
                 log.info("借款单 {} 结清终态裁定：{} → {}（余额 {}）", loan.getBillNo(), loan.getStatus(), target, bal);
                 if ("REPAID".equals(target)) {
-                    // ⑨（D-V4R-49）：借款结清=业务终态，合规审核/资金支付/账务处理链不会再有人办，全部收口
-                    //（借款的钱腿走付款批次但 D-F1R-01 口径下借款单不置 PAID，批次侧收口管不到它，只能在此收）
-                    sharingService.closeOnBillTerminal(loanBillId, "借款已结清终态");
+                    // ⑨（D-V4R-49）：借款结清=业务最终状态，合规审核/资金支付/账务处理链不会再有人办，全部办结
+                    //（借款的钱环节走付款批次但 D-F1R-01 规则下借款单不置 PAID，批次侧办结管不到它，只能在此收）
+                    sharingService.closeOnBillTerminal(loanBillId, "借款已结清");
                 }
             }
         }
@@ -855,9 +859,9 @@ public class ExpenseWfEventListener implements WfBizAction {
      *
      * <p>原文（12-24:56）「且无驳回/撤回回补路径：本单若被驳回，余额将永久停在 0 且无人回补」——
      * 提单期 {@code addLoanOffset} 已把 {@code loan_balance} 减记，还款没办成时没人加回来。
-     * <b>D-DEC-384/391（X-40 甲①）后</b>：提交腿不再落流水也不减记，还款单被驳回时按定义就没有
-     * 已生效冲抵可回退（本方法对这类单读到 0 行 ⇒ 空转，正确）；它现在兜的是发布边界前的存量，
-     * 与在途占用的自然释放（关系行随单据状态退出 DRAFT/APPROVING 即出 {@code transitLoanOccupancy} 口径）
+     * <b>D-DEC-384/391（X-40 甲①）后</b>：提交环节不再落流水也不减记，还款单被驳回时按定义就没有
+     * 已生效冲抵可回退（本方法对这类单读到 0 行 ⇒ 空转，正确）；它现在兜的是发布边界前的历史，
+     * 与在途占用的自然释放（关系行随单据状态退出 DRAFT/APPROVING 即出 {@code transitLoanOccupancy} 规则）
      * 分两路，两路都不双回补。
      *
      * <p>表头 {@code offset_amount} 只在真回退了流水时才回退（甲①后表头额＝提交期登记额，
@@ -878,10 +882,10 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * 冲抵流水的逻辑作废 + 余额按台账重算（甲③唯一回退算式；驳回、撤回、反审核三条逆腿共用，
-     * 与 {@code repayLoan}/{@code offsetLoansByClaim} 两条扣腿一一对应）。
+     * 冲抵流水的逻辑作废 + 余额按台账重算（甲③唯一回退算式；驳回、撤回、反审核三条逆环节共用，
+     * 与 {@code repayLoan}/{@code offsetLoansByClaim} 两条扣环节一一对应）。
      *
-     * <p><b>幂等</b>：以「逻辑作废该条冲抵流水」为认领闸门——
+     * <p><b>去重</b>：以「逻辑作废该条冲抵流水」为认领校验——
      * {@code exp_loan_offset} 无回退列（D-DEC-108 已记：只有 create_by，无 update_by/状态列，
      * 也没有 {@code @TableField(fill=...)} 的更新审计列），用其自带 {@code del_flag} 做原子认领
      * （MP 逻辑删除带 {@code del_flag=0} 条件，收尾重放/并发时第二次 {@code deleteById} 返回 0 行即跳过），
@@ -890,7 +894,7 @@ public class ExpenseWfEventListener implements WfBizAction {
      * <p>余额与状态一律交 {@link #recalcLoanBalance} 按台账重算（甲②）：删掉这些流水后，
      * 有存活冲抵→PARTIAL_REPAID、一笔不剩→APPROVED（未还），判据收在同一处，不在本方法里做增量加法。
      *
-     * @param reason 作废留痕文案前缀（写进流水 remark，界面与审计轨迹可见）
+     * @param reason 作废记录文案前缀（写进流水 remark，界面与审计轨迹可见）
      * @return 本单据被作废的冲抵额合计（0＝没有已生效流水可反冲）
      */
     private BigDecimal invalidateLoanOffsetFlows(ExpBill bill, String offsetType, String reason) {
@@ -906,7 +910,7 @@ public class ExpenseWfEventListener implements WfBizAction {
             if (o.getLoanBillId() == null || o.getId() == null) {
                 continue;
             }
-            // 留痕先行（updateById 走 del_flag=0 条件，作废后就改不动了）
+            // 记录先行（updateById 走 del_flag=0 条件，作废后就改不动了）
             ExpLoanOffset mark = new ExpLoanOffset();
             mark.setId(o.getId());
             mark.setRemark(reason + "（" + bill.getBillNo() + "）");
@@ -926,20 +930,20 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * 反审核（APPROVED→DRAFT）腿的结清腿反冲（D-DEC-384/391 甲：扣与冲必须同一条链路一一对应）。
+     * 反审核（APPROVED→DRAFT）环节的结清环节反冲（D-DEC-384/391 甲：扣与冲必须同一条链路一一对应）。
      *
-     * <p>X-40 甲①把减记从提交腿挪到通过腿之后，{@code ExpenseBillService.unaudit} 成了通过腿的逆操作：
+     * <p>X-40 甲①把减记从提交环节挪到通过环节之后，{@code ExpenseBillService.unaudit} 成了通过环节的逆操作：
      * 单据退回草稿，而 {@code exp_loan_offset} 流水与 {@code loan_balance} 减记、REPAID/PARTIAL_REPAID
-     * 翻档却留在原地 ⇒ 「单未生效、账已结清」正是本号要治的形态在反审核腿上重现。
+     * 翻档却留在原地 ⇒ 「单未生效、账已结清」正是本号要治的形态在反审核环节上重现。
      * 故反审核必须按本单已生效流水逐条作废并重算余额，与 {@code handleRejected} 同一算式
      * （{@link #invalidateLoanOffsetFlows}），不另造一套。
      *
      * <p><b>不动的两处，理由如实写</b>：
      * ①表头 {@code offset_amount} 不回退——提交期登记额与 {@code exp_bill_relation(LOAN_CLAIM)} 同源，
-     *   关系行保留（无 del_flag，删行＝销毁追溯证据），单据回到 DRAFT 后占用口径自动恢复"在途"，
+     *   关系行保留（无 del_flag，删行＝销毁追溯证据），单据回到 DRAFT 后占用规则自动恢复"在途"，
      *   重提走差额算式不会重复计；
-     * ②预算腿与收款单腿不在本号口径内（还款单的预算冲减按 {@code bg_occupy} 净额自校验、
-     *   {@code rc_receipt} 是资金事实），仍按 {@code unaudit} 原注释只留痕。
+     * ②预算环节与收款单环节不在本号规则内（还款单的预算冲减按 {@code bg_occupy} 净额自校验、
+     *   {@code rc_receipt} 是资金事实），仍按 {@code unaudit} 原注释只记录。
      *
      * @return 被反冲的冲抵额合计（0＝本单无已生效冲抵，或该单据类型不走借款台账）
      */
@@ -956,7 +960,7 @@ public class ExpenseWfEventListener implements WfBizAction {
         return BigDecimal.ZERO;
     }
 
-    /** 收尾线程内的当前登录人（同步事件在 HTTP 线程上跑，取不到时回落到兜底 userId） */
+    /** 收尾线程内的当前登录人（同步事件在 HTTP 线程上跑，取不到时回落到默认处理 userId） */
     private Long currentUserOr(Long fallback) {
         com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
         return u != null && u.getUserId() != null ? u.getUserId() : fallback;
@@ -966,12 +970,12 @@ public class ExpenseWfEventListener implements WfBizAction {
      * 借款余额绝对量重算（D-DEC-384/391 甲②）：<b>余额 = 借款额 − Σ该借款单现存冲抵流水</b>
      * （{@code exp_loan_offset}，含 CLAIM／REPAY 两类，逻辑删除行由 {@code @TableLogic} 自动排除）。
      *
-     * <p>写点从「增量减记」改成「按台账重算」，为的是：同一事件重复回调结果恒定（幂等），
-     * 且「{@code loan_balance} = {@code exp_loan_offset} 净额」这条不变式在提交/审批/驳回三条腿上同时成立
+     * <p>写点从「增量减记」改成「按台账重算」，为的是：同一事件重复回调结果恒定（去重），
+     * 且「{@code loan_balance} = {@code exp_loan_offset} 净额」这条不变式在提交/审批/驳回三个环节上同时成立
      * ——原三处 {@code setLoanBalance(旧值±本次)} 各自只看自己那一笔，任何一处漏配（双扣、驳回不回补）
      * 都会把余额永久留在错值上，而错值无从自证。
      *
-     * <p>状态沿用既有三态词表，不新增枚举：无现存冲抵流水 → APPROVED（未还）、有且归零 → REPAID（结清）、
+     * <p>状态沿用既有三态名称表，不新增枚举：无现存冲抵流水 → APPROVED（未还）、有且归零 → REPAID（结清）、
      * 有且未归零 → PARTIAL_REPAID（在贷）。只在 {APPROVED, PARTIAL_REPAID, REPAID} 三态内迁移，
      * VOID/CLOSED 等非在贷态不复活（与 {@code settleLoanAfterRepay} 同判据）。
      * 重算出现负余额时如实写负值并告警——归零会把台账失真藏起来，负余额在界面可查。
@@ -1012,17 +1016,17 @@ public class ExpenseWfEventListener implements WfBizAction {
     /**
      * 报销单驳回/撤回时释放在途冲抵占用（D-DEC-384/391 甲③）。
      *
-     * <p>①提交腿把 CLAIM 的在途量登记在 {@code exp_bill_relation(LOAN_CLAIM).use_amount}，
+     * <p>①提交环节把 CLAIM 的在途量登记在 {@code exp_bill_relation(LOAN_CLAIM).use_amount}，
      * 关系行<b>保留不删</b>：本表无 {@code del_flag}，物理删就是销毁「这张报销单勾过哪张借款单」的
-     * 追溯证据（追溯链七档口径）。占用判据只看未生效在途态（{@code ExpenseDetailService.transitLoanOccupancy}
+     * 追溯证据（追溯链七档规则）。占用判据只看未生效在途态（{@code ExpenseDetailService.transitLoanOccupancy}
      * 计 DRAFT/APPROVING，{@code assertRelationUseAmount} 排除 DRAFT/REJECTED/WITHDRAWN/CANCELLED/VOID/CLOSED）
      * ⇒ 单据转入 REJECTED/WITHDRAWN 即在途占用自动释放，无需删行。
      *
-     * <p>要清的是<b>发布边界前的存量</b>：旧提交腿在提单期就落了 {@code exp_loan_offset(CLAIM)} 流水
-     * 并扣减余额，这类单被驳回后原实现无人回补（{@code restoreLoanBalanceOnReject} 只管 REPAY 腿）。
+     * <p>要清的是<b>发布边界前的历史</b>：旧提交环节在提单期就落了 {@code exp_loan_offset(CLAIM)} 流水
+     * 并扣减余额，这类单被驳回后原实现无人回补（{@code restoreLoanBalanceOnReject} 只管 REPAY 环节）。
      * 现按本单 CLAIM 流水逐条逻辑作废（{@code del_flag} 原子认领，重放不双回补）+ 绝对量重算余额。
-     * 报销单从未通过审批 ⇒ 其 CLAIM 流水按定义就不是"已生效冲抵"，作废它与新口径自洽；
-     * 驳回后重提再由审批腿按关系行重新登记，算式不变。
+     * 报销单从未通过审批 ⇒ 其 CLAIM 流水按定义就不是"已生效冲抵"，作废它与新规则自洽；
+     * 驳回后重提再由审批环节按关系行重新登记，算式不变。
      */
     private void releaseLoanClaimOnReject(ExpBill claim, boolean withdrawn) {
         String reason = withdrawn ? "报销单撤回，在途冲抵作废" : "报销单驳回，在途冲抵作废";
@@ -1030,11 +1034,11 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * 还款到账的收款事实落库（D-DEC-394 X-05 甲-1，表 {@code exp_bill_receipt}）。
+     * 还款到账的收款事实写入数据库（D-DEC-394 X-05 甲-1，表 {@code exp_bill_receipt}）。
      * <p>{@code rc_receipt} 是应收收款语义（customer_id + 应收核销），员工还款在此无处挂账 ⇒
-     * 资金流入侧需要一个按单据（bill_id）而非按往来单位组织的载体，追溯链「收款」腿据此读数。
+     * 资金流入侧需要一个按单据（bill_id）而非按往来单位组织的载体，追溯链「收款」环节据此读数。
      * <p>还款单表单无付款人账号字段（实测 HK202609300001 的 payee_* 全空），{@code bank_account} 留空由出纳补录；
-     * 幂等按 bill_id 判重（收尾事件可能重放）；写腿显式 {@code setCreateBy}（该列无 MP fill 注解，不设即落 NULL）。
+     * 去重按 bill_id 判重（收尾事件可能重放）；写环节显式 {@code setCreateBy}（该列无 MP fill 注解，不设即落 NULL）。
      */
     private void registerRepayFundReceipt(ExpBill repayBill) {
         try {
@@ -1090,13 +1094,13 @@ public class ExpenseWfEventListener implements WfBizAction {
      * 本方法把那通道接上：批次付讫后由 {@code PayBatchService.writeBackPayment} 回写 paid_amount/pay_time，
      * 并把借款凭证（TPL_LOAN 借 1221 / 贷 1002）从 DRAFT 自动过账（P1-3 实付入账）。
      *
-     * <p><b>为什么不写 payable_amount</b>：借款的在贷口径由 {@code loan_balance} 承载，还款核销 FIFO 与
+     * <p><b>为什么不写 payable_amount</b>：借款的在贷规则由 {@code loan_balance} 承载，还款核销 FIFO 与
      * 逾期/限额判定（{@code repayLoan}、合规预检、借款台账）都按 status ∈ {APPROVED, PARTIAL_REPAID}
      * 认"在贷借款"。若把应付上限写成借款金额，付讫时 writeBackPayment 会把状态迁成 PAID，
      * 该笔借款随即从在贷池消失、还款冲不掉余额（等于用一个资金缺陷换另一个）。
-     * 放款上限是否要用 payable_amount 表达、"已放款"如何建态 ⇒ 产品口径，需人工裁决，此处不擅自扩状态机。
+     * 放款上限是否要用 payable_amount 表达、"已放款"如何建态 ⇒ 产品规则，需人工裁决，此处不擅自扩状态机。
      *
-     * <p><b>幂等</b>：同一借款单已存在任意付款记录时不再生成（防收尾重放打出第二条放款指令）。
+     * <p><b>去重</b>：同一借款单已存在任意付款记录时不再生成（防收尾重放打出第二条放款指令）。
      */
     private void createLoanDisbursementPayment(ExpBill loan) {
         try {
@@ -1175,7 +1179,7 @@ public class ExpenseWfEventListener implements WfBizAction {
             // D-DEC-123（证据 12-25:87）：payee_id 自建以来恒 NULL，只留一列名称文本
             // ⇒ 付款/对账/风控一律退化成按名称匹配。按既有主数据链回填供应商 ID
             // （poId→po_order.supplier_id，无订单退 contractId→cont_contract.customer_id，
-            //   与凭证行辅助同源同口径，取不到就留 NULL，不按 payeeName 猜一家）。
+            //   与凭证行辅助同源同一规则，取不到就留 NULL，不按 payeeName 猜一家）。
             p.setPayeeId(voucherService.billSupplierIdOf(bill));
             // 关联往来单位与合同，便于出纳核对与后续对账
             p.setCustomerId(bill.getCustomerId());
@@ -1212,9 +1216,9 @@ public class ExpenseWfEventListener implements WfBizAction {
     private static final ObjectMapper OM = new ObjectMapper();
 
     /**
-     * D-DEC-368（服务端继承腿）：单据 ext_json 里用户选好的收款方式（payMethod）与开户行（bankName）
-     * 此前从未进付款行——四条生成腿一律写死 BANK、bank_name 无人带 ⇒ 现金/支票单在出纳面恒显银行转账。
-     * 未选/解析不了照旧默认 BANK，开户行缺则留空不造；户名 payeeName 前端已镜像（useBill.js 载荷腿）。
+     * D-DEC-368（服务端继承环节）：单据 ext_json 里用户选好的收款方式（payMethod）与开户行（bankName）
+     * 此前从未进付款行——四条生成环节一律写死 BANK、bank_name 无人带 ⇒ 现金/支票单在出纳面恒显银行转账。
+     * 未选/解析不了照旧默认 BANK，开户行缺则留空不造；户名 payeeName 前端已镜像（useBill.js 载荷环节）。
      */
     private void inheritPayMethodAndBank(ExpBill bill, ExpBillPayment p) {
         String payMethod = null;
@@ -1243,9 +1247,9 @@ public class ExpenseWfEventListener implements WfBizAction {
         if (bankName != null && (p.getBankName() == null || p.getBankName().isBlank())) {
             p.setBankName(bankName);
         }
-        // D-V4R-41：借款页的「账号」落在 ext_json.accountNo，而组批的"防付错"闸读的是付款记录 bank_account
+        // D-V4R-41：借款页的「账号」落在 ext_json.accountNo，而组批的"防付错"校验读的是付款记录 bank_account
         // （PayBatchService 要求非空）⇒ 放款付款记录 bank_account 恒空，自动组批被拒并留下 0.00/0 笔空壳批次
-        // （实测 PB202610130014，JK202610130001／0002 两次的组批失败日志同款）。与 D-DEC-368 的户名镜像同口径补账号。
+        // （实测 PB202610130014，JK202610130001／0002 两次的组批失败日志同款）。与 D-DEC-368 的户名镜像同一规则补账号。
         if (accountNo != null && (p.getBankAccount() == null || p.getBankAccount().isBlank())) {
             p.setBankAccount(accountNo);
         }
@@ -1343,7 +1347,7 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * P0-4 报销 vs 借款 3 种差额处理（行业方案/费用报销行业标准）：
+     * P0-4 报销 vs 借款 3 种差额处理（费用报销通用规则）：
      * <pre>
      *  报销单审批通过时，与其关联的借款单（exp_bill_relation.LOAN_CLAIM）一起结算：
      *    - 先用报销金额 FIFO 冲抵各借款单余额（落 exp_loan_offset，offsetType=CLAIM）；
@@ -1419,7 +1423,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 // 「员工归还多借部分 100.00，出纳收款待确认到账」的记录被自动组成待执行<b>付款</b>批次
                 // （PB202610130015），点执行就是把员工该还给公司的钱付给员工；且它在全仓没有任何
                 // "收款确认"消费方，而同一笔钱已有正规出口＝还款登记 RP_1【出纳确认还款到账】→RP_2【财务审核】。
-                // 应还额本来就在借款单上（loan_balance>0、status=PARTIAL_REPAID），不需要第二条腿。
+                // 应还额本来就在借款单上（loan_balance>0、status=PARTIAL_REPAID），不需要第二条环节。
                 BigDecimal refundAmt = diff.negate();
                 log.warn("报销单 {} 差额退款：报销 {} < 借款 {}，员工应还 {}，留在借款单余额上走 还款登记（RP_1/RP_2）收，不再建付款记录（D-V4R-38）",
                         claim.getBillNo(), claimAmt, borrowTotal, refundAmt);
@@ -1433,26 +1437,26 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * 报销审批通过腿（结清腿）：按 {@code LOAN_CLAIM} 关系登记的应冲额落 {@code exp_loan_offset}
+     * 报销审批通过环节（结清环节）：按 {@code LOAN_CLAIM} 关系登记的应冲额落 {@code exp_loan_offset}
      * （offsetType=CLAIM），并把借款单余额交 {@link #recalcLoanBalance} 按台账重算
      * （归零 → REPAID 结清、未归零且原先未还 → PARTIAL_REPAID 在贷）。
      *
-     * <p><b>D-DEC-384（双扣收口）</b>：草稿/提交期的 {@code addLoanOffset} 与审批通过腿原实现都会
+     * <p><b>D-DEC-384（双扣办结）</b>：草稿/提交期的 {@code addLoanOffset} 与审批通过环节原实现都会
      * 「减一次余额 + 落一条流水」，对同一 (报销单, 借款单) 组合扣两次（§3.4 推演：80,000→72,000→64,000、
-     * 流水 2 条）。先以「应冲额 − 已登记额」差额口径堵住（与本类 {@code repayLoan} 同源、不另立判据）：
+     * 流水 2 条）。先以「应冲额 − 已登记额」差额规则堵住（与本类 {@code repayLoan} 同源、不另立判据）：
      * 已登记满额的关联走下面的 skip 分支，一条流水也不追加。
      *
      * <p><b>D-DEC-384/391（X-40 甲）后分工归一</b>：提单期不再落 CLAIM/REPAY 流水、不再动 {@code loan_balance}
      * （{@code ExpenseDetailService.registerLoanOccupancy} 只把占用量登记在
-     * {@code exp_bill_relation(LOAN_CLAIM).use_amount}，报销腿与还款腿同一处登记）⇒
+     * {@code exp_bill_relation(LOAN_CLAIM).use_amount}，报销环节与还款环节同一处登记）⇒
      * <b>本方法与 {@code repayLoan} 是冲抵台账仅有的两个流水写点</b>，
-     * "冲抵额真值在草稿期流水还是审批期关系"这条待裁半句就此收口：<b>关系＝在途应冲额，流水＝已生效额，
-     * 余额＝Σ流水</b>。差额口径与 skip 分支原样保留，用于兼容发布边界前已带 CLAIM 流水的在途草稿。
+     * "冲抵额真值在草稿期流水还是审批期关系"这条待裁半句就此办结：<b>关系＝在途应冲额，流水＝已生效额，
+     * 余额＝Σ流水</b>。差额规则与 skip 分支原样保留，用于兼容发布边界前已带 CLAIM 流水的在途草稿。
      */
     private void offsetLoansByClaim(ExpBill claim, List<ExpBillRelation> rels) {
         BigDecimal claimAmt = nvl(claim.getApprovedAmount()) != null && nvl(claim.getApprovedAmount()).compareTo(BigDecimal.ZERO) > 0
                 ? claim.getApprovedAmount() : nvl(claim.getTotalAmount());
-        // ① 本报销单已登记的冲抵台账（收尾重放写入；甲①后提单期不再写，此处只可能读发布边界前的存量）
+        // ① 本报销单已登记的冲抵台账（收尾重放写入；甲①后提单期不再写，此处只可能读发布边界前的历史）
         java.util.Map<Long, BigDecimal> bookedByLoan = new java.util.LinkedHashMap<>();
         BigDecimal booked = BigDecimal.ZERO;
         for (ExpLoanOffset o : expLoanOffsetMapper.selectList(new LambdaQueryWrapper<ExpLoanOffset>()
@@ -1464,7 +1468,7 @@ public class ExpenseWfEventListener implements WfBizAction {
             bookedByLoan.merge(o.getLoanBillId(), nvl(o.getOffsetAmount()), BigDecimal::add);
             booked = booked.add(nvl(o.getOffsetAmount()));
         }
-        // ② 报销额对借款冲抵的总额闸，先扣掉已登记部分（同 repayLoan 的差额口径）
+        // ② 报销额对借款冲抵的总额校验，先扣掉已登记部分（同 repayLoan 的差额规则）
         BigDecimal remain = claimAmt.subtract(booked);
         if (remain.signum() < 0) {
             log.warn("报销单 {} 已登记冲抵合计({}) 大于报销金额({})，本轮不再补冲抵（D-DEC-384）",
@@ -1492,7 +1496,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 }
                 continue;
             }
-            // 本关联应冲抵额（关系口径，报销额封顶）− 已登记额 ＝ 待补净额，且不超过当前借款余额
+            // 本关联应冲抵额（关系规则，报销额封顶）− 已登记额 ＝ 待补净额，且不超过当前借款余额
             BigDecimal gap = nvl(rel.getUseAmount()).min(claimAmt).subtract(already);
             BigDecimal plan = gap.min(remain).min(loanBal);
             if (plan.compareTo(BigDecimal.ZERO) <= 0) {
@@ -1510,7 +1514,7 @@ public class ExpenseWfEventListener implements WfBizAction {
             o.setOffsetAmount(plan);
             o.setOffsetType("CLAIM");
             o.setOffsetDate(LocalDate.now());
-            // D-DEC-391③ 口径统一到本腿：登记人＝当次办理人（审批链在 HTTP 线程上跑时取登录人），
+            // D-DEC-391③ 规则统一到本环节：登记人＝当次办理人（审批链在 HTTP 线程上跑时取登录人），
             // 取不到回落申请人；该列无 fill 注解，不显式 set 就是 NULL（原实现恒写申请人）。
             o.setCreateBy(currentUserOr(claim.getApplyUserId()));
             expLoanOffsetMapper.insert(o);
@@ -1579,7 +1583,7 @@ public class ExpenseWfEventListener implements WfBizAction {
      * <p>顺序铁律：<b>显式 {@code pay_target} 优先</b>，缺失才回退字符串比对——
      * 反过来会让"业务明确选了供应商"的单子被姓名字符串巧合翻成 EMPLOYEE。
      *
-     * <p>回退比对认三种写法（任一命中即本人）：申请人<b>工号</b>（{@code apply_user_name} 的实际存储口径）、
+     * <p>回退比对认三种写法（任一命中即本人）：申请人<b>工号</b>（{@code apply_user_name} 的实际存储规则）、
      * 申请人<b>登录账号</b>、申请人<b>姓名</b>（经 sys_user 反查）。
      * 修复前只比"姓名 vs 工号"，恒为 false ⇒ 一律打成供应商款。
      * 收款方为空同样视为付给本人（员工垫付后打款给本人的既有语义）。
@@ -1621,11 +1625,11 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * D-DEC-104：无现金腿单据的预算消耗确认（替代原 {@code writeOffPayBillBudget} 的审批期核销）。
+     * D-DEC-104：无现金环节单据的预算消耗确认（替代原 {@code writeOffPayBillBudget} 的审批期核销）。
      *
      * <p>转换时点已从"审批通过钩子"后移到"实际付款成功"（{@code PayBatchService#settleBudgetOnPaid}），
      * 但有一类单据<b>永远不会产生待付款记录</b>：报销全额被借款冲抵（平账）或报销&lt;借款（只产生退款记录）。
-     * 这类单据的钱已经在借款那一腿付出，若不在审批收尾时确认消耗，占用就会永久悬空、把额度吃死。
+     * 这类单据的钱已经在借款那一环节付出，若不在审批收尾时确认消耗，占用就会永久悬空、把额度吃死。
      * 故只在这一个分支保留即时核销，其余一律等付款。</p>
      *
      * <p><b>D-F1R-06 执行时机：必须挂到外层审批事务提交之后</b>。根因（10-13 与 10-14 两轮实证）：
@@ -1637,8 +1641,8 @@ public class ExpenseWfEventListener implements WfBizAction {
      * 3 次共耗约 2 分半，占用仍悬空 3,900。<b>加重试在这里治不了病——锁住它的正是自己。</b>
      * 挂 afterCommit 后外层一提交行锁即释放，内层立刻拿得到锁，正常一次成功。</p>
      *
-     * <p>幂等与失败口径与付款侧同一套：{@code settleOccupyOnPaid} 内部按 {@code bg_occupy}
-     * 已核销流水判重；异常仅留痕，不阻断审批收尾（与凭证生成失败同处理）。</p>
+     * <p>去重与失败规则与付款侧同一套：{@code settleOccupyOnPaid} 内部按 {@code bg_occupy}
+     * 已核销流水判重；异常仅记录，不阻断审批收尾（与凭证生成失败同处理）。</p>
      */
     private void scheduleSettleBudgetOnNoCashLeg(ExpBill bill) {
         // 注册前把需要的数据抽成标量：bill 是事务内实体，提交后不保证仍可用（游离态/延迟加载）
@@ -1680,8 +1684,8 @@ public class ExpenseWfEventListener implements WfBizAction {
             if (lines.isEmpty()) {
                 return;
             }
-            // D-V4R-39：提交后执行已消除自锁，重试仅作兜底（偶发的其它长事务仍可能撞锁）。
-            // 有界重试是安全的：settleOccupyOnPaid 自带 countWriteOffForBill>0 即跳过的幂等闸
+            // D-V4R-39：提交后执行已消除自锁，重试仅作默认处理（偶发的其它长事务仍可能撞锁）。
+            // 有界重试是安全的：settleOccupyOnPaid 自带 countWriteOffForBill>0 即跳过的去重校验
             // （BudgetService.java:1254），失败那趟整个事务回滚，不会补半次消耗。
             Exception last = null;
             for (int attempt = 1; attempt <= 3; attempt++) {
@@ -1732,7 +1736,7 @@ public class ExpenseWfEventListener implements WfBizAction {
 
     /**
      * 付款单挂 CIP（extJson.cipId）时生成 CIP 付款凭证并回写已付款金额。
-     * 幂等：VoucherService 内按 source_type=CIP_PAY + source_doc_id=billId 判重；全链路兜底不抛出。
+     * 去重：VoucherService 内按 source_type=CIP_PAY + source_doc_id=billId 判重；全链路默认处理不抛出。
      */
     private void generateCipPayVoucherIfLinked(ExpBill bill, BigDecimal payable) {
         try {
@@ -1774,10 +1778,10 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * 断点7：审批通过后重新查询单据，若状态为终态（APPROVED/PAID/CLOSED）则发布 BillTerminalEvent。
+     * 断点7：审批通过后重新查询单据，若状态为最终状态（APPROVED/PAID/CLOSED）则发布 BillTerminalEvent。
      * 重新查询是因为 handleApproved 中各 case 通过 updateById 更新数据库，
      * 内存中的 bill 对象状态未同步；且 EXP_CLAIM 可能被智能审单驳回（REJECTED），
-     * 需要以数据库最新状态为准判断是否真正到达终态。
+     * 需要以数据库最新状态为准判断是否真正到达最终状态。
      */
     private void publishTerminalEventIfTerminal(Long billId) {
         ExpBill fresh = expBillMapper.selectById(billId);

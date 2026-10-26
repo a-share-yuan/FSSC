@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="shared-pool">
     <el-card shadow="never">
@@ -96,7 +99,7 @@ const { t } = useI18n()
 /**
  * 任务池五视图（G3）：数据源 GET /api/tenant/wf/pool/views | /mine | /all。
  * 超时判定唯一真值是后端 wf_task.due_time：dueTimeMissing=true 表示历史行未落时限，
- * 明确显示「待补时限」而不是当成「未超时」（与后端注释口径一致）。
+ * 明确显示「待补时限」而不是当成「未超时」（与后端注释规则一致）。
  */
 const VIEW_LABELS = computed(() => ({
   MY_TODO: t('sharing.pool.viewMyTodo'),

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.controller;
 
 import com.fssc.common.core.Result;
@@ -11,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 移动端（H5）「我的」页统计（/api/tenant/expense/mine/**）：只读聚合，单文件、单接口，不改既有单据口。
  *
- * <p>口径与人范围与 {@code ExpenseBillService#myPage} 一致（报销人 ∪ 代理人、del_flag=0、同租户），
+ * <p>规则与人范围与 {@code ExpenseBillService#myPage} 一致（报销人 ∪ 代理人、del_flag=0、同租户），
  * 数字全部由 SQL 聚合得出，不受前端分页条数截断；登录人只从 {@code UserContext} 取，
  * 本接口<b>不接任何入参</b>，因此不存在"前端传 userId 查别人余额"的越权面。
  * 权限码与 myPage 同码 {@code exp:bill:list}——能看自己单据列表的人就能看自己的汇总数，

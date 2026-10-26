@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -34,7 +37,7 @@ public class GlJournalService {
     private final com.fssc.framework.org.OrgGuard orgGuard;
     /** D-DEC-128：记账域冲销走凭证引擎的统一出口 */
     private final com.fssc.sharing.service.VoucherService voucherService;
-    /** P4-3 审计扩面：冲销这类状态跃迁须留痕（与审批回写同口径） */
+    /** P4-3 审计扩面：冲销这类状态跃迁须记录（与审批回写同一规则） */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /**
@@ -95,7 +98,7 @@ public class GlJournalService {
     /**
      * D-GL-03：把科目主键解析成「库里真实存在的那个」。
      * <p>{@code subjectId} 为空时按科目编码取默认科目（6602 管理费用 / 1002 银行存款）；
-     * 非空时必须能在 md_subject 命中，否则 400 拒绝——避免幽灵 ID 静默落库、直到生成凭证才暴露。
+     * 非空时必须能在 md_subject 命中，否则 400 拒绝——避免幽灵 ID 静默写入数据库、直到生成凭证才暴露。
      */
     private Long resolveSubjectId(Long subjectId, String defaultCode, String side) {
         if (subjectId != null) {
@@ -157,9 +160,9 @@ public class GlJournalService {
         e.setTenantId(tenantId);
         e.setPeriod(period);
         e.setEntryType(entryType);
-        // V2.2.38（K127 期间幂等，参考行业做法"一个会计期间只能生成一张凭证"）：同期间同类型
+        // V2.2.38（K127 期间去重，"一个会计期间只能生成一张凭证"）：同期间同类型
         // 已存在未驳回的记账单（APPROVING/APPROVED/POSTED）时拒绝重复生成——防重复提单重复入账；
-        // 被驳回(REJECTED)的单不占闸，可修正后重新生成。
+        // 被驳回(REJECTED)的单不占校验，可修正后重新生成。
         GlJournalEntry dup = mapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<GlJournalEntry>()
                 .eq(GlJournalEntry::getPeriod, period)
                 .eq(GlJournalEntry::getEntryType, entryType)
@@ -167,7 +170,7 @@ public class GlJournalService {
                 .orderByDesc(GlJournalEntry::getId).last("LIMIT 1"));
         if (dup != null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "期间 " + period + " 已存在「" + typeName(entryType)
-                    + "」记账单 " + dup.getEntryNo() + "（状态 " + dup.getStatus() + "）——一个会计期间一笔（期间幂等），"
+                    + "」记账单 " + dup.getEntryNo() + "（状态 " + dup.getStatus() + "）——一个会计期间只能有一笔，"
                     + "如需重新生成请先驳回原单");
         }
         e.setSummary(StringUtils.hasText(summary) ? summary : defaultSummary(entryType, period));
@@ -208,13 +211,13 @@ public class GlJournalService {
      * {@code op_voucher.status==='POSTED'}——草稿凭证直接置灰（证据 12-28:75，本单凭证 id=24）。
      * 结果错账无路可走，只能留着或靠人直接改库。
      *
-     * <p>口径：仅已入账（POSTED）的记账单可冲销；具体由凭证引擎分流——
+     * <p>规则：仅已入账（POSTED）的记账单可冲销；具体由凭证引擎分流——
      * 凭证已过账出红字反向凭证（借贷对调、等额、直接过账落总账），
      * 凭证仍是草稿则作废原凭证（账面本无此笔，红字反而造两张空凭证）。
-     * 冲销后单据置 REVERSED，期间幂等闸（APPROVING/APPROVED/POSTED）随之放开，可重新生成正确的一笔。
+     * 冲销后单据置 REVERSED，期间去重校验（APPROVING/APPROVED/POSTED）随之放开，可重新生成正确的一笔。
      *
      * @param id     记账单主键
-     * @param reason 冲销原因（必填，落凭证备注与审计留痕）
+     * @param reason 冲销原因（必填，落凭证备注与审计记录）
      * @return 冲销结果（action=REVERSE|VOID、原凭证与红字凭证号、单据号与状态）
      */
     @Transactional(rollbackFor = Exception.class)

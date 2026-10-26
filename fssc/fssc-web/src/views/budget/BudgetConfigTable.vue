@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="budget-config-page">
     <el-card shadow="never">
@@ -73,7 +76,7 @@ import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 
-// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
+// 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 
@@ -124,7 +127,7 @@ const columnsConfig = {
   itemBudgetMap: [
     { prop: 'itemName', label: '费用项名称', minWidth: 200, required: true },
     // R5-D-268：该列是外部来源系统的预算科目编码（与 FSSC 侧 item_id 不同键空间），显式标注来源，
-    // 不再与「预算维度」列并呈为同一主键空间（两列回查关系见预算明细页 dim_key 口径）。
+    // 不再与「预算维度」列并呈为同一主键空间（两列回查关系见预算明细页 dim_key 规则）。
     { prop: 'budgetItemId', label: '预算科目ID（外部系统编码）', width: 180, required: true },
     // R5-D-268：映射行维度串为重整中间态，通常缺 '-DEPT' 段（公司级下达）；缺段即显式标注，
     // 避免用户拿该键去 bg_item（dim_key 恒含 DEPT 段，形如 2026-COMPANY1-DEPTnull-ITEM333）定位落空而不知因。

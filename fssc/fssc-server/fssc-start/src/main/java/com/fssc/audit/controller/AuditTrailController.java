@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.audit.controller;
 
 import com.fssc.audit.entity.AuditTrail;
@@ -19,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-/** 审计留痕（P0-3）：分页查询 + 按单据导出 CSV + 内部记录。 */
+/** 审计记录（P0-3）：分页查询 + 按单据导出 CSV + 内部记录。 */
 @RestController
 @RequestMapping("/api/tenant/audit/trail")
 @RequiredArgsConstructor

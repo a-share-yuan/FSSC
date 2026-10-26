@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <BillWorkbench ref="wb" bill-type="CLAIM" sub-type="" :claim="true" :before-submit="onBeforeSubmit">
     <template #create="b">
@@ -137,7 +140,7 @@
           </el-table-column>
           <el-table-column :label="$t('expense.claim.colEntertainType')" width="130">
             <template #default="{ row }">
-              <!-- D-DEC-373：绑真实列 entertain_type，ext_json 仅作历史单据回显兜底（取数口径见 entertainOfLine） -->
+              <!-- D-DEC-373：绑真实列 entertain_type，ext_json 仅作历史单据回显默认处理（查询范围见 entertainOfLine） -->
               <el-select :model-value="entertainOfLine(row).type" style="width: 100%" :disabled="!isEntertain(b, row)" clearable
                 :placeholder="isEntertain(b, row) ? t('expense.claim.dlgPickEntertainType') : t('expense.claim.phEntertainAfter')"
                 @update:model-value="(v) => setEntertain(row, { entertainType: v })">
@@ -295,7 +298,7 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 
-// 付款方式（2026-10-18 基础数据收口：字典定值域 + i18n 定文案）
+// 付款方式（2026-10-18 基础数据办结：字典定值域 + i18n 定文案）
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
 const payMethodOptions = payMethodDict.options
 const { saveFormHistory } = useAutoFill()
@@ -320,7 +323,7 @@ const shareTypeRules = { shareType: commonRules.select('请选择分摊方式') 
 const currentUserName = ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))
 const years = [new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1]
 
-// ---------- 表头必填：红星/规则/提交闸门同源（constants/billRequired.js），两个 el-form 共用一份 rules ----------
+// ---------- 表头必填：红星/规则/提交校验同源（constants/billRequired.js），两个 el-form 共用一份 rules ----------
 const formRules = computed(() => billRules('CLAIM', ''))
 const formRef = ref(null)
 const settleFormRef = ref(null)
@@ -365,7 +368,7 @@ function onOrigAmt(b, row, v) {
     const r = effRate(row)
     row.amount = r > 0 ? Math.round(v * r * 100) / 100 : v
   } else {
-    // R5-D-055：本币行同步回写原币金额与汇率（与后端 saveDraft 兜底形成双侧保证）
+    // R5-D-055：本币行同步回写原币金额与汇率（与后端 saveDraft 默认处理形成双侧保证）
     row.amount = v
     row.origAmount = v
     row.exchangeRate = 1
@@ -396,7 +399,7 @@ function recalcLine(b, row) {
   // D-DEC-023：金额变了，人均标准（ext_json.perCapita）要跟着重算，不能只在人数输入时刷新
   syncPerCapitaExt(row)
 }
-// 录入口径变化：表头统一口径，逐行同步 priceType（行不单独选，保存草稿时随每行提交）
+// 录入规则变化：表头统一规则，逐行同步 priceType（行不单独选，保存草稿时随每行提交）
 function onPriceTypeChange(b, val) {
   b.form.lines.forEach((l) => { l.priceType = val || null })
 }
@@ -414,9 +417,9 @@ function isEntertain(b, row) {
 // 原实现把三项绑在 row.entertainTarget / row.entertainCount / row.entertainType 三个「裸字段」上，
 // 后端 ExpBillLine 实体没有这三个同名属性 ⇒ 请求体反序列化时被丢弃 ⇒ exp_bill_line.ext_json={} ，
 // 详情页三项全空、人均标准校验只能靠审批人口述（12-09 单A/单B 两次实测）。
-// 现按真实承载落库：接待对象→attendees、接待人数→person_count、人均标准→ext_json.perCapita，
+// 现按真实承载写入数据库：接待对象→attendees、接待人数→person_count、人均标准→ext_json.perCapita，
 // 三项另冗余写进 ext_json（后端可据此做标准校验）。
-// D-DEC-373：招待费类型改落真实列 exp_bill_line.entertain_type，ext_json.entertainType 同步写一份以兼容历史取数。
+// D-DEC-373：招待费类型改落真实列 exp_bill_line.entertain_type，ext_json.entertainType 同步写一份以兼容历史查询。
 function lineExt(row) {
   if (typeof row.extJson === 'string') {
     try { row.extJson = JSON.parse(row.extJson || '{}') } catch { row.extJson = {} }
@@ -424,6 +427,7 @@ function lineExt(row) {
   if (!row.extJson || typeof row.extJson !== 'object') row.extJson = {}
   return row.extJson
 }
+/** 人均标准 = 含税金额 ÷ 接待人数（与 12-09 台账「人均 833.33（6 人）」同一规则） */
 function perCapita(row) {
   const n = Number(row.personCount || 0)
   const a = Number(row.amount || 0)
@@ -443,7 +447,7 @@ function setEntertain(row, patch) {
     lineExt(row).entertainType = patch.entertainType || null
   }
   const ext = lineExt(row)
-  // ext_json 冗余三项：详情页与服务端标准校验按 ext_json 取数时不必再猜列名
+  // ext_json 冗余三项：详情页与服务端标准校验按 ext_json 查询时不必再猜列名
   ext.entertainTarget = row.attendees || null
   ext.entertainCount = row.personCount ?? null
   syncPerCapitaExt(row)
@@ -478,7 +482,7 @@ async function removeLine(b, i) {
   b.form.lines.splice(i, 1)
 }
 // 修复：发票勾选生成的明细行（可能暂无费用类型 itemId，但金额/税额已自动填入）
-// 必须即时计入总金额/费用合计/收款金额，与 useBill.sumAmount 同口径，否则勾选后合计不动像"无反应"
+// 必须即时计入总金额/费用合计/收款金额，与 useBill.sumAmount 同一规则，否则勾选后合计不动像"无反应"
 function totalAmount(b) {
   return b.form.lines.filter((l) => l.itemId || Number(l.amount || 0) > 0).reduce((a, l) => a + Number(l.amount || 0), 0)
 }
@@ -498,7 +502,7 @@ function applyUserName(b) {
 async function onBeforeSubmit(b) {
   // D-V4R-46：页面级拦截原因同步写 b.submitHint（3 秒 toast 会消失，常驻横幅靠它显示具体原因）
   const warnStop = (msg) => { b.submitHint = msg; ElMessage.warning(msg); return false }
-  // 表头 + 结算必填闸门（红星同源，见 constants/billRequired.js）
+  // 表头 + 结算必填校验（红星同源，见 constants/billRequired.js）
   if (!(await validateForms([formRef, settleFormRef]))) {
     b.submitHint = t('expense.claim.errFormIncomplete') || '表头/结算信息存在未填项，请按表单红色提示补正'
     return false
@@ -511,8 +515,8 @@ async function onBeforeSubmit(b) {
     const future = b.form.lines.find((l) => l.expenseDate && l.expenseDate > todayStr())
     if (future) return warnStop(t('expense.claim.errExpenseDateFuture', { v1: future.expenseDate }))
   }
-  // P0-6 防付错的后端兜底口径（assertPayeeAccount）：payTarget 驱动 payeeAccountNo，已由红星+闸门覆盖
-  // 收款账号同步到 extJson（兼容既有打印/导出口径）
+  // P0-6 防付错的后端默认处理规则（assertPayeeAccount）：payTarget 驱动 payeeAccountNo，已由红星+校验覆盖
+  // 收款账号同步到 extJson（兼容既有打印/导出规则）
   if (b.form.bill.payeeAccountNo) b.form.bill.extJson.accountNo = b.form.bill.payeeAccountNo
   // 费用承担：把每行的成本中心/项目/预算科目同步到分摊信息（exp_bill_share 持久化）
   b.form.shares = b.form.lines
@@ -534,7 +538,7 @@ async function onBeforeSubmit(b) {
     if (!l.budgetItemId) {
       return warnStop(t('expense.claim.errBudgetItemRequired'))
     }
-    // 承担对象按当前口径校验（单选成本中心或项目）
+    // 承担对象按当前规则校验（单选成本中心或项目）
     if (shareType.value === 'COST_CENTER' && !l.costCenterId) {
       return warnStop(t('expense.claim.errCostCenterRequired'))
     }
@@ -551,7 +555,7 @@ async function onBeforeSubmit(b) {
       syncPerCapitaExt(l)
     }
   }
-  // 境外凭证合规⑤（V1.3.14）：境外收据/行程单必填中文说明（后端 submit 同口径兜底）
+  // 境外凭证合规⑤（V1.3.14）：境外收据/行程单必填中文说明（后端 submit 同一规则默认处理）
   if (b.form.lines.some((l) => l.itemId && needCnDesc(l) && !(l.cnDesc || '').trim())) {
     return warnStop(t('expense.claim.errAbroadCnDesc'))
   }
@@ -625,7 +629,7 @@ const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel
 const { options: payeeTypeOptions, load: loadPayeeType } = useBaseDict('enum_payee_type', PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N)
 
 onMounted(async () => {
-  // 费用日期未来口径：参数缺失/读取失败一律按「不允许未来」
+  // 费用日期未来规则：参数缺失/读取失败一律按「不允许未来」
   configApi.value('expense.claim.futureDateAllowed').then((v) => {
     futureExpenseDateAllowed.value = ['1', 'true', 'TRUE'].includes(String(v == null ? '' : v).trim())
   }).catch(() => {})

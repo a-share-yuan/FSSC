@@ -1,8 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * 路由级权限映射表（全站页面级拦截 — 2026-10-16）
  *
- * 数据来源：fssc 库 sys_menu（path → perms / feature_code），与后端菜单下发过滤口径一致。
- * 守卫规则见 router.js beforeEach：非 public 路由按 meta.perms → 本表 → 菜单树兜底 三级判定，
+ * 数据来源：fssc 库 sys_menu（path → perms / feature_code），与后端菜单下发过滤规则一致。
+ * 守卫规则见 router.js beforeEach：非 public 路由按 meta.perms → 本表 → 菜单树默认处理 三级判定，
  * 全部未命中即拦截回工作台。sys_menu.perms 允许逗号多码，feature_code 为功能开关码。
  */
 
@@ -68,7 +71,7 @@ export const ROUTE_PERMS = {
   '/expense/my': { perms: ['exp:bill:list'] },
   '/expense/repay': { feature: 'F_LOAN' },
   // 以下三页无 sys_menu 行（G3 建设时未落菜单），但 Layout 用户下拉按 wf:instance:list 露出入口、
-  // 后端端点也以 wf:instance:list（移交另含治理码）为闸 ⇒ 必须在映射表给同一把钥匙，
+  // 后端端点也以 wf:instance:list（移交另含治理码）为校验 ⇒ 必须在映射表给同一把钥匙，
   // 否则有权限的人点进去也必被判「无权限访问该页面」。
   '/flow-center/handover': { perms: ['wf:instance:list', 'wf:manage:instance'] },
   '/flow-center/log': { perms: ['wf:instance:list'] },
@@ -122,7 +125,8 @@ export const ROUTE_PERMS = {
   '/master/payee': { perms: ['md:payee:list'] },
   '/master/project': { perms: ['md:project:list'] },
   '/master/subject': { perms: ['md:subject:list'] },
-  '/master/tax-rate': { perms: ['md:tax:list'] },
+  // 菜单载体 md:tax:list（#208）已软删且零角色持有；后端列表读 md:taxrate:list，路由必须同一规则
+  '/master/tax-rate': { perms: ['md:taxrate:list'] },
   '/master/vehicle': { perms: ['md:config', 'md:vehicle:create', 'md:vehicle:delete', 'md:vehicle:list', 'md:vehicle:update'] },
   '/month-end': { perms: ['gl:monthclose:list'] },
   '/my/delegate': { perms: ['wf:delegate:list'] },
@@ -221,7 +225,7 @@ export const ROUTE_PERMS = {
   '/workbench': { perms: ['workbench:view'] },
 }
 
-/** 菜单表有此路径但未挂 perms/feature_code —— 由菜单树兜底判定（角色-菜单授权） */
+/** 菜单表有此路径但未挂 perms/feature_code —— 由菜单树默认处理判定（角色-菜单授权） */
 export const MENU_ONLY_PATHS = new Set([
   '/apflow',
   '/apflow/ap-month-close',

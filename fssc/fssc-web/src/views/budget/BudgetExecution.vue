@@ -1,10 +1,13 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="budget-execution-page">
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
           <span class="header-title">预算执行明细</span>
-          <span style="color:#909399; font-size:12px">按期间/部门/科目查询预算项的占用、核销与余额（占用-核销口径）</span>
+          <span style="color:#909399; font-size:12px">按期间/部门/科目查询预算项的占用、核销与余额（占用与核销的统计方式）</span>
         </div>
       </template>
 
@@ -124,7 +127,7 @@ const canViewFlow = hasPerm('budget:occupy:list')
 
 const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// ---- 名称兜底：后端未重启时 itemName 形如「预算项#96994 2026-COMPANY33-DEPT1302-ITEM335」，
+// ---- 名称默认处理：后端未重启时 itemName 形如「预算项#96994 2026-COMPANY33-DEPT1302-ITEM335」，
 // 前端从 dimKey 解析出公司/部门/费用项 id，用主数据映射补名（后端重启后直接用返回的名称字段）
 function enrichRow(row) {
   const m = (row.dimKey || row.itemName || '').match(/COMPANY(\d+)-DEPT(\d+)-ITEM(\d+)/)
@@ -195,7 +198,7 @@ async function openTrace(row) {
   if (!canViewFlow) return
   trace.loading = true
   try {
-    // budgetItemId 过滤参数随重启生效；生效前用返回行的 budgetItemId 客户端兜底过滤
+    // budgetItemId 过滤参数随重启生效；生效前用返回行的 budgetItemId 客户端默认处理过滤
     const d = await budgetApi.occupyPage({ pageNum: 1, pageSize: 200, budgetItemId: row.budgetItemId })
     const records = d?.list || d?.records || []
     trace.rows = records.filter((r) => !r.budgetItemId || Number(r.budgetItemId) === Number(row.budgetItemId))

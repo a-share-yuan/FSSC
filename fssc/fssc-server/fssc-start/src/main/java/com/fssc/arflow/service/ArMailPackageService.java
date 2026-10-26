@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -35,7 +38,7 @@ public class ArMailPackageService {
     private final ArMailNotifyLogMapper notifyLogMapper;
     private final NotifyService notifyService;
 
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /** 创建邮包：invoiceNos 逗号分隔，须已开票并打印。 */
@@ -144,7 +147,7 @@ public class ArMailPackageService {
         return p;
     }
 
-    /** 邮件通知客户收件人：按地址簿邮箱真发（未配置 SMTP 时模拟留痕），每次尝试写发送记录。 */
+    /** 邮件通知客户收件人：按地址簿邮箱真发（未配置 SMTP 时模拟记录），每次尝试写发送记录。 */
     @Transactional(rollbackFor = Exception.class, noRollbackFor = BizException.class)
     public ArMailPackage notify(Long id) {
         ArMailPackage p = require(id);

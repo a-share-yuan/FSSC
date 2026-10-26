@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.job;
 
 import com.fssc.expense.service.ColdArchiveService;
@@ -11,7 +14,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * 单据冷热分离归档日任务：把终态超期的报销单搬到 exp_bill*_cold 冷表。
+ * 单据冷热分离归档日任务：把最终状态超期的报销单搬到 exp_bill*_cold 冷表。
  *
  * <p>每日凌晨 03:40 执行（避开 01:20 应收逾期 / 02:00 影像批处理窗口），
  * 由 {@link JobHeartbeatService#run} 统一记录心跳 + MySQL GET_LOCK 调度锁 + 失败告警。

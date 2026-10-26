@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -43,7 +46,7 @@ public class JobWatchdog {
     /**
      * 期望表：任务名 -> 最大允许执行间隔。
      *
-     * <p>D-DEC-163 同族的「统计口径漏」腿（现库实测 2026-10-01）：代码侧
+     * <p>D-DEC-163 同族的「统计方式漏」环节（现库实测 2026-10-01）：代码侧
      * {@code jobHeartbeatService.run(...)} 包装的任务名共 <b>20</b> 个，本表原先只登记 <b>9</b> 个，
      * 其余 <b>11</b> 个有心跳行却不在期望表里——它们停摆了不会有任何告警。
      * 现按各自 {@code @Scheduled} 注解的真实频率补齐（月度型给 33 天）。
@@ -56,8 +59,8 @@ public class JobWatchdog {
         EXPECTED.put("ReconcileService", HOUR_26);         // cron 每日 02:00
         EXPECTED.put("RptSummaryService", HOUR_26);        // cron 每日 01:30
         EXPECTED.put("ArchiveService", HOUR_26);           // cron 每日 02:00（共享归档）
-        // D-DEC-163：本任务已从「周日 03:00 一瞬」改为「每日 03:30 tick + 6 天节奏闸门」，
-        // 最大间隔＝6 天闸门 + 1 天 tick = 7 天，8 天的容忍度仍然够用（不改，避免放宽成漏检）。
+        // D-DEC-163：本任务已从「周日 03:00 一瞬」改为「每日 03:30 tick + 6 天节奏校验」，
+        // 最大间隔＝6 天校验 + 1 天 tick = 7 天，8 天的容忍度仍然够用（不改，避免放宽成漏检）。
         EXPECTED.put("WfHistoryArchiveService", DAY_8);
         EXPECTED.put("InvoiceAbnormalAlertJob", MIN_15);   // fixedDelay 5min
         EXPECTED.put("InvoiceVerifyScheduler", MIN_15);    // fixedDelay 5min
@@ -75,7 +78,7 @@ public class JobWatchdog {
         EXPECTED.put("FxRevalJob", HOUR_26);               // cron 每日 01:10
         // 折旧自动批次＝每月 1 日 02:00，容忍度必须按"月"给，否则每天误报 STALE
         EXPECTED.put("AssetDeprAutoJob", DAY_33);          // cron 0 0 2 1 * ?（每月 1 日）
-        EXPECTED.put("PoOrderFinalStateJob", HOUR_26);     // purchase/job cron 每日 03:10（X-20 采购终态推进，心跳名＝类名）
+        EXPECTED.put("PoOrderFinalStateJob", HOUR_26);     // purchase/job cron 每日 03:10（X-20 采购最终状态推进，心跳名＝类名）
     }
 
     /** 进程内告警防重：job:类型 -> 上次告警时间 */

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="workbench">
     <!-- 业务入口卡片 -->
@@ -24,7 +27,7 @@
       <el-col :span="12">
         <el-card header="我的待办">
           <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
-            <el-button size="small" @click="exportTableCsv('todo')">导出 CSV</el-button>
+            <el-button size="small" @click="exportTableCsv('todo')">导出</el-button>
             <el-button v-if="todoSel.length" type="success" plain size="small" @click="exportSelected('todo')">导出选中({{ todoSel.length }})</el-button>
           </div>
           <SkeletonList v-if="loading.todo" :rows="8" :cols="5" />
@@ -96,11 +99,11 @@
       <el-col :span="12">
         <el-card header="我发起的单据">
           <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
-            <el-button size="small" @click="exportTableCsv('mine')">导出 CSV</el-button>
+            <el-button size="small" @click="exportTableCsv('mine')">导出</el-button>
             <el-button v-if="mineSel.length" type="success" plain size="small" @click="exportSelected('mine')">导出选中({{ mineSel.length }})</el-button>
             <span v-if="mineApprox" style="color:#909399;font-size:12px">（跨业务域汇总，总数为近似）</span>
           </div>
-          <!-- D-DEC-406：本卡改跨域聚合（合同／采购／预算／总账／应收／资产…一并按登记人取数）。
+          <!-- D-DEC-406：本卡改跨域聚合（合同／采购／预算／总账／应收／资产…一并按登记人查询）。
                后端取不到归属人列的类型如实报出，此处明示"工作台不按人汇总"，不让列表静默少数据。 -->
           <el-alert v-if="mineUnsupportedText" type="info" :closable="false" show-icon style="margin-bottom: 8px"
                     :title="'以下单据类型暂不支持按发起人汇总，不会出现在本列表，请到对应业务的台账页查看：' + mineUnsupportedText" />
@@ -136,7 +139,7 @@
       <el-col :span="12">
         <el-card header="我的抄送">
           <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
-            <el-button size="small" @click="exportTableCsv('cc')">导出 CSV</el-button>
+            <el-button size="small" @click="exportTableCsv('cc')">导出</el-button>
             <el-button v-if="ccSel.length" type="success" plain size="small" @click="exportSelected('cc')">导出选中({{ ccSel.length }})</el-button>
           </div>
           <SkeletonList v-if="loading.cc" :rows="8" :cols="5" />
@@ -162,7 +165,7 @@
       <el-col :span="24">
         <el-card header="待派工任务池（共享运营）">
           <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
-            <el-button size="small" @click="exportTableCsv('pool')">导出 CSV</el-button>
+            <el-button size="small" @click="exportTableCsv('pool')">导出</el-button>
             <el-button v-if="poolSel.length" type="success" plain size="small" @click="exportSelected('pool')">导出选中({{ poolSel.length }})</el-button>
           </div>
           <SkeletonList v-if="loading.pool" :rows="8" :cols="5" />
@@ -210,7 +213,7 @@
         </el-form-item>
         <!-- ⑯（D-V4R-47）：下一环节为 PICK 取人时，本简易弹窗此前不查候选人、也不传
              nextAssigneeUserId，提交必吃服务端「需指定办理人」红字且无处可选（UI 死路）。
-             此处对齐 ApprovalDialog 口径：PICK 档强制点名，唯一候选自动带出、可改派。 -->
+             此处对齐 ApprovalDialog 规则：PICK 档强制点名，唯一候选自动带出、可改派。 -->
         <el-form-item v-if="approveDecision === BillStatus.APPROVED && nextPick" label="下一环节" prop="nextAssigneeUserId" :required="approveDecision === BillStatus.APPROVED && nextPick">
           <div v-if="!nextPick.candidates.length" class="wb-next-empty">
             节点「{{ nextPick.nodeName }}」当前无可选办理人（该岗位在本公司下无在职非管理员成员），
@@ -243,7 +246,7 @@ import {
   Money, Document, Wallet, CreditCard, Coin, Box, Files, DataAnalysis,
   Check, Close, Connection,
 } from '@element-plus/icons-vue'
-// D-DEC-406：billApi.myPage（费用域单表）已由 /tenant/workbench/my-documents 跨域取数替代，不再引入
+// D-DEC-406：billApi.myPage（费用域单表）已由 /tenant/workbench/my-documents 跨域查询替代，不再引入
 import { wfApi, flowApi, payApi, sharingApi, store, http } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import { pathDenyReason, ensureMenuPaths } from '../../router/pathAccess'
@@ -269,6 +272,7 @@ const router = useRouter()
 // hasPerm 已抽取至 utils/perm（与 Pay.vue / FlowConfig.vue 共用，避免三份重复实现）
 const canPool = hasPerm('sharing:task:list')
 const canPay = hasPerm('pay:batch:list')
+// D-DEC-078：发票池数据面门控码（与 Approval.vue 同一规则），无此权限时「去处理」不落 #/invoice/query
 const canInvPool = hasPerm('inv:list')
 // 概览卡片等分铺满（隐藏权限不足的卡片后不留半行空白）
 const statSpan = 24 / (2 + (canPool ? 1 : 0) + (canPay ? 1 : 0))
@@ -285,7 +289,7 @@ const ENTRIES = [
   { title: '管理报表', desc: '报表与分析', path: '/reports', icon: DataAnalysis, color: '#19be3b', perm: 'report:view' },
   { title: '流程导航地图', desc: '7 大域端到端链路', path: '/process-nav', icon: Connection, color: '#606266' },
 ]
-// 入口卡两道闸：① 该入口对应菜单的业务权限码；② 路由守卫同一把钥匙（router/pathAccess）。
+// 入口卡两道校验：① 该入口对应菜单的业务权限码；② 路由守卫同一把钥匙（router/pathAccess）。
 // 只过①会漏——如「对公付款」有 exp:pay:list 却不在该角色的菜单树里，点卡片必被弹回工作台并提示无权限。
 const entries = computed(() => ENTRIES.filter((e) => {
   const need = e.perm
@@ -304,9 +308,9 @@ function openTrace(row) {
   traceVisible.value = true
 }
 
-// 按单据类型进入对应业务处理页（携带 billNo/billId 供落地页定位）；未命中类型兜底打开追溯抽屉
+// 按单据类型进入对应业务处理页（携带 billNo/billId 供落地页定位）；未命中类型默认处理打开追溯抽屉
 // D-BIZ-08：跳转前先按路由守卫同一把钥匙预判页面可达性（判据已抽到 router/pathAccess，
-// 含此前漏掉的「菜单树叶子兜底」一层——无 meta.perms 也无 ROUTE_PERMS 映射的路径靠菜单树裁决）。
+// 含此前漏掉的「菜单树叶子默认处理」一层——无 meta.perms 也无 ROUTE_PERMS 映射的路径靠菜单树裁决）。
 function billPageBlocked(path) {
   if (!path) return false
   let meta = {}
@@ -316,8 +320,8 @@ function billPageBlocked(path) {
 
 function goBiz(row) {
   const blockedPath = resolveBillRoute(row?.billType || row?.bizType)
-  // D-DEC-078：与 Approval.vue 同一落点闸——发票池数据面按 inv:list 门控，
-  // 无权限岗不跳闸页（落地只会吃「暂无数据」＋一串「缺少权限」报错），改落全链路追溯。
+  // D-DEC-078：与 Approval.vue 同一落点校验——发票池数据面按 inv:list 门控，
+  // 无权限岗不跳校验页（落地只会吃「暂无数据」＋一串「缺少权限」报错），改落全链路追溯。
   if (!canInvPool && blockedPath === '/invoice') {
     ElMessage.info('当前账号没有发票池的查看权限，已打开全链路追溯')
     openTrace(row)
@@ -333,7 +337,7 @@ function goBiz(row) {
         openTrace(row)
         return
       }
-      // 落地页取参有两套既有口径，且各页只认自己那套：
+      // 落地页取参有两套既有规则，且各页只认自己那套：
       //   ①kw——台账搜索框（Contract.vue:276／PoOrder.vue:367／PayPlan.vue:113）
       //   ②billNo/billId——readBillDeepLink（GlSpecial.vue:390／BankAccount／BankReconcile）
       // 只写一套 ⇒ 另一半页面跳过去照旧是全量首页。两套一并带上，各页取自己要的，互不干扰。
@@ -348,7 +352,7 @@ function goBiz(row) {
   }
 }
 
-// 派工池：跳到任务池管理页并按单号定位该任务（无该页权限时兜底打开全链路追溯，不弹回报错）
+// 派工池：跳到任务池管理页并按单号定位该任务（无该页权限时默认处理打开全链路追溯，不弹回报错）
 function goPoolWork(row) {
   if (billPageBlocked('/sharing/task-pool')) {
     ElMessage.info('当前账号没有共享任务池的查看权限，已打开全链路追溯')
@@ -366,7 +370,7 @@ function formatMoney(val) {
 
 const stats = reactive({ todo: 0, mine: 0, done: 0, pool: 0, pay: 0 })
 
-// D-DEC-406：跨域汇总的两条如实标注——无归属人列的类型（后端 unsupported）、单表取数封顶（approximate）
+// D-DEC-406：跨域汇总的两条如实标注——无归属人列的类型（后端 unsupported）、单表查询封顶（approximate）
 const mineUnsupported = ref([])
 const mineApprox = ref(false)
 const mineUnsupportedText = computed(() => {
@@ -458,20 +462,20 @@ async function loadMine() {
   loading.mine = true
   try {
     await pagerMine.load(async ({ pageNum, pageSize }) => {
-      // D-DEC-406：跨域「我发起的单据」。旧口径 billApi.myPage → /expense/bill/myPage 只查 exp_bill 一表，
+      // D-DEC-406：跨域「我发起的单据」。旧规则 billApi.myPage → /expense/bill/myPage 只查 exp_bill 一表，
       // 合同／采购／预算／总账／应收／资产等自提单在发起人自己的工作台恒不显示（实测同一张单
       // 「我的待办」有、「我发起的」零行）。改走 /tenant/workbench/my-documents——后端
-      // MyDocumentService 按 BillRouteRegistry 的「bizType→业务主表→归属人列」逐表取数后内存归并，
+      // MyDocumentService 按 BillRouteRegistry 的「bizType→业务主表→归属人列」逐表查询后内存归并，
       // 取不到归属人列的类型由 unsupported 如实报出（见卡片上方提示条），不静默少数据。
       const r = await http.get('/tenant/workbench/my-documents', { params: { pageNum, pageSize } })
       mines.value = (r?.records || []).map((x) => ({
         ...x,
-        // 后端行字段＝docNo／bizId／bizType／amount；本卡列名与 goBiz／openTrace 的入参口径＝billNo／billId／billType／totalAmount
+        // 后端行字段＝docNo／bizId／bizType／amount；本卡列名与 goBiz／openTrace 的入参规则＝billNo／billId／billType／totalAmount
         billNo: x.docNo || '',
         billId: x.bizId ?? null,
         billType: x.bizType || '',
         totalAmount: x.amount ?? null,
-        // 跨域行的类型标签：非费用域由后端给域标签，费用族行内自带 bill_type ⇒ 前端补词表
+        // 跨域行的类型标签：非费用域由后端给域标签，费用族行内自带 bill_type ⇒ 前端补名称表
         typeLabel: x.typeLabel || docTypeLabel(x.bizType) || '',
       }))
       mineUnsupported.value = r?.unsupported || []
@@ -498,10 +502,10 @@ async function load() {
   if (canPool) jobs.push(loadPool())
   await Promise.all(jobs)
 
-  // D-DEC-406：「我发起(待审)」改取流程侧跨域口径（/workbench/dashboard 的 mine＝
+  // D-DEC-406：「我发起(待审)」改取流程侧跨域规则（/workbench/dashboard 的 mine＝
   // wf_instance.start_user_id＝我 且 status=RUNNING 的实例数，天然覆盖全部单据域）。
-  // 旧口径是「列表首页若干行里状态不在 APPROVED/PAID/REJECTED 的行数」——列表一旦跨域，
-  // 费用状态词表就套不到合同／采购／总账的列值上，且分页外不计＝两个错叠加。
+  // 旧规则是「列表首页若干行里状态不在 APPROVED/PAID/REJECTED 的行数」——列表一旦跨域，
+  // 费用状态名称表就套不到合同／采购／总账的列值上，且分页外不计＝两个错叠加。
   try {
     // silent：概览计数属后台统计，失败静默（卡片照旧显示 0，不打断门户加载）
     const d = await http.get('/tenant/workbench/dashboard', { silent: true })
@@ -530,7 +534,7 @@ const approveRow = ref(null)
 
 // 第2批：装饰红星转真校验。comment 原为恒定 required——审批通过时也会被无脑拦下，
 // 故两条均改条件必填（requiredWhen）：驳回才要原因；下一环节办理人只在 APPROVED+下一节点 PICK 档
-// 且确有候选时必填（无候选场景放行给下方原闸门报"当前无可选办理人"，消息更精确）。
+// 且确有候选时必填（无候选场景放行给下方原校验报"当前无可选办理人"，消息更精确）。
 const approveRules = reactive({
   comment: commonRules.requiredWhen(() => approveDecision.value === BillStatus.REJECTED, '驳回时请选择或输入驳回原因'),
   nextAssigneeUserId: commonRules.requiredWhen(
@@ -550,7 +554,7 @@ async function approve(row, decision) {
   nextPickUserId.value = null
   approveVisible.value = true
   // ⑯（D-V4R-47）：通过前预取下一环节取人方式；PICK 档渲染点名下拉（唯一候选自动带出、可改派）。
-  // silent：老后端无端点（404/403）时保持 null ⇒ 区块不渲染，提交仍由服务端兜底校验，绝不阻断。
+  // silent：老后端无端点（404/403）时保持 null ⇒ 区块不渲染，提交仍由服务端默认处理校验，绝不阻断。
   if (decision === BillStatus.APPROVED && row?.taskId) {
     try {
       const n = await wfApi.nextCandidates(row.taskId, { silent: true })
@@ -564,7 +568,7 @@ async function approve(row, decision) {
 
 async function doApprove() {
   if (approving.value) return
-  // 第2批：先跑表单真校验（驳回原因/下一环节办理人），红字落字段；原手工闸门保留作双保险
+  // 第2批：先跑表单真校验（驳回原因/下一环节办理人），红字落字段；原手工校验保留作双保险
   if (!(await validateForm(approveFormRef.value))) return
   const decision = approveDecision.value
   const comment = approveComment.value
@@ -572,7 +576,7 @@ async function doApprove() {
     ElMessage.warning('驳回时请选择或输入驳回原因')
     return
   }
-  // ⑯（D-V4R-47）：PICK 档提交闸——与服务端 enforcePickOnApprove 同口径，先在前端说破省得吃红字
+  // ⑯（D-V4R-47）：PICK 档提交校验——与服务端 enforcePickOnApprove 同一规则，先在前端说破省得吃红字
   if (decision === BillStatus.APPROVED && nextPick.value) {
     if (!nextPick.value.candidates.length) {
       ElMessage.warning(`节点「${nextPick.value.nodeName}」当前无可选办理人，无法通过`)
@@ -605,7 +609,7 @@ async function finish(row) {
   // D-DEC-024/D-DEC-030（与工单处理页同一处修复）：工作台办结也走带备注的弹窗，
   // 此前一键完成不带任何输入，备注列恒 NULL。
   const { value: remark } = await ElMessageBox.prompt(
-    `完成工单 ${row.billNo || row.id}？请填写完成备注（留痕，供审计复核）`, '完成工单', {
+    `完成工单 ${row.billNo || row.id}？请填写完成备注（将记录，供审计复核）`, '完成工单', {
       inputType: 'textarea',
       inputPlaceholder: '完成备注（可空）',
       confirmButtonText: '确认完成',

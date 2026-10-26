@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.collab.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -32,7 +35,7 @@ import java.util.UUID;
  * SCP 供应商协同发票全流程服务（AP 蓝图 SCC_AP_01~10、场景一 AP_S1）：
  * 登记（打通点1/2 数据落地）→ 自动匹配（R-16 容差比对）→ 创建邮包寄送 → 内网签收 →
  * 扫描+票核（R-20 六要素自动校验）→ 记账（打通点3，受 R-14 关账冻结拦截）→
- * 集中认证（打通点6）→ 付款回写（打通点5）。EBS 通道未配置时按 MOCK 落日志。
+ * 集中认证（打通点6）→ 付款回写（打通点5）。ERP 通道未配置时按 MOCK 落日志。
  */
 @Slf4j
 @Service
@@ -78,7 +81,7 @@ public class ScpFlowService {
         b.setStatus(ScpBill.ST_WAIT_MATCH);
         b.setFailReason(null);
         mapper.insert(b);
-        // R5-D-100：SCP 对账开票数据落地留痕（打通点1/2）——collab_sync_log 记方向/单号/结果，落地不再静默
+        // R5-D-100：SCP 对账开票数据落地记录（打通点1/2）——collab_sync_log 记方向/单号/结果，落地不再静默
         syncService.log("SCP_IF01_LAND", "SCP_TO_AP", b.getPreInvoiceNo(),
                 CollabSyncLog.ST_SUCCESS, "对账开票数据落地：预制发票号 " + b.getPreInvoiceNo() + "，金额 " + b.getAmount(), null);
         return b;
@@ -136,7 +139,7 @@ public class ScpFlowService {
 
     /**
      * 强制匹配（R-18）：双方核对无误但自动匹配仍不通过时强制通过。
-     * 蓝图要求一级审批；当前以强制留痕（操作人+原因入备注与接口日志）简化，接审批中心后可加签。
+     * 蓝图要求一级审批；当前以强制记录（操作人+原因入备注与接口日志）简化，接审批中心后可加签。
      */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill forceMatch(Long id, String reason) {
@@ -152,11 +155,11 @@ public class ScpFlowService {
         b.setRemark(appendNote(b.getRemark(), "强制匹配："));
         mapper.updateById(b);
         syncService.log(CollabSyncLog.IF_SCP_MATCH_POST, "SCP_TO_EBS", b.getBillNo(),
-                CollabSyncLog.ST_MOCK, "R-18 强制匹配生效（需一级审批，简化留痕）：" + reason, null);
+                CollabSyncLog.ST_MOCK, "R-18 强制匹配生效（需一级审批，简化记录）：" + reason, null);
         return b;
     }
 
-    /** 预认证（内网发票处理查询页，认证前置）：记账成功后可预认证，状态不变、留痕。 */
+    /** 预认证（内网发票处理查询页，认证前置）：记账成功后可预认证，状态不变、记录。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill preCertify(Long id) {
         ScpBill b = require(id);
@@ -278,9 +281,9 @@ public class ScpFlowService {
     }
 
     /**
-     * 记账（打通点3：三单匹配数据推送 EBS）：票核成功 → 记账成功。
-     * R-14：月末关账期间禁止发送数据至 EBS 产生凭证，直接拦截。
-     * EBS 通道（ext_interface_config 分类 EBS_AP）未配置时 MOCK 落日志。
+     * 记账（打通点3：三单匹配数据推送 ERP）：票核成功 → 记账成功。
+     * R-14：月末关账期间禁止发送数据至 ERP 产生凭证，直接拦截。
+     * ERP 通道（ext_interface_config 分类 EBS_AP）未配置时 MOCK 落日志。
      */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill post(Long id) {
@@ -297,7 +300,7 @@ public class ScpFlowService {
         boolean real = false;
         String result = "ERP通道未配置，模拟记账";
         // 多 ERP 解析（V1.4）：通道 = {PROVIDER}_AP（蓝图默认 EBS_AP）；
-        // 接口变体细分（参照同类系统报文字典/行业方案接口注册）：蓝字专用通道优先，未配置回落统一 {PROVIDER}_AP
+        // 接口变体细分（报文字典/接口注册）：蓝字专用通道优先，未配置回落统一 {PROVIDER}_AP
         String channel = connector.resolveErpChannel("AP");
         String variantCategory = connector.getConfig(connector.resolveErpChannel("AP_BLUE")) != null
                 ? connector.resolveErpChannel("AP_BLUE") : channel;
@@ -308,7 +311,7 @@ public class ScpFlowService {
             payload.put("invoiceNo", b.getInvoiceNo());
             payload.put("supplierCode", b.getSupplierCode());
             payload.put("amount", b.getAmount());
-            // P0-2 幂等键：同一 SCP 单据重复记账（如超时重发）不重复生成 ERP 凭证，回放首次结果
+            // P0-2 唯一键：同一 SCP 单据重复记账（如超时重发）不重复生成 ERP 凭证，回放首次结果
             ChannelResponse resp = connector.invokeWrite(channel, payload,
                     "SCP_AP:" + TenantContext.getTenantId() + ":" + b.getBillNo());
             real = resp != null && resp.isOk();
@@ -328,7 +331,7 @@ public class ScpFlowService {
         return b;
     }
 
-    /** 集中认证（打通点6）：记账成功 → 认证完成（终态）。 */
+    /** 集中认证（打通点6）：记账成功 → 认证完成（最终状态）。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill certify(Long id, String result) {
         ScpBill b = require(id);
@@ -344,7 +347,7 @@ public class ScpFlowService {
         return b;
     }
 
-    /** 付款信息回写（打通点5：EBS付款成功后推送）：body {payVoucherNo, payDate, payAmount}。 */
+    /** 付款信息回写（打通点5：ERP付款成功后推送）：body {payVoucherNo, payDate, payAmount}。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill payWriteback(Long id, String payVoucherNo, LocalDate payDate, BigDecimal payAmount) {
         ScpBill b = require(id);
@@ -427,7 +430,7 @@ public class ScpFlowService {
         return b;
     }
 
-    /** 发票替换（蓝图 EBS 接口6）：原票作废，按同对账单重新生成新票（R-31 新流水）。 */
+    /** 发票替换（蓝图 ERP 接口6）：原票作废，按同对账单重新生成新票（R-31 新流水）。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill replaceBill(Long id, String reason) {
         ScpBill old = require(id);
@@ -456,7 +459,7 @@ public class ScpFlowService {
         return create(fresh);
     }
 
-    /** 冲销凭证（蓝图 EBS 接口7）：记账成功 → 回待匹配（可重新走链），MOCK 留痕。 */
+    /** 冲销凭证（蓝图 ERP 接口7）：记账成功 → 回待匹配（可重新走链），MOCK 记录。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill reverseVoucher(Long id, String reason) {
         ScpBill b = require(id);
@@ -467,11 +470,11 @@ public class ScpFlowService {
         b.setRemark(appendNote(b.getRemark(), "冲销凭证：" + (reason == null ? "" : reason)));
         mapper.updateById(b);
         syncService.log(CollabSyncLog.IF_SCP_MATCH_POST, "SCP_TO_EBS", b.getBillNo(),
-                CollabSyncLog.ST_MOCK, "EBS_AP_REVERSE 冲销凭证（变体细分）：" + (reason == null ? "" : reason), null);
+                CollabSyncLog.ST_MOCK, "冲销凭证（变体细分）：" + (reason == null ? "" : reason), null);
         return b;
     }
 
-    /** 直接扣款入账（蓝图 EBS 接口8）：记账成功单上登记扣款，MOCK 留痕。 */
+    /** 直接扣款入账（蓝图 ERP 接口8）：记账成功单上登记扣款，MOCK 记录。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill directDeduct(Long id, BigDecimal deductAmount, String reason) {
         ScpBill b = require(id);
@@ -481,7 +484,7 @@ public class ScpFlowService {
         b.setRemark(appendNote(b.getRemark(), "直接扣款入账 " + deductAmount + "：" + (reason == null ? "" : reason)));
         mapper.updateById(b);
         syncService.log("SCP_IF03_DIRECT", "SCP_TO_EBS", b.getBillNo(),
-                CollabSyncLog.ST_MOCK, "EBS_AP_DIRECT 直接扣款入账（变体细分）：" + deductAmount, null);
+                CollabSyncLog.ST_MOCK, "直接扣款入账（变体细分）：" + deductAmount, null);
         return b;
     }
 

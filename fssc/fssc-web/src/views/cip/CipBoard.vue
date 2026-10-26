@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <el-card>
@@ -168,7 +171,7 @@ import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 
 // ========== 枚举 ==========
-// 工程类别词表已并入 constants/enums.js 的 PROJECT_CATEGORY（本地原缺 TECH_REVAMP，导致该值显示为「—」）
+// 工程类别名称表已并入 constants/enums.js 的 PROJECT_CATEGORY（本地原缺 TECH_REVAMP，导致该值显示为「—」）
 const CATEGORIES = Object.entries(PROJECT_CATEGORY).map(([value, label]) => ({ value, label }))
 const COST_TYPES = [
   { label: '领料', value: 'MATERIAL' },
@@ -209,7 +212,7 @@ const dlgTransfer = ref(false)
 const transferRow = ref(null)
 const transferForm = reactive({ transferDate: '', categoryId: null, deptId: null, depreciationMethod: 'LINEAR', depreciationMonths: null, taxLifeMonths: null, remark: '' })
 
-// 校验规则唯一口径＝中央登记表（useFormRules）；提交一律走 useSubmitGuard，不在页面手写 if 判空
+// 校验规则唯一规则＝中央登记表（useFormRules）；提交一律走 useSubmitGuard，不在页面手写 if 判空
 const { rules: formRules } = useFormRules('CIP_CARD')
 const { rules: costRules } = useFormRules('CIP_COST')
 const { rules: transferRules } = useFormRules('CIP_TRANSFER')

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.security;
 
 import com.fssc.common.enums.SubjectType;
@@ -59,7 +62,7 @@ public class LoginUser implements Serializable {
 
     /**
      * 单码权限判定：通配 {@code *:*:*} 视同持有全部码。
-     * 口径与 {@code PermissionAspect.aroundPerm} 完全一致，业务侧需要"代码里再判一次"时走这里，
+     * 规则与 {@code PermissionAspect.aroundPerm} 完全一致，业务侧需要"代码里再判一次"时走这里，
      * 不要再手写 contains 分支（手写会漏通配，把超管判成无权）。
      */
     public boolean hasPerm(String code) {

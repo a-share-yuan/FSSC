@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -41,7 +44,7 @@ import java.util.stream.Collectors;
  *   <li><b>跨租户误匹配</b>：{@code op_dispatch_rule} / {@code op_sla_config} 失去租户过滤，
  *       可能取到其它租户的规则与配置。</li>
  * </ol>
- * 现改为与 {@code RcOverdueJob} 一致的范式：<b>聚合扫描用 {@code runIgnoreTenant}（只读、不落库），
+ * 现改为与 {@code RcOverdueJob} 一致的范式：<b>聚合扫描用 {@code runIgnoreTenant}（只读、不写入数据库），
  * 逐租户处理时 {@code callAs(tenantId)} 恢复上下文</b>，使租户过滤与字段填充均恢复正常。
  *
  * @see DispatchService#autoDispatchCheck()
@@ -65,7 +68,7 @@ public class AutoDispatchJob {
     public void autoDispatch() {
         jobHeartbeatService.run("AutoDispatchJob", () -> {
             try {
-                // 1) 跨租户聚合扫描（只读，不落库）：找出"有待派单或有在办派单"的租户
+                // 1) 跨租户聚合扫描（只读，不写入数据库）：找出"有待派单或有在办派单"的租户
                 List<DispatchTask>[] holder = new List[1];
                 TenantContext.runIgnoreTenant(() -> holder[0] = dispatchTaskMapper.selectList(
                         new LambdaQueryWrapper<DispatchTask>()

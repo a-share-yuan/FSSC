@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -48,7 +51,7 @@ public class MdAssetChangeLog implements Serializable {
     /** APPROVING 在途/APPROVED 通过/REJECTED 驳回 */
     private String status;
     private String remark;
-    /** Flowable 流程实例号（列型 varchar(64)），终态回写按此键定位 */
+    /** Flowable 流程实例号（列型 varchar(64)），最终状态回写按此键定位 */
     private String procInstId;
     private Long createBy;
     private Long updateBy;

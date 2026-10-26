@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -50,19 +53,19 @@ public class GlMonthCloseService {
     private final WfEngineFacade wfEngineFacade;
     private final PeriodService periodService;
     private final OpVoucherMapper opVoucherMapper;
-    /** D-V4R-68：账证一致核对要直读总账分录表（试算的取数源），故与 GlService 同用一张 Mapper */
+    /** D-V4R-68：账证一致核对要直读总账分录表（试算的查询源），故与 GlService 同用一张 Mapper */
     private final com.fssc.gl.mapper.GlEntryMapper glEntryMapper;
-    /** D-DEC-189：回写关账人时只读取该实例末节点审批留痕（wf_task_history，审计表只读） */
+    /** D-DEC-189：回写关账人时只读取该实例末节点审批记录（wf_task_history，审计表只读） */
     private final com.fssc.workflow.mapper.WfTaskHistoryMapper wfTaskHistoryMapper;
     /**
-     * D-DEC-191（12-31:169）：月结列表读侧富化用——只读 {@code wf_instance}（biz_type=GL_MONTH_CLOSE,
+     * D-DEC-191（12-31:169）：月结列表读侧补充用——只读 {@code wf_instance}（biz_type=GL_MONTH_CLOSE,
      * biz_id=月结单ID）把「这张月结单是被哪条审批流定的、什么时候办结的」补上。
      * 表上没有 proc_inst_id/approve_time/audit_time 三列（加列属 DDL 裁决，注释态 SQL 见实体类尾），
-     * 故与 D-DEC-114①／D-DEC-028 同法走 transient 富化，零写库副作用。
+     * 故与 D-DEC-114①／D-DEC-028 同法走 transient 补充，零写库副作用。
      */
     private final com.fssc.workflow.mapper.WfInstanceMapper wfInstanceMapper;
     /**
-     * D-DEC-291（GL 族终态零留痕）：月结单的终态跃迁（RUNNING → CLOSED／REJECTED／APPROVED）
+     * D-DEC-291（GL 族最终状态零记录）：月结单的最终状态跃迁（RUNNING → CLOSED／REJECTED／APPROVED）
      * 原先只有 log 与 wf_task_history，audit_trail 里查不到任何 GL_MONTH_CLOSE 行——
      * 而"这期间到底是被哪一次审批定成关账/没关账"正是事后核查要问的事。
      * 本字段只补审计行，不改任何回写判据（{@code AuditTrailService.record} 自身吞异常、不阻断业务）。
@@ -73,7 +76,7 @@ public class GlMonthCloseService {
         LambdaQueryWrapper<GlMonthClose> qw = new LambdaQueryWrapper<>();
         // D-DEC-195：库内 gl_month_close.period 是 6 位 yyyyMM（实测行 id=3 period='202609'，close() 亦按
         // length()==6 入库），而月结看板传 '2026-12' —— 原实现直接 eq 精确匹配，格式必不等 ⇒ 恒 0 行（看板全空）。
-        // 归一化收在服务端入口：yyyyMM / yyyy-MM / yyyy/MM / yy-MM 一律折成库口径，所有调用方一并治愈；
+        // 归一化收在服务端入口：yyyyMM / yyyy-MM / yyyy/MM / yy-MM 一律折成库规则，所有调用方一并治愈；
         // 空白＝不按期间过滤（月结列表页取全量的正常语义），非空而非法则显式报错，不再静默空表。
         String normPeriod = normalizePeriod(period);
         if (normPeriod != null) {
@@ -89,19 +92,19 @@ public class GlMonthCloseService {
     }
 
     /**
-     * D-DEC-191：给月结行富化「GL_MONTH_CLOSE 审批流」的可追责信息。
+     * D-DEC-191：给月结行补充「GL_MONTH_CLOSE 审批流」的可追责信息。
      *
-     * <p>取数两条批量查询（不按行循环打库）：
+     * <p>查询两条批量查询（不按行循环打库）：
      * <ol>
      *   <li>{@code wf_instance}：{@code biz_type='GL_MONTH_CLOSE' AND biz_id IN (月结单ID)}，
      *       按 id 升序覆盖 ⇒ 同一月结单被驳回后重新发起时留下<b>最新一轮</b>实例
-     *       （与 {@code ArchiveService.fillArchiveFlowKey}、{@code PayBatchService.fillDisplayFields} 同口径）；
+     *       （与 {@code ArchiveService.fillArchiveFlowKey}、{@code PayBatchService.fillDisplayFields} 同一规则）；
      *       实例的 {@code end_time} 即审批办结时刻＝approve_time；</li>
-     *   <li>{@code wf_task_history}：上述实例里最后一条 APPROVE/AUTO_PASS 留痕 ⇒
+     *   <li>{@code wf_task_history}：上述实例里最后一条 APPROVE/AUTO_PASS 记录 ⇒
      *       audit_time / audit_user_id / audit_user_name（与 D-DEC-189 关账人 {@link #lastApproverOf} 同一把尺）。</li>
      * </ol>
      *
-     * <p>富化失败只记日志：月结看板不能因为附加列取不到而打不开。
+     * <p>补充失败只记日志：月结看板不能因为附加列取不到而打不开。
      */
     private void fillWfFlowKey(java.util.List<GlMonthClose> rows) {
         if (rows == null || rows.isEmpty()) {
@@ -232,10 +235,10 @@ public class GlMonthCloseService {
      * D-GL-MC2 整改（2026-09-21）：①期间建档校验<b>前置</b>到写库之前——旧实现 try/catch 吞掉
      * closeByPeriod 异常但内层共享事务已被标记 rollback-only，提交时 UnexpectedRollbackException
      * 连月结记录+审批流整体回滚并抛 500；②失败即显式抛业务异常整体回滚（原子），不再留半成品行；
-     * ③同公司+期间已有 CLOSED 月结记录时幂等拒绝（原 close() 无幂等保护，双击即多行）。
+     * ③同公司+期间已有 CLOSED 月结记录时去重拒绝（原 close() 无去重保护，双击即多行）。
      * D-GL-MC1 整改：空期间（无任何凭证、试算 0=0）拒绝月结。
      * D-DEC-189 整改：①发起态由 CLOSED 改 RUNNING（审批在途），md_period 不再于提单同秒置 CLOSED；
-     * ②幂等/重发守卫改按「同公司+期间<b>最新一条</b>月结记录」判定——CLOSED 拦重发、
+     * ②去重/重发守卫改按「同公司+期间<b>最新一条</b>月结记录」判定——CLOSED 拦重发、
      * RUNNING 拦重复发起（发起态不再是 CLOSED 后，原守卫会失去对双击的拦截），
      * 反结账日志行（UNCLOSED）为最新行时放行重新月结。
      */
@@ -249,7 +252,7 @@ public class GlMonthCloseService {
         Long tenantId = TenantContext.getTenantId();
         Long comp = companyId != null ? companyId : 1L;
 
-        // 幂等/在途守卫（D-DEC-189）：按同公司+期间最新一条月结记录判定
+        // 去重/在途守卫（D-DEC-189）：按同公司+期间最新一条月结记录判定
         //  - CLOSED：已月结且未反结账，拒绝重复月结（防双击/重跑多行）
         //  - RUNNING：月结审批在途，拒绝二次发起（发起态改 RUNNING 后，旧 CLOSED 守卫拦不住双击，
         //    会并存两张在途单、起两条审批流，末节通过时互相回写）
@@ -281,7 +284,7 @@ public class GlMonthCloseService {
 
         // 合规整改( )：月结前置校验——该期间+公司存在未过账(DRAFT)凭证时禁止月结，
         // 须先完成凭证审核过账（DRAFT→POSTED）再发起月结，防止未过账凭证漏出本期账。
-        // V2.2.38 K128/K129（参考行业做法结账中心"复选项全勾才可结账"）：月结前校验检查闸清单——
+        // V2.2.38 K128/K129（结账中心"复选项全勾才可结账"）：月结前校验检查校验清单——
         // 该公司当期必须已建清单且全部 DONE，缺行/未勾齐一律拦截（清单由「月结反结账」同接口维护）。
         com.fssc.glex.entity.GlCloseCheckItem chkProbe = closeCheckItemMapper.selectOne(
                 new LambdaQueryWrapper<com.fssc.glex.entity.GlCloseCheckItem>()
@@ -290,7 +293,7 @@ public class GlMonthCloseService {
                         .last("LIMIT 1"));
         if (chkProbe == null) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "期间 " + period + " 尚未建立月结检查清单，请先在「检查闸清单」生成并逐项完成");
+                    "期间 " + period + " 尚未建立月结检查清单，请先在「检查清单」生成并逐项完成");
         }
         Long pendingChk = closeCheckItemMapper.selectCount(new LambdaQueryWrapper<com.fssc.glex.entity.GlCloseCheckItem>()
                 .eq(com.fssc.glex.entity.GlCloseCheckItem::getCompanyId, comp)
@@ -298,7 +301,7 @@ public class GlMonthCloseService {
                 .ne(com.fssc.glex.entity.GlCloseCheckItem::getStatus, "DONE"));
         if (pendingChk != null && pendingChk > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "月结检查闸未通过：期间 " + period + " 还有 " + pendingChk + " 项检查未完成，请逐项办结后再结账");
+                    "月结检查未通过：期间 " + period + " 还有 " + pendingChk + " 项检查未完成，请逐项办结后再结账");
         }
 
         Long draftCount = opVoucherMapper.selectCount(new LambdaQueryWrapper<OpVoucher>()
@@ -311,7 +314,7 @@ public class GlMonthCloseService {
                     "月结前须完成凭证审核过账:期间 " + period + " 有 " + draftCount + " 张 DRAFT 凭证");
         }
 
-        // D-V4R-68：账证一致闸——试算只 SUM op_gl_entry 自身借贷，凭证侧消失的分录会两侧同额虚增，
+        // D-V4R-68：账证一致校验——试算只 SUM op_gl_entry 自身借贷，凭证侧消失的分录会两侧同额虚增，
         // 于是"借贷必相等"照样成立而账证已不平（实测差 9,000＝5 张已不存在凭证的 12 行分录）。
         assertVoucherLedgerConsistent(comp, year, month, period);
 
@@ -346,7 +349,7 @@ public class GlMonthCloseService {
         // 使损益结转真号（JZ…）回不到月结单（GlProfitCarryService 只认 voucher_no 为空时回写）。
         e.setVoucherNo(null);
         // D-DEC-189：发起只建在途单——试算平衡＝RUNNING（月结审批中，期间<b>尚未</b>关账），
-        // 不平＝DRAFT（保持原口径，不关账）。旧实现此处直接置 CLOSED，与 md_period 同秒关账，
+        // 不平＝DRAFT（保持原规则，不关账）。旧实现此处直接置 CLOSED，与 md_period 同秒关账，
         // 使 7 节审批退化为事后追认（实测早末节点 59 分钟）。
         e.setStatus(balanced ? STATUS_RUNNING : "DRAFT");
         e.setResultMsg(balanced
@@ -363,7 +366,7 @@ public class GlMonthCloseService {
         try {
             // D-DEC-191：起流返回值就是本单的审批实例号。表上暂无列可存（加列属 DDL 裁决，注释态 SQL 见实体类尾），
             // 先挂在响应的 transient 字段上——发起后前端立刻就能拿到"这张月结单挂在哪条审批流上"，
-            // 后续列表由 fillWfFlowKey 从 wf_instance 富化出同一个值。
+            // 后续列表由 fillWfFlowKey 从 wf_instance 补充出同一个值。
             String procInstId = wfEngineFacade.start("GL_MONTH_CLOSE", e.getId(), userId(),
                     "月结-" + period + "-公司" + comp, balanced ? debit : diff.abs());
             e.setWfProcInstId(procInstId);
@@ -385,26 +388,26 @@ public class GlMonthCloseService {
     /**
      * 月结审批收尾回写（由 {@code GlBizAction} 在 GL_MONTH_CLOSE 流程结束事件里调用）。
      *
-     * <p><b>通过</b>：先按<b>审批结束这一刻</b>的账面重算试算与未过账闸（在途期间可能又落了新凭证），
+     * <p><b>通过</b>：先按<b>审批结束这一刻</b>的账面重算试算与未过账校验（在途期间可能又落了新凭证），
      * 仍平衡且无 DRAFT 凭证 → gl_month_close RUNNING→CLOSED、md_period 联动 CLOSED
-     * （close_time＝审批通过时刻、close_by＝末节点 APPROVE 留痕人）；
+     * （close_time＝审批通过时刻、close_by＝末节点 APPROVE 记录人）；
      * 若已不平衡或出现新的未过账凭证 → 置 {@value #STATUS_APPROVED_NOT_CLOSED}（审批通过·未关账），
      * 把原因写进 result_msg 并告警——<b>不冒充关账，也不静默</b>。
      *
      * <p><b>驳回/撤回</b>：RUNNING→REJECTED，期间<b>保持开账</b>（整改前是"提单即关账、驳回不重开"，
      * 被驳的月结会把期间永久锁死，只能人工反结账）。
      *
-     * <p>幂等：仅当当前状态为 {@value #STATUS_RUNNING}／DRAFT（不平单被驳回）时才流转；
+     * <p>去重：仅当当前状态为 {@value #STATUS_RUNNING}／DRAFT（不平单被驳回）时才流转；
      * 已是 CLOSED/REJECTED/UNCLOSED 的行只记日志不改写（收尾事件重发/双发安全）。
      *
      * @param closeId   gl_month_close 主键（流程 bizId）
      * @param approved  审批结论
      * @param comment   末节点意见（可空）
-     * @param endType   结束类型（WITHDRAWN＝申请人撤回，仅用于把留痕写准）
+     * @param endType   结束类型（WITHDRAWN＝申请人撤回，仅用于把记录写准）
      * @param procInstId Flowable 流程实例号（用于取末节点审批人，可空）
-     * @param endOperUserId 末节点操作人（由流程结束事件直接携带）。D-V4R-67：留痕行是在本方法
-     *                    之后才落库的，只靠 {@link #lastApproverOf} 取数会拿到<b>上一个</b>节点的
-     *                    审批人 ⇒ md_period.close_by 记错人。事件带人时以事件为准，取不到再退回留痕。
+     * @param endOperUserId 末节点操作人（由流程结束事件直接携带）。D-V4R-67：记录行是在本方法
+     *                    之后才写入数据库的，只靠 {@link #lastApproverOf} 查询会拿到<b>上一个</b>节点的
+     *                    审批人 ⇒ md_period.close_by 记错人。事件带人时以事件为准，取不到再退回记录。
      */
     @Transactional(rollbackFor = Exception.class)
     public void applyApprovalOutcome(Long closeId, boolean approved, String comment,
@@ -499,8 +502,8 @@ public class GlMonthCloseService {
         recordCloseAudit(closeId, e, "CLOSED", "月结审批末节点通过，期间 " + period + " 于 " + stamp
                 + " 关账（md_period 已联动 CLOSED" + (closer == null ? "" : "，关账人 id=" + closer) + "）", comment);
         // R5-D-170：月结 CLOSED 同步收尾在途流程实例——期间已关账而 GL_MONTH_CLOSE 实例仍 RUNNING，
-        // 会长期挂着一条无人可办的清单任务污染三关前置清点（存量 MC202609001/wf_instance 74 即此）。
-        // cancelRunningInstancesByBiz 仅收 RUNNING、幂等、双留痕；失败不回滚关账事实，告警留痕人工跟进。
+        // 会长期挂着一条无人可办的清单任务污染三关前置清点（历史 MC202609001/wf_instance 74 即此）。
+        // cancelRunningInstancesByBiz 仅收 RUNNING、去重、双记录；失败不回滚关账事实，告警记录人工跟进。
         try {
             int cancelledWf = wfEngineFacade.cancelRunningInstancesByBiz("GL_MONTH_CLOSE", closeId,
                     "月结单已 CLOSED，收尾作废在途审批实例（R5-D-170）");
@@ -515,9 +518,9 @@ public class GlMonthCloseService {
     }
 
     /**
-     * D-DEC-291：月结单终态跃迁留痕。口径与 {@code GlBizAction.recordStatusAudit} 逐字对齐
+     * D-DEC-291：月结单最终状态跃迁记录。规则与 {@code GlBizAction.recordStatusAudit} 逐字对齐
      * （bizType 固定 GL_MONTH_CLOSE、obj_type=gl_month_close、before/after 只带本次实际变化的 status 一列），
-     * 不整实体 JSON、不新增审计类型。审计表只增不改，存量不回灌（178/342 既有裁决）。
+     * 不整实体 JSON、不新增审计类型。审计表只增不改，历史不回灌（178/342 既有裁决）。
      */
     private void recordCloseAudit(Long closeId, GlMonthClose before, String after, String note, String comment) {
         String c = trimComment(comment);
@@ -527,7 +530,7 @@ public class GlMonthCloseService {
                 String.valueOf(closeId), b, a, note + (c == null || c.isBlank() ? "" : "：" + c));
     }
 
-    /** result_msg 列宽口径（gl_month_close.result_msg varchar(200)）：超长截断，避免收尾回写把留痕写成报错 */
+    /** result_msg 列宽规则（gl_month_close.result_msg varchar(200)）：超长截断，避免收尾回写把记录写成报错 */
     private static final int RESULT_MSG_MAX = 200;
 
     private String msg(String s) {
@@ -591,8 +594,8 @@ public class GlMonthCloseService {
 
     /**
      * 取末节点审批人（wf_task_history 上该实例最后一条 APPROVE/AUTO_PASS 行的操作人），只读。
-     * 收尾线程无登录上下文（UserContext 为空），关账人必须来自审批留痕，否则 close_by 整列 NULL
-     * 无法追责。取数失败返回 null（不影响关账本身）。
+     * 收尾线程无登录上下文（UserContext 为空），关账人必须来自审批记录，否则 close_by 整列 NULL
+     * 无法追责。查询失败返回 null（不影响关账本身）。
      */
     private Long lastApproverOf(String procInstId) {
         if (procInstId == null || procInstId.isBlank()) {
@@ -624,17 +627,17 @@ public class GlMonthCloseService {
      * <p>校验（不满足抛明确业务异常）：
      * <ol>
      *  <li>期间格式 yyyyMM；该期间确已月结（md_period 存在且 CLOSED）；</li>
-     *  <li>该期间的<b>下一期间</b>尚未结账（md_period 非 CLOSED）——期间连续关闭、逐期回退（厂商口径，方案A）；</li>
+     *  <li>该期间的<b>下一期间</b>尚未结账（md_period 非 CLOSED）——期间连续关闭、逐期回退（通用规则，方案A）；</li>
      *  <li>调用者为财务总监（CFO）、总账会计（FIN_GL）或租户管理员（perms 含 *:*:*）。</li>
      * </ol>
      *
      * @param period    会计期间 yyyyMM
-     * @param companyId 结账公司（空则 1，与 close 同口径）
+     * @param companyId 结账公司（空则 1，与 close 同一规则）
      * @return 反结账日志行（gl_month_close，status=UNCLOSED）
      */
     @Transactional(rollbackFor = Exception.class)
     public GlMonthClose unclose(String period, Long companyId) {
-        // D-DEC-195：与 close() 同口径归一化，反结账不再要求调用方先手动改成 6 位。
+        // D-DEC-195：与 close() 同一规则归一化，反结账不再要求调用方先手动改成 6 位。
         period = requirePeriod(period);
         int year = Integer.parseInt(period.substring(0, 4));
         int month = Integer.parseInt(period.substring(4, 6));
@@ -653,22 +656,22 @@ public class GlMonthCloseService {
             throw new BizException(ErrorCode.PARAM_INVALID, "期间 " + period + " 未处于结账状态，无需反结账");
         }
 
-        // ③ 反结账顺序守卫（方案A·对齐厂商口径 2026-09-25）：仅要求「下一期间尚未结账」，
+        // ③ 反结账顺序守卫（方案A·对齐通用规则 2026-09-25）：仅要求「下一期间尚未结账」，
         //   须从最后已结账期间逐期回退；下期有凭证不再拦截（反结账后按期继续核算为常态，
-        //   原「下期零凭证」守卫超出同类系统/通行口径，致显式落期单据的补生成全链死锁 D-DEC-15）。
+        //   原「下期零凭证」守卫超出通行规则，致显式落期单据的补生成全链死锁 D-DEC-15）。
         int nextYear = month == 12 ? year + 1 : year;
         int nextMonth = month == 12 ? 1 : month + 1;
         var nextRec = periodService.periodOf(comp, nextYear, nextMonth);
         if (nextRec != null && "CLOSED".equals(nextRec.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "反结账拦截：下一期间 " + nextYear + String.format("%02d", nextMonth)
-                            + " 仍处于结账状态，须先反结账下一期间、逐期回退（期间连续关闭口径）");
+                            + " 仍处于结账状态，须先反结账下一期间、逐期回退（期间须按顺序连续关闭）");
         }
 
         // ④ 期间回退开账（CLOSED → NORMAL）
         periodService.reopenByPeriod(comp, year, month);
 
-        // ⑤ 反结账日志：gl_month_close 落一条 UNCLOSED 记录（操作人/时间留痕；历史 CLOSED 行保留不改）
+        // ⑤ 反结账日志：gl_month_close 落一条 UNCLOSED 记录（操作人/时间记录；历史 CLOSED 行保留不改）
         String operator = "unknown";
         com.fssc.framework.security.LoginUser lu = UserContext.get();
         if (lu != null) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -36,7 +39,7 @@ public class GlSalaryRunController {
      * D-DEC-143（12-30:171）：某薪酬批次的人员级工资明细（应发／其他扣除／社保／个税／实发 到人）。
      *
      * <p>载体表 {@code gl_salary_run_detail} 的建表 DDL 以注释态交付、未经人工裁决执行，
-     * 现网无此表；本端点走 {@code listDetailOfRun} 的 fail-soft 口径，未建表时返回<b>空集</b>
+     * 现网无此表；本端点走 {@code listDetailOfRun} 的 fail-soft 规则，未建表时返回<b>空集</b>
      * 而非 500，界面据此显示"暂无人员级明细"。空集语义与真无明细一致：现库不存在任何
      * 到人薪酬来源，代码亦不以「人数 × 人均标准」反造明细行。</p>
      */

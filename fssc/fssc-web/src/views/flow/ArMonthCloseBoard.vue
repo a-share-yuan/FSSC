@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -40,7 +43,7 @@
         <template #default="{ row }">
           <el-button v-for="a in actions(row)" :key="a.key" link type="primary" size="small" @click="act(row, a)">{{ a.label }}</el-button>
           <el-button v-if="row.status === 'CLOSED'" link type="danger" size="small" @click="openReopen(row)">{{ $t('flow.arClose.btnReopen') }}</el-button>
-          <!-- R5-D-218：未关闭账期的月结单可作废（终态 VOID，留痕不删行） -->
+          <!-- R5-D-218：未关闭账期的月结单可作废（最终状态 VOID，记录不删行） -->
           <el-button v-if="!['CLOSED', 'VOID'].includes(row.status)" link type="warning" size="small" @click="openVoid(row)">{{ $t('field.void') }}</el-button>
           <el-button link type="info" size="small" @click="openDetail(row)">{{ $t('field.detail') }}</el-button>
         </template>
@@ -81,7 +84,7 @@
       </template>
     </el-dialog>
 
-    <!-- 反月结：原因必填留痕（41号审查报告 P0-2 同源整改） -->
+    <!-- 反月结：原因必填记录（41号审查报告 P0-2 同源整改） -->
     <el-dialog v-model="reopenVisible" :title="$t('flow.arClose.dlgReopenTitle')" width="440px" destroy-on-close>
       <el-alert type="warning" :closable="false" style="margin-bottom: 10px"
         :title="$t('flow.arClose.dlgReopenDoc', { v1: reopenRow?.closeNo, v2: reopenRow?.period })"
@@ -93,7 +96,7 @@
       </template>
     </el-dialog>
 
-    <!-- R5-D-218 作废：原因必填留痕（终态 VOID，行止不删） -->
+    <!-- R5-D-218 作废：原因必填记录（最终状态 VOID，行止不删） -->
     <el-dialog v-model="voidVisible" :title="$t('flow.arClose.dlgVoidTitle')" width="440px" destroy-on-close>
       <el-alert type="error" :closable="false" style="margin-bottom: 10px"
         :title="$t('flow.arClose.dlgReopenDoc', { v1: voidRow?.closeNo, v2: voidRow?.period })"
@@ -274,7 +277,7 @@ async function doReopen() {
   reopenVisible.value = false
 }
 
-// ---- 作废（R5-D-218 终态） ----
+// ---- 作废（R5-D-218 最终状态） ----
 function openVoid(row) {
   voidRow.value = row
   voidReason.value = ''

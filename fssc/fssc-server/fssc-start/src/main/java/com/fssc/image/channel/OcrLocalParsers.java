@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.channel;
 
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +44,7 @@ import org.w3c.dom.NodeList;
  *   <li>{@code .ofd}：OFD 本质是 ZIP，零第三方依赖（{@link ZipInputStream} + 内置 DOM）——
  *       优先读数电票内嵌 XML（{@code Doc_0/Attachs/TTSRCdata.xml} 等 {@code *TTSRC*}/{@code *invoice*}.xml）
  *       按标准节点映射；无内嵌 XML 则拼接 {@code Content.xml} 的 {@code TextCode} 文本后走中文标签正则；</li>
- *   <li>{@code .xml}：电子发票服务平台下载的数电票原始 XML，内置 DOM（禁 DTD 防 XXE）按本地名同义词表容错映射；</li>
+ *   <li>{@code .xml}：电子发票服务平台下载的数电票原始 XML，内置 DOM（禁 DTD 防 XXE）按本地名同义名称表容错映射；</li>
  *   <li>图片（jpg/png/...）不在此处理，维持走 {@link OcrChannel}（mock/http）。</li>
  * </ul>
  *
@@ -81,7 +84,7 @@ public final class OcrLocalParsers {
             "价\\s*税\\s*合\\s*计[^0-9]*([0-9][0-9,]*\\.?[0-9]*)");
     private static final Pattern P_TOTAL_AMOUNT_FALLBACK = Pattern.compile(
             "总\\s*额?\\s*[^0-9]*([0-9][0-9,]*\\.?[0-9]*)");
-    /** 运输/住宿票据末段金额兜底：票价/客票款/车票款/机票款/行程单/收费/费用 ￥317.50（客运类票面无"合计/小写"列） */
+    /** 运输/住宿票据末段金额默认处理：票价/客票款/车票款/机票款/行程单/收费/费用 ￥317.50（客运类票面无"合计/小写"列） */
     private static final Pattern P_AMOUNT_FARE = Pattern.compile(
             "(?:票\\s*价|客\\s*票\\s*款|车\\s*票\\s*款|机\\s*票\\s*款|行\\s*程\\s*单|收\\s*费|费\\s*用)\\s*[:：]?\\s*[¥￥]?\\s*([0-9][0-9,]*\\.?[0-9]*)");
     /** 名称捕获：非贪婪到行尾/下一标签前，避免把同行混入的"销 名称：…"或密文一并吞入（PDF 文本层购买/销售方可能同行） */
@@ -93,7 +96,7 @@ public final class OcrLocalParsers {
     private static final Pattern P_ITEM_STAR = Pattern.compile("\\*\\s*([^\\r\\n*]{1,40}?)\\s*(?:\\*|\\r?\\n)");
     private static final Pattern P_TAX_NO = Pattern.compile(
             "(?:统一社会信用代码|纳税人识别号|纳税人识别码|税号)[^0-9A-Za-z]*([0-9A-Za-z]{15,20})");
-    /** 标签兜底：货物或应税劳务、服务名称 后的首行文本（退化为取首出现，若被表头杂质命中则由 isItemNameUsable 过滤） */
+    /** 标签默认处理：货物或应税劳务、服务名称 后的首行文本（退化为取首出现，若被表头杂质命中则由 isItemNameUsable 过滤） */
     private static final Pattern P_ITEM_LABEL = Pattern.compile(
             "货物或应税劳务[、，]?\\s*服务名称?[^\\r\\n]{0,16}\\r?\\n\\s*([^\\r\\n]{2,40})");
     /** 数电票/OFD XML 中货物行节点名（含命名空间无关），按序取首 */
@@ -355,7 +358,7 @@ public final class OcrLocalParsers {
         return null;
     }
 
-    /** 取数电票/OFD XML 首条货物或应税劳务、服务名称（按节点名同义词表取首个可用值） */
+    /** 查询电票/OFD XML 首条货物或应税劳务、服务名称（按节点名同义名称表取首个可用值） */
     static String firstGoodsName(Document doc) {
         for (String name : ITEM_NAME_NODES) {
             NodeList nodes = doc.getElementsByTagNameNS("*", name);
@@ -375,7 +378,7 @@ public final class OcrLocalParsers {
         return null;
     }
 
-    /** 中文标签文本兜底：取首条货名（优先 *大类*具体名* 星号对的具体名，退化 *大类* 星号形式或标签后首行）。
+    /** 中文标签文本默认处理：取首条货名（优先 *大类*具体名* 星号对的具体名，退化 *大类* 星号形式或标签后首行）。
      *  仅在"货物或应税劳务"标签之后搜索——该标签前的文本是发票密文区，含 *xxx+ 等伪星号，会污染货名 */
     static String extractPrimaryItemName(String text) {
         if (text == null || text.isBlank()) {
@@ -484,7 +487,7 @@ public final class OcrLocalParsers {
 
     /**
      * 电子发票服务平台下载的数电票原始 XML 解析。DOM（{@link #parseXml} 已禁 DTD，防 XXE：含 DOCTYPE
-     * 或外部实体的恶意 XML 直接解析失败，不读取外部资源）。节点名容错：按本地名在同义词表内匹配，
+     * 或外部实体的恶意 XML 直接解析失败，不读取外部资源）。节点名容错：按本地名在同义名称表内匹配，
      * 不依赖精确路径（namespace-aware {@code getElementsByTagNameNS("*", name)}，无命名空间时退化限定名）。
      * 输出：invoiceCode 置空串、rawText=关键节点拼接文本；解析异常/无票号 → ok=false（不抛穿）。
      */
@@ -538,7 +541,7 @@ public final class OcrLocalParsers {
         return r;
     }
 
-    /** 关键节点拼接文本（留痕 + 票种推断用）：票面标题 + 号码/日期/购销方/价税合计 */
+    /** 关键节点拼接文本（记录 + 票种推断用）：票面标题 + 号码/日期/购销方/价税合计 */
     private static String buildXmlRawText(String title, OcrResult r) {
         StringBuilder sb = new StringBuilder();
         if (title != null) {
@@ -562,7 +565,7 @@ public final class OcrLocalParsers {
         return sb.toString().trim();
     }
 
-    // ===================== 中文标签正则解析（纯函数，PDF 与 OFD 文本兜底共用） =====================
+    // ===================== 中文标签正则解析（纯函数，PDF 与 OFD 文本默认处理共用） =====================
 
     /**
      * 从票据纯文本按中文标签抽取票面字段（数电票版式文本顺序稳定，容错空格与全/半角冒号）。
@@ -604,7 +607,7 @@ public final class OcrLocalParsers {
             amount = group(P_TOTAL_AMOUNT_FALLBACK, text);
         }
         if (amount == null) {
-            amount = group(P_AMOUNT_FARE, text); // 交通/住宿票面无"合计/小写"列时按票价/客票款兜底
+            amount = group(P_AMOUNT_FARE, text); // 交通/住宿票面无"合计/小写"列时按票价/客票款默认处理
         }
         r.setAmount(OcrFieldMapper.toDecimal(amount));
 
@@ -779,7 +782,7 @@ public final class OcrLocalParsers {
                 || (t.contains("车站") && (t.contains("车次") || t.contains("候车")))) return T_TRAIN;
         // 增值税专用发票
         if (t.contains("专用发票") || t.contains("增值税专用")) return T_VAT_SPECIAL;
-        // 含"增值税"字样即归增值税族（票面被拆行时也能兜底）：电子→数电,普通→普票
+        // 含"增值税"字样即归增值税族（票面被拆行时也能默认处理）：电子→数电,普通→普票
         if (t.contains("增值税")) {
             if (t.contains("普通") && !t.contains("电子")) return T_VAT_NORMAL;
             return t.contains("电子") || t.contains("数电") || t.contains("全电") ? T_ELECTRONIC : T_VAT_NORMAL;

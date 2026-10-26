@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="header-badges">
     <!-- 全局搜索触发器 -->
@@ -7,7 +10,7 @@
       </el-button>
     </el-tooltip>
 
-    <!-- 通知铃铛不在这里：NotificationCenter 自带弹层触发器，两处各挂一个铃铛会重复渲染（且角标口径不一） -->
+    <!-- 通知铃铛不在这里：NotificationCenter 自带弹层触发器，两处各挂一个铃铛会重复渲染（且角标规则不一） -->
 
     <!-- 待办角标 -->
     <el-tooltip content="待办任务" placement="bottom">
@@ -39,7 +42,7 @@ let pollTimer = null
 
 async function fetchCounts() {
   try {
-    // silent：30s 轮询失败不走全局错误弹窗（避免 toast 风暴），由横幅与下次轮询兜底
+    // silent：30s 轮询失败不走全局错误弹窗（避免 toast 风暴），由横幅与下次轮询默认处理
     const todo = await wfApi.todo(null, { silent: true })
     todoCount.value = Array.isArray(todo) ? todo.length : (todo?.total || 0)
   } catch { /* 后端不可达不阻塞 */ }

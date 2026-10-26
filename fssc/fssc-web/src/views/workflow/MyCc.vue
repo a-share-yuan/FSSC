@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="my-cc">
     <el-card shadow="never">
@@ -103,7 +106,7 @@ function open(row) {
   if (!goBizPage(router, row)) {
     // D-DEC-197：抄送抽屉必须按「本条抄送记录的 bizType + bizId」精确取链。
     // 早先兜到 row.id（wf_cc 自身主键）等于把抄送记录 id 当单据主键送去联查，
-    // 与他域主键撞号时打开的就是别人的单据全链（含他人审批意见）——宁可不打开，也不能猜锚点。
+    // 与他域主键撞号时打开的就是别人的单据全链（含他人审批意见）——宁可不打开，也不能猜关联点。
     const bizId = row.bizId != null ? row.bizId : row.billId
     if (bizId == null || !row.bizType) {
       ElMessage.warning('该抄送记录缺少单据域或单据主键，无法定位全链路；请从原单据的「追溯」入口进入')

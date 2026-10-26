@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.document.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -41,7 +44,7 @@ public class ArchiveService {
     private final com.fssc.system.service.NumberRuleService numberRuleService;
     private final com.fssc.framework.facade.BillFacade billFacade;
     /**
-     * D-DEC-028：读档案时把「归档审批流自身」的实例号富化出来（只读 wf_instance，不写任何流程表）。
+     * D-DEC-028：读档案时把「归档审批流自身」的实例号补充出来（只读 wf_instance，不写任何流程表）。
      * 用视图而非引擎门面——档案页只需要"这条卷是被哪次审批定论的"，不需要驱动能力。
      */
     private final WfInstanceMapper wfInstanceMapper;
@@ -59,18 +62,18 @@ public class ArchiveService {
     private final com.fssc.sharing.service.DeliveryService deliveryService;
 
     /**
-     * 档案类型权威词表（RA-D255a，2026-09-27 REF-C 判类＝<b>闭集枚举</b>）：
+     * 档案类型权威名称表（RA-D255a，2026-09-27 REF-C 判类＝<b>闭集枚举</b>）：
      * 前 8 项与前端 {@code ArchiveBoard.vue} 的 {@code archiveTypeLabel} 同一套；D-DEC-005 加的
      * {@code BANK_SLIP}/{@code SUPPLIER} 两类是「非单据载体」登记用，前端标签暂缺（列表回落显示原码），
      * 补标签属前端文件改动、不在本轮范围。
      *
      * <p><b>为什么不建"可配置档案"表位</b>：库里 {@code sys_dict_type} 仅 1 行、{@code sys_dict_data} 仅 3 行
-     * （全是 expense_type），档案域两列从未接字典 ⇒ 厂商那套"集团维护的可配置档案"在我方只有骨架没有实现，
+     * （全是 expense_type），档案域两列从未接字典 ⇒ 所谓"集团维护的可配置档案"在我方只有骨架没有实现，
      * 走它属扩工程且要写库（升人工裁决 ④ 组）。普查见
-     * {@code 人工测试/已裁RA35条_厂商做法参考与落码对齐册_20260927.md} §七·二。
+     * 人工裁决册 RA35 §七·二。
      *
      * <p> 已知不一致（<b>只登记、不改 DDL</b>，改列注释属 DDL 需另裁）：{@code op_archive.archive_type}
-     * 的列注释只写 5 项（BILL/VOUCHER/CONTRACT/REPORT/OTHER），库里却在用 EXPENSE 7 行——列注释不是权威词表。
+     * 的列注释只写 5 项（BILL/VOUCHER/CONTRACT/REPORT/OTHER），库里却在用 EXPENSE 7 行——列注释不是权威名称表。
      * 历史行一律不回写（演练数据保留铁律），本白名单只挡新增。
      */
     static final java.util.Set<String> ARCHIVE_TYPES = java.util.Set.of(
@@ -79,7 +82,7 @@ public class ArchiveService {
             // SUPPLIER 是供应商载体；BILL/EXPENSE/PAYMENT 的既有语义与回写白名单一字未动。
             "BANK_SLIP", "SUPPLIER");
 
-    /** 词表守卫：不在集内的取值直接拒（不静默清洗成默认值——清洗会把错值变成"看不见的错值"）。D-DEC-005：三条立卷入口＋回单登记入口共用 */
+    /** 名称表守卫：不在集内的取值直接拒（不静默清洗成默认值——清洗会把错值变成"看不见的错值"）。D-DEC-005：三条立卷入口＋回单登记入口共用 */
     public static String assertArchiveType(String archiveType) {
         String v = archiveType == null ? null : archiveType.trim().toUpperCase();
         if (v == null || !ARCHIVE_TYPES.contains(v)) {
@@ -91,12 +94,13 @@ public class ArchiveService {
 
     /**
      * D-DEC-095（12-22:113）／D-DEC-021（12-08:69）：<b>回写白名单的唯一权威</b>——
-     * 词表里「{@code bill_id}/{@code ref_id} 语义＝{@code exp_bill} 主键」的那一类。
+     * 名称表里「{@code bill_id}/{@code ref_id} 语义＝{@code exp_bill} 主键」的那一类。
      *
      * <p>逐类判据（按建卡入口实测，不按猜）：
      * <ul>
      *   <li>{@code BILL}＝{@code BillArchiveService.doArchive/eArchiveBill} 写入，{@code ref_id}＝单据主键 ✔</li>
      *   <li>{@code EXPENSE}＝UI「新建档案目录→报销凭证」默认类型（{@code ArchiveController} 立卷入参），
+     *       {@code bill_id}＝{@code ref_id}＝单据主键 ✔（D-DEC-278 A1 已放行，本处只是将同一规则收拢到一处）</li>
      *   <li>{@code PAYMENT}＝付款/结算类档案。本系统付款单/对公结算单<b>本身就在 {@code exp_bill}</b>
      *       （{@code bill_type} APPLY/CLAIM/LOAN/REPAY/PAY，FK/HK 单号），与 {@code BILL}/{@code EXPENSE} 同类目 ✔</li>
      *   <li>{@code VOUCHER}＝凭证主键、{@code CONTRACT}＝{@code cont_contract} 主键、{@code INVOICE}＝发票主键、
@@ -167,7 +171,7 @@ public class ArchiveService {
     }
 
     /**
-     * D-DEC-048（12-16:60）：判重视为<b>在册/在途</b>的归档状态（真相源 {@code archive_status} 轴，
+     * D-DEC-048（12-16:60）：判重视为<b>现有/在途</b>的归档状态（真相源 {@code archive_status} 轴，
      * 定列依据见 {@code OpArchive.archiveStatus} 的 D-DEC-182 注释）。
      *
      * <p><b>DISPOSED 不在集内＝销毁后允许重新立卷</b>：原卷已销毁、载体已下架，同一单据再立一卷
@@ -178,7 +182,7 @@ public class ArchiveService {
             java.util.Set.of("PENDING", "ARCHIVING", "ARCHIVED");
 
     /**
-     * D-DEC-048：按<b>来源单据键</b>查出该单据仍存在的在册/在途卷（空列表＝可立卷）。
+     * D-DEC-048：按<b>来源单据键</b>查出该单据仍存在的现有/在途卷（空列表＝可立卷）。
      *
      * <p><b>键的取法</b>：{@code ref_id} 与 {@code bill_id} 二者命中任一即算同一单据——
      * {@code BillArchiveService.doArchive}（影像归档链路）只写 ref_id，
@@ -186,18 +190,18 @@ public class ArchiveService {
      *
      * <p><b>类型维度</b>：{@code BILL}/{@code EXPENSE}/{@code PAYMENT} 三类的 ref 都指 {@code exp_bill}
      * 主键（判据见 {@link #BILL_SCOPED_ARCHIVE_TYPES} 注释）⇒ 必须<b>跨这三类</b>判重，
-     * 否则新建档案目录时把类型从「报销凭证」改成「单据档案」就绕开了闸（原 D-DEC-276b 的实现正是
+     * 否则新建档案目录时把类型从「报销凭证」改成「单据档案」就绕开了校验（原 D-DEC-276b 的实现正是
      * 按 (archive_type, ref_id) 精确判，所以「同一单据可无限次重复立卷」在换类型下依旧成立）；
      * 其余类型（VOUCHER/CONTRACT/INVOICE/REPORT/OTHER）的 ref 指各域主键，裸主键跨域必串号
      * （D-DEC-244／261 同族），只能在<b>同 archive_type</b> 内判重。
      *
      * <p><b>租户维度</b>：{@code op_archive} 非忽略表，{@code FsscTenantLineHandler} 自动追加
      * {@code tenant_id} 条件，{@code @TableLogic} 自动过滤 del_flag ⇒ 本查询天然按租户＋未作废行判重，
-     * 无需手工条件（手工加会与拦截器各写一套、留下漏网口径）。
+     * 无需手工条件（手工加会与拦截器各写一套、留下漏网规则）。
      *
-     * <p><b>无来源键＝不判重</b>：控制器在「关联单据」留空时兜的是 {@code 0L}（H-04 的解析口径），
+     * <p><b>无来源键＝不判重</b>：控制器在「关联单据」留空时兜的是 {@code 0L}（H-04 的解析规则），
      * 这类卷没有来源单据，不存在"同一单据重复立卷"可言；改前按 {@code ref_id=0} 判重，
-     * 会把第二张<b>无来源</b>的卷也拦下——那是误伤，不是本条要的闸。
+     * 会把第二张<b>无来源</b>的卷也拦下——那是误伤，不是本条要的校验。
      */
     public List<OpArchive> findLiveVolumes(Long sourceId, String archiveType) {
         if (sourceId == null || sourceId <= 0L) {
@@ -216,10 +220,10 @@ public class ArchiveService {
     }
 
     /**
-     * D-DEC-048：立卷前的重复硬闸——已有在册/在途卷即拒绝，并把<b>原卷号</b>如实报出来
+     * D-DEC-048：立卷前的重复强制校验——已有现有/在途卷即拒绝，并把<b>原卷号</b>如实报出来
      * （改前的文案只说"已立卷 N 次"，经办人拿着报错既找不到原卷、也做不了后续处置）。
      *
-     * <p>存量重复行不回写、不删除（演练数据保留铁律），本闸只挡新增。
+     * <p>历史重复行不回写、不删除（演练数据保留铁律），本校验只挡新增。
      */
     private void assertNoLiveVolumeForSource(Long sourceId, String archiveType) {
         List<OpArchive> live = findLiveVolumes(sourceId, archiveType);
@@ -239,7 +243,7 @@ public class ArchiveService {
                         + "。如需重新立卷，请先处置原卷（删除登记或执行销毁）——已销毁的卷不再占用键位");
     }
 
-    /** 归档状态→人话（与前端 ArchiveBoard.vue archStatusLabel、ArchivePage.vue ARCH_STATUS_LABEL 同一套词表） */
+    /** 归档状态→人话（与前端 ArchiveBoard.vue archStatusLabel、ArchivePage.vue ARCH_STATUS_LABEL 同一套名称表） */
     private static String archiveStatusLabel(String archiveStatus) {
         if (archiveStatus == null || archiveStatus.isBlank()) {
             return "未归档";
@@ -256,7 +260,7 @@ public class ArchiveService {
     @Transactional(rollbackFor = Exception.class)
     public Long createArchive(Long billId, String archiveType, Integer archiveYear,
                               String archivePeriod, Integer retentionPeriod) {
-        // 必填守卫（前端 ARCHIVE_CREATE 登记表同口径）：年度/期间/保管期限决定到期销毁日期，
+        // 必填守卫（前端 ARCHIVE_CREATE 登记表同一规则）：年度/期间/保管期限决定到期销毁日期，
         // 缺失时原逻辑按「当年 + 10 年」推算，等于凭默认值立卷。
         if (archiveType == null || archiveType.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择档案类型");
@@ -274,8 +278,8 @@ public class ArchiveService {
         if (retentionPeriod == null || retentionPeriod <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择保管期限");
         }
-        // D-DEC-276b（B2，2026-09-28 已裁）＋ D-DEC-048（12-16:60）：同一来源单据已有在册/在途卷时拒绝再次立卷。
-        // 判重口径已收拢到 assertNoLiveVolumeForSource() 单点（三条立卷入口共用，见该方法注释）。
+        // D-DEC-276b（B2，2026-09-28 已裁）＋ D-DEC-048（12-16:60）：同一来源单据已有现有/在途卷时拒绝再次立卷。
+        // 判重规则已收拢到 assertNoLiveVolumeForSource() 单点（三条立卷入口共用，见该方法注释）。
         assertNoLiveVolumeForSource(billId, archiveType);
         // D-DEC-005：bill_id 只对「ref 就是 exp_bill 主键」的那几类落值；非单据载体只落 ref_id＋类型，
         // 否则合同/供应商主键会挂进单据联查（getByBillId／findByBillId）里冒充某张单据的档案。
@@ -285,7 +289,7 @@ public class ArchiveService {
         archive.setArchiveNo(nextArchiveNo(archiveType));
         // D-DEC-184（12-31:162）：archive_code 列注释即「档案编码(冗余)」，此前人工立卷路径从不写它
         // （只有 autoArchive 写，且写的是 100 秒内必重的时间戳后 5 位）⇒ 实测该列大面积 NULL。
-        // 现取「编号镜像」口径：唯一性由 uk_tenant_archive_no 保证，编码不再另起一套号源。
+        // 现取「编号镜像」规则：唯一性由 uk_tenant_archive_no 保证，编码不再另起一套号源。
         archive.setArchiveCode(archive.getArchiveNo());
         archive.setRefId(billId);
         archive.setArchiveType(archiveType);
@@ -295,28 +299,28 @@ public class ArchiveService {
         // 依据《会计档案管理办法》：保管期限从会计年度终了后的第一天算起 →
         // destroyDate = (archiveYear + retentionYears + 1) 年 1 月 1 日。
         // 此前不设 destroy_date 导致销毁申请强校验"未设置到期销毁日期，禁止销毁"。
-        // 年度/保管年限的"未填即兜当年/10 年"已在上面的必填守卫处收口，不再凭默认值立卷。
+        // 年度/保管年限的"未填即兜当年/10 年"已在上面的必填守卫处办结，不再凭默认值立卷。
         int retention = retentionPeriod;
         archive.setRetentionYears(retention);
         archive.setDestroyDate(destroyDateOf(archiveYear, null, retention));
         archive.setArchiveStatus("PENDING");
-        // D-DEC-182：status 列不再由各写入点随手填，一律由真相源 archive_status 映射（同库默认 FILED 一致）
+        // D-DEC-182：status 列不再由各写入位置随手填，一律由真相源 archive_status 映射（同库默认 FILED 一致）
         archive.setStatus(dispositionOf(archive.getArchiveStatus()));
         archive.setIntegrityStatus("UNKNOWN");
-        // D-DEC-276a（A1，2026-09-28 已裁）：立卷动作本身必须留下"谁立的卷"。行业方案〔FSSC·1034/1033/1338〕
-        // 的归档记录把「归档人/归档时间/创建人」做成固定栏位，而非事后备注；此前本方法从不写这两列，
+        // D-DEC-276a（A1，2026-09-28 已裁）：立卷动作本身必须留下"谁立的卷"。
+        // 归档记录把「归档人/归档时间/创建人」做成固定栏位，而非事后备注；此前本方法从不写这两列，
         // 实测 archive_type='EXPENSE' 的 8 行 filing_user_id 全空（BILL 路径由 BillArchiveService 写）。
         // 无登录上下文时保持 NULL，不造假人。
         archive.setFilingUserId(userId());
         archive.setFilingTime(LocalDateTime.now());
         // 缺陷12(20260918)：创建档案目录未落 company_id，而档案列表按登录人公司过滤(OrgGuard.enforceCompany)，
-        // 导致创建者本人也看不到刚建的档案（本公司用户均不可见）。此处按当前登录人公司落值，与列表过滤口径一致。
+        // 导致创建者本人也看不到刚建的档案（本公司用户均不可见）。此处按当前登录人公司落值，与列表过滤规则一致。
         com.fssc.framework.security.LoginUser _cu = com.fssc.framework.security.UserContext.get();
         if (_cu != null && _cu.getCompanyId() != null) {
             archive.setCompanyId(_cu.getCompanyId());
         }
         // D-TRC-05：立卷时回溯来源单据的审批流程实例。手工立卷的 billId 是自由文本、不带域标识，
-        // 口径与 TRC-C 回填一致＝按 exp_bill 主键反查；查不到（非费用单据或输错）留 NULL。
+        // 规则与 TRC-C 回填一致＝按 exp_bill 主键反查；查不到（非费用单据或输错）留 NULL。
         if (billCarrier) {
             com.fssc.framework.facade.dto.BillArchiveDTO srcBill =
                     billId == null ? null : billFacade.findBillForArchive(billId);
@@ -346,7 +350,7 @@ public class ArchiveService {
             throw new BizException(ErrorCode.PARAM_INVALID, "档案不存在: " + archiveId);
         }
         String cur = archive.getArchiveStatus();
-        // D-DEC-027／D-DEC-181 状态机硬闸：FM_ARCHIVE 审批在途不得重复发起（每次点都会新起一条实例）。
+        // D-DEC-027／D-DEC-181 状态机强制校验：FM_ARCHIVE 审批在途不得重复发起（每次点都会新起一条实例）。
         // 判据用引擎实况而非只看列值——流程管理员 cancelInstance 作废实例不发布收尾事件（WfEngineFacade:3023），
         // 只看 ARCHIVING 会把档案永久锁死在途态（D-DEC-20 那类"永久不可办"）；无在办任务即放行重驱动。
         // 引擎查询异常时 fail-open（宁可重驱动，不可卡死）。已销毁档案一律不得再归档。
@@ -358,18 +362,18 @@ public class ArchiveService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "档案 " + archive.getArchiveNo() + " 已销毁，不得再执行归档");
         }
-        // ARCHIVED 行不拦：反归档（unarchive）全仓未实现，放开重执行是历史终态卷唯一的整改入口；
-        // 要不要收紧属产品裁决（D-DEC-048 的立卷判重闸 assertNoLiveVolumeForSource 与此无关——
+        // ARCHIVED 行不拦：反归档（unarchive）全仓未实现，放开重执行是历史最终状态卷唯一的整改入口；
+        // 要不要收紧属产品裁决（D-DEC-048 的立卷判重校验 assertNoLiveVolumeForSource 与此无关——
         // 它拦的是"同一单据再建一张卷"，这里放行的是"同一张卷重跑归档审批"，两码事）。
-        // D-DEC-027（12-09A:56）／D-DEC-181（12-31:159）：执行归档不再落终态。
+        // D-DEC-027（12-09A:56）／D-DEC-181（12-31:159）：执行归档不再落最终状态。
         // 本方法随后就发 FM_ARCHIVE 审批流（下方 wfEngineFacade.start），此刻三节点一个没办，
         // 原先却已把 archive_status=ARCHIVED、integrity_status=VERIFIED、archived_at 全写完，
         // 审批闭环只剩"把同样的值再写一遍"（实测 3 节审批仅 update_time 变化），驳回也没有回退。
         // 现改为只进中间态 ARCHIVING（op_archive.archive_status 既有枚举 PENDING/ARCHIVING/ARCHIVED/DISPOSED，
-        // 见 fssc_op_archive.sql L51，未新增取值；追溯链 archivedCount 已按"PENDING/ARCHIVING 不计"口径实现），
-        // 终态 ARCHIVED／archived_at／VERIFIED 与源单据回写一律由审批闭环 ArchiveFacadeImpl.handleArchiveApproval 落。
+        // 见 fssc_op_archive.sql L51，未新增取值；追溯链 archivedCount 已按"PENDING/ARCHIVING 不计"规则实现），
+        // 最终状态 ARCHIVED／archived_at／VERIFIED 与源单据回写一律由审批闭环 ArchiveFacadeImpl.handleArchiveApproval 落。
         archive.setArchiveStatus("ARCHIVING");
-        // D-DEC-182：真相源每次跃迁都同源回写镜像列（顺带把历史行里写进 status 的错轴取值纠正回本轴词表）
+        // D-DEC-182：真相源每次跃迁都同源回写镜像列（顺带把历史行里写进 status 的错轴取值纠正回本轴名称表）
         archive.setStatus(dispositionOf(archive.getArchiveStatus()));
         // D-DEC-184／D-DEC-185：执行归档前按来源单据把仍缺的目录要素补齐（只补空、不覆盖真值）。
         // 276a/184 上线前立的历史卷 archive_code/ref_no/title/period_year/period_month 多是半套，
@@ -390,12 +394,12 @@ public class ArchiveService {
         // "生效"＝审批闭环通过，而非点击执行。原前置写 markSourceBillArchived() 已从此处摘除，
         // 由 handleArchiveApproval 在同一语义下回写（同一白名单 ArchiveService.isBillScopedType）。
         // exp_bill.archive_status 只有 UNARCHIVED/ARCHIVED 两值（fssc_exp_bill.sql L76），无中间态可用，
-        // 且不得新造取值 ⇒ 审批在途期间单据侧保持 UNARCHIVED（不置位），终态才 ARCHIVED。
+        // 且不得新造取值 ⇒ 审批在途期间单据侧保持 UNARCHIVED（不置位），最终状态才 ARCHIVED。
         // 接线 M1 FM_ARCHIVE 凭证归档审批流：执行归档即发起归档审批
         try {
             // D-DEC-028：起流的返回值就是「档案自身的审批实例号」。表上暂无列可存（加列属 DDL 裁决，
             // 注释态 SQL 见 OpArchive 类注释），先如实记进日志；读侧由 fillArchiveFlowKey 从
-            // wf_instance 富化出同一个值，档案反查归档审批链由此拿到明确可点的键。
+            // wf_instance 补充出同一个值，档案反查归档审批链由此拿到明确可点的键。
             // D-DEC-185（12-31:163）后半：流程标题不再拿 biz_id 凑名——实测 wf_instance.title=「凭证归档-24」
             // 这种串既看不出是哪张单、也对不上任何业务号，审批人在待办里无从核对。
             // 取真名的优先序：档案标题（立卷时已按来源单据真名补齐，见 fillCatalogFromSourceBill）
@@ -464,11 +468,11 @@ public class ArchiveService {
      * 按 proc_inst_id 回溯）与 {@code ArchiveFacadeImpl.findByProcInstIds} 都靠它；
      * 就地翻成归档实例＝正向联查当场断（D-DEC-240 那批补丁也会失效）。表上又只有这一列实例号，
      * 加列属 DDL 裁决（注释态 SQL 已写在 {@code OpArchive} 类注释里，未执行）。
-     * 故取 {@code OpPayBatch.payProcInstId}（D-DEC-114①）同法：<b>读侧按 biz_type＋biz_id 富化</b>，
+     * 故取 {@code OpPayBatch.payProcInstId}（D-DEC-114①）同法：<b>读侧按 biz_type＋biz_id 补充</b>，
      * 归档流自己的实例号从此可查、可点、可反查审批链，而既有正向链路一字未动。
      *
      * <p>一次批量查询（不按行循环打库），同一档案多轮归档实例时取 id 最大的一条＝最新一轮，
-     * 与 {@code PayBatchService.fillDisplayFields} 同口径。富化失败只记日志——档案列表不能因为
+     * 与 {@code PayBatchService.fillDisplayFields} 同一规则。补充失败只记日志——档案列表不能因为
      * 一个附加列取不到而打不开。
      */
     private void fillArchiveFlowKey(List<OpArchive> archives) {
@@ -531,9 +535,9 @@ public class ArchiveService {
     }
 
     /**
-     * D-DEC-185（读侧挂点对外入口）：把「归档审批流自身」的实例号与状态富化进档案行。
+     * D-DEC-185（读侧挂点对外入口）：把「归档审批流自身」的实例号与状态补充进档案行。
      * 供档案域之外的档案列表端点（如共享作业 {@code SharingEnhanceService.archivePage}，
-     * 即「档案归档」页的已归档档案 Tab）复用，避免各端点各自决定要不要挂 028 的富化。
+     * 即「档案归档」页的已归档档案 Tab）复用，避免各端点各自决定要不要挂 028 的补充。
      * <b>只读 wf_instance，不写任何流程表，也不翻转 {@code proc_inst_id} 的源单据语义。</b>
      */
     public void enrichFlowKey(List<OpArchive> archives) {
@@ -563,7 +567,7 @@ public class ArchiveService {
      * （{@link #applyKeywordArms}，D-DEC-184 定下的五列面），不新增也不删减任何一列。
      *
      * <p><b>与 {@link #search} 的唯一差别（也正是本方法的用途所在）</b>：{@code search} 是
-     * "档案检索"口径，硬性只出 {@code ARCHIVED}（184 检索面现状，不动）；本方法服务列表/选择器，
+     * "档案检索"规则，硬性只出 {@code ARCHIVED}（184 检索面现状，不动）；本方法服务列表/选择器，
      * 状态按入参决定（传空＝不限）⇒ 待归档（PENDING）、归档审批中（ARCHIVING）的卷号同样可被检索到，
      * 否则档案板上刚立的卷在选择器里输入自己的编号反而"不存在"。
      *
@@ -606,9 +610,9 @@ public class ArchiveService {
      *
      * <p>R5-D-199（读端点写库）：本方法由 GET {@code /{id}/verify} 进入，是<b>只读语义</b>——
      * 改前却在此 {@code updateById} 落 {@code integrity_status} 与 {@code update_time}
-     * （反复点「校验」即反复写状态、审计时间列被污染，且 GET 不幂等）。
+     * （反复点「校验」即反复写状态、审计时间列被污染，且 GET 不去重）。
      * 现有意<b>只算不写</b>：只重算比对并返回布尔，方法体内不含任何写库调用；
-     * 状态落库与校验人留痕一律走显式 POST {@code /{id}/verify}（{@link #verifyIntegrityFull}）。
+     * 状态写入数据库与校验人记录一律走显式 POST {@code /{id}/verify}（{@link #verifyIntegrityFull}）。
      *
      * <p>D-DEC-180：重算一律走 {@link ArchiveIntegrityService#snapshot}——与写入侧<b>同一套算式</b>，
      * 不再出现"写入用甲式、校验用乙式"的必然误报。
@@ -658,7 +662,7 @@ public class ArchiveService {
                 .orderByAsc(OpArchive::getDestroyDate);
         List<OpArchive> list = archiveCatalogMapper.selectList(qw);
         // D-DEC-185（读侧挂点补齐）：到期预警清单也是档案列表端点，同样带出归档审批流实例号，
-        // 否则只有 /page 与 /list 能反查归档链、这一份不能（028 段的富化挂点漏了一处）。
+        // 否则只有 /page 与 /list 能反查归档链、这一份不能（028 段的补充挂点漏了一处）。
         fillArchiveFlowKey(list);
         return list;
     }
@@ -666,7 +670,7 @@ public class ArchiveService {
     @Transactional(rollbackFor = Exception.class)
     public Long autoArchive(Long billId, String archiveType, Integer archiveYear,
                              String archivePeriod) {
-        // 与 createArchive 同一把尺（RA-D255a）：自动归档也不得写入词表外的类型
+        // 与 createArchive 同一把尺（RA-D255a）：自动归档也不得写入名称表外的类型
         archiveType = assertArchiveType(archiveType);
         // D-DEC-048（12-16:60）：本入口改前<b>零判重</b>——同一单据每点一次「自动归档」就多落一卷，
         // batchArchive 逐单循环又是按同一入口连发，"无限次重复立卷"的字面成因就在这一条上。
@@ -681,11 +685,11 @@ public class ArchiveService {
         // ① 100 秒窗口内必重码（batchArchive 逐单循环就在同一秒里连落多卷），
         // ② 老卷的 archive_code 大面积 NULL ⇒ 归档目录"档案编码"要素整列空（本条证据），
         // ③ 重码直接进完整性哈希输入 ⇒ 不同两卷同哈希（D-DEC-180 的漏报半边）。
-        // 现按 DDL 列注释「archive_code＝档案编码(冗余)」的既有语义做成编号镜像，唯一性由 uk_tenant_archive_no 兜底。
+        // 现按 DDL 列注释「archive_code＝档案编码(冗余)」的既有语义做成编号镜像，唯一性由 uk_tenant_archive_no 默认处理。
         archive.setArchiveNo(nextArchiveNo(archiveType));
         archive.setArchiveCode(archive.getArchiveNo());
         archive.setBillId(billCarrier ? billId : null);
-        // ref_id 为 NOT NULL 无默认值：与 createArchive 口径一致，来源单据即 ref
+        // ref_id 为 NOT NULL 无默认值：与 createArchive 规则一致，来源单据即 ref
         archive.setRefId(billId);
         archive.setArchiveType(archiveType);
         archive.setArchiveYear(archiveYear);
@@ -697,10 +701,10 @@ public class ArchiveService {
         archive.setIntegrityStatus("UNKNOWN");
         // D-DEC-021 第二半（上架登记字段回填）：本路径此前与 createArchive 不同——立卷人／立卷时间两列从不写，
         // 实测该类型行的 filing_user_id/filing_time 全空（D-DEC-276a 只覆盖了 createArchive 一条入口）。
-        // 同口径补齐：有登录上下文即落真人，无上下文保持 NULL，不造假人。
+        // 同一规则补齐：有登录上下文即落真人，无上下文保持 NULL，不造假人。
         archive.setFilingUserId(userId());
         archive.setFilingTime(LocalDateTime.now());
-        // D-TRC-05：同 createArchive 口径，按 exp_bill 主键反查来源审批流程实例，查不到留 NULL
+        // D-TRC-05：同 createArchive 规则，按 exp_bill 主键反查来源审批流程实例，查不到留 NULL
         if (billCarrier) {
             com.fssc.framework.facade.dto.BillArchiveDTO src = billFacade.findBillForArchive(billId);
             if (src != null) {
@@ -718,7 +722,7 @@ public class ArchiveService {
         // 落在目录要素补齐<b>之后</b>，因为 archive_year/period_year 到这一步才取得到来源真值。
         archive.setDestroyDate(destroyDateOf(archive.getArchiveYear(), archive.getPeriodYear(),
                 archive.getRetentionYears()));
-        // V1.4.92（AMC-05）：同人工立卷口径，按公司模式补「原件保管单位」
+        // V1.4.92（AMC-05）：同人工立卷规则，按公司模式补「原件保管单位」
         applyPaperKeeperDefault(archive);
         archiveCatalogMapper.insert(archive);
 
@@ -763,9 +767,9 @@ public class ArchiveService {
      *
      * <p>R5-D-199：本方法是<b>显式写端点</b>——由 POST {@code /{id}/verify} 进入，负责把校验结论
      * 持久化到 {@code integrity_status}（{@code update_time} 由框架 MetaObjectHandler 自动填，不手写）；
-     * 校验人（操作人）由控制器侧 {@code @OperLog} 落审计留痕，本处日志同样带上校验人。
+     * 校验人（操作人）由控制器侧 {@code @OperLog} 落审计记录，本处日志同样带上校验人。
      *
-     * <p>R5-D-208：三态结论随回执返回（status/verified/message）——历史档案未固化哈希属
+     * <p>R5-D-208：三态结论随响应返回（status/verified/message）——历史档案未固化哈希属
      * 「无法校验」（UNVERIFIABLE），改前被写成 MISMATCH（"疑似篡改"），把"没保住快照"误报成"被动了"。
      * 现该情形落 UNVERIFIABLE 独立状态，提示重新归档，不再冒充篡改结论。
      */
@@ -815,7 +819,7 @@ public class ArchiveService {
     }
 
     /**
-     * D-DEC-184（12-31:162）／D-DEC-256（核实册:325）：关键词检索臂的<b>唯一口径</b>——
+     * D-DEC-184（12-31:162）／D-DEC-256（核实册:325）：关键词检索臂的<b>唯一规则</b>——
      * 档案编码、<b>档案编号（真实卷号，256 的那一臂）</b>、关联单号、档案标题、载体清单五列 LIKE。
      *
      * <p>改前只 LIKE {@code archive_code}/{@code related_ids} 两列，而 archive_code 大面积 NULL、
@@ -836,7 +840,7 @@ public class ArchiveService {
         LambdaQueryWrapper<OpArchive> qw = new LambdaQueryWrapper<>();
         if (keyword != null && !keyword.isBlank()) {
             // D-DEC-184／D-DEC-256：检索面已含 archive_no（真实档案号）精确 LIKE 臂，
-            // "选择器/检索框输入真实档案号返 0 条"的读侧断点在此收口（口径见 applyKeywordArms）。
+            // "选择器/检索框输入真实档案号返 0 条"的读侧断点在此办结（规则见 applyKeywordArms）。
             applyKeywordArms(qw, keyword);
         }
         if (archiveType != null && !archiveType.isBlank()) {
@@ -888,12 +892,12 @@ public class ArchiveService {
      * D-DEC-182（12-31:160）：<b>两列二源</b>的唯一映射——{@code archive_status}（归档流程轴，真相源）
      * → {@code status}（保管处置轴，冗余镜像）。
      *
-     * <p>库里两列的既有词表（{@code fssc_op_archive.sql} 列注释，本轮不动 DDL）：
+     * <p>库里两列的既有名称表（{@code fssc_op_archive.sql} 列注释，本轮不动 DDL）：
      * <ul>
      *   <li>{@code archive_status}：PENDING/ARCHIVING/ARCHIVED/DISPOSED，默认 PENDING ——
      *           <b>参与业务判定的那一列</b>：档案列表筛选（{@link #page}／{@link #search}）、
      *           统计（{@link #getArchiveStats}）、到期预警（{@code ArchiveExpireJob:73}）、
-     *           单据全链路联查（{@code BillTraceChainController:819}）、执行归档状态机硬闸（{@link #archive}）
+     *           单据全链路联查（{@code BillTraceChainController:819}）、执行归档状态机强制校验（{@link #archive}）
      *           全部按它判 ⇒ 定为真相源。</li>
      *   <li>{@code status}：FILED已归档/EXPIRED到期/DESTROYED已销毁，NOT NULL DEFAULT 'FILED' ——
      *           案卷在架/到期/已销毁的<b>保管</b>语义，降级为镜像，取值一律由本方法派生。</li>
@@ -901,15 +905,15 @@ public class ArchiveService {
      *
      * <p><b>缺陷是怎么形成的</b>：{@code BillArchiveService.doArchive} 只写 {@code status='ARCHIVED'}
      * 而从不写 {@code archive_status}（于是库里落到默认 PENDING）⇒ 实测 id=21/22/23
-     * 「archive_status=PENDING 而 status=ARCHIVED」互斥；而「ARCHIVED」<b>根本不在 status 的词表里</b>
+     * 「archive_status=PENDING 而 status=ARCHIVED」互斥；而「ARCHIVED」<b>根本不在 status 的名称表里</b>
      * （它写的是另一轴的取值）⇒ 页面无从判断哪列是结论。修法＝doArchive 补写真相源 ARCHIVED
-     * （与它同事务里 {@code billFacade.markArchived} 的单据终态同口径），并按本映射写镜像。
+     * （与它同事务里 {@code billFacade.markArchived} 的单据最终状态同一规则），并按本映射写镜像。
      *
      * <p>不删列、不改列注释（DDL 需另裁）；历史行的旧值不回写（演练数据保留铁律），
-     * 存量互斥行只登记不清洗。
+     * 历史互斥行只登记不清洗。
      *
      * @param archiveStatus 真相源取值
-     * @return 镜像列取值；入参为 null 时返回 null＝交由库默认 {@code FILED} 兜底
+     * @return 镜像列取值；入参为 null 时返回 null＝交由库默认 {@code FILED} 默认处理
      */
     public static String dispositionOf(String archiveStatus) {
         if (archiveStatus == null || archiveStatus.isBlank()) {
@@ -924,7 +928,7 @@ public class ArchiveService {
     }
 
     /**
-     * 到期销毁日期的<b>唯一算式</b>（三条立卷写入点共用一把尺）。
+     * 到期销毁日期的<b>唯一算式</b>（三条立卷写入位置共用一把尺）。
      * 《会计档案管理办法》：保管期限自会计年度终了后的第一天起算 ⇒ {@code (年度 + 保管年限 + 1) 年 1 月 1 日}。
      * 改前人工立卷走年度式、自动归档走 {@code now()+保管年限}，两式对同一卷可差一年以上；
      * 单据归档链路则从不设，致销毁申请被「未设置到期销毁日期，禁止销毁」整批拦死。
@@ -959,8 +963,8 @@ public class ArchiveService {
      *
      * <p> 明确<b>不补</b>的一列：{@code file_id}——本域立卷动作没有文件载体（影像迁移在
      * {@code BillArchiveService.doArchive} 那条链路），无载体不造引用；该列恒 NULL 的根因是
-     * D-DEC-183「齐套类节点零闸口」（待裁：Task_1 是否强制要求 file_id 非空才可定稿），
-     * 属产品裁决＋闸口接线，不在本条范围内。
+     * D-DEC-183「齐套类节点零校验」（待裁：Task_1 是否强制要求 file_id 非空才可定稿），
+     * 属产品裁决＋校验接线，不在本条范围内。
      */
     private void fillCatalogFromSourceBill(OpArchive archive, com.fssc.framework.facade.dto.BillArchiveDTO src) {
         if (archive == null) {
@@ -997,7 +1001,7 @@ public class ArchiveService {
 
     /**
      * V1.4.92（AMC-05）：非集中档案模式下纸质原件留原单位 ⇒ 原件保管单位默认落档案归属公司；
-     * 集中模式原件已寄送共享中心，两列保持 NULL（不写"共享中心"占位，保管地点属人工登记口径）。
+     * 集中模式原件已寄送共享中心，两列保持 NULL（不写"共享中心"占位，保管地点属人工登记规则）。
      * 只补空、不覆盖人工已填值；两条人工/自动立卷入口与影像归档链路共用。
      */
     void applyPaperKeeperDefault(OpArchive archive) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -49,7 +52,7 @@ public class DashboardService {
     private final PrecheckResultMapper precheckResultMapper;
     private final ReviewLogMapper reviewLogMapper;
     private final OpAuditTaskMapper opAuditTaskMapper;
-    // WS-4 看板完整性：合同/发票/档案三卡取数源（租户拦截器自动注入 tenant_id）
+    // WS-4 看板完整性：合同/发票/档案三卡查询源（租户拦截器自动注入 tenant_id）
     private final ContContractMapper contContractMapper;
     private final InvInvoiceMapper invInvoiceMapper;
     private final OpArchiveMapper opArchiveMapper;
@@ -161,12 +164,12 @@ public class DashboardService {
 
     /**
      * 部门报销排行（金额降序）。
-     * D-F1R-04：原口径只按 {@code orgGuard.enforceCompany()} 做公司隔离，而接口只挂
+     * D-F1R-04：原规则只按 {@code orgGuard.enforceCompany()} 做公司隔离，而接口只挂
      * {@code dashboard:view}（没有额外数据权限）⇒ 任意持该权限的用户都看到全公司各部门排名，
      * 10-15 实测报销员工 Y000885 与共享会计 Y000185 返回<b>逐行完全相同</b>的结果。
-     * 现改为公司 + 部门/本人三级收口，范围由 {@code @DataScope} 入口写入
+     * 现改为公司 + 部门/本人三级办结，范围由 {@code @DataScope} 入口写入
      * {@link DataScopeHolder}（控制器 {@code DashboardController#deptRanking} 已补注解）。
-     * 公司口径保持 {@link OrgGuard#enforceCompany()} 不变，避免回归 R5-D-026 的公司隔离。
+     * 公司范围保持 {@link OrgGuard#enforceCompany()} 不变，避免回归 R5-D-026 的公司隔离。
      */
     public List<Map<String, Object>> expenseByDept() {
         Long companyId = orgGuard.enforceCompany();
@@ -174,7 +177,7 @@ public class DashboardService {
         return reportMapper.expenseByDept(companyId, sc.deptIds(), sc.userId());
     }
 
-    /** 审批时效：提交→审批通过平均分钟（按单据类型）。D-F1R-04 数据范围收口同 {@link #expenseByDept()} */
+    /** 审批时效：提交→审批通过平均分钟（按单据类型）。D-F1R-04 数据范围办结同 {@link #expenseByDept()} */
     public List<Map<String, Object>> approvalEfficiency() {
         Long companyId = orgGuard.enforceCompany();
         ScopeArgs sc = scopeArgs();
@@ -185,12 +188,12 @@ public class DashboardService {
 
     /**
      * 费用概览四枚指标：本月报销总额 / 待审单据数 / 已付金额 / 预算执行率(%)。
-     * 返回<b>单枚</b> Map、camelCase 键，供报表工作台的概览四格直接取数——
+     * 返回<b>单枚</b> Map、camelCase 键，供报表工作台的概览四格直接查询——
      * 原 expenseByStatus 是按「单据类型×状态」分组的明细数组，键也是 snake_case，
      * 概览卡按 camelCase 单值读必然读空，故另立一枚真汇总，不改既有分组接口契约。
-     * 口径对齐：总额取本会计期间的非草稿非作废单；待审取已提交＋审批中；
-     * 已付复用付款进度卡的 PAID 口径；执行率同 budgetExecution 的 used/(total+adjust)。
-     * 数据范围同 expenseByStatus（由持有 @DataScope 的入口写入 DataScopeHolder 后 applyScope 收口）。
+     * 规则对齐：总额取本会计期间的非草稿非作废单；待审取已提交＋审批中；
+     * 已付复用付款进度卡的 PAID 规则；执行率同 budgetExecution 的 used/(total+adjust)。
+     * 数据范围同 expenseByStatus（由持有 @DataScope 的入口写入 DataScopeHolder 后 applyScope 办结）。
      */
     public Map<String, Object> expenseOverview() {
         java.time.LocalDate today = java.time.LocalDate.now();
@@ -219,15 +222,17 @@ public class DashboardService {
         // 4) 预算执行率
         QueryWrapper<com.fssc.budget.entity.BgItem> bgQw = new QueryWrapper<>();
         bgQw.select("sum(total_amount) as total", "sum(adjust_amount) as adjust", "sum(used_amount) as used");
-        applyScope(bgQw, "company_id", "dept_id", null);
+        // 与同文件 budgetExecution()/导出 F-08 同一规则：bg_item 公司级下达行 dept_id 为 NULL，
+        // 部门级登录人若只按 in(子部门) 办结会一行不中 ⇒ 执行率恒 0（10-25 报表走查实测 320004）。
+        applyScope(bgQw, "company_id", "dept_id", null, true);
         List<Map<String, Object>> bgRows = bgItemMapper.selectMaps(bgQw);
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal adjust = BigDecimal.ZERO;
         BigDecimal used = BigDecimal.ZERO;
         if (bgRows != null && !bgRows.isEmpty()) {
-            // 【D-V4R-40】sum() 在"本人口径下一行都没命中"时，MySQL 仍回一行且三列全 NULL，
+            // 【D-V4R-40】sum() 在"本人规则下一行都没命中"时，MySQL 仍回一行且三列全 NULL，
             // MyBatis 把整行 NULL 映射成 list 里的一个 null 元素 ⇒ isEmpty()=false 而 get(0)=null，
-            // 原代码直接 row.get(...) 必 NPE，费用概览整卡 500（共享会计/部门口径下没有 bg_item 行时）。
+            // 原代码直接 row.get(...) 必 NPE，费用概览整卡 500（共享会计/部门规则下没有 bg_item 行时）。
             Map<String, Object> row = bgRows.get(0);
             if (row != null) {
                 total = toDecimal(row.get("total"));
@@ -373,7 +378,7 @@ public class DashboardService {
 
     /**
      * 档案进度：在途＝待归档/归档中(PENDING/ARCHIVING)；今日完成＝今日归档(ARCHIVED)。
-     * 超时无独立汇总口径（到期预警走 ArchiveExpireJob、不改列），返回 null ⇒ 前端显「－」。
+     * 超时无独立汇总方式（到期预警走 ArchiveExpireJob、不改列），返回 null ⇒ 前端显「－」。
      */
     public Map<String, Object> archiveProgress() {
         QueryWrapper<com.fssc.document.entity.OpArchive> qw = new QueryWrapper<>();
@@ -383,7 +388,7 @@ public class DashboardService {
         return progressRow(opArchiveMapper.selectMaps(qw), false);
     }
 
-    /** 进度三槽位归一：聚合恒一行，空集/空值回落 0；hasTimeout=false ⇒ timeout=null（该域无口径，前端显「－」）。 */
+    /** 进度三槽位归一：聚合恒一行，空集/空值回落 0；hasTimeout=false ⇒ timeout=null（该域无规则，前端显「－」）。 */
     private Map<String, Object> progressRow(List<Map<String, Object>> rows, boolean hasTimeout) {
         Map<String, Object> out = new HashMap<>();
         Map<String, Object> row = (rows == null || rows.isEmpty()) ? null : rows.get(0);
@@ -397,15 +402,16 @@ public class DashboardService {
 
     /**
      * 向聚合 QueryWrapper 追加数据范围条件（由持有 @DataScope 的入口方法写入 DataScopeHolder）。
+     * 参考 DataScopeKit，但适用于原生字符串列聚合查询（selectMaps）：
      * 1 本租户全量不加条件；2 公司=companyCol；3 部门及以下/4 本部门=deptCol（无部门降级公司）；
      * 5 仅本人=ownerCol（无本人列降级公司）。
      */
     /**
      * D-F1R-04：把 {@link DataScopeHolder} 里的范围翻译成 Mapper 需要的两个入参。
      * <p>只产出「部门集合 / 本人」，公司维由调用方按 {@link OrgGuard#enforceCompany()} 单独传 ——
-     * 公司口径是 R5-D-026 的既有行为，不与数据范围混算，避免改一处动两处。
+     * 公司范围是 R5-D-026 的既有行为，不与数据范围混算，避免改一处动两处。
      * <p>scope=1（本租户全部）/ 2（本公司）时两个入参都为 null：Mapper 的 {@code <if test='... != null'>}
-     * 不会追加条件，行为与改前完全一致，只对 3/4/5 级（部门及以下/本部门/仅本人）收口。
+     * 不会追加条件，行为与改前完全一致，只对 3/4/5 级（部门及以下/本部门/仅本人）办结。
      */
     private ScopeArgs scopeArgs() {
         DataScopeHolder.Scope s = DataScopeHolder.get();
@@ -420,7 +426,7 @@ public class DashboardService {
         }
         if (s.getScope() == DataScope.DEPT.getCode()) {
             // F-04：4 档（本部门）只取本部门，与 DataScopeKit.apply／ReportQueryController.resolveScope
-            // 同口径；原与 3 档共用 deptAndChild，导致 scope=4 的用户在部门排行/审批时效里看见子部门数据。
+            // 同一规则；原与 3 档共用 deptAndChild，导致 scope=4 的用户在部门排行/审批时效里看见子部门数据。
             return new ScopeArgs(s.getDeptId() == null ? null : Set.of(s.getDeptId()), null);
         }
         // 3 部门及以下：取 deptAndChild（无部门信息时按 null 处理＝不收窄）

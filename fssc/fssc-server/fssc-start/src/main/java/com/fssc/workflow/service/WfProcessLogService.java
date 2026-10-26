@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -16,9 +19,11 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 
 /**
+ * 流程处理详细日志（{@code wf_process_log}）——流程配置「详细日志开关」（参数 4.3）：
  * 「勾选后流程处理详细日志写 log 与流程日志（管理中心可查）」。
  *
- * <p><b>开关口径</b>：{@code sys_config.wf.log.detailed.enabled}，缺省 {@code 0}。
+ * <p><b>开关规则</b>：{@code sys_config.wf.log.detailed.enabled}，缺省 {@code 0}。
+ * 取 <b>fail-closed</b>（读不到即视为关闭）——与 {@code wf.reject.free.enabled} 同一规则：
  * 详细日志会成倍放大写入量，宁可少记不可默认打开。
  *
  * （每次直读 {@code sys_config}，走 config_key 索引）。事件频率＝审批动作频率（量级极低），

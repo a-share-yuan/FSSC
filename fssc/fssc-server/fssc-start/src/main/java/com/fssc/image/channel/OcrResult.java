@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.image.channel;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -20,9 +23,9 @@ public class OcrResult {
     /**
      * D-DEC-461（「已识别」的界面语义 ≠ 已入池）：票面是否真的进了发票池 {@code inv_invoice}。
      * <ul>
-     *  <li>{@link Boolean#TRUE}＝已在池（本次入池成功，或幂等命中改前已录）；</li>
+     *  <li>{@link Boolean#TRUE}＝已在池（本次入池成功，或去重命中改前已录）；</li>
      *  <li>{@link Boolean#FALSE}＝拿到票面但没进池（要素不全／金额不自洽／入池被拒），原因见 {@link #errorMsg}；</li>
-     *  <li>{@code null}＝未走落库入池链＝本地版式解析（OFD／XML／带文本层 PDF）只回填票面、不做入池，
+     *  <li>{@code null}＝未走写入数据库入池链＝本地版式解析（OFD／XML／带文本层 PDF）只回填票面、不做入池，
      *      或识别本身失败。前端不得把 null 当 false 用（两档出路不同）。</li>
      * </ul>
      * 判据一律在后端 {@code OcrService#recognizeAndRecord} 产出，不在前端重算（会两源漂移）。
@@ -48,7 +51,7 @@ public class OcrResult {
     private String buyerTaxNo;
     /** 首条货物或应税劳务、服务名称（取票面首要货名，用于报销按商品名智能匹配费用类型；空串表示未提取） */
     private String primaryItemName;
-    /** 识别全文/原始报文摘要（留痕，回填 img_file.ocr_text） */
+    /** 识别全文/原始报文摘要（记录，回填 img_file.ocr_text） */
     private String rawText;
 
     /** 扫描版 PDF 标记：true 表示无有效文本层，需转图像 OCR（非本地版式解析场景恒为 false）。不入库。 */

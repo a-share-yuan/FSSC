@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.service;
 
 import com.fssc.asset.entity.StockCostSettle;
@@ -47,7 +50,7 @@ public class StockCostSettleService {
         settle.setItemCount(moves.size());
         settle.setTotalAmount(total);
         settleMapper.insert(settle);
-        // P4-3 口径：结转批次由 newBatch 新建落库、无旧值，不接入审计（不伪造 before）
+        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         if (total.signum() > 0) {
             voucherService.generateStockCostVoucher(settle, "ISSUE_COST");
         }
@@ -68,7 +71,7 @@ public class StockCostSettleService {
         settle.setItemCount(moves.size());
         settle.setTotalAmount(total);
         settleMapper.insert(settle);
-        // P4-3 口径：结转批次由 newBatch 新建落库、无旧值，不接入审计（不伪造 before）
+        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         if (total.signum() > 0) {
             voucherService.generateStockCostVoucher(settle, "DISPOSAL_COST");
         }
@@ -90,7 +93,7 @@ public class StockCostSettleService {
         settle.setItemCount(moves.size());
         settle.setTotalAmount(total);
         settleMapper.insert(settle);
-        // P4-3 口径：结转批次由 newBatch 新建落库、无旧值，不接入审计（不伪造 before）
+        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         if (total.signum() > 0) {
             voucherService.generateStockCostVoucher(settle, "INTERNAL_SALE_COST");
         }
@@ -108,7 +111,7 @@ public class StockCostSettleService {
         settle.setItemCount(1);
         settle.setTotalAmount(BigDecimal.ZERO);
         settleMapper.insert(settle);
-        // P4-3 口径：结转批次由 newBatch 新建落库、无旧值，不接入审计（不伪造 before）
+        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         log.info("跌价准备结转: period={}, bizId={}", period, bizId);
     }
 
@@ -126,7 +129,7 @@ public class StockCostSettleService {
         settle.setItemCount(moves.size());
         settle.setTotalAmount(total);
         settleMapper.insert(settle);
-        // P4-3 口径：结转批次由 newBatch 新建落库、无旧值，不接入审计（不伪造 before）
+        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         if (total.signum() > 0) {
             voucherService.generateStockCostVoucher(settle, "CHECK_DIFF");
         }
@@ -162,7 +165,7 @@ public class StockCostSettleService {
             settle.setItemCount(moves.size());
             settle.setTotalAmount(total);
             settleMapper.insert(settle);
-            // P4-3 口径：结转批次由 newBatch 新建落库、无旧值，不接入审计（不伪造 before）
+            // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
             if (total.signum() > 0) {
                 voucherService.generateStockCostVoucher(settle, settleType);
             }

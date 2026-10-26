@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * v-permission 权限指令 (R5-04)
  *
@@ -39,7 +42,7 @@ function check(el, binding) {
     ok = codes.some((c) => hasPerm(c))
   }
 
-  // 角色名为 admin 的历史口径仍放行（通配码与 is_admin 已由 hasPerm 覆盖）
+  // 角色名为 admin 的历史规则仍放行（通配码与 is_admin 已由 hasPerm 覆盖）
   if (!ok && userRoles.includes('admin')) ok = true
 
   if (!ok) {

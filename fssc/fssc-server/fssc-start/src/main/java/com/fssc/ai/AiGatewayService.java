@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -55,7 +58,7 @@ public class AiGatewayService {
     private static final int ARGS_TEXT_MAX = 2000;
 
     /**
-     * 动作发现的一次性返回上限（D-N34）：只是防"无界响应"的最后一道闸，<b>不是过滤手段</b>。
+     * 动作发现的一次性返回上限（D-N34）：只是防"无界响应"的最后一道校验，<b>不是过滤手段</b>。
      * <p>原实现把 {@code .limit(500)} 放在 aiOnly 过滤<b>之前</b>（过滤在 Controller 里），目录到 1222 条后
      * "只看 AI 可调用动作"永远只回前 500 条里的可调用子集（读数恒 407），与真实可调用数不符。
      * 现把 aiOnly 下推到本方法内、上限放宽到远大于目录规模，读数＝真实条数。
@@ -154,7 +157,7 @@ public class AiGatewayService {
         }
     }
 
-    // ------------------------------------------------------------ 目录与闸门
+    // ------------------------------------------------------------ 目录与校验
 
     private AiAction resolve(GatewayRequest req) {
         AiAction a = null;
@@ -191,12 +194,12 @@ public class AiGatewayService {
         // 权限预检只是快速失败的人话版本；真判仍然由下游 @RequiresPerm 按同一 token 执行
         if (a.getPermCode() == null || a.getPermCode().isBlank()) {
             throw new BizException(ErrorCode.FORBIDDEN,
-                    "动作 " + a.getCode() + " 目录中无权限码，网关按最严口径拒绝（请先补目录或补 @RequiresPerm）。");
+                    "动作 " + a.getCode() + " 目录中无权限码，网关按最严格规则拒绝（请先补目录或补 @RequiresPerm）。");
         }
         if (!user.isAdmin() && !hasPerm(user, a.getPermCode())) {
             throw new BizException(ErrorCode.FORBIDDEN, "缺少权限：" + a.getPermCode() + "（继承自下令用户 " + user.getUsername() + "）");
         }
-        // 幂等约定：写类动作必须带 X-Idempotency-Key（或由 body 内 clientReqNo 承担），重放不产生第二张单
+        // 去重约定：写类动作必须带 X-Idempotency-Key（或由 body 内 clientReqNo 承担），重放不产生第二张单
         if (!"read".equals(a.getKind())) {
             String idem = http.getHeader("X-Idempotency-Key");
             if ((idem == null || idem.isBlank()) && !hasClientReqNo(req.args())) {
@@ -342,6 +345,31 @@ public class AiGatewayService {
         return c;
     }
 
+    /**
+     * 申请人撤回自己尚未被确认的票据（会话修正「改成1200」时旧票须立即失效）。
+     * 只有申请人本人、且票据仍是 PENDING 才可撤；他人票与非 PENDING 一律拒绝。
+     */
+    public AiActionConfirm cancelTicket(Long id, String reason, LoginUser user) {
+        if (id == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "票据 ID 不能为空");
+        }
+        AiActionConfirm c = confirmMapper.selectById(id);
+        if (c == null || !c.getTenantId().equals(user.getTenantId())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "票据不存在");
+        }
+        if (!user.getUserId().equals(c.getApplicantUserId())) {
+            throw new BizException(ErrorCode.FORBIDDEN, "只有票据申请人本人可以撤回");
+        }
+        if (!"PENDING".equals(c.getStatus())) {
+            throw new BizException(ErrorCode.FORBIDDEN, "票据状态=" + c.getStatus() + "，只有 PENDING 可撤回");
+        }
+        c.setStatus("CANCELLED");
+        c.setReason(reason);
+        c.setUpdateTime(LocalDateTime.now());
+        confirmMapper.updateById(c);
+        return c;
+    }
+
     public AiAction actionByCode(String code) {
         return code == null ? null : catalog.byCode(code);
     }
@@ -419,7 +447,7 @@ public class AiGatewayService {
                     HttpMethod.valueOf(a.getMethod().toUpperCase()), entity, String.class);
             return new Loopback(resp.getStatusCode().value(), resp.getBody(), contentTypeOf(resp.getHeaders()));
         } catch (org.springframework.web.client.HttpStatusCodeException ex) {
-            // 下游业务拒绝也要如实回传并留痕（403/400/500 都是"后端拒绝"这一判据的证据）
+            // 下游业务拒绝也要如实回传并记录（403/400/500 都是"后端拒绝"这一判据的证据）
             return new Loopback(ex.getStatusCode().value(), ex.getResponseBodyAsString(), contentTypeOf(ex.getResponseHeaders()));
         }
     }
@@ -568,7 +596,7 @@ public class AiGatewayService {
         return e;
     }
 
-    /** 与 OperLogAspect 同口径的敏感字段脱敏，避免 token/password 进 AI 日志。 */
+    /** 与 OperLogAspect 同一规则的敏感字段脱敏，避免 token/password 进 AI 日志。 */
     private String sanitize(String json) {
         return json == null ? null : json.replaceAll(
                 "(\"(?:password|token|oldPassword|secret|pwd)\"\\s*:\\s*\")[^\"]*(\")", "$1******$2");

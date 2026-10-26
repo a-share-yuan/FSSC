@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -42,17 +45,17 @@ import java.util.function.Consumer;
  *
  * <p><b>刻意不做的能力</b>：不提供新增与删除。配置行的增删等于给某条业务流挂/摘收尾动作，
  * 属裁决面（要连带校验 actionBean 是否真在 Spring 容器里、bizType 是否与
- * {@code WfBizAction#bizTypes()} 声明一致），按 D-DEC-320 口径不在此开放。
+ * {@code WfBizAction#bizTypes()} 声明一致），按 D-DEC-320 规则不在此开放。
  * 同理不提供"热重载"入口——总线只在 {@code @PostConstruct} 读一次表，
  * 手工触发 {@code refreshDispatchMap()} 会改写运行中的分发映射，属引擎行为变更，需另行裁决。
- * 因此本页改完 enabled/description 后，<b>下次应用重启才影响运行期</b>，页面已按此口径提示。
+ * 因此本页改完 enabled/description 后，<b>下次应用重启才影响运行期</b>，页面已按此规则提示。
  *
  * <p><b>权限码（X-22 教训：不发明新码）</b>：全部复用 wf 域既有码
  * ——读 {@code wf:config:list}（现库绑 4 个角色：FSSC_SUPERVISOR / CONFIG_ADMIN / IT_ADMIN / WF_ADMIN，
  * 6 个在职账号持有）、写 {@code wf:config:update}（现库绑 3 个角色：CONFIG_ADMIN / IT_ADMIN / WF_ADMIN，
  * 4 个在职账号持有）。新造 {@code wf:eventaction:*} 会让页面即时锁死（无数据落家）。
  *
- * <p><b>租户口径</b>：{@code wf_*} 表不在租户忽略名单内，MP 默认追加 {@code tenant_id = 当前租户}。
+ * <p><b>租户规则</b>：{@code wf_*} 表不在租户忽略名单内，MP 默认追加 {@code tenant_id = 当前租户}。
  * 但本表 74 行里有 39 行是历史种子行（{@code tenant_id = 0}，建库早期未按租户约定写入），
  * 而引擎读侧是 {@code runIgnoreTenant} 全量加载——这 39 行<b>确实在给当前账套的流程干活</b>。
  * 若沿用默认过滤，页面会对本账套一半以上的在跑配置失明，正是要修的缺陷。
@@ -61,7 +64,7 @@ import java.util.function.Consumer;
  * 读到的范围与引擎实际消费的范围一致且不越他户。写法与 {@code WfDelegateExpireJob}/{@code WfInstanceArchiveJob}
  * 的"ignore 上下文 + holder 数组带回结果"同族。
  *
- * <p><b>列名口径</b>：以现库 {@code SHOW COLUMNS FROM wf_event_action_config} 为准
+ * <p><b>列名规则</b>：以现库 {@code SHOW COLUMNS FROM wf_event_action_config} 为准
  * （id / tenant_id / biz_type / action_bean / trigger_when / sort_order / enabled / description /
  * create_by / create_time / update_by / update_time / del_flag）。
  * 表上<b>没有 remark 列</b>，故实体、DTO 与编辑面都不提供 remark——补上去会让 MP 在所有写入上炸列。
@@ -70,7 +73,7 @@ import java.util.function.Consumer;
 @RequestMapping("/api/tenant/wf/event-action-config")
 public class WfEventActionConfigController {
 
-    /** 历史种子分区：tenant_id=0 的行按全平台默认配置被引擎读取（见类注释「租户口径」）。 */
+    /** 历史种子分区：tenant_id=0 的行按全平台默认配置被引擎读取（见类注释「租户规则」）。 */
     private static final Long SEED_TENANT_ID = 0L;
 
     /** description 列宽 varchar(256)，超长在写入库前拦下，避免 MySQL 静默截断。 */
@@ -92,7 +95,7 @@ public class WfEventActionConfigController {
     /**
      * 分页列表：可按 {@code enabled}（1=启用 0=停用）、{@code actionBean}、{@code bizType} 过滤，
      * {@code keyword} 命中 bizType / actionBean / description 任一列。
-     * 排序固定 bizType + sortOrder 升序（与引擎分组内执行顺序同口径），不接受前端传 orderBy。
+     * 排序固定 bizType + sortOrder 升序（与引擎分组内执行顺序同一规则），不接受前端传 orderBy。
      */
     @RequiresPerm("wf:config:list")
     @GetMapping("/page")
@@ -191,7 +194,7 @@ public class WfEventActionConfigController {
      * 字段级编辑：只接受 id + description + enabled，其余列（biz_type / action_bean / trigger_when /
      * sort_order / tenant_id / del_flag）一律不下发也不更新——它们决定引擎怎么跑，改动属裁决面。
      * 走 {@code update(entity, wrapper)}：SET 只含实体非空字段，update_by/update_time 由
-     * {@code FsscMetaObjectHandler.updateFill} 自动留痕。
+     * {@code FsscMetaObjectHandler.updateFill} 自动记录。
      */
     @RequiresPerm("wf:config:update")
     @OperLog(module = "WF_EVENT_ACTION_CONFIG", operType = "UPDATE", desc = "修改流程收尾动作配置")

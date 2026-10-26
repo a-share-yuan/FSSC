@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <!-- 流程进度：生命周期 + 当前节点 + 审批链全景，常驻顶部（三个页签都看得见） -->
@@ -257,7 +260,7 @@
             <el-option label="借款" value="LOAN" />
             <el-option label="还款" value="REPAY" />
           </el-select>
-          <el-button size="small" @click="b.exportCsv">导出 CSV</el-button>
+          <el-button size="small" @click="b.exportCsv">导出</el-button>
         </div>
         <el-table :data="b.bills" size="small" stripe highlight-current-row style="cursor:pointer"
                   @row-click="(row) => { b.selected = row }">
@@ -303,7 +306,7 @@
               <el-button link size="small" @click.stop="b.openDetail(row)">详情</el-button>
               <!-- D-V4R-79：WITHDRAWN（撤回）此前不在可编辑/可作废集合内，前端只剩「详情/追溯」，
                    后端 returnToEdit / voidBill 也只认 DRAFT/REJECTED ⇒ 撤回的单既不能改、不能重提、
-                   也不能作废，成为永久脏数据且白占单号与预算。口径对齐为：撤回 ≡ 退回草稿。 -->
+                   也不能作废，成为永久脏数据且白占单号与预算。规则对齐为：撤回 ≡ 退回草稿。 -->
               <el-tooltip v-if="editableStatus(row)" content="载入表单修改，重新提交走新流程实例" placement="top">
                 <el-button link size="small" type="primary" @click.stop="b.loadBillForEdit(row)">{{ row.status === 'DRAFT' ? '编辑' : '编辑重提' }}</el-button>
               </el-tooltip>
@@ -314,7 +317,7 @@
                 <el-button link size="small" type="warning" @click.stop="b.urge(row)">催办</el-button>
               </el-tooltip>
               <el-button v-if="row.status === 'APPROVED'" link size="small" type="primary" @click.stop="b.copyBill(row)">复制</el-button>
-              <!-- 反审核（D-V3-135 配套 · 行业方案"反"字链第二环）：APPROVED → DRAFT，前置校验在服务层 -->
+              <!-- 反审核（D-V3-135 配套 · 单据反操作链第二环）：APPROVED → DRAFT，前置校验在服务层 -->
               <el-tooltip v-if="row.status === 'APPROVED'" content="退回草稿修改重提（已制证/付款已执行/批次在途/存在有效勾稽时服务端拒绝）" placement="top">
                 <el-button link size="small" type="danger" @click.stop="b.unaudit(row)">反审核</el-button>
               </el-tooltip>
@@ -487,10 +490,13 @@
       </template>
 
       <div style="margin-top: 16px; text-align: right">
+        <el-button @click="printVisible = true">打印单据</el-button>
         <el-button type="primary" @click="b.copyBill(b.detailData.bill)">复制单据</el-button>
       </div>
     </template>
   </el-drawer>
+
+  <PrintDialog v-model:visible="printVisible" mode="bill" :bill="b.detailData.bill" :bill-lines="printLines" />
 
   <!-- 文件预览器 -->
   <FileViewer ref="fileViewerRef" />
@@ -508,6 +514,7 @@ import FileViewer from '../FileViewer.vue'
 import FlowProgressPanel from './FlowProgressPanel.vue'
 import BillTraceDrawer from '../BillTraceDrawer.vue'
 import CandidatePickerDialog from './CandidatePickerDialog.vue'
+import PrintDialog from '../PrintDialog.vue'
 import { fileApi, imageApi, flowApi } from '../../api'
 import { Picture, Document } from '@element-plus/icons-vue'
 import { wfActionLabel, wfActionType } from '@/constants/enums.js'
@@ -527,8 +534,8 @@ const props = defineProps({
   // 提交前钩子：允许页面同步 extJson/明细行后再校验提交（返回 false 阻止）
   beforeSubmit: { type: Function, default: null },
   // D-V4R-76：保存草稿前钩子（与 beforeSubmit 同形）。此前顶层列位的同步逻辑只挂在提交钩子上，
-  // 而「保存草稿」按钮直调 b.saveDraft() 完全绕过它 ⇒ 草稿态三单腿列（po_id/po_receipt_id/contract_id）
-  // 为空，被匹配台/手工关联/付款齐套闸读到就误判「缺腿」。此处补一个对称的前置钩子。
+  // 而「保存草稿」按钮直调 b.saveDraft() 完全绕过它 ⇒ 草稿态三单环节列（po_id/po_receipt_id/contract_id）
+  // 为空，被匹配台/手工关联/付款齐套校验读到就误判「缺环节」。此处补一个对称的前置钩子。
   beforeSaveDraft: { type: Function, default: null },
   // 关联事前申请后钩子：允许页面把申请单费用详情/分摊带入本单
   onApplyPick: { type: Function, default: null },
@@ -541,7 +548,7 @@ const props = defineProps({
 // 凡是页面自建的列表状态必须在容器上预声明，页面侧只对该数组做原地增删（splice），靠引用共享回写。
 const b = reactive({
   ...useBill({ billType: props.billType, subType: props.subType, claim: props.claim, travel: props.travel, pay: props.pay, onApplyPick: props.onApplyPick }),
-  // 采购订单/收货单候选（仅付款 SETTLE 子类型取数，见 CorpPay.loadPos/loadReceipts）
+  // 采购订单/收货单候选（仅付款 SETTLE 子类型查询，见 CorpPay.loadPos/loadReceipts）
   pos: [],
   receipts: [],
 })
@@ -550,10 +557,17 @@ const b = reactive({
 const loanOffsetIds = computed(() => (b.form?.loanOffsets || []).map((o) => o.loanBillId))
 const relationIds = computed(() => (b.form?.relations || []).map((r) => r.sourceBillId))
 
-// D-DEC-380：全链路追溯抽屉状态（行 billType 直传 biz-type，与抽屉 (bizType,bizId) 锚点同口径）
+// D-DEC-380：全链路追溯抽屉状态（行 billType 直传 biz-type，与抽屉 (bizType,bizId) 关联点同一规则）
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
+
+const printVisible = ref(false)
+const printLines = computed(() => (b.detailData?.lines || []).map((l) => ({
+  ...l,
+  expenseItemName: l.expenseItemName || l.itemName || '',
+  summary: l.summary || l.remark || '',
+})))
 function openTrace(row) {
   traceBillId.value = row.id || row.billId || row.bill_id
   traceBizType.value = row.billType || null
@@ -575,7 +589,7 @@ function onInvoiceNoChange(row) {
 /**
  * D-DEC-031（12-10:43）：借款单点「提交审批」后零可见反馈，只能刷新页面或去「我的单据」查才知道
  * 到底提上去没有。原 `doSubmit` 是 `b.submit()` 即发即忘 —— 页面不参与结果、读数一行不变，
- * "提交成功""被闸门拦下""服务端报错"三种结果在屏幕上同形。现在：
+ * "提交成功""被校验拦下""服务端报错"三种结果在屏幕上同形。现在：
  *   ① await 整条提交链，并用可复核的信号判成败（useBill.submit 只在 billApi.submit 返回成功后
  *      才把 activeTab 切到 my 并 focusRow ⇒ 页首流程进度读的就是这张单的最新落点）；
  *   ② 结果写成一条常驻横幅（3 秒 toast 会自己消失，页面却什么都没变 ⇒ 才算"零可见反馈"）；
@@ -589,7 +603,7 @@ function editableStatus(row) {
 }
 
 /**
- * D-V4R-76：保存草稿入口。先跑 beforeSaveDraft（页面对齐顶层列位），再落库。
+ * D-V4R-76：保存草稿入口。先跑 beforeSaveDraft（页面对齐顶层列位），再写入数据库。
  * 不做返回值拦截——草稿允许半成品，钩子返回 false 也照常保存（与 doSubmit 的语义区别）。
  */
 async function doSaveDraft() {
@@ -601,7 +615,7 @@ async function doSaveDraft() {
 
 const submitOutcome = ref(null)
 // 第2批：单据信息区（公司/部门）原为装饰性红星——el-form-item required 无 prop 不触发任何校验，
-// 缺公司/部门时 useBill 兜底只弹一句 toast，用户看不到是哪一项缺。现挂真 prop+rules，
+// 缺公司/部门时 useBill 默认处理只弹一句 toast，用户看不到是哪一项缺。现挂真 prop+rules，
 // doSubmit 入口先跑本区校验，红字直接落在字段上。
 const billInfoFormRef = ref(null)
 const billExtraFormRef = ref(null)
@@ -632,7 +646,7 @@ async function doSubmit() {
       return
     }
   }
-  // D-V3-136 兜底闸：提交前再查一次发票号重复（防止绕过失焦校验的路径），重复即中止提交
+  // D-V3-136 默认处理校验：提交前再查一次发票号重复（防止绕过失焦校验的路径），重复即中止提交
   const nos = (b.form.invoices || []).map((x) => (x.invoiceNo || '').trim()).filter(Boolean)
   const invDup = nos.filter((n, i) => nos.indexOf(n) !== i)
   if (invDup.length) {
@@ -644,7 +658,7 @@ async function doSubmit() {
     }
     return
   }
-  // D-V4R-45 一致性闸：每个 INVOICE 附件都应有对应发票明细行（1 附件↔1 发票），
+  // D-V4R-45 一致性校验：每个 INVOICE 附件都应有对应发票明细行（1 附件↔1 发票），
   // 防止删附件不联动/手动乱序后，票面数据缺失还放行提交（票覆盖、影像核验都会缺票）。
   const invAttaches = (b.form.attaches || []).filter((a) => a && a.attachType === 'INVOICE')
   if (invAttaches.length) {
@@ -679,7 +693,7 @@ async function doSubmit() {
       ok: false,
       title: '本次提交未生效',
       desc: (why ? `未通过的原因：\n${why}\n` : '')
-        + '服务端未受理本次提交，单据没有进入审批流（缺项、预算/合规闸门、首审办理人未点名等原因见上行），页首流程进度与「我的单据」读数都不应发生变化；若与提示不一致请以「我的单据」列表读数为准并反馈。',
+        + '服务端未受理本次提交，单据没有进入审批流（缺项、预算/合规校验、首审办理人未点名等原因见上行），页首流程进度与「我的单据」读数都不应发生变化；若与提示不一致请以「我的单据」列表读数为准并反馈。',
     }
   }
 }
@@ -716,7 +730,7 @@ function isImage(name) {
   const ext = (name.split('.').pop() || '').toLowerCase()
   return IMG_EXTS.includes(ext)
 }
-/** 该附件是否"发票影像"（要识别）：后端 attachType 优先，缺失按扩展名（口径见 utils/attachKind） */
+/** 该附件是否"发票影像"（要识别）：后端 attachType 优先，缺失按扩展名（规则见 utils/attachKind） */
 function isInvoiceAttach(a) {
   return attachKindOf(a) === 'INVOICE'
 }
@@ -806,7 +820,7 @@ async function triggerOcr(a) {
   }
   ocrStatus[a.fileId] = 'processing'
   try {
-    // 附件维度识别：后端按 fileId 解析所属影像批次（）
+    // 附件维度识别：后端按 fileId 解析所属影像批次
     // 原先误把 fileId 当 batchId 调 /image/batch/{id}/ocr，必然 "影像批次不存在" 而静默失败
     await imageApi.ocrByFile(a.fileId)
     ocrStatus[a.fileId] = 'done'
@@ -819,7 +833,7 @@ async function triggerOcr(a) {
 }
 
 /**
- * 附件角标状态。取值顺序（后者只在前者缺失时兜底）：
+ * 附件角标状态。取值顺序（后者只在前者缺失时默认处理）：
  *  ① 非发票文件（Office/压缩包/文本…）→ 'other'，不参与识别，绝不显示"待识别"
  *  ② 本次会话内的识别进度 ocrStatus（点了「OCR识别」或上传时后端已解析）
  *  ③ 已解析出发票行（重新进页面 ocrStatus 已清空，用发票行的 parsed 反推，避免明明已识别却显示待识别）
@@ -879,7 +893,7 @@ async function refreshProgress() {
   chainTick.value++
 }
 
-// 审批动作 → 中文标签 / timeline 类型：词表收口到 constants/enums
+// 审批动作 → 中文标签 / timeline 类型：名称表办结到 constants/enums
 </script>
 
 <style scoped>

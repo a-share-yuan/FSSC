@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.notify;
 
 import com.fssc.framework.spi.DistributedState;
@@ -12,7 +15,7 @@ import java.time.Duration;
  * 运维告警通道（P0-B1）。
  *
  * <p>与 {@link NotifyService} 的分工：NotifyService 面向<b>业务用户</b>（审批待办、SLA 超时推给具体的人）；
- * 本服务面向<b>运维/值班</b>，接收系统级事件——定时任务连续失败、健康探针探测到组件不可用。
+ * 本服务面向<b>运维/值班</b>，接收系统级事件——定时任务连续失败、健康检查探测到组件不可用。
  * 告警走全局企微群 webhook + 运维邮件，不依赖任何租户上下文（调度线程可安全调用）。
  *
  * <p>三个设计要点：

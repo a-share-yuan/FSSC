@@ -1,5 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
- * 币种下拉的数据源收口（2026-10-18，B 级）
+ * 币种下拉的数据源办结（2026-10-18，B 级）
  *
  * ## 背景
  *
@@ -17,17 +20,17 @@
  * 权限模型不成立。
  *
  * 故后端于 2026-10-18 新增**免权限只读通道** `/tenant/masterdata/currency/options`
- * （三道闸门同 builtin 字典通道：仍需登录 / 仅 status=NORMAL 且未删 / 只读且字段最小化），
+ * （三道校验同 builtin 字典通道：仍需登录 / 仅 status=NORMAL 且未删 / 只读且字段最小化），
  * 本层改调该端点 ⇒ 普通员工也能读到全部启用币种，币种真正成为全员可维护的基础数据。
  *
- * 仍保留本地兜底：通道未部署/网络异常时回落内置清单，绝不让下拉变空。
+ * 仍保留本地默认处理：通道未部署/网络异常时回落内置清单，绝不让下拉变空。
  *
  * ## 用法
  *
  *   import { useCurrency } from '@/composables/useCurrency'
- *   // 纯主数据口径（label 用 currencyName）
+ *   // 纯主数据范围（label 用 currencyName）
  *   const { options: currencyOptions, load, formatLabel } = useCurrency()
- *   // 保留双语口径（原 label 走 i18n 的页面用这个）
+ *   // 保留双语规则（原 label 走 i18n 的页面用这个）
  *   const { options: c, load, formatLabel: cur } = useCurrency({
  *     i18nKeys: { CNY: 'expense.common.curCny', USD: 'expense.common.curUsd' }
  *   })
@@ -46,7 +49,7 @@ import { useI18n } from 'vue-i18n'
 import { masterApi } from '@/api.js'
 
 /**
- * 内置币种清单（兜底用）。
+ * 内置币种清单（默认处理用）。
  * 取自 md_currency 启用项中最常用的核心币种，label 与库内 currencyName 逐字一致，
  * 保证"通道不可用时界面与正常态相同"。已剔除 2026-10-18 勘误停用的
  * FRF（法国法郎，已被 EUR 取代）/ RM（与 MYR 重复）等。
@@ -104,7 +107,7 @@ async function fetchAll() {
  *   pay.corp.optUsd        : zh='美元 USD'    en='USD (US Dollar)'
  * 如果直接用主数据的 currencyName（纯中文名），切英文时币种下拉会全变中文 —— 功能倒退。
  *
- * 故口径与 useBaseDict 一致：**主数据定值域 + i18n 定文案**。
+ * 故规则与 useBaseDict 一致：**主数据定值域 + i18n 定文案**。
  * i18n 映射只覆盖原来就有的那几个币种（后台新增的币种没有 key），
  * 无 key 时回落到主数据名称 + 目标格式，绝不显示裸 code。
  *
@@ -154,7 +157,7 @@ export function useCurrency(opts = {}) {
       if (import.meta.env && import.meta.env.DEV) {
         console.warn(
           '[useCurrency] labelOf 收到格式参数 ' + JSON.stringify(arg2) +
-          '；该函数第二参数本应是兜底文本。已自动按 formatLabel 处理。' +
+          '；该函数第二参数本应是默认文本。已自动按 formatLabel 处理。' +
           '建议解构改为 { formatLabel: currencyLabel }，避免同名不同义。'
         )
       }

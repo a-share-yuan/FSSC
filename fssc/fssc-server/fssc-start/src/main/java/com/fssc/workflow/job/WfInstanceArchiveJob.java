@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -33,13 +36,13 @@ import java.util.function.Supplier;
  *
  * <p><b>为什么需要它</b>：单据侧早有冷热分离（{@code exp_bill*_cold}，见 {@code ColdArchiveService}），
  * 流程侧一直<b>没有</b>对应机制——{@code wf_instance / wf_task / wf_task_history} 只增不减，
- * 越滚越大。通行口径：归档"完成 X 月前"的流程数据，且 <b>X ≤ 3（强制上限）</b>。
+ * 越滚越大。通行规则：归档"完成 X 月前"的流程数据，且 <b>X ≤ 3（强制上限）</b>。
  *
- * <p><b>搬移口径</b>：{@code wf_instance.status} 已终态（{@link #TERMINAL_STATUSES}）<b>且</b>
+ * <p><b>搬移规则</b>：{@code wf_instance.status} 已最终状态（{@link #TERMINAL_STATUSES}）<b>且</b>
  * {@code end_time < now - N 个月}。N 取 {@code sys_config.wf.archive.months}，缺省 3、<b>硬钳 &le; 3</b>
- * （即使配了 6 也只当 3 用——上限是通行口径的强制项，不是建议项）。
+ * （即使配了 6 也只当 3 用——上限是通行规则的强制项，不是建议项）。
  *
- * <p><b>两道闸（缺省即关，零行为变化）</b>：
+ * <p><b>两道校验（缺省即关，零行为变化）</b>：
  * <ol>
  *   <li>{@code sys_config.wf.archive.enabled}，<b>缺省 0（fail-closed，默认关）</b>：未配置时本作业
  *       一条都不搬，与上线前行为完全一致；</li>
@@ -52,7 +55,7 @@ import java.util.function.Supplier;
  *
  * <p><b>为什么不搬 {@code ACT_*}</b>：{@code ACT_*} 是 Flowable 的<b>引擎账</b>，它的保留与清理
  * 是引擎自己的生命周期——本仓已有 {@code WfHistoryArchiveService} 按周清理超期历史。把 {@code ACT_*}
- * 纳入本作业的事务边界会造成两套口径打架（例如引擎账先被引擎清掉、业务账再删时对不上），
+ * 纳入本作业的事务边界会造成两套规则打架（例如引擎账先被引擎清掉、业务账再删时对不上），
  * 且引擎表的分区/外键关系不受我们控制。故本作业<b>只搬 wf_* 镜像表，绝不增删任何 ACT_* 行</b>。
  *
  * <p><b>跨租户扫描</b>：本作业在调度线程运行（无租户上下文），所有 wf_* 查询一律包在
@@ -72,12 +75,12 @@ public class WfInstanceArchiveJob {
     private static final String CFG_BATCH_LIMIT = "wf.archive.batch.limit";
 
     private static final int DEFAULT_MONTHS = 3;
-    /** 通行口径强制上限：X ≤ 3 */
+    /** 通行规则强制上限：X ≤ 3 */
     private static final int MAX_MONTHS = 3;
     private static final int DEFAULT_BATCH_LIMIT = 200;
 
     /**
-     * 终态集合（取值来源 {@link WfInstance#getStatus()} 的真实口径：
+     * 最终状态集合（取值来源 {@link WfInstance#getStatus()} 的真实规则：
      * RUNNING 审批中 / APPROVED 已通过 / REJECTED 已驳回 / CANCELLED 已撤销 / TERMINATED 已终止）。
      * {@code RUNNING} 是在途态，永不归档。
      */
@@ -141,7 +144,7 @@ public class WfInstanceArchiveJob {
             if (candidates.isEmpty()) {
                 continue;
             }
-            // 归档前只读留证：把将被搬移的实例列出来（运维可据此复核口径是否过宽）
+            // 归档前只读留证：把将被搬移的实例列出来（运维可据此复核规则是否过宽）
             log.info("[流程归档] 租户 {} 本批待归档 {} 条（months={}, limit={}）：{}",
                     tenantId, candidates.size(), months, limit, describe(candidates));
             if (candidates.size() >= limit) {
@@ -228,7 +231,7 @@ public class WfInstanceArchiveJob {
         }));
     }
 
-    /** 候选实例（终态 + end_time 早于 cutoff）；回到该租户上下文，tenant_id 由拦截器注入，不手写 */
+    /** 候选实例（最终状态 + end_time 早于 cutoff）；回到该租户上下文，tenant_id 由拦截器注入，不手写 */
     private List<WfInstance> listCandidates(long tenantId, int months, int limit) {
         LocalDateTime cutoff = LocalDateTime.now().minusMonths(months);
         List<WfInstance> all = asTenant(tenantId, () -> wfInstanceMapper.selectList(
@@ -241,7 +244,7 @@ public class WfInstanceArchiveJob {
         return all == null ? List.of() : all;
     }
 
-    /** 候选实例计数（只读预览用；与 {@link #listCandidates} 同口径，不带 LIMIT） */
+    /** 候选实例计数（只读预览用；与 {@link #listCandidates} 同一规则，不带 LIMIT） */
     private long countCandidates(long tenantId, int months) {
         LocalDateTime cutoff = LocalDateTime.now().minusMonths(months);
         Long c = asTenant(tenantId, () -> wfInstanceMapper.selectCount(
@@ -276,7 +279,7 @@ public class WfInstanceArchiveJob {
         return sb.toString();
     }
 
-    /** 月数硬钳：通行口径 X ≤ 3，且至少 1 个月；非法/越界一律收敛到合法区间 */
+    /** 月数硬钳：通行规则 X ≤ 3，且至少 1 个月；非法/越界一律收敛到合法区间 */
     private int clampMonths(int raw) {
         if (raw < 1) {
             return DEFAULT_MONTHS;

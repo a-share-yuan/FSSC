@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.controller;
 
 import com.fssc.common.core.Result;
@@ -25,9 +28,10 @@ import java.util.Map;
  *
  * <ul>
  *  <li>发票版式文件（.ofd/.xml/.pdf）：attachType=INVOICE；<b>先本地版式解析，全程不发 OCR 请求</b>
+ *      （优先次序＝D-DEC-474，PC 与手机端同一接口同一规则）。扫描版 PDF（无文本层）由解析器渲染首页 PNG 后
  *      <b>再转图像 OCR 通道</b>真识别；仍解析不出（如数电票 XML 机器文件解坏）时 invoice.ok=false，由用户手工补录，
  *      不以假票面冒充已识别（D-DEC-009）。</li>
- *  <li>图片发票（.jpg/.png 等，）：attachType=INVOICE；走可插拔图像 OCR 通道
+ *  <li>图片发票（.jpg/.png 等）：attachType=INVOICE；走可插拔图像 OCR 通道
  *      （paddle=本地 PaddleOCR /invoice_ocr）结构化识别，识别结果同时落 ocr_record +
  *      自动入池 inv_invoice（见 OcrService.recognizeImageBytes／recognizeInvoiceBytes）。通道为 mock 或识别失败时
  *      invoice.ok=false，不阻断上传，由用户手工补录。</li>
@@ -39,7 +43,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ExpenseAttachController {
 
-    /** 图片类发票扩展名：本地版式解析不支持，走图像 OCR 通道（与 OcrService.IMAGE_EXTS 口径一致） */
+    /** 图片类发票扩展名：本地版式解析不支持，走图像 OCR 通道（与 OcrService.IMAGE_EXTS 规则一致） */
     private static final java.util.Set<String> IMAGE_EXTS = java.util.Set.of(
             "jpg", "jpeg", "png", "bmp", "webp", "tif", "tiff");
 
@@ -73,14 +77,14 @@ public class ExpenseAttachController {
         if (OcrLocalParsers.isLocalFormat(fileName) || isImageInvoice(fileName)) {
             // D-DEC-474：票面识别统一交 OcrService.recognizeInvoiceBytes ——
             // 本地版式解析（PDF／OFD／数电票 XML）优先、全程不发 OCR 请求，解析不出（扫描版 PDF 无文本层）
-            // 才把解析器渲染好的首页 PNG 转图像 OCR 通道，与影像批次腿同一优先级次序。
-            // 改前本腿只判扩展名：扫描版 PDF 的 PNG 被直接丢弃 ⇒ 停在"未识别"，用户被引导去电脑端补录，
-            // 而电脑端走的正是同一条腿（两端同一接口）。
+            // 才把解析器渲染好的首页 PNG 转图像 OCR 通道，与影像批次环节同一优先级次序。
+            // 改前本环节只判扩展名：扫描版 PDF 的 PNG 被直接丢弃 ⇒ 停在"未识别"，用户被引导去电脑端补录，
+            // 而电脑端走的正是同一个环节（两端同一接口）。
             OcrResult r;
             try {
                 r = ocrService.recognizeInvoiceBytes(file.getBytes(), fileName, f.getId());
             } catch (Throwable t) {
-                // 用 Throwable 兜底：识别失败绝不把 500「系统异常」抛给用户，
+                // 用 Throwable 默认处理：识别失败绝不把 500「系统异常」抛给用户，
                 // 而是按发票处理失败返回 OcrResult.fail，由前端提示手工补录。
                 r = OcrResult.fail("上传成功但解析失败：" + t.getMessage());
             }

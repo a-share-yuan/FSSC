@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_FA_TRANSFER" targetNamespace="http://fssc">
+  <bpmn:process id="FA_TRANSFER_NC" name="固定资产调拨（非集中）" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:exclusiveGateway id="GW_FATR" name="调拨范围分档" default="Flow_in_FT_1" />
+    <bpmn:sequenceFlow id="Flow_start_gw" sourceRef="StartEvent_1" targetRef="GW_FATR" />
+    <bpmn:sequenceFlow id="Flow_in_FT_1" sourceRef="GW_FATR" targetRef="FT_2" />
+    <bpmn:userTask id="FT_2" name="转出部门确认【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+    <bpmn:userTask id="FT_3" name="资产账套核对【资产核算岗】" flowable:candidateGroups="FA_ASSET_ACCOUNT" />
+    <bpmn:sequenceFlow id="Flow_in_FT_3" sourceRef="FT_2" targetRef="FT_3" />
+    <bpmn:userTask id="FT_4" name="台账过户【资产核算岗】" flowable:candidateGroups="FA_ASSET_ACCOUNT" />
+    <bpmn:sequenceFlow id="Flow_in_FT_4" sourceRef="FT_3" targetRef="FT_4" />
+    <bpmn:userTask id="FXT_1" name="转出公司确认【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+    <bpmn:sequenceFlow id="Flow_GW_FATR_FXT_1" sourceRef="GW_FATR" targetRef="FXT_1" name="跨法人档"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${billType == 'FA_TRANSFER_CROSS'}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:userTask id="FXT_2" name="受让公司总经理审批【总经理】" flowable:candidateGroups="GM" />
+    <bpmn:sequenceFlow id="Flow_FXT_2" sourceRef="FXT_1" targetRef="FXT_2" />
+    <bpmn:userTask id="FXT_3" name="跨法人账务处理【总账会计】" flowable:candidateGroups="FIN_GL" />
+    <bpmn:sequenceFlow id="Flow_FXT_3" sourceRef="FXT_2" targetRef="FXT_3" />
+    <bpmn:sequenceFlow id="Flow_sgjoin_FXT_3" sourceRef="FXT_3" targetRef="FT_4" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="FT_4" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="FA_TRANSFER_NC">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="GW_FATR_di" bpmnElement="GW_FATR"><dc:Bounds x="216" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FT_2_di" bpmnElement="FT_2"><dc:Bounds x="506" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FT_3_di" bpmnElement="FT_3"><dc:Bounds x="696" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FT_4_di" bpmnElement="FT_4"><dc:Bounds x="886" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FXT_1_di" bpmnElement="FXT_1"><dc:Bounds x="276" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FXT_2_di" bpmnElement="FXT_2"><dc:Bounds x="466" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FXT_3_di" bpmnElement="FXT_3"><dc:Bounds x="656" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="1086" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_start_gw_di" bpmnElement="Flow_start_gw"><di:waypoint x="138" y="120" /><di:waypoint x="236" y="122" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_FT_1_di" bpmnElement="Flow_in_FT_1"><di:waypoint x="236" y="122" /><di:waypoint x="381" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_FT_3_di" bpmnElement="Flow_in_FT_3"><di:waypoint x="571" y="120" /><di:waypoint x="761" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_FT_4_di" bpmnElement="Flow_in_FT_4"><di:waypoint x="761" y="120" /><di:waypoint x="951" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_FATR_FXT_1_di" bpmnElement="Flow_GW_FATR_FXT_1"><di:waypoint x="236" y="122" /><di:waypoint x="341" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_FXT_2_di" bpmnElement="Flow_FXT_2"><di:waypoint x="341" y="420" /><di:waypoint x="531" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_FXT_3_di" bpmnElement="Flow_FXT_3"><di:waypoint x="531" y="420" /><di:waypoint x="721" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_sgjoin_FXT_3_di" bpmnElement="Flow_sgjoin_FXT_3"><di:waypoint x="721" y="420" /><di:waypoint x="951" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="951" y="120" /><di:waypoint x="1104" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
+

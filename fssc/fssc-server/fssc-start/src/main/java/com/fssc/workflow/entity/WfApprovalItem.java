@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -6,6 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
+ * 流程节点「审批项」（wf_approval_item，带 tenant_id）。
  *
  * <p><b>为什么要有它</b>（改造方案 §三①）：改造前引擎语义只有 {@code approved=true/false} 二值，
  * 所有审批结果都被压成「同意 / 驳回」两档，{@code wf_task_history.action} 也只是文案。
@@ -15,8 +19,8 @@ import lombok.EqualsAndHashCode;
  * <p><b>与其它配置的关系（勿重复造）</b>：
  * <ul>
  *  <li>{@code wf_node_config} 管「谁来办」（参与人、多签、超时、抄送）；本表管「办出什么结果」；</li>
- *  <li>{@code reject_scope}（节点级）+ {@code wf.reject.free.enabled}（总闸）仍是驳回回节点的
- *      <b>前置闸门</b>——本表的 {@code target_node} 只在闸门放行时才真正搬执行，
+ *  <li>{@code reject_scope}（节点级）+ {@code wf.reject.free.enabled}（总开关）仍是驳回回节点的
+ *      <b>前置校验</b>——本表的 {@code target_node} 只在校验放行时才真正搬执行，
  *      否则落回原「终止本流程」路径（与改造前逐字一致）；</li>
  *  <li>本表<b>不</b>替代 {@code rejectToNodeKey} 运行时入参，二者同源同一执行面（
  *      {@code WfEngineFacade.complete(..., rejectToNodeKey)}），不新造第二条驳回通道。</li>
@@ -37,16 +41,16 @@ public class WfApprovalItem extends TenantAuditBase {
 
     private static final long serialVersionUID = 1L;
 
-    /** 正向结果：审批通过并继续流转（行业方案「正向审批类型」） */
+    /** 正向结果：审批通过并继续流转（正向审批类型） */
     public static final String CAT_POSITIVE = "POSITIVE";
-    /** 驳回结果：驳回（行业方案「驳回审批类型」，可逆向运行） */
+    /** 驳回结果：驳回（驳回审批类型，可逆向运行） */
     public static final String CAT_REJECT = "REJECT";
-    /** 终止结果：终止本流程实例（行业方案「终止审批类型」） */
+    /** 终止结果：终止本流程实例（终止审批类型） */
     public static final String CAT_TERMINATE = "TERMINATE";
 
     /** 流程定义 key */
     private String modelKey;
-    /** 节点 ID（BPMN userTask id），与 wf_node_config.node_key 同口径：精确匹配，孤儿行不生效 */
+    /** 节点 ID（BPMN userTask id），与 wf_node_config.node_key 同一规则：精确匹配，孤儿行不生效 */
     private String nodeKey;
     /** 审批项编码（同一节点内唯一，落流程变量 ActionResult） */
     private String itemCode;
@@ -55,7 +59,7 @@ public class WfApprovalItem extends TenantAuditBase {
     /** 类别：POSITIVE 正向 / REJECT 驳回 / TERMINATE 终止 */
     private String category;
     /**
-     * 关联表单操作（行业方案「审批项可关联表单操作」）：SAVE 保存 / AUDIT 审核 / UNAUDIT 反审核 / SUBMIT 提交。
+     * 关联表单操作（审批项可关联表单操作）：SAVE 保存 / AUDIT 审核 / UNAUDIT 反审核 / SUBMIT 提交。
      *
      * <p><b>能力边界（如实标注）</b>：本列目前只落流程变量 {@code ActionOper} 供订阅方与审计读取，
      * <b>引擎侧不执行表单操作</b>——单据状态机的权威在业务域（如 {@code ExpenseWfEventListener}），
@@ -64,7 +68,7 @@ public class WfApprovalItem extends TenantAuditBase {
      */
     private String linkedOper;
     /**
-     * 目标节点 key（仅 REJECT 类别有意义）：非空且驳回闸门放行时把在办执行退回该上游节点；
+     * 目标节点 key（仅 REJECT 类别有意义）：非空且驳回校验放行时把在办执行退回该上游节点；
      * 为空则按类别默认语义（REJECT → 终止本流程；POSITIVE → 继续流转）。
      */
     private String targetNode;

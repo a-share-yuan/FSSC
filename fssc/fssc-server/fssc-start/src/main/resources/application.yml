@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 server:
   port: 8089
   servlet:
@@ -107,6 +110,7 @@ info:
 
 # 自定义配置
 fssc:
+  # ===== 付款批次→采购付款计划 核销回写（D6，付款完成回写计划已付款）=====
   # 批次执行打款成功后按收款方归集核销 APPROVED 计划：paid_amount 累加、全额置 DONE，
   # 台账 op_plan_paid_log（batch_no+plan_id 唯一，重试幂等）。false 可整体关闭（回退用）。
   plan-writeback:
@@ -249,10 +253,26 @@ fssc:
       base-url: http://127.0.0.1:${server.port:8089}
       # 高风险确认票据 TTL（分钟），一次性、参数摘要绑定
       confirm-ttl-minutes: 10
+    # 知识检索（P0-5）：构建期产物 ai/knowledge-fssc.json，运行期 CJK bigram + BM25
+    knowledge:
+      enabled: true
+      top-k: 6
+      # 低于该 BM25 分即视为"知识库没有"，宁可拒答也不编流程
+      min-score: 1.6
+      # 覆盖闸：分块须按 IDF 加权覆盖问题核心词组的最低比例，低于即"没有对应原文"
+      min-coverage: 0.35
+      # 标题/小节标题相对正文的权重（短字段，命中即说明主题对得上）
+      head-weight: 3.0
+      # 导航型小节降权（阅读提示/索引/速览/演示路径…）：只说"去哪儿看"的小节不该当答案
+      nav-penalty: 0.45
+    # 会话记忆（P0-6）：进程内 LRU，租户+用户双绑定；重启即失（P1 落表）
+    session:
+      ttl-minutes: 30
+      max-sessions: 500
 
 # ===== 发票能力网关（InvoiceGateway，独立闭源服务，D:\SourceCode\InvoiceGateway）=====
 # FSSC 的进项/销项发票、发票 OCR 识别、真伪查验默认走这层封装 API（三系统统一键名）。
-# 上游厂商凭证（AppKey/AppSecret）只存在于网关进程内，业务系统不感知、也不得出现其字面量。
+# 上游通道凭证（AppKey/AppSecret）只存在于网关进程内，业务系统不感知、也不得出现其字面量。
 # 未启动网关时：识别返回失败、验真本轮不判定（D-DEC-115 口径），绝不伪造票面或「验真通过」。
 invoice:
   gateway:

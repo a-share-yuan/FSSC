@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.security;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -124,7 +127,7 @@ public final class DataScopeKit {
                     qw.eq(companyCol, s.getCompanyId());
                     qw.and(w -> w.in(deptCol, in).or().isNull(deptCol)); // 本部门及以下 ∪ 公司级(NULL)行
                 } else {
-                    qw.in(deptCol, in); // 无公司信息：保持原口径，不放开 NULL 行
+                    qw.in(deptCol, in); // 无公司信息：保持原规则，不放开 NULL 行
                 }
             } else if (hasDept) {
                 final Long deptId = s.getDeptId();
@@ -132,7 +135,7 @@ public final class DataScopeKit {
                     qw.eq(companyCol, s.getCompanyId());
                     qw.and(w -> w.eq(deptCol, deptId).or().isNull(deptCol)); // 本部门 ∪ 公司级(NULL)行
                 } else {
-                    qw.eq(deptCol, deptId); // 无公司信息：保持原口径，不放开 NULL 行
+                    qw.eq(deptCol, deptId); // 无公司信息：保持原规则，不放开 NULL 行
                 }
             } else if (hasCompany) {
                 qw.eq(companyCol, s.getCompanyId()); // 无部门信息降级本公司
@@ -166,10 +169,10 @@ public final class DataScopeKit {
     }
 
     /**
-     * 单条记录公司归属校验（WS-6 税域收口）。用于 {@code selectById} 类"按主键读单条后写"的方法——
-     * 这类方法不走 QueryWrapper，无法用 {@link #apply} 收口，改由本方法显式校验归属。
+     * 单条记录公司归属校验（WS-6 税域办结）。用于 {@code selectById} 类"按主键读单条后写"的方法——
+     * 这类方法不走 QueryWrapper，无法用 {@link #apply} 办结，改由本方法显式校验归属。
      *
-     * <p>口径与 {@link #apply} 一致：非本租户全部档（scope>1）且登录人有公司归属时，
+     * <p>规则与 {@link #apply} 一致：非本租户全部档（scope>1）且登录人有公司归属时，
      * 记录 {@code company_id} 必须等于登录人公司，否则抛权限异常；无部门/本人列时降级公司级，
      * 因此本方法对任意档位一律按公司级判断。登录人无公司归属时不拦（与 apply 降级一致）。</p>
      *
@@ -185,7 +188,7 @@ public final class DataScopeKit {
         }
         Long mine = s.getCompanyId();
         if (mine == null) {
-            return; // 登录人无公司归属：不拦（与 apply 的降级口径一致）
+            return; // 登录人无公司归属：不拦（与 apply 的降级规则一致）
         }
         if (companyId == null || !mine.equals(companyId)) {
             throw new BizException(ErrorCode.PERMISSION_DENIED,

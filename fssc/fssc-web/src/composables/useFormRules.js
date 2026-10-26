@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * useFormRules - 表单联动校验 composable
  * R5-06: 封装跨字段联动校验规则
@@ -201,7 +204,7 @@ const formTypeRules = {
     taxAmount: commonRules.amount('请输入申请税额（须大于 0）'),
   },
   INVOICE: {
-    // 发票号码＝外部票据号（口径 Q1 例外，人工必输）；发票代码在数电票下不存在，故不设为必填
+    // 发票号码＝外部票据号（规则 Q1 例外，人工必输）；发票代码在数电票下不存在，故不设为必填
     invoiceNo: [{ required: true, message: '请输入发票号码', validator: requiredValidator('请输入发票号码') },
       { pattern: /^[0-9]{8,20}$/, message: '发票号应为 8-20 位数字' }],
     invoiceDate: commonRules.date('请选择开票日期'),
@@ -213,7 +216,7 @@ const formTypeRules = {
     amount: commonRules.amount('请输入价税合计（须大于 0）'),
     netAmount: [{ required: true, type: 'number', min: 0, message: '请输入未税金额（可为 0，不能为负）' }],
     taxAmount: [{ required: true, type: 'number', min: 0, message: '请输入税额（可为 0，不能为负）' }],
-    // 生成报销草稿：费用项必选（标题留空由后端按"发票报销-票号"兜底）
+    // 生成报销草稿：费用项必选（标题留空由后端按"发票报销-票号"默认处理）
     itemId: commonRules.select('请选择报销费用项'),
   },
   INVOICE_BIND: {
@@ -263,7 +266,7 @@ const formTypeRules = {
     amount: commonRules.amount('请输入收款金额（须大于 0）'),
     receiptDate: commonRules.date('请选择收款日期'),
   },
-  // 资产卡片：资产编号属主数据编码，按口径 Q1 系统维护、人工只读 ⇒ 不登记为必填；
+  // 资产卡片：资产编号属主数据编码，按规则 Q1 系统维护、人工只读 ⇒ 不登记为必填；
   // 残值/税法年限/供应商/发票号可空（自建、受赠、CIP 转固等来源本就没有采购发票）。
   ASSET_CARD: {
     assetName: commonRules.required('请输入资产名称'),
@@ -287,14 +290,14 @@ const formTypeRules = {
     targetDeptId: commonRules.select('请选择目标部门'),
   },
   // 资产原值调整（X-06/D-DEC-431）：原因必输——旧版前端把原因写死成一句固定文案传给后端，
-  // 落库的"原因"与真实成因无关，事后追溯看到的是同一句话。金额绑 el-input，值为字符串⇒用 amountText。
+  // 写入数据库的"原因"与真实成因无关，事后追溯看到的是同一句话。金额绑 el-input，值为字符串⇒用 amountText。
   ASSET_ADJUST: {
     newOriginalAmount: commonRules.amountText('请输入调整后原值（须大于 0）'),
     reason: commonRules.required('请填写调整原因'),
   },
   ASSET_CATEGORY: {
-    // 默认折旧月数/残值率是「带出口径」而非「入账口径」（资产卡片自身已强制必填），
-    // 且存量类别多数为空——登记为必填会让任何一次编辑都被拦下，故只锁编码与名称。
+    // 默认折旧月数/残值率是「带出规则」而非「入账规则」（资产卡片自身已强制必填），
+    // 且历史类别多数为空——登记为必填会让任何一次编辑都被拦下，故只锁编码与名称。
     categoryCode: commonRules.required('请输入类别编码'),
     categoryName: commonRules.required('请输入类别名称'),
   },
@@ -321,7 +324,7 @@ const formTypeRules = {
     cipName: commonRules.required('请输入名称'),
     companyId: commonRules.select('请选择所属公司'),
   },
-  // 在建工程转固：转固日期即资产购置日（折旧起算口径），留空会落一张没有购置日的卡片
+  // 在建工程转固：转固日期即资产购置日（折旧起算规则），留空会落一张没有购置日的卡片
   CIP_TRANSFER: {
     transferDate: commonRules.date('请选择转固日期'),
     categoryId: commonRules.select('请选择固定资产类别'),
@@ -341,7 +344,7 @@ const formTypeRules = {
     claimReceivableId: commonRules.select('请选择应收单'),
   },
   BANK_SLIP: {
-    // 归档＝把流水状态推到 ARCHIVED（终态），没有影像文件的归档等于凭空造一条"已回单"记录
+    // 归档＝把流水状态推到 ARCHIVED（最终状态），没有影像文件的归档等于凭空造一条"已回单"记录
     slipFileId: commonRules.required('请选择回单影像文件'),
   },
   ARCHIVE_ACCESS: {
@@ -369,11 +372,11 @@ const formTypeRules = {
       { pattern: /^\d{4}-\d{2}$/, message: '期间格式应为 yyyy-MM' }],
     retentionPeriod: commonRules.select('请选择保管期限'),
   },
-  // 进项发票认证：工具条上的所属期/申报期间是必输项（后端 InvoiceService.certify 同口径拦下）
+  // 进项发票认证：工具条上的所属期/申报期间是必输项（后端 InvoiceService.certify 同一规则拦下）
   INVOICE_CERTIFY: {
     certifyPeriod: commonRules.date('请选择认证所属期'),
   },
-  // 合并底稿新建：期间 value-format=YYYYMM（6 位数字），后端 consolidateCreate 同口径要求非空
+  // 合并底稿新建：期间 value-format=YYYYMM（6 位数字），后端 consolidateCreate 同一规则要求非空
   GLEX_CONSOLIDATE: {
     period: [{ required: true, message: '请选择期间', validator: requiredValidator('请选择期间') },
       { pattern: /^\d{6}$/, message: '期间格式应为 YYYYMM（如 202610）', trigger: 'blur' }],
@@ -406,7 +409,7 @@ const formTypeRules = {
     tel: commonRules.phoneOrTel('请输入正确的电话号码（固话需含区号，如 0731-88888888）'),
     address: commonRules.maxLength(255),
   },
-  // 供应商子表-银行账户：账号格式 6-30 位数字（与 md_supplier_bank 后端 @Pattern 同口径）
+  // 供应商子表-银行账户：账号格式 6-30 位数字（与 md_supplier_bank 后端 @Pattern 同一规则）
   SUPPLIER_BANK: {
     bankName: [{ required: true, message: '请输入开户行', validator: requiredValidator('请输入开户行') }],
     bankAccount: [{ required: true, message: '请输入银行账号', validator: requiredValidator('请输入银行账号') },
@@ -449,7 +452,7 @@ export async function validateForm(formRef) {
 
 /**
  * 发票价税勾稽（第1批 P0）：价税合计 = 未税金额 + 税额，容差 1 分。
- * 后端 InvoiceService.requireManualHeader/create 已有同口径拦截，这里是第一道闸——
+ * 后端 InvoiceService.requireManualHeader/create 已有同一规则拦截，这里是第一道校验——
  * 录入当时就告知，避免提交后拿 400。三元组互为依赖，勾稽 validator 同时挂三个字段，
  * 任一项 blur 都会连带重校（async-validator 的 validator 拿不到 form 其他字段，故用闭包注入）。
  */

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.controller;
 
 import com.fssc.common.core.Result;
@@ -82,7 +85,7 @@ public class PrintTemplateController {
      *
      * <p>传 setCode 时按模板套渲染多个模板，返回数组；否则返回单个结果。
      * 必录字段缺失时 {@code blocked=true} 且 {@code missingRequired} 列出缺哪几个，
-     * 前端据此拦截（对齐行业方案「字段必录属性」）。
+     * 前端据此拦截（字段必录属性）。
      */
     @PostMapping("/render")
     public Result<Object> render(@RequestBody PrintDto.RenderRequest req) {

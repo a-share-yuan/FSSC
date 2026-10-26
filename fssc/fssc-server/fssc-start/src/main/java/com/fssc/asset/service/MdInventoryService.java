@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -20,7 +23,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * 存货收发存服务：入库（移动平均）、出库（先进先出口径）、结存查询（FA 投资到资产-存货）。
+ * 存货收发存服务：入库（移动平均）、出库（先进先出规则）、结存查询（FA 投资到资产-存货）。
  * <p>计价方式 priceMethod=MA（移动平均）。入库按"结存金额 + 入库数量×单价"累计；
  * 出库发出成本按移动平均单位成本（结存金额/结存数量）计算并核减结存——
  * 本模型仅保存聚合结存（无批次明细），故发出成本基于移动平均单价推导。</p>
@@ -304,7 +307,7 @@ public class MdInventoryService {
         return cost;
     }
 
-    /** R1 移均单价：结存金额/结存数量，结存为0时返回0。与 writeOff 取价口径一致，供盘点差异/处置执行按金额分档折算。 */
+    /** R1 移均单价：结存金额/结存数量，结存为0时返回0。与 writeOff 取价规则一致，供盘点差异/处置执行按金额分档折算。 */
     private BigDecimal avgUnitCost(MdInventory row) {
         if (row == null) return ZERO;
         return row.getRemainingNum() != null && row.getRemainingNum().signum() != 0
@@ -376,7 +379,7 @@ public class MdInventoryService {
      *
      * <p>仓库之所以必输：{@link #buildKeyWrapper} 对 warehouseId 用的是条件 eq，留空时
      * 「itemCode + limit 1」会命中该物料在**任意仓库**的一行存货并据此核减——发错仓、扣错账。
-     * 计价方式（priceMethod）前端已必输，但后端新建存货行目前固定按移动平均（MA）落库、
+     * 计价方式（priceMethod）前端已必输，但后端新建存货行目前固定按移动平均（MA）写入数据库、
      * 未消费该字段，故此处不做后端断言（已登记为挂账缺陷，避免造出"校验了却没用"的假）。
      */
     private void requireManual(MdInventory key) {
@@ -424,7 +427,7 @@ public class MdInventoryService {
             m.setStatus("APPROVED");
             m.setCreateBy(userId());
             stockMoveMapper.insert(m);
-            // P4-3 口径：移动记录为本方法新建落库、无旧值，不接入审计（不伪造 before）
+            // P4-3 规则：移动记录为本方法新建写入数据库、无旧值，不接入审计（不伪造 before）
         } catch (Exception ex) {
             log.error("写入存货移动记录失败(moveType={}, item={}): {}", moveType, row.getItemCode(), ex.getMessage(), ex);
         }

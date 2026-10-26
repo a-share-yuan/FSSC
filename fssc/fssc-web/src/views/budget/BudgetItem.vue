@@ -1,6 +1,9 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="budget-item-page">
-    <!-- R5-D-263：页面层权限门控（/item/page 端点按设计保持开放供引用预览，管理页在此收口） -->
+    <!-- R5-D-263：页面层权限门控（/item/page 端点按设计保持开放供引用预览，管理页在此办结） -->
     <el-card v-if="canList" shadow="never">
       <template #header>
         <div class="card-header">
@@ -42,8 +45,8 @@
           <template #default="{ row }">{{ row.budgetPeriod === 0 ? '全年' : row.budgetPeriod + '月' }}</template>
         </el-table-column>
         <el-table-column prop="dimKey" label="维度键" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="ncAccount" label="NC科目" width="100" />
-        <el-table-column prop="ifsAccount" label="IFS科目" width="100" />
+        <el-table-column prop="ncAccount" label="总账科目" width="100" />
+        <el-table-column prop="ifsAccount" label="外部系统科目" width="100" />
         <el-table-column prop="totalAmount" label="预算总额" width="110" align="right" sortable>
           <template #default="{ row }">{{ fmt(row.totalAmount) }}</template>
         </el-table-column>
@@ -134,7 +137,7 @@
             <el-option v-for="m in 12" :key="m" :label="m + '月'" :value="m" />
           </el-select>
         </el-form-item>
-        <!-- 公司留空时后端按方案所属公司兜底，属可选项 -->
+        <!-- 公司留空时后端按方案所属公司默认处理，属可选项 -->
         <el-form-item label="公司">
           <el-select v-model="dialog.form.companyId" placeholder="留空取方案所属公司" filterable style="width:100%">
             <el-option v-for="c in companies" :key="c.id" :label="c.companyName" :value="c.id" />
@@ -158,8 +161,8 @@
         <el-form-item label="预算总额" prop="totalAmount">
           <el-input-number v-model="dialog.form.totalAmount" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
-        <el-form-item label="NC科目码"><el-input v-model="dialog.form.ncAccount" placeholder="如 660101" /></el-form-item>
-        <el-form-item label="IFS科目码"><el-input v-model="dialog.form.ifsAccount" placeholder="如 4001" /></el-form-item>
+        <el-form-item label="总账科目码"><el-input v-model="dialog.form.ncAccount" placeholder="如 660101" /></el-form-item>
+        <el-form-item label="外部系统科目码"><el-input v-model="dialog.form.ifsAccount" placeholder="如 4001" /></el-form-item>
         <el-form-item label="币种">
           <el-select v-model="dialog.form.currencyCode" style="width:100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'code-name')" :value="o.value" />
@@ -203,7 +206,7 @@ import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 import { hasPerm } from '../../utils/perm'
 import { useCurrency } from '@/composables/useCurrency'
 
-// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
+// 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 // R5-13: 快捷键
@@ -346,14 +349,14 @@ async function handleImport() {
   } catch (e) { ElMessage.error(e.message) } finally { importDlg.saving = false }
 }
 
-// 导入弹窗必填（与后端 BudgetItemExcelService.importItems 同口径）
+// 导入弹窗必填（与后端 BudgetItemExcelService.importItems 同一规则）
 const importFormRef = ref(null)
 const importRules = reactive({
   schemeId: commonRules.select('请选择导入到的预算方案'),
   file: commonRules.required('请选择要导入的 Excel 文件'),
 })
 
-// 表单校验规则（与后端 BudgetService.assertItemRequired 同口径）
+// 表单校验规则（与后端 BudgetService.assertItemRequired 同一规则）
 const itemFormRules = reactive({
   schemeId: commonRules.select('请选择预算方案'),
   budgetYear: commonRules.required('请输入预算年度'),
@@ -514,7 +517,7 @@ function flattenTree(nodes) {
   return result
 }
 // R5-01: InlineActions approve/reject handlers
-// 通过走 budgetApi.adjustApprove（预算调剂确认，后端无意见字段，故弹窗只给上下文不假装能留痕）；
+// 通过走 budgetApi.adjustApprove（预算调剂确认，后端无意见字段，故弹窗只给上下文不假装能记录）；
 // 驳回走 wfApi.approve，必须写明原因。
 const approvalRef = ref(null)
 

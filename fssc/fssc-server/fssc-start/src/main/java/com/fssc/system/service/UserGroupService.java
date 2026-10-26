@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -28,7 +31,7 @@ import java.util.List;
  *   <li>权限链路：用户 → 用户组（sys_user_group_rel）→ 组角色（sys_group_role）→ 菜单权限（sys_role_menu）。</li>
  *   <li>生效路径：登录 perms / 菜单树 / 角色码均已在 SysUserMapper / SysMenuMapper 做
  *       「直接角色 ∪ 用户组派生角色」UNION，无需额外装配。</li>
- *   <li>内控：组角色变更与成员变更都先跑用户级 SoD（权限码并集）再落库，命中即拦截。</li>
+ *   <li>内控：组角色变更与成员变更都先跑用户级 SoD（权限码并集）再写入数据库，命中即拦截。</li>
  * </ul>
  */
 @Service

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.sharing.entity.SupplierRecon;
@@ -13,14 +16,14 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 供应商对账确认（RECON_ACTIVE）收尾腿（P0-1 事件编排总线策略实现）。
+ * 供应商对账确认（RECON_ACTIVE）收尾环节（P0-1 事件编排总线策略实现）。
  *
- * <p>D-DEC-319（批次0 P-4 / A2 回滚腿）：此前 RECON_ACTIVE 是"无收尾腿"七条之一——
+ * <p>D-DEC-319（批次0 P-4 / A2 回滚环节）：此前 RECON_ACTIVE 是"无收尾环节"七条之一——
  * {@code SupplierReconService.supplierConfirm} 先把对账单置 CONFIRMED 才发起（同事务），审批驳回后
  * 无人把状态洗回＝脏账。本动作按发起时写入的流程变量快照（prevStatus / prevSupplierConfirmStatus）
- * 在驳回侧恢复确认前状态并清空确认时间戳；通过侧 CONFIRMED 已在发起时落库（幂等维持），无需重复动作。
+ * 在驳回侧恢复确认前状态并清空确认时间戳；通过侧 CONFIRMED 已在发起时写入数据库（去重维持），无需重复动作。
  *
- * <p>批次3（T-PT-4）给通过侧补"差异核对+FIN_GL 过账"完整腿时，在本类扩展，不得另起炉灶。
+ * <p>批次3（T-PT-4）给通过侧补"差异核对+FIN_GL 过账"完整环节时，在本类扩展，不得另起炉灶。
  */
 @Slf4j
 @Component("reconBizAction")
@@ -29,7 +32,7 @@ public class ReconBizAction implements WfBizAction {
 
     private final SupplierReconMapper reconMapper;
     private final HistoryService historyService;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -48,7 +51,7 @@ public class ReconBizAction implements WfBizAction {
         }
         try {
             if (Boolean.TRUE.equals(event.getApproved())) {
-                // CONFIRMED 在 supplierConfirm 落库（同事务）；这里只补一条通过留痕，不重复改状态
+                // CONFIRMED 在 supplierConfirm 写入数据库（同事务）；这里只补一条通过记录，不重复改状态
                 java.util.Map<String, Object> same = new java.util.LinkedHashMap<>();
                 same.put("status", recon.getStatus());
                 auditTrailService.recordUpdate(event.getBizType(), reconId, recon.getReconNo(), "supplier_recon",
@@ -62,7 +65,7 @@ public class ReconBizAction implements WfBizAction {
             String prevStatus = readStringVar(event.getProcInstId(), "prevStatus");
             String prevConfirmStatus = readStringVar(event.getProcInstId(), "prevSupplierConfirmStatus");
             if (prevStatus == null || prevStatus.isBlank()) {
-                // 无快照＝历史在途单（D-DEC-319 前发起），保守洗回 DIFF 人工档并留痕
+                // 无快照＝历史在途单（D-DEC-319 前发起），保守洗回 DIFF 人工档并记录
                 log.warn("对账单 {} 驳回但无确认前快照（历史在途单），按 DIFF 人工档处理", reconId);
                 prevStatus = "DIFF";
             }

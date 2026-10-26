@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.spi;
 
 import java.time.Duration;
@@ -24,7 +27,7 @@ public interface DistributedState {
 
     /**
      * 缓存语义：命中直接返回；未命中/过期调用 loader 回源并按 ttl 写入。
-     * 并发下允许重复加载（最终一致即可，与原 TenantCache 口径相同）。
+     * 并发下允许重复加载（最终一致即可，与原 TenantCache 规则相同）。
      *
      * @param key    缓存 key
      * @param type   值的类型（Redis 实现用于反序列化；本地实现直接返回原对象引用，type 仅作声明）
@@ -68,7 +71,7 @@ public interface DistributedState {
     /**
      * 互斥锁：获取成功返回 true（调用方必须 finally unlock）；已被占用立即返回 false（不阻塞）。
      *
-     * @param ttl 锁最长持有时间（实例崩溃兜底，到期自动释放；本地 GET_LOCK 模式忽略该参数）
+     * @param ttl 锁最长持有时间（实例崩溃默认处理，到期自动释放；本地 GET_LOCK 模式忽略该参数）
      */
     boolean tryLock(String lockKey, Duration ttl);
 

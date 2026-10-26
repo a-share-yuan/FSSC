@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -55,12 +58,13 @@ public class ExchangeRateService {
     private static final String HOME_CURRENCY = "CNY";
 
     /**
+     * 取某日适用汇率（参考 汇率配置 查询语义：按 币种对 + 生效日 匹配，取「≤业务日 最近一条」）：
      * 优先 MIDDLE，同日多类型时中间价优先。
      * <p>P0-C4 改造：区间列 expire_date 不再作为「查不到」的条件——原「区间包含」写法在月度汇率
      * 未续期时（实测 6 条全部止于月末）会让所有外币单据查不到价，调用方静默按 1:1 折算，
      * 造成本位币低估。现改为过期行沿用上一条价并告警，真正的缺价（该币种对从未维护过 ≤date 的行）
      * 返回 null 交由调用方 fail-closed 拦截。
-     * <p>兜底顺序：直查 from→to → 反向取倒数（1/rate，6 位）→ 经 CNY 交叉（USD→EUR = USD_CNY / EUR_CNY，6 位）。
+     * <p>默认处理顺序：直查 from→to → 反向取倒数（1/rate，6 位）→ 经 CNY 交叉（USD→EUR = USD_CNY / EUR_CNY，6 位）。
      *
      * @return 无任何可用价（含历史行）时返回 null
      */
@@ -134,7 +138,7 @@ public class ExchangeRateService {
     /**
      * 月度批量导入（upsert）：键 = 租户 + from + to + effect_date（rateType 缺省 MIDDLE），source=IMPORT。
      *
-     * @return 成功落库行数
+     * @return 成功写入数据库行数
      */
     public int importMonthly(List<MdExchangeRate> rows) {
         if (rows == null || rows.isEmpty()) {

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="app-shell">
     <!-- 后端未连接：全局置顶横幅（登录页也可见，因为后端没起时登录同样调不通） -->
@@ -13,11 +16,24 @@
          结构不变 ⇒ 不引入 PC 侧回归。key 用 fullPath：同一条地址返回即复用实例
          （列表滚动位置、已填表单、分页进度都在），换单据/换任务则另起一份。
          缓存上限 5 页，超出按 LRU 淘汰；离开 /h5 路由族（如退出登录）缓存随容器卸载销毁。 -->
+    <!-- D-H8-01（P2，2026-10-24 H8.8/H8.9 真跑）：/glex/consolidate 与 /glex/fx-reval 曾整页白屏
+         （控制台只有 `Unhandled error during execution of setup function` ＋ `Cannot read properties of null
+         (reading 'subTree')`，界面表格空态提示），用户无从得知原因。ErrorBoundary（R5-05）此前只在
+         main.js 里全局注册、任何一处使用 ⇒ 这里把它真正套到路由出口上：页面组件 setup/render 抛错时
+         显示可读默认处理＋重试入口，而不是留一片空白。
+         :key 用 route.fullPath —— 边界自身不监听路由，换页必须重新挂载一份干净的边界，
+         否则上一页捕获过的错误会把后续所有页面都挡在默认处理页上。
+          边界必须套在 keep-alive **内层**：套在外层且带 key 会让 keep-alive 实例随每次换页重建，
+         缓存全丢 ⇒ 移动报销端 P0-8「返回不丢数据」直接退化。 -->
     <router-view v-slot="{ Component, route }">
       <keep-alive v-if="route.meta?.keepAlive" :max="5">
-        <component :is="Component" :key="route.fullPath" />
+        <ErrorBoundary :key="route.fullPath">
+          <component :is="Component" :key="route.fullPath" />
+        </ErrorBoundary>
       </keep-alive>
-      <component v-else :is="Component" />
+      <ErrorBoundary v-else :key="route.fullPath">
+        <component :is="Component" />
+      </ErrorBoundary>
     </router-view>
   </div>
 </template>
@@ -105,7 +121,7 @@ html, body, #app { height: 100%; margin: 0; }
 body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f5f7fa; }
 .app-shell { height: 100%; }
 
-/* 原生 file 控件兜底隐藏：el-upload 依赖 .el-upload__input{display:none}，一旦全局样式
+/* 原生 file 控件默认处理隐藏：el-upload 依赖 .el-upload__input{display:none}，一旦全局样式
    缺失/延迟就会露出「选择文件 未选择任何文件」并压住侧边菜单（2026-10-20 报销页实况截图）。
    这里对所有 el-upload 生效，组件内 UploadButton 另有一层定向加固。 */
 .el-upload__input {
@@ -183,4 +199,9 @@ body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f
   font-weight: 500;
   word-break: break-all;
 }
+
+/* 描述列表是自动布局表格：值里出现不可断的长串（账号/单号/流水号）时，
+   浏览器会把标签列压到最窄（单字竖排）。标签不换行、值允许断行，列宽才稳定。 */
+.el-descriptions__label { white-space: nowrap; }
+.el-descriptions__content { overflow-wrap: anywhere; word-break: break-word; }
 </style>

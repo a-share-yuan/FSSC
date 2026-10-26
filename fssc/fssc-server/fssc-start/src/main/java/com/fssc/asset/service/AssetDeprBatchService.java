@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -31,11 +34,11 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * 折旧计提批单服务（FA_DEPRECIATION 两阶段落地）。
  *
- * <p>设计稿：资产折旧摊销流程目标规范为「资产核算岗」单一责任岗，重点自动生成凭证 + 审核留痕。
+ * <p>设计稿：资产折旧摊销流程目标规范为「资产核算岗」单一责任岗，重点自动生成凭证 + 审核记录。
  * 月度计提不直接落账，而是生成批单并发起 FA_DEPRECIATION 审批流；审批通过事件
- * （{@link AssetWfEventListener} 监听 {@code WfProcessEndedEvent}）触发 {@link #executeDepr} 幂等落账。</p>
+ * （{@link AssetWfEventListener} 监听 {@code WfProcessEndedEvent}）触发 {@link #executeDepr} 去重落账。</p>
  *
- * <p>幂等：以资产 {@code lastDeprDate} 为界，批单审批通过后再次执行会跳过本期间已计提资产；
+ * <p>去重：以资产 {@code lastDeprDate} 为界，批单审批通过后再次执行会跳过本期间已计提资产；
  * 批单状态 APPROVING→DONE 仅推进一次。</p>
  */
 @Service
@@ -50,7 +53,7 @@ public class AssetDeprBatchService {
     private final AssetDeprDetailMapper deprDetailMapper;
     private final WfEngineFacade wfEngineFacade;
     private final VoucherService voucherService;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /** 月折旧批处理触发：生成批单并发起 FA_DEPRECIATION 审批流（两阶段阶段一）。 */
@@ -71,11 +74,11 @@ public class AssetDeprBatchService {
         List<MdAsset> targets = eligibleAssets(ref);
         // D-AST-1：待计提数=0 显式拒绝，杜绝 0 资产空批（覆盖 /create、/submit、定时 Job 三入口）
         if (targets.isEmpty()) {
-            // D-AST-01（2026-10-19 G5 幕真跑发现）：原提示只讲「判定口径」不讲「怎么办」，
-            // 而手册 G5.6（购置日期=2026-10-16）+ G5.7（计提期=2026-10）的组合按此口径必然失败，
-            // 新手只能反复试。此处补两类成因的计数与可执行出路，避免把口径当故障。
+            // D-AST-01（2026-10-19 G5 幕真跑发现）：原提示只讲「判定规则」不讲「怎么办」，
+            // 而手册 G5.6（购置日期=2026-10-16）+ G5.7（计提期=2026-10）的组合按此规则必然失败，
+            // 新手只能反复试。此处补两类成因的计数与可执行出路，避免把规则当故障。
             throw new BizException(ErrorCode.PARAM_INVALID, "计提期间 " + ref + " 无待计提资产（待计提数=0），不允许生成折旧批单"
-                    + "。判定口径：该期间已计提（最后计提日期不早于 " + ref.atDay(1) + "）、或该期间及之后才购置的资产不计入"
+                    + "。判定规则：该期间已计提（最后计提日期不早于 " + ref.atDay(1) + "）、或该期间及之后才购置的资产不计入"
                     + "（当月购置当月不提折旧，会计惯例）。"
                     + "处理办法：① 本期刚购置的资产请改计提下一期间；"
                     + "② 若确需本期计提，请把资产购置日期调整到 " + ref.minusMonths(1) + " 或更早（资产卡片可改），再重试本期间"
@@ -95,7 +98,7 @@ public class AssetDeprBatchService {
         batch.setStatus("DRAFT");
         batch.setCreateBy(userId());
         batchMapper.insert(batch);
-        // P4-3 口径：新建落库无旧值，不接入审计（不伪造 before），故此处刻意不写 audit_trail
+        // P4-3 规则：新建写入数据库无旧值，不接入审计（不伪造 before），故此处刻意不写 audit_trail
         log.info("生成折旧计提批单 id={} period={} assetCount={} totalAmount={}",
                 batch.getId(), p, targets.size(), batch.getTotalAmount());
         return batch;
@@ -141,7 +144,7 @@ public class AssetDeprBatchService {
     }
 
     /**
-     * 阶段二(落账)：审批通过后执行实际计提（幂等）。仅 APPROVING 批单可执行；
+     * 阶段二(落账)：审批通过后执行实际计提（去重）。仅 APPROVING 批单可执行；
      * 已 DONE 直接返回，REJECTED 拒绝执行。
      */
     @Transactional
@@ -161,10 +164,10 @@ public class AssetDeprBatchService {
         YearMonth ref = parsePeriod(batch.getPeriod());
         LocalDate monthStart = ref.atDay(1);
         String period = ref.toString();
-        // D-DEC-133：落账阶段同样以<b>批单期间</b>为唯一口径筛候选（整改前此处再取一次真实当月，
+        // D-DEC-133：落账阶段同样以<b>批单期间</b>为唯一规则筛候选（整改前此处再取一次真实当月，
         // 跨零点执行时批单期间与实际计提期间会劈叉——第二轮真跑已实测到该改判）
         List<MdAsset> targets = eligibleAssets(ref);
-        // D-DEC-134：写明细前置闸——批头行必须真实存在。require() 虽已在入口查过批单，但本方法随后要写
+        // D-DEC-134：写明细前置校验——批头行必须真实存在。require() 虽已在入口查过批单，但本方法随后要写
         // md_asset_depr_detail（该表 batch_id 可空且<b>无外键约束</b>，information_schema 已核实），
         // 一旦批头在途消失（历史上 V9.9.9/V9.9.12 清理脚本 TRUNCATE asset_depr_batch 而不清子表，
         // 实测留下指向不存在批次 18 的孤儿明细），写出来的就是无法回溯的半截批次。此处 fail-closed。
@@ -198,9 +201,9 @@ public class AssetDeprBatchService {
         upd.setId(batchId);
         upd.setStatus("DONE");
         upd.setAssetCount(count);
-        // R5-D-196 定稿口径（对照 BankReconBizAction 的 CONFIRMED 终态模式）：审批通过回调是唯一
-        // 定稿入口——批单 APPROVING→DONE 仅由本方法推进一次（上方 DONE 幂等返回）；result_json
-        // 落 finalized 标记与定稿时点，审批驳回走 reject() 置 REJECTED（同为终态、不落账）。
+        // R5-D-196 定稿规则（对照 BankReconBizAction 的 CONFIRMED 最终状态模式）：审批通过回调是唯一
+        // 定稿入口——批单 APPROVING→DONE 仅由本方法推进一次（上方 DONE 去重返回）；result_json
+        // 落 finalized 标记与定稿时点，审批驳回走 reject() 置 REJECTED（同为最终状态、不落账）。
         upd.setResultJson("{\"executed\": " + count + ", \"assetIds\": [" + String.join(",", executed) + "]"
                 + ", \"finalized\": true, \"finalizedAt\": \"" + LocalDateTime.now() + "\"}");
         upd.setUpdateBy(userId());
@@ -261,9 +264,9 @@ public class AssetDeprBatchService {
 
     /**
      * 待计提资产：未报废、非在建工程(CIP) 且 <b>传入期间</b>尚未计提 且 非<b>传入期间</b>及之后新增。
-     * <p>D-DEC-133 整改：两条判定原先都锚在 {@code YearMonth.now()}（真实时钟）上，界面传的 period
+     * <p>D-DEC-133 整改：两条判定原先都关联在 {@code YearMonth.now()}（真实时钟）上，界面传的 period
      * 只当标签用 → 传 2026-12 也按真实当月筛，候选恒空 / 本月已计提的资产当月不可补提。
-     * 现一律以参数 {@code refMonth}（＝单据期间）为口径，时钟值只在 period 缺省时由
+     * 现一律以参数 {@code refMonth}（＝单据期间）为规则，时钟值只在 period 缺省时由
      * {@link #parsePeriod(String)} 兜一次底（月度 Job 语义"当月"保持不变）。
      * <p>缺陷修复（H-03 / DA-02）：在建工程达到预定可使用状态并转固（FA_CIP_TO_ASSET）后方可计提折旧
      * （企业会计准则第4号——固定资产），CIP 状态卡片不得进入月度折旧批。
@@ -287,7 +290,7 @@ public class AssetDeprBatchService {
     }
 
     /**
-     * 期间解析（D-DEC-133）：接受 {@code yyyy-MM}（界面/Job 口径）与 {@code yyyyMM}（GL 域口径），
+     * 期间解析（D-DEC-133）：接受 {@code yyyy-MM}（界面/Job 规则）与 {@code yyyyMM}（GL 域规则），
      * 空值按<b>当前月</b>——服务层传 null 表示"当月"的既有语义保持不变（{@code MdAssetService.depreciateMonth}）。
      * 非法格式显式拒绝，不再静默 fallback 到当月（静默补值是 D-DEC-133「期间语义倒置」的另一半）。
      */
@@ -311,7 +314,7 @@ public class AssetDeprBatchService {
 
     /** 计提一个月折旧：累加累计折旧（封顶应计折旧额）、回写净值、更新 lastDeprDate、状态转在用。
      *  P1-1: 同时写入折旧明细记录(md_asset_depr_detail)。
-     *  D-DEC-133：计提日期口径改为<b>所属期间月末</b>（整改前写 {@code LocalDate.now()}）——
+     *  D-DEC-133：计提日期规则改为<b>所属期间月末</b>（整改前写 {@code LocalDate.now()}）——
      *  跨月补提时把"今天"当 last_depr_date 会把该资产在后续期间的候选集里永久挤掉
      *  （下一期间月首 &lt;= lastDeprDate 即被筛除），补提与重跑因此不可达。 */
     private AssetDeprDetail applyDepr(MdAsset a, LocalDate monthStart, Long batchId, String period) {
@@ -386,7 +389,7 @@ public class AssetDeprBatchService {
     private void assertHeaderPresent(Long batchId) {
         if (batchId == null || batchMapper.selectById(batchId) == null) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "折旧落账中断：批单 " + batchId + " 头行不存在（批单被删除或未落库），禁止写入计提明细");
+                    "折旧落账中断：批单 " + batchId + " 头行不存在（批单被删除或未保存），禁止写入计提明细");
         }
     }
 

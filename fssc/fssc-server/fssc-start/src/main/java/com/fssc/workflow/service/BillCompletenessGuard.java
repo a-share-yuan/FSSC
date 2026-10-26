@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -27,43 +30,45 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 资料齐套闸口（F2／方案 §3，2026-09-26）。
+ * 资料齐套校验（F2／方案 §3，2026-09-26）。
  *
  * <p>回答体检 E-01/E-02 的"前面为什么没拦"：附件、合同/PO、出账账户外键在现网全部零校验，
  * 缺件单据可以一路直走到付款与归档（十二月运营手册 12-22 三控制点全空仍审批通过、
- * 12-23 批次确认时供应商银行账户档案 0 条，均为本组件要收口的对象）。
+ * 12-23 批次确认时供应商银行账户档案 0 条，均为本组件要办结的对象）。
  *
  * <p>调用点：{@code WfEngineFacade.start}（SUBMIT）、{@code WfEngineFacade.complete}（NODE:节点）、
- * {@code PayBatchService.confirm}（CONFIRM）、{@code PayBatchService.execute}（EXECUTE 二次闸）。
- * 按人工裁决 RA-F2a 的口径，SUBMIT 层只告警不阻断（避免提单人被"影像还没上传"彻底卡死），
+ * {@code PayBatchService.confirm}（CONFIRM）、{@code PayBatchService.execute}（EXECUTE 二次校验）。
+ * 按人工裁决 RA-F2a 的规则，SUBMIT 层只告警不阻断（避免提单人被"影像还没上传"彻底卡死），
  * CONFIRM／NODE 层缺件硬拦。
  *
  * <p>灰度（缺省＝改造前行为）：{@code sys_config} 三键
  * {@code bill.completeness.gate.enabled=1} ＋ {@code bill.completeness.models} 白名单
  * ＋ {@code bill.completeness.rules} 分维度规则；任一缺失或读取异常都按未生效处理。
  * 唯一例外是 D4 出账账户外键：账户主数据里查不到对应记录属脏数据硬错误，不吃灰度开关，
- * 但只在 CONFIRM（生成资金指令那一步）与 EXECUTE（对外付款动作前，RA-F2d 二次闸）拒绝——在途审批
- * 节点的「同意」不因此被打死；存量悬空批次由只读普查出清单后逐单人工修数（RA-F2c），不由代码兜底。
+ * 但只在 CONFIRM（生成资金指令那一步）与 EXECUTE（对外付款动作前，RA-F2d 二次校验）拒绝——在途审批
+ * 节点的「同意」不因此被打死；历史悬空批次由只读普查出清单后逐单人工修数（RA-F2c），不由代码默认处理。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class BillCompletenessGuard {
 
-    /** 提单收口：只告警（RA-F2a） */
+    /** 提单办结：只告警（RA-F2a） */
     public static final String STAGE_SUBMIT = "SUBMIT";
     /** 付款批次确认：硬拦 */
     public static final String STAGE_CONFIRM = "CONFIRM";
     /** 审批办理：{@code NODE:<taskDefinitionKey>}，硬拦 */
     public static final String STAGE_NODE_PREFIX = "NODE:";
     /**
-     * 付款执行（对外打款动作前）二次闸，硬拦——人工裁决 RA-F2d（REF-B「两点都拦」）。
+     * 付款执行（对外打款动作前）二次校验，硬拦——人工裁决 RA-F2d（REF-B「两点都拦」）。
      *
-     * 通式（行业方案「检查通过任务方可提交…对于选择审核不通过、打回的无需校验」〔E·FSSC·97/98〕；
-     * 行业方案「单据动作发生前的条件检查…否则不允许执行」〔丙·开发指南〕），
+     * <p><b>差异声明（自定加严）</b>：外部资料只有"动作发生前须通过前置检查，否则不允许执行"这一
+     * 通式（检查通过任务方可提交…对于选择审核不通过、打回的无需校验〔E·FSSC·97/98〕；
+     * 「单据动作发生前的条件检查…否则不允许执行」〔丙·开发指南〕），
      * <b>没有</b>"付款执行前再查一次齐套"的成文条目。本档是把同一套标准复用到打款这一步，
+     * 属我方加严，不是参考还原。
      *
-     * <p>与"下移"的区别：确认时点（{@link #STAGE_CONFIRM}）的闸口<b>保留不动</b>，此处只做增量；
+     * <p>与"下移"的区别：确认时点（{@link #STAGE_CONFIRM}）的校验<b>保留不动</b>，此处只做增量；
      * 规则维度沿用 {@code modelKey:CONFIRM} 已配置的那一套（见 {@link #scopeMatches}），
      * 免得多出一个"配了才生效"的假开关。
      */
@@ -119,12 +124,12 @@ public class BillCompletenessGuard {
         }
         String detail = String.join("；", missing);
         if (stage != null && stage.startsWith(STAGE_SUBMIT)) {
-            // RA-F2a：提交层只告警，缺件单据仍可提交，由后续 NODE/CONFIRM 档收口
+            // RA-F2a：提交层只告警，缺件单据仍可提交，由后续 NODE/CONFIRM 档办结
             log.warn("齐套告警（提单层不阻断）[{}#{}] {}", modelKey, bizId, detail);
             return;
         }
         throw new BizException(ErrorCode.PARAM_INVALID,
-                "资料不齐，闸口拒绝（F2 齐套闸口·" + modelKey + "·" + stage + "）：" + detail);
+                "资料不齐，无法提交（F2 齐套校验·" + modelKey + "·" + stage + "）：" + detail);
     }
 
     // === D4 ===
@@ -140,19 +145,19 @@ public class BillCompletenessGuard {
         }
         String msg = "批次 " + batch.getBatchNo() + " 的出账账户在银行账户主数据中不存在（id="
                 + batch.getBankAccountId() + "），请先在公司银行账户档案建档并重新指定出账账户";
-        // 只在 CONFIRM（生成资金指令的那一步）与 EXECUTE（打款动作前，RA-F2d 二次闸）硬拦：审批节点是
+        // 只在 CONFIRM（生成资金指令的那一步）与 EXECUTE（打款动作前，RA-F2d 二次校验）硬拦：审批节点是
         // 复核动作，把在途 TR_PAY 实例的「同意」也一起打死，等于用脏数据把已受理的业务永久摁住——
-        // 存量悬空批次按 RA-F2c 出清单人工修数。
+        // 历史悬空批次按 RA-F2c 出清单人工修数。
         if (!STAGE_CONFIRM.equals(stage) && !STAGE_EXECUTE.equals(stage)) {
             log.warn("齐套告警（非确认/执行档不阻断）[{}#batch{}] {}", stage, batchId, msg);
             return;
         }
-        throw new BizException(ErrorCode.PARAM_INVALID, msg + "（F2 齐套闸口·D4 账户外键）");
+        throw new BizException(ErrorCode.PARAM_INVALID, msg + "（F2 齐套校验·D4 账户外键）");
     }
 
     // === 规则解析 ===
 
-    /** 该 modelKey＋stage 需要校验的维度；闸口未开或无规则时返回空（＝零行为变更）。 */
+    /** 该 modelKey＋stage 需要校验的维度；校验未开或无规则时返回空（＝零行为变更）。 */
     private List<String> dimensionsOf(String modelKey, String stage) {
         if (!"1".equals(readConfig(KEY_ENABLED))) {
             return List.of();
@@ -197,7 +202,7 @@ public class BillCompletenessGuard {
             return parts.length == 2;
         }
         if (parts[1].trim().equalsIgnoreCase(STAGE_CONFIRM)
-                // EXECUTE（RA-F2d 二次闸）沿用 CONFIRM 档已配的同一套维度：两点同标准，不另立需要
+                // EXECUTE（RA-F2d 二次校验）沿用 CONFIRM 档已配的同一套维度：两点同标准，不另立需要
                 // 额外配置才生效的规则键（现网 bill.completeness.* 三键在库中 0 行，另立即成假开关）。
                 && (STAGE_CONFIRM.equalsIgnoreCase(wantStage) || STAGE_EXECUTE.equalsIgnoreCase(wantStage))) {
             return parts.length == 2;

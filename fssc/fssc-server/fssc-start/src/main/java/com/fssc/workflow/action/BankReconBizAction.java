@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.bank.entity.BankReconcile;
@@ -26,7 +29,7 @@ public class BankReconBizAction implements WfBizAction {
     private final VoucherService voucherService;
     /** W2（D-DEC-313）：定稿前取当月余额调节差额 */
     private final com.fssc.bank.service.BankReconcileService bankReconcileService;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -50,7 +53,7 @@ public class BankReconBizAction implements WfBizAction {
             upd.setId(reconId);
             if (Boolean.TRUE.equals(event.getApproved())) {
                 // W2（D-DEC-313）：调节差额非零＝当月还有没对平的未达账项，不静默定稿。
-                // 留在 MATCHED 并逐条留痕交人工处理——Task_4 人工复核这道挡位按裁决保留不动。
+                // 留在 MATCHED 并逐条记录交人工处理——Task_4 人工复核这道挡位按裁决保留不动。
                 java.math.BigDecimal diff = bankReconcileService.reconDiff(reconId);
                 if (diff != null && diff.signum() != 0) {
                     java.util.Map<String, Object> unchanged = new java.util.LinkedHashMap<>();

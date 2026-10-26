@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -17,6 +20,7 @@ import java.util.stream.Collectors;
 
 /**
  * 报表目录服务：预置报表注册表管理 + 用户收藏管理。
+ * 报表中心——报表按分类编排，用户可收藏常用报表。
  */
 @Slf4j
 @Service
@@ -68,7 +72,7 @@ public class ReportCatalogService {
         return reportDefMapper.selectList(defQw);
     }
 
-    /** 收藏一个报表（幂等：已存在则跳过） */
+    /** 收藏一个报表（去重：已存在则跳过） */
     @Transactional(rollbackFor = Exception.class)
     public void addFavorite(String reportCode) {
         Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();

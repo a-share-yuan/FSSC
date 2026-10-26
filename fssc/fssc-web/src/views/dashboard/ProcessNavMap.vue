@@ -1,16 +1,19 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="nav-map">
     <!-- 顶部说明 -->
     <div class="map-header">
       <div>
         <h2 class="map-title">流程导航地图</h2>
-        <p class="map-sub">7 大业务域端到端链路 · 点任意节点直达对应菜单页面 · 底层由 <code>biz_no</code> 串联成连续数据链</p>
+        <p class="map-sub">7 大业务域端到端链路 · 点任意节点直达对应菜单页面 · 底层按业务单号串联成连续数据链</p>
       </div>
       <div class="map-legend">
         <span class="lg lg-start">发起</span>
         <span class="lg lg-review">审核</span>
         <span class="lg lg-account">记账</span>
-        <span class="lg lg-close">收口</span>
+        <span class="lg lg-close">办结</span>
         <el-button size="small" @click="goTraceDemo">查看全链路联查示例</el-button>
       </div>
     </div>
@@ -92,7 +95,7 @@ const router = useRouter()
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 
-// 路由 → 权限码（降级兜底用）。主判定已改为「用户菜单树同源」（见 canAccess），
+// 路由 → 权限码（降级默认处理用）。主判定已改为「用户菜单树同源」（见 canAccess），
 // 仅当菜单树加载失败时才按本表权限码放行；数组表示「任一满足即可」。
 // 数据来源：sys_menu.path/perms 实测映射（2026-09-17）。空数组 = 菜单未挂权限码，全员可进。
 // 未出现在本表的路由（treasury/*、budget/execution、expense/apply、approval 等）不在此处拦截，

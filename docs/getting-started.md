@@ -1,120 +1,177 @@
-# 快速开始（getting-started）
+# 快速上手（Getting Started）
 
-> 本文与仓库根目录 `readme.txt` 内容同源但更详细：readme.txt 面向"下载即跑"，
-> 本文补充每一步的验证方法、失败排查与结构说明。
+> **校准状态**：本文的版本号、端口、配置键、默认值均从 `application.yml` / `application-dev.yml` / `vite.config.js` / `pom.xml` / `package.json` **实测读取**；「已知启动坑」来自开发环境真实观察。**但整条流程尚未在一台干净机器上从零验证通过**——`db/schema-baseline.sql` 目前还不存在，这是发布阻断项（见 `docs/release-checklist.md` 第 4 条）。跑通后请把本节标为"已验证"并附验证环境。
+>
+> **界面语言**：只有中文，且**项目里没有国际化框架**（`package.json` 无 `vue-i18n`，全仓无 `createI18n` 与 `$t(` 调用，`fssc-web/src/i18n/` 只有一枚 bpmn-js 画布的中文补丁）。所以不要在界面上找语言切换入口，它不存在；文案是硬编码的中文字面量，状态/枚举码的中文显示统一登记在 `fssc-web/src/constants/billStatus.js`。整套英文化是一笔独立投入，判词见 `docs/release-checklist.md` §8 第 ③ 项。
 
-## 1. 前置检查
+---
 
-```bash
-java -version     # 必须 26.0.1（项目锁定 maven.compiler.release=26）
-mvn -v            # 3.9.x
-mysql --version   # 8.x
-node -v           # 24.x
-```
+## 0. 心智模型：三个进程 + 两个库
 
-数据库字符集要求 `utf8mb4` / `utf8mb4_general_ci`（建库时指定）。
-MariaDB 与 MySQL 5.7 **未经验证**，不要直接上生产。
+| 部件 | 端口 | 是什么 | 必须吗 |
+|---|---|---|---|
+| MySQL | 3306 | 两个库：`fssc`（业务表 + Flowable 表 + 平台表）、`fssc_image`（影像 6 张表，独立数据源） |  必须 |
+| `fssc-server.jar` | **8089** | Spring Boot 后端，33 个业务域全在这一个进程里 |  必须 |
+| Vite dev server | **8080** | 前端，把 `/api` 反代到 8089 |  必须（生产可换成静态站点） |
+| Invoice Gateway | 8096 | 发票识别/查验能力封装（**外部服务，本仓库不含**） |  可选，不装则识别失败 |
+| PaddleOCR 服务 | 8087 | 本地图片发票识别（`kb_ocr_server.py`） |  可选 |
+| Redis | 6379 | 多实例部署时才需要（缓存/限流/调度锁） |  单机不需要 |
 
-## 2. 导入演示数据库
+> **影像为什么单独一个库？** 影像是全系统体积增长最快的部分（原件图片/PDF），分库便于独立扩容、迁移和归档。路由靠 `@FsscDataSource("image")` 注解 + AOP，默认走 master。
 
-```bash
-# Linux / macOS / Git Bash
-bash db/import.sh
-
-# Windows
-db\import.bat
-```
-
-默认参数：`127.0.0.1:3306`，用户 `root`。覆盖方式：
+## 1. 装工具链（版本必须对齐）
 
 ```bash
-MYSQL_PWD='你的口令' bash db/import.sh -h <mysql-host> -P <port> -u <user>
+java -version    # 期望 26.x  ← pom: <java.version>26</java.version> + maven.compiler.release=26
+mvn -v           # 期望 3.9.x
+node -v          # 期望 24.x  ← Vite 6
+mysql --version  # 期望 8.x
 ```
 
-导入内容：`db/demo-db/` 下 323 个分表 SQL → 主库 `fssc`（316 表）+ 影像库
-`fssc_image`（6 表），含 460 个演示用户、694 个菜单、315 个已部署流程定义。
-**幂等**：可重复执行（每表 DROP 后重建）。
+**为什么版本这么关键**：Spring Boot **4.1.0** 是较新的大版本，其自动配置键名与 3.x 不兼容（例如 `spring.data.redis.*`、`server.max-http-request-header-size`）。用 Boot 3 的写法配 Boot 4 会静默失效。
 
-> 手动导入时的顺序约束：`fssc_routines.sql`（视图）依赖业务表，必须最后导入；
-> import 脚本已自动处理，手工 `cat *.sql` 一把梭会报 `Table 'sys_user' doesn't exist`。
+>  `application.yml` 的 `info.app.java: 17` 是**过时的展示字段**，与实际构建要求（26）不一致。以 `pom.xml` 为准。
 
-验证导入：
+## 2. 建库
 
 ```sql
-SELECT COUNT(*) FROM fssc.sys_user;            -- 期望 460
-SELECT COUNT(*) FROM fssc.md_bank_account;     -- 期望 113
-SELECT COUNT(*) FROM fssc_image.img_setting;   -- 期望 5
+CREATE DATABASE fssc       DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+CREATE DATABASE fssc_image DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+
+-- 给应用账号最小权限（演示环境用 root 也可以，生产不要）
+CREATE USER 'fssc'@'%' IDENTIFIED BY '<强口令>';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES
+  ON fssc.*       TO 'fssc'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES
+  ON fssc_image.* TO 'fssc'@'%';
+FLUSH PRIVILEGES;
 ```
 
-## 3. 配置环境变量
+**为什么账号要有 `CREATE`/`ALTER`**：Flowable 配置了 `database-schema-update: true`，**首次启动会自动建 `ACT_*` / `FLW_*` 表**。没有 DDL 权限会启动失败。生产环境建议：先在测试库让它建完，导出后手工执行，再把应用账号权限收回 DDL。
+
+然后导入业务表基线与演示数据：
+
+```bash
+mysql -ufssc -p fssc       < db/schema-baseline.sql
+mysql -ufssc -p fssc       < db/seed-demo.sql
+mysql -ufssc -p fssc_image < db/schema-image.sql   # 影像 6 表：img_batch/img_file/img_setting/image_exception/image_review/ocr_record
+```
+
+>  **当前仓库缺这三份脚本**（`sql/` 下是 205 个按施工顺序累积的增量脚本，且项目**没有引入 Flyway/Liquibase**，无法自动按序执行）。生成基线的方法见 `docs/release-checklist.md` §1 阻断项第 4 行与 §5（基线脚本生成）。**在你拿到基线之前，本项目无法干净部署。**
+
+## 3. 配置
 
 ```bash
 cp .env.example .env
 ```
 
-必填两项：
+只有两项是必填：
 
-| 变量 | 说明 |
-|---|---|
-| `FSSC_DB_PASSWORD` | MySQL 口令（留空启动失败，这是有意的 fail-fast） |
-| `FSSC_JWT_SECRET` | ≥32 字节随机串，`openssl rand -base64 48`；多实例部署必须同值 |
+```ini
+FSSC_DB_PASSWORD=<你的库口令>
+FSSC_JWT_SECRET=<openssl rand -base64 48 的输出>
+SPRING_PROFILES_ACTIVE=dev
+```
 
-可选项默认即可演示：`FSSC_OCR_CHANNEL=mock`（离线模拟票面）、
-`FSSC_BANK_GATEWAY=mock`、`FSSC_REDIS_ENABLED=false`（单机用 MySQL GET_LOCK 调度）。
+演示环境建议显式关掉需要外部服务的能力：
 
-## 4. 启动
+```ini
+FSSC_OCR_CHANNEL=mock            # 确定性模拟票面，不需要 OCR 服务
+INVOICE_GATEWAY_ENABLED=false    # 不连 8096 网关
+FSSC_BANK_GATEWAY=mock           # 银企直联走模拟
+SPRING_MAIL_HOST=                # 留空 = 邮件渠道自动禁用
+```
+
+**关键默认值（不写也能跑）**
+
+| 键 | 默认 | 含义 |
+|---|---|---|
+| `server.port` | 8089 | 后端端口 |
+| `server.shutdown` | graceful | 停机先停接单，等在途请求（`timeout-per-shutdown-phase: 30s`） |
+| `fssc.redis.enabled` | false | 单机模式；调度锁退化为 MySQL `GET_LOCK` |
+| `fssc.jwt.expire-seconds` | 7200 | token 有效期 2 小时 |
+| `fssc.file.local-root` | `./data/files` | 附件根目录，下分 `temp`/`business`/`archive` 三区 |
+| `fssc.file.max-size` | 20 MB | 与 `spring.servlet.multipart.max-file-size: 20MB` 对齐（超 20MB 必须同步改两处，否则请求在进入 Controller 前就被静默拒绝） |
+| `fssc.self-registration.enabled` | false | **自助注册默认关闭**，只能管理员邀请建号 |
+| `fssc.login.captcha-enabled` | false | 验证码开关；**本体未实现**，不要指望它防脚本 |
+| `fssc.wf.bpmn-repo-dir` | `./bpmn-repo` | BPMN 版本快照落盘目录（指向 git 工作副本可获得回溯能力） |
+| `fssc.wf.history-retention-months` | 6 | Flowable `ACT_HI_*` 保留月数，每周日 03:00 清理；**业务 `wf_*` 台账不清** |
+| `fssc.ai.gateway.enabled` | true | AI 动作网关开关；关闭不影响任何既有人工页面 |
+| `springdoc.*` | enabled | `/swagger-ui.html`、`/v3/api-docs`；分 `tenant` / `platform` 两组 |
+
+## 4. 启动后端
 
 ```bash
-# 后端（端口 8089）
-cd fssc/fssc-server
-mvn -q clean package -DskipTests
+cd fssc-server
+mvn clean package -DskipTests
+# 产物：fssc-start/target/fssc-server.jar（约 90MB 级别 fat jar）
 java -jar fssc-start/target/fssc-server.jar
+```
 
-# 前端（端口 8080，Vite 代理 /api → 8089）
-cd fssc/fssc-web
+看到 Spring Boot 启动完成日志后，**先探活**：
+
+```bash
+curl http://127.0.0.1:8089/actuator/health
+# {"status":"UP","groups":["liveness","readiness"],...}
+```
+
+`/actuator/health`、`/actuator/health/liveness`、`/actuator/health/readiness` 在 JWT 白名单里，**无需 token**，专为容器探针设计。
+`/actuator/prometheus` 与 `/actuator/metrics` **需要带 token**。
+
+> 两个健康探测项被**显式关闭**了：`management.health.redis.enabled=false`、`management.health.mail.enabled=false`。原因：类路径上有 Redis starter / mail sender 就会注册对应 HealthIndicator，而单机模式不连 Redis、SMTP host 为空 → `/actuator/health` 会**恒为 DOWN**（组件未启用被误判为故障）。如果你启用了 Redis 或配了 SMTP，请把对应开关改回 `true` 纳入健康检查。
+
+## 5. 启动前端
+
+```bash
+cd fssc-web
 npm install
-npm run dev
+npm run dev            # → http://localhost:8080
+npm run test           # vitest
+npm run build          # 产物目录当前硬编码为 dist36/（见下方"坑"）
 ```
 
-Docker/K8s 形态见 `fssc/docker/` 与 [部署运维](部署运维.md)。
+## 6. 登录，走一张单
 
-## 5. 验证跑通
+打开 `http://localhost:8080`，用 `docs/demo-accounts.md` 的演示账号登录（**自助注册是关闭的**，别在登录页找入口）。
 
-1. 打开 http://localhost:8080，`admin` / `123456` 登录（租户 DEMO1）；
-2. 健康检查：`curl http://localhost:8089/actuator/health/liveness` → `UP`；
-3. 走一张单：我的工作台 → 费用报销 → 新建 → 保存 → 提交 → 待办里审批通过；
-4. 看轨迹：单据详情 → 流程轨迹（时间线来自 `chain.summary.reached`）；
-5. 看出账：总账 → 凭证查询，应能看到该单自动生成的凭证。
-
-## 6. 已知启动坑（启动失败排查）
-
-| 现象 | 根因 | 处置 |
-|---|---|---|
-| `Access denied for user` | `FSSC_DB_PASSWORD` 不对 | 核对 .env 后重启 |
-| `Communications link failure` | MySQL 没起/端口不对 | 起库；改 `FSSC_DB_MASTER_URL` |
-| `Unknown database 'fssc'` | 没导库 | 跑 `db/import.sh` |
-| 前端白屏 / 401 | 后端没起，或 Vite 代理没连上 8089 | 先 `curl :8089/actuator/health/liveness` 确认后端 UP，再看前端 |
-| 接口 403 缺权限 | 用了 admin 之外的账号，或角色未授权 | 换 `admin`；或到「系统管理 → 角色」给当前角色勾上对应权限 |
-| 登录后菜单/数据为空（非 403） | 登录时选错租户（非 `DEMO1`） | 登录页把租户切回 `DEMO1`；演示库数据都在该租户下 |
-| 后端起不来 / 端口 8089 已被占用 | 旧进程或看门狗未退出，文件锁 | `netstat -ano \| findstr 8089` 看 PID 并结束；确认无残留再重启 |
-| Flowable 报缺表 | 导库不完整 | 重跑 `db/import.sh`（幂等，每表 DROP 后重建） |
-| `Unsupported class file major version` | JDK 不是 26 | 装 JDK 26.0.1（项目锁定 `maven.compiler.release=26`） |
-| 启动报 `xxxMapper` 找不到表 / 租户条件缺失 | 改了查询层却绕过 MP 拦截器 | 见 `docs/permissions.md` 与 `docs/data-model.md` 的列名坑清单，必须自证租户条件生效 |
-
-## 7. 目录速览
+建议的第一条路径（能一次串起 8 个域）：
 
 ```
-fssc/fssc-server/   后端（fssc-common + fssc-start 两模块）
-fssc/fssc-web/      前端（Vue3 + Vite）
-fssc/docker/        Dockerfile + k8s yaml
-bpmn-repo/          8 个流程模型（版本化）
-db/                 演示库 + 导入脚本 + 说明
-docs/               本文档集
+我的工作台 → 费用报销 → 新建 → 填明细/传附件 → 提交
+  → [compliance] 合规预检   → [budget] 预算占用   → [workflow] 审批（换一个审批账号登录点通过）
+  → [treasury/payplan] 付款 → [bank] 批次执行      → [glex] 自动生成凭证（DRAFT → 过账）
+  → [image/archive] 影像与归档 → [tracing] 单据全链路联查（看这单在每一环的记录）
 ```
 
-## 8. 已验证 / 未验证边界（诚实声明）
+走完这一条，你就理解了这套系统 70% 的结构。
 
-- **已验证**：数据库导入（干净库 0 错误，行数与 dump 一致）；演示账号登录口径；
-  后端单测与前端构建在 CI 内。
-- **未验证**：干净机器全栈（起后端→登录→提单→审批→凭证）尚未端到端跑通验证，
-  遇阻请提 issue 并附日志。
+---
+
+## 7. 已知启动坑（按发生频率排序）
+
+| # | 现象 | 根因 | 处理 |
+|---|---|---|---|
+| 1 | 页面白屏 + 顶部横幅"后端服务未启动"，或接口全 503 | 后端 8089 没起 | 这是 `vite.config.js` 的**兜底设计**（后端未连时代理返回 503 JSON，前端识别后弹横幅），不是 bug。先 `curl :8089/actuator/health` |
+| 2 | 用 `http://127.0.0.1:8080` 打不开，但 `http://localhost:8080` 能开 | dev 环境观察到 Vite 只绑定 IPv6 回环 `[::1]` | 用 `localhost`，或在 `vite.config.js` 的 `server` 里显式 `host: '0.0.0.0'`（改动属本地开发体验，别提交） |
+| 3 | 登录成功但接口 400 `Request header is too large` | 权限多的角色（如 CONFIG_ADMIN 300+ 权限点）使 JWT 膨胀到 ~8.7KB | 配置里已把 `server.max-http-request-header-size` 提到 64KB；若你自己压低了这个值会复现。长期解法是 token 只放身份不放权限清单 |
+| 4 | 某列表显示"共 0 条 / 暂无数据"，但库里明明有数据 | 后端返回 `code=4030`（缺权限），前端按空结果渲染 | 排查顺序：先看浏览器 Network 里那条响应的 `code`，再查权限。**不要**先怀疑数据 |
+| 5 | 日志/`data/files` 出现在你想不到的目录 | 二者都是相对路径（`./logs`、`./data/files`），**随启动命令的 cwd 搬家** | 固定从一个目录启动，或用绝对路径覆盖配置 |
+| 6 | 改完配置表没生效 | 一部分配置在启动时装配（如 `@ConfigurationProperties`、SPI 通道选择），运行期读的是快照 | 涉及装配的改动一律重启；只有明确标注"走 sys_config 实时读取"的（如 OCR 通道参数）才免重启 |
+| 7 | OCR 识别一直失败 | 默认 `fssc.ocr.channel=gateway` 指向 8096 外部网关，而该服务不在本仓库 | 演示置 `FSSC_OCR_CHANNEL=mock`；接真引擎走 `http` 通道 + `sys_config` 的 `ocr.api.url/token/mapping` |
+| 8 | `mvn package` 成功但 `EXIT=0` 不代表真编译了目标类 | `-q` 静默时零日志行；多模块部分失败仍可能给出成功码 | 用 `unzip -p <jar> BOOT-INF/classes/.../<类>.class` 或 `javap` 核对类面，别只看退出码 |
+| 9 | 流程模型的 XML 与你改的库不一致 | `fssc.wf.bpmn-repo-dir` 默认 `./bpmn-repo` **是相对路径**，随启动 cwd 搬家；开发工作区里曾有 4 个同名 `bpmn-repo` 目录（真相源在工作区根，`publish/` 77 个模型 / `models/` 83 编码 289 版本 XML） | 显式设 `FSSC_BPMN_REPO_DIR=<绝对路径>`，别依赖默认值 |
+
+## 8. 卸载 / 重来
+
+```bash
+mysql -e "DROP DATABASE fssc; DROP DATABASE fssc_image;"
+rm -rf fssc-web/node_modules fssc-server/*/target ./data ./logs
+```
+
+## 9. 下一步读什么
+
+- 找一个功能该改哪个文件 → `docs/module-map.md`
+- 请求在框架里怎么流转（拦截器/切面/facade）→ `docs/architecture.md`
+- 表怎么组织的 → `docs/data-model.md`
+- 审批引擎能配什么 → `docs/workflow-engine.md`
+- 加权限 → `docs/permissions.md`

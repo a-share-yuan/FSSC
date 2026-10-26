@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.log;
 
 import com.fssc.framework.config.AsyncConfig;
@@ -14,10 +17,10 @@ import org.springframework.stereotype.Component;
  * 操作日志异步写入器。
  * <p>
  * 由 {@link OperLogAspect} 在请求线程内完成上下文采集与实体组装后，把纯 INSERT 动作交给本组件，
- * 通过 {@code @Async("operLogExecutor")} 在专用线程池落库。注意 {@code @Async} 需跨 bean 调用才生效，
+ * 通过 {@code @Async("operLogExecutor")} 在专用线程池写入数据库。注意 {@code @Async} 需跨 bean 调用才生效，
  * 故从切面分离到独立组件。
  * <p>
- * 保持“日志失败不影响业务”语义：写库异常在本组件内 try-catch 吞掉，仅留痕，不回传调用方。
+ * 保持“日志失败不影响业务”语义：写库异常在本组件内 try-catch 吞掉，仅记录，不回传调用方。
  */
 @Slf4j
 @Component

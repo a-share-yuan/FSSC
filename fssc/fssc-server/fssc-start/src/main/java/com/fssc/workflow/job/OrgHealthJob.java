@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.job;
 
 import com.fssc.framework.job.JobHeartbeatService;
@@ -19,7 +22,7 @@ import java.time.Duration;
 import java.util.Map;
 
 /**
- * 组织健康巡检 Job（OrgHealthJob）——把 4 条红线做成<b>每日自动巡检 + 手工触发闸门</b>。
+ * 组织健康巡检 Job（OrgHealthJob）——把 4 条红线做成<b>每日自动巡检 + 手工触发校验</b>。
  *
  * <p>对应 {@link OrgHealthChecker} 的诊断能力。此Job 只读、只报，<b>不改任何数据</b>：
  * 「R1 补人 / R2 补部门树」属组织治理动作，必须由管理者显式决定，不能由定时任务擅自修改主数据。

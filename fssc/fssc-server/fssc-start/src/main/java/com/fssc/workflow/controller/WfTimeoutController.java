@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -41,7 +44,7 @@ public class WfTimeoutController {
     private final WfTaskMapper wfTaskMapper;
     private final WfNodeConfigMapper wfNodeConfigMapper;
     private final WfFlowConfigMapper wfFlowConfigMapper;
-    /** 节点键解析（含 Task_N → 业务节点兜底映射），与超时催办 Job 共用同一实现 */
+    /** 节点键解析（含 Task_N → 业务节点默认处理映射），与超时催办 Job 共用同一实现 */
     private final com.fssc.workflow.service.WfNodeConfigResolver wfNodeConfigResolver;
 
     /**
@@ -89,7 +92,7 @@ public class WfTimeoutController {
                 new LambdaQueryWrapper<WfTask>()
                         .eq(WfTask::getStatus, "PENDING"));
 
-        // 构建节点配置索引（modelKey:nodeKey -> WfNodeConfig，含 Task_N 兜底）
+        // 构建节点配置索引（modelKey:nodeKey -> WfNodeConfig，含 Task_N 默认处理）
         Map<String, WfNodeConfig> nodeConfigMap = wfNodeConfigResolver.index(pendingList);
 
         long totalPending = pendingList.size();

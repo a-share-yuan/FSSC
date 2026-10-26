@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.treasury.controller;
 
 import com.fssc.common.core.PageResult;
@@ -17,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 票据结算管理（/api/tenant/treasury/bill-settle/**）
- * <p>D-DEC-422 扩展：资金域写端点补操作审计留痕（原全类零 {@code @OperLog}）。
+ * <p>D-DEC-422 扩展：资金域写端点补操作审计记录（原全类零 {@code @OperLog}）。
  */
 @RestController
 @RequestMapping("/api/tenant/treasury/bill-settle")

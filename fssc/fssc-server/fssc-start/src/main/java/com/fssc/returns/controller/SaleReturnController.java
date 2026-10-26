@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.returns.controller;
 
 import com.fssc.common.core.PageResult;
@@ -26,7 +29,7 @@ public class SaleReturnController {
     /**
      * 导出上限（D-N22）：本端点返回的是 JSON 列表而非文件流，原先传 {@code Integer.MAX_VALUE}
      * 等于"一次请求把整张 sale_return 读进内存再吐出"，既无行数上限也无数据范围。
-     * 现在此封顶，数据范围由 {@code SaleReturnService.page} 上的 {@code @DataScope} 收口。
+     * 现在此封顶，数据范围由 {@code SaleReturnService.page} 上的 {@code @DataScope} 办结。
      * 超出即截断（取前 N 行），与分页端点同语义。
      */
     private static final long EXPORT_MAX_ROWS = 10000;

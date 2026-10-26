@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <!-- Toolbar -->
@@ -35,7 +38,8 @@
 
     <!-- Table -->
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="rows" size="small" border stripe v-else @selection-change="onSelChange" empty-text="暂无数据">
+    <el-table :data="rows" size="small" border stripe v-else @selection-change="onSelChange"
+      :empty-text="denied ? '无权限查看：当前账号缺少该数据的读权限，请联系管理员开通' : '暂无数据'">
       <el-table-column v-if="canWrite('update') || canWrite('delete')" type="selection" width="45" />
       <el-table-column v-for="col in cfg.columns" :key="col.prop" :prop="col.prop" :label="col.label" :width="col.width" :min-width="col.minWidth || 120" :align="col.align || 'left'" :sortable="col.sortable" show-overflow-tooltip>
         <!-- R5-D-032：formatter / optionLabel 的判断须在 #default 插槽作用域内求值，不得并列第二个 v-else-if 模板 -->
@@ -47,7 +51,7 @@
             <span v-else :title="col.tooltip ? col.formatter(row[col.prop], row) : null">{{ col.formatter(row[col.prop], row) }}</span>
           </template>
           <template v-else-if="optionLabel(col, row) != null">{{ optionLabel(col, row) }}</template>
-          <!-- R5-D-032：链尾这一支是「有行有值」的唯一保证——无 formatter 且无 select 词表的普通文本列必须落原值，缺它就是整表空白 -->
+          <!-- R5-D-032：链尾这一支是「有行有值」的唯一保证——无 formatter 且无 select 名称表的普通文本列必须落原值，缺它就是整表空白 -->
           <span v-else>{{ row[col.prop] }}</span>
         </template>
       </el-table-column>
@@ -104,7 +108,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { masterApi, masterCfgApi, dictApi, configApi, complianceApi, expensePolicyApi, numberApi, noticeApi, messageApi, fileApi, supplierApi, jobApi, flowApi, auditApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
-import { auditActionLabel, docTypeLabel, billTypeLabel, msgTypeLabel, payeeTypeLabel, ruleCategoryLabel } from '@/constants/enums.js'
+import { auditActionLabel, docTypeLabel, billTypeLabel, msgTypeLabel, payeeTypeLabel, ruleCategoryLabel, taxTypeLabel, serviceCategoryLabel, fileStorageZoneLabel, finInstTypeLabel } from '@/constants/enums.js'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
 import { useQueryVariant } from '../../composables/useQueryVariant'
@@ -117,7 +121,7 @@ const props = defineProps({
 
 // ========== CONFIG REGISTRY ==========
 // 列声明的 formatter 在 REGISTRY 构造时就要取到值，所以这几枚格式化器必须写在注册表之前。
-/** R5-D-037：op_job_heartbeat.last_result 只有 SUCCESS/FAIL/RUNNING 三枚码（实体注释＋写入侧 markRunning/markSuccess/markFail），词表外的大写原码兜底，不猜标签 */
+/** R5-D-037：op_job_heartbeat.last_result 只有 SUCCESS/FAIL/RUNNING 三枚码（实体注释＋写入侧 markRunning/markSuccess/markFail），名称表外的大写原码默认处理，不猜标签 */
 const JOB_RESULT_LABEL = { SUCCESS: '成功', FAIL: '失败', RUNNING: '执行中' }
 const jobResultLabel = (v) => (v == null || v === '' ? '' : JOB_RESULT_LABEL[String(v)] || String(v).toUpperCase())
 /** R5-D-037：last_error 屏上只留摘要——先剥 SQL 语句主体（库里存的是 JDBC/MyBatis 原始报错，整段 SQL 正文不落 UI），再截首 200 字；全文不内联展开、不做「查看全文」 */
@@ -131,7 +135,7 @@ const errSummary = (v) => {
   const t = stripSqlBodies(v == null ? '' : String(v))
   return t.length > MAX_CELL_ERR_LEN ? t.slice(0, MAX_CELL_ERR_LEN) + '…' : t
 }
-/** R5-D-037：只有上次运行 FAIL 才把错误摘要落「最近错误」列；SUCCESS/RUNNING 行的历史残值不外显（写入侧 markSuccess 已清 last_error，此处兜住存量旧行） */
+/** R5-D-037：只有上次运行 FAIL 才把错误摘要落「最近错误」列；SUCCESS/RUNNING 行的历史残值不外显（写入侧 markSuccess 已清 last_error，此处兜住历史旧行） */
 const lastErrCell = (v, row) => (row != null && String(row.lastResult || '').toUpperCase() === 'FAIL' ? errSummary(v) : '')
 const REGISTRY = {
   // --- masterApi CRUD pages ---
@@ -141,7 +145,8 @@ const REGISTRY = {
   bank: { title: '银行账户', api: masterApi.bank, columns: [{ prop: 'accountCode', label: '账号', width: 180, formatter: maskAccount }, { prop: 'accountName', label: '账户名称', minWidth: 140 }, { prop: 'bankName', label: '开户行', minWidth: 140 }, { prop: 'currencyCode', label: '币种', width: 80 }, { prop: 'balance', label: '余额', width: 120, align: 'right', formatter: 'money' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'accountCode', label: '账号', required: true }, { prop: 'accountName', label: '账户名称', required: true }, { prop: 'bankName', label: '开户行' }, { prop: 'bankBranch', label: '支行' }, { prop: 'currencyCode', label: '币种' }, { prop: 'balance', label: '余额', type: 'number' }] },
   'expense-item': { title: '费用类型', api: masterApi.item, columns: [{ prop: 'itemCode', label: '编码', width: 120 }, { prop: 'itemName', label: '名称', minWidth: 160 }, { prop: 'billType', label: '分类', width: 100, formatter: (v) => docTypeLabel(v) }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'itemCode', label: '编码', required: true }, { prop: 'itemName', label: '名称', required: true }, { prop: 'billType', label: '分类' }] },
   city: { title: '城市等级', api: masterApi.city, columns: [{ prop: 'cityCode', label: '城市编码', width: 120 }, { prop: 'cityName', label: '城市名称', minWidth: 140 }, { prop: 'cityLevel', label: '等级', width: 80, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'cityCode', label: '城市编码', required: true }, { prop: 'cityName', label: '城市名称', required: true }, { prop: 'cityLevel', label: '等级', type: 'select', options: [{ label: '一线', value: 1 }, { label: '二线', value: 2 }, { label: '三线', value: 3 }] }] },
-  'tax-rate': { title: '税码税率', api: masterApi.tax, columns: [{ prop: 'rateCode', label: '税码', width: 100 }, { prop: 'rateName', label: '税名', minWidth: 140 }, { prop: 'rateValue', label: '税率', width: 100, align: 'right', formatter: (v) => (Number(v) * 100).toFixed(2) + '%' }, { prop: 'taxType', label: '类型', width: 100 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'rateCode', label: '税码', required: true }, { prop: 'rateName', label: '税名', required: true }, { prop: 'rateValue', label: '税率', type: 'number', precision: 4 }, { prop: 'taxType', label: '类型' }] },
+  // 后端真实码：查询/新增/改 md:taxrate:*，删除 md:tax:delete（TaxRateController）；菜单载体上 md:tax:list 已软删，不得再用
+  'tax-rate': { title: '税码税率', perms: { create: 'md:taxrate:create', update: 'md:taxrate:update', delete: 'md:tax:delete', enable: 'md:taxrate:update' }, api: masterApi.tax, columns: [{ prop: 'rateCode', label: '税码', width: 100 }, { prop: 'rateName', label: '税名', minWidth: 140 }, { prop: 'rateValue', label: '税率', width: 100, align: 'right', formatter: (v) => (Number(v) * 100).toFixed(2) + '%' }, { prop: 'taxType', label: '类型', width: 100, formatter: (v) => taxTypeLabel(v) }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'rateCode', label: '税码', required: true }, { prop: 'rateName', label: '税名', required: true }, { prop: 'rateValue', label: '税率', type: 'number', precision: 4 }, { prop: 'taxType', label: '类型' }] },
   'expense-standard': { title: '报销标准', api: masterApi.std, columns: [{ prop: 'stdName', label: '标准名称', minWidth: 140 }, { prop: 'stdType', label: '类型', width: 100 }, { prop: 'amount', label: '标准金额', width: 120, align: 'right', formatter: 'money' }, { prop: 'cityLevel', label: '城市等级', width: 100 }], formFields: [{ prop: 'stdCode', label: '标准编码', required: true }, { prop: 'stdName', label: '标准名称', required: true }, { prop: 'stdType', label: '类型' }, { prop: 'amount', label: '标准金额', type: 'number' }, { prop: 'cityLevel', label: '城市等级', type: 'number', precision: 0 }] },
   payee: { title: '收款方', api: masterApi.payee, columns: [{ prop: 'payeeType', label: '类型', width: 120, formatter: (v) => payeeTypeLabel(v) }, { prop: 'payeeName', label: '名称', minWidth: 160 }, { prop: 'bankName', label: '开户行', minWidth: 140 }, { prop: 'bankAccount', label: '账号', width: 180, formatter: maskAccount }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'payeeType', label: '类型', required: true }, { prop: 'payeeName', label: '名称', required: true }, { prop: 'bankName', label: '开户行' }, { prop: 'bankAccount', label: '账号' }] },
   'exchange-rate': { title: '汇率', api: masterApi.rate, columns: [{ prop: 'fromCurrency', label: '源币种', width: 100 }, { prop: 'toCurrency', label: '目标币种', width: 100 }, { prop: 'rate', label: '汇率', width: 120, align: 'right', formatter: 'money' }, { prop: 'effectDate', label: '日期', width: 120 }], formFields: [{ prop: 'fromCurrency', label: '源币种', required: true }, { prop: 'toCurrency', label: '目标币种', required: true }, { prop: 'rate', label: '汇率', type: 'number', precision: 6, required: true }, { prop: 'effectDate', label: '日期', type: 'date' }] },
@@ -154,11 +159,11 @@ const REGISTRY = {
   itemCashMap: { title: '费用类型-现金流量码映射', api: masterCfgApi.itemCashMap, columns: [{ prop: 'itemId', label: '费用ID', width: 120 }, { prop: 'itemName', label: '费用名称', minWidth: 140 }, { prop: 'cashCode', label: '现金流编码', width: 120 }, { prop: 'cashName', label: '现金流名称', minWidth: 140 }], formFields: [{ prop: 'itemId', label: '费用ID', required: true, type: 'select', optionsSource: 'expense-item' }, { prop: 'itemName', label: '费用名称' }, { prop: 'cashCode', label: '现金流编码', required: true }, { prop: 'cashName', label: '现金流名称' }] },
   costCenterMap: { title: '成本中心-预算组织映射', api: masterCfgApi.costCenterMap, columns: [{ prop: 'costCenterId', label: '成本中心ID', width: 120 }, { prop: 'costCenterName', label: '成本中心名称', minWidth: 140 }, { prop: 'budgetOrgId', label: '预算组织ID', width: 120 }, { prop: 'budgetOrgName', label: '预算组织名称', minWidth: 140 }], formFields: [{ prop: 'costCenterId', label: '成本中心ID', required: true }, { prop: 'costCenterName', label: '成本中心名称' }, { prop: 'budgetOrgId', label: '预算组织ID', required: true }, { prop: 'budgetOrgName', label: '预算组织名称' }] },
   vehicle: { title: '交通工具', api: masterCfgApi.vehicle, columns: [{ prop: 'vehicleCode', label: '编码', width: 120 }, { prop: 'vehicleName', label: '名称', minWidth: 140 }, { prop: 'seatClass', label: '舱位', width: 100 }, { prop: 'levelRange', label: '等级范围', width: 100 }], formFields: [{ prop: 'vehicleCode', label: '编码', required: true }, { prop: 'vehicleName', label: '名称', required: true }, { prop: 'seatClass', label: '舱位' }, { prop: 'levelRange', label: '等级范围' }] },
-  'bank-inst': { title: '金融机构', api: masterCfgApi.bank, columns: [{ prop: 'bankCode', label: '编码', width: 120 }, { prop: 'bankName', label: '名称', minWidth: 160 }, { prop: 'bankType', label: '类型', width: 100 }], formFields: [{ prop: 'bankCode', label: '编码', required: true }, { prop: 'bankName', label: '名称', required: true }, { prop: 'bankType', label: '类型' }] },
+  'bank-inst': { title: '金融机构', api: masterCfgApi.bank, columns: [{ prop: 'bankCode', label: '编码', width: 120 }, { prop: 'bankName', label: '名称', minWidth: 160 }, { prop: 'bankType', label: '类型', width: 100, formatter: (v) => finInstTypeLabel(v) }], formFields: [{ prop: 'bankCode', label: '编码', required: true }, { prop: 'bankName', label: '名称', required: true }, { prop: 'bankType', label: '类型' }] },
   employeeLevel: { title: '员工等级', api: masterCfgApi.employeeLevel, columns: [{ prop: 'levelCode', label: '编码', width: 120 }, { prop: 'levelName', label: '名称', minWidth: 140 }, { prop: 'sort', label: '排序', width: 80, align: 'center' }], formFields: [{ prop: 'levelCode', label: '编码', required: true }, { prop: 'levelName', label: '名称', required: true }, { prop: 'sort', label: '排序', type: 'number', precision: 0 }] },
   // D-DEC-171：本页此前把「借方科目/贷方科目」绑在 debit/credit_subject_code 上，实测这两列 704/704 全空
-  // （本域根本没有写入点），故主列恒空。真值在 subject_code/subject_name + direction——md_gl_config 是
-  // 「一行一侧」的模型（DEBIT 279 / CREDIT 425，subject_code 零空），取数侧 VoucherService:330-356 也正好
+  // （本域根本没有写入位置），故主列恒空。真值在 subject_code/subject_name + direction——md_gl_config 是
+  // 「一行一侧」的模型（DEBIT 279 / CREDIT 425，subject_code 零空），查询侧 VoucherService:330-356 也正好
   // 按 direction 从规则池挑行后读 getSubjectCode()/getSubjectName()。列表与表单一律改绑承载列；
   // debit/credit_subject_id 两列是引擎取科目 ID 的入口（279/425 非空），原样保留可编辑。
   // R5-D-047：subject_name 存的是接口侧规则原文，与 aux_rule（辅助核算规则）同源重复，列表只留 auxRule 这一枚承载规则的列，subject_name 退到表单里可编辑。
@@ -171,11 +176,11 @@ const REGISTRY = {
   // --- system pages ---
   dict: { title: '字典管理', api: { page: (p) => dictApi.typePage(p), create: (b) => dictApi.typeCreate(b), update: (b) => dictApi.typeUpdate(b), delete: (id) => dictApi.typeDelete(id) }, columns: [{ prop: 'dictType', label: '字典类型', width: 140 }, { prop: 'dictName', label: '字典名称', minWidth: 160 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'dictType', label: '字典类型', required: true }, { prop: 'dictName', label: '字典名称', required: true }] },
   'sys-config': { title: '全局参数', api: configApi, columns: [{ prop: 'configKey', label: '参数键', width: 180 }, { prop: 'configValue', label: '参数值', minWidth: 200 }, { prop: 'configName', label: '参数名称', minWidth: 200 }], formFields: [{ prop: 'configKey', label: '参数键', required: true }, { prop: 'configValue', label: '参数值', required: false }, { prop: 'configName', label: '参数名称', type: 'textarea' }] },
-  'sys-notice': { title: '公告管理', perms: { create: 'system:notice:create', update: 'system:notice:update', delete: 'system:notice:delete' }, api: { page: (p) => noticeApi.page(p), create: (b) => noticeApi.create(b), update: (b) => noticeApi.update(b), delete: (id) => noticeApi.delete(id) }, columns: [{ prop: 'noticeTitle', label: '标题', minWidth: 200 }, { prop: 'status', label: '状态', width: 100, align: 'center', formatter: (v) => v === 'PUBLISHED' ? '已发布' : (v === 'CLOSED' ? '已关闭' : (v || '草稿')) }, { prop: 'publishTime', label: '发布时间', width: 160 }], formFields: [{ prop: 'noticeTitle', label: '标题', required: true }, { prop: 'noticeContent', label: '内容', type: 'textarea', rows: 4 }] },
+  'sys-notice': { title: '公告管理', perms: { create: 'system:notice:create', update: 'system:notice:update', delete: 'system:notice:delete' }, api: { page: (p) => noticeApi.page(p), create: (b) => noticeApi.create(b), update: (b) => noticeApi.update(b), delete: (id) => noticeApi.delete(id) }, columns: [{ prop: 'noticeTitle', label: '标题', minWidth: 200 }, { prop: 'status', label: '状态', width: 100, align: 'center', formatter: (v) => v === 'PUBLISHED' ? '已发布' : (v === 'CLOSED' ? '已关闭' : (v === 'DRAFT' || !v ? '草稿' : v)) }, { prop: 'publishTime', label: '发布时间', width: 160 }], formFields: [{ prop: 'noticeTitle', label: '标题', required: true }, { prop: 'noticeContent', label: '内容', type: 'textarea', rows: 4 }] },
   'sys-message': { title: '消息中心', api: { page: (p) => messageApi.page(p), delete: (id) => messageApi.delete(id) }, readOnly: true, columns: [{ prop: 'title', label: '标题', minWidth: 200 }, { prop: 'content', label: '内容', minWidth: 300 }, { prop: 'msgType', label: '类型', width: 100, formatter: (v) => msgTypeLabel(v) }, { prop: 'createTime', label: '时间', width: 160 }, { prop: 'isRead', label: '状态', width: 80, align: 'center', formatter: (v) => v ? '已读' : '未读' }] },
-  'sys-file': { title: '文件管理', api: { page: (p) => fileApi.page(p), delete: (id) => fileApi.delete(id) }, readOnly: true, columns: [{ prop: 'fileName', label: '文件名', minWidth: 200 }, { prop: 'fileSize', label: '大小', width: 100, align: 'right', formatter: (v) => (v / 1024).toFixed(1) + ' KB' }, { prop: 'storageZone', label: '存储区域', width: 100, align: 'center' }, { prop: 'bizType', label: '业务类型', width: 100, formatter: (v) => docTypeLabel(v) }, { prop: 'createTime', label: '上传时间', width: 160 }] },
+  'sys-file': { title: '文件管理', api: { page: (p) => fileApi.page(p), delete: (id) => fileApi.delete(id) }, readOnly: true, columns: [{ prop: 'fileName', label: '文件名', minWidth: 200 }, { prop: 'fileSize', label: '大小', width: 100, align: 'right', formatter: (v) => (v / 1024).toFixed(1) + ' KB' }, { prop: 'storageZone', label: '存储区域', width: 100, align: 'center', formatter: (v) => fileStorageZoneLabel(v) }, { prop: 'bizType', label: '业务类型', width: 100, formatter: (v) => docTypeLabel(v) }, { prop: 'createTime', label: '上传时间', width: 160 }] },
   'sys-policy': { title: '费用政策', hint: '标准明细与版本请用「费用标准」专用页维护', api: { page: (p) => expensePolicyApi.page(p), create: (b) => expensePolicyApi.create(b), update: (b) => expensePolicyApi.update(b), delete: (id) => expensePolicyApi.remove(id) }, columns: [{ prop: 'policyCode', label: '政策编码', width: 120 }, { prop: 'policyName', label: '政策名称', minWidth: 160 }, { prop: 'expenseType', label: '费用类型', width: 100 }, { prop: 'maxAmount', label: '金额上限', width: 120, align: 'right', formatter: 'money' }, { prop: 'submitDays', label: '提交时限(天)', width: 110, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: (v) => (v === 1 ? '启用' : '停用') }], formFields: [{ prop: 'policyCode', label: '政策编码', required: true }, { prop: 'policyName', label: '政策名称', required: true }, { prop: 'expenseType', label: '费用类型' }, { prop: 'expenseItemName', label: '费用项名称' }, { prop: 'maxAmount', label: '金额上限', type: 'number', required: true }, { prop: 'approveAboveAmount', label: '超额审批阈值', type: 'number' }, { prop: 'submitDays', label: '提交时限(天)', type: 'number', precision: 0 }, { prop: 'priority', label: '优先级', type: 'number', precision: 0 }, { prop: 'needInvoice', label: '需要发票', type: 'select', options: [{ label: '是', value: 1 }, { label: '否', value: 0 }] }, { prop: 'effectiveStart', label: '生效起', type: 'date' }, { prop: 'effectiveEnd', label: '生效止', type: 'date' }, { prop: 'remark', label: '备注', type: 'textarea', rows: 2 }] },
-  'sys-number': { title: '编号规则', hint: '改动后对新单据生效；已生成的存量单据号不变', perms: { create: 'system:number:create', update: 'system:number:update', delete: 'system:number:delete', enable: 'system:number:update' }, api: { page: (p) => numberApi.rulePage(p), create: (b) => numberApi.ruleCreate(b), update: (b) => numberApi.ruleUpdate(b), delete: (id) => numberApi.ruleDelete(id), enable: (id, on) => numberApi.ruleEnable(id, on) }, columns: [{ prop: 'ruleCode', label: '规则编码', width: 130 }, { prop: 'ruleName', label: '规则名称', minWidth: 150 }, { prop: 'prefix', label: '前缀', width: 90 }, { prop: 'dateFormat', label: '日期格式', width: 100, formatter: (v) => v || '不含日期' }, { prop: 'seqLength', label: '序号长度', width: 90, align: 'center' }, { prop: 'resetCycle', label: '重置周期', width: 90, align: 'center', formatter: (v) => ({ NONE: '不重置', DAY: '按日', MONTH: '按月', YEAR: '按年' }[v] || v || '-') }, { prop: 'step', label: '步长', width: 70, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }, { prop: 'remark', label: '备注', minWidth: 140 }], formFields: [{ prop: 'ruleCode', label: '规则编码', required: true }, { prop: 'ruleName', label: '规则名称', required: true }, { prop: 'prefix', label: '前缀' }, { prop: 'dateFormat', label: '日期格式', placeholder: '如 yyyyMMdd，留空表示不含日期' }, { prop: 'seqLength', label: '序号长度', type: 'number', precision: 0 }, { prop: 'resetCycle', label: '重置周期', type: 'select', options: [{ label: '不重置', value: 'NONE' }, { label: '按日', value: 'DAY' }, { label: '按月', value: 'MONTH' }, { label: '按年', value: 'YEAR' }] }, { prop: 'step', label: '步长', type: 'number', precision: 0 }, { prop: 'status', label: '状态', type: 'select', options: [{ label: '启用', value: 'NORMAL' }, { label: '停用', value: 'DISABLED' }] }, { prop: 'remark', label: '备注', type: 'textarea', rows: 2 }] },
+  'sys-number': { title: '编号规则', hint: '改动后对新单据生效；已生成的单据号不变', perms: { create: 'system:number:create', update: 'system:number:update', delete: 'system:number:delete', enable: 'system:number:update' }, api: { page: (p) => numberApi.rulePage(p), create: (b) => numberApi.ruleCreate(b), update: (b) => numberApi.ruleUpdate(b), delete: (id) => numberApi.ruleDelete(id), enable: (id, on) => numberApi.ruleEnable(id, on) }, columns: [{ prop: 'ruleCode', label: '规则编码', width: 130 }, { prop: 'ruleName', label: '规则名称', minWidth: 150 }, { prop: 'prefix', label: '前缀', width: 90 }, { prop: 'dateFormat', label: '日期格式', width: 100, formatter: (v) => v || '不含日期' }, { prop: 'seqLength', label: '序号长度', width: 90, align: 'center' }, { prop: 'resetCycle', label: '重置周期', width: 90, align: 'center', formatter: (v) => ({ NONE: '不重置', DAY: '按日', MONTH: '按月', YEAR: '按年' }[v] || v || '-') }, { prop: 'step', label: '步长', width: 70, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }, { prop: 'remark', label: '备注', minWidth: 140 }], formFields: [{ prop: 'ruleCode', label: '规则编码', required: true }, { prop: 'ruleName', label: '规则名称', required: true }, { prop: 'prefix', label: '前缀' }, { prop: 'dateFormat', label: '日期格式', placeholder: '如 yyyyMMdd，留空表示不含日期' }, { prop: 'seqLength', label: '序号长度', type: 'number', precision: 0 }, { prop: 'resetCycle', label: '重置周期', type: 'select', options: [{ label: '不重置', value: 'NONE' }, { label: '按日', value: 'DAY' }, { label: '按月', value: 'MONTH' }, { label: '按年', value: 'YEAR' }] }, { prop: 'step', label: '步长', type: 'number', precision: 0 }, { prop: 'status', label: '状态', type: 'select', options: [{ label: '启用', value: 'NORMAL' }, { label: '停用', value: 'DISABLED' }] }, { prop: 'remark', label: '备注', type: 'textarea', rows: 2 }] },
   // --- supplier ---
   // R5-D-051 扫描结论：本页列表没有账号列（bankAccount 只出现在表单项，编辑框要回写全号不能打码），所以此处无打码落点；带账号列的是 bank / payee 两行。
   supplier: { title: '供应商', api: supplierApi, columns: [{ prop: 'supplierCode', label: '编码', width: 120 }, { prop: 'supplierName', label: '名称', minWidth: 160 }, { prop: 'contactName', label: '联系人', width: 100 }, { prop: 'contactPhone', label: '电话', width: 120 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'supplierCode', label: '编码', required: true }, { prop: 'supplierName', label: '名称', required: true }, { prop: 'contactName', label: '联系人' }, { prop: 'contactPhone', label: '电话' }, { prop: 'bankName', label: '开户行' }, { prop: 'bankAccount', label: '银行账号' }] },
@@ -184,7 +189,7 @@ const REGISTRY = {
   // --- read-only pages ---
   'job-heartbeat': { title: '定时任务健康', readOnly: true, api: { page: (p) => jobApi.heartbeatPage(p) }, columns: [{ prop: 'jobName', label: '任务名称', minWidth: 180 }, { prop: 'lastResult', label: '状态', width: 100, align: 'center', formatter: jobResultLabel }, { prop: 'lastRunAt', label: '上次执行', width: 160 }, { prop: 'durationMs', label: '耗时(ms)', width: 100, align: 'center' }, { prop: 'failCount', label: '失败次数', width: 100, align: 'center' }, { prop: 'lastError', label: '最近错误', minWidth: 200, formatter: lastErrCell, tooltip: true }] },
   fraud: { title: '反欺诈检测', readOnly: true, api: { page: (p) => complianceApi.fraudList(p) }, columns: [{ prop: 'billId', label: '单据ID', width: 100, align: 'center' }, { prop: 'detectionType', label: '检测类型', width: 140 }, { prop: 'riskScore', label: '风险分', width: 100, align: 'center' }, { prop: 'details', label: '详情', minWidth: 200 }, { prop: 'actionTaken', label: '处置动作', width: 120 }, { prop: 'createTime', label: '检测时间', width: 160 }] },
-  'service-catalog': { title: '服务目录', api: { page: (p) => complianceApi.catalogPage(p), create: (b) => complianceApi.catalogCreate(b), update: (b) => complianceApi.catalogUpdate(b), delete: (id) => complianceApi.catalogDelete(id) }, columns: [{ prop: 'serviceName', label: '服务名称', minWidth: 180 }, { prop: 'serviceCode', label: '编码', width: 120 }, { prop: 'category', label: '类别', width: 100 }, { prop: 'responseSlaHours', label: '响应SLA(小时)', width: 120, align: 'center' }, { prop: 'ownerRole', label: '责任岗位', width: 120 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'serviceName', label: '服务名称', required: true }, { prop: 'serviceCode', label: '编码', required: true }, { prop: 'category', label: '类别' }, { prop: 'responseSlaHours', label: '响应SLA(小时)', type: 'number', precision: 0 }, { prop: 'description', label: '说明', type: 'textarea' }] },
+  'service-catalog': { title: '服务目录', api: { page: (p) => complianceApi.catalogPage(p), create: (b) => complianceApi.catalogCreate(b), update: (b) => complianceApi.catalogUpdate(b), delete: (id) => complianceApi.catalogDelete(id) }, columns: [{ prop: 'serviceName', label: '服务名称', minWidth: 180 }, { prop: 'serviceCode', label: '编码', width: 120 }, { prop: 'category', label: '类别', width: 100, formatter: (v) => serviceCategoryLabel(v) }, { prop: 'responseSlaHours', label: '响应SLA(小时)', width: 120, align: 'center' }, { prop: 'ownerRole', label: '责任岗位', width: 120 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'serviceName', label: '服务名称', required: true }, { prop: 'serviceCode', label: '编码', required: true }, { prop: 'category', label: '类别' }, { prop: 'responseSlaHours', label: '响应SLA(小时)', type: 'number', precision: 0 }, { prop: 'description', label: '说明', type: 'textarea' }] },
   satisfaction: { title: '满意度调查', readOnly: true, api: { page: (p) => complianceApi.satisfactionPage(p) }, columns: [{ prop: 'billNo', label: '单据号', minWidth: 140 }, { prop: 'serviceCode', label: '服务编码', width: 120 }, { prop: 'score', label: '评分', width: 100, align: 'center' }, { prop: 'surveyUserId', label: '评价人', width: 100, align: 'center' }, { prop: 'comment', label: '评价', minWidth: 200 }] },
   'audit-trail': { title: '审计轨迹', readOnly: true, api: { page: (p) => auditApi.trailPage(p) }, columns: [{ prop: 'action', label: '动作', width: 120, formatter: (v) => auditActionLabel(v) }, { prop: 'bizType', label: '业务类型', width: 120, formatter: (v) => docTypeLabel(v) }, { prop: 'bizNo', label: '单据号', width: 140 }, { prop: 'operator', label: '操作人', width: 120 }, { prop: 'createTime', label: '时间', width: 160 }, { prop: 'remark', label: '备注', minWidth: 250 }] },
   'wf-instance': { title: '流程实例', readOnly: true, api: { page: (p) => flowApi.instancePage(p) }, columns: [{ prop: 'title', label: '流程名称', minWidth: 180 }, { prop: 'bizType', label: '业务类型', width: 120, formatter: (v) => docTypeLabel(v) }, { prop: 'bizNo', label: '单据号', width: 140 }, { prop: 'status', label: '状态', width: 100, align: 'center', formatter: (v) => statusLabel(v) }, { prop: 'currentNode', label: '当前节点', width: 120 }, { prop: 'currentAssignee', label: '当前审批人', width: 120 }, { prop: 'startTime', label: '发起时间', width: 160 }, { prop: 'endTime', label: '结束时间', width: 160 }] },
@@ -192,7 +197,7 @@ const REGISTRY = {
 
 const cfg = computed(() => REGISTRY[props.configKey] || { title: props.configKey, columns: [], formFields: [], api: {} })
 
-// 写按钮按后端真实权限码门控；未声明 perms 的配置沿用原 readOnly 口径，避免扩大本轮改动面。
+// 写按钮按后端真实权限码门控；未声明 perms 的配置沿用原 readOnly 规则，避免扩大本轮改动面。
 function canWrite(action) {
   if (cfg.value.readOnly) return false
   const code = cfg.value.perms?.[action]
@@ -201,7 +206,7 @@ function canWrite(action) {
 
 /**
  * 列未声明 formatter 时，用本页 formField 自带的 select 选项把原码换回中文。
- * 词表只在这一处声明（编辑弹窗下拉与列表列同源），不在这里再抄一份 map。
+ * 名称表只在这一处声明（编辑弹窗下拉与列表列同源），不在这里再抄一份 map。
  */
 function optionLabel(col, row) {
   const f = (cfg.value.formFields || []).find(x => x.prop === col.prop && x.type === 'select' && x.options)
@@ -233,6 +238,8 @@ const total = ref(0)
 const pageNum = ref(1)
 const pageSize = ref(20)
 const searchForm = reactive({ keyword: '' })
+// 4030（无读权限）与「确实没有数据」必须分开：同形空表会把权限缺口读成业务空态
+const denied = ref(false)
 const loading = ref(false)
 const dlg = ref(false)
 const editing = ref({})
@@ -281,7 +288,11 @@ async function load() {
     const d = await cfg.value.api.page({ pageNum: pageNum.value, pageSize: pageSize.value, keyword: searchForm.keyword })
     rows.value = d?.list || d?.records || []
     total.value = Number(d.total || 0)
-  } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
+    denied.value = false
+  } catch (e) {
+    if (e?.code === 4030) { denied.value = true; rows.value = []; total.value = 0 }
+    else ElMessage.error(e.message)
+  } finally { loading.value = false }
 }
 
 function openCreate() {
@@ -338,6 +349,7 @@ watch(() => props.configKey, () => {
   pageNum.value = 1
   pageSize.value = 20
   searchForm.keyword = ''
+  denied.value = false
   rows.value = []
   total.value = 0
   initVariantAndLoad()

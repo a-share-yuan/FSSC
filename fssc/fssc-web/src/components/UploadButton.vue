@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <span class="upload-btn-wrap">
     <el-upload class="upload-btn-upload" :show-file-list="false" :http-request="doUpload" :accept="accept" :multiple="multiple">
@@ -38,7 +41,7 @@ const props = defineProps({
 
 /**
  * 单文件体积上限（MB）。与后端 `fssc.file.max-size` / `spring.servlet.multipart.max-file-size` 对齐。
- * 前端先拦是为了不让大文件白传一趟；后端仍会二次校验并返回明确原因（）。
+ * 前端先拦是为了不让大文件白传一趟；后端仍会二次校验并返回明确原因。
  * 2026-09-12 第二次对齐：后端 multipart 上限已放宽到 20MB（原 10MB 会把 15MB 的合规发票影像挡在门外），
  * 前端阈值同步改为 20MB。**改这里必须同时改 application.yml 的 max-file-size / fssc.file.max-size**，
  * 三者不一致就会出现「前端放行、后端静默拒绝」或反之。
@@ -79,7 +82,7 @@ function cancelWaiting() {
   busy.value = false
 }
 
-// 离开本页时同样收口：在飞的识别请求不断线＝服务端照写，但本页已无人接收结果（见 abortedOutcome）
+// 离开本页时同样办结：在飞的识别请求不断线＝服务端照写，但本页已无人接收结果（见 abortedOutcome）
 onBeforeUnmount(cancelWaiting)
 
 async function doUpload({ file, onSuccess, onError }) {
@@ -89,7 +92,7 @@ async function doUpload({ file, onSuccess, onError }) {
     onError && onError(new Error('FILE_TOO_LARGE'))
     return
   }
-  // D-DEC-474 界面腿：PDF 这一支的等待时长由文件类型决定，事先说明免得用户以为卡死重复上传。
+  // D-DEC-474 界面环节：PDF 这一支的等待时长由文件类型决定，事先说明免得用户以为卡死重复上传。
   // 电子发票（有文本层）走本地版式解析＝秒级；扫描版 PDF 才会转图像识别通道＝几十秒量级。
   // 文案只陈述后端真实次序（本地解析优先，解析不出才发识别请求），不承诺结果。
   if (props.parse && /\.pdf$/i.test((file && file.name) || '')) {
@@ -143,7 +146,7 @@ async function doUpload({ file, onSuccess, onError }) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  /* 定锚：原生 file 控件即使绝对定位，也只会落在按钮这一小块里，不会甩到页面左上盖住菜单 */
+  /* 定关联：原生 file 控件即使绝对定位，也只会落在按钮这一小块里，不会甩到页面左上盖住菜单 */
   position: relative;
 }
 .upload-btn-upload { display: inline-block; }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.receivable.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -38,7 +41,7 @@ import java.util.stream.Collectors;
  *
  * <p>【租户上下文】定时任务跑在 Spring 调度线程，无 {@link TenantContext}，
  * 直接查 rc_receivable（租户过滤表）会触发 fail-closed 抛 TENANT_CONTEXT_MISSING。
- * 故扫描用 {@code runIgnoreTenant} 聚合（仅扫描不落库），逐租户处理时 {@code callAs(tenantId)} 恢复上下文。
+ * 故扫描用 {@code runIgnoreTenant} 聚合（仅扫描不写入数据库），逐租户处理时 {@code callAs(tenantId)} 恢复上下文。
  * 只处理"确实存在逾期应收"的租户，避免全租户空跑。
  */
 @Slf4j
@@ -59,7 +62,7 @@ public class RcOverdueJob {
     private final JobHeartbeatService jobHeartbeatService;
 
     /**
-     * 日终 01:20 执行（早于报表刷新 01:30，保证当日报表口径含最新逾期状态）。
+     * 日终 01:20 执行（早于报表刷新 01:30，保证当日报表规则含最新逾期状态）。
      * <p>基准日＝系统当前日；补跑历史／未来账期走
      * {@link #markOverdueAndCollect(java.time.LocalDate)}（D-DEC-407）。
      */

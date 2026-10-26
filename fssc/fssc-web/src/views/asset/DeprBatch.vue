@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -9,7 +12,7 @@
     </template>
 
     <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap">
-      <!-- 计提期间是批单唯一的必输项（留空会被后端按当前月补值），故包成 el-form-item 拿红星 + 走提交闸门 -->
+      <!-- 计提期间是批单唯一的必输项（留空会被后端按当前月补值），故包成 el-form-item 拿红星 + 走提交校验 -->
       <el-form ref="periodFormRef" :model="periodModel" :rules="formRules" :inline="true" size="small">
         <el-form-item label="计提期间" prop="period" style="margin-bottom:0">
           <el-date-picker v-model="period" type="month" placeholder="计提期间" value-format="YYYY-MM" clearable style="width:150px" />
@@ -17,7 +20,7 @@
       </el-form>
       <el-button v-permission="'sharing:voucher:generate'" type="primary" @click="doSubmit">发起月度计提审批</el-button>
       <el-button v-permission="'sharing:voucher:generate'" type="success" plain @click="doCreate">仅生成草稿批单</el-button>
-      <el-button type="info" size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button type="info" size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
     </div>
 
@@ -114,7 +117,7 @@ import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 
-// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
+// 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.entity;
 
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -12,7 +15,7 @@ import java.time.LocalDateTime;
  * 打印模板套成员（V1.4.81）。
  *
  * <p>不继承 TenantAuditBase：本表只有 4 个业务列 + del_flag，
- * 沿用平台级最小审计口径（create_time）。
+ * 沿用平台级最小审计规则（create_time）。
  */
 @Data
 @TableName("md_print_template_set_item")

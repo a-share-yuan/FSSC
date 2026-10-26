@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * useFormMeta - 表单元数据驱动 composable（V1.4.85）
  * =============================================================================
@@ -14,7 +17,7 @@
  *   POST /api/tenant/masterdata/form-meta/{formCode}/validate?scope=SAVE
  *   POST /api/tenant/masterdata/form-meta/{formCode}/defaults
  *
- * 必录/锁定的权威口径在服务端（FormMetaService.validate），本 composable
+ * 必录/锁定的权威规则在服务端（FormMetaService.validate），本 composable
  * 生成的 el-form rules 只是<b>体验层提示</b>，不替代服务端校验。
  * ==========================================================================
  */
@@ -91,7 +94,7 @@ export function useFormMeta(formCode) {
     return fetchMeta(formCode, opts)
   }
 
-  /** 控件组件名（取不到映射时兜底为 el-input） */
+  /** 控件组件名（取不到映射时默认处理为 el-input） */
   function widgetOf(widgetType) {
     return WIDGET_MAP[widgetType] || 'el-input'
   }

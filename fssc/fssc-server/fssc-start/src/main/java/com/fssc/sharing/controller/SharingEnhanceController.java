@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -131,7 +134,7 @@ public class SharingEnhanceController {
     public Result<PageResult<OpBankStatement>> statementPage(PageQuery query,
                                                              @RequestParam(required = false) Long bankAccountId,
                                                              @RequestParam(required = false) String reconStatus,
-                                                             // 161b（筛选透传腿）：SharingStatement.vue 一直在发 bankSerial（流水号）
+                                                             // 161b（筛选透传环节）：SharingStatement.vue 一直在发 bankSerial（流水号）
                                                              // 与 transType（交易方向 借/贷），本方法此前只声明前两个入参 ⇒ 两参被 Spring 直接丢弃，
                                                              // 查询条件"看着填了、结果没变"（静默哑火，零报错）。补进签名并透传给 service。
                                                              @RequestParam(required = false) String bankSerial,

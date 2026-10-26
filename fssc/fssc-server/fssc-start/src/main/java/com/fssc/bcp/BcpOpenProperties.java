@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.bcp;
 
 import jakarta.annotation.PostConstruct;
@@ -40,7 +43,7 @@ public class BcpOpenProperties {
     @Value("${fssc.bcp.read-timeout-ms:15000}")
     private int readTimeoutMs;
 
-    /** 运维提示口径（不含密钥值）。 */
+    /** 运维提示规则（不含密钥值）。 */
     private static final String SECRET_HINT =
             "未注入 BCP 共享密钥：fssc.bcp.secret（环境变量 FSSC_BCP_SECRET）为空，"
                     + "须与 BCP 侧 BCP_LINKU_SECRET 配置为同一把密钥";

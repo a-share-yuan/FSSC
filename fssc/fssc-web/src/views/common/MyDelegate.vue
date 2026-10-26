@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="my-delegate-page">
     <el-card shadow="never">
@@ -34,7 +37,7 @@
             <el-table-column prop="toUserName" label="代理人" width="130" />
             <el-table-column prop="bizTypes" label="适用单据" min-width="170">
               <template #default="{ row }">
-                <span>{{ row.bizTypes || '全部单据' }}</span>
+                <span>{{ bizTypesText(row.bizTypes) }}</span>
               </template>
             </el-table-column>
             <!-- E-12/F1-2：后端给的是 LocalDateTime 原样串（2026-12-25T09:00:00），
@@ -78,7 +81,7 @@
       <el-form ref="formRef" :model="dialog.form" :rules="delegateRules" label-width="120px" size="default">
         <el-form-item label="委托人">
           <!-- 后端硬校验「委托人必须是当前登录用户」（WfDelegateService.create，V1.3.19 越权修复），
-               故这里是系统带出的只读值，不是人工填项 ⇒ 按 Q1 口径不加红星 -->
+               故这里是系统带出的只读值，不是人工填项 ⇒ 按 Q1 规则不加红星 -->
           <el-input :model-value="currentUserName" disabled />
         </el-form-item>
         <el-form-item label="代理人" prop="toUserId">
@@ -100,7 +103,7 @@
         </el-form-item>
         <el-form-item label=" ">
           <div style="font-size:12px;color:#909399;line-height:18px">
-            只能委托<b>同公司</b>同事：跨公司委托默认被拒（代办会让外公司的人出现在本公司单据的审批留痕上），
+            只能委托<b>同公司</b>同事：跨公司委托默认被拒（代办会让外公司的人出现在本公司单据的审批记录上），
             确需放行须由管理员在参数配置中设置
             <code>delegate.cross_company.whitelist</code>。委托生效期内代理人可代为办理你的待办
             （两边列表都能看到，代理人侧标注「代 X 办理」、你侧标注「已委托」），建立后代理人会收到站内通知，到期自动失效。
@@ -132,6 +135,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { flowApi, store } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { showRowDetail, formatDateTime } from '@/utils/format'
+import { billTypeLabel } from '@/constants/enums.js'
 import { hasPerm } from '@/utils/perm'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
@@ -140,12 +144,19 @@ const canList = hasPerm('wf:delegate:list')
 const canCreate = hasPerm('wf:delegate:create')
 const canUpdate = hasPerm('wf:delegate:update')
 
+/** 适用单据是多选拼接串（如 EXP_CLAIM,EXP_LOAN），逐段换中文；空=全部单据 */
+function bizTypesText(v) {
+  const codes = String(v || '').split(',').map(s => s.trim()).filter(Boolean)
+  return codes.length ? codes.map(c => billTypeLabel(c)).join('、') : '全部单据'
+}
+
 /**
  * 委托的「真实状态」——不能只看 status 列（2026-09-23 补）。
  *
  * 后端生效判定看的是时间区间（`begin_time <= now <= end_time`，见 WfDelegateService.activeDelegateTo）；
  * `status` 列只记录「人工取消 DISABLED / 到期回收 EXPIRED」，而到期回收由 WfDelegateExpireJob
  * 每 10 分钟刷一次 ⇒ 存在最长 10 分钟的窗口：行仍是 NORMAL 却早已失效。
+ * 若直接按 status 显示「启用」，用户会误以为还能继续代办。这里按时间就地算出真实态，与后端同一规则。
  */
 function effectiveStatus(row) {
   const s = String(row?.status || '').toUpperCase()
@@ -161,7 +172,7 @@ function effectiveStatus(row) {
 }
 
 /** 仅 NORMAL 的委托可取消（已过期/已停用再点取消只会拿到 4xx）。
- *  且只有委托人能取消——服务端同口径（WfDelegateService.cancel 校验 from_user_id），
+ *  且只有委托人能取消——服务端同一规则（WfDelegateService.cancel 校验 from_user_id），
  *  「由我代办」视角下把别人的委托列出取消按钮，点了只会撞 403。 */
 function canCancel(row) {
   return canUpdate && String(row?.status || '').toUpperCase() === 'NORMAL'
@@ -194,7 +205,7 @@ const dialog = reactive({
 
 const formRef = ref(null)
 
-// 与后端 WfDelegateService.create 同口径：受托人必填（委托人由系统带出），且生效判定只看时间区间 ⇒ 区间留空必被拒
+// 与后端 WfDelegateService.create 同一规则：受托人必填（委托人由系统带出），且生效判定只看时间区间 ⇒ 区间留空必被拒
 const delegateRules = {
   toUserId: commonRules.required('请选择代理人'),
   beginTime: commonRules.date('请选择开始时间'),

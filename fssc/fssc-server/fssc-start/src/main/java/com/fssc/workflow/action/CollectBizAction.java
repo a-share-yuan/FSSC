@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.receivable.entity.RcReceivable;
@@ -21,6 +24,7 @@ import java.util.Set;
  * 3. 余额 ≤ 0 → status DONE（结清）；否则 → PARTIAL（部分收款）
  * 4. 生成收款核销凭证（借银行存款 / 贷应收账款）
  * <p>
+ * 收款认领自动核销特性。
  */
 @Slf4j
 @Component("collectBizAction")
@@ -29,7 +33,7 @@ public class CollectBizAction implements WfBizAction {
 
     private final RcReceivableMapper rcReceivableMapper;
     private final VoucherService voucherService;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -52,12 +56,12 @@ public class CollectBizAction implements WfBizAction {
                 return;
             }
             // D-DEC-409（甲）：核销金额原取<b>票面全额</b>（rec.getAmount()），与本方法注释、wf_event_action_config
-            // id=81 的 description 和 VoucherService.generateCollectVoucher 的 javadoc 三处口径都写着的
+            // id=81 的 description 和 VoucherService.generateCollectVoucher 的 javadoc 三处规则都写着的
             // 「取应收余额作为核销金额」相反。后果两处（现库实证风险，非理论）：
             //   ①部分收款后再认领 ⇒ received 翻倍、remain 转负（127,200 单再走一次即 −127,200）；
             //   ②对已 DONE（余额 0）的应收单再触发一次 ⇒ 凭空加款＋凭空出一张借银行存款的进账凭证。
-            // 修法＝按声明的口径实现：本次核销额＝当前余额，余额夹到非负；余额已为 0 就什么都不做。
-            // 不落的那半条＝「该腿是否必须先有 rc_receipt 到账载体才允许出证」＝账务前置条件，进人工裁决清单。
+            // 修法＝按声明的规则实现：本次核销额＝当前余额，余额夹到非负；余额已为 0 就什么都不做。
+            // 不落的那半条＝「该环节是否必须先有 rc_receipt 到账载体才允许出证」＝账务前置条件，进人工裁决清单。
             BigDecimal receivableAmount = rec.getAmount() == null ? BigDecimal.ZERO : rec.getAmount();
             BigDecimal received = rec.getReceivedAmount() == null ? BigDecimal.ZERO : rec.getReceivedAmount();
             BigDecimal remain = rec.getRemainAmount() != null ? rec.getRemainAmount()

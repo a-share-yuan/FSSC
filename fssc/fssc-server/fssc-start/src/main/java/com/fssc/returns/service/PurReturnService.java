@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.returns.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -26,7 +29,9 @@ import com.fssc.sharing.mapper.SupplierReconDetailMapper;
 import com.fssc.sharing.mapper.SupplierReconDiffMapper;
 import com.fssc.sharing.mapper.SupplierReconMapper;
 import com.fssc.system.entity.SysConfig;
+import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysConfigMapper;
+import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.system.service.NumberRuleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +42,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 采购退货单服务（AP 退货退款冲减应付）。
@@ -58,14 +66,21 @@ public class PurReturnService {
     private final PoReceiptMapper poReceiptMapper;
     /** 租户参数（sys_config）：审核/驳回/作废读 approve.deny_self 自审禁止开关，与 Flowable 路径共用同一开关 */
     private final SysConfigMapper sysConfigMapper;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** R5-D-084 下游腿：REFUND 退货退款 → 供应商对账域（负向明细行 + balance 重算），EXCHANGE 不写 */
+    /** R5-D-084 下游环节：REFUND 退货退款 → 供应商对账域（负向明细行 + balance 重算），EXCHANGE 不写 */
     private final SupplierReconMapper supplierReconMapper;
     private final SupplierReconDetailMapper supplierReconDetailMapper;
     private final SupplierReconDiffMapper supplierReconDiffMapper;
     /** R5-D-084 供应商解析：vendor_code → md_supplier（对账单以 supplier_id 挂账） */
     private final MdSupplierMapper mdSupplierMapper;
+    /** D-H2-03：company_code/company_name 按 company_id 补充（原两列恒 NULL） */
+    private final com.fssc.system.mapper.SysCompanyMapper sysCompanyMapper;
+    /** D-H2-07：明细 uom/source_line_id 回填，来源＝采购订单行（源单是收货单时经 po_receipt.po_id 定位） */
+    private final com.fssc.purchase.mapper.PoOrderLineMapper poOrderLineMapper;
+    private final com.fssc.purchase.mapper.PoOrderMapper poOrderMapper;
+    /** D-H2-04（历史行）：读时把 approver 工号换成真名 */
+    private final SysUserMapper sysUserMapper;
 
     // ---------------- 创建 ----------------
 
@@ -83,9 +98,12 @@ public class PurReturnService {
         if (r.getReturnMode() == null || r.getReturnMode().isBlank()) {
             r.setReturnMode(PurReturn.MODE_REFUND);
         }
+        assertVendorInMaster(r);   // D-H2-02
+        fillCompanyCoords(r);      // D-H2-03
+        fillSourceDocId(r);        // D-H2-10
         List<PurReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
-        // R5-D-085：表头税额按明细派生回写（不信任前端传值，含税口径）
+        // R5-D-085：表头税额按明细派生回写（不信任前端传值，含税规则）
         r.setTaxAmount(deriveTaxAmount(lines));
 
         r.setId(null);
@@ -111,16 +129,19 @@ public class PurReturnService {
             throw new BizException(ErrorCode.PARAM_INVALID, "退货金额必须大于0");
         }
         // 编辑是整单覆盖（下面直接 set 到 old），不校验就会把 NOT NULL 的 vendor_code/bill_date 置空，
-        // 变成 500 而不是友好提示——与 create 同口径补齐。
+        // 变成 500 而不是友好提示——与 create 同一规则补齐。
         if (r.getVendorCode() == null || r.getVendorCode().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "供应商代码必填");
         }
         if (r.getBillDate() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "退货日期必填");
         }
+        assertVendorInMaster(r);   // D-H2-02（与 create 同校验：编辑改代码同样要现有）
+        fillCompanyCoords(r);      // D-H2-03
+        fillSourceDocId(r);        // D-H2-10
         List<PurReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
-        // R5-D-085：表头税额按明细派生回写（不信任前端传值，含税口径）
+        // R5-D-085：表头税额按明细派生回写（不信任前端传值，含税规则）
         r.setTaxAmount(deriveTaxAmount(lines));
 
         old.setCompanyId(r.getCompanyId());
@@ -175,10 +196,13 @@ public class PurReturnService {
         // 第二道防线：单据级「审批人 ≠ 制单人」（与角色隔离互补，齐平 Flowable 的 approve.deny_self）
         assertNotSelf(r, "审核");
         // 有源单（采购入库）时软校验：累计已生效退货金额 + 本次 ≤ 源单金额
-        if (r.getSourceDocId() != null && "PO_RECEIPT".equals(r.getSourceDocType())) {
-            PoReceipt src = poReceiptMapper.selectById(r.getSourceDocId());
+        // D-H2-10：界面建单只带源单号，source_doc_id 曾恒 NULL ⇒ 本校验对界面单永不生效。
+        // 这里对历史行再补一次关联（随下方 updateById 写入数据库），新单在 create/update 已写入。
+        if ("PO_RECEIPT".equals(r.getSourceDocType())) {
+            fillSourceDocId(r);
+            PoReceipt src = r.getSourceDocId() == null ? null : poReceiptMapper.selectById(r.getSourceDocId());
             if (src != null && src.getAmount() != null) {
-                BigDecimal returned = alreadyReturnedAmount(r.getSourceDocId(), r.getId());
+                BigDecimal returned = alreadyReturnedAmount(r);
                 if (returned.add(r.getAmount()).compareTo(src.getAmount()) > 0) {
                     throw new BizException(ErrorCode.PARAM_INVALID,
                             "退货金额超限：源单 " + r.getSourceBillNo() + " 金额 " + src.getAmount()
@@ -200,11 +224,11 @@ public class PurReturnService {
         auditAfter.put("approveTime", r.getApproveTime());
         auditTrailService.recordUpdate("PUR_RETURN", id, r.getBillNo(), "pur_return",
                 String.valueOf(id), auditBefore, auditAfter, "审核通过");
-        // R5-D-084（D-V4-005 边界）：APPROVED 收尾下游腿——按 return_mode 分流（ReturnLegMapping 为
+        // R5-D-084（D-V4-005 边界）：APPROVED 收尾下游环节——按 return_mode 分流（ReturnLegMapping 为
         // 采购/销售两域共用映射表）：REFUND 退货退款 ⇒ 生成 supplier_recon_detail 负向行
         // （item_type='PUR_RETURN'、amount 取负、关联源入库单 GRN 的 source_bill_no）并按明细重算
         // 对账单余额；EXCHANGE 退货补货 ⇒ 不进对账（不冲减应付）。与审核同事务收尾
-        // （复用 D-DEC-334 收尾事件口径），不另建定时任务。
+        // （复用 D-DEC-334 收尾事件规则），不另建定时任务。
         if (ReturnLegMapping.entersRecon(r.getReturnMode())) {
             postRefundToSupplierRecon(r);
         }
@@ -244,7 +268,7 @@ public class PurReturnService {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + r.getBillNo() + " 当前状态不可作废");
         }
         if (reason == null || reason.isBlank()) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "作废必须填写原因（退出对账口径留痕）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "作废必须填写原因（退出对账需记录）");
         }
         // 作废「已审核」单 = 反审核（抹掉一条已生效的冲减记录），禁止本人操作；
         // 草稿/在途/驳回态本人作废属流程内清理，无控制被绕过，故不拦。
@@ -281,6 +305,7 @@ public class PurReturnService {
         PurReturn r = require(id);
         r.setLines(lineMapper.selectList(new LambdaQueryWrapper<PurReturnLine>()
                 .eq(PurReturnLine::getReturnId, id).orderByAsc(PurReturnLine::getLineNo)));
+        fillApproverNames(java.util.Collections.singletonList(r));
         return r;
     }
 
@@ -289,7 +314,7 @@ public class PurReturnService {
      *
      * <p>D-N22：原实现只按入参过滤，既无数据范围也不封顶；{@code /export} 传
      * {@code Integer.MAX_VALUE} 调用本方法，等于"凭一个 companyId 就能整表拉走"。
-     * 现按 data_scope 五级收口（退货单无部门/经办人列，故只到公司级，其余级别降级本公司）。</p>
+     * 现按 data_scope 五级办结（退货单无部门/经办人列，故只到公司级，其余级别降级本公司）。</p>
      */
     @DataScope("采购退货列表数据范围")
     public PageResult<PurReturn> page(long pageNum, long pageSize, Long companyId, String vendorCode,
@@ -307,10 +332,39 @@ public class PurReturnService {
         q.orderByDesc(PurReturn::getId);
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<PurReturn> p =
                 mapper.selectPage(new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(pageNum, pageSize), q);
+        fillApproverNames(p.getRecords());
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
     // ---------------- 内部工具 ----------------
+
+    /**
+     * D-H2-04（历史行补齐）：读取时把 approver 的工号批量换成真名。
+     * <p>写入侧 {@link #currentUserName()} 只对"本次审批"生效；审批发生在修复前的老单据
+     * 仍存工号（实测 pur_return.approver='100002'），列表「审核人」列因此直接显示数字。
+     * 与应付域 {@code ApRequestService.fillDisplayNames} 同一读时解析规则，写入数据库值不动。</p>
+     */
+    private void fillApproverNames(List<PurReturn> rows) {
+        if (rows == null || rows.isEmpty()) return;
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        for (PurReturn r : rows) {
+            if (r.getApprover() != null && !r.getApprover().isBlank()) codes.add(r.getApprover().trim());
+        }
+        if (codes.isEmpty()) return;
+        Map<String, String> display = new HashMap<>();
+        for (SysUser u : sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                .in(SysUser::getUserName, codes))) {
+            if (u.getNickName() != null && !u.getNickName().isBlank()) {
+                display.put(u.getUserName(), u.getNickName());
+            }
+        }
+        if (display.isEmpty()) return;
+        for (PurReturn r : rows) {
+            if (r.getApprover() != null) {
+                r.setApprover(display.getOrDefault(r.getApprover().trim(), r.getApprover()));
+            }
+        }
+    }
 
     private List<PurReturnLine> normalizeLines(PurReturn r) {
         List<PurReturnLine> lines = r.getLines();
@@ -326,7 +380,113 @@ public class PurReturnService {
             out.add(ln);
             no++;
         }
+        fillLineTrace(r, out);   // D-H2-07
         return out;
+    }
+
+    /**
+     * D-H2-02：供应商代码必须在供应商主数据（{@code md_supplier}）现有，名称一律以主数据为准回填。
+     * <p>原实现是「代码纯输入框＋名称手填」：任意字符串都能入库（如 XXX-999），且名称留空时
+     * {@code vendor_name} 写入数据库为空串（实测 pur_return id=12 LENGTH=0）⇒ 列表「供应商」列空白，
+     * 下游对账/函证/税务规则缺关键字段，须进【编辑】手输名称才有值。
+     * <p>名称以主数据覆盖而非"空才补"：手工名称与现有名称分叉会让同一供应商在单据上出现两种写法。
+     */
+    private void assertVendorInMaster(PurReturn r) {
+        MdSupplier sup = mdSupplierMapper.selectOne(new LambdaQueryWrapper<MdSupplier>()
+                .eq(MdSupplier::getSupplierCode, r.getVendorCode())
+                .last("limit 1"));
+        if (sup == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "供应商代码 " + r.getVendorCode() + " 不在供应商主数据中：请先在【供应商管理】建档，或改用在册代码");
+        }
+        r.setVendorName(sup.getSupplierName());
+    }
+
+    /**
+     * D-H2-03：按 company_id 补充 company_code/company_name。
+     * 界面只提交 company_id（公司下拉），两列此前恒 NULL ⇒ 台账/导出里法人主体只有 id，
+     * 读的人无从对号。公司 id 不现有时如实报错，不静默留空。
+     */
+    private void fillCompanyCoords(PurReturn r) {
+        if (r.getCompanyId() == null) return;
+        com.fssc.system.entity.SysCompany c = sysCompanyMapper.selectById(r.getCompanyId());
+        if (c == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "所属公司不存在: " + r.getCompanyId());
+        }
+        r.setCompanyCode(c.getCompanyCode());
+        r.setCompanyName(c.getCompanyName());
+    }
+
+    /**
+     * D-H2-07：明细行补「单位」与「来源行 id」，保证行级追溯（原两列恒 NULL）。
+     * <p>来源＝采购订单行 {@code po_order_line}（本系统收货单 {@code po_receipt} 无行表，
+     * 行级坐标只能落在订单行上）：源单是收货单时经 {@code po_receipt.po_id} 定位到订单再取行。
+     * <p>只在能唯一确定时才写 source_line_id；单位在多条候选不一致时留空（宁缺勿错关联），
+     * 界面仍允许人工填写单位。
+     */
+    private void fillLineTrace(PurReturn r, List<PurReturnLine> lines) {
+        Long poId = resolveSourcePoId(r);
+        for (PurReturnLine ln : lines) {
+            if (ln.getItemCode() == null || ln.getItemCode().isBlank()) continue;
+            List<com.fssc.purchase.entity.PoOrderLine> hits = poOrderLineMapper.selectList(
+                    new LambdaQueryWrapper<com.fssc.purchase.entity.PoOrderLine>()
+                            .eq(com.fssc.purchase.entity.PoOrderLine::getMaterialCode, ln.getItemCode())
+                            .eq(poId != null, com.fssc.purchase.entity.PoOrderLine::getPoId, poId));
+            if (hits.isEmpty()) continue;
+            if (ln.getUom() == null || ln.getUom().isBlank()) {
+                String unit = hits.get(0).getUnit();
+                boolean agree = hits.stream().allMatch(h -> java.util.Objects.equals(h.getUnit(), unit));
+                if (agree && unit != null && !unit.isBlank()) ln.setUom(unit);
+            }
+            if (ln.getSourceLineId() == null && hits.size() == 1) {
+                ln.setSourceLineId(hits.get(0).getId());
+            }
+        }
+    }
+
+    /**
+     * D-H2-10：按源单类型＋单号补写 {@code source_doc_id}。
+     * <p>界面只提交源单号（如 GRN374866），该列历史上恒 NULL；而审核期「累计已退 + 本次 ≤ 源单金额」
+     * 与 {@link #alreadyReturnedAmount} 都以 id 为键 ⇒ 校验对界面单形同不存在。
+     * 找不到源单时留空（宁缺勿错关联），不阻断保存：源单号本身仍是可追溯的唯一凭据。
+     */
+    private void fillSourceDocId(PurReturn r) {
+        if (r.getSourceDocId() != null) return;
+        String t = r.getSourceDocType();
+        String no = r.getSourceBillNo();
+        if (t == null || t.isBlank() || no == null || no.isBlank()) return;
+        if ("PO_RECEIPT".equalsIgnoreCase(t)) {
+            PoReceipt rec = poReceiptMapper.selectOne(new LambdaQueryWrapper<PoReceipt>()
+                    .eq(PoReceipt::getReceiptNo, no).last("limit 1"));
+            if (rec != null) r.setSourceDocId(rec.getId());
+        } else if ("PO_ORDER".equalsIgnoreCase(t)) {
+            com.fssc.purchase.entity.PoOrder po = poOrderMapper.selectOne(
+                    new LambdaQueryWrapper<com.fssc.purchase.entity.PoOrder>()
+                            .eq(com.fssc.purchase.entity.PoOrder::getPoNo, no).last("limit 1"));
+            if (po != null) r.setSourceDocId(po.getId());
+        }
+    }
+
+    /** 源单 → 采购订单 id（PO_RECEIPT 经 po_receipt.po_id；PO_ORDER 直接取；无法定位返回 null） */
+    private Long resolveSourcePoId(PurReturn r) {
+        String t = r.getSourceDocType();
+        if (t == null || t.isBlank()) return null;
+        String no = r.getSourceBillNo();
+        if ("PO_RECEIPT".equalsIgnoreCase(t)) {
+            PoReceipt rec = r.getSourceDocId() != null ? poReceiptMapper.selectById(r.getSourceDocId())
+                    : (no == null || no.isBlank() ? null : poReceiptMapper.selectOne(
+                            new LambdaQueryWrapper<PoReceipt>().eq(PoReceipt::getReceiptNo, no).last("limit 1")));
+            return rec == null ? null : rec.getPoId();
+        }
+        if ("PO_ORDER".equalsIgnoreCase(t)) {
+            if (r.getSourceDocId() != null) return r.getSourceDocId();
+            if (no == null || no.isBlank()) return null;
+            com.fssc.purchase.entity.PoOrder po = poOrderMapper.selectOne(
+                    new LambdaQueryWrapper<com.fssc.purchase.entity.PoOrder>()
+                            .eq(com.fssc.purchase.entity.PoOrder::getPoNo, no).last("limit 1"));
+            return po == null ? null : po.getId();
+        }
+        return null;
     }
 
     private void saveLines(Long returnId, List<PurReturnLine> lines) {
@@ -349,9 +509,9 @@ public class PurReturnService {
     }
 
     /**
-     * R5-D-085：表头税额按明细派生（含税口径，与前端 derivedTax/recalc 同式、与发票侧价税分离口径同源）：
+     * R5-D-085：表头税额按明细派生（含税规则，与前端 derivedTax/recalc 同式、与发票侧价税分离规则同源）：
      * taxAmount = Σ line.amount × taxRate / (100 + taxRate)；行无税率按 0 计。
-     * 保存即整算回写（create/update 同一入口），存量 tax_amount=0 的历史行出只读清单交人工，本方法只影响新写。
+     * 保存即整算回写（create/update 同一入口），历史 tax_amount=0 的历史行出只读清单交人工，本方法只影响新写。
      */
     private BigDecimal deriveTaxAmount(List<PurReturnLine> lines) {
         BigDecimal tax = BigDecimal.ZERO;
@@ -365,23 +525,35 @@ public class PurReturnService {
         return tax;
     }
 
-    private BigDecimal alreadyReturnedAmount(Long sourceDocId, Long excludeId) {
-        BigDecimal sum = mapper.selectList(new LambdaQueryWrapper<PurReturn>()
-                .eq(PurReturn::getSourceDocId, sourceDocId)
-                .eq(PurReturn::getStatus, PurReturn.ST_APPROVED))
-                .stream().filter(r -> !r.getId().equals(excludeId))
-                .map(r -> r.getAmount() == null ? BigDecimal.ZERO : r.getAmount())
+    /**
+     * 同源单已生效退货金额合计。D-H2-10：修复前建的单 {@code source_doc_id} 为 NULL，
+     * 只按 id 统计会把它们漏算 ⇒ 同时按「源单类型＋单号」并入（同一 id 下的历史行，两种条件只命中一次）。
+     */
+    private BigDecimal alreadyReturnedAmount(PurReturn r) {
+        LambdaQueryWrapper<PurReturn> q = new LambdaQueryWrapper<PurReturn>()
+                .eq(PurReturn::getStatus, PurReturn.ST_APPROVED);
+        if (r.getSourceDocId() != null) {
+            q.and(w -> w.eq(PurReturn::getSourceDocId, r.getSourceDocId())
+                    .or(x -> x.isNull(PurReturn::getSourceDocId)
+                            .eq(PurReturn::getSourceDocType, r.getSourceDocType())
+                            .eq(PurReturn::getSourceBillNo, r.getSourceBillNo())));
+        } else {
+            q.eq(PurReturn::getSourceDocType, r.getSourceDocType())
+                    .eq(PurReturn::getSourceBillNo, r.getSourceBillNo());
+        }
+        return mapper.selectList(q)
+                .stream().filter(x -> !x.getId().equals(r.getId()))
+                .map(x -> x.getAmount() == null ? BigDecimal.ZERO : x.getAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return sum;
     }
 
-    // ---------------- R5-D-084 下游腿（APPROVED 收尾按 return_mode 分流） ----------------
+    // ---------------- R5-D-084 下游环节（APPROVED 收尾按 return_mode 分流） ----------------
 
     /**
      * REFUND 退货退款 → 供应商对账域：生成 supplier_recon_detail 负向明细行
      * （item_type=〔PUR_RETURN〕、amount 取负、itemNo 关联源入库单 GRN 的 source_bill_no），
      * 并按明细重算对账单期间四列与累计余额。EXCHANGE 不进入本方法（不冲减应付）。
-     * 幂等：同一退货单号在同一对账单已挂行则跳过（防重复审核/事件重放）。
+     * 去重：同一退货单号在同一对账单已挂行则跳过（防重复审核/事件重放）。
      */
     private void postRefundToSupplierRecon(PurReturn r) {
         MdSupplier sup = resolveSupplier(r);
@@ -485,7 +657,7 @@ public class PurReturnService {
                 r.getBillNo(), recon.getReconNo(), oldConfirm, newConfirm);
     }
 
-    /** vendor_code → md_supplier（对账单以 supplier_id 挂账；编码优先、名称兜底） */
+    /** vendor_code → md_supplier（对账单以 supplier_id 挂账；编码优先、名称默认处理） */
     private MdSupplier resolveSupplier(PurReturn r) {
         MdSupplier sup = mdSupplierMapper.selectOne(new LambdaQueryWrapper<MdSupplier>()
                 .eq(MdSupplier::getSupplierCode, r.getVendorCode())
@@ -537,10 +709,10 @@ public class PurReturnService {
     }
 
     /**
-     * 按明细重算对账单余额（幂等，可从任意时点重放）：
+     * 按明细重算对账单余额（去重，可从任意时点重放）：
      * periodPayable = ΣINVOICE + ΣPUR_RETURN（退货负向行直接冲减本期应付）；
      * periodPaid = ΣPAYMENT；closing = 期初 + 本期应付 − 本期已付；
-     * 累计列按 beforePaid = 累计已付 − 本期已付 还原后重算（与生成口径一致，双列兼容）。
+     * 累计列按 beforePaid = 累计已付 − 本期已付 还原后重算（与生成规则一致，双列兼容）。
      */
     private void recalcReconFromDetails(SupplierRecon recon) {
         List<SupplierReconDetail> details = supplierReconDetailMapper.selectList(
@@ -591,7 +763,12 @@ public class PurReturnService {
     private String currentUserName() {
         try {
             LoginUser u = UserContext.get();
-            return u == null ? null : u.getUserName();
+            if (u == null) return null;
+            // D-H2-04：审核人/经办人列直接显示工号（实测 pur_return.approver='100002'）——
+            // getUserName() 是登录账号（工号），真名在 nickName；与应付域 ApRequestService 同一规则：
+            // 有真名取真名，无真名（历史账号未维护）才回落工号，不留空。
+            String real = u.getNickName();
+            return real != null && !real.isBlank() ? real : u.getUserName();
         } catch (Exception e) {
             return null;
         }
@@ -634,7 +811,7 @@ public class PurReturnService {
      * 单据级「操作人 ≠ 制单人」拦截 —— 第二道防线，与「角色审批/制单分离」互补。
      * <p>角色隔离挡的是「授权时把两侧码塞给同一角色/同一人」；本方法挡的是「运行期单据归属」，
      * 两者缺一不可：超级权限（{@code *:*:*}）与未来授权回退都会绕过前者。
-     * <p>{@code create_by} 为空（历史/外部导入数据）时无法判定归属，放行以免误伤存量数据。
+     * <p>{@code create_by} 为空（历史/外部导入数据）时无法判定归属，放行以免误伤历史数据。
      */
     private void assertNotSelf(PurReturn r, String action) {
         if (!isDenySelfEnabled()) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -49,8 +52,8 @@ public class WfNodeConfig extends TenantAuditBase {
      *
      * <p>此前该列<b>三重落空</b>：实体不映射、节点配置界面不显示、运行时零读取——
      * 现网 355 个有效节点里 311 个配 0、44 个配 1（2026-09-26 只读普查），配了却从不生效。
-     * 拦截总闸 {@code approve.addsign_gate.enabled} 缺省 0＝不拦，保持现行为；
-     * 待办 VO 里的 {@code addSignAllowed} 也只在总闸打开时才下发（前端据此隐藏按钮）。
+     * 拦截总开关 {@code approve.addsign_gate.enabled} 缺省 0＝不拦，保持现行为；
+     * 待办 VO 里的 {@code addSignAllowed} 也只在总开关打开时才下发（前端据此隐藏按钮）。
      */
     private Integer allowAddsign;
     /** ADMIN转管理员/SKIP自动跳过/ERROR报错阻断 */
@@ -67,7 +70,7 @@ public class WfNodeConfig extends TenantAuditBase {
      * G2 传阅（2026-09-23）：本节点办结后抄送的用户ID，逗号分隔。
      *
      * <p>与运行时入参 {@code ccUserIds}（审批人临时指定）在 complete() 里取<b>并集</b>后投递。
-     * 与 timeout_hours/up_level 同一条口径：按 model_key + node_key <b>精确匹配</b>，
+     * 与 timeout_hours/up_level 同一条规则：按 model_key + node_key <b>精确匹配</b>，
      * node_key 不在已部署 BPMN userTask 集合内的「孤儿行」配置一律不读。
      */
     private String ccUsers;
@@ -93,29 +96,29 @@ public class WfNodeConfig extends TenantAuditBase {
     // ==================== G2 原生能力替换新增列（2026-09-24）====================
 
     /**
-     * G2 驳回范围闸门：{@code NONE}（默认，不允许指定节点驳回）/ {@code PREV_ONE}（只允许退回紧邻上一节点）/
+     * G2 驳回范围校验：{@code NONE}（默认，不允许指定节点驳回）/ {@code PREV_ONE}（只允许退回紧邻上一节点）/
      * {@code ANY_DONE}（允许退回任一已完成节点）。
      *
      * <p><b>为什么要有它</b>：指定级次驳回走的是 Flowable 的 {@code moveActivityIdTo}（属"搬执行"，
-     * 会真实改动在办单据本体），此前唯一的闸门是<b>私有</b>全局开关 {@code isFreeRejectEnabled()}
+     * 会真实改动在办单据本体），此前唯一的校验是<b>私有</b>全局开关 {@code isFreeRejectEnabled()}
      * ——要么全开要么全关，无法按节点分级。现把"谁能退、能退多远"落到节点配置上，全局开关退化为
-     * 总闸（kill-switch）继续保留：生效条件＝本列 ≠ {@code NONE} <b>且</b> 总闸 = 1。
+     * 总开关（kill-switch）继续保留：生效条件＝本列 ≠ {@code NONE} <b>且</b> 总开关 = 1。
      */
     private String rejectScope;
 
     /**
-     * G2「重新提交时跳回本节点」（行业方案"驳回类审批项可勾选重新提交时跳回本节点"）：
+     * G2「重新提交时跳回本节点」：
      * 1 = 本节点驳回后，把本节点 key 记入实例变量 {@code rejectOriginNode}；单据重新提交时跳回本节点重办。
      * 0 = 关闭（默认，行为与改造前一致）。
      */
     private Integer resubmitJumpBack;
 
     /**
-     * G2 票签取值方式（与 {@code vote_value} 配对，行业方案"确定/比例"维）：
+     * G2 票签取值方式（与 {@code vote_value} 配对，确定/比例维度）：
      * {@code RATIO}（默认，按百分比）/ {@code COUNT}（按确定票数）。
      *
      * <p>与遗留列 {@code vote_ratio} 的关系：本列 + {@code voteValue} 存在时<b>优先</b>，
-     * {@code vote_ratio} 仅作为二者缺省时的回退（保证存量行行为不变）。
+     * {@code vote_ratio} 仅作为二者缺省时的回退（保证历史行行为不变）。
      */
     private String voteMode;
 
@@ -123,18 +126,18 @@ public class WfNodeConfig extends TenantAuditBase {
     private Integer voteValue;
 
     /**
-     * G2 票签分母口径（行业方案"票数/人数"维）：{@code BY_PERSON}（默认，分母＝参与人总数，即"应到"）/
+     * G2 票签分母规则（票数/人数维度）：{@code BY_PERSON}（默认，分母＝参与人总数，即"应到"）/
      * {@code BY_VOTE}（分母＝已投票数，即"实到"）。
      */
     private String voteBasis;
 
     /**
-     * G2 不达票兜底：多实例会签全部办完但票数未达阈值时，落哪个默认审批项并让流程继续。
+     * G2 不达票默认处理：多实例会签全部办完但票数未达阈值时，落哪个默认审批项并让流程继续。
      * {@code REJECT}（默认）/ {@code PASS}。
      *
      * <p><b>为什么要显式定义</b>：此前"不达票"没有任何语义——多实例既可能因完成条件永不满足而卡死，
      * 也可能被引擎默认收敛，两种结果都无法解释、无法统计。现固定为"落默认审批项 + 流程继续"，
-     * 并写一条 {@code VOTE_NOT_REACHED} 留痕供质量报表统计。
+     * 并写一条 {@code VOTE_NOT_REACHED} 记录供质量报表统计。
      */
     private String voteFallback;
 }

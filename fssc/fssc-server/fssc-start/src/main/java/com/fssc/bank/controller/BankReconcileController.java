@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.bank.controller;
 
 import com.fssc.bank.entity.BankBalance;
@@ -54,7 +57,7 @@ public class BankReconcileController {
         return Result.success(reconcileService.sheet(bankAccountId, m));
     }
 
-    /** 未达账差异明细：按账户+月份+类型查询（sheet 生成时落库留痕，可追溯） */
+    /** 未达账差异明细：按账户+月份+类型查询（sheet 生成时写入数据库记录，可追溯） */
     @RequiresFeature("FSSC_BANK")
     @RequiresPerm("bank:reconcile:list")
     @GetMapping("/items")
@@ -95,7 +98,7 @@ public class BankReconcileController {
         return Result.success(reconcileService.statementPage(pageNum, pageSize, reconStatus));
     }
 
-    /** 收款认领核销：银行贷方流水 → 关联应收单（含冲减余额/置DONE/勾对留痕） */
+    /** 收款认领核销：银行贷方流水 → 关联应收单（含冲减余额/置DONE/勾对记录） */
     @RequiresFeature("FSSC_BANK")
     @RequiresPerm("bank:reconcile:execute")  // D-G5-03 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "收款认领核销")
@@ -129,7 +132,7 @@ public class BankReconcileController {
      * <p>认领弹层原先借应收域的 {@code /api/tenant/receivable/page} 取清单，
      * 该端点要求 {@code receivable:list}（应收域）⇒ 纯银企对账岗
      * （只有 {@code bank:reconcile:list}）打开认领弹层时清单恒空、动作做不了。
-     * 本端点用<b>本域</b>权限码放行，取数权限随域走。
+     * 本端点用<b>本域</b>权限码放行，查询权限随域走。
      */
     @RequiresFeature("FSSC_BANK")
     @RequiresPerm("bank:reconcile:list")
@@ -143,7 +146,7 @@ public class BankReconcileController {
 
     // ---------------- P1 剩余：余额快照（衔接未达账项调节表 / TR05） ----------------
 
-    /** 保存账户余额快照（同一账户同一日期幂等覆盖） */
+    /** 保存账户余额快照（同一账户同一日期去重覆盖） */
     @RequiresFeature("FSSC_BANK")
     @RequiresPerm("bank:reconcile:execute")  // D-G5-03 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "INSERT", desc = "保存银行账户余额快照")

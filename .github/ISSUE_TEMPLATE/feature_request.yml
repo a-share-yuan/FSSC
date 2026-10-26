@@ -9,7 +9,7 @@ body:
     attributes:
       value: |
         本项目 33 个业务域已覆盖财务共享主链路。提请求前请先看 `docs/module-map.md`
-        与 `docs/workflow-engine.md` 的能力矩阵——**你要的功能可能已经存在但没接线**（常见现象）。
+        与 `docs/workflow-engine.md` 的能力矩阵——**你要的功能可能已经存在但没接线**（大型代码库常见现象）。
   - type: textarea
     id: problem
     attributes:

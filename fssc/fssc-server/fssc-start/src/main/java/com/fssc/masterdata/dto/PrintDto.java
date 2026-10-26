@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.dto;
 
 import lombok.Data;
@@ -156,7 +159,7 @@ public class PrintDto {
         private String bizType;
         /** 模板套编码（传则按套内顺序渲染多个模板） */
         private String setCode;
-        /** 取数对象：{head:{...}, lines:[...]} */
+        /** 查询对象：{head:{...}, lines:[...]} */
         private java.util.Map<String, Object> data;
         /** 是否服务端直接渲染 HTML（默认 true；false 只返回模板与坐标，前端自绘） */
         private Boolean renderHtml;

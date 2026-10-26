@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -13,8 +16,8 @@ import java.time.LocalDateTime;
 
 /**
  * 供应商对账单（supplier_recon）。
- * 参照行业方案应付管理 + 供应商对账 + 行业方案应付管理最佳实践。
- * 状态流转：DRAFT 已生成 → SENT 对账函已发送 → CONFIRMED 双方确认 / DIFF 有差异 → RESOLVED 差异已处理。
+ * 应付管理与供应商对账的处理规则。
+ * 状态流转：DRAFT 待确认（已生成、尚未发函） → SENT 对账函已发送 → CONFIRMED 双方确认 / DIFF 有差异 → RESOLVED 差异已处理。
  * 供应商确认：PENDING 待确认 → CONFIRMED 供应商确认一致 / REJECTED 供应商有异议。
  */
 @Data
@@ -76,7 +79,7 @@ public class SupplierRecon implements Serializable {
     /** LinkU侧供应商ID(partnerId) */
     private Long linkuPartnerId;
 
-    /** DRAFT已生成/SENT已发函/CONFIRMED双方确认/DIFF有差异/RESOLVED差异已处理 */
+    /** DRAFT待确认（已生成未发函，D-H2-06 词面统一）/SENT已发函/CONFIRMED双方确认/DIFF有差异/RESOLVED差异已处理 */
     private String status;
     private String diffRemark;
     private LocalDateTime confirmTime;

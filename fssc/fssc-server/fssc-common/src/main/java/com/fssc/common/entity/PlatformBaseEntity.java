@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.common.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -34,7 +37,7 @@ public class PlatformBaseEntity implements Serializable {
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
-    /** 必须标 fill=INSERT_UPDATE，否则审计人无法落库 */
+    /** 必须标 fill=INSERT_UPDATE，否则审计人无法写入数据库 */
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Long updateBy;

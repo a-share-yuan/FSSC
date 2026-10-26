@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -74,7 +77,7 @@ public class WfSharedOpsController {
     }
 
     /**
-     * 某节点当前<b>生效</b>的策略（只读，不落库）：节点级 → 全局默认行 → 内置兜底（抢单 + 24h/4h）。
+     * 某节点当前<b>生效</b>的策略（只读，不写入数据库）：节点级 → 全局默认行 → 内置默认处理（抢单 + 24h/4h）。
      * 让运营能直接回答"这条流程的这个节点到底按什么策略在派单"。
      */
     @RequiresPerm("wf:config:list")
@@ -145,7 +148,7 @@ public class WfSharedOpsController {
     // ------------------------------------------------------------------
 
     /**
-     * 自动分配：{@code dryRun=true} 只试算不落库（前端可先给运营看决策依据）；
+     * 自动分配：{@code dryRun=true} 只试算不写入数据库（前端可先给运营看决策依据）；
      * 否则执行指派并落 {@code op_dispatch_log}。抢单（PICK）策略不指派，任务留池待领取。
      */
     @RequiresPerm("wf:task:reassign")
@@ -178,7 +181,7 @@ public class WfSharedOpsController {
 
     /**
      * 给任务打优先级并落双时限：写回 {@code wf_task.due_time}（既有列，成为唯一真值）
-     * ＋ upsert {@code op_task_time_limit}（可核对副本）。幂等，可重复调用。
+     * ＋ upsert {@code op_task_time_limit}（可核对副本）。去重，可重复调用。
      */
     @RequiresPerm("wf:config:update")
     @OperLog(module = "WF_OPS", operType = "UPDATE", desc = "标记任务优先级与时限")
@@ -188,7 +191,7 @@ public class WfSharedOpsController {
         return Result.success(timeLimitService.markPriority(taskRowId, priority));
     }
 
-    /** 补账：给尚无 {@code due_time} 的历史存量 PENDING 任务补算时限（幂等，可重复调用直到 0 条） */
+    /** 补账：给尚无 {@code due_time} 的历史历史 PENDING 任务补算时限（去重，可重复调用直到 0 条） */
     @RequiresPerm("wf:config:update")
     @OperLog(module = "WF_OPS", operType = "UPDATE", desc = "补算任务时限")
     @PostMapping("/time-limit/backfill")
@@ -211,7 +214,7 @@ public class WfSharedOpsController {
     }
 
     // ------------------------------------------------------------------
-    // 5. 批退原因 / 任务质量报表（口径见 TaskQualityReportService）
+    // 5. 批退原因 / 任务质量报表（规则见 TaskQualityReportService）
     // ------------------------------------------------------------------
 
     /** 质量总览：批退率、一次通过率、平均节点停留、批退原因 Top 榜 */

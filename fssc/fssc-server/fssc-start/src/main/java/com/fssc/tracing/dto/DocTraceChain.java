@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.tracing.dto;
 
 import lombok.Data;
@@ -7,6 +10,7 @@ import java.util.List;
 
 /**
  * 单据全链路溯源结果（单据→发票→凭证→付款→银行对账→档案）。
+ * 联查、单据追溯。
  */
 @Data
 public class DocTraceChain {

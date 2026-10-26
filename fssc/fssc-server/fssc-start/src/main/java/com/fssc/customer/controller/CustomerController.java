@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.customer.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -37,9 +40,9 @@ public class CustomerController {
      * D-V4R-96 修复：往来单位候选（客户档案 ∪ 供应商主数据）。
      *
      * <p>原 {@code /page} 只读 {@code crm_customer}，而供应商落在 {@code md_supplier} 且两表零同步
-     * ⇒ 对公结算的往来单位下拉里一个供应商都没有 ⇒ SETTLE 单据挂不上三单腿、根本提交不了。</p>
+     * ⇒ 对公结算的往来单位下拉里一个供应商都没有 ⇒ SETTLE 单据挂不上三单环节、根本提交不了。</p>
      *
-     * <p>本端点把供应商按 {@code supplier_code} 幂等建档为往来单位档案，
+     * <p>本端点把供应商按 {@code supplier_code} 去重建档为往来单位档案，
      * 返回的 {@code id} 是<b>语义正确的 crm_customer.id</b>（下游应收核销/坏账/对账都按这个解析），
      * 并顺带补出 {@code accountNo}/{@code bankName}（原表无账号字段，导致收款账号必填永远填不上）。</p>
      *
@@ -83,7 +86,7 @@ public class CustomerController {
     }
 
     /**
-     * V2.2.38 B-14：建档即 PENDING，核准走状态位翻转（PENDING → ACTIVE，幂等）。
+     * V2.2.38 B-14：建档即 PENDING，核准走状态位翻转（PENDING → ACTIVE，去重）。
      * D-V3-139：前端【核准】按钮自 B-14 上线即调用本端点，但路由一直未登记——
      * service.approve() 成了无暴露路径的死代码，核准通路断头（实测 404 落"目录外动作不可调用"）。
      * 权限沿用 customer:update（核准属档案维护动作，不新设权限点，避免目录漂移）。

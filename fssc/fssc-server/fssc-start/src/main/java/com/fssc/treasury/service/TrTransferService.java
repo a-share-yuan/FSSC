@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.treasury.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -39,6 +42,11 @@ public class TrTransferService {
      * 三件事分开说明。仅 SELECT，不在本类生成或过账凭证。
      */
     private final com.fssc.sharing.mapper.OpVoucherMapper voucherMapper;
+    /**
+     * D-H4-02：只读取 sys_user 的姓名列，把执行人 id 解析成真名（列表页外显"执行人"列）。
+     * 仅 SELECT，不在本类写用户。
+     */
+    private final com.fssc.system.mapper.SysUserMapper sysUserMapper;
 
     /** 创建调拨草稿 */
     public Long create(TrTransfer transfer) {
@@ -52,7 +60,7 @@ public class TrTransferService {
             throw new BizException(ErrorCode.PARAM_INVALID, "调拨金额必须大于 0");
         }
         if (transfer.getStatus() == null) transfer.setStatus("DRAFT");
-        // 整改(20260917, DEV-008/VER-016)：创建即生成单号（行业方案最佳实践：单据创建即有业务主键），
+        // 整改(20260917, DEV-008/VER-016)：创建即生成单号（口径：单据创建即有业务主键），
         // 此前 transfer_no 恒为空导致 wf_instance.biz_no 无法回写。
         if (!StringUtils.hasText(transfer.getTransferNo())) {
             String date = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
@@ -202,11 +210,13 @@ public class TrTransferService {
     /**
      * D-DEC-439 乙：把"审批已过／钱未动／账未登"三件事在接口上分开说明（不改状态机、不新建列）。
      * <p>推导只用现有列：{@code tr_transfer.status} 是唯一状态载体，而 {@link #execute(Long)} 是
-     * 改 {@code md_bank_account.balance} 的唯一腿 ⇒ status≠PAID 即"余额未变"；
-     * 本域没有现金/银行日记账的登记腿（全仓无日记账写入），故登账位恒为未登账——
+     * 改 {@code md_bank_account.balance} 的唯一环节 ⇒ status≠PAID 即"余额未变"；
+     * 本域没有现金/银行日记账的登记环节（全仓无日记账写入），故登账位恒为未登账——
      * 审批收尾生成的凭证已过账，容易被读成"钱已划走"，这里把凭证号与过账态一并带出以便对照。
      * <p>凭证按 {@code op_voucher.source_doc_type ∈ (TR_TRANSFER, TR_UPLOAD)＋source_doc_id} 批量取一次，
      * 列表页不逐行查。
+     * <p>D-H4-02 追加：已执行行的执行人真名（{@code update_by} → sys_user.nick_name）同样批量解析一次，
+     * 使列表能直接外显"执行人/执行时间"两列，不必再去 {@code sys_oper_log} 翻流水。
      */
     private void fillExecState(List<TrTransfer> rows) {
         if (rows == null || rows.isEmpty()) return;
@@ -221,6 +231,23 @@ public class TrTransferService {
                 if (v.getSourceDocId() != null) vouchers.putIfAbsent(v.getSourceDocId(), v);
             }
         }
+        // D-H4-02：执行人真名批查一次（只对已执行行取——execute() 是 tr_transfer 置 PAID 的唯一写环节，
+        // 故 PAID 行的 update_by/update_time 就是执行人/执行时刻；未执行行的 update_by 是审批或改动者，
+        // 拿它当"执行人"会张冠李戴，一律不填）。
+        java.util.Map<Long, String> execNames = new java.util.HashMap<>();
+        List<Long> execUids = rows.stream()
+                .filter(t -> "PAID".equals(t.getStatus()))
+                .map(TrTransfer::getUpdateBy)
+                .filter(uid -> uid != null && uid > 0)
+                .distinct()
+                .toList();
+        if (!execUids.isEmpty()) {
+            for (com.fssc.system.entity.SysUser u : sysUserMapper.selectList(
+                    new LambdaQueryWrapper<com.fssc.system.entity.SysUser>()
+                            .in(com.fssc.system.entity.SysUser::getId, execUids))) {
+                execNames.put(u.getId(), realNameOf(u));
+            }
+        }
         for (TrTransfer t : rows) {
             boolean paid = "PAID".equals(t.getStatus());
             boolean approved = "APPROVED".equals(t.getStatus());
@@ -230,6 +257,7 @@ public class TrTransferService {
             t.setExecuted(paid);
             t.setBalanceMoved(paid);
             t.setJournalBooked(false);
+            t.setExecutorName(paid ? execNames.get(t.getUpdateBy()) : null);
             t.setVoucherNo(v == null ? null : v.getVoucherNo());
             t.setVoucherStatus(v == null ? null : v.getStatus());
             if (paid) {
@@ -254,6 +282,13 @@ public class TrTransferService {
 
     private BigDecimal nz(BigDecimal v) {
         return v == null ? BigDecimal.ZERO : v;
+    }
+
+    /** D-H4-02：真名规则＝nickName 优先、空白回落 userName（工号），与应付域/退货域同一套 */
+    private String realNameOf(com.fssc.system.entity.SysUser u) {
+        if (u == null) return null;
+        String nick = u.getNickName();
+        return StringUtils.hasText(nick) ? nick.trim() : u.getUserName();
     }
 
     private TrTransfer requireExist(Long id) {

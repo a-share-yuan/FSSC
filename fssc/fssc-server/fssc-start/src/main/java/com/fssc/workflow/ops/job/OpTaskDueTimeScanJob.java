@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.ops.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -24,11 +27,11 @@ import java.util.Set;
  *
  * <p><b>本 Job 只报不修，为什么</b>：催办、超时自动通过这两件"动作"已由既有
  * {@code WfTimeoutJob} 承担（它按 {@code wf_node_config.timeout_hours} 现算）。若本 Job 也去催办，
- * 同一张单会被两套口径各催一次（口径还不一样），正是方案 §二 F6 说的"两处各算一遍"的病根。
+ * 同一张单会被两套规则各催一次（规则还不一样），正是方案 §二 F6 说的"两处各算一遍"的病根。
  * 因此本 Job 只做一件事：把"按落账时限已超时"的在办任务<b>聚合成可见读数</b>（日志 + 最近报告接口），
  * 让运维能核对"双时限是否真的在生效"，动作仍走原通道。
  *
- * <p><b>租户铁律</b>：跨租户聚合扫描用 {@link TenantContext#runIgnoreTenant}（只读、不落库），
+ * <p><b>租户铁律</b>：跨租户聚合扫描用 {@link TenantContext#runIgnoreTenant}（只读、不写入数据库），
  * 逐租户统计时 {@link TenantContext#callAs} 恢复上下文——否则租户过滤失效、误把别家单子算进来。
  */
 @Slf4j

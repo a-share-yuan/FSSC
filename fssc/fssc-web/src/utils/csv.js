@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * CSV 导出工具（P2-2 交互一致性：消除 26 页各自 copy-paste 的 CSV 逻辑）。
  * 所有自造 CRUD 页面统一调用此函数。
@@ -8,7 +11,9 @@ import { ElMessage } from 'element-plus'
 /**
  * 导出 CSV 文件。
  * @param {Array} rows       数据行
- * @param {Array} cols       列定义 [{ prop, label }]
+ * @param {Array} cols       列定义 [{ prop, label }] 或 [{ value: (row)=>any, label }]
+ *                           —— value 为可选的派生列取值器（如「占比」这类页面计算列），
+ *                              传入时优先于 prop，使导出列能与页面计算列同源（D-H10-02）。
  * @param {String} filename  文件名（不含扩展名）
  */
 export function exportCsv(rows, cols, filename) {
@@ -19,7 +24,7 @@ export function exportCsv(rows, cols, filename) {
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.map((row) =>
     cols.map((c) => {
-      const v = row?.[c.prop]
+      const v = typeof c.value === 'function' ? c.value(row) : row?.[c.prop]
       if (v == null) return ''
       let s = String(v)
       if (s.includes(',') || s.includes('"') || s.includes('\n')) {

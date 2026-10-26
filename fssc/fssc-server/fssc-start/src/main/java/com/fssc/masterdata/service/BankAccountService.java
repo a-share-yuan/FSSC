@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -25,12 +28,12 @@ public class BankAccountService {
     private final MdBankAccountMapper mapper;
     private final WfEngineFacade wfEngineFacade;
     private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P4-3 审计扩面（D 类）：银行账户变更留痕 */
+    /** P4-3 审计扩面（D 类）：银行账户变更记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /**
      * R5-D-026：银行账户是 company_id 级主数据，原实现只按关键字过滤 ⇒ 同租户内跨公司全量可见。
-     * 现接 data_scope 五级收口；本表无部门／经办人列，更窄的级别按公司口径收（与采购退货列表同法）。
+     * 现接 data_scope 五级办结；本表无部门／经办人列，更窄的级别按公司范围收（与采购退货列表同法）。
      */
     @DataScope("银行账户列表数据范围")
     public PageResult<MdBankAccount> page(long pageNum, long pageSize, String keyword) {
@@ -44,13 +47,13 @@ public class BankAccountService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** D-DEC-158：账户性质词表（人民银行银行结算账户分类） */
+    /** D-DEC-158：账户性质名称表（人民银行银行结算账户分类） */
     private static final java.util.Set<String> ACCOUNT_TYPES =
             java.util.Set.of("BASIC", "GENERAL", "SPECIAL", "TEMPORARY");
 
     /**
-     * D-DEC-158：账户性质闸——新增必填、取值受控，且「一司一基本户」在服务端成立。
-     * 只统计启用中（status=NORMAL、未删除）的账户；存量 account_type 为 NULL 的账户不参与判重。
+     * D-DEC-158：账户性质校验——新增必填、取值受控，且「一司一基本户」在服务端成立。
+     * 只统计启用中（status=NORMAL、未删除）的账户；历史 account_type 为 NULL 的账户不参与判重。
      */
     private String assertAccountType(MdBankAccount e, Long companyId, boolean require) {
         String t = e.getAccountType() == null ? "" : e.getAccountType().trim().toUpperCase();
@@ -98,7 +101,7 @@ public class BankAccountService {
 
     /**
      * P0 资金路由：银行账号同租户唯一——Bean Validation 只能校验单字段形态，
-     * 「同号重复登记」必须查库，放这里兜底（与前后端格式校验构成唯一性闸）。
+     * 「同号重复登记」必须查库，放这里默认处理（与前后端格式校验构成唯一性校验）。
      */
     private void assertBankAccountUnique(MdBankAccount e) {
         if (!StringUtils.hasText(e.getBankAccount())) {
@@ -119,7 +122,7 @@ public class BankAccountService {
         if (e.getStatus() == null) {
             e.setStatus("NORMAL");
         }
-        // TR-O1：companyId 缺省按当前登录人公司回填；NOT NULL 字段缺失给明确业务提示（不再落库报 ERROR 1364）
+        // TR-O1：companyId 缺省按当前登录人公司回填；NOT NULL 字段缺失给明确业务提示（不再写入数据库报 ERROR 1364）
         if (e.getCompanyId() == null) {
             com.fssc.framework.security.LoginUser u = UserContext.get();
             if (u != null) {
@@ -142,12 +145,12 @@ public class BankAccountService {
         // D-DEC-158：账户性质必填 + 一司一基本户 + 默认账户唯一
         assertAccountType(e, e.getCompanyId(), true);
         enforceSingleDefault(e, e.getCompanyId());
-        // TR-O1 补充：account_code 同为 NOT NULL 无默认值列，缺省按编号规则自动生成（兜底时间戳，风格同 createBatch）
+        // TR-O1 补充：account_code 同为 NOT NULL 无默认值列，缺省按编号规则自动生成（默认处理时间戳，风格同 createBatch）
         if (!StringUtils.hasText(e.getAccountCode())) {
             String code;
             try { code = numberRuleService.next("BANK_ACCOUNT"); }
             catch (Exception ex) {
-                // 编号规则未配置/异常：兜底用时间戳生成 account_code，保证 NOT NULL 列可落库
+                // 编号规则未配置/异常：默认处理用时间戳生成 account_code，保证 NOT NULL 列可写入数据库
                 log.warn("银行账号编号规则生成失败，回退时间戳: {}", ex.getMessage());
                 code = "BA" + System.currentTimeMillis();
             }
@@ -165,12 +168,12 @@ public class BankAccountService {
     }
 
     /**
-     * P4-3 审计扩面（D 类·银行账户变更）：改前采集旧值，**仅当账号/开户行实际变化时**留痕
-     * （口径：before/after 只含本次实际变化字段；取不到旧实体则不写、不伪造）。
+     * P4-3 审计扩面（D 类·银行账户变更）：改前采集旧值，**仅当账号/开户行实际变化时**记录
+     * （规则：before/after 只含本次实际变化字段；取不到旧实体则不写、不伪造）。
      */
     public void update(MdBankAccount e) {
         MdBankAccount old = e.getId() == null ? null : mapper.selectById(e.getId());
-        // D-DEC-158：改性质同样要过「一司一基本户」闸；公司归属取本次提交值，缺省沿用在册值
+        // D-DEC-158：改性质同样要过「一司一基本户」校验；公司归属取本次提交值，缺省沿用现有值
         Long companyId = e.getCompanyId() != null ? e.getCompanyId() : (old == null ? null : old.getCompanyId());
         assertAccountType(e, companyId, false);
         enforceSingleDefault(e, companyId);
@@ -220,7 +223,7 @@ public class BankAccountService {
     }
 
     public void enable(Long id, boolean enable) {
-        // D-DEC-158：重新启用也是"成为启用中账户"的入口——基本户判重必须一并覆盖，否则停用再启用即绕过闸口
+        // D-DEC-158：重新启用也是"成为启用中账户"的入口——基本户判重必须一并覆盖，否则停用再启用即绕过校验
         if (enable) {
             MdBankAccount cur = id == null ? null : mapper.selectById(id);
             if (cur != null && "BASIC".equalsIgnoreCase(cur.getAccountType())) {
@@ -241,7 +244,7 @@ public class BankAccountService {
         return UserContext.get() == null ? null : UserContext.get().getUserId();
     }
 
-    /** 当前登录用户归属公司（未登录或无公司归属返回 null，由调用方决定是否兜底） */
+    /** 当前登录用户归属公司（未登录或无公司归属返回 null，由调用方决定是否默认处理） */
     private Long companyId() {
         return UserContext.get() == null ? null : UserContext.get().getCompanyId();
     }

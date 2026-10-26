@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.dto;
 
 import lombok.Data;
@@ -6,7 +9,7 @@ import java.time.LocalDate;
 
 /**
  * 在建工程转固定资产请求参数。
- * 转固时按累计归集金额建资产卡片，并携带折旧口径与目标资产归属。
+ * 转固时按累计归集金额建资产卡片，并携带折旧规则与目标资产归属。
  */
 @Data
 public class MdCipTransferRequest {
@@ -20,7 +23,7 @@ public class MdCipTransferRequest {
     /** 折旧方法：LINEAR 直线 / ACCELERATED 加速 */
     private String depreciationMethod;
 
-    /** 折旧月数（会计口径，必填>0） */
+    /** 折旧月数（会计规则，必填>0） */
     private Integer depreciationMonths;
 
     /** 税法折旧年限(月)，可空 */

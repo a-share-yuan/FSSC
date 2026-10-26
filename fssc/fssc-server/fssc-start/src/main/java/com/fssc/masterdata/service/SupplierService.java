@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -53,13 +56,13 @@ public class SupplierService {
     }
 
     public Long create(MdSupplier e) {
-        // 必填收口（与前端红星同口径）：供应商编码＝人工录入的唯一编码，名称必输
+        // 必填办结（与前端红星同一规则）：供应商编码＝人工录入的唯一编码，名称必输
         AssertUtil.notBlank(e.getSupplierCode(), ErrorCode.PARAM_INVALID, "供应商编码必填");
         AssertUtil.notBlank(e.getSupplierName(), ErrorCode.PARAM_INVALID, "供应商名称必填");
         assertCodeUnique(e.getSupplierCode(), null);
         assertTaxIdentityUnique(e, null);
         e.setId(null);
-        // V2.2.38 B-14 落地（K130/K131/K133 参考行业做法：主数据零审批、状态位核准）：
+        // V2.2.38 B-14 落地（K130/K131/K133：主数据零审批、状态位核准）：
         // 建档落「未核准(PENDING)」状态位，不再发起 MD_MASTER 审批流；由持核准权限的岗位
         // 经 POST /{id}/approve 把状态位翻到 ACTIVE（页面「核准」按钮）。
         if (e.getStatus() == null || "NORMAL".equals(e.getStatus())) {
@@ -210,8 +213,8 @@ public class SupplierService {
         }
     }
     /**
-     * V2.2.38 B-14 状态位核准（K130 参考行业做法"未核准→核准"）：PENDING→ACTIVE。
-     * 权限 md:supplier:approve；幂等：已是 ACTIVE 跳过。审计留痕。
+     * V2.2.38 B-14 状态位核准（K130：未核准→核准）：PENDING→ACTIVE。
+     * 权限 md:supplier:approve；去重：已是 ACTIVE 跳过。审计记录。
      */
     @Transactional(rollbackFor = Exception.class)
     public void approve(Long id) {
@@ -220,7 +223,7 @@ public class SupplierService {
             throw new BizException(ErrorCode.PARAM_INVALID, "供应商不存在: " + id);
         }
         if ("ACTIVE".equals(sup.getStatus())) {
-            return; // 幂等
+            return; // 去重
         }
         String old = sup.getStatus();
         MdSupplier upd = new MdSupplier();

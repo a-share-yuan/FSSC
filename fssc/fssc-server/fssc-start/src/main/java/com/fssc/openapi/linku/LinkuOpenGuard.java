@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.openapi.linku;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,19 +21,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * LinkU 开放接口统一守卫（F-1 / F-4）：验签 → 幂等 → 执行 → 审计。
+ * LinkU 开放接口统一守卫（F-1 / F-4）：验签 → 去重 → 执行 → 审计。
  *
  * <p>与既有回调 {@code SupplierReconController#guardAndExecute} 同范式，差异点：</p>
  * <ol>
  *   <li>查询端点（GET）无请求体，签名原文为 <b>空串</b>（对端须以空 body 签名）；</li>
- *   <li>幂等键取请求体的 {@code idempotencyKey}（而非回调的事件+对账单 id），
- *       以支撑「查询无关、写入可重放」的语义；列缺失时自动降级为无幂等保护并告警；</li>
+ *   <li>唯一键取请求体的 {@code idempotencyKey}（而非回调的事件+对账单 id），
+ *       以支撑「查询无关、写入可重放」的语义；列缺失时自动降级为无去重保护并告警；</li>
  *   <li>全部 DB 访问包在 {@code TenantContext.runIgnoreTenant} 内：开放端点为匿名调用，
- *       无租户上下文，业务 SQL 一律以入参 tenantId 显式过滤（fail-closed 由入参校验兜底）。</li>
+ *       无租户上下文，业务 SQL 一律以入参 tenantId 显式过滤（fail-closed 由入参校验默认处理）。</li>
  * </ol>
  *
- * <p><b>未过签不落业务表、也不写审计表</b>（D-DEC-241 口径）：仅记应用日志（IP + 事件类型 + 拒绝码），
- * 不落请求体，避免未鉴权写入面。已过签的业务失败仍照常落库 —— 那是合法来源的审计线索。</p>
+ * <p><b>未过签不落业务表、也不写审计表</b>（D-DEC-241 规则）：仅记应用日志（IP + 事件类型 + 拒绝码），
+ * 不落请求体，避免未鉴权写入面。已过签的业务失败仍照常写入数据库 —— 那是合法来源的审计线索。</p>
  */
 @Slf4j
 @Component
@@ -92,7 +95,7 @@ public class LinkuOpenGuard {
                     tsErr ? "INVALID_LINKU_TIMESTAMP" : "INVALID_LINKU_SIGNATURE");
         }
 
-        // 2) 幂等：同事件 + 同幂等键已成功处理过 → 直接返回 200 且不重复执行
+        // 2) 去重：同事件 + 同唯一键已成功处理过 → 直接返回 200 且不重复执行
         if (StringUtils.hasText(idempotencyKey) && alreadyProcessed(eventType, idempotencyKey)) {
             log.info("[LinkU开放接口] 幂等命中，跳过执行 eventType={} idempotencyKey={}", eventType, idempotencyKey);
             Map<String, Object> ack = new HashMap<>();
@@ -138,7 +141,7 @@ public class LinkuOpenGuard {
         // 不在此清 TenantContext：runIgnoreTenant 内部已自动 restore，请求结束由 JwtAuthFilter 统一 clear。
     }
 
-    /** 幂等判定；{@code idempotency_key} 列缺失时降级为「无幂等保护」并告警。 */
+    /** 去重判定；{@code idempotency_key} 列缺失时降级为「无去重保护」并告警。 */
     private boolean alreadyProcessed(String eventType, String idempotencyKey) {
         final boolean[] hit = {false};
         try {
@@ -152,7 +155,7 @@ public class LinkuOpenGuard {
         }
     }
 
-    /** 落审计；列缺失时自动去掉幂等键列重试。 */
+    /** 落审计；列缺失时自动去掉唯一键列重试。 */
     private void writeLog(String eventType, Long linkuReconId, Long supplierId, String rawBody,
                           String idempotencyKey, String status, String errorMsg, int durationMs) {
         try {
@@ -182,7 +185,7 @@ public class LinkuOpenGuard {
         }
     }
 
-    /** GET 场景：把查询参数并入 Map，供幂等/审计上下文读取（tenantId 亦由此取得）。 */
+    /** GET 场景：把查询参数并入 Map，供去重/审计上下文读取（tenantId 亦由此取得）。 */
     private Map<String, Object> queryParams(HttpServletRequest req) {
         Map<String, Object> m = new HashMap<>();
         req.getParameterMap().forEach((k, v) -> {

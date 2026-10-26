@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="bct" v-if="stages.length">
     <div class="bct-title">业务链时间线</div>
@@ -28,7 +31,7 @@ import { statusLabel } from '@/constants/billStatus'
  * 格子数随单据类型而变（D-DEC-446 甲-2：summary.segmentSupport 标记本域无付款/组批环节的单据不再画该格）。
  * 历史缺陷：节点 1/2 靠另一个接口（/expense/bill/detail，被「仅限本人单据」守卫拦截，
  * 非申请人必 4030 → billInfo 为空 → status 缺失），节点 3-6 靠 traceChain；
- * 两条口径一旦前一个断供，就出现「提单灰 / 审批通过灰 / 生成凭证绿」的跳环节错觉，
+ * 两条规则一旦前一个断供，就出现「提单灰 / 审批通过灰 / 生成凭证绿」的跳环节错觉，
  * 且 /expense/bill-trace-chain 把任意业务表的自增主键当 exp_bill 主键，
  * 还会把同 id 的其它域单据（如 GL 手工凭证）撞进本单链路（实证见 docs/62）。
  * 现在后端统一裁决并补齐 APPROVED 段，本组件只做展示。
@@ -55,7 +58,7 @@ const BLOCK_LABEL = { REJECTED: '已驳回', WITHDRAWN: '已撤回', VOID: '已�
 
 /** 各段「存在计数」——用于副标题的分母，不代表已达 */
 const EXIST_KEY = { VOUCHER: 'voucherCount', PAYMENT: 'paymentCount', BATCH: 'batchCount', ARCHIVE: 'archiveCount' }
-/** D-DEC-446 乙：各段「终态计数」（凭证 POSTED／付款 PAID／批次已出账／档案 ARCHIVED）——已达判据 */
+/** D-DEC-446 乙：各段「最终状态计数」（凭证 POSTED／付款 PAID／批次已出账／档案 ARCHIVED）——已达判据 */
 const TERM_KEY = { VOUCHER: 'postedVoucherCount', PAYMENT: 'paidPaymentCount', BATCH: 'settledBatchCount', ARCHIVE: 'archivedCount' }
 const UNIT = { VOUCHER: '张', PAYMENT: '笔', BATCH: '批', ARCHIVE: '卷' }
 
@@ -63,7 +66,7 @@ function num(k) {
   const v = summary.value[k]
   return typeof v === 'number' ? v : null
 }
-/** 旧 jar 不发终态计数：回落存在计数，宁可沿用旧口径也不能显示成「0 张」 */
+/** 旧 jar 不发最终状态计数：回落存在计数，宁可沿用旧规则也不能显示成「0 张」 */
 function termCount(key) {
   const t = num(TERM_KEY[key])
   return t === null ? (num(EXIST_KEY[key]) || 0) : t
@@ -82,12 +85,12 @@ const paySegment = computed(() => {
 
 /**
  * D-DEC-060 前端侧：审批段未达时，说清「主流程真实卡点」与「派单链已办结」是两条并存的事实。
- * 改前这里只有一句「待审批」，而后端摘要一度锚的是 id 最大＝最后完成的那枚实例（常是三单匹配派单链），
- * 于是 12-18:74 出现「匹配链批完 → 这单显示已批，主流程还停在扫描岗」。后端已改锚主流程，
- * 本组件把主流程卡点显出来（兜底档不谎报具体节点），派单链完成数单列。
- * 只加文案：reached / segmentSupport / 终态计数（D-DEC-446 甲+乙）口径一律不动。
+ * 改前这里只有一句「待审批」，而后端摘要一度关联的是 id 最大＝最后完成的那枚实例（常是三单匹配派单链），
+ * 于是 12-18:74 出现「匹配链批完 → 这单显示已批，主流程还停在扫描岗」。后端已改关联主流程，
+ * 本组件把主流程卡点显出来（默认处理档不谎报具体节点），派单链完成数单列。
+ * 只加文案：reached / segmentSupport / 最终状态计数（D-DEC-446 甲+乙）规则一律不动。
  */
-// 派单/子流程实例的「已办结」＝与后端 BillTraceChainController.INST_APPROVED 同口径的两枚末态
+// 派单/子流程实例的「已办结」＝与后端 BillTraceChainController.INST_APPROVED 同一规则的两枚末态
 const SUB_DONE = ['APPROVED', 'COMPLETED']
 const mainGate = computed(() => {
   const s = summary.value
@@ -125,7 +128,7 @@ const stages = computed(() => {
     { key: 'VOUCHER', label: '生成凭证', hint: '审批后自动生成' },
     { key: 'PAYMENT', label: '付款', hint: '出纳执行' },
     { key: 'BATCH', label: '组批', hint: '付款组批' },
-    { key: 'ARCHIVE', label: '归档', hint: '终态归集' },
+    { key: 'ARCHIVE', label: '归档', hint: '最终状态' },
   ]
 
   return all
@@ -138,9 +141,9 @@ const stages = computed(() => {
       return {
         ...s,
         state: has(s.key) ? 'reached' : 'pending',
-        // 已达＝终态计数；未全部终态时把差额显式讲清楚，不含糊
+        // 已达＝最终状态计数；未全部最终状态时把差额显式讲清楚，不含糊
         detail: t > 0 ? (t < e ? `${t}/${e} ${u}` : `${t} ${u}`) : '',
-        // 有对象但一个都没到终态：不能说「待进行」，要说清卡在哪儿
+        // 有对象但一个都没到最终状态：不能说「待进行」，要说清卡在哪儿
         hint: t > 0 ? '' : (e > 0 ? `已生成 ${e} ${u}，未办结` : s.hint),
       }
     })

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -13,6 +16,7 @@ import java.time.LocalDateTime;
 
 /**
  * 供应商对账差异调节表（supplier_recon_diff）。
+ * 余额调节表 + 差异过账调整。
  * 记录对账过程中发现的每一项差异及其处理方式。
  */
 @Data

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.invoice.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -15,7 +18,7 @@ import java.time.LocalDateTime;
 @TableName("inv_invoice")
 public class InvInvoice extends TenantAuditBase {
 
-    /** 发票代码；全电票无代码，恒为空串（NOT NULL DEFAULT ''，与 inv_invoice_global/uk_tenant_inv 口径一致） */
+    /** 发票代码；全电票无代码，恒为空串（NOT NULL DEFAULT ''，与 inv_invoice_global/uk_tenant_inv 规则一致） */
     private String invoiceCode;
     private String invoiceNo;
     /** VAT增值税专票 / VATN普通 / TRAIN火车票 / OTHER */
@@ -73,7 +76,7 @@ public class InvInvoice extends TenantAuditBase {
     private Long sourceDocId;
     /** uxfix W1（2026-10-08）：方向 INPUT进项(收票)/OUTPUT销项(开票)。DDL 见 临时脚本/backup_uxfix_20261008/w1_ddl.tmp.sql */
     private String direction;
-    /** 备注/留痕（作废原因、红冲原因，） */
+    /** 备注/记录（作废原因、红冲原因） */
     private String remark;
     /** 红字发票关联的原蓝票ID（inv_invoice.original_id，列见 sql/impl-cl-20260914.sql DDL） */
     private Long originalId;

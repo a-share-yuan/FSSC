@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -31,6 +34,6 @@ public class MdExpenseStandard extends TenantAuditBase {
     private Integer abroad;
     /** 国家档位：DEV(发达)/EMG(新兴)/OTH，NULL=境外通用档 */
     private String countryTier;
-    /** 补贴/日（本位币，V1.3.10 海外报账③：出差补贴按天自动核算取数） */
+    /** 补贴/日（本位币，V1.3.10 海外报账③：出差补贴按天自动核算查询） */
     private BigDecimal allowanceDaily;
 }

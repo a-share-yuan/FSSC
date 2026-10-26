@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -38,17 +41,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * 供应商对账（应付管理与自动清账）。
  *
  * 核心流程：
  * 1. 生成对账单：按期间过滤发票和付款，计算期初余额、本期发生额、期末余额，生成逐笔明细
- * 2. 自动勾对：按发票号/金额/PO号规则自动匹配发票与付款（行业方案自动勾对）
- * 3. 手工勾对：用户逐笔选择发票与付款进行勾对（行业方案手工勾对）
+ * 2. 自动勾对：按发票号/金额/PO号规则自动匹配发票与付款
+ * 3. 手工勾对：用户逐笔选择发票与付款进行勾对
  * 4. 对账函：生成对账函编号，标记已发送状态（供应商对账函）
  * 5. 供应商确认：供应商签章回函/在线确认（预留LinkU门户接口）
  * 6. 差异处理：差异调节表记录每一项差异及处理方式（余额调节表）
  * 7. 确认完成：双方确认一致后放行三单匹配
  *
- * 状态流转：DRAFT 已生成 → SENT 对账函已发送 → CONFIRMED 双方确认 / DIFF 有差异 → RESOLVED 差异已处理
+ * 状态流转：DRAFT 待确认（已生成、尚未发函） → SENT 对账函已发送 → CONFIRMED 双方确认 / DIFF 有差异 → RESOLVED 差异已处理
  */
 @Slf4j
 @Service
@@ -69,7 +73,7 @@ public class SupplierReconService {
     // ==================== 对账单生成 ====================
 
     /**
-     * 生成/覆盖对账单（同供应商同期间幂等）。
+     * 生成/覆盖对账单（同供应商同期间去重）。
      * 按期间过滤发票和付款，计算期初期末余额，生成逐笔明细。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -121,7 +125,7 @@ public class SupplierReconService {
 
         Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
 
-        // 幂等：同供应商同期间已存在则覆盖
+        // 去重：同供应商同期间已存在则覆盖
         SupplierRecon exist = reconMapper.selectOne(new LambdaQueryWrapper<SupplierRecon>()
                 .eq(SupplierRecon::getSupplierId, supplierId)
                 .eq(SupplierRecon::getPeriod, period)
@@ -150,7 +154,7 @@ public class SupplierReconService {
             // 而前端「发送对账函」入口条件是 letterStatus==='NONE'、「确认一致」条件是
             // supplierConfirmStatus==='PENDING' ⇒ 对同一供应商+期间重新生成后，
             // 该行既不能重发函也不能确认，永久卡死（只能手工改库才能救）。
-            // 口径：重新生成 = 这一期重新走「发函 → 供应商确认」全流程，旧的函件信息全部作废。
+            // 规则：重新生成 = 这一期重新走「发函 → 供应商确认」全流程，旧的函件信息全部作废。
             upd.setLetterStatus("NONE");
             upd.setLetterNo(null);
             upd.setLetterSentTime(null);
@@ -223,7 +227,7 @@ public class SupplierReconService {
         return reconId;
     }
 
-    // ==================== 自动勾对（行业方案） ====================
+    // ==================== 自动勾对 ====================
 
     /**
      * 自动勾对：按发票号、金额、PO号规则自动匹配发票与付款。
@@ -289,7 +293,7 @@ public class SupplierReconService {
         return matchedCount;
     }
 
-    /** 手工勾对：用户指定一条发票和一条付款进行勾对（行业方案） */
+    /** 手工勾对：用户指定一条发票和一条付款进行勾对 */
     @Transactional(rollbackFor = Exception.class)
     public void manualMatch(Long reconId, Long invoiceDetailId, Long paymentDetailId) {
         SupplierReconDetail inv = detailMapper.selectById(invoiceDetailId);
@@ -356,6 +360,7 @@ public class SupplierReconService {
 
     /**
      * 发送对账函：生成对账函编号，标记已发送状态。
+     * 供应商确认函 + 对账函生成。
      */
     @Transactional(rollbackFor = Exception.class)
     public String sendLetter(Long reconId) {
@@ -380,21 +385,22 @@ public class SupplierReconService {
 
     /**
      * 供应商确认回函。
+     * 参考供应商签章回函 + 第三方对账平台供应商门户在线确认（预留LinkU接口）。
      * @param confirmStatus CONFIRMED 确认一致 / REJECTED 有异议
      * @param remark 供应商确认备注
      */
     @Transactional(rollbackFor = Exception.class)
     public void supplierConfirm(Long reconId, String confirmStatus, String remark) {
         SupplierRecon r = require(reconId);
-        // R5-D-074②：状态机硬闸——未发函（letter_status 非 SENT/RECEIVED）不得推进供应商确认状态。
+        // R5-D-074②：状态机强制校验——未发函（letter_status 非 SENT/RECEIVED）不得推进供应商确认状态。
         // 历史库存在 letter_status=NONE 而 supplier_confirm_status=REJECTED 的矛盾行（没发函何来驳回），
         // 根因就是本方法无前置校验；这里 fail-closed 拦截，不再允许静默写坏状态机。
         if (!"SENT".equals(r.getLetterStatus()) && !"RECEIVED".equals(r.getLetterStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "对账单尚未发送对账函（letter_status=" + r.getLetterStatus() + "），供应商确认状态不可推进，请先发送对账函");
         }
-        // D-DEC-319（批次0 P-4 / A2 回滚腿）：发起前采集确认前快照入流程变量。
-        // RECON_ACTIVE 驳回时由 reconBizAction 按快照把状态洗回（此前 CONFIRMED 先落库、驳回无腿＝脏账）。
+        // D-DEC-319（批次0 P-4 / A2 回滚环节）：发起前采集确认前快照入流程变量。
+        // RECON_ACTIVE 驳回时由 reconBizAction 按快照把状态洗回（此前 CONFIRMED 先写入数据库、驳回无环节＝脏账）。
         String prevStatus = r.getStatus();
         String prevSupplierConfirmStatus = r.getSupplierConfirmStatus();
         SupplierRecon upd = new SupplierRecon();
@@ -414,7 +420,7 @@ public class SupplierReconService {
         reconMapper.updateById(upd);
 
         if ("CONFIRMED".equals(confirmStatus)) {
-            // 发起对账确认审批流（快照随变量入流，驳回腿消费）
+            // 发起对账确认审批流（快照随变量入流，驳回环节消费）
             try {
                 java.util.Map<String, Object> extra = new java.util.HashMap<>();
                 extra.put("prevStatus", prevStatus == null ? "" : prevStatus);
@@ -581,7 +587,7 @@ public class SupplierReconService {
         if ("NONE".equals(r.getLetterStatus())) {
             upd.setLetterStatus("SENT");
             upd.setLetterSentTime(LocalDateTime.now());
-            // R5-D-074②：同发函口径——发函动作把确认状态推进到 PENDING（此前才有权等待供应商回函）
+            // R5-D-074②：同发函规则——发函动作把确认状态推进到 PENDING（此前才有权等待供应商回函）
             upd.setSupplierConfirmStatus("PENDING");
         }
         reconMapper.updateById(upd);
@@ -592,6 +598,7 @@ public class SupplierReconService {
     /**
      * 接收 LinkU 供应商确认回函。
      * 预留接口：后续 LinkU 通过 Webhook 回调此方法。
+     * 参考第三方对账平台：供应商在门户在线确认/提出差异。
      * 此方法由 LinkU Webhook 匿名回调，不启动审批流（审批流由租户用户后续触发）。
      *
      * @param linkuReconId LinkU 侧对账单 ID
@@ -607,8 +614,8 @@ public class SupplierReconService {
             log.warn("LinkU回调：未找到对账单, linkuReconId={}", linkuReconId);
             return;
         }
-        // R5-D-074②：同一状态机硬闸（匿名回调面）——未发函的本地对账单不得被 LinkU 回函推进确认状态，
-        // 否则又会生产 letter_status=NONE 而 confirm=REJECTED 的矛盾行。fail-closed：仅告警、拒绝落库。
+        // R5-D-074②：同一状态机强制校验（匿名回调面）——未发函的本地对账单不得被 LinkU 回函推进确认状态，
+        // 否则又会生产 letter_status=NONE 而 confirm=REJECTED 的矛盾行。fail-closed：仅告警、拒绝写入数据库。
         if (!"SENT".equals(r.getLetterStatus()) && !"RECEIVED".equals(r.getLetterStatus())) {
             log.warn("LinkU回调：对账单未发函(letter_status={})，拒绝推进供应商确认状态, reconId={}",
                     r.getLetterStatus(), r.getId());
@@ -675,7 +682,7 @@ public class SupplierReconService {
                 log.info("供应商对账匹配完成，已触发付款审批: reconId={}", recon.getId());
             } catch (Exception ex) {
                 // D-ROOT2-01：SUPPLIER_PAY 至今无流程模型（wf_model 无此 key、wf_process_config 无绑定），
-                // 冒泡会让 LinkU 回调整体失败、对账单卡在 MATCHED。建模裁决通过前先降级留痕，模型一上线即删本 catch。
+                // 冒泡会让 LinkU 回调整体失败、对账单卡在 MATCHED。建模裁决通过前先降级记录，模型一上线即删本 catch。
                 log.error("触发付款审批失败（SUPPLIER_PAY 未建模，付款需手工发起）: reconId={}", recon.getId(), ex);
             }
         }

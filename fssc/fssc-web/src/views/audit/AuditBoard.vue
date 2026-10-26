@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div :class="['audit-board', { tabless: isSingle }]">
     <div class="page-header" style="margin-bottom: 16px;">
@@ -59,7 +62,7 @@
           <el-input v-model="trailQuery.keyword" placeholder="对象/说明关键字" clearable style="width:200px" @keyup.enter="onTrailQuery" />
           <el-button type="primary" @click="onTrailQuery">查询</el-button>
           <el-button @click="onTrailReset">重置</el-button>
-          <el-button :loading="exporting" @click="onTrailExport">导出CSV</el-button>
+          <el-button :loading="exporting" @click="onTrailExport">导出</el-button>
         </div>
         <SkeletonList v-if="trailLoading" :rows="8" :cols="5" />
         <el-table :data="trailList" v-else border stripe empty-text="暂无数据" @row-dblclick="handleTrailView">
@@ -104,6 +107,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { auditApi, store } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { formatDateTime, showRowDetail } from '@/utils/format'
+// D-UI-07（2026-10-26）：本页手写名称表只覆盖旧值域，audit_trail 实测还有 RC_RECEIVABLE(444)/ARCHIVE(320)/
+// SALE_RETURN/PUR_RETURN 等无键值 ⇒ 业务类型列直显英文。保留本地措辞优先，未命中回落全站名称表。
+import { bizTypeLabel, actionLabel } from '@/constants/enums.js'
 
 // D-42 整改：本页原先绑的是 operation/module/operateTime/detail/ipAddress ——
 // audit_trail 实体与表里根本没有这些列，故 6 列有 5 列恒空、且无法按业务单号检索。
@@ -114,7 +120,7 @@ const isSingle = computed(() => !!props.activeTab)
 const activeTab = ref(props.activeTab || 'reconcile')
 
 const CHECK_ITEM_TEXT = {
-  VOUCHER: '凭证一致性', PAYMENT: '付款一致性', STATUS: '终态留痕',
+  VOUCHER: '凭证一致性', PAYMENT: '付款一致性', STATUS: '最终状态记录',
   AR_RECEIVABLE: '应收余额对平', AP_RECON: '供应商对账余额', BCP_WRITEOFF: '跨系统核销对平',
 }
 const BILL_TYPE_TEXT = {
@@ -135,8 +141,8 @@ const OBJ_TYPE_TEXT = {
 const BIZ_TYPE_OPTIONS = Object.entries(BILL_TYPE_TEXT).map(([value, label]) => ({ value, label }))
 
 function checkItemText(v) { return CHECK_ITEM_TEXT[v] || v || '-' }
-function billTypeText(v) { return BILL_TYPE_TEXT[v] || v || '-' }
-function actionText(v) { return ACTION_TEXT[v] || v || '-' }
+function billTypeText(v) { return BILL_TYPE_TEXT[v] || bizTypeLabel(v) || v || '-' }
+function actionText(v) { return ACTION_TEXT[v] || actionLabel(v) || v || '-' }
 function objTypeText(v) { return OBJ_TYPE_TEXT[v] || v || '-' }
 
 /* ---- Reconcile ---- */

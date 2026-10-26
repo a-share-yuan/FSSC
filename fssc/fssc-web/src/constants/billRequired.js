@@ -1,13 +1,16 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
- * 单据表头必填登记表 —— 红星、前端规则、提交闸门的唯一口径来源（必填项治理 P1）。
+ * 单据表头必填登记表 —— 红星、前端规则、提交校验的唯一规则来源（必填项治理 P1）。
  *
  * 为什么要登记表：单据页（报销/差旅/借款/事前申请/对公付款…）共用 BillWorkbench + useBill，
  * 但"提交"按钮在 workbench 里、表头字段在各页面自己的 el-form 上，两边此前各说各话——
- * 页面上的红星只是装饰，真正的提交闸门只在 useBill.submit() 里查了明细行和合规项。
+ * 页面上的红星只是装饰，真正的提交校验只在 useBill.submit() 里查了明细行和合规项。
  * 这里把"哪些表头字段必输"抽成一份数据：页面用 billRules() 绑到 :rules（红星由此渲染），
- * useBill.submit() 用 requiredOf() + missingBillField() 拦下未填项（闸门由此判定），一处改动全页面生效。
+ * useBill.submit() 用 requiredOf() + missingBillField() 拦下未填项（校验由此判定），一处改动全页面生效。
  *
- * 取值口径与 exp_bill 的 NOT NULL 列一致：title / apply_user_id / apply_date 在库里就是非空列。
+ * 取值规则与 exp_bill 的 NOT NULL 列一致：title / apply_user_id / apply_date 在库里就是非空列。
  * 单据编号 bill_no 由后端编号规则取号（人工只读），所以不在必填表里——它不该有红星。
  */
 
@@ -65,7 +68,7 @@ export function billRules(billType, subType = '') {
       required: true,
       message: r.tip,
       trigger: r.kind === 'input' ? 'blur' : 'change',
-      // 与 missingBillField 同口径：主路径为空但 alt 落点已填时不算漏填
+      // 与 missingBillField 同一规则：主路径为空但 alt 落点已填时不算漏填
       // async-validator 第 4 参是整个 model，从中按点路径取 alt
       validator: (rule, value, cb, model) => {
         if (filledAt(value, r.kind)) return cb()

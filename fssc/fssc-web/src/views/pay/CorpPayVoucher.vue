@@ -1,11 +1,14 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
         <b>{{ $t('pay.voucher.pageTitle') }}</b>
         <el-select v-model="sourceType" :placeholder="$t('pay.voucher.colBizType')" clearable style="width: 220px">
-          <!-- R5-D-078：默认口径＝对公付款族（页名与实际取数同口径，后端 page 已支持逗号族 IN 过滤）；
-               选项按共享词表（= 库内实际枚举，bizEntry.VOUCHER_SOURCE_LABEL）动态生成——
+          <!-- R5-D-078：默认规则＝对公付款族（页名与实际查询同一规则，后端 page 已支持逗号族 IN 过滤）；
+               选项按共享名称表（= 库内实际枚举，bizEntry.VOUCHER_SOURCE_LABEL）动态生成——
                原先硬编码 4 值，20+ 类里 16+ 类既出现在列表又无法被筛出。 -->
           <el-option :label="$t('pay.voucher.optFamilyDefault')" value="EXPENSE_PAY,EXPENSE_SETTLE,TREASURY_PAY" />
           <el-option v-for="(label, code) in VOUCHER_SOURCE_LABEL" :key="code" :label="label" :value="code" />
@@ -14,6 +17,9 @@
           <el-option :label="$t('status.draft')" value="DRAFT" />
           <el-option :label="$t('pay.shared.stPosted')" value="POSTED" />
         </el-select>
+        <!-- D-H8-04：补「会计期间」过滤，默认当前期间；清空＝不限期间 -->
+        <el-date-picker v-model="period" type="month" value-format="YYYY-MM" :clearable="true"
+                        :placeholder="$t('pay.voucher.phPeriod')" style="width: 150px" />
 <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
         <el-button v-if="selDraftIds.length" v-permission="'sharing:voucher:post'" type="success" size="small" :loading="batchPosting" @click="batchPost">
           {{ $t('pay.voucher.btnBatchPost', { v1: selDraftIds.length }) }}</el-button>
@@ -21,6 +27,8 @@
           {{ $t('pay.voucher.hintFlow') }}</span>
       </div>
     </template>
+
+    <el-alert type="info" :closable="false" style="margin-bottom: 10px" :title="$t('pay.voucher.scopeHint')" />
 
     <el-table :data="rows" size="small" border stripe :max-height="420" highlight-current-row @current-change="onSelect" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')" @row-dblclick="openTrace">
         <el-table-column type="selection" width="45" />
@@ -125,7 +133,7 @@ import { ElMessage } from 'element-plus'
 import { sharingApi, glApi } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
-import { bizTypeOfVoucherSource, voucherSourceLabel, isExpenseFamilyVoucherSource } from '../../utils/bizEntry'
+import { bizTypeOfVoucherSource, voucherSourceLabel, isExpenseFamilyVoucherSource, VOUCHER_SOURCE_LABEL } from '../../utils/bizEntry'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -141,9 +149,12 @@ function openTrace(row) {
 }
 
 const selRows = ref([])
-// R5-D-078：默认＝对公付款族（页名「对公付款凭证」与取数同口径；清空筛选可看全库）
+// R5-D-078：默认＝对公付款族（页名「对公付款凭证」与查询同一规则；清空筛选可看全库）
 const sourceType = ref('EXPENSE_PAY,EXPENSE_SETTLE,TREASURY_PAY')
 const status = ref(null)
+// D-H8-04：默认当前会计期间（YYYY-MM）；清空＝不限期间
+const now = new Date()
+const period = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
 const rows = ref([])
 const total = ref(0)
 const pageNum = ref(1)
@@ -155,8 +166,8 @@ function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractio
 
 // D-DEC-264 + R5-D-077：原先页内私有表只有对公支付四键，而本页列的是全部凭证（库内 source_type 已达 20+ 种，
 // r325 普查：AR_MONTH_CLOSE/ASSET_DEPRECIATION/BAD_DEBT_PROV/CONTRACT/FA_*/GL_*/TREASURY_PAY/RECEIVABLE…），
-// 其余一律直出英文码 ⇒ 词表以 bizEntry.VOUCHER_SOURCE_LABEL 为单一出处（与凭证台账同词）。
-// 治理判据（走查）：op_voucher.source_type 键集与该词表差集必须为空——每接一类自动凭证须同步补词表。
+// 其余一律直出英文码 ⇒ 名称表以 bizEntry.VOUCHER_SOURCE_LABEL 为单一出处（与凭证台账同词）。
+// 治理判据（走查）：op_voucher.source_type 键集与该名称表差集必须为空——每接一类自动凭证须同步补名称表。
 function sourceTypeTag(s) { return s === 'EXPENSE_PAY' ? 'primary' : s === 'EXP_CLAIM' ? 'success' : s === 'EXP_TRAVEL' ? 'warning' : 'info' }
 
 async function load() {
@@ -164,6 +175,12 @@ async function load() {
     const p = { pageNum: pageNum.value, pageSize: pageSize.value }
     if (sourceType.value) p.sourceType = sourceType.value
     if (status.value) p.status = status.value
+    // D-H8-04：会计期间按月下发（后端 voucherPage 已支持 periodYear/periodMonth）
+    if (period.value) {
+      const [y, m] = String(period.value).split('-')
+      p.periodYear = Number(y)
+      p.periodMonth = Number(m)
+    }
     const d = await sharingApi.voucherPage(p)
     rows.value = d.list || []
     total.value = Number(d.total || 0)

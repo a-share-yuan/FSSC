@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="close-workbench">
     <!-- 统一关账工作台头：AP 月末关账 + AR 应收月结合并入口（41号审查报告 P1-5） -->
@@ -39,6 +42,7 @@
 /**
  * 统一关账工作台（41-非费用域完成度审查 P1-5）
  *
+ * 原先 AP「月末关账」与 AR「应收月结管理」两套割裂页面，参考成熟 ERP 统一关账入口：
  * 一个工作台分模块 Checklist（AP / AR），后续 GL/资产模块可继续扩展 el-tab-pane。
  * 按路由自动定位页签：/apflow/ap-month-close → AP，/arflow/ar-month-close → AR。
  * scope prop＝宿主工作台限定单侧（'ar' 时只渲染 AR 月结，避免向应收角色暴露 AP 关账数据）。

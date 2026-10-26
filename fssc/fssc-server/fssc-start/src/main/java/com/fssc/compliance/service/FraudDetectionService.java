@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -38,6 +41,7 @@ public class FraudDetectionService {
     /**
      * 批次 1 ⑤：提单侧是否硬阻断（sys_config，'1'=阻断）。<b>缺省 0＝不阻断</b>——
      * 反欺诈改为三档「提示 → 人工待审 → 阻断」，硬阻断位下移到付款指令执行前
+     * （"风险检查点挂在支付指令上"、"解释为什么不通过"式提示）。
      */
     private static final String SUBMIT_BLOCK_CONFIG_KEY = "fraud.block_on_submit.enabled";
     /** 批次 1 ⑤：影子模式（sys_config，'1'=只打标不阻断，含付款侧）；演练期观察误拦率用 */
@@ -56,11 +60,11 @@ public class FraudDetectionService {
      * 命中白名单的用户跳过 FREQUENCY/AMOUNT/SUPPLIER/TIME/GEOGRAPHY 等频次类规则（其他不合规项照常）。
      */
     /**
-     * G2R-02（2026-10-19 真跑实证修复）：统计员工近 7 天<b>实际提交的单据数</b>，供 FREQUENCY 规则取数。
-     * <p>取数以 create_by 为提交人（历史数据缺失时回退 apply_user_id），按 create_time 圈近 7 天，
+     * G2R-02（2026-10-19 真跑实证修复）：统计员工近 7 天<b>实际提交的单据数</b>，供 FREQUENCY 规则查询。
+     * <p>查询以 create_by 为提交人（历史数据缺失时回退 apply_user_id），按 create_time 圈近 7 天，
      * 只数 exp_bill 主表行数（一张单一行），不含检测流水 —— 因此不会像旧实现那样被自身的检测记录放大。
-     * 取数异常不得反噬风控判定：回退为「检测流水按 bill_id 去重后的单据数」（仍与提交单据一一对应），
-     * 绝不退回「流水行数」口径。
+     * 查询异常不得反噬风控判定：回退为「检测流水按 bill_id 去重后的单据数」（仍与提交单据一一对应），
+     * 绝不退回「流水行数」规则。
      */
     private long countSubmittedBillsIn7Days(Long employeeId, LocalDateTime since) {
         try {
@@ -167,8 +171,9 @@ public class FraudDetectionService {
     /**
      * 付款指令执行前的反欺诈硬阻断（批次 1 ⑤：阻断位从"提单"下移到"付钱前"）。
      *
-     * <p>口径：本单据存在<b>高风险且尚未人工复审结案</b>（{@code reviewed_by} 为空且处置不是
+     * <p>规则：本单据存在<b>高风险且尚未人工复审结案</b>（{@code reviewed_by} 为空且处置不是
      * {@code RELEASE}）的检测记录 → 拒付。影子模式（{@code fraud.shadow_mode.enabled=1}）只记日志不阻断；
+     * 读取异常按放行处理（与提单侧同一规则：风控设施故障不得把付款链整条卡死）。
      *
      * @return {@code null}=放行；否则为拒付原因（调用方据此抛业务异常）
      */
@@ -218,7 +223,7 @@ public class FraudDetectionService {
         // **流水行数**——而每一次 detectFraud() 会同时落 FREQUENCY/AMOUNT/GEOGRAPHY/VENDOR/TIME
         // 等多条检测记录，于是「规则的输出在喂养规则的输入」：阈值 10 ⇒ 约 2 次检测必然命中，
         // 且系统用得越久误拦率越高（实案：员工 3933 近 7 天"检测次数"达 63 次，付款链被硬拦）。
-        // 语义上本规则要管的是「员工近 7 天提交了多少张单」，故取数改为 exp_bill 的实际提交单据数。
+        // 语义上本规则要管的是「员工近 7 天提交了多少张单」，故查询改为 exp_bill 的实际提交单据数。
         long recentCount = whitelisted ? 0 : countSubmittedBillsIn7Days(employeeId, sevenDaysAgo);
         int threshold = frequencyThreshold();
 
@@ -394,9 +399,9 @@ public class FraudDetectionService {
         if (actionTaken != null && !actionTaken.isBlank()) {
             qw.eq(FraudDetectionLog::getActionTaken, actionTaken);
         }
-        // D-F1R-07：待处置队列必须与付款闸 {@link #paymentBlockReason} <b>同源同判据</b>，
+        // D-F1R-07：待处置队列必须与付款校验 {@link #paymentBlockReason} <b>同源同判据</b>，
         // 否则风控看到的"待复审"和真正卡住付款的那批记录不是同一批。
-        // 原判据只按 actionTaken 精确相等筛选，而记录落库时 actionTaken 的初值就是 'REVIEW'
+        // 原判据只按 actionTaken 精确相等筛选，而记录写入数据库时 actionTaken 的初值就是 'REVIEW'
         // （＝转人工待审），既不是空也不是 'PENDING' ⇒ 按"未处置/空值"筛必然得到 0 条，
         // 风控会误以为没有待办，付款却一直被拦。现在两条专用队列：
         //  · pendingRelease=true → 正在阻断付款的记录（与 paymentBlockReason 逐条对齐）
@@ -437,8 +442,8 @@ public class FraudDetectionService {
     }
 
     /**
-     * 41号审查 P2-12 申诉闭环：被拦截/预警方登记申诉。原因追加进 details 留痕，
-     * 处置状态不变（等待财务申诉复审）；同一单可多次申诉留痕。
+     * 41号审查 P2-12 申诉闭环：被拦截/预警方登记申诉。原因追加进 details 记录，
+     * 处置状态不变（等待财务申诉复审）；同一单可多次申诉记录。
      */
     @Transactional(rollbackFor = Exception.class)
     public void appeal(Long logId, String reason) {
@@ -457,7 +462,7 @@ public class FraudDetectionService {
     }
 
     /**
-     * 41号审查 P2-12 申诉复审：approve=true → 放行(RELEASE)并结案；false → 维持原处置并留痕驳回。
+     * 41号审查 P2-12 申诉复审：approve=true → 放行(RELEASE)并结案；false → 维持原处置并记录驳回。
      */
     @Transactional(rollbackFor = Exception.class)
     public void appealReview(Long logId, boolean approve, String note, Long reviewerId) {
@@ -579,7 +584,7 @@ public class FraudDetectionService {
 
     /**
      * 增强反欺诈检测：包含所有基础检测 + 高级模式分析。
-     * 高级模式分析实时计算，不重复落库只返回风险提示。
+     * 高级模式分析实时计算，不重复写入数据库只返回风险提示。
      */
     public List<FraudDetectionLog> enhancedDetect(Long employeeId, Long billId,
                                                     BigDecimal amount, String supplierCode,

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <!--
   共享审批弹窗：把散落在 30+ 处的 ElMessageBox.confirm/prompt 单行框收敛成一个带上下文的对话框。
   用法（Promise 式，与 ElMessageBox 手感一致）：
@@ -5,7 +8,7 @@
     if (!res) return                       // 用户取消
     await wfApi.approve({ taskId: row.taskId, approved: res.approved, comment: res.comment,
                           nextAssigneeUserId: res.nextAssigneeUserId })
-  设计约束：审批意见必经输入框且必填（通过预填「同意」可改写，驳回必须写原因）——留痕口径与原
+  设计约束：审批意见必经输入框且必填（通过预填「同意」可改写，驳回必须写原因）——记录规则与原
   Approval.vue 的合规整改保持一致，不静默补默认值。
   下一环节点名：传了 taskId 才会查 /wf/next-candidates 并渲染「下一环节」区块；节点为 PICK 档时
   必选（候选=1 自动预选），其余情况 res.nextAssigneeUserId 为 null，后端按现状 AUTO 取人。
@@ -33,7 +36,7 @@
 
     <!-- D-DEC-198（12-31:176）：批量弹窗从前只有「条数/合计/示例」四行摘要，审批人对着一句
          「等 6 张」就把 6 单一起办了——看不见每一单是谁、多少钱、在哪个节点，等于闭眼签字。
-         这里补逐单明细表（数据取批量前已勾选的行，不另发请求、不新增取数范围），
+         这里补逐单明细表（数据取批量前已勾选的行，不另发请求、不新增查询范围），
          金额合计改由明细真算：amount 为 null 的行不计入合计并如实标「未取到」，
          不再 Number(x || 0) 把"没取到"当成"金额为 0"（¥0.00 就是这么来的）。 -->
     <div v-if="st.items.length" class="ad-items">
@@ -85,7 +88,7 @@
            ① 图形化进度条（已过/当前/待到达三态着色 + 比例），按钮旁边就能读出进度；
            ② 折叠条：头尾各留 1 节，中间按状态折叠成「⋯N 节」，当前节点永不折叠；
            ③ popover 内改用纵向时间轴（每节一行，含状态/办理人/时间/意见），并限高滚动，不再溢出。 -->
-    <div v-if="st.chain.length" class="ad-chain">
+    <div v-if="chainNodes.length" class="ad-chain">
       <div class="ad-chain-head">
         <span class="ad-chain-title">审批链</span>
         <span class="ad-chain-prog">{{ chainProgressText }}</span>
@@ -99,20 +102,24 @@
           </template>
           <div class="ad-chain-pop">
             <div class="ad-chain-pop-head">
-              <span>全流程节点（{{ st.chain.length }} 节）</span>
+              <!-- D-H3-05：节数按「本单实际会走的节」报（配置节数另注），原标题恒报配置行数
+                   ⇒ 与进度文字的「已过 N 节 / 本单实际 M 节」两套分母同屏打架。 -->
+              <span>本单实际 {{ chainSeqTotal }} 节<template v-if="chainNodes.length !== chainSeqTotal">（模型配置 {{ chainNodes.length }} 节，未走分支与加签另列）</template></span>
               <span class="ad-chain-pop-tip">每节含状态 / 办理人 / 时间 / 意见</span>
             </div>
             <div class="ad-chain-pop-body">
-              <FlowChain :nodes="st.chain" mode="timeline" />
+              <FlowChain :nodes="chainNodes" mode="timeline" />
             </div>
           </div>
         </el-popover>
       </div>
-      <FlowChain :nodes="st.chain" mode="inline" :max-inline="7" class="ad-chain-strip" />
+      <!-- D-H3-05：折叠条只放本单实际会走的节——被网关跳过的节在紧凑形态里只会挤占预算、
+           让「还要走哪几节」读不准；要看全量配置节请点「查看全部节点」。 -->
+      <FlowChain :nodes="chainSteps" mode="inline" :max-inline="7" class="ad-chain-strip" />
     </div>
 
     <!-- 会签/票签进度（P1）：多实例节点显示"已投 x/n · 赞成 a 反对 r"。
-         VOTE 额外给通过线与"本次提交后能否收口"，让投票人知道这一票的分量。 -->
+         VOTE 额外给通过线与"本次提交后能否办结"，让投票人知道这一票的分量。 -->
     <div v-if="st.mi && st.mi.multi" class="ad-mi">
       <div class="ad-mi-head">
         <span class="ad-mi-title">{{ miTypeLabel }}进度</span>
@@ -198,7 +205,7 @@
           <!-- D-DEC-097：多签节点在预览里曾被当成"选人节点"，只列 1 个人（引擎实为每人发一条待办） -->
           <el-tag v-if="nextBlock.mi" size="small" type="primary" effect="plain">{{ nextBlock.miLabel }}</el-tag>
         </div>
-        <!-- 无候选：只有 PICK 档才是真故障（AUTO 档取不到人另有 empty_strategy 兜底，且多为动态指派节点） -->
+        <!-- 无候选：只有 PICK 档才是真故障（AUTO 档取不到人另有 empty_strategy 默认处理，且多为动态指派节点） -->
         <div v-if="nextBlock.pick && !nextBlock.candidates.length" class="ad-next-danger">
           该节点当前无可选办理人（节点角色在本单据所属公司下没有在职非管理员成员）。
           请先在「系统管理 · 角色授权」补岗后再审批此单，否则单据会卡在这一节。
@@ -218,7 +225,7 @@
         <!-- D-DEC-013：PICK 节点候选唯一时也给「指定办理人」下拉。
              语义沿用提单（ASSIGN）那一套：唯一候选人只是自动带出的默认值，改派入口不能因为"只有一个"就消失，
              否则审批人看到的是"将流转给 张三"一行灰字，而服务端仍要求带点名值（曾出现"看起来没得选"）。
-             放在会签分支之后，D-DEC-097 的名单口径不被吃成单选；不给 clearable——清空即未点名，
+             放在会签分支之后，D-DEC-097 的名单规则不被吃成单选；不给 clearable——清空即未点名，
              唯一候选清空后无第二人可选，与其提交后吃红字，不如根本不提供清空。 -->
         <template v-else-if="nextBlock.pick && nextBlock.candidates.length === 1">
           <el-select v-model="st.nextUserId" class="ad-next-select" filterable
@@ -230,7 +237,7 @@
           </el-select>
           <div class="ad-next-auto">本环节由你指定办理人；候选唯一，已自动带出，如需改派请先在「系统管理 · 角色授权」补岗。</div>
         </template>
-        <!-- D-DEC-160③：池节点不点名、不自动指派，说破"先到先得 + 需先领取"（POOL 软锁口径） -->
+        <!-- D-DEC-160③：池节点不点名、不自动指派，说破"先到先得 + 需先领取"（POOL 软锁规则） -->
         <div v-else-if="nextBlock.pool" class="ad-next-auto">
           该节点由共享任务池承接，<span v-if="nextBlock.candidates.length">本单公司下
             <b>{{ nextBlock.candidates.length }}</b> 人可办（{{ nextBlock.candidates.map((c) => c.name).join('、') }}），</span>
@@ -243,7 +250,7 @@
         <div v-else class="ad-next-auto">
           该节点按配置自动取人{{ nextBlock.candidates.length ? '：' + nextBlock.candidates.map(c => c.name).join('、') : '' }}
         </div>
-        <!-- D-DEC-013：口径从"仅候选≥2"扩到"候选非空"，唯一候选未点名同样是未指定 -->
+        <!-- D-DEC-013：规则从"仅候选≥2"扩到"候选非空"，唯一候选未点名同样是未指定 -->
         <div v-if="st.nextErr && nextBlock.pick && nextBlock.candidates.length" class="ad-err">
           {{ nextBlock.candidates.length > 1
             ? `请指定下一环节办理人后再提交（共 ${nextBlock.candidates.length} 人可选）`
@@ -331,8 +338,8 @@
 
     <div v-if="st.history.length" class="ad-history">
       <div class="ad-his-title">前序审批</div>
-      <!-- D-DEC-079 / D-DEC-112：这一段与待办列表的「前序审批人」列同源同口径（调用方按
-           节点办理留痕四类动作、时间正序喂进来）。动作标签补齐：提单/自动通过与人工通过
+      <!-- D-DEC-079 / D-DEC-112：这一段与待办列表的「前序审批人」列同源同一规则（调用方按
+           节点办理记录四类动作、时间正序喂进来）。动作标签补齐：提单/自动通过与人工通过
            在链上是三种不同的事，从前一律写「通过」，提单那一行被说成别人审过了。 -->
       <div v-for="(h, i) in st.history" :key="i" class="ad-his-row">
         <span class="ad-his-node">{{ h.node || h.nodeName || '—' }}</span>
@@ -350,10 +357,10 @@
     <el-alert v-if="st.submitErr" class="ad-submit-err" type="error" show-icon :closable="false"
               :title="`本次${st.decision === 'approve' ? '「通过」' : '「驳回」'}未生效，弹窗已保持打开`">
       <div class="ad-submit-err-msg">{{ st.submitErr }}</div>
-      <!-- D-DEC-038：拒绝语只说"不许"、不说"那该怎么办"（台账 12-22:964/973/1025 记的正是自审/连办闸
+      <!-- D-DEC-038：拒绝语只说"不许"、不说"那该怎么办"（台账 12-22:964/973/1025 记的正是自审/连办校验
            没有任何改派出口提示），审批人只能反复点同一颗按钮。这里按后端原文给出下一步。 -->
       <div v-if="submitErrAdvice" class="ad-submit-err-msg">{{ submitErrAdvice }}</div>
-      <div class="ad-submit-err-tip">修正后可直接重试；若不再办理请点「取消」——未生效的提交不会留下任何流程留痕。</div>
+      <div class="ad-submit-err-tip">修正后可直接重试；若不再办理请点「取消」——未生效的提交不会留下任何流程记录。</div>
     </el-alert>
 
     <template #footer>
@@ -381,7 +388,7 @@ import { formatDateTime } from '../../utils/format'
 const emit = defineEmits(['detail'])
 const commentRef = ref(null)
 
-const QUICK_APPROVE = ['同意', '已核实无误', '符合规定', '同预算口径，同意']
+const QUICK_APPROVE = ['同意', '已核实无误', '符合规定', '按预算标准，同意']
 const QUICK_REJECT = ['金额超出预算', '发票不合规', '资料不完整', '费用不合理', '审批流程不符']
 const RECENT_KEY = 'fssc.approval.recentComments'
 const PHRASE_KEY = 'fssc.approval.quickPhrases'
@@ -415,13 +422,14 @@ const st = reactive({
   approvalItems: [], approvalItemCode: null,
   // D-DEC-022：submit 为调用方注入的提交动作（如 wfApi.approve）；缺省 ⇒ 沿用"关窗后由调用方发请求"手感
   submit: null, submitting: false, submitErr: '',
-  // D-DEC-073：意见与单据事实比对所需的取数（单号 + 金额），一律由调用方已传入的 row/items 现算，不额外发请求
+  // D-DEC-073：意见与单据事实比对所需的查询（单号 + 金额），一律由调用方已传入的 row/items 现算，不额外发请求
   docAmounts: [], docNo: '',
 })
 
 /** 通过/驳回只有一个可选时不显示单选钮（如批量审批、列表页的单独入口） */
 const showDecision = computed(() => st.allowApprove && st.allowReject)
 
+/** 金额展示：与待办列表「申请金额」同一规则（千分位 + 两位小数） */
 function fmtMoney(v) {
   return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
@@ -434,7 +442,7 @@ function itemAmountOf(it) {
   return Number.isFinite(n) ? n : null
 }
 
-/** 明细金额汇总：sum 只累加"取到值"的行，missing 如实计数（itemsSum 与批量提示共用一处口径） */
+/** 明细金额汇总：sum 只累加"取到值"的行，missing 如实计数（itemsSum 与批量提示共用一处规则） */
 function summarizeItems(items) {
   let sum = 0, known = 0, missing = 0
   for (const it of items || []) {
@@ -477,7 +485,7 @@ function collectDocAmounts(opts) {
 /**
  * D-DEC-073：从意见原文里取金额。只认带币种符号、带"元/万元"单位、或紧跟金额类词的数字，
  * 否则"第 3 节""2 个工作日"这类普通数字会被误报成金额不符。
- * ⑤-Ⅳb：紧跟"人均/每人/单价/每件…"这类**行级或均摊口径**的数字，天然不等于单据总额，
+ * ⑤-Ⅳb：紧跟"人均/每人/单价/每件…"这类**行级或均摊规则**的数字，天然不等于单据总额，
  * 旧实现把它们当总额比 ⇒ "人均 200.00"在 800.00 的单子上必弹不一致＝误伤合规写法，故此处直接不收。
  */
 const PER_UNIT_QUAL = /(?:人均|每人|单价|每件|每份|每间|每晚|每张|单张|分摊后|明细|行金额|标准)/
@@ -504,7 +512,7 @@ function amountsInComment(text) {
   return out
 }
 
-/** D-DEC-073：轻提示文案——1% 或 1 元内的尾差视为口径取整，不打扰；对不上才出声，且不拦提交 */
+/** D-DEC-073：轻提示文案——1% 或 1 元内的尾差视为规则取整，不打扰；对不上才出声，且不拦提交 */
 const commentAmountHint = computed(() => {
   const facts = st.docAmounts || []
   if (!facts.length) return ''
@@ -516,7 +524,7 @@ const commentAmountHint = computed(() => {
   return `意见里的 ${said.map((x) => '¥' + fmtMoney(x)).join('、')} 与${factText}${docText}不一致，请核对后再提交；本提示不拦提交。`
 })
 
-/** 当前意见字数（批量"同批共用意见"提示用；含空格，与后端留痕原文一致） */
+/** 当前意见字数（批量"同批共用意见"提示用；含空格，与后端记录原文一致） */
 const commentChars = computed(() => String(st.comment || '').length)
 
 /**
@@ -531,7 +539,7 @@ const ccTip = computed(() => (st.batch > 1
   : '可选。这些人会在「流程中心 · 我的抄送」看到本单（仅通过时投递，驳回不抄送）'))
 
 /**
- * D-DEC-091 / D-DEC-110（2026-12-22:83、12-24:60）：分母口径改为「本单实际会走的节数」。
+ * D-DEC-091 / D-DEC-110（2026-12-22:83、12-24:60）：分母规则改为「本单实际会走的节数」。
  * 后端 WfQueryService.chain() 对每个节点多发三个字段：
  *   counted=false —— 配置里有、本单不会走的节点（未命中分支、START/END 之类）；
  *   seq          —— 该节点在"实际链"里的序号（未计数节点为 null）；
@@ -539,16 +547,25 @@ const ccTip = computed(() => (st.batch > 1
  * 老包缺这三个字段时 counted 恒真、seqTotal 恒缺 ⇒ 自动退回改动前的算法，同一份代码两种包都不断档。
  */
 const isCountedNode = (n) => n && n.counted !== false
-const chainSteps = computed(() => st.chain.filter(isCountedNode))
+/**
+ * D-H3-05：提单节置首。wf_node_config 的 sort 把「提单」排在末位，而它是链上最先发生的一步；
+ * 填单侧 FlowProgressPanel 早已这么排，审批弹窗漏改 ⇒ 同一系统两种顺序。判据与其保持一致。
+ */
+const isSubmitNode = (n) => n && (n.nodeKey === 'SUBMIT' || n.nodeName === '提单')
+const chainNodes = computed(() => {
+  const arr = st.chain || []
+  return [...arr.filter(isSubmitNode), ...arr.filter((n) => !isSubmitNode(n))]
+})
+const chainSteps = computed(() => chainNodes.value.filter(isCountedNode))
 const chainSeqTotal = computed(() => {
-  const hit = st.chain.find((n) => typeof n.seqTotal === 'number')
+  const hit = chainNodes.value.find((n) => typeof n.seqTotal === 'number')
   return hit ? hit.seqTotal : chainSteps.value.length
 })
 /** 当前节在「实际链」里的下标（-1 表示没有进行中的节点） */
 const chainStepIndex = computed(() => chainSteps.value.findIndex((n) => n.state === 'CURRENT'))
 const chainIndex = computed(() => (chainStepIndex.value >= 0 ? chainStepIndex.value + 1 : chainSteps.value.length))
 const chainCurrentName = computed(() => {
-  const cur = st.chain.find((n) => n.state === 'CURRENT')
+  const cur = chainNodes.value.find((n) => n.state === 'CURRENT')
   return cur ? cur.nodeName : '已办结'
 })
 /**
@@ -571,6 +588,7 @@ const chainProgressText = computed(() => {
  * D-UI-02：审批链图形化进度条分段。
  * 原界面只有一句「第 2/3 节」文字，审批人得自己在脑子里换算"还剩几节、有多长"；
  * 这里把每一节按状态切成一格，宽度等分 ⇒ 不用读数字也能看出进度比例。
+ * 分母只取 counted 节点（实际会走的节），与 chainProgressText 同一规则，不两套分母打架。
  */
 const chainBars = computed(() =>
   chainSteps.value.map((n) => ({
@@ -607,7 +625,7 @@ const nextBlock = computed(() => {
     pick: n.mode === 'PICK',
     // D-DEC-160③：WfEngineFacade.nextCandidates 的 mode 取值域是 PICK|POOL|AUTO，
     // 此前只判 PICK，POOL 落进"自动指派"那一档 → 池节点被预告成"自动指派给某人"，
-    // 与"先到先得 + 需先领取"的软锁口径冲突，审批人据此误判投递对象。
+    // 与"先到先得 + 需先领取"的软锁规则冲突，审批人据此误判投递对象。
     pool: n.mode === 'POOL',
     candidates: Array.isArray(n.candidates) ? n.candidates : [],
     mi,
@@ -630,6 +648,7 @@ const miTypeLabel = computed(() => {
   return t === 'VOTE' ? '票签' : t === 'SEQ' ? '顺序会签' : '会签'
 })
 
+/** 是否已达成通过线（与后端 completionCondition / resolveVoteOutcome 同一规则） */
 const miReach = computed(() => {
   const m = st.mi
   if (!m || !m.multi) return false
@@ -650,7 +669,7 @@ const miRejectReach = computed(() => {
 })
 
 /**
- * 进度提示语：把"这一票的分量"说清楚——票签投票人最关心的是"我这票能不能收口"，
+ * 进度提示语：把"这一票的分量"说清楚——票签投票人最关心的是"我这票能不能办结"，
  * 光给"已投 2/3"看不出来，所以直接给通过线还差几票 / 是否已达否决线。
  */
 const miHint = computed(() => {
@@ -664,7 +683,7 @@ const miHint = computed(() => {
     if (miRejectReach.value) {
       return `反对票已达否决线（需 > ${100 - ratio}%），本节点将判否决并驳回单据`
     }
-    if (miReach.value) return `已达通过线（赞成 ≥ ${need}/${total}），本节点立即收口流转`
+    if (miReach.value) return `已达通过线（赞成 ≥ ${need}/${total}），本节点立即办结流转`
     return `需 ≥ ${need}/${total} 赞成才通过；当前 ${ack} 票，还差 ${Math.max(0, need - ack)} 票`
   }
   if (m.multiType === 'SEQ') return `顺序会签：按顺序逐个办理，共 ${total} 人，人人通过才流转`
@@ -821,6 +840,7 @@ const pickedRejectTarget = computed(() =>
   rejectBlock.value?.candidates?.find((c) => c.nodeKey === st.rejectToNodeKey) || null)
 
 /**
+ * ①层「审批项」：拉取当前节点启用中的自定义审批结果。
  * silent：开关未配 / 老后端无此端点（404/403）都静默降级为「不显示区块」，绝不阻断审批提交 ——
  * 本能力是配置驱动的增量功能（表里没有行就一个按钮都不出现），旧后端下必须完全隐形。
  */
@@ -842,7 +862,7 @@ async function loadApprovalItems(taskId) {
 const approvalBlock = computed(() => (st.approvalItems.length ? st.approvalItems : null))
 
 /**
- * 选中审批项即决定结果类别（与后端 normalizeCategory + complete() 的覆盖口径同源）：
+ * 选中审批项即决定结果类别（与后端 normalizeCategory + complete() 的覆盖规则同源）：
  * POSITIVE 正向 → approved=true；REJECT 驳回 / TERMINATE 终止 → approved=false。
  * 前端只负责把 decision 摆到正确的页签上（驳回原因框、退回级次才该出现），
  * 真正的语义判定仍由服务端按 category 执行，避免两处各表一套真值。
@@ -906,7 +926,7 @@ function buildSummary(row) {
 function batchNotice(batch, items) {
   if (!(batch > 1)) return ''
   const miss = summarizeItems(items).missing
-  return `将对勾选的 ${batch} 条待办统一填写同一条意见（同批共用，逐单不各自留痕），请对照下方明细逐单确认适用。`
+  return `将对勾选的 ${batch} 条待办统一填写同一条意见（同批共用，逐单不分别记录），请对照下方明细逐单确认适用。`
     + (miss ? `本批有 ${miss} 条未取到金额，合计不含这些单。` : '')
 }
 
@@ -925,7 +945,7 @@ function batchNotice(batch, items) {
  * @param opts.allowComment 后端是否支持审批意见；false 时隐藏输入框并明示本次不记录意见
  * @param opts.history    前序审批链
  * @param opts.chain      全流程节点链（/wf/query/chain），用于显示"第几节/当前节点"
- * @param opts.taskId     待办任务标识；给了才查询「下一环节候选人」（列表页多为 row.taskId，可自动兜底）
+ * @param opts.taskId     待办任务标识；给了才查询「下一环节候选人」（列表页多为 row.taskId，可自动默认处理）
  * @param opts.showDetail 是否显示「查看单据详情」按钮（父页接 @detail）
  * @param opts.allowCc    是否显示「抄送给」多选区（G2 传阅）；缺省 false —— 不渲染也不发请求
  * @param opts.submit     提交动作 (payload) => Promise；给了就由弹窗在关闭之前执行：
@@ -978,7 +998,7 @@ function open(opts = {}) {
   // 批量件数 >1 时不查也不点名：每条单据的下一节点各不相同，一份名单套不到 N 条上。
   nextReq = batch > 1 ? '' : String(opts.taskId || opts.row?.taskId || '')
   if (nextReq) loadNext(nextReq)
-  // G4：以驳回态打开时立即拉取可退回级次（用户后切到驳回由 onDecisionChange 兜底再拉）
+  // G4：以驳回态打开时立即拉取可退回级次（用户后切到驳回由 onDecisionChange 默认处理再拉）
   if (decision === 'reject' && nextReq) loadRejectTargets(nextReq)
   // 会签/票签进度：与下一环节同样只对单条查（批量时各条进度互不相同，给一份会误导）
   miReq = nextReq
@@ -1024,7 +1044,7 @@ function cancel() {
   st.resolve = null
 }
 
-/** 弹窗内一次性收口：关窗 + 把 payload 交回调用方 */
+/** 弹窗内一次性办结：关窗 + 把 payload 交回调用方 */
 function closeWithResult(payload) {
   st.visible = false
   nextReq = ''
@@ -1036,7 +1056,7 @@ function closeWithResult(payload) {
 
 /**
  * D-DEC-038（负向操作零反馈家族）：把服务端拒绝原文翻译成"下一步做什么"。
- * 只补出口、不改判据 —— 服务端各条闸（自审/连办、任务池须先领取、下一环节须点名、期间已结账）
+ * 只补出口、不改判据 —— 服务端各条校验（自审/连办、任务池须先领取、下一环节须点名、期间已结账）
  * 一律原样保留，重复点击也不会放行；缺的是"该走哪条合法出口"这句话（台账 12-22:964/973/1025）。
  * 未命中任何已知拒绝族时返回空串 ⇒ 只显示后端原文，不编造建议。
  */
@@ -1044,7 +1064,7 @@ const submitErrAdvice = computed(() => {
   const m = String(st.submitErr || '')
   if (!m) return ''
   if (/自审|同一人|连办/.test(m)) {
-    return '处置：内控闸口不允许同一人在同一条流程里连办多节，重复提交不会放行。请点「取消」回到待办列表，用行内「转办」把本节点交给同角色其他人，或联系流程管理员「改派」。'
+    return '处置：内控规则不允许同一人在同一条流程里连办多节，重复提交不会放行。请点「取消」回到待办列表，用行内「转办」把本节点交给同角色其他人，或联系流程管理员「改派」。'
   }
   if (/任务已被处理|不存在或已处理/.test(m)) {
     return '处置：本任务已被办理或已流转。请点「取消」回列表刷新，再到「单据追溯」确认最新落点，不要重复提交。'
@@ -1072,7 +1092,7 @@ function submit() {
   // 候选≥2 未点名、候选=0 无岗可派，都在此处先拦住，省得提交后吃一个红色报错。
   if (nb && nb.pick && nb.candidates.length === 0) { st.nextErr = true; return }
   // D-DEC-013：把「候选=1」并入未点名拦截（原条件 >1 只覆盖多候选）。
-  // 注意这不是收紧服务端闸——服务端对唯一候选同样要求点名（:1815 一带的 enforcePickOnApprove 未动），
+  // 注意这不是收紧服务端校验——服务端对唯一候选同样要求点名（:1815 一带的 enforcePickOnApprove 未动），
   // 只是把已经存在的规则在前端说破，避免"界面没得选、提交却报未指定"。
   if (nb && nb.pick && nb.candidates.length >= 1 && !st.nextUserId) { st.nextErr = true; return }
   const comment = st.allowComment ? String(st.comment).trim() : ''
@@ -1111,7 +1131,7 @@ function submit() {
 }
 
 /**
- * 用户点 X / 按 ESC 的收口：v-model 变 false 时若不 resolve，调用方的 await 会永久挂住
+ * 用户点 X / 按 ESC 的办结：v-model 变 false 时若不 resolve，调用方的 await 会永久挂住
  * （原实现即如此：只能靠「取消」按钮走 cancel()）。这里统一按取消结算。
  * 提交在飞时拒绝这次关闭，失败原因必须留在屏上。
  */
@@ -1125,7 +1145,8 @@ defineExpose({ open })
 </script>
 
 <style scoped>
-.approval-dialog :deep(.el-dialog__body) { padding-top: 12px; }
+/* 弹窗级规则（高度封顶/正文滚动）写在文件末尾的非 scoped 块里：
+   el-dialog 被 teleport 到 body 后根节点不带 data-v，scoped 选择器对它恒不命中（实测 padding-top 也是 0）。 */
 .ad-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px;
   background: #f7f8fa; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
 .ad-sum-item { min-width: 0; }
@@ -1247,4 +1268,14 @@ defineExpose({ open })
 <style>
 .ad-chain-popper.el-popper { max-width: 640px; }
 .ad-chain-popper .el-popper__body { padding: 12px 14px; }
+
+/* D-UI-03（2026-10-26）：审批弹窗总高封顶、正文内部滚动、底栏常驻。
+   原实现弹窗高度随内容自由增长（审批链 + 前序审批 N 行 + 意见/抄送/退回级次），
+   实测对公结算这类单子会把「取消 / 确认通过」顶出视口，审批人得滚整页才找得到这颗唯一出口按钮。
+   选择器带 .el-dialog 是为了压过 Element Plus 的 .el-dialog 默认 margin。 */
+.approval-dialog.el-dialog { display: flex; flex-direction: column; max-height: 90vh; margin: 5vh auto; }
+.approval-dialog.el-dialog > .el-dialog__header { flex: 0 0 auto; }
+.approval-dialog.el-dialog > .el-dialog__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-top: 12px; }
+/* 底栏与滚动正文之间加一道细线：正文在底栏下方被截断时，没有分隔会像内容没加载完 */
+.approval-dialog.el-dialog > .el-dialog__footer { flex: 0 0 auto; border-top: 1px solid var(--el-border-color-lighter); }
 </style>

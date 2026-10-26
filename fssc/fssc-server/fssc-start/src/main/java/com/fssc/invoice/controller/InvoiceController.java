@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.invoice.controller;
 
 import com.fssc.common.core.ErrorCode;
@@ -36,7 +39,7 @@ public class InvoiceController {
     @OperLog(module = "INVOICE", operType = "INSERT", desc = "录入发票")
     @PostMapping("/create")
     public Result<Long> create(@RequestBody InvInvoice invoice) {
-        // 人工补录入口的必填兜底（同一 service 方法还被 OCR 入池复用，故校验落在本边界）
+        // 人工补录入口的必填默认处理（同一 service 方法还被 OCR 入池复用，故校验落在本边界）
         invoiceService.requireManualHeader(invoice);
         return Result.success(invoiceService.create(invoice));
     }
@@ -50,7 +53,7 @@ public class InvoiceController {
     }
 
     /**
-     * 销项发票作废（仅当月且未被收款核销引用）：status→VOID，remark 留痕。
+     * 销项发票作废（仅当月且未被收款核销引用）：status→VOID，remark 记录。
      * body: {"invoiceId": 1, "reason": "开票有误"}
      */
     @RequiresPerm("inv:void")
@@ -118,7 +121,7 @@ public class InvoiceController {
             }
             return Result.success(first);
         }
-        // 手工「关联单据」弹窗：覆盖金额是必填项（前端 INVOICE_BIND 规则已拦，此处兜底）。
+        // 手工「关联单据」弹窗：覆盖金额是必填项（前端 INVOICE_BIND 规则已拦，此处默认处理）。
         // 金额为 0 的占用记录会让发票置 LOCKED_IN_USE 却对核销毫无贡献，故一并拦下。
         // 批量通道（invoiceIds，H5 建单）按剩余面额自动占用，不走本分支。
         if (req.getAmount() == null || req.getAmount().signum() <= 0) {
@@ -142,7 +145,7 @@ public class InvoiceController {
     }
 
     /**
-     * 反核销（D-V3-135 配套 · 行业方案"反"字链第一环）：解除发票-单据勾稽并解锁发票。
+     * 反核销（D-V3-135 配套 · 单据反操作链第一环）：解除发票-单据勾稽并解锁发票。
      * 前置：本单据无 PAID 付款记录（付款已执行不可反）。权限用 inv:unbind（反核销独立授权）。
      */
     @RequiresPerm("inv:unbind")
@@ -249,7 +252,7 @@ public class InvoiceController {
     /**
      * 发票「关联单据」候选单据（D-DEC-113）。
      *
-     * <p>权限用 {@code inv:bind} 而非 {@code exp:bill:list}：这是绑票动作自己的取数窗口，
+     * <p>权限用 {@code inv:bind} 而非 {@code exp:bill:list}：这是绑票动作自己的查询窗口，
      * 能绑票的人必须能选到要绑的单据；此前它复用 {@code /expense/bill/myPage}（硬过滤
      * {@code apply_user_id=登录人}），共享会计选不到他人单据，三单匹配的唯一出口不可达。</p>
      *

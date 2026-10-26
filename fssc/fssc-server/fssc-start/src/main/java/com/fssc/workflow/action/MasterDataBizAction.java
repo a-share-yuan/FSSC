@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.customer.entity.CrmCustomer;
@@ -25,13 +28,13 @@ public class MasterDataBizAction implements WfBizAction {
 
     private final MdSupplierMapper mdSupplierMapper;
     private final CrmCustomerMapper crmCustomerMapper;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
         // D-DEC-324（批次5 B 案 T-MD-1）：移域合一——银行账户/印鉴(TR_SEAL_CHANGE)/GL 主数据三档并入主数据核准载体，
-        // 事件 bizType 不变；三档无独立业务状态机（K133：银行账户靠分配＋挂科目），通过侧仅留痕确认。
+        // 事件 bizType 不变；三档无独立业务状态机（K133：银行账户靠分配＋挂科目），通过侧仅记录确认。
         return Set.of("SUPPLIER_ADD", "CUSTOMER_MAINT", "TR_BANK_MASTER", "TR_SEAL_CHANGE", "GL_SHARED_MASTER");
     }
 
@@ -66,7 +69,7 @@ public class MasterDataBizAction implements WfBizAction {
                     }
                 }
                 case "TR_BANK_MASTER", "TR_SEAL_CHANGE", "GL_SHARED_MASTER" -> {
-                    // 无独立状态机的主数据档（K130/K133 状态位/分配口径）：通过侧仅审计留痕
+                    // 无独立状态机的主数据档（K130/K133 状态位/分配规则）：通过侧仅审计记录
                     java.util.Map<String, Object> same = new java.util.LinkedHashMap<>();
                     same.put("bizType", bizType);
                     auditTrailService.recordUpdate(bizType, bizId, String.valueOf(bizId), "master_data",

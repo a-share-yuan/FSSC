@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -48,7 +51,7 @@ public class ArWriteoffService {
     private final RcReceiptService receiptService;
     private final ArFlowVoucherService voucherService;
 
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     // ---------------- 资金池 ----------------
@@ -114,7 +117,7 @@ public class ArWriteoffService {
         }
         q.gt(RcReceivable::getRemainAmount, BigDecimal.ZERO);
         q.ne(RcReceivable::getStatus, "DONE");
-        // D-V4R-71（与 RcReceiptService 同一处口径，2026-10-15 实测）：只排 DONE ⇒ 未确认（NONE，
+        // D-V4R-71（与 RcReceiptService 同一处规则，2026-10-15 实测）：只排 DONE ⇒ 未确认（NONE，
         // 含流程卡死件）与被驳回（REJECTED）的应收仍会进自动核销候选。
         q.notIn(RcReceivable::getStatus, "NONE", "REJECTED");
         q.orderByAsc(RcReceivable::getDueDate).orderByAsc(RcReceivable::getId);
@@ -238,8 +241,8 @@ public class ArWriteoffService {
             RcReceipt receipt = createAndApplyReceipt(fund, effective);
             rec.setInvoiceNos(invoiceNosOf(effective));
             rec.setReceiptNo(receipt.getBillNo());
-            // D-DEC-409（X-28 甲）：出证前已先立到账载体（上面的 rc_receipt 核销单），且对冲腿＝借 2202／贷 1122 不动银行存款，
-            // 不属"无到账凭空出核销凭证"那一族；借 1002 的收款核销腿闸在 VoucherService.generateCollectVoucher。
+            // D-DEC-409（X-28 甲）：出证前已先立到账载体（上面的 rc_receipt 核销单），且对冲环节＝借 2202／贷 1122 不动银行存款，
+            // 不属"无到账凭空出核销凭证"那一族；借 1002 的收款核销环节校验在 VoucherService.generateCollectVoucher。
             rec.setVoucherNo(voucherService.generateOffsetVoucher(fund.getTenantId(), companyId(), amount,
                     customerName, rec.getRecordNo(), rec.getId()));
             rec.setStatus(ArWriteoffRecord.ST_DONE);

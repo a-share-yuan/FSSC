@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -113,7 +116,7 @@
       </el-table>
     </template>
 
-    <!-- 凭证台账（：过账状态 + 批量过账 + 制审分离） -->
+    <!-- 凭证台账（过账状态 + 批量过账 + 制审分离） -->
     <template v-else-if="tab === 'voucher'">
       <el-row :gutter="12" style="margin-bottom: 10px; align-items: center">
         <el-col :span="8">
@@ -168,7 +171,7 @@
           <template #default="{ row }">
             <!-- 凭证 status：DRAFT=未过账 / POSTED=已过账 / VOID=已作废 -->
             <el-tag :type="row.status === 'POSTED' ? 'success' : row.status === 'VOID' ? 'info' : 'warning'" size="small">{{ voucherStatusLabel(row.status) }}</el-tag>
-            <!-- D-DEC-288（X-49 乙）：付款腿凭证已记账而资金指令未下发——存量保持不动账，只在行上明示注记 -->
+            <!-- D-DEC-288（X-49 乙）：付款环节凭证已记账而资金指令未下发——历史保持不动账，只在行上明示注记 -->
             <div v-if="row.payLegUnsettled === true" style="color: #e6a23c; font-size: 12px; line-height: 1.4">{{ $t('gl.ledger.payNotIssued') }}</div>
           </template>
         </el-table-column>
@@ -182,7 +185,7 @@
           </template>
         </el-table-column>
         <!-- D-BIZ-09：此前过账只有一条「勾选若干行→工具栏批量过账」的路，行上没有任何入口，
-             台账里那批自动生成的凭证因此看不见「怎么过账」。补按行入口，与批量口同一个权限码、同一道制审分离闸。 -->
+             台账里那批自动生成的凭证因此看不见「怎么过账」。补按行入口，与批量口同一个权限码、同一道制审分离校验。 -->
         <el-table-column v-if="canPost" :label="$t('gl.ledger.colAction')" width="90" fixed="right">
           <template #default="{ row }">
             <el-button v-if="canPostRow(row)" link size="small" type="success" @click="postOne(row)">{{ $t('gl.ledger.btnPost') }}</el-button>
@@ -205,6 +208,12 @@
 
     <!-- 试算平衡 -->
     <template v-else>
+      <el-alert type="info" :closable="false" style="margin-bottom: 10px" :title="$t('gl.ledger.trialRule')" />
+      <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+        <el-checkbox v-model="includeUnposted" @change="load">{{ $t('gl.ledger.chkIncludeUnposted') }}</el-checkbox>
+        <span v-if="includeUnposted" style="color: #909399; font-size: 12px">
+          {{ $t('gl.ledger.hintUnposted', { v1: trial?.unpostedVoucherCount || 0, d: fmt(trial?.unpostedDebitTotal), c: fmt(trial?.unpostedCreditTotal) }) }}</span>
+      </div>
       <el-row :gutter="20">
         <el-col :span="6">
           <el-card shadow="hover">
@@ -365,14 +374,16 @@ const pageNum = ref(1)
 const pageSize = ref(20)
 const balance = ref([])
 const trial = ref(null)
-// R5-D-219：截至期间文本（YYYY-MM）——试算结果未回时以当前查询条件兜底，替换原被当数字渲染的 el-statistic
+// D-H8-04：「含未过账凭证」默认关闭——op_gl_entry 只在过账时落账，默认口径＝本期已过账分录合计
+const includeUnposted = ref(false)
+// R5-D-219：截至期间文本（YYYY-MM）——试算结果未回时以当前查询条件默认处理，替换原被当数字渲染的 el-statistic
 const trialPeriod = computed(() => String(trial.value?.periodYear || year.value) + '-' + String(trial.value?.periodMonth || month.value).padStart(2, '0'))
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
 // D-DEC-196：科目余额表合计行——期初/本期/期末<b>各自成对</b>合计（此前无合计行，
 // 且接口只列"本期有发生"的科目，只有期初余额的科目连金额一起被吞 ⇒ 手工相加必然不平）。
-// 三对里任何一对不等就是口径问题，直接在"科目名称"列点出来，不留给人肉核对。
+// 三对里任何一对不等就是规则问题，直接在"科目名称"列点出来，不留给人肉核对。
 const BALANCE_SUM_PROPS = ['openDebit', 'openCredit', 'periodDebit', 'periodCredit', 'endDebit', 'endCredit']
 function balanceSummary({ columns, data }) {
   const sum = {}
@@ -418,14 +429,14 @@ function isSelfCreated(row) {
   if (!by) return false
   return userIdentities().includes(by)
 }
-// op_voucher.create_by 存的是 sys_user.id，后端按 id 回填 createByName；缺回填时兜底显示 #ID，避免裸数字像坏数据
+// op_voucher.create_by 存的是 sys_user.id，后端按 id 回填 createByName；缺回填时默认处理显示 #ID，避免裸数字像坏数据
 function creatorLabel(row) {
   if (row?.createByName) return row.createByName
   return row?.createBy ? t('gl.ledger.ctxUser', { v1: row.createBy }) : '—'
 }
 // 可过账：未过账 且 非本人制单
 function canPostRow(row) { return row?.status !== 'POSTED' && !isSelfCreated(row) }
-// D-BIZ-09：过账码与后端同闸（SharingController 的 /voucher/{id}/post、/voucher/batch-post 都是
+// D-BIZ-09：过账码与后端同校验（SharingController 的 /voucher/{id}/post、/voucher/batch-post 都是
 // @RequiresPerm("sharing:voucher:post")）。有权才放行内【过账】与工具栏【批量过账】，
 // 无权账号不再看见「点了必吃 4030」的入口。
 const canPost = hasPerm('sharing:voucher:post')
@@ -439,9 +450,9 @@ async function loadVouchers() {
   try {
     const p = { pageNum: voucherPageNum.value, pageSize: voucherPageSize.value }
     if (voucherStatus.value) p.status = voucherStatus.value
-    // D-DEC-168 根因一（前端腿）：表头的公司/年度/月度控件此前只喂给「总账分录／科目余额表／试算平衡」三个页签，
-    // 凭证页签的取数函数只发 pageNum/pageSize/status —— 屏幕上摆着的三个条件从未进入请求，
-    // 所以点「查询」列表纹丝不动。现按与「总账分录」相同的口径带上（未选＝不限，不臆造默认值）。
+    // D-DEC-168 根因一（前端环节）：表头的公司/年度/月度控件此前只喂给「总账分录／科目余额表／试算平衡」三个页签，
+    // 凭证页签的查询函数只发 pageNum/pageSize/status —— 屏幕上摆着的三个条件从未进入请求，
+    // 所以点「查询」列表纹丝不动。现按与「总账分录」相同的规则带上（未选＝不限，不臆造默认值）。
     if (companyId.value) p.companyId = companyId.value
     if (year.value) p.periodYear = year.value
     if (month.value) p.periodMonth = month.value
@@ -453,7 +464,7 @@ async function loadVouchers() {
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
-// D-DEC-168：「查询/筛选」＝条件变了，先回第 1 页再取数。
+// D-DEC-168：「查询/筛选」＝条件变了，先回第 1 页再查询。
 // 此前直接 load()：停在第 3 页时改条件仍然只翻第 3 页，窄条件下往往没有第 3 页，
 // 界面看起来就是「点了没反应」的第二半原因。翻页路径（pagination 回调）不受影响。
 function runQuery() {
@@ -473,7 +484,7 @@ const entryOrder = ref('')
 function onEntrySortChange({ prop, order }) {
   entryOrderBy.value = order ? String(prop || '') : ''
   entryOrder.value = order === 'descending' ? 'desc' : order === 'ascending' ? 'asc' : ''
-  pageNum.value = 1 // 排序变化＝取数口径变化，回第 1 页
+  pageNum.value = 1 // 排序变化＝查询范围变化，回第 1 页
   load()
 }
 const voucherOrderBy = ref('')
@@ -491,15 +502,15 @@ function onVoucherSortChange({ prop, order }) {
 // D-DEC-165（前后端契约断裂 → 说明整段丢弃）：原实现用 ElMessageBox.prompt 把「过账说明」设成必填
 // （≥2 字，不填就无法过账），但适配层只发纯 id 数组、端点签名就是 @RequestBody List<Long> ids、
 // VoucherService.post() 也没有 comment 形参 ⇒ 用户键入的说明 100% 静默丢弃，
-// 界面承诺了一条根本不存在的入账留痕（假必填）。这里先停止假必填，改为不带输入框的确认。
-// 留痕的两条真出路（择一落地，均需后端改动／人工裁决）：
+// 界面承诺了一条根本不存在的入账记录（假必填）。这里先停止假必填，改为不带输入框的确认。
+// 记录的两条真出路（择一落地，均需后端改动／人工裁决）：
 //   A. 复用既有承载列 op_voucher.remark（该列存在且同域同类动作已在用：红字冲销 reverseVoucher
 //      把 reason 写成「红字冲销：xxx」）——由 SharingController.voucherBatchPost 收 {ids, comment}、
 //      VoucherService.post() 增 remark 形参落该列；属共享/凭证域后端接线（不在本面）。
 //   B. 若要的是「每次过账一条独立入账理由」（不覆盖凭证备注、一次批量共用一条并留操作人），
 //      则需新列或新表 ⇒ DDL 变更，需人工裁决。
 // 任一方案落地后，把下面的 confirm 换回 prompt 并随 body.comment 送出即可（适配层按 body 透传 id）。
-// D-BIZ-09：单张过账走 /tenant/sharing/voucher/{id}/post（后端同码闸＋实付闸＋制审分离闸）
+// D-BIZ-09：单张过账走 /tenant/sharing/voucher/{id}/post（后端同码校验＋实付校验＋制审分离校验）
 async function postOne(row) {
   const label = row.voucherNo || (t('gl.ledger.voucherPrefix') + row.id)
   try {
@@ -581,7 +592,7 @@ async function load() {
     } else if (tab.value === 'voucher') {
       await loadVouchers()
     } else {
-      trial.value = await glApi.trial(companyId.value || 1, year.value, month.value)
+      trial.value = await glApi.trial(companyId.value || 1, year.value, month.value, includeUnposted.value)
     }
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
 }

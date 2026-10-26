@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="monthend-board">
     <!-- 权限门控（2026-09-16 P0）：本页是无菜单承载的全局入口（用户下拉「月结看板」+ /month-end），
@@ -306,21 +309,21 @@ function renderTimelineChart() {
 }
 
 async function loadPeriods() {
-  // 当前月兜底（无权限 / 接口不可达时使用）
+  // 当前月默认处理（无权限 / 接口不可达时使用）
   const fallback = () => {
     const now = new Date()
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     periods.value = [{ label: t('sharing.monthEnd.periodLabel', { v1: now.getFullYear(), v2: now.getMonth() + 1 }), value: ym }]
   }
-  // 无 md:period:list 直接兜底，不发请求（原实现会请求失败再进 catch，但全局 toast 已经弹出）
+  // 无 md:period:list 直接默认处理，不发请求（原实现会请求失败再进 catch，但全局 toast 已经弹出）
   if (!canLoadPeriods) return fallback()
   try {
     const res = await periodApi.page({ pageNum: 1, pageSize: 50 }, { silent: true })
     const list = res.list || res.records || []
-    // D-DEC-195：期间取数两处错位是「看板恒空」的另一半——
+    // D-DEC-195：期间查询两处错位是「看板恒空」的另一半——
     // ① md_period 实体字段是 periodYear/periodMonth，原代码读 p.year/p.month ⇒ 期间串成 'undefined-undefined'；
-    // ② 状态过滤只认 OPEN，而会计期间主数据的开账态实为 NORMAL ⇒ 下拉恒空，永远走兜底当月。
-    // 看板仍传 'YYYY-MM'（展示口径），由后端 GlMonthCloseService.normalizePeriod 统一折成库内 yyyyMM 再 eq，
+    // ② 状态过滤只认 OPEN，而会计期间主数据的开账态实为 NORMAL ⇒ 下拉恒空，永远走默认处理当月。
+    // 看板仍传 'YYYY-MM'（展示规则），由后端 GlMonthCloseService.normalizePeriod 统一折成库内 yyyyMM 再 eq，
     // 因此这里不需要在前端私自改成 6 位。
     periods.value = list
       .map((p) => {
@@ -374,7 +377,7 @@ async function loadData() {
     })
     // 补充流程实例数据作为参考（在途审批也属于月结任务范畴）
     // 可选增强：无 wf:instance:list 时整体跳过（不发请求）；有权限时传 silent
-    // —— 原实现用 try/catch 兜底，但提示来自 api.js 响应拦截器，catch 吞不掉。
+    // —— 原实现用 try/catch 默认处理，但提示来自 api.js 响应拦截器，catch 吞不掉。
     if (canLoadFlowRef) {
       try {
         const flowRes = await flowApi.instancePage({ pageNum: 1, pageSize: 200 }, { silent: true })

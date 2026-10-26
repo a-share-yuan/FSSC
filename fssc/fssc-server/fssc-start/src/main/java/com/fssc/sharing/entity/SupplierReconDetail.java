@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -12,6 +15,7 @@ import java.time.LocalDateTime;
 
 /**
  * 供应商对账单逐笔明细（supplier_recon_detail）。
+ * 应付管理的逐笔勾对与自动清账。
  * 每条明细代表一笔发票(INVOICE)、付款(PAYMENT)或手工调整(ADJUSTMENT)。
  * 通过 matched_detail_id + match_status 实现逐笔勾对关系。
  */

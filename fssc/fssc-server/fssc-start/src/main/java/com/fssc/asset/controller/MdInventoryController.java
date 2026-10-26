@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.controller;
 
 import com.fssc.asset.entity.MdInventory;
@@ -50,7 +53,7 @@ public class MdInventoryController {
         return Result.success();
     }
 
-    /** 出库（移动平均口径计算发出成本），返回发出成本 */
+    /** 出库（移动平均规则计算发出成本），返回发出成本 */
     @RequiresPerm("inventory:update")
     @OperLog(module = "INVENTORY", operType = "UPDATE", desc = "存货出库")
     @PostMapping("/outStock")

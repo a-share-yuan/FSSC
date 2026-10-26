@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * useAutoFill - 表单智能预填 composable
  * 根据历史数据、当前上下文自动预填表单字段
@@ -98,9 +101,9 @@ export function useAutoFill() {
       filled.push('exchangeRate')
     }
     if (!target.billDate) {
-      // D-DEC-361（补漏腿）：这里原先用 toISOString() 取「今天」，那是 UTC 串——东八区恒差 −8h，
-      // 0~8 点之间制单会把单据日期预填成"昨天"，与后端 LocalDateTime.now() 落库钟口不一致。
-      // 与 composables/useBill.js 的 localDateParts 同口径（本地时钟，零依赖，不引日期库）。
+      // D-DEC-361（补漏环节）：这里原先用 toISOString() 取「今天」，那是 UTC 串——东八区恒差 −8h，
+      // 0~8 点之间制单会把单据日期预填成"昨天"，与后端 LocalDateTime.now() 写入数据库钟口不一致。
+      // 与 composables/useBill.js 的 localDateParts 同一规则（本地时钟，零依赖，不引日期库）。
       const d = new Date()
       const p = (n) => String(n).padStart(2, '0')
       target.billDate = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`

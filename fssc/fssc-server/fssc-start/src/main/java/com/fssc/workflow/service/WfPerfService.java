@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -29,7 +32,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 流程绩效与积压分析（改造方案 G3-2：<b>把拼造数据换成真口径</b>）。
+ * 流程绩效与积压分析（改造方案 G3-2：<b>把拼造数据换成真规则</b>）。
  *
  * <p>数据源全部是业务台账，不读引擎表，也不再按一套写死的 7 节点词汇画假图：
  * <ul>
@@ -43,8 +46,8 @@ import java.util.stream.Collectors;
  *  <li><b>按人时效 / 超时未办 Top 榜</b>：{@code wf_task} 按 assignee_id（未指派时按候选人）聚合。</li>
  * </ul>
  *
- * <p><b>口径边界</b>：审批历史（路径/停留）自单据进入第二环节起才有完整事件链；待办镜像
- * {@code wf_task} 的存量在 V1.4.22 双账补齐脚本执行前只覆盖首节点，因此"办结数/按人时效"类
+ * <p><b>规则边界</b>：审批历史（路径/停留）自单据进入第二环节起才有完整事件链；待办镜像
+ * {@code wf_task} 的历史在 V1.4.22 双账补齐脚本执行前只覆盖首节点，因此"办结数/按人时效"类
  * 指标在补齐前会偏低，路径与停留不受影响。
  */
 @Slf4j
@@ -58,7 +61,7 @@ public class WfPerfService {
     private final WfNodeConfigMapper nodeConfigMapper;
     private final SysUserMapper sysUserMapper;
     /**
-     * 卡单判定（F3-2）：阈值口径与超时聚合告警同源（{@code wf.timeout.stuck.alert.after_urges}），
+     * 卡单判定（F3-2）：阈值规则与超时聚合告警同源（{@code wf.timeout.stuck.alert.after_urges}），
      * 看板只把 {@code urged_count} 变成红牌，<b>不新增列、不写库</b>。
      */
     private final WfQueryService wfQueryService;
@@ -77,7 +80,7 @@ public class WfPerfService {
     private static final int TOP_HANDLERS = 15;
     /**
      * 积压档的机器动作回看天数（D-DEC-208）。积压看板本身是"当前快照"，没有天数入参，
-     * 台账里的"实际发生"事件需要一个窗口才能数——取与其余三档同默认值 30 天，保持四档口径一致。
+     * 台账里的"实际发生"事件需要一个窗口才能数——取与其余三档同默认值 30 天，保持四档规则一致。
      */
     private static final int BACKLOG_LEDGER_DAYS = 30;
 
@@ -122,7 +125,7 @@ public class WfPerfService {
             if (age > 168) {
                 over7d++;
             }
-            // D-DEC-206：超时未办走 overdueOf() 唯一谓词（due_time 实算），与时效榜两列同一份口径
+            // D-DEC-206：超时未办走 overdueOf() 唯一谓词（due_time 实算），与时效榜两列同一份规则
             // D-DEC-204：顶部 KPI 与「当前在办/在办超时」列自此由同一谓词、同一份 PENDING 快照出数
             Overdue od = overdueOf(t, cfgIndex, now);
             if (od.yes()) {
@@ -146,7 +149,7 @@ public class WfPerfService {
         out.put("approvalEvents", events);
         out.put("finishedToday", countFinishedToday());
         out.put("overdueInFlight", overduePending);
-        // D-DEC-206：兜底口径规模如实给出（这些行没有 wf_task.due_time，超时按 create_time＋节点 SLA 回算）
+        // D-DEC-206：默认处理规则规模如实给出（这些行没有 wf_task.due_time，超时按 create_time＋节点 SLA 回算）
         out.put("noDueTimeTasks", noDueTime);
         out.put("backlogOver7d", over7d);
         out.put("avgPendingHours", pending.isEmpty() ? 0 : Math.round(pendingAgeSumHours / (double) pending.size()));
@@ -166,7 +169,7 @@ public class WfPerfService {
         // 手册 §X16 的断言要的是"改档后可见"，此前三档表头只有超时次数/达成率，改档结果在屏幕上无痕。
         out.put("timeoutActions", timeoutActionLedger(pending, hist, instances));
         // R5-D-036
-        out.put("note", "口径：审批事件取自审批留痕，停留＝同一单据相邻两次审批的时间差；"
+        out.put("note", "统计说明：审批事件取自审批记录，停留＝同一单据相邻两次审批的时间差；"
                 + "达成率仅统计配了办理时限且停留可测的审批（" + slaMeasured + "/" + events + "）。"
                 + "超时未办＝仍在办理且已过了到期时点（按到期时间实算，不用「停留−配置时限」推算）；"
                 + "其中 " + noDueTime + " 条没有到期时间，按「发起时间＋节点办理时限」推算并已单列标注。");
@@ -184,12 +187,12 @@ public class WfPerfService {
     }
 
     /**
-     * R5-D-036：{@code /wf/board} 顶部四卡的唯一口径源——按状态<b>全量</b> COUNT。
+     * R5-D-036：{@code /wf/board} 顶部四卡的唯一规则源——按状态<b>全量</b> COUNT。
      *
      * <p>整改前该页拿「当前页」的行自己数，翻页/筛选后读数随页大小漂移，
-     * 实测真值 11 的在途实例在页面上恒显 0（与 {@code /flow-center} 同口径读数差 11）。
-     * completed 取 APPROVED、rejected 取 REJECTED＋TERMINATED，与该页整改前的分桶口径一致，
-     * 本枚只修<b>取数范围</b>，不改业务口径。CANCELLED 单列返回，前端如需并入再判。</p>
+     * 实测真值 11 的在途实例在页面上恒显 0（与 {@code /flow-center} 同一规则读数差 11）。
+     * completed 取 APPROVED、rejected 取 REJECTED＋TERMINATED，与该页整改前的分桶规则一致，
+     * 本枚只修<b>查询范围</b>，不改业务规则。CANCELLED 单列返回，前端如需并入再判。</p>
      */
     public Map<String, Object> instanceStatusSummary() {
         Map<String, Long> counts = instanceStatusCount();
@@ -208,7 +211,7 @@ public class WfPerfService {
     }
 
     // ------------------------------------------------------------------
-    // 2. 流转路径（桑基真口径：实例真实走过的路径）
+    // 2. 流转路径（桑基真规则：实例真实走过的路径）
     // ------------------------------------------------------------------
 
     public Map<String, Object> paths(int days) {
@@ -290,14 +293,14 @@ public class WfPerfService {
         }
         out.put("timeoutActions", timeoutActionLedger(pending, hist, instances));
         // R5-D-036
-        out.put("note", "节点＝审批留痕里的真实节点名，连线值＝窗口内该流转实际发生的次数，退回的流转已剔除。"
+        out.put("note", "节点＝审批记录里的真实节点名，连线值＝窗口内该流转实际发生的次数，退回的流转已剔除。"
                 + "节点行的「处置档／催办·自动通过·升级行数」＝该节点在窗口内命中的处置档与系统自动动作次数。"
-                + "没有节点名的留痕不画进本图（宁缺不造），规模见「节点 SLA 明细」页签的说明。");
+                + "没有节点名的记录不画进本图（宁缺不造），规模见「节点 SLA 明细」页签的说明。");
         return out;
     }
 
     // ------------------------------------------------------------------
-    // 3. 节点停留热力（真口径：task_history 节点命中 + 相邻事件时间差）
+    // 3. 节点停留热力（真规则：task_history 节点命中 + 相邻事件时间差）
     // ------------------------------------------------------------------
 
     public Map<String, Object> nodeDwell(int days) {
@@ -312,7 +315,7 @@ public class WfPerfService {
         for (NodeStat ns : stats.size() > TOP_NODES ? stats.subList(0, TOP_NODES) : stats) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("node", ns.node);
-            // D-DEC-210：无名留痕行如实标注（前端加灰色 tag），不再与真实节点混成一堆
+            // D-DEC-210：无名记录行如实标注（前端加灰色 tag），不再与真实节点混成一堆
             m.put("unnamedTrace", isUnnamedNodeLabel(ns.node));
             m.put("events", ns.events);
             m.put("avgMinutes", ns.events == 0 ? 0 : (int) (ns.minutesSum / ns.events));
@@ -333,7 +336,7 @@ public class WfPerfService {
         out.put("buckets", List.of(BUCKET_LABELS));
         out.put("rows", rows);
         out.put("droppedNodes", Math.max(0, stats.size() - TOP_NODES));
-        // D-DEC-210：无名留痕的规模（行数＋事件数）如实给出——它不是一个节点，是历史行没写 node_name/node_key
+        // D-DEC-210：无名记录的规模（行数＋事件数）如实给出——它不是一个节点，是历史行没写 node_name/node_key
         int unnamedRows = 0;
         long unnamedEvents = 0;
         for (NodeStat ns : stats) {
@@ -347,10 +350,10 @@ public class WfPerfService {
         out.put("timeoutActions", timeoutActionLedger(pendingTasks(), hist, instances));
         // R5-D-036
         out.put("note", "行＝窗口内命中最多的 " + TOP_NODES + " 个真实节点，格值＝落在该停留区间的审批次数；"
-                + "「处置档／催办·自动通过·升级行数」读自节点超时处置配置与审批留痕，只数不改。"
+                + "「处置档／催办·自动通过·升级行数」读自节点超时处置配置与审批记录，只数不改。"
                 + (unnamedEvents > 0
-                ? "窗口内 " + unnamedEvents + " 条审批留痕没有节点名（" + unnamedRows + " 行）：能认出节点的按节点显示、"
-                  + "两者都认不出的标「留痕缺名·无节点信息」，不替它们造名。"
+                ? "窗口内 " + unnamedEvents + " 条审批记录没有节点名（" + unnamedRows + " 行）：能认出节点的按节点显示、"
+                  + "两者都认不出的标「记录缺少名称·无节点信息」，不替它们造名。"
                 : ""));
         return out;
     }
@@ -368,7 +371,7 @@ public class WfPerfService {
                 WfInstance inst = proc == null ? null : instances.get(proc);
                 prevTime = inst == null ? null : (inst.getStartTime() != null ? inst.getStartTime() : inst.getCreateTime());
             }
-            // D-DEC-210：无名留痕按真实来源出label（有 key 显 key，全无则标「留痕缺名」），不再合成伪节点
+            // D-DEC-210：无名记录按真实来源出label（有 key 显 key，全无则标「记录缺名」），不再合成伪节点
             String node = nodeLabel(h.getNodeName(), h.getNodeKey());
             NodeStat ns = byNode.computeIfAbsent(node, k -> new NodeStat(k));
             ns.events++;
@@ -424,14 +427,14 @@ public class WfPerfService {
         for (WfTask t : pending) {
             long age = hoursBetween(t.getCreateTime(), now);
             agingBuckets.merge((long) agingBucketOf(age), 1, Integer::sum);
-            // D-DEC-206：已超时＝now − wf_task.due_time（到期真值）；旧口径「账龄 − 配置 SLA」在
+            // D-DEC-206：已超时＝now − wf_task.due_time（到期真值）；旧规则「账龄 − 配置 SLA」在
             // wf_task.create_time 早于实例起流时会长出几十小时的假超时（12-31 实测 66h vs 实算 16.4h）。
             Overdue od = overdueOf(t, cfgIndex, now);
             boolean overdue = od.yes();
             if (t.getDueTime() == null) {
                 noDueTasks++;
             }
-            // D-DEC-210：留痕缺名不造名——有 nodeKey 显 key，两者皆空如实标「留痕缺名」
+            // D-DEC-210：记录缺名不造名——有 nodeKey 显 key，两者皆空如实标「记录缺名」
             String node = nodeLabel(t.getNodeName(), t.getNodeKey());
             BacklogNode bn = byNode.computeIfAbsent(node, BacklogNode::new);
             bn.count++;
@@ -471,7 +474,7 @@ public class WfPerfService {
             m.put("unnamedTrace", isUnnamedNodeLabel(bn.name));   // D-DEC-210
             m.put("count", bn.count);
             m.put("overdue", bn.overdue);
-            // D-DEC-206：这一行的超时里有多少条是"没有 due_time、按 create_time＋SLA 兜底"算出来的
+            // D-DEC-206：这一行的超时里有多少条是"没有 due_time、按 create_time＋SLA 默认处理"算出来的
             m.put("overdueFallback", bn.fallbackOverdue);
             m.put("noDueTime", bn.noDue);
             m.put("maxAgeHours", bn.maxAgeHours);
@@ -493,7 +496,7 @@ public class WfPerfService {
         out.put("buckets", buckets);
         out.put("byNode", nodes);
         out.put("overdueTop", overdueRank(pending, names, true));
-        // D-DEC-206：口径可追溯——榜上每行都带 overdueBasis；这两项给出「兜底口径」的规模
+        // D-DEC-206：规则可追溯——榜上每行都带 overdueBasis；这两项给出「默认处理规则」的规模
         out.put("noDueTimeTasks", noDueTasks);
         out.put("timeoutActions", timeoutActionLedger(pending, hist, instancesOf(hist)));
         // R5-D-036
@@ -512,8 +515,8 @@ public class WfPerfService {
 
     /**
      * 办理时效榜（G3-2）：按办理人聚合窗口内办结量与平均停留，并给出在办量与超时未办数。
-     * 口径提示：未指派（POOL/候选组）的待办按候选人计入，一人多候选会重复计入在办量——
-     * 这是"谁还能办"的运营口径，不是"谁该背"的考核口径，故不参与排序，只作参考列。
+     * 规则提示：未指派（POOL/候选组）的待办按候选人计入，一人多候选会重复计入在办量——
+     * 这是"谁还能办"的运营规则，不是"谁该背"的考核规则，故不参与排序，只作参考列。
      */
     public Map<String, Object> handlerTop(int days) {
         int window = normalizeDays(days);
@@ -543,7 +546,7 @@ public class WfPerfService {
         Map<Long, int[]> onHand = new LinkedHashMap<>();  // userId -> [在办, 超时未办, 阶梯档在办, AUTO_PASS档在办]
         // D-DEC-204：「当前在办」「在办超时」两列的直接真相源＝同一份 wf_task PENDING 快照 ＋
         // overdueOf() 唯一超时谓词（与顶部 KPI「待办任务/超时未办」逐字同一判定），不再借道大屏 Top 榜
-        // 的投影行（那是一次"榜单口径"的间接取样，改榜单就会改坏这两列）。
+        // 的投影行（那是一次"榜单规则"的间接取样，改榜单就会改坏这两列）。
         // 未指派（POOL/候选组）按候选人各计一次"谁还能办"；一个任务对同一个人只计一次。
         int overdueTasks = 0;
         int noDueTimeTasks = 0;
@@ -607,7 +610,7 @@ public class WfPerfService {
                 ? new ArrayList<>(rows.subList(0, TOP_HANDLERS)) : new ArrayList<>(rows);
         // D-DEC-204：Top 15 按「窗口内办结」排序，名下只有在办、窗口内没办结的人整批落在榜外，
         // 于是"两列在屏上还是全 0"（12-31 看到的就是这个形状）。这里把有在办却未进榜者补进末段并打标，
-        // 让两列非恒 0 由构造保证；排序与办结榜口径不动，补行只在表尾。
+        // 让两列非恒 0 由构造保证；排序与办结榜规则不动，补行只在表尾。
         int appended = 0;
         for (int i = TOP_HANDLERS; i < rows.size(); i++) {
             Map<String, Object> m = rows.get(i);
@@ -623,7 +626,7 @@ public class WfPerfService {
         out.put("appendedOnHandRows", appended);
         // D-DEC-208 / D-DEC-204 对账口：「当前在办」「在办超时」两列此前恒 0（取键取错，见上方注释）。
         // 光"有数"不够，还要能对上同页 KPI——KPI 按任务数、本表按人（候选人重复计入），
-        // 两个口径不并排给出，读者只会再报一次"两列对不上"。这里把三段差值逐项出数：
+        // 两个规则不并排给出，读者只会再报一次"两列对不上"。这里把三段差值逐项出数：
         //   屏上 15 行列合计 ≤ 全部人名下合计 ＝ 有主任务数（多候选按人重复） ＝ 待办 − 无人认领
         int overdueTasksAllUsers = 0;
         int onHandAllUsers = 0;
@@ -640,7 +643,7 @@ public class WfPerfService {
         Map<String, Object> reconcile = new LinkedHashMap<>();
         reconcile.put("pendingTasks", pending.size());          // ＝概览卡 pendingTasks（同一份 PENDING 快照）
         reconcile.put("overdueTasks", overdueTasks);            // ＝概览卡 overdueInFlight（同一 overdueOf 谓词）
-        reconcile.put("noDueTimeTasks", noDueTimeTasks);              // 没有 due_time、走兜底/不可测口径的任务数（D-DEC-206）
+        reconcile.put("noDueTimeTasks", noDueTimeTasks);              // 没有 due_time、走默认处理/不可测规则的任务数（D-DEC-206）
         reconcile.put("onHandCellSum", cellOnHand);             // 屏上各行「当前在办」列合计（只含 Top 15 人）
         reconcile.put("overdueOnHandCellSum", cellOverdue);     // 屏上各行「在办超时」列合计
         reconcile.put("onHandAllHandlersSum", onHandAllUsers);  // 全部人名下合计（未截断，候选人重复计入）
@@ -651,13 +654,14 @@ public class WfPerfService {
         out.put("reconcile", reconcile);
         // R5-D-036
         out.put("note", "办结时效＝任务从派发到办结的时长；「当前在办／在办超时」＝此刻的待办快照，"
+                + "超时判定与顶部卡片同一规则（现在 − 到期时间；无到期时间的 " + noDueTimeTasks
                 + " 条按「发起时间＋节点办理时限」推算）。"
                 + "「催满升级档／自动通过档在办」＝该人在办任务所在节点配置的处置档，只数不改。"
                 + "对账：屏上两列合计 " + cellOnHand + "／" + cellOverdue
                 + " ＝ 全部人名下合计 " + onHandAllUsers + "／" + overdueTasksAllUsers
                 + "（名下有在办而未进前 " + TOP_HANDLERS + " 的 " + appended + " 人已补在表尾，两列不会整屏为 0）；"
                 + "有人可办 " + ownedTasks + " ＋ 无人认领 " + unownedTasks + " ＝ 待办 " + pending.size()
-                + "，屏上按人合计 ≥ 任务数的差额＝一任务多候选按人重复计入（「谁还能办」的运营口径，非考核口径）。");
+                + "，屏上按人合计 ≥ 任务数的差额＝一任务多候选按人重复计入（「谁还能办」的运营统计，不作为考核依据）。");
         return out;
     }
 
@@ -665,13 +669,13 @@ public class WfPerfService {
      * 超时未办榜（G3-1 的"超时未办 Top 榜"读侧）：<b>一行＝一个任务</b>（RA-F3d · 2026-09-27 人工裁决第三轮）。
      *
      * <p>改前把候选人逐个摊成独立行 ⇒ 榜上「N 条」不是待办数（现网实测 8 个任务渲染成 16 行）。
-     * 厂商报表的计数单位始终是<b>任务</b>：「超期任务数量：按周期合计超期已处理任务数量」〔星·个人效率统计表〕，
+     * 报表的计数单位始终是<b>任务</b>：「超期任务数量：按周期合计超期已处理任务数量」〔星·个人效率统计表〕，
      * 处理人只是分组/展示维度〔E·FSSC·330「处理人｜默认选中不限，显示所有审核处理人」〕。
      * 因此这里按任务出行、处理人合并成一个名单（{@code name} 顿号连接），候选人只展开<b>不重复计数</b>；
-     * "每个人手上还有几单"的 per-user 口径由 {@link #handlerTop} 直接在同一份 PENDING 快照上现算，
+     * "每个人手上还有几单"的 per-user 规则由 {@link #handlerTop} 直接在同一份 PENDING 快照上现算，
      * 两处共用 {@link #overdueOf} 这唯一一套超时判据（D-DEC-204 的"列与 KPI 同源"就落在这里）。
      *
-     * @param onlyOverdue true＝只返回已超时项（大屏榜），false＝全部在办（历史签名，现为通用参考口径）
+     * @param onlyOverdue true＝只返回已超时项（大屏榜），false＝全部在办（历史签名，现为通用参考规则）
      */
     private List<Map<String, Object>> overdueRank(List<WfTask> pending, Map<Long, String> names, boolean onlyOverdue) {
         Map<String, WfNodeConfig> cfgIndex = nodeConfigIndex();
@@ -679,7 +683,7 @@ public class WfPerfService {
         List<Map<String, Object>> out = new ArrayList<>();
         for (WfTask t : pending) {
             long age = hoursBetween(t.getCreateTime(), now);
-            // D-DEC-206：已超时实算走 overdueOf()（due_time 真值优先），时长带 1 位小数、行上标口径
+            // D-DEC-206：已超时实算走 overdueOf()（due_time 真值优先），时长带 1 位小数、行上标规则
             Overdue od = overdueOf(t, cfgIndex, now);
             if (onlyOverdue && !od.yes()) {
                 continue;
@@ -708,7 +712,7 @@ public class WfPerfService {
         m.put("taskId", t.getTaskId());
         m.put("bizNo", t.getBizNo());
         m.put("title", t.getTitle());
-        // D-DEC-210：节点名留痕缺失时如实标注，不再让界面自己造一个"（未记节点名）"的伪节点
+        // D-DEC-210：节点名记录缺失时如实标注，不再让界面自己造一个"（未记节点名）"的伪节点
         String node = nodeLabel(t.getNodeName(), t.getNodeKey());
         m.put("node", node);
         m.put("unnamedTrace", isUnnamedNodeLabel(node));
@@ -718,16 +722,16 @@ public class WfPerfService {
                 : owners.stream().map(uid -> names.getOrDefault(uid, String.valueOf(uid)))
                         .collect(Collectors.joining("、")));
         m.put("candidateCount", assigned ? 1 : owners.size());
-        // per-user 参考列（时效榜"在办/超时未办"）与这里同一套 ownersOf/overdueOf 口径
+        // per-user 参考列（时效榜"在办/超时未办"）与这里同一套 ownersOf/overdueOf 规则
         m.put("ownerIds", owners);
         m.put("ageHours", age);
         m.put("timeoutHours", od.slaHours);
         m.put("dueTime", od.dueTime == null ? null : od.dueTime.toString());
         m.put("overdueHours", od.hours());
-        // D-DEC-206：这一行的超时是按哪个口径算出来的（DUE_TIME／CREATE_PLUS_SLA／NO_DUE_NO_SLA）
+        // D-DEC-206：这一行的超时是按哪个规则算出来的（DUE_TIME／CREATE_PLUS_SLA／NO_DUE_NO_SLA）
         m.put("overdueBasis", od.basis);
         m.put("urgedCount", t.getUrgedCount() == null ? 0 : t.getUrgedCount());
-        // 卡单红牌（F3-2 / UR-10）：催满阈值仍 PENDING ＝ 卡单。派生标记，不落库、不改状态。
+        // 卡单红牌（F3-2 / UR-10）：催满阈值仍 PENDING ＝ 卡单。派生标记，不写入数据库、不改状态。
         m.put("stuck", wfQueryService.isStuck(t.getUrgedCount()));
         return m;
     }
@@ -737,7 +741,7 @@ public class WfPerfService {
     // ------------------------------------------------------------------
 
     /**
-     * 超时处置档规范值（D-DEC-208）。取值词表与超时作业侧 {@code WfTimeoutJob} 的三档同名同义，
+     * 超时处置档规范值（D-DEC-208）。取值名称表与超时作业侧 {@code WfTimeoutJob} 的三档同名同义，
      * 但本方法是查询面自己复刻的一份别名归一（{@code WfTimeoutJob.normalizeAction} 是作业包内的
      * 包级方法，查询面调用会把大屏的发布节奏绑到作业包上）。
      * <p><b>只读</b>：这里只把 {@code wf_node_config.timeout_action} 与 {@code wf_task_history.action}
@@ -745,17 +749,17 @@ public class WfPerfService {
      * <p><b>为什么"配了"不等于"生效"</b>：AUTO_PASS 还受 {@code sys_config.wf.timeout.autopass.nodes}
      * 白名单与 {@code wf.timeout.autopass.max_amount} 金额敞口约束，阶梯档实际升级还受作业侧
      * {@code wf.timeout.escalate.after_urges} 阈值约束；三者都是 {@code WfTimeoutJob} 的读取点，
-     * 本查询面<b>不解析、不复算</b>，只把"配了几处"与"真发生了几行"并排列出（口径详见
+     * 本查询面<b>不解析、不复算</b>，只把"配了几处"与"真发生了几行"并排列出（规则详见
      * {@link #timeoutActionLedger}）。
      */
     static final String TIER_REMIND = "AUTO_REMIND";
     static final String TIER_AUTO_PASS = "AUTO_PASS";
     static final String TIER_ESCALATE = "ESCALATE";
     static final String TIER_ESCALATE_LADDER = "ESCALATE_AFTER_URGES";
-    /** 未配置或拼写不可识别（作业侧兜底为催办档） */
+    /** 未配置或拼写不可识别（作业侧默认处理为催办档） */
     static final String TIER_UNSPECIFIED = "UNSPECIFIED";
 
-    /** 机器动作在 {@code wf_task_history.action} 里的落库值（与作业侧/门面插桩同源，用于「实际发生」计数） */
+    /** 机器动作在 {@code wf_task_history.action} 里的写入数据库值（与作业侧/门面插桩同源，用于「实际发生」计数） */
     private static final String EV_URGE = "URGE";
     private static final String EV_AUTO_PASS = "AUTO_PASS";
     private static final String EV_ESCALATE = "ESCALATE";
@@ -805,7 +809,7 @@ public class WfPerfService {
         Map<String, WfNodeConfig> cfgIndex = nodeConfigIndex();
         Map<String, NodeAction> out = new LinkedHashMap<>();
         for (WfTaskHistory h : hist) {
-            // D-DEC-210：无名留痕按真实来源出label（有 key 显 key，全无则标「留痕缺名」），不再合成伪节点
+            // D-DEC-210：无名记录按真实来源出label（有 key 显 key，全无则标「记录缺名」），不再合成伪节点
             String node = nodeLabel(h.getNodeName(), h.getNodeKey());
             NodeAction na = out.computeIfAbsent(node, k -> new NodeAction());
             if (h.getAction() != null && !h.getAction().isBlank()) {
@@ -883,8 +887,8 @@ public class WfPerfService {
 
         int threshold = wfQueryService.stuckAfterUrges();
         // D-DEC-208 补齐：在办落档五档逐档计数。改档计数原先只有阶梯档／AUTO_PASS 两档有数、
-        // 催办档与未配置档在页面上恒显示「—」——同一张表里两套口径，读者无法判断「—」是"没有"还是"没算"。
-        // 现在五档同口径，且 五档 tasks 合计 + unclassifiedTasks ＝ 同页 KPI「待办任务」（＝pendingTasks）。
+        // 催办档与未配置档在页面上恒显示「—」——同一张表里两套规则，读者无法判断「—」是"没有"还是"没算"。
+        // 现在五档同一规则，且 五档 tasks 合计 + unclassifiedTasks ＝ 同页 KPI「待办任务」（＝pendingTasks）。
         Map<String, int[]> byTier = new LinkedHashMap<>();
         for (String tier : new String[]{TIER_REMIND, TIER_ESCALATE_LADDER, TIER_AUTO_PASS, TIER_ESCALATE, TIER_UNSPECIFIED}) {
             byTier.put(tier, new int[2]);
@@ -932,9 +936,9 @@ public class WfPerfService {
         out.put("inFlight", inFlight);
         // R5-D-036
         out.put("note", "档位＝节点超时处置配置归类后的处置档（只数不改，不判定是否放行）；"
-                + "实际发生＝窗口内审批留痕里的系统自动动作次数；"
+                + "实际发生＝窗口内审批记录里的系统自动动作次数；"
                 + "在办落档五档逐档计数，五档合计＋归不进档的待办行数＝待办任务数（与顶部卡片同一份待办快照）；"
-                + "「超时自动通过」还需白名单与金额敞口两道闸同时满足才真放行，配了自动通过而实际发生数为 0，即形同未开。");
+                + "「超时自动通过」还需白名单与金额敞口两个条件同时满足才真放行，配了自动通过而实际发生数为 0，即形同未开。");
         return out;
     }
 
@@ -960,18 +964,18 @@ public class WfPerfService {
 
     /** 到期时刻取 {@code wf_task.due_time}（G3 双时限真值列，与 {@code OpTaskDueTimeScanJob}／{@code TaskPoolQueryService} 同源） */
     private static final String DUE_BASIS_TASK = "DUE_TIME";
-    /** 无 {@code due_time} 的存量行：按 {@code create_time ＋节点 timeout_hours} 兜底回算（口径必须在行上标注） */
+    /** 无 {@code due_time} 的历史行：按 {@code create_time ＋节点 timeout_hours} 默认处理回算（规则必须在行上标注） */
     private static final String DUE_BASIS_FALLBACK = "CREATE_PLUS_SLA";
     /** 既无 {@code due_time} 又无节点 SLA：超时<b>不可测</b>，一律不计超时（不是"没超时"） */
     private static final String DUE_BASIS_UNMEASURABLE = "NO_DUE_NO_SLA";
 
     /**
-     * 单条任务的超时实算结果：超时时长（分钟）＋到期时刻＋节点配置 SLA＋所用口径。
+     * 单条任务的超时实算结果：超时时长（分钟）＋到期时刻＋节点配置 SLA＋所用规则。
      *
      * <p><b>D-DEC-206 的根因</b>：页面把"账龄 − 配置 SLA"当成已超时时长，而 {@code wf_task.create_time}
      * 可能早于实例起流（12-31 实测该实例差 49.99 小时），于是报出 <b>66 小时</b>、按 {@code due_time}
      * 实算只超 <b>16.4 小时</b>。这里以 {@code due_time} 为唯一真相源，取不到才回算，
-     * 并在应答里带上 {@code overdueBasis} 让口径可见。
+     * 并在应答里带上 {@code overdueBasis} 让规则可见。
      */
     private static final class Overdue {
         private final long minutes;
@@ -998,7 +1002,7 @@ public class WfPerfService {
 
     /**
      * 超时判定<b>唯一</b>谓词（D-DEC-204：顶部 KPI、积压账龄、超时未办榜、时效榜两列全部走这一处，
-     * 从此不可能出现"榜上有数、KPI 另一套"的分裂口径）。
+     * 从此不可能出现"榜上有数、KPI 另一套"的分裂规则）。
      *
      * @param ref 比较基准：在办任务传 {@code now}，办结任务传办结时刻
      */
@@ -1010,7 +1014,7 @@ public class WfPerfService {
             if (sla == null || sla <= 0 || t.getCreateTime() == null) {
                 return new Overdue(0, DUE_BASIS_UNMEASURABLE, null, sla);
             }
-            // 兜底：与作业侧 WfTimeoutJob.dueOf 同方向（due_time 缺失才回算），此处按自然小时、不复算工作日历
+            // 默认处理：与作业侧 WfTimeoutJob.dueOf 同方向（due_time 缺失才回算），此处按自然小时、不复算工作日历
             due = t.getCreateTime().plusHours(sla);
             basis = DUE_BASIS_FALLBACK;
         }
@@ -1028,14 +1032,14 @@ public class WfPerfService {
     }
 
     /** 只有 node_key、名字缺失时的后缀（D-DEC-210：显 key 而不造名） */
-    private static final String UNNAMED_SUFFIX = "（留痕未记节点名）";
+    private static final String UNNAMED_SUFFIX = "（记录未记节点名）";
     /** 名字与 key 都没有时的整行标签（D-DEC-210：如实标缺名，不并成伪节点） */
-    private static final String UNNAMED_BOTH = "（留痕缺名·无节点信息）";
+    private static final String UNNAMED_BOTH = "（记录缺少名称·无节点信息）";
 
     /**
      * 节点显示名（D-DEC-210）：<b>不造名</b>。
      * 有名字用名字；只有 {@code node_key} 就用 key（读者可反查 {@code wf_node_config}）；
-     * 两者皆空如实标「留痕缺名·无节点信息」——此前所有无名留痕被并成一个
+     * 两者皆空如实标「记录缺名·无节点信息」——此前所有无名记录被并成一个
      * "（未记节点名）"的伪节点（12-31 实测 56 事件），看起来像一个真实的高频节点。
      */
     private static String nodeLabel(String nodeName, String nodeKey) {
@@ -1048,7 +1052,7 @@ public class WfPerfService {
         return UNNAMED_BOTH;
     }
 
-    /** 这行是不是"无名留痕"行（D-DEC-210：前端据此加标注，不把它当一个真实节点读）。 */
+    /** 这行是不是"无名记录"行（D-DEC-210：前端据此加标注，不把它当一个真实节点读）。 */
     private static boolean isUnnamedNodeLabel(String label) {
         return label != null && (label.endsWith(UNNAMED_SUFFIX) || UNNAMED_BOTH.equals(label));
     }
@@ -1228,7 +1232,7 @@ public class WfPerfService {
         }
     }
 
-    /** 积压节点聚合中间态（D-DEC-208：账龄/超时之外再挂处置档与催办口径）。 */
+    /** 积压节点聚合中间态（D-DEC-208：账龄/超时之外再挂处置档与催办规则）。 */
     private static final class BacklogNode {
         private final String name;
         private final Set<String> tiers = new LinkedHashSet<>();
@@ -1243,9 +1247,9 @@ public class WfPerfService {
         private int urged;
         /** 催办已达卡单阈值仍 PENDING 的条数（与作业侧同一阈值读取点） */
         private int stuck;
-        /** D-DEC-206：本节点在办里没有 wf_task.due_time 的条数（＝超时走兜底口径的规模） */
+        /** D-DEC-206：本节点在办里没有 wf_task.due_time 的条数（＝超时走默认处理规则的规模） */
         private int noDue;
-        /** D-DEC-206：本节点按兜底口径（create_time＋SLA）判出的超时条数 */
+        /** D-DEC-206：本节点按默认处理规则（create_time＋SLA）判出的超时条数 */
         private int fallbackOverdue;
 
         private BacklogNode(String name) {

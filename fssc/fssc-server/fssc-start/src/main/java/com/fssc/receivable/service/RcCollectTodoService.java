@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.receivable.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -32,12 +35,12 @@ public class RcCollectTodoService {
     private final RcCollectTodoMapper mapper;
     private final RcReceivableMapper receivableMapper;
     private final WfEngineFacade wfEngineFacade;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** R5-D-097：公司维度读取守卫（催收待办列表接 OrgGuard，与应收单同口径） */
+    /** R5-D-097：公司维度读取守卫（催收待办列表接 OrgGuard，与应收单同一规则） */
     private final com.fssc.framework.org.OrgGuard orgGuard;
     /**
-     * D-DEC-410 乙：只读取流程侧留痕（发起人／任务承办人）来数清同一人在一条催收任务上占了几个岗，
+     * D-DEC-410 乙：只读取流程侧记录（发起人／任务承办人）来数清同一人在一条催收任务上占了几个岗，
      * 不改候选取人、不动引擎守卫、不做拦截。仅 SELECT。
      */
     private final com.fssc.workflow.mapper.WfInstanceMapper wfInstanceMapper;
@@ -46,7 +49,7 @@ public class RcCollectTodoService {
     public List<RcCollectTodo> list() {
         LambdaQueryWrapper<RcCollectTodo> qw = new LambdaQueryWrapper<RcCollectTodo>()
                 .orderByDesc(RcCollectTodo::getCreateTime);
-        // R5-D-097：公司维度读取过滤，与 RcReceivableService.page 同款守卫同口径（rc_collect_todo.company_id 为直接列）
+        // R5-D-097：公司维度读取过滤，与 RcReceivableService.page 同款守卫同一规则（rc_collect_todo.company_id 为直接列）
         Long scopeC = orgGuard.enforceCompany();
         if (scopeC != null) {
             qw.eq(RcCollectTodo::getCompanyId, scopeC);
@@ -80,7 +83,7 @@ public class RcCollectTodoService {
     /**
      * 催收待办生成（带账期基准日，D-DEC-407 甲案）。
      * <p>原实现把 {@code LocalDate.now()} 写死在逾期天数算法里（{@code between(dueDate, now)}），
-     * 与 {@code accrueOverdueBadDebt} 同族：业务期间晚于系统日时，天数算不出、阈值闸（days）也拦不住，
+     * 与 {@code accrueOverdueBadDebt} 同族：业务期间晚于系统日时，天数算不出、阈值校验（days）也拦不住，
      * 待办恒 0 条。本重载只把"与哪一天比"参数化，阈值语义（{@code overdueDays >= days}）一字未改。
      *
      * @param days     逾期天数阈值（不是基准日，D-DEC-407 已自纠：阈值不是空集成因）
@@ -149,7 +152,7 @@ public class RcCollectTodoService {
 
     /**
      * 解决催收待办。
-     * <p>D-DEC-410 乙档：只做提示闸——办结时数一遍同一人在这一条催收任务上占了几岗
+     * <p>D-DEC-410 乙档：只做提示校验——办结时数一遍同一人在这一条催收任务上占了几岗
      * （发起＝待办 create_by，起单＝RECEIVABLE_COLLECT 流程发起人，领取承办＝流程任务处理人，
      * 办结＝本次操作人），两岗及以上回非阻断复核提示位；不拦办结、不改候选取人、不动引擎守卫。
      * <p>返回体由 Void 改结构化 Map 是增量：该端点原 data 恒为 null，现调用方（应收看板）忽略返回值。
@@ -213,7 +216,7 @@ public class RcCollectTodoService {
         return null;
     }
 
-    /** 本次操作人是否领取承办过本条催收的流程任务（wf_task.assignee_id 留痕，只读） */
+    /** 本次操作人是否领取承办过本条催收的流程任务（wf_task.assignee_id 记录，只读） */
     private boolean hasHandledTask(Long receivableId, Long operator) {
         if (receivableId == null || operator == null) return false;
         Long n = wfTaskMapper.selectCount(new LambdaQueryWrapper<com.fssc.workflow.entity.WfTask>()

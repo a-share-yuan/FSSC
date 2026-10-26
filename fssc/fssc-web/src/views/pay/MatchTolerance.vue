@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -145,7 +148,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 容差差异化行的公司/供应商列按档案回显名称（存的是外键 id，直显数字无人看得懂）
+// 容差差异化行的公司/供应商列按档案回显名称（存的是外键 id，直接显示数字无人看得懂）
 const companies = ref([])
 const suppliers = ref([])
 function companyName(id) { return companies.value.find((c) => c.id === Number(id))?.name || `#${id}` }
@@ -254,7 +257,7 @@ function handleSelectionChange(val) { selRows.value = val }
 // ---- 41号审查 P2-13 差异化容差 CRUD ----
 const scopedVisible = ref(false)
 const scopedForm = reactive({ dimensionCode: '', companyId: null, supplierId: null, toleranceType: 'PERCENT', toleranceValue: 0, effectDate: null, expireDate: null, remark: '' })
-// 校验规则唯一口径＝中央登记表（useFormRules）；页面不再本地手写规则对象
+// 校验规则唯一规则＝中央登记表（useFormRules）；页面不再本地手写规则对象
 const scopedFormRef = ref(null)
 const { rules: scopedRules } = useFormRules('PAY_TOL_SCOPE')
 const { submit: guardScoped } = useSubmitGuard(scopedFormRef)

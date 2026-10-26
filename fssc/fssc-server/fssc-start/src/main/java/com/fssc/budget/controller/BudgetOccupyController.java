@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.budget.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -65,7 +68,7 @@ public class BudgetOccupyController {
     }
 
     /**
-     * R5-D-269：分页结果由后端一次批查 sys_user，把裸 user_id 补成「姓名/工号」可读口径（与审计轨迹同法）。
+     * R5-D-269：分页结果由后端一次批查 sys_user，把裸 user_id 补成「姓名/工号」可读规则（与审计轨迹同法）。
      * 查不到或异常时留空——前端回退显示裸 id，绝不臆造姓名。
      */
     private void fillOperatorNames(List<com.fssc.budget.vo.BgOccupyVO> rows) {
@@ -101,7 +104,7 @@ public class BudgetOccupyController {
 
     /**
      * 预算准入判定（D-DEC-424 乙）：不占用、不打挂提交——超出只回结论与金额（available/over/overAmount），
-     * 提交继续走 {@code /occupy} 与单据占用腿，那里才按 bg_scheme.control_type 档位执行扣减闸。
+     * 提交继续走 {@code /occupy} 与单据占用环节，那里才按 bg_scheme.control_type 档位执行扣减校验。
      */
     @RequiresPerm("budget:occupy:check")
     @PostMapping("/check")

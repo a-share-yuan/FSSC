@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.collab.service;
 
 import com.fssc.collab.entity.CollabSyncLog;
@@ -20,7 +23,7 @@ public class CollabSyncService {
 
     private final CollabSyncLogMapper logMapper;
 
-    /** 记录一次接口交互。REQUIRES_NEW：日志不随主事务回滚，失败留痕。 */
+    /** 记录一次接口交互。REQUIRES_NEW：日志不随主事务回滚，失败记录。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(String ifaceCode, String direction, String refNo, String status, String message, String payload) {
         CollabSyncLog l = new CollabSyncLog();

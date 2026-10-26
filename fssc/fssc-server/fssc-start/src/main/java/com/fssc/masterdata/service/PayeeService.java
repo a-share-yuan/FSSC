@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -15,7 +18,7 @@ import org.springframework.util.StringUtils;
 public class PayeeService {
 
     private final MdPayeeMapper mapper;
-    /** P4-3 审计扩面（D 类）：付款账户变更留痕 */
+    /** P4-3 审计扩面（D 类）：付款账户变更记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     public PageResult<MdPayee> page(long pageNum, long pageSize, String keyword) {
@@ -38,8 +41,8 @@ public class PayeeService {
     }
 
     /**
-     * P4-3 审计扩面（D 类·付款账户变更）：改前采集旧值，**仅当银行账户/开户行实际变化时**留痕
-     * （口径：before/after 只含本次实际变化字段；取不到旧实体则不写、不伪造）。
+     * P4-3 审计扩面（D 类·付款账户变更）：改前采集旧值，**仅当银行账户/开户行实际变化时**记录
+     * （规则：before/after 只含本次实际变化字段；取不到旧实体则不写、不伪造）。
      */
     public void update(MdPayee e) {
         MdPayee old = e.getId() == null ? null : mapper.selectById(e.getId());

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="std-page">
     <el-card shadow="never">
@@ -13,7 +16,7 @@
             </el-select>
             <el-input v-model="q.keyword" size="small" style="width: 150px" placeholder="编码/名称" clearable @keyup.enter="search" />
             <el-button size="small" type="primary" @click="search">查询</el-button>
-            <el-button size="small" @click="doExport">导出 CSV</el-button>
+            <el-button size="small" @click="doExport">导出</el-button>
             <el-button size="small" type="success" @click="openForm()">新增标准</el-button>
           </div>
         </div>
@@ -149,7 +152,7 @@ import SkeletonList from '../../components/SkeletonList.vue'
 
 const CITY_LEVELS = { CITY_1: '一线城市', CITY_2: '二线城市', CITY_3: '三线及以下', ABROAD_1: '海外一类', ABROAD_2: '海外二类' }
 const STD_TYPES = { DAY: '每天限额', TIMES: '每次限额', MONTH: '每月限额', MEAL: '餐补/次', TRANSPORT: '交通/次' }
-// 库内实值有两套码：种子写 HARD，界面单选写 BLOCK，语义同为「超限拦截」——数据侧口径不一致已登记
+// 库内实值有两套码：种子写 HARD，界面单选写 BLOCK，语义同为「超限拦截」——数据侧规则不一致已登记
 const CONTROL_TEXT = { WARN: '提示', BLOCK: '硬控', HARD: '硬控' }
 
 const rows = ref([])

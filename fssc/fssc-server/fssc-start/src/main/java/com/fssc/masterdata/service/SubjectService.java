@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -30,8 +33,8 @@ public class SubjectService {
 
     /**
      * R5-D-043／R5-D-158 科目编码字符集（写侧 ASCII 校验）：只允许 ASCII 数字，层级分隔符允许
-     * {@code .} {@code -} {@code _}，必须以数字开头，总长 ≤ 30。口径取自既有编码体系（种子脚本与
-     * 凭证侧引用均为纯数字码，如 1002／1122／1601／160400000；只读全量核对：合法行 0 例外、存量非法
+     * {@code .} {@code -} {@code _}，必须以数字开头，总长 ≤ 30。规则取自既有编码体系（种子脚本与
+     * 凭证侧引用均为纯数字码，如 1002／1122／1601／160400000；只读全量核对：合法行 0 例外、历史非法
      * 编码 100% 为非 ASCII——265 行把中文名写进了编码列），用于拦掉"编码含非 ASCII 字符"这类脏值。
      */
     private static final Pattern CODE_PATTERN = Pattern.compile("[0-9][0-9._-]{0,29}");
@@ -52,7 +55,7 @@ public class SubjectService {
     /**
      * R5-D-042（公司维度缺失·列表读路径）：原实现只有 tenant_id 隔离＋关键字，同租户内跨公司全量可见，
      * 页面无法判断某条科目属于哪家公司、也无法按公司筛。现与 {@code BankAccountService.page}（R5-D-026）
-     * 同法接 data_scope 五级收口；本表无部门／经办人列，更窄的级别由 {@link DataScopeKit} 降级到本公司。
+     * 同法接 data_scope 五级办结；本表无部门／经办人列，更窄的级别由 {@link DataScopeKit} 降级到本公司。
      *
      * <p>显式筛选与数据范围是 <b>AND 叠加</b>：选了公司只会更窄，绝不放宽到登录人范围之外。</p>
      */
@@ -69,7 +72,7 @@ public class SubjectService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** 旧三参签名保留（兼容仓内其它调用方；SubjectController 已绑 companyId 并入四参版）：不带显式公司筛选，仍受 data_scope 收口。 */
+    /** 旧三参签名保留（兼容仓内其它调用方；SubjectController 已绑 companyId 并入四参版）：不带显式公司筛选，仍受 data_scope 办结。 */
     @DataScope("会计科目列表数据范围")
     public PageResult<MdSubject> page(long pageNum, long pageSize, String keyword) {
         return page(pageNum, pageSize, keyword, null);
@@ -80,7 +83,7 @@ public class SubjectService {
      *
      * <p>R5-D-042：补公司维度。缓存键只到"租户"粒度，一旦本次查询带了公司筛选或登录人范围窄于本租户，
      * 继续复用该键就会把"别人范围的结果"喂给这个请求（宽范围先加载 ⇒ 窄范围读到全量＝跨公司外泄），
-     * 故<b>只有"本租户全量且无显式筛选"这一档走缓存</b>，收窄口径一律回源直查。</p>
+     * 故<b>只有"本租户全量且无显式筛选"这一档走缓存</b>，收窄规则一律回源直查。</p>
      */
     @DataScope("会计科目树数据范围")
     public java.util.List<MdSubject> tree() {
@@ -88,7 +91,7 @@ public class SubjectService {
     }
 
     /**
-     * @param companyId 显式公司筛选（null＝不按公司筛，仍按 data_scope 收口）
+     * @param companyId 显式公司筛选（null＝不按公司筛，仍按 data_scope 办结）
      */
     @DataScope("会计科目树数据范围")
     public java.util.List<MdSubject> tree(Long companyId) {
@@ -104,9 +107,9 @@ public class SubjectService {
      * 公司维度谓词（R5-D-042）。
      *
      * <p>md_subject 的 {@code company_id} 为空＝<b>租户级共用科目表</b>（见实体注释与库内
-     * {@code uk_tenant_subject(tenant_id, company_id, subject_code)} 口径），所以"只看某公司"必须
+     * {@code uk_tenant_subject(tenant_id, company_id, subject_code)} 规则），所以"只看某公司"必须
      * 是「本公司科目 ∪ 租户共用科目」，否则共用科目表会在筛选后整棵消失。该并集只在调用人自己的
-     * data_scope 之内取，不放宽范围；{@code md_period} 等 {@code company_id NOT NULL} 的表不适用此口径，
+     * data_scope 之内取，不放宽范围；{@code md_period} 等 {@code company_id NOT NULL} 的表不适用此规则，
      * 各自用等值筛选。</p>
      */
     private static void applyCompanyDimension(LambdaQueryWrapper<MdSubject> qw, Long companyId) {
@@ -116,7 +119,7 @@ public class SubjectService {
         qw.and(w -> w.eq(MdSubject::getCompanyId, companyId).or().isNull(MdSubject::getCompanyId));
     }
 
-    /** 带公司维度（筛选＋data_scope 收口）的树查询；不走缓存，见 {@link #tree(Long)} 的键位说明。 */
+    /** 带公司维度（筛选＋data_scope 办结）的树查询；不走缓存，见 {@link #tree(Long)} 的键位说明。 */
     private LambdaQueryWrapper<MdSubject> newCompanyScoped(Long companyId) {
         LambdaQueryWrapper<MdSubject> qw = new LambdaQueryWrapper<>();
         applyCompanyDimension(qw, companyId);
@@ -137,7 +140,7 @@ public class SubjectService {
     }
 
     /**
-     * 下拉可选科目：仅启用叶子科目，按公司维度（本公司 ∪ 租户共享）与 data_scope 收口。
+     * 下拉可选科目：仅启用叶子科目，按公司维度（本公司 ∪ 租户共享）与 data_scope 办结。
      * 供业务单据的科目选择器使用，避免手工输入科目编码。
      */
     @DataScope("会计科目选项数据范围")
@@ -155,7 +158,7 @@ public class SubjectService {
     }
 
     public Long create(MdSubject e) {
-        // R5-D-043／R5-D-158：company_id 为空＝无归属行（存量 86 行 NULL 归属待人工体检回填，见人工回填单）。
+        // R5-D-043／R5-D-158：company_id 为空＝无归属行（历史 86 行 NULL 归属待人工体检回填，见人工回填单）。
         // 新增口禁止再产 NULL 归属：前端「新增」弹窗不携带该字段，先按登录主体回填（与 PeriodService 的
         // D-MD-PERIOD1 同法：UserContext 取不到再显式报错，文案为业务语义、不外泄内部码）。
         if (e.getCompanyId() == null) {
@@ -200,7 +203,7 @@ public class SubjectService {
     // ---------------- R5-D-158 写侧守卫 ----------------
 
     /**
-     * 科目新增/修改的落库前校验（只做"防新增脏值"，存量异常行由人工裁决回填，不在此处修数）。
+     * 科目新增/修改的写入数据库前校验（只做"防新增脏值"，历史异常行由人工裁决回填，不在此处修数）。
      *
      * <p>五项：①编码字符集 ②名称非空 ③编码在本租户活跃行内唯一 ④科目类型属既有取值域
      * ⑤已有下级或已产生分录的科目不得被置为末级。文案一律业务语言，不外泄内部码值。</p>
@@ -218,7 +221,7 @@ public class SubjectService {
         e.setSubjectCode(code);
 
         // ② 名称：非空（拒空白串）且不得与编码同值（对应 R5-D-043 的 216 行空名与 46 行同值脏值；
-        //    同值行全部落在 company_id IS NULL 行，"以码为名"会让界面与凭证取数失去可读性）
+        //    同值行全部落在 company_id IS NULL 行，"以码为名"会让界面与凭证查询失去可读性）
         String name = trimToNull(e.getSubjectName());
         AssertUtil.notNull(name, ErrorCode.PARAM_INVALID, "请输入科目名称");
         AssertUtil.isTrue(!name.equals(code), ErrorCode.PARAM_INVALID,

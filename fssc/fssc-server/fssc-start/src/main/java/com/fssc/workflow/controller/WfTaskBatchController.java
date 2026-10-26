@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.fssc.common.core.Result;
@@ -58,7 +61,7 @@ public class WfTaskBatchController {
             return Result.fail(com.fssc.common.core.ErrorCode.PARAM_INVALID.getCode(),
                     "批量驳回必须填写原因（不少于 2 个字）");
         }
-        // 通过动作可不留意见，缺省补「批量审批」以便留痕；驳回意见一律原样透传，
+        // 通过动作可不留意见，缺省补「批量审批」以便记录；驳回意见一律原样透传，
         // 绝不由后端代填（否则审批历史里会出现并非审批人写的「批量审批」驳回理由）。
         String comment = approved && (req.getComment() == null || req.getComment().isBlank())
                 ? "批量审批" : req.getComment();

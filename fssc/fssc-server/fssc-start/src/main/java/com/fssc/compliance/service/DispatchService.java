@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -42,7 +45,7 @@ public class DispatchService {
     @Transactional(rollbackFor = Exception.class)
     public DispatchTask dispatch(String billId, String billType, String expenseType,
                                  BigDecimal amount, Long legalEntityId) {
-        // 必填守卫（前端 ARCHIVE_DISPATCH 登记表同口径）：dispatch_task 的 expense_type / amount
+        // 必填守卫（前端 ARCHIVE_DISPATCH 登记表同一规则）：dispatch_task 的 expense_type / amount
         // 为 NOT NULL，且这四个字段同时是派单规则 findMatchingRule 的匹配键——缺任一项只会得到
         // 「未找到匹配的派单规则」这种误导性的结论，掩盖真正原因（用户没填）。
         if (billType == null || billType.isBlank()) {
@@ -66,7 +69,7 @@ public class DispatchService {
             throw new BizException(ErrorCode.PARAM_INVALID, "未找到匹配的派单规则");
         }
 
-        // R5-D-201：派单幂等——同一 (bill_id, matched_rule_id) 已有任务即复用，不再重复落 dispatch_task
+        // R5-D-201：派单去重——同一 (bill_id, matched_rule_id) 已有任务即复用，不再重复落 dispatch_task
         //（改前每次调用都新插一行，重复点「发起派单/自动派单」得到多条任务，审核人收到重复工单；
         // 库级唯一键 uk_dispatch_task_bill_rule 属 DDL 变更，转人工在人工清单登记）
         DispatchTask existing = dispatchTaskMapper.selectOne(new LambdaQueryWrapper<DispatchTask>()
@@ -120,8 +123,8 @@ public class DispatchService {
 
             reviewerService.incrementPending(selected.getId());
 
-            // 不再发起 FM_DOC_FLOW 单据流转审批（流程清单瘦身 §六 X 类）：该流 0 实例、无终态收尾钩子，
-            // 派单本身的留痕由 dispatch_task + op_dispatch_log 承担。
+            // 不再发起 FM_DOC_FLOW 单据流转审批（流程清单瘦身 §六 X 类）：该流 0 实例、无最终状态收尾钩子，
+            // 派单本身的记录由 dispatch_task + op_dispatch_log 承担。
 
             log.info("自动派单完成: taskCode={}, reviewer={}, strategy={}",
                     task.getTaskCode(), selected.getReviewerName(), rule.getDispatchStrategy());

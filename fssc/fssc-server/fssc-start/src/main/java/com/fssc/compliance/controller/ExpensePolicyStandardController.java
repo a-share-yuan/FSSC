@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.controller;
 
 import com.fssc.common.core.Result;
@@ -25,8 +28,9 @@ public class ExpensePolicyStandardController {
     private final ExpensePolicyStandardService expensePolicyStandardService;
 
     /**
+     * 规则 B：按会计期间自动选当期生效的标准版本。
      *
-     * <p>同类系统的费用标准<b>没有 Version 表</b>——版本靠标准主表上的
+     * <p>费用标准<b>不单设 Version 表</b>——版本靠标准主表上的
      * {@code effective_date} 表达，查询时按期间取「当期已生效且最新」的一条。
      * 本库的 {@code expense_policy_standard} 已有 {@code effective_date}/{@code std_status} 两列，
      * 但缺「按期间选版本」的入口，导致手册 G7/POL 幕的「政策→标准→版本」第三层走不通。
@@ -58,7 +62,7 @@ public class ExpensePolicyStandardController {
             // std_status：1-启用 0-停用（Integer，不是字符串枚举）
             Integer st = s.getStdStatus();
             if (st != null && st == 0) {
-                continue;   // 停用版本不参与当期取数
+                continue;   // 停用版本不参与当期查询
             }
             java.time.LocalDate eff = s.getEffectiveDate();
             if (eff != null && eff.isAfter(end)) {
@@ -92,7 +96,7 @@ public class ExpensePolicyStandardController {
         return a.compareTo(b);
     }
 
-    /** 解析 yyyyMM / yyyy-MM 为该期间最后一天（通行口径：期间内已生效即适用）。 */
+    /** 解析 yyyyMM / yyyy-MM 为该期间最后一天（通行规则：期间内已生效即适用）。 */
     private static java.time.LocalDate parsePeriodEnd(String period) {
         String p = period.trim().replace("-", "");
         if (p.length() != 6) {

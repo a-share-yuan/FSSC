@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -19,8 +22,9 @@ import java.util.Locale;
 /**
  * 流程审批项解析与维护（wf_approval_item）——本表的唯一服务入口。
  *
- * 解析口径与 {@link WfNodeConfigResolver} 完全一致——{@code modelKey + nodeKey} <b>精确匹配</b>，
- * 匹配不到即返回空，<b>不做任何位置兜底</b>（历史教训：位置兜底曾把策略落到错误节点上造成越权）。
+ * <p>审批项：节点级自定义审批结果（正向/驳回/终止），可带目标节点。
+ * 解析规则与 {@link WfNodeConfigResolver} 完全一致——{@code modelKey + nodeKey} <b>精确匹配</b>，
+ * 匹配不到即返回空，<b>不做任何位置默认处理</b>（历史教训：位置默认处理曾把策略落到错误节点上造成越权）。
  *
  * <p><b>零影响</b>：未配置审批项的节点 {@link #listEnabled} 返回空列表、{@link #resolve} 返回 null，
  * 审批主链路完全不走审批项分支，行为与改造前逐字一致。
@@ -120,7 +124,7 @@ public class WfApprovalItemService {
 
     public void delete(Long id) {
         AssertUtil.notNull(id, ErrorCode.PARAM_INVALID, "审批项ID必填");
-        // 物理删除：软删后唯一键不释放，同一 model+node+code 就再也建不回来（与 wf_node_config 同口径）
+        // 物理删除：软删后唯一键不释放，同一 model+node+code 就再也建不回来（与 wf_node_config 同一规则）
         wfApprovalItemMapper.hardDelete(id);
     }
 

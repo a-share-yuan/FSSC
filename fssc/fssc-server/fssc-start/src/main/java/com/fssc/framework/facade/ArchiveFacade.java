@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.facade;
 
 import com.fssc.framework.facade.dto.ArchiveInfoDTO;
@@ -36,7 +39,7 @@ public interface ArchiveFacade {
     List<ArchiveInfoDTO> findByBillId(Long billId);
 
     /**
-     * 按审批流程实例反查档案（D-TRC-05 回溯列，非费用域联查唯一可用的档案锚点）。
+     * 按审批流程实例反查档案（D-TRC-05 回溯列，非费用域联查唯一可用的档案关联点）。
      *
      * @param procInstIds 本单据各轮审批的流程实例 ID
      * @return 档案 DTO 列表，按 ID 正序；入参为空时返回空列表
@@ -93,7 +96,7 @@ public interface ArchiveFacade {
      * D-DEC-443：带终审操作人的重载——引擎收尾线程无登录态，审批人只能由事件带回。
      * 默认回落两参行为（不写 approver_id），实现方覆盖后才落"谁批的"。
      *
-     * @param endOperUserId 审批终态最后操作人 userId；null＝系统代做/取不到，留空不猜
+     * @param endOperUserId 审批最终状态最后操作人 userId；null＝系统代做/取不到，留空不猜
      */
     default void handleBorrowApproval(Long accessLogId, boolean approved, Long endOperUserId) {
         handleBorrowApproval(accessLogId, approved);

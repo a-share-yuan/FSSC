@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -19,7 +22,7 @@
       <el-table-column prop="reportNo" :label="$t('gl.consolidate.colNo')" width="170" sortable />
       <el-table-column prop="period" :label="$t('gl.consolidate.colBelong')" width="90" sortable />
       <el-table-column :label="$t('gl.consolidate.colScope')" min-width="200" show-overflow-tooltip>
-        <!-- R5-D-150：公司 ID 串按 orgApi.companyTree 词表映射为公司名（取不到回落裸 ID，不造词） -->
+        <!-- R5-D-150：公司 ID 串按 orgApi.companyTree 名称表映射为公司名（取不到回落裸 ID，不造词） -->
         <template #default="{ row }">{{ companyRangeText(row) }}</template>
       </el-table-column>
       <el-table-column :label="$t('common.status')" width="100">
@@ -82,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { glexApi, orgApi } from '../../api'
@@ -163,7 +166,7 @@ async function doAdjust() {
   }
 }
 
-// R5-D-150：合并范围「公司 ID 串 → 公司名」映射（词表＝orgApi.companyTree 摊平，与 BankAccount/MasterDataTree 同机制；
+// R5-D-150：合并范围「公司 ID 串 → 公司名」映射（名称表＝orgApi.companyTree 摊平，与 BankAccount/MasterDataTree 同机制；
 // 取不到时回落裸 ID，不造词）
 const companyMap = ref({})
 async function loadCompanyMap() {
@@ -175,7 +178,7 @@ async function loadCompanyMap() {
       if (n.children?.length) walk(n.children)
     })
     walk(tree)
-  } catch (e) { /* 词表取不到时列回落裸 ID，不阻断底稿列表 */ }
+  } catch (e) { /* 名称表取不到时列回落裸 ID，不阻断底稿列表 */ }
 }
 function companyRangeText(row) {
   const raw = String(row?.companyIds ?? '').trim()

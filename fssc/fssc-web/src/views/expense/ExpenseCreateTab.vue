@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <el-card :header="$t('field.billType')">
@@ -319,7 +322,7 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 
-// 交通方式（2026-10-18 基础数据收口：字典定值域 + i18n 定文案）
+// 交通方式（2026-10-18 基础数据办结：字典定值域 + i18n 定文案）
 const trafficDict = useBaseDict('traffic_mode', TRAFFIC_LOCAL, TRAFFIC_I18N)
 const trafficOptions = trafficDict.options
 const { autofill, saveFormHistory } = useAutoFill()
@@ -337,8 +340,8 @@ function openTrace(row) {
 const emit = defineEmits(['saved', 'submitted'])
 const attachViewer = inject('attachViewer')
 
-// D-DEC-361：预填日期与后端落库时区对齐——toISOString() 是 UTC 串，东八区恒差 −8h、跨零点错成昨天，
-// 故按本地时钟取 YYYY-MM-DD（与 composables/useBill.js today() 同口径，不引日期库）。
+// D-DEC-361：预填日期与后端写入数据库时区对齐——toISOString() 是 UTC 串，东八区恒差 −8h、跨零点错成昨天，
+// 故按本地时钟取 YYYY-MM-DD（与 composables/useBill.js today() 同一规则，不引日期库）。
 function todayLocal() {
   const d = new Date()
   const p = (n) => String(n).padStart(2, '0')
@@ -392,7 +395,7 @@ function newTravel() {
 }
 function fmt(v) { return formatMoney(v, '0.00') }
 function recalcLine(row) {
-  // 价内税口径：含税金额 ÷ (1+税率) 反算不含税，税额 = 含税 − 不含税（与票面/税务口径一致，）
+  // 价内税规则：含税金额 ÷ (1+税率) 反算不含税，税额 = 含税 − 不含税（与票面/税务规则一致）
   const r = splitTaxInclusive(row.amount, row.taxRate)
   row.taxAmount = r.taxAmount
   row.netAmount = r.netAmount
@@ -400,7 +403,7 @@ function recalcLine(row) {
 function onItemChange(row, id) {
   const it = items.value.find((x) => x.id === id)
   row.itemName = it ? it.itemName : ''
-  // FINAL-01: 按费用类型自动带出映射的预算科目；手选过则不覆盖（主体口径见 utils/budget.js）
+  // FINAL-01: 按费用类型自动带出映射的预算科目；手选过则不覆盖（主体规则见 utils/budget.js）
   if (id != null && row.budgetItemId == null) {
     const bid = pickBudgetLine({
       pool: budgets.value, itemId: id, map: budgetMap.value,
@@ -417,7 +420,7 @@ function newInvoice() {
   return { uid: ++invoiceSeq, checked: false, lineRef: null, fileId: null, invoiceNo: '', invoiceDate: '', amount: 0, netAmount: 0, taxAmount: 0, taxRate: 0, sellerName: '', sellerTaxNo: '', invoiceType: '', primaryItemName: '', parsed: false, sourceName: '' }
 }
 function recalcInvoice(inc) {
-  // 与明细行同一价内税口径，避免"发票清单行 / 明细行"两套算法（）
+  // 与明细行同一价内税规则，避免"发票清单行 / 明细行"两套算法
   const r = splitTaxInclusive(inc.amount, inc.taxRate)
   inc.taxAmount = r.taxAmount
   inc.netAmount = r.netAmount
@@ -501,7 +504,7 @@ const budgetPreview = computed(() => {
     return {
       label: loaded ? budgetLabel(items.value, [], [], b0) : budgetUnseenLabel(bid),
       used: map[bid], available: loaded ? avail : null, over: loaded && map[bid] > avail, unknown: !loaded,
-      // D-DEC-372：控制方式随 pick 行带出，预览提示按档位改口（缺失按 HARD fail-closed，与服务端同口径）
+      // D-DEC-372：控制方式随 pick 行带出，预览提示按档位改口（缺失按 HARD fail-closed，与服务端同一规则）
       control: b0.controlType || 'HARD',
     }
   })
@@ -589,7 +592,7 @@ async function saveDraft() {
     form.bill.id = id
     if (currentType.value.travel && form.travels.length) await detailApi.saveTravels(id, form.travels)
     // D-V4R-42：无 exp:share:update 就不发这一跳（员工角色不在授权名册内 ⇒ 原先每次保存都红一发 4030、
-    // 分摊行零落库）。承担口径权威值在 exp_bill_line 各列上，分摊行至今无消费方（同 useBill.js 那条）。
+    // 分摊行零写入数据库）。承担规则权威值在 exp_bill_line 各列上，分摊行至今无消费方（同 useBill.js 那条）。
     if (form.shares.length && hasPerm('exp:share:update')) await detailApi.replaceShares(id, form.shares)
     for (const o of form.loanOffsets) await detailApi.addLoanOffset(id, { ...o, billId: id })
     for (const r of form.relations) await detailApi.addRelation(r.sourceBillId, id)
@@ -602,7 +605,7 @@ async function submit() {
   saveFormHistory('EXPENSE', form.value || form)
 
   try {
-    // 表头必填由 formRules + guard 统一收口；明细/差旅的逐行规则在表格内，el-form 覆盖不到，仍在此校验
+    // 表头必填由 formRules + guard 统一办结；明细/差旅的逐行规则在表格内，el-form 覆盖不到，仍在此校验
     await guard.submit(async () => {
       if (!form.lines.filter((l) => l.itemId || Number(l.amount || 0) > 0).length) { ElMessage.warning(t('expense.create.errNeedExpenseLine')); return }
       // P1-1 提交前逐行校验：金额必须大于 0
@@ -633,7 +636,7 @@ function resetForm() {
 
 async function openLoanDialog() {
   try {
-    // D-UI-03：改用候选面接口——availableBalance 已扣在途占用，与服务端放行闸同源
+    // D-UI-03：改用候选面接口——availableBalance 已扣在途占用，与服务端放行校验同源
     //  同 LoanApply.vue / useBill.js：新建单时 companyId 为空会序列化成字符串 "null"
     //   导致后端 400、await 抛错把下面的 loanDialog=true 一起吞掉（按钮点了没反应）。
     const lp = { limit: 50 }

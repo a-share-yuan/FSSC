@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.treasury.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -58,14 +61,14 @@ public class TreasuryPositionController {
 
     /**
      * 资金头寸日幕视图（越权读修复 R5-D-187，级别 高）。
-     * <p>授权闸：新增 {@code @RequiresPerm}。台账命名码为 {@code treasury:position:list}；本页面挂在
+     * <p>授权校验：新增 {@code @RequiresPerm}。台账命名码为 {@code treasury:position:list}；本页面挂在
      * 资金管理工作台菜单（sys_menu 3072，perms {@code treasury:fundplan:list,treasury:creditbill:list}）
      * 之下、前端未按页签单独设权，故采用全项目既有「多码 OR 迁移」写法（见 {@link RequiresPerm} javadoc
      * 与 SoDCheckController）：新码 treasury:position:list（随登记件播种）与工作台两个既有读码取并集放行，
-     * 避免"加闸未补授"期间合法用户 403。持有任一即通过；零权限账号无任何码 ⇒ 被闸拦下。</p>
+     * 避免"加校验未补授"期间合法用户 403。持有任一即通过；零权限账号无任何码 ⇒ 被校验拦下。</p>
      * <p>数据范围：本域读路径统一走 {@link OrgGuard#enforceCompany()}（同 TrFundPlanService.page、
-     * RcReceivableService.page 口径）——按调用者公司收口；集团级账号返回 null 不限（域内既有语义）。
-     * 三个子查询（账户 / 待付 / 应收）逐一收口，非仅首个；显式点名入参绝不放宽。</p>
+     * RcReceivableService.page 规则）——按调用者公司办结；集团级账号返回 null 不限（域内既有语义）。
+     * 三个子查询（账户 / 待付 / 应收）逐一办结，非仅首个；显式点名入参绝不放宽。</p>
      */
     @RequiresPerm({"treasury:position:list", "treasury:fundplan:list", "treasury:creditbill:list"})
     @OperLog(module = "TREASURY", operType = "QUERY", desc = "资金头寸查询")
@@ -81,7 +84,7 @@ public class TreasuryPositionController {
         }
         Long effScope = scopeC != null ? scopeC : companyId;
 
-        // 1) 各账户最近余额（md_bank_account 按调用者公司收口）
+        // 1) 各账户最近余额（md_bank_account 按调用者公司办结）
         List<MdBankAccount> accounts = bankAccountMapper.selectList(new LambdaQueryWrapper<MdBankAccount>()
                 .eq(MdBankAccount::getDelFlag, 0)
                 .eq(effScope != null, MdBankAccount::getCompanyId, effScope)
@@ -119,8 +122,8 @@ public class TreasuryPositionController {
         out.put("totalBalance", totalBalance);
 
         // 2) 待付流出：WAITING 付款记录（未组批 + 已组批未执行打款）
-        //    exp_bill_payment 无 company_id 列 ⇒ 以「付款账户所属公司」为锚：payAccountId 即
-        //    md_bank_account.id，故用已按公司收口出的 scopedAccountIds 限定；作用域内无账户时用
+        //    exp_bill_payment 无 company_id 列 ⇒ 以「付款账户所属公司」为关联：payAccountId 即
+        //    md_bank_account.id，故用已按公司办结出的 scopedAccountIds 限定；作用域内无账户时用
         //    DENY 哨兵（id=-1 恒不命中）fail-closed，避免退化成全租户口。集团级 effScope=null 不限。
         LambdaQueryWrapper<ExpBillPayment> payQw = new LambdaQueryWrapper<ExpBillPayment>()
                 .eq(ExpBillPayment::getPayStatus, "WAITING");
@@ -138,7 +141,7 @@ public class TreasuryPositionController {
         out.put("payableWaiting", payableWaiting);
         out.put("payableWaitingCount", waiting.size());
 
-        // 3) 应收未收：剩余余额合计（rc_receivable 按调用者公司收口）
+        // 3) 应收未收：剩余余额合计（rc_receivable 按调用者公司办结）
         List<RcReceivable> open = receivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .in(RcReceivable::getStatus, "NORMAL", "OVERDUE", "PARTIAL")
                 .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)

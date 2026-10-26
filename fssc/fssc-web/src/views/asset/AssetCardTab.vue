@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
@@ -59,7 +62,7 @@
           <el-button v-if="row.status !== 'SCRAP' && row.status !== 'CIP'" link size="small" type="primary" @click="openAdjustValue(row)">原值调整</el-button>
           <el-button v-if="row.status !== 'SCRAP' && row.status !== 'CIP'" link size="small" type="primary" @click="doImpair(row)">减值</el-button>
           <el-button link size="small" type="info" @click="showNet(row)">净值</el-button>
-          <!-- X-06（D-DEC-431）读取腿：变动台账此前只写不读，卡片页给一个消费者入口 -->
+          <!-- X-06（D-DEC-431）读取环节：变动台账此前只写不读，卡片页给一个消费者入口 -->
           <el-button link size="small" type="info" @click="openChangeLog(row)">变动台账</el-button>
         </template>
       </el-table-column>
@@ -81,7 +84,8 @@
         <el-col :span="12">
           <el-form-item label="资产类别" prop="categoryId">
             <el-select v-model="aForm.categoryId" filterable clearable placeholder="请选择资产类别" style="width:100%" @change="onCategoryChange">
-              <el-option v-for="c in categories" :key="c.id" :label="c.categoryName + (c.depreciationMonths ? '（默认' + c.depreciationMonths + '月）' : '')" :value="c.id" />
+              <!-- D-H5-01：下拉项前置类别编码（CAT01~CAT05），便于与类别主数据页、凭证摘要规则对号 -->
+              <el-option v-for="c in categories" :key="c.id" :label="(c.categoryCode ? c.categoryCode + ' ' : '') + c.categoryName + (c.depreciationMonths ? '（默认' + c.depreciationMonths + '月）' : '')" :value="c.id" />
             </el-select>
           </el-form-item>
         </el-col>
@@ -136,11 +140,11 @@
     <el-form ref="capitalFormRef" :model="capForm" :rules="capitalRules" label-width="130px" size="small">
       <el-form-item label="支出金额" prop="amount"><el-input-number v-model="capForm.amount" :min="0" :max="AMOUNT_MAX" :precision="2" style="width:100%" @blur="clampIn(capForm, 'amount', AMOUNT_MAX, '支出金额')" /></el-form-item>
       <el-form-item label="预算科目">
-        <!-- CER 预算集成：指定预算科目则发起即硬控、审批通过后占用；留空自动取综合预算兜底 -->
+        <!-- CER 预算集成：指定预算科目则发起即硬控、审批通过后占用；留空自动取综合预算默认处理 -->
         <el-select v-model="capForm.budgetItemId" filterable clearable placeholder="留空自动匹配综合预算" style="width:100%">
           <el-option v-for="bgt in budgetItems" :key="bgt.id" :label="`预算#${bgt.id}（总额 ${Number(bgt.totalAmount || 0).toLocaleString()}）`" :value="bgt.id" />
         </el-select>
-        <!-- D-DEC-426：空集/取数失败要看得见，不能只留一个空的下拉让人猜 -->
+        <!-- D-DEC-426：空集/查询失败要看得见，不能只留一个空的下拉让人猜 -->
         <div v-if="budgetItemsNotice" style="font-size:12px;color:#e6a23c;line-height:1.5">{{ budgetItemsNotice }}</div>
       </el-form-item>
       <el-form-item label="资产/项目名称" prop="assetName"><el-input v-model="capForm.assetName" placeholder="资本性支出对应资产或项目名称" /></el-form-item>
@@ -186,10 +190,10 @@
     </template>
   </el-dialog>
 
-  <!-- X-06（D-DEC-431）变动台账：原值调整/盘点差异的原因、前后镜像与审批终态（此前只写不读） -->
+  <!-- X-06（D-DEC-431）变动台账：原值调整/盘点差异的原因、前后镜像与审批最终状态（此前只写不读） -->
   <el-dialog v-model="dlgChangeLog" :title="`变动台账 - ${changeLogAssetName}`" width="920px" destroy-on-close>
     <el-table :data="changeLogs" size="small" max-height="380" v-loading="changeLogLoading"
-              empty-text="该资产暂无变动台账（原值调整/盘点差异审批发起后在此留痕）">
+              empty-text="该资产暂无变动台账（原值调整/盘点差异审批发起后在此记录）">
       <el-table-column prop="changeType" label="变动类型" width="100">
         <template #default="{ row }">{{ CHANGE_TYPE_LABEL[row.changeType] || row.changeType || '—' }}</template>
       </el-table-column>
@@ -217,7 +221,7 @@
     <template #footer><el-button @click="dlgChangeLog = false">关闭</el-button></template>
   </el-dialog>
 
-  <!-- 资产原值调整弹窗（X-06/D-DEC-431：原因改人工输入并随变动台账留痕，不再传硬编码兜底句） -->
+  <!-- 资产原值调整弹窗（X-06/D-DEC-431：原因改人工输入并随变动台账记录，不再传硬编码默认处理句） -->
   <el-dialog v-model="dlgAdjust" title="资产原值调整（提交审批）" width="480px" destroy-on-close>
     <el-form ref="adjustFormRef" :model="adjustForm" :rules="adjustRules" label-width="120px" size="small">
       <el-form-item label="调整资产">
@@ -326,7 +330,7 @@ import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 
-// 审批按钮归属门控（参考行业方案）：仅当该单据存在派给当前用户的待办任务时才显示，
+// 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 
@@ -367,7 +371,7 @@ const aForm = ref(emptyAsset())
 const cardReadonly = ref(false)
 
 // 数字框防呆：金额类上限 99,999,999,999、月数上限 600，失焦回读超限自动修正并提示
-// （自动化键入偶发串位 3000→300000，人工也可能误输多位；el-input-number 的 :max 在失焦时兜底截断）
+// （自动化键入偶发串位 3000→300000，人工也可能误输多位；el-input-number 的 :max 在失焦时默认处理截断）
 const AMOUNT_MAX = 99999999999
 const MONTHS_MAX = 600
 function clampIn(obj, key, max, label) {
@@ -381,7 +385,7 @@ function clampAmount(key, label) { clampIn(aForm.value, key, AMOUNT_MAX, label) 
 function clampMonths(key, label) { clampIn(aForm.value, key, MONTHS_MAX, label) }
 
 // S4 修复：选中资产类别后，按类别主数据(md_asset_category)的默认折旧参数级联带出折旧月数/残值，
-// 避免「类别主数据配了默认值却形同虚设、每张卡片都手填固定 60 个月」导致折旧口径不一致。
+// 避免「类别主数据配了默认值却形同虚设、每张卡片都手填固定 60 个月」导致折旧规则不一致。
 function onCategoryChange(id) {
   const c = (categories.value || []).find((x) => x.id === id)
   if (!c) return
@@ -420,7 +424,7 @@ const dlgTransfer = ref(false)
 const transferRow = ref({})
 const transferForm = ref({ targetDeptId: null, targetCompanyId: null, remark: '' })
 
-// X-06（D-DEC-431）：原值调整改弹窗——原因必须由人工填写（旧版传死值 '前端原值调整'，落库后与真实成因无关）
+// X-06（D-DEC-431）：原值调整改弹窗——原因必须由人工填写（旧版传死值 '前端原值调整'，写入数据库后与真实成因无关）
 const dlgAdjust = ref(false)
 const adjustRow = ref({})
 const adjustForm = ref({ newOriginalAmount: '', reason: '' })
@@ -429,7 +433,7 @@ const dlgCipToAsset = ref(false)
 const cipRow = ref({})
 const cipForm = ref({ transferDate: '', remark: '' })
 
-// 表单校验规则：登记表（useFormRules）为唯一口径，页面不再本地手写规则对象
+// 表单校验规则：登记表（useFormRules）为唯一规则，页面不再本地手写规则对象
 const assetFormRef = ref(null)
 const capitalFormRef = ref(null)
 const transferFormRef = ref(null)
@@ -456,7 +460,7 @@ async function loadAssets() {
 }
 
 /**
- * 资产建档 / 查看 / 编辑（）共用的弹窗入口。
+ * 资产建档 / 查看 / 编辑共用的弹窗入口。
  * - 不传 row：新增（空表单）；
  * - 传 row：先 assetApi.detail 回填卡片数据再开弹窗（原「查看」打开空白表单的缺陷在此修复），
  *  edit=true 仅为语义区分（行内「编辑」按钮），保存时按 aForm.id 自动走 assetApi.update。
@@ -536,12 +540,12 @@ async function doDisposeSell(row) {
 }
 async function doCheckDiff(row) {
   try {
-    // D-DEC-432 乙案：本审批只作差异确认——通过腿不产生结转凭证，账面在总账域结转前分文不动。
-    // 原症状＝单据 APPROVED＋留痕在册却呈现"差异已处理"，语义与账实脱节⇒把口径如实写进发起提示。
+    // D-DEC-432 乙案：本审批只作差异确认——通过环节不产生结转凭证，账面在总账域结转前分文不动。
+    // 原症状＝单据 APPROVED＋记录现有却呈现"差异已处理"，语义与账实脱节⇒把规则如实写进发起提示。
     const { value: diffAmount } = await ElMessageBox.prompt('输入盘点差异金额（正=盘盈/负=盘亏）。注意：本审批仅为差异确认，通过后不自动生成结转凭证，账面不变；差异结转须在总账域另起「盘点差异结转」做账，请在提交前知会总账岗。', '盘点差异处理（提交审批）', { confirmButtonText: '下一步', cancelButtonText: '取消', inputPattern: /^-?\d+(\.\d+)?$/, inputErrorMessage: '请输入金额' })
     // X-06（D-DEC-431）：差异说明改人工输入。旧版直接传死值 '盘点差异'，而后端 checkDiff 又把该形参整个丢弃
-    // ⇒ 差异成因从来没有载体；现说明随变动台账落库，故必须先有内容才放行。
-    const { value: remark } = await ElMessageBox.prompt('填写差异说明（盘盈/盘亏成因，随变动台账留痕，事后追溯看这一句）', '盘点差异说明', { confirmButtonText: '提交审批', cancelButtonText: '取消', inputValidator: (v) => (v && v.trim() ? true : '请填写差异说明') })
+    // ⇒ 差异成因从来没有载体；现说明随变动台账写入数据库，故必须先有内容才放行。
+    const { value: remark } = await ElMessageBox.prompt('填写差异说明（盘盈/盘亏成因，随变动台账记录，事后追溯看这一句）', '盘点差异说明', { confirmButtonText: '提交审批', cancelButtonText: '取消', inputValidator: (v) => (v && v.trim() ? true : '请填写差异说明') })
     await assetApi.checkDiff(row.id, Number(diffAmount), remark.trim())
     ElMessage.success('盘点差异已提交审批；审批通过仅为差异确认，结转凭证需在总账域另行制单（盘点差异结转）'); loadAssets()
   } catch (e) {
@@ -577,7 +581,7 @@ async function doImpair(row) {
 }
 async function showNet(row) { try { const nv = await assetApi.netValue(row.id); ElMessage.info('资产净值：' + fmt(nv)) } catch (e) { ElMessage.error(e.message) } }
 
-// X-06（D-DEC-431）读取腿：变动台账此前"只写不读"，卡片页补一个消费者
+// X-06（D-DEC-431）读取环节：变动台账此前"只写不读"，卡片页补一个消费者
 const CHANGE_TYPE_LABEL = { VALUE_ADJUST: '原值调整', CHECK_DIFF: '盘点差异', IMPAIR: '减值', DISPOSE: '处置', TRANSFER: '调拨' }
 const CHANGE_METHOD_LABEL = { WF: '审批流变动', DIRECT: '直接变动' }
 const dlgChangeLog = ref(false)
@@ -615,9 +619,9 @@ async function saveCapital() {
 // 注入 dept_id = 登录人部门，而现库 bg_item 9 行有 8 行 dept_id 为 NULL（预算按公司下达、未按部门拆），
 // 于是 DEPT 档员工（现库正证＝剧本岗 3872：company_id=1／dept_id=1019／多角色 min(data_scope)=4）恒命中 0 行，
 // "显式指定预算科目"这条自助通道只剩非部门档的外岗可用（同一接口对 SELF 档降级本公司后回 9 行）⇒ 下拉内容随角色而变。
-// 改走 D-DEC-042 已收口的引用选择口径 mdApi.budgets（/tenant/budget/item/pick＝按公司放行＋跨公司依旧隔离），
+// 改走 D-DEC-042 已办结的引用选择规则 mdApi.budgets（/tenant/budget/item/pick＝按公司放行＋跨公司依旧隔离），
 // 与 useBill.js:344/378、ExpenseCreateTab.vue:497 三处同源，避免另立第二处真值。
-// 空集/取数失败不再静默置空：把成因就地写进字段下方提示（留空仍走系统兜底，不编造科目行）。
+// 空集/查询失败不再静默置空：把成因就地写进字段下方提示（留空仍走系统默认处理，不编造科目行）。
 const budgetItems = ref([])
 const budgetItemsNotice = ref('')
 async function loadBudgetItems() {
@@ -631,7 +635,7 @@ async function loadBudgetItems() {
     }
   } catch (e) {
     budgetItems.value = []
-    budgetItemsNotice.value = '预算科目取数失败：' + (e?.message || '未知原因') + '；留空将由系统默认选取预算线'
+    budgetItemsNotice.value = '预算科目加载失败：' + (e?.message || '未知原因') + '；留空将由系统默认选取预算线'
   }
 }
 

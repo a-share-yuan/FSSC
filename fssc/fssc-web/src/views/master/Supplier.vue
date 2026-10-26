@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="supplier-page">
     <el-card shadow="never">
@@ -22,7 +25,7 @@
             <el-table-column label="状态" width="70" align="center">
               <template #default="{ row }">
                 <el-tag v-if="row.status === 'PENDING'" size="small" type="warning">未核准</el-tag>
-                <el-tag v-else size="small" :type="row.status === 'NORMAL' ? 'success' : 'info'">{{ row.status === 'NORMAL' ? '启用' : '停用' }}</el-tag>
+                <el-tag v-else size="small" :type="isSupplierActive(row.status) ? 'success' : 'info'">{{ isSupplierActive(row.status) ? '启用' : '停用' }}</el-tag>
                 <el-tag v-if="row.blacklist === 1" size="small" type="danger" style="margin-left:2px">黑</el-tag>
               </template>
             </el-table-column>
@@ -46,7 +49,7 @@
           <div class="panel-header">
             <span class="panel-title">供应商档案{{ current.supplierName ? ' · ' + current.supplierName : '' }}</span>
             <div>
-              <el-button v-if="current.id" v-permission="'md:supplier:update'" size="small" type="warning" @click="toggleEnable">{{ current.status === 'NORMAL' ? '停用' : '启用' }}</el-button>
+              <el-button v-if="current.id" v-permission="'md:supplier:update'" size="small" type="warning" @click="toggleEnable">{{ isSupplierActive(current.status) ? '停用' : '启用' }}</el-button>
               <el-button v-permission="['md:supplier:create', 'md:supplier:update']" type="primary" size="small" :loading="saving" @click="saveBasic">{{ current.id ? '保存资料' : '创建供应商' }}</el-button>
             </div>
           </div>
@@ -215,6 +218,7 @@
 <script setup>
 /**
  * 供应商专属档案页(41号审查 P1-8 主数据深化第一批)
+ * 基本信息 + 银行账户(N) + 联系人(N) + 资质证照(N) 多 Tab 档案,
  * 替代原 MasterConfigTable 3 列通用表;证照临期/过期自动预警着色。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -360,8 +364,11 @@ async function saveBasic() {
   } catch (e) { ElMessage.error(e.message) } finally { saving.value = false }
 }
 
+// 历史种子/审批写入过 ACTIVE，新建与停用写 NORMAL/DISABLED；ACTIVE 与 NORMAL 同为启用态
+const isSupplierActive = (s) => s === 'NORMAL' || s === 'ACTIVE'
+
 async function toggleEnable() {
-  const enable = current.value.status !== 'NORMAL'
+  const enable = !isSupplierActive(current.value.status)
   await supplierApi.enable(current.value.id, enable)
   ElMessage.success(enable ? '已启用' : '已停用')
   await load()

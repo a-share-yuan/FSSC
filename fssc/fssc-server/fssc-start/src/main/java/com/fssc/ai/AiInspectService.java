@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -24,12 +27,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 常驻巡检规则（AI 平权 P5"可组织"）：自然语言→规则落库，job 按频率复跑，
+ * 常驻巡检规则（AI 平权 P5"可组织"）：自然语言→规则写入数据库，job 按频率复跑，
  * 命中即产生"待确认队列"条目——低风险自动读、高风险写进队列等人确认（§5-P5 判据）。
  *
  * <p>刻意复用的既有件：
  * <ul>
- *   <li>读动作走 {@link AiAskService} 同一目录口径（只 read∧aiAllowed∧LOW 可做巡检源）；</li>
+ *   <li>读动作走 {@link AiAskService} 同一目录规则（只 read∧aiAllowed∧LOW 可做巡检源）；</li>
  *   <li>待确认条目直接落 {@code ai_action_confirm}（人侧队列 UI/确认接口零新增）；</li>
  *   <li>调度线程无租户上下文 ⇒ {@code TenantContext.callAs} 逐租户回灌（WfTimeoutJob 同款纪律，
  *       2026-09-22 现网教训：漏了会整批 fail-closed 抛错）。</li>
@@ -196,7 +199,7 @@ public class AiInspectService {
         ruleMapper.updateById(r);
     }
 
-    /** 双日志原则：AI 自发的每次读取也要在 ai_tool_call_log 留痕（审计不看调用方是人还是 job）。 */
+    /** 双日志原则：AI 自发的每次读取也要在 ai_tool_call_log 记录（审计不看调用方是人还是 job）。 */
     private void logToolCall(AiInspectRule r, LoginUser owner, String traceId, long t0, int status, String err, String detail) {
         try {
             AiAction a = catalog.byCode(r.getActionCode());

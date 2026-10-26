@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_PAY_PLAN_PLATE" targetNamespace="http://fssc">
+  <bpmn:process id="PAY_PLAN_PLATE" name="板块采购付款计划审批流程" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:userTask id="Task_1" name="付款计划编制【采购经理】" flowable:candidateGroups="PURCHASE_MANAGER" />
+    <bpmn:parallelGateway id="Pg_2" />
+    <bpmn:userTask id="Task_2_0" name="多部门并行会签【项目经理】" flowable:candidateGroups="PROJECT_MANAGER" />
+    <bpmn:userTask id="Task_2_1" name="多部门并行会签【费用承担部门负责人】" flowable:candidateGroups="PROJECT_MANAGER" />
+    <bpmn:userTask id="Task_2_2" name="多部门并行会签【资金岗】" flowable:candidateGroups="FUND_STAFF" />
+    <bpmn:userTask id="Task_2_3" name="多部门并行会签【板块财务经理】" flowable:candidateGroups="PLATE_FIN_MANAGER" />
+    <bpmn:userTask id="Task_2_4" name="多部门并行会签【采购经理】" flowable:candidateGroups="PURCHASE_MANAGER" />
+    <bpmn:parallelGateway id="Jg_2" />
+    <bpmn:userTask id="Task_3" name="采购总监审核【采购总监】" flowable:candidateGroups="PURCHASE_DIRECTOR" />
+    <bpmn:userTask id="Task_4" name="副总裁审批(分管生产外包)【副总裁】" flowable:candidateGroups="VP" />
+    <bpmn:userTask id="Task_5" name="板块财务总监审批【板块财务总监】" flowable:candidateGroups="FIN_DIRECTOR" />
+    <bpmn:userTask id="Task_6" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
+    <bpmn:userTask id="Task_7" name="各项目项目经理确认【项目经理/费用承担部门负责人】" flowable:candidateGroups="PROJECT_MANAGER" />
+    <bpmn:userTask id="Task_8" name="项目总监审核【项目经理/费用承担部门负责人】" flowable:candidateGroups="PROJECT_MANAGER" />
+    <bpmn:userTask id="Task_9" name="副总裁审批(分管项目)【副总裁】" flowable:candidateGroups="VP" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1" />
+    <bpmn:sequenceFlow id="Flow_2_p" sourceRef="Task_1" targetRef="Pg_2" />
+    <bpmn:sequenceFlow id="Flow_2_p0" sourceRef="Pg_2" targetRef="Task_2_0" />
+    <bpmn:sequenceFlow id="Flow_2_j0" sourceRef="Task_2_0" targetRef="Jg_2" />
+    <bpmn:sequenceFlow id="Flow_2_p1" sourceRef="Pg_2" targetRef="Task_2_1" />
+    <bpmn:sequenceFlow id="Flow_2_j1" sourceRef="Task_2_1" targetRef="Jg_2" />
+    <bpmn:sequenceFlow id="Flow_2_p2" sourceRef="Pg_2" targetRef="Task_2_2" />
+    <bpmn:sequenceFlow id="Flow_2_j2" sourceRef="Task_2_2" targetRef="Jg_2" />
+    <bpmn:sequenceFlow id="Flow_2_p3" sourceRef="Pg_2" targetRef="Task_2_3" />
+    <bpmn:sequenceFlow id="Flow_2_j3" sourceRef="Task_2_3" targetRef="Jg_2" />
+    <bpmn:sequenceFlow id="Flow_2_p4" sourceRef="Pg_2" targetRef="Task_2_4" />
+    <bpmn:sequenceFlow id="Flow_2_j4" sourceRef="Task_2_4" targetRef="Jg_2" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Jg_2" targetRef="Task_3" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_3" targetRef="Task_4" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Task_4" targetRef="Task_5" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_5" targetRef="Task_6" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Task_6" targetRef="Task_7" />
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Task_7" targetRef="Task_8" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Task_8" targetRef="Task_9" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="Task_9" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="PAY_PLAN_PLATE">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1"><dc:Bounds x="210.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Pg_2_di" bpmnElement="Pg_2"><dc:Bounds x="400.0" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_2_0_di" bpmnElement="Task_2_0"><dc:Bounds x="470.0" y="20.0" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_2_1_di" bpmnElement="Task_2_1"><dc:Bounds x="470.0" y="130.0" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_2_2_di" bpmnElement="Task_2_2"><dc:Bounds x="470.0" y="240.0" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_2_3_di" bpmnElement="Task_2_3"><dc:Bounds x="470.0" y="350.0" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_2_4_di" bpmnElement="Task_2_4"><dc:Bounds x="470.0" y="460.0" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Jg_2_di" bpmnElement="Jg_2"><dc:Bounds x="660.0" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3"><dc:Bounds x="700.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4"><dc:Bounds x="890.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_5_di" bpmnElement="Task_5"><dc:Bounds x="1080.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_6_di" bpmnElement="Task_6"><dc:Bounds x="1270.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_7_di" bpmnElement="Task_7"><dc:Bounds x="1460.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_8_di" bpmnElement="Task_8"><dc:Bounds x="1650.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_9_di" bpmnElement="Task_9"><dc:Bounds x="1840.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="2030.0" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="156.0" y="120" /><di:waypoint x="275.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_p_di" bpmnElement="Flow_2_p"><di:waypoint x="340.0" y="120" /><di:waypoint x="420.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_p0_di" bpmnElement="Flow_2_p0"><di:waypoint x="420.0" y="120" /><di:waypoint x="470.0" y="60.0" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_j0_di" bpmnElement="Flow_2_j0"><di:waypoint x="600.0" y="60.0" /><di:waypoint x="680.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_p1_di" bpmnElement="Flow_2_p1"><di:waypoint x="420.0" y="120" /><di:waypoint x="470.0" y="170.0" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_j1_di" bpmnElement="Flow_2_j1"><di:waypoint x="600.0" y="170.0" /><di:waypoint x="680.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_p2_di" bpmnElement="Flow_2_p2"><di:waypoint x="420.0" y="120" /><di:waypoint x="470.0" y="280.0" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_j2_di" bpmnElement="Flow_2_j2"><di:waypoint x="600.0" y="280.0" /><di:waypoint x="680.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_p3_di" bpmnElement="Flow_2_p3"><di:waypoint x="420.0" y="120" /><di:waypoint x="470.0" y="390.0" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_j3_di" bpmnElement="Flow_2_j3"><di:waypoint x="600.0" y="390.0" /><di:waypoint x="680.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_p4_di" bpmnElement="Flow_2_p4"><di:waypoint x="420.0" y="120" /><di:waypoint x="470.0" y="500.0" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_j4_di" bpmnElement="Flow_2_j4"><di:waypoint x="600.0" y="500.0" /><di:waypoint x="680.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="700.0" y="120" /><di:waypoint x="765.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4"><di:waypoint x="830.0" y="120" /><di:waypoint x="955.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5"><di:waypoint x="1020.0" y="120" /><di:waypoint x="1145.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6"><di:waypoint x="1210.0" y="120" /><di:waypoint x="1335.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_7_di" bpmnElement="Flow_7"><di:waypoint x="1400.0" y="120" /><di:waypoint x="1525.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_8_di" bpmnElement="Flow_8"><di:waypoint x="1590.0" y="120" /><di:waypoint x="1715.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_9_di" bpmnElement="Flow_9"><di:waypoint x="1780.0" y="120" /><di:waypoint x="1905.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="1970.0" y="120" /><di:waypoint x="2030.0" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

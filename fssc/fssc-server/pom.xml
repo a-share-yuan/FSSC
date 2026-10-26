@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -98,7 +101,7 @@
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
                     <configuration>
-                        <!-- JDK 26 运行兜底：放开原生访问与模块反射（仅本机开发用） -->
+                        <!-- JDK 26 运行默认处理：放开原生访问与模块反射（仅本机开发用） -->
                         <jvmArguments>
                             --enable-native-access=ALL-UNNAMED
                             --add-opens java.base/java.lang=ALL-UNNAMED

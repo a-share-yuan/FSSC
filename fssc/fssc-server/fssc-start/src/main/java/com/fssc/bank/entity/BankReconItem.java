@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.bank.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -10,7 +13,7 @@ import java.time.LocalDate;
 
 /**
  * 银企未达账差异明细（bank_recon_item，带 tenant_id）。
- * 由未达账项调节表生成落库留痕，衔接 TR05 余额调节表。
+ * 由未达账项调节表生成写入数据库记录，衔接 TR05 余额调节表。
  * item_type：BANK_IN 银行已收企业未收 / BANK_OUT 银行已付企业未付 /
  *            ENT_OUT 企业已付银行未付 / ENT_IN 企业已收银行未收(预留)。
  */

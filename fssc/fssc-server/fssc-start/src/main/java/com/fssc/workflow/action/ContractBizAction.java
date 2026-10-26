@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.contract.entity.ContContract;
@@ -23,7 +26,7 @@ public class ContractBizAction implements WfBizAction {
 
     private final ContContractMapper contContractMapper;
     private final VoucherService voucherService;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -41,9 +44,9 @@ public class ContractBizAction implements WfBizAction {
             return;
         }
         try {
-            // D-DEC-329（X-09 乙·流程收尾腿）：这张单若已由「手工直批腿」给出结论（EFFECTIVE 已生效／CLOSED 已关闭），
-            // 收尾一律不回写、不出证。两条审批链并存是现状（乙案＝不归一、各补互斥闸）：直批位有 fail-closed
-            // 在途闸（ContractService.assertNotInFlow），但反向只能靠本判据——否则流程的撤回/驳回事件会把
+            // D-DEC-329（X-09 乙·流程收尾环节）：这张单若已由「手工直批环节」给出结论（EFFECTIVE 已生效／CLOSED 已关闭），
+            // 收尾一律不回写、不出证。两条审批链并存是现状（乙案＝不归一、各补互斥校验）：直批位有 fail-closed
+            // 在途校验（ContractService.assertNotInFlow），但反向只能靠本判据——否则流程的撤回/驳回事件会把
             // "已生效并冻结了预算、已出过凭证"的合同改写回 APPROVED/REJECTED，并再出一张同号合同凭证。
             String concluded = contract.getStatus();
             if ("EFFECTIVE".equals(concluded) || "CLOSED".equals(concluded)) {

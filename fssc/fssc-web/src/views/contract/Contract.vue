@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <div class="page-header" style="margin-bottom: 16px;">
@@ -8,7 +11,7 @@
       <el-input v-model="kw" placeholder="搜索合同号/名称/乙方" style="width: 240px" @keyup.enter="load" />
       <el-button type="primary" size="small" @click="load">查询</el-button>
       <el-button size="small" @click="kw = ''; load()">重置</el-button>
-      <el-button type="info" size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button type="info" size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
       <el-button type="info" size="small" @click="downloadTemplate">导出导入模板</el-button>
       <el-button type="success" size="small" @click="importVis = true">导入历史合同</el-button>
@@ -41,7 +44,7 @@
         <!-- D-BIZ-07：合同提交即发起 CONTRACT 流程（ContractService.submit 尾行 wfEngineFacade.start），
              审批中的合同必有在途任务，而 ContractService.approve 首行 assertNotInFlow 一律拒绝直批，
              故这里的【通过】【驳回】对任何账号都是「点了必失败」的误导入口（后端拦、数据不变）。
-             办理入口只有 流程中心›我的待办（或 #/approval）。原「模块状态机直批」的注释口径已不成立。 -->
+             办理入口只有 流程中心›我的待办（或 #/approval）。原「模块状态机直批」的注释规则已不成立。 -->
         <template #default="{ row }">
           <InlineActions :visible="true" @view="openDetail(row)" :show-trace="true" @trace="openTrace(row)"
             :show-approve="false" :show-reject="false" />
@@ -291,7 +294,7 @@ const { autofill, saveFormHistory } = useAutoFill()
 const formRef = ref(null)
 const guard = useSubmitGuard(formRef)
 const { rules: baseRules } = useFormRules('CONTRACT')
-// 合同总额只在「固定金额」合同下必填，与后端 ContractService.create 同口径
+// 合同总额只在「固定金额」合同下必填，与后端 ContractService.create 同一规则
 const formRules = computed(() => ({
   ...baseRules.value,
   amount: [{
@@ -315,7 +318,7 @@ const condDialog = ref(false)
 const condForm = reactive({ payNode: '', payAmount: 0, planDate: '', remark: '' })
 const recDialog = ref(false)
 const recForm = reactive({ payAmount: 0, settleQty: 0, unitPrice: 0, billNo: '', billType: 'PAY', payDate: '', status: 'PAID' })
-// 第2批：付款条件/支付记录弹窗接入中央框架（原只有 toast 式必填，无格式/必填双闸）
+// 第2批：付款条件/支付记录弹窗接入中央框架（原只有 toast 式必填，无格式/必填双校验）
 const condFormRef = ref(null)
 const recFormRef = ref(null)
 const condRules = {
@@ -432,7 +435,8 @@ const totalPct = computed(() => {
 
 function stType(s) { return STATUS_TYPE[s] || 'info' }
 function contractTypeLabel(t) {
-  return { PURCHASE: '采购', SALE: '销售', SERVICE: '服务', FRAMEWORK: '框架' }[t] || t || ''
+  // 库内现值是 SALES（132 行），本地名称表误写成 SALE ⇒ 销售合同全部直接显示英文 SALES；保留 SALE 兼容旧数据
+  return { PURCHASE: '采购', SALE: '销售', SALES: '销售', SERVICE: '服务', FRAMEWORK: '框架' }[t] || t || ''
 }
 function contractStatusLabel(s) { return STATUS_LABEL[s] || s || '' }
 function payRecStatusLabel(s) {

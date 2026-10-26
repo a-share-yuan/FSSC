@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -22,6 +25,7 @@ import java.util.Map;
 
 /**
  * 流程处理详细日志（{@code /api/tenant/wf/process-log/**}）——管理中心「流程日志」视图，
+ * 流程配置参数 4.3「勾选后流程处理详细日志写 log 与流程日志（管理中心可查）」。
  *
  * <p><b>权限码选择</b>：日志属流程管理中心的诊断视图，与 {@code /wf/perf}（效率聚合）同档，
  * 复用 {@code wf:instance:list}（已授予管理侧角色），<b>不新造</b> {@code wf:log:*}——
@@ -68,7 +72,7 @@ public class WfProcessLogController {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("cfgKey", WfProcessLogService.CFG_KEY_DETAILED);
         m.put("enabled", processLogService.enabled());
-        m.put("hint", "关闭（缺省）时流程处理详细日志一行不落库；勾选后立即生效（无需重启）。"
+        m.put("hint", "关闭（缺省）时流程处理详细日志一行也不保存；勾选后立即生效（无需重启）。"
                 + "开关值存于参数表 sys_config，本接口只读。");
         return Result.success(m);
     }

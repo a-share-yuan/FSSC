@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,8 +24,8 @@ import java.util.UUID;
 
 /**
  * AR服务申请单服务（蓝图附件二，10类统一状态机 + 附件四/五默认值）。
- * EKP审批→待派工（多人派组长，蓝图5.2）→审单→EBS过账（凭证号返回）→完成；
- * 校验：对冲≤应收未清余额、借贷平衡、调整额≤原应收余额、收入暂估不走EKP。
+ * OA审批→待派工（多人派组长，蓝图5.2）→审单→ERP过账（凭证号返回）→完成；
+ * 校验：对冲≤应收未清余额、借贷平衡、调整额≤原应收余额、收入暂估不走OA。
  */
 @Slf4j
 @Service
@@ -38,15 +41,15 @@ public class ArClaimService {
     private final com.fssc.arflow.service.ArFlowVoucherService voucherService;
     private final com.fssc.workflow.service.WfEngineFacade wfEngineFacade;
 
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
-    /** Flowable 首节点审批人兜底（无 Web 上下文的系统调用才落到平台管理员；见 currentOperator） */
+    /** Flowable 首节点审批人默认处理（无 Web 上下文的系统调用才落到平台管理员；见 currentOperator） */
     private static final Long FLOW_APPROVER_ID = 1L;
 
     /**
      * MF5-07：审计记录真实登录用户。
-     * 发起/EKP代审批的操作人一律取当前登录用户；仅无 Web 上下文（定时/系统任务）才兜底平台管理员。
+     * 发起/OA代审批的操作人一律取当前登录用户；仅无 Web 上下文（定时/系统任务）才默认处理平台管理员。
      */
     private static Long currentOperator() {
         com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
@@ -65,7 +68,7 @@ public class ArClaimService {
             throw new BizException(ErrorCode.PARAM_INVALID, "申请金额必须大于0");
         }
         if (ArClaim.T_REVENUE_EST.equals(c.getClaimType()) && c.getEkpNo() != null) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "收入暂估不走EKP，共享手动填单");
+            throw new BizException(ErrorCode.PARAM_INVALID, "收入暂估不走OA审批，共享手动填单");
         }
         if (ArClaim.T_CLAIM_OUT.equals(c.getClaimType()) && c.getCostAmount() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "向客户索赔必须录入成本金额（成本会计填写）");
@@ -80,7 +83,7 @@ public class ArClaimService {
         }
         sanitizeText(c); // SEC-02: 中和自由文本中的脚本载荷（渲染层 Vue 转义为主防线，本层纵深）
         applyDefaults(c);
-        // 初始状态：不走EKP的类型（收入暂估/其它业务对冲/汇票贴息/停车费等其它业务收入）直接待派工
+        // 初始状态：不走OA的类型（收入暂估/其它业务对冲/汇票贴息/停车费等其它业务收入）直接待派工
         boolean noEkp = ArClaim.T_REVENUE_EST.equals(c.getClaimType())
                 || ArClaim.T_OTHER_OFFSET.equals(c.getClaimType())
                 || ArClaim.T_NOTE_DISCOUNT.equals(c.getClaimType())
@@ -88,11 +91,11 @@ public class ArClaimService {
                         && (c.getRemark().contains("停车费") || c.getRemark().contains("三代税返还")));
         c.setStatus(noEkp ? ArClaim.ST_PENDING_DISPATCH : ArClaim.ST_EKP_REVIEW);
         mapper.insert(c);
-        // 蓝图5.2 自动派工（同类系统任务池/行业方案派工规则范式）：免EKP类型创建即按客户十位码路由
+        // 蓝图5.2 自动派工：免OA类型创建即按客户十位码路由
         if (noEkp) {
             arDispatchService.autoAssignClaim(c);
         }
-        // 补强：EKP 类型接入 Flowable 审批（FSSC 无外部 EKP，由内部审批中心承接）
+        // 补强：OA 类型接入 Flowable 审批（FSSC 无外部 OA，由内部审批中心承接）
         if (ArClaim.ST_EKP_REVIEW.equals(c.getStatus())) {
             try {
                 // MF5-07：流程发起记录真实创建者（不再是常量平台管理员）
@@ -115,29 +118,29 @@ public class ArClaimService {
         return c;
     }
 
-    /** EKP审批通过：完成当前节点（审计记真实点击者）；流程全部结束才自动派工，否则留审批中心继续。 */
+    /** OA审批通过：完成当前节点（审计记真实点击者）；流程全部结束才自动派工，否则留审批中心继续。 */
     @Transactional(rollbackFor = Exception.class)
     public ArClaim ekpApprove(Long id) {
         ArClaim c = require(id);
-        requireStatus(c, ArClaim.ST_EKP_REVIEW, "EKP审批");
+        requireStatus(c, ArClaim.ST_EKP_REVIEW, "OA审批");
         if (c.getProcInstId() != null && !c.getProcInstId().isBlank()) {
             // MF5-07：审计记录真实点击者（不再是常量平台管理员）
             Long operator = currentOperator();
-            // MF5-08：EKP 桥接只代办点击者有权办理的节点；下一节点属于其它角色（如财务经理）
+            // MF5-08：OA 桥接只代办点击者有权办理的节点；下一节点属于其它角色（如财务经理）
             // 时停止越权代办，交由该角色在审批中心办理 —— 杜绝 node2 无 UI 完成路径的僵尸任务。
             int guard = 0;
             while (wfEngineFacade.hasActiveTask("AR_CLAIM", id) && guard < 20) {
                 try {
-                    wfEngineFacade.completeByBill("AR_CLAIM", id, true, "EKP审批通过(代)", operator);
+                    wfEngineFacade.completeByBill("AR_CLAIM", id, true, "OA审批通过(代)", operator);
                     guard++;
                 } catch (BizException ex) {
-                    log.info("[arflow] 单据 {} EKP桥接在角色边界停止，后续节点交审批中心: {}",
+                    log.info("[arflow] 单据 {} OA桥接在角色边界停止，后续节点交审批中心: {}",
                             c.getBillNo(), ex.getMessage());
                     break;
                 }
             }
             if (guard >= 20) {
-                log.error("[arflow] 单据 {} EKP桥接循环超过 20 轮仍有活动任务，中止（疑似流程定义异常）", c.getBillNo());
+                log.error("[arflow] 单据 {} OA桥接循环超过 20 轮仍有活动任务，中止（疑似流程定义异常）", c.getBillNo());
             }
         } else {
             // 降级路径：无流程实例（发起失败的历史单）直接过渡
@@ -149,7 +152,7 @@ public class ArClaimService {
             java.util.Map<String, Object> auditDegradeAfter = new java.util.LinkedHashMap<>();
             auditDegradeAfter.put("status", c.getStatus());
             auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
-                    String.valueOf(c.getId()), auditDegradeBefore, auditDegradeAfter, "EKP审批通过（无流程实例降级过渡）");
+                    String.valueOf(c.getId()), auditDegradeBefore, auditDegradeAfter, "OA审批通过（无流程实例降级过渡）");
             arDispatchService.autoAssignClaim(c);
             mapper.updateById(c);
         }
@@ -170,7 +173,7 @@ public class ArClaimService {
         java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
         auditAfter.put("status", fresh.getStatus());
         auditTrailService.recordUpdate("AR_CLAIM", fresh.getId(), fresh.getBillNo(), "ar_claim",
-                String.valueOf(fresh.getId()), auditBefore, auditAfter, "EKP审批通过自动派工");
+                String.valueOf(fresh.getId()), auditBefore, auditAfter, "OA审批通过自动派工");
         return fresh;
     }
 
@@ -198,7 +201,7 @@ public class ArClaimService {
         return c;
     }
 
-    /** 审单通过（联动EBS过账）。 */
+    /** 审单通过（联动ERP过账）。 */
     @Transactional(rollbackFor = Exception.class)
     public ArClaim review(Long id) {
         ArClaim c = require(id);
@@ -206,10 +209,10 @@ public class ArClaimService {
         return post(c);
     }
 
-    /** EBS过账：对冲≤应收余额/借贷平衡/调整额≤原应收余额强校验 + 凭证号返回。 */
+    /** ERP过账：对冲≤应收余额/借贷平衡/调整额≤原应收余额强校验 + 凭证号返回。 */
     @Transactional(rollbackFor = Exception.class)
     public ArClaim post(ArClaim c) {
-        requireStatus(c, ArClaim.ST_DISPATCHED, "EBS过账");
+        requireStatus(c, ArClaim.ST_DISPATCHED, "外部财务系统过账");
         if (ArClaim.T_OTHER_OFFSET.equals(c.getClaimType())) {
             BigDecimal debit = c.getDebitAmount() == null ? BigDecimal.ZERO : c.getDebitAmount();
             BigDecimal credit = c.getCreditAmount() == null ? BigDecimal.ZERO : c.getCreditAmount();
@@ -229,7 +232,7 @@ public class ArClaimService {
         String voucherNo;
         if (ArClaim.T_OTHER_OFFSET.equals(c.getClaimType())
                 && c.getLinesJson() != null && c.getLinesJson().trim().startsWith("[")) {
-            // 其它业务对冲 Excel 引入的多行分录 → 多借多贷凭证（同类系统范式）
+            // 其它业务对冲 Excel 引入的多行分录 → 多借多贷凭证
             voucherNo = voucherService.generateClaimMultiLineVoucher(c);
         } else {
             voucherNo = voucherService.generateClaimVoucher(c);
@@ -250,7 +253,7 @@ public class ArClaimService {
         auditAfter.put("status", c.getStatus());
         auditAfter.put("voucherNo", c.getVoucherNo());
         auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
-                String.valueOf(c.getId()), auditBefore, auditAfter, "EBS过账");
+                String.valueOf(c.getId()), auditBefore, auditAfter, "外部财务系统过账");
         return c;
     }
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.controller;
 
 import com.fssc.arflow.entity.ArClaim;
@@ -204,10 +207,10 @@ public class ArFlowController {
         return Result.success(offsetExcelService.importAndCreate(file, reason));
     }
 
-    // ---------------- AR接口2/4：EBS 推送 ----------------
+    // ---------------- AR接口2/4：ERP 推送 ----------------
 
     /** 接口2 财务调整数据推送：body {adjustNo, customerCode, adjustType, amount, taxAmount, ebsVoucherNo, statementNo}，关联异常对账单自动重核 */
-    @OperLog(module = "AR_FLOW", operType = "ADD", desc = "EBS财务调整推送")
+    @OperLog(module = "AR_FLOW", operType = "ADD", desc = "外部财务系统财务调整推送")
     @RequiresPerm("arflow:billing:manage")
     @PostMapping("/ebs-adjustments")
     public Result<com.fssc.arflow.entity.ArEbsAdjust> pushAdjust(@RequestBody Map<String, Object> body) {
@@ -220,7 +223,7 @@ public class ArFlowController {
     }
 
     /** 接口4 负数发票推送：body {ebsCreditMemoNo, preInvoiceNo|invoiceNo}，置红字前置待补通知单号 */
-    @OperLog(module = "AR_FLOW", operType = "ADD", desc = "EBS负数发票推送")
+    @OperLog(module = "AR_FLOW", operType = "ADD", desc = "外部财务系统负数发票推送")
     @RequiresPerm("arflow:billing:manage")
     @PostMapping("/red-invoices/push")
     public Result<ArPreInvoice> pushRedInvoice(@RequestBody Map<String, Object> body) {

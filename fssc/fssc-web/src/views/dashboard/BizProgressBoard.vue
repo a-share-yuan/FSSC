@@ -1,8 +1,11 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="biz-board">
     <div class="board-head">
       <div class="board-title">业务实时进度看板</div>
-      <div class="board-note">「－」表示该指标暂无取数范围，不代表业务量为零；点击卡片进入对应业务页。</div>
+      <div class="board-note">「－」表示该指标暂无统计范围，不代表业务量为零；点击卡片进入对应业务页。</div>
     </div>
     <div class="biz-grid">
       <div v-for="biz in bizList" :key="biz.type" class="biz-card" @click="drillDown(biz)">
@@ -44,10 +47,10 @@ const router = useRouter()
 const trendRefs = ref([])
 
 /**
- * D-DEC-303：本卡区此前有两个问题——① 未取数的槽位与"取到 0"显示成同一个 0，观感＝系统没数据；
+ * D-DEC-303：本卡区此前有两个问题——① 未查询的槽位与"取到 0"显示成同一个 0，观感＝系统没数据；
  * ② 全页无权限门控，无 dashboard:view / exp:bill:list 的角色进来会连弹两次「缺少权限」，
  * 而后端的 code=4030 在页面上又伪装成「暂无数据」。现改为：null＝未接通（显示「－」＋原因），
- * 数字＝真实取数结果；取数失败与无权都落到卡片脚注，不再弹全局错误。
+ * 数字＝真实查询结果；查询失败与无权都落到卡片脚注，不再弹全局错误。
  */
 function card(type, name, route, routePerm, note) {
   return { type, name, route, routePerm, note, stats: { inTransit: null, done: null, timeout: null } }
@@ -77,7 +80,7 @@ function showStat(v) {
 async function loadBillType(type, billType, label) {
   const biz = of(type)
   if (!hasAnyPerm([biz.routePerm].flat())) {
-    biz.note = '当前账号没有该业务数据的查看权限，未取数'
+    biz.note = '当前账号没有该业务数据的查看权限，未加载'
     return
   }
   try {
@@ -85,7 +88,7 @@ async function loadBillType(type, billType, label) {
     biz.stats.inTransit = Number(page?.total ?? 0)
     biz.note = `在途＝我的${label}在办单量；${NO_TODAY}`
   } catch (e) {
-    biz.note = `在途取数失败：${e?.message || '接口异常'}`
+    biz.note = `在途加载失败：${e?.message || '接口异常'}`
   }
 }
 
@@ -93,7 +96,7 @@ async function loadBillType(type, billType, label) {
 async function loadPay() {
   const biz = of('PAY')
   if (!hasAnyPerm(['dashboard:view'])) {
-    biz.note = '缺少 dashboard:view 权限，未取数'
+    biz.note = '缺少 dashboard:view 权限，无法加载'
     return
   }
   try {
@@ -101,18 +104,18 @@ async function loadPay() {
     biz.stats.inTransit = Number(p?.waitingCnt ?? 0)
     biz.note = `在途＝待付记录（全租户）${p?.waitingCnt ?? 0} 笔，累计已付 ${p?.paidCnt ?? 0} 笔；${NO_TODAY}`
   } catch (e) {
-    biz.note = `付款进度取数失败：${e?.message || '接口异常'}`
+    biz.note = `付款进度加载失败：${e?.message || '接口异常'}`
   }
 }
 
 /**
- * WS-4：通用进度卡取数（在途/今日完成/超时）。timeout 为 null ⇒ 前端显「－」（该域无超时汇总口径）；
- * 门控 dashboard:view（与付款进度卡同尺），取数失败/无权都落到卡片脚注，不弹全局错误。
+ * WS-4：通用进度卡查询（在途/今日完成/超时）。timeout 为 null ⇒ 前端显「－」（该域无超时汇总方式）；
+ * 门控 dashboard:view（与付款进度卡同尺），查询失败/无权都落到卡片脚注，不弹全局错误。
  */
 async function loadProgress(type, fetcher, noteText) {
   const biz = of(type)
   if (!hasAnyPerm(['dashboard:view'])) {
-    biz.note = '缺少 dashboard:view 权限，未取数'
+    biz.note = '缺少 dashboard:view 权限，无法加载'
     return
   }
   try {
@@ -122,7 +125,7 @@ async function loadProgress(type, fetcher, noteText) {
     biz.stats.timeout = d?.timeout === null || d?.timeout === undefined ? null : Number(d.timeout)
     biz.note = noteText
   } catch (e) {
-    biz.note = `进度取数失败：${e?.message || '接口异常'}`
+    biz.note = `进度加载失败：${e?.message || '接口异常'}`
   }
 }
 
@@ -132,7 +135,7 @@ async function fetchStats() {
   await loadBillType('LOAN', 'LOAN', '借款')
   await loadProgress('CONTRACT', dashApi.contractProgress, '在途＝审批中合同；今日完成＝今日生效；超时＝已过合同止期仍未关闭')
   await loadProgress('INVOICE', dashApi.invoiceProgress, '在途＝待核验发票；今日完成＝今日核验通过；超时＝核验失败待处理')
-  await loadProgress('ARCHIVE', dashApi.archiveProgress, '在途＝待归档/归档中；今日完成＝今日归档；超时无汇总口径')
+  await loadProgress('ARCHIVE', dashApi.archiveProgress, '在途＝待归档/归档中；今日完成＝今日归档；超时项不单独汇总')
   renderMiniTrends()
 }
 

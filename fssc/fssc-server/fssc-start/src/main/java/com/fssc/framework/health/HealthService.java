@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.health;
 
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +20,7 @@ import java.util.Map;
 /**
  * 健康探测服务（P0-B1）。
  *
- * <p>供两处复用，保证「探活口径」唯一：
+ * <p>供两处复用，保证「探活规则」唯一：
  * <ul>
  *   <li>{@link HealthController} —— 免鉴权 HTTP 探活（/api/health）；</li>
  *   <li>{@link HealthProbeJob} —— 定时探测并在状态翻转时推运维告警。</li>
@@ -25,7 +28,7 @@ import java.util.Map;
  *
  * <p>探测项：数据库连通性（必需）、Redis（仅 {@code fssc.redis.enabled=true} 时纳入，
  * 关闭时标记 DISABLED 而非 DOWN，避免单机部署被误判不健康）。
- * 任一必需项不可用 → 总状态 DOWN，HTTP 层据此返回非 0 code，便于探针判定。
+ * 任一必需项不可用 → 总状态 DOWN，HTTP 层据此返回非 0 code，便于检查判定。
  *
  * <p>本类不做任何需要租户上下文的查询：JdbcTemplate 绕过 MyBatis 拦截器，天然无租户依赖，
  * 可在白名单（无 Token）场景安全调用。
@@ -34,7 +37,7 @@ import java.util.Map;
 @Service
 public class HealthService {
 
-    /** DB 探测超时（秒）：探活必须快速返回，不能因 DB 卡住拖垮探针 */
+    /** DB 探测超时（秒）：探活必须快速返回，不能因 DB 卡住拖垮检查 */
     private static final int DB_TIMEOUT_SECONDS = 3;
 
     /** 磁盘可用空间低于该值（GB）判定 DOWN：写日志/写临时文件都会失败 */
@@ -87,7 +90,7 @@ public class HealthService {
         return r;
     }
 
-    /** 总状态是否 UP（供探针与告警判定，避免调用方解析 Map） */
+    /** 总状态是否 UP（供检查与告警判定，避免调用方解析 Map） */
     public boolean isUp() {
         return "UP".equals(check().get("status"));
     }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -43,9 +46,9 @@ public class CurrencyController {
      *   共 12 个业务页面 40 处，是**业务录入的必填字段**而非管理功能 ——
      *   若必须先授"币种管理权"才能填单，等于把主数据管理权限当成录入前置条件，权限模型不成立。
      *
-     * 三道闸门（与 builtin 字典通道同规格，缺一不可）：
+     * 三道校验（与 builtin 字典通道同规格，缺一不可）：
      *   ① **仍需登录**：本端点不在 JwtAuthFilter 的 WHITE_LIST 内，未携带 token 一律 401；
-     *   ② **仅启用且未删**：status=NORMAL 且 del_flag=0，停用/已删币种不外露（与 /page 口径一致，
+     *   ② **仅启用且未删**：status=NORMAL 且 del_flag=0，停用/已删币种不外露（与 /page 规则一致，
      *      避免"下拉能选、提交被拒"）；
      *   ③ **只读 + 字段最小化**：无任何写方法；只返回下拉必需的展示字段，
      *      **不返回** remark / 审计列 / createBy 等管理字段，也不返回整行实体

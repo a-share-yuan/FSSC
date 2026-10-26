@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <!-- ============ 冲销预付款（对公结算） ============ -->
   <el-card :header="$t('pay.offset.cardTitle')" style="margin-top: 12px">

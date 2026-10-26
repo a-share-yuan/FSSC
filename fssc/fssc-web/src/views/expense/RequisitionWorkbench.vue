@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div :class="['requisition-workbench', { tabless: isSingle }]">
     <!-- 场景卡片入口 -->
@@ -325,7 +328,7 @@ async function loadDashboard() {
   } catch (e) { /* ignore */ }
 }
 
-// 加载我的单据：全类型（后端 MyDocumentService 按 BillRouteRegistry 逐表取数归并）。
+// 加载我的单据：全类型（后端 MyDocumentService 按 BillRouteRegistry 逐表查询归并）。
 // 旧 /my-bills 只查 exp_bill 一表，合同/采购/预算/总账的驳回单在列表里根本看不见（D-CON-01）。
 async function loadMine() {
   mine.loading = true
@@ -350,7 +353,7 @@ const unsupportedText = computed(() => (mine.unsupported || []).map((u) => {
   return codes.length ? codes.join('、') : String(u.label || u.table || '')
 }).filter(Boolean).join('、'))
 
-// 下拉口径由后端给（＝注册表可按人检索的表），table: 前缀＝一表多类型只能按表筛；选项只显中文，英文码不上界面
+// 下拉规则由后端给（＝注册表可按人检索的表），table: 前缀＝一表多类型只能按表筛；选项只显中文，英文码不上界面
 const typeOptions = computed(() => (mine.types || []).map((t) => {
   const label = t.label || docTypeLabel(t.bizType) || t.bizType
   return { value: t.bizType, label }

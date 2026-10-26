@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.platform.service;
 
 import com.fssc.framework.tenant.TenantContext;
@@ -42,7 +45,7 @@ public class PlatformHealthService {
             // ---------- 今日操作量（跨租户 sys_oper_log 今日计数） ----------
             result.put("todayOperCount", count("select count(*) from sys_oper_log where date(oper_time) = curdate()"));
 
-            // ---------- 运行中流程实例（wf_instance status=RUNNING，等价 ACT_RU_EXECUTION 在途口径） ----------
+            // ---------- 运行中流程实例（wf_instance status=RUNNING，等价 ACT_RU_EXECUTION 在途规则） ----------
             result.put("runningInstances", count("select count(*) from wf_instance where status = 'RUNNING'"));
 
             // ---------- 近 7 天每日：活跃租户数 + 单据增量（bill_count 日快照做差） ----------

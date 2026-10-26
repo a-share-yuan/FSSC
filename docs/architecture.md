@@ -1,65 +1,142 @@
-# 系统架构（architecture）
+# 架构总览
 
-> 本文回答「请求是怎么进来的、经过哪几层、最后落到哪个库」。要找「某个功能改哪」，去看 [`module-map.md`](module-map.md)；要查表/写 SQL，去看 [`data-model.md`](data-model.md)。
+> **校准状态**：分层、依赖版本、配置装配、包职责从 `pom.xml` / `application*.yml` / 源码目录实测得出；「请求生命周期」中的过滤链与拦截器行为以读码为准（细节锚点见 `docs/permissions.md`）。**运行时行为未经压测验证。**
 
-## 1. 分层
+## 1. 一张图看全貌
+
+```mermaid
+flowchart TB
+  subgraph 客户端
+    PC[PC 浏览器<br/>Vue3 SPA :8080]
+    H5[移动报销端<br/>views/h5]
+    THIRD[第三方系统<br/>外部协同/ERP 回调]
+    AGENT[AI 代理<br/>/api/ai/gateway]
+  end
+
+  subgraph 后端进程["fssc-server.jar :8089（单进程，33 个业务域）"]
+    direction TB
+    FILTER[JwtAuthFilter<br/>自研过滤链·白名单探活]
+    TEN[租户上下文<br/>framework/tenant]
+    PERM["@RequiresPerm 切面<br/>149 个文件在用"]
+    LOGX["@OperLog 切面<br/>操作留痕"]
+    CTRL[160 个 @RestController<br/>1,257 个端点]
+    FACADE[framework/facade<br/>跨域门面 11 类]
+    SVC[191 个 Service]
+    SPI[framework/spi<br/>DistributedState 可插拔]
+    MP[MyBatis-Plus<br/>244 Mapper + 租户拦截器]
+    DS[双数据源路由<br/>@FsscDataSource + AOP]
+  end
+
+  DB1[(MySQL fssc<br/>业务表 + ACT_*/FLW_*)]
+  DB2[(MySQL fssc_image<br/>影像 5+1 表)]
+  FLOW[Flowable 8 引擎<br/>流程实例/定时器/异步作业]
+  RDS[(Redis 可选<br/>多实例缓存/限流/调度锁)]
+  GW[发票能力网关 :8096<br/>外部·闭源]
+  OCR[PaddleOCR :8087<br/>外部·可选]
+  BANK[银企直联<br/>默认 mock 实现]
+  MSG[通知渠道<br/>站内信/企微 webhook/SMTP]
+
+  PC & H5 -->|/api 反代| FILTER
+  THIRD & AGENT --> FILTER
+  FILTER --> TEN --> PERM --> LOGX --> CTRL --> FACADE --> SVC
+  SVC --> FLOW
+  SVC --> MP --> DS --> DB1
+  DS --> DB2
+  SVC --> SPI -.-> RDS
+  SVC --> GW & OCR & BANK & MSG
+```
+
+## 2. Maven 结构（以及一个容易搞错的点）
 
 ```
-浏览器 (Vue3 SPA, :8080)
-   │  Vite dev 代理 /api → :8089
-   ▼
-JwtAuthFilter（自研，Spring MVC 拦截器，无独立网关进程）
-   │  解析 JWT → 写入租户上下文 TenantContext + 当前用户
-   ▼
-多租户拦截器（JSqlParser 改写 SQL，注入 tenant_id 条件）
-   │
-   ▼
-@RequiresPerm / @RequiresFeature 鉴权（perms ∩ 套餐 features）
-   │
-   ▼
-Controller → Service → Mapper（MyBatis-Plus，拦截器保证租户条件）
-   │
-   ├─ 普通业务表 → 主库 fssc
-   └─ 影像/发票识别表（带 @FsscDataSource("image")）→ 影像库 fssc_image
-   ▼
-统一返回 {code, msg, data}（分页键固定为 list）
-流程类操作会经 Flowable 引擎（BPMN 模型在 bpmn-repo/）
+fssc-server/            pom.xml，packaging=pom（聚合器，不产出 jar、不编译自己的 src/）
+├── fssc-common/        15 文件 / 824 行  —— 跨模块共享的常量、工具、通用返回体
+└── fssc-start/         1007 文件 / 131,428 行 —— 全部业务代码 + 启动类 + 配置 + 打包
+    └── target/fssc-server.jar   （finalName 固定为 fssc-server）
 ```
 
-- **接入层**：`fssc-web`（Vue3 + Vite，`dist36` 为产物目录）。生产可前置 Nginx。
-- **应用层**：Spring Boot 4.1，33 个业务域，包结构 `com/fssc/<域>/{controller,service,mapper,entity,dto,vo}`。
-- **持久层**：MyBatis-Plus 3.5.15 + Flowable 8.0.0（BPMN）；**双数据源**——主库 `fssc` 与影像库 `fssc_image`（靠 `@FsscDataSource("image")` 路由）。
-- **调度**：单机用 MySQL `GET_LOCK`；多实例可插拔 Redis（`framework/spi/DistributedState`）。
+>  **`fssc-server/src/main/java` 是个空壳目录，不参与构建**。曾有过代码住在那里的历史阶段，现在全部在 `fssc-start`。搜索代码时如果命中 `fssc-server/src/...`，那份是失效副本。
 
-## 2. 请求生命周期（逐跳）
+**依赖版本（集中管控在父 pom `<properties>`）**
 
-1. 浏览器请求经 Vite 代理打到 `:8089`；
-2. `JwtAuthFilter` 解析 JWT，写入租户上下文与当前用户（**URL 第二段 `/api/tenant|platform` 决定鉴权域**）；
-3. 多租户拦截器用 JSqlParser 改写 SQL，自动追加 `tenant_id` 条件；
-4. `@RequiresPerm`（多码为 OR）/ `@RequiresFeature` 做功能鉴权；
-5. Controller → Service → Mapper，MP 拦截器保证租户条件不被绕过；
-6. 标注 `@FsscDataSource("image")` 的 Mapper 才打到 `fssc_image`，否则全走主库；
-7. 统一 `{code, msg, data}` 返回，分页数据键是 **`list`**（不是 `records`/`items`）；
-8. 流程类接口（提交/审批/加签/驳回）最终落到 Flowable 引擎，BPMN 定义来自 `bpmn-repo/`。
+| 依赖 | 版本 | 用途 |
+|---|---|---|
+| Spring Boot | 4.1.0 | Web / 配置 / Actuator。**注意 Boot 4 的配置键名与 3.x 不兼容** |
+| Flowable | 8.0.0 | BPMN 流程引擎（`flowable-spring-boot-starter-process`） |
+| MyBatis-Plus | 3.5.15 | ORM + 分页 + 多租户拦截（`mybatis-plus-jsqlparser`） |
+| jjwt | 0.12.6 | JWT 签发与验签 |
+| Lombok | 1.18.46 | 样板代码消除 |
+| commons-lang3 | 3.17.0 | 工具 |
+| springdoc-openapi | 3.1.0 | `/v3/api-docs` + Swagger UI，按 `tenant`/`platform` 分组 |
+| JDK | **26**（`maven.compiler.release=26`） | 构建要求，`info.app.java: 17` 是过时展示字段 |
 
-## 3. 多租户隔离（重点，易出跨租户泄漏）
+## 3. 一个请求的完整生命周期
 
-- 模型：**shared-DB shared-Schema**，`tenant_id` 由拦截器自动重写，**不要**在业务 SQL 里手拼租户条件（绕过 MP 拦截器的写法是跨租户泄漏）。
-- 验证铁律：任何查询层改动（`@Select`/`@Insert` 注解 SQL、直连 `JdbcTemplate`）都必须自证租户条件生效。本项目**没有 Mapper XML**，SQL 只有注解与 Java 两种形态。
-- 详见 [`permissions.md`](permissions.md) 与 [`data-model.md`](data-model.md) 的列名坑清单。
+```
+浏览器 POST /api/tenant/expense/bill/submit
+  ↓ Vite dev server 反代 → 127.0.0.1:8089
+  ① JwtAuthFilter        白名单（/api/auth、/api/health、/actuator/health*）放行；
+                         其余解析 Authorization: Bearer → 验签 → 装入上下文
+  ② 租户上下文建立        tenant_id 进入 ThreadLocal（framework/tenant）
+  ③ @RequiresPerm 切面   比对权限点（ 多码语义是 OR：命中任一即放行）
+  ④ @OperLog 切面        记录操作留痕到 sys_oper_log（GET 也会记）
+  ⑤ Controller           参数校验（spring-boot-starter-validation）→ 组装返回
+  ⑥ Facade / Service     业务编排；跨域调用走 framework/facade，不直连他人 Controller
+  ⑦ Flowable RuntimeService / TaskService   （仅审批相关接口）
+  ⑧ MyBatis-Plus 拦截器  自动注入 WHERE tenant_id = ?  ← 多租户隔离的真正落点
+  ⑨ 数据源 AOP           默认 master；@FsscDataSource("image") 切 fssc_image
+  ⑩ HikariCP → MySQL
+  ⑪ 统一返回体 {code, msg, data}；分页对象的数据键是 list
+```
 
-## 4. 双库路由
+**理解这 11 步，就理解了本项目的 80% 行为异常。** 例如"空列表"既可能是真没数据，也可能是第 ③ 步返回了 `code=4030`；"跨租户看到别人数据"几乎必然出在第 ⑧ 步被绕过（原生 SQL / `@InterceptorIgnore`）。
 
-- 主库 `fssc`：业务表（316 张）+ 视图。
-- 影像库 `fssc_image`：影像/发票识别相关 6 张表。
-- 路由判据：**`@FsscDataSource("image")` 注解**。漏注会打到主库报「表不存在」。
+## 4. 横切机制清单
 
-## 5. 构建产物
+| 机制 | 位置 | 说明 |
+|---|---|---|
+| **多租户隔离** | `framework/tenant/`（7 文件）+ MyBatis-Plus 拦截器 | 平台与租户**共库**，靠 `tenant_id` 列隔离，不是独立 schema。这是本项目最重要的安全边界 |
+| **鉴权** | `framework/security/`（19 文件） | 自研过滤链，非 Spring Security。token 内含权限清单（因此有 8KB 头部膨胀问题，见 `server.max-http-request-header-size: 64KB`） |
+| **跨域门面** | `framework/facade/`（11 文件） | 域之间协作的唯一入口，也是找"某业务到底谁在调它"的最佳索引 |
+| **分布式状态 SPI** | `framework/spi/`（`DistributedState`） | `fssc.redis.enabled=false` → 进程内实现 + MySQL `GET_LOCK` 调度锁；`true` → 缓存/限流/锁全走 Redis。主数据缓存、登录防刷计数、定时任务锁都经这一个接口 |
+| **脱敏** | `framework/mask/`（7 文件） | 证件号/账号等展示层掩码，落库与出参口径不同 |
+| **配置装配** | `framework/config/`（9 文件） | 含双数据源 `DataSourceConfig`（它一声明 bean，Boot 的 `DataSourceAutoConfiguration` 就退避） |
+| **操作留痕** | `@OperLog` + `sys_oper_log` | 排查"谁干了什么"的第一站。注意：`@OperLog.desc` 不直接落表，检索要靠 `title` / `oper_url` |
+| **优雅停机** | `server.shutdown=graceful` + `timeout-per-shutdown-phase=30s` | 滚动发布时在途请求不被硬切；K8s/脚本停机统一走 SIGTERM |
+| **编号规则** | `sys_number_rule` / `sys_number_seq` | 单据号生成（并发下靠序列表 + 行锁）。 撤回/作废会产生"号已占但单不存"的间隙，属设计 |
+| **流程历史留存** | `fssc.wf.history-retention-months: 6` | 每周日 03:00 清 `ACT_HI_*`；**业务台账 `wf_*` 不清** |
+| **Outbox** | `wf_process_outbox` | 流程事件的外发表，避免"事务提交但下游没收到" |
 
-- 后端：`fssc/fssc-start/target/fssc-server.jar`（Spring Boot repackage 胖包）。
-- 前端：`fssc/fssc-web/dist36/`（Vite 产物目录是 `dist36`，不是 `dist`）。
-- 本仓库**只发源码**：`package.json` 保持 `"private": true`，不发布 npm 包、不提供托管 demo。
+## 5. 扩展点（本项目最适合被二次开发的地方）
 
-## 6. 为什么配置项「读进来不一定生效」
+| SPI | 位置 | 内置实现 | 接自己的东西 |
+|---|---|---|---|
+| **OCR 通道** | `image/channel/`（13 文件） | `gateway`（外部发票网关）· `mock`（确定性模拟，离线演示）· `http`（通用 HTTP，配 `sys_config` 的 `ocr.api.url/token/mapping` 即可接任意外部 OCR 服务，**免改代码、免重启**）· `paddle`（本地微服务） | 新增一个 Provider 实现 + `ocr.channel` 切换 |
+| **银企直联** | `bank/` | `DefaultBankGateway`（模拟）· `HttpBankGateway`（需自行完成） | 实现接口 + `fssc.bank.gateway` 切换 |
+| **通知渠道** | `collab/` | 站内信（始终开）· 企微 webhook · SMTP（host 为空即禁用） | 加渠道实现 |
+| **分布式状态** | `framework/spi/` | `LocalDistributedState` · `RedisDistributedState` | 换 Zookeeper/etcd 等 |
+| **合规规则 / 派工规则** | `compliance/`、`op_dispatch_rule`、`ar_dispatch_rule`、`ap_dispatch_rule` | 规则表 + 引擎 | 加规则而不改码 |
 
-本项目历史上出现过「配置键被读取但无分支真正使用」的伪配置。涉及配置项的改动，先搜该键的读取点、顺藤摸瓜确认是否有分支消费它；相关结论标注在 [`workflow-engine.md`](workflow-engine.md) 的能力矩阵里。
+## 6. 前端架构要点
+
+- **路由即菜单**：`src/router.js` + `router/` 共 17 个定义文件，`views/` 下 134 个 `.vue`。菜单可见性同时受后端 `sys_menu` 驱动（历史上做过"菜单后端化"改造）。
+- **请求层单点**：`src/request.js`（axios 拦截器）统一处理 `{code,msg,data}`、401 跳登录、4030 缺权提示。**这里就是"403 被渲染成空表"问题的修法落点。**
+- **权限指令**：`src/directives/`。前端隐藏按钮 ≠ 后端放行。
+- **枚举显示层**：`src/constants/`。历史上曾因"枚举中文写在 JS 里"导致列表显示英文原值，改动时注意后端 `source` 值与展示值的映射。
+- **流程设计器**：`bpmn-js` 16 + `@bpmn-io/properties-panel`，后端对应 `/api/tenant/wf/designer`。
+- **构建产物目录**当前在 `vite.config.js` 里硬编码为 `dist36`，且 `emptyOutDir:false` —— 这是施工历史遗留，发布前应改回 `dist` 并开启清空。
+- **测试**：vitest 3 + jsdom + `@vue/test-utils`（`npm run test` / `test:coverage`）。
+
+## 7. 可观测性与部署
+
+- **Actuator**：暴露 `health,info,metrics,prometheus`；`env/beans/configprops/heapdump/threaddump/shutdown` **不暴露**（固定，别放开）。`/actuator/health*` 免鉴权给探针，`metrics/prometheus` 需 token。
+- 两个健康指示器被显式关闭（`redis`、`mail`），否则单机部署 health 恒 DOWN —— 原因见 `docs/getting-started.md` 第 4 节。
+- **K8s**：`docker/k8s-fssc.yaml` = Deployment（2 副本，滚动 `maxUnavailable:0`）+ Service + liveness/readiness 探针 + 资源限额（req 2C/4Gi，lim 4C/8Gi）+ `prometheus.io/scrape` 注解 + Secret 注入两个必填口令。
+- **Dockerfile**：`eclipse-temurin:26-jre-alpine`，非 root 用户 `fssc` 运行，`-Xms4g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200` + OOM 时 heapdump 并退出。
+  >  **曾经的缺陷已修**（2026-10-07 07:40）：`fssc/docker/Dockerfile:8` 原先 `COPY` 的是 `fssc-start-1.0.0.jar`，与 pom `finalName=fssc-server` 产出的 `fssc-server.jar` 不一致，照现状 `docker build` 必失败；现已对上，同批补了此前缺失的 `fssc/.dockerignore`（构建上下文里的 `target/` 实测 4.5 G）。 **仍未实跑过 `docker build`**（本机无 docker CLI），且基础镜像 `eclipse-temurin:26-jre-alpine`（`Dockerfile:4`）钉在非 LTS 且已过支持期的 JDK 26 上——降低线的判词见 `docs/release-checklist.md` §8 第 ⑥ 项。
+- **监控栈**：`monitor/`（`prometheus.yml` + alerts）。
+- **日志**：MyBatis dev profile 打开 `StdOutImpl`，**SQL 与业务参数会进标准输出**；日志目录是相对路径，随启动 cwd 搬家。生产务必收敛该日志级别。
+
+## 8. 设计决策记录（ADR）
+
+大型项目最缺"为什么"。本仓库用 `docs/adr/` 补齐关键决策，目前应有待写的清单见该目录 README。**每条 ADR 只回答三件事：当时面临什么约束、选了哪条路、放弃了什么以及代价。**

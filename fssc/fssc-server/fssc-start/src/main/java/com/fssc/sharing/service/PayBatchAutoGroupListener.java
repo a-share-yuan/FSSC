@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.fssc.framework.facade.event.BillTerminalEvent;
@@ -18,8 +21,8 @@ import java.util.Set;
  *  <li>D-DEC-099（12-23:58）：组批挂在出纳页加载（{@code Pay.vue} 的 {@code load()} 里调 autoGroup），
  *      且该接口要求 {@code pay:batch:create} 权限——出纳（3259/3264）按治理定案<strong>不授</strong>该权限，
  *      于是"打开付款页才组批"这条链在真实权限模型下根本不成立，付款条目长期无人产出批次。</li>
- *  <li>D-DEC-084（12-22:76）：审批通过后付款行未进任何批次，出纳无入口（原判"取数未覆盖 PAY/SETTLE"
- *      已被 12-23:58 更正——取数口径本身是通的，卡点是触发点错位＋权限门槛）。</li>
+ *  <li>D-DEC-084（12-22:76）：审批通过后付款行未进任何批次，出纳无入口（原判"查询未覆盖 PAY/SETTLE"
+ *      已被 12-23:58 更正——查询范围本身是通的，卡点是触发点错位＋权限门槛）。</li>
  * </ul>
  *
  * <p><b>本类做的（代码半）</b>：单据审批通过（{@link BillTerminalEvent}，status=APPROVED）后按本单名下
@@ -27,11 +30,11 @@ import java.util.Set;
  * 组批不再依赖 {@code pay:batch:create}。
  *
  * <p><b>本类不做的（需人工裁决）</b>：权限补授（CASHIER 不给 {@code pay:batch:create} 是治理定案）、
- * 以及"由谁在系统里对未组批兜底"的运营口径。
+ * 以及"由谁在系统里对未组批默认处理"的运营规则。
  *
  * <p><b>时序</b>：AFTER_COMMIT 且 {@code fallbackExecution = true}——付款记录由审批收尾事务写入，
  * 必须等它提交后再组批，否则本事务看不见条目（且收尾事务不能因组批异常被标 rollback-only）。
- * 引擎线程无登录上下文，按事件携带的 tenantId 重建租户上下文（与 {@code EventOrchestrationBus} 同口径），
+ * 引擎线程无登录上下文，按事件携带的 tenantId 重建租户上下文（与 {@code EventOrchestrationBus} 同一规则），
  * 审计人由自动填充回落 system。
  */
 @Component
@@ -64,8 +67,8 @@ public class PayBatchAutoGroupListener {
                             event.getBillNo(), billType, r.getBatchCount(), r.getSkippedReasons().size());
                 }
             } catch (Exception ex) {
-                // 组批失败不得影响审批收尾（单据已 APPROVED、付款记录已落库）：
-                // 出纳仍可在付款工作台「选待付记录成批」手工补组，属可恢复动作，只留痕不抛出。
+                // 组批失败不得影响审批收尾（单据已 APPROVED、付款记录已写入数据库）：
+                // 出纳仍可在付款工作台「选待付记录成批」手工补组，属可恢复动作，只记录不抛出。
                 log.error("单据 {}({}) 审批通过自动组批失败（可在付款工作台手工成批）: {}",
                         event.getBillNo(), billType, ex.getMessage(), ex);
             }

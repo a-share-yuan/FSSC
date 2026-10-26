@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -47,7 +50,7 @@ public class TaxRefundService {
     private final InvInvoiceMapper invInvoiceMapper;
     private final WfEngineFacade wfEngineFacade;
     private final com.fssc.framework.org.OrgGuard orgGuard;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     public PageResult<TaxRefund> page(long pageNum, long pageSize, String refundType, String status, String period, String keyword) {
@@ -134,7 +137,7 @@ public class TaxRefundService {
             log.error("退税单 {} 发起审批失败: {}", t.getRefundNo(), ex.getMessage(), ex);
             throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
-        // P4-3 审计留痕：状态跃迁 DRAFT → APPLYING，并记录申请人与申请时间
+        // P4-3 审计记录：状态跃迁 DRAFT → APPLYING，并记录申请人与申请时间
         java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
         auditBefore.put("status", t.getStatus());
         auditBefore.put("applyBy", t.getApplyBy());
@@ -147,13 +150,13 @@ public class TaxRefundService {
                 String.valueOf(id), auditBefore, auditAfter, "提交退税申请（DRAFT→APPLYING）");
     }
 
-    /** 状态流转：仅同租户、遵循合法状态迁移；到账(REFUNDED)须登记实际到账金额，终态不可再变更。 */
+    /** 状态流转：仅同租户、遵循合法状态迁移；到账(REFUNDED)须登记实际到账金额，最终状态不可再变更。 */
     @Transactional(rollbackFor = Exception.class)
     public void changeStatus(Long id, String to, String remark, BigDecimal refundedAmount) {
         TaxRefund t = require(id);
         orgGuard.assertVisible(t.getCompanyId(), t.getApplyBy() != null ? t.getApplyBy() : t.getCreateBy());
         if ("REFUNDED".equals(t.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "退税单已到账(REFUNDED)，为终态不可再变更");
+            throw new BizException(ErrorCode.PARAM_INVALID, "退税单已到账(REFUNDED)，已结束，不可再变更");
         }
         if (!StringUtils.hasText(to)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择目标状态");
@@ -181,7 +184,7 @@ public class TaxRefundService {
             u.setRefundedAmount(refundedAmount);
         }
         mapper.updateById(u);
-        // P4-3 审计留痕：状态跃迁（到账时并记实际到账金额变化）
+        // P4-3 审计记录：状态跃迁（到账时并记实际到账金额变化）
         java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
         auditBefore.put("status", t.getStatus());
         java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
@@ -259,7 +262,7 @@ public class TaxRefundService {
 
     /**
      * 可退留抵余额 = Σ 认证可抵扣进项税额(deduct_amount, CERTIFIED) − Σ 已审批留抵退税(非 DRAFT/REJECTED)。
-     * 演示口径：以已认证专票可抵税额为上限。
+     * 演示规则：以已认证专票可抵税额为上限。
      */
     public BigDecimal creditQuota() {
         BigDecimal certified = invInvoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()

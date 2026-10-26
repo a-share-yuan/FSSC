@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -38,7 +41,7 @@ import java.util.stream.Collectors;
  * SoD 不相容职务分离（Segregation of Duties）内控校验。
  * <ul>
  *   <li>{@link #assertNoConflict} 角色授予前置校验：把【新角色 ∪ 用户已有角色】合并后逐对比对互斥表，命中即抛异常。</li>
- *   <li>{@link #scanViolations} 存量合规巡检：按当前租户查出所有持有冲突角色组合的用户（演示全能审批人必然命中，属预期）。</li>
+ *   <li>{@link #scanViolations} 历史合规巡检：按当前租户查出所有持有冲突角色组合的用户（演示全能审批人必然命中，属预期）。</li>
  * </ul>
  * 互斥规则来源 {@code sod_role_conflict}（平台级 tenant_id NULL + 租户自定义），全局表不受租户拦截器过滤，手工取规则。
  *
@@ -51,6 +54,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SoDService {
 
+    /** C-3：在役不相容职责（L2）需要跨表读流程历史，直接走 JDBC 避开实体映射。 */
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
 
@@ -146,26 +150,28 @@ public class SoDService {
 
     /**
      * R5-D-034：执行职责分离检查（两维度一次跑完），返回 UI 就绪的结果行。
-     * 结果不落库：sod_role_conflict / sod_perm_conflict 是【规则定义表】而非结果表，
+     * 结果不写入数据库：sod_role_conflict / sod_perm_conflict 是【规则定义表】而非结果表，
      * 检查为无状态实时计算，检测时间取本次执行时刻。
      */
     public List<SodCheckRow> checkAll() {
         String detectTime = LocalDateTime.now().format(SOD_TS);
         List<SodCheckRow> rows = new ArrayList<>(roleConflictRows(detectTime));
         rows.addAll(permConflictRows(detectTime));
-        // 同类系统的 SoD 分三层：L1 互斥岗（本类已有的 role/perm 冲突表）、
+        // ── C-3：把「在役的不相容职责校验」纳入 SoD 报告 ──
+        // SoD 分三层：L1 互斥岗（本类已有的 role/perm 冲突表）、
         // L2 不相容职责（**同一单据内经办轨迹**）、L3 轮岗。
-        // 本系统真正在拦 L2 的是两个闸门——approve.deny_self（自审）与
+        // 本系统真正在拦 L2 的是两个校验——approve.deny_self（自审）与
         // approve.deny_serial_same_handler（同人连办），它们此前不在 SoD 报告里，
-        // 导致「报告 0 冲突」与「实际有单被拦」两套口径打架。
-        // 这里按「在途实例上的真实经办轨迹」反查，把闸门已拦/将拦的情形显式列出。
+        // 导致「报告 0 冲突」与「实际有单被拦」两套规则打架。
+        // 这里按「在途实例上的真实经办轨迹」反查，把校验已拦/将拦的情形显式列出。
         rows.addAll(activeDutySeparationRows(detectTime));
         return rows;
     }
 
     /**
+     * C-3：在役「不相容职责」（L2）实况——从流程历史反查真实经办轨迹。
      *
-     * <p>判定口径（与 {@code WfEngineFacade} 的两道闸完全一致，不另立标准）：
+     * <p>判定规则（与 {@code WfEngineFacade} 的两道校验完全一致，不另立标准）：
      * <ul>
      *   <li><b>自审</b>：同一流程实例内，某人既是<b>发起人</b>又<b>办过至少一个节点</b>；</li>
      *   <li><b>同人连办</b>：同一流程实例内，某人办过 <b>≥2 个不同 taskDefinitionKey</b> 的节点。</li>
@@ -197,7 +203,7 @@ public class SoDService {
                 byInstance.computeIfAbsent(inst, k -> new LinkedHashMap<>())
                         .computeIfAbsent(uid, k -> new LinkedHashSet<>()).add(dk);
             }
-            //  wf_instance 没有 del_flag 列（流程实例表靠 status 表达终态，不做逻辑删除），
+            //  wf_instance 没有 del_flag 列（流程实例表靠 status 表达最终状态，不做逻辑删除），
             //   带上它会直接 Unknown column 抛错、被外层 catch 吞掉 → 本项永远 0 条。
             for (Map<String, Object> w : jdbc.queryForList(
                     "SELECT proc_inst_id AS inst, start_user_id AS uid FROM wf_instance "
@@ -213,17 +219,17 @@ public class SoDService {
                     // L2-1 自审：发起人又办过节点
                     if (starter != null && starter == uid) {
                         rows.add(dutyRow(uid, "发起人自办本单审批节点",
-                                "L2-不相容职责/自审（approve.deny_self 在役闸门）", detectTime));
+                                "L2-不相容职责/自审（approve.deny_self 当前生效的限制）", detectTime));
                     }
                     // L2-2 同人连办：办过 ≥2 个不同节点
                     if (keys.size() >= 2) {
                         rows.add(dutyRow(uid, "同一流程内办过 " + keys.size() + " 个不同节点（" + keys + "）",
-                                "L2-不相容职责/连办（approve.deny_serial_same_handler 在役闸门）", detectTime));
+                                "L2-不相容职责/连办（approve.deny_serial_same_handler 当前生效的限制）", detectTime));
                     }
                 }
             }
         } catch (Exception ex) {
-            // fail-open：体检类查询异常不得让整个 SoD 报告失败；但必须留痕，否则"永远 0 条"无从排查
+            // fail-open：体检类查询异常不得让整个 SoD 报告失败；但必须记录，否则"永远 0 条"无从排查
             org.slf4j.LoggerFactory.getLogger(SoDService.class)
                     .warn("SoD 不相容职责(L2)实况查询失败（本次该项返回空，不影响其它维度）: {}", ex.toString());
             return rows;
@@ -273,7 +279,7 @@ public class SoDService {
         return r;
     }
 
-    /** R5-D-034：检查结果分页（维度／关键词过滤在内存完成，总量恒为本租户口径） */
+    /** R5-D-034：检查结果分页（维度／关键词过滤在内存完成，总量恒为本租户规则） */
     public PageResult<SodCheckRow> checkPage(String dimension, String keyword, long pageNum, long pageSize) {
         long size = pageSize <= 0 ? 20L : Math.min(pageSize, 500L);
         long page = pageNum <= 0 ? 1L : pageNum;
@@ -411,7 +417,7 @@ public class SoDService {
 
     /**
      * 角色授予前置校验：合并新角色与用户已有角色后逐对检查互斥表，命中抛 {@link BizException}。
-     * 只在【新增/变更授权】时拦截，存量演示绑定不受影响（本方法不改动 sys_user_role）。
+     * 只在【新增/变更授权】时拦截，历史演示绑定不受影响（本方法不改动 sys_user_role）。
      *
      * @param userId            被授权用户
      * @param roleIdsToAssign   本次要授予的角色ID集合
@@ -458,7 +464,7 @@ public class SoDService {
      * 的权限码合并后，逐条比对 {@code sod_perm_conflict} 的正则互斥规则，命中即抛异常。
      * 与 {@link #assertNoConflict}（角色码两两互斥）互补：能捕获"单看每个角色都合法、
      * 组合起来违规"的隐蔽场景（如 出纳角色+总账角色的权限码并集）。
-     * 授予入口（用户授权/用户组授权）必须先调本方法再落库。
+     * 授予入口（用户授权/用户组授权）必须先调本方法再写入数据库。
      */
     public void assertNoUserPermConflict(Long userId, Collection<Long> roleIdsToAssign) {
         Set<Long> roleIds = collectEffectiveRoleIds(userId, roleIdsToAssign);
@@ -471,8 +477,8 @@ public class SoDService {
     }
 
     /**
-     * 【用户级 SoD 存量巡检 · 权限码并集维度】按当前租户返回所有命中互斥规则的用户。
-     * 与 {@link #assertNoUserPermConflict} 同口径：单角色自带互斥（inherent 既定岗位）不计入，
+     * 【用户级 SoD 历史巡检 · 权限码并集维度】按当前租户返回所有命中互斥规则的用户。
+     * 与 {@link #assertNoUserPermConflict} 同一规则：单角色自带互斥（inherent 既定岗位）不计入，
      * 只有跨角色累积出的互斥组合才算违规，供定期复核（recertification）与 CI 巡检消费。
      */
     public List<SodViolation> scanPermViolations() {
@@ -532,7 +538,7 @@ public class SoDService {
 
     /**
      * 平台级 + 当前租户的 ACTIVE 规则逐条正则比对，返回命中描述。
-     * <b>跨角色累积口径（2026-09，D-SOD-1 修复）</b>：某规则两侧虽在并集里都命中，但若存在
+     * <b>跨角色累积规则（2026-09，D-SOD-1 修复）</b>：某规则两侧虽在并集里都命中，但若存在
      * <b>单个角色</b>自身就同时含两侧权限（inherent，属该角色定义的既定岗位职责），则不计为违规——
      * 一用户一角色下这类角色必须可授予；仅当互斥组合<b>只能由 ≥2 个角色合并</b>产生时才拦截。
      */
@@ -623,7 +629,7 @@ public class SoDService {
     }
 
     /**
-     * 存量合规巡检（按当前租户）：查出所有持有冲突角色组合的用户。
+     * 历史合规巡检（按当前租户）：查出所有持有冲突角色组合的用户。
      * 演示全能审批人（user_id=1 持有全部角色）必然命中，属预期，不排除。
      */
     public List<SodViolation> scanViolations() {
@@ -668,7 +674,7 @@ public class SoDService {
         return result;
     }
 
-    /** R5-D-034：角色维度扫描的公共走查（scanViolations 与 checkAll 同口径，避免两份判据） */
+    /** R5-D-034：角色维度扫描的公共走查（scanViolations 与 checkAll 同一规则，避免两份判据） */
     private RoleScan scanRoleBindings(List<SodRoleConflict> rules) {
         RoleScan scan = new RoleScan();
         Set<String> conflictCodes = new HashSet<>();

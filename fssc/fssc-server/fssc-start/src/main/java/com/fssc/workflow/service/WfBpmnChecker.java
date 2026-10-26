@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -46,7 +49,7 @@ public class WfBpmnChecker {
         /** 参与人引用了哪些角色（含停用/不存在），供批量改绑与影响面统计复用 */
         public final Set<String> roleRefs = new LinkedHashSet<>();
         public final List<NodeInfo> nodes = new ArrayList<>();
-        /** 本流程是否按金额分档（＝任一网关出线条件引用 amount），供全库体检与告警口径复用 */
+        /** 本流程是否按金额分档（＝任一网关出线条件引用 amount），供全库体检与告警规则复用 */
         public boolean amountTiered;
         /** 金额档位阈值（升序去重，取自条件表达式原文） */
         public final List<String> amountThresholds = new ArrayList<>();
@@ -190,7 +193,7 @@ public class WfBpmnChecker {
             String id = el.getAttribute("id");
             int out = outgoing.getOrDefault(id, List.of()).size();
             String label = id + "(" + (el.getAttribute("name").isBlank() ? ln : el.getAttribute("name")) + ")";
-            if ("parallelGateway".equals(ln)) continue;   // 并行是多路并发，不适用"默认流"口径
+            if ("parallelGateway".equals(ln)) continue;   // 并行是多路并发，不适用"默认流"规则
             if (out < 2) {
                 r.errors.add("网关「" + label + "」出口连线不足 2 条，分支不完整");
                 continue;
@@ -290,7 +293,7 @@ public class WfBpmnChecker {
     /**
      * 批次3 R3-E：金额网关的档位可达性与"低档短路"判定。
      *
-     * <p>三条口径按"会不会挡住批次2 已发布在用的流程"分档取证（bpmn-repo/drafts/batch3/r3e-gateways.log：
+     * <p>三条规则按"会不会挡住批次2 已发布在用的流程"分档取证（bpmn-repo/drafts/batch3/r3e-gateways.log：
      * 假档位 0 处、零审批短路 0 处、低档出口直达 End 21 处/13 个在用流程）：
      * <ul>
      *   <li><b>error</b> 永不命中的条件分支＝假档位（该档审批人永远收不到单，现网 0 例，不会误伤）；</li>
@@ -373,9 +376,9 @@ public class WfBpmnChecker {
     /**
      * 批次3 R3-E 规则①：分档流程 × 绑定 bizType 的金额来源核对（只 warning，不 error）。
      *
-     * <p>本想按任务口径做成 error——"链上有金额网关、绑定的 bizType 又拿不到金额"＝发起侧必然不传 amount
+     * <p>本想按任务规则做成 error——"链上有金额网关、绑定的 bizType 又拿不到金额"＝发起侧必然不传 amount
      * ＝静默降档。实测证明这样判会误伤（取证 bpmn-repo/drafts/batch3/r3e-bindings.log）：
-     * {@link BillRouteRegistry.Route#amtCol()} 的口径是"待办回填用哪一列"，与"发起点是否传 amount"不是一回事——
+     * {@link BillRouteRegistry.Route#amtCol()} 的规则是"待办回填用哪一列"，与"发起点是否传 amount"不是一回事——
      * MEETING 的注册表行 amtCol=NULL、TRAIN/TRAVEL 绑定的 EXP_APPLY 根本没有注册表行，
      * 而这三条流程的发起点确实把 exp_bill.total_amount 传进了引擎。按 amtCol 判 error 会挡住
      * 4 个批次2 已发布在用流程 ⇒ 依 R3-E 回滚判据降级为 warning 并登记；
@@ -407,7 +410,7 @@ public class WfBpmnChecker {
             if (route != null && route.amtCol() != null) continue;
             r.warnings.add("本流程按金额分档，绑定单据类型「" + bt + "」在 BillRouteRegistry 没有金额列"
                     + (route == null ? "（注册表无该 bizType 行）" : "")
-                    + "。注册表口径＝待办回填金额列，不代表发起点传了 amount；"
+                    + "。注册表统计方式＝待办回填金额列，不代表发起点传了 amount；"
                     + "请核对该 bizType 的 start() 调用点（不传 amount 时引擎按 0 计算＝静默降到低档，高档审批形同虚设）");
         }
     }
@@ -455,7 +458,7 @@ public class WfBpmnChecker {
 
     /**
      * 条件表达式是否引用金额变量——"这条流程按金额分档"的唯一判据。
-     * 发起侧告警（不传 amount 会被静默降档）与发布期硬校验共用这一句法口径，避免两处各判一次。
+     * 发起侧告警（不传 amount 会被静默降档）与发布期硬校验共用这一句法规则，避免两处各判一次。
      */
     public static boolean referencesAmount(String expr) {
         return expr != null && AMOUNT_REF.matcher(expr).find();
@@ -531,7 +534,7 @@ public class WfBpmnChecker {
     }
 
     /**
-     * P0 治理闸②：分支变量白名单。
+     * P0 治理校验②：分支变量白名单。
      * 网关条件表达式里引用的每个变量必须 ∈ {@link #BRANCH_VAR_WHITELIST}（＝ WfEngineFacade.start() 实际注入引擎的变量集），
      * 否则运行时该变量恒为 null → 条件求不出 → 分支永远无法选中（"看着能配、实际不生效"）。
      * 直接引用未注入变量（含拼写错误，如 amout）一律标 error，发布（assertPublishable）会拦截。
@@ -541,10 +544,10 @@ public class WfBpmnChecker {
     private static final java.util.Set<String> BRANCH_VAR_WHITELIST = java.util.Set.of(
             "amount", "orgType", "expenseType", "overStandard", "abroad",
             "hasLoan", "outOfPlan", "overLimit", "hasContract", "billType",
-            // D-DEC-389 同批补漏：bizType / subType 一直由 start() 真实注入（:516-:517 与 billType 归一腿），
-            // 但白名单从未收录 ⇒ 设计器里把分支条件写在 bizType 上会被本闸误拦（"变量没注入"），
+            // D-DEC-389 同批补漏：bizType / subType 一直由 start() 真实注入（:516-:517 与 billType 归一环节），
+            // 但白名单从未收录 ⇒ 设计器里把分支条件写在 bizType 上会被本校验误拦（"变量没注入"），
             // 而写在 subType 上（simulate 面板一直列着它）运行时又真的取不到。门面已把 subType 补为
-            // 真实注入变量，两侧口径在此收口：白名单＝start() 实际注入集。
+            // 真实注入变量，两侧规则在此办结：白名单＝start() 实际注入集。
             "bizType", "subType");
 
     private static final java.util.Set<String> JUEL_KEYWORDS = java.util.Set.of(

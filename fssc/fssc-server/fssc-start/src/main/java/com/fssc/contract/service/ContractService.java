@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.contract.service;
 import com.fssc.framework.security.UserContext;
 
@@ -32,9 +35,9 @@ import java.time.LocalDate;
  *   <li>无固定金额（长期协议/以量定额）合同不控制预算</li>
  * </ul>
  *
- * <p>D-DEC-329（X-09，乙）：合同审批存在两条链并存——本类的<b>手工直批腿</b>（approve/reject，落 EFFECTIVE/DRAFT）
- * 与 Flowable 的<b>流程腿</b>（submit 起流程，收尾在 ContractBizAction，落 APPROVED/REJECTED）。裁定<b>不归一</b>，
- * 改为各补状态互斥闸：直批腿执行前必须"已提交且不在流程在途"（{@link #assertNotInFlow}，服务端可阻断）；
+ * <p>D-DEC-329（X-09，乙）：合同审批存在两条链并存——本类的<b>手工直批环节</b>（approve/reject，落 EFFECTIVE/DRAFT）
+ * 与 Flowable 的<b>流程环节</b>（submit 起流程，收尾在 ContractBizAction，落 APPROVED/REJECTED）。裁定<b>不归一</b>，
+ * 改为各补状态互斥校验：直批环节执行前必须"已提交且不在流程在途"（{@link #assertNotInFlow}，服务端可阻断）；
  * 反向那一半（流程收尾不得覆写已被直批处理的单）落在 workflow/action/{@code ContractBizAction}，本波禁改，已回主窗。
  */
 @Service
@@ -43,7 +46,7 @@ import java.time.LocalDate;
 public class ContractService {
 
     private final ContContractMapper mapper;
-    /** D-V4R-91：付款条件/支付记录子表写入收口到本 Service，两个 Mapper 由 Controller 直连改为经此校验 */
+    /** D-V4R-91：付款条件/支付记录子表写入办结到本 Service，两个 Mapper 由 Controller 直连改为经此校验 */
     private final com.fssc.contract.mapper.ContPayConditionMapper payConditionMapper;
     private final com.fssc.contract.mapper.ContPayRecordMapper payRecordMapper;
     private final BudgetService budgetService;
@@ -53,9 +56,9 @@ public class ContractService {
     private final OrgGuard orgGuard;
     /** 编号规则取号（合同号等主数据编号的唯一正经来源） */
     private final NumberRuleService numberRuleService;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** 合同审批流业务类型：提交起流程与直批腿的在途互斥判据共用同一字面量（D-DEC-329） */
+    /** 合同审批流业务类型：提交起流程与直批环节的在途互斥判据共用同一字面量（D-DEC-329） */
     private static final String CONTRACT_BIZ_TYPE = "CONTRACT_APPROVE";
 
     @DataScope("合同列表数据范围")
@@ -76,7 +79,7 @@ public class ContractService {
     /** 写路径公司归属校验（①）：建单时单据公司必须等于登录人公司 */
     /** 写路径公司归属校验（①）：建单时单据公司必须等于登录人公司 */
     public Long create(ContContract e) {
-        // 必填收口（Q1 口径：合同号系统取号、人工只读；其余为业务必输项）
+        // 必填办结（Q1 规则：合同号系统取号、人工只读；其余为业务必输项）
         AssertUtil.notBlank(e.getContractName(), ErrorCode.PARAM_INVALID, "合同名称必填");
         AssertUtil.notBlank(e.getContractType(), ErrorCode.PARAM_INVALID, "合同类型必填");
         AssertUtil.notBlank(e.getPartyBName(), ErrorCode.PARAM_INVALID, "乙方（客商名称）必填");
@@ -119,7 +122,7 @@ public class ContractService {
         mapper.updateById(e);
     }
 
-    /** 起止日期顺序兜底：前端已禁选倒置，接口直调仍可写入；倒置会让预算占用/付款计划/到期提醒全部错位 */
+    /** 起止日期顺序默认处理：前端已禁选倒置，接口直调仍可写入；倒置会让预算占用/付款计划/到期提醒全部错位 */
     private void assertDateOrder(LocalDate begin, LocalDate end) {
         if (begin != null && end != null && end.isBefore(begin)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "合同有效期止不得早于有效期起");
@@ -295,7 +298,7 @@ public class ContractService {
         try {
             budgetService.occupy(budgetItemId, amt, "EXP_CONTRACT", c.getId(), c.getContractNo());
         } catch (Exception e) {
-            // 预算冻结属辅助控制：映射缺失/额度不足/脏数据均不得阻断合同审批，仅告警留痕
+            // 预算冻结属辅助控制：映射缺失/额度不足/脏数据均不得阻断合同审批，仅告警记录
             log.warn("[预算冻结] 合同 {} 冻结预算明细 {} 失败（不阻断审批）: {}",
                     c.getContractNo(), budgetItemId, e.getMessage());
         }
@@ -350,8 +353,8 @@ public class ContractService {
     }
 
     /**
-     * D-DEC-329（X-09，乙）：两条审批链并存<b>不归一</b>，改为各补一道服务端状态互斥闸。
-     * 本方法是<b>手工直批腿</b>的闸：单据除"已提交（APPROVING）"外还必须<b>不在审批流在途</b>才可执行——
+     * D-DEC-329（X-09，乙）：两条审批链并存<b>不归一</b>，改为各补一道服务端状态互斥校验。
+     * 本方法是<b>手工直批环节</b>的校验：单据除"已提交（APPROVING）"外还必须<b>不在审批流在途</b>才可执行——
      * 有在办流程任务说明这张单正由待办人签核，直批会把流程结论架空（同一张单两个结论、凭证重复生成）。
      * 可阻断的前置校验，不是文案提示；引擎查询异常时按"在途"处置（fail-closed，拿不准就不动）。
      */
@@ -388,10 +391,10 @@ public class ContractService {
     //      recordMapper.insert(r) 裸写，**零校验**（同文件主表 create 却有完整断言），
     //      可灌入「计划额 99999999」的付款条件或「付款金额 0 / 负数」的台账记录，
     //      付款进度看板、供应商对账函、付款率全部失真且无人拦截。
-    //      此处把写入收口到 Service，并补齐四类断言：必填、金额>0、
+    //      此处把写入办结到 Service，并补齐四类断言：必填、金额>0、
     //      合同归属（orgGuard，防跨公司挂靠）、计划额不超合同总额。
 
-    /** 合同付款条件新增：落库前必须过合同归属 + 节点必填 + 金额>0 + 不超合同总额 四道闸 */
+    /** 合同付款条件新增：写入数据库前必须过合同归属 + 节点必填 + 金额>0 + 不超合同总额 四道校验 */
     public Long createPayCondition(com.fssc.contract.entity.ContPayCondition c) {
         if (c.getContractId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "付款条件必须挂在某份合同下");

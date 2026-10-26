@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <el-card>
@@ -81,8 +84,8 @@
           <el-table-column :label="$t('common.operation')" width="190" fixed="right">
             <template #default="{ row }">
               <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('sharing.common.btnTrace') }}</el-button>
-              <!-- R5-D-243：单据 DRAFT/CANCELLED 时后端签收/拒签闸门必拒（先提交单据才能签），
-                   前端同口径隐藏入口并给出原因，避免"点了必失败"；billStatus 由服务端批量回填。 -->
+              <!-- R5-D-243：单据 DRAFT/CANCELLED 时后端签收/拒签校验必拒（先提交单据才能签），
+                   前端同一规则隐藏入口并给出原因，避免"点了必失败"；billStatus 由服务端批量回填。 -->
               <template v-if="row.status === 'PENDING'">
                 <template v-if="!isDraftLike(row)">
                   <el-button link type="primary" v-prevent-double-click @click="sign(row)">{{ $t('sharing.delivery.btnSign') }}</el-button>
@@ -128,7 +131,7 @@
               />
             </el-select>
           </el-form-item>
-          <!-- V1.4.92（AMC-01）：非集中档案管理公司的纸质原件留原单位，后端 applyDelivery 必拒，前端同口径前置说明 -->
+          <!-- V1.4.92（AMC-01）：非集中档案管理公司的纸质原件留原单位，后端 applyDelivery 必拒，前端同一规则前置说明 -->
           <el-form-item v-if="applyNonCentral">
             <el-alert type="info" :closable="false" show-icon :title="$t('sharing.delivery.hintNonCentralArchive')" />
           </el-form-item>
@@ -432,7 +435,7 @@ function resetSearch() {
   doSearch()
 }
 
-// R5-D-243：与后端 DeliveryService.sign/reject 的 DRAFT/CANCELLED 守卫同口径（billStatus 由服务端回填）
+// R5-D-243：与后端 DeliveryService.sign/reject 的 DRAFT/CANCELLED 守卫同一规则（billStatus 由服务端回填）
 function isDraftLike(row) {
   return ['DRAFT', 'CANCELLED'].includes(row?.billStatus)
 }
@@ -445,7 +448,7 @@ async function sign(row) {
   if (signPromptOpen) return
   signPromptOpen = true
   try {
-    // R5-D-241：后端签收已支持签收备注（signRemark），前端由 confirm 改为 prompt 收集留痕；
+    // R5-D-241：后端签收已支持签收备注（signRemark），前端由 confirm 改为 prompt 收集记录；
     // 用户取消（undefined）时直接返回，不再把 cancel 当错误弹。
     const { value: signRemark } = await ElMessageBox.prompt(
       t('sharing.delivery.confirmSign', { v1: row.billNo }), t('sharing.delivery.titleSignConfirm'), {
@@ -532,7 +535,7 @@ async function showByBill(row) {
 const applyFormRef = ref(null)
 const applyForm = ref({ billId: null, expressCompany: '', expressNo: '', packageCount: 1, deliveryType: 'POST', remark: '' })
 const applyFormRules = computed(() => ({
-  // 与后端 DeliveryService.applyDelivery 同口径：单据是交单登记的主体
+  // 与后端 DeliveryService.applyDelivery 同一规则：单据是交单登记的主体
   billId: commonRules.select(t('sharing.delivery.errPickBill')),
 }))
 const rejectFormRules = computed(() => ({
@@ -558,7 +561,7 @@ async function loadCompanies() {
     const m = {}
     ;(list || []).forEach((c) => { m[c.id] = c })
     companyById.value = m
-  } catch { /* 模式信息不可得时按集中处理，交单链路由后端同一判据兜底 */ }
+  } catch { /* 模式信息不可得时按集中处理，交单链路由后端同一判据默认处理 */ }
 }
 
 async function searchBills(query) {
@@ -721,6 +724,6 @@ function exportCsv() {
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
-/* R5-D-243：草稿/已取消单据的签收/拒签被闸时的灰态说明（hover 出原因） */
+/* R5-D-243：草稿/已取消单据的签收/拒签被校验时的灰态说明（hover 出原因） */
 .sign-blocked-tip { color: #c0c4cc; font-size: 12px; cursor: not-allowed; }
 </style>

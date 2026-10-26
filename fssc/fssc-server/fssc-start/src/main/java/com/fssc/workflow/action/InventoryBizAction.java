@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.asset.entity.MdInventory;
@@ -108,7 +111,7 @@ public class InventoryBizAction implements WfBizAction {
                     stockCostSettleService.settleDevalProvision(bizId, event.getProcInstId());
                     break;
                 case "INV_PHYSICAL_CHECK":
-                    // 盘点差异 → 生成盘点差异结转（存货口径；FA_CHECK_DIFF 资产口径结转走 GL_VOUCHER 盘点结转档，见 D-DEC-323）
+                    // 盘点差异 → 生成盘点差异结转（存货规则；FA_CHECK_DIFF 资产规则结转走 GL_VOUCHER 盘点结转档，见 D-DEC-323）
                     stockCostSettleService.settleCheckDiff(bizId, event.getProcInstId());
                     break;
                 default:

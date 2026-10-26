@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.controller;
 
 import com.fssc.common.core.Result;
@@ -65,7 +68,7 @@ public class IoTemplateController {
     }
 
     /**
-     * 按模板解析上传的 Excel（只解析不落库，返回逐行数据与逐行错误）。
+     * 按模板解析上传的 Excel（只解析不写入数据库，返回逐行数据与逐行错误）。
      *
      * <p>不中断整批：单行出错只记录，其余行继续解析，便于用户一次改完。
      */

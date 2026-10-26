@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center">
@@ -101,7 +104,7 @@ function overdueBaselineParams() {
   return v ? { asOfDate: v } : {}
 }
 
-// D-DEC-407：批处理基准日与原应收工作台同口径——留空＝系统当前日，选日期则按该日跑
+// D-DEC-407：批处理基准日与原应收工作台同一规则——留空＝系统当前日，选日期则按该日跑
 function baselineSuffix(baseline) {
   return baseline.period || baseline.asOfDate
     ? t('flow.arColl.msgBaselineSuffix', { v1: baseline.asOfDate || baseline.period })

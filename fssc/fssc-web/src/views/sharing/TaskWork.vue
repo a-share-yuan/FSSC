@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -31,8 +34,9 @@
       <el-table-column :label="$t('common.operation')" width="380" fixed="right">
         <template #default="{ row }">
           <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('sharing.common.btnTrace') }}</el-button>
-          <!-- D-DEC-029：凭证面按 sharing:voucher:list 前置收口。该接口无权限时服务端只回
+          <!-- D-DEC-029：凭证面按 sharing:voucher:list 前置办结。该接口无权限时服务端只回
                HTTP 200 + 业务码 4030，按钮照旧亮着、点了没抽屉＝"看得见点得动永远失败"，
+               故无权限账号直接不渲染本入口（与同页 canGenerateVoucher 同一规则）。 -->
           <el-button v-if="canVoucherList" link size="small" type="primary" @click="openVoucher(row)">{{ $t('sharing.taskWork.btnVoucherEdit') }}</el-button>
           <el-button link size="small" type="primary" @click="viewBillImages(row)">{{ $t('sharing.common.btnViewImages') }}</el-button>
           <el-button link size="small" type="warning" @click="openReturn(row)">{{ $t('sharing.taskWork.btnReturn') }}</el-button>
@@ -181,7 +185,7 @@ const fileViewer = ref(null)
 const subjectOptions = ref([])
 const generating = ref(false)
 const canGenerateVoucher = hasPerm('sharing:voucher:generate')
-// D-DEC-029：预览/改分录的取数接口 GET /tenant/sharing/voucher/page 需 sharing:voucher:list，
+// D-DEC-029：预览/改分录的查询接口 GET /tenant/sharing/voucher/page 需 sharing:voucher:list，
 // 无该码时服务端以业务码 4030 拒绝（HTTP 仍是 200），故入口按同一码前置隐藏。
 const canVoucherList = hasPerm('sharing:voucher:list')
 
@@ -233,14 +237,14 @@ async function openVoucher(row) {
     await searchSubjects('')
     voucherVis.value = true
   } catch (e) {
-    // D-DEC-029：取数失败（含权限码 4030）必须带单据号如实报出，不能"点了没抽屉"就完事；
+    // D-DEC-029：查询失败（含权限码 4030）必须带单据号如实报出，不能"点了没抽屉"就完事；
     // 弹窗保持关闭，避免呈现一张空凭证表让人误判"该单没有凭证"。
     voucherVis.value = false
     ElMessage.error(t('sharing.taskWork.msgLoadFail', { v1: row.billNo || row.billId || t('sharing.taskWork.txtCurrentTicket'), v2: e?.message || t('sharing.ops.fallbackUnknown') }))
   }
 }
 
-/** 补生成凭证：单据已审批/已付款但无凭证时（如结账期间生成失败），按单据类型走后端幂等生成 */
+/** 补生成凭证：单据已审批/已付款但无凭证时（如结账期间生成失败），按单据类型走后端去重生成 */
 async function generateVoucher() {
   if (!current.value?.billId) return ElMessage.warning(t('sharing.taskWork.warnNoBill'))
   generating.value = true

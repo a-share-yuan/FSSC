@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -70,7 +73,7 @@ public class DeliveryService {
 
     /**
      * 若无纸化豁免则置单据 deliveryStatus=NOT_REQUIRED；
-     * 否则登记一张 PENDING 实物流签收单并把单据置 UNSIGNED（幂等：已登记不重复建）。
+     * 否则登记一张 PENDING 实物流签收单并把单据置 UNSIGNED（去重：已登记不重复建）。
      */
     @Transactional(rollbackFor = Exception.class)
     public void registerIfNeeded(ExpBill bill) {
@@ -96,7 +99,7 @@ public class DeliveryService {
                 .eq(OpPhysicalDelivery::getBillId, bill.getId())
                 .eq(OpPhysicalDelivery::getStatus, "PENDING"));
         if (cnt != null && cnt > 0) {
-            // R5-D-229 同口径：已有在途 PENDING 单而单据侧无痕（NULL）时补 UNSIGNED，消除双轨
+            // R5-D-229 同一规则：已有在途 PENDING 单而单据侧无痕（NULL）时补 UNSIGNED，消除双轨
             markBillUnsignedInTransit(bill);
             return;
         }
@@ -122,7 +125,7 @@ public class DeliveryService {
     /**
      * 共享会计/档案岗签收实物：置 SIGNED，单据 deliveryStatus=SIGNED，
      * 并激活该单据首个共享 AUDIT 审核任务（R5-D-230：仅当存在共享任务链时——APPLY/事前申请类
-     * 单据不入共享作业、无任务链，此时静默跳过，属设计口径而非链路缺口）。
+     * 单据不入共享作业、无任务链，此时静默跳过，属设计规则而非链路缺口）。
      */
     @Transactional(rollbackFor = Exception.class)
     public void sign(Long deliveryId, Long signBy, String signName) {
@@ -204,6 +207,7 @@ public class DeliveryService {
 
     /**
      * 分页查询签收单（支持多条件筛选）。
+     * 参考采购收货清单与到货签收查询。
      */
     public PageResult<OpPhysicalDelivery> page(long pageNum, long pageSize,
                                                  String status, String billNo, String expressNo,
@@ -350,7 +354,7 @@ public class DeliveryService {
         if (!"PENDING".equals(d.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "该签收单已处理，当前状态: " + d.getStatus());
         }
-        // R5-D-243：草稿/已取消单据不可拒签（与签收同闸，防呆）
+        // R5-D-243：草稿/已取消单据不可拒签（与签收同校验，防呆）
         if (d.getBillId() != null) {
             ExpBill bill = expBillMapper.selectById(d.getBillId());
             if (bill != null && ("DRAFT".equals(bill.getStatus()) || "CANCELLED".equals(bill.getStatus()))) {
@@ -358,7 +362,7 @@ public class DeliveryService {
                         "单据处于草稿/已取消状态，不可拒签，请先提交单据");
             }
         }
-        // 必填收口（批次 2C，与前端 DeliveryPage 拒签弹窗同口径）：拒签原因是退件留痕，留空则退回无从追责
+        // 必填办结（批次 2C，与前端 DeliveryPage 拒签弹窗同一规则）：拒签原因是退件记录，留空则退回无从追责
         AssertUtil.notBlank(rejectReason, ErrorCode.PARAM_INVALID, "请填写拒签原因");
         OpPhysicalDelivery upd = new OpPhysicalDelivery();
         upd.setId(deliveryId);
@@ -378,7 +382,7 @@ public class DeliveryService {
             bUpd.setDeliveryStatus("UNSIGNED");
             expBillMapper.updateById(bUpd);
             // R5-D-240 ②：撤链——未办环节（WAITING/RECEIVED）退回任务池并置 activeFlag=N 签收前挂起态
-            // （与 SharingService 入池挂起同口径），已认领环节清回认领人与认领时间；不发明新状态，
+            // （与 SharingService 入池挂起同一规则），已认领环节清回认领人与认领时间；不发明新状态，
             // 重新签收后由 sign() 再激活首环节。
             opAuditTaskMapper.update(null, new LambdaUpdateWrapper<OpAuditTask>()
                     .set(OpAuditTask::getPoolStatus, "WAITING")
@@ -393,12 +397,13 @@ public class DeliveryService {
 
     /**
      * 员工交单登记（含快递信息录入）。
+     * 采购收货交货单与发货登记的处理规则。
      */
     @Transactional(rollbackFor = Exception.class)
     public Long applyDelivery(Long billId, String expressCompany, String expressNo,
                                Integer packageCount, String deliveryType, String remark,
                                Long deliverBy, String deliverName) {
-        // 必填收口（批次 2C，与前端「选择单据」同口径）：否则 selectById(null) 只会给出「单据不存在: null」
+        // 必填办结（批次 2C，与前端「选择单据」同一规则）：否则 selectById(null) 只会给出「单据不存在: null」
         AssertUtil.notNull(billId, ErrorCode.PARAM_INVALID, "请选择单据");
         ExpBill bill = expBillMapper.selectById(billId);
         if (bill == null) {
@@ -438,7 +443,7 @@ public class DeliveryService {
             upd.setDeliverBy(effectiveDeliverBy);
             upd.setDeliverName(effectiveDeliverName);
             upd.setDeliverTime(LocalDateTime.now());
-            // R5-D-231：存量在途单补生条码（此前邮寄交单 barcode 恒 NULL，条码管理与扫码签收无输入）
+            // R5-D-231：历史在途单补生条码（此前邮寄交单 barcode 恒 NULL，条码管理与扫码签收无输入）
             if (existing.getBarcode() == null || existing.getBarcode().isBlank()) {
                 OpBarcode bc = barcodeService.generateForRef("BILL", billId, bill.getBillNo(),
                         effectiveDeliverBy, effectiveDeliverName);
@@ -447,7 +452,7 @@ public class DeliveryService {
                 }
             }
             deliveryMapper.updateById(upd);
-            // R5-D-229：交单在途期单据侧同步置 UNSIGNED（幂等）
+            // R5-D-229：交单在途期单据侧同步置 UNSIGNED（去重）
             markBillUnsignedInTransit(bill);
             return existing.getId();
         }
@@ -476,7 +481,7 @@ public class DeliveryService {
             bcUpd.setBarcode(bc.getBarcode());
             deliveryMapper.updateById(bcUpd);
         }
-        // R5-D-229：交单成功后同步置 UNSIGNED（幂等），使在途可视并供 SLA 统计
+        // R5-D-229：交单成功后同步置 UNSIGNED（去重），使在途可视并供 SLA 统计
         markBillUnsignedInTransit(bill);
         log.info("Delivery applied billNo={} expressNo={} deliveryId={} barcode={}", bill.getBillNo(), expressNo, d.getId(),
                 bc == null ? null : bc.getBarcode());
@@ -511,9 +516,9 @@ public class DeliveryService {
     }
 
     /**
-     * R5-D-229：交单在途期单据侧留痕——将 exp_bill.deliveryStatus 置 UNSIGNED（幂等）。
-     * 已有 SIGNED/NOT_REQUIRED 终态记不回退（重复交单/签收后再登记不产生状态倒挂）；
-     * 存量裸工号姓名等历史脏行不在本方法治理范围（只读清单交人工）。
+     * R5-D-229：交单在途期单据侧记录——将 exp_bill.deliveryStatus 置 UNSIGNED（去重）。
+     * 已有 SIGNED/NOT_REQUIRED 最终状态记不回退（重复交单/签收后再登记不产生状态倒挂）；
+     * 历史裸工号姓名等历史脏行不在本方法治理范围（只读清单交人工）。
      */
     private void markBillUnsignedInTransit(ExpBill bill) {
         if (bill == null || bill.getId() == null) {
@@ -530,8 +535,8 @@ public class DeliveryService {
     }
 
     /**
-     * R5-D-239：姓名取值口径统一——sys_user.nick_name 优先，回退 user_name → fallback。
-     * （存量已写入裸工号的历史行由人工只读清单处置，本方法只收口新写入侧）
+     * R5-D-239：姓名取值规则统一——sys_user.nick_name 优先，回退 user_name → fallback。
+     * （历史已写入裸工号的历史行由人工只读清单处置，本方法只办结新写入侧）
      */
     private String resolveDisplayName(Long userId, String fallback) {
         if (userId == null) {

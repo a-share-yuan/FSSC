@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.facade.event;
 
 import lombok.Getter;
 
 /**
- * 单据终态事件（断点3 基础设施）。
+ * 单据最终状态事件（断点3 基础设施）。
  *
  * 核心域（expense）在单据状态变为 APPROVED / PAID / CLOSED 时发布此事件，
  * 档案域监听后收集为待归档候选，替代档案域反向查询 ExpBill 表。

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -33,7 +36,7 @@ import java.util.Map;
  * <p>R5-D-038 权限码：list/query/create/update/delete/test 六个码已由
  * sql/V1.0.6_ext_interface_config.sql:45-61 建好菜单行并授 Role 1，无需重播。
  * 本批只为「真详情」/{id} 新增 system:extiface:manage（与已有的 update 走 OR，
- * 未播种子行前靠 update 放行，不打断现网）；/by-category 维持 query 口径不提级。
+ * 未播种子行前靠 update 放行，不打断现网）；/by-category 维持 query 规则不提级。
  * 需要的种子行如下：</p>
  * <pre>
  * -- INSERT INTO `sys_menu` (`menu_name`, `parent_id`, `sort`, `path`, `component`, `perms`, `menu_type`, `icon`, `visible`, `status`, `del_flag`)
@@ -123,7 +126,7 @@ public class ExtInterfaceConfigController {
     /**
      * 查询指定分类下已启用的接口配置（供业务模块调用外部接口时读取连接参数）。
      * R5-D-038：出参凭据一律掩码，业务模块取真值走 Service/Mapper 不走本端点；
-     * 权限保留原有 query 口径（对账页用它探测通道是否启用），不提级以免误伤。
+     * 权限保留原有 query 规则（对账页用它探测通道是否启用），不提级以免误伤。
      */
     @RequiresPerm({"system:extiface:query", "system:extiface:manage", "system:extiface:update"})
     @GetMapping("/by-category")

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="flow-workspace">
     <div class="ws-head">
@@ -5,7 +8,7 @@
         <h2 class="ws-title">{{ $t('flow.entryAr.arWorkspace') }}</h2>
         <span class="ws-sub">{{ $t('flow.entryAr.arWorkspaceDesc') }}</span>
       </div>
-      <!-- 原应收工作台头部有统一刷新；页签化后改由这里重建当前页签取数（lazy 下只挂激活项） -->
+      <!-- 原应收工作台头部有统一刷新；页签化后改由这里重建当前页签查询（lazy 下只挂激活项） -->
       <el-button v-if="visibleNames.length" size="small" @click="refresh">{{ $t('common.refresh') }}</el-button>
     </div>
     <el-tabs v-if="visibleNames.length" :key="nonce" v-model="tab" class="ws-tabs">
@@ -28,7 +31,7 @@
 
 <script setup>
 // 方案 A（页面Tab化重构册 §甲）：蓝图 9 页收敛为一域一工作台，页内 tab 复用既有 Board 组件，
-// 不新增流程/表/API。el-tab-pane lazy＝首次激活才挂载，避免 8 个 Board 并发取数（D-DEC-265 教训）。
+// 不新增流程/表/API。el-tab-pane lazy＝首次激活才挂载，避免 8 个 Board 并发查询（D-DEC-265 教训）。
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ArClaimBoard from './ArClaimBoard.vue'

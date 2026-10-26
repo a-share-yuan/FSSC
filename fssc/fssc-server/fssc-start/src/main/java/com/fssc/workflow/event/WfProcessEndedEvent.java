@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.event;
 
 import lombok.Data;
@@ -18,7 +21,7 @@ import lombok.Data;
  * 此前唯一的判据是消费方拿 {@code comment} 与中文字面量「申请人撤回」做 {@code equals}
  * （{@code ExpenseWfEventListener:119}），而 {@code comment} 是给人看的文案：
  * 改一个字、或将来让撤回带自定义原因，收尾分支就静默走成"驳回"——单据状态、
- * 驳回类型落库、留痕动作全部跟着错，且不会报错。属"文案承载业务语义"的同族病根。
+ * 驳回类型写入数据库、记录动作全部跟着错，且不会报错。属"文案承载业务语义"的同族病根。
  */
 @Data
 public class WfProcessEndedEvent {
@@ -55,17 +58,17 @@ public class WfProcessEndedEvent {
      * 而本事件此前只携带 bizType/bizId/approved/comment——收尾方拿不到"是谁点的最后一节"，
      * 于是那些列建成建表以来恒 NULL（D-DEC-093：{@code audit_time}/{@code audit_user_id} 审完仍空）。
      *
-     * <p><b>取值口径（硬约束，改动前请读全）</b>：只可来自 {@code WfEngineFacade.complete()} 的
+     * <p><b>取值规则（硬约束，改动前请读全）</b>：只可来自 {@code WfEngineFacade.complete()} 的
      * {@code operUserId} 形参（人工办结链与超时自动通过链两处 {@code taskService.complete()}），
      * 由门面线程标记随 PROCESS_COMPLETED 同步派发带出。
      * <b>严禁改为反查 {@code wf_task_history} 末节 APPROVE 行</b>：门面在
      * {@code taskService.complete()} <b>内</b>同步触发本事件，而它自己的
-     * {@code writeHistory(APPROVE)} 在 complete() <b>之后</b>才写——事件时刻末节办理行还没落库，
+     * {@code writeHistory(APPROVE)} 在 complete() <b>之后</b>才写——事件时刻末节办理行还没写入数据库，
      * 反查只会取到<b>上一节</b>的人，那是伪造追责证据（时序坑实证见
      * {@code WfQueryService} 的 D-DEC-109 段与 {@code ExpenseWfEventListener} 的复核人注释）。
      *
      * <p><b>为空是合法状态</b>：机器路径（超时自动通过、候选组未认领）本就没有确定的人，
-     * 保持为空与 D-DEC-280「取不到就留空，绝不写猜测」同口径；消费方不得把空值当"系统"回填。
+     * 保持为空与 D-DEC-280「取不到就留空，绝不写猜测」同一规则；消费方不得把空值当"系统"回填。
      */
     private Long endOperUserId;
 

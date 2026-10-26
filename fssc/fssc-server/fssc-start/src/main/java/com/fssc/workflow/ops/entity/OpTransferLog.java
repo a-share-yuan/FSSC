@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.ops.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -10,9 +13,9 @@ import java.time.LocalDateTime;
 /**
  * G3（2026-09-24）流程批量移交日志（op_transfer_log，带 tenant_id）。
  *
- * <p>参考行业做法「流程移交＋移交日志」：一次批量移交落一条，记「谁把哪几条任务移交给谁、原因」。
+ * <p>流程移交与移交日志：一次批量移交落一条，记「谁把哪几条任务移交给谁、原因」。
  * 与 {@code wf_task_history} 的 TRANSFER 行互补——历史行记单条任务被转办，
- * 本表记一次批量移交这个<b>动作</b>，含失败清单（失败同样留痕，不静默吞掉）。
+ * 本表记一次批量移交这个<b>动作</b>，含失败清单（失败同样记录，不静默吞掉）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

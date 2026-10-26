@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
@@ -5,7 +8,7 @@
       <el-input v-model="crud.query.keyword" placeholder="搜索编码/名称/联系人" style="width: 240px" @keyup.enter="crud.load()" />
       <el-button size="small" @click="crud.load()">查询</el-button>
       <el-button size="small" @click="crud.query.keyword = ''; crud.load()">重置</el-button>
-      <el-button size="small" @click="crud.exportCsv()">导出 CSV</el-button>
+      <el-button size="small" @click="crud.exportCsv()">导出</el-button>
       <el-button v-if="crud.selRows.value.length" type="success" plain size="small" @click="crud.batchExport()">导出选中({{ crud.selRows.value.length }})</el-button>
     </div>
     <SkeletonList v-if="crud.loading.value" :rows="8" :cols="5" />
@@ -20,13 +23,13 @@
       <el-table-column prop="contactPhone" label="电话" width="130"  sortable />
       <el-table-column prop="creditLevel" label="信用" width="80"  sortable />
       <el-table-column label="状态" width="90">
-        <template #default="{ row }"><el-tag :type="row.status === 'NORMAL' ? 'success' : (row.status === 'PENDING' ? 'warning' : 'info')" size="small">{{ statusLabel(row.status) }}</el-tag></template>
+        <template #default="{ row }"><el-tag :type="isActive(row.status) ? 'success' : (row.status === 'PENDING' ? 'warning' : 'info')" size="small">{{ statusLabel(row.status) }}</el-tag></template>
       </el-table-column>
       <el-table-column label="操作" width="220">
         <template #default="{ row }">
           <el-button v-if="row.status === 'PENDING'" link size="small" type="success" @click="approveCustomer(row)">核准</el-button>
           <el-button v-permission="'customer:update'" link size="small" @click="crud.openEdit(row)">编辑</el-button>
-          <el-button v-permission="'customer:update'" link size="small" :type="row.status === 'NORMAL' ? 'warning' : 'success'" @click="crud.toggle(row)">{{ row.status === 'NORMAL' ? '停用' : '启用' }}</el-button>
+          <el-button v-permission="'customer:update'" link size="small" :type="isActive(row.status) ? 'warning' : 'success'" @click="crud.toggle(row)">{{ isActive(row.status) ? '停用' : '启用' }}</el-button>
           <el-button link size="small" type="danger" @click="crud.del(row, '确认删除该客户？')">删除</el-button>
         </template>
       </el-table-column>
@@ -100,14 +103,18 @@ const crud = useCrud({
   csvName: '客户',
 })
 
+// 核准写 ACTIVE、新建与历史种子写 NORMAL，两者同为「启用」；名称列与启停判据必须同时认这两个码，
+// 否则 61 行核准客户的状态列直接显示英文 ACTIVE，启停按钮也会把 ACTIVE 当成停用态。
+const isActive = (s) => s === 'NORMAL' || s === 'ACTIVE'
+
 function statusLabel(s) {
-  return { NORMAL: '正常', PENDING: '未核准', DISABLED: '已停用' }[s] || s || ''
+  return { NORMAL: '正常', ACTIVE: '正常', PENDING: '未核准', DISABLED: '已停用' }[s] || s || ''
 }
 
 async function approveCustomer(row) {
   try {
     await customerApi.approve(row.id)
-    ElMessage.success('已核准（ACTIVE）')
+    ElMessage.success('已核准')
     crud.load()
   } catch (e) { ElMessage.error(e?.message || '核准失败') }
 }

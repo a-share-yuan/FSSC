@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.gl.controller;
 
 import com.fssc.common.core.PageResult;
@@ -53,8 +56,9 @@ public class GlController {
     @GetMapping("/trial")
     public Result<Map<String, Object>> trial(@RequestParam Long companyId,
                                              @RequestParam Integer year,
-                                             @RequestParam Integer month) {
-        return Result.success(glService.trialBalance(companyId, year, month));
+                                             @RequestParam Integer month,
+                                             @RequestParam(required = false) Boolean includeUnposted) {
+        return Result.success(glService.trialBalance(companyId, year, month, Boolean.TRUE.equals(includeUnposted)));
     }
 
     @RequiresPerm("gl:entry:list")

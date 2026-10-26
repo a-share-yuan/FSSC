@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -64,7 +67,7 @@ public class MdComplianceRuleService {
         return hit[0];
     }
 
-    /** 当前身份可读口径对应的租户值：平台身份只读平台内置行，租户身份读 内置 ∪ 本租户 */
+    /** 当前身份可读规则对应的租户值：平台身份只读平台内置行，租户身份读 内置 ∪ 本租户 */
     private Long readableTenantId() {
         return TenantContext.isPlatform() ? null : TenantContext.getTenantId();
     }

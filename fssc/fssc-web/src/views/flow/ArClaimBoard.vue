@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card shadow="never">
     <template #header>
@@ -134,7 +137,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 厂别取值来自 ArClaimAccounts.buAmount 的口径（00 不生成事业部凭证；2400/2500 折本位币）
+// 厂别取值来自 ArClaimAccounts.buAmount 的规则（00 不生成事业部凭证；2400/2500 折本位币）
 const PLANT_OPTIONS = ['00', '2400', '2500']
 
 const rows = ref([])
@@ -150,7 +153,7 @@ const subjectOptions = ref([])
 const assignVisible = ref(false)
 const assignUserId = ref(null)
 const assignUserName = ref('')
-// 条件必输与后端 ArClaimService.create 同口径：索赔要成本金额、对冲要借贷金额、订单解挂要订单号
+// 条件必输与后端 ArClaimService.create 同一规则：索赔要成本金额、对冲要借贷金额、订单解挂要订单号
 const createRules = computed(() => {
   // 局部变量不叫 t：会遮蔽 useI18n() 的取词函数，落地器无法接线
   const ct = form.claimType
@@ -256,7 +259,7 @@ async function doSaveAccounts() {
 }
 
 async function doInput() {
-  // 驳回要留原因（后端 ArClaimService「驳回必须填写原因」同口径）
+  // 驳回要留原因（后端 ArClaimService「驳回必须填写原因」同一规则）
   if (!inputText.value.trim()) {
     return ElMessage.warning(t('flow.claim.msgRejectReasonRequired'))
   }

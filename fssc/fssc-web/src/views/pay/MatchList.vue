@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <!-- 概览统计卡片 -->
@@ -57,7 +60,7 @@
             <el-option :label="$t('pay.match.stMatched')" value="MATCHED" />
             <el-option :label="$t('pay.match.stWarnDiff')" value="WARN" />
             <el-option :label="$t('pay.match.stFailed')" value="FAILED" />
-            <!-- D-DEC-077：手工匹配链办结后的终态，结论落 exp_bill.ext_json.matchVerdict，此前无处显形 -->
+            <!-- D-DEC-077：手工匹配链办结后的最终状态，结论落 exp_bill.ext_json.matchVerdict，此前无处显形 -->
             <el-option :label="$t('pay.match.stManualClosed')" value="MANUAL_MATCHED" />
           </el-select>
           <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
@@ -151,7 +154,7 @@
             <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('pay.shared.btnTrace') }}</el-button>
             <el-button link size="small" type="primary" @click.stop="openDetail(row)">{{ $t('pay.shared.btnDetails') }}</el-button>
             <el-button link size="small" type="warning" @click.stop="openLinkDialog(row)">{{ $t('pay.match.btnLinkBills') }}</el-button>
-            <!-- D-DEC-077：人工匹配链已办结的行不再提供「派单」出口，否则终态会被重复派工淹没 -->
+            <!-- D-DEC-077：人工匹配链已办结的行不再提供「派单」出口，否则最终状态会被重复派工淹没 -->
             <el-button v-if="row.matchStatus !== 'MATCHED' && row.matchStatus !== 'MANUAL_MATCHED'" link size="small" type="danger" @click.stop="routeIssue(row)">{{ $t('pay.match.btnRoute') }}</el-button>
             <el-button link size="small" type="primary" @click.stop="manualMatch(row)">{{ $t('pay.match.btnManualMatch') }}</el-button>
             <el-button link size="small" @click.stop="checkOne(row)">{{ $t('pay.match.btnRecalc') }}</el-button>
@@ -183,7 +186,7 @@
           <el-descriptions-item :label="$t('pay.match.ctxPayFrozen')">
             <el-tag :type="detail.frozen ? 'danger' : 'success'" size="small">{{ detail.frozen ? t('pay.match.stFrozen') : t('pay.match.stNotFrozen') }}</el-tag>
           </el-descriptions-item>
-          <!-- D-DEC-077：人工匹配链的办结结论（此前终态零回写，判定意见无处留存） -->
+          <!-- D-DEC-077：人工匹配链的办结结论（此前最终状态零回写，判定意见无处留存） -->
           <el-descriptions-item v-if="detail.matchStatus === 'MANUAL_MATCHED'" :label="$t('pay.match.ctxManualVerdict')" :span="3">
             <span style="color: #67c23a; font-weight: 600">{{ detail.manualVerdict || t('pay.match.stManualClosed') }}</span>
             <span v-if="detail.manualProcInstId" style="margin-left: 12px; color: #909399; font-size: 12px">
@@ -364,7 +367,7 @@
           <div v-if="linkForm.poId && !receiptOptions.length" style="color: #909399; font-size: 12px; margin-top: 4px">
             {{ $t('pay.match.hintNoGrn') }}</div>
         </el-form-item>
-        <!-- G2R-01：合同腿补挂入口（此前缺失，NO_CONTRACT 的出口文案指向了不存在的入口） -->
+        <!-- G2R-01：合同环节补挂入口（此前缺失，NO_CONTRACT 的出口文案指向了不存在的入口） -->
         <el-form-item :label="$t('pay.match.colContract')">
           <el-select v-model="linkForm.contractId" filterable clearable :placeholder="$t('pay.match.phPickContract')" style="width: 100%"
                      :loading="contractLoading">
@@ -441,8 +444,8 @@ function statusType(s) {
 }
 function statusLabel(s) {
   // D-DEC-077：MANUAL_MATCHED＝人工匹配链已办结并解除冻结（自动判定仍存在的差异在明细里照常列出，
-  // 终态结论与原判定两件事都要看得见，故文案写"人工匹配已办结"而不是"三单一致"）
-  // 状态全集＝后端 setMatchStatus 五值（MATCHED/WARN/FAILED/UNMATCHED/MANUAL_MATCHED），漏一枚就直显英文
+  // 最终状态结论与原判定两件事都要看得见，故文案写"人工匹配已办结"而不是"三单一致"）
+  // 状态全集＝后端 setMatchStatus 五值（MATCHED/WARN/FAILED/UNMATCHED/MANUAL_MATCHED），漏一枚就直接显示英文
   return { MATCHED: t('pay.match.stMatched'), UNMATCHED: t('pay.match.stUnmatched'), WARN: t('pay.match.stWarnDiff'), FAILED: t('pay.match.stFailed'), MANUAL_MATCHED: t('pay.match.stManualClosed') }[s] || s
 }
 
@@ -618,8 +621,8 @@ const matchBarColor = computed(() => {
 })
 function billStatusText(s) { return STATUS_LABEL[s] || s }
 function issueCodeText(code) {
-  // 差异码全集＝后端 ThreeWayMatchService 的 MatchIssue 码（12 枚）；缺映射会直显英文码，
-  // 兜底改「其他差异」，原始码仍可在「差异描述」列（后端中文）里看到，不丢信息。
+  // 差异码全集＝后端 ThreeWayMatchService 的 MatchIssue 码（12 枚）；缺映射会直接显示英文码，
+  // 默认处理改「其他差异」，原始码仍可在「差异描述」列（后端中文）里看到，不丢信息。
   return {
     NO_PO: t('pay.match.noPoLinked'),
     NO_RECEIPT: t('pay.match.noGrnLinked'),
@@ -637,6 +640,7 @@ function issueCodeText(code) {
 }
 function issueRouteText(code) {
   // 与后端 ISSUE_ROUTE（ThreeWayMatchService:183）逐枚对齐；后端未登记的码 getOrDefault=FIN_AP，
+  // 故此处默认处理同为应付会计＝同一规则，别在前端另起一套责任岗。
   return {
     NO_PO: t('pay.match.rolePoManager'),
     NO_CONTRACT: t('pay.match.rolePoManager'),
@@ -722,7 +726,7 @@ const receiptOptions = ref([])
 const poLoading = ref(false)
 const receiptLoading = ref(false)
 const linkLoading = ref(false)
-// G2R-01：合同腿候选（四单之合同腿此前无补挂入口，见 doLink 注释）
+// G2R-01：合同环节候选（四单之合同环节此前无补挂入口，见 doLink 注释）
 const contractOptions = ref([])
 const contractLoading = ref(false)
 
@@ -812,7 +816,7 @@ async function reviewBill(row) {
   }
 }
 
-// ---- IFS 手工三单匹配 ----
+// ---- 手工三单匹配 ----
 async function manualMatch(row) {
   const matched = row.matchStatus === 'MATCHED'
   try {

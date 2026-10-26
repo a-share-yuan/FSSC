@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -367,7 +370,7 @@ public class IoTemplateService {
                 // 换下一种格式再试
             }
         }
-        // 兜底：Excel 序列号
+        // 默认处理：Excel 序列号
         try {
             long serial = Long.parseLong(v);
             return LocalDate.of(1899, 12, 30).plusDays(serial);

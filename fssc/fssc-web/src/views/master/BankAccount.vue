@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="bank-account-page">
     <el-card shadow="never">
@@ -10,15 +13,15 @@
             </el-select>
             <el-input v-model="q.keyword" size="small" style="width: 180px" placeholder="账号/户名/开户行" clearable @keyup.enter="search" />
             <el-button size="small" type="primary" @click="search">查询</el-button>
-            <el-button size="small" @click="doExport">导出 CSV</el-button>
-            <el-button size="small" type="success" @click="openForm()">新增账户</el-button>
+            <el-button size="small" @click="doExport">导出</el-button>
+            <el-button v-permission="'md:bankaccount:create'" size="small" type="success" @click="openForm()">新增账户</el-button>
           </div>
         </div>
       </template>
 
       <SkeletonList v-if="loading" :rows="10" :cols="8" />
       <el-table v-else :data="rows" size="small" border stripe
-        @row-dblclick="openForm" :row-class-name="rowClass"
+        @row-dblclick="onRowDblclick" :row-class-name="rowClass"
         :empty-text="denied ? '无权限查看：当前账号缺少银行账户读权限，请联系管理员开通' : '暂无数据'">
         <el-table-column prop="accountCode" label="账户编码" width="110" show-overflow-tooltip />
         <el-table-column prop="accountName" label="账户名称" min-width="160" show-overflow-tooltip />
@@ -50,10 +53,10 @@
         </el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button link size="small" type="primary" @click="openForm(row)">编辑</el-button>
-            <el-button link size="small" :type="row.status === 'NORMAL' ? 'warning' : 'success'" @click="toggleEnable(row)">{{ row.status === 'NORMAL' ? '停用' : '启用' }}</el-button>
-            <el-button link size="small" type="warning" @click="startSealChange(row)">印鉴变更</el-button>
-            <el-button link size="small" type="danger" @click="del(row)">删除</el-button>
+            <el-button v-permission="'md:bankaccount:update'" link size="small" type="primary" @click="openForm(row)">编辑</el-button>
+            <el-button v-permission="'md:bankaccount:update'" link size="small" :type="row.status === 'NORMAL' ? 'warning' : 'success'" @click="toggleEnable(row)">{{ row.status === 'NORMAL' ? '停用' : '启用' }}</el-button>
+            <el-button v-permission="'md:bankaccount:update'" link size="small" type="warning" @click="startSealChange(row)">印鉴变更</el-button>
+            <el-button v-permission="'md:bankaccount:delete'" link size="small" type="danger" @click="del(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -126,9 +129,10 @@ import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import { commonRules } from '../../composables/useFormRules'
 import { exportCsv } from '../../utils/csv'
 import { maskAccount } from '../../utils/mask'
+import { hasPerm } from '../../utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
 
-// D-DEC-158：账户性质（人民银行银行结算账户分类）——基本户唯一性判据，与后端 ACCOUNT_TYPES 同词表
+// D-DEC-158：账户性质（人民银行银行结算账户分类）——基本户唯一性判据，与后端 ACCOUNT_TYPES 同名称表
 const ACCOUNT_TYPES = [
   { value: 'BASIC', label: '基本存款账户' },
   { value: 'GENERAL', label: '一般存款账户' },
@@ -164,13 +168,13 @@ const formRules = computed(() => ({
   accountName: [{ required: true, message: '请输入账户名称' }],
   companyId: [{ required: true, message: '请选择所属组织' }],
   bankName: [{ required: true, message: '请输入开户行' }],
-  // P0 资金路由字段：银行账号必填 + 格式（6-30 位数字）；唯一性由后端兜底（同租户同号拒登记）
+  // P0 资金路由字段：银行账号必填 + 格式（6-30 位数字）；唯一性由后端默认处理（同租户同号拒登记）
   bankAccount: [...commonRules.required('请输入银行账号'), ...commonRules.bankAccount()],
   // 联行号选填，填了就必须是 12 位数字
   bankCode: commonRules.bankCode(),
-  // 期初余额不能为负（后端 @DecimalMin 兜底）
+  // 期初余额不能为负（后端 @DecimalMin 默认处理）
   balance: commonRules.amountRange(0, null, '期初余额不能为负'),
-  // D-DEC-158：账户性质是「一司一基本户」判据的来源，新增即必选；存量在册账户允许先改其它字段
+  // D-DEC-158：账户性质是「一司一基本户」判据的来源，新增即必选；历史现有账户允许先改其它字段
   accountType: form.id ? [] : [{ required: true, message: '请选择账户性质' }],
 }))
 
@@ -229,6 +233,13 @@ async function loadCompanies() {
 
 function search() { pageNum.value = 1; load() }
 
+const canUpdate = computed(() => hasPerm('md:bankaccount:update'))
+
+// 双击进编辑与「编辑」按钮同权限：只读账号双击不应打开可保存的表单
+function onRowDblclick(row) {
+  if (canUpdate.value) openForm(row)
+}
+
 function openForm(row) {
   Object.keys(form).forEach((k) => delete form[k])
   if (row) Object.assign(form, row, { isDefault: row.isDefault === 1 })
@@ -275,7 +286,7 @@ async function del(row) {
 }
 
 function doExport() {
-  // R5-D-051：CSV 与屏上同口径——投影时打码 bankAccount，堵住「列表打码、导出放全号」的旁路
+  // R5-D-051：CSV 与屏上同一规则——投影时打码 bankAccount，堵住「列表打码、导出放全号」的旁路
   exportCsv(rows.value.map((r) => ({ ...r, bankAccount: maskAccount(r.bankAccount) })), [
     { prop: 'accountCode', label: '账户编码' }, { prop: 'accountName', label: '账户名称' },
     { prop: 'bankName', label: '开户行' }, { prop: 'bankBranch', label: '支行' },

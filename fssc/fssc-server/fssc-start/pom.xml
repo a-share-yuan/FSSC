@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -159,7 +162,7 @@
         </dependency>
 
         <!-- ===== P0-B1 可观测性地基 =====
-             Actuator：免鉴权探活（/actuator/health + liveness/readiness），供 K8s 探针 / 负载均衡 / 监控系统使用；
+             Actuator：免鉴权探活（/actuator/health + liveness/readiness），供 K8s 检查 / 负载均衡 / 监控系统使用；
              Micrometer：HTTP 接口耗时/错误率/QPS 指标（http.server.requests），Prometheus 抓取。 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

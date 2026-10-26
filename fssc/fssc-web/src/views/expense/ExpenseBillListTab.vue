@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
@@ -28,7 +31,7 @@
       <el-table-column :label="$t('field.type')" width="80">
         <template #default="{ row }">{{ billTypeLabel(row.billType) }}</template>
       </el-table-column>
-      <!-- P2-1 渠道列：枚举取词表、禁中英直显（既有枚举治理约定）；未知值显「—」不猜 -->
+      <!-- P2-1 渠道列：枚举取名称表、禁中英直接显示（既有枚举治理约定）；未知值显「—」不猜 -->
       <el-table-column :label="$t('expense.ledger.colChannel')" width="72">
         <template #default="{ row }">{{ sourceLabel(row.source) }}</template>
       </el-table-column>
@@ -157,7 +160,7 @@
   </el-dialog>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" :biz-type="traceBizType" />
 
-  <!-- 单据详情抽屉：与审批工作台「去处理」共用同一详情面板，字段口径一致 -->
+  <!-- 单据详情抽屉：与审批工作台「去处理」共用同一详情面板，字段含义一致 -->
   <el-drawer v-model="detailVisible" :title="$t('expense.bill.ttlBillDetail', { v1: detailBillNo || '' })" direction="rtl" size="820px" :destroy-on-close="true">
     <BillDetailPanel :bill-id="detailBillId" :bill-type="detailBillType" />
   </el-drawer>
@@ -212,7 +215,7 @@ const bills = ref([])
 const filterType = ref('')
 // P2-1 渠道（exp_bill.source）：筛选值与服务端白名单同域（只认 PC/H5，见 ExpenseBillService#normalizeBillSource）
 const filterSource = ref('')
-/** 渠道中文名词表：库里存枚举码、界面显中文（枚举治理约定：禁中英直显、缺失不猜） */
+/** 渠道中文名名称表：库里存枚举码、界面显中文（枚举治理约定：禁中英直接显示、缺失不猜） */
 function sourceLabel(v) {
   return { PC: t('expense.ledger.optDesktop'), H5: t('expense.ledger.optMobile') }[v] || '—'
 }
@@ -267,7 +270,7 @@ function onRowClick(row) { openDetailById(row.id, row.billType, row.billNo) }
 
 async function loadBills() {
   // keyword 交服务端过滤（后端 myPage 已补该入参）：原先只在已加载的前 50 条里前端筛，
-  // 单据一多，深链携带的单号/标题就筛不到（D-DEC-245 遗留第 3 项）。前端过滤保留，两者同口径不冲突。
+  // 单据一多，深链携带的单号/标题就筛不到（D-DEC-245 遗留第 3 项）。前端过滤保留，两者同一规则不冲突。
   const kw = keyword.value.trim()
   bills.value = (await billApi.myPage({
     pageNum: 1, pageSize: 50, billType: filterType.value, keyword: kw || undefined,
@@ -430,7 +433,7 @@ onMounted(() => {
   loadBills()
 })
 
-// 同页再次深链（已在 /expense/my 时又带新 billId 过来）→ 组件被复用、onMounted 不再触发，需 watch 兜底
+// 同页再次深链（已在 /expense/my 时又带新 billId 过来）→ 组件被复用、onMounted 不再触发，需 watch 默认处理
 watch(() => currentRoute.query.billId, (v) => {
   if (v != null && v !== '') openDetailById(v, currentRoute.query.billType ? String(currentRoute.query.billType) : '', currentRoute.query.billNo ? String(currentRoute.query.billNo) : '')
 })
@@ -445,7 +448,7 @@ function hasMoreActions(row) {
     || (!!row.voucherNo && hasPerm('sharing:voucher:list'))
 }
 
-/** 撤回：仅本人发起且流程仍在审批中（首次提交后、终态前） */
+/** 撤回：仅本人发起且流程仍在审批中（首次提交后、最终状态前） */
 function canWithdraw(row) {
   return row.status === BillStatus.APPROVING || row.status === BillStatus.SUBMITTED
 }

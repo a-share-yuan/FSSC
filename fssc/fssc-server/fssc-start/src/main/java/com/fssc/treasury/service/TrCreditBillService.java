@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.treasury.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -41,7 +44,7 @@ public class TrCreditBillService {
     private final com.fssc.system.service.NumberRuleService numberRuleService;
     private final com.fssc.framework.org.OrgGuard orgGuard;
     /**
-     * D-DEC-418 丙：到账腿 ↔ 核销腿 勾稽体检的三张只读 mapper。
+     * D-DEC-418 丙：到账环节 ↔ 核销环节 勾稽体检的三张只读 mapper。
      * 跨域引用与本包既有惯例一致（本类已引 sharing 域的 OpBankStatement/Mapper；
      * bank 域的 BankReconcileService:133 也直接读 rc_receipt）。仅用于 {@link #reconTrace(Long)}
      * 的 SELECT，本类所有写方法不触碰它们。
@@ -51,8 +54,8 @@ public class TrCreditBillService {
     private final com.fssc.receivable.mapper.RcReceiptLineMapper rcReceiptLineMapper;
     /**
      * D-DEC-420 丙：只读取 TR_RECEIPT 流程实例的发起人当"建单人"——tr_credit_bill 无建单列，
-     * 而 {@code receiveRecord()} 起流时已把登录人写进 wf_instance.start_user_id，是现成留痕。
-     * 本字段仅 SELECT，不写流程表、不改审批腿。
+     * 而 {@code receiveRecord()} 起流时已把登录人写进 wf_instance.start_user_id，是现成记录。
+     * 本字段仅 SELECT，不写流程表、不改审批环节。
      */
     private final com.fssc.workflow.mapper.WfInstanceMapper wfInstanceMapper;
 
@@ -139,10 +142,10 @@ public class TrCreditBillService {
 
     /**
      * 人工核销（确认对账）。
-     * <p>D-DEC-420 丙档：只做提示闸——确认核销的人与该单建单人相同时，返回非阻断的复核提示位
-     * （{@code selfRecon}／{@code warning}），核销照常完成、不抛异常、不动审批腿与权限。
+     * <p>D-DEC-420 丙档：只做提示校验——确认核销的人与该单建单人相同时，返回非阻断的复核提示位
+     * （{@code selfRecon}／{@code warning}），核销照常完成、不抛异常、不动审批环节与权限。
      * <p>返回体由 Void 改为结构化 Map 是<b>增量</b>：该端点原 data 恒为 null，现调用方
-     * （资金收款看板）忽略返回值，取数改从 data 里读不影响既有行为。
+     * （资金收款看板）忽略返回值，查询改从 data 里读不影响既有行为。
      */
     @Transactional
     public Map<String, Object> confirmRecon(Long id) {
@@ -232,19 +235,19 @@ public class TrCreditBillService {
         return bill;
     }
 
-    // ---------------- D-DEC-418 丙档：到账腿 ↔ 核销腿 勾稽预警与联查提示（只读，不改账） ----------------
+    // ---------------- D-DEC-418 丙档：到账环节 ↔ 核销环节 勾稽预警与联查提示（只读，不改账） ----------------
 
     /**
-     * 到账腿与核销腿的勾稽体检（<b>纯读</b>：不写 tr_credit_bill、不写 rc_receipt、不出证、不冲减余额）。
+     * 到账环节与核销环节的勾稽体检（<b>纯读</b>：不写 tr_credit_bill、不写 rc_receipt、不出证、不冲减余额）。
      *
-     * <h3>两腿现状（读准的结论，均有 file:line 与现库读数支撑）</h3>
+     * <h3>两环节现状（读准的结论，均有 file:line 与现库读数支撑）</h3>
      * <ul>
-     *   <li><b>到账腿</b>：{@code receiveRecord()} 建 tr_credit_bill 并起 TR_RECEIPT 流
+     *   <li><b>到账环节</b>：{@code receiveRecord()} 建 tr_credit_bill 并起 TR_RECEIPT 流
      *       （本类 :43-64）；审批收尾在 {@code TreasuryBizAction:145-150} 置 RECONCILED、
      *       {@code TreasuryBizAction:164} 调 {@code VoucherService.generateReceiptVoucher}
      *       （{@code VoucherService:2571+}，借 1002 银行存款／贷 1122 应收账款）。
      *       <b>出证，但零核销</b>——全链路不碰 rc_receipt / rc_receivable。</li>
-     *   <li><b>核销腿</b>：{@code RcReceiptService.create()}（{@code RcReceiptService.java:56-151}）
+     *   <li><b>核销环节</b>：{@code RcReceiptService.create()}（{@code RcReceiptService.java:56-151}）
      *       建 rc_receipt ＋ rc_receipt_line 并同事务冲减 rc_receivable.received/remain（D-V3-143）。
      *       <b>核销，但零出证</b>——{@code RcReceiptService} 全文无 {@code voucherService} 引用
      *       （grep 命中 0），现库 {@code op_voucher} 按 source_doc_type 分组 <b>没有 RC_RECEIPT 这一类</b>
@@ -255,9 +258,9 @@ public class TrCreditBillService {
      *       2026-09-30）与 rc_receipt id=1（SK202609301702391／客户 24／127,200.00／2026-09-30）
      *       是同笔款项的两半，但任何一侧都查不到对方的 id。</li>
      *   <li><b>唯一的名义抓手是死列</b>：{@code rc_receipt.bank_serial}（注释即"勾对的银行流水号"）
-     *       现库 <b>8/8 全 NULL、bank_matched 全 0</b>；登记腿 {@code RcReceiptService.create()}
+     *       现库 <b>8/8 全 NULL、bank_matched 全 0</b>；登记环节 {@code RcReceiptService.create()}
      *       从不赋值它，只有银企自动勾对（{@code BankReconcileService:133-137}）会回写。
-     *       因此它不能作为两腿的公共外键使用。</li>
+     *       因此它不能作为两环节的公共外键使用。</li>
      *   <li><b>反向指针还撞车</b>：{@code op_bank_statement.recon_bill_id} 是单个 bigint、<b>无类型判别列</b>
      *       （实测 op_bank_statement 全列无 recon_bill_type），却被两条自动勾对链写入<b>不同的表</b>：
      *       本类 {@code autoRecon():92} 写 {@code tr_credit_bill.id}，
@@ -266,15 +269,15 @@ public class TrCreditBillService {
      * </ul>
      *
      * <h3>为什么只落丙档</h3>
-     * 甲（到账腿审批通过时按金额自动核销）＝错配风险，同额多客户/一客户多笔同额时会把 A 的到账冲到 B 的应收上；
-     * 乙（核销腿补出证）＝与到账腿「贷 1122」方向冲突，会产生双份银行凭证。
-     * 两者都属跨域打通＋账务口径裁决，交人工裁决（见本轮回报）。本方法只加预警与联查提示，
+     * 甲（到账环节审批通过时按金额自动核销）＝错配风险，同额多客户/一客户多笔同额时会把 A 的到账冲到 B 的应收上；
+     * 乙（核销环节补出证）＝与到账环节「贷 1122」方向冲突，会产生双份银行凭证。
+     * 两者都属跨域打通＋账务规则裁决，交人工裁决（见本轮回报）。本方法只加预警与联查提示，
      * <b>不改账、不改任何状态、不新建流程</b>，与已上线的联查读侧 {@code BillTraceChainController}
      * 亦不冲突——实测该类全文不含 tr_credit_bill／rc_receipt／TR_RECEIPT 任何一处，
-     * 这两条腿本就不在它覆盖面内（且该类禁改，故新方法另起于本域）。
+     * 这两个环节本就不在它覆盖面内（且该类禁改，故新方法另起于本域）。
      *
      * @param id tr_credit_bill 主键
-     * @return 结构化体检结果：到账腿凭证态、核销腿候选（按客户＋金额现算）、无共同键声明、流水指针多义性
+     * @return 结构化体检结果：到账环节凭证态、核销环节候选（按客户＋金额现算）、无共同键声明、流水指针多义性
      */
     public Map<String, Object> reconTrace(Long id) {
         TrCreditBill bill = requireExist(id);
@@ -288,7 +291,7 @@ public class TrCreditBillService {
         res.put("reconFlag", bill.getReconFlag());
         res.put("reconTime", bill.getReconTime());
 
-        // ① 到账腿出证侧：TR_RECEIPT 凭证（四键维持收款单坐标，D-DEC-419 已裁不可挪用）
+        // ① 到账环节出证侧：TR_RECEIPT 凭证（四键维持收款单坐标，D-DEC-419 已裁不可挪用）
         List<com.fssc.sharing.entity.OpVoucher> vouchers = voucherMapper.selectList(
                 new LambdaQueryWrapper<com.fssc.sharing.entity.OpVoucher>()
                         .eq(com.fssc.sharing.entity.OpVoucher::getSourceDocType, "TR_RECEIPT")
@@ -307,7 +310,7 @@ public class TrCreditBillService {
         res.put("receiptVouchers", voucherRows);
         res.put("hasVoucher", !voucherRows.isEmpty());
 
-        // ② 核销腿候选：同客户＋同金额的 rc_receipt。<b>这是启发式现算，不是勾稽事实</b>。
+        // ② 核销环节候选：同客户＋同金额的 rc_receipt。<b>这是启发式现算，不是勾稽事实</b>。
         List<com.fssc.receivable.entity.RcReceipt> cands = rcReceiptMapper.selectList(
                 new LambdaQueryWrapper<com.fssc.receivable.entity.RcReceipt>()
                         .eq(bill.getCustomerId() != null,
@@ -324,7 +327,7 @@ public class TrCreditBillService {
             rm.put("customerId", rc.getCustomerId());
             rm.put("receiptDate", rc.getReceiptDate());
             rm.put("status", rc.getStatus());
-            // 名义勾稽列现状：登记腿从不写，只有银企自动勾对会写 ⇒ 全 NULL 属预期，不是数据损坏
+            // 名义勾稽列现状：登记环节从不写，只有银企自动勾对会写 ⇒ 全 NULL 属预期，不是数据损坏
             rm.put("bankSerial", rc.getBankSerial());
             rm.put("bankMatched", rc.getBankMatched());
             List<com.fssc.receivable.entity.RcReceiptLine> lines = rcReceiptLineMapper.selectList(
@@ -338,19 +341,19 @@ public class TrCreditBillService {
         res.put("writeoffCandidates", rcRows);
         res.put("writeoffCandidateCount", rcRows.size());
 
-        // ③ 共同键声明：两腿之间不存在外键，候选只是"客户＋金额"现算
+        // ③ 共同键声明：两环节之间不存在外键，候选只是"客户＋金额"现算
         res.put("hasCommonForeignKey", false);
         res.put("matchBasis", "customer_id ＋ amount 现算（无外键，非勾稽事实）");
         boolean sameDay = rcRows.stream().anyMatch(x -> bill.getReceiveDate() != null
                 && bill.getReceiveDate().equals(x.get("receiptDate")));
         List<String> warns = new java.util.ArrayList<>();
         if (rcRows.isEmpty()) {
-            warns.add("到账腿无任何同客户同金额的收款核销单：本笔到账只在资金域留痕，"
+            warns.add("到账记录没有同客户同金额的收款核销单：本笔到账只在资金业务中记录，"
                     + "应收子账（rc_receivable.remain_amount）从未因此冲减，账证与子账可能不符");
         } else {
             if (rcRows.size() > 1) {
                 warns.add("同客户同金额的收款核销单有 " + rcRows.size() + " 张，无法判定本笔到账对应哪一张——"
-                        + "两腿无共同键，此处仅并列提示，不构成勾稽结论");
+                        + "两条记录没有共同单号，此处仅并列提示，不构成勾稽结论");
             }
             if (sameDay) {
                 warns.add("存在与到账日期同日的核销单：属「同日同额」人眼对齐特征，"
@@ -358,8 +361,8 @@ public class TrCreditBillService {
             }
         }
         if (!voucherRows.isEmpty() && rcRows.isEmpty()) {
-            warns.add("到账腿已出证（贷 1122 应收账款）而核销腿无对应单：总账已 relief 应收、"
-                    + "应收子账未冲减，属账证与子账两个口径并行，需人工核对");
+            warns.add("到账记录已生成凭证（贷 1122 应收账款）而核销记录无对应单：总账已 relief 应收、"
+                    + "应收子账未冲减，属总账与子账两套数据并存，需人工核对");
         }
         res.put("warnings", warns);
 

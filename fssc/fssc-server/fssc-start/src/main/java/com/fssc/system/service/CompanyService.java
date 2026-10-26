@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -28,8 +31,8 @@ public class CompanyService {
      * 出现在下拉里会让用户选到一个必然无法发起任何单据的公司（无组织 ⇒ 组织健康 R1/R2必然红）。
      * 管理端要看全部公司请走部门/公司管理页，不要依赖本方法。
      *
-     * <p>与 {@code OrgHealthChecker} 的扫描口径一致（同样只取 NORMAL），
-     * 避免「体检说没问题、下拉却选得到」的两种口径打架。
+     * <p>与 {@code OrgHealthChecker} 的扫描规则一致（同样只取 NORMAL），
+     * 避免「体检说没问题、下拉却选得到」的两种规则打架。
      */
     public List<SysCompany> tree() {
         return sysCompanyMapper.selectList(new LambdaQueryWrapper<SysCompany>()
@@ -66,7 +69,7 @@ public class CompanyService {
     }
 
     public Long create(SysCompany company) {
-        // 必填收口（批次 2C，与前端 Org.vue「公司名称/公司编码」同口径）：名称与编码是人工维护的业务键
+        // 必填办结（批次 2C，与前端 Org.vue「公司名称/公司编码」同一规则）：名称与编码是人工维护的业务键
         AssertUtil.notBlank(company.getCompanyName(), ErrorCode.PARAM_INVALID, "请输入公司名称");
         AssertUtil.notBlank(company.getCompanyCode(), ErrorCode.PARAM_INVALID, "请输入公司编码");
         Long dup = countByCode(company.getCompanyCode());
@@ -88,7 +91,7 @@ public class CompanyService {
         if (exist == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "公司不存在: " + company.getId());
         }
-        // 整单更新（前端提交完整对象），故与 create 同口径拦空；enable() 走独立对象不受影响
+        // 整单更新（前端提交完整对象），故与 create 同一规则拦空；enable() 走独立对象不受影响
         AssertUtil.notBlank(company.getCompanyName(), ErrorCode.PARAM_INVALID, "请输入公司名称");
         AssertUtil.notBlank(company.getCompanyCode(), ErrorCode.PARAM_INVALID, "请输入公司编码");
         // 更新时「未提交」不得被当成「改回集中」：留 null 让 MP 跳过该列，避免把非集中公司静默改回集中
@@ -97,7 +100,7 @@ public class CompanyService {
     }
 
     /**
-     * 档案管理模式取值收口（V1.4.92）：空值按 defaultMode 处理（create 传 CENTRAL、update 传 null＝不改）；
+     * 档案管理模式取值办结（V1.4.92）：空值按 defaultMode 处理（create 传 CENTRAL、update 传 null＝不改）；
      * 非空必须是 CENTRAL/NON_CENTRAL，防止脏值绕过 DeliveryService 的等值判定。
      */
     private String normalizeArchiveMode(String mode, String defaultMode) {

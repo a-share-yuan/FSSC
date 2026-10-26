@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="bank-reconcile-page">
     <div class="page-header" style="margin-bottom: 16px;">
@@ -51,7 +54,7 @@
         <el-card shadow="never">
           <template #header>
             <div class="panel-header">
-              <span class="panel-title">银行流水（对账留痕）</span>
+              <span class="panel-title">银行流水（对账记录）</span>
               <el-tag size="small" type="info">{{ bankRows.length }} 条</el-tag>
             </div>
           </template>
@@ -81,7 +84,7 @@
         <el-card shadow="never">
           <template #header>
             <div class="panel-header">
-              <span class="panel-title">付款记录（对账留痕）</span>
+              <span class="panel-title">付款记录（对账记录）</span>
               <el-tag size="small" type="info">{{ payRows.length }} 条</el-tag>
             </div>
           </template>
@@ -108,20 +111,26 @@
       </el-col>
     </el-row>
 
-    <el-pagination
-      v-model:current-page="pageNum"
-      v-model:page-size="pageSize"
-      :total="total"
-      :page-sizes="[10, 20, 50, 100]"
-      layout="total, prev, pager, next, jumper"
-      style="margin-top: 12px; justify-content: flex-end;"
-      @size-change="handleSizeChange"
-      @current-change="handleCurrentChange"
-    />
+    <!-- D-H6-02（P3，2026-10-24 H6 真跑）：本分页器驱动的是「对账记录」两张表（bank_reconcile），
+         改前页面上只有这一个分页器，记录 0 行时它显示「共 0 条」，而下方待勾对银行流水实有 200 行 ⇒
+         被读成"流水表 0 条"。现给它挂上归属标签，且待勾对两张表各自带计数（银行流水侧另有自己的分页器），
+         空表计数不再遮蔽有数表。 -->
+    <div class="pager-scope">
+      <span class="pager-scope-label">对账记录分页（上方「银行流水／付款记录」两张表共用同一页数据）</span>
+      <el-pagination
+        v-model:current-page="pageNum"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, prev, pager, next, jumper"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
+    </div>
 
     <!-- 待勾对候选（R5-D-184）：人工勾对只允许从真身数据源选行——银行流水取 op_bank_statement、
          付款侧取「企业已付银行未付」付款明细；勾选行 id 即 op_bank_statement.id / exp_bill_payment.id，
-         与留痕行（bank_reconcile.id）彻底分开，杜绝三表 id 数字相近串表 -->
+         与记录行（bank_reconcile.id）彻底分开，杜绝三表 id 数字相近串表 -->
     <el-card shadow="never" style="margin-top:12px">
       <template #header>
         <div class="panel-header">
@@ -134,22 +143,37 @@
       </template>
       <el-row :gutter="12">
         <el-col :span="12">
-          <div class="pending-title">待勾对银行流水（勾选一条）</div>
+          <div class="pending-title">待勾对银行流水（勾选一条）
+            <el-tag size="small" type="info" style="margin-left:6px">{{ pendingBankTotal }} 条</el-tag>
+          </div>
           <el-table :data="pendingBankRows" size="small" stripe border max-height="300" empty-text="暂无待勾对银行流水"
             v-loading="loading.pendingBank"
             @selection-change="s => selPendingBank = s"
             @row-dblclick="openTrace">
-            <el-table-column type="selection" width="40" :selectable="r => !isMatched(r.reconStatus) && r.reconStatus !== 'MANUAL' && Number(r.amount || 0) > 0" />
+            <el-table-column type="selection" width="40" :selectable="r => !r.claimed && Number(r.amount || 0) > 0" />
             <el-table-column prop="bankSerial" label="流水号" width="130" show-overflow-tooltip sortable />
             <el-table-column label="金额" width="110" align="right" sortable :sort-by="(r) => Number(r.amount)">
               <template #default="{ row }">{{ fmt(row.amount) }}</template>
             </el-table-column>
             <el-table-column prop="oppositeName" label="对手" min-width="110" show-overflow-tooltip />
-            <el-table-column prop="transDate" label="日期" width="150" show-overflow-tooltip />
+            <el-table-column prop="transDate" label="日期" width="120" show-overflow-tooltip :formatter="(r, c, v) => formatDate(v)" />
           </el-table>
+          <el-pagination
+            v-model:current-page="pendingBankPageNum"
+            v-model:page-size="pendingBankPageSize"
+            :total="pendingBankTotal"
+            :page-sizes="[20, 50, 100]"
+            layout="total, prev, pager, next"
+            small
+            style="margin-top:8px; justify-content:flex-end"
+            @size-change="onPendingBankSize"
+            @current-change="loadPendingBank"
+          />
         </el-col>
         <el-col :span="12">
-          <div class="pending-title">待勾对付款记录（企业已付银行未付，勾选一条）</div>
+          <div class="pending-title">待勾对付款记录（企业已付银行未付，勾选一条）
+            <el-tag size="small" type="info" style="margin-left:6px">{{ pendingPayRows.length }} 条</el-tag>
+          </div>
           <el-table :data="pendingPayRows" size="small" stripe border max-height="300"
             empty-text="暂无待勾对付款记录（请在调节表页先生成当月调节表）"
             v-loading="loading.pendingPay"
@@ -160,7 +184,7 @@
               <template #default="{ row }">{{ fmt(row.amount) }}</template>
             </el-table-column>
             <el-table-column prop="payeeName" label="收款方" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="bizDate" label="日期" width="110" show-overflow-tooltip />
+            <el-table-column prop="bizDate" label="日期" width="110" show-overflow-tooltip :formatter="(r, c, v) => formatDate(v)" />
           </el-table>
         </el-col>
       </el-row>
@@ -191,6 +215,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { p2Api } from '../../api'
 import { readBillDeepLink } from '../../utils/bizEntry'
+import { formatDate } from '@/utils/format'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import CoachMark from '@/components/CoachMark.vue'
@@ -218,6 +243,11 @@ const payRows = ref([])
 // R5-D-184：待勾对候选（人工勾对面，真身 id 数据源）——银行侧取 op_bank_statement、付款侧取付款明细
 const pendingBankRows = ref([])
 const pendingPayRows = ref([])
+// D-H6-01：待勾对银行流水改服务端分页（源表 op_bank_statement 2376 行、其中 UNRECON 711，
+// 旧写法一次拉 200 行且客户端排除表从不命中 ⇒ 硬截断＋混入已勾对行）。
+const pendingBankPageNum = ref(1)
+const pendingBankPageSize = ref(50)
+const pendingBankTotal = ref(0)
 const selPendingBank = ref([])
 const selPendingPay = ref([])
 const pendingMonth = ref(new Date().getFullYear() + String(new Date().getMonth() + 1).padStart(2, '0'))
@@ -233,7 +263,7 @@ const total = ref(0)
  * 本单上下文（D-DEC-153「去处理跳到资金计划页且无本单据上下文」的对账半）。
  * 待办/我的单据带 ?billNo=SER…&billId=20 进来时：
  *  · billNo 写进搜索框（本列即 bank_reconcile.serial_no，与 BillRouteRegistry:229 的 bizNoCol 同列）；
- *  · billId 作精确兜底——md_bank_account 无单号列、对账域也无 keyword 入参，光靠单号可能筛空。
+ *  · billId 作精确默认处理——md_bank_account 无单号列、对账域也无 keyword 入参，光靠单号可能筛空。
  * 该列表接口只有 matchStatus 一种服务端过滤（BankReconcileController:36-41 无 keyword 形参），
  *    所以首屏用一次性宽页取回后再客户端定位，否则默认 10 行里根本不含被审那一张。
  *    宽页只在落地那一次生效，之后翻页恢复正常页宽（deepLocate 用完即置空）。
@@ -246,7 +276,7 @@ if (deepLink.billNo) searchKey.value = deepLink.billNo
 
 const summary = computed(() => {
   const total = allRows.value.length
-  // R5-D-182：已勾对口径四处一次收口——MATCHED（自动勾对）＋CONFIRMED（审批定稿）＋CLAIMED（收款认领）
+  // R5-D-182：已勾对规则四处一次办结——MATCHED（自动勾对）＋CONFIRMED（审批定稿）＋CLAIMED（收款认领）
   // 同属"已勾对"，统计/筛选（服务端 page() 同步）/状态文案/勾选禁用四处共用 isMatched()，不得各自漂移
   const matched = allRows.value.filter(r => isMatched(r.matchStatus)).length
   const manual = allRows.value.filter(r => r.matchStatus === 'MANUAL').length
@@ -274,7 +304,7 @@ async function loadReconcile() {
     bankRows.value = records.filter(r => r.serialNo)
     payRows.value = records.filter(r => r.paymentNo)
     if (searchKey.value || once) filterRows()
-    // 主键定位只在落地那一次生效，翻页/换筛选后回到正常口径
+    // 主键定位只在落地那一次生效，翻页/换筛选后回到正常规则
     if (once) { deepLocateOnce.value = false; deepRowId.value = null }
   } catch (e) {
     ElMessage.error(e.message)
@@ -303,7 +333,7 @@ function filterRows() {
     payRows.value = allRows.value.filter(r => r.paymentNo)
     return
   }
-  // 命中口径：搜索框（流水号/付款单号）命中，或深链带进来的本单主键命中（billId 兜底）
+  // 命中规则：搜索框（流水号/付款单号）命中，或深链带进来的本单主键命中（billId 默认处理）
   const hit = (r) => (k && ((r.serialNo || '').toLowerCase().includes(k) ||
       (r.paymentNo || '').toLowerCase().includes(k))) ||
       (id != null && String(r.id) === String(id))
@@ -346,23 +376,35 @@ async function runReconcile() {
 // ========== 待勾对候选（R5-D-184） ==========
 /**
  * 人工勾对面的真身数据源：
- *  · 银行流水侧：GET /bank/reconcile/statement/page（op_bank_statement），剔除已勾对口径
- *    （MATCHED/RECONED/MANUAL，与后端 manualMatch 重复勾对闸同口径），行 id 即 op_bank_statement.id；
+ *  · 银行流水侧：GET /bank/reconcile/statement/page（op_bank_statement），剔除已勾对规则
+ *    （MATCHED/RECONED/MANUAL，与后端 manualMatch 重复勾对校验同一规则），行 id 即 op_bank_statement.id；
  *  · 付款侧：GET /bank/reconcile/items?itemType=ENT_OUT（企业已付银行未付，来源 exp_bill_payment），
  *    行 id 从 sourceRef="PAYMENT:{id}" 解析，即 exp_bill_payment.id。
- * 两侧勾选后提交的 id 语义与后端一致，不再传 bank_reconcile 留痕行的 id。
+ * 两侧勾选后提交的 id 语义与后端一致，不再传 bank_reconcile 记录行的 id。
  */
-async function loadPendingCandidates() {
+async function loadPendingBank() {
   loading.pendingBank = true
   try {
-    const r = await p2Api.bankStatementPage({ pageNum: 1, pageSize: 200 })
-    const rows = r?.list || r?.records || []
-    pendingBankRows.value = rows.filter(x => !['MATCHED', 'RECONED', 'MANUAL'].includes(x.reconStatus))
+    // D-H6-01：服务端按 reconStatus=UNRECON 过滤「未勾对」集合并分页回传总数。
+    // 旧写法 pageSize:200 一次拉回后再用 !['MATCHED','RECONED','MANUAL'].includes(reconStatus) 客户端排除——
+    // 而本列 reconStatus 实值只有 RECON/UNRECON，排除表从不命中（等于没排除），且 200 行硬截断漏掉其余未勾对流水。
+    const r = await p2Api.bankStatementPage({
+      pageNum: pendingBankPageNum.value,
+      pageSize: pendingBankPageSize.value,
+      reconStatus: 'UNRECON',
+    })
+    pendingBankRows.value = r?.list || r?.records || []
+    pendingBankTotal.value = Number(r?.total ?? 0)
   } catch (e) {
     ElMessage.error('待勾对银行流水加载失败：' + (e.message || e))
   } finally {
     loading.pendingBank = false
   }
+}
+
+function onPendingBankSize() { pendingBankPageNum.value = 1; loadPendingBank() }
+
+async function loadPendingPay() {
   loading.pendingPay = true
   try {
     const items = await p2Api.bankReconItems({ month: pendingMonth.value, itemType: 'ENT_OUT' })
@@ -383,6 +425,10 @@ async function loadPendingCandidates() {
   }
 }
 
+async function loadPendingCandidates() {
+  await Promise.all([loadPendingBank(), loadPendingPay()])
+}
+
 // ========== 人工勾对 ==========
 async function manualMatch() {
   if (selPendingBank.value.length !== 1 || selPendingPay.value.length !== 1) {
@@ -394,7 +440,7 @@ async function manualMatch() {
   const bankAmount = Number(b.amount || 0)
   const payAmount = Number(p.amount || 0)
   const diff = Math.abs(bankAmount - payAmount)
-  // 金额一致硬闸（与后端 AMOUNT_DIFF_TOLERANCE 双层同口径，超差直接拒绝，不再"确认后仍勾对"）
+  // 金额一致强制校验（与后端 AMOUNT_DIFF_TOLERANCE 双层同一规则，超差直接拒绝，不再"确认后仍勾对"）
   if (bankAmount <= 0) {
     ElMessage.warning('所选流水金额缺失或非正数，无法勾对')
     return
@@ -457,6 +503,8 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => reconcileCm.value
 .panel-title { font-size: 14px; font-weight: 600; color: #303133; }
 .manual-bar { padding: 8px 0; text-align: center; }
 .pending-title { font-size: 13px; font-weight: 600; color: #606266; margin-bottom: 6px; }
+.pager-scope { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.pager-scope-label { font-size: 12px; color: #909399; }
 .match-hint { color: #409eff; font-size: 14px; }
 .match-hint-muted { color: #909399; font-size: 13px; }
 .amt-matched { color: #67c23a; font-weight: 600; }

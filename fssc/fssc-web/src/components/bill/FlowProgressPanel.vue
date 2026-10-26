@@ -1,6 +1,11 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <!--
-  流程进度卡片：单据页顶部常驻，回答三件事——
-  ① 这张单现在停在流程的哪一节、是否还在办；② 该节谁在办、已停留多久；③ 每一节谁在什么时间签了什么意见。
+  流程进度卡片：单据页顶部常驻，回答两件事——
+  ① 这张单现在停在流程的哪一节、是否还在办；② 该节谁在办、已停留多久。
+  逐节谁在什么时间签了什么意见收在「展开审批链」「展开流程明细」两个模态框里：
+  审批链环节多时（实测对公结算 15 节）不再把下方的单据操作顶出首屏——单据操作是页面主体，审批链是旁证。
   数据源：单据本身（status / procInstId / voucherNo）+ GET /tenant/wf/query/chain（节点配置 + 审批轨迹 + 在办任务三源合一）。
   chain 不挂配置权限，制单岗拿得到，因此不再依赖 wf:history:list 的审批轨迹接口。
 -->
@@ -30,23 +35,36 @@
     </div>
 
     <!-- D-DEC-446 甲-1：status 驱动的生命周期步进条已删除。
-         它与下方审批链（FlowChain，取 /wf/query/chain 的逐节证据）在同一卡片里并存、口径不同；
+         它与下方审批链（FlowChain，取 /wf/query/chain 的逐节证据）在同一卡片里并存、规则不同；
          后半截（记账/付款/组批/归档）取的列不由 exp_bill.status 承载 ⇒ 点了也不会绿。
          「走到哪一步」由 fp-cur 一格 + 审批链格子承担。 -->
 
     <div v-if="nodes2.length" class="fp-chain">
       <div class="fp-chain-head">
         <span class="fp-chain-title">{{ chainSummary }}</span>
-        <el-button link size="small" @click="showDetail = !showDetail">
-          {{ showDetail ? '收起流程明细' : '展开流程明细（每节办理人/时间/意见）' }}
-        </el-button>
+        <div class="fp-chain-btns">
+          <!-- 审批链与流程明细默认收起、改由模态框查看：环节多时（实测对公结算 15 节）
+               纵向时间轴会把下面的单据操作顶出首屏，而这一页的主体是单据操作，不是审批链。 -->
+          <el-button size="small" @click="chainVis = true">展开审批链</el-button>
+          <el-button size="small" @click="detailVis = true">展开流程明细</el-button>
+        </div>
       </div>
-      <!-- D-UI-03（2026-10-18）：横排平铺改纵向时间轴。
-           原实现在填单侧同样是把 7 个节点标签平铺换行，无连接线、各排参差，
-           「走到哪一节」只能靠上面的 fp-cur 那一格文字。本行改时间轴后，
-           节点再多也只是变长，且每节的序号/状态/办理人/时间/意见逐行对齐。 -->
-      <FlowChain :nodes="nodes2" mode="timeline" />
-      <el-table v-if="showDetail" :data="nodes2" size="small" border class="fp-table">
+    </div>
+    <div v-else-if="bill && bill.id" class="fp-noflow">
+      <!-- R5-D-054：DRAFT 判定走脚本里的 status 计算属性（bill.id 在而 status 字段缺失＝刚保存的草稿，
+           缺省即 DRAFT），不再直读 bill.status——否则上方「尚未提交」与下方「未取到审批链数据」同屏自相矛盾。 -->
+      {{ status === 'DRAFT' ? '草稿尚未提交，暂无审批链；提交后此处显示每一节的进度与办理人。' : '未取到审批链数据（流程实例缺失或接口异常），可点右上「刷新进度」重试。' }}
+    </div>
+
+    <el-dialog v-model="chainVis" :title="dialogTitle('审批链')" width="min(680px, 92vw)" append-to-body>
+      <div class="fp-dialog-head">{{ chainSummary }}</div>
+      <div class="fp-dialog-scroll">
+        <FlowChain :nodes="nodes2" mode="timeline" />
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="detailVis" :title="dialogTitle('流程明细')" width="min(880px, 94vw)" append-to-body>
+      <el-table :data="nodes2" size="small" border class="fp-table" max-height="64vh">
         <el-table-column label="#" width="46">
           <template #default="{ $index }">{{ stepNoAt($index) || '—' }}</template>
         </el-table-column>
@@ -69,17 +87,12 @@
           <template #default="{ row }">{{ row.comment || '—' }}</template>
         </el-table-column>
       </el-table>
-    </div>
-    <div v-else-if="bill && bill.id" class="fp-noflow">
-      <!-- R5-D-054：DRAFT 判定走脚本里的 status 计算属性（bill.id 在而 status 字段缺失＝刚保存的草稿，
-           缺省即 DRAFT），不再直读 bill.status——否则上方「尚未提交」与下方「未取到审批链数据」同屏自相矛盾。 -->
-      {{ status === 'DRAFT' ? '草稿尚未提交，暂无审批链；提交后此处显示每一节的进度与办理人。' : '未取到审批链数据（流程实例缺失或接口异常），可点右上「刷新进度」重试。' }}
-    </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import FlowChain from '../FlowChain.vue'
 import { statusLabel, statusType } from '../../constants/billStatus'
 import { wfActionLabel } from '@/constants/enums.js'
@@ -94,7 +107,14 @@ const props = defineProps({
 })
 defineEmits(['refresh'])
 
-const showDetail = ref(false)
+const chainVis = ref(false)
+const detailVis = ref(false)
+// 换单时收起两个模态框，免得停留在上一张单的链上（卡片本身跨页签常驻，换单不重建）
+watch(() => props.bill?.id, () => {
+  chainVis.value = false
+  detailVis.value = false
+})
+const dialogTitle = (base) => (props.bill?.billNo ? `${base} · ${props.bill.billNo}` : base)
 
 const STATE_LABEL = {
   DONE: '已通过', CURRENT: '当前节点', REJECTED: '曾驳回', VOID: '已作废', TODO: '尚未到达',
@@ -104,7 +124,7 @@ const STATE_TYPE = {
   DONE: 'success', CURRENT: 'primary', REJECTED: 'danger', VOID: 'warning', TODO: 'info',
   SKIPPED: 'info', ADDSIGN: 'warning',
 }
-// D-DEC-386：负面末态集与 SRV BillTraceChainController.STATUS_NEGATIVE 同口径（撤回/取消原缺，卡片头误落兜底档「审批链已办结」）
+// D-DEC-386：负面末态集与 SRV BillTraceChainController.STATUS_NEGATIVE 同一规则（撤回/取消原缺，卡片头误落默认处理档「审批链已办结」）
 const ABNORMAL = ['REJECTED', 'WITHDRAWN', 'VOID', 'TERMINATED', 'CANCELLED', 'CLOSED']
 
 // 提单节在 wf_node_config 的 sort 里排在末位，链上却是最先发生的一步：显示时提到首位
@@ -122,7 +142,7 @@ const nodes2 = computed(() => {
  */
 const isCounted = (n) => n.counted !== false
 const stepNodes = computed(() => nodes2.value.filter(isCounted))
-/** 分母优先取后端 seqTotal（口径唯一真相源）；缺字段（旧包）才按现地 counted 计数 */
+/** 分母优先取后端 seqTotal（规则唯一真相源）；缺字段（旧包）才按现地 counted 计数 */
 const stepTotal = computed(() => {
   const hit = (props.nodes || []).find((n) => typeof n.seqTotal === 'number')
   return hit ? hit.seqTotal : stepNodes.value.length
@@ -231,8 +251,11 @@ function humanizeDwell(t) {
 .fp-cur-draft .fp-cur-node { color: #909399; }
 .fp-steps { margin-bottom: 10px; }
 .fp-chain { border-top: 1px dashed #ebeef5; padding-top: 8px; }
-.fp-chain-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 6px; }
+.fp-chain-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
 .fp-chain-title { font-size: 12px; color: #303133; font-weight: 600; }
-.fp-table { margin-top: 8px; }
+.fp-chain-btns { display: flex; gap: 8px; }
+.fp-dialog-head { font-size: 12px; color: #606266; margin-bottom: 10px; }
+.fp-dialog-scroll { max-height: 64vh; overflow: auto; padding-right: 4px; }
+.fp-table { margin-top: 0; }
 .fp-noflow { font-size: 12px; color: #909399; border-top: 1px dashed #ebeef5; padding-top: 8px; }
 </style>

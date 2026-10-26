@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_AR_REPORT" targetNamespace="http://fssc">
+  <bpmn:process id="AR_REPORT" name="应收账款管理分析报告审批流程" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:parallelGateway id="Pg_4" />
+    <bpmn:userTask id="Task_4_0" name="板块财务经理审阅【板块财务经理】" flowable:candidateGroups="PLATE_FIN_MANAGER" />
+    <bpmn:userTask id="Task_4_1" name="财务总监审阅【财务总监】" flowable:candidateGroups="CFO" />
+    <bpmn:userTask id="Task_4_2" name="分管领导审阅【分管领导】" flowable:candidateGroups="DIV_LEADER" />
+    <bpmn:parallelGateway id="Jg_4" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Pg_4" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Pg_4" targetRef="Task_4_0" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Pg_4" targetRef="Task_4_1" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Pg_4" targetRef="Task_4_2" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Task_4_0" targetRef="Jg_4" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_4_1" targetRef="Jg_4" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Task_4_2" targetRef="Jg_4" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="Jg_4" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="AR_REPORT">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Pg_4_di" bpmnElement="Pg_4"><dc:Bounds x="216" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_4_0_di" bpmnElement="Task_4_0"><dc:Bounds x="312" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_4_1_di" bpmnElement="Task_4_1"><dc:Bounds x="502" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_4_2_di" bpmnElement="Task_4_2"><dc:Bounds x="692" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Jg_4_di" bpmnElement="Jg_4"><dc:Bounds x="882" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="978" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="156" y="120" /><di:waypoint x="216" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="252" y="120" /><di:waypoint x="312" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="234" y="138" /><di:waypoint x="234" y="230" /><di:waypoint x="567" y="230" /><di:waypoint x="567" y="160" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4"><di:waypoint x="234" y="138" /><di:waypoint x="234" y="255" /><di:waypoint x="757" y="255" /><di:waypoint x="757" y="160" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5"><di:waypoint x="377" y="160" /><di:waypoint x="377" y="280" /><di:waypoint x="900" y="280" /><di:waypoint x="900" y="138" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6"><di:waypoint x="567" y="160" /><di:waypoint x="567" y="305" /><di:waypoint x="900" y="305" /><di:waypoint x="900" y="138" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_7_di" bpmnElement="Flow_7"><di:waypoint x="822" y="120" /><di:waypoint x="882" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="918" y="120" /><di:waypoint x="978" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

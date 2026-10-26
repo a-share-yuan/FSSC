@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /** 应收应付蓝图落地域路由（付款服务申请/月末关账/开票链/应收服务申请/核销工作台/票据/坏账/月结/报表/基础配置） */
 export default [
   // 方案 A：蓝图 10 页 → 两域工作台（菜单挂这两条；下列旧子路由保留＝历史 URL/bizEntry 深链不断）
@@ -19,6 +22,6 @@ export default [
   // 独立于 apflow/arflow：两个域的岗都要用，故不按域归属路径，菜单由 sys_menu 种子决定挂点。
   { path: 'bcp-objection', component: () => import('../../views/flow/BcpObjectionBoard.vue'),
     meta: { title: 'BCP异议审核', perms: ['bcp:objection:list'] } },
-  // 后端 /api/tenant/wf/timeout/** 三端点早有、界面无（D-V4R-62）；path 与测试手册写的兜底地址一致
+  // 后端 /api/tenant/wf/timeout/** 三端点早有、界面无（D-V4R-62）；path 与测试手册写的默认处理地址一致
   { path: 'wf/timeout/stats', component: () => import('../../views/flow/WfTimeoutStatsBoard.vue'), meta: { title: '超时升级统计' } },
 ]

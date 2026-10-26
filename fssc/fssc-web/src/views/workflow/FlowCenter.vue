@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="flow-center">
     <!-- 门户页头 -->
@@ -24,7 +27,7 @@
       </el-col>
     </el-row>
 
-    <!-- 流程效率（管理驾驶舱）：口径全部来自 /wf/perf/overview 真实聚合。
+    <!-- 流程效率（管理驾驶舱）：规则全部来自 /wf/perf/overview 真实聚合。
          仅持 wf:instance:list 的财务管理层/共享运营岗可见——全员页门控铁律：无权限时
          不请求、不渲染、不弹提示（隐藏而非报错），避免业务角色看到全公司时效数据。 -->
     <el-card v-if="canViewPerf" shadow="never" class="fc-block fc-perf" :body-style="{ padding: '14px 20px' }">
@@ -122,7 +125,7 @@ const cards = computed(() => [
   { key: 'cc', label: '我的抄送', value: stats.cc, path: '/flow-center/cc', color: '#909399' },
 ])
 
-// 流程服务入口：与侧边栏菜单可见性同口径（perm 缺省＝全员可见）
+// 流程服务入口：与侧边栏菜单可见性同一规则（perm 缺省＝全员可见）
 const ALL_ENTRIES = [
   { title: '我的待办', desc: '待我审批/处理的流程任务', path: '/requisition/todo', icon: List, color: '#e6a23c' },
   { title: '我的已办', desc: '我已处理过的流程任务', path: '/requisition/done', icon: Checked, color: '#67c23a' },
@@ -151,7 +154,7 @@ const perfMetrics = computed(() => [
   { label: '平均节点停留', value: fmtMinutes(perf.value.avgNodeMinutes), color: '#b88230' },
 ])
 
-/** 分钟 → 人读时长（与监控大屏 formatDuration 同口径，避免两页数字"看起来不一样"） */
+/** 分钟 → 人读时长（与监控大屏 formatDuration 同一规则，避免两页数字"看起来不一样"） */
 function fmtMinutes(min) {
   if (min == null) return '-'
   if (min < 60) return min + ' 分钟'
@@ -178,7 +181,7 @@ function go(path) {
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
-// D-DEC-078：与 Approval.vue / Workbench.vue 同一落点闸——发票池数据面按 inv:list 门控，
+// D-DEC-078：与 Approval.vue / Workbench.vue 同一落点校验——发票池数据面按 inv:list 门控，
 // 无权限岗不跳 #/invoice/query 吃「暂无数据＋缺少权限」，改落全链路追溯。
 const canInvPool = hasPerm('inv:list')
 function handle(row) {

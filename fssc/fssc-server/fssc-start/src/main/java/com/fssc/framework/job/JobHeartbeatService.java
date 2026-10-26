@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -48,7 +51,7 @@ public class JobHeartbeatService {
     private static final int MAX_ERROR_LEN = 1000;
     /** 调度锁 key 前缀：单机/多实例互斥执行同一 @Scheduled 任务 */
     private static final String JOB_LOCK_PREFIX = "fssc_job_";
-    /** Redis 锁最长持有时间（实例崩溃兜底自动过期；远大于正常任务耗时） */
+    /** Redis 锁最长持有时间（实例崩溃默认处理自动过期；远大于正常任务耗时） */
     private static final Duration JOB_LOCK_TTL = Duration.ofHours(2);
 
     private final OpJobHeartbeatMapper heartbeatMapper;

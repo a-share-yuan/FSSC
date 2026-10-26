@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -37,8 +40,8 @@ public class ExpensePolicyStandardService {
     public Long create(ExpensePolicyStandard standard) {
         // D-POL-02：原实现是裸 insert，零校验。两个后果：
         // ① standard_unit 是 NOT NULL 列，缺它 → SQL 异常 → HTTP 500「系统异常」，调用方无从判断是参数问题；
-        // ② 标准下限 > 上限也能落库（手册 G16.13 要求提示「该标准将永远无法命中」），
-        //    落库后规则匹配永远不命中，属静默失效——比直接报错更难排查。
+        // ② 标准下限 > 上限也能写入数据库（手册 G16.13 要求提示「该标准将永远无法命中」），
+        //    写入数据库后规则匹配永远不命中，属静默失效——比直接报错更难排查。
         if (standard.getPolicyId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择所属费用政策");
         }
@@ -69,7 +72,7 @@ public class ExpensePolicyStandardService {
         if (exist == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "政策标准不存在: " + standard.getId());
         }
-        // D-POL-02：update 与 create 同一套校验，否则「先建后改」能绕过下限≤上限的闸。
+        // D-POL-02：update 与 create 同一套校验，否则「先建后改」能绕过下限≤上限的校验。
         if (standard.getStandardUnit() == null || standard.getStandardUnit().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请填写单位（如 元/天/次/人）");
         }

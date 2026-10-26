@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.platform.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -59,7 +62,7 @@ public class TenantLifecycleService {
 
     /**
      * 企业自助注册（公开接口，无租户上下文）。
-     * 校验编码格式与唯一性 → 落库 APPLYING（待平台审核）。
+     * 校验编码格式与唯一性 → 写入数据库 APPLYING（待平台审核）。
      * 审核通过后由 {@link #approve(Long)} 自动创建租户管理员并开通。
      */
     public Long register(String tenantCode, String tenantName, String shortName,

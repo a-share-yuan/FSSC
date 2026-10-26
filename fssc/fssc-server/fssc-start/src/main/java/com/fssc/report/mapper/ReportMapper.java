@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.report.mapper;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -18,7 +21,7 @@ import java.util.Map;
  * {@code ReportQueryController} 依据 {@code DataScopeHolder}（@DataScope 切面写入）解析后传入；
  * SQL 内以 {@code <if>} 追加条件。三参数语义与 {@code DataScopeKit.apply} 逐级对应：
  * 传 null＝该维度不追加条件；由调用方保证 scopeDeptIds 非空集（需要收紧时传哨兵值而非空集/ null）。
- * 表内没有对应组织列时该维度不出现（调用方按 DataScopeKit 口径降级到公司维度）。</p>
+ * 表内没有对应组织列时该维度不出现（调用方按 DataScopeKit 规则降级到公司维度）。</p>
  */
 @Mapper
 public interface ReportMapper {
@@ -26,17 +29,17 @@ public interface ReportMapper {
     /**
      * 费用类报表的统一生效状态白名单（F-06）：审批通过／已付／已结清／已办结／已过账。
      * 原 expenseSummary／monthlyTrend／expenseComposition／expenseAnalysis 四处只写
-     * {@code APPROVED,POSTED}，已付款（PAID）的单会整张从费用口径里漏掉——与 approvalEfficiency
-     * 的五终态口径对齐，四处共用一份，避免再次漂移。
+     * {@code APPROVED,POSTED}，已付款（PAID）的单会整张从费用规则里漏掉——与 approvalEfficiency
+     * 的五最终状态规则对齐，四处共用一份，避免再次漂移。
      */
     String EXPENSE_EFFECTIVE_STATUS = "'APPROVED','PAID','REPAID','COMPLETED','POSTED'";
 
-    /** 部门报销排行（金额降序）。companyId 非 null 时仅统计该公司（① 导出口径）
+    /** 部门报销排行（金额降序）。companyId 非 null 时仅统计该公司（① 导出规则）
      *  R5-D-021：camelCase 别名为报表工作台的列绑定，snake_case 别名保留给导出与看板的既有读取，两者共存。
-     *  D-F1R-04：补数据范围参数。原口径只按公司收口（companyId），而本接口挂 {@code dashboard:view}
+     *  D-F1R-04：补数据范围参数。原规则只按公司办结（companyId），而本接口挂 {@code dashboard:view}
      *  ——普通员工与共享会计返回完全相同的全公司排名（10-15 实测两个账号结果逐行一致）。
      *  scopeDeptIds/scopeUserId 与同文件 {@code loanBalance} 同一套语义：null 即不追加该维条件。
-     *  ⑮（D-V4R-50，2026-10-16 晚间场实测）：补生效状态过滤——原口径把 DRAFT/VOID/WITHDRAWN/REJECTED
+     *  ⑮（D-V4R-50，2026-10-16 晚间场实测）：补生效状态过滤——原规则把 DRAFT/VOID/WITHDRAWN/REJECTED
      *  一并计入，赵勇（本部门只有一张 0 元草稿申请）的部门排名渲染成「费用审核组 1 单 0.00」。 */
     @Select("<script>select b.dept_id as dept_id, d.dept_name as dept_name, count(*) as cnt, " +
             "sum(b.total_amount) as amount, " +
@@ -55,16 +58,16 @@ public interface ReportMapper {
     /** 审批时效：提交(submit_time) → 审批通过(派工 create_time) 的平均分钟，按单据类型
      *  R5-D-115：报表工作台按「单据类型 + 小时」绑定，故补 camelCase 别名（avg/max 换算为小时）；
      *  snake_case 的分钟别名保留给看板的既有读取，两者共存。
-     *  R5-D-026：补公司维收口——scopeCompanyId 由 DashboardService 按 orgGuard.enforceCompany()
+     *  R5-D-026：补公司维办结——scopeCompanyId 由 DashboardService 按 orgGuard.enforceCompany()
      *  传入（同文件 expenseByDept 现例）；exp_bill 有 company_id 列；null（集团级/无公司登录）不追加。
-     *  D-F1R-04：再补部门/本人两维。原口径同样只按公司收口，而接口挂 {@code dashboard:view}
+     *  D-F1R-04：再补部门/本人两维。原规则同样只按公司办结，而接口挂 {@code dashboard:view}
      *  ⇒ 普通员工能看到全公司各部门审批时效，与共享会计无差异（10-15 实测）。 */
     @Select("<script>select b.bill_type as bill_type, count(*) as cnt, " +
             "round(avg(timestampdiff(MINUTE, b.submit_time, a.create_time)), 1) as avg_minutes, " +
             "b.bill_type as nodeName, " +
             "round(avg(timestampdiff(MINUTE, b.submit_time, a.create_time)) / 60, 1) as avgHours, " + // R5-D-115
             "round(max(timestampdiff(MINUTE, b.submit_time, a.create_time)) / 60, 1) as maxHours " + // R5-D-115
-            // ⑮（D-V4R-50）：审批通过是终态迁移而非唯一终态——已付(PAID)/结清(REPAID)/办结(COMPLETED)
+            // ⑮（D-V4R-50）：审批通过是最终状态迁移而非唯一最终状态——已付(PAID)/结清(REPAID)/办结(COMPLETED)
             // 的单同样走完了 submit→AUDIT 全程，硬编码 status='APPROVED' 会把付款后的单从时效里剔除
             //（晚间场实测：bill 7 已 PAID、bill 3 已 REPAID 均有 AUDIT 任务却不计入）
             "from exp_bill b join op_audit_task a on b.id = a.bill_id " +
@@ -154,8 +157,8 @@ public interface ReportMapper {
     // ---------- 需求 11.8 运营数据统计：共享作业情况 ----------
     // 分库改造：img_batch 已迁 fssc_image 库，"影像批次"计数改由 ReportQueryController
     // 经 ImageFacade.countBatches 应用层拼接，本 SQL 只保留 master 库 5 个 UNION 分支。
-    // 注（R5-D-026）：op_audit_task / op_quality 无 company_id（共享中心跨公司集中办理口径），
-    // 本方法不做数据范围收口，未挂 @DataScope——见 ReportQueryController 同处说明。
+    // 注（R5-D-026）：op_audit_task / op_quality 无 company_id（共享中心跨公司集中办理规则），
+    // 本方法不做数据范围办结，未挂 @DataScope——见 ReportQueryController 同处说明。
     // R5-D-299 残留：三个 op_audit_task 分支原样统计，会把已作废任务计进 KPI，逐支补软删过滤。
     @Select("select '派工任务总数' as kpi, count(*) as val from op_audit_task where del_flag = 0 " + // R5-D-299
             "union all select '待处理任务', count(*) from op_audit_task where pool_status = 'WAITING' and del_flag = 0 " + // R5-D-299
@@ -216,7 +219,7 @@ public interface ReportMapper {
                                                  @Param("scopeDeptIds") List<Long> scopeDeptIds,
                                                  @Param("scopeUserId") Long scopeUserId);
 
-    // ==================== 扩展报表（参考行业做法/同类系统财务共享最佳实践） ====================
+    // ==================== 扩展报表 ====================
 
     /** 1. 应付账龄分析：按供应商统计应付余额及账龄分布 */
     @Select("<script>select b.payee_name as payeeName, count(*) as billCnt, " +
@@ -283,7 +286,7 @@ public interface ReportMapper {
                                               @Param("scopeUserId") Long scopeUserId);
 
     /** 6. 进项发票统计：按月度统计进项发票金额、税额
-     *  R5-D-022：列语义对齐建表口径——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。 */
+     *  R5-D-022：列语义对齐建表规则——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。 */
     @Select("<script>select date_format(invoice_date, '%Y-%m') as period, " +
             "count(*) as invoiceCnt, sum(amount) as totalAmount, sum(tax_amount) as taxAmount, " + // R5-D-022
             "sum(net_amount) as netAmount " + // R5-D-022
@@ -293,7 +296,7 @@ public interface ReportMapper {
     List<Map<String, Object>> inputInvoiceStats(@Param("scopeCompanyId") Long scopeCompanyId);
 
     /** 7. 销项发票统计：按月度统计销项发票金额、税额
-     *  R5-D-022：列语义对齐建表口径——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。 */
+     *  R5-D-022：列语义对齐建表规则——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。 */
     @Select("<script>select date_format(invoice_date, '%Y-%m') as period, " +
             "count(*) as invoiceCnt, sum(amount) as totalAmount, sum(tax_amount) as taxAmount, " + // R5-D-022
             "sum(net_amount) as netAmount " + // R5-D-022
@@ -302,10 +305,13 @@ public interface ReportMapper {
             "group by date_format(invoice_date, '%Y-%m') order by period desc limit 12</script>")
     List<Map<String, Object>> outputInvoiceStats(@Param("scopeCompanyId") Long scopeCompanyId);
 
-    /** 8. 税负分析：按期间统计进项税额、销项税额、应纳税额 */
+    /** 8. 税负分析：按期间统计进项税额、销项税额、应纳税额
+     *  D-H10-01：补 taxBase（销项不含税金额）作为税负率分母——税负率 = 应纳税额 / 不含税销售收入，
+     *  原查询只回三个税额，前端无从计算该比率（手册「表头缺列＝缺陷」）。 */
     @Select("<script>select date_format(invoice_date, '%Y-%m') as period, " +
             "sum(case when (direction = 'INPUT' or (direction is null and invoice_kind = 'SPECIAL')) then tax_amount else 0 end) as inputTax, " +
             "sum(case when (direction = 'OUTPUT' or (direction is null and invoice_kind = 'NORMAL')) then tax_amount else 0 end) as outputTax, " +
+            "sum(case when (direction = 'OUTPUT' or (direction is null and invoice_kind = 'NORMAL')) then net_amount else 0 end) as taxBase, " + // D-H10-01
             "sum(case when (direction = 'OUTPUT' or (direction is null and invoice_kind = 'NORMAL')) then tax_amount else 0 end) - " +
             "sum(case when (direction = 'INPUT' or (direction is null and invoice_kind = 'SPECIAL')) then tax_amount else 0 end) as netTax " +
             "from inv_invoice where del_flag = 0 " +
@@ -315,7 +321,7 @@ public interface ReportMapper {
 
     /** 9. 运营效率分析：按任务类型统计平均处理时长 */
     // 注（R5-D-026）：op_audit_task 无 company_id（实体仅 dept_id/apply_user_id），
-    // 共享作业任务池属跨公司集中办理口径，本方法不做数据范围收口，未挂 @DataScope。
+    // 共享作业任务池属跨公司集中办理规则，本方法不做数据范围办结，未挂 @DataScope。
     @Select("select t.task_type as taskType, count(*) as taskCnt, " +
             "round(avg(timestampdiff(MINUTE, t.receive_time, t.finish_time)), 1) as avgMinutes, " +
             "max(timestampdiff(MINUTE, t.receive_time, t.finish_time)) as maxMinutes, " +
@@ -328,7 +334,7 @@ public interface ReportMapper {
 
     /** 10. 质检合格率：按质检类型统计合格率 */
     // 注（R5-D-026）：op_quality 无任何组织列（实体仅 auditor_id/checker_id），
-    // 质检合格率是全中心口径，本方法不做数据范围收口，未挂 @DataScope。
+    // 质检合格率是全中心规则，本方法不做数据范围办结，未挂 @DataScope。
     @Select("select q.check_type as checkType, count(*) as totalCnt, " +
             "sum(case when q.result = 'PASS' then 1 else 0 end) as passCnt, " +
             "round(sum(case when q.result = 'PASS' then 1 else 0 end) * 100.0 / count(*), 1) as passRate, " +
@@ -347,7 +353,7 @@ public interface ReportMapper {
             "round(ifnull(sum(p.total_amount), 0) * 100.0 / nullif(c.amount, 0), 1) as executionRate, " +
             "c.status, c.end_date as endDate " +
             "from cont_contract c " +
-            // F-05：补 p.del_flag = 0——原口径把已软删的付款腿计入已付额，与本文件 contractSummary 不一致
+            // F-05：补 p.del_flag = 0——原规则把已软删的付款环节计入已付额，与本文件 contractSummary 不一致
             "left join exp_bill p on p.contract_id = c.id and p.del_flag = 0 and p.bill_type = 'PAY' " +
             "and p.status in ('APPROVED','POSTED') " +
             "where c.del_flag = 0 " +
@@ -359,7 +365,7 @@ public interface ReportMapper {
                                                 @Param("scopeDeptIds") List<Long> scopeDeptIds);
 
     /** 13. 预算超支预警：预算使用率超80%的项目 */
-    // 收口只按公司维（R5-D-026）；不按部门维（R5-D-027：bg_item 公司级预算 dept_id 常为 NULL，
+    // 办结只按公司维（R5-D-026）；不按部门维（R5-D-027：bg_item 公司级预算 dept_id 常为 NULL，
     // 追加 dept 条件会把「有预算却查不到」的既有缺陷在新端点上复刻）。
     @Select("<script>select bi.dim_key as dimKey, d.dept_name as deptName, i.item_name as itemName, bi.budget_year as budgetYear, bi.budget_period as budgetPeriod, " +
             "bi.total_amount as totalAmount, bi.used_amount as usedAmount, bi.occupy_amount as occupyAmount, " +
@@ -436,7 +442,7 @@ public interface ReportMapper {
                                                @Param("scopeDeptIds") List<Long> scopeDeptIds);
 
     /** 18. 预算执行明细表：组织×部门 预算vs实际+差异率 */
-    // 收口只按公司维（R5-D-026），理由同 budgetOverrunAlert（R5-D-027 dept_id NULL 陷阱）。
+    // 办结只按公司维（R5-D-026），理由同 budgetOverrunAlert（R5-D-027 dept_id NULL 陷阱）。
     @Select("<script>select bi.dim_key as dimKey, bi.budget_year as budgetYear, " +
             "bi.total_amount as totalAmount, bi.adjust_amount as adjustAmount, " +
             "bi.occupy_amount as occupyAmount, bi.used_amount as usedAmount, " +
@@ -489,7 +495,7 @@ public interface ReportMapper {
             "<if test='period != null and period != \"\"'>and bs.trans_date &gt;= str_to_date(concat(#{period}, '-01'), '%Y-%m-%d') and bs.trans_date &lt; date_add(str_to_date(concat(#{period}, '-01'), '%Y-%m-%d'), interval 1 month)</if> " +
             "<if test='scopeCompanyId != null'>and bs.company_id = #{scopeCompanyId}</if> " +
             // F-01：同刻多笔（9 行同 timestamp）时仅按 trans_date 排序无法定序，limit 500 的截断边界
-            // 每次取到的行集合不同 ⇒ 补主键作唯一键兜底
+            // 每次取到的行集合不同 ⇒ 补主键作唯一键默认处理
             "order by bs.trans_date desc, bs.id desc limit 500</script>")
     List<Map<String, Object>> treasuryFlow(@Param("bankAccount") String bankAccount,
                                             @Param("period") String period,

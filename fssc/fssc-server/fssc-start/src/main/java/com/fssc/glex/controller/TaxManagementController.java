@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -28,7 +31,7 @@ import java.util.List;
  * 3. 税务风险指标（/api/tax/risk/*）
  * <p>
  * WS-6 安全加固：全部端点补 {@code @DataScope}，由切面写入登录人数据范围，
- * 服务层据此按公司维度收口（读过滤 + 写归属校验），杜绝同租户内跨公司读写。
+ * 服务层据此按公司维度办结（读过滤 + 写归属校验），杜绝同租户内跨公司读写。
  */
 @RestController
 @RequestMapping("/api/tax")

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -74,7 +77,7 @@ public class DeptService {
     }
 
     /**
-     * 必填收口（批次 2C，与前端 Org.vue「部门名称/部门编码/请选择公司」同口径）。
+     * 必填办结（批次 2C，与前端 Org.vue「部门名称/部门编码/请选择公司」同一规则）。
      * create/update 同规：前端整单提交完整对象；enable() 走独立对象，不经过本方法。
      * 前端下拉「未选」传 0 而非 null，故 0 也判为未选。
      */

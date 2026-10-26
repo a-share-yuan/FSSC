@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
@@ -10,7 +13,7 @@
       <el-button type="warning" plain @click="openInv('DISPOSAL_CHECK')">处置-状态确认</el-button>
       <el-button type="danger" plain @click="openInv('DISPOSAL_EXEC')">处置-执行账务</el-button>
       <el-button type="danger" @click="openInv('INTERNAL_SALE')">内部销售</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
     </div>
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -108,7 +111,7 @@
       </el-select>
       <el-button type="primary" @click="loadMoves">查询</el-button>
     </div>
-    <el-table :data="movesPager.pagedData" size="small" border stripe v-loading="movesPager.loading" empty-text="该物料/仓库下暂无出入库流水" max-height="520">
+    <el-table :data="movesPagedData" size="small" border stripe v-loading="movesLoading" empty-text="该物料/仓库下暂无出入库流水" max-height="520">
       <el-table-column prop="moveNo" label="流水号" width="150" />
       <el-table-column label="类型" width="90" align="center">
         <template #default="{ row }">{{ moveTypeName(row.moveType) }}</template>
@@ -127,7 +130,7 @@
       <el-table-column label="金额" width="100" align="right">
         <template #default="{ row }">{{ fmt(row.amount) }}</template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="90" align="center" />
+      <el-table-column prop="status" label="状态" width="90" align="center" :formatter="(r, c, v) => statusLabel(v)" />
       <el-table-column prop="createTime" label="发生时间" width="160" :formatter="(r, c, v) => formatDateTime(v)" />
     </el-table>
     <TablePager :pager="movesPager" @change="loadMoves" />
@@ -138,6 +141,7 @@
 import { ref, computed, inject, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { showRowDetail, formatDateTime } from '@/utils/format'
+import { statusLabel } from '../../constants/billStatus.js'
 import { assetApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { useTablePager } from '../../composables/useTablePager'
@@ -157,6 +161,9 @@ const movesVisible = ref(false)
 const movesItemCode = ref('')
 const movesWarehouseId = ref(null)
 const movesPager = useTablePager({ mode: 'server', storageKey: 'asset_inventory_moves' })
+// 模板里访问 movesPager.pagedData / .loading 拿到的是 ref 对象本身（嵌套不自动解包），
+// 会把 ComputedRef 当表格数据、把 ref 当 loading 布尔 ⇒ 抽屉一渲染就报 "rows is not iterable"。
+const { pagedData: movesPagedData, loading: movesLoading } = movesPager
 
 const dlgInv = ref(false)
 const invMode = ref('IN')
@@ -283,7 +290,7 @@ async function queryBalance() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// R5-D-189：moveType 中文映射口径与 StockMove 实体注释一致
+// R5-D-189：moveType 中文映射规则与 StockMove 实体注释一致
 const MOVE_TYPE_META = { RECEIVE: '入库', ISSUE: '领用出库', SCRAP: '报废', DISPOSAL: '处置', INTERNAL_SALE: '内部销售', CHECK: '盘点', DEVAL: '跌价' }
 function moveTypeName(t) { return MOVE_TYPE_META[t] || t || '—' }
 

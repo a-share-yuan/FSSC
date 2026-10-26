@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.org;
 
 import com.fssc.common.core.ErrorCode;
@@ -7,6 +10,7 @@ import com.fssc.framework.security.UserContext;
 import org.springframework.stereotype.Component;
 
 /**
+ * 组织合法性中央守卫（按"数据权限-组织维度"校验，2026-08-31 三路体检后统一办结）。
  *
  * <p>体检结论：tenant_id 由拦截器强制隔离可靠；但租户内分子公司(company_id)在
  * 读路径（page/detail/报表全租户可见+IDOR）、写路径（companyId 前端传值即采信）、
@@ -35,7 +39,7 @@ public class OrgGuard {
 
     /**
      * 写入守卫：payload 携带的 companyId 必须与登录人公司一致。
-     * 集团级账号（无公司）或 payload 未指定公司时放行（后者由写入路径兜底赋值）。
+     * 集团级账号（无公司）或 payload 未指定公司时放行（后者由写入路径默认处理赋值）。
      */
     public void assertCompanyAllowed(Long companyId) {
         Long mine = currentCompany();
@@ -45,7 +49,7 @@ public class OrgGuard {
         if (!mine.equals(companyId)) {
             throw new BizException(ErrorCode.FORBIDDEN,
                     "组织合法性校验不通过：无权以该公司主体建单/操作（单据公司 " + companyId + " ≠ 当前用户公司 " + mine
-                            + "）。口径：单据公司必须等于建单人所属公司；请改用目标公司 " + companyId
+                            + "）。规则：单据公司必须等于建单人所属公司；请改用目标公司 " + companyId
                             + " 下的提单人建单，或先切换到该公司（X-Company-Id）后再操作。");
         }
     }

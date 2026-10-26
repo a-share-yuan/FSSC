@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -26,7 +29,7 @@
       </el-select>
       <el-button v-permission="'inv:list'" type="primary" @click="load">查询</el-button>
       <el-button v-permission="'inv:list'" @click="reload">刷新</el-button>
-      <el-button v-permission="'inv:export'" size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button v-permission="'inv:export'" size="small" @click="exportCsv">导出</el-button>
     </div>
 
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -117,7 +120,7 @@ const YM = () => {
 if (!certifyPeriod.value) certifyPeriod.value = YM()
 if (!summaryPeriod.value) summaryPeriod.value = YM()
 
-// 校验规则唯一口径＝中央登记表（useFormRules）；工具条日期选择器同样纳入必填闸门
+// 校验规则唯一规则＝中央登记表（useFormRules）；工具条日期选择器同样纳入必填校验
 const certifyFormRef = ref(null)
 const filingFormRef = ref(null)
 const { rules: certifyRules } = useFormRules('INVOICE_CERTIFY')
@@ -131,7 +134,7 @@ const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('zh-CN', { mini
 const kindText = (k) => ({ SPECIAL: '专票', NORMAL: '普票', ELECTRONIC: '电子', VATN: '普票', VAT: '专票' }[k] || k || '—')
 const certifyText = (s) => ({ NOT_CERTIFIED: '未勾选', CERTIFIED: '已勾选', REVERSED: '进项转出' }[s] || s || '—')
 const certifyTag = (s) => ({ NOT_CERTIFIED: 'info', CERTIFIED: 'success', REVERSED: 'danger' }[s] || 'info')
-// R5-D-120：专票（invoiceKind=SPECIAL 或 invoiceType=VAT）才可抵扣，与服务端 isVatDeductible 同口径；
+// R5-D-120：专票（invoiceKind=SPECIAL 或 invoiceType=VAT）才可抵扣，与服务端 isVatDeductible 同一规则；
 // 用于认证勾选时回显「本次可抵扣合计」（此前按 0 抵扣也无任何提示）
 const isDeductible = (r) => String(r.invoiceKind || '').toUpperCase() === 'SPECIAL'
   || String(r.invoiceType || '').toUpperCase() === 'VAT'

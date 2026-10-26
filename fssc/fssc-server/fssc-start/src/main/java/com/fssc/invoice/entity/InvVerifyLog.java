@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.invoice.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -53,7 +56,7 @@ public class InvVerifyLog implements Serializable {
 
     /**
      * 发票号码：非表列（inv_verify_log 按真实列声明，无 invoice_no 列，加列属 DDL 裁决，R5-D-122）。
-     * 「验真记录」列表按票号稽核用——查询侧按 invoiceId 批查 inv_invoice 回填，不落库。
+     * 「验真记录」列表按票号稽核用——查询侧按 invoiceId 批查 inv_invoice 回填，不写入数据库。
      */
     @TableField(exist = false)
     private String invoiceNo;

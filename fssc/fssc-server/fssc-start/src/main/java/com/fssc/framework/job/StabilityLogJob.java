@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.job;
 
 import com.zaxxer.hikari.HikariDataSource;
@@ -16,8 +19,8 @@ import java.lang.management.MemoryMXBean;
  * 维度8 STAB-02：每日 23:55 稳定性快照任务。
  *
  * <p>把当日的运行指标（JVM 堆峰值、连接池活跃峰值近似值、定时任务失败数、健康探测失败数、
- * 重启次数）落库到 op_stability_log，作为「连续 14 天无非计划重启、无 OOM」的验收证据来源。
- * 堆/池取的是采集时刻的采样值加全天已观测最大值（表侧 UNIQUE(log_date) 幂等更新）。</p>
+ * 重启次数）写入数据库到 op_stability_log，作为「连续 14 天无非计划重启、无 OOM」的验收证据来源。
+ * 堆/池取的是采集时刻的采样值加全天已观测最大值（表侧 UNIQUE(log_date) 去重更新）。</p>
  */
 @Slf4j
 @Component
@@ -60,7 +63,7 @@ public class StabilityLogJob {
             int jobFails = countInt(
                     "SELECT COALESCE(SUM(fail_count),0) FROM op_job_heartbeat WHERE last_result='FAIL'");
             // 健康探测失败：以 JobWatchdog 告警表（op_job_heartbeat.fail_count 汇总）近似；
-            // 探测翻转到 DOWN 由 HealthProbeJob 直接推送 OpsAlertService，此处统计任务失败口径
+            // 探测翻转到 DOWN 由 HealthProbeJob 直接推送 OpsAlertService，此处统计任务失败规则
             int healthFails = 0;
             // 重启检测：uptime 明显小于 24h 视作当日发生过（计划内或非计划）重启
             int restarts = uptimeSec < 86_400 ? 1 : 0;

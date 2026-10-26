@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.ops.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -38,14 +41,14 @@ import java.util.Set;
 /**
  * G3（2026-09-24）分配规则顺序解析 ＋ 自动分配执行 ＋ 自动分配日志。
  *
- * <p>参考行业做法 {@code 分配规则表}「条件命中→处理人，多条件逐个解析直到命中」，
+ * <p>{@code 分配规则表}「条件命中→处理人，多条件逐个解析直到命中」，
  * 复用既有 {@code op_dispatch_rule} 表（该表在 {@code fssc/db/Dump20260911/fssc_dispatch_rule}
  * 中已有真实列定义，本类不新增列）：
  * <ol>
  *   <li><b>顺序解析</b>：按 {@code priority} <b>升序</b>逐条评估，命中即止，
  *       未命中的规则也进轨迹（{@link RuleHit}），使"为什么没走那条规则"可回答。
  *        既有 {@code DispatchService.findMatchingRule} 用的是 {@code orderByDesc(priority)}，
- *       与本口径相反；本类不改动它，只在新链路上按"数值小优先"实现，差异已如实标注。</li>
+ *       与本规则相反；本类不改动它，只在新链路上按"数值小优先"实现，差异已如实标注。</li>
  *   <li><b>条件维度</b>：类型化列（task_type/company_id/expense_item_id/currency_code，为空＝不限制）
  *       与「维度＋条件」对（TYPE/AMOUNT/LEGAL/COMPLEXITY/REGION）两类条件<b>取与</b>；
  *       金额区间支持 {@code "min,max"} 与 {@code "threshold"} 两种写法。</li>
@@ -53,8 +56,8 @@ import java.util.Set;
  *       交给 {@link DispatchPolicyService#decide} 按四模式策略选人。</li>
  * </ol>
  *
- * <p><b>执行口径</b>：策略为 PICK 时<b>不指派</b>，任务留在池里待领取（这是抢单语义）；
- * 其余策略把 Flowable 受理人改成选中人并同步镜像。机器路径不做人工闸门校验
+ * <p><b>执行规则</b>：策略为 PICK 时<b>不指派</b>，任务留在池里待领取（这是抢单语义）；
+ * 其余策略把 Flowable 受理人改成选中人并同步镜像。机器路径不做人工校验校验
  * （与方案 §二 F4 描述的既有机器路径同一取舍：自动分配不是"人办节点"，没有越权概念）。
  */
 @Slf4j
@@ -138,7 +141,7 @@ public class TaskAssignmentService {
         String dimension = trim(rule.getDispatchDimension());
         String condition = trim(rule.getMatchCondition());
         if (!notBlank(dimension) || !notBlank(condition)) {
-            return null;   // 只配了类型化列，视为命中（与既有 DispatchService 同口径）
+            return null;   // 只配了类型化列，视为命中（与既有 DispatchService 同一规则）
         }
         return switch (dimension.toUpperCase()) {
             case "TYPE" -> condition.equalsIgnoreCase(trim(bizType)) || condition.equalsIgnoreCase(trim(taskType))
@@ -186,7 +189,7 @@ public class TaskAssignmentService {
     /**
      * 自动分配：规则顺序解析 → 目标分组 → 候选画像 → 策略选人 → （非试算时）指派 + 落日志。
      *
-     * @return 决策明细（含规则轨迹、候选快照、决策理由、是否落库）
+     * @return 决策明细（含规则轨迹、候选快照、决策理由、是否写入数据库）
      */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> autoAssign(AssignRequest req) {
@@ -253,7 +256,7 @@ public class TaskAssignmentService {
         if (decision.assigned()) {
             applyAssignee(task, decision.chosenUserId());
             applied = true;
-            // 时限落账（写 due_time + op_task_time_limit）：指派后立即起算，与行业方案"任务到达待办列表开始倒计时"同口径
+            // 时限落账（写 due_time + op_task_time_limit）：指派后立即起算，与"任务到达待办列表开始倒计时"同一规则
             OpTaskTimeLimit limit = timeLimitService.applyTimeLimit(task, priority);
             out.put("dueTime", limit.getDueTime());
             out.put("limitHours", limit.getLimitHours());

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.customer.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -28,7 +31,7 @@ import java.util.Map;
  * 对公结算（SETTLE）的「往来单位」下拉只读 {@code crm_customer}（客户档案），
  * 而供应商落在 {@code md_supplier}，两者<b>零同步</b>。现役库 {@code crm_customer} 近乎空表
  * ⇒ 下拉候选里一个供应商都没有 ⇒ 结算单挂不上 {@code customer_id}/{@code po_id}/{@code po_receipt_id}
- * ⇒ 三单匹配腿断裂，SETTLE 单据根本提交不了。
+ * ⇒ 三单匹配环节断裂，SETTLE 单据根本提交不了。
  *
  * <h3>为什么不能直接把 supplierId 当 customerId 用</h3>
  * {@code exp_bill.customer_id} 的列注释是「关联往来单位ID(crm_customer)」，
@@ -41,7 +44,7 @@ import java.util.Map;
  * ② 没有 ⇒ 用供应商信息<b>建一份</b>档案（customer_code 沿用 supplier_code，
  *    customer_type=SUPPLIER），返回新建的 id。
  * 这样下拉里每一条供应商候选背后都有一个真实的 crm_customer.id，
- * 与既有下游解析口径一致。建档是<b>幂等</b>的：重复调用不会产生重复档案。
+ * 与既有下游解析规则一致。建档是<b>去重</b>的：重复调用不会产生重复档案。
  *
  * <h3>顺带修的第二个缺口：收款账号带不出</h3>
  * 原 {@code crm_customer} 表<b>根本没有银行账号字段</b>，而
@@ -58,7 +61,7 @@ public class CounterpartyCandidateService {
     private final MdSupplierMapper supplierMapper;
     private final MdSupplierBankMapper supplierBankMapper;
 
-    /** 供应商在 crm_customer 里的类型标识（与 CustomerService.create 的校验口径一致） */
+    /** 供应商在 crm_customer 里的类型标识（与 CustomerService.create 的校验规则一致） */
     private static final String TYPE_SUPPLIER = "SUPPLIER";
 
     /** 建档后的初始状态：ACTIVE=已核准（供应商主数据本身已过审，无需再走客户建档审批流） */
@@ -141,7 +144,7 @@ public class CounterpartyCandidateService {
     }
 
     /**
-     * 按 supplier_code 幂等建档。
+     * 按 supplier_code 去重建档。
      *
      * @return 新建档案的 crm_customer.id；已存在时返回既有 id
      */
@@ -167,9 +170,9 @@ public class CounterpartyCandidateService {
         c.setCustomerCode(s.getSupplierCode().trim());
         c.setCustomerName(StrUtil.isBlank(s.getSupplierName()) ? s.getSupplierCode() : s.getSupplierName());
         c.setCustomerType(TYPE_SUPPLIER);
-        // 不再逐列拷 contact/phone/address：全仓普查（10-23 16:3x）＝这三列除本服务的自动建档写入点与 CustomerService 的关键字 LIKE 外零读点，纯影子数据。
-        // 供应商侧的联系方式改由 CustomerService.page 出参时按编码回查，界面「带出联系人」口径不变。
-        // 关键字侧的兜底＝CustomerService.SUPPLIER_CONTACT_EXISTS 联查供应商三列，影子行清空后按 联系人/电话/地址 仍搜得到。
+        // 不再逐列拷 contact/phone/address：全仓普查（10-23 16:3x）＝这三列除本服务的自动建档写入位置与 CustomerService 的关键字 LIKE 外零读点，纯影子数据。
+        // 供应商侧的联系方式改由 CustomerService.page 出参时按编码回查，界面「带出联系人」规则不变。
+        // 关键字侧的默认处理＝CustomerService.SUPPLIER_CONTACT_EXISTS 联查供应商三列，影子行清空后按 联系人/电话/地址 仍搜得到。
         c.setStatus(STATUS_ACTIVE);
         c.setRemark("由供应商主数据自动建档（联系方式取自供应商档案）");
         customerMapper.insert(c);
@@ -178,7 +181,7 @@ public class CounterpartyCandidateService {
         return c.getId();
     }
 
-    /** CrmCustomer → 候选 Map（字段名与既有前端用法对齐：id/customerName/customerType）；联系人在此留空，由 {@code CustomerService#page} 的回查口径统一（两处各拷一份）。 */
+    /** CrmCustomer → 候选 Map（字段名与既有前端用法对齐：id/customerName/customerType）；联系人在此留空，由 {@code CustomerService#page} 的回查规则统一（两处各拷一份）。 */
     private Map<String, Object> toCandidate(CrmCustomer c) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", c.getId());

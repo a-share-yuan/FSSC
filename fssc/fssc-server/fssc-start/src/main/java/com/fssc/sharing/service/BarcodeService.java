@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -19,6 +22,7 @@ import java.util.List;
 /**
  * 条码管理服务。
  * 支持条码生成、打印、扫描签收、上架。
+ * 条码管理、条码追溯与批次条码的处理规则。
  */
 @Slf4j
 @Service

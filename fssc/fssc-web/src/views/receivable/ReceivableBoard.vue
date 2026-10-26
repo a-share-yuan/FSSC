@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <el-card>
@@ -22,7 +25,7 @@
                业务期间晚于系统日（补跑历史／跑到未来账期）时必须填期间，否则到期日永不早于基准日、逾期集恒空。 -->
           <el-input v-model="overdueBaseline" placeholder="账期/截止日（202611 或 2026-11-30，留空＝当天）" clearable size="small" style="width:250px" />
           <el-button type="warning" @click="accrueOverdue">逾期坏账计提批处理</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -56,10 +59,19 @@
             <template #default="{ row }">{{ fmt(row.remainAmount) }}</template>
           </el-table-column>
           <el-table-column prop="dueDate" label="到期日" width="110"  sortable />
-          <el-table-column label="状态" width="90" align="center">
+          <el-table-column label="收款态" width="90" align="center">
             <template #default="{ row }">
               <el-tag :type="row.status === 'DONE' ? 'success' : row.status === 'OVERDUE' ? 'danger' : 'warning'" size="small">
                 {{ rcStatusLabel(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <!-- D-H3-01：单据态是「收款规则」（NONE 直译"未开始"），审批期间看不出流程在跑 ⇒
+               后端 page() 按 wf_instance 投影一列流程态（未起流程/审批中/审批通过/已驳回/已撤销/已终止）。 -->
+          <el-table-column label="流程态" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag :type="flowTagType(row.flowStatus)" size="small" effect="plain">
+                {{ row.flowStatusText || '未起流程' }}
               </el-tag>
             </template>
           </el-table-column>
@@ -88,9 +100,9 @@
           </el-table-column>
           <el-table-column label="操作" width="140" fixed="right">
             <template #default="{ row }">
-              <!-- D-DEC-423④：原判据 row.status !== 'APPLIED' 与库值词表不匹配（登记腿写的是 WRITTEN_OFF），
-                   于是"已核销"行的「先进先出核销」按钮常驻可点＝重复核销的诱因；现按真实终态词表隐藏。
-                   后端 applyReceipt 同步改幂等跳过（登记即冲减，D-V3-143），二次点击也不会再冲一遍余额。 -->
+              <!-- D-DEC-423④：原判据 row.status !== 'APPLIED' 与库值名称表不匹配（登记环节写的是 WRITTEN_OFF），
+                   于是"已核销"行的「先进先出核销」按钮常驻可点＝重复核销的诱因；现按真实最终状态名称表隐藏。
+                   后端 applyReceipt 同步改去重跳过（登记即冲减，D-V3-143），二次点击也不会再冲一遍余额。 -->
               <el-button v-if="!receiptAppliedStatuses.includes(row.status)" link size="small" type="primary" @click="applyReceipt(row)">先进先出核销</el-button>
               <el-tag v-else size="small" type="success" effect="plain">登记时已核销</el-tag>
             </template>
@@ -272,6 +284,11 @@ const selRows = ref([])
 const customers = ref([])
 function customerName(id) { const c = customers.value.find((x) => x.id === id); return c ? (c.customerName || c.supplierName || c.name || '—') : (id ? '#' + id : '—') }
 
+// D-H3-01：流程态配色（wf_instance.status）——审批中给主色，最终状态按结果分色，未起流程灰
+function flowTagType(s) {
+  return { RUNNING: 'primary', APPROVED: 'success', REJECTED: 'danger', CANCELLED: 'info', TERMINATED: 'info' }[s] || 'info'
+}
+
 // 客户信用等级：等级取值 A/B/C（见 master/Customer.vue），C 为最低档（高风险）
 function customerCreditLevel(id) {
   const c = customers.value.find((x) => x.id === id)
@@ -349,7 +366,7 @@ async function saveReceivable() {
 /**
  * D-DEC-407：把界面填的基准日折成后端两个可选入参之一——
  * yyyyMM／yyyy-MM ＝期间（后端按期末日跑），yyyy-MM-dd／yyyy/MM/dd／yyyyMMdd ＝截止日（逐字取该日）；
- * 留空＝不传（后端回退系统当前日，与改造前逐字一致）；格式不认识时显式提示，不静默兜底。
+ * 留空＝不传（后端回退系统当前日，与改造前逐字一致）；格式不认识时显式提示，不静默默认处理。
  * @returns {{asOfDate?: string, period?: string}}
  */
 function overdueBaselineParams() {
@@ -379,12 +396,14 @@ async function accrueOverdue() {
 async function openReceipt() { rcForm.value = { customerId: null, amount: 0, receiptDate: '' }; dlgReceipt.value = true }
 async function saveReceipt() {
   await guardReceipt(async () => {
-    try { await receivableApi.receiptCreate(rcForm.value); ElMessage.success('收款单已登记'); dlgReceipt.value = false; loadReceipt() }
+    // D-H3-06（孪生面同修）：保存后 await 刷新，避免"点了没反应"的误判；
+    // 本页无检索工具条，新行必在列表首屏（后端按 id 倒序），故不做「不在视野」提示。
+    try { await receivableApi.receiptCreate(rcForm.value); ElMessage.success('收款单已登记'); dlgReceipt.value = false; await loadReceipt() }
     catch (e) { ElMessage.error(e.message) }
   })
 }
-// D-DEC-423④：收款单"已核销"终态词表（后端 RcReceiptService.APPLIED_RECEIPT_STATUSES 同口径）。
-// 登记腿 create() 自 D-V3-143 起在同一事务里建明细＋冲减应收腿＋置 WRITTEN_OFF，
+// D-DEC-423④：收款单"已核销"最终状态名称表（后端 RcReceiptService.APPLIED_RECEIPT_STATUSES 同一规则）。
+// 登记环节 create() 自 D-V3-143 起在同一事务里建明细＋冲减应收环节＋置 WRITTEN_OFF，
 // 故 WRITTEN_OFF／WRITE_OFF／APPLIED 都＝冲减已发生，行内不再给「先进先出核销」按钮。
 const receiptAppliedStatuses = ['WRITTEN_OFF', 'WRITE_OFF', 'APPLIED']
 
@@ -446,7 +465,7 @@ async function reconStart() {
 function reload() {
   loadReceivable(); loadReceipt(); loadCollect(); loadBadDebt()
 }
-// D-DEC-404 消费半：工作台「我的单据」台账跳转同写 kw 与 billNo/billId 两套取参口径（Workbench:269-275），
+// D-DEC-404 消费半：工作台「我的单据」台账跳转同写 kw 与 billNo/billId 两套取参规则（Workbench:269-275），
 // 本页此前完全不吃 URL——跳过来落的仍是全量首屏，"别的页面能定位到这一单"在此失明。
 const route = useRoute()
 const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()

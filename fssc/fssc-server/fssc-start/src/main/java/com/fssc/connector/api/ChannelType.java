@@ -1,10 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.connector.api;
 
 /**
  * 连接能力域（形态 B：{@code com.fssc.connector} 对外暴露的能力分类）。
  *
- * <p>它把 {@code ext_interface_config.category} 这类"厂商/通道级"标识，收敛成业务与治理层可判定的
- * 能力语义，并承载一条关键治理规则：<b>变更类能力有外部副作用，无幂等键时禁止自动重试；
+ * <p>它把 {@code ext_interface_config.category} 这类"通道级"标识，收敛成业务与治理层可判定的
+ * 能力语义，并承载一条关键治理规则：<b>变更类能力有外部副作用，无唯一键时禁止自动重试；
  * 只读类能力可安全重试</b>。该分类与历史 {@code DefaultIntegrationGateway.READ_ONLY_CATEGORIES}
  * 保持一致（AI_MODEL / OCR / INVOICE_VERIFY / INVOICE_CERTIFY 为只读）。</p>
  */
@@ -35,7 +38,7 @@ public enum ChannelType {
         this.mutating = mutating;
     }
 
-    /** 是否为变更类（有外部副作用）→ 无幂等键时禁止自动重试。 */
+    /** 是否为变更类（有外部副作用）→ 无唯一键时禁止自动重试。 */
     public boolean isMutating() {
         return mutating;
     }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.ops.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -11,6 +14,7 @@ import java.math.BigDecimal;
 /**
  * G3（2026-09-24）共享作业分配策略与双时限配置（op_dispatch_policy，带 tenant_id）。
  *
+ * <p>共享中心分配模式四档＋任务时限（普通/加急）：
  * 一条记录 = 某个流程节点的分配策略 + 两档时限；{@code model_key='*' AND node_key='*'} 是全局默认行。
  *
  * <p><b>为什么策略配置要落表而不是写死代码</b>：本仓库既有教训是"配置界面向业务承诺引擎从来没做的事"
@@ -32,9 +36,9 @@ public class OpDispatchPolicy extends TenantAuditBase {
     private String policyName;
     /** 分配策略：PICK抢单 / BALANCE_TIME均衡按时 / BALANCE_VOLUME均衡按量 / SMART智能 */
     private String strategy;
-    /** 普通任务时限（小时），通行口径默认 24h */
+    /** 普通任务时限（小时），通行规则默认 24h */
     private BigDecimal normalHours;
-    /** 加急任务时限（小时），通行口径默认 4h */
+    /** 加急任务时限（小时），通行规则默认 4h */
     private BigDecimal urgentHours;
     /** 均衡·按时的分配间隔（小时），默认 1h 一分 */
     private BigDecimal balanceIntervalHours;

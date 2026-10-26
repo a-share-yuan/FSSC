@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -23,7 +26,7 @@ import java.util.Map;
 /**
  * AR服务申请真实分录凭证生成（补齐评估缺口2）。
  *
- * <p>范式对齐 VoucherService（借/贷两行平衡分录 + md_subject 科目解析 + 同源判重幂等），
+ * <p>范式对齐 VoucherService（借/贷两行平衡分录 + md_subject 科目解析 + 同源判重去重），
  * 但独立成类避免改动 2300+ 行的共享大文件。科目取自单据上的附件五默认值；
  * 科目缺码时分录仍落 subjectCode（subjectId 允许空），不阻断。</p>
  *
@@ -70,7 +73,7 @@ public class ArFlowVoucherService {
     /**
      * 其它业务对冲多行分录凭证（蓝图附件11.4.3，"多借多贷"做法）：
      * 解析单据 lines_json（[{debitCode,debitAmount,creditCode,creditAmount,summary,partnerCode}]），
-     * 逐行生成借/贷分录；科目缺失 fail-closed；合计借贷强校验；同源判重幂等。
+     * 逐行生成借/贷分录；科目缺失 fail-closed；合计借贷强校验；同源判重去重。
      */
     public String generateClaimMultiLineVoucher(ArClaim c) {
         OpVoucher existed = opVoucherMapper.selectOne(new LambdaQueryWrapper<OpVoucher>()
@@ -244,7 +247,7 @@ public class ArFlowVoucherService {
                 "应收应付对冲-" + nullToBlank(billNo), "AR_AP_OFFSET", docId, billNo, customerName);
     }
 
-    /** 月结过总账汇总凭证：借 1122 应收账款 / 贷 6001 主营业务收入（账期汇总模拟推送 EBS 总账）。 */
+    /** 月结过总账汇总凭证：借 1122 应收账款 / 贷 6001 主营业务收入（账期汇总模拟推送 ERP 总账）。 */
     public String generateMonthCloseVoucher(Long tenantId, Long companyId, BigDecimal amount,
                                             String summary, Long docId) {
         if (amount == null || amount.signum() <= 0) {
@@ -260,12 +263,12 @@ public class ArFlowVoucherService {
     }
 
     /**
-     * R5-D-216：月结过总账凭证制单即审（DRAFT → POSTED，过账人＝当前月结操作人并留痕）。
+     * R5-D-216：月结过总账凭证制单即审（DRAFT → POSTED，过账人＝当前月结操作人并记录）。
      * <p>复用共享凭证正规过账通道 {@code VoucherService.postSystem}（含公司可见性、期间开账、
      * 分录非空、末级科目、辅助核算、借贷平衡整套校验，写 post_user_id/post_time 并落总账）；
      * 月结结转属月结作业的系统动作、无人工审核环节，与 GlProfitCarryService 损益结转同一
-     * 制审分离豁免口径（D-DEC-166，通道内留 warn 日志供事后核查），不自实现过账、不裸 UPDATE status。
-     * <p>幂等：仅 DRAFT 才过账（重跑 postGl 时同源凭证已 POSTED 则跳过）；VOID 不复活。</p>
+     * 制审分离豁免规则（D-DEC-166，通道内留 warn 日志供事后核查），不自实现过账、不裸 UPDATE status。
+     * <p>去重：仅 DRAFT 才过账（重跑 postGl 时同源凭证已 POSTED 则跳过）；VOID 不复活。</p>
      */
     private void autoPostMonthCloseVoucher(Long docId) {
         OpVoucher v = opVoucherMapper.selectOne(new LambdaQueryWrapper<OpVoucher>()
@@ -303,7 +306,7 @@ public class ArFlowVoucherService {
     private String createVoucher(Long tenantId, Long companyId, String debitCode, String creditCode,
                                  BigDecimal amount, String summary, String sourceType, Long sourceDocId,
                                  String billNo, String partnerName) {
-        // 同源判重（P0-5 幂等范式）：同 sourceType + sourceDocId 已有凭证（非VOID）直接返回其凭证号
+        // 同源判重（P0-5 去重范式）：同 sourceType + sourceDocId 已有凭证（非VOID）直接返回其凭证号
         OpVoucher existed = opVoucherMapper.selectOne(new LambdaQueryWrapper<OpVoucher>()
                 .eq(OpVoucher::getSourceType, sourceType)
                 .eq(OpVoucher::getSourceDocId, sourceDocId)

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -286,7 +289,7 @@ public class FxRevaluationService {
     // ============================ 试算 / 反冲（P1-7 四步化：试算→确认→凭证→反冲）============================
 
     /**
-     * 重估试算（第一步，只算不落库）：逐 公司+币种+方向 桶取期末汇率并算预计差异，
+     * 重估试算（第一步，只算不写入数据库）：逐 公司+币种+方向 桶取期末汇率并算预计差异，
      * 供人工确认后再执行正式重估；本期已有重估记录的桶标 EXIST（执行时将跳过）。
      */
     public Map<String, Object> trial(String period) {
@@ -409,7 +412,7 @@ public class FxRevaluationService {
         return ret;
     }
 
-    // ============================ 取数聚合 ============================
+    // ============================ 查询聚合 ============================
 
     /** 三类货币性项目聚合为 公司+币种+方向 桶。 */
     private LinkedHashMap<String, Bucket> collectBuckets(String p, LocalDate monthEnd, Long defaultCompany) {
@@ -471,7 +474,7 @@ public class FxRevaluationService {
                     cur, "LOAN", book, orig);
         }
 
-        // ---- AR 外币应收（rc_receivable 无公司维度，取租户首个公司兜底）----
+        // ---- AR 外币应收（rc_receivable 无公司维度，取租户首个公司默认处理）----
         List<RcReceivable> receivables = rcReceivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
                 .ne(RcReceivable::getCurrencyCode, HOME));

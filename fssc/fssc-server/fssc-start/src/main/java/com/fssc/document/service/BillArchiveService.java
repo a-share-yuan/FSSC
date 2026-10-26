@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.document.service;
 
 import com.fssc.common.core.ErrorCode;
@@ -48,20 +51,20 @@ public class BillArchiveService {
     private final NumberRuleService numberRuleService;
     private final BillFacade billFacade;
     private final ImageFacade imageFacade;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** D-DEC-315／#56 甲档：归档写腿按 voucher_no 正查凭证ID */
+    /** D-DEC-315／#56 甲档：归档写环节按 voucher_no 正查凭证ID */
     private final com.fssc.sharing.service.VoucherService voucherService;
     /** D-DEC-180（P1）：完整性哈希的唯一算式（本类原先把主文件裸 MD5 当哈希写库，是第三种算式并存的一支） */
     private final ArchiveIntegrityService archiveIntegrityService;
     /**
-     * D-DEC-048（12-16:60）：重复立卷判重的唯一口径在 {@code ArchiveService}（在册/在途卷查询），
+     * D-DEC-048（12-16:60）：重复立卷判重的唯一规则在 {@code ArchiveService}（现有/在途卷查询），
      * 本类的影像归档链路复用同一个方法，不再自写第二套谓词（D-DEC-095 的成因就是各写一套）。
      */
     private final ArchiveService archiveService;
     /**
      * V1.4.92：档案非集中管理公司（archive_mode=NON_CENTRAL）不产生实物流，
-     * R5-D-244 的「实物未签收不得归档」前置闸对这类公司不适用（模式判定复用 DeliveryService 单一读点）。
+     * R5-D-244 的「实物未签收不得归档」前置校验对这类公司不适用（模式判定复用 DeliveryService 单一读点）。
      */
     private final com.fssc.sharing.service.DeliveryService deliveryService;
 
@@ -84,13 +87,13 @@ public class BillArchiveService {
         } catch (Exception ignored) { /* 定时任务无用户上下文 */ }
         LocalDateTime now = LocalDateTime.now();
         int count = 0;
-        // D-DEC-048（12-16:60）：本链路改前只按"单据已 ARCHIVED"幂等，
+        // D-DEC-048（12-16:60）：本链路改前只按"单据已 ARCHIVED"去重，
         // 单据还是 UNARCHIVED 而档案行已存在（电子立卷登记的 PENDING 卷／人工建过目录）时，
-        // 再点一次「归档所选」就多落一卷 ⇒ 同一单据两张卷。现按来源单据键查在册/在途卷：
+        // 再点一次「归档所选」就多落一卷 ⇒ 同一单据两张卷。现按来源单据键查现有/在途卷：
         // 命中即跳过该单据（不整批报错，批次里别的单据照做），并在末尾如实提示原卷号。
         List<String> alreadyFiled = new ArrayList<>();
-        // R5-D-244：归档前置闸——实物未签收（delivery_status=UNSIGNED）不得归档，防「签收沦为事后补章」；
-        // 不整批报错，批次内其余单据照做，末尾如实提示（存量倒挂行只读清单交人工，NULL=历史未纳管放行）
+        // R5-D-244：归档前置校验——实物未签收（delivery_status=UNSIGNED）不得归档，防「签收沦为事后补章」；
+        // 不整批报错，批次内其余单据照做，末尾如实提示（历史倒挂行只读清单交人工，NULL=历史未纳管放行）
         List<String> unsignedBills = new ArrayList<>();
         for (Long billId : billIds) {
             BillArchiveDTO bill = billFacade.findBillForArchive(billId);
@@ -98,7 +101,7 @@ public class BillArchiveService {
                 continue;
             }
             if ("ARCHIVED".equals(bill.getArchiveStatus())) {
-                continue; // 幂等：已归档跳过
+                continue; // 去重：已归档跳过
             }
             // V1.4.92：非集中管理公司无实物流，UNSIGNED 不构成阻断（集中公司行为不变）
             if ("UNSIGNED".equals(bill.getDeliveryStatus())
@@ -161,7 +164,7 @@ public class BillArchiveService {
             a.setRelatedIds(movedFileIdList(moved));
             // 完整性校验：D-DEC-180——改前此处写的是 moved.get(0).getFileMd5()（主文件裸 MD5），
             // 既不含档案身份（两卷若首件相同即同哈希＝漏报），也永远无法被读侧按任何一套算式复算（＝误报）。
-            // 现：状态口径不变（有载体记 VERIFIED、无载体 SKIP），哈希值改在 insert 之后按唯一算式落。
+            // 现：状态规则不变（有载体记 VERIFIED、无载体 SKIP），哈希值改在 insert 之后按唯一算式落。
             if (!moved.isEmpty() && moved.get(0).getFileMd5() != null) {
                 a.setIntegrityStatus("VERIFIED");
             } else {
@@ -171,12 +174,12 @@ public class BillArchiveService {
             a.setFilingTime(now);
             a.setRetentionYears(10);
             // 本链路改前从不设 destroy_date ⇒ 立进来的卷全部 NULL，销毁申请被
-            // 「未设置到期销毁日期，禁止销毁」硬闸整批拦死；现与两条立卷入口共用一把尺。
+            // 「未设置到期销毁日期，禁止销毁」强制校验整批拦死；现与两条立卷入口共用一把尺。
             a.setDestroyDate(ArchiveService.destroyDateOf(a.getArchiveYear(),
                     bill.getPeriodYear(), a.getRetentionYears()));
             // D-DEC-182（12-31:160）：本方法过去只写 status='ARCHIVED'、从不写 archive_status
             // ⇒ 库里该列落到默认 PENDING，两列互斥（实测 id=4/10 与证据 id=21/22/23）；
-            // 且 'ARCHIVED' 本身不在 status 的词表（FILED/EXPIRED/DESTROYED）里。
+            // 且 'ARCHIVED' 本身不在 status 的名称表（FILED/EXPIRED/DESTROYED）里。
             // 现按"archive_status＝真相源、status＝同源镜像"落两列：
             // 归档结论＝ARCHIVED（本链路在同事务里 billFacade.markArchived 把单据也定成 ARCHIVED，两轴一致），
             // 保管轴＝FILED（案卷已登记在架）。
@@ -196,7 +199,7 @@ public class BillArchiveService {
             a.setIntegrityHash(integrityHash);
             // 4) 标记单据已归档 —— 断点3：通过 BillFacade 标记
             billFacade.markArchived(billId, userId, now);
-            // P4-3 审计留痕：单据归档状态跃迁 → ARCHIVED
+            // P4-3 审计记录：单据归档状态跃迁 → ARCHIVED
             auditTrailService.recordUpdate("ARCHIVE", billId, bill.getBillNo(), "exp_bill",
                     String.valueOf(billId),
                     java.util.Collections.singletonMap("archiveStatus", bill.getArchiveStatus()),
@@ -257,17 +260,17 @@ public class BillArchiveService {
 
     /**
      * 电子归档<b>立卷</b>（D-DEC-094／12-22:112 修后语义）：无纸质件的电子单据
-     * （报销/付款/结算等 exp_bill 单据，影像状态 NONE/空）在审批通过（终态 APPROVED/PAID/CLOSED）后，
+     * （报销/付款/结算等 exp_bill 单据，影像状态 NONE/空）在审批通过（最终状态 APPROVED/PAID/CLOSED）后，
      * 由 {@code BillTerminalEventListener} 调用本方法<b>登记档案目录</b>（写入既有 op_archive 表：
      * 单据 + 凭证号 + 附件清单），使 /archive 档案管理页面可检索到该电子档案。
      *
-     * <p><b>本方法不再置任何归档终态</b>。原实现在审批通过的同一秒把
+     * <p><b>本方法不再置任何归档最终状态</b>。原实现在审批通过的同一秒把
      * {@code op_archive.archive_status/status} 写成 ARCHIVED、写 archived_at，并回写
      * {@code exp_bill.archive_status=ARCHIVED + archive_time + archive_by（取末节点审批人）}，
      * 而 {@code wf_instance} 里 biz_type=FM_ARCHIVE 无对应实例（实测 op_archive id=16 vs id=14/15）——
      * 即"归档"这个控制点对 PAY/SETTLE 域恒为自动通过，档案完整性（附件、影像）无人复核即成立。
      *
-     * <p>修法（保守半，两条产品口径并列待裁，见 §报告）：
+     * <p>修法（保守半，两条产品规则并列待裁，见 §报告）：
      * <ul>
      *   <li>A 案（<b>本实现</b>）：审批通过仅登记为<b>待归档</b>（{@code archive_status='PENDING'}，
      *       op_archive 既有取值，前端 archStatusLabel 已映射「待归档」），单据侧保持 UNARCHIVED，
@@ -278,10 +281,10 @@ public class BillArchiveService {
      * </ul>
      *
      * <p>与影像归档链路（{@link #doArchive}，需影像 PARTIAL/COMPLETE）互不影响；有影像的单据仍走原链路。
-     * <p>幂等：单据已 ARCHIVED、或该单已存在 bill-scoped 的<b>在册/在途</b>档案目录行时跳过
-     * （终态事件可能多次发布；判重口径与三条立卷入口共用，见 {@code ArchiveService.findLiveVolumes}，D-DEC-048）。
-     * <p>REQUIRES_NEW：调用方为 AFTER_COMMIT 终态事件监听，原事务已提交，
-     * 新开独立事务确保归档数据真实落库（不挂在已完成的连接上）。
+     * <p>去重：单据已 ARCHIVED、或该单已存在 bill-scoped 的<b>现有/在途</b>档案目录行时跳过
+     * （最终状态事件可能多次发布；判重规则与三条立卷入口共用，见 {@code ArchiveService.findLiveVolumes}，D-DEC-048）。
+     * <p>REQUIRES_NEW：调用方为 AFTER_COMMIT 最终状态事件监听，原事务已提交，
+     * 新开独立事务确保归档数据真实写入数据库（不挂在已完成的连接上）。
      *
      * @return 1=已登记待归档档案；0=跳过（不存在/已归档/已立卷）
      */
@@ -294,11 +297,11 @@ public class BillArchiveService {
         if (bill == null) {
             return 0;
         }
-        // 幂等1：单据已归档（可能是人工/定时链路先到）
+        // 去重1：单据已归档（可能是人工/定时链路先到）
         if ("ARCHIVED".equals(bill.getArchiveStatus())) {
             return 0;
         }
-        // R5-D-244：归档前置闸与 doArchive 同一把尺——实物未签收（UNSIGNED）时不得登记待归档，
+        // R5-D-244：归档前置校验与 doArchive 同一把尺——实物未签收（UNSIGNED）时不得登记待归档，
         // 防「签收沦为事后补章」；事件语义按跳过并记日志处理（不抛异常），NULL=历史未纳管放行。
         // V1.4.92：非集中管理公司无实物流，UNSIGNED 不构成阻断（与 doArchive 同一把尺）
         if ("UNSIGNED".equals(bill.getDeliveryStatus())
@@ -312,12 +315,12 @@ public class BillArchiveService {
             log.info("电子归档跳过: 单据 {} 存在影像（{}），走影像归档链路", bill.getBillNo(), imageStatus);
             return 0;
         }
-        // 幂等2：同一单据已有<b>在册/在途</b>档案目录行（BILL/EXPENSE/PAYMENT 三类 ref 均指向本单据，
-        // 含历史人工立卷）→ 不再重复登记，也绝不代写单据归档标记（D-DEC-094：归档终态只能由审批闭环产生）。
+        // 去重2：同一单据已有<b>现有/在途</b>档案目录行（BILL/EXPENSE/PAYMENT 三类 ref 均指向本单据，
+        // 含历史人工立卷）→ 不再重复登记，也绝不代写单据归档标记（D-DEC-094：归档最终状态只能由审批闭环产生）。
         // 原实现这里调 markBillArchived() 把单据"补齐"成 ARCHIVED，正是"没走审批流的自动归档才回写"
         // 那半边反向逻辑（D-DEC-095），已随本条一并摘除。
-        // D-DEC-048：判重改走 ArchiveService.findLiveVolumes 单点口径（与 createArchive/autoArchive/本类
-        // doArchive 同一把尺；此处按"跳过并记日志"的事件语义处理，不抛异常——终态事件重试不该被硬闸打断）。
+        // D-DEC-048：判重改走 ArchiveService.findLiveVolumes 单点规则（与 createArchive/autoArchive/本类
+        // doArchive 同一把尺；此处按"跳过并记日志"的事件语义处理，不抛异常——最终状态事件重试不该被强制校验打断）。
         List<OpArchive> existingVolumes = archiveService.findLiveVolumes(billId, "BILL");
         if (!existingVolumes.isEmpty()) {
             log.info("电子归档跳过: 单据 {} 已存在在册/在途档案目录记录 {} 行（{}），待归档登记不重复落，归档终态由 FM_ARCHIVE 审批闭环回写",
@@ -361,7 +364,7 @@ public class BillArchiveService {
         a.setFilingTime(now);
         a.setRetentionYears(10);
         // D-DEC-094：审批通过只到「待归档」——archive_status=PENDING（既有取值），
-        // 不写 archived_at（终态时间由 FM_ARCHIVE 闭环写），
+        // 不写 archived_at（最终状态时间由 FM_ARCHIVE 闭环写），
         // D-DEC-182：status 不再"留空走库默认"，与真相源同源回写（PENDING 在保管轴上仍是 FILED，取值不变）；
         // 也不再回写 exp_bill.archive_status（单据在待归档清单里依旧可见，等审批闭环）。
         a.setArchiveStatus("PENDING");
@@ -371,25 +374,25 @@ public class BillArchiveService {
                 ? "无凭证" : ("凭证号 " + bill.getVoucherNo());
         a.setRemark("电子归档立卷（无纸质件，审批通过自动登记为待归档，须执行归档经 FM_ARCHIVE 审批；附件 "
                 + attachFileIds.size() + " 个；" + voucherInfo + "）");
-        // V1.4.92（AMC-05）：电子单据也可能属于非集中公司（无影像但原件在单位）⇒ 同口径补保管单位
+        // V1.4.92（AMC-05）：电子单据也可能属于非集中公司（无影像但原件在单位）⇒ 同一规则补保管单位
         archiveService.applyPaperKeeperDefault(a);
         archiveMapper.insert(a);
         log.info("电子归档立卷: 单据 {} → 档案 {}（附件 {} 个，{}）→ 待归档 PENDING，未置归档终态",
                 bill.getBillNo(), a.getArchiveNo(), attachFileIds.size(), voucherInfo);
-        // P4-3 审计留痕：档案目录登记（原此处记的是 exp_bill archive_status → ARCHIVED 的单据跃迁，
+        // P4-3 审计记录：档案目录登记（原此处记的是 exp_bill archive_status → ARCHIVED 的单据跃迁，
         // 本方法已不再改单据列，改记档案行的登记动作，避免留下未发生的跃迁）
         auditTrailService.recordUpdate("ARCHIVE", billId, bill.getBillNo(), "op_archive",
                 String.valueOf(a.getId()),
                 java.util.Collections.emptyMap(),
                 java.util.Collections.singletonMap("archiveStatus", "PENDING"),
-                "审批通过自动登记待归档档案 " + a.getArchiveNo() + "（归档终态待 FM_ARCHIVE 审批闭环）");
+                "审批通过自动登记待归档档案 " + a.getArchiveNo() + "（归档已完成，待 FM_ARCHIVE 审批办结）");
         return 1;
     }
 
     /*
      * D-DEC-094：原 private markBillArchived(billId)（回写 exp_bill archive_status=ARCHIVED + archive_time +
      * archive_by）只有 eArchiveBill 在用，现随该前置/代偿写一并移除；
-     * 影像归档链路 doArchive 仍按批次口径直接调 billFacade.markArchived(billId, userId, now)，
+     * 影像归档链路 doArchive 仍按批次规则直接调 billFacade.markArchived(billId, userId, now)，
      * 审批闭环侧的回写单点是 ArchiveFacadeImpl.handleArchiveApproval。
      */
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -55,7 +58,7 @@ import java.util.regex.Pattern;
  * </ol>
  *
  * <p><b>取人铁律</b>：所有维度解析出的人都要过 {@link #isRealUser}（在职 NORMAL、非 {@code is_admin=1}、
- * 非 {@code user_name='admin'}）——与 {@code NodeOrgResolver} 同口径，admin 不得成为业务审批节点的办理人。
+ * 非 {@code user_name='admin'}）——与 {@code NodeOrgResolver} 同一规则，admin 不得成为业务审批节点的办理人。
  *
  * <p><b>汇报关系复用既有能力</b>：向上方向（直接/间接上级）直接复用
  * {@link NodeOrgResolver#escalateTarget(String, Integer)}（沿 {@code sys_dept.leader_id} 向上 ≤10 级的升级链，
@@ -77,7 +80,7 @@ public class WfAssigneeResolver {
     private final TaskService flowTaskService;
     private final NodeOrgResolver nodeOrgResolver;
 
-    /** 条件表达式的最小文法（写入侧与预览接口共用同一份说明，避免两处口径漂移） */
+    /** 条件表达式的最小文法（写入侧与预览接口共用同一份说明，避免两处规则漂移） */
     public static final String CONDITION_GRAMMAR =
             "变量：amount/bizType/subType/companyId/deptId/startUserId 及流程实例变量原名；"
                     + "比较：== != > >= < <=（右值可写数字或 '单引号字符串'）；组合：&&（与）||（或）。"
@@ -92,7 +95,7 @@ public class WfAssigneeResolver {
      *
      * @param modelKey   流程定义 key（与 wf_node_config.model_key 同源）
      * @param nodeKey    节点 key（BPMN userTask id）
-     * @param procInstId 流程实例 ID（维度解析的组织上下文；可空，空则退化为"无单据上下文"口径）
+     * @param procInstId 流程实例 ID（维度解析的组织上下文；可空，空则退化为"无单据上下文"规则）
      * @param task       当前任务（EXCLUDE 组合模式需要它取候选组；可空）
      * @return {@code configured=false} ⇒ 该节点无方案，调用方必须保持原行为；
      *         {@code configured=true} ⇒ {@code userIds} 必然非空
@@ -202,11 +205,11 @@ public class WfAssigneeResolver {
      *
      * <p>与 {@link #preview(String, String, String, Task)} 的差异只有一处：任务由本方法自己按 ID 查。
      * 之所以由解析器查而不是让 Controller 直接碰 Flowable TaskService：本项目有"业务域禁止直接用
-     * Flowable API"的红线，取任务也属于该口径（NodeOrgResolver 同样是这么做的）。
+     * Flowable API"的红线，取任务也属于该规则（NodeOrgResolver 同样是这么做的）。
      *
      * <p>{@code modelKey}/{@code nodeKey} 留空时按任务的 {@code processDefinitionId} 与
      * {@code taskDefinitionKey} 反推（BPMN 生成的任务 id 形如 {@code Task_N}，与配置表的 node_key
-     * 同形，故反推可靠）；任务查不到（已办结/传错 ID）则按"无任务"口径解析，仅影响 EXCLUDE 组合模式。
+     * 同形，故反推可靠）；任务查不到（已办结/传错 ID）则按"无任务"规则解析，仅影响 EXCLUDE 组合模式。
      */
     public Map<String, Object> previewByTask(String modelKey, String nodeKey, String procInstId, String taskId) {
         Task task = null;
@@ -340,7 +343,7 @@ public class WfAssigneeResolver {
         }
     }
 
-    /** 角色维度：口径完全复用 {@code NodeOrgResolver.listRoleCandidates}（GROUP 跨公司 / COMPANY 按单据公司 / 排除 admin） */
+    /** 角色维度：规则完全复用 {@code NodeOrgResolver.listRoleCandidates}（GROUP 跨公司 / COMPANY 按单据公司 / 排除 admin） */
     private List<Long> roleUsers(String csv, String procInstId) {
         Set<Long> out = new LinkedHashSet<>();
         for (String code : splitCsv(csv)) {
@@ -427,8 +430,8 @@ public class WfAssigneeResolver {
      * 汇报关系维度。
      *
      * <p>向上两档（{@code DIRECT_UP}/{@code INDIRECT_UP}）复用 {@code NodeOrgResolver.escalateTarget}：
-     * 主体固定为<b>发起人</b>（与该方法的既有口径一致——它读 {@code wf_instance.start_user_id}），
-     * 级数取 {@code up_level}。因此 {@code dim_value} 对向上方向不生效（写了也只作留痕），
+     * 主体固定为<b>发起人</b>（与该方法的既有规则一致——它读 {@code wf_instance.start_user_id}），
+     * 级数取 {@code up_level}。因此 {@code dim_value} 对向上方向不生效（写了也只作记录），
      * 这是"能复用就复用、不另造一套往上报规则"的直接结果。
      *
      * <p>平级/向下两档既有链未覆盖，按部门树实现：平级＝同父部门的其它负责人；向下＝本人任负责人的

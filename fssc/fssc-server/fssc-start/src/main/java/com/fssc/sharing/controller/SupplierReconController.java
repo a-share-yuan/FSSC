@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -41,6 +44,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
+ * 供应商对账 REST API（预留第三方对账平台接口）。
  *
  * 接口分组：
  * 1. 对账单 CRUD：page / generate / summary
@@ -73,6 +77,7 @@ public class SupplierReconController {
     /** 签名时间窗（秒）：|now - X-BCP-Timestamp| 超窗拒绝 */
     private static final long LINKU_MAX_SKEW_SECONDS = 300;
 
+    /** 密钥注入点名称，启动告警与回调错误体共用同一规则，便于运维照提示自查（不打印密钥值） */
     private static final String LINKU_SECRET_HINT =
             "未注入 LinkU 回调共享密钥：配置项 fssc.linku-callback.secret（环境变量 FSSC_LINKU_CALLBACK_SECRET）为空";
 
@@ -271,17 +276,17 @@ public class SupplierReconController {
                 str(m, "verifyStatus"), str(m, "verifyRemark"), str(m, "duplicateCheck"), str(m, "ocrFileUrl")));
     }
 
-    // ==================== LinkU 回调统一守卫：验签 + 幂等 + 落 log（P0-1） ====================
+    // ==================== LinkU 回调统一守卫：验签 + 去重 + 落 log（P0-1） ====================
 
     /**
-     * 统一起点：0) 无密钥 fail-fast；1) HMAC 验签+时间窗；2) 幂等去重；3) 执行业务；4) 落 linku_sync_log。
+     * 统一起点：0) 无密钥 fail-fast；1) HMAC 验签+时间窗；2) 去重去重；3) 执行业务；4) 落 linku_sync_log。
      * 验签/执行失败返回对应 HTTP 非 2xx 状态码（body.code 保持一致），供 BCP 判为重试信号。
      *
-     * D-DEC-241 第二项（写入侧收口）：**未过签的请求不写 linku_sync_log**，改记应用日志。
-     * 回调端点对外可达，原先验签失败也 INSERT 一条含完整请求体的留痕 ⇒
+     * D-DEC-241 第二项（写入侧办结）：**未过签的请求不写 linku_sync_log**，改记应用日志。
+     * 回调端点对外可达，原先验签失败也 INSERT 一条含完整请求体的记录 ⇒
      * 任何人反复投递即可无界撑大该表（未鉴权写入面 + 请求体全量入库）。
-     * 已过签的"业务执行失败"仍照常落库——那是合法来源的审计线索，不能丢。
-     * 未过签侧保留 IP + eventType + 拒绝码在应用日志里，审计可查但不落库，且绝不打印密钥值。
+     * 已过签的"业务执行失败"仍照常写入数据库——那是合法来源的审计线索，不能丢。
+     * 未过签侧保留 IP + eventType + 拒绝码在应用日志里，审计可查但不写入数据库，且绝不打印密钥值。
      */
     private Result<Object> guardAndExecute(HttpServletRequest req, HttpServletResponse resp,
                                            String rawBody, String defaultEventType,
@@ -295,7 +300,7 @@ public class SupplierReconController {
         Long linkuReconId = linkuId(merged);
         String idemKey = callbackIdempotencyKey(req, merged, linkuReconId);
 
-        // 0) 未配置 secret：拒绝所有回调（fail-fast）。错误体带自诊断口径，对端不必翻源码。
+        // 0) 未配置 secret：拒绝所有回调（fail-fast）。错误体带自诊断规则，对端不必翻源码。
         if (!StringUtils.hasText(linkuSecret)) {
             resp.setStatus(401);
             String diag = "LINKU_CALLBACK_DISABLED|" + LINKU_SECRET_HINT;
@@ -315,7 +320,7 @@ public class SupplierReconController {
             return Result.fail(status, sig.isTimestampError() ? "INVALID_LINKU_TIMESTAMP" : "INVALID_LINKU_SIGNATURE");
         }
 
-        // 2) 幂等：同事件同幂等键已成功处理过则跳过，避免重复副作用
+        // 2) 去重：同事件同唯一键已成功处理过则跳过，避免重复副作用
         if (alreadyProcessed(eventType, idemKey, linkuReconId)) {
             return Result.success();
         }
@@ -418,7 +423,7 @@ public class SupplierReconController {
                 req.getRemoteAddr(), eventType, linkuReconId, reason);
     }
 
-    /** 落 linku_sync_log 审计留痕（仅在验签通过后的处理结果上调用） */
+    /** 落 linku_sync_log 审计记录（仅在验签通过后的处理结果上调用） */
     private void writeLog(String eventType, Long linkuReconId, String idempotencyKey, Map<String, Object> m,
                           String status, String errorMsg, long durationMs) {
         try {
@@ -434,9 +439,9 @@ public class SupplierReconController {
             log.setCreateTime(LocalDateTime.now());
             linkuSyncLogMapper.insert(log);
         } catch (org.springframework.dao.DuplicateKeyException dup) {
-            // D-V5R-03：撞 uk_linku_sync_log_idem 说明"同一幂等键已有一条 SUCCESS 留痕"，
-            // 即本事件已被处理过一次（重复投递/并发投递）。这属于幂等命中，不是故障，
-            // 不能按普通异常吞掉 —— 否则"留痕丢失"会被伪装成"从未收到过该回调"。
+            // D-V5R-03：撞 uk_linku_sync_log_idem 说明"同一唯一键已有一条 SUCCESS 记录"，
+            // 即本事件已被处理过一次（重复投递/并发投递）。这属于去重命中，不是故障，
+            // 不能按普通异常吞掉 —— 否则"记录丢失"会被伪装成"从未收到过该回调"。
             log.info("[LinkU回调] 幂等命中：同一幂等键已有成功留痕，本次不再重复落库 eventType={} idemKey={}",
                     eventType, idempotencyKey);
         } catch (Exception ex) {
@@ -445,11 +450,11 @@ public class SupplierReconController {
     }
 
     /**
-     * 回调幂等键（D-V5R-03）。
+     * 回调唯一键（D-V5R-03）。
      *
      * <p>取键顺序：① 信封 body 的 {@code idempotencyKey}；② BCP 投递头 {@code X-BCP-Event-Id}
      * （每条发件箱事件唯一：重投同一事件取值相同 ⇒ 可去重；不同事件取值不同 ⇒ 不互撞）；
-     * ③ 回落到 {@code linkuReconId}。三者皆空才退化为"无幂等保护"。</p>
+     * ③ 回落到 {@code linkuReconId}。三者皆空才退化为"无去重保护"。</p>
      *
      * <p>该键写入 {@code linku_sync_log.idempotency_key}，与 event_type 合成生成列
      * {@code active_idem_key}。修复前该列恒为 NULL ⇒ 生成列恒等于
@@ -483,7 +488,7 @@ public class SupplierReconController {
         } else if (linkuReconId != null) {
             w.eq(LinkuSyncLog::getLinkuReconId, linkuReconId);
         } else {
-            // 既无幂等键也无对账单ID：无法判定是否重复，按"未处理"放行（后续照常落留痕）
+            // 既无唯一键也无对账单ID：无法判定是否重复，按"未处理"放行（后续照常落记录）
             return false;
         }
         Long cnt = linkuSyncLogMapper.selectCount(w);

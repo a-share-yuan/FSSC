@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -31,7 +34,7 @@ public class WfDelegate extends TenantAuditBase {
      *
      * <p>注意：**生效判定看的是时间区间**（`begin_time &lt;= now &lt;= end_time`，见
      * {@code WfDelegateService.activeDelegateTo}），不看本列——因此即便本列尚未被 Job 刷成
-     * EXPIRED，过期委托也不会生效。本列只用于展示与审计口径（前端 `MyDelegate.vue`
+     * EXPIRED，过期委托也不会生效。本列只用于展示与审计规则（前端 `MyDelegate.vue`
      * 对 EXPIRED 显示「已过期」）。
      */
     private String status;

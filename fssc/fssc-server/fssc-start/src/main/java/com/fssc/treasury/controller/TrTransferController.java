@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.treasury.controller;
 
 import com.fssc.common.core.PageResult;
@@ -17,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 资金调拨管理（/api/tenant/treasury/transfer/**）
- * <p>D-DEC-422 扩展：资金域写端点补操作审计留痕（原全类零 {@code @OperLog}＝库有痕、日志无行）。
+ * <p>D-DEC-422 扩展：资金域写端点补操作审计记录（原全类零 {@code @OperLog}＝库有痕、日志无行）。
  */
 @RestController
 @RequestMapping("/api/tenant/treasury/transfer")

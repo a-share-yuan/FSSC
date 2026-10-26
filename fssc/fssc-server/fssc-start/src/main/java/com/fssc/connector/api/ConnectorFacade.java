@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.connector.api;
 
 import com.fssc.system.entity.ExtInterfaceConfig;
@@ -5,12 +8,12 @@ import com.fssc.system.entity.ExtInterfaceConfig;
 /**
  * 集成连接服务统一入口（形态 B）。
  *
- * <p>业务侧只依赖本接口，不感知具体厂商/协议。所有外呼（OCR / 银企 / 税局 / ERP / 凭证推送）
+ * <p>业务侧只依赖本接口，不感知具体通道/协议。所有外呼（OCR / 银企 / 税局 / ERP / 凭证推送）
  * 都应经由 {@link #invoke(ChannelRequest)} 或便捷方法进入，由连接域统一负责：</p>
  * <ul>
  *   <li>凭据托管（从 {@code ext_interface_config} 读配置，凭据真值只在连接域内流转）；</li>
- *   <li>幂等 / 重试 / 超时 / 留痕（底层网关实现，契约已外露 {@code duplicate}/{@code retryable}）；</li>
- *   <li>能力分类与治理规则（只读可重试、变更需幂等键）；</li>
+ *   <li>去重 / 重试 / 超时 / 记录（底层网关实现，契约已外露 {@code duplicate}/{@code retryable}）；</li>
+ *   <li>能力分类与治理规则（只读可重试、变更需唯一键）；</li>
  *   <li>多 ERP 通道解析（业务只传业务动作，不硬编码 ERP 品牌）。</li>
  * </ul>
  */
@@ -22,10 +25,10 @@ public interface ConnectorFacade {
     /** 只读能力便捷调用（无副作用，可安全重试）。 */
     ChannelResponse invokeRead(String capability, Object payload);
 
-    /** 变更能力便捷调用（有外部副作用，调用方应携带幂等键）。 */
+    /** 变更能力便捷调用（有外部副作用，调用方应携带唯一键）。 */
     ChannelResponse invokeWrite(String capability, Object payload, String idempotencyKey);
 
-    /** 该能力是否已配置可用的真实通道（未配置时业务侧走 MOCK/兜底）。 */
+    /** 该能力是否已配置可用的真实通道（未配置时业务侧走 MOCK/默认处理）。 */
     boolean isConfigured(String capability);
 
     /**

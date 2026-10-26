@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.channel;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -22,15 +25,15 @@ import java.util.Map;
 /**
  * 通用 HTTP 凭证推送通道（{@code voucher.push.channel=http} 时生效，java.net.http 零新依赖）。
  *
- * <p>对接 同类系统 / IFS 只需配置、无需改代码：在「系统设置 → 全局参数」（sys_config）维护——</p>
+ * <p>对接外部财务系统 只需配置、无需改代码：在「系统设置 → 全局参数」（sys_config）维护——</p>
  * <ul>
  *   <li>{@code voucher.push.url}：推送接口地址（POST JSON，请求体即 {@code {target, voucher...}}）；</li>
  *   <li>{@code voucher.push.token}：鉴权令牌，非空时以请求头 {@code Authorization: Bearer <token>} 发送；</li>
- *   <li>{@code voucher.push.externalNoPath}：响应 JSON 中回执单号的点号路径（默认 {@code data.docNo}）。</li>
+ *   <li>{@code voucher.push.externalNoPath}：响应 JSON 中返回单号的点号路径（默认 {@code data.docNo}）。</li>
  * </ul>
  *
  * <p>约定：超时 10s；一切失败（未配置/网络/非200/响应非法）均以 ok=false + message 返回，
- * 不抛穿，由 VoucherPushService 落库为 FAILED。每次实时读 sys_config，改配置即生效。</p>
+ * 不抛穿，由 VoucherPushService 写入数据库为 FAILED。每次实时读 sys_config，改配置即生效。</p>
  */
 @Slf4j
 @Component
@@ -88,7 +91,7 @@ public class HttpVoucherPushChannel implements VoucherPushChannel {
             }
             String externalNo = extractPath(resp.body(), externalNoPath);
             if (externalNo == null || externalNo.isBlank()) {
-                return VoucherPushResult.fail(name(), "推送响应缺少回执单号（路径 " + externalNoPath + "）", respBody);
+                return VoucherPushResult.fail(name(), "推送响应缺少返回单号（路径 " + externalNoPath + "）", respBody);
             }
             log.info("凭证推送 http 通道成功 target={} voucherNo={} externalNo={}",
                     target, payload.get("voucherNo"), externalNo);

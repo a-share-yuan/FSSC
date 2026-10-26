@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.bcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,9 +30,9 @@ import java.util.Map;
  *
  * <h3>为什么是 HTTP 而不是直连库</h3>
  * FSSC 只有本系统单数据源，读不到 {@code bcp_*} 表；伙伴提交的行级异议存在 BCP 侧。
- * 因此「BCP 异议审核」页只能经此通道取数并回写结论。
+ * 因此「BCP 异议审核」页只能经此通道查询并回写结论。
  *
- * <h3>签名口径（与 BCP 侧 {@code BcpLinkuOpenGuard} 逐字一致，两侧共用一把密钥）</h3>
+ * <h3>签名规则（与 BCP 侧 {@code BcpLinkuOpenGuard} 逐字一致，两侧共用一把密钥）</h3>
  * <pre>
  *   X-BCP-Signature = "sha256=" + 小写hex( HMAC-SHA256(secret, timestamp + "." + rawBody) )
  *   X-BCP-Timestamp = Unix 秒
@@ -93,7 +96,7 @@ public class BcpOpenClient {
      * 回写行级异议审核结论。
      *
      * @param approve true=同意（BCP 以伙伴提交的数量/单价替换明细行）；false=驳回（明细行不动）
-     * @param reviewer 审核人（FSSC AP/AR 岗用户名，随正文一起被签名覆盖，BCP 侧据此留痕）
+     * @param reviewer 审核人（FSSC AP/AR 岗用户名，随正文一起被签名覆盖，BCP 侧据此记录）
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> review(Long objectionId, boolean approve, String reviewer, String remark) {
@@ -142,7 +145,7 @@ public class BcpOpenClient {
         }
     }
 
-    /** 解析成功信封；{@code success} 不为 true 视为失败（正常 2xx 不该出现，兜底防静默）。 */
+    /** 解析成功信封；{@code success} 不为 true 视为失败（正常 2xx 不该出现，默认处理防静默）。 */
     @SuppressWarnings("unchecked")
     private Map<String, Object> parseEnvelope(String body) {
         Map<String, Object> m = parseJson(body);

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <!--
     D-UI-01 家族统一修复件（2026-10-19）：候选单据选择器。
@@ -72,7 +75,7 @@ function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractio
 function maxOf(row) { return Number(row?.[props.maxField] || 0) }
 function isSelectable(row) {
   // 可冲抵余额为 0 的候选（余额已被在途全额占满）直接不可选：
-  // ① 勾了也确认不了（金额闸要求 0 < 金额 ≤ 0 无解）；
+  // ① 勾了也确认不了（金额校验要求 0 < 金额 ≤ 0 无解）；
   // ② 更早一步就别让 el-input-number 拿到 min=0.01 > max=0 的组合（EP 会告警并拒绝渲染）。
   if (maxOf(row) <= 0) return false
   return !props.pickedIds.some((id) => String(id) === String(row.id))

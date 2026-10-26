@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.security;
 
 import com.fssc.framework.spi.DistributedState;
@@ -32,7 +35,7 @@ public class TokenBlacklistService {
 
     /** key 命名空间：与 DistributedState 的全局前缀共同构成 fssc:jwt:blacklist:{摘要} */
     private static final String NS = "jwt:blacklist:";
-    /** TTL 上限：兜底防止异常长有效期 Token 长期占用存储 */
+    /** TTL 上限：默认处理防止异常长有效期 Token 长期占用存储 */
     private static final Duration MAX_TTL = Duration.ofHours(24);
 
     private final DistributedState state;
@@ -64,7 +67,7 @@ public class TokenBlacklistService {
 
     /**
      * 计算黑名单 TTL：取 Token 剩余有效期与 24h 上限的较小值。
-     * 解析失败（密钥轮换后的旧 Token、格式非法等）兜底按上限处理——安全设施宁可多存，
+     * 解析失败（密钥轮换后的旧 Token、格式非法等）默认处理按上限处理——安全设施宁可多存，
      * 也必须保证"踢下线一定生效"。
      */
     private Duration resolveTtl(String token) {

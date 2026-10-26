@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -22,11 +25,12 @@ import java.util.stream.Collectors;
 /**
  * 多账簿服务（V1.4.87）——闭环差距③「无账簿/准则/多本位币体系（多账簿零代码）」。
  *
+ * <p><b>参考规则逐条落地</b>：
  * <ul>
- *   <li>行业方案「账簿类型分为主账簿和副账簿，一个核算组织在同一核算体系内仅能存在唯一的主账簿」
- *       → {@link #createBook} 显式校验 + {@code uk_gab_main} 唯一索引<b>双层兜底</b>
+ *   <li>「账簿类型分为主账簿和副账簿，一个核算组织在同一核算体系内仅能存在唯一的主账簿」
+ *       → {@link #createBook} 显式校验 + {@code uk_gab_main} 唯一索引<b>双层默认处理</b>
  *       （应用层给可读报错，数据库层防并发穿透）;</li>
- *   <li>行业方案「按不同的会计准则与制度出具多套财务核算数据」
+ *   <li>「按不同的会计准则与制度出具多套财务核算数据」
  *       → 同一 company 可在多个 standard 下各持一本 MAIN 账簿，
  *       {@link #listBooksOf} 按公司列出全部账簿即「多套核算数据」的载体;</li>
  *   <li>多本位币 → 账簿带 {@code baseCurrencyId}，
@@ -34,7 +38,7 @@ import java.util.stream.Collectors;
  * </ul>
  *
  * <p><b>为什么约束要落在数据库</b>：「仅能存在唯一主账簿」是会计规则，
- * 如果只在应用层判断，两人并发建账必穿透 ⇒ 必须有唯一索引兜底。
+ * 如果只在应用层判断，两人并发建账必穿透 ⇒ 必须有唯一索引默认处理。
  * 本类的存在校验只为<b>给出可读错误信息</b>，不是唯一防线。
  */
 @Slf4j
@@ -118,14 +122,14 @@ public class AccountingBookService {
     /**
      * 建账。
      *
-     * <p><b>约束双层兜底</b>：
+     * <p><b>约束双层默认处理</b>：
      * <ol>
      *   <li>本方法显式检查「同一核算组织+准则+年度+类型」是否已有账簿，给出可读报错；</li>
      *   <li>{@code uk_gab_main} 唯一索引防并发穿透 —— 两个请求同时进来，
      *       一个成功一个撞 1062，转成 BizException 后用户看到的是同一句话。</li>
      * </ol>
      * 注意：同一核算组织在<b>不同准则</b>下建 MAIN 账簿是<b>允许</b>的
-     * （对齐行业方案「按不同准则出具多套核算数据」）。
+     * （按不同准则出具多套核算数据）。
      */
     public Long createBook(GlAccountingBook book) {
         if (book.getCompanyId() == null || book.getStandardId() == null) {
@@ -150,6 +154,7 @@ public class AccountingBookService {
         try {
             bookMapper.insert(book);
         } catch (org.springframework.dao.DuplicateKeyException e) {
+            // 并发穿透由唯一索引兜住，转成同一规则的业务错误
             throw new BizException(ErrorCode.DATA_ALREADY_EXISTS,
                     "同一核算组织在同一准则与年度下已存在" + ("MAIN".equals(type) ? "主" : "副")
                     + "账簿，请勿重复创建");
@@ -181,7 +186,7 @@ public class AccountingBookService {
      * 按准则归一科目：把本准则科目映射到通用科目。
      *
      * <p>「按不同会计准则出具多套核算数据」的落点：同一笔业务在不同准则账簿下
-     * 落到各自口径的科目上，跨账簿汇总时用 commonSubjectId 归一。
+     * 落到各自规则的科目上，跨账簿汇总时用 commonSubjectId 归一。
      */
     public Long mapSubject(Long bookId, Long localSubjectId) {
         if (localSubjectId == null) {

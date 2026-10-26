@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-tabs v-model="tab" :class="{ tabless: isSingle }">
     <!-- ============ 影像调阅评价 ============ -->
@@ -13,7 +16,7 @@
           </el-select>
           <el-button size="small" @click="loadReview">查询</el-button>
           <el-button size="small" type="primary" @click="reviewForm.visible = true">+ 录入待评价影像</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
+      <el-button size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         </div>
         <el-table :data="reviews" size="small" stripe border v-loading="loading" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
@@ -38,7 +41,7 @@
                 <el-button link size="small" type="danger" @click="evaluate(row, 'REJECT')">整单作废</el-button>
               </template>
               <el-button v-if="row.reviewStatus === 'PENDING'" link size="small" type="danger" @click="delReview(row)">删除</el-button>
-              <span v-else style="color:#909399;font-size:12px">已评价记录留痕不可删</span>
+              <span v-else style="color:#909399;font-size:12px">已评价记录不可删除</span>
             </template>
           </el-table-column>
         <template #empty>
@@ -214,8 +217,8 @@ const EXC_TYPES = {
   OCR_INCOMPLETE: '发票数据识别不完整或缺失',
   VERIFY_FAIL: '发票验真失败',
   INVOICE_DUP_IN_BILL: '单据内发票重复',
-  // R5-D-227：OCR 自动留痕枚举入字典（此前直出英文枚举与中文混排）。
-  // 约定：后端新增异常类型须同步本字典；字典未收录的未知值显示兜底文案而非裸码。
+  // R5-D-227：OCR 自动记录枚举入字典（此前直出英文枚举与中文混排）。
+  // 约定：后端新增异常类型须同步本字典；字典未收录的未知值显示默认处理文案而非裸码。
   OCR_NOT_RECOGNIZED: '票面未识别',
   OCR_POOL_FAILED: '发票未入池',
   OCR_AMOUNT_INCONSISTENT: '票面金额不自洽',
@@ -267,7 +270,7 @@ async function delReview(row) {
   loadReview()
 }
 async function saveReview() {
-  // R5-D-226：先过表单校验（与服务端 AssertUtil.notBlank 双侧同口径）
+  // R5-D-226：先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
   if (reviewFormRef.value) { try { await reviewFormRef.value.validate() } catch { return } }
   await imageApi.reviewCreate({ batchNo: reviewForm.batchNo, bizNo: reviewForm.bizNo, bizType: reviewForm.bizType, remark: reviewForm.remark })
   ElMessage.success('已录入'); reviewForm.visible = false; Object.assign(reviewForm, { batchNo: '', bizNo: '', bizType: '', remark: '' }); loadReview()
@@ -278,7 +281,7 @@ async function fix(row) {
 }
 async function delExc(row) {
   try {
-    await ElMessageBox.confirm(`删除影像异常记录（${eTypeLabel(row.exceptionType)}）？已处理的异常属留痕，删除后不可恢复。`, '删除', { type: 'warning' })
+    await ElMessageBox.confirm(`删除影像异常记录（${eTypeLabel(row.exceptionType)}）？已处理的异常属于记录，删除后不可恢复。`, '删除', { type: 'warning' })
   } catch (e) { return }
   try {
     await imageApi.exceptionDelete(row.id); ElMessage.success('已删除')
@@ -286,7 +289,7 @@ async function delExc(row) {
   loadExc()
 }
 async function saveExc() {
-  // R5-D-226：先过表单校验（与服务端 AssertUtil.notBlank 双侧同口径）
+  // R5-D-226：先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
   if (excFormRef.value) { try { await excFormRef.value.validate() } catch { return } }
   await imageApi.exceptionCreate({ batchNo: excForm.batchNo, bizNo: excForm.bizNo, exceptionType: excForm.exceptionType, exceptionDesc: excForm.exceptionDesc })
   ElMessage.success('已上报'); excForm.visible = false; Object.assign(excForm, { batchNo: '', bizNo: '', exceptionType: 'VERIFY_FAIL', exceptionDesc: '' }); loadExc()

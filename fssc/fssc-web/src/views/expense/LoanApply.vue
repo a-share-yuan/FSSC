@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <!-- RA-PAGE-21 2.2：借款/还款双形态并入一个菜单（原 225 还款管理退册）——切换即跳对侧路由，整页重挂重建单据状态 -->
   <el-radio-group :model-value="mode" size="small" style="margin-bottom:8px" @change="onModeSwitch">
@@ -185,7 +188,7 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 
-// 付款方式 / 偿还方式（2026-10-18 基础数据收口：二者同属 pay_method 字典）
+// 付款方式 / 偿还方式（2026-10-18 基础数据办结：二者同属 pay_method 字典）
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
 const payMethodOptions = payMethodDict.options
 const { saveFormHistory } = useAutoFill()
@@ -206,7 +209,7 @@ const wb = ref(null)
 const users = ref([])
 const openLoans = ref([])
 
-// ---------- 表头必填：通用字段走登记表（红星/闸门同源），单据说明本页加严 ----------
+// ---------- 表头必填：通用字段走登记表（红星/校验同源），单据说明本页加严 ----------
 const formRules = computed(() => ({
   ...billRules(props.mode === 'LOAN' ? 'LOAN' : 'REPAY', ''),
   // 还款单上这个字段是「还款人」，提示语随场景改口
@@ -278,7 +281,7 @@ function loanItemId(b) {
 function ensureLine(b) {
   if (!b.form.lines.length) b.form.lines.push(b.newLine())
 }
-// D-TR-02 同口径：冲销清单双向同步 extJson.loanOffsets——草稿即存，编辑重提回读回填
+// D-TR-02 同一规则：冲销清单双向同步 extJson.loanOffsets——草稿即存，编辑重提回读回填
 // （此前只在提交时写入，重开还款草稿冲销行整块丢失）
 watch(() => {
   const b = wb.value && wb.value.b
@@ -305,14 +308,14 @@ function dayStr(d) {
 }
 function dayBefore(d, min) { return !!min && dayStr(d) < min }
 async function onBeforeSubmit(b) {
-  // 表头必填闸门：提示具体漏填项并滚动定位
+  // 表头必填校验：提示具体漏填项并滚动定位
   if (!(await validateForms([formRef]))) return false
   if (props.mode === 'LOAN') {
     syncLoanLine(b)
     b.form.bill.expectRepayDate = b.form.bill.extJson.expectRepayDate || null
     // P1-1 借款详情必填（类型/金额/收款方式/账户名称/账号/开户行）
     if (!(await validateForms([loanFormRef]))) return false
-    // 预计还款日不得早于借款申请日（前端禁选 + 提交兜底）
+    // 预计还款日不得早于借款申请日（前端禁选 + 提交默认处理）
     const applyDay = b.form.bill.applyDate || b.today()
     const repayDay = b.form.bill.extJson.expectRepayDate
     if (applyDay && repayDay && repayDay < applyDay) {
@@ -350,8 +353,8 @@ async function removeOffset(b, i) {
  * 新接口在服务端一次取齐三态、并已把 {@code loan_balance ≤ 0} 的滤掉，三分支拼装随之删除。</p>
  *
  * <p>更要紧的是它给的是 {@code availableBalance}（账面余额 − <b>在途占用</b>）：
- * 旧口径只给账面余额，前端默认勾全额必然撞服务端 {@code registerLoanOccupancy} 的超额闸
- * （即 {@code ExpenseDetailService} 类注释里登记的「已知在册残口①」）。</p>
+ * 旧规则只给账面余额，前端默认勾全额必然撞服务端 {@code registerLoanOccupancy} 的超额校验
+ * （即 {@code ExpenseDetailService} 类注释里登记的「已知现有残口①」）。</p>
  */
 async function openRepayLoan() {
   //  本函数原先直接写 `b.form.bill.companyId`，但脚本作用域里并没有裸的 `b`

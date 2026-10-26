@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -24,7 +27,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-/** 合规模块 Excel 导出。租户拦截器自动隔离；只读导出不落库。 */
+/** 合规模块 Excel 导出。租户拦截器自动隔离；只读导出不写入数据库。 */
 @Service
 @RequiredArgsConstructor
 public class ComplianceExportService {

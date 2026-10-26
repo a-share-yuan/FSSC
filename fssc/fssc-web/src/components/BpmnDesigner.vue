@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="bpmn-designer">
     <!-- 只读提示：无编辑权限时给出明确说明，而不是让用户以为页面坏了 -->
@@ -196,7 +199,7 @@ function syncCanvasSize() {
   try { modeler.get('canvas').resized() } catch (e) { /* 旧版 diagram-js 无此方法时保持原尺寸 */ }
 }
 
-/** 适配视图：带 try/catch 兜底 + 挂起重试，缩放失败绝不拖垮整个渲染结果 */
+/** 适配视图：带 try/catch 默认处理 + 挂起重试，缩放失败绝不拖垮整个渲染结果 */
 function tryZoomFit() {
   if (!modeler) return
   if (!containerHasSize()) {
@@ -287,7 +290,7 @@ function resetZoom() {
 function fitView() {
   if (!modeler) return
   syncCanvasSize()
-  // 原实现无兜底：容器尺寸为 0 时 zoom('fit-viewport') 会算出非有限缩放并抛未捕获异常
+  // 原实现无默认处理：容器尺寸为 0 时 zoom('fit-viewport') 会算出非有限缩放并抛未捕获异常
   try {
     modeler.get('canvas').zoom('fit-viewport')
   } catch (e) { /* 缩放失败保持当前视图，图形本身已渲染 */ }
@@ -379,7 +382,7 @@ const roleOptions = ref([
   { label: '共享初审岗', value: 'SHARING_INITIAL' },
   { label: '共享财务经理', value: 'SHARING_MANAGER' },
   { label: '共享资金岗', value: 'SHARING_FUND' },
-  // 取人口径而非授权角色：sys_role 里没有这一条，但 NodeOrgResolver 按部门汇报线解析它
+  // 取人规则而非授权角色：sys_role 里没有这一条，但 NodeOrgResolver 按部门汇报线解析它
   { label: '直线上级（部门负责人）', value: 'DIRECT_SUPERVISOR' },
 ])
 
@@ -543,7 +546,7 @@ function applyNodeFinance() {
       attrs['flowable:assignee'] = '${initiator}'
       delete attrs['flowable:candidateGroups']
     }
-    // 兜底清掉旧版遗留的伪属性（引擎与双账均不消费，留着只会误导下一个编辑者）
+    // 默认处理清掉旧版遗留的伪属性（引擎与双账均不消费，留着只会误导下一个编辑者）
     attrs['flowable:multiInstance'] = null
     attrs['flowable:dueDate'] = null
     attrs['flowable:approverType'] = null

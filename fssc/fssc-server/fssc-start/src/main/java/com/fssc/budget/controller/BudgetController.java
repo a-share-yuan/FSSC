@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.budget.controller;
 
 import com.fssc.budget.entity.BgItem;
@@ -119,10 +122,10 @@ public class BudgetController {
     }
 
     /**
-     * D-DEC-042：单据发起页「预算科目」红星下拉取数端点。
-     * <p>与 {@code /item/page} 的差别只在数据范围口径：本端点按<b>公司/法人</b>维度放行
+     * D-DEC-042：单据发起页「预算科目」红星下拉查询端点。
+     * <p>与 {@code /item/page} 的差别只在数据范围规则：本端点按<b>公司/法人</b>维度放行
      * （{@code BudgetService#itemPickPage}），不再套个人 data_scope 五级——普通员工
-     * （COMMON_EMP data_scope=4 本部门）在旧口径下 {@code bg_item.dept_id} 恒 NULL，命中 0 行、
+     * （COMMON_EMP data_scope=4 本部门）在旧规则下 {@code bg_item.dept_id} 恒 NULL，命中 0 行、
      * 红星永远选不出合规科目。管理侧列表仍走 {@code /item/page}（保持 {@code @DataScope}）。
      * <p>跨公司依旧隔离（OrgGuard.enforceCompany），只读、无写权限变化。
      */

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.budget.entity.BgScheme;
@@ -30,7 +33,7 @@ import java.util.Set;
 public class BudgetSchemeBizAction implements WfBizAction {
 
     private final BgSchemeMapper bgSchemeMapper;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -52,7 +55,7 @@ public class BudgetSchemeBizAction implements WfBizAction {
         BgScheme upd = new BgScheme();
         upd.setId(schemeId);
         if (Boolean.TRUE.equals(event.getApproved())) {
-            // 审批通过 → APPROVED（待下达）：与 BudgetWfEventListener 同值幂等，
+            // 审批通过 → APPROVED（待下达）：与 BudgetWfEventListener 同值去重，
             // 下达由预算管理员在页面执行 schemeIssue（APPROVED → ISSUED，记录下达时间/人）。
             // P4-3 审计扩面：改状态前采集旧值
             String oldStatus = scheme.getStatus();

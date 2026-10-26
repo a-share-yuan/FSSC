@@ -1,9 +1,12 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="flow-log-center">
     <el-card shadow="never">
       <template #header>
         <span class="header-title">流程日志中心</span>
-        <span class="header-note">流程处理详细日志（诊断口径）· 实例时间线 · 开关与清理 · 归档预览</span>
+        <span class="header-note">流程处理详细日志（诊断说明）· 实例时间线 · 开关与清理 · 归档预览</span>
       </template>
 
       <el-tabs v-model="tab" @tab-change="onTabChange">

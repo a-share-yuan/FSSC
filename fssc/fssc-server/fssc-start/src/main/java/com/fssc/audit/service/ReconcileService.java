@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.audit.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -29,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 长链路一致性对账（P0-1）。
- * 恒等式：单据总额 = 凭证借贷合计 = 已付金额 + 未付金额；终态单据应有凭证/付款留痕。
+ * 恒等式：单据总额 = 凭证借贷合计 = 已付金额 + 未付金额；最终状态单据应有凭证/付款记录。
  * 定时每日 02:00 + 手动触发；不一致落 audit_reconcile，支持人工闭环。
  */
 @Slf4j
@@ -83,7 +86,7 @@ public class ReconcileService {
     private void checkVoucher(ExpBill bill, AtomicInteger count) {
         if (bill.getTotalAmount() == null) return;
         // R5-D-041：仅取本费用族来源的活凭证——裸 bill_id 会撞上跨域同 id 单据的凭证（幻影差异行）；
-        // 剔 VOID 取活凭证口径（写侧已「作废即级联」收口，存量历史差异照常落台账交人工）
+        // 剔 VOID 取活凭证规则（写侧已「作废即级联」办结，历史历史差异照常落台账交人工）
         List<OpVoucher> vouchers = voucherMapper.selectList(new LambdaQueryWrapper<OpVoucher>()
                 .eq(OpVoucher::getBillId, bill.getId())
                 .in(OpVoucher::getSourceType, com.fssc.sharing.service.VoucherService.EXPENSE_BILL_SOURCES)
@@ -119,12 +122,12 @@ public class ReconcileService {
         }
     }
 
-    /** ③ 状态核对：终态（APPROVED/PAID）单据应有凭证或付款留痕 */
+    /** ③ 状态核对：最终状态（APPROVED/PAID）单据应有凭证或付款记录 */
     private void checkStatus(ExpBill bill, AtomicInteger count) {
         String st = bill.getStatus();
         if (!"APPROVED".equals(st) && !"PAID".equals(st)) return;
         // R5-D-041：凭证计数仅取本费用族来源——裸 bill_id 会被跨域同 id 凭证虚增计数，
-        // 掩盖「终态单据实际无凭证」的真实异常（不加状态过滤：VOID 也是走过凭证环节的留痕）
+        // 掩盖「最终状态单据实际无凭证」的真实异常（不加状态过滤：VOID 也是走过凭证环节的记录）
         long voucherCnt = voucherMapper.selectCount(new LambdaQueryWrapper<OpVoucher>()
                 .eq(OpVoucher::getBillId, bill.getId())
                 .in(OpVoucher::getSourceType, com.fssc.sharing.service.VoucherService.EXPENSE_BILL_SOURCES));
@@ -132,12 +135,12 @@ public class ReconcileService {
                 .eq(ExpBillPayment::getBillId, bill.getId()));
         if (voucherCnt == 0 && payCnt == 0) {
             upsert(bill, "STATUS",
-                    "终态单据有凭证或付款留痕", "凭证 0 条 / 付款 0 条",
+                    "已结束的单据仍有凭证或付款记录", "凭证 0 条 / 付款 0 条",
                     "单据已 " + st + " 但无凭证与付款记录", count);
         }
     }
 
-    // ---------------- 异常落库（同项 OPEN 更新，否则插入） ----------------
+    // ---------------- 异常写入数据库（同项 OPEN 更新，否则插入） ----------------
 
     private void upsert(ExpBill bill, String item, String expect, String actual, String diff, AtomicInteger count) {
         try {

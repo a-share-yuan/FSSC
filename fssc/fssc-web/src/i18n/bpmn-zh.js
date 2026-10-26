@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * bpmn-js / bpmn-js-properties-panel 中文化模块
  * 通过覆盖 diagram-js 的 translate 服务，将调色板、右键菜单、属性面板的英文文案替换为中文
@@ -634,7 +637,7 @@ const ZH = {
   '{eventType}: {type}': '{eventType}：{type}',
 }
 
-/** translate 服务实现：先做占位符替换，再查中文映射（精确匹配→大小写不敏感兜底），未命中返回原文 */
+/** translate 服务实现：先做占位符替换，再查中文映射（精确匹配→大小写不敏感默认处理），未命中返回原文 */
 const ZH_LOWER = Object.fromEntries(Object.entries(ZH).map(([k, v]) => [k.toLowerCase(), v]))
 
 export function translateZh(template, replacements) {

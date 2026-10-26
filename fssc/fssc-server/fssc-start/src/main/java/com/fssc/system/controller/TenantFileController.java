@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.controller;
 
 import com.fssc.common.core.Result;
@@ -47,7 +50,7 @@ public class TenantFileController {
 
     // 单文件详情＝预览器取元信息用，边界由下面的 assertFileReadable（上传人／单据申请人／在途受理人／共享作业岗／管理员）判，
     // 再叠一道 system:file:list：那是"跨单据全库文件列表"的管理面权限点，sys_menu 100 至今未授任何角色，
-    // 结果是谁都点不动【预览】——连看自己刚上传的那张发票都不行。跨单列表面（/page、/storageStats）的闸保持不变。
+    // 结果是谁都点不动【预览】——连看自己刚上传的那张发票都不行。跨单列表面（/page、/storageStats）的校验保持不变。
     @GetMapping("/{id}")
     public Result<SysFile> detail(@PathVariable Long id) {
         assertFileReadable(id);
@@ -107,7 +110,7 @@ public class TenantFileController {
 
     /**
      * 第一步：申领一次性下载令牌（5 分钟有效）。
-     * 与 detail 同口径：边界由 assertFileReadable 判，再叠 system:file:download——
+     * 与 detail 同一规则：边界由 assertFileReadable 判，再叠 system:file:download——
      * 该码只授给 8 个角色，实测 87 名持角色在岗用户（含审批人、财务岗）没有，
      * 叠上去＝申请人和审批人点自己的影像也 403。
      */

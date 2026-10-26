@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-drawer v-model="visible" title="个人效率统计" direction="rtl" size="420px" :destroy-on-close="true" @opened="renderTrend">
     <div v-loading="loading" class="stats-content">
@@ -89,7 +92,7 @@ function fmtDuration(minutes) {
   return `${(minutes / 60).toFixed(1)}小时`
 }
 
-/** 本人办理留痕（/history/page 不传 bizId 时后端按 oper_user_id 收敛到本人参与过的行） */
+/** 本人办理记录（/history/page 不传 bizId 时后端按 oper_user_id 收敛到本人参与过的行） */
 async function fetchHistory() {
   if (!hasPerm('wf:history:list')) {
     historyHint.value = '暂无数据（需审批历史查看权限）'
@@ -120,7 +123,7 @@ async function fetchHistory() {
   return rows.length
 }
 
-/** 排行与超时率：/perf/handler-top 是全公司口径，需流程监控权限；无权限时不臆造数字 */
+/** 排行与超时率：/perf/handler-top 是全公司范围，需流程监控权限；无权限时不臆造数字 */
 async function fetchRanking() {
   rankings.value = []
   timeoutRate.value = null

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -244,7 +247,7 @@ const selRows = ref([])
 const rows = ref([])
 const total = ref(0)
 const loading = ref(false)
-// 默认只显示待认领任务（行业方案标准做法：任务池默认展示待处理任务）
+// 默认只显示待认领任务（任务池默认展示待处理任务）
 const filter = reactive({ pageNum: 1, pageSize: 20, poolStatus: 'WAITING', taskType: '', keyword: '' })
 const users = ref([])
 const reassignVis = ref(false)
@@ -321,7 +324,7 @@ function userName(id) {
   return u ? (u.nickName || u.userName) : '#' + id
 }
 
-// SLA 逾期口径与流程侧「超时未办」一致：未办结 + 已过截止时间
+// SLA 逾期规则与流程侧「超时未办」一致：未办结 + 已过截止时间
 function isSlaOverdue(row) {
   if (!row.slaTime || row.poolStatus === 'FINISHED') return false
   const stamp = new Date(String(row.slaTime).replace(' ', 'T')).getTime()
@@ -460,7 +463,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => taskPoolCm.value?
 </script>
 
 <style scoped>
-/* SLA 逾期行整行标红（同 借款台账逾期口径），使抢单/分派时先看账龄再看单号 */
+/* SLA 逾期行整行标红（同 借款台账逾期规则），使抢单/分派时先看账龄再看单号 */
 :deep(.sla-overdue-row) td.el-table__cell { background-color: #fef0f0 !important; }
 .sla-overdue-text { color: #f56c6c; font-weight: 600; }
 </style>

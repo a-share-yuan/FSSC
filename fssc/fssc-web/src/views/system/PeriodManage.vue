@@ -1,10 +1,13 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="period-manage">
     <el-card>
       <!-- Toolbar -->
       <div class="toolbar">
         <el-input v-model="query.keyword" :placeholder="$t('system.period.phSearchPeriod')" clearable style="width:220px" @keyup.enter="loadList" />
-        <!-- R5-D-042：公司维度筛选——与弹窗「所属公司」同源（orgApi.companyTree 词表）；筛选值交服务端，服务端另叠加登录人 data_scope -->
+        <!-- R5-D-042：公司维度筛选——与弹窗「所属公司」同源（orgApi.companyTree 名称表）；筛选值交服务端，服务端另叠加登录人 data_scope -->
         <el-select v-model="query.companyId" :placeholder="$t('field.company')" clearable filterable style="width:200px" @change="onQuery">
           <el-option v-for="c in companies" :key="c.id" :label="c.companyName || c.companyCode" :value="c.id" />
         </el-select>
@@ -22,7 +25,7 @@
         <el-table-column :label="$t('system.period.colPeriodCode')" min-width="120">
           <template #default="{ row }">{{ periodCodeOf(row) }}</template>
         </el-table-column>
-        <!-- R5-D-042：公司维度列——值来自服务端 row.companyId，名称按 orgApi.companyTree 词表翻译（md_period 无 company_name 列，不做 DDL） -->
+        <!-- R5-D-042：公司维度列——值来自服务端 row.companyId，名称按 orgApi.companyTree 名称表翻译（md_period 无 company_name 列，不做 DDL） -->
         <el-table-column :label="$t('field.company')" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ companyName(row.companyId) }}</template>
         </el-table-column>
@@ -133,7 +136,7 @@ async function onBatchReopen() {
 
 // 41号审查 P1-9：期间导出
 function doExport() {
-  // R5-D-042：导出补公司列——导出时按词表实时翻译（list 只存 companyId，词表异步载入）
+  // R5-D-042：导出补公司列——导出时按名称表实时翻译（list 只存 companyId，名称表异步载入）
   const rows = list.value.map((r) => ({ ...r, companyNameText: companyName(r.companyId) }))
   exportCsv(rows, [
     { prop: 'periodCode', label: t('system.period.colPeriodCode') }, { prop: 'companyNameText', label: t('field.company') }, { prop: 'periodYear', label: t('system.period.colYear') }, { prop: 'periodMonth', label: t('system.period.colMonth') },
@@ -145,7 +148,7 @@ function doExport() {
 const loading = ref(false)
 const list = ref([])
 const total = ref(0)
-// R5-D-042：查询对象补 companyId（与 keyword 一并入服务端分页查询；服务端另有 data_scope 收口）
+// R5-D-042：查询对象补 companyId（与 keyword 一并入服务端分页查询；服务端另有 data_scope 办结）
 const query = reactive({ keyword: '', companyId: null, pageNum: 1, pageSize: 10 })
 
 const dialogVisible = ref(false)
@@ -169,7 +172,7 @@ const formRules = computed(() => ({
 }))
 
 // D-MD-PERIOD1：弹窗补公司主体字段，默认登录公司；跨公司主体亦可建档
-// R5-D-042：同一份公司词表兼作 列表「公司」列的翻译源 + 工具栏公司筛选源（不另造一份清单）
+// R5-D-042：同一份公司名称表兼作 列表「公司」列的翻译源 + 工具栏公司筛选源（不另造一份清单）
 const companies = ref([])
 function flattenCompanies(nodes, out = []) {
   for (const n of nodes || []) {
@@ -215,7 +218,7 @@ async function loadList() {
   loading.value = true
   try {
     // R5-D-042：公司维度显式入参——筛选走服务端（md_period.company_id），不在前端按公司名截取；
-    // 未选公司＝传空，由服务端 @DataScope + DataScopeKit 按登录人 data_scope 收口
+    // 未选公司＝传空，由服务端 @DataScope + DataScopeKit 按登录人 data_scope 办结
     const res = await periodApi.page({
       keyword: query.keyword || undefined,
       companyId: query.companyId ?? undefined,
@@ -312,7 +315,7 @@ async function onDelete(row) {
 }
 
 onMounted(() => {
-  // R5-D-042：公司词表与列表并行加载——词表只用于「公司」列名称翻译（服务端仅回 companyId）
+  // R5-D-042：公司名称表与列表并行加载——名称表只用于「公司」列名称翻译（服务端仅回 companyId）
   loadCompanies()
   loadList()
 })

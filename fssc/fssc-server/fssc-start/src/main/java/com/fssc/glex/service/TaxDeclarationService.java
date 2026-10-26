@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -34,7 +37,7 @@ public class TaxDeclarationService {
 
     private final TaxDeclarationMapper declarationMapper;
     private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     /**
@@ -62,7 +65,7 @@ public class TaxDeclarationService {
             }
             record.setBalanceAmount(taxAmt.subtract(record.getPaidAmount()));
         }
-        // WS-6 税域收口：非本租户全部档时，强制公司归属为登录人公司（未带则回填，已带则校验）
+        // WS-6 税域办结：非本租户全部档时，强制公司归属为登录人公司（未带则回填，已带则校验）
         Long scopedCompany = DataScopeKit.scopedCompanyId();
         if (scopedCompany != null) {
             if (record.getCompanyId() == null) {
@@ -77,9 +80,10 @@ public class TaxDeclarationService {
     }
 
     // ROOT-11（人工裁决 09-27 第三轮·明写自定）：下面四个状态跃迁都是"写 tax_declaration 一张业务表
-    // + 写 audit_trail 一条留痕"成对落库，没有事务边界时留痕写失败会留下"状态跃迁了却查不到谁跃的"的
-    // 半截记录。两家厂商手册都不覆盖"哪些方法必须有事务边界"（最近旁证只有〔丙·开发指南〕把状态
-    // 单表写、无留痕的方法一律不补（同一裁定的另一半）。
+    // + 写 audit_trail 一条记录"成对写入数据库，没有事务边界时记录写失败会留下"状态跃迁了却查不到谁跃的"的
+    // 半截记录。两套外部资料都不覆盖"哪些方法必须有事务边界"（最近旁证只有〔丙·开发指南〕把状态
+    // 回写分"聚合 VO／数据库表"两层），故本条按自定处理，不写成对比结论。
+    // 单表写、无记录的方法一律不补（同一裁定的另一半）。
     /**
      * 提交申报：DRAFT → PENDING。
      */
@@ -94,7 +98,7 @@ public class TaxDeclarationService {
         upd.setStatus("PENDING");
         declarationMapper.updateById(upd);
         log.info("税务申报 {} 提交审批", row.getDeclarationNo());
-        // P4-3 审计留痕：状态跃迁 DRAFT → PENDING
+        // P4-3 审计记录：状态跃迁 DRAFT → PENDING
         java.util.Map<String, Object> auditBefore = java.util.Collections.singletonMap("status", row.getStatus());
         java.util.Map<String, Object> auditAfter = java.util.Collections.singletonMap("status", "PENDING");
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
@@ -115,7 +119,7 @@ public class TaxDeclarationService {
         upd.setStatus("APPROVED");
         declarationMapper.updateById(upd);
         log.info("税务申报 {} 审批通过", row.getDeclarationNo());
-        // P4-3 审计留痕：状态跃迁 PENDING → APPROVED
+        // P4-3 审计记录：状态跃迁 PENDING → APPROVED
         java.util.Map<String, Object> auditBefore = java.util.Collections.singletonMap("status", row.getStatus());
         java.util.Map<String, Object> auditAfter = java.util.Collections.singletonMap("status", "APPROVED");
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
@@ -137,7 +141,7 @@ public class TaxDeclarationService {
         upd.setDeclareDate(LocalDate.now());
         declarationMapper.updateById(upd);
         log.info("税务申报 {} 已申报", row.getDeclarationNo());
-        // P4-3 审计留痕：状态跃迁 APPROVED → FILED，并记录申报日期变化
+        // P4-3 审计记录：状态跃迁 APPROVED → FILED，并记录申报日期变化
         java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
         auditBefore.put("status", row.getStatus());
         auditBefore.put("declareDate", row.getDeclareDate());
@@ -166,7 +170,7 @@ public class TaxDeclarationService {
         }
         declarationMapper.updateById(upd);
         log.info("税务申报 {} 已缴纳, 金额={}", row.getDeclarationNo(), paidAmount);
-        // P4-3 审计留痕：状态跃迁 FILED → PAID，并记录已缴/余额金额变化
+        // P4-3 审计记录：状态跃迁 FILED → PAID，并记录已缴/余额金额变化
         java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
         auditBefore.put("status", row.getStatus());
         auditBefore.put("paidAmount", row.getPaidAmount());
@@ -187,7 +191,7 @@ public class TaxDeclarationService {
                 .eq(TaxDeclaration::getPeriod, period)
                 .eq(StringUtils.hasText(taxType), TaxDeclaration::getTaxType, taxType)
                 .in(TaxDeclaration::getStatus, "FILED", "PAID");
-        // WS-6 税域收口：按数据范围收窄公司维度
+        // WS-6 税域办结：按数据范围收窄公司维度
         DataScopeKit.apply(qw, TaxDeclaration::getCompanyId, null, null);
         return declarationMapper.selectList(qw).stream()
                 .map(d -> d.getTaxAmount() == null ? BigDecimal.ZERO : d.getTaxAmount())
@@ -205,7 +209,7 @@ public class TaxDeclarationService {
         if (StringUtils.hasText(period)) {
             qw.eq(TaxDeclaration::getPeriod, period);
         }
-        // WS-6 税域收口：按数据范围收窄公司维度
+        // WS-6 税域办结：按数据范围收窄公司维度
         DataScopeKit.apply(qw, TaxDeclaration::getCompanyId, null, null);
         qw.orderByDesc(TaxDeclaration::getCreateTime);
         Page<TaxDeclaration> p = declarationMapper.selectPage(Page.of(pn, ps), qw);
@@ -217,7 +221,7 @@ public class TaxDeclarationService {
         if (row == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "税务申报记录不存在: id=" + id);
         }
-        // WS-6 税域收口：单条读后写，按公司归属校验越权
+        // WS-6 税域办结：单条读后写，按公司归属校验越权
         DataScopeKit.requireCompanyInScope(row.getCompanyId());
         return row;
     }

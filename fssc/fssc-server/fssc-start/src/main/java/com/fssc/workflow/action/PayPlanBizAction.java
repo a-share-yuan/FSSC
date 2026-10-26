@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.action;
 
 import com.fssc.payplan.entity.PayPlan;
@@ -24,7 +27,7 @@ import java.util.Set;
 public class PayPlanBizAction implements WfBizAction {
 
     private final PayPlanMapper payPlanMapper;
-    /** P4-3 审计扩面：审批终态状态跃迁留痕 */
+    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     @Override
@@ -60,7 +63,7 @@ public class PayPlanBizAction implements WfBizAction {
             auditBefore.put("status", oldStatus);
             java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
             auditAfter.put("status", upd.getStatus());
-            // 本次实际变化：驳回时同时拼接了 remark，一并留痕
+            // 本次实际变化：驳回时同时拼接了 remark，一并记录
             if (upd.getRemark() != null) {
                 auditBefore.put("remark", plan.getRemark());
                 auditAfter.put("remark", upd.getRemark());

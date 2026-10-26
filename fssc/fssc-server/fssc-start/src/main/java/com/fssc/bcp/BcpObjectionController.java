@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.bcp;
 
 import com.fssc.common.core.Result;
@@ -28,10 +31,10 @@ import java.util.Map;
  * <b>驳回</b>则明细行一字不动。
  *
  * <h3>它不改 FSSC 的账</h3>
- * 本轮口径（Q3=A）只改 BCP 的对账口径，<b>不回写 FSSC 业务单据</b>：
- * 应付/应收/入库/收付款单的权威值仍归财务系统，异议只在对账留痕里体现"从多少改成了多少"。
+ * 本轮规则（Q3=A）只改 BCP 的对账规则，<b>不回写 FSSC 业务单据</b>：
+ * 应付/应收/入库/收付款单的权威值仍归财务系统，异议只在对账记录里体现"从多少改成了多少"。
  *
- * <h3>取数与回写都走 BCP 开放通道</h3>
+ * <h3>查询与回写都走 BCP 开放通道</h3>
  * FSSC 单数据源读不到 {@code bcp_*} 表，本类的每个方法都经 {@link BcpOpenClient}
  * 以 HMAC-SHA256 签名调用 BCP 门户的 {@code /api/open/linku/**}；未配置共享密钥时 fail-closed。
  */
@@ -76,7 +79,7 @@ public class BcpObjectionController {
         return Result.success(bcpOpenClient.review(id, approve, currentUser(), remark));
     }
 
-    /** 审核人 = 当前登录用户；随请求体一起被签名覆盖后送 BCP 留痕，无法被第三方篡改。 */
+    /** 审核人 = 当前登录用户；随请求体一起被签名覆盖后送 BCP 记录，无法被第三方篡改。 */
     private String currentUser() {
         LoginUser u = UserContext.get();
         return u == null ? null : u.getUsername();

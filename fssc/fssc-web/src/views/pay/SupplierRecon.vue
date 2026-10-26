@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -10,7 +13,7 @@
         <el-button type="primary" size="small" @click="generate">{{ $t('pay.recon.btnGenerate') }}</el-button>
         <el-input v-model="q.keyword" :placeholder="$t('pay.recon.phSupplierName')" clearable style="width: 140px" @keyup.enter="load" />
         <el-select v-model="q.status" :placeholder="$t('common.status')" clearable style="width: 130px" @change="load">
-          <el-option :label="$t('pay.recon.stGenerated')" value="DRAFT" />
+          <el-option :label="$t('pay.recon.stDraft')" value="DRAFT" />
           <el-option :label="$t('pay.recon.stLetterSent')" value="SENT" />
           <el-option :label="$t('pay.shared.stConfirmed')" value="CONFIRMED" />
           <el-option :label="$t('pay.recon.stDiff')" value="DIFF" />
@@ -278,7 +281,10 @@ const q = reactive({ pageNum: 1, pageSize: 20, keyword: '', status: '' })
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 
 function statusLabel(s) {
-  return { DRAFT: t('pay.recon.stGenerated'), SENT: t('pay.recon.stLetterSent'), CONFIRMED: t('pay.shared.stConfirmed'), DIFF: t('pay.recon.stDiff'), RESOLVED: t('pay.recon.stDiffResolved') }[s] || s || ''
+  // D-H2-06：DRAFT 原直译「已生成」，与库面态是两套语言——采购退货审核通过的同一秒会自动生成
+  // 一张 recon_type=AUTO 的负数对账单（实测 supplier_recon 19／RC2026102400001／-16,000／DRAFT），
+  // 界面却显示「已生成」，读起来像已走完对账。词面统一按"这一态还没发函、还没被供应商确认"＝待确认。
+  return { DRAFT: t('pay.recon.stDraft'), SENT: t('pay.recon.stLetterSent'), CONFIRMED: t('pay.shared.stConfirmed'), DIFF: t('pay.recon.stDiff'), RESOLVED: t('pay.recon.stDiffResolved') }[s] || s || ''
 }
 function statusTagType(s) {
   return { DRAFT: 'info', SENT: 'warning', CONFIRMED: 'success', DIFF: 'danger', RESOLVED: 'success' }[s] || 'info'

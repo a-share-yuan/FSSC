@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="budget-scheme-page">
     <el-card shadow="never">
@@ -27,7 +30,9 @@
             <el-tag size="small">{{ periodTypeLabel(row.periodType) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="dimension" label="预算维度" width="160" />
+        <el-table-column prop="dimension" label="预算维度" width="160">
+          <template #default="{ row }">{{ dimensionText(row.dimension) }}</template>
+        </el-table-column>
         <el-table-column prop="controlType" label="控制方式" width="100">
           <template #default="{ row }">
             <el-tag size="small" :type="controlTypeTag(row.controlType)">{{ controlTypeLabel(row.controlType) }}</el-tag>
@@ -149,7 +154,7 @@ useKeyboard({
   'ctrl+r': () => loadList(),
 })
 
-// 表单校验规则（与后端 schemeCreate/schemeUpdate 必填闸门同口径）
+// 表单校验规则（与后端 schemeCreate/schemeUpdate 必填校验同一规则）
 const schemeFormRules = reactive({
   schemeName: commonRules.required('请输入方案名称'),
   budgetYear: commonRules.required('请输入预算年度'),
@@ -234,6 +239,12 @@ function periodTypeLabel(v) {
 }
 function controlTypeLabel(v) {
   return { WARN: '预警', SOFT: '软控', HARD: '硬控' }[v] || v
+}
+/** dimension 是多选拼接串（库内现值 DEPT ／ DEPT,ITEM），逐段换中文再拼 */
+const DIMENSION_TEXT = { DEPT: '部门', ITEM: '费用项' }
+function dimensionText(v) {
+  if (!v) return '—'
+  return String(v).split(',').map(x => DIMENSION_TEXT[x.trim()] || x.trim()).join('、')
 }
 function controlTypeTag(v) {
   return { WARN: 'warning', SOFT: 'primary', HARD: 'danger' }[v] || 'info'

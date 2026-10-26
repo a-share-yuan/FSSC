@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -33,7 +36,7 @@ public class ExpenseStandardService {
     }
 
     public Long create(MdExpenseStandard e) {
-        // 必填收口（与前端红星同口径）；std_code 上有唯一索引 uk_tenant_std_code，先查重给业务提示而非抛 SQL 错
+        // 必填办结（与前端红星同一规则）；std_code 上有唯一索引 uk_tenant_std_code，先查重给业务提示而非抛 SQL 错
         AssertUtil.notBlank(e.getStdCode(), ErrorCode.PARAM_INVALID, "标准编码必填");
         AssertUtil.notBlank(e.getStdName(), ErrorCode.PARAM_INVALID, "标准名称必填");
         AssertUtil.notNull(e.getItemId(), ErrorCode.PARAM_INVALID, "费用类型必填");

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.receivable.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -37,12 +40,14 @@ public class RcReceivableService {
     private final RcReceivableMapper mapper;
     private final WfEngineFacade wfEngineFacade;
     private final WfTaskMapper wfTaskMapper;
+    /** D-H3-01：只读取 wf_instance 投影流程态（审批中/已通过…），不在本类起停流程 */
+    private final com.fssc.workflow.mapper.WfInstanceMapper wfInstanceMapper;
     private final com.fssc.framework.org.OrgGuard orgGuard;
     /** 应收对账/分析报告记录（AR_RECON/AR_REPORT 收尾载体，P0-1） */
     private final com.fssc.receivable.mapper.ArReconRecordMapper arReconRecordMapper;
     /** 账期锁定判定（AR蓝图6.5：月结关账后当月不允许再录入业务） */
     private final com.fssc.system.service.PeriodLockService periodLockService;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
 
     public PageResult<RcReceivable> page(long pn, long ps, String kw) {
@@ -70,14 +75,56 @@ public class RcReceivableService {
         }
         qw.orderByDesc(RcReceivable::getId);
         Page<RcReceivable> p = mapper.selectPage(Page.of(pn, ps), qw);
+        fillFlowState(p.getRecords());
         return PageResult.of(p.getRecords(), p.getTotal(), pn, ps);
+    }
+
+    /**
+     * D-H3-01：把审批流态投影到台账列（非表列，不改 status 名称表、不改状态机）。
+     * <p>起因：应收单生成即起 OTC 收款审批流（见 {@link #createSingle}），但 {@code rc_receivable.status}
+     * 是<b>收款规则</b>（NONE/PARTIAL/RECEIVED/DONE/OVERDUE），审批期间恒为 NONE，
+     * 界面直译"未开始"⇒ 操作人读成"流程没起"（2026-10-24 H3 实测，同一张单 wf_instance 已 APPROVED）。
+     * <p>为什么不加一个"审批中"单据态：全仓按 status 过滤的读取点（收款 FIFO 候选、账龄、
+     * AR 对账圈单、银企勾稽）都要跟着改规则，漏一处就是账务错；投影一列的成本远低于此。
+     * <p>批量取一次 wf_instance（bizType=RECEIVABLE），同单多条实例取最新一条（驳回后重提）。
+     */
+    private void fillFlowState(List<RcReceivable> rows) {
+        if (rows == null || rows.isEmpty()) return;
+        List<Long> ids = rows.stream().map(RcReceivable::getId).filter(java.util.Objects::nonNull).toList();
+        if (ids.isEmpty()) return;
+        java.util.Map<Long, com.fssc.workflow.entity.WfInstance> inst = new java.util.HashMap<>();
+        for (com.fssc.workflow.entity.WfInstance i : wfInstanceMapper.selectList(
+                new LambdaQueryWrapper<com.fssc.workflow.entity.WfInstance>()
+                        .eq(com.fssc.workflow.entity.WfInstance::getBizType, "RECEIVABLE")
+                        .in(com.fssc.workflow.entity.WfInstance::getBizId, ids)
+                        .orderByAsc(com.fssc.workflow.entity.WfInstance::getId))) {
+            if (i.getBizId() != null) inst.put(i.getBizId(), i);   // 升序遍历 ⇒ 留下的即最新一条
+        }
+        for (RcReceivable r : rows) {
+            com.fssc.workflow.entity.WfInstance i = r.getId() == null ? null : inst.get(r.getId());
+            r.setFlowStatus(i == null ? null : i.getStatus());
+            r.setFlowStatusText(flowStateText(i == null ? null : i.getStatus()));
+        }
+    }
+
+    /** 流程态白话：与 wf_instance.status 名称表（RUNNING/APPROVED/REJECTED/CANCELLED/TERMINATED）一一对应 */
+    private String flowStateText(String status) {
+        if (!StringUtils.hasText(status)) return "未起流程";
+        return switch (status.trim().toUpperCase()) {
+            case "RUNNING" -> "审批中";
+            case "APPROVED" -> "审批通过";
+            case "REJECTED" -> "已驳回";
+            case "CANCELLED" -> "已撤销";
+            case "TERMINATED" -> "已终止";
+            default -> status;
+        };
     }
 
     /** 按销售订单生成应收单：remainAmount=amount，receivedAmount=0，status=NONE */
     @Transactional
     public Long createSingle(RcReceivable e) {
         orgGuard.assertCompanyAllowed(e.getCompanyId());
-        // 必填兜底（治理批次 2B，口径 Q2）：单据号由 genBillNo 自动取号（Q1 人工只读，不校验），
+        // 必填默认处理（治理批次 2B，规则 Q2）：单据号由 genBillNo 自动取号（Q1 人工只读，不校验），
         // 但下面三项留空会造成无法核销/永不逾期的哑数据。
         if (e.getCustomerId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择往来单位");
@@ -102,7 +149,7 @@ public class RcReceivableService {
         if (e.getCurrencyCode() == null) e.setCurrencyCode("CNY");
         if (e.getBillDate() == null) e.setBillDate(LocalDate.now());
         // D-V3-142：期间未填 → AR 对账按期间圈单圈不到（BcpReconEngine 以期间过滤拉 FSSC 未清）。
-        // 缺省按单据日期归期（yyyy-MM，与 selectReceivables 的格式容错口径一致）。
+        // 缺省按单据日期归期（yyyy-MM，与 selectReceivables 的格式容错规则一致）。
         if (!StringUtils.hasText(e.getPeriod())) {
             e.setPeriod(e.getBillDate().toString().substring(0, 7));
         }
@@ -118,7 +165,7 @@ public class RcReceivableService {
         // D-V5R-06：原两行无条件写死 sourceDocType="SALES_ORDER"、sourceDocId=orderId。
         // 手工提单（未选销售订单 ⇒ orderId 为 null）也会被标成"销售订单来源"且 source_doc_id 为 null，
         // 于是：① BCP 侧无法区分「手工单本就无订单」与「系统漏填」；
-        //      ② AR 对账明细订单腿四列全 NULL 时无从判读是否缺陷。
+        //      ② AR 对账明细订单环节四列全 NULL 时无从判读是否缺陷。
         // 改为按 orderId 有无如实标注（实体注释既有 SALES_ORDER/MANUAL 两个枚举，此前从未写过 MANUAL）。
         if (e.getOrderId() != null) {
             e.setSourceDocType("SALES_ORDER");
@@ -129,7 +176,7 @@ public class RcReceivableService {
         }
         mapper.insert(e);
         // P4：应收单生成后发起 OTC 收款审批流（OTC03 应收账款收款，bizType=RECEIVABLE），
-        // procInstId 由 wf_instance 留存，审批通过后共享往来结算岗核销并推送 IFS 生成记账凭证。
+        // procInstId 由 wf_instance 留存，审批通过后共享往来结算岗核销并推送外部财务系统生成记账凭证。
         try {
             wfEngineFacade.start("RECEIVABLE", e.getId(), userId(),
                     "应收单-" + (e.getBillNo() == null ? e.getId() : e.getBillNo()), e.getAmount());
@@ -159,15 +206,15 @@ public class RcReceivableService {
         arReconRecordMapper.insert(rec);
         Long userId = userId();
         // D-DEC-040：发起金额透真实值，不再硬编码 BigDecimal.ZERO——
-        // 金额为 0 时 AR_REPORT 的金额分级/DOA 阈值闸（如 >5,000 自动升级）永不触发＝代码级死配置，
-        // 且审批工作台「申请金额」列直显 "-"（12-14 实测两单皆如此）。
+        // 金额为 0 时 AR_REPORT 的金额分级/DOA 阈值校验（如 >5,000 自动升级）永不触发＝代码级死配置，
+        // 且审批工作台「申请金额」列直接显示 "-"（12-14 实测两单皆如此）。
         BigDecimal amount = reportPeriodAmount(period, rec.getCompanyId());
         String basis = "本期应收发生额合计";
         // 补完（D-DEC-040 二次收尾）：上一段只算「本期新开单」的发生额，实测本环境应收单集中在
         // 2026-09（5 行）且另有 2 行 period=NULL 的历史行——按手册期间 2026-11/2026-12 发起时
-        // 发生额仍为 0，金额闸（wf.timeout.autopass.max_amount 敞口）与工作台「申请金额」列
+        // 发生额仍为 0，金额校验（wf.timeout.autopass.max_amount 敞口）与工作台「申请金额」列
         // 退回缺陷原状（恒 0／显 "-"）。故发生额为 0 时回退「截至本期末未清应收余额合计」：
-        // 同属"本报告所审金额"，且按 bill_date 圈定天然覆盖 period 为空的存量行；两口径均写进 remark 留痕。
+        // 同属"本报告所审金额"，且按 bill_date 圈定天然覆盖 period 为空的历史行；两规则均写进 remark 记录。
         if (amount.signum() == 0) {
             amount = reportOpenBalanceAsOf(period, rec.getCompanyId());
             basis = "本期无新增发生额，取截至本期末未清应收余额合计";
@@ -187,7 +234,7 @@ public class RcReceivableService {
     }
 
     /**
-     * AR_REPORT 发起金额口径（D-DEC-040）：本期本公司应收发生额合计（rc_receivable.amount）。
+     * AR_REPORT 发起金额定义（D-DEC-040）：本期本公司应收发生额合计（rc_receivable.amount）。
      * period 两式并存（应收单缺省按单据日期写 yyyy-MM，历史/导入数据亦有 yyyyMM），故两种写法一并匹配；
      * 无本公司应收单时如实返回 0（本期确无发生额，与"硬编码 0"的区别是有出处、可复核）。
      */
@@ -209,7 +256,7 @@ public class RcReceivableService {
     }
 
     /**
-     * AR_REPORT 发起金额回退口径（D-DEC-040 二次收尾）：截至报告期末仍未收回的应收余额合计
+     * AR_REPORT 发起金额回退规则（D-DEC-040 二次收尾）：截至报告期末仍未收回的应收余额合计
      * （rc_receivable.remain_amount &gt; 0 且 bill_date ≤ 期末，本公司）。
      * <p>刻意按 bill_date 而非 period 圈定——历史/导入行的 period 为空（实测 2 行 127,200 元未清），
      * 等值匹配会整组漏掉，回退也就白回退了。期间无法归一或无未清行时如实返回 0。
@@ -249,7 +296,7 @@ public class RcReceivableService {
         rec.setCustomerId(customerId);
         rec.setStatus("RUNNING");
         rec.setCompanyId(currentCompanyId());
-        // D-DEC-415：对账金额取本期真实合计（口径同本文件 AR_REPORT 的发起金额），
+        // D-DEC-415：对账金额取本期真实合计（规则同本文件 AR_REPORT 的发起金额），
         // 既落 ar_recon_record.amount，也顶替原先硬传的 BigDecimal.ZERO。
         BigDecimal amount = reportPeriodAmount(period, rec.getCompanyId());
         if (amount.signum() == 0) {
@@ -277,19 +324,28 @@ public class RcReceivableService {
         return UserContext.get() == null ? null : UserContext.get().getCompanyId();
     }
 
-    /** 按往来单位查询应收单 */
+    /**
+     * 按往来单位查询应收单（供收款核销「指定应收单」候选）。
+     * <p>D-H3-02：与本类 {@link #page} 同一道公司读取守卫——候选面里出现他法人主体的应收，
+     * 就会把操作人引到跨主体串账（收款进本公司银行账、应收减他公司）。集团级账号 scopeC=null 不限制。
+     * <p>排序改为到期日+id 升序（原 dueDate 降序）＝与自动 FIFO 的取单顺序一致，
+     * 界面上手工指定的顺序与系统自动核销的顺序不再两套。
+     */
     public List<RcReceivable> listByCustomer(Long customerId) {
+        Long scopeC = orgGuard.enforceCompany();
         return mapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .eq(RcReceivable::getCustomerId, customerId)
-                .orderByDesc(RcReceivable::getDueDate));
+                .eq(scopeC != null, RcReceivable::getCompanyId, scopeC)
+                .orderByAsc(RcReceivable::getDueDate)
+                .orderByAsc(RcReceivable::getId));
     }
 
     /**
      * 逾期打卡可准入状态集（D-DEC-408 甲案）＝"已确认前后但未结清"的四态：
      * NONE 未确认（createSingle 缺省态）／NORMAL 开票派生／CONFIRMED 应收审批通过／PARTIAL 部分收款。
-     * <p>业务口径来源：催收域的业务前提是「到期未收的应收账款」，判据主项是
+     * <p>业务规则来源：催收域的业务前提是「到期未收的应收账款」，判据主项是
      * {@code remain_amount > 0}（与本域 {@code ArClaimService:392}／{@code ArStatementService:80}／
-     * {@code ArWriteoffService:116} 的 {@code status <> 'DONE'} 同一族口径），而不是「单据尚未走完审批」。
+     * {@code ArWriteoffService:116} 的 {@code status <> 'DONE'} 同一族规则），而不是「单据尚未走完审批」。
      * 原实现只放 {@code status='NONE'} 进逾期（全项目唯一 OVERDUE 写入前置），导致
      * 一支应收越往主链下游走（NORMAL→CONFIRMED）越不可能被判逾期＝状态机与业务预期反向（D-DEC-408）。
      * <p>OVERDUE 本身不在准入集内＝保持原"只打卡一次"语义，避免日终批处理每日重复翻档刷审计流水。
@@ -346,11 +402,11 @@ public class RcReceivableService {
      * 账期入参归一（D-DEC-407）：把「基准日」或「期间」两种写法折成一个跑批基准日。
      * <ul>
      *   <li>asOfDate（yyyy-MM-dd，亦容 yyyyMMdd）优先，逐字取该日；</li>
-     *   <li>period（yyyy-MM／yyyyMM）取<b>期末日</b>——账期口径下"到期日早于期末的次日"＝本期届满，
+     *   <li>period（yyyy-MM／yyyyMM）取<b>期末日</b>——账期规则下"到期日早于期末的次日"＝本期届满，
      *       与 {@code reportOpenBalanceAsOf} 的「bill_date ≤ 期末」同一读法；</li>
      *   <li>两者皆空回退 null＝由调用方按系统当前日处理（旧行为）。</li>
      * </ul>
-     * 无法归一时如实抛参数校验错，不做静默兜底（避免重演"扫描 0 条被归因成参数不当"）。
+     * 无法归一时如实抛参数校验错，不做静默默认处理（避免重演"扫描 0 条被归因成参数不当"）。
      */
     public static LocalDate resolveAsOfDate(String asOfDate, String period) {
         if (StringUtils.hasText(asOfDate)) {

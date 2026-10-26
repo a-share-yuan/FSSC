@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.budget.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -39,13 +42,13 @@ import java.util.Map;
  * 预算明细 Excel 导入/导出（2026-09-17）。
  * <p>
  * 模板列（导入/导出同构）：预算年度/期间/公司编码/公司名称/部门编码/部门名称/费用项编码/费用项名称/
- * 预算总额/币种/同类系统科目/IFS科目/备注。
- * 导入口径：
+ * 预算总额/币种/总账科目/外部系统科目/备注。
+ * 导入规则：
  * <ul>
  *   <li>方案在页面选择后随请求传入（schemeId），模板不含方案列；</li>
  *   <li>公司/部门/费用项支持「编码或名称」二选一匹配，均匹配失败则该行报错跳过；</li>
- *   <li>dimKey = 年度-COMPANY{公司id}-DEPT{部门id}-ITEM{费用项id}，与存量数据口径一致；</li>
- *   <li>按 (schemeId, dimKey) 幂等 upsert：存在则更新总额等字段，不存在则新增；</li>
+ *   <li>dimKey = 年度-COMPANY{公司id}-DEPT{部门id}-ITEM{费用项id}，与历史数据范围一致；</li>
+ *   <li>按 (schemeId, dimKey) 去重 upsert：存在则更新总额等字段，不存在则新增；</li>
  *   <li>占用/核销为运行期数据，导入不触碰。</li>
  * </ul>
  */
@@ -57,7 +60,7 @@ public class BudgetItemExcelService {
     /** 导入/导出统一列头 */
     public static final String[] HEADERS = {
             "预算年度", "期间", "公司编码", "公司名称", "部门编码", "部门名称",
-            "费用项编码", "费用项名称", "预算总额", "币种", "NC科目", "IFS科目", "备注",
+            "费用项编码", "费用项名称", "预算总额", "币种", "总账科目", "外部系统科目", "备注",
     };
 
     private final BgItemMapper bgItemMapper;
@@ -196,8 +199,8 @@ public class BudgetItemExcelService {
                 row.put("itemName", text(fmt, cell(r0, colIdx, "费用项名称")));
                 row.put("amount", num(cell(r0, colIdx, "预算总额")));
                 row.put("currency", text(fmt, cell(r0, colIdx, "币种")));
-                row.put("ncAccount", text(fmt, cell(r0, colIdx, "NC科目")));
-                row.put("ifsAccount", text(fmt, cell(r0, colIdx, "IFS科目")));
+                row.put("ncAccount", text(fmt, cell(r0, colIdx, "总账科目", "NC科目")));
+                row.put("ifsAccount", text(fmt, cell(r0, colIdx, "外部系统科目", "IFS科目")));
                 row.put("remark", text(fmt, cell(r0, colIdx, "备注")));
                 rows.add(row);
             }
@@ -362,7 +365,7 @@ public class BudgetItemExcelService {
         }
         hit = sysDeptMapper.selectOne(qw.last("limit 1"));
         if (hit == null && code != null && !code.isBlank() && name != null && !name.isBlank()) {
-            // 编码匹配失败再用名称兜底一次
+            // 编码匹配失败再用名称默认处理一次
             LambdaQueryWrapper<SysDept> qw2 = new LambdaQueryWrapper<>();
             qw2.eq(SysDept::getDeptName, name.trim());
             if (comp != null) {
@@ -374,9 +377,15 @@ public class BudgetItemExcelService {
         return hit;
     }
 
-    private Cell cell(Row r, Map<String, Integer> colIdx, String name) {
-        Integer idx = colIdx.get(name);
-        return idx == null ? null : r.getCell(idx);
+    /** 按列名取值；传入多个列名时按顺序取第一个命中的列（新旧模板表头兼容）。 */
+    private Cell cell(Row r, Map<String, Integer> colIdx, String... names) {
+        for (String name : names) {
+            Integer idx = colIdx.get(name);
+            if (idx != null) {
+                return r.getCell(idx);
+            }
+        }
+        return null;
     }
 
     private boolean isBlank(Row r) {

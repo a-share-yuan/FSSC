@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="h5-page h5-page--tabbed">
     <!-- 顶栏：sticky（全页唯一滚动容器＝文档，AD-02/03）；右侧只放姓名，
@@ -33,7 +36,7 @@
           <div class="h5-card__meta">单据编号：{{ t.billNo || '—' }} · {{ docTypeLabel(t.billType) }}</div>
           <div v-if="t.totalAmount != null" class="h5-card__meta">金额：￥{{ money(t.totalAmount) }}</div>
           <div v-if="t.assigneeName" class="h5-card__meta">在办人：{{ t.assigneeName }}</div>
-          <!-- 不可办要说明原因，不能让人点了才知道（服务端 canOperate 同口径硬拦） -->
+          <!-- 不可办要说明原因，不能让人点了才知道（服务端 canOperate 同一规则硬拦） -->
           <div v-if="t.lockedByOther" class="h5-flag h5-flag--warn h5-flag--block">同池他人办理中，暂时点不动</div>
           <div v-else-if="t.bizResolved === false" class="h5-flag h5-flag--info h5-flag--block">关联单据未取到，请在电脑端核对</div>
           <div v-else-if="!isExpBillCarrier(t.billType)" class="h5-flag h5-flag--info h5-flag--block">非费用单据（{{ t.billType || '其他域' }}）：移动端暂不支持办理，请在电脑端处理</div>
@@ -57,7 +60,7 @@
         <input id="h5-bill-kw" v-model="billKeyword" class="h5-input" type="search"
                placeholder="单号 / 标题关键字" @input="onKeywordInput" />
       </div>
-      <!-- 状态 chip：与 PC 枚举标签同口径，禁中英直显（既有枚举治理约定） -->
+      <!-- 状态 chip：与 PC 枚举标签同一规则，禁中英直接显示（既有枚举治理约定） -->
       <div class="h5-chips">
         <span class="h5-chips__cap">状态</span>
         <button v-for="c in BILL_STATUS_CHIPS" :key="c.value" class="h5-chip"
@@ -118,7 +121,7 @@
     <!-- ================= 提报 ================= -->
     <section v-if="tab === 'create'" class="h5-body" :data-dt-src="docTypesSource">
       <!-- P2-3 甲案：可选区与明示区都由「移动端单据启用清单」渲染——服务端 exp_mobile_template 读到就用它，
-           读不到（接口未上线/无权限/空清单）回落 utils/h5.js 的常量，两面的取值域与顺序口径一致。 -->
+           读不到（接口未上线/无权限/空清单）回落 utils/h5.js 的常量，两面的取值域与顺序规则一致。 -->
       <div v-if="mobileTypes.length" class="h5-card">
         <div class="h5-card__title h5-flush">发起报账</div>
         <div class="h5-tip h5-tip--left h5-tip--tight">支持多行费用明细、发票关联、附件与影像上传；填到一半退出也会自动留在本机草稿里。</div>
@@ -177,13 +180,13 @@
       </div>
 
       <!-- 队列计数用真权限判定：无 inv:verify:list 时不再显示 0，而是明说「验真由发票管理岗处理」；
-           有权限才给数字与执行按钮（D-DEC-117 同码收口）。
+           有权限才给数字与执行按钮（D-DEC-117 同码办结）。
            10-04 复核订正：核查册原判该键为「幽灵键」不成立——它在 InvoiceEnhanceController.java:67
            有真消费者（GET /verify/page），且 5 个角色持有（57/60/61/68/99032）。
            提报岗看不到计数是正常权限面，不是坏键，所以这里只做文案降级、不动授权。 -->
       <div v-if="verifyDenied" class="h5-denied">
         <div class="h5-denied__t">验真队列：当前账号无查看权限</div>
-        <div class="h5-denied__d">缺权码：{{ verifyDenied.permKey || 'inv:verify:list' }}。验真由发票管理岗触发，你可在下方票夹查看识别结果。</div>
+        <div class="h5-denied__d">验真由发票管理岗触发；识别结果与发票台账在电脑端「发票管理 › 发票验真记录-查询」里查看。急件请联系发票岗。</div>
       </div>
       <div v-else class="h5-card">
         <div class="h5-card__row">
@@ -197,7 +200,7 @@
       <template v-if="invDenied">
         <div class="h5-denied">
           <div class="h5-denied__t">票夹：当前账号无查看权限</div>
-          <div class="h5-denied__d">缺权码：{{ invDenied.permKey || 'inv:list' }}。这不是「你没有发票」，是这份列表对本角色不开放，可在电脑端「发票管理」由发票岗协同。</div>
+          <div class="h5-denied__d">这不是「你没有发票」——上面拍的票据影像仍会作为附件随单提交、审批侧照常可看；发票台账由发票岗在电脑端「发票管理 › 发票查询」维护。</div>
         </div>
       </template>
       <div v-else-if="invError" class="h5-error">
@@ -242,17 +245,17 @@
         </template>
         <template v-else>
           <div class="h5-big-num">￥{{ money(loanBalance) }}</div>
-          <!-- UX-09 原口径＝只加总前 N 条还宣称是全额，数字不可信。P1-9 改成库里 SUM 聚合后
-               与分页能取回多少条无关；聚合口未上线时回落分页累加，并在同一行如实标出是哪条腿。 -->
+          <!-- UX-09 原规则＝只加总前 N 条还宣称是全额，数字不可信。P1-9 改成库里 SUM 聚合后
+               与分页能取回多少条无关；聚合口未上线时回落分页累加，并在同一行如实标出是哪条环节。 -->
           <div class="h5-card__meta">
             未冲销完毕的借款余额（{{ loanCount }} 笔）
-            <template v-if="mineStatMode === 'server'"> · 全量口径（服务端聚合）</template>
+            <template v-if="mineStatMode === 'server'"> · 全量统计（服务端汇总）</template>
             <template v-else> · 按最近 {{ loanCount }} 笔合计（服务端聚合口未上线）</template>
           </div>
         </template>
       </div>
 
-      <!-- P1-9：在途张数。口径＝status ∈ {SUBMITTED, APPROVING}，与后端 ExpenseMineStatService
+      <!-- P1-9：在途张数。规则＝status ∈ {SUBMITTED, APPROVING}，与后端 ExpenseMineStatService
            的名单逐字相同；数字来自 SQL 聚合/服务端 total，不是"翻到的前几条里数数"。 -->
       <div class="h5-card">
         <div class="h5-amount-row">
@@ -364,7 +367,7 @@ const billError = ref('')
 const billStatus = ref('')
 const billType = ref('')
 const billKeyword = ref('')
-// 申请日期区间（闭区间，两端各自可缺）＋能力闸门，见 loadBills/probeDateSupport 注释
+// 申请日期区间（闭区间，两端各自可缺）＋能力校验，见 loadBills/probeDateSupport 注释
 const billFrom = ref('')
 const billTo = ref('')
 const billDateReady = ref(false)
@@ -389,7 +392,7 @@ const loanCount = ref(0)
 const inTransitCount = ref(0)
 const rejectedTotal = ref(0)
 // 数值出处可见性：'server'＝/mine/stat 库里聚合；'local'＝聚合口未上线时的分页累加回落
-// （借款余额那一行文案会如实标出走了哪条腿）
+// （借款余额那一行文案会如实标出走了哪条环节）
 const mineStatMode = ref('')
 const rejected = ref([])
 const rejectedDenied = ref(null)
@@ -397,8 +400,8 @@ const mineLoading = ref(false)
 const mineError = ref('')
 const scanning = ref(false)
 const uploadStates = ref([])
-/* D-DEC-463（10-05）：票夹扫描腿一次可并发 4 张，中断要把手上全部请求一起断开。
-   后端识别链是 REQUIRES_NEW 独立事务 ⇒ 断开只是"不再等回执"，不等于服务端没写进去，
+/* D-DEC-463（10-05）：票夹扫描环节一次可并发 4 张，中断要把手上全部请求一起断开。
+   后端识别链是 REQUIRES_NEW 独立事务 ⇒ 断开只是"不再等响应"，不等于服务端没写进去，
    所以断开的行按 abortedOutcome 报「结果未知」，并提示刷新票夹核对。 */
 let scanControllers = []
 const scanAborted = ref(false)
@@ -412,10 +415,10 @@ const attachText = ref('')
 const invInputRef = ref(null)
 const draftTip = ref('')
 
-/* ---------------- 提报清单（P2-3 甲案：库里可配，常量兜底） ----------------
+/* ---------------- 提报清单（P2-3 甲案：库里可配，常量默认处理） ----------------
    docTypes 初值＝常量，所以「接口没上线/读失败」时提报 tab 首屏就有内容，不出现空壳；
    docTypesSource 只做运行期可证性用（写在 section 的 data-dt-src 上，界面不显示），
-   值面验证时要区分「服务端清单」和「常量兜底」两条腿，见 §7-V 记录。 */
+   值面验证时要区分「服务端清单」和「常量默认处理」两个环节，见 §7-V 记录。 */
 const docTypes = ref(H5_DOC_TYPES)
 const docTypesSource = ref('local')
 const mobileTypes = computed(() => docTypes.value.filter((d) => d.mobile))
@@ -437,7 +440,7 @@ function goCreate(d) {
   else ElMessage.info('该类型还没有移动端表单，请到电脑端提报')
 }
 
-// D-DEC-117：与 InvoiceEnhanceController 的 @RequiresPerm("inv:verify:run") 同码收口入口可见性
+// D-DEC-117：与 InvoiceEnhanceController 的 @RequiresPerm("inv:verify:run") 同码办结入口可见性
 // （超管持 *:*:* 由 utils/perm 统一放行，不会被误藏）
 const canRunVerify = hasPerm('inv:verify:run')
 
@@ -449,8 +452,8 @@ const BILL_STATUS_CHIPS = [
   { value: BillStatus.APPROVED, label: statusLabel(BillStatus.APPROVED) },
 ]
 // P1-5 类型筛选：取值域不是猜的＝fssc.exp_bill 实测（del_flag=0）只有五型
-// PAY 14／CLAIM 6／LOAN 3／APPLY 2／REPAY 1；标签一律走 BILL_TYPE 词表，禁页面内手写 map（枚举治理约定）。
-// 与「提报入口只开 CLAIM」（A6 口径）不矛盾：全部类型都能查看与筛选，非费用载体在详情页明示去电脑端。
+// PAY 14／CLAIM 6／LOAN 3／APPLY 2／REPAY 1；标签一律走 BILL_TYPE 名称表，禁页面内手写 map（枚举治理约定）。
+// 与「提报入口只开 CLAIM」（A6 规则）不矛盾：全部类型都能查看与筛选，非费用载体在详情页明示去电脑端。
 const BILL_TYPE_CHIPS = [
   { value: '', label: '不限' },
   { value: 'CLAIM', label: BILL_TYPE.CLAIM },
@@ -462,24 +465,24 @@ const BILL_TYPE_CHIPS = [
 
 const myName = computed(() => store.user?.realName || store.user?.nickName || store.user?.username || '我')
 const myAccount = computed(() => store.user?.userName || store.user?.username || '—')
-// UX-12＋跨法人：companyId 取登录态（P0-3 同口径），并把「我在哪个公司」摊开显示，
+// UX-12＋跨法人：companyId 取登录态（P0-3 同一规则），并把「我在哪个公司」摊开显示，
 // 被 OrgGuard 拦下时用户至少知道是不是自己公司的单
 const myCompany = computed(() => store.user?.companyId ?? '—')
 const myDept = computed(() => store.user?.deptId ?? '—')
 
 /* ---------------- 单据列表：真分页（服务端 myPage 支持 status/billType/keyword/日期区间，本窗已核签名） ---------------- */
 /**
- * 日期区间能力探针（一次性）：myPage 的 startDate/endDate 是 10-04 新加的服务端参数。
+ * 日期区间能力检查（一次性）：myPage 的 startDate/endDate 是 10-04 新加的服务端参数。
  * ★前指订正（10-04 02:2x 实测）：原注释写"要发版才生效"已被运行态推翻——当前在跑的 jar
  * （PID 3848／md5 `1db8dba8…`／92,049,159B@10-04 01:00）里这两个参数**已生效**
  * （`startDate=1970-01-01&endDate=1970-01-01` 回 total=0，基线同账号 total=6）。
  * ★★再前指（10-04 02:47 发布窗后复探）：上面那个 PID 已被本仓 02:42:51 的 jar 窗换掉
  * （现网＝PID 1980／md5 `e4ab1c8b…`／92,055,317B），新载荷上这两条读数**逐字复现**
  * （空区间 total=0、基线 total=6、`billType=CLAIM` total=2）⇒ 结论不受载荷更替影响。
- * 探针本身不删：本页面可能被部署在未发版的环境／另一套后端上，判据仍是"让服务端自己回答"而非按版本号猜。
+ * 检查本身不删：本页面可能被部署在未发版的环境／另一套后端上，判据仍是"让服务端自己回答"而非按版本号猜。
  * 判据不是猜版本号而是让服务端自己回答：把两端都指向 1970-01-01（本库申请日期全在 2026 年）
  * ⇒ 真支持必回 total=0；老签名会忽略这两个参数、原样返回全量 total。
- * 探不出支持就不渲染日期行——宁可少一个入口，也不摆一个"选了没反应"的假筛选（本仓对假功能的一贯口径）。
+ * 探不出支持就不渲染日期行——宁可少一个入口，也不摆一个"选了没反应"的假筛选（本仓对假功能的一贯规则）。
  * 探活失败（无权限/网络）同样按不支持处理，不影响列表本身加载。
  */
 async function probeDateSupport() {
@@ -585,7 +588,7 @@ function loadMoreTodos() {
   todoPage.value++
   loadTodos()
 }
-/** 按 key 去重：分页口径下同一 taskId 二次出现即视为异常，宁可不重复也不能重复办同一道 */
+/** 按 key 去重：分页规则下同一 taskId 二次出现即视为异常，宁可不重复也不能重复办同一道 */
 function dedupe(arr, key) {
   const seen = new Set()
   return arr.filter((x) => {
@@ -620,25 +623,43 @@ async function loadItems() {
 }
 
 /* ---------------- 发票 ---------------- */
+/**
+ * 票夹与验真队列都属发票管理岗职能（inv:list／inv:verify:list 只授发票、税务、共享三岗，
+ * 实测七个 H5 岗位里六个不持）。这两个面板本就按缺权降级，但改造前每次都照样发请求
+ * ⇒ 全局拦截器（api.js:200）给每个提报岗在首屏弹一次「您没有「发票·list」权限，请联系管理员开通」，
+ * 既修不好问题（这权限本就不该给），又把真正的提示盖掉。
+ * 正解＝先判权再决定发不发：无权直接落降级面板，一声不响；有权才取数（并 silent，
+ * 防服务端因依赖闭包等其它口径再拒一次而弹 toast）。与本页 canRunVerify＝hasPerm('inv:verify:run') 同一手法。
+ */
 async function loadInvoices() {
   invError.value = ''
   invDenied.value = null
-  try {
-    const r = await invoiceApi.page({ pageNum: 1, pageSize: 50 })
-    invoices.value = r.list || []
-  } catch (e) {
-    const d = permDeniedOf(e)
-    if (d) invDenied.value = d
-    else { invError.value = e.message || '票夹加载失败'; invoices.value = [] }
+  if (!hasPerm('inv:list')) {
+    invDenied.value = { msg: '', permKey: 'inv:list' }
+    invoices.value = []
+  } else {
+    try {
+      const r = await invoiceApi.page({ pageNum: 1, pageSize: 50 }, { silent: true })
+      invoices.value = r.list || []
+    } catch (e) {
+      const d = permDeniedOf(e)
+      if (d) invDenied.value = d
+      else { invError.value = e.message || '票夹加载失败'; invoices.value = [] }
+    }
   }
   verifyDenied.value = null
-  try {
-    const v = await invoiceApi.verifyPage({ pageNum: 1, pageSize: 1 })
-    verifyPending.value = Number(v?.total) || 0
-  } catch (e) {
-    const d = permDeniedOf(e)
-    if (d) verifyDenied.value = d
-    else verifyPending.value = 0
+  if (!hasPerm('inv:verify:list')) {
+    verifyDenied.value = { msg: '', permKey: 'inv:verify:list' }
+    verifyPending.value = 0
+  } else {
+    try {
+      const v = await invoiceApi.verifyPage({ pageNum: 1, pageSize: 1 })
+      verifyPending.value = Number(v?.total) || 0
+    } catch (e) {
+      const d = permDeniedOf(e)
+      if (d) verifyDenied.value = d
+      else verifyPending.value = 0
+    }
   }
 }
 
@@ -647,10 +668,10 @@ async function loadInvoices() {
  * 改造前打的是通用 /system/file/upload —— 后端带 OCR 的 /expense/attach/upload 早就存在
  * （ExpenseAttachController:37）但移动端从未调用 ⇒ 「扫描」是个假功能（docs/29 §10.3 判 ✗）。
  * 运行态前提（10-04 本窗实测，★已过时·10-05 11:1x 前指）：当时 fssc 库 sys_config 的 ocr.channel=paddle，
- * paddle 地址 127.0.0.1:8087/invoice_ocr 但 8087 未监听 ⇒ 图片票「识别」这一腿现在必回
+ * paddle 地址 127.0.0.1:8087/invoice_ocr 但 8087 未监听 ⇒ 图片票「识别」这一环节现在必回
  * invoice.ok=false（服务端识别异常降级不阻断上传，ExpenseAttachController:91-97）。
  * ★现况（10-05 11:1x 实测）：sys_config ocr.channel=gateway（发票能力网关 :8096 LISTENING），
- * 8087 也在监听但已不在路由路径上 ⇒ 图片票这一腿现在真的会出票面，下面的播报口径照旧"如实分档"。
+ * 8087 也在监听但已不在路由路径上 ⇒ 图片票这一环节现在真的会出票面，下面的播报规则照旧"如实分档"。
  * D-DEC-461：识别成功 ≠ 已进票夹（票面要素不全／金额不自洽时后端只 log 不入池），
  * 所以档位一律取 invoiceOutcome 这个唯一分档口，在这里重算判据。
  */
@@ -687,7 +708,7 @@ async function onScan(e) {
       uploadStates.value[i].text = '上传中'
       uploadStates.value[i].cls = 'h5-flag--info'
       // 压缩到长边 1600／质量 0.8／目标 ≤500KB 在提单页做（那里要带明细行）；
-      // 票夹这条腿直接原图上传——压缩会糊票面，识别率优先于流量。
+      // 票夹这条环节直接原图上传——压缩会糊票面，识别率优先于流量。
       const controller = new AbortController()
       scanControllers.push(controller)
       try {
@@ -740,10 +761,10 @@ async function runVerify() {
 }
 
 /* ---------------- 我的数据（P1-9：数字改由服务端出，前端只做搬运） ---------------- */
-// 回落腿的分页上限（原 LOAN_PAGE_LIMIT＝200，并行窗 10-04 00:26 从 50 抬到 200，值保留）
+// 回落环节的分页上限（原 LOAN_PAGE_LIMIT＝200，并行窗 10-04 00:26 从 50 抬到 200，值保留）
 const MINE_PAGE_LIMIT = 200
 // 「仍在贷」＝已批且还没冲销完毕。名单与后端 ExpenseMineStatService.LOAN_OPEN_STATUSES 逐字相同
-// （＝仓内 D-DEC-106 收口后的同一组，PC 侧 LoanApply.vue#LOAN_OPEN_STATUSES 亦同值）。
+// （＝仓内 D-DEC-106 办结后的同一组，PC 侧 LoanApply.vue#LOAN_OPEN_STATUSES 亦同值）。
 // 为什么不能只认 APPROVED：借款单一旦挂上冲抵/还款就迁到 PARTIAL_REPAID，
 // 本库 3 张 LOAN 的状态是 REPAID／WITHDRAWN／PARTIAL_REPAID、APPROVED 为 0 张 ⇒ 老算法对任何人都恒显 ￥0.00，
 // 而真值是 PARTIAL_REPAID 那 1 张的 15,000.00（10-04 00:5x 只读 SQL 实测）。
@@ -766,7 +787,7 @@ async function loadMine() {
       if (permDeniedOf(e)) throw e // 缺权是权限面，不能拿分页算法把它盖成"能算但不准"
       st = null
     }
-    // ② 打回明细卡片两腿都要（要能点进「修改并重新提交」），故放在分岔之前统一拉
+    // ② 打回明细卡片两环节都要（要能点进「修改并重新提交」），故放在分岔之前统一拉
     const q = await billApi.myPage({ pageNum: 1, pageSize: MINE_PAGE_LIMIT, status: 'REJECTED' })
     rejected.value = q.list || []
     rejectedTotal.value = Number(q.total) || 0
@@ -890,12 +911,17 @@ async function onTouchEnd() {
   else ElMessage.info('这个页面没有需要刷新的列表')
 }
 
-// keep-alive 复用实例时（从提单/审批返回）只补列表，不清分页、不回滚位置
+// keep-alive 复用实例时（从提单/审批返回）刷新列表
 let firstActivated = true
 onActivated(() => {
   if (firstActivated) { firstActivated = false; return }
-  if (tab.value === 'list') loadBills()
-  else if (tab.value === 'todo') loadTodos()
+  // D-H5M-04：办完（或被驳回）后回到工作台，待办卡片必须消失，且与底部计数同源。
+  // 旧实现是"追加式"刷新（loadTodos()/loadBills() 不带 reset）：
+  //  - 待办：已办的卡片留在列表里，而计数取服务端 total ⇒ 同屏"共 0 条"却还挂着卡片；
+  //  - 单据：停留在第 2 页以上时把当页再追加一遍。
+  // 改为重建取数（reset=true）：卡片与计数取自同一次响应，翻页位置也回到第一页。
+  if (tab.value === 'list') loadBills(true)
+  else if (tab.value === 'todo') loadTodos(true)
   else if (tab.value === 'create') refreshDraftTip()
   else if (tab.value === 'mine') loadMine()
   loadTodoBadge()
@@ -925,8 +951,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('touchmove', onTouchMove)
   window.removeEventListener('touchend', onTouchEnd)
   clearTimeout(kwTimer)
-  // D-DEC-463：离开本页时把手上还没回执的识别请求断开，免得回来面对一批"来历不明"的票。
-  // 这不等于服务端停手（识别链是 REQUIRES_NEW），行内已按「结果未知」口径播报。
+  // D-DEC-463：离开本页时把手上还没响应的识别请求断开，免得回来面对一批"来历不明"的票。
+  // 这不等于服务端停手（识别链是 REQUIRES_NEW），行内已按「结果未知」规则播报。
   if (scanning.value && scanControllers.length) {
     scanAborted.value = true
     scanControllers.forEach((c) => { try { c.abort() } catch (_) { /* 已结束的连接忽略 */ } })

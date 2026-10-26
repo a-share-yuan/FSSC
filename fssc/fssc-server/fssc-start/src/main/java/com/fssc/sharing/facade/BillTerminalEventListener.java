@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.facade;
 
 import com.fssc.framework.facade.event.BillTerminalEvent;
@@ -8,13 +11,13 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * 单据终态事件监听器（断点3 + 断点7 激活）。
+ * 单据最终状态事件监听器（断点3 + 断点7 激活）。
  *
  * 当核心域 ExpenseWfEventListener 发布 BillTerminalEvent 时，档案域接收并判断：
  * - 影像完整（PARTIAL/COMPLETE）→ 记录为可归档候选，等待 scheduledArchive 或人工归档处理
  * - 影像不完整/无影像（ 电子单据：无纸质件）→ 自动执行「电子归档」闭环：
  *  生成 op_archive 档案目录记录（单据+凭证号+附件清单）并回写单据归档标记，
- *  保证 /archive 档案管理页面可检索（BillArchiveService.eArchiveBill，幂等）。
+ *  保证 /archive 档案管理页面可检索（BillArchiveService.eArchiveBill，去重）。
  *
  * 当前事件驱动与定时查询（BillFacade.findPendingBillsForScheduledArchive）并行存在，
  * 后续可将待归档候选写入本地队列表，替代定时反查 ExpBill 表。

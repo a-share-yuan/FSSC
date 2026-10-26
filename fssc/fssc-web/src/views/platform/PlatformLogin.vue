@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="login-page">
     <!-- 背景装饰 -->
@@ -20,7 +23,7 @@
           <li><el-icon><OfficeBuilding /></el-icon><div><strong>租户全生命周期</strong><span>注册审核、开通、冻结与注销一站式管理</span></div></li>
           <li><el-icon><Box /></el-icon><div><strong>套餐与配额</strong><span>功能包开关、用户数与存储配额灵活下发</span></div></li>
           <li><el-icon><TrendCharts /></el-icon><div><strong>运营监控</strong><span>租户统计、运行状态、系统日志一屏总览</span></div></li>
-          <li><el-icon><Lock /></el-icon><div><strong>平台级合规</strong><span>统一身份鉴权、登录凭证管控、操作全程留痕</span></div></li>
+          <li><el-icon><Lock /></el-icon><div><strong>平台级合规</strong><span>统一身份鉴权、登录凭证管控、操作全程记录</span></div></li>
         </ul>
         <p class="brand-foot">© 2026 FSSC 财务共享服务中心</p>
       </aside>

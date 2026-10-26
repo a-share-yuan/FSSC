@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * ID到名称的全局映射工具（解决表格列/表单直接显示数字ID的问题）
  *

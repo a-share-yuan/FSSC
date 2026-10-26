@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.bank.gateway;
 
 import com.fssc.connector.api.ChannelResponse;
@@ -22,8 +25,8 @@ import java.util.List;
  * <ul>
  *   <li><b>鉴权</b>：原本类手拼 {@code X-Api-Key}、apiSecret 明文未用 → 现由统一网关按
  *       {@code ext_interface_config} 注入 {@code Authorization: Bearer} + {@code X-API-Secret}；</li>
- *   <li><b>幂等</b>：原无幂等（重复提交会重复付款）→ 现由网关按「租户 + 幂等键」回放；</li>
- *   <li><b>留痕</b>：原仅 {@code log.info} → 现落 {@code integration_call_log}
+ *   <li><b>去重</b>：原无去重（重复提交会重复付款）→ 现由网关按「租户 + 唯一键」回放；</li>
+ *   <li><b>记录</b>：原仅 {@code log.info} → 现落 {@code integration_call_log}
  *       （trace_id / retry_count / is_duplicate 可查）；</li>
  *   <li><b>熔断限流</b>：原无 → 现经 {@code ConnectorFacade} 的 ResilienceGuard。</li>
  * </ul>
@@ -33,7 +36,7 @@ import java.util.List;
  * <p><b>为什么报文组装在本类内而不在 connector 侧</b>：本类位于 {@code com.fssc.bank}（业务包），
  * 按 CI 规则 9「业务包禁止 import {@code connector.adapter.*}」，只能依赖
  * {@code com.fssc.connector.api.*} 契约。因此银行报文底稿与流水号解析保留在本类；
- * {@code connector} 侧的 {@code BankPaymentAdapter} 负责通道语义（幂等/留痕/熔断/重试）。
+ * {@code connector} 侧的 {@code BankPaymentAdapter} 负责通道语义（去重/记录/熔断/重试）。
  * 双方通过 {@link ChannelResponse} 契约对接，各自职责不外泄。</p>
  *
  * <p><b>业务层零感知</b>：{@link BankGateway} 接口与 {@code PayBatchService} 均<b>不改动</b>。</p>
@@ -45,7 +48,7 @@ import java.util.List;
 @ConditionalOnProperty(name = "fssc.bank.gateway", havingValue = "http")
 public class HttpBankGateway implements BankGateway {
 
-    /** ext_interface_config.category：银行通道（与历史口径一致，配置零迁移）。 */
+    /** ext_interface_config.category：银行通道（与历史规则一致，配置零迁移）。 */
     private static final String CAPABILITY_BANK = "BANK";
 
     private final ConnectorFacade connectorFacade;
@@ -98,7 +101,7 @@ public class HttpBankGateway implements BankGateway {
                     batchNo, count, key, resp.isDuplicate(), resp.getDurationMs(),
                     channelResolver.activeProvider());
         } catch (Exception e) {
-            // 兜底：保证付款失败一定落到「标 FAILED + 失败留痕 + 发起 TR_PAY_FAIL」的闭环，
+            // 默认处理：保证付款失败一定落到「标 FAILED + 失败记录 + 发起 TR_PAY_FAIL」的闭环，
             // 而不会把异常抛穿进 PayBatchService 的事务导致整批回滚。
             r.setSuccess(false);
             r.setFailReason("银行接口调用失败：" + e.getMessage());
@@ -111,7 +114,7 @@ public class HttpBankGateway implements BankGateway {
     /**
      * 从银行响应体解析各笔流水号，并在编解码器无法解析时降级为占位流水号。
      *
-     * <p>降级口径与 R1/R2 一致：整批一个 {@code BANK+时间戳}，后续笔加 {@code -i} 后缀。</p>
+     * <p>降级规则与 R1/R2 一致：整批一个 {@code BANK+时间戳}，后续笔加 {@code -i} 后缀。</p>
      */
     private List<String> serialNosOf(BankProviderCodec codec, String body, int itemCount) {
         List<String> parsed = codec.parseSerialNos(body, itemCount);
@@ -127,7 +130,7 @@ public class HttpBankGateway implements BankGateway {
     }
 
     /**
-     * 幂等键：{@code BANK_PAY:{tenantId}:{batchNo}#a0}。
+     * 唯一键：{@code BANK_PAY:{tenantId}:{batchNo}#a0}。
      *
      * <p><b>为什么带尝试号</b>：网关 {@code findPrior()} 按
      * {@code (category, idempotency_key, tenant_id, is_duplicate=0)} 精确匹配且<b>不校验
@@ -136,7 +139,7 @@ public class HttpBankGateway implements BankGateway {
      * 失败后<b>重试</b>（换键 {@code #a1}）未命中 → <b>真实外呼</b>。</p>
      *
      * <p>本次先固定 {@code #a0}；待业务侧提供"失败重试次数"后，把 {@code 0} 换成真实尝试号即可，
-     * 无需再动网关（决策记录见 {@code 权限治理/T1.1_幂等失败重试方案决策_20261014.md}）。</p>
+     * 无需再动网关（决策记录见 {@code 权限治理/T1.1_去重失败重试方案决策_20261014.md}）。</p>
      */
     private String idempotencyKey(String batchNo) {
         return "BANK_PAY:" + currentTenantId() + ":" + batchNo + "#a0";

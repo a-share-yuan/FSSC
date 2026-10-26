@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="nab" v-if="action" :class="'tone-' + action.tone">
     <span class="nab-dot"></span>
@@ -17,7 +20,7 @@ import { useRouter } from 'vue-router'
 /**
  * 下一跳行动条：根据单据状态 + 业务链缺口，计算流程当前「该去哪一步」，
  * 一键跳到下游真实页面。纯前端、零后端依赖，复用 billInfo.status 与 traceChain.summary。
- * 对齐 同类系统的「流程下一站」引导思想——让用户始终知道流程如何往下走。
+ * 「流程下一站」引导：让用户始终知道流程如何往下走。
  */
 const props = defineProps({
   billInfo: { type: Object, default: null },
@@ -28,7 +31,7 @@ const status = computed(() => props.billInfo?.status || '')
 const reached = computed(() => props.chain?.summary?.reached || [])
 
 /** D-DEC-362：本域无出证/付款环节的单据不再引导「去凭证台账」「去出纳付款」——
- *  判据与 BillChainTimeline／D-DEC-446 甲-2 同源：优先 summary.segmentSupport，旧包回落 paymentSupported，缺省视为有腿。 */
+ *  判据与 BillChainTimeline／D-DEC-446 甲-2 同源：优先 summary.segmentSupport，旧包回落 paymentSupported，缺省视为有环节。 */
 const segOk = (k) => {
   const s = props.chain?.summary
   const seg = s && s.segmentSupport
@@ -42,7 +45,7 @@ const segOk = (k) => {
  * 「待付款」（exp_bill_payment.pay_status=WAITING、pay_time NULL、paid_amount=0）。
  * 判据一律复用后端同一份读数，前端只负责把话说实，不另算一套：
  *  · 是否有付款环节 ＝ summary.segmentSupport.PAYMENT（沿用上方 segOk，与 D-DEC-446 甲-2 同源）；
- *  · 是否付讫 ＝ summary.paidPaymentCount（D-DEC-446 乙-2 的终态计数，只算 pay_status='PAID'）
+ *  · 是否付讫 ＝ summary.paidPaymentCount（D-DEC-446 乙-2 的最终状态计数，只算 pay_status='PAID'）
  *    对比 summary.paymentCount（记录存在数）。
  * 旧包没有 paidPaymentCount 时判据不可知 ⇒ 维持原措辞（按 reached 段走），不臆断"未付讫"。
  */
@@ -75,7 +78,7 @@ const action = computed(() => {
     return { title: '生成凭证', desc: '审批已通过，去总账查看/补录凭证', route: '/op/gl/voucher', btn: '去凭证台账', tone: 'primary', done: false }
   if (segOk('PAYMENT') && !has('PAYMENT'))
     return { title: '执行付款', desc: '凭证已生成，去出纳付款', route: '/pay', btn: '去出纳付款', tone: 'primary', done: false }
-  // D-DEC-369：到了归档这一句，付款段的实况必须跟着 summary 的终态计数说，不能再一律说"付款已完成"
+  // D-DEC-369：到了归档这一句，付款段的实况必须跟着 summary 的最终状态计数说，不能再一律说"付款已完成"
   if (!has('ARCHIVE')) {
     const pf = payFact.value
     if (pf.kind === 'unpaid')
@@ -83,10 +86,10 @@ const action = computed(() => {
     if (pf.kind === 'partial')
       return { title: '执行付款', desc: `付款已付讫 ${pf.paid}/${pf.total} 笔，其余仍未到账`, route: '/pay', btn: '去出纳付款', tone: 'warn', done: false }
     if (pf.kind === 'none')
-      return { title: '归档', desc: '本单据类型没有付款环节，去归档收口', route: '/archive/archive', btn: '去归档', tone: 'primary', done: false }
-    return { title: '归档', desc: '付款已完成，去归档收口', route: '/archive/archive', btn: '去归档', tone: 'primary', done: false }
+      return { title: '归档', desc: '本单据类型没有付款环节，去归档办结', route: '/archive/archive', btn: '去归档', tone: 'primary', done: false }
+    return { title: '归档', desc: '付款已完成，去归档办结', route: '/archive/archive', btn: '去归档', tone: 'primary', done: false }
   }
-  return { title: '全链路已完成', desc: payFact.value.kind === 'none' ? '凭证 · 归档均已收口（本域无付款环节）' : '凭证 · 付款 · 归档均已收口', tone: 'success', done: true }
+  return { title: '全链路已完成', desc: payFact.value.kind === 'none' ? '凭证 · 归档均已办结（本域无付款环节）' : '凭证 · 付款 · 归档均已办结', tone: 'success', done: true }
 })
 
 function go(r) { router.push(r) }

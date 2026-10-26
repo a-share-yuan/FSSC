@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -9,8 +12,8 @@
         <el-date-picker v-model="month" type="month" value-format="YYYYMM" placeholder="选择月份" style="width: 140px" />
         <el-button type="primary" size="small" @click="load">生成调节表</el-button>
         <el-button size="small" @click="runReconcile">立即勾对</el-button>
-        <el-button v-if="bankAccountId" size="small" type="warning" @click="loadItems">追溯留痕明细</el-button>
-      <el-button size="small" @click="exportCsv">导出 CSV</el-button>
+        <el-button v-if="bankAccountId" size="small" type="warning" @click="loadItems">追溯记录明细</el-button>
+      <el-button size="small" @click="exportCsv">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         <span style="margin-left: auto; color: #909399; font-size: 13px">
           调节后余额 = 银行余额 − 企业已付银行未付 + 企业已收银行未收 + 银行已付企业未付 − 银行已收企业未收
@@ -96,7 +99,7 @@
     </template>
     <el-empty v-else description="选择账户和月份后生成调节表" />
 
-    <!-- 未达账差异明细追溯（bank_recon_item 落库留痕） -->
+    <!-- 未达账差异明细追溯（bank_recon_item 写入数据库记录） -->
     <el-dialog v-model="itemsVisible" title="未达账差异明细追溯（已保存）" width="720px">
       <template #header>
         <div style="display: flex; gap: 8px; align-items: center; width: 100%">
@@ -190,7 +193,7 @@ async function load() {
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
-/** 追溯未达账差异落库明细（bank_recon_item，sheet 生成时留痕） */
+/** 追溯未达账差异写入数据库明细（bank_recon_item，sheet 生成时记录） */
 async function loadItems() {
   itemsType.value = itemsType.value || ''
   itemsLoading.value = true

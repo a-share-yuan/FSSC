@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -44,10 +47,10 @@ public class SmartReviewService {
     }
 
     /**
-     * D-DEC-018（X-31，乙）：AI 未采纳的业务留痕。
+     * D-DEC-018（X-31，乙）：AI 未采纳的业务记录。
      * <p>AI 通道现与端点不同型、调用恒失败，改前只剩一行 WARN 后静默走规则引擎 ⇒ 单据的审单记录里
-     * 看不出"这一单是谁判的"。现把未采纳本身落成一条留痕：{@code action=SKIP} 与既有"未命中"行同族，
-     * 不污染 AUTO_PASS/AUTO_REJECT/MANUAL_REVIEW 三个统计口径，也不给 AUTO_PASS 链路喂 AI 结论。
+     * 看不出"这一单是谁判的"。现把未采纳本身落成一条记录：{@code action=SKIP} 与既有"未命中"行同族，
+     * 不污染 AUTO_PASS/AUTO_REJECT/MANUAL_REVIEW 三个统计方式，也不给 AUTO_PASS 链路喂 AI 结论。
      */
     private static final String AI_FALLBACK_RULE_CODE = "AI_REVIEW_FALLBACK";
     private static final String AI_FALLBACK_RULE_NAME = "AI 审单未采纳";
@@ -88,7 +91,7 @@ public class SmartReviewService {
         reviewRuleMapper.updateById(rule);
     }
 
-    /** 规则编码在本租户内的存活集唯一（与 PrecheckEngineService 同口径；本表走物理 DELETE，删除即让码位可用） */
+    /** 规则编码在本租户内的存活集唯一（与 PrecheckEngineService 同一规则；本表走物理 DELETE，删除即让码位可用） */
     private void assertRuleCodeFree(String code, Long selfId) {
         if (code == null || code.isBlank()) {
             return;
@@ -157,7 +160,7 @@ public class SmartReviewService {
      * @return 审单结果
      */
     public ReviewResult executeReview(Long billId, String billNo, Map<String, Object> billData) {
-        // D-DEC-018：本单是否走了"AI 未采纳→回退规则引擎（检查点）"——留痕要在结论里说一次
+        // D-DEC-018：本单是否走了"AI 未采纳→回退规则引擎（检查点）"——记录要在结论里说一次
         boolean aiNotAdopted = false;
         // P2-5: AI 审单前置（启用且配置有效时优先调用 AI；失败/未启用回退规则引擎）
         if (aiReviewService.isEnabled()) {
@@ -183,7 +186,7 @@ public class SmartReviewService {
                 aiLog.setRiskLevel(aiResult.getRiskLevel() != null ? aiResult.getRiskLevel() : "LOW");
                 aiLog.setRiskScore(aiResult.getRiskScore());
                 aiLog.setRemark(aiResult.getRemark() != null ? aiResult.getRemark() : "AI 审单");
-                // D-DEC-175：review_time 两支 insert 腿从未置值、create_by 非 TenantBase 字段 ⇒ 双双恒空，写点显式回写
+                // D-DEC-175：review_time 两支 insert 环节从未置值、create_by 非 TenantBase 字段 ⇒ 双双恒空，写点显式回写
                 aiLog.setReviewTime(LocalDateTime.now());
                 aiLog.setCreateBy(currentOperatorId());
                 aiLog.setCreateTime(LocalDateTime.now());
@@ -220,7 +223,7 @@ public class SmartReviewService {
                 // MANUAL_REVIEW → 继续走规则引擎
                 log.info("AI 审单建议人工审核，继续规则引擎: billNo={}", billNo);
             } else {
-                // D-DEC-018（乙）：AI 未采纳不再只是日志里一行 warn——本单落一条业务留痕，结论由规则引擎（检查点）给
+                // D-DEC-018（乙）：AI 未采纳不再只是日志里一行 warn——本单落一条业务记录，结论由规则引擎（检查点）给
                 aiNotAdopted = true;
                 recordAiFallback(billId, billNo);
             }
@@ -274,7 +277,7 @@ public class SmartReviewService {
             logEntry.setRiskLevel(matched ? rule.getRiskLevel() : "LOW");
             logEntry.setRiskScore(matched ? riskScore(rule.getRiskLevel()) : 0);
             logEntry.setRemark(matched ? "命中规则: " + rule.getRuleName() : "未命中");
-            // D-DEC-175：同 AI 腿——review_time/create_by 恒空根因，显式回写
+            // D-DEC-175：同 AI 环节——review_time/create_by 恒空根因，显式回写
             logEntry.setReviewTime(LocalDateTime.now());
             logEntry.setCreateBy(currentOperatorId());
             logEntry.setCreateTime(LocalDateTime.now());
@@ -335,7 +338,7 @@ public class SmartReviewService {
         return new ReviewResult(finalAction, finalRisk, finalScore, finalRemark, ruleResults);
     }
 
-    /** D-DEC-018：AI 未采纳的留痕行（op_review_log 既有列，零新列；action=SKIP 与"未命中"行同族） */
+    /** D-DEC-018：AI 未采纳的记录行（op_review_log 既有列，零新列；action=SKIP 与"未命中"行同族） */
     private void recordAiFallback(Long billId, String billNo) {
         try {
             ReviewLog fb = new ReviewLog();
@@ -354,12 +357,12 @@ public class SmartReviewService {
             fb.setCreateTime(LocalDateTime.now());
             reviewLogMapper.insert(fb);
         } catch (Exception ex) {
-            // 留痕失败不得改变本单判定（AI 未采纳不是异常，规则引擎照常跑）
+            // 记录失败不得改变本单判定（AI 未采纳不是异常，规则引擎照常跑）
             log.warn("AI 未采纳留痕写入失败 billNo={}: {}", billNo, ex.getMessage());
         }
     }
 
-    /** D-DEC-018：留痕行的返回视图（与 ReviewRuleResult 同构，前端审单明细直接可见） */
+    /** D-DEC-018：记录行的返回视图（与 ReviewRuleResult 同构，前端审单明细直接可见） */
     private ReviewRuleResult aiFallbackRuleResult() {
         return new ReviewRuleResult(null, AI_FALLBACK_RULE_CODE, AI_FALLBACK_RULE_NAME,
                 false, "SKIP", "LOW", AI_FALLBACK_REMARK);

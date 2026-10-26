@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -21,7 +24,7 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
     @Select("select * from sys_user where user_name = #{userName}")
     SysUser findByUserName(@Param("userName") String userName);
 
-    /** 用户数据权限：多角色取最宽（min），查不到返回 null（外层兜底 5） */
+    /** 用户数据权限：多角色取最宽（min），查不到返回 null（外层默认处理 5） */
     @Select("select min(r.data_scope) from sys_role r " +
             "join sys_user_role ur on r.id = ur.role_id " +
             "where ur.user_id = #{userId} and r.status = 'NORMAL'")
@@ -42,12 +45,12 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
     /**
      * 用户权限码集合（菜单+按钮 perms，去重；直接角色 ∪ 用户组派生角色）
      * <p>★D-DEC-468：追加 {@code m.del_flag = 0} —— 停用的功能节点不再参与鉴权。
-     * 口径＝权限项必须挂在启用的功能节点上，授权与节点生命周期一致；
+     * 规则＝权限项必须挂在启用的功能节点上，授权与节点生命周期一致；
      * 此前只有 status=1 条件，软删（del_flag=1）菜单仍持续供码，导致
-     * 「树上看不见→角色保存即被摘除、但登录仍生效」的双口径漂移（D-DEC-467 普查＝
+     * 「树上看不见→角色保存即被摘除、但登录仍生效」的双规则漂移（D-DEC-467 普查＝
      * 127 枚软删载体挂 736 条授权）。
-     * <p>上线前置闸＝必须先跑「活载体归位」数据腿（D-DEC-467），并用
-     * {@code 临时脚本/菜单治理/D-DEC-468_部署前闸.sql} 证明「有持有人却无活载体的码＝0 行」，
+     * <p>上线前置校验＝必须先跑「活载体归位」数据环节（D-DEC-467），并用
+     * {@code 临时脚本/菜单治理/D-DEC-468_部署前校验.sql} 证明「有持有人却无活载体的码＝0 行」，
      * 否则本条件会瞬时缩权。
      * <p>★A-01a：追加启用角色条件 —— 停用角色即便仍有授权行也不再供码。
      */

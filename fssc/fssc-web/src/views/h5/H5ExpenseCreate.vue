@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="h5-page h5-page--bar">
     <header class="h5-header">
@@ -16,7 +19,7 @@
 
     <template v-else>
       <!-- 原单载入失败：必须明示。改造前是"catch 后照常显示空表单"⇒ 用户以为在改打回的单，
-           实际新建了一张，原单还在打回状态（P0 数据丢失腿之一）。 -->
+           实际新建了一张，原单还在打回状态（P0 数据丢失环节之一）。 -->
       <section v-if="loadError" class="h5-body">
         <div class="h5-error">
           <div class="h5-error__d">{{ loadError }}</div>
@@ -31,6 +34,19 @@
           <div class="h5-denied__t">已恢复本机未提交的草稿</div>
           <div class="h5-denied__d">保存于 {{ timeText(restoredAt) }}。提交成功后会自动清掉；不想接着填可点下面丢弃。</div>
           <button class="h5-btn h5-btn--sub h5-mt-8" @click="discardDraft">丢弃本机草稿</button>
+        </div>
+
+        <!-- D-H5M-07：上一轮被驳回的原因必须让人看见。
+             原实现只把单子转回可编辑态就继续，用户看不到为什么被打回，
+             改完再提交还是原样 ⇒ 同一个问题被打回两次。 -->
+        <div v-if="rejectRemark" class="h5-denied">
+          <div class="h5-denied__t">上一轮被驳回，请按意见改后再提交</div>
+          <div class="h5-denied__d">{{ rejectRemark.comment || '（审批人未填写驳回意见）' }}</div>
+          <div class="h5-card__meta">
+            驳回环节：{{ rejectRemark.nodeName || '未记录' }}
+            <template v-if="rejectRemark.handler"> · 处理人 {{ rejectRemark.handler }}</template>
+            <template v-if="rejectRemark.time"> · {{ rejectRemark.time }}</template>
+          </div>
         </div>
 
         <!-- 单据归属：只读展示，避免"我在哪个公司/部门"靠猜（跨法人会被 OrgGuard 拦下） -->
@@ -145,12 +161,17 @@
                 <span class="h5-flag" :class="lineBudgetCls(l)">{{ lineBudgetText(l) }}</span>
               </div>
             </div>
+            <!-- D-H5M-06：年度内没有这条预算行时要说出来。
+                 原来界面什么都不显示，用户以为"这单不用占预算"，实际是查不到行。 -->
+            <div v-else-if="l.itemId != null" class="h5-card__meta">
+              {{ form.bill.periodYear }} 年度未下达该费用项的预算行，本单不会占用预算。
+            </div>
           </div>
 
           <button class="h5-btn h5-btn--ghost h5-mt-8" @click="addLine">+ 添加明细</button>
         </div>
 
-        <!-- ============ 预算占用汇总 + 闸门状态（判据与 PC useBill.js:605-629 同源） ============ -->
+        <!-- ============ 预算占用汇总 + 校验状态（判据与 PC useBill.js:605-629 同源） ============ -->
         <div v-if="budgetRows.length" class="h5-card">
           <div class="h5-section-title h5-flush">预算占用</div>
           <div v-for="r in budgetRows" :key="r.bid" class="h5-row-sub h5-row-sub--block">
@@ -173,7 +194,7 @@
             <button class="h5-btn h5-btn--sub h5-mt-8" @click="askOverrunReason">填写超支理由</button>
           </template>
           <div v-else-if="budgetWarnRows.length" class="h5-tip h5-tip--left">
-            {{ budgetWarnRows.length }} 项预警超支：本次放行，占用流水会留痕。
+            {{ budgetWarnRows.length }} 项预警超支：本次放行，占用流水会记录。
           </div>
         </div>
 
@@ -213,8 +234,8 @@
             <div class="h5-denied">
               <div class="h5-denied__t">票夹列表对当前账号不开放</div>
               <div class="h5-denied__d">
-            缺权码：{{ invDenied.permKey || 'inv:list' }}。这不代表你没有发票——上面拍的票据仍会作为附件随单提交，
-            发票台账由发票管理岗在电脑端协同。
+            这不代表你没有发票——上面拍的票据仍会作为附件随单提交、审批侧照常可看；
+            发票台账与勾稽由发票管理岗在电脑端「发票管理」维护。
           </div>
             </div>
           </template>
@@ -237,7 +258,7 @@
         </div>
 
         <!-- ============ 收款信息（后端 assertPayeeAccount：CLAIM 金额>0 时收款对象＋收款账号硬必填） ============
-             改造前 H5 表单根本没有这一段 ⇒ 附件腿修好后，提交仍会被 PARAM_INVALID 打回，
+             改造前 H5 表单根本没有这一段 ⇒ 附件环节修好后，提交仍会被 PARAM_INVALID 打回，
              表现为「移动端提单一直失败」。这里补齐，判据与 ExpenseBillService.assertPayeeAccount 一致。 -->
         <div class="h5-card">
           <div class="h5-section-title h5-flush">收款信息</div>
@@ -336,7 +357,7 @@
 /**
  * 移动报销端 · 提单页（P0 止血 + P1-4/P1-7/P1-10 落点）
  *
- * 本窗改造前实测到的四条会丢数据的腿，逐条对应下面的注释：
+ * 本窗改造前实测到的四条会丢数据的环节，逐条对应下面的注释：
  *  P0-2 `attaches: attaches.map(a => a.id)` —— 后端 BillReq.attaches 是 List<ExpBillAttach>，
  *       数字数组反序列化必炸（保存草稿即 500）。现按 PC 同形状传 {fileId,fileName,attachType}。
  *  P0-3 companyId/deptId 硬编码 1/1 —— 跨法人账号（如 co33）被 OrgGuard.assertCompanyAllowed 拒，
@@ -353,20 +374,21 @@
 import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { billApi, mdApi, masterCfgApi, orgApi, invoiceApi, fileApi, wfApi, store, isRequestCancelled } from '../../api'
+import { billApi, mdApi, masterCfgApi, orgApi, invoiceApi, fileApi, wfApi, flowApi, store, isRequestCancelled } from '../../api'
 import { requiredOf, missingBillField } from '../../constants/billRequired.js'
 import { invoiceOutcome, abortedOutcome } from '@/utils/invoiceOutcome'
-import { pickBudgetLine } from '../../utils/budget.js'
+import { pickBudgetLine, resolveLineBudgetId } from '../../utils/budget.js'
 import { splitTaxInclusive } from '../../utils/tax.js'
-import { budgetLabel, budgetUnseenLabel } from '../../utils/format'
+import { budgetLabel, budgetUnseenLabel, formatDateTime } from '../../utils/format'
 import { money, dayText, permDeniedOf, saveLocalDraft, loadLocalDraft, clearLocalDraft, pushRecentItems, recentItemIds, compressImage } from '@/utils/h5.js'
-// 收款方式改为读 sys_dict 的 pay_method（2026-10-18 基础数据收口）。
+import { hasPerm } from '../../utils/perm'
+// 收款方式改为读 sys_dict 的 pay_method（2026-10-18 基础数据办结）。
 //  本页全站唯一未接 i18n 的页面（文案直接写中文），故 label 直接用字典 label，不做 i18n 合成。
-//    字典不可用时 useDict 自动回落到本地兜底常量，界面与改造前一致。
+//    字典不可用时 useDict 自动回落到本地默认处理常量，界面与改造前一致。
 import { useDict } from '@/composables/useDict.js'
 import { PAY_METHOD_LOCAL, PAYEE_TYPE_LOCAL } from '@/composables/useBaseDict'
 
-// 收款方式下拉的选项来源（本地兜底常量，字典到位后被字典覆盖）
+// 收款方式下拉的选项来源（本地默认处理常量，字典到位后被字典覆盖）
 const payMethodDict = useDict('pay_method', PAY_METHOD_LOCAL)
 const payMethodOptions = payMethodDict.options
 
@@ -394,7 +416,7 @@ const isEdit = computed(() => !!editId.value)
 const userId = computed(() => store.user?.userId ?? store.user?.id ?? null)
 const myName = computed(() => store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || '我')
 
-// D-DEC-361（补漏腿·H5 制单页）：预填日期不取 toISOString().slice(0,10)＝UTC 串——
+// D-DEC-361（补漏环节·H5 制单页）：预填日期不取 toISOString().slice(0,10)＝UTC 串——
 // 东八区恒差 −8h、0~8 点会把 apply_date/expense_date 预填成"昨天"。本地钟口，与 PC today() 同判据。
 function todayLocal() {
   const d = new Date()
@@ -437,14 +459,14 @@ const form = reactive({ bill: newBill(), lines: [newLine()] })
 /**
  * P2-6 埋点：本次移动端填报会话的起始钟点。
  *
- * 口径写清楚，别把它当"提单耗时"的全生命周期指标：
+ * 规则写清楚，别把它当"提单耗时"的全生命周期指标：
  *  - 起点＝本页本次打开（新建走 onMounted boot、切回本页走 onActivated 复位），终点＝**这一次**组装载荷的时刻；
  *  - 中途离开页面再回来 ⇒ 计时重置，所以 `h5StayMs` 是"最后一段连续填报会话"的毫秒数，不是累计；
  *  - 存进 `exp_bill.ext_json` 的 `h5StayMs` 一个键，不新建表、不加接口、不动 PC 逻辑。
  * 两处已知失真，如实记下不掩饰：
- *  ① PC 端保存会按它自己的表单模型重写 ext_json ⇒ 该键可能被洗掉，本字段口径＝"最后一次保存方"；
+ *  ① PC 端保存会按它自己的表单模型重写 ext_json ⇒ 该键可能被洗掉，本字段含义＝"最后一次保存方"；
  *  ② 页面停在后台（切走 App）也照常计时，手机上的"停留"不等于"在填"。
- * 方案册 P2-6 里"平均提单时长"用的就是这条腿，取值时须按 ext_json.h5StayMs 的 NULL/非 NULL 分档，
+ * 方案册 P2-6 里"平均提单时长"用的就是这条环节，取值时须按 ext_json.h5StayMs 的 NULL/非 NULL 分档，
  * 不能拿全表平均值当移动端指标（PC 单没有这个键）。
  */
 let sessionOpenedAt = Date.now()
@@ -452,6 +474,8 @@ function resetSessionClock() { sessionOpenedAt = Date.now() }
 
 const items = ref([])
 const budgetPool = ref([])
+/** 当前预算池对应的费用年度（D-H5M-06：池按年度取，年度变了要重取） */
+const budgetPoolYear = ref(null)
 const itemBudgetMap = ref({})
 const companies = ref([])
 const depts = ref([])
@@ -479,6 +503,8 @@ function cancelUploadWait() {
 }
 const showInvPicker = ref(false)
 const restoredAt = ref(0)
+/* D-H5M-07：上一轮驳回意见 { comment, nodeName, handler, time } */
+const rejectRemark = ref(null)
 const errs = reactive({})
 const fileRef = ref(null)
 
@@ -531,7 +557,7 @@ async function removeLine(i) {
   form.lines.splice(i, 1)
 }
 function recalcLine(l) {
-  // 与 PC 同一价内税口径（utils/tax.js），避免"移动端税额＝金额×税率"的另一种算法
+  // 与 PC 同一价内税规则（utils/tax.js），避免"移动端税额＝金额×税率"的另一种算法
   const r = splitTaxInclusive(l.amount, l.taxRate)
   l.taxAmount = r.taxAmount
   l.netAmount = r.netAmount
@@ -539,7 +565,11 @@ function recalcLine(l) {
 function onItemChange(l) {
   const it = items.value.find((x) => String(x.id) === String(l.itemId))
   l.itemName = it?.itemName || ''
-  if (l.budgetItemId == null) l.budgetItemId = pickBudgetFor(l.itemId)
+  // D-H5M-05：费用项一换，预算行必须跟着换。
+  // 原实现只在 budgetItemId 为空时取一次 ⇒ 换了费用项仍挂着上一个费用项的预算行，
+  // 占用因此记到别的科目（实测：行政办公费 333 的单占用到劳动保护费行 1001）。
+  // 移动端没有人工选预算科目这一步（预算区只读展示），所以这里无条件重取，取不到即置空。
+  l.budgetItemId = pickBudgetFor(l.itemId)
   delete errs[`line${form.lines.indexOf(l)}-itemId`]
 }
 function useRecent(c) {
@@ -563,8 +593,57 @@ function pickBudgetFor(itemId) {
   return pickBudgetLine({
     pool: budgetPool.value, itemId, map: itemBudgetMap.value,
     companyId: form.bill.companyId, deptId: form.bill.deptId,
+    // D-H5M-06：年度硬条件——预算行年度必须与单据费用年度一致
+    budgetYear: form.bill.periodYear,
   })
 }
+/**
+ * 按单据费用年度重取预算行（D-H5M-06）。
+ * /budget/item/pick 支持 budgetYear；不按年取时前 200 行被最早年度占满
+ * （bg_item 排序＝budget_year/budget_period/dim_key 升序），2026 年的单会命中 2025 年行。
+ * 同一年度不重复取（载入旧单与年度变更都会走到这里）。
+ *
+ * seq 守卫：年度 watcher 与原单载入会并发触发两次取数，年份来回改时后发的响应可能先到，
+ * 不守卫就会出现"池是 A 年、字段是 B 年"。晚到的旧结果直接丢弃。
+ */
+let budgetPoolSeq = 0
+async function loadBudgetPool(year) {
+  const y = year ?? null
+  if (String(budgetPoolYear.value) === String(y)) return
+  const seq = ++budgetPoolSeq
+  try {
+    const bg = await mdApi.budgets({ pageNum: 1, pageSize: 200, budgetYear: y ?? undefined })
+    if (seq !== budgetPoolSeq) return
+    budgetPool.value = (bg && bg.list) || []
+    budgetPoolYear.value = y
+  } catch {
+    // 取不到预算行＝额度未知，不阻断填写（提交时服务端按同一年度规则自行定位）
+    if (seq !== budgetPoolSeq) return
+    budgetPool.value = []
+  }
+}
+/**
+ * 明细行的预算行重解析（D-H5M-05/D-H5M-06）。
+ * 载入旧单与年度变更后都要走这里：旧行带的是上一轮/上一年度的预算行，
+ * 留着就会把占用记到错的科目上（实测 1001＝2025 年劳动保护费）。
+ */
+function resolveLineBudgets() {
+  form.lines.forEach((l) => {
+    l.budgetItemId = resolveLineBudgetId(l, {
+      pool: budgetPool.value, map: itemBudgetMap.value,
+      companyId: form.bill.companyId, deptId: form.bill.deptId,
+      budgetYear: form.bill.periodYear,
+    })
+  })
+}
+/**
+ * 费用年度一变，预算池与每行的预算行都要跟着变（D-H5M-06）。
+ * 原来年度只影响提交时的字段，不影响预算行的选取 ⇒ 改完年度单子还占着上一年度的额度。
+ */
+watch(() => form.bill.periodYear, async (y) => {
+  await loadBudgetPool(y)
+  resolveLineBudgets()
+})
 const budgetAgg = computed(() => {
   const sum = {}
   form.lines.forEach((l) => {
@@ -627,8 +706,14 @@ const invError = ref('')
 async function loadInvoicePool() {
   invDenied.value = null
   invError.value = ''
+  // silent 只能挡住全局 toast，挡不住每次开页的无效往返与控制台 4030 噪声。
+  if (!hasPerm('inv:list')) {
+    invDenied.value = { msg: '', permKey: 'inv:list' }
+    invPool.value = []
+    return
+  }
   try {
-    // silent：员工岗通常没有 inv:list（实测 3867 只持申请类角色），刷新票夹被闸时
+    // silent：员工岗通常没有 inv:list（实测 3867 只持申请类角色），刷新票夹被校验时
     // 只走下面的 invDenied 降级面板；全局拦截器再弹一次 toast 会把"识别成功"盖成权限报错。
     const d = await invoiceApi.page({ pageNum: 1, pageSize: 50 }, { silent: true })
     invPool.value = (d && d.list) || []
@@ -646,7 +731,7 @@ function toggleInvoice(id) {
 }
 
 /* ---------------- 附件上传（走发票识别通道：/expense/attach/upload） ----------------
-     10-05 D-DEC-474：本腿与电脑端是同一个接口、同一优先级次序——OFD/PDF/XML 先本地版式解析（不发识别请求），
+     10-05 D-DEC-474：本环节与电脑端是同一个接口、同一优先级次序——OFD/PDF/XML 先本地版式解析（不发识别请求），
      只有扫描版 PDF（无文本层）才由后端渲染首页 PNG 转图像识别通道。
      10-04 实测：paddle 通道（本机 :8087）已在跑，图片票识别往返 23.1s／26.9s（暖机后），
      冷启动首支 57.8s ⇒ 仍在本请求 120s 覆写超时内（api.js attachUpload）。
@@ -701,7 +786,7 @@ async function onPickFile(e) {
   loadInvoicePool()
 }
 
-/* ---------------- 校验与闸门 ---------------- */
+/* ---------------- 校验与校验 ---------------- */
 function validateForm() {
   clearErrs()
   // 表头必输：直接吃 PC 的登记表（同一份数据 ⇒ 两端不会再各说各话）
@@ -731,7 +816,7 @@ function validateForm() {
   // 只提交已选费用项的行（PC 同判据：item_id NOT NULL，带着空行提交会整单 500）
   return true
 }
-/** 预算闸（语义逐条对齐 useBill.js:605-629）：HARD 拦死；SOFT 必须留理由；WARN 只提醒 */
+/** 预算校验（语义逐条对齐 useBill.js:605-629）：HARD 拦死；SOFT 必须留理由；WARN 只提醒 */
 async function gateBudget() {
   const overs = budgetWarnRows.value
   if (!overs.length) return true
@@ -742,7 +827,7 @@ async function gateBudget() {
   if (budgetSoft.value.length) await askOverrunReason()
   const warn = overs.filter((x) => x.control === 'WARN')
   if (warn.length && !budgetSoft.value.length) {
-    ElMessage.warning(`有 ${warn.length} 项预算超出可用额度（预警方案），本次放行、占用流水留痕`)
+    ElMessage.warning(`有 ${warn.length} 项预算超出可用额度（预警方案），本次放行、占用流水记录`)
   }
   return !!form.bill.extJson.overrunReason || !budgetSoft.value.length
 }
@@ -750,14 +835,14 @@ async function askOverrunReason() {
   if (String(form.bill.extJson.overrunReason || '').trim()) return true
   try {
     const r = await ElMessageBox.prompt(
-      `${budgetSoft.value.length} 项预算超出可用额度，当前为软控方案：请填写超支理由（随单据留痕，服务端同口径校验）`,
+      `${budgetSoft.value.length} 项预算超出可用额度，当前为软控方案：请填写超支理由（随单据记录，服务端按同一规则校验）`,
       '软控超支·需填写理由',
       { type: 'warning', inputValidator: (v) => (v && v.trim() ? true : '超支理由不能为空') })
     form.bill.extJson = { ...form.bill.extJson, overrunReason: String(r.value || '').trim() }
     return true
   } catch { return false } // 取消＝不写理由
 }
-/** D-B4-01：「必附发票」判据前移到写库之前（服务端 PrecheckService 同口径，不宽于后端） */
+/** D-B4-01：「必附发票」判据前移到写库之前（服务端 PrecheckService 同一规则，不宽于后端） */
 function gateInvoiceAttach() {
   if (hasInvoiceAttach.value) return true
   const need = form.lines.filter((l) => l.itemId != null).some((l) => {
@@ -771,22 +856,22 @@ function gateInvoiceAttach() {
   return true
 }
 
-/* ---------------- 落库 ---------------- */
+/* ---------------- 写入数据库 ---------------- */
 function buildPayload() {
-  // P2-6 埋点：随载荷带出"本次移动端会话停留毫秒数"（口径与两处已知失真见 sessionOpenedAt 注释）。
+  // P2-6 埋点：随载荷带出"本次移动端会话停留毫秒数"（规则与两处已知失真见 sessionOpenedAt 注释）。
   // 只写进这次提交的 ext 副本，不回写 form.bill.extJson——否则页面上每次重新组包都会把停留数滚大。
   const ext = { ...form.bill.extJson, h5StayMs: Math.max(0, Date.now() - sessionOpenedAt) }
   return {
     bill: {
       ...form.bill,
-      // P2-1 渠道留痕：新建腿显式标 H5（后端 ExpenseBillService#normalizeBillSource 白名单只认 PC/H5，
+      // P2-1 渠道记录：新建环节显式标 H5（后端 ExpenseBillService#normalizeBillSource 白名单只认 PC/H5，
       // 不传则由后端补 PC／由列默认值得到同一个结果）。
-      // 编辑与打回重交腿原样回传库里既有值——source 记的是"这单从哪个渠道发起"，
+      // 编辑与打回重交环节原样回传库里既有值——source 记的是"这单从哪个渠道发起"，
       // PC 上建的单在手机改完重交仍算 PC 单；取不到既有值时整个键省略（JSON.stringify 丢 undefined），
-      // 后端编辑腿走 keepBlank 分支保留原值，不会被静默洗成 PC。
+      // 后端编辑环节走 keepBlank 分支保留原值，不会被静默洗成 PC。
       source: form.bill.id ? (form.bill.source || undefined) : 'H5',
       totalAmount: totalAmount.value,
-      // D-DEC-368（同 PC 前端载荷腿）：户名镜像进 payee_name，出纳与付款批次取的是这一列
+      // D-DEC-368（同 PC 前端载荷环节）：户名镜像进 payee_name，出纳与付款批次取的是这一列
       payeeName: form.bill.payeeName || ext.accountName || '',
       extJson: JSON.stringify(ext),
     },
@@ -932,14 +1017,48 @@ watch([() => form.bill, () => form.lines, attaches, invoiceIds], () => {
 }, { deep: true })
 
 /* ---------------- 原单载入（P1-10：打回重交留在移动端） ---------------- */
+/**
+ * 取上一轮的驳回意见（D-H5M-07）。
+ *
+ * 时机是硬约束：editForResubmit 会把单子转回 DRAFT 并把 proc_inst_id 置 NULL
+ * （ExpenseBillService.returnToEdit），之后审批链就查不到了 ⇒ 必须在转态之前取。
+ * 权威来源＝审批链上的 REJECT 节点（/wf/query/chain 无 wf:history:list 权限要求，
+ * 提单人可读）；链读不到时退回单据上的 audit_remark（ExpenseWfEventListener 写驳回意见时落的字段）。
+ */
+async function fetchRejectInfo(bill) {
+  const pid = bill?.procInstId
+  if (pid) {
+    try {
+      const chain = await flowApi.chain(pid, { silent: true })
+      const rows = Array.isArray(chain) ? chain : ((chain && chain.list) || [])
+      const rej = [...rows].reverse().find((n) => n && (n.action === 'REJECT' || n.state === 'REJECTED'))
+      if (rej) {
+        return {
+          comment: rej.comment || bill.auditRemark || '',
+          nodeName: rej.nodeName || '',
+          handler: rej.handler || '',
+          time: rej.time ? formatDateTime(rej.time) : '',
+        }
+      }
+    } catch { /* 链读不到不算失败，退回 audit_remark */ }
+  }
+  if (bill?.auditRemark) return { comment: bill.auditRemark, nodeName: '', handler: '', time: '' }
+  return null
+}
 async function loadOriginal(id) {
   let d
   try {
     d = await billApi.detail(id)
     if ((d.bill || {}).status === 'REJECTED') {
+      // 驳回意见必须在转态之前取（转态会把 proc_inst_id 置空）
+      rejectRemark.value = await fetchRejectInfo(d.bill || {})
       // 与 PC 同一支：打回单要先转回可编辑态再回读（editForResubmit 是后端状态机硬要求）
       await billApi.editForResubmit(id)
       d = await billApi.detail(id)
+    } else if ((d.bill || {}).status === 'DRAFT' && (d.bill || {}).auditRemark) {
+      // 第二次进入：上一进已把单子转成 DRAFT 并清掉 proc_inst_id，审批链查不到了，
+      // 但驳回意见还落在 audit_remark 上（提交成功会清空它），照样要显示出来。
+      rejectRemark.value = await fetchRejectInfo(d.bill || {})
     }
   } catch (e) {
     loadError.value = `原单载入失败：${e.message || '网络异常'}。请确认这张单还归你、且是费用报销单。`
@@ -964,7 +1083,10 @@ async function loadOriginal(id) {
     }))
   }
   attaches.value = Array.isArray(d.attaches) ? d.attaches.map((a) => ({ ...a, id: null })) : []
-  form.lines.forEach((l) => { if (l.itemId != null && l.budgetItemId == null) l.budgetItemId = pickBudgetFor(l.itemId) })
+  // 预算行按原单的年度重解析（D-H5M-05/D-H5M-06）：
+  // 原单带的是上一轮/上一年度的预算行，直接留着会把占用记到别的科目上（实测 1001＝2025 年劳动保护费）。
+  await loadBudgetPool(form.bill.periodYear)
+  resolveLineBudgets()
   // 本单已勾稽发票回读（补充信息：无 inv:bind/读权限时静默失败，不该挡住"改这张单"本身）
   boundRows.value = []
   invoiceIds.value = []
@@ -999,9 +1121,8 @@ onBeforeRouteLeave(async () => {
 
 /* ---------------- 基础数据 ---------------- */
 async function loadMd() {
-  const [it, bg, map, comp, dept] = await Promise.all([
+  const [it, map, comp, dept] = await Promise.all([
     mdApi.expenseItems().catch(() => null),
-    mdApi.budgets({ pageNum: 1, pageSize: 200 }).catch(() => null),
     masterCfgApi.itemBudgetMap.options().catch(() => null),
     orgApi.companyTree().catch(() => null),
     orgApi.deptTree().catch(() => null),
@@ -1009,7 +1130,6 @@ async function loadMd() {
   // /expense-item/tree 实测返回**平铺**清单（ExpenseItemService.tree() 只做排序，不组装 children），
   // 所以旧页面那段"展平 children"是死代码，这里直接按 itemName 过滤空名。
   items.value = (it || []).filter((x) => x && x.itemName && String(x.itemName).trim())
-  budgetPool.value = (bg && bg.list) || []
   const m = {}
   ;(map || []).forEach((x) => { if (x && x.itemId != null && x.budgetItemId != null) m[String(x.itemId)] = x.budgetItemId })
   itemBudgetMap.value = m
@@ -1017,6 +1137,8 @@ async function loadMd() {
   companies.value = cf
   const df = []; (function walk(arr) { (arr || []).forEach((n) => { if (n) { df.push({ id: n.id, name: n.deptName || n.name || '' }); if (n.children?.length) walk(n.children) } }) })(dept)
   depts.value = df
+  // 预算行按单据费用年度取（D-H5M-06）
+  await loadBudgetPool(form.bill?.periodYear)
 }
 
 const recentChips = computed(() => recentItemIds(userId.value, 5)
@@ -1026,7 +1148,7 @@ const recentChips = computed(() => recentItemIds(userId.value, 5)
 async function boot() {
   payMethodDict.load()
   payeeTypeDict.load()
-  resetSessionClock() // P2-6 埋点起点：本页本次打开（口径见 sessionOpenedAt 注释）
+  resetSessionClock() // P2-6 埋点起点：本页本次打开（规则见 sessionOpenedAt 注释）
   bootLoading.value = true
   loadError.value = ''
   try {

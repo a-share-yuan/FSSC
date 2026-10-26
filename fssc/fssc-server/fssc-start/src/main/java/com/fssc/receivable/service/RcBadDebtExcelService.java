@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.receivable.service;
 
 import com.fssc.common.core.ErrorCode;
@@ -39,7 +42,7 @@ public class RcBadDebtExcelService {
 
     private final com.fssc.receivable.mapper.RcBadDebtMapper badDebtMapper;
     private final com.fssc.receivable.mapper.RcReceivableMapper receivableMapper;
-    /** R5-D-097：Excel 通道公司维度守卫（模板导入与列表/回显同口径，不绕过数据范围） */
+    /** R5-D-097：Excel 通道公司维度守卫（模板导入与列表/回显同一规则，不绕过数据范围） */
     private final com.fssc.framework.org.OrgGuard orgGuard;
 
     public ParseResult parse(MultipartFile file) {
@@ -102,7 +105,7 @@ public class RcBadDebtExcelService {
         }
     }
 
-    /** 逐行执行核销（EKP 仅推申请人，明细由模板导入——蓝图流程22）。返回 {writtenOff, errors}。 */
+    /** 逐行执行核销（OA 仅推申请人，明细由模板导入——蓝图流程22）。返回 {writtenOff, errors}。 */
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Map<String, Object> importAndWriteOff(MultipartFile file, RcBadDebtService writeOffService) {
         ParseResult parsed = parse(file);
@@ -120,8 +123,8 @@ public class RcBadDebtExcelService {
                 if (rec == null) {
                     throw new BizException(ErrorCode.PARAM_INVALID, "发票号/应收单号 " + invoiceNo + " 未找到应收单");
                 }
-                // R5-D-097：Excel 通道同步收口——模板行指向他公司应收时按可见性守卫行级拒绝，
-                // 坏账列表/导入/回显口径一致（集团账号与 data_scope=1 仍按 OrgGuard 既有豁免）
+                // R5-D-097：Excel 通道同步办结——模板行指向他公司应收时按可见性守卫行级拒绝，
+                // 坏账列表/导入/回显规则一致（集团账号与 data_scope=1 仍按 OrgGuard 既有豁免）
                 orgGuard.assertVisible(rec.getCompanyId(), null);
                 com.fssc.receivable.entity.RcBadDebt debt = badDebtMapper.selectOne(
                         new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.receivable.entity.RcBadDebt>()

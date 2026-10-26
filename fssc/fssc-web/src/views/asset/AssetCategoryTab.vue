@@ -1,8 +1,11 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <div style="display: flex; gap: 8px; margin-bottom: 10px">
       <el-button type="success" @click="openCategory()">新增类别</el-button>
-      <el-button @click="doExport">导出 CSV</el-button>
+      <el-button @click="doExport">导出</el-button>
       <el-button v-if="selRows.length" type="success" plain @click="exportSel">导出选中({{ selRows.length }})</el-button>
     </div>
     <SkeletonList v-if="loading" :rows="8" :cols="5" />

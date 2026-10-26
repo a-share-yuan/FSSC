@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.treasury.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -36,7 +39,7 @@ public class TrFundPlanService {
 
     /** 同一笔提交的防重窗口：超时重发的第二笔（F1 场景，两次请求相隔约 20s）落在窗口内被拒 */
     private static final java.time.Duration SUBMIT_DEDUP_WINDOW = java.time.Duration.ofSeconds(60);
-    /** 在途互斥锁的兜底存活时间：远大于单次编制耗时，防止异常退出后锁泄漏 */
+    /** 在途互斥锁的默认处理存活时间：远大于单次编制耗时，防止异常退出后锁泄漏 */
     private static final java.time.Duration SUBMIT_LOCK_TTL = java.time.Duration.ofMinutes(5);
 
     /** 编制资金计划（草稿） */
@@ -61,7 +64,7 @@ public class TrFundPlanService {
         if (plan.getPlanNo() == null || plan.getPlanNo().isBlank()) {
             plan.setPlanNo(nextPlanNo());
         }
-        // F1 后端幂等闸（与前端重试白名单/防连点互补）：一次点击因请求超时被重发的第二笔，
+        // F1 后端去重校验（与前端重试白名单/防连点互补）：一次点击因请求超时被重发的第二笔，
         // 会在同一签名上撞锁或被防重窗口拦下。签名取「租户+公司+期间+编制人+收付金额」＝
         // 同一次点击的两笔必然同值，而同一期间的不同方案（选中流程要求可以多案）不受影响。
         String submitKey = submitSignature(plan, userId());
@@ -92,7 +95,7 @@ public class TrFundPlanService {
     }
 
     /**
-     * 编制提交的幂等签名（key 自带命名空间，约定见 DistributedState）。
+     * 编制提交的去重签名（key 自带命名空间，约定见 DistributedState）。
      * 末段取 MD5：本地实现的锁走 MySQL GET_LOCK，锁名上限 64 字符（实测超长直接报 4163），
      * 明文拼接「租户+公司+期间+编制人+两个金额」会越过该上限并把接口打成 500。
      */
@@ -123,7 +126,7 @@ public class TrFundPlanService {
     /**
      * 批次1：驳回计划编辑重提 REJECTED → DRAFT 并重新发起 TR_PLAN 审批流（起【新】实例）。
      * 此前 TreasuryPlanBizAction 驳回置 REJECTED 后无任何出口，且 selectPlan/adjust 只挡
-     * COMPLETED，被驳回计划可被"选中/调整"侧门带病推进——两头一并收口。
+     * COMPLETED，被驳回计划可被"选中/调整"侧门带病推进——两头一并办结。
      */
     @Transactional(rollbackFor = Exception.class)
     public void resubmit(Long planId) {
@@ -163,14 +166,14 @@ public class TrFundPlanService {
      *   <li>删表<b>不联动</b>终止流程实例 ⇒ {@code wf_instance} 仍 RUNNING、
      *       {@code act_ru_task} 留一个<b>无 assignee</b> 的僵尸待办（实测 FP202610200001）；
      *       手工清理引擎表还会撞外键（{@code act_ru_identitylink.TASK_ID_}→{@code act_ru_task.ID_}，报 1451）。</li>
-     *   <li>物理删除不留痕，事后无法追溯「这张单为什么没了」。</li>
+     *   <li>物理删除不记录，事后无法追溯「这张单为什么没了」。</li>
      * </ol>
      *
-     * <p><b>本方法的口径</b>：单据置 {@code VOIDED}（留痕，不删行）＋
+     * <p><b>本方法的规则</b>：单据置 {@code VOIDED}（记录，不删行）＋
      * <b>联动终止</b>该单名下所有 RUNNING 流程实例。
      * 流程终止<b>不自己实现</b>，直接复用已验证可用的
      * {@link WfEngineFacade#cancelRunningInstancesByBiz}（D-DEC-068 确立的标准收尾入口：
-     * 引擎实例删除＋wf_instance 置 CANCELLED＋wf_task 的 PENDING 置 CANCELLED＋双留痕）。
+     * 引擎实例删除＋wf_instance 置 CANCELLED＋wf_task 的 PENDING 置 CANCELLED＋双记录）。
      *
      * <p><b>可作废的状态</b>：DRAFT / SELECTED / REJECTED（尚未进入实质执行）。
      * 已 COMPLETED/PAID/CLOSED/ARCHIVED 的单据有后续凭证与账务影响，不允许作废。
@@ -184,7 +187,7 @@ public class TrFundPlanService {
                     "仅草稿/已选中/已驳回的资金计划可作废，当前状态: " + status);
         }
         // 流程收尾：作废必须同时终止在办流程，否则待办镜像滞留 PENDING、催办扫描持续空转
-        // （D-DEC-068 口径）。该方法幂等：无 RUNNING 实例返回 0，不抛错。
+        // （D-DEC-068 规则）。该方法去重：无 RUNNING 实例返回 0，不抛错。
         int cancelled = wfEngineFacade.cancelRunningInstancesByBiz("TR_PLAN", planId,
                 "资金计划作废（操作人 id=" + userId() + "）：" + (reason == null || reason.isBlank() ? "未填原因" : reason));
         TrFundPlan upd = new TrFundPlan();
@@ -330,7 +333,7 @@ public class TrFundPlanService {
         log.info("资金计划 {} 状态 PAID→CLOSED", planId);
     }
 
-    /** P0-5：资金计划 CLOSED→ARCHIVED（归档，终态） */
+    /** P0-5：资金计划 CLOSED→ARCHIVED（归档，最终状态） */
     @Transactional
     public void archivePlan(Long planId) {
         TrFundPlan plan = requireExist(planId);

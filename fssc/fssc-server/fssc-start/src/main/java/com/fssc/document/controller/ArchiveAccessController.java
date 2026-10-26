@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.document.controller;
 
 import com.fssc.common.core.PageResult;
@@ -80,7 +83,7 @@ public class ArchiveAccessController {
 
     /**
      * P0-2：调阅申请分页（原 /pending 保留兼容）。
-     * D-DEC-257：加 status 入参（ALL=全部留痕，PENDING/APPROVED/REJECTED=按状态）；
+     * D-DEC-257：加 status 入参（ALL=全部记录，PENDING/APPROVED/REJECTED=按状态）；
      * 默认值仍是 PENDING ⇒ 未显式传参的老调用方行为不变。
      */
     @RequiresPerm("compliance:archiveaccess:list")

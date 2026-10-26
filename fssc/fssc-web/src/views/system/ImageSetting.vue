@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-card>
     <template #header>
@@ -75,7 +78,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R5-D-251：镜像设置项读写权限收口——此前页面无任何前端权限闸：
+// R5-D-251：镜像设置项读写权限办结——此前页面无任何前端权限校验：
 // 无 image:setting:list 的账号进来即连环弹 4030；无 update 的账号看得见新增/编辑/删除且点了必失败。
 const canSettingList = hasPerm('image:setting:list')
 const canSettingUpdate = hasPerm('image:setting:update')

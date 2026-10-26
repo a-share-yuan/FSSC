@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -24,7 +27,7 @@ import java.util.List;
  * 管理进项发票认证全生命周期：
  * 待认证(PENDING) → 已认证(CERTIFIED) → 已抵扣(DEDUCTED) → [可转出(TRANSFERRED)]
  * <p>
- * 参考行业做法税务云进项认证模块。
+ * 税务云进项认证模块。
  */
 @Slf4j
 @Service
@@ -44,7 +47,7 @@ public class TaxCertifyService {
         if (record.getRiskFlag() == null) {
             record.setRiskFlag(0);
         }
-        // WS-6 税域收口：非本租户全部档时，强制公司归属为登录人公司（未带则回填，已带则校验）
+        // WS-6 税域办结：非本租户全部档时，强制公司归属为登录人公司（未带则回填，已带则校验）
         Long scopedCompany = DataScopeKit.scopedCompanyId();
         if (scopedCompany != null) {
             if (record.getCompanyId() == null) {
@@ -152,7 +155,7 @@ public class TaxCertifyService {
         LambdaQueryWrapper<TaxInputCertify> qw = new LambdaQueryWrapper<TaxInputCertify>()
                 .eq(TaxInputCertify::getCertifyStatus, "CERTIFIED")
                 .eq(TaxInputCertify::getCertifyPeriod, period);
-        // WS-6 税域收口：按数据范围收窄公司维度
+        // WS-6 税域办结：按数据范围收窄公司维度
         DataScopeKit.apply(qw, TaxInputCertify::getCompanyId, null, null);
         List<TaxInputCertify> rows = certifyMapper.selectList(qw);
         return rows.stream()
@@ -172,7 +175,7 @@ public class TaxCertifyService {
         if (StringUtils.hasText(status)) {
             qw.eq(TaxInputCertify::getCertifyStatus, status);
         }
-        // WS-6 税域收口：按数据范围收窄公司维度
+        // WS-6 税域办结：按数据范围收窄公司维度
         DataScopeKit.apply(qw, TaxInputCertify::getCompanyId, null, null);
         qw.orderByDesc(TaxInputCertify::getCreateTime);
         Page<TaxInputCertify> p = certifyMapper.selectPage(Page.of(pn, ps), qw);
@@ -184,7 +187,7 @@ public class TaxCertifyService {
         if (row == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "进项认证记录不存在: id=" + id);
         }
-        // WS-6 税域收口：单条读后写，按公司归属校验越权
+        // WS-6 税域办结：单条读后写，按公司归属校验越权
         DataScopeKit.requireCompanyInScope(row.getCompanyId());
         return row;
     }

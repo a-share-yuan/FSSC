@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -32,7 +35,7 @@ public class GlFxRevaluation implements Serializable {
 
     /** 会计期间 yyyyMM */
     private String period;
-    /** 公司ID（应收取租户首个公司兜底） */
+    /** 公司ID（应收取租户首个公司默认处理） */
     private Long companyId;
     /** 外币币种 */
     private String fromCurrency;

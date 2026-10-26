@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.connector.core;
 
 import com.fssc.connector.adapter.ChannelAdapter;
@@ -20,7 +23,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>调用路由：先按能力域查 {@link ChannelAdapterRegistry}——已注册专属适配器的能力域
  * （如税局 {@code TaxInvoiceAdapter}）交给适配器；其余回落既有 {@code IntegrationGateway}
- * （已具备凭据托管、幂等、重试、超时、留痕能力）。业务侧改依赖 {@link ConnectorFacade} 即可，
+ * （已具备凭据托管、去重、重试、超时、记录能力）。业务侧改依赖 {@link ConnectorFacade} 即可，
  * 行为与既有完全一致（零回归）。</p>
  *
  * <p><b>非破坏保证</b>：本类只读既有网关/解析器的公开返回值并做字段搬运，不改变任何鉴权头语义、

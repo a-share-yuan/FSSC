@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -8,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * 月结检查闸清单（V2.2.38 K128/K129，参考行业做法结账中心"复选项全勾才可结账"＋结账监控中心
+ * 月结检查校验清单（V2.2.38 K128/K129，结账中心"复选项全勾才可结账"＋结账监控中心
  * "阶段/任务/责任人/计划完成时间"）。
  * close() 硬校验：该公司当期清单存在且全部 DONE 才允许月结；缺行/未勾齐一律拦截。
  */

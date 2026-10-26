@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <BillWorkbench ref="wb" :bill-type="'APPLY'" :sub-type="subType" :travel="isTravel" :before-submit="onBeforeSubmit">
     <template #create="b">
@@ -298,8 +301,8 @@
 
       <!-- ============ 分摊信息 ============ -->
       <!-- D-V4R-42：分摊的"写"权限（exp:share:create/update/delete）只授予财务/共享/审批类角色，普通员工没有 ⇒
-           原先这张卡对员工照常渲染、两列还挂必填红星，一保存就红字「缺少权限：exp:share:update」且分摊行不落库。
-           现口径：读＝随单据走（exp:bill:list，与单据母表同闸，见 BillShareController.byBill），
+           原先这张卡对员工照常渲染、两列还挂必填红星，一保存就红字「缺少权限：exp:share:update」且分摊行不写入数据库。
+           现规则：读＝随单据走（exp:bill:list，与单据母表同校验，见 BillShareController.byBill），
            写＝随岗位走（exp:share:update）⇒ 员工看得到这张单已分摊到哪（只读），改不了也不必填；
            新建态还没有分摊行 ⇒ 不渲染这张空卡。 -->
       <el-card v-if="canViewShares && (canEditShares || b.form.shares.length)" :header="$t('expense.preapply.secAllocation')" style="margin-top: 12px">
@@ -399,13 +402,13 @@ const isTravel = computed(() => props.subType === 'TRAVEL')
 const isTrain = computed(() => props.subType === 'TRAIN')
 const subTypeLabel = computed(() => ({ MEETING: t('expense.preapply.subMeeting'), TRAVEL: t('expense.preapply.subTravel'), TRAIN: t('expense.preapply.subTrain') })[props.subType] || t('expense.preapply.tabRequisition'))
 
-// D-V4R-42：分摊的"写"（exp:share:create/update/delete）授权名册里只有财务/共享/审批类角色（普通员工不在册）；
-// "读"随单据走（exp:bill:list，BillShareController.byBill 已改同闸）⇒ 能读才显示、能写才可编辑，
+// D-V4R-42：分摊的"写"（exp:share:create/update/delete）授权名册里只有财务/共享/审批类角色（普通员工不现有）；
+// "读"随单据走（exp:bill:list，BillShareController.byBill 已改同校验）⇒ 能读才显示、能写才可编辑，
 // 员工看到的是只读分摊行＋下方说明，不再挂必填红星、也不再吃 4030。
 const canEditShares = computed(() => hasPerm('exp:share:update'))
 const canViewShares = computed(() => canEditShares.value || hasPerm('exp:share:list') || hasPerm('exp:bill:list'))
 
-// ---------- 表单校验：登记表口径的通用/年度字段 + 各子类型特有字段 ----------
+// ---------- 表单校验：登记表规则的通用/年度字段 + 各子类型特有字段 ----------
 const formRules = computed(() => ({
   ...billRules('APPLY', props.subType),
   remark: isTrain.value
@@ -440,7 +443,7 @@ function loanRules(extJson) {
 const formRef = ref(null)
 const meetingFormRef = ref(null)
 const loanFormRef = ref(null)
-// 培训信息：此前只有裸 required（红星装饰，一条规则都不跑），现补规则并接入提交闸门
+// 培训信息：此前只有裸 required（红星装饰，一条规则都不跑），现补规则并接入提交校验
 const trainFormRef = ref(null)
 const trainRules = computed(() => ({
   trainType: commonRules.select(t('expense.preapply.errTrainTypeRequired')),
@@ -465,13 +468,13 @@ const shareTypeRules = { shareType: commonRules.select('请选择分摊方式') 
 const persons = ref([newPerson()])
 const calcLoading = ref(false)
 const stdCache = ref(null)
-// 业务口径：往返是否多算一晚。系统参数 expense.travel.roundTripExtraNight（1=算，0=不算），缺省/读取失败按「算」。
+// 业务规则：往返是否多算一晚。系统参数 expense.travel.roundTripExtraNight（1=算，0=不算），缺省/读取失败按「算」。
 const roundTripExtraNight = ref(true)
 async function loadRoundTripConfig() {
   try {
     const v = await configApi.value('expense.travel.roundTripExtraNight')
     if (v != null) roundTripExtraNight.value = !['0', 'false', 'FALSE'].includes(String(v).trim())
-  } catch (e) { /* 旧包无该读口或参数未种：保持既有口径（加 1 天） */ }
+  } catch (e) { /* 旧包无该读口或参数未种：保持既有规则（加 1 天） */ }
 }
 
 // 差旅标准自动计算：按 城市等级×天数×标准金额 带出 住宿费/餐饮补贴
@@ -562,7 +565,7 @@ function copyTravel(b, i) {
   // 复制行清空日期：同人同日两段行程＝重复登记（D-TR-01），由用户填新段日期
   b.form.travels.push({ ...trip, id: null, beginDate: '', endDate: '', days: 0 })
 }
-// D-TR-01 同类口径：同一人同一天出现两条行程＝重复登记（多段行程日期不同，不受影响）
+// D-TR-01 同类规则：同一人同一天出现两条行程＝重复登记（多段行程日期不同，不受影响）
 function travelDup(b, index, name) {
   const cur = b.form.travels[index]
   if (!cur || !name) return false
@@ -623,7 +626,7 @@ function calcPerson(b, row) {
 function ensureLine(b) {
   if (!b.form.lines.length) b.form.lines.push(b.newLine())
   // D-V4R-35：合成行的预算科目取分摊行那枚——服务端占用/核销只读明细行的科目，
-  // 分摊行的科目本身没有任何消费方，不写回去就是「屏幕选招待费、系统占差旅费」两套口径。
+  // 分摊行的科目本身没有任何消费方，不写回去就是「屏幕选招待费、系统占差旅费」两套规则。
   shareBudgetToLine(b.form.lines, b.form.shares)
 }
 // D-TR-02：persons 与 extJson.persons 双向同步——草稿即存（此前只在提交时写，重开草稿人员丢失），
@@ -642,7 +645,7 @@ watch(() => {
   if (JSON.stringify(persons.value) !== JSON.stringify(v)) persons.value = v.map((p) => ({ ...newPerson(), ...p }))
 }, { deep: true })
 // D-V4R-35：分摊行的预算科目一变就同步进承载金额的那条行——保存草稿也要带一致科目
-// （服务端提交时是从库里读 exp_bill_line 做占用，草稿阶段没写进去，提交就还是两套口径）
+// （服务端提交时是从库里读 exp_bill_line 做占用，草稿阶段没写进去，提交就还是两套规则）
 watch(() => {
   const b = wb.value && wb.value.b
   return b ? b.form.shares.map((s) => s.budgetItemId).join(',') : ''
@@ -659,7 +662,7 @@ function totalAmount(b) {
 
 // ---------- 提交前同步（把子类型特有内容写入 extJson/明细行） ----------
 async function onBeforeSubmit(b) {
-  // 表头必填闸门：与红星同源，提示具体漏填项并定位
+  // 表头必填校验：与红星同源，提示具体漏填项并定位
   if (!(await validateForms([formRef]))) return false
   if (isMeeting.value && !(await validateForms([meetingFormRef]))) return false
   if (isTravel.value) {
@@ -669,11 +672,11 @@ async function onBeforeSubmit(b) {
     if (b.form.travels.some((t) => t.beginDate && t.endDate && t.beginDate > t.endDate)) {
       ElMessage.warning(t('expense.preapply.errTripDateOrder')); return false
     }
-    // D-TR-01 同类口径：同人同日重复行程提交闸
+    // D-TR-01 同类规则：同人同日重复行程提交校验
     const dupT = b.form.travels.find((t, i) => travelDup(b, i, t.travelerName))
     if (dupT) { ElMessage.warning(t('expense.preapply.errDuplicateTrip', { v1: dupT.travelerName })); return false }
     if (!(await validateForms([loanFormRef]))) return false
-    // 预计还款日不得早于申请日（前端禁选 + 提交兜底）
+    // 预计还款日不得早于申请日（前端禁选 + 提交默认处理）
     const applyDay = b.form.bill.applyDate || b.today()
     const repayDay = b.form.bill.extJson.expectRepayDate
     if (applyDay && repayDay && repayDay < applyDay) {
@@ -716,7 +719,7 @@ async function onBeforeSubmit(b) {
   })
   // D-V4R-35：一屏一尺。分摊行的科目写进承载金额的那条明细行（服务端占用/核销只认行上的科目）；
   // 多科目分摊或一页多行＝这一条预算线承载不了，当场拒提点名，静默择一科目把钱占进别的预算线。
-  // D-V4R-42：只读态（无 exp:share:update）不下这条闸——用户改不动分摊行，拦他＝死路
+  // D-V4R-42：只读态（无 exp:share:update）不下这条校验——用户改不动分摊行，拦他＝死路
   if (canEditShares.value && shareBudgetToLine(b.form.lines, b.form.shares).conflict) {
     ElMessage.warning(t('expense.preapply.errShareBudgetMixed'))
     return false
@@ -777,7 +780,7 @@ function openRowDetail(row) {
   // 此前直接把行对象摊开，键名走 prettyKey 回落成 "Traffic Type / Allowance Amount" 英文标题、
   // 值原样输出 RAIL / SECOND / true —— 中文界面里完全没法看。
   // 现按「中文标签 + 字典文案」渲染：交通方式/舱位席别/培训类型取后台已加载字典（与下拉同源），
-  // 字典未到则 format.js 内置映射兜底；name 键在人员行是姓名（全局登记会被其它模块误用，故此处显式指定）。
+  // 字典未到则 format.js 内置映射默认处理；name 键在人员行是姓名（全局登记会被其它模块误用，故此处显式指定）。
   return showRowDetail(row, {
     title: t('field.detail'),
     labels: { name: t('expense.preapply.colName') },
@@ -827,7 +830,7 @@ watch(() => {
   b.form.travels.forEach((t) => { t.fromCityId = null; t.toCityId = null })
 })
 
-// 交通方式 / 舱位席别 / 培训类型（2026-10-18 基础数据收口，值域改为后台可维护）
+// 交通方式 / 舱位席别 / 培训类型（2026-10-18 基础数据办结，值域改为后台可维护）
 const trafficDict = useBaseDict('traffic_mode', TRAFFIC_LOCAL, TRAFFIC_I18N)
 const trafficOptions = trafficDict.options
 const seatDict = useBaseDict('seat_class', SEAT_LOCAL, SEAT_I18N)
@@ -855,7 +858,7 @@ onMounted(async () => {
   loadCurrency()
   await loadRoundTripConfig()
   travelTypeDict.load()
-  // 【2026-10-18 基础数据收口】交通方式/舱位席别/培训类型改为读 sys_dict，
+  // 【2026-10-18 基础数据办结】交通方式/舱位席别/培训类型改为读 sys_dict，
   // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致。
   trafficDict.load()
   seatDict.load()

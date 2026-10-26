@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.document.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -60,7 +63,7 @@ public class ArchiveController {
     public Result<Long> create(@RequestBody Map<String, Object> req) {
         Long billId = parseBillId(req.get("billId"));
         // 必填项不再由控制器代填默认值（原 archiveType 兜 "EXPENSE"、archiveYear 兜当年）：
-        // 用户没选就写出「报销凭证 / 本年」的档案目录属于造数据，交 ArchiveService 按前端同口径拦下。
+        // 用户没选就写出「报销凭证 / 本年」的档案目录属于造数据，交 ArchiveService 按前端同一规则拦下。
         String archiveType = req.get("archiveType") != null ? req.get("archiveType").toString() : null;
         Integer archiveYear = req.get("archiveYear") != null && !req.get("archiveYear").toString().isBlank()
                 ? Integer.valueOf(req.get("archiveYear").toString()) : null;
@@ -116,15 +119,15 @@ public class ArchiveController {
                                                     @RequestParam(required = false) String keyword) {
         // D-DEC-256（核实册:325）：新增可选 keyword 入参（档案编号/编码/关联单号/标题，服务端 LIKE）。
         // 不传＝行为与改前完全一致；档案选择器的检索框从此问的是全量目录而不是"已经取回的第一页"，
-        // 输入真实档案号不再返 0 条。检索臂口径由 ArchiveService.applyKeywordArms 单点将守。
+        // 输入真实档案号不再返 0 条。检索臂规则由 ArchiveService.applyKeywordArms 单点将守。
         return Result.success(archiveService.page(query.getPageNum(), query.getPageSize(),
                 archiveType, archiveYear, archiveStatus, keyword));
     }
 
     /**
-     * R5-D-199（读端点写库）：本 GET 为<b>只读语义</b>——服务层只重算比对并返回布尔，不落库
+     * R5-D-199（读端点写库）：本 GET 为<b>只读语义</b>——服务层只重算比对并返回布尔，不写入数据库
      * （改前服务层在此路径 {@code updateById} 写 integrity_status/update_time，GET 因而
-     * 幂等性与只读语义双破、审计时间列被反复点击污染）。状态落库与校验人留痕走显式
+     * 去重特性与只读语义双破、审计时间列被反复点击污染）。状态写入数据库与校验人记录走显式
      * POST {@code /{id}/verify}（见 {@link #verifyFull}）。
      */
     @RequiresFeature("FSSC_ARCHIVE")
@@ -180,9 +183,9 @@ public class ArchiveController {
 
     /**
      * R5-D-199：显式写端点——「完整性校验并落状态」。GET {@code /{id}/verify} 改为只算不写后，
-     * 状态持久化（integrity_status）与校验人留痕一律经本 POST 入口；@OperLog 由切面
+     * 状态持久化（integrity_status）与校验人记录一律经本 POST 入口；@OperLog 由切面
      * 记录操作人（校验人）入 sys_oper_log/pf_oper_log。
-     * R5-D-208：回执改为三态结构（status/verified/message：VERIFIED/MISMATCH/UNVERIFIABLE），
+     * R5-D-208：响应改为三态结构（status/verified/message：VERIFIED/MISMATCH/UNVERIFIABLE），
      * 前端按三句文案成像，无法校验不再与篡改同形。
      */
     @RequiresFeature("FSSC_ARCHIVE")

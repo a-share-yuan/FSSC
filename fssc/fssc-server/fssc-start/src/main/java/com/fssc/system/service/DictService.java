@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -47,7 +50,7 @@ public class DictService {
     }
 
     public Long typeCreate(SysDictType type) {
-        // 必填收口（批次 2C，与前端 GenericList 字典类型弹窗同口径）：字典编码是取值键、名称是展示键
+        // 必填办结（批次 2C，与前端 GenericList 字典类型弹窗同一规则）：字典编码是取值键、名称是展示键
         AssertUtil.notBlank(type.getDictName(), ErrorCode.PARAM_INVALID, "请输入字典名");
         AssertUtil.notBlank(type.getDictType(), ErrorCode.PARAM_INVALID, "请输入字典编码");
         long dup = sysDictTypeMapper.selectCount(new LambdaQueryWrapper<SysDictType>()
@@ -62,7 +65,7 @@ public class DictService {
     }
 
     public void typeUpdate(SysDictType type) {
-        // 整单更新（前端提交完整对象），故与 typeCreate 同口径拦空
+        // 整单更新（前端提交完整对象），故与 typeCreate 同一规则拦空
         AssertUtil.notBlank(type.getDictName(), ErrorCode.PARAM_INVALID, "请输入字典名");
         AssertUtil.notBlank(type.getDictType(), ErrorCode.PARAM_INVALID, "请输入字典编码");
         sysDictTypeMapper.updateById(type);
@@ -89,7 +92,7 @@ public class DictService {
                 .orderByAsc(SysDictData::getSort));
     }
 
-    // ---------- 内置字典（免权限只读通道的闸门） ----------
+    // ---------- 内置字典（免权限只读通道的校验） ----------
 
     /**
      * 当前租户的「内置字典类型」编码集合（is_builtin=1 且 status=NORMAL），按租户缓存 5 分钟。
@@ -108,9 +111,9 @@ public class DictService {
     }
 
     /**
-     * 【2026-10-15 枚举收口前置A】内置字典数据（供免权限端点调用）。
+     * 【2026-10-15 枚举办结前置A】内置字典数据（供免权限端点调用）。
      *
-     * 与 {@link #dataList(String)} 的唯一差别：**先过 is_builtin 闸门**。
+     * 与 {@link #dataList(String)} 的唯一差别：**先过 is_builtin 校验**。
      * 非内置（租户自定义）字典一律返回空列表 —— 因为该端点不带任何权限码，
      * 任何登录用户都能调，绝不能成为"绕过 system:dict:list 偷看租户自定义配置"的侧门。
      *
@@ -135,14 +138,14 @@ public class DictService {
     /**
      * 【2026-10-16 第 4 批】批量读取内置字典（供前端一次性预热 66 个 enum_* 展示字典）。
      *
-     * 为什么需要它：枚举收口后前端有 67 个展示字典，若逐个调
+     * 为什么需要它：枚举办结后前端有 67 个展示字典，若逐个调
      * {@code /builtin/data/list} 就要 67 次往返 —— 登录页首屏扛不住，故合并成一次。
      *
-     * 安全性与 {@link #builtinDataList(String)} **同一道闸门**：只返回 is_builtin=1 的类型。
+     * 安全性与 {@link #builtinDataList(String)} **同一道校验**：只返回 is_builtin=1 的类型。
      * 差别只在失败语义：单个请求里夹带的非内置类型**静默剔除**（记 warn），
      * 而不是整批抛异常 —— 预热是启动期批量动作，不能因一个脏类型让整批字典失效。
      *
-     * @param dictTypes 请求的字典类型；返回 Map 只含通过闸门的类型（未通过的不出现在 key 里）
+     * @param dictTypes 请求的字典类型；返回 Map 只含通过校验的类型（未通过的不出现在 key 里）
      */
     public Map<String, List<SysDictData>> builtinDataBatch(Collection<String> dictTypes) {
         if (dictTypes == null || dictTypes.isEmpty()) {
@@ -195,7 +198,7 @@ public class DictService {
         sysDictDataMapper.updateById(data);
     }
 
-    /** 必填收口（批次 2C，与前端 GenericList 字典数据项弹窗 dataItemRules 同口径） */
+    /** 必填办结（批次 2C，与前端 GenericList 字典数据项弹窗 dataItemRules 同一规则） */
     private void validateData(SysDictData data) {
         AssertUtil.notBlank(data.getDictType(), ErrorCode.PARAM_INVALID, "缺少字典编码");
         AssertUtil.notBlank(data.getDictLabel(), ErrorCode.PARAM_INVALID, "请填写标签");

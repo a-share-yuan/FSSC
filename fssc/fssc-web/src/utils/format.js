@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * 通用格式化工具：日期 + 金额 + 数量。
  * - 纯日期列显示 YYYY-MM-DD
@@ -8,7 +11,7 @@ import { statusLabel } from '../constants/billStatus'
 import {
   enumLabel, bizTypeLabel, billTypeLabel, taskTypeLabel, actionLabel,
   DIRECTION, PERIOD_TYPE, CONTROL_TYPE, ADJUST_TYPE, OPER_TYPE,
-  ASSIGN_TYPE, MULTI_TYPE, TIMEOUT_ACTION, REJECT_TO, ORG_SCOPE, VERIFY_STATUS,
+  ASSIGN_TYPE, MULTI_TYPE, TIMEOUT_ACTION, REJECT_TO, ORG_SCOPE, verifyStatusLabel,
 } from '../constants/enums'
 
 /**
@@ -42,7 +45,7 @@ export function formatDate(val) {
 export function formatDateTime(val) {
   if (!val) return ''
   // 先原样解析：后端主格式是 ISO 'T' 分隔，而把 '-' 一律换成 '/' 的老写法会把它打成 Invalid Date，
-  // 于是走 String(val) 兜底、界面上留下裸 ISO 时间（体检 E-12）。'/' 分支只作失败回退。
+  // 于是走 String(val) 默认处理、界面上留下裸 ISO 时间（体检 E-12）。'/' 分支只作失败回退。
   const native = new Date(val)
   const d = isNaN(native.getTime()) ? new Date(String(val).replace(/-/g, '/')) : native
   if (isNaN(d.getTime())) return String(val)
@@ -118,7 +121,7 @@ export function projectLabel(p) {
 }
 
 /**
- * 明细行 ext_json 解析（字符串/对象两种落库形态都要认）。
+ * 明细行 ext_json 解析（字符串/对象两种写入数据库形态都要认）。
  * D-DEC-023：招待三项的 ext_json 镜像就放在这一列里。
  */
 export function parseLineExt(row) {
@@ -129,7 +132,7 @@ export function parseLineExt(row) {
 }
 
 /**
- * 招待三项（接待对象 / 接待人数 / 人均标准）取数，供单据详情与费用明细表回显。
+ * 招待三项（接待对象 / 接待人数 / 人均标准）查询，供单据详情与费用明细表回显。
  * 优先真实列 exp_bill_line.attendees / person_count / entertain_type（D-DEC-373 落列），
  * 缺失回退行 ext_json（entertainTarget / entertainCount / entertainType / perCapita）；
  * 人均标准两处都没有时按 金额 ÷ 人数 现算，使历史单据（ext_json={}）也能按金额与人数复核。
@@ -158,10 +161,10 @@ export function hasEntertainLines(lines) {
 
 /**
  * 预算科目展示标签：把预算明细的维度串拼成可读名称（如 "上海公司 · 总裁办公室 · 行政办公费"）。
- * dimKey 有两套写法都要认：落库口径为连字符式 `2026-COMPANY33-DEPT1311-ITEM331`
- * （bg_item 现存 1324 行全部是这一种），早期口径为冒号式 `DEPT:1_ITEM:5`。
+ * dimKey 有两套写法都要认：写入数据库规则为连字符式 `2026-COMPANY33-DEPT1311-ITEM331`
+ * （bg_item 现存 1324 行全部是这一种），早期规则为冒号式 `DEPT:1_ITEM:5`。
  * 只认冒号式会让整列退化成原始 dimKey 串，用户无法判断选的是哪条预算线（D-P2-03）。
- * 解析失败再回退到 同类系统/IFS 科目码或 dimKey。
+ * 解析失败再回退到 外部财务系统科目码或 dimKey。
  *
  * @param ctx 可选 {companies, projects}，用于解析 COMPANY/PROJECT 段
  */
@@ -258,7 +261,7 @@ const COMMON_LABELS = {
 }
 
 // 字段 → 枚举字典：行详情弹窗的值若为枚举码，翻译成中文而不是原样输出英文
-// 兜底文案与 composables/useBaseDict.js 的 TRAFFIC_LOCAL / SEAT_LOCAL / TRAINING_LOCAL 逐字一致；
+// 默认处理文案与 composables/useBaseDict.js 的 TRAFFIC_LOCAL / SEAT_LOCAL / TRAINING_LOCAL 逐字一致；
 // 页面若已加载后台字典，可通过 opts.enums 传入实时文案覆盖（见 showRowDetail）
 const TRAFFIC_MODE_LABEL = { AIR: '飞机', RAIL: '高铁', TRAIN: '火车', CAR: '汽车', SHIP: '轮船' }
 const SEAT_CLASS_LABEL = { ECONOMY: '经济舱', BUSINESS: '商务舱', FIRST: '头等舱', SECOND: '二等座', FIRST_SEAT: '一等座' }
@@ -268,7 +271,7 @@ const yesNoLabel = (v) => (v === true || v === 1 || v === '1' || v === 'true' ? 
 
 const VALUE_ENUM_BY_KEY = {
   status: statusLabel, billStatus: statusLabel, poolStatus: statusLabel,
-  verifyStatus: (v) => enumLabel(VERIFY_STATUS, v),
+  verifyStatus: verifyStatusLabel,
   bizType: bizTypeLabel, billType: billTypeLabel, taskType: taskTypeLabel, action: actionLabel,
   direction: (v) => enumLabel(DIRECTION, v), periodType: (v) => enumLabel(PERIOD_TYPE, v),
   controlType: (v) => enumLabel(CONTROL_TYPE, v), adjustType: (v) => enumLabel(ADJUST_TYPE, v),
@@ -293,7 +296,7 @@ function isTechField(k) {
 // 行详情弹窗：数字值只有键名形如金额（*amount/*money/*price/*fee）才按金额格式化，
 // 其余数字（行号/数量/标志位等）原样字符串输出——曾有 create_by=3800 被写成「3,800.00」
 // fee：出差行程/培训人员行的 hotelFee/trafficFee/allowanceFee 等键名不带 amount，
-// 此前只落 String(v)，2400 显示成「2400」没有千分位与两位小数，与同屏 amount 列口径不一
+// 此前只落 String(v)，2400 显示成「2400」没有千分位与两位小数，与同屏 amount 列规则不一
 const MONEY_KEY_RE = /(amount|money|price|fee)/i
 // 行详情弹窗：字符串日期识别（纯日期 → formatDate；ISO 日期时间 → formatDateTime）
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/

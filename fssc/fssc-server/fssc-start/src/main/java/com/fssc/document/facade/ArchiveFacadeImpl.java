@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.document.facade;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -54,7 +57,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         if (archive == null) {
             return null;
         }
-        // D-DEC-185：跨域档案读出点也挂 028 的读侧富化（改前只有 /page 与 /list 有，
+        // D-DEC-185：跨域档案读出点也挂 028 的读侧补充（改前只有 /page 与 /list 有，
         // 工作台/联查走的是本 Facade ⇒ 同一卷在两个界面上"一个有归档流号、一个没有"）
         archiveService.enrichFlowKey(List.of(archive));
         return toDTO(archive);
@@ -89,7 +92,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
                 .in(OpArchive::getProcInstId, ids)
                 .orderByAsc(OpArchive::getId));
         // D-DEC-185：这里查的是「单据流实例 → 档案」正向键（proc_inst_id 的 D-TRC-05 语义，不翻转）；
-        // 顺带把每卷自己的归档流实例号也富化出来，正向/反向两个方向在同一次返回里都给全。
+        // 顺带把每卷自己的归档流实例号也补充出来，正向/反向两个方向在同一次返回里都给全。
         archiveService.enrichFlowKey(rows);
         return rows.stream()
                 .map(this::toDTO)
@@ -114,13 +117,13 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         OpArchive ar = new OpArchive();
         ar.setTenantId(TenantContext.getTenantId());
         ar.setArchiveNo(dto.getArchiveNo());
-        // D-DEC-184：档案编码＝编号镜像（列注释"档案编码(冗余)"），回单登记路径同口径补上；
+        // D-DEC-184：档案编码＝编号镜像（列注释"档案编码(冗余)"），回单登记路径同一规则补上；
         // 该 DTO 无年度/期间入参 ⇒ archive_year/archive_period 仍为空，不凭默认值造期间（184 后半属载体缺位，已登记）。
         ar.setArchiveCode(dto.getArchiveNo());
-        // D-DEC-005：登记簿的类型词表只有一处权威（ArchiveService.ARCHIVE_TYPES），回单登记入口同样过闸
+        // D-DEC-005：登记簿的类型名称表只有一处权威（ArchiveService.ARCHIVE_TYPES），回单登记入口同样过校验
         ar.setArchiveType(com.fssc.document.service.ArchiveService.assertArchiveType(dto.getArchiveType()));
         ar.setRefId(dto.getRefId());
-        // R5-D-210：登记带公司即落库（档案读面按公司数据域收口的取数前提）；
+        // R5-D-210：登记带公司即写入数据库（档案读面按公司数据域办结的查询前提）；
         // 来源未带公司时保持 NULL（不虚构归属），由来源域补齐后随登记链路写入。
         ar.setCompanyId(dto.getCompanyId());
         // proc_inst_id 有意留空：银行回单挂的是流水/回单（refId），非单据审批链，无来源流程实例可回溯（D-TRC-05）
@@ -134,13 +137,13 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         ar.setFilingTime(LocalDateTime.now());
         ar.setArchiveStatus(dto.getArchiveStatus());
         // D-DEC-182：镜像列不再由调用方随手传值，一律由真相源 archive_status 派生
-        // （银行回单登记本来就传 archiveStatus=ARCHIVED + status=FILED，两者同式；此处只是把口径钉死在一处）。
+        // （银行回单登记本来就传 archiveStatus=ARCHIVED + status=FILED，两者同式；此处只是把规则钉死在一处）。
         ar.setStatus(com.fssc.document.service.ArchiveService.dispositionOf(dto.getArchiveStatus()));
         ar.setIntegrityStatus(dto.getIntegrityStatus());
         ar.setRemark(dto.getRemark());
         opArchiveMapper.insert(ar);
         // D-DEC-180（P1）：回单卷此前<b>从不封哈希</b>（integrity_hash 恒 NULL）⇒ "档案是否被改动"这一问
-        // 对该类档案永远无从回答。主键入库后按唯一算式封存快照；哈希已算≠已校验（#20 口径），
+        // 对该类档案永远无从回答。主键入库后按唯一算式封存快照；哈希已算≠已校验（#20 规则），
         // 状态仍按调用方传入的 UNKNOWN，由校验/审批闭环定 VERIFIED。
         String seal = archiveIntegrityService.snapshot(ar);
         OpArchive hashUpd = new OpArchive();
@@ -180,7 +183,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
             return;
         }
         // W1（D-DEC-312）：撤掉 Task_3 人工复核后，定稿前必须过归档完整性判据。
-        // 未通过＝不静默定稿、逐条写进留痕（清单形态，非布尔）交人工处理；归档人/归档时间在立卷时已固化，不随节点撤除而丢失。
+        // 未通过＝不静默定稿、逐条写进记录（清单形态，非布尔）交人工处理；归档人/归档时间在立卷时已固化，不随节点撤除而丢失。
         java.util.List<String> failures = archiveService.preArchiveFailures(archiveId);
         if (!failures.isEmpty()) {
             OpArchive flagged = new OpArchive();
@@ -197,18 +200,18 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
             return;
         }
         // 归档人：审批收尾通常有登录上下文，取不到时保持 NULL，不造假人。
-        // 同一 operator 既用于档案侧「上架登记字段」补写，也用于单据侧 archive_by，两端口径一致。
+        // 同一 operator 既用于档案侧「上架登记字段」补写，也用于单据侧 archive_by，两端规则一致。
         Long operator = null;
         com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
         if (u != null) {
             operator = u.getUserId();
         }
         LocalDateTime finalizedAt = LocalDateTime.now();
-        // D-DEC-181／D-DEC-027：终态三件套（archive_status=ARCHIVED + archived_at + integrity_status=VERIFIED）
+        // D-DEC-181／D-DEC-027：最终状态三件套（archive_status=ARCHIVED + archived_at + integrity_status=VERIFIED）
         // 只在审批闭环这一处写。原先由"执行归档"前置写完（op_archive id=24：12:46:39 即 ARCHIVED＋VERIFIED，
         // 三节审批后只有 update_time 变化），现执行归档只进 ARCHIVING，本处定稿；
         // 完整性判据刚通过（哈希重算与归档快照一致）才置 VERIFIED——"已算哈希"不等于"已校验"。
-        // D-DEC-182（12-31:160）：改前两列都写 'ARCHIVED'，而 'ARCHIVED' 不在 status 的词表
+        // D-DEC-182（12-31:160）：改前两列都写 'ARCHIVED'，而 'ARCHIVED' 不在 status 的名称表
         // （FILED/EXPIRED/DESTROYED）里 —— 现 archive_status＝真相源落 ARCHIVED，
         // status＝同源镜像按 ArchiveService.dispositionOf 派生（落 FILED＝案卷已登记在架）。
         OpArchive upd = new OpArchive();
@@ -219,8 +222,8 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         upd.setIntegrityStatus("VERIFIED");
         // D-DEC-021 第二半（12-08:69「filing_user_id/filing_time 审批通过后仍 NULL」）：
         // 立卷留人那半条已由 D-DEC-276a 落在 ArchiveService.createArchive L163-164（jar 内），本处补的是
-        // 收尾兜底——276a 上线前立的历史卷、以及无登录上下文的立卷行，两列至今为空，归档结论无人可追。
-        // 仅在 NULL 时补写，已有立卷人／立卷时间一律不覆盖（立卷动作与定稿动作各自留痕，不混为一谈）。
+        // 收尾默认处理——276a 上线前立的历史卷、以及无登录上下文的立卷行，两列至今为空，归档结论无人可追。
+        // 仅在 NULL 时补写，已有立卷人／立卷时间一律不覆盖（立卷动作与定稿动作各自记录，不混为一谈）。
         if (archive.getFilingUserId() == null) {
             upd.setFilingUserId(operator);
         }
@@ -229,7 +232,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         }
         opArchiveMapper.updateById(upd);
         log.info("档案 {} 归档审批通过: → ARCHIVED（定稿人={}）", archive.getArchiveNo(), operator);
-        // P0-5 状态机闭环：归档审批通过同步回写源单据归档状态（幂等）。
+        // P0-5 状态机闭环：归档审批通过同步回写源单据归档状态（去重）。
         // exp_bill 用 status(业务态:PAID/...) + archiveStatus(归档态:ARCHIVED) 双字段表达状态机 ARCHIVED 段。
         // D-DEC-278（2026-09-28 已裁 A1）：守卫原先只放行 BILL ⇒ 凭证归档（EXPENSE）审批通过不回写，
         // 单据侧要等次日 02:00 定时任务代写、且代写不留归档人。
@@ -271,11 +274,11 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
             return;
         }
         // 审批通过：销毁审批单涉及的档案全部置 DESTROYED
-        // D-DEC-182 口径说明（在册例外，不改行为）：本处只落<b>保管处置轴</b>的结论（status=DESTROYED），
+        // D-DEC-182 规则说明（现有例外，不改行为）：本处只落<b>保管处置轴</b>的结论（status=DESTROYED），
         // 归档流程轴 archive_status 要等「执行销毁」真正落地才置 DISPOSED
         // （ArchiveDestroyService.executeDestroy 两列同源写）。也就是说"已批准·待执行"这一窗口内
         // 两列本就该一个说还在架、一个说已判销毁——读侧判"是否已销毁"必须两列取或，
-        // 现有实现已经是这个口径（ArchiveDestroyService.assertAllExpired:189、
+        // 现有实现已经是这个规则（ArchiveDestroyService.assertAllExpired:189、
         // SharingEnhanceService.createArchive 的档案号释放判定），故此处维持不扩权。
         List<Long> ids = parseIds(approval.getArchiveIds());
         if (!ids.isEmpty()) {

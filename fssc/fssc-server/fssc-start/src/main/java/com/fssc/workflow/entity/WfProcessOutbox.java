@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -6,6 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
+ * 流程投影事件发件箱（wf_process_outbox，带 tenant_id）——流程配置
  * 「流程处理模式＝消息队列（推荐）／同步」参数的事务性发件箱实现。
  *
  * <p><b>它解决什么</b>：方案 §二 M7 指出，流程发起链路把「引擎推进 ＋ 业务表 ＋ 镜像表 ＋ 站内消息」
@@ -49,7 +53,7 @@ public class WfProcessOutbox extends TenantAuditBase {
     /** 投影事件信封 JSON（{@code WfProjectionEvent}）：监听器在事件当场把"只有 Flowable 实体才能解析"的
      *  字段（候选组、到期时间、变量回退）全部解好，消费者只做纯写库，不再触碰引擎。 */
     private String payload;
-    /** 幂等键（唯一）：{@code eventType:taskId[:assignee]} / {@code eventType:procInstId}。重复投递被唯一键拒绝＝幂等。 */
+    /** 唯一键（唯一）：{@code eventType:taskId[:assignee]} / {@code eventType:procInstId}。重复投递被唯一键拒绝＝去重。 */
     private String idempotencyKey;
     /** {@code PENDING} 待消费 / {@code CONSUMED} 已投影 / {@code DEAD} 死信（重试超上限，已记缺陷待人工处置） */
     private String status;

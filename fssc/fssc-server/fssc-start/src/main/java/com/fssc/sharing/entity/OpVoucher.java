@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -51,11 +54,11 @@ public class OpVoucher extends TenantAuditBase {
     @TableField(exist = false)
     private String createByName;
     /**
-     * D-DEC-288（X-49 乙）展示：付款腿凭证"资金指令未下发"标记（transient，只读富化，零写库）。
-     * <p>true＝本凭证是付款腿、账面已记账（POSTED）但资金证据说款还没付出；
-     * false＝资金证据已实付；null＝不是付款腿／无资金证据可判（界面不注记）。
+     * D-DEC-288（X-49 乙）展示：付款环节凭证"资金指令未下发"标记（transient，只读补充，零写库）。
+     * <p>true＝本凭证是付款环节、账面已记账（POSTED）但资金证据说款还没付出；
+     * false＝资金证据已实付；null＝不是付款环节／无资金证据可判（界面不注记）。
      * <p>由 {@code VoucherAutoPostService.fillPayLegUnsettledFlag} 在凭证台账读侧打标，
-     * <b>不改 {@code status}</b>——存量已记账凭证保持不动账（红字冲销／回退草稿须财务另签）。
+     * <b>不改 {@code status}</b>——历史已记账凭证保持不动账（红字冲销／回退草稿须财务另签）。
      */
     @TableField(exist = false)
     private Boolean payLegUnsettled;

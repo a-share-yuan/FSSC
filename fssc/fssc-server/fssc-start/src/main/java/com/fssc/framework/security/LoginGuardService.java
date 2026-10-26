@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.security;
 
 import com.fssc.common.core.ErrorCode;
@@ -19,7 +22,7 @@ import java.time.Duration;
  *       {@link #FAIL_WINDOW} 内连续失败 {@link #MAX_FAIL_COUNT} 次 → 锁定
  *       {@link #LOCK_TTL}；锁定期间 {@link #checkLock} 直接拒绝，成功登录 {@link #resetOnSuccess} 清零。</li>
  *   <li>IP 限流：同一 IP 在 {@link #IP_WINDOW}（1 分钟，自窗口内首次尝试起算——旧版为自然分钟
- *       分桶，判定口径"窗口内超 {@link #IP_LIMIT_PER_MINUTE} 次拒绝"不变）内尝试超限抛业务异常。</li>
+ *       分桶，判定规则"窗口内超 {@link #IP_LIMIT_PER_MINUTE} 次拒绝"不变）内尝试超限抛业务异常。</li>
  *   <li>验证码开关 {@code fssc.login.captcha-enabled} 默认关闭；置 true 后由
  *       {@code com.fssc.auth.CaptchaTriggerService} 判定"该身份在本窗口内连续凭据失败是否已达
  *       {@code fssc.login.captcha-fail-threshold}（默认 3）"，达阈值后的登录必须携带一次性图形验证码

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -45,7 +48,7 @@ public class MdAssetCategoryService {
         mapper.updateById(e);
     }
 
-    /** 必填守卫（批次 2B）：文案与前端 ASSET_CATEGORY 规则一致；类别编码/名称是资产建档的追溯口径，留空即脏数据。 */
+    /** 必填守卫（批次 2B）：文案与前端 ASSET_CATEGORY 规则一致；类别编码/名称是资产建档的追溯规则，留空即脏数据。 */
     private void requireManual(MdAssetCategory e) {
         if (e == null || !StringUtils.hasText(e.getCategoryCode())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请输入类别编码");

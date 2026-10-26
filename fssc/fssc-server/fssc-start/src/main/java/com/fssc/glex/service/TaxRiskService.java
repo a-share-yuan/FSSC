@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -40,7 +43,7 @@ public class TaxRiskService {
         if (Boolean.TRUE.equals(unresolvedOnly)) {
             qw.eq(TaxRiskIndicator::getResolved, 0);
         }
-        // WS-6 税域收口：按数据范围收窄公司维度
+        // WS-6 税域办结：按数据范围收窄公司维度
         DataScopeKit.apply(qw, TaxRiskIndicator::getCompanyId, null, null);
         qw.orderByDesc(TaxRiskIndicator::getRiskScore);
         Page<TaxRiskIndicator> p = riskMapper.selectPage(Page.of(pn, ps), qw);
@@ -55,7 +58,7 @@ public class TaxRiskService {
                 .eq(TaxRiskIndicator::getResolved, 0)
                 .in(TaxRiskIndicator::getRiskLevel, "WARNING", "HIGH")
                 .orderByDesc(TaxRiskIndicator::getRiskScore);
-        // WS-6 税域收口：按数据范围收窄公司维度
+        // WS-6 税域办结：按数据范围收窄公司维度
         DataScopeKit.apply(qw, TaxRiskIndicator::getCompanyId, null, null);
         return riskMapper.selectList(qw);
     }
@@ -113,7 +116,7 @@ public class TaxRiskService {
     public void resolve(Long id, String remark) {
         TaxRiskIndicator row = riskMapper.selectById(id);
         if (row == null) return;
-        // WS-6 税域收口：单条读后写，按公司归属校验越权
+        // WS-6 税域办结：单条读后写，按公司归属校验越权
         DataScopeKit.requireCompanyInScope(row.getCompanyId());
         TaxRiskIndicator upd = new TaxRiskIndicator();
         upd.setId(id);
@@ -132,7 +135,7 @@ public class TaxRiskService {
         LambdaQueryWrapper<TaxRiskIndicator> qw = new LambdaQueryWrapper<TaxRiskIndicator>()
                 .eq(period != null, TaxRiskIndicator::getPeriod, period)
                 .eq(TaxRiskIndicator::getResolved, 0);
-        // WS-6 税域收口：按数据范围收窄公司维度
+        // WS-6 税域办结：按数据范围收窄公司维度
         DataScopeKit.apply(qw, TaxRiskIndicator::getCompanyId, null, null);
         List<TaxRiskIndicator> all = riskMapper.selectList(qw);
         long high = all.stream().filter(r -> "HIGH".equals(r.getRiskLevel())).count();

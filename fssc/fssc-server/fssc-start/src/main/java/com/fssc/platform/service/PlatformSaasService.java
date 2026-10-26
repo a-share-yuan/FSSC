@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.platform.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -153,7 +156,7 @@ public class PlatformSaasService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** 写入/更新某租户某日统计快照（幂等：存在则累加覆盖） */
+    /** 写入/更新某租户某日统计快照（去重：存在则累加覆盖） */
     public void upsertStat(PfTenantStat stat) {
         PfTenantStat exist = statMapper.selectOne(new LambdaQueryWrapper<PfTenantStat>()
                 .eq(PfTenantStat::getRefTenantId, stat.getRefTenantId())

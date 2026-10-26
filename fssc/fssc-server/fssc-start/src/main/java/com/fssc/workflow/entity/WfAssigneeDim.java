@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -36,7 +39,7 @@ public class WfAssigneeDim extends TenantAuditBase {
      * {@code PEER} 平级 / {@code DIRECT_DOWN} 直接下级 / {@code INDIRECT_DOWN} 间接下级。
      */
     private String relation;
-    /** 仅 {@code REPORT_TO} 使用：级数（1＝直接，2＝隔一级…；与 wf_node_config.up_level 同口径，最多 10） */
+    /** 仅 {@code REPORT_TO} 使用：级数（1＝直接，2＝隔一级…；与 wf_node_config.up_level 同一规则，最多 10） */
     private Integer upLevel;
     /** 仅 {@code DEPT} 使用：是否含下级部门（0否 1是）；{@code DEPT_TREE} 恒视为 1 */
     private Integer includeChildren;

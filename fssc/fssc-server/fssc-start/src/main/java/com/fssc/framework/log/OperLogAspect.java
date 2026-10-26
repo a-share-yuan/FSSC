@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.log;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 审计表（pf_oper_log / sys_oper_log）均无 del_flag，Mapper 只提供 insert —— 不可删除。
  * <p>
  * 本切面在请求线程内同步采集上下文并组装实体，仅把 INSERT 动作交给 {@link OperLogWriter}
- * 异步落库（专用线程池），避免高并发下写库阻塞业务线程；日志失败仍不影响业务结果。
+ * 异步写入数据库（专用线程池），避免高并发下写库阻塞业务线程；日志失败仍不影响业务结果。
  * <p>
  * 【D-DEC-178】{@code sys_oper_log.oper_dept_name} 此前"列在、实体字段在、全仓零赋值"
  * ⇒ 现网 604/604 行全 NULL，日志页/审计面的"办理人部门"无从追溯。
@@ -76,7 +79,7 @@ public class OperLogAspect {
             try {
                 save(pjp, operLog, result, error, System.currentTimeMillis() - start);
             } catch (Exception ex) {
-                // 审计失败不影响业务结果，但要留痕
+                // 审计失败不影响业务结果，但要记录
                 log.error("审计日志写入失败", ex);
             }
         }
@@ -131,14 +134,14 @@ public class OperLogAspect {
     // ---------- 工具 ----------
 
     /**
-     * R5-D-111：审计留痕的 error_msg 只落「异常类型＋业务可读摘要」，长度压到 200 以内。
+     * R5-D-111：审计记录的 error_msg 只落「异常类型＋业务可读摘要」，长度压到 200 以内。
      *
      * <p>改前实测：一次开票失败把 MyBatis 包装件的整段文本（含 {@code ### SQL:} 原文与
      * {@code for key '表名.PRIMARY'}）落进了 sys_oper_log.error_msg，日志页把库面结构整片摊给
      * 看日志的人；且 2000 字符上限让一条记录吃掉大半页。完整堆栈本来就由全局异常处理器
-     * log.error 落到日志文件，页面用 trace_id 关联即可，留痕列不需要复刻堆栈。</p>
+     * log.error 落到日志文件，页面用 trace_id 关联即可，记录列不需要复刻堆栈。</p>
      *
-     * <p>口径：业务异常（BizException）的文案本就是给用户的，原样留（截 200）；
+     * <p>规则：业务异常（BizException）的文案本就是给用户的，原样留（截 200）；
      * 技术异常只留最内层异常的类型名＋一句业务含义，SQL 原文/索引名/表名/mapper 路径一概不落。</p>
      */
     private String readableError(Throwable error) {
@@ -195,7 +198,7 @@ public class OperLogAspect {
             DEPT_NAME_CACHE.put(deptId, new DeptNameSample(name, now));
             return name.isEmpty() ? null : name;
         } catch (Exception e) {
-            // 不写缓存：下一笔重试；部门缺失不影响整行日志落库
+            // 不写缓存：下一笔重试；部门缺失不影响整行日志写入数据库
             log.warn("操作日志部门反查失败 deptId={}: {}", deptId, e.getMessage());
             return null;
         }

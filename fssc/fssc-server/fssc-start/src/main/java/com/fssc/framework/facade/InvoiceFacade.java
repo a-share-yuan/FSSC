@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.framework.facade;
 
 import com.fssc.framework.facade.dto.InvoicePoolDTO;
@@ -24,7 +27,7 @@ public interface InvoiceFacade {
     Long poolFromOcr(InvoicePoolDTO dto);
 
     /**
-     * D-DEC-463（幂等腿②）：入池前先问一次「这张票是不是已经在池」。
+     * D-DEC-463（去重环节②）：入池前先问一次「这张票是不是已经在池」。
      *
      * <p>改前 OCR 链每次识别都无条件调 {@link #poolFromOcr}，同一票面重复上传（客户端断开后重试／
      * 双提交／同一张票传两次）时由主域 {@code InvoiceService#create} 的查重抛
@@ -32,9 +35,9 @@ public interface InvoiceFacade {
      * ⇒ 一张好票被记成坏票、界面还会提示"要素不全"。现由调用方先问后决定：命中即按"已在池"如实透出，
      * 不再走 {@code poolFromOcr}。</p>
      *
-     * <p>口径与 {@code create} 的租户内硬查重同源：同租户 + 同 发票代码（全电票为空串）+ 同发票号码，
+     * <p>规则与 {@code create} 的租户内硬查重同源：同租户 + 同 发票代码（全电票为空串）+ 同发票号码，
      * {@code del_flag=0} 由实体的 {@code @TableLogic} 自动过滤，租户维度由 {@code FsscTenantLineHandler}
-     * 自动追加——本方法不做跨租户全局查重（那是 {@code inv_invoice_global} 的预警口径，不阻断入池）。</p>
+     * 自动追加——本方法不做跨租户全局查重（那是 {@code inv_invoice_global} 的预警规则，不阻断入池）。</p>
      *
      * @param dto 票面数据（用到 invoiceCode／invoiceNo 两列；发票号码为空＝无法判定，直接返回 false）
      * @return true＝该票面已在发票池

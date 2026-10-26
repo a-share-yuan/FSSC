@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.sharing.controller;
 
 import com.fssc.common.core.Result;
@@ -16,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
-/** 凭证推送（/api/tenant/voucher/push/**）：推送凭证至 同类系统 / IFS 外部财务系统 */
+/** 凭证推送（/api/tenant/voucher/push/**）：推送凭证至 外部财务系统 */
 @RestController
 @RequestMapping("/api/tenant/voucher/push")
 @RequiredArgsConstructor

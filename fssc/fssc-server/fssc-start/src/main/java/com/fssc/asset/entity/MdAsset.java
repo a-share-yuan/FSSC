@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.asset.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -49,7 +52,7 @@ public class MdAsset implements Serializable {
     private BigDecimal residualValue;
     /** 折旧方法：LINEAR 直线 / ACCELERATED 加速 */
     private String depreciationMethod;
-    /** 折旧月数（会计口径） */
+    /** 折旧月数（会计规则） */
     private Integer depreciationMonths;
     /** 税法折旧年限(月)：与会计年限分离，支撑税会差异(A105080)（#16） */
     private Integer taxLifeMonths;
@@ -63,7 +66,7 @@ public class MdAsset implements Serializable {
     private Long supplierId;
     /** 发票号 */
     private String invoiceNo;
-    /** 最后折旧日期（月度批处理幂等用）：NULL 表示从未计提 */
+    /** 最后折旧日期（月度批处理去重用）：NULL 表示从未计提 */
     private LocalDate lastDeprDate;
 
     private Long createBy;

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { store } from './api'
@@ -41,7 +44,7 @@ const routes = [
     children: [
       { path: '', redirect: '/workbench' }, // USG-01: 默认落地工作台(全员可用),报表看板走菜单按权限进入
       { path: 'dashboard', component: () => import('./views/dashboard/Dashboard.vue'), meta: { title: '报表看板' } },
-      // P0-5 角色化首页（D-DEC-302：用户下拉入口已下架，路由保留供直接访问；恢复入口的前置条件是补齐后端聚合口径）
+      // P0-5 角色化首页（D-DEC-302：用户下拉入口已下架，路由保留供直接访问；恢复入口的前置条件是补齐后端聚合规则）
       { path: 'role-dashboard', component: () => import('./views/dashboard/RoleDashboard.vue'), meta: { title: '角色化首页' } },
       // P0-4 流程监控大屏
       { path: 'flow-monitor', component: () => import('./views/monitor/FlowMonitor.vue'), meta: { title: '流程监控大屏' } },
@@ -68,26 +71,26 @@ const routes = [
       ...workflowRoutes,
     ],
   },
-  // 兜底: 未匹配路由显示 404 页面(整改 EXC-02, 原为静默重定向至工作台)
+  // 默认处理: 未匹配路由显示 404 页面(整改 EXC-02, 原为静默重定向至工作台)
   { path: '/:pathMatch(.*)*', component: () => import('./views/common/NotFound.vue'), meta: { title: '页面不存在' } },
 ]
 const router = createRouter({ history: createWebHashHistory(), routes })
 
 // ---- 全站页面级权限拦截（2026-10-16，R5-D-251 的补全） ----
 // 背景：此前守卫只消费 meta.perms，而大量路由未声明 ⇒ 无权限账号可 URL 直达
-// （如普通员工直达 /system/ext-interface，页面可渲染，仅靠页内接口 4030 兜底）。
+// （如普通员工直达 /system/ext-interface，页面可渲染，仅靠页内接口 4030 默认处理）。
 // 判定链（任一命中即放行）：
 //   ① 超管（*:*:* / isAdmin）放行；
-//   ② meta.perms（路由自声明，最高优先级，历史口径不变）；
+//   ② meta.perms（路由自声明，最高优先级，历史规则不变）；
 //   ③ ROUTE_PERMS[to.path]（sys_menu 权威映射：perms 多码任一 / feature_code 功能开关），
-//      映射由 fssc 库 sys_menu(status=1) 生成，与后端菜单树过滤口径一致；
-//   ④ 菜单树兜底：登录后 /tenant/system/menu/tree 返回的路径集合（角色-菜单授权判定，
-//      覆盖映射表 menuOnly 路径）。拉取失败 fail-open（可用性优先，后端 API 权限闸仍在）。
+//      映射由 fssc 库 sys_menu(status=1) 生成，与后端菜单树过滤规则一致；
+//   ④ 菜单树默认处理：登录后 /tenant/system/menu/tree 返回的路径集合（角色-菜单授权判定，
+//      覆盖映射表 menuOnly 路径）。拉取失败 fail-open（可用性优先，后端 API 权限校验仍在）。
 // 放行例外：H5 端页面（深链详情由后端按单据参与人校验）、工作台（拦截回落点，必须可达）、
 // 个人中心 / 流程导航地图（工作台卡片全员入口）。
 // 「我的待办/已办/我发起的/我的抄送」属本人视角自助页：对应后端端点（/tenant/workbench/**、
 // /wf/query/cc/mine）按当前登录人过滤、不设权限码；其中 todo/done/cc 的 sys_menu 行已软删，
-// 菜单树兜底永不命中 ⇒ 非超管一律被拦。页面级无权可收，数据面由后端本人视角兜底。
+// 菜单树默认处理永不命中 ⇒ 非超管一律被拦。页面级无权可收，数据面由后端本人视角默认处理。
 function denyToWorkbench(msg) {
   ElMessage.warning(msg || '无权限访问该页面，请联系管理员')
   return '/workbench'

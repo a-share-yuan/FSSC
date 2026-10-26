@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="fx-reval-board">
     <el-card>
@@ -81,7 +84,7 @@
       />
     </el-card>
 
-    <!-- 试算预览弹窗（第一步：只算不落库） -->
+    <!-- 试算预览弹窗（第一步：只算不写入数据库） -->
     <el-dialog v-model="trialVisible" title="重估试算预览（仅试算不保存）" width="900px" destroy-on-close>
       <el-alert v-if="trial.existingCount > 0" type="warning" :closable="false" style="margin-bottom:8px"
         :title="`该期间已有 ${trial.existingCount} 条重估记录，正式执行时同组合将自动跳过`" />
@@ -184,7 +187,7 @@ function onPeriodChange() {
   loadList()
 }
 
-// ---- ① 试算预览：只算不落库 ----
+// ---- ① 试算预览：只算不写入数据库 ----
 async function onTrial() {
   if (!period.value) return ElMessage.warning('请选择重估期间')
   try {

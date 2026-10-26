@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -47,7 +50,7 @@ public class QueryVariantService {
      */
     @Transactional(rollbackFor = Exception.class)
     public Long create(SysQueryVariant variant) {
-        // 必填收口（批次 2C，与前端 GenericList「保存查询方案」弹窗同口径）
+        // 必填办结（批次 2C，与前端 GenericList「保存查询方案」弹窗同一规则）
         AssertUtil.notBlank(variant.getVariantName(), ErrorCode.PARAM_INVALID, "请输入方案名称");
         variant.setId(null);
         variant.setUserId(currentUserId());
@@ -82,7 +85,7 @@ public class QueryVariantService {
         if (!exist.getUserId().equals(currentUserId())) {
             throw new BizException(ErrorCode.FORBIDDEN, "只能操作自己的方案");
         }
-        // 整单更新（前端提交完整对象），故与 create 同口径拦空
+        // 整单更新（前端提交完整对象），故与 create 同一规则拦空
         AssertUtil.notBlank(variant.getVariantName(), ErrorCode.PARAM_INVALID, "请输入方案名称");
         // 如果设为默认，先清除旧的默认
         if (Boolean.TRUE.equals(variant.getIsDefault()) || Integer.valueOf(1).equals(variant.getIsDefault())) {

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="flow-config-page">
     <el-row class="cm-target-flow" :gutter="16">
@@ -695,7 +698,7 @@
     <el-dialog v-model="delegateDialog.visible" :title="$t('system.flow.ttlNewDelegate')" width="600px" destroy-on-close>
       <el-form ref="delegateFormRef" :model="delegateDialog.form" :rules="delegateFormRules" label-width="120px" size="default">
         <el-form-item :label="$t('system.flow.colDelegator')">
-          <!-- 后端硬校验「委托人必须是当前登录用户」⇒ 系统带出只读值，按 Q1 口径不加红星 -->
+          <!-- 后端硬校验「委托人必须是当前登录用户」⇒ 系统带出只读值，按 Q1 规则不加红星 -->
           <el-input :model-value="currentUserName" disabled />
         </el-form-item>
         <el-form-item :label="$t('system.flow.colDelegate')" prop="toUserId">
@@ -856,12 +859,12 @@ import SkeletonList from '../../components/SkeletonList.vue'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { enumLabel, bizTypeLabel, modelCategoryLabel, BIZ_TYPE, WF_MODEL_CATEGORY, ASSIGN_TYPE, TIMEOUT_ACTION, HANDLING_MODE, MULTI_TYPE } from '@/constants/enums.js'
-// 【2026-10-15枚举收口】字典读取层：标签「字典优先、本地常量兜底」，接口不可用时行为与改造前逐字一致
+// 【2026-10-15枚举办结】字典读取层：标签「字典优先、本地常量默认处理」，接口不可用时行为与改造前逐字一致
 import { useDict } from '@/composables/useDict.js'
 // 第1批：多实例相关标签走字典
 const multiTypeDict = useDict('wf_node_multi_type', MULTI_TYPE)
 // 第2批：取人方式 / 取人档位 / 超时处置三处也走字典（字典为 V1.4.69 灌入，取值与本地常量一致）
-//   —— 本地常量继续作为兜底常量传入，两边取值若有差异，以字典为准（运营可维护的权威源）
+//   —— 本地常量继续作为默认处理常量传入，两边取值若有差异，以字典为准（运营可维护的权威源）
 const assignTypeDict = useDict('wf_assign_type', ASSIGN_TYPE)
 const handlingModeDict = useDict('wf_handling_mode', HANDLING_MODE)
 const timeoutActionDict = useDict('wf_timeout_action', TIMEOUT_ACTION)
@@ -944,7 +947,7 @@ const hiddenTabDesc = computed(() => {
 /**
  * 业务单据类型选项＝BIZ_TYPE 字典全集（2026-09-24）。
  * 原先是手写的 12 项静态清单，而库里 biz_type 有 84 种 ⇒ 基本信息页选中任何一项都显示成全大写英文码。
- * 中间版本曾把「模型名称」当作缺省标签兜底（`bt → modelName`），结果 MEETING/SUPPLIER_ADD 这类
+ * 中间版本曾把「模型名称」当作缺省标签默认处理（`bt → modelName`），结果 MEETING/SUPPLIER_ADD 这类
  * 行的单据类型显示得跟模型名称一模一样，用户判定为"显示的是其它字段的数据"——已回退。
  * 现在只认字典：缺哪个编码就补 BIZ_TYPE 一行（见 enums.js），不拿别的字段凑数。
  */
@@ -1171,7 +1174,7 @@ function openNodeDialog(row) {
       // F10 治理：first_node_auto_pass 缺省 NULL＝未配置（回退旧判据），不强制填值以保持零行为变化
       firstNodeAutoPass: null,
     }
-  // 存量行兜底：multi_type 列默认 ANY、vote_ratio 列默认 50，但老接口可能不回传 ⇒ 补默认避免控件空值
+  // 历史行默认处理：multi_type 列默认 ANY、vote_ratio 列默认 50，但老接口可能不回传 ⇒ 补默认避免控件空值
   if (form.multiType == null || form.multiType === '') form.multiType = 'ANY'
   if (form.voteRatio == null) form.voteRatio = 50
   // reject_scope / resubmit_jump_back 两列亦为 NOT NULL DEFAULT，老接口不回传时补默认
@@ -1579,7 +1582,13 @@ async function refreshInFlight() {
   if (!key) return
   try {
     inFlight.data = await designerApi.inFlight(key)
-    inFlight.history = await designerApi.publishHistory(key) || []
+    const history = await designerApi.publishHistory(key) || []
+    // 接口给的是仓库文件顺序（文件名倒序），最新一次未必在首行 ⇒ 按发布时间倒序展示
+    inFlight.history = [...history].sort((a, b) => {
+      const ta = a?.time ? new Date(a.time).getTime() : 0
+      const tb = b?.time ? new Date(b.time).getTime() : 0
+      return tb - ta
+    })
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -1669,14 +1678,14 @@ async function importFlow() {
 }
 
 // ========== 辅助方法 ==========
-/** 流程/单据类型 → 中文：先查业务类型字典（唯一口径），字典没有才退回同名模型的名称 */
+/** 流程/单据类型 → 中文：先查业务类型字典（唯一规则），字典没有才退回同名模型的名称 */
 function flowTypeLabel(v) {
   if (!v) return ''
   if (BIZ_TYPE[v]) return BIZ_TYPE[v]
   const m = models.value.find((x) => x.modelKey === v)
   return m?.modelName || v
 }
-/** 委托的适用范围：库里存逗号分隔的单据类型编码，空＝全部单据（WfDelegateService 同口径） */
+/** 委托的适用范围：库里存逗号分隔的单据类型编码，空＝全部单据（WfDelegateService 同一规则） */
 function delegateScopeLabel(v) {
   const codes = String(v || '').split(',').map(s => s.trim()).filter(Boolean)
   if (!codes.length) return t('system.flow.optAllDocTypes')
@@ -1719,14 +1728,16 @@ function handlingModeTag(v) {
 function timeoutActionLabel(v) {
   // 【第2批】字典优先；字典未到/失败 ⇒ 回落本地常量。
   //  TIMEOUT_ACTION 在前端是「别名多对一」映射（NOTIFY/REMIND/URGE 都标"催办通知"），
-  //    而字典只登记后端真正读的值（含库中存量 16 个节点的 NOTIFY 旧拼写）。
+  //    而字典只登记后端真正读的值（含库中历史 16 个节点的 NOTIFY 旧拼写）。
   //    两边标签有差异（如 AUTO_TRANSFER：前端"超时升级转办"vs 字典无此项），
-  //    故字典没命中时必须回落本地常量，否则存量别名会显示成英文码。
+  //    故字典没命中时必须回落本地常量，否则历史别名会显示成英文码。
+  //    另：字典把 NOTIFY 标注成「催办通知（旧拼写）」（迁移注解），业务界面统一显示同档别名文案。
+  if (v === 'NOTIFY' || v === 'REMIND' || v === 'URGE') return enumLabel(TIMEOUT_ACTION, v) || '—'
   return timeoutActionDict.label(v) || enumLabel(TIMEOUT_ACTION, v) || '—'
 }
 /** 会签模式：ANY 为列默认值（普通单任务），显示"任一通过"而非空白
  *
- *  【2026-10-15 第1批枚举收口】标签改为「字典优先、本地常量兜底」：
+ *  【2026-10-15 第1批枚举办结】标签改为「字典优先、本地常量默认处理」：
  *   字典 wf_node_multi_type（V1.4.67 灌入 4 项）的文案比本地常量更贴合业务
  *   （字典："或签（任一人办理即可）"／常量："任一通过（单人办理）"），且字典由运营可维护。
  *    但字典是**运行时远程数据**，接口不可用时必须回落本地常量 —— 否则配置页一打开就空白。

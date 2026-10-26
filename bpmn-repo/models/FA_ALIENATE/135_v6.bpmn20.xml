@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_FA_ALIENATE" targetNamespace="http://fssc">
+  <bpmn:process id="FA_ALIENATE" name="资产处置审批流程(对外销售)" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:userTask id="Task_1" name="采购招标，三方比价【采购经理】" flowable:candidateGroups="PURCHASE_MANAGER" />
+    <bpmn:userTask id="Task_2" name="业务部门直接上级审核【直线上级】" flowable:candidateGroups="DIRECT_SUPERVISOR" />
+    <bpmn:exclusiveGateway id="Gw_3" default="Flow_3_def" />
+    <bpmn:userTask id="Task_3" name="基地总经理审批【基地总经理】" flowable:candidateGroups="BASE_GM" />
+    <bpmn:exclusiveGateway id="Gw_4" default="Flow_4_def" />
+    <bpmn:userTask id="Task_4" name="财务经理审批【财务经理】" flowable:candidateGroups="FIN_MANAGER" />
+    <bpmn:exclusiveGateway id="Gw_5" default="Flow_5_def" />
+    <bpmn:userTask id="Task_5" name="板块分管领导审批【板块分管领导】" flowable:candidateGroups="PLATE_DIV_LEADER" />
+    <bpmn:exclusiveGateway id="Gw_6" default="Flow_6_def" />
+    <bpmn:userTask id="Task_6" name="财务总监审批【财务总监】" flowable:candidateGroups="CFO" />
+    <bpmn:exclusiveGateway id="Gw_7" default="Flow_7_def" />
+    <bpmn:userTask id="Task_7" name="董办/董会上会决议【董办/总裁办公会】" flowable:candidateGroups="BOARD_OFFICE" />
+    <bpmn:userTask id="Task_8" name="签订处置销售协议【财务专员】" flowable:candidateGroups="FIN_STAFF" />
+    <bpmn:userTask id="Task_9" name="确认收款，开票并扫描影像【财务扫描岗】" flowable:candidateGroups="SCAN_STAFF" />
+    <bpmn:userTask id="Task_10" name="生成记账凭证【总账会计】" flowable:candidateGroups="FIN_GL" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="Task_2" />
+    <bpmn:sequenceFlow id="Flow_3_in" sourceRef="Task_2" targetRef="Gw_3" />
+    <bpmn:sequenceFlow id="Flow_3_cond" name="金额&gt;100000" sourceRef="Gw_3" targetRef="Task_3"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 100000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_3_def" name="金额不足/其他" sourceRef="Gw_3" targetRef="Task_8" />
+    <bpmn:sequenceFlow id="Flow_4_in" sourceRef="Task_3" targetRef="Gw_4" />
+    <bpmn:sequenceFlow id="Flow_4_cond" name="金额&gt;200000" sourceRef="Gw_4" targetRef="Task_4"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 200000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_4_def" name="金额不足/其他" sourceRef="Gw_4" targetRef="Task_8" />
+    <bpmn:sequenceFlow id="Flow_5_in" sourceRef="Task_4" targetRef="Gw_5" />
+    <bpmn:sequenceFlow id="Flow_5_cond" name="金额&gt;500000" sourceRef="Gw_5" targetRef="Task_5"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 500000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_5_def" name="金额不足/其他" sourceRef="Gw_5" targetRef="Task_8" />
+    <bpmn:sequenceFlow id="Flow_6_in" sourceRef="Task_5" targetRef="Gw_6" />
+    <bpmn:sequenceFlow id="Flow_6_cond" name="金额&gt;2000000" sourceRef="Gw_6" targetRef="Task_6"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 2000000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_6_def" name="金额不足/其他" sourceRef="Gw_6" targetRef="Task_8" />
+    <bpmn:sequenceFlow id="Flow_7_in" sourceRef="Task_6" targetRef="Gw_7" />
+    <bpmn:sequenceFlow id="Flow_7_cond" name="金额&gt;2000000" sourceRef="Gw_7" targetRef="Task_7"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 2000000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_7_def" name="金额不足/其他" sourceRef="Gw_7" targetRef="Task_8" />
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Task_7" targetRef="Task_8" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Task_8" targetRef="Task_9" />
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Task_9" targetRef="Task_10" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="Task_10" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="FA_ALIENATE">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1"><dc:Bounds x="210.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_2_di" bpmnElement="Task_2"><dc:Bounds x="400.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Gw_3_di" bpmnElement="Gw_3"><dc:Bounds x="590.0" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_3_di" bpmnElement="Task_3"><dc:Bounds x="660.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Gw_4_di" bpmnElement="Gw_4"><dc:Bounds x="850.0" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4"><dc:Bounds x="920.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Gw_5_di" bpmnElement="Gw_5"><dc:Bounds x="1110.0" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_5_di" bpmnElement="Task_5"><dc:Bounds x="1180.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Gw_6_di" bpmnElement="Gw_6"><dc:Bounds x="1370.0" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_6_di" bpmnElement="Task_6"><dc:Bounds x="1440.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Gw_7_di" bpmnElement="Gw_7"><dc:Bounds x="1630.0" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_7_di" bpmnElement="Task_7"><dc:Bounds x="1700.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_8_di" bpmnElement="Task_8"><dc:Bounds x="1890.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_9_di" bpmnElement="Task_9"><dc:Bounds x="2080.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="Task_10_di" bpmnElement="Task_10"><dc:Bounds x="2270.0" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="2460.0" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="156.0" y="120" /><di:waypoint x="275.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="340.0" y="120" /><di:waypoint x="465.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_3_in_di" bpmnElement="Flow_3_in"><di:waypoint x="530.0" y="120" /><di:waypoint x="610.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_3_cond_di" bpmnElement="Flow_3_cond"><di:waypoint x="630.0" y="120" /><di:waypoint x="660.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_3_def_di" bpmnElement="Flow_3_def"><di:waypoint x="610.0" y="142" /><di:waypoint x="610.0" y="230" /><di:waypoint x="985.0" y="230" /><di:waypoint x="985.0" y="160" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_4_in_di" bpmnElement="Flow_4_in"><di:waypoint x="790.0" y="120" /><di:waypoint x="870.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_4_cond_di" bpmnElement="Flow_4_cond"><di:waypoint x="890.0" y="120" /><di:waypoint x="920.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_4_def_di" bpmnElement="Flow_4_def"><di:waypoint x="870.0" y="142" /><di:waypoint x="870.0" y="230" /><di:waypoint x="1245.0" y="230" /><di:waypoint x="1245.0" y="160" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_5_in_di" bpmnElement="Flow_5_in"><di:waypoint x="1050.0" y="120" /><di:waypoint x="1130.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_5_cond_di" bpmnElement="Flow_5_cond"><di:waypoint x="1150.0" y="120" /><di:waypoint x="1180.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_5_def_di" bpmnElement="Flow_5_def"><di:waypoint x="1130.0" y="142" /><di:waypoint x="1130.0" y="230" /><di:waypoint x="1505.0" y="230" /><di:waypoint x="1505.0" y="160" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_6_in_di" bpmnElement="Flow_6_in"><di:waypoint x="1310.0" y="120" /><di:waypoint x="1390.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_6_cond_di" bpmnElement="Flow_6_cond"><di:waypoint x="1410.0" y="120" /><di:waypoint x="1440.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_6_def_di" bpmnElement="Flow_6_def"><di:waypoint x="1390.0" y="142" /><di:waypoint x="1390.0" y="230" /><di:waypoint x="1765.0" y="230" /><di:waypoint x="1765.0" y="160" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_7_in_di" bpmnElement="Flow_7_in"><di:waypoint x="1570.0" y="120" /><di:waypoint x="1650.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_7_cond_di" bpmnElement="Flow_7_cond"><di:waypoint x="1670.0" y="120" /><di:waypoint x="1700.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_7_def_di" bpmnElement="Flow_7_def"><di:waypoint x="1650.0" y="142" /><di:waypoint x="1650.0" y="230" /><di:waypoint x="1955.0" y="230" /><di:waypoint x="1955.0" y="160" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_8_di" bpmnElement="Flow_8"><di:waypoint x="1830.0" y="120" /><di:waypoint x="1955.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_9_di" bpmnElement="Flow_9"><di:waypoint x="2020.0" y="120" /><di:waypoint x="2145.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_10_di" bpmnElement="Flow_10"><di:waypoint x="2210.0" y="120" /><di:waypoint x="2335.0" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="2400.0" y="120" /><di:waypoint x="2460.0" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

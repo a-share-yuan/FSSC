@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * 附件类型判定：发票影像（要识别）vs 普通附件（不识别）。
  *
@@ -7,16 +10,16 @@
  * 而附件列表的 OCR 角标此前**不看文件类型**，一律默认「待识别」——
  * 一份 .docx 合同、一个 .zip 附件挂个「待识别」，等于让用户去等一个永远不会发生的识别。
  *
- * ## 判定口径（必须与后端逐字一致）
+ * ## 判定规则（必须与后端逐字一致）
  * 后端 `ExpenseAttachController.upload()`：只有
  *   `OcrLocalParsers.isLocalFormat(fileName)`（pdf / ofd / xml）
  *   或 `IMAGE_EXTS`（jpg / jpeg / png / bmp / webp / tif / tiff）
  * 才回 `attachType=INVOICE`，其余一律 `attachType=OTHER`、`invoice=null`。
- * 前端改这里而不同步后端，就会出现「界面说有票、后端根本没解析」的口径分裂。
+ * 前端改这里而不同步后端，就会出现「界面说有票、后端根本没解析」的规则分裂。
  *
  * ## 取值优先级
- * 优先用后端返回的 `attachType`（权威，单据落库后重进页面也能拿到）；
- * 缺失时才按扩展名兜底（老数据 / 手工构造的行可能没有该字段）。
+ * 优先用后端返回的 `attachType`（权威，单据写入数据库后重进页面也能拿到）；
+ * 缺失时才按扩展名默认处理（老数据 / 手工构造的行可能没有该字段）。
  */
 
 /** 走图像 OCR 通道的图片类发票（与后端 IMAGE_EXTS 一致） */

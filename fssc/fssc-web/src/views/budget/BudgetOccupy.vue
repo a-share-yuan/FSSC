@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="budget-occupy-page">
     <el-card shadow="never">
@@ -25,7 +28,7 @@
         <el-form-item>
           <el-button type="primary" @click="loadList">查询</el-button>
           <el-button @click="resetFilter">重置</el-button>
-          <el-button @click="doExport">导出 CSV</el-button>
+          <el-button @click="doExport">导出</el-button>
         </el-form-item>
       </el-form>
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -47,7 +50,7 @@
         </el-table-column>
         <el-table-column prop="bizType" label="业务类型" width="130" :formatter="(row, col, val) => bizTypeLabel(val)" />
         <el-table-column prop="bizNo" label="单据号" width="160" sortable />
-        <!-- R5-D-269：操作人改「姓名（工号）」可读口径（后端批查 sys_user 回填）；查不到回退裸 id -->
+        <!-- R5-D-269：操作人改「姓名（工号）」可读规则（后端批查 sys_user 回填）；查不到回退裸 id -->
         <el-table-column prop="operUserId" label="操作人" width="130" sortable :formatter="(row) => operatorText(row)" />
         <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
         <el-table-column prop="createTime" label="时间" width="160" sortable :formatter="(row, col, val) => formatDateTime(val)" />
@@ -87,7 +90,7 @@
   <el-empty v-else description="未找到该预算明细" :image-size="60" />
 </el-dialog>
 
-<!-- D-V4R-39：占用核销入口（后端 budget:occupy:do 闸在，缺的是门） -->
+<!-- D-V4R-39：占用核销入口（后端 budget:occupy:do 校验在，缺的是门） -->
 <el-dialog v-model="woVisible" title="核销预算占用" width="470px" destroy-on-close>
   <el-alert type="warning" :closable="false" show-icon style="margin-bottom:12px"
     title="核销＝把这笔占用转成已用（消耗）。只在系统自动结转失败、账本上出现「只有占用没有核销」的单子上用；操作会留流水，不可撤销。" />
@@ -254,7 +257,7 @@ async function openBalance(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// 41号审查 P1-9：导出当前查询结果；R5-D-269：操作人同步「姓名（工号）」可读口径
+// 41号审查 P1-9：导出当前查询结果；R5-D-269：操作人同步「姓名（工号）」可读规则
 function doExport() {
   const rows = list.value.map((r) => ({ ...r, operatorText: operatorText(r) }))
   exportCsv(rows, [

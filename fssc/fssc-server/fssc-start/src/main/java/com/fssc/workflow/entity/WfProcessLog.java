@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -6,6 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
+ * 流程处理详细日志（wf_process_log，带 tenant_id）——流程配置「详细日志开关」（参数 4.3）：
  * 「勾选后流程处理详细日志写 log 与流程日志（管理中心可查）」。
  *
  * <p><b>为什么要有它</b>（改造方案 §三④ / §四 C 档）：改造前我们<b>既无开关、也无流程日志视图</b>，
@@ -15,13 +19,13 @@ import lombok.EqualsAndHashCode;
  *
  * <p><b>与 wf_task_history 的分工（勿重复造）</b>：
  * <ul>
- *  <li>{@code wf_task_history} 是<b>审批留痕</b>（审计口径，只记"谁审了什么"，面向时间线展示）；</li>
- *  <li>本表是<b>处理日志</b>（诊断口径，记引擎事件级明细：任务生成时候选人有谁、变量值是什么、
+ *  <li>{@code wf_task_history} 是<b>审批记录</b>（审计规则，只记"谁审了什么"，面向时间线展示）；</li>
+ *  <li>本表是<b>处理日志</b>（诊断规则，记引擎事件级明细：任务生成时候选人有谁、变量值是什么、
  *      节点配置解析到了什么），面向"为什么这单卡住了"的排查，可按 {@code log_type} 过滤、可按天清理。</li>
  * </ul>
  *
  * <p><b>开关与零影响</b>：由 {@code sys_config.wf.log.detailed.enabled} 控制，缺省 {@code 0}（关闭，
- * fail-closed，与行业方案"默认不勾选"一致）。关闭时监听器<b>一个字段都不写</b>（只做一次配置读取即返回），
+ * fail-closed，默认不勾选）。关闭时监听器<b>一个字段都不写</b>（只做一次配置读取即返回），
  * 库中零新增行，性能与行为与改造前逐字一致。
  */
 @Data
@@ -40,7 +44,7 @@ public class WfProcessLog extends TenantAuditBase {
     /** 节点ID（BPMN userTask id） */
     private String nodeKey;
     private String nodeName;
-    /** 业务单据类型 / ID / 单号（变量取数，缺失为空） */
+    /** 业务单据类型 / ID / 单号（变量查询，缺失为空） */
     private String bizType;
     private Long bizId;
     private String bizNo;

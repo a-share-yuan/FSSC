@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -44,7 +47,7 @@ public class CostCenterService {
 
     @CacheEvict(value = "masterData", key = "T(com.fssc.framework.tenant.TenantContext).getTenantId() + ':costCenter:tree'")
     public Long create(MdCostCenter e) {
-        // 必填收口（批次 2C，与前端 MasterDataTree 的 costCenterRules 同口径）：编码/名称是人工维护的业务键
+        // 必填办结（批次 2C，与前端 MasterDataTree 的 costCenterRules 同一规则）：编码/名称是人工维护的业务键
         AssertUtil.notBlank(e.getCcCode(), ErrorCode.PARAM_INVALID, "请输入编码");
         AssertUtil.notBlank(e.getCcName(), ErrorCode.PARAM_INVALID, "请输入名称");
         e.setId(null);
@@ -57,7 +60,7 @@ public class CostCenterService {
 
     @CacheEvict(value = "masterData", key = "T(com.fssc.framework.tenant.TenantContext).getTenantId() + ':costCenter:tree'")
     public void update(MdCostCenter e) {
-        // 整单更新（前端提交完整对象），故与 create 同口径拦空；enable() 走独立对象不受影响
+        // 整单更新（前端提交完整对象），故与 create 同一规则拦空；enable() 走独立对象不受影响
         AssertUtil.notBlank(e.getCcCode(), ErrorCode.PARAM_INVALID, "请输入编码");
         AssertUtil.notBlank(e.getCcName(), ErrorCode.PARAM_INVALID, "请输入名称");
         mapper.updateById(e);

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -582,7 +585,7 @@ public class PrecheckEngineService {
         for (String item : items) {
             String key = item.trim();
             // 列表项语义是「字面量」：仅当 data 中确有同名变量时按变量取值，否则按字面量比较。
-            // （resolveValue 已改为对未定义变量返回 null，此处不能再直接依赖它的兜底行为）
+            // （resolveValue 已改为对未定义变量返回 null，此处不能再直接依赖它的默认处理行为）
             Object itemVal = (data != null && data.containsKey(key)) ? data.get(key) : unquote(key);
             if (itemVal != null && leftStr.equals(itemVal.toString())) {
                 return true;
@@ -1021,7 +1024,7 @@ public class PrecheckEngineService {
 
     // ========== 脚本验证 ==========
 
-    /** 验证脚本语法并返回执行结果，不持久化 */
+    /** 验证脚本语法并返响应行结果，不持久化 */
     public Map<String, Object> validateScript(String scriptContent, Map<String, Object> sampleData) {
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("script", scriptContent);
@@ -1073,7 +1076,7 @@ public class PrecheckEngineService {
     }
 
     /**
-     * P0-5 无纸化准入校验（TCL FSSC 行业模板 TC04）：
+     * P0-5 无纸化准入校验（模板 TC04）：
      * <ul>
      *   <li>电子发票（专票/普票） + 电汇/银行转账付款 → 可无纸化，无需交实物</li>
      *   <li>纸质发票 → 禁止无纸化，必须交实物</li>

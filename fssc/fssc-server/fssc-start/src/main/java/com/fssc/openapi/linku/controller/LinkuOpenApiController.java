@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.openapi.linku.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,7 +35,7 @@ import java.util.Map;
  *   <li><b>查询</b>（GET {@code /api/open/linku/query/**}）：签名原文为<b>空串</b>；</li>
  *   <li><b>写入</b>（POST {@code /api/open/linku/sync/**}）：签名原文为请求体原文。</li>
  * </ul>
- * 全部经 {@link LinkuOpenGuard} 统一验签 → 幂等 → 审计；未过签不落业务表。
+ * 全部经 {@link LinkuOpenGuard} 统一验签 → 去重 → 审计；未过签不落业务表。
  *
  * <h3>匿名可达但默认 fail-closed</h3>
  * 本路径在 {@code JwtAuthFilter} 白名单内（外部系统无业务 Token），
@@ -101,7 +104,7 @@ public class LinkuOpenApiController {
                         intOf(p.get("limit"))));
     }
 
-    /** AR 预制发票腿（三单匹配中间腿）；OTC 代无此表时返回空列表（自动退化为两单匹配）。 */
+    /** AR 预制发票环节（三单匹配中间环节）；OTC 代无此表时返回空列表（自动退化为两单匹配）。 */
     @GetMapping("/query/pre-invoices")
     public Result<Object> preInvoices(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         Map<String, Object> p = params(req);
@@ -111,8 +114,8 @@ public class LinkuOpenApiController {
     }
 
     /**
-     * AR 销售订单腿（P0-C《AR 三单匹配改造》）。候选表 {@code so_order} 缺失时返回空并告警
-     * —— 数据源未就绪，BCP 侧 AR 匹配缺订单腿不自动通过，不回退采购订单。
+     * AR 销售订单环节（P0-C《AR 三单匹配改造》）。候选表 {@code so_order} 缺失时返回空并告警
+     * —— 数据源未就绪，BCP 侧 AR 匹配缺订单环节不自动通过，不回退采购订单。
      */
     @GetMapping("/query/sales-orders")
     public Result<Object> salesOrders(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -122,7 +125,7 @@ public class LinkuOpenApiController {
                         str(p.get("period")), intOf(p.get("limit"))));
     }
 
-    /** AR 销售出库发货腿（P0-C）。候选表 {@code so_shipment} 缺失时返回空并告警。 */
+    /** AR 销售出库发货环节（P0-C）。候选表 {@code so_shipment} 缺失时返回空并告警。 */
     @GetMapping("/query/sale-shipments")
     public Result<Object> saleShipments(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         Map<String, Object> p = params(req);
@@ -140,7 +143,7 @@ public class LinkuOpenApiController {
                         intOf(p.get("limit"))));
     }
 
-    /** 期间冻结状态（协同冻结闸：关账期间禁止对账/核销写入）。 */
+    /** 期间冻结状态（协同冻结校验：关账期间禁止对账/核销写入）。 */
     @GetMapping("/query/period-status")
     public Result<Object> periodStatus(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         Map<String, Object> p = params(req);
@@ -171,14 +174,14 @@ public class LinkuOpenApiController {
         return guard.guard(req, resp, raw, "INVOICE_SYNC", () -> syncService.syncInvoice(parse(raw)));
     }
 
-    /** 核销结果（AR 收款核销／对冲；AP 应付单终态）。 */
+    /** 核销结果（AR 收款核销／对冲；AP 应付单最终状态）。 */
     @PostMapping("/sync/writeoff")
     public Result<Object> syncWriteoff(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String raw = readBody(req);
         return guard.guard(req, resp, raw, "WRITEOFF_SYNC", () -> syncService.syncWriteoff(parse(raw)));
     }
 
-    /** 应收应付对冲留痕（gl_inter_offset，无现金流入，不生成收款单）。 */
+    /** 应收应付对冲记录（gl_inter_offset，无现金流入，不生成收款单）。 */
     @PostMapping("/sync/offset-trace")
     public Result<Object> syncOffsetTrace(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String raw = readBody(req);
@@ -199,7 +202,7 @@ public class LinkuOpenApiController {
         return guard.guard(req, resp, raw, "RECEIPT_SYNC", () -> syncService.syncReceipt(parse(raw)));
     }
 
-    /** AR 核销结果与应收应付对冲留痕。 */
+    /** AR 核销结果与应收应付对冲记录。 */
     @PostMapping("/sync/ar-writeoff")
     public Result<Object> syncArWriteoff(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String raw = readBody(req);

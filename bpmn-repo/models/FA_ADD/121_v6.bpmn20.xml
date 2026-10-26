@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_FA_ADD" targetNamespace="http://fssc">
+  <bpmn:process id="FA_ADD" name="资产新增审批流程（含在建转固档）" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始" />
+    <bpmn:exclusiveGateway id="GW_FAADD" name="来源分档" default="Flow_GW_FAADD_def" />
+    <bpmn:sequenceFlow id="Flow_start_gw" sourceRef="StartEvent_1" targetRef="GW_FAADD" />
+    <bpmn:userTask id="FK_1" name="验收登记【资产管理员】" flowable:candidateGroups="FA_ASSET_ADMIN" />
+    <bpmn:sequenceFlow id="Flow_in_FK_1" sourceRef="StartEvent_1" targetRef="FK_1" />
+    <bpmn:userTask id="FK_2" name="使用部门确认【部门经理】" flowable:candidateGroups="DEPT_MANAGER" />
+    <bpmn:sequenceFlow id="Flow_in_FK_2" sourceRef="FK_1" targetRef="FK_2" />
+    <bpmn:userTask id="FK_3" name="资产账套过账【资产核算岗】" flowable:candidateGroups="FA_ASSET_ACCOUNT" />
+    <bpmn:sequenceFlow id="Flow_in_FK_3" sourceRef="FK_2" targetRef="FK_3" />
+    <bpmn:exclusiveGateway id="GW_FAADD_AMT" name="金额授权" default="Flow_end" />
+    <bpmn:sequenceFlow id="Flow_in_GW_FAADD_AMT" sourceRef="FK_3" targetRef="GW_FAADD_AMT" />
+    <bpmn:userTask id="FK_6" name="总裁审批【总裁】" flowable:candidateGroups="PRESIDENT" />
+    <bpmn:sequenceFlow id="Flow_GW_FAADD_AMT_FK_6" sourceRef="GW_FAADD_AMT" targetRef="FK_6"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 5000000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:userTask id="FK_5" name="财务总监审批【财务总监】" flowable:candidateGroups="CFO" />
+    <bpmn:sequenceFlow id="Flow_GW_FAADD_AMT_FK_5" sourceRef="GW_FAADD_AMT" targetRef="FK_5"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 500000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:userTask id="FK_4" name="财务经理审批【财务经理】" flowable:candidateGroups="FIN_MANAGER" />
+    <bpmn:sequenceFlow id="Flow_GW_FAADD_AMT_FK_4" sourceRef="GW_FAADD_AMT" targetRef="FK_4"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 100000}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_back_FK_6" sourceRef="FK_6" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_back_FK_5" sourceRef="FK_5" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_back_FK_4" sourceRef="FK_4" targetRef="EndEvent_1" />
+    <bpmn:sequenceFlow id="Flow_GW_FAADD_def" sourceRef="GW_FAADD" targetRef="FK_1" />
+    <bpmn:userTask id="FC_1" name="转固单据扫描【财务扫描岗】" flowable:candidateGroups="SCAN_STAFF" />
+    <bpmn:sequenceFlow id="Flow_GW_FAADD_FC_1" sourceRef="GW_FAADD" targetRef="FC_1" name="在建转固档"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${billType == 'FA_CIP_TO_ASSET'}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:userTask id="FC_2" name="转固财务审核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
+    <bpmn:sequenceFlow id="Flow_FC_2" sourceRef="FC_1" targetRef="FC_2" />
+    <bpmn:userTask id="FC_3" name="资产账套过户【资产核算岗】" flowable:candidateGroups="FA_ASSET_ACCOUNT" />
+    <bpmn:sequenceFlow id="Flow_FC_3" sourceRef="FC_2" targetRef="FC_3" />
+    <bpmn:userTask id="FC_4" name="转固制证确认【总账会计】" flowable:candidateGroups="FIN_GL" />
+    <bpmn:sequenceFlow id="Flow_FC_4" sourceRef="FC_3" targetRef="FC_4" />
+    <bpmn:sequenceFlow id="Flow_sgjoin_FC_4" sourceRef="FC_4" targetRef="EndEvent_1" />
+    <bpmn:endEvent id="EndEvent_1" name="结束" />
+    <bpmn:sequenceFlow id="Flow_end" sourceRef="GW_FAADD_AMT" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="FA_ADD">
+<bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="GW_FAADD_di" bpmnElement="GW_FAADD"><dc:Bounds x="216" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FK_1_di" bpmnElement="FK_1"><dc:Bounds x="316" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FK_2_di" bpmnElement="FK_2"><dc:Bounds x="506" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FK_3_di" bpmnElement="FK_3"><dc:Bounds x="696" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="GW_FAADD_AMT_di" bpmnElement="GW_FAADD_AMT"><dc:Bounds x="886" y="102" width="40" height="40" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FK_6_di" bpmnElement="FK_6"><dc:Bounds x="841" y="240" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FK_5_di" bpmnElement="FK_5"><dc:Bounds x="841" y="330" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FK_4_di" bpmnElement="FK_4"><dc:Bounds x="841" y="420" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FC_1_di" bpmnElement="FC_1"><dc:Bounds x="276" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FC_2_di" bpmnElement="FC_2"><dc:Bounds x="466" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FC_3_di" bpmnElement="FC_3"><dc:Bounds x="656" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="FC_4_di" bpmnElement="FC_4"><dc:Bounds x="846" y="380" width="130" height="80" /></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="996" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="Flow_start_gw_di" bpmnElement="Flow_start_gw"><di:waypoint x="138" y="120" /><di:waypoint x="236" y="122" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_FK_1_di" bpmnElement="Flow_in_FK_1"><di:waypoint x="138" y="120" /><di:waypoint x="381" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_FK_2_di" bpmnElement="Flow_in_FK_2"><di:waypoint x="381" y="120" /><di:waypoint x="571" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_FK_3_di" bpmnElement="Flow_in_FK_3"><di:waypoint x="571" y="120" /><di:waypoint x="761" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_in_GW_FAADD_AMT_di" bpmnElement="Flow_in_GW_FAADD_AMT"><di:waypoint x="761" y="120" /><di:waypoint x="906" y="122" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_FAADD_AMT_FK_6_di" bpmnElement="Flow_GW_FAADD_AMT_FK_6"><di:waypoint x="906" y="122" /><di:waypoint x="906" y="280" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_FAADD_AMT_FK_5_di" bpmnElement="Flow_GW_FAADD_AMT_FK_5"><di:waypoint x="906" y="122" /><di:waypoint x="906" y="370" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_FAADD_AMT_FK_4_di" bpmnElement="Flow_GW_FAADD_AMT_FK_4"><di:waypoint x="906" y="122" /><di:waypoint x="906" y="460" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_back_FK_6_di" bpmnElement="Flow_back_FK_6"><di:waypoint x="906" y="280" /><di:waypoint x="1014" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_back_FK_5_di" bpmnElement="Flow_back_FK_5"><di:waypoint x="906" y="370" /><di:waypoint x="1014" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_back_FK_4_di" bpmnElement="Flow_back_FK_4"><di:waypoint x="906" y="460" /><di:waypoint x="1014" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_FAADD_def_di" bpmnElement="Flow_GW_FAADD_def"><di:waypoint x="236" y="122" /><di:waypoint x="381" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_GW_FAADD_FC_1_di" bpmnElement="Flow_GW_FAADD_FC_1"><di:waypoint x="236" y="122" /><di:waypoint x="341" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_FC_2_di" bpmnElement="Flow_FC_2"><di:waypoint x="341" y="420" /><di:waypoint x="531" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_FC_3_di" bpmnElement="Flow_FC_3"><di:waypoint x="531" y="420" /><di:waypoint x="721" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_FC_4_di" bpmnElement="Flow_FC_4"><di:waypoint x="721" y="420" /><di:waypoint x="911" y="420" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_sgjoin_FC_4_di" bpmnElement="Flow_sgjoin_FC_4"><di:waypoint x="911" y="420" /><di:waypoint x="1014" y="120" /></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="906" y="122" /><di:waypoint x="1014" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -29,7 +32,7 @@ public class WfModelService {
     private final WfBpmnRepoService bpmnRepoService;
     /** G3-3：发布时统计在途旧实例，写进发布日志 */
     private final WfQueryService wfQueryService;
-    /** A4（2026-10-14）：assign_type 可解析性 fast-fail——部署前拒绝"无兜底方案的 POST/EXPRESSION 节点" */
+    /** A4（2026-10-14）：assign_type 可解析性 fast-fail——部署前拒绝"无默认方案的 POST/EXPRESSION 节点" */
     private final WfAssigneeTypeGuard assigneeTypeGuard;
 
     public PageResult<WfModel> page(long pageNum, long pageSize, String keyword, String category, String status) {
@@ -58,7 +61,7 @@ public class WfModelService {
     }
 
     /**
-     * 必填收口（批次 2C，与前端 FlowConfig「基本信息」表单 / GenericList 流程模型弹窗同口径）：
+     * 必填办结（批次 2C，与前端 FlowConfig「基本信息」表单 / GenericList 流程模型弹窗同一规则）：
      * modelKey 既是 BPMN 的 process key，也是 wf_node_config / wf_process_config 的关联键，留空即挂不上节点。
      */
     private void validateKeyAndName(WfModel model) {
@@ -89,11 +92,11 @@ public class WfModelService {
         if (old == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "模型不存在: " + model.getId());
         }
-        // 整单更新（前端提交完整对象），故与 create 同口径拦空；publish() 走独立对象不经过本方法
+        // 整单更新（前端提交完整对象），故与 create 同一规则拦空；publish() 走独立对象不经过本方法
         validateKeyAndName(model);
         boolean redeploy = model.getBpmnXml() != null && !model.getBpmnXml().isBlank()
                 && !model.getBpmnXml().equals(old.getBpmnXml());
-        // A4 fast-fail（2026-10-14）：仅重部署路径校验（与 publish 同口径），且同样先于写库，
+        // A4 fast-fail（2026-10-14）：仅重部署路径校验（与 publish 同一规则），且同样先于写库，
         // 避免"库已改、部署被拒"的不一致态；纯字段更新（不重部署）不受影响。
         if (redeploy) {
             assigneeTypeGuard.assertModelAssigneesResolvable(old.getModelKey());
@@ -231,13 +234,13 @@ public class WfModelService {
      * 于是「删模型带在途单」：wf_model 行没了，在跑实例的 {@code proc_inst_id} 仍在引擎里推进，
      * 而节点配置按 model_key 关联（{@code wf_node_config}/{@code wf_process_config}）从此解析不到——
      * 催办/超时/改派这类按节点配置驱动的动作静默失效，单据既不推进也不报警，只在待办里发臭
-     * （册载"节点配置失效永不催办"）。修法取<b>禁删</b>而非软删：本表 status 词表
+     * （册载"节点配置失效永不催办"）。修法取<b>禁删</b>而非软删：本表 status 名称表
      * （DRAFT/ACTIVE/DEPLOYED/DISABLED，同 {@link #enable}）里没有"已删除"一格，
      * 新造状态会污染所有按 status 过滤的读侧，而"停用"诉求 {@code enable(id,false)} 已是独立动作。
      *
-     * <p>在途口径复用类内既有 {@code wfQueryService.countRunningOld(modelKey, null)}
+     * <p>在途规则复用类内既有 {@code wfQueryService.countRunningOld(modelKey, null)}
      * （＝{@code wf_instance.model_key = 本模型 && status='RUNNING'}，发布时统计在途旧实例用的
-     * 同一个方法、同一张表，不再另立第二套口径）；租户条件由拦截器注入，只数本租户自己的实例。
+     * 同一个方法、同一张表，不再另立第二套规则）；租户条件由拦截器注入，只数本租户自己的实例。
      *
      * <p>【不做的事】不级联删节点配置、不替用户终止在途实例——那是两码事，需要人工决定。
      */

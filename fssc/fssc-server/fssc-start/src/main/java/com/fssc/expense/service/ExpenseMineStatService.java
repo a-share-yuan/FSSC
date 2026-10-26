@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.expense.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -25,11 +28,11 @@ import java.util.Map;
  *
  * <p><b>人范围与 {@link ExpenseBillService#myPage} 完全一致</b>（源码 :1777-1807）：
  * {@code apply_user_id = 登录人 ∪ agent_user_id = 登录人}（D-DEC-179 甲：报销人 ∪ 该单登记的代理人）。
- * 只有这一条腿一致，「我的」页与「单据」tab 才对得上——代理人代填的单在两处都算他的。
+ * 只有这一个环节一致，「我的」页与「单据」tab 才对得上——代理人代填的单在两处都算他的。
  * 其余两道条件也不由本类手写：
  * <ul>
  *   <li>{@code del_flag = 0} —— 实体基类 {@code @TableLogic}（TenantAuditBase#delFlag）由 MP 自动追加，
- *       与 myPage 的 {@code selectPage} 同一道闸；</li>
+ *       与 myPage 的 {@code selectPage} 同一道校验；</li>
  *   <li>{@code tenant_id} —— {@code TenantLineInnerInterceptor} 自动注入（MybatisPlusConfig，租户拦截器先于分页注册）。</li>
  * </ul>
  *
@@ -46,17 +49,17 @@ public class ExpenseMineStatService {
 
     /**
      * 借款"未冲销完毕"的状态面。
-     * 名单不是新造的，是仓内 D-DEC-106 收口后的同一组：{@code ExpenseWfEventListener}（:648-656 判据说明、
+     * 名单不是新造的，是仓内 D-DEC-106 办结后的同一组：{@code ExpenseWfEventListener}（:648-656 判据说明、
      * :743 {@code .in(status, APPROVED, PARTIAL_REPAID, REPAID)}）与 PC 侧
      * {@code LoanApply.vue#LOAN_OPEN_STATUSES}（:328）逐字相同；
-     * 提单期预分配腿（{@code ExpenseBillService}:929）也含 PARTIAL_REPAID。
-     * 结清终态由 {@code ExpenseWfEventListener#settleLoanAfterRepay}（:783，判余额落 REPAID／PARTIAL_REPAID）。
-     * <p>为什么不能只筛 {@code status='APPROVED'}（＝H5 老算法的取数条件）：
+     * 提单期预分配环节（{@code ExpenseBillService}:929）也含 PARTIAL_REPAID。
+     * 结清最终状态由 {@code ExpenseWfEventListener#settleLoanAfterRepay}（:783，判余额落 REPAID／PARTIAL_REPAID）。
+     * <p>为什么不能只筛 {@code status='APPROVED'}（＝H5 老算法的查询条件）：
      * 借款单一旦挂上冲抵/还款就从 APPROVED 迁档到 PARTIAL_REPAID，只认 APPROVED 会把"仍在贷、真有钱可冲"
-     * 的单整片读成看不见——这正是 D-DEC-106 当年点在还款腿上的同一个洞。
+     * 的单整片读成看不见——这正是 D-DEC-106 当年点在还款环节上的同一个洞。
      * 本库实测（10-04 00:3x 只读）：LOAN 共 3 张，状态为 REPAID／WITHDRAWN／PARTIAL_REPAID 各 1，
      * 处于 APPROVED 的 0 张 ⇒ 老算法的「借款余额」对任何人都恒显示 ￥0.00，
-     * 而 SQL 口径真值是 PARTIAL_REPAID 那 1 张的 15000.00。
+     * 而 SQL 规则真值是 PARTIAL_REPAID 那 1 张的 15000.00。
      * <p>真余额判据仍是 {@code loan_balance > 0}（对齐 myPage 的 {@code minBalance} 参数）；
      * REPAID 纳入名单只为与 PC 侧同一份枚举，余额归零后它自己就进不了求和。
      */
@@ -101,7 +104,7 @@ public class ExpenseMineStatService {
     }
 
     /**
-     * 人范围谓词：与 {@code ExpenseBillService#myPage} 的 and(apply_user_id = 登录人 or agent_user_id = 登录人) 同一条腿。
+     * 人范围谓词：与 {@code ExpenseBillService#myPage} 的 and(apply_user_id = 登录人 or agent_user_id = 登录人) 同一个环节。
      * 括号必须包住 OR，否则后面拼的 bill_type/status 条件会被 OR 短路成"任何人该状态的单都算进来"。
      */
     private QueryWrapper<ExpBill> mineScope(Long userId) {
@@ -130,7 +133,7 @@ public class ExpenseMineStatService {
     }
 
     private static long toLong(Object v) {
-        // SUM() 在零行结果集上返回 NULL，库里已用 ELSE 0 兜底，这里再兜一次，页面显示 0 而不是崩溃。
+        // SUM() 在零行结果集上返回 NULL，库里已用 ELSE 0 默认处理，这里再兜一次，页面显示 0 而不是崩溃。
         return v == null ? 0L : ((Number) v).longValue();
     }
 
@@ -139,12 +142,12 @@ public class ExpenseMineStatService {
      * 打回列表），外加方案册 P1-9 点名但页面上尚未落卡的「在途」。
      * <ul>
      *   <li>{@code loanBalance} —— 「借款余额」大数字：未冲销完毕借款的 Σ loan_balance（库里聚合，非前 N 条）</li>
-     *   <li>{@code loanCount} —— 同口径下的借款笔数（页面括号里的「N 笔」）</li>
+     *   <li>{@code loanCount} —— 同一规则下的借款笔数（页面括号里的「N 笔」）</li>
      *   <li>{@code inTransitCount} —— 在途单数（我的单据里流程在办的张数）</li>
      *   <li>{@code rejectedCount} —— 被打回单数（页面「打回的单据」区块应显示的总数；
      *       老算法受 pageSize 截断且无「更多」入口，用户无法察觉列表其实没拉全）</li>
      * </ul>
-     * 页面原先的 {@code loanPartial}（"按最近 N 笔合计"的截断免责声明）在本口径下恒为 false：
+     * 页面原先的 {@code loanPartial}（"按最近 N 笔合计"的截断免责声明）在本规则下恒为 false：
      * 结果来自 SUM 聚合，与一次能取回多少条明细无关，前端接上后可直接把该标记摘掉。
      */
     @Data

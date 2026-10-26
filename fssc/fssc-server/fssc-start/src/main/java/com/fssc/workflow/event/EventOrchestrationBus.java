@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.workflow.event;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -28,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>零代码接入：新流程仅需在配置表 INSERT 一行 + 实现 WfBizAction Bean</li>
  *   <li>原子化执行：每个 Action 独立 try-catch，单个失败不中断其他动作
  *       <br> <b>D-V4R-87 例外</b>：{@link com.fssc.common.exception.BizException}
- *       （业务闸，例如三单匹配硬异常）必须冒泡，见 {@code onProcessEnded} 注释。</li>
+ *       （业务校验，例如三单匹配硬异常）必须冒泡，见 {@code onProcessEnded} 注释。</li>
  * </ul>
  *
  * @see WfBizAction
@@ -63,7 +66,7 @@ public class EventOrchestrationBus {
      * 2. 查询 wf_event_action_config 表（enabled=1）
      * 3. 按 bizType 分组，按 sortOrder 升序排序
      * 4. 若某 bizType 一条显式行都没有 → 由声明它的 Bean 按默认配置自动注册
-     *    （判定阶＝bizType；一个 Bean 只要部分 bizType 有显式行，其余 bizType 仍会拿到兜底腿）
+     *    （判定阶＝bizType；一个 Bean 只要部分 bizType 有显式行，其余 bizType 仍会拿到默认处理环节）
      */
     public synchronized void refreshDispatchMap() {
         // 1. 扫描所有 WfBizAction Bean
@@ -97,8 +100,8 @@ public class EventOrchestrationBus {
         }
 
         // 4. 对配置表尚未覆盖的 bizType，按默认配置自动注册。
-        //    判定阶＝bizType，不是 bean：本方法上方已建好显式 map，此处只为"还没有任何一条腿"的
-        //    bizType 兜底。旧实现按 bean 名整体 continue，使"半配置 bean"（有若干有效行、另一些
+        //    判定阶＝bizType，不是 bean：本方法上方已建好显式 map，此处只为"还没有任何一个环节"的
+        //    bizType 默认处理。旧实现按 bean 名整体 continue，使"半配置 bean"（有若干有效行、另一些
         //    bizType 漏配）声明的其余 bizType 既拿不到显式行也拿不到自动注册，收尾动作数静默归零；
         //    同时它又会让"全无配置的 bean"与"显式行"叠在同一个 bizType 上造成双发。
         //    bean 名排序遍历＝同一 bizType 被多个未配置 bean 声明时归属可复现。
@@ -106,7 +109,7 @@ public class EventOrchestrationBus {
             WfBizAction action = beans.get(beanName);
             for (String bizType : action.bizTypes()) {
                 if (map.containsKey(bizType)) {
-                    // 已有显式行或已有兜底腿 ⇒ 不覆盖、不叠加（防双发）
+                    // 已有显式行或已有默认处理环节 ⇒ 不覆盖、不叠加（防双发）
                     continue;
                 }
                 map.computeIfAbsent(bizType, k -> new ArrayList<>())
@@ -151,9 +154,9 @@ public class EventOrchestrationBus {
         // 必须在正确的租户上下文内执行，否则：
         //   - TenantContext.getTenantId() 因 fail-closed 抛 TENANT_CONTEXT_MISSING（凭证生成失败）
         //   - 或 MP 租户拦截器在无上下文时跳过 WHERE，造成串户风险。
-        // 故在此据事件携带的 tenantId 重建上下文；tenantId 缺失则用 runIgnoreTenant 兜底（仍不串户）。
+        // 故在此据事件携带的 tenantId 重建上下文；tenantId 缺失则用 runIgnoreTenant 默认处理（仍不串户）。
         Long tenantId = event.getTenantId();
-        // D-V4R-87：业务闸失败必须冒泡，技术异常仍按「原子化」吞掉。
+        // D-V4R-87：业务校验失败必须冒泡，技术异常仍按「原子化」吞掉。
         //
         // 【原缺陷】本层对所有 Action 一律 catch(Exception) 只记 ERROR 日志，而上游
         //   WfEngineFacade:269-281 的设计意图明写「业务收尾事件…同样失败即冒泡」，
@@ -161,12 +164,12 @@ public class EventOrchestrationBus {
         //   两层意图一致，却被这里截断 ⇒ InvoiceMatchBizAction.assertNoHardMatch
         //   抛出的「三单匹配仍有硬异常」被吞成日志，POST /wf/approve 仍回 code=0、
         //   wf_instance 照转 APPROVED、act_ru_task 清零 —— 审批人界面零红字，
-        //   闸有实体无出口。这正是 D-V4R-85「复审链点通过即绕过付款硬闸」的
+        //   校验有实体无出口。这正是 D-V4R-85「复审链点通过即绕过付款强制校验」的
         //   另一半伤：修好了不放行，却让审批人以为自己办成了。
         //
         // 【为何只放 BizException 冒泡】两类异常的性质不同：
         //   - BizException = 业务规则显式拒绝（如三单匹配有 PAY_EXCEED_INVOICE 硬异常）。
-        //     这是「闸」，必须让审批人看见红字并可改数据后重试，否则等于没闸。
+        //     这是「校验」，必须让审批人看见红字并可改数据后重试，否则等于没校验。
         //   - 其它 Exception = 技术故障（DB 抖动、编码异常、第三方超时）。
         //     这些偶发问题若一并冒泡，会让整条审批链因一次网络抖动整体失败回滚，
         //     与本类「原子化、单动作失败不中断其他」的既有契约冲突，风险更大。
@@ -184,7 +187,7 @@ public class EventOrchestrationBus {
                 try {
                     entry.action.execute(event);
                 } catch (com.fssc.common.exception.BizException be) {
-                    // 业务闸：记录后原样上抛，不中断后续 Action（让它们把该做的收口做完），
+                    // 业务校验：记录后原样上抛，不中断后续 Action（让它们把该做的办结做完），
                     // 循环结束后统一抛第一个，避免中途抛导致后续 Action 全不执行。
                     log.error("EventOrchestrationBus: 业务闸拒绝收尾（将冒泡回滚流程结束） bizType={}, bean={}, error={}",
                             event.getBizType(), entry.beanName, be.getMessage(), be);

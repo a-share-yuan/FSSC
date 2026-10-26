@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -65,7 +68,7 @@ public class MdCipService {
         }
         if (e.getCompanyId() == null) e.setCompanyId(exist.getCompanyId());
         fillCompany(e);
-        // 不允许覆盖累计金额（由归集明细维护）；paid_amount 由 CIP 付款凭证回写（），编辑同样不可覆盖
+        // 不允许覆盖累计金额（由归集明细维护）；paid_amount 由 CIP 付款凭证回写，编辑同样不可覆盖
         e.setAccruedAmount(null);
         e.setPaidAmount(null);
         e.setTransferredAmount(null);
@@ -77,7 +80,7 @@ public class MdCipService {
     }
 
     /**
-     * 人工建档必填守卫（批次 2B，与前端 CIP_CARD 登记表同口径）：
+     * 人工建档必填守卫（批次 2B，与前端 CIP_CARD 登记表同一规则）：
      * md_cip.cip_name 为 NOT NULL 且无默认值，留空会直接抛 SQL 异常（500）而非友好提示；
      * cip_code 无自动编号规则（validateCodeUnique 只查重不补号），留空会写出无编码的在建工程。
      */
@@ -123,12 +126,12 @@ public class MdCipService {
 
     /**
      * 在建工程成本归集：明细（md_cip_cost）＋工程暂挂金额（md_cip.accrued_amount）两表成对写。
-     * 无边界时明细已落而汇总未加＝暂挂金额永久少计，转资按少计额入账（ROOT-11 已裁口径：跨表写成对者补；自定，无厂商条款）。
+     * 无边界时明细已落而汇总未加＝暂挂金额永久少计，转资按少计额入账（ROOT-11 已裁规则：跨表写成对者补；自定，无外部依据）。
      */
     @Transactional(rollbackFor = Exception.class)
     public Long addCost(Long cipId, MdCipCost cost) {
         MdCip cip = requireCip(cipId);
-        // 必填守卫（批次 2B）：归集类型决定成本口径（领料/设备/人工/待摊/资本化利息），留空无从归类
+        // 必填守卫（批次 2B）：归集类型决定成本规则（领料/设备/人工/待摊/资本化利息），留空无从归类
         if (cost.getCostType() == null || cost.getCostType().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择归集类型");
         }
@@ -143,6 +146,7 @@ public class MdCipService {
         return cost.getId();
     }
 
+    /** 与 {@link #addCost} 对称：删明细＋回退暂挂金额，半写会让汇总永久多计（同一规则）。 */
     @Transactional(rollbackFor = Exception.class)
     public void deleteCost(Long costId) {
         MdCipCost cost = costMapper.selectById(costId);
@@ -165,7 +169,7 @@ public class MdCipService {
     /**
      * CIP 采购/付款成本归集：付款批次确认/执行后自动归集到在建工程成本。
      * 仅当批次显式关联在建工程（sourceDocType=CIP 且 sourceDocId=md_cip.id）时写入
-     * md_cip_cost（成本类型 EQUIPMENT，描述含批次号幂等防重），并回写累计归集金额。
+     * md_cip_cost（成本类型 EQUIPMENT，描述含批次号去重防重），并回写累计归集金额。
      *
      * <p>技术方案说明：付款明细链路为 批次→付款记录→源单据(exp_bill)，exp_bill 仅有
      * project_id（项目主数据）与 contract_id，与 md_cip（在建工程主数据）无外键关联；
@@ -214,8 +218,8 @@ public class MdCipService {
 
     /**
      * 采购收货 CIP 成本归集：收货单挂在建工程（po_receipt.cip_id，从 po_order 继承）时，
-     * 收货成功后自动写入 md_cip_cost（成本类型 EQUIPMENT，描述含收货单号幂等防重），并回写累计归集金额。
-     * 与 {@link #aggregateFromPayBatch} 同一套幂等/兜底约定：内部异常吞掉仅记日志，不阻断收货主流程。
+     * 收货成功后自动写入 md_cip_cost（成本类型 EQUIPMENT，描述含收货单号去重防重），并回写累计归集金额。
+     * 与 {@link #aggregateFromPayBatch} 同一套去重/默认处理约定：内部异常吞掉仅记日志，不阻断收货主流程。
      */
     @Transactional(rollbackFor = Exception.class)
     public void aggregateFromReceipt(String receiptNo, Long cipId, BigDecimal amount) {
@@ -267,7 +271,7 @@ public class MdCipService {
         if (req.getCategoryId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择固定资产类别");
         }
-        // 必填守卫（批次 2B）：转固日期＝新建卡片的购置日期（折旧起算口径），使用部门＝卡片归属部门；
+        // 必填守卫（批次 2B）：转固日期＝新建卡片的购置日期（折旧起算规则），使用部门＝卡片归属部门；
         // 此前两者留空照样建卡并发审批，卡片要等到人工编辑才能补齐。
         if (req.getTransferDate() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择转固日期");

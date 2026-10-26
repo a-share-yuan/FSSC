@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div>
     <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap">
@@ -42,10 +45,20 @@
         <template #default="{ row }">{{ fmt(row.remainAmount) }}</template>
       </el-table-column>
       <el-table-column prop="dueDate" :label="$t('flow.arRecv.colDueDate')" width="110" sortable />
-      <el-table-column :label="$t('common.status')" width="90" align="center">
+      <el-table-column :label="$t('flow.arRecv.colRecvState')" width="90" align="center">
         <template #default="{ row }">
           <el-tag :type="row.status === 'DONE' ? 'success' : row.status === 'OVERDUE' ? 'danger' : 'warning'" size="small">
             {{ rcStatusLabel(row.status) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <!-- D-H3-01：单据态是「收款规则」（NONE 直译"未开始"），审批期间看不出流程在跑 ⇒
+           后端 page() 按 wf_instance 投影一列流程态（未起流程/审批中/审批通过/已驳回/已撤销/已终止）。
+           当前节点与办理人仍在「流程进度」面板里看，本列只回答"审批走到没走完"。 -->
+      <el-table-column :label="$t('flow.arRecv.colFlowState')" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag :type="flowTagType(row.flowStatus)" size="small" effect="plain">
+            {{ row.flowStatusText || $t('flow.arRecv.textNoFlow') }}
           </el-tag>
         </template>
       </el-table-column>
@@ -105,6 +118,12 @@ useKeyboard({
 
 const traceVisible = ref(false)
 const traceBillId = ref(null)
+
+// D-H3-01：流程态配色（wf_instance.status）——审批中给主色，最终状态按结果分色，未起流程灰
+function flowTagType(s) {
+  return { RUNNING: 'primary', APPROVED: 'success', REJECTED: 'danger', CANCELLED: 'info', TERMINATED: 'info' }[s] || 'info'
+}
+
 function openRowDetail(row) {
   traceBillId.value = row.id
   traceVisible.value = true
@@ -194,7 +213,7 @@ async function accrueOverdue() {
 
 function reload() { loadReceivable() }
 
-// D-DEC-404 消费半：工作台台账跳转同写 kw 与 billNo/billId 两套取参口径，本页两套都吃
+// D-DEC-404 消费半：工作台台账跳转同写 kw 与 billNo/billId 两套取参规则，本页两套都吃
 onMounted(() => {
   loadCurrency()
   const q = route.query || {}

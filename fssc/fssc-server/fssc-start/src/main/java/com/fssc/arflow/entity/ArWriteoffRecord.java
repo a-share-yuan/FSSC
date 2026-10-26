@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.arflow.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
@@ -12,7 +15,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 核销记录（蓝图核销查询页 + 状态机4.3）：收款/票据/对冲三类核销的执行留痕，
+ * 核销记录（蓝图核销查询页 + 状态机4.3）：收款/票据/对冲三类核销的执行记录，
  * 关联生成的收款核销单号与凭证号。
  */
 @Data

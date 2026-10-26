@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <div class="expense-policy-manage">
     <el-alert type="info" :closable="false" show-icon class="mb12"
@@ -216,7 +219,7 @@ import { expensePolicyApi, policyStandardApi, policyVersionApi, orgApi } from '@
 import { hasPerm } from '@/utils/perm'
 import SkeletonList from '@/components/SkeletonList.vue'
 
-// 枚举词表：取值严格对齐后端实体注释（ExpensePolicyStandard.standardType / levelType / overtimeAction）
+// 枚举名称表：取值严格对齐后端实体注释（ExpensePolicyStandard.standardType / levelType / overtimeAction）
 const STD_TYPE = {
   AMOUNT: { label: '金额标准', type: 'success' },
   QUOTA:  { label: '限额',     type: 'warning' },

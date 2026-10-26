@@ -1,0 +1,50 @@
+--- bpmn:GL_MERGE v3
++++ bpmn:GL_MERGE v4
+@@ -1,35 +1,23 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:flowable="http://flowable.org/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_GL_MERGE" targetNamespace="http://fssc">
+-  <bpmn:process id="GL_MERGE" name="合并报表审批流程" isExecutable="true">
++  <bpmn:process id="GL_MERGE" name="合并报表（作业）" isExecutable="true">
+     <bpmn:startEvent id="StartEvent_1" name="开始" />
+-    <bpmn:userTask id="Task_4" name="合并底稿编制：单体CF/PBC、国内公司CF、小合并、大合并底稿与CF、利息资本化、合并层面收入成本、合并BS/PL 及注释（作业池）【总账会计】" flowable:candidateGroups="FIN_GL" />
+-    <bpmn:userTask id="Task_5" name="内部资金往来抵消确认【应收会计】" flowable:candidateGroups="FIN_AR" />
+-    <bpmn:userTask id="Task_10" name="抵消分录复核【总账会计】" flowable:candidateGroups="FIN_GL" />
+-    <bpmn:userTask id="Task_13" name="合并报表审核【财务审核岗】" flowable:candidateGroups="FIN_AUDIT" />
+-    <bpmn:userTask id="Task_14" name="对外报送【财务专员】" flowable:candidateGroups="FIN_STAFF" />
++    <bpmn:userTask id="GMG_1" name="合并底稿编制【总账会计】" flowable:candidateGroups="FIN_GL" />
++    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="GMG_1" />
++    <bpmn:userTask id="GMG_2" name="合并复核【总账会计】" flowable:candidateGroups="FIN_GL" />
++    <bpmn:sequenceFlow id="Flow_GMG_2" sourceRef="GMG_1" targetRef="GMG_2" />
+     <bpmn:endEvent id="EndEvent_1" name="结束" />
+-    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_4" />
+-    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_4" targetRef="Task_5" />
+-    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_5" targetRef="Task_10" />
+-    <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_10" targetRef="Task_13" />
+-    <bpmn:sequenceFlow id="Flow_5" sourceRef="Task_13" targetRef="Task_14" />
+-    <bpmn:sequenceFlow id="Flow_end" sourceRef="Task_14" targetRef="EndEvent_1" />
++    <bpmn:sequenceFlow id="Flow_end" sourceRef="GMG_2" targetRef="EndEvent_1" />
+   </bpmn:process>
+   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="GL_MERGE">
+ <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="120" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_4_di" bpmnElement="Task_4"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_5_di" bpmnElement="Task_5"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_10_di" bpmnElement="Task_10"><dc:Bounds x="596" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_13_di" bpmnElement="Task_13"><dc:Bounds x="786" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="Task_14_di" bpmnElement="Task_14"><dc:Bounds x="976" y="80" width="130" height="80" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="1166" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+-<bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="156" y="120" /><di:waypoint x="216" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="346" y="120" /><di:waypoint x="406" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="536" y="120" /><di:waypoint x="596" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4"><di:waypoint x="726" y="120" /><di:waypoint x="786" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5"><di:waypoint x="916" y="120" /><di:waypoint x="976" y="120" /></bpmndi:BPMNEdge>
+-<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="1106" y="120" /><di:waypoint x="1166" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNShape id="GMG_1_di" bpmnElement="GMG_1"><dc:Bounds x="216" y="80" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="GMG_2_di" bpmnElement="GMG_2"><dc:Bounds x="406" y="80" width="130" height="80" /></bpmndi:BPMNShape>
++<bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="606" y="102" width="36" height="36" /></bpmndi:BPMNShape>
++<bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="138" y="120" /><di:waypoint x="281" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_GMG_2_di" bpmnElement="Flow_GMG_2"><di:waypoint x="281" y="120" /><di:waypoint x="471" y="120" /></bpmndi:BPMNEdge>
++<bpmndi:BPMNEdge id="Flow_end_di" bpmnElement="Flow_end"><di:waypoint x="471" y="120" /><di:waypoint x="624" y="120" /></bpmndi:BPMNEdge>
+     </bpmndi:BPMNPlane>
+   </bpmndi:BPMNDiagram>
+ </bpmn:definitions>

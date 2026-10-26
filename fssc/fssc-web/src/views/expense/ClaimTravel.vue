@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <BillWorkbench ref="wb" bill-type="CLAIM" sub-type="TRAVEL" :claim="true" :travel="true" :before-submit="onBeforeSubmit" :on-apply-pick="onApplyPick">
     <template #create="b">
@@ -275,7 +278,7 @@ function openTrace(row) {
 }
 
 const wb = ref(null)
-// 表头红星/规则/闸门同源（constants/billRequired.js），差旅页特有的三个下拉再叠加本地规则
+// 表头红星/规则/校验同源（constants/billRequired.js），差旅页特有的三个下拉再叠加本地规则
 const formRef = ref(null)
 const settleFormRef = ref(null)
 const formRules = computed(() => ({
@@ -320,7 +323,7 @@ function dayStr(d) {
 }
 function dayBefore(d, min) { return !!min && dayStr(d) < min }
 function dayAfter(d, max) { return !!max && dayStr(d) > max }
-// 与 PreApply 同口径：同一人同一天出现两条行程＝重复登记（多段行程日期不同，不受影响）
+// 与 PreApply 同一规则：同一人同一天出现两条行程＝重复登记（多段行程日期不同，不受影响）
 function travelDup(b, index, name) {
   const cur = b.form.travels[index]
   if (!cur || !name) return false
@@ -350,7 +353,7 @@ async function removeTravel(b, i) {
   if (!(await confirmRemoveRow(has))) return
   b.form.travels.splice(i, 1)
 }
-// 同口径：发票勾选生成的明细行（暂无 itemId 但金额已填）即时计入合计
+// 同一规则：发票勾选生成的明细行（暂无 itemId 但金额已填）即时计入合计
 function totalAmount(b) {
   return b.form.lines.filter((l) => l.itemId || Number(l.amount || 0) > 0).reduce((a, l) => a + Number(l.amount || 0), 0)
 }
@@ -371,7 +374,7 @@ function overApplyContent(b) {
 }
 
 async function onBeforeSubmit(b) {
-  // 表头/结算必填闸门：与红星同源，漏填即中止、不发请求
+  // 表头/结算必填校验：与红星同源，漏填即中止、不发请求
   if (!(await validateForms([formRef, settleFormRef]))) return false
   if (!b.form.relations.length) {
     ElMessage.warning(t('expense.travelClaim.errRequisitionRequired')); return false
@@ -379,7 +382,7 @@ async function onBeforeSubmit(b) {
   if (!b.form.lines.filter((l) => l.itemId).length) {
     ElMessage.warning(t('expense.claim.errNeedExpenseLine')); return false
   }
-  // 境外凭证合规⑤（V1.3.14）：境外收据/行程单必填中文说明（后端 submit 同口径兜底）
+  // 境外凭证合规⑤（V1.3.14）：境外收据/行程单必填中文说明（后端 submit 同一规则默认处理）
   if (b.form.lines.some((l) => l.itemId && needCnDesc(l) && !(l.cnDesc || '').trim())) {
     ElMessage.warning(t('expense.claim.errAbroadCnDesc')); return false
   }
@@ -430,7 +433,7 @@ async function onApplyPick(row, form) {
     } catch (e) { return }
     form.lines = srcLines.map((l) => Object.assign(newLine(wb.value.b), {
       itemId: l.itemId, itemName: l.itemName, amount: l.amount || 0, budgetItemId: l.budgetItemId || null,
-      // D-DEC-361：带入日期与后端落库时区一致，走 useBill.today()（本地时钟），不再用 UTC 的 toISOString
+      // D-DEC-361：带入日期与后端写入数据库时区一致，走 useBill.today()（本地时钟），不再用 UTC 的 toISOString
       expenseDate: l.expenseDate || wb.value.b.today(), category: catOf(l.itemName), remark: l.remark || '',
     }))
     form.shares = (d.shares || []).map((s) => ({
@@ -482,13 +485,13 @@ const travelTypeDict = useBaseDict('travel_type',
   { DOMESTIC: 'expense.travelClaim.optDomestic', ABROAD: 'expense.travelClaim.optAbroad', TRIAREA: 'expense.travelClaim.optThreeCities' })
 const travelTypeOptions = travelTypeDict.options
 
-// 交通方式 / 付款方式（2026-10-18 基础数据收口）
+// 交通方式 / 付款方式（2026-10-18 基础数据办结）
 const trafficDict = useBaseDict('traffic_mode', TRAFFIC_LOCAL, TRAFFIC_I18N)
 const trafficOptions = trafficDict.options
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
 const payMethodOptions = payMethodDict.options
 
-// 舱位席别（seat_class）：与事前申请同口径——字典定值域，按交通方式窄化，换方式即清掉错配值
+// 舱位席别（seat_class）：与事前申请同一规则——字典定值域，按交通方式窄化，换方式即清掉错配值
 const seatDict = useBaseDict('seat_class', SEAT_LOCAL, SEAT_I18N)
 const seatOptions = seatDict.options
 const SEAT_CABIN = ['ECONOMY', 'BUSINESS', 'FIRST']
@@ -503,7 +506,7 @@ function onTrafficTypeChange(row) {
   const keep = seatOptionsOf(row.trafficType)
   if (row.trafficClass && !keep.some((o) => o.value === row.trafficClass)) row.trafficClass = ''
 }
-// 乘客姓名是显示值，落库要 travelerId（后端正据此校验同人同日重复行程）
+// 乘客姓名是显示值，写入数据库要 travelerId（后端正据此校验同人同日重复行程）
 function onTravelerPick(row) {
   const u = users.value.find((x) => (x.nickName || x.userName) === row.travelerName)
   row.travelerId = u ? u.id : null

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -22,7 +25,7 @@ import java.util.regex.Pattern;
  * controller 注解机械生成 {@code catalog-fssc.json}，构建期打包进 classpath，启动期加载。
  * 网关的唯一事实来源就是这份文件 —— 未登记＝不可调用；{@code aiAllowed=false}＝§6 红线，永不放行。
  *
- * <p>匹配口径：真人请求走 {@code /api/tenant/**}，AI 走网关后按同一路径模板命中
+ * <p>匹配规则：真人请求走 {@code /api/tenant/**}，AI 走网关后按同一路径模板命中
  * （路径参数 {@code {id}} 转正则），因此 AI 与人在"动作"这一层严格等价。
  */
 @Slf4j

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 package com.fssc.purchase.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -49,7 +52,7 @@ public class PurchaseService {
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private com.fssc.asset.service.MdAssetService assetService;
-    /** 收货成功自动生成暂估凭证（VoucherService 内部 REQUIRES_NEW + 全量兜底，不阻断收货主流程） */
+    /** 收货成功自动生成暂估凭证（VoucherService 内部 REQUIRES_NEW + 全量默认处理，不阻断收货主流程） */
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private com.fssc.sharing.service.VoucherService voucherService;
@@ -59,9 +62,9 @@ public class PurchaseService {
     private com.fssc.masterdata.service.MdCipService mdCipService;
     /** 采购订单挂 CIP 的存在性校验（md_cip 主数据） */
     private final com.fssc.masterdata.mapper.MdCipMapper cipMapper;
-    /** P4-3 审计扩面：单据状态跃迁留痕 */
+    /** P4-3 审计扩面：单据状态跃迁记录 */
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** 收货→存货移动台账（stock_move）写入点 */
+    /** 收货→存货移动台账（stock_move）写入位置 */
     private final com.fssc.asset.mapper.StockMoveMapper stockMoveMapper;
     /** R5-D-070：开票回写超收货额时派 INVOICE_MATCH 异常单（ThreeWayMatchService 侧复用 #17 派单链）。
      *  @Lazy 打断 purchase ↔ sharing 潜在循环依赖（sharing 侧亦装配本域 Mapper 与 WfEngineFacade）。 */
@@ -92,7 +95,7 @@ public class PurchaseService {
             com.fssc.framework.security.LoginUser lu = UserContext.get();
             if (lu != null) o.setCompanyId(lu.getCompanyId());
         }
-        // 公司维度必填（放在登录人兜底之后）：采购入库/三单匹配/付款都要认账簿，
+        // 公司维度必填（放在登录人默认处理之后）：采购入库/三单匹配/付款都要认账簿，
         // 集团岗未挂公司时无法推断，必须由建单人显式选择法人主体。
         if (o.getCompanyId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择法人主体（公司不能为空）");
@@ -143,7 +146,7 @@ public class PurchaseService {
         PoOrder upd = new PoOrder();
         upd.setId(id);
         upd.setDelFlag(1);
-        // D-DEC-051：删除也是状态写点，操作人必须落库（草稿删除只可能来自登录用户，取不到即上下文异常）
+        // D-DEC-051：删除也是状态写点，操作人必须写入数据库（草稿删除只可能来自登录用户，取不到即上下文异常）
         upd.setUpdateBy(userId());
         upd.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(upd);
@@ -225,10 +228,10 @@ public class PurchaseService {
         auditAfter.put("remark", newRemark);
         auditTrailService.recordUpdate("PURCHASE", orderId, o.getPoNo(), "po_order",
                 String.valueOf(orderId), auditBefore, auditAfter, "作废采购订单：" + reason.trim());
-        // R5-D-068 终态收尾（D-DEC-334 口径「直改状态型单据收尾须终止流程」）：作废只改单据态不终止流程，
+        // R5-D-068 最终状态收尾（D-DEC-334 规则「直改状态型单据收尾须终止流程」）：作废只改单据态不终止流程，
         // 会让 wf_instance 滞留 RUNNING、wf_task 滞留 PENDING，催办扫描持续打扰（实测 po_order 14/15 作废后
         // 实例 130/131 仍 RUNNING）。此处同批终止该 biz_type+biz_id 的 RUNNING 实例并把 PENDING 待办置
-        // CANCELLED；与发起审批同口径：流程收尾失败必须冒泡（ROOT-2），事务整体回滚。
+        // CANCELLED；与发起审批同一规则：流程收尾失败必须冒泡（ROOT-2），事务整体回滚。
         wfEngineFacade.cancelRunningInstancesByBiz("PURCHASE_ORDER_REVIEW", orderId,
                 "采购订单作废（" + o.getPoNo() + "）：" + reason.trim());
         log.info("采购订单 {} 已作废（原因: {}，操作人: {}）", o.getPoNo(), reason.trim(), operator);
@@ -241,13 +244,13 @@ public class PurchaseService {
         if (exist != null) {
             orgGuard.assertVisible(exist.getCompanyId(), exist.getCreateBy());
         }
-        // X-20 终态机守卫：终态单（VOID/CLOSED/ARCHIVED）是收尾真相，整单编辑不得把它改回生效态。
+        // X-20 最终状态机守卫：最终状态单（VOID/CLOSED/ARCHIVED）是收尾真相，整单编辑不得把它改回生效态。
         if (exist != null && ("VOID".equals(exist.getStatus())
                 || "CLOSED".equals(exist.getStatus()) || "ARCHIVED".equals(exist.getStatus()))) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "订单已终止/关账/归档（当前状态: " + exist.getStatus() + "），不可再编辑");
         }
-        // 状态跃迁只走专用入口（提交审批/审批回写/收货回写/批处理终态/终止/归档）：
+        // 状态跃迁只走专用入口（提交审批/审批回写/收货回写/批处理最终状态/终止/归档）：
         // 整单编辑把客户端传来的 status 置空，MP NOT_NULL 策略即跳过该列，堵住「编辑直接把状态写成 CLOSED」的后门。
         o.setStatus(null);
         validateSupplier(o);
@@ -305,7 +308,7 @@ public class PurchaseService {
         }
     }
 
-    /** 批次1：驳回采购订单编辑重提 REJECTED → DRAFT（修改后经 submitOrder 重新起流程，对齐合同/费用单口径） */
+    /** 批次1：驳回采购订单编辑重提 REJECTED → DRAFT（修改后经 submitOrder 重新起流程，对齐合同/费用单规则） */
     @Transactional(rollbackFor = Exception.class)
     public void returnToEditOrder(Long orderId) {
         PoOrder o = orderMapper.selectById(orderId);
@@ -362,7 +365,7 @@ public class PurchaseService {
 
     /**
      * 保存订单行项目：整批重登（既有有效行逻辑删除，再按本次提交重插）。
-     * 与全系统"更正不物理删"的口径一致——改行留历史版本，供事后追溯"当初下的是什么"。
+     * 与全系统"更正不物理删"的规则一致——改行留历史版本，供事后追溯"当初下的是什么"。
      */
     private BigDecimal saveLines(Long poId, Long tenantId, List<PoOrderLine> lines) {
         if (poId == null || lines == null) {
@@ -384,7 +387,7 @@ public class PurchaseService {
             lineNo++;
             // D-V4R-91：逐行硬校验。原先本方法只跳过"全空行"，对半填的行照单全收——
             // 自动化脚本把 60000 填进「物料名称」、数量/单价留默认值(1/0) 时，
-            // materialName 非空即判为有效行，落库出 amount=0 的垃圾数据，
+            // materialName 非空即判为有效行，写入数据库出 amount=0 的垃圾数据，
             // 且表头 60000 与行合计 0 的勾稽断裂一路放过，直到三单匹配才暴露。
             assertOrderLine(line, lineNo);
             line.setId(null);
@@ -403,18 +406,18 @@ public class PurchaseService {
     }
 
     /**
-     * D-V4R-91：行项目逐行校验（与前端 PoOrder.vue 的行内红星同口径，后端为最终闸门）。
+     * D-V4R-91：行项目逐行校验（与前端 PoOrder.vue 的行内红星同一规则，后端为最终校验）。
      * 四道断言：
-     * ① 物料名称必填 —— 只填了物料编码也算缺（名称是打印/对账/匹配的口径来源）
+     * ① 物料名称必填 —— 只填了物料编码也算缺（名称是打印/对账/匹配的规则来源）
      * ② 物料名称不得为纯数字 —— 防"金额误填进名称字段"这类字段串位
-     * ③ 数量 > 0、单价 > 0 —— 原口径允许 0，直通"行金额恒为 0"
+     * ③ 数量 > 0、单价 > 0 —— 原规则允许 0，直通"行金额恒为 0"
      * ④ 量价勾稽：数量 × 单价 必须等于行金额（容差 0.01），防三者各填各的
      */
     private void assertOrderLine(PoOrderLine line, int lineNo) {
         String pos = "第 " + lineNo + " 行";
         if (isBlank(line.getMaterialName())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    pos + "物料名称必填（只有物料编码不够，行项目名称是打印与对账口径）");
+                    pos + "物料名称必填（只有物料编码不够，行项目名称是打印与对账的依据）");
         }
         String name = line.getMaterialName().trim();
         if (name.matches("^[0-9][0-9,]*(\\.[0-9]+)?$")) {
@@ -460,7 +463,7 @@ public class PurchaseService {
         orders.forEach(o -> o.setLines(byPo.getOrDefault(o.getId(), new ArrayList<>())));
     }
 
-    /** 空行 = 前端"添加行"后未填任何内容，不落库。 */
+    /** 空行 = 前端"添加行"后未填任何内容，不写入数据库。 */
     private boolean isBlankLine(PoOrderLine line) {
         return isBlank(line.getMaterialCode()) && isBlank(line.getMaterialName())
                 && nz(line.getQuantity()).compareTo(BigDecimal.ZERO) == 0
@@ -495,7 +498,7 @@ public class PurchaseService {
     @Transactional(rollbackFor = Exception.class)
     public Long createReceipt(PoReceipt r) {
         validateSupplier(r);
-        // 与前端 PoReceipt.vue 红星同口径：收货日期、收货金额>0（金额未填时 DDL 默认 0.00，
+        // 与前端 PoReceipt.vue 红星同一规则：收货日期、收货金额>0（金额未填时 DDL 默认 0.00，
         // 会静默落一张零金额收货单并回写订单累计收货，故必须在前置就拦）。收货单号留空自动取号，不列入必填。
         if (r.getReceiptDate() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择收货日期");
@@ -529,7 +532,7 @@ public class PurchaseService {
         r.setCreateTime(LocalDateTime.now());
         r.setUpdateTime(LocalDateTime.now());
         r.setDelFlag(0);
-        // 插入级撞号兜底——DuplicateKey 时按编号规则重新取号重试（最多 3 次）。
+        // 插入级撞号默认处理——DuplicateKey 时按编号规则重新取号重试（最多 3 次）。
         // R5-D-069：原实现在此处拼「原号+System.currentTimeMillis()」（GRN2470671790959329398、RCP1790877084488
         // 即由此产生）——单号形态不可预期、无法按前缀对账；改为重走 nextReceiptNoUnique()（rule 取号+重试）。
         for (int insertAttempt = 0; ; insertAttempt++) {
@@ -562,11 +565,11 @@ public class PurchaseService {
         }
         // 收货即写存货移动台账（stock_move）：凭证已动 1405，物的侧必须有逐笔记录
         recordReceiptStockMoves(r, o);
-        // 收货挂 CIP（从订单继承）时自动归集在建工程成本（内部幂等 + 全量兜底，不阻断收货）
+        // 收货挂 CIP（从订单继承）时自动归集在建工程成本（内部去重 + 全量默认处理，不阻断收货）
         if (r.getCipId() != null) {
             mdCipService.aggregateFromReceipt(r.getReceiptNo(), r.getCipId(), r.getAmount());
         }
-        // 收货成功自动生成暂估凭证（借 存货1405 / 贷 暂估应付2203；幂等，科目缺失/异常仅 warn 不阻断）
+        // 收货成功自动生成暂估凭证（借 存货1405 / 贷 暂估应付2203；去重，科目缺失/异常仅 warn 不阻断）
         // 收货单挂 CIP 时暂估凭证借方自动改走 在建工程1604（cip 随收货单对象传入凭证服务）
         try {
             voucherService.generateEstimateOnReceipt(r);
@@ -602,7 +605,7 @@ public class PurchaseService {
      * 收货 → 存货移动台账（stock_move，move_type=RECEIVE）：此前全库 0 行，凭证已借 1405 而物侧无逐笔记录。
      * 按采购订单行逐笔落行，收货额不足整单时按行顺序分摊、末行按金额比例折算数量，保证 Σ移动额＝收货金额；
      * 订单未填行项目时整笔落一行（数量留空，由台账补录，不臆造数量）。
-     * 写台账失败不阻断收货（与暂估凭证/CIP 归集同口径）。
+     * 写台账失败不阻断收货（与暂估凭证/CIP 归集同一规则）。
      */
     private void recordReceiptStockMoves(PoReceipt r, PoOrder o) {
         try {
@@ -655,7 +658,7 @@ public class PurchaseService {
         // stock_move.item_code 是 NOT NULL 列（现库 SHOW COLUMNS 实测），而 po_order_line.material_code 可空、
         // 且现存行绝大多数录的是<b>空串</b>而非编码——直接传 null 会让整条 insert 报
         // "Column 'item_code' cannot be null"，被外层 catch 吞掉 ⇒ 台账继续 0 行（D-DEC-057 的真实卡点）。
-        // 口径：缺编码就落空串（与 po_order_line 现存数据同形态），并在 remark 如实写明"物料编码未登记"，
+        // 规则：缺编码就落空串（与 po_order_line 现存数据同形态），并在 remark 如实写明"物料编码未登记"，
         // 不拿物料名称充当编码，也不臆造一个 md_item 里不存在的编码。
         m.setItemCode(itemCode == null ? "" : itemCode);
         m.setItemName(itemName);
@@ -666,9 +669,9 @@ public class PurchaseService {
         m.setSourceDocType("PO_RECEIPT");
         m.setSourceDocId(r.getId());
         m.setStatus("APPROVED");
-        // D-DEC-057 库位口径：warehouse_id 需要 md_warehouse 主数据，而本库<b>查无仓库主数据表</b>
+        // D-DEC-057 库位规则：warehouse_id 需要 md_warehouse 主数据，而本库<b>查无仓库主数据表</b>
         // （SHOW TABLES LIKE '%warehouse%' 0 行），收货单上的 warehouse 只是自由文本。
-        // 按 P2-B 在册口径＝留空 + 文本进 remark，不臆造仓库 id、不建默认仓库。
+        // 按 P2-B 现有规则＝留空 + 文本进 remark，不臆造仓库 id、不建默认仓库。
         m.setWarehouseId(null);
         StringBuilder rmk = new StringBuilder();
         if (itemCode == null || itemCode.isBlank()) {
@@ -699,7 +702,7 @@ public class PurchaseService {
     /**
      * 开票回写：收货单累计开票金额。
      * <p>以勾稽明细（inv_bill_invoice ⋈ exp_bill.po_receipt_id）为真相源<b>重算绝对值</b>，
-     * 使绑定/反核销/后补关联三条路径都能收敛；勾稽腿缺失时（调用方单据尚未关联收货单）退回按入参累加。
+     * 使绑定/反核销/后补关联三条路径都能收敛；勾稽环节缺失时（调用方单据尚未关联收货单）退回按入参累加。
      */
     @Transactional(rollbackFor = Exception.class)
     public void markInvoiced(Long receiptId, BigDecimal invoiceAmount) {
@@ -710,7 +713,7 @@ public class PurchaseService {
         BigDecimal linked = threeWayMatchService.sumLinkedInvoiceNetAmount(receiptId);
         BigDecimal newInvoiceAmount = linked.signum() > 0 || nz(invoiceAmount).signum() == 0
                 ? linked : nz(r.getInvoiceAmount()).add(invoiceAmount);
-        // R5-D-070 硬闸：累计开票超出「收货额 + 容差」→ 拒绝回写（库内值保持原样）+ 审计留痕 + 派 INVOICE_MATCH 异常单。
+        // R5-D-070 强制校验：累计开票超出「收货额 + 容差」→ 拒绝回写（库内值保持原样）+ 审计记录 + 派 INVOICE_MATCH 异常单。
         // 为何"拒写"而不抛异常：本方法 @Transactional 且参与调用方（InvoiceService.bind/unbind 等）事务，
         // 抛出会让共享事务被标记 rollback-only，调用方 try/catch 也救不回，绑定/反核销整链回滚；
         // 而反核销恰是已超开票收货单的唯一纠偏入口，堵死它便再无收敛路径——故只拒绝本次写、不抛出。
@@ -720,7 +723,7 @@ public class PurchaseService {
                 dispatched = threeWayMatchService.dispatchInvoiceOverReceipt(
                         receiptId, r.getReceiptNo(), newInvoiceAmount, nz(r.getAmount())) != null;
             } catch (Exception ex) {
-                // 派单失败不得反噬"拒绝回写"本身（拒绝是主诉求，派单是兜底）
+                // 派单失败不得反噬"拒绝回写"本身（拒绝是主诉求，派单是默认处理）
                 log.error("[R5-D-070] 收货单 {} 超限派单失败（拒绝回写不受影响）: {}", r.getReceiptNo(), ex.getMessage());
             }
             java.util.Map<String, Object> refuseBefore = new java.util.LinkedHashMap<>();
@@ -728,7 +731,7 @@ public class PurchaseService {
             refuseBefore.put("invoiceAmount", r.getInvoiceAmount());
             auditTrailService.recordUpdate("PURCHASE", receiptId, r.getReceiptNo(), "po_receipt",
                     String.valueOf(receiptId), refuseBefore, new java.util.LinkedHashMap<>(refuseBefore),
-                    "开票回写被拒（R5-D-070 硬闸）：本次应回写 " + newInvoiceAmount + " 超收货额 " + r.getAmount()
+                    "开票回写被拒（R5-D-070 强制校验）：本次应回写 " + newInvoiceAmount + " 超收货额 " + r.getAmount()
                             + " 加容差上限，未改动库内值"
                             + (dispatched ? "，已派 INVOICE_MATCH 异常单" : "（派单未发起/去重，详见日志）"));
             log.error("[R5-D-070] 收货单 {} 开票回写被拒：累计开票 {} > 收货额 {} + 容差（硬闸），未回写并已派 INVOICE_MATCH 异常单",
@@ -746,11 +749,11 @@ public class PurchaseService {
         upd.setInvoiceAmount(newInvoiceAmount);
         upd.setStatus(newStatus);
         // D-DEC-051：勾稽额与状态跃迁都是回写，必须带操作人。
-        // 口径：调用方是「发票绑定/反核销/手工关联」三条人工路径（InvoiceService.bind/rebind、
+        // 规则：调用方是「发票绑定/反核销/手工关联」三条人工路径（InvoiceService.bind/rebind、
         // ThreeWayMatchService.link），均有登录上下文，取 userId()；
-        // 若被引擎线程调用（无 UserContext）则不伪造工号——但落库值不是 NULL：PoReceipt.updateBy
+        // 若被引擎线程调用（无 UserContext）则不伪造工号——但写入数据库值不是 NULL：PoReceipt.updateBy
         // 带 @TableField(fill = FieldFill.INSERT_UPDATE)，MP 自动填充会把 null 补成哨兵值 0，
-        // 与本文件 P0-5 段注释同口径（详见该段）。
+        // 与本文件 P0-5 段注释同一规则（详见该段）。
         upd.setUpdateBy(userId());
         upd.setUpdateTime(LocalDateTime.now());
         receiptMapper.updateById(upd);
@@ -777,7 +780,7 @@ public class PurchaseService {
 
     /**
      * D-V4R-91：金额勾稽尾差容差（元）。行金额与表头金额均为两位小数，
-     * 逐行累加的浮点误差上界远小于 0.01，故 0.01 即为最紧且不会误伤的口径
+     * 逐行累加的浮点误差上界远小于 0.01，故 0.01 即为最紧且不会误伤的规则
      * （与 PurReturnService.validateLineSum / ExpenseBillService.validateAmountReconcile 同值）。
      */
     private static final BigDecimal LINE_AMT_TOLERANCE = new BigDecimal("0.01");
@@ -785,7 +788,7 @@ public class PurchaseService {
     /**
      * D-V4R-91：表头金额与行项目合计的一致性校验。
      * 判据：只要提交了行项目，就必须与表头订单金额对得上（容差 0.01）。
-     * 无行项目时不校验 —— 采购订单允许只录表头金额（历史口径，行项目为选填）。
+     * 无行项目时不校验 —— 采购订单允许只录表头金额（历史规则，行项目为选填）。
      *
      * 背景：表头 60000 / 行合计 0 的勾稽断裂原先无人拦截，一路同步到 BCP 门户，
      * 直到三单匹配阶段才以"匹配不上"的形式暴露，返工需重建整条单据链。
@@ -805,8 +808,8 @@ public class PurchaseService {
     }
 
     /**
-     * 采购订单表头必填守卫，与前端 PoOrder.vue 的红星同口径（下单日期/订单金额>0/币种）。
-     * 订单号是系统取号（留空走 nextPoNo），按治理口径 Q1 不列入人工必填。
+     * 采购订单表头必填守卫，与前端 PoOrder.vue 的红星同一规则（下单日期/订单金额>0/币种）。
+     * 订单号是系统取号（留空走 nextPoNo），按治理规则 Q1 不列入人工必填。
      * 新增与编辑都走整表头提交（前端表单必带这三项），故两条路径同样硬拦。
      */
     private void assertOrderHeaderRequired(PoOrder o) {
@@ -844,7 +847,7 @@ public class PurchaseService {
 
     /**
      * 收货单号：一律走编号规则 PURCHASE_RECEIPT（GRN 前缀＋期间＋定长序号）。
-     * R5-D-069：原「规则缺失降级 RCP+时间戳」兜底已删除——降级号形态不可预期、无法对账；
+     * R5-D-069：原「规则缺失降级 RCP+时间戳」默认处理已删除——降级号形态不可预期、无法对账；
      * 规则缺失应显式报错去修规则，而不是静默拼时间戳（判据：收货单号形态只有 rule 一种）。
      */
     private String nextReceiptNo() {
@@ -870,13 +873,13 @@ public class PurchaseService {
             }
             log.warn("收货单号 {} 与存量记录冲突（含逻辑删除行），递增重试 {}/5", candidate, i + 1);
         }
-        // R5-D-069：原「兜底第二级＝规则号+随机 4 位尾号 50 次」已删除——尾号拼接同样产生不可预期单号；
-        // 连续冲突说明编号规则序号与存量脱节，显式报错交人工修规则（不再静默造号）
+        // R5-D-069：原「默认处理第二级＝规则号+随机 4 位尾号 50 次」已删除——尾号拼接同样产生不可预期单号；
+        // 连续冲突说明编号规则序号与历史脱节，显式报错交人工修规则（不再静默造号）
         throw new BizException(ErrorCode.PARAM_INVALID,
-                "收货单自动取号失败：连续取号均与存量单号冲突，请检查编号规则 PURCHASE_RECEIPT 的当前序号");
+                "收货单自动取号失败：连续取号均与已有单号冲突，请检查编号规则 PURCHASE_RECEIPT 的当前序号");
     }
 
-    /** 采购订单号：同上兜底策略（PO_ORDER 规则未预置时降级为时间戳，避免 NOT NULL 插入失败） */
+    /** 采购订单号：同上默认策略（PO_ORDER 规则未预置时降级为时间戳，避免 NOT NULL 插入失败） */
     private String nextPoNo() {
         try {
             return numberRuleService.next("PO_ORDER");
@@ -890,13 +893,13 @@ public class PurchaseService {
     }
 
     // ---------------- P0-5 状态机：APPROVED/INVOICED→PAID→CLOSED→ARCHIVED ----------------
-    // P0-5 终态机分治（X-20 裁定甲＋乙）：本族跃迁按性质分两路，不再一律等人工按钮。
+    // P0-5 最终状态机分治（X-20 裁定甲＋乙）：本族跃迁按性质分两路，不再一律等人工按钮。
     //   甲＝累计量达标（PAID/CLOSED）由 {@link #autoAdvanceFinalStates()} 批处理推进，不给人工入口；
     //   乙＝人工决策（终止/归档）留显式服务方法＋端点 {@link #terminateOrder}/{@link #archiveOrder}，
     //        鉴权走写专码 po:order:update（写读分面治理，不复用 po:order:list）。
     //   ARCHIVED 归档域（document/**）只写 op_archive/archive_status，不写 po_order.status，
-    //   故 po_order 侧的 ARCHIVED 跃迁由本类 {@link #archiveOrder}＋人工归档端点收口（X-20）。
-    // D-DEC-051 操作人口径（本族状态写点统一）：update_by 取 userId()＝当前登录人。
+    //   故 po_order 侧的 ARCHIVED 跃迁由本类 {@link #archiveOrder}＋人工归档端点办结（X-20）。
+    // D-DEC-051 操作人规则（本族状态写点统一）：update_by 取 userId()＝当前登录人。
     // 批处理线程无 UserContext、这里 userId() 也如实返回 null，但 PoOrder.updateBy 带
     // @TableField(fill = FieldFill.INSERT_UPDATE)，FsscMetaObjectHandler.updateFill→fillAudit
     // 见值为 null 会补一个 <b>0L</b>——所以库里落的是 update_by=0，<b>不是 NULL</b>。
@@ -911,8 +914,8 @@ public class PurchaseService {
         if (order == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "采购订单不存在: " + orderId);
         }
-        // P0-5 终态机分治（X-20 裁定甲＋乙）：前置态补 INVOICED——三单匹配收尾把订单写成 INVOICED
-        // （InvoiceMatchBizAction:85），原判据只认 APPROVED ⇒ PAID 永远进不去，终态机空转。
+        // P0-5 最终状态机分治（X-20 裁定甲＋乙）：前置态补 INVOICED——三单匹配收尾把订单写成 INVOICED
+        // （InvoiceMatchBizAction:85），原判据只认 APPROVED ⇒ PAID 永远进不去，最终状态机空转。
         String from = order.getStatus();
         if (!"APPROVED".equals(from) && !"INVOICED".equals(from)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -956,8 +959,8 @@ public class PurchaseService {
     }
 
     /**
-     * P0-5：采购订单 CLOSED→ARCHIVED（归档，终态）。
-     * P0-5 终态机分治·乙（X-20 裁定）：归档无累计量判据、属人工结案决定，入口为
+     * P0-5：采购订单 CLOSED→ARCHIVED（归档，最终状态）。
+     * P0-5 最终状态机分治·乙（X-20 裁定）：归档无累计量判据、属人工结案决定，入口为
      * {@code POST /api/tenant/purchase/order/{id}/archive}（写专码 po:order:update）。
      * 已归档/已终止单不可再归档（状态前置即守卫）。
      */
@@ -985,12 +988,12 @@ public class PurchaseService {
     }
 
     /**
-     * P0-5 终态机分治·甲（X-20 裁定）：累计量达标型终态由批处理推进，不给人工按钮。
+     * P0-5 最终状态机分治·甲（X-20 裁定）：累计量达标型最终状态由批处理推进，不给人工按钮。
      * <ul>
      *  <li>APPROVED/INVOICED → PAID：本单下游付款单（exp_bill.po_id 挂接、status=PAID）累计已付 ≥ 订单额；</li>
      *  <li>PAID → CLOSED（业务关闭）：付款已达标（PAID 即成立）且累计收货 ≥ 订单额、下游无未收货完的收货单。</li>
      * </ul>
-     * 幂等：判据全是「绝对量比较 + 状态前置」，同一轮/多轮重跑结果一致（已达标的已进终态，不再入选）。
+     * 去重：判据全是「绝对量比较 + 状态前置」，同一轮/多轮重跑结果一致（已达标的已进最终状态，不再入选）。
      * 逐单隔离：单据级异常只记日志不影响其余订单，批处理线程无租户上下文，由调用方按租户 {@code callAs} 包好。
      *
      * @return 本轮推进计数 {@code paid=N closed=M}（供 Job 日志与只读复验）
@@ -1048,12 +1051,12 @@ public class PurchaseService {
     }
 
     /**
-     * P0-5 终态机分治·乙（X-20 裁定）：终止采购订单＝人工决策，留显式入口（服务方法＋端点，
+     * P0-5 最终状态机分治·乙（X-20 裁定）：终止采购订单＝人工决策，留显式入口（服务方法＋端点，
      * 鉴权写专码 {@code po:order:update}，菜单授权由治理轨另行发放）。
      * <p>与 {@link #voidOrder} 的分工：作废只处理「还没发生下游动作」的单；终止处理
      * 已经收货/挂付款、但业务上不再继续履约的单（剩余未执行部分就此了断），
-     * 两者同落既有终态 {@code VOID}（不新增状态值），原因＋操作人＋时间随 remark 留痕。
-     * <p>已达标的单请走批处理自然收口（{@link #autoAdvanceFinalStates}），已归档单不可终止。
+     * 两者同落既有最终状态 {@code VOID}（不新增状态值），原因＋操作人＋时间随 remark 记录。
+     * <p>已达标的单请走批处理自然办结（{@link #autoAdvanceFinalStates}），已归档单不可终止。
      */
     @Transactional(rollbackFor = Exception.class)
     public void terminateOrder(Long orderId, String reason) {
@@ -1101,7 +1104,7 @@ public class PurchaseService {
         auditAfter.put("remark", newRemark);
         auditTrailService.recordUpdate("PURCHASE", orderId, o.getPoNo(), "po_order",
                 String.valueOf(orderId), auditBefore, auditAfter, "终止采购订单：" + reason.trim());
-        // R5-D-068 终态收尾（同 voidOrder）：终止同落 VOID，必须把该单据名下的 RUNNING 流程实例一并
+        // R5-D-068 最终状态收尾（同 voidOrder）：终止同落 VOID，必须把该单据名下的 RUNNING 流程实例一并
         // 终止、PENDING 待办置 CANCELLED，避免「单已终止、流程还活」的僵尸待办继续被催办。
         wfEngineFacade.cancelRunningInstancesByBiz("PURCHASE_ORDER_REVIEW", orderId,
                 "采购订单终止（" + o.getPoNo() + "）：" + reason.trim());
