@@ -54,7 +54,7 @@
     <el-dialog v-model="dlgForm" :title="form.id ? '编辑在建工程' : '新增在建工程'" width="680px" destroy-on-close>
       <el-form :model="form" ref="formRef" :rules="formRules" label-width="100px" size="small">
         <el-row :gutter="12">
-          <el-col :span="12"><el-form-item label="编码" prop="cipCode"><el-input v-model="form.cipCode" placeholder="唯一编码" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="编码" prop="cipCode"><el-input v-model="form.cipCode" placeholder="唯一编码" maxlength="64" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="名称" prop="cipName"><el-input v-model="form.cipName" /></el-form-item></el-col>
           <el-col :span="12">
             <el-form-item label="所属公司" prop="companyId">
@@ -70,7 +70,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="负责人"><el-input v-model="form.manager" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="负责人"><el-input v-model="form.manager" maxlength="64" /></el-form-item></el-col>
           <el-col :span="12">
             <el-form-item label="归属部门">
               <el-select v-model="form.deptId" filterable clearable placeholder="选择公司后联动" style="width:100%">
@@ -81,7 +81,7 @@
           <el-col :span="12"><el-form-item label="开工日期"><el-date-picker v-model="form.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="预计完工"><el-date-picker v-model="form.expectedEndDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="预算总额"><el-input-number v-model="form.budgetAmount" :min="0" :precision="2" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>

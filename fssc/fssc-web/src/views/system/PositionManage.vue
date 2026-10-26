@@ -50,7 +50,7 @@
                 <el-form-item :label="$t('system.common.colName')" class="half" prop="postName"><el-input v-model="form.postName" :placeholder="$t('system.position.phPositionName')" /></el-form-item>
               </div>
               <div class="form-row">
-                <el-form-item :label="$t('system.common.colCode')" class="half"><el-input v-model="form.postCode" :placeholder="$t('system.position.phCodeExample')" /></el-form-item>
+                <el-form-item :label="$t('system.common.colCode')" class="half"><el-input v-model="form.postCode" :placeholder="$t('system.position.phCodeExample')" maxlength="64" /></el-form-item>
                 <el-form-item :label="$t('system.position.colRank')" class="half"><el-input-number v-model="form.postLevel" :min="0" style="width:100%" /></el-form-item>
               </div>
               <div class="form-row">
@@ -71,7 +71,7 @@
                   <el-switch v-model="form.enabled" />
                 </el-form-item>
               </div>
-              <el-form-item :label="$t('common.remark')" prop="remark"><el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="$t('system.position.lblRemarkText')" /></el-form-item>
+              <el-form-item :label="$t('common.remark')" prop="remark"><el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="$t('system.position.lblRemarkText')" maxlength="500" show-word-limit /></el-form-item>
             </el-form>
           </div>
         </el-col>

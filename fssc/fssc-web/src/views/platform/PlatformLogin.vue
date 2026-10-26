@@ -36,7 +36,7 @@
 
           <el-form :model="form" :rules="loginRules" label-position="top" size="large" @submit.prevent="doLogin">
             <el-form-item label="账号" prop="username">
-              <el-input v-model="form.username" placeholder="请输入平台管理员账号" :prefix-icon="User" clearable />
+              <el-input v-model="form.username" placeholder="请输入平台管理员账号" :prefix-icon="User" clearable maxlength="64" />
             </el-form-item>
             <el-form-item label="密码" prop="password">
               <el-input v-model="form.password" type="password" show-password placeholder="请输入登录密码" :prefix-icon="Lock" @keyup.enter="doLogin" />

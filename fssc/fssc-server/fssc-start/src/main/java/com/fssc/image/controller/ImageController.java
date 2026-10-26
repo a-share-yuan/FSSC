@@ -41,6 +41,8 @@ import java.util.Set;
 public class ImageController {
 
     private final ImageService imageService;
+    /** 影像统计（报表只读服务的远程取数面；ImageFacade extends ImageStatsFacade） */
+    private final com.fssc.framework.facade.ImageFacade imageFacade;
     private final OcrService ocrService;
 
     /** 影像上传允许格式：图片 + PDF/OFD/XML（本地版式解析）；其余一律 BizException 拒绝 */
@@ -119,6 +121,24 @@ public class ImageController {
     @GetMapping("/batch/{id}/pages")
     public Result<List<ImgFile>> pages(@PathVariable Long id) {
         return Result.success(imageService.pages(id));
+    }
+
+    /**
+     * 影像批次总数（报表只读服务经此取数；HTTP 端点＝Facade 的远程实现面）。
+     * 权限：影像岗位（image:batch:list）或报表查看（report:view）任一即可 ——
+     * 与改前"报表内核直接调 Facade"的可见面一致，不额外收紧。
+     */
+    @RequiresPerm({"image:batch:list", "report:view"})
+    @GetMapping("/stats/batch-count")
+    public Result<Long> batchCount() {
+        return Result.success(imageFacade.countBatches());
+    }
+
+    /** 按业务类型统计影像批次（同上，报表只读服务的远程取数面） */
+    @RequiresPerm({"image:batch:list", "report:view"})
+    @GetMapping("/stats/by-biz-type")
+    public Result<List<java.util.Map<String, Object>>> statsByBizType() {
+        return Result.success(imageFacade.statBatchByBizType());
     }
 
     /** 触发 OCR 识别批次（页面 → 发票，可插拔引擎） */

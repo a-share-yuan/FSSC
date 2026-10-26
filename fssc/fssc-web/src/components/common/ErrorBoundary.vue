@@ -43,9 +43,18 @@ const errorStack = ref('')
 const showDetail = ref(false)
 
 onErrorCaptured((err, instance, info) => {
+  // D-V4R-1026-03：一次崩溃通常连着抛多条错误（首错 → 组件卸载期的二次错误）。
+  // 原先每条都覆盖同一组 ref，留在「查看详情」里的往往是卸载期那条（实测 unregisterPane 读 undefined），
+  // 真实首错被掩盖、用户与开发都无从定位。现只登记首条，后续错误带生命周期标签追加进详情。
+  const cause = err?.cause ? '\n原因链：' + String(err?.cause?.message || err?.cause) : ''
+  if (hasError.value) {
+    errorStack.value += `\n—— 同期其它错误（环节：${info || '未知'}）：${String(err?.message || err)}${cause}`
+    console.error('[ErrorBoundary·次生]', info, err)
+    return false
+  }
   hasError.value = true
   errorMessage.value = String(err?.message || err)
-  errorStack.value = err?.stack || ''
+  errorStack.value = `环节：${info || '未知'}\n${String(err?.stack || '')}${cause}`
   // 上报错误到控制台（生产环境可替换为日志服务）
   console.error('[ErrorBoundary]', info, err)
   return false // 阻止错误继续向上传播

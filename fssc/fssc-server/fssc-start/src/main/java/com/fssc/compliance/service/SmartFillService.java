@@ -9,7 +9,7 @@ import com.fssc.expense.entity.ExpBillLine;
 import com.fssc.expense.mapper.ExpBillLineMapper;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.invoice.entity.InvInvoice;
-import com.fssc.invoice.mapper.InvInvoiceMapper;
+import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.masterdata.entity.MdExpenseItem;
 import com.fssc.masterdata.mapper.MdExpenseItemMapper;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SmartFillService {
 
-    private final InvInvoiceMapper invInvoiceMapper;
+    private final InvoiceDomainFacade invoiceFacade;
     private final MdExpenseItemMapper mdExpenseItemMapper;
     private final ExpBillMapper expBillMapper;
     private final ExpBillLineMapper expBillLineMapper;
@@ -42,7 +42,7 @@ public class SmartFillService {
      * @return 填单建议
      */
     public SmartFillResult smartFill(Long invoiceId) {
-        InvInvoice inv = invInvoiceMapper.selectById(invoiceId);
+        InvInvoice inv = invoiceFacade.findById(invoiceId);
         if (inv == null) {
             return new SmartFillResult(false, "发票不存在: " + invoiceId, null, null, null, null);
         }
@@ -93,7 +93,7 @@ public class SmartFillService {
             return new SmartFillResult(false, "发票列表为空", null, null, null, null);
         }
 
-        List<InvInvoice> invoices = invInvoiceMapper.selectBatchIds(invoiceIds);
+        List<InvInvoice> invoices = invoiceFacade.findByIds(invoiceIds);
         if (invoices.isEmpty()) {
             return new SmartFillResult(false, "未找到有效发票", null, null, null, null);
         }

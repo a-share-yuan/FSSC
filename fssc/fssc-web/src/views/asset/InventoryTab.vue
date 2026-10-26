@@ -58,9 +58,9 @@
       <el-form-item label="操作类型">
         <el-tag :type="invOperationTag.type" size="small">{{ invOperationTag.label }}</el-tag>
       </el-form-item>
-      <el-form-item label="物料编码" prop="itemCode"><el-input v-model="invForm.itemCode" /></el-form-item>
+      <el-form-item label="物料编码" prop="itemCode"><el-input v-model="invForm.itemCode" maxlength="64" /></el-form-item>
       <el-form-item label="物料名称" prop="itemName"><el-input v-model="invForm.itemName" /></el-form-item>
-      <el-form-item label="规格/单位"><el-input v-model="invForm.spec" style="width:49%" /><el-input v-model="invForm.unit" placeholder="单位" style="width:49%; margin-left:2%" /></el-form-item>
+      <el-form-item label="规格/单位"><el-input v-model="invForm.spec" style="width:49%" /><el-input v-model="invForm.unit" placeholder="单位" style="width:49%; margin-left:2%" maxlength="32" /></el-form-item>
       <el-form-item label="仓库" prop="warehouseId">
         <el-select v-model="invForm.warehouseId" filterable clearable placeholder="请选择仓库" style="width:100%">
           <el-option v-for="w in warehouses" :key="w.id" :label="w.name" :value="w.id" />

@@ -20,8 +20,7 @@ import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.invoice.entity.InvBillInvoice;
 import com.fssc.invoice.entity.InvInvoice;
-import com.fssc.invoice.mapper.InvBillInvoiceMapper;
-import com.fssc.invoice.mapper.InvInvoiceMapper;
+import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.sharing.entity.OpAuditTask;
 import com.fssc.sharing.mapper.OpAuditTaskMapper;
 import lombok.RequiredArgsConstructor;
@@ -51,8 +50,7 @@ public class SharingService {
 
     private final OpAuditTaskMapper opAuditTaskMapper;
     private final ExpBillLineMapper expBillLineMapper;
-    private final InvBillInvoiceMapper invBillInvoiceMapper;
-    private final InvInvoiceMapper invInvoiceMapper;
+    private final InvoiceDomainFacade invoiceFacade;
     private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
     private final SmartReviewService smartReviewService;
     private final FraudDetectionService fraudDetectionService;
@@ -123,11 +121,10 @@ public class SharingService {
     /** 单据关联发票是否全部为电子介质（invoiceKind=ELECTRONIC、票种 电子发票/数电铁路票/电子客票，或数电票特征：20 位票号且无发票代码）。无关联发票返回 false（保守按需实物）。 */
     private boolean allInvoicesElectronic(Long billId) {
         try {
-            List<Long> invIds = invBillInvoiceMapper.selectList(new LambdaQueryWrapper<InvBillInvoice>()
-                            .eq(InvBillInvoice::getBillId, billId))
+            List<Long> invIds = invoiceFacade.findLinksByBillId(billId)
                     .stream().map(InvBillInvoice::getInvoiceId).filter(java.util.Objects::nonNull).distinct().toList();
             if (invIds.isEmpty()) return false;
-            List<InvInvoice> invs = invInvoiceMapper.selectBatchIds(invIds);
+            List<InvInvoice> invs = invoiceFacade.findByIds(invIds);
             if (invs.isEmpty()) return false;
             return invs.stream().allMatch(this::electronicMedia);
         } catch (Exception ex) {
@@ -169,8 +166,7 @@ public class SharingService {
             boolean overStd = lines.stream().anyMatch(l -> l.getOverStd() != null && l.getOverStd() == 1);
             data.put("overStd", overStd);
 
-            long invCnt = invBillInvoiceMapper.selectCount(new LambdaQueryWrapper<InvBillInvoice>()
-                    .eq(InvBillInvoice::getBillId, bill.getId()));
+            long invCnt = invoiceFacade.countActiveLinksByBillId(bill.getId());
             data.put("hasInvoice", invCnt > 0);
 
             boolean fraudHigh = fraudDetectionService.listByBill(bill.getId()).stream()

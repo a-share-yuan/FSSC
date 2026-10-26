@@ -16,6 +16,7 @@ import com.fssc.document.entity.OpArchive;
 import com.fssc.document.mapper.OpArchiveMapper;
 import com.fssc.framework.security.UserContext;
 import com.fssc.workflow.service.WfEngineFacade;
+import com.fssc.framework.datasource.FsscDataSource;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveDestroyService {
 
     private final ArchiveDestroyApprovalMapper archiveDestroyApprovalMapper;

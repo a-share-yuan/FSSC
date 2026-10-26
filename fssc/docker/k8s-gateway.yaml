@@ -1,0 +1,95 @@
+# 集成网关（openapi 入边 + bcp 出边 + connector 通道适配）独立部署
+#
+# 与 fssc-server / fssc-image / fssc-ai 同一镜像、同一 jar，仅覆盖 Start-Class：
+#   Start-Class=com.fssc.gateway.GatewayServiceApplication，:8093。
+#
+# 为什么三件套同进程：
+#   · openapi   —— /api/open/linku/** 入边（HMAC + 幂等 + 直写业务表），零自有业务表；
+#   · bcp       —— 出边 HMAC 客户端（伙伴协同推送）；
+#   · connector —— 通道适配器 + 凭据加解密（ext_interface_config）。
+#   三者共用同一份凭据与同一套加解密，拆进程只会引入内部认证这一层新机制。
+#
+# 健康检查：
+#   /actuator/health          聚合（含 gatewayDomain：主库连通性 + 入边密钥/处理器注册数 + bcp 出边）
+#   /actuator/health/liveness 进程存活
+#   /actuator/health/readiness 可接流量（含 gatewayDomain）
+#
+# 切流量前必读：
+#   1. 入边 /api/open/linku/** 在 JwtAuthFilter 白名单内，鉴权靠 HMAC 签名，不靠 JWT；
+#   2. 本进程与 fssc-server 会各自注册同一批入边路由——灰度期二者端口不同、由前置分流，
+#      不要在两者同时开放外部入口；
+#   3. 不做流程引擎：Flowable 自动配置已在本 profile 排除。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fssc-gateway
+  labels: {app: fssc-gateway}
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels: {app: fssc-gateway}
+  template:
+    metadata:
+      labels: {app: fssc-gateway}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8093"
+    spec:
+      containers:
+        - name: fssc-gateway
+          image: fssc-server:1.0.0
+          command: ["sh", "-c"]
+          args:
+            - >-
+              java $JAVA_OPTS
+              -Dloader.main=com.fssc.gateway.GatewayServiceApplication
+              -cp /app/fssc-start.jar
+              org.springframework.boot.loader.launch.PropertiesLauncher
+              --spring.profiles.active=gateway,prod
+          ports: [{containerPort: 8093}]
+          env:
+            - name: JAVA_OPTS
+              value: "-Xms512m -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/heapdump/ -XX:+ExitOnOutOfMemoryError"
+            - name: FSSC_DB_MASTER_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: master-jdbc-url}
+            - name: FSSC_DB_IMAGE_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: image-jdbc-url}
+            - name: FSSC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: db-password}
+            - name: FSSC_JWT_SECRET
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: jwt-secret}
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+            limits: {cpu: "2", memory: 4Gi}
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: 8093}
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: 8093}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 2
+          volumeMounts:
+            - {name: logs, mountPath: /app/logs}
+      volumes:
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fssc-gateway
+spec:
+  selector: {app: fssc-gateway}
+  ports:
+    - port: 8093
+      targetPort: 8093

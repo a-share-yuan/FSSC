@@ -5,10 +5,17 @@ package com.fssc.document.facade;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.core.PageResult;
+import com.fssc.common.exception.BizException;
 import com.fssc.document.entity.ArchiveAccessLog;
 import com.fssc.document.entity.ArchiveDestroyApproval;
 import com.fssc.document.mapper.ArchiveAccessLogMapper;
 import com.fssc.document.mapper.ArchiveDestroyApprovalMapper;
+import com.fssc.document.service.ArchiveDestroyService;
+import com.fssc.document.service.ArchiveService;
+import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.facade.ArchiveFacade;
 import com.fssc.framework.facade.BillFacade;
 import com.fssc.framework.facade.dto.ArchiveInfoDTO;
@@ -30,10 +37,17 @@ import java.util.stream.Collectors;
  * 对外只暴露接口方法，实现依赖反转。
  *
  * 档案中心拆分后，本实现类与三张表一起迁出，调用方零改动。
+ *
+ * <p>类级路由＝档案域路由键 {@code document}（独立库就绪前别名 master）：本类直接打
+ * {@code op_archive}／{@code archive_destroy_approval}／{@code archive_access_log} 的方法都归档案域。
+ * 跨域协作者各自带路由，不依赖本类的 ThreadLocal：{@code ArchiveService#enrichFlowKey}（wf_instance）、
+ * {@code AuditTrailService}（audit_trail）、{@code BillFacadeImpl}（exp_bill）均已标注 master。
+ * 切独立库前仍需按迁移清单逐项复核（见 {@code docker/README-document-invoice-split.md}）。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveFacadeImpl implements ArchiveFacade {
 
     private final OpArchiveMapper opArchiveMapper;
@@ -45,6 +59,8 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
     /** D-DEC-180（P1）：完整性快照哈希的唯一算式（回单登记卷此前从不封哈希 ⇒ 永不可校验） */
     private final com.fssc.document.service.ArchiveIntegrityService archiveIntegrityService;
     private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** R5-D-197：销毁唯一合规链入口（到期校验＋双人复核双签＋FM_DESTROY 起流程） */
+    private final ArchiveDestroyService archiveDestroyService;
 
     @Override
     public ArchiveInfoDTO findLatestByRefId(Long refId) {
@@ -313,6 +329,97 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         }
         accessLogMapper.updateById(upd);
         log.info("档案借阅单 {} 审批收尾 → {}（审批人 {}）", accessLogId, upd.getApprovalStatus(), upd.getApproverId());
+    }
+
+    // ==================== 域外读取（报表／联查／合规导出） ====================
+
+    @Override
+    public List<OpArchive> findAllForExport() {
+        return opArchiveMapper.selectList(new LambdaQueryWrapper<OpArchive>()
+                .orderByAsc(OpArchive::getId));
+    }
+
+    @Override
+    public List<OpArchive> findByBillIdOrVoucherIds(Long billId, java.util.Collection<Long> voucherIds) {
+        LambdaQueryWrapper<OpArchive> qw = new LambdaQueryWrapper<>();
+        if (voucherIds == null || voucherIds.isEmpty()) {
+            qw.eq(OpArchive::getBillId, billId);
+        } else {
+            qw.and(w -> w.eq(OpArchive::getBillId, billId)
+                    .or().in(OpArchive::getVoucherId, voucherIds));
+        }
+        qw.orderByDesc(OpArchive::getCreateTime);
+        return opArchiveMapper.selectList(qw);
+    }
+
+    // ==================== 域外写入（共享作业页的档案箱） ====================
+
+    @Override
+    public PageResult<OpArchive> pageArchives(long pageNum, long pageSize, String archiveType, String status) {
+        LambdaQueryWrapper<OpArchive> qw = new LambdaQueryWrapper<>();
+        if (archiveType != null && !archiveType.isBlank()) {
+            qw.eq(OpArchive::getArchiveType, archiveType);
+        }
+        if (status != null && !status.isBlank()) {
+            // D-DEC-182：入参名沿用前端的 status，但判定列改按真相源 archive_status——
+            // 传 ARCHIVED/PENDING/ARCHIVING/DISPOSED 按归档流程轴筛；兼容老调用方传保管轴取值（FILED/DESTROYED）。
+            qw.eq(OpArchive::getArchiveStatus, toArchiveStatusAxis(status));
+        }
+        qw.orderByDesc(OpArchive::getId);
+        Page<OpArchive> p = opArchiveMapper.selectPage(Page.of(pageNum, pageSize), qw);
+        archiveService.enrichFlowKey(p.getRecords());   // D-DEC-185：档案列表端点统一挂归档流补充
+        return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
+    }
+
+    /** D-DEC-182：保管轴取值 → 归档流程轴取值的兼容折算（FILED→ARCHIVED、DESTROYED→DISPOSED，其余原样） */
+    private static String toArchiveStatusAxis(String status) {
+        String s = status.trim().toUpperCase();
+        return switch (s) {
+            case "FILED" -> "ARCHIVED";
+            case "DESTROYED" -> "DISPOSED";
+            default -> s;
+        };
+    }
+
+    @Override
+    public Long createArchive(OpArchive a) {
+        if (a.getArchiveNo() == null || a.getArchiveNo().isBlank()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "档案编号必填");
+        }
+        // 查重：已销毁(DESTROYED)的档案释放档案号（物理清理），其余报重
+        List<OpArchive> exist = opArchiveMapper.selectList(new LambdaQueryWrapper<OpArchive>()
+                .eq(OpArchive::getArchiveNo, a.getArchiveNo()));
+        for (OpArchive e : exist) {
+            if (!"DESTROYED".equals(e.getStatus())) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "档案编号已存在: " + a.getArchiveNo());
+            }
+            opArchiveMapper.hardDelete(e.getId());
+        }
+        a.setId(null);
+        if (a.getStatus() == null) {
+            // D-DEC-182：status 是 archive_status 的冗余镜像，取值走档案域同一把尺（ArchiveService.dispositionOf）
+            String mirrored = ArchiveService.dispositionOf(a.getArchiveStatus());
+            a.setStatus(mirrored != null ? mirrored : "FILED");
+        }
+        if (a.getFilingTime() == null) {
+            a.setFilingTime(LocalDateTime.now());
+        }
+        opArchiveMapper.insert(a);
+        return a.getId();
+    }
+
+    @Override
+    public void updateArchive(OpArchive a) {
+        if (a == null || a.getId() == null || opArchiveMapper.selectById(a.getId()) == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "档案不存在: " + (a == null ? null : a.getId()));
+        }
+        opArchiveMapper.updateById(a);
+    }
+
+    @Override
+    public Long requestDestroy(List<Long> archiveIds, String reason, Long operatorId) {
+        return archiveDestroyService.createDestroyRequest(archiveIds, reason, operatorId);
     }
 
     /** 解析 JSON 数组字符串形式的档案 ID 列表（容错纯 CSV） */

@@ -105,7 +105,7 @@
           <el-input v-model="form.username" :disabled="isEdit" :placeholder="$t('system.user.lblLoginName')" />
         </el-form-item>
         <el-form-item :label="$t('system.user.colName')" prop="realName">
-          <el-input v-model="form.realName" :placeholder="$t('system.user.lblRealName')" />
+          <el-input v-model="form.realName" :placeholder="$t('system.user.lblRealName')" maxlength="50" />
         </el-form-item>
         <el-form-item :label="$t('field.dept')">
           <el-tree-select
@@ -121,7 +121,7 @@
           />
         </el-form-item>
         <el-form-item :label="$t('system.user.colPhone')">
-          <el-input v-model="form.phone" :placeholder="$t('system.user.lblMobile')" />
+          <el-input v-model="form.phone" :placeholder="$t('system.user.lblMobile')" maxlength="30" />
         </el-form-item>
         <el-form-item :label="$t('system.user.colEmail')">
           <el-input v-model="form.email" :placeholder="$t('system.user.lblEmail')" />

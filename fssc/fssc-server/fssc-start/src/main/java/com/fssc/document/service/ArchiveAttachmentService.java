@@ -8,6 +8,7 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.document.entity.ArchiveAttachment;
 import com.fssc.document.mapper.ArchiveAttachmentMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveAttachmentService {
 
     private final ArchiveAttachmentMapper archiveAttachmentMapper;

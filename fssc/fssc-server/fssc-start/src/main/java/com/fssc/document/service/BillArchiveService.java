@@ -16,6 +16,7 @@ import com.fssc.document.entity.OpArchive;
 import com.fssc.document.mapper.OpArchiveMapper;
 import com.fssc.system.entity.SysFile;
 import com.fssc.system.service.NumberRuleService;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service("billArchiveService")
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class BillArchiveService {
 
     private final OpArchiveMapper archiveMapper;

@@ -16,6 +16,7 @@ import com.fssc.invoice.entity.InvVerifyLog;
 import com.fssc.invoice.mapper.InvInvoiceLineMapper;
 import com.fssc.invoice.mapper.InvInvoiceMapper;
 import com.fssc.invoice.mapper.InvVerifyLogMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("invoice")
 public class InvoiceEnhanceService {
 
     private final InvInvoiceLineMapper lineMapper;

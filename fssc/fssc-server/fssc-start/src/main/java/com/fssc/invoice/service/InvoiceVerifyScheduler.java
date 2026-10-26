@@ -12,6 +12,7 @@ import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.invoice.mapper.InvInvoiceMapper;
 import com.fssc.system.entity.ExtInterfaceConfig;
 import com.fssc.system.service.ExtInterfaceConfigService;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -68,6 +69,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@FsscDataSource("invoice")
 public class InvoiceVerifyScheduler {
 
     private final InvoiceEnhanceService enhanceService;

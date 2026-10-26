@@ -223,10 +223,10 @@
             </el-select>
           </el-form-item>
           <el-form-item :label="$t('pay.shared.colVoucherNo')">
-            <el-input v-model="resolveForm.voucherNo" :placeholder="$t('pay.recon.phAdjustVoucherNo')" />
+            <el-input v-model="resolveForm.voucherNo" :placeholder="$t('pay.recon.phAdjustVoucherNo')" maxlength="48" />
           </el-form-item>
           <el-form-item :label="$t('common.remark')">
-            <el-input v-model="resolveForm.remark" type="textarea" :rows="2" />
+            <el-input v-model="resolveForm.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
           </el-form-item>
         </el-form>
         <template #footer>

@@ -14,6 +14,7 @@ import com.fssc.document.entity.OpArchive;
 import com.fssc.document.mapper.OpArchiveMapper;
 import com.fssc.framework.security.UserContext;
 import com.fssc.workflow.service.WfEngineFacade;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveAccessService {
 
     private final ArchiveAccessLogMapper archiveAccessLogMapper;

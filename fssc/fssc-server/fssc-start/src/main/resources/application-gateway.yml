@@ -1,0 +1,48 @@
+# 集成网关服务 profile（openapi / bcp / connector 三件套同进程；叠加在 dev / prod 之上）
+#   本机：--spring.profiles.active=gateway,dev
+#   部署：--spring.profiles.active=gateway,prod
+# 启动类：com.fssc.gateway.GatewayServiceApplication（同一可执行 jar，见 docker/k8s-gateway.yaml）
+server:
+  port: 8093
+
+spring:
+  application:
+    name: fssc-integration-gateway
+  # 网关不承载流程引擎：排除 Flowable 全部自动配置（否则会以 master 库启动引擎、向 ACT_* 写入）
+  autoconfigure:
+    exclude:
+      - org.flowable.spring.boot.ProcessEngineAutoConfiguration
+      - org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryServicesAutoConfiguration
+      - org.flowable.spring.boot.RestApiAutoConfiguration
+      - org.flowable.spring.boot.EndpointAutoConfiguration
+      - org.flowable.spring.boot.FlowableSecurityAutoConfiguration
+
+#  不用 fssc.gateway.* 前缀：那组键是「发票能力网关」总开关（OCR 通道/验真共用），语义不同
+fssc:
+  integration-gateway:
+    standalone: true
+    health:
+      enabled: true
+
+info:
+  app:
+    name: fssc-integration-gateway
+    version: 1.0.0
+
+# gatewayDomain 只进 readiness（主库故障即摘流量），不进 liveness
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,gatewayDomain

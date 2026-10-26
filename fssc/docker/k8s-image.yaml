@@ -1,0 +1,111 @@
+# 影像服务独立部署（与 fssc-server 同一镜像、同一 jar，不同 Start-Class/端口）
+#
+# 与 k8s-fssc.yaml 的关系：
+#   · fssc-server：Start-Class=com.fssc.FsscApplication，全部业务域，:8089；
+#   · fssc-image ：Start-Class=com.fssc.image.ImageServiceApplication，只装 image+framework+common，:8090。
+#   · 两者共用 image fssc-server:1.0.0，无需二次打包（PropertiesLauncher 覆盖启动类）。
+#
+# 健康检查：
+#   /actuator/health           聚合（含 imageDomain：fssc_image 连通性 + 存储根可写）
+#   /actuator/health/liveness  进程存活（k8s liveness）
+#   /actuator/health/readiness 可接流量（k8s readiness）
+#
+# 仍未收口的跨域依赖（切流量前需知）：
+#   1. 发票入池 inv_invoice 在 master 库、由 invoice 域实现；独立进程里由 StandaloneInvoiceFacade
+#      显式报「未接入」（识别结果照常落 ocr_record），不做假入池。
+#   2. sys_file 行、sys_config、sys_user 仍在 master 库（文件/配置/鉴权为共享基础设施），
+#      因此 master 连接串仍是必需配置项，不是可选项。
+#   3. 文件字节落在共享存储根：fssc-server 与 fssc-image 必须挂同一个 claim（见 fssc-files），
+#      否则"行在库、字节在别人盘上"⇒ 下载 404。
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fssc-files
+  labels: {app: fssc-image}
+spec:
+  # 两副本（且与 fssc-server 跨 Pod）共享同一存储根 ⇒ 集群需提供 RWX 类存储（NFS/CephFS/云盘 RWX）
+  accessModes: [ReadWriteMany]
+  resources:
+    requests: {storage: 100Gi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fssc-image
+  labels: {app: fssc-image}
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels: {app: fssc-image}
+  template:
+    metadata:
+      labels: {app: fssc-image}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8090"
+    spec:
+      containers:
+        - name: fssc-image
+          image: fssc-server:1.0.0
+          command: ["sh", "-c"]
+          args:
+            - >-
+              java $JAVA_OPTS
+              -Dloader.main=com.fssc.image.ImageServiceApplication
+              -cp /app/fssc-start.jar
+              org.springframework.boot.loader.launch.PropertiesLauncher
+              --spring.profiles.active=image,prod
+          ports: [{containerPort: 8090}]
+          env:
+            - name: JAVA_OPTS
+              value: "-Xms1g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/heapdump/ -XX:+ExitOnOutOfMemoryError"
+            - name: FSSC_DB_MASTER_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: master-jdbc-url}
+            - name: FSSC_DB_IMAGE_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: image-jdbc-url}
+            - name: FSSC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: db-password}
+            - name: FSSC_JWT_SECRET
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: jwt-secret}
+            - name: FSSC_OPENAPI_ENABLED
+              value: "false"
+            - name: FSSC_FILE_LOCAL_ROOT
+              value: /app/data/files
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+            limits: {cpu: "2", memory: 4Gi}
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: 8090}
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: 8090}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 2
+          volumeMounts:
+            - {name: logs, mountPath: /app/logs}
+            - {name: files, mountPath: /app/data/files}
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: files
+          persistentVolumeClaim: {claimName: fssc-files}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fssc-image
+spec:
+  selector: {app: fssc-image}
+  ports:
+    - port: 8090
+      targetPort: 8090

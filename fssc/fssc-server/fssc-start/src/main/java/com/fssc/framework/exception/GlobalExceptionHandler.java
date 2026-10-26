@@ -201,7 +201,13 @@ public class GlobalExceptionHandler {
         String m = rootMsg(ex);
         String hint;
         if (m.contains("Data too long")) {
-            hint = "有字段超出长度限制（常见于期间/编码类字段，本系统期间格式为 yyyyMM 六位）";
+            // 列名只留在上面那条 WARN 里——界面不铺数据库列名（开发腔），也不再拿「期间格式」
+            // 去回答所有超长：备注/名称粘贴过长时那句会把人引去核对期间，而期间根本没填错。
+            String col = tooLongColumn(m);
+            boolean periodCol = col != null && (col.contains("period") || col.contains("month"));
+            hint = periodCol
+                    ? "期间格式不正确，本系统期间为 yyyyMM 六位"
+                    : "填写内容超出长度限制，请缩短后重试";
         } else if (m.contains("cannot be null")) {
             hint = "有必填字段未传（该字段在数据库为 NOT NULL）";
         } else if (m.contains("Out of range") || m.contains("Truncated incorrect")) {
@@ -210,6 +216,19 @@ public class GlobalExceptionHandler {
             hint = "提交的数据不满足数据库约束：" + m;
         }
         return Result.fail(ErrorCode.PARAM_INVALID.getCode(), hint);
+    }
+
+    private static final String TOO_LONG_MARK = "Data too long for column '";
+
+    /** 取 MySQL 超长原文（{@code Data too long for column 'x' at row 1}）里的列名；取不到返回 null。 */
+    private static String tooLongColumn(String msg) {
+        int at = msg.indexOf(TOO_LONG_MARK);
+        if (at < 0) {
+            return null;
+        }
+        int from = at + TOO_LONG_MARK.length();
+        int to = msg.indexOf('\'', from);
+        return to > from ? msg.substring(from, to).toLowerCase() : null;
     }
 
     /** 取最底层 cause 的消息（数据完整性异常的真正原因藏在 cause 链里） */

@@ -14,11 +14,11 @@ import com.fssc.expense.entity.ExpBillLine;
 import com.fssc.expense.mapper.ExpBillAttachMapper;
 import com.fssc.expense.mapper.ExpBillLineMapper;
 import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.framework.facade.ImageFacade;
+import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.invoice.entity.InvBillInvoice;
 import com.fssc.invoice.entity.InvInvoice;
-import com.fssc.invoice.mapper.InvBillInvoiceMapper;
-import com.fssc.invoice.mapper.InvInvoiceMapper;
 import com.fssc.masterdata.entity.MdExpenseItem;
 import com.fssc.masterdata.mapper.MdExpenseItemMapper;
 import com.fssc.compliance.entity.ExpensePolicy;
@@ -62,8 +62,10 @@ public class PrecheckService {
     private final ExpBillAttachMapper attachMapper;
     private final MdExpenseItemMapper itemMapper;
     private final ExpensePolicyMapper policyMapper;
-    private final InvBillInvoiceMapper billInvoiceMapper;
-    private final InvInvoiceMapper invoiceMapper;
+    /** 发票池读/勾稽读经发票域 Facade（分库断点）：本类不再直连 inv_invoice/inv_bill_invoice */
+    private final InvoiceDomainFacade invoiceFacade;
+    /** 票面键/票号查重经影像域 Facade（服务化断点）：本类不再直连 fssc_image 库 */
+    private final ImageFacade imageFacade;
     @org.springframework.beans.factory.annotation.Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
@@ -146,13 +148,10 @@ public class PrecheckService {
             } catch (Exception ignore) { /* 元信息异常不作为预检失败 */ }
         }
         for (String no : parsedNos) {
-            List<InvInvoice> sameNo = invoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()
-                    .eq(InvInvoice::getInvoiceNo, no));
+            List<InvInvoice> sameNo = invoiceFacade.findByInvoiceNo(no);
             if (sameNo.isEmpty()) continue;
             List<Long> ids = sameNo.stream().map(InvInvoice::getId).toList();
-            long usedByOthers = billInvoiceMapper.selectCount(new LambdaQueryWrapper<InvBillInvoice>()
-                    .ne(InvBillInvoice::getBillId, billId)
-                    .in(InvBillInvoice::getInvoiceId, ids));
+            long usedByOthers = invoiceFacade.countLinksByInvoiceIdsExcludingBill(ids, billId);
             if (usedByOthers > 0) {
                 items.add(PrecheckItem.fail("INVOICE_DUP",
                         "发票 " + no + " 已被其他报销单使用，禁止重复报销"));
@@ -169,25 +168,11 @@ public class PrecheckService {
                         .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
             java.util.Set<String> ocrNos = new java.util.HashSet<>(parsedNos);
                 if (!myFileIds.isEmpty()) {
-                    List<Object> params = new ArrayList<>();
-                    params.add(TenantContext.getTenantId());
-                    String ph = myFileIds.stream().map(x -> "?").collect(Collectors.joining(","));
-                    params.addAll(myFileIds);
-                    for (Map<String, Object> row : jdbcTemplate.queryForList(
-                            "SELECT DISTINCT invoice_no FROM fssc_image.ocr_record "
-                                    + "WHERE tenant_id = ? AND invoice_no IS NOT NULL AND invoice_no <> '' AND file_id IN (" + ph + ")",
-                            params.toArray())) {
-                        String no = row.get("invoice_no") == null ? null : row.get("invoice_no").toString();
-                        if (no != null && !no.isBlank()) ocrNos.add(no);
-                    }
+                    ocrNos.addAll(imageFacade.invoiceNosByFileIds(TenantContext.getTenantId(), new ArrayList<>(myFileIds)));
                 }
                 for (String no : ocrNos) {
-                    List<Map<String, Object>> recs = jdbcTemplate.queryForList(
-                            "SELECT DISTINCT file_id FROM fssc_image.ocr_record "
-                                    + "WHERE tenant_id = ? AND invoice_no = ? AND file_id IS NOT NULL",
-                            TenantContext.getTenantId(), no);
-                    List<Long> otherFileIds = recs.stream()
-                            .map(r -> ((Number) r.get("file_id")).longValue())
+                    List<Long> otherFileIds = imageFacade
+                            .fileIdsByInvoiceNo(TenantContext.getTenantId(), no).stream()
                             .filter(f -> !myFileIds.contains(f)).distinct().toList();
                     if (otherFileIds.isEmpty()) continue;
                     long usedByOthers = attachMapper.selectCount(new LambdaQueryWrapper<ExpBillAttach>()
@@ -230,16 +215,13 @@ public class PrecheckService {
         }
 
         // 5) 重复发票：关联发票已被其他单据使用
-        List<InvBillInvoice> links = billInvoiceMapper.selectList(new LambdaQueryWrapper<InvBillInvoice>()
-                .eq(InvBillInvoice::getBillId, billId));
+        List<InvBillInvoice> links = invoiceFacade.findLinksByBillId(billId);
         if (!links.isEmpty()) {
             List<Long> invIds = links.stream().map(InvBillInvoice::getInvoiceId).distinct().toList();
-            List<InvInvoice> invs = invoiceMapper.selectBatchIds(invIds);
+            List<InvInvoice> invs = invoiceFacade.findByIds(invIds);
             for (InvInvoice inv : invs) {
                 if (inv.getInvoiceNo() == null) continue;
-                long used = invoiceMapper.selectCount(new LambdaQueryWrapper<InvInvoice>()
-                        .eq(InvInvoice::getInvoiceNo, inv.getInvoiceNo())
-                        .eq(InvInvoice::getInvoiceCode, inv.getInvoiceCode()));
+                long used = invoiceFacade.countByCodeAndNo(inv.getInvoiceCode(), inv.getInvoiceNo());
                 if (used > 1) {
                     items.add(PrecheckItem.fail("INVOICE_DUP",
                             "发票重复报销：" + inv.getInvoiceCode() + " " + inv.getInvoiceNo()));

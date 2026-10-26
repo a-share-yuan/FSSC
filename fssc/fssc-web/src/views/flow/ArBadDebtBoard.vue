@@ -69,7 +69,7 @@
     <el-dialog v-model="writeoffVisible" :title="$t('flow.badDebt.dlgWriteoffTitle')" width="480px" destroy-on-close>
       <el-form ref="writeoffFormRef" :model="writeoffForm" :rules="writeoffRules" label-width="110px" size="small">
         <el-form-item :label="$t('flow.report.colBadDebtWriteOff')" prop="amount"><el-input v-model="writeoffForm.amount" /></el-form-item>
-        <el-form-item :label="$t('flow.badDebt.colWriteoffReason')" prop="reason"><el-input v-model="writeoffForm.reason" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item :label="$t('flow.badDebt.colWriteoffReason')" prop="reason"><el-input v-model="writeoffForm.reason" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
         <el-form-item :label="$t('flow.badDebt.colBasisNo')" prop="basisNo"><el-input v-model="writeoffForm.basisNo" :placeholder="$t('flow.badDebt.phBasisNo')" /></el-form-item>
       </el-form>
       <template #footer>

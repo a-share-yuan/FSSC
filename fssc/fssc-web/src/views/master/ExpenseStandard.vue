@@ -127,7 +127,7 @@
           <el-form-item label="生效日期" class="half"><el-date-picker v-model="form.effectDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
           <el-form-item label="失效日期" class="half"><el-date-picker v-model="form.expireDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         </div>
-        <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
       </el-form>
       <template #footer>
         <el-button size="small" @click="formVisible = false">取消</el-button>

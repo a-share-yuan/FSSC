@@ -72,7 +72,7 @@
                 </div>
                 <div class="form-row">
                   <el-form-item label="统一社会信用代码" class="half"><el-input v-model="form.creditCode" maxlength="18" /></el-form-item>
-                  <el-form-item label="税号" class="half"><el-input v-model="form.taxNo" /></el-form-item>
+                  <el-form-item label="税号" class="half"><el-input v-model="form.taxNo" maxlength="64" /></el-form-item>
                 </div>
                 <div class="form-row">
                   <el-form-item label="纳税人资质" class="half">
@@ -102,10 +102,10 @@
                 </div>
                 <el-form-item label="地址"><el-input v-model="form.address" /></el-form-item>
                 <div class="form-row">
-                  <el-form-item label="电话" class="half"><el-input v-model="form.tel" /></el-form-item>
+                  <el-form-item label="电话" class="half"><el-input v-model="form.tel" maxlength="30" /></el-form-item>
                   <el-form-item label="黑名单" class="half"><el-switch v-model="form.blacklist" active-text="是" inactive-text="否" /></el-form-item>
                 </div>
-                <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
+                <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
               </el-form>
             </el-tab-pane>
 
@@ -187,15 +187,15 @@
         <template v-if="subDialog === 'bank'">
           <el-form-item label="开户行" prop="bankName"><el-input v-model="bankForm.bankName" /></el-form-item>
           <el-form-item label="支行"><el-input v-model="bankForm.bankBranch" /></el-form-item>
-          <el-form-item label="银行账号" prop="bankAccount"><el-input v-model="bankForm.bankAccount" /></el-form-item>
-          <el-form-item label="币种"><el-input v-model="bankForm.currencyCode" placeholder="CNY" /></el-form-item>
+          <el-form-item label="银行账号" prop="bankAccount"><el-input v-model="bankForm.bankAccount" maxlength="64" /></el-form-item>
+          <el-form-item label="币种"><el-input v-model="bankForm.currencyCode" placeholder="CNY" maxlength="10" /></el-form-item>
           <el-form-item label="默认账户"><el-switch v-model="bankForm.isDefault" /></el-form-item>
           <el-form-item label="备注"><el-input v-model="bankForm.remark" /></el-form-item>
         </template>
         <template v-else-if="subDialog === 'contact'">
-          <el-form-item label="姓名" prop="contactName"><el-input v-model="contactForm.contactName" /></el-form-item>
-          <el-form-item label="职务"><el-input v-model="contactForm.position" /></el-form-item>
-          <el-form-item label="电话" prop="phone"><el-input v-model="contactForm.phone" /></el-form-item>
+          <el-form-item label="姓名" prop="contactName"><el-input v-model="contactForm.contactName" maxlength="50" /></el-form-item>
+          <el-form-item label="职务"><el-input v-model="contactForm.position" maxlength="50" /></el-form-item>
+          <el-form-item label="电话" prop="phone"><el-input v-model="contactForm.phone" maxlength="30" /></el-form-item>
           <el-form-item label="邮箱" prop="email"><el-input v-model="contactForm.email" /></el-form-item>
           <el-form-item label="主要联系人"><el-switch v-model="contactForm.isPrimary" /></el-form-item>
         </template>

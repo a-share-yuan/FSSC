@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("invoice")
 public class InvoiceService {
 
     private final InvInvoiceMapper invInvoiceMapper;

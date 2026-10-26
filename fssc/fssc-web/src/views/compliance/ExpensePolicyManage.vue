@@ -139,7 +139,7 @@
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="政策编码" prop="policyCode"><el-input v-model="form.policyCode" :disabled="!!form.id" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="政策名称" prop="policyName"><el-input v-model="form.policyName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="费用类型"><el-input v-model="form.expenseType" placeholder="如 TRAVEL / MEETING" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="费用类型"><el-input v-model="form.expenseType" placeholder="如 TRAVEL / MEETING" maxlength="32" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="费用项名称"><el-input v-model="form.expenseItemName" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="金额上限" prop="maxAmount"><el-input-number v-model="form.maxAmount" :min="0" :precision="2" controls-position="right" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="超额审批阈值"><el-input-number v-model="form.approveAboveAmount" :min="0" :precision="2" controls-position="right" style="width:100%" /></el-form-item></el-col>
@@ -158,7 +158,7 @@
           </el-form-item></el-col>
           <el-col :span="12"><el-form-item label="生效起"><el-date-picker v-model="form.effectiveStart" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="生效止"><el-date-picker v-model="form.effectiveEnd" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>
@@ -178,10 +178,10 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="标准键" prop="standardKey"><el-input v-model="stdForm.standardKey" placeholder="如 HOTEL_RATE / MEAL" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="标准键" prop="standardKey"><el-input v-model="stdForm.standardKey" placeholder="如 HOTEL_RATE / MEAL" maxlength="64" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="下限"><el-input-number v-model="stdForm.standardValueMin" :precision="2" controls-position="right" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="上限"><el-input-number v-model="stdForm.standardValueMax" :precision="2" controls-position="right" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="单位"><el-input v-model="stdForm.standardUnit" placeholder="元 / 人天 / %" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="单位"><el-input v-model="stdForm.standardUnit" placeholder="元 / 人天 / %" maxlength="16" /></el-form-item></el-col>
           <el-col :span="12">
             <el-form-item label="级别类型">
               <el-select v-model="stdForm.levelType" clearable style="width:100%">
@@ -189,7 +189,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="级别值"><el-input v-model="stdForm.levelValue" placeholder="与级别类型对应，如 P5 / 经理" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="级别值"><el-input v-model="stdForm.levelValue" placeholder="与级别类型对应，如 P5 / 经理" maxlength="64" /></el-form-item></el-col>
           <el-col :span="12">
             <el-form-item label="超标动作">
               <el-select v-model="stdForm.overtimeAction" clearable style="width:100%">
@@ -197,8 +197,8 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="超标审批级别"><el-input v-model="stdForm.overtimeAuthLevel" placeholder="如 MANAGER / CFO" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="备注"><el-input v-model="stdForm.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="超标审批级别"><el-input v-model="stdForm.overtimeAuthLevel" placeholder="如 MANAGER / CFO" maxlength="32" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="备注"><el-input v-model="stdForm.remark" type="textarea" :rows="2" maxlength="256" show-word-limit /></el-form-item></el-col>
         </el-row>
         <el-alert v-if="stdForm.standardValueMin != null && stdForm.standardValueMax != null
                        && stdForm.standardValueMin > stdForm.standardValueMax" type="error" :closable="false" show-icon

@@ -4,7 +4,7 @@
 package com.fssc.workflow.action;
 
 import com.fssc.invoice.entity.InvInvoice;
-import com.fssc.invoice.mapper.InvInvoiceMapper;
+import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
 import com.fssc.sharing.service.VoucherService;
@@ -30,7 +30,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class InvoiceIssueBizAction implements WfBizAction {
 
-    private final InvInvoiceMapper invInvoiceMapper;
+    private final InvoiceDomainFacade invoiceFacade;
     private final RcReceivableMapper receivableMapper;
     private final VoucherService voucherService;
     private final com.fssc.customer.mapper.CrmCustomerMapper crmCustomerMapper;
@@ -46,7 +46,7 @@ public class InvoiceIssueBizAction implements WfBizAction {
     public void execute(WfProcessEndedEvent event) {
         Long invoiceId = event.getBizId();
         if (invoiceId == null) return;
-        InvInvoice invoice = invInvoiceMapper.selectById(invoiceId);
+        InvInvoice invoice = invoiceFacade.findById(invoiceId);
         if (invoice == null) {
             log.warn("开票收尾: 不存在的发票 {}", invoiceId);
             return;
@@ -54,14 +54,12 @@ public class InvoiceIssueBizAction implements WfBizAction {
         try {
             // P4-3 审计扩面：改状态前采集旧值
             String oldStatus = invoice.getStatus();
-            InvInvoice upd = new InvInvoice();
-            upd.setId(invoiceId);
-            upd.setStatus(Boolean.TRUE.equals(event.getApproved()) ? "ISSUED" : "REJECTED");
-            invInvoiceMapper.updateById(upd);
+            String newStatus = Boolean.TRUE.equals(event.getApproved()) ? "ISSUED" : "REJECTED";
+            invoiceFacade.updateStatus(invoiceId, newStatus);
             java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
             auditBefore.put("status", oldStatus);
             java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
-            auditAfter.put("status", upd.getStatus());
+            auditAfter.put("status", newStatus);
             auditTrailService.recordUpdate(event.getBizType(), invoiceId, invoice.getInvoiceNo(), "inv_invoice",
                     String.valueOf(invoiceId), auditBefore, auditAfter,
                     (Boolean.TRUE.equals(event.getApproved()) ? "审批通过" : "审批驳回")

@@ -15,6 +15,7 @@ import com.fssc.system.entity.SysUserRole;
 import com.fssc.system.mapper.SysRoleMapper;
 import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.system.mapper.SysUserRoleMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -45,6 +46,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveExpireJob {
 
     /** 预警目标角色编码：档案管理员 */

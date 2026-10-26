@@ -333,7 +333,7 @@
         <el-form-item label="往来单位"><el-select v-model="creditForm.customerId" filterable clearable placeholder="选择客户/供应商" style="width:100%"><el-option v-for="c in customers" :key="c.id" :label="c.customerName" :value="c.id" /></el-select></el-form-item>
         <el-form-item label="支付方式"><el-select v-model="creditForm.payMethod" filterable allow-create default-first-option placeholder="请选择支付方式" style="width:100%"><el-option label="电汇" value="电汇" /><el-option label="支票" value="支票" /><el-option label="承兑汇票" value="承兑汇票" /><el-option label="现金" value="现金" /><el-option label="网银转账" value="网银转账" /></el-select></el-form-item>
         <el-form-item label="付款方银行"><el-input v-model="creditForm.payerBank" placeholder="请输入付款方银行" /></el-form-item>
-        <el-form-item label="付款方账号"><el-input v-model="creditForm.payerAccount" placeholder="请输入付款方账号" /></el-form-item>
+        <el-form-item label="付款方账号"><el-input v-model="creditForm.payerAccount" placeholder="请输入付款方账号" maxlength="64" /></el-form-item>
         <el-form-item label="收款金额" prop="amount"><el-input-number v-model="creditForm.amount" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="渠道"><el-select v-model="creditForm.sourceChannel" filterable allow-create default-first-option placeholder="请选择渠道" style="width:100%"><el-option label="银行直联" value="银行直联" /><el-option label="票据贴现" value="票据贴现" /><el-option label="第三方支付" value="第三方支付" /><el-option label="其他" value="其他" /></el-select></el-form-item>
       </el-form>
@@ -362,7 +362,7 @@
     <!-- 票据登记弹窗 -->
     <el-dialog v-model="dlgSettle" title="登记票据" width="560px">
       <el-form ref="settleFormRef" :model="stForm" :rules="settleFormRules" label-width="130px" size="small">
-        <el-form-item label="票据号" prop="ticketNo"><el-input v-model="stForm.ticketNo" placeholder="请输入票据号" /></el-form-item>
+        <el-form-item label="票据号" prop="ticketNo"><el-input v-model="stForm.ticketNo" placeholder="请输入票据号" maxlength="64" /></el-form-item>
         <el-form-item label="票面种类">
           <el-select v-model="stForm.ticketType" style="width:100%"><el-option label="银承" value="银承" /><el-option label="商承" value="商承" /></el-select>
         </el-form-item>
@@ -381,10 +381,10 @@
     <!-- 银行主数据新增弹窗（T1：TR_BANK_MASTER） -->
     <el-dialog v-model="dlgAccount" title="新增银行账户" width="520px">
       <el-form ref="accFormRef" :model="accForm" :rules="accountFormRules" label-width="130px" size="small">
-        <el-form-item label="账户编码"><el-input v-model="accForm.accountCode" placeholder="留空由系统取号" /></el-form-item>
+        <el-form-item label="账户编码"><el-input v-model="accForm.accountCode" placeholder="留空由系统取号" maxlength="64" /></el-form-item>
         <el-form-item label="账户名称" prop="accountName"><el-input v-model="accForm.accountName" placeholder="请输入账户名称" /></el-form-item>
         <el-form-item label="开户银行" prop="bankName"><el-select v-model="accForm.bankName" filterable allow-create default-first-option placeholder="请选择或输入开户银行" style="width:100%"><el-option label="工商银行" value="工商银行" /><el-option label="建设银行" value="建设银行" /><el-option label="农业银行" value="农业银行" /><el-option label="中国银行" value="中国银行" /><el-option label="交通银行" value="交通银行" /><el-option label="招商银行" value="招商银行" /><el-option label="邮储银行" value="邮储银行" /><el-option label="其他" value="其他" /></el-select></el-form-item>
-        <el-form-item label="银行账号" prop="bankAccount"><el-input v-model="accForm.bankAccount" placeholder="请输入银行账号" /></el-form-item>
+        <el-form-item label="银行账号" prop="bankAccount"><el-input v-model="accForm.bankAccount" placeholder="请输入银行账号" maxlength="64" /></el-form-item>
         <el-form-item label="币种"><el-select v-model="accForm.currencyCode" style="width:100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 </el-select></el-form-item>

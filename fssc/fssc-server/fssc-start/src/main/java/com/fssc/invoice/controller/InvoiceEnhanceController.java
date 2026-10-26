@@ -15,6 +15,7 @@ import com.fssc.invoice.service.InvoiceEnhanceService;
 import lombok.RequiredArgsConstructor;
 import com.fssc.common.exception.BizException;
 import com.fssc.common.core.ErrorCode;
+import com.fssc.framework.datasource.FsscDataSource;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,6 +33,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/tenant/invoice/enhance")
 @RequiredArgsConstructor
+@FsscDataSource("invoice")
 public class InvoiceEnhanceController {
 
     private final InvoiceEnhanceService enhanceService;

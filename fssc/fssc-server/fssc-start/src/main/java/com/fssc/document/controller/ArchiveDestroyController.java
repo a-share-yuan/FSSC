@@ -10,6 +10,7 @@ import com.fssc.document.service.ArchiveDestroyService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,6 +26,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/tenant/compliance/archive-destroy")
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveDestroyController {
 
     private final ArchiveDestroyService archiveDestroyService;

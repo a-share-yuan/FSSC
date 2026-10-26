@@ -126,7 +126,7 @@
             </el-select>
           </el-form-item>
         </el-col>
-        <el-col :span="12"><el-form-item label="发票号"><el-input v-model="aForm.invoiceNo" /></el-form-item></el-col>
+        <el-col :span="12"><el-form-item label="发票号"><el-input v-model="aForm.invoiceNo" maxlength="64" /></el-form-item></el-col>
       </el-row>
     </el-form>
     <template #footer>
@@ -158,7 +158,7 @@
           <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="申请说明" prop="remark"><el-input v-model="capForm.remark" type="textarea" :rows="2" placeholder="立项依据 / 采购计划说明" /></el-form-item>
+      <el-form-item label="申请说明" prop="remark"><el-input v-model="capForm.remark" type="textarea" :rows="2" placeholder="立项依据 / 采购计划说明" maxlength="500" show-word-limit /></el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="dlgCapital = false">取消</el-button>
@@ -235,7 +235,7 @@
       </el-form-item>
       <el-form-item label="调整原因" prop="reason">
         <el-input v-model="adjustForm.reason" type="textarea" :rows="2"
-                  placeholder="请填写调整原因（审批人与事后追溯看这一句）" />
+                  placeholder="请填写调整原因（审批人与事后追溯看这一句）" maxlength="500" show-word-limit />
       </el-form-item>
     </el-form>
     <template #footer>

@@ -13,7 +13,7 @@ import com.fssc.framework.tenant.TenantContext;
 import com.fssc.glex.entity.TaxRefund;
 import com.fssc.glex.mapper.TaxRefundMapper;
 import com.fssc.invoice.entity.InvInvoice;
-import com.fssc.invoice.mapper.InvInvoiceMapper;
+import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.workflow.service.WfEngineFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +47,7 @@ public class TaxRefundService {
     private static final Set<String> TYPES = Set.of("EXPORT_REFUND", "CREDIT_REFUND", "IMMEDIATE_REFUND");
 
     private final TaxRefundMapper mapper;
-    private final InvInvoiceMapper invInvoiceMapper;
+    private final InvoiceDomainFacade invoiceFacade;
     private final WfEngineFacade wfEngineFacade;
     private final com.fssc.framework.org.OrgGuard orgGuard;
     /** P4-3 审计扩面：单据状态跃迁记录 */
@@ -265,8 +265,7 @@ public class TaxRefundService {
      * 演示规则：以已认证专票可抵税额为上限。
      */
     public BigDecimal creditQuota() {
-        BigDecimal certified = invInvoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()
-                        .eq(InvInvoice::getCertifyStatus, "CERTIFIED"))
+        BigDecimal certified = invoiceFacade.findByCertifyStatus("CERTIFIED")
                 .stream().map(inv -> inv.getDeductAmount() == null ? BigDecimal.ZERO : inv.getDeductAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal refunded = mapper.selectList(new LambdaQueryWrapper<TaxRefund>()

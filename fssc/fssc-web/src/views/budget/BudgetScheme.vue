@@ -101,7 +101,7 @@
         <el-form-item label="结余结转">
           <el-switch v-model="dialog.form.carryOver" :active-value="1" :inactive-value="0" />
         </el-form-item>
-        <el-form-item label="备注"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialog.visible = false">取消</el-button>

@@ -47,9 +47,14 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - {name: logs, mountPath: /app/logs}
+            # 与 fssc-image 共用同一存储根（claim 定义在 k8s-image.yaml）：
+            # sys_file 行在 master 库，字节在盘上，两边必须看到同一份文件，否则下载 404
+            - {name: files, mountPath: /app/data/files}
       volumes:
         - name: logs
           emptyDir: {}
+        - name: files
+          persistentVolumeClaim: {claimName: fssc-files}
 ---
 apiVersion: v1
 kind: Service

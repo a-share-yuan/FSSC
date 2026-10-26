@@ -15,8 +15,7 @@ import com.fssc.expense.mapper.ExpBillPaymentMapper;
 import com.fssc.framework.security.UserContext;
 import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.invoice.entity.InvBillInvoice;
-import com.fssc.invoice.mapper.InvBillInvoiceMapper;
-import com.fssc.invoice.mapper.InvInvoiceMapper;
+import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.masterdata.entity.MdMatchTolerance;
 import com.fssc.masterdata.entity.MdSupplier;
 import com.fssc.masterdata.mapper.MdMatchToleranceMapper;
@@ -65,8 +64,7 @@ public class ThreeWayMatchService {
     private final ExpBillMapper expBillMapper;
     private final ExpBillPaymentMapper expBillPaymentMapper;
     private final ContContractMapper contractMapper;
-    private final InvBillInvoiceMapper billInvoiceMapper;
-    private final InvInvoiceMapper invInvoiceMapper;
+    private final InvoiceDomainFacade invoiceFacade;
     private final PoOrderMapper poOrderMapper;
     private final PoReceiptMapper poReceiptMapper;
     /** 量侧：订购数量来自订单行，已收数量来自存货移动台账（stock_move） */
@@ -587,8 +585,7 @@ public class ThreeWayMatchService {
         ExpBill anchor = null;
         BigDecimal anchorLinked = BigDecimal.ZERO;
         for (ExpBill b : bills) {
-            BigDecimal s = billInvoiceMapper.selectList(new LambdaQueryWrapper<InvBillInvoice>()
-                            .eq(InvBillInvoice::getBillId, b.getId()))
+            BigDecimal s = invoiceFacade.findLinksByBillId(b.getId())
                     .stream().map(x -> nz(x.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
             if (anchor == null || s.compareTo(anchorLinked) > 0) { // 并列取先遍历到的小 id
                 anchor = b;
@@ -616,8 +613,7 @@ public class ThreeWayMatchService {
      * 查询付款单关联的发票明细列表（供三单匹配明细展示）。
      */
     public List<Map<String, Object>> listInvoices(Long billId) {
-        List<InvBillInvoice> links = billInvoiceMapper.selectList(new LambdaQueryWrapper<InvBillInvoice>()
-                .eq(InvBillInvoice::getBillId, billId));
+        List<InvBillInvoice> links = invoiceFacade.findLinksByBillId(billId);
         List<Map<String, Object>> result = new ArrayList<>();
         for (InvBillInvoice link : links) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -625,7 +621,7 @@ public class ThreeWayMatchService {
             m.put("invoiceId", link.getInvoiceId());
             m.put("amount", nz(link.getAmount()));
             if (link.getInvoiceId() != null) {
-                InvInvoice inv = invInvoiceMapper.selectById(link.getInvoiceId());
+                InvInvoice inv = invoiceFacade.findById(link.getInvoiceId());
                 if (inv != null) {
                     m.put("invoiceNo", inv.getInvoiceNo());
                     m.put("invoiceCode", inv.getInvoiceCode());
@@ -737,8 +733,7 @@ public class ThreeWayMatchService {
         }
 
         // 3) 发票侧（付款单关联发票合计）
-        List<InvBillInvoice> links = billInvoiceMapper.selectList(new LambdaQueryWrapper<InvBillInvoice>()
-                .eq(InvBillInvoice::getBillId, bill.getId()));
+        List<InvBillInvoice> links = invoiceFacade.findLinksByBillId(bill.getId());
         BigDecimal invoiceAmt = links.stream().map(x -> nz(x.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
         // D-V4-008：价税规则归一。收货单（po_receipt.amount）是不含税入账，而关联发票的
         // 覆盖金额是价税合计——直接比较会把"净额收货+价税开票"的标准组合误判为超收货
@@ -1050,8 +1045,7 @@ public class ThreeWayMatchService {
         if (billIds.isEmpty()) {
             return List.of();
         }
-        return billInvoiceMapper.selectList(new LambdaQueryWrapper<InvBillInvoice>()
-                .in(InvBillInvoice::getBillId, billIds));
+        return invoiceFacade.findLinksByBillIds(billIds);
     }
 
     /** 勾稽明细对应发票的税额合计（发票缺失或无税额信息按 0） */
@@ -1059,7 +1053,7 @@ public class ThreeWayMatchService {
         BigDecimal tax = BigDecimal.ZERO;
         for (InvBillInvoice link : links) {
             if (link.getInvoiceId() == null) continue;
-            InvInvoice inv = invInvoiceMapper.selectById(link.getInvoiceId());
+            InvInvoice inv = invoiceFacade.findById(link.getInvoiceId());
             if (inv != null && inv.getTaxAmount() != null) {
                 tax = tax.add(inv.getTaxAmount());
             }

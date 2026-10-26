@@ -167,12 +167,12 @@
               :label="`${r.recipientName}${r.customerName ? ' · ' + r.customerName : ''}${r.email ? ' · ' + r.email : ''}`" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="$t('flow.bill.mailReceiver')" prop="receiver"><el-input v-model="mailForm.receiver" :placeholder="$t('flow.bill.mailReceiverPh')" /></el-form-item>
-        <el-form-item :label="$t('flow.bill.mailPhone')"><el-input v-model="mailForm.receiverPhone" :placeholder="$t('flow.bill.mailPhonePh')" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailReceiver')" prop="receiver"><el-input v-model="mailForm.receiver" :placeholder="$t('flow.bill.mailReceiverPh')" maxlength="64" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailPhone')"><el-input v-model="mailForm.receiverPhone" :placeholder="$t('flow.bill.mailPhonePh')" maxlength="32" /></el-form-item>
         <el-form-item :label="$t('flow.bill.mailEmail')" prop="receiverEmail"><el-input v-model="mailForm.receiverEmail" :placeholder="$t('flow.bill.mailEmailPh')" />
           <div v-if="mailForm.customerCode && !mailForm.receiverEmail" style="color:#e6a23c;font-size:12px">{{ $t('flow.bill.hintNoEmailInProfile') }}</div>
         </el-form-item>
-        <el-form-item :label="$t('flow.bill.mailAddress')" prop="address"><el-input v-model="mailForm.address" type="textarea" :rows="2" :placeholder="$t('flow.bill.mailAddressPh')" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailAddress')" prop="address"><el-input v-model="mailForm.address" type="textarea" :rows="2" :placeholder="$t('flow.bill.mailAddressPh')" maxlength="255" show-word-limit /></el-form-item>
       </el-form>
       <template #footer>
         <el-button size="small" @click="mailVisible = false">{{ $t('common.cancel') }}</el-button>
@@ -228,12 +228,12 @@
         <el-form-item :label="$t('field.customer')">
           <CustomerSelect v-model="recipientForm.customerCode" @change="onRecipientCustomer" />
         </el-form-item>
-        <el-form-item :label="$t('flow.bill.mailReceiver')" prop="recipientName"><el-input v-model="recipientForm.recipientName" /></el-form-item>
-        <el-form-item :label="$t('flow.bill.mailPhone')"><el-input v-model="recipientForm.phone" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailReceiver')" prop="recipientName"><el-input v-model="recipientForm.recipientName" maxlength="64" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailPhone')"><el-input v-model="recipientForm.phone" maxlength="32" /></el-form-item>
         <el-form-item :label="$t('flow.bill.mailEmail')" prop="email"><el-input v-model="recipientForm.email" />
           <div v-if="recipientForm.customerCode && !recipientForm.email" style="color:#e6a23c;font-size:12px">{{ $t('flow.bill.hintNoEmailInProfile') }}</div>
         </el-form-item>
-        <el-form-item :label="$t('flow.bill.mailAddress')"><el-input v-model="recipientForm.address" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailAddress')"><el-input v-model="recipientForm.address" type="textarea" :rows="2" maxlength="255" show-word-limit /></el-form-item>
         <el-form-item :label="$t('flow.bill.recipientDefault')"><el-switch v-model="recipientForm.isDefault" :active-value="1" :inactive-value="0" /></el-form-item>
         <el-form-item :label="$t('common.remark')"><el-input v-model="recipientForm.remark" /></el-form-item>
       </el-form>
@@ -271,9 +271,9 @@
     <!-- ERP 财务调整推送 -->
     <el-dialog v-model="ebsVisible" :title="$t('flow.bill.erpAdjustBoxTitle')" width="560px" destroy-on-close>
       <el-form :model="ebsForm" label-width="110px" size="small">
-        <el-form-item :label="$t('flow.bill.erpAdjustNo')" required><el-input v-model="ebsForm.adjustNo" :placeholder="$t('flow.bill.erpAdjustNoPh')" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.erpAdjustNo')" required><el-input v-model="ebsForm.adjustNo" :placeholder="$t('flow.bill.erpAdjustNoPh')" maxlength="48" /></el-form-item>
         <el-form-item :label="$t('field.customer')"><CustomerSelect v-model="ebsForm.customerCode" /></el-form-item>
-        <el-form-item :label="$t('flow.bill.erpAdjustType')" required><el-input v-model="ebsForm.adjustType" :placeholder="$t('flow.bill.erpAdjustTypePh')" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.erpAdjustType')" required><el-input v-model="ebsForm.adjustType" :placeholder="$t('flow.bill.erpAdjustTypePh')" maxlength="16" /></el-form-item>
         <el-form-item :label="$t('field.amount')"><el-input v-model="ebsForm.amount" /></el-form-item>
         <el-form-item :label="$t('field.taxAmount')"><el-input v-model="ebsForm.taxAmount" /></el-form-item>
         <el-form-item :label="$t('flow.bill.erpStatement')">

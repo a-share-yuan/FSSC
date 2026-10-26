@@ -13,7 +13,7 @@ import com.fssc.framework.tenant.TenantContext;
 import com.fssc.glex.entity.GlInterOffset;
 import com.fssc.glex.mapper.GlInterOffsetMapper;
 import com.fssc.invoice.entity.InvInvoice;
-import com.fssc.invoice.mapper.InvInvoiceMapper;
+import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
 import com.fssc.workflow.service.WfEngineFacade;
@@ -39,7 +39,7 @@ public class GlInterOffsetService {
     private final GlInterOffsetMapper mapper;
     private final WfEngineFacade wfEngineFacade;
     private final RcReceivableMapper rcReceivableMapper;
-    private final InvInvoiceMapper invInvoiceMapper;
+    private final InvoiceDomainFacade invoiceFacade;
     private final com.fssc.system.service.ConfigService configService;
     // R5-D-153
     private final com.fssc.sharing.service.VoucherService voucherService;
@@ -291,10 +291,7 @@ public class GlInterOffsetService {
             log.warn("读取 gl.offset.companyPairs 失败，退回自适应配对: {}", ex.getMessage());
         }
         // 自适应：有应付余额的公司 × 有应收余额的公司（跨公司）
-        Set<Long> froms = invInvoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()
-                .eq(InvInvoice::getStatus, "NORMAL")
-                .isNotNull(InvInvoice::getCompanyId)).stream()
-                .map(InvInvoice::getCompanyId).filter(id -> id != null && id > 0).collect(Collectors.toSet());
+        Set<Long> froms = invoiceFacade.companyIdsByStatus("NORMAL");
         Set<Long> tos = rcReceivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .in(RcReceivable::getStatus, "NORMAL", "OVERDUE", "PARTIAL")
                 .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
@@ -321,9 +318,7 @@ public class GlInterOffsetService {
      */
     private BigDecimal pairOffsetAmount(long fromId, long toId) {
         // fromId 方的应付余额（发票未作废合计）
-        List<InvInvoice> invoices = invInvoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()
-                .eq(InvInvoice::getCompanyId, fromId)
-                .eq(InvInvoice::getStatus, "NORMAL"));
+        List<InvInvoice> invoices = invoiceFacade.findByCompanyIdAndStatus(fromId, "NORMAL");
         BigDecimal payable = invoices.stream()
                 .map(i -> i.getAmount() == null ? BigDecimal.ZERO : i.getAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

@@ -17,7 +17,9 @@ import java.lang.annotation.Target;
  * 方法结束后自动恢复上一层路由键（支持嵌套调用）。
  * <ul>
  *   <li>方法级优先于类级；未标注时走默认数据源 master（fssc 主库）。</li>
- *   <li>当前取值：master（fssc 主库）/ image（fssc_image 影像库），新增库时在 DataSourceConfig 注册。</li>
+ *   <li>当前取值：master（fssc 主库）/ image（fssc_image 影像库）/ replica（报表只读副本，
+ *       不论是否独立库都套只读守卫）/ document / invoice（档案、发票域自治库，未拆库时别名 master）。
+ *       新增库时在 DataSourceConfig 注册。</li>
  * </ul>
  */
 @Target({ElementType.TYPE, ElementType.METHOD})

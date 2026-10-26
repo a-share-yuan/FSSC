@@ -232,7 +232,7 @@
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colAccountName')" prop="extJson.accountName"><el-input v-model="b.form.bill.extJson.accountName" /></el-form-item></el-col>
             <el-col :xs="24" :md="8">
               <el-form-item :label="$t('expense.common.colPayeeAccount')" prop="payeeAccountNo">
-                <el-input v-model="b.form.bill.payeeAccountNo" :placeholder="$t('expense.claim.phPayeeAccount')" />
+                <el-input v-model="b.form.bill.payeeAccountNo" :placeholder="$t('expense.claim.phPayeeAccount')" maxlength="64" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colBank')" prop="extJson.bankName"><el-input v-model="b.form.bill.extJson.bankName" /></el-form-item></el-col>

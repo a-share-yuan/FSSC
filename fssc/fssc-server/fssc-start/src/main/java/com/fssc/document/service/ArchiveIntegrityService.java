@@ -9,6 +9,7 @@ import com.fssc.document.entity.OpArchive;
 import com.fssc.document.mapper.ArchiveAttachmentMapper;
 import com.fssc.system.entity.SysFile;
 import com.fssc.system.mapper.SysFileMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -85,6 +86,7 @@ import java.util.TreeSet;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveIntegrityService {
 
     /** 算式版本前缀（入哈希串，使旧算式产出的哈希与新值不可能巧合相等） */
