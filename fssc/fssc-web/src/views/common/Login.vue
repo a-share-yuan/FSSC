@@ -36,7 +36,7 @@
               <el-input v-model="form.tenantCode" placeholder="请输入企业编码" :prefix-icon="OfficeBuilding" clearable />
             </el-form-item>
             <el-form-item label="账号" prop="username">
-              <el-input v-model="form.username" placeholder="请输入工号或用户名" :prefix-icon="User" clearable />
+              <el-input v-model="form.username" placeholder="请输入工号或用户名" :prefix-icon="User" clearable maxlength="64" />
             </el-form-item>
             <el-form-item label="密码" prop="password">
               <el-input v-model="form.password" type="password" show-password placeholder="请输入登录密码" :prefix-icon="Lock" @keyup.enter="doLogin" />
@@ -77,7 +77,7 @@
     <el-dialog v-model="regVisible" title="企业注册" width="480px" destroy-on-close>
       <el-form :model="reg" :rules="regRules" label-width="100px" size="default">
         <el-form-item label="企业编码" prop="tenantCode" required>
-          <el-input v-model="reg.tenantCode" placeholder="2-20 位大写字母/数字/下划线，登录用" />
+          <el-input v-model="reg.tenantCode" placeholder="2-20 位大写字母/数字/下划线，登录用" maxlength="64" />
         </el-form-item>
         <el-form-item label="企业名称" prop="tenantName" required>
           <el-input v-model="reg.tenantName" placeholder="企业全称" />
@@ -86,7 +86,7 @@
           <el-input v-model="reg.shortName" />
         </el-form-item>
         <el-form-item label="统一信用码" prop="creditCode">
-          <el-input v-model="reg.creditCode" />
+          <el-input v-model="reg.creditCode" maxlength="64" />
         </el-form-item>
         <el-form-item label="行业" prop="industry">
           <el-select v-model="reg.industry" clearable style="width: 100%">
@@ -106,16 +106,16 @@
           </el-select>
         </el-form-item>
         <el-form-item label="联系人" prop="contactName" required>
-          <el-input v-model="reg.contactName" />
+          <el-input v-model="reg.contactName" maxlength="50" />
         </el-form-item>
         <el-form-item label="联系电话" prop="contactPhone" required>
-          <el-input v-model="reg.contactPhone" />
+          <el-input v-model="reg.contactPhone" maxlength="30" />
         </el-form-item>
         <el-form-item label="联系邮箱" prop="contactEmail">
           <el-input v-model="reg.contactEmail" />
         </el-form-item>
         <el-form-item label="申请说明" prop="remark">
-          <el-input v-model="reg.remark" type="textarea" :rows="2" />
+          <el-input v-model="reg.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>

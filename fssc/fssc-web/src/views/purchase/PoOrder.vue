@@ -96,7 +96,7 @@
           <el-col :span="12">
             <!-- 订单号＝系统取号（后端留空自动生成 PO+年月+序号），按治理规则 Q1 人工只读字段不加红星 -->
             <el-form-item label="订单号">
-              <el-input v-model="form.poNo" placeholder="留空则由系统自动取号" />
+              <el-input v-model="form.poNo" placeholder="留空则由系统自动取号" maxlength="64" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -195,7 +195,7 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="联系电话">
-              <el-input v-model="form.contactPhone" placeholder="联系方式" />
+              <el-input v-model="form.contactPhone" placeholder="联系方式" maxlength="50" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -303,7 +303,7 @@
         </div>
 
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="订单备注说明" />
+          <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="订单备注说明" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>

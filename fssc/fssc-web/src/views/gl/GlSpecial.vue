@@ -167,7 +167,7 @@
     <!-- 一般总账记账 -->
       <el-tab-pane :label="$t('gl.special.postNormal')" name="journal">
         <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center; flex-wrap:wrap">
-          <el-input v-model="journalForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:120px" />
+          <el-input v-model="journalForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:120px" maxlength="16" />
           <el-select v-model="journalForm.entryType" :placeholder="$t('gl.special.colPostType')" style="width:150px">
             <el-option :label="$t('gl.special.postAccrual')" value="ACCRUAL" />
             <el-option :label="$t('gl.special.postPrepaid')" value="DEFER" />
@@ -349,7 +349,7 @@
       <el-tab-pane :label="$t('gl.special.tabGlMaster')" name="master">
         <el-form ref="masterFormRef" :model="masterForm" :rules="masterRules" inline style="margin-bottom: 10px">
           <el-form-item :label="$t('gl.ledger.colPeriod')" prop="period">
-            <el-input v-model="masterForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:120px" />
+            <el-input v-model="masterForm.period" :placeholder="$t('gl.special.phPeriodYm2')" style="width:120px" maxlength="16" />
           </el-form-item>
           <!-- 主数据类型/动作下拉恒有默认值且不可清空，不会出现未填态，故不加红星 -->
           <el-form-item :label="$t('gl.special.tagMaster')">
@@ -368,7 +368,7 @@
             </el-select>
           </el-form-item>
           <el-form-item :label="$t('gl.ledger.fieldSubjectCode')" prop="subjectCode">
-            <el-input v-model="masterForm.subjectCode" :placeholder="$t('gl.ledger.fieldSubjectCode')" style="width:110px" />
+            <el-input v-model="masterForm.subjectCode" :placeholder="$t('gl.ledger.fieldSubjectCode')" style="width:110px" maxlength="32" />
           </el-form-item>
           <el-form-item :label="$t('gl.ledger.fieldSubjectName')" prop="subjectName">
             <el-input v-model="masterForm.subjectName" :placeholder="$t('gl.ledger.fieldSubjectName')" style="width:130px" />

@@ -1,0 +1,63 @@
+# 报表/追溯只读服务独立部署 profile（叠加在 dev / prod 之上，不单独使用）
+#   本机：--spring.profiles.active=report,dev
+#   部署：--spring.profiles.active=report,prod（库地址走 FSSC_DB_* / fssc.datasource.*）
+# 启动类：com.fssc.report.ReportServiceApplication（同一可执行 jar，见 docker/k8s-report.yaml）
+server:
+  port: 8094
+
+spring:
+  application:
+    name: fssc-report-service
+  # 报表服务不承载流程引擎：排除 Flowable 全部自动配置（否则会以 master 库启动引擎、向 ACT_* 写入）
+  autoconfigure:
+    exclude:
+      - org.flowable.spring.boot.ProcessEngineAutoConfiguration
+      - org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryServicesAutoConfiguration
+      - org.flowable.spring.boot.RestApiAutoConfiguration
+      - org.flowable.spring.boot.EndpointAutoConfiguration
+      - org.flowable.spring.boot.FlowableSecurityAutoConfiguration
+
+fssc:
+  report:
+    health:
+      enabled: true
+  datasource:
+    replica:
+      # false = 无独立副本：replica 路由别名 master，仍套只读守卫（报表/追溯不写库照样成立）。
+      # 真副本就绪后改为 true 并填下面连接串即可切库，代码与路由键都不用动。
+      enabled: ${FSSC_REPLICA_ENABLED:false}
+      jdbc-url: ${FSSC_DB_REPLICA_JDBC_URL:jdbc:mysql://127.0.0.1:3306/fssc?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false}
+      username: ${FSSC_DB_USERNAME:root}
+      password: ${FSSC_DB_PASSWORD:123456}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      minimum-idle: 2
+      maximum-pool-size: 20
+      connection-timeout: 30000
+  remote:
+    image:
+      # 影像统计走真 HTTP（影像服务 :8090），转发调用方 Authorization，不引入服务账号
+      enabled: true
+      base-url: ${FSSC_IMAGE_BASE_URL:http://127.0.0.1:8090}
+
+info:
+  app:
+    name: fssc-report-service
+    version: 1.0.0
+
+# reportDomain（副本连通性 + 只读守卫实证 + 影像上游）只进 readiness，不进 liveness
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,reportDomain

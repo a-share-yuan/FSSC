@@ -8,6 +8,7 @@ import com.fssc.document.entity.ArchiveAttachment;
 import com.fssc.document.service.ArchiveAttachmentService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +25,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/tenant/compliance/archive-attachment")
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveAttachmentController {
 
     private final ArchiveAttachmentService archiveAttachmentService;

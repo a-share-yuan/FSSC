@@ -99,7 +99,7 @@
           <el-date-picker v-model="dialog.form.endTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width:100%" />
         </el-form-item>
         <el-form-item label="委托原因">
-          <el-input v-model="dialog.form.reason" type="textarea" :rows="3" />
+          <el-input v-model="dialog.form.reason" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
         <el-form-item label=" ">
           <div style="font-size:12px;color:#909399;line-height:18px">

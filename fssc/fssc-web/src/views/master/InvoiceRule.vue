@@ -76,7 +76,7 @@
           <el-switch v-model="editing.status" active-value="NORMAL" inactive-value="DISABLED" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="editing.remark" type="textarea" :rows="2" />
+          <el-input v-model="editing.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>

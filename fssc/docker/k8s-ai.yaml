@@ -1,0 +1,97 @@
+# AI 服务独立部署（与 fssc-server 同一镜像、同一 jar，不同 Start-Class/端口）
+#
+# 与 k8s-fssc.yaml / k8s-image.yaml 的关系：
+#   · fssc-server：Start-Class=com.fssc.FsscApplication，全部业务域，:8089；
+#   · fssc-image ：Start-Class=com.fssc.image.ImageServiceApplication，影像域，:8090；
+#   · fssc-ai    ：Start-Class=com.fssc.ai.AiServiceApplication，AI 会话/技能/知识问答，:8092。
+#   三者共用同一镜像，PropertiesLauncher 覆盖启动类，无需二次打包。
+#
+# 关键配置：FSSC_BUSINESS_BASE_URL 必须指向业务服务（fssc-server 的 Service），
+#   不能是 localhost —— AI 执行类能力全部是真 HTTP 转发到业务服务，由业务服务按调用方
+#   原始 Authorization 做鉴权与数据范围判定；本进程不持有服务账号、不知道任何业务表。
+#
+# 健康检查：
+#   /actuator/health          聚合（含 aiDomain：上游业务服务连通性 + 模型通道 + 知识库）
+#   /actuator/health/liveness 进程存活（不含 aiDomain，上游抖动不应重启 Pod）
+#   /actuator/health/readiness 可接流量（含 aiDomain）
+#
+# 巡检作业（AiInspectService）留在 fssc-server：它依赖同进程业务控制器反射执行；
+# 本进程 fssc.ai.inspect.enabled=false，避免两处重复开单。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fssc-ai
+  labels: {app: fssc-ai}
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels: {app: fssc-ai}
+  template:
+    metadata:
+      labels: {app: fssc-ai}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8092"
+    spec:
+      containers:
+        - name: fssc-ai
+          image: fssc-server:1.0.0
+          command: ["sh", "-c"]
+          args:
+            - >-
+              java $JAVA_OPTS
+              -Dloader.main=com.fssc.ai.AiServiceApplication
+              -cp /app/fssc-start.jar
+              org.springframework.boot.loader.launch.PropertiesLauncher
+              --spring.profiles.active=ai,prod
+          ports: [{containerPort: 8092}]
+          env:
+            - name: JAVA_OPTS
+              value: "-Xms1g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/heapdump/ -XX:+ExitOnOutOfMemoryError"
+            - name: FSSC_BUSINESS_BASE_URL
+              value: "http://fssc-server:8089"
+            - name: FSSC_DB_MASTER_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: master-jdbc-url}
+            - name: FSSC_DB_IMAGE_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: image-jdbc-url}
+            - name: FSSC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: db-password}
+            - name: FSSC_JWT_SECRET
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: jwt-secret}
+            - name: FSSC_OPENAPI_ENABLED
+              value: "false"
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+            limits: {cpu: "2", memory: 4Gi}
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: 8092}
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: 8092}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 2
+          volumeMounts:
+            - {name: logs, mountPath: /app/logs}
+      volumes:
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fssc-ai
+spec:
+  selector: {app: fssc-ai}
+  ports:
+    - port: 8092
+      targetPort: 8092

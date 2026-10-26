@@ -88,7 +88,7 @@
                 <el-option v-for="it in expenseItems" :key="it.id" :label="it.itemName" :value="it.id" />
               </el-select>
             </el-form-item>
-            <el-form-item :label="$t('sharing.ops.labCurrency')"><el-input v-model="ruleForm.currencyCode" placeholder="CNY" style="width: 90px" /></el-form-item>
+            <el-form-item :label="$t('sharing.ops.labCurrency')"><el-input v-model="ruleForm.currencyCode" placeholder="CNY" style="width: 90px" maxlength="16" /></el-form-item>
             <el-form-item :label="$t('sharing.ops.labLegalEntityId')">
               <el-select v-model="ruleForm.legalEntityId" filterable clearable :placeholder="$t('common.all')" style="width: 170px">
                 <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
@@ -328,8 +328,8 @@
     <!-- 策略编辑 -->
     <el-dialog v-model="policyVisible" :title="policyForm.id ? t('sharing.console.dlgEditPolicy') : t('sharing.console.dlgCreatePolicy')" width="620px" destroy-on-close>
       <el-form ref="policyFormRef" :model="policyForm" :rules="policyRules" label-width="120px" size="small">
-        <el-form-item :label="$t('sharing.ops.phProcessKey')" prop="modelKey"><el-input v-model="policyForm.modelKey" :placeholder="$t('sharing.ops.phStarDefault')" /></el-form-item>
-        <el-form-item :label="$t('sharing.common.colNodeKey')" prop="nodeKey"><el-input v-model="policyForm.nodeKey" :placeholder="$t('sharing.ops.phStarDefault')" /></el-form-item>
+        <el-form-item :label="$t('sharing.ops.phProcessKey')" prop="modelKey"><el-input v-model="policyForm.modelKey" :placeholder="$t('sharing.ops.phStarDefault')" maxlength="64" /></el-form-item>
+        <el-form-item :label="$t('sharing.common.colNodeKey')" prop="nodeKey"><el-input v-model="policyForm.nodeKey" :placeholder="$t('sharing.ops.phStarDefault')" maxlength="64" /></el-form-item>
         <el-form-item :label="$t('sharing.ops.colPolicyName')" prop="policyName"><el-input v-model="policyForm.policyName" /></el-form-item>
         <el-form-item :label="$t('sharing.ops.colAssignMode')" prop="strategy">
           <el-select v-model="policyForm.strategy" style="width: 100%">
@@ -344,7 +344,7 @@
         <el-form-item :label="$t('sharing.ops.colWeightUrgency')"><el-input-number v-model="policyForm.smartWeightUrgency" :min="0" :precision="2" style="width: 100%" /></el-form-item>
         <el-form-item :label="$t('sharing.ops.colWeightPriority')"><el-input-number v-model="policyForm.smartWeightPriority" :min="0" :precision="2" style="width: 100%" /></el-form-item>
         <el-form-item :label="$t('sharing.common.colEnabled')"><el-switch v-model="policyForm.enabled" :active-value="1" :inactive-value="0" /></el-form-item>
-        <el-form-item :label="$t('common.remark')"><el-input v-model="policyForm.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item :label="$t('common.remark')"><el-input v-model="policyForm.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="policyVisible = false">{{ $t('common.cancel') }}</el-button>

@@ -95,6 +95,35 @@ fssc:
       minimum-idle: 2
       maximum-pool-size: 10
       connection-timeout: 30000
+    # 只读副本：enabled=false 时 replica 路由别名 master（仍套只读守卫）；真副本就绪再置 true
+    replica:
+      enabled: ${FSSC_REPLICA_ENABLED:false}
+      jdbc-url: ${FSSC_DB_REPLICA_JDBC_URL:}
+      username: ${FSSC_DB_USERNAME:}
+      password: ${FSSC_DB_PASSWORD:}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      minimum-idle: 2
+      maximum-pool-size: 20
+      connection-timeout: 30000
+    # 档案/发票域自治库：未拆库时 enabled=false，路由别名 master
+    document:
+      enabled: ${FSSC_DOCUMENT_DB_ENABLED:false}
+      jdbc-url: ${FSSC_DB_DOCUMENT_JDBC_URL:}
+      username: ${FSSC_DB_USERNAME:}
+      password: ${FSSC_DB_PASSWORD:}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 30000
+    invoice:
+      enabled: ${FSSC_INVOICE_DB_ENABLED:false}
+      jdbc-url: ${FSSC_DB_INVOICE_JDBC_URL:}
+      username: ${FSSC_DB_USERNAME:}
+      password: ${FSSC_DB_PASSWORD:}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      minimum-idle: 2
+      maximum-pool-size: 20
+      connection-timeout: 30000
 
   # ===== 分布式状态（framework/spi/DistributedState）=====
   # 多实例部署必须置 true 并注入 SPRING_DATA_REDIS_HOST / SPRING_DATA_REDIS_PORT，

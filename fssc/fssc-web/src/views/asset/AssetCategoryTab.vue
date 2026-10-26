@@ -33,7 +33,7 @@
   <!-- 资产类别弹窗 -->
   <el-dialog v-model="dlgCategory" :title="cForm.id ? '编辑类别' : '新增类别'" width="520px" destroy-on-close>
     <el-form ref="categoryFormRef" :model="cForm" :rules="formRules" label-width="130px" size="small">
-      <el-form-item label="类别编码" prop="categoryCode"><el-input v-model="cForm.categoryCode" /></el-form-item>
+      <el-form-item label="类别编码" prop="categoryCode"><el-input v-model="cForm.categoryCode" maxlength="64" /></el-form-item>
       <el-form-item label="类别名称" prop="categoryName"><el-input v-model="cForm.categoryName" /></el-form-item>
       <el-form-item label="上级类别">
         <el-select v-model="cForm.parentId" filterable clearable placeholder="不选则为顶级类别" style="width:100%">

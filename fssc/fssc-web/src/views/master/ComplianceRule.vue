@@ -65,7 +65,7 @@
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑合规规则' : '新增合规规则'" width="640px">
       <el-form ref="formRef" :model="form" :rules="complianceRules" label-width="110px" size="small">
         <el-form-item label="规则编码" prop="ruleCode">
-          <el-input v-model="form.ruleCode" placeholder="如 COMP-DUP-INV-001" />
+          <el-input v-model="form.ruleCode" placeholder="如 COMP-DUP-INV-001" maxlength="64" />
         </el-form-item>
         <el-form-item label="规则名称" prop="ruleName">
           <el-input v-model="form.ruleName" />
@@ -104,7 +104,7 @@
           <el-input-number v-model="form.sortNo" :min="0" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="2" />
+          <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>

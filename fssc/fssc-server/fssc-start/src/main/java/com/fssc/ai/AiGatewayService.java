@@ -78,21 +78,31 @@ public class AiGatewayService {
     @Value("${fssc.ai.gateway.enabled:false}")
     private boolean enabled;
 
-    /** 回环转发基址：默认跟随本机监听端口；容器内可通过环境变量指向服务自身。 */
+    /** 回环转发基址：默认跟随本机监听端口；独立 AI 服务里必须指向业务服务（见 application-ai.yml）。 */
     @Value("${fssc.ai.gateway.base-url:http://127.0.0.1:${server.port:8089}}")
     private String baseUrl;
 
     @Value("${fssc.ai.gateway.confirm-ttl-minutes:10}")
     private int confirmTtlMinutes;
 
-    private final RestTemplate restTemplate = buildRestTemplate();
+    /** 到业务服务的连接/读取超时：跨进程后是真实网络跳，必须可配（容器内默认值偏保守）。 */
+    @Value("${fssc.ai.gateway.connect-timeout-ms:5000}")
+    private int connectTimeoutMs = 5_000;
 
-    private static RestTemplate buildRestTemplate() {
-        org.springframework.http.client.SimpleClientHttpRequestFactory f =
-                new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        f.setConnectTimeout(5_000);
-        f.setReadTimeout(120_000);
-        return new RestTemplate(f);
+    @Value("${fssc.ai.gateway.read-timeout-ms:120000}")
+    private int readTimeoutMs = 120_000;
+
+    private RestTemplate restTemplate;
+
+    private RestTemplate restTemplate() {
+        if (restTemplate == null) {
+            org.springframework.http.client.SimpleClientHttpRequestFactory f =
+                    new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            f.setConnectTimeout(connectTimeoutMs);
+            f.setReadTimeout(readTimeoutMs);
+            restTemplate = new RestTemplate(f);
+        }
+        return restTemplate;
     }
 
     // ------------------------------------------------------------------ 执行
@@ -443,7 +453,7 @@ public class AiGatewayService {
             }
         }
         try {
-            ResponseEntity<String> resp = restTemplate.exchange(url,
+            ResponseEntity<String> resp = restTemplate().exchange(url,
                     HttpMethod.valueOf(a.getMethod().toUpperCase()), entity, String.class);
             return new Loopback(resp.getStatusCode().value(), resp.getBody(), contentTypeOf(resp.getHeaders()));
         } catch (org.springframework.web.client.HttpStatusCodeException ex) {

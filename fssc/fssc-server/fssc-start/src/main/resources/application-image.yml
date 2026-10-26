@@ -1,0 +1,51 @@
+# 影像服务独立部署 profile（叠加在 dev / prod 之上，不单独使用）
+#   本机：--spring.profiles.active=image,dev
+#   部署：--spring.profiles.active=image,prod（库地址走 FSSC_DB_MASTER_JDBC_URL / FSSC_DB_IMAGE_JDBC_URL）
+# 启动类：com.fssc.image.ImageServiceApplication（同一可执行 jar，见 docker/k8s-image.yaml）
+server:
+  port: 8090
+
+spring:
+  application:
+    name: fssc-image-service
+  # 影像服务不承载流程引擎：排除 Flowable 全部自动配置（否则会以 master 库启动引擎、向 ACT_* 写入）
+  autoconfigure:
+    exclude:
+      - org.flowable.spring.boot.ProcessEngineAutoConfiguration
+      - org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryServicesAutoConfiguration
+      - org.flowable.spring.boot.RestApiAutoConfiguration
+      - org.flowable.spring.boot.EndpointAutoConfiguration
+      - org.flowable.spring.boot.FlowableSecurityAutoConfiguration
+
+fssc:
+  image:
+    # 独立进程不加载 invoice 域：发票入池由 StandaloneInvoiceFacade 显式报「未接入」，
+    # 识别结果照常落 ocr_record（不静默假装已入池）
+    standalone: true
+    # 把 imageDomain 组件（fssc_image 连通性 + 存储可写）纳入 /actuator/health
+    health:
+      enabled: true
+
+info:
+  app:
+    name: fssc-image-service
+    version: 1.0.0
+
+# imageDomain 只进 readiness（库/存储故障时摘流量），不进 liveness——
+# 否则存储根抖动会把 Pod 反复重启，而不是等运维修盘。
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,imageDomain

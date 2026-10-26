@@ -66,10 +66,10 @@
               <el-option v-for="p in PLANT_OPTIONS" :key="p" :label="p" :value="p" />
             </el-select>
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.claim.orderNo')" prop="orderNo"><el-input v-model="form.orderNo" :placeholder="$t('flow.claim.unholdRequired')" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.claim.orderNo')" prop="orderNo"><el-input v-model="form.orderNo" :placeholder="$t('flow.claim.unholdRequired')" maxlength="64" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.claim.debitAmount')" prop="debitAmount"><el-input v-model="form.debitAmount" :placeholder="$t('flow.claim.otherOffsetRequired')" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.claim.creditAmount')" prop="creditAmount"><el-input v-model="form.creditAmount" :placeholder="$t('flow.claim.dcBalanceHint')" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item :label="$t('flow.claim.reason')"><el-input v-model="form.reason" type="textarea" :rows="2" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item :label="$t('flow.claim.reason')"><el-input v-model="form.reason" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>

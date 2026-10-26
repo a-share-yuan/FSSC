@@ -1,0 +1,57 @@
+# AI 服务独立部署 profile（叠加在 dev / prod 之上，不单独使用）
+#   本机：--spring.profiles.active=ai,dev
+#   部署：--spring.profiles.active=ai,prod（库地址走 FSSC_DB_MASTER_JDBC_URL / FSSC_DB_IMAGE_JDBC_URL）
+# 启动类：com.fssc.ai.AiServiceApplication（同一可执行 jar，见 docker/k8s-ai.yaml）
+server:
+  port: 8092
+
+spring:
+  application:
+    name: fssc-ai-service
+  # AI 服务不承载流程引擎：排除 Flowable 全部自动配置（否则会以 master 库启动引擎、向 ACT_* 写入）
+  autoconfigure:
+    exclude:
+      - org.flowable.spring.boot.ProcessEngineAutoConfiguration
+      - org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryServicesAutoConfiguration
+      - org.flowable.spring.boot.RestApiAutoConfiguration
+      - org.flowable.spring.boot.EndpointAutoConfiguration
+      - org.flowable.spring.boot.FlowableSecurityAutoConfiguration
+
+fssc:
+  ai:
+    # 独立进程标记：base-url 指回本进程端口时健康判红（转发必 404）
+    standalone: true
+    health:
+      enabled: true
+    gateway:
+      # 回环→真 HTTP：转发基址必须是业务服务（单体 :8089），不能用 ${server.port} 自指
+      base-url: ${FSSC_BUSINESS_BASE_URL:http://127.0.0.1:8089}
+      enabled: true
+      connect-timeout-ms: ${FSSC_AI_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${FSSC_AI_READ_TIMEOUT_MS:120000}
+    inspect:
+      # 巡检作业留在单体：它靠同进程业务控制器反射执行，独立 AI 服务没有这些控制器
+      enabled: false
+
+info:
+  app:
+    name: fssc-ai-service
+    version: 1.0.0
+
+# aiDomain（上游业务服务连通性 + 模型通道 + 知识库）只进 readiness，不进 liveness
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,aiDomain

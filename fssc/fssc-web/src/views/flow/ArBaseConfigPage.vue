@@ -116,7 +116,7 @@
             <el-option :label="$t('flow.baseCfg.typeOffsetWriteoff')" value="OFFSET" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="$t('flow.baseCfg.colCustPrefix')"><el-input v-model="ruleForm.customerPrefix" :placeholder="$t('flow.baseCfg.phCustPrefix')" /></el-form-item>
+        <el-form-item :label="$t('flow.baseCfg.colCustPrefix')"><el-input v-model="ruleForm.customerPrefix" :placeholder="$t('flow.baseCfg.phCustPrefix')" maxlength="10" /></el-form-item>
         <el-form-item :label="$t('flow.baseCfg.colOwner')" prop="handlerList">
           <el-select v-model="ruleForm.handlerList" multiple filterable :placeholder="$t('flow.baseCfg.phOwnerMulti')" style="width:100%">
             <el-option v-for="u in ruleUserOptions" :key="u" :label="u" :value="u" />

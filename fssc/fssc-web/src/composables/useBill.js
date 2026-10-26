@@ -202,11 +202,18 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   function onItemChange(row, id) {
     const it = items.value.find((x) => x.id === id)
     row.itemName = it ? it.itemName : ''
+    if (id == null) return
     // FINAL-01: 按费用类型自动带出映射的预算科目；手选过则不覆盖
-    if (id != null && row.budgetItemId == null) {
+    if (row.budgetItemId == null) {
       const bid = pickBudgetFor(id)
       if (bid != null) row.budgetItemId = bid
+      return
     }
+    // D-H5M-05：换了费用类型，原先按旧类型挂上的预算行要跟着重取。
+    // 这条判据原先写在 resolveLineBudgetId() 里，那个函数同时被「重开草稿」调用，
+    // 会把库里已保存且合法的预算科目清成空（D-V4R-1026-04）⇒ 收回到这里，只在用户真的换费用类型时执行。
+    const hit = budgets.value.find((b) => String(b.id) === String(row.budgetItemId))
+    if (hit && String(hit.itemId ?? '') !== String(id)) row.budgetItemId = pickBudgetFor(id)
   }
   /**
    * 费用类型 → 预算明细行 解析（规则见 utils/budget.js pickBudgetLine，D-P2-01）。

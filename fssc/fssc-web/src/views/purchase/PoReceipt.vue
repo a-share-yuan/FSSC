@@ -7,7 +7,7 @@
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
         <b>收货单</b>
         <el-button type="primary" size="small" @click="openCreate">新增收货单</el-button>
-        <el-input v-model="q.keyword" placeholder="收货单号/PO/供应商" clearable style="width: 200px" @keyup.enter="load" />
+        <el-input v-model="q.keyword" placeholder="收货单号/PO/供应商/送货单号" clearable style="width: 200px" @keyup.enter="load" />
         <el-select v-model="q.status" placeholder="状态" clearable style="width: 120px" @change="load">
           <el-option label="已收货" value="RECEIVED" />
           <el-option label="已开票" value="INVOICED" />
@@ -77,7 +77,7 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="收货单号">
-              <el-input v-model="form.receiptNo" placeholder="留空自动取号（也可手填，如 GRN202608001）" />
+              <el-input v-model="form.receiptNo" placeholder="留空自动取号（也可手填，如 GRN202608001）" maxlength="64" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -138,12 +138,12 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="送货单号">
-              <el-input v-model="form.deliveryNote" placeholder="供应商送货单号" />
+              <el-input v-model="form.deliveryNote" placeholder="供应商送货单号" maxlength="200" show-word-limit />
             </el-form-item>
           </el-col>
         </el-row>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="收货备注说明" />
+          <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="收货备注说明" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -193,7 +193,7 @@
 
 const { rules: formRules } = useFormRules('PO_RECEIPT')
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { purchaseApi, supplierApi } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
@@ -307,6 +307,31 @@ async function save() {
     // 故不列入必填。
     const supplierName = String(form.supplierName || '').trim()
     const amount = Number(form.amount)
+    const deliveryNote = String(form.deliveryNote || '').trim()
+
+    // 送货单号查重：同供应商同号已有收货单时提示一次，由录入人判断是"分次收货"还是"重复录入"。
+    // 只提示不硬拦——一张送货单分次到货是合法场景；预检接口自身故障也不该挡住正常收货。
+    if (deliveryNote && form.supplierId != null) {
+      try {
+        const dupes = await purchaseApi.receiptDeliveryNoteCheck({
+          supplierId: Number(form.supplierId), deliveryNote,
+        })
+        if (Array.isArray(dupes) && dupes.length) {
+          const sample = dupes.slice(0, 3)
+            .map((r) => (r.receiptNo || '未取号') + (r.receiptDate ? '（' + r.receiptDate + '）' : ''))
+            .join('、')
+          await ElMessageBox.confirm(
+            `该供应商下已有 ${dupes.length} 张同号送货单的收货单：${sample}。`
+              + '若为同一张送货单分次到货可继续保存；若属重复录入请返回核对。',
+            '送货单号重复',
+            { type: 'warning', confirmButtonText: '继续保存', cancelButtonText: '返回核对' },
+          )
+        }
+      } catch (e) {
+        // 选择"返回核对"时 ElMessageBox 以 'cancel'/'close' 拒绝，此处中止提交且不落库
+        if (e === 'cancel' || e === 'close') return
+      }
+    }
 
     // 显式按 PoReceipt 实体组装提交数据（不再整包 spread 表单——autofill 会往 form 里塞
     // applicantId/currency/billDate 等非实体字段，历史上还可能残留 id/status 等脏键）；
@@ -324,7 +349,7 @@ async function save() {
       receiverName: String(form.receiverName || '').trim(),
       warehouse: form.warehouse || '',
       qualityStatus: form.qualityStatus || 'PENDING',
-      deliveryNote: String(form.deliveryNote || '').trim(),
+      deliveryNote,
       remark: form.remark || '',
     }
     try {

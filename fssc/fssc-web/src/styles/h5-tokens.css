@@ -139,6 +139,37 @@
 .h5-card__meta { color: var(--h5-text-2); font-size: var(--h5-fs-aux); line-height: 18px; word-break: break-all; }
 .h5-section-title { font-size: var(--h5-fs-body); font-weight: 600; color: var(--h5-text); margin: 4px 2px var(--h5-gap); }
 
+/* ---------------- 可折叠卡片（components/h5/H5FoldCard.vue） ----------------
+   内边距从卡片挪到标题/正文两侧，收起时整卡只剩一行 44px 热区（硬线 1）。
+   本块必须写在 .h5-page .h5-card 之后：同特异性靠后声明才盖得住 padding。 */
+.h5-page .h5-card--fold { padding: 0 var(--h5-pad); }
+.h5-fold__head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--h5-gap);
+  width: 100%; min-height: var(--h5-tap-h); padding: 6px 0;
+  background: transparent; border: 0; color: var(--h5-text);
+  font-size: var(--h5-fs-body); font-weight: 600; text-align: left; cursor: pointer;
+}
+.h5-fold__head:active { background: #fafcff; }
+.h5-fold__title { flex: 0 0 auto; }
+/* 摘要允许换行到第二行（单号 + 状态标签已经把首行占满时不挤压），单行内超长才省略 */
+.h5-fold__sum {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--h5-fs-aux); font-weight: 400; color: var(--h5-text-2); text-align: right;
+}
+.h5-fold__sum--warn { color: var(--h5-warning); }
+.h5-fold__sum--err { color: var(--h5-danger); }
+.h5-fold__caret {
+  flex: 0 0 auto; width: 8px; height: 8px; margin-left: 2px;
+  border-right: 2px solid var(--h5-text-2); border-bottom: 2px solid var(--h5-text-2);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--h5-dur-1) var(--h5-ease);
+}
+.h5-page .h5-card--fold.is-open .h5-fold__caret { transform: rotate(-135deg) translateY(-2px); }
+.h5-fold__body { padding-bottom: var(--h5-pad); }
+/* 正文首元素自带 margin（.h5-section-title / .h5-card__title）时不要与卡片顶距叠加 */
+.h5-fold__body > .h5-section-title:first-child,
+.h5-fold__body > .h5-card__title:first-child { margin-top: 0; }
+
 /* AD-09：单号是文本不是按钮。原先 .no 同时被 scoped 里的驳回按钮染色规则命中 ⇒ 白字红底。
    这里显式写死透明底，并在 P0-6 把按钮类名改成 .h5-btn-danger，两条规则不再同名。 */
 .h5-page .no {

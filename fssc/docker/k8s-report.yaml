@@ -1,0 +1,103 @@
+# 报表/追溯只读服务独立部署
+#
+# 与 fssc-server / fssc-image / fssc-ai / fssc-gateway 同一镜像、同一 jar，仅覆盖 Start-Class：
+#   Start-Class=com.fssc.report.ReportServiceApplication，:8094。
+#
+# 只读语义（两道闸）：
+#   1. 路由：报表/追溯类统一 @FsscDataSource("replica")，读副本；
+#   2. 连接：replica 路由被 ReadOnlyGuardDataSource 包住，UPDATE/INSERT/DELETE/DDL/FOR UPDATE
+#      在发出前被拒（reportDomain.writeGuard 每次健康检查做一次真拒绝试探）。
+#   写动作（报表收藏、预聚合刷新）显式走 master，不在本进程的只读面上。
+#
+# 健康检查：
+#   /actuator/health          聚合（含 reportDomain：副本连通 + 只读守卫是否真的咬住 + 影像上游）
+#   /actuator/health/liveness 进程存活
+#   /actuator/health/readiness 可接流量（含 reportDomain）
+#
+# 上游依赖：
+#   · MySQL 副本：FSSC_REPLICA_ENABLED=true 时用 FSSC_DB_REPLICA_JDBC_URL；false 时别名 master。
+#   · 影像服务：FSSC_IMAGE_BASE_URL 指向 fssc-image Service（影像统计两张报表经真 HTTP 取数，
+#     转发调用方 Authorization，不持有服务账号）。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fssc-report
+  labels: {app: fssc-report}
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels: {app: fssc-report}
+  template:
+    metadata:
+      labels: {app: fssc-report}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8094"
+    spec:
+      containers:
+        - name: fssc-report
+          image: fssc-server:1.0.0
+          command: ["sh", "-c"]
+          args:
+            - >-
+              java $JAVA_OPTS
+              -Dloader.main=com.fssc.report.ReportServiceApplication
+              -cp /app/fssc-start.jar
+              org.springframework.boot.loader.launch.PropertiesLauncher
+              --spring.profiles.active=report,prod
+          ports: [{containerPort: 8094}]
+          env:
+            - name: JAVA_OPTS
+              value: "-Xms512m -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/heapdump/ -XX:+ExitOnOutOfMemoryError"
+            - name: FSSC_REPLICA_ENABLED
+              value: "true"
+            - name: FSSC_DB_MASTER_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: master-jdbc-url}
+            - name: FSSC_DB_REPLICA_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: replica-jdbc-url}
+            - name: FSSC_DB_IMAGE_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: image-jdbc-url}
+            - name: FSSC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: db-password}
+            - name: FSSC_JWT_SECRET
+              valueFrom:
+                secretKeyRef: {name: fssc-secrets, key: jwt-secret}
+            - name: FSSC_IMAGE_BASE_URL
+              value: "http://fssc-image:8090"
+            - name: FSSC_OPENAPI_ENABLED
+              value: "false"
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+            limits: {cpu: "2", memory: 4Gi}
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: 8094}
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: 8094}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 2
+          volumeMounts:
+            - {name: logs, mountPath: /app/logs}
+      volumes:
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fssc-report
+spec:
+  selector: {app: fssc-report}
+  ports:
+    - port: 8094
+      targetPort: 8094

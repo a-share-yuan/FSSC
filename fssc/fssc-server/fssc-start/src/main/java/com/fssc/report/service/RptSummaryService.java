@@ -9,6 +9,7 @@ import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.report.entity.RptSummary;
 import com.fssc.report.mapper.RptSummaryMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.job.JobHeartbeatService;
 import com.fssc.framework.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -36,8 +37,9 @@ public class RptSummaryService {
     private final RptSummaryMapper summaryMapper;
     private final JobHeartbeatService jobHeartbeatService;
 
-    /** 每日 01:30 刷新近 3 个月聚合 */
+    /** 每日 01:30 刷新近 3 个月聚合。写动作显式回主库——只读副本不能写。 */
     @Scheduled(cron = "0 30 1 * * ?")
+    @FsscDataSource("master")
     public void scheduledRefresh() {
         jobHeartbeatService.run("RptSummaryService", () -> {
             // 缺陷D6-3(20260919)：调度线程无租户上下文，aggregate 查 exp_bill 触发
@@ -60,7 +62,8 @@ public class RptSummaryService {
         });
     }
 
-    /** 手动刷新指定期间，返回写入条数 */
+    /** 手动刷新指定期间，返回写入条数。写动作显式回主库——只读副本不能写。 */
+    @FsscDataSource("master")
     public int refresh(Integer year, Integer month) {
         String period = year + String.format("%02d", month);
         int total = 0;

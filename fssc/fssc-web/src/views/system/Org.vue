@@ -118,14 +118,14 @@
       <el-form ref="orgFormRef" :model="form" :rules="orgFormRules" label-width="110px" size="default">
         <template v-if="type === 'company'">
           <el-form-item :label="$t('system.org.colCompanyName')" prop="companyName"><el-input v-model="form.companyName" /></el-form-item>
-          <el-form-item :label="$t('system.org.colCompanyCode')" prop="companyCode"><el-input v-model="form.companyCode" /></el-form-item>
+          <el-form-item :label="$t('system.org.colCompanyCode')" prop="companyCode"><el-input v-model="form.companyCode" maxlength="64" /></el-form-item>
           <el-form-item :label="$t('system.org.lblParentCompany')">
             <el-select v-model="form.parentId" filterable clearable :placeholder="$t('system.org.optNoParentCompany')" style="width:100%">
               <el-option v-for="c in flatCompanies.filter((c) => c.id !== form.id)" :key="c.id" :label="c.companyName" :value="c.id" />
             </el-select>
           </el-form-item>
-          <el-form-item :label="$t('system.org.colCreditCode')"><el-input v-model="form.creditCode" /></el-form-item>
-          <el-form-item :label="$t('system.org.colTaxNo')"><el-input v-model="form.taxNo" /></el-form-item>
+          <el-form-item :label="$t('system.org.colCreditCode')"><el-input v-model="form.creditCode" maxlength="64" /></el-form-item>
+          <el-form-item :label="$t('system.org.colTaxNo')"><el-input v-model="form.taxNo" maxlength="64" /></el-form-item>
           <!-- V1.4.92（AMC-01）：档案管理模式决定纸质原件是否寄送共享中心（非集中＝原件留原单位、不产生实物流） -->
           <el-form-item :label="$t('system.org.colArchiveMode')">
             <el-select v-model="form.archiveMode" style="width:100%">

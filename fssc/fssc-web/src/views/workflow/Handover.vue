@@ -29,7 +29,7 @@
               <el-input v-model="form.reason" placeholder="离职 / 换岗 / 工作交接等" />
             </el-form-item>
             <el-form-item label="备注">
-              <el-input v-model="form.remark" type="textarea" :rows="2" />
+              <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
             </el-form-item>
             <el-form-item>
               <el-button v-permission="['wf:manage:intervene', 'wf:task:reassign']" type="primary" :loading="execLoading" @click="doExecute">执行移交</el-button>

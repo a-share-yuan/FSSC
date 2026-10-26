@@ -215,7 +215,8 @@ fssc:
     allowed-extensions: jpg,jpeg,png,gif,bmp,webp,pdf,ofd,xml,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar
     # ===== 存储设计（多环境部署可覆盖，代码不硬编码路径）=====
     # 存储根目录（本地磁盘根；生产可映射网络盘/对象存储挂载点）
-    local-root: ./data/files
+    # 影像服务独立部署时两进程必须指向同一目录（k8s 用同一 PVC 挂载），故支持环境变量覆盖
+    local-root: ${FSSC_FILE_LOCAL_ROOT:./data/files}
     # 存储区域逻辑隔离（相对 local-root 的子目录）：
     #   temp    临时附件存储区（草稿单据）
     #   business 业务正式影像存储区（审批中单据）

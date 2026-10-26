@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
+@com.fssc.framework.datasource.FsscDataSource("master")
 public class BillFacadeImpl implements BillFacade {
 
     private final ExpBillMapper expBillMapper;

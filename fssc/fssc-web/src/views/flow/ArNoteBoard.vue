@@ -82,7 +82,7 @@
               <el-radio value="PAPER">{{ $t('flow.report.notePaper') }}</el-radio>
             </el-radio-group>
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.note.colNoteNo')" prop="noteNo"><el-input v-model="form.noteNo" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.note.colNoteNo')" prop="noteNo"><el-input v-model="form.noteNo" maxlength="64" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.note.colDrawer')"><el-input v-model="form.drawer" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.note.colAcceptor')"><el-input v-model="form.acceptor" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('field.customer')">
@@ -96,7 +96,7 @@
               <el-input v-model="form.imageRef" :placeholder="$t('flow.note.phImageScan')" />
             </el-form-item>
           </el-col>
-          <el-col :span="24"><el-form-item :label="$t('common.remark')"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item :label="$t('common.remark')"><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>

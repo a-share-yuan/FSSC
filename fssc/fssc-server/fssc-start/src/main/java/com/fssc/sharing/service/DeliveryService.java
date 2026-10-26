@@ -21,6 +21,7 @@ import com.fssc.sharing.mapper.OpBarcodeMapper;
 import com.fssc.sharing.mapper.OpPhysicalDeliveryMapper;
 import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysUserMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("master")
 public class DeliveryService {
 
     private final OpPhysicalDeliveryMapper deliveryMapper;

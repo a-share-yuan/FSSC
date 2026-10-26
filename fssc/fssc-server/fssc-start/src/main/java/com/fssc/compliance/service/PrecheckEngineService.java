@@ -10,6 +10,7 @@ import com.fssc.compliance.entity.PrecheckResult;
 import com.fssc.compliance.entity.ReviewRule;
 import com.fssc.compliance.mapper.PrecheckResultMapper;
 import com.fssc.compliance.mapper.ReviewRuleMapper;
+import com.fssc.framework.facade.ImageFacade;
 import com.fssc.framework.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,8 @@ public class PrecheckEngineService {
     private final ReviewRuleMapper reviewRuleMapper;
     private final PrecheckResultMapper precheckResultMapper;
     private final com.fssc.expense.mapper.ExpBillAttachMapper expBillAttachMapper;
+    /** 票面键/票号查重经影像域 Facade（服务化断点）：本类不再直连 fssc_image 库 */
+    private final ImageFacade imageFacade;
     @org.springframework.beans.factory.annotation.Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
@@ -207,19 +210,11 @@ public class PrecheckEngineService {
                     .filter(java.util.Objects::nonNull).distinct().toList();
             data.put("hasAttachment", !fileIds.isEmpty());
             if (!fileIds.isEmpty()) {
-                List<Object> params = new ArrayList<>();
-                params.add(TenantContext.getTenantId());
-                String ph = fileIds.stream().map(x -> "?").collect(java.util.stream.Collectors.joining(","));
-                params.addAll(fileIds);
-                List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                        "SELECT invoice_no, invoice_code, invoice_type, amount FROM fssc_image.ocr_record "
-                                + "WHERE tenant_id = ? AND invoice_no IS NOT NULL AND invoice_no <> '' AND file_id IN ("
-                                + ph + ") ORDER BY id DESC LIMIT 1", params.toArray());
-                if (!rows.isEmpty()) {
-                    Map<String, Object> r = rows.get(0);
-                    data.put("invoiceNumber", r.get("invoice_no"));
-                    data.put("invoiceCode", r.get("invoice_code"));
-                    data.put("invoiceType", r.get("invoice_type"));
+                Map<String, Object> r = imageFacade.latestInvoiceKeysByFileIds(TenantContext.getTenantId(), fileIds);
+                if (r != null) {
+                    data.put("invoiceNumber", r.get("invoiceNo"));
+                    data.put("invoiceCode", r.get("invoiceCode"));
+                    data.put("invoiceType", r.get("invoiceType"));
                     data.put("invoiceAmount", r.get("amount"));
                 }
             }
@@ -728,10 +723,8 @@ public class PrecheckEngineService {
                 return true;
             }
             try {
-                Integer cnt = jdbcTemplate.queryForObject(
-                        "SELECT COUNT(*) FROM fssc_image.ocr_record WHERE invoice_no = ?",
-                        Integer.class, invoiceNumber);
-                if (cnt != null && cnt > 1) {
+                long cnt = imageFacade.countByInvoiceNo(invoiceNumber);
+                if (cnt > 1) {
                     log.warn("发票重复: invoiceNumber={} 已出现 {} 次", invoiceNumber, cnt);
                     return false;
                 }

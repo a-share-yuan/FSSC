@@ -8,6 +8,7 @@ import com.fssc.budget.entity.BgItem;
 import com.fssc.budget.mapper.BgItemMapper;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.DataScopeHolder;
 import com.fssc.framework.security.DataScopeKit;
@@ -31,6 +32,7 @@ import java.util.Map;
  */
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("replica")
 public class ExportService {
 
     private final ExpBillMapper expBillMapper;

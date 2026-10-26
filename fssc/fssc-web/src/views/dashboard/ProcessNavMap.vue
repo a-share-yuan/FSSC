@@ -272,8 +272,8 @@ const domains = [
         { menu: '共享运营 / 对公三单匹配 / 匹配操作', page: '匹配操作', route: '/pay/match' },
       ]},
       { stage: '付款与共享审核', steps: [
-        { menu: '费用报销 / 对公支付 / 对公结算', page: '对公结算', route: '/corp-pay/settle' },
-        { menu: '费用报销 / 对公支付 / 费用预付款', page: '费用预付款', route: '/corp-pay/prepay' },
+        { menu: '费用报账 / 对公支付 / 对公结算', page: '对公结算', route: '/corp-pay/settle' },
+        { menu: '费用报账 / 对公支付 / 费用预付款', page: '费用预付款', route: '/corp-pay/prepay' },
         { menu: '共享运营 / 任务池管理', page: '任务池管理', route: '/sharing/task-pool' },
         { menu: '共享运营 / 工单处理', page: '工单处理', route: '/sharing/task-work' },
         { menu: '资金管理 / 出纳付款', page: '出纳付款', route: '/pay' },
@@ -294,14 +294,14 @@ const domains = [
     key: 'exp', name: '费用报销链', icon: Money, color: '#67c23a',
     stages: [
       { stage: '报销发起', steps: [
-        { menu: '费用报销 / 员工报销 / 员工费用报销', page: '员工费用报销', route: '/expense/claim' },
-        { menu: '费用报销 / 员工报销 / 差旅培训报销', page: '差旅培训报销', route: '/expense/claim-travel' },
-        { menu: '费用报销 / 事前申请', page: '事前申请', route: '/expense/apply' },
-        { menu: '费用报销 / 借款还款 / 借款申请', page: '借款申请', route: '/expense/loan' },
-        { menu: '费用报销 / 借款还款 / 还款管理', page: '还款管理', route: '/expense/repay' },
+        { menu: '费用报账 / 员工报销 / 员工费用报销', page: '员工费用报销', route: '/expense/claim' },
+        { menu: '费用报账 / 员工报销 / 差旅培训报销', page: '差旅培训报销', route: '/expense/claim-travel' },
+        { menu: '费用报账 / 事前申请', page: '事前申请', route: '/expense/apply' },
+        { menu: '费用报账 / 借款还款 / 借款申请', page: '借款申请', route: '/expense/loan' },
+        { menu: '费用报账 / 借款还款 / 还款管理', page: '还款管理', route: '/expense/repay' },
       ]},
       { stage: '审核', steps: [
-        { menu: '费用报销 / 我的单据', page: '我的单据', route: '/requisition/mine' },
+        { menu: '费用报账 / 我的单据', page: '我的单据', route: '/requisition/mine' },
         { menu: '共享运营 / 审批工作台', page: '审批工作台', route: '/approval' },
         { menu: '共享运营 / 任务池管理', page: '任务池管理', route: '/sharing/task-pool' },
         { menu: '共享运营 / 工单处理', page: '工单处理', route: '/sharing/task-work' },

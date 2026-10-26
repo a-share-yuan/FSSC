@@ -10,6 +10,7 @@ import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.entity.ExpBillReceipt;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.expense.mapper.ExpBillReceiptMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.invoice.mapper.InvInvoiceMapper;
 import com.fssc.purchase.entity.PoOrder;
@@ -45,11 +46,14 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("replica")
 public class DocTracingService {
 
     private final ExpBillMapper expBillMapper;
     private final ExpBillReceiptMapper expBillReceiptMapper;
     private final PoOrderMapper poOrderMapper;
+    //  跨域直连的唯一允许点（read-only 联查聚合）：本服务类级路由 replica，全链路溯源天生跨域；
+    //    发票/档案域 Facade 的实现在本进程不装配，故保留 Mapper 只读。
     private final InvInvoiceMapper invInvoiceMapper;
     private final RcReceivableMapper rcReceivableMapper;
     private final OpVoucherMapper opVoucherMapper;

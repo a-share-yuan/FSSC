@@ -119,8 +119,8 @@
           </el-form-item></el-col>
           <el-col v-if="form.bidCompare === 1" :md="12"><el-form-item label="招标比价过程"><el-input v-model="form.bidProcess" placeholder="请输入招标比价过程" /></el-form-item></el-col>
           <el-col :md="12"><el-form-item label="中标原因"><el-select v-model="form.bidReason" filterable allow-create default-first-option placeholder="请选择或输入" style="width: 100%"><el-option label="价格优势" value="价格优势" /><el-option label="技术方案优" value="技术方案优" /><el-option label="资质齐全" value="资质齐全" /><el-option label="服务承诺好" value="服务承诺好" /><el-option label="综合评分最高" value="综合评分最高" /><el-option label="唯一供应商" value="唯一供应商" /></el-select></el-form-item></el-col>
-          <el-col :md="24"><el-form-item label="中标说明"><el-input v-model="form.bidNote" type="textarea" :rows="2" /></el-form-item></el-col>
-          <el-col :md="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" placeholder="请输入备注" /></el-form-item></el-col>
+          <el-col :md="24"><el-form-item label="中标说明"><el-input v-model="form.bidNote" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item></el-col>
+          <el-col :md="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" placeholder="请输入备注" maxlength="500" show-word-limit /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>

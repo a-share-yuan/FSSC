@@ -373,7 +373,7 @@
         <el-row :gutter="12">
           <el-col :span="10">
             <el-form-item :label="$t('system.flow.colNodeCode')" prop="nodeKey">
-              <el-input v-model="nodeDialog.form.nodeKey" :placeholder="$t('system.flow.phNodeCode')" />
+              <el-input v-model="nodeDialog.form.nodeKey" :placeholder="$t('system.flow.phNodeCode')" maxlength="64" />
             </el-form-item>
           </el-col>
           <el-col :span="14">
@@ -551,7 +551,7 @@
           <el-input :model-value="selectedModel?.modelKey" disabled />
         </el-form-item>
         <el-form-item :label="$t('system.flow.colSubType', '单据子类')">
-          <el-input v-model="bindingDialog.form.subType" :placeholder="$t('system.flow.phSubType')" />
+          <el-input v-model="bindingDialog.form.subType" :placeholder="$t('system.flow.phSubType')" maxlength="32" />
           <div class="field-hint">{{ $t('system.flow.hintSubTypeRoute') }}</div>
         </el-form-item>
         <el-form-item :label="$t('system.flow.lblAmountMinIncl')">
@@ -716,7 +716,7 @@
           <el-date-picker v-model="delegateDialog.form.endTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width:100%" />
         </el-form-item>
         <el-form-item :label="$t('system.flow.lblDelegateReason')">
-          <el-input v-model="delegateDialog.form.reason" type="textarea" :rows="3" />
+          <el-input v-model="delegateDialog.form.reason" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>

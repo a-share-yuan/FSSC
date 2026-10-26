@@ -82,14 +82,14 @@
             <!-- 供应商从档案选取：手输名称会与应付对账/发票三单匹配的客户规则对不上 -->
             <SupplierSelect v-model="form.vendorCode" :placeholder="$t('flow.request.phPickSupplier')" @change="onVendor" />
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.request.colBu')"><el-input v-model="form.sbu" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.request.colBu')"><el-input v-model="form.sbu" maxlength="64" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('field.amount')" prop="amount"><el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.request.colInvoiceNo')" prop="invoiceNo"><el-input v-model="form.invoiceNo" :placeholder="$t('flow.request.hintInvoiceNoRange')" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.request.colPoNo')" prop="poNo"><el-input v-model="form.poNo" :placeholder="$t('flow.request.errPrepayRequired')" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('field.account')" prop="bankNo"><el-input v-model="form.bankNo" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.request.colPoNo')" prop="poNo"><el-input v-model="form.poNo" :placeholder="$t('flow.request.errPrepayRequired')" maxlength="64" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('field.account')" prop="bankNo"><el-input v-model="form.bankNo" maxlength="64" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.request.colDraftDue')" prop="expireDate"><el-date-picker v-model="form.expireDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" :placeholder="$t('flow.request.errApNoteRequired')" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.request.colEndorseAmount')"><el-input-number v-model="form.paymentAmount" :min="0" :precision="2" style="width: 100%" :placeholder="$t('flow.request.needInvoiceTotal')" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item :label="$t('common.remark')"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item :label="$t('common.remark')"><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>
@@ -228,7 +228,7 @@
         <el-form-item :label="$t('common.status')">
           <el-switch v-model="ruleForm.enabled" :active-value="1" :inactive-value="0" :active-text="$t('flow.request.stRuleEnabled')" :inactive-text="$t('flow.request.stRuleDisabled')" />
         </el-form-item>
-        <el-form-item :label="$t('common.remark')"><el-input v-model="ruleForm.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item :label="$t('common.remark')"><el-input v-model="ruleForm.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
       </el-form>
       <template #footer>
         <el-button size="small" @click="ruleFormVisible = false">{{ $t('common.cancel') }}</el-button>

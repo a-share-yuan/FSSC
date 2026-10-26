@@ -44,7 +44,7 @@
               </el-select>
             </el-form-item>
             <el-form-item v-if="currentType.pay" :label="$t('expense.common.colPayeeAccount')" prop="payeeAccountNo">
-              <el-input v-model="form.bill.payeeAccountNo" :placeholder="$t('expense.travelClaim.phPayeeAccountRequired')" />
+              <el-input v-model="form.bill.payeeAccountNo" :placeholder="$t('expense.travelClaim.phPayeeAccountRequired')" maxlength="64" />
             </el-form-item>
             <el-form-item :label="$t('common.remark')">
               <el-input v-model="form.bill.remark" type="textarea" :rows="2" />
@@ -176,7 +176,7 @@
                 </template>
               </el-table-column>
               <el-table-column :label="$t('expense.create.colInvoiceNo')" min-width="160">
-                <template #default="{ row }"><el-input v-model="row.invoiceNo" size="small" :placeholder="$t('expense.create.colInvoiceNo')" /></template>
+                <template #default="{ row }"><el-input v-model="row.invoiceNo" size="small" :placeholder="$t('expense.create.colInvoiceNo')" maxlength="255" /></template>
               </el-table-column>
               <el-table-column :label="$t('field.invoiceDate')" width="130">
                 <template #default="{ row }"><el-date-picker v-model="row.invoiceDate" type="date" value-format="YYYY-MM-DD" size="small" style="width:100%" /></template>

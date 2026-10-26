@@ -13,6 +13,7 @@ import com.fssc.common.exception.BizException;
 import com.fssc.common.util.AssertUtil;
 import com.fssc.system.entity.ExtInterfaceConfig;
 import com.fssc.system.mapper.ExtInterfaceConfigMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,7 @@ import java.util.Set;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("master")
 public class ExtInterfaceConfigService {
 
     private final ExtInterfaceConfigMapper configMapper;

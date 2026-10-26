@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /** 采购三单域：采购订单 + 收货单。 */
 @RestController
 @RequestMapping("/api/tenant/purchase")
@@ -135,13 +137,23 @@ public class PurchaseController {
     }
 
     // ---- 收货单 ----
+    /** @param poId 可选：按采购订单收口候选集（付款勾稽「手工关联收货单」必传，否则会拿到全租户收货单） */
     @RequiresPerm("po:receipt:list")
     @GetMapping("/receipt/page")
     public Result<PageResult<PoReceipt>> receiptPage(@RequestParam(defaultValue = "1") long pageNum,
                                                      @RequestParam(defaultValue = "10") long pageSize,
                                                      @RequestParam(required = false) String keyword,
-                                                     @RequestParam(required = false) String status) {
-        return Result.success(purchaseService.receiptPage(pageNum, pageSize, keyword, status));
+                                                     @RequestParam(required = false) String status,
+                                                     @RequestParam(required = false) Long poId) {
+        return Result.success(purchaseService.receiptPage(pageNum, pageSize, keyword, status, poId));
+    }
+
+    /** 送货单号重复预检：同供应商同号已有收货单时返回已有记录，前端提示后再决定是否继续保存。 */
+    @RequiresPerm("po:receipt:list")
+    @GetMapping("/receipt/delivery-note/check")
+    public Result<List<PoReceipt>> checkDeliveryNote(@RequestParam Long supplierId,
+                                                     @RequestParam String deliveryNote) {
+        return Result.success(purchaseService.findDeliveryNoteDuplicates(supplierId, deliveryNote));
     }
 
     @RequiresPerm("po:receipt:list")

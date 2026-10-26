@@ -91,7 +91,7 @@ const menuIndex = [
   { key: 'm-dashboard', label: '报表看板', desc: 'Dashboard', icon: DataAnalysis, path: '/dashboard', group: 'menu' },
   { key: 'm-requisition', label: '报账工作台', desc: '统一收单', icon: Tickets, path: '/requisition', group: 'menu' },
   { key: 'm-workbench', label: '我的工作台', desc: '个人工作台', icon: Document, path: '/workbench', group: 'menu' },
-  { key: 'm-expense', label: '报销管理', desc: '费用报销', icon: Money, path: '/expense', group: 'menu' },
+  { key: 'm-expense', label: '报销管理', desc: '费用报账', icon: Money, path: '/expense', group: 'menu' },
   { key: 'm-loan', label: '借款管理', desc: '借款/还款', icon: Money, path: '/expense/loan', group: 'menu' },
   { key: 'm-approval', label: '审批工作台', desc: '待办审批', icon: Document, path: '/approval', group: 'menu' },
   { key: 'm-contract', label: '合同管理', desc: '合同台账', icon: Files, path: '/contract', group: 'menu' },

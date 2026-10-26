@@ -57,8 +57,8 @@
             <el-option label="服务商" value="VENDOR" />
           </el-select>
         </el-form-item>
-        <el-form-item label="联系人"><el-input v-model="crud.form.contactName" /></el-form-item>
-        <el-form-item label="联系电话"><el-input v-model="crud.form.contactPhone" /></el-form-item>
+        <el-form-item label="联系人"><el-input v-model="crud.form.contactName" maxlength="64" /></el-form-item>
+        <el-form-item label="联系电话"><el-input v-model="crud.form.contactPhone" maxlength="64" /></el-form-item>
         <el-form-item label="邮箱"><el-input v-model="crud.form.email" /></el-form-item>
         <el-form-item label="地址"><el-input v-model="crud.form.address" /></el-form-item>
         <el-form-item label="信用等级">
@@ -66,7 +66,7 @@
             <el-option label="A" value="A" /><el-option label="B" value="B" /><el-option label="C" value="C" />
           </el-select>
         </el-form-item>
-        <el-form-item label="备注"><el-input v-model="crud.form.remark" type="textarea" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="crud.form.remark" type="textarea" maxlength="500" show-word-limit /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="crud.vis.value = false">取消</el-button>

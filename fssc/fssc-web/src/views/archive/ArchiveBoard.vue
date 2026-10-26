@@ -341,7 +341,7 @@
           <el-input-number v-model="arForm.archiveYear" :min="2000" :max="2100" style="width:100%" />
         </el-form-item>
         <el-form-item label="期间" prop="archivePeriod">
-          <el-input v-model="arForm.archivePeriod" placeholder="如：2026-08" />
+          <el-input v-model="arForm.archivePeriod" placeholder="如：2026-08" maxlength="20" />
         </el-form-item>
         <el-form-item label="保管期限" prop="retentionPeriod">
           <el-select v-model="arForm.retentionPeriod" style="width:100%">

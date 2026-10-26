@@ -57,7 +57,7 @@
           <el-input v-model="form.roleName" :placeholder="$t('system.role.colRoleName')" />
         </el-form-item>
         <el-form-item :label="$t('system.role.colDescription')">
-          <el-input v-model="form.description" type="textarea" :rows="2" :placeholder="$t('system.role.lblRoleDesc')" />
+          <el-input v-model="form.description" type="textarea" :rows="2" :placeholder="$t('system.role.lblRoleDesc')" maxlength="500" show-word-limit />
         </el-form-item>
         <el-form-item :label="$t('system.common.colEnabled')">
           <el-switch v-model="form.status" :active-value="'NORMAL'" :inactive-value="'DISABLED'" />

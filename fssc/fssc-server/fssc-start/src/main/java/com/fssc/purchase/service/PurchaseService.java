@@ -506,6 +506,12 @@ public class PurchaseService {
         if (r.getAmount() == null || r.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请输入收货金额（须大于 0）");
         }
+        // 送货单号是自由文本且非必填，前端无长度约束时会超长直落 varchar(200) → 数据库截断异常 500
+        String deliveryNote = r.getDeliveryNote() == null ? null : r.getDeliveryNote().trim();
+        if (deliveryNote != null && deliveryNote.length() > 200) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "送货单号过长（最多 200 字符）");
+        }
+        r.setDeliveryNote(deliveryNote);
         r.setId(null);
         r.setTenantId(TenantContext.getTenantId());
         // 留空自动取号时校验唯一键（uk_receipt_no: tenant_id+receipt_no，含 del_flag=1 历史行），
@@ -687,16 +693,34 @@ public class PurchaseService {
         stockMoveMapper.insert(m);
     }
 
-    public PageResult<PoReceipt> receiptPage(long pageNum, long pageSize, String keyword, String status) {
+    /**
+     * @param poId 可选：按采购订单收口。付款勾稽「手工关联收货单」按 PO 取候选集时必传，
+     *             否则会拿到全租户收货单列表（前端只取前 100 条），存在关联错单的风险。
+     */
+    public PageResult<PoReceipt> receiptPage(long pageNum, long pageSize, String keyword, String status, Long poId) {
         LambdaQueryWrapper<PoReceipt> qw = new LambdaQueryWrapper<>();
         if (keyword != null && !keyword.isBlank()) {
             qw.and(w -> w.like(PoReceipt::getReceiptNo, keyword).or().like(PoReceipt::getSupplierName, keyword)
-                    .or().like(PoReceipt::getPoNo, keyword));
+                    .or().like(PoReceipt::getPoNo, keyword).or().like(PoReceipt::getDeliveryNote, keyword));
         }
         if (status != null && !status.isBlank()) qw.eq(PoReceipt::getStatus, status);
+        if (poId != null) qw.eq(PoReceipt::getPoId, poId);
         qw.orderByDesc(PoReceipt::getId);
         Page<PoReceipt> p = receiptMapper.selectPage(Page.of(pageNum, pageSize), qw);
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
+    }
+
+    /**
+     * 送货单号重复预检（同供应商 + 同号）。只提示不拦截：一张送货单分次收货是合法业务，
+     * 故不能加唯一键；这里把已有同号单据交回前端，由录入人判断是"分次收货"还是"重复录入"。
+     */
+    public List<PoReceipt> findDeliveryNoteDuplicates(Long supplierId, String deliveryNote) {
+        if (supplierId == null || deliveryNote == null || deliveryNote.isBlank()) return List.of();
+        return receiptMapper.selectList(new LambdaQueryWrapper<PoReceipt>()
+                .eq(PoReceipt::getSupplierId, supplierId)
+                .eq(PoReceipt::getDeliveryNote, deliveryNote.trim())
+                .orderByDesc(PoReceipt::getId)
+                .last("LIMIT 20"));
     }
 
     /**

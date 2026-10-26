@@ -87,7 +87,7 @@
             <el-form-item v-if="selectedNode.id" label="所属公司">
               <el-input :model-value="companyLabel(selectedNode) || '（未定）'" disabled />
             </el-form-item>
-            <el-form-item label="科目编码" prop="subjectCode"><el-input v-model="selectedNode.subjectCode" /></el-form-item>
+            <el-form-item label="科目编码" prop="subjectCode"><el-input v-model="selectedNode.subjectCode" maxlength="64" /></el-form-item>
             <el-form-item label="科目名称" prop="subjectName"><el-input v-model="selectedNode.subjectName" /></el-form-item>
             <el-form-item label="科目层级">
               <el-input-number v-model="selectedNode.subjectLevel" :min="1" :max="5" :controls="false" style="width:100%" />
@@ -117,7 +117,7 @@
                 <el-checkbox value="project">项目</el-checkbox>
               </el-checkbox-group>
             </el-form-item>
-            <el-form-item label="备注"><el-input v-model="selectedNode.remark" type="textarea" :rows="2" /></el-form-item>
+            <el-form-item label="备注"><el-input v-model="selectedNode.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
           </el-form>
 
           <!-- 成本中心表单 -->
@@ -142,7 +142,7 @@
             <el-form-item label="排序">
               <el-input-number v-model="selectedNode.sort" :min="0" :controls="false" style="width:100%" />
             </el-form-item>
-            <el-form-item label="备注"><el-input v-model="selectedNode.remark" type="textarea" :rows="2" /></el-form-item>
+            <el-form-item label="备注"><el-input v-model="selectedNode.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
           </el-form>
 
           <el-empty v-if="!selectedNode" description="请从左侧选择一个节点查看或编辑详情" :image-size="80" />

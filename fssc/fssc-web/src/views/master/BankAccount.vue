@@ -90,8 +90,8 @@
           <el-form-item label="支行" class="half"><el-input v-model="form.bankBranch" /></el-form-item>
         </div>
         <div class="form-row">
-          <el-form-item label="银行账号" prop="bankAccount" class="half"><el-input v-model="form.bankAccount" /></el-form-item>
-          <el-form-item label="联行号" prop="bankCode" class="half"><el-input v-model="form.bankCode" /></el-form-item>
+          <el-form-item label="银行账号" prop="bankAccount" class="half"><el-input v-model="form.bankAccount" maxlength="64" /></el-form-item>
+          <el-form-item label="联行号" prop="bankCode" class="half"><el-input v-model="form.bankCode" maxlength="64" /></el-form-item>
         </div>
         <div class="form-row">
           <el-form-item label="账户性质" prop="accountType" class="half">
@@ -104,7 +104,7 @@
         <div class="form-row">
           <el-form-item label="默认账户" class="half"><el-switch v-model="form.isDefault" /></el-form-item>
         </div>
-        <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
       </el-form>
       <template #footer>
         <el-button size="small" @click="formVisible = false">取消</el-button>

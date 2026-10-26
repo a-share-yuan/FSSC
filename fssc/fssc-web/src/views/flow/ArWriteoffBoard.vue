@@ -111,13 +111,13 @@
               <el-option :label="$t('flow.wfo.fundTypeNote')" value="NOTE" />
             </el-select>
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.wfo.colFundNo')" prop="fundNo"><el-input v-model="fundForm.fundNo" :placeholder="$t('flow.wfo.phFundNo')" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.wfo.colFundNo')" prop="fundNo"><el-input v-model="fundForm.fundNo" :placeholder="$t('flow.wfo.phFundNo')" maxlength="48" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('field.customer')" prop="customerId">
             <CustomerSelect v-model="fundForm.customerId" value-key="id" :placeholder="$t('flow.wfo.phPickCustomer')" @change="onFundCustomer" />
           </el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.wfo.lblFundAmount')" prop="fundAmount"><el-input v-model="fundForm.fundAmount" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.wfo.lblFundDate')"><el-date-picker v-model="fundForm.fundDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.wfo.lblBankSerial')"><el-input v-model="fundForm.bankSerial" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.wfo.lblBankSerial')"><el-input v-model="fundForm.bankSerial" maxlength="64" /></el-form-item></el-col>
           <el-col v-if="fundForm.fundType === 'NOTE'" :span="12"><el-form-item :label="$t('flow.wfo.lblNoteId')" prop="noteId">
             <el-select v-model="fundForm.noteId" filterable style="width: 100%" :placeholder="$t('flow.wfo.phPickNote')">
               <el-option v-for="n in noteOptions" :key="n.id" :label="`${n.noteNo}（${n.customerName || n.drawer || ''}）`" :value="n.id" />

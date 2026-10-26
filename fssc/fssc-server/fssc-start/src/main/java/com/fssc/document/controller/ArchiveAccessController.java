@@ -9,6 +9,7 @@ import com.fssc.document.entity.ArchiveAccessLog;
 import com.fssc.document.service.ArchiveAccessService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +26,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/tenant/compliance/archive-access")
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveAccessController {
 
     private final ArchiveAccessService archiveAccessService;

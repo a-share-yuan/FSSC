@@ -192,7 +192,7 @@
     <el-dialog v-model="editVisible" title="编辑资料" width="480px" destroy-on-close>
       <el-form :model="editForm" :rules="editProfileRules" label-width="100px">
         <el-form-item label="姓名" prop="nickName" required>
-          <el-input v-model="editForm.nickName" />
+          <el-input v-model="editForm.nickName" maxlength="50" />
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="editForm.phone" placeholder="请输入手机号" maxlength="11" />

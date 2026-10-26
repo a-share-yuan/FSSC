@@ -155,11 +155,11 @@
     <el-dialog v-model="createVisible" :title="$t('flow.collab.tabInvLanding')" width="660px" destroy-on-close>
       <el-form ref="createFormRef" :model="form" :rules="createRules" label-width="110px" size="small">
         <el-row :gutter="12">
-          <el-col :span="12"><el-form-item :label="$t('field.reconNo')" prop="reconBillNo"><el-input v-model="form.reconBillNo" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('field.reconNo')" prop="reconBillNo"><el-input v-model="form.reconBillNo" maxlength="48" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.request.colSupplierName')">
             <SupplierSelect v-model="form.supplierCode" :placeholder="$t('flow.collab.phPickSupplier')" @change="onSupplier" />
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.request.colPoNo')"><el-input v-model="form.poNo" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.request.colPoNo')"><el-input v-model="form.poNo" maxlength="64" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('field.invoiceType')">
             <el-select v-model="form.invoiceType" style="width: 100%">
               <el-option :label="$t('flow.collab.kindSpecial')" value="VAT_SPECIAL" /><el-option :label="$t('flow.collab.kindPlain')" value="VAT_NORMAL" />
@@ -170,8 +170,8 @@
           <el-col :span="12"><el-form-item :label="$t('field.totalWithTax')"><el-input v-model="form.totalAmount" :placeholder="$t('flow.collab.emptyAuto')" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.collab.colBaseAmount')"><el-input v-model="form.reconAmount" :placeholder="$t('flow.collab.colReconSideAmount')" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item :label="$t('flow.collab.colBaseTax')"><el-input v-model="form.reconTaxAmount" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.collab.colBuyerTaxNo')"><el-input v-model="form.buyerTaxNo" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item :label="$t('flow.collab.colSellerTaxNo')"><el-input v-model="form.sellerTaxNo" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.collab.colBuyerTaxNo')"><el-input v-model="form.buyerTaxNo" maxlength="64" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item :label="$t('flow.collab.colSellerTaxNo')"><el-input v-model="form.sellerTaxNo" maxlength="64" /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>
@@ -182,15 +182,15 @@
 
     <el-dialog v-model="shipVisible" :title="$t('flow.collab.tabShipPush')" width="520px" destroy-on-close>
       <el-form ref="shipFormRef" :model="shipForm" :rules="shipRules" label-width="120px" size="small">
-        <el-form-item :label="$t('flow.collab.colShipNo')" prop="shippingNo"><el-input v-model="shipForm.shippingNo" /></el-form-item>
-        <el-form-item :label="$t('flow.collab.colErpInvNo')"><el-input v-model="shipForm.soInvoiceNo" /></el-form-item>
+        <el-form-item :label="$t('flow.collab.colShipNo')" prop="shippingNo"><el-input v-model="shipForm.shippingNo" maxlength="48" /></el-form-item>
+        <el-form-item :label="$t('flow.collab.colErpInvNo')"><el-input v-model="shipForm.soInvoiceNo" maxlength="48" /></el-form-item>
         <el-form-item :label="$t('field.customer')">
           <CustomerSelect v-model="shipForm.customerCode" :placeholder="$t('flow.collab.phPickCustomer')" @change="onShipCustomer" />
         </el-form-item>
         <el-form-item :label="$t('flow.collab.colShipAmount')" prop="amount"><el-input v-model="shipForm.amount" /></el-form-item>
         <el-form-item :label="$t('field.taxAmount')"><el-input v-model="shipForm.taxAmount" /></el-form-item>
         <el-form-item :label="$t('flow.collab.colShipDate')"><el-date-picker v-model="shipForm.shippingDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
-        <el-form-item :label="$t('flow.collab.colLinkedStatement')"><el-input v-model="shipForm.statementNo" /></el-form-item>
+        <el-form-item :label="$t('flow.collab.colLinkedStatement')"><el-input v-model="shipForm.statementNo" maxlength="48" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button size="small" @click="shipVisible = false">{{ $t('common.cancel') }}</el-button>

@@ -13,7 +13,7 @@ import com.fssc.compliance.mapper.ExpensePolicyStandardMapper;
 import com.fssc.compliance.mapper.FraudDetectionLogMapper;
 import com.fssc.compliance.mapper.ReviewRuleMapper;
 import com.fssc.document.entity.OpArchive;
-import com.fssc.document.mapper.OpArchiveMapper;
+import com.fssc.framework.facade.ArchiveFacade;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -35,7 +35,7 @@ public class ComplianceExportService {
     private final ReviewRuleMapper reviewRuleMapper;
     private final ExpensePolicyStandardMapper expensePolicyStandardMapper;
     private final ExpensePolicyMapper expensePolicyMapper;
-    private final OpArchiveMapper opArchiveMapper;
+    private final ArchiveFacade archiveFacade;
     private final FraudDetectionLogMapper fraudDetectionLogMapper;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -121,8 +121,7 @@ public class ComplianceExportService {
 
     /** 导出档案列表 */
     public byte[] exportArchives() {
-        List<OpArchive> list = opArchiveMapper.selectList(
-                new LambdaQueryWrapper<OpArchive>().orderByAsc(OpArchive::getId));
+        List<OpArchive> list = archiveFacade.findAllForExport();
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("档案列表");
             String[] heads = {"档案编码", "档案类型", "档案年份", "档案期间", "保留期限", "状态", "创建时间"};

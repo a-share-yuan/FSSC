@@ -82,7 +82,7 @@
     <el-dialog v-model="dialog.visible" :title="dialog.editing ? t('sharing.quality.dlgEditTitle') : t('sharing.quality.btnAdd')" width="560px" destroy-on-close>
       <el-form ref="qualityFormRef" :model="dialog.form" :rules="qualityFormRules" label-width="100px" size="default">
         <el-form-item :label="$t('sharing.common.colDocNoFull')" prop="billNo">
-          <el-input v-model="dialog.form.billNo" :placeholder="$t('sharing.quality.phPayBillNo')" />
+          <el-input v-model="dialog.form.billNo" :placeholder="$t('sharing.quality.phPayBillNo')" maxlength="64" />
         </el-form-item>
         <el-form-item :label="$t('sharing.quality.labSampling')" prop="checkType">
           <el-select v-model="dialog.form.checkType" style="width:100%">
@@ -104,7 +104,7 @@
           <el-input v-model="dialog.form.deductReason" type="textarea" :rows="2" />
         </el-form-item>
         <el-form-item :label="$t('common.remark')">
-          <el-input v-model="dialog.form.remark" type="textarea" :rows="2" />
+          <el-input v-model="dialog.form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>

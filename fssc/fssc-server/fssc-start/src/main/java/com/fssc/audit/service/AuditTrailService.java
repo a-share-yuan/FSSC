@@ -30,6 +30,7 @@ import java.util.Set;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@com.fssc.framework.datasource.FsscDataSource("master")
 public class AuditTrailService {
 
     private final AuditTrailMapper trailMapper;

@@ -3,10 +3,14 @@
 
 package com.fssc.framework.facade;
 
+import com.fssc.common.core.PageResult;
+import com.fssc.document.entity.OpArchive;
 import com.fssc.framework.facade.dto.ArchiveInfoDTO;
 import com.fssc.framework.facade.dto.ArchiveRegisterDTO;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 档案中心 Facade：其他域通过此接口访问档案能力，
@@ -16,6 +20,12 @@ import java.util.List;
  * 断点6：findByBillId 替代 BillTraceChainController 直接查询 OpArchiveMapper
  * 断点8：registerBankSlipArchive 替代 BankReconcileService 直接插入 op_archive
  * 断点9：三个审批收尾方法替代 ArchiveBizAction 直接操作档案域三张表
+ *
+ * <p><b>分库同前（2026-10-27）</b>：档案域登记了独立路由键 {@code document}（{@code fssc.datasource.document}），
+ * 独立库就绪前别名 master，实现类同时标注类级 {@code @FsscDataSource("document")}。
+ * 共享作业页的档案登记/更新/分页/销毁原先直接注入 {@code OpArchiveMapper} 与档案域服务，
+ * 现一并收进本接口（{@link #pageArchives}／{@link #createArchive}／{@link #updateArchive}／
+ * {@link #requestDestroy}），仓储实现留在档案域内。
  */
 public interface ArchiveFacade {
 
@@ -101,4 +111,61 @@ public interface ArchiveFacade {
     default void handleBorrowApproval(Long accessLogId, boolean approved, Long endOperUserId) {
         handleBorrowApproval(accessLogId, approved);
     }
+
+    // ==================== 域外读取（报表／联查／合规导出） ====================
+
+    /**
+     * 全量档案清单（合规导出用；按 ID 正序，租户由拦截器收窄）。
+     *
+     * <p>不分页：导出器自己按列落 CSV，语义与改前 {@code selectList(orderByAsc id)} 一致。
+     */
+    List<OpArchive> findAllForExport();
+
+    /**
+     * 按单据 ID 或凭证 ID 集合取档案（单据全链路联查的归档段）。
+     *
+     * <p>谓词：{@code bill_id = billId OR voucher_id IN voucherIds}，创建时间倒序；
+     * {@code voucherIds} 为空时只按 {@code bill_id} 查。
+     *
+     * @param billId     单据 ID
+     * @param voucherIds 该单据各腿凭证 ID（可空集合）
+     */
+    List<OpArchive> findByBillIdOrVoucherIds(Long billId, Collection<Long> voucherIds);
+
+    // ==================== 域外写入（共享作业页的档案箱） ====================
+
+    /**
+     * 档案列表分页（共享作业「已归档档案」Tab）。
+     *
+     * <p>筛选口径与改前一致：{@code status} 入参按 {@code archive_status}（归档流程轴）筛，
+     * 兼容老调用方传保管轴取值（FILED→ARCHIVED、DESTROYED→DISPOSED）；结果统一挂
+     * D-DEC-185 的归档流实例号/状态补充（只读 {@code wf_instance}）。
+     */
+    PageResult<OpArchive> pageArchives(long pageNum, long pageSize, String archiveType, String status);
+
+    /**
+     * 登记一卷档案（档案域内规则单点）。
+     *
+     * <p>本方法只做档案域自己的事：同号查重（已销毁的卷释放档案号＝物理删）、
+     * {@code status} 镜像列按 {@code ArchiveService.dispositionOf} 兜底、{@code filingTime} 兜底、
+     * 插入。<b>跨域前置</b>（凭证存在性校验、按来源单据回填 {@code procInstId}）由调用方完成后再传入。
+     *
+     * @param archive 档案行（{@code archiveNo} 必填）
+     * @return 新档案 ID
+     */
+    Long createArchive(OpArchive archive);
+
+    /** 更新档案（先做存在性校验；不存在抛 {@code BizException}）。 */
+    void updateArchive(OpArchive archive);
+
+    /**
+     * R5-D-197：销毁唯一合规链入口——发起「销毁申请」（到期校验＋双人复核双签＋FM_DESTROY 起流程），
+     * 本方法不直改任何销毁列。
+     *
+     * @param archiveIds 待销毁档案 ID
+     * @param reason     申请理由
+     * @param operatorId 申请人 userId（无登录态时传 null）
+     * @return 销毁审批单 ID
+     */
+    Long requestDestroy(List<Long> archiveIds, String reason, Long operatorId);
 }

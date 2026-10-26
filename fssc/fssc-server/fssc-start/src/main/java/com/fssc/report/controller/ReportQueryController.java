@@ -7,7 +7,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
-import com.fssc.framework.facade.ImageFacade;
+import com.fssc.framework.datasource.FsscDataSource;
+import com.fssc.framework.facade.ImageStatsFacade;
 import com.fssc.framework.security.DataScopeHolder;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
@@ -42,11 +43,12 @@ import java.util.Set;
 @RequestMapping("/api/tenant/report")
 @RequiredArgsConstructor
 @Slf4j
+@FsscDataSource("replica")
 public class ReportQueryController {
 
     private final ReportMapper reportMapper;
     /** 分库改造：img_batch 在 fssc_image 库，影像统计经 Facade 跨库访问（image 路由） */
-    private final ImageFacade imageFacade;
+    private final ImageStatsFacade imageFacade;
 
     // ==================== 数据范围解析（R5-D-026） ====================
 

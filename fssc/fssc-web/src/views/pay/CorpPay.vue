@@ -273,7 +273,7 @@
               </el-form-item>
             </el-col>
             <!-- 后端 assertPayeeAccount：收款对象非空则收款账号必填（防付错），故此处与「*收款对象」同为必填 -->
-            <el-col :xs="24" :md="8"><el-form-item :label="subType === 'AGENCY' ? t('pay.corp.colBankAccount') : t('pay.corp.colAccountNo')" prop="extJson.payeeAccountNo"><el-input v-model="b.form.bill.extJson.payeeAccountNo" :placeholder="$t('pay.corp.phPayeeAccount')" /></el-form-item></el-col>
+            <el-col :xs="24" :md="8"><el-form-item :label="subType === 'AGENCY' ? t('pay.corp.colBankAccount') : t('pay.corp.colAccountNo')" prop="extJson.payeeAccountNo"><el-input v-model="b.form.bill.extJson.payeeAccountNo" :placeholder="$t('pay.corp.phPayeeAccount')" maxlength="64" /></el-form-item></el-col>
             <el-col :xs="24" :md="8"><el-form-item :label="$t('pay.corp.lblPayeeBank')"><el-input v-model="b.form.bill.extJson.payeeBankName" /></el-form-item></el-col>
           </el-row>
           <el-alert v-if="blacklistHit" type="error" :closable="false" :title="blacklistHit" style="margin-top: 8px" />

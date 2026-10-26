@@ -14,7 +14,7 @@ import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.invoice.entity.InvInvoice;
-import com.fssc.invoice.mapper.InvInvoiceMapper;
+import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.masterdata.entity.MdSupplier;
 import com.fssc.masterdata.mapper.MdSupplierMapper;
 import com.fssc.sharing.entity.SupplierRecon;
@@ -65,7 +65,7 @@ public class SupplierReconService {
     private final SupplierReconDetailMapper detailMapper;
     private final SupplierReconDiffMapper diffMapper;
     private final ExpBillPaymentMapper paymentMapper;
-    private final InvInvoiceMapper invoiceMapper;
+    private final InvoiceDomainFacade invoiceFacade;
     private final MdSupplierMapper supplierMapper;
     private final WfEngineFacade wfEngineFacade;
     private final com.fssc.system.service.NumberRuleService numberRuleService;
@@ -89,10 +89,8 @@ public class SupplierReconService {
         LocalDate periodEnd = ym.atEndOfMonth();
 
         // 本期发票（按 invoice_date 过滤期间）
-        List<InvInvoice> periodInvoices = invoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()
-                .eq(InvInvoice::getSellerName, name)
-                .ge(InvInvoice::getInvoiceDate, periodStart)
-                .le(InvInvoice::getInvoiceDate, periodEnd));
+        List<InvInvoice> periodInvoices =
+                invoiceFacade.findBySellerNameAndDateRange(name, periodStart, periodEnd);
         BigDecimal periodPayable = periodInvoices.stream().map(i -> nz(i.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // 本期已付付款（按 pay_time 过滤期间）
@@ -104,9 +102,7 @@ public class SupplierReconService {
         BigDecimal periodPaid = periodPays.stream().map(p -> nz(p.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // 期初余额 = 截至上期的累计应付 - 累计已付
-        List<InvInvoice> beforeInvoices = invoiceMapper.selectList(new LambdaQueryWrapper<InvInvoice>()
-                .eq(InvInvoice::getSellerName, name)
-                .lt(InvInvoice::getInvoiceDate, periodStart));
+        List<InvInvoice> beforeInvoices = invoiceFacade.findBySellerNameBefore(name, periodStart);
         BigDecimal beforePayable = beforeInvoices.stream().map(i -> nz(i.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         List<ExpBillPayment> beforePays = paymentMapper.selectList(new LambdaQueryWrapper<ExpBillPayment>()

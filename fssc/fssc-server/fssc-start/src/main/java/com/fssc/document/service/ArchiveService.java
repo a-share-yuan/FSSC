@@ -13,6 +13,7 @@ import com.fssc.document.mapper.OpArchiveMapper;
 import com.fssc.workflow.entity.WfInstance;
 import com.fssc.workflow.mapper.WfInstanceMapper;
 import com.fssc.workflow.service.WfEngineFacade;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ import java.util.Map;
 @Slf4j
 @Service("complianceArchiveService")
 @RequiredArgsConstructor
+@FsscDataSource("document")
 public class ArchiveService {
 
     private final OpArchiveMapper archiveCatalogMapper;
@@ -540,6 +542,7 @@ public class ArchiveService {
      * 即「档案归档」页的已归档档案 Tab）复用，避免各端点各自决定要不要挂 028 的补充。
      * <b>只读 wf_instance，不写任何流程表，也不翻转 {@code proc_inst_id} 的源单据语义。</b>
      */
+    @com.fssc.framework.datasource.FsscDataSource("master")
     public void enrichFlowKey(List<OpArchive> archives) {
         fillArchiveFlowKey(archives);
     }
