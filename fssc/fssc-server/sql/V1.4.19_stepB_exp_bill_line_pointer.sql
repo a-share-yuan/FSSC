@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS bak_v1419_bill_line AS
 SELECT id, bill_id, line_no, item_id, budget_item_id, amount
 FROM exp_bill_line WHERE id IN (8433, 8434);
 
--- 改指正确预算行（幂等：已是 97954 则不重复写）
+-- 改指正确预算行（去重：已是 97954 则不重复写）
 UPDATE exp_bill_line
 SET budget_item_id = 97954
 WHERE id IN (8433, 8434) AND budget_item_id = 98262;

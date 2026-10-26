@@ -11,7 +11,7 @@ WHERE `book_voucher_id` IN (
 DELETE FROM `gl_book_voucher`
 WHERE `remark` LIKE '阶段⑤投影%';
 
--- SME 科目口径改回 ASBE 通用口径（V1.4.88 建账时是 ASBE 口径）
+-- SME 科目规则改回 ASBE 通用规则（V1.4.88 建账时是 ASBE 规则）
 UPDATE `gl_book_subject_map` m
 JOIN `gl_accounting_book` b ON b.id = m.book_id
 JOIN `gl_standard` s ON s.id = b.standard_id

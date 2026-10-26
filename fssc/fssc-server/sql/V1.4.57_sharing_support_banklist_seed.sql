@@ -10,8 +10,8 @@
 --   「银行流水(id=108, path=/sharing/statement)＋银行流水-查询(id=3695)」，
 --   两枚菜单 perms 均为 op:bank:list。
 --
--- 修复（本件＝存量数据补齐）：
---   为 role_id=37 补授菜单 108 与 3695（与其同权岗双持口径同构）。
+-- 修复（本件＝历史数据补齐）：
+--   为 role_id=37 补授菜单 108 与 3695（与其同权岗双持规则同构）。
 --   代码侧已同步在 PermDependency 增加保存期依赖
 --   「op:bank:import ⇒ 须同时授予 op:bank:list」（授导入必须带查看），
 --   防未来再出现「能导入却看不到」的授权装配缺口。
@@ -22,7 +22,7 @@
 --   预期 0；执行后预期 2。
 -- ============================================================================
 
--- 幂等补授（sys_role_menu 无业务唯一键，用 NOT EXISTS 防重，可重复执行）
+-- 去重补授（sys_role_menu 无业务唯一键，用 NOT EXISTS 防重，可重复执行）
 -- INSERT INTO fssc.sys_role_menu (tenant_id, role_id, menu_id, create_by, create_time)
 -- SELECT 1, 37, 108, NULL, NOW() FROM DUAL
 --  WHERE NOT EXISTS (SELECT 1 FROM fssc.sys_role_menu WHERE role_id = 37 AND menu_id = 108);

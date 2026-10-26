@@ -1,14 +1,14 @@
 -- =====================================================================================
 -- V1.4.53  R5-D-187 权限码播种：资金头寸读码 treasury:position:list —— 本文件【登记态·全注释·未执行】
 -- 铁律：DDL 与授权(grant)类脚本一律以注释登记、由人工在发布窗放行。本文件所有语句均为注释态，
---       直接执行不产生任何写库效果。人工放行前请先跑 §0 前置只读校验，核对锚点与行数后逐段解注释。
--- 关联代码腿：TreasuryPositionController.position() 加 @RequiresPerm({"treasury:position:list",
---       "treasury:fundplan:list","treasury:creditbill:list"}) + OrgGuard.enforceCompany() 三段收口。
---       本登记件负责"补授"，与代码闸在同一枚内成对落地（加闸不补授=合法用户在自家页面 403）。
+--       直接执行不产生任何写库效果。人工放行前请先跑 §0 前置只读校验，核对关联点与行数后逐段解注释。
+-- 关联代码环节：TreasuryPositionController.position() 加 @RequiresPerm({"treasury:position:list",
+--       "treasury:fundplan:list","treasury:creditbill:list"}) + OrgGuard.enforceCompany() 三段办结。
+--       本登记件负责"补授"，与代码校验在同一枚内成对落地（加校验不补授=合法用户在自家页面 403）。
 --
 -- 【要解决的问题】
 --   GET /api/tenant/treasury/position 此前零权限码、零公司过滤，权限码 treasury:position:list
---   从未播种进 sys_menu ⇒ 该码在库内不可授予、不可回收。若不先播种，代码闸上线后任何依赖
+--   从未播种进 sys_menu ⇒ 该码在库内不可授予、不可回收。若不先播种，代码校验上线后任何依赖
 --   新码的授权都落空；本件把台账命名码入册并授给"本就 legitimate 需要资金头寸工作台"的角色。
 --
 -- 【码的选择与替换证据】
@@ -18,15 +18,15 @@
 --      component=treasury/index，perms='treasury:fundplan:list,treasury:creditbill:list'）下，
 --      前端 finance.js /treasury/position 与 TreasuryBoard.vue 未按页签单独设权 ⇒
 --       govern 该页菜单的既有码＝treasury:fundplan:list(及 creditbill:list)。
---   3. 故代码闸采「多码 OR 迁移」写法（见 RequiresPerm javadoc 与 SoDCheckController）：
---      以台账命名码 treasury:position:list 为主，并联工作台两个既有读码作 OR 兜底，
+--   3. 故代码校验采「多码 OR 迁移」写法（见 RequiresPerm javadoc 与 SoDCheckController）：
+--      以台账命名码 treasury:position:list 为主，并联工作台两个既有读码作 OR 默认处理，
 --      使播种前(靠 fundplan/creditbill 码)与播种后(靠 position 码)各自可通行，零停机零回归；
---      待授权数据平滑迁移后再收口为仅 position 码，属业务裁决腿（人工清单）。
+--      待授权数据平滑迁移后再办结为仅 position 码，属业务裁决环节（人工清单）。
 -- =====================================================================================
 --
--- -- §0 前置只读校验（人工放行前先跑，核对锚点与"改前"行数）-----------------------------------
+-- -- §0 前置只读校验（人工放行前先跑，核对关联点与"改前"行数）-----------------------------------
 -- --   期望 A：treasury:position:list 现有 0 行（尚未播种）
--- --   期望 B：资金工作台菜单 3072 存活且 perms 含 treasury:fundplan:list（父锚点来源）
+-- --   期望 B：资金工作台菜单 3072 存活且 perms 含 treasury:fundplan:list（父关联点来源）
 -- --   期望 C：持有工作台(fundplan 或 creditbill 码)的角色数＝本次应授权基数（改前读数量）
 -- SELECT COUNT(*) AS pre_existing_position_rows
 --   FROM fssc.sys_menu WHERE perms = 'treasury:position:list' AND del_flag = 0;
@@ -37,8 +37,8 @@
 --  WHERE (FIND_IN_SET('treasury:fundplan:list', m.perms) OR FIND_IN_SET('treasury:creditbill:list', m.perms))
 --    AND m.del_flag = 0;
 --
--- -- §1 播种 F 型按钮码 treasury:position:list（挂在资金工作台菜单下，幂等：已存在则不重复插）----
--- --   父锚点用子查询定位（不硬写可能漂移的 menu id）；sort 段 9100 与工作台其余 F 子项区分，人工可微调。
+-- -- §1 播种 F 型按钮码 treasury:position:list（挂在资金工作台菜单下，去重：已存在则不重复插）----
+-- --   父关联点用子查询定位（不硬写可能漂移的 menu id）；sort 段 9100 与工作台其余 F 子项区分，人工可微调。
 -- INSERT INTO fssc.sys_menu
 --     (parent_id, menu_name, menu_type, path, component, perms, icon, feature_code, terminal, sort, visible, status, del_flag)
 -- SELECT p.id, '资金头寸-查询', 'F', NULL, NULL, 'treasury:position:list', NULL, NULL, 'PC', 9100, 1, 1, 0
@@ -49,7 +49,7 @@
 --                     WHERE x.perms = 'treasury:position:list' AND x.del_flag = 0);
 --
 -- -- §2 授权：授给"本就 legitimate 需要资金头寸工作台"的角色 = 现持工作台(fundplan/creditbill 码)的全部角色
--- --   自锚定、零回归：能看工作台者即能看头寸页；零权限账号不在此集合内 ⇒ 加闸后被 §闸 拦下。
+-- --   自关联、零回归：能看工作台者即能看头寸页；零权限账号不在此集合内 ⇒ 加校验后被 §校验 拦下。
 -- INSERT INTO fssc.sys_role_menu (tenant_id, role_id, menu_id, create_by)
 -- SELECT r.tenant_id, r.id, m.id, NULL
 --   FROM fssc.sys_role r
@@ -71,10 +71,10 @@
 --   JOIN fssc.sys_menu m ON m.id = rm.menu_id AND m.perms = 'treasury:position:list'
 --  GROUP BY r.role_code ORDER BY r.role_code;
 -- =====================================================================================
--- 【闸-授耦合显式登记】
+-- 【校验-授耦合显式登记】
 --   放行本件后：所有现持资金工作台(treasury:fundplan:list 或 treasury:creditbill:list)的角色，
---   经 §2 自锚定额外获得 treasury:position:list；代码闸对这批用户"新旧码皆可通行"，无 403 回归。
---   此前"零权限也能读到全租户头寸"的账号：既不持工作台码、也不持新码 ⇒ §闸 直接 PERMISSION_DENIED；
---   叠加读路径三段公司收口，即便越权持码的跨公司账号也只回本公司账户/待付/应收。
---   注：本枚＝代码已落；授权播种(§1/§2)与运行时负向腿＝人工/发布窗，本文件保持注释态不自动执行。
+--   经 §2 自关联额外获得 treasury:position:list；代码校验对这批用户"新旧码皆可通行"，无 403 回归。
+--   此前"零权限也能读到全租户头寸"的账号：既不持工作台码、也不持新码 ⇒ §校验 直接 PERMISSION_DENIED；
+--   叠加读路径三段公司办结，即便越权持码的跨公司账号也只回本公司账户/待付/应收。
+--   注：本枚＝代码已落；授权播种(§1/§2)与运行时负向环节＝人工/发布窗，本文件保持注释态不自动执行。
 -- =====================================================================================

@@ -1,6 +1,6 @@
 -- V1.4.33  批次2 第八族（借款 LOAN/REPAY）配置侧对齐【本轮仅 REPAY】：wf_node_config <- 已发布 BPMN 唯一真值
 -- 前置：REPAY 已 /api/tenant/wf/designer/publish 重发布（v7→v8，新 procDef REPAY:229），
---   发布前回读复核与 draft 逐字节一致（e2e-ui/batch2/fam8-verify.log）、在途双口径为 0
+--   发布前回读复核与 draft 逐字节一致（e2e-ui/batch2/fam8-verify.log）、在途双规则为 0
 --   （designer/in-flight runningTotal=0 且 staleCount=0；fam8-publish-check.log）。
 -- ★ LOAN 本轮【不发布也不对齐】——§八 在途门槛第一次真的拦下东西：
 --   fam8-publish-check.log 实测 LOAN runningTotal=2（exp_bill 5893/5894，co31，批次 1 为"待分配→人工分配"取证特意保留的在途样本；
@@ -9,7 +9,7 @@
 --   若按未发布的 LOAN_draft 把 12 行改成 8 行，就会出现"配置说 8 道、引擎跑 12 道"的反向脱钩（新图节点拿到旧行档位才是真危害）。
 --   实测当前 LOAN：node_config 12 行 == 活体 BPMN 12 节点（fam8-audit-post.log），两侧仍一致，不存在遗留漂移。
 --   → LOAN 的 12→8 对齐整包顺延到在途样本处置完成后（方案 §8.11 F 节）。
--- 结构（REPAY）：5 个人工节点 -> 3 个（净 -2，-40%；口径＝留 2 道（Task_2/Task_3）＋删 3 道（Task_1 点名提单、Task_4/Task_5 机器动作）＋新增 1 道（Task_6 到账确认））；
+-- 结构（REPAY）：5 个人工节点 -> 3 个（净 -2，-40%；规则＝留 2 道（Task_2/Task_3）＋删 3 道（Task_1 点名提单、Task_4/Task_5 机器动作）＋新增 1 道（Task_6 到账确认））；
 --   作业池 1 个（handling_mode=POOL，新增的到账确认）、排他网关 0 个、并联会审 0 组。
 --   本族是批次 2 里第一个"开工三问全部通过"的族（公司解析/deny_self/start 时序三条皆有 Java 正证，见方案 §8.11 B 节），
 --   因此 REPAY 的整改是纯结构：删提单点名节点、删两道机器动作节点、【补】一道链上原本不存在的到账确认控制点。
@@ -31,7 +31,7 @@
 --     持权角色 14 个（BASE_FIN_MANAGER,BIZ_FIN_MANAGER,CENTER_APPROVER,CENTER_DIRECTOR,CFO,DEPT_MANAGER,EXEC_APPROVER,FIN_AUDIT,
 --     FIN_DIRECTOR,FIN_MANAGER,FIN_MGR_ORG,FSSC_AUDITOR,FSSC_SUPERVISOR,PLATE_FIN_MANAGER）；重造前 LOAN 12 道里 8 道岗位不在名单、
 --     REPAY Task_4/Task_5 挂 FIN_GL 亦不在名单；而流程侧审批走 WfTaskController:554 /wf/approve【无 @RequiresPerm】、只靠候选组判定
---     ⇒ 这些节点"待办中心能办、单据审核页无按钮"（本轮把岗名与权限口径对齐，权限表本身未动）；
+--     ⇒ 这些节点"待办中心能办、单据审核页无按钮"（本轮把岗名与权限规则对齐，权限表本身未动）；
 --   D-FAM8-02 sys_menu id 225「还款管理 /expense/repay」的 perms 为 NULL＝整页不受任何权限码约束；
 --   D-FAM8-03 ${approver} 由请求参数自报（本轮已随 Task_1 出链清零，但 submit 接口仍可传该参数给其它 bizType，属报销族同型遗留）；
 --   D-FAM8-04 借款的"付款"与"账务"其实不在这条流程里：审批通过后 SharingService:255-258 另派作业链「合规审核→资金支付→账务处理」，
@@ -39,14 +39,14 @@
 --     CASHIER/FIN_AUDIT/FIN_GL/FSSC_AUDITOR/FSSC_SUPERVISOR/SCAN_STAFF/SHARING_SUPPORT），既不区分环节类型也不区分单据类型，
 --     finish() 无第二人复核 ⇒ 连扫描岗都能认领并完成借款的"资金支付"环节（这是 LOAN.Task_11 留池不删的理由）；
 --   D-FAM8-05 先核销债权、后确认到账（见 ③），且 ExpenseBillService.markPaid()（第 1244 行）在借款链上零调用方 ⇒ LOAN 单永不进 PAID；
---   R8-01 借款 approve-deduct 无 Flowable 终态校验；R8-02 co31 之外 DIRECT_SUPERVISOR 全租户仅 2 人、co1 为 0（本轮已随 Task_2 出链）。
--- 档位口径（方案 §5.9）：作业池 48h AUTO_REMIND、共享审单(FIN_AUDIT) 8h AUTO_REMIND、业务审批(PLATE_FIN_MANAGER) 24h AUTO_REMIND；
---   empty_strategy 全 ESCALATE（理由见 gen-sql.js 注释）。NOTIFY 本轮 0 条（§七 R8 占比口径）。
+--   R8-01 借款 approve-deduct 无 Flowable 最终状态校验；R8-02 co31 之外 DIRECT_SUPERVISOR 全租户仅 2 人、co1 为 0（本轮已随 Task_2 出链）。
+-- 档位规则（方案 §5.9）：作业池 48h AUTO_REMIND、共享审单(FIN_AUDIT) 8h AUTO_REMIND、业务审批(PLATE_FIN_MANAGER) 24h AUTO_REMIND；
+--   empty_strategy 全 ESCALATE（理由见 gen-sql.js 注释）。NOTIFY 本轮 0 条（§七 R8 占比规则）。
 -- allow_transfer / multi_type / auto_pass_self / form_perm 一律不动（沿用批次1 定档）。
 -- 不删任何数据；回滚见 V1.4.33_fam8_nodeconfig_align_rollback.sql
 -- 执行：mysql -uroot -p123456 -h127.0.0.1 -P3306 -Dfssc --default-character-set=utf8mb4 < 本文件
 
--- 0) 备份将被改动的行（幂等：表已存在则跳过，备份表不删）
+-- 0) 备份将被改动的行（去重：表已存在则跳过，备份表不删）
 CREATE TABLE IF NOT EXISTS wf_node_config_bak_V1433_20260923 AS
 SELECT * FROM wf_node_config WHERE (model_key, node_key) IN (('REPAY','Task_6'),('REPAY','Task_2'),('REPAY','Task_3'));
 
@@ -81,7 +81,7 @@ UPDATE wf_node_config
        update_time    = NOW()
  WHERE model_key = 'REPAY' AND node_key = 'Task_3';
 
--- 2) 新 key 插行（1 行，NOT EXISTS 守卫保证幂等）
+-- 2) 新 key 插行（1 行，NOT EXISTS 守卫保证去重）
 -- REPAY.Task_6  出纳确认还款到账并登记收款（作业池）【出纳】  ← 链首新增控制点，sort=1 让它排在保留节点之前
 INSERT INTO wf_node_config
   (tenant_id, model_key, node_key, node_name, assign_type, assign_value, handling_mode, up_level, multi_type,
@@ -113,7 +113,7 @@ SELECT COUNT(*) AS drift_rows_A FROM (
       OR IFNULL(c.handling_mode, '') <> e.exp_hm
   ) x;
 
--- 4) 复核 B：REPAY 3 个角色的存在性与 co1 在编持岗人数（口径 status='NORMAL' 且 is_admin=0）。
+-- 4) 复核 B：REPAY 3 个角色的存在性与 co1 在编持岗人数（规则 status='NORMAL' 且 is_admin=0）。
 --     单点/双人角色：FIN_AUDIT co1 仅 1 人（挂 Task_2）、PLATE_FIN_MANAGER co1 2 人（COMPANY 范围）→ 断流靠 ESCALATE 沿汇报线外兜；
 --      CASHIER co1 3 人（作业池，多人同池正是 POOL 的用意）。角色收敛属 R5（等 RA-01~15 裁决），本轮不增岗。
 SELECT r.role_code, ANY_VALUE(r.role_name) role_name, ANY_VALUE(r.org_scope) org_scope, ANY_VALUE(r.status) status,

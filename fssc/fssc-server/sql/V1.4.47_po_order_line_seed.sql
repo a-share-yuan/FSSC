@@ -10,7 +10,7 @@
 --        fssc-web/src/views/purchase/PoOrder.vue:480  提交 { ...form, lines: formLines.value.filter(...) }
 --        purchase/controller/PurchaseController.java:41  形参是 @RequestBody PoOrder o
 --        purchase/entity/PoOrder.java                   无 lines 字段
---        ⇒ JSON 里的 lines 在反序列化阶段无人接收，从未落库。
+--        ⇒ JSON 里的 lines 在反序列化阶段无人接收，从未写入数据库。
 --   F-3  演练单 PO1790434820845（id=11）的两批明细只以文字存在于 remark：
 --        remark = 「合同2026-09-23签订：不含税80,000（税率13%，价税90,400）。
 --                  分两批：批一50,000（价税56,500）/批二30,000（价税33,900）；账期=货到票到后7日付款。」
@@ -19,13 +19,13 @@
 --
 -- 【为什么要建这张表，而不是只在 BCP 侧建】
 --   BCP 侧 bcp_purchase_order / bcp_purchase_order_line 结构早已齐备（bcp_schema.sql:885-917，
---   含 uk_po(partner_id,po_no) 幂等键），只是 0 行。缺的是"数据从哪来"：
+--   含 uk_po(partner_id,po_no) 唯一键），只是 0 行。缺的是"数据从哪来"：
 --   FSSC 不落行项目 ⇒ 任何同步通道都只能搬单头 ⇒ SCP 接单/分批 ASN/开票对账无凭可查。
 --   详见《BCP/docs/… 或 LinkU/docs/业务运行记录/V3引擎重构版/01/B-9补救方案_FSSC到BCP采购订单同步通道.md》。
 --
--- 【口径】行金额与表头 amount 同为不含税（表头 80,000 = 不含税、remark 记税 10,400、价税 90,400）。
+-- 【规则】行金额与表头 amount 同为不含税（表头 80,000 = 不含税、remark 记税 10,400、价税 90,400）。
 --   本表不加 tax_rate/tax_amount：PoOrder.vue 行项目列只有 物料编码/物料名称/数量/单位/单价/金额，
---   加没人填的列 = 死列。税额口径在 BCP 同步侧按配置税率推导（bcp sys_config po.sync.tax-rate）。
+--   加没人填的列 = 死列。税额规则在 BCP 同步侧按配置税率推导（bcp sys_config po.sync.tax-rate）。
 -- =====================================================================================
 
 SET NAMES utf8mb4;
@@ -38,7 +38,7 @@ SET NAMES utf8mb4;
 SELECT TABLE_NAME FROM information_schema.TABLES
  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'po_order_line';
 
--- 0.2 存量订单规模（决定 §2 是否需要补录、以及补录工作量）
+-- 0.2 历史订单规模（决定 §2 是否需要补录、以及补录工作量）
 SELECT status, COUNT(*) AS cnt FROM po_order WHERE del_flag = 0 GROUP BY status;
 
 -- 0.3 已审批通过、后续要走协同的订单（本演练至少要能同步出行的那些）
@@ -47,7 +47,7 @@ SELECT id, po_no, supplier_name, amount, received_amount, status
  ORDER BY id;
 
 -- ----------------------------------------------------------------------------
--- §1 建表（幂等：CREATE TABLE IF NOT EXISTS）
+-- §1 建表（去重：CREATE TABLE IF NOT EXISTS）
 -- ----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS po_order_line (
@@ -67,14 +67,14 @@ CREATE TABLE IF NOT EXISTS po_order_line (
   update_by     BIGINT NULL,
   update_time   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   del_flag      TINYINT NOT NULL DEFAULT 0,
-  -- ★ 刻意不建 uk(po_id,line_no)：编辑订单走行"逻辑删除 + 重插"留痕（对齐 FSSC 全程禁物理删的口径），
+  -- ★ 刻意不建 uk(po_id,line_no)：编辑订单走行"逻辑删除 + 重插"记录（对齐 FSSC 全程禁物理删的规则），
   --   同 po_id 同 line_no 会出现多行 del_flag=1 的历史版本，唯一键会当场把第二次编辑顶死。
   KEY idx_po (po_id),
   KEY idx_tenant (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='采购订单行项目（po_order 的行腿，金额不含税）';
 
 -- ----------------------------------------------------------------------------
--- §2 存量订单行补录 —— 【本文件不自动补录，理由如下】
+-- §2 历史订单行补录 —— 【本文件不自动补录，理由如下】
 --
 --   F-2 是"提交即丢弃"，不是"存了没搬"：操作员当初在界面上敲的数量/单价**没有任何地方留存**，
 --   只有 remark 里的金额文字活了下来。据 remark 反推数量=编数据，违反"数据必须勾稽"。

@@ -6,7 +6,7 @@
 --   同 priority 时子类型精确行优先于通配行：WfProcessConfigService.java:82-83 的比较器给精确行 key=0、通配行 key=1，
 --   List.sort 是稳定排序、保留 SQL 的 priority DESC，故 CLAIM/TRAVEL 命中 CLAIM_TRAVEL 而不会落到 CLAIM/*。
 --   全库 wf_model 无一行 org_scope<>ALL、无一行 exclude_org_ids（已查＝0 行），resolveModelKey 的 orgScopeMatches
---   fail-closed 分支在本账套恒不触发 ⇒ 镜像行对任意 companyId 都与内置映射同落点，不限于探针用的公司31。
+--   fail-closed 分支在本账套恒不触发 ⇒ 镜像行对任意 companyId 都与内置映射同落点，不限于检查用的公司31。
 -- 生成方式：bpmn-repo/drafts/batch3/r2-gen-seed-sql.js 从 r2-seed-rows-alias.tsv 机械推导（该 tsv 由 r2-routing-matrix.js
 --   对 resolveProcessKey 三级链路【绑定表 → 内置 switch → 部署存在性 → expenseClaim】的 JS 1:1 复算得出，非手写）。
 -- 判据（每条镜像行都必须同时满足，否则不生成）：
@@ -15,7 +15,7 @@
 --      "静默落错流程"升级成"发起直接报错"，故只 seed 已部署 key；
 --   ③ 有可达性证据：bizType 出现在 wfEngineFacade.start(...) 的字面量或 flowKey 推导值里，或历史实例里；
 --   ④ 不加约束：company_id/dept_id/amount_min/amount_max 全 NULL、status=NORMAL、priority=10、sub_type=NULL(通配)，
---      与现有行同口径，保证任何金额/任何公司都命中，等价于今天"表未命中→内置映射"的结果；
+--      与现有行同一规则，保证任何金额/任何公司都命中，等价于今天"表未命中→内置映射"的结果；
 --   ⑤ 已有绑定行的 bizType 一律不动（生成本文件时库内 75 行所属 bizType 均不在本 seed 范围内）。
 -- 不迁移项（有意留空，见 r2-routing-matrix.log §C）：
 --   ① 断链 bizType（PURCHASE_ORDER_REVIEW / SUPPLIER_PAY / ARCHIVE_RECON / TR_SEAL_CHANGE / BG_ADJUST）：同 V1.4.38，
@@ -32,11 +32,11 @@
 SELECT COUNT(*) AS before_rows, SUM(del_flag=0 AND status='NORMAL') AS before_active FROM wf_process_config;
 SELECT biz_type, COUNT(*) c FROM wf_process_config WHERE del_flag=0 GROUP BY biz_type HAVING c > (SELECT COUNT(DISTINCT IFNULL(sub_type,'')) FROM wf_process_config x WHERE x.del_flag=0 AND x.biz_type=wf_process_config.biz_type);
 
--- 0.5) 改前留痕表（本 seed 是 INSERT-only、回滚按 remark 精确匹配即可；此表只为审计兜底，不删）
+-- 0.5) 改前记录表（本 seed 是 INSERT-only、回滚按 remark 精确匹配即可；此表只为审计默认处理，不删）
 CREATE TABLE IF NOT EXISTS wf_process_config_bak_V1440_20260923 AS SELECT * FROM wf_process_config;
 SELECT COUNT(*) AS bak_rows FROM wf_process_config_bak_V1440_20260923;
 
--- 1) 镜像行（幂等：同 (biz_type, sub_type, model_key) 已有未删除行则跳过）
+-- 1) 镜像行（去重：同 (biz_type, sub_type, model_key) 已有未删除行则跳过）
 --  1. CLAIM（通配） -> CLAIM   改前路径=内置→已部署
 INSERT INTO wf_process_config (tenant_id, biz_type, sub_type, config_name, model_key, priority, status, remark, create_time, update_time, del_flag)
 SELECT 1, 'CLAIM', NULL, '员工个人报销审批流程', 'CLAIM', 10, 'NORMAL', 'V1.4.40批次3路由合一镜像seed别名', NOW(), NOW(), 0
@@ -133,5 +133,5 @@ SELECT biz_type, COUNT(*) c FROM wf_process_config WHERE del_flag=0 AND IFNULL(s
 -- 4) 复核 C：镜像行的目标 key 必须全部已部署（期望 bad_target=0）
 SELECT COUNT(*) AS bad_target FROM wf_process_config c LEFT JOIN (SELECT DISTINCT KEY_ FROM ACT_RE_PROCDEF) p ON p.KEY_=c.model_key WHERE c.del_flag=0 AND c.remark='V1.4.40批次3路由合一镜像seed别名' AND p.KEY_ IS NULL;
 
--- 5) 终态快照
+-- 5) 最终状态快照
 SELECT biz_type, IFNULL(sub_type,'*') sub, model_key, priority, status, remark FROM wf_process_config WHERE del_flag=0 ORDER BY biz_type, priority DESC, id;

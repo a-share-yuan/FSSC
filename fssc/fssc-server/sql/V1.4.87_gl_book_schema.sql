@@ -4,6 +4,7 @@
 -- 目的：闭环差距③「无账簿/准则/多本位币体系（多账簿零代码）」。
 --       实测：309 张表里 %book% / %ledger% 零命中，只有 sys_company(9 行) + md_org_type，
 --       gl_consolidate 表在但 0 行 ⇒ 现在的「总账」本质是单套复式记账的记账区，
+--       不是账簿体系。参考规则：
 --         账簿：「账簿类型分为主账簿和副账簿，一个核算组织在同一核算体系内仅能存在
 --                   唯一的主账簿」
 --         多账簿应用：「按不同的会计准则与制度出具多套财务核算数据」
@@ -24,7 +25,7 @@
 -- 【零破坏边界】
 --   本件只新增表，**不改 op_voucher / op_gl_entry**：
 --   现有 741 张凭证仍挂在 company_id 上，book_id 先落 NULL；
---   待账簿数据验证通过后，再由 V1.4.88 做「存量凭证回填 book_id」的显式迁移。
+--   待账簿数据验证通过后，再由 V1.4.88 做「历史凭证回填 book_id」的显式迁移。
 --
 -- 回滚脚本：V1.4.87_gl_book_schema_rollback.sql
 -- =============================================================================
@@ -102,7 +103,7 @@ CREATE TABLE IF NOT EXISTS `gl_accounting_book` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_gab_code` (`tenant_id`,`book_code`),
   -- 【核心约束】同一核算组织 + 同一准则 + 同一年度 + 同一账面类型 ⇒ 唯一
-  -- 对齐行业方案：「一个核算组织在同一核算体系内仅能存在唯一的主账簿」
+  -- 「一个核算组织在同一核算体系内仅能存在唯一的主账簿」
   UNIQUE KEY `uk_gab_main` (`tenant_id`,`company_id`,`standard_id`,`accounting_year`,`book_type`),
   KEY `idx_gab_tenant_company` (`tenant_id`,`company_id`,`accounting_year`),
   KEY `idx_gab_status` (`tenant_id`,`status`)

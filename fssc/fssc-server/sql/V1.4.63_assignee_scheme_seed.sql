@@ -21,7 +21,7 @@
 --       维度2 = POST  (J0016)
 --   实测交集 = {3797 共享会计-01, 3820 共享会计-02, 3836 成本费用岗-01, 3898 共享会计-03}
 --             **与现状 ROLE 取人逐字相同的 4 人**（A==B 已断言）。
---   ⇒ 本件落库后 Task_7 的取人结果**不变**，但走的是"参与人方案"这条新链路
+--   ⇒ 本件写入数据库后 Task_7 的取人结果**不变**，但走的是"参与人方案"这条新链路
 --     （优先级 + 条件表达式 + 多维度 AND/OR/EXCLUDE），机制得到真实验证。
 --
 -- 【零影响边界】
@@ -51,7 +51,7 @@
 -- SELECT COUNT(*) FROM fssc.wf_assignee_dim;                                      -- 期望 0
 
 -- ----------------------------------------------------------------------------
--- §2 执行段 A：建方案（幂等：先软删同键再插）
+-- §2 执行段 A：建方案（去重：先软删同键再插）
 -- ----------------------------------------------------------------------------
 DELETE FROM fssc.wf_assignee_scheme
  WHERE tenant_id = 1 AND model_key = 'CLAIM' AND node_key = 'Task_7';
@@ -89,13 +89,13 @@ SELECT 1, s.id, 'POST', 'J0016', NULL, NULL, 0, 20, 0
 
 -- ----------------------------------------------------------------------------
 -- §2 执行段 B：改 Task_7 的 assign_type（ROLE → POST）
---     只改 assign_type 一列；assign_value 原样保留（FSSC_AUDITOR），便于回滚与留痕。
+--     只改 assign_type 一列；assign_value 原样保留（FSSC_AUDITOR），便于回滚与记录。
 -- ----------------------------------------------------------------------------
 UPDATE fssc.wf_node_config
    SET assign_type = 'POST'
  WHERE tenant_id = 1 AND del_flag = 0
    AND model_key = 'CLAIM' AND node_key = 'Task_7'
-   AND assign_type = 'ROLE';   -- 幂等护栏：只在当前确为 ROLE 时才改，重复执行不会误伤
+   AND assign_type = 'ROLE';   -- 去重护栏：只在当前确为 ROLE 时才改，重复执行不会误伤
 
 -- ----------------------------------------------------------------------------
 -- §3 后置复点
@@ -107,7 +107,7 @@ UPDATE fssc.wf_node_config
 --
 -- ② 其余节点未动
 --    执行后实测全表分布：ROLE 363 / INITIATOR 21 / POST 1 / USER 1 = 386 行
---    （落库前为 ROLE 364 / INITIATOR 21 / USER 1 ⇒ 恰好 1 行由 ROLE 变 POST）
+--    （写入数据库前为 ROLE 364 / INITIATOR 21 / USER 1 ⇒ 恰好 1 行由 ROLE 变 POST）
 -- SELECT assign_type, COUNT(*) FROM fssc.wf_node_config GROUP BY assign_type;
 --
 -- ③ 方案与维度就位
@@ -129,7 +129,7 @@ UPDATE fssc.wf_node_config
 --  ORDER BY u.id;
 --   期望恰好 4 行：3797 共享会计-01 / 3820 共享会计-02 / 3836 成本费用岗-01 / 3898 共享会计-03
 --
--- ⑤ 对照：现状 ROLE 分支口径（应与 ④ 完全一致）
+-- ⑤ 对照：现状 ROLE 分支规则（应与 ④ 完全一致）
 -- SELECT u.id, u.nick_name
 --   FROM fssc.sys_user u
 --   JOIN fssc.sys_user_role ur ON ur.user_id = u.id

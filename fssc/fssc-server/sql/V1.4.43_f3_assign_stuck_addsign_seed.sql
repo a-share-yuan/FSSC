@@ -4,7 +4,7 @@
 -- 方案：流程引擎问题修复方案_20260926.md §4（F3）；裁决项：RA-F3a（灰度清单）/ RA-F3b（改档）
 --
 --  本文件在本轮演练中【一行都没有执行】。铁律：演练期 MySQL SELECT-only。
---    开闸前必须由业务方逐条裁决，并按 §末回滚脚本准备退路。
+--    开启前必须由业务方逐条裁决，并按 §末回滚脚本准备退路。
 -- ============================================================================
 
 -- 【只读普查快照（2026-09-26）】
@@ -21,28 +21,28 @@
 
 -- ---------- 1) sys_config：三组新键（缺省值＝与改造前逐字一致） ----------
 --  tenant_id 必须是 1：sys_config 是租户表，读取走租户拦截器（WHERE tenant_id=<当前租户>），
---    插 NULL/0 的行永远读不到＝假配置。列名口径对齐现网 V1.4.42（无 config_desc 列，名称列是 config_name）。
+--    插 NULL/0 的行永远读不到＝假配置。列名规则对齐现网 V1.4.42（无 config_desc 列，名称列是 config_name）。
 -- INSERT IGNORE：键已存在时不覆盖运维调过的值（uk_tenant_config_key 保唯一）
 -- INSERT IGNORE INTO sys_config (tenant_id, config_key, config_name, config_value, value_type, group_code, is_builtin, editable, remark)
 -- VALUES
 --  (1,'wf.assign.strategy','ROLE 节点取人策略（FIRST_ID=第一个候选人，LEAST_LOADED=在办任务最少，ROUND_ROBIN=轮询）','FIRST_ID',
 --     'STRING','WORKFLOW',0,1,'F3-1／体检 E-07、E-13：单人岗与多人岗取人一律落在第一个候选人上，忙的人越来越忙。改值只对下面白名单里的模型生效。'),
 --  (1,'wf.assign.strategy.models','取人策略灰度白名单（model_key 逗号分隔，空＝全库不生效）','',
---     'STRING','WORKFLOW',0,1,'RA-F3a 建议首版：LOAN,CLAIM,SETTLE。空清单时总闸值再硬也不生效（fail-closed）。'),
+--     'STRING','WORKFLOW',0,1,'RA-F3a 建议首版：LOAN,CLAIM,SETTLE。空清单时总开关值再硬也不生效（fail-closed）。'),
 --  (1,'wf.timeout.stuck.alert.after_urges','卡单阈值：同一待办催满 N 次仍 PENDING＝卡单，聚合成一条站内信发流程管理员；0/负数＝关闭','3',
 --     'NUMBER','WORKFLOW',0,1,'F3-2／体检 E-03「只催不升」。只出声不处置：不改派、不自动通过。现网实测最长催办 37 次无人升级。'),
---  (1,'approve.addsign_gate.enabled','允许加签节点开关是否真拦（0=只看按钮不看闸口，1=按 wf_node_config.allow_addsign 硬拒）','0',
---     'STRING','WORKFLOW',0,1,'F3-3／体检 E-11：allow_addsign 此前实体不映射、界面不显示、运行时零读取（三重落空），现网 44 行=1、311 行=0。总闸=0 时加签行为与改造前逐字一致。'),
---  (1,'approve.addsign_gate.models','加签闸口灰度白名单（model_key 逗号分隔，空＝总开关开了也不生效）','',
---     'STRING','WORKFLOW',0,1,'建议首版：TR_PAY。闸口生效时，未勾 allow_addsign 的节点服务端直接拒绝加签并在待办列表隐藏按钮。');
--- 注：不 seed 也可以跑——代码缺省即 FIRST_ID / 空清单 / 阈值 3 / 闸口关。seed 的作用是把口径显式写进配置面，便于审计。
+--  (1,'approve.addsign_gate.enabled','允许加签节点开关是否真拦（0=只看按钮不看校验，1=按 wf_node_config.allow_addsign 硬拒）','0',
+--     'STRING','WORKFLOW',0,1,'F3-3／体检 E-11：allow_addsign 此前实体不映射、界面不显示、运行时零读取（三重落空），现网 44 行=1、311 行=0。总开关=0 时加签行为与改造前逐字一致。'),
+--  (1,'approve.addsign_gate.models','加签校验灰度白名单（model_key 逗号分隔，空＝总开关开了也不生效）','',
+--     'STRING','WORKFLOW',0,1,'建议首版：TR_PAY。校验生效时，未勾 allow_addsign 的节点服务端直接拒绝加签并在待办列表隐藏按钮。');
+-- 注：不 seed 也可以跑——代码缺省即 FIRST_ID / 空清单 / 阈值 3 / 校验关。seed 的作用是把规则显式写进配置面，便于审计。
 
--- ---------- 2) 开闸语句（RA-F3a 裁决后再执行，逐模型灰度） ----------
+-- ---------- 2) 开启语句（RA-F3a 裁决后再执行，逐模型灰度） ----------
 -- UPDATE sys_config SET config_value='LEAST_LOADED' WHERE tenant_id=1 AND config_key='wf.assign.strategy';
 -- UPDATE sys_config SET config_value='LOAN,CLAIM,SETTLE' WHERE tenant_id=1 AND config_key='wf.assign.strategy.models';
 -- UPDATE sys_config SET config_value='1' WHERE tenant_id=1 AND config_key='approve.addsign_gate.enabled';
 -- UPDATE sys_config SET config_value='TR_PAY' WHERE tenant_id=1 AND config_key='approve.addsign_gate.models';
--- 卡单上报无需开闸：只出声不处置（不改派、不自动通过），阈值即开关（设 0 即熄火）。
+-- 卡单上报无需开启：只出声不处置（不改派、不自动通过），阈值即开关（设 0 即熄火）。
 
 -- ---------- 3) RA-F3b：关键岗节点改档 AUTO_REMIND/NOTIFY → ESCALATE_AFTER_URGES ----------
 -- 语义：先催办，催满 wf.timeout.escalate.after_urges（默认 3）次仍无人办理，

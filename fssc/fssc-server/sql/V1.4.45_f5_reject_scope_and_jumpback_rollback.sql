@@ -10,7 +10,7 @@
 --    若 seed 之后另有第三方改过节点档位，请以该快照为准逐行还原，勿用下面的整表语句。
 -- ============================================================================
 
--- ---------- 1) 先关闸（顺序不能颠倒：先断执行面，再改配置列）----------
+-- ---------- 1) 先关闭（顺序不能颠倒：先断执行面，再改配置列）----------
 -- UPDATE sys_config SET config_value='0' WHERE tenant_id=1 AND config_key='wf.reject.free.enabled';
 -- UPDATE sys_config SET config_value=''   WHERE tenant_id=1 AND config_key='wf.reject.free.models';
 -- UPDATE sys_config SET config_value='0'  WHERE tenant_id=1 AND config_key='wf.resubmit.jumpback.enabled';
@@ -42,4 +42,4 @@
 -- SELECT CONCAT(t.proc_inst_id,'|',t.node_key,'|',t.status,'|',IFNULL(t.assignee_id,'NULL'))
 --   FROM wf_task t WHERE t.status='PENDING' ORDER BY t.proc_inst_id, t.node_key;
 -- 两条清单里，同一实例的"当前节点"必须与唯一一条 PENDING 镜像同源；不一致即说明回滚时机上有半完成驳回，
--- 必须按方案 §6 步骤 6 的三方一致口径逐单处置（人工，不改库）。
+-- 必须按方案 §6 步骤 6 的三方一致规则逐单处置（人工，不改库）。

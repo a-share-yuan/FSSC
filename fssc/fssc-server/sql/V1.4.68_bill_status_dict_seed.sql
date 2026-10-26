@@ -1,12 +1,12 @@
 -- =============================================================================
 -- V1.4.68 经营域字典补齐（4-D / 8-C代码侧）
 --
--- 目的：把「前端硬编码枚举」收口到数据库字典。
+-- 目的：把「前端硬编码枚举」办结到数据库字典。
 --   【真实缺口，不是臆造出来的任务】前端`fssc-web/src/constants/billStatus.js`
---   已维护一张约 70 键的**统一状态词表**（STATUS_LABEL / STATUS_TYPE），
---   且注释明确要求「新增枚举码须同步登记，缺键会把英文码直显到界面」；
---   而 V1.4.67 落库后 `sys_dict_data` 里**一个业务状态都没有**
---   ⇒ **前后端两套枚举并存**，字典侧完全空转。本次把词表按域拆开灌进字典。
+--   已维护一张约 70 键的**统一状态名称表**（STATUS_LABEL / STATUS_TYPE），
+--   且注释明确要求「新增枚举码须同步登记，缺键会把英文码直接显示到界面」；
+--   而 V1.4.67 写入数据库后 `sys_dict_data` 里**一个业务状态都没有**
+--   ⇒ **前后端两套枚举并存**，字典侧完全空转。本次把名称表按域拆开灌进字典。
 --
 -- 【取值来源：唯一权威= billStatus.js 的 STATUS_LABEL】
 --   · 标签（dict_label）逐字取自该文件，**未自造一个中文词**；
@@ -27,7 +27,7 @@
 --
 -- 【零风险边界】
 --   · 只 INSERT sys_dict_type（缺失的 15 个）与 sys_dict_data，**不碰任何业务表的枚举列**；
---   · 幂等：先DELETE 同 (dict_type, dict_value) 再插，重复执行结果一致；
+--   · 去重：先DELETE 同 (dict_type, dict_value) 再插，重复执行结果一致；
 --   · 不改 V1.4.67 已灌的 8 个容器（expense_type / sys_status / wf_* / dict_yes_no）；
 --   · create_by 置 NULL（该列是 BIGINT 存用户 ID，塞不了脚本标记串）；
 --   · 回滚见 V1.4.68_..._rollback.sql（按 dict_type 精确清理本件所建）。
@@ -65,7 +65,7 @@ ON DUPLICATE KEY UPDATE dict_name = VALUES(dict_name), remark = VALUES(remark);
 -- §3 数据（sys_dict_data）—— 标签逐字取自 billStatus.js STATUS_LABEL
 -- ----------------------------------------------------------------------------
 
--- §3.0 幂等清理（本件所建类型 + 已存在容器的同值行）
+-- §3.0 去重清理（本件所建类型 + 已存在容器的同值行）
 DELETE FROM fssc.sys_dict_data WHERE tenant_id=1 AND dict_type IN
  ('bill_status_main','bill_status_exception','wf_instance_status','job_status','loan_status',
   'master_data_status','archive_status','recon_status','receipt_status','bill_domain_status',
@@ -82,7 +82,7 @@ INSERT INTO fssc.sys_dict_data
  (1,'bill_status_main','已记账','POSTED','success',6,0,'NORMAL',NULL,0),
  (1,'bill_status_main','已归档','ARCHIVED','info',7,0,'NORMAL',NULL,0);
 
--- §3.2 单据异常/终态分支
+-- §3.2 单据异常/最终状态分支
 INSERT INTO fssc.sys_dict_data
  (tenant_id,dict_type,dict_label,dict_value,css_class,sort,is_default,status,create_by,del_flag) VALUES
  (1,'bill_status_exception','已驳回','REJECTED','danger',1,0,'NORMAL',NULL,0),

@@ -37,7 +37,7 @@ DELETE p FROM md_period p
 LEFT JOIN bak_v1416_period_before k ON k.id = p.id
 WHERE k.id IS NULL AND p.status = 'NORMAL' AND p.period_year IN (2026, 2027);
 
--- 6) 撤销演示口径的汇率续期（ROLLFORWARD 为本次标记，真实牌价行不受影响）
+-- 6) 撤销演示规则的汇率续期（ROLLFORWARD 为本次标记，真实牌价行不受影响）
 DELETE FROM md_exchange_rate WHERE source = 'ROLLFORWARD';
 
 COMMIT;

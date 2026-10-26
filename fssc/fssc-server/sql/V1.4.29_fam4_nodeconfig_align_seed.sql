@@ -1,14 +1,14 @@
 -- V1.4.29  批次2 第四族（资产 FA_*）配置侧对齐：wf_node_config <- 已发布 BPMN 唯一真值
 -- 前置：11 个模型已 /api/tenant/wf/designer/publish 重发布（FA_ADD / FA_ALIENATE / FA_DISPOSE / FA_DEPRECIATION / FA_IMPAIRMENT / FA_TRANSFER / FA_TRANSFER_CROSS / FA_CER / FA_CHECK_DIFF / FA_VALUE_ADJUST / FA_CIP_TO_ASSET），
---   发布前回读复核 11/11 与 draft 逐字节一致、在途实例 0（wf_instance 与 ACT_RU_EXECUTION 双口径均为 0）。
+--   发布前回读复核 11/11 与 draft 逐字节一致、在途实例 0（wf_instance 与 ACT_RU_EXECUTION 双规则均为 0）。
 -- 结构：本族 11 模型 92 个人工节点 -> 60 个（-32，-35%）；
 --   作业池 14 个（handling_mode=POOL）、排他网关 16 个（金额 DOA）、并联会审 2 组（FA_ADD 三道验收、FA_CHECK_DIFF 资产+稽核）。
--- 已出链旧节点的配置行按批次2口径【保留不删】（DB 增量原则）：引擎按 BPMN 节点反查配置，幽灵行不产生运行时影响，仅在复核 C 盘点计数。
+-- 已出链旧节点的配置行按批次2规则【保留不删】（DB 增量原则）：引擎按 BPMN 节点反查配置，幽灵行不产生运行时影响，仅在复核 C 盘点计数。
 -- 本文件做三件事：1) 60 个已存在节点对齐 node_name/assign_type/assign_value/handling_mode/empty_strategy/超时；
 --   2) 0 个新 key 插行；3) 复核 A~E。
 -- 改岗清单（BPMN candidateGroups 与旧 assign_value 不同者）：
 --   FA_ALIENATE.Task_2 DIRECT_SUPERVISOR->DEPT_MANAGER、FA_DEPRECIATION.Task_3 FA_ASSET_ACCOUNT->FIN_GL、FA_IMPAIRMENT.Task_4 FIN_GL->CFO、FA_TRANSFER.Task_3 DIRECT_SUPERVISOR->DEPT_MANAGER、FA_CER.Task_1 3906->FA_ASSET_ADMIN、FA_VALUE_ADJUST.Task_7 FA_ASSET_ADMIN->FA_ASSET_ACCOUNT、FA_CIP_TO_ASSET.Task_6 NULL->FA_ASSET_ACCOUNT
--- 档位口径（方案 §5.9）：授权层级(GM/BASE_GM/CFO/PRESIDENT/板块分管领导) 48h AUTO_REMIND 且永不 AUTO_PASS；
+-- 档位规则（方案 §5.9）：授权层级(GM/BASE_GM/CFO/PRESIDENT/板块分管领导) 48h AUTO_REMIND 且永不 AUTO_PASS；
 --   集体决策 BOARD_OFFICE 168h NOTIFY；共享审单(FSSC_AUDITOR/FIN_AUDIT/SCAN_STAFF) 8h AUTO_REMIND；
 --   业务审批 24h AUTO_REMIND；作业池 48h AUTO_REMIND。empty_strategy 全族 ESCALATE
 --   （ERROR 会在零持有人公司直接抛错卡死；作业池不用 §5.9 的 SKIP —— 建档/清卡/制卡是"必须有人做的事"，SKIP 会事无人做且不留待办）。
@@ -16,7 +16,7 @@
 -- 不删任何数据；回滚见 V1.4.29_fam4_nodeconfig_align_rollback.sql
 -- 执行：mysql -uroot -p123456 -h127.0.0.1 -P3306 -Dfssc --default-character-set=utf8mb4 < 本文件
 
--- 0) 备份将被改动的行（幂等：表已存在则跳过，备份表不删）
+-- 0) 备份将被改动的行（去重：表已存在则跳过，备份表不删）
 CREATE TABLE IF NOT EXISTS wf_node_config_bak_V1429_20260922 AS
 SELECT * FROM wf_node_config WHERE (model_key, node_key) IN (('FA_ADD','Task_1'),('FA_ADD','Task_2'),('FA_ADD','Task_3'),('FA_ADD','Task_4'),('FA_ADD','Task_5'),('FA_ADD','Task_6'),('FA_ADD','Task_7'),('FA_ALIENATE','Task_1'),('FA_ALIENATE','Task_2'),('FA_ALIENATE','Task_4'),('FA_ALIENATE','Task_3'),('FA_ALIENATE','Task_6'),('FA_ALIENATE','Task_7'),('FA_DISPOSE','Task_3'),('FA_DISPOSE','Task_4'),('FA_DISPOSE','Task_5'),('FA_DISPOSE','Task_6'),('FA_DISPOSE','Task_9'),('FA_DISPOSE','Task_7'),('FA_DISPOSE','Task_10'),('FA_DEPRECIATION','Task_1'),('FA_DEPRECIATION','Task_3'),('FA_IMPAIRMENT','Task_1'),('FA_IMPAIRMENT','Task_3'),('FA_IMPAIRMENT','Task_4'),('FA_TRANSFER','Task_2'),('FA_TRANSFER','Task_3'),('FA_TRANSFER','Task_4'),('FA_TRANSFER','Task_5'),('FA_TRANSFER','Task_7'),('FA_TRANSFER_CROSS','Task_2'),('FA_TRANSFER_CROSS','Task_3'),('FA_TRANSFER_CROSS','Task_4'),('FA_TRANSFER_CROSS','Task_7'),('FA_TRANSFER_CROSS','Task_8'),('FA_TRANSFER_CROSS','Task_10'),('FA_TRANSFER_CROSS','Task_12'),('FA_CER','Task_1'),('FA_CER','Task_3'),('FA_CER','Task_7'),('FA_CER','Task_8'),('FA_CER','Task_9'),('FA_CER','Task_5'),('FA_CER','Task_4'),('FA_CHECK_DIFF','Task_2'),('FA_CHECK_DIFF','Task_3'),('FA_CHECK_DIFF','Task_5'),('FA_CHECK_DIFF','Task_6'),('FA_CHECK_DIFF','Task_7'),('FA_CHECK_DIFF','Task_8'),('FA_VALUE_ADJUST','Task_2'),('FA_VALUE_ADJUST','Task_4'),('FA_VALUE_ADJUST','Task_3'),('FA_VALUE_ADJUST','Task_5'),('FA_VALUE_ADJUST','Task_6'),('FA_VALUE_ADJUST','Task_7'),('FA_CIP_TO_ASSET','Task_2'),('FA_CIP_TO_ASSET','Task_3'),('FA_CIP_TO_ASSET','Task_6'),('FA_CIP_TO_ASSET','Task_8'));
 
@@ -880,7 +880,7 @@ SELECT e.model_key, e.node_key, e.exp_role AS bpmn_groups, c.assign_value AS con
     OR IFNULL(c.timeout_action, '') <> e.exp_ta
     OR IFNULL(c.handling_mode, '') <> e.exp_hm;
 
--- 4) 复核 B：本族 17 个角色的存在性与 co1 在编持岗人数（口径 status='NORMAL' 且 is_admin=0；
+-- 4) 复核 B：本族 17 个角色的存在性与 co1 在编持岗人数（规则 status='NORMAL' 且 is_admin=0；
 --    COMPANY 范围角色必须问"该公司有没有在编持有人"。active_co1=0 即为 §5.4 补岗清单候选，不是脚本缺陷）
 SELECT r.role_code, ANY_VALUE(r.role_name) role_name, ANY_VALUE(r.org_scope) org_scope, ANY_VALUE(r.status) status,
        COUNT(DISTINCT ur.user_id) holders_total,

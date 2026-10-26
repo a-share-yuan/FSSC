@@ -8,7 +8,7 @@
 
 -- 回滚 exp_bill_cold：删掉 V1.4.76 补入的列 ['loan_company_id']
 DROP TABLE IF EXISTS `exp_bill_cold_rollback`;
--- 幂等清理(DDL 隐式提交)
+-- 去重清理(DDL 隐式提交)
 CREATE TABLE `exp_bill_cold_rollback` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `tenant_id` bigint NOT NULL COMMENT '租户ID【多租户隔离字段】',
@@ -88,7 +88,7 @@ RENAME TABLE `exp_bill_cold_rollback` TO `exp_bill_cold`;
 
 -- 回滚 exp_bill_line_cold：删掉 V1.4.76 补入的列 ['entertain_type', 'voucher_form', 'cn_desc']
 DROP TABLE IF EXISTS `exp_bill_line_cold_rollback`;
--- 幂等清理(DDL 隐式提交)
+-- 去重清理(DDL 隐式提交)
 CREATE TABLE `exp_bill_line_cold_rollback` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `tenant_id` bigint NOT NULL COMMENT '租户ID【多租户隔离字段】',
@@ -135,7 +135,7 @@ RENAME TABLE `exp_bill_line_cold_rollback` TO `exp_bill_line_cold`;
 
 -- 回滚 exp_bill_payment_cold：删掉 V1.4.76 补入的列 ['proc_inst_id']
 DROP TABLE IF EXISTS `exp_bill_payment_cold_rollback`;
--- 幂等清理(DDL 隐式提交)
+-- 去重清理(DDL 隐式提交)
 CREATE TABLE `exp_bill_payment_cold_rollback` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `tenant_id` bigint NOT NULL COMMENT '租户ID【多租户隔离字段】',

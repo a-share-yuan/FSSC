@@ -6,7 +6,7 @@
 -- 【覆盖缺陷】
 --   D-DEC-006：md_city 无「长沙」，差旅手册目的地无法录入（分级册 12-07:36）
 --   D-DEC-212：批次所属公司银行账户零 is_default（分级册 F2:116）
---   D-DEC-213：md_bank_account 把表头当数据落库，下拉仍可选「账号」（分级册 F2:117）
+--   D-DEC-213：md_bank_account 把表头当数据写入数据库，下拉仍可选「账号」（分级册 F2:117）
 --
 -- §0 现库只读校验（2026-10-01 14:3x 实测，fssc 库，UTF-8）
 --   SELECT COUNT(*) FROM md_city WHERE city_name LIKE '%长沙%';                    -- 实测 0
@@ -19,7 +19,7 @@
 --   执行窗口若上述读数已变化（并行窗可能已补默认），对应语句作废并以新读数重写。
 --
 -- §1 D-DEC-006 长沙 seed
---   编码沿现库字母序列（A=一线、B=二线字母序到 B12）⇒ 追加 B13；级别/省份取值沿手册口径，
+--   编码沿现库字母序列（A=一线、B=二线字母序到 B12）⇒ 追加 B13；级别/省份取值沿手册规则，
 --   若业务指定其他编码请改后执行。
 -- INSERT INTO md_city (tenant_id, city_code, city_name, province, city_level, is_abroad, sort, status)
 -- VALUES (1, 'B13', '长沙', '湖南', 'B', 0, 99, 'NORMAL');
@@ -42,6 +42,6 @@
 --   复验：SELECT company_id, SUM(is_default=1) FROM md_bank_account WHERE del_flag=0 GROUP BY company_id
 --         HAVING SUM(is_default=1) <> 1;  -- 期望零行
 --
--- 【与代码轨的边界】下拉过滤腿（把表头行挡在账户下拉外）属代码面另行处置；
+-- 【与代码轨的边界】下拉过滤环节（把表头行挡在账户下拉外）属代码面另行处置；
 -- 本文件只覆盖数据三件。
 -- =====================================================================================

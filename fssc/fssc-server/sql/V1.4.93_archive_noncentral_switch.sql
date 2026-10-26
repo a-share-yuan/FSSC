@@ -4,13 +4,13 @@
 -- 来源：人工测试/档案集中管理模式开关_非集中模式流程改造方案_20261024.md §5.2 / §7
 --
 -- 前置（缺一不可，未满足时本件以 SIGNAL 中止，不会半执行）：
---   1) :8089 已换含 V1.4.92 代码腿的新包（DeliveryService.isNonCentralArchive 在位）；
+--   1) :8089 已换含 V1.4.92 代码环节的新包（DeliveryService.isNonCentralArchive 在位）；
 --   2) 四支 _NC 模型已由设计器导入并发布：CLAIM_NC / SETTLE_NC / FA_ADD_NC / FA_TRANSFER_NC，
 --      且 wf_model.status='DEPLOYED'、deploy_id / proc_def_id 非空；
 --   3) wf_model.org_scope/org_ids 已置 ORG/33（本件第 2 步统一写入，作第二道 fail-closed）。
 --
--- 幂等口径：
---   - 本件为**一次性执行**：步骤 1 的硬闸发现任何 _NC 残留即中止（防误覆盖别人的试点）；
+-- 去重规则：
+--   - 本件为**一次性执行**：步骤 1 的强制校验发现任何 _NC 残留即中止（防误覆盖别人的试点）；
 --     需要重跑必须先执行回滚件；
 --   - 齐套键：只做「追加」，用 FIND_IN_SET / INSTR 护栏，绝不整值覆盖（现网 TR_PAY 规则必须保住）；
 --   - 公司模式：仅当 company_code='AIG-KS' 且当前为 CENTRAL 时更新。
@@ -49,7 +49,7 @@ SELECT 'G completeness_rules',
        (SELECT config_value FROM sys_config WHERE config_key = 'bill.completeness.rules');
 
 -- -----------------------------------------------------------------------------
--- 步骤 1：前置硬闸（模型未发布 / 已有非集中公司 / 公司档案模式不符 → 中止）
+-- 步骤 1：前置强制校验（模型未发布 / 已有非集中公司 / 公司档案模式不符 → 中止）
 -- -----------------------------------------------------------------------------
 DROP PROCEDURE IF EXISTS tmp_v1493_guard;
 DELIMITER $$
@@ -217,7 +217,7 @@ SELECT tenant_id, biz_type, sub_type, CONCAT(config_name, '（非集中档案·�
  WHERE model_key = 'FA_TRANSFER' AND del_flag = 0;
 
 -- -----------------------------------------------------------------------------
--- 步骤 5：齐套闸扩到 _NC（追加，不覆盖 TR_PAY 现网值）
+-- 步骤 5：齐套校验扩到 _NC（追加，不覆盖 TR_PAY 现网值）
 --   接续节点＝扫描节点被摘后的同分支后继（2026-10-24 按在役 BPMN 连线实测）
 --   CLAIM→Task_4、SETTLE→Task_4、FA_ADD（转固档）→FC_2、FA_TRANSFER（默认档）→FT_2
 -- -----------------------------------------------------------------------------
@@ -233,7 +233,7 @@ UPDATE sys_config
    AND INSTR(config_value, 'CLAIM_NC') = 0;
 
 -- -----------------------------------------------------------------------------
--- 步骤 6：公司模式切换（放最后：此前所有腿已就位，翻转后即整套语义生效）
+-- 步骤 6：公司模式切换（放最后：此前所有环节已就位，翻转后即整套语义生效）
 -- -----------------------------------------------------------------------------
 UPDATE sys_company SET archive_mode = 'NON_CENTRAL'
  WHERE id = 33 AND company_code = 'AIG-KS' AND archive_mode = 'CENTRAL';

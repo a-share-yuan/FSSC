@@ -2,7 +2,7 @@
 -- V1.4.52_close_check_202611_reset_rollback.sql
 -- 配套回退件（R5-D-304）。状态：注释态登记件，未执行。
 --
--- 回退值不硬编码：本表 checker／check_time 是逐行留痕，必须用「执行前留值快照」原样回填。
+-- 回退值不硬编码：本表 checker／check_time 是逐行记录，必须用「执行前留值快照」原样回填。
 -- 快照取法（执行 V1.4.52 主体之前必跑，结果落 .tmp_b16/ 并写进本件下方注释）：
 --   SELECT id, item_name, status, checker, check_time, remark
 --     FROM fssc.gl_close_check_item WHERE period='202611' AND company_id=1 AND del_flag=0 ORDER BY id;

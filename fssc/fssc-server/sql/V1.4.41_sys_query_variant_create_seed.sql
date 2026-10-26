@@ -8,7 +8,7 @@
 --       列定义严格对齐实体 + BaseEntity 约定（tenant_id/create_by/
 --       create_time/update_by/update_time/del_flag 由 MetaObjectHandler 填充）。
 --
--- 幂等：CREATE TABLE IF NOT EXISTS，重复执行无副作用。
+-- 去重：CREATE TABLE IF NOT EXISTS，重复执行无副作用。
 -- 回滚：V1.4.41_sys_query_variant_create_rollback.sql（DROP TABLE）
 -- =============================================================
 

@@ -7,7 +7,7 @@
 --      "静默落错流程"升级成"发起直接报错"，故只 seed 已部署 key；
 --   ③ 有可达性证据：bizType 出现在 wfEngineFacade.start(...) 的字面量或 flowKey 推导值里，或历史实例里；
 --   ④ 不加约束：company_id/dept_id/amount_min/amount_max 全 NULL、status=NORMAL、priority=10、sub_type=NULL(通配)，
---      与现有 7 行同口径，保证任何金额/任何公司都命中，等价于今天"表未命中→内置映射"的结果；
+--      与现有 7 行同一规则，保证任何金额/任何公司都命中，等价于今天"表未命中→内置映射"的结果；
 --   ⑤ 已有绑定行的 bizType 一律不动（EXP_CLAIM / EXP_LOAN / EXP_PAY / EXP_REPAY 共 7 行不在本 seed 范围内）。
 -- 不迁移项（有意留空，见 r2-routing-matrix.log §C）：
 --   断链 bizType PURCHASE_ORDER_REVIEW / SUPPLIER_PAY / ARCHIVE_RECON / TR_SEAL_CHANGE：内置目标 key 未部署，
@@ -21,11 +21,11 @@
 SELECT COUNT(*) AS before_rows, SUM(del_flag=0 AND status='NORMAL') AS before_active FROM wf_process_config;
 SELECT biz_type, COUNT(*) c FROM wf_process_config WHERE del_flag=0 GROUP BY biz_type HAVING c > (SELECT COUNT(DISTINCT IFNULL(sub_type,'')) FROM wf_process_config x WHERE x.del_flag=0 AND x.biz_type=wf_process_config.biz_type);
 
--- 0.5) 改前留痕表（本 seed 是 INSERT-only、回滚按 remark 精确匹配即可；此表只为审计兜底，不删）
+-- 0.5) 改前记录表（本 seed 是 INSERT-only、回滚按 remark 精确匹配即可；此表只为审计默认处理，不删）
 CREATE TABLE IF NOT EXISTS wf_process_config_bak_V1438_20260923 AS SELECT * FROM wf_process_config;
 SELECT COUNT(*) AS bak_rows FROM wf_process_config_bak_V1438_20260923;
 
--- 1) 镜像行（幂等：同 (biz_type, sub_type, model_key) 已有未删除行则跳过）
+-- 1) 镜像行（去重：同 (biz_type, sub_type, model_key) 已有未删除行则跳过）
 --  1. AR_CLAIM（通配） -> AR_CLAIM   改前路径=内置→已部署
 INSERT INTO wf_process_config (tenant_id, biz_type, sub_type, config_name, model_key, priority, status, remark, create_time, update_time, del_flag)
 SELECT 1, 'AR_CLAIM', NULL, 'AR服务申请审批', 'AR_CLAIM', 10, 'NORMAL', 'V1.4.38批次3路由合一镜像seed', NOW(), NOW(), 0
@@ -722,5 +722,5 @@ SELECT biz_type, COUNT(*) c FROM wf_process_config WHERE del_flag=0 AND IFNULL(s
 -- 4) 复核 C：镜像行的目标 key 必须全部已部署（期望 bad_target=0）
 SELECT COUNT(*) AS bad_target FROM wf_process_config c LEFT JOIN (SELECT DISTINCT KEY_ FROM ACT_RE_PROCDEF) p ON p.KEY_=c.model_key WHERE c.del_flag=0 AND c.remark='V1.4.38批次3路由合一镜像seed' AND p.KEY_ IS NULL;
 
--- 5) 终态快照
+-- 5) 最终状态快照
 SELECT biz_type, IFNULL(sub_type,'*') sub, model_key, priority, status, remark FROM wf_process_config WHERE del_flag=0 ORDER BY biz_type, priority DESC, id;

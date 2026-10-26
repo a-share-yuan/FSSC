@@ -9,19 +9,19 @@
 --   实测 97958 上的非结转流水**恰好只有**这 11 笔 OCCUPY（净额 10,773.47，另 3,200.00 是 V1.4.17 期初结转），
 --   所以"逐笔负记"不会波及其它单据；已 APPROVED/PAID 的错项单净额已归零（占用→已用），本批**不动**（见文末）。
 -- 目标行＝**部署后代码 `matchItem` 的取行结果**（部门精确 > 年度就近 > period 离 0 近 > 年份新 > dim_key），
---   用同一比较器在只读环境逐单模拟（`_t2` 探针，max 候选行 7 < Java 侧 limit 200 → 模拟与实现等价）：
+--   用同一比较器在只读环境逐单模拟（`_t2` 检查，max 候选行 7 < Java 侧 limit 200 → 模拟与实现等价）：
 --     9 张 item 333 行政办公费 → 97954 `2026-COMPANY1-DEPT1001-ITEM333`（ACTIVE/WARN，总额 1,137,400）
 --     5846 item 403 国内出差-住宿费 → 98508 `2026-COMPANY1-ITEM403`（ACTIVE/WARN，**总额 0**）
 --     5860 item 439 办公设施维修   → 98526 `2026-COMPANY1-ITEM439`（ACTIVE/WARN，**总额 0**）
---   选"与代码同口径"而非"挑一条有额度的父级行"，是为了让历史数与今后同类单据落在同一行；
---   98508/98526 额度 0 只会在 WARN 下留痕放行（`total_amount` 一律不增，**不编额度**）。
+--   选"与代码同一规则"而非"挑一条有额度的父级行"，是为了让历史数与今后同类单据落在同一行；
+--   98508/98526 额度 0 只会在 WARN 下记录放行（`total_amount` 一律不增，**不编额度**）。
 --
 -- 范围：本文件只写 **bg_occupy（流水）+ bg_item（派生列）**。
 --    必须与 `V1.4.20_stepB_exp_bill_line_pointer.sql`（业务表指针改指）**同批执行**，理由同 V1.4.19：
 --   核销/释放读 `exp_bill_line.budget_item_id`（`ExpenseWfEventListener:281/517/751`），
 --   只冲销不改指针 → 审批通过时该单在 97958 净占用已为 0 → C2 判"无占用可核"整体跳过
 --   → 目标行上的占用永久悬挂、永不转执行；驳回还会在 97958 叠重复负记（release 无夹紧为已知挂账）。
--- 幂等：所有写入带 `remark` 前缀 'V1.4.20' 的 NOT EXISTS 守卫，可重复执行。
+-- 去重：所有写入带 `remark` 前缀 'V1.4.20' 的 NOT EXISTS 守卫，可重复执行。
 -- 执行方式：**必须带 utf8mb4 连接**（`{ echo "SET NAMES utf8mb4;"; cat 本文件 stepB; } | mysql --comments`），
 --   否则中文 CONCAT 与 utf8mb4_0900_ai_ci 列冲突 → ERROR 1271（V1.4.19 实测坑）。
 -- =====================================================================
@@ -35,7 +35,7 @@ INSERT INTO bg_occupy
     (tenant_id, budget_item_id, oper_type, amount, biz_type, biz_id, biz_no, biz_line_id, oper_user_id, remark, create_time)
 SELECT o.tenant_id, 97958, 'RELEASE', -o.amount, o.biz_type, o.biz_id, o.biz_no, o.biz_line_id, 1,
        CONCAT('V1.4.20 跨费用项冲销：单据 ', o.biz_no, ' 明细费用项非 330(职工福利)，原占用误记在本行 ',
-              o.amount, '，按厂商"预算调整-冲销重占"口径负记；非业务驳回'),
+              o.amount, '，按预算调整-冲销重占口径负记；非业务驳回'),
        NOW()
 FROM bg_occupy o
 WHERE o.budget_item_id = 97958 AND o.oper_type = 'OCCUPY' AND o.biz_type <> 'INIT_CARRY'
@@ -68,7 +68,7 @@ UPDATE bg_item i
 SET i.occupy_amount = (SELECT COALESCE(SUM(o.amount), 0) FROM bg_occupy o WHERE o.budget_item_id = i.id)
 WHERE i.id IN (97958, 97954, 98508, 98526);
 
--- ---------- 验收（口径：净额，不是流水条数——账本只增不改，成对流水必须保留） ----------
+-- ---------- 验收（规则：净额，不是流水条数——账本只增不改，成对流水必须保留） ----------
 -- N1 期望 0 行：这 11 张单在错误行 97958 上仍有净占用
 SELECT o.biz_id, o.biz_no, COALESCE(SUM(o.amount), 0) AS net_on_97958
 FROM bg_occupy o WHERE o.budget_item_id = 97958 AND o.biz_type <> 'INIT_CARRY'
@@ -82,7 +82,7 @@ FROM bg_occupy o WHERE o.biz_type <> 'INIT_CARRY'
   AND o.budget_item_id IN (97954, 98508, 98526)
 GROUP BY o.biz_id, o.biz_no, o.budget_item_id ORDER BY o.biz_id;
 
--- N3 期望 0：全库（祖先链口径）仍有"净占用落在异费用项行"的单据
+-- N3 期望 0：全库（祖先链规则）仍有"净占用落在异费用项行"的单据
 SELECT b.id AS bill_id, b.bill_no,
        (SELECT COALESCE(SUM(o.amount),0) FROM bg_occupy o JOIN bg_item i ON i.id=o.budget_item_id
           WHERE o.biz_id=b.id AND o.biz_type<>'INIT_CARRY'

@@ -3,7 +3,7 @@
 -- ----------------------------------------------------------------
 -- 背景：billStatus.js 的 statusLabel() 被 55 个业务文件直接调用，
 --       是**全局单一映射**（不分区），而 V1.4.68 按域拆的 15 个字典
---       是**下拉口径**（某字段可选值）。两者职责不同：
+--       是**下拉规则**（某字段可选值）。两者职责不同：
 --         · 域字典    → 下拉/表单可选值（按域精确）
 --         · 本展示字典 → 列表/详情任意状态码的中文显示（全局扁平）
 --       若强行让 statusLabel 去查 15 个域字典，CLOSED/DRAFT/NORMAL
@@ -13,7 +13,7 @@
 --          **标签逐字取自该文件，未自造一个中文词**；css_class 取自 STATUS_TYPE，
 --          使 el-tag 颜色也变成可运营维护的数据。
 --
--- 幂等：sys_dict_type 有 uk_tenant_dict_type、sys_dict_data 有 uk_tenant_type_value，
+-- 去重：sys_dict_type 有 uk_tenant_dict_type、sys_dict_data 有 uk_tenant_type_value，
 --       可重复执行。回滚见 V1.4.70_bill_status_display_rollback.sql。
 -- ================================================================
 

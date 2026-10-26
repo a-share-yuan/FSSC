@@ -7,15 +7,15 @@
 --       「参与人解析失败」→ 单据卡在该节点无人可办。
 --       本件把 post_id 补上，使 POST 维度从「不可用」变为「可用」。
 --
--- 映射口径（人工编排，见 .tmp/_post_mapping.py，可审可改）：
+-- 映射规则（人工编排，见 .tmp/_post_mapping.py，可审可改）：
 --   sys_post 的 20 个岗位是「通用职级」（J0001 首席执行官…J0004 助理经理）＋4 个专用岗；
 --   sys_role 的 70 个角色是「业务职责岗」（CFO/共享会计/财务扫描岗…）。
 --   两者是不同维度，故按语义就近映射，**不做 1:1 生搬**。
---   取人优先级：显式映射角色 > 未映射的具体角色 > COMMON_EMP 兜底（J0004 助理经理）。
+--   取人优先级：显式映射角色 > 未映射的具体角色 > COMMON_EMP 默认处理（J0004 助理经理）。
 --   审核类角色（共享会计/总账会计/预制凭证审核/财务审核/内审）统一上抬到 J0016 主任，避免与被审方同层（职责分离）。
 --
 -- 本批分布（实测 dry-run 结果，共 173 人）：
---   J0004 助理经理  94 人（57 由具体角色映射 + 37 COMMON_EMP 兜底）
+--   J0004 助理经理  94 人（57 由具体角色映射 + 37 COMMON_EMP 默认处理）
 --   J0013 经理      27 人   J0016 主任  16 人（审核类集中于此）
 --   J0011 总监      12 人   J0005 副经理  9 人
 --   J0008 副总经理   5 人   J0006 总经理   4 人
@@ -24,9 +24,9 @@
 -- 影响面：post_id 仅被 POST 维度取人读取（WfAssigneeResolver.postUsers）与
 --         岗位类报表使用；**现有 176 个节点 assign_type 全为 ROLE**，
 --         走的是 NodeOrgResolver.listRoleCandidates，不读 post_id ⇒
---         **本件落库对现有单据零行为差异**，只是把数据补到可供方案使用的状态。
+--         **本件写入数据库对现有单据零行为差异**，只是把数据补到可供方案使用的状态。
 --
--- 幂等：只对 post_id IS NULL 的行赋值，故重复执行不会覆盖后续人工调整。
+-- 去重：只对 post_id IS NULL 的行赋值，故重复执行不会覆盖后续人工调整。
 -- 注：不写 update_by —— sys_user.update_by 是 bigint（审计人ID），非字符串。
 -- ===========================================================================
 
@@ -55,7 +55,7 @@ UPDATE fssc.sys_user SET post_id = CASE id WHEN 3795 THEN 14 WHEN 3796 THEN 16 W
 --  WHERE p.del_flag = 0 GROUP BY p.post_code ORDER BY resolved_users DESC;
 --   ⇒ 与 WfAssigneeResolver.postUsers 的过滤条件逐字一致
 --
--- ★ 实测落库后**有 9 个岗位零在岗**（配 POST 维度方案时必须避开，否则解析不出人 → 抛 BizException）：
+-- ★ 实测写入数据库后**有 9 个岗位零在岗**（配 POST 维度方案时必须避开，否则解析不出人 → 抛 BizException）：
 --     J0040 常务副总裁 / J0003 助理总裁 / J0009 助理总经理 / J0012 助理总监
 --     J0029 专家工程师 / J0034 高级主任专员
 --     TRAIN_SPECIALIST 培训专员 / TRAIN_DIRECTOR 培训主任 / HR_LEADER 人力资源部分管领导
@@ -70,7 +70,7 @@ UPDATE fssc.sys_user SET post_id = CASE id WHEN 3795 THEN 14 WHEN 3796 THEN 16 W
 -- 回滚后复点（期望 0）
 -- SELECT COUNT(*) FROM fssc.sys_user WHERE post_id IS NOT NULL;
 --
--- 回滚口径说明：本件是「补空列」，落库前 post_id 全为 NULL，
+-- 回滚规则说明：本件是「补空列」，写入数据库前 post_id 全为 NULL，
 --   故回滚只有「全量置 NULL」一条路径，不需还原历史值。
---   若落库后已有人工调整过 post_id，全量置 NULL 会一并抹掉 ——
+--   若写入数据库后已有人工调整过 post_id，全量置 NULL 会一并抹掉 ——
 --   届时应改为按 id 白名单精确回退（本件 §2 的 ids 即白名单，可直接取用）。

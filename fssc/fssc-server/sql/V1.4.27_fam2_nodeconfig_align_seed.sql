@@ -6,12 +6,12 @@
 --   ROLE 分支是把 config.assign_value 作为候选组【追加】到 BPMN candidateGroups 之上、从不摘除。
 --   不同改 -> 已出链/已改岗的旧角色仍可办理新节点（参与人两处真值漂移），本族 6 处改岗会全部失效。
 -- 只动新 BPMN 里真实存在的 37 个节点（11 个模型；AR_CLAIM 2 节点本轮未改结构，配置行保持原值）。
--- 已出链旧节点的配置行按批次2第一族口径【保留不删】（DB 增量原则）：引擎按 BPMN 节点反查配置，幽灵行不产生运行时影响，仅在盘点里计数。
+-- 已出链旧节点的配置行按批次2第一族规则【保留不删】（DB 增量原则）：引擎按 BPMN 节点反查配置，幽灵行不产生运行时影响，仅在盘点里计数。
 -- handling_mode / allow_transfer / multi_type 一律不动（沿用批次1 定档），本文件只对齐：名称、参与人、empty_strategy、超时矩阵。
 -- 不删任何数据；回滚见 V1.4.27_fam2_nodeconfig_align_rollback.sql
 -- 执行：mysql -uroot -p123456 -h127.0.0.1 -P3306 -Dfssc --default-character-set=utf8mb4 < 本文件
 
--- 0) 备份将被改动的行（幂等：表已存在则跳过，备份表不删）
+-- 0) 备份将被改动的行（去重：表已存在则跳过，备份表不删）
 CREATE TABLE IF NOT EXISTS wf_node_config_bak_v1427_20260922 AS
 SELECT * FROM wf_node_config WHERE (model_key, node_key) IN (('AR_RECON','Task_4'),('AR_RECON','Task_6'),('AR_RECON','Task_8'),('AR_REPORT','Task_4_0'),('AR_REPORT','Task_4_1'),('AR_REPORT','Task_4_2'),('BAD_DEBT_CONFIRM','Task_2'),('BAD_DEBT_CONFIRM','Task_3'),('BAD_DEBT_CONFIRM','Task_4'),('BAD_DEBT_CONFIRM','Task_5'),('BAD_DEBT_PROV','Task_1'),('BAD_DEBT_PROV','Task_3'),('INVOICE_ISSUE','Task_2'),('INVOICE_ISSUE','Task_3'),('INVOICE_ISSUE','Task_4'),('INVOICE_ISSUE','Task_5'),('INVOICE_ISSUE','Task_6'),('INVOICE_MATCH','Task_4'),('INVOICE_MATCH','Task_2'),('INVOICE_MATCH','Task_3'),('INVOICE_MATCH','Task_8'),('INVOICE_MATCH','Task_11'),('INVOICE_MATCH','Task_9'),('INVOICE_MATCH_MANUAL','Task_2'),('INVOICE_MATCH_MANUAL','Task_5'),('RECEIVABLE','Task_2'),('RECEIVABLE','Task_3'),('RECEIVABLE','Task_5'),('RECEIVABLE_COLLECT','Task_3'),('RECEIVABLE_COLLECT','Task_7'),('RECEIVABLE_COLLECT','Task_8'),('RECON_ACTIVE','Task_5'),('RECON_ACTIVE','Task_6'),('RECON_ACTIVE','Task_7'),('RECON_PASSIVE','Task_3'),('RECON_PASSIVE','Task_7'),('RECON_PASSIVE','Task_8'));
 
@@ -280,7 +280,7 @@ UPDATE wf_node_config
        update_time    = NOW()
  WHERE model_key = 'INVOICE_MATCH_MANUAL' AND node_key = 'Task_2';
 
--- INVOICE_MATCH_MANUAL.Task_5  IFS 手工三单匹配确认【应付会计】
+-- INVOICE_MATCH_MANUAL.Task_5  手工三单匹配确认【应付会计】
 UPDATE wf_node_config
    SET node_name      = 'IFS 手工三单匹配确认【应付会计】',
        assign_type    = 'ROLE',
@@ -324,7 +324,7 @@ UPDATE wf_node_config
        update_time    = NOW()
  WHERE model_key = 'RECEIVABLE' AND node_key = 'Task_5';
 
--- RECEIVABLE_COLLECT.Task_3  逾期催收执行并留痕（到期提醒／7天／15天／每工作日两次催款函）【财务专员】
+-- RECEIVABLE_COLLECT.Task_3  逾期催收执行并记录（到期提醒／7天／15天／每工作日两次催款函）【财务专员】
 UPDATE wf_node_config
    SET node_name      = '逾期催收执行并留痕（到期提醒／7天／15天／每工作日两次催款函）【财务专员】',
        assign_type    = 'ROLE',

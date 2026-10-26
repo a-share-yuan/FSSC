@@ -21,13 +21,13 @@ SET SESSION lock_wait_timeout = 10;
 SET SESSION innodb_lock_wait_timeout = 10;
 SELECT COUNT(*) AS open_trx_should_be_0 FROM information_schema.INNODB_TRX;
 
--- 0) 备份本次唯一改动行（成对 rollback 的兜底真值）
+-- 0) 备份本次唯一改动行（成对 rollback 的默认处理真值）
 DROP TABLE IF EXISTS wf_node_config_bak_v1426_20260922;
 CREATE TABLE wf_node_config_bak_v1426_20260922 AS
 SELECT * FROM wf_node_config WHERE model_key = 'CLAIM' AND node_key = 'Task_14';
 SELECT COUNT(*) AS bak_rows_should_be_1 FROM wf_node_config_bak_v1426_20260922;
 
--- 1) 参与人真值对齐 + 节点名跟 BPMN 一致（幂等：仅当前值为 FSSC_AUDITOR 时命中）
+-- 1) 参与人真值对齐 + 节点名跟 BPMN 一致（去重：仅当前值为 FSSC_AUDITOR 时命中）
 UPDATE wf_node_config
    SET assign_value = 'FIN_GL',
        node_name    = '审核预制凭证【总账会计】',
@@ -36,7 +36,7 @@ UPDATE wf_node_config
    AND assign_type = 'ROLE' AND assign_value = 'FSSC_AUDITOR';
 SELECT ROW_COUNT() AS updated_rows;
 
--- 2) 复核：三链同一职能节点口径已统一，且 CLAIM.Task_7 未被连带改动
+-- 2) 复核：三链同一职能节点规则已统一，且 CLAIM.Task_7 未被连带改动
 --    （注意本库 sys_role/sys_user.status 取值为 'NORMAL'，不是 '0'；写成 '0' 会让复核假报"零命中"）
 SELECT c.model_key, c.node_key, c.node_name, c.assign_value,
        (SELECT COUNT(*) FROM sys_role r WHERE r.role_code = c.assign_value AND r.status = 'NORMAL' AND r.del_flag = '0') AS role_exists,

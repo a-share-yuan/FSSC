@@ -23,7 +23,7 @@
 --   sys_config 归档键    archive.enabled=0 / archive.cold_months=12 / archive.terminal_status=…
 --    本库 2026-10-23 20:03~20:23 曾被整库重建，任何跨窗引用都须临执行前重跑上面的读数。
 --
--- 幂等：逐列按 information_schema 存在性护栏，重复执行不报错、不重复加列。
+-- 去重：逐列按 information_schema 存在性护栏，重复执行不报错、不重复加列。
 -- 回滚：V1.4.92_archive_mode_rollback.sql（仅当三列均为缺省值时才允许 DROP）。
 -- =============================================================================
 

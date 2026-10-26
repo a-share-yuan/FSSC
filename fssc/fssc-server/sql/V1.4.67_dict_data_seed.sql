@@ -3,7 +3,7 @@
 --
 -- 目的：`sys_dict_type` 容器已在 V1.4.60 建好 8 个类型，但 `sys_dict_data` 仍只有
 --       3 行（仅 expense_type 的 TRAVEL/OFFICE/ENTERTAIN）⇒ **容器空置**，
---       "枚举字典收口"这条改造没有落点。本件按**代码中已在使用的取值**补齐数据。
+--       "枚举字典办结"这条改造没有落点。本件按**代码中已在使用的取值**补齐数据。
 --
 -- 【取值来源：全部来自代码/库现状，不臆造业务枚举】
 --   wf_node_multi_type    ← WfEngineFacade 多类型分支 + wf_node_config 实际分布
@@ -22,14 +22,14 @@
 -- 【重要边界：灌了 ≠ 生效】
 --   实测（2026-10-15）前端 `fssc-web/src` 对本 8 个 dict_type 的字符串命中**几乎全为 0**
 --   （expense_type 仅 1 处），即当前**没有任何页面按字典渲染下拉**。
---   ⇒ 本件的作用是**把落点建起来**（让后续枚举收口有地方落、有 UI 可管），
+--   ⇒ 本件的作用是**把落点建起来**（让后续枚举办结有地方落、有 UI 可管），
 --     并让 `GET /dict/data/{type}` 这类接口能返回真实枚举；
---     **前端改为读字典属于 4-C「通用策略配置页」与后续i18n/枚举收口的工作范围**，
+--     **前端改为读字典属于 4-C「通用策略配置页」与后续i18n/枚举办结的工作范围**，
 --     不在本件。
 --
 -- 【零影响边界】
 --   · 只 INSERT sys_dict_data，不改任何业务表的枚举列；
---   · 幂等：先按 (tenant_id, dict_type, dict_value) 删除同值再插，重复执行结果一致；
+--   · 去重：先按 (tenant_id, dict_type, dict_value) 删除同值再插，重复执行结果一致；
 --   · is_default 只给每类的"首选值"置1（如 multi_type 的 ANY），仅供 UI 默认选中用，
 --     当前无UI 消费故无行为影响；
 --   · 回滚见V1.4.67_dict_data_rollback.sql（按 executed_by=NULL 精确清理）。
@@ -47,7 +47,7 @@
 -- §2 执行段
 -- ----------------------------------------------------------------------------
 
--- §2.1 幂等清理（本件写入的条目：executed_by=NULL）
+-- §2.1 去重清理（本件写入的条目：executed_by=NULL）
 DELETE FROM fssc.sys_dict_data
  WHERE tenant_id = 1
    AND create_by IS NULL
@@ -69,7 +69,7 @@ VALUES
   (1,'wf_node_multi_type','依次签（按顺序逐个办理）','SEQ','warning',3,0,'NORMAL',NULL,0),
   (1,'wf_node_multi_type','票签（可投赞成/反对票）','VOTE','danger',4,0,'NORMAL',NULL,0);
 
--- §2.3 空审批人兜底策略（严格对齐 NodeOrgResolver.applyEmptyStrategy 的 switch 四档）
+-- §2.3 空审批人默认策略（严格对齐 NodeOrgResolver.applyEmptyStrategy 的 switch 四档）
 INSERT INTO fssc.sys_dict_data
   (tenant_id, dict_type, dict_label, dict_value, css_class, sort, is_default,
    status, create_by, del_flag)

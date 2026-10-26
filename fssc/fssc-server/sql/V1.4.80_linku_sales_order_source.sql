@@ -1,7 +1,7 @@
 -- ============================================================
 -- V1.4.80 — LinkU 开放接口 · AR 销售订单/出库发货源表（P0-C 依赖）
 --
--- 背景：《AR 三单匹配改造》P0-C 要求 AR 侧改走「销售订单 + 销售出库发货单 + 销项发票」三腿。
+-- 背景：《AR 三单匹配改造》P0-C 要求 AR 侧改走「销售订单 + 销售出库发货单 + 销项发票」三环节。
 --       FSSC 现役库**不存在** so_order / so_order_line / so_shipment（全仓零命中），
 --       开放端点 /api/open/linku/query/sales-orders、/query/sale-shipments 目前经
 --       LinkuOpenQueryService 表存在性探测后返回空（不伪造数据）。
@@ -11,9 +11,9 @@
 --             （列别名即 BCP 消费键，两端逐字对齐）。
 -- 伙伴关联：customer_id → crm_customer.id（该表已存在，勿在本脚本内改动）。
 --
---  表归属：销售订单/出库单属 ERP/销售模块域，**须由业务/上游确认口径后落库**。
+--  表归属：销售订单/出库单属 ERP/销售模块域，**须由业务/上游确认规则后写入数据库**。
 --    本脚本为候选契约稿，未在任何环境执行；如需本地联调，可先在本库执行本脚本。
---  幂等：CREATE TABLE IF NOT EXISTS，可重复执行（不 DROP、不改既有对象）。
+--  去重：CREATE TABLE IF NOT EXISTS，可重复执行（不 DROP、不改既有对象）。
 -- ============================================================
 
 SET NAMES utf8mb4;
@@ -26,7 +26,7 @@ SELECT TABLE_NAME FROM information_schema.TABLES
    AND TABLE_NAME IN ('so_order', 'so_order_line', 'so_shipment');
 
 -- ============================================================
--- §1 销售订单头（订单腿；行级查询以头为锚）
+-- §1 销售订单头（订单环节；行级查询以头为关联）
 -- ============================================================
 CREATE TABLE IF NOT EXISTS so_order (
     id            BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS so_order (
   COMMENT '销售订单头（AR 三单匹配订单腿数据源，P0-C）';
 
 -- ============================================================
--- §2 销售订单行（订单腿行级）
+-- §2 销售订单行（订单环节行级）
 -- ============================================================
 CREATE TABLE IF NOT EXISTS so_order_line (
     id            BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS so_order_line (
   COMMENT '销售订单行（AR 三单匹配订单腿行级数据源，P0-C）';
 
 -- ============================================================
--- §3 销售出库发货单（发货腿；行粒度，经 so_no 桥回订单腿）
+-- §3 销售出库发货单（发货环节；行粒度，经 so_no 桥回订单环节）
 -- ============================================================
 CREATE TABLE IF NOT EXISTS so_shipment (
     id            BIGINT PRIMARY KEY AUTO_INCREMENT,

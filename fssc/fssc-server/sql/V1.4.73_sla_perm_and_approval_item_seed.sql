@@ -59,7 +59,7 @@ VALUES
   (1, 'CLAIM', 'Task_2',  'SCAN_PASS',    '扫描无误·提交审核', 'POSITIVE', 'SUBMIT',   NULL, 1, 1, '扫描岗确认单据要件齐全', 0),
   (1, 'CLAIM', 'Task_2',  'SCAN_RETURN',  '退回重扫',         'REJECT',   'SAVE',     'Task_2', 2, 0, '要件不全退回扫描岗（驳回闸门放行时生效）', 0),
   (1, 'CLAIM', 'Task_2',  'SCAN_VOID',    '单据无效·终止',    'TERMINATE','UNAUDIT',  NULL, 3, 0, '重复/无效单据终止流程', 0),
-  -- Task_7 财务共享审核单据【共享会计】：与已落库的 form_perm 核减权限配套
+  -- Task_7 财务共享审核单据【共享会计】：与已写入数据库的 form_perm 核减权限配套
   (1, 'CLAIM', 'Task_7',  'FS_PASS',      '审核通过',         'POSITIVE', 'AUDIT',    NULL, 1, 1, '共享会计审核通过', 0),
   (1, 'CLAIM', 'Task_7',  'FS_ADJUST',    '核减后通过',       'POSITIVE', 'AUDIT',    NULL, 2, 1, '核定金额有核减（配合 Task_7 form_perm 四字段可写）', 0),
   (1, 'CLAIM', 'Task_7',  'FS_REJECT',    '驳回至扫描',       'REJECT',   'SAVE',     'Task_2', 3, 0, '退回扫描岗重报', 0),
@@ -70,7 +70,7 @@ VALUES
 
 -- ---------------------------------------------------------------------------
 -- 为什么驳回/终止默认不启用
---   REJECT 需「自由驳回」闸门（wf.reject.free.enabled，当前默认 0）放行才搬执行，
+--   REJECT 需「自由驳回」校验（wf.reject.free.enabled，当前默认 0）放行才搬执行，
 --   否则按 WfEngineFacade 代码落回「终止本流程」——比原「驳回」更重，属行为变更。
 --   不该由灌数据脚本替业务做主，故建档（可在管理页改 enabled），默认停用。
 -- ---------------------------------------------------------------------------
