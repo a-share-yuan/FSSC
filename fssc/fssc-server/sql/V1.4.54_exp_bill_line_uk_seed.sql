@@ -5,24 +5,24 @@
 -- 背景（R5-D-031 台账）：exp_bill_line 全表 56 行/30 张单，17 张单出现同
 --   (bill_id,line_no) 物理重复行；凡按明细行求和的报表金额虚高 2~4 倍。
 -- 本波（波次二十 C）全仓普查结论＋研发定位：
---   ① Java 侧对 exp_bill_line 热表仅有 2 个直插点，均在闸后：
+--   ① Java 侧对 exp_bill_line 热表仅有 2 个直插点，均在校验后：
 --      ExpenseBillService.replaceLines()（先删后编＋行号从 1 重编）与
---      convertApply()（「该事前申请已转报销单，不能重复转换」闸＋lineNo++）。
+--      convertApply()（「该事前申请已转报销单，不能重复转换」校验＋lineNo++）。
 --   ② 物理重复并非「谁重复插入」——replaceLines 的 expBillLineMapper.delete(...)
 --      是【逻辑删】（ExpBillLine 继承 TenantAuditBase，其 delFlag 带 @TableLogic；
 --      09-11 表备份证实 del_flag 列存在、默认 0）。每保存一轮＝旧行置 del_flag=1、
 --      新行追加一组 ⇒ 同 (tenant_id,bill_id,line_no) 物理多行属既有语义，
---      逻辑口径（MyBatis-Plus 全量 selectList）永远只见 1 组活行。
+--      逻辑规则（MyBatis-Plus 全量 selectList）永远只见 1 组活行。
 --   ③ 虚高的直接根因＝报表 5 条 SQL 此前按物理表求和、未滤行级 del_flag。
 --      该面已由前波（w20rpt）在 ReportMapper 补 `and l.del_flag = 0`
---      （5 处各带 // R5-D-031 标记），本件不重复改码、报表口径不动。
+--      （5 处各带 // R5-D-031 标记），本件不重复改码、报表规则不动。
 -- ★★ 人工裁决要点（本件为何保持注释态） ★★
 --   对 (tenant_id,bill_id,line_no) 直接建唯一键与逻辑删除【互斥】：
 --   del_flag=1 的历史行物理保留，第二次保存（先逻辑删旧行、再插同 line_no 新行）
---   即触发 Duplicate entry ⇒ 单据保存腿会被自家唯一键打挂。故必须先裁决方案：
---     方案甲：保存腿由「逻辑删」改为「物理清行（删语句）」后建唯一键
---             ——改变审计留痕语义，需评估历史追溯面；
---     方案乙：不建唯一键，维持「报表/来源查询滤 del_flag + 月结体检」口径治理
+--   即触发 Duplicate entry ⇒ 单据保存环节会被自家唯一键打挂。故必须先裁决方案：
+--     方案甲：保存环节由「逻辑删」改为「物理清行（删语句）」后建唯一键
+--             ——改变审计记录语义，需评估历史追溯面；
+--     方案乙：不建唯一键，维持「报表/来源查询滤 del_flag + 月结体检」规则治理
 --             ——现状（费用最低，本波推荐）；
 --     方案丙：唯一键改含生成列（仅约束 del_flag=0 活行）——须先验证与 MyBatis-Plus
 --             逻辑删写入的兼容性，且历史多枚 del_flag=1 旧行仍须一并处置。
@@ -31,7 +31,7 @@
 -- ============================================================================
 -- §0 改前只读校验（全部只读查询；人工裁决/放行前先跑，结果留档）
 -- ----------------------------------------------------------------------------
--- §0-a 物理重复组清单（含逻辑删历史行；即 R5-D-031 现场证据口径）：
+-- §0-a 物理重复组清单（含逻辑删历史行；即 R5-D-031 现场证据规则）：
 --   SELECT tenant_id, bill_id, line_no, COUNT(*) AS cnt,
 --          SUM(del_flag = 0) AS live_cnt, SUM(del_flag = 1) AS dead_cnt,
 --          MIN(create_time) AS first_seen, MAX(create_time) AS last_seen
@@ -40,7 +40,7 @@
 --   HAVING COUNT(*) > 1
 --    ORDER BY cnt DESC, bill_id, line_no;
 --
--- §0-b 逻辑口径重复组（应恒为空集；非空＝真实活行重复缺陷，须另案排查）：
+-- §0-b 逻辑规则重复组（应恒为空集；非空＝真实活行重复缺陷，须另案排查）：
 --   SELECT tenant_id, bill_id, line_no, COUNT(*) AS cnt
 --     FROM exp_bill_line
 --    WHERE del_flag = 0
@@ -49,7 +49,7 @@
 --
 -- §0-c 月结体检：表头金额 ≠ 活明细合计（APPROVED/POSTED）——
 --       validateAmountReconcile 的只读等价版（该 Java 校验仅提交时刻执行、
---       且读 MyBatis-Plus 逻辑口径，对存量终态单与物理重复均无感，见报告 §④）：
+--       且读 MyBatis-Plus 逻辑规则，对历史最终状态单与物理重复均无感，见报告 §④）：
 --   SELECT b.id, b.bill_no, b.status, b.total_amount,
 --          SUM(l.amount) AS live_line_sum,
 --          ROUND(b.total_amount - SUM(l.amount), 2) AS diff
@@ -59,7 +59,7 @@
 --    GROUP BY b.id, b.bill_no, b.status, b.total_amount
 --   HAVING ABS(b.total_amount - SUM(l.amount)) > 0.01;
 --
--- §0-d 物理口径 vs 逻辑口径对照（证明虚高只来自 del_flag=1 历史行）：
+-- §0-d 物理规则 vs 逻辑规则对照（证明虚高只来自 del_flag=1 历史行）：
 --   SELECT
 --     (SELECT COUNT(*) FROM exp_bill_line)                                   AS physical_rows,
 --     (SELECT COUNT(*) FROM exp_bill_line WHERE del_flag = 0)                AS live_rows,
@@ -68,7 +68,7 @@
 -- §1 唯一键添加语句（注释态·未执行；仅人工裁决「方案甲/方案丙」且 §0-a 复点为空后，
 --    按实际列面复核再放行执行 —— 完整语句如下，两方案择一）
 -- ----------------------------------------------------------------------------
---   方案甲（需先完成：保存腿改物理清行，历史 del_flag=1 行须一并处置）：
+--   方案甲（需先完成：保存环节改物理清行，历史 del_flag=1 行须一并处置）：
 --   ALTER TABLE exp_bill_line
 --     ADD UNIQUE KEY uk_exp_bill_line_tenant_bill_line (tenant_id, bill_id, line_no);
 --

@@ -14,7 +14,7 @@
 --   只跑本文件时，审批通过会按 exp_bill_line.budget_item_id=98262 核销，而该单在 98262 的净占用已被我冲成 0
 --   → C2 判"无占用可核"整体跳过 → 97954 上这 9,000 永久悬挂为占用、永不转执行；
 --   若单据被驳回，还会在 98262 上再叠一笔 −4,000/−5,000 的重复释放（release 无夹紧为已知挂账项）。
--- 幂等：所有写入均带 NOT EXISTS 标签守卫（remark 前缀 'V1.4.19'），可重复执行。
+-- 去重：所有写入均带 NOT EXISTS 标签守卫（remark 前缀 'V1.4.19'），可重复执行。
 -- =====================================================================
 
 -- ---------- 步骤 0：快照（回滚依据） ----------
@@ -26,7 +26,7 @@ INSERT INTO bg_occupy
     (tenant_id, budget_item_id, oper_type, amount, biz_type, biz_id, biz_no, biz_line_id, oper_user_id, remark, create_time)
 SELECT o.tenant_id, 98262, 'RELEASE', -o.amount, o.biz_type, o.biz_id, o.biz_no, o.biz_line_id, 1,
        CONCAT('V1.4.19 C1 跨主体冲销：单据 ', o.biz_no, ' 属公司1/2026 费用项333，原占用误记在本行(公司34/2025/费用项330) ',
-              o.amount, '，按厂商"预算调整-冲销重占"口径负记；非业务驳回'),
+              o.amount, '，按预算调整-冲销重占口径负记；非业务驳回'),
        NOW()
 FROM bg_occupy o
 WHERE o.budget_item_id = 98262 AND o.oper_type = 'OCCUPY' AND o.biz_type <> 'INIT_CARRY'
@@ -53,7 +53,7 @@ UPDATE bg_item i
 SET i.occupy_amount = (SELECT COALESCE(SUM(o.amount), 0) FROM bg_occupy o WHERE o.budget_item_id = i.id)
 WHERE i.id IN (98262, 97954);
 
--- ---------- 验收（期望值见注释；与 4.9 表第 1 项的验收口径一致） ----------
+-- ---------- 验收（期望值见注释；与 4.9 表第 1 项的验收规则一致） ----------
 --  执行方式：`{ echo "SET NAMES utf8mb4;"; cat 本文件 stepB文件; } | mysql --comments`
 --   不带 SET NAMES 时客户端按 gbk 连接，步骤 1 的中文 CONCAT 会与 utf8mb4_0900_ai_ci 列冲突：
 --   ERROR 1271 Illegal mix of collations for operation 'concat'（2026-09-22 实测）。

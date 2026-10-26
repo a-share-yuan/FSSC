@@ -10,9 +10,9 @@
 --   · sys_config.approve.pick_mode.enabled=1、models='LOAN'
 --   · CLAIM_TRAVEL.Task_10 node_name 脏值「基地总经理 / 审核【基地总经理】」（BPMN 侧本次已改净，配置侧本脚本跟改）
 -- 不做（留给裁决）：
---   · Task_2 empty_strategy 维持 ERROR（§5.9 作业口口径是 SKIP，但改成 SKIP 等于"没扫描也能往下走"，属控制让步）
+--   · Task_2 empty_strategy 维持 ERROR（§5.9 作业口规则是 SKIP，但改成 SKIP 等于"没扫描也能往下走"，属控制让步）
 --   · Task_1/Task_3/Task_5/Task_15/Task_16 等本次已从 BPMN 删除的节点，其配置行**保留不删**（引擎按 node_key 取配置，
---     节点不存在即永不命中；删行属破坏性动作，不在增量口径内）
+--     节点不存在即永不命中；删行属破坏性动作，不在增量规则内）
 --   · fraud.shadow_mode 不启用（演练只需 3 张样单，离反欺诈高频阈值很远，保持生产语义真实）
 -- 回滚：V1.4.25_batch2_expense_family_config_seed_rollback.sql
 -- ============================================================================
@@ -83,6 +83,6 @@ SELECT model_key, node_key, node_name, assign_value, handling_mode, timeout_hour
  ORDER BY model_key, CAST(SUBSTRING(node_key,6) AS UNSIGNED);
 SELECT config_key, config_value FROM sys_config
  WHERE config_key IN ('approve.pick_mode.enabled','approve.pick_mode.models');
--- 全库口径确认：不应出现 POOL 以外的 handling_mode 变化，也不应有任何节点 timeout_action='AUTO_PASS'
+-- 全库规则确认：不应出现 POOL 以外的 handling_mode 变化，也不应有任何节点 timeout_action='AUTO_PASS'
 SELECT timeout_action, COUNT(*) FROM wf_node_config
  WHERE del_flag = 0 AND model_key IN ('CLAIM','CLAIM_TRAVEL','SETTLE') GROUP BY timeout_action;

@@ -1,5 +1,5 @@
 -- =====================================================================
--- V1.4.22  wf_task 双账补齐（P1-G22 双账打通的存量侧）
+-- V1.4.22  wf_task 双账补齐（P1-G22 双账打通的历史侧）
 -- ---------------------------------------------------------------------
 -- 病灶（09-22 只读勘查）：wf_task 镜像只在 start() 记了首节点，第 2 个节点起引擎有任务、视图没行。
 --   SELECT COUNT(*) FROM ACT_RU_TASK;                        -- 7 条在办
@@ -10,11 +10,11 @@
 --   （RequisitionWorkbenchService.myTodo / getDashboard 用 assignee_id + candidate_ids LIKE）、
 --   催办找人（handleNotify 按 assignee_id 发通知：单子在真人手里却催到别人）。
 -- 代码侧同批修复（本次重打包生效）：recordTaskMirror 在三级解析收尾后补记、
---   start()/complete() 改按重查到的实时任务写镜像、claim/unclaim 双写收口。
---   本脚本只负责<b>存量</b>：已启动、还在跑的实例不会重走 start()，不补就一直缺。
+--   start()/complete() 改按重查到的实时任务写镜像、claim/unclaim 双写办结。
+--   本脚本只负责<b>历史</b>：已启动、还在跑的实例不会重走 start()，不补就一直缺。
 -- 范围：只写 wf_task 一张表（视图/查询表，不碰 ACT_*、不碰业务单据表）。
--- 幂等：INSERT 带 NOT EXISTS 守卫，UPDATE 带"值确实不同"守卫，可重复执行。
--- 执行：mysql --default-character-set=utf8mb4（V1.4.22 的中文标签按 utf8mb4 落库）
+-- 去重：INSERT 带 NOT EXISTS 守卫，UPDATE 带"值确实不同"守卫，可重复执行。
+-- 执行：mysql --default-character-set=utf8mb4（V1.4.22 的中文标签按 utf8mb4 写入数据库）
 -- =====================================================================
 
 -- ---------- 步骤 0：快照（回滚依据） ----------
@@ -66,7 +66,7 @@ SELECT i.tenant_id,
        i.title,
        i.amount,
        CASE WHEN t.ASSIGNEE_ REGEXP '^[0-9]+$' THEN CAST(t.ASSIGNEE_ AS UNSIGNED) ELSE NULL END,
-       -- 与运行态同口径：已指派只写 assignee_id，未指派（候选组态）才写候选人
+       -- 与运行态同一规则：已指派只写 assignee_id，未指派（候选组态）才写候选人
        CASE WHEN t.ASSIGNEE_ REGEXP '^[0-9]+$' THEN NULL ELSE c.candidate_ids END,
        i.start_user_id,
        t.CREATE_TIME_,
@@ -76,8 +76,8 @@ FROM ACT_RU_TASK t
 JOIN wf_instance i ON i.proc_inst_id = t.PROC_INST_ID_
 LEFT JOIN (
     -- 候选人 = 候选组角色的在职非 admin 持有人并集，逗号包裹 ,1,2,3,（myTodo 的 LIKE 匹配格式）。
-    --  两点与运行态的已知差异，只影响<b>存量补齐</b>、不影响新单（新单由 recordTaskMirror 写）：
-    --   ① 不做"角色范围 × 单据公司"过滤（SQL 侧拿不到 bizType→业务表的白名单口径），
+    --  两点与运行态的已知差异，只影响<b>历史补齐</b>、不影响新单（新单由 recordTaskMirror 写）：
+    --   ① 不做"角色范围 × 单据公司"过滤（SQL 侧拿不到 bizType→业务表的白名单规则），
     --      因此跨公司候选人会多看到一条镜像待办（审批工作台本来就按 Flowable 候选组给他们显示）；
     --   ② 按列宽 varchar(1000) 截到 60 人（COMMON_EMP 这类 151 人大角色全拼会溢出导致整行插不进去）。
     SELECT l.TASK_ID_ AS task_id,

@@ -18,7 +18,7 @@
 -- 【标签来源：前端 enums.js 已维护带中文标签的映射，逐字取用】
 --   enums.js: ASSIGN_TYPE / TIMEOUT_ACTION / MULTI_TYPE 等。
 --    TIMEOUT_ACTION 在前端是**别名多对一**（NOTIFY/REMIND/URGE 都标"催办通知"）。
---      本字典的取舍（经落库校验后修正）：
+--      本字典的取舍（经写入数据库校验后修正）：
 --        · `AUTO_REMIND` 与 `NOTIFY` **都登记** —— WfTimeoutJob:175 明确两者归一后同档，
 --          但库中 16 个节点存的是 `NOTIFY`；只登记规范值会让运维查不到这 16 个节点，
 --          误判"配置坏了"。REMIND/URGE 等库中零使用的别名不登记，避免下拉出现无意义项。
@@ -33,9 +33,9 @@
 -- 【零风险边界】
 --   · 只 INSERT sys_dict_type / sys_dict_data，**不改任何业务表的枚举列取值**；
 --   · 不动 V1.4.67 / V1.4.68 已灌的 23 个容器；
---   · 幂等：先 DELETE 同 (dict_type,dict_value) 再插；
+--   · 去重：先 DELETE 同 (dict_type,dict_value) 再插；
 --   · wf_history_action 字典仅供展示；**MIRROR_DONE_ACTIONS（对账判据）保持代码内常量不动**，
---     改字典会静默改变双账对账口径（见 WfLedgerReconcileJob:196-198 注释）。
+--     改字典会静默改变双账对账规则（见 WfLedgerReconcileJob:196-198 注释）。
 -- =============================================================================
 
 -- ----------------------------------------------------------------------------

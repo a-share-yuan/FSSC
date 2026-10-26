@@ -1,8 +1,8 @@
--- V1.4.15 op_voucher 同源生成幂等键（审计 C5/D2 的库级防线）
+-- V1.4.15 op_voucher 同源生成唯一键（审计 C5/D2 的库级防线）
 -- 背景：FSSC财务业务逻辑同类缺陷审计_20260921 第 C5/D2 条——VoucherService.generate(ExpBill) 是全部
 --       generate* 入口中唯一无查重的一条，审批回调重放即产生双凭证；实测 13 张单据挂着
---       op_voucher 中不存在的 voucher_no（先回写后落库 + REQUIRES_NEW 回滚 + catch-log 吞异常）。
--- 应用层防线（先行、无需 DDL、已随代码上线）：generate() 入口 existingVoucherId("EXPENSE", billId) 幂等返回。
+--       op_voucher 中不存在的 voucher_no（先回写后写入数据库 + REQUIRES_NEW 回滚 + catch-log 吞异常）。
+-- 应用层防线（先行、无需 DDL、已随代码上线）：generate() 入口 existingVoucherId("EXPENSE", billId) 去重返回。
 -- 本迁移补库级防线：同一 (租户, 源单据类型, 源单据ID) 只允许一张「有效」凭证。
 --       VOID 凭证必须可共存（作废后允许重制），MySQL 无部分索引，故用生成列 + NULL 不冲突实现：
 --       active_source_key 在 status='VOID' 时为 NULL，唯一索引对 NULL 不去重。

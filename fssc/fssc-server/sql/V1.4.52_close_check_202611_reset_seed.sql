@@ -1,6 +1,6 @@
 -- ============================================================================
 -- V1.4.52_close_check_202611_reset_seed.sql
--- 关联缺陷：R5-D-304（月结检查闸清单对未来期间 202611 已预置全部 DONE ⇒ 闸门恒开）
+-- 关联缺陷：R5-D-304（月结检查校验清单对未来期间 202611 已预置全部 DONE ⇒ 校验恒开）
 -- 状态：注释态登记件，未执行。执行权＝月结岗（FIN_GL）人工裁决后放行。
 --
 -- 实测底料（只读盘，.tmp_b16/r984_checkitem_status.txt／r985_checker_face.txt／r982_checkitem.txt）：
@@ -8,8 +8,8 @@
 --   checker／check_time 全非空（202609 勾于 2026-10-01 09:19:27，202611 勾于 2026-10-02 22:33 之后，
 --   company_id=1，create_by=NULL）；**202610 组行数 0**。
 --   代码面：生成端点置 PENDING（GlPeriodOpsController.java:115），只有 /close-check/check 才置 DONE
---   并写 checker／check_time（:130-133）；月结闸门按「缺清单拦截 / 存在非 DONE 行拦截」判定
---   （GlMonthCloseService.java:289-300）。⇒ 202611 一旦到真月结，闸门会被这 8 行 DONE 直接放行。
+--   并写 checker／check_time（:130-133）；月结校验按「缺清单拦截 / 存在非 DONE 行拦截」判定
+--   （GlMonthCloseService.java:289-300）。⇒ 202611 一旦到真月结，校验会被这 8 行 DONE 直接放行。
 --
 -- 判据（执行前必须逐条复算，任一不满足即停）：
 --   ① SELECT COUNT(*) FROM fssc.gl_close_check_item WHERE period='202611' AND del_flag=0;      -- 期望 8
@@ -36,4 +36,4 @@
 -- ---- 后置复点（执行后跑）----
 -- SELECT COUNT(*) AS pending_cnt FROM fssc.gl_close_check_item WHERE period='202611' AND status='PENDING';   -- 期望 8
 -- SELECT COUNT(*) AS done_cnt    FROM fssc.gl_close_check_item WHERE period='202611' AND status='DONE';      -- 期望 0
--- SELECT COUNT(*) AS gate_blocks FROM fssc.gl_close_check_item WHERE period='202611' AND status<>'DONE';      -- 期望 8 ⇒ 月结闸门此时会正确拦截
+-- SELECT COUNT(*) AS gate_blocks FROM fssc.gl_close_check_item WHERE period='202611' AND status<>'DONE';      -- 期望 8 ⇒ 月结校验此时会正确拦截

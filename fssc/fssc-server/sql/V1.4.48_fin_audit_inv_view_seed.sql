@@ -20,15 +20,15 @@
 --   3. sys_role_menu：role_id=15 现持 66 条菜单，其中 menu 215 = 0 行、menu 266 = 0 行、
 --      任何 perms LIKE '%inv:%' 的菜单 = 0 行（重查方式：JOIN sys_menu 按 perms 逗号串过滤）。
 --      对照：FSSC_AUDITOR(60) 持 215/266/268/3212；FIN_AP/FIN_AR/FIN_GL/FSSC_SUPERVISOR/TAX_* 持 266。
---   4. 后端闸口（@RequiresPerm）：InvoiceController 的 /page、/bill-invoices、/filing-summary、
+--   4. 后端校验（@RequiresPerm）：InvoiceController 的 /page、/bill-invoices、/filing-summary、
 --      /anomaly、/used-count/audit 均挂 inv:list；InvoiceEnhanceController /line/list 挂
 --      inv:line:list、/verify/page 挂 inv:verify:list。
---   5. 前端闸口：BillDetailPanel 审批详情内嵌「关联发票」区 canViewInvoice=hasPerm('inv:list')；
---      Approval.vue / Workbench.vue / FlowCenter.vue「去处理」已加 D-DEC-078 落点闸
---      （无 inv:list 时不再跳发票池、改落全链路追溯）。本 SQL 执行并重登后该闸自动放行。
+--   5. 前端校验：BillDetailPanel 审批详情内嵌「关联发票」区 canViewInvoice=hasPerm('inv:list')；
+--      Approval.vue / Workbench.vue / FlowCenter.vue「去处理」已加 D-DEC-078 落点校验
+--      （无 inv:list 时不再跳发票池、改落全链路追溯）。本 SQL 执行并重登后该校验自动放行。
 --
--- 【跳闸链路与幂等】
---   授权只补数据缺口，不改代码。INSERT ... SELECT ... WHERE NOT EXISTS 幂等可重复执行；
+-- 【跳校验链路与去重】
+--   授权只补数据缺口，不改代码。INSERT ... SELECT ... WHERE NOT EXISTS 去重可重复执行；
 --   必须 215+266 成对授（缺父节点 215 则菜单树渲染不出，参照 audit-role-log-grant-20260920.sql §2 教训）。
 --   回滚：V1.4.48_fin_audit_inv_view_rollback.sql（按 role_code+menu_id 精确配对删除，同为注释态）。
 --    生效条件：权限点烤进 JWT（AuthService→TokenService 'per' claim），授权后须重新登录；
@@ -50,7 +50,7 @@ SELECT id AS role_id, tenant_id, role_code, role_name, status FROM sys_role
 -- 0.2 目标菜单现行状态（预期：215/266 均 del_flag=0、visible=1、status=1）
 SELECT id, parent_id, menu_name, menu_type, path, perms, del_flag FROM sys_menu WHERE id IN (215, 266);
 
--- 0.3 缺口基线（预期：0 行 ⇒ 本脚本确有缺口要补；若已有行则 §1 幂等空转）
+-- 0.3 缺口基线（预期：0 行 ⇒ 本脚本确有缺口要补；若已有行则 §1 去重空转）
 SELECT rm.role_id, rm.menu_id FROM sys_role_menu rm JOIN sys_role r ON r.id = rm.role_id
  WHERE r.role_code = 'FIN_AUDIT' AND r.del_flag = 0 AND rm.menu_id IN (215, 266);
 
@@ -67,7 +67,7 @@ SELECT rm.role_id, rm.menu_id FROM sys_role_menu rm JOIN sys_role r ON r.id = rm
 
 -- 1.2 发票管理页（266，C /invoice/query，perms=inv:list）→ FIN_AUDIT
 --     一个码同时解锁三处只读面：发票池列表（InvoiceController /page）、审批详情内嵌
---     「关联发票」区（/bill-invoices）、以及前端「去处理」落点闸（D-DEC-078 注释见 Approval.vue）。
+--     「关联发票」区（/bill-invoices）、以及前端「去处理」落点校验（D-DEC-078 注释见 Approval.vue）。
 -- INSERT INTO sys_role_menu(tenant_id, role_id, menu_id, create_time)
 -- SELECT r.tenant_id, r.id, 266, NOW() FROM sys_role r
 --  WHERE r.role_code = 'FIN_AUDIT' AND r.del_flag = 0
@@ -88,7 +88,7 @@ SELECT rm.role_id, rm.menu_id FROM sys_role_menu rm JOIN sys_role r ON r.id = rm
 --  WHERE r.role_code = 'FIN_AUDIT' AND rm.menu_id IN (215, 266, 3212)
 --  ORDER BY rm.menu_id;
 
--- 复核口径（逗号串必须 FIND_IN_SET，勿等值匹配——历史假阴性前科）：
+-- 复核规则（逗号串必须 FIND_IN_SET，勿等值匹配——历史假阴性前科）：
 -- SELECT r.role_code FROM sys_role_menu rm
 --   JOIN sys_role r ON r.id = rm.role_id JOIN sys_menu m ON m.id = rm.menu_id
 --  WHERE FIND_IN_SET('inv:list', m.perms) GROUP BY r.role_code;

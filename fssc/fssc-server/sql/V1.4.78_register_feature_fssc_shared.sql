@@ -2,7 +2,7 @@
 -- V1.4.78  八类差距收尾⑨：补注册缺失的特性码 FSSC_SHARED（共享运营域整体 403 的根因）
 -- 日期：2026-10-17
 --
--- 【根因】系统用「特性码(feature_code)」做套餐闸：菜单挂 feature_code，端点加
+-- 【根因】系统用「特性码(feature_code)」做套餐校验：菜单挂 feature_code，端点加
 --   @RequiresFeature("XXX")，租户套餐未开通该特性码 ⇒ 一律 4031「当前套餐未开通该功能」。
 -- 实测发现 pf_feature（特性码登记表）里**根本没有 FSSC_SHARED 这一行**，
 --   而 sys_menu 中有 13 条菜单挂着 feature_code='FSSC_SHARED'，

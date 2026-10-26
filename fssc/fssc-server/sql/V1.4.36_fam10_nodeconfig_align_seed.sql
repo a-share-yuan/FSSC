@@ -2,13 +2,13 @@
 --   TRAVEL id104 v11→v12 引擎 228→229、TRAIN id105 v10→v11 引擎 228→229、MEETING id189 v1→v2 引擎 122→123、
 --   CONTRACT id200 v1→v2 引擎 80→81、CUSTOMER_MAINT id116 v3→v4 引擎 228→229、SUPPLIER_ADD id110 v5→v6 引擎 228→229，
 --   fam10-publish.log），发布后回读与 draft 逐字节一致 6/6（fam10-verify.log）、三方 md5 全等
---   （仓内 latest / 库内 wf_model.bpmn_xml / 本地 draft）、在途双口径 0
+--   （仓内 latest / 库内 wf_model.bpmn_xml / 本地 draft）、在途双规则 0
 --   （designer/in-flight runningTotal=0 且 staleCount=0，fam10-publish-check.log），本族 wf_instance 历史实例数亦为 0
 --   （fam10-instakes.log ①）⇒ 零回归面，同时零验证面（结构正确性只有 simulate 路径预测做证据）。
---   ★取证自纠（本 seed 上一版头注有三处口径错，按 published.json 原文更正）：① 把 TRAVEL 与 TRAIN 的版本迁移对调了
+--   ★取证自纠（本 seed 上一版头注有三处规则错，按 published.json 原文更正）：① 把 TRAVEL 与 TRAIN 的版本迁移对调了
 --   （实为 TRAVEL v11→v12、TRAIN v10→v11）；② CUSTOMER_MAINT 写成 v1→v2，实为 v3→v4（该链此前已有两版）；
 --   ③ "引擎"一栏是 procDefId 的第二段＝deployment id，不是流程定义版本（ACT_RE_PROCDEF 里同 key 的 VERSION_ 最高达
---   v229，与本文件的 wf_model.version 序号不是一个口径，前九族注释里的"引擎 228→229"全部按此重读）。
+--   v229，与本文件的 wf_model.version 序号不是一个规则，前九族注释里的"引擎 228→229"全部按此重读）。
 -- 结构：TRAVEL 8→6、TRAIN 9→6、MEETING 8→6、CONTRACT 4→3、CUSTOMER_MAINT 4→2、SUPPLIER_ADD 9→8；
 --   族合计 42→31（-11，-26%）。
 --   作业池 1 个（SUPPLIER_ADD.Task_1）、排他网关 9 个（三链各 3 档金额授权）、并联会审 1 组。
@@ -26,16 +26,16 @@
 --      SKIP 又会把"供应商准入必须有资料"变成无人确认 ⇒ 在用行统一 ESCALATE（沿汇报线兜给上级真人，永不兜 admin）。
 --      实测改前本族 42 行有 8 行 ERROR（批次 1 定档），其中【在用行仅 1 行】即本条，另 7 行随节点出链原地保留。
 --      与批次 1 定档的偏离是有记录的：现库 POOL 47 行 = 48h/ESCALATE×43 ＋ 24h/ESCALATE×1 ＋ 8h/ERROR×3，
---      三条 ERROR 全是收单扫描（CLAIM/CLAIM_TRAVEL/SETTLE 的 Task_2），本节点不属该性质；§5.9 兜底行原文
+--      三条 ERROR 全是收单扫描（CLAIM/CLAIM_TRAVEL/SETTLE 的 Task_2），本节点不属该性质；§5.9 默认处理行原文
 --      "ERROR 仅保留给业务上必须报错"。第九族已对 PREPAY.Task_2 做过同向改动（ERROR→ESCALATE）。
 --   ⑤ timeout_action：本族在用 31 行 NOTIFY 由 31 行（100%，与第九族并列批次 2 最大单项违规）
---      降为 0 行 ⇒ §七 R8（≤30%）达族级口径；实测改前全族 42 行 42 条 NOTIFY（100%），
+--      降为 0 行 ⇒ §七 R8（≤30%）达族级规则；实测改前全族 42 行 42 条 NOTIFY（100%），
 --      改后含 11 条出链幽灵行（仍保留 NOTIFY）为 11/42＝26%，仍达标。
 --      时限按 §5.9 由"节点性质"推导：作业池/授权档 48h（DIV_LEADER 与 BASE_GM/PLATE_DIV_LEADER/PRESIDENT 同档，
 --      故 CONTRACT.Task_4 与 SUPPLIER_ADD.Task_7 由 24h→48h）、总监/中心级 PURCHASE_DIRECTOR 与 RND_CENTER_DIRECTOR 同档保持 48h、
 --      共享审单 FIN_AUDIT/FIN_AR 8h、业务审批 24h，全部 AUTO_REMIND、零 AUTO_PASS（白名单 wf.timeout.autopass.nodes 仍为空）。
 --      时限改动 10 处：TRAVEL.Task_6 24h→48h、TRAIN.Task_7 24h→48h、MEETING.Task_6 24h→48h、CONTRACT.Task_2 24h→8h、CONTRACT.Task_4 24h→48h、CUSTOMER_MAINT.Task_3 48h→24h、SUPPLIER_ADD.Task_1 8h→48h、SUPPLIER_ADD.Task_2 8h→24h、SUPPLIER_ADD.Task_7 24h→48h、SUPPLIER_ADD.Task_8 24h→48h
---   ★ R9-04 回归闸（第九族收口发现的口径缺口）：本产出器的 handling_mode 不再硬编码 POOL/AUTO 两值，
+--   ★ R9-04 回归校验（第九族办结发现的规则缺口）：本产出器的 handling_mode 不再硬编码 POOL/AUTO 两值，
 --      改前是 PICK 且非作业池的行【原样保留 PICK】。本族在用 31 行改前 PICK=0（全库 12 行 PICK 均在
 --      CLAIM/CLAIM_TRAVEL/SETTLE/LOAN/PREPAY）⇒ 本 seed 降档数 0；断言 3 与复核 I 各证伪一次。
 -- 岗名对齐清单（node_name 改动 29 处）：TRAVEL.Task_3「部门经理审核【部门经理】」→「部门经理审核业务必要性及归口安排【部门经理】」、TRAVEL.Task_4「项目经理审核【项目经理/费用承担部门负责人】」→「项目经理/费用承担部门审核预算【项目经理/费用承担部门负责人】」、TRAVEL.Task_2「审核申请单【财务审核岗】」→「财务审核岗审核申请单及标准合规性【财务审核岗】」、TRAVEL.Task_6「基地总经理审核【基地总经理】」→「基地总经理审批【基地总经理·20万以上】」、TRAVEL.Task_7「板块分管领导审核【板块分管领导】」→「板块分管领导审批【板块分管领导·50万以上】」、TRAVEL.Task_8「总裁审批【总裁】」→「总裁审批【总裁·500万以上】」、TRAIN.Task_3「部门经理审核【部门经理】」→「部门经理审核业务必要性及归口安排【部门经理】」、TRAIN.Task_4「项目经理审核【项目经理/费用承担部门负责人】」→「项目经理/费用承担部门审核预算【项目经理/费用承担部门负责人】」、TRAIN.Task_2「审核申请单【财务审核岗】」→「财务审核岗审核申请单及标准合规性【财务审核岗】」、TRAIN.Task_7「基地总经理审核【基地总经理】」→「基地总经理审批【基地总经理·20万以上】」、TRAIN.Task_8「板块分管领导审核【板块分管领导】」→「板块分管领导审批【板块分管领导·50万以上】」、TRAIN.Task_9「总裁审批【总裁】」→「总裁审批【总裁·500万以上】」、MEETING.Task_3「部门经理审核【部门经理】」→「部门经理审核业务必要性及归口安排【部门经理】」、MEETING.Task_4「项目经理审核【项目经理/费用承担部门负责人】」→「项目经理/费用承担部门审核预算【项目经理/费用承担部门负责人】」、MEETING.Task_2「审核申请单【财务审核岗】」→「财务审核岗审核申请单及标准合规性【财务审核岗】」、MEETING.Task_6「基地总经理审核【基地总经理】」→「基地总经理审批【基地总经理·20万以上】」、MEETING.Task_7「板块分管领导审核【板块分管领导】」→「板块分管领导审批【板块分管领导·50万以上】」、MEETING.Task_8「总裁审批【总裁】」→「总裁审批【总裁·500万以上】」、CONTRACT.Task_3「部门经理审核【部门经理】」→「部门经理审核业务真实性【部门经理】」、CONTRACT.Task_2「法务审核【财务审核岗】」→「合同合规审核（条款/金额/相对方）【财务审核岗】」、CONTRACT.Task_4「分管领导审批【分管领导】」→「分管领导授权审批【分管领导】」、CUSTOMER_MAINT.Task_3「审核主数据信息的完整性和准确性【部门经理】」→「部门经理审核客户档案变更必要性【部门经理】」、CUSTOMER_MAINT.Task_2「审核主数据信息的完整性和准确性【应收会计】」→「应收会计审核客户主数据完整性与唯一性【应收会计】」、SUPPLIER_ADD.Task_1「录入供应商基础信息并上传资料【应付会计】」→「录入供应商基础信息并上传资质资料（作业池）【应付会计】」、SUPPLIER_ADD.Task_2「供应商准入申请【采购经理】」→「采购经理审核准入申请【采购经理】」、SUPPLIER_ADD.Task_4「研发设计中心总监审核【研发设计中心总监】」→「研发设计中心总监审核技术资质【研发设计中心总监】」、SUPPLIER_ADD.Task_5「财务经理审核【财务经理】」→「财务经理审核财务资信【财务经理】」、SUPPLIER_ADD.Task_6「企业管理部经理审核【企业管理部经理】」→「企业管理部经理审核合规准入【企业管理部经理】」、SUPPLIER_ADD.Task_8「总裁终审(准入/退出)【总裁】」→「总裁终审（准入/退出）【总裁】」
@@ -62,7 +62,7 @@
 --   D-FAM10-09 三链（MEETING/TRAIN/TRAVEL）的 3 档金额网关**没有任何历史数据触达高档**：
 --     实测 11 张 APPLY 单行合计最大 ¥24,300（全部 <5万）、TRAVEL/TRAIN 触达 20万/50万/500万 三档均为 0 次
 --     （fam10-instakes.log ②b）⇒ 新增的 BASE_GM/PLATE_DIV_LEADER/PRESIDENT 三道在演示账套上是纯设计证据。
---   D-FAM10-10 bg_scheme 无金额维度、ISSUED 可绕过审批直接下达；GL6-7/GL8/OTC06/PTP02-02 四链本轮只做 §5.10 探针未发布
+--   D-FAM10-10 bg_scheme 无金额维度、ISSUED 可绕过审批直接下达；GL6-7/GL8/OTC06/PTP02-02 四链本轮只做 §5.10 检查未发布
 --     （2 节点链已证明引擎合法，业务授权仍待裁决）。
 --   D-FAM10-11 DIV_LEADER（分管领导）co1 在编 0 人：批次 2 十族里第一个"链上岗位在演示公司无人可派"的情形；
 --     因该岗是 GROUP 范围不按公司过滤，后果是**跨公司代签**（co32 孙海燕 / co35 何文青 签 co1 的合同与供应商准入），
@@ -74,7 +74,7 @@
 -- 不删任何数据；回滚见 V1.4.36_fam10_nodeconfig_align_rollback.sql
 -- 执行：mysql -uroot -p123456 -h127.0.0.1 -P3306 -Dfssc --default-character-set=utf8mb4 < 本文件
 
--- 0) 备份将被改动的行（幂等：表已存在则跳过，备份表不删）
+-- 0) 备份将被改动的行（去重：表已存在则跳过，备份表不删）
 CREATE TABLE IF NOT EXISTS wf_node_config_bak_V1436_20260923 AS
 SELECT * FROM wf_node_config WHERE (model_key, node_key) IN (('TRAVEL','Task_3'),('TRAVEL','Task_4'),('TRAVEL','Task_2'),('TRAVEL','Task_6'),('TRAVEL','Task_7'),('TRAVEL','Task_8'),('TRAIN','Task_3'),('TRAIN','Task_4'),('TRAIN','Task_2'),('TRAIN','Task_7'),('TRAIN','Task_8'),('TRAIN','Task_9'),('MEETING','Task_3'),('MEETING','Task_4'),('MEETING','Task_2'),('MEETING','Task_6'),('MEETING','Task_7'),('MEETING','Task_8'),('CONTRACT','Task_3'),('CONTRACT','Task_2'),('CONTRACT','Task_4'),('CUSTOMER_MAINT','Task_3'),('CUSTOMER_MAINT','Task_2'),('SUPPLIER_ADD','Task_1'),('SUPPLIER_ADD','Task_2'),('SUPPLIER_ADD','Task_3'),('SUPPLIER_ADD','Task_4'),('SUPPLIER_ADD','Task_5'),('SUPPLIER_ADD','Task_6'),('SUPPLIER_ADD','Task_7'),('SUPPLIER_ADD','Task_8'));
 
@@ -563,7 +563,7 @@ SELECT COUNT(*) AS drift_rows_A FROM (
       OR IFNULL(c.sort, -1) <> e.exp_sort
   ) x;
 
--- 4) 复核 B：本族 14 个岗位的存在性与 co1 在编持岗人数（口径 status='NORMAL' 且 is_admin=0）。
+-- 4) 复核 B：本族 14 个岗位的存在性与 co1 在编持岗人数（规则 status='NORMAL' 且 is_admin=0）。
 --     批次 2 首次出现"co1 在编 0 人"的岗位：DIV_LEADER（分管领导，GROUP 范围）2 名持岗人分别在 co32/co35，
 --      co1 无在编分管领导 ⇒ CONTRACT.Task_4 与 SUPPLIER_ADD.Task_7 两道在 co1 单上**必然由外公司人签**
 --      （GROUP 范围不按公司过滤，不是死锁而是跨公司代签，登记为 D-FAM10-11）；
@@ -615,14 +615,14 @@ SELECT COUNT(*) AS named_user_rows_F FROM wf_node_config
  WHERE del_flag = 0 AND (model_key, node_key) IN (('TRAVEL','Task_3'),('TRAVEL','Task_4'),('TRAVEL','Task_2'),('TRAVEL','Task_6'),('TRAVEL','Task_7'),('TRAVEL','Task_8'),('TRAIN','Task_3'),('TRAIN','Task_4'),('TRAIN','Task_2'),('TRAIN','Task_7'),('TRAIN','Task_8'),('TRAIN','Task_9'),('MEETING','Task_3'),('MEETING','Task_4'),('MEETING','Task_2'),('MEETING','Task_6'),('MEETING','Task_7'),('MEETING','Task_8'),('CONTRACT','Task_3'),('CONTRACT','Task_2'),('CONTRACT','Task_4'),('CUSTOMER_MAINT','Task_3'),('CUSTOMER_MAINT','Task_2'),('SUPPLIER_ADD','Task_1'),('SUPPLIER_ADD','Task_2'),('SUPPLIER_ADD','Task_3'),('SUPPLIER_ADD','Task_4'),('SUPPLIER_ADD','Task_5'),('SUPPLIER_ADD','Task_6'),('SUPPLIER_ADD','Task_7'),('SUPPLIER_ADD','Task_8'))
    AND (assign_type <> 'ROLE' OR assign_value IS NULL OR assign_value = '');
 
--- 8b) 复核 H：§七 R8 超时口径 —— 本族在用行 NOTIFY 占比（期望 0/31）；同时打印含幽灵行的全族占比供对账
+-- 8b) 复核 H：§七 R8 超时规则 —— 本族在用行 NOTIFY 占比（期望 0/31）；同时打印含幽灵行的全族占比供对账
 SELECT SUM(CASE WHEN timeout_action = 'NOTIFY' THEN 1 ELSE 0 END) AS notify_in_new_bpmn,
        COUNT(*) AS in_new_bpmn_rows,
        SUM(CASE WHEN timeout_action = 'NOTIFY' THEN 1 ELSE 0 END) * 100 DIV COUNT(*) AS pct_H
   FROM wf_node_config
  WHERE del_flag = 0 AND (model_key, node_key) IN (('TRAVEL','Task_3'),('TRAVEL','Task_4'),('TRAVEL','Task_2'),('TRAVEL','Task_6'),('TRAVEL','Task_7'),('TRAVEL','Task_8'),('TRAIN','Task_3'),('TRAIN','Task_4'),('TRAIN','Task_2'),('TRAIN','Task_7'),('TRAIN','Task_8'),('TRAIN','Task_9'),('MEETING','Task_3'),('MEETING','Task_4'),('MEETING','Task_2'),('MEETING','Task_6'),('MEETING','Task_7'),('MEETING','Task_8'),('CONTRACT','Task_3'),('CONTRACT','Task_2'),('CONTRACT','Task_4'),('CUSTOMER_MAINT','Task_3'),('CUSTOMER_MAINT','Task_2'),('SUPPLIER_ADD','Task_1'),('SUPPLIER_ADD','Task_2'),('SUPPLIER_ADD','Task_3'),('SUPPLIER_ADD','Task_4'),('SUPPLIER_ADD','Task_5'),('SUPPLIER_ADD','Task_6'),('SUPPLIER_ADD','Task_7'),('SUPPLIER_ADD','Task_8'));
 
--- 8c) 复核 I：R9-04 回归闸（SQL 独立口径）——"改前是 PICK、改后不是 PICK"的行数必须为 0，
+-- 8c) 复核 I：R9-04 回归校验（SQL 独立规则）——"改前是 PICK、改后不是 PICK"的行数必须为 0，
 --     与 gen-sql.js 断言 3 互为独立证伪；顺带打印本族在用行 handling_mode 现值分布。
 SELECT COUNT(*) AS pick_demoted_rows_I FROM wf_node_config c
   JOIN wf_node_config_bak_V1436_20260923 b

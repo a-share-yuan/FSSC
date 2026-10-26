@@ -5,7 +5,7 @@
 --       现状实查：md_form_config 13 行在库，但 config_json 只有 {"sections":[...]} 这种
 --       **分节名**，没有任何字段定义 —— 表是死的，前端零消费（V1.4.85 前 Java 仅 3 处引用：
 --       实体 + Mapper + Controller）。
---       行业方案 bos 平台的口径是「业务对象设计、界面定义、流程定义、业务规则设计、报表设计、
+--        业务对象设计、界面定义、流程定义、业务规则设计、报表设计、
 --       部署等环节」，且「支持业务单据的布局、字段必录和锁定属性、业务流程以及打印的设置」。
 --
 -- 【为什么不全塞进 config_json】
@@ -45,8 +45,8 @@ CREATE TABLE IF NOT EXISTS `md_form_field` (
   `help_text`        VARCHAR(500) NULL COMMENT '字段说明',
   `default_value`    VARCHAR(500) NULL COMMENT '默认值',
   `options_json`     TEXT         NULL COMMENT '选项配置 JSON(SELECT 的选项树/参照表查询)',
-  `required`         TINYINT      NOT NULL DEFAULT 0 COMMENT '必录属性:1-必录(对应行业方案"字段必录")',
-  `locked`           TINYINT      NOT NULL DEFAULT 0 COMMENT '锁定属性:1-编辑时灰显不可改(对应行业方案"锁定属性")',
+  `required`         TINYINT      NOT NULL DEFAULT 0 COMMENT '必录属性:1-必录(字段必录属性)',
+  `locked`           TINYINT      NOT NULL DEFAULT 0 COMMENT '锁定属性:1-编辑时灰显不可改(锁定属性)',
   `readonly_roles`   VARCHAR(500) NULL COMMENT '只读角色码(逗号分隔;命中角色即只读)',
   `visible_roles`    VARCHAR(500) NULL COMMENT '可见角色码(逗号分隔;空=全部可见)',
   `unique_flag`      TINYINT      NOT NULL DEFAULT 0 COMMENT '是否唯一键',

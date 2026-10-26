@@ -8,7 +8,7 @@
 --   不同改 -> 已出链/已改岗的旧角色仍可办理新节点（参与人两处真值漂移）。本族 4 处改岗：
 --   GL_MONTH_CLOSE.Task_9 FIN_STAFF->FIN_AUDIT（自审自查）、GL_SHARED_MASTER.Task_7 FIN_GL->FIN_AUDIT（制证与复核分岗）、
 --   GL_MERGE.Task_5 FUND_STAFF->FIN_AR、GL_SALARY_PAY.Task_5 FUND_PAY_STAFF->FUND_STAFF（网银录入与审核分岗）。
--- 结构：本族 13 模型 100 个人工节点 -> 42 个（-58%）。已出链旧节点的配置行按批次2口径【保留不删】（DB 增量原则）：
+-- 结构：本族 13 模型 100 个人工节点 -> 42 个（-58%）。已出链旧节点的配置行按批次2规则【保留不删】（DB 增量原则）：
 --   引擎按 BPMN 节点反查配置，幽灵行不产生运行时影响，仅在复核 C 里盘点计数。
 -- 本文件做四件事：1) 39 个已存在节点对齐名称/参与人/empty_strategy/超时；2) 3 个新 key 插行
 --   （GL_SALARY_PAY.Task_13 超50万CFO档、GL_MONTH_CLOSE.Task_17_0/17_1 出具财务报表并行双签）；
@@ -18,7 +18,7 @@
 -- 不删任何数据；回滚见 V1.4.28_fam3_nodeconfig_align_rollback.sql
 -- 执行：mysql -uroot -p123456 -h127.0.0.1 -P3306 -Dfssc --default-character-set=utf8mb4 < 本文件
 
--- 0) 备份将被改动的行（幂等：表已存在则跳过，备份表不删）
+-- 0) 备份将被改动的行（去重：表已存在则跳过，备份表不删）
 CREATE TABLE IF NOT EXISTS wf_node_config_bak_V1428_20260922 AS
 SELECT * FROM wf_node_config WHERE (model_key, node_key) IN (('GL_MONTH_CLOSE','Task_1'),('GL_MONTH_CLOSE','Task_7'),('GL_MONTH_CLOSE','Task_9'),('GL_MONTH_CLOSE','Task_15'),('GL_MONTH_CLOSE','Task_17_0'),('GL_MONTH_CLOSE','Task_17_1'),('GL_MERGE','Task_4'),('GL_MERGE','Task_5'),('GL_MERGE','Task_10'),('GL_MERGE','Task_13'),('GL_MERGE','Task_14'),('GL_SALARY_PAY','Task_1'),('GL_SALARY_PAY','Task_3'),('GL_SALARY_PAY','Task_13'),('GL_SALARY_PAY','Task_4'),('GL_SALARY_PAY','Task_5'),('GL_SALARY_PAY','Task_9'),('GL_SALARY_PROV','Task_1'),('GL_SALARY_PROV','Task_3'),('GL_ACCRUAL','Task_2'),('GL_ACCRUAL','Task_4'),('GL_ACCRUAL','Task_6'),('GL_DEFER','Task_3'),('GL_DEFER','Task_5'),('GL_MANUAL_VOUCHER','Task_2'),('GL_MANUAL_VOUCHER','Task_5'),('GL_OTHER_RECEIPT','Task_2'),('GL_OTHER_RECEIPT','Task_4'),('GL_OTHER_RECEIPT','Task_5'),('GL_SHARED_MASTER','Task_3'),('GL_SHARED_MASTER','Task_7'),('GL_TAX_PAY','Task_2'),('GL_TAX_PAY','Task_4'),('GL_TAX_PAY','Task_6'),('GL_TAX_PROV','Task_2'),('GL_TAX_PROV','Task_4'),('GL_TAX_REFUND','Task_2'),('GL_TAX_REFUND','Task_3'),('GL_TAX_REFUND','Task_5'),('GL_OFFSET','Task_2'),('GL_OFFSET','Task_6'),('GL_OFFSET','Task_7'));
 
@@ -502,7 +502,7 @@ UPDATE wf_node_config
  WHERE model_key = 'GL_OFFSET' AND node_key = 'Task_7';
 
 -- 2) 新 key 插行（3 行：BPMN 有节点、config 无行 -> applyNodeConfig 取不到配置，只能靠 BPMN 候选组裸跑）
---    用 NOT EXISTS 守卫保证幂等（本文件重复执行不会产生重复配置行）
+--    用 NOT EXISTS 守卫保证去重（本文件重复执行不会产生重复配置行）
 -- GL_MONTH_CLOSE.Task_17_0  出具财务报表批准【财务总监】
 INSERT INTO wf_node_config
   (tenant_id, model_key, node_key, node_name, assign_type, assign_value, handling_mode, up_level, multi_type,
@@ -633,7 +633,7 @@ SELECT e.model_key, e.node_key, e.exp_role AS bpmn_groups, c.assign_value AS con
     OR IFNULL(c.timeout_action, '') <> e.exp_ta
     OR IFNULL(c.handling_mode, '') <> e.exp_hm;
 
--- 4) 复核 B：本族 11 个角色的存在性与 co1 在编持岗人数（口径：status='NORMAL' 且非 admin；
+-- 4) 复核 B：本族 11 个角色的存在性与 co1 在编持岗人数（规则：status='NORMAL' 且非 admin；
 --    COMPANY 范围角色必须问"该公司有没有在编持有人"，不是全局有没有人）
 SELECT r.role_code, ANY_VALUE(r.role_name) role_name, ANY_VALUE(r.org_scope) org_scope, ANY_VALUE(r.status) status,
        COUNT(DISTINCT ur.user_id) holders_total,

@@ -1,4 +1,4 @@
--- V1.4.39 回滚：按留痕表 wf_model_biztype_bak_V1439_20260923 的 id 精确还原 biz_type（本批 17 行的原值全部是 NULL）
+-- V1.4.39 回滚：按记录表 wf_model_biztype_bak_V1439_20260923 的 id 精确还原 biz_type（本批 17 行的原值全部是 NULL）
 -- 只还原这 17 行的 biz_type/update_time，其余列、其余行一律不动；零 DELETE。
 
 -- 0) 将要还原的行（人工核对条数=17）

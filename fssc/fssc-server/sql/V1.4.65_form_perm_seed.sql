@@ -8,7 +8,7 @@
 -- 【载体纠正 —— 不是独立表】
 --   `form_perm` **不是一张表**（库中无此表），而是 `wf_node_config` 的**一列**
 --   （`WfNodeConfig.java:65 private String formPerm`），JSON 扁平结构 {"字段":"档位"}。
---   解析器 `WfNodeConfigResolver.resolveFormFieldPerm:121`，口径三条：
+--   解析器 `WfNodeConfigResolver.resolveFormFieldPerm:121`，规则三条：
 --     · 取严不取宽（同字段多档取H>R>W）；
 --     · **fail-open**（未配置/配置损坏 → 空 Map 不裁剪）
 --       ⇒ **限制性规则必须把字段写全**，否则漏写的字段等于放行；
@@ -56,7 +56,7 @@
 --  WHERE model_key='CLAIM' AND node_key IN ('Task_7','Task_13') AND del_flag=0;
 
 -- ----------------------------------------------------------------------------
--- §2 执行段（幂等）
+-- §2 执行段（去重）
 -- ----------------------------------------------------------------------------
 
 -- §2.1 Task_7 共享会计：核定三层 + 审批意见均可写（放行侧基线）
@@ -68,7 +68,7 @@ UPDATE fssc.wf_node_config
    AND node_key = 'Task_7'
    AND del_flag = 0;
 
--- §2.2 Task_13 总裁审批：金额三项只读、意见可写（收口真实越权面）
+-- §2.2 Task_13 总裁审批：金额三项只读、意见可写（办结真实越权面）
 UPDATE fssc.wf_node_config
    SET form_perm = '{"approvedAmount":"R","approvedPayAmount":"R","approvedRefundAmount":"R","auditRemark":"W"}',
        update_by = NULL,

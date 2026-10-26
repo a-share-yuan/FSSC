@@ -4,12 +4,12 @@
 -- 类型：注释态登记件。可执行行＝0。
 --
 -- 前置判断（回滚前必查，任一不满足则**不得**回滚）：
---   R0.1 已有按该规则取出的收货单号 ⇒ 规则删除后再次取号会重新 400，且存量号失去来源。
+--   R0.1 已有按该规则取出的收货单号 ⇒ 规则删除后再次取号会重新 400，且历史号失去来源。
 --        SELECT COUNT(*) AS used_cnt FROM fssc.po_receipt WHERE receipt_no REGEXP '^GRN[0-9]{8}[0-9]{4}$';
 --        期望 0 才可回滚；>0 时保留规则（规则本身无害，删除只会把业务打回 400）。
 --   R0.2 留底：SELECT id, tenant_id, rule_code FROM fssc.sys_number_rule WHERE rule_code='PURCHASE_RECEIPT';
 --
--- 幂等：WHERE 带 rule_code＋tenant_id 精确锚 ⇒ 二次执行 0 行变更。
+-- 去重：WHERE 带 rule_code＋tenant_id 精确关联 ⇒ 二次执行 0 行变更。
 --  不动 po_receipt（业务数据）； 不动其它规则行。
 -- ============================================================================
 

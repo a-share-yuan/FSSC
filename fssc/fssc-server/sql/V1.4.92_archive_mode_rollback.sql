@@ -6,13 +6,13 @@
 --   op_archive.paper_keeper_company_id
 --   op_archive.paper_location
 --
--- 安全闸：只在「三列都没有承载任何业务选择」时才 DROP ——
+-- 安全校验：只在「三列都没有承载任何业务选择」时才 DROP ——
 --   archive_mode 全为 'CENTRAL' 且无 NULL；
 --   paper_keeper_company_id / paper_location 全为 NULL。
 -- 任一条不满足即跳过该列的 DROP 并打印计数，交由人工判断（DROP 会丢已登记的原件存放地，
 -- 不可逆；本件不会替你决定）。
 --
--- 前置：回滚须与**代码腿同步回退**。代码一旦读取 archive_mode／paper_*，先撤代码再跑本件，
+-- 前置：回滚须与**代码环节同步回退**。代码一旦读取 archive_mode／paper_*，先撤代码再跑本件，
 --       否则运行期列缺失会直接报错。
 -- =============================================================================
 

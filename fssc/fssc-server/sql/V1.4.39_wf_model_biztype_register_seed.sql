@@ -4,24 +4,24 @@
 --   全仓 grep 无任何一处读取 WfModel.bizType（读方为 0；写方仅 WfModelService.java:184 的 syncFromTemplates，
 --   而 wf_business_flow 当前 0 行 ⇒ 该同步是空跑）。发起路由走 wf_process_config.biz_type ＋ 内置 switch，
 --   与这一列无关。所以本文件是"台账完整性"，不是功能修复：登记前后所有单据落点、待办、审批链完全一致，
---   设计器列表也不显示这一列（前端 grep 无引用）；它的价值是让 R5-11/R6-05 挂账的台账口径与代码事实对齐。
+--   设计器列表也不显示这一列（前端 grep 无引用）；它的价值是让 R5-11/R6-05 挂账的台账规则与代码事实对齐。
 -- 取值规则（不猜）：只补 biz_type＝model_key，且每一行都有一条代码调用点证据（下表）；无证据的行不出现在本文件里。
 --   17 行里 8 行另有历史实例同值佐证（wf_instance.biz_type＝model_key，条数见每行注释），
 --   9 行只有调用点证据（该流程尚无历史实例，属新上线/未跑过的模型）。
 -- 影响面：配置/台账表 wf_model，UPDATE-only、只改 biz_type 与 update_time 两列，零 INSERT、零 DELETE、不动 bpmn_xml；
 --   不触碰 wf_node_config / 业务单据表 / ACT_* 引擎表；co1 2026-09 账期仍 CLOSED，与本文件无关。
--- 回滚：同名 _rollback.sql 从留痕表按 id 精确还原为 NULL。
+-- 回滚：同名 _rollback.sql 从记录表按 id 精确还原为 NULL。
 
 -- 0) 改前基线（期望 null_rows=17）
 SELECT COUNT(*) AS null_rows FROM wf_model WHERE del_flag=0 AND (biz_type IS NULL OR biz_type='');
 
--- 0.5) 改前留痕（只存这 17 行的 id/原值，回滚按它还原）
+-- 0.5) 改前记录（只存这 17 行的 id/原值，回滚按它还原）
 DROP TABLE IF EXISTS wf_model_biztype_bak_V1439_20260923;
 CREATE TABLE wf_model_biztype_bak_V1439_20260923 AS SELECT id, model_key, version, biz_type AS old_biz_type, update_time AS old_update_time
   FROM wf_model WHERE del_flag=0 AND (biz_type IS NULL OR biz_type='');
 SELECT COUNT(*) AS bak_rows FROM wf_model_biztype_bak_V1439_20260923;
 
--- 1) 逐行补登记（幂等：带 biz_type IS NULL 前置条件，重复执行不会覆盖已有值）
+-- 1) 逐行补登记（去重：带 biz_type IS NULL 前置条件，重复执行不会覆盖已有值）
 --  1. id=163 AR_RECON v3 DEPLOYED  证据=receivable/service/RcReceivableService.java:139  start("AR_RECON", amount=BigDecimal.ZERO)  历史实例同值 6 条
 UPDATE wf_model SET biz_type='AR_RECON', update_time=NOW()
  WHERE id=163 AND del_flag=0 AND (biz_type IS NULL OR biz_type='');
@@ -84,5 +84,5 @@ SELECT (SELECT COUNT(*) FROM wf_model m JOIN wf_model_biztype_bak_V1439_20260923
         WHERE m.model_key<>b.model_key OR m.version<>b.version) AS identity_changed,
        (SELECT COUNT(*) FROM wf_model m JOIN wf_model_biztype_bak_V1439_20260923 b ON b.id=m.id) AS rows_touched;
 
--- 4) 终态快照
+-- 4) 最终状态快照
 SELECT m.id, m.model_key, m.biz_type, m.version, m.status FROM wf_model m JOIN wf_model_biztype_bak_V1439_20260923 b ON b.id=m.id ORDER BY m.model_key;

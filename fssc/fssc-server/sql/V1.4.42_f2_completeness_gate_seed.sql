@@ -1,15 +1,16 @@
 -- ============================================================================
--- F2 资料齐套闸口 · sys_config 灰度键播种（V1.4.42 / 2026-09-26）
+-- F2 资料齐套校验 · sys_config 灰度键播种（V1.4.42 / 2026-09-26）
 -- 方案出处：流程引擎问题修复方案_20260926.md §3（F2）；代码落点：
 --   com.fssc.workflow.service.BillCompletenessGuard（三调用点：WfEngineFacade.start=SUBMIT、
 --   WfEngineFacade.complete=NODE:<taskDefKey>、PayBatchService.confirm=CONFIRM）
 --
--- ★ 本脚本只播种"关"状态：enabled='0'／models=''／rules='' ⇒ 闸口零行为变更（等价改造前）。
---   真正的"开闸"是逐键 UPDATE，属人工裁决 RA-F2a/b/c 之后的动作，本脚本不含。
+-- ★ 本脚本只播种"关"状态：enabled='0'／models=''／rules='' ⇒ 校验零行为变更（等价改造前）。
+--   真正的"开启"是逐键 UPDATE，属人工裁决 RA-F2a/b/c 之后的动作，本脚本不含。
 --
--- 口径披露（与既有 wf 开关一致，非本片新增）：
+-- 规则披露（与既有 wf 开关一致，非本片新增）：
 --   BillCompletenessGuard 读键用 sysConfigMapper + limit 1，**不带 tenant 过滤**，
 --   与 WfEngineFacade.readConfig（approve.pick_mode.*／approve.transfer_strict.*／approve.deny_self）
+--   同一规则；即本表三键为**全局开关**。多租户量产前需与那几键一并收敛到租户级，登记为挂账项。
 --
 -- 回滚：V1.4.42_f2_completeness_gate_rollback.sql
 -- ============================================================================
@@ -17,7 +18,7 @@
 SET SESSION lock_wait_timeout = 10;
 START TRANSACTION;
 
--- 备份（回滚前留痕；空表也建，便于脚本重复执行）
+-- 备份（回滚前记录；空表也建，便于脚本重复执行）
 CREATE TABLE IF NOT EXISTS sys_config_bak_v1442_20260926 AS
   SELECT * FROM sys_config WHERE config_key LIKE 'bill.completeness.%';
 
@@ -38,11 +39,11 @@ SELECT config_key, config_value, editable FROM sys_config
  WHERE del_flag = 0 AND config_key LIKE 'bill.completeness.%' ORDER BY config_key;
 
 -- ----------------------------------------------------------------------------
--- 【开闸语句·待授权后由人工执行，本脚本不执行】
+-- 【开启语句·待授权后由人工执行，本脚本不执行】
 -- UPDATE sys_config SET config_value='1'  WHERE config_key='bill.completeness.gate.enabled';
 -- UPDATE sys_config SET config_value='TR_PAY,SETTLE,PREPAY' WHERE config_key='bill.completeness.models';
 -- UPDATE sys_config SET config_value='TR_PAY:CONFIRM=attach,contract_or_po;SETTLE:NODE=attach'
 --   WHERE config_key='bill.completeness.rules';
--- 执行前必读普查报告的"开闸后果"一节：现网 11 个付款批次的 bank_account_id 全部指向不存在的 id=1，
+-- 执行前必读普查报告的"开启后果"一节：现网 11 个付款批次的 bank_account_id 全部指向不存在的 id=1，
 -- D4 硬拦与灰度无关，部署即生效。
 -- ----------------------------------------------------------------------------

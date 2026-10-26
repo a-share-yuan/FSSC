@@ -7,7 +7,8 @@
 --   **零写入**，包括 REJECTED / DRAFT / VOID 等中间状态。已产生的错账按财会惯例走
 --   **调整凭证**（更正分录 / 冲红重复制证），而不是 UPDATE 原单金额 ——
 --   UPDATE 会让单据金额与已审批流、影像、发票、付款批次对不上，制造新的不可审计。
---   Note 相关的 STorno 流程即"原凭证保留、另立反向凭证"）；行业方案 likewise 红字凭证/冲销凭证。
+--   规则：凭证冲销一律用 Reverse Document（新凭证 + 冲销标记，原凭证不变，
+--   Note 相关的 STorno 流程即"原凭证保留、另立反向凭证"）；同样支持红字凭证/冲销凭证。
 --
 -- 三类错账（2026-09-21 实测条数）：
 --   A) 外币行按 1:1 折算      → 26 行（= 外币明细行的 100%，无一行做过真实折算）
@@ -56,9 +57,9 @@ ORDER BY ABS(b.total_amount - l.lines_sum) DESC;
 -- ---------------------------------------------------------------- C) 孤儿凭证号
 -- 现象：exp_bill.voucher_no / voucher_date 已回写，但 op_voucher 里没有该号（全库 op_voucher
 --       仅 2 行、且都不指向这些单据）→ 单据显示"已制证"而账上无凭证，属**制证失败但号已占**。
---       这正是 P0-C5/D2（制证幂等查重 + 唯一键 V1.4.15）要防的形态；历史 13 张需重复制证。
+--       这正是 P0-C5/D2（制证去重查重 + 唯一键 V1.4.15）要防的形态；历史 13 张需重复制证。
 -- 处置建议：部署 P0-C5 代码后由「补制证」入口重跑（V1.4.15 唯一键会拒绝重复活动凭证）；
---           凭证号如需保留原号，需在月结前由财务确认，否则新制凭证会取新号 → 原号作废留痕。
+--           凭证号如需保留原号，需在月结前由财务确认，否则新制凭证会取新号 → 原号作废记录。
 SELECT b.bill_no, b.bill_type, b.status, b.company_id, b.voucher_no, b.voucher_date,
        b.total_amount, b.approved_pay_amount, b.paid_amount
 FROM exp_bill b
@@ -66,7 +67,7 @@ WHERE b.del_flag = 0 AND b.voucher_no IS NOT NULL AND b.voucher_no <> ''
   AND NOT EXISTS (SELECT 1 FROM op_voucher v WHERE v.voucher_no = b.voucher_no AND v.del_flag = 0)
 ORDER BY b.voucher_no;
 
--- ---------------------------------------------------------------- D) 反向核对（应为 0，非 0 即清单口径本身有偏差）
+-- ---------------------------------------------------------------- D) 反向核对（应为 0，非 0 即清单规则本身有偏差）
 SELECT 'A_fx_onetoone_lines' k, COUNT(*) v, 26 expect FROM exp_bill_line l JOIN exp_bill b ON b.id=l.bill_id
   WHERE b.del_flag=0 AND l.currency_code NOT IN ('CNY','') AND l.exchange_rate = 1
 UNION ALL SELECT 'B_header_ne_sum', COUNT(*), 7 FROM exp_bill b JOIN (SELECT bill_id, SUM(amount) s FROM exp_bill_line GROUP BY bill_id) l ON l.bill_id=b.id

@@ -1,9 +1,9 @@
 -- =============================================================================
--- V1.4.59 加签闸口两枚 sys_config 键 seed（P0-1）
+-- V1.4.59 加签校验两枚 sys_config 键 seed（P0-1）
 --
 -- 目的：把「allow_addsign 节点级开关」从"界面不显示、运行时零读取"接进运行时。
 --       代码读点已就位（WfEngineFacade.isAddSignGateEnabled:1964 / addSignGateModels:1971 /
---       isConfigGatedOn:3815），缺的是闸键本身 —— sys_config 里查无此二键，
+--       isConfigGatedOn:3815），缺的是校验键本身 —— sys_config 里查无此二键，
 --       故 isConfigGatedOn 恒 false，26 枚 allow_addsign=1 与 150 枚 =0 行为完全一致。
 --
 -- 灰度依据（实测，2026-10-15 现查 fssc@127.0.0.1:3306）：
@@ -13,7 +13,7 @@
 --   ⇒ 灰度只放 CLAIM、LOAN 两个模型（覆盖 24 枚 =1 节点所在的模型），
 --     其余 42 个模型保持缺省=不拦，现行为逐字不变。
 --
--- 闸键语义（见 WfEngineFacade:3814-3822 注释）：
+-- 校验键语义（见 WfEngineFacade:3814-3822 注释）：
 --   enabled=1 且 modelKey ∈ models 才拦；enabled=1 且 models 为空 ⇒ Set.of() ⇒ 任何模型都不拦；
 --   两键缺任一 ⇒ 不拦。本件即取"窄灰度"：只让 CLAIM/LOAN 真拦。
 --
@@ -46,7 +46,7 @@
 --   期望 CLAIM 12 / LOAN 12
 
 -- ----------------------------------------------------------------------------
--- §2 执行段（幂等：先删同键再插，避免重复键与历史值漂移）
+-- §2 执行段（去重：先删同键再插，避免重复键与历史值漂移）
 -- ----------------------------------------------------------------------------
 DELETE FROM fssc.sys_config
  WHERE config_key IN ('approve.addsign_gate.enabled','approve.addsign_gate.models');
@@ -77,7 +77,7 @@ VALUES
 --   FROM fssc.sys_config
 --  WHERE config_key IN ('approve.addsign_gate.enabled','approve.addsign_gate.models');
 --
--- 行为对位复点（期望：闸口生效后，CLAIM/LOAN 内 allow_addsign=0 的节点加签将被拒）
+-- 行为对位复点（期望：校验生效后，CLAIM/LOAN 内 allow_addsign=0 的节点加签将被拒）
 -- SELECT model_key,
 --        SUM(allow_addsign = 0) AS blocked_now,
 --        SUM(allow_addsign = 1) AS still_allowed
@@ -95,5 +95,5 @@ VALUES
 -- SELECT COUNT(*) FROM fssc.sys_config
 --  WHERE config_key IN ('approve.addsign_gate.enabled','approve.addsign_gate.models');
 --
--- 回滚口径说明：回滚即"回到本件落库前的状态"——两键本不存在，
+-- 回滚规则说明：回滚即"回到本件写入数据库前的状态"——两键本不存在，
 -- 故回滚只有 DELETE 一条路径，不需还原旧值（这是"缺键补键"型 seed 的固有好处）。

@@ -1,13 +1,13 @@
 -- =====================================================================================
 -- V1.4.50 回滚：撤销「system:sod:scan 权限码播种与 3 岗授权」—— 本文件【未执行】，仅在需要回退时执行
 -- 与 V1.4.50_sodscan_perm_seed.sql 成对；按 perms + role_code 精确配对删除，不按 create_time 扫删
--- （沿用 V1.4.48_fin_audit_inv_view_rollback.sql 的配对口径）。
+-- （沿用 V1.4.48_fin_audit_inv_view_rollback.sql 的配对规则）。
 --
 -- 回滚后果：
---   1. SoDCheckController.java:55 的注解含 OR 兜底（system:sod:list），回滚后"执行检查"仍可用，
---      即回到"假闸"状态——功能不断，但权限面上再次无法单独回收执行动作。
+--   1. SoDCheckController.java:55 的注解含 OR 默认处理（system:sod:list），回滚后"执行检查"仍可用，
+--      即回到"假校验"状态——功能不断，但权限面上再次无法单独回收执行动作。
 --   2. 权限点烤进 JWT，删除授权后相关用户须重新登录才失效。
---   3. 菜单行用 del_flag=1 软删（与 sys_menu 的 @TableLogic 口径一致），不物理删行，留可追溯痕迹。
+--   3. 菜单行用 del_flag=1 软删（与 sys_menu 的 @TableLogic 规则一致），不物理删行，留可追溯痕迹。
 -- =====================================================================================
 
 SET NAMES utf8mb4;

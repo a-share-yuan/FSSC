@@ -1,6 +1,6 @@
 -- V1.4.31  批次2 第六族（资金 TR_* + PAY_PLAN_BASE/PAY_PLAN_PLATE）配置侧对齐：wf_node_config <- 已发布 BPMN 唯一真值
 -- 前置：13 个模型已 /api/tenant/wf/designer/publish 重发布（PAY_PLAN_BASE / PAY_PLAN_PLATE / TR_PAY / TR_PAY_FAIL / TR_PLAN / TR_PLAN_ADJUST / TR_TRANSFER / TR_UPLOAD / TR_RECEIPT / TR_BILL / TR_BANK_RECON / TR_BANK_MASTER / TR01-02），
---   发布前回读复核 13/13 与 draft 逐字节一致（e2e-ui/batch2/fam6-verify.log）、在途实例双口径均为 0
+--   发布前回读复核 13/13 与 draft 逐字节一致（e2e-ui/batch2/fam6-verify.log）、在途实例双规则均为 0
 --   （designer/in-flight runningTotal=0 且 staleCount=0；e2e-ui/batch2/fam6-publish-check.log）。
 -- 结构：本族 13 模型 88 个人工节点 -> 48 个（-40，-45%）；
 --   作业池 11 个（handling_mode=POOL）、排他网关 10 个（金额 DOA 阶梯，每档显式默认流）、并联会审 1 组
@@ -16,9 +16,9 @@
 --     · 根本没传 amount → 挂档必假：TR_BILL / TR_BANK_RECON / TR_BANK_MASTER 走 WfEngineFacade 四参 start()（amount=null→0＋显式 WARN，R6-02）；
 --     · 传了 amount 但本链不新增支出授权：TR_PAY_FAIL（钱已在 TR_PAY 四档批过，此处只把 op_pay_batch 从 FAILED 恢复到可重试）、
 --       TR_UPLOAD（同法人体系内下划上存归集，不对外付款）、TR_RECEIPT（收入侧到款确认）；
---     · 按流程性质不设档：TR_PLAN（计划类按组织层级授权，且 start 传 income_amount 而列表展示 outcome_amount，口径不一致 R6-04）、
+--     · 按流程性质不设档：TR_PLAN（计划类按组织层级授权，且 start 传 income_amount 而列表展示 outcome_amount，规则不一致 R6-04）、
 --       TR_BANK_MASTER/TR01-02 主数据类（§5.3）；TR01-02 另有"无 Java 调用方、结构性不可达"（R6-05）。
--- 已出链旧节点的配置行按批次2口径【保留不删】（DB 增量原则）：引擎按 BPMN 节点反查配置，幽灵行不产生运行时影响，仅在复核 C 盘点计数。
+-- 已出链旧节点的配置行按批次2规则【保留不删】（DB 增量原则）：引擎按 BPMN 节点反查配置，幽灵行不产生运行时影响，仅在复核 C 盘点计数。
 -- 本文件做三件事：1) 48 个已存在节点对齐 node_name/assign_type/assign_value/handling_mode/empty_strategy/超时；
 --   2) 0 个新 key 插行；3) 复核 A~F。
 -- 改岗清单（BPMN candidateGroups 与旧 assign_value 不同者，共 15 处）：
@@ -29,15 +29,15 @@
 --   D-FAM6-02 tr_bill_settle / tr_credit_bill / bank_reconcile 无 company_id 列 → TR_BILL/TR_RECEIPT/TR_BANK_RECON 三条链【永久只能挂 GROUP 范围角色】，
 --     补白名单也解析不出，属数据模型限制而非缺陷绕行；
 --   deny_self 在本族全死：这些业务表既无 apply_user_id 也无 applyColumn() 特例（pay_plan=applicant_id、op_pay_batch=submit_user_id）→ 提单人自审无服务端拦截；
---   md:bankaccount:create/update 仅授 CONFIG_ADMIN/IT_ADMIN → TR_BANK_MASTER 的审批人与"能操作的人"两套口径脱钩（并入 RA 系列裁决）。
--- 档位口径（方案 §5.9）：授权层级(BASE_GM/GM/CFO/PRESIDENT/板块分管领导) 48h AUTO_REMIND 且永不 AUTO_PASS；
+--   md:bankaccount:create/update 仅授 CONFIG_ADMIN/IT_ADMIN → TR_BANK_MASTER 的审批人与"能操作的人"两套规则脱钩（并入 RA 系列裁决）。
+-- 档位规则（方案 §5.9）：授权层级(BASE_GM/GM/CFO/PRESIDENT/板块分管领导) 48h AUTO_REMIND 且永不 AUTO_PASS；
 --   共享审单(FSSC_AUDITOR/FIN_AUDIT/SCAN_STAFF) 8h AUTO_REMIND；业务审批 24h AUTO_REMIND；作业池 48h AUTO_REMIND。
 --   本族无 BOARD_OFFICE 节点 → 无 168h NOTIFY；empty_strategy 全族 ESCALATE。
 -- allow_transfer / multi_type / auto_pass_self / form_perm 一律不动（沿用批次1 定档）。
 -- 不删任何数据；回滚见 V1.4.31_fam6_nodeconfig_align_rollback.sql
 -- 执行：mysql -uroot -p123456 -h127.0.0.1 -P3306 -Dfssc --default-character-set=utf8mb4 < 本文件
 
--- 0) 备份将被改动的行（幂等：表已存在则跳过，备份表不删）
+-- 0) 备份将被改动的行（去重：表已存在则跳过，备份表不删）
 CREATE TABLE IF NOT EXISTS wf_node_config_bak_V1431_20260922 AS
 SELECT * FROM wf_node_config WHERE (model_key, node_key) IN (('PAY_PLAN_BASE','Task_2'),('PAY_PLAN_BASE','Task_3'),('PAY_PLAN_BASE','Task_4'),('PAY_PLAN_BASE','Task_5'),('PAY_PLAN_PLATE','Task_2_0'),('PAY_PLAN_PLATE','Task_2_1'),('PAY_PLAN_PLATE','Task_2_2'),('PAY_PLAN_PLATE','Task_2_3'),('PAY_PLAN_PLATE','Task_3'),('PAY_PLAN_PLATE','Task_4'),('PAY_PLAN_PLATE','Task_5'),('TR_PAY','Task_2'),('TR_PAY','Task_3'),('TR_PAY','Task_4'),('TR_PAY','Task_5'),('TR_PAY','Task_6'),('TR_PAY','Task_7'),('TR_PAY','Task_8'),('TR_PAY','Task_9'),('TR_PAY_FAIL','Task_1'),('TR_PAY_FAIL','Task_6'),('TR_PLAN','Task_2'),('TR_PLAN','Task_3'),('TR_PLAN','Task_5'),('TR_PLAN','Task_6'),('TR_PLAN','Task_7'),('TR_PLAN_ADJUST','Task_2'),('TR_PLAN_ADJUST','Task_3'),('TR_PLAN_ADJUST','Task_6'),('TR_PLAN_ADJUST','Task_7'),('TR_TRANSFER','Task_1'),('TR_TRANSFER','Task_2'),('TR_TRANSFER','Task_3'),('TR_TRANSFER','Task_4'),('TR_TRANSFER','Task_5'),('TR_UPLOAD','Task_1'),('TR_UPLOAD','Task_2'),('TR_RECEIPT','Task_4'),('TR_RECEIPT','Task_2'),('TR_BILL','Task_1'),('TR_BILL','Task_4'),('TR_BANK_RECON','Task_1'),('TR_BANK_RECON','Task_4'),('TR_BANK_MASTER','Task_2'),('TR_BANK_MASTER','Task_4'),('TR_BANK_MASTER','Task_6'),('TR01-02','Task_1'),('TR01-02','Task_2'));
 
@@ -620,7 +620,7 @@ UPDATE wf_node_config
        update_time    = NOW()
  WHERE model_key = 'TR01-02' AND node_key = 'Task_2';
 
--- 2) 新 key 插行（0 行，NOT EXISTS 守卫保证幂等）
+-- 2) 新 key 插行（0 行，NOT EXISTS 守卫保证去重）
 
 -- 3) 复核 A：逐节点期望值对账（期望 0 行；输出任一行即为 BPMN 与 config 两处真值漂移）
 SELECT e.model_key, e.node_key, e.exp_role AS bpmn_groups, c.assign_value AS config_role,
@@ -734,7 +734,7 @@ SELECT e.model_key, e.node_key, e.exp_role AS bpmn_groups, c.assign_value AS con
     OR IFNULL(c.timeout_action, '') <> e.exp_ta
     OR IFNULL(c.handling_mode, '') <> e.exp_hm;
 
--- 4) 复核 B：本族 14 个角色的存在性与 co1 在编持岗人数（口径 status='NORMAL' 且 is_admin=0；
+-- 4) 复核 B：本族 14 个角色的存在性与 co1 在编持岗人数（规则 status='NORMAL' 且 is_admin=0；
 --    COMPANY 范围角色必须问"该公司有没有在编持有人"。active_co1=0 即为 §5.4 补岗清单候选，不是脚本缺陷。
 --     本族三个单点角色：FUND_STAFF 全租户 1 人挂 3 口、BASE_GM 1 人挂 2 口、PRESIDENT 1 人挂 4 口（DOA 顶档），
 --      断流只能靠 ESCALATE 沿汇报线外兜；DIRECT_SUPERVISOR co1=0 人已从 PAY_PLAN_BASE 换下（改 DEPT_MANAGER）。

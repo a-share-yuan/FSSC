@@ -1,12 +1,12 @@
 -- =============================================================================
--- V1.4.90 银企对账：部分勾对金额落库 + 银行余额口径修正（D-G5-04 / D-G5-06）
+-- V1.4.90 银企对账：部分勾对金额写入数据库 + 银行余额规则修正（D-G5-04 / D-G5-06）
 -- =============================================================================
 -- 目的：修两个实测坐实的「调节表金额算错」缺陷。
 --
 -- 【D-G5-04 认领不回写收款单 ⇒ 未达项虚增】
 --   实测：收款单 SK202610201235521 金额 146,900，其中 65,540 已与银行流水
 --   BS20261020001 认领勾对（bank_reconcile.match_status=CLAIMED、流水 MATCHED），
---   但 rc_receipt.bank_matched 仍为 0 ⇒ 调节表 ENT_IN 取数（WHERE bank_matched=0）
+--   但 rc_receipt.bank_matched 仍为 0 ⇒ 调节表 ENT_IN 查询（WHERE bank_matched=0）
 --   把整张 146,900 列为「企业已收银行未收」⇒ 未达项虚增 65,540。
 --
 -- 【关键约束：不能只用布尔位】
@@ -18,7 +18,7 @@
 --   故本件新增 rc_receipt.bank_matched_amount DECIMAL(20,2)，并保留
 --   bank_matched 作为「是否全额勾对」的派生布尔位（向后兼容既有读方）。
 --
--- 【D-G5-06 银行余额口径：可空时不得回落为 0】
+-- 【D-G5-06 银行余额规则：可空时不得回落为 0】
 --   computeSheet 原写法：
 --       bankBalance = stmts.isEmpty() ? account.getBalance() : nz(stmts.get(0).getBalance());
 --   只要当月有流水就一律取流水 balance，**不再回落到账户维护余额**；
@@ -27,7 +27,7 @@
 --   ⇒ 本件不改 Java（该处改为「取非空的最后一条流水 balance，全空才回落账户余额」，
 --      属代码改动，见代码提交）；本 SQL 只做数据层准备：
 --      ① 新增 bank_matched_amount 字段；
---      ② 存量回填：已勾对的收款单按 bank_reconcile 实际勾对金额回填，
+--      ② 历史回填：已勾对的收款单按 bank_reconcile 实际勾对金额回填，
 --         避免老数据被误判为「全额未达」。
 --
 -- 【零破坏边界】
@@ -51,9 +51,9 @@ SET @DDL := IF(@COL_EXISTS = 0,
 PREPARE stmt FROM @DDL; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- --------------------------------------------------------------------------
--- §2 存量回填：按 bank_reconcile 的实际勾对金额回填 bank_matched_amount
+-- §2 历史回填：按 bank_reconcile 的实际勾对金额回填 bank_matched_amount
 -- --------------------------------------------------------------------------
--- 认领腿：bank_reconcile.payment_no 存的是「应收单号」（rc_receivable.bill_no），
+-- 认领环节：bank_reconcile.payment_no 存的是「应收单号」（rc_receivable.bill_no），
 -- 而 rc_receipt.receivable_ids 存的是「应收单 id 列表」（逗号分隔），
 -- 两者要经 rc_receivable 才能对上。
 -- 这里按「流水勾对到的应收单 → 找出核销了该应收单的收款单」来归集。

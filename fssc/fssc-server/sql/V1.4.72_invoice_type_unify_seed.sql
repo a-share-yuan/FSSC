@@ -1,20 +1,20 @@
 -- ================================================================
--- V1.4.72  发票类型字典统一：修复「下拉一套词、表格另一套词」的双词表分裂
+-- V1.4.72  发票类型字典统一：修复「下拉一套词、表格另一套词」的双名称表分裂
 -- ----------------------------------------------------------------
 -- 背景（本批发现的真实缺陷，非理论风险）：
---   前端存在两份互不引用的发票类型词表——
+--   前端存在两份互不引用的发票类型名称表——
 --     ① fssc-web/src/constants/invoiceType.js  INVOICE_TYPES（13 项）→ 供 el-select 下拉选项
 --     ② fssc-web/src/constants/enums.js       INVOICE_TYPE （ 8 项）→ 供 enumLabel() 取表格/详情中文
 --   V1.4.71 已把 ② 灌成字典 enum_invoice_type（8 行），但 ① 仍是硬编码，于是：
 --     · 下拉里选「增值税专用发票」，保存后列表列经 invoiceTypeLabel() 显示成「增值税专用」——同一条数据两处两样；
 --     · 高铁/动车、火车票、航空运输电子客票、出租车、网约车、定额发票、停车费、医疗收费票据
---       这 8 类在 ② 里根本没有，enumLabel() 兜底直接把英文码 RAIL_HIGH / RIDE_HALLING … 显示给用户。
+--       这 8 类在 ② 里根本没有，enumLabel() 默认处理直接把英文码 RAIL_HIGH / RIDE_HALLING … 显示给用户。
 --
 -- 权威源裁定：**以 invoiceType.js 为准**。理由——后端
 --   OcrLocalParsers T_VAT_SPECIAL…T_OTHER 恰为 13 型，且源码注释明写
 --   「编码与前端 constants/invoiceType.js 对齐」；enums.js 那份是没跟上 OCR 扩展的过时残本。
 --
--- 标签口径：13 个正式码逐字取自 invoiceType.js（未自造中文）；
+-- 标签规则：13 个正式码逐字取自 invoiceType.js（未自造中文）；
 --   SPECIAL/NORMAL 与 VAT/VATN/增专/增普 为历史兼容码，仅保留供回显旧数据，不参与下拉。
 --    VAT 一处真冲突：enums.js 作「增值税普通」、invoiceType.js LEGACY 作「增值税专票」，
 --      本脚本采纳后者（VAT 与 VAT_SPECIAL 同族、VATN 对应 NORMAL，与后端归一逻辑一致）。

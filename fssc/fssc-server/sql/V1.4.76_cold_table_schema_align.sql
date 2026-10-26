@@ -20,7 +20,7 @@
 -- ==== exp_bill  ->  exp_bill_cold 结构对齐 ====
 -- ==== exp_bill  ->  exp_bill_cold 结构对齐 ====
 DROP TABLE IF EXISTS `exp_bill_cold_new`;
--- 幂等清理(DDL 隐式提交，重复执行前必清)
+-- 去重清理(DDL 隐式提交，重复执行前必清)
 CREATE TABLE `exp_bill_cold_new` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `tenant_id` bigint NOT NULL COMMENT '租户ID【多租户隔离字段】',
@@ -101,7 +101,7 @@ RENAME TABLE `exp_bill_cold_new` TO `exp_bill_cold`;
 
 -- ==== exp_bill_line  ->  exp_bill_line_cold 结构对齐 ====
 DROP TABLE IF EXISTS `exp_bill_line_cold_new`;
--- 幂等清理(DDL 隐式提交，重复执行前必清)
+-- 去重清理(DDL 隐式提交，重复执行前必清)
 CREATE TABLE `exp_bill_line_cold_new` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `tenant_id` bigint NOT NULL COMMENT '租户ID【多租户隔离字段】',
@@ -151,7 +151,7 @@ RENAME TABLE `exp_bill_line_cold_new` TO `exp_bill_line_cold`;
 
 -- ==== exp_bill_payment  ->  exp_bill_payment_cold 结构对齐 ====
 DROP TABLE IF EXISTS `exp_bill_payment_cold_new`;
--- 幂等清理(DDL 隐式提交，重复执行前必清)
+-- 去重清理(DDL 隐式提交，重复执行前必清)
 CREATE TABLE `exp_bill_payment_cold_new` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `tenant_id` bigint NOT NULL COMMENT '租户ID【多租户隔离字段】',

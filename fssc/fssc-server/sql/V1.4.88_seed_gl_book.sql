@@ -6,15 +6,15 @@
 --
 -- 【为什么这份 seed 敢这么建】
 --   ① 准则：企业会计准则(ASBE) + 小企业会计准则(SME) 两套，用于验证「同一公司在两套准则下
---      各自有一本主账簿，且可以出两套核算数据」（多账簿应用口径）。
+--      各自有一本主账簿，且可以出两套核算数据」（多账簿应用规则）。
 --   ② 币种：CNY 本位币 + USD/HKD/JPY 外币，验证本位币与原币分离。
 --   ③ 账簿：每家核算组织在 ASBE 下建主账簿；AIG-HQ(1) 额外建 SME 主账簿 + ASBE 副账簿，
 --      其中「ASBE 副账簿」会触发唯一索引冲突并被拒绝 —— 这正是我们要用**失败的插入**
 --      来证明约束真的在生效（见文件末尾的约束验证段）。
---   ④ 科目映射：把现有 md_subject 的通用科目映射到两套准则口径。
+--   ④ 科目映射：把现有 md_subject 的通用科目映射到两套准则规则。
 --   ⑤ 期初：给 2026 年度各账簿灌期初余额，使试算平衡有起点。
 --
--- 幂等：NOT EXISTS 护栏。回滚：V1.4.88_seed_gl_book_rollback.sql
+-- 去重：NOT EXISTS 护栏。回滚：V1.4.88_seed_gl_book_rollback.sql
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -92,7 +92,7 @@ WHERE c.`company_code`='AIG-HQ' AND c.`del_flag`=0
     WHERE b.`company_id`=c.id AND b.`standard_id`=s.id
       AND b.`accounting_year`=2026 AND b.`book_type`='MAIN' AND b.`del_flag`=0);
 
--- 集团总部额外建「外币核算副账簿」（USD 本位币口径的辅助账）
+-- 集团总部额外建「外币核算副账簿」（USD 本位币规则的辅助账）
 INSERT INTO `gl_accounting_book`
   (`tenant_id`,`book_code`,`book_name`,`book_type`,`company_id`,`standard_id`,`base_currency_id`,
    `accounting_year`,`fiscal_start`,`fiscal_end`,`status`,`remark`)
@@ -125,7 +125,7 @@ WHERE c.`company_code`='AIG-KS' AND c.`del_flag`=0
       AND b.`accounting_year`=2026 AND b.`book_type`='MAIN' AND b.`del_flag`=0);
 
 -- -----------------------------------------------------------------------------
--- ④ 科目映射：ASBE 口径下，现有叶子科目直接对应
+-- ④ 科目映射：ASBE 规则下，现有叶子科目直接对应
 -- -----------------------------------------------------------------------------
 INSERT INTO `gl_book_subject_map`
   (`tenant_id`,`book_id`,`standard_id`,`local_subject_id`,`local_subject_code`,`local_subject_name`,
@@ -140,7 +140,7 @@ WHERE b.`del_flag`=0 AND b.`status`='OPEN'
     SELECT 1 FROM `gl_book_subject_map` m
     WHERE m.`book_id`=b.id AND m.`local_subject_id`=s.id AND m.`del_flag`=0);
 
--- SME 口径：账簿对应的科目集（简表口径，标的名称加「(小企业)」后缀以示区分）
+-- SME 规则：账簿对应的科目集（简表规则，标的名称加「(小企业)」后缀以示区分）
 INSERT INTO `gl_book_subject_map`
   (`tenant_id`,`book_id`,`standard_id`,`local_subject_id`,`local_subject_code`,`local_subject_name`,
    `common_subject_id`,`mapping_type`,`status`,`remark`)
@@ -187,7 +187,7 @@ WHERE b.`del_flag`=0 AND b.`status`='OPEN'
 -- -----------------------------------------------------------------------------
 -- ⑥ 约束验证：重复主账簿必须被 uk_gab_main 拒绝
 --    这一段<b>故意会失败</b>（Duplicate entry），用来证明「同一核算组织在同一准则内
---    仅能存在唯一主账簿」不是靠代码 if-else，而是靠数据库唯一索引兜底。
+--    仅能存在唯一主账簿」不是靠代码 if-else，而是靠数据库唯一索引默认处理。
 --    执行本脚本时此段会报错，属预期；如需在正式环境静默跳过，请单独注释本段。
 -- -----------------------------------------------------------------------------
 -- INSERT INTO `gl_accounting_book`

@@ -9,7 +9,7 @@
 --   wf_node_config（del_flag=0）           = 355 个有效节点
 --   bpmn_xml 关键片段计数（运行时）        = 含 multiInstanceLoopCharacteristics 7 个、
 --                                            含 boundaryEvent 1 个（仅 P2_TO）、含 parallelGateway 10 个
---      统计口径必须写全名 multiInstanceLoopCharacteristics；写 'multiLoop…' 短体会把所有会签
+--      统计方式必须写全名 multiInstanceLoopCharacteristics；写 'multiLoop…' 短体会把所有会签
 --        模型误计为 0（本轮曾因此得出"87 个 XML 无一含会签"的错误结论）。
 --   已部署定义（ACT_RE_PROCDEF 16,668 个）  = 含会签 221 个定义、含边界定时器 30 个、含并行网关 470 个
 --     其中业务模型的会签定义各只有 1 个版本：SETTLE/GL_MONTH_CLOSE/INVOICE_MATCH/FM_DESTROY 都是 v231，
@@ -107,7 +107,7 @@
 --       PURCHASE_MANAGER    3 节点  3869 张立威 /company1/dept1008
 --       RND_CENTER_DIRECTOR 1 节点  3943 研发设计中心总监(模拟) /company1/dept1014  ← 占位账号
 --       WH_KEEPER           6 节点  3811 贺昌海 /company1/dept1001
---      口径限制：以上"持有人数"是全租户口径。引擎按公司/部门解析取人，同一角色在 A 公司有 2 人、
+--      规则限制：以上"持有人数"是全租户规则。引擎按公司/部门解析取人，同一角色在 A 公司有 2 人、
 --        B 公司 0 人时，B 公司的单据仍然取不到人（走 empty_strategy）。所以真实单点面 ≥ 85 节点，
 --        逐公司精算需要业务先给出"哪些角色必须在哪些法人可办理"的期望矩阵，不在本轮范围。
 --      5 个角色挂在"（模拟）"占位账号上：演示账套里这些岗位没有真人。这不是程序缺陷，
@@ -119,11 +119,11 @@
 --     目标：让 352 个已配超时的节点在 BPMN 上真的挂上非中断边界定时器（当前只有 1 个模型挂了）。
 --     灰度批次（与方案 §7 步骤 2 对齐，但批次①的内容已按实测更正）：
 --       批次① 4 个有模板行的模型（MI_TEST/MI_SEQ/MI_VOTE/P2_TO）——重启即自动再生成，用于验证
---               指纹口径本身，不动业务链。
+--               指纹规则本身，不动业务链。
 --       批次② 低风险业务链：先挑 §1 里零实例的模型（下线与重发布可同批），实测 26 个
 --               （AR_RECON / BAD_DEBT_CONFIRM / BAD_DEBT_PROV / FA_* 13 个 / INV_* 9 个 / INVOICE_ISSUE），
 --               零实例 ⇒ 无在途风险。
---       批次③ 资金链（TR_PAY/SETTLE/PREPAY/LOAN/CLAIM…）：有在途实例，必须与 F2 齐套闸口、
+--       批次③ 资金链（TR_PAY/SETTLE/PREPAY/LOAN/CLAIM…）：有在途实例，必须与 F2 齐套校验、
 --               F5 驳回灰度同一窗口，且逐链执行（一条链一次发布）。
 --     每个模型的执行动作（顺序固定）：
 --       a) node bpmn-repo/runtime-baseline-20260926/fingerprint_check.cjs <MODEL_KEY>   → 记录"发布前"指纹
@@ -146,7 +146,7 @@
 --     实测：表名含 'bak' 的表 62 张 = wf_*_bak_* 27 张 + sys_*_bak_* 17 张 + 其他 18 张（含 11 张 bak_ 前缀）
 --           估算行数合计 11,332 行、占 2.3 MB（含索引）；建表时间 2026-09-20 12:54 ~ 09-23 20:59
 --           （体检方案原写"45 张 wf_*_bak_*"，实测 wf_ 前缀只有 27 张，45 是把 sys_*/bak_* 混计了）
---     只读盘点语句（运维看板取数用，不产生变更）：
+--     只读盘点语句（运维看板查询用，不产生变更）：
 --     SELECT t.TABLE_NAME, t.TABLE_ROWS, ROUND((t.DATA_LENGTH+t.INDEX_LENGTH)/1024/1024,2) mb, t.CREATE_TIME
 --       FROM information_schema.tables t
 --      WHERE t.TABLE_SCHEMA = 'fssc' AND t.TABLE_NAME LIKE '%bak%'

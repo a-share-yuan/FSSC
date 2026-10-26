@@ -1,6 +1,6 @@
 -- V1.4.34  批次2 第九族（预付与招待 PREPAY/CLAIM_G1）配置侧对齐：wf_node_config <- 已发布 BPMN 唯一真值
 -- 前置：两模型已 /api/tenant/wf/designer/publish 重发布（PREPAY v11→v12 引擎 228→229；CLAIM_G1 v4→v5 引擎 3→4），
---   发布前回读复核与 draft 逐字节一致（fam9-verify.log）、在途双口径 0（designer/in-flight runningTotal=0 且 staleCount=0，
+--   发布前回读复核与 draft 逐字节一致（fam9-verify.log）、在途双规则 0（designer/in-flight runningTotal=0 且 staleCount=0，
 --   fam9-publish-check.log）、四件套 md5 全等（fam9-repo-sync.log：PREPAY dee8bc2c…、CLAIM_G1 2cc5c7f4…）。
 -- 结构：PREPAY 13→8（净 -5）、
 --   CLAIM_G1 7→5（净 -2）；族合计 20→13（-35%）。
@@ -10,22 +10,22 @@
 --   ① PREPAY 加 4 个金额网关（原链 0 网关＝1 元与 1,000 万预付同样签 13 道），阈值逐字借用同域已发布兄弟链
 --      CLAIM/SETTLE 的阶梯 5万/20万/50万/500万（wf_process_config 实测 EXP_PAY 域由 PREPAY 与 SETTLE 两条链分流，
 --      同表 exp_bill、同 bizType；build.js 断言 1 从仓内 latest 件反向抓取该集合做硬核对）。
---      实测改前 simulate：¥1 / ¥4.99万 / ¥5万 / ¥20万 / ¥50万 / ¥500万 **6 探针全部 13 步、1 条路径**（fam9-gate-before.log）；
---      改后 9 探针 → **5 条不同路径（4/5/6/7/8 步）**（fam9-gate.log）。
+--      实测改前 simulate：¥1 / ¥4.99万 / ¥5万 / ¥20万 / ¥50万 / ¥500万 **6 检查全部 13 步、1 条路径**（fam9-gate-before.log）；
+--      改后 9 检查 → **5 条不同路径（4/5/6/7/8 步）**（fam9-gate.log）。
 --   ② PREPAY 合并同角色多道：Task_4+Task_5（DEPT_MANAGER 相邻同角色，co1 仅 1 人连签两遍）、
 --      Task_3+Task_6+Task_13（FIN_AUDIT 一链三角色位）；删 Task_1「提交报账单」（本族唯一 ${approver} 点名提单节点，
 --      配置行 1616 assign_type=INITIATOR）与 Task_8「基地分管领导审批」（BASE_DIV_LEADER 全租户仅 1 人、无条件签字，
 --      且实测已发布的同域报销三链 CLAIM/CLAIM_TRAVEL/SETTLE 都不含这一档）。
 --   ③ CLAIM_G1 删 Gw_1「招待费判定」及其默认流 Flow_3「非招待费 → EndEvent」：该网关恒真（Java resolveStartProcessKey
 --      已用同一个 resolveExpenseType() 判过、只有 ENTERTAIN 才投进本模型），而默认分支是**零审批直通出口**——
---      实测改前 simulate 6 探针**全部「审批0步 → 结束」**（validate errors=0 warnings=0，设计器完全不告警）。
+--      实测改前 simulate 6 检查**全部「审批0步 → 结束」**（validate errors=0 warnings=0，设计器完全不告警）。
 --      同时删提单节点 Task_1【COMMON_EMP】、合并 Task_3/Task_6 两道 FSSC_AUDITOR，并把两处名实不符对齐
 --      （Task_4 名「财务总监」实挂 CENTER_APPROVER＝中心/总监级审批档；真岗"财务总监"是另一角色 CFO）。
 -- 岗名对齐清单（node_name 改动 12 处，assign_value 改岗 0 处）：PREPAY.Task_2「扫描单据【财务扫描岗】」→「扫描单据及影像齐套（作业池）【财务扫描岗】」、PREPAY.Task_4「直接上级审批【部门经理】」→「部门经理审核【部门经理】」、PREPAY.Task_7「项目经理审批【项目经理/费用承担部门负责人】」→「项目经理/费用承担部门审核【项目经理/费用承担部门负责人】」、PREPAY.Task_3「审核单据【财务审核岗】」→「审核单据及付款申请【财务审核岗】」、PREPAY.Task_9「基地总经理审批【基地总经理】」→「基地总经理审核【基地总经理】」、PREPAY.Task_10「板块财务经理审批【板块财务经理】」→「板块财务经理审核【板块财务经理】」、PREPAY.Task_11「板块分管领导审批【板块分管领导】」→「板块分管领导审核【板块分管领导】」、CLAIM_G1.Task_2「部门经理审核【部门经理—核业务真实性】」→「部门经理审核业务真实性【部门经理】」、CLAIM_G1.Task_3「财务共享审核【共享会计—人均标准/真实性】」→「共享审核人均标准及预制凭证【共享会计】」、CLAIM_G1.Task_4「财务总监审核【财务总监】」→「总监级授权审批【中心/总监级审批档】」、CLAIM_G1.Task_5「执行总裁审批【执行总裁—大额升级】」→「高管决策审批【高管决策审批档】」、CLAIM_G1.Task_7「生成凭证【总账会计】」→「审核预制凭证【总账会计】」
 -- 链序同步（sort 改动 13 处，本 seed 第一次同步 sort，防"配置顺序≠图顺序"脱钩）：PREPAY.Task_2 2→1、PREPAY.Task_4 4→2、PREPAY.Task_7 7→3、PREPAY.Task_3 3→4、PREPAY.Task_9 9→5、PREPAY.Task_10 10→6、PREPAY.Task_11 11→7、PREPAY.Task_12 12→8、CLAIM_G1.Task_2 2→1、CLAIM_G1.Task_3 3→2、CLAIM_G1.Task_4 4→3、CLAIM_G1.Task_5 5→4、CLAIM_G1.Task_7 7→5
 -- 超时矩阵：作业池 48h／授权档 48h／共享审单 8h／业务审批 24h，timeout_action 全 AUTO_REMIND
 --   ⇒ 本族在用 13 行 NOTIFY 由 13 行（100%，批次 2 至今最大单项违规）降为 0 行（0%），达 §七 R8 ≤30%；
---   含 7 条出链幽灵行未动（仍为 NOTIFY），按"含幽灵"口径为 7/20＝35%。
+--   含 7 条出链幽灵行未动（仍为 NOTIFY），按"含幽灵"规则为 7/20＝35%。
 -- empty_strategy：在用 13 行全 ESCALATE（原 5 行 ERROR 全部改出，理由见 gen-sql.js 注释；ESCALATE 沿汇报线兜、绝不兜 admin）。
 -- 出链幽灵行（7 行，不删不改，仅盘点）：CLAIM_G1.Task_1 / CLAIM_G1.Task_6 / PREPAY.Task_1 / PREPAY.Task_13 / PREPAY.Task_5 / PREPAY.Task_6 / PREPAY.Task_8
 --   —— 保留理由：增量原则（不删数据）＋ 若 BPMN 回滚到 v11/v4 结构，配置侧须能原样恢复；引擎按 BPMN 节点反查配置，不再读取它们。
@@ -42,7 +42,7 @@
 -- 不删任何数据；回滚见 V1.4.34_fam9_nodeconfig_align_rollback.sql
 -- 执行：mysql -uroot -p123456 -h127.0.0.1 -P3306 -Dfssc --default-character-set=utf8mb4 < 本文件
 
--- 0) 备份将被改动的行（幂等：表已存在则跳过，备份表不删）
+-- 0) 备份将被改动的行（去重：表已存在则跳过，备份表不删）
 CREATE TABLE IF NOT EXISTS wf_node_config_bak_V1434_20260923 AS
 SELECT * FROM wf_node_config WHERE (model_key, node_key) IN (('PREPAY','Task_2'),('PREPAY','Task_4'),('PREPAY','Task_7'),('PREPAY','Task_3'),('PREPAY','Task_9'),('PREPAY','Task_10'),('PREPAY','Task_11'),('PREPAY','Task_12'),('CLAIM_G1','Task_2'),('CLAIM_G1','Task_3'),('CLAIM_G1','Task_4'),('CLAIM_G1','Task_5'),('CLAIM_G1','Task_7'));
 
@@ -263,7 +263,7 @@ SELECT COUNT(*) AS drift_rows_A FROM (
       OR IFNULL(c.sort, -1) <> e.exp_sort
   ) x;
 
--- 4) 复核 B：本族 13 个岗位的存在性与 co1 在编持岗人数（口径 status='NORMAL' 且 is_admin=0）。
+-- 4) 复核 B：本族 13 个岗位的存在性与 co1 在编持岗人数（规则 status='NORMAL' 且 is_admin=0）。
 --     单点岗位：BASE_GM/EXEC_APPROVER/DEPT_MANAGER(co1) 各 1 人、PLATE_DIV_LEADER/PLATE_FIN_MANAGER 全租户 2 人
 --      → 断流靠 ESCALATE 沿汇报线外兜（永不兜 admin）。角色收敛属 R5（等 RA-01~15 裁决），本轮不增岗。
 SELECT r.role_code, ANY_VALUE(r.role_name) role_name, ANY_VALUE(r.org_scope) org_scope, ANY_VALUE(r.status) status,
@@ -309,7 +309,7 @@ SELECT COUNT(*) AS named_user_rows_F FROM wf_node_config
  WHERE del_flag = 0 AND (model_key, node_key) IN (('PREPAY','Task_2'),('PREPAY','Task_4'),('PREPAY','Task_7'),('PREPAY','Task_3'),('PREPAY','Task_9'),('PREPAY','Task_10'),('PREPAY','Task_11'),('PREPAY','Task_12'),('CLAIM_G1','Task_2'),('CLAIM_G1','Task_3'),('CLAIM_G1','Task_4'),('CLAIM_G1','Task_5'),('CLAIM_G1','Task_7'))
    AND (assign_type <> 'ROLE' OR assign_value IS NULL OR assign_value = '');
 
--- 8b) 复核 H：§七 R8 超时口径 —— 本族在用行 NOTIFY 占比（期望 0/13）；同时打印含幽灵行的全族占比供对账
+-- 8b) 复核 H：§七 R8 超时规则 —— 本族在用行 NOTIFY 占比（期望 0/13）；同时打印含幽灵行的全族占比供对账
 SELECT SUM(CASE WHEN timeout_action = 'NOTIFY' THEN 1 ELSE 0 END) AS notify_in_new_bpmn,
        COUNT(*) AS in_new_bpmn_rows,
        SUM(CASE WHEN timeout_action = 'NOTIFY' THEN 1 ELSE 0 END) * 100 DIV COUNT(*) AS pct_H

@@ -27,7 +27,7 @@
 --   ACT_RE_PROCDEF 实测 CLAIM 段 ID_ 形如 'CLAIM:232:c6c2…' ⇒ split(":")[0] == 'CLAIM'
 --   与 wf_approval_item.model_key、wf_node_config.model_key 逐字同源 
 --
--- 试点范围（收窄口径）：
+-- 试点范围（收窄规则）：
 --   只给 CLAIM 的 3 个节点配审批项，且只配 2 类结果（POSITIVE/REJECT）——
 --   **TERMINATE 本件一律不配**：终止是不可逆动作，需业务先签字确认语义，
 --   不与"把按钮点亮"混在同一件里。
@@ -37,7 +37,7 @@
 --     （实体 javadoc：action 是 varchar(20) NOT NULL 且 WfQueryService:676 用
 --      "REJECT".equals(action) 反推实例状态，写文案会误判 —— 本件严格遵守，不碰 action）；
 --   · REJECT 项的 target_node 留空 ⇒ 落回原「终止本流程」路径，与改造前逐字一致
---     （target_node 只在 wf.reject.free.enabled 总闸放行时才搬执行，现该键=0，闸门本就是关的）。
+--     （target_node 只在 wf.reject.free.enabled 总开关放行时才搬执行，现该键=0，校验本就是关的）。
 -- =============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -54,10 +54,10 @@
 -- SELECT node_key, node_name, handling_mode FROM fssc.wf_node_config
 --  WHERE del_flag = 0 AND model_key='CLAIM' AND node_key IN ('Task_5','Task_11','Task_13');
 --   实测 2026-10-15：Task_5=PICK(部门经理挑选)、Task_11=AUTO(财务总监)、Task_13=AUTO(总裁)
---   —— 三者均非 POOL 取数节点，故均可挂审批项。
+--   —— 三者均非 POOL 查询节点，故均可挂审批项。
 
 -- ----------------------------------------------------------------------------
--- §2 执行段（幂等：先按 (tenant, model, node, item_code) 删，再插）
+-- §2 执行段（去重：先按 (tenant, model, node, item_code) 删，再插）
 -- ----------------------------------------------------------------------------
 DELETE FROM fssc.wf_approval_item
  WHERE tenant_id = 1 AND model_key = 'CLAIM'
@@ -107,7 +107,7 @@ VALUES
 --   取任一 CLAIM 在办任务 → GET /api/workflow/task/approval-items?taskId=<id>
 --   期望返回 2 项（同意/驳回），前端审批弹窗据此渲染自定义按钮。
 --   注：当前库 CLAIM/LOAN 无 PENDING 在办任务（wf_task 中 status='PENDING' 且 model_key IN
---   ('CLAIM','LOAN') 命中 0 行），故本轮只能做配置侧验证，界面腿待有在办单据时补。
+--   ('CLAIM','LOAN') 命中 0 行），故本轮只能做配置侧验证，界面环节待有在办单据时补。
 
 -- =============================================================================
 -- 回滚

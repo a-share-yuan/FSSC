@@ -12,7 +12,8 @@
 --   后果：P0-C2 之后核销按「单据在该预算行的净占用」推导，历史占用不可见 → 这些行的占用
 --   永远不会被核销/释放冲减，也无法向审计解释占用构成（无法穿透到单据）。
 --
---   同类系统的预算模块都有**预算期初**（年初预算、期初已发生、期初占用）这一独立录入项，
+-- 处置规则：
+--   预算模块应有**预算期初**（年初预算、期初已发生、期初占用）这一独立录入项，
 --   初始化时把既有余额以「期初结转」凭证式记录进流水，而不是改写历史单据。
 --   本脚本照此办理：对每条不平的预算行补 **一条** OCCUPY 流水，
 --   biz_type='INIT_CARRY'、biz_id=0（bg_occupy.biz_id 为 NOT NULL，用 0 作期初哨兵）、
@@ -33,7 +34,7 @@
 --      这批数据改由 V1.4.17_used_no_ledger.sql 出**只读清单**交财务认定。
 --   3) 不动任何业务事实表。
 --
--- 幂等：每条预算行至多补一行（NOT EXISTS 按 biz_type='INIT_CARRY' 守卫），可重复执行。
+-- 去重：每条预算行至多补一行（NOT EXISTS 按 biz_type='INIT_CARRY' 守卫），可重复执行。
 -- 回滚：V1.4.17_bg_occupy_opening_carryover_rollback.sql（按 biz_type='INIT_CARRY' 删除，只删本次新增行）
 -- 备份：自动化测试/backup/fssc_masterdata_20260921_1950.sql
 -- 备注：bg_occupy 按 create_time 月分区；本次结转行落在执行时刻所在分区，
@@ -51,7 +52,7 @@ SELECT i.tenant_id, i.id, 'OCCUPY',
        'INIT_CARRY', 0, 'INIT-CARRY', 0,
        1,
        CONCAT('V1.4.17 期初结转：预算行既有占用 ', i.occupy_amount - COALESCE(f.s, 0),
-              ' 无历史流水（初始化直写汇总数），按厂商"预算期初占用"口径补记；非本期发生额，报表按 biz_type 过滤 INIT_CARRY'),
+              ' 无历史流水（初始化直写汇总数），按预算期初占用口径补记；非本期发生额，报表按 biz_type 过滤 INIT_CARRY'),
        NOW()
 FROM bg_item i
 LEFT JOIN (SELECT budget_item_id, SUM(amount) s FROM bg_occupy GROUP BY budget_item_id) f
@@ -89,7 +90,7 @@ COMMIT;
 -- H) 不变式 I1 破坏行数            → 期望 0
 -- I) 结转行数                      → 期望 238
 -- J) 结转金额合计                  → 期望 2105160.35
--- K) 结转行是否可能被单据口径命中   → 期望 0（biz_id>0 或 biz_line_id 非 0 的 INIT_CARRY 行，必须一条都没有）
+-- K) 结转行是否可能被单据规则命中   → 期望 0（biz_id>0 或 biz_line_id 非 0 的 INIT_CARRY 行，必须一条都没有）
 -- M) used 无核销流水（只报告不改） → 期望 635 行 / 24611523.68
 --    注：bg_item 的 total/adjust/occupy/used 四列本脚本零写入，可用额度不变（可另跑
 --        SELECT COUNT(*) FROM bg_item WHERE del_flag=0; → 期望仍为 1450）

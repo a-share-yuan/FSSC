@@ -1,25 +1,25 @@
 -- V1.4.30  批次2 第五族（存货 INV_* + FA11-01/FA11-04）配置侧对齐：wf_node_config <- 已发布 BPMN 唯一真值
 -- 前置：11 个模型已 /api/tenant/wf/designer/publish 重发布（FA11-01 / FA11-04 / INV_DEVAL / INV_DISPOSAL_APPLY / INV_DISPOSAL_CHECK / INV_DISPOSAL_EXEC / INV_DISPOSE / INV_INTERNAL_SALE / INV_ISSUE_NONPROJECT / INV_ISSUE_PROJECT / INV_PHYSICAL_CHECK），
---   发布前回读复核 11/11 与 draft 逐字节一致（e2e-ui/batch2/fam5-verify.log）、在途实例双口径均为 0
+--   发布前回读复核 11/11 与 draft 逐字节一致（e2e-ui/batch2/fam5-verify.log）、在途实例双规则均为 0
 --   （designer/in-flight runningTotal=0 且 ACT_RU_EXECUTION/ACT_RU_TASK 按 KEY_ 前缀查得 0）。
 -- 结构：本族 11 模型 79 个人工节点 -> 42 个（-37，-47%）；
 --   作业池 5 个（handling_mode=POOL）、排他网关 8 个（金额 DOA 阶梯，每档显式默认流）、并联会审 3 组
 --   （INV_DISPOSAL_APPLY 仓库+归口+基地财务 3 出、INV_DISPOSAL_EXEC 同 3 出、INV_PHYSICAL_CHECK 仓库录入+稽核 2 出）。
 -- 相邻同角色：重造前 19 对（WH_KEEPER×4 出现在 4 个模型、FIN_AUDIT×3、FIN_GL×3）-> 重造后 0 对，
 --   且【同一模型内同一角色只出现一次】（自检断言）。
--- 已出链旧节点的配置行按批次2口径【保留不删】（DB 增量原则）：引擎按 BPMN 节点反查配置，幽灵行不产生运行时影响，仅在复核 C 盘点计数。
+-- 已出链旧节点的配置行按批次2规则【保留不删】（DB 增量原则）：引擎按 BPMN 节点反查配置，幽灵行不产生运行时影响，仅在复核 C 盘点计数。
 -- 本文件做三件事：1) 38 个已存在节点对齐 node_name/assign_type/assign_value/handling_mode/empty_strategy/超时；
 --   2) 4 个新 key 插行；3) 复核 A~E。
 -- 改岗清单（BPMN candidateGroups 与旧 assign_value 不同者，共 12 处）：
 --   FA11-01.Task_2 FA_ASSET_ADMIN->FSSC_AUDITOR、FA11-04.Task_2 FA_ASSET_ADMIN->FSSC_AUDITOR、INV_DISPOSAL_APPLY.Task_6 FIN_AUDIT->DEPT_MANAGER、INV_DISPOSAL_APPLY.Task_8 FIN_AUDIT->BASE_FIN_MANAGER、INV_DISPOSAL_EXEC.Task_4 WH_KEEPER->DEPT_MANAGER、INV_DISPOSAL_EXEC.Task_5 WH_KEEPER->BASE_FIN_MANAGER、INV_DISPOSAL_EXEC.Task_8 FIN_STAFF->CFO、INV_DISPOSE.Task_2 DEPT_MANAGER->SCAN_STAFF、INV_DISPOSE.Task_10 FA_ASSET_ACCOUNT->FIN_GL、INV_INTERNAL_SALE.Task_6 NULL->SCAN_STAFF、INV_ISSUE_PROJECT.Task_3 FIN_AP->FIN_GL、INV_PHYSICAL_CHECK.Task_6 FA_ASSET_ADMIN->WH_KEEPER
--- 档位口径（方案 §5.9）：授权层级(BASE_GM/GM/CFO/PRESIDENT/板块分管领导) 48h AUTO_REMIND 且永不 AUTO_PASS；
+-- 档位规则（方案 §5.9）：授权层级(BASE_GM/GM/CFO/PRESIDENT/板块分管领导) 48h AUTO_REMIND 且永不 AUTO_PASS；
 --   集体决策 BOARD_OFFICE 168h NOTIFY；共享审单(FSSC_AUDITOR/FIN_AUDIT/SCAN_STAFF) 8h AUTO_REMIND；
 --   业务审批 24h AUTO_REMIND；作业池 48h AUTO_REMIND。empty_strategy 全族 ESCALATE。
 -- allow_transfer / multi_type / auto_pass_self / form_perm 一律不动（沿用批次1 定档）。
 -- 不删任何数据；回滚见 V1.4.30_fam5_nodeconfig_align_rollback.sql
 -- 执行：mysql -uroot -p123456 -h127.0.0.1 -P3306 -Dfssc --default-character-set=utf8mb4 < 本文件
 
--- 0) 备份将被改动的行（幂等：表已存在则跳过，备份表不删）
+-- 0) 备份将被改动的行（去重：表已存在则跳过，备份表不删）
 CREATE TABLE IF NOT EXISTS wf_node_config_bak_V1430_20260922 AS
 SELECT * FROM wf_node_config WHERE (model_key, node_key) IN (('FA11-01','Task_2'),('FA11-01','Task_3'),('FA11-04','Task_2'),('FA11-04','Task_3'),('INV_DEVAL','Task_2'),('INV_DEVAL','Task_3'),('INV_DEVAL','Task_4'),('INV_DEVAL','Task_5'),('INV_DISPOSAL_APPLY','Task_2'),('INV_DISPOSAL_APPLY','Task_6'),('INV_DISPOSAL_APPLY','Task_8'),('INV_DISPOSAL_APPLY','Task_7'),('INV_DISPOSAL_CHECK','Task_1'),('INV_DISPOSAL_CHECK','Task_3'),('INV_DISPOSAL_EXEC','Task_2'),('INV_DISPOSAL_EXEC','Task_3'),('INV_DISPOSAL_EXEC','Task_4'),('INV_DISPOSAL_EXEC','Task_5'),('INV_DISPOSAL_EXEC','Task_7'),('INV_DISPOSAL_EXEC','Task_8'),('INV_DISPOSE','Task_2'),('INV_DISPOSE','Task_3'),('INV_DISPOSE','Task_4'),('INV_DISPOSE','Task_5'),('INV_DISPOSE','Task_8'),('INV_DISPOSE','Task_6'),('INV_DISPOSE','Task_9'),('INV_DISPOSE','Task_10'),('INV_INTERNAL_SALE','Task_6'),('INV_INTERNAL_SALE','Task_13'),('INV_INTERNAL_SALE','Task_10'),('INV_INTERNAL_SALE','Task_11'),('INV_ISSUE_NONPROJECT','Task_2'),('INV_ISSUE_NONPROJECT','Task_7'),('INV_ISSUE_PROJECT','Task_2'),('INV_ISSUE_PROJECT','Task_3'),('INV_PHYSICAL_CHECK','Task_2'),('INV_PHYSICAL_CHECK','Task_3'),('INV_PHYSICAL_CHECK','Task_4'),('INV_PHYSICAL_CHECK','Task_5'),('INV_PHYSICAL_CHECK','Task_6'),('INV_PHYSICAL_CHECK','Task_7'));
 
@@ -72,7 +72,7 @@ UPDATE wf_node_config
        update_time    = NOW()
  WHERE model_key = 'INV_DEVAL' AND node_key = 'Task_2';
 
--- INV_DEVAL.Task_3  稽核岗复核跌价计提口径【财务审核岗】
+-- INV_DEVAL.Task_3  稽核岗复核跌价计提规则【财务审核岗】
 UPDATE wf_node_config
    SET node_name      = '稽核岗复核跌价计提口径【财务审核岗】',
        assign_type    = 'ROLE',
@@ -492,7 +492,7 @@ UPDATE wf_node_config
        update_time    = NOW()
  WHERE model_key = 'INV_PHYSICAL_CHECK' AND node_key = 'Task_7';
 
--- 2) 新 key 插行（4 行，NOT EXISTS 守卫保证幂等）
+-- 2) 新 key 插行（4 行，NOT EXISTS 守卫保证去重）
 -- FA11-01.Task_3  财务审核岗复核领用科目与结转【财务审核岗】
 INSERT INTO wf_node_config
   (tenant_id, model_key, node_key, node_name, assign_type, assign_value, handling_mode, up_level, multi_type,
@@ -633,10 +633,10 @@ SELECT e.model_key, e.node_key, e.exp_role AS bpmn_groups, c.assign_value AS con
     OR IFNULL(c.timeout_action, '') <> e.exp_ta
     OR IFNULL(c.handling_mode, '') <> e.exp_hm;
 
--- 4) 复核 B：本族 12 个角色的存在性与 co1 在编持岗人数（口径 status='NORMAL' 且 is_admin=0；
+-- 4) 复核 B：本族 12 个角色的存在性与 co1 在编持岗人数（规则 status='NORMAL' 且 is_admin=0；
 --    COMPANY 范围角色必须问"该公司有没有在编持有人"。active_co1=0 即为 §5.4 补岗清单候选，不是脚本缺陷。
 --     WH_KEEPER：本族挂载点已由 20 降到 6（APPLY/CHECK/EXEC/PHYSICAL_CHECK + 两条领用链），但该角色全租户仍仅 1 人
---      → 这 6 个节点在任何一张单据上都只能靠 B 角补岗或 ESCALATE 沿汇报线兜底，属 §5.4 四选一未裁决项）
+--      → 这 6 个节点在任何一张单据上都只能靠 B 角补岗或 ESCALATE 沿汇报线默认处理，属 §5.4 四选一未裁决项）
 SELECT r.role_code, ANY_VALUE(r.role_name) role_name, ANY_VALUE(r.org_scope) org_scope, ANY_VALUE(r.status) status,
        COUNT(DISTINCT ur.user_id) holders_total,
        SUM(CASE WHEN u.status = 'NORMAL' AND u.is_admin = 0 THEN 1 ELSE 0 END) active_total,
