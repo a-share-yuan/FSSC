@@ -35,7 +35,7 @@ import java.util.Set;
  * + 应付确认凭证（借 库存商品(1405)/贷 应付账款(2202)）。
  * <p>
  * 注意：起流方（ThreeWayMatchService.review/manualReview）传入的 bizId 是<b>付款单 id</b>（exp_bill，PAY），
- * 采购订单需经 exp_bill.poId 解析（P1 修复：原实现直接把 bizId 当 po_order.id 查，永远查不到导致收尾空转）。
+ * 采购订单需经 exp_bill.poId 解析——直接把 bizId 当 po_order.id 查必然查不到，收尾会空转。
  */
 @Slf4j
 @Component("invoiceMatchBizAction")
@@ -76,35 +76,35 @@ public class InvoiceMatchBizAction implements WfBizAction {
             return;
         }
         boolean approved = Boolean.TRUE.equals(event.getApproved());
-        // P0 办结前强制校验：付款单仍有三单匹配硬异常（超付/超容差 ⇒ frozen）时，**禁止**在本链办结放行。
-        //   此前本钩子对任意 approved 的 INVOICE_MATCH(_MANUAL) 链都无条件把结论写成 MANUAL_MATCHED，
-        //   等于「谁点通过谁放行」，付款强制校验形同虚设。实证（V4 人工 N1-B 幕）：
-        //   付款单 FK202610160003（120,000 超付、无发票覆盖、缺合同环节）先被付款校验正确拦下
-        //   （code=400「三单匹配拦截：超付（关联发票 0＋容差 0.00 < 本次付款 120,000.00）」），
-        //   随后仅把该单的 INVOICE_MATCH 复审链点通过两节，结论即被改写为 MANUAL_MATCHED，
-        //   付款校验随即放行 → 异常单真的付了款（PB202610160004 PAID，回单 SER17921255826250）。
-        //   注意：本方法整体被外层 catch(Exception) 默认处理，异常会被静默吞掉 ⇒ 硬拦必须抛在 try 之外。
+        // 办结前强制校验：付款单仍有三单匹配硬异常（超付/超容差 ⇒ frozen）时，禁止在本链办结放行。
+        //   对任意 approved 的 INVOICE_MATCH(_MANUAL) 链都无条件把结论写成 MANUAL_MATCHED，
+        //   等于「谁点通过谁放行」，付款强制校验形同虚设：一张超付、无发票覆盖、缺合同环节的单
+        //   先被付款校验正确拦下
+        //   （code=400「三单匹配拦截：超付」），
+        //   再把该单的 INVOICE_MATCH 复审链点过两节，结论就被改写成 MANUAL_MATCHED，
+        //   付款校验随即放行，异常单真的付了款。
+        //   注意：本方法整体被外层 catch(Exception) 兜底，异常会被静默吞掉 ⇒ 硬拦必须抛在 try 之外。
         if (approved) {
             assertNoHardMatch(bill);
         }
         try {
             if (approved) {
                 // 先落人工/自动匹配链的<b>最终状态结论</b>（去重覆盖，异常只 warn）——
-                // 此前本钩子只把 po_order 置 INVOICED，付款单侧的匹配结论没有任何写入数据库载体，
+                // 只把 po_order 置 INVOICED 的话，付款单侧的匹配结论没有落库载体，
                 // ThreeWayMatchService.check() 每次现算现判，办结后仍回显 FAILED 并继续冻结付款。
                 threeWayMatchService.recordMatchVerdict(billId, event.getBizType(), event.getProcInstId(),
                         ThreeWayMatchService.VERDICT_MANUAL_MATCHED,
                         event.getComment());
 
-                // 四单齐套检查把「合同环节」纳入同一判据——
+                // 四单齐套检查把「合同环节」纳入同一套判断——
                 // 付款单 contract_id 与采购订单 contract_id 两环节皆无（或挂了不存在的合同）即缺环节。
-                // 本轮只做<b>如实报告 + WARN 记录，不硬拦</b>：
-                // 「缺合同是否硬拦」仍属 P2-B 现有待裁（分级册§六），裁决落地时把下面的 log.warn
-                // 换成抛 BizException 即可，硬拦开关不进本轮。
+                // 这里只做如实报告 + WARN 记录，不硬拦：
+                // 「缺合同是否硬拦」尚待定，决定硬拦时把下面的 log.warn
+                // 换成抛 BizException 即可。
                 String contractGap = contractGapOf(bill, order);
                 if (contractGap != null) {
                     log.warn("[四单齐套] 付款单 {}（采购订单 {}）办结即自动生成应付确认凭证，但四单缺合同腿：{}。"
-                                    + "合同/PO/收货/发票四腿中合同腿无任何一侧登记，本轮按在册待裁口径只留痕不拦截。",
+                                    + "合同/PO/收货/发票四腿中合同腿无任何一侧登记，按在册待定口径只留痕不拦截。",
                             bill.getBillNo(), order.getPoNo(), contractGap);
                 }
 
@@ -127,10 +127,9 @@ public class InvoiceMatchBizAction implements WfBizAction {
                 auditBefore.put("status", oldStatus);
                 Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
-                // 未标级修复战役 K4-C：记录的 biz 坐标必须与流程实例同轨。
-                // 本链 wf_instance 的坐标是 INVOICE_MATCH(_MANUAL)／exp_bill.id／FK 单号，此前这里写的是
-                // PO 侧（po_order.id／PO 单号）⇒ 台账 16:58 实测 audit_trail id=17 按付款单号或实例联查＝0 命中，
-                // 而同一窗内 PAY_PLAN_BASE（id=18）／RECON_ACTIVE（id=19）都写的是单据坐标，属正证。
+                // 记录的 biz 坐标必须与流程实例同轨。
+                // 本链 wf_instance 的坐标是 INVOICE_MATCH(_MANUAL)／exp_bill.id／FK 单号，写成
+                // PO 侧（po_order.id／PO 单号）时，按付款单号或实例联查 audit_trail 是 0 命中。
                 // 被改的行仍是 po_order ⇒ obj_type/obj_id 如实记 PO 侧；PO 单号折进备注，
                 // 读侧关键词检索（AuditTrailService.page/listByFilter 是 obj_type OR remark 的 LIKE）照旧命中。
                 // remark 列宽 varchar(500)，本行比原文多带一段 PO 说明，超长时截尾而不是让整行记录丢掉。
@@ -141,7 +140,7 @@ public class InvoiceMatchBizAction implements WfBizAction {
                         trailRemark.length() > 500 ? trailRemark.substring(0, 500) : trailRemark);
                 log.info("三单匹配 {} 审批通过: po_order {} → INVOICED（付款单 {}）",
                         event.getBizType(), order.getPoNo(), bill.getBillNo());
-                // P1-B 流程最终状态生成凭证：三单匹配通过 = 应付确认会计事件
+                // 流程最终状态生成凭证：三单匹配通过 = 应付确认会计事件
                 // 借 库存商品(1405)/贷 应付账款(2202)，失败不阻断状态迁移
                 try {
                     Long vid = voucherService.generateInvoiceMatchVoucher(order);
@@ -159,9 +158,9 @@ public class InvoiceMatchBizAction implements WfBizAction {
     }
 
     /**
-     * P0：三单匹配硬异常校验（办结前）。
+     * 三单匹配硬异常校验（办结前）。
      *
-     * <p>判据＝{@link ThreeWayMatchService#check(Long)} 现算的 {@code frozen}：
+     * <p>判定依据＝{@link ThreeWayMatchService#check(Long)} 现算的 {@code frozen}：
      * 超付、发票超收货超容差等 ERROR 级差异会把付款单冻住，此时付款执行接口会拒绝。
      * 人工/复审链<b>不得</b>把这种单据放行——否则只要在链上点一次通过就能绕过付款强制校验。
      * 查询失败同样不放行（无法确认可否放行时按保守处理）。
@@ -192,7 +191,7 @@ public class InvoiceMatchBizAction implements WfBizAction {
     }
 
     /**
-     * 四单齐套的合同环节判据——付款单 contract_id 与采购订单 contract_id 是同一事实的两个登记点，
+     * 四单齐套的合同环节判定——付款单 contract_id 与采购订单 contract_id 是同一事实的两个登记点，
      * 任一侧有值且合同档案真实存在即算齐；两环节皆空＝缺合同环节，挂了但查不到＝合同悬空。
      *
      * @return 缺失描述；合同环节在位时返回 null（调用方据此决定是否记录）

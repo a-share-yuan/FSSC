@@ -3,6 +3,8 @@
 
 package com.fssc.framework.security;
 
+import com.fssc.auth.CaptchaService;
+import com.fssc.auth.CaptchaTriggerService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.spi.DistributedState;
@@ -24,15 +26,15 @@ import java.time.Duration;
  *   <li>IP 限流：同一 IP 在 {@link #IP_WINDOW}（1 分钟，自窗口内首次尝试起算——旧版为自然分钟
  *       分桶，判定规则"窗口内超 {@link #IP_LIMIT_PER_MINUTE} 次拒绝"不变）内尝试超限抛业务异常。</li>
  *   <li>验证码开关 {@code fssc.login.captcha-enabled} 默认关闭；置 true 后由
- *       {@code com.fssc.auth.CaptchaTriggerService} 判定"该身份在本窗口内连续凭据失败是否已达
+ *       {@code CaptchaTriggerService} 判定"该身份在本窗口内连续凭据失败是否已达
  *       {@code fssc.login.captcha-fail-threshold}（默认 3）"，达阈值后的登录必须携带一次性图形验证码
- *       （下发端点 {@code GET /api/auth/captcha}，实体见 {@code com.fssc.auth.CaptchaService}）。
+ *       （下发端点 {@code GET /api/auth/captcha}，实体见 {@code CaptchaService}）。
  *       本服务只提供开关读数与失败计数来源，不参与验证码的生成与比对。</li>
  * </ul>
  * <p>
  * key 约定（相对 key，Redis 实现统一加 {@code fssc:} 命名空间前缀）：{@code login:ip:<ip>}（IP 计数）、
- * {@code login:fail:<scope>:<username>}
- * （失败计数）、{@code login:lock:<scope>:<username>}（锁定标记，getOrLoad 写入 Boolean 并随 TTL 自动过期）。
+ * {@code login:fail:<scope><username>}
+ * 失败计数、{@code login:lock:<scope><username>}（锁定标记，getOrLoad 写入 Boolean 并随 TTL 自动过期）。
  */
 @Service
 public class LoginGuardService {
@@ -53,7 +55,7 @@ public class LoginGuardService {
      * <p>true 时并非"每次登录都要验证码"：只有同一身份连续凭据失败达
      * {@code fssc.login.captcha-fail-threshold}（默认 3）之后的登录才必须携带，
      * 判定在 {@code CaptchaTriggerService#requiresCaptcha}；验证码本体（生成/一次性校验）
-     * 在 {@code com.fssc.auth.CaptchaService}，下发端点 {@code GET /api/auth/captcha}。</p>
+     * 在 {@code CaptchaService}，下发端点 {@code GET /api/auth/captcha}。</p>
      */
     @Value("${fssc.login.captcha-enabled:false}")
     private boolean captchaEnabled;

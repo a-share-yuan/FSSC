@@ -45,7 +45,7 @@ public class MdExpenseItem extends TenantAuditBase {
     private String status;
     private String remark;
 
-    // ========== 合并自 expense_type（费用类型） ==========
+    // 合并自 expense_type（费用类型）
 
     /** 是否需事前审批：1-是 0-否 */
     private Integer requiresPreApproval;

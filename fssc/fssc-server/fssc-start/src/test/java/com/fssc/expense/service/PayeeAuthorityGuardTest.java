@@ -86,7 +86,7 @@ class PayeeAuthorityGuardTest {
         TenantContext.clear();
     }
 
-    /** 库内 SUPPLIER 型往来单位（crm_customer.customer_type=SUPPLIER 实测行 44/46/47 同款形状）。 */
+    /** 库内 SUPPLIER 型往来单位（crm_customer.customer_type=SUPPLIER 的账号形状）。 */
     private void supplier(Long id, String name) {
         CrmCustomer c = new CrmCustomer();
         c.setId(id);
@@ -149,8 +149,8 @@ class PayeeAuthorityGuardTest {
     }
 
     @Test
-    @DisplayName("判据3: customer_id 指向不存在的往来单位时拒绝，文案点名 customer_id= 且一行不落库")
-    void 判据3_往来单位悬空应点名customer_id且不落库() {
+    @DisplayName("customer_id 指向不存在的往来单位时拒绝，文案点名 customer_id= 且一行不落库")
+    void 往来单位悬空应点名customer_id且不落库() {
         supplier(44L, WANWEI);
 
         BizException e = assertThrows(BizException.class,
@@ -163,8 +163,8 @@ class PayeeAuthorityGuardTest {
     }
 
     @Test
-    @DisplayName("判据3: po_id 指向不存在的采购订单时拒绝，文案点名 po_id= 且不牵连往来单位")
-    void 判据3_采购订单悬空应点名po_id且不落库() {
+    @DisplayName("po_id 指向不存在的采购订单时拒绝，文案点名 po_id= 且不牵连往来单位")
+    void 采购订单悬空应点名po_id且不落库() {
         supplier(44L, WANWEI);
         po(2L, HONGYI);
 
@@ -180,8 +180,8 @@ class PayeeAuthorityGuardTest {
     }
 
     @Test
-    @DisplayName("判据3: 编辑腿的悬空来源同样拦在写库之前")
-    void 判据3_编辑腿悬空来源不落库() {
+    @DisplayName("编辑腿的悬空来源同样拦在写库之前")
+    void 编辑腿悬空来源不落库() {
         supplier(44L, WANWEI);
         storedBill(44L, 4L);
 
@@ -194,8 +194,8 @@ class PayeeAuthorityGuardTest {
     }
 
     @Test
-    @DisplayName("判据1: 编辑腿往来单位与PO同指万维时 payee_name 被服务端反查覆盖，不保留前端残留串")
-    void 判据1_编辑腿请求带往来单位时户名反查覆盖() {
+    @DisplayName("编辑腿往来单位与PO同指万维时 payee_name 被服务端反查覆盖，不保留前端残留串")
+    void 编辑腿请求带往来单位时户名反查覆盖() {
         supplier(44L, WANWEI);
         po(4L, WANWEI);
         storedBill(46L, 2L);
@@ -209,8 +209,8 @@ class PayeeAuthorityGuardTest {
     }
 
     @Test
-    @DisplayName("判据1: 编辑腿请求未回传往来单位时按库中现单的 customer_id 反查，户名仍不跟前端残留")
-    void 判据1_编辑腿请求不带来源时按库中现单反查() {
+    @DisplayName("编辑腿请求未回传往来单位时按库中现单的 customer_id 反查，户名仍不跟前端残留")
+    void 编辑腿请求不带来源时按库中现单反查() {
         supplier(44L, WANWEI);
         po(4L, WANWEI);
         storedBill(44L, 4L);
@@ -222,8 +222,8 @@ class PayeeAuthorityGuardTest {
     }
 
     @Test
-    @DisplayName("判据2: 编辑腿两源指向不同供应商时拒绝，文案同时点名两家与两个 id 且不落库")
-    void 判据2_编辑腿两源冲突应拒绝且不落库() {
+    @DisplayName("编辑腿两源指向不同供应商时拒绝，文案同时点名两家与两个 id 且不落库")
+    void 编辑腿两源冲突应拒绝且不落库() {
         supplier(44L, WANWEI);
         po(2L, HONGYI);
         storedBill(44L, 4L);

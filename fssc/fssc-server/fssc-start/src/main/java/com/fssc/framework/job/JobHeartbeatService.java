@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 锁异常（如 GET_LOCK 不支持）时降级为直接执行并仅告警一次，保持单机部署零阻塞。
  *
  * <p>【租户】本服务在 Spring 调度线程运行，无 TenantContext。心跳表 {@code op_job_heartbeat} 为全局表
- * （拦截器忽略名单）可直接读写；告警接收人读 {@code sys_config notify.job_alert_user}（默认演示租户1的用户1），
+ * 拦截器忽略名单 可直接读写；告警接收人读 {@code sys_config notify.job_alert_user}（默认演示租户1的用户1），
  * 发站内信需租户上下文，故先忽略租户查接收人租户，再 {@code callAs} 建立上下文后推送。
  */
 @Slf4j
@@ -51,7 +51,7 @@ public class JobHeartbeatService {
     private static final int MAX_ERROR_LEN = 1000;
     /** 调度锁 key 前缀：单机/多实例互斥执行同一 @Scheduled 任务 */
     private static final String JOB_LOCK_PREFIX = "fssc_job_";
-    /** Redis 锁最长持有时间（实例崩溃默认处理自动过期；远大于正常任务耗时） */
+    /** Redis 锁最长持有时间（实例崩溃兜底自动过期；远大于正常任务耗时） */
     private static final Duration JOB_LOCK_TTL = Duration.ofHours(2);
 
     private final OpJobHeartbeatMapper heartbeatMapper;
@@ -65,7 +65,7 @@ public class JobHeartbeatService {
 
     /**
      * 带心跳记录地执行任务体。执行成功记 SUCCESS（耗时 + 清零连续失败），异常记 FAIL
-     * （连续失败 +1、记错误摘要、推告警），异常吞掉不外抛。
+     * 连续失败 +1、记错误摘要、推告警，异常吞掉不外抛。
      *
      * <p>多实例部署下用分布式锁保证同一任务同一时刻只有一个实例执行：
      * 拿不到锁（其他实例在跑）立即跳过本轮，且<b>不更新 last_run_at</b>——只有真正执行的任务才记录心跳。
@@ -168,7 +168,7 @@ public class JobHeartbeatService {
         exist.setFailCount(0);
         exist.setLastError(null);
         exist.setUpdateTime(LocalDateTime.now());
-        // R5-D-037：MyBatis-Plus 默认字段策略「非 null 才写」，updateById 配 setLastError(null) 不会发 SET last_error=NULL，
+        // MyBatis-Plus 默认字段策略「非 null 才写」，updateById 配 setLastError(null) 不会发 SET last_error=NULL，
         // 历史错误会随下一次 SUCCESS 一直残留；改用显式 UpdateWrapper 强制清列，落实「上次失败才填该列」的写入侧不变量。
         heartbeatMapper.update(exist, new LambdaUpdateWrapper<OpJobHeartbeat>()
                 .eq(OpJobHeartbeat::getId, exist.getId())
@@ -210,7 +210,7 @@ public class JobHeartbeatService {
         String content = "任务「" + jobName + "」执行失败，连续失败 " + failCount + " 次。\n"
                 + "错误摘要：" + truncate(errMsg(ex));
         alert(jobName, title, content);
-        // P0-B1：业务站内信只推给配置的接收人（可能无人值守），再补一条运维通道告警（企微群 + 邮件）
+        // 业务站内信只推给配置的接收人（可能无人值守），再补一条运维通道告警（企微群 + 邮件）
         opsAlertService.alert("ERROR", title,
                 content + "\n建议：检查 op_job_heartbeat.last_error 与 fssc-error.log（已按 traceId 归档）。");
     }

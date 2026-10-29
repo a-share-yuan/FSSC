@@ -68,7 +68,7 @@ public class OpBankStatement implements Serializable {
 
     /**
      * 导入/直连写入数据库的操作人（bigint，与 md_* 同一规则）。
-     * <p>部署守卫（P3-D 实证 10-01）：fssc 与 fssc_drill 两库 `op_bank_statement` 均<b>无 create_by/update_by 列</b>
+     * <p>部署守卫：fssc 与 fssc_drill 两库 `op_bank_statement` 均<b>无 create_by/update_by 列</b>
      * 且无已批 ALTER 现有，而 {@code FsscMetaObjectHandler} 对存在 setter 的这两字段一律自动填充 ⇒
      * 列上线前任何 insert/update 都会 "Unknown column" 打红银行流水/收款认领/未达账项三页。
      * 注释态 DDL（DBA/用户放行后执行，执行后移除 exist=false）：

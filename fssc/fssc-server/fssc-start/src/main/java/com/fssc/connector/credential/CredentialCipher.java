@@ -22,7 +22,7 @@ import java.util.Base64;
  * <b>明文</b>（历史数据）或 <b>密文</b>（带 {@value #PREFIX} 版本前缀）。本类统一判定与转换：</p>
  * <ul>
  *   <li>默认<b>关闭</b>：未配置 {@code fssc.connector.credential.key} 时 {@link #isEnabled()}=false，
- *       {@link #decrypt(String)} 原样返回——与改造前行为完全一致，零回归；</li>
+ *       {@link #decrypt(String)} 原样返回——与原先行为完全一致，零回归；</li>
  *   <li>配置密钥后启用：AES-256-GCM，随机 96 位 IV 前置，密文形如 {@code enc:v1:<base64(iv||ct||tag)>}；</li>
  *   <li>解密失败（密钥错配/数据损坏）不抛穿，记 WARN 并原样返回，避免阻断业务外呼。</li>
  * </ul>

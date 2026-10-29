@@ -3,6 +3,7 @@
 
 package com.fssc.workflow.controller;
 
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.Result;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.UserContext;
@@ -49,16 +50,16 @@ public class WfTaskBatchController {
     @PostMapping("/batch-approve")
     public Result<Map<String, Object>> batchApprove(@RequestBody BatchApproveReq req) {
         if (req == null || req.getTaskIds() == null || req.getTaskIds().isEmpty()) {
-            return Result.fail(com.fssc.common.core.ErrorCode.PARAM_INVALID.getCode(), "taskIds 不能为空");
+            return Result.fail(ErrorCode.PARAM_INVALID.getCode(), "taskIds 不能为空");
         }
         if (req.getTaskIds().size() > MAX_BATCH_SIZE) {
-            return Result.fail(com.fssc.common.core.ErrorCode.PARAM_INVALID.getCode(),
+            return Result.fail(ErrorCode.PARAM_INVALID.getCode(),
                     "单次批量审批不能超过 " + MAX_BATCH_SIZE + " 条");
         }
         Long operUserId = UserContext.getRequired().getUserId();
         boolean approved = req.getApproved() == null || req.getApproved();
         if (!approved && (req.getComment() == null || req.getComment().trim().length() < 2)) {
-            return Result.fail(com.fssc.common.core.ErrorCode.PARAM_INVALID.getCode(),
+            return Result.fail(ErrorCode.PARAM_INVALID.getCode(),
                     "批量驳回必须填写原因（不少于 2 个字）");
         }
         // 通过动作可不留意见，缺省补「批量审批」以便记录；驳回意见一律原样透传，

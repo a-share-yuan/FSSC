@@ -11,38 +11,37 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * bizType 单据路由<b>唯一真值表</b>（批次3 R3-B，办结件）。
+ * bizType 单据路由<b>唯一真值表</b>。
  *
- * <p>改前同一个 bizType 的查询范围分散在三处各写一遍，彼此可以静默漂移：
+ * <p>同一个 bizType 的查询范围若分散在多处各写一遍，彼此就会静默漂移。本表收敛的三处是：
  * <ul>
  *   <li>{@code WfEngineFacade.BIZ_NO_TABLES}——起流时写 {@code wf_instance.biz_no} 的表/列；</li>
  *   <li>{@code WfTaskController.fillBillInfoBatch()}——待办列表回填 单号/金额/标题 的表/列；</li>
  *   <li>{@code NodeOrgResolver.companyTable()}——COMPANY 范围角色取人时的公司归属表。</li>
  * </ul>
- * round 1 实测到的正是这种漂移：{@code RECEIVABLE_COLLECT} 前两处已改对 {@code rc_receivable}，
+ * 漂移的典型形态：{@code RECEIVABLE_COLLECT} 前两处已改对 {@code rc_receivable}，
  * 取人侧仍写 {@code rc_collect_todo}；{@code FA_DEPRECIATION} 取人侧已改 {@code asset_depr_batch}，
- * 查询侧仍按 {@code FA} 前缀借 {@code md_asset} 的卡号（＝同一类"错值比空值危险"）。
- * 本类把三者合成一行，改一个 bizType 只需改一处。
+ * 查询侧仍按 {@code FA} 前缀借 {@code md_asset} 的卡号（同一类"错值比空值危险"）。
+ * 收敛到本类之后，改一个 bizType 只需改一处。
  *
- * <h3>本轮的验收判据＝除两处已声明的更正外零行为变更</h3>
- * 不改变任何一单的落点、待办或候选面。仅两处刻意更正：
+ * 本表不改变任何一单的落点、待办或候选面。刻意更正只有一处：
  * <ol>
- *   <li>{@code FA_DEPRECIATION} 查询侧 {@code md_asset}→{@code asset_depr_batch}（与 round 1 C1 取人侧对齐）；</li>
- *   <li>无第二处——其余差异全部原样保留并标注为"待裁决"，因为启用它们的后果是<b>换授权面</b>：
- *       {@code companyTable()} 返回 null 时 {@code canOperate()} 会放宽放行，改成有值即收窄候选面，
- *       属业务/权限裁决，不在查询合一这一轮顺手做。</li>
+ *   <li>{@code FA_DEPRECIATION} 查询侧 {@code md_asset}→{@code asset_depr_batch}（与取人侧对齐）。</li>
  * </ol>
+ * 其余差异原样保留并标注为"待定"：启用它们的后果是<b>换授权面</b>——
+ * {@code companyTable()} 返回 null 时 {@code canOperate()} 会放宽放行，改成有值即收窄候选面，
+ * 属业务/权限判定，不在查询合一这一范围内顺手做。
  */
 public final class BillRouteRegistry {
 
     /**
-     * @param fillTable 待办回填目标表；null＝该 bizType 今天不参与待办回填（保持原样，不新增覆盖面）
+     * @param fillTable 待办回填目标表；null＝该 bizType 不参与待办回填（不新增覆盖面）
      * @param noCol 单号列；null＝该表无单号列，单号置空属预期
      * @param amtCol 金额列；null＝无金额列
      * @param titleCol 标题列；null＝无标题列
      * @param bizNoTable 起流单号表；null＝回落 {@code fillTable}
      * @param bizNoCol 起流单号列；null＝回落 {@code noCol}
-     * @param companyTable COMPANY 范围角色的公司归属表；null＝不参与公司解析（现状，多数是"待启用"而非"不可用"）
+     * @param companyTable COMPANY 范围角色的公司归属表；null＝不参与公司解析（多数是"待启用"而非"不可用"）
      * @param ownerCol 「我的单据」按人过滤的归属人列；构造时按 {@link #homeTable()} 自动查
      *                    {@link #TABLE_OWNER}，无需逐行登记；null＝该表没有登记人列 ⇒ 前端明示不支持
      */
@@ -68,7 +67,7 @@ public final class BillRouteRegistry {
     /**
      * 表 → 归属人（"这单是谁登记的"）列。<b>未登记的表即没有按人检索的列</b>，
      * 由 {@link #myDocUnsupported()} 显式报给前端，而不是静默少数据。
-     * 取值规则按 2026-09-25 information_schema 实测（列存在性与注释均已核对）：
+     * 列名与列注释按 information_schema 逐列核对：
      * <ul>
      *   <li>{@code apply_user_id}＝报销/预算调整/资产申请的报账人；</li>
      *   <li>{@code applicant_id}＝付款计划经办人、档案销毁申请人；{@code requester_id}＝借阅申请人；
@@ -148,7 +147,7 @@ public final class BillRouteRegistry {
     );
 
     /**
-     * 业务主表 → 单据族中文名（同一张表多种 bizType 时的默认处理类型标签，见 {@link #TABLE_LEDGER} 注释）。
+     * 业务主表 → 单据族中文名（同一张表多种 bizType 时的兜底类型标签，见 {@link #TABLE_LEDGER} 注释）。
      * 前端 {@code constants/enums} 的 BIZ_TYPE 名称表按编码取值，这里给的是"表级"规则，两者不重叠。
      */
     private static final Map<String, String> TABLE_DOMAIN = Map.ofEntries(
@@ -217,33 +216,33 @@ public final class BillRouteRegistry {
     private static final Map<String, Route> EXACT = Map.ofEntries(
             // —— 资金域 ——
             // 死映射：treasury_transfer / asset_card 两张表在 information_schema 查无，
-            // 两 bizType 实测 wf_instance/wf_task 均 0 行 ⇒ 潜伏。刻意不猜目标表（猜表正是 的成因）。
+            // 两 bizType 在 wf_instance/wf_task 均无行 ⇒ 暂时潜伏。刻意不猜目标表：
+            // 猜表正是前文"错值比空值危险"的成因。
             Map.entry("TREASURY", f("treasury_transfer", "transfer_no", "amount", "title", null)),
             Map.entry("ASSET", f("asset_card", "card_no", "original_value", "asset_name", null)),
             Map.entry("TR_TRANSFER", f("tr_transfer", "transfer_no", "amount", "purpose", "tr_transfer")),
-            // TR_UPLOAD 与 TR_TRANSFER 同表同列，但改前 companyTable() 没有它这一行 ⇒ 公司解析 null。
-            // 原样保留：启用＝收窄候选面，属授权裁决（下同理，标注"取人未启用"）。
+            // TR_UPLOAD 与 TR_TRANSFER 同表同列，但 companyTable() 里没有它这一行 ⇒ 公司解析为 null。
+            // 暂不补：启用＝收窄候选面，属授权口径待定（下文同理，标注"取人未启用"）。
             Map.entry("TR_UPLOAD", f("tr_transfer", "transfer_no", "amount", "purpose", null)),
             Map.entry("TR_PAY", f("op_pay_batch", "batch_no", "total_amount", "batch_no", "op_pay_batch")),
             Map.entry("TR_PAY_FAIL", f("op_pay_batch", "batch_no", "total_amount", "batch_no", "op_pay_batch")),
-            // 2026-10-21 D-G47：原注「tr_credit_bill / tr_bill_settle 无 company_id」与实测不符——
-            // 两表都有 company_id（tr_bill_settle 由 TrBillSettleService.orgGuard.currentCompany() 写入），
-            // create_by 亦已于 2026-10-02 补出（/420，X-34 甲）。查无公司列的是 bank_reconcile。
-            // TR_BILL 在役实例 284（tr_bill_settle id=4, company_id=1）实测取人 null ⇒ COMPANY 范围角色
-            // 名单为空（NodeOrgResolver:1102）⇒ TB_1／TB_2 双 ESCALATE 到同一个人，再撞连办校验被迫转办。
-            // 故 TR_BILL 补登 tr_bill_settle；TR_RECEIPT 无在役实例，先留 null（同前提成立但未取证）。
+            // tr_credit_bill / tr_bill_settle 都有 company_id（后者由 TrBillSettleService.orgGuard
+            // .currentCompany() 写入），create_by 也早已补出；没有公司列的是 bank_reconcile。
+            // TR_BILL 若不登记 tr_bill_settle，COMPANY 范围角色的候选名单会为空
+            // （NodeOrgResolver 侧取人 null）⇒ TB_1／TB_2 双 ESCALATE 到同一个人，再撞连办校验被迫转办。
+            // TR_RECEIPT 无在役实例，先留 null（同前提成立但未核实）。
             Map.entry("TR_RECEIPT", f("tr_credit_bill", "bill_no", "amount", "bill_no", null)),
             Map.entry("TR_BILL", f("tr_bill_settle", "bill_no", "amount", "bill_no", "tr_bill_settle")),
             Map.entry("TR_PLAN", f("tr_fund_plan", "plan_no", "outcome_amount", "plan_no", "tr_fund_plan")),
             Map.entry("TR_PLAN_ADJUST", f("tr_fund_plan", "plan_no", "outcome_amount", "plan_no", "tr_fund_plan")),
             Map.entry("TR_BANK_RECON", f("bank_reconcile", "serial_no", null, "serial_no", null)),
-            // 银行账户主数据/印鉴变更：md_bank_account 无单号列 ⇒ 单号空属预期；公司走 create_by 默认处理（C2）。
+            // 银行账户主数据/印鉴变更：md_bank_account 无单号列 ⇒ 单号空属预期；公司按 create_by 归属。
             Map.entry("TR_BANK_MASTER", f("md_bank_account", null, null, "account_name", "md_bank_account")),
             Map.entry("TR_SEAL_CHANGE", f("md_bank_account", null, null, "account_name", "md_bank_account")),
 
             // —— 采购 / 合同 / 预算 ——
-            // po_order 实测<b>有</b> company_id 列，但改前 companyTable() 只认 PURCHASE_ORDER_REVIEW ⇒
-            // PO/PURCHASE 两个 bizType 取人 null（＝canOperate 放宽）。启用属裁决，本轮原样保留。
+            // po_order 有 company_id 列，但 companyTable() 只认 PURCHASE_ORDER_REVIEW ⇒
+            // PO/PURCHASE 两个 bizType 取人 null（＝canOperate 放宽）。补登属授权口径待定，暂不启用。
             Map.entry("PO", f("po_order", "po_no", "amount", "supplier_name", null)),
             Map.entry("PURCHASE", f("po_order", "po_no", "amount", "supplier_name", null)),
             Map.entry("PURCHASE_ORDER_REVIEW", f("po_order", "po_no", "amount", "supplier_name", "po_order")),
@@ -256,17 +255,18 @@ public final class BillRouteRegistry {
 
             // —— 应收 / 发票 / 对账 ——
             Map.entry("RECEIVABLE", f("rc_receivable", "bill_no", "amount", "bill_no", "rc_receivable")),
-            // round 1 的三处错表之一：bizId 是<b>应收单</b> id 而非催收待办 id（RcCollectTodoService:79 注释＋实测 83/88）。
+            // bizId 是<b>应收单</b> id 而非催收待办 id —— 按催收待办取数会查空，
+            // 把应收单的落点错记成"没有这张单"。
             Map.entry("RECEIVABLE_COLLECT", f("rc_receivable", "bill_no", "amount", "bill_no", "rc_receivable")),
             Map.entry("INVOICE_ISSUE", f("inv_invoice", "invoice_no", "amount", "invoice_title", "inv_invoice")),
             Map.entry("RECON_ACTIVE", f("supplier_recon", "recon_no", "payable_amount", "supplier_name", "supplier_recon")),
-            // RECON_PASSIVE 查询路由随旧门一并摘除（流程清单瘦身 §12.1）：三张记录表零行、无历史实例可追溯。
+            // RECON_PASSIVE 的查询路由已随旧门摘除：三张记录表零行、无历史实例可追溯。
             // ar_recon_record 补 amount 列后两行同值——同表的「我的单据」查询按表去重取首行，
             // 只改 AR_RECON 会让 amount 位的取值随 Map.ofEntries 迭代次序漂移。
             Map.entry("AR_RECON", f("ar_recon_record", "period", "amount", "record_type", "ar_recon_record")),
             Map.entry("AR_REPORT", f("ar_recon_record", "period", "amount", "record_type", "ar_recon_record")),
             Map.entry("AR_CLAIM", f("ar_claim", "bill_no", "amount", "reason", "ar_claim")),
-            // EER31-01 只在起流单号映射里出现，改前既不回填也不取人 ⇒ 原样。
+            // EER31-01 只在起流单号映射里出现，既不回填也不取人。
             Map.entry("EER31-01", bizNoOnly("ar_claim", "bill_no")),
             // BAD_DEBT（不带 _PROV/_CONFIRM 的那条老 bizType）三处各说各话：起流单号查 rc_receivable、
             // 待办走 rc_bad_debt LEFT JOIN rc_receivable 的特例方法、取人查 rc_bad_debt。
@@ -277,9 +277,9 @@ public final class BillRouteRegistry {
 
             // —— 资产 ——
             Map.entry("FA_CER", f("fa_cer_request", "request_no", "amount", "asset_name", "fa_cer_request")),
-            // 本轮刻意更正①：取人侧 round 1 已改 asset_depr_batch，查询侧仍按 FA 前缀借 md_asset 的资产卡号
-            // ⇒ 折旧批次 id 若与资产卡 id 撞号，待办会显示<b>另一张资产</b>的卡号。
-            // asset_depr_batch 实测有 batch_no/total_amount（information_schema），标题列取 period（同 rc_bad_debt 规则）。
+            // 查询侧按 FA 前缀借 md_asset 的资产卡号是错的：折旧批次 id 若与资产卡 id 撞号，
+            // 待办会显示<b>另一张资产</b>的卡号。取人侧早已是 asset_depr_batch，此处与它对齐。
+            // 该表有 batch_no/total_amount，标题列取 period（与 rc_bad_debt 同一取值规则）。
             Map.entry("FA_DEPRECIATION", f("asset_depr_batch", "batch_no", "total_amount", "period", "asset_depr_batch")),
 
             // —— 存货（前缀族见 of()：md_inventory/item_code/out_amount/item_name）——
@@ -293,11 +293,11 @@ public final class BillRouteRegistry {
             Map.entry("GL_DEFER", f("gl_journal_entry", "entry_no", "amount", "summary", "gl_journal_entry")),
             Map.entry("GL_OTHER_RECEIPT", f("gl_journal_entry", "entry_no", "amount", "summary", "gl_journal_entry")),
             Map.entry("GL_MANUAL_VOUCHER", f("gl_journal_entry", "entry_no", "amount", "summary", "gl_journal_entry")),
-            // 起 gl_journal_entry 是五合一（计提/待摊/手工/其他收款/盘点差异结转），但盘点差异那一型
-            // 此前没进本表 ⇒ ①待办「去处理」在 bizEntry.js 查不到落点（127/139/148 同根因的第 5 型，前端已登记该行）
-            // ②待办的单号/金额/标题三列空 ③sameTableDomains 按 fillTable 分组缺行，联查「声明域落空·同表纠偏」认不出它。
+            // 起 gl_journal_entry 的是五合一（计提/待摊/手工/其他收款/盘点差异结转），盘点差异那一型
+            // 不入本表会有三处后果：待办「去处理」在 bizEntry.js 查不到落点；待办的单号/金额/标题三列空；
+            // sameTableDomains 按 fillTable 分组缺行，联查「声明域落空·同表纠偏」认不出它。
             // 五格与同表另四型逐格一致（entry_no/amount/summary + companyTable=gl_journal_entry 取人，
-            // 该表实测有 company_id/create_by，见 人工测试/零证据流程首证_GL_DEFER…20260928.md:24）⇒ 不给第五型开出第二种规则。
+            // 该表有 company_id/create_by）⇒ 不给第五型另立规则。
             Map.entry("GL_CHECK_DIFF", f("gl_journal_entry", "entry_no", "amount", "summary", "gl_journal_entry")),
             Map.entry("GL_TAX_PROV", f("gl_tax_provision", "provision_no", "tax_amount", "provision_no", "gl_tax_provision")),
             // GL_TAX_PAY 不建新单据、复用当期计提行 ⇒ 单号列与计提同。
@@ -316,16 +316,16 @@ public final class BillRouteRegistry {
             Map.entry("FM_DOC_FLOW", f("dispatch_task", "task_code", "amount", "task_code", "dispatch_task")),
             Map.entry("FM_DESTROY", f("archive_destroy_approval", "destroy_code", null, "destroy_reason", "archive_destroy_approval")),
 
-            // —— 主数据（无 company_id，走 create_by 建单人默认处理＝round 1 C2；改前不参与待办回填）——
+            // —— 主数据（无 company_id，公司按 create_by 建单人归属；不参与待办回填）——
             Map.entry("CUSTOMER_MAINT", companyOnly("crm_customer")),
             Map.entry("SUPPLIER_ADD", companyOnly("md_supplier")),
 
             // —— 发票匹配 ——
-            // 改前只有起流单号映射（facade），待办回填没有这一条 ⇒ 此前 fillTable 置 null 原样保留。
-            // 本轮据实改判：`#/approval` 列表按 bill_type 显示（bizResolved 判据），exp_bill 行必然存在且 id＝bizId
-            // 一对一（bizId 就是那张付款单主键，配对查询无跨域撞号面）⇒ "显示的是本行自己的字段"，
-            // 补行只消灭「无关联单据／金额 -」的假阴性，不引入错值。INVOICE_MATCH_MANUAL 同型（2.5 第 2 例）。
-            // 取人环节维持现状 null——启用＝收窄候选面，属授权裁决（见类注释）。
+            // 起流单号映射（facade）里原本就有这两型，待办回填却缺行 ⇒ fillTable 曾是 null。
+            // 补行依据：`#/approval` 列表按 bill_type 显示（bizResolved 判据），exp_bill 行必然存在且
+            // id＝bizId 一对一（bizId 就是那张付款单主键，配对查询无跨域撞号面）⇒ "显示的是本行自己的字段"。
+            // 补行只消灭「无关联单据／金额 -」的假阴性，不引入错值。INVOICE_MATCH_MANUAL 同型。
+            // 取人环节维持 null——启用＝收窄候选面，属授权口径待定（见类注释）。
             Map.entry("INVOICE_MATCH", f("exp_bill", "bill_no", "total_amount", "title", null)),
             Map.entry("INVOICE_MATCH_MANUAL", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("PTP03", f("exp_bill", "bill_no", "total_amount", "title", null)),
@@ -339,9 +339,9 @@ public final class BillRouteRegistry {
             Map.entry("TRAIN", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("PREPAY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("SETTLE", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
-            // APPLY/MEETING/PAY 三格：待办回填走 exp_bill（改前 controller 的 EXP_BILL_TYPES 含它们），
-            // 但改前 companyTable() 的 EXPENSE_BIZ <b>不含</b> ⇒ 取人 null。两套集合的差集原样保留（待裁决）。
-            // MEETING 是例外：改前只在 facade 的 11 项类型集合里、<b>不在</b> controller 的 10 项里
+            // APPLY/MEETING/PAY 三格：待办回填走 exp_bill（controller 的 EXP_BILL_TYPES 含它们），
+            // 但 companyTable() 的 EXPENSE_BIZ <b>不含</b> ⇒ 取人 null。两套集合的差集原样保留（待定）。
+            // MEETING 是例外：它只在 facade 的 11 项类型集合里、<b>不在</b> controller 的 10 项里
             // ⇒ 起流单号取 exp_bill.bill_no、待办不回填，两值分开登记（合并成一行就会顺手扩覆盖面）。
             Map.entry("APPLY", f("exp_bill", "bill_no", "total_amount", "title", null)),
             Map.entry("MEETING", bizNoOnly("exp_bill", "bill_no")),
@@ -349,13 +349,11 @@ public final class BillRouteRegistry {
             Map.entry("EXP_CLAIM", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("EXP_LOAN", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             // EXP_REPAY 是运行期真 bizType（ExpenseBillService 提交时按 bill_type 映射
-            // REPAY→EXP_REPAY），本表却只有不带前缀的 REPAY ⇒ of("EXP_REPAY") 走完
+            // REPAY→EXP_REPAY）。若本表只有不带前缀的 REPAY，of("EXP_REPAY") 会走完
             // 显式映射→FA/INV 前缀→BIZNO_EXP_TYPES 三档全部让路（那 11 项是<b>不带前缀</b>的老名），
             // 返回 null ⇒ 起流时 wf_instance.biz_no 取不到单号、待办的单号/金额/标题三列也回填不上。
-            // 现网一手正证（wf_instance）：id=39（EXP_REPAY/LOAN）biz_no=NULL，而同期 EXP_LOAN(35/38)、
-            // EXP_CLAIM(31/32/73)、EXP_PAY(22/25/29/…) 全部有号——只有没登记的这一型空着。
+            // 症状是只有这一型空着：同一批 EXP_LOAN、EXP_CLAIM、EXP_PAY 的实例都有号。
             // 取人环节没坏（companyOf 认 EXP_ 前缀），坏的只有查询环节，正是本表要消灭的"三处各写一遍"漂移。
-            // 同批普查（把 wf_instance 全部 biz_type 与本表逐一对表）另有一型同样缺行：EXP_APPLY
             Map.entry("EXP_REPAY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("EXP_APPLY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("EXP_PAY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill"))
@@ -374,8 +372,8 @@ public final class BillRouteRegistry {
      *       由 {@code ThreeWayMatchService.route()} 在单据已有主流程之后再起一枚实例；</li>
      *   <li>{@code PTP03}——发票校验异常人工复审链（{@code ThreeWayMatchController} 注释即"PTP03 INVOICE_MATCH"）。</li>
      * </ul>
-     * 用途＝联查/追溯判「这单批完了没有」时必须排除它们：12-18:74 实测单据 26 名下
-     * SETTLE(98, {@code exp_bill.proc_inst_id}, RUNNING 停在扫描岗) 与 INVOICE_MATCH(99, APPROVED)，
+     * 用途＝联查/追溯判「这单批完了没有」时必须排除它们：同一张单据名下既有主流程实例
+     * （SETTLE 停在扫描岗）又有派单实例（INVOICE_MATCH 已 APPROVED），
      * 按"最后完成的那枚"查询就把「派单批完」显示成「已批」，且主流程真实卡点整条丢失。
      *
      * <p>登记在<b>本表</b>而不是散进 {@code BillTraceChainController}：这张表就是 bizType 的唯一真值表，
@@ -390,12 +388,12 @@ public final class BillRouteRegistry {
     }
 
     /**
-     * 流程 bizType → 凭证 {@code source_doc_type} 的<b>写侧域名别名</b>（/甲案读侧半）。
-     * <p>同一张单据在两侧可能用不同的名字：CONTRACT_APPROVE（流程域）vs CONTRACT（凭证写侧，现库 id=7 实证）、
-     * FA_DEPRECIATION（流程域）vs ASSET_DEPRECIATION（{@code AssetDeprBatchService→generateAssetVoucher} 写侧，
-     * 现库 id=34 实证）。追溯/联查按 bizType 成对匹配凭证就<b>恒 0 命中</b>——数据在、页面说没有＝假灰断链。
-     * <p>这里只登记<b>现库实证过</b>的两对，不做前缀推断（错值比空值危险）。写侧统一命名（真正的甲案全半）
-     * 会动既有凭证规则，属裁决面；本别名只做读侧补臂，不改任何写入值。
+     * 流程 bizType → 凭证 {@code source_doc_type} 的<b>写侧域名别名</b>（读侧补臂）。
+     * <p>同一张单据在两侧可能用不同的名字：CONTRACT_APPROVE（流程域）vs CONTRACT（凭证写侧）、
+     * FA_DEPRECIATION（流程域）vs ASSET_DEPRECIATION（{@code AssetDeprBatchService→generateAssetVoucher} 写侧）。
+     * 追溯/联查按 bizType 成对匹配凭证就<b>恒 0 命中</b>——数据在、页面说没有＝假灰断链。
+     * <p>这里只登记<b>现库实证过</b>的两对，不做前缀推断（错值比空值危险）。写侧统一命名
+     * 会动既有凭证规则，属待定范围；本别名只做读侧补臂，不改任何写入值。
      */
     private static final Map<String, Set<String>> VOUCHER_DOMAIN_ALIASES = Map.of(
             "CONTRACT_APPROVE", Set.of("CONTRACT"),
@@ -471,7 +469,7 @@ public final class BillRouteRegistry {
             "CLAIM", "CLAIM_TRAVEL", "APPLY", "TRAVEL", "TRAIN", "MEETING",
             "LOAN", "REPAY", "PAY", "PREPAY", "SETTLE");
 
-    /** 改前 NodeOrgResolver.EXPENSE_BIZ 的 8 项（与上面 11 项的差集＝APPLY/MEETING/PAY，见类注释）。 */
+    /** 原先 NodeOrgResolver.EXPENSE_BIZ 的 8 项（与上面 11 项的差集＝APPLY/MEETING/PAY，见类注释）。 */
     private static final Set<String> COMPANY_EXPENSE_TYPES = Set.of(
             "CLAIM", "CLAIM_TRAVEL", "LOAN", "REPAY", "TRAVEL", "TRAIN", "PREPAY", "SETTLE");
 
@@ -480,7 +478,7 @@ public final class BillRouteRegistry {
 
     /**
      * 查询路由（待办回填＋起流单号）。查不到返回 null＝该 bizType 既不回填也不取单号。
-     * 注意改前门面用的是 {@code startsWith("FA")}（无下划线），这里保持一致以免多覆盖。
+     * 注意原先门面用的是 {@code startsWith("FA")}（无下划线），这里保持一致以免多覆盖。
      */
     public static Route of(String bizType) {
         if (bizType == null || bizType.isBlank()) return null;
@@ -494,7 +492,7 @@ public final class BillRouteRegistry {
 
     /**
      * 取人路由（COMPANY 范围角色的公司归属表）。返回 null＝不参与公司解析，
-     * 后果由 {@code canOperate()} 对 null 公司"放宽放行"承担（＝候选面扩到全租户），办结它属授权裁决。
+     * 后果由 {@code canOperate()} 对 null 公司"放宽放行"承担（＝候选面扩到全租户），办结它属授权口径待定。
      */
     public static String companyOf(String bizType) {
         if (bizType == null || bizType.isBlank()) return null;
@@ -511,7 +509,7 @@ public final class BillRouteRegistry {
         return EXACT;
     }
 
-    /** 该 bizType 是否有显式行——前缀族回填据此让路（改前 {@code INVOICE_*} 被 "INV" 前缀二次覆盖就是缺这条判断） */
+    /** 该 bizType 是否有显式行——前缀族回填据此让路（原先 {@code INVOICE_*} 被 "INV" 前缀二次覆盖就是缺这条判断） */
     public static boolean hasExact(String bizType) {
         return bizType != null && EXACT.containsKey(bizType);
     }

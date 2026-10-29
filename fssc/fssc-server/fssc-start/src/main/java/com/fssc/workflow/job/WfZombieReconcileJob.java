@@ -27,14 +27,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * （2026-10-19 人工测试 G册实测修）：<b>流程实例与单据状态的双向收敛对账Job</b>。
+ * <b>流程实例与单据状态的双向收敛对账 Job</b>。
  *
- * <h3>要解决的实测问题</h3>
- * 本次人工测试发现 6 条「流程与单据状态脱节」的 RUNNING 实例：
+ * <h3>要解决的问题</h3>
+ * 「流程与单据状态脱节」的 RUNNING 实例有两种形态：
  * <ul>
- *   <li><b>A类 3 条</b>：单据已 {@code PAID}（钱已付清），但 INVOICE_MATCH 三单匹配派单流程仍 RUNNING
+ *   <li><b>单据已结束、流程还在跑</b>：单据已 {@code PAID}（钱已付清），但 INVOICE_MATCH 三单匹配派单流程仍 RUNNING
  *       ——单据是从<b>付款批次</b>那条路走通的，付款批次不会回调匹配流程，于是旧派单永久悬挂；</li>
- *   <li><b>B 类 3 条</b>：单据仍 {@code DRAFT}（用户还没提交），流程却已发起并挂出待办
+ *   <li><b>流程已起、单据还没提交</b>：单据仍 {@code DRAFT}（用户还没提交），流程却已发起并挂出待办
  *       ——挂在待办里点进去是空的。</li>
  * </ul>
  *
@@ -55,7 +55,7 @@ import java.util.List;
  * <ol>
  *   <li><b>只收RUNNING</b>：已办结/已驳回的历史实例一律不动（否则等于抹掉审计痕迹）；</li>
  *   <li><b>读不到即放行</b>：单据表/列读不到时 fail-open（不撤销）——
- *       <b>误杀正在办的单，远比留一个僵尸实例严重</b>；</li>
+ *       误杀正在办的单，远比留一个僵尸实例严重；</li>
  *   <li><b>成熟期门槛</b>：只处理创建已满 {@code min-age-minutes} 的实例
  *       默认 30 分钟，避开「刚提交还没写完状态」的瞬时窗口；</li>
  *   <li><b>分布式单跑</b>：多实例部署时用 {@link DistributedState} 抢锁，保证一个集群只有一个节点在扫。</li>
@@ -168,13 +168,13 @@ public class WfZombieReconcileJob {
                 if (billTerminalChecker.isBillTerminal(bizType, bizId)) {
                     // A类：单据已最终状态（PAID/APPROVED/VOID…），流程没跟上。
                     // 用 cancelRunningInstancesByBiz 而非 cancelInstance：它对
-                    // 「引擎实例已被删、视图仍 RUNNING」有补办结容错（ROOT-2规则），
+                    // 「引擎实例已被删、视图仍 RUNNING」有补办结容错，
                     // 直接调 cancelInstance 会在这种半脱节状态下抛「实例不存在或已结束」。
                     int n = wfEngineFacade.cancelRunningInstancesByBiz(bizType, bizId,
                             "D-WF-14 自动办结：单据 " + bizType + "#" + bizId + " 已结束，流程实例自动撤销");
                     terminalClosed += n;
                     if (n > 0) {
-                        log.info("[僵尸实例对账] 终态收口 bizType={}, bizId={}, 撤销实例 {} 个", bizType, bizId, n);
+                        log.info("[僵尸实例对账] 终态清理 bizType={}, bizId={}, 撤销实例 {} 个", bizType, bizId, n);
                     }
                 } else if (billTerminalChecker.isBillNotSubmitted(bizType, bizId)) {
                     // B 类：单据还没提交，挂在待办里点进去是空的
@@ -182,7 +182,7 @@ public class WfZombieReconcileJob {
                             "D-WF-14 自动办结：单据 " + bizType + "#" + bizId + " 尚未提交（草稿态），流程实例自动撤销");
                     draftClosed += n;
                     if (n > 0) {
-                        log.info("[僵尸实例对账] 未提交收口 bizType={}, bizId={}, 撤销实例 {} 个", bizType, bizId, n);
+                        log.info("[僵尸实例对账] 未提交清理 bizType={}, bizId={}, 撤销实例 {} 个", bizType, bizId, n);
                     }
                 } else {
                     skipped++;
@@ -193,7 +193,7 @@ public class WfZombieReconcileJob {
                 log.warn("[僵尸实例对账] 单条处理失败 procInstId={}: {}", procInstId, e.getMessage());
             }
         }
-        log.info("[僵尸实例对账] 完成：终态收口 {} 条、未提交收口 {} 条、本轮跳过 {} 条",
+        log.info("[僵尸实例对账] 完成：终态清理 {} 条、未提交清理 {} 条、本轮跳过 {} 条",
                 terminalClosed, draftClosed, skipped);
         if (stat != null && stat.length >= 3) {
             stat[0] = terminalClosed;

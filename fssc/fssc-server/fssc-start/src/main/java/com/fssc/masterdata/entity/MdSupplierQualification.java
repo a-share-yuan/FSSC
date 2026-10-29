@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/** md_supplier_qualification 供应商资质证照(N)(41号审查 P1-8 供应商专属页子表) */
+/** md_supplier_qualification 供应商资质证照(N)(41号审查 供应商专属页子表) */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("md_supplier_qualification")

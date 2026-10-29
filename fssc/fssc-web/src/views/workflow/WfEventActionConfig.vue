@@ -234,7 +234,7 @@ function openRowDetail(row) { return showRowDetail(row, { title: '收尾动作�
 
 // 编辑
 const edit = reactive({ visible: false, saving: false, row: {}, form: { enabled: 1, description: '' } })
-// 第2批：编辑弹窗接入——配置说明 256 字默认处理；启用状态恒有值（1/0）不建规则
+// 编辑弹窗接入——配置说明 256 字兜底；启用状态恒有值（1/0）不建规则
 const editFormRef = ref(null)
 const editRules = { description: commonRules.maxLength(256, '配置说明最多 256 个字符') }
 
@@ -242,7 +242,7 @@ async function openEdit(row) {
   edit.row = { ...row }
   edit.form = { enabled: isEnabled(row) ? 1 : 0, description: row.description || '' }
   edit.visible = true
-  // 详情接口回读一次：清单可能停留在改前的旧值上，编辑前以库内为准
+  // 详情接口回读一次：清单可能停留在原先的旧值上，编辑前以库内为准
   try {
     const fresh = await wfEventActionApi.detail(row.id)
     if (fresh) {
@@ -255,7 +255,7 @@ async function openEdit(row) {
 async function saveEdit() {
   edit.saving = true
   try {
-    // 第2批：配置说明长度默认处理（模板 maxlength 只限制输入，绕过 DOM 直接赋值可超长入库）
+    // 配置说明长度兜底（模板 maxlength 只限制输入，绕过 DOM 直接赋值可超长入库）
     if (!(await validateForm(editFormRef.value))) return
     await wfEventActionApi.update({
       id: edit.row.id,

@@ -21,15 +21,15 @@
 
         <!-- Header 右侧功能区 -->
         <div class="header-right">
-          <!-- P1: 暗色模式切换 -->
+          <!-- 暗色模式切换 -->
           <el-button link class="header-btn" @click="toggleTheme" title="切换深/浅色模式">
             <el-icon :size="18"><Sunny v-if="!isDark" /><Moon v-else /></el-icon>
           </el-button>
-          <!-- P1: 快捷键帮助 -->
+          <!-- 快捷键帮助 -->
           <el-button link class="header-btn" @click="kbHelpVisible = true" title="快捷键 (?)">
             <el-icon :size="18"><Key /></el-icon>
           </el-button>
-          <!-- P0: 待办角标 + 搜索 + 通知 + 收藏 -->
+          <!-- 待办角标 + 搜索 + 通知 + 收藏 -->
           <HeaderBadges
             @search="searchVisible = true"
             @todo="router.push('/approval')"
@@ -89,7 +89,7 @@
 
       <el-main class="main">
         <!-- key=$route.path：防止"同组件不同菜单"（如 银行账户/金融机构 等共用 MasterConfigTable）
-             复用同一实例导致旧数据残留、新页签字段全空（2026-09-17 用户实测踩坑） -->
+             复用同一实例导致旧数据残留、新页签字段全空 -->
         <router-view :key="$route.path" />
       </el-main>
     </el-container>
@@ -216,11 +216,11 @@ const coachMarkRef = ref(null)
 const { isDark, toggle: toggleTheme } = useTheme()
 
 /**
- * 全局入口页权限门控（2026-09-16 P0 权限治理）
+ * 全局入口页权限门控
  *
- * 用户下拉菜单里的「流程监控大屏」「月结看板」是**没有菜单承载**的入口页
+ * 用户下拉菜单里的「流程监控大屏」「月结看板」是没有菜单承载的入口页
  * （sys_menu 中无任何 path/component 指向它们），因此不受菜单权限体系约束。
- * 此前对全员无条件渲染 → 无权限者点进去即弹「缺少权限：xxx」。
+ * 对全员无条件渲染的话 → 无权限者点进去即弹「缺少权限：xxx」。
  * 这里按各自页面首屏接口的真实权限码收敛。
  */
 const canFlowMonitor = hasPerm('wf:instance:list')
@@ -273,7 +273,7 @@ function addCurrentPageToFav() {
   ElMessage.success('已收藏当前页面')
 }
 
-// 面包屑以登录菜单树为准（菜单挂在哪，面包屑就走哪），仅菜单树无匹配时按路径首段默认处理
+// 面包屑以登录菜单树为准（菜单挂在哪，面包屑就走哪），仅菜单树无匹配时按路径首段兜底
 const PATH_DOMAIN_MAP = {
   expense: '费用报账', approval: '流程中心', wf: '流程中心',
   pay: '付款与对账', 'corp-pay': '付款与对账', contract: '付款与对账',
@@ -340,7 +340,7 @@ function closeNotice() {
   notices.value = []
   currentIdx.value = 0
 }
-// 任意关闭路径（X / ESC / 关闭按钮）统一默认处理清理，避免残留状态
+// 任意关闭路径（X / ESC / 关闭按钮）统一兜底清理，避免残留状态
 function onNoticeClosed() {
   notices.value = []
   currentIdx.value = 0

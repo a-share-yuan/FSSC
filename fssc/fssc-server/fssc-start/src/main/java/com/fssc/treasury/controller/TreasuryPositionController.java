@@ -102,7 +102,7 @@ public class TreasuryPositionController {
             }
             for (MdBankAccount a : accounts) {
                 BankBalance b = latest.get(a.getId());
-                // 余额表未登记时退化为账户主数据当前余额（改前恒 0，与"账户确实没钱"同形，
+                // 余额表未登记时退化为账户主数据当前余额（原先恒 0，与"账户确实没钱"同形，
                 // 界面按 balanceDate 是否为空标注「未登记（取账户余额）」；登记入口见资金管理→头寸→登记余额）
                 BigDecimal bal = b == null || b.getBalance() == null
                         ? (a.getBalance() == null ? BigDecimal.ZERO : a.getBalance())

@@ -9,9 +9,9 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 表单字段元数据（V1.4.85）——闭环差距①「单据/界面不是元数据驱动」。
+ * 表单字段元数据——闭环差距①「单据/界面不是元数据驱动」。
  *
- * <p><b>改造前</b>：{@code md_form_config} 13 行在库，但 config_json 里只有
+ * <p><b>原先</b>：{@code md_form_config} 13 行在库，但 config_json 里只有
  * {@code {"sections":["概要",...]}} 这种分节名，没有任何字段定义，前端零消费。
  * 结果是「新增一种单据 = 改前端代码 + 发版」。
  *

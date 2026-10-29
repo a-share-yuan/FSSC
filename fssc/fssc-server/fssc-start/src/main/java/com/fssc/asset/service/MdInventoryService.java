@@ -29,7 +29,7 @@ import java.math.RoundingMode;
  * <p>计价方式 priceMethod=MA（移动平均）。入库按"结存金额 + 入库数量×单价"累计；
  * 出库发出成本按移动平均单位成本（结存金额/结存数量）计算并核减结存——
  * 本模型仅保存聚合结存（无批次明细），故发出成本基于移动平均单价推导。</p>
- * <p>P2 接线（F2）：领用出库/报废/处置/内部销售/盘点差异/跌价准备 6 条存货流程均由此出单
+ * <p>领用出库/报废/处置/内部销售/盘点差异/跌价准备 6 条存货流程均由此出单
  * 调 {@code WfEngineFacade.start()} 发起对应审批（INV_ISSUE/DISPOSE/DISPOSAL/INTERNAL_SALE/
  * PHYSICAL_CHECK/DEVAL）。</p>
  */
@@ -60,7 +60,7 @@ public class MdInventoryService {
         return PageResult.of(p.getRecords(), p.getTotal(), pn, ps);
     }
 
-    /** 出入库流水读点（stock_move 此前只写不读）——按物料编码/仓库倒序分页。 */
+    /** 出入库流水读点——按物料编码/仓库倒序分页。 */
     public PageResult<StockMove> movesPage(long pn, long ps, String itemCode, Long warehouseId) {
         LambdaQueryWrapper<StockMove> qw = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(itemCode)) {
@@ -99,8 +99,8 @@ public class MdInventoryService {
             n.setUnit(key.getUnit());
             n.setWarehouseId(key.getWarehouseId());
             n.setPriceMethod("MA");
-            // P0 结存=期初+入−出 恒等式：新建行期初为 0，首笔入库计入 inNum 而非期初，
-            // 避免把首批既算期初又算入、造成结存翻倍不齐（此前首库 50 报 期初+50-0=100 但结存=50）。
+            // 结存=期初+入−出 恒等式：新建行期初为 0，首笔入库计入 inNum 而非期初，
+            // 避免把首批既算期初又算入、造成结存翻倍。
             n.setOpeningNum(ZERO);
             n.setOpeningAmount(ZERO);
             n.setInNum(qty);
@@ -172,7 +172,7 @@ public class MdInventoryService {
                     "存货领用出库-" + key.getItemName() + (purpose == null ? "" : purpose), issueCost);
         } catch (Exception ex) {
             log.error("存货 {} 发起领用出库审批失败: {}", key.getItemCode(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -190,7 +190,7 @@ public class MdInventoryService {
                     "存货报废-" + key.getItemName(), cost);
         } catch (Exception ex) {
             log.error("存货 {} 发起报废审批失败: {}", key.getItemCode(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -204,14 +204,14 @@ public class MdInventoryService {
                     "存货处置-" + key.getItemName() + (remark == null ? "" : remark), cost);
         } catch (Exception ex) {
             log.error("存货 {} 发起处置审批失败: {}", key.getItemCode(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
     /** 存货处置-物资状态确认（INV_DISPOSAL_CHECK，FA11-04 第1阶段）：处置前物资状态/可用性审批确认，不改库存。 */
     public void disposalCheck(MdInventory key, BigDecimal qty, String remark) {
         requireManual(key);
-        // 此前既不校验数量也不校验说明：一条「确认了什么、确认多少」全空的审批照样发出
+        // 数量与说明都要校验：不能发出一条「确认了什么、确认多少」全空的审批
         requirePositive(qty, "处置数量");
         requireText(remark, "请填写处置说明");
         MdInventory row = findByKey(key);
@@ -221,7 +221,7 @@ public class MdInventoryService {
                     qty == null ? ZERO : qty);
         } catch (Exception ex) {
             log.error("存货 {} 发起处置状态确认审批失败: {}", key.getItemCode(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -231,7 +231,7 @@ public class MdInventoryService {
         requirePositive(qty, "处置数量");
         requireText(remark, "请填写处置说明");
         MdInventory row = findByKey(key);
-        // R1 语义修正：金额分档以「处置金额」判别，金额=|处置数量| × 移均单价（此前误将数量 qty 当金额）
+        // R1：金额分档以「处置金额」判别，金额=|处置数量| × 移均单价
         BigDecimal disposalAmt = nvl(qty).abs().multiply(avgUnitCost(row)).setScale(2, RoundingMode.HALF_UP);
         try {
             wfEngineFacade.start("INV_DISPOSAL_EXEC", row == null ? null : row.getId(), userId(),
@@ -239,7 +239,7 @@ public class MdInventoryService {
                     disposalAmt);
         } catch (Exception ex) {
             log.error("存货 {} 发起处置执行账务审批失败: {}", key.getItemCode(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -252,7 +252,7 @@ public class MdInventoryService {
                     "存货内部销售-" + key.getItemName(), cost);
         } catch (Exception ex) {
             log.error("存货 {} 发起内部销售审批失败: {}", key.getItemCode(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -262,14 +262,14 @@ public class MdInventoryService {
         MdInventory row = requireRow(key);
         BigDecimal diffNum = (checkedQty == null ? ZERO : checkedQty)
                 .subtract(nvl(row.getRemainingNum()));
-        // R1 语义修正：金额分档以「盘点差异金额」判别，金额=|差异数量| × 移均单价（此前误将数量 diffNum 当金额）
+        // R1：金额分档以「盘点差异金额」判别，金额=|差异数量| × 移均单价
         BigDecimal diffAmt = diffNum.abs().multiply(avgUnitCost(row)).setScale(2, RoundingMode.HALF_UP);
         try {
             wfEngineFacade.start("INV_PHYSICAL_CHECK", row.getId(), userId(),
                     "存货盘点差异-" + key.getItemName(), diffAmt);
         } catch (Exception ex) {
             log.error("存货 {} 发起盘点差异审批失败: {}", key.getItemCode(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -283,7 +283,7 @@ public class MdInventoryService {
                     "存货跌价准备-" + key.getItemName(), provisionAmount);
         } catch (Exception ex) {
             log.error("存货 {} 发起跌价准备审批失败: {}", key.getItemCode(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -318,7 +318,7 @@ public class MdInventoryService {
     }
 
     /**
-     * P0 冗余断言：结存 = 期初 + 入 − 出（数量精确、金额容差 0.02）。
+     * 冗余断言：结存 = 期初 + 入 − 出（数量精确、金额容差 0.02）。
      * 聚合字段由出入库累计维护，此处显式校验一致性，防脏写/被绕过。
      */
     private void assertLedger(MdInventory r) {
@@ -377,12 +377,12 @@ public class MdInventoryService {
     }
 
     /**
-     * 存货操作必填守卫（必填项治理批次 2B）：文案与前端 INVENTORY_OP 规则一致。
+     * 存货操作必填守卫：文案与前端 INVENTORY_OP 规则一致。
      *
      * <p>仓库之所以必输：{@link #buildKeyWrapper} 对 warehouseId 用的是条件 eq，留空时
      * 「itemCode + limit 1」会命中该物料在**任意仓库**的一行存货并据此核减——发错仓、扣错账。
      * 计价方式（priceMethod）前端已必输，但后端新建存货行目前固定按移动平均（MA）写入数据库、
-     * 未消费该字段，故此处不做后端断言（已登记为挂账缺陷，避免造出"校验了却没用"的假）。
+     * 未消费该字段，故此处不做后端断言（按已知缺陷处理，避免造出"校验了却没用"的假）。
      */
     private void requireManual(MdInventory key) {
         if (key == null || !StringUtils.hasText(key.getItemCode())) {
@@ -408,7 +408,7 @@ public class MdInventoryService {
 
     /**
      * 写入 stock_move 交易记录。
-     * 每笔出入库/报废/处置均落盘一笔移动单，替代此前"流程跑在空模型上"。
+     * 每笔出入库/报废/处置均落盘一笔移动单，出入库流水因此有真实来源。
      */
     private void recordMove(String moveType, MdInventory row, BigDecimal qty,
                             BigDecimal unitCost, BigDecimal amount,

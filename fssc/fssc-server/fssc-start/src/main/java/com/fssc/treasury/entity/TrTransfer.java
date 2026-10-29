@@ -43,7 +43,7 @@ public class TrTransfer implements Serializable {
     private String purpose;
     /** DRAFT草稿/APPROVED已审批/PAID已执行 */
     private String status;
-    /** 登记人（/420 补列；此前本表无提交人列 ⇒ deny_self 与自审回避只能回落实例发起人） */
+    /** 登记人（本表原先无提交人列 ⇒ deny_self 与自审回避只能回落实例发起人） */
     @TableField(fill = FieldFill.INSERT)
     private Long createBy;
 
@@ -85,14 +85,14 @@ public class TrTransfer implements Serializable {
     /** 账证侧：凭证状态 DRAFT／POSTED */
     @TableField(exist = false)
     private String voucherStatus;
-    /** 下一步动作提示（乙案保持人工执行环节，审批通过不自动动账） */
+    /** 下一步动作提示（保持人工执行环节，审批通过不自动动账） */
     @TableField(exist = false)
     private String nextActionText;
 
     /**
      * 执行人真名（非表列）——由 {@code update_by} 批查 sys_user 解析，
      * 与执行时间 {@code update_time} 配对，供列表页外显"执行"两列。
-     * <p>执行记录此前只能去 {@code sys_oper_log} 里翻（H4 真跑实测），而 execute() 是
+     * <p>执行记录若没有这两列，只能去 {@code sys_oper_log} 里翻，而 execute() 是
      * {@code tr_transfer} 唯一的 PAID 写环节 ⇒ status=PAID 时 update_by/update_time 就是执行人/执行时刻。
      * 真名规则＝nickName 优先、空则回落 userName（工号），与应付域/退货域同一套。
      */

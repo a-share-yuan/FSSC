@@ -2,17 +2,17 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * 权限判定公共工具（P0 权限治理沉淀）
+ * 权限判定公共工具（权限治理沉淀）
  *
  * 背景：FSSC 的权限完全来自「角色 → sys_role_menu → sys_menu.perms」，
  * 登录时由 /api/auth/login 下发并挂到 store.user.perms。
  * 该字段既可能是数组，也可能是逗号分隔字符串，故在此统一归一化，
- * 避免每个页面各写一份 hasPerm（此前 Workbench.vue / Pay.vue 已各有一份）。
+ * 避免每个页面各写一份 hasPerm（Workbench.vue / Pay.vue 就各有一份）。
  *
  * 三条务必遵守的实现事实：
  *  1. **登录时会注入通配权限 `*:*:*`**：`AuthService:150` 对 `is_admin=1` 的用户
- *     直接把 perms 置为 `["*:*:*"]`（**不经过菜单表**，故静态审计脚本看不到）。
- *     后台 `PermissionAspect` 对通配放行，**前端必须做同样处理**，
+ *     直接把 perms 置为 `["*:*:*"]`（不经过菜单表，故静态审计脚本看不到）。
+ *     后台 `PermissionAspect` 对通配放行，前端必须做同样处理，
  *     否则管理员会因"没有这个具体码"被判定无权、入口被误隐藏。
  *     （历史注记：本文件早期注释写"本项目不存在 *:*:*"，那是只查了 sys_menu 得出的错误结论。）
  *  2. `sys_menu.perms` 允许逗号多码（如 `asset:list,inventory:list`），

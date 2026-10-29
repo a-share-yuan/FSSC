@@ -27,7 +27,7 @@ public class PurReturnController {
     private final PurReturnService service;
 
     /**
-     * 导出上限（D-N22）：本端点返回的是 JSON 列表而非文件流，原先传 {@code Integer.MAX_VALUE}
+     * 导出上限：本端点返回的是 JSON 列表而非文件流，原先传 {@code Integer.MAX_VALUE}
      * 等于"一次请求把整张 pur_return 读进内存再吐出"，既无行数上限也无数据范围。
      * 现在此封顶，数据范围由 {@code PurReturnService.page} 上的 {@code @DataScope} 办结。
      * 超出即截断（取前 N 行），与分页端点同语义。

@@ -56,7 +56,7 @@ export default defineConfig({
     proxy: { '/api': backendProxy },
   },
   build: {
-    // 输出目录：前端构建产物统一落在 dist33/（P1 交互整改轮次）
+    // 输出目录：前端构建产物统一落在 dist33/
     outDir: 'dist36',
     emptyOutDir: false,
     chunkSizeWarningLimit: 1500,

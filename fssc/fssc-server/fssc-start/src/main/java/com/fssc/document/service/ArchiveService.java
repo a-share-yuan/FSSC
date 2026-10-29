@@ -215,11 +215,17 @@ public class ArchiveService {
      * 定列依据见 {@code OpArchive.archiveStatus} 的 注释）。
      *
      * <p><b>DISPOSED 不在集内＝销毁后允许重新立卷</b>：原卷已销毁、载体已下架，同一单据再立一卷
-     * 是共享中心的常规补录动作；若产品裁定"销毁过的单据永不再立卷"，只需把 DISPOSED 并进本集
+     * 是共享中心的常规补录动作；若产品判定"销毁过的单据永不再立卷"，只需把 DISPOSED 并进本集
      * 单点改动，三条立卷入口共用。
      */
     static final Set<String> LIVE_VOLUME_STATUSES =
             Set.of("PENDING", "ARCHIVING", "ARCHIVED");
+
+    /**
+     * 无分页检索端点（{@code /compliance/archive/list}、{@code /compliance/archive/search}）的行数硬上限。
+     * 这两个端点没有 pageNum/pageSize，全量 ARCHIVED 在 52 万卷语料上实测单响应 95 MB。
+     */
+    private static final int SEARCH_MAX_ROWS = 500;
 
     /**
      * 按<b>来源单据键</b>查出该单据仍存在的现有/在途卷（空列表＝可立卷）。
@@ -426,7 +432,7 @@ public class ArchiveService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "案卷 " + archive.getArchiveNo() + " 卷内无件，不得执行归档；请先在卷内目录加入待归档单据。");
         }
-        // 入口闸③：内容物判据（件号连续／纸质卷已编页）必须前移到执行归档入口。
+        // 入口闸③：内容物判据（件号连续／纸质卷已编页）在执行归档入口就拦下。
         // 同一条规则在 FM_ARCHIVE 定稿分支（preArchiveFailures）也会拦，但那一步已是审批人点了「通过」之后——
         // 只挂定稿就会变成「审批人点通过、档案永远停在归档中」，把死结推给审批人。
         // 此处 400 fail-fast；判据与定稿共用 volumeContentFailures 一处实现，不要两处各写一版。
@@ -489,7 +495,7 @@ public class ArchiveService {
         // ⇒ 审批在途期间单据侧保持 UNARCHIVED（不置位），最终状态才 ARCHIVED。
         // 接线 M1 FM_ARCHIVE 凭证归档审批流：执行归档即发起归档审批
         try {
-            // 起流的返回值就是「档案自身的审批实例号」。表上暂无列可存（加列属 DDL 裁决，
+            // 起流的返回值就是「档案自身的审批实例号」。表上暂无列可存（加列属 DDL 待确认，
             // 注释态 SQL 见 OpArchive 类注释），先如实记进日志；读侧由 fillArchiveFlowKey 从
             // wf_instance 补充出同一个值，档案反查归档审批链由此拿到明确可点的键。
             // 流程标题必须取真名，不能拿 biz_id 凑：wf_instance.title 若是「凭证归档-24」这种串，
@@ -524,22 +530,13 @@ public class ArchiveService {
     }
 
     /**
-     * 内控红线，销毁不可逆：这里<b>没有</b>一键销毁方法。
+     * 内控红线，销毁不可逆：这里<b>没有</b>一键销毁方法，也<b>没有</b>「按 id 删档案」的通用删除。
      * 直置 DISPOSED 而不做到期校验、不查销毁审批、不起 FM_DESTROY 流程，就是绕过整条合规链。
      * 所有人工销毁入口一律转 {@link ArchiveDestroyService#createDestroyRequest} 发起「销毁申请」，
      * 由合规链定论（assertAllExpired 到期校验＋双人复核双签＋FM_DESTROY 起流程）；
      * DISPOSED 的唯一落地点是 {@link ArchiveDestroyService#executeDestroy}（审批闭环后执行）。
+     * 登记删除的唯一出口是 {@link #deleteEmptyVolume(Long)}（仅「待归档＋卷内 0 件」）。
      */
-
-    @Transactional(rollbackFor = Exception.class)
-    public void delete(Long archiveId) {
-        OpArchive archive = archiveCatalogMapper.selectById(archiveId);
-        if (archive == null) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "档案不存在: " + archiveId);
-        }
-        archiveCatalogMapper.deleteById(archiveId);
-        log.info("删除档案: archiveId={}", archiveId);
-    }
 
     public OpArchive getById(Long id) {
         OpArchive archive = archiveCatalogMapper.selectById(id);
@@ -557,7 +554,7 @@ public class ArchiveService {
      * <p><b>为什么不改 {@code op_archive.proc_inst_id} 的取值</b>：那一列存的是
      * <b>被归档那张单</b>的审批实例，「单据全链路 → 档案」段（{@code BillTraceChainController}
      * 按 proc_inst_id 回溯）与 {@code ArchiveFacadeImpl.findByProcInstIds} 都靠它；
-     * 就地翻成归档实例，正向联查当场就断了。表上又只有这一列实例号，加列属 DDL 裁决
+     * 就地翻成归档实例，正向联查当场就断了。表上又只有这一列实例号，加列属 DDL 待确认
      * （注释态 SQL 已写在 {@code OpArchive} 类注释里，未执行）。
      * 所以走读侧：按 biz_type＋biz_id 补充，归档流自己的实例号可查、可点、可反查审批链，
      * 既有正向链路一字未动。
@@ -610,7 +607,7 @@ public class ArchiveService {
      * 卷内件数批量补充：一次 {@code GROUP BY archive_id} 聚合，不要按卷循环打库。
      *
      * <p>界面要靠这个数把"0 件的卷"标出来并禁用【执行归档】——后端 {@code archive()} 入口闸也会拦，
-     * 但不要让人撞了报错才知道（同 的教训：能前置说明的，别留给一次失败请求）。
+     * 但不要让人撞了报错才知道（能前置说明的，就别留给一次失败请求）。
      * 取数失败只记日志并留 null，档案列表不能因为一个附加列取不到而打不开。
      */
     private void fillItemCount(List<OpArchive> archives) {
@@ -673,7 +670,7 @@ public class ArchiveService {
      * 读侧挂点对外入口：把「归档审批流自身」的实例号与状态补充进档案行。
      * 供档案域之外的档案列表端点（如共享作业 {@code SharingEnhanceService.archivePage}，
      * 即「档案归档」页的已归档档案 Tab）复用，避免各端点各自决定要不要挂这条补充。
-     * <b>只读 wf_instance，不写任何流程表，也不翻转 {@code proc_inst_id} 的源单据语义。</b>
+     * 只读 wf_instance，不写任何流程表，也不翻转 {@code proc_inst_id} 的源单据语义。
      */
     @FsscDataSource("master")
     public void enrichFlowKey(List<OpArchive> archives) {
@@ -749,9 +746,11 @@ public class ArchiveService {
         if (scopeC != null) {
             qw.eq(OpArchive::getCompanyId, scopeC);
         }
-        qw.orderByDesc(OpArchive::getCreateTime);
-
+        // 计数必须在挂 ORDER BY 之前发出：MyBatis-Plus 的 selectCount 原样继承 wrapper 的排序子句，
+        // 而 MySQL 一旦看到 ORDER BY 就无法只走索引求和，必须逐行回表取 create_time 再排序
+        // （实测 10.3 万行 ARCHIVED：覆盖索引 39ms → 带回表 324ms）。排序只服务下面这页取值。
         long total = archiveCatalogMapper.selectCount(qw);
+        qw.orderByDesc(OpArchive::getCreateTime);
         qw.last("LIMIT " + (pageNum - 1) * pageSize + "," + pageSize);
         List<OpArchive> list = archiveCatalogMapper.selectList(qw);
         fillArchiveFlowKey(list);   // 档案列表行带出归档审批流自身实例号
@@ -792,7 +791,7 @@ public class ArchiveService {
     /**
      * 归档定稿前的逐项检查，返回**未通过清单**（空＝全通过）。
      * <p>不引入新阈值——只用归档时已固化的完整性哈希与其重算值。
-     * {@link #verifyIntegrity} 只回布尔、不下判词；撤掉 FM_ARCHIVE 的人工复核后，
+     * {@link #verifyIntegrity} 只回布尔、不下结论；撤掉 FM_ARCHIVE 的人工复核后，
      * 由本方法把判据接进定稿分支。
      */
     public List<String> preArchiveFailures(Long archiveId) {
@@ -942,6 +941,63 @@ public class ArchiveService {
         archiveItemMapper.hardDelete(itemId);
         resequenceItems(archiveId);
         log.info("案卷 {} 移出件 {}（原件号 {}）", volume.getArchiveNo(), itemId, item.getSeqNo());
+        releaseSourceWhenEmpty(volume);
+    }
+
+    /**
+     * 卷内件清空后解除来源单据绑定。
+     *
+     * <p>卷表的 {@code ref_id/bill_id/ref_no/related_ids} 是「首件镜像」，件表才是内容真相。
+     * 件全部移走后镜像仍在，于是 {@link #findLiveVolumes} 仍认为这张单据挂在本卷上：
+     * 移出卷的提示说「可再加入其他案卷」，实际再建卷必被 {@link #assertNoLiveVolumeForSource}
+     * 以「同一单据不得重复立卷」拦下，并建议「删除登记」——而界面上没有这个入口，
+     * 单据就被永久锁在一只空卷里。这里把镜像归零（{@code ref_id=0} 即系统约定的「无来源键」），
+     * 单据回到待立卷候选；空卷本体保留，可继续【追加件】或停在那里不占单据。
+     *
+     * <p>{@code proc_inst_id} 一并清空：单据流转页的电子档案段按 bill_id＋审批实例号两臂取卷，
+     * 保留实例号会让这张单据的溯源里多出一行早已空掉的「待归档」卷，看着像还挂着一只卷。
+     */
+    private void releaseSourceWhenEmpty(OpArchive volume) {
+        if (volumeItemCount(volume.getId()) > 0L) {
+            return;
+        }
+        archiveCatalogMapper.update(null, new LambdaUpdateWrapper<OpArchive>()
+                .eq(OpArchive::getId, volume.getId())
+                .set(OpArchive::getRefId, 0L)
+                .set(OpArchive::getBillId, null)
+                .set(OpArchive::getRefNo, null)
+                .set(OpArchive::getRelatedIds, null)
+                .set(OpArchive::getProcInstId, null)
+                .set(OpArchive::getUpdateTime, LocalDateTime.now()));
+        log.info("案卷 {} 卷内已无件，解除来源单据绑定", volume.getArchiveNo());
+    }
+
+    /**
+     * 删除空案卷（仅「待归档」且卷内 0 件）。
+     *
+     * <p>建错卷、或件全部移出后留下的空壳，此前没有出口：既不能执行归档（入口闸拦空卷），
+     * 界面上也没有删除入口，只能一直占着一行。这里补唯一删除点，且只放行这一种形态；
+     * 归档中/已归档/已销毁的卷不得删——那些要留痕、要走鉴定销毁审批。
+     * 逻辑删除，档号不回收（号码规则继续向后取号，不得造出重号）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteEmptyVolume(Long archiveId) {
+        OpArchive volume = archiveCatalogMapper.selectById(archiveId);
+        if (volume == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "案卷不存在或已删除");
+        }
+        if (!"PENDING".equals(volume.getArchiveStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "只有「待归档」的案卷可以删除；案卷 " + volume.getArchiveNo()
+                            + " 当前为「" + volume.getArchiveStatus() + "」，已归档的卷请走鉴定销毁审批");
+        }
+        long n = volumeItemCount(archiveId);
+        if (n > 0L) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "卷内还有 " + n + " 件，不能删除；请先在卷内目录把件移出（移出只解绑，不动单据）");
+        }
+        archiveCatalogMapper.deleteById(archiveId);
+        log.info("删除空案卷 {}（卷内 0 件）", volume.getArchiveNo());
     }
 
     /**
@@ -1314,7 +1370,7 @@ public class ArchiveService {
      *
      * <p><b>为什么需要它</b>：归档哈希的算式把 {@code no=档案编号} 与 {@code code=档案编码}
      * 都串进输入（{@link ArchiveIntegrityService#snapshot}），档号结构一改（比如加全宗前缀，
-     * {@code AR2026102800004 → AIG-HQ-AR2026102800004}）这两段就变，在册卷会集体判成 {@code MISMATCH}。
+     * {@code <旧号> → <新号>}）这两段就变，在册卷会集体判成 {@code MISMATCH}。
      * 哈希串里还含 {@code files=[fileId:MD5]}（{@code sys_file.file_md5}），<b>SQL 算不出来</b>，
      * 只能由 Java 侧按同一算式重算——本方法就是那个唯一入口。
      *
@@ -1410,38 +1466,59 @@ public class ArchiveService {
             qw.eq(OpArchive::getCompanyId, scopeC);
         }
         qw.eq(OpArchive::getArchiveStatus, "ARCHIVED")
-                .orderByDesc(OpArchive::getCreateTime);
+                .orderByDesc(OpArchive::getCreateTime)
+                // 本端点无分页入参，全量 ARCHIVED 在 52 万卷语料上实测回出 95 MB 单响应
+                // （/compliance/archive/{list,search}），任何调用方都会被整份实体反序列化拖住。
+                // 检索只用于"找卷"，硬上限 500 行足够定位，超出部分请走 /page 分页端点。
+                .last("LIMIT " + SEARCH_MAX_ROWS);
         List<OpArchive> hits = archiveCatalogMapper.selectList(qw);
         fillArchiveFlowKey(hits);
         fillSourceBillNo(hits);     // 检索面与列表面同一把尺
         return hits;
     }
 
+    /**
+     * 档案统计三数（总数／已归档／待归档）。
+     *
+     * <p><b>一条 GROUP BY 出三数</b>：原实现跑三次独立的 {@code selectCount}，每次都把整租户的
+     * 卷表扫一遍（52 万行语料实测各约 1.1s，端点 3.3s）；三次的 WHERE 只差 archive_status 一个等值。
+     * 现在分桶交给库做一次，Java 侧只搬运；配合
+     * {@code idx_t_del_comp_status(tenant_id, del_flag, company_id, archive_status, archived_at)}
+     * 走覆盖索引，约为原耗时的九分之一。
+     *
+     * <p>口径保持不变：年度过滤同传则三条都带；未落 archive_status 的历史行只计入总数
+     * （与原实现在 archived/pending 两侧都不计入一致）。
+     */
     public Map<String, Object> getArchiveStats(Integer year) {
         Map<String, Object> stats = new HashMap<>();
 
-        LambdaQueryWrapper<OpArchive> baseQw = new LambdaQueryWrapper<>();
+        QueryWrapper<OpArchive> qw = new QueryWrapper<>();
+        qw.select("archive_status", "count(*) as cnt");
         if (year != null) {
-            baseQw.eq(OpArchive::getArchiveYear, year);
+            qw.eq("archive_year", year);
         }
+        qw.groupBy("archive_status");
 
-        long totalCount = archiveCatalogMapper.selectCount(baseQw);
+        long totalCount = 0L;
+        long archivedCount = 0L;
+        long pendingCount = 0L;
+        for (Map<String, Object> row : archiveCatalogMapper.selectMaps(qw)) {
+            if (row == null) {
+                continue;
+            }
+            Object cnt = row.get("cnt");
+            long n = cnt == null ? 0L : ((Number) cnt).longValue();
+            totalCount += n;
+            String st = row.get("archive_status") == null ? "" : String.valueOf(row.get("archive_status"));
+            if ("ARCHIVED".equals(st)) {
+                archivedCount = n;
+            } else if ("PENDING".equals(st)) {
+                pendingCount = n;
+            }
+        }
         stats.put("totalCount", totalCount);
-
-        LambdaQueryWrapper<OpArchive> archivedQw = new LambdaQueryWrapper<>();
-        if (year != null) {
-            archivedQw.eq(OpArchive::getArchiveYear, year);
-        }
-        archivedQw.eq(OpArchive::getArchiveStatus, "ARCHIVED");
-        stats.put("archivedCount", archiveCatalogMapper.selectCount(archivedQw));
-
-        LambdaQueryWrapper<OpArchive> pendingQw = new LambdaQueryWrapper<>();
-        if (year != null) {
-            pendingQw.eq(OpArchive::getArchiveYear, year);
-        }
-        pendingQw.eq(OpArchive::getArchiveStatus, "PENDING");
-        stats.put("pendingCount", archiveCatalogMapper.selectCount(pendingQw));
-
+        stats.put("archivedCount", archivedCount);
+        stats.put("pendingCount", pendingCount);
         return stats;
     }
 
@@ -1469,7 +1546,7 @@ public class ArchiveService {
      * <p>不删列、不改列注释（DDL 变动另行决策）；历史行的旧值不回写，互斥行只登记不清洗。
      *
      * @param archiveStatus 真相源取值
-     * @return 镜像列取值；入参为 null 时返回 null＝交由库默认 {@code FILED} 默认处理
+     * @return 镜像列取值；入参为 null 时返回 null＝交由库默认 {@code FILED} 兜底
      */
     public static String dispositionOf(String archiveStatus) {
         if (archiveStatus == null || archiveStatus.isBlank()) {

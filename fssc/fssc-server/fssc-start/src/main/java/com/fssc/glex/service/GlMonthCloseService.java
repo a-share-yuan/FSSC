@@ -53,10 +53,10 @@ import java.util.Map;
 /**
  * 月结服务（gl_month_close）。对指定期间执行试算平衡校验，balance 则发起 GL_MONTH_CLOSE 月结审批流。
  *
- * <p><b>关账时点（2026-10-01 源码级整改）</b>：发起月结<b>只建在途单</b>
+ * <p><b>关账时点</b>：发起月结<b>只建在途单</b>
  * （gl_month_close=RUNNING、md_period 保持 NORMAL），真正关账（md_period=CLOSED + 月结单 CLOSED）
  * 后置到末节点审批通过的收尾回写 {@link #applyApprovalOutcome}（由 GlBizAction 在流程结束事件里调用）。
- * 整改前是「点按钮那一秒即关账、7 节审批零回写、驳回不重开」——审批只做事后追认，
+ * 若点按钮那一秒就关账，7 节审批只剩事后追认，
  * 且被驳回的月结单会把期间永久锁死，须人工反结账。
  */
 @Slf4j
@@ -84,22 +84,22 @@ public class GlMonthCloseService {
     /**
      * 169：月结列表读侧补充用——只读 {@code wf_instance}（biz_type=GL_MONTH_CLOSE,
      * biz_id=月结单ID）把「这张月结单是被哪条审批流定的、什么时候办结的」补上。
-     * 表上没有 proc_inst_id/approve_time/audit_time 三列（加列属 DDL 裁决，注释态 SQL 见实体类尾），
+     * 表上没有 proc_inst_id/approve_time/audit_time 三列（加列属 DDL 待确认，注释态 SQL 见实体类尾），
      * 故与 ①／同法走 transient 补充，零写库副作用。
      */
     private final WfInstanceMapper wfInstanceMapper;
     /**
      * GL 族最终状态零记录：月结单的最终状态跃迁（RUNNING → CLOSED／REJECTED／APPROVED）
-     * 原先只有 log 与 wf_task_history，audit_trail 里查不到任何 GL_MONTH_CLOSE 行——
+ * 只落在 log 与 wf_task_history 里，audit_trail 查不到任何 GL_MONTH_CLOSE 行——
      * 而"这期间到底是被哪一次审批定成关账/没关账"正是事后核查要问的事。
-     * 本字段只补审计行，不改任何回写判据（{@code AuditTrailService.record} 自身吞异常、不阻断业务）。
+ * 本字段只补审计行，不参与任何回写判定（{@code AuditTrailService.record} 自身吞异常、不阻断业务）。
      */
     private final AuditTrailService auditTrailService;
 
     public PageResult<GlMonthClose> page(long pageNum, long pageSize, String period, String keyword) {
         LambdaQueryWrapper<GlMonthClose> qw = new LambdaQueryWrapper<>();
-        // 库内 gl_month_close.period 是 6 位 yyyyMM（实测行 id=3 period='202609'，close() 亦按
-        // length()==6 入库），而月结看板传 '2026-12' —— 原实现直接 eq 精确匹配，格式必不等 ⇒ 恒 0 行（看板全空）。
+        // 库内 gl_month_close.period 是 6 位 yyyyMM（close() 亦按 length()==6 入库），
+        // 而月结看板传 '2026-12'，直接 eq 精确匹配必然不中 ⇒ 恒 0 行（看板全空）。
         // 归一化收在服务端入口：yyyyMM / yyyy-MM / yyyy/MM / yy-MM 一律折成库规则，所有调用方一并治愈；
         // 空白＝不按期间过滤（月结列表页取全量的正常语义），非空而非法则显式报错，不再静默空表。
         String normPeriod = normalizePeriod(period);
@@ -111,7 +111,7 @@ public class GlMonthCloseService {
         }
         qw.orderByDesc(GlMonthClose::getId);
         Page<GlMonthClose> p = mapper.selectPage(Page.of(pageNum, pageSize), qw);
-        fillWfFlowKey(p.getRecords());   // D-DEC-191：月结行带出审批流实例号/办结时刻/末节点复核人与时刻
+        fillWfFlowKey(p.getRecords());   // 月结行带出审批流实例号/办结时刻/末节点复核人与时刻
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
@@ -208,7 +208,7 @@ public class GlMonthCloseService {
      * 把外部传入的会计期间统一成库内 6 位 {@code yyyyMM}。
      *
      * <p>接受 {@code 202612} / {@code 2026-12} / {@code 2026/12} / {@code 20261}（yyyy-M）/ {@code 26-12}（yy-MM）；
-     * 其余一律 {@link ErrorCode#PARAM_INVALID} 显式报错——静默匹配不到行是本号的病根，不能靠放宽查询治。
+     * 其余一律 {@link ErrorCode#PARAM_INVALID} 显式报错——静默匹配不到行是这一路的病根，不能靠放宽查询治。
      *
      * @param raw 原始期间串
      * @return 6 位 yyyyMM；{@code raw} 为 null/空白时返回 {@code null}（＝不按期间过滤）
@@ -256,14 +256,14 @@ public class GlMonthCloseService {
     /**
      * 月结执行：trialBalance 校验借贷平衡，<b>写「在途」月结记录并发起 GL_MONTH_CLOSE 审批</b>；
      * 关账（md_period=CLOSED）不在本方法发生，见 {@link #applyApprovalOutcome}。
-     * D-GL-MC2 整改：①期间建档校验<b>前置</b>到写库之前——旧实现 try/catch 吞掉
+     * ①期间建档校验<b>前置</b>到写库之前——若 try/catch 吞掉
      * closeByPeriod 异常但内层共享事务已被标记 rollback-only，提交时 UnexpectedRollbackException
      * 连月结记录+审批流整体回滚并抛 500；②失败即显式抛业务异常整体回滚（原子），不再留半成品行；
-     * ③同公司+期间已有 CLOSED 月结记录时去重拒绝（原 close() 无去重保护，双击即多行）。
-     * D-GL-MC1 整改：空期间（无任何凭证、试算 0=0）拒绝月结。
-     * 整改：①发起态由 CLOSED 改 RUNNING（审批在途），md_period 不再于提单同秒置 CLOSED；
-     * ②去重/重发守卫改按「同公司+期间<b>最新一条</b>月结记录」判定——CLOSED 拦重发、
-     * RUNNING 拦重复发起（发起态不再是 CLOSED 后，原守卫会失去对双击的拦截），
+     * ③同公司+期间已有 CLOSED 月结记录时去重拒绝（无此保护则双击即多行）。
+     * 空期间（无任何凭证、试算 0=0）同样拒绝月结。
+     * 发起态是 RUNNING（审批在途），md_period 不在提单时置 CLOSED；
+     * ②去重/重发守卫按「同公司+期间<b>最新一条</b>月结记录」判定——CLOSED 拦重发、
+     * RUNNING 拦重复发起（发起态不是 CLOSED 时，只认 CLOSED 的守卫拦不住双击），
      * 反结账日志行（UNCLOSED）为最新行时放行重新月结。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -306,9 +306,9 @@ public class GlMonthCloseService {
             throw new BizException(ErrorCode.PARAM_INVALID, "期间 " + period + " 已处于结账状态，如需重月结请先反结账");
         }
 
-        // 合规整改( )：月结前置校验——该期间+公司存在未过账(DRAFT)凭证时禁止月结，
+        // 月结前置校验——该期间+公司存在未过账(DRAFT)凭证时禁止月结，
         // 须先完成凭证审核过账（DRAFT→POSTED）再发起月结，防止未过账凭证漏出本期账。
-        // K128/K129（结账中心"复选项全勾才可结账"）：月结前校验检查校验清单——
+        // 结账中心的「复选项全勾才可结账」：月结前校验检查清单——
         // 该公司当期必须已建清单且全部 DONE，缺行/未勾齐一律拦截（清单由「月结反结账」同接口维护）。
         GlCloseCheckItem chkProbe = closeCheckItemMapper.selectOne(
                 new LambdaQueryWrapper<GlCloseCheckItem>()
@@ -339,7 +339,7 @@ public class GlMonthCloseService {
         }
 
         // 账证一致校验——试算只 SUM op_gl_entry 自身借贷，凭证侧消失的分录会两侧同额虚增，
-        // 于是"借贷必相等"照样成立而账证已不平（实测差 9,000＝5 张已不存在凭证的 12 行分录）。
+        // 于是"借贷必相等"照样成立而账证已不平。
         assertVoucherLedgerConsistent(comp, year, month, period);
 
         // D-GL-MC1：空期间拦截——该期间无任何凭证(VOID 除外)时试算恒为 0=0, 属假平衡
@@ -373,8 +373,8 @@ public class GlMonthCloseService {
         // 使损益结转真号（JZ…）回不到月结单（GlProfitCarryService 只认 voucher_no 为空时回写）。
         e.setVoucherNo(null);
         // 发起只建在途单——试算平衡＝RUNNING（月结审批中，期间<b>尚未</b>关账），
-        // 不平＝DRAFT（保持原规则，不关账）。旧实现此处直接置 CLOSED，与 md_period 同秒关账，
-        // 使 7 节审批退化为事后追认（实测早末节点 59 分钟）。
+        // 不平＝DRAFT（保持原规则，不关账）。此处不能直接置 CLOSED 并与 md_period 同时关账，
+        // 否则 7 节审批就退化成事后追认。
         e.setStatus(balanced ? STATUS_RUNNING : "DRAFT");
         e.setResultMsg(balanced
                 ? "试算平衡，期间 " + period + " 借方=贷方=¥" + debit
@@ -388,7 +388,7 @@ public class GlMonthCloseService {
 
         // G1：月结发起 GL_MONTH_CLOSE 月结审批流（总账会计月结准备→财务经理复核→财务总监→总裁阈值）
         try {
-            // 起流返回值就是本单的审批实例号。表上暂无列可存（加列属 DDL 裁决，注释态 SQL 见实体类尾），
+            // 起流返回值就是本单的审批实例号。表上暂无列可存（加列属 DDL 待确认，注释态 SQL 见实体类尾），
             // 先挂在响应的 transient 字段上——发起后前端立刻就能拿到"这张月结单挂在哪条审批流上"，
             // 后续列表由 fillWfFlowKey 从 wf_instance 补充出同一个值。
             String procInstId = wfEngineFacade.start("GL_MONTH_CLOSE", e.getId(), userId(),
@@ -397,7 +397,7 @@ public class GlMonthCloseService {
             e.setWfFlowStatus(STATUS_RUNNING);
         } catch (Exception ex) {
             log.error("月结 {} 发起月结审批失败: {}", period, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
         return e;
     }
@@ -416,9 +416,9 @@ public class GlMonthCloseService {
      * 仍平衡且无 DRAFT 凭证 → gl_month_close RUNNING→CLOSED、md_period 联动 CLOSED
      * （close_time＝审批通过时刻、close_by＝末节点 APPROVE 记录人）；
      * 若已不平衡或出现新的未过账凭证 → 置 {@value #STATUS_APPROVED_NOT_CLOSED}（审批通过·未关账），
-     * 把原因写进 result_msg 并告警——<b>不冒充关账，也不静默</b>。
+     * 把原因写进 result_msg 并告警——不冒充关账，也不静默。
      *
-     * <p><b>驳回/撤回</b>：RUNNING→REJECTED，期间<b>保持开账</b>（整改前是"提单即关账、驳回不重开"，
+     * <p><b>驳回/撤回</b>：RUNNING→REJECTED，期间<b>保持开账</b>（提单即关账的写法下驳回不重开，
      * 被驳的月结会把期间永久锁死，只能人工反结账）。
      *
      * <p>去重：仅当当前状态为 {@value #STATUS_RUNNING}／DRAFT（不平单被驳回）时才流转；
@@ -526,11 +526,11 @@ public class GlMonthCloseService {
         recordCloseAudit(closeId, e, "CLOSED", "月结审批末节点通过，期间 " + period + " 于 " + stamp
                 + " 关账（md_period 已联动 CLOSED" + (closer == null ? "" : "，关账人 id=" + closer) + "）", comment);
         // 月结 CLOSED 同步收尾在途流程实例——期间已关账而 GL_MONTH_CLOSE 实例仍 RUNNING，
-        // 会长期挂着一条无人可办的清单任务污染三关前置清点（历史 MC202609001/wf_instance 74 即此）。
+        // 会长期挂着一条无人可办的清单任务污染三关前置清点。
         // cancelRunningInstancesByBiz 仅收 RUNNING、去重、双记录；失败不回滚关账事实，告警记录人工跟进。
         try {
             int cancelledWf = wfEngineFacade.cancelRunningInstancesByBiz("GL_MONTH_CLOSE", closeId,
-                    "月结单已 CLOSED，收尾作废在途审批实例（R5-D-170）");
+                    "月结单已 CLOSED，收尾作废在途审批实例");
             if (cancelledWf > 0) {
                 log.info("月结单 {} 关账后同步作废在途流程实例 {} 个", e.getCloseNo(), cancelledWf);
             }
@@ -544,7 +544,7 @@ public class GlMonthCloseService {
     /**
      * 月结单最终状态跃迁记录。规则与 {@code GlBizAction.recordStatusAudit} 逐字对齐
      * （bizType 固定 GL_MONTH_CLOSE、obj_type=gl_month_close、before/after 只带本次实际变化的 status 一列），
-     * 不整实体 JSON、不新增审计类型。审计表只增不改，历史不回灌（178/342 既有裁决）。
+     * 不整实体 JSON、不新增审计类型。审计表只增不改，历史不回灌（178/342 既有判定）。
      */
     private void recordCloseAudit(Long closeId, GlMonthClose before, String after, String note, String comment) {
         String c = trimComment(comment);
@@ -576,7 +576,7 @@ public class GlMonthCloseService {
     /**
      * 账证一致核对：期间内每一行总账分录都必须找得到未删除的凭证。
      * 幽灵分录（凭证已不在、分录还在）会让借贷两侧同额虚增，试算恒"平衡"而账证已不平，
-     * 所以这道核对必须独立于"借=贷"那条判据存在。发现即拦，并列出票号让人去冲销/补回。
+     * 所以这道核对必须独立于"借=贷"那条校验存在。发现即拦，并列出票号让人去冲销/补回。
      */
     private void assertVoucherLedgerConsistent(Long comp, int year, int month, String period) {
         List<GlEntry> entries = glEntryMapper.selectList(
@@ -680,7 +680,7 @@ public class GlMonthCloseService {
             throw new BizException(ErrorCode.PARAM_INVALID, "期间 " + period + " 未处于结账状态，无需反结账");
         }
 
-        // ③ 反结账顺序守卫（方案A·对齐通用规则 2026-09-25）：仅要求「下一期间尚未结账」，
+        // ③ 反结账顺序守卫（方案A·对齐通用规则）：仅要求「下一期间尚未结账」，
         //   须从最后已结账期间逐期回退；下期有凭证不再拦截（反结账后按期继续核算为常态，
         //   原「下期零凭证」守卫超出通行规则，致显式落期单据的补生成全链死锁）。
         int nextYear = month == 12 ? year + 1 : year;

@@ -14,23 +14,23 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import java.util.Set;
 
 /**
- * 代码半 ／付款条目在<strong>审批通过的收尾</strong>里自动组批，而不是等出纳打开付款页。
+ * 付款条目在<strong>审批通过的收尾</strong>里自动组批，而不是等出纳打开付款页。
  *
- * <p><b>缺陷原文</b>
+ * <p><b>为什么不能挂在出纳页</b>
  * <ul>
- *  <li>组批挂在出纳页加载（{@code Pay.vue} 的 {@code load()} 里调 autoGroup），
- *      且该接口要求 {@code pay:batch:create} 权限——出纳（3259/3264）按治理定案<strong>不授</strong>该权限，
- *      于是"打开付款页才组批"这条链在真实权限模型下根本不成立，付款条目长期无人产出批次。</li>
- *  <li>审批通过后付款行未进任何批次，出纳无入口（原判"查询未覆盖 PAY/SETTLE"
- *      已被 12-23:58 更正——查询范围本身是通的，卡点是触发点错位＋权限门槛）。</li>
+ *  <li>组批若由出纳页加载触发（{@code Pay.vue} 的 {@code load()} 里调 autoGroup），
+ *      该接口要求 {@code pay:batch:create} 权限——出纳（3259/3264）按治理口径<strong>不授</strong>该权限，
+ *      于是这条链在真实权限模型下根本不成立，付款条目长期无人产出批次。</li>
+ *  <li>审批通过后付款行不进任何批次，出纳没有入口；查询范围本身是通的，
+ *      卡点在触发点与权限门槛。</li>
  * </ul>
  *
- * <p><b>本类做的（代码半）</b>：单据审批通过（{@link BillTerminalEvent}，status=APPROVED）后按本单名下
+ * <p><b>本类做的</b>：单据审批通过（{@link BillTerminalEvent}，status=APPROVED）后按本单名下
  * 未入批的 WAITING 付款记录组批，服务端触发、与登录人权限无关。付款页只剩读操作，
  * 组批不再依赖 {@code pay:batch:create}。
  *
- * <p><b>本类不做的（需人工裁决）</b>：权限补授（CASHIER 不给 {@code pay:batch:create} 是治理定案）、
- * 以及"由谁在系统里对未组批默认处理"的运营规则。
+ * <p><b>本类不做的（需产品确认）</b>：权限补授（CASHIER 不给 {@code pay:batch:create} 是治理口径）、
+ * 以及"由谁在系统里对未组批兜底"的运营规则。
  *
  * <p><b>时序</b>：AFTER_COMMIT 且 {@code fallbackExecution = true}——付款记录由审批收尾事务写入，
  * 必须等它提交后再组批，否则本事务看不见条目（且收尾事务不能因组批异常被标 rollback-only）。

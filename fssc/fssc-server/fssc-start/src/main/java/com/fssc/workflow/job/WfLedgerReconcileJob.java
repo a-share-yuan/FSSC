@@ -36,12 +36,12 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * 流程双账对账作业（G0 止血 · 方案 §二 F13 / §六 G0-③，2026-09-24）。
+ * 流程双账对账作业。
  *
  * <p><b>为什么需要它</b>：Flowable 的 {@code ACT_*} 是引擎账，{@code wf_instance/wf_task/
  * wf_task_history} 是业务账。两本账由 {@code WfEngineFacade} 手工双写，任何一次写失败或旁路推进
- * 都会让它们悄悄分叉（F13 实测：{@code wf_task_history} 294 行 vs {@code act_hi_taskinst} 211 行）。
- * 在"写失败必须冒泡"（G0-①）之外，还需要一个独立的<b>对账哨兵</b>来回答"现在到底有没有漂移"。
+ * 都会让它们悄悄分叉（两类表的行数一旦对不上，就是有写没落到另一本账上）。
+ * 在"写失败必须冒泡"之外，还需要一个独立的<b>对账哨兵</b>来回答"现在到底有没有漂移"。
  *
  * <p><b>三条对账向量</b>：
  * <ol>
@@ -53,20 +53,20 @@ import java.util.function.Supplier;
  *       <ul>
  *         <li><b>引擎侧</b>只取「已办结且非删除」（{@code endTime != null} 且 {@code deleteReason} 为空）：
  *             引擎在任务<b>创建时</b>即写历史行，任务被取消/驳回跳转删除后该行仍保留（带
- *             {@code DELETE_REASON_}），这类行天然没有镜像记录。<b>收窄前实测固定误报 27 条
- *             5 条在途 + 22 条被删除，其中真漂移 0 条。</b></li>
+ *             {@code DELETE_REASON_}），这类行天然没有镜像记录。不剥掉它们，每次都会固定报出一批
+ *             假差异（在途行与被删除行），把真漂移淹掉。</li>
  *         <li><b>业务侧</b>只取办结类动作（见 {@link #MIRROR_DONE_ACTIONS}）：{@code wf_task_history}
  *             是「任务级记录 + 过程动作」混表——{@code URGE}/{@code ESCALATE}/{@code CLAIM}
  *             /{@code ASSIGN}/{@code UNCLAIM}/{@code TRANSFER}/{@code REASSIGN} 都带 {@code task_id}
  *             但只是过程动作，任务本身还在办；{@code REJECT_TO}/{@code REJECT_TO_DONE} 是驳回跳转，
  *             引擎把该任务<b>删除</b>（{@code DELETE_REASON_=Change activity to ...}）而非办结。
- *             只收窄引擎侧时，这些行会立刻从反向向量（{@code historyMissingInEngine}）反扑
- *             （实测：单侧收窄后 v3a=0 而 v3b=14，告警仍每轮常亮）。</li>
+ *             只收窄引擎侧时，这些行会立刻从反向向量（{@code historyMissingInEngine}）反扑，
+ *             告警天天亮着，等于没有告警。</li>
  *       </ul>
- *       双向收窄后两侧集合同为 184，v3a/v3b 同时归零（2026-09-25 运行期实测）。</li>
+ *       两侧都剥掉过程态行，两条向量才能同时归零。</li>
  * </ol>
  *
- * <p><b>只报不修</b>（方案明确要求）：对账作业绝不自动改数据——静默修复会把"哪里出了问题"
+ * <p><b>只报不修</b>：对账作业绝不自动改数据——静默修复会把"哪里出了问题"
  * 一起抹掉，反而更难定位。差异按租户聚合后落一条 {@code sys_oper_log}（{@code status=1}，
  * {@code error_msg} 带错误码 {@code WF-MIRROR-002}、计数与样本 ID），同时推一条运维告警；
  * 最近一次报告驻留内存，经 {@code GET /api/tenant/wf/perf/ledger-reconcile} 查看。
@@ -94,16 +94,29 @@ public class WfLedgerReconcileJob {
     private static final int MAX_TENANT_DEFECTS = 10;
     /** 引擎历史查询上限：防止历史表膨胀时把对账作业自身拖垮 */
     private static final int HISTORY_SCAN_LIMIT = 20000;
+    /**
+     * 业务账扫描上限，与引擎侧同值。
+     *
+     * <p>业务账三张表在造数语料里分别有 163 万（wf_task）、163 万（wf_task_history）、55 万
+     * （wf_instance）行，而引擎侧早就限了 {@link #HISTORY_SCAN_LIMIT}。原先业务账三路一律全表读，
+     * 每 10 分钟一轮把约 380 万行拉进堆再求差：既是持续的打满 I/O 源（报表与列表接口从毫秒级
+     * 涨到秒级），又因为两侧不对称——业务账全量、引擎账只取前 2 万——把「引擎没扫到的那 160 万行」
+     * 全部算成差异，于是每次告警都是「发现 1653480 条差异」，真信号被彻底淹没。
+     *
+     * <p>两侧同上限后：任一册扫描到上限即判本轮<b>不可比</b>，只记日志不出告警
+     * （见 {@code doReconcile} 尾部的 truncated 分支）——宁可这轮不报，也不拿截断样本冒充漂移。
+     */
+    private static final int MIRROR_SCAN_LIMIT = HISTORY_SCAN_LIMIT;
 
     /**
-     * 业务账 {@code wf_task_history.action} 中属于「任务级办结记录」的动作白名单（规则收窄 2026-09-25）。
+     * 业务账 {@code wf_task_history.action} 中属于「任务级办结记录」的动作白名单。
      *
      * <p><b>为什么必须按动作白名单</b>：{@code wf_task_history} 是「任务级记录 + 过程动作」混表，
      * 过程动作也带 {@code task_id}——催办 {@code URGE}、升级 {@code ESCALATE}、认领 {@code CLAIM}、
      * 派单 {@code ASSIGN}、释放 {@code UNCLAIM}、转办 {@code TRANSFER}、改派 {@code REASSIGN}
      * 记录的是「谁对还在办的任务做了什么」，任务本身并未办结；{@code REJECT_TO}/{@code REJECT_TO_DONE}
      * 是驳回跳转，引擎把该任务<b>删除</b>（{@code DELETE_REASON_ = Change activity to ...}）而非办结。
-     * 这些行若也算作记录，会与引擎侧的「已办结且非删除」判据错位，反向向量恒不为零。
+     * 这些行若也算作记录，会与引擎侧的「已办结且非删除」口径错位，反向向量恒不为零。
      *
      * <p>下列动作对应的引擎任务必然落在「{@code endTime != null} 且 {@code deleteReason} 为空」里：
      * <ul>
@@ -124,6 +137,10 @@ public class WfLedgerReconcileJob {
         jobHeartbeatService.run("WfLedgerReconcileJob", () -> {
             Map<String, Object> report = doReconcile();
             lastReport = report;
+            if (Boolean.TRUE.equals(report.get("truncated"))) {
+                // 样本截断的轮次已由 doReconcile 记 WARN，差分数不可当结论，故不推告警
+                return;
+            }
             long drift = asLong(report.get("driftTotal"));
             if (drift > 0) {
                 String content = "流程双账对账发现 " + drift + " 条差异（引擎账 ACT_* vs 业务账 wf_*）。\n"
@@ -158,13 +175,15 @@ public class WfLedgerReconcileJob {
             taskProcInst.put(t.getId(), t.getProcessInstanceId());
         }
         Set<String> engineProcInstIds = new LinkedHashSet<>();
-        for (HistoricProcessInstance h : historyService.createHistoricProcessInstanceQuery()
-                .listPage(0, HISTORY_SCAN_LIMIT)) {
+        List<HistoricProcessInstance> engineProcInstScan = historyService.createHistoricProcessInstanceQuery()
+                .listPage(0, HISTORY_SCAN_LIMIT + 1);
+        for (HistoricProcessInstance h : engineProcInstScan) {
             engineProcInstIds.add(h.getId());
         }
         Set<String> engineHistTaskIds = new LinkedHashSet<>();
-        for (HistoricTaskInstance h : historyService.createHistoricTaskInstanceQuery()
-                .listPage(0, HISTORY_SCAN_LIMIT)) {
+        List<HistoricTaskInstance> engineHistTaskScan = historyService.createHistoricTaskInstanceQuery()
+                .listPage(0, HISTORY_SCAN_LIMIT + 1);
+        for (HistoricTaskInstance h : engineHistTaskScan) {
             // 规则收窄：镜像的任务级记录只在办结时写，故只有「已办结且非删除」的
             // 历史任务才应当有镜像行；在途任务（endTime 为空）与被删除任务（deleteReason 非空，
             // 如取消、驳回跳转、流程取消）天然无行，不构成本向量的漂移。
@@ -178,14 +197,15 @@ public class WfLedgerReconcileJob {
         }
 
         // 业务账（wf_*，跨租户）
-        // 万级在办实测：原写法 selectList(null) 把 wf_instance 55 万行、
-        // wf_task_history 108 万行的全部列（各 30+ 列）读进堆，每 10 分钟一轮；实测该轮期间
-        // 报表接口从 130 ms 涨到 2~112 s（2 GB buffer pool / 9.5 GB 库，读风暴打满 I/O）。
+        // 用 selectList(null) 会把 wf_instance 与 wf_task_history 的全部列都读进堆，作业每 10 分钟一轮，
+        // 读风暴打满 I/O 后报表接口会从毫秒级涨到分钟级。
         // 三条向量只用到下面这几列，故显式投影；判定口径不动。
         List<WfTask> pending = ignoreTenant(() -> wfTaskMapper.selectList(
                 new LambdaQueryWrapper<WfTask>()
                         .select(WfTask::getTaskId, WfTask::getTenantId)
-                        .eq(WfTask::getStatus, "PENDING")));
+                        .eq(WfTask::getStatus, "PENDING")
+                        .orderByDesc(WfTask::getId)
+                        .last("LIMIT " + (MIRROR_SCAN_LIMIT + 1))));
         Set<String> mirrorPendingTaskIds = new LinkedHashSet<>();
         Map<String, Long> pendingTenantByTask = new HashMap<>();
         for (WfTask t : pending == null ? List.<WfTask>of() : pending) {
@@ -195,7 +215,9 @@ public class WfLedgerReconcileJob {
         }
         List<WfInstance> instances = ignoreTenant(() -> wfInstanceMapper.selectList(
                 new LambdaQueryWrapper<WfInstance>()
-                        .select(WfInstance::getProcInstId, WfInstance::getTenantId)));
+                        .select(WfInstance::getProcInstId, WfInstance::getTenantId)
+                        .orderByDesc(WfInstance::getId)
+                        .last("LIMIT " + (MIRROR_SCAN_LIMIT + 1))));
         Set<String> mirrorProcInstIds = new LinkedHashSet<>();
         Map<String, Long> tenantByProcInst = new HashMap<>();
         for (WfInstance i : instances == null ? List.<WfInstance>of() : instances) {
@@ -205,18 +227,26 @@ public class WfLedgerReconcileJob {
         }
         List<WfTaskHistory> histories = ignoreTenant(() -> wfTaskHistoryMapper.selectList(
                 new LambdaQueryWrapper<WfTaskHistory>()
-                        .select(WfTaskHistory::getTaskId, WfTaskHistory::getTenantId, WfTaskHistory::getAction)));
+                        .select(WfTaskHistory::getTaskId, WfTaskHistory::getTenantId, WfTaskHistory::getAction)
+                        .orderByDesc(WfTaskHistory::getId)
+                        .last("LIMIT " + (MIRROR_SCAN_LIMIT + 1))));
         Set<String> mirrorHistTaskIds = new LinkedHashSet<>();
         Map<String, Long> tenantByHistTask = new HashMap<>();
         for (WfTaskHistory h : histories == null ? List.<WfTaskHistory>of() : histories) {
             // taskId 为空的记录是事件级行（SUBMIT / APPROVED / REJECTED），不参与任务级比对
             if (h.getTaskId() == null) continue;
             // 规则收窄：只认办结类动作；催办/升级/认领/转办/驳回跳转等过程动作行
-            // 虽带 task_id，但任务本身未办结，计入即与引擎侧判据错位（详见 MIRROR_DONE_ACTIONS）。
+            // 虽带 task_id，但任务本身未办结，计入即与引擎侧口径错位（详见 MIRROR_DONE_ACTIONS）。
             if (!MIRROR_DONE_ACTIONS.contains(h.getAction())) continue;
             mirrorHistTaskIds.add(h.getTaskId());
             tenantByHistTask.put(h.getTaskId(), h.getTenantId());
         }
+        // 三张表任一读满「上限＋1」＝本轮样本被截断，两侧不再可比（见 MIRROR_SCAN_LIMIT）
+        boolean truncated = sizeOf(pending) > MIRROR_SCAN_LIMIT
+                || sizeOf(instances) > MIRROR_SCAN_LIMIT
+                || sizeOf(histories) > MIRROR_SCAN_LIMIT
+                || engineProcInstScan.size() > HISTORY_SCAN_LIMIT
+                || engineHistTaskScan.size() > HISTORY_SCAN_LIMIT;
 
         // 三向量求差
         Vector v1a = diff(engineTaskIds, mirrorPendingTaskIds,
@@ -241,6 +271,17 @@ public class WfLedgerReconcileJob {
         putVector(report, "historyMissingInEngine", v3b);
         long driftTotal = v1a.size() + v1b.size() + v2a.size() + v2b.size() + v3a.size() + v3b.size();
         report.put("driftTotal", driftTotal);
+        report.put("truncated", truncated);
+
+        if (truncated) {
+            // 样本被截断时差分数只反映「哪一册没扫全」，不构成漂移结论：
+            // 既不出运维告警、也不落缺陷记录，否则每轮都会把没扫到的行数重新播一遍。
+            log.warn("[双账对账] 本轮样本超限（上限 {} 行/表），跳过差异判定：引擎实例 {} / 引擎历史任务 {} / "
+                            + "待办 {} / 实例视图 {} / 审批记录 {}",
+                    MIRROR_SCAN_LIMIT, engineProcInstIds.size(), engineHistTaskIds.size(),
+                    mirrorPendingTaskIds.size(), mirrorProcInstIds.size(), mirrorHistTaskIds.size());
+            return report;
+        }
 
         // 缺陷记录（按租户聚合，只报不修）
         recordDrift("engineTaskMissingInMirror", v1a);
@@ -293,6 +334,10 @@ public class WfLedgerReconcileJob {
 
     private long asLong(Object o) {
         return o instanceof Number n ? n.longValue() : 0L;
+    }
+
+    private static int sizeOf(List<?> list) {
+        return list == null ? 0 : list.size();
     }
 
     /** 差集结果：总量 + 全量样本（上限 {@link #SAMPLE_LIMIT}）+ 按租户分组的样本 */

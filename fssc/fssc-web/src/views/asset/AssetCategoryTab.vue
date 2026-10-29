@@ -113,7 +113,7 @@ const CATEGORY_COLS = [
   { prop: 'residualRate', label: '默认残值率' },
 ]
 
-// 41号审查 P1-9：资产类别导出（当前页/选中）
+// 41号审查 资产类别导出（当前页/选中）
 function doExport() { exportCsv(categories.value, CATEGORY_COLS, 'AssetCategory') }
 function exportSel() { exportCsv(selRows.value, CATEGORY_COLS, 'AssetCategory_Sel') }
 

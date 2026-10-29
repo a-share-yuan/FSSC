@@ -324,7 +324,7 @@ public class PurReturnService {
     /**
      * 退货单分页查询（列表页与 {@code GET /export} 共用同一查询）。
      *
-     * <p>D-N22：原实现只按入参过滤，既无数据范围也不封顶；{@code /export} 传
+     * <p>只按入参过滤的话，既无数据范围也不封顶；{@code /export} 传
      * {@code Integer.MAX_VALUE} 调用本方法，等于"凭一个 companyId 就能整表拉走"。
      * 现按 data_scope 五级办结（退货单无部门/经办人列，故只到公司级，其余级别降级本公司）。</p>
      */
@@ -352,8 +352,8 @@ public class PurReturnService {
 
     /**
      * 历史行补齐：读取时把 approver 的工号批量换成真名。
-     * <p>写入侧 {@link #currentUserName()} 只对"本次审批"生效；审批发生在修复前的老单据
-     * 仍存工号（实测 pur_return.approver='100002'），列表「审核人」列因此直接显示数字。
+     * <p>写入侧 {@link #currentUserName()} 只对"本次审批"生效；审批发生在升级前建的老单据
+     * 仍存工号，列表「审核人」列因此直接显示数字。
      * 与应付域 {@code ApRequestService.fillDisplayNames} 同一读时解析规则，写入数据库值不动。</p>
      */
     private void fillApproverNames(List<PurReturn> rows) {
@@ -399,7 +399,7 @@ public class PurReturnService {
     /**
      * 供应商代码必须在供应商主数据（{@code md_supplier}）现有，名称一律以主数据为准回填。
      * <p>原实现是「代码纯输入框＋名称手填」：任意字符串都能入库（如 XXX-999），且名称留空时
-     * {@code vendor_name} 写入数据库为空串（实测 pur_return id=12 LENGTH=0）⇒ 列表「供应商」列空白，
+     * {@code vendor_name} 写入数据库为空串 ⇒ 列表「供应商」列空白，
      * 下游对账/函证/税务规则缺关键字段，须进【编辑】手输名称才有值。
      * <p>名称以主数据覆盖而非"空才补"：手工名称与现有名称分叉会让同一供应商在单据上出现两种写法。
      */
@@ -416,7 +416,7 @@ public class PurReturnService {
 
     /**
      * 按 company_id 补充 company_code/company_name。
-     * 界面只提交 company_id（公司下拉），两列此前恒 NULL ⇒ 台账/导出里法人主体只有 id，
+     * 界面只提交 company_id（公司下拉），两列不补就恒 NULL ⇒ 台账/导出里法人主体只有 id，
      * 读的人无从对号。公司 id 不现有时如实报错，不静默留空。
      */
     private void fillCompanyCoords(PurReturn r) {
@@ -538,7 +538,7 @@ public class PurReturnService {
     }
 
     /**
-     * 同源单已生效退货金额合计。修复前建的单 {@code source_doc_id} 为 NULL，
+     * 同源单已生效退货金额合计。升级前建的单 {@code source_doc_id} 为 NULL，
      * 只按 id 统计会把它们漏算 ⇒ 同时按「源单类型＋单号」并入（同一 id 下的历史行，两种条件只命中一次）。
      */
     private BigDecimal alreadyReturnedAmount(PurReturn r) {
@@ -669,7 +669,7 @@ public class PurReturnService {
                 r.getBillNo(), recon.getReconNo(), oldConfirm, newConfirm);
     }
 
-    /** vendor_code → md_supplier（对账单以 supplier_id 挂账；编码优先、名称默认处理） */
+    /** vendor_code → md_supplier（对账单以 supplier_id 挂账；编码优先、名称兜底） */
     private MdSupplier resolveSupplier(PurReturn r) {
         MdSupplier sup = mdSupplierMapper.selectOne(new LambdaQueryWrapper<MdSupplier>()
                 .eq(MdSupplier::getSupplierCode, r.getVendorCode())
@@ -776,7 +776,7 @@ public class PurReturnService {
         try {
             LoginUser u = UserContext.get();
             if (u == null) return null;
-            // 审核人/经办人列直接显示工号（实测 pur_return.approver='100002'）——
+            // 审核人/经办人列直接显示工号——
             // getUserName() 是登录账号（工号），真名在 nickName；与应付域 ApRequestService 同一规则：
             // 有真名取真名，无真名（历史账号未维护）才回落工号，不留空。
             String real = u.getNickName();

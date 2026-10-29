@@ -45,7 +45,7 @@ export function formatDate(val) {
 export function formatDateTime(val) {
   if (!val) return ''
   // 先原样解析：后端主格式是 ISO 'T' 分隔，而把 '-' 一律换成 '/' 的老写法会把它打成 Invalid Date，
-  // 于是走 String(val) 默认处理、界面上留下裸 ISO 时间（体检 E-12）。'/' 分支只作失败回退。
+  // 于是走 String(val) 兜底、界面上留下裸 ISO 时间（体检 E-12）。'/' 分支只作失败回退。
   const native = new Date(val)
   const d = isNaN(native.getTime()) ? new Date(String(val).replace(/-/g, '/')) : native
   if (isNaN(d.getTime())) return String(val)
@@ -241,7 +241,7 @@ const COMMON_LABELS = {
   settleMode: '结算方式', employeeName: '员工', departmentName: '部门',
   modelKey: '流程编码', modelVersion: '流程版本', procInstId: '流程实例ID', taskId: '任务ID',
   // 申请类单据（出差行程 / 培训人员 / 会议信息 / 分摊）行详情
-  // 这些键此前没有中文标签，行详情弹窗会走 prettyKey() 回落成
+  // 这些键没有中文标签的话，行详情弹窗会走 prettyKey() 回落成
   // "Traffic Type / Allowance Amount / Round Trip" 这种英文标题，
   // 中文界面里看着像半截 JSON。统一在此登记，凡是走 showRowDetail 的页面一律变中文。
   travelerName: '出差人', personName: '姓名', employeeNo: '工号', empNo: '工号',
@@ -261,7 +261,7 @@ const COMMON_LABELS = {
 }
 
 // 字段 → 枚举字典：行详情弹窗的值若为枚举码，翻译成中文而不是原样输出英文
-// 默认处理文案与 composables/useBaseDict.js 的 TRAFFIC_LOCAL / SEAT_LOCAL / TRAINING_LOCAL 逐字一致；
+// 兜底文案与 composables/useBaseDict.js 的 TRAFFIC_LOCAL / SEAT_LOCAL / TRAINING_LOCAL 逐字一致；
 // 页面若已加载后台字典，可通过 opts.enums 传入实时文案覆盖（见 showRowDetail）
 const TRAFFIC_MODE_LABEL = { AIR: '飞机', RAIL: '高铁', TRAIN: '火车', CAR: '汽车', SHIP: '轮船' }
 const SEAT_CLASS_LABEL = { ECONOMY: '经济舱', BUSINESS: '商务舱', FIRST: '头等舱', SECOND: '二等座', FIRST_SEAT: '一等座' }
@@ -296,7 +296,7 @@ function isTechField(k) {
 // 行详情弹窗：数字值只有键名形如金额（*amount/*money/*price/*fee）才按金额格式化，
 // 其余数字（行号/数量/标志位等）原样字符串输出——曾有 create_by=3800 被写成「3,800.00」
 // fee：出差行程/培训人员行的 hotelFee/trafficFee/allowanceFee 等键名不带 amount，
-// 此前只落 String(v)，2400 显示成「2400」没有千分位与两位小数，与同屏 amount 列规则不一
+// 只落 String(v) 的话，2400 显示成「2400」没有千分位与两位小数，与同屏 amount 列规则不一
 const MONEY_KEY_RE = /(amount|money|price|fee)/i
 // 行详情弹窗：字符串日期识别（纯日期 → formatDate；ISO 日期时间 → formatDateTime）
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/

@@ -95,7 +95,7 @@ public class RedisDistributedState implements DistributedState {
         return m;
     }
 
-    // ==================== 缓存 ====================
+    // 缓存
 
     @Override
     @SuppressWarnings("unchecked")
@@ -163,7 +163,7 @@ public class RedisDistributedState implements DistributedState {
         }
     }
 
-    // ==================== 限流 / 失败计数 ====================
+    // 限流 / 失败计数
 
     @Override
     public void mark(String key, Duration ttl) {
@@ -206,7 +206,7 @@ public class RedisDistributedState implements DistributedState {
         }
     }
 
-    // ==================== 调度锁 ====================
+    // 调度锁
 
     @Override
     public boolean tryLock(String lockKey, Duration ttl) {
@@ -223,7 +223,7 @@ public class RedisDistributedState implements DistributedState {
         }
     }
 
-    // ==================== 内部 ====================
+    // 内部
 
     private void putLocal(String key, Object value, Duration ttl) {
         if (localCache.size() >= LOCAL_MAX_ENTRIES) {

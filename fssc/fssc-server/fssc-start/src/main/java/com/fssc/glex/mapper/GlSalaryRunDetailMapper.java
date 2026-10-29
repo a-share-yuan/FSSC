@@ -9,8 +9,8 @@ import com.fssc.glex.entity.GlSalaryRunDetail;
 /**
  * 薪酬发放人员级明细 Mapper（gl_salary_run_detail）。
  *
- * <p>D-DEC-143（12-30:171）：本表建表 DDL 以<b>注释态</b>交付在
- * {@link com.fssc.glex.entity.GlSalaryRunDetail} 类注释里，人工裁决执行前表不存在，
+ * <p>（171）：本表建表 DDL 以<b>注释态</b>交付在
+ * {@link GlSalaryRunDetail} 类注释里，产品确认执行前表不存在，
  * 故所有调用方必须 fail-soft（见 {@code GlSalaryRunService.listDetailOfRun}），
  * 不得让"表还没建"变成界面 500 或薪酬核算失败。</p>
  */

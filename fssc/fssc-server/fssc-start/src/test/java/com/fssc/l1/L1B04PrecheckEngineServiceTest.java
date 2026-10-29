@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * L1-B-04 PrecheckEngineService 单元测试：审单规则表达式引擎。
+ * PrecheckEngineService 单元测试：审单规则表达式引擎。
  *
  * <p>重点回归 <b>fail-closed</b>：表达式引用不存在的变量时必须判为「未命中(false)」，
  * 不能 fail-open 返回 true —— 否则配合 AUTO_REJECT 规则会把所有单据误杀。
@@ -25,7 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("L1-B-04 PrecheckEngineService 规则引擎")
 class L1B04PrecheckEngineServiceTest {
 
-    private final PrecheckEngineService svc = new PrecheckEngineService(null, null, null);
+    // PrecheckEngineService 第 4 枚依赖＝ImageFacade（票面键/票号查重改走影像域 Facade，10-27 00:29 那轮改造）；
+    // 本用例只回归表达式引擎的 fail-closed，四枚协作者一律不用，故按原写法继续传 null。
+    private final PrecheckEngineService svc = new PrecheckEngineService(null, null, null, null);
 
     private static Map<String, Object> data(Object... kv) {
         Map<String, Object> m = new HashMap<>();

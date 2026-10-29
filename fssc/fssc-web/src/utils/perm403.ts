@@ -2,7 +2,7 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * G12（2026-10-09 权限治理）：403/4030 错误文案层治理。
+ * G12（权限治理）：403/4030 错误文案层治理。
  *
  * 问题：后端 4030 业务码的 msg 形如「缺少权限：treasury:creditbill:list」，
  * 直接弹给用户＝技术黑话，用户不知道发生了什么、该找谁。

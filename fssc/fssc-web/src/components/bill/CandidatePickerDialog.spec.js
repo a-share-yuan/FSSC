@@ -7,7 +7,7 @@ import ElementPlus from 'element-plus'
 import CandidatePickerDialog from './CandidatePickerDialog.vue'
 
 /**
- * D-UI-01 家族（2026-10-19）回归护栏：候选选择器必须「勾选生效 + 金额可改 + 确定才入账」。
+ * 候选选择器回归护栏：必须「勾选生效 + 金额可改 + 确定才入账」。
  *
  * 改前形态（缺陷本体）：表格只有 @row-click，点任意一行立刻按「可冲抵余额全额」push 进表单并关窗，
  * 无确认、金额不可调、键盘不可达、无可发现性提示。本用例把底线逐条锁死：
@@ -58,7 +58,8 @@ function rowCheckboxDisabled(w, idx) {
 }
 
 describe('CandidatePickerDialog 勾选+金额+确定', () => {
-  it('① 未勾选任何行时【确定】禁用（空提交被拦）', async () => {
+  // 全量并行跑测时本用例与其它套件争 CPU 会偶发过 5s 默认超时（单跑恒通过），单独放宽
+  it('① 未勾选任何行时【确定】禁用（空提交被拦）', { timeout: 15000 }, async () => {
     const w = mountPicker()
     await settle(w)
     expect(confirmBtn(w).text()).toContain('确定')

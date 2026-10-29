@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.fssc.masterdata.entity.MdSupplierQualification;
 import org.apache.ibatis.annotations.Mapper;
 
-/** 主数据：供应商资质证照(N)(41号审查 P1-8,租户拦截器自动隔离) */
+/** 主数据：供应商资质证照(N)(41号审查 ,租户拦截器自动隔离) */
 @Mapper
 public interface MdSupplierQualificationMapper extends BaseMapper<MdSupplierQualification> {
 }

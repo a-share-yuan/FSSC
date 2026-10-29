@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <template>
-  <!-- ============ 三单匹配 · 异常派单 ============ -->
+  <!-- 三单匹配 · 异常派单 -->
   <el-card :header="$t('pay.route.cardTitle')" style="margin-top: 12px">
     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
       <el-button size="small" @click="loadApprovedPays">{{ $t('pay.route.btnRefreshApproved') }}</el-button>
@@ -63,7 +63,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -77,7 +77,7 @@ function openRowDetail(row) {
 }
 
 const approvedPays = ref([])
-// P0-2: 服务端分页（后端 myPage 返回 PageResult，替代原固定 pageSize:100 的静默截断）
+// 服务端分页（后端 myPage 返回 PageResult，替代原固定 pageSize:100 的静默截断）
 const pager = useTablePager({ mode: 'server', storageKey: 'pay_match_route' })
 const { pagedData } = pager
 const routeLoading = ref(false)

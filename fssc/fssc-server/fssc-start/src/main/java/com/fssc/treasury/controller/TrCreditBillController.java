@@ -47,10 +47,10 @@ public class TrCreditBillController {
      * <p>背景：到账环节（tr_credit_bill，TR_RECEIPT 审批收尾出「借 1002／贷 1122」凭证）与
      * 核销环节（rc_receipt，冲减 rc_receivable 余额）是同一笔钱的两半，但<b>两环节之间没有任何共同外键</b>，
      * 现库只靠同日同额人眼对齐；核销环节还完全不出证（现库 op_voucher 无 RC_RECEIPT 类凭证）。
-     * 跨域打通该做成"到账自动核销"还是"核销补出证"属账务规则裁决（甲/乙），本轮<b>只落丙</b>：
+     * 跨域打通该做成"到账自动核销"还是"核销补出证"属账务规则，本次<b>只做提示</b>：
      * 把两环节现状、可用的启发式候选、以及"这不是勾稽结论"如实告诉使用者。
      *
-     * <p>读侧另起于本域：已上线的联查读侧 {@code BillTraceChainController}（禁改）实测全文
+     * <p>读侧另起于本域：联查读侧 {@code BillTraceChainController} 通篇
      * 不含 tr_credit_bill／rc_receipt／TR_RECEIPT，不覆盖这两个环节，故无重复规则、无冲突。
      *
      * <p>权限复用既有 {@code treasury:creditbill:list}（sys_menu id=3072），不新建权限码。
@@ -63,9 +63,8 @@ public class TrCreditBillController {
 
     /**
      * 渠道流水认领，生成应收收款。
-     * <p>本类原为资金域唯一"零 {@code @OperLog}"的写控制器——实测 tr_credit_bill
-     * 已建行、wf_instance 已起流，而 sys_oper_log 在该时间窗零行（对照同包
-     * {@code TreasuryPositionController:54} 与应收域 {@code RcReceivableController:37}），
+     * <p>本类曾是资金域唯一"零 {@code @OperLog}"的写控制器——tr_credit_bill
+     * 已建行、wf_instance 已起流，而 sys_oper_log 零行（同包与应收域的写控制器都打了点），
      * "库有痕、日志无行"＝到账这类最易被伪造的单据反而无法按操作日志回溯建单人/金额/时间。
      * 现三个写端点全挂记录（两个核销入口 {@code auto-recon}／{@code confirm-recon} 必挂，
      * 旁路核销不再无痕）；{@code page}/{@code detail} 不加 QUERY，与全项目写动作打点、

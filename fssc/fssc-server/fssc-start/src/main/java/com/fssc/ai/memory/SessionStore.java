@@ -17,10 +17,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * P0 会话记忆（方案 §5.7）：进程内 LRU，租户+用户双绑定，30 分钟 TTL。
+ * 会话记忆（方案 §5.7）：进程内 LRU，租户+用户双绑定，30 分钟 TTL。
  *
  * <p>只保存"上一轮业务上下文"（技能、参数、票据号、单号），不保存完整对话文本；
- * 重启即失是 P0 的既定取舍（P1 落表）。跨用户读取在同一把锁下被 key 拒绝。
+ * 重启即失是进程内实现的取舍（尚未落表）。跨用户读取在同一把锁下被 key 拒绝。
  */
 @Slf4j
 @Component

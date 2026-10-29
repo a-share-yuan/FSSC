@@ -34,7 +34,7 @@ import java.util.Map;
  * <ul>
  *   <li><b>匹配</b>：批次明细 {@code supplier_id} = 计划 {@code supplier_id} 优先；
  *       <b>计划行 supplier_id 为 NULL</b> 时回退 {@code pay_plan.supplier = 批次明细 payee_name}；
- *       明细侧无 id 时整条按名称归集（与改造前同一规则）。status=APPROVED 且未全额核销；
+ *       明细侧无 id 时整条按名称归集（与原先同一规则）。status=APPROVED 且未全额核销；
  *       同主体多笔时本公司计划优先、期间升序 FIFO 分配。</li>
  *   <li><b>核销</b>：paid_amount 累加本次分配额；paid_amount ≥ amount → status=DONE（全额），
  *       否则保持 APPROVED（部分执行）。</li>
@@ -42,27 +42,27 @@ import java.util.Map;
  *   <li><b>开关</b>：fssc.plan-writeback.enabled（默认 true）。</li>
  * </ul>
  *
- * <h3>勾稽键由供应商名称文本改为档案 id 优先（本轮已落码）</h3>
- * 原判词：{@link #writeBackOnBatchPaid} 的匹配键实为 {@code pay_plan.supplier = 批次明细 payee_name}
- * 的<b>字符串相等</b>，名称近似即错配（现网实证 {@code md_supplier} 现库 60 行按 supplier_name 分组零重名，
- * 所以此前未爆雷；但 id=53「东昇贸易有限公司」与 id=42「东昇实业有限公司」这类同前缀异主体，
+ * <h3>勾稽键以档案 id 优先，名称文本只作回退</h3>
+ * 只看 {@link #writeBackOnBatchPaid} 的匹配键 {@code pay_plan.supplier = 批次明细 payee_name}
+ * 的<b>字符串相等</b>，名称近似即错配（{@code md_supplier} 按 supplier_name 分组目前零重名，
+ * 尚未爆雷；但「东昇贸易有限公司」与「东昇实业有限公司」这类同前缀异主体，
  * 恰是三单匹配认定的「收款方≠供应商」真实场景，两域都用名称做键就会互相印证错）。
  *
  * <p><b>现规则</b>：{@code pay_plan.supplier_id} 与 {@code op_pay_batch_detail.supplier_id} 已加列（库=fssc）。
  * 收款主体先按档案 id 归集，计划候选先按 id 相等取；<b>只有 supplier_id 为 NULL 的计划行</b>才回退名称等值匹配，
  * 挂了档案的计划行永不以名称参与比对——近似名至多命中"两侧都还没挂档案"的历史行，不会把 A 家的付款
- * 核销到已挂档案的 B 家计划上。明细侧没有 id 时整条退回名称归集，行为与本条上线前完全一致。
+ * 核销到已挂档案的 B 家计划上。明细侧没有 id 时整条退回名称归集，与不带 id 的旧行为一致。
  *
- * <p><b>id 只取上下文已有的真值，绝不在后端按名称反查档案补 id</b>（那等于把本条认定的不可靠判据搬进代码）：
+ * id 只取上下文已有的真值，绝不在后端按名称反查档案补 id（那等于把已知不可靠的判据搬进代码）：
  * <ul>
  *   <li>计划侧：{@code POST /api/tenant/pay-plan/create} 的入参 {@code supplierId}
  *       （{@code PayPlan.vue} 的档案下拉，值＝md_supplier.id），随实体透传写入数据库；</li>
  *   <li>批次侧：{@code op_pay_batch_detail.supplier_id ← exp_bill_payment.payee_id}
  *       （仅 {@code payee_type='SUPPLIER'} 时；该列由上游按 采购订单 supplier_id → 合同往来单位
- *       两级解析，两条都取不到即为 NULL，实测现库标供应商的 6 行 payee_id 全为 NULL）。</li>
+ *       两级解析，两条都取不到即为 NULL）。</li>
  * </ul>
  *
- * <p><b>历史不回填</b>（回灌 SQL 未被点名放行，且以名称文本回灌＝用本条判据给自己背书，回填规则待人工裁决），
+ * <p><b>历史不回填</b>（以名称文本回灌就是用同一套判据给自己背书，回填规则待产品确认），
  * 所以老行的 supplier_id 恒为 NULL 并走名称回退分支——回退分支的存在是历史规则，不是遗留缺陷。
  * 新录的计划与付款一旦带上档案 id，勾稽即不再依赖名称。
  */
@@ -168,7 +168,7 @@ public class PlanWritebackService {
      * 计划候选查询（双路）：
      * <ul>
      *   <li>明细带档案 id → {@code supplier_id = id} 为主路，另并一条 {@code supplier_id IS NULL 且
-     *       supplier = 收款方名称} 的回退路，专供本条上线前的历史计划（不回填，回退即它们的唯一出口）；
+     *       supplier = 收款方名称} 的回退路，专供没有档案 id 的历史计划（不回填，回退即它们的唯一出口）；
      *       已挂档案的计划行只能按 id 命中，名称再近似也不会被核销走；</li>
      *   <li>明细无档案 id（历史批次／员工等非标品收款方）→ 维持原名称等值匹配，规则不变。</li>
      * </ul>

@@ -14,7 +14,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/** 报表预聚合（rpt_summary，P2-3） */
+/** 报表预聚合（rpt_summary） */
 @Data
 @TableName("rpt_summary")
 public class RptSummary implements Serializable {

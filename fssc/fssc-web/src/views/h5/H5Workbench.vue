@@ -3,9 +3,9 @@
 
 <template>
   <div class="h5-page h5-page--tabbed">
-    <!-- 顶栏：sticky（全页唯一滚动容器＝文档，AD-02/03）；右侧只放姓名，
-         「退出」已从主导航摘出并移入「我的」页＋二次确认（AD-06 实测原退出按钮热区仅 42px，
-         且破坏性动作与常规动作同排＝§5「破坏性动作不入主导航」）。 -->
+    <!-- 顶栏：sticky（全页唯一滚动容器＝文档）；右侧只放姓名。
+         「退出」已移入「我的」页并加二次确认：它原先的点击热区只有 42px，
+         而破坏性动作不该和常规动作同排。 -->
     <header class="h5-header">
       <span class="h5-header__title">FSSC 移动报销</span>
       <span class="h5-header__sub">{{ myName }}</span>
@@ -120,7 +120,7 @@
 
     <!-- 提报 -->
     <section v-if="tab === 'create'" class="h5-body" :data-dt-src="docTypesSource">
-      <!-- 甲案：可选区与明示区都由「移动端单据启用清单」渲染——服务端 exp_mobile_template 读到就用它，
+      <!-- 可选区与明示区都由「移动端单据启用清单」渲染——服务端 exp_mobile_template 读到就用它，
            读不到（接口未上线/无权限/空清单）回落 utils/h5.js 的常量，两面的取值域与顺序规则一致。 -->
       <div v-if="mobileTypes.length" class="h5-card">
         <div class="h5-card__title h5-flush">发起报账</div>
@@ -151,9 +151,9 @@
     <section v-if="tab === 'invoice'" class="h5-body">
       <div class="h5-card">
         <div class="h5-card__title h5-flush">发票扫描 / 上传</div>
-        <!-- 原先 @click="document.getElementById(...)" —— Vue 3 模板全局白名单里没有
-             document，运行时解析成 _ctx.document＝undefined ⇒ TypeError，按钮点了没反应
-             （本窗已在应用内浏览器抓到 Uncaught TypeError 原文）。改为真 ref。 -->
+        <!-- 模板里不能写 @click="document.getElementById(...)"：Vue 3 模板全局白名单里没有
+             document，运行时解析成 _ctx.document＝undefined ⇒ TypeError，按钮点了没反应。
+             要拿 DOM 引用就走模板 ref。 -->
         <input ref="invInputRef" type="file" accept="image/*,.pdf,.ofd,.xml" multiple capture="environment"
                hidden @change="onScan" />
         <button class="h5-btn" :disabled="scanning" :aria-busy="scanning ? 'true' : 'false'" @click="invInputRef && invInputRef.click()">
@@ -415,10 +415,10 @@ const attachText = ref('')
 const invInputRef = ref(null)
 const draftTip = ref('')
 
-/* 提报清单（甲案：库里可配，常量默认处理）
+/* 提报清单（库里可配，常量兜底）
    docTypes 初值＝常量，所以「接口没上线/读失败」时提报 tab 首屏就有内容，不出现空壳；
    docTypesSource 只做运行期可证性用（写在 section 的 data-dt-src 上，界面不显示），
-   值面验证时要区分「服务端清单」和「常量默认处理」两个环节，见 §7-V 记录。 */
+   值面验证时要区分「服务端清单」和「常量兜底」两个环节，见 §7-V 记录。 */
 const docTypes = ref(H5_DOC_TYPES)
 const docTypesSource = ref('local')
 const mobileTypes = computed(() => docTypes.value.filter((d) => d.mobile))
@@ -451,8 +451,8 @@ const BILL_STATUS_CHIPS = [
   { value: BillStatus.REJECTED, label: statusLabel(BillStatus.REJECTED) },
   { value: BillStatus.APPROVED, label: statusLabel(BillStatus.APPROVED) },
 ]
-// 类型筛选：取值域不是猜的＝fssc.exp_bill 实测（del_flag=0）只有五型
-// PAY 14／CLAIM 6／LOAN 3／APPLY 2／REPAY 1；标签一律走 BILL_TYPE 名称表，禁页面内手写 map（枚举治理约定）。
+// 类型筛选的取值域来自 exp_bill 现有数据（del_flag=0）的五种单据类型；
+// 标签一律走 BILL_TYPE 名称表，禁页面内手写 map（枚举治理约定）。
 // 与「提报入口只开 CLAIM」（A6 规则）不矛盾：全部类型都能查看与筛选，非费用载体在详情页明示去电脑端。
 const BILL_TYPE_CHIPS = [
   { value: '', label: '不限' },
@@ -472,17 +472,10 @@ const myDept = computed(() => store.user?.deptId ?? '—')
 
 /* 单据列表：真分页（服务端 myPage 支持 status/billType/keyword/日期区间，本窗已核签名） */
 /**
- * 日期区间能力检查（一次性）：myPage 的 startDate/endDate 是 10-04 新加的服务端参数。
- * 前指订正（10-04 02:2x 实测）：原注释写"要发版才生效"已被运行态推翻——当前在跑的 jar
- * （PID 3848／md5 `1db8dba8…`／92,049,159B@10-04 01:00）里这两个参数**已生效**
- * （`startDate=1970-01-01&endDate=1970-01-01` 回 total=0，基线同账号 total=6）。
- * 再前指（10-04 02:47 发布窗后复探）：上面那个 PID 已被本仓 02:42:51 的 jar 窗换掉
- * （现网＝PID 1980／md5 `e4ab1c8b…`／92,055,317B），新载荷上这两条读数**逐字复现**
- * （空区间 total=0、基线 total=6、`billType=CLAIM` total=2）⇒ 结论不受载荷更替影响。
- * 检查本身不删：本页面可能被部署在未发版的环境／另一套后端上，判据仍是"让服务端自己回答"而非按版本号猜。
- * 判据不是猜版本号而是让服务端自己回答：把两端都指向 1970-01-01（本库申请日期全在 2026 年）
- * ⇒ 真支持必回 total=0；老签名会忽略这两个参数、原样返回全量 total。
- * 探不出支持就不渲染日期行——宁可少一个入口，也不摆一个"选了没反应"的假筛选（本仓对假功能的一贯规则）。
+ * 日期区间能力检查（一次性）：myPage 认不认 startDate/endDate 由服务端自己回答，不看版本号。
+ * 把两端都指向 1970-01-01（本库申请日期全在 2026 年）⇒ 真支持必回 total=0；
+ * 老签名会忽略这两个参数、原样返回全量 total。
+ * 探不出支持就不渲染日期行——宁可少一个入口，也不摆一个"选了没反应"的假筛选。
  * 探活失败（无权限/网络）同样按不支持处理，不影响列表本身加载。
  */
 async function probeDateSupport() {
@@ -561,7 +554,7 @@ function clearFilters() {
 }
 
 /* 待办：换服务端分页口 */
-// 改造前打的是 /wf/todo —— 服务端签名只有 limit（WfTaskController:71-77），
+// 原先打的是 /wf/todo —— 服务端签名只有 limit（WfTaskController:71-77），
 // 传 pageNum/pageSize 被静默丢弃 ⇒ hasMore 恒真、整份列表反复追加。
 // 现改 /wf/todo/page（PC 已用），返回 {list,total,pages,pageNum,pageSize}。
 async function loadTodos(reset = false) {
@@ -625,7 +618,7 @@ async function loadItems() {
 /* 发票 */
 /**
  * 票夹与验真队列都属发票管理岗职能（inv:list／inv:verify:list 只授发票、税务、共享三岗，
- * 实测七个 H5 岗位里六个不持）。这两个面板本就按缺权降级，但改造前每次都照样发请求
+ * 其余 H5 岗位多数不持）。这两个面板本就按缺权降级，但每次开页照样发请求
  * ⇒ 全局拦截器（api.js:200）给每个提报岗在首屏弹一次「您没有「发票·list」权限，请联系管理员开通」，
  * 既修不好问题（这权限本就不该给），又把真正的提示盖掉。
  * 正解＝先判权再决定发不发：无权直接落降级面板，一声不响；有权才取数（并 silent，
@@ -664,14 +657,12 @@ async function loadInvoices() {
 }
 
 /**
- * 发票扫描改走识别通道（的端点半边）。
- * 改造前打的是通用 /system/file/upload —— 后端带 OCR 的 /expense/attach/upload 早就存在
- * （ExpenseAttachController:37）但移动端从未调用 ⇒ 「扫描」是个假功能（docs/29 §10.3 判 ✗）。
- * 运行态前提（10-04 本窗实测，已过时·10-05 11:1x 前指）：当时 fssc 库 sys_config 的 ocr.channel=paddle，
- * paddle 地址 127.0.0.1:8087/invoice_ocr 但 8087 未监听 ⇒ 图片票「识别」这一环节现在必回
- * invoice.ok=false（服务端识别异常降级不阻断上传，ExpenseAttachController:91-97）。
- * 现况（10-05 11:1x 实测）：sys_config ocr.channel=gateway（发票能力网关 :8096 LISTENING），
- * 8087 也在监听但已不在路由路径上 ⇒ 图片票这一环节现在真的会出票面，下面的播报规则照旧"如实分档"。
+ * 发票扫描走识别通道。
+ * 通用 /system/file/upload 不带识别，后端带 OCR 的 /expense/attach/upload 才是这条链
+ * （ExpenseAttachController:37）；打错端点时「扫描」只是个假功能。
+ * 识别通道取自 sys_config 的 ocr.channel（现走发票能力网关），本页不做假设；
+ * 服务端识别异常时降级为 invoice.ok=false 且不阻断上传（ExpenseAttachController:91-97），
+ * 下面的播报规则按此分档。
  * 识别成功 ≠ 已进票夹（票面要素不全／金额不自洽时后端只 log 不入池），
  * 所以档位一律取 invoiceOutcome 这个唯一分档口，不要在这里重算判据。
  */
@@ -761,13 +752,12 @@ async function runVerify() {
 }
 
 /* 我的数据（数字改由服务端出，前端只做搬运） */
-// 回落环节的分页上限（原 LOAN_PAGE_LIMIT＝200，并行窗 10-04 00:26 从 50 抬到 200，值保留）
+// 回落环节的分页上限
 const MINE_PAGE_LIMIT = 200
 // 「仍在贷」＝已批且还没冲销完毕。名单与后端 ExpenseMineStatService.LOAN_OPEN_STATUSES 逐字相同
-// （＝仓内 办结后的同一组，PC 侧 LoanApply.vue#LOAN_OPEN_STATUSES 亦同值）。
+// （PC 侧 LoanApply.vue#LOAN_OPEN_STATUSES 亦同值）。
 // 为什么不能只认 APPROVED：借款单一旦挂上冲抵/还款就迁到 PARTIAL_REPAID，
-// 本库 3 张 LOAN 的状态是 REPAID／WITHDRAWN／PARTIAL_REPAID、APPROVED 为 0 张 ⇒ 老算法对任何人都恒显 ￥0.00，
-// 而真值是 PARTIAL_REPAID 那 1 张的 15,000.00（10-04 00:5x 只读 SQL 实测）。
+// 只认 APPROVED 会让这类人在「仍在贷」上恒显 ￥0.00。
 const MINE_LOAN_STATUSES = ['APPROVED', 'PARTIAL_REPAID', 'REPAID']
 // 「在途」＝已提交、流程在办、尚未出结论；SUBMITTED 当前 0 行但属会落状态的历史枚举码，漏算就把在途读小。
 const MINE_TRANSIT_STATUSES = ['SUBMITTED', 'APPROVING']
@@ -818,7 +808,7 @@ async function loadMine() {
   } finally { mineLoading.value = false }
 }
 
-// 打回重交留在 #/h5 路由族内（改造前 location.hash 直接跳 PC 页 ⇒ UX-08）
+// 打回重交留在 #/h5 路由族内（原先 location.hash 直接跳 PC 页 ⇒ UX-08）
 function goResubmit(r) {
   router.push(`/h5/expense/${r.id}/edit`)
 }

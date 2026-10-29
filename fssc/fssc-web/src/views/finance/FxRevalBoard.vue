@@ -200,7 +200,7 @@ async function onTrial() {
 }
 
 async function confirmFromTrial() {
-  // 试算预览页脚的写入口与工具栏 onRun 一样两步确认（此前一键直发 POST /fx-reval/run，
+  // 试算预览页脚的写入口与工具栏 onRun 一样两步确认（不能一键直发 POST /fx-reval/run，
   // 同一写动作两条入口确认步数不一致）；取消时保留试算弹窗供继续预览。
   try {
     await ElMessageBox.confirm(`确认对期间 [${period.value}] 正式执行外币汇兑重估？将按月末汇率生成 草稿转账凭证（不自动记账）。`, '执行重估', { type: 'warning' })

@@ -20,9 +20,9 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * D-V4R-33：差旅行「市内交通费」必须既落库、又进兜底合计。
+ * 差旅行「市内交通费」必须既落库、又进兜底合计。
  *
- * <p>实案（2026-10-13 12:33 运行态）：出差申请 {@code SQ202610130007} 五段金额填 1,200／2,400／900／600／900，
+ * <p>实案（运行态）：出差申请 {@code SQ202610130007} 五段金额填 1,200／2,400／900／600／900，
  * 前端「小计」＝6,000，而落库行的分量只有 1,200＋2,400＋900＋900＝<b>5,400</b>——
  * 因为表与实体都没有市内交通费这一栏（UI 绑的是 {@code row.localTrafficAmount}），
  * 兜底合计也只加四项 ⇒ 同一行自己跟自己对不上，重开草稿小计还会从 6,000 缩成 5,400。</p>
@@ -77,7 +77,7 @@ class TravelLocalTrafficSumTest {
                 "兜底合计漏了市内交通费就会只算出 5,400");
     }
 
-    /** 这一栏要真落库（被实体丢字段），否则分量与合计永远对不上。 */
+    /** 这一栏要真落库（不要被实体丢字段），否则分量与合计永远对不上。 */
     @Test
     void localTrafficAmountSurvivesToTheSavedRow() {
         ExpTravel t = row();
@@ -86,7 +86,7 @@ class TravelLocalTrafficSumTest {
                 "市内交通费没被带进落库行＝列或字段又丢了");
     }
 
-    /** 前端已把小计算好回传时，服务端覆盖它（保持"前端口径优先"这条既有行为）。 */
+    /** 前端已把小计算好回传时，服务端不要覆盖它（保持"前端口径优先"这条既有行为）。 */
     @Test
     void clientSuppliedTotalIsNotOverwritten() {
         ExpTravel t = row();

@@ -29,7 +29,6 @@ const H = vi.hoisted(() => {
 })
 
 vi.mock('@/api', () => {
-  const page = () => Promise.resolve({ list: [], total: 0 })
   const noop = () => Promise.resolve({ code: 0, data: null })
   return {
     // 用 getter 暴露 user，使测试改 H.user.perms 后组件在 setup 期能读到最新权限
@@ -42,7 +41,9 @@ vi.mock('@/api', () => {
     flowApi: { myCc: H.myCc },
     payApi: { batchPage: H.batchPage },
     sharingApi: { pool: H.pool, receive: noop, finish: noop },
-    getMenuTree: page,
+    // 菜单树接口返回的是节点数组，不是分页对象：回 {list:[]} 会让 pathAccess.leafSetOf
+    // 在 (ns||[]).forEach 处抛 TypeError（表现为整轮 6 条 unhandled rejection）
+    getMenuTree: () => Promise.resolve([]),
     getPerfLog: () => [],
     login: noop, logout: noop, registerTenant: noop, BACKEND_TARGET: 'x',
   }
@@ -50,7 +51,7 @@ vi.mock('@/api', () => {
 
 import Workbench from './Workbench.vue'
 
-describe('L1-F-06 Workbench.vue 组件测试', () => {
+describe('Workbench.vue 组件测试', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     H.user = { userId: 1, realName: '测试', perms: [] }
@@ -106,7 +107,7 @@ describe('Workbench.vue 权限门控回归（普通员工兼部门经理）', ()
     shallowMount(Workbench)
     await flushPromises()
     expect(H.todoPage).toHaveBeenCalled()
-    // D-DEC-406：「我发起的单据」不再走 billApi.myPage，改由跨域接口取数
+    // 「我发起的单据」不再走 billApi.myPage，改由跨域接口取数
     expect(H.httpGet).toHaveBeenCalledWith('/tenant/workbench/my-documents', expect.anything())
     expect(H.myCc).toHaveBeenCalled()
   })

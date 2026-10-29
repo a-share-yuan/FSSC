@@ -2,7 +2,7 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * useNetworkDegradation - 弱网降级策略 composable (R5-16)
+ * useNetworkDegradation - 弱网降级策略 composable ()
  *
  * 功能：
  * 1. 监测网络质量（通过 navigator.connection + 自定义延迟探测）

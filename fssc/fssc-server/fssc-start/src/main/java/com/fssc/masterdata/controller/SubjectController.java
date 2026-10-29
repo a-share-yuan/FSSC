@@ -29,7 +29,7 @@ public class SubjectController {
     private final SubjectService service;
 
     /**
-     * R5-D-043／R5-D-158（顺带修 R5-D-042 转注态①）：列表/树补 companyId 显式筛选入参，
+     * 顺带修 转注态①：列表/树补 companyId 显式筛选入参，
      * 照 PeriodController 的现成模式——服务端仍叠加登录人 data_scope 谓词（见 {@code SubjectService.page/tree}），
      * 传别的公司号也不会放宽可见范围。
      */
@@ -42,7 +42,7 @@ public class SubjectController {
 
     @RequiresPerm("md:subject:list")
     @GetMapping("/tree")
-    public Result<java.util.List<MdSubject>> tree(@RequestParam(required = false) Long companyId) {
+    public Result<List<MdSubject>> tree(@RequestParam(required = false) Long companyId) {
         return Result.success(service.tree(companyId));
     }
     @RequiresPerm("md:subject:create")

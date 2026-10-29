@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
  * 案卷卷内件清单（op_archive_item，带 tenant_id）。
  *
  * <p><b>为什么要有这张表</b>：归档整理的层级是「全宗 → 年度/机构/保管期限 → 案卷 → 件 → 页」，
- * "件"才是最小整理单位（DA/T 22—2015《归档文件整理规则》），而本系统此前把"卷"退化成了"件"——
+ * "件"才是最小整理单位（DA/T 22—2015《归档文件整理规则》），而本系统原先把"卷"退化成了"件"——
  * {@code op_archive} 只有 {@code bill_id}/{@code ref_id}/{@code related_ids}/{@code file_id}
  * 四个单值列，立卷入口一次只接一张单、判重键又按来源单据，结果是一卷一件、卷内目录无从谈起。
  * 本表承载"一卷多件"，{@code op_archive} 那几列降级为<b>首件镜像</b>（不要删列：历史卷与旧读数都在引用）。
@@ -67,10 +67,10 @@ public class OpArchiveItem implements Serializable {
     /** 件题名（默认取单据标题） */
     private String title;
 
-    /** 起页（P1 编页；纸质卷必填） */
+    /** 起页（纸质卷必填） */
     private Integer pageFrom;
 
-    /** 页数（P1；电子卷以文件数替代） */
+    /** 页数（电子卷以文件数替代） */
     private Integer pageCount;
 
     /** 该件的文件ID清单，逗号串，顺序即卷内文件顺序 */

@@ -23,7 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * 登录图形验证码本体（收官缺陷 C-3 / SEC 复跑项）。
+ * 登录图形验证码本体。
  *
  * <p>与同仓 BCP 门户 {@code com.unierp.bcp.portal.auth.CaptchaService} <b>同构移植</b>，
  * 不另发明第二套机制：纯 JDK {@code java.awt} 渲染 PNG（零新增三方依赖——本仓 Maven 离线，
@@ -148,7 +148,7 @@ public class CaptchaService {
         store.entrySet().removeIf(en -> en.getValue().expiresAt <= now);
     }
 
-    /** 超容量默认处理：先清过期，仍超限则淘汰最早到期的一半（与 LocalDistributedState 同一规则） */
+    /** 超容量兜底：先清过期，仍超限则淘汰最早到期的一半（与 LocalDistributedState 同一规则） */
     private void trimIfOverCapacity() {
         purgeExpired();
         if (store.size() <= MAX_ENTRIES) {

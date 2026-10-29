@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * SLA 配置实体（P1-5 共享运营实质化）。
+ * SLA 配置实体（共享运营实质化）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

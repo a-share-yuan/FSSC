@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
  *   <li>请求结束 {@code MDC.remove}，避免线程池复用导致串号（与 UserContext/TenantContext 同一规则）。</li>
  * </ol>
  *
- * <p>另记录慢请求：耗时 ≥ {@link #SLOW_MS} 的请求打 WARN，作为无 APM 时的默认处理观测手段。
+ * <p>另记录慢请求：耗时 ≥ {@link #SLOW_MS} 的请求打 WARN，作为无 APM 时的兜底观测手段。
  * 常规耗时/错误率指标由 Micrometer（{@code http.server.requests}）提供，不在此重复采集。
  */
 @Slf4j

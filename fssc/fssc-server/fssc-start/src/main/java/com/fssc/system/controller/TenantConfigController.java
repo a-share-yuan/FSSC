@@ -10,8 +10,11 @@ import com.fssc.common.core.Result;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.image.channel.OcrConfigService;
 import com.fssc.system.entity.SysConfig;
 import com.fssc.system.service.ConfigService;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,13 +30,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class TenantConfigController {
 
     private final ConfigService configService;
-    private final com.fssc.image.channel.OcrConfigService ocrConfigService;
+    private final OcrConfigService ocrConfigService;
 
     /**
      * 业务界面可读参数白名单（登录即可读，无需 system:config:*）。
      * sys_config 同时存有 SMTP 口令、OCR Token 等敏感值，故只能按键放行，不能整表下发给业务角色。
      */
-    private static final java.util.Set<String> BUSINESS_READABLE_KEYS = java.util.Set.of(
+    private static final Set<String> BUSINESS_READABLE_KEYS = Set.of(
             "expense.travel.roundTripExtraNight",
             "expense.claim.futureDateAllowed");
 
@@ -66,18 +69,18 @@ public class TenantConfigController {
         return Result.success();
     }
 
-    // ---------------- OCR 通道配置（管理员可视化，改后即时生效） ----------------
+    // OCR 通道配置（管理员可视化，改后即时生效）
 
     @RequiresPerm("system:config:list")
     @GetMapping("/ocr")
-    public Result<java.util.Map<String, Object>> getOcr() {
+    public Result<Map<String, Object>> getOcr() {
         return Result.success(ocrConfigService.get());
     }
 
     @RequiresPerm("system:config:update")
     @OperLog(module = "CONFIG", operType = "UPDATE", desc = "保存OCR通道配置")
     @PostMapping("/ocr")
-    public Result<Void> saveOcr(@RequestBody java.util.Map<String, String> req) {
+    public Result<Void> saveOcr(@RequestBody Map<String, String> req) {
         ocrConfigService.save(req);
         return Result.success();
     }

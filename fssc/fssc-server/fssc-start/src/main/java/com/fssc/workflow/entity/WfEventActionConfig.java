@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fssc.workflow.event.EventOrchestrationBus;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -17,7 +18,7 @@ import java.time.LocalDateTime;
  * 流程事件收尾动作配置（wf_event_action_config，表驱动）。
  * <p>
  * 每行映射一个 bizType → action_bean 的收尾配置，
- * {@link com.fssc.workflow.event.EventOrchestrationBus} 在启动时读取本表，
+ * {@link EventOrchestrationBus} 在启动时读取本表，
  * 按 bizType 分组、按 sort_order 排序、按 trigger_when 过滤后分发事件。
  * <p>
  * 设计目标：新流程接入仅需新增配置行（INSERT），零代码改动。

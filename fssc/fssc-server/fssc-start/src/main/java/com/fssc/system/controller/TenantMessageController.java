@@ -54,7 +54,7 @@ public class TenantMessageController {
      * 与 {@code /wf/query/cc/mine} 同型——该码在授权表里并非人人有（现网 COMMON_EMP 持，
      * 但 FSSC_SUPERVISOR 单岗用户不持），一旦抄送提醒发给了一个不持该码的岗位，
      * 前端 {@code silent:true} 把 403 吞成「暂无通知」＝写了 sys_message 却仍然没有出口。
-     * 现改为：<b>查自己不设权限码</b>，查他人仍需 {@code system:message:list}（管理视图不扩面）。
+     * <b>查自己不设权限码</b>，查他人仍需 {@code system:message:list}（管理视图不扩面）。
      */
     @GetMapping("/page")
     public Result<PageResult<SysMessage>> page(PageQuery query,

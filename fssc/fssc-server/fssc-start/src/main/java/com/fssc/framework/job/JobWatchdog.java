@@ -46,9 +46,9 @@ public class JobWatchdog {
     /**
      * 期望表：任务名 -> 最大允许执行间隔。
      *
-     * <p>同族的「统计方式漏」环节（现库实测 2026-10-01）：代码侧
-     * {@code jobHeartbeatService.run(...)} 包装的任务名共 <b>20</b> 个，本表原先只登记 <b>9</b> 个，
-     * 其余 <b>11</b> 个有心跳行却不在期望表里——它们停摆了不会有任何告警。
+     * <p>另有一处「统计方式漏」：代码侧
+     * {@code jobHeartbeatService.run(...)} 包装的任务名里，本表原先只登记了一小半，
+     * 剩下那些有心跳行却不在期望表里——它们停摆了不会有任何告警。
      * 现按各自 {@code @Scheduled} 注解的真实频率补齐（月度型给 33 天）。
      * 频率取值依据＝类上注解，非猜测：见每行注释。
      */
@@ -65,7 +65,7 @@ public class JobWatchdog {
         EXPECTED.put("InvoiceAbnormalAlertJob", MIN_15);   // fixedDelay 5min
         EXPECTED.put("InvoiceVerifyScheduler", MIN_15);    // fixedDelay 5min
         EXPECTED.put("WfTimeoutJob", MIN_15);              // fixedDelay 1min
-        // —— 以下 10 行为本轮补登记（原先有心跳行却不在期望表 = 停摆零告警的漏检面）——
+        // —— 以下作业有心跳行却一直不在期望表里（停摆零告警的漏检面）——
         EXPECTED.put("AutoDispatchJob", MIN_15);           // compliance/job fixedDelay 1min
         EXPECTED.put("HealthProbeJob", MIN_15);            // framework/health fixedDelay 5min
         EXPECTED.put("StabilityLogJob", HOUR_26);          // cron 每日 23:55（另有 5min tick，取慢的那条）
@@ -109,7 +109,7 @@ public class JobWatchdog {
             // 跑成功、跑失败、清理 0 条，三种结局都会留下一行（例外只有"写心跳本身报错"与
             // "调度锁被他实例持有"，两者在日志里都有独立 warn/info 痕迹）。所以缺行最可能的解释是：
             // 该 @Scheduled 方法<b>从未被调度器触发</b>（调度未生效 / 触发窗口从未被进程存活期覆盖），
-            // 而不是"执行了但失败"。原文案"可能从未执行或调度未生效"两种可能并列，值班无法据此定位。
+            // 而不是"执行了但失败"。只说"可能从未执行或调度未生效"值班无从下手，下面给可执行的排查项。
             detail = "op_job_heartbeat 无 job_name=" + jobName + " 行 ⇒ 大概率 @Scheduled 方法从未被触发"
                     + "（成功/失败/零处理量三种结局都会留行，故不是「执行了但失败」）。"
                     + "请确认：该任务是否已被注册、其触发窗口（cron 时刻或 fixedDelay）是否被进程存活期覆盖过、"

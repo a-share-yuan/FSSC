@@ -4,6 +4,7 @@
 package com.fssc.auth;
 
 import com.fssc.common.core.Result;
+import com.fssc.framework.security.JwtAuthFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,11 +18,11 @@ import java.util.Map;
  * 登录图形验证码下发端点（C-3 登录验证码本体）。
  *
  * <pre>
- *   GET /api/auth/captcha  →  Result.data = { captchaId, image, [debugCode] }
+ *   GET /api/auth/captcha → Result.data = { captchaId, image, [debugCode] }
  * </pre>
  *
  * <p><b>匿名可达</b>：本路径落在 {@code JwtAuthFilter} 的白名单 {@code /api/auth/**} 内
- * （验证码本来就是登录前拿的，见 {@link com.fssc.framework.security.JwtAuthFilter#WHITE_LIST} 约定）。</p>
+ * （验证码本来就是登录前拿的，见 {@link JwtAuthFilter#WHITE_LIST} 约定）。</p>
  *
  * <p><b>不可缓存</b>：验证码是服务端一次性状态（captchaId → 明文），被 CDN/网关/浏览器缓存
  * 就等于把同一张图发给后续所有请求，故响应强制 {@code Cache-Control: no-store}。</p>

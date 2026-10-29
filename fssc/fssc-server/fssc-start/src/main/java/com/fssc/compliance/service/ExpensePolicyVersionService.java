@@ -8,6 +8,7 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.ExpensePolicyVersion;
 import com.fssc.compliance.mapper.ExpensePolicyVersionMapper;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -85,7 +86,7 @@ public class ExpensePolicyVersionService {
         }
         version.setStatus("APPROVED");
         version.setApprovedBy(approverId);
-        version.setApprovedAt(java.time.LocalDateTime.now());
+        version.setApprovedAt(LocalDateTime.now());
         expensePolicyVersionMapper.updateById(version);
         log.info("审批政策版本: id={}, approverId={}", id, approverId);
     }

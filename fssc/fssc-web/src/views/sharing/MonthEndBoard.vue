@@ -3,7 +3,7 @@
 
 <template>
   <div class="monthend-board">
-    <!-- 权限门控（2026-09-16 P0）：本页是无菜单承载的全局入口（用户下拉「月结看板」+ /month-end），
+    <!-- 权限门控：本页是无菜单承载的全局入口（用户下拉「月结看板」+ /month-end），
          首屏主数据来自 gl:monthclose:list。无权限时给说明而非弹全局错误提示。 -->
     <div v-if="!canView" class="no-perm">
       <el-empty :description="$t('sharing.monthEnd.noPermTitle')">
@@ -165,7 +165,7 @@ const monthEndAlert = ref({ shouldAlert: false, message: '', daysLeft: 0 })
 const nextTask = ref(null)
 
 /**
- * 权限门控（2026-09-16 P0 权限治理）
+ * 权限门控
  *
  * 本页是无菜单承载的全局入口页（Layout 用户下拉「月结看板」+ 路由 /month-end）。
  * 首屏三个接口分两层：
@@ -309,20 +309,20 @@ function renderTimelineChart() {
 }
 
 async function loadPeriods() {
-  // 当前月默认处理（无权限 / 接口不可达时使用）
+  // 当前月兜底（无权限 / 接口不可达时使用）
   const fallback = () => {
     const now = new Date()
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     periods.value = [{ label: t('sharing.monthEnd.periodLabel', { v1: now.getFullYear(), v2: now.getMonth() + 1 }), value: ym }]
   }
-  // 无 md:period:list 直接默认处理，不发请求（原实现会请求失败再进 catch，但全局 toast 已经弹出）
+  // 无 md:period:list 直接兜底，不发请求（原实现会请求失败再进 catch，但全局 toast 已经弹出）
   if (!canLoadPeriods) return fallback()
   try {
     const res = await periodApi.page({ pageNum: 1, pageSize: 50 }, { silent: true })
     const list = res.list || res.records || []
     // 期间查询两处错位是「看板恒空」的另一半——
     // ① md_period 实体字段是 periodYear/periodMonth，原代码读 p.year/p.month ⇒ 期间串成 'undefined-undefined'；
-    // ② 状态过滤只认 OPEN，而会计期间主数据的开账态实为 NORMAL ⇒ 下拉恒空，永远走默认处理当月。
+    // ② 状态过滤只认 OPEN，而会计期间主数据的开账态实为 NORMAL ⇒ 下拉恒空，永远走兜底当月。
     // 看板仍传 'YYYY-MM'（展示规则），由后端 GlMonthCloseService.normalizePeriod 统一折成库内 yyyyMM 再 eq，
     // 因此这里不需要在前端私自改成 6 位。
     periods.value = list
@@ -377,7 +377,7 @@ async function loadData() {
     })
     // 补充流程实例数据作为参考（在途审批也属于月结任务范畴）
     // 可选增强：无 wf:instance:list 时整体跳过（不发请求）；有权限时传 silent
-    // —— 原实现用 try/catch 默认处理，但提示来自 api.js 响应拦截器，catch 吞不掉。
+    // —— 原实现用 try/catch 兜底，但提示来自 api.js 响应拦截器，catch 吞不掉。
     if (canLoadFlowRef) {
       try {
         const flowRes = await flowApi.instancePage({ pageNum: 1, pageSize: 200 }, { silent: true })
@@ -487,7 +487,7 @@ onBeforeUnmount(() => {
 .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
 .text-muted { color: #c0c4cc; }
 .text-success { color: #67c23a; }
-/* 权限门控占位（2026-09-16 P0） */
+/* 权限门控占位 */
 .no-perm { padding: 60px 20px; background: #fff; border-radius: 8px; }
 .no-perm .np-title { font-size: 15px; font-weight: 600; color: #303133; margin: 0 0 6px; }
 .no-perm .np-code { font-size: 13px; color: #606266; margin: 0 0 10px; }

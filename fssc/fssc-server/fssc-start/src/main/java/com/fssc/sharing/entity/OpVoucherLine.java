@@ -47,8 +47,8 @@ public class OpVoucherLine implements Serializable {
     /**
      * 库表本有 {@code employee_id} 列（第 18 列），实体一直没映射 ⇒ 任何写入位置都填不进去。
      * 现补映射但<b>暂无写入方</b>：库里没有员工主档（{@code md_employee} 不存在，只有
-     * {@code md_employee_level}），"员工辅助"到底指向 {@code sys_user.id} 还是人事档案 ID 属规则裁决，
-     * 猜错就是把薪酬/借款辅助挂到错的人身上（同族 的借款挂员工，留待该裁决一并落）。
+     * {@code md_employee_level}），"员工辅助"到底指向 {@code sys_user.id} 还是人事档案 ID 属规则待定，
+     * 猜错就是把薪酬/借款辅助挂到错的人身上（同族 的借款挂员工，留待该判定一并落）。
      */
     private Long employeeId;
     /**

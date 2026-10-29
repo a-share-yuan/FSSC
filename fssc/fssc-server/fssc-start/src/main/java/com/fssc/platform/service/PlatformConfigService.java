@@ -28,7 +28,7 @@ public class PlatformConfigService {
     private final PfConfigMapper configMapper;
     private final PfNoticeTemplateMapper templateMapper;
 
-    // ---------- 平台全局配置 ----------
+    // 平台全局配置
 
     public PageResult<PfConfig> configPage(long pageNum, long pageSize, String group, String keyword) {
         LambdaQueryWrapper<PfConfig> qw = new LambdaQueryWrapper<>();
@@ -78,7 +78,7 @@ public class PlatformConfigService {
         configMapper.deleteById(id);
     }
 
-    // ---------- 消息模板 ----------
+    // 消息模板
 
     public PageResult<PfNoticeTemplate> templatePage(long pageNum, long pageSize, String channel, String keyword) {
         LambdaQueryWrapper<PfNoticeTemplate> qw = new LambdaQueryWrapper<>();

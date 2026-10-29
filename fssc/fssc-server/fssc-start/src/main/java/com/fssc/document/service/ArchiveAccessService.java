@@ -45,7 +45,7 @@ public class ArchiveAccessService {
     private final SysUserMapper sysUserMapper;
 
     /**
-     * 调阅类型名称表（· 2026-09-27 人工裁决）：取**前端可渲染的键集**
+     * 调阅类型名称表（· 产品确认）：取**前端可渲染的键集**
      * （ArchiveBoard.vue accessTypeLabel 的 READ/VIEW/COPY），写进去的值必然读得出来。
      * archive_access_log.access_type 的列注释写着 VIEW/DOWNLOAD/PRINT，但现网零行
      * 用过后两者，且前端无对应文案 ⇒ 列注释非权威，不并入白名单（仅登记，DDL 不动）。
@@ -90,13 +90,13 @@ public class ArchiveAccessService {
         accessLog.setApprovalStatus("PENDING");
         archiveAccessLogMapper.insert(accessLog);
 
-        // P3：调阅申请发起 FM03 凭证借阅审批流（FM_BORROW，借阅申请→共享主管复核→财务经理审批）
+        // 调阅申请发起 FM03 凭证借阅审批流（FM_BORROW，借阅申请→共享主管复核→财务经理审批）
         try {
             wfEngineFacade.start("FM_BORROW", accessLog.getId(), userId(),
                     "档案调阅-" + archiveId);
         } catch (Exception ex) {
             log.error("调阅申请 {} 发起借阅审批失败: {}", accessLog.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
 
         log.info("申请档案调阅: accessLogId={}, archiveId={}, requesterId={}",
@@ -140,12 +140,10 @@ public class ArchiveAccessService {
     }
 
     /**
-     * A4 第③层·运行时默认处理（· 2026-09-27 人工裁决第三轮）：批准/授予都必须同时持有
-     * 「调阅申请查看」{@code compliance:archiveaccess:list}。依据与依赖真值见 {@code PermDependency}：
-     * 配置期拦截（「查看是其余权限的前置权限…不能设置为有权」），运行层只是第二道。
-     * 现网取证：approve 与 list 持有人<b>零交集</b> ⇒ 有 approve 的人列不出申请却仍能批准放行，
-     * 等于在看不见台账的情况下开放档案访问，与 （审批历史读侧未办结）同类。
-     * 本轮只加代码校验，不动任何权限数据；是否收敛授权矩阵留 ④ 组裁决。
+     * 批准/授予都必须同时持有「调阅申请查看」{@code compliance:archiveaccess:list}。
+     * 配置期已有拦截（查看是其余权限的前置，不能把查看设为无权），运行层是第二道：
+     * 两个权限的持有人若没有交集，有 approve 的人列不出申请却仍能批准放行，
+     * 等于在看不见台账的情况下开放档案访问。此处只做代码校验，不改动权限数据。
      */
     private void assertApproverCanList() {
         PermDependency
@@ -192,7 +190,10 @@ public class ArchiveAccessService {
     public List<ArchiveAccessLog> listPendingApproval() {
         LambdaQueryWrapper<ArchiveAccessLog> qw = new LambdaQueryWrapper<>();
         qw.eq(ArchiveAccessLog::getApprovalStatus, "PENDING")
-                .orderByAsc(ArchiveAccessLog::getCreateTime);
+                .orderByAsc(ArchiveAccessLog::getCreateTime)
+                // 本端点无分页入参（界面已改走 /pending/page）。20 万行待审语料实测单响应 13.4 MB，
+                // 上限 200 行只防无界载荷，正常待审队列远小于此；需要翻页请走 pagePendingApproval。
+                .last("LIMIT 200");
         List<ArchiveAccessLog> rows = archiveAccessLogMapper.selectList(qw);
         fillRequesters(rows);
         return rows;
@@ -206,7 +207,7 @@ public class ArchiveAccessService {
     /**
      * 调阅审批分页按状态可查。
      * 原端点只返回 PENDING ⇒ 已批准/已驳回的调阅记录在界面上永不可见
-     * （库内实测 3 行：1 APPROVED / 1 REJECTED / 1 PENDING，页面只见 1 行）。
+     * （已批、已驳的记录都拿不到，页面上只剩待审那一行）。
      * status 传空或 ALL 返回全部，其余按等值过滤；控制器默认给 PENDING 以保持既有调用方行为不变。
      */
     public PageResult<ArchiveAccessLog> pageApproval(String status, long pageNum, long pageSize) {
@@ -222,11 +223,11 @@ public class ArchiveAccessService {
     }
 
     /**
-     * 申请人姓名/工号回填（2026-09-27 人工裁决第三轮）：
-     * 后端只给裸 requester_id，前端本地 join 出来的是<b>工号</b>（现网显示 Y006083）；
-     * 且本地用户表只拉一页 500 行，翻页外的申请人直接退化成「用户#ID」。
+     * 申请人姓名/工号回填：
+     * 后端只给裸 requester_id，前端本地 join 出来的是工号而不是姓名；
+     * 且本地用户表只拉一页 500 行，翻页外的申请人会退化成「用户#ID」。
      * 规则与流程侧 {@code WfQueryService.namesByIds} 一致：nick_name 优先、缺失回退登录号；
-     * 姓名与工号<b>并存</b>，不做互相替换、也不改任何历史行。
+     * 姓名与工号并存，不做互相替换，也不回写历史行。
      */
     private void fillRequesters(List<ArchiveAccessLog> rows) {
         Set<Long> ids = new HashSet<>();

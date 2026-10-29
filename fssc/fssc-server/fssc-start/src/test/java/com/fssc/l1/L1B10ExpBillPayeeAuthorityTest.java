@@ -27,9 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * L1-B-10 对公结算单的收款方名称与标题（服务端权威口径）。
+ * 对公结算单的收款方名称与标题（服务端权威口径）。
  *
- * <p>判据三条：
+ * <p>三条口径：
  * <ol>
  *   <li>往来单位/采购订单选定万维 ⇒ exp_bill.payee_name 落「万维物流有限公司」，
  *       即使请求体里回传的是上一张单的「弘毅贸易有限公司」也以服务端反查为准；</li>
@@ -64,7 +64,7 @@ class L1B10ExpBillPayeeAuthorityTest {
         L1TestSupport.inject(svc, "crmCustomerMapper", crmCustomerMapper);
         L1TestSupport.inject(svc, "poOrderMapper", poOrderMapper);
         L1TestSupport.inject(svc, "numberRuleService", numberRuleService);
-        // 新建腿需要 id 才能走完 insert 之后的行/附件收口
+        // 新建腿需要 id 才能走完 insert 之后的行/附件写入
         Mockito.when(expBillMapper.insert(Mockito.any(ExpBill.class))).thenAnswer(inv -> {
             ((ExpBill) inv.getArgument(0)).setId(9001L);
             return 1;
@@ -127,8 +127,8 @@ class L1B10ExpBillPayeeAuthorityTest {
     }
 
     @Test
-    @DisplayName("判据1: 往来单位+PO 都指万维时 payee_name 落万维，不保留前端回传的弘毅串")
-    void 判据1_选万维的PO建单_payeeName必须是万维() {
+    @DisplayName("往来单位+PO 都指万维时 payee_name 落万维，不保留前端回传的弘毅串")
+    void 选万维的PO建单_payeeName必须是万维() {
         numberRules("FK202610120010");
         counterName(44L, WANWEI);
         poSupplierName(4L, WANWEI);
@@ -144,8 +144,8 @@ class L1B10ExpBillPayeeAuthorityTest {
     }
 
     @Test
-    @DisplayName("判据1补: 仅选往来单位（无 PO）时 payee_name 取往来单位；PO 单独存在时取 PO 供应商")
-    void 判据1补_单一来源各自反查() {
+    @DisplayName("仅选往来单位（无 PO）时 payee_name 取往来单位；PO 单独存在时取 PO 供应商")
+    void 单一来源各自反查() {
         numberRules("FK202610120011", "FK202610120012");
         counterName(47L, SHENGTAI);
         svc.saveDraft(settleBill("只选往来单位", 47L, null), null, null);
@@ -161,8 +161,8 @@ class L1B10ExpBillPayeeAuthorityTest {
     }
 
     @Test
-    @DisplayName("判据2: 往来单位指万维而 PO 指弘毅时当场拒绝，文案点名两个来源且一行不落库")
-    void 判据2_两源指向不同供应商应拒绝且不落库() {
+    @DisplayName("往来单位指万维而 PO 指弘毅时当场拒绝，文案点名两个来源且一行不落库")
+    void 两源指向不同供应商应拒绝且不落库() {
         numberRules("FK202610120013");
         counterName(44L, WANWEI);
         poSupplierName(2L, HONGYI);
@@ -178,8 +178,8 @@ class L1B10ExpBillPayeeAuthorityTest {
     }
 
     @Test
-    @DisplayName("判据3: title 原样落用户输入；留空时按单据编号生成且不等于上一张单的标题")
-    void 判据3_title落用户原文留空按编号生成() {
+    @DisplayName("title 原样落用户输入；留空时按单据编号生成且不等于上一张单的标题")
+    void title落用户原文留空按编号生成() {
         numberRules("FK202610120007", "FK202610120010");
         counterName(44L, WANWEI);
         poSupplierName(4L, WANWEI);
@@ -204,8 +204,8 @@ class L1B10ExpBillPayeeAuthorityTest {
     }
 
     @Test
-    @DisplayName("判据3补: 非对公单据（CLAIM）不套用本口径，收款方与标题保持原行为")
-    void 判据3补_报销单不受影响() {
+    @DisplayName("非对公单据（CLAIM）不套用本口径，收款方与标题保持原行为")
+    void 报销单不受影响() {
         numberRules("CLM202610120001");
         ExpBill claim = new ExpBill();
         claim.setBillType("CLAIM");

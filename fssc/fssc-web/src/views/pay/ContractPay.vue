@@ -76,7 +76,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -86,7 +86,7 @@ function openTrace(row) {
 
 const selRows = ref([])
 const rows = ref([])
-// P0-1: 合同付款查询本地分页（后端未分页，前端切片）
+// 合同付款查询本地分页（后端未分页，前端切片）
 const pager = useTablePager({ mode: 'server', storageKey: 'contract_pay' })
 const { pagedData } = pager
 const loading = ref(false)
@@ -100,7 +100,7 @@ function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractio
 async function load() {
   loading.value = true
   try {
-    // P0-2: 后端分页 + 关键字过滤（kw 在服务端 LIKE contractNo/contractName）
+    // 后端分页 + 关键字过滤（kw 在服务端 LIKE contractNo/contractName）
     await pager.load(async ({ pageNum, pageSize }) => {
       const r = await reportApi.contractSummaryPage({ pageNum, pageSize, kw: kw.value || undefined })
       rows.value = r.list || []

@@ -16,7 +16,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 
 /**
- * 维度8 STAB-02：每日 23:55 稳定性快照任务。
+ * 每日 23:55 稳定性快照任务。
  *
  * <p>把当日的运行指标（JVM 堆峰值、连接池活跃峰值近似值、定时任务失败数、健康探测失败数、
  * 重启次数）写入数据库到 op_stability_log，作为「连续 14 天无非计划重启、无 OOM」的验收证据来源。

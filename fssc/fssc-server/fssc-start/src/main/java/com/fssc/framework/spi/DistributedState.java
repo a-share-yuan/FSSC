@@ -13,7 +13,7 @@ import java.util.function.Supplier;
  *
  * <p>实现按配置 {@code fssc.redis.enabled} 切换（@ConditionalOnProperty）：</p>
  * <ul>
- *   <li>{@link LocalDistributedState}（false 或缺省）：进程内实现，行为与改造前完全一致
+ *   <li>{@link LocalDistributedState}（false 或缺省）：进程内实现，行为与原先完全一致
  *       （锁走 MySQL GET_LOCK，与单机现状相同）；</li>
  *   <li>{@link RedisDistributedState}（true）：StringRedisTemplate + Jackson 序列化，
  *       缓存 GET/SET EX + 本地 double-check，前缀失效 SCAN+DEL，限流 INCR+EXPIRE，
@@ -29,10 +29,10 @@ public interface DistributedState {
      * 缓存语义：命中直接返回；未命中/过期调用 loader 回源并按 ttl 写入。
      * 并发下允许重复加载（最终一致即可，与原 TenantCache 规则相同）。
      *
-     * @param key    缓存 key
-     * @param type   值的类型（Redis 实现用于反序列化；本地实现直接返回原对象引用，type 仅作声明）
+     * @param key 缓存 key
+     * @param type 值的类型（Redis 实现用于反序列化；本地实现直接返回原对象引用，type 仅作声明）
      * @param loader 回源加载器
-     * @param ttl    存活时间
+     * @param ttl 存活时间
      */
     <T> T getOrLoad(String key, Class<T> type, Supplier<T> loader, Duration ttl);
 
@@ -62,7 +62,7 @@ public interface DistributedState {
     /**
      * 标记是否存在（未过期返回 true）。
      * <p>
-     * <b>失败语义与缓存/限流不同，本方法 fail-closed</b>：存储不可用时返回 true（视作"已标记"）
+     * 失败语义与缓存/限流不同，本方法 fail-closed：存储不可用时返回 true（视作"已标记"）
      * 并告警。令牌黑名单是安全设施而非可用性设施——存储故障时应拒绝访问，而不是放行一个已被
      * 强制下线的用户去操作资金。其他三个语义（缓存、限流、锁）仍按各自注释 fail-open。
      */
@@ -71,7 +71,7 @@ public interface DistributedState {
     /**
      * 互斥锁：获取成功返回 true（调用方必须 finally unlock）；已被占用立即返回 false（不阻塞）。
      *
-     * @param ttl 锁最长持有时间（实例崩溃默认处理，到期自动释放；本地 GET_LOCK 模式忽略该参数）
+     * @param ttl 锁最长持有时间（实例崩溃兜底，到期自动释放；本地 GET_LOCK 模式忽略该参数）
      */
     boolean tryLock(String lockKey, Duration ttl);
 

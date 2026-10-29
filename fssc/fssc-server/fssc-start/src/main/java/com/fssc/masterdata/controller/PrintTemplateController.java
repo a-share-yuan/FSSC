@@ -19,15 +19,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 打印/套打引擎对外接口（V1.4.81，闭环差距②「打印无套打设计器」）。
+ * 打印/套打引擎对外接口（闭环差距②「打印无套打设计器」）。
  *
  * <p>路径 {@code /api/tenant/masterdata/print/**}。
  *
  * <p><b>前端改造点</b>：{@code fssc-web/src/composables/usePrintTemplate.js} 原先把 5 套模板
  * 写死在 TEMPLATES 常量里。改造后改为：
  * <pre>
- *   1) GET  /template/biz/{bizType}      取模板（含毫米坐标与字段属性）
- *   2) POST /render                      传数据拿渲染 HTML + 必录校验结论
+ *   1) GET /template/biz/{bizType} 取模板（含毫米坐标与字段属性）
+ *   2) POST /render 传数据拿渲染 HTML + 必录校验结论
  * </pre>
  * 这样新增单据打印样式＝后台建模板数据，不再改前端代码。
  */
@@ -38,7 +38,7 @@ public class PrintTemplateController {
 
     private final PrintTemplateService printService;
 
-    // ==================== 模板查询 ====================
+    // 模板查询
 
     /** 全部模板（套打设计器模板列表页用） */
     @GetMapping("/template/list")
@@ -66,7 +66,7 @@ public class PrintTemplateController {
         return Result.success(printService.render(probe).getTemplate());
     }
 
-    // ==================== 模板套 ====================
+    // 模板套
 
     @GetMapping("/set/list")
     public Result<List<MdPrintTemplateSet>> listSets() {
@@ -78,7 +78,7 @@ public class PrintTemplateController {
         return Result.success(printService.buildSetView(setCode));
     }
 
-    // ==================== 渲染 ====================
+    // 渲染
 
     /**
      * 渲染打印内容。
@@ -96,7 +96,7 @@ public class PrintTemplateController {
         return Result.success(printService.render(req));
     }
 
-    // ==================== 模板维护（套打设计器） ====================
+    // 模板维护（套打设计器）
 
     @PostMapping("/template/save")
     @RequiresPerm("md:print:template:edit")

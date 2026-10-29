@@ -3,6 +3,7 @@
 
 package com.fssc.sharing.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fssc.common.entity.TenantAuditBase;
 import lombok.Data;
@@ -26,7 +27,7 @@ public class OpDispatchRule extends TenantAuditBase {
     /** 规则名称 */
     private String ruleName;
 
-    // ========== 合并自 dispatch_rule（派单规则） ==========
+    // 合并自 dispatch_rule（派单规则）
 
     /** 派单维度 */
     private String dispatchDimension;
@@ -64,6 +65,6 @@ public class OpDispatchRule extends TenantAuditBase {
     private String remark;
 
     /** 目标分组是否自动派单（关联 ShGroup.isAutoDispatch，仅查询展示用，非持久化字段） */
-    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    @TableField(exist = false)
     private String targetGroupAutoDispatch;
 }

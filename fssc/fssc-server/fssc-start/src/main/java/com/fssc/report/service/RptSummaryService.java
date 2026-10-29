@@ -12,6 +12,7 @@ import com.fssc.report.mapper.RptSummaryMapper;
 import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.job.JobHeartbeatService;
 import com.fssc.framework.tenant.TenantContext;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,9 +25,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 报表预聚合（P2-3，需求文档 12.9）。
+ * 报表预聚合（需求文档 12.9）。
  * 按 租户+期间+维度（单据类型/公司/部门）预计算单据量与金额合计，替代实时 selectMaps 聚合。
- * 定时每日刷新近 3 个月 + 手动触发；查询读预聚合表，无数据回源实时聚合默认处理。
+ * 定时每日刷新近 3 个月 + 手动触发；查询读预聚合表，无数据回源实时聚合兜底。
  */
 @Slf4j
 @Service
@@ -45,10 +46,10 @@ public class RptSummaryService {
             // 缺陷D6-3(20260919)：调度线程无租户上下文，aggregate 查 exp_bill 触发
             // fail-closed「业务SQL缺少租户条件」，任务每天 01:30 必刷 ERROR。
             // 报表预聚合是跨租户聚合（汇总各租户单据量/金额），用框架既定的 runIgnoreTenant。
-            // ★D-DEC-466(20261004)：runIgnoreTenant 只放开 SELECT 的租户过滤；写入必须按单据自带
+            // (20261004)：runIgnoreTenant 只放开 SELECT 的租户过滤；写入必须按单据自带
             // tenant_id 显式赋值（见 aggregate/upsert），否则 rpt_summary.tenant_id 落 NULL 撞 NOT NULL。
-            // ★同批修复「假 SUCCESS」：原先此处 catch(Exception) 只 log.error，导致 JobHeartbeatService
-            // 拿到正常返回→markSuccess，心跳页永远显示 SUCCESS（2026-10-04 01:30:17 ERROR 与
+            // 同批修复「假 SUCCESS」：原先此处 catch(Exception) 只 log.error，导致 JobHeartbeatService
+            // 拿到正常返回→markSuccess，心跳页永远显示 SUCCESS（ERROR 行与
             // last_result=SUCCESS/duration_ms=16454 同时存在即为实证）。改为记日志后原样上抛，
             // 由心跳包装层 markFail＋告警，失败可见。
             TenantContext.runIgnoreTenant(() -> {
@@ -67,11 +68,11 @@ public class RptSummaryService {
     public int refresh(Integer year, Integer month) {
         String period = year + String.format("%02d", month);
         int total = 0;
-        // 维度1：单据类型
+        // 按单据类型
         total += aggregate(period, "EXPENSE_TYPE", "bill_type", year, month, null);
-        // 维度2：公司
+        // 按公司
         total += aggregate(period, "COMPANY", "company_id", year, month, "company_id");
-        // 维度3：部门
+        // 按部门
         total += aggregate(period, "DEPT", "dept_id", year, month, "dept_id");
         return total;
     }
@@ -79,7 +80,7 @@ public class RptSummaryService {
     /**
      * 按维度聚合 exp_bill（排除草稿/删除）并 upsert rpt_summary。
      * groupField 为 null 时按空维度聚合（占位，前端主要用有值维度）。
-     * <p>★D-DEC-466：聚合与分组都带 tenant_id —— 跨租户刷新（runIgnoreTenant）时
+     * <p>聚合与分组都带 tenant_id —— 跨租户刷新（runIgnoreTenant）时
      * 写入必须落回单据自己的租户，否则 rpt_summary.tenant_id=NULL 撞 NOT NULL 约束；
      * 同租户单条刷新（界面手动触发）时该列即当前上下文租户，行为不变。
      */
@@ -112,7 +113,7 @@ public class RptSummaryService {
     }
 
     private void upsert(String period, String dimType, String dimKey, String dimName, Long cnt, BigDecimal amt, Long tenantId) {
-        // ★命中判断必须同租户，否则 uk_rpt(tenant_id,period,dim_type,dim_key) 下会串改他租户汇总行
+        // 命中判断必须同租户，否则 uk_rpt(tenant_id,period,dim_type,dim_key) 下会串改他租户汇总行
         RptSummary exist = summaryMapper.selectOne(new LambdaQueryWrapper<RptSummary>()
                 .eq(RptSummary::getTenantId, tenantId)
                 .eq(RptSummary::getPeriod, period)
@@ -124,11 +125,11 @@ public class RptSummaryService {
             upd.setId(exist.getId());
             upd.setBillCount(cnt);
             upd.setTotalAmount(amt);
-            upd.setRefreshTime(java.time.LocalDateTime.now());
+            upd.setRefreshTime(LocalDateTime.now());
             summaryMapper.updateById(upd);
         } else {
             RptSummary s = new RptSummary();
-            // ★显式赋租户：FsscMetaObjectHandler 在 ignore 模式下不填 tenantId（见其 insertFill 分支），
+            // 显式赋租户：FsscMetaObjectHandler 在 ignore 模式下不填 tenantId（见其 insertFill 分支），
             // 自动填充指望不上，只能由聚合结果带入。
             s.setTenantId(tenantId);
             s.setPeriod(period);
@@ -137,7 +138,7 @@ public class RptSummaryService {
             s.setDimName(dimName);
             s.setBillCount(cnt);
             s.setTotalAmount(amt);
-            s.setRefreshTime(java.time.LocalDateTime.now());
+            s.setRefreshTime(LocalDateTime.now());
             summaryMapper.insert(s);
         }
     }

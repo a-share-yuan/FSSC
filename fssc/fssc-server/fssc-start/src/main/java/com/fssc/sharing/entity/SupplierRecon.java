@@ -87,7 +87,7 @@ public class SupplierRecon implements Serializable {
     private String remark;
     /** 所属公司（多分子公司审批路由） */
     private Long companyId;
-    // 与 X-34 资金四表同型裸字段：不标 fill 则 MP 的 INSERT/UPDATE 列清单不含该列，MetaObjectHandler 填值无效
+    // 同资金四表一样是裸字段：不标 fill 则 MP 的 INSERT/UPDATE 列清单不含该列，MetaObjectHandler 填值无效
     @TableField(fill = FieldFill.INSERT)
     private Long createBy;
     @TableField(fill = FieldFill.INSERT)

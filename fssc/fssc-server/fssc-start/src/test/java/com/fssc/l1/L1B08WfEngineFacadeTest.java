@@ -3,7 +3,10 @@
 
 package com.fssc.l1;
 
+import com.fssc.common.exception.BizException;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.service.NodeOrgResolver;
+import java.lang.reflect.InvocationTargetException;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.runtime.ProcessInstance;
@@ -30,7 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * L1-B-08 WfEngineFacade 单元测试。
+ * WfEngineFacade 单元测试。
  *
  * <p>核心回归点 —— <b>L3-02 驳回兜底</b>：由 {@code wf_business_flow.node_json} 动态生成的 BPMN
  * 只有「金额 > 阈值」排他网关，没有 {@code ${approved == false}} 的驳回分支，导致
@@ -95,7 +98,7 @@ class L1B08WfEngineFacadeTest {
             var m = facade.getClass().getMethod("complete", String.class, boolean.class,
                     String.class, String.class, Long.class);
             // writeHistory 现按租户 fail-closed（TenantContext 缺失即拒），单测补 1 号租户上下文
-            com.fssc.framework.tenant.TenantContext.callAs(1L, () -> {
+            TenantContext.callAs(1L, () -> {
                 try {
                     m.invoke(facade, TASK_ID, approved, comment, "REJECT", operUserId);
                 } catch (ReflectiveOperationException e) {
@@ -148,7 +151,7 @@ class L1B08WfEngineFacadeTest {
         FacadeFixture f = fixture();
         for (String bad : new String[]{null, "", "   ", "差"}) {
             Throwable t = causeOfReject(f.facade(), bad);
-            assertTrue(t instanceof com.fssc.common.exception.BizException,
+            assertTrue(t instanceof BizException,
                     "空原因驳回应抛 BizException，实际: " + t);
             assertTrue(t.getMessage() != null && t.getMessage().contains("驳回必须填写原因"),
                     "提示语需可诊断，实际: " + t.getMessage());
@@ -162,7 +165,7 @@ class L1B08WfEngineFacadeTest {
             var m = facade.getClass().getMethod("complete", String.class, boolean.class,
                     String.class, String.class, Long.class);
             m.invoke(facade, TASK_ID, false, comment, "GRADE_BY_GRADE", 9001L);
-        } catch (java.lang.reflect.InvocationTargetException e) {
+        } catch (InvocationTargetException e) {
             return e.getCause();
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException(e);

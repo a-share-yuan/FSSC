@@ -27,9 +27,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * 本工具不创建业务单据（bizId 用自增假 ID，仅用于流程变量占位），也不绕过引擎——
  * 仍走真实 Flowable 定义、动态办理人解析、越权守卫与流程审计双写。</p>
  *
- * <p>安全说明（P0 修复）：本工具可<b>以任意身份启动流程</b>、<b>取消任意流程实例</b>，
- * 属流程引擎级高危操作，2026-09-16 权限审计前<b>无任何权限注解</b>，任何登录用户均可调用
- * （实测 E2E 脚本即以普通总账会计账号 Y003739 调用成功）。
+ * <p>安全说明：本工具可<b>以任意身份启动流程</b>、<b>取消任意流程实例</b>，
+ * 属流程引擎级高危操作，权限审计前<b>无任何权限注解</b>，任何登录用户均可调用
+ * （普通总账会计账号就能调用成功）。
  * 现收敛为 {@code wf:model:update}（流程建模/部署权，仅授予配置管理类角色），
  * 并保留 {@code fssc.wf.dev-tool-enabled} 开关供生产直接下线。</p>
  */
@@ -50,8 +50,8 @@ public class WfDevController {
      * <p>本方法曾与类注释宣称的办结不一致——{@code /start} 与
      * {@code /instance/refresh-biz-no} 都挂了权限校验，唯独这条「取消任意实例」的环节裸奔，
      * 任何登录用户都能作废他人 in-flight 流程。现与同族端点同码办结，并补 {@code @OperLog}
-     * 让作废动作进 {@code sys_oper_log}（此前只在 {@code wf_task_history} 留 CANCEL，
-     * 平台侧记录零痕迹）。业务单据的正当作废出口＝的 {@code pay-plan/{id}/void}，
+     * 让作废动作进 {@code sys_oper_log}（只在 {@code wf_task_history} 留 CANCEL 的话，
+     * 平台侧记录零痕迹）。业务单据的正当作废出口是 {@code pay-plan/{id}/void}，
      * 该端点会同步回写单据状态，不需要走这里。</p>
      */
     @RequiresPerm({"wf:design:update", "wf:model:update"})
@@ -70,13 +70,13 @@ public class WfDevController {
     private static final AtomicLong ID_SEQ = new AtomicLong(System.currentTimeMillis() % 100000000L + 8000000000L);
 
     /**
-     * 批次3 R3-C：按实例补救业务单据号（去重，单实例）。
+     * 按实例补救业务单据号（去重，单实例）。
      *
      * <p>请求体：{@code instanceId}（{@code wf_instance.id}）。行为与发起时同源：重新解析单据号，
      * 只在"解析得到且与现值不同"时写回 {@code wf_instance.biz_no}（并同步 {@code wf_task.biz_no} 冗余列）；
      * 解析不到 ⇒ 保持原值，<b>不会</b>把已有单号刷成 null。重复调用同一实例结果一致。</p>
      *
-     * <p>不提供批量入口，也不自动回填 2026-09-23 之前的 32 条历史 NULL——那批属裁决项（备而未执行）。
+     * <p>不提供批量入口，也不自动回填 2026-09-23 之前的 32 条历史 NULL——那批属待确认项（备而未执行）。
      * 为什么放在 dev 工具下：它写的是流程侧展示列，不改业务表、不改流转状态，但可被用来伪造单号列，
      * 故与 {@code /start} 同级办结在 {@code wf:model:update} + {@code dev-tool-enabled} 之后。</p>
      *

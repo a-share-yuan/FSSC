@@ -2,6 +2,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -132,7 +133,7 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- P1-1 Caffeine 进程内缓存：主数据（科目/部门/用户/费用项/币种/成本中心）高频只读，TTL 5min 自动过期 -->
+        <!-- Caffeine 进程内缓存：主数据（科目/部门/用户/费用项/币种/成本中心）高频只读，TTL 5min 自动过期 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
@@ -161,7 +162,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- ===== P0-B1 可观测性地基 =====
+        <!-- 可观测性地基
              Actuator：免鉴权探活（/actuator/health + liveness/readiness），供 K8s 检查 / 负载均衡 / 监控系统使用；
              Micrometer：HTTP 接口耗时/错误率/QPS 指标（http.server.requests），Prometheus 抓取。 -->
         <dependency>

@@ -2,6 +2,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -31,7 +32,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <commons-lang3.version>3.17.0</commons-lang3.version>
         <lombok.version>1.18.46</lombok.version>
-        <!-- Flowable / Knife4j 在后续阶段（P5/P7）引入，此处先声明便于统一管理 -->
+        <!-- Flowable / Knife4j 暂未启用，此处先声明便于统一管理 -->
         <flowable.version>8.0.0</flowable.version>
         <knife4j.version>4.5.0</knife4j.version>
     </properties>

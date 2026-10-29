@@ -25,24 +25,24 @@ export const INVOICE_TYPES = [
 ]
 
 // code → 中文标签；兼容历史编码（VAT/VATN/TRAIN 为旧值）
-const LEGACY = { VAT: '增值税专票', VATN: '增值税普票', TRAIN: '火车票', 增专: '增值税专用发票', 增普: '增值税普通发票' } // R5-D-101：历史中文值默认处理显示（新写入统一字典码 VAT_SPECIAL/VAT_NORMAL）
+const LEGACY = { VAT: '增值税专票', VATN: '增值税普票', TRAIN: '火车票', 增专: '增值税专用发票', 增普: '增值税普通发票' } // 历史中文值兜底显示（新写入统一字典码 VAT_SPECIAL/VAT_NORMAL）
 
 const MAP = INVOICE_TYPES.reduce((m, it) => { m[it.code] = it.label; return m }, {})
 Object.assign(MAP, LEGACY)
 
 /**
- * 【】字典优先取词。
+ * 字典优先取词。
  *
- * 为什么必须改走字典：此前本文件（13 型，供下拉）与 enums.js 的 INVOICE_TYPE（8 型，
+ * 为什么必须改走字典：本文件（13 型，供下拉）与 enums.js 的 INVOICE_TYPE（8 型，
  * 供 enumLabel 取表格中文）是两份互不引用的名称表，后果是——下拉选「增值税专用发票」存库后，
  * 列表列显示成「增值税专用」；而高铁/火车票/机票/出租车/网约车/定额/停车/医疗这 8 类
- * 在 enums.js 里根本没有，enumLabel 默认处理直接把 RAIL_HIGH、RIDE_HALLING 等英文码显示给用户。
+ * 在 enums.js 里根本没有，enumLabel 兜底直接把 RAIL_HIGH、RIDE_HALLING 等英文码显示给用户。
  * 把两份名称表合并到字典 enum_invoice_type（13 正式型 + 6 历史码），两端同读一处。
  *
- * 边界：INVOICE_TYPES 的**键集合**仍由本地常量定（新增票据类型必须后端改 OcrLocalParsers，
+ * 边界：INVOICE_TYPES 的键集合仍由本地常量定（新增票据类型必须后端改 OcrLocalParsers，
  * 必然发版）；字典只负责文案，运营改词后下拉与列表同步生效。
  *
- * fail-soft：字典未加载/为空时回落 MAP，行为与改造前逐字一致，绝不白屏、绝不返回空串。
+ * fail-soft：字典未加载/为空时回落 MAP，行为与原先逐字一致，绝不白屏、绝不返回空串。
  */
 export function invoiceTypeLabel(code) {
   if (!code) return '—'

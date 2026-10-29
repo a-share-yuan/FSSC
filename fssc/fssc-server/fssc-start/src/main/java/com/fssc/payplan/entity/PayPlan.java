@@ -43,7 +43,7 @@ public class PayPlan implements Serializable {
     private Long projectId;
     /** 供应商 */
     private String supplier;
-    /** 供应商档案ID（md_supplier.id）；提交侧选档案带入，取不到为 NULL（D-DEC-348） */
+    /** 供应商档案ID（md_supplier.id）；提交侧选档案带入，取不到为 NULL */
     private Long supplierId;
     /** 付款计划期间 yyyyMM */
     private String period;

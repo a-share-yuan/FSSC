@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 /**
  * 流程节点「审批项」（wf_approval_item，带 tenant_id）。
  *
- * <p><b>为什么要有它</b>（改造方案 §三①）：改造前引擎语义只有 {@code approved=true/false} 二值，
+ * <p><b>为什么要有它</b>（改造方案 §三①）：原先引擎语义只有 {@code approved=true/false} 二值，
  * 所有审批结果都被压成「同意 / 驳回」两档，{@code wf_task_history.action} 也只是文案。
  * 业务上真实存在的第三种结果——「终止/作废」「转交某岗位复核」——无处表达。
  * 本表把「审批结果」提升为一等公民：一个节点可以有 N 个自定义审批项，各自带类别与去向。
@@ -21,13 +21,13 @@ import lombok.EqualsAndHashCode;
  *  <li>{@code wf_node_config} 管「谁来办」（参与人、多签、超时、抄送）；本表管「办出什么结果」；</li>
  *  <li>{@code reject_scope}（节点级）+ {@code wf.reject.free.enabled}（总开关）仍是驳回回节点的
  *      <b>前置校验</b>——本表的 {@code target_node} 只在校验放行时才真正搬执行，
- *      否则落回原「终止本流程」路径（与改造前逐字一致）；</li>
+ *      否则落回原「终止本流程」路径（与原先逐字一致）；</li>
  *  <li>本表<b>不</b>替代 {@code rejectToNodeKey} 运行时入参，二者同源同一执行面（
  *      {@code WfEngineFacade.complete(..., rejectToNodeKey)}），不新造第二条驳回通道。</li>
  * </ul>
  *
  * <p><b>零影响边界</b>：库里没有任何 {@code wf_approval_item} 行时，{@code complete()} 收不到
- * {@code approvalItemCode}，全部行为与改造前逐字一致（不读表、不写变量、不记审批项）。
+ * {@code approvalItemCode}，全部行为与原先逐字一致（不读表、不写变量、不记审批项）。
  *
  * <p><b>为什么不把项目名直接写进 {@code wf_task_history.action}</b>：该列是 {@code varchar(20) NOT NULL}，
  * 且 {@code WfQueryService:676} 用 {@code "REJECT".equals(action)} 反推实例状态——写文案会直接

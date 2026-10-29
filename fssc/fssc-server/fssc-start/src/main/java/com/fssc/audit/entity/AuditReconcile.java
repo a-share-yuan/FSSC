@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 
 /**
  * 数据一致性对账异常流水（audit_reconcile，只追加，无 del_flag，禁止物理删除）。
- * P0-1 长链路一致性对账：单据总额 = 凭证借贷合计 = 已付 + 未付，不一致落此表。
+ * 长链路一致性对账：单据总额 = 凭证借贷合计 = 已付 + 未付，不一致落此表。
  */
 @TableName("audit_reconcile")
 public class AuditReconcile implements Serializable {

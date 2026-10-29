@@ -67,7 +67,7 @@ public class EventOrchestrationBus {
      * 2. 查询 wf_event_action_config 表（enabled=1）
      * 3. 按 bizType 分组，按 sortOrder 升序排序
      * 4. 若某 bizType 一条显式行都没有 → 由声明它的 Bean 按默认配置自动注册
-     *    （判定阶＝bizType；一个 Bean 只要部分 bizType 有显式行，其余 bizType 仍会拿到默认处理环节）
+     *    （判定阶＝bizType；一个 Bean 只要部分 bizType 有显式行，其余 bizType 仍会拿到兜底环节）
      */
     public synchronized void refreshDispatchMap() {
         // 1. 扫描所有 WfBizAction Bean
@@ -102,7 +102,7 @@ public class EventOrchestrationBus {
 
         // 4. 对配置表尚未覆盖的 bizType，按默认配置自动注册。
         //    判定阶＝bizType，不是 bean：本方法上方已建好显式 map，此处只为"还没有任何一个环节"的
-        //    bizType 默认处理。旧实现按 bean 名整体 continue，使"半配置 bean"（有若干有效行、另一些
+        //    bizType 兜底。旧实现按 bean 名整体 continue，使"半配置 bean"（有若干有效行、另一些
         //    bizType 漏配）声明的其余 bizType 既拿不到显式行也拿不到自动注册，收尾动作数静默归零；
         //    同时它又会让"全无配置的 bean"与"显式行"叠在同一个 bizType 上造成双发。
         //    bean 名排序遍历＝同一 bizType 被多个未配置 bean 声明时归属可复现。
@@ -110,7 +110,7 @@ public class EventOrchestrationBus {
             WfBizAction action = beans.get(beanName);
             for (String bizType : action.bizTypes()) {
                 if (map.containsKey(bizType)) {
-                    // 已有显式行或已有默认处理环节 ⇒ 不覆盖、不叠加（防双发）
+                    // 已有显式行或已有兜底环节 ⇒ 不覆盖、不叠加（防双发）
                     continue;
                 }
                 map.computeIfAbsent(bizType, k -> new ArrayList<>())
@@ -155,7 +155,7 @@ public class EventOrchestrationBus {
         // 必须在正确的租户上下文内执行，否则：
         //   - TenantContext.getTenantId() 因 fail-closed 抛 TENANT_CONTEXT_MISSING（凭证生成失败）
         //   - 或 MP 租户拦截器在无上下文时跳过 WHERE，造成串户风险。
-        // 故在此据事件携带的 tenantId 重建上下文；tenantId 缺失则用 runIgnoreTenant 默认处理（仍不串户）。
+        // 故在此据事件携带的 tenantId 重建上下文；tenantId 缺失则用 runIgnoreTenant 兜底（仍不串户）。
         Long tenantId = event.getTenantId();
         // 业务校验失败必须冒泡，技术异常仍按「原子化」吞掉。
         // 【原缺陷】本层对所有 Action 一律 catch(Exception) 只记 ERROR 日志，而上游

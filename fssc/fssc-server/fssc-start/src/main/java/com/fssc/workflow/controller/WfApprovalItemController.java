@@ -52,7 +52,7 @@ public class WfApprovalItemController {
 
     /**
      * 某节点启用的审批项（按 sort 升序）。无配置返回空数组 —— 前端据此决定是否渲染自定义按钮，
-     * 未配置审批项的节点审批弹窗与改造前完全一致（只有同意/驳回）。
+     * 未配置审批项的节点审批弹窗与原先完全一致（只有同意/驳回）。
      */
     @RequiresPerm("wf:config:list")
     @GetMapping("/by-node")

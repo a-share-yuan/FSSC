@@ -52,7 +52,7 @@ public class ShGroup extends TenantAuditBase {
     /** 备注 */
     private String remark;
 
-    // ========== 合并自 reviewer_group（审核组） ==========
+    // 合并自 reviewer_group（审核组）
 
     /** 组类型：BY_TYPE/BY_AMOUNT/BY_LEGAL/BY_REGION */
     private String groupType;

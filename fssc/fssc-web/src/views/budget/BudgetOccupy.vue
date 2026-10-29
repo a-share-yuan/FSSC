@@ -151,7 +151,7 @@ const bizTypes = [
 const woVisible = ref(false)
 const woBusy = ref(false)
 const woForm = reactive({ budgetItemId: null, amount: 0, bizType: null, bizId: null, bizNo: '' })
-// 第2批：预算核销弹窗接入中央框架（原只有一句组合 toast，字段级错误不落位）
+// 预算核销弹窗接入中央框架（原只有一句组合 toast，字段级错误不落位）
 const woFormRef = ref(null)
 const woRules = {
   budgetItemId: [{ required: true, type: 'number', min: 1, message: '请选择预算明细' }],

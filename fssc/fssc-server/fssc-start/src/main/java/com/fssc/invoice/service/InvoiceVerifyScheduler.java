@@ -39,10 +39,10 @@ import java.util.Map;
  * <ul>
  *   <li>配置已启用（status=ENABLED）：调用该配置指定的真实外部验真接口（HTTP POST + Bearer Auth），
  *       按响应 JSON 的 result/pass 字段判定 PASS/FAIL——管理员显式配置优先；</li>
- *   <li>配置未启用或不存在：<b>默认改走发票能力网关（InvoiceGateway，8096）的验真门面</b>
- *       {@code POST {base}/api/tax/v1/verify/invoices}，逐张给结论并把请求体与返回原文一起进证据链
- *       （需求「发票真伪查验/认证抵扣默认使用我们封装的 API」）；
- *       网关结论同样出自真实查验通道，符合 的「带报文」出口要求；</li>
+ *   <li>配置未启用或不存在：默认改走发票能力网关（InvoiceGateway，8096）的验真门面
+ *       {@code POST {base}/api/tax/v1/verify/invoices}，逐张给结论并把请求体与返回原文一起留痕
+ *       （发票真伪查验/认证抵扣默认走我方封装的 API）；
+ *       网关结论同样出自真实查验通道，满足「带报文」的出口要求；</li>
  *   <li>网关被显式关闭（{@code invoice.gateway.enabled=false}）或地址留空：
  *       <b>本轮不做任何判定</b>，待验发票原状态（NONE=未验真 / PENDING=验真中）
  *       保持不变——不再回退「模拟 PASS 写 SUCCESS」。模拟结果不是税务局的结论，
@@ -51,7 +51,7 @@ import java.util.Map;
  *       该张本轮不写结论、保持原状态，只记告警日志——既不伪造通过，也不把网络抖动写成「验真失败」。</li>
  * </ul>
  *
- * <p>【可判定前置谓词 】只有「有发票影像（img_file_id 非空）且来源不是手工补录
+ * <p>【可判定前置谓词】只有「有发票影像（img_file_id 非空）且来源不是手工补录
  * （source_doc_type≠MANUAL）」的发票才进验真队列：手工键入的扫描件既无影像也无 OCR/税务报文，
  * 建单两分钟就被置 SUCCESS 属程序造出的假状态，且这些行也不占 {@code limit} 名额（否则永远捞不到真待验票）。
  * 不满足前置谓词的行留在原状态（NONE=未验真 / PENDING=验真中），等人工补影像后自然进入队列；
@@ -141,9 +141,9 @@ public class InvoiceVerifyScheduler {
             } else if (gatewayAvailable()) {
                 // 需求：发票真伪查验默认走我们封装的 API（InvoiceGateway 8096）。
                 // 管理员在「外部接口配置」显式启用了 INVOICE_VERIFY 时仍以上面的配置优先。
-                log.info("[定时验真] 默认通道=发票能力网关 {}（逐张查验并落报文证据链）", gatewayBase());
+                log.info("[定时验真] 默认通道=发票能力网关 {}（逐张查验并落报文留痕）", gatewayBase());
             } else {
-                // 网关被显式关闭且无 ENABLED 外部配置 ⇒ 沿用 旧规则：不产出任何验真结论。
+                // 网关被显式关闭且无 ENABLED 外部配置 ⇒ 不产出任何验真结论。
                 // 旧行为是「回退模拟 PASS」并把 50 张票刷成 SUCCESS（verify_msg=定时验真(系统自动)通过），
                 // 系统内没有一条外部报文支撑该状态，却成为下游发票覆盖/合规审核/归档的准入依据。
                 log.warn("[定时验真] 验真通道不可用（category=INVOICE_VERIFY 无 ENABLED 配置，"
@@ -155,7 +155,7 @@ public class InvoiceVerifyScheduler {
             }
 
             for (InvInvoice inv : pending) {
-                // 默认处理校验：扫描规则与逐行规则不一致时，宁可跳过也不给无凭据的发票造结论
+                // 兜底校验：扫描规则与逐行规则不一致时，宁可跳过也不给无凭据的发票造结论
                 if (!isVerifiableByJob(inv)) {
                     log.info("[定时验真] 发票 {} 跳过：{}（不判定验真结果，保持原状态）",
                             inv.getId(), unverifiableReason(inv));
@@ -167,7 +167,7 @@ public class InvoiceVerifyScheduler {
                         // 结论出自真实外部通道 ⇒ 走「带报文」的出口，
                         // 把请求体与返回原文一起进 inv_verify_log（旧实现只写 resp_content=result=PASS，
                         // 等于用一行自造报文冒充查验证据），并标 channel=SYSTEM（系统作业，
-                        // 旧实现误标 REALTIME，与「实为定时作业」不符，取证点之一）。
+                        // 旧实现误标 REALTIME，与「实为定时作业」不符）。
                         enhanceService.applyVerifyConclusion(inv.getId(), vr.pass(),
                                 "定时验真(系统自动)·" + vr.message(), "SYSTEM",
                                 vr.request(), vr.rawResponse(), null);
@@ -177,7 +177,7 @@ public class InvoiceVerifyScheduler {
                         VerifyResult vr = callGatewayVerify(inv);
                         if (vr.inconclusive()) {
                             // 通道故障（网关不可达/回错/无票面结果）≠ 查验结论：本张不判定，留原状态待下轮。
-                            // 与 同向：既没有报文就不写 SUCCESS，也不把网络抖动写成「验真失败」。
+                            // 既没有报文就不写 SUCCESS，也不把网络抖动写成「验真失败」。
                             log.warn("[定时验真] 发票 {} 本轮不判定：{}", inv.getId(), vr.message());
                             return;
                         }
@@ -225,7 +225,7 @@ public class InvoiceVerifyScheduler {
      * 响应判定：JSON 中 result=PASS 或 pass=true 则通过，否则 FAIL，附带 message 字段。</p>
      */
     private VerifyResult callExternalVerify(ExtInterfaceConfig config, InvInvoice inv) {
-        // 请求体在 try 外声明，异常分支也要能把「发出去了什么」交给证据链
+        // 请求体在 try 外声明，异常分支也要能把「发出去了什么」留给日志
         String jsonBody = "";
         try {
             // 构造请求体
@@ -397,7 +397,7 @@ public class InvoiceVerifyScheduler {
         }
     }
 
-    /** 报文入证据链前的长度办结（inv_verify_log 的 req_param/resp_content 为 text，仍防单行失控） */
+    /** 报文落 inv_verify_log 前的长度截断（req_param/resp_content 为 text，仍防单行失控） */
     private static String truncate(String s) {
         if (s == null) {
             return null;
@@ -419,8 +419,8 @@ public class InvoiceVerifyScheduler {
      * @param pass 通道判定
      * @param inconclusive true=通道故障/无结果，本轮<b>不判定</b>（不写 verify_status，留原状态待下轮）
      * @param message 说明
-     * @param request 实际发出的请求体（证据链 req_param）
-     * @param rawResponse 通道返回原文（证据链 resp_content；前这里被写成自造的 result=PASS）
+     * @param request 实际发出的请求体（落 req_param）
+     * @param rawResponse 通道返回原文（落 resp_content；曾被写成自造的 result=PASS）
      */
     private record VerifyResult(boolean pass, boolean inconclusive, String message,
                                 String request, String rawResponse) {

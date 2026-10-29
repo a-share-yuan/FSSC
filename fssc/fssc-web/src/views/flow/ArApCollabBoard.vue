@@ -55,7 +55,7 @@
         </el-table>
       </el-tab-pane>
 
-      <!-- 演示沙盘：与真实供应商对账(/pay/recon)重复，暂下线，恢复时改回 hasPerm('collab:scp:list') -->
+      <!-- 演示沙盘：与真实供应商对账(/pay/recon)重复，暂下线，恢复时换回 hasPerm('collab:scp:list') -->
       <el-tab-pane v-if="false" :label="$t('flow.collab.tabSupplierRecon')" name="recon">
         <div class="ops" style="margin-bottom: 8px">
           <el-select v-model="reconQuery.status" size="small" style="width: 140px" :placeholder="$t('common.status')" clearable @change="loadRecons">
@@ -214,7 +214,7 @@
     </el-dialog>
 
     <el-dialog v-model="inputVisible" :title="inputTitle" width="440px" destroy-on-close>
-      <!-- 创建邮包：快递公司＋单号分格（原为「快递公司,单号」逗号串，输错一个逗号就整条报废） -->
+      <!-- 创建邮包：快递公司＋单号分格（「快递公司,单号」逗号串，输错一个逗号就整条报废） -->
       <el-form v-if="inputKind === 'send'" label-width="90px" size="small">
         <el-form-item :label="$t('flow.bill.mailCourierCompany')">
           <el-select v-model="sendForm.courierCompany" filterable allow-create default-first-option style="width: 100%" :placeholder="$t('flow.collab.phCourierCompany')">
@@ -279,7 +279,7 @@ const IFACES = computed(() => ({
   AR_IF10_RECON_SYNC: t('flow.collab.actStatusSync'),
 }))
 
-// 协同日志方向英文枚举→中文映射（未收录值原样默认处理）
+// 协同日志方向英文枚举→中文映射（未收录值原样兜底）
 const DIRECTION_LABEL = computed(() => ({ SCP_TO_AP: 'SCP→AP', AP_TO_SCP: 'AP→SCP', SCP_TO_EBS: 'SCP→ERP', EBS_TO_SHARED: t('flow.collab.ebsToShared'), SHARED_TO_EBS: t('flow.collab.sharedToEbs'), CCP_TO_SHARED: t('flow.collab.ccpToShared') }))
 
 // 日志接口码按域办结：接口前缀即方向（SCP_* 供应商链 / AR_* 客户端）
@@ -577,7 +577,7 @@ function openGoods() {
 async function doReconInput() {
   const id = current.value.id
   if (inputKind.value === 'confirm') {
-    // 解构变量不叫 t：会遮蔽 useI18n() 的取词函数（本轮接线校验拦下的正是这种写法）
+    // 解构变量不叫 t：会遮蔽 useI18n() 的取词函数
     const [tok, r] = inputText.value.split(',').map((s) => s.trim())
     await api(() => collabApi.scpConfirmRecon(id, { invoiceType: { 增专: 'VAT_SPECIAL', 增普: 'VAT_NORMAL' }[tok] || tok || 'VAT_SPECIAL', taxRatePct: r || undefined }), t('flow.collab.msgStatementConfirmed'))
   } else if (inputKind.value === 'objection') {

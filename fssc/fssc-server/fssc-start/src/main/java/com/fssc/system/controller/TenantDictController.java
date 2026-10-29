@@ -6,11 +6,14 @@ package com.fssc.system.controller;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
+import com.fssc.framework.cache.CacheUtil;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.SysDictData;
 import com.fssc.system.entity.SysDictType;
 import com.fssc.system.service.DictService;
+import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,7 +34,7 @@ public class TenantDictController {
 
     private final DictService dictService;
 
-    // ---------- 类型 ----------
+    // 类型
 
     @RequiresPerm("system:dict:list")
     @GetMapping("/type/page")
@@ -62,24 +65,24 @@ public class TenantDictController {
         return Result.success();
     }
 
-    // ---------- 数据 ----------
+    // 数据
 
     @RequiresPerm("system:dict:list")
     @GetMapping("/data/list")
     public Result<List<SysDictData>> dataList(@RequestParam String dictType) {
-        // P1-3 缓存分层：字典按租户+类型缓存 5 分钟，变更主动失效
-        String key = "dict:" + com.fssc.framework.tenant.TenantContext.getTenantId() + ":" + dictType;
-        List<SysDictData> list = com.fssc.framework.cache.CacheUtil.get(key, () -> dictService.dataList(dictType));
+        // 缓存分层：字典按租户+类型缓存 5 分钟，变更主动失效
+        String key = "dict:" + TenantContext.getTenantId() + ":" + dictType;
+        List<SysDictData> list = CacheUtil.get(key, () -> dictService.dataList(dictType));
         return Result.success(list);
     }
 
     /**
-     * 【2026-10-15 枚举办结前置A】内置字典**免权限**只读通道。
+     * 内置字典**免权限**只读通道。
      *
      * 为什么需要它：
      *   {@code system:dict:list} 没有独立权限节点，只挂在菜单 3615「系统参数」的复合 perms 里，
-     *   实测只授予了 CONFIG_ADMIN(2人)/IT_ADMIN(1人) —— 而 COMMON_EMP 154 人、SCAN_STAFF 5 人
-     *   全都读不到。前端枚举办结要覆盖 55 个业务页面（billStatus.js 的 statusLabel），
+     *   只授给了 CONFIG_ADMIN / IT_ADMIN —— 而普通员工与扫描岗
+     *   全都读不到。前端枚举展示要覆盖几十个业务页面（billStatus.js 的 statusLabel），
      *   若走带权限端点，普通用户每开一页都会吃一次 4030 + 一条 warn，办结等于白做。
      *
      * 安全性（三道校验，缺一不可）：
@@ -95,13 +98,13 @@ public class TenantDictController {
     @GetMapping("/builtin/data/list")
     public Result<List<SysDictData>> builtinDataList(@RequestParam String dictType) {
         // 与 /data/list 共用同一份 5 分钟缓存（key = dict:tenantId:dictType），不额外占内存
-        String key = "dict:" + com.fssc.framework.tenant.TenantContext.getTenantId() + ":" + dictType;
-        List<SysDictData> list = com.fssc.framework.cache.CacheUtil.get(key, () -> dictService.builtinDataList(dictType));
+        String key = "dict:" + TenantContext.getTenantId() + ":" + dictType;
+        List<SysDictData> list = CacheUtil.get(key, () -> dictService.builtinDataList(dictType));
         return Result.success(list);
     }
 
     /**
-     * 【2026-10-16 第 4 批】内置字典**批量**免权限只读通道（供前端一次性预热 66 个 enum_* 展示字典）。
+     * 内置字典**批量**免权限只读通道（供前端一次性预热 66 个 enum_* 展示字典）。
      *
      * 与 {@link #builtinDataList(String)} 完全同一套校验：需登录、仅 is_builtin=1、只读。
      * 请求里夹带的非内置类型被静默剔除（不报错），返回的 Map 只含通过校验的类型。
@@ -111,7 +114,7 @@ public class TenantDictController {
     @GetMapping("/builtin/data/batch")
     public Result<Map<String, List<SysDictData>>> builtinDataBatch(@RequestParam String types) {
         List<String> list = types == null ? List.of()
-                : java.util.Arrays.stream(types.split(","))
+                : Arrays.stream(types.split(","))
                         .map(String::trim).filter(s -> !s.isEmpty()).toList();
         return Result.success(dictService.builtinDataBatch(list));
     }
@@ -145,13 +148,13 @@ public class TenantDictController {
     /**
      * 字典变更 → 失效当前租户字典缓存。
      *
-     *  必须同时清 {@code dictbuiltin:} 前缀：新增/改 is_builtin 标记后，
+     * 必须同时清 {@code dictbuiltin:} 前缀：新增/改 is_builtin 标记后，
      * 若只清 {@code dict:}，内置集合缓存会残留旧值最长 5 分钟，
      * 表现为「刚建的内置字典走免权限通道读不到」。
      */
     private void evictDictCache() {
-        String tid = String.valueOf(com.fssc.framework.tenant.TenantContext.getTenantId());
-        com.fssc.framework.cache.CacheUtil.evictPrefix("dict:" + tid + ":");
-        com.fssc.framework.cache.CacheUtil.evictPrefix("dictbuiltin:" + tid);
+        String tid = String.valueOf(TenantContext.getTenantId());
+        CacheUtil.evictPrefix("dict:" + tid + ":");
+        CacheUtil.evictPrefix("dictbuiltin:" + tid);
     }
 }

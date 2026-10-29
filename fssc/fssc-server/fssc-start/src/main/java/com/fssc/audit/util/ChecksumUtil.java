@@ -4,11 +4,12 @@
 package com.fssc.audit.util;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 /**
- * 关键字段校验和工具（P0-2 金额防篡改）。
+ * 关键字段校验和工具（金额防篡改）。
  * 提交时对关键字段生成 SHA-256；审批/付款执行时校验，防止金额/收款账户被篡改。
  */
 public final class ChecksumUtil {
@@ -29,7 +30,7 @@ public final class ChecksumUtil {
                 sb.append(SEP);
             } else if (f instanceof BigDecimal bd) {
                 sb.append(bd.stripTrailingZeros().toPlainString()).append(SEP);
-            } else if (f instanceof java.math.BigInteger bi) {
+            } else if (f instanceof BigInteger bi) {
                 sb.append(bi.toString()).append(SEP);
             } else {
                 sb.append(f).append(SEP);

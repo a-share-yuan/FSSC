@@ -5,6 +5,7 @@ package com.fssc.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fssc.common.entity.TenantAuditBase;
+import java.time.LocalDateTime;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -26,7 +27,7 @@ import lombok.EqualsAndHashCode;
  * 本表与业务/DTO 同事务 INSERT，因此<b>不丢事件</b>；上线真 MQ 时只换消费者，投递物（{@code payload}）不变。
  *
  * <p><b>开关与零影响</b>：由 {@code sys_config.wf.process.mode} 控制，缺省 {@code SYNC}（fail-closed）。
- * SYNC 时本表<b>一行不写</b>、消费线程不启动——与改造前逐字一致（方案 §三「零行为变化的验收门槛」）。
+ * SYNC 时本表<b>一行不写</b>、消费线程不启动——与原先逐字一致（方案 §三「零行为变化的验收门槛」）。
  *
  * <p><b>字段取舍（不粉饰）</b>：方案列的 {@code seq} 未建。{@code id} 为自增主键，同一事务内多次
  * enqueue 严格递增，已提供"按实例串行"所需的全部顺序信息；消费端按 {@code id ASC} 领取。
@@ -60,9 +61,9 @@ public class WfProcessOutbox extends TenantAuditBase {
     /** 已尝试消费次数 */
     private Integer attempts;
     /** 下次可消费时间（退避重试；null＝立即可消费） */
-    private java.time.LocalDateTime nextRetryAt;
+    private LocalDateTime nextRetryAt;
     /** 投影成功时刻 */
-    private java.time.LocalDateTime consumedTime;
+    private LocalDateTime consumedTime;
     /** 最后一次失败原因（截断到 last_error 列宽） */
     private String lastError;
 }

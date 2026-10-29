@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
  * MyBatis-Plus 配置。最关键的是【拦截器注册顺序】：
  * <pre>
  *   interceptor.addInnerInterceptor(new TenantLineInnerInterceptor(handler)); // ① 租户：必须先
- *   interceptor.addInnerInterceptor(new PaginationInnerInterceptor(MYSQL));   // ② 分页：必须后
+ *   interceptor.addInnerInterceptor(new PaginationInnerInterceptor(MYSQL)); // ② 分页：必须后
  * </pre>
  * 顺序反了会导致分页 count 语句不带 tenant_id —— 列表只有本租户数据，总数却是全库的，
  * 总数本身就已经泄露了其他租户的数据规模（高危坑，已在架构文档 2.2 标注）。

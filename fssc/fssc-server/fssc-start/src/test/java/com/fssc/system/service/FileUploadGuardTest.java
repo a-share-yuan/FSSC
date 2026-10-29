@@ -83,7 +83,7 @@ class FileUploadGuardTest {
         return svc;
     }
 
-    // ------------------------------------------------ 下限闸：不依赖配置
+    // 下限闸：不依赖配置
 
     @Test
     @DisplayName("C-11：白名单被清空时，脚本/网页/可执行后缀仍被下限表拒绝，且一个字节都不落盘")
@@ -108,7 +108,7 @@ class FileUploadGuardTest {
         assertEquals(0, diskFiles().size());
     }
 
-    // ------------------------------------------------ 落盘改名与目录闸
+    // 落盘改名与目录闸
 
     @Test
     @DisplayName("C-11：磁盘名只有 UUID+后缀，不含原始文件名；展示名仍保留原始名")
@@ -145,7 +145,7 @@ class FileUploadGuardTest {
         assertEquals("pdf", saved.getFileSuffix());
     }
 
-    // ------------------------------------------------ 白名单闸与拒绝文案
+    // 白名单闸与拒绝文案
 
     @Test
     @DisplayName("C-11：白名单生效时清单外格式被拒，且文案不含配置原文")
@@ -169,7 +169,7 @@ class FileUploadGuardTest {
         assertEquals(1, diskFiles().size());
     }
 
-    // ------------------------------------------------ 体积闸（回归，未被本次改动破坏）
+    // 体积闸（回归，未被本次改动破坏）
 
     @Test
     @DisplayName("C-11：体积闸保持原口径（超限即拒，先于类型判定）")
@@ -179,7 +179,7 @@ class FileUploadGuardTest {
         assertThrows(BizException.class, () -> tiny.upload(multipart("x.pdf"), "CLAIM", 1L, "BUSINESS"));
     }
 
-    // ------------------------------------------------ 辅助
+    // 辅助
 
     private static MockMultipartFile multipart(String originalName) {
         return new MockMultipartFile("file", originalName, "application/pdf", PDF_BYTES);

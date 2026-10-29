@@ -32,10 +32,10 @@ public class ConfigService {
     private final SysUserMapper sysUserMapper;
 
     /**
-     * 平台属主参数键前缀（G4 参数权属显式化，2026-09-24）。
+     * 平台属主参数键前缀（G4 参数权属显式化）。
      *
      * <p><b>为什么要有这道校验</b>：行业原文「工作流参数和组织无关，<b>必须由 administrator 用户设置</b>，
-     * 一般有管理员权限的用户设置也不生效」。而改造前 {@code sys_config} 的写入口对 wf./approve. 这些
+     * 一般有管理员权限的用户设置也不生效」。而原先 {@code sys_config} 的写入口对 wf./approve. 这些
      * <b>全局流程语义开关</b>（如 {@code approve.deny_self}、{@code wf.timeout.autopass.nodes}）
      * 只校验 {@code editable} 列，任何持 {@code system:config:update} 的租户管理员都能改——
      * 一处误改即改变全租户的审批控制流，且无属主可追。
@@ -100,11 +100,10 @@ public class ConfigService {
     }
 
     /**
-     * 工作流域参数属主校验（G4）：只有平台 administrator 可写，其余一律拒绝。
+     * 工作流域参数属主校验：只有平台 administrator 可写，其余一律拒绝。
      *
-     * <p><b>administrator 的真实判定依据（库内实测）</b>：{@code sys_user.is_admin = 1}
-     * —— 当前库中同时满足 {@code user_name='admin'} 与 {@code is_admin=1} 的账号只有一个
-     * id=1 / tenant_id=1，与 {@code NodeOrgResolver.isAdministrator()} 全仓规则一致
+     * <p><b>administrator 的判定依据</b>：{@code sys_user.is_admin = 1}
+     * —— 与 {@code NodeOrgResolver.isAdministrator()} 的全仓规则一致
      * （is_admin=1 <b>或</b> user_name='admin'）；此外 {@code LoginUser.isAdmin()}（perms 含
      * {@code *:*:*}）亦视为平台超管。三者取并集，避免出现"铁律判定说他是 admin、参数校验说不算"的漂移。</p>
      */
@@ -148,7 +147,7 @@ public class ConfigService {
     @FsscDataSource("master")
     @Transactional(propagation = Propagation.NOT_SUPPORTED, readOnly = true)
     public String getValue(String key) {
-        // 实测一次「付款批次确认」把这条只读参数取数打了 26 遍：sys_config 才几十行，
+        // 一次「付款批次确认」会把这条只读参数取数打二十几遍：sys_config 才几十行，
         // 但每遍都是一个独立往返，而这台库单语句固定成本 1~17ms ⇒ 走主数据缓存门面 TenantCache
         // （默认进程内 TTL，置 fssc.redis.enabled=true 自动切集中式；与字典/组织同一套设施，不自建缓存）。
         // 三个写入口 create/update/setValue 都挂 evict，改参数当场生效，不会读到旧值。

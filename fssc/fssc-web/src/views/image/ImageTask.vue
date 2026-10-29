@@ -93,7 +93,7 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { formatDate, formatDateTime } from '@/utils/format'
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -176,7 +176,7 @@ async function del(row) {
 }
 
 onMounted(() => {
-  // P0 修复（2026-10-21）：默认只加载同公司人员
+  // 默认只加载同公司人员
   userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId }).then((d) => { users.value = d?.list || [] }).catch(() => {})
   load()
 })

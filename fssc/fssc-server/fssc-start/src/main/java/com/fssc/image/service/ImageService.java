@@ -33,7 +33,7 @@ import java.util.List;
 
 /**
  * 影像服务：批次上传（批次+页面）→ 发布影像状态变更事件（BillImageEvent）。
- * P7 简化：批次上传完成即标记单据影像 COMPLETE；OCR 能力留 P8。
+ * 批次上传完成即标记单据影像 COMPLETE；OCR 能力尚未接入。
  *
  * 断点1 改造：移除 ExpBillMapper 依赖，改为通过 ApplicationEventPublisher
  * 发布 BillImageEvent，由核心域 BillImageEventListener 监听回写 exp_bill.image_status。
@@ -207,8 +207,8 @@ public class ImageService {
 
     /**
      * 调阅审核状态更新（需求 6.5：审核后回写）。
-     * W2 非人性化整改：
-     * ① 枚举白名单校验——此前任意字符串可直写 review_status，静默产生坏数据；
+     * 三条硬校验：
+     * ① 枚举白名单校验——任意字符串直写 review_status 会静默产生坏数据；
      * ② 存在性校验——批次不存在时不再"静默成功"；
      * ③ 状态机——OK/REJECTED 只允许从「待审核」判定，已判定批次不可重复判定
      *    （需更正请走影像替扫/重采集，replaceScan 会回写 PENDING 重新进入待审核）；

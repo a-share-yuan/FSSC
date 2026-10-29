@@ -56,12 +56,12 @@ public class ArClaimService {
     /** 审计扩面：单据状态跃迁记录 */
     private final AuditTrailService auditTrailService;
 
-    /** Flowable 首节点审批人默认处理（无 Web 上下文的系统调用才落到平台管理员；见 currentOperator） */
+    /** Flowable 首节点审批人兜底（无 Web 上下文的系统调用才落到平台管理员；见 currentOperator） */
     private static final Long FLOW_APPROVER_ID = 1L;
 
     /**
      * MF5-07：审计记录真实登录用户。
-     * 发起/OA代审批的操作人一律取当前登录用户；仅无 Web 上下文（定时/系统任务）才默认处理平台管理员。
+     * 发起/OA代审批的操作人一律取当前登录用户；仅无 Web 上下文（定时/系统任务）才兜底平台管理员。
      */
     private static Long currentOperator() {
         LoginUser u = UserContext.get();
@@ -93,7 +93,7 @@ public class ArClaimService {
                 && (c.getOrderNo() == null || c.getOrderNo().isBlank())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "订单解挂必须录入订单号");
         }
-        sanitizeText(c); // SEC-02: 中和自由文本中的脚本载荷（渲染层 Vue 转义为主防线，本层纵深）
+        sanitizeText(c); // 中和自由文本中的脚本载荷（渲染层 Vue 转义为主防线，本层纵深）
         applyDefaults(c);
         // 初始状态：不走OA的类型（收入暂估/其它业务对冲/汇票贴息/停车费等其它业务收入）直接待派工
         boolean noEkp = ArClaim.T_REVENUE_EST.equals(c.getClaimType())
@@ -123,7 +123,7 @@ public class ArClaimService {
                 log.error("[arflow] 服务申请单 {} 发起审批失败（降级为直接过渡）: {}",
                         c.getBillNo(), ex.getMessage(), ex);
                 c.setProcInstId(null);
-                throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+                throw ex;  // 流程发起失败必须抛出去，不能静默降级成没有流程的孤儿单
             }
         }
         log.info("[arflow] 服务申请单 {} 创建（{}）", c.getBillNo(), c.getClaimType());
@@ -354,7 +354,7 @@ public class ArClaimService {
 
     // 附件四/附件五默认值
 
-    /** SEC-02: 中和 <script> 块与内联事件载荷；普通文本（含合法 <、>）不受影响 */
+    /** 中和 <script> 块与内联事件载荷；普通文本（含合法 <、>）不受影响 */
     private static void sanitizeText(ArClaim c) {
         if (c.getReason() != null) c.setReason(neutralize(c.getReason()));
         if (c.getCustomerName() != null) c.setCustomerName(neutralize(c.getCustomerName()));

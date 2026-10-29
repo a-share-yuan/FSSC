@@ -88,16 +88,16 @@ import { useRouter } from 'vue-router'
 import { ShoppingCart, Money, Wallet, CreditCard, Box, Document, Operation, TopRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { hasAnyPerm, isSuperPerm } from '../../utils/perm'
-import { getMenuTree } from '../../api'
+import { ensureMenuTree } from '../../router/pathAccess'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 
 const router = useRouter()
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 
-// 路由 → 权限码（降级默认处理用）。主判定已改为「用户菜单树同源」（见 canAccess），
+// 路由 → 权限码（降级兜底用）。主判定已改为「用户菜单树同源」（见 canAccess），
 // 仅当菜单树加载失败时才按本表权限码放行；数组表示「任一满足即可」。
-// 数据来源：sys_menu.path/perms 实测映射（2026-09-17）。空数组 = 菜单未挂权限码，全员可进。
+// 数据来源：sys_menu.path/perms 的映射。空数组 = 菜单未挂权限码，全员可进。
 // 未出现在本表的路由（treasury/*、budget/execution、expense/apply、approval 等）不在此处拦截，
 // 交由目标页自身守卫处理，避免误拦。
 const ROUTE_PERM = {
@@ -188,7 +188,7 @@ const ROUTE_PERM = {
 const menuPaths = ref(null)
 onMounted(async () => {
   try {
-    const tree = await getMenuTree()
+    const tree = await ensureMenuTree()
     const set = new Set()
     const walk = (nodes) => (nodes || []).forEach((n) => {
       if (n.path) set.add(n.path)
@@ -210,7 +210,7 @@ const GLOBAL_ENTRIES = {
 //  ① 超管（*:*:* / is_admin）→ 全放行
 //  ② 菜单树已加载 → 与左侧菜单严格同源：命中菜单 path，或是某菜单的父路由
 //     （如 /expense/apply → /expense/apply/meeting）
-//  ③ 菜单未命中 **不等于无权**：一域一台改造后，工作台的页签级页面（/arflow/billing 等）
+//  ③ 菜单未命中不等于无权：一域一台改造后，工作台的页签级页面（/arflow/billing 等）
 //     不再有独立菜单行，只在 ROUTE_PERM 里留码——此处必须回退按码判定，
 //     否则这些真实可打开的页面会被整片标成「无权限」＝新造的假阴性。
 //  ④ 既不在菜单、也没有登记码 → 视为不可达；全局入口页走 GLOBAL_ENTRIES 白名单。
@@ -428,7 +428,7 @@ const domains = [
   },
 ]
 
-// ---- 角色聚焦（复用 RoleDashboard 角色枚举；当前前端未绑定真实登录角色，故本地切换）----
+// 角色聚焦（复用 RoleDashboard 角色枚举；当前前端未绑定真实登录角色，故本地切换）
 const roleFilter = ref('ALL')
 const roleLabel = { ALL: '全部', OPERATOR: '操作员', SUPERVISOR: '主管', CFO: '财务总监', ADMIN: '管理员' }
 // 各角色聚焦的域（key）。职责聚焦映射，可按实际岗位调整；ALL = 7 域全显

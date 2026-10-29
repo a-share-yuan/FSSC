@@ -23,11 +23,11 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * G3（2026-09-24）任务时限超时扫描（以 {@code wf_task.due_time} 为唯一真值）。
+ * 任务时限超时扫描（以 {@code wf_task.due_time} 为唯一真值）。
  *
- * <p><b>本 Job 只报不修，为什么</b>：催办、超时自动通过这两件"动作"已由既有
+ * <p>本 Job 只报不修，为什么：催办、超时自动通过这两件"动作"已由既有
  * {@code WfTimeoutJob} 承担（它按 {@code wf_node_config.timeout_hours} 现算）。若本 Job 也去催办，
- * 同一张单会被两套规则各催一次（规则还不一样），正是方案 §二 F6 说的"两处各算一遍"的病根。
+ * 同一张单会被两套规则各催一次（规则还不一样），正是"两处各算一遍"的病根。
  * 因此本 Job 只做一件事：把"按落账时限已超时"的在办任务<b>聚合成可见读数</b>（日志 + 最近报告接口），
  * 让运维能核对"双时限是否真的在生效"，动作仍走原通道。
  *
@@ -115,6 +115,9 @@ public class OpTaskDueTimeScanJob {
     /**
      * 跨租户只读扫描：找出存在"PENDING 且 due_time 已过"任务的租户。
      * 只 select tenant_id 一列，不把任务正文读进内存。
+     *
+     * <p>单列 select 仍会把几万行搬进驱动再在 Java 里去重，作业每 5 分钟跑一次，耗时以分钟计。
+     * 改用 {@code group by tenant_id}：库侧去重，行数＝租户数。
      */
     private Set<Long> tenantsWithOverdue() {
         List<WfTask>[] holder = new List[1];
@@ -123,7 +126,8 @@ public class OpTaskDueTimeScanJob {
                         .select(WfTask::getTenantId)
                         .eq(WfTask::getStatus, "PENDING")
                         .isNotNull(WfTask::getDueTime)
-                        .lt(WfTask::getDueTime, LocalDateTime.now())));
+                        .lt(WfTask::getDueTime, LocalDateTime.now())
+                        .groupBy(WfTask::getTenantId)));
         List<WfTask> rows = holder[0];
         Set<Long> ids = new LinkedHashSet<>();
         if (rows != null) {

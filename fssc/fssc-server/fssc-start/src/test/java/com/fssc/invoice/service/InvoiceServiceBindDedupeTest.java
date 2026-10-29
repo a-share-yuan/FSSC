@@ -15,12 +15,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * InvoiceService.alreadyBound 单测（D-V4R-30 判据面）：
+ * InvoiceService.alreadyBound 单测：
  * bindToBill 每次调用只会 INSERT 一行勾稽，所以"同一单据重复关联同一张发票"必须判重，
- * 否则票面会被同一张单吃穿（实测读数 72,000＋40,000＝112,000／50,000＋50,000＝100,000），
+ * 否则票面会被同一张单吃穿（金额重复计入、汇总虚增），
  * 后果是超付闸永久挡死该单付款，而反核销 inv:unbind 在授权面上未授予任何角色 ⇒ 系统内不可逆。
  */
-@DisplayName("InvoiceService 关联判重（D-V4R-30）")
+@DisplayName("InvoiceService 关联判重")
 class InvoiceServiceBindDedupeTest {
 
     private static InvBillInvoice link(Long billId, Long lineId) {

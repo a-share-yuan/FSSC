@@ -27,7 +27,7 @@ class LocalDistributedStateTest {
         state = new LocalDistributedState();
     }
 
-    // ==================== 缓存 ====================
+    // 缓存
 
     @Test
     void getOrLoad_未过期命中不重复回源() {
@@ -65,7 +65,7 @@ class LocalDistributedStateTest {
         assertEquals(2, state.getOrLoad("1:md:std:5:2", Object.class, () -> 2, Duration.ofMinutes(5)));
     }
 
-    // ==================== 限流窗口 ====================
+    // 限流窗口
 
     @Test
     void tryAcquireRate_窗口内超限拒绝_窗口过期重新放行() throws InterruptedException {
@@ -97,7 +97,7 @@ class LocalDistributedStateTest {
         assertFalse(state.tryAcquireRate("fail:x", 4, win), "第5次失败触发锁定");
     }
 
-    // ==================== 锁 ====================
+    // 锁
 
     @Test
     void tryLock_无JdbcTemplate时直通true且可重入_unlock无异常() {

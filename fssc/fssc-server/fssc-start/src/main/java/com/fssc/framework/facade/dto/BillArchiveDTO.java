@@ -35,7 +35,7 @@ public class BillArchiveDTO {
     private LocalDateTime archiveTime;
     /** 归档人；定时任务代写时取不到登录人 ⇒ 保持 null，界面按"系统自动归档"明示，不造假人 */
     private Long archiveBy;
-    /** 待归档列表的「金额」列此前无字段可绑，恒显 0.00 ⇒ 随单带出表头总额 */
+    /** 待归档列表的「金额」列：随单带出表头总额，否则无字段可绑、恒显 0.00 */
     private BigDecimal totalAmount;
     /** 「审批完成时间」列取 exp_bill.approve_time，不要用 create_time 顶替 */
     private LocalDateTime approveTime;

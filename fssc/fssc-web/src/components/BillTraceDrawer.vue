@@ -53,7 +53,7 @@
       <!-- 联查明细（五段链路） -->
       <el-collapse v-if="chain && supported" v-model="openSections" class="chain-collapse">
         <!-- 付款记录（exp_bill_payment 属费用域专属表，他域不按 bill_id 借用 ⇒ 不渲染该段） -->
-        <el-collapse-item v-if="isExpense" name="payments">
+        <el-collapse-item v-if="isExpense && showSeg('PAYMENT', chain.payments)" name="payments">
           <template #title><b>付款记录</b><el-tag size="small" style="margin-left:8px" :type="chain.payments?.length ? 'success' : 'info'">{{ chain.payments?.length || 0 }} 笔</el-tag></template>
           <el-table :data="chain.payments || []" size="small" border>
             <el-table-column prop="payeeName" label="收款方" min-width="120" show-overflow-tooltip />
@@ -68,7 +68,7 @@
         </el-collapse-item>
 
         <!-- 付款批次 -->
-        <el-collapse-item name="batches">
+        <el-collapse-item v-if="showSeg('BATCH', chain.batches)" name="batches">
           <template #title><b>付款批次</b><el-tag size="small" style="margin-left:8px" :type="chain.batches?.length ? 'success' : 'info'">{{ chain.batches?.length || 0 }} 批</el-tag></template>
           <el-empty v-if="!chain.batches?.length" description="未组批/无批次" :image-size="48" />
           <el-table v-else :data="chain.batches" size="small" border>
@@ -83,12 +83,12 @@
         </el-collapse-item>
 
         <!-- 记账凭证（含分录） -->
-        <el-collapse-item name="vouchers">
+        <el-collapse-item v-if="showSeg('VOUCHER', chain.vouchers)" name="vouchers">
           <template #title><b>记账凭证</b><el-tag size="small" style="margin-left:8px" :type="chain.vouchers?.length ? 'success' : 'info'">{{ chain.vouchers?.length || 0 }} 张</el-tag></template>
           <el-empty v-if="!chain.vouchers?.length" description="无凭证（未审核通过或非凭证域单据）" :image-size="48" />
           <div v-else v-for="v in chain.vouchers" :key="v.id" class="voucher-card">
             <div class="voucher-head">
-              <!-- P-EN 2026-10-27：op_voucher.voucher_word 存的是英文枚举 JOURNAL，原先直接拼在凭证号前
+              <!-- op_voucher.voucher_word 存的是英文枚举 JOURNAL，原先直接拼在凭证号前
                    ⇒ 抽屉里显示「JOURNAL-JZ2026102700016」。字号走 VOUCHER_WORD 名称表（记／付／转／收）。 -->
               <span class="voucher-no">{{ voucherWordLabel(v.voucherWord) }}-{{ v.voucherNo }}</span>
               <el-tag size="small" :type="v.status === 'POSTED' ? 'success' : 'warning'">{{ v.status === 'POSTED' ? '已过账' : '草稿' }}</el-tag>
@@ -103,7 +103,7 @@
               <el-table-column label="科目" min-width="130">
                 <template #default="{ row }">{{ row.subjectCode || '' }} {{ row.subjectName || '' }}</template>
               </el-table-column>
-              <!-- op_voucher_line.direction 实测只有 DEBIT／CREDIT（43/42 行），
+              <!-- op_voucher_line.direction 只有 DEBIT／CREDIT 两种取值，
                    原先写 row.direction === 'D' ⇒ 借方行恒落 else，两行都显示「贷」，
                    与同卡片「借 80,000.00 = 贷 80,000.00」自相矛盾。改走共用名称表 DIRECTION。 -->
               <el-table-column label="方向" width="55" align="center">
@@ -115,7 +115,7 @@
         </el-collapse-item>
 
         <!-- 电子档案 -->
-        <el-collapse-item name="archives">
+        <el-collapse-item v-if="showSeg('ARCHIVE', chain.archives)" name="archives">
           <template #title><b>电子档案</b><el-tag size="small" style="margin-left:8px" :type="chain.archives?.length ? 'success' : 'info'">{{ chain.archives?.length || 0 }} 卷</el-tag></template>
           <el-empty v-if="!chain.archives?.length" description="未归档" :image-size="48" />
           <el-table v-else :data="chain.archives" size="small" border>
@@ -184,6 +184,26 @@ const openSections = ref([])
 const supported = computed(() => chain.value?.summary?.scope !== 'NOT_SUPPORTED')
 // 费用域专属交互（下一跳行动条 / 生命周期步骤条 / 付款记录段）的开关
 const isExpense = computed(() => chain.value?.summary?.scope === 'EXPENSE')
+
+/**
+ * 各段适用性：后端 summary.segmentSupport 按「本单据类型 / 本业务域」逐段裁剪，与
+ * BillChainTimeline 同源。无此环节的段不再渲染折叠面板（档案卷没有「生成凭证/付款批次」段）；
+ * 有环节但暂无数据时照常渲染空态，让「还没做」可被看见。
+ * 旧包只发 PAYMENT 一档 ⇒ 回落 paymentSupported；缺省视为有环节。
+ */
+function segOk(k) {
+  const s = chain.value?.summary || {}
+  const seg = s.segmentSupport
+  if (seg && seg[k] !== undefined) return seg[k] !== false
+  if (k === 'PAYMENT' || k === 'BATCH') {
+    if (s.paymentSupported !== undefined) return s.paymentSupported !== false
+  }
+  return true
+}
+/** 判为不适用但确实取到了数据 ⇒ 照常显示（不让判据偏差把真实数据藏掉） */
+function showSeg(k, data) {
+  return segOk(k) || (Array.isArray(data) && data.length > 0)
+}
 const notSupportReason = computed(
   () => chain.value?.summary?.reason || '未声明单据域且该主键在费用单据表内不存在；请为该页面的追溯入口补传 bizType。'
 )
@@ -194,9 +214,9 @@ function openSeg(key) {
   const sec = SEG2SECTION[key]
   if (sec && !openSections.value.includes(sec)) openSections.value.push(sec)
 }
-// P-EN 2026-10-27：补 UNARCHIVED（exp_bill.archive_status 实测取值），字典外不再回显英文
+// 补 UNARCHIVED（exp_bill.archive_status 的实际取值），字典外不再回显英文
 const ARC_ST = { PENDING: '待归档', ARCHIVING: '归档中', ARCHIVED: '已归档', DISPOSED: '已处置', UNARCHIVED: '未归档', DESTROYED: '已销毁' }
-/** summary.scope 是「流程域」而非单据类型（实测只有 EXPENSE／NOT_SUPPORTED），
+/** summary.scope 是「流程域」而非单据类型（只有 EXPENSE／NOT_SUPPORTED 两种），
  *  走 BIZ_TYPE 会显示成「费用组」，语义不对，故单独定名。 */
 const SCOPE_LABEL = { EXPENSE: '费用报销', NOT_SUPPORTED: '未接入' }
 function scopeLabel(s) { return SCOPE_LABEL[s] || docTypeLabel(s) || '' }
@@ -246,7 +266,7 @@ watch(() => [props.modelValue, props.billId, props.bizType], async ([v, bid]) =>
     // 把后端原话落到 NOT_SUPPORTED 空态上，否则抽屉只剩一片空白，看着像坏了。
     chain.value = { summary: { scope: 'NOT_SUPPORTED', reason: (e && e.message) || '联查失败' } }
   }
-  // 默认处理：只有「后端确认这是费用域、且链路响应里确实没带头部」才回退费用单详情接口。
+  // 兜底：只有「后端确认这是费用域、且链路响应里确实没带头部」才回退费用单详情接口。
   // /他域主键（抄送记录 id、方案 id…）与 exp_bill.id 不是同一坐标系，
   // 关联点未命中（NOT_SUPPORTED）或已按他域解析时再拿这个数字去查详情，就会把别人的报销单头贴进来。
   const scope = chain.value?.summary?.scope

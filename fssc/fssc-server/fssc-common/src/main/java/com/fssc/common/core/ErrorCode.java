@@ -32,7 +32,7 @@ public enum ErrorCode {
     DATA_SCOPE_EMPTY(4034, "数据权限范围未配置"),
 
     /**
-     * 唯一键冲突（DuplicateKeyException）专用码。此前落默认处理 500「系统异常」，
+     * 唯一键冲突（DuplicateKeyException）专用码。此前落成笼统的 500「系统异常」，
      * 调用方无法区分"我重复提交了"与"服务端坏了"，会自动重试；对外文案只说业务含义，
      * 不回显 SQL 语句、索引名或 mapper 路径（详细原因由 log.warn 落服务端日志）。
      */
@@ -49,8 +49,8 @@ public enum ErrorCode {
 
     /**
      * 工作流引擎运行异常（FlowableException）专用码。
-     * 此前落默认处理 500「系统异常，请稍后重试」，操作人无法区分"我填错了"与"系统坏了"，
-     * 于是反复重试同一笔。实测最典型的一次是清库误删 {@code act_ge_bytearray}（BPMN 资源字节流），
+     * 此前落成笼统的 500「系统异常，请稍后重试」，操作人无法区分"我填错了"与"系统坏了"，
+     * 于是反复重试同一笔。最典型的一次是清库误删 {@code act_ge_bytearray}（BPMN 资源字节流），
      * 引擎起流程时读不到流程定义 → {@code deployment 'X' didn't put process definition 'Y' in the cache}，
      * 界面只给一句"系统异常"，排查成本极高。
      * 5xx 族但语义明确：<b>不是用户能靠重试解决的</b>，须管理员介入（重新部署流程或恢复引擎资源表）。

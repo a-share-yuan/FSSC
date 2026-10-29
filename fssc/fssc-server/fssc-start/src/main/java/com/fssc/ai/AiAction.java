@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
- * 动作目录条目（AI 平权 P1/P2）。由 build-action-catalog.js 机械生成后打包进 classpath，
+ * 动作目录条目。由 build-action-catalog.js 机械生成后打包进 classpath，
  * 网关按 (method, path) 或 code 命中；未登记 / aiAllowed=false ⇒ 403。
  */
 public final class AiAction {
@@ -30,7 +30,7 @@ public final class AiAction {
     private final JsonNode schema;
     /**
      * 被拒时的"因哪一族被封"（仅 aiAllowed=false 的条目有值）。
-     * D-N17：拒答要能解释，就得报得出族名，故把生成器已写进 JSON 的 redlineFamily 读进实体。
+     * 拒答要能解释，就得报得出族名，故把生成器已写进 JSON 的 redlineFamily 读进实体。
      */
     private final String redlineFamily;
 
@@ -71,7 +71,7 @@ public final class AiAction {
     public String getDomain() { return domain; }
     public String getController() { return controller; }
 
-    /** 仅被拒动作为非空；用于把"为什么不能做"讲清楚（D-N17）。 */
+    /** 仅被拒动作为非空；用于把"为什么不能做"讲清楚。 */
     public String getRedlineFamily() { return redlineFamily; }
 
     /** 参数结构只在服务端编排里用，不扩到对外动作清单 JSON（保持既有响应形状不变）。 */

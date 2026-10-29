@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * 委托代理到期自动回收（方案 §1.4-1，2026-09-23 补）。
+ * 委托代理到期自动回收（方案 §1.4-1）。
  *
  * <p><b>为什么需要它</b>：{@code wf_delegate} 的状态列只有 {@code NORMAL}（启用）与
  * {@code DISABLED}（人工取消）两个写入位置——<b>没有任何代码路径会写 {@code EXPIRED}</b>。
@@ -49,7 +49,7 @@ import java.util.function.Supplier;
  *
  * <p><b>与超时 Job 的关系</b>：本 Job 的第二段（委托改派）确实会动 Flowable 的办理人，
  * 但只在 {@code wf.delegate.mode=REASSIGN} 且该流程在灰度清单内时；缺省（该键库里不存在）
- * 两段都短路返回，行为与改造前逐字一致。回跳/改派一律经引擎 {@code setAssignee} + 镜像同步 + 记录，
+ * 两段都短路返回，行为与原先逐字一致。回跳/改派一律经引擎 {@code setAssignee} + 镜像同步 + 记录，
  * 绝不直写 {@code wf_task}。
  */
 @Slf4j
@@ -109,7 +109,7 @@ public class WfDelegateExpireJob {
                                     if (!nodeOrgResolver.delegateReassignActive()) {
                                         return;
                                     }
-                                    // A3（人工裁决 RA-F4a 前置）：到期后未办任务是否返还原办理人＝参数控制，
+                                    // A3（产品确认 RA-F4a 前置）：到期后未办任务是否返还原办理人＝参数控制，
                                     // 缺省返还原办理人（保守侧）；配成 KEEP 才留在受托人名下。
                                     if (!nodeOrgResolver.delegateRevertOnEndEnabled()) {
                                         log.info("委托到期按参数不回跳（KEEP）: delegate={} 未办任务留在受托人 {} 名下",
@@ -155,7 +155,7 @@ public class WfDelegateExpireJob {
      *
      * <p>缺省（{@code wf.delegate.mode} 不存在或非 REASSIGN）时，每行都在租户内被
      * {@link NodeOrgResolver#delegateReassignActive()} 短路，
-     * 不查引擎、不动待办，与改造前行为一致。
+     * 不查引擎、不动待办，与原先行为一致。
      */
     @Scheduled(fixedDelay = 600_000, initialDelay = 180_000)
     public void activateDelegatedWindows() {

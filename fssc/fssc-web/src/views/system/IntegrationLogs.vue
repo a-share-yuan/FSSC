@@ -3,7 +3,7 @@
 
 <template>
   <div class="integration-logs">
-    <!-- R5-D-040：失败告警横幅——全失败红牌/部分类别失败黄牌，先于数字呈现在首屏 -->
+    <!-- 失败告警横幅——全失败红牌/部分类别失败黄牌，先于数字呈现在首屏 -->
     <el-alert v-if="allFail" type="error" show-icon :closable="false" style="margin-bottom: 12px"
               :title="$t('system.intLog.errAllFail')" />
     <el-alert v-else-if="failCats.length" type="warning" show-icon :closable="false" style="margin-bottom: 12px"
@@ -135,7 +135,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -166,7 +166,7 @@ const successRateColor = computed(() => {
   return '#f56c6c'
 })
 
-// R5-D-040：后端 stats 新增 byCategory（分类别 total/fail），前端汇总出全失败/部分失败两类告警
+// 后端 stats 新增 byCategory（分类别 total/fail），前端汇总出全失败/部分失败两类告警
 const failCats = computed(() => (stats.value.byCategory || [])
   .filter((r) => Number(r.fail) > 0)
   .map((r) => `${extCategoryLabel(r.category)}(${r.fail})`))

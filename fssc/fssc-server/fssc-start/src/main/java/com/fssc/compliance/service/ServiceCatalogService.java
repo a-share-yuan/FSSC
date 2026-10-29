@@ -15,6 +15,8 @@ import com.fssc.compliance.mapper.SatisfactionSurveyMapper;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.sharing.entity.OpAuditTask;
 import com.fssc.sharing.mapper.OpAuditTaskMapper;
+import java.math.RoundingMode;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,7 +41,7 @@ public class ServiceCatalogService {
     private final SatisfactionSurveyMapper satisfactionMapper;
     private final OpAuditTaskMapper auditTaskMapper;
 
-    // ==================== 服务目录 CRUD ====================
+    // 服务目录 CRUD
 
     public PageResult<ServiceCatalog> pageCatalog(long pageNum, long pageSize, String category, Integer status) {
         LambdaQueryWrapper<ServiceCatalog> qw = new LambdaQueryWrapper<>();
@@ -109,7 +111,7 @@ public class ServiceCatalogService {
         catalogMapper.updateById(c);
     }
 
-    // ==================== SLA 监控 ====================
+    // SLA 监控
 
     /** SLA 超时预警：仍在处理且已超过 sla_time 的作业任务。 */
     public List<Map<String, Object>> slaMonitor() {
@@ -128,7 +130,7 @@ public class ServiceCatalogService {
             m.put("title", t.getTitle());
             m.put("poolStatus", t.getPoolStatus());
             m.put("slaTime", t.getSlaTime());
-            m.put("overdueHours", java.time.Duration.between(t.getSlaTime(), LocalDateTime.now()).toHours());
+            m.put("overdueHours", Duration.between(t.getSlaTime(), LocalDateTime.now()).toHours());
             result.add(m);
         }
         return result;
@@ -147,7 +149,7 @@ public class ServiceCatalogService {
                 .lt(OpAuditTask::getSlaTime, LocalDateTime.now()));
         long late = finished - onTime;
         BigDecimal onTimeRate = finished > 0
-                ? BigDecimal.valueOf(onTime * 100.0 / finished).setScale(2, java.math.RoundingMode.HALF_UP)
+                ? BigDecimal.valueOf(onTime * 100.0 / finished).setScale(2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("total", total);
@@ -159,7 +161,7 @@ public class ServiceCatalogService {
         return r;
     }
 
-    // ==================== 满意度调查 ====================
+    // 满意度调查
 
     @Transactional(rollbackFor = Exception.class)
     public void submitSatisfaction(SatisfactionSurvey s) {
@@ -190,7 +192,7 @@ public class ServiceCatalogService {
         long one = all.stream().filter(s -> s.getScore() == 1).count();
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("total", total);
-        r.put("avgScore", BigDecimal.valueOf(avg).setScale(2, java.math.RoundingMode.HALF_UP));
+        r.put("avgScore", BigDecimal.valueOf(avg).setScale(2, RoundingMode.HALF_UP));
         r.put("score5", five);
         r.put("score4", four);
         r.put("score3", three);

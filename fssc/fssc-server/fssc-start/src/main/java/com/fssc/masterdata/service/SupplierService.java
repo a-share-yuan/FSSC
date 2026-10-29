@@ -34,7 +34,7 @@ import java.util.List;
 
 /**
  * 主数据 Supplier 服务（带 tenant_id，租户拦截器自动隔离）。
- * P1：供应商新增走准入审批（PTP01 SUPPLIER_ADD），创建后自动发起流程。
+ * 供应商新增走准入审批（PTP01 SUPPLIER_ADD），创建后自动发起流程。
  * 41号审查 专属页子表 —— 银行账户(N)/联系人(N)/资质证照(N)。
  */
 @Slf4j
@@ -66,14 +66,14 @@ public class SupplierService {
         assertCodeUnique(e.getSupplierCode(), null);
         assertTaxIdentityUnique(e, null);
         e.setId(null);
-        // B-14 落地（K130/K131/K133：主数据零审批、状态位核准）：
+        // 主数据零审批、状态位核准：
         // 建档落「未核准(PENDING)」状态位，不再发起 MD_MASTER 审批流；由持核准权限的岗位
         // 经 POST /{id}/approve 把状态位翻到 ACTIVE（页面「核准」按钮）。
         if (e.getStatus() == null || "NORMAL".equals(e.getStatus())) {
             e.setStatus("PENDING");
         }
         mapper.insert(e);
-        // B-14：审批流退役（MD_MASTER 已删），建档即 PENDING 状态位，核准走 approve() 翻转
+        // 审批流已停用（MD_MASTER 已删），建档即 PENDING 状态位，核准走 approve() 翻转
         log.info("供应商 {} 建档完成（PENDING，待核准）", e.getSupplierCode());
         return e.getId();
     }
@@ -101,7 +101,7 @@ public class SupplierService {
     }
 
     /**
-     * 第1批 P0：税号/统一社会信用代码唯一（不含自身）——同一法人重复建档会导致
+     * 税号/统一社会信用代码唯一（不含自身）——同一法人重复建档会导致
      * 付款对象重复、对账串档、发票查验重复预警。选填字段只在非空时查重。
      */
     private void assertTaxIdentityUnique(MdSupplier e, Long selfId) {
@@ -217,7 +217,7 @@ public class SupplierService {
         }
     }
     /**
-     * B-14 状态位核准（K130：未核准→核准）：PENDING→ACTIVE。
+     * 状态位核准（未核准→核准）：PENDING→ACTIVE。
      * 权限 md:supplier:approve；去重：已是 ACTIVE 跳过。审计记录。
      */
     @Transactional(rollbackFor = Exception.class)

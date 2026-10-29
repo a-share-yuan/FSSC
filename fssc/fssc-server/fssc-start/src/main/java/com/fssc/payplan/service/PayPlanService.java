@@ -129,7 +129,7 @@ public class PayPlanService {
 
     /**
      * 提交去重签名（租户＋公司＋期间＋供应商＋金额＋用途＋经办人）。
-     * 末段 MD5：本地实现取 MySQL GET_LOCK，锁名上限 64 字符（实测超长报 4163 把接口打成 500）。
+     * 末段 MD5：本地实现取 MySQL GET_LOCK，锁名上限 64 字符（超长会报 4163 把接口打成 500）。
      * 供应商优先取档案 id，档案缺失时退供应商名（允许 supplier_id 为 NULL）。
      */
     private static String submitSignature(PayPlan plan, Long applicantId) {
@@ -142,10 +142,10 @@ public class PayPlanService {
     }
 
     /**
-     * 提单人作废在途付款计划 APPROVING → VOID。此前 APPROVING 单没有任何出口，
-     * 只能任其挂在审批池，或由引擎开发端点裸作废实例（那条环节不写业务状态、不记录）。
-     * 前置＝提单人本人＋APPROVING＋未发生核销；审批链由 cancelInstance 同步终止，失败冒泡回滚（ROOT-2）。
-     * 若审批链此前已被引擎开发端点"裸作废"（该端点按设计只终结流程、不回写业务态），
+     * 提单人作废在途付款计划 APPROVING → VOID。
+     * 不给这条出口的话 APPROVING 单只能任其挂在审批池，或由引擎开发端点裸作废实例（那条环节不写业务状态、不记录）。
+     * 前置＝提单人本人＋APPROVING＋未发生核销；审批链由 cancelInstance 同步终止，失败冒泡回滚。
+     * 若审批链已被引擎开发端点"裸作废"（该端点按设计只终结流程、不回写业务态），
      * cancelInstance 会抛「实例不存在或已结束」＝这条单永远废不掉＝死单。现只对该种异常放行、照常落 VOID。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -174,7 +174,7 @@ public class PayPlanService {
             // 审批面可能已被"裸作废"终结（引擎开发端点 cancelInstance 只删流程实例＋回写
             // wf_instance，按设计不触发业务收尾），于是业务单仍挂 APPROVING、待办却一条不剩＝既办不了也废不掉。
             // 这里把"引擎终止"做成去重臂：只吞「实例不存在或已结束」这一种 PARAM_INVALID，其余异常照旧冒泡
-            // ROOT-2「流程失败不得静默」语义不变，业务侧 VOID＋audit_trail 照常办结。
+            // 流程失败不得静默的规则不变：业务侧 VOID＋audit_trail 照常办结。
             try {
                 wfEngineFacade.cancelInstance(plan.getProcInstId(), "提单人作废 " + plan.getPlanNo() + "：" + reason);
             } catch (BizException ex) {
@@ -184,7 +184,7 @@ public class PayPlanService {
                     throw ex;
                 }
                 engineAlreadyEnded = true;
-                log.warn("付款计划 {} 的审批面此前已终结（{}），本次作废仅收口业务态 APPROVING→VOID",
+                log.warn("付款计划 {} 的审批面此前已终结（{}），本次作废只改业务态 APPROVING→VOID",
                         plan.getPlanNo(), ex.getMessage());
             }
         }
@@ -203,8 +203,8 @@ public class PayPlanService {
     }
 
     /**
-     * 批次1：驳回付款计划重报 REJECTED → 重新审批。此前 PayPlanBizAction 驳回置 REJECTED 后
-     * 无任何出口，用户只能再新建一条计划单绕过。重发起对应审批流（新实例），失败冒泡回滚（ROOT-2）。
+     * 驳回付款计划重报 REJECTED → 重新审批：驳回置 REJECTED 后
+     * 单据在 REJECTED 上没有出口，只能新建一条计划单绕过。重发起对应审批流（新实例），失败冒泡回滚。
      */
     @Transactional(rollbackFor = Exception.class)
     public void resubmit(Long planId) {
@@ -234,7 +234,7 @@ public class PayPlanService {
             mapper.updateById(flowUpd);
         } catch (Exception ex) {
             log.error("付款计划 {} 重报发起审批失败: {}", plan.getPlanNo(), ex.getMessage(), ex);
-            throw ex; // ROOT-2: 流程发起失败必须冒泡，状态回滚
+            throw ex; // 流程发起失败必须冒泡，否则单据停在旧状态而流程已起
         }
         auditTrailService.recordUpdate("PAY_PLAN", planId, plan.getPlanNo(), "pay_plan",
                 String.valueOf(planId),

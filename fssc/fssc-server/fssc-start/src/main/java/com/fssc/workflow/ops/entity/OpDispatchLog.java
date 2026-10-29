@@ -9,14 +9,14 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * G3（2026-09-24）自动分配日志（op_dispatch_log，带 tenant_id）。
+ * G3自动分配日志（op_dispatch_log，带 tenant_id）。
  *
  * <p>每次自动分配 / 规则命中 / 策略决策落一条，回答"这单为什么派给了他"：
  * 命中了哪条规则、采用了哪条策略、候选有哪些（快照）、为什么选他。
  * 自动分配日志与接口调用日志中的前者。
  *
  * <p><b>只增不改</b>：日志表不提供更新入口，写失败不影响主流程（分配本身已写入数据库），
- * 但必须 {@code log.error} 留下可见物，不得静默（方案 §二 F2 的教训）。
+ * 但必须 {@code log.error} 留下可见物，不得静默。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

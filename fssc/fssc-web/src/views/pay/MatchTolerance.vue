@@ -67,7 +67,7 @@
       @current-change="handleCurrentChange"
     />
 
-    <!-- 41号审查 P2-13:差异化容差(按组织/供应商) -->
+    <!-- 41号审查 差异化容差(按组织/供应商) -->
     <div class="scoped-head">
       <b>{{ $t('pay.tolerance.secScoped') }}</b>
       <el-button size="small" type="primary" plain @click="scopedVisible = true">{{ $t('pay.tolerance.btnAddScoped') }}</el-button>
@@ -201,7 +201,7 @@ async function reload() {
     // 预填当前值到编辑副本（无配置行默认 PERCENT/0）
     const keep = edit.value
     edit.value = {}
-    // 41号审查 P2-13:通用行(无公司/供应商维度)进主表,差异化行单列展示
+    // 41号审查 通用行(无公司/供应商维度)进主表,差异化行单列展示
     rows.value = list.filter((r) => !r.companyId && !r.supplierId)
     for (const r of rows.value) {
       edit.value[r.dimensionCode] = {
@@ -254,7 +254,7 @@ function openRowDetail(row) {
 
 function handleSelectionChange(val) { selRows.value = val }
 
-// ---- 41号审查 P2-13 差异化容差 CRUD ----
+// 41号审查 差异化容差 CRUD
 const scopedVisible = ref(false)
 const scopedForm = reactive({ dimensionCode: '', companyId: null, supplierId: null, toleranceType: 'PERCENT', toleranceValue: 0, effectDate: null, expireDate: null, remark: '' })
 // 校验规则唯一规则＝中央登记表（useFormRules）；页面不再本地手写规则对象

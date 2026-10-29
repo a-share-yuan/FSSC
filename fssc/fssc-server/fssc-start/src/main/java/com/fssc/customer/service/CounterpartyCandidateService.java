@@ -21,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 往来单位候选聚合服务（之邻缺陷 修复）。
@@ -99,8 +101,6 @@ public class CounterpartyCandidateService {
         Map<String, Map<String, Object>> byCode = new LinkedHashMap<>();
         for (CrmCustomer c : customers) {
             Map<String, Object> m = toCandidate(c);
-            // 已建档但账号未带出的，用 supplier_code 反查银行账户补上
-            enrichBank(m);
             out.add(m);
             if (StrUtil.isNotBlank(c.getCustomerCode())) {
                 byCode.put(c.getCustomerCode().trim().toUpperCase(), m);
@@ -124,9 +124,8 @@ public class CounterpartyCandidateService {
             String key = s.getSupplierCode().trim().toUpperCase();
             Map<String, Object> hit = byCode.get(key);
             if (hit != null) {
-                // 已在档案里：只需把供应商侧信息补全（账号/银行）
+                // 已在档案里：只需把供应商侧信息补全（账号/银行），由末尾的批量补齐统一做
                 hit.put("source", "BOTH");
-                enrichBank(hit);
                 continue;
             }
             // 不在档案里 ⇒ 建档，产出语义正确的 customer_id
@@ -137,9 +136,11 @@ public class CounterpartyCandidateService {
             Map<String, Object> m = toCandidate(created);
             m.put("source", "SUPPLIER_AUTO");
             m.put("supplierId", s.getId());
-            enrichBank(m);
             out.add(m);
         }
+        // 供应商侧字段（supplierId/supplierName/blacklist/accountNo/bankName）最后统一批量补齐：
+        // 原先逐行回查供应商 + 默认账户，300 行候选要打 300×2 = 600 条 SQL（实测 121+116 条、~74ms 纯 SQL）。
+        enrichSupplierBatch(out);
         return out;
     }
 
@@ -172,7 +173,7 @@ public class CounterpartyCandidateService {
         c.setCustomerType(TYPE_SUPPLIER);
         // 不再逐列拷 contact/phone/address：全仓普查（10-23 16:3x）＝这三列除本服务的自动建档写入位置与 CustomerService 的关键字 LIKE 外零读点，纯影子数据。
         // 供应商侧的联系方式改由 CustomerService.page 出参时按编码回查，界面「带出联系人」规则不变。
-        // 关键字侧的默认处理＝CustomerService.SUPPLIER_CONTACT_EXISTS 联查供应商三列，影子行清空后按 联系人/电话/地址 仍搜得到。
+        // 关键字侧的兜底＝CustomerService.SUPPLIER_CONTACT_EXISTS 联查供应商三列，影子行清空后按 联系人/电话/地址 仍搜得到。
         c.setStatus(STATUS_ACTIVE);
         c.setRemark("由供应商主数据自动建档（联系方式取自供应商档案）");
         customerMapper.insert(c);
@@ -195,35 +196,73 @@ public class CounterpartyCandidateService {
     }
 
     /**
-     * 用 md_supplier_bank 的默认收款账户补齐 accountNo/bankName。
+     * 用 md_supplier_bank 的默认收款账户批量补齐 supplierId/supplierName/blacklist/accountNo/bankName。
      *
-     * <p>候选的 id 是 crm_customer.id，需先按 customer_code 找到对应 supplier 再取账户。</p>
+     * <p>候选的 id 是 crm_customer.id，需先按 customer_code 对上 supplier 再取账户；
+     * 批量化后每次调用固定两条 SQL（供应商一条、账户一条），不再随候选行数线性增长。</p>
      */
-    private void enrichBank(Map<String, Object> m) {
-        if (m == null) return;
+    private void enrichSupplierBatch(List<Map<String, Object>> rows) {
+        if (rows.isEmpty()) return;
         Long tenantId = TenantContext.getTenantId();
         if (tenantId == null) return;
-        Object code = m.get("customerCode");
-        if (StrUtil.isBlank(String.valueOf(code))) return;
-        MdSupplier s = supplierMapper.selectOne(new LambdaQueryWrapper<MdSupplier>()
-                .eq(MdSupplier::getTenantId, tenantId)
-                .eq(MdSupplier::getSupplierCode, String.valueOf(code).trim())
-                .last("LIMIT 1"));
-        if (s == null) return;
-        // crm_customer 无 supplierId 字段，这里补挂来源供应商 id
-        m.put("supplierId", s.getId());
-        m.put("supplierName", s.getSupplierName());
-        m.put("blacklist", s.getBlacklist());
 
-        MdSupplierBank bank = supplierBankMapper.selectOne(new LambdaQueryWrapper<MdSupplierBank>()
-                .eq(MdSupplierBank::getTenantId, tenantId)
-                .eq(MdSupplierBank::getSupplierId, s.getId())
-                .orderByDesc(MdSupplierBank::getIsDefault)
-                .orderByAsc(MdSupplierBank::getId)
-                .last("LIMIT 1"));
-        if (bank != null) {
-            m.put("accountNo", bank.getBankAccount());
-            m.put("bankName", StrUtil.isBlank(bank.getBankBranch()) ? bank.getBankName() : bank.getBankBranch());
+        // customer_code → supplier：一次 IN 查完；大小写不敏感（档案侧编码与供应商侧别名可能大小写不一）
+        Set<String> codes = new LinkedHashSet<>();
+        for (Map<String, Object> m : rows) {
+            if (m.get("supplierId") != null) continue;   // 供应商侧自动建档的行已带着 supplierId
+            Object code = m.get("customerCode");
+            if (code == null || StrUtil.isBlank(String.valueOf(code))) continue;
+            codes.add(String.valueOf(code).trim());
+        }
+        Map<String, MdSupplier> byCode = new HashMap<>();
+        if (!codes.isEmpty()) {
+            for (MdSupplier s : supplierMapper.selectList(new LambdaQueryWrapper<MdSupplier>()
+                    .eq(MdSupplier::getTenantId, tenantId)
+                    .in(MdSupplier::getSupplierCode, codes))) {
+                if (s.getSupplierCode() != null) {
+                    byCode.putIfAbsent(s.getSupplierCode().trim().toUpperCase(), s);
+                }
+            }
+        }
+        Map<Long, MdSupplierBank> bankOf = new HashMap<>();
+        List<Long> needBank = new ArrayList<>();
+        for (MdSupplier s : byCode.values()) {
+            needBank.add(s.getId());
+        }
+        // 自动建档行也要银行账户 ⇒ 把已带 supplierId 的行一并纳入
+        for (Map<String, Object> m : rows) {
+            Object sid = m.get("supplierId");
+            if (sid instanceof Number n) needBank.add(n.longValue());
+        }
+        if (!needBank.isEmpty()) {
+            // 默认账户优先：同一供应商取 ORDER BY is_default DESC, id ASC 的首条
+            for (MdSupplierBank b : supplierBankMapper.selectList(new LambdaQueryWrapper<MdSupplierBank>()
+                    .eq(MdSupplierBank::getTenantId, tenantId)
+                    .in(MdSupplierBank::getSupplierId, needBank)
+                    .orderByDesc(MdSupplierBank::getIsDefault)
+                    .orderByAsc(MdSupplierBank::getId))) {
+                bankOf.putIfAbsent(b.getSupplierId(), b);
+            }
+        }
+        for (Map<String, Object> m : rows) {
+            Object code = m.get("customerCode");
+            MdSupplier s = null;
+            if (m.get("supplierId") == null && code != null && StrUtil.isNotBlank(String.valueOf(code))) {
+                s = byCode.get(String.valueOf(code).trim().toUpperCase());
+            }
+            if (s != null) {
+                // crm_customer 无 supplierId 字段，这里补挂来源供应商 id
+                m.put("supplierId", s.getId());
+                m.put("supplierName", s.getSupplierName());
+                m.put("blacklist", s.getBlacklist());
+            }
+            Object sid = m.get("supplierId");
+            if (!(sid instanceof Number)) continue;
+            MdSupplierBank bank = bankOf.get(((Number) sid).longValue());
+            if (bank != null) {
+                m.put("accountNo", bank.getBankAccount());
+                m.put("bankName", StrUtil.isBlank(bank.getBankBranch()) ? bank.getBankName() : bank.getBankBranch());
+            }
         }
     }
 }

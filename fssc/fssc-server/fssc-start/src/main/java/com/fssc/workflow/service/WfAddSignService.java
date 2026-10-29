@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fssc.workflow.entity.WfAddSign;
 import com.fssc.workflow.mapper.WfAddSignMapper;
+import java.util.Collection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -59,7 +60,7 @@ public class WfAddSignService {
     }
 
     /**
-     * 一批任务上"正在进行"的加签记录（D-DEC-065：待办列表加签标识）。
+     * 一批任务上"正在进行"的加签记录（待办列表加签标识）。
      *
      * <p>为什么要批量版：待办每页最多 200 行，逐行调 {@link #activeByTask} 就是 200 次查询。
      * 这里一次 {@code task_id IN (...)} 取回，由调用方按 taskId 归堆。
@@ -69,7 +70,7 @@ public class WfAddSignService {
      * 待办里看到的那一行都命中本查询。审结/取消后记录转 DONE/CANCELLED ⇒ 标识自动消失，
      * 原办理人的待办回到"普通环节"规则，不会长期挂着加签角标。
      */
-    public List<WfAddSign> activeByTaskIds(java.util.Collection<String> taskIds) {
+    public List<WfAddSign> activeByTaskIds(Collection<String> taskIds) {
         if (taskIds == null || taskIds.isEmpty()) {
             return List.of();
         }

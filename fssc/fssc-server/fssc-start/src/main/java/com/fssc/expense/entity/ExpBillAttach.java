@@ -45,7 +45,7 @@ public class ExpBillAttach implements Serializable {
     @TableField(exist = false)
     private String fileName;
 
-    /** D-DEC-025 显示面：上传人姓名。upload_by 存 sys_user.id，直接给前端只显数字——回显时批量反查 sys_user 填充 */
+    /** 显示面：上传人姓名。upload_by 存 sys_user.id，直接给前端只显数字——回显时批量反查 sys_user 填充 */
     @TableField(exist = false)
     private String uploadByName;
 }

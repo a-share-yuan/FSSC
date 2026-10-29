@@ -311,7 +311,7 @@ async function loadCompanies() {
 }
 
 async function loadUsers() {
-  // P0 修复：月结负责人通常为本财务人员，按同公司过滤
+  // 月结负责人通常为本财务人员，按同公司过滤
   try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch { users.value = [] }
 }
 
@@ -346,7 +346,7 @@ async function doInit() {
 // 派工
 function openDispatch(row) {
   dispatchRow.value = row
-  // 优先按工号回填（历史昵称/花名数据默认处理按昵称匹配）
+  // 优先按工号回填（历史昵称/花名数据兜底按昵称匹配）
   memberIds.value = (row.members || '').split(',').map((s) => s.trim()).filter(Boolean)
     .map((name) => (users.value.find((u) => u.userName === name) || users.value.find((u) => u.nickName === name))?.id)
     .filter((id) => id != null)

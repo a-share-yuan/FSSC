@@ -59,7 +59,7 @@ public class ArchiveDestroyApproval implements Serializable {
     @TableField(value = "created_at", fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
-    /** 申请人姓名（nick_name，缺失回退登录号），由 applicant_id 反查（非表列，RA-D248b） */
+    /** 申请人姓名（nick_name，缺失回退登录号），由 applicant_id 反查（非表列） */
     @TableField(exist = false)
     private String applicantName;
 

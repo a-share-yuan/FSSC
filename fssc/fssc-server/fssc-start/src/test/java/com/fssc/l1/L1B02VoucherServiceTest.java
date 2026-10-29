@@ -23,7 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * L1-B-02 VoucherService 单元测试：凭证分录的借贷平衡不变量。
+ * VoucherService 单元测试：凭证分录的借贷平衡不变量。
  *
  * <p>会计恒等式：Σ借方 == Σ贷方。任何生成路径都必须守住该不变量，
  * 否则凭证无法过账（op_voucher.debit_total / credit_total 由分录汇总推导）。

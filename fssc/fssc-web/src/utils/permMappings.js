@@ -18,6 +18,9 @@ export const MODULE_MAP = {
   inventory: '存货管理', platform: '平台管理', demo: '演示数据', po: '采购订单',
   policy: '费用政策', voucher: '凭证管理', customer: '客户管理', payplan: '付款计划',
   invoice: '发票管理',
+  // 按 sys_menu/后端 @RequiresPerm 实际码审计出的缺失模块
+  ai: 'AI 智能', apflow: '应付流程', ar: '应收管理', arflow: '应收流程',
+  bcp: '业财协同', collab: '外部协同', returns: '退货管理',
 }
 
 // 资源中文映射（权限码第二段）
@@ -59,6 +62,31 @@ export const RESOURCE_MAP = {
   occupy: '预算占用', item: '预算项', scheme: '预算方案',
   ops: '运营看板', compliance: '合规',
   list: '列表', line: '明细行', trail: '审计轨迹', fxreval: '汇兑重估',
+  // 审计出的 59 个缺失资源段（左＝权限码第二段，右＝界面上要显示的中文）
+  // 报表域子类
+  ar: '应收分析', audit: '审计阅示', cash: '资金收支', exp: '费用分析', gl: '凭证统计',
+  p2p: '采购到付款', sharing: '运营统计',
+  // 主数据域
+  book: '账簿', budgetcategory: '预算类别', budgetorg: '预算组织', budgetperiod: '预算期间',
+  budgettype: '预算类型', cashflow: '现金流量码', cip: '在建工程', contracttype: '合同类型',
+  costCenter: '成本中心', costcentermap: '成本中心映射', employeelevel: '员工等级',
+  fininst: '金融机构', form: '表单类型', formmeta: '表单元数据', glconfig: '记账配置',
+  incomeexpense: '收支设置', invoiceRule: '发票匹配规则', io: '导入导出模板',
+  itembudgetmap: '预算科目映射', itemcashmap: '现金流量码映射', loaninitial: '初始借款余额',
+  loanlimit: '借款额度', loanpaytype: '借款付款类型', orgtype: '组织类型', print: '打印模板',
+  rate: '费率', std: '费用标准', vehicle: '交通工具',
+  // 系统域
+  extiface: '外部接口', group: '用户组',
+  // 应付/应收流程域
+  baseconfig: '基础配置', billing: '开票链', claim: '应收服务申请', close: '月末关账',
+  request: '付款服务申请',
+  note: '票据', writeoff: '收款核销', baddebt: '坏账',
+  // 外部协同 / 退货域
+  ccp: '发运协同', scp: '供应链协同', freeze: '冻结状态', objection: '异议审核',
+  pur: '采购退货', sale: '销售退货',
+  // 流程 / 资金 / 其他
+  design: '流程设计', manage: '流程管理', credit: '员工信用', position: '资金头寸',
+  taxcertify: '进项认证', taxdecl: '纳税申报', taxrisk: '税务风险', confirm: 'AI票据确认',
 }
 
 // 操作中文映射（权限码第三段）
@@ -83,6 +111,16 @@ export const ACTION_MAP = {
   page: '分页查询', pending: '待处理', model: '模型管理', config: '配置',
   secret: '密钥', adjust: '调整', consolidate: '合并', log: '日志',
   use: '使用',
+  // 审计出的 28 个缺失动作码 + 3 个四段式复合动作
+  admin: '管理员操作', cashier: '出纳处理', correct: '更正', deduct: '扣减',
+  dispatch: '派单', do: '执行', 'dry-run': '试运行', ekp: 'EKP 同步',
+  file: '文件', 'force-appr': '强制匹配审批', 'force-appr-l2': '强制匹配二级审批',
+  instance: '实例管理', intervene: '干预', issue: '开票', item: '检查项维护',
+  manual: '手工处理', query: '查询', reassign: '改派', redflush: '红冲',
+  register: '登记', reopen: '重新打开', replace: '替换', scan: '扫描',
+  supplier: '供应商操作', test: '连接测试', transfer: '划转', unbind: '解绑', verify: '核验',
+  // 四段式权限码（md:formmeta:field:edit 这类）的末两段复合动作
+  'field:edit': '字段编辑', 'template:edit': '模板编辑', 'template:import': '模板导入',
 }
 
 /**
@@ -99,10 +137,11 @@ export function translatePermCode(code) {
     const actLabel = ACTION_MAP[parts[1]] || parts[1]
     return `${modLabel} - ${actLabel}`
   }
-  // 3段式 module:resource:action
+  // 3段及以上 module:resource:action[:…]。四段式（md:formmeta:field:edit）末两段是复合动作，
+  // 原实现只取 parts[2] ⇒ 退化成英文 'field'，必须整段拼回再查名称表。
   const modLabel = MODULE_MAP[parts[0]] || parts[0]
-  const resLabel = RESOURCE_MAP[parts[1]] || parts[1]
-  const actLabel = ACTION_MAP[parts[2]] || parts[2]
+  const resLabel = RESOURCE_MAP[parts[1]] || MODULE_MAP[parts[1]] || parts[1]
+  const actLabel = ACTION_MAP[parts.slice(2).join(':')] || parts.slice(2).join(':')
   return `${modLabel} - ${resLabel} - ${actLabel}`
 }
 

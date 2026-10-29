@@ -140,7 +140,7 @@ const loading = ref(false)
 const error = ref('')
 
 // C-3 图形验证码：默认不显示，只有服务端判定"连续失败已达阈值"（4011/4012）才出现并自动拉图。
-//  单测注意：vitest 对 mock 缺失导出是"访问即抛"而非 undefined，`|| []` 接不住 ——
+// 单测注意：vitest 对 mock 缺失导出是"访问即抛"而非 undefined，`|| []` 接不住 ——
 // vi.mock('@/api') 工厂必须一并提供本常量与 getCaptcha（Login.spec.js 已带 [4011,4012]）。
 const captchaRequiredCode = (code) => (CAPTCHA_ERROR_CODES || []).includes(code)
 const captchaVisible = ref(false)
@@ -205,7 +205,7 @@ async function doLogin() {
     clearGlobalOverlays()
     ElMessage.success('登录成功')
     // USG-01: 落地页按权限分流 —— 无 dashboard:view 的角色落工作台,避免默认页触发6个无权限聚合调用
-    // R5-D-035 同族第三处落点：判定必须走 hasPerm()，否则 admin 的 *:*:* 通配码被 includes() 误判为无权、
+    // 同族第三处落点：判定必须走 hasPerm()，否则 admin 的 *:*:* 通配码被 includes() 误判为无权、
     // 管理员登录会被分流到 /workbench 而不是 /dashboard（store.user 已在上一行赋好，此处读得到新 perms）
     router.push(hasPerm('dashboard:view') ? '/dashboard' : '/workbench')
   } catch (e) {
@@ -231,7 +231,7 @@ async function doRegister() {
   regLoading.value = true
   try {
     await registerTenant({ ...reg })
-    // R5-D-303：此处原有一枚「管理员账号＋初始口令」明文提示，并被下方预填进登录表单 ⇒ 初始口令等同公开
+    // 此处原有一枚「管理员账号＋初始口令」明文提示，并被下方预填进登录表单 ⇒ 初始口令等同公开
     // （任何读过发布件的人都可用该口令登录新开通租户）。文案改为指向平台下发流程，初始口令不再出现在前端。
     ElMessage.success('注册申请已提交，请等待平台审核开通；管理员账号为 admin_{企业编码}，初始口令请向平台管理员索取')
     regVisible.value = false
@@ -274,7 +274,7 @@ async function doRegister() {
   box-shadow: 0 24px 70px rgba(6, 18, 60, .45);
 }
 
-/* ---------- 左侧品牌区 ---------- */
+/* 左侧品牌区 */
 .brand-side {
   flex: 0 0 42%;
   display: flex;
@@ -301,7 +301,7 @@ async function doRegister() {
 .brand-feats span { font-size: 12px; color: rgba(255, 255, 255, .68); line-height: 1.5; }
 .brand-foot { margin-top: auto; font-size: 12px; color: rgba(255, 255, 255, .5); }
 
-/* ---------- 右侧表单区 ---------- */
+/* 右侧表单区 */
 .form-side { flex: 1; display: flex; align-items: center; justify-content: center; padding: 36px 44px; }
 .form-box { width: 100%; max-width: 400px; }
 .form-title { margin: 0 0 6px; font-size: 24px; color: #16244a; font-weight: 700; }
@@ -320,7 +320,7 @@ async function doRegister() {
 .error-tip { margin-top: 12px; }
 .reg-link { text-align: center; margin-top: 14px; }
 
-/* ---------- 响应式 ---------- */
+/* 响应式 */
 @media (max-width: 900px) {
   .brand-side { display: none; }
   .login-panel { width: 520px; min-height: 0; }

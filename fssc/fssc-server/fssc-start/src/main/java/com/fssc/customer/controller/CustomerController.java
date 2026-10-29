@@ -89,9 +89,9 @@ public class CustomerController {
     }
 
     /**
-     * B-14：建档即 PENDING，核准走状态位翻转（PENDING → ACTIVE，去重）。
-     * 前端【核准】按钮自 B-14 上线即调用本端点，但路由一直未登记——
-     * service.approve() 成了无暴露路径的死代码，核准通路断头（实测 404 落"目录外动作不可调用"）。
+     * 建档即 PENDING，核准走状态位翻转（PENDING → ACTIVE，去重）。
+     * 前端【核准】按钮一上线就调用本端点，但路由一直未登记——
+     * service.approve() 成了无暴露路径的死代码，核准通路断头（调用即 404，落"目录外动作不可调用"）。
      * 权限沿用 customer:update（核准属档案维护动作，不新设权限点，避免目录漂移）。
      */
     @RequiresPerm("customer:update")

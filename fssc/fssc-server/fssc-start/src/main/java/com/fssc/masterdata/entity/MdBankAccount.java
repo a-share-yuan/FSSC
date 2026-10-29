@@ -35,7 +35,7 @@ public class MdBankAccount extends TenantAuditBase {
     private String currencyCode;
     @DecimalMin(value = "0.00", message = "期初余额不能为负")
     private BigDecimal balance;
-    /** 账户性质（D-DEC-158）：BASIC 基本存款户/GENERAL 一般存款户/SPECIAL 专用存款户/TEMPORARY 临时存款户 */
+    /** 账户性质：BASIC 基本存款户/GENERAL 一般存款户/SPECIAL 专用存款户/TEMPORARY 临时存款户 */
     private String accountType;
     /** 关联会计科目（资金科目） */
     private Long subjectId;

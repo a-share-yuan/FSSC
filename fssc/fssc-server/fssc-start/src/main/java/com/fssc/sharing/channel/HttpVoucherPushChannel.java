@@ -4,6 +4,7 @@
 package com.fssc.sharing.channel;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.SysConfig;
@@ -106,7 +107,7 @@ public class HttpVoucherPushChannel implements VoucherPushChannel {
     /** 读取响应 JSON 的一层点号路径（如 data.docNo），缺失返回 null */
     private String extractPath(String json, String path) {
         try {
-            com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(json);
+            JsonNode node = objectMapper.readTree(json);
             for (String seg : path.split("\\.")) {
                 if (node == null) {
                     return null;

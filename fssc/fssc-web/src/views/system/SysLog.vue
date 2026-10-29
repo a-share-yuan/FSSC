@@ -6,7 +6,7 @@
     <template #header>
       <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
         <b>{{ $t('system.sysLog.ttlPage') }}</b>
-        <!-- R5-D-046：操作日志 / 登录日志双页签；登录日志首次切到时懒加载 -->
+        <!-- 操作日志 / 登录日志双页签；登录日志首次切到时懒加载 -->
         <el-tabs v-model="activeTab" style="flex: 1; min-width: 240px" class="log-tabs">
           <el-tab-pane :label="$t('system.sysLog.tabOpLog')" name="oper" />
           <el-tab-pane :label="$t('system.sysLog.tabLoginLog')" name="login" />
@@ -48,7 +48,7 @@
         <el-table-column prop="operTime" :label="$t('field.time')" width="170" sortable :formatter="(row, col, val) => formatDateTime(val)" />
       </el-table>
 
-      <!-- P0 易用性：日志增长最快，原来固定取第 1 页 200 条且无翻页入口，超量后静默截断 -->
+      <!-- 日志增长最快，原来固定取第 1 页 200 条且无翻页入口，超量后静默截断 -->
       <el-pagination
         v-if="total > 0"
         class="log-pager"
@@ -131,7 +131,7 @@ const bizTypes = computed(() => ([
 ]))
 function bizTypeText(v) { return operBusinessTypeLabel(v) || '-' }
 
-// R5-D-046：登录日志页签状态（懒加载——首次切到才请求，避免无权限账号空打请求）
+// 登录日志页签状态（懒加载——首次切到才请求，避免无权限账号空打请求）
 const activeTab = ref('oper')
 const loginRows = ref([])
 const loginLoading = ref(false)
@@ -191,7 +191,7 @@ function onSizeChange(s) { pageSize.value = s; pageNum.value = 1; load() }
 /** 查询：条件变化后必须回到第一页，否则会停在不存在的页码上显示空列表 */
 function search() { pageNum.value = 1; load() }
 
-// R5-D-046：登录日志加载/查询/翻页（审计表只读）
+// 登录日志加载/查询/翻页（审计表只读）
 async function loadLogin() {
   loginLoading.value = true
   try {

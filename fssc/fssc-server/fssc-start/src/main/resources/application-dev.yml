@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
-# ===== 数据源已迁移到下方 fssc.datasource.master / fssc.datasource.image（分库改造）=====
+  # 数据源在下方 fssc.datasource.master / fssc.datasource.image（分库：影像域独立一库）
 # DataSourceConfig 声明 DataSource bean 后，Boot 的 DataSourceAutoConfiguration 退避，
 # 两个连接池属性按 Hikari 原生键（jdbc-url 等）直接绑定，不经 spring.datasource。
 
 # Flowable 7：启动时自动建 ACT_*/FLW_* 表；不扫描 resources/processes
-# G2 第 3 条（2026-09-24）：async-executor-activate 由 false 改为 true。
+# G2 第 3 条：async-executor-activate 由 false 改为 true。
 #   理由：超时改为「BPMN 边界定时器 + JavaDelegate」驱动，定时器与异步作业都写进 ACT_RU_TIMER_JOB /
 #         ACT_RU_JOB，只有异步执行器在跑才会被拾取执行；关着等于定时器永远不触发（旧的 60 秒轮询
-#         @Scheduled 与执行器无关，所以此前关掉也能"看起来正常"，掩盖了这个开关的必要性）。
+#         @Scheduled 与执行器无关，所以关掉它也能"看起来正常"，掩盖了这个开关的必要性）。
 #   影响：① 边界定时器、异步作业开始真实执行，超时处置会在到期时刻由引擎主动触发；
 #         ② 存量已配 timeout_hours 的节点在下次模板同步/发布时会新增边界定时器，属行为变更；
 #         ③ 异步线程池会额外占用少量线程与连接（默认配置足够，无需额外调参）。
@@ -20,7 +20,7 @@ flowable:
 
 # 第三方接入开关（默认离线可跑；配置凭据即切换到真实实现）
 fssc:
-  # ===== 双数据源（分库改造：影像域独立 fssc_image 库）=====
+  # 双数据源（分库改造：影像域独立 fssc_image 库）
   # master：主库 fssc（除影像 6 表外全部业务表 + Flowable + 平台表）
   # image ：影像库 fssc_image（img_batch/img_file/img_setting/image_exception/image_review/ocr_record）
   # 路由规则：默认 master；@FsscDataSource("image") 注解的类/方法经 AOP 切换到 image 库。
@@ -33,7 +33,7 @@ fssc:
       driver-class-name: com.mysql.cj.jdbc.Driver
       # 平台/租户共库；多租户靠 tenant_id 列 + 拦截器隔离，非靠独立 schema
       minimum-idle: 5
-      maximum-pool-size: 40  # PERF-01: 20→40,消除30并发下的池排队(P95 2s→目标<1s)
+      maximum-pool-size: 40  # 消除 30 并发下的池排队（P95 从 2s 降到 1s 以内）
       connection-timeout: 30000
     image:
       jdbc-url: jdbc:mysql://127.0.0.1:3306/fssc_image?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false
@@ -43,7 +43,7 @@ fssc:
       minimum-idle: 2
       maximum-pool-size: 10
       connection-timeout: 30000
-  # ===== 令牌签名（C-2 收敛后的 dev 侧显式放行，仅本 profile 生效）=====
+  # 令牌签名（C-2 收敛后的 dev 侧显式放行，仅本 profile 生效）
   # allow-default-secret=true 的含义：允许沿用 application.yml 里的内置默认密钥，
   # TokenService 只打一行 WARN 后照常签发（本地/演示/01 册冒烟脚本零影响）。
   # 该开关缺省为 false，且只在 activeProfiles 含 dev 时才起作用 —— 生产 profile
@@ -65,8 +65,11 @@ fssc:
 
 mybatis-plus:
   configuration:
-    # 打开 SQL 日志，便于观察租户拦截器注入的 WHERE tenant_id = ?
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # SQL 日志默认关。StdOutImpl 在请求线程内把 SQL 连**整表结果行**打到 stdout：
+    # 一次审批就能吐出上千行，一小时刷出几十 MB 日志，
+    # 而这台 Windows 上现役 JVM 的 stdout 直接接控制台（无重定向），I/O 就是请求耗时的一部分。
+    # 要恢复"按请求数 SQL 条数"的统计口径：启动前 export FSSC_MYBATIS_LOG_IMPL=org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: ${FSSC_MYBATIS_LOG_IMPL:org.apache.ibatis.logging.nologging.NoLoggingImpl}
     map-underscore-to-camel-case: true
   global-config:
     db-config:

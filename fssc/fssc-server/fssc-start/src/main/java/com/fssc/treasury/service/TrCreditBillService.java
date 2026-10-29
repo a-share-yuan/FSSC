@@ -43,7 +43,7 @@ import java.util.Map;
 /**
  * 资金收款单服务。
  * receiveRecord（渠道流水认领生成应收收款 PENDING）-> autoRecon（与银行流水自动对账 RECONCILED）-> confirmRecon（人工核销）。
- * P5：收款认领即发起 TR_RECEIPT 资金收款确认审批流。
+ * 收款认领即发起 TR_RECEIPT 资金收款确认审批流。
  */
 @Slf4j
 @Service
@@ -91,7 +91,7 @@ public class TrCreditBillService {
         }
         orgGuard.assertCompanyAllowed(bill.getCompanyId());
         creditMapper.insert(bill);
-        // P5：收款认领即发起 TR_RECEIPT 资金收款确认审批流（出纳获取到款→资金岗确认→共享会计核销）
+        // 收款认领即发起 TR_RECEIPT 资金收款确认审批流（出纳获取到款→资金岗确认→共享会计核销）
         try {
             String procInstId = wfEngineFacade.start("TR_RECEIPT", bill.getId(), userId(),
                     "资金收款-" + bill.getBillNo(), bill.getAmount());
@@ -101,7 +101,7 @@ public class TrCreditBillService {
             creditMapper.updateById(flowUpd);
         } catch (Exception ex) {
             log.error("收款单 {} 发起收款确认审批失败: {}", bill.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
         return bill.getId();
     }
@@ -121,7 +121,7 @@ public class TrCreditBillService {
                 .eq(TrCreditBill::getStatus, "PENDING")
                 .last("limit 200"));
         int count = 0;
-        // 丙：本轮"本人建单—本人核销"的单据号（批量端点只回条数，提示位落日志）
+        // 本人建单—本人核销的单据号（批量端点只回条数，提示位落日志）
         List<String> selfReconNos = new ArrayList<>();
         Map<Long, Long> creators = creatorsOf(pending.stream().map(TrCreditBill::getId).toList());
         Long operator = userId();
@@ -148,7 +148,7 @@ public class TrCreditBillService {
             count++;
         }
         if (!selfReconNos.isEmpty()) {
-            log.warn("资金收款自动核销 D-DEC-420 复核提示：{} 条由建单人本人核销（不阻断，建议他人复核）：{}",
+            log.warn("资金收款自动核销复核提示：{} 条由建单人本人核销（不阻断，建议他人复核）：{}",
                     selfReconNos.size(), String.join("、", selfReconNos));
         }
         log.info("资金收款自动对账完成：{} 条", count);
@@ -183,7 +183,7 @@ public class TrCreditBillService {
         res.put("selfRecon", warning != null);
         res.put("warning", warning);
         if (warning != null) {
-            log.warn("资金收款单 {} D-DEC-420 复核提示：{}", bill.getBillNo(), warning);
+            log.warn("资金收款单 {} 复核提示：{}", bill.getBillNo(), warning);
         }
         return res;
     }
@@ -261,34 +261,32 @@ public class TrCreditBillService {
      *       本类 :43-64；审批收尾在 {@code TreasuryBizAction:145-150} 置 RECONCILED、
      *       {@code TreasuryBizAction:164} 调 {@code VoucherService.generateReceiptVoucher}
      *       （{@code VoucherService:2571+}，借 1002 银行存款／贷 1122 应收账款）。
-     *       <b>出证，但零核销</b>——全链路不碰 rc_receipt / rc_receivable。</li>
-     *   <li><b>核销环节</b>：{@code RcReceiptService.create()}（{@code RcReceiptService.java:56-151}）
+     *       出证，但零核销——全链路不碰 rc_receipt / rc_receivable。</li>
+     *   <li><b>核销环节</b>：{@code RcReceiptService.create()}
      *       建 rc_receipt ＋ rc_receipt_line 并同事务冲减 rc_receivable.received/remain。
-     *       <b>核销，但零出证</b>——{@code RcReceiptService} 全文无 {@code voucherService} 引用
-     *       grep 命中 0，现库 {@code op_voucher} 按 source_doc_type 分组 <b>没有 RC_RECEIPT 这一类</b>
-     *       （实测 21 类里有 TR_RECEIPT=1、RECEIVABLE=7，无收款核销凭证）。</li>
+     *       核销，但零出证——{@code RcReceiptService} 全文无 {@code voucherService} 引用
+     *       代码里没有任何 {@code voucherService} 引用，{@code op_voucher} 按 source_doc_type 分组<b>也没有 RC_RECEIPT 这一类</b>：
+     *       收款核销这一环核销了金额，却不落凭证。</li>
      *   <li><b>共同键：没有</b>。{@code tr_credit_bill} 与 {@code rc_receipt} 互不引用对方主键，
-     *       两侧只剩「customer_id ＋ amount ＋ 日期」这组业务同义维度可对齐——正是本条判词说的
-     *       "靠同日同额人眼对齐"。现库实测：tr_credit_bill id=1（CR2026093000001／客户 24／127,200.00／
-     *       2026-09-30）与 rc_receipt id=1（SK202609301702391／客户 24／127,200.00／2026-09-30）
-     *       是同笔款项的两半，但任何一侧都查不到对方的 id。</li>
+     *       两侧只剩「customer_id ＋ amount ＋ 日期」这组业务同义维度可对齐——
+     *       只能"靠同日同额人眼对齐"。两表的对应关系任何一侧都查不到对方的 id。</li>
      *   <li><b>唯一的名义抓手是死列</b>：{@code rc_receipt.bank_serial}（注释即"勾对的银行流水号"）
-     *       现库 <b>8/8 全 NULL、bank_matched 全 0</b>；登记环节 {@code RcReceiptService.create()}
-     *       从不赋值它，只有银企自动勾对（{@code BankReconcileService:133-137}）会回写。
+     *       当前全是空值、bank_matched 也全为 0；登记环节 {@code RcReceiptService.create()}
+     *       从不赋值它，只有银企自动勾对（{@code BankReconcileService}）会回写。
      *       因此它不能作为两环节的公共外键使用。</li>
      *   <li><b>反向指针还撞车</b>：{@code op_bank_statement.recon_bill_id} 是单个 bigint、<b>无类型判别列</b>
-     *       （实测 op_bank_statement 全列无 recon_bill_type），却被两条自动勾对链写入<b>不同的表</b>：
-     *       本类 {@code autoRecon():92} 写 {@code tr_credit_bill.id}，
-     *       {@code BankReconcileService:123} 写 {@code rc_receipt.id}。
-     *       现库 op_bank_statement 0 行 ⇒ 尚未发作，属潜伏面（本方法如实报告，不擅自"猜表"解析）。</li>
+     *       （op_bank_statement 全列没有 recon_bill_type），却被两条自动勾对链写入<b>不同的表</b>：
+     *       本类 {@code autoRecon()} 写 {@code tr_credit_bill.id}，
+     *       {@code BankReconcileService} 写 {@code rc_receipt.id}。
+     *       表里暂无数据 ⇒ 尚未发作，属潜伏面（本方法如实报告，不擅自"猜表"解析）。</li>
      * </ul>
      *
      * <h3>为什么只落丙档</h3>
      * 甲（到账环节审批通过时按金额自动核销）＝错配风险，同额多客户/一客户多笔同额时会把 A 的到账冲到 B 的应收上；
      * 乙（核销环节补出证）＝与到账环节「贷 1122」方向冲突，会产生双份银行凭证。
-     * 两者都属跨域打通＋账务规则裁决，交人工裁决（见本轮回报）。本方法只加预警与联查提示，
-     * <b>不改账、不改任何状态、不新建流程</b>，与已上线的联查读侧 {@code BillTraceChainController}
-     * 亦不冲突——实测该类全文不含 tr_credit_bill／rc_receipt／TR_RECEIPT 任何一处，
+     * 两者都属跨域打通＋账务规则待定，交产品确认。本方法只加预警与联查提示，
+     * <b>不改账、不改任何状态、不新建流程</b>，与联查读侧 {@code BillTraceChainController}
+     * 亦不冲突——该类全文不含 tr_credit_bill／rc_receipt／TR_RECEIPT 任何一处，
      * 这两个环节本就不在它覆盖面内（且该类禁改，故新方法另起于本域）。
      *
      * @param id tr_credit_bill 主键
@@ -325,7 +323,7 @@ public class TrCreditBillService {
         res.put("receiptVouchers", voucherRows);
         res.put("hasVoucher", !voucherRows.isEmpty());
 
-        // ② 核销环节候选：同客户＋同金额的 rc_receipt。<b>这是启发式现算，不是勾稽事实</b>。
+        // ② 核销环节候选：同客户＋同金额的 rc_receipt。这是启发式现算，不是勾稽事实。
         List<RcReceipt> cands = rcReceiptMapper.selectList(
                 new LambdaQueryWrapper<RcReceipt>()
                         .eq(bill.getCustomerId() != null,

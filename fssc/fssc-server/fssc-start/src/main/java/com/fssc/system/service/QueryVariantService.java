@@ -18,7 +18,7 @@ import java.util.List;
 
 /**
  * 查询方案（Variant）服务。
- * <p>P1-3：保存个人常用筛选组合，支持 CRUD 与默认方案设置。</p>
+ * <p>保存个人常用筛选组合，支持 CRUD 与默认方案设置。</p>
  */
 @Service
 @RequiredArgsConstructor

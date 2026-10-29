@@ -11,6 +11,7 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.receivable.entity.RcReceiptLine;
 import com.fssc.receivable.entity.RcReceivable;
+import java.util.ArrayList;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,7 +31,7 @@ public class ArWriteoffController {
 
     private final ArWriteoffService writeoffService;
 
-    // ---------------- 资金池 ----------------
+    // 资金池
 
     @RequiresPerm("arflow:writeoff:manage")
     @GetMapping("/funds")
@@ -47,7 +48,7 @@ public class ArWriteoffController {
         return Result.success(writeoffService.registerFund(fund));
     }
 
-    // ---------------- 待核销发票 ----------------
+    // 待核销发票
 
     @RequiresPerm("arflow:writeoff:manage")
     @GetMapping("/pending-invoices")
@@ -71,7 +72,7 @@ public class ArWriteoffController {
     public Result<ArWriteoffRecord> manualMatch(@RequestBody Map<String, Object> body) {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rawLines = (List<Map<String, Object>>) body.get("lines");
-        List<RcReceiptLine> lines = new java.util.ArrayList<>();
+        List<RcReceiptLine> lines = new ArrayList<>();
         if (rawLines != null) {
             for (Map<String, Object> raw : rawLines) {
                 RcReceiptLine l = new RcReceiptLine();
@@ -97,7 +98,7 @@ public class ArWriteoffController {
                 null));
     }
 
-    // ---------------- 核销查询 ----------------
+    // 核销查询
 
     @RequiresPerm("arflow:writeoff:manage")
     @GetMapping("/records")

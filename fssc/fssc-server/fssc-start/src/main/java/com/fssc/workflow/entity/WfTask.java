@@ -3,6 +3,7 @@
 
 package com.fssc.workflow.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -28,7 +29,7 @@ public class WfTask implements Serializable {
     private Long id;
 
     @JsonIgnore
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private Long tenantId;
 
     /** Flowable 任务 ID */
@@ -59,6 +60,6 @@ public class WfTask implements Serializable {
     /** PENDING待办/DONE已办/CANCELLED已取消 */
     private String status;
 
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT_UPDATE)
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 }

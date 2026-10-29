@@ -8,7 +8,7 @@ import com.fssc.masterdata.entity.MdPrintTemplateSet;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * MdPrintTemplateSet Mapper（V1.4.81 打印/套打引擎）。
+ * MdPrintTemplateSet Mapper（打印/套打引擎）。
  */
 @Mapper
 public interface MdPrintTemplateSetMapper extends BaseMapper<MdPrintTemplateSet> {

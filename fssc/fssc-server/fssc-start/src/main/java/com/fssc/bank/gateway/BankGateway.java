@@ -3,6 +3,7 @@
 
 package com.fssc.bank.gateway;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -20,6 +21,6 @@ public interface BankGateway {
 
     /** 付款项（收款人/账户/金额） */
     record PayItem(String payeeName, String bankName, String bankAccount,
-                   java.math.BigDecimal amount, String postscript) {
+                   BigDecimal amount, String postscript) {
     }
 }

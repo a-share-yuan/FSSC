@@ -109,7 +109,7 @@
       </template>
     </el-dialog>
 
-    <!-- R4-02 单据全链路联查 -->
+    <!-- 单据全链路联查 -->
     <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" biz-type="BG_SCHEME" />
   </div>
 </template>
@@ -127,7 +127,7 @@ import { useAutoFill } from '@/composables/useAutoFill'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -149,7 +149,7 @@ const dialog = reactive({
 const { autofill, saveFormHistory } = useAutoFill()
 autofill(dialog.form, 'BUDGET_SCHEME')
 
-// R5-13: 快捷键（仅保留本页可用的刷新）
+// 快捷键（仅保留本页可用的刷新）
 useKeyboard({
   'ctrl+r': () => loadList(),
 })

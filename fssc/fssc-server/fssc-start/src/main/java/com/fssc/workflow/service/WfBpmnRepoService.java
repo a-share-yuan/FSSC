@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.entity.WfModel;
 import com.fssc.workflow.mapper.WfModelMapper;
+import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,7 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * BPMN 仓库化（G3-4，问题全集 A-5）：模型 XML 全量导出入仓 + 发布动作产出 diff 记录。
+ * BPMN 仓库化（问题全集 A-5）：模型 XML 全量导出入仓 + 发布动作产出 diff 记录。
  *
  * <p>体检背景：{@code wf_model.bpmn_xml} 是流程设计的事实唯一权威，但它只活在数据库里——
  * 没有 git 历史、没有 review、被覆盖即不可回滚，出事只能靠 {@code ACT_RE_MODEL} 里的引擎副本猜。
@@ -36,11 +37,11 @@ import java.util.Map;
  *
  * <p>目录布局：
  * <pre>
- *   INDEX.md                        全量模型清单（key / 名称 / 版本 / 摘要 / 部署 ID）
- *   models/&lt;key&gt;/&lt;id&gt;_v&lt;ver&gt;.bpmn20.xml   每次导出的版本快照
- *   models/&lt;key&gt;/latest.bpmn20.xml  该 key 当前生效 XML
- *   publish/&lt;key&gt;/v&lt;旧&gt;_to_v&lt;新&gt;_&lt;时间戳&gt;.diff  发布 diff
- *   publish/&lt;key&gt;/LOG.md            发布日志（含在途旧实例数）
+ *   INDEX.md 全量模型清单（key / 名称 / 版本 / 摘要 / 部署 ID）
+ *   models/&lt;key&gt;/&lt;id&gt;_v&lt;ver&gt;.bpmn20.xml 每次导出的版本快照
+ *   models/&lt;key&gt;/latest.bpmn20.xml 该 key 当前生效 XML
+ *   publish/&lt;key&gt;/v&lt;旧&gt;_to_v&lt;新&gt;_&lt;时间戳&gt;.diff 发布 diff
+ *   publish/&lt;key&gt;/LOG.md 发布日志（含在途旧实例数）
  * </pre>
  *
  * <p>所有写文件失败都不允许影响发布主流程：调用方 {@link WfModelService} 以 try/catch 包裹，
@@ -63,7 +64,7 @@ public class WfBpmnRepoService {
     private static final long DP_CELL_LIMIT = 4_000_000L;
     private static final int MAX_DIFF_READ = 200_000;
 
-    // ---------- 全量导出 ----------
+    // 全量导出
 
     /** 全量导出 wf_model 的 BPMN 到仓库目录（跨租户，设计态资产统一归集） */
     public Map<String, Object> exportAll() {
@@ -121,14 +122,14 @@ public class WfBpmnRepoService {
         return r;
     }
 
-    // ---------- 发布 diff ----------
+    // 发布 diff
 
     /**
      * 发布/重新部署成功后落盘：版本快照 + 统一 diff + 发布日志一行。
      *
-     * @param oldXml     部署前 XML（首次发布可为 null）
+     * @param oldXml 部署前 XML（首次发布可为 null）
      * @param newVersion 部署后回写的版本号
-     * @param inFlight   在途旧实例数（发布不迁移老实例，数量决定要不要人工跟进），可为 null
+     * @param inFlight 在途旧实例数（发布不迁移老实例，数量决定要不要人工跟进），可为 null
      */
     public Map<String, Object> recordPublish(WfModel oldModel, String newXml, int newVersion,
                                              String deployId, String procDefId, Integer inFlight) {
@@ -179,7 +180,7 @@ public class WfBpmnRepoService {
                 m.put("summary", firstChangeSummary(p));
                 try {
                     m.put("time", LocalDateTime.ofInstant(Files.getLastModifiedTime(p).toInstant(),
-                            java.time.ZoneId.systemDefault()).format(TS));
+                            ZoneId.systemDefault()).format(TS));
                 } catch (IOException ignore) {
                     // 文件 mtime 不可读时置 null（展示性字段，不影响流程定义加载）
                     m.put("time", null);
@@ -214,7 +215,7 @@ public class WfBpmnRepoService {
         }
     }
 
-    // ---------- 目录与文件 ----------
+    // 目录与文件
 
     private Path root() {
         return Paths.get(repoDir == null || repoDir.isBlank() ? "./bpmn-repo" : repoDir);
@@ -292,7 +293,7 @@ public class WfBpmnRepoService {
         }
     }
 
-    // ---------- 统一 diff ----------
+    // 统一 diff
 
     /** 行级 LCS 统一 diff（3 行上下文）。oldXml 为 null 视为新增全文。 */
     static String unifiedDiff(String oldXml, String newXml) {

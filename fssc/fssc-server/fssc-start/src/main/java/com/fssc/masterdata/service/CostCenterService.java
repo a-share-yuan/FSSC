@@ -20,7 +20,7 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 
 /** 主数据 CostCenter 服务（带 tenant_id，租户拦截器自动隔离）
- * <p>P1-1：tree() 全量列表缓存（高频只读，变更很少） */
+ * <p>tree() 全量列表缓存（高频只读，变更很少） */
 @Service
 @RequiredArgsConstructor
 public class CostCenterService {
@@ -37,7 +37,7 @@ public class CostCenterService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** 树形数据：按编码排序返回全量（前端按 parentId 组树）。P1-1：Caffeine 缓存 5min TTL。 */
+    /** 树形数据：按编码排序返回全量（前端按 parentId 组树）。Caffeine 缓存 5min TTL。 */
     @Cacheable(value = "masterData", key = "T(com.fssc.framework.tenant.TenantContext).getTenantId() + ':costCenter:tree'")
     public List<MdCostCenter> tree() {
         return mapper.selectList(

@@ -83,7 +83,7 @@
             <el-table-column prop="fileId" label="文件ID" width="80" align="center" />
             <el-table-column label="类型" width="80" align="center">
               <template #default="{ row }">
-                <!-- 定性规则统一在 utils/attachKind：attachType 缺失时按扩展名默认处理，
+                <!-- 定性规则统一在 utils/attachKind：attachType 缺失时按扩展名兜底，
                      不再把老数据直接吐成 "OTHER" / "其他" 这种半英文 -->
                 <el-tag size="small" :type="attachKindOf(row) === 'INVOICE' ? 'success' : 'info'">
                   {{ ATTACH_KIND_TEXT[attachKindOf(row)] }}

@@ -62,14 +62,14 @@ public class SaleReturn extends TenantAuditBase {
     @TableField(exist = false)
     private List<SaleReturnLine> lines;
 
-    // ---------------- 状态常量 ----------------
+    // 状态常量
     public static final String ST_DRAFT = "DRAFT";
     public static final String ST_PENDING = "PENDING";
     public static final String ST_APPROVED = "APPROVED";
     public static final String ST_REJECTED = "REJECTED";
     public static final String ST_VOIDED = "VOIDED";
 
-    // ---------------- 退货方式常量 ----------------
+    // 退货方式常量
     public static final String MODE_REFUND = "REFUND";
     public static final String MODE_EXCHANGE = "EXCHANGE";
 }

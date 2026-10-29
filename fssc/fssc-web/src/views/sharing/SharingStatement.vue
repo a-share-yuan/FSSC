@@ -129,7 +129,7 @@ const q = reactive({ bankSerial: '', reconStatus: '', transType: '' })
 
 // CSV 批量导入需先选定目标银行账户（company_id/bank_account_id 由后端按账户回填）
 const importBankAccountId = ref(null)
-// 4030 权限拒绝独立空态（改前被统一渲染成「暂无数据」，用户把「无权限」读成「没数据」；
+// 4030 权限拒绝独立空态（原先被统一渲染成「暂无数据」，用户把「无权限」读成「没数据」；
 // 权限码文案由 api.js 拦截器 toast，表体这里只把空态的语义纠正过来）
 const denied = ref(false)
 const bankOptions = ref([])
@@ -227,7 +227,7 @@ function doExport() {
   ], 'SharingStatement')
 }
 // 勾对状态有三个同义码在写：本页 markRecon 写 RECONED、银行对账模块写 MATCHED、历史种子行是 RECON
-// （实测 op_bank_statement：RECON 1,665 行 / UNRECON 711 行）⇒ 名称表必须同时认三者，否则 RECON 行直显英文。
+// ⇒ 名称表必须同时认三者，否则 RECON 行直显英文。
 function reconText(s) {
   return { UNRECON: t('sharing.statement.optUnrecon'), RECON: t('sharing.statement.optReconed'), RECONED: t('sharing.statement.optReconed'), MATCHED: t('sharing.statement.optReconed'), DIFF: t('sharing.statement.optDiff') }[s] || s
 }

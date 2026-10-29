@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 合规规则配置服务（P0-10）。
+ * 合规规则配置服务。
  *
  * <p>统一维护四类合规规则（重复发票/费用项目不一致/超标/黑名单），
  * 供智能审单与合规预检引擎 {@code PrecheckEngineService} 引用。
@@ -35,7 +35,7 @@ public class MdComplianceRuleService {
             "DUPLICATE_INVOICE", "EXPENSE_MISMATCH", "OVER_STANDARD", "BLACKLIST"
     };
 
-    // R5-D-033：内置规则以 tenant_id=NULL（平台级）播种，而 md_compliance_rule 不在租户拦截器
+    // 内置规则以 tenant_id=NULL（平台级）播种，而 md_compliance_rule 不在租户拦截器
     // 忽略名单内，拦截器一律追加 tenant_id=当前租户 ⇒ 平台级种子恒被过滤、列表恒空。
     // 读侧改为「平台级 ∪ 本租户自定义」，写侧仍限本租户自有行（不跨租户改写共享定义）。
     public List<MdComplianceRule> list(String ruleType, String status) {
@@ -94,7 +94,7 @@ public class MdComplianceRuleService {
         return hit[0];
     }
 
-    // R5-D-033：写侧只允许改本租户自有行；平台内置行可见但不可改，避免一处启停影响全部租户
+    // 写侧只允许改本租户自有行；平台内置行可见但不可改，避免一处启停影响全部租户
     private MdComplianceRule requireOwnRow(Long id) {
         MdComplianceRule own = ruleMapper.selectById(id);
         if (own != null) {
@@ -151,7 +151,7 @@ public class MdComplianceRuleService {
         log.info("删除合规规则: id={}, ruleCode={}", id, exist.getRuleCode());
     }
 
-    /** R5-D-033：启用中的全部可见规则（平台内置 ∪ 本租户），供预检/审单引擎加载 */
+    /** 启用中的全部可见规则（平台内置 ∪ 本租户），供预检/审单引擎加载 */
     public List<MdComplianceRule> listEnabled() {
         Long tenantId = readableTenantId();
         List<MdComplianceRule> rows = new ArrayList<>();

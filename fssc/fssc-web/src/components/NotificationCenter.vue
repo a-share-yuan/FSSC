@@ -70,13 +70,13 @@ const uid = store.user?.userId ?? store.user?.id
 async function fetchUnread() {
   if (!uid) return
   try {
-    // silent：辅助角标拉取失败不弹全局错误（30s 轮询与下次展开默认处理）
+    // silent：辅助角标拉取失败不弹全局错误（30s 轮询与下次展开兜底）
     unreadCount.value = await messageApi.unreadCount(uid, { silent: true }) || 0
   } catch { /* 忽略 */ }
 }
 
-// D-DEC-149/187：字段名按后端 SysMessage 实序列化键取 —— 已读位是 `isRead`（0/1）、类型位是 `msgType`。
-// 此前本组件读的是 `msg.readFlag`／`msg.category` 两个**不存在的键**（对照系统设置「消息中心」
+// 字段名按后端 SysMessage 序列化键取 —— 已读位是 `isRead`（0/1）、类型位是 `msgType`。
+// 读 `msg.readFlag`／`msg.category` 两个不存在的键的话（对照系统设置「消息中心」
 // 只读视图 MasterConfigTable.vue 用的正是 `isRead`＋`msgType`）⇒ `!undefined === true` 恒真，
 // 已读的消息也一律渲染成未读、未读数按整页虚高、未读 tab 与「全部」tab 内容相同。
 const filteredList = computed(() => {
@@ -97,9 +97,9 @@ async function fetchMessages() {
 /**
  * 点击一条通知：先回写已读，再按 `link_url` 跳转。
  *
- * D-DEC-149 的后半：`sys_message.link_url` 注释写着「跳转地址（PC/H5共用相对路径）」，
- * 抄送提醒也明确引导「可在『流程中心 > 我的抄送』查看该单」，但本组件此前只标已读、从不消费
- * link_url ⇒ 通知出口只到"知道有这条消息"，被抄送人仍需自己找入口。现已读＋直达一并补上。
+ * 的后半：`sys_message.link_url` 注释写着「跳转地址（PC/H5共用相对路径）」，
+ * 抄送提醒也明确引导「可在『流程中心 > 我的抄送』查看该单」，但本组件只标已读、不消费
+ * link_url ⇒ 通知出口只到"知道有这条消息"，被抄送人仍需自己找入口。所以已读＋直达一并补上。
  * 跳转失败（路由表外的历史链接）不打断已读回写，也不弹全局错误。
  */
 async function onItemClick(msg) {

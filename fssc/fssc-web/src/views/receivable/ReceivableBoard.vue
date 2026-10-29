@@ -100,7 +100,7 @@
           </el-table-column>
           <el-table-column label="操作" width="140" fixed="right">
             <template #default="{ row }">
-              <!-- ④：原判据 row.status !== 'APPLIED' 与库值名称表不匹配（登记环节写的是 WRITTEN_OFF），
+              <!-- ④：判据不能写成 row.status !== 'APPLIED'，库值名称表对不上（登记环节写的是 WRITTEN_OFF），
                    于是"已核销"行的「先进先出核销」按钮常驻可点＝重复核销的诱因；现按真实最终状态名称表隐藏。
                    后端 applyReceipt 同步改去重跳过（登记即冲减），二次点击也不会再冲一遍余额。 -->
               <el-button v-if="!receiptAppliedStatuses.includes(row.status)" link size="small" type="primary" @click="applyReceipt(row)">先进先出核销</el-button>
@@ -313,13 +313,13 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const receivables = ref([])
 const recvTotal = ref(0)
-// 4030 权限拒绝独立空态（改前与「暂无数据」同形，无权限被读成没数据）
+// 4030 权限拒绝独立空态（原先与「暂无数据」同形，无权限被读成没数据）
 const denied = ref(false)
 const receipts = ref([])
 const collects = ref([])
 const badDebts = ref([])
 const overdueDays = ref(30)
-// 逾期批处理的账期基准日（留空＝系统当前日）。批处理原本把 LocalDate.now() 写死在判据里，
+// 逾期批处理的账期基准日（留空＝系统当前日）。判据若写死 LocalDate.now()，
 // "业务期间晚于系统日"时到期日永不早于基准日 ⇒ 逾期集恒空、催收池零成员、坏账计提与账龄同因空转。
 const overdueBaseline = ref('')
 const badDebtPeriod = ref('')
@@ -366,7 +366,7 @@ async function saveReceivable() {
 /**
  * 把界面填的基准日折成后端两个可选入参之一——
  * yyyyMM／yyyy-MM ＝期间（后端按期末日跑），yyyy-MM-dd／yyyy/MM/dd／yyyyMMdd ＝截止日（逐字取该日）；
- * 留空＝不传（后端回退系统当前日，与改造前逐字一致）；格式不认识时显式提示，不静默默认处理。
+ * 留空＝不传（后端回退系统当前日，与原先逐字一致）；格式不认识时显式提示，不静默兜底。
  * @returns {{asOfDate?: string, period?: string}}
  */
 function overdueBaselineParams() {
@@ -466,7 +466,7 @@ function reload() {
   loadReceivable(); loadReceipt(); loadCollect(); loadBadDebt()
 }
 // 消费半：工作台「我的单据」台账跳转同写 kw 与 billNo/billId 两套取参规则（Workbench:269-275），
-// 本页此前完全不吃 URL——跳过来落的仍是全量首屏，"别的页面能定位到这一单"在此失明。
+// 本页完全不吃 URL 的话——跳过来落的仍是全量首屏，"别的页面能定位到这一单"在此失明。
 const route = useRoute()
 const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
 

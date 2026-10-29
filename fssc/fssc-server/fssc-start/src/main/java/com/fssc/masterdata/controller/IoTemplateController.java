@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 统一导入导出引擎对外接口（V1.4.83/V1.4.84，闭环差距②后半「导入导出无统一引擎」）。
+ * 统一导入导出引擎对外接口（/，闭环差距②后半「导入导出无统一引擎」）。
  *
  * <p>路径 {@code /api/tenant/masterdata/io/**}。
  *

@@ -20,7 +20,7 @@ export default [
   { path: 'expense/claim', component: () => import('../../views/expense/ClaimExpense.vue'), meta: { title: '员工费用报销' } },
   { path: 'expense/claim-travel', component: () => import('../../views/expense/ClaimTravel.vue'), meta: { title: '差旅培训报销' } },
   { path: 'expense/air-query', component: () => import('../../views/expense/AirTicketQuery.vue'), meta: { title: '机票结算申请' } },
-  // 事前申请（RA-PAGE-21：原 meeting/travel/train 三个独立菜单收敛为一个工作区，成员页路由保留作深链）
+  // 事前申请（原 meeting/travel/train 三个独立菜单收敛为一个工作区，成员页路由保留作深链）
   { path: 'expense/apply', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'preapply' }, meta: { title: '事前申请' } },
   { path: 'expense/apply/meeting', component: () => import('../../views/expense/ApplyMeeting.vue'), meta: { title: '会议申请' } },
   { path: 'expense/apply/travel', component: () => import('../../views/expense/ApplyTravel.vue'), meta: { title: '出差申请' } },

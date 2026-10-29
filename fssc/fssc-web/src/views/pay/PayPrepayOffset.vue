@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <template>
-  <!-- ============ 冲销预付款（对公结算） ============ -->
+  <!-- 冲销预付款（对公结算） -->
   <el-card :header="$t('pay.offset.cardTitle')" style="margin-top: 12px">
     <el-button size="small" :disabled="!customerId" @click="loadPrepay">{{ $t('pay.offset.btnRefreshPrepay') }}</el-button>
     <el-table :data="offsets" size="small" border style="margin-top: 8px" :empty-text="$t('common.empty')">
@@ -27,7 +27,7 @@
     <el-alert type="info" :closable="false" :title="$t('pay.offset.hintRule')" style="margin-top: 6px" />
   </el-card>
 
-  <!-- 预付款选择弹窗（D-UI-05：勾选+可改冲抵金额+【确定】；导出按钮移入 toolbar，selection 语义不变） -->
+  <!-- 预付款选择弹窗（勾选+可改冲抵金额+【确定】；导出按钮移入 toolbar，selection 语义不变） -->
   <CandidatePickerDialog v-model="prepayDialog" :title="$t('pay.offset.ctxPickTitle')"
                         :rows="prepayCandidates" max-field="available" :show-max-column="true"
                         extra-prop="title" :extra-label="$t('pay.shared.colTitle')"
@@ -75,7 +75,7 @@ const offsets = computed(() => {
   if (!b.form.bill.extJson.prepayOffsets) b.form.bill.extJson.prepayOffsets = []
   return b.form.bill.extJson.prepayOffsets
 })
-/** 已入账的预付单 id —— 选择器里置灰，防同一张预付单重复入账（D-UI-05） */
+/** 已入账的预付单 id —— 选择器里置灰，防同一张预付单重复入账 */
 const pickedPrepayIds = computed(() => offsets.value.map((o) => o.billId))
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
@@ -92,8 +92,8 @@ async function loadPrepay() {
 }
 
 /**
- * D-UI-05（2026-10-19）：【确定】后按对话框里改过的冲抵金额入账（默认=可用余额，可改，支持部分冲抵）。
- * 改前是点任意行立刻按 available 全额入账并关窗；且该弹窗同时挂着「复选框（供导出）」与「行点入账」
+ * 【确定】后按对话框里改过的冲抵金额入账（默认=可用余额，可改，支持部分冲抵）。
+ * 原先是点任意行立刻按 available 全额入账并关窗；且该弹窗同时挂着「复选框（供导出）」与「行点入账」
  * 两套语义、彼此不一致——现在统一为「勾选=要入账的行」。
  */
 function confirmPrepayPicks(items) {

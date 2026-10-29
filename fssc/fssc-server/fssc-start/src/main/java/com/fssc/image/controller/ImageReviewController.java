@@ -68,7 +68,7 @@ public class ImageReviewController {
     @OperLog(module = "IMAGE", operType = "UPDATE", desc = "影像调阅评价")
     @PostMapping("/review/evaluate")
     public Result<Void> evaluate(@RequestBody ReviewReq req) {
-        // 非法动作值此前可直写 review_status 产生静默坏数据，现拒绝（W3 配套，2026-10-08）
+        // 动作值必须落在白名单内，否则直写 review_status 会产生静默坏数据
         if (req.getAction() == null || !REVIEW_ACTIONS.contains(req.getAction())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "评价动作非法：" + req.getAction() + "，仅允许 OK/RE_COLLECT/RESCAN/REJECT");
@@ -94,7 +94,7 @@ public class ImageReviewController {
         }
         review.setReviewStatus(req.getAction());
         review.setReviewTime(LocalDateTime.now());
-        // 评价记录回填评价人（此前 review_user_id 恒 NULL，审核责任不可追溯）
+        // 评价记录回填评价人（否则 review_user_id 恒 NULL，审核责任不可追溯）
         review.setReviewUserId(UserContext.getRequired().getUserId());
         review.setRemark(req.getRemark());
         reviewMapper.updateById(review);
@@ -153,7 +153,7 @@ public class ImageReviewController {
     @OperLog(module = "IMAGE", operType = "INSERT", desc = "上报影像异常")
     @PostMapping("/exception/create")
     public Result<Long> exceptionCreate(@RequestBody ImgException e) {
-        // 服务端非空校验（此前业务单号为空仍成功入库 image_exception id=3 biz_no=''）
+        // 服务端非空校验（业务单号为空不能入库）
         AssertUtil.notBlank(e.getBatchNo(), ErrorCode.PARAM_INVALID, "请填写影像批次号");
         AssertUtil.notBlank(e.getBizNo(), ErrorCode.PARAM_INVALID, "请填写业务单号");
         AssertUtil.notBlank(e.getExceptionType(), ErrorCode.PARAM_INVALID, "请选择异常类型");
@@ -175,7 +175,7 @@ public class ImageReviewController {
         }
         e.setStatus("FIXED");
         e.setHandleTime(LocalDateTime.now());
-        // 处理记录回填处理人（此前 handle_user_id 恒 NULL）
+        // 处理记录回填处理人（否则 handle_user_id 恒 NULL）
         e.setHandleUserId(UserContext.getRequired().getUserId());
         if (remark != null) e.setRemark(remark);
         exceptionMapper.updateById(e);

@@ -3,7 +3,7 @@
 
 package com.fssc.framework.mask;
 
-/** 敏感字段类型（P1-3）。 */
+/** 敏感字段类型。 */
 public enum SensitiveType {
     /** 手机号：138****8000 */
     PHONE,

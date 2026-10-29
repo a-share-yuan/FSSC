@@ -2,24 +2,22 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * useFormMeta - 表单元数据驱动 composable（V1.4.85）
- * =============================================================================
+ * useFormMeta - 表单元数据驱动 composable
  * 对齐差距①「单据/界面不是元数据驱动，新增一种单据＝改代码」。
  *
- * 改造前：每个单据页面把表单项写死在 .vue 里 —— 加一个字段要改代码、并发版。
+ * 原先：每个单据页面把表单项写死在 .vue 里 —— 加一个字段要改代码、并发版。
  * 改造后：字段的控件类型/布局/必录/锁定/默认值全部由后端元数据下发，
  *         前端按元数据渲染；新增字段 = 后台插一行数据。
  *
  * 后端接口
- *   GET  /api/tenant/masterdata/form-meta/{formCode}/fields?roles=R1,R2
- *   GET  /api/tenant/masterdata/form-meta/{formCode}/rules?scope=SAVE
- *   GET  /api/tenant/masterdata/form-meta/{formCode}/bundle?roles=..&scope=..
+ *   GET /api/tenant/masterdata/form-meta/{formCode}/fields?roles=R1,R2
+ *   GET /api/tenant/masterdata/form-meta/{formCode}/rules?scope=SAVE
+ *   GET /api/tenant/masterdata/form-meta/{formCode}/bundle?roles=..&scope=..
  *   POST /api/tenant/masterdata/form-meta/{formCode}/validate?scope=SAVE
  *   POST /api/tenant/masterdata/form-meta/{formCode}/defaults
  *
  * 必录/锁定的权威规则在服务端（FormMetaService.validate），本 composable
  * 生成的 el-form rules 只是<b>体验层提示</b>，不替代服务端校验。
- * ==========================================================================
  */
 
 import { ref, computed } from 'vue'
@@ -94,7 +92,7 @@ export function useFormMeta(formCode) {
     return fetchMeta(formCode, opts)
   }
 
-  /** 控件组件名（取不到映射时默认处理为 el-input） */
+  /** 控件组件名（取不到映射时兜底为 el-input） */
   function widgetOf(widgetType) {
     return WIDGET_MAP[widgetType] || 'el-input'
   }

@@ -34,8 +34,8 @@ public class BarcodeService {
     /**
      * 批量生成条码。
      * @param bizType BILL/ARCHIVE/BOX
-     * @param refIds  关联业务ID列表
-     * @param refNos  关联业务编号列表（与refIds一一对应）
+     * @param refIds 关联业务ID列表
+     * @param refNos 关联业务编号列表（与refIds一一对应）
      * @param printBy 打印人ID
      * @param printName 打印人姓名
      */
@@ -48,7 +48,7 @@ public class BarcodeService {
     }
 
     /**
-     * R5-D-231：为单个业务对象生成条码并返回实体（交单登记自动生成用）。
+     * 为单个业务对象生成条码并返回实体（交单登记自动生成用）。
      * 需要回写业务表 barcode 列（如 op_physical_delivery.barcode）时用本方法；
      * 编码规则与 {@link #generateBarcodes} 一致。
      */

@@ -79,7 +79,7 @@
         </el-form-item>
         <el-form-item label="选择应收单" prop="claimReceivableId">
           <!-- 应收单清单是共享列表（不按流水逐条取），故不在此按方向做客户端过滤——
-               方向与金额的裁定权在服务端 claimReceipt，客户端筛掉的单子只会让人误判规则在哪一层。 -->
+               方向与金额的判定权在服务端 claimReceipt，客户端筛掉的单子只会让人误判规则在哪一层。 -->
           <el-select v-model="claimReceivableId" filterable :loading="receivablesLoading"
                      :placeholder="receivablesLoading ? '应收单清单加载中…' : '按余额搜索应收单'" style="width:100%">
             <el-option v-for="rec in receivables" :key="rec.id" :value="rec.id"
@@ -184,14 +184,14 @@ const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('zh-CN', { mini
 const transText = (t) => ({ CREDIT: '收', DEBIT: '付', RECEIPT: '收', IN: '收', OUT: '付' }[t] || t || '—')
 const slipText = (s) => ({ NONE: '未生成', DOWNLOADED: '已下载', ARCHIVED: '已归档' }[s] || s || '—')
 /**
- * 勾对口径：库里并存两族写法——历史导入落 RECON（实测 1,665 行），
+ * 勾对口径：库里并存两族写法——历史导入落 RECON，
  * 勾对作业落 MATCHED（BankReconcileService），旧注释还提过 RECONED。
  * 只认 MATCHED 曾让 RECON 行整片显示「未对账」且「已对账」筛选恒空。
  */
 const RECON_CODES = ['MATCHED', 'RECON', 'RECONED']
 const isReconciled = (s) => RECON_CODES.includes(String(s || '').trim().toUpperCase())
 
-// 收款（贷方）方向的实测值集——与服务端 BankReconcileService 里的同名值集逐字一致
+// 收款（贷方）方向的取值集——与服务端 BankReconcileService 里的同名值集逐字一致
 //（trans_type 取 CREDIT／RECEIPT／IN 者为收款，DEBIT 为付款方向，大小写不敏感）。
 const CREDIT_TRANS_TYPES = ['CREDIT', 'RECEIPT', 'IN']
 const isReceiptDir = (t) => !!t && CREDIT_TRANS_TYPES.some(c => c.toLowerCase() === String(t).toLowerCase())
@@ -233,7 +233,7 @@ function requireSel() {
  *  改调银行域专用端点 bankClaimableReceivables。
  *  原先借应收域的 receivableApi.page（要求 receivable:list 应收域权限），
  *  纯银企对账岗（只有 bank:reconcile:list）打开认领弹层时清单恒空、认领做不了；
- *  查询权限随域走，改调本域端点（同样由服务端做余额/方向裁定，前端不做业务过滤）。
+ *  查询权限随域走，改调本域端点（同样由服务端做余额/方向判定，前端不做业务过滤）。
  */
 async function loadReceivables() {
   receivablesLoading.value = true

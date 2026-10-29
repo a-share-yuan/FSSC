@@ -44,7 +44,7 @@ public class TenantUserController {
 
     // 只读查询放开给所有登录租户用户：报销/还款等单据发起页的申请人、还款人下拉必用（写操作仍需权限）
     // SOX-02：无 system:user:list 权限的调用方裁剪为下拉最小字段集，避免向全员暴露 phone/email
-    // P0 组织办结：companyId 由前端传入，**不可信**——直接调 API 不传/乱传就能拉全租户人员。
+    // companyId 由前端传入，不可信——直接调 API 不传/乱传就能拉全租户人员。
     // 无 system:user:list 的调用方一律以登录人公司为准（跨公司请求直接拒绝，不静默改写）；
     // 只有持用户管理权限的角色可跨公司检索。
     @GetMapping("/page")

@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * P0-5 实物流签收（TC12：电子流 + 实物流双到达）。
+ * 实物流签收（TC12：电子流 + 实物流双到达）。
  * 增强功能：条码扫描签收、批量签收、拒签退件、快递信息录入、交单登记。
  * 采购收货、到货签收与批次采收的处理规则。
  */
@@ -66,7 +66,7 @@ public class DeliveryController {
     }
 
     /**
-     * 单条签收（R5-D-241：支持签收备注）。
+     * 单条签收（支持签收备注）。
      * body 可省；Body: { "signRemark": "已当面清点" }
      */
     @PostMapping("/sign/{id}")
@@ -165,7 +165,7 @@ public class DeliveryController {
         return Result.success();
     }
 
-    // ==================== 条码管理 ====================
+    // 条码管理
 
     /**
      * 条码分页查询。

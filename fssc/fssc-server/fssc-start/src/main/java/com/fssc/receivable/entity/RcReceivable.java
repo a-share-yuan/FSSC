@@ -62,7 +62,7 @@ public class RcReceivable extends TenantAuditBase {
      * 未起流程为 null。
      * <p>本表 status 是<b>收款规则</b>（NONE 未结清／PARTIAL 部分收款／RECEIVED／DONE 结清／OVERDUE 逾期），
      * 不承载审批语义：应收单生成即起 OTC 收款审批流，但审批期间 status 仍是 NONE，
-     * 界面直译成"未开始"，看起来像流程没起（2026-10-24 H3 实测）。
+     * 界面直译成"未开始"，看起来像流程没起。
      * 补一个"审批中"单据态要动全仓按 status 过滤的读取点（核销候选、账龄、对账圈单），
      * 风险远大于收益 ⇒ 规则取"台账另列显示流程态"，status 名称表不变。
      */

@@ -8,11 +8,14 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.treasury.entity.TrBillSettle;
 import com.fssc.treasury.mapper.TrBillSettleMapper;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +25,7 @@ import org.springframework.util.StringUtils;
 /**
  * 票据结算服务。
  * 在库(STOCK)票据可背书转让(endorse)、贴现(discount)、到期托收收妥(collection)。
- * P5：票据登记即发起 TR_BILL 票据结算审批流。
+ * 票据登记即发起 TR_BILL 票据结算审批流。
  */
 @Slf4j
 @Service
@@ -31,7 +34,7 @@ public class TrBillSettleService {
 
     private final TrBillSettleMapper mapper;
     private final WfEngineFacade wfEngineFacade;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
+    private final OrgGuard orgGuard;
 
     /** 票据登记入库（STOCK） */
     public Long create(TrBillSettle settle) {
@@ -42,7 +45,7 @@ public class TrBillSettleService {
         if (settle.getEndorseFlag() == null) settle.setEndorseFlag(Boolean.FALSE);
         // 整改(20260917, DEV-008/VER-016)：创建即生成票据单号（口径：单据创建即有业务主键）。
         if (!StringUtils.hasText(settle.getBillNo())) {
-            String date = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
+            String date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
             long seq = mapper.selectCount(new LambdaQueryWrapper<TrBillSettle>()
                     .likeRight(TrBillSettle::getBillNo, "PJ" + date)) + 1;
             settle.setBillNo(String.format("PJ%s%04d", date, seq));
@@ -54,14 +57,14 @@ public class TrBillSettleService {
         }
         orgGuard.assertCompanyAllowed(settle.getCompanyId());
         mapper.insert(settle);
-        // P5：票据登记入库即发起 TR_BILL 票据结算审批流（出纳登记→资金岗复核→财务经理审批）
-        // 批次3 R3-D：传入票面金额（TR_BILL 当前无金额网关 ⇒ 只影响实例金额展示/统计，不改路由）
+        // 票据登记入库即发起 TR_BILL 票据结算审批流（出纳登记→资金岗复核→财务经理审批）
+        // 传入票面金额（TR_BILL 当前无金额网关 ⇒ 只影响实例金额展示/统计，不改路由）
         try {
             wfEngineFacade.start("TR_BILL", settle.getId(), userId(),
                     "票据结算-" + settle.getTicketNo(), settle.getAmount());
         } catch (Exception ex) {
             log.error("票据 {} 发起结算审批失败: {}", settle.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须抛出去，不能静默降级成没有流程的孤儿单
         }
         return settle.getId();
     }

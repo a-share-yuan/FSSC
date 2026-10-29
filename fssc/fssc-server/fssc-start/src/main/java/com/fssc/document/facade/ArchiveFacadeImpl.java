@@ -70,9 +70,9 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
     private final ArchiveDestroyApprovalMapper destroyApprovalMapper;
     private final ArchiveAccessLogMapper accessLogMapper;
     private final BillFacade billFacade;
-    /** W1：撤 FM_ARCHIVE Task_3 人工复核后，归档完整性判据由档案服务给出逐条未通过清单 */
+    /** 归档完整性校验的出口：档案服务给出逐条未通过清单（归档链无人工复核节点） */
     private final ArchiveService archiveService;
-    /** P1：完整性快照哈希的唯一算式（回单登记卷此前从不封哈希 ⇒ 永不可校验） */
+    /** 完整性快照哈希的唯一算式；回单登记卷同样要封哈希，否则无从校验 */
     private final ArchiveIntegrityService archiveIntegrityService;
     private final AuditTrailService auditTrailService;
     /** 销毁唯一合规链入口（到期校验＋双人复核双签＋FM_DESTROY 起流程） */
@@ -80,7 +80,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
 
     @Override
     public ArchiveInfoDTO findLatestByRefId(Long refId) {
-        // ref_id 在本接口文档里＝「关联单据 ID」⇒ 只取单据语义类型的卷，防同号合同/回单卷冒充（断点5 调用方传的是 billId）
+        // ref_id 在本接口文档里＝「关联单据 ID」⇒ 只取单据语义类型的卷，防同号合同/回单卷冒充
         OpArchive archive = opArchiveMapper.selectOne(new LambdaQueryWrapper<OpArchive>()
                 .eq(OpArchive::getRefId, refId)
                 .in(OpArchive::getArchiveType, ArchiveService.BILL_SCOPED_ARCHIVE_TYPES)
@@ -89,8 +89,8 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         if (archive == null) {
             return null;
         }
-        // 跨域档案读出点也挂 028 的读侧补充（改前只有 /page 与 /list 有，
-        // 工作台/联查走的是本 Facade ⇒ 同一卷在两个界面上"一个有归档流号、一个没有"）
+        // 跨域档案读出点同样要补归档流号：/page 与 /list 已补，工作台/联查走的是本 Facade，
+        // 漏一处，同一卷就会在两个界面上一有、一无
         archiveService.enrichFlowKey(List.of(archive));
         return toDTO(archive);
     }
@@ -100,19 +100,28 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         if (billId == null) {
             return List.of();
         }
-        List<OpArchive> rows = opArchiveMapper.selectList(new LambdaQueryWrapper<OpArchive>()
-                // bill_id 臂改前不分类型匹配 ⇒ 合同/回单卷的 bill_id 与单据主键同号即被联查成"这张单据的档案"
-                .and(w -> w.and(x -> x.eq(OpArchive::getBillId, billId)
-                                .in(OpArchive::getArchiveType,
-                                        ArchiveService.BILL_SCOPED_ARCHIVE_TYPES))
-                        .or(x -> x.eq(OpArchive::getRefId, billId).eq(OpArchive::getArchiveType, "BILL")))
-                .orderByAsc(OpArchive::getId));
+        // 两臂分开查、内存里并集：`(bill_id=…) OR (ref_id=…)` 跨两个索引列，优化器不做 index merge
+        // 而是整表扫（实测 51 万行卷表 ~1.4s/次），拆开后各走 idx_tenant_bill / idx_tenant_ref。
+        List<OpArchive> rows = new ArrayList<>();
+        Set<Long> seen = new LinkedHashSet<>();
+        // bill_id 臂必须带类型过滤：合同/回单卷的 bill_id 与单据主键同号时会联查成别人的档案
+        for (OpArchive a : opArchiveMapper.selectList(new LambdaQueryWrapper<OpArchive>()
+                .eq(OpArchive::getBillId, billId)
+                .in(OpArchive::getArchiveType, ArchiveService.BILL_SCOPED_ARCHIVE_TYPES))) {
+            if (seen.add(a.getId())) {
+                rows.add(a);
+            }
+        }
+        for (OpArchive a : opArchiveMapper.selectList(new LambdaQueryWrapper<OpArchive>()
+                .eq(OpArchive::getRefId, billId)
+                .eq(OpArchive::getArchiveType, "BILL"))) {
+            if (seen.add(a.getId())) {
+                rows.add(a);
+            }
+        }
+        rows.sort(Comparator.comparing(OpArchive::getId));
         // 组卷改造：一卷多件后，"这张单据归哪卷"的答案在卷内件清单里，不在卷表的首件镜像上。
         // 只认 bill_id/ref_id 会让第 2 件起的单据溯源第 6 格永久灰 ⇒ 并集补齐（按 id 正序、去重）。
-        Set<Long> seen = new LinkedHashSet<>();
-        for (OpArchive a : rows) {
-            seen.add(a.getId());
-        }
         List<Long> volumeIds = new ArrayList<>();
         for (OpArchiveItem item : archiveItemMapper.selectList(
                 new LambdaQueryWrapper<OpArchiveItem>()
@@ -129,7 +138,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
             rows = new ArrayList<>(rows);
             rows.addAll(extra);
         }
-        archiveService.enrichFlowKey(rows);   // D-DEC-185
+        archiveService.enrichFlowKey(rows);   // 补归档流号
         return rows.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
@@ -162,7 +171,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         if (archive == null) {
             return null;
         }
-        archiveService.enrichFlowKey(List.of(archive));   // D-DEC-185
+        archiveService.enrichFlowKey(List.of(archive));   // 补归档流号
         return toDTO(archive);
     }
 
@@ -172,7 +181,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         ar.setTenantId(TenantContext.getTenantId());
         ar.setArchiveNo(dto.getArchiveNo());
         // 档案编码＝编号镜像（列注释"档案编码(冗余)"），回单登记路径同一规则补上；
-        // 该 DTO 无年度/期间入参 ⇒ archive_year/archive_period 仍为空，不凭默认值造期间（184 后半属载体缺位，已登记）。
+        // 该 DTO 无年度/期间入参 ⇒ archive_year/archive_period 仍为空，不凭默认值造期间（184 后半属载体缺位，已记入缺口）。
         ar.setArchiveCode(dto.getArchiveNo());
         // 登记簿的类型名称表只有一处权威（ArchiveService.ARCHIVE_TYPES），回单登记入口同样过校验
         ar.setArchiveType(ArchiveService.assertArchiveType(dto.getArchiveType()));
@@ -196,8 +205,8 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         ar.setIntegrityStatus(dto.getIntegrityStatus());
         ar.setRemark(dto.getRemark());
         opArchiveMapper.insert(ar);
-        // P1：回单卷此前<b>从不封哈希</b>（integrity_hash 恒 NULL）⇒ "档案是否被改动"这一问
-        // 对该类档案永远无从回答。主键入库后按唯一算式封存快照；哈希已算≠已校验（#20 规则），
+        // 回单卷同样要封快照哈希（integrity_hash 不能留 NULL），否则"档案是否被改动"这一问
+        // 永远无从回答。主键入库后按唯一算式封存快照；哈希已算≠已校验，
         // 状态仍按调用方传入的 UNKNOWN，由校验/审批闭环定 VERIFIED。
         String seal = archiveIntegrityService.snapshot(ar);
         OpArchive hashUpd = new OpArchive();
@@ -216,13 +225,13 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
             return;
         }
         if (!approved) {
-            // 159 "驳回无回退路径"：执行归档已把档案推到 ARCHIVING（归档中），
-            // 审批驳回后不得停在途态——回退到 PENDING（待归档）。取的是 op_archive.archive_status
-            // 既有取值（fssc_op_archive.sql L51 PENDING/ARCHIVING/ARCHIVED/DISPOSED），前端 archStatusLabel
+            // 执行归档会把档案推到 ARCHIVING（归档中），
+            // 审批驳回后不得停在途态——回退到 PENDING（待归档）。这是 op_archive.archive_status
+            // 的既有取值（PENDING/ARCHIVING/ARCHIVED/DISPOSED），前端 archStatusLabel
             // 亦已把 PENDING 显示为「待归档」，不新造状态。
-            // 源单据侧无需回退：修后"执行归档"不再前置写 exp_bill.archive_status，
-            // 审批在途期间单据一直是 UNARCHIVED。历史行若被旧版前置写成 ARCHIVED 也不在此反向解绑——
-            // 反归档（unarchive）全仓未实现（仅注释提及），解绑属产品裁决。
+            // 源单据侧无需回退：执行归档不前置写 exp_bill.archive_status，
+            // 审批在途期间单据一直是 UNARCHIVED。历史行若被旧版前置写成 ARCHIVED 也不在此反向解绑，
+            // 反归档（unarchive）全仓未实现，解绑属产品判定。
             OpArchive rollback = new OpArchive();
             rollback.setId(archiveId);
             rollback.setArchiveStatus("PENDING");
@@ -236,8 +245,8 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
                     archive.getArchiveNo(), archive.getArchiveStatus());
             return;
         }
-        // W1：撤掉 Task_3 人工复核后，定稿前必须过归档完整性判据。
-        // 未通过＝不静默定稿、逐条写进记录（清单形态，非布尔）交人工处理；归档人/归档时间在立卷时已固化，不随节点撤除而丢失。
+        // 定稿前必须过归档完整性校验。
+        // 未通过＝不静默定稿，逐条写进记录（清单形态，非布尔）交人工处理；归档人/归档时间在立卷时已固化。
         List<String> failures = archiveService.preArchiveFailures(archiveId);
         if (!failures.isEmpty()) {
             OpArchive flagged = new OpArchive();
@@ -262,11 +271,10 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         }
         LocalDateTime finalizedAt = LocalDateTime.now();
         // 最终状态三件套（archive_status=ARCHIVED + archived_at + integrity_status=VERIFIED）
-        // 只在审批闭环这一处写。原先由"执行归档"前置写完（op_archive id=24：12:46:39 即 ARCHIVED＋VERIFIED，
-        // 三节审批后只有 update_time 变化），现执行归档只进 ARCHIVING，本处定稿；
-        // 完整性判据刚通过（哈希重算与归档快照一致）才置 VERIFIED——"已算哈希"不等于"已校验"。
-        // 160：改前两列都写 'ARCHIVED'，而 'ARCHIVED' 不在 status 的名称表
-        // （FILED/EXPIRED/DESTROYED）里 —— 现 archive_status＝真相源落 ARCHIVED，
+        // 只在审批闭环这一处写：执行归档只进 ARCHIVING，定稿落在这里。
+        // 完整性校验刚通过（哈希重算与归档快照一致）才置 VERIFIED——"已算哈希"不等于"已校验"。
+        // 两列不能都写 'ARCHIVED'：'ARCHIVED' 不在 status 的名称表里
+        // （FILED/EXPIRED/DESTROYED）。archive_status＝真相源，落 ARCHIVED，
         // status＝同源镜像按 ArchiveService.dispositionOf 派生（落 FILED＝案卷已登记在架）。
         OpArchive upd = new OpArchive();
         upd.setId(archiveId);
@@ -274,9 +282,8 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         upd.setStatus(ArchiveService.dispositionOf("ARCHIVED"));
         upd.setArchivedAt(finalizedAt);
         upd.setIntegrityStatus("VERIFIED");
-        // 第二半（69「filing_user_id/filing_time 审批通过后仍 NULL」）：
-        // 立卷留人那半条已由 落在 ArchiveService.createArchive L163-164（jar 内），本处补的是
-        // 收尾默认处理——276a 上线前立的历史卷、以及无登录上下文的立卷行，两列至今为空，归档结论无人可追。
+        // filing_user_id/filing_time 在立卷时已由 ArchiveService.createArchive 写入，本处补的是收尾兜底——
+        // 早期立的历史卷、以及无登录上下文的立卷行两列可能为空，不让归档结论无人可追。
         // 仅在 NULL 时补写，已有立卷人／立卷时间一律不覆盖（立卷动作与定稿动作各自记录，不混为一谈）。
         if (archive.getFilingUserId() == null) {
             upd.setFilingUserId(operator);
@@ -288,12 +295,11 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         log.info("档案 {} 归档审批通过: → ARCHIVED（定稿人={}）", archive.getArchiveNo(), operator);
         // 状态机闭环：归档审批通过同步回写源单据归档状态（去重）。
         // exp_bill 用 status(业务态:PAID/...) + archiveStatus(归档态:ARCHIVED) 双字段表达状态机 ARCHIVED 段。
-        // 2026-09-28 已裁 A1：守卫原先只放行 BILL ⇒ 凭证归档（EXPENSE）审批通过不回写，
-        // 单据侧要等次日 02:00 定时任务代写、且代写不留归档人。
-        // 113：白名单再按 ref_id 语义补齐为 ArchiveService.BILL_SCOPED_ARCHIVE_TYPES
-        // ＝{BILL, EXPENSE, PAYMENT}（付款/结算单本身就在 exp_bill）；VOUCHER/CONTRACT/INVOICE/REPORT/OTHER
-        // 与 BANK_SLIP 的 ref_id 属别的域主键，跨域裸主键回写必串号，仍旧不放行。
-        // 谓词收拢到 ArchiveService 一处，与（已摘除的）执行归档前置写共用同一把尺，避免两条链路再次分叉。
+        // 白名单只放行 BILL 时，凭证归档（EXPENSE）审批通过什么都不回写，单据侧要等次日 02:00
+        // 定时任务代写，且代写不留归档人；故白名单按 ref_id 语义取 ArchiveService.BILL_SCOPED_ARCHIVE_TYPES
+        // ＝{BILL, EXPENSE, PAYMENT}（付款/结算单本身就在 exp_bill）。VOUCHER/CONTRACT/INVOICE/REPORT/OTHER
+        // 与 BANK_SLIP 的 ref_id 属别的域主键，跨域裸主键回写必串号，不放行。
+        // 谓词收拢到 ArchiveService 一处，两条链路共用同一把尺，避免分叉。
         // 组卷改造：一卷可多件 ⇒ 定稿回写按<b>卷内件清单</b>逐件执行（历史卷无件行时回落首件镜像），
         // 否则"卷归档了、卷里其余单据仍显示未归档"，溯源第 6 格会永久灰在那。
         List<Long> billIds = new ArrayList<>();
@@ -311,7 +317,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         int written = 0;
         for (Long billId : billIds) {
             if (billFacade.findBillForArchive(billId) == null) {
-                continue;   // 非费用单据（他域载体）不在此回写，跨域裸主键借用
+                continue;   // 非费用单据（他域载体）不在此回写，跨域裸主键不得借用
             }
             try {
                 billFacade.markArchived(billId, operator, finalizedAt);
@@ -425,7 +431,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
         }
         qw.orderByDesc(OpArchive::getId);
         Page<OpArchive> p = opArchiveMapper.selectPage(Page.of(pageNum, pageSize), qw);
-        archiveService.enrichFlowKey(p.getRecords());   // D-DEC-185：档案列表端点统一挂归档流补充
+        archiveService.enrichFlowKey(p.getRecords());   // 补归档流号（列表端点统一挂）
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 

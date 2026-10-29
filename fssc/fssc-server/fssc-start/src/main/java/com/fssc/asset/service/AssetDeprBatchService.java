@@ -70,7 +70,7 @@ public class AssetDeprBatchService {
 
     /** 阶段一(生成)：统计待计提资产并生成 DRAFT 批单（不落账）。
      *  整改：候选集按<b>传入期间</b>筛（不再用真实时钟），传入期间同时作为批单期间，
-     *  二者同源——整改前 period 只是标签，筛资产恒用 {@code YearMonth.now()}，
+     *  二者同源——原先 period 只是标签，筛资产恒用 {@code YearMonth.now()}，
      *  传 2026-12 却按真实当月筛，期间语义倒置且本月已计提的资产当月永不可补提。 */
     @Transactional
     public AssetDeprBatch create(String period) {
@@ -78,9 +78,9 @@ public class AssetDeprBatchService {
         List<MdAsset> targets = eligibleAssets(ref);
         // 待计提数=0 显式拒绝，杜绝 0 资产空批（覆盖 /create、/submit、定时 Job 三入口）
         if (targets.isEmpty()) {
-            // 2026-10-19 G5 幕真跑发现：原提示只讲「判定规则」不讲「怎么办」，
-            // 而手册 G5.6（购置日期=2026-10-16）+ G5.7（计提期=2026-10）的组合按此规则必然失败，
-            // 新手只能反复试。此处补两类成因的计数与可执行出路，避免把规则当故障。
+            // 原提示只讲「判定规则」不讲「怎么办」，手册 G5.6 与 G5.7 那样的组合按此规则
+            // 必然被拒，新手只能反复试。下面补两类成因的计数与可执行出路，
+            // 避免把规则当故障。
             throw new BizException(ErrorCode.PARAM_INVALID, "计提期间 " + ref + " 无待计提资产（待计提数=0），不允许生成折旧批单"
                     + "。判定规则：该期间已计提（最后计提日期不早于 " + ref.atDay(1) + "）、或该期间及之后才购置的资产不计入"
                     + "（当月购置当月不提折旧，会计惯例）。"
@@ -168,13 +168,13 @@ public class AssetDeprBatchService {
         YearMonth ref = parsePeriod(batch.getPeriod());
         LocalDate monthStart = ref.atDay(1);
         String period = ref.toString();
-        // 落账阶段同样以<b>批单期间</b>为唯一规则筛候选（整改前此处再取一次真实当月，
-        // 跨零点执行时批单期间与实际计提期间会劈叉——第二轮真跑已实测到该改判）
+        // 落账阶段同样以<b>批单期间</b>为唯一规则筛候选（原先此处再取一次真实当月，
+        // 跨零点执行时批单期间与实际计提期间会劈叉）
         List<MdAsset> targets = eligibleAssets(ref);
         // 写明细前置校验——批头行必须真实存在。require() 虽已在入口查过批单，但本方法随后要写
         // md_asset_depr_detail（该表 batch_id 可空且<b>无外键约束</b>，information_schema 已核实），
-        // 一旦批头在途消失（历史上 /清理脚本 TRUNCATE asset_depr_batch 而不清子表，
-        // 实测留下指向不存在批次 18 的孤儿明细），写出来的就是无法回溯的半截批次。此处 fail-closed。
+        // 一旦批头在途消失（清理脚本会 TRUNCATE asset_depr_batch 而不清子表，
+        // 留下指向不存在批次的孤儿明细），写出来的就是无法回溯的半截批次。此处 fail-closed。
         assertHeaderPresent(batchId);
         List<String> executed = new ArrayList<>();
         int count = 0;
@@ -318,7 +318,7 @@ public class AssetDeprBatchService {
 
     /** 计提一个月折旧：累加累计折旧（封顶应计折旧额）、回写净值、更新 lastDeprDate、状态转在用。
      *  同时写入折旧明细记录(md_asset_depr_detail)。
-     *  计提日期规则改为<b>所属期间月末</b>（整改前写 {@code LocalDate.now()}）——
+     *  计提日期规则改为<b>所属期间月末</b>（原先写 {@code LocalDate.now()}）——
      *  跨月补提时把"今天"当 last_depr_date 会把该资产在后续期间的候选集里永久挤掉
      *  （下一期间月首 &lt;= lastDeprDate 即被筛除），补提与重跑因此不可达。 */
     private AssetDeprDetail applyDepr(MdAsset a, LocalDate monthStart, Long batchId, String period) {
@@ -383,11 +383,11 @@ public class AssetDeprBatchService {
     /**
      * 批头存在性断言（fail-closed）：折旧计提明细只允许写在真实存在的批单下。
      *
-     * <p>取证结论：本仓唯一的明细写点是 {@link #applyDepr}（batch_id 取自批单主键），
+     * <p>本仓唯一的明细写点是 {@link #applyDepr}（batch_id 取自批单主键），
      * 「头行 0 行 + 明细指向不存在批次」并非代码造出的半截批次，而是外部清理脚本
      * （{@code fssc/sql/V9.9.9_cleanup_garbage_data.sql:161}、{@code V9.9.12_cleanup_after_wf_refactor.sql:265}
      * 都 {@code TRUNCATE TABLE asset_depr_batch} 而不清 {@code md_asset_depr_detail}）
-     * 加无外键约束共同造成的孤儿（2026-09-29 备份实测：批头空表，明细 id=47 仍挂 batch_id=18）。
+     * 加无外键约束共同造成的孤儿（批头已是空表，明细仍挂着不存在的批次）。
      * 代码侧自此把不变式写死：<b>写明细前批头查不到 ⇒ 整单抛错回滚</b>，孤儿不再可能由本域产生。
      */
     private void assertHeaderPresent(Long batchId) {

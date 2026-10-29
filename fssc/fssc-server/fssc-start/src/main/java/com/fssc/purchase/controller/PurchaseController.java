@@ -110,7 +110,7 @@ public class PurchaseController {
     }
 
     /**
-     * 最终状态机分治·乙（X-20 裁定）：终止采购订单＝人工决策，故留显式入口。
+     * 最终状态机分治：终止采购订单＝人工决策，故留显式入口。
      * POST /api/tenant/purchase/order/{id}/terminate，body {reason: string}。
      * 与 /order/void 的分工：作废处理「无下游动作」的单，终止处理「已收货/已挂付款但不再履约」的单；
      * 两者同落既有最终状态 VOID。鉴权走写专码 po:order:update（写读分面治理规则，不复用 list 码）。
@@ -127,7 +127,7 @@ public class PurchaseController {
     }
 
     /**
-     * 最终状态机分治·乙（X-20 裁定）：归档采购订单（CLOSED → ARCHIVED）＝人工结案判断，
+     * 最终状态机分治：归档采购订单（CLOSED → ARCHIVED）＝人工结案判断，
      * 没有累计量判据可给批处理用（要的是「这批单可以结案」的决定），故留显式入口＋前端按钮。
      * POST /api/tenant/purchase/order/{id}/archive；鉴权写专码 po:order:update。
      */
@@ -140,7 +140,7 @@ public class PurchaseController {
     }
 
     // 收货单
-    /** @param poId 可选：按采购订单收口候选集（付款勾稽「手工关联收货单」必传，否则会拿到全租户收货单） */
+    /** @param poId 可选：按采购订单限定候选集（付款勾稽「手工关联收货单」必传，否则会拿到全租户收货单） */
     @RequiresPerm("po:receipt:list")
     @GetMapping("/receipt/page")
     public Result<PageResult<PoReceipt>> receiptPage(@RequestParam(defaultValue = "1") long pageNum,

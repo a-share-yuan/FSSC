@@ -54,7 +54,7 @@ public class TrCreditBill implements Serializable {
     private String procInstId;
     /** 归属公司（法人主体） */
     private Long companyId;
-    /** 登记人（D-DEC-298/420 补列；此前本表无提交人列 ⇒ deny_self 与自审回避只能回落实例发起人） */
+    /** 登记人（补列；本表没有提交人列的话，deny_self 与自审回避只能回落实例发起人） */
     @TableField(fill = FieldFill.INSERT)
     private Long createBy;
 

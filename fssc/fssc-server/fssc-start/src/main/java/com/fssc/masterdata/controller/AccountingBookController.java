@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 多账簿 / 多准则 / 多本位币 对外接口（V1.4.87，闭环差距③）。
+ * 多账簿 / 多准则 / 多本位币 对外接口（闭环差距③）。
  *
  * <p>路径 {@code /api/tenant/masterdata/book/**}。
  */
@@ -29,7 +29,7 @@ public class AccountingBookController {
 
     private final AccountingBookService bookService;
 
-    // ==================== 基础配置 ====================
+    // 基础配置
 
     /** 会计准则列表 */
     @GetMapping("/standard/list")
@@ -43,7 +43,7 @@ public class AccountingBookController {
         return Result.success(bookService.listCurrencies());
     }
 
-    // ==================== 账簿 ====================
+    // 账簿
 
     /** 账簿列表（可按年度/类型过滤） */
     @GetMapping("/list")
@@ -80,7 +80,7 @@ public class AccountingBookController {
         return Result.success(bookService.createBook(book));
     }
 
-    // ==================== 科目映射 ====================
+    // 科目映射
 
     /** 取账簿科目映射（key=本准则科目ID，value=通用科目ID） */
     @GetMapping("/{bookId}/subject-map")

@@ -10,7 +10,7 @@ export default [
   { path: 'apflow/ap-month-close', component: () => import('../../views/flow/CloseWorkbench.vue'), meta: { title: '统一关账工作台' } },
   { path: 'arflow/billing', component: () => import('../../views/flow/ArBillingBoard.vue'), meta: { title: '开票链工作台' } },
   { path: 'arflow/claims', component: () => import('../../views/flow/ArClaimBoard.vue'), meta: { title: '应收服务申请' } },
-  // 蓝图缺口落地（核对报告 P0~P2）
+  // 蓝图缺口落地
   { path: 'arflow/writeoff', component: () => import('../../views/flow/ArWriteoffBoard.vue'), meta: { title: '核销工作台' } },
   { path: 'arflow/notes', component: () => import('../../views/flow/ArNoteBoard.vue'), meta: { title: '票据管理' } },
   { path: 'arflow/bad-debt', component: () => import('../../views/flow/ArBadDebtBoard.vue'), meta: { title: '坏账管理' } },
@@ -22,6 +22,6 @@ export default [
   // 独立于 apflow/arflow：两个域的岗都要用，故不按域归属路径，菜单由 sys_menu 种子决定挂点。
   { path: 'bcp-objection', component: () => import('../../views/flow/BcpObjectionBoard.vue'),
     meta: { title: 'BCP异议审核', perms: ['bcp:objection:list'] } },
-  // 后端 /api/tenant/wf/timeout/** 三端点早有、界面无；path 与测试手册写的默认处理地址一致
+  // 后端 /api/tenant/wf/timeout/** 三端点早有、界面无；path 与测试手册写的兜底地址一致
   { path: 'wf/timeout/stats', component: () => import('../../views/flow/WfTimeoutStatsBoard.vue'), meta: { title: '超时升级统计' } },
 ]

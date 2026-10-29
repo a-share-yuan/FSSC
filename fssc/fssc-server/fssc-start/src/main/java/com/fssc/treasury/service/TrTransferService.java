@@ -36,7 +36,7 @@ import java.util.List;
 /**
  * 资金调拨服务。
  * create(草稿 DRAFT) -> APPROVED 审批 -> execute 执行落银行账户余额(PAID)。
- * P5：调拨单创建即发起 TR_TRANSFER 资金上存/调拨审批流。
+ * 调拨单创建即发起 TR_TRANSFER 资金上存/调拨审批流。
  */
 @Slf4j
 @Service
@@ -69,8 +69,8 @@ public class TrTransferService {
             throw new BizException(ErrorCode.PARAM_INVALID, "调拨金额必须大于 0");
         }
         if (transfer.getStatus() == null) transfer.setStatus("DRAFT");
-        // 整改(20260917, DEV-008/VER-016)：创建即生成单号（口径：单据创建即有业务主键），
-        // 此前 transfer_no 恒为空导致 wf_instance.biz_no 无法回写。
+        // 创建即生成单号（口径：单据创建即有业务主键），
+        // 否则 transfer_no 恒为空，wf_instance.biz_no 也就无法回写。
         if (!StringUtils.hasText(transfer.getTransferNo())) {
             String date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
             long seq = mapper.selectCount(new LambdaQueryWrapper<TrTransfer>()
@@ -80,13 +80,13 @@ public class TrTransferService {
         transfer.setId(null);
         transfer.setTenantId(TenantContext.getTenantId());
         mapper.insert(transfer);
-        // P5：调拨单创建即发起 TR_TRANSFER 资金上存/调拨审批流（出纳经办→资金岗复核→财务经理/财务总监阈值审批）
+        // 调拨单创建即发起 TR_TRANSFER 资金上存/调拨审批流（出纳经办→资金岗复核→财务经理/财务总监阈值审批）
         try {
             wfEngineFacade.start("TR_TRANSFER", transfer.getId(), userId(),
                     "资金调拨-" + transfer.getId(), transfer.getAmount());
         } catch (Exception ex) {
             log.error("资金调拨单 {} 发起调拨审批失败: {}", transfer.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
         return transfer.getId();
     }
@@ -97,8 +97,8 @@ public class TrTransferService {
     }
 
     /**
-     * 批次1：草稿/被驳回调拨单重新提交审批。驳回侧 TreasuryBizAction 保持 DRAFT「待重提」，
-     * 但此前无任何 submit 端点（唯一出口是 approve 旁路）——本方法即正规重提通道。
+     * 草稿/被驳回调拨单重新提交审批。驳回侧 TreasuryBizAction 保持 DRAFT「待重提」，
+     * 但若没有 submit 端点（唯一出口是 approve 旁路），重提就只能绕道；本方法即正规通道。
      *
      * @param flowType TR_TRANSFER（调拨，默认）/ TR_UPLOAD（上存）
      */
@@ -119,7 +119,7 @@ public class TrTransferService {
                     t.getAmount());
         } catch (Exception ex) {
             log.error("资金调拨单 {} 重新发起审批失败: {}", id, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡
+            throw ex;  // 流程发起失败必须冒泡
         }
     }
 
@@ -144,7 +144,7 @@ public class TrTransferService {
                     "资金上存-" + transfer.getId(), transfer.getAmount());
         } catch (Exception ex) {
             log.error("资金上存单 {} 发起上存审批失败: {}", transfer.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
         return transfer.getId();
     }

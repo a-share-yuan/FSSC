@@ -17,12 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 冷热归档运维入口（2026-10-17 新增）。
+ * 冷热归档运维入口。
  *
  * <p><b>为什么补这个口</b>：归档逻辑原本只有定时任务 {@code ColdArchiveJob} 触发，
  * 导致两个现实问题——① 运维无法在不等待调度周期的前提下验证归档链是否真的能跑；
  * ② {@code archive.enabled} 默认关，且无「现在会搬哪些单」的预演能力，
- * 真要开归档只能盲开。本 Controller 补齐 <b>预演（dry-run，只 SELECT COUNT）</b> 与
+ * 真要开归档只能盲开。本 Controller 补齐 预演（dry-run，只 SELECT COUNT） 与
  * <b>手动执行</b> 两个动作。</p>
  *
  * <p><b>危险动作提示</b>：{@code /run} 是<b>单向</b>的——归档把单据从热表整行搬进
@@ -38,7 +38,7 @@ public class ColdArchiveController {
     private final ColdArchiveService coldArchiveService;
 
     /**
-     * 预演：按当前配置统计「若现在执行会搬多少张」，<b>只 SELECT，不改任何数据</b>。
+     * 预演：按当前配置统计「若现在执行会搬多少张」，只 SELECT，不改任何数据。
      * 返回逐租户的 enabled / coldMonths / count，便于先判断开关与阈值是否配置到位。
      */
     @RequiresPerm("system:archive:dry-run")

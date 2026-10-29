@@ -27,7 +27,7 @@ import { computed } from 'vue'
 import BillDetailPanel from '../bill/BillDetailPanel.vue'
 
 /**
- * 审批工作台「去处理」直达的单据详情抽屉（合规整改 ）。
+ * 审批工作台「去处理」直达的单据详情抽屉（合规整改）。
  *
  * 原实现把审批人送到业务模块的「发起单据」页（`/expense` → 重定向 `/expense/claim` 新建表单），
  * 既没有查询也没有详情，审批人看不到附件、OCR 结果与审批历史 —— 形成实质「盲审」。

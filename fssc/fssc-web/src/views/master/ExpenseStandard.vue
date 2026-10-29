@@ -139,7 +139,7 @@
 
 <script setup>
 /**
- * 报销标准专属页(41号审查 P1-8 主数据深化第一批)
+ * 报销标准专属页(41号审查 主数据深化第一批)
  * 三维标准表:费用类型 × 岗位职级区间 × 城市等级 + 生效期/失效期 + 优先级 + 控制方式(提示/硬控),
  * 替代原 MasterConfigTable 通用 4 列表;失效标准自动着色标注。
  */
@@ -152,7 +152,7 @@ import SkeletonList from '../../components/SkeletonList.vue'
 
 const CITY_LEVELS = { CITY_1: '一线城市', CITY_2: '二线城市', CITY_3: '三线及以下', ABROAD_1: '海外一类', ABROAD_2: '海外二类' }
 const STD_TYPES = { DAY: '每天限额', TIMES: '每次限额', MONTH: '每月限额', MEAL: '餐补/次', TRANSPORT: '交通/次' }
-// 库内实值有两套码：种子写 HARD，界面单选写 BLOCK，语义同为「超限拦截」——数据侧规则不一致已登记
+// 库内实值有两套码：种子写 HARD，界面单选写 BLOCK，语义同为「超限拦截」——数据侧规则不一致
 const CONTROL_TEXT = { WARN: '提示', BLOCK: '硬控', HARD: '硬控' }
 
 const rows = ref([])

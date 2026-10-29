@@ -10,20 +10,25 @@
       </template>
 
       <el-tabs v-model="tab" @tab-change="onTabChange">
-        <!-- ---------------- 1. 批量移交 ---------------- -->
+        <!-- 1. 批量移交 -->
         <el-tab-pane label="批量移交" name="execute">
           <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 12px"
-            title="「指定任务ID」与「原办理人」二选一：都不传则报错。操作人取当前登录用户；操作人即原办理人时走转办通道，否则走改派通道。" />
+            title="「指定任务」与「原办理人」二选一：都不选会报错。选定任务＝逐单移交；只选「原办理人」＝移交其名下全部在办任务。操作人取当前登录用户。" />
           <el-form ref="handoverFormRef" :model="form" :rules="formRules" label-width="130px" size="small" style="max-width: 620px">
             <el-form-item label="接收人" prop="toUserId">
-              <!-- P0 修复（2026-10-21）：默认只加载同公司人员 -->
+              <!-- 默认只加载同公司人员 -->
               <UserSelect v-model="form.toUserId" scope="same-company" placeholder="请选择接手人" />
             </el-form-item>
             <el-form-item label="原办理人">
               <UserSelect v-model="form.fromUserId" scope="same-company" placeholder="按其在办任务批量移交（可选）" />
             </el-form-item>
-            <el-form-item label="指定任务ID">
-              <el-input v-model="form.taskIdsText" type="textarea" :rows="3" placeholder="Flowable taskId，逗号/空格/换行分隔；填写后忽略「原办理人」" />
+            <el-form-item label="指定任务">
+              <el-select v-model="form.taskIds" multiple filterable remote reserve-keyword clearable
+                         :remote-method="searchTasks" :loading="taskLoading"
+                         :placeholder="form.fromUserId ? '不选则移交该办理人全部在办任务' : '按单号/标题搜索在办任务（可多选）'"
+                         style="width: 100%">
+                <el-option v-for="t in taskOptions" :key="t.taskId" :label="taskLabel(t)" :value="t.taskId" />
+              </el-select>
             </el-form-item>
             <el-form-item label="移交原因" prop="reason">
               <el-input v-model="form.reason" placeholder="离职 / 换岗 / 工作交接等" />
@@ -49,7 +54,7 @@
           </el-table>
         </el-tab-pane>
 
-        <!-- ---------------- 2. 移交日志 ---------------- -->
+        <!-- 2. 移交日志 -->
         <el-tab-pane label="移交日志" name="log">
           <el-form :inline="true" size="small" style="margin-bottom: 10px">
             <el-form-item label="原办理人">
@@ -79,9 +84,9 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { wfOpsApi } from '../../api'
+import { wfOpsApi, flowApi } from '../../api'
 import TablePager from '../../components/common/TablePager.vue'
 import { useTablePager } from '../../composables/useTablePager'
 import { formatDateTime } from '@/utils/format'
@@ -96,7 +101,7 @@ const tab = ref('execute')
 const loadedTabs = new Set()
 
 const handoverFormRef = ref(null)
-const form = reactive({ toUserId: null, fromUserId: null, taskIdsText: '', reason: '', remark: '' })
+const form = reactive({ toUserId: null, fromUserId: null, taskIds: [], reason: '', remark: '' })
 const formRules = reactive({
   toUserId: commonRules.select('请选择接收人'),
   reason: commonRules.required('请输入移交原因'),
@@ -104,18 +109,31 @@ const formRules = reactive({
 const execLoading = ref(false)
 const execResult = ref(null)
 
-function parseTaskIds(text) {
-  return String(text || '')
-    .split(/[\s,，;；]+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
+/** 在办任务候选（单号/标题远程检索）：选定即按该任务移交给接收人 */
+const taskOptions = ref([])
+const taskLoading = ref(false)
+async function searchTasks(keyword) {
+  taskLoading.value = true
+  try {
+    const r = await flowApi.taskPage({
+      pageNum: 1, pageSize: 20, status: 'PENDING',
+      assigneeId: form.fromUserId || undefined,
+      keyword: keyword || undefined,
+    })
+    taskOptions.value = r?.list || []
+  } catch { taskOptions.value = [] } finally { taskLoading.value = false }
 }
+function taskLabel(t) {
+  return [t.bizNo || t.title || '', t.nodeName, t.assigneeName].filter(Boolean).join(' · ') || t.taskId
+}
+// 换了原办理人，之前挑的任务已不属于他，清空重拉
+watch(() => form.fromUserId, () => { form.taskIds = []; searchTasks('') })
 
 async function doExecute() {
   if (!(await validateForms([handoverFormRef]))) return
-  const taskIds = parseTaskIds(form.taskIdsText)
+  const taskIds = form.taskIds || []
   if (!taskIds.length && !form.fromUserId) {
-    ElMessage.warning('请填写「指定任务ID」或选择「原办理人」之一')
+    ElMessage.warning('请选择「指定任务」或「原办理人」之一')
     return
   }
   execLoading.value = true
@@ -155,7 +173,7 @@ function onTabChange(name) {
   if (name === 'log') loadLog()
 }
 
-onMounted(() => { loadedTabs.add('execute') })
+onMounted(() => { loadedTabs.add('execute'); searchTasks('') })
 </script>
 
 <style scoped>

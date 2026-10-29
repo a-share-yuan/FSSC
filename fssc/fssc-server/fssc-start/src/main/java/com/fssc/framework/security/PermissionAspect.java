@@ -67,10 +67,10 @@ public class PermissionAspect {
                 throw new BizException(ErrorCode.PERMISSION_DENIED,
                         "缺少权限：" + String.join(" 或 ", need));
             }
-            // B 项：运行时默认处理 —— 持有某权限码时，必须同时持有其前置权限码
+            // B 项：运行时兜底 —— 持有某权限码时，必须同时持有其前置权限码
             // （通用形态：查看是其余权限的前置。规则见 PermDependency 类注释）。
             // 为什么要放进切面：PermDependency.assertGrantClosure 只能在「角色授权保存期」拦，
-            // 拦不住**历史**授权（缺陷前授的、或直接写库的）；此前 assertHolds 只挂在
+            // 拦不住历史授权（缺陷前授的、或直接写库的）；assertHolds 只挂在
             // ArchiveAccessService 一处，导致「op:bank:import 却没有 op:bank:list」这类
             // 历史错配在运行期照样放行 —— 银行流水导入功能因此在 UI 上无人可用。
             // 多码 OR 场景：逐个已持有的码做依赖校验（只校验实际持有的那一个）。

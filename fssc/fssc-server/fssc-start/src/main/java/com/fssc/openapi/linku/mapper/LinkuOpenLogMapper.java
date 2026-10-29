@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  *
  * <p>与既有回调复用同一张表。此处刻意<b>不使用</b> MP 实体（{@code LinkuSyncLog}），
  * 而是显式 SQL：开放接口需要写入可选的 {@code idempotency_key} 列，
- * 而该列为 P1 新增列，在未执行 DDL 的库里不存在 —— 显式 SQL 才能在列缺失时降级
+ * 而该列是不久前新增的，在未执行 DDL 的库里不存在 —— 显式 SQL 才能在列缺失时降级
  * （见 {@link #insertWithoutKey}），实体方式会因列固定而整体写入失败。</p>
  *
  * <p>{@code linku_sync_log} 无 {@code tenant_id} 列，已在

@@ -123,7 +123,7 @@ public class ArWriteoffService {
         }
         q.gt(RcReceivable::getRemainAmount, BigDecimal.ZERO);
         q.ne(RcReceivable::getStatus, "DONE");
-        // （与 RcReceiptService 同一处规则，2026-10-15 实测）：只排 DONE ⇒ 未确认（NONE，
+        // （与 RcReceiptService 同一处规则）：只排 DONE ⇒ 未确认（NONE，
         // 含流程卡死件）与被驳回（REJECTED）的应收仍会进自动核销候选。
         q.notIn(RcReceivable::getStatus, "NONE", "REJECTED");
         q.orderByAsc(RcReceivable::getDueDate).orderByAsc(RcReceivable::getId);
@@ -247,7 +247,7 @@ public class ArWriteoffService {
             RcReceipt receipt = createAndApplyReceipt(fund, effective);
             rec.setInvoiceNos(invoiceNosOf(effective));
             rec.setReceiptNo(receipt.getBillNo());
-            // X-28 甲：出证前已先立到账载体（上面的 rc_receipt 核销单），且对冲环节＝借 2202／贷 1122 不动银行存款，
+            // 出证前已先立到账载体（上面的 rc_receipt 核销单），且对冲环节＝借 2202／贷 1122 不动银行存款，
             // 不属"无到账凭空出核销凭证"那一族；借 1002 的收款核销环节校验在 VoucherService.generateCollectVoucher。
             rec.setVoucherNo(voucherService.generateOffsetVoucher(fund.getTenantId(), companyId(), amount,
                     customerName, rec.getRecordNo(), rec.getId()));

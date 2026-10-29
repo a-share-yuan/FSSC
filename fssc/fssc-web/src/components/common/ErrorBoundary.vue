@@ -43,8 +43,8 @@ const errorStack = ref('')
 const showDetail = ref(false)
 
 onErrorCaptured((err, instance, info) => {
-  // -03：一次崩溃通常连着抛多条错误（首错 → 组件卸载期的二次错误）。
-  // 原先每条都覆盖同一组 ref，留在「查看详情」里的往往是卸载期那条（实测 unregisterPane 读 undefined），
+  // 一次崩溃通常连着抛多条错误（首错 → 组件卸载期的二次错误）。
+  // 原先每条都覆盖同一组 ref，留在「查看详情」里的往往是卸载期那条（读的是已卸载的 pane），
   // 真实首错被掩盖、用户与开发都无从定位。现只登记首条，后续错误带生命周期标签追加进详情。
   const cause = err?.cause ? '\n原因链：' + String(err?.cause?.message || err?.cause) : ''
   if (hasError.value) {

@@ -13,8 +13,8 @@ import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.glex.entity.GlSalaryRun;
-import com.fssc.glex.entity.GlSalaryRunDetail;   // D-DEC-143：人员级薪酬明细载体
-import com.fssc.glex.mapper.GlSalaryRunDetailMapper;   // D-DEC-143
+import com.fssc.glex.entity.GlSalaryRunDetail;
+import com.fssc.glex.mapper.GlSalaryRunDetailMapper;
 import com.fssc.glex.mapper.GlSalaryRunMapper;
 import com.fssc.masterdata.entity.MdExpenseItem;
 import com.fssc.masterdata.mapper.MdExpenseItemMapper;
@@ -29,8 +29,8 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Collections;   // D-DEC-143：明细表未建时的空集返回
-import java.util.List;          // D-DEC-143
+import java.util.Collections;
+import java.util.List;
 
 /** 薪酬发放服务（gl_salary_run，按部门/期间计算应发、扣除与个税并发放）。 */
 @Slf4j
@@ -122,10 +122,9 @@ public class GlSalaryRunService {
         run.setTaxAmount(tax);
         run.setTotalAmount(total);
         run.setRunNo("SR" + period + String.format("%03d", countByPeriod(period) + 1));
-        // 核算＝提单，计提审批链此刻才起，写入数据库不得再是最终状态。
-        // 原实现在 insert 前置 PAID（证据 12-30:169，09:57:10 写入数据库即 PAID，发放流程 10:10:45 才起），
-        // 于是 8 节审批对单据零回写、账上"已付款"而发放凭证全无。
-        // 现由 GlBizAction 回写：计提链末节点通过 → POSTED（已入账·未发放），发放链末节点通过 → PAID。
+        // 核算＝提单，计提审批链此刻才起，落库时不能是最终状态。
+        // 写 PAID 会让 8 节审批对单据零回写、账上"已付款"而发放凭证全无。
+        // 由 GlBizAction 回写：计提链末节点通过 → POSTED（已入账·未发放），发放链末节点通过 → PAID。
         run.setPayStatus("APPROVING");
         if (run.getCompanyId() == null) {
             run.setCompanyId(orgGuard.currentCompany());
@@ -135,13 +134,13 @@ public class GlSalaryRunService {
         // 173：人工成本全程不进预算 ⇒ 超支无校验。计提即占用，
         // 放在起流之前、与核算同一事务：起流失败会连占用流水一起回滚，不留幽灵占用。
         occupyBudgetForRun(run);
-        // P6：薪酬计提即发起 GL_SALARY_PROV 薪酬计提审批流（拆分后：计提走 GL_SALARY_PROV，发放走 GL_SALARY_PAY）
+        // 薪酬计提即发起 GL_SALARY_PROV 薪酬计提审批流（拆分后：计提走 GL_SALARY_PROV，发放走 GL_SALARY_PAY）
         try {
             wfEngineFacade.start("GL_SALARY_PROV", run.getId(), userId(),
                     "薪酬计提-" + period, run.getTotalAmount());
         } catch (Exception ex) {
             log.error("薪酬计提 {} 发起发放审批失败: {}", run.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须抛出去，不能静默降级成没有流程的孤儿单
         }
         // 171：emp_count 是"人数 × 人均标准"的入参，不是从到人数据数出来的。
         // 保存处即做一致性记录，让"审批人审的是一个总数"在服务端日志里可见（只 WARN，不拦核算）。
@@ -187,19 +186,19 @@ public class GlSalaryRunService {
      * 薪酬计提占用预算（占用量＝应发工资总额，与计提凭证借 6602 同额）。
      * <p>失败/落空一律只记录不回滚核算：预算域目前<b>没有</b>薪酬明细行（bg_item 9 行里没有一条薪酬费用项，
      * md_item_budget_map 把 352 工资薪酬 指向不存在的预算明细 98887），此时 {@code BudgetService} 会打
-     * 「占用落空，不臆造科目」的 WARN。是否给薪酬单开预算线、超支是否硬拦＝人工裁决项（见交付报告）。</p>
+     * 「占用落空，不臆造科目」的 WARN。是否给薪酬单开预算线、超支是否硬拦＝待确认项（见交付报告）。</p>
      */
     private void occupyBudgetForRun(GlSalaryRun run) {
         try {
             Long expenseItemId = salaryBudgetExpenseItemId();
             if (expenseItemId == null) {
                 log.warn("薪酬预算科目口径未配置（sys_config 无 salary.budget.expense_item，费用项主数据也没有「工资薪酬」），" +
-                        "批次 {} 的占用将落空（D-DEC-145）", run.getRunNo());
+                        "批次 {} 的占用将落空", run.getRunNo());
             }
             budgetService.occupySalaryBudget(run.getId(), run.getRunNo(), expenseItemId,
                     run.getCompanyId(), run.getDeptId(), periodYear(run.getPeriod()), run.getSalaryAmount());
         } catch (Exception ex) {
-            log.error("薪酬批次 {} 预算占用异常（不阻断薪酬核算，D-DEC-145）: {}",
+            log.error("薪酬批次 {} 预算占用异常（不阻断薪酬核算）: {}",
                     run.getRunNo(), ex.getMessage(), ex);
         }
     }
@@ -245,10 +244,9 @@ public class GlSalaryRunService {
     }
 
     /**
-     * 发放：发起 GL_SALARY_PAY 薪酬发放审批流（补链：此前发放无审批入口）。
+     * 发放：发起 GL_SALARY_PAY 薪酬发放审批流。
      *
-     * <p>原实现在发起瞬间即 {@code payStatus=PAID}，出纳点"发放"就等于"已付款"，
-     * 8 节发放审批对单据零回写。现改为发起置 APPROVING（审批中·未付款），
+     * <p>发起时置 APPROVING（审批中·未付款），不能置 PAID——出纳点"发放"不等于"已付款"。
      * PAID 由 {@code GlBizAction} 在末节点通过且发放凭证出证成功后回写；被驳回到计提办结态 POSTED。
      * <p>校验：只有计提链已办结（POSTED=已入账 / APPROVED=已审批未出证）的批次才允许发起发放；
      * 审批中（APPROVING）拦重复发起，已付款（PAID）/已驳回（REJECTED）拦重放。
@@ -272,14 +270,14 @@ public class GlSalaryRunService {
                     "薪酬计提链尚未审批通过（当前状态 " + st + "），不可发起发放——"
                             + "计提驳回（REJECTED）的批次请重新核算生成新批次");
         }
-        // 171：发放发起＝"账要变成钱"的最后一道人工可见点，此刻再核一次
+        // 发放发起＝"账要变成钱"的最后一道人工可见点，此刻再核一次
         // emp_count 与到人明细是否对得上。取 WARN 而非 fail-closed：明细表 DDL 尚是注释态、
-        // 且现库无行级来源可回填，硬拦会把所有薪酬批次（含历史 3 个）一起冻结；
-        // "到人数据到底是不是发薪依据"＝人工裁决项，见交付报告。
+        // 且现库无行级来源可回填，硬拦会把所有薪酬批次一起冻结；
+        // "到人数据到底是不是发薪依据"＝待确认项，见交付报告。
         checkEmpCountConsistency(run);
         // 发起≠付款。PAID 由发放审批末节点回写（GlBizAction.handleSalary）。
         // 置位必须在起流之前：事件总线是同步派发（SimpleApplicationEventMulticaster 无 taskExecutor，
-        // 见 WfEngineFacade:226 publishEvent 在 Flowable PROCESS_COMPLETED 监听器内），
+        // 见 WfEngineFacade 的 publishEvent 在 Flowable PROCESS_COMPLETED 监听器内），
         // 若流程在 start() 调用栈里即办结（首节点自动跳过/零节点直达结束），
         // 回写会先落 PAID/REJECTED，再被这里的 APPROVING 覆盖成永久在途——
         // 而上面的校验又拦掉 APPROVING 重发，等于批次卡死。与 calculateRun/GeneralJournal 同序。
@@ -287,14 +285,14 @@ public class GlSalaryRunService {
         upd.setId(id);
         upd.setPayStatus("APPROVING");
         mapper.updateById(upd);
-        // P6-补链：薪酬发放即发起 GL_SALARY_PAY 发放审批流（计提 GL_SALARY_PROV 已接线，发放此前缺失）
+        // 薪酬发放即发起 GL_SALARY_PAY 发放审批流（计提 GL_SALARY_PROV 已接线，发放这条腿同样要起流）
         try {
             wfEngineFacade.start("GL_SALARY_PAY", run.getId(), userId(),
                     "薪酬发放-" + run.getPeriod() + "-" + (run.getRunNo() == null ? run.getId() : run.getRunNo()),
                     nvl(run.getTotalAmount()));
         } catch (Exception ex) {
             log.error("薪酬发放 {} 发起审批失败: {}", run.getRunNo(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单（异常回滚，状态一并撤销）
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单（异常回滚，状态一并撤销）
         }
     }
 
@@ -323,7 +321,7 @@ public class GlSalaryRunService {
      * 171：读某薪酬批次的人员级工资明细。<b>只读、fail-soft</b>。
      *
      * <p>{@code gl_salary_run_detail} 的建表 DDL 以注释态交付（见
-     * {@link GlSalaryRunDetail} 类注释）且未经人工裁决执行，
+     * {@link GlSalaryRunDetail} 类注释）且未经产品确认执行，
      * 现网此表不存在——读它必然抛 SQL 语法错。故这里吞掉异常返回空集：
      * "明细载体还没建"不能演化成"薪酬页面 500"，也不能演化成"薪酬核算失败"。
      * 界面按空集显示"暂无人员级明细"即可，语义与真无明细一致（现库确实无到人数据）。</p>
@@ -341,8 +339,8 @@ public class GlSalaryRunService {
                             .orderByAsc(GlSalaryRunDetail::getId));
             return rows == null ? Collections.emptyList() : rows;
         } catch (Exception ex) {
-            log.warn("D-DEC-143：批次 {} 的人员级薪酬明细读取失败"
-                            + "（gl_salary_run_detail 建表 DDL 尚为注释态、未经裁决执行，现网无此表）：{}",
+            log.warn("批次 {} 的人员级薪酬明细读取失败"
+                            + "（gl_salary_run_detail 建表 DDL 尚为注释态、未经产品确认执行，现网无此表）：{}",
                     runId, rootMsg(ex));
             return Collections.emptyList();
         }
@@ -351,12 +349,12 @@ public class GlSalaryRunService {
     /**
      * 171：{@code gl_salary_run.emp_count} 与人员级明细条数的一致性记录。
      *
-     * <p><b>为什么是 WARN 而不是 fail-closed</b>（裁决点，已按"语义拿不准走 WARN＋报告"处置）：
+     * <p><b>为什么是 WARN 而不是 fail-closed</b>（判断点，已按"语义拿不准走 WARN＋报告"处置）：
      * <ol>
      *   <li>明细表 DDL 未执行，任何拦截都等于把整个薪酬模块锁死；</li>
      *   <li>现库没有可回填的行级来源（全库无员工薪酬主数据，{@code md_employee_level} 只是职级字典），
      *       建表后历史批次仍是 0 行，fail-closed 会让历史 3 个批次永远发不出去；</li>
-     *   <li>"emp_count 到底必须等于明细行数，还是允许批次级批计规则与到人台账并存"属规则裁决，
+     *   <li>"emp_count 到底必须等于明细行数，还是允许批次级批计规则与到人台账并存"属规则待定，
      *       不由缺陷批次单方面定死。</li>
      * </ol>
      * 三种记录分档写日志，复核时可直接 grep {@code } 统计"无到人支撑的发薪次数"：
@@ -376,29 +374,29 @@ public class GlSalaryRunService {
             counted = salaryRunDetailMapper.selectCount(new LambdaQueryWrapper<GlSalaryRunDetail>()
                     .eq(GlSalaryRunDetail::getRunId, run.getId()));
         } catch (Exception ex) {
-            log.warn("D-DEC-143：薪酬批次 {}（id={}）声明发放 {} 人，但 emp_count 无法核验——"
-                            + "人员级明细表 gl_salary_run_detail 尚未建立（建表 DDL 以注释态交付，待人工裁决执行）；"
+            log.warn("薪酬批次 {}（id={}）声明发放 {} 人，但 emp_count 无法核验——"
+                            + "人员级明细表 gl_salary_run_detail 尚未建立（建表 DDL 以注释态交付，待产品确认后执行）；"
                             + "本批次的应发/扣除/社保/个税均由「人数 × sys_config 人均标准」算出，无到人支撑。原因：{}",
                     run.getRunNo(), run.getId(), empCount, rootMsg(ex));
             return;
         }
         long detailCount = counted == null ? 0L : counted;
         if (empCount == null) {
-            log.warn("D-DEC-143：薪酬批次 {}（id={}）emp_count 为空，人员级明细 {} 行，数量无从核对",
+            log.warn("薪酬批次 {}（id={}）emp_count 为空，人员级明细 {} 行，数量无从核对",
                     run.getRunNo(), run.getId(), detailCount);
         } else if (detailCount == 0L) {
-            log.warn("D-DEC-143：薪酬批次 {}（id={}）声明发放 {} 人，人员级明细 0 行——"
+            log.warn("薪酬批次 {}（id={}）声明发放 {} 人，人员级明细 0 行——"
                             + "审批人审的是一个总数（应发={} 其他扣除={} 社保={} 个税={}），核不到人；"
                             + "明细表已建但该批次无到人来源，回填须真实薪酬台账，不以人均标准反推造数",
                     run.getRunNo(), run.getId(), empCount,
                     run.getSalaryAmount(), run.getDeductionAmount(),
                     run.getSocialSecurityAmount(), run.getTaxAmount());
         } else if (detailCount != empCount.longValue()) {
-            log.warn("D-DEC-143：薪酬批次 {}（id={}）emp_count={} 与人员级明细 {} 行不一致，差 {} 人——"
+            log.warn("薪酬批次 {}（id={}）emp_count={} 与人员级明细 {} 行不一致，差 {} 人——"
                             + "发薪前须核到多出/缺少的是哪几个员工",
                     run.getRunNo(), run.getId(), empCount, detailCount, empCount.longValue() - detailCount);
         } else {
-            log.info("D-DEC-143：薪酬批次 {}（id={}）emp_count={} 与人员级明细 {} 行一致，发放人数有到人支撑",
+            log.info("薪酬批次 {}（id={}）emp_count={} 与人员级明细 {} 行一致，发放人数有到人支撑",
                     run.getRunNo(), run.getId(), empCount, detailCount);
         }
     }

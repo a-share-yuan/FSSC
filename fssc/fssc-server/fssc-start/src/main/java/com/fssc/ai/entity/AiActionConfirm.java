@@ -11,10 +11,10 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 高风险动作确认票据（ai_action_confirm，P4"人工确认"的等数据实体）。
+ * 高风险动作确认票据（ai_action_confirm）。
  *
  * <p>语义＝作者案例里"飞书确认卡片"的内网等价物：一次性、绑定参数摘要
- * （参数哪怕改一个字段，摘要即不符，票据作废）、短 TTL、确认人必须是有权限的真人。
+ * 参数哪怕改一个字段，摘要即不符，票据作废、短 TTL、确认人必须是有权限的真人。
  * 申请人（AI 或代问的人）与确认人不得为同一账号。
  */
 @Data
@@ -38,7 +38,7 @@ public class AiActionConfirm {
     private String paramsDigest;
 
     /**
-     * 参数文本快照（D-N14，选项乙）：{@code params_digest} 只防篡改，人手读不出哈希背后的参数，
+     * 参数文本快照：{@code params_digest} 只防篡改，人手读不出哈希背后的参数，
      * 确认人等于"闭眼背书"。本列仅供人读（待确认队列回显），执行复核仍以 digest 为准；
      * 口令/令牌类字段落盘前打码。
      */

@@ -14,6 +14,7 @@ import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.sharing.entity.OpBankStatement;
 import com.fssc.receivable.entity.RcReceivable;
+import java.time.format.DateTimeFormatter;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,7 +29,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
-/** 银企直连对账（P2-1）。 */
+/** 银企直连对账。 */
 @RestController
 @RequestMapping("/api/tenant/bank/reconcile")
 @RequiredArgsConstructor
@@ -52,7 +53,7 @@ public class BankReconcileController {
     public Result<BankReconcileService.SheetResult> sheet(@RequestParam(required = false) Long bankAccountId,
                                                           @RequestParam(required = false) String month) {
         String m = (month == null || month.isBlank())
-                ? java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMM"))
+                ? LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"))
                 : month;
         return Result.success(reconcileService.sheet(bankAccountId, m));
     }
@@ -67,7 +68,7 @@ public class BankReconcileController {
         return Result.success(reconcileService.reconItems(bankAccountId, month, itemType));
     }
 
-    /** 自动勾对：返回本轮结果（勾对/未勾对条数与未勾对流水号，D-DEC-157） */
+    /** 自动勾对：返回本轮结果（勾对/未勾对条数与未勾对流水号） */
     @RequiresFeature("FSSC_BANK")
     @RequiresPerm("bank:reconcile:execute")  // D-G5-03 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "自动勾对")
@@ -86,7 +87,7 @@ public class BankReconcileController {
         return Result.success(null);
     }
 
-    // ---------------- P1-7 银企直连闭环 ----------------
+    // 银企直连闭环
 
     /** 银行流水分页查询 */
     @RequiresFeature("FSSC_BANK")
@@ -127,7 +128,7 @@ public class BankReconcileController {
     }
 
     /**
-     * D-G5-02：可认领应收单清单（<b>银行域专用</b>）。
+     * 可认领应收单清单（<b>银行域专用</b>）。
      *
      * <p>认领弹层原先借应收域的 {@code /api/tenant/receivable/page} 取清单，
      * 该端点要求 {@code receivable:list}（应收域）⇒ 纯银企对账岗
@@ -144,7 +145,7 @@ public class BankReconcileController {
         return Result.success(reconcileService.claimableReceivables(pageNum, pageSize, keyword));
     }
 
-    // ---------------- P1 剩余：余额快照（衔接未达账项调节表 / TR05） ----------------
+    // 余额快照（衔接未达账项调节表 / TR05）
 
     /** 保存账户余额快照（同一账户同一日期去重覆盖） */
     @RequiresFeature("FSSC_BANK")

@@ -134,12 +134,12 @@ public class TaxRefundService {
         u.setApplyTime(LocalDateTime.now());
         mapper.updateById(u);
         try {
-            // 批次3 R3-D：申请额=可退税额 taxAmount（GL_TAX_REFUND 当前无金额网关 ⇒ 只影响实例金额展示/统计，不改路由）
+            // 申请额=可退税额 taxAmount（GL_TAX_REFUND 当前无金额网关 ⇒ 只影响实例金额展示/统计，不改路由）
             wfEngineFacade.start("GL_TAX_REFUND", id, userId(),
                     "税务退税-" + t.getRefundType() + "-" + t.getPeriod(), t.getTaxAmount());
         } catch (Exception ex) {
             log.error("退税单 {} 发起审批失败: {}", t.getRefundNo(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须抛出去，不能静默降级成没有流程的孤儿单
         }
         // 审计记录：状态跃迁 DRAFT → APPLYING，并记录申请人与申请时间
         Map<String, Object> auditBefore = new LinkedHashMap<>();

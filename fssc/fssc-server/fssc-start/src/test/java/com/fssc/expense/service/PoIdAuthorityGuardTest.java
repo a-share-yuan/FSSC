@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * D-V4R-27：对公结算「采购订单」主键的落库与交叉校验口径。
+ * 对公结算「采购订单」主键的落库与交叉校验口径。
  *
  * <p>归因（读代码得出，非猜测）：CorpPay 的采购订单下拉把选中项主键写进
  * {@code bill.ext_json.poId}（v-model），而 {@code exp_bill.po_id} 列的取值源是<b>顶层</b>
@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>本类只走真实入口 {@code saveDraft}，断言的是 {@code expBillMapper.insert} 实收的那个 ExpBill
  * ＝真正会落库的值；反置形状均为「行为可观测」，不依赖反射读私有字段。
  */
-@DisplayName("D-V4R-27 采购订单主键落库与交叉校验")
+@DisplayName("采购订单主键落库与交叉校验")
 class PoIdAuthorityGuardTest {
 
     private static final String HONGYI_TRADE = "弘毅贸易有限公司";
@@ -144,7 +144,7 @@ class PoIdAuthorityGuardTest {
                 "文案须同时点出来往单位与采购订单两家，实际: " + e.getMessage());
         assertTrue(e.getMessage().contains("customer_id=46") && e.getMessage().contains("po_id=1"),
                 "文案须带上两个来源的 id 供定位，实际: " + e.getMessage());
-        // 改前此场景被整段跳过（顶层 poId 为空），今天实测「冲突被放过」正是这一条
+        // 改前此场景被整段跳过（顶层 poId 为空），「冲突被放过」正是这一条
         assertNothingWritten();
     }
 

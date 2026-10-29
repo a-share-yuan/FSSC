@@ -32,7 +32,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * 流程实例归档作业（G4 第 6 条「流程实例归档」，2026-09-24）。
+ * 流程实例归档作业（G4 第 6 条「流程实例归档」）。
  *
  * <p><b>为什么需要它</b>：单据侧早有冷热分离（{@code exp_bill*_cold}，见 {@code ColdArchiveService}），
  * 流程侧一直<b>没有</b>对应机制——{@code wf_instance / wf_task / wf_task_history} 只增不减，
@@ -42,9 +42,9 @@ import java.util.function.Supplier;
  * {@code end_time < now - N 个月}。N 取 {@code sys_config.wf.archive.months}，缺省 3、<b>硬钳 &le; 3</b>
  * （即使配了 6 也只当 3 用——上限是通行规则的强制项，不是建议项）。
  *
- * <p><b>两道校验（缺省即关，零行为变化）</b>：
+ * <p>两道校验（缺省即关，零行为变化）：
  * <ol>
- *   <li>{@code sys_config.wf.archive.enabled}，<b>缺省 0（fail-closed，默认关）</b>：未配置时本作业
+ *   <li>{@code sys_config.wf.archive.enabled}，缺省 0（fail-closed，默认关）：未配置时本作业
  *       一条都不搬，与上线前行为完全一致；</li>
  *   <li>{@code sys_config.wf.archive.batch.limit}（缺省 {@value #DEFAULT_BATCH_LIMIT}）：单次归档条数上限，
  *       避免一次性把在线表搬空导致下游查询/报表骤降。</li>
@@ -56,7 +56,7 @@ import java.util.function.Supplier;
  * <p><b>为什么不搬 {@code ACT_*}</b>：{@code ACT_*} 是 Flowable 的<b>引擎账</b>，它的保留与清理
  * 是引擎自己的生命周期——本仓已有 {@code WfHistoryArchiveService} 按周清理超期历史。把 {@code ACT_*}
  * 纳入本作业的事务边界会造成两套规则打架（例如引擎账先被引擎清掉、业务账再删时对不上），
- * 且引擎表的分区/外键关系不受我们控制。故本作业<b>只搬 wf_* 镜像表，绝不增删任何 ACT_* 行</b>。
+ * 且引擎表的分区/外键关系不受我们控制。故本作业只搬 wf_* 镜像表，绝不增删任何 ACT_* 行。
  *
  * <p><b>跨租户扫描</b>：本作业在调度线程运行（无租户上下文），所有 wf_* 查询一律包在
  * 冷表 {@code wf_*_cold} 未挂实体、不在 MyBatis-Plus 租户拦截器管辖内，其 SQL 走
@@ -204,7 +204,7 @@ public class WfInstanceArchiveJob {
         return resp;
     }
 
-    // ---------------- 内部实现 ----------------
+    // 内部实现
 
     /** 单实例搬移事务：冷表插入（子→头）后删在线（子→头）。任一 SQL 异常整实例回滚。 */
     private void archiveOne(long tenantId, WfInstance inst) {

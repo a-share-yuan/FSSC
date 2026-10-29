@@ -3,7 +3,9 @@
 
 package com.fssc.sharing.facade;
 
+import com.fssc.document.service.BillArchiveService;
 import com.fssc.framework.facade.event.BillTerminalEvent;
+import com.fssc.framework.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -27,7 +29,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Slf4j
 public class BillTerminalEventListener {
 
-    private final com.fssc.document.service.BillArchiveService billArchiveService;
+    private final BillArchiveService billArchiveService;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onBillTerminalEvent(BillTerminalEvent event) {
@@ -46,7 +48,7 @@ public class BillTerminalEventListener {
             if (tid == null) {
                 billArchiveService.eArchiveBill(event.getBillId());
             } else {
-                com.fssc.framework.tenant.TenantContext.callAs(tid,
+                TenantContext.callAs(tid,
                         () -> billArchiveService.eArchiveBill(event.getBillId()));
             }
         } catch (Exception e) {

@@ -30,11 +30,11 @@ public class ExpBill extends TenantAuditBase {
     private String title;
     /** 费用承担单位（四维度之一） */
     private Long companyId;
-    /** 结算(报销)单位：跨组织场景下与费用承担单位分离（P2 跨组织四维度） */
+    /** 结算(报销)单位：跨组织场景下与费用承担单位分离（跨组织四维度） */
     private Long settleCompanyId;
-    /** 支付单位：实际付款主体（P2 跨组织四维度） */
+    /** 支付单位：实际付款主体（跨组织四维度） */
     private Long payCompanyId;
-    /** 借款单位：跨组织借款时款项借入的公司（P2 #18 四分离·借款维，默认同费用承担单位） */
+    /** 借款单位：跨组织借款时款项借入的公司（#18 四分离·借款维，默认同费用承担单位） */
     private Long loanCompanyId;
     private Long deptId;
     private Long costCenterId;
@@ -42,13 +42,13 @@ public class ExpBill extends TenantAuditBase {
     private Long applyUserId;
     private String applyUserName;
     /**
-     * 代理人（代他人报销，代填单）。甲：本列此前全仓零生产端写入，
-     * 现由 ExpenseBillService 保存/提交环节显式落值——代理人恒等于填单登录人，且与报销人（apply_user_id）不同人。
+     * 代理人（代他人报销，代填单）。本列由 ExpenseBillService 保存/提交环节显式落值——
+     * 代理人恒等于填单登录人，且与报销人（apply_user_id）不同人。
      */
     private Long agentUserId;
-    /** 共享审核人（AUDIT 环节完成经办人，；此前实体无字段致列恒空） */
+    /** 共享审核人（AUDIT 环节完成经办人） */
     private Long auditUserId;
-    /** 收款人：代理报销场景下报销人≠收款人（张三填、李四报、赵五收），款项付给本字段（P2 代理报销） */
+    /** 收款人：代理报销场景下报销人≠收款人（张三填、李四报、赵五收），款项付给本字段 */
     private Long receiverUserId;
     private LocalDate applyDate;
     private Integer periodYear;
@@ -64,9 +64,9 @@ public class ExpBill extends TenantAuditBase {
     private BigDecimal netAmount;
     /** 审批核定金额（核定报销） */
     private BigDecimal approvedAmount;
-    /** 核定付款金额：≤核定报销，付款控制规则（P2 核定三层） */
+    /** 核定付款金额：≤核定报销，付款控制规则（核定三层） */
     private BigDecimal approvedPayAmount;
-    /** 核定退款金额：=核定报销 − 核定付款（P2 核定三层） */
+    /** 核定退款金额：=核定报销 − 核定付款（核定三层） */
     private BigDecimal approvedRefundAmount;
     /** 借款冲抵金额 */
     private BigDecimal offsetAmount;
@@ -116,7 +116,7 @@ public class ExpBill extends TenantAuditBase {
     private Long sourceBillId;
     /** 收款方名称（对公支付/付款单） */
     private String payeeName;
-    /** 收款对象：EMPLOYEE员工/SUPPLIER供应商/CUSTOMER客户——驱动收款账户必填校验（P2 防付错） */
+    /** 收款对象：EMPLOYEE员工/SUPPLIER供应商/CUSTOMER客户——驱动收款账户必填校验（防付错） */
     private String payTarget;
     /** 收款账号：按 payTarget 驱动必填（员工→个人卡，供应商/客户→对公卡） */
     private String payeeAccountNo;

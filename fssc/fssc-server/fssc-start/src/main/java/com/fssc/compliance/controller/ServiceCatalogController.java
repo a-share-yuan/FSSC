@@ -23,7 +23,7 @@ public class ServiceCatalogController {
 
     private final ServiceCatalogService serviceCatalogService;
 
-    // ==================== 服务目录 CRUD ====================
+    // 服务目录 CRUD
 
     @RequiresPerm("compliance:catalog:list")
     @GetMapping("/service-catalog")
@@ -69,7 +69,7 @@ public class ServiceCatalogController {
         return Result.success();
     }
 
-    // ==================== SLA 监控 ====================
+    // SLA 监控
 
     @RequiresPerm("compliance:sla:list")
     @GetMapping("/sla/monitor")
@@ -83,7 +83,7 @@ public class ServiceCatalogController {
         return Result.success(serviceCatalogService.slaStats());
     }
 
-    // ==================== 满意度调查 ====================
+    // 满意度调查
 
     @RequiresPerm("compliance:satisfaction:list")
     @GetMapping("/satisfaction")

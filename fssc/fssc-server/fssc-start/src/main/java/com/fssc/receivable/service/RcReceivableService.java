@@ -96,7 +96,7 @@ public class RcReceivableService {
      * 把审批流态投影到台账列（非表列，不改 status 名称表、不改状态机）。
      * <p>起因：应收单生成即起 OTC 收款审批流（见 {@link #createSingle}），但 {@code rc_receivable.status}
      * 是<b>收款规则</b>（NONE/PARTIAL/RECEIVED/DONE/OVERDUE），审批期间恒为 NONE，
-     * 界面直译"未开始"⇒ 操作人读成"流程没起"（2026-10-24 H3 实测，同一张单 wf_instance 已 APPROVED）。
+     * 界面直译"未开始"⇒ 操作人读成"流程没起"，而同一张单的 wf_instance 可能已经 APPROVED。
      * <p>为什么不加一个"审批中"单据态：全仓按 status 过滤的读取点（收款 FIFO 候选、账龄、
      * AR 对账圈单、银企勾稽）都要跟着改规则，漏一处就是账务错；投影一列的成本远低于此。
      * <p>批量取一次 wf_instance（bizType=RECEIVABLE），同单多条实例取最新一条（驳回后重提）。
@@ -137,7 +137,7 @@ public class RcReceivableService {
     @Transactional
     public Long createSingle(RcReceivable e) {
         orgGuard.assertCompanyAllowed(e.getCompanyId());
-        // 必填默认处理（治理批次 2B，规则 Q2）：单据号由 genBillNo 自动取号（Q1 人工只读，不校验），
+        // 必填兜底（治理批次 2B，规则 Q2）：单据号由 genBillNo 自动取号（Q1 人工只读，不校验），
         // 但下面三项留空会造成无法核销/永不逾期的哑数据。
         if (e.getCustomerId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择往来单位");
@@ -175,11 +175,11 @@ public class RcReceivableService {
             LoginUser lu = UserContext.get();
             if (lu != null) e.setCompanyId(lu.getCompanyId());
         }
-        // 原两行无条件写死 sourceDocType="SALES_ORDER"、sourceDocId=orderId。
+        // 这两列不能无条件写死 sourceDocType="SALES_ORDER"、sourceDocId=orderId。
         // 手工提单（未选销售订单 ⇒ orderId 为 null）也会被标成"销售订单来源"且 source_doc_id 为 null，
         // 于是：① BCP 侧无法区分「手工单本就无订单」与「系统漏填」；
         //      ② AR 对账明细订单环节四列全 NULL 时无从判读是否缺陷。
-        // 改为按 orderId 有无如实标注（实体注释既有 SALES_ORDER/MANUAL 两个枚举，此前从未写过 MANUAL）。
+        // 按 orderId 有无如实标注（实体注释既有 SALES_ORDER/MANUAL 两个枚举，MANUAL 长期没用上）。
         if (e.getOrderId() != null) {
             e.setSourceDocType("SALES_ORDER");
             e.setSourceDocId(e.getOrderId());
@@ -188,14 +188,14 @@ public class RcReceivableService {
             e.setSourceDocId(null);
         }
         mapper.insert(e);
-        // P4：应收单生成后发起 OTC 收款审批流（OTC03 应收账款收款，bizType=RECEIVABLE），
+        // 应收单生成后发起 OTC 收款审批流（OTC03 应收账款收款，bizType=RECEIVABLE），
         // procInstId 由 wf_instance 留存，审批通过后共享往来结算岗核销并推送外部财务系统生成记账凭证。
         try {
             wfEngineFacade.start("RECEIVABLE", e.getId(), userId(),
                     "应收单-" + (e.getBillNo() == null ? e.getId() : e.getBillNo()), e.getAmount());
         } catch (Exception ex) {
             log.error("应收单 {} 发起收款审批失败: {}", e.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
         return e.getId();
     }
@@ -218,15 +218,14 @@ public class RcReceivableService {
         rec.setCompanyId(currentCompanyId());
         arReconRecordMapper.insert(rec);
         Long userId = userId();
-        // 发起金额透真实值，不再硬编码 BigDecimal.ZERO——
+        // 发起金额透真实值，不能用 BigDecimal.ZERO 顶替——
         // 金额为 0 时 AR_REPORT 的金额分级/DOA 阈值校验（如 >5,000 自动升级）永不触发＝代码级死配置，
-        // 且审批工作台「申请金额」列直接显示 "-"（12-14 实测两单皆如此）。
+        // 且审批工作台「申请金额」列直接显示 "-"。
         BigDecimal amount = reportPeriodAmount(period, rec.getCompanyId());
         String basis = "本期应收发生额合计";
-        // 补完（二次收尾）：上一段只算「本期新开单」的发生额，实测本环境应收单集中在
-        // 2026-09（5 行）且另有 2 行 period=NULL 的历史行——按手册期间 2026-11/2026-12 发起时
-        // 发生额仍为 0，金额校验（wf.timeout.autopass.max_amount 敞口）与工作台「申请金额」列
-        // 退回缺陷原状（恒 0／显 "-"）。故发生额为 0 时回退「截至本期末未清应收余额合计」：
+        // 只算「本期新开单」的发生额会漏掉老单：应收单可能集中在更早月份，且部分历史行 period 为空。
+        // 那样按手册期间发起时发生额为 0，金额校验（wf.timeout.autopass.max_amount 敞口）与
+        // 工作台「申请金额」列就形同虚设。故发生额为 0 时回退「截至本期末未清应收余额合计」：
         // 同属"本报告所审金额"，且按 bill_date 圈定天然覆盖 period 为空的历史行；两规则均写进 remark 记录。
         if (amount.signum() == 0) {
             amount = reportOpenBalanceAsOf(period, rec.getCompanyId());
@@ -241,7 +240,7 @@ public class RcReceivableService {
             arReconRecordMapper.updateById(rec);
         } catch (Exception ex) {
             log.error("应收分析报告 {}（记录 {}）发起审批失败: {}", period, rec.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
         return rec.getId();
     }
@@ -269,9 +268,9 @@ public class RcReceivableService {
     }
 
     /**
-     * AR_REPORT 发起金额回退规则（二次收尾）：截至报告期末仍未收回的应收余额合计
+     * AR_REPORT 发起金额的回退规则：截至报告期末仍未收回的应收余额合计
      * （rc_receivable.remain_amount &gt; 0 且 bill_date ≤ 期末，本公司）。
-     * <p>刻意按 bill_date 而非 period 圈定——历史/导入行的 period 为空（实测 2 行 127,200 元未清），
+     * <p>刻意按 bill_date 而非 period 圈定——历史/导入行的 period 可能为空，
      * 等值匹配会整组漏掉，回退也就白回退了。期间无法归一或无未清行时如实返回 0。
      */
     private BigDecimal reportOpenBalanceAsOf(String period, Long companyId) {
@@ -310,7 +309,7 @@ public class RcReceivableService {
         rec.setStatus("RUNNING");
         rec.setCompanyId(currentCompanyId());
         // 对账金额取本期真实合计（规则同本文件 AR_REPORT 的发起金额），
-        // 既落 ar_recon_record.amount，也顶替原先硬传的 BigDecimal.ZERO。
+        // 既落 ar_recon_record.amount，也替掉原来硬传的 BigDecimal.ZERO。
         BigDecimal amount = reportPeriodAmount(period, rec.getCompanyId());
         if (amount.signum() == 0) {
             amount = reportOpenBalanceAsOf(period, rec.getCompanyId());
@@ -327,7 +326,7 @@ public class RcReceivableService {
             arReconRecordMapper.updateById(rec);
         } catch (Exception ex) {
             log.error("应收对账（记录 {}）发起审批失败: {}", rec.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
         return rec.getId();
     }
@@ -354,13 +353,13 @@ public class RcReceivableService {
     }
 
     /**
-     * 逾期打卡可准入状态集（甲案）＝"已确认前后但未结清"的四态：
+     * 逾期打卡可准入状态集＝"已确认前后但未结清"的四态：
      * NONE 未确认（createSingle 缺省态）／NORMAL 开票派生／CONFIRMED 应收审批通过／PARTIAL 部分收款。
-     * <p>业务规则来源：催收域的业务前提是「到期未收的应收账款」，判据主项是
-     * {@code remain_amount > 0}（与本域 {@code ArClaimService:392}／{@code ArStatementService:80}／
-     * {@code ArWriteoffService:116} 的 {@code status <> 'DONE'} 同一族规则），而不是「单据尚未走完审批」。
-     * 原实现只放 {@code status='NONE'} 进逾期（全项目唯一 OVERDUE 写入前置），导致
-     * 一支应收越往主链下游走（NORMAL→CONFIRMED）越不可能被判逾期＝状态机与业务预期反向。
+     * <p>业务前提是「到期未收的应收账款」，判定主项是
+     * {@code remain_amount > 0}（与本域 {@code ArClaimService}／{@code ArStatementService}／
+     * {@code ArWriteoffService} 的 {@code status <> 'DONE'} 同一族规则），而不是「单据尚未走完审批」。
+     * 只放 {@code status='NONE'} 进逾期（全项目唯一 OVERDUE 写入前置）的后果是：
+     * 一支应收越往主链下游走（NORMAL→CONFIRMED）就越不可能被判逾期＝状态机与业务预期反向。
      * <p>OVERDUE 本身不在准入集内＝保持原"只打卡一次"语义，避免日终批处理每日重复翻档刷审计流水。
      */
     public static final Set<String> OVERDUE_MARKABLE_STATUSES =
@@ -377,10 +376,10 @@ public class RcReceivableService {
     }
 
     /**
-     * 逾期坏账计提批处理（带账期基准日，甲案）。
-     * <p>原实现把 {@code LocalDate.now()} 写死在判据里，且全链路无基准日入参 ⇒
+     * 逾期坏账计提批处理（带账期基准日）。
+     * <p>把 {@code LocalDate.now()} 写死在判定里、且全链路无基准日入参 ⇒
      * 凡"业务期间晚于系统日"（补录历史／跑到未来账期）时到期日永不早于基准日，逾期集恒空，
-     * 下游催收待办、账龄分期、坏账计提（{@code RcBadDebtService:90} 依赖 OVERDUE）与日终站内信
+     * 下游催收待办、账龄分期、坏账计提（{@code RcBadDebtService} 依赖 OVERDUE）与日终站内信
      * 同因空转。本重载只把"与哪一天比"参数化，判定式（到期日 &lt; 基准日 ∧ 余额 &gt; 0）一字未改。
      *
      * @param asOfDate 账期／跑批基准日；null 或空白回退系统当前日（与旧行为逐字一致）
@@ -419,7 +418,7 @@ public class RcReceivableService {
      *       与 {@code reportOpenBalanceAsOf} 的「bill_date ≤ 期末」同一读法；</li>
      *   <li>两者皆空回退 null＝由调用方按系统当前日处理（旧行为）。</li>
      * </ul>
-     * 无法归一时如实抛参数校验错，不做静默默认处理（避免重演"扫描 0 条被归因成参数不当"）。
+     * 无法归一时如实抛参数校验错，不做静默兜底（避免重演"扫描 0 条被归因成参数不当"）。
      */
     public static LocalDate resolveAsOfDate(String asOfDate, String period) {
         if (StringUtils.hasText(asOfDate)) {

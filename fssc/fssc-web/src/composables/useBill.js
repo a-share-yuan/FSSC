@@ -18,7 +18,7 @@ import { isInvoiceFile } from '../utils/attachKind'
 
 
 // 预填值必须与后端写入数据库时区一致。`toISOString()` 给的是 UTC 串，东八区读出来恒差 −8h
-// （实测「制单时间」预填 12:05 而页壳/库内 create_time 均为 20:05），跨零点还会把日期错成昨天。
+// （「制单时间」会少 8 小时，跨零点还会把日期错成昨天）。
 // 后端 create_time / apply_date 走 LocalDateTime.now()（服务器本地钟），故前端一律按本地时钟取值，
 // 不引日期库。
 function today() {
@@ -107,7 +107,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   const budgets = ref([])
   // 预算池是按单据费用年度取的，池对应的年度记在这里（池与年度必须一致）
   const budgetPoolYear = ref(null)
-  // FINAL-01: 费用类型→预算科目映射(md_item_budget_map, itemId→budgetItemId)，
+  // 费用类型→预算科目映射(md_item_budget_map, itemId→budgetItemId)，
   // 选择费用类型时自动带出对应预算科目；用户已手选则不覆盖
   const itemBudgetMap = ref({})
   const cities = ref([])
@@ -132,7 +132,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   const detailData = reactive({ bill: {}, lines: [], shares: [], travels: [], loanOffsets: [], relations: [], attaches: [], wfTrace: [] })
 
   // 顶部「流程进度」跟着当前这张单走：详情抽屉打开时看抽屉，否则看当前页签（发起页看正在编辑的单，我的单据看选中行）。
-  // 旧实现只看 detailData，抽屉开过一次就永久停在上一张单，切行/改单都不动。
+  // 只认 detailData 的话，抽屉开过一次就永久停在上一张单，切行/改单都不动。
   const focusedBill = computed(() => {
     if (detailVisible.value && detailData.bill?.id) return detailData.bill
     const editing = form.bill?.id ? form.bill : null
@@ -156,12 +156,12 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   function newTravel() {
     return {
       // 出差人员默认＝当前登录人（同文件 81 行「申请人＝当前登录人」同源）。
-      // 留空会让下拉首位（userApi.page 第 0 行实测＝id 1/admin/系统管理员）被回车选中，且单据上不是本人。
+      // 留空会让下拉首位（userApi.page 返回的第一行是系统管理员账号）被回车选中，且单据上不是本人。
       travelerName: store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || '',
       // 出差人员的外键：下拉只绑姓名 ⇒ traveler_id 恒 NULL（重名/改名即断，按 id 取标准的规则也拿不到）
       travelerId: store.user?.userId ?? store.user?.id ?? null,
       fromCityId: null, toCityId: null, destCountry: '', beginDate: '', endDate: '', days: 0,
-      // 是否往返：这栏参与 calcTravel 的天数规则（往返 +1 天），原先连键都没有 ⇒ 保存不写入数据库、编辑回来是空的
+      // 是否往返：这栏参与 calcTravel 的天数规则（往返 +1 天），没有这个键 ⇒ 保存不写入数据库、编辑回来是空的
       roundTrip: false,
       trafficType: 'RAIL', trafficClass: '', hotelAmount: 0, trafficAmount: 0, allowanceAmount: 0,
       otherAmount: 0, totalAmount: 0, overStd: 0, remark: '',
@@ -204,15 +204,15 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     const it = items.value.find((x) => x.id === id)
     row.itemName = it ? it.itemName : ''
     if (id == null) return
-    // FINAL-01: 按费用类型自动带出映射的预算科目；手选过则不覆盖
+    // 按费用类型自动带出映射的预算科目；手选过则不覆盖
     if (row.budgetItemId == null) {
       const bid = pickBudgetFor(id)
       if (bid != null) row.budgetItemId = bid
       return
     }
-    // 换了费用类型，原先按旧类型挂上的预算行要跟着重取。
-    // 这条判据原先写在 resolveLineBudgetId() 里，那个函数同时被「重开草稿」调用，
-    // 会把库里已保存且合法的预算科目清成空（-04）⇒ 收回到这里，只在用户真的换费用类型时执行。
+    // 换了费用类型，按旧类型挂上的预算行要跟着重取。
+    // 这条判据若放在 resolveLineBudgetId() 里，那个函数同时被「重开草稿」调用，
+    // 会把库里已保存且合法的预算科目清成空 ⇒ 收回到这里，只在用户真的换费用类型时执行。
     const hit = budgets.value.find((b) => String(b.id) === String(row.budgetItemId))
     if (hit && String(hit.itemId ?? '') !== String(id)) row.budgetItemId = pickBudgetFor(id)
   }
@@ -327,7 +327,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
    * 于是编辑重提重开表单时「已解析发票」整块空着，附件条与 image_status=COMPLETE 却都在，提交照样放行。
    * 这里给每个尚未在清单里的 INVOICE 附件补一行手工态（parsed=false / checked=false：
    * 不自动生成明细行、不改合计，票面由人补全），把「暂无发票」换成「有票可看、可补」。
-   * inv_bill_invoice 关联写环节在提交服务端路径，本轮未动。
+   * inv_bill_invoice 关联写环节在提交服务端路径，这里只负责回显。
    */
   function restoreInvoiceRowsFromAttaches() {
     const known = new Set(form.invoices.map((x) => String(x.fileId || '')))
@@ -353,7 +353,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   // 由下方 watch 按 id 精确回填真实额度后再重新判定。
   const budgetPreview = computed(() => {
     const map = {}
-    // 多币种折算(BUG-03)：预算以本币(CNY)规则存储，非 CNY 明细按汇率折算后参与预算比较
+    // 多币种折算：预算以本币(CNY)规则存储，非 CNY 明细按汇率折算后再参与预算比较
     const rateOf = (l) => (String(form.bill.currencyCode || 'CNY').toUpperCase().startsWith('CNY') ? 1 : Number(form.bill.exchangeRate || l.exchangeRate || 1) || 1)
     form.lines.filter((l) => l.budgetItemId).forEach((l) => {
       const conv = String(form.bill.currencyCode || 'CNY').toUpperCase().startsWith('CNY')
@@ -415,8 +415,8 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   }
   function billSubTypeLabel(s) {
     // 子类名称的唯一真值＝constants/enums.js BILL_SUB_TYPE（BillDetailPanel／ExpenseBillListTab／
-    // RequisitionWorkbench 已共用它）。这里原来自持一份，把 TRAVEL 写成「差旅报销」、TRAIN 写成「培训报销」，
-    // 于是「事前申请 · 差旅报销」把出差申请说成了另一张单据（10-27 F1 实测）。
+    // RequisitionWorkbench 已共用它）。本文件若自持一份，TRAVEL 会写成「差旅报销」、TRAIN 写成「培训报销」，
+    // 于是「事前申请 · 差旅报销」把出差申请说成了另一张单据。
     // 共享表没有的历史码（CLAIM/CORP/…）留在下方兜底，避免退化成英文原码。
     if (BILL_SUB_TYPE[s]) return BILL_SUB_TYPE[s]
     return { CLAIM: '日常报销', CLAIM_TRAVAL: '差旅报销', CORP: '对公付款',
@@ -486,10 +486,10 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     await Promise.all([
       __fill(async () => fillArr(contracts.value, ((await contractApi.page({ pageNum: 1, pageSize: 200 })) || {}).list || []), () => fillArr(contracts.value, [])),
       // 往来单位候选必须覆盖供应商。
-      // 原先只读 /customer/page（crm_customer 客户档案），而供应商在 md_supplier、两表零同步，
-      // 现役库 crm_customer 近乎空表 ⇒ 对公结算下拉里一个供应商都没有，
+      // 只读 /customer/page（crm_customer 客户档案）不够：供应商在 md_supplier、两表零同步，
+      // crm_customer 里根本查不到供应商 ⇒ 对公结算下拉里一个供应商都没有，
       // SETTLE 单据挂不上 customer_id/po_id/po_receipt_id，三单匹配环节断裂、根本提交不了。
-      // 改用 /customer/candidates：后端把供应商按 supplier_code 去重建档为往来单位档案，
+      // 故取 /customer/candidates：后端把供应商按 supplier_code 去重建档为往来单位档案，
       // 返回的 id 是语义正确的 crm_customer.id（下游应收核销/坏账/对账都按这个解析），
       // 并补出 accountNo/bankName（原档案表无账号字段，导致收款账号必填永远填不上）。
       __fill(async () => {
@@ -499,7 +499,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       }, () => fillArr(customers.value, [])),
       __fill(async () => fillArr(costCenters.value, ((await mdApi.costCenters({ pageNum: 1, pageSize: 200 })) || {}).list || []), () => fillArr(costCenters.value, [])),
       __fill(async () => fillArr(projects.value, ((await mdApi.projects({ pageNum: 1, pageSize: 200 })) || {}).list || []), () => fillArr(projects.value, [])),
-      // FINAL-01: 费用类型→预算科目映射(选费用类型自动带出预算科目；失败不影响主数据)
+      // 费用类型→预算科目映射(选费用类型自动带出预算科目；失败不影响主数据)
       __fill(async () => { const maps = (await masterCfgApi.itemBudgetMap.options()) || []; const m = {}; maps.forEach((x) => { if (x?.itemId != null && x?.budgetItemId != null) m[String(x.itemId)] = x.budgetItemId }); itemBudgetMap.value = m }, () => { itemBudgetMap.value = {} }),
       // 公司树：任登录用户可读；扁平化用于 公司 下拉。
       __fill(async () => { const compTree = (await orgApi.companyTree({ silent: true })) || []; const compFlat = []; const walkComp = (arr) => { arr.forEach((n) => { if (n) { compFlat.push({ id: n.id, name: n.companyName || n.name || '' }); if (n.children?.length) walkComp(n.children) } }) }; walkComp(compTree); fillArr(companies.value, compFlat) }, () => fillArr(companies.value, [])),
@@ -533,8 +533,8 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
         ElMessage.warning(`附件「${rec.fileName}」已在本单据中，已跳过重复上传`)
         return
       }
-      // 附带修复：原实现整表覆盖（form.attaches = [{...}]），多附件场景互相踩掉，改为追加
-      // 类型按扩展名定性（原先无条件写 INVOICE，Office 附件也被当成发票，后续"必须有发票附件"的
+      // 追加而不是整表覆盖：form.attaches 一次赋整个数组，多附件场景会互相踩掉
+      // 类型按扩展名定性（不能一律写 INVOICE，否则 Office 附件也被当成发票，后续"必须有发票附件"的
       // 校验会被假发票顶掉，附件列表还会给它挂「待识别」）
       form.attaches = [...form.attaches, { fileId: rec.id, fileName: rec.fileName, attachType: isInvoiceFile(rec.fileName) ? 'INVOICE' : 'OTHER' }]
       ElMessage.success(`附件已上传：${rec.fileName}`)
@@ -550,8 +550,8 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   function onAttachUploaded(rec) {
     if (!rec) return
     const attach = { fileId: rec.id, fileName: rec.fileName, attachType: rec.attachType === 'INVOICE' ? 'INVOICE' : 'OTHER' }
-    // 同名文件查重——fileId 每次上传都生成新值，旧守卫 find(fileId) 形同虚设，
-    // 同一发票文件可重复添加 N 次全部写入数据库（实测 4 行同名 INVOICE 附件）。同名即拦截。
+    // 同名文件查重——fileId 每次上传都生成新值，按 fileId 的守卫形同虚设，
+    // 同一发票文件能重复添加多次、全部写入数据库。同名即拦截。
     if (form.attaches.some((a) => (a.fileName || '') === (attach.fileName || ''))) {
       ElMessage.warning(`附件「${attach.fileName}」已在本单据中，已跳过重复上传`)
       return
@@ -573,7 +573,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       if (inc.netAmount > 0 && inc.amount > 0) inc.taxRate = Math.round(((inc.amount - inc.netAmount) / inc.netAmount) * 10000) / 100
       inc.sourceName = rec.fileName
       form.invoices = [...form.invoices, inc]
-      // 解析失败此前也弹绿条"已识别发票"，提单人会以为票面已入单、直接提交一张没有票面的报销单
+      // 解析失败不能也弹绿条"已识别发票"：提单人会以为票面已入单、直接提交一张没有票面的报销单
       // 只看 ok 还不够——"识别成功"和"票进了发票池"是两件事，
       // 分档一律走 invoiceOutcome（判据在后端 invoice.inPool，不要此处不重算金额自洽）
       const out = invoiceOutcome(rec.invoice, { fileName: rec.fileName || '', end: 'pc' })
@@ -583,7 +583,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     }
   }
 
-  // 提单选人（首审环节办理人，方案）
+  // 提单选人（首审环节办理人）
   // 配置驱动：只有该流程首审节点配成 PICK 档（且灰度放行）时 mode 才是 PICK，页面才渲染下拉；
   // POOL 档只显示"任务池抢单"提示，AUTO/未部署/老后端一律 mode=AUTO（不渲染、不阻断提交）。
   const firstPick = reactive({
@@ -643,7 +643,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       ext.entertainCount = pc
       if (amt > 0) ext.perCapita = Math.round((amt / pc) * 100) / 100
     }
-    // 差旅报销明细另有五栏在 exp_bill_line 没有列（费用类别/房间数/出差止日/出发地/目的地，工厂见 ClaimTravel.vue:296）：
+    // 差旅报销明细另有五栏在 exp_bill_line 没有列（费用类别/房间数/出差止日/出发地/目的地，构造见 ClaimTravel.vue）：
     // 不镜像就是"界面填了、库里 {}"，且重载后 category 丢失会让住宿行的那组列整组换成交通行的列。
     for (const k of ['category', 'roomCount', 'endDate', 'fromCityId', 'toCityId']) {
       if (l[k] !== undefined && l[k] !== null && l[k] !== '') ext[k] = l[k]
@@ -652,7 +652,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   }
   async function saveDraft(extra) {
     try {
-      // 修复：发票勾选联动生成的明细行在未选「费用类型」时（item_id 数据库 NOT NULL），
+      // 发票勾选联动生成的明细行在未选「费用类型」时（item_id 数据库 NOT NULL），
       // 随草稿一起提交会导致后端整单 500（表头一并回滚，用户看到"勾选后没反应/保存不了"）。
       // 因此只提交已选费用类型的行；未选行保留在页面上并给出明确提示，补选后再保存即可。
       const pendingItemLines = form.lines.filter((l) => !l.itemId && Number(l.amount || 0) > 0)
@@ -670,7 +670,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
         },
         lines: form.lines.filter((l) => l.itemId).map((l) => ({
           ...l,
-          // P1 缺陷修复：行级 extJson 若为对象，序列化为字符串，避免 saveDraft 反序列化失败(HTTP 500)
+          // 行级 extJson 若为对象，序列化为字符串，避免 saveDraft 反序列化失败(HTTP 500)
           extJson: typeof l.extJson === 'string' ? l.extJson : JSON.stringify(lineExtForSave(l)),
         })),
         attaches: form.attaches,
@@ -694,14 +694,14 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       if (opts.travel && form.travels.length) {
         await detailApi.saveTravels(id, form.travels)
       }
-      // 分摊表 exp:share:* 只授予财务/共享/审批类角色（普通员工不现有），原先无条件调用
+      // 分摊表 exp:share:* 只授予财务/共享/审批类角色（普通员工没有），无条件调用
       // ⇒ 员工每次保存草稿都吃一发 code:4030 红字、分摊行零写入数据库。写权限都没有时就不发这一跳：
       // 承担规则的权威值本就落在 exp_bill_line（成本中心/项目/预算科目列），分摊行至今无任何消费方
       // （见 ExpBillShare 全仓只有 CRUD 四个引用点）⇒ 少写这几行不影响预算占用、核销与凭证。
       if (form.shares.length && hasPerm('exp:share:update')) await detailApi.replaceShares(id, form.shares)
       for (const o of form.loanOffsets) {
         await detailApi.addLoanOffset(id, { ...o, billId: id })
-        // E2E-001 修复：冲借款同步建立 LOAN_CLAIM 关系（source=借款单、target=报销单），
+        // 冲借款同步建立 LOAN_CLAIM 关系（source=借款单、target=报销单），
         // 使审批通过时 handleLoanClaimDiff 能识别借款关联并计算差额补付而非全额付款
         await detailApi.addRelation(o.loanBillId, id, 'LOAN_CLAIM', o.offsetAmount).catch(() => {})
       }
@@ -743,8 +743,8 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
         return
       }
       // 校验分档与服务端 occupy 同一规则——HARD 超预算拦死；SOFT 须填超支理由（写 ext_json.overrunReason，
-      // 服务端 ExpenseBillService 同列校验）；WARN 只提醒放行。原实现不分控制方式一律"无法提交"，
-      // 预警/软控科目被前端越权拦死，且软控理由没有任何 UI 写口。
+      // 服务端 ExpenseBillService 同列校验）；WARN 只提醒放行。不分控制方式一律"无法提交"，
+      // 预警/软控科目就被前端越权拦死，且软控理由没有任何 UI 写口。
       if (budgetWarn.value.length) {
         const hard = budgetWarn.value.filter((x) => (x.control || 'HARD') === 'HARD')
         const soft = budgetWarn.value.filter((x) => x.control === 'SOFT')
@@ -757,7 +757,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
           let reason = saved
           if (!reason) {
             try {
-              // F-run-1017b 实测：inputType 显式改 textarea——ElMessageBox.prompt 默认渲染
+              // inputType 显式指定 textarea——ElMessageBox.prompt 默认渲染
               // 单行 input，超支理由是长文本（要写清"为什么超、调剂规则"），单行既不好填也不好读；
               // 且自动化/无障碍定位按 textarea 找，单行 input 让检查脚本永远抓不到输入框。
               const r = await ElMessageBox.prompt(
@@ -779,9 +779,9 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
           ElMessage.warning(`有 ${warn.length} 项预算超出可用额度（预警方案），本次放行、占用流水记录`)
         }
       }
-      // 「必附发票」原本是服务端合规预检的判据（PrecheckService 数 exp_bill_attach 的 INVOICE 行），
+      // 「必附发票」在服务端是合规预检的判据（PrecheckService 数 exp_bill_attach 的 INVOICE 行），
       // 而预检入参是 billId ⇒ 必须先落草稿才能预检，表现为"草稿已保存"＋"提交被拦截"两条互相打脸的提示。
-      // 这里把同一判据前移到写库之前，只覆盖费用项侧（政策侧仍由服务端默认处理），判据不宽于服务端，不会误拦。
+      // 这里把同一判据放到写库之前，只覆盖费用项侧（政策侧仍由服务端兜底），判据不宽于服务端，不会误拦。
       if (billType === 'CLAIM' && !form.attaches.some((a) => a.attachType === 'INVOICE')) {
         const needInvoiceItem = form.lines.filter((l) => l.itemId).some((l) => {
           const it = items.value.find((x) => x.id === l.itemId)
@@ -811,7 +811,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       const warns = checks.filter((c) => c.level === 'WARN')
       if (fails.length) {
         const detail = fails.map((c) => ' ' + c.msg)
-        // ⑤-Ⅳa：服务端只说「当前未上传」，看不出下一步动作。预检入参是 billId ⇒ 附件行必须随草稿写入数据库
+        // 服务端只说「当前未上传」，看不出下一步动作。预检入参是 billId ⇒ 附件行必须随草稿写入数据库
         // 才被数到（上传时单据还没 id，附件行是挂在 billId=NULL 的孤儿行上的），故这里补可执行动作。
         if (fails.some((c) => c.code === 'INVOICE_REQUIRED' || c.code === 'APPLY_ATTACH_REQUIRED')) {
           detail.push('下一步：请用「选择文件」上传发票影像，并点一次「保存草稿」把附件一并保存，再重新提交')
@@ -834,7 +834,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       focusRow(id)
     } catch (e) {
       const msg = String(e?.message || '')
-      // 默认处理（软控超支理由）：服务端是预算校验的权威。
+      // 兜底（软控超支理由）：服务端是预算校验的权威。
       // 前端 budgetPreview 只聚合 lines 中 budgetItemId 非空的金额；出差申请等场景该字段在提交前尚未
       // 解析 ⇒ 预览为空 ⇒ 上方 SOFT 弹窗永不触发 ⇒ 直接提交被服务端拒。
       // 这里捕获「需填写超支理由」报错：弹窗补填 → 随草稿写入数据库 → 自动重试一次提交。
@@ -959,16 +959,16 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   }
 
   // 冲借款 / 关联事前申请
-  // / （2026-10-19 G1 幕真跑发现 + 全项目排查）：原实现点行即「按全额占用并关窗」——
-  // 没有可发现入口、键盘不可达、误点无确认；更关键是金额硬取 row.loanBalance / row.totalAmount，
-  // 只能全额：报销额小于借款额时差额被一并占掉，后续还款被后端「累计占用超出借款单金额」拦死；
+  // 不能做成「点行即按全额占用并关窗」：没有可发现入口、键盘不可达、误点无确认；
+  // 更关键是金额硬取 row.loanBalance / row.totalAmount 只能全额——报销额小于借款额时差额被一并占掉，
+  // 后续还款被后端「累计占用超出借款单金额」拦死；
   // 事前申请关联额同样硬取全额且入表后不可编辑（连删掉重选都做不到部分关联）。
-  // 现统一到 CandidatePickerDialog：弹层内勾选 + 可改金额（支持部分冲抵/部分关联）+ 底部【确定】提交。
+  // 故统一到 CandidatePickerDialog：弹层内勾选 + 可改金额（支持部分冲抵/部分关联）+ 底部【确定】提交。
   // 本 composable 只做「把对话框产出的 [{ row, amount }] 落进表单」，勾选与金额交互都在组件里，
-  // 金额合法性（> 0 且 ≤ 可冲抵余额）由 components/bill/candidateAmount.js 统一裁决。
+  // 金额合法性（> 0 且 ≤ 可冲抵余额）由 components/bill/candidateAmount.js 统一判定。
   async function openLoanDialog() {
-    // 改用候选面接口——它给的 availableBalance 已扣掉在途占用，
-    // 与服务端放行校验同源（旧的 myPage 只给账面余额，默认勾全额必然被拒）。
+    // 用候选面接口——它给的 availableBalance 已扣掉在途占用，
+    // 与服务端放行校验同源（单据列表的 myPage 只给账面余额，按账面勾全额必然被拒）。
     // 新建单时 form.bill.companyId 为空，原样传会被序列化成字符串 "null"，
     //   后端 @RequestParam Long companyId 转换失败返回 400，await 抛错把
     //   loanDialog.value = true 一起吞掉 ⇒ 表现为「点了『选择借款单冲抵』毫无反应」。
@@ -1024,7 +1024,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     selected.value = row
     if (!row.voucherNo) { ElMessage.info('该单据尚未生成凭证（需审批通过）'); return }
     activeTab.value = 'voucher'
-    // 原实现无 catch（接口报错只留控制台异常、界面停在空预览），
+    // 必须有 catch（否则接口报错只留控制台异常、界面停在空预览），
     // 且台账首页 50 条查不到时静默失明——空态文案还反向误导（让用户"去选带凭证号的单据"，可他已经选了）
     try {
       const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50 })).list || []
@@ -1108,7 +1108,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   // 副环节：撤回确认后到接口返回前按钮实际可连点，加防重入校验
   let withdrawBusy = false
   // 撤回是不可逆动作（流程终止、不可复活），与作废/关闭同一规则必须先确认；
-  // 原实现裸调 await 一旦服务端报错即未捕获异常，此处一并办结。
+  // 裸调 await 一旦服务端报错就是未捕获异常，故这里 try/catch 一并办结。
   async function withdraw(row) {
     if (withdrawBusy) return
     withdrawBusy = true
@@ -1120,7 +1120,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     finally { withdrawBusy = false }
   }
   /**
-   * 催办（体检 E-10 /）：审批中的单据问一句"卡在哪了"。
+   * 催办：审批中的单据问一句"卡在哪了"。
    * 限频/鉴权都在服务端，命中限频要把原因显示出来——静默"催办成功"等于骗人。
    */
   async function urge(row) {

@@ -10,8 +10,10 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.payplan.entity.PayPlan;
 import com.fssc.payplan.service.PayPlanService;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,20 +45,20 @@ public class PayPlanController {
     @RequiresPerm("payplan:add")
     @OperLog(module = "PAY_PLAN", operType = "UPDATE", desc = "驳回付款计划重新提交审批")
     @PostMapping("/{id}/resubmit")
-    public Result<Void> resubmit(@org.springframework.web.bind.annotation.PathVariable Long id) {
+    public Result<Void> resubmit(@PathVariable Long id) {
         service.resubmit(id);
         return Result.success(null);
     }
 
     /**
-     * D-DEC-454：提单人作废在途计划（APPROVING→VOID，同步终止审批链）。
+     * 提单人作废在途计划（APPROVING→VOID，同步终止审批链）。
      * 权限码复用 {@code payplan:add}＝与建单/重报同一批角色，不新增码（新码无人持有＝端点作废）。
      */
     @RequiresPerm("payplan:add")
     @OperLog(module = "PAY_PLAN", operType = "UPDATE", desc = "作废采购付款计划并终止审批")
     @PostMapping("/{id}/void")
-    public Result<Void> voidPlan(@org.springframework.web.bind.annotation.PathVariable Long id,
-                                 @RequestBody(required = false) java.util.Map<String, String> body) {
+    public Result<Void> voidPlan(@PathVariable Long id,
+                                 @RequestBody(required = false) Map<String, String> body) {
         service.voidPlan(id, body == null ? null : body.get("reason"));
         return Result.success(null);
     }

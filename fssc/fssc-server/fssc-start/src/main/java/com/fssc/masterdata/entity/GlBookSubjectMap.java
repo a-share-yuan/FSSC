@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 账簿×科目映射（V1.4.87）——多准则出多套核算数据的桥梁。
+ * 账簿×科目映射——多准则出多套核算数据的桥梁。
  *
  * <p>不同会计准则科目体系不同（如 ASBE「应收账款 1122」vs SME 简表），
  * 没有映射表就只能靠代码 if-else 判断 ⇒ 又回到"改代码才能改准则"的老路。

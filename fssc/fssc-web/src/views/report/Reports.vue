@@ -25,7 +25,7 @@
         <el-button type="success" size="small" v-permission="'report:export'" @click="exp('budgetExecution','预算执行')">导出预算执行</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
       </div>
-      <!-- W5（2026-10-08 非人性化整改）：25 个页签横排难定位，提供分组下拉直达；页签本身保留不动 -->
+      <!-- W5（非人性化整改）：25 个页签横排难定位，提供分组下拉直达；页签本身保留不动 -->
       <div class="toolbar" style="margin-bottom:8px">
         <el-select v-model="tab" filterable placeholder="报表快速定位（按分组跳转）" size="small" style="width: 260px">
           <el-option-group v-for="g in REPORT_GROUPS" :key="g.label" :label="g.label">
@@ -402,7 +402,7 @@
           </el-table>
         </el-tab-pane>
       </el-tabs>
-      <!-- P0 遗留专项：逐 tab 本地分页（只渲染当前激活 tab 的 pager） -->
+      <!-- 逐 tab 本地分页（只渲染当前激活 tab 的 pager） -->
       <TablePager v-if="activePager" :pager="activePager" />
     </el-card>
   </div>
@@ -420,7 +420,7 @@ import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '
 import { formatMoney, formatDate } from '@/utils/format'
 import { hasPerm } from '@/utils/perm'
 
-// G1（2026-10-09 权限治理）：25 tab 按 12 报表域门控。
+// G1（权限治理）：25 tab 按 12 报表域门控。
 // 每枚 tab 绑定一个 report:<domain>view 权限码，无权则隐藏 tab（不发请求、不渲染）。
 // 域定义见后端 ReportDomain.java（EXP/AR/P2P/CASH/ASSET/GL/BUDGET/CONTRACT/SHARING/APPROVAL/IMAGE/TAX）。
 const TAB_DOMAIN = {
@@ -451,14 +451,14 @@ function companyName(id) { const c = companies.value.find((x) => x.value === id)
 
 // 默认 tab 支持路由 prop 指定（10 个报表子菜单指向本页不同 tab）
 // 组件复用时不重建实例，必须 watch props 同步 tab
-// RA-PAGE-15（批次1 A1）：default 由 'dept' 改 ''——宿主路由（/reports 无 props）渲染 25 页签工作台；
+// default 由 'dept' 改 ''——宿主路由（/reports 无 props）渲染 25 页签工作台；
 // 显式传 tab 的深链（/reports/dept 等）仍单页模式。
 const props = defineProps({ tab: { type: String, default: '' } })
 const isSingle = computed(() => !!props.tab)
 const tab = ref(props.tab || 'dept')
 watch(() => props.tab, (v) => { if (v) tab.value = v })
 
-// W5（2026-10-08 非人性化整改）：25 张报表按业务分组，供「报表快速定位」下拉跳转。
+// W5（非人性化整改）：25 张报表按业务分组，供「报表快速定位」下拉跳转。
 // name 必须与 el-tab-pane 的 name 逐一对应；新增/下线页签时两处同步。
 const REPORT_GROUPS = [
   { label: '费用报销与预算', items: [
@@ -490,7 +490,7 @@ const loading = ref(false)
 // 不再用 ?? 0 把「没取到」说成「金额为 0」。初值为 null（渲染「查询中…」），成功回填后才出数。
 const overviewError = ref(false)
 // 预算执行率由服务端回两位小数的百分数（如 81.55），裸渲染会被统计卡按默认精度抹成「81」，
-// 故该格单列 precision/suffix；金额与单数保持整数千分位。10-25 视觉走查实测。
+// 故该格单列 precision/suffix；金额与单数保持整数千分位。
 const overview = reactive([
   { label: '本月报销总额', value: null },
   { label: '待审单据', value: null },
@@ -529,7 +529,7 @@ const budgetAlertRows = ref([])
 const loanOverdueRows = ref([])
 const voucherRows = ref([])
 
-// P0 遗留专项：逐 tab 本地分页
+// 逐 tab 本地分页
 // 25 个报表 tab 各自独立 local pager（watch 数据源→setSource，total/页码自动 clamp）；
 // 底部单个 <TablePager> 只渲染当前激活 tab 的 pager；跨页勾选导出仅限当前页（ERP 标准行为）。
 function makeTabPager(srcRef, key) {
@@ -729,12 +729,12 @@ const budgetAlertChart = computed(() => {
 // 预加载其余 Tab 是可选项而非默认项（FineReport 帮助文档《决策报表新自适应》）。
 // 旧规则一次挂载并发 26 请求、同屏渲染 50 张表；改为「公司列表＋费用概览＋当前页签」3 枚起量，
 // 其余页签首次点亮时才取自己那一枚，取过的不重复请求（筛选条件变化由「查询/重置」强制重取）。
-// G1（2026-10-09 权限治理）的 403 不连坐规则原样保留：allSettled 逐枚独立，缺权只落空值默认处理。
-// 每枚报表＝{ get 请求, empty 默认处理, put 落值 }；枚名与 el-tab-pane 的 name 一一对应，ensureTab 按名直取。
+// G1（权限治理）的 403 不连坐规则原样保留：allSettled 逐枚独立，缺权只落空值兜底。
+// 每枚报表＝{ get 请求, empty 兜底, put 落值 }；枚名与 el-tab-pane 的 name 一一对应，ensureTab 按名直取。
 const REPORTS = {
   overview: {
     // 概览四格改指服务端真汇总（单枚 camelCase Map），不再拿分组明细数组去凑。
-    // 查询失败或缺任一指标都置错误态，界面直说「本次未刷新成功」；原 ?? 0 的默认处理已删。
+    // 查询失败或缺任一指标都置错误态，界面直说「本次未刷新成功」；原 ?? 0 的兜底已删。
     get: () => http.get('/tenant/dashboard/expense/overview').catch((e) => { overviewError.value = true; throw e }),
     empty: null, put: (v) => {
     if (!v) { overviewError.value = true; return }
@@ -770,7 +770,7 @@ const REPORTS = {
   voucherStats: { get: () => reportApi.voucherStats(), empty: [], put: (v) => { voucherRows.value = v } },
 }
 const fetchedReports = new Set()
-/** 权限类失败（HTTP 403 / 业务码 4030）：拦截器已出提示，页内不再补弹，空值默认处理即可 */
+/** 权限类失败（HTTP 403 / 业务码 4030）：拦截器已出提示，页内不再补弹，空值兜底即可 */
 function isPermErr(e) { return e?.code === 4030 || e?.status === 403 }
 
 async function fetchReports(names, force) {
@@ -782,7 +782,7 @@ async function fetchReports(names, force) {
     results.forEach((r, i) => {
       const spec = REPORTS[todo[i]]
       if (r.status === 'fulfilled') { spec.put(r.value ?? spec.empty); fetchedReports.add(todo[i]); return }
-      // 缺权＝该域本就不该看到这张表：默认处理并标记已取，避免每次点亮重放同一记 403
+      // 缺权＝该域本就不该看到这张表：兜底并标记已取，避免每次点亮重放同一记 403
       if (isPermErr(r.reason)) { spec.put(spec.empty); fetchedReports.add(todo[i]) }
       // 其余失败（超时/服务异常）不落标记：重新点亮该页签即重试
     })

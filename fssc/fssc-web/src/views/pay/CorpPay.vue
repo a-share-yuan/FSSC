@@ -60,10 +60,10 @@
             </el-col>
             <!-- PREPAY / SETTLE: 付款类型 + 往来单位 -->
             <el-col v-if="subType === 'PREPAY' || subType === 'SETTLE'" :xs="24" :md="8">
-              <!-- 缺陷⑥（2026-10-19 修）：此处原装 BANK/TRANSFER/CASH/BILL —— 那是「付款方式」的值域，
+              <!-- 缺陷⑥：此处原装 BANK/TRANSFER/CASH/BILL —— 那是「付款方式」的值域，
                    与「付款类型」（款项性质：预付款／结算款）无关，也与提交校验
                    constants/billRequired.js 的取值域 ['PREPAY','SETTLE'] 对不上，
-                   选什么都过不了校验（且默认值写死 BANK）。现在改回款项性质，并随 subType 带出。 -->
+                   选什么都过不了校验（且默认值写死 BANK）。现在按款项性质取值，并随 subType 带出。 -->
               <el-form-item :label="$t('pay.corp.lblPayType')" prop="extJson.payType">
                 <el-select v-model="b.form.bill.extJson.payType" style="width: 100%">
                   <el-option :label="$t('pay.corp.optPayTypePrepay')" value="PREPAY" />
@@ -316,7 +316,7 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 
-// 付款/收款方式（2026-10-18 基础数据办结）。
+// 付款/收款方式（基础数据办结）。
 // 注：payMethod 走 pay_method 字典；上方 payType 是「款项性质」（PREPAY/SETTLE），
 //    值域与 pay_method 不同，属另一个业务维度（缺陷⑥ 已修正其选项与默认值）。
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CORP)
@@ -353,7 +353,7 @@ const formRef = ref(null)
 const payFormRef = ref(null)
 const formRules = computed(() => billRules('PAY', subType.value))
 const shareType = ref('COST_CENTER')
-// 第2批：分摊方式恒有默认值（COST_CENTER）——挂 rules 纳入中央框架视野；
+// 分摊方式恒有默认值（COST_CENTER）——挂 rules 纳入中央框架视野；
 // computed 包装只为给 el-form 一个可校验 model，v-model 仍绑 shareType ref 不动
 const shareForm = computed(() => ({ shareType: shareType.value }))
 const shareTypeRules = { shareType: commonRules.select('请选择分摊方式') }
@@ -510,14 +510,14 @@ async function loadPos(b, counterName) {
   setArr(b.receipts, [])
   try {
     // silent: 这是辅助性后台加载(为用户准备 PO 下拉)，失败(如无 po:order:list 权限)不应打扰用户
-    // 查询键：此前把「往来单位名」当 keyword 打给 order/page，而后端只按
+    // 查询键：原先把「往来单位名」当 keyword 打给 order/page，而后端只按
     // po_no/supplier_name 模糊匹配 —— crm_customer 无 supplier_id 可映射、两套名称不同源
-    // （实测「苏州科韵精密设备有限公司」在 crm_customer 里 0 命中）⇒ 下拉恒空。
-    // 现改为不带 keyword 取单，名称只做尽力收窄：命中才收窄，落空退回全量，绝不再恒空。
+    // （客户主数据里没有同名的供应商）⇒ 下拉恒空。
+    // 不带 keyword 取单，名称只做尽力收窄：命中才收窄，落空退回全量，绝不再恒空。
     const r = await purchaseApi.orderPage({ pageNum: 1, pageSize: 100 }, { silent: true })
     const all0 = r.list || []
     // 已作废（VOID）的采购订单不得再进结算候选——原先只按供应商名收窄，
-    // 实测本轮作废的 PO1791909414058 仍挂在第二枚候选上，能把钱结算到一张作废订单上。
+    // 作废单仍会留在候选里，能把钱结算到一张作废订单上。
     const all = all0.filter((p) => String((p && p.status) || '').toUpperCase() !== 'VOID')
     all0.forEach((p) => { if (p && p.id != null) poSupplierNames.set(Number(p.id), String(p.supplierName || '').trim()) })
     const key = String(counterName || '').trim()
@@ -530,7 +530,7 @@ async function loadPos(b, counterName) {
     // 第二重必空：原「剩余可收>0」是收货页规则，结算时 PO 通常已全量收货
     // ⇒ 该过滤会把要匹配的单全部剔掉，故去除（选项标签本就展示剩余额，由人判断）。
     setArr(b.pos, named.length ? named : all)
-    // 草稿重编辑：PO 候选到位后才能判「往来单位 vs PO 供应商」是否同主体，此前无从比
+    // 草稿重编辑：PO 候选到位后才能判「往来单位 vs PO 供应商」是否同主体，否则无从比
     refreshSubjectConflict(b)
     // 草稿重编辑：单上已指认过 PO 的，按它把收货单候选一并备好
     if (b.form.bill.extJson.poId) loadReceipts(b, b.form.bill.extJson.poId)
@@ -548,7 +548,7 @@ function onPoPick(b, poId) {
   refreshSubjectConflict(b)
   if (subjectConflict.value) ElMessage.warning(subjectConflict.value)
 }
-/** 死控件补齐：b.receipts 此前全仓无赋值点 ⇒「收货单」下拉恒 0 项 */
+/** b.receipts 必须有赋值点，否则「收货单」下拉恒 0 项 */
 async function loadReceipts(b, poId) {
   setArr(b.receipts, [])
   const po = b.pos.find((x) => x.id === poId)
@@ -678,7 +678,7 @@ const { options: payeeTypeOptions, load: loadPayeeType } = useBaseDict('enum_pay
 onMounted(async () => {
   loadPayeeType()
   loadCurrency()
-  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
+  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与原先逐字一致
   payMethodDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单，并把子类型切到单据实际类型
   try {
@@ -689,7 +689,7 @@ onMounted(async () => {
       if (st) subType.value = st
       // 不回写路由 query：App.vue 按 route.fullPath 给页面挂 :key，改 query＝整页重挂载，
       // 刚载入的草稿/驳回单会被一份空白新建态顶掉（toast 仍说「已载入」，界面却是空单）。
-      // 余量：草稿重编辑此前不加载 PO/GRN 候选——
+      // 草稿重编辑还要加载 PO/GRN 候选——
       // loadPos 只挂在 onCounterChange（下拉 change 事件）上，深链载入不经过它，
       // 于是"已选好 PO/收货单的草稿"重开时两列下拉恒空、且看不到已选单的标签，
       // 用户一清空就再也选不回来。现按单上往来单位名补一次候选加载
@@ -717,7 +717,7 @@ onMounted(async () => {
     }
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   try {
-    // P0 修复：默认只加载同公司人员
+    // 默认只加载同公司人员
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('pay.corp.lblCurrentUser')
@@ -758,12 +758,12 @@ currentUserName.value = store.user?.realName || store.user?.nickName || store.us
         if (d.applyNo == null) d.applyNo = ''
       })
     }
-    // P0 根因修复：合同下拉的数据源是 contractApi.page，而 paidAmount 只是选项标签上的
-    // 「已付合计」装饰。此前把两者串在一个 try 里、且 reportApi.contractSummary() 抛错被
+    // 合同下拉的数据源是 contractApi.page，而 paidAmount 只是选项标签上的
+    // 「已付合计」装饰。把两者串在一个 try 里的话、reportApi.contractSummary() 抛错会被
     // `catch { ignore }` 吞掉 ⇒ contracts 整行赋值不执行 ⇒ 「付款合同」下拉对所有未授 report:view
     // 的角色（应付会计、普通员工）永久为空 ⇒ 三单/四单匹配的合同环节挂不上、付款齐套校验以「缺合同环节」
     // 永久拦截。这是一条所有人无解的阻断缺陷，不是权限配置疏漏的表象。
-    // 修法：解耦——合同列表独立 try（失败才空），报表汇总独立 try（失败即按 paidAmount=0 默认处理），
+    // 修法：解耦——合同列表独立 try（失败才空），报表汇总独立 try（失败即按 paidAmount=0 兜底），
     // 不再让「一个装饰性数字取不到」拖垮「合同环节能不能挂」这条主链路。
     // 后续若要标签上的「已付」也准确，可让 contract/page 直接带出 paidAmount（需 DTO 改造），
     // 但那属于锦上添花，不得再作为下拉可用性的前置条件。
@@ -775,7 +775,7 @@ currentUserName.value = store.user?.realName || store.user?.nickName || store.us
       sums.forEach((s) => { sumMap[s.contractNo] = Number(s.paidAmount || 0) })
     } catch (e) {
       // 缺 report:view 时只影响标签上的「已付」数字，下拉本身必须照常可用（余额标签退化为合同额全额）
-      console.warn('[D-V4R-78] 读取合同已付金额失败，合同下拉改为不显示已付金额：', e?.message || e)
+      console.warn('读取合同已付金额失败，合同下拉改为不显示已付金额：', e?.message || e)
     }
     contracts.value = clist.map((c) => ({ ...c, paidAmount: sumMap[c.contractNo] ?? Number(c.paidAmount ?? 0) }))
     if (matchRouteRef.value) matchRouteRef.value.loadApprovedPays()

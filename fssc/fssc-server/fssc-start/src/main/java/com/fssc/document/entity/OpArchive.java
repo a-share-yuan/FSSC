@@ -46,9 +46,9 @@ public class OpArchive implements Serializable {
     /**
      * 载体类型：PAPER 纸质（原件保管，归档前必须逐件编页）/ ELECTRONIC 电子（按件计数，不强制编页）。
      *
-     * <p>新增列。此前 {@code op_archive} 没有任何载体字段，{@code preArchiveFailures}
+     * <p>没有载体字段的话，{@code preArchiveFailures}
      * 只能做「编了就必须编全、从第 1 页连续」的一致性校验，分不清纸质与电子 ⇒ DA/T 22 的
-     * 「纸质卷必须编页」无法只对纸质卷强制。列默认 {@code PAPER}（严格侧）：历史 5 卷原件均为纸质，
+     * 「纸质卷必须编页」无法只对纸质卷强制。列默认 {@code PAPER}（严格侧）：既有卷原件都是纸质，
      * 若默认电子等于把存量纸质卷静默放过，闸门先自废一半；实为电子的卷逐卷订正。
      */
     private String carrierType;
@@ -65,10 +65,10 @@ public class OpArchive implements Serializable {
     private Long billId;
 
     /**
-     * UX-OUT-11（读侧补充，与 {@link #archiveProcInstId} 同法＝零 DDL）：来源单据编号。
+     * 读侧补充，与 {@link #archiveProcInstId} 同法（零 DDL）：来源单据编号。
      *
-     * <p>本列此前不存在，而档案列表/选择器出参是裸实体 ⇒ 前端「关联单据」列没有可绑的编号，
-     * 只能回落到主键（实测渲染成 {@code 单据#null}／{@code 单据#700000562}）。单号其实一直在
+     * <p>档案列表/选择器出参是裸实体，没有本列的话 ⇒ 前端「关联单据」列没有可绑的编号，
+     * 只能回落到主键（界面上渲染成 {@code 单据#null}）。单号其实一直在
      * {@code ref_no} 里（人工立卷走 {@code ArchiveService.fillCatalogFromSourceBill}、
      * 自动腿走 {@code BillArchiveService}，三条腿同源），只是列读错了字段。
      * 现由 {@code ArchiveService.fillSourceBillNo} 按单据载体类型回填，非单据载体保持 NULL
@@ -93,13 +93,13 @@ public class OpArchive implements Serializable {
      * 从此有两个不同语义的实例号。
      *
      * <pre>
-     * -- 需人工裁决：以下是把该键<b>持久化</b>的注释态 DDL，本轮未执行、也不得由缺陷修复批次执行。
+     * -- 需产品确认：以下是把该键<b>持久化</b>的注释态 DDL，没有执行过，也不得借修复之名代为执行。
      * -- 写入数据库后本字段去掉 @TableField(exist = false) 改 @TableField("archive_proc_inst_id")，
      * -- 并在 ArchiveService.archive() 起流处用 wfEngineFacade.start(...) 的返回值（就是新实例号）写入。
      * -- ALTER TABLE op_archive
      * ADD COLUMN archive_proc_inst_id VARCHAR(64) NULL COMMENT '归档审批流(FM_ARCHIVE)自身实例ID' AFTER proc_inst_id,
      * ADD COLUMN archive_flow_status VARCHAR(20) NULL COMMENT '归档审批流状态 RUNNING/APPROVED/REJECTED/CANCELLED' AFTER archive_proc_inst_id;
-     * -- 历史回灌（数据轨，与上面的裁决一起做；不回灌则老档案行仍只能靠读侧补充）：
+     * -- 历史回灌（数据轨，与上面的判定一起做；不回灌则老档案行仍只能靠读侧补充）：
      * -- UPDATE op_archive a JOIN wf_instance w ON w.biz_type = 'FM_ARCHIVE' AND w.biz_id = a.id
      * SET a.archive_proc_inst_id = w.proc_inst_id, a.archive_flow_status = w.status
      * WHERE a.archive_proc_inst_id IS NULL; -- 同一档案多轮归档实例时取 id 最大的一条（读侧同一规则）
@@ -167,7 +167,7 @@ public class OpArchive implements Serializable {
     /**
      * 保管处置状态：FILED已归档在架/EXPIRED到期/DESTROYED已销毁。
      *
-     * <p><b>本列是 {@code archiveStatus} 的冗余镜像，不承载业务判定</b>，
+     * <p>本列是 {@code archiveStatus} 的冗余镜像，不承载业务判定，
      * 取值一律由 {@code ArchiveService.dispositionOf(archiveStatus)} 派生后同源回写：
      * <pre>
      *   PENDING / ARCHIVING / ARCHIVED → FILED （案卷已登记在架）
@@ -177,13 +177,13 @@ public class OpArchive implements Serializable {
      *
      * <p><b>缺陷原状（为什么会"两列互斥"）</b>：写入位置各写一列——
      * {@code BillArchiveService.doArchive} 只写 {@code status='ARCHIVED'} 而从不写本域默认 PENDING 的
-     * {@code archive_status}（实测 id=21/22/23 与现库 id=4/10 都是「archive_status=PENDING ＋ status=ARCHIVED」）；
+     * {@code archive_status}（两列于是长期是「archive_status=PENDING ＋ status=ARCHIVED」）；
      * {@code ArchiveFacadeImpl.handleArchiveApproval} 又把两列都写成 'ARCHIVED'，
      * 而 'ARCHIVED' 根本不在本列名称表里。现两处均改走 {@code dispositionOf}，
      * 唯一现有例外＝FM_DESTROY 审批通过时先置本列 DESTROYED（归档轴待「执行销毁」才 DISPOSED），
      * 判"已销毁"须两列取或（{@code ArchiveDestroyService.assertAllExpired}）。
      *
-     * <p>列不删、名称表不改（DDL 需人工裁决）；历史行的旧值不回写（演练数据保留铁律），
+     * <p>列不删、名称表不改（DDL 需产品确认）；历史行的旧值不回写（演练数据保留铁律），
      * 只在后续正常写入时按映射自然收敛。
      */
     private String status;

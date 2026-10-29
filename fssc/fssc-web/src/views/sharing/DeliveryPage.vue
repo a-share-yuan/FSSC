@@ -214,7 +214,7 @@
           </el-select>
           <el-input v-model="barcodeFilters.keyword" :placeholder="$t('sharing.delivery.phBarcodeKeyword')" clearable size="small" style="width:200px" @keyup.enter="loadBarcodes" />
           <el-button type="primary" size="small" @click="loadBarcodes">{{ $t('common.search') }}</el-button>
-          <!-- 条码管理此前只读列表，无生成/上架入口；后端 /barcode/generate、/barcode/shelve 早已在 -->
+          <!-- 条码管理补上生成/上架入口（后端 /barcode/generate、/barcode/shelve 早已在） -->
           <el-button type="success" size="small" @click="openGenerateBarcode">{{ $t('sharing.delivery.btnGenByBill') }}</el-button>
         </div>
 
@@ -561,7 +561,7 @@ async function loadCompanies() {
     const m = {}
     ;(list || []).forEach((c) => { m[c.id] = c })
     companyById.value = m
-  } catch { /* 模式信息不可得时按集中处理，交单链路由后端同一判据默认处理 */ }
+  } catch { /* 模式信息不可得时按集中处理，交单链路由后端同一判据兜底 */ }
 }
 
 async function searchBills(query) {
@@ -616,7 +616,7 @@ async function loadBarcodes() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// 按单据生成条码（条码管理页此前无写入出口；后端 /barcode/generate 早已在）
+// 按单据生成条码（后端 /barcode/generate 早已在，页面补上写入出口）
 const genBarcodeVisible = ref(false)
 const genBarcodeBill = ref(null)
 const genBarcodeOptions = ref([])

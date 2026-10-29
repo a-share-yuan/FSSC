@@ -18,6 +18,7 @@ import com.fssc.masterdata.mapper.MdCipCostMapper;
 import com.fssc.masterdata.mapper.MdCipMapper;
 import com.fssc.system.entity.SysCompany;
 import com.fssc.system.mapper.SysCompanyMapper;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,7 +43,7 @@ public class MdCipService {
     private final SysCompanyMapper sysCompanyMapper;
     private final MdAssetService assetService;
 
-    // ---------------- 卡片维护 ----------------
+    // 卡片维护
 
     public Long create(MdCip e) {
         e.setId(null);
@@ -122,16 +123,16 @@ public class MdCipService {
         return cip;
     }
 
-    // ---------------- 成本归集 ----------------
+    // 成本归集
 
     /**
      * 在建工程成本归集：明细（md_cip_cost）＋工程暂挂金额（md_cip.accrued_amount）两表成对写。
-     * 无边界时明细已落而汇总未加＝暂挂金额永久少计，转资按少计额入账（ROOT-11 已裁规则：跨表写成对者补；自定，无外部依据）。
+     * 无边界时明细已落而汇总未加＝暂挂金额永久少计，转资按少计额入账（跨表写成对者补；自定，无外部依据）。
      */
     @Transactional(rollbackFor = Exception.class)
     public Long addCost(Long cipId, MdCipCost cost) {
         MdCip cip = requireCip(cipId);
-        // 必填守卫（批次 2B）：归集类型决定成本规则（领料/设备/人工/待摊/资本化利息），留空无从归类
+        // 必填守卫：归集类型决定成本规则（领料/设备/人工/待摊/资本化利息），留空无从归类
         if (cost.getCostType() == null || cost.getCostType().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择归集类型");
         }
@@ -164,7 +165,7 @@ public class MdCipService {
         return PageResult.of(p.getRecords(), p.getTotal(), q.getPageNum(), q.getPageSize());
     }
 
-    // ---------------- 转固定资产 ----------------
+    // 转固定资产
 
     /**
      * CIP 采购/付款成本归集：付款批次确认/执行后自动归集到在建工程成本。
@@ -201,7 +202,7 @@ public class MdCipService {
             cost.setCipId(sourceDocId);
             cost.setCostType("EQUIPMENT");
             cost.setAmount(amount);
-            cost.setOccurDate(java.time.LocalDate.now());
+            cost.setOccurDate(LocalDate.now());
             cost.setDescription(descKey + "（付款批次 " + batchNo + " 自动归集）");
             costMapper.insert(cost);
             MdCip upd = new MdCip();
@@ -219,7 +220,7 @@ public class MdCipService {
     /**
      * 采购收货 CIP 成本归集：收货单挂在建工程（po_receipt.cip_id，从 po_order 继承）时，
      * 收货成功后自动写入 md_cip_cost（成本类型 EQUIPMENT，描述含收货单号去重防重），并回写累计归集金额。
-     * 与 {@link #aggregateFromPayBatch} 同一套去重/默认处理约定：内部异常吞掉仅记日志，不阻断收货主流程。
+     * 与 {@link #aggregateFromPayBatch} 同一套去重/兜底约定：内部异常吞掉仅记日志，不阻断收货主流程。
      */
     @Transactional(rollbackFor = Exception.class)
     public void aggregateFromReceipt(String receiptNo, Long cipId, BigDecimal amount) {
@@ -244,7 +245,7 @@ public class MdCipService {
             cost.setCipId(cipId);
             cost.setCostType("EQUIPMENT");
             cost.setAmount(amount);
-            cost.setOccurDate(java.time.LocalDate.now());
+            cost.setOccurDate(LocalDate.now());
             cost.setDescription(descKey + "（采购收货 " + receiptNo + " 自动归集）");
             costMapper.insert(cost);
             MdCip upd = new MdCip();
@@ -271,8 +272,8 @@ public class MdCipService {
         if (req.getCategoryId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择固定资产类别");
         }
-        // 必填守卫（批次 2B）：转固日期＝新建卡片的购置日期（折旧起算规则），使用部门＝卡片归属部门；
-        // 此前两者留空照样建卡并发审批，卡片要等到人工编辑才能补齐。
+        // 必填守卫：转固日期＝新建卡片的购置日期（折旧起算规则），使用部门＝卡片归属部门；
+        // 两者留空就照样建卡并发审批的话，卡片要等到人工编辑才能补齐。
         if (req.getTransferDate() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择转固日期");
         }

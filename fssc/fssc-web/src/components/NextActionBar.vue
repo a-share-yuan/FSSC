@@ -31,7 +31,7 @@ const status = computed(() => props.billInfo?.status || '')
 const reached = computed(() => props.chain?.summary?.reached || [])
 
 /** 本域无出证/付款环节的单据不再引导「去凭证台账」「去出纳付款」——
- *  判据与 BillChainTimeline／甲-2 同源：优先 summary.segmentSupport，旧包回落 paymentSupported，缺省视为有环节。 */
+ *  判据与 BillChainTimeline 同源：优先 summary.segmentSupport，旧包回落 paymentSupported，缺省视为有环节。 */
 const segOk = (k) => {
   const s = props.chain?.summary
   const seg = s && s.segmentSupport
@@ -41,7 +41,7 @@ const segOk = (k) => {
 }
 
 /**
- * 「付款已完成」这句话此前在归档引导里是无条件写的，而同抽屉的付款记录段可能正显示
+ * 「付款已完成」这句话不能在归档引导里无条件写，而同抽屉的付款记录段可能正显示
  * 「待付款」（exp_bill_payment.pay_status=WAITING、pay_time NULL、paid_amount=0）。
  * 判据一律复用后端同一份读数，前端只负责把话说实，不另算一套：
  *  · 是否有付款环节 ＝ summary.segmentSupport.PAYMENT（沿用上方 segOk，与 甲-2 同源）；

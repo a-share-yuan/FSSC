@@ -107,8 +107,8 @@ public class BankAccountService {
     }
 
     /**
-     * P0 资金路由：银行账号同租户唯一——Bean Validation 只能校验单字段形态，
-     * 「同号重复登记」必须查库，放这里默认处理（与前后端格式校验构成唯一性校验）。
+     * 资金路由：银行账号同租户唯一——Bean Validation 只能校验单字段形态，
+     * 「同号重复登记」必须查库，放这里兜底（与前后端格式校验构成唯一性校验）。
      */
     private void assertBankAccountUnique(MdBankAccount e) {
         if (!StringUtils.hasText(e.getBankAccount())) {
@@ -152,12 +152,12 @@ public class BankAccountService {
         // 账户性质必填 + 一司一基本户 + 默认账户唯一
         assertAccountType(e, e.getCompanyId(), true);
         enforceSingleDefault(e, e.getCompanyId());
-        // TR-O1 补充：account_code 同为 NOT NULL 无默认值列，缺省按编号规则自动生成（默认处理时间戳，风格同 createBatch）
+        // TR-O1 补充：account_code 同为 NOT NULL 无默认值列，缺省按编号规则自动生成（兜底时间戳，风格同 createBatch）
         if (!StringUtils.hasText(e.getAccountCode())) {
             String code;
             try { code = numberRuleService.next("BANK_ACCOUNT"); }
             catch (Exception ex) {
-                // 编号规则未配置/异常：默认处理用时间戳生成 account_code，保证 NOT NULL 列可写入数据库
+                // 编号规则未配置/异常：兜底用时间戳生成 account_code，保证 NOT NULL 列可写入数据库
                 log.warn("银行账号编号规则生成失败，回退时间戳: {}", ex.getMessage());
                 code = "BA" + System.currentTimeMillis();
             }
@@ -169,13 +169,13 @@ public class BankAccountService {
             wfEngineFacade.start("TR_BANK_MASTER", e.getId(), userId(), "银行主数据-" + e.getAccountName());
         } catch (Exception ex) {
             log.error("银行主数据 {} 发起主数据审批失败: {}", e.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须抛出去，不能静默降级成没有流程的孤儿单
         }
         return e.getId();
     }
 
     /**
-     * 审计扩面（D 类·银行账户变更）：改前采集旧值，**仅当账号/开户行实际变化时**记录
+     * 审计扩面（D 类·银行账户变更）：原先采集旧值，**仅当账号/开户行实际变化时**记录
      * （规则：before/after 只含本次实际变化字段；取不到旧实体则不写、不伪造）。
      */
     public void update(MdBankAccount e) {
@@ -251,7 +251,7 @@ public class BankAccountService {
         return UserContext.get() == null ? null : UserContext.get().getUserId();
     }
 
-    /** 当前登录用户归属公司（未登录或无公司归属返回 null，由调用方决定是否默认处理） */
+    /** 当前登录用户归属公司（未登录或无公司归属返回 null，由调用方决定是否兜底） */
     private Long companyId() {
         return UserContext.get() == null ? null : UserContext.get().getCompanyId();
     }

@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.fssc.masterdata.entity.GlStandard;
 import org.apache.ibatis.annotations.Mapper;
 
-/** GlStandard Mapper（V1.4.87 多账簿体系，闭环差距③）。 */
+/** GlStandard Mapper（多账簿体系，闭环差距③）。 */
 @Mapper
 public interface GlStandardMapper extends BaseMapper<GlStandard> {
 }

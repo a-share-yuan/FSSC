@@ -42,7 +42,7 @@ const props = defineProps({
 /**
  * 单文件体积上限（MB）。与后端 `fssc.file.max-size` / `spring.servlet.multipart.max-file-size` 对齐。
  * 前端先拦是为了不让大文件白传一趟；后端仍会二次校验并返回明确原因。
- * 2026-09-12 第二次对齐：后端 multipart 上限已放宽到 20MB（原 10MB 会把 15MB 的合规发票影像挡在门外），
+ * 第二次对齐：后端 multipart 上限已放宽到 20MB（原 10MB 会把 15MB 的合规发票影像挡在门外），
  * 前端阈值同步改为 20MB。**改这里必须同时改 application.yml 的 max-file-size / fssc.file.max-size**，
  * 三者不一致就会出现「前端放行、后端静默拒绝」或反之。
  */
@@ -50,14 +50,14 @@ const MAX_SIZE_MB = 20
 
 /**
  * 本按钮在飞的请求集合。
- * 写成数组而不是单枚＝el-upload 的 multiple 会**逐文件各调一次** doUpload，
+ * 写成数组而不是单枚＝el-upload 的 multiple 会逐文件各调一次 doUpload，
  * 单枚 controller 会被后一次赋值顶掉 ⇒「取消等待」只中断最后一条、其余仍在跑却不再有任何出口
- * （10-05 登记时已把这条列为已知限制，本轮收掉）。
+ * 所以这里按文件维度各存一枚，取消等待才能覆盖全部在传文件。
  */
 const busy = ref(false)
 /**
  * 等待期按钮文案：只有发票类文件才叫「识别中」。
- * 此前只要 parse=true 一律显示"识别中…"，传一份 .docx 合同也在喊识别——
+ * 只要 parse=true 一律显示"识别中…"的话，传一份 .docx 合同也在喊识别——
  * 后端对非发票格式直接 attachType=OTHER、根本不走识别（见 ExpenseAttachController）。
  */
 const busyText = ref('上传中…')
@@ -153,7 +153,7 @@ async function doUpload({ file, onSuccess, onError }) {
 /*
  * el-upload 依赖全局样式 .el-upload__input{display:none} 隐藏原生 file 控件。
  * 全局 CSS 缺失/加载失败/被覆盖时，原生「选择文件」控件会以浏览器默认样式直接排在文档流里
- * （2026-10-20 23:38 实测截图：它跑到页面左上，压住侧边菜单）。这里在组件内再兜一层，
+ * （它会跑到页面左上，压住侧边菜单）。这里在组件内再兜一层，
  * 四重隐藏 + 移出可视区，确保无论全局样式在不在，用户都看不到原生控件。
  */
 .upload-btn-wrap :deep(.el-upload__input) {

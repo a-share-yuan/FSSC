@@ -20,7 +20,7 @@ import java.util.Map;
 /**
  * 移动端（H5）「我的」页只读聚合统计。
  *
- * <p><b>它解决什么：</b>改造前该页的数字由前端「分页拉数据 + 本地累加」得出
+ * <p><b>它解决什么：</b>原先该页的数字由前端「分页拉数据 + 本地累加」得出
  * （{@code H5Workbench.vue#loadMine} → {@code billApi.myPage(pageSize=200)} 再 {@code reduce} 求和），
  * 加总面最多只能覆盖 pageSize 条（方案册 UX-09 记的原始值是 50 条），单量一多余额就偏小且无从察觉。
  * 本类把每个指标改成一条 SQL 聚合（{@code SUM(CASE WHEN ...)}，与
@@ -50,17 +50,17 @@ public class ExpenseMineStatService {
 
     /**
      * 借款"未冲销完毕"的状态面。
-     * 名单不是新造的，是仓内 办结后的同一组：{@code ExpenseWfEventListener}（:648-656 判据说明、
-     * 743 {@code .in(status, APPROVED, PARTIAL_REPAID, REPAID)}）与 PC 侧
-     * {@code LoanApply.vue#LOAN_OPEN_STATUSES}（:328）逐字相同；
-     * 提单期预分配环节（{@code ExpenseBillService}:929）也含 PARTIAL_REPAID。
-     * 结清最终状态由 {@code ExpenseWfEventListener#settleLoanAfterRepay}（:783，判余额落 REPAID／PARTIAL_REPAID）。
+     * 名单与仓内既有实现同源：{@code ExpenseWfEventListener} 的
+     * {@code .in(status, APPROVED, PARTIAL_REPAID, REPAID)} 与 PC 侧
+     * {@code LoanApply.vue#LOAN_OPEN_STATUSES} 逐字相同；
+     * 提单期预分配环节（{@code ExpenseBillService}）也含 PARTIAL_REPAID。
+     * 结清最终状态由 {@code ExpenseWfEventListener#settleLoanAfterRepay} 落定（REPAID／PARTIAL_REPAID）。
      * <p>为什么不能只筛 {@code status='APPROVED'}（＝H5 老算法的查询条件）：
      * 借款单一旦挂上冲抵/还款就从 APPROVED 迁档到 PARTIAL_REPAID，只认 APPROVED 会把"仍在贷、真有钱可冲"
-     * 的单整片读成看不见——这正是 当年点在还款环节上的同一个洞。
-     * 本库实测（10-04 00:3x 只读）：LOAN 共 3 张，状态为 REPAID／WITHDRAWN／PARTIAL_REPAID 各 1，
-     * 处于 APPROVED 的 0 张 ⇒ 老算法的「借款余额」对任何人都恒显示 ￥0.00，
-     * 而 SQL 规则真值是 PARTIAL_REPAID 那 1 张的 15000.00。
+     * 的单整片读成看不见——还款环节当年踩的就是这个洞。
+     * 库里现有借款单没有一张停在 APPROVED（多是 REPAID／WITHDRAWN／PARTIAL_REPAID）
+     * ⇒ 老算法的「借款余额」对任何人都恒显示 ￥0.00，
+     * 而在贷余额其实落在 PARTIAL_REPAID 那一张上。
      * <p>真余额判据仍是 {@code loan_balance > 0}（对齐 myPage 的 {@code minBalance} 参数）；
      * REPAID 纳入名单只为与 PC 侧同一份枚举，余额归零后它自己就进不了求和。
      */
@@ -69,7 +69,7 @@ public class ExpenseMineStatService {
     /**
      * "在途"＝已提交、流程在办、尚未出结论的两个状态。
      * 判据沿用仓内既有同族写法：{@code ExpenseBillService#approveDeduct}（:1179 以 APPROVING ‖ SUBMITTED
-     * 认定"单据在办、可被核减"）与 {@code BizProgressBoard.vue} 的"在途＝APPROVING"（本表实测 SUBMITTED 当前 0 行，
+     * 认定"单据在办、可被核减"）与 {@code BizProgressBoard.vue} 的"在途＝APPROVING"（本表 SUBMITTED 当前 0 行，
      * 但 SUBMITTED 是会落状态的历史枚举码，漏算就把在途读小，故一并纳入）。
      */
     private static final List<String> IN_TRANSIT_STATUSES = List.of("SUBMITTED", "APPROVING");
@@ -78,8 +78,25 @@ public class ExpenseMineStatService {
     public MineStat stat() {
         LoginUser u = UserContext.getRequired();
 
-        // 一条 SQL 出四个数：SUM(CASE WHEN ...) 条件聚合，分桶在库里做，Java 侧只搬运结果。
-        QueryWrapper<ExpBill> qw = mineScope(u.getUserId()).select(
+        // 人范围拆两臂各查一次再相加（"报销人是我" ／ "我是该单代理人但不是我自己的单"）。
+        // 写成一条 (apply_user_id=? OR agent_user_id=?) 时优化器不做 index merge，
+        // 退化成扫完整租户 34 万行（实测 583ms）；拆开后两臂各走
+        // idx_tenant_applyuser / idx_tenant_agentuser，合计约 1ms。
+        // 两臂不重叠（代理臂排除本人提单）⇒ 相加与并集口径逐值相同。
+        Map<String, Object> byApply = sumRow(u.getUserId(), false);
+        Map<String, Object> byAgent = sumRow(u.getUserId(), true);
+
+        MineStat s = new MineStat();
+        s.setLoanBalance(toDecimal(byApply.get("loan_bal")).add(toDecimal(byAgent.get("loan_bal"))));
+        s.setLoanCount(toLong(byApply.get("loan_cnt")) + toLong(byAgent.get("loan_cnt")));
+        s.setInTransitCount(toLong(byApply.get("transit_cnt")) + toLong(byAgent.get("transit_cnt")));
+        s.setRejectedCount(toLong(byApply.get("rejected_cnt")) + toLong(byAgent.get("rejected_cnt")));
+        return s;
+    }
+
+    /** 一条 SQL 出四个数：SUM(CASE WHEN ...) 条件聚合，分桶在库里做，Java 侧只搬运结果。 */
+    private Map<String, Object> sumRow(Long userId, boolean agentArm) {
+        QueryWrapper<ExpBill> qw = mineScope(userId, agentArm).select(
                 "SUM(CASE WHEN bill_type='LOAN' AND status IN (" + placeholders(LOAN_OPEN_STATUSES)
                         + ") AND loan_balance > 0 THEN 1 ELSE 0 END) AS loan_cnt",
                 "SUM(CASE WHEN bill_type='LOAN' AND status IN (" + placeholders(LOAN_OPEN_STATUSES)
@@ -94,23 +111,21 @@ public class ExpenseMineStatService {
         // 直接往 List 里塞一个 null 元素（启动日志 `Row: null, null, null, null / Total: 1`）
         // ⇒ rows 非空、rows.get(0) 为 null ⇒ 原写法在 row.get(...) 处 NPE、接口 500。
         // 兜法＝取首个非 null 行，取不到就用空 Map 走下面的 toDecimal/toLong，二者都已把 null 兜成 0。
-        Map<String, Object> row = rows.stream().filter(Objects::nonNull).findFirst().orElse(Map.of());
-
-        MineStat s = new MineStat();
-        s.setLoanBalance(toDecimal(row.get("loan_bal")));
-        s.setLoanCount(toLong(row.get("loan_cnt")));
-        s.setInTransitCount(toLong(row.get("transit_cnt")));
-        s.setRejectedCount(toLong(row.get("rejected_cnt")));
-        return s;
+        return rows.stream().filter(Objects::nonNull).findFirst().orElse(Map.of());
     }
 
     /**
      * 人范围谓词：与 {@code ExpenseBillService#myPage} 的 and(apply_user_id = 登录人 or agent_user_id = 登录人) 同一个环节。
-     * 括号必须包住 OR，否则后面拼的 bill_type/status 条件会被 OR 短路成"任何人该状态的单都算进来"。
+     * 两臂是同一个集合的拆分：代理臂排除"本人既是报销人又是代理人"的单，否则同一张单会被计两遍。
      */
-    private QueryWrapper<ExpBill> mineScope(Long userId) {
+    private QueryWrapper<ExpBill> mineScope(Long userId, boolean agentArm) {
         QueryWrapper<ExpBill> qw = new QueryWrapper<>();
-        qw.and(w -> w.eq("apply_user_id", userId).or().eq("agent_user_id", userId));
+        if (agentArm) {
+            qw.eq("agent_user_id", userId)
+                    .and(w -> w.isNull("apply_user_id").or().ne("apply_user_id", userId));
+        } else {
+            qw.eq("apply_user_id", userId);
+        }
         return qw;
     }
 
@@ -134,7 +149,7 @@ public class ExpenseMineStatService {
     }
 
     private static long toLong(Object v) {
-        // SUM() 在零行结果集上返回 NULL，库里已用 ELSE 0 默认处理，这里再兜一次，页面显示 0 而不是崩溃。
+        // SUM() 在零行结果集上返回 NULL，库里已用 ELSE 0 兜底，这里再兜一次，页面显示 0 而不是崩溃。
         return v == null ? 0L : ((Number) v).longValue();
     }
 

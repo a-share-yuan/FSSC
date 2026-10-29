@@ -32,7 +32,7 @@ import java.math.BigDecimal;
 /**
  * 资金计划服务。
  * create（编制草稿）-> selectPlan（选中关联资金计划）-> combineActual（按流水更新实际收/支并完成）。
- * P5：计划编制即发起 TR_PLAN 资金计划编制审批流。
+ * 计划编制即发起 TR_PLAN 资金计划编制审批流。
  */
 @Slf4j
 @Service
@@ -47,7 +47,7 @@ public class TrFundPlanService {
 
     /** 同一笔提交的防重窗口：超时重发的第二笔（F1 场景，两次请求相隔约 20s）落在窗口内被拒 */
     private static final Duration SUBMIT_DEDUP_WINDOW = Duration.ofSeconds(60);
-    /** 在途互斥锁的默认处理存活时间：远大于单次编制耗时，防止异常退出后锁泄漏 */
+    /** 在途互斥锁的兜底存活时间：远大于单次编制耗时，防止异常退出后锁泄漏 */
     private static final Duration SUBMIT_LOCK_TTL = Duration.ofMinutes(5);
 
     /** 编制资金计划（草稿） */
@@ -67,7 +67,7 @@ public class TrFundPlanService {
         }
         orgGuard.assertCompanyAllowed(plan.getCompanyId());
         // 缺陷修复（H-06 / DF-03）：计划编号在创建时即取号（sys_number_rule TR_PLAN，FP 前缀），
-        // 原实现不落 plan_no 且审批结束事件不回写，导致 tr_fund_plan 历史行 plan_no=NULL、
+        // 不落 plan_no、审批结束事件又不回写，tr_fund_plan 的行就会 plan_no=NULL、
         // 审批待办/列表单据号列恒空。
         if (plan.getPlanNo() == null || plan.getPlanNo().isBlank()) {
             plan.setPlanNo(nextPlanNo());
@@ -86,13 +86,13 @@ public class TrFundPlanService {
         }
         try {
             mapper.insert(plan);
-            // P5：计划编制即发起 TR_PLAN 资金计划编制审批流（资金岗编制→共享主管复核→财务经理阈值审批）
+            // 计划编制即发起 TR_PLAN 资金计划编制审批流（资金岗编制→共享主管复核→财务经理阈值审批）
             try {
                 wfEngineFacade.start("TR_PLAN", plan.getId(), userId(),
                         "资金计划-" + plan.getId(), plan.getIncomeAmount() == null ? BigDecimal.ZERO : plan.getIncomeAmount());
             } catch (Exception ex) {
                 log.error("资金计划 {} 发起计划审批失败: {}", plan.getId(), ex.getMessage(), ex);
-                throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+                throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
             }
             // 只有成功落单才立窗口；失败不立，用户可立即重试
             distributedState.mark(submitKey, SUBMIT_DEDUP_WINDOW);
@@ -104,7 +104,7 @@ public class TrFundPlanService {
 
     /**
      * 编制提交的去重签名（key 自带命名空间，约定见 DistributedState）。
-     * 末段取 MD5：本地实现的锁走 MySQL GET_LOCK，锁名上限 64 字符（实测超长直接报 4163），
+     * 末段取 MD5：本地实现的锁走 MySQL GET_LOCK，锁名上限 64 字符（超长直接报 4163），
      * 明文拼接「租户+公司+期间+编制人+两个金额」会越过该上限并把接口打成 500。
      */
     private static String submitSignature(TrFundPlan plan, Long creatorId) {
@@ -132,8 +132,8 @@ public class TrFundPlanService {
     }
 
     /**
-     * 批次1：驳回计划编辑重提 REJECTED → DRAFT 并重新发起 TR_PLAN 审批流（起【新】实例）。
-     * 此前 TreasuryPlanBizAction 驳回置 REJECTED 后无任何出口，且 selectPlan/adjust 只挡
+     * 驳回计划编辑重提 REJECTED → DRAFT 并重新发起 TR_PLAN 审批流（起【新】实例）。
+     * TreasuryPlanBizAction 驳回置 REJECTED 后若无出口，而 selectPlan/adjust 只挡
      * COMPLETED，被驳回计划可被"选中/调整"侧门带病推进——两头一并办结。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -154,7 +154,7 @@ public class TrFundPlanService {
                     "资金计划-" + planId, plan.getIncomeAmount() == null ? BigDecimal.ZERO : plan.getIncomeAmount());
         } catch (Exception ex) {
             log.error("资金计划 {} 重新发起审批失败: {}", planId, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡（事务回滚，状态还原 REJECTED）
+            throw ex;  // 流程发起失败必须冒泡（事务回滚，状态还原 REJECTED）
         }
     }
 
@@ -168,11 +168,11 @@ public class TrFundPlanService {
     /**
      * 作废资金计划（<b>不是物理删除</b>）。
      *
-     * <p><b>为什么需要这个出口</b>：此前资金计划<b>没有删除/作废端点</b>，
+     * <p><b>为什么需要这个出口</b>：资金计划<b>没有删除/作废端点</b>时，
      * 跑测者想清理一张重复的草稿只能直接删表 ⇒ 产生两个后果：
      * <ol>
      *   <li>删表<b>不联动</b>终止流程实例 ⇒ {@code wf_instance} 仍 RUNNING、
-     *       {@code act_ru_task} 留一个<b>无 assignee</b> 的僵尸待办（实测 FP202610200001）；
+     *       {@code act_ru_task} 留一个<b>无 assignee</b> 的僵尸待办；
      *       手工清理引擎表还会撞外键（{@code act_ru_identitylink.TASK_ID_}→{@code act_ru_task.ID_}，报 1451）。</li>
      *   <li>物理删除不记录，事后无法追溯「这张单为什么没了」。</li>
      * </ol>
@@ -211,7 +211,7 @@ public class TrFundPlanService {
     /**
      * 资金计划调整（T1）：在计划收/支基础上追加调整额，并发起 TR_PLAN_ADJUST 计划调整审批流。
      *
-     * <p>缺陷修复（H-09 / DF-01）：原实现对调整额无任何校验，任意负数/超额数值都会直接并入计划。
+     * <p>调整额必须有校验：不校验的话，任意负数/超额数值都会直接并入计划。
      * 现增加三重校验（不通过抛友好业务异常，前端无需改造）：</p>
      * <ul>
      *   <li>调整额不可全为 0（至少一个方向有实际调整）；</li>
@@ -254,7 +254,7 @@ public class TrFundPlanService {
                     "资金计划调整-" + plan.getId(), inc.max(outc));
         } catch (Exception ex) {
             log.error("资金计划 {} 发起调整审批失败: {}", plan.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
     }
 

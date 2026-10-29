@@ -4,11 +4,11 @@
 /**
  * useTablePager - 通用表格分页 composable
  *
- * 背景（第 6 轮体检 P0-1）：系统内大量列表页一次性全量拉取、无分页，
+ * 背景：系统内大量列表页一次性全量拉取、无分页，
  * 数据量增长后必然卡死。本项目存在两类列表：
  *
  *   1) 服务端分页：后端接口支持 pageNum/pageSize（推荐，明细列表用）
- *   2) 本地分页  ：后端返回聚合结果/小全集（报表、看板、配置项），
+ *   2) 本地分页：后端返回聚合结果/小全集（报表、看板、配置项），
  *                  前端按页切片，避免一次渲染上百行 DOM
  *
  * 用法 A（服务端分页）：
@@ -22,7 +22,7 @@
  *
  * 用法 B（本地分页）：
  *   const { pagedData, total, pageNum, pageSize, onPageChange, onSizeChange } = useTablePager({ mode: 'local' })
- *   watchEffect(() => pagedData)   // 传入全量源
+ *   watchEffect(() => pagedData) // 传入全量源
  *   const view = useTablePager({ mode: 'local' })
  *   view.setSource(allRows.value)
  *   <el-table :data="view.pagedData">
@@ -39,10 +39,10 @@ export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200]
 export const DEFAULT_PAGE_SIZE = 20
 
 /**
- * @param {Object}  opts
+ * @param {Object} opts
  * @param {'server'|'local'} [opts.mode='server'] 分页模式
- * @param {number}  [opts.pageSize=20] 初始每页条数
- * @param {string}  [opts.storageKey]  传入则记忆用户上次的每页条数（P2-2 预留）
+ * @param {number} [opts.pageSize=20] 初始每页条数
+ * @param {string} [opts.storageKey] 传入则记忆用户上次的每页条数（预留）
  */
 export function useTablePager(opts = {}) {
   const { mode = 'server', pageSize: initSize = DEFAULT_PAGE_SIZE, storageKey } = opts
@@ -52,10 +52,10 @@ export function useTablePager(opts = {}) {
   const total = ref(0)
   const loading = ref(false)
 
-  // ---- 服务端分页数据 ----
+  // 服务端分页数据
   const rows = ref([])
 
-  // ---- 本地分页数据 ----
+  // 本地分页数据
   const source = ref([])
   const pagedData = computed(() => {
     if (mode !== 'local') return rows.value

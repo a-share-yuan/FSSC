@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fssc.compliance.entity.EmployeeCredit;
 import com.fssc.compliance.mapper.EmployeeCreditMapper;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,7 +17,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 
 /**
- * 员工信用服务（P1-5 共享运营实质化）。
+ * 员工信用服务（共享运营实质化）。
  * <p>
  * 信用分驱动三大能力：
  * 1. 免审额度：信用分越高，单据金额低于免审额度时自动通过
@@ -25,7 +26,7 @@ import java.math.BigDecimal;
  * <p>
  * 信用等级：
  * A(850-1000) 免审5000 B(700-849) 免审2000
- * C(500-699)  免审500  D(0-499)   免审0
+ * C(500-699) 免审500 D(0-499) 免审0
  */
 @Slf4j
 @Service
@@ -181,7 +182,7 @@ public class EmployeeCreditService {
         upd.setCreditLevel(newLevel);
         upd.setAutoApproveLimit(newLimit);
         upd.setLastAdjustReason(reason);
-        upd.setLastAdjustTime(java.time.LocalDateTime.now());
+        upd.setLastAdjustTime(LocalDateTime.now());
         creditMapper.updateById(upd);
 
         if (!newLevel.equals(credit.getCreditLevel())) {

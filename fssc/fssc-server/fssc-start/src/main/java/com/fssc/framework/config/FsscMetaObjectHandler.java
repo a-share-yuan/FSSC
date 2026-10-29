@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 /**
  * 自动填充。INSERT 时填充审计字段 + 租户ID；UPDATE 时填充更新人/时间。
  * <p>
- * R5-D-249/314：审计四列 strict 语义——无条件覆盖（旧行回显/入参伪造不得冻结审计列）；
+ * /314：审计四列 strict 语义——无条件覆盖（旧行回显/入参伪造不得冻结审计列）；
  * tenantId 入参携带值与登录上下文不一致时 fail-closed 抛错，不静默改写。
  * <p>
  * 审计字段按实体实际类型自适应：
@@ -52,14 +52,14 @@ public class FsscMetaObjectHandler implements MetaObjectHandler {
 
     @Override
     public void updateFill(MetaObject metaObject) {
-        // strictUpdateFill：无条件刷新，杜绝「旧值回显→填充被跳过→审计列冻结」（R5-D-249）
+        // strictUpdateFill：无条件刷新，杜绝「旧值回显→填充被跳过→审计列冻结」
         fillAudit(metaObject, "updateBy", LocalDateTime.now());
         fillTime(metaObject, "updateTime", LocalDateTime.now());
     }
 
-    // ---------- 工具 ----------
+    // 工具
 
-    /** 审计人字段：strict 语义无条件覆盖（R5-D-249/314）。String 填用户名，Long 填用户ID */
+    /** 审计人字段：strict 语义无条件覆盖（/314）。String 填用户名，Long 填用户ID */
     private void fillAudit(MetaObject mo, String field, LocalDateTime now) {
         if (!mo.hasSetter(field)) {
             return;
@@ -88,7 +88,7 @@ public class FsscMetaObjectHandler implements MetaObjectHandler {
     }
 
     /**
-     * 租户列 fail-closed（R5-D-314）：入参携带 tenantId 且与登录上下文不一致即拒绝写入，不静默改写；
+     * 租户列 fail-closed：入参携带 tenantId 且与登录上下文不一致即拒绝写入，不静默改写；
      * 与上下文一致等价放行；为空则按上下文填充。
      */
     private void fillTenant(MetaObject mo, Long tid) {

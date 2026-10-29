@@ -24,7 +24,7 @@ import java.time.LocalDateTime;
  * 见 {@code PayBatchService.fillDisplayFields}），即下面三个 {@code exist=false} 字段。
  *
  * <pre>
- * -- 需人工裁决：以下 DDL 未执行、也不得由缺陷修复批次执行（注释态交付）。
+ * -- 需产品确认：以下 DDL 未执行、也不得由缺陷修复批次执行（注释态交付）。
  * -- 表结构落列后，把下面三行 @TableField(exist = false) 摘掉即可自动对上（MP 下划线转驼峰），
  * -- 并把 PayBatchService.confirm() 里捕获的 TR_PAY 实例号、PayBatchBizAction 收尾拿到的凭证号真正回写这两列。
  * -- ALTER TABLE op_pay_batch
@@ -34,14 +34,14 @@ import java.time.LocalDateTime;
  * ADD KEY idx_pay_proc_inst_id (pay_proc_inst_id),
  * ADD KEY idx_voucher_id (voucher_id);
  * --
- * -- 历史回灌（与建列同一裁决一起做，否则老批次仍是空列、列表规则新旧两套）：
+ * -- 历史回灌（与建列同一判定一起做，否则老批次仍是空列、列表规则新旧两套）：
  * -- UPDATE op_pay_batch b JOIN wf_instance w ON w.biz_type='TR_PAY' AND w.biz_id=b.id
  * SET b.pay_proc_inst_id = w.proc_inst_id WHERE b.pay_proc_inst_id IS NULL;
  * -- UPDATE op_pay_batch b JOIN op_voucher v ON v.source_type='TREASURY_PAY' AND v.source_doc_id=b.id AND v.del_flag=0
  * SET b.voucher_id=v.id, b.voucher_no=v.voucher_no WHERE b.voucher_id IS NULL;
  * -- 跨类型跳过（批次不出证、由单据级 EXPENSE_PAY 凭证承载）的那批批次，voucher_id 只能经
  * -- op_pay_batch_detail → exp_bill_payment.bill_id → op_voucher.bill_id 推出，多单可能多张凭证⇒一列存不下，
- * -- 该子集是否落列（改存关联表 op_pay_batch_voucher）同属本项裁决，宁缺毋滥：取不到就留 NULL，
+ * -- 该子集是否落列（改存关联表 op_pay_batch_voucher）同属本项判定，宁缺毋滥：取不到就留 NULL，
  * -- 不给批次写一个"猜出来的"凭证号（同 ／本类 proc_inst_id「多源合并留 NULL」规则）。
  * -- </pre>
  */
@@ -88,8 +88,8 @@ public class OpPayBatch extends TenantAuditBase {
     private String voucherStatus;
     /**
      * ①：本批次<b>自身</b>的资金付款审批（TR_PAY）流程实例号（transient，读侧补充）。
-     * 与 {@link #procInstId} 不是一回事——后者按 是<b>来源单据</b>的审批流（dc5ea295 那一类），
-     * 缺陷实测「从批次点追溯直达另一条流程」就是拿它当批次流用造成的。
+     * 与 {@link #procInstId} 不是一回事——后者是<b>来源单据</b>的审批流，
+     * 「从批次点追溯直达另一条流程」就是拿它当批次流用造成的。
      * 写入数据库需 DDL（见类注释），现由 {@code PayBatchService.fillDisplayFields} 从
      * {@code wf_instance(biz_type='TR_PAY', biz_id=id)} 取最新一条，与 {@code Pay.vue} 已声明的
      * {@code biz-type="TR_PAY"} 追溯入口同一规则，前端可直接把它当追溯主键用。

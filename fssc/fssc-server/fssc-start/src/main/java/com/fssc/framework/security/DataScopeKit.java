@@ -12,9 +12,9 @@ import com.fssc.common.exception.BizException;
 import java.util.Set;
 
 /**
- * data_scope 五级过滤工具（V1.3.20 安全审计③：让 @DataScope 注解真正生效）。
+ * data_scope 五级过滤工具（安全审计③：让 @DataScope 注解真正生效）。
  *
- * <p>用于在 {@code @DataScope} 标注的列表查询方法内，依据当前登录人的数据范围（1-5）向
+ * <p>用于在 {@code @DataScope} 标注的列表查询方法内，依据当前登录人的数据范围向
  * LambdaQueryWrapper 追加组织维度条件：</p>
  * <ul>
  *   <li>1 TENANT（本租户全部）→ 不加任何条件；</li>
@@ -29,7 +29,7 @@ import java.util.Set;
  * 则直接跳过，不影响原有查询。</p>
  *
  * <p>设计取舍：采用"各列表方法显式调用"而非全局 SQL 改写拦截器，避免对跨表 join 聚合查询
- * （报表统计）误注入列导致的 SQL 错误，风险更低、行为可预期。</p>
+ * 报表统计 误注入列导致的 SQL 错误，风险更低、行为可预期。</p>
  */
 public final class DataScopeKit {
 
@@ -39,11 +39,11 @@ public final class DataScopeKit {
     /**
      * 向查询追加数据范围条件。
      *
-     * @param qw        查询构造器（会被原地修改）
+     * @param qw 查询构造器（会被原地修改）
      * @param companyCol 公司列（如 OpVoucher::getCompanyId）；无则传 null
-     * @param deptCol    部门列（如 BgItem::getDeptId）；无则传 null
-     * @param ownerCol   本人列（如 ExpBill::getApplyUserId）；无则传 null
-     * @param <T>       实体类型
+     * @param deptCol 部门列（如 BgItem::getDeptId）；无则传 null
+     * @param ownerCol 本人列（如 ExpBill::getApplyUserId）；无则传 null
+     * @param <T> 实体类型
      */
     public static <T> void apply(LambdaQueryWrapper<T> qw,
                                  SFunction<T, ?> companyCol,
@@ -85,7 +85,7 @@ public final class DataScopeKit {
     }
 
     /**
-     * R5-D-262：{@link #apply} 的「公司级行可见」变体——专用于预算明细等"按公司下达、
+     * {@link #apply} 的「公司级行可见」变体——专用于预算明细等"按公司下达、
      * dept_id 常为 NULL"的列表页。
      *
      * <p>与 {@link #apply} 唯一的差别：DEPT / DEPT_AND_CHILD 档在部门条件之外追加
@@ -93,11 +93,11 @@ public final class DataScopeKit {
      * 且在公司归属可用时同步收紧 {@code company_id = 登录人公司}——不放开跨公司。
      * COMPANY / SELF / TENANT 档与 {@link #apply} 完全一致。</p>
      *
-     * @param qw        查询构造器（会被原地修改）
+     * @param qw 查询构造器（会被原地修改）
      * @param companyCol 公司列（如 BgItem::getCompanyId）；无则传 null
-     * @param deptCol    部门列（如 BgItem::getDeptId）；无则传 null
-     * @param ownerCol   本人列；无则传 null
-     * @param <T>       实体类型
+     * @param deptCol 部门列（如 BgItem::getDeptId）；无则传 null
+     * @param ownerCol 本人列；无则传 null
+     * @param <T> 实体类型
      */
     public static <T> void applyWithNullDept(LambdaQueryWrapper<T> qw,
                                              SFunction<T, ?> companyCol,
@@ -155,7 +155,7 @@ public final class DataScopeKit {
      * 返回当前数据范围收窄后的公司 ID（scope=1 本租户全部时返回 null）。
      *
      * <p>供"新增写"方法使用：非本租户全部档时返回值非空，调用方可将其作为新记录的公司归属
-     * （记录未带公司时回填）并校验（记录已带公司时须等于该值）。</p>
+     * 记录未带公司时回填 并校验（记录已带公司时须等于该值）。</p>
      */
     public static Long scopedCompanyId() {
         DataScopeHolder.Scope s = DataScopeHolder.get();

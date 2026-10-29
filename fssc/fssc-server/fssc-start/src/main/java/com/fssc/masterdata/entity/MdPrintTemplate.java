@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 /**
  * 打印模板头（套打平台 / 单据设计器）。
  *
- * <p><b>为什么建这张表</b>：此前全仓 print_template 零命中，5 套打印模板硬编码在
+ * <p><b>为什么建这张表</b>：打印模板原先硬编码在
  * {@code fssc-web/src/composables/usePrintTemplate.js} 的 TEMPLATES 常量里。
  * 那意味着「新增一种单据的打印样式」＝改前端代码＋发版，模板不是数据而是代码，
  * 业务人员无法自助调整版式。本表把版式参数写入数据库，把「模板」变回可配置数据。

@@ -55,7 +55,7 @@ public class ArStatementService {
 
     /**
      * 汇率主数据（md_exchange_rate）：外币折 RMB 的<b>首选</b>来源。
-     * 2026-10-17 起替代 sys_config 硬编码键 {@code ar.fx.{ccy}}（见 {@link #applyFx}）。
+     * 替代 sys_config 硬编码键 {@code ar.fx.{ccy}}（见 {@link #applyFx}）。
      */
     private final ExchangeRateService exchangeRateService;
 
@@ -242,9 +242,9 @@ public class ArStatementService {
     }
 
     /**
-     * 解析外币→CNY 汇率（2026-10-17 改造：汇率表优先，硬编码键降级为默认处理）。
+     * 解析外币→CNY 汇率（改造：汇率表优先，硬编码键降级为兜底）。
      *
-     * <p><b>改造前</b>：只读 {@code sys_config} 的 {@code ar.fx.{ccy}} —— 4 条写死参数，
+     * <p><b>原先</b>：只读 {@code sys_config} 的 {@code ar.fx.{ccy}} —— 4 条写死参数，
      * 无生效期、换汇比要改库、且与已有的汇率主数据表 {@code md_exchange_rate} 各干各的。</p>
      *
      * <p><b>改造后</b>查询顺序：

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <template>
-  <!-- RA-PAGE-21 2.2：借款/还款双形态并入一个菜单（原 225 还款管理退册）——切换即跳对侧路由，整页重挂重建单据状态 -->
+  <!-- 借款/还款双形态并入一个菜单（原 225 还款管理退册）——切换即跳对侧路由，整页重挂重建单据状态 -->
   <el-radio-group :model-value="mode" size="small" style="margin-bottom:8px" @change="onModeSwitch">
     <el-radio-button value="LOAN">{{ $t('expense.loan.tabLoanApply') }}</el-radio-button>
     <el-radio-button value="REPAY">{{ $t('expense.loan.tabRepayRegister') }}</el-radio-button>
@@ -188,7 +188,7 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 
-// 付款方式 / 偿还方式（2026-10-18 基础数据办结：二者同属 pay_method 字典）
+// 付款方式 / 偿还方式（基础数据办结：二者同属 pay_method 字典）
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
 const payMethodOptions = payMethodDict.options
 const { saveFormHistory } = useAutoFill()
@@ -233,7 +233,7 @@ const companyRules = computed(() => ({
 const formRef = ref(null)
 const loanFormRef = ref(null)
 const companyFormRef = ref(null)
-// P0 遗留专项：myPage 支持 minBalance 服务端过滤，未冲销借款列表切 server 模式
+// myPage 支持 minBalance 服务端过滤，未冲销借款列表切 server 模式
 const pager = useTablePager({ mode: 'server', storageKey: 'loan_apply' })
 const { pagedData } = pager
 const currentUserName = ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))
@@ -282,7 +282,7 @@ function ensureLine(b) {
   if (!b.form.lines.length) b.form.lines.push(b.newLine())
 }
 // 同一规则：冲销清单双向同步 extJson.loanOffsets——草稿即存，编辑重提回读回填
-// （此前只在提交时写入，重开还款草稿冲销行整块丢失）
+// （只在提交时写入的话，重开还款草稿冲销行整块丢失）
 watch(() => {
   const b = wb.value && wb.value.b
   return b && b.form.loanOffsets
@@ -315,7 +315,7 @@ async function onBeforeSubmit(b) {
     b.form.bill.expectRepayDate = b.form.bill.extJson.expectRepayDate || null
     // 借款详情必填（类型/金额/收款方式/账户名称/账号/开户行）
     if (!(await validateForms([loanFormRef]))) return false
-    // 预计还款日不得早于借款申请日（前端禁选 + 提交默认处理）
+    // 预计还款日不得早于借款申请日（前端禁选 + 提交兜底）
     const applyDay = b.form.bill.applyDate || b.today()
     const repayDay = b.form.bill.extJson.expectRepayDate
     if (applyDay && repayDay && repayDay < applyDay) {
@@ -348,9 +348,9 @@ async function removeOffset(b, i) {
 /**
  * 候选面改走 /loan-candidates，一次查询取回。
  *
- * <p>此前这里按 {@code APPROVED／PARTIAL_REPAID／REPAID} 三次 myPage 再合并去重
- * （的历史补丁：借款被在途冲抵会迁 PARTIAL_REPAID，单查 APPROVED 会失明）。
- * 新接口在服务端一次取齐三态、并已把 {@code loan_balance ≤ 0} 的滤掉，三分支拼装随之删除。</p>
+ * <p>按 {@code APPROVED／PARTIAL_REPAID／REPAID} 三次 myPage 再合并去重的话，
+ * 借款被在途冲抵会迁 PARTIAL_REPAID，单查 APPROVED 会失明。
+ * 新接口在服务端一次取齐三态、并已把 {@code loan_balance ≤ 0} 的滤掉，不再需要三分支拼装。</p>
  *
  * <p>更要紧的是它给的是 {@code availableBalance}（账面余额 − <b>在途占用</b>）：
  * 旧规则只给账面余额，前端默认勾全额必然撞服务端 {@code registerLoanOccupancy} 的超额校验
@@ -375,7 +375,7 @@ async function openRepayLoan() {
 }
 /**
  * 【确定】后才入账，且金额以对话框里改过的值为准（支持部分冲抵）。
- * 改前是点任意行立刻按未还余额全额冲抵并关窗——误点即产生财务动作、无确认、金额不可调。
+ * 原先是点任意行立刻按未还余额全额冲抵并关窗——误点即产生财务动作、无确认、金额不可调。
  */
 function confirmRepayLoans(items) {
   const b = wb.value && wb.value.b
@@ -402,7 +402,7 @@ function onRepayUserChange(b, id) {
   if (u) b.form.bill.applyUserName = u.nickName || u.userName
 }
 
-/** P0 遗留专项：未冲销借款列表（服务端分页 + loan_balance>0 过滤） */
+/** 未冲销借款列表（服务端分页 + loan_balance>0 过滤） */
 async function loadOpenLoans() {
   await pager.load(async ({ pageNum, pageSize }) => {
     const r = await billApi.myPage({ pageNum, pageSize, billType: 'LOAN', status: 'APPROVED', minBalance: 0 })
@@ -413,7 +413,7 @@ async function loadOpenLoans() {
 
 const route = useRoute()
 const router = useRouter()
-// 借款⇄还款切换（RA-PAGE-21 2.2）
+// 借款⇄还款切换
 function onModeSwitch(v) {
   if (v === props.mode) return
   router.push(v === 'REPAY' ? '/expense/repay' : '/expense/loan')
@@ -422,7 +422,7 @@ const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel
 
 onMounted(async () => {
   loadCurrency()
-  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
+  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与原先逐字一致
   payMethodDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单（LOAN/REPAY 同组件，按单据实际类型载入）
   // 不要此处不得回写路由 query：App.vue 按 route.fullPath 给页面挂 :key，改 query＝整页重挂载，
@@ -435,7 +435,7 @@ onMounted(async () => {
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   loading.value = true
   try {
-    // P0 修复：默认只加载同公司人员
+    // 默认只加载同公司人员
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
     currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')

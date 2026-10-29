@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ser.BeanSerializerModifier;
 import java.util.List;
 
 /**
- * 敏感字段脱敏 Jackson 模块（P1-3）。
+ * 敏感字段脱敏 Jackson 模块。
  *
  * <p>用 {@link BeanSerializerModifier} 在序列化器构建阶段把
  * {@link SensitiveSerializer} 绑定到带 {@link Sensitive} 注解的属性上。

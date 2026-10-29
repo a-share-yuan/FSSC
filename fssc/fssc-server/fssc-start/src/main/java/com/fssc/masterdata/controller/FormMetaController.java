@@ -17,13 +17,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 表单元数据引擎对外接口（V1.4.85，闭环差距①「单据/界面不是元数据驱动」）。
+ * 表单元数据引擎对外接口（闭环差距①「单据/界面不是元数据驱动」）。
  *
  * <p>路径 {@code /api/tenant/masterdata/form-meta/**}。
  *
  * <p><b>前端接入方式</b>：把写死的表单改成按元数据渲染。
  * <pre>
- *   const meta = await getFormMeta('EXP_CLAIM', roles)   // 取字段定义（含必录/锁定）
+ *   const meta = await getFormMeta('EXP_CLAIM', roles) // 取字段定义（含必录/锁定）
  *   &lt;el-form :model="form" :rules="rulesFromMeta(meta)"&gt;
  *     &lt;component v-for="f in meta" :is="widgetOf(f.widgetType)" v-model="form[f.fieldKey]" /&gt;
  *   &lt;/el-form&gt;
@@ -41,7 +41,7 @@ public class FormMetaController {
      * 取表单字段元数据。
      *
      * @param formCode 表单编码
-     * @param roles    当前用户角色码（逗号分隔，可空）。传了就会按 readonlyRoles/visibleRoles
+     * @param roles 当前用户角色码（逗号分隔，可空）。传了就会按 readonlyRoles/visibleRoles
      *                 把「锁定属性」在服务端就折叠好，前端不用再判断一次。
      */
     @GetMapping("/{formCode}/fields")
@@ -63,8 +63,8 @@ public class FormMetaController {
      * 服务端权威校验（前端绕过直调接口也拦得住）。
      *
      * @param formCode 表单编码
-     * @param scope    校验时机 SAVE/APPROVE
-     * @param data     提交数据
+     * @param scope 校验时机 SAVE/APPROVE
+     * @param data 提交数据
      */
     @PostMapping("/{formCode}/validate")
     public Result<FormMetaService.ValidateResult> validate(
@@ -96,7 +96,7 @@ public class FormMetaController {
                 "rules", formMetaService.rulesOf(formCode, scope)));
     }
 
-    // ==================== 字段维护（配置面） ====================
+    // 字段维护（配置面）
 
     @PostMapping("/field/save")
     @RequiresPerm("md:formmeta:field:edit")

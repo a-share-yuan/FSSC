@@ -58,7 +58,7 @@
 </template>
 
 <script setup>
-// P0-4（41号审查报告）：原页数据库为写死文案"MySQL 8.0 (fssc)"、无真实探活。
+// 41号审查报告：原页数据库为写死文案"MySQL 8.0 (fssc)"、无真实探活。
 // 现接 /api/health（免鉴权端点，JwtAuthFilter 白名单）：DB / Redis / 磁盘 / JVM 堆 / 运行时长 / 版本。
 import { computed, onMounted, ref } from 'vue'
 import { healthApi, reportApi, store } from '../../api'
@@ -90,7 +90,7 @@ function compTag(st) {
   return 'danger'
 }
 
-// R5-D-050：组件状态枚举中文化（UP/DOWN/DISABLED/UNKNOWN 原样出英文码对用户不可读）
+// 组件状态枚举中文化（UP/DOWN/DISABLED/UNKNOWN 原样出英文码对用户不可读）
 const compText = computed(() => ({ UP: t('system.common.stNormal'), DOWN: t('system.runStatus.stAbnormal'), DISABLED: t('system.runStatus.stNotEnabled'), UNKNOWN: t('system.runStatus.stUnknown') }))
 
 async function probe() {

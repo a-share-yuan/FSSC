@@ -69,7 +69,7 @@
       </template>
     </el-dialog>
 
-    <!-- Menu Assignment Dialog（2026-09-17 重构：大弹窗，左目录树（搜索/展开收起）+ 右已选权限清单） -->
+    <!-- Menu Assignment Dialog（重构：大弹窗，左目录树（搜索/展开收起）+ 右已选权限清单） -->
     <el-dialog v-model="menuDialogVisible" :title="$t('system.role.btnAssignMenu')" width="920px" top="6vh">
       <SkeletonDetail v-if="menuLoading" :rows="6" />
       <div v-else class="menu-assign">
@@ -198,7 +198,7 @@ const menuTreeRef = ref()
 const menuTree = ref([])
 const currentRole = ref(null)
 
-// 目录树搜索 / 展开收起 / 已选清单（2026-09-17 重构）
+// 目录树搜索 / 展开收起 / 已选清单
 const menuKeyword = ref('')
 const checkedList = ref([])
 const rootMenuIds = computed(() => menuTree.value.map((m) => m.id))

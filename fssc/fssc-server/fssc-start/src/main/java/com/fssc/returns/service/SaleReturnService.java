@@ -78,7 +78,7 @@ public class SaleReturnService {
     private final CrmCustomerMapper crmCustomerMapper;
     /** 红字应收（贷项）走应收族同一制证钩子——RECEIVABLE 族本就有制证写入位置
      *  （应收审批收尾 ReceivableBizAction、开票收尾 InvoiceIssueBizAction 都出证），
-     *  唯独本环节自建的红字应收不制证 ⇒ 应收侧账面净额与总账差一笔退货额（实测 −5,000 零凭证）。 */
+     *  唯独本环节自建的红字应收不制证 ⇒ 应收侧账面净额与总账会差一笔退货额。 */
     private final VoucherService voucherService;
     /** company_code/company_name 按 company_id 补充（原两列恒 NULL） */
     private final SysCompanyMapper sysCompanyMapper;
@@ -296,7 +296,7 @@ public class SaleReturnService {
     /**
      * 退货单分页查询（列表页与 {@code GET /export} 共用同一查询）。
      *
-     * <p>D-N22：原实现只按入参过滤，既无数据范围也不封顶；{@code /export} 传
+     * <p>只按入参过滤的话，既无数据范围也不封顶；{@code /export} 传
      * {@code Integer.MAX_VALUE} 调用本方法，等于"凭一个 companyId 就能整表拉走"。
      * 现按 data_scope 五级办结（退货单无部门/经办人列，故只到公司级，其余级别降级本公司）。</p>
      */
@@ -324,8 +324,8 @@ public class SaleReturnService {
 
     /**
      * 历史行补齐：读取时把 approver 的工号批量换成真名。
-     * <p>写入侧 {@link #currentUserName()} 只对"本次审批"生效；审批发生在修复前的老单据
-     * 仍存工号（实测 sale_return.approver='100002'），列表「审核人」列因此直接显示数字。
+     * <p>写入侧 {@link #currentUserName()} 只对"本次审批"生效；审批发生在升级前建的老单据
+     * 仍存工号，列表「审核人」列因此直接显示数字。
      * 与应付域 {@code ApRequestService.fillDisplayNames} 同一读时解析规则，写入数据库值不动。</p>
      */
     private void fillApproverNames(List<SaleReturn> rows) {
@@ -361,7 +361,7 @@ public class SaleReturnService {
             ln.setReturnId(r.getId());
             if (ln.getLineNo() == null) ln.setLineNo(no);
             if (ln.getAmount() == null) ln.setAmount(BigDecimal.ZERO);
-            // 单位由界面明细行带入（销售域无订单行模型可派生：so_order/so_order_line 实测 0 行），
+            // 单位由界面明细行带入（销售域无订单行模型可派生：so_order/so_order_line 没有数据），
             // 这里只做去空白归一，避免写入数据库成 ' ' 这种"看着有值其实没有"的脏数据。
             if (ln.getUom() != null) {
                 String u = ln.getUom().trim();
@@ -466,7 +466,7 @@ public class SaleReturnService {
         List<RcReceivable> open = rcReceivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .eq(RcReceivable::getCustomerId, cust.getId())
                 // 同族：冲减候选限定在本退货单所属法人主体内。客户主数据全租户共享，
-                // 不限主体就会拿本公司的一笔退货去冲他公司的应收（与收款环节 H3.4 实测同一形态的串账）。
+                // 不限主体就会拿本公司的一笔退货去冲他公司的应收（与收款环节同一形态的串账）。
                 .eq(r.getCompanyId() != null, RcReceivable::getCompanyId, r.getCompanyId())
                 .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
                 .ne(RcReceivable::getStatus, "DONE")
@@ -574,7 +574,7 @@ public class SaleReturnService {
                 r.getBillNo(), credit.getBillNo(), offset, stmt.getBillNo());
     }
 
-    /** customer_code → crm_customer（应收单以 customer_id 挂账；编码优先、名称默认处理） */
+    /** customer_code → crm_customer（应收单以 customer_id 挂账；编码优先、名称兜底） */
     private CrmCustomer resolveCustomer(SaleReturn r) {
         CrmCustomer cust = crmCustomerMapper.selectOne(new LambdaQueryWrapper<CrmCustomer>()
                 .eq(CrmCustomer::getCustomerCode, r.getCustomerCode())
@@ -603,7 +603,7 @@ public class SaleReturnService {
         try {
             LoginUser u = UserContext.get();
             if (u == null) return null;
-            // 审核人列直接显示工号（实测 sale_return.approver='100002'）——真名在 nickName，
+            // 审核人列直接显示工号——真名在 nickName，
             // getUserName() 是登录账号；与应付域 ApRequestService、采购退货侧同一规则。
             String real = u.getNickName();
             return real != null && !real.isBlank() ? real : u.getUserName();

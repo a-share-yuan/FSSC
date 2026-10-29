@@ -14,6 +14,7 @@ import com.fssc.compliance.mapper.OpSlaBreachMapper;
 import com.fssc.compliance.mapper.OpSlaConfigMapper;
 import com.fssc.compliance.mapper.ReviewerMapper;
 import com.fssc.compliance.entity.Reviewer;
+import java.util.Comparator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * SLA 监控服务（P1-5 共享运营实质化）。
+ * SLA 监控服务（共享运营实质化）。
  * <p>
  * 职责：
  * 1. 按单据类型配置 SLA（目标时长、预警时长）
@@ -55,13 +56,13 @@ public class SlaMonitorService {
     /**
      * 查询全部 SLA 配置。
      */
-    public java.util.List<OpSlaConfig> listAllConfigs() {
+    public List<OpSlaConfig> listAllConfigs() {
         return slaConfigMapper.selectList(
                 new LambdaQueryWrapper<OpSlaConfig>()
                         .orderByAsc(OpSlaConfig::getPriority));
     }
 
-    // ---------------- 维护面（2026-10-17 补：此前只有 list/check，SLA 阈值改一次只能改库）----------------
+    // 维护面（补上写入口；原先只有 list/check，SLA 阈值改一次只能改库）
 
     /**
      * 新增 SLA 配置。
@@ -246,7 +247,7 @@ public class SlaMonitorService {
                             .eq(Reviewer::getStatus, 1));
             if (!candidates.isEmpty()) {
                 Reviewer selected = candidates.stream()
-                        .min(java.util.Comparator.comparingInt(r -> r.getCurrentPending() != null ? r.getCurrentPending() : 0))
+                        .min(Comparator.comparingInt(r -> r.getCurrentPending() != null ? r.getCurrentPending() : 0))
                         .orElse(candidates.get(0));
                 breach.setEscalatedTo(selected.getId());
                 breach.setRemark("SLA超时, 升级至: " + selected.getReviewerName());

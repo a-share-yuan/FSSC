@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * P2：总账模块。凭证 POSTED 时落账到 op_gl_entry（所有 EER / PTP 凭证统一入账）。
+ * 总账模块。凭证 POSTED 时落账到 op_gl_entry（所有 EER / PTP 凭证统一入账）。
  * 余额与试算平衡通过明细实时聚合，天然支持反向凭证、无冲销增量回滚的脏数据风险。
  */
 @Slf4j
@@ -45,7 +45,7 @@ public class GlService {
     private final GlEntryMapper glEntryMapper;
     private final OpVoucherMapper opVoucherMapper;
     private final OpVoucherLineMapper opVoucherLineMapper;
-    /** 落账时把过账人姓名冗余进分录（列待人工裁决执行 DDL，见 {@code GlEntry}） */
+    /** 落账时把过账人姓名冗余进分录（列待产品确认后执行 DDL，见 {@code GlEntry}） */
     private final SysUserMapper sysUserMapper;
 
     /**
@@ -183,7 +183,7 @@ public class GlService {
     /**
      * 总账分录分页（支持列头服务端排序）。
      *
-     * <p>背景：前端列头原为裸 {@code sortable}——element-plus 只对「当前页 20 行」做前端排序，
+     * <p>背景：前端列头若只挂裸 {@code sortable}——element-plus 只对「当前页 20 行」做前端排序，
      * 翻页即乱序。排序收到后端：{@code orderBy} 为前端列 prop（camelCase），
      * <b>仅白名单列</b>映射到实体 getter（{@link #sortColumnOf}），非白名单值一律忽略回退默认序；
      * {@code order} 仅识别 desc（其余按 asc）。排序值不进入任何 SQL 字面量拼接，无注入面。
@@ -239,12 +239,12 @@ public class GlService {
      * 总账科目余额（含期初）。期初 = 该科目在小于本期期间的全部发生合计；
      * 本期借/贷 = 本期发生；期末 = 期初 + 本期借 - 本期贷，返回方向与绝对值。
      *
-     * <p><b>（证据 12-31:174，科目余额表合计借贷不平）</b>：本方法原先<b>只遍历本期发生行</b>，
+     * <p><b>科目余额表合计借贷不平</b>：本方法原先<b>只遍历本期发生行</b>，
      * 期初集合只是拿来"按编码查一下"——于是<b>只有期初余额、本期没有发生</b>的科目整行消失，
-     * 它的期初金额也跟着凭空不见，合计行自然对不平（现网实测：公司 1 / 2026-11，
-     * 11 个科目被丢掉、期初借 3,446,200 与期初贷 2,133,891.67 蒸发，页面读数变成
-     * 期初借 414,191.67 ≠ 期初贷 1,726,500.00；换到本期无发生的期间更是<b>整表空白</b>）。
-     * 现改为<b>科目全集 = 本期发生 ∪ 期初余额</b>，两边都有的合并成一行。
+     * 它的期初金额也跟着凭空不见，合计行自然对不平——这些科目在借、贷两侧缺的金额并不对等，
+     * 差额就落在合计行上；换到本期无发生的期间更是如此，
+     * 整张表直接变<b>空白</b>。
+     * <b>科目全集 = 本期发生 ∪ 期初余额</b>，两边都有的合并成一行。
      *
      * <p>同轮把<b>期初也按科目方向规范化</b>（净额落借或贷一边，与期末同一规则）：
      * 原先期初借/期初贷直接取发生额合计，同一科目两边同时挂数（如 1602 累计折旧期初借 501,000 又贷 4,591.67），

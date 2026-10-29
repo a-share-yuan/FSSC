@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 
 /**
- * 运维告警通道（P0-B1）。
+ * 运维告警通道。
  *
  * <p>与 {@link NotifyService} 的分工：NotifyService 面向<b>业务用户</b>（审批待办、SLA 超时推给具体的人）；
  * 本服务面向<b>运维/值班</b>，接收系统级事件——定时任务连续失败、健康检查探测到组件不可用。
@@ -65,8 +65,8 @@ public class OpsAlertService {
     /**
      * 推送一条运维告警。
      *
-     * @param level   ERROR / WARN / INFO（仅用于标题前缀与日志级别）
-     * @param title   告警标题（同时作为限流维度，同标题同窗口合并）
+     * @param level ERROR / WARN / INFO（仅用于标题前缀与日志级别）
+     * @param title 告警标题（同时作为限流维度，同标题同窗口合并）
      * @param content 告警正文（建议含影响面 + 已做动作 + 建议动作）
      */
     public void alert(String level, String title, String content) {

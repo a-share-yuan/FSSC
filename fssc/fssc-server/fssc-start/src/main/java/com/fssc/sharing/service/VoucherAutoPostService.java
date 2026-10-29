@@ -40,34 +40,34 @@ import org.springframework.transaction.annotation.Transactional;
  * 独立事务（REQUIRES_NEW）：凭证过账失败只影响凭证状态，绝不回滚已成功的付款；
  * 失败后可在凭证工作台用批量记账手工补账（提供）。
  * <p>
- * 「凭证与电子归档早于资金指令」逐段核对后的两条落码环节（本类是"实付入账"语义的唯一持有者）：
+ * 「凭证与电子归档早于资金指令」逐段核对后的两条实现环节（本类是"实付入账"语义的唯一持有者）：
  * <ol>
  *  <li><b>串号封堵</b>（{@link #autoPostDraftByBill} / {@link #autoPostDraftByBatch}）：
  *      {@code op_voucher.bill_id} 存的粒度按来源分家——单据级凭证（EXPENSE_PAY／CIP_PAY）存
  *      {@code exp_bill.id}，批次级凭证（TREASURY_PAY／CIP_PAY_BATCH，见
- *      {@code VoucherService.generateTreasuryPayVoucher} 与 后半）存
- *      {@code op_pay_batch.id}。原方法对两族凭证用同一条 {@code bill_id = ? OR source_doc_id = ?}
- *      查询，而两张表的 id 各自全局自增、数值区间重叠（现库 op_pay_batch 1~7 与 exp_bill 1~12 同段），
- *      于是"执行批次 2"会把<b>单据 2</b> 名下 80,000 元的付款环节凭证一并过账并盖上本批次号
- *      （真错位：凭证在自身的资金指令未下发时就被记账）。现按来源族划界；</li>
+ *      {@code VoucherService.generateTreasuryPayVoucher}）存
+ *      {@code op_pay_batch.id}。若两族共用同一条 {@code bill_id = ? OR source_doc_id = ?}
+ *      查询就会串号：两张表的 id 各自全局自增、数值区间重叠，
+ *      "执行批次 2"于是把<b>单据 2</b> 名下的付款环节凭证一并过账并盖上本批次号
+ *      （凭证在自己的资金指令未下发时就被记账）。故按来源族划界；</li>
  *  <li><b>人工过账口的实付校验</b>（{@link #assertPaymentLegSettled} /
  *      {@link #findUnsettledPaymentLegs}）：自动通道只在银行指令成功之后推
  *      （{@code PayBatchService.writeBackPayment} 与 {@code PayBatchBizAction.closeAccountingForLateApproval}
  *      的 {@code if (!paid) return} 两环节），但凭证工作台的人工记账口（
  *      {@code POST /sharing/voucher/{id}/post}、{@code /sharing/voucher/batch-post}）
- *      只校验制审分离，谁都能把"贷 银行存款"的付款环节凭证在款未付出时入账——
- *      现库实证 4 张（凭证 14/15/16/23，对应单据 1/2/3/8 的付款记录至今 {@code WAITING}、
- *      {@code paid_amount=0}、{@code pay_time} 空，却在 2026-10-01 02:37:57～02:39:05 被置 POSTED）。
- *      本校验把"款未付出不得入账"从代码注释里的规则变成可执行判据，只校验付款环节、逐张给原因，
+ *      只校验制审分离，谁都能把"贷 银行存款"的付款环节凭证在款未付出时入账
+ *      （库里就有这样的凭证：对应付款记录仍是 {@code WAITING}、{@code paid_amount=0}、
+ *      {@code pay_time} 空，凭证却已被置 POSTED）。
+ *      本校验把"款未付出不得入账"这条只在注释里写着的规则变成可执行判据，只校验付款环节、逐张给原因，
  *      取不到资金证据时放行（fail-open，不挡历史单与其他域）。</li>
- *  <li><b>历史只注记、不动账</b>（{@link #fillPayLegUnsettledFlag}，X-49 乙）：上面的写侧校验只管增量，
- *      已 POSTED 而款未付的那几张（现库 14/15/16/23）本类不碰其状态——冲销／回退草稿是账务动作，须财务另签；
+ *  <li><b>历史只注记、不动账</b>（{@link #fillPayLegUnsettledFlag}）：上面的写侧校验只管增量，
+ *      已经 POSTED 而款未付的那几张，本类不碰其状态——冲销／回退草稿是账务动作，须财务另签；
  *      改为在凭证台账读侧按<b>同一套</b>资金证据打 {@code payLegUnsettled}，界面明示"资金指令未下发"，
  *      避免看凭证的人把"账面已记账"读成"款已付出"。</li>
  * </ol>
- * 不在本类处置的半条（属裁决面，见回报"需主窗裁决清单"）：制证时点本身是否参数化
- * （审批后即出 DRAFT 凭证 vs 付款后才出）——已由 （X-48 甲）在 {@code VoucherService}
- * 一侧落成出纳参数，默认＝否＝现网行为不变；"归档早于付款"半条已按 既有裁决 判不修。
+ * 不在本类处置的半条：制证时点本身是否参数化（审批后即出 DRAFT 凭证 vs 付款后才出）
+ * 已由 {@code VoucherService} 一侧落成出纳参数，默认＝否＝现网行为不变；
+ * "归档早于付款"半条一并判不修。
  */
 @Slf4j
 @Service
@@ -83,7 +83,7 @@ public class VoucherAutoPostService {
     /**
      * 实付校验默认覆盖族（贷方为银行存款 1002，款未付出即入账＝虚减银行）：
      * 单据级 EXPENSE_PAY／CIP_PAY ＋ 批次级 TREASURY_PAY／CIP_PAY_BATCH。
-     * <p>（X-50 甲）：这四族＝加参数化之前的既有覆盖面，默认值逐字不变。
+     * <p>这四族＝加参数化之前的既有覆盖面，默认值逐字不变。
      * <p>不含 EXPENSE_SETTLE（结算审批通过出的是"借 6602／贷 2202"计提应付凭证，
      * 付款环节另由批次凭证承载，审批后即入账是正确的）。
      */
@@ -91,23 +91,23 @@ public class VoucherAutoPostService {
             Set.of("EXPENSE_PAY", "CIP_PAY", "TREASURY_PAY", "CIP_PAY_BATCH");
 
     /**
-     * X-50 甲：可<b>逐族</b>加校验的候选族——默认<b>关</b>（不在默认集内），
+     * 可<b>逐族</b>加校验的候选族——默认<b>关</b>（不在默认集内），
      * 由 {@link #CFG_PAYMENT_LEG_SOURCE_TYPES} 点名后才纳入实付校验，避免新增拦口堵期末批量记账。
      * <p>FA_ADD 无资金环节证据通道（凭证按资产卡片落账，本环境没有对应的付款记录/批次），
-     * 即便点名也按"无证据可判＝放行"，与改前一致。
+     * 即便点名也按"无证据可判＝放行"，与原先一致。
      */
     private static final Set<String> OPTIONAL_PAYMENT_LEG_SOURCE_TYPES =
             Set.of("EXP_LOAN", "GL_SALARY_PAY", "FA_ADD", "TR_TRANSFER");
 
     /**
-     * X-50 甲：实付校验覆盖族的逐族配置键（sys_config 逗号串，如
+     * 实付校验覆盖族的逐族配置键（sys_config 逗号串，如
      * {@code EXP_LOAN,GL_SALARY_PAY}＝在默认四族之外再加两族；{@code -CIP_PAY}＝把某默认族撤校验）。
-     * <b>读不到＝用默认四族</b>（本轮不向库里插参数行）。
+     * <b>读不到＝用默认四族</b>（不向库里插参数行）。
      */
     private static final String CFG_PAYMENT_LEG_SOURCE_TYPES = "voucher.post.payment-leg.source-types";
 
     /**
-     * X-49 乙：读侧注记可判定的付款环节族——只收录<b>本类已有资金证据通道</b>的族，
+     * 读侧注记可判定的付款环节族——只收录<b>本类已有资金证据通道</b>的族，
      * 且证据键按 的划界规则取（批次级族＝{@code op_pay_batch.id}，其余＝{@code exp_bill.id}）。
      * <p>不含 GL_SALARY_PAY／TR_TRANSFER／FA_ADD：前两族的实付证据在各自域的另一张表
      * （{@link #settledPayrollOrTransfer} 走 selectById，未做列表批量化），FA_ADD 本就无资金环节证据通道；
@@ -222,7 +222,7 @@ public class VoucherAutoPostService {
         if (ids.isEmpty()) {
             return blocked;
         }
-        Set<String> gated = gatedPaymentLegSourceTypes();   // D-DEC-288：一次入口读一次参数，不逐张查库
+        Set<String> gated = gatedPaymentLegSourceTypes();   // 入口读一次参数，不逐张查库
         for (OpVoucher v : opVoucherMapper.selectBatchIds(ids)) {
             String reason = unsettledReason(v, gated);
             if (reason != null) {
@@ -244,7 +244,7 @@ public class VoucherAutoPostService {
     }
 
     /**
-     * X-49 乙 裁决落地：<b>只读补充</b>——给"账面已记账、资金指令未下发"的付款环节凭证
+     * 口径落地：<b>只读补充</b>——给"账面已记账、资金指令未下发"的付款环节凭证
      * 打 {@code payLegUnsettled} 展示标记，凭证台账据此在行上注记"资金指令未下发"。
      *
      * <p><b>零账务动作</b>：本方法不 {@code update} 任何表、不改 {@code op_voucher.status}，
@@ -280,7 +280,7 @@ public class VoucherAutoPostService {
                 continue;   // 非现有付款环节／本通道无资金证据的族，一律不出标记
             }
             if (legDocId(v) == null) {
-                continue;   // 溯源键缺失（D-DEC-114③ 族）不在此处加责
+                continue;   // 溯源键缺失的族不在此处加责
             }
             targets.add(v);
         }
@@ -335,7 +335,7 @@ public class VoucherAutoPostService {
     }
 
     /**
-     * X-50 甲：实付校验当前的覆盖族＝默认四族 ＋ 配置点名的候选族（－ 配置撤校验的默认族）。
+     * 实付校验当前的覆盖族＝默认四族 ＋ 配置点名的候选族（－ 配置撤校验的默认族）。
      * <p>参数读不到／读失败＝默认四族（＝加本参数前的硬编码覆盖面），现网行为不变。
      */
     private Set<String> gatedPaymentLegSourceTypes() {
@@ -381,7 +381,7 @@ public class VoucherAutoPostService {
         }
         Long docId = v.getSourceDocId() != null ? v.getSourceDocId() : v.getBillId();
         if (docId == null) {
-            return null; // 溯源键缺失属 D-DEC-114③ 族，不在此处加责
+            return null; // 溯源键缺失的族不在此处加责
         }
         if (BATCH_LEG_SOURCE_TYPES.contains(sourceType)) {
             OpPayBatch batch = opPayBatchMapper.selectById(docId);
@@ -416,7 +416,7 @@ public class VoucherAutoPostService {
     }
 
     /**
-     * X-50 甲：薪酬发放／资金调拨两族的实付证据——各自域自己的资金状态列，
+     * 薪酬发放／资金调拨两族的实付证据——各自域自己的资金状态列，
      * 查不到行／状态不认识＝无证据可判 ⇒ 放行（与 fail-open 同一规则，不新增拦口）。
      */
     private String settledPayrollOrTransfer(String sourceType, Long docId) {

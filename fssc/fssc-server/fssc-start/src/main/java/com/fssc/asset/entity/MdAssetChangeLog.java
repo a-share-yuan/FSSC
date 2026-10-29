@@ -16,8 +16,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 资产变动台账（md_asset_change_log，带 tenant_id）＝变动原因与幅度的载体，D-DEC-431（X-06 甲-1）。
- * 原形态＝原值调整/盘点差异只起流不建业务行，原因拼进流程标题、卡片只留末值，前后镜像无从回查。
+ * 资产变动台账（md_asset_change_log，带 tenant_id）＝变动原因与幅度的载体。
+ * 没有这张表的话，原值调整/盘点差异只起流不建业务行，原因拼进流程标题、卡片只留末值，前后镜像无从回查。
  * <p>{@code createBy/updateBy} 为裸字段（无 fill 注解）⇒ 写入方必须显式 {@code setCreateBy(...)}，否则落 DB NULL。
  */
 @Data

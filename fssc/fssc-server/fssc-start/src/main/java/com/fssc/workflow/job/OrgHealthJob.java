@@ -3,11 +3,14 @@
 
 package com.fssc.workflow.job;
 
+import com.fssc.common.core.Result;
 import com.fssc.framework.job.JobHeartbeatService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.framework.spi.DistributedState;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.service.OrgHealthChecker;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,12 +30,12 @@ import java.util.Map;
  * <p>对应 {@link OrgHealthChecker} 的诊断能力。此Job 只读、只报，<b>不改任何数据</b>：
  * 「R1 补人 / R2 补部门树」属组织治理动作，必须由管理者显式决定，不能由定时任务擅自修改主数据。
  *
- * <p>为什么必须有这个：红线条目此前只是文档里的注意事项，实测发现
- * <b>13 家公司里 12 家不满足 R1、7 家R2 断裂</b>——靠人工记忆与逐次排查不可持续。
+ * <p>为什么必须有这个：红线条目原先只是文档里的注意事项，而
+ * 绝大多数公司不满足 R1，R2 也成片断裂——靠人工记忆与逐次排查不可持续。
  *
  * <p>手工触发入口（运维/内控用）：
- * <pre>GET  /api/tenant/system/org-health/overview   查看体检报告（只读，需 wf:instance:admin）</pre>
- * <pre>POST /api/tenant/system/org-health/run       立即巡检一次（需 wf:instance:admin）</pre>
+ * <pre>GET /api/tenant/system/org-health/overview 查看体检报告（只读，需 wf:instance:admin）</pre>
+ * <pre>POST /api/tenant/system/org-health/run 立即巡检一次（需 wf:instance:admin）</pre>
  */
 @Slf4j
 @RestController
@@ -43,7 +46,7 @@ public class OrgHealthJob {
 
     private final OrgHealthChecker orgHealthChecker;
     private final JobHeartbeatService jobHeartbeatService;
-    private final com.fssc.framework.spi.DistributedState distributedState;
+    private final DistributedState distributedState;
 
     @Value("${fssc.org-health.enabled:true}")
     private boolean enabled;
@@ -90,16 +93,16 @@ public class OrgHealthJob {
     @RequiresPerm("wf:instance:admin")
     @OperLog(module = "WF", operType = "OTHER", desc = "手工触发组织健康巡检")
     @PostMapping("/run")
-    public com.fssc.common.core.Result<Map<String, Object>> runNow() {
+    public Result<Map<String, Object>> runNow() {
         runOnce("手工触发");
-        return com.fssc.common.core.Result.success(checkIgnoreTenant());
+        return Result.success(checkIgnoreTenant());
     }
 
     /** 查看体检报告（只读，每次现算；需 wf:instance:admin）。 */
     @RequiresPerm("wf:instance:admin")
     @GetMapping("/overview")
-    public com.fssc.common.core.Result<Map<String, Object>> overview() {
-        return com.fssc.common.core.Result.success(checkIgnoreTenant());
+    public Result<Map<String, Object>> overview() {
+        return Result.success(checkIgnoreTenant());
     }
 
     /**
@@ -111,6 +114,6 @@ public class OrgHealthJob {
     private Map<String, Object> checkIgnoreTenant() {
         Map<String, Object>[] holder = new Map[1];
         TenantContext.runIgnoreTenant(() -> holder[0] = orgHealthChecker.check());
-        return holder[0] == null ? Map.of("summary", Map.of("errorCount", 0, "warnCount", 0), "issues", java.util.List.of()) : holder[0];
+        return holder[0] == null ? Map.of("summary", Map.of("errorCount", 0, "warnCount", 0), "issues", List.of()) : holder[0];
     }
 }

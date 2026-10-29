@@ -5,11 +5,14 @@ package com.fssc.expense.facade;
 
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.facade.event.BillImageEvent;
 import com.fssc.image.service.ImageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -20,20 +23,21 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * 替代 ImageService 直接注入 ExpBillMapper。
  *
  * 分库改造：@EventListener 同步监听改为 @TransactionalEventListener(AFTER_COMMIT)。
- * 发布方 ImageService 已切到 fssc_image 库的独立事务（REQUIRES_NEW），
- * 同步监听会在 image 事务连接上回写 exp_bill（master 表）导致跨库写错库；
- * 提交后触发时无事务上下文，按默认 master 路由新建连接回写，语义与
- * 断点7 BillTerminalEventListener 的场景1 修复一致。fallbackExecution=true
- * 保证无事务发布时事件不丢失。
+ * 发布方 ImageService 的写入是 fssc_image 库上的 REQUIRES_NEW 事务，AFTER_COMMIT 回调触发时
+ * 那条事务的提交清理还没做完、连接仍绑在影像库上——此时直接 update 会落到 fssc_image.exp_bill
+ * （表不存在）。因此回写必须自带独立事务：REQUIRES_NEW 把外层连接挂起，再按本类声明的 master
+ * 路由另开主库连接。fallbackExecution=true 保证无事务发布时事件不丢失。
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@FsscDataSource("master")
 public class BillImageEventListener {
 
     private final ExpBillMapper expBillMapper;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onBillImageEvent(BillImageEvent event) {
         // 缺陷修复（H-0）：原仅处理 EXP_CLAIM，报销域其他单据类型
         // （CLAIM/TRAVEL/PREPAY/SETTLE/PAY 等，均落 exp_bill 表）影像状态不回写。

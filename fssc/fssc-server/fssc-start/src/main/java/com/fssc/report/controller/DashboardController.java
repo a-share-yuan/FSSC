@@ -32,7 +32,7 @@ public class DashboardController {
     }
 
     /**
-     * R5-D-020：费用概览四枚指标（本月报销总额/待审单据/已付金额/预算执行率），
+     * 费用概览四枚指标（本月报销总额/待审单据/已付金额/预算执行率），
      * 单枚 camelCase Map 返回。与 /expense/stats 的分组明细数组并存——后者的既有契约不动。
      */
     @RequiresPerm("dashboard:view")
@@ -77,7 +77,7 @@ public class DashboardController {
         return Result.success(dashboardService.approvalEfficiency());
     }
 
-    // ========== 业务实时进度看板：合同/发票/档案（WS-4 看板完整性） ==========
+    // 业务实时进度看板：合同/发票/档案（WS-4 看板完整性）
 
     @RequiresPerm("dashboard:view")
     @DataScope("业务进度看板数据范围")
@@ -100,7 +100,7 @@ public class DashboardController {
         return Result.success(dashboardService.archiveProgress());
     }
 
-    // ========== 合规风险看板（P1 增强） ==========
+    // 合规风险看板
 
     @RequiresPerm("dashboard:compliance:view")
     @GetMapping("/compliance-risk")
@@ -108,7 +108,7 @@ public class DashboardController {
         return Result.success(dashboardService.complianceRisk());
     }
 
-    // ========== 共享运营看板（P1 增强） ==========
+    // 共享运营看板
 
     @RequiresPerm("dashboard:ops:view")
     @GetMapping("/ops/overview")

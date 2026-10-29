@@ -46,7 +46,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final AntPathMatcher M = new AntPathMatcher();
 
     private static final List<String> WHITE_LIST = List.of(
-            // P0-B1 健康探活：K8s 检查 / SLB / 监控系统不可能持有业务 Token，必须免鉴权
+            // 健康探活：K8s 检查 / SLB / 监控系统不可能持有业务 Token，必须免鉴权
             "/api/health",
             "/actuator/health",
             "/actuator/health/**",
@@ -73,7 +73,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     );
 
     /**
-     * P2：OpenAPI 文档路径。默认放行（开发/联调），
+     * OpenAPI 文档路径。默认放行（开发/联调），
      * 生产环境通过 {@code fssc.security.openapi-public=false} 关闭匿名访问。
      */
     private static final List<String> DOCS_PATHS = List.of(
@@ -85,7 +85,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/webjars/**"
     );
 
-    /** OpenAPI 文档是否允许匿名访问（P2）。默认 true；生产建议置 false。 */
+    /** OpenAPI 文档是否允许匿名访问。默认 true；生产建议置 false。 */
     @Value("${fssc.security.openapi-public:true}")
     private boolean openapiPublic;
 
@@ -169,7 +169,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (WHITE_LIST.stream().anyMatch(p -> M.match(p, uri))) {
             return true;
         }
-        // P2：文档路径仅在 openapi-public=true 时匿名放行，否则要求携带 Token
+        // 文档路径仅在 openapi-public=true 时匿名放行，否则要求携带 Token
         return openapiPublic && DOCS_PATHS.stream().anyMatch(p -> M.match(p, uri));
     }
 

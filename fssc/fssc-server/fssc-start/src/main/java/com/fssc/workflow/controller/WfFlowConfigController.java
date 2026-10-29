@@ -5,13 +5,16 @@ package com.fssc.workflow.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
+import com.fssc.common.util.AssertUtil;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.workflow.entity.WfFlowConfig;
 import com.fssc.workflow.mapper.WfFlowConfigMapper;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -75,12 +78,12 @@ public class WfFlowConfigController {
 
     /** 必填办结（批次 2C，与前端 FlowConfig「全局配置」/ GenericList 流程配置弹窗同一规则）。 */
     private void validate(WfFlowConfig c) {
-        com.fssc.common.util.AssertUtil.notBlank(c.getCfgType(),
-                com.fssc.common.core.ErrorCode.PARAM_INVALID, "请选择配置类型");
-        com.fssc.common.util.AssertUtil.notBlank(c.getCfgCode(),
-                com.fssc.common.core.ErrorCode.PARAM_INVALID, "请输入配置编码");
-        com.fssc.common.util.AssertUtil.notBlank(c.getCfgName(),
-                com.fssc.common.core.ErrorCode.PARAM_INVALID, "请输入配置名称");
+        AssertUtil.notBlank(c.getCfgType(),
+                ErrorCode.PARAM_INVALID, "请选择配置类型");
+        AssertUtil.notBlank(c.getCfgCode(),
+                ErrorCode.PARAM_INVALID, "请输入配置编码");
+        AssertUtil.notBlank(c.getCfgName(),
+                ErrorCode.PARAM_INVALID, "请输入配置名称");
     }
 
     @RequiresPerm("wf:config:update")
@@ -101,11 +104,11 @@ public class WfFlowConfigController {
 
     /** 配置键＝(cfg_type, cfg_code) 复合；租户条件由 MP 拦截器叠加，软删行由 @TableLogic 自动过滤 */
     private boolean cfgKeyTaken(WfFlowConfig c, Long excludeId) {
-        java.util.List<WfFlowConfig> hits = configMapper.selectList(new LambdaQueryWrapper<WfFlowConfig>()
+        List<WfFlowConfig> hits = configMapper.selectList(new LambdaQueryWrapper<WfFlowConfig>()
                 .eq(WfFlowConfig::getCfgType, c.getCfgType())
                 .eq(WfFlowConfig::getCfgCode, c.getCfgCode()));
         for (WfFlowConfig hit : hits) {
-            if (excludeId == null || !java.util.Objects.equals(hit.getId(), excludeId)) {
+            if (excludeId == null || !Objects.equals(hit.getId(), excludeId)) {
                 return true;
             }
         }
@@ -113,7 +116,7 @@ public class WfFlowConfigController {
     }
 
     private <T> Result<T> duplicateCfg() {
-        return Result.fail(com.fssc.common.core.ErrorCode.DATA_ALREADY_EXISTS.getCode(),
-                com.fssc.common.core.ErrorCode.DATA_ALREADY_EXISTS.getMessage());
+        return Result.fail(ErrorCode.DATA_ALREADY_EXISTS.getCode(),
+                ErrorCode.DATA_ALREADY_EXISTS.getMessage());
     }
 }

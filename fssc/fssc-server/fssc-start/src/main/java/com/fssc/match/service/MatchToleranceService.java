@@ -108,7 +108,7 @@ public class MatchToleranceService {
      * 按租户+公司 upsert 容差参数（POST /api/tenant/match-tolerance，唯一调用方是页面保存，无机器写入路径）。
      * 必填守卫（批次 2B，与前端 MATCH_TOLERANCE 登记表同一规则）：公司/百分比/绝对值三项都是参数本身，
      * 原实现把空值静默补成默认 0.5%/100 元——用户没填却写入数据库一条"看起来填过"的参数，故改为直接拒绝。
-     * 读取侧 {@link #getTolerance(Long)} 的默认默认处理保留（匹配引擎必须拿到可用容差）。
+     * 读取侧 {@link #getTolerance(Long)} 的默认兜底保留（匹配引擎必须拿到可用容差）。
      */
     @Transactional(rollbackFor = Exception.class)
     public MatchTolerance upsert(MatchTolerance in) {

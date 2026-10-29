@@ -32,7 +32,7 @@ public class OpPayBatchDetail implements Serializable {
     /** 单据付款记录ID（exp_bill_payment） */
     private Long billPaymentId;
     private String payeeName;
-    /** 供应商档案ID（md_supplier.id）；收款方为供应商且付款记录自带档案 id 时写入，否则 NULL（D-DEC-348） */
+    /** 供应商档案ID（md_supplier.id）；收款方为供应商且付款记录自带档案 id 时写入，否则 NULL */
     private Long supplierId;
     private String bankName;
     private String bankAccount;

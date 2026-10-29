@@ -61,7 +61,7 @@ public class NotifyService {
      * 通知用户（多渠道）：站内信必发；企微/邮件按配置启用。
      *
      * <p>{@code sys_message.biz_type} 列的语义是<b>业务域</b>（列注释「业务类型，如 EXP_CLAIM」），
-     * 本重载沿用它改造前的写法恒记 {@code APPROVAL}，于是 {@code biz_id} 成了无域可依的裸主键——
+     * 本重载沿用它原先的写法恒记 {@code APPROVAL}，于是 {@code biz_id} 成了无域可依的裸主键——
      * 同一列值既可能是报销单 id 也可能是供应商 id，收件人点进去无法定位。
      * 需要可联查的调用方改走 {@link #notifyUser(Long, String, String, String, String, Long, String)}
      * 并显式交代业务域。
@@ -101,7 +101,7 @@ public class NotifyService {
             String host = getConfig("notify.mail.host", "");
             sendMail(u.getEmail(), title, content + (linkUrl == null ? "" : "\n" + linkUrl), host);
         }
-        // 4) 短信（维度7 EXT-03）：sys_config notify.sms.enabled 开关（默认关，关闭时仅记日志）；
+        // 4) 短信：sys_config notify.sms.enabled 开关（默认关，关闭时仅记日志）；
         //    开启后按 notify.sms.provider 走服务商（log=日志模拟/aliyun/tencent），凭据 notify.sms.*
         if ("true".equalsIgnoreCase(getConfig("notify.sms.enabled", "false"))) {
             String phone = u != null ? u.getPhone() : null;
@@ -176,7 +176,7 @@ public class NotifyService {
     }
 
     /**
-     * 短信通知渠道（维度7 EXT-03）。sys_config 配置：
+     * 短信通知渠道。sys_config 配置：
      * notify.sms.enabled（默认 false）/ notify.sms.provider（log/aliyun/tencent）/
      * notify.sms.url、access_key、secret、sign、template。
      * 未启用或未配置 URL 时日志模拟，不影响主流程（fail-open）。

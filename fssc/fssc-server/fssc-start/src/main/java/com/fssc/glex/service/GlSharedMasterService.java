@@ -87,7 +87,7 @@ public class GlSharedMasterService {
         e.setDescription(StringUtils.hasText(description) ? description
                 : "GL" + typeName(type) + "主数据" + actionName(action));
         e.setReqNo("MS" + period + String.format("%03d", seq));
-        // R5-D-153：不预造 GLMS 凭证号——本申请不产生凭证，凭证号只能由真实凭证回写；无凭证则留空
+        // 不预造 GLMS 凭证号——本申请不产生凭证，凭证号只能由真实凭证回写；无凭证则留空
         e.setStatus("APPROVED");
         mapper.insert(e);
         // G1：主数据维护发起 GL_SHARED_MASTER 审批流
@@ -96,7 +96,7 @@ public class GlSharedMasterService {
                     typeName(type) + "主数据" + actionName(action) + "-" + period, new BigDecimal("0"));
         } catch (Exception ex) {
             log.error("GL 主数据维护 {} 发起审批失败: {}", period, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须抛出去，不能静默降级成没有流程的孤儿单
         }
         return e;
     }

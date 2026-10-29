@@ -27,7 +27,7 @@ spring:
       - org.flowable.spring.boot.EndpointAutoConfiguration
       - org.flowable.spring.boot.FlowableSecurityAutoConfiguration
 
-#  不用 fssc.gateway.* 前缀：那组键是「发票能力网关」总开关（OCR 通道/验真共用），语义不同
+# 不用 fssc.gateway.* 前缀：那组键是「发票能力网关」总开关（OCR 通道/验真共用），语义不同
 fssc:
   integration-gateway:
     standalone: true

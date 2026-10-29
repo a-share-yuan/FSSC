@@ -45,9 +45,9 @@ public class BillFacadeImpl implements BillFacade {
         LambdaQueryWrapper<ExpBill> qw = new LambdaQueryWrapper<>();
         qw.in(ExpBill::getStatus, "APPROVED", "PAID", "CLOSED")
                 .in(ExpBill::getImageStatus, "PARTIAL", "COMPLETE");
-        // B1，2026-09-28 已裁：原先无条件 `ne ARCHIVED` 把已归档单据从清单里彻底抹掉
+        // B1，已裁：原先无条件 `ne ARCHIVED` 把已归档单据从清单里彻底抹掉
         // ⇒ 归档后无法在同一页面核对"归到哪一档、谁归的"，也让去重只能靠运气。
-        // 归档记录序时簿是**状态四值筛选**（已归档/未归档/归档中/不限），已归档项仍在列表内。
+        // 归档记录序时簿是状态四值筛选（已归档/未归档/归档中/不限），已归档项仍在列表内。
         // 故改为按入参筛选，默认（空值）＝只看未归档，与页面原行为一致；重复立卷由 ArchiveService 的状态机强制校验拦（B2）。
         // 未归档一侧仍写 ne＋isNull：库里 archive_status 为 NULL 的历史行不该因三值逻辑凭空消失。
         String st = archiveStatus == null ? "" : archiveStatus.trim();
@@ -75,6 +75,22 @@ public class BillFacadeImpl implements BillFacade {
     @Override
     public BillArchiveDTO findBillForArchive(Long billId) {
         ExpBill bill = expBillMapper.selectById(billId);
+        return bill == null ? null : toDTO(bill);
+    }
+
+    @Override
+    public BillArchiveDTO findBillByNo(String billNo) {
+        if (billNo == null || billNo.isBlank()) {
+            return null;
+        }
+        LambdaQueryWrapper<ExpBill> qw = new LambdaQueryWrapper<>();
+        qw.eq(ExpBill::getBillNo, billNo.trim());
+        Long scopeC = orgGuard.enforceCompany();
+        if (scopeC != null) {
+            qw.eq(ExpBill::getCompanyId, scopeC);
+        }
+        qw.last("limit 1");
+        ExpBill bill = expBillMapper.selectOne(qw);
         return bill == null ? null : toDTO(bill);
     }
 

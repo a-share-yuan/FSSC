@@ -5,6 +5,7 @@ package com.fssc.workflow.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
@@ -12,6 +13,8 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.workflow.entity.WfBusinessFlow;
 import com.fssc.workflow.mapper.WfBusinessFlowMapper;
+import com.fssc.workflow.service.WfBpmnTemplateService;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,7 +36,7 @@ import java.util.List;
 public class WfBusinessFlowController {
 
     private final WfBusinessFlowMapper flowMapper;
-    private final com.fssc.workflow.service.WfBpmnTemplateService bpmnTemplateService;
+    private final WfBpmnTemplateService bpmnTemplateService;
 
     @RequiresPerm("wf:bizflow:list")
     @GetMapping("/page")
@@ -104,7 +107,7 @@ public class WfBusinessFlowController {
         List<WfBusinessFlow> hits = flowMapper.selectList(new LambdaQueryWrapper<WfBusinessFlow>()
                 .eq(WfBusinessFlow::getBizType, bizType));
         for (WfBusinessFlow hit : hits) {
-            if (excludeId == null || !java.util.Objects.equals(hit.getId(), excludeId)) {
+            if (excludeId == null || !Objects.equals(hit.getId(), excludeId)) {
                 return true;
             }
         }
@@ -112,8 +115,8 @@ public class WfBusinessFlowController {
     }
 
     private <T> Result<T> duplicateBizType() {
-        return Result.fail(com.fssc.common.core.ErrorCode.DATA_ALREADY_EXISTS.getCode(),
-                com.fssc.common.core.ErrorCode.DATA_ALREADY_EXISTS.getMessage());
+        return Result.fail(ErrorCode.DATA_ALREADY_EXISTS.getCode(),
+                ErrorCode.DATA_ALREADY_EXISTS.getMessage());
     }
 
     /** 按业务单据类型生成初始 BPMN 模板（业务流程节点 → BPMN XML 含 DI，供可视化设计器加载） */

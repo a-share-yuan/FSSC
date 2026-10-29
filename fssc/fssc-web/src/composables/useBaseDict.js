@@ -6,17 +6,17 @@
  *
  * ## 为什么需要这一层（不要直接用 useDict 的 options 当 label）
  *
- * 系统里绝大多数下拉原本是**裸写死**的：
+ * 系统里绝大多数下拉原本是裸写死的：
  *   <el-option :label="$t('expense.preapply.optPlane')" value="AIR" />
  * 这里的 label 走 vue-i18n，中英双语都有（zh-CN.js / en-US.js 各一份）。
  *
  * 如果改造时直接换成 `dict.options`：
  *   <el-option v-for="o in dict.options" :label="o.label" ... />
- * 那么 label 就变成**数据库里的中文** —— 切到英文界面时「交通方式」下拉里
- * 会显示"飞机/高铁"而不是 "Plane/High-speed rail"，是**用户可感知的功能倒退**。
+ * 那么 label 就变成数据库里的中文 —— 切到英文界面时「交通方式」下拉里
+ * 会显示"飞机/高铁"而不是 "Plane/High-speed rail"，是用户可感知的功能倒退。
  *
  * 所以定下这条规则（本次改造全部按它执行）：
- *   **字典定「值域」(value) + i18n 定「文案」(label)**
+ *   字典定「值域」(value) + i18n 定「文案」(label)
  *   - value 以字典为准：后台可增删选项，这是办结的目的；
  *   - label 优先走 i18n：保住双语；
  *   - i18n 缺 key（后台新增了选项但没补语言包）⇒ 回落字典 label（中文），
@@ -25,7 +25,7 @@
  * ## 与 useDict 的关系
  *
  * 本层建立在 useDict 之上，复用它的全部 fail-soft 语义：
- *   字典未到 / 401 / 超时 / 后端未部署 ⇒ options 原样等于本地默认处理常量，界面零变化。
+ *   字典未到 / 401 / 超时 / 后端未部署 ⇒ options 原样等于本地兜底常量，界面零变化。
  * 本层只多做一件事：把 label 换算成 i18n 结果。
  *
  * ## 用法
@@ -37,7 +37,7 @@
  *   <el-option v-for="o in trafficOptions" :key="o.value" :label="o.label" :value="o.value" />
  *
  * @param {string} dictType sys_dict_type.dict_type
- * @param {object} localFallback 本地默认处理常量 { VALUE: '默认处理中文', ... }（字典不可用时用它）
+ * @param {object} localFallback 本地兜底常量 { VALUE: '兜底中文', ... }（字典不可用时用它）
  * @param {object} i18nKeys 每个 value 对应的 i18n key { VALUE: 'expense.preapply.optPlane' }
  */
 import { computed, unref } from 'vue'
@@ -50,8 +50,8 @@ export function useBaseDict(dictType, localFallback = {}, i18nKeys = {}) {
 
   /**
    * 合成后的下拉选项：
-   *   1. 取值域 —— 字典优先，未到则本地默认处理（由 useDict.options 保证同步有值）
-   *   2. 取文案 —— i18n key 存在且能翻译 ⇒ 用译文；否则用字典 label；再否则用本地默认处理中文
+   *   1. 取值域 —— 字典优先，未到则本地兜底（由 useDict.options 保证同步有值）
+   *   2. 取文案 —— i18n key 存在且能翻译 ⇒ 用译文；否则用字典 label；再否则用本地兜底中文
    */
   const options = computed(() => {
     const raw = unref(dict.options) || []
@@ -67,7 +67,7 @@ export function useBaseDict(dictType, localFallback = {}, i18nKeys = {}) {
   })
 
   /**
-   * 反查文案（列表/详情页回显用）。找不到时返回默认处理文本，绝不返回 undefined。
+   * 反查文案（列表/详情页回显用）。找不到时返回兜底文本，绝不返回 undefined。
    */
   function labelOf(value, fallbackText = '') {
     const hit = options.value.find((o) => o.value === value)
@@ -78,7 +78,7 @@ export function useBaseDict(dictType, localFallback = {}, i18nKeys = {}) {
 }
 
 /* ------------------------------------------------------------------ *
- * 共享的「值 → 中文默认处理 / 值 → i18n key」映射。
+ * 共享的「值 → 中文兜底 / 值 → i18n key」映射。
  *
  * 为什么集中放这里而不是每个页面各写一份：
  *   同一维度在 8 个页面被引用（交通方式 3 处文件、付款方式 5 处文件），
@@ -86,7 +86,7 @@ export function useBaseDict(dictType, localFallback = {}, i18nKeys = {}) {
  *  办结到基础数据字典的目的正是消灭这种漂移。
  *
  * 值必须与 sys_dict_data.dict_value 逐字一致；
- *    字典缺失时默认处理到这里的常量，行为与改造前逐字相同（零风险）。
+ *    字典缺失时兜底到这里的常量，行为与原先逐字相同（零风险）。
 
 /** 交通方式（traffic_mode） */
 export const TRAFFIC_LOCAL = {
@@ -143,12 +143,12 @@ export const PAY_METHOD_I18N_CORP = {
 }
 
 /**
- * 收款方类型（enum_payee_type）—— 库内字典**早已存在**且值域与前端写死逐字一致
+ * 收款方类型（enum_payee_type）—— 库内字典早已存在且值域与前端写死逐字一致
  * （EMPLOYEE/SUPPLIER/CUSTOMER），故无需新建字典，直接办结到既有字典即可。
  *
  * i18n key 选 `field.*` 而非各页面的 `colEmployee`/`optEmployee`：
  *   field.supplier / field.customer 是全局共用 key，而 colEmployee 在
- *   expense.claim 与 pay.corp 下**重复定义**（两份都译成"员工"），选 field.*
+ *   expense.claim 与 pay.corp 下重复定义（两份都译成"员工"），选 field.*
  *   可让五个页面共用同一份映射，不受页面 i18n 命名空间差异影响。
  */
 export const PAYEE_TYPE_LOCAL = {

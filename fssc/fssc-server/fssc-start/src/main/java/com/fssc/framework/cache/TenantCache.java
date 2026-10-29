@@ -13,7 +13,7 @@ import java.time.Duration;
 import java.util.function.Supplier;
 
 /**
- * 主数据缓存门面（P1-3 主数据缓存分层），内部委托 {@link DistributedState} 可插拔实现：
+ * 主数据缓存门面（主数据缓存分层），内部委托 {@link DistributedState} 可插拔实现：
  * 单实例（默认）走进程内 {@link LocalDistributedState}（原 ConcurrentHashMap TTL 缓存语义原样收编），
  * 多实例部署置 {@code fssc.redis.enabled=true} 切 Redis 集中式缓存（GET/SET EX + SCAN 前缀失效）。
  *
@@ -25,7 +25,7 @@ import java.util.function.Supplier;
  * 调用方不得原地修改返回值。</p>
  *
  * <p>Spring 启动后由 {@link TenantCacheBinder} 注入条件化实现（bind）；未绑定时
- * 使用进程内默认处理实现，脱离容器的静态调用方行为与旧版完全一致。</p>
+ * 使用进程内兜底实现，脱离容器的静态调用方行为与旧版完全一致。</p>
  */
 public final class TenantCache {
 
@@ -34,7 +34,7 @@ public final class TenantCache {
     /** 默认 TTL：5 分钟（与 CacheUtil 分层规则一致） */
     private static final long DEFAULT_TTL_MS = 5 * 60 * 1000L;
 
-    /** 委托的分布式状态实现：默认进程内默认处理（语义与原静态 map 相同），容器就绪后 bind 替换 */
+    /** 委托的分布式状态实现：默认进程内兜底（语义与原静态 map 相同），容器就绪后 bind 替换 */
     private static volatile DistributedState state = new LocalDistributedState();
 
     private TenantCache() {
@@ -78,7 +78,7 @@ public final class TenantCache {
         state.evictPrefix(prefix);
     }
 
-    /** 清空全部（运维默认处理；仅进程内实现支持，Redis 模式为避免全命名空间误删不放开） */
+    /** 清空全部（运维兜底；仅进程内实现支持，Redis 模式为避免全命名空间误删不放开） */
     public static void clear() {
         if (state instanceof LocalDistributedState lds) {
             lds.clearCache();

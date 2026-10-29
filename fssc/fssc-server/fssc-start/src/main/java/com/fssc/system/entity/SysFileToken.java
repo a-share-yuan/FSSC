@@ -3,6 +3,7 @@
 
 package com.fssc.system.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -28,7 +29,7 @@ public class SysFileToken implements Serializable {
     private Long id;
 
     @JsonIgnore
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private Long tenantId;
 
     /** 一次性下载令牌（全局唯一） */
@@ -41,6 +42,6 @@ public class SysFileToken implements Serializable {
     /** 是否已使用：0否 1是 */
     private Integer used;
 
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 }

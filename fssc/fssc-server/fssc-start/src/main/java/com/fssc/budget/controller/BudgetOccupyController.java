@@ -58,7 +58,7 @@ public class BudgetOccupyController {
     /** 补销/释放需要读单据状态，费用单据只读查询。 */
     private final ExpBillMapper expBillMapper;
 
-    /** 占用流水查询（需求 3.10 查看占用明细，真分页）。2026-09-17：支持 budgetItemId 穿透过滤 */
+    /** 占用流水查询（需求 3.10 查看占用明细，真分页）。支持 budgetItemId 穿透过滤 */
     @RequiresPerm("budget:occupy:list")
     @GetMapping("/page")
     public Result<PageResult<BgOccupyVO>> page(PageQuery query,
@@ -150,7 +150,7 @@ public class BudgetOccupyController {
     /**
      * 预算占用三动作的单据状态前置校验。
      *
-     * <p>背景：补销口原先只认 {@code bizId} 落流水，完全不读单据状态，实测对
+     * <p>背景：补销口原先只认 {@code bizId} 落流水，完全不读单据状态，于是对
      * {@code APPROVED}（钱尚未付）的对公结算单也能核销成功 ⇒ 预算在未付时转「已用」，
      * 而 {@code writeOff} 只进不出，付款失败/退款没有回滚路径。
      *

@@ -62,7 +62,7 @@ public class ExpenseBillController {
     }
 
     /**
-     * 审批核减（P2 核定金额三层）：核定报销 / 核定付款 / 核定退款。
+     * 审批核减（核定金额三层）：核定报销 / 核定付款 / 核定退款。
      * 勾稽：核定报销≤申请金额；核定付款≤核定报销；核定退款=核定报销−核定付款。
      */
     @RequiresPerm("exp:bill:audit")
@@ -186,7 +186,7 @@ public class ExpenseBillController {
 
     /**
      * 我的单据分页。startDate/endDate（申请日期闭区间）与 source（渠道）均为可选，
-     * 不传或空串即不加条件——老前端不传时与本方法改前逐字同结果。
+     * 不传或空串即不加条件——老前端不传时与本方法原先逐字同结果。
      */
     @RequiresPerm("exp:bill:list")
     @GetMapping("/myPage")
@@ -198,7 +198,7 @@ public class ExpenseBillController {
                 billType, status, minBalance, keyword, startDate, endDate, source));
     }
 
-    /** P0 遗留专项：机票查询分页（keyword 服务端过滤 + used 核销状态服务端过滤 + relationUsed 回填） */
+    /** 机票查询分页（keyword 服务端过滤 + used 核销状态服务端过滤 + relationUsed 回填） */
     @RequiresPerm("exp:bill:list")
     @GetMapping("/air-ticket/page")
     public Result<PageResult<ExpBill>> airTicketPage(PageQuery query, @RequestParam(required = false) String keyword,

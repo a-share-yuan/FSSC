@@ -237,7 +237,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 upd.setLoanBalance(nvl(bill.getTotalAmount()));
                 // 借款放款上限回写 payable_amount（＝借款本金）。
                 // 本分支不能只写 loan_balance：PayBatchService 的防超付校验跳过判据是
-                // payableAmount **为空**而非等于 0，payable_amount 留在 0 就会变成
+                // payableAmount 为空而非等于 0，payable_amount 留在 0 就会变成
                 // 「已付 0 ＋ 拟付 4000 ＞ 应付 0.00」，放款永久拦死；
                 // 而借款凭证已经过账（贷 1002 银行存款），账上记了支出、实际零支出。
                 // 两个字段分工：payable_amount 承载「放款上限」（资金校验语义），在贷余额仍由 loan_balance 承载。
@@ -275,7 +275,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 // 还款资金事实唯一载体＝exp_bill_receipt；rc_receipt 那条旧环节已撤除
                 registerRepayFundReceipt(bill);
                 sharingService.createChain(bill, "EXP_REPAY");
-                // 还款链的「收款核对→冲销账务归档」在上方 repayLoan（余额核销+结清裁定）
+                // 还款链的「收款核对→冲销账务归档」在上方 repayLoan（余额核销+结清判定）
                 // 与 registerRepayFundReceipt（收款登记）里已全部自动办结，凭证也已自动生成。
                 // 这两节再留池任务，只会成为最终状态单上的僵尸待认领。
                 // 创建即办结：留 FINISHED 痕迹证明链走过，池里不再出现无意义工单。
@@ -383,7 +383,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                     // 但<b>不能就在此刻执行</b>，见 settleBudgetOnNoCashLeg 的方法注释：
                     // 必须等外层审批事务提交后（行锁已释放）再跑，否则内层 REQUIRES_NEW 自锁 50s 超时。
                     scheduleSettleBudgetOnNoCashLeg(bill);
-                    // 无现金环节＝钱不经付款批次（全额借款冲抵/退款了结），单据业务就此收官，
+                    // 无现金环节＝钱不经付款批次（全额借款冲抵/退款了结），单据业务到此结束，
                     // 上面刚建的作业链（票据审核/付款审核/记账归档）不会再有人办——立即办结，
                     // 否则就会留下「已核销平账却仍挂审核待认领」的僵尸工单。
                     sharingService.closeOnBillTerminal(bill.getId(), "报销无实际付款（全额冲抵/退款），业务已了结");
@@ -588,7 +588,7 @@ public class ExpenseWfEventListener implements WfBizAction {
         Long tenantId = (TenantContext.hasContext() && !TenantContext.isIgnoreTenant())
                 ? TenantContext.getTenantId() : null;
         if (tenantId == null) {
-            // sys_oper_log.tenant_id NOT NULL：总线以 runIgnoreTenant 默认处理时无法写入数据库，只留文件日志
+            // sys_oper_log.tenant_id NOT NULL：总线以 runIgnoreTenant 兜底时无法写入数据库，只留文件日志
             log.warn("[{}] 无租户上下文，凭证失败未落 sys_oper_log，单据 {}（billId={}）",
                     CODE_VOUCHER_GEN_FAILED, bill.getBillNo(), bill.getId());
             return;
@@ -692,7 +692,7 @@ public class ExpenseWfEventListener implements WfBizAction {
 
     /**
      * 还款核销（流程最终状态回写）：把借款人的借款余额减掉、落 {@code exp_loan_offset(offsetType=REPAY)} 流水，
-     * 并统一裁定 REPAID／PARTIAL_REPAID 最终状态。
+     * 并统一判定 REPAID／PARTIAL_REPAID 最终状态。
      *
      * <p><b>冲抵流水与余额减记的唯一写点在这里</b>。
      * 提单期若另有一处写点（{@code ExpenseDetailService.addLoanOffset} 的 REPAY 分支，
@@ -701,15 +701,15 @@ public class ExpenseWfEventListener implements WfBizAction {
      * 所以提交环节只登记在途占用（{@code exp_bill_relation(LOAN_CLAIM).use_amount}），
      * <b>本方法与 {@code offsetLoansByClaim} 是冲抵流水与余额减记的唯一写点</b>：
      * ①读现存流水 → ②-a 先按提交期登记的那张借款单补差落流水（用户勾的是哪张就冲哪张，不再被 FIFO 换单）
-     * → ②-b 登记缺失的历史/只填金额路径退回溯 FIFO → ③最终状态裁定与预算对齐。
+     * → ②-b 登记缺失的历史/只填金额路径退回溯 FIFO → ③最终状态判定与预算对齐。
      * 报销冲抵与还款冲抵由此同一个环节、同一算式（关系＝在途应冲额、流水＝已生效额、余额＝Σ流水）。
      *
      * <p><b>结清时点</b>：
      * <ol>
      *  <li><b>候选状态判据</b>：只认 {@code APPROVED} 会把提单期已迁到在途中间态（PARTIAL_REPAID）／
      *      归零态（REPAID）的借款单全部漏掉，本方法对已提交的还款单一律空转，
-     *      借款是否结清实际由制单人提单那一下决定。判据改为 {@code APPROVED／PARTIAL_REPAID／REPAID}，
-     *      末尾由本方法（最终状态）统一裁定 REPAID／PARTIAL_REPAID。</li>
+     *      借款是否结清实际由制单人提单那一下决定。判据是 {@code APPROVED／PARTIAL_REPAID／REPAID}，
+     *      末尾由本方法（最终状态）统一判定 REPAID／PARTIAL_REPAID。</li>
      *  <li><b>去重</b>：先读本还款单已登记的 {@code exp_loan_offset(REPAY)} 台账，只对
      *      「还款额 − 已登记额」的差额补冲抵。不这么做会对未空转的单再插一批冲抵，
      *      把已经扣过的余额<b>二次减记</b>。</li>
@@ -817,7 +817,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 o.setCreateBy(currentUserOr(loan.getApplyUserId()));
                 // 只登记人缺失，本方法是新增环节，直接带上经办人
                 expLoanOffsetMapper.insert(o);
-                // 余额按台账绝对量重算（/391 甲②）；结清最终状态仍由 ③ 的 settleLoanAfterRepay 裁定
+                // 余额按台账绝对量重算（/391 甲②）；结清最终状态仍由 ③ 的 settleLoanAfterRepay 判定
                 recalcLoanBalance(loan.getId());
                 bookedByLoan.merge(loan.getId(), offset, BigDecimal::add);
                 remain = remain.subtract(offset);
@@ -826,14 +826,14 @@ public class ExpenseWfEventListener implements WfBizAction {
                 log.warn("还款 {} 超出在贷余额 {}，余量未核销", repayBill.getBillNo(), remain);
             }
         }
-        // ③ 最终状态裁定 + 预算冲减对齐（只有走到这里才有权置 REPAID）
+        // ③ 最终状态判定 + 预算冲减对齐（只有走到这里才有权置 REPAID）
         for (Map.Entry<Long, BigDecimal> en : bookedByLoan.entrySet()) {
             settleLoanAfterRepay(en.getKey(), repayBill, en.getValue());
         }
     }
 
     /**
-     * 结清最终状态裁定：按借款单当前余额把状态定为 REPAID（已结清）／PARTIAL_REPAID（仍在贷），
+     * 结清最终状态判定：按借款单当前余额把状态定为 REPAID（已结清）／PARTIAL_REPAID（仍在贷），
      * 并把本还款单对该借款单的预算冲减对齐到实际冲抵额（结清环节）。
      */
     private void settleLoanAfterRepay(Long loanBillId, ExpBill repayBill, BigDecimal actualOffset) {
@@ -851,7 +851,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 loanUpd.setId(loanBillId);
                 loanUpd.setStatus(target);
                 expBillMapper.updateById(loanUpd);
-                log.info("借款单 {} 结清终态裁定：{} → {}（余额 {}）", loan.getBillNo(), loan.getStatus(), target, bal);
+                log.info("借款单 {} 结清终态判定：{} → {}（余额 {}）", loan.getBillNo(), loan.getStatus(), target, bal);
                 if ("REPAID".equals(target)) {
                     // ⑨：借款结清=业务最终状态，合规审核/资金支付/账务处理链不会再有人办，全部办结
                     //（借款的钱环节走付款批次但 规则下借款单不置 PAID，批次侧办结管不到它，只能在此收）
@@ -866,9 +866,9 @@ public class ExpenseWfEventListener implements WfBizAction {
     /**
      * 还款单驳回/撤回：回补本单已登记的冲抵（缺失的回退路径）。
      *
-     * <p>原文「且无驳回/撤回回补路径：本单若被驳回，余额将永久停在 0 且无人回补」——
-     * 提单期 {@code addLoanOffset} 已把 {@code loan_balance} 减记，还款没办成时没人加回来。
-     * <b>/391（X-40 甲①）后</b>：提交环节不再落流水也不减记，还款单被驳回时按定义就没有
+     * <p>提单期 {@code addLoanOffset} 会把 {@code loan_balance} 减记，还款没办成时没人加回来，
+     * 余额就永久停在 0——这是提交环节减记时的形态。
+     * <b>改成提交环节只登记占用之后</b>：不再落流水也不减记，还款单被驳回时按定义就没有
      * 已生效冲抵可回退（本方法对这类单读到 0 行 ⇒ 空转，正确）；它现在兜的是发布边界前的历史，
      * 与在途占用的自然释放（关系行随单据状态退出 DRAFT/APPROVING 即出 {@code transitLoanOccupancy} 规则）
      * 分两路，两路都不双回补。
@@ -939,19 +939,19 @@ public class ExpenseWfEventListener implements WfBizAction {
     }
 
     /**
-     * 反审核（APPROVED→DRAFT）环节的结清环节反冲（/391 甲：扣与冲必须同一条链路一一对应）。
+     * 反审核（APPROVED→DRAFT）环节的结清环节反冲（扣与冲必须同一条链路一一对应）。
      *
-     * <p>X-40 甲①把减记从提交环节挪到通过环节之后，{@code ExpenseBillService.unaudit} 成了通过环节的逆操作：
+     * <p>减记从提交环节挪到通过环节之后，{@code ExpenseBillService.unaudit} 就成了通过环节的逆操作：
      * 单据退回草稿，而 {@code exp_loan_offset} 流水与 {@code loan_balance} 减记、REPAID/PARTIAL_REPAID
-     * 翻档却留在原地 ⇒ 「单未生效、账已结清」正是本号要治的形态在反审核环节上重现。
+     * 翻档却留在原地 ⇒ 「单未生效、账已结清」这个形态又在反审核环节上长出来。
      * 故反审核必须按本单已生效流水逐条作废并重算余额，与 {@code handleRejected} 同一算式
      * （{@link #invalidateLoanOffsetFlows}），不另造一套。
      *
-     * <p><b>不动的两处，理由如实写</b>：
+     * <p>不动的两处，理由如实写：
      * ①表头 {@code offset_amount} 不回退——提交期登记额与 {@code exp_bill_relation(LOAN_CLAIM)} 同源，
      *   关系行保留（无 del_flag，删行＝销毁追溯证据），单据回到 DRAFT 后占用规则自动恢复"在途"，
      *   重提走差额算式不会重复计；
-     * ②预算环节与收款单环节不在本号规则内（还款单的预算冲减按 {@code bg_occupy} 净额自校验、
+     * ②预算环节与收款单环节不走这条规则（还款单的预算冲减按 {@code bg_occupy} 净额自校验、
      *   {@code rc_receipt} 是资金事实），仍按 {@code unaudit} 原注释只记录。
      *
      * @return 被反冲的冲抵额合计（0＝本单无已生效冲抵，或该单据类型不走借款台账）
@@ -969,7 +969,7 @@ public class ExpenseWfEventListener implements WfBizAction {
         return BigDecimal.ZERO;
     }
 
-    /** 收尾线程内的当前登录人（同步事件在 HTTP 线程上跑，取不到时回落到默认处理 userId） */
+    /** 收尾线程内的当前登录人（同步事件在 HTTP 线程上跑，取不到时回落到兜底 userId） */
     private Long currentUserOr(Long fallback) {
         LoginUser u = UserContext.get();
         return u != null && u.getUserId() != null ? u.getUserId() : fallback;
@@ -1428,7 +1428,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 log.info("报销单 {} 差额补付: 报销 {} > 借款 {}，补付金额 {}", claim.getBillNo(), claimAmt, borrowTotal, diff);
                 return diff;
             } else {
-                // 代判：报销 < 借款 ⇒ 员工应还差额。<b>不产 WAITING「差额退款」付款记录</b>。
+    // 顺带判定：报销 < 借款 ⇒ 员工应还差额。<b>不产 WAITING「差额退款」付款记录</b>。
                 // WHY：exp_bill_payment 没有方向列，"该收"与"该付"同表同状态，而组批/执行只认
                 // {@code pay_status='WAITING'}＋收款方归组（PayBatchService.groupWaiting）——把
                 // 「员工归还多借部分，出纳收款待确认到账」记成付款记录，会被自动组进待执行<b>付款</b>批次，
@@ -1461,7 +1461,7 @@ public class ExpenseWfEventListener implements WfBizAction {
      * （{@code ExpenseDetailService.registerLoanOccupancy} 只把占用量登记在
      * {@code exp_bill_relation(LOAN_CLAIM).use_amount}，报销环节与还款环节同一处登记）⇒
      * <b>本方法与 {@code repayLoan} 是冲抵台账仅有的两个流水写点</b>：
-     * <b>关系＝在途应冲额，流水＝已生效额，余额＝Σ流水</b>。差额规则与 skip 分支同样用于
+     * 关系＝在途应冲额，流水＝已生效额，余额＝Σ流水。差额规则与 skip 分支同样用于
      * 兼容已带 CLAIM 流水的在途草稿。
      */
     private void offsetLoansByClaim(ExpBill claim, List<ExpBillRelation> rels) {
@@ -1594,7 +1594,7 @@ public class ExpenseWfEventListener implements WfBizAction {
      *
      * <p>回退比对认三种写法（任一命中即本人）：申请人<b>工号</b>（{@code apply_user_name} 的实际存储规则）、
      * 申请人<b>登录账号</b>、申请人<b>姓名</b>（经 sys_user 反查）。
-     * 修复前只比"姓名 vs 工号"，恒为 false ⇒ 一律打成供应商款。
+     * 只比"姓名 vs 工号"时，恒为 false ⇒ 一律打成供应商款。
      * 收款方为空同样视为付给本人（员工垫付后打款给本人的既有语义）。
      */
     private boolean resolvePayToEmployee(ExpBill claim, String payeeName) {
@@ -1641,13 +1641,13 @@ public class ExpenseWfEventListener implements WfBizAction {
      * 这类单据的钱已经在借款那一环节付出，若不在审批收尾时确认消耗，占用就会永久悬空、把额度吃死。
      * 故只在这一个分支保留即时核销，其余一律等付款。</p>
      *
-     * <p><b>执行时机：必须挂到外层审批事务提交之后</b>。根因（10-13 与 10-14 两轮实证）：
+     * <p><b>执行时机：必须挂到外层审批事务提交之后</b>。根因：
      * 本方法与同一条收尾链上的 {@code writeOffApplyOccupy}/{@code handleLoanClaimDiff} 同处外层事务，
      * 而那些步骤已经动过同一枚 {@code bg_item} 行；{@code settleOccupyOnPaid} 是
      * {@code REQUIRES_NEW}，要 {@code SELECT ... FOR UPDATE} 同一行 —— 外层未提交 ⇒ 内层<b>自锁</b>，
      * 每次等满 {@code innodb_lock_wait_timeout}(50s) 才超时。日志实证：
      * 23:55:41 收尾 → 23:56:31 撞锁① → 23:57:21 撞锁② → 23:58:12 放弃，
-     * 3 次共耗约 2 分半，占用仍悬空 3,900。<b>加重试在这里治不了病——锁住它的正是自己。</b>
+     * 3 次共耗约 2 分半，占用仍悬空 3,900。加重试在这里治不了病——锁住它的正是自己。
      * 挂 afterCommit 后外层一提交行锁即释放，内层立刻拿得到锁，正常一次成功。</p>
      *
      * <p>去重与失败规则与付款侧同一套：{@code settleOccupyOnPaid} 内部按 {@code bg_occupy}
@@ -1664,7 +1664,7 @@ public class ExpenseWfEventListener implements WfBizAction {
         // 租户上下文同样要在注册前抓住：MyBatis 租户拦截器靠 TenantContext 的 ThreadLocal 拼 tenant_id，
         // afterCommit 跑在同一线程但请求链随时可能清理，届时不显式恢复会查询不到数据。
         final Long tenantId = TenantContext.getTenantId();
-        // 事务外（事件重放/单测直调）没有同步器可用时，退化为立即执行，行为与改前一致
+        // 事务外（事件重放/单测直调）没有同步器可用时，退化为立即执行，行为与原先一致
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             log.warn("报销单 {} 无事务同步上下文，预算消耗确认改为立即执行（D-F1R-06）", billNo);
             TenantContext.callAs(tenantId, () ->
@@ -1693,7 +1693,7 @@ public class ExpenseWfEventListener implements WfBizAction {
             if (lines.isEmpty()) {
                 return;
             }
-            // 提交后执行已消除自锁，重试仅作默认处理（偶发的其它长事务仍可能撞锁）。
+            // 提交后执行已消除自锁，重试仅作兜底（偶发的其它长事务仍可能撞锁）。
             // 有界重试是安全的：settleOccupyOnPaid 自带 countWriteOffForBill>0 即跳过的去重校验
             // （BudgetService.java:1254），失败那趟整个事务回滚，不会补半次消耗。
             Exception last = null;
@@ -1745,7 +1745,7 @@ public class ExpenseWfEventListener implements WfBizAction {
 
     /**
      * 付款单挂 CIP（extJson.cipId）时生成 CIP 付款凭证并回写已付款金额。
-     * 去重：VoucherService 内按 source_type=CIP_PAY + source_doc_id=billId 判重；全链路默认处理不抛出。
+     * 去重：VoucherService 内按 source_type=CIP_PAY + source_doc_id=billId 判重；全链路兜底不抛出。
      */
     private void generateCipPayVoucherIfLinked(ExpBill bill, BigDecimal payable) {
         try {

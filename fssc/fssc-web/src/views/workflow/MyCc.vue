@@ -55,8 +55,8 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 
 const router = useRouter()
 
-// D-DEC-187：后端 /wf/query/cc/mine 与 /wf/query/cc/{id}/read 现同为「本人视角免权限码」
-// （列表本就无，已读端点此前挂 wf:cc:update——只授 CONFIG_ADMIN／FIN_MANAGER／IT_ADMIN，
+// 后端 /wf/query/cc/mine 与 /wf/query/cc/{id}/read 现同为「本人视角免权限码」
+// （列表本就无，已读端点若挂 wf:cc:update——只授 CONFIG_ADMIN／FIN_MANAGER／IT_ADMIN，
 // 而实际收到抄送的业务岗位皆不持 ⇒ 按钮不渲染、is_read 恒 0）。
 // 前端随之撤掉 hasPerm 预判：按钮对收件人本人恒可见，越权由服务端按归属判据拦。
 
@@ -77,7 +77,7 @@ async function load() {
     const res = await flowApi.myCc({ pageNum: pageNum.value, pageSize })
     rows.value = res?.list || res?.records || []
     total.value = res?.total || 0
-    // 未读徽标改取服务端总数：此前按「当前页」里 !isRead 计数，
+    // 未读徽标改取服务端总数：按「当前页」里 !isRead 计数的话，
     // 第二页之后的未读从不参与，抄送一多徽标就恒显一页的量（与「标记已读」回流后对不上账）。
     unread.value = await loadUnread()
   } catch (e) {
@@ -100,11 +100,11 @@ async function loadUnread() {
 }
 
 function open(row) {
-  // 打开即视为已读（D-DEC-187）：收件人已经看到并进入了这条抄送，
+  // 打开即视为已读：收件人已经看到并进入了这条抄送，
   // 再要求他多点一次「标记已读」只会让 is_read 恒 0——现网 12 行全未读就是这么攒出来的。
   if (!row.isRead) markRead(row, true)
   if (!goBizPage(router, row)) {
-    // D-DEC-197：抄送抽屉必须按「本条抄送记录的 bizType + bizId」精确取链。
+    // 抄送抽屉必须按「本条抄送记录的 bizType + bizId」精确取链。
     // 早先兜到 row.id（wf_cc 自身主键）等于把抄送记录 id 当单据主键送去联查，
     // 与他域主键撞号时打开的就是别人的单据全链（含他人审批意见）——宁可不打开，也不能猜关联点。
     const bizId = row.bizId != null ? row.bizId : row.billId

@@ -88,12 +88,12 @@ public class WfPerfService {
     private static final String[] INSTANCE_STATUSES = {"RUNNING", "APPROVED", "REJECTED", "CANCELLED", "TERMINATED"};
 
     /*
-     * 看板快照（万级在办实测）。
+     * 看板快照缓存。
      *
-     * 四个自观测端点此前各把同一份数据现算一遍：/overview 与 /backlog 各读一次 4.4 万条
-     * PENDING 快照 + 2 万条审批历史窗，/handler-top 再读一次 PENDING + 按人聚合，
-     * /node-dwell 又读一次历史窗。3 并发实测（S-WF 档）p95 7.4~13.2 s、四端点轮着打到库上
-     * 互相抢 I/O；单发则 1.2~2.3 s，说明成本在"重复装载"而不是单个规则慢。
+     * 四个自观测端点各自把同一份数据现算一遍：/overview 与 /backlog 各读一次在办
+     * PENDING 快照 + 审批历史窗，/handler-top 再读一次 PENDING + 按人聚合，
+     * /node-dwell 又读一次历史窗。并发时四端点轮着打库、互相抢 I/O，耗时随并发放大；
+     * 单发则快得多，说明成本在"重复装载"而不是单个规则慢。
      *
      * 这里只收敛<b>装载</b>：TTL 内复用同一份 PENDING / 历史窗 / 按人聚合 / 实例状态计数。
      * 判定口径一律不动——每个数仍由下面各方法唯一给定，缓存不参与任何阈值、终态或归属判断；
@@ -173,7 +173,7 @@ public class WfPerfService {
         out.put("approvalEvents", events);
         out.put("finishedToday", countFinishedToday());
         out.put("overdueInFlight", overduePending);
-        // 默认处理规则规模如实给出（这些行没有 wf_task.due_time，超时按 create_time＋节点 SLA 回算）
+        // 兜底规则规模如实给出（这些行没有 wf_task.due_time，超时按 create_time＋节点 SLA 回算）
         out.put("noDueTimeTasks", noDueTime);
         out.put("backlogOver7d", over7d);
         out.put("avgPendingHours", pending.isEmpty() ? 0 : Math.round(pendingAgeSumHours / (double) pending.size()));
@@ -190,7 +190,7 @@ public class WfPerfService {
         }
         out.put("buckets", bucketList);
         // 概览卡补超时处置档计数（阶梯档／AUTO_PASS 的节点数、窗口内实际发生数、在办落档数）。
-        // 手册 §X16 的断言要的是"改档后可见"，此前三档表头只有超时次数/达成率，改档结果在屏幕上无痕。
+        // 手册要求"改档后可见"：三档表头只有超时次数/达成率时，改档结果在屏幕上无痕。
         out.put("timeoutActions", timeoutActionLedger(pending, hist, instances));
         out.put("note", "统计说明：审批事件取自审批记录，停留＝同一单据相邻两次审批的时间差；"
                 + "达成率仅统计配了办理时限且停留可测的审批（" + slaMeasured + "/" + events + "）。"
@@ -222,10 +222,9 @@ public class WfPerfService {
     /**
      * {@code /wf/board} 顶部四卡的唯一规则源——按状态<b>全量</b> COUNT。
      *
-     * <p>整改前该页拿「当前页」的行自己数，翻页/筛选后读数随页大小漂移，
-     * 实测真值 11 的在途实例在页面上恒显 0（与 {@code /flow-center} 同一规则读数差 11）。
-     * completed 取 APPROVED、rejected 取 REJECTED＋TERMINATED，与该页整改前的分桶规则一致，
-     * 本枚只修<b>查询范围</b>，不改业务规则。CANCELLED 单列返回，前端如需并入再判。</p>
+     * <p>拿「当前页」的行自己数时，翻页/筛选后读数随页大小漂移，在途实例可能一直显 0，
+     * 与 {@code /flow-center} 同一规则也会对不上。completed 取 APPROVED、rejected 取 REJECTED＋TERMINATED，
+     * 与该页原有分桶规则一致，这枚只修<b>查询范围</b>，不改业务规则。CANCELLED 单列返回，前端如需并入再判。</p>
      */
     public Map<String, Object> instanceStatusSummary() {
         Map<String, Long> counts = instanceStatusCount();
@@ -452,8 +451,8 @@ public class WfPerfService {
         for (WfTask t : pending) {
             long age = hoursBetween(t.getCreateTime(), now);
             agingBuckets.merge((long) agingBucketOf(age), 1, Integer::sum);
-            // 已超时＝now − wf_task.due_time（到期真值）；旧规则「账龄 − 配置 SLA」在
-            // wf_task.create_time 早于实例起流时会长出几十小时的假超时（12-31 实测 66h vs 实算 16.4h）。
+            // 已超时＝now − wf_task.due_time（到期真值）；「账龄 − 配置 SLA」在
+            // wf_task.create_time 早于实例起流时会把起流前的时间算进去，长出几十小时的假超时。
             Overdue od = overdueOf(t, cfgIndex, now);
             boolean overdue = od.yes();
             if (t.getDueTime() == null) {
@@ -496,10 +495,10 @@ public class WfPerfService {
         for (BacklogNode bn : byNode.values()) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("node", bn.name);
-            m.put("unnamedTrace", isUnnamedNodeLabel(bn.name));   // D-DEC-210
+            m.put("unnamedTrace", isUnnamedNodeLabel(bn.name));   // 本行节点名是否来自「记录缺名」兜底
             m.put("count", bn.count);
             m.put("overdue", bn.overdue);
-            // 这一行的超时里有多少条是"没有 due_time、按 create_time＋SLA 默认处理"算出来的
+            // 这一行的超时里有多少条是"没有 due_time、按 create_time＋SLA 兜底"算出来的
             m.put("overdueFallback", bn.fallbackOverdue);
             m.put("noDueTime", bn.noDue);
             m.put("maxAgeHours", bn.maxAgeHours);
@@ -521,7 +520,7 @@ public class WfPerfService {
         out.put("buckets", buckets);
         out.put("byNode", nodes);
         out.put("overdueTop", overdueRank(pending, names, true));
-        // 规则可追溯——榜上每行都带 overdueBasis；这两项给出「默认处理规则」的规模
+        // 规则可追溯——榜上每行都带 overdueBasis；这两项给出「兜底规则」的规模
         out.put("noDueTimeTasks", noDueTasks);
         out.put("timeoutActions", timeoutActionLedger(pending, hist, instancesOf(hist)));
         out.put("note", "账龄＝任务发起到现在的时长；已超时＝现在 − 到期时间（按到期时点实算），"
@@ -542,8 +541,8 @@ public class WfPerfService {
      */
     public Map<String, Object> handlerTop(int days) {
         int window = normalizeDays(days);
-        // 改前把窗口内 DONE 任务（30 天窗口命中 18.4 万行）整表读进堆逐行累加，
-        // 单发实测 398 s、看板一打开即超时。改为按人下推聚合（超时谓词与 overdueOf() 同规则，
+        // 把窗口内 DONE 任务整表读进堆逐行累加，窗口一大就会把看板拖到超时。
+        // 改为按人下推聚合（超时谓词与 overdueOf() 同规则，
         // 见 WfTaskMapper.handlerDoneStats 的注释），本方法只保留在办侧的逐行规则。
         List<Map<String, Object>> doneStats = handlerDoneStats(window);
         List<WfTask> pending = pendingTasks();
@@ -653,7 +652,7 @@ public class WfPerfService {
         out.put("measured", rows.size());
         out.put("topRows", shown.size());
         out.put("appendedOnHandRows", appended);
-        // / 对账口：「当前在办」「在办超时」两列此前恒 0（取键取错，见上方注释）。
+        // 对账口：「当前在办」「在办超时」两列曾因取键取错而恒为 0（见上方注释）。
         // 光"有数"不够，还要能对上同页 KPI——KPI 按任务数、本表按人（候选人重复计入），
         // 两个规则不并排给出，读者只会再报一次"两列对不上"。这里把三段差值逐项出数：
         //   屏上 15 行列合计 ≤ 全部人名下合计 ＝ 有主任务数（多候选按人重复） ＝ 待办 − 无人认领
@@ -672,14 +671,14 @@ public class WfPerfService {
         Map<String, Object> reconcile = new LinkedHashMap<>();
         reconcile.put("pendingTasks", pending.size());          // ＝概览卡 pendingTasks（同一份 PENDING 快照）
         reconcile.put("overdueTasks", overdueTasks);            // ＝概览卡 overdueInFlight（同一 overdueOf 谓词）
-        reconcile.put("noDueTimeTasks", noDueTimeTasks);              // 没有 due_time、走默认处理/不可测规则的任务数（D-DEC-206）
+        reconcile.put("noDueTimeTasks", noDueTimeTasks);              // 没有 due_time、走兜底/不可测规则的任务数
         reconcile.put("onHandCellSum", cellOnHand);             // 屏上各行「当前在办」列合计（只含 Top 15 人）
         reconcile.put("overdueOnHandCellSum", cellOverdue);     // 屏上各行「在办超时」列合计
         reconcile.put("onHandAllHandlersSum", onHandAllUsers);  // 全部人名下合计（未截断，候选人重复计入）
         reconcile.put("overdueOnHandAllHandlersSum", overdueTasksAllUsers);
         reconcile.put("ownedTasks", ownedTasks);                // 至少有一个可办理人的任务数
         reconcile.put("unownedTasks", unownedTasks);            // 候选组为空、无人认领的任务数（任何人名下都不计）
-        reconcile.put("appendedOnHandRows", appended);          // 名下有在办、窗口内无办结而补进表尾的行数（D-DEC-204）
+        reconcile.put("appendedOnHandRows", appended);          // 名下有在办、窗口内无办结而补进表尾的行数
         out.put("reconcile", reconcile);
         out.put("note", "办结时效＝任务从派发到办结的时长；「当前在办／在办超时」＝此刻的待办快照，"
                 + "超时判定与顶部卡片同一规则（现在 − 到期时间；无到期时间的 " + noDueTimeTasks
@@ -694,14 +693,14 @@ public class WfPerfService {
     }
 
     /**
-     * 超时未办榜（的"超时未办 Top 榜"读侧）：<b>一行＝一个任务</b>（RA-F3d · 2026-09-27 人工裁决第三轮）。
+     * 超时未办榜（大屏"超时未办 Top 榜"的读侧）：<b>一行＝一个任务</b>。
      *
-     * <p>改前把候选人逐个摊成独立行 ⇒ 榜上「N 条」不是待办数（现网实测 8 个任务渲染成 16 行）。
+     * <p>把候选人逐个摊成独立行时，榜上「N 条」不是待办数：一个任务有多个候选人就会被算成多条。
      * 报表的计数单位始终是<b>任务</b>：「超期任务数量：按周期合计超期已处理任务数量」〔星·个人效率统计表〕，
      * 处理人只是分组/展示维度〔E·FSSC·330「处理人｜默认选中不限，显示所有审核处理人」〕。
      * 因此这里按任务出行、处理人合并成一个名单（{@code name} 顿号连接），候选人只展开<b>不重复计数</b>；
      * "每个人手上还有几单"的 per-user 规则由 {@link #handlerTop} 直接在同一份 PENDING 快照上现算，
-     * 两处共用 {@link #overdueOf} 这唯一一套超时判据（的"列与 KPI 同源"就落在这里）。
+     * 两处共用 {@link #overdueOf} 这唯一一套超时口径，榜单列与 KPI 因此天然同源。
      *
      * @param onlyOverdue true＝只返回已超时项（大屏榜），false＝全部在办（历史签名，现为通用参考规则）
      */
@@ -759,7 +758,7 @@ public class WfPerfService {
         // 这一行的超时是按哪个规则算出来的（DUE_TIME／CREATE_PLUS_SLA／NO_DUE_NO_SLA）
         m.put("overdueBasis", od.basis);
         m.put("urgedCount", t.getUrgedCount() == null ? 0 : t.getUrgedCount());
-        // 卡单红牌（/ UR-10）：催满阈值仍 PENDING ＝ 卡单。派生标记，不写入数据库、不改状态。
+        // 卡单红牌：催满阈值仍 PENDING ＝ 卡单。派生标记，不写入数据库、不改状态。
         m.put("stuck", wfQueryService.isStuck(t.getUrgedCount()));
         return m;
     }
@@ -782,7 +781,7 @@ public class WfPerfService {
     static final String TIER_AUTO_PASS = "AUTO_PASS";
     static final String TIER_ESCALATE = "ESCALATE";
     static final String TIER_ESCALATE_LADDER = "ESCALATE_AFTER_URGES";
-    /** 未配置或拼写不可识别（作业侧默认处理为催办档） */
+    /** 未配置或拼写不可识别（作业侧兜底为催办档） */
     static final String TIER_UNSPECIFIED = "UNSPECIFIED";
 
     /** 机器动作在 {@code wf_task_history.action} 里的写入数据库值（与作业侧/门面插桩同源，用于「实际发生」计数） */
@@ -862,7 +861,7 @@ public class WfPerfService {
      *      （经 {@code WfQueryService} 与看板红牌同一读取点）。</li>
      * </ul>
      *
-     * <p><b>两个阈值不是同一个键，别混读</b>：阶梯档<em>实际升级</em>用的是作业侧
+     * <p>两个阈值不是同一个键，别混读：阶梯档<em>实际升级</em>用的是作业侧
      * {@code sys_config.wf.timeout.escalate.after_urges}（{@code WfTimeoutJob} 包内常量，默认 3），
      * 本台账的「其中卡单」列用的是大屏/告警侧 {@code wf.timeout.stuck.alert.after_urges}（默认亦 3）。
      * 两键同默认值但可各自改配，故本列只回答"催满到该打红牌了"，<b>不等于</b>作业已经升级过；
@@ -912,9 +911,9 @@ public class WfPerfService {
         }
 
         int threshold = wfQueryService.stuckAfterUrges();
-        // 补齐：在办落档五档逐档计数。改档计数原先只有阶梯档／AUTO_PASS 两档有数、
-        // 催办档与未配置档在页面上恒显示「—」——同一张表里两套规则，读者无法判断「—」是"没有"还是"没算"。
-        // 现在五档同一规则，且 五档 tasks 合计 + unclassifiedTasks ＝ 同页 KPI「待办任务」（＝pendingTasks）。
+        // 在办落档五档逐档计数。阶梯档／AUTO_PASS 两档之外的档位若不给数，
+        // 催办档与未配置档在页面上只能显示「—」——同一张表里两套规则，读者无法判断「—」是"没有"还是"没算"。
+        // 五档同一规则，且五档 tasks 合计 + unclassifiedTasks ＝ 同页 KPI「待办任务」（＝pendingTasks）。
         Map<String, int[]> byTier = new LinkedHashMap<>();
         for (String tier : new String[]{TIER_REMIND, TIER_ESCALATE_LADDER, TIER_AUTO_PASS, TIER_ESCALATE, TIER_UNSPECIFIED}) {
             byTier.put(tier, new int[2]);
@@ -983,11 +982,11 @@ public class WfPerfService {
 
     // 共用底座
 
-    // 超时实算的唯一谓词（/）
+    // 超时实算的唯一谓词
 
-    /** 到期时刻取 {@code wf_task.due_time}（G3 双时限真值列，与 {@code OpTaskDueTimeScanJob}／{@code TaskPoolQueryService} 同源） */
+    /** 到期时刻取 {@code wf_task.due_time}（双时限真值列，与 {@code OpTaskDueTimeScanJob}／{@code TaskPoolQueryService} 同源） */
     private static final String DUE_BASIS_TASK = "DUE_TIME";
-    /** 无 {@code due_time} 的历史行：按 {@code create_time ＋节点 timeout_hours} 默认处理回算（规则必须在行上标注） */
+    /** 无 {@code due_time} 的历史行：按 {@code create_time ＋节点 timeout_hours} 兜底回算（规则必须在行上标注） */
     private static final String DUE_BASIS_FALLBACK = "CREATE_PLUS_SLA";
     /** 既无 {@code due_time} 又无节点 SLA：超时<b>不可测</b>，一律不计超时（不是"没超时"） */
     private static final String DUE_BASIS_UNMEASURABLE = "NO_DUE_NO_SLA";
@@ -995,9 +994,9 @@ public class WfPerfService {
     /**
      * 单条任务的超时实算结果：超时时长（分钟）＋到期时刻＋节点配置 SLA＋所用规则。
      *
-     * <p><b>的根因</b>：页面把"账龄 − 配置 SLA"当成已超时时长，而 {@code wf_task.create_time}
-     * 可能早于实例起流（12-31 实测该实例差 49.99 小时），于是报出 <b>66 小时</b>、按 {@code due_time}
-     * 实算只超 <b>16.4 小时</b>。这里以 {@code due_time} 为唯一真相源，取不到才回算，
+     * <p><b>假超时的根因</b>：页面把"账龄 − 配置 SLA"当成已超时时长，而 {@code wf_task.create_time}
+     * 可能早于实例起流（起流前的时间全被算成账龄），于是报出的超时远大于按 {@code due_time}
+     * 实算的结果。这里以 {@code due_time} 为唯一真相源，取不到才回算，
      * 并在应答里带上 {@code overdueBasis} 让规则可见。
      */
     private static final class Overdue {
@@ -1037,7 +1036,7 @@ public class WfPerfService {
             if (sla == null || sla <= 0 || t.getCreateTime() == null) {
                 return new Overdue(0, DUE_BASIS_UNMEASURABLE, null, sla);
             }
-            // 默认处理：与作业侧 WfTimeoutJob.dueOf 同方向（due_time 缺失才回算），此处按自然小时、不复算工作日历
+            // 兜底：与作业侧 WfTimeoutJob.dueOf 同方向（due_time 缺失才回算），此处按自然小时、不复算工作日历
             due = t.getCreateTime().plusHours(sla);
             basis = DUE_BASIS_FALLBACK;
         }
@@ -1062,8 +1061,8 @@ public class WfPerfService {
     /**
      * 节点显示名：<b>不造名</b>。
      * 有名字用名字；只有 {@code node_key} 就用 key（读者可反查 {@code wf_node_config}）；
-     * 两者皆空如实标「记录缺名·无节点信息」——此前所有无名记录被并成一个
-     * "（未记节点名）"的伪节点（12-31 实测 56 事件），看起来像一个真实的高频节点。
+     * 两者皆空如实标「记录缺名·无节点信息」——不能把所有无名记录并成一个
+     * "（未记节点名）"的伪节点，那看起来就像一个真实的高频节点。
      */
     private static String nodeLabel(String nodeName, String nodeKey) {
         if (nodeName != null && !nodeName.isBlank()) {
@@ -1273,8 +1272,8 @@ public class WfPerfService {
     }
 
     /**
-     * F-09：首次出现步序的均值必须是实数——原实现 {@code (int)(sum / size)} 向下取整，
-     * 1.5 与 1.0 并列，节点分层排序把真实流转边判成回边丢掉（桑基少一条
+     * 首次出现步序的均值必须是实数：用 {@code (int)(sum / size)} 向下取整时，
+     * 1.5 与 1.0 并列，节点分层排序会把真实流转边判成回边丢掉（桑基少一条
      * 「扫描单据→直属上级审核」）。改为 double 比较，只影响层号排序，不参与展示。
      */
     private double avg(List<Integer> values) {
@@ -1320,9 +1319,9 @@ public class WfPerfService {
         private int urged;
         /** 催办已达卡单阈值仍 PENDING 的条数（与作业侧同一阈值读取点） */
         private int stuck;
-        /** 本节点在办里没有 wf_task.due_time 的条数（＝超时走默认处理规则的规模） */
+        /** 本节点在办里没有 wf_task.due_time 的条数（＝超时走兜底规则的规模） */
         private int noDue;
-        /** 本节点按默认处理规则（create_time＋SLA）判出的超时条数 */
+        /** 本节点按兜底规则（create_time＋SLA）判出的超时条数 */
         private int fallbackOverdue;
 
         private BacklogNode(String name) {

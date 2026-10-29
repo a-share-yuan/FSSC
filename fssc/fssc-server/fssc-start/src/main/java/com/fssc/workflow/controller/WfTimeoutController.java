@@ -45,7 +45,7 @@ public class WfTimeoutController {
     private final WfTaskMapper wfTaskMapper;
     private final WfNodeConfigMapper wfNodeConfigMapper;
     private final WfFlowConfigMapper wfFlowConfigMapper;
-    /** 节点键解析（含 Task_N → 业务节点默认处理映射），与超时催办 Job 共用同一实现 */
+    /** 节点键解析（含 Task_N → 业务节点兜底映射），与超时催办 Job 共用同一实现 */
     private final WfNodeConfigResolver wfNodeConfigResolver;
 
     /**
@@ -89,11 +89,15 @@ public class WfTimeoutController {
      * 构建超时统计数据。
      */
     private Map<String, Object> buildOverdueStats() {
+        // 这里只用到「节点键 + 创建时刻」：整行 selectList 在万级在办下是 4.4 万行 × 20 列
+        // （实测 494 ms/次，其中绝大部分是把用不到的长文本搬过来），收窄到 4 列。
         List<WfTask> pendingList = wfTaskMapper.selectList(
                 new LambdaQueryWrapper<WfTask>()
+                        .select(WfTask::getId, WfTask::getModelKey,
+                                WfTask::getNodeKey, WfTask::getCreateTime)
                         .eq(WfTask::getStatus, "PENDING"));
 
-        // 构建节点配置索引（modelKey:nodeKey -> WfNodeConfig，含 Task_N 默认处理）
+        // 构建节点配置索引（modelKey:nodeKey -> WfNodeConfig，含 Task_N 兜底）
         Map<String, WfNodeConfig> nodeConfigMap = wfNodeConfigResolver.index(pendingList);
 
         long totalPending = pendingList.size();

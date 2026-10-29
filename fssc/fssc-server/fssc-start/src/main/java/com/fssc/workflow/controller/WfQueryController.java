@@ -45,7 +45,7 @@ public class WfQueryController {
     private final WfQueryService wfQueryService;
     /** G2 传阅：抄送候选人只读查询（审批弹窗「抄送给」的数据源） */
     private final WfCcService wfCcService;
-    /** 审批历史读侧归属判定（RA-TRC-04 前置：授权扩面前先办结） */
+    /** 审批历史读侧归属判定（前置：授权扩面前先办结） */
     private final OrgGuard orgGuard;
     private final NodeOrgResolver nodeOrgResolver;
     /** 流程侧只读预览的归属校验（chain 与四个预览端点同一把尺） */
@@ -95,7 +95,7 @@ public class WfQueryController {
      *
      * <p>新增 {@code bizNo} 入参——按单号查历史不再要求调用方先知道 bizId。
      *
-     * <p><b>RA-TRC-04 前置（读侧归属过滤）</b>：本接口要授给全业务角色，所以先办结再放权——
+     * <p><b>前置（读侧归属过滤）</b>：本接口要授给全业务角色，所以先办结再放权——
      * 按单/按号查询走 {@code OrgGuard.assertVisible}（本公司 / 本人提单 / 集团数据范围放行）；
      * 判为不可见的单据<b>不再整表放开</b>，也不甩 403 打断详情页：结果收敛为<b>本人参与过</b>的
      * 那些行（办理过 / 被转办加签点名 / 待办在我名下或候选含我）。既不泄露他人审批意见，
@@ -203,7 +203,7 @@ public class WfQueryController {
         return r;
     }
 
-    /** TRC-B 同档归属判定：单据公司 + 提单人，集团数据范围角色在 OrgGuard 内部放行 */
+    /** 与联查同档的归属判定：单据公司 + 提单人，集团数据范围角色在 OrgGuard 内部放行 */
     private boolean isVisibleDoc(WfInstance inst) {
         try {
             orgGuard.assertVisible(nodeOrgResolver.companyIdOfBill(inst.getBizType(), inst.getBizId()),
@@ -222,8 +222,8 @@ public class WfQueryController {
      */
     @GetMapping("/chain")
     public Result<List<Map<String, Object>>> chain(@RequestParam String procInstId) {
-        // 本端点连同四个预览端点此前只靠「实例 UUID 不可枚举」当防线。
-        // 实测同租户他公司账号换个 UUID 就能读到整条链（含各节点审批意见原文），
+        // 本端点连同四个预览端点不能只靠「实例 UUID 不可枚举」当防线。
+        // 同租户他公司账号换个 UUID 就能读到整条链（含各节点审批意见原文），
         // 而单据联查侧同类查询早被 OrgGuard 拒 403 ⇒ 补齐，规则一致。
         wfReadGuard.assertInstanceReadable(procInstId);
         return Result.success(wfQueryService.chain(procInstId));
@@ -261,9 +261,9 @@ public class WfQueryController {
     /**
      * 标记抄送已读。
      *
-     * <p>此前挂 {@code @RequiresPerm("wf:cc:update")}，而该码只授 CONFIG_ADMIN／FIN_MANAGER／IT_ADMIN，
-     * 真正收到抄送的岗位（现网收件人 3901／3915＝FSSC_SUPERVISOR＋COMMON_EMP）皆不持 ⇒
-     * 收件人永远点不动「标记已读」，{@code wf_cc.is_read} 结构性恒 0（实测 12 行全未读）。
+     * <p>原先挂 {@code @RequiresPerm("wf:cc:update")}，而该码只授 CONFIG_ADMIN／FIN_MANAGER／IT_ADMIN，
+     * 真正收到抄送的岗位（FSSC_SUPERVISOR＋COMMON_EMP）皆不持 ⇒
+     * 收件人永远点不动「标记已读」，{@code wf_cc.is_read} 结构性恒 0。
      * 已读是收件人自己的状态，与 {@code GET /cc/mine} 同一规则改为<b>本人视角免权限码</b>，
      * 归属判据在 {@link WfCcService#markRead} 内硬校验（id 可枚举，不可裸放行）；
      * 持 {@code wf:cc:update} 者代人标记的维护通道保留。

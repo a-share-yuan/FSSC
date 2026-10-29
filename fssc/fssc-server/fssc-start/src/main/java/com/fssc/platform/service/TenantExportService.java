@@ -74,7 +74,7 @@ public class TenantExportService {
         return holder[0];
     }
 
-    // ---------- 工具 ----------
+    // 工具
 
     /** 候选表中第一个真实存在的（大小写不敏感，按 information_schema）。 */
     private String firstExisting(List<String> candidates) {

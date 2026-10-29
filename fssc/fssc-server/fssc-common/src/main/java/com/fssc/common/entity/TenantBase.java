@@ -23,7 +23,7 @@ public class TenantBase implements Serializable {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** R5-D-314：系统列只读——序列化照旧输出，反序列化（@RequestBody）一律丢弃 */
+    /** 系统列只读——序列化照旧输出，反序列化（@RequestBody）一律丢弃 */
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     @TableField(fill = FieldFill.INSERT)
     private Long tenantId;

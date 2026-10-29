@@ -51,10 +51,10 @@ public class GlJournalService {
     /**
      * 默认借贷科目的<b>科目编码</b>（不是主键！）。
      *
-     * <p>原实现把 6602/2241 当主键写死（{@code DEFAULT_DEBIT=6602L}、{@code DEFAULT_CREDIT=2241L}），
+     * <p>把 6602/2241 当主键写死（{@code DEFAULT_DEBIT=6602L}、{@code DEFAULT_CREDIT=2241L}）会错：
      * 而 md_subject 里 6602 的主键是 919、1002 是 967，<b>2241 更是查无此行</b>（幽灵 ID）。
      * 结果未传科目的手工凭证会落成「借 6602 管理费用 / 贷 2241 其他应付款」——账实不符。
-     * 原注释「仅展示用，非外键约束」与实现不符：凭证引擎直接拿这两个值生成分录。
+     * 注释写「仅展示用，非外键约束」与实现不符：凭证引擎直接拿这两个值生成分录。
      *
      * <p>改为按编码查库解析真实主键，租户/公司换了 id 也不会错。
      */
@@ -168,7 +168,7 @@ public class GlJournalService {
         e.setTenantId(tenantId);
         e.setPeriod(period);
         e.setEntryType(entryType);
-        // （K127 期间去重，"一个会计期间只能生成一张凭证"）：同期间同类型
+        // （期间去重："一个会计期间只能生成一张凭证"）：同期间同类型
         // 已存在未驳回的记账单（APPROVING/APPROVED/POSTED）时拒绝重复生成——防重复提单重复入账；
         // 被驳回(REJECTED)的单不占校验，可修正后重新生成。
         GlJournalEntry dup = mapper.selectOne(new LambdaQueryWrapper<GlJournalEntry>()
@@ -206,7 +206,7 @@ public class GlJournalService {
                     typeName(entryType) + "-" + period + " " + e.getSummary(), amount, null, extraVars);
         } catch (Exception ex) {
             log.error("一般总账记账 {} 发起 {} 审批失败: {}", period, bizType, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
         return e;
     }
@@ -214,9 +214,9 @@ public class GlJournalService {
     /**
      * 一般总账记账（费用预提/待摊/手工凭证/其他收款）冲销出口。
      *
-     * <p>此前记账域只有 list/generate 两个动作：预提单办结后凭证停在 DRAFT，
+     * <p>记账域只有 list/generate 两个动作时：预提单办结后凭证停在 DRAFT，
      * 而全系统唯一的冲销入口是凭证台账的「红字冲销」按钮，其前置条件是
-     * {@code op_voucher.status==='POSTED'}——草稿凭证直接置灰（证据 12-28:75，本单凭证 id=24）。
+     * {@code op_voucher.status==='POSTED'}——草稿凭证直接置灰。
      * 结果错账无路可走，只能留着或靠人直接改库。
      *
      * <p>规则：仅已入账（POSTED）的记账单可冲销；具体由凭证引擎分流——
@@ -273,7 +273,7 @@ public class GlJournalService {
             case "DEFER" -> "GL_DEFER";
             case "MANUAL" -> "GL_MANUAL_VOUCHER";
             case "OTHER_RECEIPT" -> "GL_OTHER_RECEIPT";
-            // 批次2 B-12：盘点差异结转做账档——资产/存货盘点差异结转凭证统一走总账凭证载体
+            // 盘点差异结转做账档——资产/存货盘点差异结转凭证统一走总账凭证载体
             case "CHECK_DIFF" -> "GL_CHECK_DIFF";
             default -> null;
         };

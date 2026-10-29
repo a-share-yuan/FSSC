@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** 报表预聚合（P2-3）。 */
+/** 报表预聚合。 */
 @RestController
 @RequestMapping("/api/tenant/report/summary")
 @RequiredArgsConstructor

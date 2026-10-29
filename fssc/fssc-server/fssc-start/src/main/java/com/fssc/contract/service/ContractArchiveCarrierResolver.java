@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * D-DEC-005（X-19）：合同作为非单据载体进档案登记簿（{@code archive_type='CONTRACT'}，
+ * 合同作为非单据载体进档案登记簿（{@code archive_type='CONTRACT'}，
  * {@code ref_id=cont_contract.id}）——合同表零加列，归档结论只落在 op_archive。
  */
 @Component

@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { isAmountValid, clampAmount } from './candidateAmount'
 
 /**
- * D-UI-01 家族（2026-10-19）：金额闸的纯函数单测。
+ * 金额闸的纯函数单测。
  * 这条规则是"支持部分冲抵"的底线：金额必须 > 0 且 ≤ 可冲抵余额，
  * 非法值拦住、超额值拦住、浮点尾差放行。
  */

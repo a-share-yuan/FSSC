@@ -13,10 +13,13 @@ import com.fssc.workflow.entity.WfModel;
 import com.fssc.workflow.entity.WfNodeConfig;
 import com.fssc.workflow.entity.WfProcessConfig;
 import com.fssc.workflow.service.NodeOrgResolver;
+import com.fssc.workflow.service.WfAssigneeResolver;
 import com.fssc.workflow.service.WfDelegateService;
 import com.fssc.workflow.service.WfModelService;
 import com.fssc.workflow.service.WfNodeConfigService;
 import com.fssc.workflow.service.WfProcessConfigService;
+import java.math.BigDecimal;
+import java.util.Collections;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -53,9 +56,9 @@ public class WfConfigController {
     private final WfDelegateService delegateService;
     private final NodeOrgResolver nodeOrgResolver;
     /** G2 参与人解析（wf_assignee_scheme / wf_assignee_dim）：只读预览接口用 */
-    private final com.fssc.workflow.service.WfAssigneeResolver assigneeResolver;
+    private final WfAssigneeResolver assigneeResolver;
 
-    // ---------- 流程模型 ----------
+    // 流程模型
 
     @RequiresPerm({"wf:design:list", "wf:model:list"})
     @GetMapping("/model/page")
@@ -100,7 +103,7 @@ public class WfConfigController {
         return Result.success();
     }
 
-    // ---------- 单据类型流程绑定 ----------
+    // 单据类型流程绑定
 
     @RequiresPerm("wf:config:list")
     @GetMapping("/process/page")
@@ -140,19 +143,19 @@ public class WfConfigController {
         Number companyId = (Number) body.get("companyId");
         Number deptId = (Number) body.get("deptId");
         String key = processConfigService.resolveModelKey(bizType,
-                amount == null ? null : java.math.BigDecimal.valueOf(amount.doubleValue()),
+                amount == null ? null : BigDecimal.valueOf(amount.doubleValue()),
                 companyId == null ? null : companyId.longValue(),
                 deptId == null ? null : deptId.longValue());
         return Result.success(key);
     }
 
-    // ---------- 节点审批人配置 ----------
+    // 节点审批人配置
 
     @RequiresPerm({"wf:config:list", "wf:node:list"})
     @GetMapping("/node/list")
     public Result<List<WfNodeConfig>> nodeList(@RequestParam(required = false) String modelKey) {
         if (modelKey == null || modelKey.isBlank()) {
-            return Result.success(java.util.Collections.emptyList());
+            return Result.success(Collections.emptyList());
         }
         return Result.success(nodeConfigService.listByModel(modelKey));
     }
@@ -191,7 +194,7 @@ public class WfConfigController {
     }
 
     /**
-     * 节点参与人只读解析预览（G2 2026-09-24）：回答"这个节点现在会解析到谁"。
+     * 节点参与人只读解析预览（G2）：回答"这个节点现在会解析到谁"。
      *
      * <p>入参两种给法：{@code modelKey + nodeKey}（配置页视角，没有在办任务也能看）；
      * 或 {@code taskId}（待办视角，缺的 modelKey/nodeKey 由任务反推，且 EXCLUDE 组合模式需要它取候选组）。
@@ -210,7 +213,7 @@ public class WfConfigController {
         return Result.success(assigneeResolver.previewByTask(modelKey, nodeKey, procInstId, taskId));
     }
 
-    // ---------- 委托代理 ----------
+    // 委托代理
 
     @RequiresPerm("wf:delegate:list")
     @GetMapping("/delegate/page")
@@ -218,7 +221,7 @@ public class WfConfigController {
                                                        @RequestParam(required = false) Long fromUserId,
                                                        @RequestParam(required = false) Long toUserId,
                                                        @RequestParam(required = false) String scope) {
-        // scope 缺省 = mine（本人委托）。E-12：改造前不带任何身份条件，普通员工可翻全租户授权关系。
+        // scope 缺省 = mine（本人委托）。E-12：原先不带任何身份条件，普通员工可翻全租户授权关系。
         return Result.success(delegateService.page(query.getPageNum(), query.getPageSize(),
                 fromUserId, toUserId, scope));
     }

@@ -5,10 +5,9 @@ package com.fssc.sharing.service;
 
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.invoice.entity.InvBillInvoice;
 import com.fssc.invoice.entity.InvInvoice;
-import com.fssc.invoice.mapper.InvBillInvoiceMapper;
-import com.fssc.invoice.mapper.InvInvoiceMapper;
 import com.fssc.l1.L1TestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,20 +46,20 @@ class ReceiptInvoiceNetAmountTest {
         Mockito.when(billMapper.selectList(ArgumentMatchers.any())).thenReturn(List.of(bill));
         L1TestSupport.inject(svc, "expBillMapper", billMapper);
 
-        InvBillInvoiceMapper linkMapper = Mockito.mock(InvBillInvoiceMapper.class);
+        // 勾稽行与发票读取走 InvoiceDomainFacade（服务已不再直连 inv_* mapper）
         InvBillInvoice link = new InvBillInvoice();
         link.setBillId(77L);
         link.setInvoiceId(9L);
         link.setAmount(INVOICE_GROSS);
-        Mockito.when(linkMapper.selectList(ArgumentMatchers.any())).thenReturn(List.of(link));
-        L1TestSupport.inject(svc, "billInvoiceMapper", linkMapper);
 
-        InvInvoiceMapper invMapper = Mockito.mock(InvInvoiceMapper.class);
         InvInvoice inv = new InvInvoice();
         inv.setId(9L);
         inv.setTaxAmount(taxAmount);
-        Mockito.when(invMapper.selectById(9L)).thenReturn(inv);
-        L1TestSupport.inject(svc, "invInvoiceMapper", invMapper);
+
+        InvoiceDomainFacade facade = Mockito.mock(InvoiceDomainFacade.class);
+        Mockito.when(facade.findLinksByBillIds(ArgumentMatchers.anyCollection())).thenReturn(List.of(link));
+        Mockito.when(facade.findById(9L)).thenReturn(inv);
+        L1TestSupport.inject(svc, "invoiceFacade", facade);
 
         return svc;
     }

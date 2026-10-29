@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 @TableName("gl_tax_provision")
 public class GlTaxProvision extends TenantAuditBase {
 
-    /** 记账公司（组织合法性守卫 V1.3.18） */
+    /** 记账公司（组织合法性守卫） */
     private Long companyId;
     /** 计提单号 */
     private String provisionNo;

@@ -31,7 +31,7 @@
             </el-table-column>
             <el-table-column label="操作" width="120" align="center">
               <template #default="{ row }">
-                <!-- 此前非 PENDING 行没有任何显式控件，选中/进编辑只能靠整行点击，
+                <!-- 非 PENDING 行若没有任何显式控件，选中/进编辑只能靠整行点击，
                      键盘用户彻底不可达。补「编辑」按钮与 onSelect 同源（.stop 防冒泡再触发一次行点击）。 -->
                 <el-button v-if="row.status !== 'PENDING'" link size="small" type="primary" @click.stop="onSelect(row)">编辑</el-button>
                 <el-button v-if="row.status === 'PENDING'" v-permission="'md:supplier:approve'" type="success" size="small" @click="approveSupplier(row)">核准</el-button>
@@ -259,7 +259,7 @@ const basicFormRef = ref(null)
 const subFormRef = ref(null)
 const basicGuard = useSubmitGuard(basicFormRef)
 const subGuard = useSubmitGuard(subFormRef)
-// 第1批 P0：录入规则统一走中央框架 useFormRules（原页面本地 rules 只有编码/名称必填，
+// 录入规则统一走中央框架 useFormRules（原页面本地 rules 只有编码/名称必填，
 // 税号/信用代码/电话/子表账号全部裸奔）。资质证照「有效期至不得早于生效日」是跨字段勾稽，
 // 用页面级 computed 追加一条闭包 validator（async-validator 的 validator 拿不到 form 其他字段）。
 const { rules: supplierRules } = useFormRules('SUPPLIER')

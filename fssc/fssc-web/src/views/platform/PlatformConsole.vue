@@ -23,7 +23,7 @@
     </div>
 
     <div class="pc-main">
-      <!-- ================= 平台看板 ================= -->
+      <!-- 平台看板 -->
       <div v-show="tab === 'dash'">
         <el-row :gutter="12">
           <el-col v-for="c in dashCards" :key="c.label" :xs="12" :sm="8" :md="6" :lg="3">
@@ -39,7 +39,7 @@
         </el-card>
       </div>
 
-      <!-- ================= 租户管理 ================= -->
+      <!-- 租户管理 -->
       <el-card v-show="tab === 'tenant'">
         <template #header>
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
@@ -87,7 +87,7 @@
           :page-sizes="[10, 20, 50]" @change="loadTenants()" />
       </el-card>
 
-      <!-- ================= 套餐功能开关 ================= -->
+      <!-- 套餐功能开关 -->
       <el-card v-show="tab === 'feature'">
         <template #header>
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
@@ -121,7 +121,7 @@
         </div>
       </el-card>
 
-      <!-- ================= 数据导出 ================= -->
+      <!-- 数据导出 -->
       <el-card v-show="tab === 'export'">
         <template #header><b>租户数据导出（ZIP）</b></template>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
@@ -178,7 +178,7 @@ function openRowDetail(row) {
   return showRowDetail(row, { title: '详情' })
 }
 
-// ---------------- 平台看板 ----------------
+// 平台看板
 const dash = ref({})
 const dashLoading = ref(false)
 const dashChart = ref()
@@ -222,7 +222,7 @@ function renderDashChart(rows) {
   })
 }
 
-// ---------------- 租户管理 ----------------
+// 租户管理
 const tenants = ref([])
 const tenantsAll = ref([])
 const tenantTotal = ref(0)
@@ -294,7 +294,7 @@ async function doUnfreeze(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// ---------------- 套餐功能开关 ----------------
+// 套餐功能开关
 const packages = ref([])
 const matrix = ref([])
 const fLoading = ref(false)
@@ -349,7 +349,7 @@ async function saveFeatures() {
   }
 }
 
-// ---------------- 数据导出（fetch + Blob，仿 Dashboard.vue exportXlsx） ----------------
+// 数据导出（fetch + Blob，仿 Dashboard.vue exportXlsx）
 const eq = reactive({ tenantId: null })
 const exportLoading = ref(false)
 
@@ -373,7 +373,7 @@ async function doExport() {
   }
 }
 
-// ---------------- 页签/生命周期 ----------------
+// 页签/生命周期
 function onTabChange(name) {
   if (name === 'dash') nextTick(() => { if (dashInstance) dashInstance.resize(); else if (dash.value.totalTenants == null) loadDashboard() })
   if (name === 'tenant') loadTenants()

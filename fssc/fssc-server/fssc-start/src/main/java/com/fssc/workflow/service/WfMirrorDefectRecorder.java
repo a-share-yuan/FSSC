@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 
 /**
- * 流程镜像写失败缺陷记录器（G0 止血，2026-09-24）。
+ * 流程镜像写失败缺陷记录器（G0 止血）。
  *
  * <p><b>背景（方案 §二 F1~F4）</b>：{@code wf_instance}/{@code wf_task}/{@code wf_task_history}
  * 是 Flowable 引擎之外的"第二本账"，写点分散在 {@code WfEngineFacade} 各处，且失败一律
@@ -53,11 +53,11 @@ public class WfMirrorDefectRecorder {
     /**
      * 记录一条镜像缺陷。
      *
-     * @param code     错误码（见本类常量）
-     * @param scene    场景/方法名，如 {@code markTaskDone}
+     * @param code 错误码（见本类常量）
+     * @param scene 场景/方法名，如 {@code markTaskDone}
      * @param tenantId 归属租户；为 null 时回退当前线程租户上下文（调度线程无上下文则只写日志）
-     * @param detail   可定位的上下文（taskId / procInstId / 单据号等）
-     * @param ex       原始异常，可为 null
+     * @param detail 可定位的上下文（taskId / procInstId / 单据号等）
+     * @param ex 原始异常，可为 null
      */
     public void record(String code, String scene, Long tenantId, String detail, Throwable ex) {
         String msg = buildMessage(code, scene, detail, ex);

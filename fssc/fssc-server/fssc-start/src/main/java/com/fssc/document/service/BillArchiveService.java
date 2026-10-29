@@ -63,7 +63,7 @@ public class BillArchiveService {
     private final AuditTrailService auditTrailService;
     /** #56 甲档：归档写环节按 voucher_no 正查凭证ID */
     private final VoucherService voucherService;
-    /** P1：完整性哈希的唯一算式（本类原先把主文件裸 MD5 当哈希写库，是第三种算式并存的一支） */
+    /** 完整性哈希的唯一算式（本类原先把主文件裸 MD5 当哈希写库，是第三种算式并存的一支） */
     private final ArchiveIntegrityService archiveIntegrityService;
     /**
      * 重复立卷判重的唯一规则在 {@code ArchiveService}（现有/在途卷查询），
@@ -95,7 +95,7 @@ public class BillArchiveService {
         } catch (Exception ignored) { /* 定时任务无用户上下文 */ }
         LocalDateTime now = LocalDateTime.now();
         int count = 0;
-        // 本链路改前只按"单据已 ARCHIVED"去重，
+        // 本链路原先只按"单据已 ARCHIVED"去重，
         // 单据还是 UNARCHIVED 而档案行已存在（电子立卷登记的 PENDING 卷／人工建过目录）时，
         // 再点一次「归档所选」就多落一卷 ⇒ 同一单据两张卷。现按来源单据键查现有/在途卷：
         // 命中即跳过该单据（不整批报错，批次里别的单据照做），并在末尾如实提示原卷号。
@@ -152,7 +152,7 @@ public class BillArchiveService {
             OpArchive a = new OpArchive();
             a.setArchiveNo(nextArchiveNo());
             // 162：目录要素补全。本链路是"有影像的单据"归档主路，
-            // 改前 archive_code／archive_year／archive_period 三列从不写（全库该类型行恒 NULL），
+            // 原先 archive_code／archive_year／archive_period 三列从不写（全库该类型行恒 NULL），
             // 且只把 moved.get(0) 记进 file_id、其余迁移件无处登记 ⇒ 完整性清单看不到全貌。
             a.setArchiveCode(a.getArchiveNo());                       // 列注释＝"档案编码(冗余)"⇒ 编号镜像
             a.setArchiveType("BILL");
@@ -170,7 +170,7 @@ public class BillArchiveService {
             }
             a.setFileId(moved.isEmpty() ? null : moved.get(0).getId());
             a.setRelatedIds(movedFileIdList(moved));
-            // 完整性校验：——改前此处写的是 moved.get(0).getFileMd5()（主文件裸 MD5），
+            // 完整性校验：——原先此处写的是 moved.get(0).getFileMd5()（主文件裸 MD5），
             // 既不含档案身份（两卷若首件相同即同哈希＝漏报），也永远无法被读侧按任何一套算式复算（＝误报）。
             // ARC-M5：本链路已不再定稿 ⇒ "哈希已算"不等于"已校验"，状态一律 UNKNOWN，
             // VERIFIED 由 FM_ARCHIVE 闭环重算比对后才置（与 ArchiveService.archive 同一规则）。
@@ -178,15 +178,15 @@ public class BillArchiveService {
             a.setFilingUserId(userId);
             a.setFilingTime(now);
             a.setRetentionYears(10);
-            // 本链路改前从不设 destroy_date ⇒ 立进来的卷全部 NULL，销毁申请被
+            // 本链路原先从不设 destroy_date ⇒ 立进来的卷全部 NULL，销毁申请被
             // 「未设置到期销毁日期，禁止销毁」强制校验整批拦死；现与两条立卷入口共用一把尺。
             a.setDestroyDate(ArchiveService.destroyDateOf(a.getArchiveYear(),
                     bill.getPeriodYear(), a.getRetentionYears()));
-            // ARC-M5（已裁"并入"）：本链路（02:00 定时＋界面「归档所选」）此前在同一次调用里
-            // 把 归档结论 ARCHIVED、单据回写、审计跃迁全部写完 ⇒ "归档"这个控制点对影像齐套的单恒为
-            // 自动通过，正是 要消掉的那件事，只是当时只裁了电子立卷那条腿。
-            // 现收口＝本链路只<b>迁移文件＋登记待归档案卷（PENDING）</b>，终态一律由 FM_ARCHIVE 审批闭环
-            // （ArchiveFacadeImpl.handleArchiveApproval）落 archive_status/archived_at/VERIFIED 与单据回写。
+            // 本链路（02:00 定时＋界面「归档所选」）只做「迁移文件＋登记待归档案卷（PENDING）」，
+            // 不在这里写归档结论：影像齐套的单若在同一次调用里直接置 ARCHIVED、回写单据、记审计跃迁，
+            // "归档"这个控制点就成了恒为自动通过的摆设，等于没设。终态一律由 FM_ARCHIVE 审批闭环
+            // （ArchiveFacadeImpl.handleArchiveApproval）落 archive_status/archived_at/VERIFIED
+            // 与单据回写。
             a.setArchiveStatus("PENDING");
             a.setStatus(ArchiveService.dispositionOf(a.getArchiveStatus()));
             a.setCreateTime(now);
@@ -203,7 +203,7 @@ public class BillArchiveService {
             a.setIntegrityHash(integrityHash);
             // 立卷即落卷内件行（件号 1）⇒ 卷有内容物，档案岗才能在「卷内目录」里复核
             archiveService.addVolumeItem(a.getId(), billId);
-            // 4) 单据侧不再前置回写"已归档"：审批在途期间单据保持 UNARCHIVED（与 ／181 同规则），
+            // 4) 单据侧不前置回写"已归档"：审批在途期间单据保持 UNARCHIVED，
             //    终态与归档人由闭环单点写。审计改记"登记待归档"，不要留下未发生的跃迁。
             auditTrailService.recordUpdate("ARCHIVE", billId, bill.getBillNo(), "exp_bill",
                     String.valueOf(billId),
@@ -220,7 +220,7 @@ public class BillArchiveService {
                     "所选单据均已立卷，不得重复立卷；原档案卷号：" + String.join("、", alreadyFiled)
                             + "。如需重新立卷，请先处置原卷（删除登记或执行销毁）");
         }
-        // 整批都因"实物未签收"被跳过时同样给出可行动理由（此前只显「归档完成 0 张」）
+        // 整批都因"实物未签收"被跳过时同样给出可行动理由
         if (count == 0 && alreadyFiled.isEmpty() && !unsignedBills.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "所选单据实物均未签收（delivery_status=UNSIGNED），归档前置未满足；请先完成实物签收。未签收单据："
@@ -272,10 +272,10 @@ public class BillArchiveService {
      * <p><b>本方法不再置任何归档最终状态</b>。原实现在审批通过的同一秒把
      * {@code op_archive.archive_status/status} 写成 ARCHIVED、写 archived_at，并回写
      * {@code exp_bill.archive_status=ARCHIVED + archive_time + archive_by（取末节点审批人）}，
-     * 而 {@code wf_instance} 里 biz_type=FM_ARCHIVE 无对应实例（实测 op_archive id=16 vs id=14/15）——
+     * 而 {@code wf_instance} 里 biz_type=FM_ARCHIVE 无对应实例——
      * 即"归档"这个控制点对 PAY/SETTLE 域恒为自动通过，档案完整性（附件、影像）无人复核即成立。
      *
-     * <p>修法（保守半，两条产品规则并列待裁，见 §报告）：
+     * <p>修法（保守半，两条产品规则并列待定，见 §报告）：
      * <ul>
      *   <li>A 案（<b>本实现</b>）：审批通过仅登记为<b>待归档</b>（{@code archive_status='PENDING'}，
      *       op_archive 既有取值，前端 archStatusLabel 已映射「待归档」），单据侧保持 UNARCHIVED，
@@ -400,7 +400,7 @@ public class BillArchiveService {
      * 原 private markBillArchived(billId)（回写 exp_bill archive_status=ARCHIVED + archive_time +
      * archive_by）只有 eArchiveBill 在用，现随该前置/代偿写一并移除。
      * ARC-M5：影像归档链路 doArchive 原先也直接调 billFacade.markArchived(billId, userId, now)
-     * ——那正是"归档控制点对影像齐套的单恒为自动通过"的第二条腿，现已摘除；
+     * ——那正是"归档控制点对影像齐套的单恒为自动通过"的第二条腿，已摘除；
      * 单据侧归档终态（archive_status/archive_time/archive_by）的回写<b>单点</b>只剩
      * ArchiveFacadeImpl.handleArchiveApproval（FM_ARCHIVE 审批闭环，按卷内件逐件回写）。
      */
@@ -416,7 +416,7 @@ public class BillArchiveService {
     /**
      * 把本卷迁移进归档区的全部载体登记到 {@code related_ids}（CSV，列宽 1000）。
      *
-     * <p>改前只把 {@code moved.get(0)} 记进 file_id，其余迁移件在档案上无踪可寻
+     * <p>原先只把 {@code moved.get(0)} 记进 file_id，其余迁移件在档案上无踪可寻
      * ⇒ 完整性清单（按载体 MD5 逐件入算）只能覆盖首件，"换掉第二页"这类改动测不出来。
      * 超出列宽时按已收集顺序截断（不静默丢：记 warn）；无迁移件返回 null＝不造空串占位。
      */

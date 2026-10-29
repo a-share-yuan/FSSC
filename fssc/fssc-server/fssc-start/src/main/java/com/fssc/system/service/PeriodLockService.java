@@ -3,7 +3,10 @@
 
 package com.fssc.system.service;
 
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.tenant.TenantContext;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -55,14 +58,14 @@ public class PeriodLockService {
     /** 账期锁定校验（蓝图规则6.5）：已锁定则抛业务异常。period 形如 yyyy-MM。 */
     public void assertNotLocked(Long companyId, String period, String action) {
         if (isLocked(companyId, period)) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID,
                     "账期 " + period + " 已被月结关闭，不允许再" + action + "（蓝图规则6.5）");
         }
     }
 
     /** 按单据日期判定所属账期是否锁定（yyyy-MM）。 */
-    public boolean isLockedByDate(Long companyId, java.time.LocalDate billDate) {
+    public boolean isLockedByDate(Long companyId, LocalDate billDate) {
         if (billDate == null) {
             return false;
         }

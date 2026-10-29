@@ -67,7 +67,7 @@ function onSaved() {
  * 「查看凭证」：原实现 emit('select-bill') → 父组件把 activeTab 切成隐藏的凭证 tab，
  * 在单页模式（/expense/my 即此场景，tab 导航条被隐藏）下用户会被困在凭证页且无法返回，
  * 且 Popper 参照元素随 tab 隐藏而失效、弹层回退到左上角盖住左侧菜单。
- * 现改为弹出凭证抽屉，停留在当前列表，可随时关闭返回。
+ * 弹出凭证抽屉，停留在当前列表，可随时关闭返回。
  */
 function onViewVoucher(row) {
   selected.value = { ...row }

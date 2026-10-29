@@ -67,7 +67,7 @@
         </el-select>
         <!-- 仓库候选的唯一来源＝本页存货台账行去重（见 script 内 loadInventory），台账 0 行⇒候选 0 个，
              而「仓库」是必填项⇒点确认只报「请选择仓库」却看不出为什么没得选，与"无权限被画成空态"看不出差别。
-             系统当前没有仓库主数据载体（information_schema 实测 table_name LIKE '%warehouse%' 命中 0 张表，
+             系统当前没有仓库主数据载体（库里没有仓库表，
              后端无实体/端点、菜单无该面），故这里只把成因说实：不造候选、不放宽必填、不写库。 -->
         <div v-if="!warehouses.length" style="font-size:12px;color:#e6a23c;line-height:1.5">当前没有可选仓库：仓库候选取自本页存货台账行，而存货台账为空、系统尚无仓库主数据入口——需先建立仓库主数据或已有台账行</div>
       </el-form-item>
@@ -102,7 +102,7 @@
     </template>
   </el-dialog>
 
-  <!-- 出入库流水（stock_move 只读回放；此前该表只写不读，结存对不上时无从逐笔追溯） -->
+  <!-- 出入库流水（stock_move 只读回放；没有它，结存对不上时无从逐笔追溯） -->
   <el-drawer v-model="movesVisible" title="出入库流水" size="760px">
     <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
       <el-input v-model="movesItemCode" placeholder="按物料编码过滤" clearable style="width: 200px" @keyup.enter="loadMoves" />

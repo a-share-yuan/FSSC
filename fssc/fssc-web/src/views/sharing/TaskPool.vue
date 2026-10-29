@@ -11,7 +11,7 @@
           <el-option :label="$t('sharing.taskPool.optWaiting')" value="WAITING" />
           <el-option :label="$t('sharing.taskPool.optAssigned')" value="RECEIVED" />
           <el-option :label="$t('sharing.taskPool.optFinished')" value="FINISHED" />
-          <!-- R5-D-236：未激活（实物未签收）任务此前在池中不可见也不可筛，现按 activeFlag='N' 落参过滤 -->
+          <!-- 未激活（实物未签收）任务按 activeFlag='N' 落参过滤，否则池中不可见也不可筛 -->
           <el-option :label="$t('sharing.taskPool.optInactiveFilter')" value="INACTIVE" />
         </el-select>
         <el-select v-model="filter.taskType" :placeholder="$t('sharing.common.colWorkItem')" clearable style="width: 130px" @change="load">
@@ -22,7 +22,7 @@
         <el-input v-model="filter.keyword" :placeholder="$t('sharing.common.phBillNoTitle')" clearable style="width: 200px" @keyup.enter="load" />
         <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
         <el-button v-if="filter.poolStatus !== 'WAITING'" size="small" @click="filter.poolStatus = 'WAITING'; load()">{{ $t('sharing.taskPool.btnViewWaiting') }}</el-button>
-        <!-- P1-4 分组 + 批量抢单 -->
+        <!-- 分组 + 批量抢单 -->
         <el-select v-model="groupBy" :placeholder="$t('sharing.taskPool.phGroupBy')" clearable size="small" style="width: 120px" @change="applyGroup">
           <el-option :label="$t('sharing.taskPool.optGroupWorkItem')" value="taskType" />
           <el-option :label="$t('sharing.taskPool.optGroupDocType')" value="billType" />
@@ -30,7 +30,7 @@
         </el-select>
         <el-button v-if="selRows.length" type="success" size="small" @click="batchGrabVis = true">
           {{ $t('sharing.taskPool.btnBatchGrabN', { v1: selRows.length }) }}</el-button>
-        <!-- R5-D-246：列表导出归位到工具栏（原先错挂在「重新分配」弹窗页脚，且导出内容是凭证行） -->
+        <!-- 列表导出归位到工具栏（原先错挂在「重新分配」弹窗页脚，且导出内容是凭证行） -->
         <el-button size="small" @click="exportCsv">{{ $t('sharing.common.btnExportCsv') }}</el-button>
         <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('sharing.common.btnExportSelected', { v1: selRows.length }) }}</el-button>
       </div>
@@ -136,7 +136,7 @@
       <el-empty v-if="!voucherLines.length" :description="$t('sharing.taskPool.emptyNoVoucher')" />
     </el-dialog>
 
-    <!-- P1-4 批量抢单弹窗 -->
+    <!-- 批量抢单弹窗 -->
     <el-dialog v-model="batchGrabVis" :title="$t('sharing.taskPool.btnBatchGrab')" width="480px">
       <el-alert type="info" :closable="false" style="margin-bottom: 12px">
         {{ $t('sharing.taskPool.msgBatchGrabLead') }}<b>{{ selRows.length }}</b> {{ $t('sharing.taskPool.msgBatchGrabRule') }}
@@ -215,14 +215,14 @@ import { validateForms } from '@/composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => location.reload(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
 })
 const taskPoolCm = ref(null)
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -257,7 +257,7 @@ const reassignForm = reactive({ assigneeId: null })
 const voucherVis = ref(false)
 const voucherLines = ref([])
 
-// P1-4 分组 + 批量抢单
+// 分组 + 批量抢单
 const groupBy = ref('')
 const batchGrabVis = ref(false)
 const batchLoading = ref(false)
@@ -277,7 +277,7 @@ function applyGroup() {
 
 // 只做抢单。任务池行来自 op_audit_task，没有 task_id / 流程实例列，
 // 在这里调 wfApi.approve 恒会失败——审批要回到「审批工作台」的待办列表做。
-// 两张账打通后再考虑在本页加审批入口（见 流程节点指定处理人改造方案_20260922.md P2）。
+// 两张账打通后再考虑在本页加审批入口（见 流程节点指定处理人改造方案_20260922.md）。
 async function doBatchGrab() {
   if (!selRows.value.length) return
   batchLoading.value = true
@@ -344,7 +344,7 @@ function goBill(row) {
 async function load() {
   loading.value = true
   try {
-    // R5-D-236：INACTIVE 是前端伪状态——落参时换成 activeFlag='N' 并清空 poolStatus；
+    // INACTIVE 是前端伪状态——落参时换成 activeFlag='N' 并清空 poolStatus；
     // 其余状态显式清空 activeFlag，避免上一次筛选残留导致列表莫名变空。
     const params = filter.poolStatus === 'INACTIVE'
       ? { ...filter, poolStatus: '', activeFlag: 'N' }
@@ -377,7 +377,7 @@ function withdraw(row) {
 }
 
 async function openReassign(row) {
-  // P0 修复（2026-10-21）：默认只加载同公司人员
+  // 默认只加载同公司人员
   if (!users.value.length) users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
   current.value = row
   reassignForm.assigneeId = row.assigneeId || null
@@ -407,12 +407,12 @@ onMounted(async () => {
   if (route.query.keyword) filter.keyword = String(route.query.keyword)
   if (route.query.poolStatus) filter.poolStatus = String(route.query.poolStatus)
   load()
-  // P0 修复（2026-10-21）：默认只加载同公司人员
+  // 默认只加载同公司人员
   try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch (e) { /* ignore */ }
 })
 
 function exportCsv() {
-  // R5-D-246：原实现导出的是 voucherLines（凭证行）、入口还错挂在「重新分配」弹窗页脚；
+  // 原实现导出的是 voucherLines（凭证行）、入口还错挂在「重新分配」弹窗页脚；
   // 现与「导出选中」并列在工具栏，列集对齐当前任务池表格。
   if (!rows.value.length) { ElMessage.warning(t('sharing.common.msgNothingToExport')); return }
   const cols = [{ prop: 'billNo', label: t('field.docNo') }, { prop: 'title', label: t('sharing.common.colTitle') }, { prop: 'amount', label: t('field.amount') }, { prop: 'billStatus', label: t('sharing.common.colDocStatus') }, { prop: 'taskType', label: t('sharing.common.colWorkItem') }, { prop: 'poolStatus', label: t('common.status') }, { prop: 'receiveTime', label: t('sharing.common.colClaimTime') }, { prop: 'createTime', label: t('common.createTime') }]
@@ -457,7 +457,7 @@ function batchExport() {
 }
 
 
-// R4-06: Show guide on first visit
+// Show guide on first visit
 const _guideKey = 'fssc_guide_taskPoolCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => taskPoolCm.value?.show(), 800) } } catch {}
 </script>

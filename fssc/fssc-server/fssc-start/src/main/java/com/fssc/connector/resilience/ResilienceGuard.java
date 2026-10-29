@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * </ul>
  *
  * <p><b>默认关闭</b>（{@code fssc.connector.resilience.enabled=false}）：{@link #allow(String)} 恒真、
- * 记录方法为空操作，与改造前行为完全一致，零回归。开启后仅作用于连接域入口
+ * 记录方法为空操作，与原先行为完全一致，零回归。开启后仅作用于连接域入口
  * {@code DefaultConnectorFacade}，不改动任何既有网关逻辑。</p>
  */
 @Slf4j

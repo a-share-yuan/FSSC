@@ -3,6 +3,8 @@
 
 package com.fssc.ai;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.Result;
@@ -11,8 +13,13 @@ import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.lang.reflect.InvocationTargetException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Date;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.stereotype.Component;
@@ -20,6 +27,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.lang.reflect.Method;
@@ -27,7 +35,7 @@ import java.lang.reflect.Parameter;
 import java.util.Map;
 
 /**
- * 目录动作的本地只读执行器（P5 巡检 job 用）。
+ * 目录动作的本地只读执行器（巡检 job 用）。
  *
  * <p>为什么不发假 token 走 HTTP：TokenService 把 perms 烘进 JWT，但下游
  * {@code PermissionAspect}/{@code DataScopeHolder} 以"会话重载的权限"为准 ——
@@ -45,12 +53,12 @@ public class AiLocalReadInvoker {
 
     private final RequestMappingHandlerMapping handlerMapping;
     private final ObjectMapper objectMapper;
-    private final org.springframework.context.ApplicationContext applicationContext;
+    private final ApplicationContext applicationContext;
     private static final ParameterNameDiscoverer PND = new DefaultParameterNameDiscoverer();
 
     public AiLocalReadInvoker(@Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping,
                               ObjectMapper objectMapper,
-                              org.springframework.context.ApplicationContext applicationContext) {
+                              ApplicationContext applicationContext) {
         this.handlerMapping = handlerMapping;
         this.objectMapper = objectMapper;
         this.applicationContext = applicationContext;
@@ -103,7 +111,7 @@ public class AiLocalReadInvoker {
                 if (isPageLike(t)) {
                     long pn = toLong(args.get("pageNum"), 1L);
                     long psz = toLong(args.get("pageSize"), 500L);
-                    argv[i] = new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(pn, psz);
+                    argv[i] = new Page<>(pn, psz);
                 } else if (t.getName().startsWith("com.fssc.")) {
                     // 查询对象（XxxQuery POJO）：整个参数模板 map 绑进去
                     argv[i] = objectMapper.convertValue(args, t);
@@ -124,7 +132,7 @@ public class AiLocalReadInvoker {
         } catch (BizException ex) {
             throw ex;
         } catch (Exception ex) {
-            Throwable cause = ex instanceof java.lang.reflect.InvocationTargetException ite && ite.getTargetException() != null
+            Throwable cause = ex instanceof InvocationTargetException ite && ite.getTargetException() != null
                     ? ite.getTargetException() : ex;
             if (cause instanceof BizException be) {
                 throw be;
@@ -135,7 +143,7 @@ public class AiLocalReadInvoker {
     }
 
     private HandlerMethod findHandler(AiAction action) {
-        for (Map.Entry<org.springframework.web.servlet.mvc.method.RequestMappingInfo, HandlerMethod> en
+        for (Map.Entry<RequestMappingInfo, HandlerMethod> en
                 : handlerMapping.getHandlerMethods().entrySet()) {
             HandlerMethod hm = en.getValue();
             if (!hm.getMethod().getName().equals(action.getJavaMethod())) {
@@ -173,13 +181,13 @@ public class AiLocalReadInvoker {
 
     private boolean isSimple(Class<?> t) {
         return t == String.class || Number.class.isAssignableFrom(t) || t == boolean.class || t == Boolean.class
-                || t == java.time.LocalDate.class || t == java.time.LocalDateTime.class || t == java.util.Date.class;
+                || t == LocalDate.class || t == LocalDateTime.class || t == Date.class;
     }
 
     /** MP 的 Page/IPage 形态参数：不能由 Map 直接 convert，给默认分页。 */
     private boolean isPageLike(Class<?> t) {
-        return com.baomidou.mybatisplus.extension.plugins.pagination.Page.class.isAssignableFrom(t)
-                || com.baomidou.mybatisplus.core.metadata.IPage.class.isAssignableFrom(t);
+        return Page.class.isAssignableFrom(t)
+                || IPage.class.isAssignableFrom(t);
     }
 
     private Object defaultOf(Class<?> t) {

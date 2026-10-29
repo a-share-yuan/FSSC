@@ -129,7 +129,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {

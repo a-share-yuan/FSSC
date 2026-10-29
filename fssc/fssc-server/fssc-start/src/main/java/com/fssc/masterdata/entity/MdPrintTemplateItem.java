@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 打印模板字段项（V1.4.81）。
+ * 打印模板字段项。
  *
  * <p><b>字段属性对齐通行规则</b>：单据类型支持「布局、字段必录和锁定属性、业务流程以及打印的设置」。
  * 本表承载布局（row/col/span/mm）、必录（required）、锁定（locked）三项，

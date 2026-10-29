@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * 按钮/接口权限。value 为权限码，如 {@code exp:claim:submit}。
  * 最终权限 = 角色权限(perms) ∩ 套餐功能码(features)，见 PermissionAspect。
  *
- * <p><b>多码语义（OR，2026-09-16 权限治理）：</b>支持一次声明多个权限码，
+ * <p>多码语义（OR）：支持一次声明多个权限码，
  * 持有其中<b>任意一个</b>即可通过。用于「权限码收敛/迁移」的过渡期——
  * 例如把粗粒度 {@code md:config} 拆成细粒度码时，可先声明
  * {@code @RequiresPerm({"md:supplier:list", "md:config"})}，

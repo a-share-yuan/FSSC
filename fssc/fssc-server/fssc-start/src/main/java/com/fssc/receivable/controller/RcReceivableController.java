@@ -49,11 +49,11 @@ public class RcReceivableController {
     }
 
     /**
-     * 逾期坏账计提批处理（D-DEC-407）：补两个可选账期入参，不改任何判定语义。
+     * 逾期坏账计提批处理：补两个可选账期入参，不改任何判定语义。
      * <ul>
      *   <li>{@code asOfDate}=yyyy-MM-dd 跑批基准日（补跑某一天的到期扫描）；</li>
      *   <li>{@code period}=yyyyMM／yyyy-MM 账期，按期末日跑；</li>
-     *   <li>两者皆不传＝系统当前日，与改造前逐字等价（前端旧按钮零改动仍可用）。</li>
+     *   <li>两者皆不传＝系统当前日，与原先逐字等价（前端旧按钮零改动仍可用）。</li>
      * </ul>
      */
     @RequiresPerm("receivable:overdue")

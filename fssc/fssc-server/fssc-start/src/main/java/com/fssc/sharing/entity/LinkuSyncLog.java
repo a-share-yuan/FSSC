@@ -40,7 +40,7 @@ public class LinkuSyncLog implements Serializable {
      * 唯一键（修复）：与 event_type 合成生成列 active_idem_key
      * （{@code event_type:ifnull(idempotency_key,'')}），唯一索引 uk_linku_sync_log_idem 建在它上面。
      *
-     * <p>修复前本字段在实体里缺位 ⇒ 回调写入时恒为 NULL ⇒ 生成列退化为
+     * <p>本字段若在实体里缺位 ⇒ 回调写入时恒为 NULL ⇒ 生成列退化为
      * {@code "RECON_MATCH:"}（事件类型冒号后为空），第二条成功记录必撞唯一键，
      * DuplicateKeyException 被吞掉，整条记录丢失。</p>
      */

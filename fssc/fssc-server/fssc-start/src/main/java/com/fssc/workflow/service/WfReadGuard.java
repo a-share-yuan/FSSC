@@ -31,16 +31,15 @@ import java.util.Objects;
  *
  * <p><b>补的是哪一段</b>：写路径有 {@code canOperate} 越权守卫（fail-closed），
  * 但同一批「只读预览」端点按 {@code taskId}/{@code procInstId} 查询时<b>不做任何归属校验</b>。
- * 2026-09-26 实测（同一在办 TR_PAY，批次 PB202609260002）：
+ * 用同一张在办 TR_PAY 验证过：
  * <ul>
- *   <li>公司 31 的普通账号读公司 1 的在办单 ⇒ {@code reject-targets} 1690 B、{@code approval-items} 46 B、
- *       {@code withdraw-preview} 1198 B、{@code query/chain} 1699 B（含各节点审批意见原文），
+ *   <li>别的公司的普通账号读这单的在办数据 ⇒ {@code reject-targets}、{@code approval-items}、
+ *       {@code withdraw-preview}、{@code query/chain} 全部带出（含各节点审批意见原文），
  *   <li>同一时刻同一账号调单据联查 {@code bill-trace-chain} 被 {@code OrgGuard} 正确拒 403
- *       ⇒ 缺口只在流程侧，TRC-B 那次办结没覆盖到这批后来加的预览端点。</li>
+ *       ⇒ 缺口只在流程侧，那轮补的联查守卫没覆盖到这批后来加的预览端点。</li>
  * </ul>
  *
- * <p><b>规则选择（刻意与 已裁决规则对齐，不另立标准）</b>：先认「与本单的关系」，
- * 关系不成立再按单据公司默认处理——
+ * 关系不成立再按单据公司兜底——
  * <ol>
  *   <li><b>可办理</b>：{@link NodeOrgResolver#canOperate}（办理人 / 候选组角色∩公司维度 / 委托受托人 /
  *       GROUP 范围角色），与执行面同源，保证审批弹窗、跨公司受托人不会被这道校验挡在门外；</li>
@@ -53,7 +52,7 @@ import java.util.Objects;
  *       （{@code companyIdOfBill} 返回 null，见）在 OrgGuard 里是 fail-open，
  *       故此处补一条「无公司维度 ⇒ 仅关系人可见」，与 {@code assertGenericVisible} 同一规则。</li>
  * </ol>
- * 也就是说：本校验把<b>跨公司</b>读取封死，<b>同公司非参与人</b>维持现状（那是 已裁决的
+ * 也就是说：本校验把<b>跨公司</b>读取封死，<b>同公司非参与人</b>维持现状（那是 已判定的
  * 「本公司单据可见」，不在修复批次里单方面收紧；若要收到「仅参与人可见」，见交付文档）。
  *
  * <p><b>fail-closed</b>：解析不到流程实例（无 {@code wf_instance} 镜像行）时一律拒绝，

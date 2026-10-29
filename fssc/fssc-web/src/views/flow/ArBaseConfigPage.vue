@@ -104,7 +104,7 @@
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 新增/编辑派工规则（41号审查 P0-1 同源整改：废弃 window.prompt） -->
+    <!-- 新增/编辑派工规则（41号审查 同源整改：废弃 window.prompt） -->
     <el-dialog v-model="ruleVisible" :title="$t('flow.baseCfg.dlgAddRule')" width="520px" destroy-on-close>
       <el-form ref="ruleFormRef" :model="ruleForm" :rules="ruleRules" label-width="100px" size="small">
         <el-form-item :label="$t('flow.baseCfg.colRuleName')" prop="ruleName"><el-input v-model="ruleForm.ruleName" :placeholder="$t('flow.baseCfg.phRuleName')" /></el-form-item>
@@ -207,12 +207,12 @@ async function addFx() {
   await loadAll()
 }
 
-// ---- AR派工规则 ----
+// AR派工规则
 const ruleRows = ref([])
 const ruleUserOptions = ref([])
 
 async function loadRuleUsers() {
-  // P0 修复（2026-10-21）：默认只加载同公司人员
+  // 默认只加载同公司人员
   try {
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     ruleUserOptions.value = list.map((u) => u.nickName || u.userName).filter(Boolean)
@@ -226,7 +226,7 @@ async function loadRules() {
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
-// 41号审查 P0-1 同源整改：新增规则由 window.prompt 改为表单弹窗
+// 41号审查 同源整改：新增规则由 window.prompt 改为表单弹窗
 const ruleVisible = ref(false)
 const ruleForm = ref({ ruleName: '', claimType: '', customerPrefix: '', handlerList: [], groupLeader: '', autoBalance: 0, slaHours: null })
 const ruleFormRef = ref(null)
@@ -255,7 +255,7 @@ async function saveRule() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// 41号审查 P1-9：按页签导出配置
+// 41号审查 按页签导出配置
 const TAB_EXPORT = computed(() => ({
   fx: () => [fxRows.value, [
     { prop: 'configKey', label: t('flow.baseCfg.colParamKey') }, { prop: 'configName', label: t('flow.baseCfg.colParamName') }, { prop: 'configValue', label: t('flow.baseCfg.colRate') },

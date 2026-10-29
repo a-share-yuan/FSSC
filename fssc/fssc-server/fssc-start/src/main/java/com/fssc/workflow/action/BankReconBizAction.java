@@ -58,7 +58,7 @@ public class BankReconBizAction implements WfBizAction {
             upd.setId(reconId);
             if (Boolean.TRUE.equals(event.getApproved())) {
                 // W2：调节差额非零＝当月还有没对平的未达账项，不静默定稿。
-                // 留在 MATCHED 并逐条记录交人工处理——Task_4 人工复核这道挡位按裁决保留不动。
+    // 留在 MATCHED 并逐条记录交人工处理——Task_4 人工复核这道挡位按既定口径保留不动。
                 BigDecimal diff = bankReconcileService.reconDiff(reconId);
                 if (diff != null && diff.signum() != 0) {
                     Map<String, Object> unchanged = new LinkedHashMap<>();

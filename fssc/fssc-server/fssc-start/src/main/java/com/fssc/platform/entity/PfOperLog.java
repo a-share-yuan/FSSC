@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
  * 平台操作日志（pf_oper_log）。
  * 【不可删除】：无 del_flag，Mapper 不提供 delete —— 满足审计铁律。
  *
- * <p><b>本表不是空壳，0 行 ≠ 无写入者</b>（2026-09-24 P4-2 勘误）：写入链路完整——
+ * <p>本表不是空壳，0 行 ≠ 无写入者：写入链路完整——
  * {@code OperLogAspect:66-83} 按登录主体分轨，平台用户（{@code LoginUser.isPlatform()}）走
  * {@code OperLogWriter.writePf} → {@code PfOperLogMapper.insert}；平台主体由
  * {@code AuthService:209} / {@code AuthController:47} 赋 {@code SubjectType.PLATFORM}。

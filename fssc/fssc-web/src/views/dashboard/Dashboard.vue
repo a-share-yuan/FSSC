@@ -20,7 +20,7 @@
       <el-col :xs="24" :md="12" style="margin-top: 16px"><el-card header="预算执行率"><div ref="budgetChart" class="chart" @click="drillBudget" /></el-card></el-col>
     </el-row>
 
-    <!-- P1-3 数据钻取抽屉 -->
+    <!-- 数据钻取抽屉 -->
     <DrillDownDrawer
       v-model="drillVisible"
       :title="drillTitle"
@@ -73,7 +73,7 @@ const pay = ref({})
 const charts = []
 const mq = window.matchMedia('(max-width: 767px)')
 
-// P1-3 数据钻取
+// 数据钻取
 const drillVisible = ref(false)
 const drillTitle = ref('数据钻取')
 const drillColumns = ref([])
@@ -149,7 +149,7 @@ function drillTrend() {
     { prop: 'amount', label: '金额', numeric: true, align: 'right' },
   ]
   drillData.value = rawData.trend
-  // F-15：类目拼「年-月」，不再出现裸数字 1..6
+  // 类目拼「年-月」，不再出现裸数字 1..6
   drillLabelFormatter.value = (v, row) => `${row.period_year}-${String(v).padStart(2, '0')}`
   openDrill()
 }
@@ -337,7 +337,7 @@ async function renderAll() {
   if (dashPermDenied) return
   try {
     // USG-01: 无 dashboard:view 权限的角色跳过 6 个看板聚合接口（权限拒绝噪声源头）
-    // R5-D-035: 判定必须走 hasPerm()——admin 的 perms=["*:*:*"] 用 includes() 恒为 false，会把 6 图误判成无权
+    // 判定必须走 hasPerm()——admin 的 perms=["*:*:*"] 用 includes() 恒为 false，会把 6 图误判成无权
     if (!hasPerm('dashboard:view')) return
     const [stats, trend, budget, payData, dept, eff] = await Promise.all([
       dashApi.stats(), dashApi.trend(6), dashApi.budget(), dashApi.pay(),

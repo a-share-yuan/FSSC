@@ -13,7 +13,7 @@ import ImageManager from '../image/ImageManager.vue'
 import ImageTask from '../image/ImageTask.vue'
 import ImageReview from '../image/ImageReview.vue'
 import ImageSetting from '../system/ImageSetting.vue'
-// RA-PAGE-21 批次2 同域合并：业务页 tab 化（成员页路由全保留，深链不受影响）
+// 同域合并：业务页 tab 化（成员页路由全保留，深链不受影响）
 import ExpenseApplyList from '../expense/ExpenseApplyList.vue'
 import ApplyMeeting from '../expense/ApplyMeeting.vue'
 import ApplyTravel from '../expense/ApplyTravel.vue'
@@ -25,7 +25,6 @@ import MatchTolerance from '../pay/MatchTolerance.vue'
 import BankReconcile from '../bank/BankReconcile.vue'
 import BankSlip from '../bank/BankSlip.vue'
 import ReconcileSheet from '../bank/ReconcileSheet.vue'
-import ArchivePage from '../sharing/ArchivePage.vue'
 import SharingStatement from '../sharing/SharingStatement.vue'
 import ArchiveBoard from '../archive/ArchiveBoard.vue'
 import BudgetItem from '../budget/BudgetItem.vue'
@@ -34,20 +33,23 @@ import BudgetAdjust from '../budget/BudgetAdjust.vue'
 import BudgetOccupy from '../budget/BudgetOccupy.vue'
 import FraudBoard from '../compliance/FraudBoard.vue'
 import ComplianceRule from './ComplianceRule.vue'
-// D-DEC-320：流程收尾动作配置表（wf_event_action_config）此前无任何页面入口
+// 流程收尾动作配置表（wf_event_action_config）的页面入口
 import WfEventActionConfig from '../workflow/WfEventActionConfig.vue'
-// R5-D-034：SoD 检查改为独立页（通用配置表无执行入口、列与返回体错位）
+// SoD 检查改为独立页（通用配置表无执行入口、列与返回体错位）
 import SoDCheck from '../system/SoDCheck.vue'
 
 export const CONFIG_GROUPS = {
   sharing: {
     title: '共享运营配置',
-    sub: '作业岗位 · 分组 · 工作日历 · 抢派单规则',
+    sub: '作业岗位 · 分组 · 工作日历 · 抢派单规则 · 单据流转',
     tabs: [
       { key: 'job', label: '作业岗位设置', comp: SharingConfigTable, props: { configType: 'job' } },
       { key: 'group', label: '分组管理', comp: SharingConfigTable, props: { configType: 'group' } },
       { key: 'calendar', label: '工作日历', comp: SharingConfigTable, props: { configType: 'calendar' } },
       { key: 'dispatch-rule', label: '抢派单规则', comp: SharingConfigTable, props: { configType: 'dispatch-rule' } },
+      // 单据流转（派单→审核组→完成/升级）是共享运营作业，不是档案作业：从档案管理迁出，
+      // 按 compliance:dispatch:list 门控——无码岗位（含档案岗）不渲染页签，也不会再吃 4030。
+      { key: 'dispatch', label: '单据流转', comp: ArchiveBoard, props: { tab: 'dispatch' }, perm: 'compliance:dispatch:list' },
     ],
   },
   system: {
@@ -106,7 +108,7 @@ export const CONFIG_GROUPS = {
       { key: 'form', label: '表单详情配置', comp: MasterConfigTable, props: { configKey: 'form' } },
       { key: 'vehicle', label: '交通工具', comp: MasterConfigTable, props: { configKey: 'vehicle' } },
       { key: 'project', label: '项目管理', comp: MasterConfigTable, props: { configKey: 'project' } },
-      // RA 裁决⑤：合同类型语义＝业务主数据，从「运行监控与合规」移入；无 md:contracttype:list 码的角色不渲染此 tab（勿扩权）
+      // 合同类型语义＝业务主数据，从「运行监控与合规」移入；无 md:contracttype:list 码的角色不渲染此 tab（勿扩权）
       { key: 'contractType', label: '合同类型', comp: MasterConfigTable, props: { configKey: 'contractType' }, perm: 'md:contracttype:list' },
     ],
   },
@@ -125,7 +127,7 @@ export const CONFIG_GROUPS = {
     tabs: [
       { key: 'job-heartbeat', label: '定时任务健康', comp: MasterConfigTable, props: { configKey: 'job-heartbeat' } },
       { key: 'sod-check', label: '不相容职责检查', comp: SoDCheck, perm: 'system:sod:list' },
-      // D-DEC-320：引擎钩子配置表补齐可见可控；按 wf:config:list 门控（无码角色不渲染页签，勿扩权）
+      // 引擎钩子配置表补齐可见可控；按 wf:config:list 门控（无码角色不渲染页签，勿扩权）
       { key: 'wf-event-action', label: '流程收尾动作配置', comp: WfEventActionConfig, perm: 'wf:config:list' },
     ],
   },
@@ -139,7 +141,7 @@ export const CONFIG_GROUPS = {
       { key: 'setting', label: '系统设置', comp: ImageSetting },
     ],
   },
-  // ===== RA-PAGE-21 批次2：同域业务页 tab 合并（成员页路由全保留，退的只是菜单入口）=====
+  // 同域业务页 tab 合并（成员页路由全保留，退的只是菜单入口）
   preapply: {
     title: '事前申请',
     sub: '申请列表 · 会议 · 出差 · 培训',
@@ -174,16 +176,21 @@ export const CONFIG_GROUPS = {
       { key: 'reconcile', label: '银企对账', comp: BankReconcile },
       { key: 'slip', label: '回单·收款认领', comp: BankSlip },
       { key: 'sheet', label: '未达账项调节表', comp: ReconcileSheet },
-      // RA-PAGE-22 批次3：T-TR-5 银行对账作业上线后，原独立菜单 108 银行流水并入（门控 op:bank:list）
+      // T-TR-5 银行对账作业上线后，原独立菜单 108 银行流水并入（门控 op:bank:list）
       { key: 'statement', label: '银行流水', comp: SharingStatement, perm: 'op:bank:list' },
     ],
   },
+  // 档案管理（DA/T 22—2015 的四个业务面：收集整理／保管检索／借阅利用／鉴定销毁）。
+  // 一个面＝一个页签，不要再套内层页签；「凭证归档」与「归档整理」本是同一件事，已并成一个。
+  // 「单据流转」属合规域派单（compliance:dispatch:*），不要留在档案域——已移入「合规风控」。
   archive: {
     title: '档案管理',
-    sub: '档案归档 · 借阅销毁',
+    sub: '归档整理 · 档案库 · 借阅利用 · 鉴定销毁',
     tabs: [
-      { key: 'archive', label: '档案归档', comp: ArchivePage },
-      { key: 'borrow', label: '借阅与销毁', comp: ArchiveBoard, perm: 'compliance:archiveaccess:list' },
+      { key: 'filing', label: '归档整理', comp: ArchiveBoard, props: { tab: 'archive', scope: 'filing' }, perm: 'compliance:archive:list' },
+      { key: 'library', label: '档案库', comp: ArchiveBoard, props: { tab: 'archive', scope: 'library' }, perm: 'compliance:archive:list' },
+      { key: 'access', label: '借阅利用', comp: ArchiveBoard, props: { tab: 'access' }, perm: 'compliance:archiveaccess:list' },
+      { key: 'destroy', label: '鉴定销毁', comp: ArchiveBoard, props: { tab: 'destroy' }, perm: 'compliance:archivedestroy:list' },
     ],
   },
   budgetManage: {

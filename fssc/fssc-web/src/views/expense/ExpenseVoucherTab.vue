@@ -28,7 +28,7 @@
     <div style="margin-top: 10px">
       <el-button type="primary" :disabled="voucher.status === BillStatus.POSTED" @click="postVoucher">{{ $t('expense.voucher.btnPost') }}</el-button>
       <span style="margin-left: 12px; color: #909399">{{ $t('expense.voucher.txtTrialBalance', { v1: fmt(voucher.debitTotal), v2: fmt(voucher.creditTotal), v3: voucher.isBalanced === 1 ? t('common.yes') : t('common.no') }) }}</span>
-      <!-- X-49 乙：已记账而资金指令未下发的付款环节凭证——只明示注记，不动账、不新开弹窗 -->
+      <!-- 已记账而资金指令未下发的付款环节凭证——只明示注记，不动账、不新开弹窗 -->
       <div v-if="voucher.payLegUnsettled === true" style="margin-top: 6px; color: #e6a23c; font-size: 12px">{{ $t('expense.voucher.hintPaymentNotIssued') }}</div>
     </div>
   </el-card>

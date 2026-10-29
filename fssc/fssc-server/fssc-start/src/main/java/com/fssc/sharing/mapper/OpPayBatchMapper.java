@@ -13,7 +13,7 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface OpPayBatchMapper extends BaseMapper<OpPayBatch> {
 
-    /** 行锁读取批次（P1-1：付款执行/确认加锁，并发重复执行被串行化，防重复付款） */
+    /** 行锁读取批次（付款执行/确认加锁，并发重复执行被串行化，防重复付款） */
     @Select("SELECT * FROM op_pay_batch WHERE id = #{id} FOR UPDATE")
     OpPayBatch selectForUpdate(@Param("id") Long id);
 }

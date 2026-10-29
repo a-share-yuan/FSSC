@@ -83,12 +83,12 @@ public class GlTaxProvisionService {
     /**
      * 按期间批量计提税金：对增值税/附加/所得税各计提一条，税额=计税基数×税率，
      * 关联科目并生成凭证号。
-     * <p><b>整改：逐条起流，不再"3 条记录只挂第 1 条"</b>。
-     * 整改前循环落 3 行后只以 {@code created.get(0).getId()} 起一条 GL_TAX_PROV，
-     * 另两条（附加 1,440 + 所得税 12,500＝13,940 元）无流程、无审批、无凭证；
+     * <p>逐条起流，不能"3 条记录只挂第 1 条"。
+     * 若循环落 3 行后只以 {@code created.get(0).getId()} 起一条 GL_TAX_PROV，
+     * 另外两条就无流程、无审批、无凭证；
      * 且流程金额取三条合计（26,940）而审批屏展示第 1 条（13,000），审批人审的与被背书的不是同一件事。
      * <p>现在：每行一个审批对象（bizId=本行 id、金额=本行税额、标题带税种），
-     * 任一行起流失败即整体回滚（ROOT-2，不留半挂接批次），并在收尾做<b>漏挂断言</b>
+     * 任一行起流失败即整体回滚（不留半挂接批次），并在收尾做<b>漏挂断言</b>
      * （见 {@link #assertAllLinked}）——条数与流程实例数不等就抛错回滚，绝不静默。
      * <p>未选"一张汇总单挂 3 条明细"方案：那要新建头行表（DDL），而逐条起流零 DDL、
      * 且与本表既有"一行一税种一凭证"的行级语义一致（回写路径 GlBizAction.handleTax 本就按 bizId 逐条出凭证）。
@@ -124,7 +124,7 @@ public class GlTaxProvisionService {
             mapper.insert(e);
             created.add(e);
         }
-        // P6：税金计提即发起 GL_TAX_PROV 税金计提审批流（拆分后：计提走 GL_TAX_PROV，支付走 GL_TAX_PAY）
+        // 税金计提即发起 GL_TAX_PROV 税金计提审批流（拆分后：计提走 GL_TAX_PROV，支付走 GL_TAX_PAY）
         // 一条记录一个流程实例（逐条起流），审批对象=金额=凭证三者同源
         for (GlTaxProvision e : created) {
             try {
@@ -134,7 +134,7 @@ public class GlTaxProvisionService {
             } catch (Exception ex) {
                 log.error("税金计提 {}（{}，单号 {}）发起审批失败，整批回滚: {}",
                         period, e.getTaxType(), e.getProvisionNo(), ex.getMessage(), ex);
-                throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+                throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
             }
         }
         assertAllLinked(created);
@@ -143,7 +143,7 @@ public class GlTaxProvisionService {
 
     /**
      * 漏挂断言：本批每条计提记录都必须有 GL_TAX_PROV 流程实例，
-     * 条数与实例数不等即显式抛错并回滚整批——整改前正是"只挂第 1 条"却无人报错。
+     * 条数与实例数不等即显式抛错并回滚整批——"只挂第 1 条"却无人报错正是要堵的口子。
      */
     private void assertAllLinked(List<GlTaxProvision> created) {
         if (created.isEmpty()) {
@@ -315,11 +315,11 @@ public class GlTaxProvisionService {
      *  TERMINATED 的缴款流不算挂过——挂接核查按本规则报「已挂缴款流程」，历史在途缴款流才看得见。 */
     private static final List<String> LIVE_FLOW_STATUS = Arrays.asList("RUNNING", "APPROVED");
 
-    // X-42 甲：原 pay(period) 缴款发起环节已删除——GL_TAX_PAY 那条独立缴款流既不产生付款动作
+    // pay(period) 的缴款发起环节已删除——GL_TAX_PAY 那条独立缴款流既不产生付款动作
     // 也不出缴纳凭证（VoucherService.generateTaxVoucher 同批办结），留下的只会是一条「审批通过、什么也没发生」
     // 的僵尸流。税金缴款的真相由对公付款通道承载：应付税额的付款单／付款批次执行后才出「借 2221／贷 1002」。
     // 页面入口（GlSpecial.vue「缴纳」按钮）与前端调用环节（api.js glexApi）同步删除；库里 wf_model 的 GL_TAX_PAY
-    // 模型行与 bpmn-repo 流程定义属数据/文件面，未随本轮改动（历史实例仍须可查，摘模型行需另裁）。
+    // 模型行与 bpmn-repo 流程定义属数据/文件面，本次不动（历史实例仍须可查，摘模型行需另裁）。
     private long countByPeriod(String period) {
         return mapper.selectCount(new LambdaQueryWrapper<GlTaxProvision>().eq(GlTaxProvision::getPeriod, period));
     }

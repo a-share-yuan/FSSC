@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 class ExchangeRateServiceMathTest {
 
-    // ---------------- 直查 ----------------
+    // 直查
 
     @Test
     void 直查命中优先_忽略反向与交叉() {
@@ -26,7 +26,7 @@ class ExchangeRateServiceMathTest {
         assertEquals(new BigDecimal("7.13"), r);
     }
 
-    // ---------------- 反向 1/rate（6 位） ----------------
+    // 反向 1/rate（6 位）
 
     @Test
     void 无反向表价时_倒数保留6位() {
@@ -44,7 +44,7 @@ class ExchangeRateServiceMathTest {
         assertEquals(0, r.compareTo(ExchangeRateService.inverseRate(new BigDecimal("7.85"))));
     }
 
-    // ---------------- 经 CNY 交叉（6 位） ----------------
+    // 经 CNY 交叉（6 位）
 
     @Test
     void 交叉价等于两本位币价相除() {
@@ -59,7 +59,7 @@ class ExchangeRateServiceMathTest {
         assertEquals(6, r.scale());
     }
 
-    // ---------------- 无价 / 容错 ----------------
+    // 无价 / 容错
 
     @Test
     void 全缺价返回null_放行手填() {

@@ -3,6 +3,7 @@
 
 package com.fssc.system.mapper;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.fssc.system.entity.SysOperLog;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -15,10 +16,10 @@ import java.util.List;
  * 租户操作日志（sys_oper_log，带 tenant_id）。
  * 【审计铁律】：只提供 insert/查询，不提供 update/delete；tenant_id 由 MetaObjectHandler 从 TenantContext 填充。
  *
- * <p>R5-D-297（PERF-02 索引面登记）：sys_oper_log 25 个月分区、PK=(id, oper_time)，按时间排序的
- * 分页（order by id desc / oper_time desc）在最左列不匹配时走全分区扫＋filesort；现量 45~1,257 行
- * 属量级风险而非当前缺陷。<b>处置＝只登记、本包不动 DDL</b>：行量到十万级再对
- * `ORDER BY <时间> DESC LIMIT` 端点建 (tenant_id, oper_time) 覆盖排序索引（届时另行走 DDL 放行）。</p>
+ * <p>sys_oper_log 25 个月分区、PK=(id, oper_time)，按时间排序的
+ * 分页（order by id desc / oper_time desc）在最左列不匹配时走全分区扫＋filesort；当前行量小，
+ * 不构成缺陷。行量到十万级再对
+ * `ORDER BY <时间> DESC LIMIT` 端点建 (tenant_id, oper_time) 覆盖排序索引。</p>
  */
 @Mapper
 public interface SysOperLogMapper {
@@ -39,14 +40,14 @@ public interface SysOperLogMapper {
             "<if test='businessType != null and businessType != \"\"'>and business_type = #{businessType}</if> " +
             "<if test='status != null'>and status = #{status}</if> " +
             "</where> order by id desc</script>")
-    com.baomidou.mybatisplus.core.metadata.IPage<SysOperLog> searchPage(
-            com.baomidou.mybatisplus.core.metadata.IPage<SysOperLog> page,
+    IPage<SysOperLog> searchPage(
+            IPage<SysOperLog> page,
             @Param("keyword") String keyword,
             @Param("businessType") String businessType,
             @Param("status") Integer status);
 
     /**
-     * A12 执行结果视图（RA-ROOT-09）：按标题倒序取最近 {@code limit} 条失败事件。
+     * 执行结果视图：按标题倒序取最近 {@code limit} 条失败事件。
      * 只读——本 Mapper 的审计铁律仍是「只提供 insert/查询」；tenant_id 由租户拦截器注入。
      * limit 是扫描上限而非精确规则，调用方须把 scanned/truncated 如实回给界面。
      */

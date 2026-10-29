@@ -108,7 +108,7 @@ public class ScpReconService {
         if (!ScpRecon.ST_PRELIM.equals(r.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "对账单 " + r.getReconNo() + " 当前状态不可确认");
         }
-        // R5-D-101：入参兼容历史中文值与字典码，统一归一化为字典码入库（VAT_SPECIAL/VAT_NORMAL）
+        // 入参兼容历史中文值与字典码，统一归一化为字典码入库（VAT_SPECIAL/VAT_NORMAL）
         invoiceType = "增专".equals(invoiceType) ? "VAT_SPECIAL" : ("增普".equals(invoiceType) ? "VAT_NORMAL" : invoiceType);
         if (!"VAT_SPECIAL".equals(invoiceType) && !"VAT_NORMAL".equals(invoiceType)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "发票类型必须为增专或增普");
@@ -188,7 +188,7 @@ public class ScpReconService {
         return mapper.selectList(q.orderByDesc(ScpRecon::getId));
     }
 
-    // ---------------- 内部 ----------------
+    // 内部
 
     private void computeTotals(ScpRecon r, BigDecimal taxRatePct) {
         // 明细金额已在 linesJson；表头金额以导入传入为准，缺省按明细聚合由前端/调用方保证

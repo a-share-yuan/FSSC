@@ -9,7 +9,11 @@ import com.fssc.common.core.Result;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.masterdata.entity.MdSupplier;
+import com.fssc.masterdata.entity.MdSupplierBank;
+import com.fssc.masterdata.entity.MdSupplierContact;
+import com.fssc.masterdata.entity.MdSupplierQualification;
 import com.fssc.masterdata.service.SupplierService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,7 +45,7 @@ public class SupplierController {
         return Result.success(service.create(e));
     }
 
-    /** V2.2.38 B-14 状态位核准（K130：未核准→核准）：PENDING→ACTIVE，零审批流 */
+    /** 状态位核准（未核准→核准）：PENDING→ACTIVE，零审批流 */
     @RequiresPerm("md:supplier:approve")
     @OperLog(module = "MD_SUPPLIER", operType = "UPDATE", desc = "供应商状态位核准")
     @PostMapping("/{id}/approve")
@@ -74,18 +78,18 @@ public class SupplierController {
         return Result.success();
     }
 
-    // ================= 41号审查 P1-8：专属页子表(银行账户/联系人/资质证照) =================
+    // 41号审查 专属页子表(银行账户/联系人/资质证照)
 
     @RequiresPerm("md:supplier:list")
     @GetMapping("/{id}/banks")
-    public Result<java.util.List<com.fssc.masterdata.entity.MdSupplierBank>> banks(@PathVariable Long id) {
+    public Result<List<MdSupplierBank>> banks(@PathVariable Long id) {
         return Result.success(service.banks(id));
     }
 
     @RequiresPerm("md:supplier:update")
     @OperLog(module = "SUPPLIER", operType = "INSERT", desc = "供应商新增银行账户")
     @PostMapping("/{id}/banks")
-    public Result<Long> addBank(@PathVariable Long id, @Validated @RequestBody com.fssc.masterdata.entity.MdSupplierBank b) {
+    public Result<Long> addBank(@PathVariable Long id, @Validated @RequestBody MdSupplierBank b) {
         b.setSupplierId(id);
         return Result.success(service.addBank(b));
     }
@@ -100,14 +104,14 @@ public class SupplierController {
 
     @RequiresPerm("md:supplier:list")
     @GetMapping("/{id}/contacts")
-    public Result<java.util.List<com.fssc.masterdata.entity.MdSupplierContact>> contacts(@PathVariable Long id) {
+    public Result<List<MdSupplierContact>> contacts(@PathVariable Long id) {
         return Result.success(service.contacts(id));
     }
 
     @RequiresPerm("md:supplier:update")
     @OperLog(module = "SUPPLIER", operType = "INSERT", desc = "供应商新增联系人")
     @PostMapping("/{id}/contacts")
-    public Result<Long> addContact(@PathVariable Long id, @Validated @RequestBody com.fssc.masterdata.entity.MdSupplierContact c) {
+    public Result<Long> addContact(@PathVariable Long id, @Validated @RequestBody MdSupplierContact c) {
         c.setSupplierId(id);
         return Result.success(service.addContact(c));
     }
@@ -122,14 +126,14 @@ public class SupplierController {
 
     @RequiresPerm("md:supplier:list")
     @GetMapping("/{id}/quals")
-    public Result<java.util.List<com.fssc.masterdata.entity.MdSupplierQualification>> quals(@PathVariable Long id) {
+    public Result<List<MdSupplierQualification>> quals(@PathVariable Long id) {
         return Result.success(service.quals(id));
     }
 
     @RequiresPerm("md:supplier:update")
     @OperLog(module = "SUPPLIER", operType = "INSERT", desc = "供应商新增资质证照")
     @PostMapping("/{id}/quals")
-    public Result<Long> addQual(@PathVariable Long id, @RequestBody com.fssc.masterdata.entity.MdSupplierQualification q) {
+    public Result<Long> addQual(@PathVariable Long id, @RequestBody MdSupplierQualification q) {
         q.setSupplierId(id);
         return Result.success(service.addQual(q));
     }

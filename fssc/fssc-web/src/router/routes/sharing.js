@@ -6,7 +6,7 @@ export default [
   // 共享运营
   { path: 'sharing', redirect: '/sharing/quality' },
   { path: 'sharing/quality', component: () => import('../../views/sharing/SharingQuality.vue'), meta: { title: '共享质检' } },
-  // 档案（RA-PAGE-21：归档+借阅销毁收敛为一个工作区；/archive 深链保留）
+  // 档案（归档+借阅销毁收敛为一个工作区；/archive 深链保留）
   { path: 'sharing/archive', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'archive' }, meta: { title: '档案管理' } },
   { path: 'sharing/statement', component: () => import('../../views/sharing/SharingStatement.vue'), meta: { title: '银行流水' } },
   // 共享配置四个独立页已收进「共享运营配置」工作区（/cfg/sharing，query.tab 直达）；
@@ -17,7 +17,7 @@ export default [
   { path: 'sharing/dispatch-rule', redirect: '/cfg/sharing?tab=dispatch-rule' },
   { path: 'sharing/task-pool', component: () => import('../../views/sharing/TaskPool.vue'), meta: { title: '任务池' } },
   { path: 'sharing/task-work', component: () => import('../../views/sharing/TaskWork.vue'), meta: { title: '工单处理' } },
-  // G3 共享作业层（2026-09-24 新视图，数据源 /api/tenant/wf/pool|ops/**）
+  // G3 共享作业层（新视图，数据源 /api/tenant/wf/pool|ops/**）
   // ②：三个视图页补 perms 前置校验（码集=其端点实需码的并集；全局守卫在 router.js 消费）：
   // shared-pool：/wf/pool/views|mine 需 wf:task:list、/wf/pool/all 需 wf:instance:list
   { path: 'sharing/shared-pool', component: () => import('../../views/sharing/SharedPool.vue'), meta: { title: '共享任务池（五视图）', perms: ['wf:task:list', 'wf:instance:list'] } },

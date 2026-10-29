@@ -46,7 +46,7 @@ import java.util.Objects;
 
 /**
  * 基础数据-配置类 CRUD（需求 2.17/2.23/2.27~2.34）。
- * 统一路径 /api/tenant/masterdata/config/{type}/... ，type 见各端点。
+ * 统一路径 /api/tenant/masterdata/config/{type}/...，type 见各端点。
  */
 @RestController
 @RequestMapping("/api/tenant/masterdata/config")
@@ -85,7 +85,7 @@ public class MasterConfigController {
     private final MdBudgetTypeMapper mdbudgettypeMapper;
 
 
-    // ---------------- 表单详情配置 ----------------
+    // 表单详情配置
 
     @RequiresPerm("md:form:list")
     @GetMapping("/form/page")
@@ -126,8 +126,8 @@ public class MasterConfigController {
     /** 启用中的单据类型列表（发起入口/流程绑定动态化使用） */
     @RequiresPerm("md:form:list")
     @GetMapping("/form/options")
-    public Result<java.util.List<MdFormConfig>> formOptions() {
-        java.util.List<MdFormConfig> list = mdformconfigMapper.selectList(
+    public Result<List<MdFormConfig>> formOptions() {
+        List<MdFormConfig> list = mdformconfigMapper.selectList(
                 new LambdaQueryWrapper<MdFormConfig>()
                         .eq(MdFormConfig::getStatus, "NORMAL")
                         .orderByAsc(MdFormConfig::getBillType).orderByAsc(MdFormConfig::getBillSubType));
@@ -135,7 +135,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 借款额度 ----------------
+    // 借款额度
 
     @RequiresPerm("md:loanlimit:list")
     @GetMapping("/loanLimit/page")
@@ -174,7 +174,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 初始借款余额 ----------------
+    // 初始借款余额
 
     @RequiresPerm("md:loaninitial:list")
     @GetMapping("/loanInitial/page")
@@ -213,7 +213,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 组织类型 ----------------
+    // 组织类型
 
     @RequiresPerm("md:orgtype:list")
     @GetMapping("/orgType/page")
@@ -252,7 +252,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 现金流量码 ----------------
+    // 现金流量码
 
     @RequiresPerm("md:cashflow:list")
     @GetMapping("/cashFlow/page")
@@ -291,7 +291,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 费用类型与现金流量码映射 ----------------
+    // 费用类型与现金流量码映射
 
     @RequiresPerm("md:itemcashmap:list")
     @GetMapping("/itemCashMap/page")
@@ -330,14 +330,14 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 费用类型与预算科目映射 ----------------
+    // 费用类型与预算科目映射
 
     /**
      * FINAL-01：费用类型→预算科目映射只读选项。登录租户用户即可读（不加 md:config）：
      * 单据发起页「选费用类型自动带出预算科目」依赖此数据；配置维护仍走下方需权限的 page/create/update。
      */
     @GetMapping("/itemBudgetMap/options")
-    public Result<java.util.List<MdItemBudgetMap>> itembudgetmapOptions() {
+    public Result<List<MdItemBudgetMap>> itembudgetmapOptions() {
         return Result.success(mditembudgetmapMapper.selectList(
                 new LambdaQueryWrapper<MdItemBudgetMap>().orderByAsc(MdItemBudgetMap::getItemId)));
     }
@@ -379,7 +379,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 成本中心预算组织映射 ----------------
+    // 成本中心预算组织映射
 
     @RequiresPerm("md:costcentermap:list")
     @GetMapping("/costCenterMap/page")
@@ -418,7 +418,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 交通工具 ----------------
+    // 交通工具
 
     @RequiresPerm("md:vehicle:list")
     @GetMapping("/vehicle/page")
@@ -504,7 +504,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 金融机构（需求 2.10） ----------------
+    // 金融机构（需求 2.10）
     @RequiresPerm("md:fininst:list")
     @GetMapping("/bank/page")
     public Result<PageResult<MdBank>> bankPage(PageQuery q, String keyword) {
@@ -542,7 +542,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // ---------------- 员工等级（需求 2.18） ----------------
+    // 员工等级（需求 2.18）
     @RequiresPerm("md:employeelevel:list")
     @GetMapping("/employeeLevel/page")
     public Result<PageResult<MdEmployeeLevel>> employeeLevelPage(PageQuery q, String keyword) {
@@ -580,7 +580,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // ---------------- 记账配置（需求 2.20） ----------------
+    // 记账配置（需求 2.20）
     @RequiresPerm("md:glconfig:list")
     @GetMapping("/glConfig/page")
     public Result<PageResult<MdGlConfig>> glConfigPage(PageQuery q, String keyword) {
@@ -603,7 +603,7 @@ public class MasterConfigController {
     @PostMapping("/glConfig/{id}/delete")
     public Result<Void> glConfigDelete(@PathVariable Long id) { mdglconfigMapper.deleteById(id); return Result.success(); }
 
-    // ---------------- 收支设置（需求 2.21） ----------------
+    // 收支设置（需求 2.21）
     @RequiresPerm("md:incomeexpense:list")
     @GetMapping("/incomeExpense/page")
     public Result<PageResult<MdIncomeExpense>> incomeExpensePage(PageQuery q, String keyword) {
@@ -641,7 +641,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // ---------------- 借款付款类型（需求 2.26） ----------------
+    // 借款付款类型（需求 2.26）
     @RequiresPerm("md:loanpaytype:list")
     @GetMapping("/loanPayType/page")
     public Result<PageResult<MdLoanPayType>> loanPayTypePage(PageQuery q, String keyword) {
@@ -680,7 +680,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 预算类别（需求 3.3） ----------------
+    // 预算类别（需求 3.3）
     @RequiresPerm("md:budgetcategory:list")
     @GetMapping("/budgetCategory/page")
     public Result<PageResult<MdBudgetCategory>> budgetCategoryPage(PageQuery q, String keyword) {
@@ -718,7 +718,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // ---------------- 预算组织（需求 3.4） ----------------
+    // 预算组织（需求 3.4）
     @RequiresPerm("md:budgetorg:list")
     @GetMapping("/budgetOrg/page")
     public Result<PageResult<MdBudgetOrg>> budgetOrgPage(PageQuery q, String keyword) {
@@ -756,7 +756,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // ---------------- 预算期间（需求 3.6） ----------------
+    // 预算期间（需求 3.6）
     @RequiresPerm("md:budgetperiod:list")
     @GetMapping("/budgetPeriod/page")
     public Result<PageResult<MdBudgetPeriod>> budgetPeriodPage(PageQuery q, Integer periodYear) {
@@ -798,7 +798,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 合同类型（需求 5.1） ----------------
+    // 合同类型（需求 5.1）
     @RequiresPerm("md:contracttype:list")
     @GetMapping("/contractType/page")
     public Result<PageResult<MdContractType>> contractTypePage(PageQuery q, String keyword) {
@@ -837,7 +837,7 @@ public class MasterConfigController {
     }
 
 
-    // ---------------- 在建工程（需求补齐：基础数据与配置 > 在建工程） ----------------
+    // 在建工程（需求补齐：基础数据与配置 > 在建工程）
     @RequiresPerm("md:cip:list")
     @GetMapping("/cip/page")
     public Result<PageResult<MdCip>> cipPage(PageQuery q, String keyword) {
@@ -862,7 +862,7 @@ public class MasterConfigController {
     @PostMapping("/cip/{id}/delete")
     public Result<Void> cipDelete(@PathVariable Long id) { mdcipMapper.deleteById(id); return Result.success(); }
 
-    // ---------------- 在建工程：成本归集 ----------------
+    // 在建工程：成本归集
     @RequiresPerm("md:cip:update")
     @OperLog(module = "MD_CONFIG", operType = "INSERT", desc = "新增在建工程成本归集明细")
     @PostMapping("/cip/{id}/cost/add")
@@ -879,7 +879,7 @@ public class MasterConfigController {
         return Result.success(mdcipService.costPage(id, q));
     }
 
-    // ---------------- 在建工程：转固定资产 ----------------
+    // 在建工程：转固定资产
     @RequiresPerm("md:cip:transfer")
     @OperLog(module = "MD_CONFIG", operType = "TRANSFER", desc = "在建工程转固定资产")
     @PostMapping("/cip/{id}/transferToAsset")
@@ -887,7 +887,7 @@ public class MasterConfigController {
         return Result.success(mdcipService.transferToAsset(id, req));
     }
 
-    // ---------------- 预算类型（需求补齐：预算管理 > 预算类型） ----------------
+    // 预算类型（需求补齐：预算管理 > 预算类型）
     @RequiresPerm("md:budgettype:list")
     @GetMapping("/budgetType/page")
     public Result<PageResult<MdBudgetType>> budgetTypePage(PageQuery q, String keyword) {

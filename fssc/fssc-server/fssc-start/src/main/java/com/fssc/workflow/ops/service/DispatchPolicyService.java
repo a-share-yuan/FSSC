@@ -52,9 +52,9 @@ import java.util.Set;
  *
  * <p><b>为什么预计耗时按节点历史平均停留估算</b>：{@code wf_task_history.duration} 是既有真值
  * 每个节点办理的真实停留毫秒，比"给所有人一个固定系数"更贴近"按时均衡"的本意；
- * 该节点无历史样本时退回"时限的 1/3"作默认处理，并在决策理由里如实标注估算来源。
+ * 该节点无历史样本时退回"时限的 1/3"作兜底，并在决策理由里如实标注估算来源。
  *
- * <p><b>死配置教训</b>（方案 §二 F6~F8）：本类的每一个配置列都有读取点——
+ * <p><b>每个配置列都要有读取点</b>：本类的每一个配置列都落在具体代码上——
  * {@code strategy} 进 {@link #decide}，{@code normalHours/urgentHours} 进
  * {@code TaskTimeLimitService} 的 due_time 计算，{@code balanceIntervalHours/balanceBatchSize}
  * 进 {@link #planBalanceVolume} 与决策理由，{@code smartWeight*} 进 SMART 打分。
@@ -72,7 +72,7 @@ public class DispatchPolicyService {
     /** 全局默认行标识（model_key='*' AND node_key='*'） */
     public static final String GLOBAL_KEY = "*";
 
-    /** 内置默认处理时限：通行规则 普通 24h / 加急 4h（库里无配置行时的最后一道防线） */
+    /** 内置兜底时限：通行规则 普通 24h / 加急 4h（库里无配置行时的最后一道防线） */
     private static final BigDecimal BUILTIN_NORMAL_HOURS = new BigDecimal("24");
     private static final BigDecimal BUILTIN_URGENT_HOURS = new BigDecimal("4");
 
@@ -159,12 +159,12 @@ public class DispatchPolicyService {
         }
     }
 
-    // 2. 配置解析：节点级 → 全局默认行 → 内置默认处理
+    // 2. 配置解析：节点级 → 全局默认行 → 内置兜底
 
     /**
      * 解析某节点的生效策略：先按 {@code modelKey:nodeKey} 精确匹配（与
-     * {@code WfNodeConfigResolver} 同一"精确键、不位置默认处理"的契约），未命中再取全局默认行，
-     * 仍无则返回内置默认处理对象（抢单 + 24h/4h）。<b>不返回 null</b>——调用方无需到处判空。
+     * {@code WfNodeConfigResolver} 同一"精确键、不位置兜底"的契约），未命中再取全局默认行，
+     * 仍无则返回内置兜底对象（抢单 + 24h/4h）。<b>不返回 null</b>——调用方无需到处判空。
      */
     public OpDispatchPolicy resolvePolicy(String modelKey, String nodeKey) {
         if (modelKey != null && !modelKey.isBlank() && nodeKey != null && !nodeKey.isBlank()) {

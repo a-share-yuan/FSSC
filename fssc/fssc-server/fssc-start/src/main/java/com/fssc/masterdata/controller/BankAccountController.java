@@ -64,10 +64,10 @@ public class BankAccountController {
         return Result.success(service.startSealChange(id));
     }
 
-    // 权限治理（2026-09-16）：原用 @RequiresPerm("md:bank:delete") 属跨对象串味——该码挂在
-    // 菜单「银行信息删除」(#3457) 且 **0 角色持有**，语义上又指向「银行信息」而非「银行账户」，
+    // 权限治理：原用 @RequiresPerm("md:bank:delete") 属跨对象串味——该码挂在
+    // 菜单「银行信息删除」(#3457) 且 0 角色持有，语义上又指向「银行信息」而非「银行账户」，
     // 导致本删除接口对所有角色恒为无权（功能实际不可用）。
-    // 现改为对象一致的 md:bankaccount:delete，并由 seed-perm-p1-20260916.sql 将该码授予
+    // 现改用对象一致的 md:bankaccount:delete，并由 seed-perm-p1-20260916.sql 将该码授予
     // 数据配置管理员（菜单 #3457 授权 CONFIG_ADMIN）。
     // 因旧码持有者为 0，无需多码 OR 过渡，直接用单一码以避免留下幽灵码。
     // 注意：删除银行账户属 SoD-01 高风险动作，该码只应授予数据配置管理员，不得授予出纳/资金岗。

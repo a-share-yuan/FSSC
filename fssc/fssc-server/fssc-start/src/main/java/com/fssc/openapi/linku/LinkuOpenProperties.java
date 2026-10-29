@@ -15,7 +15,7 @@ import org.springframework.util.StringUtils;
  * <p>本通道承载 BCP（外网）→ FSSC（内网）的受控 HTTP 调用，替代原「BCP 直连 FSSC 内网库」。
  * 全部端点以 HMAC-SHA256 验签，未过签不落任何业务表。</p>
  *
- * <h3>密钥注入（F-6）</h3>
+ * <h3>密钥注入</h3>
  * 优先取 {@code fssc.linku.secret}；未配置时回退既有回调密钥 {@code fssc.linku-callback.secret}
  * （BCP 双侧本就是同一把共享密钥，便于灰度期只配一处）。两者皆空则 <b>fail-closed</b>：
  * 全部开放端点以 401 拒绝。绝不写入任何默认密钥，也不在日志中打印密钥值。

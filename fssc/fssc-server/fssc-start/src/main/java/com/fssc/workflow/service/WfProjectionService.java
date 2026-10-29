@@ -17,9 +17,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 /**
- * 流程镜像投影的<b>唯一实现</b>（G1 单一真值 + ④层消息队列，2026-09-24）。
+ * 流程镜像投影的<b>唯一实现</b>（G1 单一真值 + ④层消息队列）。
  *
- * <p><b>为什么必须抽出来</b>：改造前投影逻辑长在 {@code WfMirrorProjectionListener} 里，
+ * <p><b>为什么必须抽出来</b>：原先投影逻辑长在 {@code WfMirrorProjectionListener} 里，
  * 一旦引入"消息队列模式"，同一套投影就出现了第二条执行路径（同步内联 / 异步消费）——
  * 两条路径各写一份子逻辑＝双账漂移迟早重现。故投影动作<b>只此一份</b>：
  * <ul>
@@ -32,7 +32,7 @@ import java.time.ZoneId;
  * 的东西，已由监听器解好装进 {@link WfProjectionEvent}。本类<b>只做纯写库</b>，因此异步消费时
  * 无需再触碰引擎（引擎变量在实例结束后会被清理，那时再解析就晚了）。
  *
- * <p><b>无 {@code @Transactional}</b>：与改造前一致（{@code WfEngineFacade} 全类 {@code @Transactional}
+ * <p><b>无 {@code @Transactional}</b>：与原先一致（{@code WfEngineFacade} 全类 {@code @Transactional}
  * 计数为 0，镜像写与引擎推进本就不在同一事务）。本类内置事务会改变"投影失败是否回滚引擎命令"的语义，
  * 属夹带变更，故不做。
  *
@@ -84,7 +84,7 @@ public class WfProjectionService {
         });
     }
 
-    // 六个投影动作（与改造前监听器逐个 handler 一一对应）
+    // 六个投影动作（与原先监听器逐个 handler 一一对应）
 
     /** PROCESS_STARTED → 建 wf_instance（RUNNING）。 */
     private void onProcessStarted(WfProjectionEvent e, Long tenantId) {
@@ -197,7 +197,7 @@ public class WfProjectionService {
     // 投影构造与工具
 
     /**
-     * 由事件信封构造 wf_task 投影行（字段含义与改造前监听器的 {@code buildTaskRow} 逐字一致，
+     * 由事件信封构造 wf_task 投影行（字段含义与原先监听器的 {@code buildTaskRow} 逐字一致，
      * 差异只在"变量/实例行回退已在监听器构造信封时完成"）。
      *
      * @return 构造好的行；实例归属（biz_type NOT NULL）无法回填时返回 {@code null}（已记缺陷）

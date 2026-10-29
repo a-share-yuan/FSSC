@@ -26,7 +26,7 @@ public class ComplianceController {
 
     private final PrecheckService precheckService;
 
-    // ---- 费用政策管理 ----
+    // 费用政策管理
     @RequiresPerm("policy:list")
     @GetMapping("/policy/page")
     public Result<PageResult<ExpensePolicy>> page(@RequestParam(defaultValue = "1") long pageNum,
@@ -49,7 +49,7 @@ public class ComplianceController {
         return Result.success();
     }
 
-    // ---- 合规预检（提交前/提交时） ----
+    // 合规预检（提交前/提交时）
     @RequiresPerm("exp:bill:submit")
     @GetMapping("/precheck")
     public Result<List<PrecheckService.PrecheckItem>> precheck(@RequestParam Long billId) {

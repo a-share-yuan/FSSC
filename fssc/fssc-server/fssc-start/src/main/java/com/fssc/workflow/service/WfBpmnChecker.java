@@ -301,16 +301,15 @@ public class WfBpmnChecker {
     }
 
     /**
-     * 批次3 R3-E：金额网关的档位可达性与"低档短路"判定。
+     * 金额网关的档位可达性与"低档短路"判定。
      *
-     * <p>三条规则按"会不会挡住批次2 已发布在用的流程"分档取证（bpmn-repo/drafts/batch3/r3e-gateways.log：
-     * 假档位 0 处、零审批短路 0 处、低档出口直达 End 21 处/13 个在用流程）：
+     * <p>三条规则都按"会不会挡住已发布在用的流程"来定档：
      * <ul>
-     *   <li><b>error</b> 永不命中的条件分支＝假档位（该档审批人永远收不到单，现网 0 例，不会误伤）；</li>
+     *   <li><b>error</b> 永不命中的条件分支＝假档位（该档审批人永远收不到单，不会误伤）；</li>
      *   <li><b>error</b> 零审批短路：网关在"开始→网关"之间没有任何人工节点，且金额不达标时直通 End
-     *       （＝不传 amount 引擎按 0 计算，整单无人审批即通过，现网 0 例）；</li>
-     *   <li><b>warning</b> 低档出口直达 End 但网关上游已有人工审批＝批次2 金额升级链的标准形态
-     *       金额不达标就不再追加高管审批。按 R3-E 回滚判据降级并登记，不默默扩大拦截面。</li>
+     *       （＝不传 amount 引擎按 0 计算，整单无人审批即通过）；</li>
+     *   <li><b>warning</b> 低档出口直达 End 但网关上游已有人工审批＝金额升级链的标准形态，
+     *       金额不达标就不再追加高管审批。这类不拦截，只降级为 warning 并登记，免得默默扩大拦截面。</li>
      * </ul>
      * 只要有一条出口条件静态求不出（{@code &&}/{@code ||}/函数/未传变量），本网关整体不给结论——
      * 宁可漏报，也不给设计器一个假的"档位可达"。
@@ -384,14 +383,14 @@ public class WfBpmnChecker {
     }
 
     /**
-     * 批次3 R3-E 规则①：分档流程 × 绑定 bizType 的金额来源核对（只 warning，不 error）。
+     * 规则①：分档流程 × 绑定 bizType 的金额来源核对（只 warning，不 error）。
      *
      * <p>本想按任务规则做成 error——"链上有金额网关、绑定的 bizType 又拿不到金额"＝发起侧必然不传 amount
-     * ＝静默降档。实测证明这样判会误伤（取证 bpmn-repo/drafts/batch3/r3e-bindings.log）：
+     * ＝静默降档。但这样判会误伤：
      * {@link BillRouteRegistry.Route#amtCol()} 的规则是"待办回填用哪一列"，与"发起点是否传 amount"不是一回事——
      * MEETING 的注册表行 amtCol=NULL、TRAIN/TRAVEL 绑定的 EXP_APPLY 根本没有注册表行，
      * 而这三条流程的发起点确实把 exp_bill.total_amount 传进了引擎。按 amtCol 判 error 会挡住
-     * 4 个批次2 已发布在用流程 ⇒ 依 R3-E 回滚判据降级为 warning 并登记；
+     * 几条已发布在用的流程，所以只降级为 warning 并登记；
      * 真正的回归拦截由全库体检（{@code /designer/audit-models}）逐格比对承担。
      */
     private void amountSourceCoverage(Report r, String modelKey) {
@@ -544,7 +543,7 @@ public class WfBpmnChecker {
     }
 
     /**
-     * P0 治理校验②：分支变量白名单。
+     * 治理校验②：分支变量白名单。
      * 网关条件表达式里引用的每个变量必须 ∈ {@link #BRANCH_VAR_WHITELIST}（＝ WfEngineFacade.start() 实际注入引擎的变量集），
      * 否则运行时该变量恒为 null → 条件求不出 → 分支永远无法选中（"看着能配、实际不生效"）。
      * 直接引用未注入变量（含拼写错误，如 amout）一律标 error，发布（assertPublishable）会拦截。

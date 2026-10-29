@@ -68,7 +68,7 @@ public class DispatchController {
         return Result.success(dispatchService.listByStatus(status));
     }
 
-    /** P0-2：派单任务分页（原 /by-status 保留兼容） */
+    /** 派单任务分页（原 /by-status 保留兼容） */
     @RequiresPerm("compliance:dispatch:list")
     @GetMapping("/by-status/page")
     public Result<PageResult<DispatchTask>> pageByStatus(@RequestParam(required = false) String status,

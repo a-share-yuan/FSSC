@@ -62,7 +62,7 @@
           <el-button v-if="row.status !== 'SCRAP' && row.status !== 'CIP'" link size="small" type="primary" @click="openAdjustValue(row)">原值调整</el-button>
           <el-button v-if="row.status !== 'SCRAP' && row.status !== 'CIP'" link size="small" type="primary" @click="doImpair(row)">减值</el-button>
           <el-button link size="small" type="info" @click="showNet(row)">净值</el-button>
-          <!-- X-06读取环节：变动台账此前只写不读，卡片页给一个消费者入口 -->
+          <!-- 变动台账：给台账补一个读的入口 -->
           <el-button link size="small" type="info" @click="openChangeLog(row)">变动台账</el-button>
         </template>
       </el-table-column>
@@ -140,7 +140,7 @@
     <el-form ref="capitalFormRef" :model="capForm" :rules="capitalRules" label-width="130px" size="small">
       <el-form-item label="支出金额" prop="amount"><el-input-number v-model="capForm.amount" :min="0" :max="AMOUNT_MAX" :precision="2" style="width:100%" @blur="clampIn(capForm, 'amount', AMOUNT_MAX, '支出金额')" /></el-form-item>
       <el-form-item label="预算科目">
-        <!-- CER 预算集成：指定预算科目则发起即硬控、审批通过后占用；留空自动取综合预算默认处理 -->
+        <!-- CER 预算集成：指定预算科目则发起即硬控、审批通过后占用；留空自动取综合预算兜底 -->
         <el-select v-model="capForm.budgetItemId" filterable clearable placeholder="留空自动匹配综合预算" style="width:100%">
           <el-option v-for="bgt in budgetItems" :key="bgt.id" :label="budgetOptionLabel(bgt)" :value="bgt.id" />
         </el-select>
@@ -190,7 +190,7 @@
     </template>
   </el-dialog>
 
-  <!-- X-06变动台账：原值调整/盘点差异的原因、前后镜像与审批最终状态（此前只写不读） -->
+  <!-- 变动台账：原值调整/盘点差异的原因、前后镜像与审批最终状态 -->
   <el-dialog v-model="dlgChangeLog" :title="`变动台账 - ${changeLogAssetName}`" width="920px" destroy-on-close>
     <el-table :data="changeLogs" size="small" max-height="380" v-loading="changeLogLoading"
               empty-text="该资产暂无变动台账（原值调整/盘点差异审批发起后在此记录）">
@@ -221,7 +221,7 @@
     <template #footer><el-button @click="dlgChangeLog = false">关闭</el-button></template>
   </el-dialog>
 
-  <!-- 资产原值调整弹窗（X-06/原因改人工输入并随变动台账记录，不再传硬编码默认处理句） -->
+  <!-- 资产原值调整弹窗（原因人工输入并随变动台账记录，不接受硬编码兜底句） -->
   <el-dialog v-model="dlgAdjust" title="资产原值调整（提交审批）" width="480px" destroy-on-close>
     <el-form ref="adjustFormRef" :model="adjustForm" :rules="adjustRules" label-width="120px" size="small">
       <el-form-item label="调整资产">
@@ -371,7 +371,7 @@ const aForm = ref(emptyAsset())
 const cardReadonly = ref(false)
 
 // 数字框防呆：金额类上限 99,999,999,999、月数上限 600，失焦回读超限自动修正并提示
-// （自动化键入偶发串位 3000→300000，人工也可能误输多位；el-input-number 的 :max 在失焦时默认处理截断）
+// （自动化键入偶发串位 3000→300000，人工也可能误输多位；el-input-number 的 :max 在失焦时兜底截断）
 const AMOUNT_MAX = 99999999999
 const MONTHS_MAX = 600
 function clampIn(obj, key, max, label) {
@@ -424,7 +424,7 @@ const dlgTransfer = ref(false)
 const transferRow = ref({})
 const transferForm = ref({ targetDeptId: null, targetCompanyId: null, remark: '' })
 
-// X-06：原值调整改弹窗——原因必须由人工填写（旧版传死值 '前端原值调整'，写入数据库后与真实成因无关）
+// 原值调整改弹窗——原因必须由人工填写（旧版传死值 '前端原值调整'，写入数据库后与真实成因无关）
 const dlgAdjust = ref(false)
 const adjustRow = ref({})
 const adjustForm = ref({ newOriginalAmount: '', reason: '' })
@@ -540,10 +540,10 @@ async function doDisposeSell(row) {
 }
 async function doCheckDiff(row) {
   try {
-    // 乙案：本审批只作差异确认——通过环节不产生结转凭证，账面在总账域结转前分文不动。
-    // 原症状＝单据 APPROVED＋记录现有却呈现"差异已处理"，语义与账实脱节⇒把规则如实写进发起提示。
+    // 本审批只作差异确认——通过环节不产生结转凭证，账面在总账域结转前分文不动。
+    // 单据 APPROVED＋记录现有却呈现"差异已处理"＝语义与账实脱节 ⇒ 把规则如实写进发起提示。
     const { value: diffAmount } = await ElMessageBox.prompt('输入盘点差异金额（正=盘盈/负=盘亏）。注意：本审批仅为差异确认，通过后不自动生成结转凭证，账面不变；差异结转须在总账域另起「盘点差异结转」做账，请在提交前知会总账岗。', '盘点差异处理（提交审批）', { confirmButtonText: '下一步', cancelButtonText: '取消', inputPattern: /^-?\d+(\.\d+)?$/, inputErrorMessage: '请输入金额' })
-    // X-06：差异说明改人工输入。旧版直接传死值 '盘点差异'，而后端 checkDiff 又把该形参整个丢弃
+    // 差异说明改人工输入。旧版直接传死值 '盘点差异'，而后端 checkDiff 又把该形参整个丢弃
     // ⇒ 差异成因从来没有载体；现说明随变动台账写入数据库，故必须先有内容才放行。
     const { value: remark } = await ElMessageBox.prompt('填写差异说明（盘盈/盘亏成因，随变动台账记录，事后追溯看这一句）', '盘点差异说明', { confirmButtonText: '提交审批', cancelButtonText: '取消', inputValidator: (v) => (v && v.trim() ? true : '请填写差异说明') })
     await assetApi.checkDiff(row.id, Number(diffAmount), remark.trim())
@@ -574,14 +574,14 @@ async function doImpair(row) {
     await assetApi.impair(row.id, Number(impairmentAmount))
     ElMessage.success('减值已提交审批'); loadAssets()
   } catch (e) {
-    // 同上——减值分支的服务端拒绝此前被静默丢弃，列表不刷新、也无任何提示
+    // 同上——减值分支的服务端拒绝不能被静默丢弃，否则列表不刷新、也无任何提示
     if (e === 'cancel' || e === 'close') return
     ElMessage.error(e && e.message ? e.message : String(e))
   }
 }
 async function showNet(row) { try { const nv = await assetApi.netValue(row.id); ElMessage.info('资产净值：' + fmt(nv)) } catch (e) { ElMessage.error(e.message) } }
 
-// X-06读取环节：变动台账此前"只写不读"，卡片页补一个消费者
+// 变动台账的读侧：卡片页消费这些记录
 const CHANGE_TYPE_LABEL = { VALUE_ADJUST: '原值调整', CHECK_DIFF: '盘点差异', IMPAIR: '减值', DISPOSE: '处置', TRANSFER: '调拨' }
 const CHANGE_METHOD_LABEL = { WF: '审批流变动', DIRECT: '直接变动' }
 const dlgChangeLog = ref(false)
@@ -621,12 +621,12 @@ async function saveCapital() {
 // "显式指定预算科目"这条自助通道只剩非部门档的外岗可用（同一接口对 SELF 档降级本公司后回 9 行）⇒ 下拉内容随角色而变。
 // 改走 已办结的引用选择规则 mdApi.budgets（/tenant/budget/item/pick＝按公司放行＋跨公司依旧隔离），
 // 与 useBill.js:344/378、ExpenseCreateTab.vue:497 三处同源，避免另立第二处真值。
-// 空集/查询失败不再静默置空：把成因就地写进字段下方提示（留空仍走系统默认处理，不编造科目行）。
+// 空集/查询失败不再静默置空：把成因就地写进字段下方提示（留空仍走系统兜底，不编造科目行）。
 const budgetItems = ref([])
 const budgetItemsNotice = ref('')
-// pick 接口回的是 bg_item 裸行，没有科目名：dimKey 实测形如「2025-COMPANY1-DEPTnull-ITEM331」
+// pick 接口回的是 bg_item 裸行，没有科目名：dimKey 形如「2025-COMPANY1-DEPTnull-ITEM331」
 // 字面 null＋内部 id，不能上屏；用费项主数据把 itemId 换成名称（/expense-item/tree 无需授权，
-// 与 BudgetExecution.vue:242-245 同一映射），补不到名时只显示年度与金额，仍不暴露主键。
+// 与 BudgetExecution.vue 同一映射），补不到名时只显示年度与金额，仍不暴露主键。
 const budgetItemNames = ref({})
 async function loadBudgetItemNames() {
   if (Object.keys(budgetItemNames.value).length) return
@@ -686,7 +686,7 @@ const cipFlowLoading = ref(false)
 const cipFlowSubmitting = ref(false)
 // transferToAsset 真实契约要素
 const cipFlowForm = ref({ categoryId: null, deptId: null, transferDate: '', depreciationMethod: 'LINEAR', depreciationMonths: 60, remark: '' })
-// 第2批：转固弹窗原为装饰红星（el-form-item required 无 prop），改挂中央框架 CIP_TRANSFER 规则集
+// 转固弹窗曾用装饰红星（el-form-item required 无 prop），改挂中央框架 CIP_TRANSFER 规则集
 const cipFlowFormRef = ref(null)
 const { rules: cipFlowRules } = useFormRules('CIP_TRANSFER')
 const cipFlowCats = ref([])
@@ -733,7 +733,7 @@ async function confirmCipFlow() {
   try {
     await ElMessageBox.confirm(`确认将在建工程「${row.cipName || row.id}」转固为固定资产？`, '转固确认', { type: 'warning', closeOnClickModal: false })
   } catch (_) { return }
-  // 第2批：装饰红星转真校验（原 4 个 toast 式 if 改为 EP 标准 validate，红字落字段）
+  // 装饰红星转真校验（原 4 个 toast 式 if 改为 EP 标准 validate，红字落字段）
   if (!(await validateForm(cipFlowFormRef.value))) return
   cipFlowSubmitting.value = true
   try {

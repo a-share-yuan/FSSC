@@ -74,7 +74,7 @@ public class SharingService {
             return null;
         }
 
-        // 智能审单：审批通过进入审核环节前，先跑规则引擎自动裁决
+        // 智能审单：审批通过进入审核环节前，先跑规则引擎自动判定
         ReviewResult review = runSmartReview(bill);
         if ("AUTO_REJECT".equals(review.getAction())) {
             // 高风险/欺诈：自动驳回，不入作业池
@@ -86,7 +86,7 @@ public class SharingService {
 
         Long firstId = buildChain(bill, chain);
 
-        // BUG-08 修复：电子发票单据工单激活 —— 关联发票全部为电子介质时自动豁免实物签收
+        // 电子发票单据工单激活 —— 关联发票全部为电子介质时自动豁免实物签收
         // （置 paperless=Y / deliveryStatus=NOT_REQUIRED），首环节工单创建即 activeFlag=Y 可认领
         if (!"Y".equals(bill.getPaperless()) && allInvoicesElectronic(bill.getId())) {
             ExpBill upd = new ExpBill();
@@ -166,7 +166,7 @@ public class SharingService {
             data.put("billNo", bill.getBillNo());
             data.put("billType", bill.getBillType());
             data.put("totalAmount", bill.getTotalAmount() == null ? BigDecimal.ZERO : bill.getTotalAmount());
-            // P1 冒烟发现：审单规则表达式（op_review_rule.match_expression）按惯例用 amount，
+            // 审单规则表达式（op_review_rule.match_expression）按惯例用 amount，
             // 缺该键会让 `amount > 50000` 求值异常（求值引擎 fail-open 返回 true）误杀单据，补别名
             data.put("amount", bill.getTotalAmount() == null ? BigDecimal.ZERO : bill.getTotalAmount());
             data.put("applyUserId", bill.getApplyUserId());
@@ -203,8 +203,8 @@ public class SharingService {
         for (int i = 0; i < total; i++) {
             String[] seg = chain.get(i); // {taskType, taskName}
             // 链生成去重——同 bill_id+task_type 已有未最终状态（WAITING/RECEIVED）任务即跳过重建
-            // （此前 3 张单各出现两套 AUDIT/PAY/BOOKKEEP，认领量/SLA/质量报表分母虚高；
-            //  DDL 唯一索引 uk(bill_id,task_type,chain_seq,del_flag) 已注释态待放行 M-20）
+            // （不去重的话，同一张单会出现两套 AUDIT/PAY/BOOKKEEP，认领量/SLA/质量报表分母虚高；
+            //  唯一索引 uk(bill_id,task_type,chain_seq,del_flag) 已在 DDL 里备好，放行后由数据库兜底）
             Long dup = opAuditTaskMapper.selectCount(new LambdaQueryWrapper<OpAuditTask>()
                     .eq(OpAuditTask::getBillId, bill.getId())
                     .eq(OpAuditTask::getTaskType, seg[0])
@@ -293,10 +293,10 @@ public class SharingService {
     }
 
     /**
-     * ⑨（2026-10-16 晚间场实测）：单据到达业务最终状态时，办结其共享作业链上所有未办结任务。
+     * 单据到达业务最终状态时，办结其共享作业链上所有未办结任务。
      *
-     * <p>缺陷现场：BX202610160002 已 APPROVED（凭证已过账、借款冲抵已核销），派工池仍挂着
-     * 「审核/待认领」——全库 11 条池任务全部是最终状态单上的僵尸行（0 认领 0 办结），且
+     * <p>否则：单据已 APPROVED（凭证已过账、借款冲抵已核销），派工池仍挂着「审核/待认领」——
+     * 池里的任务会全是最终状态单上的僵尸行（无人认领、无人办结），且
      * {@link #createChain} 的去重查重（只认 WAITING/RECEIVED）会让这些残留
      * 永久占位。根因：业务侧的「钱/账/核销」闭环（付款批次执行、还款入账、无现金环节平账、
      * 驳回/撤回）与共享作业链之间没有任何联动办结点。
@@ -330,7 +330,7 @@ public class SharingService {
             upd.setRemark(remark);
             opAuditTaskMapper.updateById(upd);
         }
-        log.info("单据 billId={} 到达业务终态，共享作业链自动收口 {} 条未办结任务：{}",
+        log.info("单据 billId={} 到达业务终态，共享作业链自动办结 {} 条未办结任务：{}",
                 billId, open.size(), reason);
         return open.size();
     }
@@ -345,9 +345,9 @@ public class SharingService {
     }
 
     /**
-     * P2·状态一致性：智能审单自动驳回必须落与人工驳回同源的善后。
+     * 智能审单自动驳回必须落与人工驳回同源的善后。
      * <p>修前只置 REJECTED，留下三处悬空事实：① 提交时按行 OCCUPY 的预算永不 RELEASE
-     * （实测行政办公费净占 5,200,000 挂在已驳回单上，预算执行数失真）；② 审批收尾自动生成的
+     * （预算占用挂在已驳回单上不释放，预算执行数失真）；② 审批收尾自动生成的
      * DRAFT 凭证仍挂在被驳回的单上；③ 单据侧无结论留痕，重提后旧「自动驳回」文案与状态并存。
      * <p>释放口径与 {@code ExpenseWfEventListener.handleRejected} 同源：按 billType 还原占用类型、
      * 逐行 release；重复调用由 {@code BudgetService.release} 的 净占用上限兜底，不会记成负数流水。
@@ -464,7 +464,7 @@ public class SharingService {
 
     /**
      * 完成（审核通过；串行作业链自动激活下一环节）。
-     * /办结备注（审计口语）必须落 op_audit_task.remark——此前请求不带备注、
+     * 办结备注（审计口语）必须落 op_audit_task.remark——请求不带备注、
      * 服务端也不写列，三张工单（AUDIT/PAY/BOOKKEEP）办结后 remark 恒 NULL，记录全丢。
      * 备注为选填：空白不覆盖既有值（避免把退单原因等历史记录擦掉）。
      */
@@ -536,7 +536,7 @@ public class SharingService {
         // 排序：最新任务排在最前面（按创建时间降序 + ID降序）
         w.orderByDesc(OpAuditTask::getCreateTime).orderByDesc(OpAuditTask::getId);
         Page<OpAuditTask> p = opAuditTaskMapper.selectPage(Page.of(pageNum, pageSize), w);
-        // 分页 VO 补 billStatus（UI「单据状态」列此前全「—」，同页同批办结）
+        // 分页 VO 补 billStatus（否则 UI「单据状态」列全是「—」）
         enrichBillStatus(p.getRecords());
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
@@ -599,7 +599,7 @@ public class SharingService {
         if (!"RECEIVED".equals(task.getPoolStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "仅已认领任务可退单，当前: " + task.getPoolStatus());
         }
-        // 退单原因必填双校验（与前端红星+行内校验同一规则）——此前直连接口可空原因退单
+        // 退单原因必填双校验（与前端红星+行内校验同一规则）——直连接口也不能空原因退单
         AssertUtil.notBlank(reason, ErrorCode.PARAM_INVALID, "请填写退单原因");
         // 与 withdraw 同一规则：updateById 的实体在默认 NOT_NULL 字段策略下会跳过 null 字段，
         // 表现是"退单成功、状态回池了，但认领人/认领时间还挂在原人名下"（任务池同行同时显示「待认领」＋认领人）。

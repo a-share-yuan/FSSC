@@ -8,7 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 敏感数据脱敏装配（P1-3）。
+ * 敏感数据脱敏装配。
  *
  * <p>配置项 {@code fssc.security.mask-sensitive}：true（默认）脱敏 / false 返回明文（仅限受控联调）。</p>
  *

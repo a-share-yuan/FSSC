@@ -476,7 +476,7 @@ public class FxRevaluationService {
                     cur, "LOAN", book, orig);
         }
 
-        // AR 外币应收（rc_receivable 无公司维度，取租户首个公司默认处理）
+        // AR 外币应收（rc_receivable 无公司维度，取租户首个公司兜底）
         List<RcReceivable> receivables = rcReceivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
                 .ne(RcReceivable::getCurrencyCode, HOME));

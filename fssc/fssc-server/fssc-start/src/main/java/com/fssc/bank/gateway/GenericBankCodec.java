@@ -15,13 +15,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 通用银行报文形态（{@code provider=GENERIC}）——<b>收编前的既有行为，零回归基线</b>。
+ * 通用银行报文形态（{@code provider=GENERIC}）——收编前的既有行为，零回归基线。
  *
  * <p>请求体为通用 JSON：{@code {batchNo, count, totalAmount, items:[{payeeName, bankName,
  * account, amount, postscript}]}}。响应按最小契约解析：body 含 {@code "serialNos":[...]} 则取之，
  * 否则由调用方降级为占位流水号。</p>
  *
- * <p>本类是<b>默认处理 provider</b>：即使某银行尚未提供专属编解码器，只要通道配置的 provider
+ * <p>本类是<b>兜底 provider</b>：即使某银行尚未提供专属编解码器，只要通道配置的 provider
  * 留空或填 {@code GENERIC}，都会落到这里，行为与 R1/R2 完全一致。</p>
  */
 @Slf4j

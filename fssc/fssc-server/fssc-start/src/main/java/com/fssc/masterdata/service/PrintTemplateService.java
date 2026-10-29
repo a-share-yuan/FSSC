@@ -34,7 +34,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * 打印/套打引擎（V1.4.81）——闭环差距②「打印无套打设计器」。
+ * 打印/套打引擎——闭环差距②「打印无套打设计器」。
  *
  * <p><b>本类解决的三个问题</b>：
  * <ol>
@@ -60,7 +60,7 @@ public class PrintTemplateService {
     private final MdPrintTemplateSetMapper setMapper;
     private final MdPrintTemplateSetItemMapper setItemMapper;
 
-    // ==================== 查询 ====================
+    // 查询
 
     /**
      * 按业务类型取启用中的模板列表（同一 template_code 取最高版本）。
@@ -179,7 +179,7 @@ public class PrintTemplateService {
         return views;
     }
 
-    // ==================== 渲染 ====================
+    // 渲染
 
     /**
      * 渲染打印内容：绑定数据 → 必录校验 → 拼 HTML。
@@ -238,7 +238,7 @@ public class PrintTemplateService {
         return out;
     }
 
-    // ==================== 保存（套打设计器） ====================
+    // 保存（套打设计器）
 
     /**
      * 保存模板（设计器提交）。存在则更新，不存在则新增；字段项按模板全量覆盖。
@@ -342,7 +342,7 @@ public class PrintTemplateService {
         templateMapper.deleteById(templateId);
     }
 
-    // ==================== 模板套 ====================
+    // 模板套
 
     public List<MdPrintTemplateSet> listSets() {
         return setMapper.selectList(new LambdaQueryWrapper<MdPrintTemplateSet>()
@@ -384,7 +384,7 @@ public class PrintTemplateService {
         return v;
     }
 
-    // ==================== 内部 ====================
+    // 内部
 
     private MdPrintTemplate resolveTemplate(PrintDto.RenderRequest req) {
         if (req.getTemplateCode() != null && !req.getTemplateCode().isBlank()) {

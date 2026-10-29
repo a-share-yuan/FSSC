@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * AbroadStandardRule 单测（V1.3.10 海外报账②③）：纯逻辑，无 Spring 上下文。
+ * AbroadStandardRule 单测（海外报账②③）：纯逻辑，无 Spring 上下文。
  * 覆盖 出国判定（dest_country 非空且≠中国）+ 境外标准档位匹配（tier 精确→通用→无）+ days×补贴/日。
  */
 class AbroadStandardRuleTest {
@@ -32,7 +32,7 @@ class AbroadStandardRuleTest {
         return s;
     }
 
-    // ---------- 出国判定 ----------
+    // 出国判定
 
     @Test
     void 空目的地或空集合为国内() {
@@ -52,7 +52,7 @@ class AbroadStandardRuleTest {
         assertTrue(AbroadStandardRule.resolveAbroad(Collections.singletonList("德国")));
     }
 
-    // ---------- 档位匹配取标准 ----------
+    // 档位匹配取标准
 
     @Test
     void tier精确匹配优先() {
@@ -75,7 +75,7 @@ class AbroadStandardRuleTest {
         assertNull(AbroadStandardRule.pickStandard(Collections.emptyList(), "DEV"));
     }
 
-    // ---------- 天数补齐（首末日全算） ----------
+    // 天数补齐（首末日全算）
 
     @Test
     void days已有值不覆盖() {
@@ -97,7 +97,7 @@ class AbroadStandardRuleTest {
         assertNull(AbroadStandardRule.resolveDays(null, LocalDate.of(2026, 3, 8), LocalDate.of(2026, 3, 1)));
     }
 
-    // ---------- days×daily 补贴 ----------
+    // days×daily 补贴
 
     @Test
     void 补贴等于天数乘每日标准() {

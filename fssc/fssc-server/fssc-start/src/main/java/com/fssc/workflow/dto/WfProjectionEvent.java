@@ -23,7 +23,7 @@ import java.math.BigDecimal;
  * </ol>
  *
  * <p><b>字段含义</b>：与 {@code WfMirrorProjectionListener} 的字段级映射清单一一对应，
- * 来源优先级仍是"流程变量优先 → 镜像实例行回退 → NOT NULL 默认处理"，只是<b>回退已在构造期完成</b>。
+ * 来源优先级仍是"流程变量优先 → 镜像实例行回退 → NOT NULL 兜底"，只是<b>回退已在构造期完成</b>。
  *
  * <p><b>时间字段为什么用 epoch 毫秒而不是 {@code LocalDateTime}</b>：本信封必须能 JSON 往返
  * （outbox {@code payload} 列）。用 long 使序列化/反序列化不依赖 jackson 的 JavaTimeModule 配置，
@@ -75,7 +75,7 @@ public class WfProjectionEvent implements Serializable {
      *
      * <p><b>为什么与 {@link #assigneeId} 并存</b>：原投影实现的 TASK_CREATED 分支把<b>原样字符串</b>
      * 写进 {@code wf_instance.current_assignee}（而非解析后的数字），TASK_ASSIGNED 分支写的是解析值。
-     * 两处规则本就不一致，本次搬迁<b>不做"顺手统一"</b>——保持与改造前逐字一致，
+     * 两处规则本就不一致，本次搬迁<b>不做"顺手统一"</b>——保持与原先逐字一致，
      * 差异留给后续单独一轮办结（避免在"零行为变化"的改造里夹带语义变更）。
      */
     private String assigneeRaw;

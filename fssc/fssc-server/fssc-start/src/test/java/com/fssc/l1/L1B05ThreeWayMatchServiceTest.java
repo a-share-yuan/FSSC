@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * L1-B-05 ThreeWayMatchService 单元测试：三单匹配（合同 / 发票 / 入库）入口与路由。
+ * ThreeWayMatchService 单元测试：三单匹配（合同 / 发票 / 入库）入口与路由。
  *
  * <p>契约要求：单据不存在时必须抛出业务异常，不得返回空 MatchRow 让调用方误判为「已匹配」。
  */

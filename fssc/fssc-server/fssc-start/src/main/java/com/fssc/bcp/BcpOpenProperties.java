@@ -14,7 +14,7 @@ import org.springframework.util.StringUtils;
  *
  * <p>本通道承载 FSSC（内网）→ BCP（门户 8501）的受控 HTTP 调用，用于「BCP 异议审核」页
  * 拉取伙伴提交的行级异议、并回写审核结论。方向与既有 {@code fssc.openapi.linku}
- * （BCP → FSSC 入站）相反，两侧共用同一套 HMAC-SHA256 约定。</p>
+ * BCP → FSSC 入站 相反，两侧共用同一套 HMAC-SHA256 约定。</p>
  *
  * <h3>密钥注入</h3>
  * 取 {@code fssc.bcp.secret}（环境变量 {@code FSSC_BCP_SECRET}），必须与 BCP 侧

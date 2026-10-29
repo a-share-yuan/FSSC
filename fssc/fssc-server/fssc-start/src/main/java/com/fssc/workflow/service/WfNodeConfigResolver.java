@@ -29,15 +29,15 @@ import java.util.Set;
  * <p><b>契约（起）</b>：{@code wf_node_config.node_key} 必须与该模型 BPMN 的 userTask
  * {@code taskDefinitionKey} <b>逐字符一致</b>，即精确键 {@code modelKey:nodeKey}。
  * 解析器只做精确匹配，匹配不到即返回 {@code null}（该节点无配置 → 超时/空策略不生效，
- * 行为等同默认 ERROR/不催办），<b>不再做任何位置默认处理</b>。
+ * 行为等同默认 ERROR/不催办），<b>不再做任何位置兜底</b>。
  *
- * <p><b>历史沿革（为什么删掉默认处理）</b>：早期 BPMN 由 {@code WfBpmnTemplateService} 统一生成
+ * <p><b>历史沿革（为什么删掉兜底）</b>：早期 BPMN 由 {@code WfBpmnTemplateService} 统一生成
  * {@code Task_1..Task_N}，而 {@code wf_node_config.node_key} 却是业务编码
  * （{@code CLAIM_T1 / FA_DISPOSE_N01 …}），两者"永远匹配不上"，曾用一条
- * 「{@code Task_N → 该 model 按 sort 升序第 N 个配置}」的<b>位置默认处理桥</b>权宜凑合。
+ * 「{@code Task_N → 该 model 按 sort 升序第 N 个配置}」的<b>位置兜底桥</b>权宜凑合。
  * 该桥<b>脆弱且危险</b>：两表行数/顺序一旦漂移，策略与超时就会落到<b>错误的节点</b>上
- * （实测 21 个流程数量不符、27 个流程语义错配，且 ROLE 分支是"追加候选组"→ 直接造成越权放行）。
- * 2026-09-20 已将全库 602 行 {@code node_key} 重建为 BPMN 实际 id 并<b>移除该默认处理</b>；
+ * （流程数量不符、语义错配，且 ROLE 分支是"追加候选组"→ 直接造成越权放行）。
+ * 现网 {@code node_key} 已按 BPMN 实际 id 重建并<b>移除该兜底</b>；
  * 写入侧由 {@link WfNodeConfigService} 校验 node_key ∈ 该模型 BPMN userTask 集合，杜绝复发。
  *
  * <p><b>单一实现</b>：Controller（列表/统计）与 Job（催办执行）共用本类，
@@ -51,7 +51,7 @@ public class WfNodeConfigResolver {
     private final WfNodeConfigMapper wfNodeConfigMapper;
 
     /**
-     * 全表节点配置的缓存位。实测单次 /wf/approve 把这张 465 行表整表载入 6 遍、
+     * 全表节点配置的缓存位。一次 /wf/approve 会把这整张表载入 6 遍、
      * /wf/start-candidates 2 遍；写侧 WfNodeConfigService / WfAssigneeReplaceService 均挂 evictAll。
      * key 由 TenantCache 统一带租户前缀，置 fssc.redis.enabled=true 即切集中式缓存（多实例一致）。
      */
@@ -98,7 +98,7 @@ public class WfNodeConfigResolver {
     /**
      * 全部 {@code handling_mode=POOL}（任务池/抢单作业节点）的节点键集合，形如 {@code modelKey:nodeKey}。
      *
-     * <p>待办列表要按行标注"已被他人领取"的软锁（批次 1 ①），逐行 {@code resolve()} 会把整张配置表
+     * <p>待办列表要按行标注"已被他人领取"的软锁，逐行 {@code resolve()} 会把整张配置表
      * 载入 N 次；这里一次查完，供列表批量判定。
      */
     public Set<String> poolNodeKeys() {
@@ -119,7 +119,7 @@ public class WfNodeConfigResolver {
      * AUTO（按角色自动指派）档节点的 {@code modelKey:nodeKey -> assign_value 角色码} 映射。
      *
      * <p>为什么需要：Flowable 的 {@code taskCandidateGroupIn} 只回「未指派」的任务，而 AUTO 档在节点
-     * 激活时就把 assignee 写死（实测 {@code act_ru_task.ASSIGNEE_} 有值、候选组 identityLink 失效）。
+     * 激活时就把 assignee 写死（{@code act_ru_task.ASSIGNEE_} 有值、按候选组查不到它）。
      * 于是同岗位的其他人（如 FIN_AUDIT 的 B 角色）{@code /wf/todo} 里**看不到**这条任务，
      * 但服务端 {@code approve} 只按登录人权限与两道校验放行、**不校验 assignee** ⇒
      * 「能办但看不见」，真实用户打开工作台一片空白，单子静默停摆且无任何提示。
@@ -163,8 +163,8 @@ public class WfNodeConfigResolver {
     }
 
     /**
-     * G13 字段级节点权限（form_perm）解析 —— {@code wf_node_config.form_perm} 的<b>唯一运行时消费点</b>
-     * （P3 G13，2026-09-23 补齐：此前该列只有实体字段、全仓零消费，属「字段有、运行时不生效」残口）。
+     * 字段级节点权限（form_perm）解析 —— {@code wf_node_config.form_perm} 的<b>唯一运行时消费点</b>
+     * （该列必须有运行时消费点，否则就是「字段有、运行时不生效」）。
      *
      * <p><b>既定 schema</b>（建列注释规则）：扁平 {@code {"field":"H|R|W"}} —— H=隐藏 / R=只读 / W=可编辑。
      * 解析规则（与 UniERP {@code resolveFormFieldPerm} 同语义，便于后续引擎级迁移对齐）：
@@ -230,7 +230,7 @@ public class WfNodeConfigResolver {
 
     /**
      * 按 key 集合构建索引：一次性载入全部节点配置（量级数百行，与原实现一致），
-     * <b>仅注册精确键</b> {@code modelKey:nodeKey}。已移除 {@code Task_N} 位置默认处理。
+     * <b>仅注册精确键</b> {@code modelKey:nodeKey}。已移除 {@code Task_N} 位置兜底。
      */
     private Map<String, WfNodeConfig> indexByKeys(Set<String> keys) {
         if (keys.isEmpty()) {

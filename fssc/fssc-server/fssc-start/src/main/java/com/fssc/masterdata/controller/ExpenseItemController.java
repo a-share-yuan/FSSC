@@ -36,8 +36,8 @@ public class ExpenseItemController {
 
     // 同上：借款/报销表单按名称匹配费用项目生成明细行
     @GetMapping("/tree")
-    public Result<java.util.List<MdExpenseItem>> tree() {
-        // P1-3 缓存分层：费用类型树缓存下沉到 ExpenseItemService.tree()（TenantCache），变更在 Service 写入口失效
+    public Result<List<MdExpenseItem>> tree() {
+        // 缓存分层：费用类型树缓存下沉到 ExpenseItemService.tree()（TenantCache），变更在 Service 写入口失效
         return Result.success(service.tree());
     }
     @RequiresPerm("md:expenseitem:create")

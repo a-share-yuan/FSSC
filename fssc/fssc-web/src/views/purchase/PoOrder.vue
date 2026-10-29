@@ -75,9 +75,9 @@
           <el-button v-if="row.status === 'DRAFT'" link type="danger" size="small" @click="removeOrder(row)">删除</el-button>
           <!-- 作废：非最终状态（含已驳回）可作废，需填写作废原因；与后端 voidOrder 同一规则 -->
           <el-button v-if="['DRAFT','OPEN','APPROVED','REJECTED'].includes(row.status)" link type="danger" size="small" @click="voidOrder(row)">作废</el-button>
-          <!-- 最终状态机人工环节（X-20）：「权限码 + 状态」双重门控，状态规则同 PurchaseService.terminateOrder
+          <!-- 最终状态机人工环节：「权限码 + 状态」双重门控，状态规则同 PurchaseService.terminateOrder
                （非 VOID 且非 PAID/CLOSED/ARCHIVED）。与「作废」并列可见：作废拦在下游收货/付款数据上，
-               那种单改走「终止」，谁能点由后端状态前置默认处理。 -->
+               那种单改走「终止」，谁能点由后端状态前置兜底。 -->
           <el-button v-if="['OPEN','APPROVED','REJECTED','INVOICED'].includes(row.status) && hasPerm('po:order:update')" link type="danger" size="small" @click="terminateOrderRow(row)">终止</el-button>
           <!-- 归档：仅已关闭(CLOSED)可归档，落最终状态 ARCHIVED 后不可再变更；规则同 PurchaseService.archiveOrder -->
           <el-button v-if="row.status === 'CLOSED' && hasPerm('po:order:update')" link type="warning" size="small" @click="archiveOrderRow(row)">归档</el-button>
@@ -220,7 +220,7 @@
         <el-table :data="formLines" size="small" border style="margin-bottom: 8px" max-height="240" @selection-change="handleSelectionChange" empty-text="暂无数据">
         <el-table-column type="selection" width="45" />
           <el-table-column label="行号" width="55" align="center">
-            <!-- 2026-10-19 G2 幕真跑发现：行项目明细不在 el-form 内，guardSubmit 校验不到，
+            <!-- 行项目明细不在 el-form 内，guardSubmit 校验不到，
                  validateLines 失败只弹一条 3 秒即逝的 ElMessage.warning ⇒ 点【保存并提交】毫无反应，
                  自动化脚本与新手都抓不到原因。此处把出错行号染红，配合下方持久提示条形成可见反馈。 -->
             <template #default="{ $index }">
@@ -309,7 +309,7 @@
       <template #footer>
         <el-button @click="dlg = false">取消</el-button>
         <el-button type="primary" @click="save(false)">保存</el-button>
-        <!-- (P3-UI-01)：弹窗内补【保存并提交】，免去"关闭弹窗→回列表找行→点提交"三步跳转 -->
+        <!-- 弹窗内补【保存并提交】，免去"关闭弹窗→回列表找行→点提交"三步跳转 -->
         <el-button type="success" @click="save(true)">保存并提交</el-button>
         <div style="flex:1"></div>
         <span style="font-size:12px;color:#909399;margin-right:8px">
@@ -408,9 +408,9 @@ const dlg = ref(false)
 const dlgDetail = ref(false)
 const detailRow = ref(null)
 const q = reactive({ pageNum: 1, pageSize: 20, keyword: route.query.kw ? String(route.query.kw) : '', status: '' })
-// 列表显示规则（业务确认 2026-09-21）：「执行中」只对应状态 OPEN；
+// 列表显示规则（业务确认）：「执行中」只对应状态 OPEN；
 // 其余状态一律走 billStatus 统一映射（APPROVED=已审批、DRAFT=草稿、CLOSED=已关闭、VOID=已作废），
-// 不再用行内三元默认处理把未列举状态误渲染为「已关闭」。
+// 不再用行内三元兜底把未列举状态误渲染为「已关闭」。
 function poListLabel(s) {
   if (s === 'OPEN') return '执行中'
   return statusLabel(s)
@@ -424,7 +424,7 @@ const formRef = ref(null)
 const { submit: guardSubmit } = useSubmitGuard(formRef)
 const { autofill, saveFormHistory } = useAutoFill()
 const formLines = ref([])
-// 行项目校验失败的持久提示（原文案只有 3 秒即逝的 toast，点【保存并提交】等于毫无反应）
+// 行项目校验失败的持久提示（只用 3 秒即逝的 toast，点【保存并提交】等于毫无反应）
 const lineError = ref('')
 const lineErrorRows = ref([])
 function lineErrorAt(rowIndex) {
@@ -481,9 +481,9 @@ function addLine() {
 
 /**
  * 判断一行是否仍是 addLine() 追加时的原样空行。
- * 旧「全空行忽略」判据按 quantity!==0 认定已填写，而空行的默认数量恰是 1 ⇒ 自动追加的空行
+ * 「全空行忽略」若按 quantity!==0 认定已填写，空行的默认数量恰是 1 ⇒ 自动追加的空行
  * 被当成有效行，行项目校验报「物料名称必填」拦下【保存并提交】（save 的 payload 又会把该行丢掉），
- * 用户看到的就是"点了没反应"。判据改为与默认值逐字段一致才算空行；
+ * 用户看到的就是"点了没反应"。所以判据取「与默认值逐字段一致」；
  * 用户只要动过任一字段（含只填了数量），仍按未填完的行走红字提示，不静默丢数据。
  */
 function isBlankLine(l) {
@@ -514,7 +514,7 @@ function onMaterialSelect(row, itemId) {
 }
 
 async function load() {
-  if (!canList) return // R5-D-072：无权不请求，避免 4030 被吞成空表
+  if (!canList) return // 无列表权限就不发请求，避免 4030 被吞成空表
   loading.value = true
   try {
     const r = await purchaseApi.orderPage({ ...q })
@@ -607,7 +607,7 @@ function validateLines() {
  * 保存 / 保存并提交。
  * 历史设计把「提交审批」只放在列表行内（PoOrder.vue 行操作列），弹窗底部只有【保存】，
  * 新手按手册「→【保存】→【提交】」操作时会在弹窗里找不到提交键，误以为功能缺失
- * P3-UI-01。此处补【保存并提交】：一次点击完成「保存 → 提交审批」，
+ * 此处补【保存并提交】：一次点击完成「保存 → 提交审批」，
  * 省掉关闭弹窗、回列表找行、再点一次的三步跳转。
  * 编辑态（form.id 已存在且已是草稿）同样允许——驳回重提场景也需要一键重提。
  */
@@ -615,7 +615,7 @@ async function save(thenSubmit = false) {
   saveFormHistory('PO_ORDER', form.value || form)
 
   await guardSubmit(async () => {
-    if (!validateLines()) return          // D-V4R-91：行项目校验，先于请求发出
+    if (!validateLines()) return          // 行项目校验，先于请求发出
     try {
       const payload = { ...form, lines: formLines.value.filter(l => l.materialName || l.materialCode) }
       let saved

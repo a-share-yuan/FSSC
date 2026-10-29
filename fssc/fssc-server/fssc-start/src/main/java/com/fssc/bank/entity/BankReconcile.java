@@ -14,7 +14,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/** 银企勾对流水（bank_reconcile，只追加；P2-1） */
+/** 银企勾对流水（bank_reconcile，只追加） */
 @Data
 @TableName("bank_reconcile")
 public class BankReconcile implements Serializable {
@@ -40,8 +40,8 @@ public class BankReconcile implements Serializable {
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
-    /** P0-4 溯源：来源单据类型 BANK_STATEMENT银行流水 */
+    /** 溯源：来源单据类型 BANK_STATEMENT银行流水 */
     private String sourceDocType;
-    /** P0-4 溯源：来源单据ID（bank_statement.id） */
+    /** 溯源：来源单据ID（bank_statement.id） */
     private Long sourceDocId;
 }

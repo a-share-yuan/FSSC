@@ -118,7 +118,7 @@ public class WfModelService {
      * <p>区别于 {@link #update} 的「仅当内容变化才部署」——发布是用户的显式动作，即便内容与
      * 库中相同也应保证引擎里存在可用的流程定义。
      *
-     * <p><b>修复背景（2026-09-20 实测）</b>：设计器 {@code /wf/designer/publish} 原实现直接
+     * <p><b>修复背景</b>：设计器 {@code /wf/designer/publish} 原实现直接
      * {@code modelMapper.updateById}，绕过了本 Service 的部署分支，导致
      * {@code wf_model.deploy_id} 长期为 NULL —— FA_DISPOSE / INV_DISPOSE / CLAIM_G1 等
      * {@code source=TEMPLATE} 的流程<b>从未真正部署进引擎</b>（实例数恒为 0），改了 BPMN 也不生效。
@@ -234,7 +234,7 @@ public class WfModelService {
     /**
      * 删除模型（物理删，删后释放 model_key 唯一键，见 {@code WfModelMapper.hardDelete} 注释）。
      *
-     * <p><b>先拦在途实例。</b>原实现一句 {@code modelMapper.hardDelete(id)} 裸删，
+     * <p>先拦在途实例。原实现一句 {@code modelMapper.hardDelete(id)} 裸删，
      * 于是「删模型带在途单」：wf_model 行没了，在跑实例的 {@code proc_inst_id} 仍在引擎里推进，
      * 而节点配置按 model_key 关联（{@code wf_node_config}/{@code wf_process_config}）从此解析不到——
      * 催办/超时/改派这类按节点配置驱动的动作静默失效，单据既不推进也不报警，只在待办里发臭

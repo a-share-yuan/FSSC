@@ -6,8 +6,10 @@ package com.fssc.system.controller;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
+import com.fssc.framework.cache.CacheUtil;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.SysCompany;
 import com.fssc.system.entity.SysDept;
 import com.fssc.system.entity.SysPost;
@@ -38,7 +40,7 @@ public class TenantOrgController {
     private final DeptService deptService;
     private final PostService postService;
 
-    // ---------- 公司 ----------
+    // 公司
 
     // 只读查询放开给所有登录租户用户：单据发起页公司信息必用（写操作仍需权限）。
     // 但"放开读"≠"跨公司可见"：出参按登录人数据范围裁剪（普通员工只看本公司），
@@ -46,9 +48,9 @@ public class TenantOrgController {
     @GetMapping("/company/tree")
     public Result<List<SysCompany>> companyTree(
             @RequestParam(required = false) Long companyId) {
-        // P1-3 缓存分层：公司树按租户缓存 5 分钟，变更主动失效
-        String key = "companyTree:" + com.fssc.framework.tenant.TenantContext.getTenantId();
-        List<SysCompany> all = com.fssc.framework.cache.CacheUtil.get(key, () -> companyService.tree());
+        // 缓存分层：公司树按租户缓存 5 分钟，变更主动失效
+        String key = "companyTree:" + TenantContext.getTenantId();
+        List<SysCompany> all = CacheUtil.get(key, () -> companyService.tree());
         return Result.success(companyService.visibleForUser(all, companyId));
     }
 
@@ -89,10 +91,10 @@ public class TenantOrgController {
 
     /** 公司变更 → 失效当前租户公司树缓存 */
     private void evictCompanyCache() {
-        com.fssc.framework.cache.CacheUtil.evictPrefix("companyTree:" + com.fssc.framework.tenant.TenantContext.getTenantId());
+        CacheUtil.evictPrefix("companyTree:" + TenantContext.getTenantId());
     }
 
-    // ---------- 部门 ----------
+    // 部门
 
     /** 部门树（只读，任何已登录用户可读）：供单据表单的 公司→部门 下拉选择；不套 system:dept:list 管理权限 */
     @GetMapping("/dept/tree")
@@ -134,7 +136,7 @@ public class TenantOrgController {
         return Result.success();
     }
 
-    // ---------- 岗位 ----------
+    // 岗位
 
     @RequiresPerm("system:post:list")
     @GetMapping("/post/list")
@@ -149,7 +151,7 @@ public class TenantOrgController {
         return Result.success(postService.list());
     }
 
-    /** P0-2：岗位分页查询（前端 Org.vue 岗位列表分页用，替代全量 postList） */
+    /** 岗位分页查询（前端 Org.vue 岗位列表分页用，替代全量 postList） */
     @RequiresPerm("system:post:list")
     @GetMapping("/post/page")
     public Result<PageResult<SysPost>> postPage(PageQuery query,

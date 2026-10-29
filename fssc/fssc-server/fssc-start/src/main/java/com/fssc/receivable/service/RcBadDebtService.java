@@ -141,14 +141,14 @@ public class RcBadDebtService {
             totalAmt = totalAmt.add(amt);
             created++;
         }
-        // P4：坏账计提后发起 OTC06 坏账计提审批流（拆分后：计提走 BAD_DEBT_PROV，确认走 BAD_DEBT_CONFIRM；第一笔计提单为业务主键）
+        // 坏账计提后发起 OTC06 坏账计提审批流（拆分后：计提走 BAD_DEBT_PROV，确认走 BAD_DEBT_CONFIRM；第一笔计提单为业务主键）
         if (created > 0 && firstId != null) {
             try {
                 wfEngineFacade.start("BAD_DEBT_PROV", firstId, userId(),
                         "坏账计提-" + period, totalAmt);
             } catch (Exception ex) {
                 log.error("坏账计提 {} 发起审批失败: {}", firstId, ex.getMessage(), ex);
-                throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+                throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
             }
         }
         return created;
@@ -166,7 +166,7 @@ public class RcBadDebtService {
      * 转回即反向「借：坏账准备 1231 / 贷：信用减值损失 6701」，借贷方向与计提相反，
      * 金额为原计提额。凭证落 DRAFT 待审核，不自动记账（避免期间关闭/科目缺失时误记账）。
      *
-     * <p>此前 rc_bad_debt 的 REVERSED 状态从未被任何代码置位，转回与总账完全脱节。
+     * <p>rc_bad_debt 的 REVERSED 状态若没有任何代码置位，转回就与总账完全脱节。
      */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> reverse(Long id) {
@@ -217,7 +217,7 @@ public class RcBadDebtService {
                     "坏账确认-" + d.getCustomerId() + (reason == null ? "" : "-" + reason), d.getAmount());
         } catch (Exception ex) {
             log.error("坏账 {} 发起确认审批失败: {}", id, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
     }
 
@@ -434,7 +434,7 @@ public class RcBadDebtService {
         LambdaQueryWrapper<RcBadDebt> qw = new LambdaQueryWrapper<>();
         if (period != null && !period.isEmpty()) {
             // 账期入参归一——yyyyMM/yyyy-MM-dd/yyyyMMdd 与库内 yyyy-MM/yyyyMM 两种历史形态对齐；
-            // 原实现按原样 eq，前端 YYYYMM 直查 yyyy-MM 历史行恒空。
+            // 按原样 eq 的话，前端 YYYYMM 直查 yyyy-MM 历史行恒空。
             String digits = period.replaceAll("[^0-9]", "");
             if (digits.length() >= 6) {
                 String ym = digits.substring(0, 4) + "-" + digits.substring(4, 6);

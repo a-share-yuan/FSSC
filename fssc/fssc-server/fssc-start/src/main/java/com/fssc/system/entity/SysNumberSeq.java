@@ -3,6 +3,7 @@
 
 package com.fssc.system.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -28,7 +29,7 @@ public class SysNumberSeq implements Serializable {
     private Long id;
 
     @JsonIgnore
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private Long tenantId;
 
     /** 规则编码 */
@@ -38,6 +39,6 @@ public class SysNumberSeq implements Serializable {
     /** 当前流水值 */
     private Long currentVal;
 
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT_UPDATE)
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 }

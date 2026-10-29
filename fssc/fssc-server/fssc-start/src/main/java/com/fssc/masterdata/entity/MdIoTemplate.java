@@ -9,10 +9,10 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 导入导出模板头（V1.4.83）。
+ * 导入导出模板头。
  *
  * <p>把「新增一种导入模板 = 复制一支手写 ExcelService 再改列头」变成「插两行数据」。
- * 已迁移 6 支手写 Service 的列头（见 V1.4.84）。
+ * 已迁移 6 支手写 Service 的列头（见）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

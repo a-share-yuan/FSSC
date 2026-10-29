@@ -24,7 +24,7 @@ import java.util.Set;
  * <p>
  * TR_PLAN 审批通过 → tr_fund_plan.status: DRAFT → APPROVED
  * <p>
- * 缺陷修复（H-06 / DF-03）：审批结束默认处理回填 plan_no——历史单据创建时未取号导致
+ * 缺陷修复（H-06 / DF-03）：审批结束兜底回填 plan_no——历史单据创建时未取号导致
  * tr_fund_plan.plan_no=NULL、审批待办/列表单据号列恒空；已有编号则去重跳过。
  */
 @Slf4j
@@ -66,7 +66,7 @@ public class TreasuryPlanBizAction implements WfBizAction {
             auditBefore.put("status", oldStatus);
             Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", upd.getStatus());
-            // 本次实际变化：plan_no 默认处理回填时一并记录
+            // 本次实际变化：plan_no 兜底回填时一并记录
             if (upd.getPlanNo() != null) {
                 auditBefore.put("planNo", plan.getPlanNo());
                 auditAfter.put("planNo", upd.getPlanNo());

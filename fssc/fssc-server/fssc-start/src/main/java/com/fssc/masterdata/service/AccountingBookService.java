@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  * <p><b>参考规则逐条落地</b>：
  * <ul>
  *   <li>「账簿类型分为主账簿和副账簿，一个核算组织在同一核算体系内仅能存在唯一的主账簿」
- *       → {@link #createBook} 显式校验 + {@code uk_gab_main} 唯一索引<b>双层默认处理</b>
+ *       → {@link #createBook} 显式校验 + {@code uk_gab_main} 唯一索引<b>双层兜底</b>
  *       应用层给可读报错，数据库层防并发穿透 ;</li>
  *   <li>「按不同的会计准则与制度出具多套财务核算数据」
  *       → 同一 company 可在多个 standard 下各持一本 MAIN 账簿，
@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  * </ul>
  *
  * <p><b>为什么约束要落在数据库</b>：「仅能存在唯一主账簿」是会计规则，
- * 如果只在应用层判断，两人并发建账必穿透 ⇒ 必须有唯一索引默认处理。
+ * 如果只在应用层判断，两人并发建账必穿透 ⇒ 必须有唯一索引兜底。
  * 本类的存在校验只为<b>给出可读错误信息</b>，不是唯一防线。
  */
 @Slf4j
@@ -123,7 +123,7 @@ public class AccountingBookService {
     /**
      * 建账。
      *
-     * <p><b>约束双层默认处理</b>：
+     * <p><b>约束双层兜底</b>：
      * <ol>
      *   <li>本方法显式检查「同一核算组织+准则+年度+类型」是否已有账簿，给出可读报错；</li>
      *   <li>{@code uk_gab_main} 唯一索引防并发穿透 —— 两个请求同时进来，

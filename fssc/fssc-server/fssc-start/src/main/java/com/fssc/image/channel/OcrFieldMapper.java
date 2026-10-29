@@ -85,7 +85,7 @@ public final class OcrFieldMapper {
     /**
      * 按 mapping 从响应 JSON 提取票面字段。
      *
-     * @param mappingJson  字段映射表 JSON（空则用默认）
+     * @param mappingJson 字段映射表 JSON（空则用默认）
      * @param responseJson OCR 服务响应原文 JSON
      * @return 识别结果；响应非法 JSON 时返回 ok=false + errorMsg（不抛穿）
      */
@@ -188,7 +188,7 @@ public final class OcrFieldMapper {
         try {
             return LocalDate.parse(s, LOOSE_DATE).format(ISO_DATE);
         } catch (Exception e) {
-            return text; // 无法识别的格式保留原文，交由票面校验/人工复核默认处理
+            return text; // 无法识别的格式保留原文，交由票面校验/人工复核兜底
         }
     }
 

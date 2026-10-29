@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 流程镜像投影监听器（G1「单一真值：镜像投影化」＋④层「流程处理模式」，2026-09-24）。
+ * 流程镜像投影监听器（G1「单一真值：镜像投影化」＋④层「流程处理模式」）。
  *
  * <p><b>它解决什么</b>：方案 §二 F1~F4 认定"镜像写点分散 + 无事务 + 失败吞掉 + 引擎旁路"是全部问题的根——
  * {@code wf_instance}/{@code wf_task} 的"何时推进"由 {@code WfEngineFacade} 里约 30 处手工调用决定，
@@ -50,7 +50,7 @@ import java.util.Map;
  * </ol>
  * 两条路共用一份投影实现，因此"同步/异步"不会产生两套子逻辑（那是双账漂移的老成因）。
  *
- * <p><b>注册策略：无条件注册（2026-09-24 由"仅开关打开时注册"改为无条件）</b>。
+ * <p><b>注册策略：无条件注册</b>。
  * 原因：模式是<b>运行时可改的参数</b>（通行语义"勾选即生效、免重启"）。若在启动期决定是否注册，
  * 运营切到 QUEUE 就必须重启才生效——那又是"配置界面向业务承诺引擎没做的事"（方案 §一 症状 2）。
  * 改为无条件注册后，默认态的代价是<b>每个流程事件一次内存布尔判定</b>（{@link WfProcessOutboxService#queueModeEnabled()}
@@ -67,10 +67,10 @@ import java.util.Map;
  *
  * <p>字段来源优先级：<b>流程变量优先</b>（{@code runtimeService.getVariables}），缺失回退 {@code wf_instance}
  * 镜像行（变量会被引擎清理，视图行不会）；两者皆无的 NOT NULL 列按默认值写入。{@code bizNo} 由门面
- * {@code start()} 新注入变量（此前它只在门面里现算、不落变量），故监听器能取到。
+ * {@code start()} 新注入变量（原先它只在门面里现算、不落变量），故监听器能取到。
  *
- * <p><b>本次搬迁的一处刻意修复（WF-PROCLOG-001 同源）</b>：原实现取 {@code pi.getId()} 作为流程实例 ID，
- * 实测 {@code PROCESS_STARTED} 落成 {@code 457e3bb8-…} 而同单后续事件全是 {@code 457e1494-…}
+ * <p><b>搬迁时顺手修的一处</b>：原实现取 {@code pi.getId()} 作为流程实例 ID，
+ * {@code PROCESS_STARTED} 于是落成另一个 id，同单后续事件全都对不上
  * ——该时刻执行实例 id 尚未定型为流程实例 id，写出的是一行<b>既不在 wf_instance 也不在 ACT_HI_PROCINST
  * 的悬空行</b>，使"按实例查时间线"永久丢失「流程发起」。现统一用 {@code pi.getProcessInstanceId()}。
  *
@@ -115,7 +115,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
      * G1 开关：{@code fssc.wf.mirror.projection-enabled}，默认 {@code false}。
      *
      * <p>本类<b>无条件注册</b>（见类注释），故该开关在本类内的语义是"是否内联投影"：
-     * 关闭且模式为 SYNC ⇒ 本监听器什么都不做（门面照旧手工写，行为与改造前逐字一致）。
+     * 关闭且模式为 SYNC ⇒ 本监听器什么都不做（门面照旧手工写，行为与原先逐字一致）。
      */
     @Value("${fssc.wf.mirror.projection-enabled:false}")
     private boolean projectionEnabled;
@@ -195,8 +195,8 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
     }
 
     private WfProjectionEvent buildProcessEnvelope(FlowableEngineEventType type, ProcessInstance pi) {
-        // WF-PROCLOG-001 同源修复：必须用 getProcessInstanceId()，不能用 getId()
-        // （实测该时刻 getId() 尚未定型为流程实例 id，会写出不在 wf_instance / ACT_HI_PROCINST 的悬空行）
+        // 必须用 getProcessInstanceId()，不能用 getId()
+        // （该时刻 getId() 尚未定型为流程实例 id，会写出不在 wf_instance / ACT_HI_PROCINST 的悬空行）
         String procInstId = pi.getProcessInstanceId();
         if (procInstId == null) {
             return null;
@@ -252,7 +252,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
         e.setOperUserName(currentUserName());
         e.setComment(strVar(vars, "comment", null));
         e.setApproved(Boolean.TRUE.equals(vars == null ? null : vars.get("approved")));
-        // 业务归属：变量优先 → 镜像实例行回退（与改造前 buildTaskRow 的查询范围逐字一致）
+        // 业务归属：变量优先 → 镜像实例行回退（与原先 buildTaskRow 的查询范围逐字一致）
         e.setBizType(strVar(vars, "bizType", inst == null ? null : inst.getBizType()));
         e.setBizId(longVar(vars, "bizId", inst == null ? null : inst.getBizId()));
         e.setBizNo(strVar(vars, "bizNo", inst == null ? null : inst.getBizNo()));
@@ -314,7 +314,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
 
     /**
      * 到期时刻（epoch 毫秒）：{@code wf_node_config.timeout_hours}，与门面同一份规则。
-     * 解析失败/未配置返回 null（不阻断投影，与改造前 {@code log.debug} 后继续一致）。
+     * 解析失败/未配置返回 null（不阻断投影，与原先 {@code log.debug} 后继续一致）。
      */
     private Long resolveDueTimeMillis(String modelKey, String nodeKey, LocalDateTime createTime) {
         if (modelKey == null || createTime == null) {
@@ -438,7 +438,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
         }
     }
 
-    /** 任务创建时间为 null 时默认处理为 now（与改造前 {@code toLocalDateTime} 同一规则）。 */
+    /** 任务创建时间为 null 时兜底为 now（与原先 {@code toLocalDateTime} 同一规则）。 */
     private static LocalDateTime toLocalDateTime(Date date) {
         return date == null ? LocalDateTime.now()
                 : LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault());
@@ -469,7 +469,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
      * 里既有人名又有工号。改为同一规则：realName（=nick_name）优先，空白才回落 username。
      *
      * <p>登录态缺失仍返回 null：定时任务/引擎回调等没有 UserContext 的链路
-     * 不能拿工号或姓名冒充经办人，宁可留空由读侧按 oper_user_id 默认处理。
+     * 不能拿工号或姓名冒充经办人，宁可留空由读侧按 oper_user_id 兜底。
      */
     private static String currentUserName() {
         LoginUser u = UserContext.get();

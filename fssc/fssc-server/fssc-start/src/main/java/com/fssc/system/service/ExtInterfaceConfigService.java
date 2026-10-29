@@ -266,7 +266,7 @@ public class ExtInterfaceConfigService {
             saveTestResult(id, "FAIL", "未配置 API 地址");
             return result;
         }
-        // 自指配置先拦下（实测 id=2 曾把本服务的管理端点填成外部发票验真接口）
+        // 自指配置先拦下（把本服务的管理端点当成外部接口，探测请求会绕回自己）
         if (isSelfReference(url)) {
             result.put("success", false);
             result.put("message", "API 地址指向本服务自身（" + url + "），属配置错误，请填真实外部接口地址");
@@ -319,8 +319,7 @@ public class ExtInterfaceConfigService {
             String msg = scrubCredential("HTTP " + resp.statusCode() + (resp.body() != null && !resp.body().isBlank()
                     ? " (" + resp.body().substring(0, Math.min(resp.body().length(), 200)) + ")" : ""), c);
 
-            // 修正（2026-10-17 运行期实测）：原实现只看 HTTP 状态码，
-            // 而大量国内接口在鉴权/参数错误时仍返回 HTTP 200，把业务错误写进 body
+            // 只看 HTTP 状态码不够：大量国内接口在鉴权/参数错误时仍返回 HTTP 200，把业务错误写进 body
             // （如百度 OCR `{"error_code":23,"error_msg":"IAM API-KEY authentication failed"}`）。
             // ⇒ 2xx 被一律判为「连接成功」，运维据此认为通道已接通，实际一调就失败。
             // 现在补业务错误识别：HTTP 层通过但 body 带业务错误码 ⇒ 判 FAIL。
@@ -351,7 +350,7 @@ public class ExtInterfaceConfigService {
     /**
      * 从响应体里识别「业务错误」，返回可读描述；没有则返回 {@code null}（视为成功）。
      *
-     * <p>覆盖实测到的两类国内接口约定：</p>
+     * <p>覆盖两类国内接口约定：</p>
      * <ul>
      *   <li>{@code error_code != 0}（百度 OCR / 阿里云系）：如 {@code error_code:23} 鉴权失败；</li>
      *   <li>{@code success=false} 或 {@code code != 0}（FSSC 自身响应包装，如误配成自指 URL
@@ -445,7 +444,7 @@ public class ExtInterfaceConfigService {
         return incoming;
     }
 
-    /** 本缺陷修复前的旧出参掩码形态（前 2 + **** + 后 2），防历史缓存把星号串写回 */
+    /** 旧版出参掩码形态（前 2 + **** + 后 2），防历史缓存把星号串写回 */
     private String previousMaskShape(String v) {
         if (v == null || v.isEmpty()) {
             return "";

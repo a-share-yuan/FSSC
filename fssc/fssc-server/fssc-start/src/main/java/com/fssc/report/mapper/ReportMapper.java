@@ -28,26 +28,23 @@ import java.util.Map;
 public interface ReportMapper {
 
     /**
-     * 费用类报表的统一生效状态白名单（F-06）：审批通过／已付／已结清／已办结／已过账。
-     * 原 expenseSummary／monthlyTrend／expenseComposition／expenseAnalysis 四处只写
-     * {@code APPROVED,POSTED}，已付款（PAID）的单会整张从费用规则里漏掉——与 approvalEfficiency
-     * 的五最终状态规则对齐，四处共用一份，避免再次漂移。
+     * 费用类报表的统一生效状态白名单：审批通过／已付／已结清／已办结／已过账。
+     * expenseSummary／monthlyTrend／expenseComposition／expenseAnalysis 与 approvalEfficiency 共用这一份：
+     * 只写 {@code APPROVED,POSTED} 会让已付款的单整张从费用统计里漏掉；四处各写一套迟早再漂移。
      */
     String EXPENSE_EFFECTIVE_STATUS = "'APPROVED','PAID','REPAID','COMPLETED','POSTED'";
 
-    /** 部门报销排行（金额降序）。companyId 非 null 时仅统计该公司（① 导出规则）
+    /** 部门报销排行（金额降序）。companyId 非 null 时仅统计该公司。
      *  camelCase 别名为报表工作台的列绑定，snake_case 别名保留给导出与看板的既有读取，两者共存。
-     *  补数据范围参数。原规则只按公司办结（companyId），而本接口挂 {@code dashboard:view}
-     *  ——普通员工与共享会计返回完全相同的全公司排名（10-15 实测两个账号结果逐行一致）。
      *  scopeDeptIds/scopeUserId 与同文件 {@code loanBalance} 同一套语义：null 即不追加该维条件。
-     *  ⑮（2026-10-16 晚间场实测）：补生效状态过滤——原规则把 DRAFT/VOID/WITHDRAWN/REJECTED
-     *  一并计入，赵勇（本部门只有一张 0 元草稿申请）的部门排名渲染成「费用审核组 1 单 0.00」。 */
+     *  这两维不能省：本接口挂 {@code dashboard:view}，只按公司办结时普通员工与共享会计拿到的是同一份全公司排行。
+     *  状态走白名单：把 DRAFT/VOID/WITHDRAWN/REJECTED 计进来，一张 0 元草稿就能把部门排名压成「1 单 0.00」。 */
     @Select("<script>select b.dept_id as dept_id, d.dept_name as dept_name, count(*) as cnt, " +
             "sum(b.total_amount) as amount, " +
-            "d.dept_name as deptName, count(*) as billCount, sum(b.total_amount) as totalAmount " + // R5-D-021
+            "d.dept_name as deptName, count(*) as billCount, sum(b.total_amount) as totalAmount " +
             "from exp_bill b left join sys_dept d on b.dept_id = d.id " +
             "where b.del_flag = 0 and b.dept_id is not null " +
-            "and b.status not in ('DRAFT','VOID','WITHDRAWN','REJECTED') " + // ⑮ D-V4R-50
+            "and b.status not in ('DRAFT','VOID','WITHDRAWN','REJECTED') " +
             "<if test='companyId != null'>and b.company_id = #{companyId}</if> " +
             "<if test='scopeDeptIds != null'>and b.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
             "<if test='scopeUserId != null'>and b.apply_user_id = #{scopeUserId}</if> " +
@@ -61,16 +58,15 @@ public interface ReportMapper {
      *  snake_case 的分钟别名保留给看板的既有读取，两者共存。
      *  补公司维办结——scopeCompanyId 由 DashboardService 按 orgGuard.enforceCompany()
      *  传入（同文件 expenseByDept 现例）；exp_bill 有 company_id 列；null（集团级/无公司登录）不追加。
-     *  再补部门/本人两维。原规则同样只按公司办结，而接口挂 {@code dashboard:view}
-     *  ⇒ 普通员工能看到全公司各部门审批时效，与共享会计无差异（10-15 实测）。 */
+     *  再补部门/本人两维：本接口同样挂 {@code dashboard:view}，少了这两维，普通员工看到的是
+     *  全公司各部门的审批时效。 */
     @Select("<script>select b.bill_type as bill_type, count(*) as cnt, " +
             "round(avg(timestampdiff(MINUTE, b.submit_time, a.create_time)), 1) as avg_minutes, " +
             "b.bill_type as nodeName, " +
-            "round(avg(timestampdiff(MINUTE, b.submit_time, a.create_time)) / 60, 1) as avgHours, " + // R5-D-115
-            "round(max(timestampdiff(MINUTE, b.submit_time, a.create_time)) / 60, 1) as maxHours " + // R5-D-115
-            // ⑮：审批通过是最终状态迁移而非唯一最终状态——已付(PAID)/结清(REPAID)/办结(COMPLETED)
-            // 的单同样走完了 submit→AUDIT 全程，硬编码 status='APPROVED' 会把付款后的单从时效里剔除
-            //（晚间场实测：bill 7 已 PAID、bill 3 已 REPAID 均有 AUDIT 任务却不计入）
+            "round(avg(timestampdiff(MINUTE, b.submit_time, a.create_time)) / 60, 1) as avgHours, " +
+            "round(max(timestampdiff(MINUTE, b.submit_time, a.create_time)) / 60, 1) as maxHours " +
+            // 审批通过不是唯一终点：已付(PAID)/结清(REPAID)/办结(COMPLETED) 的单同样走完了
+            // submit→AUDIT 全程，硬编码 status='APPROVED' 会把付款之后的单从时效里剔除
             "from exp_bill b join op_audit_task a on b.id = a.bill_id " +
             "where a.task_type = 'AUDIT' and a.del_flag = 0 and b.del_flag = 0 " +
             "and b.status in ('APPROVED','PAID','REPAID','COMPLETED','POSTED') and b.submit_time is not null " +
@@ -82,7 +78,7 @@ public interface ReportMapper {
                                                  @Param("scopeDeptIds") Collection<Long> scopeDeptIds,
                                                  @Param("scopeUserId") Long scopeUserId);
 
-    // 需求 11.4 借款余额汇总：员工借款金额/未冲销余额
+    // 借款余额汇总：员工借款金额/未冲销余额
     @Select("<script>select b.apply_user_id as applyUserId, max(ifnull(u.nick_name, b.apply_user_name)) as applyUserName, count(*) as billCnt, " +
             "sum(b.total_amount) as loanTotal, sum(ifnull(b.loan_balance, 0)) as balance " +
             "from exp_bill b left join sys_user u on b.apply_user_id = u.id " +
@@ -95,7 +91,7 @@ public interface ReportMapper {
                                           @Param("scopeDeptIds") List<Long> scopeDeptIds,
                                           @Param("scopeUserId") Long scopeUserId);
 
-    // 需求 11.6 合同汇总：合同总额 / 已付款金额（PAY 已审批单据累计）
+    // 合同汇总：合同总额 / 已付款金额（PAY 已审批单据累计）
     @Select("<script>select c.contract_no as contractNo, c.contract_name as contractName, c.contract_type as contractType, c.party_b_name as partyBName, " +
             "c.amount as contractAmount, c.currency_code as currencyCode, c.status, " +
             "ifnull(sum(p.total_amount), 0) as paidAmount, c.begin_date as beginDate, c.end_date as endDate " +
@@ -131,15 +127,14 @@ public interface ReportMapper {
                                                    @Param("scopeCompanyId") Long scopeCompanyId,
                                                    @Param("scopeDeptIds") List<Long> scopeDeptIds);
 
-    // 需求 11.7 费用明细表：按单据+明细行查询
-    // F-03：原 `order by b.id desc limit 300` 是行级截断——边界单只出一半明细，且同单各行在并列排序下
-    // 保留哪几行不确定（BX382025100006 曾只剩劳动保护费、差旅费被截掉）。改为单据粒度：
-    // 先取最近 100 单（关键字/数据范围全部下推到单据），再取这些单的全部明细，单内按行 id 定序。
+    // 费用明细表：按单据+明细行查询
+    // 截断必须按单据粒度：行级 limit 会把边界单据截成半张，且同单各行在并列排序下保留哪几行不确定。
+    // 故先取最近 100 单（关键字/数据范围全部下推到单据），再取这些单的全部明细，单内按行 id 定序。
     @Select("<script>select b.bill_no as billNo, b.bill_type as billType, b.bill_sub_type as billSubType, " +
             "b.apply_user_name as applyUserName, b.apply_date as applyDate, b.dept_id as deptId, " +
             "l.item_name as itemName, l.amount, b.status, b.voucher_no as voucherNo " +
             "from exp_bill b join exp_bill_line l on l.bill_id = b.id where l.item_id is not null " +
-            "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
+            "and b.del_flag = 0 and l.del_flag = 0 " +
             "and b.id in (select t.id from (select b2.id from exp_bill b2 where b2.del_flag = 0 " +
             "<if test='kw != null and kw != \"\"'>and (b2.bill_no like concat('%',#{kw},'%') " +
             "or b2.apply_user_name like concat('%',#{kw},'%') or exists (select 1 from exp_bill_line l2 " +
@@ -155,26 +150,29 @@ public interface ReportMapper {
                                             @Param("scopeDeptIds") List<Long> scopeDeptIds,
                                             @Param("scopeUserId") Long scopeUserId);
 
-    // 需求 11.8 运营数据统计：共享作业情况
+    // 运营数据统计：共享作业情况
     // 分库改造：img_batch 已迁 fssc_image 库，"影像批次"计数改由 ReportQueryController
-    // 经 ImageFacade.countBatches 应用层拼接，本 SQL 只保留 master 库 5 个 UNION 分支。
-    // 注：op_audit_task / op_quality 无 company_id（共享中心跨公司集中办理规则），
-    // 本方法不做数据范围办结，未挂 @DataScope——见 ReportQueryController 同处说明。
-    // 残留：三个 op_audit_task 分支原样统计，会把已作废任务计进 KPI，逐支补软删过滤。
-    @Select("select '派工任务总数' as kpi, count(*) as val from op_audit_task where del_flag = 0 " + // R5-D-299
-            "union all select '待处理任务', count(*) from op_audit_task where pool_status = 'WAITING' and del_flag = 0 " + // R5-D-299
-            "union all select '已办结任务', count(*) from op_audit_task where pool_status = 'DONE' and del_flag = 0 " + // R5-D-299
-            "union all select '生成凭证数', count(*) from op_voucher where del_flag = 0 " +
-            "union all select '付款批次', count(*) from op_pay_batch where del_flag = 0 " +
-            "union all select '质检记录', count(*) from op_quality where del_flag = 0")
-    List<Map<String, Object>> opsStatistics();
+    // 经 ImageFacade.countBatches 应用层拼接，本 SQL 只保留 master 库三张表的计数。
+    // 注：op_audit_task / op_quality 无 company_id（共享中心跨公司集中办理），
+    // 本方法不做数据范围过滤，未挂 @DataScope——见 ReportQueryController 同处说明。
+    // 三个 op_audit_task 分支必须各自带 del_flag = 0，否则已软删的任务会计进 KPI。
+    // 原先是 6 条 union all（op_audit_task 被扫三遍），改成一趟条件求和 + 三个标量子查询；
+    // 标量子查询里的 tenant_id 必须显式写——租户拦截器只补主表，不补原生 SQL。
+    @Select("select count(*) as taskTotal, "
+            + "sum(case when pool_status = 'WAITING' then 1 else 0 end) as taskWaiting, "
+            + "sum(case when pool_status = 'DONE' then 1 else 0 end) as taskDone, "
+            + "(select count(*) from op_voucher where del_flag = 0 and tenant_id = #{tenantId}) as voucherCnt, "
+            + "(select count(*) from op_pay_batch where del_flag = 0 and tenant_id = #{tenantId}) as payBatchCnt, "
+            + "(select count(*) from op_quality where del_flag = 0 and tenant_id = #{tenantId}) as qualityCnt "
+            + "from op_audit_task where del_flag = 0")
+    Map<String, Object> opsStatistics(@Param("tenantId") Long tenantId);
 
-    // 需求 11.1 费用发生汇总表：组织在期间段内各类费用的发生情况
+    // 费用发生汇总表：组织在期间段内各类费用的发生情况
     @Select("<script>select l.item_name as itemName, l.item_id as itemId, count(distinct b.id) as billCnt, " +
             "count(*) as lineCnt, sum(l.amount) as totalAmount " +
             "from exp_bill b join exp_bill_line l on l.bill_id = b.id " +
             "where b.status in (" + EXPENSE_EFFECTIVE_STATUS + ") and b.period_year is not null " +
-            "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
+            "and b.del_flag = 0 and l.del_flag = 0 " +
             "<if test='year != null'>and b.period_year = #{year}</if> " +
             "<if test='month != null'>and b.period_month = #{month}</if> " +
             "<if test='itemName != null and itemName != \"\"'>and l.item_name like concat('%',#{itemName},'%')</if> " +
@@ -188,12 +186,12 @@ public interface ReportMapper {
                                              @Param("scopeDeptIds") List<Long> scopeDeptIds,
                                              @Param("scopeUserId") Long scopeUserId);
 
-    // 需求 11.2 费用月度变动表：特定组织各类费用的月度变动
+    // 费用月度变动表：特定组织各类费用的月度变动
     @Select("<script>select b.period_year as year, b.period_month as month, l.item_name as itemName, " +
             "sum(l.amount) as totalAmount " +
             "from exp_bill b join exp_bill_line l on l.bill_id = b.id " +
             "where b.status in (" + EXPENSE_EFFECTIVE_STATUS + ") and b.period_year is not null " +
-            "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
+            "and b.del_flag = 0 and l.del_flag = 0 " +
             "<if test='scopeCompanyId != null'>and b.company_id = #{scopeCompanyId}</if> " +
             "<if test='scopeDeptIds != null'>and b.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
             "<if test='scopeUserId != null'>and b.apply_user_id = #{scopeUserId}</if> " +
@@ -203,12 +201,12 @@ public interface ReportMapper {
                                            @Param("scopeDeptIds") List<Long> scopeDeptIds,
                                            @Param("scopeUserId") Long scopeUserId);
 
-    // 需求 11.3 费用构成情况表：某类型费用在各组织的月度变动
+    // 费用构成情况表：某类型费用在各组织的月度变动
     @Select("<script>select b.company_id as companyId, b.period_year as year, b.period_month as month, " +
             "sum(l.amount) as totalAmount " +
             "from exp_bill b join exp_bill_line l on l.bill_id = b.id " +
             "where b.status in (" + EXPENSE_EFFECTIVE_STATUS + ") and b.period_year is not null " +
-            "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
+            "and b.del_flag = 0 and l.del_flag = 0 " +
             "<if test='itemName != null and itemName != \"\"'>and l.item_name like concat('%',#{itemName},'%')</if> " +
             "<if test='scopeCompanyId != null'>and b.company_id = #{scopeCompanyId}</if> " +
             "<if test='scopeDeptIds != null'>and b.dept_id in <foreach collection='scopeDeptIds' item='did' open='(' separator=',' close=')'>#{did}</foreach></if> " +
@@ -289,8 +287,8 @@ public interface ReportMapper {
     /** 6. 进项发票统计：按月度统计进项发票金额、税额
      *  列语义对齐建表规则——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。 */
     @Select("<script>select date_format(invoice_date, '%Y-%m') as period, " +
-            "count(*) as invoiceCnt, sum(amount) as totalAmount, sum(tax_amount) as taxAmount, " + // R5-D-022
-            "sum(net_amount) as netAmount " + // R5-D-022
+            "count(*) as invoiceCnt, sum(amount) as totalAmount, sum(tax_amount) as taxAmount, " +
+            "sum(net_amount) as netAmount " +
             "from inv_invoice where (direction = 'INPUT' or (direction is null and invoice_kind = 'SPECIAL')) and del_flag = 0 " +
             "<if test='scopeCompanyId != null'>and company_id = #{scopeCompanyId}</if> " +
             "group by date_format(invoice_date, '%Y-%m') order by period desc limit 12</script>")
@@ -299,20 +297,20 @@ public interface ReportMapper {
     /** 7. 销项发票统计：按月度统计销项发票金额、税额
      *  列语义对齐建表规则——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。 */
     @Select("<script>select date_format(invoice_date, '%Y-%m') as period, " +
-            "count(*) as invoiceCnt, sum(amount) as totalAmount, sum(tax_amount) as taxAmount, " + // R5-D-022
-            "sum(net_amount) as netAmount " + // R5-D-022
+            "count(*) as invoiceCnt, sum(amount) as totalAmount, sum(tax_amount) as taxAmount, " +
+            "sum(net_amount) as netAmount " +
             "from inv_invoice where (direction = 'OUTPUT' or (direction is null and invoice_kind = 'NORMAL')) and del_flag = 0 " +
             "<if test='scopeCompanyId != null'>and company_id = #{scopeCompanyId}</if> " +
             "group by date_format(invoice_date, '%Y-%m') order by period desc limit 12</script>")
     List<Map<String, Object>> outputInvoiceStats(@Param("scopeCompanyId") Long scopeCompanyId);
 
     /** 8. 税负分析：按期间统计进项税额、销项税额、应纳税额
-     *  补 taxBase（销项不含税金额）作为税负率分母——税负率 = 应纳税额 / 不含税销售收入，
-     *  原查询只回三个税额，前端无从计算该比率（手册「表头缺列＝缺陷」）。 */
+     *  带 taxBase（销项不含税金额）作税负率分母——税负率 = 应纳税额 / 不含税销售收入；
+     *  只回三个税额的话，前端无从计算该比率。 */
     @Select("<script>select date_format(invoice_date, '%Y-%m') as period, " +
             "sum(case when (direction = 'INPUT' or (direction is null and invoice_kind = 'SPECIAL')) then tax_amount else 0 end) as inputTax, " +
             "sum(case when (direction = 'OUTPUT' or (direction is null and invoice_kind = 'NORMAL')) then tax_amount else 0 end) as outputTax, " +
-            "sum(case when (direction = 'OUTPUT' or (direction is null and invoice_kind = 'NORMAL')) then net_amount else 0 end) as taxBase, " + // D-H10-01
+            "sum(case when (direction = 'OUTPUT' or (direction is null and invoice_kind = 'NORMAL')) then net_amount else 0 end) as taxBase, " +
             "sum(case when (direction = 'OUTPUT' or (direction is null and invoice_kind = 'NORMAL')) then tax_amount else 0 end) - " +
             "sum(case when (direction = 'INPUT' or (direction is null and invoice_kind = 'SPECIAL')) then tax_amount else 0 end) as netTax " +
             "from inv_invoice where del_flag = 0 " +
@@ -328,7 +326,7 @@ public interface ReportMapper {
             "max(timestampdiff(MINUTE, t.receive_time, t.finish_time)) as maxMinutes, " +
             "sum(case when t.finish_time > t.sla_time then 1 else 0 end) as slaBreachCnt " +
             "from op_audit_task t where t.pool_status = 'DONE' " +
-            "and t.del_flag = 0 " + // R5-D-299
+            "and t.del_flag = 0 " +
             "and t.receive_time is not null and t.finish_time is not null " +
             "group by t.task_type")
     List<Map<String, Object>> opsEfficiency();
@@ -354,7 +352,7 @@ public interface ReportMapper {
             "round(ifnull(sum(p.total_amount), 0) * 100.0 / nullif(c.amount, 0), 1) as executionRate, " +
             "c.status, c.end_date as endDate " +
             "from cont_contract c " +
-            // F-05：补 p.del_flag = 0——原规则把已软删的付款环节计入已付额，与本文件 contractSummary 不一致
+            // 软删的付款单不计入已付额——与 contractSummary 同口径
             "left join exp_bill p on p.contract_id = c.id and p.del_flag = 0 and p.bill_type = 'PAY' " +
             "and p.status in ('APPROVED','POSTED') " +
             "where c.del_flag = 0 " +
@@ -467,7 +465,7 @@ public interface ReportMapper {
             "left join sys_company sc on b.company_id = sc.id " +
             "left join sys_dept d on b.dept_id = d.id " +
             "where b.status in (" + EXPENSE_EFFECTIVE_STATUS + ") and b.period_year is not null " +
-            "and b.del_flag = 0 and l.del_flag = 0 " + // R5-D-031
+            "and b.del_flag = 0 and l.del_flag = 0 " +
             "<if test='year != null'>and b.period_year = #{year}</if> " +
             "<if test='companyId != null'>and b.company_id = #{companyId}</if> " +
             "<if test='scopeCompanyId != null'>and b.company_id = #{scopeCompanyId}</if> " +
@@ -495,8 +493,8 @@ public interface ReportMapper {
             // 期间过滤改索引可用区间条件（禁 date_format 包裹日期列；&gt;/&lt; 为 XML 实体）
             "<if test='period != null and period != \"\"'>and bs.trans_date &gt;= str_to_date(concat(#{period}, '-01'), '%Y-%m-%d') and bs.trans_date &lt; date_add(str_to_date(concat(#{period}, '-01'), '%Y-%m-%d'), interval 1 month)</if> " +
             "<if test='scopeCompanyId != null'>and bs.company_id = #{scopeCompanyId}</if> " +
-            // F-01：同刻多笔（9 行同 timestamp）时仅按 trans_date 排序无法定序，limit 500 的截断边界
-            // 每次取到的行集合不同 ⇒ 补主键作唯一键默认处理
+            // 同刻多笔时仅按 trans_date 排序定不了序，limit 500 的截断边界每次取到的行集合都不同
+            // ⇒ 补主键作唯一排序键兜底
             "order by bs.trans_date desc, bs.id desc limit 500</script>")
     List<Map<String, Object>> treasuryFlow(@Param("bankAccount") String bankAccount,
                                             @Param("period") String period,

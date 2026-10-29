@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 敏感字段脱敏（P1-3）Jackson 集成测试。
+ * 敏感字段脱敏 Jackson 集成测试。
  *
  * <p>覆盖：注解驱动脱敏、全局开关、反序列化不受影响（明文入参可保存）。
  * 本测试即"脱敏器必须真正生效"的回归防线——曾因

@@ -18,7 +18,7 @@
 <script setup>
 /**
  * 方案 B 泛型宿主（页面Tab化重构册 §乙）：一个配置工作区＝一个菜单，页内 tab 复用通用表格组件。
- * el-tab-pane lazy＝首次激活才挂载，避免同组 N 张表并发查询（教训）。
+ * el-tab-pane lazy＝首次激活才挂载，避免同组 N 张表并发查询。
  * 分组清单见 configWorkspaceRegistry.js；旧「一表一页」路由全部保留，本页只做聚合呈现。
  */
 import { computed, ref, watch } from 'vue'

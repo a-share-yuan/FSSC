@@ -110,7 +110,7 @@
 
 <script setup>
 /**
- * 超时升级统计（D-V4R-62：后端 /api/tenant/wf/timeout 三端点早有、界面无）。
+ * 超时升级统计（后端 /api/tenant/wf/timeout 三端点早有、界面无）。
  * 全部只读，字段逐一对齐 WfTimeoutController 组装的 Map key，不做二次加工。
  */
 import { computed, onMounted, reactive, ref } from 'vue'

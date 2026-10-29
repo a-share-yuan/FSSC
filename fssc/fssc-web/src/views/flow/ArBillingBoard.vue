@@ -414,7 +414,7 @@ async function doCheck(row) {
 }
 
 async function doAdjust(row) {
-  // 41号审查 P0-1 同源整改：window.prompt -> ElMessageBox.prompt（统一样式/可取消）
+  // 41号审查 同源整改：window.prompt -> ElMessageBox.prompt（统一样式/可取消）
   const { value: note } = await ElMessageBox.prompt(t('flow.bill.adjustPromptTitle'), t('flow.bill.adjustBoxTitle'), {
     inputPlaceholder: t('flow.bill.adjustNotePh'), inputType: 'textarea',
     confirmButtonText: t('flow.request.btnConfirm'), cancelButtonText: t('common.cancel'),
@@ -438,7 +438,7 @@ async function biz(row, action) {
   if (action === 'bizConfirm') {
     await arFlowApi.bizConfirm(row.id, t('flow.bill.operatorBiz'))
   } else {
-    // 41号审查 P0-1 同源整改：window.prompt -> ElMessageBox.prompt（必填校验）
+    // 41号审查 同源整改：window.prompt -> ElMessageBox.prompt（必填校验）
     const { value: reason } = await ElMessageBox.prompt(t('flow.bill.rejectPromptTitle'), t('flow.bill.bizReject'), {
       inputPlaceholder: t('flow.bill.rejectReasonPh'), inputType: 'textarea',
       inputValidator: (v) => (v && v.trim() ? true : t('flow.collab.errRejectReason')),
@@ -579,7 +579,7 @@ async function doCreateMail() {
   await load()
 }
 
-// ---------------- 收件人管理 / 邮件记录 ----------------
+// 收件人管理 / 邮件记录
 
 function openRecipientManage() {
   recipientVisible.value = true
@@ -600,7 +600,7 @@ function openRecipientForm(row) {
   recipientFormVisible.value = true
 }
 
-// 选往来单位＝把客户档案里的联系人/电话/邮箱/地址带进地址簿表单；已填过的不覆盖，改完只落到地址簿，回写客户主数据
+// 选往来单位＝把客户档案里的联系人/电话/邮箱/地址带进地址簿表单；已填过的不覆盖，改完只落到地址簿，不要回写客户主数据
 function onRecipientCustomer(c) {
   recipientForm.customerName = c?.customerName || ''
   if (!c) return

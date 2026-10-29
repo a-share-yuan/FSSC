@@ -57,7 +57,7 @@
         </el-form-item>
         <el-form-item label="计划期间" prop="period">
           <!-- 手输「2026-11」会被控件按自身格式解析后写进 value-format=YYYYMM 的模型，
-               写入数据库期间就成了非预期值（实测能写出 2026-11 这类带横线值）。期间只允许从面板选。 -->
+               写入数据库期间就成了非预期值（会写出 2026-11 这类带横线值）。期间只允许从面板选。 -->
           <el-date-picker v-model="form.period" type="month" value-format="YYYYMM" format="YYYY-MM" :editable="false" unlink-panels style="width: 100%" placeholder="请选择年月" />
         </el-form-item>
         <el-form-item label="计划金额" prop="amount">
@@ -132,7 +132,7 @@ const { autofill, saveFormHistory } = useAutoFill()
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 
 async function load() {
-  if (!canList) return // R5-D-072：无权不请求，避免 4030 被吞成空表
+  if (!canList) return // 无列表权限就不发请求，避免 4030 被吞成空表
   loading.value = true
   try {
     const r = await payPlanApi.page({ ...q })

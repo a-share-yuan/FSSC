@@ -24,10 +24,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * （2026-10-19 人工测试 G 册实测修）：<b>业务级流程撤销入口</b>。
+ * <b>业务级流程撤销入口</b>。
  *
  * <h3>要解决的实际问题</h3>
- * 此前清理僵尸/悬挂流程实例<b>只能走 {@code POST /api/tenant/wf/dev/instance/cancel}</b>，
+ * 清理僵尸/悬挂流程实例原先<b>只能走 {@code POST /api/tenant/wf/dev/instance/cancel}</b>，
  * 而它是<b>开发调试工具</b>：
  * <ul>
  *   <li>权限是 {@code wf:design:update} / {@code wf:model:update}（<b>流程设计权限</b>），

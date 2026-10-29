@@ -7,6 +7,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.system.entity.SysMenu;
 import com.fssc.system.mapper.SysMenuMapper;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -44,7 +46,7 @@ public class MenuService {
             if (ids.isEmpty()) {
                 return List.of();
             }
-            // ★导航完整性：只补祖先目录；页面(C)祖先仅在被授权的是页面时补，避免只授按钮(F)的用户
+            // 导航完整性：只补祖先目录；页面(C)祖先仅在被授权的是页面时补，避免只授按钮(F)的用户
             //   看到"点进去就 403"的幽灵菜单（仅用于成树，不追加 perms）
             List<SysMenu> all = sysMenuMapper.selectList(new LambdaQueryWrapper<SysMenu>()
                     .eq(SysMenu::getStatus, 1)
@@ -53,7 +55,7 @@ public class MenuService {
             for (SysMenu m : all) {
                 allById.put(m.getId(), m);
             }
-            Set<Long> visible = new java.util.LinkedHashSet<>(ids);
+            Set<Long> visible = new LinkedHashSet<>(ids);
             for (Long id : ids) {
                 SysMenu granted = allById.get(id);
                 if (granted == null) {
@@ -62,7 +64,7 @@ public class MenuService {
                 boolean pageGrant = "C".equals(granted.getMenuType())
                         && StringUtils.hasText(granted.getPath());
                 SysMenu cur = granted;
-                Set<Long> guard = new java.util.HashSet<>();
+                Set<Long> guard = new HashSet<>();
                 while (cur.getParentId() != null && cur.getParentId() != 0
                         && guard.add(cur.getParentId())) {
                     cur = allById.get(cur.getParentId());
@@ -80,7 +82,7 @@ public class MenuService {
     }
 
     /** 套餐功能过滤：菜单声明了 feature_code 但套餐未开通 → 剔除（权限 ∩ 功能码） */
-    private List<SysMenu> filterByFeature(List<SysMenu> menus, java.util.Set<String> features) {
+    private List<SysMenu> filterByFeature(List<SysMenu> menus, Set<String> features) {
         return menus.stream()
                 .filter(m -> !StringUtils.hasText(m.getFeatureCode()) || features.contains(m.getFeatureCode()))
                 .toList();

@@ -92,12 +92,12 @@ public class BudgetService {
     /** 组织合法性守卫（安全审计①）：读路径公司隔离 + 写路径公司归属校验 */
     private final OrgGuard orgGuard;
     private final NumberRuleService numberRuleService;
-    /** 方案 company_id 默认处理解析（bg_scheme.company_id NOT NULL） */
+    /** 方案 company_id 兜底解析（bg_scheme.company_id NOT NULL） */
     private final SysCompanyMapper sysCompanyMapper;
-    /** 执行页名称解析（itemName 不再显示"预算项#id"） */
+    /** 执行页名称解析（itemName 显示真实名称，不回退"预算项#id"） */
     private final SysDeptMapper sysDeptMapper;
     private final MdExpenseItemMapper mdExpenseItemMapper;
-    /** 费用类型→预算明细映射（主体化解析的默认处理来源） */
+    /** 费用类型→预算明细映射（主体化解析的兜底来源） */
     private final MdItemBudgetMapMapper mdItemBudgetMapMapper;
     /** 预算方案审批流发起（架构红线：业务域禁止直用 Flowable API，一律经门面） */
     private final WfEngineFacade wfEngineFacade;
@@ -120,12 +120,11 @@ public class BudgetService {
     }
 
     /**
-     * 预算方案保存 500 根因：
-     * bg_scheme.company_id 为 NOT NULL 且无默认值，而前端保存未传 company_id，
-     * insert 缺列直接抛 "Field 'company_id' doesn't have a default value"（S01/S08 复现一致）。
-     * 修复：company_id 缺失时按当前登录人公司默认处理，再退租户首家公司；
+     * 预算方案保存：bg_scheme.company_id 为 NOT NULL 且无默认值，而前端保存可能不带 company_id，
+     * insert 缺列会直接抛 "Field 'company_id' doesn't have a default value"。
+     * 故 company_id 缺失时按当前登录人公司补齐，再退租户首家公司；
      * scheme_code 缺失自动取号、budget_year 缺省当年、scheme_name 必填前置校验，
-     * 消除其余会导致同接口 500 的 NOT NULL 缺列路径。
+     * 消除其余会因 NOT NULL 缺列而 500 的路径。
      */
     public Long schemeCreate(BgScheme scheme) {
         scheme.setId(null);
@@ -147,7 +146,7 @@ public class BudgetService {
         return scheme.getId();
     }
 
-    /** 公司默认处理：登录人公司 → 租户首家公司（id 最小，与 VoucherService.resolveCompanyId 同一规则） */
+    /** 公司兜底：登录人公司 → 租户首家公司（id 最小，与 VoucherService.resolveCompanyId 同一规则） */
     private Long defaultCompanyId() {
         LoginUser u = UserContext.get();
         if (u != null && u.getCompanyId() != null) {
@@ -225,7 +224,7 @@ public class BudgetService {
     }
 
     public void schemeEnable(Long id, boolean enable) {
-        // BUG-14 修复：启用必须基于已审批下达(ISSUED)的方案，堵住 DRAFT 直启绕过审批的口子
+        // 启用必须基于已审批下达(ISSUED)的方案，堵住 DRAFT 直启绕过审批的口子
         BgScheme cur = bgSchemeMapper.selectById(id);
         if (cur == null) {
             throw new ResponseStatusException(
@@ -304,7 +303,7 @@ public class BudgetService {
     }
 
     /**
-     * 下达（ 内部方法）：置 status=ISSUED 并记录下达时间/人。
+     * 下达：置 status=ISSUED 并记录下达时间/人。
      * 规则：APPROVED（审批通过后下达，两段式主路径）或 DRAFT（免审直下达，兼容既有直接启用习惯）均可下达；
      * APPROVING（审批中，历史规则保留兼容）/ACTIVE（历史启用）亦放行；
      * ISSUED/CLOSED 拒绝重复下达。既有 ACTIVE 方案不受影响（保持有效）。
@@ -340,7 +339,7 @@ public class BudgetService {
     }
 
     /** 存活方案 id 集合（bg_scheme 带 @TableLogic，selectList 自动过滤 del_flag=0），
-     *  供执行读数与管理列表内连存活方案；孤儿行（scheme_id 不在此集）分别出只读清单交人工裁决。 */
+     *  供执行读数与管理列表内连存活方案；孤儿行（scheme_id 不在此集）分别出只读清单交产品确认。 */
     private List<Long> liveSchemeIds() {
         return bgSchemeMapper.selectList(new LambdaQueryWrapper<BgScheme>().select(BgScheme::getId))
                 .stream().map(BgScheme::getId).collect(Collectors.toList());
@@ -349,7 +348,7 @@ public class BudgetService {
     @DataScope("预算明细列表数据范围")
     public PageResult<BgItem> itemPage(long pageNum, long pageSize, Long schemeId, Long deptId, Long itemId,
                                        Collection<Long> ids) {
-        // 内连存活方案——scheme_id 不在存活方案中的孤儿行不进管理列表（现网 4 行 scheme_id=100 孤儿）
+        // 内连存活方案——scheme_id 不在存活方案中的孤儿行不进管理列表
         List<Long> liveSchemes = liveSchemeIds();
         if (liveSchemes.isEmpty()) {
             return PageResult.of(Collections.emptyList(), 0, pageNum, pageSize);
@@ -371,12 +370,12 @@ public class BudgetService {
             qw.in(BgItem::getId, ids);
         }
         // ③ data_scope 五级：依据登录人 data_scope 注入 公司/部门/本人 过滤（TENANT 不加条件）
-        // 部门档改走 applyWithNullDept——dept_id=NULL 的公司级下达行对同公司人员可见
-        //（原 apply 的 dept_id=本人部门 规则把 8/9 行 NULL 部门行全部滤掉，BUDGET_MANAGER 面板恒 0 行）
+        // 部门档走 applyWithNullDept——dept_id=NULL 的公司级下达行对同公司人员可见
+        //（若按 dept_id=本人部门 过滤，公司级下达行会被全部滤掉，BUDGET_MANAGER 面板恒 0 行）
         DataScopeKit.applyWithNullDept(qw, BgItem::getCompanyId, BgItem::getDeptId, null);
         qw.orderByAsc(BgItem::getDimKey);
         Page<BgItem> p = bgItemMapper.selectPage(Page.of(pageNum, pageSize), qw);
-        // 执行率统一由后端单点计算填充（前端不再自算/封顶，与预警页规则互引）
+        // 执行率统一由后端单点计算填充（前端不自算/封顶，与预警页规则互引）
         p.getRecords().forEach(bi -> bi.setExecRate(execRateOf(bi)));
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
@@ -384,15 +383,15 @@ public class BudgetService {
     /**
      * 单据发起页「预算科目」引用选择规则（申请人可选科目，非预算管理列表）。
      *
-     * <p><b>为什么必须另开规则</b>：{@link #itemPage} 走 data_scope 五级过滤，而现网
-     * {@code sys_role.data_scope} 分布为 普通员工 COMMON_EMP＝4（本部门，151 人）、
-     * 绝大多数岗＝5（仅本人）；同时 {@code bg_item.dept_id} 实测 8/9 行为 NULL（预算按公司下达、
+     * <p><b>为什么必须另开规则</b>：{@link #itemPage} 走 data_scope 五级过滤，而
+     * {@code sys_role.data_scope} 的常见档位是 普通员工 COMMON_EMP＝4（本部门）、
+     * 其余岗位多为 5（仅本人）；同时 {@code bg_item.dept_id} 大多为 NULL（预算按公司下达、
      * 未按部门拆）。于是 DEPT 档注入 {@code dept_id = 登录人部门} 直接命中 0 行，SELF 档无本人列
      * 降级本公司——同一个"科目下拉"在不同人手里忽空忽满，制单页红星永远选不出科目。</p>
      *
      * <p><b>本规则的边界（不是放开全租户口）</b>：预算明细属于"引用型主数据"，申请人需要的是
      * <b>法人/公司维度</b>的可选集合，故只按 {@link OrgGuard#enforceCompany()} 收成登录人本公司
-     * （集团级账号 companyId 为空＝不限），跨公司依旧隔离；部门维度改为可选过滤参数，
+     * （集团级账号 companyId 为空＝不限），跨公司依旧隔离；部门维度作为可选过滤参数，
      * 本部门行排在前面（不隐藏他部门行，避免额度被同公司其它部门"看不见地"重复占用）。</p>
      *
      * <p>管理侧列表（{@code budgetApi.itemPage} → {@code /item/page}）保持 {@code @DataScope} 不变
@@ -407,7 +406,7 @@ public class BudgetService {
         if (company != null) {
             qw.eq(BgItem::getCompanyId, company);
         } else if (itemId == null && (ids == null || ids.isEmpty())) {
-            // 无公司且非精确查询（既没选费用项也没按 id 回填）：不给"全租户摊开"的默认处理，
+            // 无公司且非精确查询（既没选费用项也没按 id 回填）：不给"全租户摊开"的兜底，
             // 只放行下达态方案下的行，避免集团级账号一次拉出全部主体预算。
             log.debug("预算科目引用选择：登录人无公司维度（集团级），不加公司过滤");
         }
@@ -439,10 +438,9 @@ public class BudgetService {
     /**
      * 解析本行应占用哪条预算明细。
      *
-     * <p>历史规则是「全租户单值」映射：{@code md_item_budget_map} 按费用项 {@code limit 1} 取一条
-     * {@code bg_item} 主键直接用。该主键可能属于其它公司/部门（实测 行政办公费→id 20 属于
-     * company 33 / dept 1311），于是：占用记到别的主体；制单人在自己的 data_scope 内看不到该行，
-     * 下拉退化显示原始主键。这里改为以<b>单据主体</b>为准：</p>
+     * <p>映射表 {@code md_item_budget_map} 是全租户单值：按费用项 {@code limit 1} 取一条
+     * {@code bg_item} 主键直接用。该主键可能属于其它公司/部门，于是：占用记到别的主体；
+     * 制单人在自己的 data_scope 内看不到该行，下拉退化显示原始主键。故以<b>单据主体</b>为准：</p>
      * <ol>
      *   <li>调用方已给 {@code wantedItemId} 且与单据同公司 → 原样使用（尊重人工选择）；</li>
      *   <li>跨公司 → 按费用项在单据主体内重定位；重定位不到则<b>拒绝</b>（不把占用记到别的公司预算线）；</li>
@@ -534,9 +532,9 @@ public class BudgetService {
     }
 
     /**
-     * 预算行年度与单据业务年度的距离：同年 0，跨年取绝对差（缺同年度时退而取最近的同主体行，
-     * 不再无条件"年份最大"，否则 2026 的占用会全部记到 2027 行、期间控制失效）；
-     * {@code bizYear} 为空（历史单据无会计期间）时一律 0，退回旧规则。
+     * 预算行年度与单据业务年度的距离：同年 0，跨年取绝对差（缺同年度时退而取最近的同主体行；
+     * 若无条件取"年份最大"的行，早期单据的占用会全部记到未来年度上，期间控制失效）；
+     * {@code bizYear} 为空（历史单据无会计期间）时一律 0，按最近年度兜底。
      */
     private static int yearGap(Integer rowYear, Integer bizYear) {
         if (bizYear == null) {
@@ -550,7 +548,7 @@ public class BudgetService {
      * <p>
      * 维度键一律由维度字段推导（与 Excel 导入 {@link BudgetItemExcelService} 同一规则：
      * {@code 年度-COMPANY{公司id}-DEPT{部门id}-ITEM{费用项id}}），不接受前端原样回传的 dim_key——
-     * 手工录入弹窗此前不带 dim_key，直接写入数据库会写入 dim_key=NULL 的孤儿行，页面「维度键」列为空且去重失效。
+     * 录入弹窗不传 dim_key，原样落库会留下 dim_key=NULL 的孤儿行，页面「维度键」列为空且去重失效。
      * 唯一性按 DB 约束规则 {@code (tenant_id, scheme_id, budget_period, dim_key)} 判定，
      * 少带 budget_period 会把按月录入的 1 月行覆盖成 2 月行。
      */
@@ -567,7 +565,7 @@ public class BudgetService {
             item.setBudgetPeriod(0);
         }
         // 期间范围以 bg_scheme.period_type 为唯一权威——ANNUAL 方案统一落 budget_period=0；
-        // MONTH 方案保留 0~12（0=全年仍有历史语义，页面按「全年」展示；严格 1~12 的收紧待名称表修复后另议）。
+        // MONTH 方案保留 0~12（0=全年，页面按「全年」展示；是否收紧为严格 1~12 另议）。
         if ("ANNUAL".equalsIgnoreCase(scheme.getPeriodType())) {
             item.setBudgetPeriod(0);
         }
@@ -642,7 +640,7 @@ public class BudgetService {
 
     /**
      * 按预算明细主键读可用额度（只读、不加行锁），供付款侧的控制点复核。
-     * <p>与 {@link #checkOccupyResult} 的差别：后者是"占用前的准入判定"（乙后超出只出结论不拦提交），
+     * <p>与 {@link #checkOccupyResult} 的差别：后者是"占用前的准入判定"（超出只出结论、不拦提交），
      * 本方法只回数，调用方自己决定记录还是拒绝——付款执行前的超预算复核属观察位，不该由额度工具抛业务异常。
      *
      * @return 可用额度；明细不存在返回 {@code null}（区别于 0，调用方据此不臆判）
@@ -663,7 +661,7 @@ public class BudgetService {
      * 保证控制方式不可被非法值绕过。
      * <p>
      * 硬控引用生效规则：仅 status IN ('ACTIVE','ISSUED') 的方案按其 control_type 生效；
-     * 其余状态（DRAFT/APPROVING/CLOSED/脏数据）一律按 HARD 默认处理（fail-closed，不因方案未下达而放松控制）。
+     * 其余状态（DRAFT/APPROVING/CLOSED/脏数据）一律按 HARD 兜底（fail-closed，不因方案未下达而放松控制）。
      */
     public String controlTypeOf(BgItem item) {
         if (item == null) {
@@ -722,11 +720,11 @@ public class BudgetService {
     }
 
     /**
-     * 乙（预算默认处理 vs 强制校验档位）：预算<b>准入位</b>判定只出「超出」结论与金额，不再打挂提交。
-     * <p>档位语义一字未改（HARD/SOFT/WARN 仍由 {@code bg_scheme.control_type} 决定），
-     * 真实扣减校验仍留在 {@link #occupy} 内按档位执行——HARD 超预算照样拒绝占用。
-     * <p>为何只降准入位：{@link #controlTypeOf} 对未下达/未启用方案与脏值一律默认处理成 HARD，
-     * 而准入校验又常被传 {@code hard=true}（资本性支出发起即校验），于是「发起即失败」，
+     * 预算<b>准入位</b>判定：只出「超出」结论与金额，不拦提交。
+     * <p>档位语义不变（HARD/SOFT/WARN 仍由 {@code bg_scheme.control_type} 决定），
+     * 真实扣减校验留在 {@link #occupy} 内按档位执行——HARD 超预算照样拒绝占用。
+     * <p>为何准入位不拦：{@link #controlTypeOf} 对未下达/未启用方案与脏值一律按 HARD 兜底，
+     * 而准入校验又常被传 {@code hard=true}（资本性支出发起即校验），若此处也拦就成了「发起即失败」，
      * 单据连提交机会都没有，预算校验成了配置缺失的替罪羊。
      * <p>超出不得静默：结论里带超出额，WARN 日志记录，扣减环节另有 {@code bg_occupy.remark} 记录。
      *
@@ -744,14 +742,14 @@ public class BudgetService {
         boolean over = apply.compareTo(avail) > 0;
         BigDecimal overAmount = over ? apply.subtract(avail) : BigDecimal.ZERO;
         if (over) {
-            log.warn("预算准入判定放行（D-DEC-424 乙）：明细 {}（公司 {} / 年度 {}）控制方式 {} 可用 {} < 本次 {}，超出 {}",
+            log.warn("预算准入判定放行：明细 {}（公司 {} / 年度 {}）控制方式 {} 可用 {} < 本次 {}，超出 {}",
                     budgetItemId, item.getCompanyId(), item.getBudgetYear(), controlType, avail, apply, overAmount);
         }
         return new OccupyCheckResult(budgetItemId, controlType, avail, apply, over, overAmount);
     }
 
     /**
-     * 乙：预算准入判定结论（超出＝给结论与金额，提交可继续）。
+     * 预算准入判定结论（超出＝给结论与金额，提交可继续）。
      * 只有「明细不存在」会抛错，本对象一旦返回即代表放行。
      */
     public static class OccupyCheckResult {
@@ -822,7 +820,7 @@ public class BudgetService {
     /**
      * 占用（事务：行锁 + 写流水 + 原子汇总更新）。
      * <p>
-     * 控制方式由方案 {@code bg_scheme.control_type} 决定（BUD-01 修复：不再硬编码 hard=true）：
+     * 控制方式由方案 {@code bg_scheme.control_type} 决定（不写死 hard=true）：
      * <ul>
      *  <li>HARD：超预算直接拒绝提交</li>
      *  <li>SOFT：超预算需填写超支理由（{@code overrunReason} 非空），放行并在占用流水记录</li>
@@ -834,36 +832,35 @@ public class BudgetService {
                        String overrunReason) {
         // 关键：必须用 FOR UPDATE 的「当前读」结果做可用额判定。
         // 若改成先 selectForUpdate 再 selectById，MySQL RR 隔离下 selectById 是快照读，
-        // 会读不到其他并发事务已提交的占用，导致并发超占（实测 8 并发 × 200 可占出 1600 > 额度 1000）。
+        // 会读不到其他并发事务已提交的占用，导致并发超占（同一额度会被多个事务同时占走）。
         BgItem item = bgItemMapper.selectForUpdate(budgetItemId);
         if (item == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "预算明细不存在: " + budgetItemId);
         }
         // 提交链路一致性校验——表头 occupy_amount vs 全行流水净额（bg_occupy 只增不改＝真相账本）。
-        // 台账修法为「不等即拒绝」，但现网 bg_item 表头含无流水对应的历史/导入占用（本会话只读勾稽：
-        // 9 行表头 occupy 多为非零而 bg_occupy 空），双向硬拦会把历史行全部锁死——按现状适配为：
+        // 最严格的做法是「不等即拒绝」，但 bg_item 表头含无流水对应的历史/导入占用，
+        // 双向硬拦会把这类历史行全部锁死——故按方向分级：
         //   ① 流水净额 > 表头占用（可用被高估，继续放行将按虚高额度出款）＝危险方向，硬拦＋error 记录；
-        //   ② 表头占用 > 流水净额（历史背离，可用被低估，偏保守）＝放行但 error 记录，交人工按流水裁决。
-        // 待人工按 台账重算历史行后，可升级为严格双向相等校验（见 _w20_pk07_report.md 转人工栏）。
+        //   ② 表头占用 > 流水净额（历史背离，可用被低估，偏保守）＝放行但 error 记录，交人工按流水判定。
+        // 历史行按流水重算后，可收紧为严格双向相等校验。
         BigDecimal flowNetAll = nvl(bgOccupyMapper.sumNetOccupyByItem(budgetItemId));
         BigDecimal headOccupyNow = nvl(item.getOccupyAmount());
         if (flowNetAll.compareTo(headOccupyNow) > 0) {
-            log.error("R5-D-265 提交链路一致性闸：预算行 {} 流水净占用 {} > 表头占用 {}（可用将被高估），拒绝本次占用并留痕",
+            log.error("提交链路一致性闸：预算行 {} 流水净占用 {} > 表头占用 {}（可用将被高估），拒绝本次占用并留痕",
                     budgetItemId, flowNetAll, headOccupyNow);
             throw new BizException(ErrorCode.PARAM_INVALID, "预算占用账实不一致（流水净占用大于表头，可用余额将被高估），"
                     + "为防超占已拒绝提交；请联系管理员核对预算行 " + budgetItemId);
         }
         if (flowNetAll.compareTo(headOccupyNow) < 0) {
-            log.error("R5-D-265 提交链路一致性提示：预算行 {} 表头占用 {} > 流水净占用 {}（历史背离/无流水存量行，可用被低估），"
-                    + "本次放行但留痕，待人工按流水裁决重算", budgetItemId, headOccupyNow, flowNetAll);
+            log.error("提交链路一致性提示：预算行 {} 表头占用 {} > 流水净占用 {}（历史背离/无流水存量行，可用被低估），"
+                    + "本次放行但留痕，待人工按流水判定重算", budgetItemId, headOccupyNow, flowNetAll);
         }
         BigDecimal avail = available(item);
         String remark = null;
         if (amount.compareTo(avail) > 0) {
-            // 附带点：该预算明细「下达额 total_amount=0.00」时，任何金额都算超支，
-            // 而 WARN/SOFT 方案会静默放行，流水备注与"真超支"混成一句，事后无从区分
-            // 「额度确实被突破」和「这个科目压根没下达过预算」。现把两种成因在备注里分开记录。
-            // （零下达科目是否应当硬拦＝产品规则，需人工裁决，此处不擅自改判定。）
+            // 该预算明细「下达额 total_amount=0.00」时任何金额都算超支，而 WARN/SOFT 方案会放行；
+            // 若与"真超支"共用一句备注，事后无从区分「额度确实被突破」和「这个科目压根没下达过预算」。
+            // 故备注按成因分开记录。（零下达科目是否应当硬拦＝产品规则，需产品确认，此处不擅自改判定。）
             boolean neverIssued = nvl(item.getTotalAmount()).signum() == 0;
             String cause = neverIssued ? "该明细未下达预算额度（total_amount=0）" : "超预算";
             String msg = "预算不足：" + cause + "，可用 " + avail + "，本次申请 " + amount;
@@ -890,12 +887,12 @@ public class BudgetService {
 
     /**
      * 释放（撤销占用，事务）。行锁防止与占用/核销交错。
-     * <p><b>甲案（占用/核销互斥）</b>：原实现按调用方给的金额盲减
-     * {@code bg_item.occupy_amount}，去重「由调用方保证」而调用方并未保证——同一单据被反审批回退
-     * 两次，就会把「已经转成已用」的那一笔再冲一遍占用，形成
-     * 「同一笔既在 occupy_amount 又在 used_amount」的双记（实测 bg_item id=2
-     * total 100,000／occupy 56,500／used 56,500 ⇒ 可用 −13,000，该预算线对任何正金额都必拦）。
-     * 现与 {@link #writeOff} 同源改判：释放额以 {@code bg_occupy} 账本上
+     * <p><b>占用/核销互斥</b>：若按调用方给的金额直接扣减
+     * {@code bg_item.occupy_amount}，去重就全靠调用方保证——同一单据被反审批回退
+     * 两次，会把「已经转成已用」的那一笔再冲一遍占用，形成
+     * 「同一笔既在 occupy_amount 又在 used_amount」的双记，可用额被压成负数，
+     * 该预算线此后对任何正金额都必拦。
+     * 故与 {@link #writeOff} 同源：释放额以 {@code bg_occupy} 账本上
      * 「本单据(biz_id) 在本预算行的净占用」为上限，净额 ≤ 0（已全额转实或已释放）即整体跳过。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -909,12 +906,12 @@ public class BudgetService {
             BigDecimal net = nvl(bgOccupyMapper.sumNetOccupyByItemAndBiz(
                     budgetItemId, bizId, bizType, EXPENSE_BIZ_TYPES.contains(bizType)));
             if (net.signum() <= 0) {
-                log.info("预算行 {} 上单据 {}（{}）已无剩余占用（净额 {}），跳过本次释放（D-DEC-425 防占用/已用双记）",
+                log.info("预算行 {} 上单据 {}（{}）已无剩余占用（净额 {}），跳过本次释放（防占用/已用双记）",
                         budgetItemId, bizNo, bizType, net);
                 return;
             }
             if (take.compareTo(net) > 0) {
-                log.info("预算行 {} 单据 {} 释放 {} 超出其净占用 {}，按净占用截断（D-DEC-425）",
+                log.info("预算行 {} 单据 {} 释放 {} 超出其净占用 {}，按净占用截断",
                         budgetItemId, bizNo, take, net);
                 take = net;
             }
@@ -925,15 +922,15 @@ public class BudgetService {
 
     // 还款冲减借款占用
 
-    /** 还款冲减/回补流水的业务类型标记（原全库 EXP_REPAY 0 行的载体） */
+    /** 还款冲减/回补流水的业务类型标记（EXP_REPAY） */
     public static final String BIZ_TYPE_REPAY = "EXP_REPAY";
 
     /** 借款占用流水的业务类型标记 */
     public static final String BIZ_TYPE_LOAN = "EXP_LOAN";
 
     /**
-     * 单据类型 → 预算占用流水 biz_type（附带点：还款/借款的占用一律被记成 EXP_CLAIM，
-     * 于是 {@code bg_occupy} 里 EXP_LOAN／EXP_REPAY 永远 0 行，占用台账按业务类型读数全部失真）。
+     * 单据类型 → 预算占用流水 biz_type。还款/借款的占用若统一记成 EXP_CLAIM，
+     * {@code bg_occupy} 里 EXP_LOAN／EXP_REPAY 就永远没有流水，占用台账按业务类型读数全部失真。
      * <p>提交占用、驳回释放、反审批回冲三处必须同用一个规则，否则释放流水与占用流水类型不一致。
      * <p>返回值均落在 {@link #EXPENSE_BIZ_TYPES} 内，{@code writeOff} 的跨类型归户（按 biz_id）不受影响。
      */
@@ -951,8 +948,7 @@ public class BudgetService {
      * 还款单对「借款单既有占用」的等额冲减（铁律：只增不改）。
      *
      * <p><b>为什么不是 occupy 也不是 release</b>：还款在业务上是资金回流，预算占用应当被<b>释放</b>，
-     * 而不是再占用一次。实测 12-24 还款单提交即写 {@code bg_occupy} OCCUPY 80,000（id=45），
-     * 借款单原始占用（id=33）仍在 ⇒ 同一笔借款双重占用。
+     * 而不是再占用一次；否则借款单的原始占用仍在、还款单又记一笔，同一笔借款被双重占用。
      * 本方法追加的是 <b>RELEASE 负数流水</b>，且：
      * <ul>
      *  <li>归户在<b>借款单</b> biz_id 上（占用本来就是借款单的），biz_no 记还款单号，
@@ -1156,9 +1152,9 @@ public class BudgetService {
     /**
      * 核销（占用转已用，事务）。
      * <p>
-     * P0-C2（整改 2026-09-21）：占用转出量改为按 {@code bg_occupy} 账本推导「本单据(biz_id)
-     * 在该预算行的净占用」，不再用 {@code bg_item.occupy_amount}（全预算行汇总）截断。
-     * 原规则下 A 单占用 100、B 单核销 800 会把 A 的占用一并转走并给 B 记 800 已用，
+     * 占用转出量按 {@code bg_occupy} 账本推导「本单据(biz_id) 在该预算行的净占用」，
+     * 不用 {@code bg_item.occupy_amount}（全预算行汇总）截断：按汇总截断时，
+     * 一张单据核销会把同预算行上其它单据的占用一并转走并记到本单已用，
      * 造成占用/已用同时失真。
      * <p>
      * 单据在该行从未占用（线下直报）→ 只加已用、不动占用；已无剩余占用仍被重放核销 → 整体跳过。
@@ -1181,7 +1177,7 @@ public class BudgetService {
             everOccupied = nvl(bgOccupyMapper.sumOccupiedByItemAndBiz(budgetItemId, bizId, bizType, crossExpense));
         }
         if (everOccupied.signum() > 0 && net.signum() <= 0) {
-            log.info("预算行 {} 上单据 {}（{}）已无剩余占用（历史占用 {}），跳过本次核销（P0-C2 防重复核销虚增已用）",
+            log.info("预算行 {} 上单据 {}（{}）已无剩余占用（历史占用 {}），跳过本次核销（防重复核销虚增已用）",
                     budgetItemId, bizNo, bizType, everOccupied);
             return;
         }
@@ -1200,13 +1196,13 @@ public class BudgetService {
     /**
      * 反审批/退回修改：回冲已核销的预算（对称 {@link #writeOff}）。
      * <p>
-     * 单据反审批退回可编辑态时，此前核销转出的已用额度必须等额回冲，否则
-     * 「可用额度」被幽灵占用，重提时预算校验必然误拦（首跑实证）。
-     * <p><b>甲案</b>：去重原「由调用方保证」而调用方并未保证——同一 bizId 重放回冲
+     * 单据反审批退回可编辑态时，已核销转出的已用额度必须等额回冲，否则
+     * 「可用额度」被幽灵占用，重提时预算校验必然误拦。
+     * <p><b>去重</b>：若把去重交给调用方——同一 bizId 重放回冲
      * 会把已用额记成负数，与本行真实占用互相错身，最终留下
-     * 「同一笔既占用又核销」的双记（实测 bg_item id=2 可用 −13,000）。
-     * 现按汇总侧不变量办结：回冲额以本行 {@code used_amount} 为上限，已用 ≤ 0 即整体跳过；
-     * 「账本净额 vs 汇总列」的日终对账作业（乙案）另列移交项，本方法不擅自改账。
+     * 「同一笔既占用又核销」的双记。
+     * 故按汇总侧不变量处理：回冲额以本行 {@code used_amount} 为上限，已用 ≤ 0 即整体跳过；
+     * 「账本净额 vs 汇总列」的日终对账另作独立作业，本方法不擅自改账。
      */
     @Transactional(rollbackFor = Exception.class)
     public void reverseWriteOff(Long budgetItemId, BigDecimal amount, String bizType, Long bizId, String bizNo) {
@@ -1220,12 +1216,12 @@ public class BudgetService {
             return;
         }
         if (used.signum() <= 0) {
-            log.info("预算行 {} 已用额为 {}，单据 {}（{}）无已核销可回冲，跳过（D-DEC-425 防重复回冲记负已用）",
+            log.info("预算行 {} 已用额为 {}，单据 {}（{}）无已核销可回冲，跳过（防重复回冲记负已用）",
                     budgetItemId, used, bizNo, bizType);
             return;
         }
         if (take.compareTo(used) > 0) {
-            log.info("预算行 {} 单据 {} 回冲核销 {} 超出本行已用 {}，按已用截断（D-DEC-425）",
+            log.info("预算行 {} 单据 {} 回冲核销 {} 超出本行已用 {}，按已用截断",
                     budgetItemId, bizNo, take, used);
             take = used;
         }
@@ -1247,12 +1243,12 @@ public class BudgetService {
 
     /**
      * 预算「占用 → 已用（消耗）」的确认时点＝<b>实际付款成功</b>（或无现金环节的结清），
-     * <b>不再是审批通过</b>。
+     * <b>不是审批通过</b>。
      *
-     * <p>旧规则把转换挂在审批通过钩子上（EXP_CLAIM/EXP_PAY 单据收尾、TR_PAY 批次审批收尾三处），
-     * 于是「款未付、票未得」的费用已经计进 {@code bg_item.used_amount}：预算执行报表提前报满，
+     * <p>若在审批通过时（EXP_CLAIM/EXP_PAY 单据收尾、TR_PAY 批次审批收尾三处）就转已用，
+     * 「款未付、票未得」的费用会提前计进 {@code bg_item.used_amount}：预算执行报表提前报满，
      * 而后续付款失败/退票时这笔消耗没人回冲（{@code reverseWriteOff} 只覆盖反审批一路）。
-     * 现在审批通过只保留占用（OCCUPIED，额度继续被本单预留住，不会失控），
+     * 故审批通过只保留占用（OCCUPIED，额度继续被本单预留住，不会失控），
      * 钱真的出去（{@code PayBatchService.execute} 打款成功）才转已用。</p>
      *
      * <p><b>去重</b>：本单据名下已存在任一条执行核销流水（{@link BgOccupyMapper#countWriteOffForBill}，
@@ -1280,12 +1276,12 @@ public class BudgetService {
         // 借款占用由还款 offsetLoanOccupy 冲减或由报销单接续，此处再转一次已用＝同一笔钱计两次消耗。
         String bt = billType == null ? "" : billType.trim().toUpperCase();
         if ("LOAN".equals(bt) || "REPAY".equals(bt) || "APPLY".equals(bt)) {
-            log.info("单据 {}（{}）不属于消耗型单据，不做占用转已用（D-DEC-104 口径）", billNo, bt);
+            log.info("单据 {}（{}）不属于消耗型单据，不做占用转已用", billNo, bt);
             return 0;
         }
         String bizType = occupyBizTypeOf(billType);
         if (bgOccupyMapper.countWriteOffForBill(billId) > 0) {
-            log.info("单据 {}（{}）已发生过预算执行核销，跳过本次消耗确认（D-DEC-104 幂等）", billNo, bizType);
+            log.info("单据 {}（{}）已发生过预算执行核销，跳过本次消耗确认（幂等）", billNo, bizType);
             return 0;
         }
         int done = 0;
@@ -1296,7 +1292,7 @@ public class BudgetService {
             Long itemId = resolveOccupyItem(line.budgetItemId(), line.expenseItemId(), companyId, deptId,
                     periodYear, false);
             if (itemId == null) {
-                // 与 同一规则：定位不到科目就如实记录，不臆造预算行
+                // 定位不到科目就如实记录，不臆造预算行（与提交占用同一规则）
                 log.warn("单据 {} 行（费用项 {}）未解析到预算科目（显式/费用项映射均未命中），跳过消耗确认",
                         billNo, line.expenseItemId());
                 continue;
@@ -1304,7 +1300,7 @@ public class BudgetService {
             writeOff(itemId, line.amount(), bizType, billId, billNo);
             done++;
         }
-        log.info("单据 {}（{}）付款/结清 → 预算占用已转已用 {} 行（D-DEC-104：转换时点已从审批通过钩子后移）",
+        log.info("单据 {}（{}）付款/结清 → 预算占用已转已用 {} 行（转换时点已从审批通过钩子后移）",
                 billNo, bizType, done);
         return done;
     }
@@ -1323,13 +1319,11 @@ public class BudgetService {
     public static final String BIZ_TYPE_SALARY = "GL_SALARY";
 
     /**
-     * 薪酬<b>计提</b>即占用预算 —— 人工成本此前全程不进预算（173）。
+     * 薪酬<b>计提</b>即占用预算 —— 人工成本也要进预算。
      *
-     * <p>证据：{@code gl_salary_run} 单行 202611 批次应发 390,000.00，而 {@code bg_occupy} 里
-     * 没有任何薪酬域的流水；{@code bg_item} 全表 9 行的费用项只有 行政办公费/差旅费/招待费/修理费/劳动保护费，
-     * <b>没有一条薪酬预算明细</b>；{@code md_item_budget_map} 把 352 工资薪酬 映射到 budget_item_id=98887，
-     * 而 bg_item 最大主键为 9（映射表 211 条孤儿行）。所以本方法在现网数据下会走到「占用落空」分支，
-     * 这是<b>如实记录</b>而不是静默通过 —— 薪酬科目是否单独建预算线、走哪条控制方式＝人工裁决项。</p>
+     * <p>薪酬费用项在 {@code md_item_budget_map} 里可能映射到并不存在的 {@code bg_item} 行，
+     * 或该主体下根本没有薪酬预算明细，此时解析会走到「占用落空」分支：本方法如实记录
+     * WARN 而不静默通过 —— 薪酬科目是否单独建预算线、走哪条控制方式＝待确认项。</p>
      *
      * <p><b>规则与费用域一致</b>：占用量取计提凭证的成本额（{@code VoucherService.generateSalaryVoucher}
      * 借 6602 的金额＝{@code salary_amount} 应发工资总额，扣除/社保/个税是应发内部的代扣，不重复占额度）；
@@ -1337,7 +1331,7 @@ public class BudgetService {
      * 再回退映射表（仍要求同主体），定位不到就返回 null 交由调用方记录，<b>绝不臆造预算行</b>。</p>
      *
      * <p><b>超支只记录不阻断</b>：{@code bg_scheme.control_type=HARD} 且额度不足时，费用域是直接拒提；
-     * 故本版本按 brief 拦成 WARN 记录 + 报告，未占用（不写半条流水），是否改为硬拦见交付说明的待裁点。</p>
+     * 故此处对硬控超支只记 WARN 且不写占用流水，是否改为硬拦需产品确认。</p>
      *
      * <p><b>去重</b>：本批次名下已存在 OCCUPY 流水（{@link BgOccupyMapper#selectOccupiedItemsByBiz}）即整体跳过，
      * 重放核算/重试起流不会二次占额。事务传播 REQUIRED：与薪酬核算同生共死，
@@ -1354,17 +1348,17 @@ public class BudgetService {
             return null;
         }
         if (amount == null || amount.signum() <= 0) {
-            log.info("薪酬批次 {} 应发金额为 {}，无额度可占用（D-DEC-145）", runNo, amount);
+            log.info("薪酬批次 {} 应发金额为 {}，无额度可占用", runNo, amount);
             return null;
         }
         if (!bgOccupyMapper.selectOccupiedItemsByBiz(BIZ_TYPE_SALARY, runId).isEmpty()) {
-            log.info("薪酬批次 {} 名下已有占用流水，跳过重复占用（D-DEC-145 幂等）", runNo);
+            log.info("薪酬批次 {} 名下已有占用流水，跳过重复占用（幂等）", runNo);
             return null;
         }
         Long itemId = resolveOccupyItem(null, expenseItemId, companyId, deptId, bizYear, false);
         if (itemId == null) {
             log.warn("薪酬批次 {} 应发 {} 未定位到预算科目（费用项 {}／公司 {}／年度 {} 下无预算明细行，" +
-                    "映射表指向的预算明细不存在）——占用落空，本批次不计入预算执行，不臆造科目（D-DEC-145）",
+                    "映射表指向的预算明细不存在）——占用落空，本批次不计入预算执行，不臆造科目",
                     runNo, amount, expenseItemId, companyId, bizYear);
             return null;
         }
@@ -1372,28 +1366,28 @@ public class BudgetService {
         BigDecimal avail = available(item);
         if (amount.compareTo(avail) > 0 && "HARD".equals(controlTypeOf(item))) {
             log.warn("薪酬批次 {} 超预算未占用：预算明细 {}（公司 {} / 年度 {}）可用 {}，本次应发 {}，方案为硬控——" +
-                    "D-DEC-145 本版只留痕不阻断薪酬核算，人工成本超支是否硬拦＝待人工裁决",
+                    "本版只留痕不阻断薪酬核算，人工成本超支是否硬拦＝待产品确认",
                     runNo, itemId, companyId, bizYear, avail, amount);
             return null;
         }
-        // 预检与占用之间理论上可被并发插队（此刻再撞上 HARD 拦截），故默认处理 catch：
+        // 预检与占用之间理论上可被并发插队（此刻再撞上 HARD 拦截），故用 catch 兜住：
         // occupy 是本类自调用（不过代理），异常不会把外层事务标成 rollback-only，薪酬核算不受牵连。
         try {
             occupy(itemId, amount, BIZ_TYPE_SALARY, runId, runNo,
-                    amount.compareTo(avail) > 0 ? "薪酬计提超支记录（D-DEC-145：暂不阻断薪酬核算）" : null);
+                    amount.compareTo(avail) > 0 ? "薪酬计提超支记录（暂不阻断薪酬核算）" : null);
         } catch (BizException ex) {
-            log.warn("薪酬批次 {} 预算占用被拒（并发下额度已被占满）：{}，本批次未计入预算执行（D-DEC-145）",
+            log.warn("薪酬批次 {} 预算占用被拒（并发下额度已被占满）：{}，本批次未计入预算执行",
                     runNo, ex.getMessage());
             return null;
         }
-        log.info("薪酬批次 {} 计提占用预算：明细 {} 金额 {}（可用余额 {}）——D-DEC-145 人工成本首次进预算闸口",
+        log.info("薪酬批次 {} 计提占用预算：明细 {} 金额 {}（可用余额 {}）——人工成本首次进预算闸口",
                 runNo, itemId, amount, avail);
         return itemId;
     }
 
     /**
-     * ＋ 薪酬<b>发放成功</b>（GL_SALARY_PAY 末节点通过且凭证已出）才把占用转已用。
-     * 计提链通过（POSTED）只保留占用——那时尚未付出一分钱，与 的消耗确认时点同一规则。
+     * 薪酬<b>发放成功</b>（GL_SALARY_PAY 末节点通过且凭证已出）才把占用转已用。
+     * 计提链通过（POSTED）只保留占用——那时尚未付出一分钱，与费用域消耗确认时点同一规则。
      *
      * <p>逐行取「本批次在该预算行的净占用」{@link BgOccupyMapper#sumNetOccupyByItemAndBiz}（跨类型关闭：
      * 薪酬 biz_id 与 exp_bill 主键会撞号），有净占用才核销，重放发放自动归零跳过。</p>
@@ -1420,9 +1414,9 @@ public class BudgetService {
             done++;
         }
         if (done == 0) {
-            log.info("薪酬批次 {} 名下无可转已用的净占用（占用落空或已核销），本次不做消耗确认（D-DEC-145）", runNo);
+            log.info("薪酬批次 {} 名下无可转已用的净占用（占用落空或已核销），本次不做消耗确认", runNo);
         } else {
-            log.info("薪酬批次 {} 发放成功 → 预算占用转已用 {} 行（D-DEC-145／消耗确认时点见 D-DEC-104）", runNo, done);
+            log.info("薪酬批次 {} 发放成功 → 预算占用转已用 {} 行", runNo, done);
         }
         return done;
     }
@@ -1453,9 +1447,9 @@ public class BudgetService {
             done++;
         }
         if (done == 0) {
-            log.info("薪酬批次 {} 名下无待释放的净占用（占用落空／占用流水尚未提交），不释放（D-DEC-145）", runNo);
+            log.info("薪酬批次 {} 名下无待释放的净占用（占用落空／占用流水尚未提交），不释放", runNo);
         } else {
-            log.info("薪酬批次 {} 计提被驳回 → 释放预算占用 {} 行（D-DEC-145）", runNo, done);
+            log.info("薪酬批次 {} 计提被驳回 → 释放预算占用 {} 行", runNo, done);
         }
         return done;
     }
@@ -1513,16 +1507,16 @@ public class BudgetService {
 
     /**
      * 调整单登记：头（bg_adjust）＋行（bg_adjust_line）两表成对写，Controller 直连无外层事务。
-     * 半写会留下"有调整单、一行都没有"的空头单据（ROOT-11 已裁规则：跨表写成对者补边界；自定，无外部依据）。
+     * 半写会留下"有调整单、一行都没有"的空头单据，故必须在同一事务内成对写入。
      */
     @Transactional(rollbackFor = Exception.class)
     public Long adjustCreate(BgAdjust adjust, List<BgAdjustLine> lines) {
         assertAdjustRequired(adjust, lines);
         adjust.setId(null);
         adjust.setAdjustNo(nextAdjustNo());
-        // 缺陷14(20260918)：bg_adjust.apply_user_id / apply_date 均为 NOT NULL 无默认值，
-        // 前端创建弹窗未携带申请人字段 → insert 直接 SQL 异常"Field 'apply_user_id' doesn't have a default value"，
-        // 任何用户都无法经 UI 创建预算调整单。此处按当前登录人补齐申请人/部门/申请日期。
+        // bg_adjust.apply_user_id / apply_date 均为 NOT NULL 且无默认值，
+        // 而创建弹窗不带申请人字段 → insert 直接抛 "Field 'apply_user_id' doesn't have a default value"，
+        // UI 上无人能建预算调整单。故按当前登录人补齐申请人/部门/申请日期。
         LoginUser _cu = UserContext.get();
         if (adjust.getApplyUserId() == null && _cu != null) {
             adjust.setApplyUserId(_cu.getUserId());
@@ -1554,7 +1548,7 @@ public class BudgetService {
         if (!"DRAFT".equals(db.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿状态可编辑，当前: " + db.getStatus());
         }
-        // 编辑保存只带改动字段时，用库中现值默认处理后再整体过必填校验（避免半空载荷绕过校验）
+        // 编辑保存只带改动字段时，用库中现值兜底后再整体过必填校验（避免半空载荷绕过校验）
         if (adjust.getAdjustType() == null || adjust.getAdjustType().isBlank()) {
             adjust.setAdjustType(db.getAdjustType());
         }
@@ -1633,7 +1627,7 @@ public class BudgetService {
         }
         List<BgAdjustLine> lines = bgAdjustLineMapper.selectByAdjustId(adjustId);
         String type = adjust.getAdjustType();
-        // 审计扩面（D 类·预算调整）：先采集本次涉及的预算明细「调整前 adjust_amount」
+        // 审计：先采集本次涉及的预算明细「调整前 adjust_amount」
         Set<Long> touchedItems = new LinkedHashSet<>();
         for (BgAdjustLine line : lines) {
             if ("TRANSFER".equals(type) && line.getOutItemId() != null) {
@@ -1663,7 +1657,7 @@ public class BudgetService {
                 String.valueOf(adjustId),
                 Collections.singletonMap("status", adjust.getStatus()),
                 Collections.singletonMap("status", "APPROVED"), "审批预算调整单");
-        // 审计扩面（D 类·预算调整）：记录各预算明细「调整前后预算」（adjust_amount 增减）
+        // 审计：记录各预算明细「调整前后预算」（adjust_amount 增减）
         Map<String, Object> budgetAfter = new LinkedHashMap<>();
         for (Long itemId : touchedItems) {
             if (itemId == null) continue;

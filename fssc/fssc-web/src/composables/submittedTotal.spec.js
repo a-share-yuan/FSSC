@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { submittedTotal } from './useBill.js'
 
 /**
- * D-V4R-37：表头总金额必须只加「会进本次载荷的行」（已选费用类型）。
+ * 表头总金额必须只加「会进本次载荷的行」（已选费用类型）。
  * 反置法：把 submittedTotal 的 filter 换回旧口径 `l.itemId || amount>0`，第 2 条即转红。
  */
 describe('submittedTotal — 表头金额与落库行同源', () => {

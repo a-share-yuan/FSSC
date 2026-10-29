@@ -24,7 +24,7 @@ import java.util.Map;
  * G2 第 3 条「工作日历」：按共享工作日历把「自然小时」换算成「工作小时」的到期时间。
  *
  * <p><b>为什么要单独一个服务</b>：{@code due_time} 要成为真值（方案 §二 F6），而 SLA 是业务时限、
- * 不是墙钟时限——跨周末/节假日排期必须按工作日历扣减。此前 {@code TaskTimeLimitService} 按自然小时算、
+ * 不是墙钟时限——跨周末/节假日排期必须按工作日历扣减。原先 {@code TaskTimeLimitService} 按自然小时算、
  * 边界定时器按 {@code PT{N}H} 算，两处规则各自漂移。本类把"从某时刻起 +N 个工作小时"收敛为唯一实现，
  * 供 {@link TaskTimeLimitService} 与 BPMN 边界定时器共用。
  *
@@ -38,19 +38,19 @@ import java.util.Map;
  * 租户默认行）"。组织列属<b>尚未执行的结构变更</b>，故本类<b>绝不无条件 SELECT 该列</b>，按下列顺序查询：
  * <ol>
  *   <li><b>先探测列是否存在</b>（查 {@code INFORMATION_SCHEMA.COLUMNS}，结果缓存在本进程）；
- *       列不存在 ⇒ 走<b>改造前逐字不变的旧 SQL</b>（见 {@link #SELECT_BASE_SQL}，仅按 {@code tenant_id} 取）；</li>
+ *       列不存在 ⇒ 走<b>原先逐字不变的旧 SQL</b>（见 {@link #SELECT_BASE_SQL}，仅按 {@code tenant_id} 取）；</li>
  *   <li>列存在且调用方给了 {@code companyId} ⇒ 取该公司专属行（{@code company_id = ?}）；
  *       <b>该公司本窗口内无专属行 ⇒ 回退 {@code company_id = 0} 的租户默认行</b>
- *       （历史行 company_id 全为 0，故这一回退与改造前结果逐字一致）；</li>
+ *       （历史行 company_id 全为 0，故这一回退与原先结果逐字一致）；</li>
  *   <li>列存在但调用方拿不到组织（{@code companyId == null}）⇒ 仍取 {@code company_id = 0} 默认行；</li>
  *   <li>组织查询抛异常（如探测缓存与实际结构一度不一致）⇒ 捕获后回落旧 SQL 并纠正缓存，
  *       绝不把 Unknown column 抛给调用方。</li>
  * </ol>
  * 代价（如实说明）：① 探测为进程内缓存，脚本执行后需重启一次才切到组织规则（回滚后缓存仍为 true 的进程
- * 靠上述第 4 条默认处理）；② 组织专属行与租户默认行需在"同一天"并存，故该表唯一键须由
+ * 靠上述第 4 条兜底）；② 组织专属行与租户默认行需在"同一天"并存，故该表唯一键须由
  * {@code (tenant_id, cal_date)} 调整为 {@code (tenant_id, company_id, cal_date)}，详见该 SQL 脚本。
  * <b>哨兵取 0 而非 NULL</b>：MySQL 唯一索引视 NULL 互不相等，默认行若用 NULL 存，新键就拦不住"同一租户
- * 同一天插出多行默认日历"；该表写入口是纯 {@code insert()}（无 upsert 默认处理），只能靠 0 哨兵保住数据库层
+ * 同一天插出多行默认日历"；该表写入口是纯 {@code insert()}（无 upsert 兜底），只能靠 0 哨兵保住数据库层
  * 唯一性。公司 id 自 1 起，0 不可能是真实公司，故不冲突。
  *
  * <p><b>缺省语义（零行为变化的前提）</b>：某天在日历里<b>没有行</b> ⇒ 视为正常工作日、用默认在岗时段
@@ -71,8 +71,8 @@ public class WorkCalendarService {
     private static final int MAX_SCAN_DAYS = 400;
 
     /**
-     * 旧规则 SQL（改造前逐字原样保留）：仅按租户取。
-     * 列不存在、拿不到组织、组织查询异常三种情形都走它，保证降级结果与改造前逐字一致。
+     * 旧规则 SQL（原先逐字原样保留）：仅按租户取。
+     * 列不存在、拿不到组织、组织查询异常三种情形都走它，保证降级结果与原先逐字一致。
      */
     private static final String SELECT_BASE_SQL =
             "SELECT `cal_date` AS d, `day_type` AS t, `work_start` AS s, `work_end` AS e "
@@ -99,7 +99,7 @@ public class WorkCalendarService {
     /**
      * {@code op_calendar.company_id} 列是否已建（G2 第 3 条组织维）。三态：{@code null}=未探测、
      * {@code TRUE}=已建、{@code FALSE}=未建。进程内缓存：脚本执行后需重启一次才切到组织规则；
-     * 回滚后缓存误置 TRUE 的情形由 {@link #loadCalendar} 的 try/catch 默认处理（回落旧 SQL 并纠正缓存）。
+     * 回滚后缓存误置 TRUE 的情形由 {@link #loadCalendar} 的 try/catch 兜底（回落旧 SQL 并纠正缓存）。
      */
     private volatile Boolean companyColumnPresent;
 
@@ -108,7 +108,7 @@ public class WorkCalendarService {
     }
 
     /**
-     * 从 {@code from} 起推进 {@code hours} 个<b>工作小时</b>后的时刻（租户规则，与改造前逐字一致）。
+     * 从 {@code from} 起推进 {@code hours} 个<b>工作小时</b>后的时刻（租户规则，与原先逐字一致）。
      *
      * @param hours 可为小数（如 4.5）；&lt;=0 或 from 为空时按"不推进"处理（返回 from 或 now）
      */
@@ -128,12 +128,12 @@ public class WorkCalendarService {
     }
 
     /**
-     * 从 {@code from} 起推进 {@code minutes} 个<b>工作分钟</b>后的时刻（租户规则，与改造前逐字一致）。
+     * 从 {@code from} 起推进 {@code minutes} 个<b>工作分钟</b>后的时刻（租户规则，与原先逐字一致）。
      *
      * <p>算法：逐日推进，落在工作日时取「在岗时段 ∩ [起点, 当日收工]」的有效分钟数扣减；
      * 扣完即返回该日的具体时刻。休息日/节假日整天跳过（贡献 0 分钟）。
      *
-     * <p>默认处理：超过 {@link #MAX_SCAN_DAYS} 天仍未扣完（脏日历），退化为自然分钟相加并在日志记录
+     * <p>兜底：超过 {@link #MAX_SCAN_DAYS} 天仍未扣完（脏日历），退化为自然分钟相加并在日志记录
      * ——宁可给出一个偏晚的到期时间，也不返回空导致"永不超时"。
      */
     public LocalDateTime plusWorkingMinutes(LocalDateTime from, long minutes) {
@@ -192,8 +192,8 @@ public class WorkCalendarService {
      * 租户拦截器无法替本查询注入条件，故这里显式过滤（非"手写租户过滤绕过拦截器"，而是"没有实体可拦"）。
      * 租户上下文缺失（如引擎线程未带上下文）时按"无日历"处理，退化为默认工作日。
      *
-     * <p>查询顺序见类注释。关键点：<b>列不存在时用的 SQL 与改造前逐字一致</b>（{@link #SELECT_BASE_SQL}），
-     * 故脚本未执行前本方法与改造前行为零差异。
+     * <p>查询顺序见类注释。关键点：<b>列不存在时用的 SQL 与原先逐字一致</b>（{@link #SELECT_BASE_SQL}），
+     * 故脚本未执行前本方法与原先行为零差异。
      */
     private Map<LocalDate, CalDay> loadCalendar(LocalDate from, int days, Long companyId) {
         Long tenantId = TenantContext.getTenantId();
@@ -201,7 +201,7 @@ public class WorkCalendarService {
             return new HashMap<>();
         }
         if (companyId == null || !companyColumnPresent()) {
-            // 拿不到组织，或组织列尚未建（脚本未执行）⇒ 走改造前逐字不变的租户级 SQL
+            // 拿不到组织，或组织列尚未建（脚本未执行）⇒ 走原先逐字不变的租户级 SQL
             return query(from, days, SELECT_BASE_SQL, tenantId, null);
         }
         try {
@@ -210,7 +210,7 @@ public class WorkCalendarService {
                 return org;
             }
             // 该组织本窗口内无专属日历 ⇒ 回退租户默认行（company_id = 0 哨兵）。
-            // 历史行 company_id 全为 0，故这一回退与改造前"按租户取"结果逐字一致。
+            // 历史行 company_id 全为 0，故这一回退与原先"按租户取"结果逐字一致。
             return query(from, days, SELECT_DEFAULT_SQL, tenantId, null);
         } catch (Exception ex) {
             // 探测缓存为 true 但列实际不存在（如脚本已回滚）：捕获后回落旧 SQL 并纠正缓存，

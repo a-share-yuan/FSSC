@@ -6,7 +6,7 @@ package com.fssc.workflow.event;
 import java.util.Set;
 
 /**
- * 流程结束收尾动作策略接口（P0-1 事件编排总线）。
+ * 流程结束收尾动作策略接口（事件编排总线）。
  * <p>
  * 每个业务域实现本接口，在 {@link #bizTypes()} 声明处理的业务类型集合，
  * 在 {@link #execute(WfProcessEndedEvent)} 中执行审批通过/驳回后的收尾逻辑。

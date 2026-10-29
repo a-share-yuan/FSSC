@@ -10,7 +10,7 @@
 #   /actuator/health/liveness  进程存活（k8s liveness）
 #   /actuator/health/readiness 可接流量（k8s readiness）
 #
-# 仍未收口的跨域依赖（切流量前需知）：
+# 仍未收尾的跨域依赖（切流量前需知）：
 #   1. 发票入池 inv_invoice 在 master 库、由 invoice 域实现；独立进程里由 StandaloneInvoiceFacade
 #      显式报「未接入」（识别结果照常落 ocr_record），不做假入池。
 #   2. sys_file 行、sys_config、sys_user 仍在 master 库（文件/配置/鉴权为共享基础设施），

@@ -67,7 +67,7 @@ public class FraudDetectionService {
      * 命中白名单的用户跳过 FREQUENCY/AMOUNT/SUPPLIER/TIME/GEOGRAPHY 等频次类规则（其他不合规项照常）。
      */
     /**
-     * G2R-02（2026-10-19 真跑实证修复）：统计员工近 7 天<b>实际提交的单据数</b>，供 FREQUENCY 规则查询。
+     * 统计员工近 7 天<b>实际提交的单据数</b>，供 FREQUENCY 规则查询。
      * <p>查询以 create_by 为提交人（历史数据缺失时回退 apply_user_id），按 create_time 圈近 7 天，
      * 只数 exp_bill 主表行数（一张单一行），不含检测流水 —— 因此不会像旧实现那样被自身的检测记录放大。
      * 查询异常不得反噬风控判定：回退为「检测流水按 bill_id 去重后的单据数」（仍与提交单据一一对应），
@@ -170,7 +170,7 @@ public class FraudDetectionService {
         return configOn(SUBMIT_BLOCK_CONFIG_KEY) && !isShadowMode();
     }
 
-    /** 影子模式（批次 1 ⑤）：开启后全链路只打标不阻断，用于演练期观察误拦率 */
+    /** 影子模式：开启后全链路只打标不阻断，用于演练期观察误拦率 */
     public boolean isShadowMode() {
         return configOn(SHADOW_MODE_CONFIG_KEY);
     }
@@ -226,8 +226,8 @@ public class FraudDetectionService {
         boolean whitelisted = isFrequencyWhitelisted(employeeId);
 
         LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
-        // G2R-02（2026-10-19 真跑实证修复）：此前 recentCount 统计的是 fraud_detection_log 的
-        // **流水行数**——而每一次 detectFraud() 会同时落 FREQUENCY/AMOUNT/GEOGRAPHY/VENDOR/TIME
+        // recentCount 不能统计 fraud_detection_log 的
+        // 流水行数——而每一次 detectFraud() 会同时落 FREQUENCY/AMOUNT/GEOGRAPHY/VENDOR/TIME
         // 等多条检测记录，于是「规则的输出在喂养规则的输入」：阈值 10 ⇒ 约 2 次检测必然命中，
         // 且系统用得越久误拦率越高（实案：员工 3933 近 7 天"检测次数"达 63 次，付款链被硬拦）。
         // 语义上本规则要管的是「员工近 7 天提交了多少张单」，故查询改为 exp_bill 的实际提交单据数。
@@ -242,7 +242,7 @@ public class FraudDetectionService {
             freqLog.setDetectionResult("HIGH_RISK");
             freqLog.setRiskScore(new BigDecimal("80"));
             freqLog.setDetails("员工近7天内提交单据达 " + recentCount + " 张，超过阈值 " + threshold + " 张");
-            // 三档语义（批次 1 ⑤）：高风险默认进人工待审队列（REVIEW），只有显式开回提单侧阻断才是 BLOCK
+            // 三档语义：高风险默认进人工待审队列（REVIEW），只有显式开回提单侧阻断才是 BLOCK
             freqLog.setActionTaken(isSubmitBlockEnabled() ? "BLOCK" : "REVIEW");
             fraudDetectionLogMapper.insert(freqLog);
             logs.add(freqLog);
@@ -408,7 +408,7 @@ public class FraudDetectionService {
         }
         // 待处置队列必须与付款校验 {@link #paymentBlockReason} <b>同源同判据</b>，
         // 否则风控看到的"待复审"和真正卡住付款的那批记录不是同一批。
-        // 原判据只按 actionTaken 精确相等筛选，而记录写入数据库时 actionTaken 的初值就是 'REVIEW'
+        // 判据不能只按 actionTaken 精确相等筛选：记录写库时 actionTaken 的初值就是 'REVIEW'
         // ＝转人工待审，既不是空也不是 'PENDING' ⇒ 按"未处置/空值"筛必然得到 0 条，
         // 风控会误以为没有待办，付款却一直被拦。现在两条专用队列：
         //  · pendingRelease=true → 正在阻断付款的记录（与 paymentBlockReason 逐条对齐）
@@ -585,7 +585,7 @@ public class FraudDetectionService {
         return total;
     }
 
-    // 增强检测（P1 增强）
+    // 增强检测
 
     private final ExpBillMapper expBillMapper;
 
@@ -796,7 +796,7 @@ public class FraudDetectionService {
             }
         }
 
-        // 三档语义（批次 1 ⑤）：HIGH_RISK 默认只进人工待审队列（风控看板/复审接口），不再挡提单；
+        // 三档语义：HIGH_RISK 默认只进人工待审队列（风控看板/复审接口），不再挡提单；
         // 硬阻断位在付款指令执行前（{@link #paymentBlockReason}）。要回退旧行为把
         // sys_config.fraud.block_on_submit.enabled 置 1；演练期观察误拦率置 fraud.shadow_mode.enabled=1。
         boolean blockAtSubmit = shouldBlock && isSubmitBlockEnabled();

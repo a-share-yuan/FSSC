@@ -47,7 +47,7 @@ public class SupplierReconDiff implements Serializable {
     /** 处理状态：PENDING 待处理 / RESOLVED 已处理 */
     private String status;
     private String remark;
-    // 与 X-34 资金四表同型裸字段：不标 fill 则 MP 的 INSERT/UPDATE 列清单不含该列，MetaObjectHandler 填值无效
+    // 同资金四表一样是裸字段：不标 fill 则 MP 的 INSERT/UPDATE 列清单不含该列，MetaObjectHandler 填值无效
     @TableField(fill = FieldFill.INSERT)
     private Long createBy;
     @TableField(fill = FieldFill.INSERT)

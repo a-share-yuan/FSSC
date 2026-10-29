@@ -13,6 +13,7 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.image.entity.ImgSetting;
 import com.fssc.image.mapper.ImgSettingMapper;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -75,7 +76,7 @@ public class ImageSettingController {
 
     @RequiresPerm("image:setting:list")
     @GetMapping("/types")
-    public Result<java.util.List<ImgSetting>> types(@RequestParam String settingType) {
+    public Result<List<ImgSetting>> types(@RequestParam String settingType) {
         return Result.success(settingMapper.selectList(new LambdaQueryWrapper<ImgSetting>()
                 .eq(ImgSetting::getSettingType, settingType)
                 .eq(ImgSetting::getStatus, "NORMAL")

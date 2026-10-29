@@ -75,7 +75,7 @@ const { t } = useI18n()
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -86,7 +86,7 @@ function openTrace(row) {
 const router = useRouter()
 const rows = ref([])
 const loading = ref(false)
-// P0 遗留专项：后端 air-ticket/page 支持 keyword/used 服务端过滤 + relationUsed 回填，消除 N+1 与 100 条截断
+// 后端 air-ticket/page 支持 keyword/used 服务端过滤 + relationUsed 回填，消除 N+1 与 100 条截断
 const pager = useTablePager({ mode: 'server', storageKey: 'air_ticket_query' })
 const { pagedData } = pager
 const kw = ref('')
@@ -111,7 +111,7 @@ async function load() {
 /** 搜索/筛选条件变化 → 回到第 1 页 */
 function search() { pager.resetPage(); load() }
 function reset() { kw.value = ''; used.value = null; search() }
-/** P1-2 输入即过滤，防抖 300ms，避免高频请求 */
+/** 输入即过滤，防抖 300ms，避免高频请求 */
 let searchTimer = null
 function debouncedSearch() {
   clearTimeout(searchTimer)

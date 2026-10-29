@@ -15,6 +15,7 @@ import com.fssc.framework.security.UserContext;
 import com.fssc.framework.security.annotation.DataScope;
 import com.fssc.framework.security.annotation.ReportDomain;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.report.mapper.ReportMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -95,7 +96,7 @@ public class ReportQueryController {
         }
         DataScopeHolder.Scope s = DataScopeHolder.get();
         if (s == null) {
-            log.warn("R5-D-026 数据范围载体缺失，按最窄口径收紧 user={}", u.getUsername());
+            log.warn("数据范围载体缺失，按最窄口径收紧 user={}", u.getUsername());
             return ScopeFilter.DENY;
         }
         int code = s.getScope();
@@ -182,9 +183,21 @@ public class ReportQueryController {
     @ReportDomain("SHARING")
     @GetMapping("/ops-statistics")
     public Result<List<Map<String, Object>>> opsStatistics() {
-        List<Map<String, Object>> rows = reportMapper.opsStatistics();
+        Map<String, Object> core = reportMapper.opsStatistics(TenantContext.getTenantId());
+        List<Map<String, Object>> rows = new ArrayList<>();
+        rows.add(kpi("派工任务总数", core == null ? null : core.get("taskTotal")));
+        rows.add(kpi("待处理任务", core == null ? null : core.get("taskWaiting")));
+        rows.add(kpi("已办结任务", core == null ? null : core.get("taskDone")));
+        rows.add(kpi("生成凭证数", core == null ? null : core.get("voucherCnt")));
+        rows.add(kpi("付款批次", core == null ? null : core.get("payBatchCnt")));
+        rows.add(kpi("质检记录", core == null ? null : core.get("qualityCnt")));
         rows.add(Map.of("kpi", "影像批次", "val", imageFacade.countBatches()));
         return Result.success(rows);
+    }
+
+    /** KPI 行：与原先 union 分支同形 {kpi, val}，聚合空值按 0。 */
+    private static Map<String, Object> kpi(String name, Object val) {
+        return Map.of("kpi", name, "val", val instanceof Number n ? n : 0L);
     }
 
     /** 11.1 费用发生汇总表（期间×费用类型） */

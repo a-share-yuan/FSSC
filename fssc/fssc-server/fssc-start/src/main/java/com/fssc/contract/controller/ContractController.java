@@ -114,7 +114,7 @@ public class ContractController {
         return Result.success(service.supplement(id));
     }
 
-    // ---------------- 付款条件 / 支付记录（需求 5.2） ----------------
+    // 付款条件 / 支付记录（需求 5.2）
 
     @RequiresPerm("contract:list")
     @GetMapping("/{id}/conditions")
@@ -127,7 +127,7 @@ public class ContractController {
     @OperLog(module = "CONTRACT", operType = "INSERT", desc = "新增合同付款条件")
     @PostMapping("/condition/create")
     public Result<Long> conditionCreate(@RequestBody ContPayCondition c) {
-        // D-V4R-91：原为 conditionMapper.insert(c) 裸写零校验，
+        // 直接调 conditionMapper.insert(c) 会裸写零校验，
         // 可灌入计划额 99999999 / 金额为 0 / 挂到别的公司合同下的脏数据。改走 Service 校验。
         return Result.success(service.createPayCondition(c));
     }
@@ -151,7 +151,7 @@ public class ContractController {
     @OperLog(module = "CONTRACT", operType = "INSERT", desc = "新增合同支付记录")
     @PostMapping("/record/create")
     public Result<Long> recordCreate(@RequestBody ContPayRecord r) {
-        // D-V4R-91：原为 recordMapper.insert(r) 裸写零校验，付款台账金额可任意填。改走 Service 校验。
+        // 直接调 recordMapper.insert(r) 会裸写零校验，付款台账金额可任意填。改走 Service 校验。
         return Result.success(service.createPayRecord(r));
     }
 

@@ -24,12 +24,14 @@ vi.mock('@/api', () => ({
   // 导出（C-3 验证码判定），工厂漏供会让 doLogin 直接抛（段H 回归实案，`|| []` 兜不住）
   getCaptcha: vi.fn(),
   CAPTCHA_ERROR_CODES: [4011, 4012],
+  // 登录成功后清浮层（错误提示/弹窗残留），doLogin 直接调用
+  clearGlobalOverlays: vi.fn(),
 }))
 
 import Login from './Login.vue'
 import { login, store } from '@/api'
 
-describe('L1-F-04 Login.vue 组件测试', () => {
+describe('Login.vue 组件测试', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     store.token = ''

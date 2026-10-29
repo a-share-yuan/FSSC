@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * L1-B-07 BankReconcileService 单元测试：银行对账。
+ * BankReconcileService 单元测试：银行对账。
  *
  * <p>契约要求：
  * <ol>

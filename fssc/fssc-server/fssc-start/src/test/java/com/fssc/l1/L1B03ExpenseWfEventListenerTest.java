@@ -25,12 +25,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * L1-B-03 ExpenseWfEventListener 单元测试。
+ * ExpenseWfEventListener 单元测试。
  *
- * <p>核心验证 <b>P0-2 防篡改 fail-closed</b>：审批通过前校验单据关键字段校验和，
+ * <p>核心验证 <b>防篡改 fail-closed</b>：审批通过前校验单据关键字段校验和，
  * 校验和缺失或不一致一律拦截（置 REJECTED + 审计留痕），绝不"异常即放行"。
  */
-@DisplayName("L1-B-03 ExpenseWfEventListener 防篡改/事件收口")
+@DisplayName("L1-B-03 ExpenseWfEventListener 防篡改/事件处理")
 class L1B03ExpenseWfEventListenerTest {
 
     private static final BigDecimal AMT = new BigDecimal("1000.00");

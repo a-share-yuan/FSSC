@@ -61,7 +61,7 @@
       <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
           <el-button link type="info" size="small" @click="viewDetail(row)">详情</el-button>
-          <!-- 行内追溯入口——此前抽屉死挂载（openTrace 零调用点），数据在、页面不给看 -->
+          <!-- 行内追溯入口——抽屉原先死挂载（openTrace 零调用点），数据在、页面不给看 -->
           <el-button link size="small" @click.stop="openTrace(row)">追溯</el-button>
         </template>
       </el-table-column>
@@ -262,7 +262,7 @@ function normalizeDate(v) {
 }
 
 async function load() {
-  if (!canList) return // R5-D-072：无权不请求，避免 4030 被吞成空表
+  if (!canList) return // 无列表权限就不发请求，避免 4030 被吞成空表
   loading.value = true
   try {
     const r = await purchaseApi.receiptPage({ ...q })
@@ -370,7 +370,7 @@ onMounted(async () => {
     ])
     suppliers.value = s.list || []
     pos.value = p.list || []
-  } catch (e) { /* 失败已由 api.js 拦截器全局弹错，此处仅默认处理防止未捕获拒绝；下拉为空时用户可感知 */ }
+  } catch (e) { /* 失败已由 api.js 拦截器全局弹错，此处仅兜底防止未捕获拒绝；下拉为空时用户可感知 */ }
   load()
 })
 

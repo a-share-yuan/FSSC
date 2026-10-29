@@ -17,9 +17,10 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Pattern;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 表单元数据引擎（V1.4.85）——闭环差距①「单据/界面不是元数据驱动」。
+ * 表单元数据引擎——闭环差距①「单据/界面不是元数据驱动」。
  *
  * <p><b>本类为什么是关键</b>：差距①的根因不是「没有配置表」，
  * 而是 {@code md_form_config} 的 config_json 里只有分节名、<b>没有任何字段定义</b>，
@@ -53,13 +54,13 @@ public class FormMetaService {
                             String severity) {
     }
 
-    // ==================== 元数据读取 ====================
+    // 元数据读取
 
     /**
      * 取表单字段元数据。
      *
      * @param formCode 表单编码
-     * @param roles    当前用户角色码集合（用于 readonlyRoles/visibleRoles 过滤，可空）
+     * @param roles 当前用户角色码集合（用于 readonlyRoles/visibleRoles 过滤，可空）
      */
     public List<MdFormField> fieldsOf(String formCode, Set<String> roles) {
         List<MdFormField> all = fieldMapper.selectList(new LambdaQueryWrapper<MdFormField>()
@@ -98,7 +99,7 @@ public class FormMetaService {
         return validationMapper.selectList(w);
     }
 
-    // ==================== 权威校验 ====================
+    // 权威校验
 
     /**
      * 按元数据校验提交数据。
@@ -108,8 +109,8 @@ public class FormMetaService {
      * ERROR 级违规抛异常阻断提交，WARN 级仅记录。
      *
      * @param formCode 表单编码
-     * @param data     提交数据（fieldKey → value）
-     * @param scope    校验时机 SAVE/APPROVE
+     * @param data 提交数据（fieldKey → value）
+     * @param scope 校验时机 SAVE/APPROVE
      */
     public ValidateResult validate(String formCode, Map<String, Object> data, String scope) {
         List<MdFormField> fields = fieldsOf(formCode, null);
@@ -223,7 +224,7 @@ public class FormMetaService {
                         ? null : "身份证格式不正确";
             }
             case "UNIQUE" -> {
-                // 唯一性需要查库，此处只做「已填」检查；真正的唯一性由 DB 唯一索引默认处理
+                // 唯一性需要查库，此处只做「已填」检查；真正的唯一性由 DB 唯一索引兜底
                 return null;
             }
             case "CUSTOM_EXPRESSION" -> {
@@ -254,7 +255,7 @@ public class FormMetaService {
         }
     }
 
-    // ==================== 默认值 ====================
+    // 默认值
 
     /**
      * 按元数据填默认值（数据里没有的字段用 defaultValue 补上）。
@@ -281,7 +282,7 @@ public class FormMetaService {
         };
     }
 
-    // ==================== 字段维护（配置面） ====================
+    // 字段维护（配置面）
 
     /**
      * 保存字段元数据（配置面入口）。
@@ -289,7 +290,7 @@ public class FormMetaService {
      * <p><b>为什么单独开放写接口</b>：本类的价值在于「新增字段 = 插数据」，
      * 如果只读不写，这条链仍然要改代码才能加字段，差距①就没真正闭环。
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class)
     public Long saveField(MdFormField field) {
         if (field.getFormCode() == null || field.getFormCode().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "表单编码不能为空");
@@ -315,7 +316,7 @@ public class FormMetaService {
     /**
      * 删除字段（系统字段禁删）。
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class)
     public void deleteField(Long fieldId) {
         MdFormField f = fieldMapper.selectById(fieldId);
         if (f == null) {
@@ -331,7 +332,7 @@ public class FormMetaService {
         fieldMapper.deleteById(fieldId);
     }
 
-    // ==================== 内部 ====================
+    // 内部
 
     /**
      * 角色过滤：配置为空=不限制；非空则须命中其一。

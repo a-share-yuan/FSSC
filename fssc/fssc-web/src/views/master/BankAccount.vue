@@ -168,11 +168,11 @@ const formRules = computed(() => ({
   accountName: [{ required: true, message: '请输入账户名称' }],
   companyId: [{ required: true, message: '请选择所属组织' }],
   bankName: [{ required: true, message: '请输入开户行' }],
-  // P0 资金路由字段：银行账号必填 + 格式（6-30 位数字）；唯一性由后端默认处理（同租户同号拒登记）
+  // 资金路由字段：银行账号必填 + 格式（6-30 位数字）；唯一性由后端兜底（同租户同号拒登记）
   bankAccount: [...commonRules.required('请输入银行账号'), ...commonRules.bankAccount()],
   // 联行号选填，填了就必须是 12 位数字
   bankCode: commonRules.bankCode(),
-  // 期初余额不能为负（后端 @DecimalMin 默认处理）
+  // 期初余额不能为负（后端 @DecimalMin 兜底）
   balance: commonRules.amountRange(0, null, '期初余额不能为负'),
   // 账户性质是「一司一基本户」判据的来源，新增即必选；历史现有账户允许先改其它字段
   accountType: form.id ? [] : [{ required: true, message: '请选择账户性质' }],
@@ -191,7 +191,7 @@ function fmtMoney(v) {
   return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-// 4030 权限拒绝独立空态（改前与「暂无数据」同形，无权限被读成没数据）
+// 4030 权限拒绝独立空态（原先与「暂无数据」同形，无权限被读成没数据）
 const denied = ref(false)
 
 async function load() {

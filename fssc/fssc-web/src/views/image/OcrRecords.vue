@@ -55,7 +55,7 @@
       <el-table-column prop="channelName" label="识别通道" width="110" align="center">
         <template #default="{ row }">{{ ocrChannelLabel(row.channelName) || '—' }}</template>
       </el-table-column>
-      <!-- 识别失败此前不落本表 ⇒ 记录页对一次失败恒 0 行、无从复核。
+      <!-- 识别失败若不落本表 ⇒ 记录页对一次失败恒 0 行、无从复核。
            现失败也有一行（recognizeStatus=FAILED），本列区分成功/失败，失败原因见下一列。 -->
       <el-table-column label="识别结果" width="90" align="center">
         <template #default="{ row }">
@@ -120,7 +120,7 @@ async function loadBatches() {
   try { batchOptions.value = (await imageApi.batchList({})) || [] } catch { batchOptions.value = [] }
 }
 
-// P0 铁律：列表页必须 server 分页（sizes + jumper）
+// 列表页必须 server 分页（sizes + jumper）
 const pager = useTablePager({ mode: 'server', storageKey: 'ocr_records' })
 const { pagedData: pagedRecords } = pager
 

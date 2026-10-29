@@ -63,14 +63,14 @@ public class PurReturn extends TenantAuditBase {
     @TableField(exist = false)
     private List<PurReturnLine> lines;
 
-    // ---------------- 状态常量 ----------------
+    // 状态常量
     public static final String ST_DRAFT = "DRAFT";
     public static final String ST_PENDING = "PENDING";
     public static final String ST_APPROVED = "APPROVED";
     public static final String ST_REJECTED = "REJECTED";
     public static final String ST_VOIDED = "VOIDED";
 
-    // ---------------- 退货方式常量 ----------------
+    // 退货方式常量
     /** 退货退款：冲减应付，进对账 */
     public static final String MODE_REFUND = "REFUND";
     /** 退货补货：不冲减应付，不进对账 */

@@ -72,7 +72,7 @@ public class ColdArchiveService {
         this.transactionTemplate = new TransactionTemplate(txManager);
     }
 
-    // ---------------- dryRun ----------------
+    // dryRun
 
     /**
      * 按当前配置返回各租户"可搬"最终状态超期单据数（只 SELECT COUNT，不搬）。
@@ -112,7 +112,7 @@ public class ColdArchiveService {
         return false;
     }
 
-    // ---------------- archive ----------------
+    // archive
 
     /**
      * 归档主流程：enabled=1 才执行；逐租户，每批 LIMIT 200，每张单独立事务。
@@ -217,7 +217,7 @@ public class ColdArchiveService {
         });
     }
 
-    // ---------------- 冷表查询（Controller 用） ----------------
+    // 冷表查询（Controller 用）
 
     /** 冷单据分页：手工带 tenant_id，走 JdbcTemplate（冷表不在租户拦截器管辖）。 */
     public PageResult<Map<String, Object>> coldPage(long pageNum, long pageSize, String billNo,
@@ -280,7 +280,7 @@ public class ColdArchiveService {
         return result;
     }
 
-    // ---------------- 内部工具 ----------------
+    // 内部工具
 
     /** 存在任意非删除单据的租户列表（用于跨租户扫描） */
     private List<Long> listCandidateTenants() {

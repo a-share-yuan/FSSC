@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 免鉴权健康探活端点（P0-B1）。
+ * 免鉴权健康探活端点。
  *
  * <p>与 Actuator 的分工：
  * <ul>

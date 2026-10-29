@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 故本链路不需要新建表或列。</p>
  *
  * <p>权限码：{@code system:sod:list} 与 {@code system:sod:scan} 两个码都按「多码 OR、新旧同认」
- * 同时挂在查询与执行端点上。实测 sys_menu 中两码均有在用行——
+ * 同时挂在查询与执行端点上。sys_menu 中两码均有在用行——
  * {@code system:sod:list} 挂在菜单 3621（逗号打包码）；{@code system:sod:scan} 已播种为按钮菜单 3762
  * del_flag=0。仅持有 3762 的角色（如合规管理岗 99031）若只认 list 会在首屏查询即 403，
  * 故两个端点都并认两码。旧的菜单 3080（system:sod:list）已 del_flag=1，不再作为依据。</p>

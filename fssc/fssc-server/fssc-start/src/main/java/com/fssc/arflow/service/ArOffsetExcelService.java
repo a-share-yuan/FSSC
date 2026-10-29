@@ -4,6 +4,7 @@
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fssc.arflow.entity.ArClaim;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
@@ -17,6 +18,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -139,7 +141,7 @@ public class ArOffsetExcelService {
     }
 
     /** 引入并生成 OTHER_OFFSET 服务申请单（校验报告非空则整单拒绝——先校验后入库）。 */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> importAndCreate(MultipartFile file, String reason) {
         ParseResult parsed = parse(file);
         if (!parsed.report().isEmpty()) {
@@ -162,12 +164,12 @@ public class ArOffsetExcelService {
                 l.put("partnerCode", r.getPartnerCode());
                 lines.add(l);
             }
-            linesJson = com.fasterxml.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(lines);
+            linesJson = JsonMapper.builder().build().writeValueAsString(lines);
         } catch (Exception e) {
             throw new BizException(ErrorCode.SYSTEM_ERROR, "分录序列化失败：" + e.getMessage());
         }
-        com.fssc.arflow.entity.ArClaim c = new com.fssc.arflow.entity.ArClaim();
-        c.setClaimType(com.fssc.arflow.entity.ArClaim.T_OTHER_OFFSET);
+        ArClaim c = new ArClaim();
+        c.setClaimType(ArClaim.T_OTHER_OFFSET);
         c.setCompanyId(1L);
         c.setAmount(totalDebit);
         c.setDebitAmount(totalDebit);

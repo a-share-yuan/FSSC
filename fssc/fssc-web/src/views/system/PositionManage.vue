@@ -206,7 +206,7 @@ async function del(row) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-// 41号审查 P1-9：全量职位导出（树形页无分页语义，导出即全量清单）
+// 41号审查 全量职位导出（树形页无分页语义，导出即全量清单）
 function doExport() {
   exportCsv(allPosts.value.map((p) => ({
     ...p,

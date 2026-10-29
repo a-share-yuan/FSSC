@@ -43,7 +43,7 @@ public class SharingController {
     private final VoucherService voucherService;
     /** 人工过账口的实付校验（付款环节凭证未实付不得记账） */
     private final VoucherAutoPostService voucherAutoPostService;
-    /** A12（RA-ROOT-09）：自动制证失败事件的只读视图 */
+    /** 自动制证失败事件的只读视图 */
     private final VoucherGenFailureService voucherGenFailureService;
     private final ExpBillMapper expBillMapper;
 
@@ -133,7 +133,7 @@ public class SharingController {
                     + (bill.getStatus() == null ? "null" : bill.getStatus()));
         }
         // 对公付款单（PAY：SETTLE/PREPAY/AGENCY/AIR）走付款凭证语义：借 2202 / 贷 1002，
-        // generatePtpPayment 内置 去重判重与 voucher_no 默认处理回写，可安全补生成。
+        // generatePtpPayment 内置 去重判重与 voucher_no 兜底回写，可安全补生成。
         if ("PAY".equals(bill.getBillType())) {
             return Result.success(voucherService.generatePtpPayment(bill));
         }
@@ -153,8 +153,8 @@ public class SharingController {
 
     /**
      * 凭证台账列表。后端环节：补「公司／年度／月度」三个可空筛选参数——
-     * 原先签名里没有这三项，页面筛选与查询按钮对返回结果完全无效。
-     * 三个参数一律 {@code required = false}，不传＝不加条件＝改前规则；数据范围仍由服务层
+     * 签名里没有这三项时，页面筛选与查询按钮对返回结果完全无效。
+     * 三个参数一律 {@code required = false}，不传＝不加条件；数据范围仍由服务层
      * {@code @DataScope} 注入（本接口未绕过可见性校验）。
      */
     @RequiresPerm("sharing:voucher:list")
@@ -171,14 +171,14 @@ public class SharingController {
                                                      @RequestParam(required = false) String order) {
         PageResult<OpVoucher> page = voucherService.page(query.getPageNum(), query.getPageSize(), status, sourceType,
                 companyId, periodYear, periodMonth, orderBy, order);
-        // X-49 乙：读侧打标"资金指令未下发"（payLegUnsettled）——已记账但款未付出的历史付款环节凭证
+        // 读侧打标"资金指令未下发"（payLegUnsettled）——已记账但款未付出的历史付款环节凭证
         // 保持不动账，只在凭证台账明示注记；纯只读，不改 status、不写库、不拦记账（记账校验仍是 assertPaymentLegSettled）。
         voucherAutoPostService.fillPayLegUnsettledFlag(page.getList());
         return Result.success(page);
     }
 
     /**
-     * A12 执行结果视图（RA-ROOT-09）：审批通过后自动制证失败的<b>事件</b>列表，只读、零写。
+     * 执行结果视图：审批通过后自动制证失败的<b>事件</b>列表，只读、零写。
      * status 传空＝不限（默认规则）；PENDING＝至今未补生成，RESOLVED＝已按同源补出凭证。
      * 覆盖范围仅费用族，理由见 {@link VoucherGenFailureService} 类注释。
      */
@@ -193,7 +193,7 @@ public class SharingController {
                 query.getPageNum(), query.getPageSize(), status, sourceType, billNo));
     }
 
-    /** A12 配套：按来源事件计数（含扫描上限与是否截断，避免把「最近 N 条内」说成全量真值） */
+    /** 按来源事件计数（含扫描上限与是否截断，避免把「最近 N 条内」说成全量真值） */
     @RequiresPerm("sharing:voucher:list")
     @GetMapping("/voucher/gen-failure/stats")
     public Result<Map<String, Object>> voucherGenFailureStats(
@@ -213,14 +213,14 @@ public class SharingController {
     public Result<Void> voucherPost(@PathVariable Long id) {
         // 人工过账口的实付校验——付款环节凭证（贷 银行存款）在款项实际付出前不得置 POSTED。
         // 自动通道只在银行指令成功后推（PayBatchService.writeBackPayment／PayBatchBizAction 的 paid 判定），
-        // 而本口原先只校验制审分离，实测 4 张未付款的付款环节凭证由此被人工记账（现库凭证 14/15/16/23）。
+        // 只校验制审分离的话，未付款的付款环节凭证照样能被人工记账。
         voucherAutoPostService.assertPaymentLegSettled(id);
         voucherService.post(id, UserContext.getRequired().getUserId());
         return Result.success();
     }
 
     /** 批量过账：逐张 DRAFT→POSTED，单张失败不影响其余，返回每张结果 */
-    /** GAP-01(20260921)：凭证作废（仅 DRAFT 凭证可作废） */
+    /** 凭证作废（仅 DRAFT 凭证可作废） */
     @RequiresPerm("sharing:voucher:post")
     @OperLog(module = "VOUCHER", operType = "VOID", desc = "凭证作废")
     @PostMapping("/voucher/void/{id}")
@@ -229,7 +229,7 @@ public class SharingController {
         return Result.success();
     }
 
-    /** GAP-01(20260921)：凭证红字冲销（POSTED → 生成方向相反金额相等的红字凭证） */
+    /** 凭证红字冲销（POSTED → 生成方向相反金额相等的红字凭证） */
     @RequiresPerm("sharing:voucher:post")
     @OperLog(module = "VOUCHER", operType = "REVERSE", desc = "凭证红字冲销")
     @PostMapping("/voucher/reverse/{id}")

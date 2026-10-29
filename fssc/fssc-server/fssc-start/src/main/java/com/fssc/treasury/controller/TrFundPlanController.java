@@ -73,7 +73,7 @@ public class TrFundPlanController {
     /**
      * 作废资金计划（记录，不物理删除；联动终止在办流程）。
      *
-     * <p>此前没有作废/删除出口，跑测清理重复草稿只能直接删表 ⇒ 留下 RUNNING 僵尸流程实例
+     * <p>没有作废/删除出口的话，清理重复草稿只能直接删表 ⇒ 留下 RUNNING 僵尸流程实例
      * 与无 assignee 的僵尸待办。作废走标准收尾入口 {@code cancelRunningInstancesByBiz}。</p>
      */
     @RequiresPerm("treasury:fundplan:update")

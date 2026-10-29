@@ -10,7 +10,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 报表业务域校验（P1 报表权限整改）。
+ * 报表业务域校验（报表权限整改）。
  *
  * <p>标注在报表查询接口上，与 {@code @RequiresPerm("report:view")} 叠加使用：
  * 前者校验"是否有报表基础码"，本注解校验"是否持有对应业务域的判据权限码"——

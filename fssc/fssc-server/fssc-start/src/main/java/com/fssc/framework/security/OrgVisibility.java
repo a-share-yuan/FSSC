@@ -3,12 +3,13 @@
 
 package com.fssc.framework.security;
 
+import com.fssc.common.enums.DataScope;
 import java.util.Objects;
 
 /**
  * 组织可见范围判定（公司维度）。
  *
- * <p>复用登录态里已有的 {@code dataScope}（{@code com.fssc.common.enums.DataScope}，1-5 档）
+ * <p>复用登录态里已有的 {@code dataScope}（{@code DataScope}，1-5 档）
  * 与权限码，不另立枚举。用途：公司树 / 部门树 / 人员下拉等"跨公司可选"的读接口，
  * 在出参侧裁到登录人的可见范围，避免普通员工从下拉里看到其他法人主体。</p>
  *

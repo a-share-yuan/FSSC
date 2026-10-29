@@ -7,7 +7,7 @@
  * 未命中的 key 原样返回，不影响功能
  */
 const ZH = {
-  // ============ 调色板 / 右键菜单 / 创建操作 ============
+  // 调色板 / 右键菜单 / 创建操作
   'Start Event': '开始事件',
   'End Event': '结束事件',
   'Task': '任务',
@@ -67,7 +67,7 @@ const ZH = {
   'Create/remove Space Tool': '空间工具',
   'Add to diagram': '添加到画布',
 
-  // ---- 调色板实际 key（bpmn-js PaletteProvider）----
+  // 调色板实际 key（bpmn-js PaletteProvider）
   'Activate hand tool': '抓手工具',
   'Activate lasso tool': '套索工具',
   'Activate create/remove space tool': '创建/删除空间工具',
@@ -83,7 +83,7 @@ const ZH = {
   'Create pool/participant': '创建泳道/参与者',
   'Create intermediate/boundary event': '创建中间/边界事件',
 
-  // ---- 右键菜单实际 key（bpmn-js ContextPadProvider）----
+  // 右键菜单实际 key（bpmn-js ContextPadProvider）
   'Change element': '更改元素',
   'Connect to other element': '连接到其他元素',
   'Connect using association': '使用关联连线',
@@ -104,7 +104,7 @@ const ZH = {
   'Append timer intermediate catch event': '追加定时器中间捕获事件',
   'Append intermediate/boundary event': '追加中间/边界事件',
 
-  // ---- 替换菜单 / 事件标签 ----
+  // 替换菜单 / 事件标签
   'Expanded Sub Process': '展开子流程',
   'Event Sub Process': '事件子流程',
   'sub process(expanded)': '子流程（展开）',
@@ -127,7 +127,7 @@ const ZH = {
   'Transaction': '事务',
   'Call Activity': '调用活动',
 
-  // ---- 更改元素（替换菜单，bpmn-js ReplaceOptions 全量）----
+  // 更改元素（替换菜单，bpmn-js ReplaceOptions 全量）
   'Sub-process': '子流程',
   'Sub-process (collapsed)': '子流程（折叠）',
   'Sub-process (expanded)': '子流程（展开）',
@@ -194,7 +194,7 @@ const ZH = {
   'Parallel multi-instance': '并行多实例',
   'Sequential multi-instance': '顺序多实例',
 
-  // ============ 属性面板 ============
+  // 属性面板
   'General': '常规',
   'Details': '详情',
   'Documentation': '说明',
@@ -317,7 +317,7 @@ const ZH = {
   'Role': '角色',
   'Group': '分组',
 
-  // ---- 属性面板字段级标签（bpmn-js-properties-panel）----
+  // 属性面板字段级标签（bpmn-js-properties-panel）
   'Active elements': '活动元素',
   'Active elements collection': '活动元素集合',
   'Activity reference': '活动引用',
@@ -436,7 +436,7 @@ const ZH = {
   'Delete item': '删除项',
   'Participant': '参与者',
 
-  // ---- 属性面板缺失键补齐（2026-09-17 全面盘点 @bpmn-io/properties-panel + bpmn-js-properties-panel dist 静态键）----
+  // 属性面板缺失键补齐（全面盘点 @bpmn-io/properties-panel + bpmn-js-properties-panel dist 静态键）
   // 通用 / 状态
   ' or ': ' 或 ',
   '). ': '）。',
@@ -637,7 +637,7 @@ const ZH = {
   '{eventType}: {type}': '{eventType}：{type}',
 }
 
-/** translate 服务实现：先做占位符替换，再查中文映射（精确匹配→大小写不敏感默认处理），未命中返回原文 */
+/** translate 服务实现：先做占位符替换，再查中文映射（精确匹配→大小写不敏感兜底），未命中返回原文 */
 const ZH_LOWER = Object.fromEntries(Object.entries(ZH).map(([k, v]) => [k.toLowerCase(), v]))
 
 export function translateZh(template, replacements) {

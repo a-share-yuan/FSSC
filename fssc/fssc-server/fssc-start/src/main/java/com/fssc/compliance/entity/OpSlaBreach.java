@@ -16,7 +16,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * SLA 违约记录实体（P1-5 共享运营实质化）。
+ * SLA 违约记录实体（共享运营实质化）。
  */
 @Data
 @TableName("op_sla_breach")

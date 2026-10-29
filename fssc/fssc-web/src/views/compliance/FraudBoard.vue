@@ -109,10 +109,10 @@
             <el-button link size="small" type="success" @click="doAppealReview(row, true)">申诉通过</el-button>
             <el-button link size="small" type="danger" @click="doAppealReview(row, false)">申诉驳回</el-button>
           </template>
-          <!-- F-run-1017b 实测：人工放行只对「会拦付款的行」渲染——与后端
+          <!-- 人工放行只对「会拦付款的行」渲染——与后端
                paymentBlockReason / fraud/page pendingRelease 同一规则（HIGH_RISK 且未复审且未人工放行）。
                原实现按 actionTaken==='REVIEW' 渲染，预警行（WARN）与待审行的按钮混排，
-               按行文本定位极易点到预警行的【申诉】（实测首轮脚本就点错行）。 -->
+               按行文本定位极易点到预警行的【申诉】。 -->
           <template v-else-if="isPendingRelease(row)">
             <el-button link size="small" type="success" @click="doReview(row, 'RELEASE')">人工放行</el-button>
             <el-button link size="small" type="danger" @click="doReview(row, 'BLOCK')">阻断</el-button>
@@ -161,7 +161,7 @@ const ACTION_ST = { ALLOW: '自动放行', WARN: '预警', REVIEW: '人工待审
 function riskTag(r) { return r === 'HIGH_RISK' ? 'danger' : (r === 'SUSPICIOUS' ? 'warning' : 'success') }
 function actionTag(a) { return a === 'BLOCK' ? 'danger' : ((a === 'WARN' || a === 'MONITOR' || a === 'REVIEW') ? 'warning' : 'success') }
 
-// P0 铁律：列表页必须 server 分页（sizes + jumper）
+// 列表页必须 server 分页（sizes + jumper）
 const pager = useTablePager({ mode: 'server', storageKey: 'fraud_logs' })
 const { pagedData: pagedLogs } = pager
 

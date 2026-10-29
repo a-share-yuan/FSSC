@@ -12,27 +12,27 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 薪酬发放人员级明细（gl_salary_run_detail，带 tenant_id）——<b>（171）</b>。
+ * 薪酬发放人员级明细（gl_salary_run_detail，带 tenant_id）。
  *
- * <p><b>缺陷本体的库侧取证（只读普查，2026-10-01）：</b>
+ * <p><b>库侧现状（只读查询）：</b>
  * {@code SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='fssc' AND
  * (TABLE_NAME LIKE '%salar%' OR '%payroll%' OR '%wage%' OR '%emp%')} 只有两条与薪酬沾边的表——
  * {@code gl_salary_run}（1 行）与 {@code md_employee_level}（职级字典，列只有 level_code/level_name/sort/status，
  * <b>没有员工号、没有金额</b>）；{@code employee_credit} 是员工信用与薪酬无关。
  * 再看列：{@code information_schema.COLUMNS} 里全库只有 {@code gl_salary_run.salary_amount} 与
  * {@code sys_user.emp_no} 两列命中 salar/emp_no/withhold/other_deduct——
- * <b>现库不存在任何人员级薪酬明细载体，也不存在可回填的行级来源</b>。
+ * 现库不存在任何人员级薪酬明细载体，也不存在可回填的行级来源。
  * 于是 {@code gl_salary_run.emp_count=10}（批次 SR202612001）无从支撑：该数由
  * {@code GlSalaryRunService.calculateRun} 的「人数 × sys_config 人均标准」算出（salary.std.basic 等 4 个参数），
  * 审批人看到的"工资"是一个总数，核不到人，代扣额也失去唯一可信来源。</p>
  *
- * <p><b>本类只落代码侧载体，不落数据：</b>建表属 DDL，按本仓 114/167/028 同模式以<b>注释态</b>交付于下方
+ * <p>本类只落代码侧载体，不落数据：建表属 DDL，按本仓 114/167/028 同模式以<b>注释态</b>交付于下方
  * {@code <pre>} 块，修复批次不执行；读侧 {@code GlSalaryRunService.listDetailOfRun} 在未建表期 fail-soft
  * 只留 WARN、返回空集，不抛给界面；写侧<b>刻意不建档</b>——现库无行级来源，若按「人数 × 人均标准」
  * 生成 10 条完全相同的"人"，等于把配置参数伪造成到人证据，比现状（一个总数）更坏，故宁缺毋滥。</p>
  *
  * <pre>
- * -- 需人工裁决：以下 DDL 未执行、也不得由缺陷修复批次执行（注释态交付）。
+ * -- 需产品确认：以下 DDL 未执行、也不得由缺陷修复批次执行（注释态交付）。
  * -- 建表后本类字段按 MP 下划线转驼峰自动对上，无需改代码；
  * -- 同时 GlSalaryRunService.checkEmpCountConsistency 的"未建表"WARN 会自动切成真实的条数比对。
  * -- CREATE TABLE gl_salary_run_detail (
@@ -70,10 +70,10 @@ import java.math.BigDecimal;
  * -- 直到接入真实薪酬台账（见下"建档写入位置前置条件"）。
  * --
  * -- 建档写入位置的前置条件（缺一条都不落写入代码，避免把参数伪装成证据）：
- * ① 上面的 DDL 经人工裁决执行；
+ * ① 上面的 DDL 经产品确认执行；
  * ② 出现行级来源——人事薪酬台账，或 md_employee 一类的员工主数据（现库没有，只有职级字典 md_employee_level）；
  * 届时在 GlSalaryRunService.calculateRun 的 insert 之后、occupyBudgetForRun 之前按人建行，
- * 并让人均标准 4 个 sys_config 参数退化为"无台账批计"默认处理规则。
+ * 并让人均标准 4 个 sys_config 参数退化为"无台账批计"兜底规则。
  * -- </pre>
  *
  * @see GlSalaryRunService#listDetailOfRun

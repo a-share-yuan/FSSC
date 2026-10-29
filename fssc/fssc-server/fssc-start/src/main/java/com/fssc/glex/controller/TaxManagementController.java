@@ -23,7 +23,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * 税务管理统一入口（P1-3 税务一体化）。
+ * 税务管理统一入口（税务一体化）。
  * <p>
  * 覆盖三大模块：
  * 1. 进项认证台账（/api/tax/certify/*）
@@ -42,7 +42,7 @@ public class TaxManagementController {
     private final TaxDeclarationService declarationService;
     private final TaxRiskService riskService;
 
-    // ================ 进项认证台账 ================
+    // 进项认证台账
 
     @RequiresFeature("FSSC_TAX")
     @RequiresPerm("gl:taxcertify:list")
@@ -121,7 +121,7 @@ public class TaxManagementController {
         return Result.success(certifyService.sumDeductible(period));
     }
 
-    // ================ 全税种申报 ================
+    // 全税种申报
 
     @RequiresFeature("FSSC_TAX")
     @RequiresPerm("gl:taxdecl:list")
@@ -191,7 +191,7 @@ public class TaxManagementController {
         return Result.success(declarationService.sumTaxAmount(period, taxType));
     }
 
-    // ================ 税务风险指标 ================
+    // 税务风险指标
 
     @RequiresFeature("FSSC_TAX")
     @RequiresPerm("gl:taxrisk:list")

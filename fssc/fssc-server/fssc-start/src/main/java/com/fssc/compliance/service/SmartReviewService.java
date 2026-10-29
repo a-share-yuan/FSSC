@@ -48,8 +48,8 @@ public class SmartReviewService {
     }
 
     /**
-     * X-31，乙：AI 未采纳的业务记录。
-     * <p>AI 通道现与端点不同型、调用恒失败，改前只剩一行 WARN 后静默走规则引擎 ⇒ 单据的审单记录里
+     * AI 未采纳的业务记录。
+     * <p>AI 通道与端点不同型、调用恒失败，若只留一行 WARN 再静默走规则引擎 ⇒ 单据的审单记录里
      * 看不出"这一单是谁判的"。现把未采纳本身落成一条记录：{@code action=SKIP} 与既有"未命中"行同族，
      * 不污染 AUTO_PASS/AUTO_REJECT/MANUAL_REVIEW 三个统计方式，也不给 AUTO_PASS 链路喂 AI 结论。
      */
@@ -231,9 +231,9 @@ public class SmartReviewService {
         }
 
         // 规则引擎审单
-        // P1 修复（2026-09-09 UI 实测发现）：加载规则时必须按单据类型过滤 related_expense_types，
+        // 加载规则时必须按单据类型过滤 related_expense_types，
         // 否则「金额超5万自动驳回」等费用风控规则会误杀借款/还款/付款等资金类单据
-        // （600 万借款经 12 节点审批后仍被 amount>50000 规则 AUTO_REJECT，导致最终状态 REJECTED）。
+        // （借款单走完整条审批链后仍被 amount>50000 规则 AUTO_REJECT，导致最终状态 REJECTED）。
         // 规则 related_expense_types 为 NULL 表示全类型适用（向后兼容保持原行为）。
         String billTypeOfBill = billData.get("billType") != null ? String.valueOf(billData.get("billType")) : null;
         List<ReviewRule> rules = reviewRuleMapper.selectList(

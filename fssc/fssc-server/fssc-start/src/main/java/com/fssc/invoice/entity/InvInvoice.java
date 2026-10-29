@@ -68,13 +68,13 @@ public class InvInvoice extends TenantAuditBase {
     private LocalDateTime reverseDate;
     /** 发票影像文件ID（sys_file.id，供前端预览发票影像） */
     private Long imgFileId;
-    /** 所属公司（多分子公司审批路由 V1.3.17） */
+    /** 所属公司（多分子公司审批路由） */
     private Long companyId;
-    /** P0-4 溯源：来源单据类型 BILL单据/IMG_FILE影像/MANUAL手工 */
+    /** 溯源：来源单据类型 BILL单据/IMG_FILE影像/MANUAL手工 */
     private String sourceDocType;
-    /** P0-4 溯源：来源单据ID */
+    /** 溯源：来源单据ID */
     private Long sourceDocId;
-    /** uxfix W1（2026-10-08）：方向 INPUT进项(收票)/OUTPUT销项(开票)。DDL 见 临时脚本/backup_uxfix_20261008/w1_ddl.tmp.sql */
+    /** 方向 INPUT进项(收票)/OUTPUT销项(开票)。 */
     private String direction;
     /** 备注/记录（作废原因、红冲原因） */
     private String remark;

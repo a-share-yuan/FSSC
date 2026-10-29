@@ -19,7 +19,7 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 
 /** 主数据 Currency 服务（带 tenant_id，租户拦截器自动隔离）
- * <p>P1-1：全量列表缓存（币种高频只读，变更很少） */
+ * <p>全量列表缓存（币种高频只读，变更很少） */
 @Service
 @RequiredArgsConstructor
 public class CurrencyService {
@@ -33,7 +33,7 @@ public class CurrencyService {
 
     private final MdCurrencyMapper mapper;
 
-    /** 全量列表（页码固定 pageSize=200 拉全量，用于下拉选项）。P1-1：Caffeine 缓存 5min TTL。 */
+    /** 全量列表（页码固定 pageSize=200 拉全量，用于下拉选项）。Caffeine 缓存 5min TTL。 */
     @Cacheable(value = "masterData", key = "T(com.fssc.framework.tenant.TenantContext).getTenantId() + ':currency:list'")
     public PageResult<MdCurrency> page(long pageNum, long pageSize, String keyword) {
         LambdaQueryWrapper<MdCurrency> qw = new LambdaQueryWrapper<>();
@@ -46,7 +46,7 @@ public class CurrencyService {
     }
 
     /**
-     * 【2026-10-18 币种免权限通道的数据源】币种下拉选项。
+     * 【币种免权限通道的数据源】币种下拉选项。
      *
      * 与 {@link #page} 的三处刻意差异：
      *   ① **独立缓存 key** {@code :currency:options} —— 不能复用 page 的 {@code :currency:list}：

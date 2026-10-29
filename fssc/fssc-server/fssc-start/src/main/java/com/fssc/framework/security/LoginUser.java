@@ -41,7 +41,7 @@ public class LoginUser implements Serializable {
     /** 当前纳税主体（集团型租户切换公司用，X-Company-Id 经后端校验归属当前租户） */
     private Long companyId;
 
-    /** 当前部门（data_scope 部门/本部门及以下两级过滤用，V1.3.20 新增） */
+    /** 当前部门（data_scope 部门/本部门及以下两级过滤用，新增） */
     private Long deptId;
 
     /** 登录时间戳（毫秒） */

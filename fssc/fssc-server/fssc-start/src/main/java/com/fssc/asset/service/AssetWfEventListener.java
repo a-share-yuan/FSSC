@@ -66,15 +66,15 @@ public class AssetWfEventListener implements WfBizAction {
     private final WfQueryService wfQueryService;
     /** 审计扩面：审批最终状态状态跃迁记录 */
     private final AuditTrailService auditTrailService;
-    /** X-06：变动台账最终状态回写（发起侧 MdAssetService 插行，本类只把 APPROVING 改成最终状态） */
+    /** 变动台账最终状态回写（发起侧 MdAssetService 插行，本类只把 APPROVING 改成最终状态） */
     private final MdAssetChangeLogMapper changeLogMapper;
 
     @Override
     public Set<String> bizTypes() {
-        // 批次0 P-4：新增 FA_TRANSFER / FA_VALUE_ADJUST / FA_IMPAIRMENT——
-        // 这三条此前"先改账再起流、驳回不回滚"（MdAssetService 零 @Transactional），
-        // 现发起侧只传目标值入流程变量，改账统一挪到本监听器 APPROVED 环节（驳回侧资产零改动）。
-        // 批次2：FA_ALIENATE 并档进 FA_DISPOSE 载体（B 案 T-FA-3），事件 bizType 不变，
+        // FA_TRANSFER / FA_VALUE_ADJUST / FA_IMPAIRMENT 三个 bizType——
+        // 这三条若"先改账再起流、驳回不回滚"（MdAssetService 零 @Transactional），
+        // 发起侧就只传目标值入流程变量，改账统一挪到本监听器 APPROVED 环节（驳回侧资产零改动）。
+        // FA_ALIENATE 并档进 FA_DISPOSE 载体，事件 bizType 不变，
         // 对外销售通过侧复用处置凭证环节（§1.4 无环节 #3 消除）。
         // 批次2：+FA_CHECK_DIFF 盘点差异作业确认闭环记录（结转凭证走 GL_CHECK_DIFF 做账档，账务分离）
         return Set.of("FA_DEPRECIATION", "FA_TRANSFER_CROSS", "FA_TRANSFER", "FA_VALUE_ADJUST", "FA_IMPAIRMENT",
@@ -186,7 +186,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_CER 资本性支出申请审批结束收尾（合规整改，联动 DA-01 修复）：
+     * FA_CER 资本性支出申请审批结束收尾：
      * 通过 → 按申请金额占用预算科目（去重：已有 OCCUPY 流水跳过）并置 APPROVED；
      * 驳回 → 置 REJECTED；若此前已发生占用（异常时序/重复事件）则释放，正常时序未占用不动预算（防负占用）。
      */
@@ -375,7 +375,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_DISPOSE 资产处置（报废）审批结束收尾（合规整改 + 甲案改账时点后移）：
+     * FA_DISPOSE 资产处置（报废）审批结束收尾（合规整改；改账时点后移）：
      * <p>通过 → 此刻才改账（累计折旧补提到顶＝原值−残值、账面净值冲至残值、状态置 SCRAP），
      * 再生成处置凭证（借 累计折旧+处置净损失 贷 固定资产，金额=资产原值）；
      * 驳回 → <b>卡片零改动</b>，只记录（发起侧已不预写，故无需回冲路径）。
@@ -438,7 +438,7 @@ public class AssetWfEventListener implements WfBizAction {
                 log.info("资产处置审批通过，资产 {} 已改账为 SCRAP（累计折旧 {}／净值 {}），处置凭证已生成/按幂等跳过",
                         assetId, asset.getAccumDepr(), asset.getNetAmount());
             } else {
-                log.info("资产处置 {} 审批驳回（{}），卡片保持 {}：发起侧零改账，无需回冲（D-DEC-428）",
+                log.info("资产处置 {} 审批驳回（{}），卡片保持 {}：发起侧零改账，无需回冲",
                         assetId, event.getComment() == null ? "" : event.getComment(), asset.getStatus());
             }
         } catch (Exception ex) {
@@ -506,7 +506,7 @@ public class AssetWfEventListener implements WfBizAction {
      */
     private void handleValueAdjustEnded(WfProcessEndedEvent event) {
         Long assetId = event.getBizId();
-        // X-06：台账最终状态回写放在资产判空之前——卡片缺失也不该让台账行永远停在 APPROVING
+        // 台账最终状态回写放在资产判空之前——卡片缺失也不该让台账行永远停在 APPROVING
         markChangeLogTerminated(event);
         MdAsset asset = assetId == null ? null : assetMapper.selectById(assetId);
         if (asset == null) {
@@ -594,7 +594,7 @@ public class AssetWfEventListener implements WfBizAction {
      */
     private void handleCheckDiffEnded(WfProcessEndedEvent event) {
         Long assetId = event.getBizId();
-        // X-06：差异说明的载体＝变动台账行（发起侧 MdAssetService#checkDiff 插入），此处回写最终状态
+        // 差异说明的载体＝变动台账行（发起侧 MdAssetService#checkDiff 插入），此处回写最终状态
         markChangeLogTerminated(event);
         try {
             MdAsset asset = assetId == null ? null : assetMapper.selectById(assetId);
@@ -612,7 +612,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * X-06：按 proc_inst_id 把变动台账从 APPROVING 回写为最终状态（通过 APPROVED／驳回 REJECTED）。
+     * 按 proc_inst_id 把变动台账从 APPROVING 回写为最终状态（通过 APPROVED／驳回 REJECTED）。
      *
      * <p>只回写状态，不改卡片——改账环节各自保持原规则（原值调整、盘点差异作业与账务分离），
      * 本方法解决的是"这次变动最后成没成"在库里没有答案。

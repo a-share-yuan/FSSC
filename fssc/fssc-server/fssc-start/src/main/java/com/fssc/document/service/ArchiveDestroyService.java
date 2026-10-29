@@ -72,13 +72,13 @@ public class ArchiveDestroyService {
         }
         archiveDestroyApprovalMapper.insert(approval);
 
-        // P3：销毁申请发起 FM04 凭证销毁审批流（FM_DESTROY，销毁申请→共享主管复核→财务总监→总裁）
+        // 销毁申请发起 FM04 凭证销毁审批流（FM_DESTROY，销毁申请→共享主管复核→财务总监→总裁）
         try {
             wfEngineFacade.start("FM_DESTROY", approval.getId(), userId(),
                     "档案销毁-" + approval.getDestroyCode());
         } catch (Exception ex) {
             log.error("销毁申请 {} 发起审批失败: {}", approval.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须抛出去，不能静默降级成没有流程的孤儿单
         }
 
         log.info("创建销毁申请: destroyId={}, archiveIds={}, applicantId={}",
@@ -199,7 +199,7 @@ public class ArchiveDestroyService {
         for (ArchiveAccessLog al : pendings) {
             al.setApprovalStatus("REJECTED");
             al.setAccessReason((al.getAccessReason() == null || al.getAccessReason().isEmpty() ? "" : al.getAccessReason() + "；")
-                    + "档案已销毁，级联关闭（R5-D-207）");
+                    + "档案已销毁，级联关闭");
             al.setApprovedAt(closedAt);
             archiveAccessLogMapper.updateById(al);
         }
@@ -211,8 +211,8 @@ public class ArchiveDestroyService {
     /**
      * 销毁强校验（合规红线）：待销毁档案必须"全部已到期"且仍为在库已归档状态。
      *
-     * <p>《会计档案管理办法》规定保管期满方可销毁。此前 executeDestroy 仅校验审批状态
-     * APPROVED，未校验 destroyDate，存在"未到期档案被合法销毁"的合规风险；
+     * <p>《会计档案管理办法》规定保管期满方可销毁。executeDestroy 只校验审批状态
+     * APPROVED 而不校验 destroyDate，就有"未到期档案被合法销毁"的合规风险；
      * createDestroyRequest 同样无任何到期校验。故申请与执行两处均加本校验，
      * 执行侧复校验另可防"申请时已到期、审批期间被延期"的绕过路径。
      */
@@ -275,7 +275,7 @@ public class ArchiveDestroyService {
 
     /**
      * 申请人姓名/工号回填（与 ArchiveAccessService.fillRequesters 同一规则）：
-     * 前端「申请人」列此前只能拿裸 applicant_id 本地 join，显示出来是工号。
+     * 前端「申请人」列不必拿裸 applicant_id 本地 join，否则显示出来是工号。
      */
     private void fillApplicants(List<ArchiveDestroyApproval> rows) {
         Set<Long> ids = new HashSet<>();

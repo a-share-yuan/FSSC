@@ -3,7 +3,7 @@
 
 <template>
   <div class="close-workbench">
-    <!-- 统一关账工作台头：AP 月末关账 + AR 应收月结合并入口（41号审查报告 P1-5） -->
+    <!-- 统一关账工作台头：AP 月末关账 + AR 应收月结合并入口（41号审查报告） -->
     <el-card shadow="never" class="head-card">
       <div class="head">
         <div>
@@ -40,7 +40,7 @@
 
 <script setup>
 /**
- * 统一关账工作台（41-非费用域完成度审查 P1-5）
+ * 统一关账工作台（41-非费用域完成度审查）
  *
  * 原先 AP「月末关账」与 AR「应收月结管理」两套割裂页面，参考成熟 ERP 统一关账入口：
  * 一个工作台分模块 Checklist（AP / AR），后续 GL/资产模块可继续扩展 el-tab-pane。

@@ -3,6 +3,7 @@
 
 package com.fssc.workflow.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -28,7 +29,7 @@ public class WfInstance implements Serializable {
     private Long id;
 
     @JsonIgnore
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private Long tenantId;
 
     /** Flowable 流程实例 ID */
@@ -79,14 +80,14 @@ public class WfInstance implements Serializable {
     private Long overdueHours;
     /**
      * 发起人姓名（nick_name，缺失回退登录号），由 {@code start_user_id} 反查（非表列）。
-     * RA-D248b：列表「发起人」列一直在绑本字段而后端从不返回，故恒空。
+     * 列表「发起人」列一直在绑本字段而后端从不返回，故恒空。
      */
     @TableField(exist = false)
     private String initiatorName;
 
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT_UPDATE)
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 }

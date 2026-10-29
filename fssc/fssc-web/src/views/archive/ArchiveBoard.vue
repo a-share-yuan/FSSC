@@ -32,9 +32,9 @@
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
         <el-table class="cm-target-board" :data="pagedAccess" size="small" border stripe v-else empty-text="暂无数据" v-loading="loading" @row-dblclick="openTrace">
-          <!-- 本列的数据源只有裸 archive_id，改前靠"当前 tab 恰好加载过的那页档案"
-               本地 join，恒退化成 #ID ⇒ 档案编码列空相。现走档案目录回落（archiveLabel→findArchiveRow），
-               出的是真 archive_no（定案：号在 archive_no 列，冗余列 archive_code 只是 184 的镜像）。 -->
+          <!-- 本列的数据源只有裸 archive_id，靠"当前 tab 恰好加载过的那页档案"
+               本地 join 会恒退化成 #ID ⇒ 档案编码列空相。故走档案目录回落（archiveLabel→findArchiveRow），
+               出的是真 archive_no（号在 archive_no 列，冗余列 archive_code 只是它的镜像）。 -->
           <el-table-column label="档案号" min-width="140" show-overflow-tooltip>
             <template #default="{ row }">{{ archiveLabel(row.archiveId) }}</template>
           </el-table-column>
@@ -61,8 +61,8 @@
           </el-table-column>
           <el-table-column label="操作" width="170" fixed="right">
             <!-- 审批动作统一走下方「批准 / 驳回」（显式传 decision、按 PENDING 判定）。
-                 原先 InlineActions 上另挂了一份 approve/reject 且未传 decision（点通过=驳回），已移除；
-                 该组件的 showApprove/showReject **默认为 true**，故必须显式关掉，
+                 InlineActions 上不能再挂一份 approve/reject：不传 decision 会让点通过=驳回。
+                 该组件的 showApprove/showReject 默认为 true，故必须显式关掉，
                  否则图标仍在＝点了没有处理器的死按钮，且对无 compliance:archiveaccess:approve 的人构成假入口。 -->
             <template #default="{ row }">
               <InlineActions :visible="true" :show-approve="false" :show-reject="false" @view="viewAccess(row)" :show-trace="true" @trace="openTrace(row)" />
@@ -183,7 +183,7 @@
           <el-button type="primary" plain size="small" @click="archSearch">查询</el-button>
           <el-button size="small" @click="exportArchiveCsv">导出目录</el-button>
         </div>
-        <!-- UX-ARC-05：先勾一批单据，再新建案卷（清单与「共享运营›档案归档」同一取数） -->
+        <!-- 先勾一批单据，再新建案卷（清单与「共享运营›档案归档」同一取数） -->
         <div v-if="canListPending && !isLibrary" style="margin-bottom:12px">
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px">
             <b style="font-size:13px">待立卷候选（{{ candTotal }}）</b>
@@ -229,7 +229,7 @@
                           :type="row.carrierType === 'ELECTRONIC' ? 'info' : ''">
                     {{ row.carrierType === 'ELECTRONIC' ? '电子载体' : '纸质载体·须编页' }}
                   </el-tag>
-                  <!-- ARC-M4：待归档卷可直接订正载体（建卷选错了不必求 SQL）；审批在途/已定稿只读 -->
+                  <!-- 待归档卷可直接订正载体（建卷选错了不必求 SQL）；审批在途/已定稿只读 -->
                   <el-select v-else :model-value="row.carrierType || 'PAPER'" size="small" style="width:150px"
                              :loading="busy('archive-carrier-' + row.id)"
                              @change="(v) => changeCarrier(row, v)">
@@ -258,7 +258,7 @@
                   <el-table-column label="日期" width="110" align="center">
                     <template #default="{ row: it }">{{ formatDate(it.itemDate) || '—' }}</template>
                   </el-table-column>
-                  <!-- ARC-M4 编页：纸质卷装订后「第几页」是核对实物的锚点；可改窗口内直接在目录里编 -->
+                  <!-- 编页：纸质卷装订后「第几页」是核对实物的锚点；可改窗口内直接在目录里编 -->
                   <el-table-column label="起页" width="96" align="center">
                     <template #default="{ row: it }">
                       <el-input-number v-if="canEditVolume && !isLibrary && !volumeLocked(row)" v-model="it.pageFrom"
@@ -291,7 +291,7 @@
               </div>
             </template>
           </el-table-column>
-          <!-- 定案：本列绑 archiveNo（op_archive.archive_no，DDL NOT NULL、取号器唯一），
+          <!-- 说明：本列绑 archiveNo（op_archive.archive_no，DDL NOT NULL、取号器唯一），
                不绑冗余列 archiveCode——该列在 184 的"编号镜像"上线前整列 NULL，绑它就是"档案编码列全空"。 -->
           <el-table-column prop="archiveNo" label="档案号" min-width="150" show-overflow-tooltip  sortable />
           <!-- 题名＝档案目录的必备著录项（DA/T 22 归档文件目录），卷级列表原缺此列，档案库只能靠编号认卷 -->
@@ -302,7 +302,7 @@
             </template>
           </el-table-column>
           <el-table-column label="载体" width="92" align="center">
-            <!-- ARC-M4：纸质卷归档前须逐件编页，电子卷不要求——载体是本页"能不能直接归档"的判据来源，
+            <!-- 纸质卷归档前须逐件编页，电子卷不要求——载体是本页"能不能直接归档"的判据来源，
                  列表直接给出，免得点【执行归档】才吃 400 -->
             <template #default="{ row }">
               <el-tag size="small" effect="plain" :type="row.carrierType === 'ELECTRONIC' ? 'info' : ''">
@@ -339,7 +339,7 @@
               <el-tag :type="integrityTag(row.integrityStatus)" size="small">{{ integrityLabel(row.integrityStatus) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="330" fixed="right">
+          <el-table-column label="操作" width="400" fixed="right">
             <template #default="{ row }">
               <el-button link size="small" type="primary" @click="openTrace(row)">追溯</el-button>
               <!-- 卷内 0 件的卷，服务端入口闸必拦（「卷内无件，不得执行归档」）⇒ 这里提前置灰，不让人撞了才知道 -->
@@ -351,6 +351,8 @@
               </el-tooltip>
               <el-button link size="small" type="primary" :loading="busy('archive-files-' + row.id)" @click="viewVolumeFiles(row)">查看卷内文件</el-button>
               <el-button v-if="!isLibrary && canCreateDestroy && row.archiveStatus !== 'DISPOSED'" link size="small" type="danger" @click="destroyArchive(row)">发起销毁申请</el-button>
+              <!-- 空卷出口：建错卷/件全移出后留下的空壳既不能归档也无处删。只放行「待归档＋0 件」，已归档请走销毁 -->
+              <el-button v-if="!isLibrary && canEditVolume && row.archiveStatus === 'PENDING' && itemCountOf(row) === 0" link size="small" type="danger" @click="deleteEmptyVolume(row)">删除空卷</el-button>
               <el-button link size="small" @click="verifyArchive(row)">完整性校验</el-button>
             </template>
           </el-table-column>
@@ -421,8 +423,8 @@
     <el-dialog v-model="dlgDispatch" title="发起单据流转" width="560px" destroy-on-close>
       <el-form ref="dispatchFormRef" :model="dpForm" :rules="dispatchRules" label-width="100px" size="small">
         <el-form-item label="单据标识" prop="billId">
-          <!-- 改前为纯手输框（placeholder 写「业务单据编号」，实际要的却是数字主键，
-               用户无从得知填什么）——现从「我的单据」列表选取（billApi.myPage），也允许直接输入 -->
+          <!-- 纯手输框在这里行不通（placeholder 写「业务单据编号」，实际要的却是数字主键，
+               用户无从得知填什么）——故从「我的单据」列表选取（billApi.myPage），也允许直接输入 -->
           <el-select
             v-model="dpForm.billId"
             filterable
@@ -472,8 +474,8 @@
       <el-form ref="archiveFormRef" :model="arForm" :rules="archiveFormRules" label-width="100px" size="small">
         <el-form-item label="档案类型" prop="archiveType">
           <el-select v-model="arForm.archiveType" style="width:100%">
-            <!-- 选项集与 archiveTypeLabel 名称表对齐（8 项）。改前只给 4 项，
-                 而现网占多数的是 BILL（单据档案）——库里能存、列表能显示、新建却选不到。
+            <!-- 选项集与 archiveTypeLabel 名称表对齐（8 项）。只给 4 项时，
+                 现网占多数的 BILL（单据档案）库里能存、列表能显示、新建却选不到。
                  权威名称表由后端白名单把守（ArchiveService.ARCHIVE_TYPES），前端不再自造第 9 个值。 -->
             <el-option label="单据档案" value="BILL" />
             <el-option label="凭证档案" value="VOUCHER" />
@@ -486,7 +488,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="载体类型" prop="carrierType">
-          <!-- ARC-M4：载体决定"归档前是否强制逐件编页"——纸质卷装订后页码是实物位置标识，
+          <!-- 载体决定"归档前是否强制逐件编页"——纸质卷装订后页码是实物位置标识，
                电子档案以「件/文件」为最小单位不要求页码。默认纸质＝严格侧（认不出就按纸质要求）。 -->
           <el-radio-group v-model="arForm.carrierType">
             <el-radio label="PAPER">纸质</el-radio>
@@ -497,8 +499,8 @@
           </div>
         </el-form-item>
         <el-form-item label="入卷单据" prop="billIds">
-          <!-- UX-ARC-02：改前是纯文本框（提示写「关联业务单据编号」，服务端要的却是数字主键）⇒ 输单号必被 400。
-               UX-ARC-06：一个案卷挂多张单据⇒改多选；选中顺序即卷内件号，与「待立卷候选」勾选预填同一入口。 -->
+          <!-- 不能做成纯文本框（提示写「关联业务单据编号」，服务端要的却是数字主键）⇒ 输单号必被 400。
+               一个案卷可挂多张单据⇒多选；选中顺序即卷内件号，与「待立卷候选」勾选预填同一入口。 -->
           <el-select v-model="arForm.billIds"
                      multiple
                      filterable
@@ -571,8 +573,8 @@
     <!-- 档案选择器弹窗（借阅单选 / 销毁多选共用） -->
     <el-dialog v-model="dlgPicker" :title="pickerMode === 'multi' ? '选择档案（可多选）' : '选择档案'" width="780px" append-to-body>
       <div style="margin-bottom:12px; display:flex; gap:8px; align-items:center">
-        <!-- 核实册:325：检索臂＝卷号/编码/关联单号/标题/类型，本地零命中还会下推到服务端查全量；
-             提示语跟着改规则，别再只说"档案编码"（那一列历史上恒空，正是 047/254 的成因）。 -->
+        <!-- 检索臂＝卷号/编码/关联单号/标题/类型，本地零命中还会下推到服务端查全量；
+             提示语跟着检索规则写，别再只说"档案编码"（那一列历史上恒空，按它搜必然零命中）。 -->
         <el-input v-model="pickerSearch" placeholder="搜索档案号/单号/标题" clearable size="small" style="width:260px" @input="filterArchives" />
         <el-select v-model="pickerTypeFilter" placeholder="档案类型" clearable size="small" style="width:140px" @change="filterArchives">
           <el-option label="单据档案" value="BILL" />
@@ -754,7 +756,7 @@ const dlgArchive = ref(false)
 const arForm = ref({ billIds: [], archiveType: 'EXPENSE', carrierType: 'PAPER', archiveYear: new Date().getFullYear(), archivePeriod: '', retentionPeriod: 10 })
 
 /**
- * UX-ARC-05：先勾一批单据，再新建案卷。
+ * 先勾一批单据，再新建案卷。
  * 候选清单与「共享运营›档案归档」同一把尺（审批完成＋影像完整），不要另起一套取数。
  */
 const pagerCandidate = useTablePager({ mode: 'server', storageKey: 'archive_candidate' })
@@ -785,10 +787,10 @@ async function loadCandidates() {
 }
 
 /**
- * UX-ARC-02：入卷选单源。有清单权时＝待归档清单；否则回落「我的单据」（同源）。
- * 不要再让用户手输内部主键——改前文本框提示写「业务单据编号」，服务端要的却是 Long，
+ * 入卷选单源。有清单权时＝待归档清单；否则回落「我的单据」（同源）。
+ * 不要让用户手输内部主键——文本框提示写「业务单据编号」，服务端要的却是 Long，
  * 输单号必被 400，而报错还指向"单据列表"（弹窗里根本没有列表）。
- * UX-ARC-06：改多选后远端搜索结果（filingRemote）与已选中的行（filingPinned）并入选项，
+ * 一个案卷可多选后，远端搜索结果（filingRemote）与已选中的行（filingPinned）都要并入选项，
  * 否则翻页/换关键字后已勾的单据只剩一串数字主键、看不清选了什么。
  */
 const filingRemote = ref([])
@@ -869,7 +871,7 @@ const destroyModel = computed(() => ({
 
 /**
  * 假失败＋重复起流程：长耗时写动作（起流程类）在途锁。
- * 提交在飞或慢响应窗口里连点两次，会把同一批档案起两条流程（实证：前端 20s 断连的
+ * 提交在飞或慢响应窗口里连点两次，会把同一批档案起两条流程（前端 20s 断连时，
  * archive-destroy/create 服务端其实已建 wf_instance）；useSubmitGuard 只管必填校验、无在途态，
  * 这里按「动作＋对象」维度补上：整批动作（销毁申请）一个 key，逐行动作（执行归档/执行销毁）每行一个 key。
  */
@@ -885,9 +887,9 @@ async function runLocked(key, fn) {
 const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 /**
- * UX-ARC-01：列表一律以业务编号定位，不要内部主键上屏。
- * 改前两处（单据流转 :134／凭证归档 :183）写的是 `row.billNo || 单据#${row.billId}`，
- * 而档案分页出参是裸实体 OpArchive（无 billNo 字段）、派工出参是裸实体 DispatchTask（同），
+ * 列表一律以业务编号定位，不要内部主键上屏。
+ * 若写成 `row.billNo || 单据#${row.billId}`，会踩两个坑：
+ * 档案分页出参是裸实体 OpArchive（无 billNo 字段）、派工出参是裸实体 DispatchTask（同），
  * ⇒ billNo 恒 undefined，这列永远显示主键；免审腿连 bill_id 都不写，于是渲染成「单据#null」。
  * 单号其实一直在 ref_no 里（ArchiveService.fillCatalogFromSourceBill／BillArchiveService 三条腿同源）。
  */
@@ -900,8 +902,8 @@ function accessStatusLabel(s) { return STATUS_LABEL[s] || s || '未知' }
 
 /**
  * 后端对 access_type 无白名单（历史接口写入过 VIEW 等越词值），故未知值原样显示，不并入「复制」。
- * VIEW 是 2026-09-24 检查经 /request 写入的历史值（申请弹窗只会产生 READ/COPY），语义与 READ 同为线上查阅；
- * 原先缺键把英文码直出到列表，且 tag 取空串触发 ElementPlus 校验告警。
+ * VIEW 是历史接口经 /request 写入的值（申请弹窗只会产生 READ/COPY），语义与 READ 同为线上查阅；
+ * 名称表缺这个键就会把英文码直出到列表，且 tag 取空串触发 ElementPlus 校验告警。
  */
 function accessTypeLabel(t) { return ({ READ: '查阅', VIEW: '查阅', COPY: '复制副本' })[t] || t || '—' }
 function accessTypeTag(t) { return t === 'COPY' ? 'warning' : 'info' }
@@ -936,15 +938,15 @@ function billTypeLabel(t) {
 function archiveTypeLabel(t) { return ({ BILL: '单据档案', VOUCHER: '凭证档案', EXPENSE: '报销凭证', PAYMENT: '付款凭证', CONTRACT: '合同', INVOICE: '发票', REPORT: '报表', OTHER: '其他' })[t] || t || '—' }
 function archiveTypeTag(t) { return ({ BILL: 'info', VOUCHER: 'info', EXPENSE: '', PAYMENT: 'success', CONTRACT: 'warning', INVOICE: 'danger' })[t] || 'info' }
 
-// 档案编号显示（／同根）
+// 档案编号显示
 /**
- * 档案目录缓存：调阅记录表与销毁申请表上只有裸 archive_id，「档案编码」列此前只能拿
- * archives（＝凭证归档 tab 的<b>当前页</b>，而 之后别的 tab 根本不加载它）本地 join，
- * 于是恒退化成「#12」——列上没有过真档案号，这就是 047 记的"档案编码列全空"在调阅/销毁两页的形态。
- * 现按需拉一次档案目录（与选择器同一端点、同一份数据）作为回落源。
+ * 档案目录缓存：调阅记录表与销毁申请表上只有裸 archive_id，「档案编码」列只能拿
+ * archives（＝凭证归档 tab 的<b>当前页</b>，别的 tab 根本不加载它）本地 join，
+ * 于是恒退化成「#12」——列上拿不到真档案号，「档案编码列全空」在调阅/销毁两页都是这个形态。
+ * 故按需拉一次档案目录（与选择器同一端点、同一份数据）作为回落源。
  */
 const archiveDir = ref([])
-// 目录只尝试拉一次：无 compliance:archive:list 的人反复切 tab 会反复吃权限报错（同一教训）
+// 目录只尝试拉一次：无 compliance:archive:list 的人反复切 tab 会反复吃权限报错
 let archiveDirTried = false
 
 async function ensureArchiveDir() {
@@ -963,7 +965,7 @@ function findArchiveRow(id) {
 }
 
 /**
- * 59，沿 定案：取<b>真档案号</b>的唯一规则。
+ * 59，沿用「取<b>真档案号</b>的唯一规则」。
  * 优先序 archive_no → archive_code（184 已把它做成编号镜像，老卷仍 NULL）→ 目录回落；
  * 全都取不到时返回<b>空串</b>，由调用方整段不显号——绝不再把 null/undefined 拼进文案。
  */
@@ -993,12 +995,12 @@ function archiveLabel(id) {
 function userLabel(id) {
   if (!id) return '—'
   const u = users.value.find((x) => x.id === id)
-  // 与全仓其它页面同一规则：昵称优先、缺失才退登录号（原先只取 userName ⇒ 列显示工号，D-DEC/D248b）
+  // 与全仓其它页面同一规则：昵称优先、缺失才退登录号（只取 userName 会在列上显示工号）
   return u ? (u.nickName || u.userName) : `用户#${id}`
 }
 
 /**
- * 申请人以**后端补充好的姓名**为主，前端本地 join 只作默认处理（历史脏 ID / 姓名缺失）。
+ * 申请人以后端补充好的姓名为主，前端本地 join 只作兜底（历史脏 ID / 姓名缺失）。
  * 工号不混进姓名，另走「显示工号列」开关。
  */
 function personLabel(name, id) {
@@ -1009,7 +1011,7 @@ function personLabel(name, id) {
 const showUserNameCols = ref(false)
 
 function archiveNamesFromIds(ids) {
-  // 后端 archive_ids 落的是 JSON 字符串（"[12,24]"），不是数组——原先只判 Array.isArray，本列恒为「—」。
+  // 后端 archive_ids 落的是 JSON 字符串（"[12,24]"），不是数组——只判 Array.isArray 会让本列恒为「—」。
   let list = ids
   if (typeof list === 'string') {
     try { list = JSON.parse(list) } catch { list = list.split(',') }
@@ -1049,7 +1051,7 @@ async function filterArchives() {
   let list = pickerSource.value
   const kw = (pickerSearch.value || '').trim().toLowerCase()
   if (kw) {
-    // 核实册:325，与 254 同根：候选集只是"已经取回的第一页目录"，改前又只认
+    // 候选集只是"已经取回的第一页目录"，只认
     // archiveNo/archiveType 两臂 ⇒ 真实卷号落在第一页外（或卷号在 archive_code 镜像列上）就"返 0 条"。
     // 本地臂先补齐（卷号/编码/关联单号/标题/类型），仍零命中就下推到服务端问全量（见下）。
     list = list.filter((a) => (a.archiveNo || '').toLowerCase().includes(kw)
@@ -1065,7 +1067,7 @@ async function filterArchives() {
   filteredArchives.value = list
   // 本地零命中且有关键字 ⇒ 按同一关键字请服务端在全量目录里查一次
   // （/compliance/archive/page 的 keyword 臂与 ArchiveService.search 的 检索面共用同一把尺，
-  //  但不像 search 那样硬过滤 ARCHIVED ⇒ 刚立的待归档卷，输卷号同样选得到；184 检索面现状不受影响）
+  //  但不像 search 那样硬过滤 ARCHIVED ⇒ 刚立的待归档卷，输卷号同样选得到；检索面的取数范围不受影响）
   if (kw && !list.length) {
     try {
       const params = { pageNum: 1, pageSize: 50, keyword: pickerSearch.value.trim() }
@@ -1152,7 +1154,7 @@ async function saveAccess() {
       ElMessage.success('调阅申请已提交')
       dlgAccess.value = false
       // request 已成功，随后的记录刷新才撞 compliance:archiveaccess:list 缺权——
-      // 原样 ElMessage.error 会把成功报成失败（真跑实测：建单成功＋同秒弹「缺少权限」）。
+      // 原样 ElMessage.error 会把成功报成失败（建单成功＋同秒弹「缺少权限」）。
       // 提交后的刷新属附带动作：失败只明示权限缺口，不改变"已提交"结论。
       try {
         await loadAccess(true)
@@ -1181,7 +1183,7 @@ async function loadDestroy() {
       destroys.value = r.list || []
       return { list: destroys.value, total: r.total || 0 }
     })
-    await ensureArchiveDir()   // D-DEC-047：销毁申请表的「销毁档案」列出真卷号，同上
+    await ensureArchiveDir()   // 销毁申请表的「销毁档案」列出真卷号，同上
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -1202,8 +1204,8 @@ async function saveDestroy() {
         loadDestroy()
       } catch (e) {
         if (e?.timeout) {
-          // 起流程类长写超时≠失败——服务端多半已受理建单（实证 20006ms 断连时 wf_instance 已落）。
-          // 拦截器已按「已提交，处理中」规则显式提示；这里办结：关窗＋回读列表，堵住"再点一次"的重复起流程窗口。
+          // 起流程类长写超时≠失败：前端 20s 断连时服务端的建单/流程往往已经落库。
+          // 拦截器已按「已提交，处理中」提示；这里直接办结——关窗并回读列表，堵住"再点一次"重复起流程的窗口。
           dlgDestroy.value = false
           loadDestroy()
         } else { ElMessage.error(e.message) }
@@ -1226,7 +1228,7 @@ async function executeDestroy(row) {
       loadDestroy()
     } catch (e) {
       if (e === 'cancel' || e === 'close') return // 用户取消，静默
-      // 原实现把真实失败也当 cancelled 静默吞掉；超时按「已提交，处理中」规则办结（拦截器已提示），回读列表
+      // 只有用户取消才算静默，真实失败必须显式报错；超时按「已提交，处理中」办结（拦截器已提示），回读列表确认
       if (e?.timeout) { loadDestroy(); return }
       ElMessage.error(e.message)
     }
@@ -1235,7 +1237,7 @@ async function executeDestroy(row) {
 
 // 单据流转
 async function loadDispatch() {
-  if (!hasPerm('compliance:dispatch:list')) return // 无读码不发请求，让 4030 弹成红字
+  if (!hasPerm('compliance:dispatch:list')) return // 无读权限就不发请求，免得 4030 弹成红字
   try {
     await pagerDispatch.load(async ({ pageNum, pageSize }) => {
       const r = await fmApi.dispatchListPage({ pageNum, pageSize })
@@ -1348,7 +1350,7 @@ async function loadVolumeItems(volumeId) {
 
 function onVolumeExpand(row, arg) {
   // 展开才拉卷内目录（不进列表主查询，避免每页 N 倍取数）；收起时不请求
-  // EP2 的第二参是当前展开行数组，个别版本给布尔 ⇒ 两种都认
+  // 展开事件的第二参是当前展开行数组，个别版本给布尔 ⇒ 两种都认
   const open = Array.isArray(arg) ? arg.some((x) => String(x && x.id) === String(row.id)) : !!arg
   if (open) loadVolumeItems(row.id)
 }
@@ -1401,7 +1403,7 @@ async function removeVolumeItem(volume, item) {
 }
 
 /**
- * ARC-M4 件级编页：起页＋页数成对提交（服务端同一把尺校验：区间不得与卷内其它件重叠，
+ * 件级编页：起页＋页数成对提交（服务端同一把尺校验：区间不得与卷内其它件重叠，
  * 且全卷要么都编、要么都不编，否则执行归档会被定稿判据拦下）。
  */
 async function saveItemPages(volume, item) {
@@ -1418,13 +1420,13 @@ async function saveItemPages(volume, item) {
       await loadVolumeItems(volume.id)
     } catch (e) {
       ElMessage.error(e.message)
-      await loadVolumeItems(volume.id) // 服务端拒绝（重叠/非可改窗口）时把行回读成库里真值，留假编辑态
+      await loadVolumeItems(volume.id) // 服务端拒绝（重叠/非可改窗口）时把行回读成库里真值，别留下假的编辑态
     }
   })
 }
 
 /**
- * ARC-M4：改载体类型。不要乐观更新——服务端拒绝（非待归档窗口）时选择框保持旧值，
+ * 改载体类型。不要乐观更新——服务端拒绝（非待归档窗口）时选择框保持旧值，
  * 由 :model-value 绑行数据回显，不出现"界面已改、库里没改"的假态。
  */
 async function changeCarrier(volume, carrierType) {
@@ -1443,8 +1445,8 @@ async function changeCarrier(volume, carrierType) {
 }
 
 /**
- * RA-ARC-09（查看卷内文件）：清单与取流令牌都取自案卷自己的端点。
- * 不要再走 billApi.detail——档案岗不在「单据归属」白名单里，必被 4030 拦死（原实现在此处即静默失败）。
+ * 查看卷内文件：清单与取流令牌都取自案卷自己的端点。
+ * 不能走 billApi.detail——档案岗不在「单据归属」白名单里，必被 4030 拦死，点了没反应。
  * FileViewer 第三个参数按 fileId 索引，给了 name 就不再打文件域详情接口、给了 tokenProvider 就不打文件域令牌。
  */
 async function viewVolumeFiles(row) {
@@ -1468,7 +1470,7 @@ async function viewVolumeFiles(row) {
   })
 }
 
-/** 调阅申请行的「查看」＝只读详情。原先挂的是 openArchive()（新建档案目录表单，且不接 row），点了查看出来一张空白写单。 */
+/** 调阅申请行的「查看」＝只读详情。这里不能挂 openArchive()（那是新建档案目录表单，且不接 row），否则点了查看出来一张空白写单。 */
 function viewAccess(row) {
   return showRowDetail({
     id: row.id,
@@ -1492,7 +1494,7 @@ function openArchive() {
   dlgArchive.value = true
 }
 
-/** UX-ARC-05：勾完候选单据再开同一张新建案卷表单（要素填一次，所选单据一次性入卷、各成一件） */
+/** 勾完候选单据再开同一张新建案卷表单：要素填一次，所选单据一次性入卷、各成一件 */
 function openArchiveBatch() {
   if (!candSelected.value.length) return
   const rows = [...candSelected.value]
@@ -1552,8 +1554,8 @@ async function doArchive(row) {
       loadArchive()
     } catch (e) {
       if (e === 'cancel' || e === 'close') return // 用户取消，静默
-      // 超时≠失败（服务端多半已起流程，实证 20s 断连时 wf_instance 已落），
-      // 拦截器已按「已提交，处理中，请稍后刷新」规则提示；回读列表确认，不引导重复起流程
+      // 超时≠失败（前端 20s 断连时服务端的流程往往已经起来了），
+      // 拦截器已按「已提交，处理中，请稍后刷新」提示；回读列表确认，不引导重复起流程
       if (e?.timeout) { loadArchive(); return }
       ElMessage.error(e.message)
     }
@@ -1561,20 +1563,32 @@ async function doArchive(row) {
 }
 
 /**
- * 内控红线，销毁不可逆：改前行内【销毁】直调旧「一键销毁」接口，会绕过到期校验与
- * FM_DESTROY 双签（实测未届满档案一键变 DISPOSED）。现改为带入该卷打开「发起销毁申请」弹窗——
- * 提交走 ArchiveDestroyService 合规链（到期校验＋双人复核＋FM_DESTROY 起流程），本页不再直落销毁。
+ * 内控红线，销毁不可逆：行内的【销毁】不能直调旧「一键销毁」接口，那样会绕过到期校验与
+ * FM_DESTROY 双签，未届满档案一键就变 DISPOSED。这里带入该卷打开「发起销毁申请」弹窗——
+ * 提交走 ArchiveDestroyService 合规链（到期校验＋双人复核＋FM_DESTROY 起流程），本页不直接落销毁。
  */
 function destroyArchive(row) {
   openDestroy()
   selectedDestroyArchives.value = [row]
 }
 
+/** 删除空卷（服务端只放行「待归档＋0 件」；非空/已归档由服务端拒并报原文，不在前端假装能删） */
+async function deleteEmptyVolume(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除空案卷${archiveSubject(row)}？该卷没有任何卷内件，删除后不可恢复，单据不受影响。`, '删除空卷', { type: 'warning' })
+    await fmApi.archiveVolumeDelete(row.id)
+    ElMessage.success('空案卷已删除')
+    loadArchive()
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(e.message)
+  }
+}
+
 /**
- * 读端点写库：校验结论会落 integrity_status（写动作），必须走显式 POST——
- * 改前走 GET `/{id}/verify`，而 GET 却带写副作用：反复点「校验」即反复写状态、审计时间列被
- * 污染（GET 不去重）。现走 api.js 既有 fmApi.archiveVerify（POST /{id}/verify），
- * 服务端持久化后回读列表刷新完整性状态列。
+ * 校验会写库：结论要落 integrity_status，必须走显式 POST，不能用 GET——
+ * GET 带写副作用的话，反复点「校验」就会反复写状态、把审计时间列污染（GET 不去重）。
+ * 故走 fmApi.archiveVerify（POST /{id}/verify），服务端持久化后回读列表刷新完整性状态列。
  */
 async function verifyArchive(row) {
   try {
@@ -1591,9 +1605,9 @@ async function verifyArchive(row) {
 }
 
 // 初始化
-// 原先四个页签在挂载时并发查询，只有「档案调阅」权限的人一进页面就吃两次
-// 「缺少权限：compliance:dispatch:list」红色报错（数据没用到，请求却已经发了）。改为按当前页签查询。
-// UX-ARC-05：凭证归档页签同时拉「待立卷候选清单」（无清单权的岗位内部直接 return）
+// 四个页签不能在挂载时并发查询：只有「档案调阅」权限的人一进页面就吃两次
+// 「缺少权限：compliance:dispatch:list」红色报错（数据没用到，请求却已经发了）。故按当前页签查询。
+// 凭证归档页签同时拉「待立卷候选清单」（无清单权的岗位内部直接 return）
 const TAB_LOADERS = {
   access: loadAccess,
   destroy: loadDestroy,
@@ -1613,7 +1627,7 @@ async function reload() {
 watch(tab, reload)
 
 async function loadUsers() {
-  // P0 修复：pageSize 从 500 降至 200，并按同公司过滤
+  // 人员下拉 pageSize 取 200 并带 companyId：全表拉取既慢，又会把别家员工带进选择器
   try {
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list

@@ -165,7 +165,7 @@ function renderTrend() {
   }, true)
 }
 
-/** 首开时 watch 里的 nextTick 早于抽屉内容挂载，这里在打开动画结束后补渲染（F-12） */
+/** 首开时 watch 里的 nextTick 早于抽屉内容挂载，这里在打开动画结束后补渲染 */
 function onOpened() {
   if (currentLevel.value === 0) loadData()
   else renderTrend()

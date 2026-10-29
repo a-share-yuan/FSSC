@@ -8,6 +8,8 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.receivable.entity.RcCollectTodo;
 import com.fssc.receivable.service.RcCollectTodoService;
+import com.fssc.receivable.service.RcReceivableService;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,9 +36,9 @@ public class RcCollectTodoController {
 
     /**
      * 扫描逾期应收生成催收待办。
-     * <p>D-DEC-407：在逾期天数阈值（days）之外补两个可选账期入参——
+     * <p>在逾期天数阈值（days）之外补两个可选账期入参——
      * {@code asOfDate}（yyyy-MM-dd 基准日）或 {@code period}（yyyyMM／yyyy-MM，按期末日）；
-     * 都不传＝系统当前日，与改造前逐字等价（前端旧调用 {@code ?days=30} 零改动仍可用）。
+     * 都不传＝系统当前日，与原先逐字等价（前端旧调用 {@code ?days=30} 零改动仍可用）。
      */
     @RequiresPerm("receivable:overdue")
     @OperLog(module = "COLLECT_TODO", operType = "INSERT", desc = "扫描逾期应收生成催收待办")
@@ -45,19 +47,19 @@ public class RcCollectTodoController {
                                               @RequestParam(required = false) String asOfDate,
                                               @RequestParam(required = false) String period) {
         return Result.success(service.createOverdueTodos(days,
-                com.fssc.receivable.service.RcReceivableService.resolveAsOfDate(asOfDate, period)));
+                RcReceivableService.resolveAsOfDate(asOfDate, period)));
     }
 
     /**
      * 解决催收待办。
-     * <p>D-DEC-410 乙档：同一登录人在这一条催收任务上占多岗（发起／起单／领取承办／办结）时，
+     * <p>乙档：同一登录人在这一条催收任务上占多岗（发起／起单／领取承办／办结）时，
      * data 里回非阻断复核提示位（{@code multiRole}／{@code roles}／{@code warning}）供界面显示；
      * 办结照常完成，不拦、不改候选取人。
      */
     @RequiresPerm("receivable:update")
     @OperLog(module = "COLLECT_TODO", operType = "UPDATE", desc = "解决催收待办")
     @PostMapping("/{id}/solve")
-    public Result<java.util.Map<String, Object>> solve(@PathVariable Long id) {
+    public Result<Map<String, Object>> solve(@PathVariable Long id) {
         return Result.success(service.solve(id));
     }
 }

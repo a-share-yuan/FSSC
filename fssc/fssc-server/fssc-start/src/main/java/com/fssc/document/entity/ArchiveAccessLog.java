@@ -58,7 +58,7 @@ public class ArchiveAccessLog implements Serializable {
 
     /**
      * 申请人姓名（sys_user.nick_name，缺失回退登录号），由 requester_id 反查（非表列）。
-     * RA-D248b：调阅列表「申请人」列此前只拿到裸 ID，前端本地 join 出来的是工号。
+     * 调阅列表「申请人」列不能只拿裸 ID，前端本地 join 出来的是工号。
      */
     @TableField(exist = false)
     private String requesterName;

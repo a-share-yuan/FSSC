@@ -18,7 +18,7 @@ import java.util.List;
 
 /**
  * 查询方案（Variant）控制器。
- * <p>P1-3：保存个人常用筛选组合。</p>
+ * <p>保存个人常用筛选组合。</p>
  */
 @RestController
 @RequestMapping("/api/tenant/system/query-variant")

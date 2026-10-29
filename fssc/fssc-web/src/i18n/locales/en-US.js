@@ -95,7 +95,7 @@ export default {
   },
 
   // Error codes (front-end fallback; backend returns localized msgs) -
-  // gl：总账域（域8B/T1.6 第 1 批）
+  // gl：总账域（域8B/T1.6）
   // 键名遵循本文件顶部的 <层级>.<模块>.<键>；本批＝合并底稿 consolidate / 总账分录台账 ledger /
   // 特殊业务 special / 退税 refund 四个模块。模板取词用 $t（基座 globalInjection 注入）。
   gl: {

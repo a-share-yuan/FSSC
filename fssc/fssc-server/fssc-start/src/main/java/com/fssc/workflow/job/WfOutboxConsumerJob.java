@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 流程投影事件发件箱消费者（④层「流程处理模式＝消息队列」，2026-09-24）。
+ * 流程投影事件发件箱消费者（④层「流程处理模式＝消息队列」）。
  *
  * <p><b>它做什么</b>：把 {@code wf_process_outbox} 里 {@code PENDING} 的投影事件取出来，
  * 逐条交给 {@link WfProjectionService}（<b>与同步模式同一份投影实现</b>），成功后置 {@code CONSUMED}；
@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 心跳表可查最近执行时间/耗时/连续失败；单条事件失败不影响同批其余事件。
  *
  * <p><b>零影响（SYNC 模式）</b>：每轮第一件事是 {@link WfProcessOutboxService#peekQueueMode()}——
- * <b>纯内存读、零查询</b>，非 QUEUE 立即返回：不领表、不起线程、不写任何行，与改造前逐字一致。
+ * <b>纯内存读、零查询</b>，非 QUEUE 立即返回：不领表、不起线程、不写任何行，与原先逐字一致。
  */
 @Slf4j
 @Component

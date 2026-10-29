@@ -35,7 +35,7 @@ public class MdInventoryController {
         return Result.success(service.page(query.getPageNum(), query.getPageSize(), keyword));
     }
 
-    /** R5-D-189：出入库流水查询（stock_move 只读回放，此前该表只写不读）。 */
+    /** 出入库流水查询（stock_move 只读回放）。 */
     @RequiresPerm("inventory:list")
     @GetMapping("/moves/page")
     public Result<PageResult<StockMove>> movesPage(PageQuery query, String itemCode, Long warehouseId) {
