@@ -9,6 +9,7 @@ import com.fssc.common.exception.BizException;
 import com.fssc.framework.security.annotation.PlatformOnly;
 import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import java.lang.annotation.Annotation;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * 权限防线单测（P1-4）：@RequiresPerm / @RequiresFeature / @PlatformOnly 的放行与拦截。
+ * 权限防线单测：@RequiresPerm / @RequiresFeature / @PlatformOnly 的放行与拦截。
  *
  * <p>纯逻辑测试，不启动 Spring 上下文；也不使用 Mockito
  * （JDK 26 下 byte-buddy agent 自附加受限），改用 JDK 动态代理伪造 ProceedingJoinPoint。</p>
@@ -36,7 +37,7 @@ class PermissionAspectTest {
         UserContext.clear();
     }
 
-    // ------------------------------------------------ 伪 ProceedingJoinPoint
+    // 伪 ProceedingJoinPoint
 
     /** 记录 proceed() 调用次数的最小实现 */
     static final class FakePjp implements InvocationHandler {
@@ -83,7 +84,7 @@ class PermissionAspectTest {
             }
 
             @Override
-            public Class<? extends java.lang.annotation.Annotation> annotationType() {
+            public Class<? extends Annotation> annotationType() {
                 return RequiresPerm.class;
             }
         };
@@ -97,7 +98,7 @@ class PermissionAspectTest {
             }
 
             @Override
-            public Class<? extends java.lang.annotation.Annotation> annotationType() {
+            public Class<? extends Annotation> annotationType() {
                 return RequiresFeature.class;
             }
         };
@@ -106,13 +107,13 @@ class PermissionAspectTest {
     private static PlatformOnly platformOnly() {
         return new PlatformOnly() {
             @Override
-            public Class<? extends java.lang.annotation.Annotation> annotationType() {
+            public Class<? extends Annotation> annotationType() {
                 return PlatformOnly.class;
             }
         };
     }
 
-    // ------------------------------------------------ @RequiresPerm
+    // @RequiresPerm
 
     @Test
     void 有权限码则放行() throws Throwable {
@@ -156,7 +157,7 @@ class PermissionAspectTest {
         assertEquals(0, fake.calls);
     }
 
-    // ------------------------------------------------ @RequiresFeature
+    // @RequiresFeature
 
     @Test
     void 套餐含功能码则放行() throws Throwable {
@@ -186,7 +187,7 @@ class PermissionAspectTest {
         }
     }
 
-    // ------------------------------------------------ @PlatformOnly
+    // @PlatformOnly
 
     @Test
     void 平台主体放行() throws Throwable {

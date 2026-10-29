@@ -217,6 +217,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { expensePolicyApi, policyStandardApi, policyVersionApi, orgApi } from '@/api'
 import { hasPerm } from '@/utils/perm'
+import { commonRules } from '@/composables/useFormRules'
 import SkeletonList from '@/components/SkeletonList.vue'
 
 // 枚举名称表：取值严格对齐后端实体注释（ExpensePolicyStandard.standardType / levelType / overtimeAction）
@@ -274,17 +275,17 @@ const dlg = ref(false)
 const formRef = ref(null)
 const form = reactive({})
 const rules = {
-  policyCode: [{ required: true, message: '请填写政策编码', trigger: 'blur' }],
-  policyName: [{ required: true, message: '请填写政策名称', trigger: 'blur' }],
-  maxAmount:  [{ required: true, message: '请填写金额上限', trigger: 'blur' }],
+  policyCode: commonRules.required('请填写政策编码'),
+  policyName: commonRules.required('请填写政策名称'),
+  maxAmount:  commonRules.required('请填写金额上限'),
 }
 
 const stdDlg = ref(false)
 const stdRef = ref(null)
 const stdForm = reactive({})
 const stdRules = {
-  standardType: [{ required: true, message: '请选择标准类型', trigger: 'change' }],
-  standardKey:  [{ required: true, message: '请填写标准键', trigger: 'blur' }],
+  standardType: commonRules.select('请选择标准类型'),
+  standardKey:  commonRules.required('请填写标准键'),
 }
 
 async function load() {

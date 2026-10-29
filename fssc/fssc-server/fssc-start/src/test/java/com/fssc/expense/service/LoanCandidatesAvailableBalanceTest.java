@@ -29,7 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
- * D-UI-03 配套（2026-10-19）：借款冲抵候选面必须吐出「可冲抵余额（账面 − 在途占用）」。
+ * 借款冲抵候选面必须吐出「可冲抵余额（账面 − 在途占用）」。
  *
  * <p><b>为什么这是缺陷而不是口径差</b>：{@code ExpBill.loanBalance} 是账面余额，不含在途占用；
  * 候选面把它当"可冲抵额"交给前端，前端默认勾全额 ⇒ 第二张草稿必然撞
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.when;
  * 本用例把三条口径钉死：① 无在途时 available＝账面；② 有在途时 available＝账面−在途；
  * ③ 在途占满的行不出现在候选里（选了也是死路）；④ 候选只列当前用户本人名下。</p>
  */
-@DisplayName("借款候选面：可冲抵余额＝账面−在途占用（D-UI-03 配套）")
+@DisplayName("借款候选面：可冲抵余额＝账面−在途占用")
 class LoanCandidatesAvailableBalanceTest {
 
     private static final Long ME = 3808L;

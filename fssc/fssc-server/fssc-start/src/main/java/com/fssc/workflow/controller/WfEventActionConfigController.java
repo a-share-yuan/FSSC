@@ -44,16 +44,15 @@ import java.util.function.Consumer;
  * 列表 / 详情 / 选项字典 / 引擎生效快照（读）＋ 描述与启用位（写）。
  *
  * <p><b>刻意不做的能力</b>：不提供新增与删除。配置行的增删等于给某条业务流挂/摘收尾动作，
- * 属裁决面（要连带校验 actionBean 是否真在 Spring 容器里、bizType 是否与
+ * 属待定范围（要连带校验 actionBean 是否真在 Spring 容器里、bizType 是否与
  * {@code WfBizAction#bizTypes()} 声明一致），按 规则不在此开放。
  * 同理不提供"热重载"入口——总线只在 {@code @PostConstruct} 读一次表，
- * 手工触发 {@code refreshDispatchMap()} 会改写运行中的分发映射，属引擎行为变更，需另行裁决。
+ * 手工触发 {@code refreshDispatchMap()} 会改写运行中的分发映射，属引擎行为变更，需另行判定。
  * 因此本页改完 enabled/description 后，<b>下次应用重启才影响运行期</b>，页面已按此规则提示。
  *
- * <p><b>权限码（X-22 教训：不发明新码）</b>：全部复用 wf 域既有码
- * ——读 {@code wf:config:list}（现库绑 4 个角色：FSSC_SUPERVISOR / CONFIG_ADMIN / IT_ADMIN / WF_ADMIN，
- * 6 个在职账号持有）、写 {@code wf:config:update}（现库绑 3 个角色：CONFIG_ADMIN / IT_ADMIN / WF_ADMIN，
- * 4 个在职账号持有）。新造 {@code wf:eventaction:*} 会让页面即时锁死（无数据落家）。
+ * <p><b>权限码（不发明新码）</b>：全部复用 wf 域既有码
+ * ——读 {@code wf:config:list}、写 {@code wf:config:update}（现库已有角色持有）。
+ * 新造 {@code wf:eventaction:*} 会让页面即时锁死（无数据落家）。
  *
  * <p><b>租户规则</b>：{@code wf_*} 表不在租户忽略名单内，MP 默认追加 {@code tenant_id = 当前租户}。
  * 但本表 74 行里有 39 行是历史种子行（{@code tenant_id = 0}，建库早期未按租户约定写入），
@@ -188,7 +187,7 @@ public class WfEventActionConfigController {
 
     /**
      * 字段级编辑：只接受 id + description + enabled，其余列（biz_type / action_bean / trigger_when /
-     * sort_order / tenant_id / del_flag）一律不下发也不更新——它们决定引擎怎么跑，改动属裁决面。
+     * sort_order / tenant_id / del_flag）一律不下发也不更新——它们决定引擎怎么跑，改动属待定范围。
      * 走 {@code update(entity, wrapper)}：SET 只含实体非空字段，update_by/update_time 由
      * {@code FsscMetaObjectHandler.updateFill} 自动记录。
      */
@@ -291,7 +290,7 @@ public class WfEventActionConfigController {
     /**
      * 编辑入参：字段级白名单（只 id + description + enabled）。
      * 刻意不接整个实体——那会让页面顺手改到 action_bean / trigger_when / sort_order，
-     * 等于绕过裁决面改引擎行为。
+ * 等于绕开既定口径改引擎行为。
      */
     @Data
     public static class EditRequest {

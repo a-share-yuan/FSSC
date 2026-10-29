@@ -50,9 +50,9 @@ public class PoOrder implements Serializable {
     private String remark;
     /** OPEN执行中/APPROVED已审批/PAID已付款/CLOSED已关闭/ARCHIVED已归档 */
     private String status;
-    /** 所属公司（多分子公司审批路由 V1.3.17） */
+    /** 所属公司（多分子公司审批路由） */
     private Long companyId;
-    /** P1-1 资本化标识：1=固定资产投资(收货即转固建卡) 0=普通采购 */
+    /** 资本化标识：1=固定资产投资(收货即转固建卡) 0=普通采购 */
     private Integer capitalFlag;
     /**  关联在建工程项目（md_cip.id，可空；收货/付款成本自动归集到该 CIP） */
     private Long cipId;
@@ -66,8 +66,8 @@ public class PoOrder implements Serializable {
     private Integer delFlag;
 
     /**
-     * 行项目（po_order_line）。前端一直提交 lines 而本实体此前无该字段 ⇒ 反序列化时整块丢弃
-     * （缺陷 F-2，见 sql/V1.4.47_po_order_line_seed.sql 头部），故必须显式接收。
+     * 行项目（po_order_line）。前端一直提交 lines，本实体若没有该字段 ⇒ 反序列化时整块丢弃
+     * （见 sql/V1.4.47_po_order_line_seed.sql 头部），故必须显式接收。
      * null = 调用方未带行（不动既有行）；空集合 = 明确清空。
      */
     @TableField(exist = false)

@@ -3,9 +3,11 @@
 
 package com.fssc.framework.spi;
 
+import java.sql.SQLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -23,13 +25,13 @@ import javax.sql.DataSource;
 
 /**
  * 进程内实现（{@code fssc.redis.enabled=false} 或缺省）：单机部署零外部依赖，
- * 语义与改造前的 TenantCache / LoginGuardService.ipWindows / JobHeartbeatService GET_LOCK 逐一对齐。
+ * 语义与原先的 TenantCache / LoginGuardService.ipWindows / JobHeartbeatService GET_LOCK 逐一对齐。
  *
  * <ul>
  *   <li>缓存：收编原 TenantCache 的 ConcurrentHashMap TTL map——命中未过期直返，
  *       并发允许重复加载，粗容量 {@value #MAX_ENTRIES} 条超限清最旧一半；返回值按"只读"约定使用。</li>
  *   <li>限流：收编原 LoginGuardService 的 IP 计数 map——原子递增 + 窗口过期（窗口自首次递增起算，
- *       原实现为自然分钟分桶，判定规则"窗口内超 maxCount 拒绝"不变）。</li>
+ *       以自然分钟分桶，"窗口内超 maxCount 拒绝"的规则不变）。</li>
  *   <li>锁：走 MySQL {@code GET_LOCK(name, 0)}/{@code RELEASE_LOCK}，<b>取锁与解锁必须落在同一条连接上</b>
  *       （会话级锁，详见 {@link #tryLock} 的类内注释）；持有中若连接被服务端掐断，检测到后<b>销毁</b>该连接
  *       （{@link #discardQuietly}，不可 close 归还，否则池会把死连接再借回来）并重新竞争；
@@ -55,17 +57,17 @@ public class LocalDistributedState implements DistributedState {
     /** 标记存储（令牌黑名单等仅"存在/不存在"的语义）：key → 过期时间戳（毫秒） */
     private final Map<String, Long> marks = new ConcurrentHashMap<>();
 
-    /** 纯逻辑环境（静态默认处理/单测）：无 JdbcTemplate，锁退化为无锁直通 */
+    /** 纯逻辑环境（静态兜底/单测）：无 JdbcTemplate，锁退化为无锁直通 */
     public LocalDistributedState() {
         this.jdbcTemplate = null;
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public LocalDistributedState(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
         this.jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
     }
 
-    // ==================== 缓存 ====================
+    // 缓存
 
     @Override
     @SuppressWarnings("unchecked")
@@ -94,7 +96,7 @@ public class LocalDistributedState implements DistributedState {
         cache.keySet().removeIf(k -> k.startsWith(prefix));
     }
 
-    /** 运维默认处理：清空进程内缓存（仅本地实现有全量视图；对应原 TenantCache.clear） */
+    /** 运维兜底：清空进程内缓存（仅本地实现有全量视图；对应原 TenantCache.clear） */
     public void clearCache() {
         cache.clear();
     }
@@ -117,7 +119,7 @@ public class LocalDistributedState implements DistributedState {
                 .forEach(cache::remove);
     }
 
-    // ==================== 限流 / 失败计数 ====================
+    // 限流 / 失败计数
 
     @Override
     public void mark(String key, Duration ttl) {
@@ -146,7 +148,7 @@ public class LocalDistributedState implements DistributedState {
         if (marks.size() > MAX_ENTRIES) {
             int drop = marks.size() / 2;
             marks.entrySet().stream()
-                    .sorted(java.util.Map.Entry.comparingByValue())
+                    .sorted(Map.Entry.comparingByValue())
                     .limit(drop)
                     .forEach(e -> marks.remove(e.getKey()));
         }
@@ -170,7 +172,7 @@ public class LocalDistributedState implements DistributedState {
         return count <= maxCount;
     }
 
-    // ==================== 调度锁（MySQL GET_LOCK，连接亲和） ====================
+    // 调度锁（MySQL GET_LOCK，连接亲和）
 
     /** 持有中的调度锁：lockKey → (独占连接, 取锁线程) */
     private record HeldLock(Connection conn, long threadId) {
@@ -179,20 +181,20 @@ public class LocalDistributedState implements DistributedState {
     /**
      * 持有中的调度锁表。
      *
-     * <p><b>为什么必须独占连接（本类是 2026-09-24 锁泄漏缺陷的修复点）</b>：{@code GET_LOCK} 是
+     * <p><b>为什么必须独占连接（本类是锁泄漏缺陷的修复点）</b>：{@code GET_LOCK} 是
      * <b>会话级</b>锁——它挂在"执行这条 SQL 的那条 MySQL 连接"上，释放也必须在<b>同一会话</b>上执行
-     * {@code RELEASE_LOCK}。改造前用 {@code jdbcTemplate} 分别执行这两句，两次调用由连接池<b>各自</b>
+     * {@code RELEASE_LOCK}。原先用 {@code jdbcTemplate} 分别执行这两句，两次调用由连接池<b>各自</b>
      * 分配连接，取锁与解锁很可能落在<b>两条不同连接</b>上；此时 {@code RELEASE_LOCK} 返回 0 且静默无效，
      * 锁就遗留在池中那条空闲连接上、再也无人释放。
      *
-     * <p><b>实测证据</b>：2026-09-24 深夜连库可见 MySQL 连接 {@code 17419}（{@code COMMAND=Sleep}，
-     * 即池中空闲连接）<b>同时持有</b> {@code fssc_job_WfOutboxConsumerJob} 与
-     * {@code fssc_job_WfLedgerReconcileJob} 两把锁，导致这两个（乃至经 {@code JobHeartbeatService}
-     * 包装的<b>全部</b>）定时任务连续 33 轮被判为"已被其他实例持有调度锁，跳过本轮"而被饿死；
+     * <p><b>故障形态</b>：一条 {@code COMMAND=Sleep} 的空闲连接
+     * <b>同时持有</b> {@code fssc_job_WfOutboxConsumerJob} 与
+     * {@code fssc_job_WfLedgerReconcileJob} 两把锁时，这两个（乃至经 {@code JobHeartbeatService}
+     * 包装的<b>全部</b>）定时任务都会被判为"已被其他实例持有调度锁，跳过本轮"而长期饿死；
      * 其中含 G0 双账对账作业——它被饿死时双账漂移整段时间不可见。
      *
      * <p><b>代价</b>：持锁期间占用池中 1 条连接（主库池 {@code maximum-pool-size: 40}）；
-     * 任务体与心跳另有连接，不影响 30 并发规则（PERF-01）。
+     * 任务体与心跳另有连接，不影响 30 并发规则。
      */
     private final Map<String, HeldLock> heldLocks = new ConcurrentHashMap<>();
 
@@ -270,7 +272,7 @@ public class LocalDistributedState implements DistributedState {
     }
 
     /** 在指定连接上执行锁函数，返回 MySQL 三值语义（1 / 0 / NULL→null） */
-    private static Integer callLockFn(Connection conn, String sql, String lockKey) throws java.sql.SQLException {
+    private static Integer callLockFn(Connection conn, String sql, String lockKey) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, lockKey);
             try (ResultSet rs = ps.executeQuery()) {
@@ -307,18 +309,18 @@ public class LocalDistributedState implements DistributedState {
     /**
      * 销毁一条<b>已确认不可用</b>的连接（绝不复用、绝不归还池）。
      *
-     * <p><b>为什么不能只 close()（2026-09-25 harness 实证，非推断）</b>：HikariCP 的
+     * <p><b>为什么不能只 close()</b>：HikariCP 的
      * {@code ProxyConnection.close()} 只把条目置回"未占用"并放回列表，<b>不做存活探测</b>；
      * 而 {@code getConnection()} 在 {@code aliveBypassWindowMs}（默认 500ms）内<b>跳过 ping</b>，
-     * 且刚归还的条目位于列表首位（LIFO）。三者叠加的实测结果：把被 KILL 的连接 close() 之后
-     * <b>立刻再借，拿回来的正是同一条死连接</b>——随后 {@code GET_LOCK} 抛
+     * 且刚归还的条目位于列表首位（LIFO）。三者叠加：把被 KILL 的连接 close() 之后
+     * 立刻再借，拿回来的正是同一条死连接——随后 {@code GET_LOCK} 抛
      * {@code SQLNonTransientConnectionException}，本轮被 {@code JobHeartbeatService} 降级为
      * "不加锁直接执行"（多实例下即互斥失效一拍）。改用 {@code abort()} 后立刻再借即为健康连接。
      *
-     * <p>实测对照（HikariCP + MySQL，pool max=3）：
+     * <p>对照（HikariCP + MySQL，pool max=3）：
      * <pre>
-     * close() ：KILL 后 isValid=false → close() → 立刻再借 isValid=false（同一条死连接）→ 隔 700ms 才恢复
-     * abort() ：KILL 后 isValid=false → abort() → 立刻再借 isValid=true （服务端 id 已换新）
+     * close()：KILL 后 isValid=false → close() → 立刻再借 isValid=false（同一条死连接）→ 隔 700ms 才恢复
+     * abort()：KILL 后 isValid=false → abort() → 立刻再借 isValid=true （服务端 id 已换新）
      * </pre>
      *
      * <p>{@code abort} 为 JDBC 4.1 标准方法（"终止连接并释放资源"）；池实现若不支持则退回 close()。

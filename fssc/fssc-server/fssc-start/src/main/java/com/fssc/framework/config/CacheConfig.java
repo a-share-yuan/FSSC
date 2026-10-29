@@ -4,6 +4,7 @@
 package com.fssc.framework.config;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,12 +12,12 @@ import org.springframework.context.annotation.Configuration;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Caffeine 缓存配置（P1-1 主数据缓存）。
+ * Caffeine 缓存配置（主数据缓存）。
  * <p>
  * 用于进程内本地缓存高频只读数据（主数据科目/部门/用户等），默认 5 分钟过期，
  * 最大容量 1000 条目（足够覆盖全租户所有主数据）。
  * <p>
- * 配合 {@link org.springframework.cache.annotation.Cacheable} 注解使用。
+ * 配合 {@link Cacheable} 注解使用。
  */
 @Configuration
 public class CacheConfig {

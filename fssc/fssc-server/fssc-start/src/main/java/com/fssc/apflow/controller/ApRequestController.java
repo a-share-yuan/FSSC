@@ -5,11 +5,17 @@ package com.fssc.apflow.controller;
 
 import com.fssc.apflow.entity.ApDispatchRule;
 import com.fssc.apflow.entity.ApServiceRequest;
+import com.fssc.apflow.service.ApPlanExcelService;
 import com.fssc.apflow.service.ApRequestService;
+import com.fssc.arflow.service.ArReceiptExcelService;
 import com.fssc.common.core.Result;
 import com.fssc.common.core.PageResult;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,8 +35,8 @@ import java.util.Map;
 public class ApRequestController {
 
     private final ApRequestService service;
-    private final com.fssc.apflow.service.ApPlanExcelService planExcelService;
-    private final com.fssc.arflow.service.ArReceiptExcelService receiptExcelService;
+    private final ApPlanExcelService planExcelService;
+    private final ArReceiptExcelService receiptExcelService;
 
     @RequiresPerm("apflow:request:list")
     @GetMapping("/page")
@@ -137,7 +143,7 @@ public class ApRequestController {
         return Result.success(service.close(id));
     }
 
-    // ---------------- 派工规则配置 ----------------
+    // 派工规则配置
 
     @RequiresPerm("apflow:request:list")
     @GetMapping("/dispatch-rules")
@@ -161,7 +167,7 @@ public class ApRequestController {
     public Result<Map<String, Object>> importPlan(@RequestParam("file") MultipartFile file,
                                                   @RequestParam(required = false, defaultValue = "PLAN_PAYMENT") String reqType,
                                                   @RequestParam(required = false) Long companyId) {
-        com.fssc.apflow.service.ApPlanExcelService.ParseResult parsed = planExcelService.parse(file);
+        ApPlanExcelService.ParseResult parsed = planExcelService.parse(file);
         List<Map<String, Object>> bills = new ArrayList<>();
         for (Map<String, Object> row : parsed.rows()) {
             ApServiceRequest r = new ApServiceRequest();
@@ -173,20 +179,20 @@ public class ApRequestController {
             r.setPaymentWay((String) row.get("paymentWay"));
             r.setBankNo((String) row.get("bankNo"));
             Object pd = row.get("paymentDate");
-            r.setPaymentDate(pd == null ? java.time.LocalDateTime.now()
-                    : java.time.LocalDateTime.parse(pd + "T00:00:00"));
+            r.setPaymentDate(pd == null ? LocalDateTime.now()
+                    : LocalDateTime.parse(pd + "T00:00:00"));
             Object rebate = row.get("rebateAmount");
-            r.setRebateAmount(rebate == null ? java.math.BigDecimal.ZERO : new java.math.BigDecimal(String.valueOf(rebate)));
+            r.setRebateAmount(rebate == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(rebate)));
             Object exp = row.get("expireDate");
-            r.setExpireDate(exp == null ? null : java.time.LocalDate.parse(String.valueOf(exp)));
+            r.setExpireDate(exp == null ? null : LocalDate.parse(String.valueOf(exp)));
             Object pa = row.get("paymentAmount");
-            r.setPaymentAmount(pa == null ? null : new java.math.BigDecimal(String.valueOf(pa)));
+            r.setPaymentAmount(pa == null ? null : new BigDecimal(String.valueOf(pa)));
             r.setPoNo((String) row.get("poNo"));
-            r.setAmount(pa == null ? java.math.BigDecimal.ONE : new java.math.BigDecimal(String.valueOf(pa)));
+            r.setAmount(pa == null ? BigDecimal.ONE : new BigDecimal(String.valueOf(pa)));
             r.setRemark((String) row.get("remark"));
             try {
                 ApServiceRequest created = service.create(r);
-                Map<String, Object> ok = new java.util.LinkedHashMap<>();
+                Map<String, Object> ok = new LinkedHashMap<>();
                 ok.put("billNo", created.getBillNo());
                 ok.put("excelRow", row.get("_excelRow"));
                 bills.add(ok);
@@ -195,7 +201,7 @@ public class ApRequestController {
                 parsed.errors().add("第" + row.get("_excelRow") + "行建单失败：" + e.getMessage());
             }
         }
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("created", bills.size());
         out.put("bills", bills);
         out.put("errors", parsed.errors());

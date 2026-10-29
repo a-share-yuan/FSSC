@@ -71,12 +71,12 @@ public class SysUser extends TenantAuditBase {
     public Long getPostId() { return postId; }
     public void setPostId(Long postId) { this.postId = postId; }
 
-    /** P1-3：手机号出参脱敏（138****8000） */
+    /** 手机号出参脱敏（138****8000） */
     @Sensitive(SensitiveType.PHONE)
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
 
-    /** P1-3：邮箱出参脱敏（ab***@x.com） */
+    /** 邮箱出参脱敏（ab***@x.com） */
     @Sensitive(SensitiveType.EMAIL)
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }

@@ -41,7 +41,7 @@
         <template #default="{ row }"><el-tag :type="stType(row.status)" size="small">{{ contractStatusLabel(row.status) }}</el-tag></template>
       </el-table-column>
       <el-table-column label="操作" width="300">
-        <!-- D-BIZ-07：合同提交即发起 CONTRACT 流程（ContractService.submit 尾行 wfEngineFacade.start），
+        <!-- 合同提交即发起 CONTRACT 流程（ContractService.submit 尾行 wfEngineFacade.start），
              审批中的合同必有在途任务，而 ContractService.approve 首行 assertNotInFlow 一律拒绝直批，
              故这里的【通过】【驳回】对任何账号都是「点了必失败」的误导入口（后端拦、数据不变）。
              办理入口只有 流程中心›我的待办（或 #/approval）。原「模块状态机直批」的注释规则已不成立。 -->
@@ -264,7 +264,7 @@ import { formatDate, formatDateTime } from '@/utils/format'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 import { useCurrency } from '@/composables/useCurrency'
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+s': () => { try { save() } catch { /* noop */ } },
   'ctrl+r': () => { try { loadData() } catch { /* noop */ } },
@@ -318,7 +318,7 @@ const condDialog = ref(false)
 const condForm = reactive({ payNode: '', payAmount: 0, planDate: '', remark: '' })
 const recDialog = ref(false)
 const recForm = reactive({ payAmount: 0, settleQty: 0, unitPrice: 0, billNo: '', billType: 'PAY', payDate: '', status: 'PAID' })
-// 第2批：付款条件/支付记录弹窗接入中央框架（原只有 toast 式必填，无格式/必填双校验）
+// 付款条件/支付记录弹窗接入中央框架（原只有 toast 式必填，无格式/必填双校验）
 const condFormRef = ref(null)
 const recFormRef = ref(null)
 const condRules = {
@@ -338,7 +338,7 @@ const payRate = computed(() => {
   return Math.min(100, Math.round((paid / total) * 100))
 })
 
-// ---------------- 分段式付款进度 ----------------
+// 分段式付款进度
 const STANDARD_NODES = ['预付款', '进度款', '验收款', '质保金', '尾款']
 
 function fmtMoney(v) {
@@ -519,7 +519,7 @@ async function act(op, row) {
   try { await contractApi[op](row.id); ElMessage.success('操作成功'); await load() }
   catch (e) { ElMessage.error(e.message) }
 }
-/** D-CON-01：驳回合同编辑重提（后端 REJECTED→DRAFT），随即打开编辑表单 */
+/** 驳回合同编辑重提（后端 REJECTED→DRAFT），随即打开编辑表单 */
 async function returnToEdit(row) {
   try {
     await contractApi.returnToEdit(row.id)
@@ -566,7 +566,7 @@ async function doImport() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -580,7 +580,6 @@ async function loadRefs() {
     const flat = []
     for (const it of tree) { if (it.children && it.children.length) flat.push(...it.children); else flat.push(it) }
     items.value = flat
-    // 加载公司列表
     const compTree = (await orgApi.companyTree()) || []
     const compFlat = []
     const walkComp = (arr) => { arr.forEach((n) => { if (n) { compFlat.push({ id: n.id, companyName: n.companyName || n.name || '' }); if (n.children?.length) walkComp(n.children) } }) }
@@ -595,7 +594,7 @@ onMounted(() => {
   autofill(form, 'CONTRACT')
  load(); loadRefs() })
 
-// ---------------- 详情抽屉：付款条件/支付记录/预算情况 ----------------
+// 详情抽屉：付款条件/支付记录/预算情况
 async function openDetail(row) {
   Object.assign(detail, row)
   detailVisible.value = true
@@ -657,7 +656,7 @@ function batchExport() {
 }
 
 
-// R4-06: Show guide on first visit
+// Show guide on first visit
 const _guideKey = 'fssc_guide_contractCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => contractCm.value?.show(), 800) } } catch {}
 </script>

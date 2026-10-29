@@ -64,7 +64,7 @@ import java.util.Map;
  * 4. 合同是四单之一环节：付款单未挂合同且采购订单也未挂 → NO_CONTRACT（WARN，提示补挂，不冻结付款）；
  *    金额链之外另有数量链：订购数量（po_order_line）vs 已收数量（stock_move RECEIVE）。
  * 5. 主体链：付款单收款方 vs 采购订单供应商 → PAYEE_NOT_SUPPLIER（WARN，<b>只记录提示、不冻结付款</b>；
- *    升级为硬拦属校验策略，与 「执行期强制校验无解拦出口」联动，待人工裁决）。
+ *    升级为硬拦属校验策略，须与付款执行期的强制校验拦口一并判定）。
  */
 @Slf4j
 @Service
@@ -82,9 +82,9 @@ public class ThreeWayMatchService {
     private final StockMoveMapper stockMoveMapper;
     private final SupplierReconService supplierReconService;
     private final MdMatchToleranceMapper toleranceMapper;
-    /** B2：付款行 {@code payee_id} 回写要按收款方名称精确命中供应商档案（与 {@code PayBatchService.resolveSupplierArchiveId} 同源反查） */
+    /** 付款行 {@code payee_id} 回写要按收款方名称精确命中供应商档案（与 {@code PayBatchService.resolveSupplierArchiveId} 同源反查） */
     private final MdSupplierMapper mdSupplierMapper;
-    /**  收货 vs 发票容差：match_tolerance 参数表（公司级，百分比+绝对值），无配置默认 0.5%/100 元 */
+    /** 收货 vs 发票容差：match_tolerance 参数表（公司级，百分比+绝对值），无配置默认 0.5%/100 元 */
     private final MatchToleranceService matchToleranceService;
     private final WfEngineFacade wfEngineFacade;
 
@@ -120,7 +120,7 @@ public class ThreeWayMatchService {
     }
 
     /**
-     * P1：发票校验异常发起人工复审（PTP03 INVOICE_MATCH）。
+     * 发票校验异常发起人工复审（PTP03 INVOICE_MATCH）。
      * 仅当匹配非 MATCHED（FAILED/WARN）才允许进入复审审批；procInstId 由 wf_instance 留存。
      * @return 流程实例ID
      */
@@ -142,7 +142,7 @@ public class ThreeWayMatchService {
     }
 
     /**
-     * 在途判重 + 应付确认去重（瘦身方案 §十二 R-2 的 G1/G2）。
+     * 在途判重 + 应付确认去重。
      * 两条链共用同一个最终状态钩子 {@code invoiceMatchBizAction}，它会把 po_order 无条件置 INVOICED
      * 并生成应付确认凭证，所以"同一单再起一条链"的真实代价是重复制证，必须在发起侧就拦住。
      */
@@ -161,9 +161,9 @@ public class ThreeWayMatchService {
     }
 
     /**
-     * P3-补链：手工三单匹配审批（INVOICE_MATCH_MANUAL）。自动化校验不适用/需人工复核时，
+     * 手工三单匹配审批（INVOICE_MATCH_MANUAL）。自动化校验不适用/需人工复核时，
      * 由用户发起该手工匹配审批流走「发票合规审核 → 手工三单匹配确认」人工链路。
-     * G3（RA-FLOW-09 规则）：三单已一致(MATCHED)允许走人工链，但必须给人工判定理由——
+     * 三单已一致(MATCHED)也允许走人工链，但必须给人工判定理由——
      * 手工链的价值就在自动判定不可信时，一刀切拒绝会把它该干的活也关掉；理由随实例变量留存。
      * @return 流程实例ID
      */
@@ -190,7 +190,7 @@ public class ThreeWayMatchService {
                 bill.getTotalAmount(), null, vars);
     }
 
-    /** #17 三单匹配异常 → 责任岗位路由表（差异类型决定派给谁处理） */
+    /** 三单匹配异常 → 责任岗位路由表（差异类型决定派给谁处理） */
     private static final Map<String, String> ISSUE_ROUTE = Map.of(
             "NO_PO", "PURCHASE_MANAGER",                  // 缺采购订单 → 采购
             "NO_CONTRACT", "PURCHASE_MANAGER",            // 缺合同环节（四单不齐）→ 采购补挂合同
@@ -210,10 +210,10 @@ public class ThreeWayMatchService {
             "RECON_CLERK", "对账专员");
 
     /**
-     * #17 三单匹配异常按类型路由派单。
+     * 三单匹配异常按类型路由派单。
      *
-     * <p>此前异常只会"冻结付款"，谁来改、改什么全靠线下协调，差异容易悬而未决。
-     * 现按差异类型归并到责任岗位（价格/金额差异→应付会计，收货/订单差异→采购，
+     * <p>异常只冻结付款时，谁来改、改什么全靠线下协调，差异容易悬而未决。
+     * 故按差异类型归并到责任岗位（价格/金额差异→应付会计，收货/订单差异→采购，
      * 缺收货单→仓储，未对账→对账专员），并发起 INVOICE_MATCH 异常复审流程派单；
      * 硬异常（超付/超容差）在解决前保持冻结（PayBatchService 已按 freezePay 拦截）。
      *
@@ -238,7 +238,7 @@ public class ThreeWayMatchService {
         }
         String mainRole = byRole.keySet().iterator().next();
         Long u = UserContext.get() == null ? null : UserContext.get().getUserId();
-        // 差异明细此前只进日志与 HTTP 响应，办理人在待办里只见标题、不知"为何被派"，
+        // 差异明细若只进日志与 HTTP 响应，办理人在待办里只见标题、不知"为何被派"，
         // wf_task.title／历史也只落标题。这里把主责岗待处理差异（byRole 值取自 it.getMsg()，已是中文说明、
         // 非枚举码，故不触发枚举直接显示）拼进发起标题——标题随 start() 一并下发到待办并落 wf_task.title 记录，
         // 是派单当时唯一可见的下发面（comment 变量要到审批人出票时才有值）。宽度约束＝wf_task.title／
@@ -301,8 +301,7 @@ public class ThreeWayMatchService {
 
     /**
      * 手工关联采购订单/收货单到付款单。
-     * 发票校验 场景：用户在发票校验时手工选择 PO 和收货单进行匹配。
-     * 典型场景：三单核对时手工选取采购订单、到货单进行关联。
+     * 发票校验场景下由用户在界面上手工选择 PO 和收货单，作为该付款单的匹配依据。
      */
     /**
      * 手工关联采购订单/收货单到付款单（向后兼容的两参重载）。
@@ -314,7 +313,7 @@ public class ThreeWayMatchService {
 
     /**
      * 手工关联采购订单/收货单/采购合同到付款单。
-     * <p>G2R-01：新增 contractId，补上合同环节的可达补挂入口（详见 Controller 注释）。
+     * <p>支持补挂合同（contractId），使合同环节在付款单上有可达的补挂入口（详见 Controller 注释）。
      */
     @Transactional(rollbackFor = Exception.class)
     public String link(Long billId, Long poId, Long poReceiptId, Long contractId) {
@@ -336,7 +335,7 @@ public class ThreeWayMatchService {
             }
             bill.setPoReceiptId(poReceiptId);
         }
-        // G2R-01：合同环节补挂。传 null 表示本次不改合同（保持向后兼容）；传值则校验合同真实存在。
+        // 合同环节补挂：传 null 表示本次不改合同（保持向后兼容）；传值则校验合同真实存在。
         if (contractId != null) {
             ContContract c = contractMapper.selectById(contractId);
             if (c == null) {
@@ -355,7 +354,7 @@ public class ThreeWayMatchService {
             syncReceiptInvoiceColumn(poReceiptId);
         }
         // 关联到 PO 时，该 PO 名下<b>其它</b>已关联付款单的收货单也要重算一遍——
-        // 之前只有本次点到的那张收货单被补，同 PO 的兄弟收货单继续挂 0（的"从不更新"残余面）。
+        // 否则只有本次点到的那张收货单被补，同 PO 的其它收货单会一直挂 0。
         if (poId != null) {
             for (PoReceipt rc : poReceiptMapper.selectList(new LambdaQueryWrapper<PoReceipt>()
                     .eq(PoReceipt::getPoId, poId))) {
@@ -367,18 +366,17 @@ public class ThreeWayMatchService {
     }
 
     /**
-     * B2（后半）：手工关联之后补一次付款行的 {@code payee_id}。
+     * 手工关联之后补一次付款行的 {@code payee_id}。
      *
      * <p>付款记录在审批通过那一刻就解析过一次收款方档案（{@code ExpenseWfEventListener.createPaymentRecord}），
      * 但「手工关联」是<b>之后</b>才把 PO 挂上单的那一步，当时取到什么就永久留在什么上，仓内没有任何写点回头补
-     * ⇒ 现库标 {@code SUPPLIER} 的 11 行 {@code payee_id} 全 NULL，付款侧三道校验（禁用/黑名单、
+     * ⇒ 标 {@code SUPPLIER} 的付款行 {@code payee_id} 可能全为 NULL，付款侧三道校验（禁用/黑名单、
      * 账号核对、主体比对）只能退化成按名称现算。</p>
      *
      * <p>查询范围＝{@code payee_name} 在 {@code md_supplier} 的<b>唯一</b>精确命中；零命中或多命中都留 NULL
      * （同名多家＝哪一条都不是"这一家"的证据，与凭证侧「不猜一家」同一规则）。
-     * 不要刻意不取 {@code po_id → po_order.supplier_id}：那条链答的是"向谁买"，与本列的"付给谁"可以不同主体——
-     * 实测 bill 1/2 的收款方＝东昇贸易有限公司，其 PO 供应商＝苏州科韵精密设备(27606)，
-     * 按 PO 回填会把 要抓的"资金流主体与票据流主体分离"直接洗平成相等。</p>
+     * 也不应按 {@code po_id → po_order.supplier_id} 回填：那条链答的是"向谁买"，与本列的"付给谁"可以不同主体——
+     * 按 PO 回填会把"资金流主体与票据流主体分离"直接洗平成相等。</p>
      *
      * <p>去重：只改 {@code payee_id IS NULL} 的行，已有值一律不覆盖。</p>
      */
@@ -408,7 +406,7 @@ public class ThreeWayMatchService {
         }
     }
 
-    /** 当前登录人；无请求上下文（引擎线程/定时线程）返回 null——按 规则如实留空，不伪造操作人 */
+    /** 当前登录人；无请求上下文（引擎线程/定时线程）返回 null——如实留空，不伪造操作人 */
     private static Long currentUser() {
         return UserContext.get() == null ? null : UserContext.get().getUserId();
     }
@@ -418,9 +416,8 @@ public class ThreeWayMatchService {
     /**
      * ext_json 里存放三单匹配<b>人工结论</b>的键。
      *
-     * <p>为什么写在 {@code exp_bill.ext_json}：现库实测<b>没有</b> three_way_match 表
-     * （SHOW TABLES LIKE '%match%' 只有 match_tolerance / md_match_tolerance，均为容差参数表），
-     * exp_bill 也没有 match_status / match_result 一列（全列 SHOW COLUMNS 已逐列核对）。
+     * <p>为什么写在 {@code exp_bill.ext_json}：库里没有 three_way_match 表，
+     * exp_bill 也没有 match_status / match_result 列。
      * 而 ext_json 是既有 text 列，同族已有 voucherPending / abroadFlag / overrunReason /
      * autoAuditSample / cipId 五个键在用——匹配结论沿用同一载体＝<b>零 DDL</b>，
      * 不为此再造一张表、也不改共享列语义。
@@ -531,9 +528,9 @@ public class ThreeWayMatchService {
             if (rc == null) {
                 return;
             }
-            // G#39：回写列与判据都取「勾稽净额（不含税）」。po_receipt.amount 是不含税入账额，
-            // 而 inv_bill_invoice.amount 是价税合计——旧实现拿价税直接比不含税收货额，
-            // 标准组合「净额收货＋价税开票」会被判成超收货（G2 实证：40,680 > 36,000，超 4,680 恰为税额）。
+            // 回写列与判据都取「勾稽净额（不含税）」。po_receipt.amount 是不含税入账额，
+            // 而 inv_bill_invoice.amount 是价税合计——两者直接相比，
+            // 标准组合「净额收货＋价税开票」会被判成超收货（差额恰为税额）。
             // 与 check() 的 invoiceNetAmt 同尺：勾稽价税合计 − 关联发票税额。
             BigDecimal linked = sumLinkedInvoiceNetAmount(receiptId);
             // 与 PurchaseService.markInvoiced 同一绝对值重算规则（两者都只认 inv_bill_invoice 明细为真相源），
@@ -544,15 +541,15 @@ public class ThreeWayMatchService {
             }
             // 强制校验：勾稽重算后累计开票超出「收货额 + 容差」→ 拒绝回写（库内值保持原样）并派 INVOICE_MATCH 异常单。
             // 规则同 PurchaseService.markInvoiced（同一判据方法）；"拒写"而非抛异常：本方法在人工关联路径事务内，
-            // 抛出会污染调用方事务，得不偿失；拒绝后留 error 日志 + 派单默认处理，人工据单纠偏。
+            // 抛出会污染调用方事务，得不偿失；拒绝后留 error 日志 + 派单兜底，人工据单纠偏。
             if (invoiceExceedsReceiptCap(linked, rc.getAmount())) {
                 try {
                     dispatchInvoiceOverReceipt(receiptId, rc.getReceiptNo(), linked, nz(rc.getAmount()));
                 } catch (Exception ex) {
-                    // 派单失败不得反噬"拒绝回写"本身（拒绝是主诉求，派单是默认处理）
-                    log.warn("[R5-D-070] 收货单 {} 超限派单失败（拒绝回写不受影响）: {}", rc.getReceiptNo(), ex.getMessage());
+                    // 派单失败不得反噬"拒绝回写"本身（拒绝是主诉求，派单是兜底）
+                    log.warn("收货单 {} 超限派单失败（拒绝回写不受影响）: {}", rc.getReceiptNo(), ex.getMessage());
                 }
-                log.error("[R5-D-070] 收货单 {} 勾稽开票额 {} 超收货额 {} + 容差 {}（硬闸），拒绝回写",
+                log.error("收货单 {} 勾稽开票额 {} 超收货额 {} + 容差 {}（硬闸），拒绝回写",
                         rc.getReceiptNo(), linked, nz(rc.getAmount()), INVOICE_OVER_RECEIPT_TOLERANCE);
                 return;
             }
@@ -576,8 +573,8 @@ public class ThreeWayMatchService {
     }
 
     /**
-     * 开票回写超收货额（强制校验触发）→ 复用 #17 三单匹配异常派单链，差异类型 INVOICE_OVER_RECEIPT
-     * 固定路由应付会计（ISSUE_ROUTE/ROLE_NAME 原表已登记），发起 INVOICE_MATCH 异常复审流程。
+     * 开票回写超收货额（强制校验触发）→ 复用三单匹配异常派单链，差异类型 INVOICE_OVER_RECEIPT
+     * 固定路由应付会计（ISSUE_ROUTE/ROLE_NAME 中已登记），发起 INVOICE_MATCH 异常复审流程。
      * 故意不加事务注解：调用方（两处回写路径）均已在事务内，派单失败只须记录，不得反噬"拒绝回写"；
      * 关联单取该收货单名下勾稽额最大的付款单（并列取小 id，查询已按 id 升序），并以 hasActiveTask 防重
      * （同一付款单已有在办 INVOICE_MATCH 派单则不再发起）。
@@ -589,7 +586,7 @@ public class ThreeWayMatchService {
                 .eq(ExpBill::getPoReceiptId, receiptId)
                 .orderByAsc(ExpBill::getId));
         if (bills.isEmpty()) {
-            log.warn("[R5-D-070] 收货单 {} 超限但名下无付款单，无处派 INVOICE_MATCH（补挂后下次回写再触发）", receiptNo);
+            log.warn("收货单 {} 超限但名下无付款单，无处派 INVOICE_MATCH（补挂后下次回写再触发）", receiptNo);
             return null;
         }
         ExpBill anchor = null;
@@ -603,7 +600,7 @@ public class ThreeWayMatchService {
             }
         }
         if (wfEngineFacade.hasActiveTask("INVOICE_MATCH", anchor.getId())) {
-            log.info("[R5-D-070] 付款单 {} 已有在办 INVOICE_MATCH 派单，去重不重复发起", anchor.getId());
+            log.info("付款单 {} 已有在办 INVOICE_MATCH 派单，去重不重复发起", anchor.getId());
             return null;
         }
         String role = ISSUE_ROUTE.getOrDefault("INVOICE_OVER_RECEIPT", "FIN_AP");
@@ -614,7 +611,7 @@ public class ThreeWayMatchService {
                         + "｜派单原因：开票回写超收货额（收货单 " + receiptNo + " 累计开票 " + invoiceTotal
                         + " 超收货额 " + receiptAmount + " 加容差上限，回写已拒绝）",
                 invoiceTotal);
-        log.warn("[R5-D-070] 开票回写超收货额派单：收货单 {} 累计开票 {} > 收货额 {} + 容差，锚付款单 {} 流程 {}",
+        log.warn("开票回写超收货额派单：收货单 {} 累计开票 {} > 收货额 {} + 容差，锚付款单 {} 流程 {}",
                 receiptNo, invoiceTotal, receiptAmount, billNo, procInstId);
         return procInstId;
     }
@@ -657,8 +654,8 @@ public class ThreeWayMatchService {
         r.setContractId(bill.getContractId());
         r.setBillStatus(bill.getStatus());
 
-        // P1 修复：三单匹配（PO/收货/发票）仅适用于对公付款单（采购循环 PTP）。
-        // 员工报销(CLAIM)/借还款等单据没有 PO 语义，此前被「未关联采购订单+超付」误拦，直接放行。
+        // 三单匹配（PO/收货/发票）仅适用于对公付款单（采购循环 PTP）。
+        // 员工报销(CLAIM)/借还款等单据没有 PO 语义，若按「未关联采购订单+超付」校验只会误拦，故直接放行。
         if (!"PAY".equals(bill.getBillType())) {
             r.setMatchStatus("MATCHED");
             r.setMsg("非对公付款单（" + bill.getBillType() + "），不适用三单匹配");
@@ -666,9 +663,9 @@ public class ThreeWayMatchService {
         }
 
         // 供应商对账联动（独立计算）
-        // 此前只认付款记录 payee_name 一级，取不到就把字面量 '无'（连引号）拼进 WARN 文案，
-        // 对账专员无从判断该对哪一家。改为三级回退取名（付款记录 → 单据 → 采购订单），
-        // 并把 reconStatus 的计算下移到 PO 环节解析之后（见下方「供应商对账」段）。
+        // 只认付款记录 payee_name 一级时，取不到会把字面量 '无'（连引号）拼进 WARN 文案，
+        // 对账专员无从判断该对哪一家。故按三级回退取名（付款记录 → 单据 → 采购订单），
+        // 并把 reconStatus 的计算放到 PO 环节解析之后（见下方「供应商对账」段）。
         ExpBillPayment pay = expBillPaymentMapper.selectOne(new LambdaQueryWrapper<ExpBillPayment>()
                 .eq(ExpBillPayment::getBillId, bill.getId())
                 .last("limit 1"));
@@ -688,9 +685,9 @@ public class ThreeWayMatchService {
                 r.setPoReceived(nz(po.getReceivedAmount()));
                 r.setPoQty(sumOrderedQty(po.getId()));
                 // RECEIPT ≤ PO：收货超订单。
-                // 通行规则，2026-10-16：超收货本身**不冻结**——先收货后补订单、
-                // 分批到货溢装在实务中是常态，整体拦会逼出"为过校验而压低收货"的反向作弊。
-                // 真正的资金风险是**为超收那部分付了钱**：钱出去了、订单上没有对应义务。
+                // 超收货本身不冻结——先收货后补订单、分批到货溢装在实务中是常态，
+                // 整体拦会逼出"为过校验而压低收货"的反向作弊。
+                // 真正的资金风险是为超收那部分付了钱：钱出去了、订单上没有对应义务。
                 // 故这里保持 WARN（提示去补订单／办溢收手续），并把超收金额记下来，
                 // 由 {@link #assertPayNotBeyondOrder} 作为独立的 ERROR 强制校验承担拦截。
                 if (r.getPoReceived().compareTo(r.getPoAmount()) > 0) {
@@ -722,7 +719,7 @@ public class ThreeWayMatchService {
                 r.setReceiptNo(rc.getReceiptNo());
                 r.setReceiptAmount(nz(rc.getAmount()));
                 // 收货↔发票勾稽：以 inv_bill_invoice 明细现算为准（回写列可能是绑定早于关联的历史欠账）
-                // G#39：与回写列同用不含税净额，避免同屏「已开票」显示价税、判据用净额的双规则
+                // 与回写列同用不含税净额，避免同屏「已开票」显示价税、判据用净额的双规则
                 BigDecimal liveInvoice = sumLinkedInvoiceNetAmount(rc.getId());
                 r.setReceiptInvoice(liveInvoice.signum() > 0 ? liveInvoice : nz(rc.getInvoiceAmount()));
                 r.setReceiptQty(sumReceivedQty(rc.getId()));
@@ -747,9 +744,9 @@ public class ThreeWayMatchService {
         BigDecimal invoiceAmt = links.stream().map(x -> nz(x.getAmount())).reduce(BigDecimal.ZERO, BigDecimal::add);
         // 价税规则归一。收货单（po_receipt.amount）是不含税入账，而关联发票的
         // 覆盖金额是价税合计——直接比较会把"净额收货+价税开票"的标准组合误判为超收货
-        // （N5 实证：50,000 收货 vs 56,500 发票，超 6,500 恰为税额）。这里累计关联发票的
-        // 税额，"发票 ≤ 收货"改按不含税规则比较：invoiceAmt − linkedTax ≤ receiptAmount。
-        // 发票无税额信息（tax_amount=0/NULL，如非增值税票）时行为与旧规则一致（向后兼容）。
+        // （差额恰为税额）。这里累计关联发票的税额，
+        // "发票 ≤ 收货"按不含税规则比较：invoiceAmt − linkedTax ≤ receiptAmount。
+        // 发票无税额信息（tax_amount=0/NULL，如非增值税票）时退化为价税合计（向后兼容）。
         BigDecimal linkedTax = linkedTaxOf(links);
         BigDecimal invoiceNetAmt = invoiceAmt.subtract(linkedTax).max(BigDecimal.ZERO);
         r.setInvoiceAmount(invoiceAmt);
@@ -763,17 +760,17 @@ public class ThreeWayMatchService {
             issues.add(new MatchIssue("PAY_EXCEED_INVOICE", "ERROR",
                     "超付：关联发票 " + invoiceAmt + " + 容差 " + payAllow + " < 本次付款 " + r.getPayAmount() + "（无发票覆盖）"));
         }
-        // 通行规则，2026-10-16 新增：付款不得超过采购订单额。
+        // 付款不得超过采购订单额。
         // 上游把「收货超订单」定为 WARN 是有意的（超收是实务常态），但仅靠 WARN 等于
         // "为超收那部分照样付钱"没有任何校验——钱出账、订单无对应义务，正是本项要堵的资金风险。
-        // 判据取 **PO 订单额**（非收货额）：收货额已被超收污染，用它当上限等于用超收数给自己批额度。
+        // 判据取 PO 订单额（非收货额）：收货额已被超收污染，用它当上限等于用超收数给自己批额度。
         // 容差复用 RECEIPT_VS_PO（与超收同一把尺子，避免出现"超容差按收货拦、按订单不拦"的自相矛盾）。
-        // 规则归一：与上方 「发票 ≤ 收货」同一类规则错配——
+        // 规则归一：与上方「发票 ≤ 收货」属同一类规则错配——
         //   po_order.amount 是<b>不含税</b>入账额，而付款单 exp_bill.total_amount 是<b>价税合计</b>
         //   = 关联发票价税合计，拿价税付款直接比不含税订单，会把标准组合「净额订单 + 价税付款」
-        //   恒判超付（N5 实证：PO 50,000 vs 付款 56,500，超 6,500 恰为税额），付款链在 IM_2 办结放行
-        //   时被强制校验永久锁死（HTTP 400）。故这里把付款额折算到<b>不含税规则</b>再比，与发票/收货同尺：
-        //   付款净额 = 付款价税 − 关联发票税额（发票无税额信息时 linkedTax=0，退化为原规则，向后兼容）。
+        //   恒判超付（差额恰为税额），付款链在办结放行时被强制校验永久锁死（HTTP 400）。
+        //   故这里把付款额折算到<b>不含税规则</b>再比，与发票/收货同尺：
+        //   付款净额 = 付款价税 − 关联发票税额（发票无税额信息时 linkedTax=0，退化为价税合计，向后兼容）。
         BigDecimal payNetAmount = r.getPayAmount().subtract(linkedTax).max(BigDecimal.ZERO);
         if (r.getPoAmount() != null && r.getPoAmount().signum() > 0
                 && payNetAmount.compareTo(r.getPoAmount()) > 0) {
@@ -791,7 +788,7 @@ public class ThreeWayMatchService {
                                 + " —— 须先补订单或办溢收手续后调整付款金额，不得为无订单覆盖的部分付款"));
             }
         }
-        //   发票 ≤ 收货： 容差参数化——收货金额 vs 发票金额容差改由 match_tolerance 参数表
+        //   发票 ≤ 收货：容差参数化——收货金额 vs 发票金额的容差取自 match_tolerance 参数表
         //   （公司级，amount_pct 百分比 + amount_abs 绝对值，容差金额 = max(收货×pct/100, abs)；
         //   无公司配置/停用时默认 0.5% / 100 元）。超容差 → ERROR 冻结，容差内 → WARN。
         if (r.getReceiptAmount() != null && invoiceNetAmt.compareTo(r.getReceiptAmount()) > 0) {
@@ -826,7 +823,7 @@ public class ThreeWayMatchService {
             issues.add(new MatchIssue("NO_CONTRACT", "WARN",
                     "未关联采购合同：四单缺合同（合同/PO/收货/发票），请补挂合同或说明豁免依据"));
         }
-        // 供应商对账（取名三级回退 + 查询失败文案如实，不再把字面量 '无' 带引号拼进 WARN）
+        // 供应商对账（取名三级回退；查询失败时文案如实说明，不把字面量 '无' 带引号拼进 WARN）
         String supplierName = firstNonBlank(pay == null ? null : pay.getPayeeName(),
                 bill.getPayeeName(), poLeg == null ? null : poLeg.getSupplierName());
         Long supplierId = (pay != null && "SUPPLIER".equalsIgnoreCase(pay.getPayeeType()) && pay.getPayeeId() != null)
@@ -837,15 +834,9 @@ public class ThreeWayMatchService {
         //   supplier_name 为 NULL；而 hasConfirmedByName 是按名字精确匹配 ⇒ 这类行即使
         //   status='CONFIRMED' 也永远查不到，匹配台恒挂一条「应付对账（函）未确认」WARN，
         //   正常单因此永远判不到「三单一致」。
-        //   实案（2026-10-16 V4 册 N1-B 幕 1B.10）：supplier_recon id=15 recon_no=BCP15-202610、
-        //   supplier_name=NULL、supplier_id=18、status=CONFIRMED、supplier_confirm_status=CONFIRMED，
-        //   而结算单 A 的匹配明细仍显示「应付对账（函）未确认」，判 差异预警 而非 MATCHED。
-        // 补链：的回退只在 supplierId 已有值时才生效，而「无 PO 环节
-        //   且付款记录未按 SUPPLIER 记 payee_id」的单据两侧键同时落空 ⇒ 仍恒挂误报。
-        //   实案（V4 册 N1-B 幕 1B.11）：异常样本单 B 无 PO/收货/合同，supplier_recon 唯一行
-        //   supplier_name=NULL、supplier_id=18、status=CONFIRMED，名称侧查不到、id 侧无值，
-        //   于是多报一条「应付对账（函）未确认」（实测 5 条 vs 手册 4 条）。
-        //   此处补一层「名称 → 供应商档案 id」桥（md_supplier 按名精确反查），把两端键打通后再查确认记录。
+        //   若回退只在 supplierId 已有值时才生效，则「无 PO 环节且付款记录未按 SUPPLIER 记 payee_id」
+        //   的单据两侧键同时落空 ⇒ 仍恒挂误报。
+        //   故补一层「名称 → 供应商档案 id」桥（md_supplier 按名精确反查），把两端键打通后再查确认记录。
         boolean reconConfirmed = supplierName != null && supplierReconService.hasConfirmedByName(supplierName);
         if (!reconConfirmed) {
             Long sid = supplierId;
@@ -857,7 +848,7 @@ public class ThreeWayMatchService {
                         sid = archive.getId();
                     }
                 } catch (Exception ex) {
-                    // 档案反查属默认处理桥，失败不得反噬对账判定本身，仅记录
+                    // 档案反查属兜底桥，失败不得反噬对账判定本身，仅记录
                     log.warn("[三单匹配] 供应商档案按名反查失败（supplierName={}）: {}", supplierName, ex.getMessage());
                 }
             }
@@ -876,22 +867,18 @@ public class ThreeWayMatchService {
                                     + "，请先补全收款方后再核对对账单"));
         }
 
-        // 收款方 vs 供应商：只做「记录＋界面提示」，不新增拦截
-        // 判据缺口（本条真缺陷所在）：以上各环节比对了 金额链（付款≤发票≤收货≤PO）、数量链（订购 vs 已收）、
+        // 收款方 vs 供应商：只做「记录＋界面提示」，不拦截付款
+        // 以上各环节比对了 金额链（付款≤发票≤收货≤PO）、数量链（订购 vs 已收）、
         // 合同环节、对账环节，<b>唯独没比对「付款单收款方」与「采购订单供应商」是否同一主体</b>。
-        // 更具体地：上方 supplierName 是 firstNonBlank(付款记录名 → 单据名 → 采购订单供应商名) 合成的
-        // <b>单一</b>变量（的取名三级回退），三者被当成同义词使用、从未互相比较，
+        // 上方 supplierName 是 firstNonBlank(付款记录名 → 单据名 → 采购订单供应商名) 合成的
+        // <b>单一</b>变量（取名三级回退），三者被当成同义词使用、从未互相比较，
         // 于是「钱付给 A、票与货走 B」在名称不一致时不产生任何差异行。
-        // 现库实测（exp_bill × po_order，bill_type='PAY'，2026-10-01 只读查询）：
-        //   FK202609290001 / FK202609290002（各 80,000.00，均 APPROVED）
-        //   收款方 exp_bill.payee_name＝东昇贸易有限公司（md_supplier 真实现有，id=53 / SUP-041）
-        //   供应商 po_order.supplier_name＝苏州科韵精密设备有限公司（supplier_id=27606 / SUP-054）
-        //   ⇒ 两条单当前的差异清单里没有任何一条指向「收付主体与票据主体分离」。
-        // 级别取 WARN 且<b>刻意不置 hasError</b>：PayBatchService:990 的刚性拦截只认 "FAILED"，
-        // 本差异不冻结付款、不进 的执行期拦口（该拦口本身无解拦出口、已现有待裁）。
-        // 「升级为硬拦（收款方≠供应商即拒付）」＝需人工裁决，见本轮回报甲乙丙。
+        // 故此处把付款单收款方与采购订单供应商分列，两侧都取得到且确实不符时记一条 WARN。
+        // 级别取 WARN 且<b>刻意不置 hasError</b>：付款执行环节的刚性拦截只认 "FAILED"，
+        // 本差异不冻结付款、不进执行期拦口（该拦口本身无解拦出口，属待定事项）。
+        // 「升级为硬拦（收款方≠供应商即拒付）」＝需产品确认。
         // 收款<b>账号</b>与主数据的核对不在此重复：控制点③ warnIfPayeeWithoutMasterAccount
-        //PayBatchService:979 已在付款执行环节承担该规则，避免第二处真值。
+        // 已在付款执行环节承担该规则，避免第二处真值。
         String payeeName = firstNonBlank(pay == null ? null : pay.getPayeeName(), bill.getPayeeName());
         String payeeBankAccount = firstNonBlank(pay == null ? null : pay.getBankAccount(), bill.getPayeeAccountNo());
         Long payeeSupplierId = (pay != null && "SUPPLIER".equalsIgnoreCase(pay.getPayeeType())) ? pay.getPayeeId() : null;
@@ -902,7 +889,7 @@ public class ThreeWayMatchService {
         r.setPoSupplierName(poSupplierName);
         r.setPoSupplierId(poSupplierId);
         // 只在两侧名称/档案 id <b>都取得到</b>且确实不符时报差异（一侧缺＝无从比对，不硬判）。
-        // 收款方名完全缺失的情形也不在此重复报：上方 RECON_UNCONFIRMED 的默认处理文案已如实报「三处均未登记收款方名称」。
+        // 收款方名完全缺失的情形也不在此重复报：上方 RECON_UNCONFIRMED 的兜底文案已如实报「三处均未登记收款方名称」。
         boolean payeeNameDiffers = payeeName != null && poSupplierName != null && !payeeName.equals(poSupplierName);
         boolean payeeIdDiffers = payeeSupplierId != null && poSupplierId != null
                 && !payeeSupplierId.equals(poSupplierId);
@@ -928,9 +915,9 @@ public class ThreeWayMatchService {
             r.setMatchStatus("MATCHED");
             r.setFrozen(false);
         }
-        // 叠盖已办结的人工结论——此前手工匹配链审结后匹配结果仍是 FAILED，
-        // 因为结论没有任何写入数据库载体、check() 每次现算现判，人工判定等于白做。
-        // 现从 ext_json.matchVerdict 读结论（零 DDL 载体，见 {@link #EXT_MATCH_VERDICT_KEY} 注释）：
+        // 叠盖已办结的人工结论——若结论没有写入载体，check() 每次现算现判，
+        // 手工匹配链审结后匹配结果仍是 FAILED，人工判定等于白做。
+        // 故从 ext_json.matchVerdict 读结论（零 DDL 载体，见 {@link #EXT_MATCH_VERDICT_KEY} 注释）：
         // 手工通过 ⇒ matchStatus=MANUAL_MATCHED、解除冻结；差异明细 issues 与 msg <b>原样保留</b>，
         // 只改"这条差异现在处于什么处置态"，不抹事实。放在 matchCode/msg 定型之后，避免被现算值覆盖。
         r.setMatchCode(issues.isEmpty() ? "MATCHED" : issues.get(0).getCode());
@@ -945,7 +932,7 @@ public class ThreeWayMatchService {
             r.setManualProcInstId(verdict.get("procInstId"));
             if (hasError) {
                 log.warn("[三单匹配] 付款单 {} 自动判定为硬异常({})，已由人工链 {} 判定通过并解除冻结；"
-                                + "差异明细仍展示，硬拦开关的裁决（是否允许人工放行 ERROR）未在本轮变更",
+                                + "差异明细仍展示，硬拦开关是否允许人工放行 ERROR 维持不变",
                         bill.getBillNo(), r.getMatchCode(), verdict.get("flowKey"));
             }
             r.setMsg(("〔人工匹配已办结" + (r.getManualVerdict() == null || r.getManualVerdict().isBlank()
@@ -955,10 +942,9 @@ public class ThreeWayMatchService {
         return r;
     }
 
-    /** 参数化容差：加载当租户全部容差配置（去重，缺省严格 0）。 */
     /**
-     * 41号审查 差异化容差解析：同维度下按「公司匹配+供应商匹配」特异性取最优先、
-     * 且处于生效窗口内的配置；全 NULL 为通用默认处理。无命中返回 null（调用方按 0 严格处理）。
+     * 参数化容差解析：同维度下按「公司匹配+供应商匹配」特异性取最优先、
+     * 且处于生效窗口内的配置；全 NULL 为通用兜底。无命中返回 null（调用方按 0 严格处理）。
      */
     private MdMatchTolerance resolveTolerance(String dimension, Long companyId, Long supplierId) {
         LocalDate today = LocalDate.now();
@@ -982,7 +968,7 @@ public class ThreeWayMatchService {
 
     /**
      * 计算某维度允许容差金额：PERCENT=base×value/100；FIXED=value；无配置或非法=0（严格）。
-     * 41号审查 支持按组织/供应商差异化配置+生效期，特异性优先。
+     * 支持按组织/供应商差异化配置+生效期，特异性优先。
      */
     private BigDecimal tolerance(String dimension, BigDecimal base, Long companyId, Long supplierId) {
         MdMatchTolerance t = resolveTolerance(dimension, companyId, supplierId);
@@ -1036,9 +1022,9 @@ public class ThreeWayMatchService {
     }
 
     /**
-     * G#39：收货单已开票<b>净额</b>（不含税）＝勾稽发票价税合计 − 关联发票税额。
+     * 收货单已开票<b>净额</b>（不含税）＝勾稽发票价税合计 − 关联发票税额。
      * <p>po_receipt.amount 是不含税入账额，回写列与「开票 ≤ 收货」强制校验都必须用同一把不含税尺子；
-     * 发票无税额信息（tax_amount=0/NULL）时退化为价税合计，与旧规则向后兼容。
+     * 发票无税额信息（tax_amount=0/NULL）时退化为价税合计（向后兼容）。
      * 供本类 syncReceiptInvoiceColumn 与 PurchaseService.markInvoiced 共用，避免两处各算一套。
      */
     public BigDecimal sumLinkedInvoiceNetAmount(Long receiptId) {
@@ -1085,15 +1071,15 @@ public class ThreeWayMatchService {
         if (in == null || in.getDimensionCode() == null || in.getDimensionCode().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "维度编码不能为空");
         }
-        // 必填守卫（批次 2B，前端 PAY_TOL_SCOPE 登记表同一规则）：容差类型/容差值原为静默补默认值
-        // PERCENT / 0，而这两项就是规则本身的内容——补值等于凭默认造出一条用户没写的容差规则。
+        // 必填守卫（与前端 PAY_TOL_SCOPE 登记表同一规则）：容差类型/容差值是规则本身的内容，
+        // 若静默补默认值 PERCENT / 0，等于凭默认造出一条用户没写的容差规则。
         if (in.getToleranceType() == null || in.getToleranceType().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择容差类型");
         }
         if (in.getToleranceValue() == null || in.getToleranceValue().compareTo(BigDecimal.ZERO) < 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请输入容差值");
         }
-        // 41号审查 upsert 按「维度+公司+供应商」定位(通用行三字段均 NULL)
+        // upsert 按「维度+公司+供应商」定位（通用行三字段均 NULL）
         MdMatchTolerance exist = toleranceMapper.selectOne(new LambdaQueryWrapper<MdMatchTolerance>()
                 .eq(MdMatchTolerance::getDimensionCode, in.getDimensionCode())
                 .eq(in.getCompanyId() != null, MdMatchTolerance::getCompanyId, in.getCompanyId())
@@ -1130,7 +1116,7 @@ public class ThreeWayMatchService {
         return exist;
     }
 
-    /** 41号审查 删除容差配置行(逻辑删) */
+    /** 删除容差配置行（逻辑删） */
     @Transactional(rollbackFor = Exception.class)
     public void deleteTolerance(Long id) {
         toleranceMapper.deleteById(id);
@@ -1204,8 +1190,8 @@ public class ThreeWayMatchService {
         private String supplierName;
         /**
          * 付款单侧登记的收款方名（付款记录 → 单据两级回退）。
-         * 与 {@link #supplierName} <b>分列</b>存放——此前两者被 firstNonBlank 合成为同一个变量，
-         * 于是界面与判据都只看到一个名字，「收款方≠供应商」既比不出来也无从展示。
+         * 与 {@link #supplierName} <b>分列</b>存放：若用 firstNonBlank 合成为同一个变量，
+         * 界面与判据都只看到一个名字，「收款方≠供应商」既比不出来也无从展示。
          */
         private String payeeName;
         /** 收款方银行账号（付款记录 bank_account 优先，退回单据 payee_account_no） */

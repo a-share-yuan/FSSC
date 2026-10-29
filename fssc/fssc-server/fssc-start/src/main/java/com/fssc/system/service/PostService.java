@@ -42,7 +42,7 @@ public class PostService {
                 .orderByAsc(SysPost::getSort));
     }
 
-    /** 分页查询（P0-2）：按部门/公司过滤，tenant_id 由拦截器自动追加 */
+    /** 分页查询：按部门/公司过滤，tenant_id 由拦截器自动追加 */
     public PageResult<SysPost> page(long pageNum, long pageSize, Long companyId, Long deptId) {
         LambdaQueryWrapper<SysPost> w = new LambdaQueryWrapper<SysPost>().orderByAsc(SysPost::getSort);
         if (deptId != null) w.eq(SysPost::getDeptId, deptId);

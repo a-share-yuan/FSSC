@@ -31,7 +31,7 @@
 
 <script setup>
 // 方案 A（页面Tab化重构册 §甲）：蓝图 9 页收敛为一域一工作台，页内 tab 复用既有 Board 组件，
-// 不新增流程/表/API。el-tab-pane lazy＝首次激活才挂载，避免 8 个 Board 并发查询（教训）。
+// 不新增流程/表/API。el-tab-pane lazy＝首次激活才挂载，避免 8 个 Board 并发查询。
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ArClaimBoard from './ArClaimBoard.vue'
@@ -51,7 +51,7 @@ import { hasPerm } from '@/utils/perm'
 const route = useRoute()
 const router = useRouter()
 // 页签逐个按内层接口码门控：页面授了但缺某个域的码时，不渲染该页签，避免点开才 403。
-// 这里只用**本域**权限码门控。跨域借来的码（如基础配置的端点在系统参数下、要 system:config:list）
+// 这里只用本域权限码门控。跨域借来的码（如基础配置的端点在系统参数下、要 system:config:list）
 // 一律不参与页签显隐：业务角色多数不持有系统域码，拿它做 AND 门控会连整个功能入口一起抹掉，
 // 用户看到的是"这功能没了"而不是"没权限"——比报错更糟。缺该码时由组件内空态明示。
 const TAB_PERMS = {

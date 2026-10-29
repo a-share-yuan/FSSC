@@ -4,7 +4,7 @@
 
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  FSSC 日志配置（P0-B1 可观测性地基）。
+  FSSC 日志配置（可观测性地基）。
 
   要点：
   1) 每行日志带 [traceId]，与 TraceIdFilter 写入的 MDC 对齐 —— 一次请求的全部日志可用 traceId 串联；

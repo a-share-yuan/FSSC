@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 
 /**
  * 实物流签收单（op_physical_delivery，带 tenant_id）。
- * P0-5 行业特性 TC12：电子流 + 实物流双到达。传统交单模式下，
+ * 行业特性 TC12：电子流 + 实物流双到达。传统交单模式下，
  * 实物未签收 → 共享会计待办不显示对应审核任务。
  */
 @Data
@@ -61,7 +61,7 @@ public class OpPhysicalDelivery implements Serializable {
     private LocalDateTime deliverTime;
     private LocalDateTime signTime;
 
-    /** R5-D-243：关联单据状态（仅出参，page 时批量填充；DRAFT/CANCELLED 时 UI 隐藏签收/拒签并给原因） */
+    /** 关联单据状态（仅出参，page 时批量填充；DRAFT/CANCELLED 时 UI 隐藏签收/拒签并给原因） */
     @TableField(exist = false)
     private String billStatus;
 

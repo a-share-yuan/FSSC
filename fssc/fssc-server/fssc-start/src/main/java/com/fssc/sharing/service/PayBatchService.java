@@ -84,7 +84,7 @@ public class PayBatchService {
     private final BankGateway bankGateway;
     private final ThreeWayMatchService threeWayMatchService;
     /**
-     * 反欺诈（批次 1 ⑤）：硬阻断位从"提单"下移到"付款指令执行前"——高风险单据在打款前必须经人工复审结案
+     * 反欺诈：硬阻断位从"提单"下移到"付款指令执行前"——高风险单据在打款前必须经人工复审结案
      * （{@code fraud_detection_log.reviewed_by} 非空或处置 RELEASE），否则整批拒付。
      */
     private final FraudDetectionService fraudDetectionService;
@@ -99,7 +99,7 @@ public class PayBatchService {
     private final PlanWritebackService planWritebackService;
     /**
      * F2 资料齐套校验。两层调用点：{@code confirm}（CONFIRM）与 {@code execute}（EXECUTE 二次校验，
-     * 人工裁决 RA-F2d／REF-B「两点都拦」——确认时点不撤，打款前再查一次）。
+     * 产品确认 RA-F2d／REF-B「两点都拦」——确认时点不撤，打款前再查一次）。
      */
     private final BillCompletenessGuard billCompletenessGuard;
     /** 自动组批时取本公司默认出账账户，不再写死不存在的外键 */
@@ -107,7 +107,7 @@ public class PayBatchService {
     /** ⑨：单据全额付讫（APPROVED→PAID）时办结其共享作业链残留池任务 */
     private final SharingService sharingService;
     /**
-     * X-39 丙：收款账号查询收敛——供应商档案开户信息（{@code md_supplier_bank}）
+     * 收款账号查询收敛——供应商档案开户信息（{@code md_supplier_bank}）
      * 与 {@code md_payee} 一起构成"账号有没有档案支撑"的判据来源（只读）。
      */
     private final MdSupplierBankMapper mdSupplierBankMapper;
@@ -125,20 +125,20 @@ public class PayBatchService {
     private final ExpBillLineMapper expBillLineMapper;
 
     /**
-     * ①③：批次名下凭证的批次级来源族——出纳付款凭证（TREASURY_PAY）与 CIP 批次付款凭证
-     * CIP_PAY_BATCH。与列表「凭证/记账」列批次级查询环节（②）同源，一律按
-     * source_doc_id 成对精确匹配批次主键，不与单据级 bill_id 混用（跨域裸主键串号，教训）。
+     * 批次名下凭证的批次级来源族——出纳付款凭证（TREASURY_PAY）与 CIP 批次付款凭证
+     * CIP_PAY_BATCH。与列表「凭证/记账」列的批次级查询同源，一律按
+     * source_doc_id 成对精确匹配批次主键，不与单据级 bill_id 混用（跨域裸主键会撞号）。
      */
     private static final Set<String> BATCH_LEVEL_VOUCHER_SOURCES =
             Set.of("TREASURY_PAY", "CIP_PAY_BATCH");
 
     /**
-     * ②：PAID 收尾校验未过时落在 fail_reason 的异常记录规则（列表红色标记另见 voucherAnomaly）。
-     * 刻意不回退为 FAILED（会被当月"可重试"通道再次打款）也不新造状态值（groupWaiting 的
+     * PAID 收尾校验未过时落在 fail_reason 的异常记录规则（列表红色标记另见 voucherAnomaly）。
+     * 刻意不回退为 FAILED（会被"可重试"通道再次打款）也不新造状态值（groupWaiting 的
      * 防重复组批只认 status='PAID'，新值会让已付单据重新可组批）——款项事实保留，异常显式记录并禁付。
      */
     private static final String PAID_NO_VOUCHER_NOTE =
-            "账证不符（R5-D-079②）：打款已成功（款项已付出），但批次名下查无任何有效凭证（单据级/批次级皆无）。"
+            "账证不符：打款已成功（款项已付出），但批次名下查无任何有效凭证（单据级/批次级皆无）。"
                     + "不得静默视为正常已付款——请到凭证工作台核对并补制付款凭证后人工核销";
 
     // 付款记录
@@ -155,7 +155,7 @@ public class PayBatchService {
         String payeeType = req.getPayeeType() == null ? "SUPPLIER" : req.getPayeeType();
         // 供应商黑名单对公付款强拦：收方为供应商且命中黑名单 → 禁止发起付款
         assertSupplierNotBlacklisted(payeeType, req.getPayeeId());
-        // #14 付款账号与主数据一致性校验：快照账号须在 md_payee 中登记且未停用（防付错）
+        // 付款账号与主数据一致性校验：快照账号须在 md_payee 中登记且未停用（防付错）
         assertPayeeAccountConsistent(payeeType, req.getPayeeId(), req.getBankAccount());
         ExpBillPayment p = new ExpBillPayment();
         p.setTenantId(TenantContext.getTenantId());
@@ -229,14 +229,14 @@ public class PayBatchService {
     // 付款侧控制点
 
     /**
-     * 控制点①「禁用供应商」：付款指令发出前的供应商状态校验。
+     * 控制点「禁用供应商」：付款指令发出前的供应商状态校验。
      *
-     * <p>原规则只认 {@code md_supplier.blacklist}，而现网实测 {@code blacklist=1} 为 <b>0 家</b>、
-     * 禁用是用 {@code status='DISABLED'}（1 家）表达的——"禁用供应商不得付款"这条控制在付款侧
-     * 等于不存在。本校验把二者并集视为不可付（黑名单或状态非 NORMAL/ACTIVE）。</p>
+     * <p>只认 {@code md_supplier.blacklist} 不足以表达"禁用"——禁用是用 {@code status='DISABLED'}
+     * 写的，不并查状态列，"禁用供应商不得付款"这条控制在付款侧等于不存在。
+     * 本校验把二者并集视为不可付（黑名单或状态非 NORMAL/ACTIVE）。</p>
      *
      * <p>解析规则：{@code payee_id} 优先，为空时按 {@code payee_name} 精确反查
-     * （实测 {@code exp_bill_payment.payee_id} 6/8 为 NULL，只按 ID 查这道校验形同虚设）。
+     * （{@code exp_bill_payment.payee_id} 常为空，只按 ID 查这道校验形同虚设）。
      * 反查不到＝收款方不在供应商主数据里（历史单据/员工付款/名称变更），<b>不臆断成"已禁用"</b>，
      * 只留 WARN 痕；主数据侧补齐后自然收敛为硬拦。</p>
      */
@@ -254,7 +254,7 @@ public class PayBatchService {
                     .last("limit 1"));
         }
         if (supplier == null) {
-            log.warn("D-DEC-092 付款控制留痕：收款方[{}](payeeId={}) 在 md_supplier 中不存在，"
+            log.warn("付款控制留痕：收款方[{}](payeeId={}) 在 md_supplier 中不存在，"
                     + "供应商状态无从判定，本次不按猜测拒付；请补录供应商主数据后该笔即受状态闸约束",
                     payeeName, payeeId);
             return;
@@ -267,20 +267,20 @@ public class PayBatchService {
                     "付款控制拦截（供应商不可付）：" + supplier.getSupplierName()
                             + "(" + supplier.getSupplierCode() + ") 状态="
                             + (Integer.valueOf(1).equals(supplier.getBlacklist()) ? "黑名单" : st)
-                            + "，禁止对外付款（D-DEC-092）。"
+                            + "，禁止对外付款。"
                             + "处理出口：到 供应商主数据 恢复状态/解除黑名单，或改派其他合规供应商后重新组批。");
         }
     }
 
     /**
-     * 控制点③「收款方主数据无账户」：账号未经主数据核对的记录位。
-     * <p>{@code assertPayeeAccountConsistent} 在收款方 {@code md_payee} 零账户时是直接 return
-     * 历史数据兼容，于是"无账户"与"账户已核对"在台账上长得一样。付款执行前补一条如实记录，
-     * 不改变放行结论（硬拦会把现网全部未建账户的收款方一并锁死，分级属校验策略，交回裁决）。</p>
+     * 控制点「收款方主数据无账户」：账号未经主数据核对的记录位。
+     * <p>{@code assertPayeeAccountConsistent} 在收款方 {@code md_payee} 零账户时直接 return
+     * （历史数据兼容），于是"无账户"与"账户已核对"在台账上长得一样。付款执行前补一条如实记录，
+     * 不改变放行结论（硬拦会把尚未建账户的收款方一并锁死，分级属校验策略，交回产品确认）。</p>
      */
     private void warnIfPayeeWithoutMasterAccount(String payeeType, Long payeeId, String payeeName, Long billId) {
         if (payeeId == null) {
-            log.warn("D-DEC-092 付款控制留痕：单据 {} 收款方[{}] 未关联主数据 ID，账号无法与 md_payee 核对",
+            log.warn("付款控制留痕：单据 {} 收款方[{}] 未关联主数据 ID，账号无法与 md_payee 核对",
                     billId, payeeName);
             return;
         }
@@ -288,17 +288,17 @@ public class PayBatchService {
                 .eq(MdPayee::getPayeeType, payeeType)
                 .eq(MdPayee::getRefId, payeeId));
         if (cnt == 0) {
-            log.warn("D-DEC-092 付款控制留痕：收款方[{}](id={}, type={}) 在 md_payee 无任何账户登记，"
+            log.warn("付款控制留痕：收款方[{}](id={}, type={}) 在 md_payee 无任何账户登记，"
                     + "本次付款账号未经主数据核对（单据 {}）", payeeName, payeeId, payeeType, billId);
         }
     }
 
-    // 收款账号查询收敛（X-39 丙）
+    // 收款账号查询收敛
 
     /**
-     * X-39 丙：解析收款方对应的<b>供应商档案</b> id。
+     * 解析收款方对应的<b>供应商档案</b> id。
      * <p>规则与 {@link #assertSupplierNotDisabled} 同源——{@code payee_id} 优先，为空按 {@code payee_name}
-     * 精确反查（实测 {@code exp_bill_payment.payee_id} 对供应商行为 NULL，只认 ID 这道收不住）。
+     * 精确反查（{@code exp_bill_payment.payee_id} 对供应商行常为 NULL，只认 ID 这道收不住）。
      * 员工/其他收款方不走供应商档案（工资卡另有规则），返回 null 即不参与本判据。
      */
     private Long resolveSupplierArchiveId(String payeeType, Long payeeId, String payeeName) {
@@ -320,7 +320,7 @@ public class PayBatchService {
     }
 
     /**
-     * X-39 丙：供应商档案登记在案的开户账号集合 = md_supplier_bank ∪ md_payee(SUPPLIER)，
+     * 供应商档案登记在案的开户账号集合 = md_supplier_bank ∪ md_payee(SUPPLIER)，
      * 两处均只取未停用行（{@code del_flag} 由 {@code @TableLogic} 自动过滤）。
      * <p>返回空集＝该供应商压根没有开户信息（现网实证：东昇 id=53 有档案无账户行、宏远无档案）。
      */
@@ -353,13 +353,13 @@ public class PayBatchService {
     }
 
     /**
-     * X-39 丙：<b>唯一一处</b>账号完整性判据——付款账号是否有该供应商档案开户信息支撑。
+     * <b>唯一一处</b>账号完整性判据——付款账号是否有该供应商档案开户信息支撑。
      *
-     * <p>不做字符集/长度强制校验（那是把现网合法账号一次性洗掉的写法，且真正的风险是"账号无出处"而不是"账号不好看"）：
-     * 现网实证 {@code exp_bill_payment.bank_account} 上的 {@code DEMO-NO-SUPPLIER-BANK-MASTER} 长度合法、
-     * 字符合法，唯独没有任何档案能解释它从哪来——所以判据落在"档案里查得到/查不到"。
+     * <p>不做字符集/长度强制校验——那是把合法账号一次性洗掉的写法，真正的风险是"账号无出处"而不是"账号不好看"：
+     * 一个长度与字符都合法、却没有任何档案能解释来源的账号，照样过不了本判据，
+     * 所以判据落在"档案里查得到/查不到"。
      *
-     * <p>只读、不抛错、不改状态；档案读取异常时<b>放行</b>（同 记录规则，不因主数据抖动锁死付款）。
+     * <p>只读、不抛错、不改状态；档案读取异常时<b>放行</b>（不因主数据抖动锁死付款）。
      *
      * @return null＝可提交银企（非供应商收款方、档案读取异常亦含在此）；非空＝给人看的缺档说明
      */
@@ -368,7 +368,7 @@ public class PayBatchService {
             return null;
         }
         if (bankAccount == null || bankAccount.isBlank()) {
-            return null; // 账号为空由 D-DEC-092 控制点②（收款账户缺失）管，此处不写第二道判据
+            return null; // 账号为空由执行侧「收款账户缺失」控制点管，此处不写第二道判据
         }
         try {
             Long supplierId = resolveSupplierArchiveId(payeeType, payeeId, payeeName);
@@ -389,13 +389,13 @@ public class PayBatchService {
             return "付款账号 " + target + " 与供应商[" + payeeName + "] 档案开户账号不一致（档案登记 "
                     + archived.size() + " 个，如 " + first + "）";
         } catch (Exception ex) {
-            log.warn("D-DEC-088 收款账号档案核对异常（本次放行）：收款方[{}] {}", payeeName, ex.getMessage(), ex);
+            log.warn("收款账号档案核对异常（本次放行）：收款方[{}] {}", payeeName, ex.getMessage(), ex);
             return null;
         }
     }
 
     /**
-     * X-39 丙 查询收敛用：档案默认开户账号——md_supplier_bank 的默认行优先，其次该表/ md_payee
+     * 档案默认开户账号——md_supplier_bank 的默认行优先，其次该表 / md_payee
      * 的任一可用行。档案无账号时返回 null，由调用方回落到单据快照。
      */
     private String archivedDefaultAccount(String payeeType, Long payeeId, String payeeName) {
@@ -417,7 +417,7 @@ public class PayBatchService {
             Set<String> accounts = archivedPayeeAccounts(supplierId);
             return accounts.isEmpty() ? null : accounts.iterator().next();
         } catch (Exception ex) {
-            log.warn("D-DEC-088 档案开户账号取数异常（回落单据快照）：收款方[{}] {}", payeeName, ex.getMessage(), ex);
+            log.warn("档案开户账号取数异常（回落单据快照）：收款方[{}] {}", payeeName, ex.getMessage(), ex);
             return null;
         }
     }
@@ -429,7 +429,7 @@ public class PayBatchService {
      * 付款转已用是"占用−/已用+"等额互换，不改可用额度；所以此处 {@code available < 0} 的真实含义是
              <b>这条预算线已经被整体突破</b>（含他单占用），现网实证 bg_item id=2 可用 = −13,000。
      * 把它做成付款强制校验＝把"制单时按 SOFT/WARN 方案合法放行"的单据在出纳环节成片锁死，
-     * 分级（硬拦/软拦/仅记录）属校验策略，需人工裁决。本批按 WARN 记录落，报告已列。</p>
+     * 分级（硬拦/软拦/仅记录）属校验策略，需产品确认。本批按 WARN 记录落，报告已列。</p>
      */
     private void warnIfOverBudgetOnExecute(String batchNo, List<OpPayBatchDetail> details) {
         try {
@@ -458,8 +458,8 @@ public class PayBatchService {
                     }
                     BigDecimal avail = budgetService.availableOf(itemId);
                     if (avail != null && avail.signum() < 0) {
-                        log.warn("D-DEC-092 付款控制留痕（超预算，未硬拦）：批次 {} 底层单据 {} 的预算明细 {} "
-                                + "可用额度已为 {}（预算线整体被打穿），本次仍按现行人工裁决口径放行付款",
+                        log.warn("付款控制留痕（超预算，未硬拦）：批次 {} 底层单据 {} 的预算明细 {} "
+                                + "可用额度已为 {}（预算线整体被打穿），本次仍按现行产品确认口径放行付款",
                                 batchNo, bill.getBillNo(), itemId, avail);
                     }
                 }
@@ -475,8 +475,8 @@ public class PayBatchService {
     /**
      * 打款成功 → 预算「占用转已用」按底层单据确认。
      *
-     * <p>替代原先挂在审批通过钩子上的三处转换（{@code ExpenseWfEventListener} 报销/付款收尾、
-     * {@code PayBatchBizAction} 批次审批收尾）：那些时点钱还没出去，计消耗即失真。
+     * <p>时点必须是钱出去之后：审批通过钩子上的转换（{@code ExpenseWfEventListener} 报销/付款收尾、
+     * {@code PayBatchBizAction} 批次审批收尾）在钱还没出去时就计消耗，必然失真——转换点只留在这里。
      * 本方法在银行指令确认成功后调用；{@code settleOccupyOnPaid} 为 {@code REQUIRES_NEW} 独立事务
      * 且自带去重判重（已核销过的单据整单跳过），异常只回滚本次确认，绝不回滚已发出的付款。</p>
      */
@@ -512,7 +512,7 @@ public class PayBatchService {
                 }
                 int done = budgetService.settleOccupyOnPaid(billId, bill.getBillNo(), bill.getBillType(),
                         bill.getCompanyId(), bill.getDeptId(), bill.getPeriodYear(), lines);
-                log.info("付款批次 {} 打款成功 → 单据 {} 预算占用转已用 {} 行（D-DEC-104）",
+                log.info("付款批次 {} 打款成功 → 单据 {} 预算占用转已用 {} 行",
                         batch.getBatchNo(), bill.getBillNo(), done);
             } catch (Exception ex) {
                 log.error("付款批次 {} 单据 {} 预算占用转已用失败（钱已付出，可经 预算>占用核销 手工补）: {}",
@@ -539,15 +539,15 @@ public class PayBatchService {
     /**
      * 代码半：结算/付款审批通过即组批的服务端入口——只处理本单名下未入批的 WAITING 付款记录。
      *
-     * <p>原先组批唯一的触发点是出纳打开付款页（{@code Pay.vue} 的 {@code load()} 里调
-     * {@code POST /batch/auto-group}），于是：①读动作带写副作用，批次生成时点与审批时点解耦
-     * 实测差 1 小时 46 分；②只有持 {@code pay:batch:create} 的人打开页面才会建批，
-     * 无该权限的出纳永远看不到批次——这就是 「审批通过后付款行未进任何批次、出纳无入口」的真因
-     * （已更正 原判因「组批查询未覆盖 PAY/SETTLE」：查询是通的，卡的是触发点＋权限）。
-     * 现把建批挪到审批收尾后由服务端触发（{@code PayBatchAutoGroupListener} 监听单据最终状态事件，
+     * <p>组批不能挂在出纳打开付款页的读动作上（{@code Pay.vue} 的 {@code load()} 里调
+     * {@code POST /batch/auto-group}）：这样批次生成时点与审批时点解耦，
+     * 且只有持 {@code pay:batch:create} 的人打开页面才会建批，无该权限的出纳永远看不到批次——
+     * 「审批通过后付款行未进任何批次、出纳无入口」的真因就在这里，不在查询
+     * （组批查询本身覆盖 PAY/SETTLE，卡的是触发点＋权限）。
+     * 建批因此挪到审批收尾后由服务端触发（{@code PayBatchAutoGroupListener} 监听单据最终状态事件，
      * AFTER_COMMIT 时点付款记录已写入数据库可见），付款页不再隐式建批。
      *
-     * <p>权限补授（CASHIER 3259/3264 不给 pay:batch:create）是权限治理 09-19 定案，不属本改动范围。
+     * <p>权限补授（CASHIER 3259/3264 不给 pay:batch:create）是权限治理口径，不属本改动范围。
      */
     @Transactional(rollbackFor = Exception.class)
     public AutoGroupResult autoGroupForBill(Long billId) {
@@ -568,7 +568,7 @@ public class PayBatchService {
      */
     private AutoGroupResult groupWaiting(List<ExpBillPayment> waiting) {
         AutoGroupResult result = new AutoGroupResult(new ArrayList<>());
-        // P1 修复：剔除源单据已驳回/撤回等无效状态的孤儿付款记录（智能审单驳回后残留），
+        // 剔除源单据已驳回/撤回等无效状态的孤儿付款记录（智能审单驳回后残留），
         // 防止被组批进真实批次后触发三单匹配拦截/误付款
         List<ExpBillPayment> validWaiting = new ArrayList<>();
         for (ExpBillPayment p : waiting) {
@@ -582,7 +582,7 @@ public class PayBatchService {
             }
             // 重提轮会按审批重新生成 WAITING 付款记录；若该单据的上一笔付款已经
             // 执行成功（存在 PAID 批次指向本单，或同单已有 PAID 付款记录），则本次记录不再组批——
-            // 否则同一笔业务出现第二个批次（实测 FK202609300001 空壳 PAID 后又被组出 PB202609300006），
+            // 否则同一笔业务出现第二个批次（空壳 PAID 之后又被组出一批），
             // 构成双付风险。PAID 付款记录/PAID 批次的甄别以批次溯源列与付款记录双保险为准。
             boolean paidBatchExists = opPayBatchMapper.selectCount(new LambdaQueryWrapper<OpPayBatch>()
                     .eq(OpPayBatch::getSourceDocId, p.getBillId())
@@ -593,7 +593,7 @@ public class PayBatchService {
                             .eq(ExpBillPayment::getPayStatus, "PAID")
                             .ne(p.getId() != null, ExpBillPayment::getId, p.getId())) > 0;
             if (paidBatchExists || paidPaymentExists) {
-                log.warn("自动组批跳过付款记录 id={}（单据 {} 已有支付成功批次/记录，防 D-V3-137 双付）",
+                log.warn("自动组批跳过付款记录 id={}（单据 {} 已有支付成功批次/记录，防双付）",
                         p.getId(), src.getBillNo());
                 continue;
             }
@@ -630,7 +630,7 @@ public class PayBatchService {
             if (bankAccountId == null) {
                 // 缺默认出账账户这件事必须让出纳看到：只写 log 的话，界面上"批次没变多"却没有任何说明，
                 // 只能回源码或翻日志才知道原因。这里把同一句话升成返回体文案，由付款页提示出来。
-                // 建批与否的判定不变（宁缺不造），仍不后退成"任一账户"默认处理。
+                // 建批与否的判定不变（宁缺不造），仍不后退成"任一账户"兜底。
                 String reason = "待付记录（收款方 " + first.getPayeeName() + "）未指定出账账户，且本公司未配置默认出账账户，"
                         + "本次未建批；请到 主数据 > 公司银行账户 将一条状态正常的账户设为默认，"
                         + "或用本页「选待付记录成批」显式选择出账账户。";
@@ -847,7 +847,7 @@ public class PayBatchService {
     /**
      * 出账账户解析：显式传入 → 付款记录自带 → 本公司默认账户；三者皆无则拒（不建批）。
      *
-     * <p>既不做"默认账户硬必填"，也不后退成"本公司任一账户"默认处理——
+     * <p>既不做"默认账户硬必填"，也不后退成"本公司任一账户"兜底——
      * 出账账户决定钱从哪个银行账户付出，属业务事实。付款账户本身在参数配置里是「必填=否」，
      * 条件必录走 CS 系列参数化配置，校验点在提交而非保存，
      * 所以这里保持"可选＋缺失即拒"，并把缺失原因写成前端可读文案。
@@ -970,7 +970,7 @@ public class PayBatchService {
         }
         // 组批入口由「仅付款页加载」变为「审批收尾服务端触发 ＋ 付款页/手工成批」多条，
         // 同一付款记录被两个入口挂进不同批次即双付。入批前按 bill_payment_id 复查（与查询侧 notInSql 同一规则）。
-        // 注：并发同时读的窄口要靠 op_pay_batch_detail.bill_payment_id 唯一索引才彻底封死，属 DDL，需另行裁决。
+        // 注：并发同时读的窄口要靠 op_pay_batch_detail.bill_payment_id 唯一索引才彻底封死，属 DDL 变更，需另行确认。
         Long alreadyInBatch = opPayBatchDetailMapper.selectCount(new LambdaQueryWrapper<OpPayBatchDetail>()
                 .eq(OpPayBatchDetail::getBillPaymentId, billPaymentId)
                 .eq(OpPayBatchDetail::getDelFlag, 0));
@@ -1079,7 +1079,7 @@ public class PayBatchService {
         update.setStatus("VOID");
         opPayBatchMapper.updateById(update);
         int vouchersVoided = voidBatchOwnVouchers(batchId);
-        log.info("付款批次 {} 作废 DRAFT→VOID，同批收口名下凭证 {} 张", batch.getBatchNo(), vouchersVoided);
+        log.info("付款批次 {} 作废 DRAFT→VOID，同批作废名下凭证 {} 张", batch.getBatchNo(), vouchersVoided);
     }
 
     /**
@@ -1263,7 +1263,7 @@ public class PayBatchService {
     /**
      * 执行付款被拦时，逐条透出「到底缺哪一单」的结构化拦口报告。
      *
-     * <p><b>本条的真缺陷不是校验本身错，而是校验无出口</b>：批次审批全绿后，{@link #execute} 在
+     * <p>本条的真缺陷不是校验本身错，而是校验无出口：批次审批全绿后，{@link #execute} 在
      * 「付款指令发出前」的硬阻断位（收款账户缺失 / 黑名单 / 禁用 / 反欺诈 / <b>三单匹配 FAILED</b>）
      * 抛 {@link BizException} 回滚整批，前端只拿到一条拼好的 {@code msg} 字符串走全局 toast
      * api.js:127-129，操作人看完无法知道「是这一批的哪一条明细、缺的是哪一环节、该去哪个界面补」，
@@ -1280,7 +1280,7 @@ public class PayBatchService {
      * 类断言以 try/catch 取其消息（该方法本身只有 selectById，无写点）。
      * 因此本端点被反复调用不会带来副作用，可安全挂在 {@code pay:batch:list} 读权限上。
      *
-     * <p><b>放宽校验（允许财务主管解拦放行）不在本条处置面</b>——属校验策略／权限裁决面，需单独裁。
+     * <p><b>放宽校验（允许财务主管解拦放行）不在本条处置面</b>——属校验策略／权限待定范围，需单独确认。
      *
      * @return 每个存在拦口的明细一行；全部可执行时返回空列表
      */
@@ -1478,7 +1478,7 @@ public class PayBatchService {
                             + "，异常码 " + voucherAnomaly + "）凭证与批次状态不勾稽，禁止再次付款。"
                             + "处理出口：到 凭证工作台 核对该批次名下凭证（作废并补办/补制付款凭证）后重试");
         }
-        // 前置收窄为"审批已办结"。CONFIRMED 只说明出纳已确认、TR_PAY 仍在途，
+        // 前置条件只认"审批已办结"。CONFIRMED 只说明出纳已确认、TR_PAY 仍在途，
         // 此时打款＝钱已出去而流程没批完。
         // 失败重试仍放行：FAILED 直接重试；TR_PAY_FAIL 审批通过后改置 APPROVED（见 TreasuryBizAction）。
         if (!"APPROVED".equals(batch.getStatus()) && !"FAILED".equals(batch.getStatus())) {
@@ -1519,7 +1519,7 @@ public class PayBatchService {
             if (d.getBillPaymentId() == null) continue;
             ExpBillPayment pay = expBillPaymentMapper.selectById(d.getBillPaymentId());
             if (pay != null && pay.getBillId() != null) {
-                // 供应商黑名单默认处理：批次执行（打款前）再拦一次
+                // 供应商黑名单兜底：批次执行（打款前）再拦一次
                 assertSupplierNotBlacklisted(pay.getPayeeType(), pay.getPayeeId());
                 // 「禁用供应商」：只认 md_supplier.blacklist 不够——禁用实际靠 status='DISABLED' 表达，
                 // 不查状态列，"禁用供应商"在付款侧就是空的。黑名单与禁用二者其一即拒付。
@@ -1539,7 +1539,7 @@ public class PayBatchService {
                 ThreeWayMatchService.MatchRow m = threeWayMatchService.check(pay.getBillId());
                 if ("FAILED".equals(m.getMatchStatus())) {
                     // 刚性拦截只在这里抛错，必须把业务出口一并讲清楚，否则批次就被执行环节锁死。
-                    // 本校验不放宽（超付仍是硬约束，放行与否属校验策略、待人工裁决），这里只把业务出口讲清楚。
+                    // 本校验不放宽（超付仍是硬约束，放行与否属校验策略、待产品确认），这里只把业务出口讲清楚。
                     // 批次状态此刻未被改写（本方法整体在同一事务内、抛错即回滚），补足发票后可原地重试。
                     throw new BizException(ErrorCode.PARAM_INVALID,
                             "三单匹配拦截：付款单 " + m.getBillNo() + " 超付，禁止执行付款（" + m.getMsg() + "）。"
@@ -1599,7 +1599,7 @@ public class PayBatchService {
         //  · 不抛 BizException、不把批次改成 FAILED（＝整批失败）——批次停在原态，档案补齐后原地重试执行即可；
         //  · 逐条把缺档说明落到 op_pay_batch_detail.fail_reason（批次明细弹窗可见），只提示不阻断其它环节；
         //  · 存在缺档行时整批暂缓、不按子集拆分报文：批次出纳凭证（TREASURY_PAY）金额取 op_pay_batch.total_amount
-        //    全额，付一部分留一部分会造成本金凭证与实付不一致——拆分规则待主窗裁决后再放开。
+        //    全额，付一部分留一部分会造成本金凭证与实付不一致——拆分规则待主窗判定后再放开。
         List<OpPayBatchDetail> unarchivedLines = new ArrayList<>();
         Map<Long, String> archiveIssues = new HashMap<>();
         for (OpPayBatchDetail d : details) {
@@ -1685,7 +1685,7 @@ public class PayBatchService {
         } catch (Exception ex) {
             log.error("付款批次 {} 计划核销回写失败（不影响付款结果）: {}", batchNo, ex.getMessage(), ex);
         }
-        // 付款完成后默认处理归集（确认时已归集则去重跳过）
+        // 付款完成后兜底归集（确认时已归集则去重跳过）
         mdCipService.aggregateFromPayBatch(batch.getSourceDocType(), batch.getSourceDocId(),
                 batch.getBatchNo(), batch.getTotalAmount());
         // 重试成功后清空失败记录（updateById 忽略 null 字段，需显式 set）
@@ -1776,7 +1776,7 @@ public class PayBatchService {
                 if (billPaidNow) {
                     // 钱已打出、单据付讫是最终状态，作业链（票据审核/付款审核/记账归档）
                     // 不会再有人办——办结未办结池任务，杜绝「已付款仍挂审核待认领」。
-                    // 借款单不置 PAID，其作业链由还款结清裁定（settleLoanAfterRepay）办结。
+                    // 借款单不置 PAID，其作业链由还款结清判定（settleLoanAfterRepay）办结。
                     sharingService.closeOnBillTerminal(bill.getId(), "付款批次已执行、单据全额付讫");
                 }
                 // 实付入账：单据付讫（含刚刚迁移 PAID）后自动过账关联 DRAFT 凭证。
@@ -1802,7 +1802,7 @@ public class PayBatchService {
      * 批次列表的「单据状态 / 凭证记账」三列必须在后端补：接口直出实体时这几列压根不在返回键里，
      * 只改前端绑定拿不到数据。
      * 规则：批次 → op_pay_batch_detail → exp_bill_payment.bill_id → exp_bill / op_voucher.bill_id（明细侧全覆盖，
-     * 来源侧的 AUTO_GROUP 合并批次 source_doc_id 按设计为 NULL）；仅在明细缺失时按 source_doc_id 默认处理，
+     * 来源侧的 AUTO_GROUP 合并批次 source_doc_id 按设计为 NULL）；仅在明细缺失时按 source_doc_id 兜底，
      * 且只有费用族才把它当 exp_bill 主键解释——source_doc_id 是跨域裸主键（CIP 批次指向 md_cip），
      * 跨域撞号同理，不能只看值不看类型。
      * <p>另外两处同源补充也在这里办结，不另开接口：

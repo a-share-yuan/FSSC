@@ -60,10 +60,10 @@ public class WfDelegateService {
      * {@code *>1} 表示任何公司都可以委托给集团）。
      *
      * <p><b>缺省＝全禁</b>（fail-closed）：现网 {@code sys_user.company_id} 有 5 家公司
-     * （1 集团 / 31 销售 / 32 湖南 / 33 昆山 / 35 研发），而此前 {@link #create} 只校验了
-     * U9 的四条规则（自己 / 可用 / 同期唯一 / 循环），**没有公司维度校验**——实测
-     * 3818（昆山）成功委托给 3797（集团），且受托人随后真的办理了该公司的任务、
-     * 记录操作人跨了公司（2026-09-23 运行期实证，见 docs/委托代理治理审计报告.md）。
+     * （集团 / 销售 / 湖南 / 昆山 / 研发），而 {@link #create} 原先只校验了
+     * U9 的四条规则（自己 / 可用 / 同期唯一 / 循环），**没有公司维度校验**——
+     * 昆山的人能成功委托给集团的人，且受托人随后真的办理了该公司的任务、
+     * 记录操作人跨了公司（见 docs/委托代理治理审计报告.md）。
      */
     static final String CROSS_COMPANY_WHITELIST_KEY = "delegate.cross_company.whitelist";
 
@@ -80,7 +80,7 @@ public class WfDelegateService {
      *
      * <p><b>为什么要过滤</b>：此端点原先没有任何身份条件，任何持有 {@code wf:delegate:list}
      * 的普通员工都能翻到<b>全租户</b>的委托安排——谁把审批权临时借给了谁、借到哪天、覆盖哪些单据。
-     * 委托关系本身是审批授权信息，2026-12-25 演练中「我的委托代理」页把他人安排一并列出即为此缺口。
+     * 委托关系本身是审批授权信息，演练中「我的委托代理」页把他人安排一并列出即为此缺口。
      *
      * <p><b>规则</b>：{@code mine}（本人作为委托人，缺省）/ {@code agent}（由本人代办）/
      * {@code all}（全量，仅无公司维度的集团级账号）。公司维度账号请求 {@code all} 直接 403，
@@ -165,7 +165,7 @@ public class WfDelegateService {
         // ② 受托人必须是可办理的真人（存在/在职/有角色/非 admin，铁律禁 admin 参与任何节点）；
         // ③ 同一时间只能委托给一个人（U9 原文："若委托给多人，系统只会给其中一人转发"——与其运行期挑一个，
         //    不如在配置期就拒绝歧义）；④ 禁止循环委托（A2②：沿委托链逐跳走样，A→B→C→A 也算回环）；
-        // ⑤ 公司维度边界（2026-09-23 补，原四条之外新增）——默认禁止跨公司，避免 A 公司的单据
+        // ⑤ 公司维度边界（原四条之外新增）——默认禁止跨公司，避免 A 公司的单据
         //    被 B 公司的人代审：委托只是把"办理资格"临时借出，但写入数据库的 oper_user_id 是受托人本人，
         //    于是审批记录上会出现不属于该公司的经办人（数据隔离/内控可见性问题）。
         // 「只支持一级委托」无需实现：canOperate 只做受托人→委托人一跳，不存在链式递归。
@@ -173,7 +173,7 @@ public class WfDelegateService {
             throw new BizException(ErrorCode.PARAM_INVALID, "不能把待办委托给自己");
         }
         assertDelegateTargetUsable(delegate.getToUserId());
-        // ⑤ 公司维度边界（2026-09-23 补）：默认禁止跨公司委托，命中白名单才放行
+        // ⑤ 公司维度边界：默认禁止跨公司委托，命中白名单才放行
         assertCompanyBoundary(delegate.getFromUserId(), delegate.getToUserId());
         LocalDateTime begin = delegate.getBeginTime(), end = delegate.getEndTime();
         if (countActiveInRange(delegate.getFromUserId(), null, begin, end) > 0) {
@@ -186,7 +186,7 @@ public class WfDelegateService {
             delegate.setStatus("NORMAL");
         }
         delegateMapper.insert(delegate);
-        // 通知补全：委托建立当即告知受托人——改造前只有"办结响应"，受托人从来不知道自己被委托了。
+        // 通知补全：委托建立当即告知受托人——原先只有"办结响应"，受托人从来不知道自己被委托了。
         notifyDelegateCreated(delegate);
         // 历史改派：窗口已开（begin<=now）才动别人的待办，未来生效的委托由
         // {@code WfDelegateExpireJob} 的生效扫描在窗口开启那一刻补做，避免"提前建委托就提前抢单"。
@@ -283,7 +283,7 @@ public class WfDelegateService {
     }
 
     /**
-     * 受托人可用性校验（A2 第①条硬约束，人工裁决 RA-F4a 前置）：
+     * 受托人可用性校验（A2 第①条硬约束，产品确认 RA-F4a 前置）：
      * 存在 + 本人可登录（status=NORMAL）+ 非 admin + <b>持有至少一个未停用的角色</b>。
      *
      * <p>规则来源：〔E·BOSBCFG·8〕委托的资格是"借"给一个<b>能办事的操作员</b>；同类做法
@@ -328,15 +328,11 @@ public class WfDelegateService {
     }
 
     /**
-     * 公司维度边界校验（2026-09-23 补，方案 §1.4-2）。
+     * 公司维度边界校验（方案 §1.4-2）。
      *
-     * <p><b>缺口的实证</b>：{@code create()} 原有四条 U9 规则全都与"人"有关，没有任何一条看"公司"，
-     * 而现网 {@code sys_user.company_id} 有 5 家公司。运行期实测：
-     * <pre>
-     *   3818 陈修利（company 33 昆山）→ 3797 付程鹏（company 1 集团）：HTTP 200，委托建立成功
-     *   随后 3819（company 32）作为受托人成功办理了 company 1 的任务，wf_task_history.oper_user_id=3819
-     * </pre>
-     * 即"跨公司代办"不仅能建立、而且真的能落地执行，审批记录上出现外公司的经办人。
+     * <p><b>缺口</b>：{@code create()} 原有四条 U9 规则全都与"人"有关，没有任何一条看"公司"，
+     * 而现网 {@code sys_user.company_id} 有 5 家公司。于是跨公司委托不仅能建立、也能落地执行：
+     * 受托人办完任务后，{@code wf_task_history.oper_user_id} 记的是外公司的人。
      *
      * <p><b>判定规则</b>：
      * <ol>
@@ -444,12 +440,12 @@ public class WfDelegateService {
     }
 
     /**
-     * 循环委托检查（A2 第②条硬约束，人工裁决 RA-F4a 前置）：沿委托链一跳跳走下去，
+     * 循环委托检查（A2 第②条硬约束，产品确认 RA-F4a 前置）：沿委托链一跳跳走下去，
      * 只要能绕回委托人（A→B→C→A）就拒绝。
      *
-     * <p>改造前只查<b>直接两跳</b>（A→B 且 B→A），三跳及以上的环放行；而受托人可持有委托人的
+     * <p>原先只查<b>直接两跳</b>（A→B 且 B→A），三跳及以上的环放行；而受托人可持有委托人的
      * 办理资格这一事实会沿链叠出"谁都在等别人办"的死锁面。规则依据：〔E·BOSBCFG·8〕原文
-     * 「<b>不允许循环委托！</b>」——外部资料未把该禁令限定在两跳。
+     * 「不允许循环委托！」——外部资料未把该禁令限定在两跳。
      *
      * <p>深度上限 {@value #MAX_DELEGATE_CHAIN_DEPTH}：链上每一跳都要查一次库，且现网委托窗口互斥
      * 同一委托人同期只能委托一人 本就让链难以变长；超限只记日志放行，
@@ -472,7 +468,7 @@ public class WfDelegateService {
             }
             cursor = next;
         }
-        log.warn("委托链超过 {} 跳未收口（{}），按放行处理——循环判定只保证该深度内的环",
+        log.warn("委托链超过 {} 跳未收敛（{}），按放行处理——循环判定只保证该深度内的环",
                 MAX_DELEGATE_CHAIN_DEPTH, chain);
     }
 

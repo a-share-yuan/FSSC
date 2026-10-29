@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 应收对账 / 分析报告记录（ar_recon_record，OTC04/OTC05，P0-1 收尾）。
+ * 应收对账 / 分析报告记录（ar_recon_record，OTC04/OTC05，收尾）。
  * <p>
  * AR_RECON / AR_REPORT 原以 bizId=NULL 发起，流程结束不触发收尾事件；
  * 现发起时落一条本记录（RUNNING）并以记录 id 作为流程 bizId，
@@ -32,7 +32,7 @@ public class ArReconRecord extends TenantAuditBase {
     private Long customerId;
     /** 所属公司 */
     private Long companyId;
-    /** 对账/报告金额（元，D-DEC-415） */
+    /** 对账/报告金额（元） */
     private BigDecimal amount;
     /** RUNNING 审批中 / CONFIRMED 已确认 / REJECTED 已驳回 */
     private String status;

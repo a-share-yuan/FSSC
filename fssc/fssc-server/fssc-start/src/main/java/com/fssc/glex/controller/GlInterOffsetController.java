@@ -3,9 +3,11 @@
 
 package com.fssc.glex.controller;
 
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.glex.entity.GlInterOffset;
@@ -47,8 +49,8 @@ public class GlInterOffsetController {
     @PostMapping("/create")
     public Result<List<GlInterOffset>> create(@RequestBody List<GlInterOffset> pair) {
         if (pair == null || pair.size() != 2) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "需成对提交来账(应收)与往账(应付)两条分录");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "需成对提交来账(应收)与往账(应付)两条分录");
         }
         return Result.success(service.create(pair.get(0), pair.get(1)));
     }

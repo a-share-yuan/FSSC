@@ -41,13 +41,13 @@ public class GlTaxProvisionController {
         return Result.success(service.provision(period));
     }
 
-    // X-42 甲：原 POST /pay（发起 GL_TAX_PAY 缴款审批）已作废删除——独立缴款流不出付款动作、
+    // 原 POST /pay（发起 GL_TAX_PAY 缴款审批）已作废删除——独立缴款流不出付款动作、
     // 不出缴纳凭证。税金缴款走对公付款通道（付款单／付款批次），本控制器只保留计提环节。
     // 历史 GL_TAX_PAY 实例仍可由下方挂接核查 /link-check 读出。
 
     /**
      * 计提挂接核查：列出该期间每条计提记录是否挂了审批流程/是否出了凭证/是否挂了缴款流程，
-     * 并给出未挂面条数与金额。整改前"一次计提 3 条只挂第 1 条"是静默的，本接口使其可见、可查。
+     * 并给出未挂面条数与金额。原先"一次计提 3 条只挂第 1 条"是静默的，本接口使其可见、可查。
      */
     @RequiresPerm("gl:taxprov:list")
     @GetMapping("/link-check")

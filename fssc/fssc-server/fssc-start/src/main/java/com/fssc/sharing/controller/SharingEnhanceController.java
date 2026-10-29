@@ -14,6 +14,7 @@ import com.fssc.sharing.entity.OpBankStatement;
 import com.fssc.sharing.entity.OpQuality;
 import com.fssc.document.service.BillArchiveService;
 import com.fssc.sharing.service.SharingEnhanceService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,7 +37,7 @@ public class SharingEnhanceController {
     private final SharingEnhanceService enhanceService;
     private final BillArchiveService archiveService;
 
-    // ---------- 质检 ----------
+    // 质检
 
     @RequiresPerm("op:quality:list")
     @GetMapping("/quality/page")
@@ -69,7 +70,7 @@ public class SharingEnhanceController {
         return Result.success();
     }
 
-    // ---------- 档案归档 ----------
+    // 档案归档
 
     @RequiresPerm("op:archive:list")
     @GetMapping("/archive/page")
@@ -79,7 +80,7 @@ public class SharingEnhanceController {
         return Result.success(enhanceService.archivePage(query.getPageNum(), query.getPageSize(), archiveType, status));
     }
 
-    /** 归档清单（审批完成+影像完整）：archiveStatus 空＝未归档、ARCHIVED＝已归档、ALL＝不限（D-DEC-276b/B1） */
+    /** 归档清单（审批完成+影像完整）：archiveStatus 空＝未归档、ARCHIVED＝已归档、ALL＝不限（/B1） */
     @RequiresPerm("op:archive:list")
     @GetMapping("/archive/pending")
     public Result<PageResult<BillArchiveDTO>> archivePending(PageQuery query,
@@ -90,16 +91,18 @@ public class SharingEnhanceController {
                 billType, keyword, archiveStatus));
     }
 
-    /** 归档执行：迁移文件到 archive 区 + 建档案 + 标记单据 */
-    @RequiresPerm("op:archive:create")
-    @OperLog(module = "OP_ARCHIVE", operType = "INSERT", desc = "单据批量归档")
+    /** 批量立卷：迁移文件到 archive 区 + 建待归档案卷（起不再前置回写单据归档终态） */
+    @RequiresPerm({"op:archive:create", "compliance:archive:create"})
+    @OperLog(module = "OP_ARCHIVE", operType = "INSERT", desc = "单据批量立卷")
     @PostMapping("/archive/do-archive")
-    public Result<Integer> doArchive(@RequestBody java.util.List<Long> billIds) {
+    public Result<Integer> doArchive(@RequestBody List<Long> billIds) {
         return Result.success(archiveService.doArchive(billIds));
     }
 
-    @RequiresPerm("op:archive:create")
-    @OperLog(module = "OP_ARCHIVE", operType = "INSERT", desc = "档案归档")
+    // 与 do-archive 同一 OR 规则——档案序列持 compliance:archive:create 也应能登记案卷，
+    // 不要出现"页面授权给档案岗、动作只认运营档案码"的错配（那正是 用一句提示兜住的旧账）。
+    @RequiresPerm({"op:archive:create", "compliance:archive:create"})
+    @OperLog(module = "OP_ARCHIVE", operType = "INSERT", desc = "档案登记")
     @PostMapping("/archive/create")
     public Result<Long> archiveCreate(@RequestBody OpArchive a) {
         return Result.success(enhanceService.createArchive(a));
@@ -114,7 +117,7 @@ public class SharingEnhanceController {
     }
 
     /**
-     * R5-D-197（内控红线，销毁不可逆）：改前直调 {@code enhanceService.destroyArchive(id)} 一键置 DISPOSED
+     * 内控红线，销毁不可逆：原先直调 {@code enhanceService.destroyArchive(id)} 一键置 DISPOSED
      * （无到期校验、无销毁审批、不起 FM_DESTROY）——同一缺陷的第二条人工旁路。现整体改道：
      * 一律转 ArchiveDestroyService 发起「销毁申请」，由合规链（到期校验＋双签＋FM_DESTROY）定论；
      * 理由缺失时由服务层按「请填写销毁理由」拒绝（fail-closed），不再存在"无理由一键销毁"。
@@ -127,15 +130,15 @@ public class SharingEnhanceController {
         return Result.success(enhanceService.destroyArchive(id, reason));
     }
 
-    // ---------- 银行流水 ----------
+    // 银行流水
 
     @RequiresPerm("op:bank:list")
     @GetMapping("/statement/page")
     public Result<PageResult<OpBankStatement>> statementPage(PageQuery query,
                                                              @RequestParam(required = false) Long bankAccountId,
                                                              @RequestParam(required = false) String reconStatus,
-                                                             // 161b（筛选透传环节）：SharingStatement.vue 一直在发 bankSerial（流水号）
-                                                             // 与 transType（交易方向 借/贷），本方法此前只声明前两个入参 ⇒ 两参被 Spring 直接丢弃，
+                                                             // SharingStatement.vue 一直在发 bankSerial（流水号）
+                                                             // 与 transType（交易方向 借/贷），本方法只声明前两个入参的话 ⇒ 两参被 Spring 直接丢弃，
                                                              // 查询条件"看着填了、结果没变"（静默哑火，零报错）。补进签名并透传给 service。
                                                              @RequestParam(required = false) String bankSerial,
                                                              @RequestParam(required = false) String transType) {

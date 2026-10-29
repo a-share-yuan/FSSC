@@ -33,7 +33,7 @@ public class DispatchTask extends TenantBase {
     private LocalDateTime upgradedAt;
     private String upgradeReason;
 
-    // P1-5 共享运营实质化：SLA + 信用 + 质检 + 满意度
+    // 共享运营实质化：SLA + 信用 + 质检 + 满意度
     private LocalDateTime slaDueTime;
     private String slaStatus;
     private Integer creditScore;

@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 @TableName("gl_salary_run")
 public class GlSalaryRun extends TenantAuditBase {
 
-    /** 记账公司（组织合法性守卫 V1.3.18） */
+    /** 记账公司（组织合法性守卫） */
     private Long companyId;
     /** 发放批次号 */
     private String runNo;

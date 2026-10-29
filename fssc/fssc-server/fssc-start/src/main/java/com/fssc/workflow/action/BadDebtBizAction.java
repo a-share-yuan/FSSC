@@ -67,7 +67,7 @@ public class BadDebtBizAction implements WfBizAction {
                     String.valueOf(badDebtId), auditBefore, auditAfter,
                     "审批通过" + (event.getComment() == null || event.getComment().isBlank() ? "" : "：" + event.getComment()));
             log.info("坏账 {} 审批通过: → {}", badDebtId, targetStatus);
-            // P1-B 流程最终状态生成凭证：计提/核销均为会计事件，审批通过即生成凭证（失败不阻断状态迁移）
+            // 流程最终状态生成凭证：计提/核销均为会计事件，审批通过即生成凭证（失败不阻断状态迁移）
             try {
                 Long vid = voucherService.generateBadDebtVoucher(badDebt, event.getBizType());
                 log.info("坏账 {} 自动生成{}凭证: {}", badDebt.getPeriod(),

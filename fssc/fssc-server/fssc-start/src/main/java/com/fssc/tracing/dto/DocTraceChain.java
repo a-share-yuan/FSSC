@@ -34,7 +34,7 @@ public class DocTraceChain {
     private List<TraceNode> vouchers;
     /** 关联付款批次列表 */
     private List<TraceNode> payBatches;
-    /** 收款事实列表（资金流入侧，D-DEC-394：exp_bill_receipt） */
+    /** 收款事实列表（资金流入侧，exp_bill_receipt） */
     private List<TraceNode> receipts;
     /** 银行对账记录 */
     private List<TraceNode> bankReconciles;

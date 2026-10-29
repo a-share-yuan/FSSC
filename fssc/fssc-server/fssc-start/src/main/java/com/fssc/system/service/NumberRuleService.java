@@ -4,6 +4,7 @@
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
@@ -28,7 +29,7 @@ import java.util.Locale;
  * 单据编号规则（sys_number_rule + sys_number_seq）。
  * <p>
  * 取号并发安全：先 UPDATE sys_number_seq SET current_val = current_val + step
- * （行锁保证唯一），影响行数为 0 时 INSERT 初始行（uk_tenant_rule_cycle 防并发重复，
+ * 行锁保证唯一，影响行数为 0 时 INSERT 初始行（uk_tenant_rule_cycle 防并发重复，
  * 冲突则重试一次）。编号 = prefix + 日期 + 补零流水号。
  */
 @Slf4j
@@ -39,7 +40,7 @@ public class NumberRuleService {
     private final SysNumberRuleMapper ruleMapper;
     private final SysNumberSeqMapper seqMapper;
 
-    // ---------- 规则 CRUD ----------
+    // 规则 CRUD
 
     public PageResult<SysNumberRule> page(long pageNum, long pageSize, String keyword) {
         LambdaQueryWrapper<SysNumberRule> qw = new LambdaQueryWrapper<>();
@@ -93,13 +94,13 @@ public class NumberRuleService {
         ruleMapper.hardDelete(id);
     }
 
-    // ---------- 取号 ----------
+    // 取号
 
     /**
      * 按规则编码取下一个单据号（并发安全，行锁 + 唯一键）。
      * 业务侧统一走本方法，禁止手写前缀拼号。
      * 分库改造：sys_number_rule/sys_number_seq 在 master 库；REQUIRES_NEW 挂起外层
-     * （可能为 image 库）事务、绑定 master 连接独立取号——外层回滚时号段已消费
+     * 可能为 image 库 事务、绑定 master 连接独立取号——外层回滚时号段已消费
      * 出现跳号，属取号服务常规可接受语义。
      */
     @FsscDataSource("master")
@@ -139,7 +140,7 @@ public class NumberRuleService {
         Long tenantId = TenantContext.getTenantId();
         int step = rule.getStep() == null ? 1 : rule.getStep();
         int updated = seqMapper.update(null,
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<SysNumberSeq>()
+                new LambdaUpdateWrapper<SysNumberSeq>()
                         .eq(SysNumberSeq::getTenantId, tenantId)
                         .eq(SysNumberSeq::getRuleCode, rule.getRuleCode())
                         .eq(SysNumberSeq::getCycleKey, cycleKey)
@@ -156,7 +157,7 @@ public class NumberRuleService {
             } catch (Exception e) {
                 // 并发插入冲突（uk_tenant_rule_cycle），重试一次自增
                 int retry = seqMapper.update(null,
-                        new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<SysNumberSeq>()
+                        new LambdaUpdateWrapper<SysNumberSeq>()
                                 .eq(SysNumberSeq::getTenantId, tenantId)
                                 .eq(SysNumberSeq::getRuleCode, rule.getRuleCode())
                                 .eq(SysNumberSeq::getCycleKey, cycleKey)

@@ -12,6 +12,7 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.glex.entity.GlJournalEntry;
 import com.fssc.glex.service.GlJournalService;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -52,14 +53,14 @@ public class GlJournalController {
     }
 
     /**
-     * D-DEC-128：记账域冲销出口（红字反向凭证 / 草稿凭证作废）。
+     * 记账域冲销出口（红字反向凭证 / 草稿凭证作废）。
      * 权限暂复用已种子的 {@code gl:journal:generate}——冲销与制单同属记账岗职责，
-     * 独立权限码 gl:journal:reverse 需 sys_menu 种子扩码并由权限治理定案授予（报告列为裁决项）。
+     * 独立权限码 gl:journal:reverse 需 sys_menu 种子扩码并由权限治理口径授予（报告列为待确认项）。
      */
     @RequiresPerm("gl:journal:generate")
     @OperLog(module = "GL_JOURNAL", operType = "UPDATE", desc = "一般总账记账冲销")
     @PostMapping("/{id}/reverse")
-    public Result<java.util.Map<String, Object>> reverse(@PathVariable Long id,
+    public Result<Map<String, Object>> reverse(@PathVariable Long id,
                                                          @RequestParam(required = false) String reason) {
         return Result.success(service.reverse(id, reason));
     }

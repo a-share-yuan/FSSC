@@ -3,7 +3,7 @@
 
 <template>
   <div class="flow-monitor">
-    <!-- 权限门控（P0 权限治理 2026-09-16）：
+    <!-- 权限门控：
          本页展示「全公司在途单据」（单据号/金额/当前节点/处理人/停留时长），
          仅持 wf:instance:list 的财务管理层与共享运营岗可见。
          入口已在 Layout.vue 用户菜单/快捷键中隐藏，此处为第二道防线（防直达 URL）。
@@ -121,7 +121,7 @@
                 <el-table-column prop="count" label="在办" width="70" />
                 <el-table-column label="已超时" width="90">
                   <template #default="{ row }">
-                    <!-- 本列按 due_time 实算；行尾括注＝其中没有 due_time、走默认处理规则的条数 -->
+                    <!-- 本列按 due_time 实算；行尾括注＝其中没有 due_time、走兜底规则的条数 -->
                     <span :class="row.overdue ? 'text-danger' : ''">{{ row.overdue }}</span>
                     <span v-if="row.overdueFallback" class="basis-mark">（†{{ row.overdueFallback }}）</span>
                   </template>
@@ -326,7 +326,7 @@
       </el-table>
       <TablePager :pager="pager" @change="fetchData" />
       <!-- 接口侧 WfQueryService.fillStay 已合入 due_time 优先规则（主窗移交合入完成），
-           本页与上方两表同源；无 due_time 的实例双方同走「create_time+节点 SLA」推算默认处理 -->
+           本页与上方两表同源；无 due_time 的实例双方同走「create_time+节点 SLA」推算兜底 -->
       <div class="perf-note">
         本表「停留时长 / 超时」的计算方式＝<b>按单据到期时间实算优先</b>，没有到期时间的才按节点配置的超时时长推算，与上方「超时未办 Top 榜」同源。
       </div>
@@ -518,7 +518,7 @@ const hasDwell = computed(() => dwellRows.value.length > 0)
 
 /**
  * 画布高度随内容长。桑基每节点留 ~26px、热力每行 ~34px，
- * 否则 20+ 个节点名挤在固定 300px 里必然互相叠压（12-31 截图就是这个形状）；上限 640 防撑爆页面。
+ * 否则 20+ 个节点名挤在固定 300px 里必然互相叠压；上限 640 防撑爆页面。
  */
 const sankeyHeight = computed(() => Math.min(640, Math.max(300, ((paths.value.nodes || []).length) * 26 + 70)))
 const heatHeight = computed(() => Math.min(640, Math.max(300, dwellRows.value.length * 34 + 120)))
@@ -567,7 +567,7 @@ async function fetchData() {
     await pager.load(async ({ pageNum, pageSize }) => {
       // silent：本页每 30 秒轮询一次，若因权限/网络报错会变成"每 30 秒弹一次"的持续骚扰，
       // 而 try/catch 吞不掉 —— 提示来自 api.js 响应拦截器的全局 toastBizError，只有 silent 能抑制。
-      // status=RUNNING：这一节标题是"在途流程实例"，此前不传状态把已办结/驳回的单子也列了进来，
+      // status=RUNNING：这一节标题是"在途流程实例"，不传状态会把已办结/驳回的单子也列进来，
       // 于是"在途"数与顶部卡片对不上，且已办结单永远显示"停留 -、状态 正常"。
       const data = await flowApi.instancePage({ pageNum, pageSize, status: 'RUNNING' }, { silent: true })
       const list = data?.records || data?.list || []
@@ -666,7 +666,7 @@ function onTabChange(name) {
 function renderSankey() {
   if (!sankeyRef.value || !hasPaths.value) return
   if (!sankeyChart) sankeyChart = echarts.init(sankeyRef.value)
-  else sankeyChart.resize() // D-DEC-210：容器高度随节点数变过，画布要先跟上再出图
+  else sankeyChart.resize() // 容器高度随节点数变过，画布要先跟上再出图
   const hits = {}
   ;(paths.value.nodes || []).forEach(n => { hits[n.name] = n.hits })
   const nodes = (paths.value.links || []).reduce((acc, l) => {
@@ -704,7 +704,7 @@ function renderSankey() {
 function renderHeatmap() {
   if (!heatmapRef.value || !hasDwell.value) return
   if (!heatChart) heatChart = echarts.init(heatmapRef.value)
-  else heatChart.resize() // D-DEC-210：同上，行数变化后先跟上容器高度
+  else heatChart.resize() // 同上，行数变化后先跟上容器高度
   const nodes = dwellRows.value.map(r => r.node).reverse()
   const buckets = dwellBuckets.value.length ? dwellBuckets.value : ['<1小时', '1-4小时', '4-8小时', '8-24小时', '>24小时']
   const data = []
@@ -749,7 +749,7 @@ function goBiz(row) {
 
 onMounted(async () => {
   await nextTick()
-  // 无权限时不请求、不启动轮询（原实现无条件 fetch + setInterval → 每 30 秒弹一次错误）
+  // 无权限时不请求、不启动轮询（否则无条件 fetch + setInterval 会每 30 秒弹一次错误）
   if (canView) {
     fetchData()
     loadOverview()
@@ -806,7 +806,7 @@ function onResize() {
 .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .chart-title .chart-sub { margin-left: 8px; font-size: 11px; font-weight: 400; color: #c0c4cc; }
 .chart-body { height: 300px; }
-/* 默认处理规则的行内标注（†），与表下的规则说明成对出现 */
+/* 兜底规则的行内标注（†），与表下的规则说明成对出现 */
 .basis-mark { margin-left: 2px; color: #e6a23c; font-weight: 600; font-size: 11px; }
 .perf-note code {
   background: #f4f4f5; padding: 0 4px; border-radius: 3px;

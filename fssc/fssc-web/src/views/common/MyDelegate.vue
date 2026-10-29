@@ -85,14 +85,14 @@
           <el-input :model-value="currentUserName" disabled />
         </el-form-item>
         <el-form-item label="代理人" prop="toUserId">
-          <!-- P0 修复：默认只加载同公司人员，解决全量加载的性能与安全问题 -->
+          <!-- 默认只加载同公司人员，解决全量加载的性能与安全问题 -->
           <UserSelect v-model="dialog.form.toUserId" scope="same-company" show-dept />
         </el-form-item>
         <el-form-item label="适用单据类型">
           <el-input v-model="dialog.form.bizTypes" placeholder="逗号分隔，空=全部。如 EXP_CLAIM,EXP_LOAN" />
         </el-form-item>
         <el-form-item label="开始时间" prop="beginTime">
-          <!-- 2026-09-23 T9 实测修复：后端 Jackson 只认 ISO 'T' 分隔，空格格式 500「系统异常」 -->
+          <!-- 后端 Jackson 只认 ISO 'T' 分隔，空格格式 500「系统异常」 -->
           <el-date-picker v-model="dialog.form.beginTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width:100%" />
         </el-form-item>
         <el-form-item label="结束时间" prop="endTime">
@@ -122,10 +122,10 @@
 /**
  * 我的委托代理（权限治理新增）
  *
- * 背景：委托代理（wf:delegate:*）本是**员工自助**功能，但原先只作为
+ * 背景：委托代理（wf:delegate:*）本是员工自助功能，但原先只作为
  * 「流程管理」(/expense/flow, 菜单 104) 的一个页签存在，而菜单 104
  * 位于「系统管理 → 系统配置」域下且被误授给 COMMON_EMP（普通员工）。
- * 2026-09-16 权限审计将该菜单从全员基础角色收回（流程建模属高危管理功能），
+ * 权限审计将该菜单从全员基础角色收回（流程建模属高危管理功能），
  * 为不使普通员工丢失委托代理自助能力，特拆出本独立页面。
  *
  * 权限：wf:delegate:list 查询 / wf:delegate:create 新增 / wf:delegate:update 取消
@@ -151,7 +151,7 @@ function bizTypesText(v) {
 }
 
 /**
- * 委托的「真实状态」——不能只看 status 列（2026-09-23 补）。
+ * 委托的「真实状态」——不能只看 status 列。
  *
  * 后端生效判定看的是时间区间（`begin_time <= now <= end_time`，见 WfDelegateService.activeDelegateTo）；
  * `status` 列只记录「人工取消 DISABLED / 到期回收 EXPIRED」，而到期回收由 WfDelegateExpireJob
@@ -188,7 +188,7 @@ const total = ref(0)
 const scope = ref('mine')
 const isGroupLevel = computed(() => store.user?.companyId == null)
 
-// 委托契约是 **用户 ID**（WfDelegate.fromUserId/toUserId）：此前弹窗送 fromUserName/toUserName，
+// 委托契约是用户 ID（WfDelegate.fromUserId/toUserId）：弹窗送 fromUserName/toUserName 的话，
 // Jackson 丢弃未知字段 ⇒ userId 恒空，UI 新增委托 100% 被 create 的必填断言拒（见治理文档 §11.6-4）
 const currentUserId = computed(() => store.user?.userId ?? store.user?.id ?? null)
 const currentUserName = computed(() => store.user?.realName || store.user?.nickName

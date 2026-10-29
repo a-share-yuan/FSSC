@@ -4,6 +4,7 @@
 package com.fssc.arflow.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * AR科目与组织映射纯逻辑（蓝图附件四/附件五 落地）。
@@ -51,7 +52,7 @@ public final class ArClaimAccounts {
         boolean foreign = ccy != null && !"CNY".equalsIgnoreCase(ccy);
         if (foreign) {
             BigDecimal rate = fxRate == null ? BigDecimal.ONE : fxRate;
-            return amount.multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP);
+            return amount.multiply(rate).setScale(2, RoundingMode.HALF_UP);
         }
         return amount;
     }
@@ -63,6 +64,6 @@ public final class ArClaimAccounts {
         }
         return faceAmount.multiply(annualRatePercent)
                 .multiply(BigDecimal.valueOf(days))
-                .divide(BigDecimal.valueOf(100 * 360L), 2, java.math.RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(100 * 360L), 2, RoundingMode.HALF_UP);
     }
 }

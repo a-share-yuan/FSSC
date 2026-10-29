@@ -10,7 +10,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 敏感字段脱敏注解（P1-3）。
+ * 敏感字段脱敏注解。
  *
  * <p>标注在实体字段 / getter 上，**出参序列化**时由
  * {@link SensitiveModule} 中的 {@link SensitivePropertyModifier} 自动套用脱敏；

@@ -3,6 +3,9 @@
 
 package com.fssc.workflow.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.entity.WfInstance;
 import com.fssc.workflow.entity.WfProcessLog;
@@ -23,12 +26,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 流程处理详细日志监听器（G4 ④层治理，2026-09-24）——流程配置「详细日志开关」参数 4.3。
+ * 流程处理详细日志监听器（G4 ④层治理）——流程配置「详细日志开关」参数 4.3。
  *
- * <p><b>为什么挂在 Flowable 全局事件上，而不是在门面里插桩</b>：方案 §二 F3/F4 明确指出存在
+ * <p>为什么挂在 Flowable 全局事件上，而不是在门面里插桩：方案 §二 F3/F4 明确指出存在
  * <b>引擎旁路</b>——{@code empty_strategy=SKIP} 直连 {@code taskService.complete()}、
  * 超时 AUTO_PASS 与空节点跳过"不经过本方法"。门面插桩会<b>漏记这些旁路</b>，
- * 而"卡住的单子"恰恰经常死在旁路上。事件监听器与投影监听器同一规则：<b>一个挂点，全路径覆盖</b>。
+ * 而"卡住的单子"恰恰经常死在旁路上。事件监听器与投影监听器同一规则：一个挂点，全路径覆盖。
  *
  * <p><b>注册策略（与镜像投影开关刻意不同）</b>：本监听器<b>无条件注册</b>，是否真正写入数据库由
  * {@link WfProcessLogService#enabled()}（{@code sys_config.wf.log.detailed.enabled}）逐事件判定。
@@ -40,7 +43,7 @@ import java.util.Set;
  * 投影失败必须冒泡（镜像缺行会造成幽灵待办等真实业务后果）；详细日志失败只是<b>少一条观测记录</b>，
  * 让它冒泡会把"记日志失败"升级成"审批失败"，属本末倒置。
  *
- * <p><b>零影响</b>：开关关闭时本监听器不写任何行、不改任何状态、不抛异常——与改造前逐字一致。
+ * <p><b>零影响</b>：开关关闭时本监听器不写任何行、不改任何状态、不抛异常——与原先逐字一致。
  */
 @Slf4j
 @Component
@@ -55,11 +58,11 @@ public class WfProcessLogListener extends AbstractFlowableEventListener {
      * 已办结任务的近期记忆（WF-PROCLOG-002 去噪用）。
      *
      * <p><b>为什么需要</b>：办结也要删除任务实体，故 {@code ENTITY_DELETED} 对办结任务同样触发；
-     * 实测 2026-09-24 22:29:43 同一 {@code task_id=4596ccd7-…} 在 9ms 内先 {@code TASK_COMPLETED}
-     * 后 {@code TASK_CANCELLED}，即每笔办结都多一条假取消。
+     * 同一个 {@code task_id} 会在毫秒内先 {@code TASK_COMPLETED} 后 {@code TASK_CANCELLED}，
+     * 即每笔办结都多一条假取消。
      *
      * <p><b>为什么靠内存而不查库</b>：办结与实体删除发生在<b>同一个引擎命令、同一线程</b>内，且
-     * {@code TASK_COMPLETED} 必先于实体删除（同上实测）。而 {@code wf_task} 镜像行此刻尚未置 DONE
+     * {@code TASK_COMPLETED} 必先于实体删除。而 {@code wf_task} 镜像行此刻尚未置 DONE
      * ——门面是「先 {@code taskService.complete()}、后写镜像」，故按库判据反而判不出。
      * 真取消的任务从未产生 {@code TASK_COMPLETED}，不会被误伤。
      *
@@ -123,13 +126,12 @@ public class WfProcessLogListener extends AbstractFlowableEventListener {
         return false;
     }
 
-    // ---------------- 事件归一 ----------------
+    // 事件归一
 
     private void onProcess(Object entity, String logType, String scene) {
-        // WF-PROCLOG-001：必须用 getProcessInstanceId()，不能用 getId()。
-        // 实测 2026-09-24 22:28:55 PROCESS_STARTED 落成了 pi.getId()=457e3bb8-…，
-        // 而同单后续事件（TASK_COMPLETED 等）全部是 457e1494-… —— 该时刻执行实例 id 尚未定型为
-        // 流程实例 id，用 getId() 会写入一条既不在 wf_instance 也不在 ACT_HI_PROCINST 的悬空行，
+        // 必须用 getProcessInstanceId()，不能用 getId()：PROCESS_STARTED 那一刻执行实例 id
+        // 尚未定型为流程实例 id，同单后续事件（TASK_COMPLETED 等）用的是另一个号，
+        // 用 getId() 会写入一条既不在 wf_instance 也不在 ACT_HI_PROCINST 的悬空行，
         // 使"按实例查时间线"永久丢失「流程发起」这一行。
         if (!(entity instanceof ProcessInstance pi)) {
             return;
@@ -183,11 +185,11 @@ public class WfProcessLogListener extends AbstractFlowableEventListener {
         processLogService.write(row);
     }
 
-    // ---------------- 工具 ----------------
+    // 工具
 
     /**
      * 构造基础行：租户从镜像实例行取（事件可能脱离请求上下文，如作业线程），
-     * 取不到再回退当前线程租户；两者皆无则写空租户（{@link WfProcessLogService#write} 内会默认处理，
+     * 取不到再回退当前线程租户；两者皆无则写空租户（{@link WfProcessLogService#write} 内会兜底，
      * 租户拦截器拦下时只 warn 不冒泡——日志行丢一条，不影响业务）。
      */
     private WfProcessLog base(String procInstId) {
@@ -271,14 +273,14 @@ public class WfProcessLogListener extends AbstractFlowableEventListener {
     /** 明细 JSON 序列化（失败降级为 null，绝不让日志序列化问题影响主链路） */
     private static String json(Map<String, Object> map) {
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(map);
+            return new ObjectMapper().writeValueAsString(map);
         } catch (Exception ex) {
             return null;
         }
     }
 
     private static Long currentUserId() {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         return u == null ? null : u.getUserId();
     }
 

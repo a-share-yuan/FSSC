@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * 动作目录注册表（AI 平权 P2 组件①）。
+ * 动作目录注册表。
  *
  * <p>目录不是手写文档：{@code bpmn-repo/drafts/ai-rights/build-action-catalog.js} 从
  * controller 注解机械生成 {@code catalog-fssc.json}，构建期打包进 classpath，启动期加载。
@@ -55,11 +55,11 @@ public class AiActionCatalog {
                         text(n, "idempotency"), text(n, "preconditions"),
                         n.path("aiAllowed").asBoolean(false), text(n, "domain"), text(n, "controller"),
                         n.path("schema").isMissingNode() || n.path("schema").isNull() ? null : n.path("schema"),
-                        // D-N17：被拒族名（生成器已写进 JSON，仅 aiAllowed=false 的条目有值）
+                        // 被拒族名（生成器已写进 JSON，仅 aiAllowed=false 的条目有值）
                         text(n, "redlineFamily"));
                 byCode.put(a.getCode(), a);
                 if (a.getUrl() != null && a.getUrl().startsWith("/api/tenant/")) {
-                    // D-N24：matchIndexable=false 的动作不进 (verb,path) 模板索引 ——
+                    // matchIndexable=false 的动作不进 (verb,path) 模板索引 ——
                     // 判据是"AI 经网关只能传 JSON，无法承载 multipart 文件"，这类动作按路径匹配到的请求
                     // 注定跑不通（下游 415/400），且会让"同 verb+path 双登记"产生歧义。登记本身不丢：仍可按 code 寻址。
                     if (n.path("matchIndexable").asBoolean(true)) {
@@ -89,8 +89,8 @@ public class AiActionCatalog {
         for (Templated t : tenantTemplates) {
             if (t.action.getMethod().equalsIgnoreCase(verb) && t.pathPattern.matcher(path).matches()) {
                 if (hit != null) {
-                    // D-N24 fail-closed（人工裁决）：同一 verb+path 命中多条 ⇒ 模板本身有歧义，
-                    // 此时**谁都不要给**（返回 null，网关按"未登记"403），而不是让目录顺序决定 AI 究竟调了哪一个。
+                    // fail-closed：同一 verb+path 命中多条 ⇒ 模板本身有歧义，
+                    // 此时谁都不要给（返回 null，网关按"未登记"403），而不是让目录顺序决定 AI 究竟调了哪一个。
                     // 宁可让该动作暂时不可达并留下告警，也不能出现"目录说是 A、执行落到 B"。
                     log.warn("动作目录歧义（fail-closed）：{} {} 同时命中 {} 与 {}，本次按未登记拒绝",
                             verb, path, hit.getCode(), t.action.getCode());

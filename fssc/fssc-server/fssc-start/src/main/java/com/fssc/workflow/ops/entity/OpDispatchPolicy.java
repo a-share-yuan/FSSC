@@ -12,13 +12,13 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * G3（2026-09-24）共享作业分配策略与双时限配置（op_dispatch_policy，带 tenant_id）。
+ * G3共享作业分配策略与双时限配置（op_dispatch_policy，带 tenant_id）。
  *
  * <p>共享中心分配模式四档＋任务时限（普通/加急）：
  * 一条记录 = 某个流程节点的分配策略 + 两档时限；{@code model_key='*' AND node_key='*'} 是全局默认行。
  *
- * <p><b>为什么策略配置要落表而不是写死代码</b>：本仓库既有教训是"配置界面向业务承诺引擎从来没做的事"
- * （方案 §二 F6~F8 伪配置）。本表反过来——<b>列在表里、代码里有读取点</b>，
+ * <p><b>为什么策略配置要落表而不是写死代码</b>：配置界面向业务承诺、引擎却从来没做的事，就是伪配置。
+ * 本表反过来——<b>列在表里、代码里有读取点</b>，
  * 读取点见 {@code DispatchPolicyService}，配置改了行为就变。
  */
 @Data

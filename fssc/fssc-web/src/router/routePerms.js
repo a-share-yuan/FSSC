@@ -2,20 +2,22 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * 路由级权限映射表（全站页面级拦截 — 2026-10-16）
+ * 路由级权限映射表（全站页面级拦截）
  *
  * 数据来源：fssc 库 sys_menu（path → perms / feature_code），与后端菜单下发过滤规则一致。
- * 守卫规则见 router.js beforeEach：非 public 路由按 meta.perms → 本表 → 菜单树默认处理 三级判定，
+ * 守卫规则见 router.js beforeEach：非 public 路由按 meta.perms → 本表 → 菜单树兜底 三级判定，
  * 全部未命中即拦截回工作台。sys_menu.perms 允许逗号多码，feature_code 为功能开关码。
  */
 
 export const ROUTE_PERMS = {
   '/approval': { perms: ['wf:task:list'] },
   '/archive': { perms: ['compliance:archiveaccess:list', 'compliance:archivedestroy:list'] },
-  '/archive/access': { perms: ['compliance:archiveaccess:list', 'compliance:archivedestroy:list'] },
-  '/archive/archive': { perms: ['compliance:archiveaccess:list', 'compliance:archivedestroy:list'] },
-  '/archive/destroy': { perms: ['compliance:archiveaccess:list', 'compliance:archivedestroy:list'] },
-  '/archive/dispatch': { perms: ['compliance:archiveaccess:list', 'compliance:archivedestroy:list'] },
+  // 档案域按页签各按自家的读码限定：借阅查借阅、销毁查销毁、案卷查档案，不要一律放行到 4030
+  '/archive/access': { perms: ['compliance:archiveaccess:list'] },
+  '/archive/archive': { perms: ['compliance:archive:list'] },
+  '/archive/destroy': { perms: ['compliance:archivedestroy:list'] },
+  // 单据流转已移入「共享运营配置」页签；这条深链保留给旧书签，按派单码放行
+  '/archive/dispatch': { perms: ['compliance:dispatch:list'] },
   '/asset': { perms: ['asset:list', 'inventory:list'] },
   '/asset/asset': { perms: ['asset:list', 'inventory:list'] },
   '/asset/category': { perms: ['asset:list', 'inventory:list'] },
@@ -46,6 +48,8 @@ export const ROUTE_PERMS = {
   '/cfg/sharing': { perms: ['sharing:config'] },
   '/cfg/system': { perms: ['system:config:list', 'system:dict:list', 'system:number:list', 'system:file:list', 'system:notice:list', 'system:message:list'] },
   '/compliance/fraud': { perms: ['compliance:fraud:list'] },
+  // 合规风控工作区：任一页签的读码即可进页，页内页签再按各自的码过滤（单据流转＝compliance:dispatch:list）
+  '/compliance/board': { perms: ['compliance:fraud:list', 'compliance:rule:list', 'compliance:dispatch:list'] },
   '/compliance/review-rules': { perms: ['policy:list'] },
   '/compliance/rule': { perms: ['compliance:rule:list'] },
   '/compliance/satisfaction': { perms: ['policy:list'] },
@@ -225,7 +229,7 @@ export const ROUTE_PERMS = {
   '/workbench': { perms: ['workbench:view'] },
 }
 
-/** 菜单表有此路径但未挂 perms/feature_code —— 由菜单树默认处理判定（角色-菜单授权） */
+/** 菜单表有此路径但未挂 perms/feature_code —— 由菜单树兜底判定（角色-菜单授权） */
 export const MENU_ONLY_PATHS = new Set([
   '/apflow',
   '/apflow/ap-month-close',

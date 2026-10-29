@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { shareBudgetToLine } from './useBill.js'
 
 /**
- * D-V4R-35：事前申请页唯一的预算科目入口在「分摊信息」，而服务端预算占用/核销只读费用明细行的科目
+ * 事前申请页唯一的预算科目入口在「分摊信息」，而服务端预算占用/核销只读费用明细行的科目
  * （ExpBillShare 全仓只有 CRUD 四个引用点＝分摊行的科目没有任何消费方）⇒ 屏幕选招待费、系统占差旅费。
  * 修法＝一屏一尺：分摊行科目写进那条承载金额的行；多科目/多行落不下一条预算线时返回 conflict 交页面拒提。
  * 反置法：把 `ls[0].budgetItemId = items[0]` 删掉 ⇒ 第 1/2 条转红；
@@ -27,14 +27,14 @@ describe('shareBudgetToLine — 分摊行科目与占用科目同源', () => {
     expect(lines[0].budgetItemId).toBe(7)
   })
 
-  it('两枚分摊行科目不同：conflict，静默择一把整单金额占进其中一条预算线', () => {
+  it('两枚分摊行科目不同：conflict，不得静默择一把整单金额占进其中一条预算线', () => {
     const lines = [{ itemId: 335, amount: 6000, budgetItemId: 6 }]
     const shares = [{ budgetItemId: 7 }, { budgetItemId: 5 }]
     expect(shareBudgetToLine(lines, shares).conflict).toBe(true)
     expect(lines[0].budgetItemId).toBe(6)
   })
 
-  it('一页多条费用明细行（报销单形状）：替所有行择一科目，交回原口径', () => {
+  it('一页多条费用明细行（报销单形状）：不得替所有行择一科目，交回原口径', () => {
     const lines = [{ budgetItemId: null }, { budgetItemId: null }]
     const shares = [{ budgetItemId: 7 }]
     expect(shareBudgetToLine(lines, shares).conflict).toBe(true)

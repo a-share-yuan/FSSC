@@ -27,10 +27,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * A12「凭证自动生成执行结果视图」（RA-ROOT-09，2026-09-27 第三轮裁定）。
+ * 凭证自动生成执行结果视图。
  *
- * <p>立项目的：审批通过后的自动制证失败此前只能靠 SSH grep 文件日志发现（P3 已改为写
- * {@code sys_oper_log}，见 {@code ExpenseWfEventListener#handleVoucherGenFailure}），
+ * <p>立项目的：审批通过后的自动制证失败原先只能靠 SSH grep 文件日志发现，现写入
+ * {@code sys_oper_log}，见 {@code ExpenseWfEventListener#handleVoucherGenFailure}，
  * 财务侧在界面上看不见、点数也说不清。本视图把「失败事件」变成一等公民：
  * 状态筛选（默认不限）／异常行明细／补生成入口／按来源事件计数。
  *
@@ -41,9 +41,9 @@ import java.util.regex.Pattern;
  * {@link #FAILURE_LOG_TITLE} 的行，而该 title 目前只有一个生产者——费用域审批收尾
  * {@code ExpenseWfEventListener}。因此本视图覆盖 <b>费用族</b>（EXPENSE / EXPENSE_PAY /
  * EXP_LOAN / EXP_REPAY）自动制证失败；采购、合同、总账等域的制证失败仅记文件日志，
- * 无事件行可查（已登记为遗留项，不在本视图伪造）。
+ * 无事件行可查（按遗留项处理，不在本视图伪造）。
  *
- * <p><b>差异说明（明写自定，不冒充外部依据）</b>：外部资料的作业监控是「机器人 + 预置事件 + 固定
+ * <p>差异说明（明写自定，不冒充外部依据）：外部资料的作业监控是「机器人 + 预置事件 + 固定
  * 收件人」自动跑；本 v1 只做「结果视图 + 人工重推」，事件预置与自动通知留下一批。
  */
 @Slf4j
@@ -317,7 +317,7 @@ public class VoucherGenFailureService {
             row.put("retriable", false);
             row.put("retryHint", "既有补生成入口按单据类型派发，来源 " + p.sourceType
                     + "（单据类型 " + bill.getBillType() + "）会被落成另一种来源，重推将产生错凭证；"
-                    + "请改走该来源的专用生成方法（待码侧接入，见 D-DEC-271）");
+                    + "请改走该来源的专用生成方法（待码侧接入）");
             return;
         }
         row.put("retriable", true);

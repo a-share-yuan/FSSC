@@ -8,6 +8,7 @@ import com.fssc.common.enums.SubjectType;
 import com.fssc.common.exception.BizException;
 import com.fssc.common.util.StrUtil;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import java.lang.annotation.Annotation;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -42,7 +43,7 @@ class MultiPermMenuTest {
         return u;
     }
 
-    // ------------------------------------------------ 拆分逻辑
+    // 拆分逻辑
 
     @Test
     void expandPerms_拆分6个多权限码菜单() {
@@ -68,7 +69,7 @@ class MultiPermMenuTest {
         assertTrue(StrUtil.expandPerms(List.of()).isEmpty());
     }
 
-    // ------------------------------------------------ PermissionAspect × 多权限码场景
+    // PermissionAspect × 多权限码场景
 
     private boolean allowed(Set<String> userPerms, String required) {
         UserContext.set(userWithPerms(userPerms));
@@ -81,7 +82,7 @@ class MultiPermMenuTest {
                         }
 
                         @Override
-                        public Class<? extends java.lang.annotation.Annotation> annotationType() {
+                        public Class<? extends Annotation> annotationType() {
                             return RequiresPerm.class;
                         }
                     });

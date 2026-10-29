@@ -10,7 +10,7 @@ import java.util.List;
 
 /**
  * 分页响应。total 是【本租户】数据总量（多租户拦截器已强制 tenant_id 过滤，
- * 绝不会是全库总量 —— 这是 P0 阶段用静态/在线双层校验死守的红线）。
+ * 绝不会是全库总量 —— 静态/在线双层校验守着的红线）。
  */
 @Data
 public class PageResult<T> implements Serializable {

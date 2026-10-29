@@ -95,7 +95,7 @@ public class InvoiceEnhanceService {
         }
         qw.orderByDesc(InvVerifyLog::getId);
         Page<InvVerifyLog> p = verifyLogMapper.selectPage(Page.of(pageNum, pageSize), qw);
-        // inv_verify_log 无 invoice_no 列（审计表按真实列声明，加列属 DDL 裁决）——
+        // inv_verify_log 无 invoice_no 列（审计表按真实列声明，加列属 DDL 待确认）——
         // 列表查询后按 invoiceId 一次批查发票号码，回填到实体 transient 列供「发票号码」列按票稽核
         List<InvVerifyLog> records = p.getRecords();
         if (!records.isEmpty()) {
@@ -117,14 +117,14 @@ public class InvoiceEnhanceService {
     /**
      * 记录一次验真（税务/第三方/人工渠道；审计表不提供更新/删除）。
      *
-     * <p><b>写环节补齐</b>：本表两个"人/时间"列此前全程无人赋值，
+     * <p><b>写环节补齐</b>：本表两个"人/时间"列必须有人赋值，否则
      * 验真记录页的「验真时间」「验真人」因此恒空——
      * <ul>
      *   <li>{@code verify_time}：实体上写的是 {@code @TableField(fill = FieldFill.INSERT)}，
      *       而 {@code FsscMetaObjectHandler} 只填充 createBy/updateBy/createTime/updateTime/delFlag/tenantId
      *       六个名字，不认识 verifyTime ⇒ 填充列被 INSERT 无条件写成 NULL（连表默认值都跳过）。
-     *       现改为写侧显式取当前时间（注解同步摘除，见实体注释）。</li>
-     *   <li>{@code verify_user_id}：HTTP 入口（{@code /verify/run}）本就传登录人，但服务层没有默认处理，
+     *       写侧显式取当前时间（注解同步摘除，见实体注释）。</li>
+     *   <li>{@code verify_user_id}：HTTP 入口（{@code /verify/run}）本就传登录人，但服务层没有兜底，
      *       任何新调用方漏传即静默无痕；现调用方未传时回落到 {@link UserContext} 当前登录人。
      *       <b>系统作业（定时验真）无登录人 ⇒ 保持 NULL</b>，不拿 0/"system" 冒充某个具体经办人，
      *       该行的归属由 {@code channel=SYSTEM} 表达。</li>
@@ -187,7 +187,7 @@ public class InvoiceEnhanceService {
     /**
      * 实时/手动验真（需求 7.1/7.2）：发票池按钮与批量入口共用的「发起」出口。
      *
-     * <p><b>【】模拟通道不再产出「验真通过」。</b>本方法拿不到任何外部报文——调用方是浏览器
+     * <p>【】模拟通道不再产出「验真通过」。本方法拿不到任何外部报文——调用方是浏览器
      * （{@code POST /verify/now}、{@code /verify/batch}，前端把 result 硬编码成 PASS、按钮文案写着
      * 「模拟税务通道」）或旧定时作业的回退分支。旧实现把这些请求一律按 {@code result≠FAIL 即通过}
      * 写成 {@code verify_status=SUCCESS}，并顺手在 inv_verify_log 落一行 {@code resp_content=result=PASS}
@@ -198,7 +198,7 @@ public class InvoiceEnhanceService {
      * <ul>
      *   <li>自报失败（result=FAIL/FAILED）⇒ 照旧落 {@code FAILED}，从严方向不受影响；</li>
      *   <li>其余（含 PASS/空）⇒ 只推进到 {@code PENDING}（验真中），verify_time 不动，
-     *       并写明未判定原因；<b>不写 SUCCESS，也不落 inv_verify_log</b>——该表 result 列名称表只有
+     *       并写明未判定原因；不写 SUCCESS，也不落 inv_verify_log——该表 result 列名称表只有
      *       PASS/FAIL，没有「未判定」一格，写进去等于再造一条假证据，发起动作的记录由
      *       {@code sys_oper_log}（@OperLog）与 verify_msg 承担；</li>
      *   <li>要拿到「验真通过」，必须由真实通道给结论：见 {@link #applyVerifyConclusion}，

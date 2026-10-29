@@ -34,7 +34,7 @@ public class MdSupplier extends TenantAuditBase {
     private String taxNo;
     /** GENERAL一般纳税人/SMALL小规模/OTHER */
     private String taxType;
-    /** 付款条件(如 月结30/货到付款)(41号审查 P1-8) */
+    /** 付款条件(如 月结30/货到付款)(41号审查 ) */
     private String payTerms;
     /** 结算币种 */
     private String currencyCode;

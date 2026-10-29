@@ -2,12 +2,12 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * v-permission 权限指令 (R5-04)
+ * v-permission 权限指令 ()
  *
  * 用法：
- *   v-permission="'expense:create'"          // 单权限
- *   v-permission="['expense:create','expense:approve']"  // 任一满足
- *   v-permission.role="'admin'"               // 角色判断
+ *   v-permission="'expense:create'" // 单权限
+ *   v-permission="['expense:create','expense:approve']" // 任一满足
+ *   v-permission.role="'admin'" // 角色判断
  *
  * 权限来源：store.user.perms（数组或逗号串，统一由 utils/perm 归一化）或 store.user.roles（数组）
  * 无匹配权限时元素从 DOM 移除。

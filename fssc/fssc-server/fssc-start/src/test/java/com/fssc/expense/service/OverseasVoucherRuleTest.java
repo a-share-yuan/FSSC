@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * OverseasVoucherRule 单测（V1.3.14 境外凭证合规⑤，19号公告口径）：纯逻辑，无 Spring 上下文。
+ * OverseasVoucherRule 单测（境外凭证合规⑤，19号公告口径）：纯逻辑，无 Spring 上下文。
  * 覆盖 收据/行程单中文说明必填（RECEIPT 无说明报错、FAPIAO/国内不要求）+
  * forceNoDeduct 仅 abroad + 补贴超标额计算（含 2 位小数精度）。
  */
@@ -28,7 +28,7 @@ class OverseasVoucherRuleTest {
         return l;
     }
 
-    // ---------- requireCnDesc ----------
+    // requireCnDesc
 
     @Test
     void 境外收据无中文说明返回错误() {
@@ -52,7 +52,7 @@ class OverseasVoucherRuleTest {
         assertNull(OverseasVoucherRule.requireCnDesc(true, null));
     }
 
-    // ---------- forceNoDeduct ----------
+    // forceNoDeduct
 
     @Test
     void 仅境外行强制不可抵扣() {
@@ -62,7 +62,7 @@ class OverseasVoucherRuleTest {
         assertFalse(OverseasVoucherRule.forceNoDeduct(true, null));
     }
 
-    // ---------- allowanceTaxable ----------
+    // allowanceTaxable
 
     @Test
     void 超标额等于实际减标准乘天数() {
@@ -103,7 +103,7 @@ class OverseasVoucherRuleTest {
                 OverseasVoucherRule.allowanceTaxable(new BigDecimal("4500"), new BigDecimal("500"), BigDecimal.ZERO)));
     }
 
-    // ---------- isReceiptForm ----------
+    // isReceiptForm
 
     @Test
     void 收据与行程单为境外凭证形态() {

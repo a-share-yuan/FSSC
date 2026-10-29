@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * MaskUtil 单测（P1-3）：验证脱敏口径稳定、幂等、边界安全。
+ * MaskUtil 单测：验证脱敏口径稳定、幂等、边界安全。
  */
 class MaskUtilTest {
 

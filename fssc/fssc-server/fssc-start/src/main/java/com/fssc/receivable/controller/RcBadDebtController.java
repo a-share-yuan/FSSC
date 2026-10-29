@@ -7,7 +7,9 @@ import com.fssc.common.core.Result;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.receivable.entity.RcBadDebt;
+import com.fssc.receivable.service.RcBadDebtExcelService;
 import com.fssc.receivable.service.RcBadDebtService;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,7 +30,7 @@ import java.util.Map;
 public class RcBadDebtController {
 
     private final RcBadDebtService service;
-    private final com.fssc.receivable.service.RcBadDebtExcelService badDebtExcelService;
+    private final RcBadDebtExcelService badDebtExcelService;
 
     @RequiresPerm("receivable:list")
     @GetMapping("/list")
@@ -76,8 +78,8 @@ public class RcBadDebtController {
     @OperLog(module = "BAD_DEBT", operType = "UPDATE", desc = "坏账核销")
     @PostMapping("/{id}/writeoff")
     public Result<Map<String, Object>> writeOff(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        java.math.BigDecimal amount = body.get("amount") == null ? null
-                : new java.math.BigDecimal(String.valueOf(body.get("amount")));
+        BigDecimal amount = body.get("amount") == null ? null
+                : new BigDecimal(String.valueOf(body.get("amount")));
         return Result.success(service.writeOff(id, amount,
                 (String) body.get("reason"), (String) body.get("basisNo")));
     }

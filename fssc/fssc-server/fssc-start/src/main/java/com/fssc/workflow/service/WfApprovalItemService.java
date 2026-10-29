@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
+import com.fssc.common.exception.BizException;
 import com.fssc.common.util.AssertUtil;
 import com.fssc.workflow.entity.WfApprovalItem;
 import com.fssc.workflow.mapper.WfApprovalItemMapper;
@@ -24,10 +25,10 @@ import java.util.Locale;
  *
  * <p>审批项：节点级自定义审批结果（正向/驳回/终止），可带目标节点。
  * 解析规则与 {@link WfNodeConfigResolver} 完全一致——{@code modelKey + nodeKey} <b>精确匹配</b>，
- * 匹配不到即返回空，<b>不做任何位置默认处理</b>（历史教训：位置默认处理曾把策略落到错误节点上造成越权）。
+ * 匹配不到即返回空，<b>不做任何位置兜底</b>——位置兜底会把策略落到错误节点上，造成越权。
  *
  * <p><b>零影响</b>：未配置审批项的节点 {@link #listEnabled} 返回空列表、{@link #resolve} 返回 null，
- * 审批主链路完全不走审批项分支，行为与改造前逐字一致。
+ * 审批主链路完全不走审批项分支，行为与原先逐字一致。
  */
 @Slf4j
 @Service
@@ -51,7 +52,7 @@ public class WfApprovalItemService {
                             .orderByAsc(WfApprovalItem::getId));
             return rows == null ? Collections.emptyList() : rows;
         } catch (Exception ex) {
-            // 读配置失败不得让审批主链路塌掉：按"该节点无审批项"处理（等价改造前行为）
+            // 读配置失败不得让审批主链路塌掉：按"该节点无审批项"处理（等价于原先行为）
             log.warn("审批项读取失败（按无审批项处理）modelKey={} nodeKey={}: {}", modelKey, nodeKey, ex.getMessage());
             return Collections.emptyList();
         }
@@ -89,7 +90,7 @@ public class WfApprovalItemService {
         };
     }
 
-    // ==================== 配置维护（管理端） ====================
+    // 配置维护（管理端）
 
     public PageResult<WfApprovalItem> page(PageQuery q, String modelKey, String nodeKey, String keyword) {
         LambdaQueryWrapper<WfApprovalItem> w = new LambdaQueryWrapper<>();
@@ -137,7 +138,7 @@ public class WfApprovalItemService {
             String c = item.getCategory().trim().toUpperCase(Locale.ROOT);
             if (!WfApprovalItem.CAT_POSITIVE.equals(c) && !WfApprovalItem.CAT_REJECT.equals(c)
                     && !WfApprovalItem.CAT_TERMINATE.equals(c)) {
-                throw new com.fssc.common.exception.BizException(ErrorCode.PARAM_INVALID,
+                throw new BizException(ErrorCode.PARAM_INVALID,
                         "审批项类别只能是 POSITIVE/REJECT/TERMINATE");
             }
         }
@@ -157,7 +158,7 @@ public class WfApprovalItemService {
                 .eq(WfApprovalItem::getItemCode, item.getItemCode())
                 .ne(excludeId != null, WfApprovalItem::getId, excludeId));
         if (cnt != null && cnt > 0) {
-            throw new com.fssc.common.exception.BizException(ErrorCode.PARAM_INVALID,
+            throw new BizException(ErrorCode.PARAM_INVALID,
                     "该节点下审批项编码已存在：" + item.getItemCode());
         }
     }

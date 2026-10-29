@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 健康检查定时任务（P0-B1）。
+ * 健康检查定时任务。
  *
  * <p>为什么需要它：健康端点只解决「有人来问才知道」。无人问津的深夜，数据库掉线不会有人发现。
  * 本任务每 5 分钟主动探测一次，仅在<b>状态翻转</b>时告警（UP→DOWN 报故障、DOWN→UP 报恢复），
@@ -32,7 +32,7 @@ public class HealthProbeJob {
     private final OpsAlertService opsAlertService;
     private final JobHeartbeatService jobHeartbeatService;
 
-    /** 上一次探测状态，用于识别翻转（初始视作 UP，避免启动后第一轮误报恢复） */
+    /** 上一次探测状态，用于识别翻转（初始视作 UP，避免启动时报一次假的恢复） */
     private final AtomicReference<String> lastStatus = new AtomicReference<>("UP");
 
     /**
@@ -53,7 +53,7 @@ public class HealthProbeJob {
                         "健康检查：服务组件不可用",
                         "探测结果：" + now + "\n组件明细：" + detail.get("components")
                                 + "\n版本：" + detail.get("version")
-                                + "\n建议：立即检查数据库/Redis 连通性与连接池，必要时执行 P0-B2 回滚预案。");
+                                + "\n建议：立即检查数据库/Redis 连通性与连接池，必要时执行回滚预案。");
             } else {
                 opsAlertService.alert("INFO",
                         "健康检查：服务已恢复",

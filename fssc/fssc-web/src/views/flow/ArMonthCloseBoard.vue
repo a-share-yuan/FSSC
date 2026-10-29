@@ -174,7 +174,7 @@ function personLabel(name) {
   return (u && (u.nickName || u.userName)) || name
 }
 async function loadUsers() {
-  // P0 修复：月结负责人通常为本财务人员，按同公司过滤
+  // 月结负责人通常为本财务人员，按同公司过滤
   try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch { users.value = [] }
 }
 

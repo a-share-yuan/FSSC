@@ -4,7 +4,7 @@
 package com.fssc.workflow.ops.dto;
 
 /**
- * G3（2026-09-24）分配策略候选人的负载画像。
+ * G3分配策略候选人的负载画像。
  *
  * <p>三种策略都只看这三个数，规则只有一份（避免"均衡·按时"与"均衡·按量"各算一套）：
  * <ul>
@@ -13,11 +13,11 @@ package com.fssc.workflow.ops.dto;
  *   <li>{@code overdueCount} 其中已按 {@code due_time} 判超时的条数 —— 智能策略的"时限紧迫度"。</li>
  * </ul>
  *
- * @param userId         用户 ID
- * @param userName       用户姓名（冗余，便于日志直读）
- * @param pendingCount   在手待办数
+ * @param userId 用户 ID
+ * @param userName 用户姓名（冗余，便于日志直读）
+ * @param pendingCount 在手待办数
  * @param expectedMinutes 在手任务预计耗时合计（分钟）
- * @param overdueCount   已超时条数（按 wf_task.due_time 真值判定）
+ * @param overdueCount 已超时条数（按 wf_task.due_time 真值判定）
  */
 public record CandidateLoad(
         Long userId,

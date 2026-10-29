@@ -254,7 +254,7 @@ const requirePicked = (msg) => [{
   validator: (rule, value, cb) => (!value || Number(value) === 0 ? cb(new Error(msg)) : cb()),
 }]
 const orgFormRules = computed(() => (reactive({
-  // 与后端 SysCompany/SysDept/SysPost 服务同名断言（批次 2C）
+  // 与后端 SysCompany/SysDept/SysPost 服务同名断言
   companyName: commonRules.required(t('system.org.errCompanyNameRequired')),
   companyCode: commonRules.required(t('system.org.errCompanyCodeRequired')),
   deptName: commonRules.required(t('system.org.errDeptNameRequired')),

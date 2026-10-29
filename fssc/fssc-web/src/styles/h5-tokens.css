@@ -2,21 +2,21 @@
 /* Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) */
 
 /**
- * 移动报销端（H5）视觉 / 交互 token —— 方案 §5「交互与视觉规范」的可执行落点（P1-1 / P1-2）
+ * 移动报销端（H5）视觉 / 交互 token —— 方案 §5「交互与视觉规范」的可执行落点
  *
- * 为什么是全局表而不是三页各自 scoped：AD-04 实测「三页样式各自复制一份，无共享 token」，
- * 同一份 .card/.no/.submit 在三页里被复制三遍，其中 H5Workbench 的 .no 既当单号样式
- * 又当驳回按钮底色（AD-09 单号被渲染成白字红底）。本表把色板 / 字号阶 / 间距阶 / 圆角 /
- * 状态色 / 热区一次性收口，三页只留页面特有布局，禁止再写内联 style（AD-05）。
+ * 为什么是全局表而不是三页各自 scoped：三页各自复制了一份样式，.card/.no/.submit 各三遍，
+ * 其中 H5Workbench 的 .no 既当单号样式又当驳回按钮底色，单号被渲染成白字红底。
+ * 本表把色板 / 字号阶 / 间距阶 / 圆角 / 状态色 / 热区一次性收口，三页只留页面特有布局，
+ * 禁止再写内联 style。
  *
  * 三条硬线（可被 §7-V1/V2 断言直接量到，改动前先想清楚会不会破线）：
- *  1. 触控热区 ≥44×44 CSS px（K318 W3C WCAG 2.2 SC 2.5.5；最小不得低于 24×24＝SC 2.5.8）；
+ *  1. 触控热区 ≥44×44 CSS px（W3C WCAG 2.2 SC 2.5.5；最小不得低于 24×24＝SC 2.5.8）；
  *     相邻可点元素间隔 ≥8px，破坏性动作与常规动作不同行。
- *  2. 输入类 computed font-size ≥16px（AD-07：iOS Safari 对 <16px 输入聚焦即放大页面，
+ *  2. 输入类 computed font-size ≥16px（iOS Safari 对 <16px 输入聚焦即放大页面，
  *     靠禁缩放解决会伤无障碍，故只把字号抬到 16）。
- *  3. 单滚动容器 ＝ 文档流本身（AD-02/03：原先 .h5-body 内层 overflow:auto +
- *     calc(100vh - 100px) 魔法数字，实测内层可视高 407px、整页 546px，且 header+nav 实高
- *     94.8px ≠ 100px）。本表不给任何区块设 overflow / max-height，
+ *  3. 单滚动容器 ＝ 文档流本身（原先 .h5-body 内层 overflow:auto +
+ *     calc(100vh - 100px) 魔法数字，内层可视高度只剩整页的七成上下，
+ *     而 header+nav 的实高也对不上那个 100px）。本表不给任何区块设 overflow / max-height，
  *     吸底栏与 Tab Bar 用 position:fixed + env(safe-area-inset-bottom)（需 index.html 的
  *     viewport-fit=cover 才生效），页面底部用 padding 让位。
  *
@@ -69,8 +69,8 @@
   --h5-safe-b: env(safe-area-inset-bottom, 0px);
   --h5-safe-t: env(safe-area-inset-top, 0px);
 
-  /* 动效时长阶（P2-5）：快＝即时反馈、中＝进出场、慢＝大位移；与色板同处一份 :root，
-     不在页面里各写一份（AD-04 的老毛病就是同一套 token 被复制三遍） */
+  /* 动效时长阶：快＝即时反馈、中＝进出场、慢＝大位移；与色板同处一份 :root，
+     不在页面里各写一份（同一套 token 被复制三遍是老毛病） */
   --h5-dur-1: .16s;
   --h5-dur-2: .26s;
   --h5-dur-3: .42s;
@@ -131,11 +131,11 @@
 .h5-page .h5-card--tap { cursor: pointer; }
 .h5-page .h5-card--tap:active { background: #fafcff; }
 .h5-card__row { display: flex; align-items: center; justify-content: space-between; gap: var(--h5-gap); }
-/* 明细行的「删除」是 44×44 热区，下面紧跟 .h5-field（上内边距 6px）⇒ 实测垂直净距只有 6px，
+/* 明细行的「删除」是 44×44 热区，下面紧跟 .h5-field（上内边距 6px）⇒ 垂直净距只有 6px，
    破 §5「相邻可点元素间距 ≥8px」硬线。只给明细区补行距，别处的 __row（标题+标记）不受影响。 */
 .h5-lines > .h5-card__row { margin-bottom: var(--h5-gap); }
 .h5-card__title { font-size: 15px; font-weight: 500; margin: 6px 0; word-break: break-all; }
-/* AD-07/§5：辅助文字 ≥12px；单号长串要能折，不能撑破卡片 */
+/* §5：辅助文字 ≥12px；单号长串要能折，不能撑破卡片 */
 .h5-card__meta { color: var(--h5-text-2); font-size: var(--h5-fs-aux); line-height: 18px; word-break: break-all; }
 .h5-section-title { font-size: var(--h5-fs-body); font-weight: 600; color: var(--h5-text); margin: 4px 2px var(--h5-gap); }
 
@@ -170,8 +170,8 @@
 .h5-fold__body > .h5-section-title:first-child,
 .h5-fold__body > .h5-card__title:first-child { margin-top: 0; }
 
-/* AD-09：单号是文本不是按钮。原先 .no 同时被 scoped 里的驳回按钮染色规则命中 ⇒ 白字红底。
-   这里显式写死透明底，并在 P0-6 把按钮类名改成 .h5-btn-danger，两条规则不再同名。 */
+/* 单号是文本不是按钮。原先 .no 同时被 scoped 里的驳回按钮染色规则命中 ⇒ 白字红底。
+   这里显式写死透明底，并把按钮类名改成 .h5-btn-danger，两条规则不再同名。 */
 .h5-page .no {
   color: var(--h5-text-2);
   font-size: var(--h5-fs-aux);
@@ -186,7 +186,7 @@
 .h5-tip { text-align: center; color: var(--h5-text-2); font-size: var(--h5-fs-aux); padding: var(--h5-gap) 0; line-height: 18px; }
 .h5-amount-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--h5-gap); }
 
-/* ---------------- 表单（AD-07：输入字号 ≥16px；label 与控件同高） ---------------- */
+/* ---------------- 表单（输入字号 ≥16px；label 与控件同高） ---------------- */
 .h5-field {
   display: flex;
   align-items: center;
@@ -221,7 +221,7 @@
   outline: none;
   border-color: var(--h5-primary);
 }
-/* 字段级错误定位（P0-9）：出错行标红＋把错误文案挂在字段下方 */
+/* 字段级错误定位：出错行标红＋把错误文案挂在字段下方 */
 .h5-field.is-error { background: #fef0f0; }
 .h5-field.is-error input, .h5-field.is-error select, .h5-field.is-error textarea { border-color: var(--h5-danger); }
 .h5-field__err { color: var(--h5-danger); font-size: var(--h5-fs-aux); line-height: 18px; padding: 2px 10px 6px; }
@@ -253,7 +253,7 @@
 .h5-btn--block-ghost { display: block; width: 100%; }
 .h5-btn-ok { flex: 1; background: var(--h5-success); color: #fff; border: 0; font-size: var(--h5-fs-input); min-height: 48px; }
 .h5-btn-danger { flex: 1; background: var(--h5-danger); color: #fff; border: 0; font-size: var(--h5-fs-input); min-height: 48px; }
-/* 行内小按钮（删除明细 / 移除附件）：视觉是小字，热区必须仍 ≥44×44（AD-06 实测 21.5px） */
+/* 行内小按钮（删除明细 / 移除附件）：视觉是小字，热区必须仍 ≥44×44（原热区只有 21.5px） */
 .h5-btn-link {
   background: transparent;
   border: 0;
@@ -264,12 +264,12 @@
   padding: 0 6px;
 }
 .h5-btn-link--plain { color: var(--h5-primary); }
-/* 禁用态：只有 :disabled 属性、没有视觉差别 ⇒ 用户点了没反应会以为页面坏了（本窗实测缺口）。
+/* 禁用态：只有 :disabled 属性、没有视觉差别 ⇒ 用户点了没反应会以为页面坏了。
    只改颜色与光标，min-height/min-width 保持不变 ⇒ 热区仍 ≥44（§7-V1 L1 判据不受影响）。 */
 .h5-btn-link:disabled { color: var(--h5-text-2); opacity: .55; cursor: not-allowed; }
 .h5-ops { display: flex; gap: var(--h5-gap-2); margin-top: var(--h5-gap); }
 
-/* 顶栏返回：热区 44×44（AD-06 实测「退出」仅 42px 宽 ⇒ 从主导航摘出） */
+/* 顶栏返回：热区 44×44（原「退出」只有 42px 宽 ⇒ 从主导航摘出） */
 .h5-back {
   flex: 0 0 auto;
   width: var(--h5-tap-h);
@@ -284,7 +284,7 @@
   border-radius: var(--h5-radius-sm);
 }
 
-/* ---------------- 吸底 Tab Bar / 操作栏（AD-01/06/12） ---------------- */
+/* ---------------- 吸底 Tab Bar / 操作栏 ---------------- */
 .h5-tabbar {
   position: fixed;
   left: 0;
@@ -356,7 +356,7 @@
 .h5-actionbar .h5-btn { flex: 1 1 0; width: auto; min-width: 0; }
 .h5-actionbar .h5-btn--narrow { flex: 0 0 auto; }
 
-/* ---------------- 三态：骨架 / 空（带引导） / 错（带重试）（AD-13、UX-05） ---------------- */
+/* ---------------- 三态：骨架 / 空（带引导） / 错（带重试） ---------------- */
 .h5-skeleton { background: #fff; border-radius: var(--h5-radius); padding: var(--h5-pad); margin-bottom: var(--h5-gap-2); }
 .h5-skeleton__line { height: 14px; border-radius: 4px; background: linear-gradient(90deg, #f0f2f5 25%, #e6e8eb 37%, #f0f2f5 63%); background-size: 400% 100%; animation: h5-skel 1.2s ease infinite; }
 .h5-skeleton__line + .h5-skeleton__line { margin-top: 10px; }
@@ -368,14 +368,14 @@
 .h5-state__title { font-size: var(--h5-fs-body); color: var(--h5-text-2); margin-bottom: 6px; line-height: 20px; }
 .h5-state__hint { font-size: var(--h5-fs-aux); color: #b6bac2; line-height: 18px; margin-bottom: 10px; }
 .h5-state__act { display: inline-block; background: var(--h5-primary-soft); color: var(--h5-primary); border: 0; padding: 8px 16px; min-height: var(--h5-tap-h); }
-/* 权限不足（code:4030）与「真的没数据」必须文案分立（AD-13/UX-05，本窗实测提报岗三面板报 4030） */
+/* 权限不足（code:4030）与「真的没数据」必须文案分立（提报岗三个面板都会报 4030） */
 .h5-denied { background: #fdf6ec; border: 1px solid #faecd8; border-radius: var(--h5-radius); padding: var(--h5-pad); margin-bottom: var(--h5-gap-2); }
 .h5-denied__t { color: var(--h5-warning); font-size: var(--h5-fs-body); font-weight: 600; line-height: 20px; }
 .h5-denied__d { color: var(--h5-text-regular); font-size: var(--h5-fs-aux); line-height: 18px; margin-top: 4px; word-break: break-all; }
 .h5-error { background: #fef0f0; border: 1px solid #fbc4c4; border-radius: var(--h5-radius); padding: var(--h5-pad); margin-bottom: var(--h5-gap-2); }
 .h5-error__d { color: var(--h5-danger); font-size: var(--h5-fs-body); line-height: 20px; word-break: break-all; }
 
-/* ---------------- 弹层（AD-11） ---------------- */
+/* ---------------- 弹层 ---------------- */
 .h5-mask {
   position: fixed;
   inset: 0;
@@ -414,11 +414,11 @@
   font-size: var(--h5-fs-body);
 }
 .h5-chip.on { background: var(--h5-primary-soft); color: var(--h5-primary); border-color: var(--h5-primary); font-weight: 600; }
-/* 筛选行小标题（状态／类型）：两行 chip 并排时无标题会分不清哪行筛的是什么（本窗补类型筛选时新增）。
+/* 筛选行小标题（状态／类型）：两行 chip 并排时无标题会分不清哪行筛的是什么。
    纯说明文本，不给 min-height，避免被 §7-V1 L1 当成可点元素量。 */
 .h5-chips__cap { font-size: var(--h5-fs-aux); color: var(--h5-text-2); align-self: center; }
 
-/* ---------------- 影像 / 附件（UX-03：审批页看不到附件是最致命的一条） ---------------- */
+/* ---------------- 影像 / 附件（审批页看不到附件是最致命的一条） ---------------- */
 .h5-thumb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--h5-gap); }
 .h5-thumb {
   position: relative;
@@ -454,7 +454,7 @@
 .h5-stay--late { color: var(--h5-warning); font-weight: 600; }
 .h5-stay--over { color: var(--h5-danger); font-weight: 600; }
 
-/* ---------------- 身份卡（UX-12：没有「我是谁 / 我在哪个公司」） ---------------- */
+/* ---------------- 身份卡（没有「我是谁 / 我在哪个公司」） ---------------- */
 .h5-idcard { display: flex; align-items: center; gap: var(--h5-gap-2); }
 .h5-idcard__ava { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; background: var(--h5-primary-soft); color: var(--h5-primary); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
 .h5-idcard__name { font-size: var(--h5-fs-title); font-weight: 600; }
@@ -465,7 +465,7 @@
 .h5-pf { height: 4px; border-radius: 2px; background: var(--h5-border); overflow: hidden; margin-top: 4px; }
 .h5-pf i { display: block; height: 100%; background: var(--h5-primary); transition: width .2s linear; }
 
-/* ---------------- 工具类（AD-05「禁内联 style」的落点） ----------------
+/* ---------------- 工具类（「禁内联 style」的落点） ----------------
    只允许出现"清一色"的语义小类；唯一例外是数据驱动的绑定（如上传进度 width:{{pct}}%），
    那种值没法预先成类，仍写在模板里并注明原因。 */
 .h5-mt-8 { margin-top: 8px; }
@@ -492,14 +492,14 @@
 }
 
 /* =====================================================================
-   动效层（方案 §6 P2-5：提单/审批的动效与状态过渡＋ prefers-reduced-motion）
-   新增窗口 10-04 00:3x。五条自限原则，改动前先对号：
+   动效层（方案 §6：提单/审批的动效与状态过渡＋ prefers-reduced-motion）
+   五条自限原则，改动前先对号：
      1. 只动 opacity / transform / 颜色，绝不动 width/height/padding/margin
         ⇒ §7-V1 的「可点元素 ≥44×44」判据不会因为动效而破线（热区量的是稳态）。
      2. 入场位移一律用 transform（合成层），不用 top/height ⇒ 不触发 reflow，
         低端机滑动不掉帧。
      3. 反馈要"即时可感"：按压态、载入态、进出场、禁用态各有一处过渡，
-        原先本仓三页 0 处 transition（实测 grep 命中 0），点了没动静被用户读成"页面坏了"。
+        原先本仓三页没有一处 transition，点了没动静被用户读成"页面坏了"。
      4. Vue <Transition> 只包最外层容器（弹层包 mask，不包 sheet），
         面板位移用后代选择器跟着根节点走，避免每页写两份动画。
      5. 整套可被 prefers-reduced-motion 一把关掉；关掉后仍保留"非位移"的进行指示

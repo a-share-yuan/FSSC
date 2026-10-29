@@ -152,7 +152,7 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const receivables = ref([])
 const recvTotal = ref(0)
-// 4030 权限拒绝独立空态（改前与「暂无数据」同形，无权限被读成没数据）
+// 4030 权限拒绝独立空态（原先与「暂无数据」同形，无权限被读成没数据）
 const denied = ref(false)
 const overdueBaseline = ref('')
 

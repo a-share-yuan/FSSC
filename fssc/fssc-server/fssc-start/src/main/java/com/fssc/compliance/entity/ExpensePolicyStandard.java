@@ -51,7 +51,7 @@ public class ExpensePolicyStandard extends TenantAuditBase {
     /** 备注 */
     private String remark;
 
-    // ========== 合并自 travel_standard（差旅标准） ==========
+    // 合并自 travel_standard（差旅标准）
 
     /** 员工级别 */
     private String employeeLevel;

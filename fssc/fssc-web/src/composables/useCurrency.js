@@ -6,24 +6,24 @@
  *
  * ## 背景
  *
- * 币种此前在 12 个页面里各写一份 <el-option value="CNY">人民币</el-option>，
- * 有的还只写 CNY/USD 两项（实际 md_currency 有 35 种）。
- * 后果：① 加币种要改 12 处，漏一处就出现"这个页面选不到那个币种"；
+ * 币种原先在十几个页面里各写一份 <el-option value="CNY">人民币</el-option>，
+ * 有的还只写 CNY/USD 两项（实际 md_currency 有几十种）。
+ * 后果：① 加币种要改十几处，漏一处就出现"这个页面选不到那个币种"；
  *       ② 后端 md_currency 明明是主数据，界面却读不到，属双源脱节。
  *
  * ## 权限现实（改造过程中的关键转折，务必知道）
  *
- * 最初直接调 `masterApi.currency.page()` 实测失败：该端点带权限码 `md:currency:list`，
- * 只授予 CONFIG_ADMIN/IT_ADMIN，而 COMMON_EMP 154 人、SCAN_STAFF 5 人全部 4030。
+ * 最初直接调 `masterApi.currency.page()` 就走不通：该端点带权限码 `md:currency:list`，
+ * 只授予 CONFIG_ADMIN/IT_ADMIN，普通员工与扫描岗全部 4030。
  * 币种下拉散落在 budget/contract/expense/invoice/pay/purchase/receivable/treasury
- * 共 12 个页面 40 处，是**业务录入必填项**——要求普通员工先授"币种管理权"才能填单，
+ * 共 12 个页面 40 处，是业务录入必填项——要求普通员工先授"币种管理权"才能填单，
  * 权限模型不成立。
  *
- * 故后端于 2026-10-18 新增**免权限只读通道** `/tenant/masterdata/currency/options`
+ * 故后端新增免权限只读通道 `/tenant/masterdata/currency/options`
  * （三道校验同 builtin 字典通道：仍需登录 / 仅 status=NORMAL 且未删 / 只读且字段最小化），
  * 本层改调该端点 ⇒ 普通员工也能读到全部启用币种，币种真正成为全员可维护的基础数据。
  *
- * 仍保留本地默认处理：通道未部署/网络异常时回落内置清单，绝不让下拉变空。
+ * 仍保留本地兜底：通道未部署/网络异常时回落内置清单，绝不让下拉变空。
  *
  * ## 用法
  *
@@ -49,9 +49,9 @@ import { useI18n } from 'vue-i18n'
 import { masterApi } from '@/api.js'
 
 /**
- * 内置币种清单（默认处理用）。
+ * 内置币种清单（兜底用）。
  * 取自 md_currency 启用项中最常用的核心币种，label 与库内 currencyName 逐字一致，
- * 保证"通道不可用时界面与正常态相同"。已剔除 2026-10-18 勘误停用的
+ * 保证"通道不可用时界面与正常态相同"。已剔除勘误停用的
  * FRF（法国法郎，已被 EUR 取代）/ RM（与 MYR 重复）等。
  */
 const BUILTIN = {
@@ -99,15 +99,15 @@ async function fetchAll() {
 /**
  * 格式化 label。
  *
- * ## 为什么需要 i18n 版本（2026-10-18 实施时发现）
+ * ## 为什么需要 i18n 版本（实施时发现）
  *
- * 原写死下拉的 label **走 vue-i18n 双语**，而各页面中英格式并不统一：
+ * 原写死下拉的 label 走 vue-i18n 双语，而各页面中英格式并不统一：
  *   expense.common.curCny : zh='人民币 CNY' en='CNY'
  *   pay.corp.optCny : zh='人民币 CNY' en='CNY (RMB)'
  *   pay.corp.optUsd : zh='美元 USD' en='USD (US Dollar)'
  * 如果直接用主数据的 currencyName（纯中文名），切英文时币种下拉会全变中文 —— 功能倒退。
  *
- * 故规则与 useBaseDict 一致：**主数据定值域 + i18n 定文案**。
+ * 故规则与 useBaseDict 一致：主数据定值域 + i18n 定文案。
  * i18n 映射只覆盖原来就有的那几个币种（后台新增的币种没有 key），
  * 无 key 时回落到主数据名称 + 目标格式，绝不显示裸 code。
  *
@@ -141,13 +141,13 @@ export function useCurrency(opts = {}) {
   /**
    * 主数据纯名称。
    *
-   * ## 为什么要这样写（2026-10-18 收尾加固）
+   * ## 为什么要这样写
    *
    * 本文件历史上同时存在 `labelOf(value, fallbackText)` 与 `formatLabel(value, format)`，
-   * **两者第二参数语义完全不同却同名**。改造中 12 个页面里有 6 个误写成
+   * 两者第二参数语义完全不同却同名。改造中 12 个页面里有 6 个误写成
    * `labelOf: currencyLabel`，模板又照习惯传了 `currencyLabel(o.value, 'name-code')` ——
    * 于是格式被静默丢弃、所有 label 退化成纯名称。
-   * 这类退化**能编译、测试也过、构建零告警**，只有肉眼比对 label 才发现（坑 4a）。
+   * 这类退化能编译、测试也过、构建零告警，只有肉眼比对 label 才发现（坑 4a）。
    *
    * 所以现在让 `labelOf` 自证：第二参数若是合法格式名，说明调用方想控制格式
    * ⇒ 直接转 `formatLabel`，并在 dev 环境告警。误用从"静默退化"变成"立刻出声"。

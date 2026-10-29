@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.fssc.workflow.ops.entity.OpTaskTimeLimit;
 import org.apache.ibatis.annotations.Mapper;
 
-/** G3（2026-09-24）任务优先级与时限落账（带 tenant_id） */
+/** G3任务优先级与时限落账（带 tenant_id） */
 @Mapper
 public interface OpTaskTimeLimitMapper extends BaseMapper<OpTaskTimeLimit> {
 }

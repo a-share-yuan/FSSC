@@ -50,7 +50,7 @@ public class ArchiveController {
     private final ArchiveDestroyService archiveDestroyService;
     /** 组卷编排（一卷多件） */
     private final ArchiveVolumeService archiveVolumeService;
-    /** RA-ARC-09 卷内文件取流（档案域这条腿，不要绕开共享附件白名单） */
+    /** 卷内文件取流（档案域这条腿，不要绕开共享附件白名单） */
     private final FileService fileService;
 
     /**
@@ -105,8 +105,8 @@ public class ArchiveController {
     }
 
     /**
-     * 内控红线，销毁不可逆：本端点改前直调 {@code ArchiveService#destroy} 一键置 DISPOSED——
-     * 无到期校验、不查销毁审批、不起 FM_DESTROY 流程（实测 id=25 destroy_date=2030-01-01 未届满却已 DISPOSED）。
+     * 内控红线，销毁不可逆：本端点原先直调 {@code ArchiveService#destroy} 一键置 DISPOSED——
+     * 无到期校验、不查销毁审批、不起 FM_DESTROY 流程（未届满的档案也能被直接置 DISPOSED）。
      * 现整体改道：一律转 {@link ArchiveDestroyService#createDestroyRequest} 发起「销毁申请」，由合规链定论
      * （assertAllExpired 到期校验＋双人复核双签＋FM_DESTROY 起流程）；DISPOSED 只会在审批闭环后的
      * {@link ArchiveDestroyService#executeDestroy} 落地。理由（reason）缺失时由服务层按「请填写销毁理由」
@@ -140,7 +140,7 @@ public class ArchiveController {
                                                     @RequestParam(required = false) String archiveStatus,
                                                     @RequestParam(required = false) String keyword) {
         // 核实册:325：新增可选 keyword 入参（档案编号/编码/关联单号/标题，服务端 LIKE）。
-        // 不传＝行为与改前完全一致；档案选择器的检索框从此问的是全量目录而不是"已经取回的第一页"，
+        // 不传＝行为与原先完全一致；档案选择器的检索框从此问的是全量目录而不是"已经取回的第一页"，
         // 输入真实档案号不再返 0 条。检索臂规则由 ArchiveService.applyKeywordArms 单点将守。
         return Result.success(archiveService.page(query.getPageNum(), query.getPageSize(),
                 archiveType, archiveYear, archiveStatus, keyword));
@@ -148,7 +148,7 @@ public class ArchiveController {
 
     /**
      * 读端点写库：本 GET 为<b>只读语义</b>——服务层只重算比对并返回布尔，不写入数据库
-     * （改前服务层在此路径 {@code updateById} 写 integrity_status/update_time，GET 因而
+     * （原先服务层在此路径 {@code updateById} 写 integrity_status/update_time，GET 因而
      * 去重特性与只读语义双破、审计时间列被反复点击污染）。状态写入数据库与校验人记录走显式
      * POST {@code /{id}/verify}（见 {@link #verifyFull}）。
      */
@@ -164,15 +164,6 @@ public class ArchiveController {
     @GetMapping("/expiring")
     public Result<List<OpArchive>> listExpiring(@RequestParam(defaultValue = "30") int days) {
         return Result.success(archiveService.listExpiringSoon(days));
-    }
-
-    @RequiresFeature("FSSC_ARCHIVE")
-    @RequiresPerm("compliance:archive:delete")
-    @OperLog(module = "ARCHIVE", operType = "DELETE", desc = "删除档案")
-    @DeleteMapping("/{id}")
-    public Result<Void> delete(@PathVariable Long id) {
-        archiveService.delete(id);
-        return Result.success();
     }
 
     @RequiresFeature("FSSC_ARCHIVE")
@@ -259,7 +250,7 @@ public class ArchiveController {
         return Result.success(archiveService.search(keyword, archiveType, archiveYear));
     }
 
-    // 组卷改造 P0：案卷 ↔ 卷内件（一卷多件）
+    // 组卷改造：案卷 ↔ 卷内件（一卷多件）
     // 权限沿用既有三个码（list 读、create 写），不要新造权限码——档案岗/档案主管已持有，
     // 加新码＝又要过一轮全站授权核查窗。
 
@@ -325,9 +316,24 @@ public class ArchiveController {
     }
 
     /**
-     * RA-ARC-09（卷内文件清单）：档案岗看自己案卷里有哪些文件、叫什么名。
+     * 删除空案卷（仅「待归档」且卷内 0 件）。
      *
-     * <p>改前档案页【查看影像】绕到「单据详情＋共享附件令牌」两条腿，两者都按<b>单据归属</b>白名单收口
+     * <p>建错卷、或件全部移出后留下的空壳，此前没有出口：不能执行归档（入口闸拦空卷），
+     * 也没有删除入口。写码与建卷同一个（{@code compliance:archive:create}）——删的是登记，不是档案。
+     */
+    @RequiresFeature("FSSC_ARCHIVE")
+    @RequiresPerm("compliance:archive:create")
+    @OperLog(module = "ARCHIVE", operType = "DELETE", desc = "删除空案卷")
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteEmptyVolume(@PathVariable Long id) {
+        archiveService.deleteEmptyVolume(id);
+        return Result.success();
+    }
+
+    /**
+     * 档案岗看自己案卷里有哪些文件、叫什么名。
+     *
+     * <p>原先档案页【查看影像】绕到「单据详情＋共享附件令牌」两条腿，两者都按<b>单据归属</b>白名单限定
      * （报销人／代理人／该单流程办理人／10 枚财务共享作业岗），档案岗不在其中 ⇒ 复核人看不到影像，
      * 归档审批那节只剩签字。本端点的边界＝卷本身可见（{@code ArchiveService.getById} 同一把尺）
      * ＋文件必须来自该卷的卷内件清单。不要把档案岗加进共享附件白名单（＝任意档案岗可读全租户任意文件）。
@@ -370,7 +376,7 @@ public class ArchiveController {
     }
 
     /**
-     * RA-ARC-09（卷内文件取流第一步）：卷内校验通过后签发一次性下载令牌。
+     * 卷内校验通过后签发一次性下载令牌。
      * 令牌本身仍由 {@code FileService} 发，取流走既有 {@code /system/file/download?token=}
      * （token 即身份，不再叠加单据归属白名单）⇒ 前端影像查看器零改动即可复用。
      */

@@ -47,8 +47,8 @@ public class ContractBizAction implements WfBizAction {
             return;
         }
         try {
-            // X-09 乙·流程收尾环节：这张单若已由「手工直批环节」给出结论（EFFECTIVE 已生效／CLOSED 已关闭），
-            // 收尾一律不回写、不出证。两条审批链并存是现状（乙案＝不归一、各补互斥校验）：直批位有 fail-closed
+            // 流程收尾环节：这张单若已由「手工直批环节」给出结论（EFFECTIVE 已生效／CLOSED 已关闭），
+            // 收尾一律不回写、不出证。两条审批链并存是现状（不归一、各补互斥校验）：直批位有 fail-closed
             // 在途校验（ContractService.assertNotInFlow），但反向只能靠本判据——否则流程的撤回/驳回事件会把
             // "已生效并冻结了预算、已出过凭证"的合同改写回 APPROVED/REJECTED，并再出一张同号合同凭证。
             String concluded = contract.getStatus();
@@ -71,7 +71,7 @@ public class ContractBizAction implements WfBizAction {
                     String.valueOf(contractId), auditBefore, auditAfter,
                     (Boolean.TRUE.equals(event.getApproved()) ? "审批通过" : "审批驳回")
                             + (event.getComment() == null || event.getComment().isBlank() ? "" : "：" + event.getComment()));
-            // 生成合同凭证（激活此前零调用方的 generateByContract）
+            // 生成合同凭证（generateByContract 原先没有调用方）
             if (Boolean.TRUE.equals(event.getApproved())) {
                 try {
                     // ②：带回流程实例号 ⇒ 凭证 proc_inst_id 回溯列不再留 NULL

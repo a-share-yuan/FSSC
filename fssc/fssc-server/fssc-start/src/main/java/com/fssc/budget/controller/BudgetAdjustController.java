@@ -9,6 +9,7 @@ import com.fssc.budget.entity.BgAdjust;
 import com.fssc.budget.entity.BgAdjustLine;
 import com.fssc.budget.mapper.BgAdjustMapper;
 import com.fssc.budget.service.BudgetService;
+import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
 import com.fssc.framework.log.OperLog;
@@ -35,7 +36,7 @@ public class BudgetAdjustController {
 
     @RequiresPerm("budget:adjust:list")
     @GetMapping("/page")
-    public Result<PageResult<BgAdjust>> page(com.fssc.common.core.PageQuery query, String keyword) {
+    public Result<PageResult<BgAdjust>> page(PageQuery query, String keyword) {
         LambdaQueryWrapper<BgAdjust> qw = new LambdaQueryWrapper<>();
         if (keyword != null && !keyword.isBlank()) {
             qw.like(BgAdjust::getAdjustNo, keyword);

@@ -59,7 +59,7 @@ public class MdCip extends TenantAuditBase {
     /** 累计归集金额（由成本归集明细实时累加回写，冗余便于列表展示） */
     private BigDecimal accruedAmount;
 
-    /** 已付款金额（ 2026-09-14：CIP 付款审批通过自动凭证时累加回写；列见 sql/impl-cl-20260914.sql DDL） */
+    /** 已付款金额（CIP 付款审批通过自动凭证时累加回写；列见 sql/impl-cl-20260914.sql DDL） */
     private BigDecimal paidAmount;
 
     /** 已转固金额 */

@@ -23,7 +23,7 @@ public class OcrResult {
     /**
      * 「已识别」的界面语义 ≠ 已入池：票面是否真的进了发票池 {@code inv_invoice}。
      * <ul>
-     *  <li>{@link Boolean#TRUE}＝已在池（本次入池成功，或去重命中改前已录）；</li>
+     *  <li>{@link Boolean#TRUE}＝已在池（本次入池成功，或去重命中原先已录）；</li>
      *  <li>{@link Boolean#FALSE}＝拿到票面但没进池（要素不全／金额不自洽／入池被拒），原因见 {@link #errorMsg}；</li>
      *  <li>{@code null}＝未走写入数据库入池链＝本地版式解析（OFD／XML／带文本层 PDF）只回填票面、不做入池，
      *      或识别本身失败。前端不得把 null 当 false 用（两档出路不同）。</li>

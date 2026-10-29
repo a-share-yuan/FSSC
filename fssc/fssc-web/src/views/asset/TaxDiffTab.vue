@@ -92,7 +92,7 @@ function openRowDetail(row) {
   return showRowDetail(row, { title: '详情' })
 }
 
-// 41号审查 P1-9：导出当前页税会差异
+// 41号审查 导出当前页税会差异
 function doExport() {
   exportCsv(taxDiffs.value, [
     { prop: 'assetNo', label: '资产编号' }, { prop: 'assetName', label: '资产名称' },

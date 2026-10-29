@@ -19,7 +19,7 @@ public interface SysLoginLogMapper {
     int insert(SysLoginLog log);
 
     /**
-     * R5-D-046：登录日志分页查询（只读，按 id 倒序）。
+     * 登录日志分页查询（只读，按 id 倒序）。
      * keyword 匹配用户名/IP；status 0=成功、1=失败；租户隔离由框架租户拦截器自动注入。
      */
     @Select("<script>select * from sys_login_log <where>" +

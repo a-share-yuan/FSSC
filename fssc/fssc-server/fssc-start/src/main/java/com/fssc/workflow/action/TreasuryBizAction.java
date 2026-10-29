@@ -152,7 +152,7 @@ public class TreasuryBizAction implements WfBizAction {
                 TrCreditBill upd = new TrCreditBill();
                 upd.setId(id);
                 upd.setStatus("RECONCILED");
-                // 甲案：状态翻档同处补写核销双列——此前薄更新只带 id＋status，
+                // 状态翻档同处补写核销双列——薄更新只带 id＋status 的话，
                 // recon_flag/recon_time 恒 0/NULL，按这两列查询的报表与去重判断永远看不到这笔到账
                 upd.setReconFlag(Boolean.TRUE);
                 upd.setReconTime(LocalDateTime.now());
@@ -163,7 +163,7 @@ public class TreasuryBizAction implements WfBizAction {
                 auditBefore.put("reconTime", b.getReconTime());
                 Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
-                auditAfter.put("reconFlag", upd.getReconFlag()); // D-DEC-421：字段级 before/after 补齐核销段
+                auditAfter.put("reconFlag", upd.getReconFlag()); // 字段级 before/after 补齐核销段
                 auditAfter.put("reconTime", upd.getReconTime());
                 auditTrailService.recordUpdate(event.getBizType(), id, b.getBillNo(), "tr_credit_bill",
                         String.valueOf(id), auditBefore, auditAfter,
@@ -221,7 +221,7 @@ public class TreasuryBizAction implements WfBizAction {
             String oldStatus = batch.getStatus();
             OpPayBatch upd = new OpPayBatch();
             upd.setId(id);
-            // 失败处理核准后回到"已审批"而非"已确认"——execute 前置已收窄，CONFIRMED 不再可打款
+            // 失败处理核准后回到"已审批"而非"已确认"——execute 只认已审批，CONFIRMED 不再可打款
             upd.setStatus(approved ? "APPROVED" : "FAILED");
             opPayBatchMapper.updateById(upd);
             Map<String, Object> auditBefore = new LinkedHashMap<>();
@@ -272,7 +272,7 @@ public class TreasuryBizAction implements WfBizAction {
         }
     }
 
-    /** 资金计划调整：审批通过 SELECTED/DRAFT→APPROVED；驳回保持原态。plan_no 为空时默认处理回填（H-06/DF-03） */
+    /** 资金计划调整：审批通过 SELECTED/DRAFT→APPROVED；驳回保持原态。plan_no 为空时兜底回填（H-06/DF-03） */
     private void handlePlanAdjust(WfProcessEndedEvent event, boolean approved) {
         Long id = event.getBizId();
         if (id == null) return;
@@ -288,7 +288,7 @@ public class TreasuryBizAction implements WfBizAction {
                 TrFundPlan upd = new TrFundPlan();
                 upd.setId(id);
                 upd.setStatus("APPROVED");
-                // 缺陷修复（H-06 / DF-03）：历史计划创建时未取号，审批结束默认处理回填 plan_no
+                // 缺陷修复（H-06 / DF-03）：历史计划创建时未取号，审批结束兜底回填 plan_no
                 if (plan.getPlanNo() == null || plan.getPlanNo().isBlank()) {
                     upd.setPlanNo(nextPlanNo());
                     log.info("资金计划 {} 调整审批结束兜底回填 plan_no={}", id, upd.getPlanNo());
@@ -298,7 +298,7 @@ public class TreasuryBizAction implements WfBizAction {
                 auditBefore.put("status", oldStatus);
                 Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
-                // 本次实际变化：plan_no 默认处理回填时一并记录
+                // 本次实际变化：plan_no 兜底回填时一并记录
                 if (upd.getPlanNo() != null) {
                     auditBefore.put("planNo", plan.getPlanNo());
                     auditAfter.put("planNo", upd.getPlanNo());

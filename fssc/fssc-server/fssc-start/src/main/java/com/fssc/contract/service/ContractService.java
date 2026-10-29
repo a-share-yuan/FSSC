@@ -44,8 +44,8 @@ import java.time.LocalDate;
  *   <li>无固定金额（长期协议/以量定额）合同不控制预算</li>
  * </ul>
  *
- * <p>（X-09，乙）：合同审批存在两条链并存——本类的<b>手工直批环节</b>（approve/reject，落 EFFECTIVE/DRAFT）
- * 与 Flowable 的<b>流程环节</b>（submit 起流程，收尾在 ContractBizAction，落 APPROVED/REJECTED）。裁定<b>不归一</b>，
+ * <p>合同审批存在两条链并存——本类的<b>手工直批环节</b>（approve/reject，落 EFFECTIVE/DRAFT）
+ * 与 Flowable 的<b>流程环节</b>（submit 起流程，收尾在 ContractBizAction，落 APPROVED/REJECTED）。判定<b>不归一</b>，
  * 改为各补状态互斥校验：直批环节执行前必须"已提交且不在流程在途"（{@link #assertNotInFlow}，服务端可阻断）；
  * 反向那一半（流程收尾不得覆写已被直批处理的单）落在 workflow/action/{@code ContractBizAction}，本波禁改，已回主窗。
  */
@@ -131,7 +131,7 @@ public class ContractService {
         mapper.updateById(e);
     }
 
-    /** 起止日期顺序默认处理：前端已禁选倒置，接口直调仍可写入；倒置会让预算占用/付款计划/到期提醒全部错位 */
+    /** 起止日期顺序兜底：前端已禁选倒置，接口直调仍可写入；倒置会让预算占用/付款计划/到期提醒全部错位 */
     private void assertDateOrder(LocalDate begin, LocalDate end) {
         if (begin != null && end != null && end.isBefore(begin)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "合同有效期止不得早于有效期起");
@@ -147,9 +147,9 @@ public class ContractService {
     }
 
     /**
-     * X-09，乙：废弃/终止类动作走配置状态，不留按钮旁路。
-     * 改前此处直接 deleteById ⇒ 审批中的单可被删掉（流程任务变悬空）、已生效/已审批的单可绕过
-     * 「手工关闭」把已冻结的预算与已生成的凭证留在原地。现只允许未生效的草稿/已驳回作废。
+     * 废弃/终止类动作走配置状态，不留按钮旁路。
+     * 直接 {@code deleteById} 的话，审批中的单可被删掉（流程任务变悬空）、已生效/已审批的单可绕过
+     * 「手工关闭」把已冻结的预算与已生成的凭证留在原地。故只允许未生效的草稿/已驳回作废。
      */
     public void delete(Long id) {
         ContContract c = require(id);
@@ -179,7 +179,7 @@ public class ContractService {
         auditTrailService.recordUpdate("CONTRACT", id, c.getContractNo(), "cont_contract",
                 String.valueOf(id), auditBefore, auditAfter, "提交审批");
         // CL 合同审批纳入 Flowable 流程引擎统一管理
-        // 批次3 R3-D：传入合同金额，使流程实例金额与单据一致（CONTRACT 流程当前无金额网关 ⇒ 只影响展示/统计，不改路由）
+        // 传入合同金额，使流程实例金额与单据一致（CONTRACT 流程当前无金额网关 ⇒ 只影响展示/统计，不改路由）
         String title = "合同审批-" + (c.getContractNo() != null ? c.getContractNo() : String.valueOf(id));
         wfEngineFacade.start(CONTRACT_BIZ_TYPE, id, userId(), title, c.getAmount());
     }
@@ -197,7 +197,7 @@ public class ContractService {
                 String.valueOf(id), auditBefore, auditAfter, "审批通过");
         // 固定金额合同 → 按费用类型映射的预算科目冻结合同总额（台账需求：固定金额合同通过合同总额冻结预算）
         freezeBudget(c);
-        // P1 修复：合同为直批模式（无流程），ContractBizAction(CONTRACT_APPROVE) 经事件总线永远不触发，
+        // 合同为直批模式（无流程），ContractBizAction(CONTRACT_APPROVE) 经事件总线永远不触发，
         // 生效即在此生成合同凭证（激活 generateByContract 零调用方）；失败不影响生效
         try {
             Long vid = voucherService.generateByContract(id);
@@ -362,7 +362,7 @@ public class ContractService {
     }
 
     /**
-     * X-09，乙：两条审批链并存<b>不归一</b>，改为各补一道服务端状态互斥校验。
+     * 两条审批链并存，<b>不归一</b>，各补一道服务端状态互斥校验。
      * 本方法是<b>手工直批环节</b>的校验：单据除"已提交（APPROVING）"外还必须<b>不在审批流在途</b>才可执行——
      * 有在办流程任务说明这张单正由待办人签核，直批会把流程结论架空（同一张单两个结论、凭证重复生成）。
      * 可阻断的前置校验，不是文案提示；引擎查询异常时按"在途"处置（fail-closed，拿不准就不动）。
@@ -396,8 +396,8 @@ public class ContractService {
     }
 
     // 付款条件 / 支付记录子表入库校验
-    // 背景：这两个子表此前由 ContractController 直接 conditionMapper.insert(c) /
-    //      recordMapper.insert(r) 裸写，**零校验**（同文件主表 create 却有完整断言），
+    // 背景：这两个子表若由 ContractController 直接 conditionMapper.insert(c) /
+    //      recordMapper.insert(r) 裸写，零校验（同文件主表 create 却有完整断言），
     //      可灌入「计划额 99999999」的付款条件或「付款金额 0 / 负数」的台账记录，
     //      付款进度看板、供应商对账函、付款率全部失真且无人拦截。
     //      此处把写入办结到 Service，并补齐四类断言：必填、金额>0、

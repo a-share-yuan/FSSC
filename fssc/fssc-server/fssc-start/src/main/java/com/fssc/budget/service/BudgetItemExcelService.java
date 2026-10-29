@@ -16,6 +16,7 @@ import com.fssc.system.entity.SysCompany;
 import com.fssc.system.entity.SysDept;
 import com.fssc.system.mapper.SysCompanyMapper;
 import com.fssc.system.mapper.SysDeptMapper;
+import java.math.RoundingMode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -39,7 +40,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 预算明细 Excel 导入/导出（2026-09-17）。
+ * 预算明细 Excel 导入/导出。
  * <p>
  * 模板列（导入/导出同构）：预算年度/期间/公司编码/公司名称/部门编码/部门名称/费用项编码/费用项名称/
  * 预算总额/币种/总账科目/外部系统科目/备注。
@@ -69,7 +70,7 @@ public class BudgetItemExcelService {
     private final SysDeptMapper sysDeptMapper;
     private final MdExpenseItemMapper mdExpenseItemMapper;
 
-    // ---------------- 导出 ----------------
+    // 导出
 
     /** 导出预算明细 xlsx（schemeId/deptId/itemId 可选过滤），返回字节流 */
     public byte[] exportItems(Long schemeId, Long deptId, Long itemId) {
@@ -130,7 +131,7 @@ public class BudgetItemExcelService {
         }
     }
 
-    // ---------------- 导入 ----------------
+    // 导入
 
     public record ImportResult(int inserted, int updated, List<String> errors) {
     }
@@ -280,7 +281,7 @@ public class BudgetItemExcelService {
         return new ImportResult(inserted, updated, errors);
     }
 
-    // ---------------- 解析工具 ----------------
+    // 解析工具
 
     /** 期间解析：「全年」/空 → 0；1-12 → 月份；非法 → -1 */
     private int parsePeriod(String s) {
@@ -365,7 +366,7 @@ public class BudgetItemExcelService {
         }
         hit = sysDeptMapper.selectOne(qw.last("limit 1"));
         if (hit == null && code != null && !code.isBlank() && name != null && !name.isBlank()) {
-            // 编码匹配失败再用名称默认处理一次
+            // 编码匹配失败再用名称兜底一次
             LambdaQueryWrapper<SysDept> qw2 = new LambdaQueryWrapper<>();
             qw2.eq(SysDept::getDeptName, name.trim());
             if (comp != null) {
@@ -412,7 +413,7 @@ public class BudgetItemExcelService {
             return null;
         }
         if (cell.getCellType() == CellType.NUMERIC) {
-            return BigDecimal.valueOf(cell.getNumericCellValue()).setScale(2, java.math.RoundingMode.HALF_UP);
+            return BigDecimal.valueOf(cell.getNumericCellValue()).setScale(2, RoundingMode.HALF_UP);
         }
         String s = String.valueOf(cell).trim();
         if (s.isEmpty()) {

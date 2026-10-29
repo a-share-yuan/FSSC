@@ -13,9 +13,9 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 档案管理审批收尾（P0-1 事件编排总线）。
+ * 档案管理审批收尾（事件编排总线）。
  * <p>
- * P1 修复 bizId 错位（原实现把三种 bizType 的 bizId 都当 op_archive.id 查，FM_DESTROY/FM_BORROW 永远空转）：
+ * bizId 错位（原实现把三种 bizType 的 bizId 都当 op_archive.id 查，FM_DESTROY/FM_BORROW 永远空转）：
  * <ul>
  *   <li>FM_ARCHIVE：bizId = op_archive.id → status: ARCHIVED</li>
  *   <li>FM_DESTROY：bizId = archive_destroy_approval.id → approvalStatus APPROVED/REJECTED + 档案 DESTROYED</li>

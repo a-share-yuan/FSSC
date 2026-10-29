@@ -3,6 +3,7 @@
 
 package com.fssc.connector.adapter.bank;
 
+import com.fssc.bank.gateway.BankGateway;
 import com.fssc.connector.adapter.ChannelAdapter;
 import com.fssc.connector.api.ChannelRequest;
 import com.fssc.connector.api.ChannelResponse;
@@ -17,7 +18,7 @@ import org.springframework.stereotype.Component;
 /**
  * 银企直联适配器（形态 B · 域3 收编）。
  *
- * <p><b>为什么有本类</b>：银行能力原先另起一套平行实现 {@code com.fssc.bank.gateway.BankGateway}
+ * <p><b>为什么有本类</b>：银行能力原先另起一套平行实现 {@code BankGateway}
  * （{@code DefaultBankGateway} 模拟 + {@code HttpBankGateway} HTTP），<b>绕过</b> connector 的
  * 凭据托管 / 去重 / 记录 / 熔断统一治理。本类把银行注册为一个正规能力域
  * （{@code ChannelType.BANK_PAYMENT}），使「新增一家银行只加通道配置、不改业务码」成立。</p>

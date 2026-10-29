@@ -18,6 +18,9 @@ import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.system.mapper.SysUserRoleMapper;
 import com.fssc.system.mapper.SysDeptMapper;
 import com.fssc.system.mapper.SysCompanyMapper;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -52,14 +55,14 @@ public PageResult<SysUser> page(long pageNum, long pageSize, String keyword, Str
     }
 
     /**
-     * 用户分页（2026-09-17 优化：支持机构目录树联动过滤）。
-     * @param deptIds   部门 ID 集合（选中部门节点 = 该部门及其全部子部门），null/空 不过滤
+     * 用户分页（优化：支持机构目录树联动过滤）。
+     * @param deptIds 部门 ID 集合（选中部门节点 = 该部门及其全部子部门），null/空 不过滤
      * @param companyId 公司 ID（选中公司节点），null 不过滤
      */
     public PageResult<SysUser> page(long pageNum, long pageSize, String keyword, String status,
                                     List<Long> deptIds, Long companyId) {
         LambdaQueryWrapper<SysUser> qw = new LambdaQueryWrapper<>();
-        // P0-1 租户数据隔离：仅返回当前租户用户，防止跨租户演示账号出现在人员下拉/选择器
+        // 租户数据隔离：仅返回当前租户用户，防止跨租户演示账号出现在人员下拉/选择器
         Long tenantId = TenantContext.getTenantId();
         if (tenantId != null) {
             qw.eq(SysUser::getTenantId, tenantId);
@@ -81,27 +84,27 @@ public PageResult<SysUser> page(long pageNum, long pageSize, String keyword, Str
         }
         qw.orderByAsc(SysUser::getId);
         Page<SysUser> p = sysUserMapper.selectPage(Page.of(pageNum, pageSize), qw);
-        // 部门/公司名称按本次页内 ID 批量查（改前逐行 selectById：200 人 = 400 次往返，
-        // 人员下拉首屏实测 1.5~1.7s）
-        java.util.Set<Long> deptIdsOfPage = new java.util.HashSet<>();
-        java.util.Set<Long> companyIdsOfPage = new java.util.HashSet<>();
+        // 部门/公司名称按本次页内 ID 批量查（原先逐行 selectById：200 人 = 400 次往返，
+        // 人员下拉首屏要 1.5~1.7s）
+        Set<Long> deptIdsOfPage = new HashSet<>();
+        Set<Long> companyIdsOfPage = new HashSet<>();
         for (SysUser u : p.getRecords()) {
             if (u.getDeptId() != null && u.getDeptId() > 0) deptIdsOfPage.add(u.getDeptId());
             if (u.getCompanyId() != null && u.getCompanyId() > 0) companyIdsOfPage.add(u.getCompanyId());
         }
-        Map<Long, String> deptNames = new java.util.HashMap<>();
+        Map<Long, String> deptNames = new HashMap<>();
         if (!deptIdsOfPage.isEmpty()) {
             for (SysDept d : sysDeptMapper.selectByIds(deptIdsOfPage)) {
                 deptNames.put(d.getId(), d.getDeptName());
             }
         }
-        Map<Long, String> companyNames = new java.util.HashMap<>();
+        Map<Long, String> companyNames = new HashMap<>();
         if (!companyIdsOfPage.isEmpty()) {
             for (SysCompany c : sysCompanyMapper.selectByIds(companyIdsOfPage)) {
                 companyNames.put(c.getId(), c.getCompanyName());
             }
         }
-        // P1-3：列表出参对联系方式脱敏（HTTP 出参由 Boot4 的 Jackson3 序列化，
+        // 列表出参对联系方式脱敏（HTTP 出参由 Boot4 的 Jackson3 序列化，
         // 不经过 Jackson2 的 @Sensitive 模块，故在此显式脱敏；明文走 /{id}/full 授权接口）
         for (SysUser u : p.getRecords()) {
             u.setPhone(MaskUtil.phone(u.getPhone()));
@@ -205,7 +208,7 @@ public PageResult<SysUser> page(long pageNum, long pageSize, String keyword, Str
     }
 
     /**
-     * P1-3：授权查看用户明文联系方式。
+     * 授权查看用户明文联系方式。
      *
      * <p>列表接口对 phone/email 已脱敏（{@code @Sensitive}），编辑表单需要可回填的明文，
      * 故单独提供本方法；返回 Map 而非 SysUser，避免命中脱敏序列化器。

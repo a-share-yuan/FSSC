@@ -150,7 +150,7 @@ import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useTablePager } from '@/composables/useTablePager'
 import TablePager from '@/components/common/TablePager.vue'
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -168,7 +168,7 @@ const itemsVisible = ref(false)
 const items = ref([])
 const itemsLoading = ref(false)
 const itemsType = ref('')
-// P1-2：未达账明细追溯弹窗列表本地分页（数据量大时避免一次性渲染上百行 DOM）
+// 未达账明细追溯弹窗列表本地分页（数据量大时避免一次性渲染上百行 DOM）
 const itemsPager = useTablePager({ mode: 'local' })
 
 const ITEM_TYPE = {
@@ -178,7 +178,7 @@ const ITEM_TYPE = {
   ENT_OUT: '企业已付银行未付',
 }
 const itemTypeName = (t) => ITEM_TYPE[t] || t
-// D-DEC-164：未达账项状态（bank_recon_item.status）——对账审批定稿后由 OPEN 转 CLEARED
+// 未达账项状态（bank_recon_item.status）——对账审批定稿后由 OPEN 转 CLEARED
 const ITEM_STATUS = { OPEN: '未清', CLEARED: '已清结' }
 const itemStatusLabel = (s) => ITEM_STATUS[s] || s || '—'
 const itemTypeTag = (t) => t === 'BANK_IN' ? 'success' : t === 'BANK_OUT' ? 'warning' : t === 'ENT_IN' ? 'primary' : 'danger'
@@ -217,8 +217,8 @@ async function runReconcile() {
     const unmatched = Number(r?.unmatched || 0)
     const ambiguous = Number(r?.ambiguous || 0)
     const foreign = Number(r?.foreignSerialBlocked || 0)
-    // D-DEC-157：当场给出"勾对几条／未勾几条"，未达账项不等调节表环节才发现
-    // D-DEC-420 丙：同人建单—同人勾对的收款核销单当场提示复核，不阻断本轮勾对
+    // 当场给出"勾对几条／未勾几条"，未达账项不等调节表环节才发现
+    // 丙：同人建单—同人勾对的收款核销单当场提示复核，不阻断本轮勾对
     ElMessage({
       type: (unmatched > 0 || r?.selfMatchWarning) ? 'warning' : 'success',
       duration: 6000,

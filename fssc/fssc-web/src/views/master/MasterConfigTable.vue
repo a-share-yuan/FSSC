@@ -121,7 +121,7 @@ const props = defineProps({
 
 // CONFIG REGISTRY
 // 列声明的 formatter 在 REGISTRY 构造时就要取到值，所以这几枚格式化器必须写在注册表之前。
-/** op_job_heartbeat.last_result 只有 SUCCESS/FAIL/RUNNING 三枚码（实体注释＋写入侧 markRunning/markSuccess/markFail），名称表外的大写原码默认处理，不猜标签 */
+/** op_job_heartbeat.last_result 只有 SUCCESS/FAIL/RUNNING 三枚码（实体注释＋写入侧 markRunning/markSuccess/markFail），名称表外的大写原码兜底，不猜标签 */
 const JOB_RESULT_LABEL = { SUCCESS: '成功', FAIL: '失败', RUNNING: '执行中' }
 const jobResultLabel = (v) => (v == null || v === '' ? '' : JOB_RESULT_LABEL[String(v)] || String(v).toUpperCase())
 /** last_error 屏上只留摘要——先剥 SQL 语句主体（库里存的是 JDBC/MyBatis 原始报错，整段 SQL 正文不落 UI），再截首 200 字；全文不内联展开、不做「查看全文」 */
@@ -161,9 +161,9 @@ const REGISTRY = {
   vehicle: { title: '交通工具', api: masterCfgApi.vehicle, columns: [{ prop: 'vehicleCode', label: '编码', width: 120 }, { prop: 'vehicleName', label: '名称', minWidth: 140 }, { prop: 'seatClass', label: '舱位', width: 100 }, { prop: 'levelRange', label: '等级范围', width: 100 }], formFields: [{ prop: 'vehicleCode', label: '编码', required: true }, { prop: 'vehicleName', label: '名称', required: true }, { prop: 'seatClass', label: '舱位' }, { prop: 'levelRange', label: '等级范围' }] },
   'bank-inst': { title: '金融机构', api: masterCfgApi.bank, columns: [{ prop: 'bankCode', label: '编码', width: 120 }, { prop: 'bankName', label: '名称', minWidth: 160 }, { prop: 'bankType', label: '类型', width: 100, formatter: (v) => finInstTypeLabel(v) }], formFields: [{ prop: 'bankCode', label: '编码', required: true }, { prop: 'bankName', label: '名称', required: true }, { prop: 'bankType', label: '类型' }] },
   employeeLevel: { title: '员工等级', api: masterCfgApi.employeeLevel, columns: [{ prop: 'levelCode', label: '编码', width: 120 }, { prop: 'levelName', label: '名称', minWidth: 140 }, { prop: 'sort', label: '排序', width: 80, align: 'center' }], formFields: [{ prop: 'levelCode', label: '编码', required: true }, { prop: 'levelName', label: '名称', required: true }, { prop: 'sort', label: '排序', type: 'number', precision: 0 }] },
-  // 本页此前把「借方科目/贷方科目」绑在 debit/credit_subject_code 上，实测这两列 704/704 全空
+  // 本页原先把「借方科目/贷方科目」绑在 debit/credit_subject_code 上，而这两列全空
   // 本域根本没有写入位置，故主列恒空。真值在 subject_code/subject_name + direction——md_gl_config 是
-  // 「一行一侧」的模型（DEBIT 279 / CREDIT 425，subject_code 零空），查询侧 VoucherService:330-356 也正好
+  // 「一行一侧」的模型（DEBIT／CREDIT 各占一行，subject_code 零空），查询侧 VoucherService:330-356 也正好
   // 按 direction 从规则池挑行后读 getSubjectCode()/getSubjectName()。列表与表单一律改绑承载列；
   // debit/credit_subject_id 两列是引擎取科目 ID 的入口（279/425 非空），原样保留可编辑。
   // subject_name 存的是接口侧规则原文，与 aux_rule（辅助核算规则）同源重复，列表只留 auxRule 这一枚承载规则的列，subject_name 退到表单里可编辑。
@@ -199,7 +199,7 @@ const REGISTRY = {
 
 const cfg = computed(() => REGISTRY[props.configKey] || { title: props.configKey, columns: [], formFields: [], api: {} })
 
-// 写按钮按后端真实权限码门控；未声明 perms 的配置沿用原 readOnly 规则，避免扩大本轮改动面。
+// 写按钮按后端真实权限码门控；未声明 perms 的配置沿用原 readOnly 规则，避免扩大改动面。
 function canWrite(action) {
   if (cfg.value.readOnly) return false
   const code = cfg.value.perms?.[action]
@@ -219,7 +219,7 @@ function optionLabel(col, row) {
 
 const cfgFormRef = ref(null)
 /**
- * 配置驱动的必填规则。此前 el-form-item 没有 prop，这份规则从未被 el-form 绑定过，
+ * 配置驱动的必填规则。el-form-item 没有 prop 的话，这份规则从未被 el-form 绑定过，
  * 红星只由 :required 画出来、save() 也不校验——补上 prop 后规则必须走自定义 validator：
  * 本注册表的必填字段里有数字（汇率/额度/余额），纯 {required,type,trigger} 三键规则会把 0 判成未填。
  */
@@ -346,7 +346,7 @@ async function toggleEnable(row) {
 function onSelChange(val) { selRows.value = val }
 
 // configKey 变化（组件实例被复用时，如外层直接嵌入无 :key 的场景）：重置分页/搜索并按新配置重新加载，
-// 否则会残留上一页签的 rows 与本页签的 columns 错配 → 整页字段全空（2026-09-17 实测）
+// 否则会残留上一页签的 rows 与本页签的 columns 错配 → 整页字段全空
 watch(() => props.configKey, () => {
   pageNum.value = 1
   pageSize.value = 20

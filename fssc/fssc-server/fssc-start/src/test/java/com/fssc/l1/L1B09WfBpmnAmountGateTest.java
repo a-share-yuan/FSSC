@@ -23,14 +23,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 批次3 R3-E 发布期硬校验单测（金额网关）。
+ * 发布期硬校验单测（金额网关）。
  *
- * <p>为什么必须有正向用例：批次 1 之前那条"发起未传 amount 会告警"的判据读的是空表，
- * 线上一次都没响过也没人发现（D-B3-08 真根因）。只证"现网 82 个模型 0 error"无法区分
+ * <p>为什么必须有正向用例：若"发起未传 amount 会告警"的判据读的是空表，
+ * 线上一次都没响过也没人发现。只证"现网 82 个模型 0 error"无法区分
  * "规则对"与"规则永远不触发"，所以这里各造一个坏结构，要求它<b>必须</b>被判下来。
  *
  * <p>三条口径：①假档位=error；②零审批短路=error；③批次2 金额升级链的低档直达 End=warning
- * （21 处在用网关即此形态，判 error 会把在用流程挡在发布门外，按 R3-E 回滚判据降级并登记）。
+ * （21 处在用网关即此形态，判 error 会把在用流程挡在发布门外，故这一档按 warning 降级并登记）。
  */
 @DisplayName("L1-B-09 WfBpmnChecker 金额网关硬校验")
 class L1B09WfBpmnAmountGateTest {
@@ -74,7 +74,7 @@ class L1B09WfBpmnAmountGateTest {
         return "<userTask id=\"" + id + "\" name=\"" + name + "\" flowable:candidateGroups=\"" + role + "\"/>";
     }
 
-    // ---------------------------------------------------------------- ①假档位
+    // ①假档位
 
     @Test
     @DisplayName("出口阈值倒挂：高档分支永远不会被选中 ⇒ error 假档位")
@@ -124,7 +124,7 @@ class L1B09WfBpmnAmountGateTest {
         assertTrue(r.errors.isEmpty(), "正序档位不该报 error，实际=" + r.errors);
     }
 
-    // ---------------------------------------------------------------- ②零审批短路
+    // ②零审批短路
 
     @Test
     @DisplayName("网关前无人工审批且低档直达结束 ⇒ error 零审批通过")
@@ -145,7 +145,7 @@ class L1B09WfBpmnAmountGateTest {
         assertFalse(r.valid());
     }
 
-    // ---------------------------------------------------------------- ③升级链低档直达 End = 只提示
+    // ③升级链低档直达 End = 只提示
 
     @Test
     @DisplayName("批次2 金额升级链（网关前已有审批）⇒ 只 warning，不挡发布")
@@ -168,7 +168,7 @@ class L1B09WfBpmnAmountGateTest {
                 "应给出低档跳档提示，实际=" + r.warnings);
     }
 
-    // ---------------------------------------------------------------- 规则①：金额来源核对
+    // 规则①：金额来源核对
 
     @Test
     @DisplayName("分档流程绑定的 bizType 在注册表无金额列 ⇒ warning 点名，但不拦发布")

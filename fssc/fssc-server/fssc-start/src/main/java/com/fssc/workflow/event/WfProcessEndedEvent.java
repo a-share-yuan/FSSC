@@ -17,9 +17,9 @@ import lombok.Data;
  *   <li>GRADE_BY_GRADE（逐级驳回，默认）：按审批链逐级驳回，字段可全改</li>
  * </ul>
  *
- * <p>ROOT-17：新增 {@link #endType} 显式区分"驳回"与"申请人撤回"。
- * 此前唯一的判据是消费方拿 {@code comment} 与中文字面量「申请人撤回」做 {@code equals}
- * （{@code ExpenseWfEventListener:119}），而 {@code comment} 是给人看的文案：
+ * <p>{@link #endType} 显式区分"驳回"与"申请人撤回"。
+ * 只靠消费方拿 {@code comment} 与中文字面量「申请人撤回」做 {@code equals} 的话，
+ * （见 {@code ExpenseWfEventListener}），而 {@code comment} 是给人看的文案：
  * 改一个字、或将来让撤回带自定义原因，收尾分支就静默走成"驳回"——单据状态、
  * 驳回类型写入数据库、记录动作全部跟着错，且不会报错。属"文案承载业务语义"的同族病根。
  */
@@ -46,19 +46,19 @@ public class WfProcessEndedEvent {
     /** Flowable 流程实例ID（新增）：业务收尾可读流程变量，如跨法人调拨 targetCompanyId */
     private String procInstId;
     /**
-     * 结束类型（ROOT-17）：仅"撤回"路径显式置 {@link #END_WITHDRAWN}；
+     * 结束类型：仅"撤回"路径显式置 {@link #END_WITHDRAWN}；
      * 通过与驳回两路仍按 {@code approved} 判定，本列留空（不给同一事实造第二套真值）。
      */
     private String endType;
 
     /**
-     * 办结本流程的<b>操作人</b>用户ID（P3-A2 前置件 ·，2026-10 未标级修复战役 K4 批）。
+     * 办结本流程的<b>操作人</b>用户ID。
      *
      * <p>为什么必须有：业务收尾要落"复核人/审核人"这类追责列（如 {@code exp_bill.audit_user_id}），
-     * 而本事件此前只携带 bizType/bizId/approved/comment——收尾方拿不到"是谁点的最后一节"，
+     * 而本事件只带 bizType/bizId/approved/comment 时，收尾方拿不到"是谁点的最后一节"，
      * 于是那些列建成建表以来恒 NULL（{@code audit_time}/{@code audit_user_id} 审完仍空）。
      *
-     * <p><b>取值规则（硬约束，改动前请读全）</b>：只可来自 {@code WfEngineFacade.complete()} 的
+     * <p>取值规则（硬约束，改动前请读全）：只可来自 {@code WfEngineFacade.complete()} 的
      * {@code operUserId} 形参（人工办结链与超时自动通过链两处 {@code taskService.complete()}），
      * 由门面线程标记随 PROCESS_COMPLETED 同步派发带出。
      * <b>严禁改为反查 {@code wf_task_history} 末节 APPROVE 行</b>：门面在

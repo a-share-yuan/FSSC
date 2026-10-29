@@ -84,8 +84,8 @@ public class ExportService {
     }
 
     /** 导出部门报销排行（① 导出规则：仅本登录人公司）
-     * F-07：补 {@code @DataScope} 与部门/本人两参——原方法只做公司隔离，部门/本人两参恒 null，
-     * scope=5 的账号导出件里出现本人部门以外的其他部门（屏幕 31 单 vs 导出 166 单）。
+     * 补 {@code @DataScope} 与部门/本人两参——只做公司隔离时两参恒 null，
+     * scope=5 的账号导出件里会出现本人部门以外的其他部门。
      * 范围规则与 DashboardService.scopeArgs／ReportQueryController.resolveScope 一致。 */
     @DataScope("部门排行导出数据范围")
     public byte[] exportDeptRanking() {
@@ -121,8 +121,8 @@ public class ExportService {
                         BgItem::getAdjustAmount,
                         BgItem::getOccupyAmount,
                         BgItem::getUsedAmount);
-        // F-08：改 applyWithNullDept——bg_item 公司级下达行 dept_id 为 NULL，原 apply 的
-        // dept_id = 本人部门 会把它们整批滤掉（屏幕 6 行 / 导出 0 行）。
+        // 用 applyWithNullDept——bg_item 公司级下达行 dept_id 为 NULL，普通 apply 的
+        // dept_id = 本人部门 会把它们整批滤掉（屏幕有、导出为 0）。
         DataScopeKit.applyWithNullDept(qw, BgItem::getCompanyId, BgItem::getDeptId, null);
         List<Map<String, Object>> rows = bgItemMapper.selectMaps(qw);
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
@@ -152,7 +152,7 @@ public class ExportService {
     }
 
     /**
-     * 部门/本人两维的数据范围入参（F-07），规则与 {@code DashboardService.scopeArgs}、
+     * 部门/本人两维的数据范围入参，规则与 {@code DashboardService.scopeArgs}、
      * {@code ReportQueryController.resolveScope} 一致：1/2 档不收窄；3 档取本部门及以下；
      * 4 档只取本部门；5 档取本人（无本人维时由调用方降级公司）。
      */

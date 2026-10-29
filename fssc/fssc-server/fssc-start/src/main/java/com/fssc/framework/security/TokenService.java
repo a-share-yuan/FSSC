@@ -61,8 +61,8 @@ public class TokenService {
     /**
      * 启动自检：防止生产环境沿用默认/缺失的 JWT 密钥。
      * <p>判定与 {@link #key()} 内层守卫<b>同一份判据</b>（{@link #assertSecretUsable}），
-     * 区别只在于启动期报"启动自检"、签名期报"签发/验签"。此前"dev 且默认密钥 ⇒ 仅告警仍签发"
-     * 的分支（C-2 登记的放行分支）现由 {@link #allowDefaultSecret} 控制，缺省关闭。</p>
+     * 区别只在于启动期报"启动自检"、签名期报"签发/验签"。"dev 且默认密钥 ⇒ 仅告警仍签发"
+     * 的分支由 {@link #allowDefaultSecret} 控制，缺省关闭。</p>
      */
     @PostConstruct
     public void checkSecret() {

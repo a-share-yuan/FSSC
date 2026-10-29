@@ -23,7 +23,7 @@
 // 方案 A（页面Tab化重构册 §甲）：应付侧蓝图收敛；ap-month-close 菜单 3400 保留故以链接承接，不重复嵌组件。
 // 原「统计报表」页签内嵌的是 ArApReportBoard（开票/核销/票据/坏账/月结，纯应收内容），
 //   门控码 arflow:report:view 只有应收会计持有、而应收会计没有应付工作台菜单 3399
-//   ⇒ 应付角色全看不到、能看到的角色打不开本页，属死页签（2026-10-23 审计）。已移除；
+//   ⇒ 应付角色全看不到、能看到的角色打不开本页，属死页签。已移除；
 //   应付类报表走「管理报表」菜单（应付账龄分析/供应商付款汇总/进项发票统计）。
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -33,7 +33,7 @@ import { hasPerm } from '@/utils/perm'
 
 const route = useRoute()
 const router = useRouter()
-// R5-D-106：无 apflow:request:list 权限时不挂载申请板（避免 4030 被吞成静默空表），显式无权限态引导授权
+// 无 apflow:request:list 权限时不挂载申请板（避免 4030 被吞成静默空表），显式无权限态引导授权
 const canList = hasPerm('apflow:request:list')
 // 页签按各自接口码门控：申请池＝apflow:request:list，供应商协同＝collab:scp:list；无码不渲染以免点了才 403
 const visibleNames = ['request', 'collab'].filter((n) =>

@@ -248,7 +248,7 @@ async function loadOrgTree() {
       label: d.deptName || d.deptCode || t('field.deptNo', { v1: d.id }),
       children: (d.children || []).map((c) => wrapDept(c)),
     })
-    // 未挂公司的部门默认处理为根级"未分配部门"
+    // 未挂公司的部门兜底为根级"未分配部门"
     const orphanDepts = forestOf(0)
     orgTree.value = [
       ...attachDepts(companyNodes),
@@ -380,7 +380,7 @@ async function onSave() {
   saving.value = true
   try {
     if (isEdit.value) {
-      // 后端 SysUser 姓名字段为 nickName（非 realName），此前提交 realName 导致改名静默失效
+      // 后端 SysUser 姓名字段为 nickName（非 realName），提交 realName 会让改名静默失效
       await userApi.update({ id: form.id, nickName: form.realName, deptId: form.deptId, phone: form.phone, email: form.email, status: form.status })
       ElMessage.success(t('system.common.msgUpdated'))
     } else {

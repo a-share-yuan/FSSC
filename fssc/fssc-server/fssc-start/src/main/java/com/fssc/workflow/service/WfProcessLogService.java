@@ -12,6 +12,7 @@ import com.fssc.system.entity.SysConfig;
 import com.fssc.system.mapper.SysConfigMapper;
 import com.fssc.workflow.entity.WfProcessLog;
 import com.fssc.workflow.mapper.WfProcessLogMapper;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -87,7 +88,7 @@ public class WfProcessLogService {
         }
     }
 
-    // ==================== 管理中心查询 ====================
+    // 管理中心查询
 
     /** 按实例/单据/类型/时间分页查询（管理中心「流程日志」视图） */
     public PageResult<WfProcessLog> page(PageQuery q, String procInstId, String bizNo, String bizType,
@@ -117,7 +118,7 @@ public class WfProcessLogService {
     }
 
     /** 某实例的完整流程日志（时间线，升序）——排查"这单为什么卡住"的主入口 */
-    public java.util.List<WfProcessLog> byInstance(String procInstId) {
+    public List<WfProcessLog> byInstance(String procInstId) {
         return wfProcessLogMapper.selectList(new LambdaQueryWrapper<WfProcessLog>()
                 .eq(WfProcessLog::getProcInstId, procInstId)
                 .orderByAsc(WfProcessLog::getId));

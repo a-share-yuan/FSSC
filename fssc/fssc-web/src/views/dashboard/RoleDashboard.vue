@@ -96,7 +96,7 @@
 
 <script setup>
 /**
- * （2026-09-28 处置＝下架入口、内容暂不修）：
+ * （处置＝下架入口、内容暂不修）：
  * 本页 KPI 中 monthExp/monthPay/monthProgress 无赋值点、inTransit/timeout/budgetRate 查询键与后端返回不符，
  * 另有 done/avgTime/timeoutRate/sysHealth 四项为写死的展示值（10-01 已办结＝改接
  * /wf/perf/overview 与 /api/health 两条真实读数，取不到显示「—」，见下方 kpiCards/kpiNote）。
@@ -133,8 +133,8 @@ const sysHealth = ref('')
 const PERF_WINDOW_DAYS = 30
 
 /**
- * 外跳入口的权限门控（2026-09-16 P0）
- * 「查看大屏」/ KPI 钻取的目标页（/flow-monitor、/month-end）是**无菜单承载**的全局入口页，
+ * 外跳入口的权限门控
+ * 「查看大屏」/ KPI 钻取的目标页（/flow-monitor、/month-end）是无菜单承载的全局入口页，
  * 有独立的接口权限码。无权限时给出提示而非把用户送进一个必然报错的页面。
  */
 const canFlowMonitor = hasPerm('wf:instance:list')
@@ -301,7 +301,7 @@ function drillKpi(kpi) {
     sysHealth: '/system/run-status',
   }
   const route = drillRoutes[kpi.key]
-  // 无菜单承载的外跳页按各自权限码收敛（2026-09-16 P0）：无权限给提示，不跳进必然报错的页面
+  // 无菜单承载的外跳页按各自权限码收敛：无权限给提示，不跳进必然报错的页面
   if (route === '/flow-monitor' && !canFlowMonitor) {
     ElMessage.warning('当前账号没有查看流程监控大屏的权限，请联系管理员开通')
     return

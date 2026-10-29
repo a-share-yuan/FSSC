@@ -28,7 +28,7 @@ public class PeriodController {
     private final PeriodService service;
 
     /**
-     * R5-D-042：列表补公司维度。{@code companyId} 是"显式筛选"入参，服务端仍叠加登录人
+     * 列表补公司维度。{@code companyId} 是"显式筛选"入参，服务端仍叠加登录人
      * data_scope 谓词（见 {@code PeriodService.page}），因此传别的公司号也不会放宽可见范围。
      */
     @RequiresPerm("md:period:list")

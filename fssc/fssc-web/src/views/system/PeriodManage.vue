@@ -106,7 +106,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 41号审查 P1：批量开账/结账（多选行，仅对未结账/已结账行生效）
+// 批量开账/结账（多选行，仅对未结账/已结账行生效）
 const selRows = ref([])
 function handleSelectionChange(val) { selRows.value = val }
 

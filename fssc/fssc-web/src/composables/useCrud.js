@@ -2,16 +2,16 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * useCrud — 通用 CRUD composable（P2-2 交互一致性）。
+ * useCrud — 通用 CRUD composable（交互一致性）。
  * 消除 26 个自造 CRUD 页面重复的 load/create/update/delete/export/batch 逻辑。
  *
  * 用法：
  *   const crud = useCrud({
- *     api: customerApi,        // 含 page/create/update/delete/enable
+ *     api: customerApi, // 含 page/create/update/delete/enable
  *     defaultForm: () => ({ customerCode: '', customerName: '', ... }),
  *     csvColumns: [{ prop: 'customerCode', label: '编码' }, ...],
  *     csvName: '客户',
- *     formRef,                 // el-form 的 ref；传入后 save() 先跑必填校验，不过就不发请求
+ *     formRef, // el-form 的 ref；传入后 save() 先跑必填校验，不过就不发请求
  *   })
  *   // crud.rows, crud.loading, crud.selRows, crud.vis, crud.form
  *   // crud.load(), crud.openCreate(), crud.openEdit(row), crud.save(),

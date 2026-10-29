@@ -30,7 +30,7 @@ public interface BgOccupyMapper {
     int insert(BgOccupy occupy);
 
     /** 占用流水真分页查询（IPage 触发 MP 分页插件；租户拦截器自动注入 tenant_id）。
-     *  2026-09-17：增加 budgetItemId 过滤，供执行页「穿透查看该明细的占用/核销流水」。 */
+     *  增加 budgetItemId 过滤，供执行页「穿透查看该明细的占用/核销流水」。 */
     @Select("<script>select * from bg_occupy " +
             "<where>" +
             "<if test='budgetItemId != null'>and budget_item_id = #{budgetItemId}</if> " +
@@ -68,7 +68,7 @@ public interface BgOccupyMapper {
 
     /**
      * 单据在某一预算明细上的净占用额（OCCUPY 为正，WRITE_OFF/RELEASE 为负）。
-     * <p>P0-C2：核销时以此为准，不再用 bg_item.occupy_amount（全行汇总）截断，
+     * <p>核销时以此为准，不再用 bg_item.occupy_amount（全行汇总）截断，
      * 避免 A 单的占用被 B 单核销吃掉。
      * <p>按 biz_id 归户但跨 biz_type：事前申请占用记 EXP_CLAIM、其核销记 EXP_APPLY
      * （{@code ExpenseWfEventListener.writeOffApplyOccupy}），故不能按单一 biz_type 过滤。
@@ -88,7 +88,7 @@ public interface BgOccupyMapper {
 
     /**
      * 单据在某一预算明细上的历史占用总额（仅统计 OCCUPY 正向流水）。
-     * <p>P0-C2：与 {@link #sumNetOccupyByItemAndBiz} 配对，用于区分
+     * <p>与 {@link #sumNetOccupyByItemAndBiz} 配对，用于区分
      * 「本单据从未在该预算行占用过」（=线下直报，核销只加已用）与
      * 「占用已全部转实/释放，又被重放核销」（=重复核销，必须整体跳过，否则 used 虚增）。
      */

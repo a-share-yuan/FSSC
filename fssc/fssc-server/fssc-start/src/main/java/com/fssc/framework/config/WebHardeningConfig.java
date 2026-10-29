@@ -22,13 +22,13 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 维度4 安全加固（SEC-02/SEC-03）：
+ * 安全加固：
  * <ul>
- *   <li>安全响应头（SEC-03）：CSP / X-Content-Type-Options / X-Frame-Options / Referrer-Policy，
+ *   <li>安全响应头：CSP / X-Content-Type-Options / X-Frame-Options / Referrer-Policy，
  *       阻断注入载荷的脚本执行与点击劫持。</li>
- *   <li>Origin/Referer 校验（SEC-02）：写操作（POST/PUT/DELETE/PATCH）若携带 Origin 或 Referer，
+ *   <li>Origin/Referer 校验：写操作（POST/PUT/DELETE/PATCH）若携带 Origin 或 Referer，
  *       其 host 必须为同源、localhost 系或 fssc.security.allowed-origins 白名单；纯 API 客户端
- *       （curl/服务间调用）不携带这些头直接放行。本项目鉴权走 Authorization 头不经 Cookie，
+ *       curl/服务间调用 不携带这些头直接放行。本项目鉴权走 Authorization 头不经 Cookie，
  *       此过滤器为 CSRF 纵深防御。</li>
  * </ul>
  */

@@ -80,7 +80,7 @@ public interface ImageFacade extends ImageStatsFacade {
     List<Long> fileIdsByInvoiceNo(Long tenantId, String invoiceNo);
 
     /**
-     * 同票号 OCR 记录计数（全库口径，与改前 SQL 一致，不做租户过滤）。
+     * 同票号 OCR 记录计数（全库口径，与原先 SQL 一致，不做租户过滤）。
      */
     long countByInvoiceNo(String invoiceNo);
 }

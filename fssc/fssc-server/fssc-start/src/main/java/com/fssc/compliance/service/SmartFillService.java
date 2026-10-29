@@ -173,7 +173,7 @@ public class SmartFillService {
             }
         }
 
-        // 默认处理：取第一个可用的费用项
+        // 兜底：取第一个可用的费用项
         List<MdExpenseItem> defaultItems = mdExpenseItemMapper.selectList(
                 new LambdaQueryWrapper<MdExpenseItem>()
                         .eq(MdExpenseItem::getStatus, "NORMAL")
@@ -199,7 +199,7 @@ public class SmartFillService {
                         .last("LIMIT 10"));
     }
 
-    // ==================== 内部类 ====================
+    // 内部类
 
     @lombok.Data
     @lombok.AllArgsConstructor

@@ -298,7 +298,7 @@ public class TaskAssignmentService {
                 task.getTaskId(), targetUserId, task.getModelKey(), task.getNodeKey());
     }
 
-    /** 落一条自动分配日志（写失败必须可见，不得静默——方案 §二 F2 的教训） */
+    /** 落一条自动分配日志（写失败必须可见，不得静默） */
     private void writeLog(WfTask task, RuleResolution resolution, OpDispatchPolicy policy,
                           AssignmentDecision decision, String priority, Long groupId, int success) {
         OpDispatchLog row = new OpDispatchLog();

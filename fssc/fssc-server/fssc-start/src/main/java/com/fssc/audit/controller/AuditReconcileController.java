@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
-/** 数据一致性对账（P0-1）。 */
+/** 数据一致性对账。 */
 @RestController
 @RequestMapping("/api/tenant/audit/reconcile")
 @RequiredArgsConstructor

@@ -33,7 +33,7 @@ vi.mock('@/api', () => {
 
 import Approval from './Approval.vue'
 
-describe('L1-F-03 Approval.vue 组件测试', () => {
+describe('Approval.vue 组件测试', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('可挂载（待办列表为空时不崩溃）', async () => {

@@ -46,7 +46,7 @@ defineEmits(['view', 'approve', 'reject', 'print', 'trace'])
 </script>
 
 <style scoped>
-/* 操作按钮始终可见：此前默认 opacity:0 仅悬停自显示，用户根本发现不了按钮（"看不清"） */
+/* 操作按钮始终可见：默认 opacity:0 仅悬停自显示的话，用户根本发现不了按钮 */
 .inline-actions {
   display: flex; align-items: center; gap: 2px;
   opacity: 1; transition: opacity 0.15s;

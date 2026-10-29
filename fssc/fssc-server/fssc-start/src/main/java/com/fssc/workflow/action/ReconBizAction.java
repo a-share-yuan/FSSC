@@ -23,7 +23,7 @@ import java.util.Set;
 /**
  * 供应商对账确认（RECON_ACTIVE）收尾环节（事件编排总线策略实现）。
  *
- * <p>（批次0 P-4 / A2 回滚环节）：此前 RECON_ACTIVE 是"无收尾环节"七条之一——
+ * <p>RECON_ACTIVE 原来属于"无收尾环节"——
  * {@code SupplierReconService.supplierConfirm} 先把对账单置 CONFIRMED 才发起（同事务），审批驳回后
  * 无人把状态洗回＝脏账。本动作按发起时写入的流程变量快照（prevStatus / prevSupplierConfirmStatus）
  * 在驳回侧恢复确认前状态并清空确认时间戳；通过侧 CONFIRMED 已在发起时写入数据库（去重维持），无需重复动作。

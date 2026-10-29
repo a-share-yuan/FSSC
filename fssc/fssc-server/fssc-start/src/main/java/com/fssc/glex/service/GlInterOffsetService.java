@@ -100,7 +100,7 @@ public class GlInterOffsetService {
             created.add(out);
             created.add(in);
         }
-        // P6：内部往来抵消即发起 GL_OFFSET 内部往来抵消审批流（总账会计编制→共享主管复核→财务经理审批）
+        // 内部往来抵消即发起 GL_OFFSET 内部往来抵消审批流（总账会计编制→共享主管复核→财务经理审批）
         if (!created.isEmpty()) {
             BigDecimal total = created.stream().map(GlInterOffset::getAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -109,7 +109,7 @@ public class GlInterOffsetService {
                         "内部往来抵消-" + period, total);
             } catch (Exception ex) {
                 log.error("内部往来抵消 {} 发起抵消审批失败: {}", period, ex.getMessage(), ex);
-                throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+                throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
             }
         }
         return created;
@@ -164,7 +164,7 @@ public class GlInterOffsetService {
     }
 
     /** 往来抵消强校验：抵消金额必须 > 0，方向必须为 RECEIVABLE/PAYABLE。
-     *  内部往来抵消要求同一公司对的应收/应付金额相等（镜像勾销），此处做数据合法性默认处理。 */
+     *  内部往来抵消要求同一公司对的应收/应付金额相等（镜像勾销），此处做数据合法性兜底。 */
     private static void assertOffset(BigDecimal amount, String interFlag) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "抵消金额必须 > 0: " + amount);
@@ -230,7 +230,7 @@ public class GlInterOffsetService {
         }
         mapper.insert(in);
         mapper.insert(out);
-        // BUG-10 修复：手工成对录入与自动生成同一规则，发起 GL_OFFSET 内部往来抵消审批流
+        // 手工成对录入与自动生成同一规则，发起 GL_OFFSET 内部往来抵消审批流
         // 总额取单侧金额（镜像对来账=往账，双计会把审批额放大一倍）
         try {
             BigDecimal total = in.getAmount() != null ? in.getAmount()
@@ -239,7 +239,7 @@ public class GlInterOffsetService {
                     "内部往来抵消-" + period, total);
         } catch (Exception ex) {
             log.warn("手工录入抵消发起 GL_OFFSET 审批失败: {}", ex.getMessage());
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
         return Arrays.asList(in, out);
     }
@@ -270,7 +270,7 @@ public class GlInterOffsetService {
      * <ol>
      *   <li>优先读 sys_config {@code gl.offset.companyPairs}，格式 {@code fromId:toId,fromId:toId,...}；</li>
      *   <li>未配置则自适应：取「有未作废发票（应付余额>0）」的公司 × 「有未结清应收（remain>0）」的公司
-     *       做跨公司配对（排除自身），再由 {@link #pairOffsetAmount} 按 min(应付,应收) 逐对裁量——
+     *       做跨公司配对（排除自身），再由 {@link #pairOffsetAmount} 按 min(应付,应收) 逐对取舍——
      *       与原硬编码三公司循环的业务意图一致，但不再依赖特定公司 ID 存在。</li>
      * </ol>
      */

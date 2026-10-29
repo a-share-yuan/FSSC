@@ -18,7 +18,7 @@ public class SysRole extends TenantAuditBase {
     private String roleName;
     /** 数据权限：1本租户 2本公司 3本部门及以下 4本部门 5仅本人 */
     private Integer dataScope;
-    /** 组织范围（V1.3.16）：COMPANY=本公司内解析(业务审批段) / GROUP=跨公司集中办理(共享段+集团垂直) */
+    /** 组织范围：COMPANY=本公司内解析(业务审批段) / GROUP=跨公司集中办理(共享段+集团垂直) */
     private String orgScope;
     /** NORMAL正常 / DISABLED停用 */
     private String status;

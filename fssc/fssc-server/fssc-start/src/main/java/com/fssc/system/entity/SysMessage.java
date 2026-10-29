@@ -5,6 +5,7 @@ package com.fssc.system.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fssc.common.entity.TenantAuditBase;
+import java.time.LocalDateTime;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -32,5 +33,5 @@ public class SysMessage extends TenantAuditBase {
     /** 是否已读：0否 1是 */
     private Integer isRead;
     /** 阅读时间 */
-    private java.time.LocalDateTime readTime;
+    private LocalDateTime readTime;
 }

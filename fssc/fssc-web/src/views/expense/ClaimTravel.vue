@@ -382,7 +382,7 @@ async function onBeforeSubmit(b) {
   if (!b.form.lines.filter((l) => l.itemId).length) {
     ElMessage.warning(t('expense.claim.errNeedExpenseLine')); return false
   }
-  // 境外凭证合规⑤：境外收据/行程单必填中文说明（后端 submit 同一规则默认处理）
+  // 境外凭证合规⑤：境外收据/行程单必填中文说明（后端 submit 同一规则兜底）
   if (b.form.lines.some((l) => l.itemId && needCnDesc(l) && !(l.cnDesc || '').trim())) {
     ElMessage.warning(t('expense.claim.errAbroadCnDesc')); return false
   }
@@ -485,7 +485,7 @@ const travelTypeDict = useBaseDict('travel_type',
   { DOMESTIC: 'expense.travelClaim.optDomestic', ABROAD: 'expense.travelClaim.optAbroad', TRIAREA: 'expense.travelClaim.optThreeCities' })
 const travelTypeOptions = travelTypeDict.options
 
-// 交通方式 / 付款方式（2026-10-18 基础数据办结）
+// 交通方式 / 付款方式（基础数据办结）
 const trafficDict = useBaseDict('traffic_mode', TRAFFIC_LOCAL, TRAFFIC_I18N)
 const trafficOptions = trafficDict.options
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
@@ -520,12 +520,12 @@ onMounted(async () => {
   loadPayeeType()
   loadCurrency()
   travelTypeDict.load()
-  // 字典不可用时自动回落到本地常量，界面与改造前逐字一致
+  // 字典不可用时自动回落到本地常量，界面与原先逐字一致
   trafficDict.load()
   seatDict.load()
   payMethodDict.load()
   try {
-    // P0 修复：默认只加载同公司人员
+    // 默认只加载同公司人员
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')

@@ -18,13 +18,15 @@ import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.compliance.entity.SatisfactionSurvey;
 import com.fssc.sharing.entity.OpQuality;
+import java.math.BigDecimal;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 /**
- * 共享运营管理统一入口（P1-5 共享运营实质化）。
+ * 共享运营管理统一入口（共享运营实质化）。
  * <p>
  * 四大模块：
  * 1. 员工信用（/api/shared-ops/credit/*）
@@ -42,7 +44,7 @@ public class SharedOpsController {
     private final QualityCheckService qualityCheckService;
     private final SatisfactionService satisfactionService;
 
-    // ================ 员工信用 ================
+    // 员工信用
 
     @RequiresFeature("FSSC_SHARED")
     @RequiresPerm("gl:credit:view")
@@ -66,16 +68,16 @@ public class SharedOpsController {
     @RequiresPerm("gl:credit:view")
     @GetMapping("/credit/{userId}/can-auto-approve")
     public Result<Boolean> canAutoApprove(@PathVariable Long userId,
-                                           @RequestParam java.math.BigDecimal amount) {
+                                           @RequestParam BigDecimal amount) {
         return Result.success(creditService.canAutoApprove(userId, amount));
     }
 
-    // ================ SLA 监控 ================
+    // SLA 监控
 
     @RequiresFeature("FSSC_SHARED")
     @RequiresPerm("gl:sla:list")
     @GetMapping("/sla/config/list")
-    public Result<java.util.List<OpSlaConfig>> slaConfigList() {
+    public Result<List<OpSlaConfig>> slaConfigList() {
         return Result.success(slaMonitorService.listAllConfigs());
     }
 
@@ -88,7 +90,7 @@ public class SharedOpsController {
         return Result.success();
     }
 
-    // SLA 维护面（2026-10-17 补：此前只有 list/check，SLA 阈值改一次只能改库）
+    // SLA 维护面（补上写入口；原先只有 list/check，SLA 阈值改一次只能改库）
 
     @RequiresFeature("FSSC_SHARED")
     @RequiresPerm("gl:sla:create")
@@ -116,7 +118,7 @@ public class SharedOpsController {
         return Result.success();
     }
 
-    // ================ 质检管理 ================
+    // 质检管理
 
     @RequiresFeature("FSSC_SHARED")
     @RequiresPerm("gl:quality:list")
@@ -144,7 +146,7 @@ public class SharedOpsController {
         return Result.success(qualityCheckService.summary());
     }
 
-    // ================ 满意度管理 ================
+    // 满意度管理
 
     @RequiresFeature("FSSC_SHARED")
     @RequiresPerm("gl:satisfaction:list")

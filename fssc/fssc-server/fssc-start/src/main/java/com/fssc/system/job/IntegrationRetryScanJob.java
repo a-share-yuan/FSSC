@@ -12,7 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * P0-3 集成外呼失败重投扫描 Job。
+ * 集成外呼失败重投扫描 Job。
  *
  * <p>周期扫描 {@code integration_call_log} 中 success=0 且未达重试上限的记录，逐条在原租户上下文内重投，
  * 复用同一 log 行（retry_count 自增封顶），避免无限重试；重投安全护栏由
@@ -32,7 +32,7 @@ public class IntegrationRetryScanJob {
     private final IntegrationGateway integrationGateway;
     private final JobHeartbeatService jobHeartbeatService;
 
-    /** P0-3 重投总开关（默认 false，需显式开启） */
+    /** 重投总开关（默认 false，需显式开启） */
     @Value("${fssc.connector.retry.enabled:false}")
     private boolean enabled;
 

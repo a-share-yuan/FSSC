@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * T2.5 / 域3-R3 多银行 provider 分派验证。
  *
- * <p>验证点：<b>同一批付款明细，在不同 provider 下产出不同报文</b>——
+ * <p>验证点：同一批付款明细，在不同 provider 下产出不同报文——
  * 这正是「新增一家银行只加配置、不改业务码」的可测形态。</p>
  */
 class BankProviderCodecTest {

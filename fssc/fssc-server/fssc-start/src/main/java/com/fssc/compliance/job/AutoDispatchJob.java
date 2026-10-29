@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  * 本任务负责将其转为 ASSIGNED 并分配审核员。
  *
  * <h3>【租户上下文铁律】</h3>
- * 定时任务跑在 Spring 调度线程，无 {@link TenantContext}。此前本任务用
+ * 定时任务跑在 Spring 调度线程，无 {@link TenantContext}。本任务若用
  * {@code runIgnoreTenant} 包住整个处理链，导致两类缺陷：
  * <ol>
  *   <li><b>写入落 null</b>：{@code FsscMetaObjectHandler} 在 ignore 上下文跳过 tenantId 填充，
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  *   <li><b>跨租户误匹配</b>：{@code op_dispatch_rule} / {@code op_sla_config} 失去租户过滤，
  *       可能取到其它租户的规则与配置。</li>
  * </ol>
- * 现改为与 {@code RcOverdueJob} 一致的范式：<b>聚合扫描用 {@code runIgnoreTenant}（只读、不写入数据库），
+ * 与 {@code RcOverdueJob} 一致的范式：<b>聚合扫描用 {@code runIgnoreTenant}（只读、不写入数据库），
  * 逐租户处理时 {@code callAs(tenantId)} 恢复上下文</b>，使租户过滤与字段填充均恢复正常。
  *
  * @see DispatchService#autoDispatchCheck()
@@ -91,7 +91,7 @@ public class AutoDispatchJob {
                     try {
                         TenantContext.callAs(tenantId, () -> {
                             dispatchService.autoDispatchCheck();
-                            // P1-5: SLA 违约检测与自动升级
+                            // SLA 违约检测与自动升级
                             slaMonitorService.slaCheck();
                         });
                     } catch (Exception ex) {

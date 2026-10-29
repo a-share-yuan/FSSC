@@ -146,6 +146,11 @@
               入口：<a :href="msg.route">{{ msg.route }}</a>
             </div>
 
+            <!-- 导航落点 -->
+            <div v-if="msg.route" class="nav-card">
+              入口：<a :href="msg.route">{{ msg.route }}</a>
+            </div>
+
             <!-- 反馈：只用于运营评测，不参与执行 -->
             <div v-if="msg.role === 'ai' && msg.traceId" class="feedback-row">
               <template v-if="!msg.feedback">
@@ -482,7 +487,7 @@ async function cancelTicket(t) {
   }
 }
 
-// ------------------------------------------------ 票据状态轮询 → 确认后自动执行
+// 票据状态轮询 → 确认后自动执行
 
 function trackTicket(t) {
   tracked.value.push(t)

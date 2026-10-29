@@ -45,7 +45,7 @@ public class RequisitionWorkbenchController {
     /**
      * 我的单据（<b>费用域</b> exp_bill 一表，含 10+ 种 bill_type）
      * 全类型（合同/采购/预算/总账/档案…）见 {@link #myDocuments}。本接口保留一个版本给旧入口，
-     * 注释此前写"全类型"是错的（的症状之一：承诺与规则不一致）。
+     * 不要写成"全类型"：那会让注释承诺与规则不一致。
      */
     @GetMapping("/my-bills")
     public Result<PageResult<Map<String, Object>>> myBills(PageQuery query,
@@ -55,7 +55,7 @@ public class RequisitionWorkbenchController {
     }
 
     /**
-     * 我登记的全类型单据（批次5 /）。按 {@code BillRouteRegistry} 的
+     * 我登记的全类型单据。按 {@code BillRouteRegistry} 的
      * "bizType→业务主表→归属人列"逐表查询后内存归并；无归属人列的类型走 {@code unsupported}
      * 明示，而不是静默少数据。
      */

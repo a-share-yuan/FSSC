@@ -49,7 +49,7 @@
         </template>
         </el-table>
 
-        <!-- P0 易用性：影像评价列表分页，避免影像量增长后静默截断在 100 条 -->
+        <!-- 影像评价列表分页，避免影像量增长后静默截断在 100 条 -->
         <el-pagination
           v-if="rPage.total > 0"
           class="img-pager"
@@ -98,7 +98,7 @@
         </template>
         </el-table>
 
-        <!-- P0 易用性：影像异常列表分页 -->
+        <!-- 影像异常列表分页 -->
         <el-pagination
           v-if="ePage.total > 0"
           class="img-pager"
@@ -117,7 +117,7 @@
 
   <!-- 录入待评价 -->
   <el-dialog v-model="reviewForm.visible" title="录入待评价影像" width="520px" destroy-on-close>
-    <!-- 表单项此前未绑 prop ⇒ reviewRules 永不触发（必填校验双向失效）；补 prop + 提交前 validate -->
+    <!-- 表单项必须绑 prop，否则 reviewRules 永不触发（必填校验双向失效）；提交前再 validate 一次 -->
     <el-form ref="reviewFormRef" :model="reviewForm" :rules="reviewRules" label-width="100px" size="default">
       <el-form-item label="影像批次号" prop="batchNo"><el-input v-model="reviewForm.batchNo" /></el-form-item>
       <el-form-item label="业务单号" prop="bizNo"><el-input v-model="reviewForm.bizNo" /></el-form-item>
@@ -217,8 +217,8 @@ const EXC_TYPES = {
   OCR_INCOMPLETE: '发票数据识别不完整或缺失',
   VERIFY_FAIL: '发票验真失败',
   INVOICE_DUP_IN_BILL: '单据内发票重复',
-  // OCR 自动记录枚举入字典（此前直出英文枚举与中文混排）。
-  // 约定：后端新增异常类型须同步本字典；字典未收录的未知值显示默认处理文案而非裸码。
+  // OCR 自动记录枚举入字典（否则直出英文枚举与中文混排）。
+  // 约定：后端新增异常类型须同步本字典；字典未收录的未知值显示兜底文案而非裸码。
   OCR_NOT_RECOGNIZED: '票面未识别',
   OCR_POOL_FAILED: '发票未入池',
   OCR_AMOUNT_INCONSISTENT: '票面金额不自洽',

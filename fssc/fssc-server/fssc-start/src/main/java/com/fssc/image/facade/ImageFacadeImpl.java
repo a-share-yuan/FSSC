@@ -4,14 +4,13 @@
 package com.fssc.image.facade;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.facade.ImageFacade;
 import com.fssc.framework.facade.dto.ImageFileDTO;
 import com.fssc.framework.facade.dto.InvoiceParseResultDTO;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.image.channel.OcrLocalParsers;
 import com.fssc.image.channel.OcrResult;
-import com.fssc.image.entity.ImgBatch;
 import com.fssc.image.entity.ImgFile;
 import com.fssc.image.mapper.ImgBatchMapper;
 import com.fssc.image.mapper.ImgFileMapper;
@@ -91,20 +90,14 @@ public class ImageFacadeImpl implements ImageFacade {
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED, readOnly = true)
     public Long countBatches() {
-        // del_flag=0 与 tenant_id 由 @TableLogic / 租户拦截器自动注入
-        return imgBatchMapper.selectCount(null);
+        // 走 img_batch 覆盖索引；tenant_id 显式传参（自写 SQL 不被租户拦截器改写）
+        return imgBatchMapper.countByTenant(TenantContext.getTenantId());
     }
 
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED, readOnly = true)
     public List<Map<String, Object>> statBatchByBizType() {
-        // 与原 ReportMapper.imageStatistics SQL 逐列等价；del_flag/tenant_id 由拦截器自动注入
-        return imgBatchMapper.selectMaps(new QueryWrapper<ImgBatch>()
-                .select("biz_type as bizType, count(*) as batchCnt, sum(doc_count) as totalDocs, "
-                        + "sum(case when review_status = 'PASSED' then 1 else 0 end) as reviewedCnt, "
-                        + "sum(case when seal_status = 'DONE' then 1 else 0 end) as sealedCnt")
-                .groupBy("biz_type")
-                .orderByDesc("batchCnt"));
+        return imgBatchMapper.statByBizType(TenantContext.getTenantId());
     }
 
     @Override

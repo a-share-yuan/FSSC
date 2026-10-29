@@ -85,7 +85,7 @@ class AccrualSummaryPayeeTest {
     }
 
     @Test
-    @DisplayName("判据4: 摘要取 payee_name 的收款人名，不带标题里的另一家名字")
+    @DisplayName("摘要取 payee_name 的收款人名，不带标题里的另一家名字")
     void 摘要取收款人名而非标题() {
         svc.generateSettlementAccrual(settledBill(WANWEI));
 
@@ -97,7 +97,7 @@ class AccrualSummaryPayeeTest {
     }
 
     @Test
-    @DisplayName("判据4补: 户名有值时摘要与标题脱钩——改标题不影响摘要")
+    @DisplayName("户名有值时摘要与标题脱钩——改标题不影响摘要")
     void 摘要不随标题变() {
         ExpBill bill = settledBill(WANWEI);
         bill.setTitle("随手填的另一个标题");
@@ -108,7 +108,7 @@ class AccrualSummaryPayeeTest {
     }
 
     @Test
-    @DisplayName("判据4补: 户名为空的子类型回落标题，摘要不留空尾缀")
+    @DisplayName("户名为空的子类型回落标题，摘要不留空尾缀")
     void 户名为空回落标题() {
         svc.generateSettlementAccrual(settledBill("  "));
 
@@ -117,7 +117,7 @@ class AccrualSummaryPayeeTest {
     }
 
     @Test
-    @DisplayName("判据4补: 凭证来源与幂等键不因摘要改口径而变动")
+    @DisplayName("凭证来源与幂等键不因摘要改口径而变动")
     void 来源与幂等键不变() {
         svc.generateSettlementAccrual(settledBill(WANWEI));
 

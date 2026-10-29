@@ -21,33 +21,30 @@ import java.util.List;
 import java.util.TreeSet;
 
 /**
- * 档案完整性快照哈希（P1，证据 12-31:158）。
+ * 档案完整性快照哈希。
  *
  * <p><b>本类是哈希算式的唯一权威</b>：写入侧（{@code ArchiveService.archive/autoArchive}、
  * {@code BillArchiveService.doArchive}）与校验/对账读侧（{@code verifyIntegrity}、
  * {@code verifyIntegrityFull}、{@code preArchiveFailures}）一律调本方法，
  * 不允许再出现第二套算式。
  *
- * <p><b>的三条根因（本类逐条对症）</b>：
+ * <p><b>旧实现的三条根因（本类逐条对症）</b>：
  * <ol>
- *   <li><b>两套算式并存 ⇒ 同单异值（误报）</b>：整改前 {@code ArchiveService} 里有
+ *   <li><b>两套算式并存 ⇒ 同单异值（误报）</b>：原先 {@code ArchiveService} 里有
  *       {@code computeIntegrityHash(archiveNo|refId|archiveType|fileId+文件MD5)} 与
  *       {@code calculateIntegrityHash(archiveCode+archiveType+billId+voucherId+附件清单)} 两个私有方法，
  *       前者被「执行归档／校验／定稿校验」用，后者被「自动归档／verifyFull」用；
  *       {@code BillArchiveService.doArchive} 更省事，直接把<b>主文件的裸 MD5</b> 当哈希写进
  *       {@code integrity_hash}（第三种算式）。于是同一卷档案经不同入口得到三个值，
  *       校验时按其中一种重算必然与另一种不符 ⇒ 界面报「可能被篡改」。
- *       实测证据：{@code bill_id=22} 的两份档案哈希互异（id=12 {@code 101ccb14…} vs id=24 {@code bc0a1eb a…}）。
  *   </li>
  *   <li><b>输入集不含区分要素 ⇒ 异卷同值（漏报）</b>：{@code calculateIntegrityHash} 的输入是
  *       {@code archive_code|archive_type|bill_id|voucher_id|附件清单}，而现网
  *       ① {@code archive_code} 大面积 NULL、② 由时间戳后 5 位生成（100 秒内必重码）、
- *       ③ {@code archive_attachment} 库里 0 行（实测 COUNT=0）⇒ 同类型的两卷档案输入完全相同，
+ *       ③ {@code archive_attachment} 多数档案为空 ⇒ 同类型的两卷档案输入完全相同，
  *       哈希必然相等，「内容被换掉」根本检不出来。
- *       实测证据：id=21（BX202609250004）与 id=23（BX202609250005）<b>两张不同档案同一哈希</b>
- *       {@code 09d09451e40804b938edaa64903dee3c}。
  *   </li>
- *   <li><b>输入集含非确定因子</b>：整改前的算法在部分入口把创建时刻/公司归属卷进输入，
+ *   <li><b>输入集含非确定因子</b>：原先的算法在部分入口把创建时刻/公司归属卷进输入，
  *       同一卷重算随时间漂移。本算式<b>只取不可变要素</b>，杜绝漂移。</li>
  * </ol>
  *
@@ -67,9 +64,9 @@ import java.util.TreeSet;
  *       状态列（{@code archive_status/status/integrity_status}）、归属列（{@code company_id/tenant_id}）
  *       与文案列（{@code title/remark}）。理由＝它们要么被后续环节改写
  *       （{@code archive_status/integrity_status/archived_at} 由 FM_ARCHIVE 审批闭环写、
- *       {@code filing_user_id/filing_time} 由 {@code ArchiveFacadeImpl.handleArchiveApproval} 默认处理补写），
+ *       {@code filing_user_id/filing_time} 由 {@code ArchiveFacadeImpl.handleArchiveApproval} 兜底补写），
  *       进算式就会把「正常回写」算成「篡改」；要么与内容无关。
- *       归属/标题若要改，走 {@code } 的建档补齐（在 insert 之前），不影响已固化快照。</li>
+ *       归属/标题若要改，走建档补齐（在 insert 之前），不影响已固化快照。</li>
  *   <li><b>清单排序后入算</b>：{@code related_ids} 的存储顺序取决于查询顺序（附件表/影像表 join），
  *       不排序就会出现「内容没变、顺序变了 ⇒ 哈希变了」的假阳性，故一律升序去重。</li>
  * </ul>
@@ -77,7 +74,7 @@ import java.util.TreeSet;
  * <p><b>版本前缀的作用</b>：v2 串里带 {@code ARCHIVE-HASH-V2}，历史行的旧哈希（含裸文件 MD5）
  * 与新值必然不符 ⇒ 重算前先 {@code MISMATCH} 是<b>预期行为</b>而不是新缺陷。
  * 历史重算属数据轨（需一次 Java 窗口按卷调 {@link #snapshot(OpArchive)} 回灌，SQL 无法算 MD5 串），
- * 本轮不执行、不改写历史行（演练数据保留铁律）。
+ * 本类不做，也不改写历史行（演练数据保留铁律）。
  *
  * <p>查询失败（sys_file 查不到／附件表异常）不抛异常——完整性哈希是附加能力，
  * 档案主链路（立卷/审批/检索）不得因它中断；此时以占位段 {@code file:<id>no-md5} 入算，

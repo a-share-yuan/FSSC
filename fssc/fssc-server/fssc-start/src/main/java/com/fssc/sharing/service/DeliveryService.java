@@ -68,7 +68,7 @@ public class DeliveryService {
 
     /**
      * 公司是否走档案非集中管理（原件留原单位、纸质件不寄共享中心）。
-     * 公司不存在、未设值、读取异常一律返回 false（＝按集中处理，保持改造前行为）。
+     * 公司不存在、未设值、读取异常一律返回 false（＝按集中处理，保持原先行为）。
      */
     public boolean isNonCentralArchive(Long companyId) {
         if (companyId == null) {
@@ -87,7 +87,7 @@ public class DeliveryService {
         if (bill == null || bill.getId() == null) {
             return;
         }
-        // 草稿/已取消单据不得进入交付链（此前 DRAFT 单也登记了 PENDING 交付与共享作业任务）
+        // 草稿/已取消单据不得进入交付链
         if ("DRAFT".equals(bill.getStatus()) || "CANCELLED".equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "单据处于草稿/已取消状态，不可登记实物流（请先提交单据）");
@@ -116,7 +116,7 @@ public class DeliveryService {
         d.setBillNo(bill.getBillNo());
         d.setBillType(bill.getBillType());
         d.setDeliverBy(bill.getApplyUserId());
-        // 姓名统一取 nick_name（此前取 applyUserName＝裸工号，如 Y005713）
+        // 姓名统一取 nick_name，不取裸工号
         d.setDeliverName(resolveDisplayName(bill.getApplyUserId(), bill.getApplyUserName()));
         d.setDeliveryType("HANDOVER");
         d.setStatus("PENDING");
@@ -139,7 +139,7 @@ public class DeliveryService {
         sign(deliveryId, signBy, signName, null);
     }
 
-    /** 带签收备注的签收（sign_remark 随签收一次写入，此前单条签收路径恒 NULL） */
+    /** 带签收备注的签收（sign_remark 随签收一次写入） */
     @Transactional(rollbackFor = Exception.class)
     public void sign(Long deliveryId, Long signBy, String signName, String signRemark) {
         OpPhysicalDelivery d = deliveryMapper.selectById(deliveryId);
@@ -324,7 +324,7 @@ public class DeliveryService {
                     .last("limit 1"));
         }
         if (d == null) {
-            // 无匹配给出可行动文案（此前仅报未找到，用户不知下一步）
+            // 无匹配时给出可行动的文案，而不是只说一句未找到
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "未找到匹配的待签收单据，扫描值: " + scanValue
                             + "；可扫描条码/单据号/运单号，或先在条码管理中按单据生成条码后重试");
@@ -416,7 +416,7 @@ public class DeliveryService {
         if (bill == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据不存在: " + billId);
         }
-        // 草稿/已取消单据不得进入交付链（此前 DRAFT 单 id=6 也建了交付与 6 条工单）
+        // 草稿/已取消单据不得进入交付链
         if ("DRAFT".equals(bill.getStatus()) || "CANCELLED".equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "单据处于草稿/已取消状态，不可交单登记（请先提交单据）");
@@ -426,7 +426,7 @@ public class DeliveryService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "该公司为档案非集中管理，纸质原件留原单位保管，无需登记实物流");
         }
-        // 交付人姓名统一取 sys_user.nick_name（此前存裸工号如 Y005713，与人员列治理同批）
+        // 交付人姓名统一取 sys_user.nick_name，不存裸工号
         Long effectiveDeliverBy = deliverBy != null ? deliverBy : bill.getApplyUserId();
         String effectiveDeliverName = resolveDisplayName(effectiveDeliverBy,
                 deliverName != null ? deliverName : bill.getApplyUserName());
@@ -450,7 +450,7 @@ public class DeliveryService {
             upd.setDeliverBy(effectiveDeliverBy);
             upd.setDeliverName(effectiveDeliverName);
             upd.setDeliverTime(LocalDateTime.now());
-            // 历史在途单补生条码（此前邮寄交单 barcode 恒 NULL，条码管理与扫码签收无输入）
+            // 在途单缺条码时补生：邮寄交单不带条码，条码管理与扫码签收就没有输入
             if (existing.getBarcode() == null || existing.getBarcode().isBlank()) {
                 OpBarcode bc = barcodeService.generateForRef("BILL", billId, bill.getBillNo(),
                         effectiveDeliverBy, effectiveDeliverName);

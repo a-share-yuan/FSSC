@@ -266,7 +266,7 @@
           </el-dialog>
         </el-tab-pane>
 
-        <!-- 5. 制证失败·执行结果视图（A12） -->
+        <!-- 5. 制证失败·执行结果视图 -->
         <el-tab-pane :label="$t('sharing.ops.tabVoucherFail')" name="vouchfail">
           <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
             :title="$t('sharing.ops.hintVoucherFail')" />
@@ -675,7 +675,7 @@ const backfillLoading = ref(false)
 const markVisible = ref(false)
 const markLoading = ref(false)
 const markForm = reactive({ taskRowId: null, priority: 'NORMAL' })
-// 第2批：时限标记弹窗接入（原只有一句 toast）——任务行 ID 必须为正整数、优先级必选
+// 时限标记弹窗接入（原只有一句 toast）——任务行 ID 必须为正整数、优先级必选
 const markFormRef = ref(null)
 const markRules = {
   taskRowId: [{ required: true, type: 'number', min: 1, message: '请确认任务行' }],
@@ -715,7 +715,7 @@ onMounted(() => {
   loadRuleRefs()
 })
 
-// 5. 制证失败·执行结果视图（A12）
+// 5. 制证失败·执行结果视图
 const VF_SOURCES = computed(() => ([
   { value: 'EXPENSE', label: t('sharing.ops.srcExpense') },
   { value: 'EXPENSE_PAY', label: t('sharing.ops.srcVendorPay') },

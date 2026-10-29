@@ -126,8 +126,8 @@ public class PayBatchBizAction implements WfBizAction {
                 auditTrailService.recordUpdate(event.getBizType(), batchId, batch.getBatchNo(), "op_pay_batch",
                         String.valueOf(batchId), settledBefore, settledBefore,
                         "审批结束事件到达但批次状态 " + oldStatus + " 不在可改写白名单（DRAFT/CONFIRMED/REJECTED）内，"
-                                + "拒绝回退状态（D-DEC-34 fail-closed 守卫），请人工核对是否重复收尾");
-                log.warn("付款批次 {} 状态 {} 不在可改写白名单内，审批{}事件不回退状态（D-DEC-34 fail-closed）",
+                                + "拒绝回退状态，请人工核对是否重复收尾");
+                log.warn("付款批次 {} 状态 {} 不在可改写白名单内，审批{}事件不回退状态",
                         batch.getBatchNo(), oldStatus, Boolean.TRUE.equals(event.getApproved()) ? "通过" : "驳回");
                 // 回写半（先付后审的账务闭合）：状态不在白名单（PAID/APPROVED/FAILED/…）时一律不动状态，
                 // 但"审批通过后本应发生的账务动作"不能跟着一起丢——12-31 X15 批量审批后 6 支批次
@@ -245,7 +245,7 @@ public class PayBatchBizAction implements WfBizAction {
             } else {
                 voucherId = voucherService.generateTreasuryPayVoucher(batch, event.getProcInstId());
             }
-            // ③：先付后审的补账通道同样要落"审批流 ↔ 凭证"的对应关系（12-25 实测的正是这一路）
+            // ③：先付后审的补账通道同样要落"审批流 ↔ 凭证"的对应关系
             linkVoucherToFlow(batch, event.getProcInstId(), voucherId);
         } catch (Exception vex) {
             log.error("付款批次 {} 审批终态后到补凭证失败（不影响批次状态）: {}",
@@ -272,7 +272,7 @@ public class PayBatchBizAction implements WfBizAction {
         // 先付后审补账时同样要把批次级 DRAFT 凭证带进实付入账。
         // 走批次作用域通道，避免批次 id 与同号单据的单据级凭证互相串号过账。
         try {
-            voucherAutoPostService.autoPostDraftByBatch(batch.getId(), batch.getBatchNo(), event.getEndOperUserId()); // D-DEC-093 消费环节
+            voucherAutoPostService.autoPostDraftByBatch(batch.getId(), batch.getBatchNo(), event.getEndOperUserId()); // 消费环节
         } catch (Exception ex) {
             log.warn("付款批次 {} 审批终态后到自动过账批次凭证异常（可在凭证工作台批量记账补账）: {}",
                     batch.getBatchNo(), ex.getMessage());
@@ -281,8 +281,8 @@ public class PayBatchBizAction implements WfBizAction {
 
     /**
      * ③：把「本次资金付款审批（TR_PAY）实例 ↔ 承载本次付款环节的凭证」落到数据上。
-     * <p>缺陷实测（78，本库当前 7 支批次复现 5 支）：批次审批流与凭证之间零关联——
-     * {@code generateTreasuryPayVoucher} 命中 <b>跨类型</b>去重时直接 {@code return 单据级凭证id}，
+     * <p>批次审批流与凭证之间会零关联：{@code generateTreasuryPayVoucher} 命中 <b>跨类型</b>去重时
+     * 直接 {@code return 单据级凭证id}，
      * 批次级不出证，而那张单据级凭证的 {@code op_voucher.proc_inst_id} 是<b>源单据</b>的 EXPENSE_PAY 流
      * 语义，正确、不可改写，于是按本 TR_PAY 实例反查凭证恒 0 行，
      * {@code BillTraceChainController} 的「凭证」段（{@code source_doc_type=bizType} 或 {@code proc_inst_id IN 本单流程}）
@@ -292,10 +292,10 @@ public class PayBatchBizAction implements WfBizAction {
      *  <li>批次级凭证（{@code source_type='TREASURY_PAY'} 且 {@code source_doc_id=批次id}）：
      *      只在 {@code proc_inst_id} <b>为空</b>时补上本次实例号（上线前出的历史证即此形态），
      *      已有值一律不动——补空是恢复本应有的关联，覆盖才是造假日；</li>
-     *  <li>跨类型跳过（付款环节由单据级凭证承载）：批次表没有凭证列、凭证表没有批次列（属 DDL 裁决，
+     *  <li>跨类型跳过（付款环节由单据级凭证承载）：批次表没有凭证列、凭证表没有批次列（属 DDL 待确认，
      *      见 {@code OpPayBatch} 类注释的注释态脚本），先把这条对应关系落进 {@code audit_trail}
      *      （bizType=TR_PAY + bizId=批次id ⇄ objType=op_voucher + objId=凭证id），审批流→凭证当场可查；
-     *      同 白名单守卫的记录做法（前后值同态、以说明文字承载结论）。</li>
+     *      同白名单守卫的记录做法（前后值同态、以说明文字承载结论）。</li>
      * </ol>
      * 全方法吞异常：收尾链路的账不能因为一条关联记录而中断（同 {@link #generateCipPayVoucherIfLinked} 规则）。
      */
@@ -304,13 +304,13 @@ public class PayBatchBizAction implements WfBizAction {
             return;
         }
         try {
-            // ⑬（2026-10-16 PB202610160002 实测）：出证环节 generateTreasuryPayVoucher 是
+            // ⑬：出证环节 generateTreasuryPayVoucher 是
             // REQUIRES_NEW，其提交晚于本收尾事务（REPEATABLE READ）的快照——父事务里 selectById
             // 恒读不到刚出的凭证行，误报「收尾凭证 id=x 查不到」并整段跳过关联落点。
             // 与 GlBizAction同款修法：另起 REQUIRES_NEW 只读事务取新快照。
             OpVoucher v = voucherService.readVoucherCommitted(voucherId);
             if (v == null) {
-                log.warn("付款批次 {} 收尾凭证 id={} 查不到，跳过审批流↔凭证关联落点（D-DEC-114③）",
+                log.warn("付款批次 {} 收尾凭证 id={} 查不到，跳过审批流↔凭证关联落点",
                         batch.getBatchNo(), voucherId);
                 return;
             }
@@ -326,7 +326,7 @@ public class PayBatchBizAction implements WfBizAction {
                     upd.setId(v.getId());
                     upd.setProcInstId(procInstId);
                     opVoucherMapper.updateById(upd);
-                    log.info("付款批次 {} 凭证 {} 原缺流程号，已补本批次 TR_PAY 实例 {}（D-DEC-114③，只补空、不覆盖）",
+                    log.info("付款批次 {} 凭证 {} 原缺流程号，已补本批次 TR_PAY 实例 {}",
                             batch.getBatchNo(), v.getVoucherNo(), procInstId);
                 }
                 return; // 已带号＝双向本就可查，无需重复记录
@@ -344,11 +344,11 @@ public class PayBatchBizAction implements WfBizAction {
                     String.valueOf(v.getId()), link, link,
                     "付款批次 " + batch.getBatchNo() + " 的付款凭证由单据级凭证 " + v.getVoucherNo() + "（id=" + v.getId()
                             + "）承载，P0-5 跨类型去重故批次级不再生成凭证；该凭证的 proc_inst_id 属源单据流程、不可改写，"
-                            + "故本 TR_PAY 实例↔凭证的关系落这条流水（D-DEC-114③）");
-            log.info("付款批次 {} 付款腿由单据级凭证 id={} 承载，已落 TR_PAY 实例 {}↔凭证 的审计关联（D-DEC-114③）",
+                            + "故本 TR_PAY 实例↔凭证的关系落这条流水");
+            log.info("付款批次 {} 付款腿由单据级凭证 id={} 承载，已落 TR_PAY 实例 {}↔凭证 的审计关联",
                     batch.getBatchNo(), v.getId(), flowKnown ? procInstId : "（事件未带实例号）");
         } catch (Exception ex) {
-            log.warn("付款批次 {} 审批流↔凭证关联落点失败（不影响收尾，D-DEC-114③）: {}",
+            log.warn("付款批次 {} 审批流↔凭证关联落点失败（不影响收尾）: {}",
                     batch.getBatchNo(), ex.getMessage());
         }
     }
@@ -378,7 +378,7 @@ public class PayBatchBizAction implements WfBizAction {
 
     /**
      * 批次挂 CIP（source_doc_type=CIP）时生成 CIP 付款凭证并回写已付款金额。
-     * 与 成本归集（aggregateFromPayBatch）同触发点、互不影响；全链路默认处理不抛出。
+     * 与 成本归集（aggregateFromPayBatch）同触发点、互不影响；全链路兜底不抛出。
      */
     private void generateCipPayVoucherIfLinked(OpPayBatch batch) {
         try {

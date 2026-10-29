@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 总账期间操作（ 反结账 / 损益结转独立动作，2026-09-14）。
+ * 总账期间操作（反结账 / 损益结转独立动作）。
  * <p>
  * 端点规则按需求指定：
  * <ul>
@@ -71,7 +71,7 @@ public class GlPeriodOpsController {
         private Long companyId;
     }
 
-    // K128/K129 月结检查校验清单
+    // 月结检查校验清单
 
     /** 检查校验清单：GET /close-check/list?period=202611&companyId=1（公司缺省取登录上下文，与月结 close 同一规则） */
     @RequiresPerm("gl:monthclose:close")

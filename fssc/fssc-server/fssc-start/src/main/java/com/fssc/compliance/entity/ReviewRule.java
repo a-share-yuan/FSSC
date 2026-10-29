@@ -46,7 +46,7 @@ public class ReviewRule extends TenantBase {
     /** 备注 */
     private String remark;
 
-    // ========== 合并自 precheck_rule（预检规则） ==========
+    // 合并自 precheck_rule（预检规则）
 
     /** 规则级别：ERROR/WARNING/INFO */
     private String ruleLevel;

@@ -25,12 +25,12 @@
 
 <script setup>
 /**
- * UserSelect 人员选择组件（统一人员下拉 + P0 权限治理）
+ * UserSelect 人员选择组件（统一人员下拉 + 权限治理）
  *
  * 统一人员展示规则：nickName || userName（可选附加部门后缀），
  * 值绑定用户 id。数据源：userApi.page（租户用户分页）。
  *
- * **P0 修复**：默认只加载同公司人员，解决全量加载的性能与安全问题。
+ * 默认只加载同公司人员，解决全量加载的性能与安全问题。
  *
  * 用法：
  *   <UserSelect v-model="bill.applyUserId" @change="(id, u) => onSel(bill, id, u)" />

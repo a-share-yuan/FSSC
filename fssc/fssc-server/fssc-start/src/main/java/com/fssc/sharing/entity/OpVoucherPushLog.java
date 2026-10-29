@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 
 /**
  * 凭证推送外部系统日志（op_voucher_push_log，带 tenant_id）。
- * P1-8：替代原 VoucherPushService 的进程内 Map，推送轨迹可持久化、可审计、多实例一致。
+ * 替代原 VoucherPushService 的进程内 Map，推送轨迹可持久化、可审计、多实例一致。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

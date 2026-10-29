@@ -15,6 +15,7 @@ import com.fssc.platform.entity.PfTenantStat;
 import com.fssc.platform.mapper.PfBillMapper;
 import com.fssc.platform.mapper.PfOrderMapper;
 import com.fssc.platform.mapper.PfTenantStatMapper;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -35,7 +36,7 @@ public class PlatformSaasService {
     private final PfBillMapper billMapper;
     private final PfTenantStatMapper statMapper;
 
-    // ---------- 订单 ----------
+    // 订单
 
     public PageResult<PfOrder> orderPage(long pageNum, long pageSize, Long refTenantId, String payStatus) {
         LambdaQueryWrapper<PfOrder> qw = new LambdaQueryWrapper<>();
@@ -92,7 +93,7 @@ public class PlatformSaasService {
         orderMapper.updateById(upd);
     }
 
-    // ---------- 账单 ----------
+    // 账单
 
     public PageResult<PfBill> billPage(long pageNum, long pageSize, Long refTenantId, String status) {
         LambdaQueryWrapper<PfBill> qw = new LambdaQueryWrapper<>();
@@ -125,12 +126,12 @@ public class PlatformSaasService {
     }
 
     /** 收款核销：累计 paid_amount，达应收即结清 */
-    public void receivePayment(Long id, java.math.BigDecimal paid) {
+    public void receivePayment(Long id, BigDecimal paid) {
         PfBill exist = billMapper.selectById(id);
         if (exist == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "账单不存在: " + id);
         }
-        java.math.BigDecimal acc = exist.getPaidAmount() == null ? java.math.BigDecimal.ZERO : exist.getPaidAmount();
+        BigDecimal acc = exist.getPaidAmount() == null ? BigDecimal.ZERO : exist.getPaidAmount();
         acc = acc.add(paid);
         PfBill upd = new PfBill();
         upd.setId(id);
@@ -141,7 +142,7 @@ public class PlatformSaasService {
         billMapper.updateById(upd);
     }
 
-    // ---------- 租户用量统计（仅聚合，跨租户时走 runIgnoreTenant） ----------
+    // 租户用量统计（仅聚合，跨租户时走 runIgnoreTenant）
 
     public PageResult<PfTenantStat> statPage(long pageNum, long pageSize, Long refTenantId, LocalDate statDate) {
         LambdaQueryWrapper<PfTenantStat> qw = new LambdaQueryWrapper<>();
@@ -177,8 +178,8 @@ public class PlatformSaasService {
     }
 
     /** 跨租户聚合（仅允许 sum/count 聚合，禁止查明细） */
-    public List<java.util.Map<String, Object>> aggregateUsage(LocalDate statDate) {
-        final List<java.util.Map<String, Object>>[] holder = new List[1];
+    public List<Map<String, Object>> aggregateUsage(LocalDate statDate) {
+        final List<Map<String, Object>>[] holder = new List[1];
         TenantContext.runIgnoreTenant(() -> holder[0] = statMapper.selectMaps(
                 new LambdaQueryWrapper<PfTenantStat>()
                         .eq(PfTenantStat::getStatDate, statDate)

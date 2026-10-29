@@ -47,7 +47,7 @@ public class GlConsolidateService {
     }
 
     /**
-     * D-GL-04：会计期间归一化为 {@code yyyyMM}（底表列宽只有 6 位），容忍 {@code yyyy-MM} 输入。
+     * 会计期间归一化为 {@code yyyyMM}（底表列宽只有 6 位），容忍 {@code yyyy-MM} 输入。
      * <p>月份越界/格式非法一律 400，绝不放行到 INSERT 变成 500。
      */
     private String normalizePeriod(String period) {
@@ -72,7 +72,7 @@ public class GlConsolidateService {
         if (!StringUtils.hasText(e.getPeriod())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "会计期间不能为空");
         }
-        // D-GL-04：gl_consolidate.period 是 varchar(6)=yyyyMM，传 yyyy-MM 会在 INSERT 时
+        // gl_consolidate.period 是 varchar(6)=yyyyMM，传 yyyy-MM 会在 INSERT 时
         // 触发 "Data too long" 的 SQL 异常，被全局处理器包成 HTTP 500「系统异常」——
         // 调用方只会当系统故障排查。先归一化，非法格式显式 400。
         e.setPeriod(normalizePeriod(e.getPeriod()));
@@ -114,7 +114,7 @@ public class GlConsolidateService {
                         "合并报表-" + period, null);
             } catch (Exception ex) {
                 log.error("合并报表 {} 发起审批失败: {}", period, ex.getMessage(), ex);
-                throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+                throw ex;  // 流程发起失败必须抛出去，不能静默降级成没有流程的孤儿单
             }
         }
     }

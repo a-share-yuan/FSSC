@@ -50,7 +50,7 @@ public class ShOpsConfigController {
     private final OpDispatchRuleMapper dispatchRuleMapper;
     private final SysUserMapper sysUserMapper;
 
-    // ---------------- 作业岗位设置 ----------------
+    // 作业岗位设置
 
     @RequiresPerm("sharing:config")
     @GetMapping("/job/page")
@@ -88,7 +88,7 @@ public class ShOpsConfigController {
         return Result.success();
     }
 
-    // ---------------- 分组管理 ----------------
+    // 分组管理
 
     @RequiresPerm("sharing:config")
     @GetMapping("/group/page")
@@ -145,7 +145,7 @@ public class ShOpsConfigController {
         return Result.success();
     }
 
-    // ---------------- 工作日历 ----------------
+    // 工作日历
 
     @RequiresPerm("sharing:config")
     @GetMapping("/calendar/page")
@@ -182,7 +182,7 @@ public class ShOpsConfigController {
         return Result.success();
     }
 
-    // ---------------- 抢派单规则（需求 8.2.1） ----------------
+    // 抢派单规则（需求 8.2.1）
 
     @RequiresPerm("sharing:config")
     @GetMapping("/dispatch-rule/page")

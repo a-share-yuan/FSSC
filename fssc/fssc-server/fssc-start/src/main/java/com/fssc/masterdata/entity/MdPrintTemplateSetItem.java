@@ -12,7 +12,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 打印模板套成员（V1.4.81）。
+ * 打印模板套成员。
  *
  * <p>不继承 TenantAuditBase：本表只有 4 个业务列 + del_flag，
  * 沿用平台级最小审计规则（create_time）。

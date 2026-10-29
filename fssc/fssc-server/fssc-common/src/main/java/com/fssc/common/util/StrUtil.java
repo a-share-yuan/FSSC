@@ -3,6 +3,8 @@
 
 package com.fssc.common.util;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.Collection;
@@ -28,12 +30,12 @@ public final class StrUtil {
     /** 把 "a,b,c" 拆成去重后的 Set（权限码/功能码常用）。恒返回可变集合，调用方可安全再做增删过滤。 */
     public static Set<String> splitToSet(String csv) {
         if (isBlank(csv)) {
-            return new java.util.HashSet<>();
+            return new HashSet<>();
         }
-        return java.util.Arrays.stream(csv.split(","))
+        return Arrays.stream(csv.split(","))
                 .map(String::trim)
                 .filter(StringUtils::isNotBlank)
-                .collect(Collectors.toCollection(java.util.HashSet::new));
+                .collect(Collectors.toCollection(HashSet::new));
     }
 
     public static String join(Collection<String> items) {
@@ -46,11 +48,11 @@ public final class StrUtil {
      */
     public static Set<String> expandPerms(Collection<String> items) {
         if (items == null || items.isEmpty()) {
-            return new java.util.HashSet<>();
+            return new HashSet<>();
         }
         return items.stream()
                 .filter(StringUtils::isNotBlank)
-                .flatMap(s -> java.util.Arrays.stream(s.split(",")))
+                .flatMap(s -> Arrays.stream(s.split(",")))
                 .map(String::trim)
                 .filter(StringUtils::isNotBlank)
                 .collect(Collectors.toSet());

@@ -11,11 +11,11 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 常驻巡检规则（AI 平权 P5"可组织"的最小载体）。
+ * 常驻巡检规则。
  *
  * <p>一条规则＝目录里一个只读动作 ＋ 触发判据 ＋ 命中后的动作（只允许：进待确认队列）。
  * 规则本身可停用（enabled）、可追溯（last_*），触发产生的高风险写一律走确认票据 —— 与 §6 红线一致。
- * 自然语言→本行的转换器见 {@link com.fssc.ai.AiInspectRuleService}。
+ * 自然语言→本行的转换器见 {@link AiInspectRuleService}。
  */
 @Data
 @TableName("ai_inspect_rule")
@@ -41,7 +41,7 @@ public class AiInspectRule {
     private String op;
     private String expected;
 
-    /** 命中后的处置：QUEUE（进待确认队列，默认）——AUTO_EXECUTE 永不开启（需另立裁决） */
+    /** 命中后的处置：QUEUE（进待确认队列，默认）——AUTO_EXECUTE 永不开启（需另行设定） */
     private String onBreach;
 
     /** 调度频率（分钟）；job 每轮扫 next_run_at&lt;=now 的规则 */

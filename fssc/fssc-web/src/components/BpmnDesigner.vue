@@ -7,7 +7,7 @@
     <el-alert v-if="readonly" type="info" :closable="false" show-icon
               title="只读预览：可拖动或缩放查看流程图。如需修改，请联系系统管理员开通流程建模权限。" />
 
-    <!-- ============ 专业工具栏（参照主流流程设计器） ============ -->
+    <!-- 专业工具栏（参照主流流程设计器） -->
     <div class="bpmn-toolbar" v-if="!readonly">
       <div class="toolbar-group">
         <el-tooltip content="保存流程" placement="bottom">
@@ -56,13 +56,13 @@
       </div>
     </div>
 
-    <!-- ============ 画布工作区 ============ -->
+    <!-- 画布工作区 -->
     <div class="workspace">
       <div ref="canvasRef" class="canvas"></div>
       <div ref="panelRef" class="properties-panel" v-show="showPanel"></div>
     </div>
 
-    <!-- ============ 底部状态栏 ============ -->
+    <!-- 底部状态栏 -->
     <div class="status-bar">
       <span class="status-item">
         <el-icon><Grid /></el-icon>
@@ -83,10 +83,10 @@
 
     <!-- UC03 财务节点快捷配置：选中节点后显示 -->
     <!-- 本面板只维护"节点取人"（→ flowable:candidateGroups/assignee）。DEPT_LEADER/NOT_SELF 后端无消费方，
-         2026-09-22 体检后摘除；超时与空策略在「流程配置→节点配置」维护
+         体检后摘除；超时与空策略在「流程配置→节点配置」维护
          （wf_node_config.timeout_hours/empty_strategy）。
          会签/顺序会签/票签：由「流程配置→节点配置」的「会签模式」维护
-         （wf_node_config.multi_type = ALL/SEQ/VOTE），P1 起后端真实消费——
+         （wf_node_config.multi_type = ALL/SEQ/VOTE），后端会据此真实消费——
          WfBpmnTemplateService 在此节点生成 BPMN multiInstanceLoopCharacteristics，
          故不在此面板重复提供控件，避免两处配置打架。 -->
     <div v-if="!readonly && selTask" class="finance-config">
@@ -100,8 +100,11 @@
                  style="width: 140px" placeholder="选角色或直接输入角色编码" @change="applyNodeFinance">
         <el-option v-for="r in roleOptions" :key="r.value" :label="r.label" :value="r.value" />
       </el-select>
-      <el-input v-else-if="selApproverType === 'USER'" v-model="selApproverValue" size="small" style="width: 140px"
-                placeholder="用户ID（数字）" @change="applyNodeFinance" />
+      <el-select v-else-if="selApproverType === 'USER'" v-model="selApproverValue" size="small" filterable remote clearable
+                 :remote-method="searchAssignUsers" :loading="userLoading" placeholder="按姓名选择用户"
+                 style="width: 180px" @focus="ensureAssignUsers" @change="applyNodeFinance">
+        <el-option v-for="u in userOptions" :key="u.userId" :label="userLabel(u)" :value="String(u.userId)" />
+      </el-select>
       <el-button size="small" type="primary" @click="applyNodeFinance">应用</el-button>
       <!-- 选完角色即体检：把"某公司 0 人 / 多公司 ≥2 人"这种运行期才炸的问题提到配置时 -->
       <div v-if="selApproverType === 'ROLE'" style="width:100%">
@@ -177,7 +180,7 @@ const error = ref('')
 const showPanel = ref(true)
 let modeler = null
 
-// ---- 隐藏容器挂载保护（2026-09-17 修复 SVGMatrix non-finite）----
+// 隐藏容器挂载保护（修复 SVGMatrix non-finite）
 // 场景：组件在 el-tab-pane（v-show 隐藏，尺寸 0×0）里挂载并 render。
 // 此时 importXML 正常，但 canvas.zoom('fit-viewport') 会算出 NaN 缩放
 // （diagram-js: newScale=min(1,0/w,0/h)=0 → outer.width/0=NaN），
@@ -199,7 +202,7 @@ function syncCanvasSize() {
   try { modeler.get('canvas').resized() } catch (e) { /* 旧版 diagram-js 无此方法时保持原尺寸 */ }
 }
 
-/** 适配视图：带 try/catch 默认处理 + 挂起重试，缩放失败绝不拖垮整个渲染结果 */
+/** 适配视图：带 try/catch 兜底 + 挂起重试，缩放失败绝不拖垮整个渲染结果 */
 function tryZoomFit() {
   if (!modeler) return
   if (!containerHasSize()) {
@@ -215,7 +218,7 @@ function tryZoomFit() {
   updateElementCount()
 }
 
-// ---- 缩放与撤销状态 ----
+// 缩放与撤销状态
 const currentZoom = ref(1)
 const canUndo = ref(false)
 const canRedo = ref(false)
@@ -263,7 +266,7 @@ const EMPTY_XML = `<?xml version="1.0" encoding="UTF-8"?>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>`
 
-// ---- 缩放控制 ----
+// 缩放控制
 function zoomIn() {
   if (!modeler) return
   const canvas = modeler.get('canvas')
@@ -290,7 +293,7 @@ function resetZoom() {
 function fitView() {
   if (!modeler) return
   syncCanvasSize()
-  // 原实现无默认处理：容器尺寸为 0 时 zoom('fit-viewport') 会算出非有限缩放并抛未捕获异常
+  // 原实现无兜底：容器尺寸为 0 时 zoom('fit-viewport') 会算出非有限缩放并抛未捕获异常
   try {
     modeler.get('canvas').zoom('fit-viewport')
   } catch (e) { /* 缩放失败保持当前视图，图形本身已渲染 */ }
@@ -306,7 +309,7 @@ function updateZoomState() {
   } catch (e) { /* ignore */ }
 }
 
-// ---- 撤销/重做 ----
+// 撤销/重做
 function undo() {
   if (!modeler) return
   try {
@@ -332,7 +335,7 @@ function updateUndoRedoState() {
   } catch (e) { /* ignore */ }
 }
 
-// ---- 元素计数 ----
+// 元素计数
 function updateElementCount() {
   if (!modeler) return
   try {
@@ -366,7 +369,7 @@ async function render(xml) {
   }
 }
 
-// ---------------- UC03 节点财务属性配置 ----------------
+// UC03 节点财务属性配置
 // 前 11 项是费用报销域的常用角色（保留中文简称，比 sys_role.role_name 更好读）；
 // 真实可选项由 loadRoleOptions() 合并 sys_role 全量——只留硬编码会让新增角色在设计器里选不到，
 // 只能靠手输编码，配置态与运行态就此分叉。
@@ -385,6 +388,20 @@ const roleOptions = ref([
   // 取人规则而非授权角色：sys_role 里没有这一条，但 NodeOrgResolver 按部门汇报线解析它
   { label: '直线上级（部门负责人）', value: 'DIRECT_SUPERVISOR' },
 ])
+
+/** 指定用户候选（归档到 BPMN assignee）：抄送候选人只读清单，按姓名远程检索，界面不手输用户ID */
+const userOptions = ref([])
+const userLoading = ref(false)
+async function searchAssignUsers(keyword) {
+  userLoading.value = true
+  try { userOptions.value = (await flowApi.ccCandidates({ keyword: keyword || undefined, limit: 200 })) || [] }
+  catch { userOptions.value = [] } finally { userLoading.value = false }
+}
+function userLabel(u) {
+  const name = u.name || u.userName || ''
+  return u.userName && u.userName !== u.name ? `${name}（${u.userName}）` : name
+}
+function ensureAssignUsers() { if (!userOptions.value.length) searchAssignUsers('') }
 
 /** 合并 sys_role 全量到下拉（已存在的编码保留上面的中文简称，不覆盖） */
 async function loadRoleOptions() {
@@ -407,7 +424,7 @@ const selTask = ref(null)
 const selApproverType = ref('ROLE')
 const selApproverValue = ref('')
 
-// ---- UC06 连线条件配置 ----
+// UC06 连线条件配置
 const flowFields = { amount: '单据金额', expenseType: '费用类型', overBudget: '是否超标', billType: '单据类型', deptId: '部门', companyId: '公司' }
 const condOps = ['>', '>=', '<', '<=', '==', '!=']
 const selFlow = ref(null)
@@ -418,7 +435,7 @@ const condValue = ref('')
 const selFlowDefault = ref(false)
 const selFlowCanDefault = ref(false)
 
-// ---- UC12 子流程调用配置 ----
+// UC12 子流程调用配置
 const selSubprocess = ref(null)
 const subprocessKey = ref('')
 const subprocessOptions = ref([])
@@ -465,7 +482,7 @@ function onSelectionChange(evt) {
     selFlowDefault.value = selFlowCanDefault.value && !!srcBo.default && srcBo.default.id === bo.id
     return
   }
-  // 系统节点（ServiceTask 等）保留着色但不再提供配置面板：flowable:systemAction 无后端消费方，2026-09-22 摘除
+  // 系统节点（ServiceTask 等）保留着色但不再提供配置面板：flowable:systemAction 无后端消费方，摘除
   const isSystem = bo.$type === 'bpmn:ServiceTask' || bo.$type === 'bpmn:ScriptTask' || bo.$type === 'bpmn:BusinessRuleTask'
   const isTask = bo.$type && bo.$type.indexOf('Task') >= 0 && !isSystem
   selFlow.value = null
@@ -476,6 +493,8 @@ function onSelectionChange(evt) {
     selApproverType.value = attrs['flowable:approverType'] || (attrs['flowable:candidateGroups'] ? 'ROLE' : attrs['flowable:assignee'] ? 'USER' : 'ROLE')
     selApproverValue.value = attrs['flowable:candidateGroups'] || (attrs['flowable:assignee'] || '').replace('${', '').replace('}', '')
     if (selApproverType.value !== 'ROLE' && selApproverType.value !== 'USER' && selApproverType.value !== 'INITIATOR') selApproverType.value = 'ROLE'
+    // 节点原值是数字用户ID：先把候选人拉回来，否则下拉框在选中瞬间只能显示裸主键
+    if (selApproverType.value === 'USER' && selApproverValue.value) ensureAssignUsers()
   }
 }
 
@@ -539,14 +558,14 @@ function applyNodeFinance() {
       delete attrs['flowable:assignee']
     } else if (selApproverType.value === 'USER') {
       // assignee 必须是可登录的真人 ID：历史误存角色编码会让任务永远无人可见
-      if (!/^\d+$/.test(val)) { ElMessage.warning('指定用户须填数字用户ID'); return }
+      if (!/^\d+$/.test(val)) { ElMessage.warning('指定用户无效，请从人员列表重新选择'); return }
       attrs['flowable:assignee'] = val
       delete attrs['flowable:candidateGroups']
     } else if (selApproverType.value === 'INITIATOR') {
       attrs['flowable:assignee'] = '${initiator}'
       delete attrs['flowable:candidateGroups']
     }
-    // 默认处理清掉旧版遗留的伪属性（引擎与双账均不消费，留着只会误导下一个编辑者）
+    // 兜底清掉旧版遗留的伪属性（引擎与双账均不消费，留着只会误导下一个编辑者）
     attrs['flowable:multiInstance'] = null
     attrs['flowable:dueDate'] = null
     attrs['flowable:approverType'] = null
@@ -658,7 +677,7 @@ function upgradeExistingTasks() {
   } catch (e) { /* ignore */ }
 }
 
-// ---- 键盘快捷键 ----
+// 键盘快捷键
 function onKeydown(e) {
   if (e.ctrlKey || e.metaKey) {
     if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
@@ -684,7 +703,7 @@ onMounted(async () => {
     resizeObserver.observe(canvasRef.value)
   }
 
-  // ---- 只读分支：用 NavigatedViewer 渲染，无调色板 / 无属性面板 / 无键盘快捷键 ----
+  // 只读分支：用 NavigatedViewer 渲染，无调色板 / 无属性面板 / 无键盘快捷键
   if (props.readonly) {
     showPanel.value = false
     modeler = new BpmnNavigatedViewer({
@@ -762,7 +781,7 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
-/* ---- 专业工具栏 ---- */
+/* 专业工具栏 */
 .bpmn-toolbar {
   display: flex;
   align-items: center;
@@ -824,7 +843,7 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
-/* ---- 工作区 ---- */
+/* 工作区 */
 .workspace {
   display: flex;
   gap: 6px;
@@ -851,7 +870,7 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   background: #fff;
 }
-/* ---- 属性面板「表格化」皮肤（2026-09-17 用户反馈排版乱） ---- */
+/* 属性面板「表格化」皮肤（用户反馈排版乱） */
 /* 顶部元素头：吸底分隔，类型名+节点名一眼可辨 */
 .properties-panel :deep(.bio-properties-panel-header) {
   border-bottom: 2px solid #409eff;
@@ -902,11 +921,11 @@ onBeforeUnmount(() => {
   border-radius: 3px;
 }
 .properties-panel :deep(.bio-properties-panel-input:focus) { border-color: #409eff; }
-/* ---- 屏蔽「弹窗编辑器」功能（2026-09-17 用户要求：点击输入框右侧展开箭头弹出的英文编辑层，直接关闭） ---- */
+/* 屏蔽「弹窗编辑器」功能（用户要求：点击输入框右侧展开箭头弹出的英文编辑层，直接关闭） */
 .properties-panel :deep(.bio-properties-panel-open-feel-popup) { display: none !important; }
 .properties-panel :deep(.bio-properties-panel-feel-popup) { display: none !important; }
 
-/* ---- 底部状态栏 ---- */
+/* 底部状态栏 */
 .status-bar {
   display: flex;
   align-items: center;
@@ -940,7 +959,7 @@ onBeforeUnmount(() => {
   margin-left: 4px;
 }
 
-/* ---- 财务节点配置面板 ---- */
+/* 财务节点配置面板 */
 .finance-config {
   display: flex;
   align-items: center;

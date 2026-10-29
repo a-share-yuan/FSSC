@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import { rowDetailItems } from './format'
 
-// 临时校验：用截图里那一行「行程信息」实测渲染文本，确认不再出现英文键名与裸码值
+// 用「行程信息」这一行确认渲染文本里不再出现英文键名与裸码值
 describe('rowDetailItems - 出差行程行', () => {
   const row = {
     id: 99,

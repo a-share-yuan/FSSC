@@ -131,7 +131,7 @@ const ALL_ENTRIES = [
   { title: '我的已办', desc: '我已处理过的流程任务', path: '/requisition/done', icon: Checked, color: '#67c23a' },
   { title: '我发起的', desc: '我提交的单据与流程', path: '/requisition/mine', icon: Document, color: '#409eff' },
   { title: '我的抄送', desc: '抄送给我的流程', path: '/flow-center/cc', icon: Promotion, color: '#909399' },
-  // P3 G3：已办撤销回原节点的只读预览（与流程监控同档权限；执行面未开放）
+  // 已办撤销回原节点的只读预览（与流程监控同档权限；执行面未开放）
   { title: '已办撤销预览', desc: '只读：撤回到某节点的影响面', path: '/flow-center/withdraw-preview', icon: RefreshLeft, color: '#e6a23c', perm: 'wf:instance:list' },
   { title: '我的委托代理', desc: '审批委托与代理规则', path: '/my/delegate', icon: User, color: '#9b59b6', perm: 'wf:delegate:list' },
   { title: '流程监控大屏', desc: '在办实例与积压监控', path: '/flow-monitor', icon: Monitor, color: '#f56c6c', perm: 'wf:instance:list' },

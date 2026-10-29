@@ -54,9 +54,9 @@ public class OcrRecord implements Serializable {
     private Integer consistent;
 
     /**
-     * 识别结果：SUCCESS 成功／FAILED 失败（2026-10-24 H7 真跑）。
-     * <p>此前本表只承载"识别成功"的结构化票面，失败环节只写 log 与异常池 ⇒
-     * OCR 记录页对一次失败的识别恒 0 行（实测 img_batch=1／img_file=1(FAILED)／ocr_record=0），
+     * 识别结果：SUCCESS 成功／FAILED 失败。
+     * <p>本表不只承载"识别成功"的结构化票面：失败环节若只写 log 与异常池 ⇒
+     * OCR 记录页对一次失败的识别恒 0 行，
      * 运营无从复核"到底识别过没有、为什么没识别出来"。现失败也落一行。
      * <p>需先执行 V1.4.96_ocr_record_status.sql（列默认 'SUCCESS'，历史行即成功行）。
      */

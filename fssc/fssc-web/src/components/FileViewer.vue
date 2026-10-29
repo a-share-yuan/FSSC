@@ -79,10 +79,16 @@ const activeIndex = ref(0)
 const current = computed(() => files.value[activeIndex.value] || null)
 
 // 单个文件：取元数据 → 申领一次性下载令牌 → 拉取字节 → 包装为 File 交给 open-file-viewer
-async function toFile(id) {
-  const d = await fileApi.detail(id) || {}
-  const name = d.fileName || String(id)
-  const tk = await fileApi.createToken(id)
+// opts：{ name, tokenProvider } —— 档案岗没有共享文件域的读权限码，
+// 传了 name 就不要再打 /system/file/{id} 详情、传了 tokenProvider 就走案卷自己的取流端点，
+// 取流仍复用 /system/file/download?token=（token 即身份）。不传＝与原先逐字一致。
+async function toFile(id, opts) {
+  let name = opts?.name
+  if (!name) {
+    const d = await fileApi.detail(id) || {}
+    name = d.fileName || String(id)
+  }
+  const tk = opts?.tokenProvider ? await opts.tokenProvider(id) : await fileApi.createToken(id)
   const url = '/api/tenant/system/file/download?token=' + tk
   const resp = await fetch(url, { credentials: 'include', headers: { Accept: '*/*' } })
   if (!resp.ok) throw new Error('HTTP ' + resp.status)
@@ -92,7 +98,7 @@ async function toFile(id) {
   return { name, file: new File([blob], name, { type: mime || undefined }) }
 }
 
-async function open(fileIds, t) {
+async function open(fileIds, t, opts) {
   title.value = t || '预览'
   files.value = []
   activeIndex.value = 0
@@ -102,7 +108,8 @@ async function open(fileIds, t) {
   for (const id of ids) {
     if (id == null) continue
     try {
-      loaded.push(await toFile(id))
+      const one = Array.isArray(opts) ? null : opts
+      loaded.push(await toFile(id, one ? (one[id] || one) : null))
     } catch (e) {
       console.warn('[FileViewer] 加载失败', id, e)
       loaded.push({ name: '文件 #' + id + ' 加载失败', file: null, _err: e?.message || String(e) })

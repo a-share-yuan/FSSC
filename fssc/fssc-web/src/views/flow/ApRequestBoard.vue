@@ -144,7 +144,7 @@
       </template>
     </el-dialog>
 
-    <!-- 单据详情：apFlowApi.get 此前从未被界面消费，办理人看不到税额/折扣/时间戳等确认依据 -->
+    <!-- 单据详情：apFlowApi.get 得有人消费，否则办理人看不到税额/折扣/时间戳等确认依据 -->
     <el-drawer v-model="detailVisible" :title="$t('flow.request.drawerDetailTitle')" size="520px" destroy-on-close>
       <el-descriptions v-if="detailRow" :column="1" border size="small">
         <el-descriptions-item :label="$t('flow.request.colApplyNo')">{{ detailRow.billNo }}</el-descriptions-item>
@@ -177,7 +177,7 @@
       <el-empty v-else :description="$t('common.empty')" />
     </el-drawer>
 
-    <!-- 派工规则维护：GET/POST /ap-request/dispatch-rules 此前只有读环节（供派工下拉候选），规则只能改库 -->
+    <!-- 派工规则维护：POST /ap-request/dispatch-rules 补上写环节（原先只有派工下拉用的读环节，规则只能改库） -->
     <el-dialog v-model="rulesVisible" :title="$t('flow.request.rulesDialogTitle')" width="820px" destroy-on-close>
       <div class="toolbar">
         <el-button type="primary" size="small" @click="openRuleForm()">{{ $t('flow.request.btnRuleNew') }}</el-button>
@@ -281,7 +281,7 @@ const createRules = computed(() => ({
   expireDate: form.paymentWay === '应付票据' ? commonRules.date(t('flow.request.errNoteDueDate')) : [],
 }))
 const confirmForm = reactive({})
-// 第2批：确认服务请求弹窗（原无任何校验）——收款账号校银行账号格式（防付错账），
+// 确认服务请求弹窗（原无任何校验）——收款账号校银行账号格式（防付错账），
 // 付款方式必选，返利金额填了就必须是数字（现金折扣，允许留空）
 const confirmFormRef = ref(null)
 const confirmRules = computed(() => ({
@@ -329,7 +329,7 @@ const ruleFormRules = computed(() => ({
   handlerList: commonRules.multiSelect(t('flow.request.errRuleHandlers')),
 }))
 // 处理人候选＝工号（后端 assertRuleUsers 按 sys_user.user_name 校验，存姓名会让派工在保存后报「负责人不存在或已停用」）。
-// 人员分页口按登录人公司强制办结（许娜 330017 实测 44 人、取不到公司 1 的 100110），故并入现有规则里已在岗的工号，
+// 人员分页口按登录人公司强制收窄（只返回本公司的人、取不到外公司的人），故并入现有规则里已在岗的工号，
 // 否则编辑既有跨公司规则时会在下拉里看不见、保存即把人丢掉。
 const ruleUserOptions = computed(() => {
   const map = new Map()

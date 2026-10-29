@@ -443,7 +443,7 @@ function loanRules(extJson) {
 const formRef = ref(null)
 const meetingFormRef = ref(null)
 const loanFormRef = ref(null)
-// 培训信息：此前只有裸 required（红星装饰，一条规则都不跑），现补规则并接入提交校验
+// 培训信息：不只挂裸 required（那只是红星装饰，一条规则都不跑），规则要真跑并接入提交校验
 const trainFormRef = ref(null)
 const trainRules = computed(() => ({
   trainType: commonRules.select(t('expense.preapply.errTrainTypeRequired')),
@@ -461,7 +461,7 @@ const trainRules = computed(() => ({
 
 const users = ref([])
 const shareType = ref('COST_CENTER')
-// 第2批：分摊方式恒有默认值（COST_CENTER）——挂 rules 纳入中央框架视野；
+// 分摊方式恒有默认值（COST_CENTER）——挂 rules 纳入中央框架视野；
 // computed 包装只为给 el-form 一个可校验 model，v-model 仍绑 shareType ref 不动
 const shareForm = computed(() => ({ shareType: shareType.value }))
 const shareTypeRules = { shareType: commonRules.select('请选择分摊方式') }
@@ -629,8 +629,8 @@ function ensureLine(b) {
   // 分摊行的科目本身没有任何消费方，不写回去就是「屏幕选招待费、系统占差旅费」两套规则。
   shareBudgetToLine(b.form.lines, b.form.shares)
 }
-// persons 与 extJson.persons 双向同步——草稿即存（此前只在提交时写，重开草稿人员丢失），
-// 编辑重提 loadBillForEdit 回读 extJson 时反向回填本地清单（此前永远停在一行空人员）
+// persons 与 extJson.persons 双向同步——草稿即存（只在提交时写的话，重开草稿人员会丢），
+// 编辑重提 loadBillForEdit 回读 extJson 时反向回填本地清单（否则永远停在一行空人员）
 watch(persons, () => {
   const b = wb.value && wb.value.b
   if (!b || !isTrain.value) return
@@ -676,7 +676,7 @@ async function onBeforeSubmit(b) {
     const dupT = b.form.travels.find((t, i) => travelDup(b, i, t.travelerName))
     if (dupT) { ElMessage.warning(t('expense.preapply.errDuplicateTrip', { v1: dupT.travelerName })); return false }
     if (!(await validateForms([loanFormRef]))) return false
-    // 预计还款日不得早于申请日（前端禁选 + 提交默认处理）
+    // 预计还款日不得早于申请日（前端禁选 + 提交兜底）
     const applyDay = b.form.bill.applyDate || b.today()
     const repayDay = b.form.bill.extJson.expectRepayDate
     if (applyDay && repayDay && repayDay < applyDay) {
@@ -701,7 +701,7 @@ async function onBeforeSubmit(b) {
     if (named.length < persons.value.length) { ElMessage.warning(t('expense.preapply.errTraineeNameRequired')); return false }
     const dup = named.find((n, i) => named.indexOf(n) !== i)
     if (dup) { ElMessage.warning(t('expense.preapply.errDuplicateTrainee', { v1: dup })); return false }
-    // RA-06 乙案：人数与人员清单不一致仅二次确认，不硬拦（按人头汇总一行是合法用法）
+    // 人数与人员清单不一致仅二次确认，不硬拦（按人头汇总一行是合法用法）
     const att = Number(b.form.bill.extJson.attendees || 0)
     if (att && att !== persons.value.length) {
       try {
@@ -748,7 +748,7 @@ function shareBudget(b, row) {
 // 申请人
 async function loadUsers() {
   try {
-    // P0 修复：默认只加载同公司人员
+    // 默认只加载同公司人员
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
   } catch (e) { users.value = [] }
@@ -757,7 +757,7 @@ function onApplicantChange(b, id) {
   const u = users.value.find((x) => x.id === id)
   if (u) b.form.bill.applyUserName = u.nickName || u.userName
 }
-// 出差人员下拉只绑姓名 ⇒ 补一行反查，把 exp_travel.traveler_id 填上（此前恒 NULL）
+// 出差人员下拉只绑姓名 ⇒ 补一行反查，把 exp_travel.traveler_id 填上（否则恒 NULL）
 function onTravelerPick(row) {
   const u = users.value.find((x) => (x.nickName || x.userName) === row.travelerName)
   row.travelerId = u ? u.id : null
@@ -777,10 +777,10 @@ const applicantCompany = computed(() => {
 
 function openRowDetail(row) {
   // 行详情弹窗（双击行程/培训人员/分摊行触发）：
-  // 此前直接把行对象摊开，键名走 prettyKey 回落成 "Traffic Type / Allowance Amount" 英文标题、
+  // 直接把行对象摊开的话，键名走 prettyKey 回落成 "Traffic Type / Allowance Amount" 英文标题、
   // 值原样输出 RAIL / SECOND / true —— 中文界面里完全没法看。
   // 现按「中文标签 + 字典文案」渲染：交通方式/舱位席别/培训类型取后台已加载字典（与下拉同源），
-  // 字典未到则 format.js 内置映射默认处理；name 键在人员行是姓名（全局登记会被其它模块误用，故此处显式指定）。
+  // 字典未到则 format.js 内置映射兜底；name 键在人员行是姓名（全局登记会被其它模块误用，故此处显式指定）。
   return showRowDetail(row, {
     title: t('field.detail'),
     labels: { name: t('expense.preapply.colName') },
@@ -830,7 +830,7 @@ watch(() => {
   b.form.travels.forEach((t) => { t.fromCityId = null; t.toCityId = null })
 })
 
-// 交通方式 / 舱位席别 / 培训类型（2026-10-18 基础数据办结，值域改为后台可维护）
+// 交通方式 / 舱位席别 / 培训类型（基础数据办结，值域改为后台可维护）
 const trafficDict = useBaseDict('traffic_mode', TRAFFIC_LOCAL, TRAFFIC_I18N)
 const trafficOptions = trafficDict.options
 const seatDict = useBaseDict('seat_class', SEAT_LOCAL, SEAT_I18N)
@@ -858,8 +858,8 @@ onMounted(async () => {
   loadCurrency()
   await loadRoundTripConfig()
   travelTypeDict.load()
-  // 【2026-10-18 基础数据办结】交通方式/舱位席别/培训类型改为读 sys_dict，
-  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致。
+  // 交通方式/舱位席别/培训类型改为读 sys_dict，
+  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与原先逐字一致。
   trafficDict.load()
   seatDict.load()
   trainingTypeDict.load()

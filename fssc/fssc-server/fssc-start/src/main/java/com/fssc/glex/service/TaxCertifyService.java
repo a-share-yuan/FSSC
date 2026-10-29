@@ -22,7 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * 进项认证服务（P1-3 税务一体化）。
+ * 进项认证服务（税务一体化）。
  * <p>
  * 管理进项发票认证全生命周期：
  * 待认证(PENDING) → 已认证(CERTIFIED) → 已抵扣(DEDUCTED) → [可转出(TRANSFERRED)]

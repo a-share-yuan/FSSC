@@ -2,10 +2,10 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * 单据表头必填登记表 —— 红星、前端规则、提交校验的唯一规则来源（必填项治理 P1）。
+ * 单据表头必填登记表 —— 红星、前端规则、提交校验的唯一规则来源（必填项治理）。
  *
  * 为什么要登记表：单据页（报销/差旅/借款/事前申请/对公付款…）共用 BillWorkbench + useBill，
- * 但"提交"按钮在 workbench 里、表头字段在各页面自己的 el-form 上，两边此前各说各话——
+ * 但"提交"按钮在 workbench 里、表头字段在各页面自己的 el-form 上，两边各说各话的话——
  * 页面上的红星只是装饰，真正的提交校验只在 useBill.submit() 里查了明细行和合规项。
  * 这里把"哪些表头字段必输"抽成一份数据：页面用 billRules() 绑到 :rules（红星由此渲染），
  * useBill.submit() 用 requiredOf() + missingBillField() 拦下未填项（校验由此判定），一处改动全页面生效。

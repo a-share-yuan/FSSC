@@ -70,7 +70,7 @@ public class HttpBankGateway implements BankGateway {
 
         try {
             String key = idempotencyKey(batchNo);
-            // R3：报文形态由通道配置的 provider 决定，业务层不感知
+            // 报文形态由通道配置的 provider 决定，业务层不感知
             BankProviderCodec codec = channelResolver.activeCodec();
             Object payload = codec.buildPayload(batchNo, items, channelResolver.activeInstance());
 
@@ -101,7 +101,7 @@ public class HttpBankGateway implements BankGateway {
                     batchNo, count, key, resp.isDuplicate(), resp.getDurationMs(),
                     channelResolver.activeProvider());
         } catch (Exception e) {
-            // 默认处理：保证付款失败一定落到「标 FAILED + 失败记录 + 发起 TR_PAY_FAIL」的闭环，
+            // 兜底：保证付款失败一定落到「标 FAILED + 失败记录 + 发起 TR_PAY_FAIL」的闭环，
             // 而不会把异常抛穿进 PayBatchService 的事务导致整批回滚。
             r.setSuccess(false);
             r.setFailReason("银行接口调用失败：" + e.getMessage());

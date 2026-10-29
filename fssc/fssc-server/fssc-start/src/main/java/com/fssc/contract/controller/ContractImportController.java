@@ -8,8 +8,10 @@ import com.fssc.common.core.Result;
 import com.fssc.contract.entity.ContContract;
 import com.fssc.contract.mapper.ContContractMapper;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.framework.tenant.TenantContext;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,7 +33,7 @@ import java.util.List;
 public class ContractImportController {
 
     private final ContContractMapper contractMapper;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
+    private final OrgGuard orgGuard;
 
     @RequiresPerm("contract:import")
     @PostMapping("/template")
@@ -85,8 +87,8 @@ public class ContractImportController {
                 c.setContractName(f[1].trim());
                 c.setContractType(f[2].trim());
                 c.setPartyBName(f[3].trim());
-                c.setAmount(new java.math.BigDecimal(f[4].trim()));
-                // D-CON-1：签订公司ID留空 → 回填登录人公司，杜绝 company_id=NULL 导致列表不可见
+                c.setAmount(new BigDecimal(f[4].trim()));
+                // 签订公司ID留空 → 回填登录人公司，杜绝 company_id=NULL 导致列表不可见
                 c.setCompanyId(f[5].trim().isEmpty() ? orgGuard.currentCompany() : Long.valueOf(f[5].trim()));
                 if (c.getCompanyId() == null) {
                     errors.add("第" + (i + 1) + "行签订公司ID为空且无法从登录主体回填");

@@ -9,7 +9,9 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.Result;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.datasource.FsscDataSource;
+import com.fssc.framework.facade.BillFacade;
 import com.fssc.framework.facade.ImageFacade;
+import com.fssc.framework.facade.dto.BillArchiveDTO;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.image.entity.ImgBatch;
@@ -46,6 +48,7 @@ public class ImageController {
     /** 影像统计（报表只读服务的远程取数面；ImageFacade extends ImageStatsFacade） */
     private final ImageFacade imageFacade;
     private final OcrService ocrService;
+    private final BillFacade billFacade;
 
     /** 影像上传允许格式：图片 + PDF/OFD/XML（本地版式解析）；其余一律 BizException 拒绝 */
     private static final Set<String> IMAGE_ALLOWED =
@@ -55,7 +58,8 @@ public class ImageController {
     @OperLog(module = "IMAGE", operType = "INSERT", desc = "上传影像批次")
     @PostMapping("/batch/upload")
     public Result<Long> upload(@RequestBody UploadReq req) {
-        Long id = imageService.uploadBatch(req.getBizType(), req.getBizId(), req.getBizNo(), req.getPages());
+        BillRef ref = resolveBill(req.getBizType(), req.getBizId(), req.getBizNo());
+        Long id = imageService.uploadBatch(ref.bizType(), ref.bizId(), ref.bizNo(), req.getPages());
         autoOcr(id);
         return Result.success(id);
     }
@@ -70,9 +74,41 @@ public class ImageController {
                                     @RequestParam(required = false) String bizNo,
                                     @RequestParam(required = false) String zone) {
         validateImageFormats(files);
-        Long id = imageService.uploadBatchMulti(files, bizType, bizId, bizNo, zone);
+        BillRef ref = resolveBill(bizType, bizId, bizNo);
+        Long id = imageService.uploadBatchMulti(files, ref.bizType(), ref.bizId(), ref.bizNo(), zone);
         autoOcr(id);
         return Result.success(id);
+    }
+
+    /**
+     * 上传影像只给业务单号时，按单号回查单据把归属（bizId/bizType）补齐。
+     * 缺这一步时批次的 biz_no 只是一串字符、批次不挂单据：ImageService 发布影像状态事件时
+     * 因 bizId 为空直接返回，单据 image_status 永远停在 NONE，档案「待立卷候选」也就取不到
+     * 这张单——影像传了却永远进不了归档。单号查不到（非 exp_bill 域/已删除）时保持原样。
+     * <p>
+     * 回查必须在本方法内完成：ImageService 的上传是 REQUIRES_NEW 且路由 fssc_image，
+     * 事务一开连接就绑在影像库上，此时再走主库 Facade 只会复用那条连接而查不到 exp_bill。
+     */
+    private BillRef resolveBill(String bizType, Long bizId, String bizNo) {
+        if (bizId != null || bizNo == null || bizNo.isBlank()) {
+            return new BillRef(bizType, bizId, bizNo);
+        }
+        try {
+            BillArchiveDTO bill = billFacade.findBillByNo(bizNo.trim());
+            if (bill != null) {
+                String type = bill.getBillType() == null || bill.getBillType().isBlank()
+                        ? bizType : bill.getBillType();
+                String no = bill.getBillNo() == null || bill.getBillNo().isBlank()
+                        ? bizNo.trim() : bill.getBillNo();
+                return new BillRef(type, bill.getId(), no);
+            }
+        } catch (Exception ex) {
+            log.warn("影像上传按单号回查单据失败 bizNo={}（按无归属继续）: {}", bizNo, ex.toString());
+        }
+        return new BillRef(bizType, bizId, bizNo);
+    }
+
+    private record BillRef(String bizType, Long bizId, String bizNo) {
     }
 
     /** 上传后自动触发 OCR（识别失败不阻塞上传，页面可手动重试） */
@@ -128,7 +164,7 @@ public class ImageController {
     /**
      * 影像批次总数（报表只读服务经此取数；HTTP 端点＝Facade 的远程实现面）。
      * 权限：影像岗位（image:batch:list）或报表查看（report:view）任一即可 ——
-     * 与改前"报表内核直接调 Facade"的可见面一致，不额外收紧。
+     * 与原先"报表内核直接调 Facade"的可见面一致，不额外收紧。
      */
     @RequiresPerm({"image:batch:list", "report:view"})
     @GetMapping("/stats/batch-count")

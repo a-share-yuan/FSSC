@@ -10,10 +10,15 @@
       </template>
 
       <el-tabs v-model="tab" @tab-change="onTabChange">
-        <!-- ---------------- 1. 日志分页查询 ---------------- -->
+        <!-- 1. 日志分页查询 -->
         <el-tab-pane label="日志查询" name="query">
           <el-form :inline="true" size="small" style="margin-bottom: 10px">
-            <el-form-item label="实例ID"><el-input v-model="q.procInstId" clearable style="width: 160px" @keyup.enter="resetQuery" /></el-form-item>
+            <el-form-item label="流程实例">
+              <el-select v-model="q.procInstId" filterable remote clearable :remote-method="searchInstances"
+                         :loading="instLoading" placeholder="按单号/标题搜索实例" style="width: 240px" @change="resetQuery">
+                <el-option v-for="i in instOptions" :key="i.procInstId" :label="instLabel(i)" :value="i.procInstId" />
+              </el-select>
+            </el-form-item>
             <el-form-item label="单号"><el-input v-model="q.bizNo" clearable style="width: 150px" @keyup.enter="resetQuery" /></el-form-item>
             <el-form-item label="单据类型"><el-input v-model="q.bizType" clearable style="width: 130px" @keyup.enter="resetQuery" /></el-form-item>
             <el-form-item label="日志类型">
@@ -46,7 +51,7 @@
             <el-table-column prop="procInstId" label="实例ID" width="150" show-overflow-tooltip />
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" :disabled="!row.procInstId" @click="openTimeline(row.procInstId)">时间线</el-button>
+                <el-button link type="primary" size="small" :disabled="!row.procInstId" @click="openTimeline(row)">时间线</el-button>
                 <el-button link type="info" size="small" :disabled="!row.detail" @click="openDetail(row)">明细</el-button>
               </template>
             </el-table-column>
@@ -54,11 +59,14 @@
           <TablePager :pager="pager" @change="load" />
         </el-tab-pane>
 
-        <!-- ---------------- 2. 实例时间线 ---------------- -->
+        <!-- 2. 实例时间线 -->
         <el-tab-pane label="实例时间线" name="timeline">
           <el-form :inline="true" size="small" style="margin-bottom: 10px">
-            <el-form-item label="流程实例ID">
-              <el-input v-model="timelineInstId" clearable placeholder="procInstId" style="width: 260px" @keyup.enter="loadTimeline" />
+            <el-form-item label="流程实例">
+              <el-select v-model="timelineInstId" filterable remote clearable :remote-method="searchInstances"
+                         :loading="instLoading" placeholder="按单号/标题搜索实例" style="width: 280px">
+                <el-option v-for="i in instOptions" :key="i.procInstId" :label="instLabel(i)" :value="i.procInstId" />
+              </el-select>
             </el-form-item>
             <el-form-item><el-button type="primary" :loading="timelineLoading" @click="loadTimeline">查询</el-button></el-form-item>
           </el-form>
@@ -78,10 +86,10 @@
               <div class="tl-content">{{ item.content || '—' }}</div>
             </el-timeline-item>
           </el-timeline>
-          <el-empty v-else description="请输入流程实例ID后查询（升序展示该实例的完整处理日志）" :image-size="80" />
+          <el-empty v-else description="请选择流程实例后查询（升序展示该实例的完整处理日志）" :image-size="80" />
         </el-tab-pane>
 
-        <!-- ---------------- 3. 开关与清理 ---------------- -->
+        <!-- 3. 开关与清理 -->
         <el-tab-pane label="开关与清理" name="switch">
           <el-descriptions :column="1" border size="small" style="max-width: 720px">
             <el-descriptions-item label="详细日志开关">
@@ -100,7 +108,7 @@
           </el-form>
         </el-tab-pane>
 
-        <!-- ---------------- 4. 归档预览 ---------------- -->
+        <!-- 4. 归档预览 -->
         <el-tab-pane label="归档预览" name="archive">
           <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
             title="纯只读：只做 COUNT，不搬移、不删除任何数据（按当前配置回答「当前会归档多少条、N 是多少」）。" />
@@ -134,7 +142,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { wfOpsApi } from '../../api'
+import { wfOpsApi, flowApi } from '../../api'
 import TablePager from '../../components/common/TablePager.vue'
 import { useTablePager } from '../../composables/useTablePager'
 import { formatDateTime } from '@/utils/format'
@@ -183,13 +191,35 @@ async function load() {
 const timelineInstId = ref('')
 const timelineRows = ref([])
 const timelineLoading = ref(false)
-function openTimeline(procInstId) {
+
+/**
+ * 流程实例选项：候选取自「流程管理›实例列表」（单号/标题远程检索），
+ * 界面只让选实例、不再让人手输 procInstId。
+ */
+const instOptions = ref([])
+const instLoading = ref(false)
+async function searchInstances(keyword) {
+  instLoading.value = true
+  try {
+    const r = await flowApi.instancePage({ pageNum: 1, pageSize: 20, keyword: keyword || undefined })
+    instOptions.value = r?.list || []
+  } catch { instOptions.value = [] } finally { instLoading.value = false }
+}
+function instLabel(i) {
+  return [i.bizNo || i.title || '', i.currentNode, i.status].filter(Boolean).join(' · ') || i.procInstId
+}
+/** 从日志行点「时间线」：把该行实例补进选项，避免下拉显示成裸实例号 */
+function openTimeline(row) {
+  const procInstId = row.procInstId
   timelineInstId.value = procInstId
+  if (procInstId && !instOptions.value.some((i) => i.procInstId === procInstId)) {
+    instOptions.value = [{ procInstId, bizNo: row.bizNo, status: '' }, ...instOptions.value]
+  }
   tab.value = 'timeline'
   loadTimeline()
 }
 async function loadTimeline() {
-  if (!timelineInstId.value) { ElMessage.warning('请输入流程实例ID'); return }
+  if (!timelineInstId.value) { ElMessage.warning('请选择流程实例'); return }
   timelineLoading.value = true
   try { timelineRows.value = await wfOpsApi.processLogByInstance(timelineInstId.value) }
   catch (e) { ElMessage.error(e.message); timelineRows.value = [] } finally { timelineLoading.value = false }
@@ -231,7 +261,7 @@ function onTabChange(name) {
   if (name === 'archive') loadArchive()
 }
 
-onMounted(() => { loadedTabs.add('query'); load() })
+onMounted(() => { loadedTabs.add('query'); load(); searchInstances('') })
 </script>
 
 <style scoped>

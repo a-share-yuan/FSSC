@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 资料齐套校验（F2／方案 §3，2026-09-26）。
+ * 资料齐套校验（F2／方案 §3）。
  *
  * <p>回答体检 E-01/E-02 的"前面为什么没拦"：附件、合同/PO、出账账户外键在现网全部零校验，
  * 缺件单据可以一路直走到付款与归档（十二月运营手册 12-22 三控制点全空仍审批通过、
@@ -38,15 +38,15 @@ import java.util.Set;
  *
  * <p>调用点：{@code WfEngineFacade.start}（SUBMIT）、{@code WfEngineFacade.complete}（NODE:节点）、
  * {@code PayBatchService.confirm}（CONFIRM）、{@code PayBatchService.execute}（EXECUTE 二次校验）。
- * 按人工裁决 RA-F2a 的规则，SUBMIT 层只告警不阻断（避免提单人被"影像还没上传"彻底卡死），
+ * 按产品确认 RA-F2a 的规则，SUBMIT 层只告警不阻断（避免提单人被"影像还没上传"彻底卡死），
  * CONFIRM／NODE 层缺件硬拦。
  *
- * <p>灰度（缺省＝改造前行为）：{@code sys_config} 三键
+ * <p>灰度（缺省＝原先行为）：{@code sys_config} 三键
  * {@code bill.completeness.gate.enabled=1} ＋ {@code bill.completeness.models} 白名单
  * ＋ {@code bill.completeness.rules} 分维度规则；任一缺失或读取异常都按未生效处理。
  * 唯一例外是 D4 出账账户外键：账户主数据里查不到对应记录属脏数据硬错误，不吃灰度开关，
  * 但只在 CONFIRM（生成资金指令那一步）与 EXECUTE（对外付款动作前，RA-F2d 二次校验）拒绝——在途审批
- * 节点的「同意」不因此被打死；历史悬空批次由只读普查出清单后逐单人工修数（RA-F2c），不由代码默认处理。
+ * 节点的「同意」不因此被打死；历史悬空批次由只读普查出清单后逐单人工修数（RA-F2c），不由代码兜底。
  */
 @Slf4j
 @Service
@@ -60,7 +60,7 @@ public class BillCompletenessGuard {
     /** 审批办理：{@code NODE:<taskDefinitionKey>}，硬拦 */
     public static final String STAGE_NODE_PREFIX = "NODE:";
     /**
-     * 付款执行（对外打款动作前）二次校验，硬拦——人工裁决 RA-F2d（REF-B「两点都拦」）。
+     * 付款执行（对外打款动作前）二次校验，硬拦——产品确认 RA-F2d（REF-B「两点都拦」）。
      *
      * <p><b>差异声明（自定加严）</b>：外部资料只有"动作发生前须通过前置检查，否则不允许执行"这一
      * 通式（检查通过任务方可提交…对于选择审核不通过、打回的无需校验〔E·FSSC·97/98〕；
@@ -95,10 +95,10 @@ public class BillCompletenessGuard {
      * 齐套校验入口。
      *
      * @param modelKey 流程 key（{@code wf_instance.model_key}／processKey），灰度白名单按它取
-     * @param stage    {@link #STAGE_SUBMIT}／{@link #STAGE_CONFIRM}／{@link #STAGE_EXECUTE}／{@code NODE:Task_7}
-     * @param bizType  流程业务类型：{@code EXP_CLAIM/EXP_APPLY/EXP_LOAN/EXP_REPAY/EXP_PAY}（bizId=exp_bill.id）
+     * @param stage {@link #STAGE_SUBMIT}／{@link #STAGE_CONFIRM}／{@link #STAGE_EXECUTE}／{@code NODE:Task_7}
+     * @param bizType 流程业务类型：{@code EXP_CLAIM/EXP_APPLY/EXP_LOAN/EXP_REPAY/EXP_PAY}（bizId=exp_bill.id）
      *                 或 {@code TR_PAY}（bizId=op_pay_batch.id）
-     * @param bizId    业务主键
+     * @param bizId 业务主键
      * @throws BizException 缺件（CONFIRM／EXECUTE／NODE 档）；SUBMIT 档只写日志不抛
      */
     public void assertComplete(String modelKey, String stage, String bizType, Long bizId) {
@@ -132,7 +132,7 @@ public class BillCompletenessGuard {
                 "资料不齐，无法提交（F2 齐套校验·" + modelKey + "·" + stage + "）：" + detail);
     }
 
-    // === D4 ===
+    // D4
 
     private void assertBankAccountResolvable(Long batchId, String stage) {
         OpPayBatch batch = opPayBatchMapper.selectById(batchId);
@@ -155,7 +155,7 @@ public class BillCompletenessGuard {
         throw new BizException(ErrorCode.PARAM_INVALID, msg + "（F2 齐套校验·D4 账户外键）");
     }
 
-    // === 规则解析 ===
+    // 规则解析
 
     /** 该 modelKey＋stage 需要校验的维度；校验未开或无规则时返回空（＝零行为变更）。 */
     private List<String> dimensionsOf(String modelKey, String stage) {
@@ -237,7 +237,7 @@ public class BillCompletenessGuard {
         }
     }
 
-    // === 维度 D1 / D2 ===
+    // 维度 D1 / D2
 
     private List<String> missingAttach(List<ExpBill> bills) {
         List<String> out = new ArrayList<>();

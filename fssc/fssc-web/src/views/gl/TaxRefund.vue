@@ -166,13 +166,13 @@ const { t } = useI18n()
 // 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+s': () => { try { submit() } catch { /* noop */ } },
   'ctrl+r': () => { try { loadData() } catch { /* noop */ } },
 })
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {

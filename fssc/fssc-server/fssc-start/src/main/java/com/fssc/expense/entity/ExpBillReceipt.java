@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 
 /**
  * 单据收款事实（exp_bill_receipt，带 tenant_id）＝资金流入侧载体，镜像 {@link ExpBillPayment} 的反方向。
- * X-05 甲-1：还款 80,000 的现金流入原先零载体，追溯链「收款」环节无从读数。
+ * 还款 80,000 的现金流入原先零载体，追溯链「收款」环节无从读数。
  * <p>{@code createBy/updateBy} 为裸字段（无 fill 注解）⇒ 写入方必须显式 {@code setCreateBy(...)}，否则落 DB NULL。
  */
 @Data

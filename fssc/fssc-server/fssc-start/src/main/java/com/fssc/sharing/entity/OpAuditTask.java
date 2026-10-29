@@ -53,7 +53,7 @@ public class OpAuditTask implements Serializable {
     private LocalDateTime finishTime;
     private String remark;
 
-    /** R5-D-237：关联单据状态（仅出参，manage 分页时批量填充；UI「单据状态」列中文映射） */
+    /** 关联单据状态（仅出参，manage 分页时批量填充；UI「单据状态」列中文映射） */
     @TableField(exist = false)
     private String billStatus;
 

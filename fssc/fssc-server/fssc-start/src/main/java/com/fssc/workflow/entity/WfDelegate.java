@@ -41,8 +41,8 @@ public class WfDelegate extends TenantAuditBase {
 
     /**
      * 委托人姓名——<b>不入库</b>，由 {@code WfDelegateService.page} 批量回填。
-     * 实体本身只存 fromUserId/toUserId，此前无人回填 ⇒ 前端「委托人/代理人」两列恒空白
-     * （治理文档 §11.6-4）。
+     * 实体本身只存 fromUserId/toUserId，无人回填的话 ⇒ 前端「委托人/代理人」两列恒空白
+     * 治理文档 §11.6-4。
      */
     @TableField(exist = false)
     private String fromUserName;

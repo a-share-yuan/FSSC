@@ -12,6 +12,7 @@
           <el-option label="事前申请" value="APPLY" />
           <el-option label="对公付款" value="EXP_PAY" />
           <el-option label="借款" value="LOAN" />
+          <el-option label="还款" value="REPAY" />
           <el-option label="合同" value="CONTRACT" />
           <el-option label="发票" value="INVOICE" />
         </el-select>
@@ -238,7 +239,7 @@
                 <p v-else-if="currentPage.ocrStatus === 'PENDING'">OCR 识别中...</p>
                 <p v-else-if="currentPage.ocrStatus === 'FAILED'">
                   OCR 识别失败
-                  <!-- D-DEC-009：这一页只剩"识别失败"四个字时，人不知道下一步能干什么 -->
+                  <!-- 这一页只剩"识别失败"四个字时，人不知道下一步能干什么 -->
                   <span class="ocr-fail-exit">可改传 XML/OFD 版式文件重新上传，或在「发票管理 › 发票补录」手工录入发票要素</span>
                 </p>
                 <p v-else>无 OCR 数据</p>
@@ -308,7 +309,7 @@ async function getFileUrl(fileId) {
     const suffix = (detail.fileSuffix || (name.split('.').pop() || '')).toLowerCase()
     if (!IMG_EXTS.includes(suffix)) return null
     const token = await fileApi.createToken(fileId)
-    // R5-D-223：令牌签发异常时服务端曾回 data:null，此处绝不能拼 download?token=null
+    // 令牌签发异常时服务端曾回 data:null，此处绝不能拼 download?token=null
     // ——浏览器只会得到 400「令牌无效」，预览静默"加载失败"且用户无从重试；显式失败并给可重试提示。
     if (!token || String(token).trim() === '' || String(token) === 'null') {
       ElMessage.error('预览令牌签发失败，请稍后重试')
@@ -433,7 +434,7 @@ async function runOcr(b, page) {
   ocrRunning.value = true
   try {
     const count = await imageApi.ocr(b.id)
-    // D-DEC-009：整批报绿会把"有几页没解析出来"盖掉——批次只要存在 FAILED 页就按警示报，
+    // 整批报绿会把"有几页没解析出来"盖掉——批次只要存在 FAILED 页就按警示报，
     // 并把两条真路说清楚（换版式文件重传 / 手工录入发票要素）。
     let failed = 0
     try { failed = ((await imageApi.pages(b.id)) || []).filter((p) => p.ocrStatus === 'FAILED').length } catch { /* 页态取不到时沿用原提示 */ }
@@ -470,11 +471,10 @@ async function delBatch(b) {
 async function handleUpload(file) {
   uploading.value = true
   try {
-    // 1. Upload file
-    const fileRes = await fileApi.upload(file, 'INVOICE', null, 'BUSINESS')
-    const fileId = fileRes?.id
-    if (!fileId) throw new Error('文件上传失败')
-    // 2. Create batch with uploaded file
+    // 这里不再预调 fileApi.upload：该调用的返回值除判空外无人使用，
+    // 而下一步 /image/batch/upload-multi 自己就会把同一份字节再存一遍并落 sys_file（img_file.file_id 指向它）。
+    // 两次写＝同一文件在 sys_file 与磁盘上各留两份，前一份零引用（谁都不指向它）。
+    // 1. Create batch with uploaded file（批次接口是唯一存储腿）
     const fd = new FormData()
     fd.append('files', file)
     fd.append('bizType', q.bizType || 'INVOICE')

@@ -3,12 +3,16 @@
 
 package com.fssc.expense.service;
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.entity.ExpBillPayment;
+import com.fssc.expense.entity.ExpBillRelation;
 import com.fssc.expense.entity.ExpLoanOffset;
 import com.fssc.expense.mapper.ExpBillPaymentMapper;
 import com.fssc.expense.mapper.ExpBillRelationMapper;
 import com.fssc.expense.mapper.ExpLoanOffsetMapper;
 import com.fssc.l1.L1TestSupport;
+import java.sql.SQLException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,17 +29,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * D-V4R-38（代判）：报销 &lt; 借款 时，"员工应还多少"这件事只留在借款单上，不再进付款池。
+ * 报销 &lt; 借款 时，"员工应还多少"这件事只留在借款单上，不再进付款池。
  *
- * <p>实案（2026-10-13 第八次执行 F4）：报销 3,900 冲抵借款 4,000 后，
+ * <p>实案（第八次执行 F4）：报销 3,900 冲抵借款 4,000 后，
  * {@code handleLoanClaimDiff} 走了 diff&lt;0 分支，往 {@code exp_bill_payment} 插了一条
  * {@code pay_status=WAITING}、{@code amount=100.00}、方向只写在 remark 里的"差额退款"记录。
  * {@code PayBatchService.groupWaiting} 只按 {@code WAITING}＋收款方归组、不辨方向
- * ⇒ 该记录被自动组成待执行<b>付款</b>批次 PB202610130015，页面上与真付款批次一模一样，
+ * ⇒ 该记录被自动组成待执行<b>付款</b>批次，页面上与真付款批次一模一样，
  * 点【执行付款】就是把员工该还给公司的 100 元付给员工。同一笔钱又已有正规出口
- * ＝还款登记 RP_1【出纳确认还款到账】→RP_2【还款核销审核】（本轮实测借款单由此归零转 REPAID）。</p>
+ * ＝还款登记 RP_1【出纳确认还款到账】→RP_2【还款核销审核】（借款单由此归零转 REPAID）。</p>
  */
-@DisplayName("报销<借款的差额退款：不进付款池（D-V4R-38），补付/平账口径不变")
+@DisplayName("报销<借款的差额退款：不进付款池，补付/平账口径不变")
 class LoanClaimDiffPaymentRecordTest {
 
     private ExpenseWfEventListener svc;
@@ -52,7 +56,7 @@ class LoanClaimDiffPaymentRecordTest {
         L1TestSupport.inject(svc, "expBillRelationMapper", relationMapper);
         L1TestSupport.inject(svc, "expLoanOffsetMapper", offsetMapper);
         L1TestSupport.inject(svc, "expBillPaymentMapper", paymentMapper);
-        when(relationMapper.selectList(ArgumentMatchers.<com.baomidou.mybatisplus.core.conditions.Wrapper<com.fssc.expense.entity.ExpBillRelation>>any()))
+        when(relationMapper.selectList(ArgumentMatchers.<Wrapper<ExpBillRelation>>any()))
                 .thenReturn(List.of());
     }
 
@@ -71,7 +75,7 @@ class LoanClaimDiffPaymentRecordTest {
         o.setBillId(4L);
         o.setOffsetType("CLAIM");
         o.setOffsetAmount(new BigDecimal(amount));
-        when(offsetMapper.selectList(ArgumentMatchers.<com.baomidou.mybatisplus.core.conditions.Wrapper<ExpLoanOffset>>any()))
+        when(offsetMapper.selectList(ArgumentMatchers.<Wrapper<ExpLoanOffset>>any()))
                 .thenReturn(List.of(o));
     }
 
@@ -89,7 +93,7 @@ class LoanClaimDiffPaymentRecordTest {
         BigDecimal payable = diff(claim("BX202610130002", "3900.00"));
 
         assertEquals(0, BigDecimal.ZERO.compareTo(payable), "报销<借款 ⇒ 本单无现金流出");
-        verify(paymentMapper, never()).insert(ArgumentMatchers.<com.fssc.expense.entity.ExpBillPayment>any());
+        verify(paymentMapper, never()).insert(ArgumentMatchers.<ExpBillPayment>any());
     }
 
     @Test
@@ -98,7 +102,7 @@ class LoanClaimDiffPaymentRecordTest {
         stubOffsets("4000");
 
         assertEquals(0, new BigDecimal("1000.00").compareTo(diff(claim("BX202610130009", "5000.00"))));
-        verify(paymentMapper, never()).insert(ArgumentMatchers.<com.fssc.expense.entity.ExpBillPayment>any());
+        verify(paymentMapper, never()).insert(ArgumentMatchers.<ExpBillPayment>any());
     }
 
     @Test
@@ -107,7 +111,7 @@ class LoanClaimDiffPaymentRecordTest {
         stubOffsets("4000");
 
         assertEquals(0, BigDecimal.ZERO.compareTo(diff(claim("BX202610130010", "4000.00"))));
-        verify(paymentMapper, never()).insert(ArgumentMatchers.<com.fssc.expense.entity.ExpBillPayment>any());
+        verify(paymentMapper, never()).insert(ArgumentMatchers.<ExpBillPayment>any());
     }
 
     @Test
@@ -117,17 +121,17 @@ class LoanClaimDiffPaymentRecordTest {
         m.setAccessible(true);
 
         assertEquals(Boolean.TRUE, m.invoke(null,
-                new RuntimeException(new java.sql.SQLException("Lock wait timeout exceeded; try restarting transaction"))));
+                new RuntimeException(new SQLException("Lock wait timeout exceeded; try restarting transaction"))));
         assertEquals(Boolean.TRUE, m.invoke(null, new IllegalStateException("Deadlock found when trying to get lock")));
         assertEquals(Boolean.FALSE, m.invoke(null, new IllegalArgumentException("字段不存在: used_amount")));
     }
 
     @Test
-    @DisplayName("D-V4R-41：借款单账号落在 ext_json.accountNo 时，付款记录必须镜像出 bank_account（否则组批被防付错闸拒）")
+    @DisplayName("借款单账号落在 ext_json.accountNo 时，付款记录必须镜像出 bank_account（否则组批被防付错闸拒）")
     void loanAccountNoMirrorsIntoPaymentRecord() throws Exception {
         ExpBill loan = claim("JK202610130002", "2000.00");
         loan.setExtJson("{\"loanType\":\"LOAN\",\"payMethod\":\"BANK\",\"accountNo\":\"6217000012345678\",\"bankName\":\"中国工商银行上海分行\"}");
-        com.fssc.expense.entity.ExpBillPayment p = new com.fssc.expense.entity.ExpBillPayment();
+        ExpBillPayment p = new ExpBillPayment();
 
         invokeInherit(loan, p);
 
@@ -137,22 +141,22 @@ class LoanClaimDiffPaymentRecordTest {
     }
 
     @Test
-    @DisplayName("D-V4R-41 反向：单上已有 payee_account_no 时被 ext_json 覆盖（用户显式值优先）")
+    @DisplayName("反向：单上已有 payee_account_no 时不得被 ext_json 覆盖（用户显式值优先）")
     void explicitPayeeAccountWins() throws Exception {
         ExpBill claim = claim("BX202610130003", "500.00");
         claim.setExtJson("{\"payMethod\":\"CASH\",\"accountNo\":\"9999-应被忽略\"}");
-        com.fssc.expense.entity.ExpBillPayment p = new com.fssc.expense.entity.ExpBillPayment();
+        ExpBillPayment p = new ExpBillPayment();
         p.setBankAccount("6217000012345678");
 
         invokeInherit(claim, p);
 
-        assertEquals("6217000012345678", p.getBankAccount(), "已有值一律不覆盖（与 D-DEC-368 户名镜像同口径）");
+        assertEquals("6217000012345678", p.getBankAccount(), "已有值一律不覆盖（与户名镜像同口径）");
         assertEquals("CASH", p.getPayMethod());
     }
 
-    private void invokeInherit(ExpBill bill, com.fssc.expense.entity.ExpBillPayment p) throws Exception {
+    private void invokeInherit(ExpBill bill, ExpBillPayment p) throws Exception {
         Method m = ExpenseWfEventListener.class.getDeclaredMethod("inheritPayMethodAndBank", ExpBill.class,
-                com.fssc.expense.entity.ExpBillPayment.class);
+                ExpBillPayment.class);
         m.setAccessible(true);
         m.invoke(svc, bill, p);
     }

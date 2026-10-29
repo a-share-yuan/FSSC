@@ -13,7 +13,7 @@ import org.aspectj.lang.annotation.Aspect;
 import org.springframework.stereotype.Component;
 
 /**
- * 报表业务域防线（P1 报表权限整改）：
+ * 报表业务域防线（报表权限整改）：
  * 校验当前用户持有 {@code @ReportDomain} 声明域的任一判据权限码，
  * 即「业务域无业务权限 → 该域报表接口必拒」的运行期强制。
  *
@@ -38,7 +38,7 @@ public class ReportDomainAspect {
         boolean auditAll = perms != null && perms.contains(com.fssc.framework.security.ReportDomain.AUDIT_ALL);
         if (!wildcard && !auditAll) {
             var domain = com.fssc.framework.security.ReportDomain.of(reportDomain.value());
-            // hitForRead = 业务判据码 ∪ 域报表查看码(report:<domain>:view，管理层阅示凭证)
+            // hitForRead = 业务判据码 ∪ 域报表查看码(report:<domain>view，管理层阅示凭证)
             if (!domain.hitForRead(perms)) {
                 throw new BizException(ErrorCode.PERMISSION_DENIED,
                         "缺少「" + domain.getLabel() + "」业务权限，无权访问该域报表（需任一："

@@ -18,7 +18,7 @@ import java.util.List;
  * 移动端单据启用清单（/api/tenant/expense/mobile/templates）：只读，无入参。
  *
  * <p>给 H5 提报页下发「哪些类型能在手机上提、哪些要回电脑端」，取代前端硬编码常量
- * {@code H5_DOC_TYPES}（方案册 P2-3 甲案）。返回<b>全量</b>清单——含 {@code mobileEnabled=0}
+ * {@code H5_DOC_TYPES}。返回<b>全量</b>清单——含 {@code mobileEnabled=0}
  * 的行，页面「以下类型请在电脑端提报」明示区正是用这些行渲染的。</p>
  *
  * <p><b>权限码沿用</b> {@code exp:bill:list}（与 {@code ExpenseBillController#myPage}、

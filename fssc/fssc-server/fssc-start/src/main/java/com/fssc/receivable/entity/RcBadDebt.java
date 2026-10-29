@@ -38,7 +38,7 @@ public class RcBadDebt extends TenantAuditBase {
     private String period;
     /** PROVISIONED 已计提 / REVERSED 已转回 / WRITTEN_OFF 已核销 */
     private String status;
-    /** 所属公司（多分子公司审批路由 V1.3.17） */
+    /** 所属公司（多分子公司审批路由） */
     private Long companyId;
 
     /** 坏账核销金额（蓝图流程22/模板11.4.2，≤已计提余额） */
@@ -52,10 +52,10 @@ public class RcBadDebt extends TenantAuditBase {
     /** 坏账核销凭证号 */
     private String writeoffVoucherNo;
 
-    /** R5-D-094 列表展示用——客户名称（来自 crm_customer，非 rc_bad_debt 库列） */
+    /** 列表展示用——客户名称（来自 crm_customer，非 rc_bad_debt 库列） */
     @TableField(exist = false)
     private String customerName;
-    /** R5-D-094 列表展示用——应收单号（来自 rc_receivable，非 rc_bad_debt 库列） */
+    /** 列表展示用——应收单号（来自 rc_receivable，非 rc_bad_debt 库列） */
     @TableField(exist = false)
     private String receivableBillNo;
 }

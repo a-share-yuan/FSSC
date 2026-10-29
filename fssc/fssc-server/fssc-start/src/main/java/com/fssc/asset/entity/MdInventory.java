@@ -59,7 +59,7 @@ public class MdInventory implements Serializable {
     private BigDecimal remainingAmount;
     /** 计价方式：MA 移动平均 */
     private String priceMethod;
-    /** 所属公司（多分子公司审批路由 V1.3.17） */
+    /** 所属公司（多分子公司审批路由） */
     private Long companyId;
 
     private Long createBy;

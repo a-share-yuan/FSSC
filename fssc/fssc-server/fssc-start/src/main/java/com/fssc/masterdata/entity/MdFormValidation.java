@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 表单字段校验规则（V1.4.85）。
+ * 表单字段校验规则。
  *
  * <p>对齐 财务共享「检查点配置」的三要素：<b>校验字段 / 基准 / 执行顺序</b>，
  * 并额外给出 severity（不通过是否阻断）与 scope（保存时还是审批时才校验）。

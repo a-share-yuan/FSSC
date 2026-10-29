@@ -13,8 +13,8 @@ import java.util.Map;
 /**
  * 本地占位推送通道（默认实现，{@code fssc.voucher.push.channel=local}）。
  *
- * <p>P1-8 整改要点：本类不产生任何网络调用，且**不含任何人为 sleep/随机**——
- * 与改造前 mock 的差异在于：原实现用 {@code Thread.sleep(150)} 伪造网络耗时、
+ * <p>整改要点：本类不产生任何网络调用，且**不含任何人为 sleep/随机**——
+ * 与原先 mock 的差异在于：原实现用 {@code Thread.sleep(150)} 伪造网络耗时、
  * 用内存 Map 保存推送记录；现改为立即返回确定性成功 + 由 VoucherPushService 写入数据库，
  * 演示环境同样可跑，但不污染真实链路、不影响吞吐。</p>
  *

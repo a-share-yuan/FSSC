@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 
 /**
  * AI 工具调用日志（ai_tool_call_log，双日志之一）。不可删除，无 del_flag，Mapper 只提供 insert。
- * 与 sys_oper_log 通过 {@code trace_id} 串联：任一调用可回放"指令→动作→结果→操作人"（D-ai-trace 判据）。
+ * 与 sys_oper_log 通过 {@code trace_id} 串联：任一调用可回放"指令→动作→结果→操作人"。
  */
 @Data
 @TableName("ai_tool_call_log")
@@ -58,7 +58,7 @@ public class AiToolCallLog {
     private Long operatorUserId;
     private String operatorUsername;
 
-    /** 高风险写：绑定的确认票据（P4）；一次性，票据变了参数即作废 */
+    /** 高风险写：绑定的确认票据；一次性，票据变了参数即作废 */
     private Long confirmId;
 
     /** 唯一键（写类动作必填，重放不产生第二张单） */

@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * G3（2026-09-24）任务优先级与时限落账（op_task_time_limit，带 tenant_id）。
+ * G3任务优先级与时限落账（op_task_time_limit，带 tenant_id）。
  *
  * <p><b>为什么不给 wf_task 加列</b>：{@code wf_task} 在
  * {@code fssc/db/Dump20260911/fssc_wf_task.sql} 已有真实列定义，G3 硬约束要求"不要臆造列"，

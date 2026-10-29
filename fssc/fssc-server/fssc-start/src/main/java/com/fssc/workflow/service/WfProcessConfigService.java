@@ -98,7 +98,7 @@ public class WfProcessConfigService {
         if (rules.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "未配置流程规则: " + bizType);
         }
-        // 排序：子类型精确命中优先于通配（sub_type 为空的规则默认处理），同级保持 priority 降序
+        // 排序：子类型精确命中优先于通配（sub_type 为空的规则兜底），同级保持 priority 降序
         List<WfProcessConfig> ordered = new ArrayList<>(rules);
         ordered.sort(Comparator.comparingInt(
                 r -> (subType != null && !subType.isBlank() && subType.equalsIgnoreCase(r.getSubType())) ? 0 : 1));

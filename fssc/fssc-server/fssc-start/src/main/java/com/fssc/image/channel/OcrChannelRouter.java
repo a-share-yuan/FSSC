@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>【网关可整体回退】{@code invoice.gateway.enabled=false}（yml {@code fssc.gateway.enabled}
  * 或 sys_config）时 {@link QxyGatewayOcrChannel} 直接返回失败结果，不参与降级；
- * 若要退回改造前的模拟识别，把 {@code ocr.channel} 显式设为 mock 即可。</p>
+ * 若要退回原先的模拟识别，把 {@code ocr.channel} 显式设为 mock 即可。</p>
  */
 @Slf4j
 @Component

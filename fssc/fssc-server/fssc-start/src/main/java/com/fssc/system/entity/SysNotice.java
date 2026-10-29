@@ -5,6 +5,7 @@ package com.fssc.system.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fssc.common.entity.TenantAuditBase;
+import java.time.LocalDateTime;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -23,7 +24,7 @@ public class SysNotice extends TenantAuditBase {
     /** 公告内容（富文本） */
     private String noticeContent;
     /** 发布时间 */
-    private java.time.LocalDateTime publishTime;
+    private LocalDateTime publishTime;
     /** DRAFT/PUBLISHED/CLOSED */
     private String status;
     private String remark;

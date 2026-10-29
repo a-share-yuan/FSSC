@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 
 /**
  * 预算明细（occupy/used 为汇总值）。
- * P1-1 并发控制：selectForUpdate 行锁串行化同一科目；addXxx 原子 UPDATE 防丢失更新（读-改-写）。
+ * 并发控制：selectForUpdate 行锁串行化同一科目；addXxx 原子 UPDATE 防丢失更新（读-改-写）。
  */
 @Mapper
 public interface BgItemMapper extends BaseMapper<BgItem> {

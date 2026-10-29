@@ -5,6 +5,7 @@ package com.fssc.apflow.service;
 
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import java.math.RoundingMode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -150,7 +151,7 @@ public class ApPlanExcelService {
             return null;
         }
         if (cell.getCellType() == CellType.NUMERIC) {
-            return BigDecimal.valueOf(cell.getNumericCellValue()).setScale(2, java.math.RoundingMode.HALF_UP);
+            return BigDecimal.valueOf(cell.getNumericCellValue()).setScale(2, RoundingMode.HALF_UP);
         }
         String s = String.valueOf(cell).trim();
         if (s.isEmpty()) {

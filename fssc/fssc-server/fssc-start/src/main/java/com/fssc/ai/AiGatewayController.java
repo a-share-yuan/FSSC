@@ -12,6 +12,7 @@ import com.fssc.framework.security.UserContext;
 import com.fssc.framework.trace.TraceIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,7 +49,7 @@ public class AiGatewayController {
                                                      @RequestParam(required = false) String keyword,
                                                      @RequestParam(defaultValue = "true") boolean aiOnly) {
         requireTenant();
-        // D-N34：aiOnly 下推到服务层过滤（原实现在 limit 之后过滤 ⇒ 返回条数与真实可调用数不符）
+        // aiOnly 下推到服务层过滤（原实现在 limit 之后过滤 ⇒ 返回条数与真实可调用数不符）
         return Result.success(gatewayService.catalog(kind, keyword, aiOnly).stream()
                 .map(a -> Map.<String, Object>of(
                         "code", a.getCode(),
@@ -97,7 +98,7 @@ public class AiGatewayController {
                 "next", "请由其他有权限真人在 /api/tenant/ai/confirm/{id} 确认后方可执行"));
     }
 
-    /** 巡检规则（P5"可组织"）：登记/查询/停用。规则只能引用只读动作，命中后进人工确认队列。 */
+    /** 巡检规则：登记/查询/停用。规则只能引用只读动作，命中后进人工确认队列。 */
     @GetMapping("/inspect-rules")
     public Result<List<AiInspectRule>> rules() {
         requireTenant();
@@ -130,7 +131,7 @@ public class AiGatewayController {
             u = UserContext.getRequired();
         } catch (Exception ex) {
             // 匿名/失效 token 打 AI 入口：留 WARN 痕迹（JwtAuthFilter 已拦下，这里只是让攻击面可见）
-            org.slf4j.LoggerFactory.getLogger(AiGatewayController.class)
+            LoggerFactory.getLogger(AiGatewayController.class)
                     .warn("AI 网关匿名访问被拒: {}", ex.getMessage());
             throw ex;
         }
@@ -143,6 +144,6 @@ public class AiGatewayController {
     public record ConfirmRequestBody(String instructionId, String actionCode, Map<String, Object> args) {
     }
 
-    public record RuleBody(String instruction, com.fssc.ai.entity.AiInspectRule rule) {
+    public record RuleBody(String instruction, AiInspectRule rule) {
     }
 }

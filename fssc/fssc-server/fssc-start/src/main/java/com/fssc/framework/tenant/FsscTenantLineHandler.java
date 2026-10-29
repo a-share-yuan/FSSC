@@ -36,12 +36,12 @@ public class FsscTenantLineHandler implements TenantLineHandler {
      *   - op_job_heartbeat：定时任务心跳，跨租户全局运维表，无 tenant_id，且由调度线程（无租户上下文）写入。
      *   - sod_role_conflict：SoD 互斥规则，tenant_id NULL=平台级规则需跨租户读取，故不自动追加过滤，
      *     由 SoDService 手工按 (tenant_id IS NULL OR tenant_id = 当前租户) 取规则。
-     *   - linku_sync_log（P1-7 补登记）：LinkU 供应商回函 webhook 的同步审计日志。回函由外部系统
+     *   - linku_sync_log（补登记）：LinkU 供应商回函 webhook 的同步审计日志。回函由外部系统
      *     **匿名**调用（见 JwtAuthFilter 白名单 linku-* 路径），此时根本没有租户上下文；而该表本就没有
      *     tenant_id 列。若不在白名单，任何经 MP 的查询都会被追加 tenant_id 条件 —— 轻则 SQL 报
      *     "Unknown column 'tenant_id'"，重则 TenantContext.getTenantId() fail-closed 直接抛
      *     "租户上下文缺失"。链路上的租户归属靠 linku_recon_id 关联业务单据推导，不需要列级隔离。
-     *   - sys_schema_version（P1-7 补登记）：数据库迁移版本台账（P0-B2 引入），库级元数据，
+     *   - sys_schema_version（补登记）：数据库迁移版本台账，库级元数据，
      *     由运维脚本在无租户上下文中读写，不属于任何租户。
      *
      * 【登记规则】凡"无 tenant_id 列"的表，必须在此显式登记并写明理由；
@@ -81,8 +81,8 @@ public class FsscTenantLineHandler implements TenantLineHandler {
     }
 
     @Override
-    public boolean ignoreInsert(java.util.List<net.sf.jsqlparser.schema.Column> columns, String tenantIdLine) {
-        // R5-D-314 fail-closed 改写（原为恒 true，拦截器在 INSERT 面既不注入也不校验）：
+    public boolean ignoreInsert(List<net.sf.jsqlparser.schema.Column> columns, String tenantIdLine) {
+        // fail-closed 改写（恒 true 时，拦截器在 INSERT 面既不注入也不校验）：
         // 1) 列清单已含 tenant_id（MetaObjectHandler 已按上下文填充，或业务代码显式赋值）：
         //    按 MP 默认语义跳过注入避免列重复；值面校验由 FsscMetaObjectHandler.fillTenant 把关
         //    （入参携带却与上下文不一致即抛错，不静默改写）。

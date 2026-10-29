@@ -55,6 +55,6 @@ public class ReviewLog extends TenantBase {
     /** 最终状态：PASS/REJECT/PENDING */
     private String finalStatus;
 
-    /** 记录人（D-DEC-175：TenantBase 无审计列，MP 自动填充够不到本列，须写点显式置值；表列为 varchar） */
+    /** 记录人（TenantBase 无审计列，MP 自动填充够不到本列，须写点显式置值；表列为 varchar） */
     private String createBy;
 }

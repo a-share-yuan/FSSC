@@ -4,6 +4,7 @@
 package com.fssc.budget.mapper;
 
 import com.fssc.budget.entity.BgAdjustLine;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -24,6 +25,6 @@ public interface BgAdjustLineMapper {
     List<BgAdjustLine> selectByAdjustId(@Param("adjustId") Long adjustId);
 
     /** 删除调整单全部明细行（仅草稿编辑时使用，租户条件由拦截器注入） */
-    @org.apache.ibatis.annotations.Delete("delete from bg_adjust_line where adjust_id = #{adjustId}")
+    @Delete("delete from bg_adjust_line where adjust_id = #{adjustId}")
     int deleteByAdjustId(@Param("adjustId") Long adjustId);
 }

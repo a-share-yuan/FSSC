@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 合规规则配置（P0-10 md_compliance_rule）。
+ * 合规规则配置（md_compliance_rule）。
  *
  * <p>管理四类合规规则：重复发票 DUPLICATE_INVOICE / 费用项目不一致 EXPENSE_MISMATCH /
  * 超标 OVER_STANDARD / 黑名单 BLACKLIST。规则可 online 启停，供智能审单引擎引用。</p>

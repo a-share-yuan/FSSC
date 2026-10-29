@@ -83,7 +83,7 @@
     <div v-else>
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
       <el-table :data="archiveRows" size="small" stripe v-else max-height="460" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
-        <!-- 定案：档案号列绑 archiveNo（op_archive.archive_no，NOT NULL＋取号器唯一），
+        <!-- 说明：档案号列绑 archiveNo（op_archive.archive_no，NOT NULL＋取号器唯一），
              不绑冗余列 archiveCode——该列在 184 的"编号镜像"上线前整列 NULL，绑上去就是"档案编码列全空"。 -->
         <el-table-column prop="archiveNo" :label="$t('sharing.archive.colArchiveNo')" width="180"  sortable />
         <el-table-column prop="title" :label="$t('sharing.common.colTitle')" min-width="150" show-overflow-tooltip  sortable />

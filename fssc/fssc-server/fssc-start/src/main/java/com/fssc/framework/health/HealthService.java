@@ -3,9 +3,13 @@
 
 package com.fssc.framework.health;
 
+import java.io.File;
+import java.lang.management.MemoryMXBean;
+import java.nio.file.Path;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -18,7 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 健康探测服务（P0-B1）。
+ * 健康探测服务。
  *
  * <p>供两处复用，保证「探活规则」唯一：
  * <ul>
@@ -124,7 +128,7 @@ public class HealthService {
             return false;
         }
         try {
-            String pong = template.execute(org.springframework.data.redis.connection.RedisConnection::ping);
+            String pong = template.execute(RedisConnection::ping);
             boolean ok = pong != null;
             components.put("redis", ok ? "UP" : "DOWN");
             return ok;
@@ -139,13 +143,13 @@ public class HealthService {
     /** 磁盘探测（必需项）：取工作目录所在盘的总量/可用量，可用 < 1GB 判 DOWN */
     private boolean probeDisk(Map<String, Object> components) {
         try {
-            java.io.File dir = new java.io.File(".").getAbsoluteFile();
+            File dir = new File(".").getAbsoluteFile();
             long totalGb = dir.getTotalSpace() / (1024L * 1024L * 1024L);
             long usableGb = dir.getUsableSpace() / (1024L * 1024L * 1024L);
             boolean ok = dir.getUsableSpace() > DISK_MIN_USABLE_GB * 1024L * 1024L * 1024L;
             components.put("disk", ok ? "UP" : "DOWN");
-            // R5-D-050：只回盘符根（相对路径 getParent() 会把部署目录结构泄到未鉴权端点）
-            java.nio.file.Path diskRoot = dir.toPath().getRoot();
+            // 只回盘符根（相对路径 getParent() 会把部署目录结构泄到未鉴权端点）
+            Path diskRoot = dir.toPath().getRoot();
             components.put("diskPath", diskRoot != null ? diskRoot.toString() : "");
             components.put("diskTotalGb", totalGb);
             components.put("diskUsableGb", usableGb);
@@ -164,7 +168,7 @@ public class HealthService {
     /** JVM 堆内存指标（信息项，不参与健康判定）：used/max MB，供「运行状态」页展示 */
     private void probeJvm(Map<String, Object> components) {
         try {
-            java.lang.management.MemoryMXBean mem = ManagementFactory.getMemoryMXBean();
+            MemoryMXBean mem = ManagementFactory.getMemoryMXBean();
             long usedMb = mem.getHeapMemoryUsage().getUsed() / (1024L * 1024L);
             long maxMb = mem.getHeapMemoryUsage().getMax() / (1024L * 1024L);
             components.put("jvmHeapUsedMb", usedMb);

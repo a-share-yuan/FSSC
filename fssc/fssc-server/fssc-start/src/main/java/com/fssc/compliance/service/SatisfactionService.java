@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 
 /**
- * 满意度服务（P1-5 共享运营实质化）。
+ * 满意度服务（共享运营实质化）。
  * <p>
  * 满意度评分 1-5 驱动：
  * - 评价 < 3 分触发预警

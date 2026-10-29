@@ -3,6 +3,7 @@
 
 package com.fssc.workflow.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -27,7 +28,7 @@ public class WfTaskHistory implements Serializable {
     private Long id;
 
     @JsonIgnore
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private Long tenantId;
 
     private String procInstId;
@@ -50,16 +51,16 @@ public class WfTaskHistory implements Serializable {
     /** 本节点停留时长（毫秒） */
     private Long duration;
 
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime operTime;
 
     /**
-     * 展示层附加位（<b>非表列</b>，D-DEC-067/080）：本行是否「实例级定论行」
+     * 展示层附加位（<b>非表列</b>，/080）：本行是否「实例级定论行」
      * （action ∈ APPROVED/REJECTED/WITHDRAW/CANCEL，见 {@code WfQueryService.INSTANCE_LEVEL_ACTIONS}）。
      *
      * <p>定论行原先直接抄末位审批人的意见全文，与真实办理行只差一个 action、时间还早 1 秒，
-     * 联查把它原样透出时看起来像"同一段签署内容留了两次"（12-18 #651/#652、12-21 #655/#656）。
-     * 写侧判据已改为只记实例级结论；本字段让前端<b>无需再按 action 白名单自行推断</b>，
+     * 联查把它原样透出时看起来像"同一段签署内容留了两次"。
+     * 写侧判据只记实例级结论；本字段让前端<b>无需再按 action 白名单自行推断</b>，
      * 可把定论行归到"整单结论"栏而不是"第 N 节办理"栏。由读数侧（联查）赋值，写入数据库不涉及。
      */
     @TableField(exist = false)

@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
  * 应收逾期日终批处理（补齐 §4.1「账龄自动分期 + 逾期自动 OVERDUE 进催收池」闭环）。
  *
  * <p>链路：到期未结清应收 → 打卡 OVERDUE → 生成催收待办(rc_collect_todo，逾期即进池)
- * → 推站内信给催收专员(AR_COLLECTOR)。此前
+ * → 推站内信给催收专员(AR_COLLECTOR)。
  * {@link RcReceivableService#accrueOverdueBadDebt()} 与
  * {@link RcCollectTodoService#createOverdueTodos(int)} 虽已实现，但全项目无调度引用，
  * 只能靠人工调接口触发，导致下游账龄分期与坏账计提（依赖 OVERDUE 状态）实际未生效。
@@ -64,7 +64,7 @@ public class RcOverdueJob {
     /**
      * 日终 01:20 执行（早于报表刷新 01:30，保证当日报表规则含最新逾期状态）。
      * <p>基准日＝系统当前日；补跑历史／未来账期走
-     * {@link #markOverdueAndCollect(java.time.LocalDate)}（D-DEC-407）。
+     * {@link #markOverdueAndCollect(LocalDate)}。
      */
     @Scheduled(cron = "0 20 1 * * ?")
     public void markOverdueAndCollect() {
@@ -72,10 +72,10 @@ public class RcOverdueJob {
     }
 
     /**
-     * 同一条链路的可指定基准日版本（D-DEC-407）：扫描、打卡、催收待办三步共用同一个
+     * 同一条链路的可指定基准日版本：扫描、打卡、催收待办三步共用同一个
      * {@code baseline}，避免"扫描按 A 日、打卡按系统日"的两把尺子。
      *
-     * @param asOfDate 跑批基准日；null＝系统当前日（与改造前逐字等价）
+     * @param asOfDate 跑批基准日；null＝系统当前日（与原先逐字等价）
      */
     public void markOverdueAndCollect(LocalDate asOfDate) {
         final LocalDate baseline = asOfDate == null ? LocalDate.now() : asOfDate;
@@ -84,9 +84,9 @@ public class RcOverdueJob {
             List<RcReceivable>[] holder = new List[1];
             TenantContext.runIgnoreTenant(() ->
                     holder[0] = receivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
-                            // D-DEC-408：本处过滤必须与 accrueOverdueBadDebt 的准入集同源，
+                            // 本处过滤必须与 accrueOverdueBadDebt 的准入集同源，
                             // 否则"租户发现"仍只认 NONE，已确认（CONFIRMED）／开票派生（NORMAL）
-                            // ／部分收款（PARTIAL）的逾期行根本进不了后续逐租户处理
+                            // 部分收款（PARTIAL）的逾期行根本进不了后续逐租户处理
                             .in(RcReceivable::getStatus, RcReceivableService.OVERDUE_MARKABLE_STATUSES)
                             .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
                             .isNotNull(RcReceivable::getDueDate)

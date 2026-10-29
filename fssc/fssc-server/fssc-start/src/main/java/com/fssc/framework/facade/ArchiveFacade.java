@@ -117,7 +117,7 @@ public interface ArchiveFacade {
     /**
      * 全量档案清单（合规导出用；按 ID 正序，租户由拦截器收窄）。
      *
-     * <p>不分页：导出器自己按列落 CSV，语义与改前 {@code selectList(orderByAsc id)} 一致。
+     * <p>不分页：导出器自己按列落 CSV，语义与原先 {@code selectList(orderByAsc id)} 一致。
      */
     List<OpArchive> findAllForExport();
 
@@ -137,7 +137,7 @@ public interface ArchiveFacade {
     /**
      * 档案列表分页（共享作业「已归档档案」Tab）。
      *
-     * <p>筛选口径与改前一致：{@code status} 入参按 {@code archive_status}（归档流程轴）筛，
+     * <p>筛选口径与原先一致：{@code status} 入参按 {@code archive_status}（归档流程轴）筛，
      * 兼容老调用方传保管轴取值（FILED→ARCHIVED、DESTROYED→DISPOSED）；结果统一挂
      * 的归档流实例号/状态补充（只读 {@code wf_instance}）。
      */

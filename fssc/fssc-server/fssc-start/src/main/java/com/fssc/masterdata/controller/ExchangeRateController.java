@@ -83,8 +83,8 @@ public class ExchangeRateController {
         return Result.success(service.importCsv(text));
     }
 
-    // 权限治理（2026-09-16）：原用 @RequiresPerm("md:rate:delete")，该码挂在菜单「汇率删除」(#3464)
-    // 且 **0 角色持有** → 本接口对所有角色恒为无权。现改用对象一致的 md:exchangerate:delete，
+    // 权限治理：原用 @RequiresPerm("md:rate:delete")，该码挂在菜单「汇率删除」(#3464)
+    // 且 0 角色持有 → 本接口对所有角色恒为无权。现改用对象一致的 md:exchangerate:delete，
     // 并由 seed-perm-p1-20260916.sql 将该码授予数据配置管理员。旧码持有者为 0，故不留 OR 过渡。
     // 同族命名分叉另见菜单 #211「汇率管理」挂 md:exchange-rate:list（死码）而接口实际要求
     // md:exchangerate:list，已由同一脚本一并对齐。

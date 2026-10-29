@@ -324,7 +324,7 @@ async function loadData() {
   try {
     await pager.load(async ({ pageNum, pageSize }) => {
       const d = await extInterfaceApi.page({ pageNum, pageSize, category: activeTab.value, keyword: keyword.value })
-      // 默认处理脱敏：即使出参未掩码，行数据/详情弹层也不会拿到凭据原文
+      // 兜底脱敏：即使出参未掩码，行数据/详情弹层也不会拿到凭据原文
       tableData.value = (d.list || []).map(desensitize)
       return { list: tableData.value, total: d.total || tableData.value.length }
     })

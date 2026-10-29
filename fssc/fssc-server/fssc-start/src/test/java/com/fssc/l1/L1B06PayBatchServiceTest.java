@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * L1-B-06 PayBatchService 单元测试：付款批的入参与状态机守卫。
+ * PayBatchService 单元测试：付款批的入参与状态机守卫。
  *
  * <p>付款是直接动资金的动作，任何「批不存在 / 入参为空」都必须快速失败，
  * 不能静默创建空批或对不存在的批次做状态流转。

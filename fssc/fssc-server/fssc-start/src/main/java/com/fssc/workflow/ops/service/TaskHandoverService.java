@@ -32,7 +32,7 @@ import java.util.Set;
 /**
  * G3流程批量移交 ＋ 移交日志（用于离职/换岗/工作交接）。
  *
- * <p><b>为什么走引擎既有改派/转办通道，而不是直接 {@code setAssignee}</b>：直接改受理人会漏掉三件事——
+ * <p>为什么走引擎既有改派/转办通道，而不是直接 {@code setAssignee}：直接改受理人会漏掉三件事——
  * {@code wf_task} 镜像同步、{@code wf_task_history} 记录、接收人通知，正是方案 §二 F1/F13 描述的
  * "双真值 + 时间线断节"来源。故本类只做两件事：<b>挑单</b>（按原办理人反查在办任务）与
  * <b>逐单调用引擎</b>，其余交给 {@link WfEngineFacade}。
@@ -180,7 +180,7 @@ public class TaskHandoverService {
         }
     }
 
-    /** 落一条批量移交日志（写失败必须可见，不得静默——方案 §二 F2 的教训） */
+    /** 落一条批量移交日志（写失败必须可见，不得静默） */
     private Long writeLog(HandoverRequest req, Long operUserId, int requested, int success,
                           List<Map<String, Object>> failed, Map<String, String> names) {
         OpTransferLog row = new OpTransferLog();

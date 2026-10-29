@@ -3,7 +3,10 @@
 
 package com.fssc.expense.controller;
 
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
+import com.fssc.expense.dto.LoanCandidateDTO;
 import com.fssc.expense.entity.ExpBillRelation;
 import com.fssc.expense.entity.ExpLoanOffset;
 import com.fssc.expense.entity.ExpTravel;
@@ -75,8 +78,8 @@ public class ExpenseDetailController {
         Object p = req.get("prepayBillId");
         Object a = req.get("amount");
         if (p == null || a == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "prepayBillId 与 amount 必填");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "prepayBillId 与 amount 必填");
         }
         return Result.success(detailService.writeOffPrepay(billId,
                 Long.valueOf(p.toString()), new BigDecimal(a.toString())));
@@ -89,7 +92,7 @@ public class ExpenseDetailController {
     }
 
     /**
-     * 借款冲抵候选（D-UI-03 配套，2026-10-19）。
+     * 借款冲抵候选（配套）。
      *
      * <p>与 {@code /loan-offset/{billId}}（回读本单已登记的冲抵）配对：那个是「已选了什么」，
      * 这个是「还能选什么」。返回里 {@code availableBalance} 已扣掉在途占用，
@@ -97,7 +100,7 @@ public class ExpenseDetailController {
      */
     @RequiresPerm("exp:bill:list")
     @GetMapping("/loan-candidates")
-    public Result<List<com.fssc.expense.dto.LoanCandidateDTO>> loanCandidates(
+    public Result<List<LoanCandidateDTO>> loanCandidates(
             @RequestParam(required = false) Long companyId,
             @RequestParam(required = false) Integer limit) {
         return Result.success(detailService.loanCandidates(companyId, limit));

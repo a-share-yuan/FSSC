@@ -3,6 +3,7 @@
 
 package com.fssc.receivable.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fssc.common.entity.TenantAuditBase;
 import lombok.Data;
@@ -40,13 +41,13 @@ public class RcCollectTodo extends TenantAuditBase {
     private String note;
     /** DOING 催收中 / RESOLVED 已解决 */
     private String status;
-    /** 所属公司（多分子公司审批路由 V1.3.17） */
+    /** 所属公司（多分子公司审批路由） */
     private Long companyId;
 
     /**
-     * D-DEC-410 乙：读侧复核提示位（非表列，只出参不进 SQL）。
+     * 乙：读侧复核提示位（非表列，只出参不进 SQL）。
      * 已办结且发起人与办结人同一时为提示文案，其余为 null。
      */
-    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    @TableField(exist = false)
     private String multiRoleWarning;
 }

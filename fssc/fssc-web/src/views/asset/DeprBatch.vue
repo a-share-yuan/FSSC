@@ -42,7 +42,7 @@
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">          <InlineActions :visible="true" @view="handleView(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="true" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
           <el-button v-if="row.status === BillStatus.DRAFT" v-permission="'sharing:voucher:generate'" link size="small" type="primary" @click="submitById(row)">提交审批</el-button>
-          <!-- ：批单落账后生成的折旧凭证为 DRAFT，提供查看与过账入口（DRAFT→POSTED 并落总账） -->
+          <!-- 批单落账后生成的折旧凭证为 DRAFT，提供查看与过账入口（DRAFT→POSTED 并落总账） -->
           <el-button v-if="row.status === 'DONE'" v-permission="'sharing:voucher:list'" link size="small" type="success" @click="openVouchers(row)">凭证/过账</el-button>
           <el-button v-show="false" link size="small" type="warning" @click="execute(row)">执行落账</el-button>
         </template>
@@ -51,7 +51,7 @@
     <el-pagination class="pager" background layout="total, prev, pager, next" :total="total"
                    :page-size="pageSize" :current-page="pageNum" @current-change="(p) => { pageNum = p; load() }" />
 
-    <!-- ：折旧凭证查看与过账弹窗（批单 DONE 后逐资产生成的 ASSET_DEPRECIATION 凭证） -->
+    <!-- 折旧凭证查看与过账弹窗（批单 DONE 后逐资产生成的 ASSET_DEPRECIATION 凭证） -->
     <el-dialog v-model="dlgVoucher" title="折旧凭证查看与过账" width="880px">
       <div style="margin-bottom:8px; color:#909399; font-size:12px; line-height:1.6">
         折旧批「{{ curBatch?.batchNo }}」（期间 {{ curBatch?.period || '—' }}）落账时逐资产生成的折旧凭证
@@ -171,7 +171,7 @@ async function execute(row) {
   await deprBatchApi.execute(row.id); ElMessage.success('已执行落账'); load()
 }
 
-// ================= ：折旧凭证查看与过账 =================
+// 折旧凭证查看与过账
 // 后端已提供凭证过账端点：POST /tenant/sharing/voucher/{id}/post（权限 sharing:voucher:post）
 // 及批量 POST /tenant/sharing/voucher/batch-post。批单执行落账时逐资产生成 DRAFT 凭证；
 // 月结（GL_MONTH_CLOSE）前置校验会因期间存在 DRAFT 凭证而拦截（并非自动过账），
@@ -278,7 +278,7 @@ function batchExport() {
   ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
 }
 
-// R5-01: InlineActions approve/reject/view/trace handlers
+// InlineActions approve/reject/view/trace handlers
 
 async function handleView(row) {
   try {

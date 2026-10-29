@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.fssc.masterdata.entity.MdFormField;
 import org.apache.ibatis.annotations.Mapper;
 
-/** MdFormField Mapper（V1.4.85 元数据驱动）。 */
+/** MdFormField Mapper（元数据驱动）。 */
 @Mapper
 public interface MdFormFieldMapper extends BaseMapper<MdFormField> {
 }

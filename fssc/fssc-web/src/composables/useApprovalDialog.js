@@ -32,12 +32,12 @@ export function useApprovalDialog({ taskIdOf, reload }) {
     }
     const res = await approvalRef.value.open({
       row, decision, taskId,
-      // D-DEC-022：把审批请求交给弹窗执行 —— 成功才关窗；被服务端业务异常拒绝（如"禁止审批自己
+      // 把审批请求交给弹窗执行 —— 成功才关窗；被服务端业务异常拒绝（如"禁止审批自己
       // 提交的单据""会计期间已结账"）时弹窗保持打开、意见保留、原因就地显示，可原地改后重试。
       // 原手感是先关窗再发请求，失败只剩一条飘过顶部的红条，审批人既丢了意见也不知卡在哪。
       submit: async (payload) => {
         // G2 传阅 / G4 自由驳回 / ①层审批项：弹窗返回的非空字段一并透传；
-        // 三项都是"空即不生效"，故未使用这些能力时请求体与改造前逐字一致。
+        // 三项都是"空即不生效"，故未使用这些能力时请求体与原先逐字一致。
         await wfApi.approve({
           taskId,
           approved: payload.approved,

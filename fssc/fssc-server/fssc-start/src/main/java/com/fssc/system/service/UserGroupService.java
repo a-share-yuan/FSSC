@@ -10,12 +10,14 @@ import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.SysGroupRole;
+import com.fssc.system.entity.SysRole;
 import com.fssc.system.entity.SysUserGroup;
 import com.fssc.system.entity.SysUserGroupRel;
 import com.fssc.system.mapper.SysGroupRoleMapper;
 import com.fssc.system.mapper.SysRoleMapper;
 import com.fssc.system.mapper.SysUserGroupMapper;
 import com.fssc.system.mapper.SysUserGroupRelMapper;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,9 +78,9 @@ public class UserGroupService {
     public void assignRoles(Long groupId, List<Long> roleIds) {
         requireGroup(groupId);
         if (roleIds != null && !roleIds.isEmpty()) {
-            long exist = roleMapper.selectCount(new LambdaQueryWrapper<com.fssc.system.entity.SysRole>()
-                    .in(com.fssc.system.entity.SysRole::getId, roleIds));
-            if (exist < roleIds.stream().filter(java.util.Objects::nonNull).distinct().count()) {
+            long exist = roleMapper.selectCount(new LambdaQueryWrapper<SysRole>()
+                    .in(SysRole::getId, roleIds));
+            if (exist < roleIds.stream().filter(Objects::nonNull).distinct().count()) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "存在无效角色ID，请刷新后重试");
             }
         }
@@ -89,7 +91,7 @@ public class UserGroupService {
         groupRoleMapper.delete(new LambdaQueryWrapper<SysGroupRole>().eq(SysGroupRole::getGroupId, groupId));
         if (roleIds != null) {
             Long tenantId = TenantContext.getTenantId();
-            for (Long roleId : roleIds.stream().filter(java.util.Objects::nonNull).distinct().toList()) {
+            for (Long roleId : roleIds.stream().filter(Objects::nonNull).distinct().toList()) {
                 SysGroupRole gr = new SysGroupRole();
                 gr.setTenantId(tenantId);
                 gr.setGroupId(groupId);
@@ -105,14 +107,14 @@ public class UserGroupService {
         requireGroup(groupId);
         List<Long> groupRoleIds = roleIdsOf(groupId);
         if (userIds != null) {
-            for (Long uid : userIds.stream().filter(java.util.Objects::nonNull).distinct().toList()) {
+            for (Long uid : userIds.stream().filter(Objects::nonNull).distinct().toList()) {
                 sodService.assertNoUserPermConflict(uid, groupRoleIds);
             }
         }
         relMapper.delete(new LambdaQueryWrapper<SysUserGroupRel>().eq(SysUserGroupRel::getGroupId, groupId));
         if (userIds != null) {
             Long tenantId = TenantContext.getTenantId();
-            for (Long uid : userIds.stream().filter(java.util.Objects::nonNull).distinct().toList()) {
+            for (Long uid : userIds.stream().filter(Objects::nonNull).distinct().toList()) {
                 SysUserGroupRel rel = new SysUserGroupRel();
                 rel.setTenantId(tenantId);
                 rel.setUserId(uid);

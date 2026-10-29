@@ -50,7 +50,7 @@
     </el-card>
 
     <!-- 新建调整单弹窗 -->
-    <!-- 乙案：Escape 关闭竞态下全屏遮罩层残留拦截整页点击（甲案 destroy-on-close 早已在位仍复现）。
+    <!-- Escape 关闭竞态下全屏遮罩层残留拦截整页点击（destroy-on-close 已在位仍复现）。
          modal-penetrable＝遮罩 pointer-events:none、由内层弹窗承接点击（本 EP 版本以去模态实现，故无半透明遮罩、点空白不再关窗）。 -->
     <el-dialog v-model="dialog.visible" title="新建预算调整单" width="800px" destroy-on-close modal-penetrable>
       <el-form ref="formRef" :model="dialog.form" :rules="adjustFormRules" label-width="120px" size="default">
@@ -117,7 +117,7 @@
     </el-dialog>
 
     <!-- 调整单详情：草稿可编辑（改类型/方案/原因/明细行），已审批只读——调整单范式 -->
-    <!-- 乙案：同新建弹窗，遮罩穿透防残留拦截 -->
+    <!-- 同新建弹窗，遮罩穿透防残留拦截 -->
     <el-dialog v-model="detailDialog.visible" :title="detailDialog.editable ? '调整单编辑（草稿）' : '调整明细'" width="860px" destroy-on-close modal-penetrable>
       <el-descriptions :column="3" border size="small" style="margin-bottom:12px">
         <el-descriptions-item label="单号">{{ detailDialog.row?.adjustNo }}</el-descriptions-item>

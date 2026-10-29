@@ -7,12 +7,20 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.SysConfig;
 import com.fssc.system.mapper.SysConfigMapper;
 import com.fssc.workflow.dto.WfProjectionEvent;
 import com.fssc.workflow.entity.WfProcessOutbox;
 import com.fssc.workflow.mapper.WfProcessOutboxMapper;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -34,7 +42,7 @@ import java.util.List;
  * </ol>
  *
  * <p><b>模式判定为什么要缓存 5 秒</b>：{@code queueModeEnabled()} 会被<b>每个流程事件</b>调用
- * （监听器用它决定"内联投影还是入队"），也要被门面 {@code mirrorByFacade()} 按动作调用。
+ * 监听器用它决定"内联投影还是入队"，也要被门面 {@code mirrorByFacade()} 按动作调用。
  * 直读库会把这些热路径变成逐事件一次 {@code sys_config} 查询；而完全内存化又会把"参数"退化成
  * "需要重启的编译期开关"（该参数的语义是勾选即生效）。折中：<b>5 秒 TTL 缓存</b>——
  * 勾选后 5 秒内生效、免重启，且查询量摊薄到"每 5 秒最多一次"。fail-closed：读不到/异常一律 SYNC。
@@ -76,7 +84,7 @@ public class WfProcessOutboxService {
     private volatile boolean queueModeCache;
     private volatile long queueModeReadAt;
 
-    // ==================== 模式判定 ====================
+    // 模式判定
 
     /**
      * 是否「消息队列」模式（fail-closed：缺行/非 QUEUE/读异常一律视为 SYNC）。
@@ -106,8 +114,8 @@ public class WfProcessOutboxService {
      * <ul>
      *   <li>业务路径（监听器/门面/入队）用 {@link #queueModeEnabled()}——本来就在处理请求、库连接是热的，
      *       每 5 秒最多多一次 {@code sys_config} 单行点查；</li>
-     *   <li>调度作业（每 5 秒一轮）用本方法——<b>纯内存读，零查询</b>。系统空闲时（无任何流程操作）
-     *       整条链路一次库都不碰，与改造前逐字一致。</li>
+     *   <li>调度作业（每 5 秒一轮）用本方法——纯内存读，零查询。系统空闲时（无任何流程操作）
+     *       整条链路一次库都不碰，与原先逐字一致。</li>
      * </ul>
      * 且不会漏判：模式一旦被切到 QUEUE，必然伴随流程操作（有人点审批/发起），业务路径随即刷新缓存，
      * 下一轮 tick 就能看到并开始消费；切换期间入队的事件一条不丢（它们已在表里）。
@@ -134,7 +142,7 @@ public class WfProcessOutboxService {
         }
     }
 
-    // ==================== 入队 ====================
+    // 入队
 
     /**
      * 投递一条投影事件（在事件当场、与业务同事务调用）。
@@ -176,8 +184,8 @@ public class WfProcessOutboxService {
                         "type=" + e.getEventType() + " procInstId=" + e.getProcInstId()
                                 + " taskId=" + e.getTaskId() + " key=" + row.getIdempotencyKey(), ex);
                 throw ex instanceof RuntimeException re ? re
-                        : new com.fssc.common.exception.BizException(
-                                com.fssc.common.core.ErrorCode.SYSTEM_ERROR, "投影事件入队失败: " + ex.getMessage());
+                        : new BizException(
+                                ErrorCode.SYSTEM_ERROR, "投影事件入队失败: " + ex.getMessage());
             }
         });
     }
@@ -197,7 +205,7 @@ public class WfProcessOutboxService {
         return key.length() <= 160 ? key : key.substring(0, 160);
     }
 
-    // ==================== 消费侧 ====================
+    // 消费侧
 
     /**
      * 领取一批待消费事件（按 {@code id ASC}：id 为自增主键，同一事务内严格递增，
@@ -283,7 +291,7 @@ public class WfProcessOutboxService {
                         + " attempts=" + attempts + " err=" + truncate(error), null);
     }
 
-    private void update(Long id, java.util.function.Consumer<LambdaUpdateWrapper<WfProcessOutbox>> setter) {
+    private void update(Long id, Consumer<LambdaUpdateWrapper<WfProcessOutbox>> setter) {
         TenantContext.runIgnoreTenant(() -> {
             LambdaUpdateWrapper<WfProcessOutbox> w = new LambdaUpdateWrapper<>();
             w.eq(WfProcessOutbox::getId, id);
@@ -292,7 +300,7 @@ public class WfProcessOutboxService {
         });
     }
 
-    // ==================== 观测 ====================
+    // 观测
 
     /**
      * 投递观测（方案 §六 G5「六列台账」规则）：积压深度 / 最老未消费年龄 / 失败率。
@@ -300,15 +308,15 @@ public class WfProcessOutboxService {
      * <p>三项都是<b>从本表直接算出来的</b>（这正是选发件箱而非外部 MQ 的理由之一：
      * 队列状态就是一张能 SQL 查的表，不需要额外的 MQ 监控面板）。
      */
-    public java.util.Map<String, Object> stats() {
+    public Map<String, Object> stats() {
         Object[] holder = new Object[1];
         TenantContext.runIgnoreTenant(() -> holder[0] = queryStats());
         @SuppressWarnings("unchecked")
-        java.util.Map<String, Object> r = (java.util.Map<String, Object>) holder[0];
+        Map<String, Object> r = (Map<String, Object>) holder[0];
         return r;
     }
 
-    private java.util.Map<String, Object> queryStats() {
+    private Map<String, Object> queryStats() {
         long pending = countByStatus(ST_PENDING);
         long consumed = countByStatus(ST_CONSUMED);
         long dead = countByStatus(ST_DEAD);
@@ -318,10 +326,10 @@ public class WfProcessOutboxService {
                 .orderByAsc(WfProcessOutbox::getId)
                 .last("limit 1"));
         if (!oldest.isEmpty() && oldest.get(0).getCreateTime() != null) {
-            oldestAgeSeconds = java.time.Duration.between(oldest.get(0).getCreateTime(), LocalDateTime.now()).getSeconds();
+            oldestAgeSeconds = Duration.between(oldest.get(0).getCreateTime(), LocalDateTime.now()).getSeconds();
         }
         long total = pending + consumed + dead;
-        java.util.Map<String, Object> r = new java.util.LinkedHashMap<>();
+        Map<String, Object> r = new LinkedHashMap<>();
         r.put("mode", currentMode());
         r.put("pending", pending);
         r.put("consumed", consumed);
@@ -330,8 +338,8 @@ public class WfProcessOutboxService {
         r.put("oldestPendingAgeSeconds", Math.max(oldestAgeSeconds, 0));
         // 失败率＝死信/总量（死信是最终状态失败；PENDING 里含未开始的，不算失败）
         r.put("failureRate", total == 0 ? 0.0d
-                : java.math.BigDecimal.valueOf(dead * 1.0d / total)
-                        .setScale(4, java.math.RoundingMode.HALF_UP).doubleValue());
+                : BigDecimal.valueOf(dead * 1.0d / total)
+                        .setScale(4, RoundingMode.HALF_UP).doubleValue());
         return r;
     }
 
@@ -341,15 +349,15 @@ public class WfProcessOutboxService {
         return n == null ? 0L : n;
     }
 
-    // ==================== 工具 ====================
+    // 工具
 
     private static String toJson(WfProjectionEvent e) {
         try {
             return JSON.writeValueAsString(e);
         } catch (Exception ex) {
             // 序列化失败＝投递物不可用，等同入队失败（由调用方记缺陷并冒泡），此处返回 null 会被下游拦下
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.SYSTEM_ERROR, "投影事件序列化失败: " + ex.getMessage());
+            throw new BizException(
+                    ErrorCode.SYSTEM_ERROR, "投影事件序列化失败: " + ex.getMessage());
         }
     }
 

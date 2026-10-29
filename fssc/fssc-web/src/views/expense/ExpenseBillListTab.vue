@@ -433,7 +433,7 @@ onMounted(() => {
   loadBills()
 })
 
-// 同页再次深链（已在 /expense/my 时又带新 billId 过来）→ 组件被复用、onMounted 不再触发，需 watch 默认处理
+// 同页再次深链（已在 /expense/my 时又带新 billId 过来）→ 组件被复用、onMounted 不再触发，需 watch 兜底
 watch(() => currentRoute.query.billId, (v) => {
   if (v != null && v !== '') openDetailById(v, currentRoute.query.billType ? String(currentRoute.query.billType) : '', currentRoute.query.billNo ? String(currentRoute.query.billNo) : '')
 })

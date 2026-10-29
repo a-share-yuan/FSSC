@@ -4,6 +4,7 @@
 package com.fssc.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
@@ -55,7 +56,7 @@ public class MessageService {
     }
 
     /**
-     * 按主键读单条（D-DEC-149/187 已读回写的归属判据用）。
+     * 按主键读单条（/187 已读回写的归属判据用）。
      *
      * <p>与 {@link #markRead(Long)} 不同，本方法<b>不抛</b>「不存在」——控制器要拿它区分
      * 「行不存在(404)」与「不是你的消息(403)」两种结果，判空即可。
@@ -81,7 +82,7 @@ public class MessageService {
     /** 全部标记已读（指定接收人） */
     public void markAllRead(Long receiverId) {
         messageMapper.update(null,
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<SysMessage>()
+                new LambdaUpdateWrapper<SysMessage>()
                         .eq(SysMessage::getReceiverId, receiverId)
                         .eq(SysMessage::getIsRead, 0)
                         .set(SysMessage::getIsRead, 1)

@@ -9,7 +9,7 @@
  * 异常分支：REJECTED / VOID / CLOSED / TERMINATED
  */
 
-// 【2026-10-15 第 3 批】字典读取（同步、只读内存缓存，不发请求）
+// 字典读取（同步、只读内存缓存，不发请求）
 // 依赖方向：billStatus.js → useDict.js → api.js，三者均不反向引用本文件，无循环依赖。
 import { dictLabelOf, dictCssClassOf } from '@/composables/useDict.js'
 
@@ -94,7 +94,7 @@ export const STATUS_LABEL = {
   MIXED: '状态不一',
   // 合同生命周期（cont_contract.status=EFFECTIVE，变更/关闭按钮的判据）
   EFFECTIVE: '已生效',
-  // 合同执行态（cont_contract.status 库内现值 SIGNED/EXECUTING，10-25 报表走查实测直接显示英文后补登）
+  // 合同执行态（cont_contract.status 的现值为 SIGNED/EXECUTING，缺标签会直显英文）
   SIGNED: '已签约',
   EXECUTING: '执行中',
   // 报表定义启停（rpt_report_def.status=ACTIVE/INACTIVE）
@@ -112,13 +112,13 @@ export const STATUS_LABEL = {
   // 合并报表已出表（gl_consolidate.status，GlConsolidateService:75）
   CONSOLIDATED: '已合并',
   // 内部往来抵消已记账（gl_inter_offset.offset_status，GlInterOffsetService:148/246 写入 OFFSET；
-  // 补：此前名称表无此键，GL 专项页签状态列直接显示英文 OFFSET）
+  // 名称表缺这个键的话，GL 专项页签状态列直接显示英文 OFFSET）
   OFFSET: '已抵消',
   // 供应商对账不平（supplier_recon.status，SupplierReconService:386/433/596）
   DIFF: '有差异',
   // 坏账准备已计提（rc_bad_debt.status＝PROVISIONED/REVERSED/WRITTEN_OFF 之首）
   PROVISIONED: '已计提',
-  // 催收待办（rc_collect_todo.status=DOING，实测 442 行；全库仅这一列用此码）
+  // 催收待办（rc_collect_todo.status=DOING；全库仅这一列用此码）
   DOING: '催收中',
 }
 
@@ -170,20 +170,20 @@ export const STATUS_TYPE = {
  * 未登记的状态码仍返回原码（保证不吞值），但会在开发期告警，避免英文码静默泄露到界面。
  */
 /**
- * 【2026-10-15 第 3 批枚举办结】状态码 → 中文，改为「字典优先、本地常量默认处理」。
+ * 状态码 → 中文，改为「字典优先、本地常量兜底」。
  *
  * 为什么能零风险切换：
  *   字典是运行时远程数据，可能未部署/未登录/未预热/网络不通；
  *   STATUS_LABEL 是编译期常量，同步可得、永不失败。
  *   故顺序固定为「先查字典缓存（同步、无请求）→ 未命中回落本地常量」：
- *     · 字典没到 ⇒ 结果与改造前**逐字一致**（不会白屏、不会变英文码）；
+ *     · 字典没到 ⇒ 结果与原先逐字一致（不会白屏、不会变英文码）；
  *     · 字典到了 ⇒ 以字典为准，运营可在界面改文案而不必重新发版。
  *
- * 这里是**同步**取值：不发请求，只读 useDict 的内存缓存（由 App.vue 预热填充）。
+ * 这里是同步取值：不发请求，只读 useDict 的内存缓存（由 App.vue 预热填充）。
  *    绝不能在此处 await —— statusLabel 被 55 个文件当作纯函数直接调用。
  *
  * 用扁平字典 bill_status_display 而非按域拆的 15 个字典：
- *    statusLabel 是**全局单一映射**，调用方不带域上下文，
+ *    statusLabel 是全局单一映射，调用方不带域上下文，
  *    CLOSED/DRAFT/NORMAL 等跨义键无法判定归属 ⇒ 展示规则另立一套扁平字典。
  *    域字典用于下拉可选值，本字典用于列表展示，两者职责不同、互不覆盖。
  */
@@ -194,7 +194,7 @@ export function statusLabel(s) {
   // ① 字典（运营可维护的权威源）
   const fromDict = dictLabelOf(DICT_DISPLAY, s)
   if (fromDict) return fromDict
-  // ② 本地常量（默认处理，保证改造前后行为一致）
+  // ② 本地常量（兜底，保证原先后行为一致）
   if (STATUS_LABEL[s]) return STATUS_LABEL[s]
   if (import.meta.env.DEV && s && !warnedStatus.has(s)) {
     warnedStatus.add(s)

@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
  * 互斥规则来源 {@code sod_role_conflict}（平台级 tenant_id NULL + 租户自定义），全局表不受租户拦截器过滤，手工取规则。
  *
  * <p>（内控实况登记，数据与配置面）：现库 32 条规则下命中 7 对冲突组合／多角色用户 112 人，
- * 其中 FIN_GL × FSSC_AUDITOR（记账×审核，HIGH 语义）1 人；处置＝逐组出<b>人工裁决清单</b>
+ * 其中 FIN_GL × FSSC_AUDITOR（记账×审核，HIGH 语义）1 人；处置＝逐组出<b>待确认清单</b>
  * 撤兼任或书面豁免，本包<b>不改任何授权数据、不执行 DB 写</b>；呈现缺陷另见。
  * 赋权入口已接线：UserService 授予角色前调 {@code assertNoUserPermConflict}（本行即该面登记）。</p>
  */
@@ -163,9 +163,9 @@ public class SoDService {
         rows.addAll(permConflictRows(detectTime));
         // ── C-3：把「在役的不相容职责校验」纳入 SoD 报告 ──
         // SoD 分三层：L1 互斥岗（本类已有的 role/perm 冲突表）、
-        // L2 不相容职责（**同一单据内经办轨迹**）、L3 轮岗。
+        // L2 不相容职责（同一单据内经办轨迹）、L3 轮岗。
         // 本系统真正在拦 L2 的是两个校验——approve.deny_self（自审）与
-        // approve.deny_serial_same_handler（同人连办），它们此前不在 SoD 报告里，
+        // approve.deny_serial_same_handler（同人连办），它们若不在 SoD 报告里，
         // 导致「报告 0 冲突」与「实际有单被拦」两套规则打架。
         // 这里按「在途实例上的真实经办轨迹」反查，把校验已拦/将拦的情形显式列出。
         rows.addAll(activeDutySeparationRows(detectTime));
@@ -193,13 +193,13 @@ public class SoDService {
             // 同一实例内的发起人
             Map<String, Long> starterByInstance = new HashMap<>();
             // 不要再 JOIN act_ru_execution：它是 Flowable 的「运行中执行」表，
-            // 流程一结束就清空（实测仅 6 行），而历史轨迹全在 act_hi_taskinst（288 行）。
+            // 流程一结束就清空，而历史轨迹全在 act_hi_taskinst。
             // 直接用 act_hi_taskinst 自带的 PROC_INST_ID_ 分组即可。
             for (Map<String, Object> h : jdbc.queryForList(
                     "SELECT PROC_INST_ID_ AS inst, ASSIGNEE_ AS uid, TASK_DEF_KEY_ AS dk "
                             + "FROM act_hi_taskinst "
                             + "WHERE ASSIGNEE_ IS NOT NULL AND TASK_DEF_KEY_ IS NOT NULL")) {
-                // JdbcTemplate 返回的列名按驱动/库大小写不定（实测 MySQL 返回大写 INST/UID/DK），
+                // JdbcTemplate 返回的列名按驱动/库大小写不定（MySQL 会返回大写 INST/UID/DK），
                 //   直接 get("inst") 会拿到 null ⇒ 全部数据聚到 "null" 键上，判据永远不命中。
                 String inst = String.valueOf(col(h, "inst"));
                 long uid = asLong(col(h, "uid"));
@@ -542,7 +542,7 @@ public class SoDService {
 
     /**
      * 平台级 + 当前租户的 ACTIVE 规则逐条正则比对，返回命中描述。
-     * <b>跨角色累积规则（2026-09，修复）</b>：某规则两侧虽在并集里都命中，但若存在
+     * 跨角色累积规则：某规则两侧虽在并集里都命中，但若存在
      * <b>单个角色</b>自身就同时含两侧权限（inherent，属该角色定义的既定岗位职责），则不计为违规——
      * 一用户一角色下这类角色必须可授予；仅当互斥组合<b>只能由 ≥2 个角色合并</b>产生时才拦截。
      */

@@ -27,9 +27,9 @@ import java.util.Map;
 /**
  * 确认票据的人侧入口（挂在 /api/tenant/** 下，与真人链路同鉴权同审计）。
  *
- * <p>设计裁决点：AI 网关可以"申请"票据（POST /api/ai/gateway/confirm-request），
+ * <p>设计判断点：AI 网关可以"申请"票据（POST /api/ai/gateway/confirm-request），
  * 但确认动作只能由真人在这里做 —— 决策属人（方案 §6）。
- * 权限码 ai:confirm:approve 需入角色目录（待裁决项，见 P0-修复说明与待裁决清单）。
+ * 权限码 ai:confirm:approve 需入角色目录（是否授予待定）。
  */
 @RestController
 @RequestMapping("/api/tenant/ai/confirm")
@@ -42,7 +42,7 @@ public class AiConfirmController {
     /**
      * 待确认队列：本人可见（同租户），确认人不应看到自己申请的票据为可确认态（服务层已挡自确）。
      *
-     * <p>D-N13：过期即废是票据的既有语义（{@code useConfirmTicket} 一直是这么判的），
+     * <p>过期即废是票据的既有语义（{@code useConfirmTicket} 一直是这么判的），
      * 但读侧没跟上 —— 过期票长期以 PENDING 挂在队列里，确认人面对一堆无法放行的死票。
      * 这里只过滤不回写状态：审计表 insert-only，"死票"由读取时刻的 TTL 决定即可。
      */
@@ -58,7 +58,7 @@ public class AiConfirmController {
     }
 
     /**
-     * 我申请的票据（含各状态）：下令侧轮询用 —— 出票后不再只能凭 confirmId 盲等（D-N05/A-4 补配）。
+     * 我申请的票据（含各状态）：下令侧轮询用 —— 出票后不再只能凭 confirmId 盲等。
      * 无 {@code @RequiresPerm}：可见范围由 applicant_user_id=本人 天然圈死，属"个人域读"，不扩权。
      * 未过期却仍未消耗的票按 TTL 事实回显为 EXPIRED（只改写返回值、不写入数据库），否则前端轮询链会永远等一张死票。
      */

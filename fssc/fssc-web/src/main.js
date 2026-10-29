@@ -14,8 +14,8 @@ import { bootstrapSession } from './api'
 // 国际化基座（域8A/T0.5）：i18n 实例 + 语言切换器 + Element Plus locale 跟随
 import i18n, { getLocale } from './i18n'
 import { elementLocaleOf } from './i18n/element-locale'
-// 移动报销端（H5）视觉/交互 token（P1-1）：三页共享一套色板/字号阶/热区硬线，
-// 取代此前「三页各自 scoped 复制一份」（AD-04）与内联 style 覆盖（AD-05）。
+// 移动报销端（H5）视觉/交互 token：三页共享一套色板/字号阶/热区硬线，
+// 取代「三页各自 scoped 复制一份」与内联 style 覆盖。
 import './styles/h5-tokens.css'
 import { permissionDirective } from './directives/permission'
 import { preventDoubleClickDirective } from './directives/preventDoubleClick'
@@ -39,13 +39,13 @@ for (const [name, comp] of Object.entries(Icons)) {
   app.component(name, comp)
 }
 
-// R5-04: 全局权限指令
+// 全局权限指令
 app.directive('permission', permissionDirective)
-// P2-5: 全局防重复提交指令
+// 全局防重复提交指令
 app.directive('prevent-double-click', preventDoubleClickDirective)
-// R5-05: 全局错误边界组件
+// 全局错误边界组件
 app.component('ErrorBoundary', ErrorBoundary)
-// P2-3: 统一人员下拉组件
+// 统一人员下拉组件
 app.component('UserSelect', UserSelect)
 // 域8A: 全局语言切换器
 app.component('LocaleSwitch', LocaleSwitch)

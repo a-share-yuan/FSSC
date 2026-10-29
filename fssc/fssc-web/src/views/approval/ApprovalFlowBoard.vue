@@ -182,7 +182,7 @@
         <el-form-item label="单据">{{ reassignRow?.bizNo }}</el-form-item>
         <el-form-item label="当前节点">{{ reassignRow?.currentNode }}（{{ reassignRow?.currentAssigneeNames || reassignRow?.currentAssignee || '候选组' }}）</el-form-item>
         <el-form-item label="新处理人" prop="target">
-          <!-- P0 修复：默认只加载同公司人员，流程管理员改派也须遵循同公司原则 -->
+          <!-- 默认只加载同公司人员，流程管理员改派也须遵循同公司原则 -->
           <UserSelect v-model="reassignForm.target" scope="same-company" placeholder="选择接办人(任意在职真人)" />
         </el-form-item>
         <el-form-item label="改派原因" prop="reason"><el-input v-model="reassignForm.reason" type="textarea" :rows="2" placeholder="必填:如 原审批人离职/换岗/本节点无人可办(将记录)" /></el-form-item>
@@ -215,7 +215,7 @@ import { messageApi, wfApi, store } from '../../api'
 import { hasPerm } from '@/utils/perm'
 
 /**
- * 改派入口是否可见：要 wf:task:reassign 权限点，且**排除 admin 账号**。
+ * 改派入口是否可见：要 wf:task:reassign 权限点，且排除 admin 账号。
  * 铁律"任何流程节点都不允许 admin 参与"——改派是流程动作的一种（替别人决定谁来办），
  * admin 虽然因 *:*:* 通配过 hasPerm，也不该看到这个入口（后端另有目标侧硬拦，此处是入口侧办结）。
  */
@@ -392,7 +392,7 @@ function goBiz(row) {
 }
 
 // 顶部四卡读数改取服务端<b>全量</b>聚合，不要从「当前页」的 insts 切片现算
-// （整改前翻页/筛选都会让四卡随页大小漂移，实测真值 11 的在途实例恒显 0）
+// （原先翻页/筛选都会让四卡随页大小漂移，真有在途实例时恒显 0）
 const instStats = ref({ total: 0, running: 0, completed: 0, rejected: 0 })
 const instStatsPending = ref(true)
 const instStatsFailed = ref(false)
@@ -481,7 +481,7 @@ function batchExport() {
 <style scoped>
 /* 一 TAB = 一菜单：从菜单深链进来（tab 命中）时隐藏 tab 导航条，只显示该页 */
 .tabless :deep(.el-tabs__header) { display: none; }
-/* 统计口查询中/失败时的默认处理形态——沿用 el-statistic 的字号与标题样式 */
+/* 统计口查询中/失败时的兜底形态——沿用 el-statistic 的字号与标题样式 */
 .st-fallback { display: flex; flex-direction: column; }
 .st-fallback .st-title { font-size: 12px; color: var(--el-text-color-secondary); line-height: 1.2; margin-bottom: 4px; }
 .st-fallback .st-dash { font-size: 22px; color: var(--el-text-color-placeholder); line-height: 1; }

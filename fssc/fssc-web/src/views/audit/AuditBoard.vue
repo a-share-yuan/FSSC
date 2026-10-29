@@ -107,8 +107,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { auditApi, store } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { formatDateTime, showRowDetail } from '@/utils/format'
-// 本页手写名称表只覆盖旧值域，audit_trail 实测还有 RC_RECEIVABLE(444)/ARCHIVE(320)/
-// SALE_RETURN/PUR_RETURN 等无键值 ⇒ 业务类型列直显英文。保留本地措辞优先，未命中回落全站名称表。
+// 本页手写名称表只覆盖旧值域，audit_trail 里还有 RC_RECEIVABLE / ARCHIVE /
+// SALE_RETURN / PUR_RETURN 等无键值 ⇒ 业务类型列直显英文。保留本地措辞优先，未命中回落全站名称表。
 import { bizTypeLabel, actionLabel } from '@/constants/enums.js'
 
 // D-42 整改：本页原先绑的是 operation/module/operateTime/detail/ipAddress ——

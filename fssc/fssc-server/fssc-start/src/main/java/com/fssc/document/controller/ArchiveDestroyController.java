@@ -71,7 +71,7 @@ public class ArchiveDestroyController {
         return Result.success(archiveDestroyService.listByStatus(approvalStatus));
     }
 
-    /** P0-2：销毁申请分页（原 /list 保留兼容） */
+    /** 销毁申请分页（原 /list 保留兼容） */
     @RequiresFeature("FSSC_ARCHIVE")
     @RequiresPerm("compliance:archivedestroy:list")
     @GetMapping("/list/page")

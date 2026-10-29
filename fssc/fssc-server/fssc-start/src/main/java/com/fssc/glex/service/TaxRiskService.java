@@ -10,6 +10,8 @@ import com.fssc.framework.security.DataScopeKit;
 import com.fssc.framework.security.UserContext;
 import com.fssc.glex.entity.TaxRiskIndicator;
 import com.fssc.glex.mapper.TaxRiskIndicatorMapper;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,7 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * 税务风险指标服务（P1-3 税务一体化）。
+ * 税务风险指标服务（税务一体化）。
  * <p>
  * 风险评分/等级/预警监控：进销项比对异常、税负率偏低、发票疑点等。
  * 风险等级：NORMAL正常 → ATTENTION关注 → WARNING预警 → HIGH高风险。
@@ -74,7 +76,7 @@ public class TaxRiskService {
         // 税负率类：低于阈值=风险
         if ("TAX_BURDEN".equals(riskType)) {
             if (cmp < 0) {
-                return actual.compareTo(threshold.divide(BigDecimal.valueOf(2), 4, java.math.RoundingMode.HALF_UP)) < 0
+                return actual.compareTo(threshold.divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP)) < 0
                         ? "HIGH" : "WARNING";
             }
             return "NORMAL";
@@ -122,7 +124,7 @@ public class TaxRiskService {
         upd.setId(id);
         upd.setResolved(1);
         upd.setResolvedBy(UserContext.get() == null ? null : UserContext.get().getUserId());
-        upd.setResolvedTime(java.time.LocalDateTime.now());
+        upd.setResolvedTime(LocalDateTime.now());
         upd.setResolvedRemark(remark);
         riskMapper.updateById(upd);
         log.info("税务风险 {} 已处理: {}", id, remark);

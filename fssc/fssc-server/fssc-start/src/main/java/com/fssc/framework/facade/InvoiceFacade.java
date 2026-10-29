@@ -35,7 +35,7 @@ public interface InvoiceFacade {
     /**
      * 去重环节②：入池前先问一次「这张票是不是已经在池」。
      *
-     * <p>改前 OCR 链每次识别都无条件调 {@link #poolFromOcr}，同一票面重复上传（客户端断开后重试／
+     * <p>原先 OCR 链每次识别都无条件调 {@link #poolFromOcr}，同一票面重复上传（客户端断开后重试／
      * 双提交／同一张票传两次）时由发票域 {@code InvoiceService#create} 的查重抛
      * {@code BizException「已存在于发票池」}，而 {@code OcrService} 把这个 catch 当"入池失败"处理
      * ⇒ 一张好票被记成坏票、界面还会提示"要素不全"。现由调用方先问后决定：命中即按"已在池"如实透出，

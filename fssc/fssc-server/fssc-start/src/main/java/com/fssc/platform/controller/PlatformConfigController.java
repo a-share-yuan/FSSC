@@ -28,7 +28,7 @@ public class PlatformConfigController {
 
     private final PlatformConfigService configService;
 
-    // ---------- 平台全局配置 ----------
+    // 平台全局配置
 
     @RequiresPerm("platform:config:list")
     @GetMapping("/page")
@@ -61,7 +61,7 @@ public class PlatformConfigController {
         return Result.success();
     }
 
-    // ---------- 消息模板 ----------
+    // 消息模板
 
     @RequiresPerm("platform:template:list")
     @GetMapping("/template/page")

@@ -5,6 +5,7 @@ package com.fssc.masterdata.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fssc.common.entity.TenantAuditBase;
+import java.time.LocalDate;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -22,7 +23,7 @@ public class MdMatchTolerance extends TenantAuditBase {
 
     /** 维度：PAY_VS_INVOICE / INVOICE_VS_RECEIPT / RECEIPT_VS_PO */
     private String dimensionCode;
-    /** 适用公司(NULL=全组织)(41号审查 P2-13 差异化容差) */
+    /** 适用公司(NULL=全组织)(41号审查 差异化容差) */
     private Long companyId;
     /** 适用供应商(NULL=全部) */
     private Long supplierId;
@@ -34,7 +35,7 @@ public class MdMatchTolerance extends TenantAuditBase {
     private BigDecimal toleranceValue;
     private String remark;
     /** 生效日(NULL=立即) */
-    private java.time.LocalDate effectDate;
+    private LocalDate effectDate;
     /** 失效日(NULL=长期) */
-    private java.time.LocalDate expireDate;
+    private LocalDate expireDate;
 }

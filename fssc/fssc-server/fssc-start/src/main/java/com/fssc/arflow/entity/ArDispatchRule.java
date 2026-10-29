@@ -33,7 +33,7 @@ public class ArDispatchRule implements Serializable {
     private String ruleName;
     /** 服务申请类型（10类之一），空=全部 */
     private String claimType;
-    /** 客户十位码前缀，空=默认处理 */
+    /** 客户十位码前缀，空=兜底 */
     private String customerPrefix;
     /** 负责人清单（逗号分隔，多人=选单池） */
     private String handlers;

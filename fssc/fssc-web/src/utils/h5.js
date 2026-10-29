@@ -18,13 +18,13 @@ export function money(v) {
 
 /**
  * 后端 Date 序列化兼容解析。
- * 实测（10-03 用 Y00FINAR02 只读拉 /wf/todo/page）待办行的 createTime 是
- * **Java Date.toString() 串**：`"Sat Oct 03 15:23:10 CST 2026"`；
- * 而业务表接口（/budget/item/pick 等）是 ISO 串 `"2026-09-29T11:14:07"`。两套都要能吃。
+ * /wf/todo/page 待办行的 createTime 是 Java Date.toString() 串：
+ * `"Sat Oct 03 15:23:10 CST 2026"`；业务表接口（/budget/item/pick 等）则是 ISO 串
+ * `"2026-09-29T11:14:07"`。两套都要能吃。
  *
- * 不能用 new Date(str) 默认处理：V8 把 "CST" 认成**美国中部标准时间（UTC−6）**，
- * 实测 `new Date("Sat Oct 03 15:23:10 CST 2026")` 解出 10-04 05:23（本地 +08:00），
- * 差 14 小时 ⇒ 停留时长会算成负数。这里按「钟点即本机时区」直接取年月日时分秒，
+ * 不能用 new Date(str) 兜底：V8 把 "CST" 认成美国中部标准时间（UTC−6），
+ * 上面那串会被解成晚 14 小时的时刻，停留时长因此算成负数。这里按「钟点即本机时区」
+ * 直接取年月日时分秒，
  * 前提是服务端与浏览器同时区（本演示环境＝Asia/Shanghai，成立）；跨时区部署时该规则要重定。
  */
 const MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 }
@@ -54,7 +54,7 @@ export function parseServerTime(s) {
 
 /**
  * 待办停留时长（§4.2-①：超 24h 标橙、超 72h 标红；沿用既有超时治理规则，不新造阈值）。
- * 解不出时间 ⇒ 返回 null，调用方**不显示**该字段，绝不显示"0 小时"或假数。
+ * 解不出时间 ⇒ 返回 null，调用方不显示该字段，绝不显示"0 小时"或假数。
  */
 export function stayOf(createTime, now = Date.now()) {
   const d = parseServerTime(createTime)
@@ -74,10 +74,10 @@ export function dayText(v) {
 }
 
 /**
- * 「权限不足」与「真的没数据」分立（AD-13 / UX-05；§5 三态行）。
- * 本窗用提报岗 Y000147 实测：/invoice/page、/invoice/enhance/verify/page、
- * /wf/query/history/page 三条都回 code:4030，前端此前一律渲染成「暂无 X」⇒ 假空。
- * 判据优先认 code（api.js 已把业务码挂到 Error.code），文案默认处理认关键字，
+ * 「权限不足」与「真的没数据」分立：提报岗访问 /invoice/page、
+ * /invoice/enhance/verify/page、/wf/query/history/page 三条都回 code:4030，
+ * 前端一律渲染成「暂无 X」⇒ 假空。
+ * 判据优先认 code（api.js 已把业务码挂到 Error.code），文案兜底认关键字，
  * 因为老封装可能只透出 msg。
  */
 export function permDeniedOf(e) {
@@ -95,10 +95,10 @@ export function permDeniedOf(e) {
  * 流程变量带/不带 EXP_ 前缀两种写法都收，见 WfTaskController:504-512）；
  * 派单类 INVOICE_MATCH/PTP03 的 bizId 同样是 exp_bill.id（BillRouteRegistry:361-368），能看单。
  *
- * 为什么前端要这道判据：/wf/todo 的 billId 是**按 bizType 回到各自的表**取的主键
- * （实测 AR_RECON 待办的 billId=7 指向 ar_recon_record，不是 exp_bill）。
- * 改造前 H5 对所有待办一律跳 #/h5/approval/{billId} ⇒ 拿 AR_RECON 的 7 去查 exp_bill 7，
- * 是**串到别人的单**上审批，比"看不了"更严重。非 exp_bill 载体一律明示去电脑端。
+ * 为什么前端要这道判据：/wf/todo 的 billId 是按 bizType 回到各自的表取的主键
+ * （AR_RECON 待办的 billId 指向 ar_recon_record，不是 exp_bill）。
+ * 若对所有待办一律跳 #/h5/approval/{billId}，就会拿 AR_RECON 的 id 去查 exp_bill，
+ * 是串到别人的单上审批，比"看不了"更严重。非 exp_bill 载体一律明示去电脑端。
  */
 const EXP_BILL_CARRIERS = ['CLAIM', 'CLAIM_TRAVEL', 'LOAN', 'REPAY', 'PAY', 'TRAVEL', 'TRAIN', 'PREPAY', 'SETTLE', 'APPLY', 'INVOICE_MATCH', 'INVOICE_MATCH_MANUAL', 'PTP03']
 export function isExpBillCarrier(bizType) {
@@ -112,16 +112,16 @@ export function docTypeKey(billType, billSubType) {
 }
 
 /**
- * 移动端提报「启用清单」的**默认处理常量**（§4.2-② 的乙案前端半边；零新表、零重启、零授权）。
+ * 移动端提报「启用清单」的兜底常量（零新表、零重启、零授权）。
  * 判据＝"该类型在移动端能交出一张不缺件的单"：
  *  - CLAIM 的表头/明细/附件/发票四环节在 H5 已齐；
  *  - CLAIM_TRAVEL 缺差旅明细段（exp_travel）、APPLY 缺事由与关联预算环节、LOAN 缺冲销与还款计划规则
  *    ⇒ 交了就是脏单；PAY/REPAY 的收款方与付款通道、还款计划段也不在移动端 ⇒ 同样未启用。
  * 未启用类型明示列在灰区并给"去电脑端"的出口，而不是从下拉里静默消失（看不见 ≠ 不存在）。
  *
- * 10-04 甲案：这份清单的**权威来源已改成库里表 `exp_mobile_template`**
+ * 这份清单的权威来源是库里表 `exp_mobile_template`
  * （接口 `/api/tenant/expense/mobile/templates`，见 api.js#mobileTemplates）。本常量只在
- * 「接口未上线（404）／读失败／返回空清单」时默认处理——所以它的取值域与排列规则必须和 seed
+ * 「接口未上线（404）／读失败／返回空清单」时兜底——所以它的取值域与排列规则必须和 seed
  * 逐条对得上（六档、只有 CLAIM 主型启用）：配置接口一上线界面就变样＝又一个假功能。
  * 中文名不在这里写第二套：取 constants/enums.js#BILL_TYPE（全仓禁止重复定义枚举标签）；
  * pcPath 与 constants/billStatus.js#editBillPath（:205-211）同一张表，不另造路由。
@@ -188,7 +188,7 @@ export function normalizeMobileTemplates(rows) {
 
 /**
  * 明示区（「以下类型请在电脑端提报」）的行间文案：三种成因要分开说，否则用户以为是自己没权限。
- *  - 库里未启用（含常量默认处理）⇒ 说"移动端暂未开放"，给电脑端去向；
+ *  - 库里未启用（含常量兜底）⇒ 说"移动端暂未开放"，给电脑端去向；
  *  - 库里已启用但 H5 没表单 ⇒ 说"移动端表单未覆盖"，别让人误以为是配置坏了；
  *  - 接口没上线走常量 ⇒ 与第一种同文案，不向用户暴露"配置口未上线"这种开发规则。
  */

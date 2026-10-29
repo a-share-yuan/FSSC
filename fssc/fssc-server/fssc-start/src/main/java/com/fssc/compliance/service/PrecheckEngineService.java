@@ -199,8 +199,8 @@ public class PrecheckEngineService {
     }
 
     /**
-     * BUG-06 修复：组装预检 inputData 时从附件关联的 ocr_record 补齐票面键
-     * （此前仅注入 4 个标量，INVOICE 类规则拿不到 invoiceNumber 而空转放行）。
+     * 组装预检 inputData 时从附件关联的 ocr_record 补齐票面键
+     * （只注入 4 个标量的话，INVOICE 类规则拿不到 invoiceNumber，会空转放行）。
      */
     private Map<String, Object> buildInputData(Long billId, String billType, String expenseType, Long employeeId) {
         Map<String, Object> data = new LinkedHashMap<>();
@@ -328,7 +328,7 @@ public class PrecheckEngineService {
             }
             return evaluateCompoundExpression(trimmed, inputData);
         } catch (Exception e) {
-            // P1 修复：审单规则求值异常必须 fail-closed（不命中）。
+            // 审单规则求值异常必须 fail-closed（不命中）。
             // 原 fail-open 返回 true 会让任何写错的表达式（如引用不存在的变量）恒命中，
             // 配合 AUTO_REJECT 规则会把所有单据误杀（真实事故：1500 元报销单被「金额超5万」规则驳回）。
             log.warn("脚本执行异常（按未命中处理）: {}", script, e);
@@ -343,7 +343,7 @@ public class PrecheckEngineService {
         if (expr.isBlank()) return true;
 
         // 处理括号优先级。
-        // 修复（L1-B-04 单测发现）：原实现无脑取 lastIndexOf('(') 当分组括号，
+        // 无脑取 lastIndexOf('(') 当分组括号会出错：
         // 会把函数调用 contains(title, '差旅') 的括号拆掉，表达式被改写成 "containstrue" 这类字符串，
         // 使 evaluateAtomicExpression 里的函数分支（startsWith("contains(")）成为永不可达的死代码——
         // 即所有用 contains/startsWith/endsWith/matches/isNull/notNull/in 写的规则实际完全不生效。
@@ -503,7 +503,7 @@ public class PrecheckEngineService {
         Object leftVal = resolveValue(left, data);
         Object rightVal = resolveValue(right, data);
         // 任一侧是「未定义的裸标识符」（且不是 null 字面量）→ 无法比较，fail-closed。
-        // 修复前该场景因 resolveValue 返回变量名而恒为 true（字母 > 数字），会把全部单据误杀。
+        // 该场景若由 resolveValue 返回变量名，比较恒为 true（字母 > 数字），会把全部单据误杀。
         if ((leftVal == null && !isNullLiteral(left)) || (rightVal == null && !isNullLiteral(right))) {
             return false;
         }
@@ -587,7 +587,7 @@ public class PrecheckEngineService {
         for (String item : items) {
             String key = item.trim();
             // 列表项语义是「字面量」：仅当 data 中确有同名变量时按变量取值，否则按字面量比较。
-            // （resolveValue 已改为对未定义变量返回 null，此处不能再直接依赖它的默认处理行为）
+            // （resolveValue 已改为对未定义变量返回 null，此处不能再直接依赖它的兜底行为）
             Object itemVal = (data != null && data.containsKey(key)) ? data.get(key) : unquote(key);
             if (itemVal != null && leftStr.equals(itemVal.toString())) {
                 return true;
@@ -679,10 +679,10 @@ public class PrecheckEngineService {
         if (data != null && data.containsKey(token)) {
             return data.get(token);
         }
-        // 修复（L1-B-04 单测发现）：未定义变量必须 fail-closed 返回 null。
-        // 原实现 `return token` 把"变量名"当字面量返回，于是 `未定义变量 > 50000` 走字符串字典序比较，
+        // 未定义变量必须 fail-closed 返回 null。
+        // 把"变量名"当字面量返回的话，`未定义变量 > 50000` 会走字符串字典序比较，
         // 小写字母(n=110) > 数字(5=53) 恒为 true —— 任何字段名写错的 AUTO_REJECT 规则会把全部单据误杀
-        // （与"1500 元报销单被金额超5万规则驳回"的真实事故同源，此前只加了 try-catch，本路径不抛异常故未被拦住）。
+        // （"1500 元报销单被金额超5万规则驳回"那类事故正是这么来的：此处不抛异常，try-catch 拦不住）。
         return null;
     }
 
@@ -725,7 +725,7 @@ public class PrecheckEngineService {
         }
 
         if ("PRE-INV-DUPLICATE".equals(ruleCode)) {
-            // BUG-06 修复：真实查重 —— 同租户下 OCR 已识别的同票号记录数 >1（或历史已被其他单据使用）即判重复
+            // 真实查重 —— 同租户下 OCR 已识别的同票号记录数 >1（或历史已被其他单据使用）即判重复
             if (invoiceNumber == null || invoiceNumber.isBlank()) {
                 return true;
             }

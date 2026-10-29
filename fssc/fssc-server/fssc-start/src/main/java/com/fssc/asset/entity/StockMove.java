@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 
 /**
  * 存货移动单（stock_move，带 tenant_id）。
- * 逐笔出入库/盘点/处置交易记录，替代此前"流程跑在空模型上"。
+ * 逐笔出入库/盘点/处置交易记录。
  */
 @Data
 @TableName("stock_move")

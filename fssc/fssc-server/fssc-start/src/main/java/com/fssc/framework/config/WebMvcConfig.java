@@ -17,7 +17,7 @@ import java.util.List;
  * Web 层配置。这里只放跨域；认证/租户过滤器由各自的 @Component + @Order 注册，
  * CORS 过滤器用最高优先级，确保预检 OPTIONS 先于认证链路处理。
  * <p>
- * SEC-08：fssc.cors.allowed-origin-patterns 默认 * 仅供开发/演示；
+ * fssc.cors.allowed-origin-patterns 默认 * 仅供开发/演示；
  * 生产必须配置为前端真实域名清单（逗号分隔），不得使用通配。
  */
 @Configuration

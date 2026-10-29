@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/** md_supplier_bank 供应商银行账户(N)(41号审查 P1-8 供应商专属页子表) */
+/** md_supplier_bank 供应商银行账户(N)(41号审查 供应商专属页子表) */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("md_supplier_bank")

@@ -19,17 +19,17 @@ import java.util.*;
 /**
  * 「我的单据」全类型读侧聚合（办结）。
  *
- * <p>改前 {@code RequisitionWorkbenchService.myBills()} 只查 {@code exp_bill}，接口注释却写"全类型"
- * ⇒ 合同/采购/预算/总账/档案的驳回单在工作台里根本看不见，用户只能新建（＝的死循环）。
+ * <p>只查 {@code exp_bill} 时接口注释却写"全类型"⇒ 合同/采购/预算/总账/档案的驳回单在工作台里根本看不见，
+ * 用户只能新建，越缺越建、越建越缺。
  * 这里按 {@link BillRouteRegistry} 的"bizType→业务主表→归属人列"逐表查询后内存归并，
- * 覆盖范围由注册表决定，不再另立一份表清单。
+ * 覆盖范围由注册表决定，不另立一份表清单。
  *
  * <h3>三条刻意的设计</h3>
  * <ol>
- *   <li><b>不支持就说不支持</b>：资金调拨/票据/银行对账/派工单等表实测既无 {@code create_by}
+ *   <li><b>不支持就说不支持</b>：资金调拨/票据/银行对账/派工单等表既无 {@code create_by}
  *       也无报账人列（见 {@code BillRouteRegistry.TABLE_OWNER} 注释），这类域进
  *       {@code unsupported} 列表由前端明示"请到 XX 台账查看"，而不是让"全类型"的承诺静默少数据。</li>
- *   <li><b>每表一条 SQL + LIMIT，内存归并</b>：跨 26 张业务主表做 selectPage 会退化成深翻；
+ *   <li>每表一条 SQL + LIMIT，内存归并：跨 26 张业务主表做 selectPage 会退化成深翻；
  *       每表取前 {@code offset+pageSize}（封顶 {@link #PER_TABLE_CAP}）再归并，
  *       与待办回填 {@code WfTaskController.fillBillInfoBatch()} 同一路数。
  *       total 用一条 UNION ALL 外层 COUNT 估算 ⇒ 响应里 {@code approximate=true}。</li>
@@ -193,7 +193,7 @@ public class MyDocumentService {
             }
             if (covered.contains(r.fillTable())) return;
             Set<String> cols = columnsOf(r.fillTable());
-            if (cols != null && cols.isEmpty()) return;   // 表不存在（treasury_transfer/asset_card，D-B3-05 死映射）
+            if (cols != null && cols.isEmpty()) return;   // 表不存在（treasury_transfer/asset_card 是历史留下的死映射）
             if (r.ownerCol() != null) return;
             byTable.computeIfAbsent(r.fillTable(), t -> bucket(t, "NO_OWNER_COL"))
                     .merge("bizTypes", bt, MyDocumentService::append);
@@ -217,7 +217,7 @@ public class MyDocumentService {
 
     // 查询
 
-    /** 按 bizType/status 过滤出本轮要查的表；同一张表只查一次 */
+    /** 按 bizType/status 过滤出本次要查的表；同一张表只查一次 */
     private List<Source> selectSources(String bizType, String status) {
         String req = bizType == null ? "" : bizType.trim();
         boolean allTypes = req.isEmpty();
@@ -303,13 +303,13 @@ public class MyDocumentService {
                 // 共表族的真类型在行内（bill_type），拿路由键当类型＝把差旅报销说成还款（错值比空值危险）
                 row.put("bizType", expense ? row.get("billType") : s.bizType());
                 row.put("typeLabel", label);
-                // 只有费用族的填单页在工作台内联（旧 /my-bills 规则），其余域一律跳台账编辑
+                // 只有费用族的填单页在工作台内联（与 /my-bills 同一规则），其余域一律跳台账编辑
                 row.put("editable", expense);
                 row.put("ledgerRoute", ledger);
             }
             return rows;
         } catch (Exception ex) {
-            warnOnce("Q" + s.table(), "我的单据加载失败 表={}（该域本轮不展示）: {}", s.table(), ex.getMessage());
+            warnOnce("Q" + s.table(), "我的单据加载失败 表={}（该域暂不展示）: {}", s.table(), ex.getMessage());
             return List.of();
         }
     }
@@ -381,9 +381,9 @@ public class MyDocumentService {
     /**
      * 表 → 列名（小写）。
      *
-     * <p>改前逐表懒查 {@code information_schema}：29 张表各一条，重启后首个请求要连发 35 条
-     * 元数据查询（S-WF-06 冷启动实测 11 s，10-29 档位 H）。改为首次需要时<b>一条 IN 查完</b>整批表，
-     * 之后照旧走进程内缓存。降级语义不变：批量装载失败返回 {@code null}＝本轮不校验列名（原来单表失败也是这条）。
+     * <p>逐表懒查 {@code information_schema} 时，每张表一条，重启后首个请求要连发几十条
+     * 元数据查询，冷启动会明显卡住。这里改为首次需要时<b>一条 IN 查完</b>整批表，
+     * 之后走进程内缓存。降级语义不变：批量装载失败返回 {@code null}＝本次不校验列名（单表失败同样如此）。
      */
     private Set<String> columnsOf(String table) {
         if (table == null || table.isBlank()) return Set.of();
@@ -418,7 +418,7 @@ public class MyDocumentService {
                 tableColumns.put(t.toLowerCase(), m.getOrDefault(t.toLowerCase(), Set.of()));
             }
         } catch (Exception ex) {
-            log.warn("我的单据列元数据批量装载失败（本轮不校验列名）: {}", ex.getMessage());
+            log.warn("我的单据列元数据批量装载失败（列名暂不校验）: {}", ex.getMessage());
         }
     }
 
@@ -433,7 +433,7 @@ public class MyDocumentService {
             }
             tableColumns.put(table, cols);
         } catch (Exception ex) {
-            log.warn("我的单据列元数据查询失败 表={}（本轮不校验列名）", table, ex);
+            log.warn("我的单据列元数据查询失败 表={}（列名暂不校验）", table, ex);
         }
     }
 

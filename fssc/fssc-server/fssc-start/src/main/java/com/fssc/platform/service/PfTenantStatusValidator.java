@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
  * 每个租户请求由 TenantFilter 调用，校验租户生命周期状态：
  * FROZEN 冻结 / CANCELLED 注销 / 过期欠费 → 返回拦截原因，请求被 403 拦截。
  * <p>
- * TODO(性能)：单机高频下可加 30s 级缓存（Caffeine），P2 先用直查保证正确性。
+ * TODO(性能)：单机高频下可加 30s 级缓存（Caffeine），当前先用直查保证正确性。
  */
 @Component
 @Primary

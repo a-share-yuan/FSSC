@@ -40,14 +40,14 @@ import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * AI 入站网关内核（AI 平权 P2，方案 §4-②）。
+ * AI 入站网关内核。
  *
  * <p>职责边界：只做"目录校验 / 红线分级 / 真人身份透传 / 双日志"，<b>不含任何业务逻辑</b>。
  * 实际执行是把请求原样回环转发到与人相同的那条 {@code /api/tenant/**} 链路 ——
  * 认证、RBAC（@RequiresPerm）、套餐开关（@RequiresFeature）、数据范围、状态机、
  * 单据守卫、@OperLog 审计全部照常生效，AI 得到的权限恰是"下指令那个人"的权限，不多不少。
  *
- * <p>判据（§5-P2）：未登记动作＝403；任一调用可按 traceId 回放"指令→动作→结果→操作人"；
+ * <p>判据（§5）：未登记动作＝403；任一调用可按 traceId 回放"指令→动作→结果→操作人"；
  * 关闭网关开关不影响任何既有页面功能。
  */
 @Slf4j
@@ -58,11 +58,11 @@ public class AiGatewayService {
     /** §6 红线：这些动作类型永不经网关执行（审批决策属人，写规则属配置面）。 */
     private static final Set<String> NEVER_KINDS = Set.of("approve", "void", "config", "delete");
 
-    /** 参数文本快照上限（D-N14）：确认队列页要回显，不宜让单条票据撑爆响应体。 */
+    /** 参数文本快照上限：确认队列页要回显，不宜让单条票据撑爆响应体。 */
     private static final int ARGS_TEXT_MAX = 2000;
 
     /**
-     * 动作发现的一次性返回上限（D-N34）：只是防"无界响应"的最后一道校验，<b>不是过滤手段</b>。
+     * 动作发现的一次性返回上限：只是防"无界响应"的最后一道校验，<b>不是过滤手段</b>。
      * <p>原实现把 {@code .limit(500)} 放在 aiOnly 过滤<b>之前</b>（过滤在 Controller 里），目录到 1222 条后
      * "只看 AI 可调用动作"永远只回前 500 条里的可调用子集（读数恒 407），与真实可调用数不符。
      * 现把 aiOnly 下推到本方法内、上限放宽到远大于目录规模，读数＝真实条数。
@@ -146,8 +146,8 @@ public class AiGatewayService {
             if (!bizOk) {
                 entry.setErrorMsg(truncate(biz.path("msg").asText(""), 2000));
             }
-            // 票据消耗语义（人工裁决：业务 5xx 不消耗票据）：票据已在执行前原子置 USED；
-            // 若上游返回 5xx（服务端异常、请求未获业务裁决）则退回 CONFIRMED，不烧掉一次真人背书。
+            // 票据消耗语义（产品确认：业务 5xx 不消耗票据）：票据已在执行前原子置 USED；
+            // 若上游返回 5xx（服务端异常、请求未获业务判定）则退回 CONFIRMED，不烧掉一次真人背书。
             if (ticket != null && resp.status() >= 500) {
                 String note = releaseTicket(ticket);
                 entry.setErrorMsg(truncate((entry.getErrorMsg() == null ? "" : entry.getErrorMsg() + " ｜ ") + note, 2000));
@@ -203,7 +203,7 @@ public class AiGatewayService {
         }
         if (NEVER_KINDS.contains(a.getKind())) {
             throw new BizException(ErrorCode.FORBIDDEN,
-                    "动作类型 " + a.getKind() + " 永不经 AI 网关执行（决策属人，配置属裁决）。");
+                            "动作类型 " + a.getKind() + " 永不经 AI 网关执行（决策属人，配置归人定）。");
         }
         // 权限预检只是快速失败的人话版本；真判仍然由下游 @RequiresPerm 按同一 token 执行
         if (a.getPermCode() == null || a.getPermCode().isBlank()) {
@@ -221,7 +221,7 @@ public class AiGatewayService {
                         "写类动作必须携带 X-Idempotency-Key 头（或参数含 clientReqNo）：" + a.getIdempotency());
             }
         }
-        // 风险分级：LOW 直跑；其余必须持有效确认票据（P4）——票据在此处原子消耗，5xx 时由调用方退回
+        // 风险分级：LOW 直跑；其余必须持有效确认票据——票据在此处原子消耗，5xx 时由调用方退回
         if (!"LOW".equalsIgnoreCase(a.getRiskLevel())) {
             return useConfirmTicket(a, req, user);
         }
@@ -261,7 +261,7 @@ public class AiGatewayService {
             throw new BizException(ErrorCode.FORBIDDEN, "参数与确认时不一致（摘要不符即作废），请重新申请确认");
         }
         // 票据是"申请人下令、其他真人背书"的授权凭证：执行者必须是申请人本人（AI 以其身份跑），
-        // 且同租户——防他人凭 confirmId 消费别人的已确认票。自审禁止在 confirmTicket 确认环节把住，此处不再判申请人。
+        // 且同租户——防他人凭 confirmId 消费别人的已确认票。自审在 confirmTicket 确认环节拦住，这里不重复判申请人。
         if (!user.getUserId().equals(c.getApplicantUserId())) {
             throw new BizException(ErrorCode.FORBIDDEN, "票据只能由申请人本人的会话执行（他人票据不可代用）");
         }
@@ -275,7 +275,7 @@ public class AiGatewayService {
     }
 
     /**
-     * 上游 5xx / 未交付时把票据退回 CONFIRMED（人工裁决：「业务 5xx 不消耗票据」）。
+     * 上游 5xx / 未交付时把票据退回 CONFIRMED（产品确认：「业务 5xx 不消耗票据」）。
      * 只在票据确实处于 USED 时回退，避免误改他人状态；若退回时已过 TTL 则置 EXPIRED。
      */
     private String releaseTicket(AiActionConfirm used) {
@@ -293,7 +293,7 @@ public class AiGatewayService {
             fresh.setStatus("CONFIRMED");
             fresh.setUpdateTime(LocalDateTime.now());
             confirmMapper.updateById(fresh);
-            return "服务端异常未交付业务裁决，票据 " + used.getId() + " 已回退 CONFIRMED（TTL 内可用同一票据重试）";
+            return "服务端异常未交付业务判定，票据 " + used.getId() + " 已回退 CONFIRMED（TTL 内可用同一票据重试）";
         } catch (Exception ex) {
             log.error("票据回退失败(id={})", used.getId(), ex);
             return "票据 " + used.getId() + " 回退失败，请人工核对";
@@ -485,7 +485,7 @@ public class AiGatewayService {
     }
 
     /**
-     * 参数文本快照（D-N14，选项乙）：给人读的明文参数，口令/令牌类字段落盘前打码。
+     * 参数文本快照：给人读的明文参数，口令/令牌类字段落盘前打码。
      * 与 {@link #digest} 分工明确——digest 防篡改（执行时复核），本方法只负责让确认人
      * "看得见自己背书的是什么"，不再是面对一串哈希闭眼签字。
      */
@@ -525,7 +525,7 @@ public class AiGatewayService {
     }
 
     /**
-     * D-N21：审计只留"可判读的摘要"——非 JSON 响应（ZIP/CSV/字节流）一律不落原文，
+     * 审计只留"可判读的摘要"——非 JSON 响应（ZIP/CSV/字节流）一律不落原文，
      * 改写为 contentType＋字节数＋哈希前缀，杜绝把导出文件明文副本灌进 ai_tool_call_log。
      */
     private String bizResultOf(Loopback resp) {
@@ -535,7 +535,7 @@ public class AiGatewayService {
             return truncate(resp.body(), 2000);
         }
         int bytes = resp.body() == null ? 0 : resp.body().length();
-        return truncate("[D-N21：非 JSON 响应不落原文] contentType=" + (ct.isBlank() ? "unknown" : ct)
+        return truncate("[非 JSON 响应不落原文] contentType=" + (ct.isBlank() ? "unknown" : ct)
                 + " bytes=" + bytes + " sha256_16=" + sha256(resp.body()), 2000);
     }
 
@@ -570,7 +570,7 @@ public class AiGatewayService {
         }
     }
 
-    /** JsonNode → 普通 Java 值（D-N09）：标量取原生类型、容器转 Map/List，缺失/空回 null，避免把 JsonNode 当 POJO 序列化。 */
+    /** JsonNode → 普通 Java 值：标量取原生类型、容器转 Map/List，缺失/空回 null，避免把 JsonNode 当 POJO 序列化。 */
     private Object plain(JsonNode node) {
         if (node == null || node.isNull() || node.isMissingNode()) {
             return null;

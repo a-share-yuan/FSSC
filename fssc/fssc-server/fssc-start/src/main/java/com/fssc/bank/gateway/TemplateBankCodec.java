@@ -26,9 +26,9 @@ import java.util.Map;
  * <pre>
  * extra_config = {
  *   "header": { "batchNo": "batchNo", "count": "cnt", "total": "sumAmt" },
- *   "item":   { "payeeName": "payeName", "bankName": "bankName",
+ *   "item": { "payeeName": "payeName", "bankName": "bankName",
  *               "account": "acctNo", "amount": "amt", "postscript": "remark" },
- *   "items":  "detailList",
+ *   "items": "detailList",
  *   "serialList": "serialNos"
  * }
  * </pre>

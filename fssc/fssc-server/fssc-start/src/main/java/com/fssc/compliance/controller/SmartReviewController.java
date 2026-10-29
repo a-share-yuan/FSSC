@@ -25,7 +25,7 @@ public class SmartReviewController {
 
     private final SmartReviewService smartReviewService;
 
-    // ==================== 规则 CRUD ====================
+    // 规则 CRUD
 
     @RequiresPerm("compliance:review:list")
     @GetMapping("/rules")
@@ -83,7 +83,7 @@ public class SmartReviewController {
         return Result.success();
     }
 
-    // ==================== 批量操作 ====================
+    // 批量操作
 
     @RequiresPerm("compliance:review:update")
     @OperLog(module = "REVIEW_RULE", operType = "UPDATE", desc = "批量启用")
@@ -112,7 +112,7 @@ public class SmartReviewController {
         return Result.success();
     }
 
-    // ==================== 执行审单 ====================
+    // 执行审单
 
     @RequiresPerm("compliance:review:execute")
     @OperLog(module = "REVIEW_RULE", operType = "OTHER", desc = "执行审单")
@@ -125,7 +125,7 @@ public class SmartReviewController {
         return Result.success(smartReviewService.executeReview(billId, billNo, billData));
     }
 
-    // ==================== 审单日志 ====================
+    // 审单日志
 
     @RequiresPerm("compliance:review:log")
     @GetMapping("/logs")
@@ -143,7 +143,7 @@ public class SmartReviewController {
         return Result.success(smartReviewService.listLogsByBill(billId));
     }
 
-    // ==================== 统计 ====================
+    // 统计
 
     @RequiresPerm("compliance:review:list")
     @GetMapping("/stats")

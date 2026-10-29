@@ -21,7 +21,7 @@ import java.util.Set;
  * <p>
  * PURCHASE_ORDER_REVIEW 审批通过 → po_order.status: OPEN → APPROVED。
  * <p>
- * <b>（甲档）：订单审批通过环节不再出证。</b>「审批不产生入库」——入库的账实动作在收货侧，
+ * （甲档）：订单审批通过环节不再出证。「审批不产生入库」——入库的账实动作在收货侧，
  * 采购循环的出证环节本来就有一条完整的：<br>
  * {@code PurchaseService.createReceipt:502 → VoucherService.generateEstimateOnReceipt}（借 1405／贷 2203 暂估）
  * → {@code InvoiceService:641 → VoucherService.reverseEstimateOnInvoiceMatch}（三单匹配红冲暂估）
@@ -76,7 +76,7 @@ public class PurchaseOrderBizAction implements WfBizAction {
                 // 甲档：订单审批通过不出证——入库出证环节在收货侧
                 // PurchaseService.createReceipt → VoucherService.generateEstimateOnReceipt（借 1405／贷 2203 暂估），
                 // 三单匹配再由 generateInvoiceMatchVoucher 出正式应付。此处出证＝库存与负债双计。
-                log.info("采购订单 {} 审批通过腿按 D-DEC-333 不出证，入库凭证由收货暂估腿生成", order.getPoNo());
+                log.info("采购订单 {} 审批通过腿不出证，入库凭证由收货暂估腿生成", order.getPoNo());
             } else {
                 // 审计扩面：改状态前采集旧值
                 String oldStatus = order.getStatus();

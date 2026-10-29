@@ -29,13 +29,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 流程传阅（G2）投递服务 —— {@code wf_cc} 的<b>唯一写入位置</b>（P3，2026-09-23）。
+ * 流程传阅投递服务 —— {@code wf_cc} 的<b>唯一写入位置</b>。
  *
  * <p><b>为什么需要它</b>：复核发现 G2 是「三缺一之三」的彻底空壳 ——
  * 表 / 实体 / Mapper / 查询（{@code ccPage}）/ 已读标记 / 3 个 Controller 端点 /
  * 前端（{@code MyCc.vue}、工作台卡片、流程中心概览计数）全部齐备，
  * 而 {@code WfQueryService.recordCc()} <b>全仓零调用</b>、{@code wf_node_config} 无抄送列、
- * {@code wf_cc} 实测 <b>0 行</b>。即读端与前端 100% 就绪、生产端 0%，
+ * {@code wf_cc} <b>0 行</b>。即读端与前端 100% 就绪、生产端 0%，
  * 与 {@code MyDelegate.vue} 早已备好 {@code EXPIRED} 分支而后端从不产出同型。
  *
  * <p><b>抄送人来源（取并集后去重）</b>：
@@ -51,19 +51,19 @@ import java.util.Set;
  * <p><b>投递时机</b>：仅在审批<b>通过并推进</b>后投递（驳回会终止实例，且已有独立终止通知链路；
  * 给已终止的实例挂抄送点击价值低）。若后续需要「驳回也抄送」，在此处放开即可。
  *
- * <p><b>通知出口（/149/187，2026-10-01 办结）</b>：投递成功后逐条发 {@code sys_message}
- * 站内信（{@value #CC_MSG_TYPE}）。此前本服务只写 {@code wf_cc}，而 {@code wf_cc} 不是任何人会主动去翻的
- * 地方 —— 抄送在数据层成立、在运营层失效，被抄送人永远不知道有单可看。站内信与 {@code wf_cc} 行
+ * <p><b>通知出口</b>：投递成功后逐条发 {@code sys_message}
+ * 站内信（{@value #CC_MSG_TYPE}）。只写 {@code wf_cc} 的话，抄送在数据层成立、在运营层失效——
+ * 被抄送人永远不知道有单可看。站内信与 {@code wf_cc} 行
  * <b>同一条据</b>：{@code (biz_type, biz_id)} 直接取 {@code wf_cc} 上的业务域与单据主键，
  * 使提醒本身可联查回被抄送的单据。
  *
  * <p><b>发送失败不阻断</b>：站内信在投递循环之外补发，单条异常只记 warn，既不影响 {@code wf_cc} 已成的事实，
  * 也不影响审批主链路。
  *
- * <p><b>默认零影响</b>：两路来源皆空时不写任何行，{@code complete()} 行为与改造前逐字一致。
+ * <p><b>默认零影响</b>：两路来源皆空时不写任何行，{@code complete()} 行为与原先逐字一致。
  *
  * <p><b>去重</b>：库层 {@code wf_cc.uk_proc_node_user (proc_inst_id, from_node, cc_user_id)}
- * 默认处理，重复投递（如驳回后重走同一节点）静默跳过，绝不因重复键中断审批。
+ * 兜底，重复投递（如驳回后重走同一节点）静默跳过，绝不因重复键中断审批。
  *
  * <p><b>失败不阻断</b>：调用方（{@code WfEngineFacade.complete}）已整体 try/catch；
  * 本类内部亦逐条 catch —— 传阅是附加可观测性，不允许影响审批主链路。
@@ -95,17 +95,17 @@ public class WfCcService {
     private final NodeOrgResolver nodeOrgResolver;
 
     /**
-     * 按<b>取人侧同一规则</b>展开 {@code cc_roles} 为收件人集合（不变量 II，2026-10-15）。
+     * 按<b>取人侧同一规则</b>展开 {@code cc_roles} 为收件人集合（不变量 II）。
      *
      * <p><b>为什么不能按角色编码直接反查全网用户</b>：指派链路（{@code NodeOrgResolver}）按
      * {@code sys_role.org_scope} 收敛——{@code COMPANY} 角色只取<b>单据公司</b>持有人、
      * {@code GROUP} 角色才取全网；而 {@code SysUserMapper.selectUserIdsByRoleCodes} 没有任何
      * company/scope 条件。两套规则并存时，单公司单据会把抄送投给<b>所有公司</b>的同角色人员
-     * （实测：company 1 的应收单抄出 20 人、横跨 9 家公司 ⇒ 过度知会/信息越界）。
+     * （company 1 的应收单会把抄送投给横跨多家公司的同角色人员 ⇒ 过度知会/信息越界）。
      * 该缺陷在「角色 × 公司全覆盖」补位（278 账号）之后从偶发放大为必然，故必须与指派同源收敛。
      *
      * <p><b>规则</b>：逐角色走 {@link NodeOrgResolver#listRoleCandidatesInScope}——
-     * COMPANY→本公司持有人（单据公司解析不到时取空，<b>不做全局默认处理</b>：宁可少抄，
+     * COMPANY→本公司持有人（单据公司解析不到时取空，<b>不做全局兜底</b>：宁可少抄，
      * 也不在解析失败时把抄送撒满全租户）；GROUP→全局（本公司优先序）；附带排除停用与 admin。
      * 单角色展开失败只跳过该角色，不影响其余角色与主链路（fail-soft，与 {@link #deliver} 整体一致）。
      *
@@ -256,15 +256,14 @@ public class WfCcService {
     }
 
     /**
-     * 抄送已读回写（2026-10-01 办结）。
+     * 抄送已读回写。
      *
      * <p><b>为什么改</b>：{@code wf_cc.is_read} 是<b>收件人的个人状态</b>，不是流程管理动作，
-     * 而端点此前挂 {@code wf:cc:update}——该码在授权表里只授 CONFIG_ADMIN／FIN_MANAGER／IT_ADMIN 三岗
-     * （sys_menu id=3350 → sys_role_menu 反查，FIND_IN_SET 复核），而实际收到抄送的岗位
-     * （现网 wf_cc 收件人 3901／3915 = FSSC_SUPERVISOR＋COMMON_EMP）一个都不持 ⇒
+     * 而端点挂 {@code wf:cc:update}——该码在授权表里只授 CONFIG_ADMIN／FIN_MANAGER／IT_ADMIN 三岗，
+     * 实际收到抄送的岗位
+     * 一个都不持 ⇒
      * 前端「标记已读」按钮对他们<b>不渲染</b>、接口对他们 403，{@code is_read} 结构性恒为 0
-     * （实测 {@code wf_cc} 12 行全部 {@code is_read=0}、{@code read_time} 全 NULL，
-     * 与 登记的「5 条未读」同因，只是行数随投递增加）。
+     * （{@code wf_cc} 的行全部 {@code is_read=0}、{@code read_time} 全 NULL）。
      * 光补通知不解决这一半：提醒发得出去，已读状态仍永远翻不过来。
      *
      * <p><b>规则</b>：与 {@code GET /cc/mine} 的「本人视角免权限码」一致——自己的抄送行不需要权限码；

@@ -39,13 +39,11 @@ public class GlMonthClose extends TenantAuditBase {
     /** 执行结果说明 */
     private String resultMsg;
 
-    // 证据 12-31:169：月结记录回不到审批流
-    // 缺陷原状：{@code gl_month_close} 表上<b>没有</b> proc_inst_id / approve_time / audit_time 三列
-    // （证据按 information_schema.columns 所记，本轮只读复核仍缺），于是月结单与 GL_MONTH_CLOSE 审批流
-    // 之间没有任何键——月结记录点不进审批链、也答不出"谁在哪一刻批的"，
-    // 与 /143（GL 域结构性缺列）同型。
-    // 本轮做法＝①（{@code OpPayBatch.payProcInstId}）／（{@code OpArchive.archiveProcInstId}）
-    // 同一套<b>读侧补充</b>：零 DDL、零写库副作用，由 {@code GlMonthCloseService.page()} 按
+    // 月结记录回不到审批流：{@code gl_month_close} 表上<b>没有</b> proc_inst_id / approve_time / audit_time
+    // 三列（按 information_schema.columns 只读复核仍然缺），于是月结单与 GL_MONTH_CLOSE 审批流之间
+    // 没有任何键——月结记录点不进审批链、也答不出"谁在哪一刻批的"。
+    // 处理办法沿用既有两处读侧补充（{@code OpPayBatch.payProcInstId}、
+    // {@code OpArchive.archiveProcInstId}）：零 DDL、零写库副作用，由 {@code GlMonthCloseService.page()} 按
     // {@code wf_instance(biz_type='GL_MONTH_CLOSE', biz_id=月结单ID)} 与 {@code wf_task_history}
     // 末节点 APPROVE/AUTO_PASS 记录填出下面几列。持久化见类尾注释态 SQL（未执行）。
 
@@ -74,8 +72,8 @@ public class GlMonthClose extends TenantAuditBase {
     private String auditUserName;
 
     /*
-     * 需人工裁决：以下是把上面三枚键<b>持久化</b>的注释态 DDL，本轮未执行、
-     * 也不得由缺陷修复批次执行（与 /141 载体册同批交回）。
+     * 需产品确认：以下是把上面三枚键<b>持久化</b>的注释态 DDL，没有执行过，
+     * 也不得借修复之名代为执行。
      * 写入数据库后把实体上的 @TableField(exist = false) 改成真实列名，并在
      * GlMonthCloseService.close() 起流处用 wfEngineFacade.start(...) 的返回值写 proc_inst_id、
      * 在 applyApprovalOutcome() 定稿处写 approve_time/audit_time/audit_user_id（读侧补充保留，兼容历史行）。
@@ -85,7 +83,7 @@ public class GlMonthClose extends TenantAuditBase {
      * ADD COLUMN audit_time DATETIME NULL COMMENT '末节点复核时刻＝最后一条 APPROVE/AUTO_PASS 记录',
      * ADD COLUMN audit_user_id BIGINT NULL COMMENT '末节点复核人',
      * ADD KEY idx_gl_mc_proc_inst_id (proc_inst_id);
-     * -- 历史回灌（数据轨，与上面的裁决一起做；历史行默认不回写＝演练数据保留铁律）：
+     * -- 历史回灌（数据轨，与上面的判定一起做；历史行默认不回写＝演练数据保留铁律）：
      * -- UPDATE gl_month_close g JOIN wf_instance w ON w.biz_type='GL_MONTH_CLOSE' AND w.biz_id=g.id
      * SET g.proc_inst_id=w.proc_inst_id, g.approve_time=w.end_time WHERE g.proc_inst_id IS NULL;
      * -- UPDATE gl_month_close g JOIN wf_task_history h ON h.id=(SELECT MAX(h2.id) FROM wf_task_history h2

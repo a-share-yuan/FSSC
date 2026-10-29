@@ -28,7 +28,7 @@
       <el-table-column :label="$t('sharing.common.colWorkItem')" width="90">
         <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
       </el-table-column>
-      <!-- 认领时间此前直出后端原始串（ISO 带 T），与页面其余时间列格式不一致，统一走 formatDateTime -->
+      <!-- 认领时间统一走 formatDateTime：直出后端原始串（ISO 带 T）会与页面其余时间列格式不一致 -->
       <el-table-column prop="receiveTime" :label="$t('sharing.common.colClaimTime')" width="160" sortable :formatter="(r, c, v) => formatDateTime(v)" />
       <el-table-column prop="remark" :label="$t('common.remark')" min-width="120" show-overflow-tooltip  sortable />
       <el-table-column :label="$t('common.operation')" width="380" fixed="right">
@@ -165,7 +165,7 @@ function openRowDetail(row) {
 }
 
 const selRows = ref([])
-// 服务端分页：改造前固定 pageNum:1/pageSize:100，超 100 条静默截断
+// 服务端分页：原先固定 pageNum:1/pageSize:100，超 100 条静默截断
 const pager = useTablePager({ mode: 'server', storageKey: 'sharing_taskwork' })
 const { rows, loading, pageNum, pageSize, total } = pager
 const voucherVis = ref(false)
@@ -174,8 +174,8 @@ const editableLines = ref([])
 const readonly = ref(false)
 const returnVis = ref(false)
 const current = ref(null)
-// 退单原因此前只有裸 ref + 空 rules（reactive({})），既无必填校验也无任何提示；
-// 现改为表单绑定 + 必填规则，与后端 SharingService.returnTask 的「请填写退单原因」断言同一把尺。
+// 退单原因只有裸 ref + 空 rules（reactive({})）的话，既无必填校验也无任何提示；
+// 表单绑定 + 必填规则，与后端 SharingService.returnTask 的「请填写退单原因」断言同一把尺。
 const returnFormRef = ref(null)
 const returnForm = reactive({ reason: '' })
 const returnFormRules = computed(() => (reactive({
@@ -296,8 +296,8 @@ async function doReturn() {
 }
 
 async function finish(row) {
-  // /完成弹窗由纯 confirm 改为带备注输入框——
-  // 此前办结是 MessageBox.confirm，审计口语无处可写、更无处可提交，三张工单 remark 恒 NULL。
+  // 完成弹窗带备注输入框，不用纯 confirm——
+  // 纯 confirm 下审计口语无处可写、更无处可提交，三张工单 remark 恒 NULL。
   // 备注选填（不阻断办结），提交后服务端落 op_audit_task.remark 并随「备注」列回显。
   const { value: remark } = await ElMessageBox.prompt(
     t('sharing.taskWork.promptFinish', { v1: row.billNo }), t('sharing.taskWork.titleFinish'), {

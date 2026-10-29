@@ -8,7 +8,7 @@ import com.fssc.common.entity.TenantAuditBase;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/** 币种与本位币（V1.4.87）。 */
+/** 币种与本位币。 */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("gl_currency")

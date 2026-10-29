@@ -22,10 +22,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * P1-1 资产月度自动计提 Job。
+ * 资产月度自动计提 Job。
  *
  * <p>每月 1 日 02:00 自动触发折旧计提批单生成 + 发起 FA_DEPRECIATION 审批流。
- * 替代此前只能靠人工调接口触发的问题，接通"投资到资产"循环的自动化最后一环。
+ * 省掉人工调接口触发，接通"投资到资产"循环的自动化最后一环。
  *
  * <p>多租户处理：扫描有在用资产的租户，逐租户发起计提。
  * 去重由 {@link AssetDeprBatchService#createAndSubmit} 的批单状态 + 资产 lastDeprDate 保障。

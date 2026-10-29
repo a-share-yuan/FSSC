@@ -10,7 +10,7 @@ import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 
-/** 会计准则（V1.4.87）。多准则出多套核算数据的基础。 */
+/** 会计准则。多准则出多套核算数据的基础。 */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("gl_standard")

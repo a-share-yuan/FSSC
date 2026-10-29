@@ -86,7 +86,7 @@ public class IntegrationController {
         Long recentTotal = callLogMapper.selectCount(
                 new LambdaQueryWrapper<IntegrationCallLog>().ge(IntegrationCallLog::getCreateTime, since));
         result.put("recent24h", recentTotal);
-        // R5-D-040：按接口类别汇总成功/失败数（前端据此红牌「全失败类别」告警）
+        // 按接口类别汇总成功/失败数（前端据此红牌「全失败类别」告警）
         QueryWrapper<IntegrationCallLog> cq = new QueryWrapper<>();
         cq.select("category", "count(*) as total",
                 "sum(case when success = 0 then 1 else 0 end) as fail")

@@ -45,7 +45,7 @@ public class DataSourceAspect {
         }
     }
 
-    /** 方法级注解优先，类级注解默认处理（取目标类而非代理类，避免 CGLIB 代理丢注解） */
+    /** 方法级注解优先，类级注解兜底（取目标类而非代理类，避免 CGLIB 代理丢注解） */
     private FsscDataSource resolveAnnotation(ProceedingJoinPoint pjp) {
         MethodSignature signature = (MethodSignature) pjp.getSignature();
         Method method = signature.getMethod();

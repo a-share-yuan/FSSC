@@ -4,11 +4,24 @@
 package com.fssc.workflow.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.entity.WfModel;
 import com.fssc.workflow.mapper.WfModelMapper;
+import com.fssc.workflow.service.WfAssigneeReplaceService;
+import com.fssc.workflow.service.WfBpmnChecker;
+import com.fssc.workflow.service.WfBpmnRepoService;
+import com.fssc.workflow.service.WfModelService;
+import com.fssc.workflow.service.WfQueryService;
+import java.io.StringReader;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +33,11 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
 /**
  * 可视化流程设计器增强（需求文档：可视化流程设计器功能用例-财务共享专用）。
@@ -29,8 +47,8 @@ import java.util.Map;
  * {@code wf:model} 迁移到 {@code wf:design:*}。迁移期用 {@code @RequiresPerm} 的<b>多码 OR 语义</b>
  * 并保留旧码 {@code wf:model}，故历史授权（CONFIG_ADMIN / IT_ADMIN）上线后不会 403。
  *
- * <p><b>2026-10-02 摘旧码（写读分面收尾）</b>：OR 语义下"留旧码"等于"旧码单独开全族"，实测
- * 只持 3358 {@code wf:model} 的 FSSC_SUPERVISOR（2 人）可直接调 {@code /publish} 越过界面发版，
+ * <p><b>摘旧码（写读分面收尾）</b>：OR 语义下"留旧码"等于"旧码单独开全族"，
+ * 只持 {@code wf:model} 的 FSSC_SUPERVISOR 可直接调 {@code /publish} 越过界面发版，
  * 故按危害面分两档收窄：
  * <ul>
  *   <li><b>改模型/发版/建模型档</b>（validate / simulate / publish / import / batch-replace-assignee）
@@ -51,22 +69,22 @@ import java.util.Map;
 public class WfDesignerController {
 
     private final WfModelMapper modelMapper;
-    private final com.fssc.workflow.service.WfModelService modelService;
-    private final com.fssc.workflow.service.WfQueryService wfQueryService;
-    private final com.fssc.workflow.service.WfBpmnRepoService bpmnRepoService;
-    private final com.fssc.workflow.service.WfBpmnChecker bpmnChecker;
-    private final com.fssc.workflow.service.WfAssigneeReplaceService assigneeReplaceService;
+    private final WfModelService modelService;
+    private final WfQueryService wfQueryService;
+    private final WfBpmnRepoService bpmnRepoService;
+    private final WfBpmnChecker bpmnChecker;
+    private final WfAssigneeReplaceService assigneeReplaceService;
 
-    // ---------------- UC08 流程合法性校验 ----------------
+    // UC08 流程合法性校验
 
     /**
-     * 校验逻辑抽到 {@link com.fssc.workflow.service.WfBpmnChecker}：发版与"参与人批量替换"共用同一道。
+     * 校验逻辑抽到 {@link WfBpmnChecker}：发版与"参与人批量替换"共用同一道。
      * 原实现只查"有没有配参与人"，查不出角色码写错（运行时零候选）、节点不可达、网关缺默认流这三类会直接卡单的结构问题。
      */
     @RequiresPerm("wf:design:update")
     @PostMapping("/validate")
     public Result<Map<String, Object>> validate(@RequestBody Map<String, Object> body) {
-        com.fssc.workflow.service.WfBpmnChecker.Report r = bpmnChecker.check((String) body.get("bpmnXml"));
+        WfBpmnChecker.Report r = bpmnChecker.check((String) body.get("bpmnXml"));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("valid", r.valid());
         out.put("errors", r.errors);
@@ -75,11 +93,11 @@ public class WfDesignerController {
         return Result.success(out);
     }
 
-    private String elAttr(org.w3c.dom.Element el, String name) {
+    private String elAttr(Element el, String name) {
         return el.getAttribute(name);
     }
 
-    // ---------------- UC10 模拟调试运行 ----------------
+    // UC10 模拟调试运行
 
     /**
      * 路径预测（UC10）：按传入的分支变量真走一遍图。
@@ -112,11 +130,11 @@ public class WfDesignerController {
             DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
             f.setNamespaceAware(true);
             DocumentBuilder b = f.newDocumentBuilder();
-            org.w3c.dom.Document doc = b.parse(new org.xml.sax.InputSource(new java.io.StringReader(bpmnXml)));
-            org.w3c.dom.Element process = (org.w3c.dom.Element) doc.getElementsByTagNameNS("*", "process").item(0);
-            Map<String, List<org.w3c.dom.Element>> outs = outgoingBySource(process);
+            Document doc = b.parse(new InputSource(new StringReader(bpmnXml)));
+            Element process = (Element) doc.getElementsByTagNameNS("*", "process").item(0);
+            Map<String, List<Element>> outs = outgoingBySource(process);
             String startId = null;
-            for (org.w3c.dom.Element fl : outs.getOrDefault(startIdOf(process), List.of())) {
+            for (Element fl : outs.getOrDefault(startIdOf(process), List.of())) {
                 startId = fl.getAttribute("targetRef");
                 break;
             }
@@ -124,10 +142,10 @@ public class WfDesignerController {
                 trace.add(row("error", "无起点", "开始节点没有出线"));
                 return Result.success(r);
             }
-            int approvals = walk(process, outs, startId, vars, trace, new java.util.LinkedHashSet<>());
+            int approvals = walk(process, outs, startId, vars, trace, new LinkedHashSet<>());
             r.put("approvalSteps", approvals);
             // 与发版同一套校验：预测顺手把结构问题带出来，设计器不必先点"校验"再点"模拟"
-            com.fssc.workflow.service.WfBpmnChecker.Report chk = bpmnChecker.check(bpmnXml);
+            WfBpmnChecker.Report chk = bpmnChecker.check(bpmnXml);
             r.put("errors", chk.errors);
             r.put("warnings", chk.warnings);
         } catch (Exception e) {
@@ -137,32 +155,32 @@ public class WfDesignerController {
         return Result.success(r);
     }
 
-    private String startIdOf(org.w3c.dom.Element process) {
-        org.w3c.dom.NodeList all = process.getChildNodes();
+    private String startIdOf(Element process) {
+        NodeList all = process.getChildNodes();
         for (int i = 0; i < all.getLength(); i++) {
-            org.w3c.dom.Node n = all.item(i);
-            if (n.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE && "startEvent".equals(n.getLocalName())) {
-                return elAttr((org.w3c.dom.Element) n, "id");
+            Node n = all.item(i);
+            if (n.getNodeType() == Node.ELEMENT_NODE && "startEvent".equals(n.getLocalName())) {
+                return elAttr((Element) n, "id");
             }
         }
         return "__none__";
     }
 
-    private Map<String, List<org.w3c.dom.Element>> outgoingBySource(org.w3c.dom.Element process) {
-        Map<String, List<org.w3c.dom.Element>> out = new LinkedHashMap<>();
-        org.w3c.dom.NodeList flows = process.getElementsByTagNameNS("*", "sequenceFlow");
+    private Map<String, List<Element>> outgoingBySource(Element process) {
+        Map<String, List<Element>> out = new LinkedHashMap<>();
+        NodeList flows = process.getElementsByTagNameNS("*", "sequenceFlow");
         for (int i = 0; i < flows.getLength(); i++) {
-            org.w3c.dom.Element fl = (org.w3c.dom.Element) flows.item(i);
+            Element fl = (Element) flows.item(i);
             out.computeIfAbsent(fl.getAttribute("sourceRef"), k -> new ArrayList<>()).add(fl);
         }
         return out;
     }
 
     /** 深度优先展开路径，返回途经人工节点数（汇聚/回环只记一次，不重复计数） */
-    private int walk(org.w3c.dom.Element process, Map<String, List<org.w3c.dom.Element>> outs, String id,
-                     Map<String, Object> vars, List<Map<String, String>> trace, java.util.Set<String> visited) {
+    private int walk(Element process, Map<String, List<Element>> outs, String id,
+                     Map<String, Object> vars, List<Map<String, String>> trace, Set<String> visited) {
         if (id == null || trace.size() > 200) return 0;
-        org.w3c.dom.Element cur = findElement(process, id);
+        Element cur = findElement(process, id);
         if (cur == null) {
             trace.add(row("error", "连线指向不存在的节点", id));
             return 0;
@@ -185,7 +203,7 @@ public class WfDesignerController {
         }
         trace.add(row("task", name.isBlank() ? ln + " " + id : name, nodeTip(cur, ln, vars)));
         int self = "userTask".equals(ln) ? 1 : 0;
-        List<org.w3c.dom.Element> flows = outs.getOrDefault(id, List.of());
+        List<Element> flows = outs.getOrDefault(id, List.of());
         if (flows.isEmpty()) {
             trace.add(row("error", "节点无出流", id + "：流程走到此处即悬挂"));
             return self;
@@ -194,28 +212,28 @@ public class WfDesignerController {
             // BPMN 语义：活动有多条无条件出线 = 隐式并行分叉，各支都会执行
             trace.add(row("gateway", "隐式并行分叉（" + id + "）", "出口 " + flows.size() + " 条，各支同时执行"));
             int n = 0;
-            for (org.w3c.dom.Element fl : flows) n += walk(process, outs, fl.getAttribute("targetRef"), vars, trace, visited);
+            for (Element fl : flows) n += walk(process, outs, fl.getAttribute("targetRef"), vars, trace, visited);
             return n;
         }
         return self + walk(process, outs, flows.get(0).getAttribute("targetRef"), vars, trace, visited);
     }
 
     /** 网关选路：排他取文档序第一条为真、包容取全部为真、并行取全部；都不成立走默认流 */
-    private List<String> gatewayTargets(org.w3c.dom.Element gw, List<org.w3c.dom.Element> flows,
+    private List<String> gatewayTargets(Element gw, List<Element> flows,
                                         Map<String, Object> vars, List<Map<String, String>> trace) {
         String ln = gw.getLocalName();
         List<String> targets = new ArrayList<>();
         StringBuilder why = new StringBuilder();
-        org.w3c.dom.Element defFlow = null;
+        Element defFlow = null;
         boolean condHit = false;
-        for (org.w3c.dom.Element fl : flows) {
+        for (Element fl : flows) {
             String cond = condOf(fl);
             if (cond.isEmpty()) {
                 if (defFlow == null) defFlow = fl;
                 continue;
             }
             if ("parallelGateway".equals(ln)) continue;
-            Boolean v = com.fssc.workflow.service.WfBpmnChecker.evalCondition(cond, vars);
+            Boolean v = WfBpmnChecker.evalCondition(cond, vars);
             String flName = fl.getAttribute("name");
             String tag = flName.isBlank() ? fl.getAttribute("id") : flName;
             if (v == null) {
@@ -230,14 +248,14 @@ public class WfDesignerController {
         }
         if (!condHit || "parallelGateway".equals(ln)) {
             if ("parallelGateway".equals(ln)) {
-                for (org.w3c.dom.Element fl : flows) targets.add(fl.getAttribute("targetRef"));
+                for (Element fl : flows) targets.add(fl.getAttribute("targetRef"));
                 why.insert(0, "并行扇出 " + flows.size() + " 支（各支独立办理，全通过才汇聚）");
             } else {
                 String def = gw.getAttribute("default");
                 if (!def.isBlank()) {
                     // default 属性存的是"连线 id"，不是目标节点 id——必须解析成 targetRef，
                     // 否则模拟会把连线当节点走一步，路径预测直接失真。
-                    org.w3c.dom.Element dfl = flowById(flows, def);
+                    Element dfl = flowById(flows, def);
                     if (dfl != null) {
                         targets.add(dfl.getAttribute("targetRef"));
                         why.append("→ 默认流 ").append(def);
@@ -258,13 +276,13 @@ public class WfDesignerController {
         return targets;
     }
 
-    private static org.w3c.dom.Element flowById(List<org.w3c.dom.Element> flows, String id) {
-        for (org.w3c.dom.Element fl : flows) if (id.equals(fl.getAttribute("id"))) return fl;
+    private static Element flowById(List<Element> flows, String id) {
+        for (Element fl : flows) if (id.equals(fl.getAttribute("id"))) return fl;
         return null;
     }
 
-    private static String condOf(org.w3c.dom.Element flow) {
-        org.w3c.dom.NodeList c = flow.getElementsByTagNameNS("*", "conditionExpression");
+    private static String condOf(Element flow) {
+        NodeList c = flow.getElementsByTagNameNS("*", "conditionExpression");
         if (c.getLength() > 0 && c.item(0).getTextContent() != null) return c.item(0).getTextContent().trim();
         return flow.getTextContent() == null ? "" : flow.getTextContent().trim();
     }
@@ -277,7 +295,7 @@ public class WfDesignerController {
         return m;
     }
 
-    private String nodeTip(org.w3c.dom.Element el, String ln, Map<String, Object> vars) {
+    private String nodeTip(Element el, String ln, Map<String, Object> vars) {
         String cg = el.getAttribute("flowable:candidateGroups");
         String as = el.getAttribute("flowable:assignee");
         if (!cg.isBlank()) return "候选角色: " + cg;
@@ -286,19 +304,19 @@ public class WfDesignerController {
         return "人工节点（未配参与人）";
     }
 
-    private org.w3c.dom.Element findElement(org.w3c.dom.Element process, String id) {
-        org.w3c.dom.NodeList all = process.getChildNodes();
+    private Element findElement(Element process, String id) {
+        NodeList all = process.getChildNodes();
         for (int i = 0; i < all.getLength(); i++) {
-            org.w3c.dom.Node n = all.item(i);
-            if (n.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
-                org.w3c.dom.Element el = (org.w3c.dom.Element) n;
+            Node n = all.item(i);
+            if (n.getNodeType() == Node.ELEMENT_NODE) {
+                Element el = (Element) n;
                 if (id.equals(el.getAttribute("id"))) return el;
             }
         }
         return null;
     }
 
-    // ---------------- UC09 版本发布 / UC11 导入导出 ----------------
+    // UC09 版本发布 / UC11 导入导出
 
     /** 发布：bpmnXml 存入模型，版本+1，重新部署由 WfModelService.update 处理 */
     @RequiresPerm("wf:design:update")
@@ -306,18 +324,18 @@ public class WfDesignerController {
     @PostMapping("/publish")
     public Result<WfModel> publish(@RequestBody WfModel model) {
         if (model.getId() == null) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "模型ID必填");
+            throw new BizException(ErrorCode.PARAM_INVALID, "模型ID必填");
         }
         WfModel old = modelMapper.selectById(model.getId());
         if (old == null) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "模型不存在");
+            throw new BizException(ErrorCode.PARAM_INVALID, "模型不存在");
         }
         // 校验
-        Map<String, Object> v = new java.util.HashMap<>();
+        Map<String, Object> v = new HashMap<>();
         v.put("bpmnXml", model.getBpmnXml());
         Map<String, Object> vres = validate(v).getData();
         if (!Boolean.TRUE.equals(vres.get("valid"))) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(ErrorCode.PARAM_INVALID,
                     "流程校验未通过: " + String.join("; ", (List<String>) vres.get("errors")));
         }
         WfModel upd = new WfModel();
@@ -346,7 +364,7 @@ public class WfDesignerController {
     @GetMapping("/export")
     public Result<Map<String, Object>> export(@RequestParam Long id) {
         WfModel m = modelMapper.selectById(id);
-        if (m == null) throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "模型不存在");
+        if (m == null) throw new BizException(ErrorCode.PARAM_INVALID, "模型不存在");
         Map<String, Object> r = new HashMap<>();
         r.put("modelKey", m.getModelKey());
         r.put("modelName", m.getModelName());
@@ -364,11 +382,11 @@ public class WfDesignerController {
         String modelName = (String) body.get("modelName");
         String bpmnXml = (String) body.get("bpmnXml");
         if (modelKey == null || modelKey.isBlank() || bpmnXml == null || bpmnXml.isBlank()) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "模型编码与BPMN必填");
+            throw new BizException(ErrorCode.PARAM_INVALID, "模型编码与BPMN必填");
         }
         long dup = modelMapper.selectCount(new LambdaQueryWrapper<WfModel>().eq(WfModel::getModelKey, modelKey));
         if (dup > 0) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "模型编码已存在: " + modelKey);
+            throw new BizException(ErrorCode.PARAM_INVALID, "模型编码已存在: " + modelKey);
         }
         WfModel m = new WfModel();
         m.setModelKey(modelKey);
@@ -377,13 +395,13 @@ public class WfDesignerController {
         m.setSource("IMPORT");
         m.setVersion(1);
         m.setStatus("DRAFT");
-        m.setTenantId(com.fssc.framework.tenant.TenantContext.getTenantId());
+        m.setTenantId(TenantContext.getTenantId());
         modelMapper.insert(m);
         return Result.success(m.getId());
     }
 
     /**
-     * 参与人批量替换（批次 2 裁决⑥交付）：把某角色从所有流程节点上换成另一角色，
+     * 参与人批量替换：把某角色从所有流程节点上换成另一角色，
      * BPMN candidateGroups 与 wf_node_config 两侧同改并立即 publish（版本+1）。
      * 默认 dryRun=true 只出影响面清单。
      */
@@ -401,18 +419,18 @@ public class WfDesignerController {
         } else if (keys instanceof String s && !s.isBlank()) {
             for (String s2 : s.split(",")) if (!s2.isBlank()) modelKeys.add(s2.trim());
         }
-        com.fssc.framework.security.LoginUser lu = com.fssc.framework.security.UserContext.get();
+        LoginUser lu = UserContext.get();
         Long operator = lu == null ? null : lu.getUserId();
         return Result.success(assigneeReplaceService.replace(from, to, modelKeys, dryRun, operator));
     }
 
-    // ---------------- G3-3 在途影响面 / G3-4 BPMN 仓库化 ----------------
+    // 在途影响面 / BPMN 仓库化
 
     /**
-     * 批次3 R3-E 全库体检（只读）：把 wf_model 每个 modelKey 的最高版本逐个过一遍发布，
+     * 全库体检（只读）：把 wf_model 每个 modelKey 的最高版本逐个过一遍发布，
      * 回传"哪个模型有几条 error/warning、是否金额分档、档位阈值、绑定哪些 bizType"。
      *
-     * <p>用途＝金额网关新规则的回归基线：规则改前/改后各跑一次逐格比对，在用模型的 error 必须零新增
+     * <p>用途＝金额网关新规则的回归基线：规则变更前/变更后各跑一次逐格比对，在用模型的 error 必须零新增
      * ——网关出口顺序动一下就可能把整个流程族挡在发布门外，而这里是只读的，不碰任何单据。
      * 与 {@code /validate} 用的是同一个 checker，所以体检结论就等于下一次发布的校验结论。
      */
@@ -427,7 +445,7 @@ public class WfDesignerController {
         int errorTotal = 0;
         int tieredTotal = 0;
         for (WfModel m : latest.values()) {
-            com.fssc.workflow.service.WfBpmnChecker.Report rep = bpmnChecker.check(m.getBpmnXml());
+            WfBpmnChecker.Report rep = bpmnChecker.check(m.getBpmnXml());
             if (rep.amountTiered) tieredTotal++;
             errorTotal += rep.errors.size();
             if (!includeClean && rep.errors.isEmpty() && rep.warnings.isEmpty()) continue;
@@ -452,7 +470,7 @@ public class WfDesignerController {
     }
 
     /**
-     * 在途实例影响面（G3-3）：某模型当前 RUNNING 且仍绑定旧流程定义的实例清单。
+     * 在途实例影响面：某模型当前 RUNNING 且仍绑定旧流程定义的实例清单。
      * 发布前先查它做提示，发布后再查它决定要不要逐笔跟进。
      */
     @RequiresPerm({"wf:design:list", "wf:model"})

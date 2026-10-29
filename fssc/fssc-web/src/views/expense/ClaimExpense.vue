@@ -140,7 +140,7 @@
           </el-table-column>
           <el-table-column :label="$t('expense.claim.colEntertainType')" width="130">
             <template #default="{ row }">
-              <!-- 绑真实列 entertain_type，ext_json 仅作历史单据回显默认处理（查询范围见 entertainOfLine） -->
+              <!-- 绑真实列 entertain_type，ext_json 仅作历史单据回显兜底（查询范围见 entertainOfLine） -->
               <el-select :model-value="entertainOfLine(row).type" style="width: 100%" :disabled="!isEntertain(b, row)" clearable
                 :placeholder="isEntertain(b, row) ? t('expense.claim.dlgPickEntertainType') : t('expense.claim.phEntertainAfter')"
                 @update:model-value="(v) => setEntertain(row, { entertainType: v })">
@@ -238,7 +238,7 @@
             <el-col :xs="24" :md="8"><el-form-item :label="$t('expense.common.colBank')" prop="extJson.bankName"><el-input v-model="b.form.bill.extJson.bankName" /></el-form-item></el-col>
           </el-row>
 
-          <!-- P2 #18 跨组织四维度（承担/结算/支付/借款）+ 代理报销 分离 -->
+          <!-- #18 跨组织四维度（承担/结算/支付/借款）+ 代理报销 分离 -->
           <el-divider content-position="left" style="margin: 4px 0 12px">{{ $t('expense.claim.secCrossOrgProxy') }}</el-divider>
           <el-row :gutter="12">
             <el-col :xs="24" :md="8">
@@ -298,7 +298,7 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 
-// 付款方式（2026-10-18 基础数据办结：字典定值域 + i18n 定文案）
+// 付款方式（基础数据办结：字典定值域 + i18n 定文案）
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
 const payMethodOptions = payMethodDict.options
 const { saveFormHistory } = useAutoFill()
@@ -316,7 +316,7 @@ const loading = ref(false)
 const users = ref([])
 const companies = ref([])
 const shareType = ref('COST_CENTER')
-// 第2批：分摊方式恒有默认值（COST_CENTER）——挂 rules 纳入中央框架视野；
+// 分摊方式恒有默认值（COST_CENTER）——挂 rules 纳入中央框架视野；
 // computed 包装只为给 el-form 一个可校验 model，v-model 仍绑 shareType ref 不动
 const shareForm = computed(() => ({ shareType: shareType.value }))
 const shareTypeRules = { shareType: commonRules.select('请选择分摊方式') }
@@ -368,7 +368,7 @@ function onOrigAmt(b, row, v) {
     const r = effRate(row)
     row.amount = r > 0 ? Math.round(v * r * 100) / 100 : v
   } else {
-    // 本币行同步回写原币金额与汇率（与后端 saveDraft 默认处理形成双侧保证）
+    // 本币行同步回写原币金额与汇率（与后端 saveDraft 兜底形成双侧保证）
     row.amount = v
     row.origAmount = v
     row.exchangeRate = 1
@@ -416,7 +416,7 @@ function isEntertain(b, row) {
 // ───────── 招待三项（接待对象 / 接待人数 / 人均标准）随单入库 ─────────
 // 原实现把三项绑在 row.entertainTarget / row.entertainCount / row.entertainType 三个「裸字段」上，
 // 后端 ExpBillLine 实体没有这三个同名属性 ⇒ 请求体反序列化时被丢弃 ⇒ exp_bill_line.ext_json={}，
-// 详情页三项全空、人均标准校验只能靠审批人口述（12-09 单A/单B 两次实测）。
+// 详情页三项全空、人均标准校验只能靠审批人口述。
 // 现按真实承载写入数据库：接待对象→attendees、接待人数→person_count、人均标准→ext_json.perCapita，
 // 三项另冗余写进 ext_json（后端可据此做标准校验）。
 // 招待费类型改落真实列 exp_bill_line.entertain_type，ext_json.entertainType 同步写一份以兼容历史查询。
@@ -515,7 +515,7 @@ async function onBeforeSubmit(b) {
     const future = b.form.lines.find((l) => l.expenseDate && l.expenseDate > todayStr())
     if (future) return warnStop(t('expense.claim.errExpenseDateFuture', { v1: future.expenseDate }))
   }
-  // 防付错的后端默认处理规则（assertPayeeAccount）：payTarget 驱动 payeeAccountNo，已由红星+校验覆盖
+  // 防付错的后端兜底规则（assertPayeeAccount）：payTarget 驱动 payeeAccountNo，已由红星+校验覆盖
   // 收款账号同步到 extJson（兼容既有打印/导出规则）
   if (b.form.bill.payeeAccountNo) b.form.bill.extJson.accountNo = b.form.bill.payeeAccountNo
   // 费用承担：把每行的成本中心/项目/预算科目同步到分摊信息（exp_bill_share 持久化）
@@ -555,7 +555,7 @@ async function onBeforeSubmit(b) {
       syncPerCapitaExt(l)
     }
   }
-  // 境外凭证合规⑤：境外收据/行程单必填中文说明（后端 submit 同一规则默认处理）
+  // 境外凭证合规⑤：境外收据/行程单必填中文说明（后端 submit 同一规则兜底）
   if (b.form.lines.some((l) => l.itemId && needCnDesc(l) && !(l.cnDesc || '').trim())) {
     return warnStop(t('expense.claim.errAbroadCnDesc'))
   }
@@ -635,7 +635,7 @@ onMounted(async () => {
   }).catch(() => {})
   loadPayeeType()
   loadCurrency()
-  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
+  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与原先逐字一致
   payMethodDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单
   // 不要此处不得回写路由 query：App.vue 按 route.fullPath 给页面挂 :key，改 query＝整页重挂载，
@@ -647,7 +647,7 @@ onMounted(async () => {
     }
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   try {
-    // P0 修复：默认只加载同公司人员，解决性能与安全问题
+    // 默认只加载同公司人员，解决性能与安全问题
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
@@ -668,7 +668,7 @@ currentUserName.value = store.user?.realName || store.user?.nickName || store.us
     if (b && b.form.bill.title === '') b.form.bill.title = '员工费用报销'
     if (b && !b.form.bill.payTarget) b.form.bill.payTarget = 'EMPLOYEE'
   } catch (e) { /* ignore */ }
-  // P2 跨组织四维度：公司树扁平化，供结算单位/支付单位选择
+  // 跨组织四维度：公司树扁平化，供结算单位/支付单位选择
   try {
     const tree = (await orgApi.companyTree()) || []
     const flat = []

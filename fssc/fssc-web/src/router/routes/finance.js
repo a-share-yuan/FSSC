@@ -3,15 +3,15 @@
 
 /** 财务核算域路由（总账/资产/应收/资金/银行/档案/合同/报表） */
 export default [
-  // P0-7 FA 资产与存货：父路径重定向到首个 tab，不渲染汇总的 hub 页
+  // FA 资产与存货：父路径重定向到首个 tab，不渲染汇总的 hub 页
   { path: 'asset', redirect: '/asset/asset' },
   { path: 'asset/asset', component: () => import('../../views/asset/AssetBoard.vue'), props: { tab: 'asset' }, meta: { title: '资产卡片' } },
   { path: 'asset/category', component: () => import('../../views/asset/AssetBoard.vue'), props: { tab: 'category' }, meta: { title: '资产类别' } },
   { path: 'asset/inventory', component: () => import('../../views/asset/AssetBoard.vue'), props: { tab: 'inventory' }, meta: { title: '存货收发存' } },
   { path: 'asset/taxDiff', component: () => import('../../views/asset/AssetBoard.vue'), props: { tab: 'taxDiff' }, meta: { title: '税会差异' } },
   { path: 'asset/depr-batch', component: () => import('../../views/asset/DeprBatch.vue'), meta: { title: '折旧计提批' } },
-  // P0-8 TR 资金管理：父路径重定向到首个 tab，不渲染汇总的 hub 页
-  // R5-D-186：treasury 七路由补 meta.perms（router.js 全局守卫消费；读码与后端 @RequiresPerm 逐一对齐：
+  // TR 资金管理：父路径重定向到首个 tab，不渲染汇总的 hub 页
+  // treasury 七路由补 meta.perms（router.js 全局守卫消费；读码与后端 @RequiresPerm 逐一对齐：
   // treasury:fundplan/creditbill/transfer/billsettle/position、bank=md:bankaccount:list、bankRecon=bank:reconcile:list）。
   // 无权限账号 URL 直达不再渲染带写按钮的空壳；后端守卫保持现状。
   { path: 'treasury', redirect: '/treasury/plan' },
@@ -22,24 +22,26 @@ export default [
   { path: 'treasury/bank', component: () => import('../../views/treasury/TreasuryBoard.vue'), props: { tab: 'bank' }, meta: { title: '银行主数据', perms: ['md:bankaccount:list'] } },
   { path: 'treasury/bankRecon', component: () => import('../../views/treasury/TreasuryBoard.vue'), props: { tab: 'bankRecon' }, meta: { title: '银行对账', perms: ['bank:reconcile:list'] } },
   { path: 'treasury/position', component: () => import('../../views/treasury/TreasuryBoard.vue'), props: { tab: 'position' }, meta: { title: '资金头寸', perms: ['treasury:position:list', 'treasury:fundplan:list', 'treasury:creditbill:list'] } },
-  // P0-6 OTC 应收管理：父路径重定向到首个 tab，不渲染汇总的 hub 页
+  // OTC 应收管理：父路径重定向到首个 tab，不渲染汇总的 hub 页
   { path: 'receivable', redirect: '/receivable/receivable' },
   { path: 'receivable/receivable', component: () => import('../../views/receivable/ReceivableBoard.vue'), props: { tab: 'receivable' }, meta: { title: '应收单' } },
   { path: 'receivable/receipt', component: () => import('../../views/receivable/ReceivableBoard.vue'), props: { tab: 'receipt' }, meta: { title: '收款核销' } },
   { path: 'receivable/collect', component: () => import('../../views/receivable/ReceivableBoard.vue'), props: { tab: 'collect' }, meta: { title: '催收待办' } },
   { path: 'receivable/badDebt', component: () => import('../../views/receivable/ReceivableBoard.vue'), props: { tab: 'badDebt' }, meta: { title: '坏账计提' } },
-  // P3 FM 档案借阅/销毁：父路径重定向到首个 tab，不渲染汇总的 hub 页
+  // FM 档案：档案管理（/sharing/archive）四个页签＝归档整理/档案库/借阅利用/鉴定销毁；
+  // 以下为单页深链，旧书签仍可落地
   { path: 'archive', redirect: '/archive/access' },
-  { path: 'archive/access', component: () => import('../../views/archive/ArchiveBoard.vue'), props: { tab: 'access' }, meta: { title: '档案调阅' } },
-  { path: 'archive/destroy', component: () => import('../../views/archive/ArchiveBoard.vue'), props: { tab: 'destroy' }, meta: { title: '档案销毁' } },
-  { path: 'archive/dispatch', component: () => import('../../views/archive/ArchiveBoard.vue'), props: { tab: 'dispatch' }, meta: { title: '单据流转' } },
-  { path: 'archive/archive', component: () => import('../../views/archive/ArchiveBoard.vue'), props: { tab: 'archive' }, meta: { title: '凭证归档' } },
-  // 合同（RA-PAGE-21：台账+付款查询收敛为一个工作区；/contract/pay-query 深链保留）
+  { path: 'archive/access', component: () => import('../../views/archive/ArchiveBoard.vue'), props: { tab: 'access' }, meta: { title: '借阅利用' } },
+  { path: 'archive/destroy', component: () => import('../../views/archive/ArchiveBoard.vue'), props: { tab: 'destroy' }, meta: { title: '鉴定销毁' } },
+  // 单据流转＝共享运营派单作业，已移入「共享运营配置」页签；旧深链改道，不再挂在档案侧
+  { path: 'archive/dispatch', redirect: '/cfg/sharing?tab=dispatch' },
+  { path: 'archive/archive', component: () => import('../../views/archive/ArchiveBoard.vue'), props: { tab: 'archive' }, meta: { title: '档案目录' } },
+  // 合同（台账+付款查询收敛为一个工作区；/contract/pay-query 深链保留）
   { path: 'contract', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'contract' }, meta: { title: '合同管理' } },
   { path: 'contract/type', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'contractType' }, meta: { title: '合同类型' } },
-  // P2 总账：父路径重定向到首个 tab，不渲染汇总的 hub 页
-  //  RA-PAGE-22 缓办（2026-09-29 实测）：3066 有 {58,99007}、3082 有 {61,68,99013} 不在 3065 并集内，
-  // 直接并会砍访问或增权（3065 带 gl:entry:list,md:subject:list）——随流程批次先裁授权面再并。
+  // 总账：父路径重定向到首个 tab，不渲染汇总的 hub 页
+  // /op/gl 暂不并为工作区：总账分录、科目余额、试算平衡三个页签的权限码不是互相的子集，
+  // 直接并会砍访问或增权（总账分录还带 gl:entry:list、md:subject:list）——先裁授权面再并。
   { path: 'op/gl', redirect: '/op/gl/entry' },
   // 总账各页签拆为独立菜单（见下）
   { path: 'op/gl/entry', component: () => import('../../views/gl/GlLedger.vue'), props: { tab: 'entry' }, meta: { title: '总账分录' } },
@@ -54,20 +56,20 @@ export default [
   { path: 'glex/special/inter', component: () => import('../../views/gl/GlSpecial.vue'), props: { tab: 'inter' }, meta: { title: '内部往来抵消' } },
   { path: 'glex/special/journal', component: () => import('../../views/gl/GlSpecial.vue'), props: { tab: 'journal' }, meta: { title: '一般记账' } },
   { path: 'glex/special/monthclose', component: () => import('../../views/gl/GlSpecial.vue'), props: { tab: 'monthclose' }, meta: { title: '月结' } },
-  // D-DEC-295（批5 后续）：合并报表底稿入口（GL_MERGE 作业化后归 GL 作业页签）
+  // 批5 后续：合并报表底稿入口（GL_MERGE 作业化后归 GL 作业页签）
   { path: 'glex/consolidate', component: () => import('../../views/gl/GlConsolidate.vue'), meta: { title: '合并报表底稿' } },
   { path: 'glex/special/consolidate', component: () => import('../../views/gl/GlSpecial.vue'), props: { tab: 'consolidate' }, meta: { title: '合并报表' } },
   { path: 'glex/special/master', component: () => import('../../views/gl/GlSpecial.vue'), props: { tab: 'master' }, meta: { title: 'GL主数据' } },
   { path: 'glex/tax-refund', component: () => import('../../views/gl/TaxRefund.vue'), meta: { title: '税务退税三场景' } },
   { path: 'glex/fx-reval', component: () => import('../../views/finance/FxRevalBoard.vue'), meta: { title: '汇兑重估' } },
-  // P2 银企对账（RA-PAGE-21：对账/回单认领/调节表收敛为一个工作区；/bank/slip、/bank/reconcile-sheet 深链保留）
+  // 银企对账（对账/回单认领/调节表收敛为一个工作区；/bank/slip、/bank/reconcile-sheet 深链保留）
   { path: 'bank/reconcile', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'bankRecon' }, meta: { title: '银企对账' } },
   { path: 'bank/slip', component: () => import('../../views/bank/BankSlip.vue'), meta: { title: '银企回单·收款认领' } },
   { path: 'bank/reconcile-sheet', component: () => import('../../views/bank/ReconcileSheet.vue'), meta: { title: '未达账项调节表' } },
-  // 预算（RA-PAGE-21：科目/方案/调整/占用收敛为一个工作区，逐页签按 budget 码门控；
+  // 预算（科目/方案/调整/占用收敛为一个工作区，逐页签按 budget 码门控；
   // 宿主直挂根（sys_menu parent=0）＝绕开预算目录 13 的 budget:item:list 授权，修复 315 等 4 角色游离不可见问题）
   { path: 'budget/workbench', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'budgetManage' }, meta: { title: '预算管理' } },
-  { path: 'budget/item', component: () => import('../../views/budget/BudgetItem.vue'), meta: { title: '预算明细', perms: ['budget:item:list'] } }, // R5-D-263：声明读权；页面内按 hasPerm 显式空态门控（router 暂无 meta.perms 全局消费）
+  { path: 'budget/item', component: () => import('../../views/budget/BudgetItem.vue'), meta: { title: '预算明细', perms: ['budget:item:list'] } }, // 声明读权；页面内按 hasPerm 显式空态门控（router 暂无 meta.perms 全局消费）
   { path: 'budget/type', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'budgetType' }, meta: { title: '预算类型' } },
   { path: 'budget/category', component: () => import('../../views/budget/BudgetConfigTable.vue'), props: { configType: 'budgetCategory', title: '预算类别' }, meta: { title: '预算类别' } },
   { path: 'budget/org', component: () => import('../../views/budget/BudgetConfigTable.vue'), props: { configType: 'budgetOrg', title: '预算组织' }, meta: { title: '预算组织' } },
@@ -79,7 +81,7 @@ export default [
   { path: 'budget/execution', component: () => import('../../views/budget/BudgetExecution.vue'), meta: { title: '预算执行明细' } },
   // 报表
   { path: 'report/summary', component: () => import('../../views/finance/ReportSummaryBoard.vue'), meta: { title: '报表预聚合' } },
-  // RA-PAGE-15（批次1 A1）：/reports 为报表工作台宿主（25 页签），不传 tab；成员深链 /reports/* 保留单页模式
+  // /reports 为报表工作台宿主（25 页签），不传 tab；成员深链 /reports/* 保留单页模式
   { path: 'reports', component: () => import('../../views/report/Reports.vue'), meta: { title: '管理报表工作台' } },
   { path: 'reports/summary', component: () => import('../../views/report/Reports.vue'), props: { tab: 'summary' }, meta: { title: '费用发生汇总' } },
   { path: 'reports/trend', component: () => import('../../views/report/Reports.vue'), props: { tab: 'trend' }, meta: { title: '费用月度变动' } },

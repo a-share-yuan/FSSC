@@ -185,7 +185,7 @@ function summaryAmounts({ columns, data }) {
   })
 }
 
-// 41号审查 P1-9：按页签导出统计结果
+// 41号审查 按页签导出统计结果
 const TAB_EXPORT = computed(() => ({
   invoicing: () => [invoicingRows.value, [
     { prop: 'period', label: t('field.period') }, { prop: 'status', label: t('common.status') }, { prop: 'count', label: t('flow.report.colInvoiceCount') },

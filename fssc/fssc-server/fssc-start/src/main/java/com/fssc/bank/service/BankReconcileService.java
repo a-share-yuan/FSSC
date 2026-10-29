@@ -60,9 +60,12 @@ public class BankReconcileService {
 
     private static final List<String> PAID_STATUS = List.of("PAID", "SUCCESS");
 
+    /** 余额快照列表单次返回上限（按日一条，1000 行≈三年，足够页面看「最近怎么变的」） */
+    private static final int BALANCE_LIST_MAX = 1000;
+
     /**
-     * 实测值集：op_bank_statement.trans_type 中属于「收款（贷方）方向」的取值。
-     * <p>实测本仓库对该列的三处判定同源：本类 {@link #isCreditStatement}、本类 computeSheet 的
+     * op_bank_statement.trans_type 中属于「收款（贷方）方向」的取值。
+     * <p>仓库内对该列有三处判定，值域必须同源：本类 {@link #isCreditStatement}、本类 computeSheet 的
      * bankIn/bankOut 分流、资金域收款单服务的 IN_TYPES，均为 {@code CREDIT / RECEIPT / IN}
      * （大小写不敏感，列注释另记 DEBIT＝借方/付款方向）。
      * <p>值集收敛到这一处，方向校验与自动勾对、调节表分流不会各自漂移。
@@ -86,11 +89,11 @@ public class BankReconcileService {
     private final AuditTrailService auditTrailService;
 
     /**
-     * 自动勾对：返回本轮结果 {scanned,matched,unmatched,ambiguous,foreignSerialBlocked,
+     * 自动勾对：返回 {scanned,matched,unmatched,ambiguous,foreignSerialBlocked,
      * unmatchedSerials,matchedAmount,processStarted}。
      * <p>未勾对＝仍会进未达账项，必须当场反馈给出纳，而不是等调节表环节才被发现；
      * 反馈体里带上未勾对的流水号与拒配原因（多候选 / 同金额单据已归属他行流水号），操作员一眼能核对漏了几条。
-     * <p>模糊命中唯一性：同金额的候选不止一条、或候选已归属本轮另一条流水号 ⇒ 一律拒配转人工（见
+     * <p>模糊命中唯一性：同金额的候选不止一条、或候选已归属同批另一条流水号 ⇒ 一律拒配转人工（见
      * {@link #matchCandidates}／{@link #findReceiptMatches}），杜绝两笔"金额相同、流水号不同"互相顶掉。
      */
     public Map<String, Object> run() {
@@ -100,10 +103,10 @@ public class BankReconcileService {
                 .orderByAsc(OpBankStatement::getId));
         int count = 0;
         int ambiguous = 0;
-        // 本轮因"同金额的付款/核销单已归属另一条银行流水号"而被剔除的流水条数（结果反馈规则）
+        // 因"同金额的付款/核销单已归属另一条银行流水号"而被剔除的流水条数（随结果一并反馈）
         int foreignBlocked = 0;
-        // 模糊命中唯一性——本轮未勾对流水的"流水号 → 流水"归属表（零额外查询，直接用 un）。
-        // 付款记录自带银行流水号时，它就属于那条流水；本轮另一条流水不得按金额把它抢走（互顶）。
+        // 模糊命中唯一性的归属表——本批未勾对流水的"流水号 → 流水"（零额外查询，直接用 un）。
+        // 付款记录自带银行流水号时，它就属于那条流水；同批另一条流水不得按金额把它抢走（互顶）。
         Map<String, Long> serialOwner = new HashMap<>();
         for (OpBankStatement s : un) {
             if (s.getBankSerial() != null && !s.getBankSerial().isBlank()) {
@@ -111,17 +114,17 @@ public class BankReconcileService {
             }
         }
         List<String> unmatchedSerials = new ArrayList<>();
-        // 丙：本轮"本人建单—本人勾对核销"的收款核销单标识（非阻断，只提示）
+        // "本人建单—本人勾对核销"的收款核销单标识（非阻断，只提示）
         List<String> selfMatchedReceipts = new ArrayList<>();
         Long reconOperator = userId();
         // 一次勾对可能命中多条流水 ⇒ 逐条收集「记录行 id → 本行金额」，
         // 勾对完成后一记录行起一个 TR_BANK_RECON 实例（bank_reconcile 行 : 实例 = 1:1），
         // 不再用「末行 id + 全批累计金额」单起一批（单实例多行会让审批明细与流程金额都失真）。
         Map<Long, BigDecimal> reconFlowSeeds = new LinkedHashMap<>();
-        // 本轮已占用的付款记录/收款核销单：同一轮内两条流水不得顶掉同一条
+        // 已占用的付款记录/收款核销单：同一批内两条流水不得顶掉同一条
         Set<Long> consumed = new HashSet<>();
         Set<Long> consumedReceipts = new HashSet<>();
-        // 批次3 R3-D：本轮勾对累计金额——批次汇总反馈规则（后流程金额按行取本行金额，本累计不再充当流程金额）
+        // 本批勾对累计金额，仅作批级汇总反馈；每条流程取自己那一行的金额
         BigDecimal matchedAmount = BigDecimal.ZERO;
         for (OpBankStatement st : un) {
             // 收款方向：贷方流水按 金额相等 + 往来单位名相等 保守勾对 rc_receipt（企业已收银行未收 → 已达）
@@ -140,7 +143,7 @@ public class BankReconcileService {
                 }
                 RcReceipt rc = rcCands.get(0);
                 consumedReceipts.add(rc.getId());
-                // 丙：收款核销单由本人建单、又由本人勾对核销 ⇒ 复核提示（不拦勾对）
+                // 收款核销单由本人建单、又由本人勾对核销 ⇒ 复核提示（不拦勾对）
                 if (reconOperator != null && rc.getCreateBy() != null && rc.getCreateBy() != 0L
                         && reconOperator.equals(rc.getCreateBy())) {
                     selfMatchedReceipts.add((rc.getBillNo() == null ? "id=" + rc.getId() : rc.getBillNo()));
@@ -240,9 +243,9 @@ public class BankReconcileService {
             count++;
             matchedAmount = matchedAmount.add(st.getAmount() == null ? BigDecimal.ZERO : st.getAmount());
         }
-        // T1：对账勾对完成后发起 TR_BANK_RECON 银行对账审批流（共享会计勾对→财务经理复核未达账）
+        // 对账勾对完成后发起 TR_BANK_RECON 银行对账审批流（共享会计勾对→财务经理复核未达账）
         // 逐条起流程（bank_reconcile 记录行 : 流程实例 = 1:1），金额取本行流水金额；
-        // 批内任一条发起失败一律冒泡（ROOT-2），不得静默降级成无流程孤儿单。
+        // 批内任一条发起失败一律冒泡，不得静默降级成无流程孤儿单。
         boolean processStarted = false;
         for (Map.Entry<Long, BigDecimal> fe : reconFlowSeeds.entrySet()) {
             try {
@@ -251,7 +254,7 @@ public class BankReconcileService {
                 processStarted = true;
             } catch (Exception ex) {
                 log.error("银行对账发起对账审批失败: {}", ex.getMessage(), ex);
-                throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+                throw ex;  // 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
             }
         }
         log.info("银企自动勾对完成：勾对 {} 条，未勾对 {} 条（其中同金额多候选拒配 {} 条、同金额付款已归属他行流水号 {} 条）",
@@ -265,14 +268,14 @@ public class BankReconcileService {
         result.put("unmatchedSerials", unmatchedSerials);
         result.put("matchedAmount", matchedAmount);
         result.put("processStarted", processStarted);
-        // 丙：新增提示位（原键一字未动，界面按既有键查询不受影响）
+        // "本人建单—本人勾对"提示位：既有键一字未动，界面按原键查询不受影响
         result.put("selfMatchedReceipts", selfMatchedReceipts);
         result.put("selfMatchWarning", selfMatchedReceipts.isEmpty() ? null
-                : "本轮 " + selfMatchedReceipts.size() + " 张收款核销单（"
+                : "本次勾对中 " + selfMatchedReceipts.size() + " 张收款核销单（"
                         + String.join("、", selfMatchedReceipts)
                         + "）由建单人本人勾对核销，建议由他人复核到账与核销是否一致");
         if (!selfMatchedReceipts.isEmpty()) {
-            log.warn("银企收款勾对 D-DEC-420 复核提示：{} 张核销单由本人建单并本人勾对：{}",
+            log.warn("银企收款勾对复核提示：{} 张核销单由本人建单并本人勾对：{}",
                     selfMatchedReceipts.size(), String.join("、", selfMatchedReceipts));
         }
         return result;
@@ -298,9 +301,10 @@ public class BankReconcileService {
     private static final BigDecimal AMOUNT_DIFF_TOLERANCE = new BigDecimal("0.01");
 
     /**
-     * 人工勾对（办结）：入参改为「银行流水 id（op_bank_statement.id）＋付款记录 id（exp_bill_payment.id）」
-     * 各一条——前端【待勾对】面板必须从这两处真身数据源查询；<b>禁止再传 bank_reconcile 记录行的 id</b>：
-     * 三张表各自自增、数字相近即串表，此前把记录行 id 当流水 id / 付款 id 用，一旦提交会把无关流水改写状态并落伪记录。
+     * 人工勾对（办结）：入参是「银行流水 id（op_bank_statement.id）＋付款记录 id（exp_bill_payment.id）」
+     * 各一条——前端【待勾对】面板必须从这两处真身数据源查询；<b>禁止传 bank_reconcile 记录行的 id</b>：
+     * 三张表各自自增、数字相近即串表，拿记录行 id 当流水 id / 付款 id 提交，
+     * 会把无关流水改写状态并落伪记录。
      * <p>服务端守卫（缺一即拒，与前端校验双层）：
      * <ol>
      *   <li>流水、付款记录必须存在（不按数字 id 猜表）；</li>
@@ -404,8 +408,8 @@ public class BankReconcileService {
 
     /**
      * bank_reconcile.payment_no 统一写「付款所属费用单（exp_bill）单号」，自动环节与人工环节共用。
-     * <p>此前该列写的是 exp_bill_payment 主键数字（billId 的字符串化），
-     * 与收款环节的 rc_receipt.billNo（单号文本）同列异义，出纳按列核对时会把主键当单号。
+     * <p>该列与收款环节的 rc_receipt.billNo（单号文本）同列，语义必须一致；
+     * 写主键数字会让出纳按列核对时把 id 当单号。
      * 单据缺失（bill_id 空或 exp_bill 行已不存在）时返回 null ⇒ 列留空，不混入主键数字。
      */
     private String paymentBillNo(ExpBillPayment pay) {
@@ -419,15 +423,15 @@ public class BankReconcileService {
     /**
      * 匹配付款记录：先按银行流水号精确匹配，未命中按 金额+已付款 二次匹配。
      * <p>二次环节返回<b>全部</b>候选而不是 limit 1 —— 同金额不同流水号的多笔候选必须由调用方拒配，
-     * 否则两条流水会互相顶掉同一条付款。已被本轮占用/已进过 bank_reconcile 的付款一律剔除。
-     * <p><b>流水号唯一性（补齐的半）</b>：付款记录自带 pay_serial_no，且该号是<b>本轮另一条</b>
+     * 否则两条流水会互相顶掉同一条付款。已被同批占用／已进过 bank_reconcile 的付款一律剔除。
+     * <p><b>流水号唯一性（补齐的半）</b>：付款记录自带 pay_serial_no，且该号是<b>同批另一条</b>
      * 未勾对流水的银行流水号（{@code serialOwner}）时，这笔付款归属那条流水，当前流水不得按金额抢走；
      * 剔除后无可匹配候选即报"未勾对"，把原因（归属哪条流水号）经 {@code foreign} 带回给界面。
      * <p>已付款规则与 {@link #computeSheet} 的"企业已付银行未付"统一为 {@link #PAID_STATUS}
      * PAID/SUCCESS 两值并存 ——只认 PAID 会把 SUCCESS 的同号付款看成"不存在"，
      * 反而让它躲过唯一性检查、由同金额的另一笔错顶。
      *
-     * @param serialOwner 本轮未勾对流水的 银行流水号 → 流水 id（零额外查询，由 {@link #run()} 现算）
+     * @param serialOwner 本批未勾对流水的 银行流水号 → 流水 id（零额外查询，由 {@link #run()} 现算）
      * @param foreign 出参：被归属剔除的付款流水号，用于结果反馈文案
      */
     private List<ExpBillPayment> matchCandidates(OpBankStatement st, Set<Long> consumed,
@@ -583,9 +587,9 @@ public class BankReconcileService {
             ym = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"));
         }
         SheetResult r = computeSheet(bankAccountId, ym);
-        // 未达账差异明细写入数据库记录（衔接 TR05 余额调节表）。
-        // 改去重 upsert——同键 (账户, 月份, 来源引用) 不重建，既有行 id/create_by/清结标注保留；
-        // 重复调用行 id 不再漂移（此前全月 hardDelete+重建：首轮 16~30、次轮 31~45，抹掉人工维护状态）。
+        // 未达账差异明细写入数据库记录（衔接余额调节表）。
+        // 同键 (账户, 月份, 来源引用) 走 upsert 而不是重建，既有行 id/create_by/清结标注保留；
+        // 反复点【调节表】不会让行 id 漂移，人工维护的状态也不会丢。
         MdBankAccount acct = bankAccountId == null ? null : bankAccountMapper.selectById(bankAccountId);
         saveReconItems(bankAccountId, acct == null ? null : acct.getBankAccount(), ym,
                 r.getBankIn(), "BANK_IN", r.getBankOut(), "BANK_OUT",
@@ -593,7 +597,7 @@ public class BankReconcileService {
         return r;
     }
 
-    /** 纯读计算（不写入数据库）：W2 定稿校验 {@link #reconDiff} 复用，避免审批收尾链路触发明细重建。 */
+    /** 纯读计算（不写库）：定稿校验 {@link #reconDiff} 复用，避免审批收尾链路触发明细重建。 */
     private SheetResult computeSheet(Long bankAccountId, String month) {
         SheetResult r = new SheetResult();
         MdBankAccount account = bankAccountId == null ? null : bankAccountMapper.selectById(bankAccountId);
@@ -601,10 +605,9 @@ public class BankReconcileService {
         r.setBankAccountName(account == null ? null : account.getAccountName());
         r.setMonth(month);
 
-        // 银行对账单余额：该账户当月**最后一条有余额快照的**流水 balance；全都没有则取账户维护余额。
-        // 原写法是「只要当月有流水就一律取 stmts.get(0).getBalance()，不再回落」，
-        // 而银行流水导入的 balance 是可选字段（可为 NULL）⇒ nz(NULL)=0
-        // ⇒ 调节表「银行余额」取 0，实测调节差额 −2,464,354（账户维护余额 2,491,474）。
+        // 银行对账单余额：该账户当月最后一条有余额快照的流水 balance；全都没有则取账户维护余额。
+        // 不能只取 stmts.get(0).getBalance() 就收工：银行流水导入的 balance 是可选字段（可为 NULL），
+        // NULL 落成 0 会让调节表「银行余额」取 0、调节差额被算成一个天文数字。
         // 0 是一个业务上极不可能的余额，会直接掩盖一切差异，故必须回落。
         String start = monthStart(month);
         String endEx = monthStart(nextMonth(month));
@@ -636,7 +639,7 @@ public class BankReconcileService {
             if ("MATCHED".equals(s.getReconStatus()) || "RECONED".equals(s.getReconStatus())) continue;
             Item it = new Item(s.getBankSerial(), s.getOppositeName(), s.getTransDate() == null ? null : s.getTransDate().toLocalDate(),
                     nz(s.getAmount()), s.getSummary(), s.getReconStatus(), "STATEMENT:" + s.getId());
-            // 方向分流统一到 {@link #isCreditStatement}，同一实测值集不在两处各写一份
+            // 方向分流统一走 {@link #isCreditStatement}，值域只此一处，不在两处各写一份
             (isCreditStatement(s) ? bankIn : bankOut).add(it);
         }
         r.setBankIn(bankIn);   // 银行已收企业未收
@@ -656,12 +659,11 @@ public class BankReconcileService {
         r.setEntOut(entOut); // 企业已付银行未付
         BigDecimal entOutAmt = entOut.stream().map(Item::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 企业已收银行未收：当月**尚未全额与银行流水勾对**的收款核销单 rc_receipt。
-        // 原写法是「bank_matched=0 ⇒ 整张 amount 进未达」，但认领时
-        //   claimReceipt 从不回写 rc_receipt ⇒ 已认领勾对的收款单仍被整张列为未达
-        //   （实测：146,900 中已认领 65,540，未达项虚增 65,540）。
-        // 关键约束：不能只用布尔位判定。本例是「部分勾对」——146,900 只认领了 65,540，
-        //   若简单置 bank_matched=1 ⇒ 未认领的 81,360 会被误标为已勾对，反而漏计真实未达。
+        // 企业已收银行未收：当月尚未全额与银行流水勾对的收款核销单 rc_receipt。
+        // 判据不能用 bank_matched=0 的整张金额：认领只回写已认领部分，
+        //   整张进未达会把已勾对的那一段重复计入（例如 146,900 里已认领 65,540）。
+        // 关键约束：不能只用布尔位判定。若简单置 bank_matched=1，
+        //   未认领的余额会被误标为已勾对，反而漏计真实未达。
         //   ⇒ 按「已勾对金额」算未达额：未达额 = amount − bank_matched_amount，
         //     未达额 ≤ 0 的整条不进未达清单。
         List<RcReceipt> unmatchedReceipts = receiptMapper.selectList(new LambdaQueryWrapper<RcReceipt>()
@@ -704,7 +706,7 @@ public class BankReconcileService {
     }
 
     /**
-     * W2：定位某条对账记录所属账户当月的余额调节差额。
+     * 定位某条对账记录所属账户当月的余额调节差额，供定稿校验。
      * 定位不到（无流水／无账户）返回 null＝不拦，宁可不判也不臆造判据。
      */
     public BigDecimal reconDiff(Long reconId) {
@@ -736,7 +738,7 @@ public class BankReconcileService {
      *   <li>新键：插入新行（补 tenantId、status=OPEN）；</li>
      *   <li>本次快照已不含的旧行（来源已勾对/核销/移出当月）：按行 id 精确移除（逻辑删，记录可溯）。</li>
      * </ul>
-     * 落码前每次读接口都换一批新 id 并抹掉人工维护状态——本方法保证反复调用同月同账户行为去重、行 id 稳定。
+     * 改造前每次读接口都换一批新 id 并抹掉人工维护状态——本方法保证反复调用同月同账户行为去重、行 id 稳定。
      */
     private void saveReconItems(Long accountId, String accountNo, String month,
                                 List<Item> bankIn, String inType,
@@ -762,8 +764,8 @@ public class BankReconcileService {
         int reused = 0;
         for (BankReconItem e : items) {
             BankReconItem old = e.getSourceRef() == null ? null : byRef.get(e.getSourceRef());
-            // 上面的 existing 是进入本方法时的快照。同一账户同一月份被重复触发
-            // （连点两次【调节表】，实测 bank_recon_item id=700000051/700000052 相差 1 秒）时，
+            // 上面的 existing 是进入本方法时的快照。同一账户同一月份被连续触发两次
+            // （连点两次【调节表】，两次调用间隔不到一秒）时，
             // 两次调用都读不到对方刚插的行 ⇒ 同一 source_ref 落两行，勾对面出现两条可勾对的同一付款。
             // 落库前按 (account_id, month, source_ref) 现读一次：命中即复用旧行，不新增（不引新锁、不改表结构）。
             if (old == null && e.getSourceRef() != null) {
@@ -813,7 +815,8 @@ public class BankReconcileService {
 
     /**
      * 对账审批定稿后关闭当批未达账项——bank_recon_item: OPEN → CLEARED（写 update_by/update_time）。
-     * 此前对账域的回写全部发生在起流之前，办结后 ④ 格在整条链上没有任何结论落点。
+     * 对账域的回写都发生在起流之前，办结后若不在此落一笔，
+     * 整条链上就没有任何地方能证明"这一批未达项已随审批收尾"。
      *
      * @return 本次清结的未达账项条数；定位不到账户/月份时返回 0（不臆造结论）
      */
@@ -925,7 +928,7 @@ public class BankReconcileService {
                 .eq(RcReceivable::getId, recId)
                 .last("FOR UPDATE")).stream().findFirst().orElse(null);
         if (rec == null) {
-            // 必填守卫（批次 2B）：应收单必选——此前 null 直接进 selectById 会抛 MP 的 "id can not be null"（500）
+            // 应收单必选——直接拿 null 进 selectById 会抛 MP 的 "id can not be null"（500）
             throw new BizException(ErrorCode.PARAM_INVALID, receivableId == null ? "请选择应收单" : "应收单不存在: " + receivableId);
         }
         BigDecimal amt = nz(st.getAmount());
@@ -968,10 +971,10 @@ public class BankReconcileService {
         // 回写收款单的「已勾对金额」。
         // 认领环节挂在应收单（rc_receivable）上，而调节表 ENT_IN 取的是收款单（rc_receipt），
         // 两者靠 rc_receipt.receivable_ids（核销的应收单 id 列表）关联。
-        // 此前 claimReceipt 只动 rc_receivable、不动 rc_receipt ⇒ 调节表把整张收款单
-        // 含已认领部分 都算作未达，实测虚增 65,540。
-        // 按「金额」而非「布尔位」回写：一张收款单可能被多次部分认领
-        //   （本次 146,900 只认领 65,540），置布尔位会把未认领部分误标为已勾对。
+        // 认领若只动 rc_receivable、不动 rc_receipt，调节表会把整张收款单连已认领部分
+        // 一起算作未达，未达项随之虚增。
+        // 按「金额」而非「布尔位」回写：一张收款单可能被多次部分认领，
+        //   置布尔位会把未认领部分误标为已勾对。
         markReceiptMatched(rec, amt, st);
 
         // 勾对记录
@@ -999,12 +1002,12 @@ public class BankReconcileService {
         rs.setReceivableId(rec.getId());
         rs.setReceivableNo(rec.getBillNo());
         rs.setReceivableBalance(balance.subtract(amt));
-        // 丙：应收单由本人建单、又由本人认领核销 ⇒ 非阻断复核提示（认领照常完成）
+        // 应收单由本人建单、又由本人认领核销 ⇒ 非阻断复核提示（认领照常完成）
         Long claimOperator = userId();
         if (claimOperator != null && rec.getCreateBy() != null && rec.getCreateBy() != 0L
                 && claimOperator.equals(rec.getCreateBy())) {
             rs.setWarning("该应收单由本人建单并由本人认领核销，建议由他人复核到账与冲减是否一致");
-            log.warn("收款认领核销 D-DEC-420 复核提示：应收单 {} 由本人建单并本人核销", rec.getBillNo());
+            log.warn("收款认领核销复核提示：应收单 {} 由本人建单并本人核销", rec.getBillNo());
         }
         return rs;
     }
@@ -1015,12 +1018,11 @@ public class BankReconcileService {
      * <p><b>为什么必须回写</b>：认领环节挂在应收单（rc_receivable）上，
      * 而调节表「企业已收银行未收」取的是收款单（rc_receipt），
      * 两者靠 {@code rc_receipt.receivable_ids}（该收款单核销的应收单 id 列表）关联。
-     * 此前认领只动应收单、不动收款单 ⇒ 已认领的收款单仍被整张列为未达项
-     * （实测 146,900 中已认领 65,540 ⇒ 未达项虚增 65,540）。
+     * 只动应收单、不动收款单，已认领的收款单就会被整张列为未达项，未达额随认领金额虚增。
      *
-     * <p><b>为什么按金额而非布尔位</b>：一张收款单可能被多次<b>部分</b>认领
-     * （本次 146,900 只认领了 65,540）。若只置 {@code bank_matched=1}，
-     * 未认领的 81,360 会被误标为已勾对 ⇒ 由「虚增 65,540」变成「漏计 81,360」，更糟。
+     * <p><b>为什么按金额而非布尔位</b>：一张收款单可能被多次<b>部分</b>认领。
+     * 若只置 {@code bank_matched=1}，
+     * 未认领的余额会被误标为已勾对 ⇒ 从「虚增」变成「漏计」，更糟。
      * 故累计 {@code bank_matched_amount}，未达额 = amount − bank_matched_amount。
      *
      * <p><b>找不到对应收款单时不报错</b>：应收单可能由开票自动挂账（source_doc_type=INVOICE_ISSUE），
@@ -1082,8 +1084,8 @@ public class BankReconcileService {
         if (st == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "银行流水不存在: " + statementId);
         }
-        // 必填守卫（批次 2B）：归档的语义是"回单影像已入档案"，fileId 留空原先会静默降级成 DOWNLOADED
-        // 且跳过 op_archive 登记——用户点了「归档」却什么都没归档。前端已必输，此处默认处理。
+        // 归档的语义是"回单影像已入档案"：fileId 留空时既没必要也不可能归档，
+        // 放行只会把状态改成 DOWNLOADED 并跳过 op_archive 登记——用户点了「归档」却什么都没归档。
         if (fileId == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择回单影像文件");
         }
@@ -1099,14 +1101,14 @@ public class BankReconcileService {
                 Collections.singletonMap("slipStatus", "ARCHIVED"),
                 "银行回单归档");
 
-        // P1 剩余：回单影像并入电子会计档案（op_archive），挂来源链与完整性哈希占位
-        // 断点8：通过 ArchiveFacade 登记，不再直接依赖 OpArchiveMapper
+        // 回单影像并入电子会计档案（op_archive），挂来源链与完整性哈希占位。
+        // 走 ArchiveFacade 登记，本类不直接依赖 OpArchiveMapper。
         if (fileId != null) {
             ArchiveRegisterDTO dto = new ArchiveRegisterDTO();
             dto.setArchiveNo("BS" + st.getId() + "-" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE));
             dto.setArchiveType("BANK_SLIP");
             dto.setRefId(st.getId());
-            // 立卷入口从流水带公司（档案读面按公司数据域办结），登记写入数据库字段不再空悬
+            // 立卷入口由流水带出公司：档案读面按公司数据域过滤，不带公司会让卷落到空公司上
             dto.setCompanyId(st.getCompanyId());
             dto.setBillId(st.getId());
             dto.setRefNo(st.getBankSerial());
@@ -1116,15 +1118,15 @@ public class BankReconcileService {
             dto.setArchiveStatus("ARCHIVED");
             dto.setStatus("FILED");
             dto.setIntegrityStatus("UNKNOWN");
-            dto.setRemark("P1 银企直连回单自动归档");
+            dto.setRemark("银企直连回单自动归档");
             archiveFacade.registerBankSlipArchive(dto);
         }
     }
 
-    // P1 剩余：余额快照 & 待认领池
+    // 余额快照 & 待认领池
 
     /**
-     * 保存账户余额快照（同一账户同一日期去重覆盖，衔接未达账项调节表与 TR05）。
+     * 保存账户余额快照（同一账户同一日期去重覆盖，衔接未达账项调节表）。
      */
     @Transactional(rollbackFor = Exception.class)
     public Long saveBalance(Long accountId, LocalDate balanceDate, BigDecimal balance, String remark) {
@@ -1160,11 +1162,18 @@ public class BankReconcileService {
         return bb.getId();
     }
 
-    /** 余额快照列表（按账户，兼顾最新在前） */
+    /**
+     * 余额快照列表（按账户，兼顾最新在前）。
+     *
+     * <p>必须封顶：造数语料里 {@code bank_balance} 有 3.5 万行，原先该端点把整表一次吐出，
+     * 单次响应 10.8 MB，既拖慢接口又把浏览器内存打满。快照按日生成，这里只给最近的一页量级
+     * （{@value #BALANCE_LIST_MAX} 行，约三年），要更早的历史走分页查询端点。
+     */
     public List<BankBalance> balanceList(Long accountId) {
         LambdaQueryWrapper<BankBalance> qw = new LambdaQueryWrapper<BankBalance>()
                 .eq(accountId != null, BankBalance::getAccountId, accountId)
-                .orderByDesc(BankBalance::getBalanceDate);
+                .orderByDesc(BankBalance::getBalanceDate)
+                .last("LIMIT " + BALANCE_LIST_MAX);
         return bankBalanceMapper.selectList(qw);
     }
 
@@ -1187,16 +1196,16 @@ public class BankReconcileService {
     /**
      * 可认领应收单清单（<b>银行域专用</b>，权限随域走）。
      *
-     * <p><b>为什么要有这个端点</b>：认领弹层（{@code views/bank/BankSlip.vue}）原先借
+     * <p><b>为什么要有这个端点</b>：认领弹层（{@code views/bank/BankSlip.vue}）若借
      * <b>应收域</b>的通用分页接口 {@code GET /api/tenant/receivable/page} 取清单，
-     * 而该端点标 {@code @RequiresPerm("receivable:list")}（应收域）；
+     * 该端点标 {@code @RequiresPerm("receivable:list")}（应收域）；
      * 认领动作本身 {@code POST /api/tenant/bank/reconcile/claim} 只要求
      * {@code bank:reconcile:list}（银行域）⇒ 后端放行、前端因跨域查询被 403 卡住，
-     * <b>纯银企对账岗做不了收款认领</b>（实测潘燕 100012 认领弹层恒空）。
+     * <b>纯银企对账岗根本做不了收款认领</b>（认领弹层恒空）。
      *
      * <p><b>本端点的规则</b>：只返回「有未收余额、可被流水认领」的应收单，
      * 且按<b>可认领金额降序</b>（让大额单排在前面，便于优先核销）。
-     * 方向与金额的最终裁定权仍在服务端 {@code claimReceipt}（余额校验 + 方向校验），
+     * 方向与金额的最终判定权仍在服务端 {@code claimReceipt}（余额校验 + 方向校验），
      * 本端点只做「候选清单」，不放开任何非法动作。
      *
      * <p>权限：{@code bank:reconcile:list}（银企对账域）——查询权限随域走，
@@ -1232,7 +1241,7 @@ public class BankReconcileService {
         private Long receivableId;
         private String receivableNo;
         private BigDecimal receivableBalance;
-        /** 丙：同人建单—同人核销的复核提示位（无提示时为 null，不阻断业务） */
+        /** 同人建单—同人核销的复核提示位（无提示时为 null，不阻断业务） */
         private String warning;
     }
 

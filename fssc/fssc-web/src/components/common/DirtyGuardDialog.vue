@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <!--
-  DirtyGuardDialog —— 含表单的 el-dialog 通用「脏值守卫」薄封装（R5-D-107）。
+  DirtyGuardDialog —— 含表单的 el-dialog 通用「脏值守卫」薄封装。
 
-  存在的问题（缺陷原文）：新建退货单弹窗里已填好客户/日期/方式/原因＋明细行，
+  存在的问题：新建退货单弹窗里已填好客户/日期/方式/原因＋明细行，
   为收起展开的下拉按一下 Escape，弹窗被 el-dialog 直接关掉、输入全丢：
   el-dialog 的 Escape / 点遮罩 / 右上 X 三条关闭路径都不过任何"有未保存内容"的确认，
   键盘用户与快捷键误触一律整单丢失，其余含表单弹窗同病（本仓 70 页含表单弹窗）。
@@ -14,27 +14,27 @@
   逐页改 70 处必漏 ⇒ 只做这一个封装件，页面接入三行（见文件尾"接入方式"）。
 
   props:
-    modelValue        v-model 显隐（与 el-dialog 同义）
-    dirty             Boolean | Function —— 是否已脏。传函数时关窗当场求值（可 async），
+    modelValue v-model 显隐（与 el-dialog 同义）
+    dirty Boolean | Function —— 是否已脏。传函数时关窗当场求值（可 async），
                       比维护一个响应式标记可靠：页面只需比对"开场快照 vs 当前值"。
-    dirtyTitle        二次确认标题（默认「未保存提示」）
-    dirtyMessage      二次确认正文（默认「有未保存内容，确认关闭？」）
-    dirtyConfirmText  确认按钮文案（默认「放弃并关闭」）
-    dirtyCancelText   取消按钮文案（默认「继续编辑」）
+    dirtyTitle 二次确认标题（默认「未保存提示」）
+    dirtyMessage 二次确认正文（默认「有未保存内容，确认关闭？」）
+    dirtyConfirmText 确认按钮文案（默认「放弃并关闭」）
+    dirtyCancelText 取消按钮文案（默认「继续编辑」）
   其余属性（width/title/destroy-on-close/close-on-click-modal…）一律透传给 el-dialog。
 
   emits:
-    update:modelValue  显隐回写（经守卫后才回写 false）
+    update:modelValue 显隐回写（经守卫后才回写 false）
 
   slots:
-    default           带插槽 props { isDirty, requestClose }
-    header / title / footer  原样透传给 el-dialog
+    default 带插槽 props { isDirty, requestClose }
+    header / title / footer 原样透传给 el-dialog
 
   接入方式（示例，只列不改其余页）：
     <DirtyGuardDialog ref="formDialogRef" v-model="formVisible" :dirty="isFormDirty" title="新建单据">
       ...原 el-dialog 内容...
       <template #footer>
-        <el-button @click="formDialogRef?.requestClose()">取消</el-button>  <-- 必须走 requestClose
+        <el-button @click="formDialogRef?.requestClose()">取消</el-button> <-- 必须走 requestClose
         <el-button type="primary" @click="doSave">保存</el-button>
       </template>
     </DirtyGuardDialog>
@@ -62,7 +62,7 @@
  * 关窗守卫逻辑：
  *  - handleBeforeClose：el-dialog Escape／点遮罩／右上 X 三条路径都进这里；
  *    不脏 → done() 放行；脏 → ElMessageBox.confirm，确认才 done()，取消则静默留在原地
- *    （弹窗保持打开，已录入内容一个字不动）。
+ *    弹窗保持打开，已录入内容一个字不动。
  *  - requestClose：页面底部「取消」按钮等主动关窗的出口，同一套判定，防绕过。
  *  - dialogAttrs：剔除父组件 v-model 落进 $attrs 的 onUpdate:modelValue 再透传，
  *    否则 el-dialog 的内部 emit 会直通父组件、绕过守卫（防漏口）。

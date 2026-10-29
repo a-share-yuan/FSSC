@@ -40,7 +40,7 @@ public class TenantLifecycleService {
     private boolean selfRegistrationEnabled;
 
     /**
-     * 租户管理员初始口令（R5-D-303）：改由配置注入，缺省为空＝fail-closed。
+     * 租户管理员初始口令：改由配置注入，缺省为空＝fail-closed。
      * 原实现是一把 {@code public static final} 明文常量，且同一字面量被抄进前端注册成功提示与登录表单预填
      * ⇒ 任何读过发布件的人都可用它登录「新开通租户」的管理员账号。宁可不开通，也不用一把人人可读的固定口令。
      */
@@ -109,7 +109,7 @@ public class TenantLifecycleService {
         if (t.getExpireTime() == null) {
             update.setExpireTime(LocalDateTime.now().plusYears(1));
         }
-        // R5-D-303：初始口令未注入时在改状态之前拦截，避免「租户已 NORMAL、管理员却建不出来」的半态
+        // 初始口令未注入时在改状态之前拦截，避免「租户已 NORMAL、管理员却建不出来」的半态
         if (t.getAdminUserId() == null && !StringUtils.hasText(initAdminPwd)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "未配置租户管理员初始口令（fssc.tenant.init-admin-pwd），审核开通已拦截；请由运维注入一次性口令后重试");
@@ -126,7 +126,7 @@ public class TenantLifecycleService {
         }
     }
 
-    /** 在租户上下文内创建管理员：user_name = admin_{tenantCode 小写}，初始口令取配置项 {@code fssc.tenant.init-admin-pwd}（R5-D-303） */
+    /** 在租户上下文内创建管理员：user_name = admin_{tenantCode 小写}，初始口令取配置项 {@code fssc.tenant.init-admin-pwd} */
     private Long createTenantAdmin(PfTenant tenant) {
         final Long[] adminId = new Long[1];
         TenantContext.callAs(tenant.getId(), () -> {

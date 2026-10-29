@@ -9,6 +9,7 @@ import com.fssc.common.exception.BizException;
 import com.fssc.workflow.entity.WfInstance;
 import com.fssc.workflow.entity.WfModel;
 import com.fssc.workflow.entity.WfNodeConfig;
+import com.fssc.workflow.mapper.WfInstanceMapper;
 import com.fssc.workflow.mapper.WfModelMapper;
 import com.fssc.workflow.mapper.WfNodeConfigMapper;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +42,7 @@ public class WfAssigneeReplaceService {
 
     private final WfModelMapper modelMapper;
     private final WfNodeConfigMapper nodeConfigMapper;
-    private final com.fssc.workflow.mapper.WfInstanceMapper instanceMapper;
+    private final WfInstanceMapper instanceMapper;
     private final WfModelService modelService;
     private final WfBpmnChecker checker;
 
@@ -126,6 +127,9 @@ public class WfAssigneeReplaceService {
                 u.setId(c.getId());
                 u.setAssignValue(replaceToken(c.getAssignValue(), from, to));
                 nodeConfigMapper.updateById(u);
+            }
+            if (!cfgHits.isEmpty()) {
+                WfNodeConfigResolver.evictAll();
             }
             log.info("参与人批量替换：模型 {} 角色 {}→{}，BPMN {} 处、配置 {} 行，操作人 {}",
                     m.getModelKey(), from, to, rw.replaced, cfgHits.size(), operator);

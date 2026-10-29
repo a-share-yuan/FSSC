@@ -3,7 +3,7 @@
 
 <template>
   <div class="profile">
-    <!-- ========== 用户信息卡 ========== -->
+    <!-- 用户信息卡 -->
     <el-card class="user-card" shadow="never">
       <div class="user-header">
         <div class="avatar">
@@ -40,7 +40,7 @@
       </div>
     </el-card>
 
-    <!-- ========== 概览统计 ========== -->
+    <!-- 概览统计 -->
     <el-row :gutter="12" class="stat-row">
       <el-col :xs="12" :sm="6">
         <div class="stat-card stat-role" @click="scrollTo('roles')">
@@ -80,7 +80,7 @@
       </el-col>
     </el-row>
 
-    <!-- ========== 主体区域：左右分栏 ========== -->
+    <!-- 主体区域：左右分栏 -->
     <el-row :gutter="16">
       <!-- 左栏：角色 + 权限 -->
       <el-col :xs="24" :lg="14">
@@ -144,7 +144,7 @@
             >
               <template #default="{ node, data }">
                 <span class="perm-tree-node">
-                  <span class="perm-tree-label">{{ node.label }}</span>
+                  <span class="perm-tree-label" :title="data.code || data.key">{{ node.label }}</span>
                   <el-tag v-if="data.children" size="small" type="info" round>{{ data.children.length }}</el-tag>
                 </span>
               </template>
@@ -188,7 +188,7 @@
       </el-col>
     </el-row>
 
-    <!-- ========== 编辑资料弹窗 ========== -->
+    <!-- 编辑资料弹窗 -->
     <el-dialog v-model="editVisible" title="编辑资料" width="480px" destroy-on-close>
       <el-form :model="editForm" :rules="editProfileRules" label-width="100px">
         <el-form-item label="姓名" prop="nickName" required>
@@ -207,7 +207,7 @@
       </template>
     </el-dialog>
 
-    <!-- ========== 修改密码弹窗 ========== -->
+    <!-- 修改密码弹窗 -->
     <el-dialog v-model="pwdVisible" title="修改密码" width="480px" destroy-on-close>
       <el-form :model="pwdForm" :rules="pwdRules" label-width="100px">
         <el-form-item label="旧密码" prop="oldPassword" required>
@@ -226,7 +226,7 @@
       </template>
     </el-dialog>
 
-    <!-- ========== 更换手机弹窗 ========== -->
+    <!-- 更换手机弹窗 -->
     <el-dialog v-model="phoneVisible" title="更换手机号" width="480px" destroy-on-close>
       <el-form :model="phoneForm" :rules="phoneRules" label-width="100px">
         <el-form-item label="新手机号" prop="newPhone" required>
@@ -244,7 +244,7 @@
       </template>
     </el-dialog>
 
-    <!-- ========== 更换邮箱弹窗 ========== -->
+    <!-- 更换邮箱弹窗 -->
     <el-dialog v-model="emailVisible" title="更换邮箱" width="480px" destroy-on-close>
       <el-form :model="emailForm" :rules="emailRules" label-width="100px">
         <el-form-item label="新邮箱" prop="newEmail" required>
@@ -339,6 +339,25 @@ const permList = ref([])
 const isAdminUser = computed(() => permList.value.includes('*:*:*'))
 
 // 构建权限树：模块 → 资源 → 操作（映射表已从 ../utils/permMappings 导入）
+// 原则：这一段是给用户看的中文目录，任何一段查不到中文都不许回显英文原码
+// （报表统计下挂 p2p / exp / cash / gl / ar / sharing 全是英文）。
+// 翻译失败一律降级为中文占位；原码保留在节点 data.code 上，模板里用 title 悬停可见，便于排查漏配。
+const UNKNOWN_MOD = '其他模块'
+const UNKNOWN_ACT = '其他操作'
+function modLabelOf(key) {
+  return MODULE_MAP[key] || UNKNOWN_MOD
+}
+function resLabelOf(key, modKey) {
+  if (RESOURCE_MAP[key]) return RESOURCE_MAP[key]
+  // 资源段与模块段同名的很常见（exp / gl / sharing / ar / cash…），复用模块中文名
+  if (MODULE_MAP[key]) return MODULE_MAP[key]
+  const mod = MODULE_MAP[modKey]
+  return mod ? `${mod}·其他` : '其他'
+}
+function actLabelOf(key) {
+  return ACTION_MAP[key] || UNKNOWN_ACT
+}
+
 const permTreeData = computed(() => {
   // 1. 展开逗号打包的权限码
   const rawPerms = permList.value
@@ -358,26 +377,26 @@ const permTreeData = computed(() => {
     const parts = code.split(':')
     const modKey = parts[0]
     if (!modKey) continue
+    const modLabel = modLabelOf(modKey)
+    if (!tree[modKey]) tree[modKey] = { key: modKey, code, label: modLabel, children: {} }
 
     if (parts.length === 2) {
-      // 两段式 module:action（如 workbench:view, dashboard:view）
+      // 两段式 module:action（如 workbench:view, inv:correct）——归到「通用功能」下
       const actKey = parts[1]
-      const modLabel = MODULE_MAP[modKey] || modKey
-      const actLabel = ACTION_MAP[actKey] || actKey
-      if (!tree[modKey]) tree[modKey] = { key: modKey, label: modLabel, children: {} }
       const resKey = '_default'
-      if (!tree[modKey].children[resKey]) tree[modKey].children[resKey] = { key: `${modKey}:${resKey}`, label: '通用功能', children: {} }
-      tree[modKey].children[resKey].children[actKey] = { key: code, label: actLabel }
+      if (!tree[modKey].children[resKey]) {
+        tree[modKey].children[resKey] = { key: `${modKey}:${resKey}`, code, label: '通用功能', children: {} }
+      }
+      tree[modKey].children[resKey].children[actKey] = { key: code, code, label: actLabelOf(actKey) }
     } else {
-      // 三段式 module:resource:action
+      // 三段及以上的 module:resource:action[:…]（四段式如 md:formmeta:field:edit，
+      // 末两段合并成复合动作键，名称表里对应 'field:edit'）
       const resKey = parts[1] || 'other'
       const actKey = parts.slice(2).join(':') || 'all'
-      const modLabel = MODULE_MAP[modKey] || modKey
-      const resLabel = RESOURCE_MAP[resKey] || resKey
-      const actLabel = ACTION_MAP[actKey] || actKey
-      if (!tree[modKey]) tree[modKey] = { key: modKey, label: modLabel, children: {} }
-      if (!tree[modKey].children[resKey]) tree[modKey].children[resKey] = { key: `${modKey}:${resKey}`, label: resLabel, children: {} }
-      tree[modKey].children[resKey].children[actKey] = { key: code, label: actLabel }
+      if (!tree[modKey].children[resKey]) {
+        tree[modKey].children[resKey] = { key: `${modKey}:${resKey}`, code, label: resLabelOf(resKey, modKey), children: {} }
+      }
+      tree[modKey].children[resKey].children[actKey] = { key: code, code, label: actLabelOf(actKey) }
     }
   }
 
@@ -399,7 +418,7 @@ watch(permSearch, (val) => {
 function permFilterNode(value, data) {
   if (!value) return true
   const kw = value.toLowerCase()
-  return (data.label?.toLowerCase().includes(kw)) || (data.permCode?.toLowerCase().includes(kw))
+  return (data.label?.toLowerCase().includes(kw)) || (data.code?.toLowerCase().includes(kw))
 }
 
 function expandAllPerms() {
@@ -597,7 +616,7 @@ const todosRef = ref()
 <style scoped>
 .profile { max-width: 1100px; margin: 0 auto; padding: 16px; }
 
-/* ===== 用户信息卡 ===== */
+/* 用户信息卡 */
 .user-card { margin-bottom: 16px; border: none; border-radius: 8px; }
 .user-card :deep(.el-card__body) { padding: 20px 24px; }
 .user-header { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
@@ -616,7 +635,7 @@ const todosRef = ref()
 .meta-item .el-icon { font-size: 14px; }
 .user-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
-/* ===== 概览统计 ===== */
+/* 概览统计 */
 .stat-row { margin-bottom: 16px; }
 .stat-card {
   display: flex; align-items: center; gap: 12px; padding: 16px;
@@ -637,7 +656,7 @@ const todosRef = ref()
 .stat-num { font-size: 24px; font-weight: 700; color: #1f2d3d; line-height: 1.2; }
 .stat-label { font-size: 12px; color: #909399; }
 
-/* ===== 区域卡片通用 ===== */
+/* 区域卡片通用 */
 .section-card { margin-bottom: 16px; border-radius: 8px; }
 .section-card :deep(.el-card__header) { padding: 14px 20px; }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
@@ -645,7 +664,7 @@ const todosRef = ref()
 .card-title .el-icon { color: #409eff; font-size: 16px; }
 .perm-header-right { display: flex; align-items: center; gap: 8px; }
 
-/* ===== 角色网格 ===== */
+/* 角色网格 */
 .role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
 .role-item {
   display: flex; align-items: center; gap: 10px; padding: 12px 14px;
@@ -659,7 +678,7 @@ const todosRef = ref()
 }
 .role-name { font-size: 14px; font-weight: 500; color: #303133; }
 
-/* ===== 权限目录树 ===== */
+/* 权限目录树 */
 .perm-tree-wrap { padding: 4px 0; }
 .perm-admin-notice { padding: 8px 0; }
 .perm-toolbar { display: flex; gap: 4px; margin-bottom: 8px; padding-left: 4px; }
@@ -674,7 +693,7 @@ const todosRef = ref()
 .perm-tree :deep(.el-tree-node__content:hover) { background: #f5f7fa; }
 .perm-tree :deep(.el-tree-node.is-current > .el-tree-node__content) { background: #ecf5ff; }
 
-/* ===== 待办列表 ===== */
+/* 待办列表 */
 .todo-card :deep(.el-card__body) { padding: 0; }
 .todo-list { max-height: 480px; overflow-y: auto; }
 .todo-item {
@@ -696,7 +715,7 @@ const todosRef = ref()
 .todo-sub { display: flex; align-items: center; gap: 8px; }
 .todo-wait { font-size: 12px; color: #c0c4cc; }
 
-/* ===== 响应式 ===== */
+/* 响应式 */
 @media (max-width: 767px) {
   .profile { padding: 10px; }
   .user-header { gap: 12px; }

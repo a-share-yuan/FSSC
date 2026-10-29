@@ -175,7 +175,7 @@ async function doLogin() {
   box-shadow: 0 24px 70px rgba(4, 22, 48, .45);
 }
 
-/* ---------- 左侧品牌区 ---------- */
+/* 左侧品牌区 */
 .brand-side {
   flex: 0 0 42%;
   display: flex;
@@ -205,7 +205,7 @@ async function doLogin() {
 .brand-feats span { font-size: 12px; color: rgba(255, 255, 255, .68); line-height: 1.5; }
 .brand-foot { margin-top: auto; font-size: 12px; color: rgba(255, 255, 255, .5); }
 
-/* ---------- 右侧表单区 ---------- */
+/* 右侧表单区 */
 .form-side { flex: 1; display: flex; align-items: center; justify-content: center; padding: 36px 44px; }
 .form-box { width: 100%; max-width: 400px; }
 .form-title { margin: 0 0 6px; font-size: 24px; color: #14283f; font-weight: 700; }
@@ -223,7 +223,7 @@ async function doLogin() {
 .submit-btn { width: 100%; height: 44px; font-size: 16px; letter-spacing: 8px; border-radius: 10px; }
 .error-tip { margin-top: 12px; }
 
-/* ---------- 响应式 ---------- */
+/* 响应式 */
 @media (max-width: 900px) {
   .brand-side { display: none; }
   .login-panel { width: 520px; min-height: 0; }

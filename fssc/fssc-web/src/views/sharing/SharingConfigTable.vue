@@ -30,7 +30,7 @@
               {{ optionLabel(col, row[col.prop]) }}
             </el-tag>
           </template>
-          <!-- R5-D-253：目标分组按 id 查名展示（冗余名称列可能为 NULL，不做名称直出） -->
+          <!-- 目标分组按 id 查名展示（冗余名称列可能为 NULL，不做名称直出） -->
           <template v-else-if="col.dynamic === 'group'" #default="{ row }">
             {{ groupNameById(row[col.prop]) }}
           </template>
@@ -57,7 +57,7 @@
           <el-select v-if="col.options" v-model="dialog.form[col.prop]" style="width:100%" :placeholder="$t('sharing.cfg.phSelectOption')">
             <el-option v-for="o in col.options" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
-          <!-- R5-D-253：目标分组下拉（选项来自分组管理 op_sh_group），只提交 id -->
+          <!-- 目标分组下拉（选项来自分组管理 op_sh_group），只提交 id -->
           <el-select v-else-if="col.dynamic === 'group'" v-model="dialog.form[col.prop]" filterable clearable style="width:100%" :placeholder="$t('sharing.cfg.phSelectGroup')">
             <el-option v-for="g in groupOptions" :key="g.id" :label="g.groupName || g.groupCode || ('#' + g.id)" :value="g.id" />
           </el-select>
@@ -88,13 +88,13 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => loadList(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
 })
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -178,19 +178,19 @@ const CONFIG_MAP = computed(() => ({
       ]},
       { prop: 'mode', label: t('sharing.cfg.colDispatchMode'), width: 100, options: [
         { label: t('sharing.cfg.optSystemDispatch'), value: 'SYSTEM' }, { label: t('sharing.cfg.optManualHandle'), value: 'MANUAL' },
-        // R5-D-252：库中已有 AUTO 值（只读实测 op_dispatch_rule id=19），缺此标签会显示成裸码且编辑时选不回
+        // 库中已有 AUTO 值，缺此标签会显示成裸码且编辑时选不回
         { label: t('sharing.cfg.optAutoDispatch'), value: 'AUTO' },
       ], defaultValue: 'SYSTEM' },
-      // R5-D-252：策略值域对齐引擎实认集（compliance DispatchService.selectReviewer 的 switch 分支：
+      // 策略值域对齐引擎实认集（compliance DispatchService.selectReviewer 的 switch 分支：
       // ROUND_ROBIN/LOAD_BALANCE/SKILL_MATCH/CREDIT_BASED；库中亦有 CREDIT_BASED 实例）。
-      // 原 LEAST_LOADED/RANDOM 引擎不识别（掉 default 分支），已从编辑选项移除，旧值经 optionLabel 默认处理提示。
+      // 原 LEAST_LOADED/RANDOM 引擎不识别（掉 default 分支），已从编辑选项移除，旧值经 optionLabel 兜底提示。
       { prop: 'dispatchStrategy', label: t('sharing.common.colStrategy'), width: 110, options: [
         { label: t('sharing.cfg.optRoundRobin'), value: 'ROUND_ROBIN' }, { label: t('sharing.cfg.optLoadBalance'), value: 'LOAD_BALANCE' },
         { label: t('sharing.cfg.optSkillMatch'), value: 'SKILL_MATCH' }, { label: t('sharing.cfg.optCreditBased'), value: 'CREDIT_BASED' },
       ]},
       { prop: 'priority', label: t('sharing.common.colPriority'), width: 80, type: 'number', defaultValue: 10 },
       { prop: 'slaHours', label: t('sharing.cfg.colSlaHours'), width: 90, type: 'number' },
-      // R5-D-253：目标分组原为手填展示列（只读实测 id=1 的行名称为 NULL，页面空白）；
+      // 目标分组曾是手填展示列（行里只存 id、名称没填，页面空白）；
       // 改为 id 驱动的下拉列：编辑选分组、展示按 id 查名，保存只提交 target_group_id。
       { prop: 'targetGroupId', label: t('sharing.cfg.colTargetGroup'), minWidth: 140, dynamic: 'group' },
       { prop: 'status', label: t('common.status'), width: 90, options: STATUS_OPTS.value, defaultValue: 'NORMAL' },
@@ -213,7 +213,7 @@ const dialog = reactive({ visible: false, editing: null, form: {}, saving: false
 const searchRules = reactive({})
 const dialogFormRef = ref(null)
 /**
- * 列驱动的必填规则。此前 el-form-item 没有 prop，dialogRules 从未生效，红星只是画出来；
+ * 列驱动的必填规则。el-form-item 没有 prop 的话，dialogRules 从未生效，红星只是画出来；
  * 补 prop 后必须用自定义 validator：本表必填列含数字/日期，三键 {required,message,trigger} 会把 0 判成未填。
  * 数字列不再另挂 type:'number' 规则——el-input-number 本身只产数字，挂了反而让「清空的可选数字列」存不进去。
  */
@@ -249,7 +249,7 @@ async function loadList() {
 }
 
 function optionLabel(col, val) {
-  // R5-D-252：未知值不得直出裸码（运维看到 LEAST_LOADED 这种值也判断不了含义与处置）；
+  // 未知值不得直出裸码（运维看到 LEAST_LOADED 这种值也判断不了含义与处置）；
   // 空值给占位符，未知非空值给可行动文案。
   if (val == null || val === '') return '—'
   const o = (col.options || []).find(o => o.value === val)
@@ -275,7 +275,7 @@ function openDialog(row) {
   dialog.visible = true
 }
 
-// R5-D-249：系统列（审计/租户/逻辑删）不回传，避免旧行回显触发后端填充跳过或入参伪造
+// 系统列（审计/租户/逻辑删）不回传，避免旧行回显触发后端填充跳过或入参伪造
 const SYSTEM_COLS = ['createBy', 'createTime', 'updateBy', 'updateTime', 'delFlag', 'tenantId']
 function stripSystemCols(o) {
   const c = { ...o }
@@ -283,7 +283,7 @@ function stripSystemCols(o) {
   return c
 }
 
-// R5-D-253：目标分组只提交 id——名称是服务端冗余列（只读实测存在为 NULL 的行），
+// 目标分组只提交 id——名称是服务端冗余列（存在名称为 NULL 的行），
 // 把旧行回显的名称/派生标志回传会把冗余列写脏或引入伪造面。
 function stripDerivedCols(o) {
   const c = stripSystemCols(o)
@@ -294,7 +294,7 @@ function stripDerivedCols(o) {
   return c
 }
 
-// R5-D-253：分组下拉选项（分组管理 op_sh_group）与按 id 查名
+// 分组下拉选项（分组管理 op_sh_group）与按 id 查名
 const groupOptions = ref([])
 async function loadGroupOptions() {
   try {
@@ -340,7 +340,7 @@ async function del(row) {
 
 onMounted(() => {
   loadList()
-  // R5-D-253：派单规则页需分组下拉（展示按 id 查名、编辑按下拉选择）
+  // 派单规则页需分组下拉（展示按 id 查名、编辑按下拉选择）
   if (props.configType === 'dispatch-rule') loadGroupOptions()
 })
 </script>

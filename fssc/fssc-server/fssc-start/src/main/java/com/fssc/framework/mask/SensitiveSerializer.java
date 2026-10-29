@@ -11,7 +11,7 @@ import com.fssc.common.util.MaskUtil;
 import java.io.IOException;
 
 /**
- * 敏感字段序列化器（P1-3）：出参按 {@link SensitiveType} 脱敏。
+ * 敏感字段序列化器：出参按 {@link SensitiveType} 脱敏。
  *
  * <p>由 {@link SensitivePropertyModifier} 在序列化器构建阶段绑定到
  * 带 {@link Sensitive} 注解的属性上；全局开关见 {@link SensitiveSerializer#setEnabled(boolean)}。</p>

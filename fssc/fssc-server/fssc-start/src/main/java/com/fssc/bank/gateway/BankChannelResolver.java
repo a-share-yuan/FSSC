@@ -40,7 +40,7 @@ public class BankChannelResolver {
 
     private volatile Map<String, BankProviderCodec> registry;
 
-    /** provider（大写）→ 编解码器。未注册返回 null（由 activeCodec 默认处理）。 */
+    /** provider（大写）→ 编解码器。未注册返回 null（由 activeCodec 兜底）。 */
     public BankProviderCodec codecOf(String provider) {
         if (provider == null || provider.isBlank()) {
             return null;

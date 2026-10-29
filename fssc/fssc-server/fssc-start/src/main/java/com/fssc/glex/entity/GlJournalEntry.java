@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 @TableName("gl_journal_entry")
 public class GlJournalEntry extends TenantAuditBase {
 
-    /** 记账公司（组织合法性守卫 V1.3.18） */
+    /** 记账公司（组织合法性守卫） */
     private Long companyId;
     /** 记账单号 */
     private String entryNo;

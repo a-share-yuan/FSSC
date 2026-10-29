@@ -72,7 +72,7 @@ public class PrecheckController {
         return Result.success(precheckEngineService.getResults(batchId));
     }
 
-    // === Precheck Rule CRUD ===
+    // Precheck Rule CRUD
 
     @RequiresPerm("compliance:precheck:list")
     @GetMapping("/rules/{id}")
@@ -119,7 +119,7 @@ public class PrecheckController {
         return Result.success();
     }
 
-    // === 脚本验证 ===
+    // 脚本验证
 
     @RequiresPerm("compliance:precheck:list")
     @OperLog(module = "PRECHECK_RULE", operType = "OTHER", desc = "验证脚本")
@@ -131,7 +131,7 @@ public class PrecheckController {
         return Result.success(precheckEngineService.validateScript(scriptContent, sampleData));
     }
 
-    // === 批量操作 ===
+    // 批量操作
 
     @RequiresPerm("compliance:precheck:update")
     @OperLog(module = "PRECHECK_RULE", operType = "UPDATE", desc = "批量启用")

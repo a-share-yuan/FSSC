@@ -2,7 +2,7 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * useMonthEndSchedule - 月结调度自动化 composable (R5-11)
+ * useMonthEndSchedule - 月结调度自动化 composable ()
  *
  * 提供月结任务编排、自动检查、调度提醒功能：
  * - 按期间(YYYY-MM)管理月结任务清单
@@ -53,7 +53,6 @@ export function useMonthEndSchedule() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   }
 
-  // 初始化月结任务清单
   async function initPeriod(period) {
     currentPeriod.value = period || getCurrentPeriod()
     loading.value = true
@@ -190,7 +189,6 @@ export function useMonthEndSchedule() {
     return { shouldAlert: false, daysLeft }
   }
 
-  // 获取甘特图数据
   function getGanttData() {
     return tasks.value.map((t) => ({
       id: t.id,

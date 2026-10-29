@@ -17,11 +17,11 @@ import org.springframework.stereotype.Component;
 /**
  * 税务通道适配器（形态 B · 域2）。
  *
- * <p><b>本类只做通道语义，不做报文翻译。</b>四组能力（识别 / 查验 / 认证抵扣 / 数电开票）
+ * <p>本类只做通道语义，不做报文翻译。四组能力（识别 / 查验 / 认证抵扣 / 数电开票）
  * 已由 <b>InvoiceGateway</b> 封装为自家中性契约 {@code /api/tax/v1/**}；本类对应的
  * {@link ChannelType#TAX_INVOICE} 就是该网关通道在连接器里的注册点。</p>
  *
- * <p><b>职责边界（严格，对齐 InvoiceGateway 交付说明的三条不变量）</b>：
+ * <p>职责边界（严格，对齐 InvoiceGateway 交付说明的三条不变量）：
  * <ol>
  *   <li><b>报文形态归网关</b>：本类<b>原样透传</b>业务侧 payload（中性契约字段，如
  *       {@code orderNumber}/{@code invoiceTypeCode}/{@code seller}/{@code buyer}/{@code lines}），

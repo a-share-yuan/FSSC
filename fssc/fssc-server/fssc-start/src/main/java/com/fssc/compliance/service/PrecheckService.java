@@ -165,7 +165,7 @@ public class PrecheckService {
             }
         }
 
-        // 3.3) BUG-06 修复：OCR 票号查重（票号未勾选入明细也拦）——
+        // 3.3) OCR 票号查重（票号没勾进明细也拦）——
         //      本单附件影像经 OCR 识别出的票号，若已被其他单据的在用附件使用，即判重复发票
         if (isClaim) {
             try {

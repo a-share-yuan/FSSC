@@ -3,7 +3,7 @@
 
 <template>
   <div class="sod-check">
-    <!-- R5-D-034：SoD 检查页此前复用通用配置表格（无执行入口、列与返回体错位），改为独立页面 -->
+    <!-- SoD 检查页不复用通用配置表格（无执行入口、列与返回体错位），改独立页面 -->
     <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px">
       <template #title>
         {{ $t('system.sod.hintPage') }}</template>
@@ -119,7 +119,7 @@ async function load(page) {
       silent: true,
     }))
   } catch {
-    // 台账 R5-D-034：不把后端原文/错误码透出给业务用户
+    // 台账 不把后端原文/错误码透出给业务用户
     ElMessage.error(t('system.sod.msgLoadFail'))
   } finally {
     loading.value = false

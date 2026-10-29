@@ -14,8 +14,12 @@ import com.fssc.collab.service.ScpReconService;
 import com.fssc.collab.service.ScpFlowService;
 import com.fssc.common.core.Result;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.system.service.ConfigService;
+import java.math.RoundingMode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -40,9 +44,9 @@ public class CollabController {
     private final CcpFlowService ccpFlowService;
     private final ApMonthCloseService apMonthCloseService;
     private final CollabSyncLogMapper syncLogMapper;
-    private final com.fssc.system.service.ConfigService configService;
+    private final ConfigService configService;
 
-    // ---------------- SCP 供应商端 ----------------
+    // SCP 供应商端
 
     @RequiresPerm("collab:scp:list")
     @GetMapping("/scp/bills")
@@ -130,7 +134,7 @@ public class CollabController {
                 (String) body.get("payVoucherNo"), date, amount));
     }
 
-    // ---------------- SCP 供应商对账管理（E1~E6，蓝图 SCC_AP_01/02） ----------------
+    // SCP 供应商对账管理（E1~E6，蓝图 SCC_AP_01/02）
 
     @RequiresPerm("collab:scp:recon:list")
     @GetMapping("/scp/recons")
@@ -166,8 +170,8 @@ public class CollabController {
     @RequiresPerm("collab:scp:recon:supplier")
     @PostMapping("/scp/recons/{id}/confirm")
     public Result<ScpRecon> confirmRecon(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        java.math.BigDecimal rate = body.get("taxRatePct") == null ? null
-                : new java.math.BigDecimal(String.valueOf(body.get("taxRatePct")));
+        BigDecimal rate = body.get("taxRatePct") == null ? null
+                : new BigDecimal(String.valueOf(body.get("taxRatePct")));
         return Result.success(scpReconService.confirm(id, (String) body.get("invoiceType"), rate));
     }
 
@@ -191,24 +195,24 @@ public class CollabController {
     @PostMapping("/scp/bills/{id}/manual-match")
     public Result<ScpBill> manualMatch(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         return Result.success(scpFlowService.manualMatch(id,
-                body.get("reconAmount") == null ? null : new java.math.BigDecimal(String.valueOf(body.get("reconAmount"))),
-                body.get("reconTaxAmount") == null ? null : new java.math.BigDecimal(String.valueOf(body.get("reconTaxAmount"))),
-                body.get("reconTotal") == null ? null : new java.math.BigDecimal(String.valueOf(body.get("reconTotal")))));
+                body.get("reconAmount") == null ? null : new BigDecimal(String.valueOf(body.get("reconAmount"))),
+                body.get("reconTaxAmount") == null ? null : new BigDecimal(String.valueOf(body.get("reconTaxAmount"))),
+                body.get("reconTotal") == null ? null : new BigDecimal(String.valueOf(body.get("reconTotal")))));
     }
 
     /** R-18 申请强制匹配（四眼第一步，单据进 FORCE_PENDING 锁定）：body {reason} */
     @RequiresPerm("collab:scp:force-appr")
     @PostMapping("/scp/bills/{id}/force-apply")
     public Result<ScpBill> forceApply(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        String operator = com.fssc.framework.security.UserContext.get() == null ? null
-                : com.fssc.framework.security.UserContext.get().getUsername();
+        String operator = UserContext.get() == null ? null
+                : UserContext.get().getUsername();
         return Result.success(scpFlowService.forceApply(id, (String) body.get("reason"), operator));
     }
 
     /** R-18 审批通过（分级审批做法：差额≤阈值需一级 force-appr；超阈值由二级岗 force-appr-l2 审批即可；四眼：审批人≠申请人） */
     @PostMapping("/scp/bills/{id}/force-approve")
     public Result<ScpBill> forceApprove(@PathVariable Long id) {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.getRequired();
+        LoginUser u = UserContext.getRequired();
         ScpBill b = scpFlowService.get(id);
         boolean l2 = scpForceServiceL2Required(b);
         String needed = l2 ? "collab:scp:force-appr-l2" : "collab:scp:force-appr";
@@ -224,25 +228,25 @@ public class CollabController {
     @RequiresPerm("collab:scp:force-appr")
     @PostMapping("/scp/bills/{id}/force-reject")
     public Result<ScpBill> forceReject(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.getRequired();
+        LoginUser u = UserContext.getRequired();
         return Result.success(scpFlowService.rejectForce(id, u.getUsername(), (String) body.get("reason")));
     }
 
     private boolean scpForceServiceL2Required(ScpBill b) {
         try {
-            java.math.BigDecimal recon = b.getReconAmount() == null ? java.math.BigDecimal.ONE : b.getReconAmount();
-            java.math.BigDecimal diff = b.getAmount() == null ? java.math.BigDecimal.ZERO
+            BigDecimal recon = b.getReconAmount() == null ? BigDecimal.ONE : b.getReconAmount();
+            BigDecimal diff = b.getAmount() == null ? BigDecimal.ZERO
                     : b.getAmount().subtract(recon).abs();
-            java.math.BigDecimal thresholdPct = new java.math.BigDecimal(configService.getValue("scp.force.diff-pct") == null ? "5" : configService.getValue("scp.force.diff-pct"));
-            java.math.BigDecimal diffPct = diff.divide(recon.abs().max(java.math.BigDecimal.ONE), 6, java.math.RoundingMode.HALF_UP)
-                    .multiply(java.math.BigDecimal.valueOf(100));
+            BigDecimal thresholdPct = new BigDecimal(configService.getValue("scp.force.diff-pct") == null ? "5" : configService.getValue("scp.force.diff-pct"));
+            BigDecimal diffPct = diff.divide(recon.abs().max(BigDecimal.ONE), 6, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
             return diffPct.compareTo(thresholdPct) > 0;
         } catch (Exception e) {
             return false;
         }
     }
 
-    private boolean hasPerm(com.fssc.framework.security.LoginUser u, String perm) {
+    private boolean hasPerm(LoginUser u, String perm) {
         return u.getPerms() != null && (u.getPerms().contains("*:*:*") || u.getPerms().contains(perm));
     }
 
@@ -272,12 +276,12 @@ public class CollabController {
     @RequiresPerm("collab:scp:pay")
     @PostMapping("/scp/bills/{id}/direct-deduct")
     public Result<ScpBill> directDeduct(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        java.math.BigDecimal amt = body.get("deductAmount") == null ? null
-                : new java.math.BigDecimal(String.valueOf(body.get("deductAmount")));
+        BigDecimal amt = body.get("deductAmount") == null ? null
+                : new BigDecimal(String.valueOf(body.get("deductAmount")));
         return Result.success(scpFlowService.directDeduct(id, amt, (String) body.get("reason")));
     }
 
-    // ---------------- CCP 客户端 ----------------
+    // CCP 客户端
 
     @RequiresPerm("collab:ccp:manage")
     @GetMapping("/ccp/shippings")
@@ -308,7 +312,7 @@ public class CollabController {
         return Result.success(ccpFlowService.invoiceWriteback(preInvoiceId));
     }
 
-    // ---------------- 通用 ----------------
+    // 通用
 
     /** 关账冻结状态（R-14/打通点7查询面）：SCP 发送侧按公司+期间校验 */
     @RequiresPerm("collab:freeze:view")

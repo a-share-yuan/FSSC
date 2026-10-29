@@ -20,9 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * D-V4R-40：费用概览在「本人口径下没有任何预算行」时不得 500。
+ * 费用概览在「本人口径下没有任何预算行」时不得 500。
  *
- * <p>实案（2026-10-13 17:2x 运行态，共享会计 Y000185 打开 管理报表›部门报销排名）：
+ * <p>实案（运行态，共享会计 Y000185 打开管理报表›部门报销排名）：
  * 概览四格调 {@code GET /tenant/dashboard/expense/overview} 回 {@code {"code":500,"msg":"系统异常，请稍后重试"}}，
  * 页面「费用概览」卡整块显示「本次未刷新成功」。栈顶
  * {@code NullPointerException: Cannot invoke "java.util.Map.get(Object)" because "row" is null}

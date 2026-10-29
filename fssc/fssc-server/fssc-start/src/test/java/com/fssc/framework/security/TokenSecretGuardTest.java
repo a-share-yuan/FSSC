@@ -78,7 +78,7 @@ class TokenSecretGuardTest {
         return u;
     }
 
-    // ------------------------------------------------ 失败分支：默认密钥
+    // 失败分支：默认密钥
 
     @Test
     @DisplayName("C-2：默认密钥 + 非 dev profile ⇒ 启动自检抛异常（不放行）")
@@ -113,7 +113,7 @@ class TokenSecretGuardTest {
         assertEquals("u_test", svc.parseToken(token).getUsername());
     }
 
-    // ------------------------------------------------ 失败分支：缺失/过短密钥
+    // 失败分支：缺失/过短密钥
 
     @Test
     @DisplayName("C-2：密钥为空串（${FSSC_JWT_SECRET:} 未注入即此值）⇒ 启动自检抛异常，绝不回落内置默认值")
@@ -163,7 +163,7 @@ class TokenSecretGuardTest {
         assertThrows(IllegalStateException.class, svc::checkSecret);
     }
 
-    // ------------------------------------------------ 发布单断言：prod 配置文件本身
+    // 发布单断言：prod 配置文件本身
 
     @Test
     @DisplayName("C-2/C-3 发布断言：application-prod.yml 关掉放行分支、密钥只留环境变量引用、不含任何默认密钥字面值")

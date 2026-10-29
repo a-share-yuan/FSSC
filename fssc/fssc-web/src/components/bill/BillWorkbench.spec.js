@@ -5,10 +5,10 @@ import ElementPlus from 'element-plus'
 /**
  * PC 单据台 · 提交审批的重复点击闸。
  *
- * 与 H5 那份判据成对（见 H5ExpenseCreate.spec.js，反置探针实测＝一次连点 3 条 saveDraft）。
+ * 与 H5 那份判据成对（见 H5ExpenseCreate.spec.js，反置探针下连点一次会落 3 条 saveDraft）。
  * 这里守的是 b.submitting 罩不到的两处：
  *   ① 点下去到 submitting 落下之间（本页 billInfoForm 校验＋beforeSubmit 钩子）——
- *      反置探针实测＝一次连点落进 2 条 saveDraft；
+ *      反置探针下连点一次会落进 2 条 saveDraft；
  *   ② 失败路径放闸：被服务端「请勿重复提交」打回后按钮必须立刻恢复可点，
  *      否则闸就把页面焊死，用户只能刷新。
  * 同样不能真提交（会落草稿＋起流程），所以把 saveDraft 挂成永不返回。

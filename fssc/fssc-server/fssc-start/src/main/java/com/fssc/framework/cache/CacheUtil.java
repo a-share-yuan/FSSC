@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
- * 轻量内存缓存（P1-3 主数据缓存分层）。
+ * 轻量内存缓存（主数据缓存分层）。
  * ConcurrentHashMap + TTL，不引入外部缓存组件；缓存不可用/未命中回源 DB（fail-open 仅缓存层）。
  */
 public final class CacheUtil {
@@ -53,7 +53,7 @@ public final class CacheUtil {
         CACHE.keySet().removeIf(k -> k.startsWith(prefix));
     }
 
-    /** 清空全部（运维/租户切换默认处理） */
+    /** 清空全部（运维/租户切换兜底） */
     public static void clear() {
         CACHE.clear();
     }

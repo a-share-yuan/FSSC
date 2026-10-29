@@ -49,7 +49,7 @@ vi.mock('@/api', () => {
 
 import Dashboard from './Dashboard.vue'
 
-describe('L1-F-07 Dashboard.vue 组件测试', () => {
+describe('Dashboard.vue 组件测试', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('可挂载并初始化图表容器', async () => {

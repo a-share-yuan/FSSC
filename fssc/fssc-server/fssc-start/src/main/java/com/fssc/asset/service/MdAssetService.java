@@ -62,7 +62,7 @@ public class MdAssetService {
     /** 审计扩面：单据状态跃迁记录 */
     private final AuditTrailService auditTrailService;
     /**
-     * X-06：资产变动台账＝原值调整/盘点差异的原因与前后幅度载体。
+     * 资产变动台账＝原值调整/盘点差异的原因与前后幅度载体。
      * 卡片 {@code md_asset} 只有末值，历史镜像一律落本表（写入位置见 {@code writeChangeLog}）。
      */
     private final MdAssetChangeLogMapper changeLogMapper;
@@ -84,7 +84,7 @@ public class MdAssetService {
     }
 
     /**
-     * 人工建档/改档的必填守卫（必填项治理批次 2B）：文案与前端 ASSET_CARD 规则逐字一致，
+     * 人工建档/改档的必填守卫：文案与前端 ASSET_CARD 规则逐字一致，
      * 由 {@code MdAssetController} 在人工入口调用。
      *
      * <p>刻意不放进 {@link #create} —— 采购收货转固（{@code PurchaseService#createAssetFromReceipt}）
@@ -142,13 +142,13 @@ public class MdAssetService {
         e.setCreateBy(userId());
         mapper.insert(e);
         // 规则：本方法新建写入数据库、无旧值，不接入审计（不伪造 before）
-        // P7：资产新增即发起 FA03 资产新增审批流（资产管理员→部门经理→资产管理岗→财务经理(>200000)）
+        // 资产新增即发起 FA03 资产新增审批流（资产管理员→部门经理→资产管理岗→财务经理(>200000)）
         try {
             wfEngineFacade.start("FA_ADD", e.getId(), userId(),
                     "资产-" + (e.getAssetName() == null ? e.getId() : e.getAssetName()), e.getOriginalAmount());
         } catch (Exception ex) {
             log.error("资产 {} 发起新增审批失败: {}", e.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
         return e.getId();
     }
@@ -196,7 +196,7 @@ public class MdAssetService {
     }
 
     /**
-     * 报废发起：只起流程，<b>零改账</b>（甲案）。
+     * 报废发起：只起流程，<b>零改账</b>。
      * <p>原实现在发起瞬间就预写改账——{@code accum_depr} 直接补提到顶（原值−残值）、
      * {@code net_amount} 冲至残值、{@code status} 置 SCRAP，然后才 {@code start(FA_DISPOSE)}，
      * 而本类无 REJECTED 回冲路径 ⇒ ①任何人驳回也回不来；②"补提到顶"抹掉真实折旧轨迹
@@ -212,13 +212,13 @@ public class MdAssetService {
         if ("SCRAP".equals(a.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "该资产已报废");
         }
-        // P7：资产报废即发起 FA06 资产处置审批流（资产管理员→部门经理→资产管理岗→财务总监(>500000)）
+        // 资产报废即发起 FA06 资产处置审批流（资产管理员→部门经理→资产管理岗→财务总监(>500000)）
         try {
             wfEngineFacade.start("FA_DISPOSE", a.getId(), userId(),
                     "资产处置-" + (a.getAssetName() == null ? a.getId() : a.getAssetName()), a.getOriginalAmount());
         } catch (Exception ex) {
             log.error("资产 {} 发起处置审批失败: {}", a.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -229,7 +229,7 @@ public class MdAssetService {
 
     /**
      * 资本性支出申请（FA01 FA_CER）：立项申请即发起资本性支出审批流，不落资产卡片（购建/调拨后建档）。
-     * 兼容旧签名（未指定预算科目 → 自动取综合预算默认处理科目）。
+     * 兼容旧签名（未指定预算科目 → 自动取综合预算兜底科目）。
      */
     public void capitalRequest(BigDecimal amount, String assetName, Long deptId, Long companyId, String remark) {
         capitalRequest(amount, assetName, deptId, companyId, remark, null);
@@ -245,11 +245,11 @@ public class MdAssetService {
      *      AssetWfEventListener 占用预算并置 APPROVED，驳回置 REJECTED（如已占用则释放）。</li>
      * </ol>
      *
-     * @param budgetItemId 预算科目（bg_item.id），为空时自动取综合预算默认处理科目
+     * @param budgetItemId 预算科目（bg_item.id），为空时自动取综合预算兜底科目
      */
     public void capitalRequest(BigDecimal amount, String assetName, Long deptId, Long companyId, String remark,
                                Long budgetItemId) {
-        // 必填守卫（批次 2B）：文案与前端 ASSET_CAPITAL 规则一致。原先 companyId 为空时静默按
+        // 必填守卫：文案与前端 ASSET_CAPITAL 规则一致。原先 companyId 为空时静默按
         // 登录用户所属公司补值——申请人看到的「所属公司」是空的，单据却记到了另一家公司，故改为必输。
         if (amount == null || amount.compareTo(ZERO) <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请输入支出金额（须大于 0）");
@@ -294,11 +294,11 @@ public class MdAssetService {
             cerRequestMapper.updateById(upd);
         } catch (Exception ex) {
             log.error("资本性支出申请 {} 发起审批失败: {}", cer.getId(), ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
-    /** CER 默认预算科目：取当前租户预算总额最大的科目（综合预算默认处理，id=19 场景） */
+    /** CER 默认预算科目：取当前租户预算总额最大的科目（综合预算兜底，id=19 场景） */
     private Long defaultCerBudgetItem() {
         List<BgItem> items = bgItemMapper.selectList(
                 new LambdaQueryWrapper<BgItem>()
@@ -337,8 +337,8 @@ public class MdAssetService {
     }
 
     /**
-     * X-06：单卡变动台账读取环节——原值调整/盘点差异的原因、前后镜像与最终状态。
-     * <p>写侧在 {@code writeChangeLog}，此前库里只有行、界面无任何消费者，故该表实质上是只写不读的哑台账。
+     * 单卡变动台账读取环节——原值调整/盘点差异的原因、前后镜像与最终状态。
+     * <p>写侧在 {@code writeChangeLog}，本读点是它的消费者，否则该表就成了只写不读的哑台账。
      * <p>规则与 {@code page} 一致：受组织范围约束的账号只能看本公司卡片的变动行，防止跨法人查询。
      */
     public List<MdAssetChangeLog> changeLogs(Long assetId) {
@@ -351,7 +351,7 @@ public class MdAssetService {
     }
 
     /**
-     * X-06：资产变动台账写入——原值调整/盘点差异的原因与前后幅度此前只拼在流程标题里，
+     * 资产变动台账写入——原值调整/盘点差异的原因与前后幅度只拼在流程标题里的话，
      * 卡片只留末值，事后无从回查"为什么改、从多少改到多少"。
      *
      * <p>调用时点＝{@code wfEngineFacade.start} 返回之后：start 五个重载都回 procInstId（本域 FA_CER 已有
@@ -369,7 +369,7 @@ public class MdAssetService {
             row.setCompanyId(asset.getCompanyId());
             row.setDeptId(asset.getDeptId());
             row.setChangeType(changeType);
-            // 取值域（X-06 读取环节同窗定档）：change_type 记"变了什么"，本列记"怎么变的"——
+            // 取值域：change_type 记"变了什么"，本列记"怎么变的"——
             // 有流程号＝审批流变动(WF)，无流程号＝不经审批的直接改账(DIRECT)。
             // 现两个写入方（盘点差异/原值调整）都先起流再落台账，⇒值面只会出 WF；DIRECT 臂待直改环节接入。
             row.setChangeMethod(StringUtils.hasText(procInstId) ? "WF" : "DIRECT");
@@ -382,7 +382,7 @@ public class MdAssetService {
             row.setStatus("APPROVING");
             row.setRemark(remark);
             row.setProcInstId(procInstId);
-            // create_by 是裸字段（无 fill 注解）⇒ 必须显式赋值，否则落 DB NULL（X-34 同型坑）
+            // create_by 是裸字段（无 fill 注解）⇒ 必须显式赋值，否则落 DB NULL
             row.setCreateBy(userId());
             changeLogMapper.insert(row);
             log.info("资产变动台账 id={} 资产={} 类型={} 原因={} 幅度={} 流程={}",
@@ -396,15 +396,15 @@ public class MdAssetService {
     /** 资产调拨（FA05）：部门间 FA_TRANSFER(FA05-01) / 跨法人 FA_TRANSFER_CROSS(FA05-C)。 */
     public void transfer(Long id, Long targetDeptId, Long targetCompanyId, String remark) {
         MdAsset a = require(id);
-        // 必填守卫（批次 2B）：原先 targetDeptId 为空时只是「什么都不改」，
+        // 必填守卫：原先 targetDeptId 为空时只是「什么都不改」，
         // 却照样写入数据库并发起一条调拨审批——审批人看到的是一张目标部门为空的调拨单。
         if (targetDeptId == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择目标部门");
         }
         boolean cross = targetCompanyId != null && a.getCompanyId() != null
                 && !targetCompanyId.equals(a.getCompanyId());
-        // 批次0 P-4 / A1 收尾环节三件套：调拨改账挪到审批通过后执行——
-        // 此处不再预写 dept_id/company_id（此前先写入数据库再起流：驳回不回滚＝脏账，起流失败不反弹）。
+        // 调拨改账挪到审批通过后执行——
+        // 此处不预写 dept_id/company_id（先写库再起流：驳回不回滚＝脏账，起流失败不反弹）。
         // 目标值经流程变量传递，assetBizAction 在 APPROVED 时写入数据库；驳回侧资产零改动（R-4 回滚半径=0）。
         Map<String, Object> extra = new HashMap<>();
         extra.put("targetDeptId", targetDeptId);
@@ -419,7 +419,7 @@ public class MdAssetService {
             }
         } catch (Exception ex) {
             log.error("资产 {} 发起调拨审批失败: {}", id, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -434,8 +434,8 @@ public class MdAssetService {
         MdAsset upd = new MdAsset();
         upd.setId(id);
         upd.setStatus("USING");
-        // 必填守卫（批次 2B）：转固日期就是这张卡片的购置日期 / 折旧起算规则。
-        // 此前留空静默沿用建卡时的旧值、格式错误直接 ignore，两种情况都会让卡片带着错误的起算日进入折旧。
+        // 必填守卫：转固日期就是这张卡片的购置日期 / 折旧起算规则。
+        // 留空会静默沿用建卡时的旧值、格式错误直接 ignore，两种情况都会让卡片带着错误的起算日进入折旧。
         if (!StringUtils.hasText(transferDate)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择转固日期");
         }
@@ -456,7 +456,7 @@ public class MdAssetService {
                     a.getOriginalAmount());
         } catch (Exception ex) {
             log.error("资产 {} 发起转固审批失败: {}", id, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -471,7 +471,7 @@ public class MdAssetService {
                     "资产对外销售处置-" + a.getAssetName(), sellAmount == null ? a.getOriginalAmount() : sellAmount);
         } catch (Exception ex) {
             log.error("资产 {} 发起对外销售处置审批失败: {}", id, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -484,9 +484,9 @@ public class MdAssetService {
                     "资产盘点差异-" + a.getAssetName(), diffAmount);
         } catch (Exception ex) {
             log.error("资产 {} 发起盘点差异审批失败: {}", id, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
-        // X-06：remark 原先在方法体内完全丢弃＝差异说明零载体，现随台账写入数据库。
+        // remark 原先在方法体内完全丢弃＝差异说明零载体，现随台账写入数据库。
         // 前后镜像四列按「申请时刻卡片现值」写入数据库（before=after=现值快照）——本审批只做差异确认、
         // 不改卡片（结转凭证走总账 GL_CHECK_DIFF），四列如实记录申请时点的账面现值，
         // 不再四列全 NULL（旧式让台账行无任何金额镜像可比对，等于镜像列形同虚设）。
@@ -517,9 +517,9 @@ public class MdAssetService {
                     delta.abs(), null, extra);
         } catch (Exception ex) {
             log.error("资产 {} 发起原值调整审批失败: {}", id, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
-        // X-06：原因＋前后镜像落变动台账。after 取的就是上面传给审批环节的两个目标值，
+        // 原因＋前后镜像落变动台账。after 取的就是上面传给审批环节的两个目标值，
         // 同规则不同表——改账仍只在审批通过时发生，台账行只记录"这次要把原值从 X 改成 Y、为什么改"。
         writeChangeLog(a, "VALUE_ADJUST", reason, procInstId,
                 nvl(a.getOriginalAmount()), newOriginalAmount, nvl(a.getNetAmount()), targetNet, delta, null);
@@ -541,7 +541,7 @@ public class MdAssetService {
                     "资产减值准备-" + a.getAssetName(), impairmentAmount, null, extra);
         } catch (Exception ex) {
             log.error("资产 {} 发起减值准备审批失败: {}", id, ex.getMessage(), ex);
-            throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+            throw ex;  // 流程发起失败必须冒泡：静默降级会留下没有流程的孤儿单
         }
     }
 
@@ -565,7 +565,7 @@ public class MdAssetService {
     }
 
     /**
-     * P7 月度折旧批处理（FA_DEPRECIATION 两阶段：阶段一）。
+     * 月度折旧批处理（FA_DEPRECIATION 两阶段：阶段一）。
      *
      * <p>按设计稿改造：月度计提不再直接落账，而是生成折旧批单并发起 FA_DEPRECIATION 审批流
      * （{@link AssetDeprBatchService#createAndSubmit}）；审批通过事件回调（{@link AssetWfEventListener}）

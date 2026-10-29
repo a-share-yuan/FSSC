@@ -104,10 +104,10 @@ const form = ref({ period: '', companyIds: '', rawRows: '' })
 const adjustVisible = ref(false)
 const adjustRow = ref(null)
 const adjustRaw = ref('')
-// 第2批：新建底稿期间原为装饰红星（el-form-item required 无 prop，缺期间时只有一句 toast）
+// 新建底稿期间曾用装饰红星（el-form-item required 无 prop，缺期间时只有一句 toast）
 const createFormRef = ref(null)
 const { rules: createRules } = useFormRules('GLEX_CONSOLIDATE')
-// 第2批：调整分录弹窗接入（空分录提交无意义）；computed 包装给 el-form 可校验 model
+// 调整分录弹窗接入（空分录提交无意义）；computed 包装给 el-form 可校验 model
 const adjustFormRef = ref(null)
 const adjustFormModel = computed(() => ({ rawRows: adjustRaw.value }))
 const adjustRules = { rawRows: commonRules.required('请输入调整分录内容') }

@@ -54,7 +54,7 @@ public class OpVoucher extends TenantAuditBase {
     @TableField(exist = false)
     private String createByName;
     /**
-     * X-49 乙 展示：付款环节凭证"资金指令未下发"标记（transient，只读补充，零写库）。
+     * 付款环节凭证"资金指令未下发"标记（transient，只读补充，零写库）。
      * <p>true＝本凭证是付款环节、账面已记账（POSTED）但资金证据说款还没付出；
      * false＝资金证据已实付；null＝不是付款环节／无资金证据可判（界面不注记）。
      * <p>由 {@code VoucherAutoPostService.fillPayLegUnsettledFlag} 在凭证台账读侧打标，

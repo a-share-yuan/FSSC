@@ -64,7 +64,7 @@ public class CollectBizAction implements WfBizAction {
             //   ①部分收款后再认领 ⇒ received 翻倍、remain 转负（127,200 单再走一次即 −127,200）；
             //   ②对已 DONE（余额 0）的应收单再触发一次 ⇒ 凭空加款＋凭空出一张借银行存款的进账凭证。
             // 修法＝按声明的规则实现：本次核销额＝当前余额，余额夹到非负；余额已为 0 就什么都不做。
-            // 不落的那半条＝「该环节是否必须先有 rc_receipt 到账载体才允许出证」＝账务前置条件，进人工裁决清单。
+            // 不落的那半条＝「该环节是否必须先有 rc_receipt 到账载体才允许出证」＝账务前置条件，进待确认清单。
             BigDecimal receivableAmount = rec.getAmount() == null ? BigDecimal.ZERO : rec.getAmount();
             BigDecimal received = rec.getReceivedAmount() == null ? BigDecimal.ZERO : rec.getReceivedAmount();
             BigDecimal remain = rec.getRemainAmount() != null ? rec.getRemainAmount()
@@ -73,7 +73,7 @@ public class CollectBizAction implements WfBizAction {
                 remain = BigDecimal.ZERO;
             }
             if (remain.signum() == 0) {
-                log.warn("收款认领 {} 审批通过但应收余额已为 0（已收 {}／票面 {}），不重复核销、不出证（D-DEC-409）",
+                log.warn("收款认领 {} 审批通过但应收余额已为 0（已收 {}／票面 {}），不重复核销、不出证",
                         rec.getBillNo(), received, receivableAmount);
                 return;
             }

@@ -10,6 +10,7 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.masterdata.entity.MdCostCenter;
 import com.fssc.masterdata.service.CostCenterService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,7 +36,7 @@ public class CostCenterController {
 
     /** 树形数据（前端按 parentId 组树） */
     @GetMapping("/tree")
-    public Result<java.util.List<MdCostCenter>> tree() {
+    public Result<List<MdCostCenter>> tree() {
         return Result.success(service.tree());
     }
 

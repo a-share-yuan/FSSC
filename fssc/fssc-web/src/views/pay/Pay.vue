@@ -6,8 +6,8 @@
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
         <b>{{ $t('pay.batch.pageTitle') }}</b>
-        <!-- 文案对齐「先审后付」时序——原文「出纳确认后执行付款」正是把先付后审写成操作指引，
-             与下方 CONFIRMED 只读提示（同一缺陷的按钮）矛盾，改为「确认→审批办结→执行」。 -->
+        <!-- 文案对齐「先审后付」时序——「出纳确认后执行付款」这种写法把先付后审当成操作指引，
+             与下方 CONFIRMED 只读提示冲突；本页的口径是「确认→审批办结→执行」。 -->
         <span style="color: #909399; font-size: 13px">{{ $t('pay.batch.hintAutoGroup') }}</span>
         <div style="margin-left: auto">
           <el-button v-if="canCreate" type="primary" size="small" @click="openPick">{{ $t('pay.batch.btnPickPending') }}</el-button>
@@ -272,8 +272,8 @@ const payCm = ref(null)
 
 // 权限收敛
 // 本页菜单是 op:pay:list（出纳付款），但页面首屏实际调用的是 pay:batch:* 系列接口，
-// 两套码不一致 → 实测 FIN_MANAGER/BIZ_FIN_MANAGER/FIN_DIRECTOR/BASE_FIN_MANAGER/PLATE_FIN_MANAGER
-// 这 5 个角色（有 op:pay:list、无 pay:batch:list）进页即弹「缺少权限：pay:batch:list」；
+// 两套码不一致 → 只持 op:pay:list 的财务经理类角色
+// （FIN_MANAGER 等 5 个）进页即弹「缺少权限：pay:batch:list」；
 // CFO 少 pay:batch:create 也会因自动组批报错。
 // 故这里统一按「接口真实所需权限」收敛：无权的请求不发、无权按钮不渲染。
 // hasPerm 已抽取至 utils/perm（与 Workbench.vue / FlowConfig.vue 共用）
@@ -288,7 +288,7 @@ const groupNotice = ref('')
 
 // ③：账证不符红标映射与解说出处（与后端 voucherAnomaly 判据同源，两组合：
 // 已作废却仍挂已记账凭证 / 已付款却查无任何凭证）。红标行禁止再次付款——按钮门控＋executeBatch 守卫，
-// 服务端 execute 入口另有同源强制校验默认处理。
+// 服务端 execute 入口另有同源强制校验兜底。
 const VOUCHER_ANOMALY_LABEL = computed(() => ({
   VOID_WITH_POSTED_VOUCHER: t('pay.batch.anomalyVoidWithPosted'),
   PAID_WITHOUT_VOUCHER: t('pay.batch.anomalyPaidNoVoucher'),
@@ -323,7 +323,7 @@ async function load() {
   // 无 pay:batch:list（如只有 op:pay:list 的财务经理类角色）：不请求接口，页面显示无权限空态
   if (!canList) return
   // 本方法改为纯读。原先在列表加载里调 autoGroup()——读动作带写副作用，
-  // 批次生成时点与审批时点解耦（实测差 1 小时 46 分），且不持 pay:batch:create 的出纳（CASHIER）
+  // 批次生成时点与审批时点解耦，且不持 pay:batch:create 的出纳（CASHIER）
   // 永远组不出批次。组批现由服务端在单据审批通过收尾时触发（PayBatchAutoGroupListener），
   // 页面只负责看；需要手工补组时用「立即组批」显式触发（仍限建批权限）。
   try {
@@ -335,7 +335,7 @@ async function load() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// 手工默认处理的组批入口（显式点击才写数据）。服务端收尾已覆盖常态，
+// 手工兜底的组批入口（显式点击才写数据）。服务端收尾已覆盖常态，
 // 这里只处理历史遗留/收尾异常留下的 WAITING 记录。
 async function groupNow() {
   if (!canCreate) return
@@ -351,9 +351,9 @@ async function groupNow() {
 }
 
 // C1：选待付记录一步成批
-// 原先这里是"先建空批次（账户取本公司任一账户默认处理）→ 再逐笔挂明细"，而挂明细接口 payApi.addDetail
+// 原先这里是"先建空批次（账户取本公司任一账户兜底）→ 再逐笔挂明细"，而挂明细接口 payApi.addDetail
 // 在本页从未被调用过，所以手工建出的批次永远是 0 笔、确认时被空批校验拒掉，等于没有出口。
-// 现在改为在待付清单里勾选记录、一次请求成批；出账账户可显式选择，不选就用本公司默认账户，
+// 在待付清单里勾选记录、一次请求成批；出账账户可显式选择，不选就用本公司默认账户，
 // 两者都没有时后端直接拒建并把原因返到界面（不再悄悄建出一张付不出去的批次）。
 const dlgPick = ref(false)
 const pickRows = ref([])
@@ -465,7 +465,7 @@ async function executeBatch(row) {
   // 本改动不放宽那道校验，只是给它一个看得见的出口。
   try {
     const result = await payApi.execute(row.id)
-    // X-39 丙：DEFERRED＝收款账号未经供应商档案核对，整批<b>未提交银企</b>、
+    // DEFERRED＝收款账号未经供应商档案核对，整批<b>未提交银企</b>、
     // 批次状态未动 ⇒ 绝不能报"付款执行完成"。同样走拦口弹窗看逐条缺档明细与补录出口。
     if (result === 'DEFERRED') {
       await openBlockReport(row, { message: t('pay.batch.msgBankNotSubmitted') })
@@ -521,7 +521,7 @@ function blockChannels(b) {
     out.push(t('pay.batch.exitLegMissing'))
   }
   if (has('RECON_UNCONFIRMED')) out.push(t('pay.batch.exitReconUnconfirmed'))
-  // X-39 丙：账号"无出处"＝整批暂缓提交银企（DEFERRED），补档案后原地重试，不写 FAILED
+  // 账号"无出处"＝整批暂缓提交银企（DEFERRED），补档案后原地重试，不写 FAILED
   if (has('PAYEE_ACCOUNT_NOT_ARCHIVED')) out.push(t('pay.batch.exitAccountNotArchived'))
   if (has('BANK_ACCOUNT_MISSING')) out.push(t('pay.batch.exitAccountEmpty'))
   if (has('SUPPLIER_BLACKLISTED', 'SUPPLIER_DISABLED')) out.push(t('pay.batch.exitBlacklisted'))
@@ -531,7 +531,7 @@ function blockChannels(b) {
 }
 
 /**
- * G2R-03：顶部「处理出口」此前恒取 pay.batch.hintNoBypass（三单匹配规则），
+ * 顶部「处理出口」不能恒取 pay.batch.hintNoBypass（三单匹配规则）：
  * 反欺诈／供应商停用／账号未核档等非三单匹配校验被拦时，出纳按提示去补 PO／合同／发票，
  * 永远解不掉校验。此处按后端拦截原文识别校验类型，给出对应的真出口。
  */

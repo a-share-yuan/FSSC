@@ -2,12 +2,12 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * useSubmitGuard — 表单提交前的必填校验（必填项治理 P1）。
+ * useSubmitGuard — 表单提交前的必填校验。
  *
- * 存在的原因：实测 77 个含表单页面里只有 11 个真的调用了 formRef.validate()，
+ * 存在的原因：含表单页面里真正调用过 formRef.validate() 的只是少数，
  * 另有两个反模式——① `el-form-item` 上裸写 `required` 但不给 `prop`，于是红星照显示、
  * 校验一条都不跑（Element Plus 只遍历有 prop 的项）；② 定义了 rules 对象却从不在提交时调用
- * （死规则）。本 composable 把"提交前先校验、不过就中止"收敛成一处，避免 66 个页面各写一遍、
+ * 死规则。本 composable 把"提交前先校验、不过就中止"收敛成一处，避免每个页面各写一遍、
  * 各自漏写。
  *
  * 用法：
@@ -59,7 +59,7 @@ export async function validateForms(formRefs) {
 export function useSubmitGuard(formRef) {
   /**
    * @param action 校验通过后要执行的异步逻辑（真正的 create/update 请求）
-   * @returns 校验未通过时返回 undefined 且**不发请求**
+   * @returns 校验未通过时返回 undefined 且不发请求
    */
   async function submit(action) {
     // 没挂 ref 的表单无法前端校验——此时宁可放行交给后端必填守卫，也不要静默吞掉提交

@@ -48,7 +48,7 @@ public class MdAssetCategoryService {
         mapper.updateById(e);
     }
 
-    /** 必填守卫（批次 2B）：文案与前端 ASSET_CATEGORY 规则一致；类别编码/名称是资产建档的追溯规则，留空即脏数据。 */
+    /** 必填守卫：文案与前端 ASSET_CATEGORY 规则一致；类别编码/名称是资产建档的追溯规则，留空即脏数据。 */
     private void requireManual(MdAssetCategory e) {
         if (e == null || !StringUtils.hasText(e.getCategoryCode())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请输入类别编码");

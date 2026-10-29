@@ -22,8 +22,8 @@ import java.util.List;
 /**
  * G4 治理：流程<b>管理</b>中心的组织隔离（参考通行参数 4.8「流程管理中心启用组织隔离」）。
  *
- * <p><b>开关（fail-closed，缺省关）</b>：{@code sys_config.wf.manage.org-isolated}
- * —— 缺省（无记录 / 非 '1'）时本类<b>不做任何过滤</b>，与改造前行为完全一致；
+ * <p>开关（fail-closed，缺省关）：{@code sys_config.wf.manage.org-isolated}
+ * —— 缺省（无记录 / 非 '1'）时本类<b>不做任何过滤</b>，与原先行为完全一致；
  * 这是必须的：租户内流程数据是否按组织办结属"管理策略"，不该由一次代码升级替租户拍板。</p>
  *
  * <p><b>为什么复用 @DataScope 而不另造一套</b>：项目已有 data_scope 五级过滤（{@code PermissionAspect}

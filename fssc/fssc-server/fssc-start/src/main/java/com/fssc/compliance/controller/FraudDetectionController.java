@@ -154,10 +154,10 @@ public class FraudDetectionController {
     }
 
     /**
-     * 请求体缺失的统一默认处理。
+     * 请求体缺失的统一兜底。
      * <p>本控制器对 body 一律按「可选接收 + 显式判空」处理，原因见 {@code review} 处注释；
      * 缺失时抛 400 {@code PARAM_INVALID} 并把期望的 body 形态写进提示，
-     * 而不是让 {@code null.get()} 一路 NPE 到全局默认处理成 500「系统异常」。
+     * 而不是让 {@code null.get()} 一路 NPE 到全局兜底成 500「系统异常」。
      */
     private void requireBody(Map<String, Object> req, String action, String expected) {
         if (req == null) {

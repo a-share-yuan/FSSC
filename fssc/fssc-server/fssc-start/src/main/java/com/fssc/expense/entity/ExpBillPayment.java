@@ -29,7 +29,7 @@ public class ExpBillPayment implements Serializable {
     private Long tenantId;
 
     private Long billId;
-    /** D-TRC-05：来源单据的审批流程实例ID，生成付款记录时随单写入 */
+    /** 来源单据的审批流程实例ID，生成付款记录时随单写入 */
     private String procInstId;
     private Integer lineNo;
     /** EMPLOYEE员工/SUPPLIER供应商/OTHER */

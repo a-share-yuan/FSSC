@@ -3,6 +3,8 @@
 
 package com.fssc.workflow.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Locale;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -46,7 +48,7 @@ public class WfBpmnTemplateService {
         ROLE_MAP.put("行政核对岗", "ADMIN_CHECK");
         ROLE_MAP.put("行政", "ADMIN_CHECK");
         ROLE_MAP.put("培训部门负责人", "TRAIN_MANAGER");
-        // P0-2 补 10 角色：流程 v3.0 + 会议纪要要求删除/新增/角色映射（EER OTC PTP TR GL FM）
+        // 补 10 角色：流程 v3.0 + 会议纪要要求删除/新增/角色映射（EER OTC PTP TR GL FM）
         ROLE_MAP.put("项目会计", "PROJECT_ACCOUNTANT");        // EER02 纪要要求删除，保留映射防止 BPMN 残留时 roleCode=null 派不出任务
         ROLE_MAP.put("基地分管领导", "BASE_DIV_LEADER");        // EER02 纪要要求删除，同上
         ROLE_MAP.put("财务总监", "CFO");                        // EER03-03 一般报销加财务总监阈值节点
@@ -62,7 +64,7 @@ public class WfBpmnTemplateService {
         ROLE_MAP.put("共享应付主管", "FSSC_SUPERVISOR");
         ROLE_MAP.put("出纳", "CASHIER");                         // LOAN/PREPAY/CLAIM 付款节点、收款
         ROLE_MAP.put("资金出纳", "CASHIER");
-        // P0-1a 续补 PTP/OTC/FA/TR/GL/FM 6 域角色映射（按流程 v3.0 节点中出现的审批人）
+        // 续补 PTP/OTC/FA/TR/GL/FM 6 域角色映射（按流程 v3.0 节点中出现的审批人）
         ROLE_MAP.put("采购经理", "PURCHASE_MANAGER");
         ROLE_MAP.put("采购负责人", "PURCHASE_MANAGER");
         ROLE_MAP.put("采购部经理", "PURCHASE_MANAGER");
@@ -90,27 +92,27 @@ public class WfBpmnTemplateService {
         ROLE_MAP.put("项目管理中心总监", "PM_CENTER_DIRECTOR"); // OTC02 开票合规性审核
         ROLE_MAP.put("基地总经理", "BASE_GM");                  // FA06 原值分档授权
         ROLE_MAP.put("板块分管领导", "PLATE_DIV_LEADER");        // FA06 原值 10-50 万档
-        // V1.1.8 上会环节：董办/董会决议（大额/重大损失上会）
+        // 上会环节：董办/董会决议（大额/重大损失上会）
         ROLE_MAP.put("董会", "BOARD_OF_DIRECTORS");
         ROLE_MAP.put("董事会", "BOARD_OF_DIRECTORS");
         ROLE_MAP.put("董办", "BOARD_OFFICE");
         ROLE_MAP.put("总裁办公会", "BOARD_OFFICE");
         ROLE_MAP.put("董办/总裁办公会", "BOARD_OFFICE");
-        // V1.1.10 PTP02-02 并行会签 + 高管审批链
+        // PTP02-02 并行会签 + 高管审批链
         ROLE_MAP.put("采购总监", "PURCHASE_DIRECTOR");           // 采购负责人会签后审核
         ROLE_MAP.put("采购管理部总监", "PURCHASE_DIRECTOR");     // 采购管理部总监（PTP01 供应商准入/FA01 会签）
         ROLE_MAP.put("副总裁", "VP");                            // 大额付款高级审批
-        // V1.1.11 FA01 资本性支出 / PTP01 供应商准入 补链：新增归口部门审批角色
+        // FA01 资本性支出 / PTP01 供应商准入 补链：新增归口部门审批角色
         ROLE_MAP.put("外包及工程管理部经理", "OUTSOURCE_ENGG_MGR");  // FA01 基建/工程类支出首审
         ROLE_MAP.put("研发设计中心总监", "RND_CENTER_DIRECTOR");     // PTP01 研发/设备类供应商审核
         ROLE_MAP.put("企业管理部经理", "ENT_MGMT_MGR");              // PTP01 企管归口审核
-        // V1.2.0 拆分流程（FA/GL/OTC/PTP 域）补 3 角色：新建/拆分流程节点中出现的审批人
+        // 拆分流程（FA/GL/OTC/PTP 域）补 3 角色：新建/拆分流程节点中出现的审批人
         ROLE_MAP.put("财务专员", "FIN_STAFF");                        // INV_DISPOSAL_EXEC 签订处置销售协议
         ROLE_MAP.put("财务扫描岗", "SCAN_STAFF");                     // 各流程扫描影像/单据节点
         ROLE_MAP.put("资金支付岗", "FUND_PAY_STAFF");                 // GL_SALARY_PAY 网银录入/审核
-        // V1.2.1 全量 node_json 按 sys_role.role_name 重建（sync_all_bizflow）补 6 角色中文名
+        // 全量 node_json 按 sys_role.role_name 重建（sync_all_bizflow）补 6 角色中文名
         ROLE_MAP.put("业务财务经理", "BIZ_FIN_MANAGER");              // LOAN 业务财务经理节点
-        ROLE_MAP.put("普通员工", "COMMON_EMP");                       // 员工默认角色（CLAIAM 默认处理）
+        ROLE_MAP.put("普通员工", "COMMON_EMP");                       // 员工默认角色（CLAIAM 兜底）
         ROLE_MAP.put("成本费用岗", "COST_STAFF");                     // LOAN/费用成本核算
         ROLE_MAP.put("板块财务总监", "FIN_DIRECTOR");                 // GL/FA 板块财务总监审批
         ROLE_MAP.put("项目经理/费用承担部门负责人", "PROJECT_MANAGER"); // FA/INV 项目费用承担部门
@@ -136,7 +138,7 @@ public class WfBpmnTemplateService {
         String voteMode;      // RATIO 比例（默认）/ COUNT 确定票数
         Integer voteValue;    // RATIO 时百分比 1~100；COUNT 时所需票数
         String voteBasis;     // BY_PERSON 分母=参与人总数(应到，默认) / BY_VOTE 分母=已投票数(实到)
-        String voteFallback;  // 不达票默认处理：REJECT（默认）/ PASS
+        String voteFallback;  // 不达票兜底：REJECT（默认）/ PASS
         // —— G2 第 3 条「超时」：timeout_hours > 0 时生成边界定时器（仅非多实例 userTask）
         Integer timeoutHours;
         String timeoutAction;
@@ -148,7 +150,7 @@ public class WfBpmnTemplateService {
         public final String multiType;
         public final Integer voteRatio;
         public final String roleCode; // 该节点的角色编码（用于运行时候选解析），可能为空
-        // G2 票＋人双维与不达票默认处理：与 BPMN 完成条件、WfEngineFacade 办结裁决同一套规则
+        // G2 票＋人双维与不达票兜底：与 BPMN 完成条件、WfEngineFacade 办结判定同一套规则
         public final String voteMode;
         public final Integer voteValue;
         public final String voteBasis;
@@ -214,7 +216,7 @@ public class WfBpmnTemplateService {
             String baseId = (n.key != null && !n.key.isBlank()) ? n.key : "Task_" + (i + 1);
             String taskId = baseId;
             taskIds[i] = taskId;
-            // P1 会签/票签：按 node_key 从 wf_node_config 读取 multiType，标记本节点是否多实例
+            // 会签/票签：按 node_key 从 wf_node_config 读取 multiType，标记本节点是否多实例
             attachMultiType(processKey, taskId, n);
             boolean hasGw = hasBranch(n);
             double taskX = x + (hasGw || isPara[i] ? 70 : 0);
@@ -248,7 +250,7 @@ public class WfBpmnTemplateService {
                 String displayName = n.approver != null && !n.approver.isBlank()
                         ? n.name + "【" + n.approver + "】" : n.name;
                 if (n.multiType != null) {
-                    // —— P1 会签/票签：userTask + multiInstanceLoopCharacteristics ——
+                    // —— 会签/票签：userTask + multiInstanceLoopCharacteristics ——
                     // 集合=运行期注入的候选用户列表（<taskId>_assignees），每实例 one assignee=${assignee}。
                     // ALL=并行全批 / SEQ=顺序全批 / VOTE=比例通过（同时按通过/否决双条件提前办结）。
                     String coll = taskId + "_assignees";
@@ -259,10 +261,10 @@ public class WfBpmnTemplateService {
                     mi.append("      <bpmn:multiInstanceLoopCharacteristics isSequential=\"").append(seq).append("\"")
                             .append(" flowable:collection=\"${").append(coll).append("}\" flowable:elementVariable=\"assignee\"");
                     if ("VOTE".equals(n.multiType)) {
-                        // P1 票签计票：计数变量按节点 id 前缀隔离，避免同一流程内多个票签节点互相污染。
+                        // 票签计票：计数变量按节点 id 前缀隔离，避免同一流程内多个票签节点互相污染。
                         // 计数由 WfEngineFacade.complete() 在每次投票后累加，达标即触发 completionCondition 提前办结。
                         // G2：条件改由 voteCompletionCondition 生成（票＋人双维 + 不达票硬终止），
-                        // 未配新列的历史行仍产出与改造前一致的表达式。
+                        // 未配新列的历史行仍产出与原先一致的表达式。
                         mi.append(">\n        <bpmn:completionCondition xsi:type=\"bpmn:tFormalExpression\">")
                                 .append(voteCompletionCondition(n, taskId))
                                 .append("</bpmn:completionCondition>\n")
@@ -406,7 +408,7 @@ public class WfBpmnTemplateService {
                 n.multiType = cfg.getMultiType().toUpperCase();
                 if ("VOTE".equals(n.multiType)) {
                     // 遗留列仅作回退：新列（vote_mode/vote_value/vote_basis/vote_fallback）存在时优先，
-                    // 保证历史"只配了 vote_ratio"的行生成与改造前逐字一致的完成条件。
+                    // 保证历史"只配了 vote_ratio"的行生成与原先逐字一致的完成条件。
                     n.voteMode = blankToNull(cfg.getVoteMode());
                     n.voteValue = cfg.getVoteValue();
                     n.voteBasis = blankToNull(cfg.getVoteBasis());
@@ -428,18 +430,18 @@ public class WfBpmnTemplateService {
     }
 
     private static String blankToNull(String v) {
-        return v == null || v.isBlank() ? null : v.trim().toUpperCase(java.util.Locale.ROOT);
+        return v == null || v.isBlank() ? null : v.trim().toUpperCase(Locale.ROOT);
     }
 
     /**
      * G2 票签完成条件：把「票＋人双维」编译成 multiInstance 的 {@code completionCondition}。
      *
-     * <p><b>为什么必须带硬终止项</b>：改造前不达票<b>没有任何语义</b>——条件永不满足时多实例既可能卡死、
+     * <p><b>为什么必须带硬终止项</b>：原先不达票<b>没有任何语义</b>——条件永不满足时多实例既可能卡死、
      * 也可能被引擎默认收敛，两种结果都不可解释。现固定为
      * {@code <阈值条件> || nrOfCompletedInstances == nrOfInstances}：阈值只是<b>提前办结</b>，
      * 全部实例办完一定终止，随后由 {@code WfEngineFacade} 按 {@code vote_fallback} 落默认审批项。
      *
-     * <p>三种规则（与运行期裁决同一套公式，避免"XML 与 Java 各算一遍"漂移）：
+     * <p>三种规则（与运行期判定同一套公式，避免"XML 与 Java 各算一遍"漂移）：
      * <ul>
      *   <li>{@code COUNT}：{@code 赞成票 >= 所需票数}；</li>
      *   <li>{@code RATIO + BY_PERSON}：{@code 赞成*100 >= 百分比*nrOfInstances}（分母＝应到人数）；</li>
@@ -480,7 +482,7 @@ public class WfBpmnTemplateService {
      * 并被 {@code WfModelService.initSync()} 用"内容是否相同"判断要不要升版本——若时长依赖
      * {@code now()}（工作日历推算），每次启动内容都不同 ⇒ 版本号会被无意义地反复 +1。
      * 故这里只放确定的自然小时数；<b>真正的到期真值是 {@code wf_task.due_time}</b>，
-     * 由 {@code WorkCalendarService} 算出、由 Delegate 与默认处理作业在触发时优先读取
+     * 由 {@code WorkCalendarService} 算出、由 Delegate 与兜底作业在触发时优先读取
      * （定时器在此仅充当"唤醒"，未到 due_time 时 Delegate 不动作，由安全网补齐）。
      *
      * <p>多实例（会签/票签）节点不挂边界定时器：票签的办结由完成条件与
@@ -546,7 +548,7 @@ public class WfBpmnTemplateService {
     private List<Node> parse(String processKey, String nodeJson) {
         List<Node> nodes = new ArrayList<>();
         try {
-            Object arr = new com.fasterxml.jackson.databind.ObjectMapper().readValue(nodeJson, Object.class);
+            Object arr = new ObjectMapper().readValue(nodeJson, Object.class);
             if (arr instanceof List<?> list) {
                 for (Object o : list) {
                     Node n = new Node();
@@ -567,8 +569,8 @@ public class WfBpmnTemplateService {
                     }
                     n.roleCode = n.approver == null ? null : ROLE_MAP.get(n.approver);
                     n.isAssignee = n.roleCode == null;
-                    // V1.1.10 并行会签：approver 用"/"分隔多个会签角色 → parallelGateway 并行 fan-out/join。
-                    // 缺陷修复（V1.3.17）：仅当整串未命中 ROLE_MAP 时才按"/"分割——否则"项目经理/费用承担部门负责人"
+                    // 并行会签：approver 用"/"分隔多个会签角色 → parallelGateway 并行 fan-out/join。
+                    // 缺陷修复：仅当整串未命中 ROLE_MAP 时才按"/"分割——否则"项目经理/费用承担部门负责人"
                     // 这类含斜杠的单一角色名会被误判为并行会签，导致 roleCode 丢失、退化动态指派 assignee=${approver}。
                     if (n.roleCode == null && n.approver != null && n.approver.contains("/")) {
                         n.parallel = true;

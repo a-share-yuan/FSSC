@@ -34,7 +34,7 @@
           <el-table class="cm-target-workbench" :data="pagedTodo" size="small" stripe v-else max-height="320" empty-text="暂无数据" v-loading="loading.todo" @selection-change="(val) => todoSel = val" @row-dblclick="openTrace">
             <el-table-column type="selection" width="45" />
             <el-table-column prop="billNo" label="单号" width="150" sortable />
-            <!-- W4（2026-10-08 非人性化整改）：待办混排报销/借款/付款/合同等，原列表无类型列，逐行点开才知是什么单 -->
+            <!-- W4（非人性化整改）：待办混排报销/借款/付款/合同等，原列表无类型列，逐行点开才知是什么单 -->
             <el-table-column label="单据类型" width="100" sortable>
               <template #default="{ row }">{{ docTypeLabel(row.billType || row.bizType) || '—' }}</template>
             </el-table-column>
@@ -42,7 +42,7 @@
             <el-table-column prop="taskName" label="节点" width="110" sortable />
             <el-table-column label="操作" width="178" fixed="right">
               <template #default="{ row }">
-                <!-- P0: 主入口——去业务处理页；始终可见，不依赖状态字段 -->
+                <!-- 主入口——去业务处理页；始终可见，不依赖状态字段 -->
                 <el-button link type="primary" size="small" @click="goBiz(row, 'todo')">去处理</el-button>
                 <!-- 待办均为待审批项，审批/退回/追溯始终展示（待办行无 status 字段，不能用状态门控） -->
                 <el-tooltip content="审批通过" placement="top">
@@ -211,8 +211,8 @@
             </template>
           </el-select>
         </el-form-item>
-        <!-- ⑯：下一环节为 PICK 取人时，本简易弹窗此前不查候选人、也不传
-             nextAssigneeUserId，提交必吃服务端「需指定办理人」红字且无处可选（UI 死路）。
+        <!-- 下一环节为 PICK 取人时，本简易弹窗不查候选人、也不传
+             nextAssigneeUserId 的话，提交必吃服务端「需指定办理人」红字且无处可选（UI 死路）。
              此处对齐 ApprovalDialog 规则：PICK 档强制点名，唯一候选自动带出、可改派。 -->
         <el-form-item v-if="approveDecision === BillStatus.APPROVED && nextPick" label="下一环节" prop="nextAssigneeUserId" :required="approveDecision === BillStatus.APPROVED && nextPick">
           <div v-if="!nextPick.candidates.length" class="wb-next-empty">
@@ -265,7 +265,7 @@ const router = useRouter()
 // 权限守卫
 // 工作台是全员默认落地页(USG-01)，但其中「共享运营任务池」「付款待执行」属模块专属数据。
 // 无对应权限的角色若照旧无条件请求，会弹出"无该功能/按钮权限：缺少权限：xxx"的误导性报错
-// （实测租户 136 名非管理员用户中，119 人无 sharing:task:list、125 人无 pay:batch:list）。
+// （非管理员用户里多数人不持 sharing:task:list / pay:batch:list）。
 // 故按权限跳过请求，并同步隐藏对应卡片。
 // 注：store 是 localStorage 支持的普通对象（非 reactive），且登录/会话校验都发生在工作台挂载之前，
 // 故这里在 setup 期一次性求值即可，不用 computed 制造"可响应"的假象。
@@ -298,7 +298,7 @@ const entries = computed(() => ENTRIES.filter((e) => {
 }))
 function go(path) { router.push(path) }
 
-// 查看/全链路追溯统一走单据轨迹抽屉（此前 @view 绑到空函数、openTrace 未定义）
+// 查看/全链路追溯统一走单据轨迹抽屉
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -308,9 +308,9 @@ function openTrace(row) {
   traceVisible.value = true
 }
 
-// 按单据类型进入对应业务处理页（携带 billNo/billId 供落地页定位）；未命中类型默认处理打开追溯抽屉
+// 按单据类型进入对应业务处理页（携带 billNo/billId 供落地页定位）；未命中类型兜底打开追溯抽屉
 // 跳转前先按路由守卫同一把钥匙预判页面可达性（判据已抽到 router/pathAccess，
-// 含此前漏掉的「菜单树叶子默认处理」一层——无 meta.perms 也无 ROUTE_PERMS 映射的路径靠菜单树裁决）。
+// 含「菜单树叶子兜底」一层——无 meta.perms 也无 ROUTE_PERMS 映射的路径靠菜单树判定）。
 function billPageBlocked(path) {
   if (!path) return false
   let meta = {}
@@ -323,7 +323,7 @@ const APPLICANT_SCOPED_ROUTES = ['/expense/my', '/expense/apply']
 
 function goBiz(row, from) {
   const blockedPath = resolveBillRoute(row?.billType || row?.bizType)
-  // 10-27 F1.3 实测：待办的办理人不是发起人，而事前申请工作台/我的单据取数口径＝本人发起，
+  // 待办的办理人不是发起人，而事前申请工作台/我的单据取数口径＝本人发起，
   // 审批人从「我的待办」点去处理会被丢进整页「共 0 条」，且拿不到任何审批动作。
   // 审批工作台对同一判据早已改为「打开单据详情抽屉」（见 Approval.vue goBiz 注释），本卡按同规则落该页。
   if (from === 'todo' && APPLICANT_SCOPED_ROUTES.includes(blockedPath)) {
@@ -346,7 +346,7 @@ function goBiz(row, from) {
   if (!goBizPage(router, row)) {
     // 一表多 bizType 的跨域行（po_order＝PO/PURCHASE/PURCHASE_ORDER_REVIEW 三写、
     // gl_journal_entry＝计提/待摊/其他收入/手工凭证四合一）后端宁缺勿错、不猜类型 ⇒ 行内 bizType 为空，
-    // 按 billType 的映射表必然落空。这类行带的是**表级**台账坐标（ledgerRoute），跳台账并按单号定位。
+    // 按 billType 的映射表必然落空。这类行带的是表级台账坐标（ledgerRoute），跳台账并按单号定位。
     if (row.ledgerRoute) {
       if (billPageBlocked(row.ledgerRoute)) {
         ElMessage.info('当前账号没有该台账页面的查看权限，已打开全链路追溯；需办理请到 流程中心›我的待办')
@@ -368,7 +368,7 @@ function goBiz(row, from) {
   }
 }
 
-// 派工池：跳到任务池管理页并按单号定位该任务（无该页权限时默认处理打开全链路追溯，不弹回报错）
+// 派工池：跳到任务池管理页并按单号定位该任务（无该页权限时兜底打开全链路追溯，不弹回报错）
 function goPoolWork(row) {
   if (billPageBlocked('/sharing/task-pool')) {
     ElMessage.info('当前账号没有共享任务池的查看权限，已打开全链路追溯')
@@ -467,7 +467,7 @@ async function loadPool() {
     await pagerPool.load(async ({ pageNum, pageSize }) => {
       const p = await sharingApi.pool({ pageNum, pageSize })
       pools.value = p?.list || []
-      // 数据字段为 poolStatus（非 status），此前误用 x.status 导致待派工统计恒为 0
+      // 数据字段为 poolStatus（非 status），用 x.status 会让待派工统计恒为 0
       stats.pool = pools.value.filter((x) => x.poolStatus === 'WAITING').length
       return { list: pools.value, total: p?.total || pools.value.length }
     })
@@ -479,8 +479,8 @@ async function loadMine() {
   try {
     await pagerMine.load(async ({ pageNum, pageSize }) => {
       // 跨域「我发起的单据」。旧规则 billApi.myPage → /expense/bill/myPage 只查 exp_bill 一表，
-      // 合同／采购／预算／总账／应收／资产等自提单在发起人自己的工作台恒不显示（实测同一张单
-      // 「我的待办」有、「我发起的」零行）。改走 /tenant/workbench/my-documents——后端
+      // 合同／采购／预算／总账／应收／资产等自提单在发起人自己的工作台恒不显示（同一张单
+      // 「我的待办」有、「我发起的」却零行）。改走 /tenant/workbench/my-documents——后端
       // MyDocumentService 按 BillRouteRegistry 的「bizType→业务主表→归属人列」逐表查询后内存归并，
       // 取不到归属人列的类型由 unsupported 如实报出（见卡片上方提示条），不静默少数据。
       const r = await http.get('/tenant/workbench/my-documents', { params: { pageNum, pageSize } })
@@ -548,7 +548,7 @@ const approveDecision = ref('')
 const approveComment = ref('')
 const approveRow = ref(null)
 
-// 第2批：装饰红星转真校验。comment 原为恒定 required——审批通过时也会被无脑拦下，
+// 装饰红星转真校验。comment 曾恒定 required——审批通过时也会被无脑拦下，
 // 故两条均改条件必填（requiredWhen）：驳回才要原因；下一环节办理人只在 APPROVED+下一节点 PICK 档
 // 且确有候选时必填（无候选场景放行给下方原校验报"当前无可选办理人"，消息更精确）。
 const approveRules = reactive({
@@ -570,7 +570,7 @@ async function approve(row, decision) {
   nextPickUserId.value = null
   approveVisible.value = true
   // ⑯：通过前预取下一环节取人方式；PICK 档渲染点名下拉（唯一候选自动带出、可改派）。
-  // silent：老后端无端点（404/403）时保持 null ⇒ 区块不渲染，提交仍由服务端默认处理校验，绝不阻断。
+  // silent：老后端无端点（404/403）时保持 null ⇒ 区块不渲染，提交仍由服务端兜底校验，绝不阻断。
   if (decision === BillStatus.APPROVED && row?.taskId) {
     try {
       const n = await wfApi.nextCandidates(row.taskId, { silent: true })
@@ -584,7 +584,7 @@ async function approve(row, decision) {
 
 async function doApprove() {
   if (approving.value) return
-  // 第2批：先跑表单真校验（驳回原因/下一环节办理人），红字落字段；原手工校验保留作双保险
+  // 先跑表单真校验（驳回原因/下一环节办理人），红字落字段；原手工校验保留作双保险
   if (!(await validateForm(approveFormRef.value))) return
   const decision = approveDecision.value
   const comment = approveComment.value
@@ -622,8 +622,7 @@ async function receive(row) {
   try { await sharingApi.receive(row.id); ElMessage.success('已抢单'); await load() } catch (e) { ElMessage.error(e.message) }
 }
 async function finish(row) {
-  // /（与工单处理页同一处修复）：工作台办结也走带备注的弹窗，
-  // 此前一键完成不带任何输入，备注列恒 NULL。
+  // 否则一键完成不带任何输入，备注列恒 NULL。
   const { value: remark } = await ElMessageBox.prompt(
     `完成工单 ${row.billNo || row.id}？请填写完成备注（将记录，供审计复核）`, '完成工单', {
       inputType: 'textarea',

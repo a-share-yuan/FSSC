@@ -71,8 +71,8 @@ public class RoleService {
     }
 
     /** 分配菜单：删旧插新（sys_role_menu 带 tenant_id，天然租户内隔离）。
-     *  P1 报表权限卡点：/reports/* 报表菜单只能授予「未来权限集仍命中对应业务域判据码」的角色。
-     *  A4 第②层：权限项依赖在**保存期**拦，不只运行时默认处理。 */
+     * 报表权限卡点：/reports/* 报表菜单只能授予「未来权限集仍命中对应业务域判据码」的角色。
+     *  A4 第②层：权限项依赖在**保存期**拦，不只运行时兜底。 */
     @Transactional(rollbackFor = Exception.class)
     public void assignMenus(Long roleId, List<Long> menuIds) {
         assertReportDomainProjection(menuIds);
@@ -128,10 +128,10 @@ public class RoleService {
     }
 
     /**
-     * A4 第②层（· 2026-09-27 人工裁决第三轮）：权限项依赖的**保存期**校验。
+     * 权限项依赖的**保存期**校验，不只运行时兜底。
      * assignMenus 是全量替换 ⇒ 本次 menuIds 的 perms 并集就是该角色未来的权限集，
      * 依赖不闭合（如授了 approve 却没授 list）整单拒绝，与"查看是其余权限的前置权限"同构。
-     * 真值在 {@code PermDependency}，运行时默认处理走同一份，不两处各写一套。
+     * 真值在 {@code PermDependency}，运行时兜底走同一份，不两处各写一套。
      */
     private void assertPermDependencyClosure(List<Long> menuIds) {
         if (menuIds == null || menuIds.isEmpty()) {

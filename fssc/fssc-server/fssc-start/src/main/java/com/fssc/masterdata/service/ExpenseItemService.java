@@ -34,8 +34,8 @@ public class ExpenseItemService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** 树形数据：按祖先路径+排序返回全量（前端组树）。P1-3：进程内 TTL 缓存，调用方只读。 */
-    public java.util.List<MdExpenseItem> tree() {
+    /** 树形数据：按祖先路径+排序返回全量（前端组树）。进程内 TTL 缓存，调用方只读。 */
+    public List<MdExpenseItem> tree() {
         return TenantCache.get(TenantCache.mdKey(DOMAIN_TREE), () -> mapper.selectList(
                 new LambdaQueryWrapper<MdExpenseItem>()
                         // 过滤 itemName 为空/空白/未命名的脏数据，避免前端下拉出现空白选项

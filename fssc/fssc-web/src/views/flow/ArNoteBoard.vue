@@ -172,7 +172,7 @@ const registerRules = computed(() => ({
   imageRef: commonRules.required(t('flow.note.errImageScanRequired')),
 }))
 const discountForm = reactive({ rate: '', date: '' })
-// 第2批：票据贴现弹窗（原无任何校验）——年化贴现率必须是 0-100 的数字、贴现日必选
+// 票据贴现弹窗（原无任何校验）——年化贴现率必须是 0-100 的数字、贴现日必选
 const discountFormRef = ref(null)
 const discountRules = {
   rate: [...commonRules.required('请输入年化贴现率'),

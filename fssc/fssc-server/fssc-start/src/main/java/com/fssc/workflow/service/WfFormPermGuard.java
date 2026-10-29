@@ -16,9 +16,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 字段级表单权限（form_perm）服务端校验（B1，2026-10-13）。
+ * 字段级表单权限（form_perm）服务端校验。
  *
- * <p><b>为什么需要</b>：{@code wf_node_config.form_perm}（扁平 {@code {"field":"H|R|W"}}）此前
+ * <p><b>为什么需要</b>：{@code wf_node_config.form_perm}（扁平 {@code {"field":"H|R|W"}}）原先
  * 只有一条"只读回显"链——{@link WfNodeConfigResolver#resolveFormFieldPerm} 解析后经
  * {@code GET /wf/task-form-perm} 交前端 {@code BillDetailPanel.vue} 做隐藏/只读渲染。
  * 前端裁剪<b>拦不住直接调接口</b>：绕过页面即可提交被本环节隐藏/只读的字段。本类把该权限
@@ -47,7 +47,7 @@ public class WfFormPermGuard {
     /**
      * 按单据流程实例做审批上下文字段级写入校验；命中 H/R 抛 {@link BizException}（FORBIDDEN）。
      *
-     * @param procInstId      业务单据的流程实例 ID（如 {@code exp_bill.proc_inst_id}）；空 → 放行
+     * @param procInstId 业务单据的流程实例 ID（如 {@code exp_bill.proc_inst_id}）；空 → 放行
      * @param submittedFields 本次将要写入的字段名 → 值；值为 null 的条目跳过
      */
     public void assertFieldsWritable(String procInstId, Map<String, Object> submittedFields) {

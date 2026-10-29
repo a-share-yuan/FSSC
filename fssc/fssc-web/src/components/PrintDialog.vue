@@ -5,7 +5,7 @@
   <el-dialog v-model="innerVisible" :title="mode === 'voucher' ? '凭证套打预览' : '单据打印预览'" width="720px" top="3vh"
              destroy-on-close append-to-body class="print-dialog">
     <div class="print-area">
-      <!-- ===== 单据打印 ===== -->
+      <!-- 单据打印 -->
       <template v-if="mode === 'bill' && bill">
         <h2 class="print-title">{{ billTitle }}</h2>
         <table class="p-head">
@@ -28,7 +28,7 @@
         <p class="p-foot">审批：{{ statusLabel(bill.status) }}　　制单人：{{ makerName }}　　打印日期：{{ today }}</p>
       </template>
 
-      <!-- ===== 凭证套打 ===== -->
+      <!-- 凭证套打 -->
       <template v-else-if="mode === 'voucher' && voucher">
         <h2 class="print-title">记 账 凭 证</h2>
         <table class="p-head">

@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * L1-B-01 ExpenseBillService 单元测试。
+ * ExpenseBillService 单元测试。
  *
  * <p>覆盖两块核心金额逻辑：
  * <ol>

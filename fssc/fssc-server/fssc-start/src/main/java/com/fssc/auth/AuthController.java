@@ -6,7 +6,9 @@ package com.fssc.auth;
 import com.fssc.common.core.Result;
 import com.fssc.common.enums.SubjectType;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.TokenBlacklistService;
+import com.fssc.framework.security.TokenService;
 import com.fssc.framework.security.UserContext;
 import com.fssc.platform.service.TenantLifecycleService;
 import com.fssc.system.entity.SysUser;
@@ -38,7 +40,7 @@ public class AuthController {
     private final AuthService authService;
     private final TenantLifecycleService tenantLifecycleService;
     private final TokenBlacklistService tokenBlacklistService;
-    private final com.fssc.framework.security.TokenService tokenService;
+    private final TokenService tokenService;
 
     @PostMapping("/login")
     public Result<LoginResult> login(@Validated @RequestBody LoginForm form, HttpServletRequest request) {
@@ -80,7 +82,7 @@ public class AuthController {
     }
 
     /**
-     * Token 滑动续期（SEC-05）：验签通过且未进黑名单的 Token 可换取新 Token（TTL 重新计时），
+     * Token 滑动续期：验签通过且未进黑名单的 Token 可换取新 Token（TTL 重新计时），
      * 旧 Token 立即入黑名单防重放；续期后按普通会话（非记住我）处理。
      */
     @PostMapping("/refresh")
@@ -89,7 +91,7 @@ public class AuthController {
         if (old == null || tokenBlacklistService.isBlacklisted(old)) {
             return Result.fail(401, "Token 无效或已过期");
         }
-        com.fssc.framework.security.LoginUser u;
+        LoginUser u;
         try {
             u = tokenService.parseToken(old);
         } catch (Exception e) {
@@ -100,7 +102,7 @@ public class AuthController {
         return Result.success(new LoginResult(fresh, u));
     }
 
-    // ---------- 个人中心：改密、换绑、更新资料 ----------
+    // 个人中心：改密、换绑、更新资料
 
     /** 获取当前登录用户详细信息（含权限） */
     @PostMapping("/profile")
@@ -153,7 +155,7 @@ public class AuthController {
         return null;
     }
 
-    // ---------- DTO ----------
+    // DTO
 
     public static class ProfileVo {
         private SysUser user;

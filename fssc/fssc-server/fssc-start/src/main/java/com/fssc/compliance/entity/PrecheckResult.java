@@ -52,7 +52,7 @@ public class PrecheckResult implements Serializable {
 
     private String precheckBatchId;
 
-    // ========== 合并自 precheck_batch（预检批次） ==========
+    // 合并自 precheck_batch（预检批次）
 
     /** 员工ID */
     private Long employeeId;

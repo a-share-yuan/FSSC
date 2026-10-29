@@ -55,7 +55,7 @@ public class InvVerifyLog implements Serializable {
     private LocalDateTime verifyTime;
 
     /**
-     * 发票号码：非表列（inv_verify_log 按真实列声明，无 invoice_no 列，加列属 DDL 裁决）。
+     * 发票号码：非表列（inv_verify_log 按真实列声明，无 invoice_no 列，加列属 DDL 待确认）。
      * 「验真记录」列表按票号稽核用——查询侧按 invoiceId 批查 inv_invoice 回填，不写入数据库。
      */
     @TableField(exist = false)

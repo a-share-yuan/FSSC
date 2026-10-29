@@ -52,7 +52,7 @@ public class MdAssetController {
         return Result.success(service.get(id));
     }
 
-    /** X-06读取环节：单卡变动台账（原值调整/盘点差异的原因、前后镜像、审批最终状态），最新在前 */
+    /** 单卡变动台账（原值调整/盘点差异的原因、前后镜像、审批最终状态），最新在前 */
     @RequiresPerm("asset:list")
     @GetMapping("/{id}/change-logs")
     public Result<List<MdAssetChangeLog>> changeLogs(@PathVariable Long id) {
@@ -151,7 +151,7 @@ public class MdAssetController {
     @PostMapping("/capitalRequest")
     public Result<Void> capitalRequest(BigDecimal amount, String assetName, Long deptId, Long companyId, String remark,
                                        Long budgetItemId) {
-        // budgetItemId 可选（为空自动取综合预算默认处理科目）；发起即硬控校验，审批通过后占用
+        // budgetItemId 可选（为空自动取综合预算兜底科目）；发起即硬控校验，审批通过后占用
         service.capitalRequest(amount, assetName, deptId, companyId, remark, budgetItemId);
         return Result.success();
     }

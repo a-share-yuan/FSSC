@@ -33,7 +33,7 @@ import java.util.Map;
 
 /**
  * 发票能力网关（InvoiceGateway，8096）OCR 通道——<b>系统内发票识别的默认通道</b>
- * （{@code fssc.ocr.channel} 缺省即 gateway，改造前为 mock）。
+ * （{@code fssc.ocr.channel} 缺省即 gateway，原先为 mock）。
  *
  * <p>本类<b>只对接自家网关的中性契约</b>（{@code POST {base}/api/tax/v1/ocr/recognize}，
  * 请求体 {@code {imageBase64, fileName}}，响应 {@code {success, code, message, data:{invoices[]}}}）：
@@ -75,7 +75,7 @@ public class QxyGatewayOcrChannel implements OcrChannel {
     @Value("${invoice.gateway.api-key:}")
     private String ymlApiKey;
 
-    /** 总开关：false 时本通道不参与路由（回退改造前行为） */
+    /** 总开关：false 时本通道不参与路由（回退原先行为） */
     @Value("${fssc.gateway.enabled:true}")
     private boolean ymlEnabled;
 

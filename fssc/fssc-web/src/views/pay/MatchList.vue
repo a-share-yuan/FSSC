@@ -60,7 +60,7 @@
             <el-option :label="$t('pay.match.stMatched')" value="MATCHED" />
             <el-option :label="$t('pay.match.stWarnDiff')" value="WARN" />
             <el-option :label="$t('pay.match.stFailed')" value="FAILED" />
-            <!-- 手工匹配链办结后的最终状态，结论落 exp_bill.ext_json.matchVerdict，此前无处显形 -->
+            <!-- 手工匹配链办结后的最终状态，结论落 exp_bill.ext_json.matchVerdict -->
             <el-option :label="$t('pay.match.stManualClosed')" value="MANUAL_MATCHED" />
           </el-select>
           <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
@@ -186,7 +186,7 @@
           <el-descriptions-item :label="$t('pay.match.ctxPayFrozen')">
             <el-tag :type="detail.frozen ? 'danger' : 'success'" size="small">{{ detail.frozen ? t('pay.match.stFrozen') : t('pay.match.stNotFrozen') }}</el-tag>
           </el-descriptions-item>
-          <!-- 人工匹配链的办结结论（此前最终状态零回写，判定意见无处留存） -->
+          <!-- 人工匹配链的办结结论（最终状态与判定意见都在这里显形） -->
           <el-descriptions-item v-if="detail.matchStatus === 'MANUAL_MATCHED'" :label="$t('pay.match.ctxManualVerdict')" :span="3">
             <span style="color: #67c23a; font-weight: 600">{{ detail.manualVerdict || t('pay.match.stManualClosed') }}</span>
             <span v-if="detail.manualProcInstId" style="margin-left: 12px; color: #909399; font-size: 12px">
@@ -367,7 +367,7 @@
           <div v-if="linkForm.poId && !receiptOptions.length" style="color: #909399; font-size: 12px; margin-top: 4px">
             {{ $t('pay.match.hintNoGrn') }}</div>
         </el-form-item>
-        <!-- G2R-01：合同环节补挂入口（此前缺失，NO_CONTRACT 的出口文案指向了不存在的入口） -->
+        <!-- 合同环节补挂入口（缺了它，NO_CONTRACT 的出口文案会指向不存在的入口） -->
         <el-form-item :label="$t('pay.match.colContract')">
           <el-select v-model="linkForm.contractId" filterable clearable :placeholder="$t('pay.match.phPickContract')" style="width: 100%"
                      :loading="contractLoading">
@@ -622,7 +622,7 @@ const matchBarColor = computed(() => {
 function billStatusText(s) { return STATUS_LABEL[s] || s }
 function issueCodeText(code) {
   // 差异码全集＝后端 ThreeWayMatchService 的 MatchIssue 码（12 枚）；缺映射会直接显示英文码，
-  // 默认处理改「其他差异」，原始码仍可在「差异描述」列（后端中文）里看到，不丢信息。
+  // 兜底改「其他差异」，原始码仍可在「差异描述」列（后端中文）里看到，不丢信息。
   return {
     NO_PO: t('pay.match.noPoLinked'),
     NO_RECEIPT: t('pay.match.noGrnLinked'),
@@ -640,7 +640,7 @@ function issueCodeText(code) {
 }
 function issueRouteText(code) {
   // 与后端 ISSUE_ROUTE（ThreeWayMatchService:183）逐枚对齐；后端未登记的码 getOrDefault=FIN_AP，
-  // 故此处默认处理同为应付会计＝同一规则，别在前端另起一套责任岗。
+  // 故此处兜底同为应付会计＝同一规则，别在前端另起一套责任岗。
   return {
     NO_PO: t('pay.match.rolePoManager'),
     NO_CONTRACT: t('pay.match.rolePoManager'),
@@ -726,7 +726,7 @@ const receiptOptions = ref([])
 const poLoading = ref(false)
 const receiptLoading = ref(false)
 const linkLoading = ref(false)
-// G2R-01：合同环节候选（四单之合同环节此前无补挂入口，见 doLink 注释）
+// 合同环节候选（四单之合同环节的补挂入口，见 doLink 注释）
 const contractOptions = ref([])
 const contractLoading = ref(false)
 
@@ -745,7 +745,7 @@ async function openLinkDialog(row) {
     // 同族：三单匹配的 PO 候选同样不要出现已作废订单
     poOptions.value = (r.list || []).filter((p) => String((p && p.status) || '').toUpperCase() !== 'VOID')
   } catch (e) { ElMessage.error(t('pay.match.msgLoadPoFail')) } finally { poLoading.value = false }
-  // 加载合同候选（G2R-01）
+  // 加载合同候选
   contractLoading.value = true
   try {
     const rc = await contractApi.page({ pageNum: 1, pageSize: 100 })

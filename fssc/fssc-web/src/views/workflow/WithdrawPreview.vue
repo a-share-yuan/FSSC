@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <!--
-  「已办撤销回原节点」只读预览（P3 G3，2026-09-23）。
+  「已办撤销回原节点」只读预览。
 
   为什么是"只读"而不是"撤销按钮"：Flowable 8 没有 ProcessInstanceModification，
   等价原语 ChangeActivityStateBuilder.moveActivityIdTo 属「搬执行」——直接把运行中的执行实例

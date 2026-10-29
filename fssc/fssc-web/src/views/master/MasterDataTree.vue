@@ -3,7 +3,7 @@
 
 <template>
   <div class="md-tree-page">
-    <!-- RA-PAGE-21 2.3：会计科目/成本中心双形态并入一个菜单（原 205 会计科目退册，宿主=206）——切换即跳对侧路由 -->
+    <!-- 会计科目/成本中心双形态并入一个菜单（原 205 会计科目退册，宿主=206）——切换即跳对侧路由 -->
     <el-radio-group :model-value="mode" size="small" style="margin-bottom:8px" @change="onModeSwitch">
       <el-radio-button value="subject">会计科目</el-radio-button>
       <el-radio-button value="costCenter">成本中心</el-radio-button>
@@ -173,7 +173,7 @@ const router = useRouter()
 const canCreate = computed(() => hasPerm(props.mode === 'subject' ? 'md:subject:create' : 'md:costcenter:create'))
 const canUpdate = computed(() => hasPerm(props.mode === 'subject' ? 'md:subject:update' : 'md:costcenter:update'))
 const canDelete = computed(() => hasPerm(props.mode === 'subject' ? 'md:subject:delete' : 'md:costCenter:delete'))
-// 科目⇄成本中心切换（RA-PAGE-21 2.3）
+// 科目⇄成本中心切换
 function onModeSwitch(v) {
   if (v === props.mode) return
   router.push(v === 'subject' ? '/master/subject' : '/master/cost-center')
@@ -195,7 +195,7 @@ const api = computed(() => props.mode === 'subject' ? masterApi.subject : master
 // 筛选值走服务端（?companyId=），服务端 SubjectService.tree(Long) 已按 md_subject.company_id 落谓词并叠 @DataScope；
 // 未选＝不带参，由服务端按登录人 data_scope 办结。SubjectController.tree() 已补绑 companyId（/158 顺带修，
 // 见其控制器注解）；CostCenterController.tree() 暂不绑（不在本次改动面），故下方另做一道「按 id 精确」的可见集
-// 办结默认处理——它只收窄、不放宽，控制器补参后与服务端结果同一规则（去重），不会掩盖越权数据。
+// 办结兜底——它只收窄、不放宽，控制器补参后与服务端结果同一规则（去重），不会掩盖越权数据。
 const query = reactive({ companyId: null })
 const treeUrl = computed(() => `/tenant/masterdata/${props.mode === 'subject' ? 'subject' : 'cost-center'}/tree`)
 // 名称表＝orgApi.companyTree 摊平（与 BankAccount.vue 同一机制），不硬编码公司清单
@@ -231,7 +231,7 @@ function companyLabel(data) {
 }
 
 /**
- * 默认处理可见集办结（仅按 id 精确判定，不做公司名模糊匹配）：
+ * 兜底可见集办结（仅按 id 精确判定，不做公司名模糊匹配）：
  * 科目＝本公司 ∪ 租户共用；成本中心＝仅本公司（无共用语义）。
  */
 function withinCompany(rows) {
@@ -273,7 +273,7 @@ function findName(id) {
 async function loadTree() {
   loading.value = true
   try {
-    // 公司维度入请求（服务端谓词＋data_scope 为权威规则），返回后再按 id 精确办结默认处理
+    // 公司维度入请求（服务端谓词＋data_scope 为权威规则），返回后再按 id 精确办结兜底
     const data = await http.get(treeUrl.value, {
       params: query.companyId != null ? { companyId: query.companyId } : {},
     })

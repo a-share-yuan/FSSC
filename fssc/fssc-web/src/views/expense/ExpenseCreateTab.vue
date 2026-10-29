@@ -322,7 +322,7 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 
-// 交通方式（2026-10-18 基础数据办结：字典定值域 + i18n 定文案）
+// 交通方式（基础数据办结：字典定值域 + i18n 定文案）
 const trafficDict = useBaseDict('traffic_mode', TRAFFIC_LOCAL, TRAFFIC_I18N)
 const trafficOptions = trafficDict.options
 const { autofill, saveFormHistory } = useAutoFill()
@@ -524,7 +524,7 @@ async function loadMd() {
     } catch (e) { budgetMap.value = {} }
     cities.value = (await mdApi.cities({ pageNum: 1, pageSize: 2000 })).list || []
     payees.value = (await mdApi.payees({ pageNum: 1, pageSize: 200 })).list || []
-    // 出差人受控选择 + P0 修复：加载同公司用户列表供出行人下拉
+    // 出差人受控选择：加载同公司用户列表供出行人下拉
     users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -561,7 +561,7 @@ function onAttachUploaded(rec) {
     if (inc.netAmount > 0 && inc.amount > 0) inc.taxRate = Math.round(((inc.amount - inc.netAmount) / inc.netAmount) * 10000) / 100
     inc.sourceName = rec.fileName
     form.invoices = [...form.invoices, inc]
-    // 解析失败此前也弹绿条"已识别发票"，提单人会以为票面已入单、直接提交一张没有票面的报销单
+    // 解析失败也弹绿条"已识别发票"的话，提单人会以为票面已入单、直接提交一张没有票面的报销单
     // 只看 ok 还不够——"识别成功"和"票进了发票池"是两件事，
     // 分档一律走 invoiceOutcome（判据在后端 invoice.inPool，不要此处不重算金额自洽）
     const out = invoiceOutcome(rec.invoice, { fileName: rec.fileName || '', end: 'pc' })
@@ -648,7 +648,7 @@ async function openLoanDialog() {
 }
 /**
  * 【确定】后按对话框里改过的金额入账（默认=未还余额，可改，支持部分冲抵）。
- * 改前点任意行立刻按未还余额全额冲抵并关窗——误点即产生财务动作、无确认、键盘不可达。
+ * 原先点任意行立刻按未还余额全额冲抵并关窗——误点即产生财务动作、无确认、键盘不可达。
  */
 function confirmLoanPicks(items) {
   let added = 0
@@ -666,7 +666,7 @@ function confirmLoanPicks(items) {
   if (added) ElMessage.success(t('expense.create.msgLoanOffsetAdded', { v: added }))
 }
 
-/** 申请关联金额改为可改（此前硬取申请全额且入表后不可编辑） */
+/** 申请关联金额可改（不硬取申请全额、入表后仍可编辑） */
 function confirmApplyPicks(items) {
   let added = 0
   for (const { row, amount } of items || []) {
@@ -729,7 +729,7 @@ const { options: payeeTypeOptions, load: loadPayeeType } = useBaseDict('enum_pay
 onMounted(() => {
   loadPayeeType()
   loadCurrency()
-  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
+  // 字典不可用时 useBaseDict 自动回落到本地常量，界面与原先逐字一致
   trafficDict.load()
   autofill(form, 'EXPENSE')
 

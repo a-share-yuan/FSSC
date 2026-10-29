@@ -19,14 +19,14 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 采购订单最终状态推进 Job（X-20 裁定甲＋乙之「甲」）。
+ * 采购订单最终状态推进 Job。
  *
  * <p>累计量达标型最终状态（APPROVED/INVOICED→PAID、PAID→CLOSED 业务关闭）不由人工按钮触发，
- * 改为本 Job 每日扫描推进；人工决策型最终状态（终止）另有显式端点
+ * 由本 Job 每日扫描推进；人工决策型最终状态（终止）另有显式端点
  * {@code POST /api/tenant/purchase/order/{id}/terminate}。
  *
  * <p>ARCHIVED 属归档域出口（document/**），本 Job 不越界推进。
- * 去重：跃迁原判据（状态前置 + 绝对量比较）保持不变，重跑只可能 0 推进，不会叠加。
+ * 去重：跃迁判据（状态前置 + 绝对量比较）不变，重跑只可能 0 推进，不会叠加。
  * 多租户：无登录上下文，先跨租户取待办租户集，再逐租户 {@code callAs} 执行（租户过滤由拦截器接管）。
  */
 @Slf4j

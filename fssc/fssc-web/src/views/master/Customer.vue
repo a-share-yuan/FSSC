@@ -130,7 +130,7 @@ function handleCurrentChange(val) {
   crud.load()
 }
 
-// 第1批 P0：录入规则统一走中央框架 useFormRules('CUSTOMER')
+// 录入规则统一走中央框架 useFormRules('CUSTOMER')
 // （原页面本地 rules 只有名称/类型必填，联系电话与邮箱裸奔）
 const { rules: customerRules } = useFormRules('CUSTOMER')
 

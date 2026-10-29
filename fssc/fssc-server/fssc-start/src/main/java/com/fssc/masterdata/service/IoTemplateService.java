@@ -10,6 +10,8 @@ import com.fssc.masterdata.entity.MdIoTemplate;
 import com.fssc.masterdata.entity.MdIoTemplateField;
 import com.fssc.masterdata.mapper.MdIoTemplateFieldMapper;
 import com.fssc.masterdata.mapper.MdIoTemplateMapper;
+import java.io.ByteArrayOutputStream;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -28,16 +30,16 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 /**
- * 统一导入导出引擎（V1.4.83/V1.4.84）——闭环差距②后半「导入导出无统一引擎」。
+ * 统一导入导出引擎（/）——闭环差距②后半「导入导出无统一引擎」。
  *
- * <p><b>改造前</b>：fssc-server 内 6 支手写 {@code *ExcelService}
+ * <p><b>原先</b>：fssc-server 内 6 支手写 {@code *ExcelService}
  * （ApPlan / ArReceipt / ArOffset / ArStatement / BudgetItem / RcBadDebt），
  * 每支各自硬编码 {@code HEADERS} 数组、各自写一遍 POI 解析、各自决定错误文案，
  * 新增一种导入模板 = 复制一支 Service 再改列头 ⇒ 必然长出 N+1 支。
  *
  * <p><b>改造后</b>：列头与转换规则落 {@code md_io_template} / {@code md_io_template_field}，
  * 本引擎按模板解释器统一执行。新增导入模板 = 插两行数据，<b>不需要写代码</b>。
- * 6 支手写 Service 的列头已逐字迁移为 7 个模板（见 V1.4.84），
+ * 6 支手写 Service 的列头已逐字迁移为 7 个模板（见），
  * 保证与现有导入文件格式 100% 兼容。
  *
  * <p><b>转换规则声明式</b>（{@code column_type}）：
@@ -76,7 +78,7 @@ public class IoTemplateService {
     };
     private static final Pattern NUM = Pattern.compile("^-?\\d+(\\.\\d+)?$");
 
-    // ==================== 模板查询 ====================
+    // 模板查询
 
     public List<MdIoTemplate> listAll(String direction) {
         LambdaQueryWrapper<MdIoTemplate> w = new LambdaQueryWrapper<MdIoTemplate>()
@@ -106,7 +108,7 @@ public class IoTemplateService {
                 .orderByAsc(MdIoTemplateField::getId));
     }
 
-    // ==================== 模板下载（空白模板供用户填写） ====================
+    // 模板下载（空白模板供用户填写）
 
     /**
      * 生成空白导入模板（带表头与一行示例）。
@@ -125,7 +127,7 @@ public class IoTemplateService {
                 sample.createCell(i).setCellValue(sampleOf(f));
                 sheet.setColumnWidth(i, Math.min(40, Math.max(12, f.getColumnName().length() * 2 + 4)) * 256);
             }
-            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
             wb.write(bos);
             return bos.toByteArray();
         } catch (Exception e) {
@@ -145,7 +147,7 @@ public class IoTemplateService {
         };
     }
 
-    // ==================== 导入解析 ====================
+    // 导入解析
 
     /**
      * 按模板解析上传的 Excel。
@@ -250,13 +252,13 @@ public class IoTemplateService {
         return new ImportResult(rows, errors, total, rows.size(), t.getTemplateName());
     }
 
-    // ==================== 导出 ====================
+    // 导出
 
     /**
      * 按模板导出数据为 Excel。
      *
      * @param templateCode 模板编码（direction=EXPORT）
-     * @param conditions   附加查询条件（key=列名,value=值），做等值过滤
+     * @param conditions 附加查询条件（key=列名,value=值），做等值过滤
      */
     public byte[] exportExcel(String templateCode, Map<String, Object> conditions) {
         MdIoTemplate t = resolveTemplate(templateCode);
@@ -306,7 +308,7 @@ public class IoTemplateService {
                     }
                 }
             }
-            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
             wb.write(bos);
             log.info("[io] 导出行数={} template={}", ri - 1, templateCode);
             return bos.toByteArray();
@@ -315,7 +317,7 @@ public class IoTemplateService {
         }
     }
 
-    // ==================== 内部 ====================
+    // 内部
 
     /**
      * 按声明式规则转换单元格值。
@@ -345,7 +347,7 @@ public class IoTemplateService {
                 String ev = f.getEnumValues();
                 if (ev != null && !ev.isBlank()) {
                     Set<String> allow = Arrays.stream(ev.split(","))
-                            .map(String::trim).collect(java.util.stream.Collectors.toSet());
+                            .map(String::trim).collect(Collectors.toSet());
                     if (!allow.contains(v)) {
                         throw new BizException(ErrorCode.PARAM_INVALID,
                                 "取值「" + v + "」不在允许范围(" + ev + ")内");
@@ -370,7 +372,7 @@ public class IoTemplateService {
                 // 换下一种格式再试
             }
         }
-        // 默认处理：Excel 序列号
+        // 兜底：Excel 序列号
         try {
             long serial = Long.parseLong(v);
             return LocalDate.of(1899, 12, 30).plusDays(serial);

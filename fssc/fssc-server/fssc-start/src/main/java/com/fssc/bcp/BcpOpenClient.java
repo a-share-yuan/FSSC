@@ -72,7 +72,7 @@ public class BcpOpenClient {
      * 拉取 BCP 侧待审的行级异议。
      *
      * @param direction 可选 AP/AR 过滤；null/空=全部
-     * @param limit     条数上限（BCP 侧钳位 1..500）
+     * @param limit 条数上限（BCP 侧钳位 1..500）
      */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listPending(String direction, Integer limit) {
@@ -112,7 +112,7 @@ public class BcpOpenClient {
         return data instanceof Map ? (Map<String, Object>) data : Map.of();
     }
 
-    // ==================== 传输 ====================
+    // 传输
 
     /**
      * 发起一次签名调用并解析 BCP 的统一信封。

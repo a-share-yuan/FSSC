@@ -33,7 +33,7 @@ import com.fssc.framework.security.UserContext;
  * AR 自动派工服务（蓝图 5.2，共享任务池/派工规则范式）：
  * 规则命中：customer_prefix 最长前缀 → claim_type 精确 → priority；
  * 命中后：单人直派（可按在办量最少负载均衡）／多人进选单池（组内抢单）；
- * SLA 超时未处理自动升级组长（定时默认处理）。
+ * SLA 超时未处理自动升级组长（定时兜底）。
  */
 @Slf4j
 @Service
@@ -158,13 +158,13 @@ public class ArDispatchService {
         return String.valueOf(u.getUserId());
     }
 
-    /** SLA 超时升级（定时默认处理）：DISPATCHED 且超 sla_hours 的单据备注升级并记组长。 */
+    /** SLA 超时升级（定时兜底）：DISPATCHED 且超 sla_hours 的单据备注升级并记组长。 */
     @Scheduled(fixedDelay = 300_000, initialDelay = 120_000)
     public void escalateSla() {
-        // 整改(20260918)：定时任务线程无租户上下文，需跨租户扫描。
-        // 缺陷D6-2(20260919)：此前误用 setPlatform()（tenantId=null 且 ignore=false）——
-        // TenantContext.getTenantId() 的 fail-closed 检查仍抛「业务SQL缺少租户条件」，任务每5分钟刷 ERROR。
-        // 改用框架既定的 runIgnoreTenant（FsscTenantLineHandler.ignoreTable 对 ignore 模式放行）。
+        // 定时任务线程无租户上下文，需跨租户扫描。
+        // 用 setPlatform()（tenantId=null 且 ignore=false）不行：TenantContext.getTenantId() 的
+        // fail-closed 检查仍会抛「业务SQL缺少租户条件」，任务每 5 分钟刷一次 ERROR。
+        // 走框架既定的 runIgnoreTenant（FsscTenantLineHandler.ignoreTable 对 ignore 模式放行）。
         TenantContext.runIgnoreTenant(this::doEscalateSla);
     }
 

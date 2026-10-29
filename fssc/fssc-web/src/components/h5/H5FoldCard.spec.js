@@ -9,7 +9,7 @@ import H5FoldCard from './H5FoldCard.vue'
  *   ① 收起态必须给摘要，否则关键数（金额/张数/待补项）全藏进二次点击里；
  *      展开后摘要要让位，不与正文里的同一数字重复显示。
  *   ② 正文用 v-show 不用 v-if——提单页的附件 input 挂 ref="fileRef"，
- *      被销毁重建会让「拍票据 / 上传发票」按钮在收起后变死（P0-5 的老坑）。
+ *      被销毁重建会让「拍票据 / 上传发票」按钮在收起后变死。
  */
 function mountFold(props = {}, slots = {}) {
   return mount(H5FoldCard, {

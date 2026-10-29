@@ -282,7 +282,7 @@ function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractio
 
 function statusLabel(s) {
   // DRAFT 原直译「已生成」，与库面态是两套语言——采购退货审核通过的同一秒会自动生成
-  // 一张 recon_type=AUTO 的负数对账单（实测 supplier_recon 19／RC2026102400001／-16,000／DRAFT），
+  // 一张 recon_type=AUTO 的负数对账单，
   // 界面却显示「已生成」，读起来像已走完对账。词面统一按"这一态还没发函、还没被供应商确认"＝待确认。
   return { DRAFT: t('pay.recon.stDraft'), SENT: t('pay.recon.stLetterSent'), CONFIRMED: t('pay.shared.stConfirmed'), DIFF: t('pay.recon.stDiff'), RESOLVED: t('pay.recon.stDiffResolved') }[s] || s || ''
 }

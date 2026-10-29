@@ -37,7 +37,7 @@ public class PlatformSaasController {
 
     private final PlatformSaasService saasService;
 
-    // ---------- 订单 ----------
+    // 订单
 
     @RequiresPerm("platform:order:list")
     @GetMapping("/order/page")
@@ -62,7 +62,7 @@ public class PlatformSaasController {
         return Result.success();
     }
 
-    // ---------- 账单 ----------
+    // 账单
 
     @RequiresPerm("platform:bill:list")
     @GetMapping("/bill/page")
@@ -87,7 +87,7 @@ public class PlatformSaasController {
         return Result.success();
     }
 
-    // ---------- 租户用量统计 ----------
+    // 租户用量统计
 
     @RequiresPerm("platform:stat:list")
     @GetMapping("/stat/page")

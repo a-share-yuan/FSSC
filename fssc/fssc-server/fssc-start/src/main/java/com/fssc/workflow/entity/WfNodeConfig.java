@@ -37,7 +37,7 @@ public class WfNodeConfig extends TenantAuditBase {
     private Integer upLevel;
     /**
      * 多签类型：ANY任一通过 / ALL会签 / SEQ顺序审批 / VOTE票签。
-     * <p><b>P1 已落地（2026-09-23）</b>：WfBpmnTemplateService 在生成 BPMN 时按 node_key 读取本字段，
+     * <p><b>已落地</b>：WfBpmnTemplateService 在生成 BPMN 时按 node_key 读取本字段，
      * 对 ALL/SEQ/VOTE 节点生成 {@code multiInstanceLoopCharacteristics}（集合=运行期注入的候选用户列表）；
      * VOTE 再以 {@code voteRatio} 生成比例通过完成条件 + WfEngineFacade 计票（wf_task_vote）。
      * 仅 ANY 与单办理人模型一致（候选组任一人认领并完成即推进）。未配置或为空 → 不生成多实例（零行为变更）。
@@ -48,10 +48,10 @@ public class WfNodeConfig extends TenantAuditBase {
     /** 允许转办：0 时人工转办被 WfEngineFacade.transfer 直接拒绝；超时自动转办不受此开关约束 */
     private Integer allowTransfer;
     /**
-     * 允许加签：0 时 {@code WfEngineFacade.addSign} 拒绝（F3-3 接真，体检 E-06a）。
+     * 允许加签：0 时 {@code WfEngineFacade.addSign} 拒绝。
      *
-     * <p>此前该列<b>三重落空</b>：实体不映射、节点配置界面不显示、运行时零读取——
-     * 现网 355 个有效节点里 311 个配 0、44 个配 1（2026-09-26 只读普查），配了却从不生效。
+     * <p>该列在<b>三处</b>都必须接上：实体映射、节点配置界面显示、运行时读取；缺一处就等于配了不生效。
+     * 三处接齐之前，这个开关配 0 还是配 1 都没有区别。
      * 拦截总开关 {@code approve.addsign_gate.enabled} 缺省 0＝不拦，保持现行为；
      * 待办 VO 里的 {@code addSignAllowed} 也只在总开关打开时才下发（前端据此隐藏按钮）。
      */
@@ -67,7 +67,7 @@ public class WfNodeConfig extends TenantAuditBase {
     /** 本节点字段权限 JSON */
     private String formPerm;
     /**
-     * G2 传阅（2026-09-23）：本节点办结后抄送的用户ID，逗号分隔。
+     * G2 传阅：本节点办结后抄送的用户ID，逗号分隔。
      *
      * <p>与运行时入参 {@code ccUserIds}（审批人临时指定）在 complete() 里取<b>并集</b>后投递。
      * 与 timeout_hours/up_level 同一条规则：按 model_key + node_key <b>精确匹配</b>，
@@ -78,30 +78,30 @@ public class WfNodeConfig extends TenantAuditBase {
     private String ccRoles;
     private Integer sort;
 
-    // ==================== G4 治理新增列（2026-09-24）====================
+    // G4 治理新增列
 
     /**
      * F10「节点名不承载控制流」：首节点是否"提单即完成"（提单动作本身，不产生人工待办）。
      *
-     * <p><b>为什么要有它</b>：改造前该语义由 {@code WfEngineFacade.autoSkipSelfConfirmFirstNode}
+     * <p><b>为什么要有它</b>：原先该语义由 {@code WfEngineFacade.autoSkipSelfConfirmFirstNode}
      * 按 {@code firstTask.getName().contains("提交")} 的子串判定——<b>改一个节点名就改变了控制流</b>，
      * 是不可测试、不可审计的隐式契约。现落到本列显式承载。
      *
      * <p><b>取值</b>：{@code 1}=自动通过；{@code 0}=显式关闭；
-     * {@code NULL}=未配置——过渡期回退按旧判据（节点名含"提交"）判定，保证上线行为零变化。
-     * 待旧判据可观测后即可摘除回退分支，届时本列成为唯一真值。
+     * {@code NULL}=未配置——按节点名是否含"提交"判定（过渡期口径），保证上线行为零变化。
+     * 回退分支可以摘掉时，本列就成为唯一真值。
      */
     private Integer firstNodeAutoPass;
 
-    // ==================== G2 原生能力替换新增列（2026-09-24）====================
+    // G2 原生能力替换新增列
 
     /**
      * G2 驳回范围校验：{@code NONE}（默认，不允许指定节点驳回）/ {@code PREV_ONE}（只允许退回紧邻上一节点）/
      * {@code ANY_DONE}（允许退回任一已完成节点）。
      *
      * <p><b>为什么要有它</b>：指定级次驳回走的是 Flowable 的 {@code moveActivityIdTo}（属"搬执行"，
-     * 会真实改动在办单据本体），此前唯一的校验是<b>私有</b>全局开关 {@code isFreeRejectEnabled()}
-     * ——要么全开要么全关，无法按节点分级。现把"谁能退、能退多远"落到节点配置上，全局开关退化为
+     * 会真实改动在办单据本体），而只靠<b>私有</b>全局开关 {@code isFreeRejectEnabled()} 的话，
+     * 要么全开要么全关，无法按节点分级。所以把"谁能退、能退多远"落到节点配置上，全局开关退化为
      * 总开关（kill-switch）继续保留：生效条件＝本列 ≠ {@code NONE} <b>且</b> 总开关 = 1。
      */
     private String rejectScope;
@@ -109,7 +109,7 @@ public class WfNodeConfig extends TenantAuditBase {
     /**
      * G2「重新提交时跳回本节点」：
      * 1 = 本节点驳回后，把本节点 key 记入实例变量 {@code rejectOriginNode}；单据重新提交时跳回本节点重办。
-     * 0 = 关闭（默认，行为与改造前一致）。
+     * 0 = 关闭（默认，行为与原先一致）。
      */
     private Integer resubmitJumpBack;
 
@@ -132,11 +132,11 @@ public class WfNodeConfig extends TenantAuditBase {
     private String voteBasis;
 
     /**
-     * G2 不达票默认处理：多实例会签全部办完但票数未达阈值时，落哪个默认审批项并让流程继续。
+     * G2 不达票兜底：多实例会签全部办完但票数未达阈值时，落哪个默认审批项并让流程继续。
      * {@code REJECT}（默认）/ {@code PASS}。
      *
-     * <p><b>为什么要显式定义</b>：此前"不达票"没有任何语义——多实例既可能因完成条件永不满足而卡死，
-     * 也可能被引擎默认收敛，两种结果都无法解释、无法统计。现固定为"落默认审批项 + 流程继续"，
+     * <p><b>为什么要显式定义</b>："不达票"没有语义的话——多实例既可能因完成条件永不满足而卡死，
+     * 也可能被引擎默认收敛，两种结果都无法解释、无法统计。故固定为"落默认审批项 + 流程继续"，
      * 并写一条 {@code VOTE_NOT_REACHED} 记录供质量报表统计。
      */
     private String voteFallback;

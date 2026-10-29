@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
  *
  * <p>每日扫描保管期即将届满的档案（destroyDate 落在 [today, today+30] 且仍为 ARCHIVED），
  * 按租户聚合后经 {@link NotifyService} 推送站内信给档案管理员(FM_ARCHIVIST)，
- * 提醒其发起销毁审批或办理延期。此前 {@code ArchiveService.listExpiringSoon(int)}
+ * 提醒其发起销毁审批或办理延期。{@code ArchiveService.listExpiringSoon(int)}
  * 虽已实现查询，但无定时任务、无推送、无前端入口，档案到期无人感知。
  *
  * <p>【去重】到期是持续状态（不同于"新增异常"这类一次性事件），故以

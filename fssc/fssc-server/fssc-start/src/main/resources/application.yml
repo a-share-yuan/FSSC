@@ -5,10 +5,10 @@ server:
   port: 8089
   servlet:
     context-path: /
-  # 维度8 STAB-01：优雅停机——停机时先停止接收新请求，等待在途请求完成（最长 30s），
+  # 优雅停机——停机时先停止接收新请求，等待在途请求完成（最长 30s），
   # 避免滚动发布/重启时在途单据请求被硬切；K8s/脚本停机统一走 SIGTERM。
   shutdown: graceful
-  
+
   # JWT 权限多时 Authorization 头可能超 8KB 默认上限（CONFIG_ADMIN 类角色 300+ 权限 → token ~8.7KB → 400 Request header is too large）
   # 注意：Spring Boot 4 已废弃 server.max-http-header-size，改名为 server.max-http-request-header-size（仅请求头）
   max-http-request-header-size: 64KB
@@ -17,7 +17,7 @@ spring:
   application:
     name: fssc-server
   lifecycle:
-    # 优雅停机等待窗口（STAB-01），与 server.shutdown=graceful 配套
+    # 优雅停机等待窗口，与 server.shutdown=graceful 配套
     timeout-per-shutdown-phase: 30s
   profiles:
     active: dev
@@ -33,7 +33,7 @@ spring:
   #   autoconfigure:
   #     exclude:
   #       - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
-  # ===== 消息多渠道-邮件通知（smtp；host 为空则邮件渠道自动禁用）=====
+  # 消息多渠道-邮件通知（smtp；host 为空则邮件渠道自动禁用）
   mail:
     host: ""        # 如 smtp.qq.com / smtp.exmail.qq.com
     port: 465
@@ -43,8 +43,8 @@ spring:
       mail.smtp.auth: true
       mail.smtp.ssl.enable: true
 
-# ===== OpenAPI / Swagger UI（springdoc-openapi 3.1.0，Boot4 兼容线）=====
-# P2：文档默认匿名放行（开发/联调）；生产设置 FSSC_OPENAPI_PUBLIC=false 后需携带 Token，
+# OpenAPI / Swagger UI（springdoc-openapi 3.1.0，Boot4 兼容线）
+# 文档默认匿名放行（开发/联调）；生产设置 FSSC_OPENAPI_PUBLIC=false 后需携带 Token，
 #     或设置 FSSC_OPENAPI_ENABLED=false 直接关闭文档端点。
 springdoc:
   api-docs:
@@ -65,7 +65,7 @@ springdoc:
       display-name: 平台端 API
       packages-to-scan: com.fssc.platform
 
-# ===== P0-B1 可观测性（Actuator + Micrometer）=====
+# 可观测性（Actuator + Micrometer）
 # 免鉴权探活：/actuator/health（聚合）、/actuator/health/liveness、/actuator/health/readiness
 #   —— 这三个路径已在 JwtAuthFilter 白名单放行，K8s 探针 / SLB / 监控可直接调用，无需 Token。
 # 指标：/actuator/prometheus（Prometheus 抓取）、/actuator/metrics（人工排查）。
@@ -89,7 +89,7 @@ management:
       enabled: true
     readinessstate:
       enabled: true
-    #  两个必须显式关闭的探测项，否则 /actuator/health 恒为 DOWN（组件未启用 ≠ 故障）：
+    # 两个必须显式关闭的探测项，否则 /actuator/health 恒为 DOWN（组件未启用 ≠ 故障）：
     #  redis：spring-boot-starter-data-redis 在类路径上就会注册 RedisHealthIndicator，
     #         而单机部署 fssc.redis.enabled=false 不连 Redis → 误判 DOWN。
     #         多实例部署启用 Redis 后，请把此项改为 true 纳入健康检查。
@@ -110,12 +110,12 @@ info:
 
 # 自定义配置
 fssc:
-  # ===== 付款批次→采购付款计划 核销回写（D6，付款完成回写计划已付款）=====
+  # 付款批次→采购付款计划 核销回写（D6，付款完成回写计划已付款）
   # 批次执行打款成功后按收款方归集核销 APPROVED 计划：paid_amount 累加、全额置 DONE，
   # 台账 op_plan_paid_log（batch_no+plan_id 唯一，重试幂等）。false 可整体关闭（回退用）。
   plan-writeback:
     enabled: true
-  # ===== 流程引擎（workflow 包）=====
+  # 流程引擎（workflow 包）
   wf:
     # BPMN 仓库化根目录（G3-4）：wf_model.bpmn_xml 的版本快照、latest 与发布 diff 落在这里。
     # 指向代码仓库子目录（如 ./bpmn-repo 或部署机上的仓库工作副本）后一起 git 提交，
@@ -124,13 +124,13 @@ fssc:
     bpmn-repo-dir: ${FSSC_BPMN_REPO_DIR:./bpmn-repo}
     # Flowable ACT_HI_* 历史保留月数（超期由每周日 03:00 的归档任务清理，业务台账 wf_* 不清）
     history-retention-months: 6
-  # ===== 分布式状态可插拔（framework/spi/DistributedState：主数据缓存/登录防刷计数/调度锁）=====
+  # 分布式状态可插拔（framework/spi/DistributedState：主数据缓存/登录防刷计数/调度锁）
   # false 或缺省：进程内实现（单机行为与历史完全一致，调度锁走 MySQL GET_LOCK）；
   # 多实例部署置 true，并配置 spring.data.redis.host / spring.data.redis.port（或环境变量
   # SPRING_DATA_REDIS_HOST / SPRING_DATA_REDIS_PORT）——缓存/限流/调度锁全部转 Redis。
   redis:
     enabled: false
-  # ===== OCR 通道可插拔（image/channel/OcrChannel SPI）=====
+  # OCR 通道可插拔（image/channel/OcrChannel SPI）
   # gateway（默认）：发票能力网关 InvoiceGateway（独立闭源服务，默认端口 8096），
   #   发票 OCR 识别默认走自家封装 API；端点/密钥/开关见下方顶层 invoice.gateway 块，
   #   租户级即时覆盖走「系统设置→OCR通道配置」（sys_config ocr.channel / invoice.gateway.*）。
@@ -148,13 +148,13 @@ fssc:
   # false ⇒ 识别退回 ocr.channel 的其余取值、验真退回「无 ENABLED 外部配置即不判定」的旧口径。
   gateway:
     enabled: ${INVOICE_GATEWAY_ENABLED:true}
-  # ===== LinkU Webhook 回调共享密钥（P0-1 回调对接）=====
+  # LinkU Webhook 回调共享密钥
   # 与 BCP 侧 FSSC_LINKU_CALLBACK_SECRET 保持完全一致。
   # 为空（未配置）时 FSSC 直接拒绝所有 linku-* 回调（fail-fast，绝不静默放行）。
   linku-callback:
     secret: ${FSSC_LINKU_CALLBACK_SECRET:}
-  # ===== LinkU 开放接口（BCP → FSSC 数据通道 /api/open/linku/**）=====
-  # 《BCP-FSSC对接HTTP化改造方案》F-1~F-7：BCP 不再直连 FSSC 内网库，改为 HMAC 签名调用本组接口。
+  # LinkU 开放接口（BCP → FSSC 数据通道 /api/open/linku/**）
+  # 《BCP-FSSC对接HTTP化改造方案》约定：BCP 不再直连 FSSC 内网库，改为 HMAC 签名调用本组接口。
   # 与 BCP 侧 bcp.adapter.fssc.http.secret 必须完全一致（同一把共享密钥）。
   # 签名口径（与回调一致）：X-BCP-Signature = "sha256=" + hex(HMAC-SHA256(secret, timestamp + "." + rawBody))；
   #                     GET 查询的 rawBody 为空串；POST 写入的 rawBody 为请求体原文。
@@ -167,7 +167,7 @@ fssc:
     max-skew-seconds: ${FSSC_LINKU_MAX_SKEW_SECONDS:300}
     # 单次查询/写入条数上限（防超大结果集拖垮内网）。
     max-page-size: ${FSSC_LINKU_MAX_PAGE_SIZE:500}
-  # ===== BCP 出站通道（FSSC → BCP「BCP 异议审核」，走 BCP /api/open/linku/**）=====
+  # BCP 出站通道（FSSC → BCP「BCP 异议审核」，走 BCP /api/open/linku/**）
   # 反向出站：FSSC 的 AP/AR 岗在本系统审核供应商/客户提起的行级异议，
   #   查待审清单 + 回写审核结论，均由 BcpOpenClient 以 HMAC 签名调用 BCP 门户。
   # base-url：BCP 门户（bcp-portal）地址；本机联调默认 127.0.0.1:8501。
@@ -188,7 +188,7 @@ fssc:
     # 否则 A 服务签发的令牌在 B 服务验签失败，表现为"刚登录就被踢"。建议统一由 KMS/配置中心下发。
     secret: ${FSSC_JWT_SECRET:fssc-default-secret-please-change-32bytes!!}
     expire-seconds: 7200
-  # ===== 登录图形验证码（C-3 本体已实现：com.fssc.auth.CaptchaService / CaptchaTriggerService / CaptchaController）=====
+  # 登录图形验证码（C-3）：com.fssc.auth.CaptchaService / CaptchaTriggerService / CaptchaController
   # captcha-enabled —— 总开关（是否启用"失败阈值后的验证码校验"），默认 false 不动：
   #   false = 登录链完全不介入验证码（01 册冒烟脚本 S1-01~S1-25 与演示的程序化登录零影响）；
   #   true  = 仅当同一身份（租户 tenantCode+账号 / 平台 PLATFORM+账号）连续「凭据失败」累计达到
@@ -202,7 +202,7 @@ fssc:
   #   data = { captchaId, image(base64 PNG dataURL) }；一次性，校验过或过期即失效（防重放），TTL 120s。
   # 错误码：4011 = 需要图形验证码（未携带或跨过阈值那一拍），4012 = 验证码错误/已失效。
   login:
-    # C-3 生产口径切换（10-07 构建窗）：原值 false → 新值 true；回滚值 false（改此行即回滚，无需改码）。
+  # C-3 生产口径：true；回滚把本值改回 false 即可，无需改码。
     # 生效后果：同一身份连续 3 次「凭据失败」后，登录必须携带 captchaId + captchaCode（4011/4012），
     # 成功即清零；未达阈值的正常登录链完全不介入，01 册冒烟 25 项的程序化登录不受影响。
     captcha-enabled: true
@@ -213,7 +213,7 @@ fssc:
     max-size: 20971520
     # 允许的扩展名白名单（逗号分隔），空则允许所有
     allowed-extensions: jpg,jpeg,png,gif,bmp,webp,pdf,ofd,xml,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar
-    # ===== 存储设计（多环境部署可覆盖，代码不硬编码路径）=====
+    # 存储设计（多环境部署可覆盖，代码不硬编码路径）
     # 存储根目录（本地磁盘根；生产可映射网络盘/对象存储挂载点）
     # 影像服务独立部署时两进程必须指向同一目录（k8s 用同一 PVC 挂载），故支持环境变量覆盖
     local-root: ${FSSC_FILE_LOCAL_ROOT:./data/files}
@@ -228,14 +228,14 @@ fssc:
   # 自助注册开关（默认关闭，财务规范要求仅管理员邀请）
   self-registration:
     enabled: false
-  # R5-D-303：租户管理员初始口令不写死在代码与前端，改由环境变量一次性注入。
+  # 租户管理员初始口令不写死在代码与前端，改由环境变量一次性注入。
   # 留空＝fail-closed：「租户审核开通」会在改状态之前被拦截（宁可用一把没人知道的口令不开通）。
   tenant:
     init-admin-pwd: ${FSSC_TENANT_INIT_ADMIN_PWD:}
   # 消息多渠道-企业微信（站内信始终启用；wecom-webhook 空则不启用企微渠道）
   notify:
     wecom-webhook: ""
-    # ===== P0-B1 运维告警通道（系统级，非某个用户的业务通知）=====
+    # 运维告警通道（系统级，非某个用户的业务通知）
     # 触达：定时任务连续失败、健康探针探测到 DB/Redis 不可用。
     # ops-webhook：企微群机器人 webhook（留空则回退用上面的 wecom-webhook，再空则只落日志）。
     # ops-mail-to：运维邮件接收人（多个用逗号分隔；留空则不发邮件）。
@@ -244,7 +244,7 @@ fssc:
     ops-webhook: ""
     ops-mail-to: ""
     ops-alert-enabled: true
-  # ===== AI 平权（方案 20260924）：入站网关 =====
+  # AI 平权：入站网关
   # 判据：关闭本开关不影响任何既有页面功能（/api/ai/** 是新增路径，人侧链路零依赖）。
   ai:
     gateway:
@@ -254,7 +254,7 @@ fssc:
       base-url: http://127.0.0.1:${server.port:8089}
       # 高风险确认票据 TTL（分钟），一次性、参数摘要绑定
       confirm-ttl-minutes: 10
-    # 知识检索（P0-5）：构建期产物 ai/knowledge-fssc.json，运行期 CJK bigram + BM25
+    # 知识检索：构建期产物 ai/knowledge-fssc.json，运行期 CJK bigram + BM25
     knowledge:
       enabled: true
       top-k: 6
@@ -266,15 +266,15 @@ fssc:
       head-weight: 3.0
       # 导航型小节降权（阅读提示/索引/速览/演示路径…）：只说"去哪儿看"的小节不该当答案
       nav-penalty: 0.45
-    # 会话记忆（P0-6）：进程内 LRU，租户+用户双绑定；重启即失（P1 落表）
+    # 会话记忆：进程内 LRU，租户+用户双绑定；重启即失（尚未落表）
     session:
       ttl-minutes: 30
       max-sessions: 500
 
-# ===== 发票能力网关（InvoiceGateway，独立闭源服务，D:\SourceCode\InvoiceGateway）=====
+# 发票能力网关（InvoiceGateway，独立闭源服务，D:\SourceCode\InvoiceGateway）
 # FSSC 的进项/销项发票、发票 OCR 识别、真伪查验默认走这层封装 API（三系统统一键名）。
 # 上游通道凭证（AppKey/AppSecret）只存在于网关进程内，业务系统不感知、也不得出现其字面量。
-# 未启动网关时：识别返回失败、验真本轮不判定（D-DEC-115 口径），绝不伪造票面或「验真通过」。
+# 未启动网关时：识别返回失败、验真本轮不判定（不写结论、留原状态待下轮），绝不伪造票面或「验真通过」。
 invoice:
   gateway:
     base-url: ${INVOICE_GATEWAY_BASE_URL:http://127.0.0.1:8096}

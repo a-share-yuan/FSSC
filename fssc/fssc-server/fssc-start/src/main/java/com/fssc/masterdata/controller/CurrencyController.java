@@ -37,11 +37,11 @@ public class CurrencyController {
     }
 
     /**
-     * 【2026-10-18 币种免权限通道】币种**下拉选项**免权限只读通道。
+     * 【币种免权限通道】币种**下拉选项**免权限只读通道。
      *
      * 为什么需要它（与 {@code TenantDictController#builtinDataList} 同源问题）：
-     *   {@code /page} 带 {@code md:currency:list}，实测只授予 CONFIG_ADMIN/IT_ADMIN，
-     *   而 COMMON_EMP 154 人、SCAN_STAFF 5 人全部 4030。可币种下拉散落在
+     *   {@code /page} 带 {@code md:currency:list}，而该码只授给 CONFIG_ADMIN / IT_ADMIN，
+     *   普通员工与扫描岗全部 4030。可币种下拉散落在
      *   budget / contract / expense / invoice / pay / purchase / receivable / treasury
      *   共 12 个业务页面 40 处，是**业务录入的必填字段**而非管理功能 ——
      *   若必须先授"币种管理权"才能填单，等于把主数据管理权限当成录入前置条件，权限模型不成立。

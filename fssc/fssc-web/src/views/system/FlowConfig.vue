@@ -127,8 +127,8 @@
               </el-form>
             </el-tab-pane>
 
-            <!-- 流程图（BPMN 图形）——2026-09-16 补齐：
-                 此前本页只有表单/表格，而全站的图形设计器 BpmnDesigner 只被一个从未挂路由的
+            <!-- 流程图（BPMN 图形）：
+                 本页只有表单/表格的话，全站的图形设计器 BpmnDesigner 只被一个从未挂路由的
                  通用页引用（其 isFlow 分支要求 route.path === '/expense/flow'，而该路由由本页渲染）
                  → 图形化流程图在任何入口都打不开。
                  现直接在本页提供：有 bpmnXml 即渲染图形；无 wf:model:update 走只读 Viewer。 -->
@@ -712,7 +712,7 @@
           <el-input :model-value="currentUserName" disabled />
         </el-form-item>
         <el-form-item :label="$t('system.flow.colDelegate')" prop="toUserId">
-          <!-- P0 修复：默认只加载同公司人员 -->
+          <!-- 默认只加载同公司人员 -->
           <UserSelect v-model="delegateDialog.form.toUserId" scope="same-company" show-dept />
         </el-form-item>
         <el-form-item :label="$t('system.flow.lblApplyDocTypes')">
@@ -869,17 +869,17 @@ import SkeletonList from '../../components/SkeletonList.vue'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { enumLabel, bizTypeLabel, modelCategoryLabel, BIZ_TYPE, WF_MODEL_CATEGORY, ASSIGN_TYPE, TIMEOUT_ACTION, HANDLING_MODE, MULTI_TYPE } from '@/constants/enums.js'
-// 【2026-10-15枚举办结】字典读取层：标签「字典优先、本地常量默认处理」，接口不可用时行为与改造前逐字一致
+// 字典读取层：标签「字典优先、本地常量兜底」，接口不可用时行为与原先逐字一致
 import { useDict } from '@/composables/useDict.js'
-// 第1批：多实例相关标签走字典
+// 多实例相关标签走字典
 const multiTypeDict = useDict('wf_node_multi_type', MULTI_TYPE)
-// 第2批：取人方式 / 取人档位 / 超时处置三处也走字典（字典为 灌入，取值与本地常量一致）
-//   —— 本地常量继续作为默认处理常量传入，两边取值若有差异，以字典为准（运营可维护的权威源）
+// 取人方式 / 取人档位 / 超时处置三处也走字典（字典为 灌入，取值与本地常量一致）
+//   —— 本地常量继续作为兜底常量传入，两边取值若有差异，以字典为准（运营可维护的权威源）
 const assignTypeDict = useDict('wf_assign_type', ASSIGN_TYPE)
 const handlingModeDict = useDict('wf_handling_mode', HANDLING_MODE)
 const timeoutActionDict = useDict('wf_timeout_action', TIMEOUT_ACTION)
 
-/** 统一触发本组件用到的全部枚举字典加载（第1批 1 个 + 第2批 3 个）。
+/** 统一触发本组件用到的全部枚举字典加载。
  *  useDict 内部有 inflight 去重与 fail-soft，这里只负责"一次触发、全部并发"。
  *  不 await、不catch 抛出：字典不可用时标签函数已回落本地常量，界面零影响。 */
 function useDictsReady() {
@@ -918,12 +918,12 @@ const loading = reactive({ models: false, nodes: false, bindings: false, configs
 const detailTab = ref('info')
 const saving = ref(false)
 
-// 权限门控（P0 修复 · 2026-09-16）
+// 权限门控
 // 本页是「六页签聚合页」，但菜单 104「流程管理」只挂了一个码 wf:model:list，
-// 而各页签分别打不同接口、要不同权限码。改前 selectModel() 会并行拉取
+// 而各页签分别打不同接口、要不同权限码。原先 selectModel() 会并行拉取
 // 节点/绑定/实例/委托四份数据，导致仅有 wf:model:list 的角色（如普通员工
 // COMMON_EMP）一进页就连报「缺少权限：wf:node:list / wf:instance:list」——
-// 用户 2026-09-16 报障即为此。现按各页签真实权限码门控：无权限则不打请求、
+// 用户报障即为此。现按各页签真实权限码门控：无权限则不打请求、
 // 并隐藏对应页签与操作按钮，做到"看不到而非报错"。
 const canModelList = hasPerm('wf:model:list')
 const canModelCreate = hasPerm('wf:model:create')
@@ -957,7 +957,7 @@ const hiddenTabDesc = computed(() => {
 /**
  * 业务单据类型选项＝BIZ_TYPE 字典全集。
  * 原先是手写的 12 项静态清单，而库里 biz_type 有 84 种 ⇒ 基本信息页选中任何一项都显示成全大写英文码。
- * 中间版本曾把「模型名称」当作缺省标签默认处理（`bt → modelName`），结果 MEETING/SUPPLIER_ADD 这类
+ * 中间版本曾把「模型名称」当作缺省标签兜底（`bt → modelName`），结果 MEETING/SUPPLIER_ADD 这类
  * 行的单据类型显示得跟模型名称一模一样，用户判定为"显示的是其它字段的数据"——已回退。
  * 现在只认字典：缺哪个编码就补 BIZ_TYPE 一行（见 enums.js），不拿别的字段凑数。
  */
@@ -1039,7 +1039,7 @@ async function selectModel(m) {
 
 async function loadAllDetails(m) {
   if (!m) return
-  // 按权限逐页签决定是否请求（P0 修复：原为无条件 Promise.all 四连发）
+  // 按权限逐页签决定是否请求（不再无条件 Promise.all 四连发）
   const jobs = []
   if (canNodeList) jobs.push(loadNodes(m.modelKey))
   if (canConfigList) jobs.push(loadBindings(m.modelKey))
@@ -1207,10 +1207,10 @@ function openNodeDialog(row) {
       ccUsers: '', ccRoles: '',
       // G2 驳回产品化：reject_scope 列默认 NONE、resubmit_jump_back 列默认 0（未配置即零行为变化）
       rejectScope: 'NONE', resubmitJumpBack: 0,
-      // F10 治理：first_node_auto_pass 缺省 NULL＝未配置（回退旧判据），不强制填值以保持零行为变化
+      // first_node_auto_pass 缺省 NULL＝未配置时按节点名回退判定，不强制填值以保持零行为变化
       firstNodeAutoPass: null,
     }
-  // 历史行默认处理：multi_type 列默认 ANY、vote_ratio 列默认 50，但老接口可能不回传 ⇒ 补默认避免控件空值
+  // 历史行兜底：multi_type 列默认 ANY、vote_ratio 列默认 50，但老接口可能不回传 ⇒ 补默认避免控件空值
   if (form.multiType == null || form.multiType === '') form.multiType = 'ANY'
   if (form.voteRatio == null) form.voteRatio = 50
   // reject_scope / resubmit_jump_back 两列亦为 NOT NULL DEFAULT，老接口不回传时补默认
@@ -1730,7 +1730,7 @@ function delegateScopeLabel(v) {
   return codes.map(c => bizTypeLabel(c)).join('、')
 }
 function assignTypeLabel(v) {
-  // 【第2批】字典优先；字典未到/失败 ⇒回落本地常量，行为与改造前一致
+  // 字典优先；字典未到/失败 ⇒回落本地常量，行为与原先一致
   return assignTypeDict.label(v) || enumLabel(ASSIGN_TYPE, v)
 }
 function assignTypeTag(v) {
@@ -1755,7 +1755,7 @@ function upLevelLabel(v) {
 }
 /** 取人方式：列/详情用。老后端不返回该字段时显示"自动指派"（等价 DB 默认值，不是缺数据） */
 function handlingModeLabel(v) {
-  // 【第2批】字典优先；字典未到/失败 ⇒ 回落本地常量
+  // 字典优先；字典未到/失败 ⇒ 回落本地常量
   return handlingModeDict.label(v || 'AUTO') || enumLabel(HANDLING_MODE, v || 'AUTO')
 }
 /** POOL 用 primary 色：它意味着该节点会有"待领取"任务停在池里，是运维要盯的状态 */
@@ -1764,7 +1764,7 @@ function handlingModeTag(v) {
   return m === 'PICK' ? 'warning' : m === 'POOL' ? 'primary' : 'info'
 }
 function timeoutActionLabel(v) {
-  // 【第2批】字典优先；字典未到/失败 ⇒ 回落本地常量。
+  // 字典优先；字典未到/失败 ⇒ 回落本地常量。
   // TIMEOUT_ACTION 在前端是「别名多对一」映射（NOTIFY/REMIND/URGE 都标"催办通知"），
   //    而字典只登记后端真正读的值（含库中历史 16 个节点的 NOTIFY 旧拼写）。
   //    两边标签有差异（如 AUTO_TRANSFER：前端"超时升级转办"vs 字典无此项），
@@ -1775,10 +1775,10 @@ function timeoutActionLabel(v) {
 }
 /** 会签模式：ANY 为列默认值（普通单任务），显示"任一通过"而非空白
  *
- *  【2026-10-15 第1批枚举办结】标签改为「字典优先、本地常量默认处理」：
+ * 标签改为「字典优先、本地常量兜底」：
  *   字典 wf_node_multi_type（灌入 4 项）的文案比本地常量更贴合业务
  *   字典："或签（任一人办理即可 "／常量："任一通过（单人办理）"），且字典由运营可维护。
- *   但字典是**运行时远程数据**，接口不可用时必须回落本地常量 —— 否则配置页一打开就空白。
+ *   但字典是运行时远程数据，接口不可用时必须回落本地常量 —— 否则配置页一打开就空白。
  *   useDict 内部已做 fail-soft：加载中/失败/未配置 ⇒ 一律用本地常量，界面零变化。
  */
 function multiTypeLabel(v) {
@@ -1796,7 +1796,7 @@ function instanceStatusTag(v) {
   return statusType(v)
 }
 function instanceStatusText(v) {
-  // 后端统一拼写为 CANCELLED（双 L），此前本地表写成 CANCELED 导致该态原样显示英文
+  // 后端统一拼写为 CANCELLED（双 L），本地表写成 CANCELED 会让该态原样显示英文
   return v ? statusLabel(v) : '—'
 }
 
@@ -1836,7 +1836,7 @@ function onFullscreenChange() {
 
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFullscreenChange)
-  // 【2026-10-15】取枚举字典（第1批会签模式 + 第2批取人方式/档位/超时处置）。
+  // 取枚举字典（会签模式 + 取人方式/档位/超时处置）。
   //   失败不阻断页面（useDict内部 fail-soft 回落本地常量），也不 await 到阻塞首屏——
   //   标签函数是同步的，字典回来后 computed 自动刷新。
   useDictsReady()
@@ -1909,7 +1909,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.valu
   overflow: hidden;
 }
 .diagram-wrap:fullscreen .bpmn-designer { height: 100%; }
-/* 发布 diff 原文 */
+/* 发布 diff 展示区 */
 .diff-view {
   margin-top: 10px; max-height: 320px; overflow: auto;
   background: #fafbfc; border: 1px solid #ebeef5; border-radius: 4px;

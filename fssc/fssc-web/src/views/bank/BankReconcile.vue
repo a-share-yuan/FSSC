@@ -111,9 +111,9 @@
       </el-col>
     </el-row>
 
-    <!-- P3，2026-10-24 H6 真跑：本分页器驱动的是「对账记录」两张表（bank_reconcile），
-         改前页面上只有这一个分页器，记录 0 行时它显示「共 0 条」，而下方待勾对银行流水实有 200 行 ⇒
-         被读成"流水表 0 条"。现给它挂上归属标签，且待勾对两张表各自带计数（银行流水侧另有自己的分页器），
+    <!-- 本分页器驱动的是「对账记录」两张表（bank_reconcile）。没有归属标签时，
+         记录 0 行只显示「共 0 条」，而下方待勾对银行流水其实有数据 ⇒ 被读成"流水表 0 条"。
+         标签指明分页器归属；待勾对两张表各自带计数（银行流水侧另有自己的分页器），
          空表计数不再遮蔽有数表。 -->
     <div class="pager-scope">
       <span class="pager-scope-label">对账记录分页（上方「银行流水／付款记录」两张表共用同一页数据）</span>
@@ -263,7 +263,7 @@ const total = ref(0)
  * 本单上下文（「去处理跳到资金计划页且无本单据上下文」的对账半）。
  * 待办/我的单据带 ?billNo=SER…&billId=20 进来时：
  *  · billNo 写进搜索框（本列即 bank_reconcile.serial_no，与 BillRouteRegistry:229 的 bizNoCol 同列）；
- *  · billId 作精确默认处理——md_bank_account 无单号列、对账域也无 keyword 入参，光靠单号可能筛空。
+ *  · billId 作精确兜底——md_bank_account 无单号列、对账域也无 keyword 入参，光靠单号可能筛空。
  * 该列表接口只有 matchStatus 一种服务端过滤（BankReconcileController:36-41 无 keyword 形参），
  *    所以首屏用一次性宽页取回后再客户端定位，否则默认 10 行里根本不含被审那一张。
  *    宽页只在落地那一次生效，之后翻页恢复正常页宽（deepLocate 用完即置空）。
@@ -332,7 +332,7 @@ function filterRows() {
     payRows.value = allRows.value.filter(r => r.paymentNo)
     return
   }
-  // 命中规则：搜索框（流水号/付款单号）命中，或深链带进来的本单主键命中（billId 默认处理）
+  // 命中规则：搜索框（流水号/付款单号）命中，或深链带进来的本单主键命中（billId 兜底）
   const hit = (r) => (k && ((r.serialNo || '').toLowerCase().includes(k) ||
       (r.paymentNo || '').toLowerCase().includes(k))) ||
       (id != null && String(r.id) === String(id))

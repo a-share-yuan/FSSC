@@ -12,7 +12,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * 海外报账②③纯规则集（V1.3.10）：出国判定 / 境外标准档位匹配 / 天数补齐 / 补贴按天核算。
+ * 海外报账②③纯规则集：出国判定 / 境外标准档位匹配 / 天数补齐 / 补贴按天核算。
  *
  * <p>全部静态纯函数，不依赖 Spring 与数据库，供 ExpenseBillService（提交标准校验换源）、
  * ExpenseDetailService（差旅行保存）调用，可直接单测。
@@ -61,7 +61,7 @@ public final class AbroadStandardRule {
     /**
      * 境外标准档位匹配：在 abroad=1 候选集中先取 country_tier 精确档，
      * 无匹配退回境外通用档（country_tier=NULL），再无返回 null（由调用方回退国内标准）。
-     * 注：国家→档位（DEV/EMG/OTH）映射规则暂由调用方默认处理传 DEV，
+     * 注：国家→档位（DEV/EMG/OTH）映射规则暂由调用方兜底传 DEV，
      * 留待 md_sys_config 配置化后替换。
      */
     public static MdExpenseStandard pickStandard(List<MdExpenseStandard> abroadCandidates, String countryTier) {
@@ -85,7 +85,7 @@ public final class AbroadStandardRule {
 
     /**
      * 出差天数补齐：days 已有值（&gt;0）原样返回；否则按 起止日期含首末日 全算
-     * （end − begin + 1）。半天/按比例折算（首尾按 0.5 天等）留待配置化扩展。
+     * end − begin + 1。半天/按比例折算（首尾按 0.5 天等）留待配置化扩展。
      */
     public static BigDecimal resolveDays(BigDecimal days, LocalDate beginDate, LocalDate endDate) {
         if (days != null && days.compareTo(BigDecimal.ZERO) > 0) {

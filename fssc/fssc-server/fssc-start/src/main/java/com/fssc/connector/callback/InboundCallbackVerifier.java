@@ -22,7 +22,7 @@ public class InboundCallbackVerifier {
     /**
      * 校验结果。
      *
-     * @param ok     是否通过
+     * @param ok 是否通过
      * @param reason 未通过原因；{@code ts|...} 前缀表示时间窗错误（应对应 400），其余对应 401
      */
     public record Result(boolean ok, String reason) {
@@ -44,10 +44,10 @@ public class InboundCallbackVerifier {
     /**
      * 校验回调签名与时间窗。
      *
-     * @param secret         共享密钥（非空；空密钥由调用方先行拒绝，本方法不判定）
-     * @param tsHeader       时间戳头（Unix 秒）
-     * @param sigHeader      签名头（{@code sha256=} 前缀可选）
-     * @param rawBody        原始请求体（参与签名的原文）
+     * @param secret 共享密钥（非空；空密钥由调用方先行拒绝，本方法不判定）
+     * @param tsHeader 时间戳头（Unix 秒）
+     * @param sigHeader 签名头（{@code sha256=} 前缀可选）
+     * @param rawBody 原始请求体（参与签名的原文）
      * @param nowEpochSeconds 当前 Unix 秒
      * @param maxSkewSeconds 允许时间偏差（秒）
      */

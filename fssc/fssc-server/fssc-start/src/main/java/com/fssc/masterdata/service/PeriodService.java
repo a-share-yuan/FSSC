@@ -37,8 +37,8 @@ public class PeriodService {
     /**
      * 期间分页（公司维度缺失·读路径）。
      *
-     * <p>原实现只按关键字过滤，同租户内 9 个法人公司的期间行互相全量可见（库内实测
-     * md_period 覆盖 company_id=1/31~38），页面既看不出某行属于哪家公司，也筛不动。
+     * <p>原实现只按关键字过滤，同租户内各法人公司的期间行互相全量可见（
+     * md_period 在一张表里混着多家公司），页面既看不出某行属于哪家公司，也筛不动。
      * 现按本仓库既有规则接 {@code @DataScope} + {@link DataScopeKit}（与 的
      * {@code BankAccountService.page}、退货列表 {@code PurReturnService.page} 同法）：
      * md_period 无部门／经办人列，2~5 档一律降级到本公司；载体为空（注解未生效）时
@@ -101,9 +101,9 @@ public class PeriodService {
     }
 
     public void enable(Long id, boolean enable) {
-        // 残留写点取证结论：本口是 reopen/reopenByPeriod 之外唯一把 status 写回
+        // 本口是 reopen/reopenByPeriod 之外唯一把 status 写回
         // NORMAL 的地方，原实现只 set status —— 对已结账期间点「启用」即得「NORMAL + 关账时间/关账人」
-        // 的矛盾行（实测 md_period id=12、id=217 即此形态）。同 delete() 的规则：关账态不许经这里绕行
+        // 的矛盾行。同 delete() 的规则：关账态不许经这里绕行
         // 解锁（反结账另有入口 /{id}/reopen）；改状态时一并显式清空关账记录。
         MdPeriod exist = require(id);
         if ("CLOSED".equals(exist.getStatus())) {

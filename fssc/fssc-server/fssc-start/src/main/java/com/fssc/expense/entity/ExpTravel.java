@@ -35,7 +35,7 @@ public class ExpTravel implements Serializable {
     private String travelerName;
     private Long fromCityId;
     private Long toCityId;
-    /** 目的地国家/地区（V1.3.10：非空且≠中国=出国，触发境外标准与补贴按天核算） */
+    /** 目的地国家/地区（：非空且≠中国=出国，触发境外标准与补贴按天核算） */
     private String destCountry;
     private LocalDate beginDate;
     private LocalDate endDate;
@@ -51,11 +51,11 @@ public class ExpTravel implements Serializable {
     private BigDecimal trafficAmount;
     private BigDecimal allowanceAmount;
     /** 市内交通费：表单与「小计」一直带着这一栏（PreApply.vue 绑 row.localTrafficAmount），
-     *  表与实体都没有 ⇒ 分量相加小于 total_amount、重开草稿小计自己变小（D-V4R-33）。 */
+     *  表与实体都没有 ⇒ 分量相加小于 total_amount、重开草稿小计自己变小。 */
     private BigDecimal localTrafficAmount;
     private BigDecimal otherAmount;
     private BigDecimal totalAmount;
-    /** 补贴超标并入个税（V1.3.14⑤）：1=超标部分需并入工资薪金计税 */
+    /** 补贴超标并入个税（⑤）：1=超标部分需并入工资薪金计税 */
     private Integer allowanceTaxable;
     /** 1 超标准 */
     private Integer overStd;

@@ -29,7 +29,7 @@ public interface VoucherPushChannel {
     /**
      * 推送一张凭证至外部系统。
      *
-     * @param target  推送目标（NC_SYSTEM / IFS_SYSTEM）
+     * @param target 推送目标（NC_SYSTEM / IFS_SYSTEM）
      * @param payload 凭证业务数据（凭证号、借贷合计、分录摘要等），供通道序列化
      * @return 推送结果，永不返回 null、永不抛穿
      */

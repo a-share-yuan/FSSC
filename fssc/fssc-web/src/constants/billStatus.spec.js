@@ -31,7 +31,7 @@ describe('billStatus constants', () => {
     expect(STATUS_TYPE.REJECTED).toBe('danger')
   })
 
-  // D-DEC-446 甲-3：LIFECYCLE_STEPS / getLifecycleStep 随 status 驱动步进条一并删除，
+  // LIFECYCLE_STEPS / getLifecycleStep 随 status 驱动步进条一并删除，
   // 相应断言（含 `getLifecycleStep('ARCHIVED') === 5` 那条把「永灰」写成基线的用例）不再存在。
 
   it('statusLabel returns Chinese label', () => {

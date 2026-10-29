@@ -33,7 +33,7 @@ vi.mock('@/api', () => {
 
 import Expense from './Expense.vue'
 
-describe('L1-F-02 Expense.vue 组件测试', () => {
+describe('Expense.vue 组件测试', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('可挂载并渲染页签容器', async () => {

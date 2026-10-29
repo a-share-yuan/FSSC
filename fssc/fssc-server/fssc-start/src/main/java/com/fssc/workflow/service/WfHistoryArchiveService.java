@@ -21,7 +21,7 @@ import java.util.List;
  * 业务侧 wf_instance/wf_task_history 不由本类清理（单据追溯依赖，见 {@code WfInstanceArchiveJob}）。
  * 配置：fssc.wf.history-retention-months（默认 6）
  *
- * <p><b>保留策略改「归档后删」</b>：本类此前对超期实例<b>直接物理删除</b>
+ * <p><b>保留策略改「归档后删」</b>：本类原先对超期实例<b>直接物理删除</b>
  * {@code ACT_HI_*}，而业务账 {@code wf_*} 要等 {@code WfInstanceArchiveJob} 且开关
  * {@code sys_config.wf.archive.enabled} 缺省为 0 ⇒ <b>引擎账可能在业务账尚未异地留存时就被销毁，
  * 不可恢复</b>。现加一道校验：只有该实例已落冷表 {@code wf_instance_cold} 才允许清理其引擎账；
@@ -47,9 +47,9 @@ public class WfHistoryArchiveService {
     private int retentionMonths;
 
     /**
-     * 调度补偿：本任务原为 {@code @Scheduled(cron = "0 0 3 ? * SUN")}——全周只有<b>周日 03:00 那一分钟</b>
-     * 是触发窗口。现库实测（op_job_heartbeat 全表重跑）：表内共 19 行，而代码侧
-     * {@code jobHeartbeatService.run(...)} 包装的任务名共 20 个，<b>缺的那一行正是本任务</b>；而心跳行是在 {@code JobHeartbeatService.doRun} 的第一行无条件写入的
+     * 调度补偿：本任务曾用 {@code @Scheduled(cron = "0 0 3 ? * SUN")}——全周只有<b>周日 03:00 那一分钟</b>
+     * 是触发窗口。而 {@code op_job_heartbeat} 里有心跳的任务比代码侧
+     * {@code jobHeartbeatService.run(...)} 包装的任务名少一个，<b>缺的那一行正是本任务</b>；而心跳行是在 {@code JobHeartbeatService.doRun} 的第一行无条件写入的
      * 跑成功/跑失败/清理 0 条都会留下行 ⇒ 无行＝本方法的 {@code @Scheduled} 从未触发，
      * 看门狗报"从未执行"是<b>真没跑</b>，不是统计方式漏。
      *

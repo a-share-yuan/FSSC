@@ -16,14 +16,14 @@
          结构不变 ⇒ 不引入 PC 侧回归。key 用 fullPath：同一条地址返回即复用实例
          列表滚动位置、已填表单、分页进度都在，换单据/换任务则另起一份。
          缓存上限 5 页，超出按 LRU 淘汰；离开 /h5 路由族（如退出登录）缓存随容器卸载销毁。 -->
-    <!-- （P2，2026-10-24 H8.8/H8.9 真跑）：/glex/consolidate 与 /glex/fx-reval 曾整页白屏
+    <!-- /glex/consolidate 与 /glex/fx-reval 这类页面一旦组件 setup 抛错就整页白屏
          （控制台只有 `Unhandled error during execution of setup function` ＋ `Cannot read properties of null
-         (reading 'subTree')`，界面不要表格不要空态不要提示），用户无从得知原因。ErrorBoundary此前只在
-         main.js 里全局注册、不要任何一处使用 ⇒ 这里把它真正套到路由出口上：页面组件 setup/render 抛错时
-         显示可读默认处理＋重试入口，而不是留一片空白。
+         (reading 'subTree')`，界面不要表格不要空态不要提示），用户无从得知原因。ErrorBoundary若只在
+         main.js 里全局注册、却没有任何一处使用，等于没接 ⇒ 这里把它真正套到路由出口上：页面组件 setup/render 抛错时
+         显示可读兜底＋重试入口，而不是留一片空白。
          key 用 route.fullPath —— 边界自身不监听路由，换页必须重新挂载一份干净的边界，
-         否则上一页捕获过的错误会把后续所有页面都挡在默认处理页上。
-         边界必须套在 keep-alive **内层**：套在外层且带 key 会让 keep-alive 实例随每次换页重建，
+         否则上一页捕获过的错误会把后续所有页面都挡在兜底页上。
+         边界必须套在 keep-alive 内层：套在外层且带 key 会让 keep-alive 实例随每次换页重建，
          缓存全丢 ⇒ 移动报销端 「返回不丢数据」直接退化。 -->
     <router-view v-slot="{ Component, route }">
       <keep-alive v-if="route.meta?.keepAlive" :max="5">
@@ -43,7 +43,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { backend, probeBackend, store } from './api'
 import { preloadBuiltinDicts, PRELOAD_DICT_TYPES } from './composables/useDict.js'
-// 【2026-10-16 第 4 批】enums.js 的 66 个展示字典（enum_*）也要预热：
+// enums.js 的 66 个展示字典（enum_*）也要预热：
 // enumLabel() 同为纯同步函数，被各页直接调用，没有生命周期可挂。
 import { ENUM_DICT_TYPES } from './constants/enums.js'
 
@@ -51,16 +51,16 @@ const retrying = ref(false)
 let timer = null
 
 /**
- * 【2026-10-15 第 3 批】全局预热内置字典。
+ * 全局预热内置字典。
  *
- * 为什么挂在这里：billStatus.js 的 statusLabel()/statusType() 是**纯同步函数**，
+ * 为什么挂在这里：billStatus.js 的 statusLabel()/statusType() 是纯同步函数，
  * 被 55 个业务文件直接调用，没有组件生命周期可挂 onMounted —— 逐文件改造既不现实也无必要，
  * 统一在根组件预热一次，后续所有同步调用共享内存缓存。
  *
  * 三点防护：
  *   ① 未登录不请求（避免每次开登录页都吃一次 401）；
  *   ② 后端离线不请求（后端都没起来，请求必然失败）；
- *   ③ 失败完全静默 —— useDict 内部 fail-soft，界面回落本地常量，与改造前逐字一致。
+ *   ③ 失败完全静默 —— useDict 内部 fail-soft，界面回落本地常量，与原先逐字一致。
  */
 async function warmDicts() {
   if (!store.token || !backend.online) return
@@ -97,11 +97,11 @@ watch(() => backend.online, (v, old) => {
 })
 
 /**
- * 【2026-10-16 修缺陷】登录成功后补一次预热。
+ * 登录成功后补一次预热。
  *
- * 根因：warmDicts() 原本只在 onMounted 调一次，而首次进入时用户**尚未登录**，
+ * 根因：warmDicts() 原本只在 onMounted 调一次，而首次进入时用户尚未登录，
  * `!store.token` 直接 return；登录动作只是把 token 写进内存，不触发任何生命周期
- * ⇒ 第 3/4 批的 67 个字典在本次会话内**永远不会被预热**，statusLabel/enumLabel
+ * ⇒ 第 3/4 批的 67 个字典在本次会话内永远不会被预热，statusLabel/enumLabel
  * 全程走本地常量，字典化等于没生效（刷新页面才碰巧生效，因为刷新时 token 已从本地恢复）。
  *
  * 修法：监听 token 由空变非空，触发一次预热（已加载的类型在 useDict 内短路，不会重复请求）。
@@ -121,8 +121,8 @@ html, body, #app { height: 100%; margin: 0; }
 body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f5f7fa; }
 .app-shell { height: 100%; }
 
-/* 原生 file 控件默认处理隐藏：el-upload 依赖 .el-upload__input{display:none}，一旦全局样式
-   缺失/延迟就会露出「选择文件 未选择任何文件」并压住侧边菜单（2026-10-20 报销页实况截图）。
+/* 原生 file 控件兜底隐藏：el-upload 依赖 .el-upload__input{display:none}，一旦全局样式
+   缺失/延迟就会露出「选择文件 未选择任何文件」并压住侧边菜单（报销页实况截图）。
    这里对所有 el-upload 生效，组件内 UploadButton 另有一层定向加固。 */
 .el-upload__input {
   display: none !important;

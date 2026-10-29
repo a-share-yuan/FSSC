@@ -40,8 +40,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * 本切面在请求线程内同步采集上下文并组装实体，仅把 INSERT 动作交给 {@link OperLogWriter}
  * 异步写入数据库（专用线程池），避免高并发下写库阻塞业务线程；日志失败仍不影响业务结果。
  * <p>
- * 【】{@code sys_oper_log.oper_dept_name} 此前"列在、实体字段在、全仓零赋值"
- * ⇒ 现网 604/604 行全 NULL，日志页/审计面的"办理人部门"无从追溯。
+ * <p>{@code sys_oper_log.oper_dept_name} 若"列在、实体字段在、却全仓零赋值"
+ * ⇒ 日志页/审计面的"办理人部门"就无从追溯。
  * {@link LoginUser} 只带 deptId（部门名不入 Token，免得改名后长期签发旧名），
  * 故在<b>请求线程内</b>按 deptId 反查 sys_dept（该表受租户过滤，异步写入线程没有租户上下文，
  * 交给 {@link OperLogWriter} 查会直接 fail-closed 抛 TENANT_CONTEXT_MISSING），
@@ -125,7 +125,7 @@ public class OperLogAspect {
             l.setJsonResult(truncate(toJson(result)));
             l.setOperUserId(u.getUserId());
             l.setOperUserName(u.getUsername());
-            l.setOperDeptName(resolveDeptName(u.getDeptId())); // D-DEC-178：办理人部门，留空只在确无部门时出现
+            l.setOperDeptName(resolveDeptName(u.getDeptId())); // 办理人部门，留空只在确无部门时出现
             l.setOperIp(req == null ? null : req.getRemoteAddr());
             l.setStatus(ok ? 0 : 1);
             l.setErrorMsg(ok ? null : readableError(error));
@@ -140,7 +140,7 @@ public class OperLogAspect {
     /**
      * 审计记录的 error_msg 只落「异常类型＋业务可读摘要」，长度压到 200 以内。
      *
-     * <p>改前实测：一次开票失败把 MyBatis 包装件的整段文本（含 {@code ### SQL:} 原文与
+     * <p>原先一次开票失败就能把 MyBatis 包装件的整段文本（含 {@code ### SQL:} 原文与
      * {@code for key '表名.PRIMARY'}）落进了 sys_oper_log.error_msg，日志页把库面结构整片摊给
      * 看日志的人；且 2000 字符上限让一条记录吃掉大半页。完整堆栈本来就由全局异常处理器
      * log.error 落到日志文件，页面用 trace_id 关联即可，记录列不需要复刻堆栈。</p>

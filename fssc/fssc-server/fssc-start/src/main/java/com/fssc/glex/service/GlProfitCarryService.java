@@ -95,7 +95,7 @@ public class GlProfitCarryService {
         orgGuard.assertVisible(comp, null);
 
         // 期间态前置校验——已关账(CLOSED)期间直接早退。原实现把 glService.balance 全量损益
-        // 计算跑完才在关账侧被拒（记录实测拒绝耗时 20,003ms），用户等 20s 才拿到一句拒绝。
+        // 计算跑完才在关账侧被拒，用户白等二十秒才拿到一句拒绝。
         MdPeriod periodRow = mdPeriodMapper.selectOne(
                 new LambdaQueryWrapper<MdPeriod>()
                         .eq(MdPeriod::getCompanyId, comp)

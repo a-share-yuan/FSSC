@@ -396,8 +396,8 @@ public class SupplierReconService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "对账单尚未发送对账函（letter_status=" + r.getLetterStatus() + "），供应商确认状态不可推进，请先发送对账函");
         }
-        // 批次0 P-4 / A2 回滚环节：发起前采集确认前快照入流程变量。
-        // RECON_ACTIVE 驳回时由 reconBizAction 按快照把状态洗回（此前 CONFIRMED 先写入数据库、驳回无环节＝脏账）。
+        // 发起前采集确认前快照入流程变量，供驳回回滚用。
+        // RECON_ACTIVE 驳回时由 reconBizAction 按快照把状态洗回，否则 CONFIRMED 先落库而驳回无回滚环节，就成了脏账。
         String prevStatus = r.getStatus();
         String prevSupplierConfirmStatus = r.getSupplierConfirmStatus();
         SupplierRecon upd = new SupplierRecon();
@@ -427,7 +427,7 @@ public class SupplierReconService {
                         "供应商对账确认-" + r.getSupplierName(), r.getClosingBalance(), null, extra);
             } catch (Exception ex) {
                 log.error("对账单 {} 发起审批流失败: {}", reconId, ex.getMessage(), ex);
-                throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
+                throw ex;  // 流程发起失败必须抛出去，不能静默降级成没有流程的孤儿单
             }
         }
     }
@@ -584,7 +584,7 @@ public class SupplierReconService {
         if ("NONE".equals(r.getLetterStatus())) {
             upd.setLetterStatus("SENT");
             upd.setLetterSentTime(LocalDateTime.now());
-            // ②：同发函规则——发函动作把确认状态推进到 PENDING（此前才有权等待供应商回函）
+            // 同发函规则——发函动作把确认状态推进到 PENDING，此后才有权等待供应商回函
             upd.setSupplierConfirmStatus("PENDING");
         }
         reconMapper.updateById(upd);
@@ -679,7 +679,7 @@ public class SupplierReconService {
                 log.info("供应商对账匹配完成，已触发付款审批: reconId={}", recon.getId());
             } catch (Exception ex) {
                 // SUPPLIER_PAY 至今无流程模型（wf_model 无此 key、wf_process_config 无绑定），
-                // 冒泡会让 LinkU 回调整体失败、对账单卡在 MATCHED。建模裁决通过前先降级记录，模型一上线即删本 catch。
+                // 冒泡会让 LinkU 回调整体失败、对账单卡在 MATCHED。建模判定通过前先降级记录，模型一上线即删本 catch。
                 log.error("触发付款审批失败（SUPPLIER_PAY 未建模，付款需手工发起）: reconId={}", recon.getId(), ex);
             }
         }

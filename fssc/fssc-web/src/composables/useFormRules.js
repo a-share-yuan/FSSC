@@ -20,7 +20,7 @@ function isBlank(v) {
 
 // 必填判定一律走自定义 validator：async-validator 只在 rule 的键恰好只剩 required 时才用类型无关的
 // required 校验器，多任何一个键（trigger / whitespace / min）它就改走 string 校验器，于是下拉选中的
-// 年份与申请人 ID（数字）、开关选"否"（布尔）这些**合法值会被判为不合法**，表单永远提交不过。
+// 年份与申请人 ID（数字）、开关选"否"（布尔）这些合法值会被判为不合法，表单永远提交不过。
 // 自定义 validator 既保留红星（EP 只看 rule.required 标志），又能顺手判空白文本。
 const requiredValidator = (msg) => (rule, value, cb) => (isBlank(value) ? cb(new Error(msg)) : cb())
 
@@ -216,7 +216,7 @@ const formTypeRules = {
     amount: commonRules.amount('请输入价税合计（须大于 0）'),
     netAmount: [{ required: true, type: 'number', min: 0, message: '请输入未税金额（可为 0，不能为负）' }],
     taxAmount: [{ required: true, type: 'number', min: 0, message: '请输入税额（可为 0，不能为负）' }],
-    // 生成报销草稿：费用项必选（标题留空由后端按"发票报销-票号"默认处理）
+    // 生成报销草稿：费用项必选（标题留空由后端按"发票报销-票号"兜底）
     itemId: commonRules.select('请选择报销费用项'),
   },
   INVOICE_BIND: {
@@ -289,7 +289,7 @@ const formTypeRules = {
   ASSET_TRANSFER: {
     targetDeptId: commonRules.select('请选择目标部门'),
   },
-  // 资产原值调整（X-06/）：原因必输——旧版前端把原因写死成一句固定文案传给后端，
+  // 资产原值调整：原因必输——原因写死成一句固定文案传给后端的话，
   // 写入数据库的"原因"与真实成因无关，事后追溯看到的是同一句话。金额绑 el-input，值为字符串⇒用 amountText。
   ASSET_ADJUST: {
     newOriginalAmount: commonRules.amountText('请输入调整后原值（须大于 0）'),
@@ -396,7 +396,7 @@ const formTypeRules = {
     toleranceType: commonRules.select('请选择容差类型'),
     toleranceValue: [{ required: true, type: 'number', min: 0, message: '请输入容差值' }],
   },
-  // 主数据（第1批 P0）：供应商 / 客户 / 供应商子表
+  // 主数据：供应商 / 客户 / 供应商子表
   // 供应商基本信息 Tab：编码/名称必填；信用代码与税号「选填但填了就必须合规」——
   // jakarta/前端 pattern 对空串天然放行，故基座侧只挂格式校验，必填由页面 rules 另配。
   SUPPLIER: {
@@ -451,7 +451,7 @@ export async function validateForm(formRef) {
 }
 
 /**
- * 发票价税勾稽（第1批 P0）：价税合计 = 未税金额 + 税额，容差 1 分。
+ * 发票价税勾稽：价税合计 = 未税金额 + 税额，容差 1 分。
  * 后端 InvoiceService.requireManualHeader/create 已有同一规则拦截，这里是第一道校验——
  * 录入当时就告知，避免提交后拿 400。三元组互为依赖，勾稽 validator 同时挂三个字段，
  * 任一项 blur 都会连带重校（async-validator 的 validator 拿不到 form 其他字段，故用闭包注入）。
