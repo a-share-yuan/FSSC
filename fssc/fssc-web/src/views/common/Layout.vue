@@ -43,8 +43,8 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">个人中心</el-dropdown-item>
-                <!-- D-DEC-302：「角色化首页」入口已下架（路由与组件保留，直接访问 /role-dashboard 仍可用）。
-                     原因＝四项 KPI 查询键与后端返回不符（恒 0）＋四项为写死的展示值（D-DEC-308），
+                <!-- 「角色化首页」入口已下架（路由与组件保留，直接访问 /role-dashboard 仍可用）。
+                     原因＝四项 KPI 查询键与后端返回不符（恒 0）＋四项为写死的展示值，
                      真要修等于重做整页查询与角色模型，而重做后独有内容与报表看板/流程监控大屏重叠。 -->
                 <el-dropdown-item v-if="canFlowMonitor && openable('/flow-monitor')" command="flow-monitor">流程监控大屏</el-dropdown-item>
                 <!-- G3 共享作业层新视图：同属「无 sys_menu 承载的入口页」，按各页首屏接口权限码收敛 -->
@@ -88,7 +88,7 @@
       </el-drawer>
 
       <el-main class="main">
-        <!-- :key=$route.path：防止"同组件不同菜单"（如 银行账户/金融机构 等共用 MasterConfigTable）
+        <!-- key=$route.path：防止"同组件不同菜单"（如 银行账户/金融机构 等共用 MasterConfigTable）
              复用同一实例导致旧数据残留、新页签字段全空（2026-09-17 用户实测踩坑） -->
         <router-view :key="$route.path" />
       </el-main>
@@ -110,22 +110,22 @@
       </template>
     </el-dialog>
 
-    <!-- P0-1 全局搜索 Ctrl+K -->
+    <!-- 全局搜索 Ctrl+K -->
     <SearchCommand v-model:visible="searchVisible" />
 
-    <!-- P1-7 收藏夹 -->
+    <!-- 收藏夹 -->
     <Favorites v-model="favVisible" ref="favoritesRef" />
 
-    <!-- P1-5 个人效率统计 -->
+    <!-- 个人效率统计 -->
     <MyStats v-model="statsVisible" />
 
-    <!-- P1-9 全局水印 -->
+    <!-- 全局水印 -->
     <Watermark ref="watermarkRef" :enabled="watermarkEnabled" />
 
-    <!-- P1-10 导出预览 -->
+    <!-- 导出预览 -->
     <ExportPreview v-model="exportVisible" :columns="exportColumns" :rows="exportRows" :title="exportTitle" />
 
-    <!-- P1-1 快捷键帮助弹窗 -->
+    <!-- 快捷键帮助弹窗 -->
     <el-dialog v-model="kbHelpVisible" title="键盘快捷键" width="480px" :destroy-on-close="true">
       <el-table :data="kbShortcuts" size="small" border empty-text="暂无数据" v-loading="loading">
         <el-table-column prop="key" label="快捷键" width="140" />
@@ -133,19 +133,19 @@
       </el-table>
     </el-dialog>
 
-    <!-- P2-1 新手引导 -->
+    <!-- 新手引导 -->
     <OnboardingGuide ref="onboardingRef" />
 
-    <!-- P2-2 上下文帮助面板 -->
+    <!-- 上下文帮助面板 -->
     <HelpPanel v-model:visible="helpVisible" />
 
-    <!-- P2-3 AI 智能助手 -->
+    <!-- AI 智能助手 -->
     <AIAssistant />
 
-    <!-- P2-5 操作引导气泡 -->
+    <!-- 操作引导气泡 -->
     <CoachMark ref="coachMarkRef" />
 
-    <!-- R5-16 弱网降级小通知（右下角，不影响浏览） -->
+    <!-- 弱网降级小通知（右下角，不影响浏览） -->
     <Transition name="net-slide">
       <div v-if="isSlowNetwork && !netNoticeDismissed" class="net-notice" :class="degradationLevel">
         <span class="net-notice-icon">{{ degradationLevel === 'severe' ? '' : '' }}</span>
@@ -163,8 +163,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Key, Sunny, Moon } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { store, getMenuTree, logout, noticeApi } from '../../api'
-import { setMenuTree, collapseSingleLeafGroups, pathDenyReason } from '../../router/pathAccess'
+import { store, logout, noticeApi } from '../../api'
+import { setMenuTree, ensureMenuTree, collapseSingleLeafGroups, pathDenyReason } from '../../router/pathAccess'
 import MenuTree from '../../components/MenuTree.vue'
 import HeaderBadges from '../../components/HeaderBadges.vue'
 import SearchCommand from '../../components/SearchCommand.vue'
@@ -190,7 +190,7 @@ const isMobile = ref(false)
 const menuTree = ref([])
 const searchVisible = ref(false)
 
-// R5-16: 弱网降级
+// 弱网降级
 const { isSlowNetwork, degradationLevel, degradationConfig } = useNetworkDegradation()
 const netNoticeDismissed = ref(false)
 const favVisible = ref(false)
@@ -212,7 +212,7 @@ const helpVisible = ref(false)
 const onboardingRef = ref(null)
 const coachMarkRef = ref(null)
 
-// P1-8 暗色模式
+// 暗色模式
 const { isDark, toggle: toggleTheme } = useTheme()
 
 /**
@@ -229,11 +229,11 @@ const canMonthEnd = hasPerm('gl:monthclose:list')
 const openable = (p) => !pathDenyReason(p)
 // G3 任务池五视图是业务角色日常工作台，权限码为 wf:task:list（与 /wf/pool/mine 同族）
 const canTaskPool = hasPerm('wf:task:list')
-// D-DEC-303：业务进度看板的两条查询环节分别是 dashboard:view（付款进度）与 exp:bill:list（在途单量），
+// 业务进度看板的两条查询环节分别是 dashboard:view（付款进度）与 exp:bill:list（在途单量），
 // 两码皆无者进来只会看到空卡，故入口同样按首屏接口权限码收敛。
 const canBizProgress = hasPerm('dashboard:view') || hasPerm('exp:bill:list')
 
-// P1-1 快捷键（Alt+4 仅在持 wf:instance:list 时展示，避免"按了没反应"的困惑）
+// 快捷键（Alt+4 仅在持 wf:instance:list 时展示，避免"按了没反应"的困惑）
 const kbShortcuts = computed(() => [
   { key: 'Ctrl + K', desc: '全局搜索' },
   { key: 'Ctrl + /', desc: '快捷键帮助' },
@@ -284,6 +284,9 @@ const PATH_DOMAIN_MAP = {
   receivable: '财务核算', archive: '财务核算',
   report: '管理报表', reports: '管理报表',
   op: '财务核算', glex: '财务核算', bank: '财务核算', customer: '主数据管理',
+  // 审计轨迹/会计科目等页面已从左侧菜单软删（sys_menu 3056/205），只能深链进入，
+  // 菜单树匹配不到父链时靠这里补模块名，否则面包屑只剩「首页›当前页」，看不出归属。
+  audit: '系统监控', compliance: '系统监控', master: '系统主数据',
 }
 
 function normMenuPath(p) {
@@ -314,12 +317,15 @@ function findMenuChain(nodes, targetPath) {
 const breadcrumbChain = computed(() => {
   const target = normMenuPath(route.path)
   const chain = findMenuChain(menuTree.value, target)
-  if (chain && chain.length) {
-    return chain.map((n) => ({ title: n.menuName, path: normMenuPath(n.path) }))
-  }
   const seg = route.path.split('/')[1]
-  const title = route.meta.title || '当前页'
   const domain = PATH_DOMAIN_MAP[seg]
+  const title = route.meta.title || '当前页'
+  if (chain && chain.length) {
+    const items = chain.map((n) => ({ title: n.menuName, path: normMenuPath(n.path) }))
+    // 菜单树只命中单级（该页在菜单里是根节点、或父级被裁剪）时补模块名，避免只剩「首页›当前页」
+    if (items.length === 1 && domain && domain !== items[0].title) items.unshift({ title: domain })
+    return items
+  }
   return domain && domain !== title ? [{ title: domain }, { title }] : [{ title }]
 })
 
@@ -354,11 +360,15 @@ onMounted(async () => {
   isMobile.value = mq.matches
   mq.addEventListener('change', onMq)
   try {
-    // 只挂一个页面的分组就地收敛：侧栏与面包屑共用这一份，两处层级一致
-    const raw = collapseSingleLeafGroups(await getMenuTree())
-    menuTree.value = raw
-    // 回灌给页面可达性判据（router/pathAccess），避免入口卡与守卫各判一套
-    setMenuTree(raw)
+    // 菜单树走共享缓存：守卫/导航地图要的是同一棵树，不要各拉各的（那条联表是全站最贵的一枚）
+    const raw = await ensureMenuTree()
+    if (raw) {
+      // 只挂一个页面的分组就地收敛：侧栏与面包屑共用这一份，两处层级一致
+      const collapsed = collapseSingleLeafGroups(raw)
+      menuTree.value = collapsed
+      // 回灌给页面可达性判据（router/pathAccess），避免入口卡与守卫各判一套
+      setMenuTree(collapsed)
+    }
   } catch (e) {
     // 菜单树拉取失败不阻塞页面
     console.warn('菜单树加载失败', e.message)
@@ -452,7 +462,7 @@ async function onCommand(cmd) {
   .page-title { font-size: 15px; }
 }
 
-/* R5-16 弱网降级小通知 */
+/* 弱网降级小通知 */
 .net-notice {
   position: fixed;
   right: 16px;

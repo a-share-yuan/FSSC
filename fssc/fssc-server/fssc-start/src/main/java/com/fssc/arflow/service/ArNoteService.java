@@ -6,11 +6,17 @@ package com.fssc.arflow.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.arflow.entity.ArNote;
 import com.fssc.arflow.mapper.ArNoteMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.customer.entity.CrmCustomer;
 import com.fssc.customer.mapper.CrmCustomerMapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.system.service.PeriodLockService;
+import java.time.YearMonth;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,20 +40,20 @@ import java.util.List;
 public class ArNoteService {
 
     private final ArNoteMapper mapper;
-    private final com.fssc.system.service.PeriodLockService periodLockService;
+    private final PeriodLockService periodLockService;
     private final ArFlowVoucherService voucherService;
-    /** R5-D-095：客户主数据解析（登记按客户名解析 customer_code，解析失败显式拦截） */
+    /** 客户主数据解析（登记按客户名解析 customer_code，解析失败显式拦截） */
     private final CrmCustomerMapper crmCustomerMapper;
 
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /** 票据登记：生成服务请求语义的 REGISTERED 待审单；纸质票据强制影像扫描（流程19规则）。 */
     @Transactional(rollbackFor = Exception.class)
     public ArNote register(ArNote n) {
 
         // 蓝图规则6.5：账期已被月结关闭时禁止录入当月业务
-        periodLockService.assertNotLocked(null, java.time.YearMonth.now().toString(), "登记票据");
+        periodLockService.assertNotLocked(null, YearMonth.now().toString(), "登记票据");
         if (!StringUtils.hasText(n.getNoteNo())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "票据编号必填");
         }
@@ -72,7 +78,7 @@ public class ArNoteService {
         if (paper && !StringUtils.hasText(n.getImageRef())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "纸质票据必须完成影像扫描上传（蓝图流程19）");
         }
-        // R5-D-095：登记落 customer_code——按客户名解析客户主数据；解析失败显式拦截（不落悬空票据）
+        // 登记落 customer_code——按客户名解析客户主数据；解析失败显式拦截（不落悬空票据）
         if (StringUtils.hasText(n.getCustomerName())) {
             CrmCustomer cust = crmCustomerMapper.selectOne(new LambdaQueryWrapper<CrmCustomer>()
                     .eq(CrmCustomer::getCustomerName, n.getCustomerName()).last("LIMIT 1"));
@@ -105,10 +111,10 @@ public class ArNoteService {
         n.setVoucherNo(voucherNo);
         n.setStatus(ArNote.ST_IN_ACCOUNT);
         mapper.updateById(n);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("voucherNo", auditOldVoucherNo);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", n.getStatus());
         auditAfter.put("voucherNo", n.getVoucherNo());
         auditTrailService.recordUpdate("AR_NOTE", n.getId(), n.getNoteNo(), "ar_note",
@@ -134,10 +140,10 @@ public class ArNoteService {
         n.setRemark(appendNote(n.getRemark(), "移交出纳：" + keeper));
         n.setStatus(ArNote.ST_CUSTODY);
         mapper.updateById(n);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", n.getStatus());
         auditAfter.put("remark", n.getRemark());
         auditTrailService.recordUpdate("AR_NOTE", n.getId(), n.getNoteNo(), "ar_note",
@@ -160,10 +166,10 @@ public class ArNoteService {
         n.setTransferee(transferee);
         n.setStatus(ArNote.ST_ENDORSED);
         mapper.updateById(n);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("transferee", auditOldTransferee);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", n.getStatus());
         auditAfter.put("transferee", n.getTransferee());
         auditTrailService.recordUpdate("AR_NOTE", n.getId(), n.getNoteNo(), "ar_note",
@@ -210,12 +216,12 @@ public class ArNoteService {
         n.setDiscountVoucherNo(voucherNo);
         n.setStatus(ArNote.ST_DISCOUNTED);
         mapper.updateById(n);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("discountAmount", auditOldDiscountAmount);
         auditBefore.put("discountInterest", auditOldDiscountInterest);
         auditBefore.put("discountVoucherNo", auditOldDiscountVoucherNo);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", n.getStatus());
         auditAfter.put("discountAmount", n.getDiscountAmount());
         auditAfter.put("discountInterest", n.getDiscountInterest());
@@ -237,8 +243,8 @@ public class ArNoteService {
         n.setStatus(ArNote.ST_COLLECTING);
         mapper.updateById(n);
         auditTrailService.recordUpdate("AR_NOTE", n.getId(), n.getNoteNo(), "ar_note",
-                String.valueOf(n.getId()), java.util.Collections.singletonMap("status", auditOldStatus),
-                java.util.Collections.singletonMap("status", n.getStatus()), "到期提示转待托收");
+                String.valueOf(n.getId()), Collections.singletonMap("status", auditOldStatus),
+                Collections.singletonMap("status", n.getStatus()), "到期提示转待托收");
         return n;
     }
 
@@ -256,10 +262,10 @@ public class ArNoteService {
         n.setCollectVoucherNo(voucherNo);
         n.setStatus(ArNote.ST_COMPLETED);
         mapper.updateById(n);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("collectVoucherNo", auditOldCollectVoucherNo);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", n.getStatus());
         auditAfter.put("collectVoucherNo", n.getCollectVoucherNo());
         auditTrailService.recordUpdate("AR_NOTE", n.getId(), n.getNoteNo(), "ar_note",
@@ -283,10 +289,10 @@ public class ArNoteService {
         n.setStatus(ArNote.ST_VOIDED);
         n.setRemark(appendNote(n.getRemark(), "作废原因：" + (reason == null ? "" : reason)));
         mapper.updateById(n);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", n.getStatus());
         auditAfter.put("remark", n.getRemark());
         auditTrailService.recordUpdate("AR_NOTE", n.getId(), n.getNoteNo(), "ar_note",

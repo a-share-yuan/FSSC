@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
  * 单据状态变更轨迹（exp_bill_trace，带 tenant_id）。
  * 【审计表-不可删】无 del_flag/create_by，按真实列独立声明；Mapper 不提供 delete。
  *
- * @deprecated RA-TRC-03 乙（D-TRC-06）：本表在全库没有写入位置（{@code BillTraceService.record} 零调用），
+ * @deprecated RA-TRC-03 乙：本表在全库没有写入位置（{@code BillTraceService.record} 零调用），
  * 联查 traces 段已改读 {@code wf_task_history}。表结构与既有行按「保留全部生成数据」规则不删除，仅停用。
  */
 @Deprecated

@@ -15,7 +15,7 @@
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
     <el-table :data="assets" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据">
       <el-table-column type="selection" width="45" />
-      <!-- R5-D-190：无编号卡片（盘点导入等）首列空值文案，按卡片 ID 追溯 -->
+      <!-- 无编号卡片（盘点导入等）首列空值文案，按卡片 ID 追溯 -->
       <el-table-column label="资产编号" width="140" sortable>
         <template #default="{ row }">
           <span v-if="row.assetNo">{{ row.assetNo }}</span>
@@ -51,7 +51,7 @@
       </el-table-column>
       <el-table-column label="操作" width="470" fixed="right">
         <template #default="{ row }">          <InlineActions :visible="true" @view="openAsset(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
-          <!-- ：编辑入口——打开与新增相同的建档弹窗并回填卡片数据，保存走 assetApi.update -->
+          <!-- 编辑入口——打开与新增相同的建档弹窗并回填卡片数据，保存走 assetApi.update -->
           <el-button link size="small" type="primary" @click="openAsset(row, true)">编辑</el-button>
           <el-button v-if="row.status !== 'SCRAP' && row.status !== 'CIP'" link size="small" type="warning" @click="depreciate(row)">折旧</el-button>
           <el-button v-if="row.status === 'CIP'" link size="small" type="success" @click="openCipToAsset(row)">转固</el-button>
@@ -62,7 +62,7 @@
           <el-button v-if="row.status !== 'SCRAP' && row.status !== 'CIP'" link size="small" type="primary" @click="openAdjustValue(row)">原值调整</el-button>
           <el-button v-if="row.status !== 'SCRAP' && row.status !== 'CIP'" link size="small" type="primary" @click="doImpair(row)">减值</el-button>
           <el-button link size="small" type="info" @click="showNet(row)">净值</el-button>
-          <!-- X-06（D-DEC-431）读取环节：变动台账此前只写不读，卡片页给一个消费者入口 -->
+          <!-- X-06读取环节：变动台账此前只写不读，卡片页给一个消费者入口 -->
           <el-button link size="small" type="info" @click="openChangeLog(row)">变动台账</el-button>
         </template>
       </el-table-column>
@@ -84,7 +84,7 @@
         <el-col :span="12">
           <el-form-item label="资产类别" prop="categoryId">
             <el-select v-model="aForm.categoryId" filterable clearable placeholder="请选择资产类别" style="width:100%" @change="onCategoryChange">
-              <!-- D-H5-01：下拉项前置类别编码（CAT01~CAT05），便于与类别主数据页、凭证摘要规则对号 -->
+              <!-- 下拉项前置类别编码（CAT01~CAT05），便于与类别主数据页、凭证摘要规则对号 -->
               <el-option v-for="c in categories" :key="c.id" :label="(c.categoryCode ? c.categoryCode + ' ' : '') + c.categoryName + (c.depreciationMonths ? '（默认' + c.depreciationMonths + '月）' : '')" :value="c.id" />
             </el-select>
           </el-form-item>
@@ -142,9 +142,9 @@
       <el-form-item label="预算科目">
         <!-- CER 预算集成：指定预算科目则发起即硬控、审批通过后占用；留空自动取综合预算默认处理 -->
         <el-select v-model="capForm.budgetItemId" filterable clearable placeholder="留空自动匹配综合预算" style="width:100%">
-          <el-option v-for="bgt in budgetItems" :key="bgt.id" :label="`预算#${bgt.id}（总额 ${Number(bgt.totalAmount || 0).toLocaleString()}）`" :value="bgt.id" />
+          <el-option v-for="bgt in budgetItems" :key="bgt.id" :label="budgetOptionLabel(bgt)" :value="bgt.id" />
         </el-select>
-        <!-- D-DEC-426：空集/查询失败要看得见，不能只留一个空的下拉让人猜 -->
+        <!-- 空集/查询失败要看得见，不能只留一个空的下拉让人猜 -->
         <div v-if="budgetItemsNotice" style="font-size:12px;color:#e6a23c;line-height:1.5">{{ budgetItemsNotice }}</div>
       </el-form-item>
       <el-form-item label="资产/项目名称" prop="assetName"><el-input v-model="capForm.assetName" placeholder="资本性支出对应资产或项目名称" /></el-form-item>
@@ -190,7 +190,7 @@
     </template>
   </el-dialog>
 
-  <!-- X-06（D-DEC-431）变动台账：原值调整/盘点差异的原因、前后镜像与审批最终状态（此前只写不读） -->
+  <!-- X-06变动台账：原值调整/盘点差异的原因、前后镜像与审批最终状态（此前只写不读） -->
   <el-dialog v-model="dlgChangeLog" :title="`变动台账 - ${changeLogAssetName}`" width="920px" destroy-on-close>
     <el-table :data="changeLogs" size="small" max-height="380" v-loading="changeLogLoading"
               empty-text="该资产暂无变动台账（原值调整/盘点差异审批发起后在此记录）">
@@ -221,7 +221,7 @@
     <template #footer><el-button @click="dlgChangeLog = false">关闭</el-button></template>
   </el-dialog>
 
-  <!-- 资产原值调整弹窗（X-06/D-DEC-431：原因改人工输入并随变动台账记录，不再传硬编码默认处理句） -->
+  <!-- 资产原值调整弹窗（X-06/原因改人工输入并随变动台账记录，不再传硬编码默认处理句） -->
   <el-dialog v-model="dlgAdjust" title="资产原值调整（提交审批）" width="480px" destroy-on-close>
     <el-form ref="adjustFormRef" :model="adjustForm" :rules="adjustRules" label-width="120px" size="small">
       <el-form-item label="调整资产">
@@ -261,7 +261,7 @@
     </template>
   </el-dialog>
 
-  <!-- 在建工程转固入口弹窗：选择在途 CIP 项目 → 补齐转固要素 → 走 /masterdata/config/cip/{id}/transferToAsset（D-DEC-296） -->
+  <!-- 在建工程转固入口弹窗：选择在途 CIP 项目 → 补齐转固要素 → 走 /masterdata/config/cip/{id}/transferToAsset -->
   <el-dialog v-model="dlgCipFlow" title="在建工程转固" width="680px" destroy-on-close>
     <el-alert type="info" :closable="false" style="margin-bottom: 10px"
       title="以下为在途在建工程项目，选择一项并补齐转固要素后确认；按归集成本生成固定资产并发起转固审批。" />
@@ -307,7 +307,7 @@
     </template>
   </el-dialog>
 
-  <!-- R5-15: 审批轨迹抽屉 -->
+  <!-- 审批轨迹抽屉 -->
   <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
   <ApprovalDialog ref="approvalRef" />
 </template>
@@ -334,12 +334,12 @@ import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => loadAssets(),
 })
 
-// R5-15: 审批轨迹
+// 审批轨迹
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -424,7 +424,7 @@ const dlgTransfer = ref(false)
 const transferRow = ref({})
 const transferForm = ref({ targetDeptId: null, targetCompanyId: null, remark: '' })
 
-// X-06（D-DEC-431）：原值调整改弹窗——原因必须由人工填写（旧版传死值 '前端原值调整'，写入数据库后与真实成因无关）
+// X-06：原值调整改弹窗——原因必须由人工填写（旧版传死值 '前端原值调整'，写入数据库后与真实成因无关）
 const dlgAdjust = ref(false)
 const adjustRow = ref({})
 const adjustForm = ref({ newOriginalAmount: '', reason: '' })
@@ -507,7 +507,7 @@ async function scrap(row) {
     await ElMessageBox.confirm('确认报废资产「' + row.assetName + '」？', '报废（提交审批）', { type: 'warning' })
     await assetApi.scrap(row.id); ElMessage.success('报废已提交审批'); loadAssets()
   } catch (e) {
-    // D-DEC-457：只放行取消/关闭，真实 API 错误必须可见（旧版整段吞掉＝「点了没反应」）
+    // 只放行取消/关闭，真实 API 错误必须可见（旧版整段吞掉＝「点了没反应」）
     if (e === 'cancel' || e === 'close') return
     ElMessage.error(e && e.message ? e.message : String(e))
   }
@@ -533,17 +533,17 @@ async function doDisposeSell(row) {
     await assetApi.disposeSell(row.id, Number(sellAmount))
     ElMessage.success('外销处置已提交审批'); loadAssets()
   } catch (e) {
-    // D-DEC-457：同上——外销金额非法/权限不足/状态机拦截都发生在 prompt 之后的同一个 try 里
+    // 同上——外销金额非法/权限不足/状态机拦截都发生在 prompt 之后的同一个 try 里
     if (e === 'cancel' || e === 'close') return
     ElMessage.error(e && e.message ? e.message : String(e))
   }
 }
 async function doCheckDiff(row) {
   try {
-    // D-DEC-432 乙案：本审批只作差异确认——通过环节不产生结转凭证，账面在总账域结转前分文不动。
+    // 乙案：本审批只作差异确认——通过环节不产生结转凭证，账面在总账域结转前分文不动。
     // 原症状＝单据 APPROVED＋记录现有却呈现"差异已处理"，语义与账实脱节⇒把规则如实写进发起提示。
     const { value: diffAmount } = await ElMessageBox.prompt('输入盘点差异金额（正=盘盈/负=盘亏）。注意：本审批仅为差异确认，通过后不自动生成结转凭证，账面不变；差异结转须在总账域另起「盘点差异结转」做账，请在提交前知会总账岗。', '盘点差异处理（提交审批）', { confirmButtonText: '下一步', cancelButtonText: '取消', inputPattern: /^-?\d+(\.\d+)?$/, inputErrorMessage: '请输入金额' })
-    // X-06（D-DEC-431）：差异说明改人工输入。旧版直接传死值 '盘点差异'，而后端 checkDiff 又把该形参整个丢弃
+    // X-06：差异说明改人工输入。旧版直接传死值 '盘点差异'，而后端 checkDiff 又把该形参整个丢弃
     // ⇒ 差异成因从来没有载体；现说明随变动台账写入数据库，故必须先有内容才放行。
     const { value: remark } = await ElMessageBox.prompt('填写差异说明（盘盈/盘亏成因，随变动台账记录，事后追溯看这一句）', '盘点差异说明', { confirmButtonText: '提交审批', cancelButtonText: '取消', inputValidator: (v) => (v && v.trim() ? true : '请填写差异说明') })
     await assetApi.checkDiff(row.id, Number(diffAmount), remark.trim())
@@ -574,14 +574,14 @@ async function doImpair(row) {
     await assetApi.impair(row.id, Number(impairmentAmount))
     ElMessage.success('减值已提交审批'); loadAssets()
   } catch (e) {
-    // D-DEC-457：同上——减值分支的服务端拒绝此前被静默丢弃，列表不刷新、也无任何提示
+    // 同上——减值分支的服务端拒绝此前被静默丢弃，列表不刷新、也无任何提示
     if (e === 'cancel' || e === 'close') return
     ElMessage.error(e && e.message ? e.message : String(e))
   }
 }
 async function showNet(row) { try { const nv = await assetApi.netValue(row.id); ElMessage.info('资产净值：' + fmt(nv)) } catch (e) { ElMessage.error(e.message) } }
 
-// X-06（D-DEC-431）读取环节：变动台账此前"只写不读"，卡片页补一个消费者
+// X-06读取环节：变动台账此前"只写不读"，卡片页补一个消费者
 const CHANGE_TYPE_LABEL = { VALUE_ADJUST: '原值调整', CHECK_DIFF: '盘点差异', IMPAIR: '减值', DISPOSE: '处置', TRANSFER: '调拨' }
 const CHANGE_METHOD_LABEL = { WF: '审批流变动', DIRECT: '直接变动' }
 const dlgChangeLog = ref(false)
@@ -614,19 +614,42 @@ async function saveCapital() {
 }
 
 // CER 预算集成：预算科目下拉数据（bg_item 可用预算明细）
-// D-DEC-426：本下拉属于「单据发起页的引用选择」，不是预算管理列表。旧代码走 budgetApi.itemPage
+// 本下拉属于「单据发起页的引用选择」，不是预算管理列表。旧代码走 budgetApi.itemPage
 // （/tenant/budget/item/page），该端点套个人 data_scope 五级过滤——DataScopeKit:61-72 对 scope=4(DEPT)
 // 注入 dept_id = 登录人部门，而现库 bg_item 9 行有 8 行 dept_id 为 NULL（预算按公司下达、未按部门拆），
 // 于是 DEPT 档员工（现库正证＝剧本岗 3872：company_id=1／dept_id=1019／多角色 min(data_scope)=4）恒命中 0 行，
 // "显式指定预算科目"这条自助通道只剩非部门档的外岗可用（同一接口对 SELF 档降级本公司后回 9 行）⇒ 下拉内容随角色而变。
-// 改走 D-DEC-042 已办结的引用选择规则 mdApi.budgets（/tenant/budget/item/pick＝按公司放行＋跨公司依旧隔离），
+// 改走 已办结的引用选择规则 mdApi.budgets（/tenant/budget/item/pick＝按公司放行＋跨公司依旧隔离），
 // 与 useBill.js:344/378、ExpenseCreateTab.vue:497 三处同源，避免另立第二处真值。
 // 空集/查询失败不再静默置空：把成因就地写进字段下方提示（留空仍走系统默认处理，不编造科目行）。
 const budgetItems = ref([])
 const budgetItemsNotice = ref('')
+// pick 接口回的是 bg_item 裸行，没有科目名：dimKey 实测形如「2025-COMPANY1-DEPTnull-ITEM331」
+// 字面 null＋内部 id，不能上屏；用费项主数据把 itemId 换成名称（/expense-item/tree 无需授权，
+// 与 BudgetExecution.vue:242-245 同一映射），补不到名时只显示年度与金额，仍不暴露主键。
+const budgetItemNames = ref({})
+async function loadBudgetItemNames() {
+  if (Object.keys(budgetItemNames.value).length) return
+  try {
+    const { mdApi } = await import('../../api')
+    const d = await mdApi.expenseItems()
+    const arr = Array.isArray(d) ? d : d?.list || []
+    budgetItemNames.value = Object.fromEntries(arr.map((x) => [String(x.id), [x.itemCode || x.code, x.itemName || x.name].filter(Boolean).join(' ')]))
+  } catch { budgetItemNames.value = {} }
+}
+/** 预算科目选项文案：费项名＋年度/期间＋金额，不让内部主键上屏 */
+function budgetOptionLabel(b) {
+  const money = (v) => Number(v || 0).toLocaleString()
+  const avail = Number(b.totalAmount || 0) + Number(b.adjustAmount || 0)
+    - Number(b.occupyAmount || 0) - Number(b.usedAmount || 0)
+  const name = budgetItemNames.value[String(b.itemId)] || '预算科目'
+  const period = [b.budgetYear ? `${b.budgetYear}年` : '', b.budgetPeriod ? `${b.budgetPeriod}月` : ''].join('')
+  return `${name}${period ? ' · ' + period : ''}（总额 ${money(b.totalAmount)} / 可用 ${money(avail)}）`
+}
 async function loadBudgetItems() {
   if (budgetItems.value.length) return
   budgetItemsNotice.value = ''
+  loadBudgetItemNames()
   try {
     const { mdApi } = await import('../../api')
     budgetItems.value = (await mdApi.budgets({ pageNum: 1, pageSize: 200 })).list || []
@@ -653,7 +676,7 @@ async function confirmCipToAsset() {
   })
 }
 
-/* ---------------- 在建工程转固入口 
+/* 在建工程转固入口
  * 点击后拉取在途 CIP（GET /api/tenant/cip/list?status=IN_PROGRESS）→ 弹窗选择 → POST /api/tenant/cip/to-asset {cipId}。
  * 后端并行实现中：接口 404 时提示「转固流程入口准备中」并不阻断页面其他操作。 */
 const dlgCipFlow = ref(false)
@@ -661,7 +684,7 @@ const cipFlowRows = ref([])
 const cipFlowSelected = ref(null)
 const cipFlowLoading = ref(false)
 const cipFlowSubmitting = ref(false)
-// D-DEC-296：transferToAsset 真实契约要素
+// transferToAsset 真实契约要素
 const cipFlowForm = ref({ categoryId: null, deptId: null, transferDate: '', depreciationMethod: 'LINEAR', depreciationMonths: 60, remark: '' })
 // 第2批：转固弹窗原为装饰红星（el-form-item required 无 prop），改挂中央框架 CIP_TRANSFER 规则集
 const cipFlowFormRef = ref(null)
@@ -740,7 +763,7 @@ function handleSelectionChange(val) { selRows.value = val }
 onMounted(() => { loadAssets() })
 
 defineExpose({ loadAssets })
-// R5-01: InlineActions approve/reject handlers
+// InlineActions approve/reject handlers
 
 // 行内审批统一走共享审批弹窗：单据摘要 + 必填意见（通过预填「同意」可改写、驳回必须写原因），
 // 取代原先的 confirm + 硬编码意见「审批通过」与无校验的驳回 prompt。

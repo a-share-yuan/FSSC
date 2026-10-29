@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-//
+
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 // 简体中文语言包（基准语言 / fallback）
-// ---------------------------------------------------------------------------
 // 键命名：<层级>.<模块>.<键>，全小写下划线或驼峰，同层保持一致。
 // 本文件是「键的权威来源」：en-US.js 必须与本文件键集完全对齐（CI 校验）。
 // 域8B 历史抽取时按「菜单 > 按钮/标签 > 提示/校验 > 长文案」四级追加。
 
 export default {
-  // ---- 通用 ------------------------------------------------------------
+  // 通用
   common: {
     confirm: '确定',
     cancel: '取消',
@@ -44,13 +45,13 @@ export default {
     gotIt: '知道了',
   },
 
-  // ---- 语言切换器 ------------------------------------------------------
+  // 语言切换器
   locale: {
     switch: '切换语言',
     current: '当前语言：{lang}',
   },
 
-  // ---- 登录 ------------------------------------------------------------
+  // 登录
   login: {
     title: '财务共享平台',
     subtitle: 'Financial Shared Service Center',
@@ -69,7 +70,7 @@ export default {
     recovered: '系统已恢复连接，正在刷新页面...',
   },
 
-  // ---- 布局 / 导航 -----------------------------------------------------
+  // 布局 / 导航
   layout: {
     profile: '个人中心',
     logout: '退出登录',
@@ -81,7 +82,7 @@ export default {
     backHome: '返回首页',
   },
 
-  // ---- 通用状态 -------------------------------------------------------
+  // 通用状态
   status: {
     draft: '草稿',
     submitted: '已提交',
@@ -96,9 +97,9 @@ export default {
     pending: '待处理',
   },
 
-  // ---- 错误码（后端 MessageSource 映射：前端 $t('err.' + code)）---------
+  // 错误码（后端 MessageSource 映射：前端 $t('err.' + code)）
   // 注意：错误文案由后端按 Accept-Language 返回多语；此处仅为前端本地默认处理。
-  // ---- gl：总账域（域8B/T1.6 第 1 批）----
+  // gl：总账域（域8B/T1.6 第 1 批）
   // 键名遵循本文件顶部的 <层级>.<模块>.<键>；本批＝合并底稿 consolidate / 总账分录台账 ledger /
   // 特殊业务 special / 退税 refund 四个模块。模板取词用 $t（基座 globalInjection 注入）。
   gl: {
@@ -505,7 +506,7 @@ export default {
       periodOpened: '当前开账期间',
     },
   },
-  // ---- field：跨域共用的列名/字段名（域8B/T1.6）----
+  // field：跨域共用的列名/字段名（域8B/T1.6）
   // 各业务域的同名标签一律复用这里，避免同一句中文在每个域各建一枚键。
   field: {
     account: '银行账户',
@@ -561,7 +562,7 @@ export default {
     summary: '摘要',
     batchNo: '批次号',
   },
-  // ---- 业务域命名空间（域8B/T1.6 逐域填充）----
+  // 业务域命名空间（域8B/T1.6 逐域填充）
   // 先立空块：落地器拒绝自己新造一级命名空间（避免同一域出现两种层次写法）。
   flow: {
     arClose: {
@@ -1665,7 +1666,7 @@ export default {
       hintKeySaved: '已保存（留空或保留掩码表示不修改）',
       hintSecretMasked: '出于安全考虑，已保存的密钥只回显末 4 位用于辨认；更换时请填入完整新值，留空或保留掩码都不会改动已保存的内容。',
       lblExtraJson: '附加配置(JSON)',
-      lnkCallLogs: '调用日志 &gt;',
+      lnkCallLogs: '调用日志 >',
       msgSetDefault: '已设为默认',
       msgTestFail: '连接测试失败:',
       msgTestPass: '连接测试通过:',
@@ -1787,8 +1788,8 @@ export default {
       errNodeNameRequired: '请输入节点名称',
       errRoleCodeRequired: '请填写角色编码',
       errStartRequired: '请选择开始时间',
-      errUserIdFormat: '用户ID须为数字，多个用英文逗号分隔',
-      errUserIdRequired: '请填写用户ID（数字）',
+      errUserIdFormat: '指定用户格式有误，请从人员列表重新选择',
+      errUserIdRequired: '请选择用户',
       hintAddSignBrief: '关闭后，本节点不能加签。',
       hintApproverTypeBrief: '指定用户或角色由系统按配置取人；逐级上级沿汇报线向上取人。',
       hintAssignModeBrief: '自动指派：系统在候选人中指定一人；上一环节指定、任务池领取仅适用于指定角色。',
@@ -1799,7 +1800,7 @@ export default {
       hintCountersignBrief: '按角色取到多人时生效；修改后需重新发布流程。',
       hintEmptyBrief: '按角色找不到办理人时的处理方式。',
       hintFirstNodeBrief: '开启后，提单即完成本节点，不再产生待办。',
-      hintHardAssign: '按用户ID直接指派。',
+      hintHardAssign: '直接指派给所选人员。',
       hintLevelLonger: '级别越高，审批链路越长',
       hintMultistageRepublish: '本模型含会签/票签节点：修改会签模式后需重新发布流程才会生效。',
       hintNeedModelPerm: '如需编辑流程图，请联系系统管理员开通流程建模权限。',
@@ -1819,7 +1820,7 @@ export default {
       hintRoleResolve: '按角色成员取人；找不到候选人时按「无候选空策略」处理。',
       hintStaleLimit: '仅显示前 100 条，完整清单请到「流程监控 → 在途实例」查看。',
       hintSubTypeRoute: '同一单据类型配置多条规则时，按优先级从高到低匹配。',
-      hintUserIdValue: '用户ID，多个用英文逗号分隔',
+      hintUserIdValue: '按人员选择，可多选',
       hintViewOnly: '当前账号仅有流程模型查看权限，如需节点配置／流程绑定／运行实例等信息请联系数据配置管理员',
       lblAllowAddSign: '允许加签',
       lblAllowTransfer: '允许转办',
@@ -1917,7 +1918,7 @@ export default {
       optUnclassified: '未归类',
       phApplyDocTypes: '逗号分隔，空=全部。如 EXP_CLAIM,EXP_LOAN',
       phCcRoleCodes: '角色编码，英文逗号分隔，如 FIN_AUDIT,FIN_MANAGER（可留空）',
-      phCcUserIds: '抄送人用户ID，英文逗号分隔，如 3892,3893（可留空）',
+      phCcUserIds: '选择抄送人（可多选，可留空）',
       phCfgJsonFallback: '如 {\'{\'}"min":5000,"max":50000,"level":2{\'}\'}',
       phDefaultRemark: '审批时默认填入的备注',
       phModelCodeUnique: '请输入模型编码（唯一）',
@@ -2923,7 +2924,7 @@ export default {
   },
   sharing: {
     archive: {
-      btnArchiveSel: '归档所选（{v1}）',
+      btnArchiveSel: '批量立卷（登记待归档）（{v1}）',
       btnViewSelImages: '查看所选影像',
       colApproveTime: '审批完成时间',
       colArchFlow: '归档审批流',
@@ -2934,11 +2935,10 @@ export default {
       colImage: '影像',
       colPaperKeeper: '原件保管',
       colRetention: '保管年限',
-      confirmArchive: '确认归档所选 {v1} 张单据？文件将迁移至归档存储区。',
+      confirmArchive: '确认对所选 {v1} 张单据立卷？文件将迁移至归档存储区，案卷登记为「待归档」；归档终态需在「档案管理 · 凭证归档」执行归档并经审批办结。',
       hintAutoFiled: '（系统自动归档）',
-      hintFlow: '归档执行：文件迁移至 archive 存储区 + 生成档案记录 + 单据标记已归档',
-      hintNoArchivePerm: '当前账号无归档执行权限，本清单仅供查阅与核对；如需归档，请联系共享支持岗执行。',
-      hintOnlyUnarchived: '仅在「未归档」筛选下可执行归档，避免对已归档单据重复立卷',
+      hintFlow: '批量立卷：迁移文件至归档存储区 + 生成待归档案卷；单据的归档状态由归档审批办结后回写',
+      hintOnlyUnarchived: '仅在「未归档」筛选下可立卷，避免对已归档单据重复立卷',
       labelArchiving: '归档中',
       labelCompanyId: '公司#{v1}',
       labelDestroyed: '已销毁',
@@ -2948,18 +2948,17 @@ export default {
       labelTerminated: '已终止',
       labelUnfiled: '未归档',
       labelUnknown: '未知',
-      msgDone: '归档完成 {v1} 张',
-      msgFail: '归档执行失败：{v1}',
+      msgDone: '已立卷 {v1} 张（案卷状态＝待归档）',
+      msgFail: '立卷失败：{v1}',
       msgNoArchiveImage: '该档案无影像',
-      msgNoPerm: '当前账号无归档执行权限，归档请由共享支持岗执行',
+      msgNoPerm: '当前账号缺少立卷权限，请刷新页面后重试',
       msgNoSelImages: '所选单据均无影像',
       pageTitle: '档案归档',
       tabFiled: '已归档档案',
       tabPending: '待归档（{v1}）',
       titleArchiveImages: '档案影像：',
-      titleConfirm: '归档确认',
+      titleConfirm: '立卷确认',
       titleSelDocImages: '所选单据影像',
-      txtOrVoucherFlow: '或在「档案管理 · 凭证归档」发起归档审批流。',
       txtNoReason: '服务端未返回具体原因，请稍后重试或联系共享支持岗',
     },
     cfg: {
@@ -3232,8 +3231,8 @@ export default {
       btnMarkPriority: '标记优先级',
       btnRefreshStats: '刷新计数',
       btnRegenerate: '补生成',
+      colAssignee: '受理人',
       colAssignMode: '分配模式',
-      colAssigneeId: '受理人ID',
       colBalanceBatch: '均衡批大小',
       colBalanceInterval: '均衡间隔(h)',
       colBySource: '按来源计数',
@@ -3282,7 +3281,7 @@ export default {
       errNodeKey: '请输入节点 key（* 为全局默认）',
       errPolicyName: '请输入策略名称',
       errProcessKey: '请输入流程 key（* 为全局默认）',
-      errTaskRowId: '请输入任务行ID',
+      errTaskRowId: '请选择待办任务',
       errVoucherRead: '读取制证失败事件失败：',
       fallbackNoRule: '未命中任何规则',
       fallbackUnassigned: '未指派（进池待领取）',
@@ -3302,8 +3301,8 @@ export default {
       labExpenseItemId: '费用项目ID',
       labLegalEntityId: '法人主体ID',
       labScanLimit: '扫描条数上限',
-      labTaskId: '任务ID',
-      labTaskRowId: '任务行ID',
+      labTaskId: '任务',
+      labTaskRowId: '待办任务',
       labelApproved: '已审批',
       labelCaution: '需注意',
       labelMarked: '已标记',
@@ -3326,6 +3325,7 @@ export default {
       phPolicyKeyword: '策略名称/流程/节点',
       phProcessKey: '流程 key',
       phStarDefault: '* 表示全局默认',
+      phTaskPick: '按单号/标题搜索任务',
       srcExpense: '费用报销',
       srcVendorPay: '对公付款',
       subAutoAssign: '自动分配',
@@ -3353,7 +3353,7 @@ export default {
       hintClaimable: 'PENDING、未指派、我是候选人且节点是任务池——真正能抢的任务。',
       hintLockedByOthers: '节点是任务池、已被指派给他人但我是候选人：行看得见、办不了，可看到锁定者。',
       hintMyClaimed: '节点是任务池且受理人是我。',
-      hintMyTodo: 'PENDING 且受理人是我或我是候选人（含池内未锁定）。',
+      hintMyTodo: '待办理状态，且受理人是我或我是候选人（含池内未锁定）。',
       hintPoolAll: '当前视图展示任务池的全部在办任务（不限候选人），供共享中心主管总览。',
       labelDueMissing: '待补时限',
       labelGrabbable: '可抢',
@@ -3588,7 +3588,7 @@ export default {
       exitAccountNotArchived: '收款账号没有供应商档案开户信息支撑：到「主数据 › 供应商 › 银行账户」补录或更正该供应商开户账号，使档案与付款账号一致，再回本批次重试「执行付款」（本批未提交银企、批次状态未变）',
       exitBlacklisted: '供应商处于黑名单/停用：该笔不进入任何付款通道，需先更正主数据档案状态',
       exitFraudOpen: '风控记录未复审结案：复审通过后回本批次重试',
-      // D-R1020-16：反欺诈这道校验有正规放行出口（风控 › 欺诈检测【人工放行】，FraudBoard.vue 只对
+      // 反欺诈这道校验有正规放行出口（风控 › 欺诈检测【人工放行】，FraudBoard.vue 只对
       // HIGH_RISK 且未复审未放行的行渲染），旧文案开头写「本校验不设放行／解拦出口」与后半句自相矛盾，
       // 也与后端拦截原文「请到 风控>欺诈检测 复审结案后重试」对不上 ⇒ 改为如实说明「批次页无直接放行按钮」。
       hintBypassFraud: '本批次页无「直接放行」按钮，放行出口在风控侧：请到 风控 › 欺诈检测 对该单据的高风险记录做「人工放行／复审结案」，结案后回到本批次直接重试执行（无需重建批次）。补齐 PO／收货／合同／发票对本次拦截无效。',
@@ -4065,7 +4065,7 @@ export default {
       dimPayVsInvoice: '付款≤发票',
       dimReceiptVsPo: '收货≤订单',
       errNeedScope: '至少填写公司ID或供应商ID之一(否则属通用配置)',
-      hintByDim: '按维度配置容差（百分比 / 固定金额），超容差冻结付款 / WARN 提示',
+      hintByDim: '按维度配置容差（百分比 / 固定金额），超容差时冻结付款或标记预警',
       hintNoScoped: '暂无差异化配置',
       hintSemantics: '容差说明：付款金额不得超过发票金额（默认不允许超付）；发票金额超过收货金额时，超出容差将冻结业务，容差内仅提醒；收货金额超过订单金额时给予提醒。',
       msgDeleted: '已删除',

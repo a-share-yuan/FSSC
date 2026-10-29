@@ -20,7 +20,11 @@ import com.fssc.system.mapper.SysMenuMapper;
 import com.fssc.system.mapper.SysRoleMapper;
 import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.system.mapper.SysUserRoleMapper;
+import java.util.HashMap;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -45,9 +49,9 @@ import java.util.stream.Collectors;
  * </ul>
  * 互斥规则来源 {@code sod_role_conflict}（平台级 tenant_id NULL + 租户自定义），全局表不受租户拦截器过滤，手工取规则。
  *
- * <p>R5-D-276（内控实况登记，数据与配置面）：现库 32 条规则下命中 7 对冲突组合／多角色用户 112 人，
+ * <p>（内控实况登记，数据与配置面）：现库 32 条规则下命中 7 对冲突组合／多角色用户 112 人，
  * 其中 FIN_GL × FSSC_AUDITOR（记账×审核，HIGH 语义）1 人；处置＝逐组出<b>人工裁决清单</b>
- * （撤兼任或书面豁免），本包<b>不改任何授权数据、不执行 DB 写</b>；呈现缺陷另见 R5-D-034。
+ * 撤兼任或书面豁免，本包<b>不改任何授权数据、不执行 DB 写</b>；呈现缺陷另见。
  * 赋权入口已接线：UserService 授予角色前调 {@code assertNoUserPermConflict}（本行即该面登记）。</p>
  */
 @Service
@@ -55,7 +59,7 @@ import java.util.stream.Collectors;
 public class SoDService {
 
     /** C-3：在役不相容职责（L2）需要跨表读流程历史，直接走 JDBC 避开实体映射。 */
-    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private final JdbcTemplate jdbc;
 
 
     private final SodRoleConflictMapper conflictMapper;
@@ -93,7 +97,7 @@ public class SoDService {
         public void setConflicts(List<String> conflicts) { this.conflicts = conflicts; }
     }
 
-    // R5-D-034：SoD 检查结果行（列契约与业务用语对齐，前端可直接渲染）
+    // SoD 检查结果行（列契约与业务用语对齐，前端可直接渲染）
     public static class SodCheckRow {
         private Long userId;
         private String userName;
@@ -125,7 +129,7 @@ public class SoDService {
         public void setDetectTime(String detectTime) { this.detectTime = detectTime; }
     }
 
-    // R5-D-034：权限码互斥规则的命中明细（保留角色出处，供结果列表标注"谁与谁"）
+    // 权限码互斥规则的命中明细（保留角色出处，供结果列表标注"谁与谁"）
     private static class PermHit {
         private final SodPermConflict rule;
         private final List<Long> roleIdsA = new ArrayList<>();
@@ -136,20 +140,20 @@ public class SoDService {
         }
     }
 
-    // R5-D-034：角色维度扫描中间态
+    // 角色维度扫描中间态
     private static class RoleScan {
-        private final Map<Long, Set<String>> codesByUser = new java.util.HashMap<>();
-        private final Map<String, String> nameByCode = new java.util.HashMap<>();
+        private final Map<Long, Set<String>> codesByUser = new HashMap<>();
+        private final Map<String, String> nameByCode = new HashMap<>();
     }
 
     private static final DateTimeFormatter SOD_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final String DIM_ROLE = "ROLE";
     private static final String DIM_PERM = "PERM";
-    // R5-D-034：岗位互斥规则原文即"不得由同一人担任"，属硬约束，严重度恒记高
+    // 岗位互斥规则原文即"不得由同一人担任"，属硬约束，严重度恒记高
     private static final String SEVERITY_ROLE_CONFLICT = "高";
 
     /**
-     * R5-D-034：执行职责分离检查（两维度一次跑完），返回 UI 就绪的结果行。
+     * 执行职责分离检查（两维度一次跑完），返回 UI 就绪的结果行。
      * 结果不写入数据库：sod_role_conflict / sod_perm_conflict 是【规则定义表】而非结果表，
      * 检查为无状态实时计算，检测时间取本次执行时刻。
      */
@@ -187,15 +191,15 @@ public class SoDService {
             // 同一实例内「人 → 不同节点 key 集合」
             Map<String, Map<Long, Set<String>>> byInstance = new LinkedHashMap<>();
             // 同一实例内的发起人
-            Map<String, Long> starterByInstance = new java.util.HashMap<>();
-            //  不要再 JOIN act_ru_execution：它是 Flowable 的「运行中执行」表，
+            Map<String, Long> starterByInstance = new HashMap<>();
+            // 不要再 JOIN act_ru_execution：它是 Flowable 的「运行中执行」表，
             // 流程一结束就清空（实测仅 6 行），而历史轨迹全在 act_hi_taskinst（288 行）。
             // 直接用 act_hi_taskinst 自带的 PROC_INST_ID_ 分组即可。
             for (Map<String, Object> h : jdbc.queryForList(
                     "SELECT PROC_INST_ID_ AS inst, ASSIGNEE_ AS uid, TASK_DEF_KEY_ AS dk "
                             + "FROM act_hi_taskinst "
                             + "WHERE ASSIGNEE_ IS NOT NULL AND TASK_DEF_KEY_ IS NOT NULL")) {
-                //  JdbcTemplate 返回的列名按驱动/库大小写不定（实测 MySQL 返回大写 INST/UID/DK），
+                // JdbcTemplate 返回的列名按驱动/库大小写不定（实测 MySQL 返回大写 INST/UID/DK），
                 //   直接 get("inst") 会拿到 null ⇒ 全部数据聚到 "null" 键上，判据永远不命中。
                 String inst = String.valueOf(col(h, "inst"));
                 long uid = asLong(col(h, "uid"));
@@ -203,7 +207,7 @@ public class SoDService {
                 byInstance.computeIfAbsent(inst, k -> new LinkedHashMap<>())
                         .computeIfAbsent(uid, k -> new LinkedHashSet<>()).add(dk);
             }
-            //  wf_instance 没有 del_flag 列（流程实例表靠 status 表达最终状态，不做逻辑删除），
+            // wf_instance 没有 del_flag 列（流程实例表靠 status 表达最终状态，不做逻辑删除），
             //   带上它会直接 Unknown column 抛错、被外层 catch 吞掉 → 本项永远 0 条。
             for (Map<String, Object> w : jdbc.queryForList(
                     "SELECT proc_inst_id AS inst, start_user_id AS uid FROM wf_instance "
@@ -230,7 +234,7 @@ public class SoDService {
             }
         } catch (Exception ex) {
             // fail-open：体检类查询异常不得让整个 SoD 报告失败；但必须记录，否则"永远 0 条"无从排查
-            org.slf4j.LoggerFactory.getLogger(SoDService.class)
+            LoggerFactory.getLogger(SoDService.class)
                     .warn("SoD 不相容职责(L2)实况查询失败（本次该项返回空，不影响其它维度）: {}", ex.toString());
             return rows;
         }
@@ -279,7 +283,7 @@ public class SoDService {
         return r;
     }
 
-    /** R5-D-034：检查结果分页（维度／关键词过滤在内存完成，总量恒为本租户规则） */
+    /** 检查结果分页（维度／关键词过滤在内存完成，总量恒为本租户规则） */
     public PageResult<SodCheckRow> checkPage(String dimension, String keyword, long pageNum, long pageSize) {
         long size = pageSize <= 0 ? 20L : Math.min(pageSize, 500L);
         long page = pageNum <= 0 ? 1L : pageNum;
@@ -316,7 +320,7 @@ public class SoDService {
         return false;
     }
 
-    /** R5-D-034：角色维度＝一人兼两岗，逐（用户×命中规则）出行 */
+    /** 角色维度＝一人兼两岗，逐（用户×命中规则）出行 */
     private List<SodCheckRow> roleConflictRows(String detectTime) {
         List<SodRoleConflict> rules = loadActiveRules();
         List<SodCheckRow> rows = new ArrayList<>();
@@ -361,7 +365,7 @@ public class SoDService {
         return rows;
     }
 
-    /** R5-D-034：权限码维度＝跨角色累积出的互斥操作权限，逐（用户×命中规则）出行 */
+    /** 权限码维度＝跨角色累积出的互斥操作权限，逐（用户×命中规则）出行 */
     private List<SodCheckRow> permConflictRows(String detectTime) {
         List<SodCheckRow> rows = new ArrayList<>();
         List<SodPermConflict> rules = loadActivePermRules();
@@ -393,7 +397,7 @@ public class SoDService {
 
     /** 当前租户内的角色名（sys_role 受租户拦截器过滤） */
     private Map<Long, String> roleNameByRoleId(Collection<Long> roleIds) {
-        Map<Long, String> out = new java.util.HashMap<>();
+        Map<Long, String> out = new HashMap<>();
         if (roleIds == null || roleIds.isEmpty()) {
             return out;
         }
@@ -417,10 +421,10 @@ public class SoDService {
 
     /**
      * 角色授予前置校验：合并新角色与用户已有角色后逐对检查互斥表，命中抛 {@link BizException}。
-     * 只在【新增/变更授权】时拦截，历史演示绑定不受影响（本方法不改动 sys_user_role）。
+     * 只在时拦截，历史演示绑定不受影响（本方法不改动 sys_user_role）。
      *
-     * @param userId            被授权用户
-     * @param roleIdsToAssign   本次要授予的角色ID集合
+     * @param userId 被授权用户
+     * @param roleIdsToAssign 本次要授予的角色ID集合
      */
     public void assertNoConflict(Long userId, Collection<Long> roleIdsToAssign) {
         List<SodRoleConflict> rules = loadActiveRules();
@@ -433,7 +437,7 @@ public class SoDService {
             mergedRoleIds.addAll(userRoleMapper.selectRoleIdsByUser(userId));
         }
         if (roleIdsToAssign != null) {
-            roleIdsToAssign.stream().filter(java.util.Objects::nonNull).forEach(mergedRoleIds::add);
+            roleIdsToAssign.stream().filter(Objects::nonNull).forEach(mergedRoleIds::add);
         }
         if (mergedRoleIds.size() < 2) {
             return;
@@ -442,7 +446,7 @@ public class SoDService {
         Map<Long, SysRole> roleById = roleMapper.selectBatchIds(mergedRoleIds).stream()
                 .collect(Collectors.toMap(SysRole::getId, Function.identity(), (x, y) -> x));
         Set<String> codes = roleById.values().stream()
-                .map(SysRole::getRoleCode).filter(java.util.Objects::nonNull)
+                .map(SysRole::getRoleCode).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         // 逐对检查
         List<String> hits = new ArrayList<>();
@@ -502,14 +506,14 @@ public class SoDService {
             roleIds.addAll(groupRoleMapper.selectRoleIdsByUserId(userId));
         }
         if (roleIdsToAssign != null) {
-            roleIdsToAssign.stream().filter(java.util.Objects::nonNull).forEach(roleIds::add);
+            roleIdsToAssign.stream().filter(Objects::nonNull).forEach(roleIds::add);
         }
         return roleIds;
     }
 
     /** 每个角色 -> 该角色自身权限码集合（sys_menu.perms 逗号拆分）；保留角色维度出处以判定 inherent */
     private Map<Long, Set<String>> permsByRole(Collection<Long> roleIds) {
-        Map<Long, Set<String>> perRole = new java.util.LinkedHashMap<>();
+        Map<Long, Set<String>> perRole = new LinkedHashMap<>();
         if (roleIds == null || roleIds.isEmpty()) {
             return perRole;
         }
@@ -538,7 +542,7 @@ public class SoDService {
 
     /**
      * 平台级 + 当前租户的 ACTIVE 规则逐条正则比对，返回命中描述。
-     * <b>跨角色累积规则（2026-09，D-SOD-1 修复）</b>：某规则两侧虽在并集里都命中，但若存在
+     * <b>跨角色累积规则（2026-09，修复）</b>：某规则两侧虽在并集里都命中，但若存在
      * <b>单个角色</b>自身就同时含两侧权限（inherent，属该角色定义的既定岗位职责），则不计为违规——
      * 一用户一角色下这类角色必须可授予；仅当互斥组合<b>只能由 ≥2 个角色合并</b>产生时才拦截。
      */
@@ -550,7 +554,7 @@ public class SoDService {
         return hits;
     }
 
-    /** R5-D-034：与 {@link #permConflictHits} 同判据，额外保留命中两侧的角色出处 */
+    /** 与 {@link #permConflictHits} 同判据，额外保留命中两侧的角色出处 */
     private List<PermHit> permConflictMatches(Map<Long, Set<String>> perRole) {
         return permConflictMatches(perRole, loadActivePermRules());
     }
@@ -564,7 +568,7 @@ public class SoDService {
                         .or().eq(SodPermConflict::getTenantId, tenantId)));
     }
 
-    /** R5-D-034：规则集外提，逐用户巡检时同一份规则只取一次 */
+    /** 规则集外提，逐用户巡检时同一份规则只取一次 */
     private List<PermHit> permConflictMatches(Map<Long, Set<String>> perRole, List<SodPermConflict> rules) {
         List<PermHit> hits = new ArrayList<>();
         if (perRole == null || perRole.isEmpty()) {
@@ -674,7 +678,7 @@ public class SoDService {
         return result;
     }
 
-    /** R5-D-034：角色维度扫描的公共走查（scanViolations 与 checkAll 同一规则，避免两份判据） */
+    /** 角色维度扫描的公共走查（scanViolations 与 checkAll 同一规则，避免两份判据） */
     private RoleScan scanRoleBindings(List<SodRoleConflict> rules) {
         RoleScan scan = new RoleScan();
         Set<String> conflictCodes = new HashSet<>();
@@ -687,7 +691,7 @@ public class SoDService {
         if (roles.isEmpty()) {
             return scan;
         }
-        Map<Long, String> codeByRoleId = new java.util.HashMap<>();
+        Map<Long, String> codeByRoleId = new HashMap<>();
         for (SysRole r : roles) {
             codeByRoleId.put(r.getId(), r.getRoleCode());
             scan.nameByCode.put(r.getRoleCode(),
@@ -705,7 +709,7 @@ public class SoDService {
     }
 
     private Map<Long, SysUser> loadUsers(Collection<Long> userIds) {
-        Map<Long, SysUser> out = new java.util.HashMap<>();
+        Map<Long, SysUser> out = new HashMap<>();
         if (userIds == null || userIds.isEmpty()) {
             return out;
         }
@@ -727,7 +731,7 @@ public class SoDService {
         return roleById.values().stream()
                 .filter(r -> code != null && code.equals(r.getRoleCode()))
                 .map(SysRole::getRoleName)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .findFirst().orElse(code);
     }
 

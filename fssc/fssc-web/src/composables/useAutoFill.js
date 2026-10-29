@@ -101,7 +101,7 @@ export function useAutoFill() {
       filled.push('exchangeRate')
     }
     if (!target.billDate) {
-      // D-DEC-361（补漏环节）：这里原先用 toISOString() 取「今天」，那是 UTC 串——东八区恒差 −8h，
+      // 补漏环节：这里原先用 toISOString() 取「今天」，那是 UTC 串——东八区恒差 −8h，
       // 0~8 点之间制单会把单据日期预填成"昨天"，与后端 LocalDateTime.now() 写入数据库钟口不一致。
       // 与 composables/useBill.js 的 localDateParts 同一规则（本地时钟，零依赖，不引日期库）。
       const d = new Date()

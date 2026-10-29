@@ -15,15 +15,19 @@ import com.fssc.common.exception.BizException;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.trace.TraceIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.URLEncoder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
@@ -96,8 +100,8 @@ public class AiGatewayService {
 
     private RestTemplate restTemplate() {
         if (restTemplate == null) {
-            org.springframework.http.client.SimpleClientHttpRequestFactory f =
-                    new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            SimpleClientHttpRequestFactory f =
+                    new SimpleClientHttpRequestFactory();
             f.setConnectTimeout(connectTimeoutMs);
             f.setReadTimeout(readTimeoutMs);
             restTemplate = new RestTemplate(f);
@@ -105,7 +109,7 @@ public class AiGatewayService {
         return restTemplate;
     }
 
-    // ------------------------------------------------------------------ 执行
+    // 执行
 
     /**
      * 网关执行主流程。任何一步不过即拒（BizException→对应 HTTP 码），且每一步都落 ai_tool_call_log。
@@ -167,7 +171,7 @@ public class AiGatewayService {
         }
     }
 
-    // ------------------------------------------------------------ 目录与校验
+    // 目录与校验
 
     private AiAction resolve(GatewayRequest req) {
         AiAction a = null;
@@ -303,7 +307,7 @@ public class AiGatewayService {
         }
     }
 
-    // ------------------------------------------------------------------ 票据面
+    // 票据面
 
     /** 高风险写：先出"待确认"票据，由真人在待确认队列里点确认，AI 只能出示票据号。 */
     public AiActionConfirm requestConfirm(AiAction a, Map<String, Object> args, String instructionId, LoginUser user) {
@@ -394,7 +398,7 @@ public class AiGatewayService {
                 .toList();
     }
 
-    // ------------------------------------------------------------ 回环执行面
+    // 回环执行面
 
     private Loopback executeLoopback(AiAction a, GatewayRequest req, HttpServletRequest http, LoginUser user) {
         String path = a.getUrl();
@@ -422,7 +426,7 @@ public class AiGatewayService {
                     qs.append('&');
                 }
                 qs.append(e.getKey()).append('=')
-                        .append(java.net.URLEncoder.encode(String.valueOf(e.getValue()), StandardCharsets.UTF_8));
+                        .append(URLEncoder.encode(String.valueOf(e.getValue()), StandardCharsets.UTF_8));
             }
         }
         String url = baseUrl + path + (qs.length() > 0 ? "?" + qs : "");
@@ -456,18 +460,18 @@ public class AiGatewayService {
             ResponseEntity<String> resp = restTemplate().exchange(url,
                     HttpMethod.valueOf(a.getMethod().toUpperCase()), entity, String.class);
             return new Loopback(resp.getStatusCode().value(), resp.getBody(), contentTypeOf(resp.getHeaders()));
-        } catch (org.springframework.web.client.HttpStatusCodeException ex) {
+        } catch (HttpStatusCodeException ex) {
             // 下游业务拒绝也要如实回传并记录（403/400/500 都是"后端拒绝"这一判据的证据）
             return new Loopback(ex.getStatusCode().value(), ex.getResponseBodyAsString(), contentTypeOf(ex.getResponseHeaders()));
         }
     }
 
     private String contentTypeOf(HttpHeaders headers) {
-        org.springframework.http.MediaType mt = headers == null ? null : headers.getContentType();
+        MediaType mt = headers == null ? null : headers.getContentType();
         return mt == null ? null : mt.toString();
     }
 
-    // ------------------------------------------------------------------ 工具面
+    // 工具面
 
     /** 参数规范化摘要：TreeMap 深排序后序列化，字段顺序不影响摘要（改值必改摘要）。 */
     public String digest(Map<String, Object> args) {
@@ -554,7 +558,7 @@ public class AiGatewayService {
     }
 
     private String currentTraceId() {
-        String t = org.slf4j.MDC.get(TraceIdFilter.MDC_KEY);
+        String t = MDC.get(TraceIdFilter.MDC_KEY);
         return t;
     }
 
@@ -628,7 +632,7 @@ public class AiGatewayService {
         }
     }
 
-    // ------------------------------------------------------------------ 类型
+    // 类型
 
     public record GatewayRequest(String instruction, String model, String action, String verb, String path,
                                  Map<String, Object> args, Long confirmId) {

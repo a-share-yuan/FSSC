@@ -4,7 +4,7 @@
 <template>
   <BillWorkbench ref="wb" bill-type="CLAIM" sub-type="TRAVEL" :claim="true" :travel="true" :before-submit="onBeforeSubmit" :on-apply-pick="onApplyPick">
     <template #create="b">
-      <!-- ============ 单据概要 ============ -->
+      <!-- 单据概要 -->
       <el-card :header="$t('expense.claim.colBillSummary')">
         <el-form ref="formRef" :rules="formRules" :model="b.form.bill" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -79,7 +79,7 @@
         </el-form>
       </el-card>
 
-      <!-- ============ 费用详情（按类别 tab） ============ -->
+      <!-- 费用详情（按类别 tab） -->
       <el-card :header="$t('expense.claim.colExpenseDetail')" style="margin-top: 12px">
         <el-tabs v-model="activeCat" type="card">
           <el-tab-pane :label="$t('common.all')" name="ALL" />
@@ -172,7 +172,7 @@
         <div style="margin-top: 6px">{{ $t('expense.claim.labFeeTotal') }}<span style="color:#f59a23;font-weight:700">{{ b.fmt(totalAmount(b)) }}</span> {{ $t('expense.common.unitYuan') }}</div>
       </el-card>
 
-      <!-- ============ 行程信息（差旅/培训涉及出差时） ============ -->
+      <!-- 行程信息（差旅/培训涉及出差时） -->
       <el-card v-if="b.form.bill.extJson.reimburseType !== 'TRAIN'" :header="$t('expense.travelClaim.secTripInfo')" style="margin-top: 12px">
         <el-table :data="b.form.travels" size="small" border :empty-text="$t('common.empty')" v-loading="loading" @row-dblclick="openRowDetail">
           <el-table-column :label="$t('expense.travelClaim.colPassenger')" width="110">
@@ -220,7 +220,7 @@
           :title="$t('expense.travelClaim.hintAbroadAuto')" />
       </el-card>
 
-      <!-- ============ 结算信息 ============ -->
+      <!-- 结算信息 -->
       <el-card :header="$t('expense.claim.secSettlement')" style="margin-top: 12px">
         <el-form ref="settleFormRef" :rules="formRules" :model="b.form.bill" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -269,7 +269,7 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 const { saveFormHistory } = useAutoFill()
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -298,7 +298,7 @@ const cats = computed(() => ([
   { v: 'VISA', label: t('expense.travelClaim.tabVisaFee') }, { v: 'OTHER', label: t('expense.travelClaim.tabOtherFee') },
 ]))
 
-// 境外凭证合规⑤（V1.3.14）：凭证形态（境内发票/境外收据/行程单）+ 中文说明（19号公告税前扣除要件）
+// 境外凭证合规⑤：凭证形态（境内发票/境外收据/行程单）+ 中文说明（19号公告税前扣除要件）
 function newLine(b) { return Object.assign(b.newLine(), { category: 'TRAFFIC', roomCount: 1, endDate: '', fromCityId: null, toCityId: null, voucherForm: 'FAPIAO', cnDesc: '' }) }
 function needCnDesc(row) { return row.voucherForm === 'RECEIPT' || row.voucherForm === 'ITINERARY' }
 function addLine(b) { b.form.lines.push(newLine(b)) }
@@ -382,7 +382,7 @@ async function onBeforeSubmit(b) {
   if (!b.form.lines.filter((l) => l.itemId).length) {
     ElMessage.warning(t('expense.claim.errNeedExpenseLine')); return false
   }
-  // 境外凭证合规⑤（V1.3.14）：境外收据/行程单必填中文说明（后端 submit 同一规则默认处理）
+  // 境外凭证合规⑤：境外收据/行程单必填中文说明（后端 submit 同一规则默认处理）
   if (b.form.lines.some((l) => l.itemId && needCnDesc(l) && !(l.cnDesc || '').trim())) {
     ElMessage.warning(t('expense.claim.errAbroadCnDesc')); return false
   }
@@ -433,7 +433,7 @@ async function onApplyPick(row, form) {
     } catch (e) { return }
     form.lines = srcLines.map((l) => Object.assign(newLine(wb.value.b), {
       itemId: l.itemId, itemName: l.itemName, amount: l.amount || 0, budgetItemId: l.budgetItemId || null,
-      // D-DEC-361：带入日期与后端写入数据库时区一致，走 useBill.today()（本地时钟），不再用 UTC 的 toISOString
+      // 带入日期与后端写入数据库时区一致，走 useBill.today()（本地时钟），不再用 UTC 的 toISOString
       expenseDate: l.expenseDate || wb.value.b.today(), category: catOf(l.itemName), remark: l.remark || '',
     }))
     form.shares = (d.shares || []).map((s) => ({
@@ -525,14 +525,14 @@ onMounted(async () => {
   seatDict.load()
   payMethodDict.load()
   try {
-    // P0 修复（2026-10-21）：默认只加载同公司人员
+    // P0 修复：默认只加载同公司人员
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
     const b = wb.value && wb.value.b
     const uid = store.user?.userId ?? store.user?.id
     if (b && !b.form.bill.applyUserId) {
-      // P1-5 默认申请人 = 当前登录人，严格匹配 me.id，不回退 list[0]
+      // 默认申请人 = 当前登录人，严格匹配 me.id，不回退 list[0]
       const me = uid ? list.find((x) => x.id === uid) : null
       if (me) {
         b.form.bill.applyUserId = me.id

@@ -126,7 +126,7 @@
           </el-form-item>
           <el-form-item :label="$t('system.org.colCreditCode')"><el-input v-model="form.creditCode" maxlength="64" /></el-form-item>
           <el-form-item :label="$t('system.org.colTaxNo')"><el-input v-model="form.taxNo" maxlength="64" /></el-form-item>
-          <!-- V1.4.92（AMC-01）：档案管理模式决定纸质原件是否寄送共享中心（非集中＝原件留原单位、不产生实物流） -->
+          <!-- AMC-01：档案管理模式决定纸质原件是否寄送共享中心（非集中＝原件留原单位、不产生实物流） -->
           <el-form-item :label="$t('system.org.colArchiveMode')">
             <el-select v-model="form.archiveMode" style="width:100%">
               <el-option :label="$t('system.org.optArchiveCentral')" value="CENTRAL" />
@@ -188,13 +188,13 @@ import { validateForms } from '@/composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => loadCompanyTree(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
 })
 
-// ========== 左树右表联动状态 ==========
+// 左树右表联动状态
 const companyTreeRef = ref()
 const companyFilter = ref('')
 const companyTree = ref([])
@@ -202,7 +202,7 @@ const selectedCompany = ref(null)
 const selectedDept = ref(null)
 const deptTreeData = ref([])
 const posts = ref([])
-// P0-2: 服务端分页（后端 postPage 返回 PageResult，前端传 pageNum/pageSize 用后端 total）
+// 服务端分页（后端 postPage 返回 PageResult，前端传 pageNum/pageSize 用后端 total）
 const pager = useTablePager({ mode: 'server', storageKey: 'system_org' })
 const { pagedData } = pager
 // 记录最近一次筛选条件，供 TablePager @change 翻页/改每页条数时复用
@@ -264,7 +264,7 @@ const orgFormRules = computed(() => (reactive({
   postCode: commonRules.required(t('system.org.errPostCodeRequired')),
 })))
 
-// ========== 数据加载 ==========
+// 数据加载
 
 async function loadCompanyTree() {
   try {
@@ -312,7 +312,7 @@ function buildDeptTree(list) {
   return roots
 }
 
-// ========== 公司树搜索过滤 ==========
+// 公司树搜索过滤
 watch(companyFilter, (val) => {
   companyTreeRef.value?.filter(val)
 })
@@ -321,7 +321,7 @@ function filterCompanyNode(value, data) {
   return data.companyName?.includes(value) || data.companyCode?.includes(value)
 }
 
-// ========== 弹窗 ==========
+// 弹窗
 
 function open(kind, row) {
   type.value = kind
@@ -405,7 +405,7 @@ async function remove(kind, row) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-// R5-D-045：进页默认选中当前用户所属公司（loadCompanyTree 完成后联动右侧）
+// 进页默认选中当前用户所属公司（loadCompanyTree 完成后联动右侧）
 onMounted(async () => {
   await loadCompanyTree()
   const cid = store.user?.companyId

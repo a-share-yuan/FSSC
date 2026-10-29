@@ -70,6 +70,6 @@ public class ArMonthClose implements Serializable {
     public static final String ST_GL_POSTED = "GL_POSTED";
     public static final String ST_RECONCILED = "RECONCILED";
     public static final String ST_CLOSED = "CLOSED";
-    /** R5-D-218：作废最终状态（记录不删行，解冻账期锁与期间的出口态） */
+    /** 作废最终状态（记录不删行，解冻账期锁与期间的出口态） */
     public static final String ST_VOID = "VOID";
 }

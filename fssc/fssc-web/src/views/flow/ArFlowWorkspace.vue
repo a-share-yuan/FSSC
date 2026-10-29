@@ -31,7 +31,7 @@
 
 <script setup>
 // 方案 A（页面Tab化重构册 §甲）：蓝图 9 页收敛为一域一工作台，页内 tab 复用既有 Board 组件，
-// 不新增流程/表/API。el-tab-pane lazy＝首次激活才挂载，避免 8 个 Board 并发查询（D-DEC-265 教训）。
+// 不新增流程/表/API。el-tab-pane lazy＝首次激活才挂载，避免 8 个 Board 并发查询（教训）。
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ArClaimBoard from './ArClaimBoard.vue'

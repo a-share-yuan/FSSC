@@ -5,8 +5,11 @@ package com.fssc.workflow.action;
 
 import com.fssc.arflow.entity.ArClaim;
 import com.fssc.arflow.mapper.ArClaimMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -24,8 +27,8 @@ import java.util.Set;
 public class ArClaimBizAction implements WfBizAction {
 
     private final ArClaimMapper arClaimMapper;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -44,7 +47,7 @@ public class ArClaimBizAction implements WfBizAction {
             return;
         }
         try {
-            // P4-3 审计扩面：改状态前采集旧值
+            // 审计扩面：改状态前采集旧值
             String oldStatus = claim.getStatus();
             ArClaim upd = new ArClaim();
             upd.setId(claimId);
@@ -56,9 +59,9 @@ public class ArClaimBizAction implements WfBizAction {
                         + "审批驳回:" + event.getComment());
             }
             arClaimMapper.updateById(upd);
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("status", oldStatus);
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", upd.getStatus());
             // 本次实际变化：驳回时同时拼接了 remark，一并记录
             if (upd.getRemark() != null) {

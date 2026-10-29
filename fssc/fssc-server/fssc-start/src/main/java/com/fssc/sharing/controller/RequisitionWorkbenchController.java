@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * P0-6 统一收单工作台（/api/tenant/workbench/**）
+ * 统一收单工作台（/api/tenant/workbench/**）
  * 统一收单大厅：场景卡片发起所有单据 + 我的单据/待办/已办三视图 + 单据详情内联展示全链路
  */
 @RestController
@@ -45,7 +45,7 @@ public class RequisitionWorkbenchController {
     /**
      * 我的单据（<b>费用域</b> exp_bill 一表，含 10+ 种 bill_type）
      * 全类型（合同/采购/预算/总账/档案…）见 {@link #myDocuments}。本接口保留一个版本给旧入口，
-     * 注释此前写"全类型"是错的（D-CON-01 的症状之一：承诺与规则不一致）。
+     * 注释此前写"全类型"是错的（的症状之一：承诺与规则不一致）。
      */
     @GetMapping("/my-bills")
     public Result<PageResult<Map<String, Object>>> myBills(PageQuery query,
@@ -55,7 +55,7 @@ public class RequisitionWorkbenchController {
     }
 
     /**
-     * 我登记的全类型单据（批次5 / D-CON-01）。按 {@code BillRouteRegistry} 的
+     * 我登记的全类型单据（批次5 /）。按 {@code BillRouteRegistry} 的
      * "bizType→业务主表→归属人列"逐表查询后内存归并；无归属人列的类型走 {@code unsupported}
      * 明示，而不是静默少数据。
      */
@@ -82,7 +82,7 @@ public class RequisitionWorkbenchController {
      * 单据详情（全链路：单据基础 + 流程轨迹 + 凭证 + 付款 + 影像 + 档案）
      *
      * <p>{@code bizType} 用于挡住跨域同 id：本详情按 {@code exp_bill} 主键查询，而"我的单据"已扩到
-     * 全类型（合同 id=7 与报销单 id=7 会撞号）⇒ 传了非费用域类型就直接拒绝，不回错数据（D-CON-01 附带项）。
+     * 全类型（合同 id=7 与报销单 id=7 会撞号）⇒ 传了非费用域类型就直接拒绝，不回错数据（附带项）。
      */
     @GetMapping("/bill-detail/{billId}")
     public Result<Map<String, Object>> billDetail(@PathVariable Long billId,

@@ -11,12 +11,12 @@ import lombok.EqualsAndHashCode;
 /**
  * 合规规则配置（md_compliance_rule，带 tenant_id）。
  *
- * <p>P0-10：作为智能审单/合规校验的统一规则来源，覆盖四类高频合规风险：</p>
+ * <p>作为智能审单/合规校验的统一规则来源，覆盖四类高频合规风险：</p>
  * <ul>
- *   <li>DUPLICATE_INVOICE   重复发票校验（同一发票号/代码在窗口期被重复报销）</li>
- *   <li>EXPENSE_MISMATCH    费用项目不一致（发票品名规则与报销费用类型不一致）</li>
- *   <li>OVER_STANDARD       超标校验（单笔/单日/单月超出费用标准或限额）</li>
- *   <li>BLACKLIST           黑名单使用校验（供应商/开票方在欠税、走逃、红冲、涉刑问题名单）</li>
+ *   <li>DUPLICATE_INVOICE 重复发票校验（同一发票号/代码在窗口期被重复报销）</li>
+ *   <li>EXPENSE_MISMATCH 费用项目不一致（发票品名规则与报销费用类型不一致）</li>
+ *   <li>OVER_STANDARD 超标校验（单笔/单日/单月超出费用标准或限额）</li>
+ *   <li>BLACKLIST 黑名单使用校验（供应商/开票方在欠税、走逃、红冲、涉刑问题名单）</li>
  * </ul>
  */
 @Data

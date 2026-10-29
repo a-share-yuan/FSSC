@@ -181,7 +181,7 @@ function go(path) {
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
-// D-DEC-078：与 Approval.vue / Workbench.vue 同一落点校验——发票池数据面按 inv:list 门控，
+// 与 Approval.vue / Workbench.vue 同一落点校验——发票池数据面按 inv:list 门控，
 // 无权限岗不跳 #/invoice/query 吃「暂无数据＋缺少权限」，改落全链路追溯。
 const canInvPool = hasPerm('inv:list')
 function handle(row) {

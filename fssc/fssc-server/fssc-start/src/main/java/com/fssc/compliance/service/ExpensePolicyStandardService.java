@@ -8,6 +8,7 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.ExpensePolicyStandard;
 import com.fssc.compliance.mapper.ExpensePolicyStandardMapper;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,7 +39,7 @@ public class ExpensePolicyStandardService {
 
     @Transactional(rollbackFor = Exception.class)
     public Long create(ExpensePolicyStandard standard) {
-        // D-POL-02：原实现是裸 insert，零校验。两个后果：
+        // 原实现是裸 insert，零校验。两个后果：
         // ① standard_unit 是 NOT NULL 列，缺它 → SQL 异常 → HTTP 500「系统异常」，调用方无从判断是参数问题；
         // ② 标准下限 > 上限也能写入数据库（手册 G16.13 要求提示「该标准将永远无法命中」），
         //    写入数据库后规则匹配永远不命中，属静默失效——比直接报错更难排查。
@@ -54,8 +55,8 @@ public class ExpensePolicyStandardService {
         if (standard.getStandardUnit() == null || standard.getStandardUnit().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请填写单位（如 元/天/次/人）");
         }
-        java.math.BigDecimal min = standard.getStandardValueMin();
-        java.math.BigDecimal max = standard.getStandardValueMax();
+        BigDecimal min = standard.getStandardValueMin();
+        BigDecimal max = standard.getStandardValueMax();
         if (min != null && max != null && min.compareTo(max) > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "下限大于上限，该标准将永远无法命中：下限 " + min.stripTrailingZeros().toPlainString()
@@ -72,12 +73,12 @@ public class ExpensePolicyStandardService {
         if (exist == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "政策标准不存在: " + standard.getId());
         }
-        // D-POL-02：update 与 create 同一套校验，否则「先建后改」能绕过下限≤上限的校验。
+        // update 与 create 同一套校验，否则「先建后改」能绕过下限≤上限的校验。
         if (standard.getStandardUnit() == null || standard.getStandardUnit().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请填写单位（如 元/天/次/人）");
         }
-        java.math.BigDecimal min = standard.getStandardValueMin();
-        java.math.BigDecimal max = standard.getStandardValueMax();
+        BigDecimal min = standard.getStandardValueMin();
+        BigDecimal max = standard.getStandardValueMax();
         if (min != null && max != null && min.compareTo(max) > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "下限大于上限，该标准将永远无法命中：下限 " + min.stripTrailingZeros().toPlainString()

@@ -13,6 +13,8 @@ import com.fssc.workflow.entity.WfModel;
 import com.fssc.workflow.entity.WfProcessConfig;
 import com.fssc.workflow.mapper.WfModelMapper;
 import com.fssc.workflow.mapper.WfProcessConfigMapper;
+import java.util.ArrayList;
+import java.util.Comparator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -87,7 +89,7 @@ public class WfProcessConfigService {
         return resolveModelKey(bizType, null, amount, companyId, deptId);
     }
 
-    /** V1.3.19 子类型感知路由：subType 非空时优先命中 sub_type 精确规则，其次通配规则 */
+    /** 子类型感知路由：subType 非空时优先命中 sub_type 精确规则，其次通配规则 */
     public String resolveModelKey(String bizType, String subType, BigDecimal amount, Long companyId, Long deptId) {
         List<WfProcessConfig> rules = configMapper.selectList(new LambdaQueryWrapper<WfProcessConfig>()
                 .eq(WfProcessConfig::getBizType, bizType)
@@ -97,8 +99,8 @@ public class WfProcessConfigService {
             throw new BizException(ErrorCode.PARAM_INVALID, "未配置流程规则: " + bizType);
         }
         // 排序：子类型精确命中优先于通配（sub_type 为空的规则默认处理），同级保持 priority 降序
-        List<WfProcessConfig> ordered = new java.util.ArrayList<>(rules);
-        ordered.sort(java.util.Comparator.comparingInt(
+        List<WfProcessConfig> ordered = new ArrayList<>(rules);
+        ordered.sort(Comparator.comparingInt(
                 r -> (subType != null && !subType.isBlank() && subType.equalsIgnoreCase(r.getSubType())) ? 0 : 1));
         for (WfProcessConfig r : ordered) {
             // 子类型不匹配的规则直接排除（规则声明了 sub_type 就必须等于单据子类型；空=通配）

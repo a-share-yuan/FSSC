@@ -3,11 +3,18 @@
 
 package com.fssc.compliance.controller;
 
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.ExpensePolicyStandard;
 import com.fssc.compliance.service.ExpensePolicyStandardService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,39 +58,39 @@ public class ExpensePolicyStandardController {
         if (period == null || period.isBlank()) {
             return Result.success(all);   // 兼容：不传 period = 原行为
         }
-        java.time.LocalDate end = parsePeriodEnd(period);
+        LocalDate end = parsePeriodEnd(period);
         if (end == null) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(ErrorCode.PARAM_INVALID,
                     "period 格式应为 yyyyMM 或 yyyy-MM，收到：" + period);
         }
         // ① 过滤：已生效且未废止
-        java.util.List<ExpensePolicyStandard> alive = new java.util.ArrayList<>();
+        List<ExpensePolicyStandard> alive = new ArrayList<>();
         for (ExpensePolicyStandard s : all) {
             // std_status：1-启用 0-停用（Integer，不是字符串枚举）
             Integer st = s.getStdStatus();
             if (st != null && st == 0) {
                 continue;   // 停用版本不参与当期查询
             }
-            java.time.LocalDate eff = s.getEffectiveDate();
+            LocalDate eff = s.getEffectiveDate();
             if (eff != null && eff.isAfter(end)) {
                 continue;   // 该版本尚未生效
             }
             alive.add(s);
         }
         // ② 同 standard_key 取 effective_date 最大者（缺省视为最早，保证老数据不被顶掉）
-        java.util.Map<String, ExpensePolicyStandard> newest = new java.util.LinkedHashMap<>();
+        Map<String, ExpensePolicyStandard> newest = new LinkedHashMap<>();
         for (ExpensePolicyStandard s : alive) {
             String k = s.getStandardKey();
             ExpensePolicyStandard cur = newest.get(k);
-            java.time.LocalDate d = s.getEffectiveDate();
+            LocalDate d = s.getEffectiveDate();
             if (cur == null || compareEff(d, cur.getEffectiveDate()) > 0) {
                 newest.put(k, s);
             }
         }
-        return Result.success(new java.util.ArrayList<>(newest.values()));
+        return Result.success(new ArrayList<>(newest.values()));
     }
 
-    private static int compareEff(java.time.LocalDate a, java.time.LocalDate b) {
+    private static int compareEff(LocalDate a, LocalDate b) {
         if (a == null && b == null) {
             return 0;
         }
@@ -97,7 +104,7 @@ public class ExpensePolicyStandardController {
     }
 
     /** 解析 yyyyMM / yyyy-MM 为该期间最后一天（通行规则：期间内已生效即适用）。 */
-    private static java.time.LocalDate parsePeriodEnd(String period) {
+    private static LocalDate parsePeriodEnd(String period) {
         String p = period.trim().replace("-", "");
         if (p.length() != 6) {
             return null;
@@ -108,8 +115,8 @@ public class ExpensePolicyStandardController {
             if (m < 1 || m > 12) {
                 return null;
             }
-            return java.time.LocalDate.of(y, m, 1).withDayOfMonth(
-                    java.time.YearMonth.of(y, m).lengthOfMonth());
+            return LocalDate.of(y, m, 1).withDayOfMonth(
+                    YearMonth.of(y, m).lengthOfMonth());
         } catch (RuntimeException ex) {
             return null;
         }

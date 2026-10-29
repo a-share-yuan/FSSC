@@ -18,7 +18,7 @@
       </div>
     </template>
 
-    <!-- R5-D-180：异步动作失败必须在页面上留下可见的错误态，不能只剩一张"看起来正常"的旧列表 -->
+    <!-- 异步动作失败必须在页面上留下可见的错误态，不能只剩一张"看起来正常"的旧列表 -->
     <el-alert v-if="errorText" :title="errorText" type="error" show-icon closable
               class="err-bar" @close="errorText = ''" />
 
@@ -42,7 +42,7 @@
           <el-tag :type="isReconciled(row.reconStatus) ? 'success' : 'info'" size="small">{{ isReconciled(row.reconStatus) ? '已勾对' : '未对账' }}</el-tag>
         </template>
       </el-table-column>
-      <!-- R5-D-179：勾对（recon_status=MATCHED）与认领（bank_reconcile 记录 match_status=CLAIMED 派生的 claimed 补充）是两件事，分列各自呈现 -->
+      <!-- 勾对（recon_status=MATCHED）与认领（bank_reconcile 记录 match_status=CLAIMED 派生的 claimed 补充）是两件事，分列各自呈现 -->
       <el-table-column label="认领状态" width="110" align="center">
         <template #default="{ row }">
           <el-tag :type="row.claimed ? 'success' : 'info'" size="small">{{ row.claimed ? '已认领' : '未认领' }}</el-tag>
@@ -55,12 +55,12 @@
       </el-table-column>
       <el-table-column label="操作" width="170" fixed="right">
         <template #default="{ row }">          <InlineActions :visible="true" @view="viewSlip(row)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
-          <!-- R5-D-181：付款（借方）方向流水不做收款认领 ⇒ 界面不给这个入口（「查看」只出只读详情，认领必须由本按钮进）。
+          <!-- 付款（借方）方向流水不做收款认领 ⇒ 界面不给这个入口（「查看」只出只读详情，认领必须由本按钮进）。
                方向校验在服务端 claimReceipt 独立成立，这里只是不让非法动作变得"可点"。 -->
           <el-button v-if="canClaim(row)" link type="primary" size="small" @click="openClaim(row)">收款认领</el-button>
           <el-button v-else-if="!isReconciled(row.reconStatus)" link type="primary" size="small" :disabled="true"
                      :title="CLAIM_DIR_HINT">收款认领</el-button>
-          <!-- R5-D-179：禁点按钮文案与行事实同源——claimed（认领记录）为真显示「已认领」，否则只说明已勾对 -->
+          <!-- 禁点按钮文案与行事实同源——claimed（认领记录）为真显示「已认领」，否则只说明已勾对 -->
           <el-button v-else link type="success" size="small" :disabled="true">{{ row.claimed ? '已认领' : '已勾对' }}</el-button>
           <el-button link type="warning" size="small" @click="openArchive(row)">回单归档</el-button>
         </template>
@@ -71,14 +71,14 @@
 
     <!-- 收款认领核销弹窗 -->
     <el-dialog v-model="dlgClaim" title="收款认领核销（贷方流水 → 应收单）" width="560px" destroy-on-close>
-      <!-- R5-D-180：清单查询失败 / 认领被拒都要在弹窗内留下可见错误态，弹窗不静默关闭、行状态不动 -->
+      <!-- 清单查询失败 / 认领被拒都要在弹窗内留下可见错误态，弹窗不静默关闭、行状态不动 -->
       <el-alert v-if="claimError" :title="claimError" type="error" show-icon class="err-bar" />
       <el-form ref="claimFormRef" :model="claimModel" :rules="claimRules" label-width="110px">
         <el-form-item label="银行流水">
           <span>{{ cur.bankSerial }} · {{ fmt(cur.amount) }} · {{ transText(cur.transType) }}方</span>
         </el-form-item>
         <el-form-item label="选择应收单" prop="claimReceivableId">
-          <!-- R5-D-181：应收单清单是共享列表（不按流水逐条取），故不在此按方向做客户端过滤——
+          <!-- 应收单清单是共享列表（不按流水逐条取），故不在此按方向做客户端过滤——
                方向与金额的裁定权在服务端 claimReceipt，客户端筛掉的单子只会让人误判规则在哪一层。 -->
           <el-select v-model="claimReceivableId" filterable :loading="receivablesLoading"
                      :placeholder="receivablesLoading ? '应收单清单加载中…' : '按余额搜索应收单'" style="width:100%">
@@ -95,7 +95,7 @@
 
     <!-- 回单归档弹窗 -->
     <el-dialog v-model="dlgSlip" title="回单归档" width="460px" destroy-on-close>
-      <!-- R5-D-180：归档失败同样要有显式落点，不能静默回到"看起来已归档"的行状态 -->
+      <!-- 归档失败同样要有显式落点，不能静默回到"看起来已归档"的行状态 -->
       <el-alert v-if="slipError" :title="slipError" type="error" show-icon class="err-bar" />
       <el-form ref="slipFormRef" :model="slipModel" :rules="slipRules" label-width="110px">
         <el-form-item label="银行流水">
@@ -136,7 +136,7 @@ import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -163,7 +163,7 @@ const cur = ref({})
 const receivables = ref([])
 const claimReceivableId = ref(null)
 const slipFileId = ref('')
-// R5-D-180：异步动作的显式错误态——列表级一个（页顶横幅），认领/归档弹窗内各一个。
+// 异步动作的显式错误态——列表级一个（页顶横幅），认领/归档弹窗内各一个。
 // 规则：请求失败只写这些状态 + 一条可见提示，行状态与列表一律不在失败时改写。
 const errorText = ref('')
 const claimError = ref('')
@@ -191,7 +191,7 @@ const slipText = (s) => ({ NONE: '未生成', DOWNLOADED: '已下载', ARCHIVED:
 const RECON_CODES = ['MATCHED', 'RECON', 'RECONED']
 const isReconciled = (s) => RECON_CODES.includes(String(s || '').trim().toUpperCase())
 
-// R5-D-181：收款（贷方）方向的实测值集——与服务端 BankReconcileService 里的同名值集逐字一致
+// 收款（贷方）方向的实测值集——与服务端 BankReconcileService 里的同名值集逐字一致
 //（trans_type 取 CREDIT／RECEIPT／IN 者为收款，DEBIT 为付款方向，大小写不敏感）。
 const CREDIT_TRANS_TYPES = ['CREDIT', 'RECEIPT', 'IN']
 const isReceiptDir = (t) => !!t && CREDIT_TRANS_TYPES.some(c => c.toLowerCase() === String(t).toLowerCase())
@@ -202,13 +202,13 @@ const isReceiptDir = (t) => !!t && CREDIT_TRANS_TYPES.some(c => c.toLowerCase() 
 const canClaim = (row) => !!row && !isReconciled(row.reconStatus) && isReceiptDir(row.transType)
 const CLAIM_DIR_HINT = '该流水不是收款方向，不可收款认领'
 
-// R5-D-180：错误文案只取后端回传的业务消息本身（拦截器已把权限类消息换成中文规则），
+// 错误文案只取后端回传的业务消息本身（拦截器已把权限类消息换成中文规则），
 // 前端不臆造成因、不写"后端不可达"这类与既有默认规则冲突的话。
 const errText = (e) => (e && (e.message || e.msg)) || '操作未完成'
 
 async function load() {
   loading.value = true
-  // R5-D-180：本函数自身已消化失败（只写 errorText，不再向上抛），调用点无需再包一层，
+  // 本函数自身已消化失败（只写 errorText，不再向上抛），调用点无需再包一层，
   // 也不会把"列表刷新失败"错报成"刚才那笔认领没做成"。
   try {
     const d = await p2Api.bankStatementPage({ pageNum: pageNum.value, pageSize: pageSize.value, reconStatus: reconStatus.value || 'ALL' })
@@ -230,7 +230,7 @@ function requireSel() {
 }
 
 /** 取应收单清单：成功返回 true；失败清空清单并写明错误态后返回 false（不沿用上一条流水带来的旧清单）
- *  D-G5-02：改调银行域专用端点 bankClaimableReceivables。
+ *  改调银行域专用端点 bankClaimableReceivables。
  *  原先借应收域的 receivableApi.page（要求 receivable:list 应收域权限），
  *  纯银企对账岗（只有 bank:reconcile:list）打开认领弹层时清单恒空、认领做不了；
  *  查询权限随域走，改调本域端点（同样由服务端做余额/方向裁定，前端不做业务过滤）。
@@ -271,7 +271,7 @@ function viewSlip(row) {
 }
 
 async function openClaim(row) {
-  // R5-D-181：付款（借方）方向流水不做收款认领 ⇒ 界面不给这个入口；
+  // 付款（借方）方向流水不做收款认领 ⇒ 界面不给这个入口；
   // 弹窗一开就能提交，判据必须在这里再立一道（行内「查看」已改走只读详情 viewSlip）。
   if (!canClaim(row)) {
     ElMessage.warning(CLAIM_DIR_HINT)
@@ -286,7 +286,7 @@ async function openClaim(row) {
 }
 
 async function doClaim() {
-  // R5-D-180：整段动作（校验校验 → 请求 → 成功后的收尾）都在 try 里；
+  // 整段动作（校验校验 → 请求 → 成功后的收尾）都在 try 里；
   // 失败时弹窗保持打开、claimError 显式可见、行状态与列表不改写、不刷新——
   // 只有认领确实成功才关弹窗并刷新列表（避免把未生效的行照成"已认领"）。
   try {
@@ -296,7 +296,7 @@ async function doClaim() {
       try {
         const r = await p2Api.bankClaim(cur.value.id, claimReceivableId.value)
         ElMessage.success(`认领成功：${r.bankSerial} → ${r.receivableNo}，剩余余额 ${fmt(r.receivableBalance)}`)
-        // D-DEC-420 丙：认领照做，同人建单—同人勾对时补一条不阻断的复核提示
+        // 丙：认领照做，同人建单—同人勾对时补一条不阻断的复核提示
         if (r && r.warning) ElMessage({ type: 'warning', message: r.warning, duration: 6000 })
         claimError.value = ''
         dlgClaim.value = false
@@ -327,7 +327,7 @@ function onSlipUploaded(rec) {
 }
 
 async function doArchive() {
-  // R5-D-180：与认领同一规则——失败留显式错误态、不关弹窗、不刷新列表
+  // 与认领同一规则——失败留显式错误态、不关弹窗、不刷新列表
   try {
     await guardArchive(async () => {
       saving.value = true
@@ -352,7 +352,7 @@ async function doArchive() {
 }
 
 onMounted(load)
-// R5-01: InlineActions approve/reject handlers
+// InlineActions approve/reject handlers
 
 // 行内审批统一走共享审批弹窗：单据摘要 + 必填意见（通过预填「同意」可改写、驳回必须写原因），
 // 取代原先的 confirm + 硬编码意见「审批通过」与无校验的驳回 prompt。
@@ -361,6 +361,6 @@ const { approvalRef, handleApprove, handleReject } = useApprovalDialog({ taskIdO
 
 <style scoped>
 .pager { margin-top: 12px; justify-content: flex-end; }
-/* R5-D-180：错误横幅与表格/表单之间留一行间距，保证它在页面上是"看得见的一条"而非贴字 */
+/* 错误横幅与表格/表单之间留一行间距，保证它在页面上是"看得见的一条"而非贴字 */
 .err-bar { margin-bottom: 10px; }
 </style>

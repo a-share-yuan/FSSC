@@ -50,7 +50,7 @@
     </el-card>
 
     <!-- 新建调整单弹窗 -->
-    <!-- D-DEC-375 乙案：Escape 关闭竞态下全屏遮罩层残留拦截整页点击（甲案 destroy-on-close 早已在位仍复现）。
+    <!-- 乙案：Escape 关闭竞态下全屏遮罩层残留拦截整页点击（甲案 destroy-on-close 早已在位仍复现）。
          modal-penetrable＝遮罩 pointer-events:none、由内层弹窗承接点击（本 EP 版本以去模态实现，故无半透明遮罩、点空白不再关窗）。 -->
     <el-dialog v-model="dialog.visible" title="新建预算调整单" width="800px" destroy-on-close modal-penetrable>
       <el-form ref="formRef" :model="dialog.form" :rules="adjustFormRules" label-width="120px" size="default">
@@ -117,7 +117,7 @@
     </el-dialog>
 
     <!-- 调整单详情：草稿可编辑（改类型/方案/原因/明细行），已审批只读——调整单范式 -->
-    <!-- D-DEC-375 乙案：同新建弹窗，遮罩穿透防残留拦截 -->
+    <!-- 乙案：同新建弹窗，遮罩穿透防残留拦截 -->
     <el-dialog v-model="detailDialog.visible" :title="detailDialog.editable ? '调整单编辑（草稿）' : '调整明细'" width="860px" destroy-on-close modal-penetrable>
       <el-descriptions :column="3" border size="small" style="margin-bottom:12px">
         <el-descriptions-item label="单号">{{ detailDialog.row?.adjustNo }}</el-descriptions-item>
@@ -218,7 +218,7 @@
       </template>
     </el-dialog>
 
-    <!-- R4-02 单据全链路联查 -->
+    <!-- 单据全链路联查 -->
     <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
 
     <CoachMark ref="budgetAdjCm" :guide-key="_guideKey" :selector="'.cm-target-dialog'" title="预算调整" text="预算调整页面可对已有预算方案进行追加、削减或转移操作。" />
@@ -242,7 +242,7 @@ import { hasPerm } from '../../utils/perm'
 import { formatDate, formatDateTime } from '@/utils/format'
 const budgetAdjCm = ref(null)
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -272,7 +272,7 @@ const detailDialog = reactive({
 const { autofill, saveFormHistory } = useAutoFill()
 autofill(dialog.form, 'BUDGET_ADJUST')
 
-// R5-13: 快捷键（仅保留本页可用的刷新）
+// 快捷键（仅保留本页可用的刷新）
 useKeyboard({
   'ctrl+r': () => loadList(),
 })
@@ -477,7 +477,7 @@ onMounted(async () => {
   await loadList()
 })
 
-// R4-06: Show guide on first visit
+// Show guide on first visit
 const _guideKey = 'fssc_guide_budgetAdjCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => budgetAdjCm.value?.show(), 800) } } catch {}
 </script>

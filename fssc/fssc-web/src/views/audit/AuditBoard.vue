@@ -107,7 +107,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { auditApi, store } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { formatDateTime, showRowDetail } from '@/utils/format'
-// D-UI-07（2026-10-26）：本页手写名称表只覆盖旧值域，audit_trail 实测还有 RC_RECEIVABLE(444)/ARCHIVE(320)/
+// 本页手写名称表只覆盖旧值域，audit_trail 实测还有 RC_RECEIVABLE(444)/ARCHIVE(320)/
 // SALE_RETURN/PUR_RETURN 等无键值 ⇒ 业务类型列直显英文。保留本地措辞优先，未命中回落全站名称表。
 import { bizTypeLabel, actionLabel } from '@/constants/enums.js'
 
@@ -145,7 +145,7 @@ function billTypeText(v) { return BILL_TYPE_TEXT[v] || bizTypeLabel(v) || v || '
 function actionText(v) { return ACTION_TEXT[v] || actionLabel(v) || v || '-' }
 function objTypeText(v) { return OBJ_TYPE_TEXT[v] || v || '-' }
 
-/* ---- Reconcile ---- */
+/* Reconcile */
 const reconcileLoading = ref(false)
 const running = ref(false)
 const reconcileList = ref([])
@@ -242,7 +242,7 @@ function handleView(row) {
   })
 }
 
-/* ---- Trail ---- */
+/* Trail */
 const trailLoading = ref(false)
 const exporting = ref(false)
 const trailList = ref([])

@@ -9,6 +9,7 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.treasury.entity.TrCreditBill;
 import com.fssc.treasury.service.TrCreditBillService;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,7 +42,7 @@ public class TrCreditBillController {
     }
 
     /**
-     * D-DEC-418 丙档：本笔到账与收款核销的勾稽体检（只读，不改账、不改状态、不出证、不起流）。
+     * 丙档：本笔到账与收款核销的勾稽体检（只读，不改账、不改状态、不出证、不起流）。
      *
      * <p>背景：到账环节（tr_credit_bill，TR_RECEIPT 审批收尾出「借 1002／贷 1122」凭证）与
      * 核销环节（rc_receipt，冲减 rc_receivable 余额）是同一笔钱的两半，但<b>两环节之间没有任何共同外键</b>，
@@ -56,13 +57,13 @@ public class TrCreditBillController {
      */
     @RequiresPerm("treasury:creditbill:list")
     @GetMapping("/{id}/recon-trace")
-    public Result<java.util.Map<String, Object>> reconTrace(@PathVariable Long id) {
+    public Result<Map<String, Object>> reconTrace(@PathVariable Long id) {
         return Result.success(service.reconTrace(id));
     }
 
     /**
      * 渠道流水认领，生成应收收款。
-     * <p>D-DEC-422：本类原为资金域唯一"零 {@code @OperLog}"的写控制器——实测 tr_credit_bill
+     * <p>本类原为资金域唯一"零 {@code @OperLog}"的写控制器——实测 tr_credit_bill
      * 已建行、wf_instance 已起流，而 sys_oper_log 在该时间窗零行（对照同包
      * {@code TreasuryPositionController:54} 与应收域 {@code RcReceivableController:37}），
      * "库有痕、日志无行"＝到账这类最易被伪造的单据反而无法按操作日志回溯建单人/金额/时间。
@@ -77,9 +78,9 @@ public class TrCreditBillController {
         return Result.success(service.receiveRecord(bill));
     }
 
-    /** 资金收款核销：对全部待核销收款单按同金额未对账银行流水自动勾对（D-DEC-436：原注释与界面同名
+    /** 资金收款核销：对全部待核销收款单按同金额未对账银行流水自动勾对（原注释与界面同名
      *  「自动对账」，与本域的「银行流水勾对」混称，现按真实对象改名）
-     *  <p>D-DEC-420：本端点返回命中条数（前端按数字查询，契约不可加字段），"本人建单—本人核销"的
+     *  <p>本端点返回命中条数（前端按数字查询，契约不可加字段），"本人建单—本人核销"的
      *  复核提示在服务端按单据记录记入日志，界面提示走单条确认核销端点的 data 提示位。 */
     @RequiresPerm("treasury:creditbill:recon")
     @OperLog(module = "TREASURY", operType = "UPDATE", desc = "资金收款-按同金额银行流水自动核销")
@@ -90,13 +91,13 @@ public class TrCreditBillController {
 
     /**
      * 人工核销（确认对账）。
-     * <p>D-DEC-420 丙档：本端点不经审批环节，同持建单权＋核销权的人可"本人建单—本人确认核销"。
+     * <p>丙档：本端点不经审批环节，同持建单权＋核销权的人可"本人建单—本人确认核销"。
      * 不拆权、不拦操作，只在 data 里回非阻断复核提示位（{@code selfRecon}／{@code warning}）供界面显示。
      */
     @RequiresPerm("treasury:creditbill:recon")
     @OperLog(module = "TREASURY", operType = "UPDATE", desc = "资金收款-人工确认核销")
     @PostMapping("/{id}/confirm-recon")
-    public Result<java.util.Map<String, Object>> confirmRecon(@PathVariable Long id) {
+    public Result<Map<String, Object>> confirmRecon(@PathVariable Long id) {
         return Result.success(service.confirmRecon(id));
     }
 }

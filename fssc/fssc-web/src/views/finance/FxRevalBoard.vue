@@ -4,7 +4,7 @@
 <template>
   <div class="fx-reval-board">
     <el-card>
-      <!-- 步骤条（P1-7 四步化：试算预览 → 确认执行 → 生成凭证 → 反冲） -->
+      <!-- 步骤条（四步化：试算预览 → 确认执行 → 生成凭证 → 反冲） -->
       <el-steps :active="stepActive" align-center finish-status="success" style="margin-bottom: 16px">
         <el-step title="① 试算预览" description="仅试算不保存，核对外币敞口与预计损益" />
         <el-step title="② 确认执行" description="按试算结果正式重估" />
@@ -187,7 +187,7 @@ function onPeriodChange() {
   loadList()
 }
 
-// ---- ① 试算预览：只算不写入数据库 ----
+// ① 试算预览：只算不写入数据库
 async function onTrial() {
   if (!period.value) return ElMessage.warning('请选择重估期间')
   try {
@@ -200,7 +200,7 @@ async function onTrial() {
 }
 
 async function confirmFromTrial() {
-  // R5-D-152：试算预览页脚的写入口与工具栏 onRun 一样两步确认（此前一键直发 POST /fx-reval/run，
+  // 试算预览页脚的写入口与工具栏 onRun 一样两步确认（此前一键直发 POST /fx-reval/run，
   // 同一写动作两条入口确认步数不一致）；取消时保留试算弹窗供继续预览。
   try {
     await ElMessageBox.confirm(`确认对期间 [${period.value}] 正式执行外币汇兑重估？将按月末汇率生成 草稿转账凭证（不自动记账）。`, '执行重估', { type: 'warning' })
@@ -209,7 +209,7 @@ async function confirmFromTrial() {
   doRun()
 }
 
-// ---- ② 确认执行：正式重估并生成凭证 ----
+// ② 确认执行：正式重估并生成凭证
 async function onRun() {
   if (!period.value) return ElMessage.warning('请选择重估期间')
   await ElMessageBox.confirm(`确认对期间 [${period.value}] 正式执行外币汇兑重估？将按月末汇率生成 草稿转账凭证（不自动记账）。`, '执行重估', { type: 'warning' })
@@ -230,7 +230,7 @@ async function doRun() {
   }
 }
 
-// ---- ④ 反冲：对已生成凭证反向冲销 ----
+// ④ 反冲：对已生成凭证反向冲销
 async function onReverse(row) {
   await ElMessageBox.confirm(
     `确认反冲该重估记录（${row.currencyCode || row.fromCurrency} 差异 ${formatMoney(row.revalAmount || row.diff)}）？将生成借贷对调的反向 DRAFT 凭证。`,

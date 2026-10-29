@@ -6,20 +6,44 @@ package com.fssc.purchase.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.asset.entity.MdAsset;
+import com.fssc.asset.entity.StockMove;
+import com.fssc.asset.mapper.StockMoveMapper;
+import com.fssc.asset.service.MdAssetService;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.framework.org.OrgGuard;
+import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.masterdata.entity.MdCip;
+import com.fssc.masterdata.mapper.MdCipMapper;
+import com.fssc.masterdata.service.MdCipService;
 import com.fssc.purchase.entity.PoOrder;
 import com.fssc.purchase.entity.PoOrderLine;
 import com.fssc.purchase.entity.PoReceipt;
 import com.fssc.purchase.mapper.PoOrderLineMapper;
 import com.fssc.purchase.mapper.PoOrderMapper;
 import com.fssc.purchase.mapper.PoReceiptMapper;
+import com.fssc.sharing.service.ThreeWayMatchService;
+import com.fssc.sharing.service.VoucherService;
+import com.fssc.system.service.NumberRuleService;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.math.RoundingMode;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,35 +68,35 @@ public class PurchaseService {
     private final PoOrderLineMapper orderLineMapper;
     private final PoReceiptMapper receiptMapper;
     /**  作废校验：下游报销/付款单挂 PO（exp_bill.po_id）引用检查 */
-    private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
+    private final ExpBillMapper expBillMapper;
     private final WfEngineFacade wfEngineFacade;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P1-1: @Lazy 避免与资产域循环依赖（AssetDeprBatchService 间接依赖 PurchaseService 的情况） */
-    @org.springframework.context.annotation.Lazy
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.fssc.asset.service.MdAssetService assetService;
+    private final OrgGuard orgGuard;
+    private final NumberRuleService numberRuleService;
+    /** @Lazy 避免与资产域循环依赖（AssetDeprBatchService 间接依赖 PurchaseService 的情况） */
+    @Lazy
+    @Autowired
+    private MdAssetService assetService;
     /** 收货成功自动生成暂估凭证（VoucherService 内部 REQUIRES_NEW + 全量默认处理，不阻断收货主流程） */
-    @org.springframework.context.annotation.Lazy
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.fssc.sharing.service.VoucherService voucherService;
+    @Lazy
+    @Autowired
+    private VoucherService voucherService;
     /** 收货挂 CIP 时自动归集在建工程成本（@Lazy 避免经 MdAssetService 与资产域循环依赖） */
-    @org.springframework.context.annotation.Lazy
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.fssc.masterdata.service.MdCipService mdCipService;
+    @Lazy
+    @Autowired
+    private MdCipService mdCipService;
     /** 采购订单挂 CIP 的存在性校验（md_cip 主数据） */
-    private final com.fssc.masterdata.mapper.MdCipMapper cipMapper;
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    private final MdCipMapper cipMapper;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
     /** 收货→存货移动台账（stock_move）写入位置 */
-    private final com.fssc.asset.mapper.StockMoveMapper stockMoveMapper;
-    /** R5-D-070：开票回写超收货额时派 INVOICE_MATCH 异常单（ThreeWayMatchService 侧复用 #17 派单链）。
+    private final StockMoveMapper stockMoveMapper;
+    /** 开票回写超收货额时派 INVOICE_MATCH 异常单（ThreeWayMatchService 侧复用 #17 派单链）。
      *  @Lazy 打断 purchase ↔ sharing 潜在循环依赖（sharing 侧亦装配本域 Mapper 与 WfEngineFacade）。 */
-    @org.springframework.context.annotation.Lazy
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.fssc.sharing.service.ThreeWayMatchService threeWayMatchService;
+    @Lazy
+    @Autowired
+    private ThreeWayMatchService threeWayMatchService;
 
-    // ---------------- 采购订单 ----------------
+    // 采购订单
 
     @Transactional(rollbackFor = Exception.class)
     public Long createOrder(PoOrder o) {
@@ -90,9 +114,9 @@ public class PurchaseService {
         o.setCreateTime(LocalDateTime.now());
         o.setUpdateTime(LocalDateTime.now());
         o.setDelFlag(0);
-        // 多分子公司审批路由 V1.3.17：前端已传不覆盖，否则取当前登录用户所属公司
+        // 多分子公司审批路由：前端已传不覆盖，否则取当前登录用户所属公司
         if (o.getCompanyId() == null) {
-            com.fssc.framework.security.LoginUser lu = UserContext.get();
+            LoginUser lu = UserContext.get();
             if (lu != null) o.setCompanyId(lu.getCompanyId());
         }
         // 公司维度必填（放在登录人默认处理之后）：采购入库/三单匹配/付款都要认账簿，
@@ -146,7 +170,7 @@ public class PurchaseService {
         PoOrder upd = new PoOrder();
         upd.setId(id);
         upd.setDelFlag(1);
-        // D-DEC-051：删除也是状态写点，操作人必须写入数据库（草稿删除只可能来自登录用户，取不到即上下文异常）
+        // 删除也是状态写点，操作人必须写入数据库（草稿删除只可能来自登录用户，取不到即上下文异常）
         upd.setUpdateBy(userId());
         upd.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(upd);
@@ -188,8 +212,8 @@ public class PurchaseService {
                     "订单已进入开票/三单匹配（当前状态: INVOICED），不可作废");
         }
         // 下游报销/付款单挂此 PO（付款关联）：存在即拒绝
-        Long downBills = expBillMapper.selectCount(new LambdaQueryWrapper<com.fssc.expense.entity.ExpBill>()
-                .eq(com.fssc.expense.entity.ExpBill::getPoId, orderId));
+        Long downBills = expBillMapper.selectCount(new LambdaQueryWrapper<ExpBill>()
+                .eq(ExpBill::getPoId, orderId));
         if (downBills != null && downBills > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "订单已被 " + downBills + " 张下游报销/付款单引用，不可作废");
@@ -200,14 +224,14 @@ public class PurchaseService {
         // remark 追加：作废原因 + 时间 + 操作人（remark 上限 500，超长截断保护）
         String operator = "unknown";
         try {
-            com.fssc.framework.security.LoginUser lu = UserContext.get();
+            LoginUser lu = UserContext.get();
             if (lu != null) {
                 operator = lu.getRealName() == null || lu.getRealName().isBlank()
                         ? lu.getUsername() : lu.getRealName();
             }
         } catch (Exception ignored) { /* 无用户上下文（系统操作） */ }
         String suffix = "；【作废】原因：" + reason.trim() + "；操作人：" + operator
-                + "；时间：" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                + "；时间：" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         String baseRemark = o.getRemark() == null ? "" : o.getRemark();
         String newRemark = baseRemark + suffix;
         if (newRemark.length() > 500) {
@@ -220,15 +244,15 @@ public class PurchaseService {
         upd.setUpdateBy(userId());
         upd.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(upd);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", o.getStatus());
         auditBefore.put("remark", o.getRemark());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "VOID");
         auditAfter.put("remark", newRemark);
         auditTrailService.recordUpdate("PURCHASE", orderId, o.getPoNo(), "po_order",
                 String.valueOf(orderId), auditBefore, auditAfter, "作废采购订单：" + reason.trim());
-        // R5-D-068 最终状态收尾（D-DEC-334 规则「直改状态型单据收尾须终止流程」）：作废只改单据态不终止流程，
+        // 最终状态收尾（规则「直改状态型单据收尾须终止流程」）：作废只改单据态不终止流程，
         // 会让 wf_instance 滞留 RUNNING、wf_task 滞留 PENDING，催办扫描持续打扰（实测 po_order 14/15 作废后
         // 实例 130/131 仍 RUNNING）。此处同批终止该 biz_type+biz_id 的 RUNNING 实例并把 PENDING 待办置
         // CANCELLED；与发起审批同一规则：流程收尾失败必须冒泡（ROOT-2），事务整体回滚。
@@ -293,9 +317,9 @@ public class PurchaseService {
         upd.setUpdateBy(userId());
         upd.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(upd);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", o.getStatus());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "OPEN");
         auditTrailService.recordUpdate("PURCHASE", orderId, o.getPoNo(), "po_order",
                 String.valueOf(orderId), auditBefore, auditAfter, "提交审批");
@@ -324,16 +348,16 @@ public class PurchaseService {
         upd.setUpdateBy(userId());
         upd.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(upd);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", o.getStatus());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "DRAFT");
         auditTrailService.recordUpdate("PURCHASE", orderId, o.getPoNo(), "po_order",
                 String.valueOf(orderId), auditBefore, auditAfter, "驳回后编辑重提");
     }
 
     /** 收货环节唯一可挂的订单状态：审批通过(APPROVED)与已开票(INVOICED，允许分批续收) */
-    private static final java.util.Set<String> RECEIVABLE_PO_STATUS = java.util.Set.of("APPROVED", "INVOICED");
+    private static final Set<String> RECEIVABLE_PO_STATUS = Set.of("APPROVED", "INVOICED");
 
     public PageResult<PoOrder> orderPage(long pageNum, long pageSize, String keyword, String status) {
         return orderPage(pageNum, pageSize, keyword, status, false);
@@ -385,7 +409,7 @@ public class PurchaseService {
                 continue;
             }
             lineNo++;
-            // D-V4R-91：逐行硬校验。原先本方法只跳过"全空行"，对半填的行照单全收——
+            // 逐行硬校验。原先本方法只跳过"全空行"，对半填的行照单全收——
             // 自动化脚本把 60000 填进「物料名称」、数量/单价留默认值(1/0) 时，
             // materialName 非空即判为有效行，写入数据库出 amount=0 的垃圾数据，
             // 且表头 60000 与行合计 0 的勾稽断裂一路放过，直到三单匹配才暴露。
@@ -406,7 +430,7 @@ public class PurchaseService {
     }
 
     /**
-     * D-V4R-91：行项目逐行校验（与前端 PoOrder.vue 的行内红星同一规则，后端为最终校验）。
+     * 行项目逐行校验（与前端 PoOrder.vue 的行内红星同一规则，后端为最终校验）。
      * 四道断言：
      * ① 物料名称必填 —— 只填了物料编码也算缺（名称是打印/对账/匹配的规则来源）
      * ② 物料名称不得为纯数字 —— 防"金额误填进名称字段"这类字段串位
@@ -451,7 +475,7 @@ public class PurchaseService {
         if (orders == null || orders.isEmpty()) {
             return;
         }
-        List<Long> ids = orders.stream().map(PoOrder::getId).filter(java.util.Objects::nonNull).toList();
+        List<Long> ids = orders.stream().map(PoOrder::getId).filter(Objects::nonNull).toList();
         if (ids.isEmpty()) {
             return;
         }
@@ -493,7 +517,7 @@ public class PurchaseService {
         }
     }
 
-    // ---------------- 收货单 ----------------
+    // 收货单
 
     @Transactional(rollbackFor = Exception.class)
     public Long createReceipt(PoReceipt r) {
@@ -539,13 +563,13 @@ public class PurchaseService {
         r.setUpdateTime(LocalDateTime.now());
         r.setDelFlag(0);
         // 插入级撞号默认处理——DuplicateKey 时按编号规则重新取号重试（最多 3 次）。
-        // R5-D-069：原实现在此处拼「原号+System.currentTimeMillis()」（GRN2470671790959329398、RCP1790877084488
+        // 原实现在此处拼「原号+System.currentTimeMillis()」（GRN2470671790959329398、RCP1790877084488
         // 即由此产生）——单号形态不可预期、无法按前缀对账；改为重走 nextReceiptNoUnique()（rule 取号+重试）。
         for (int insertAttempt = 0; ; insertAttempt++) {
             try {
                 receiptMapper.insert(r);
                 break;
-            } catch (org.springframework.dao.DuplicateKeyException e) {
+            } catch (DuplicateKeyException e) {
                 if (insertAttempt >= 2) throw e;
                 r.setReceiptNo(nextReceiptNoUnique());
                 log.warn("收货单号撞唯一键，按编号规则 PURCHASE_RECEIPT 重取为 {}", r.getReceiptNo());
@@ -555,12 +579,12 @@ public class PurchaseService {
             PoOrder upd = new PoOrder();
             upd.setId(o.getId());
             upd.setReceivedAmount(nz(o.getReceivedAmount()).add(r.getAmount()));
-            // D-DEC-051：金额回写必须盖操作人。收货由登录人发起，此处的 update_by 就是收货经办人；
+            // 金额回写必须盖操作人。收货由登录人发起，此处的 update_by 就是收货经办人；
             // 原实现只写金额不写人，po_order.update_by 恒 NULL，追溯面无法回答"这笔累计收货是谁做的"。
             upd.setUpdateBy(userId());
             upd.setUpdateTime(LocalDateTime.now());
             orderMapper.updateById(upd);
-            // P1-1: 投资到资产循环——资本化采购收货即自动建资产卡片(INIT/CIP)
+            // 投资到资产循环——资本化采购收货即自动建资产卡片(INIT/CIP)
             if (o.getCapitalFlag() != null && o.getCapitalFlag() == 1) {
                 try {
                     createAssetFromReceipt(r, o);
@@ -586,11 +610,11 @@ public class PurchaseService {
     }
 
     /**
-     * P1-1: 采购收货转固建卡——资本化采购订单收货后自动创建资产卡片。
+     * 采购收货转固建卡——资本化采购订单收货后自动创建资产卡片。
      * 资产初始状态为 CIP(在建工程)，需人工确认转固(FA_CIP_TO_ASSET)后开始折旧。
      */
     private void createAssetFromReceipt(PoReceipt r, PoOrder o) {
-        com.fssc.asset.entity.MdAsset asset = new com.fssc.asset.entity.MdAsset();
+        MdAsset asset = new MdAsset();
         asset.setAssetName("采购资产-" + o.getPoNo());
         asset.setSupplierId(o.getSupplierId());
         asset.setCompanyId(o.getCompanyId());
@@ -615,9 +639,9 @@ public class PurchaseService {
      */
     private void recordReceiptStockMoves(PoReceipt r, PoOrder o) {
         try {
-            long existed = stockMoveMapper.selectCount(new LambdaQueryWrapper<com.fssc.asset.entity.StockMove>()
-                    .eq(com.fssc.asset.entity.StockMove::getSourceDocType, "PO_RECEIPT")
-                    .eq(com.fssc.asset.entity.StockMove::getSourceDocId, r.getId()));
+            long existed = stockMoveMapper.selectCount(new LambdaQueryWrapper<StockMove>()
+                    .eq(StockMove::getSourceDocType, "PO_RECEIPT")
+                    .eq(StockMove::getSourceDocId, r.getId()));
             if (existed > 0) {
                 return;
             }
@@ -638,9 +662,9 @@ public class PurchaseService {
                 }
                 BigDecimal taken = lineAmount.compareTo(remaining) <= 0 ? lineAmount : remaining;
                 BigDecimal qty = nz(line.getQuantity()).multiply(taken)
-                        .divide(lineAmount, 4, java.math.RoundingMode.HALF_UP);
+                        .divide(lineAmount, 4, RoundingMode.HALF_UP);
                 BigDecimal unitCost = qty.signum() > 0
-                        ? taken.divide(qty, 6, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
+                        ? taken.divide(qty, 6, RoundingMode.HALF_UP) : BigDecimal.ZERO;
                 insertStockMove(r, companyId, ++seq, line.getMaterialCode(), line.getMaterialName(),
                         qty, unitCost, taken, null);
                 remaining = remaining.subtract(taken);
@@ -658,12 +682,12 @@ public class PurchaseService {
 
     private void insertStockMove(PoReceipt r, Long companyId, int seq, String itemCode, String itemName,
                                  BigDecimal qty, BigDecimal unitCost, BigDecimal amount, String extraRemark) {
-        com.fssc.asset.entity.StockMove m = new com.fssc.asset.entity.StockMove();
+        StockMove m = new StockMove();
         m.setMoveNo("SMR" + r.getId() + "-" + seq);
         m.setMoveType("RECEIVE");
         // stock_move.item_code 是 NOT NULL 列（现库 SHOW COLUMNS 实测），而 po_order_line.material_code 可空、
         // 且现存行绝大多数录的是<b>空串</b>而非编码——直接传 null 会让整条 insert 报
-        // "Column 'item_code' cannot be null"，被外层 catch 吞掉 ⇒ 台账继续 0 行（D-DEC-057 的真实卡点）。
+        // "Column 'item_code' cannot be null"，被外层 catch 吞掉 ⇒ 台账继续 0 行（的真实卡点）。
         // 规则：缺编码就落空串（与 po_order_line 现存数据同形态），并在 remark 如实写明"物料编码未登记"，
         // 不拿物料名称充当编码，也不臆造一个 md_item 里不存在的编码。
         m.setItemCode(itemCode == null ? "" : itemCode);
@@ -675,7 +699,7 @@ public class PurchaseService {
         m.setSourceDocType("PO_RECEIPT");
         m.setSourceDocId(r.getId());
         m.setStatus("APPROVED");
-        // D-DEC-057 库位规则：warehouse_id 需要 md_warehouse 主数据，而本库<b>查无仓库主数据表</b>
+        // 库位规则：warehouse_id 需要 md_warehouse 主数据，而本库<b>查无仓库主数据表</b>
         // （SHOW TABLES LIKE '%warehouse%' 0 行），收货单上的 warehouse 只是自由文本。
         // 按 P2-B 现有规则＝留空 + 文本进 remark，不臆造仓库 id、不建默认仓库。
         m.setWarehouseId(null);
@@ -737,11 +761,11 @@ public class PurchaseService {
         BigDecimal linked = threeWayMatchService.sumLinkedInvoiceNetAmount(receiptId);
         BigDecimal newInvoiceAmount = linked.signum() > 0 || nz(invoiceAmount).signum() == 0
                 ? linked : nz(r.getInvoiceAmount()).add(invoiceAmount);
-        // R5-D-070 强制校验：累计开票超出「收货额 + 容差」→ 拒绝回写（库内值保持原样）+ 审计记录 + 派 INVOICE_MATCH 异常单。
+        // 强制校验：累计开票超出「收货额 + 容差」→ 拒绝回写（库内值保持原样）+ 审计记录 + 派 INVOICE_MATCH 异常单。
         // 为何"拒写"而不抛异常：本方法 @Transactional 且参与调用方（InvoiceService.bind/unbind 等）事务，
         // 抛出会让共享事务被标记 rollback-only，调用方 try/catch 也救不回，绑定/反核销整链回滚；
         // 而反核销恰是已超开票收货单的唯一纠偏入口，堵死它便再无收敛路径——故只拒绝本次写、不抛出。
-        if (com.fssc.sharing.service.ThreeWayMatchService.invoiceExceedsReceiptCap(newInvoiceAmount, r.getAmount())) {
+        if (ThreeWayMatchService.invoiceExceedsReceiptCap(newInvoiceAmount, r.getAmount())) {
             boolean dispatched = false;
             try {
                 dispatched = threeWayMatchService.dispatchInvoiceOverReceipt(
@@ -750,11 +774,11 @@ public class PurchaseService {
                 // 派单失败不得反噬"拒绝回写"本身（拒绝是主诉求，派单是默认处理）
                 log.error("[R5-D-070] 收货单 {} 超限派单失败（拒绝回写不受影响）: {}", r.getReceiptNo(), ex.getMessage());
             }
-            java.util.Map<String, Object> refuseBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> refuseBefore = new LinkedHashMap<>();
             refuseBefore.put("status", r.getStatus());
             refuseBefore.put("invoiceAmount", r.getInvoiceAmount());
             auditTrailService.recordUpdate("PURCHASE", receiptId, r.getReceiptNo(), "po_receipt",
-                    String.valueOf(receiptId), refuseBefore, new java.util.LinkedHashMap<>(refuseBefore),
+                    String.valueOf(receiptId), refuseBefore, new LinkedHashMap<>(refuseBefore),
                     "开票回写被拒（R5-D-070 强制校验）：本次应回写 " + newInvoiceAmount + " 超收货额 " + r.getAmount()
                             + " 加容差上限，未改动库内值"
                             + (dispatched ? "，已派 INVOICE_MATCH 异常单" : "（派单未发起/去重，详见日志）"));
@@ -772,19 +796,19 @@ public class PurchaseService {
         upd.setId(receiptId);
         upd.setInvoiceAmount(newInvoiceAmount);
         upd.setStatus(newStatus);
-        // D-DEC-051：勾稽额与状态跃迁都是回写，必须带操作人。
+        // 勾稽额与状态跃迁都是回写，必须带操作人。
         // 规则：调用方是「发票绑定/反核销/手工关联」三条人工路径（InvoiceService.bind/rebind、
         // ThreeWayMatchService.link），均有登录上下文，取 userId()；
         // 若被引擎线程调用（无 UserContext）则不伪造工号——但写入数据库值不是 NULL：PoReceipt.updateBy
         // 带 @TableField(fill = FieldFill.INSERT_UPDATE)，MP 自动填充会把 null 补成哨兵值 0，
-        // 与本文件 P0-5 段注释同一规则（详见该段）。
+        // 与本文件 段注释同一规则（详见该段）。
         upd.setUpdateBy(userId());
         upd.setUpdateTime(LocalDateTime.now());
         receiptMapper.updateById(upd);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("invoiceAmount", r.getInvoiceAmount());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", newStatus);
         auditAfter.put("invoiceAmount", newInvoiceAmount);
         auditTrailService.recordUpdate("PURCHASE", receiptId, r.getReceiptNo(), "po_receipt",
@@ -803,14 +827,14 @@ public class PurchaseService {
     }
 
     /**
-     * D-V4R-91：金额勾稽尾差容差（元）。行金额与表头金额均为两位小数，
+     * 金额勾稽尾差容差（元）。行金额与表头金额均为两位小数，
      * 逐行累加的浮点误差上界远小于 0.01，故 0.01 即为最紧且不会误伤的规则
      * （与 PurReturnService.validateLineSum / ExpenseBillService.validateAmountReconcile 同值）。
      */
     private static final BigDecimal LINE_AMT_TOLERANCE = new BigDecimal("0.01");
 
     /**
-     * D-V4R-91：表头金额与行项目合计的一致性校验。
+     * 表头金额与行项目合计的一致性校验。
      * 判据：只要提交了行项目，就必须与表头订单金额对得上（容差 0.01）。
      * 无行项目时不校验 —— 采购订单允许只录表头金额（历史规则，行项目为选填）。
      *
@@ -853,7 +877,7 @@ public class PurchaseService {
         if (cipId == null) {
             return;
         }
-        com.fssc.masterdata.entity.MdCip cip = cipMapper.selectById(cipId);
+        MdCip cip = cipMapper.selectById(cipId);
         if (cip == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "关联的在建工程不存在: " + cipId);
         }
@@ -871,7 +895,7 @@ public class PurchaseService {
 
     /**
      * 收货单号：一律走编号规则 PURCHASE_RECEIPT（GRN 前缀＋期间＋定长序号）。
-     * R5-D-069：原「规则缺失降级 RCP+时间戳」默认处理已删除——降级号形态不可预期、无法对账；
+     * 原「规则缺失降级 RCP+时间戳」默认处理已删除——降级号形态不可预期、无法对账；
      * 规则缺失应显式报错去修规则，而不是静默拼时间戳（判据：收货单号形态只有 rule 一种）。
      */
     private String nextReceiptNo() {
@@ -897,7 +921,7 @@ public class PurchaseService {
             }
             log.warn("收货单号 {} 与存量记录冲突（含逻辑删除行），递增重试 {}/5", candidate, i + 1);
         }
-        // R5-D-069：原「默认处理第二级＝规则号+随机 4 位尾号 50 次」已删除——尾号拼接同样产生不可预期单号；
+        // 原「默认处理第二级＝规则号+随机 4 位尾号 50 次」已删除——尾号拼接同样产生不可预期单号；
         // 连续冲突说明编号规则序号与历史脱节，显式报错交人工修规则（不再静默造号）
         throw new BizException(ErrorCode.PARAM_INVALID,
                 "收货单自动取号失败：连续取号均与已有单号冲突，请检查编号规则 PURCHASE_RECEIPT 的当前序号");
@@ -916,14 +940,14 @@ public class PurchaseService {
         return v == null ? BigDecimal.ZERO : v;
     }
 
-    // ---------------- P0-5 状态机：APPROVED/INVOICED→PAID→CLOSED→ARCHIVED ----------------
-    // P0-5 最终状态机分治（X-20 裁定甲＋乙）：本族跃迁按性质分两路，不再一律等人工按钮。
+    // 状态机：APPROVED/INVOICED→PAID→CLOSED→ARCHIVED
+    // 最终状态机分治（X-20 裁定甲＋乙）：本族跃迁按性质分两路，不再一律等人工按钮。
     //   甲＝累计量达标（PAID/CLOSED）由 {@link #autoAdvanceFinalStates()} 批处理推进，不给人工入口；
     //   乙＝人工决策（终止/归档）留显式服务方法＋端点 {@link #terminateOrder}/{@link #archiveOrder}，
     //        鉴权走写专码 po:order:update（写读分面治理，不复用 po:order:list）。
     //   ARCHIVED 归档域（document/**）只写 op_archive/archive_status，不写 po_order.status，
     //   故 po_order 侧的 ARCHIVED 跃迁由本类 {@link #archiveOrder}＋人工归档端点办结（X-20）。
-    // D-DEC-051 操作人规则（本族状态写点统一）：update_by 取 userId()＝当前登录人。
+    // 操作人规则（本族状态写点统一）：update_by 取 userId()＝当前登录人。
     // 批处理线程无 UserContext、这里 userId() 也如实返回 null，但 PoOrder.updateBy 带
     // @TableField(fill = FieldFill.INSERT_UPDATE)，FsscMetaObjectHandler.updateFill→fillAudit
     // 见值为 null 会补一个 <b>0L</b>——所以库里落的是 update_by=0，<b>不是 NULL</b>。
@@ -931,14 +955,14 @@ public class PurchaseService {
     // 结论：0 是「无登录上下文」的全局哨兵值，人工路径写真实 userId，两者可区分；
     // 追溯面按 0 判"系统/引擎所为"即可；仍不用 create_by 或随便一个工号冒充操作人。
 
-    /** P0-5：采购订单 APPROVED/INVOICED→PAID（累计付款达标） */
+    /** 采购订单 APPROVED/INVOICED→PAID（累计付款达标） */
     @Transactional(rollbackFor = Exception.class)
     public void markPaid(Long orderId) {
         PoOrder order = orderMapper.selectById(orderId);
         if (order == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "采购订单不存在: " + orderId);
         }
-        // P0-5 最终状态机分治（X-20 裁定甲＋乙）：前置态补 INVOICED——三单匹配收尾把订单写成 INVOICED
+        // 最终状态机分治（X-20 裁定甲＋乙）：前置态补 INVOICED——三单匹配收尾把订单写成 INVOICED
         // （InvoiceMatchBizAction:85），原判据只认 APPROVED ⇒ PAID 永远进不去，最终状态机空转。
         String from = order.getStatus();
         if (!"APPROVED".equals(from) && !"INVOICED".equals(from)) {
@@ -953,12 +977,12 @@ public class PurchaseService {
         orderMapper.updateById(update);
         auditTrailService.recordUpdate("PURCHASE", orderId, order.getPoNo(), "po_order",
                 String.valueOf(orderId),
-                java.util.Collections.singletonMap("status", order.getStatus()),
-                java.util.Collections.singletonMap("status", "PAID"), "标记已付款");
+                Collections.singletonMap("status", order.getStatus()),
+                Collections.singletonMap("status", "PAID"), "标记已付款");
         log.info("采购订单 {} 状态 {}→PAID", order.getPoNo(), from);
     }
 
-    /** P0-5：采购订单 PAID→CLOSED（关账） */
+    /** 采购订单 PAID→CLOSED（关账） */
     @Transactional(rollbackFor = Exception.class)
     public void closeOrder(Long orderId) {
         PoOrder order = orderMapper.selectById(orderId);
@@ -977,14 +1001,14 @@ public class PurchaseService {
         orderMapper.updateById(update);
         auditTrailService.recordUpdate("PURCHASE", orderId, order.getPoNo(), "po_order",
                 String.valueOf(orderId),
-                java.util.Collections.singletonMap("status", order.getStatus()),
-                java.util.Collections.singletonMap("status", "CLOSED"), "关账");
+                Collections.singletonMap("status", order.getStatus()),
+                Collections.singletonMap("status", "CLOSED"), "关账");
         log.info("采购订单 {} 状态 PAID→CLOSED", order.getPoNo());
     }
 
     /**
-     * P0-5：采购订单 CLOSED→ARCHIVED（归档，最终状态）。
-     * P0-5 最终状态机分治·乙（X-20 裁定）：归档无累计量判据、属人工结案决定，入口为
+     * 采购订单 CLOSED→ARCHIVED（归档，最终状态）。
+     * 最终状态机分治·乙（X-20 裁定）：归档无累计量判据、属人工结案决定，入口为
      * {@code POST /api/tenant/purchase/order/{id}/archive}（写专码 po:order:update）。
      * 已归档/已终止单不可再归档（状态前置即守卫）。
      */
@@ -1006,13 +1030,13 @@ public class PurchaseService {
         orderMapper.updateById(update);
         auditTrailService.recordUpdate("PURCHASE", orderId, order.getPoNo(), "po_order",
                 String.valueOf(orderId),
-                java.util.Collections.singletonMap("status", order.getStatus()),
-                java.util.Collections.singletonMap("status", "ARCHIVED"), "归档");
+                Collections.singletonMap("status", order.getStatus()),
+                Collections.singletonMap("status", "ARCHIVED"), "归档");
         log.info("采购订单 {} 状态 CLOSED→ARCHIVED", order.getPoNo());
     }
 
     /**
-     * P0-5 最终状态机分治·甲（X-20 裁定）：累计量达标型最终状态由批处理推进，不给人工按钮。
+     * 最终状态机分治·甲（X-20 裁定）：累计量达标型最终状态由批处理推进，不给人工按钮。
      * <ul>
      *  <li>APPROVED/INVOICED → PAID：本单下游付款单（exp_bill.po_id 挂接、status=PAID）累计已付 ≥ 订单额；</li>
      *  <li>PAID → CLOSED（业务关闭）：付款已达标（PAID 即成立）且累计收货 ≥ 订单额、下游无未收货完的收货单。</li>
@@ -1061,13 +1085,13 @@ public class PurchaseService {
 
     /** 本订单下游已付款累计（exp_bill.po_id 挂接且 status=PAID，取实付额、实付额缺失回退单据额） */
     private BigDecimal paidAmountOf(Long orderId) {
-        List<com.fssc.expense.entity.ExpBill> bills = expBillMapper.selectList(
-                new LambdaQueryWrapper<com.fssc.expense.entity.ExpBill>()
-                        .eq(com.fssc.expense.entity.ExpBill::getPoId, orderId)
-                        .eq(com.fssc.expense.entity.ExpBill::getStatus, "PAID")
-                        .eq(com.fssc.expense.entity.ExpBill::getDelFlag, 0));
+        List<ExpBill> bills = expBillMapper.selectList(
+                new LambdaQueryWrapper<ExpBill>()
+                        .eq(ExpBill::getPoId, orderId)
+                        .eq(ExpBill::getStatus, "PAID")
+                        .eq(ExpBill::getDelFlag, 0));
         BigDecimal sum = BigDecimal.ZERO;
-        for (com.fssc.expense.entity.ExpBill b : bills) {
+        for (ExpBill b : bills) {
             BigDecimal paidAmt = nz(b.getPaidAmount());
             sum = sum.add(paidAmt.signum() > 0 ? paidAmt : nz(b.getTotalAmount()));
         }
@@ -1075,7 +1099,7 @@ public class PurchaseService {
     }
 
     /**
-     * P0-5 最终状态机分治·乙（X-20 裁定）：终止采购订单＝人工决策，留显式入口（服务方法＋端点，
+     * 最终状态机分治·乙（X-20 裁定）：终止采购订单＝人工决策，留显式入口（服务方法＋端点，
      * 鉴权写专码 {@code po:order:update}，菜单授权由治理轨另行发放）。
      * <p>与 {@link #voidOrder} 的分工：作废只处理「还没发生下游动作」的单；终止处理
      * 已经收货/挂付款、但业务上不再继续履约的单（剩余未执行部分就此了断），
@@ -1101,14 +1125,14 @@ public class PurchaseService {
         }
         String operator = "unknown";
         try {
-            com.fssc.framework.security.LoginUser lu = UserContext.get();
+            LoginUser lu = UserContext.get();
             if (lu != null) {
                 operator = lu.getRealName() == null || lu.getRealName().isBlank()
                         ? lu.getUsername() : lu.getRealName();
             }
         } catch (Exception ignored) { /* 无用户上下文（系统操作） */ }
         String suffix = "；【终止】原因：" + reason.trim() + "；操作人：" + operator
-                + "；时间：" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                + "；时间：" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         String newRemark = (o.getRemark() == null ? "" : o.getRemark()) + suffix;
         if (newRemark.length() > 500) {
             newRemark = newRemark.substring(newRemark.length() - 500);
@@ -1120,15 +1144,15 @@ public class PurchaseService {
         upd.setUpdateBy(userId());
         upd.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(upd);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", status);
         auditBefore.put("remark", o.getRemark());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "VOID");
         auditAfter.put("remark", newRemark);
         auditTrailService.recordUpdate("PURCHASE", orderId, o.getPoNo(), "po_order",
                 String.valueOf(orderId), auditBefore, auditAfter, "终止采购订单：" + reason.trim());
-        // R5-D-068 最终状态收尾（同 voidOrder）：终止同落 VOID，必须把该单据名下的 RUNNING 流程实例一并
+        // 最终状态收尾（同 voidOrder）：终止同落 VOID，必须把该单据名下的 RUNNING 流程实例一并
         // 终止、PENDING 待办置 CANCELLED，避免「单已终止、流程还活」的僵尸待办继续被催办。
         wfEngineFacade.cancelRunningInstancesByBiz("PURCHASE_ORDER_REVIEW", orderId,
                 "采购订单终止（" + o.getPoNo() + "）：" + reason.trim());

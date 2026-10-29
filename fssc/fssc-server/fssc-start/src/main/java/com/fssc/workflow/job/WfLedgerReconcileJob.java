@@ -14,6 +14,7 @@ import com.fssc.workflow.mapper.WfInstanceMapper;
 import com.fssc.workflow.mapper.WfTaskHistoryMapper;
 import com.fssc.workflow.mapper.WfTaskMapper;
 import com.fssc.workflow.service.WfMirrorDefectRecorder;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
@@ -47,13 +48,13 @@ import java.util.function.Supplier;
  *   <li>{@code ACT_RU_TASK} ↔ {@code wf_task(status=PENDING)}：在办任务是否都能被待办列表看见；</li>
  *   <li>{@code ACT_HI_PROCINST} ↔ {@code wf_instance}：历史流程实例是否都有业务实例视图；</li>
  *   <li>{@code ACT_HI_TASKINST} ↔ {@code wf_task_history}：引擎任务历史是否都有审批记录。
- *       <b>双向规则收窄（2026-09-25）</b>：本向量要比较的是「任务级<b>办结</b>记录」，两侧都必须先剥掉
+ *       <b>双向规则收窄</b>：本向量要比较的是「任务级<b>办结</b>记录」，两侧都必须先剥掉
  *       「过程态」行，否则差集恒不为零、真信号会被噪声埋掉（单侧收窄时告警还会从反向向量反扑）。
  *       <ul>
  *         <li><b>引擎侧</b>只取「已办结且非删除」（{@code endTime != null} 且 {@code deleteReason} 为空）：
  *             引擎在任务<b>创建时</b>即写历史行，任务被取消/驳回跳转删除后该行仍保留（带
  *             {@code DELETE_REASON_}），这类行天然没有镜像记录。<b>收窄前实测固定误报 27 条
- *             （5 条在途 + 22 条被删除），其中真漂移 0 条。</b></li>
+ *             5 条在途 + 22 条被删除，其中真漂移 0 条。</b></li>
  *         <li><b>业务侧</b>只取办结类动作（见 {@link #MIRROR_DONE_ACTIONS}）：{@code wf_task_history}
  *             是「任务级记录 + 过程动作」混表——{@code URGE}/{@code ESCALATE}/{@code CLAIM}
  *             /{@code ASSIGN}/{@code UNCLAIM}/{@code TRANSFER}/{@code REASSIGN} 都带 {@code task_id}
@@ -149,7 +150,7 @@ public class WfLedgerReconcileJob {
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("runAt", LocalDateTime.now().toString());
 
-        // ---------- 引擎账（ACT_*） ----------
+        // 引擎账（ACT_*）
         Set<String> engineTaskIds = new LinkedHashSet<>();
         Map<String, String> taskProcInst = new HashMap<>();       // taskId -> procInstId
         for (Task t : taskService.createTaskQuery().list()) {
@@ -164,7 +165,7 @@ public class WfLedgerReconcileJob {
         Set<String> engineHistTaskIds = new LinkedHashSet<>();
         for (HistoricTaskInstance h : historyService.createHistoricTaskInstanceQuery()
                 .listPage(0, HISTORY_SCAN_LIMIT)) {
-            // 规则收窄（2026-09-25）：镜像的任务级记录只在办结时写，故只有「已办结且非删除」的
+            // 规则收窄：镜像的任务级记录只在办结时写，故只有「已办结且非删除」的
             // 历史任务才应当有镜像行；在途任务（endTime 为空）与被删除任务（deleteReason 非空，
             // 如取消、驳回跳转、流程取消）天然无行，不构成本向量的漂移。
             if (h.getEndTime() == null) {
@@ -176,9 +177,15 @@ public class WfLedgerReconcileJob {
             engineHistTaskIds.add(h.getId());
         }
 
-        // ---------- 业务账（wf_*，跨租户） ----------
+        // 业务账（wf_*，跨租户）
+        // 万级在办实测：原写法 selectList(null) 把 wf_instance 55 万行、
+        // wf_task_history 108 万行的全部列（各 30+ 列）读进堆，每 10 分钟一轮；实测该轮期间
+        // 报表接口从 130 ms 涨到 2~112 s（2 GB buffer pool / 9.5 GB 库，读风暴打满 I/O）。
+        // 三条向量只用到下面这几列，故显式投影；判定口径不动。
         List<WfTask> pending = ignoreTenant(() -> wfTaskMapper.selectList(
-                new LambdaQueryWrapper<WfTask>().eq(WfTask::getStatus, "PENDING")));
+                new LambdaQueryWrapper<WfTask>()
+                        .select(WfTask::getTaskId, WfTask::getTenantId)
+                        .eq(WfTask::getStatus, "PENDING")));
         Set<String> mirrorPendingTaskIds = new LinkedHashSet<>();
         Map<String, Long> pendingTenantByTask = new HashMap<>();
         for (WfTask t : pending == null ? List.<WfTask>of() : pending) {
@@ -186,7 +193,9 @@ public class WfLedgerReconcileJob {
             mirrorPendingTaskIds.add(t.getTaskId());
             pendingTenantByTask.put(t.getTaskId(), t.getTenantId());
         }
-        List<WfInstance> instances = ignoreTenant(() -> wfInstanceMapper.selectList(null));
+        List<WfInstance> instances = ignoreTenant(() -> wfInstanceMapper.selectList(
+                new LambdaQueryWrapper<WfInstance>()
+                        .select(WfInstance::getProcInstId, WfInstance::getTenantId)));
         Set<String> mirrorProcInstIds = new LinkedHashSet<>();
         Map<String, Long> tenantByProcInst = new HashMap<>();
         for (WfInstance i : instances == null ? List.<WfInstance>of() : instances) {
@@ -194,20 +203,22 @@ public class WfLedgerReconcileJob {
             mirrorProcInstIds.add(i.getProcInstId());
             tenantByProcInst.put(i.getProcInstId(), i.getTenantId());
         }
-        List<WfTaskHistory> histories = ignoreTenant(() -> wfTaskHistoryMapper.selectList(null));
+        List<WfTaskHistory> histories = ignoreTenant(() -> wfTaskHistoryMapper.selectList(
+                new LambdaQueryWrapper<WfTaskHistory>()
+                        .select(WfTaskHistory::getTaskId, WfTaskHistory::getTenantId, WfTaskHistory::getAction)));
         Set<String> mirrorHistTaskIds = new LinkedHashSet<>();
         Map<String, Long> tenantByHistTask = new HashMap<>();
         for (WfTaskHistory h : histories == null ? List.<WfTaskHistory>of() : histories) {
             // taskId 为空的记录是事件级行（SUBMIT / APPROVED / REJECTED），不参与任务级比对
             if (h.getTaskId() == null) continue;
-            // 规则收窄（2026-09-25）：只认办结类动作；催办/升级/认领/转办/驳回跳转等过程动作行
+            // 规则收窄：只认办结类动作；催办/升级/认领/转办/驳回跳转等过程动作行
             // 虽带 task_id，但任务本身未办结，计入即与引擎侧判据错位（详见 MIRROR_DONE_ACTIONS）。
             if (!MIRROR_DONE_ACTIONS.contains(h.getAction())) continue;
             mirrorHistTaskIds.add(h.getTaskId());
             tenantByHistTask.put(h.getTaskId(), h.getTenantId());
         }
 
-        // ---------- 三向量求差 ----------
+        // 三向量求差
         Vector v1a = diff(engineTaskIds, mirrorPendingTaskIds,
                 id -> tenantByProcInst.get(taskProcInst.get(id)));
         Vector v1b = diff(mirrorPendingTaskIds, engineTaskIds, pendingTenantByTask::get);
@@ -231,7 +242,7 @@ public class WfLedgerReconcileJob {
         long driftTotal = v1a.size() + v1b.size() + v2a.size() + v2b.size() + v3a.size() + v3b.size();
         report.put("driftTotal", driftTotal);
 
-        // ---------- 缺陷记录（按租户聚合，只报不修） ----------
+        // 缺陷记录（按租户聚合，只报不修）
         recordDrift("engineTaskMissingInMirror", v1a);
         recordDrift("mirrorPendingMissingInEngine", v1b);
         recordDrift("engineProcInstMissingInMirror", v2a);
@@ -295,7 +306,7 @@ public class WfLedgerReconcileJob {
         }
     }
 
-    private Vector diff(Set<String> left, Set<String> right, java.util.function.Function<String, Long> tenantOf) {
+    private Vector diff(Set<String> left, Set<String> right, Function<String, Long> tenantOf) {
         Vector v = new Vector();
         for (String id : left) {
             if (right.contains(id)) {

@@ -80,7 +80,7 @@ import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -99,7 +99,7 @@ const loading = ref(false)
 const keyword = ref('')
 const page = reactive({ current: 1, size: 10, total: 0 })
 
-// R5-D-268：映射行维度串登记为「重整中间态」，多数不含 '-DEPT' 段（＝按公司下达、无部门维度）；
+// 映射行维度串登记为「重整中间态」，多数不含 '-DEPT' 段（＝按公司下达、无部门维度）；
 // 与 bg_item.dim_key（恒含 DEPT 段）不同构，此处显式标注缺段，避免用户按该键回查预算表落空而不明因。
 function annotateDimKey(v) {
   const s = v == null ? '' : String(v)
@@ -126,10 +126,10 @@ const columnsConfig = {
   ],
   itemBudgetMap: [
     { prop: 'itemName', label: '费用项名称', minWidth: 200, required: true },
-    // R5-D-268：该列是外部来源系统的预算科目编码（与 FSSC 侧 item_id 不同键空间），显式标注来源，
+    // 该列是外部来源系统的预算科目编码（与 FSSC 侧 item_id 不同键空间），显式标注来源，
     // 不再与「预算维度」列并呈为同一主键空间（两列回查关系见预算明细页 dim_key 规则）。
     { prop: 'budgetItemId', label: '预算科目ID（外部系统编码）', width: 180, required: true },
-    // R5-D-268：映射行维度串为重整中间态，通常缺 '-DEPT' 段（公司级下达）；缺段即显式标注，
+    // 映射行维度串为重整中间态，通常缺 '-DEPT' 段（公司级下达）；缺段即显式标注，
     // 避免用户拿该键去 bg_item（dim_key 恒含 DEPT 段，形如 2026-COMPANY1-DEPTnull-ITEM333）定位落空而不知因。
     { prop: 'budgetDimKey', label: '预算维度', minWidth: 220, format: (v) => annotateDimKey(v) },
     { prop: 'remark', label: '备注', minWidth: 200 },
@@ -202,7 +202,7 @@ watch(() => props.configType, () => {
 })
 
 onMounted(() => loadList())
-// R5-01: InlineActions approve/reject handlers
+// InlineActions approve/reject handlers
 
 // 行内审批统一走共享审批弹窗：单据摘要 + 必填意见（通过预填「同意」可改写、驳回必须写原因），
 // 取代原先的 confirm + 硬编码意见「审批通过」与无校验的驳回 prompt。

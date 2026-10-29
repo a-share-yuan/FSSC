@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 资金调拨管理（/api/tenant/treasury/transfer/**）
- * <p>D-DEC-422 扩展：资金域写端点补操作审计记录（原全类零 {@code @OperLog}＝库有痕、日志无行）。
+ * <p>扩展：资金域写端点补操作审计记录（原全类零 {@code @OperLog}＝库有痕、日志无行）。
  */
 @RestController
 @RequestMapping("/api/tenant/treasury/transfer")
@@ -30,7 +30,7 @@ public class TrTransferController {
     private final TrTransferService service;
 
     /**
-     * 调拨列表（D-DEC-439 乙：出参带三态明示 execStateCode/execStateText/journalText——
+     * 调拨列表（乙：出参带三态明示 execStateCode/execStateText/journalText——
      * 「已审批·未执行·账户余额未变」与「已执行」在列表上就能分开，且明示未登账）
      */
     @RequiresPerm("treasury:transfer:list")
@@ -41,7 +41,7 @@ public class TrTransferController {
         return Result.success(service.page(pageNum, pageSize, status));
     }
 
-    /** 调拨详情（D-DEC-439 乙：同列表，另带账证侧 voucherNo/voucherStatus 供对照） */
+    /** 调拨详情（乙：同列表，另带账证侧 voucherNo/voucherStatus 供对照） */
     @RequiresPerm("treasury:transfer:list")
     @GetMapping("/{id}")
     public Result<TrTransfer> detail(@PathVariable Long id) {

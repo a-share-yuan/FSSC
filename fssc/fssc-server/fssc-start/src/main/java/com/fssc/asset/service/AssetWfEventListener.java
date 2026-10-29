@@ -4,11 +4,25 @@
 package com.fssc.asset.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.asset.entity.FaCerRequest;
 import com.fssc.asset.entity.MdAsset;
+import com.fssc.asset.entity.MdAssetChangeLog;
+import com.fssc.asset.mapper.FaCerRequestMapper;
+import com.fssc.asset.mapper.MdAssetChangeLogMapper;
 import com.fssc.asset.mapper.MdAssetMapper;
+import com.fssc.audit.service.AuditTrailService;
+import com.fssc.budget.mapper.BgOccupyMapper;
+import com.fssc.budget.service.BudgetService;
+import com.fssc.masterdata.service.MdCipService;
 import com.fssc.sharing.service.VoucherService;
+import com.fssc.workflow.event.EventOrchestrationBus;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import com.fssc.workflow.service.WfQueryService;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
@@ -20,9 +34,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.Set;
 
 /**
- * 资产域流程结束收尾（P0-1 事件编排总线策略实现）。
+ * 资产域流程结束收尾（事件编排总线策略实现）。
  *
- * <p>V1.3.17：修复跨法人调拨公司时序缺陷——
+ * <p>修复跨法人调拨公司时序缺陷——
  * {@code MdAssetService.transfer} 跨法人调拨时不再先改资产归属公司（否则公司维度校验会把调出公司审批人全部拦截），
  * 目标公司经流程变量 {@code targetCompanyId} 传递；本监听器在审批通过后读取并更新资产 {@code company_id}。
  *
@@ -33,7 +47,7 @@ import java.util.Set;
  *      （借固定资产/贷银行存款或在建工程；处置借累计折旧+处置损益贷固定资产），去重防重、科目缺失记 WARN 跳过不阻断审批</li>
  * </ul>
  * <p>
- * 原 @EventListener 已移除，由 {@link com.fssc.workflow.event.EventOrchestrationBus} 统一分发。
+ * 原 @EventListener 已移除，由 {@link EventOrchestrationBus} 统一分发。
  */
 @Slf4j
 @Component("assetBizAction")
@@ -43,26 +57,26 @@ public class AssetWfEventListener implements WfBizAction {
     private final MdAssetMapper assetMapper;
     private final HistoryService historyService;
     private final AssetDeprBatchService deprBatchService;
-    private final com.fssc.masterdata.service.MdCipService cipService;
+    private final MdCipService cipService;
     private final VoucherService voucherService;
     /** FA_CER 资本性支出申请收尾（预算占用/释放） */
-    private final com.fssc.asset.mapper.FaCerRequestMapper cerRequestMapper;
-    private final com.fssc.budget.service.BudgetService budgetService;
-    private final com.fssc.budget.mapper.BgOccupyMapper bgOccupyMapper;
-    private final com.fssc.workflow.service.WfQueryService wfQueryService;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** X-06（D-DEC-431）：变动台账最终状态回写（发起侧 MdAssetService 插行，本类只把 APPROVING 改成最终状态） */
-    private final com.fssc.asset.mapper.MdAssetChangeLogMapper changeLogMapper;
+    private final FaCerRequestMapper cerRequestMapper;
+    private final BudgetService budgetService;
+    private final BgOccupyMapper bgOccupyMapper;
+    private final WfQueryService wfQueryService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
+    /** X-06：变动台账最终状态回写（发起侧 MdAssetService 插行，本类只把 APPROVING 改成最终状态） */
+    private final MdAssetChangeLogMapper changeLogMapper;
 
     @Override
     public Set<String> bizTypes() {
-        // D-DEC-319（批次0 P-4）：新增 FA_TRANSFER / FA_VALUE_ADJUST / FA_IMPAIRMENT——
+        // 批次0 P-4：新增 FA_TRANSFER / FA_VALUE_ADJUST / FA_IMPAIRMENT——
         // 这三条此前"先改账再起流、驳回不回滚"（MdAssetService 零 @Transactional），
         // 现发起侧只传目标值入流程变量，改账统一挪到本监听器 APPROVED 环节（驳回侧资产零改动）。
-        // D-DEC-322（批次2）：FA_ALIENATE 并档进 FA_DISPOSE 载体（B 案 T-FA-3），事件 bizType 不变，
+        // 批次2：FA_ALIENATE 并档进 FA_DISPOSE 载体（B 案 T-FA-3），事件 bizType 不变，
         // 对外销售通过侧复用处置凭证环节（§1.4 无环节 #3 消除）。
-        // D-DEC-322（批次2）：+FA_CHECK_DIFF 盘点差异作业确认闭环记录（结转凭证走 GL_CHECK_DIFF 做账档，账务分离）
+        // 批次2：+FA_CHECK_DIFF 盘点差异作业确认闭环记录（结转凭证走 GL_CHECK_DIFF 做账档，账务分离）
         return Set.of("FA_DEPRECIATION", "FA_TRANSFER_CROSS", "FA_TRANSFER", "FA_VALUE_ADJUST", "FA_IMPAIRMENT",
                 "FA_ADD", "FA_CIP_TO_ASSET", "FA_DISPOSE", "FA_ALIENATE", "FA_CER", "FA_CHECK_DIFF");
     }
@@ -130,10 +144,10 @@ public class AssetWfEventListener implements WfBizAction {
                 upd.setId(assetId);
                 upd.setCompanyId(targetCompanyId);
                 assetMapper.updateById(upd);
-                // P4-3 审计扩面：本次实际变化为归属公司（company_id）跨法人转移
-                java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                // 审计扩面：本次实际变化为归属公司（company_id）跨法人转移
+                Map<String, Object> auditBefore = new LinkedHashMap<>();
                 auditBefore.put("companyId", asset.getCompanyId());
-                java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("companyId", upd.getCompanyId());
                 auditTrailService.recordUpdate(event.getBizType(), assetId, asset.getAssetNo(), "md_asset",
                         String.valueOf(assetId), auditBefore, auditAfter,
@@ -172,7 +186,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_CER 资本性支出申请审批结束收尾（合规整改 ，联动 DA-01 修复）：
+     * FA_CER 资本性支出申请审批结束收尾（合规整改，联动 DA-01 修复）：
      * 通过 → 按申请金额占用预算科目（去重：已有 OCCUPY 流水跳过）并置 APPROVED；
      * 驳回 → 置 REJECTED；若此前已发生占用（异常时序/重复事件）则释放，正常时序未占用不动预算（防负占用）。
      */
@@ -182,7 +196,7 @@ public class AssetWfEventListener implements WfBizAction {
             log.warn("FA_CER 结束事件缺少申请记录ID");
             return;
         }
-        com.fssc.asset.entity.FaCerRequest cer = cerRequestMapper.selectById(cerId);
+        FaCerRequest cer = cerRequestMapper.selectById(cerId);
         if (cer == null) {
             log.warn("FA_CER 结束事件指向不存在的申请记录: {}", cerId);
             return;
@@ -194,26 +208,26 @@ public class AssetWfEventListener implements WfBizAction {
                 try {
                     wfQueryService.updateInstanceStatus(event.getProcInstId(),
                             Boolean.TRUE.equals(event.getApproved()) ? "APPROVED" : "REJECTED",
-                            java.time.LocalDateTime.now());
+                            LocalDateTime.now());
                 } catch (Exception ignore) { /* 视图回写失败不影响业务收尾 */ }
             }
             if (Boolean.TRUE.equals(event.getApproved())) {
                 if (cer.getBudgetItemId() != null && cer.getAmount() != null
-                        && cerOccupyAmount(cerId).compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                        && cerOccupyAmount(cerId).compareTo(BigDecimal.ZERO) <= 0) {
                     budgetService.occupy(cer.getBudgetItemId(), cer.getAmount(), "FA_CER", cerId, cer.getRequestNo());
                     log.info("资本性支出申请 {} 审批通过，预算科目 {} 占用 {}",
                             cer.getRequestNo(), cer.getBudgetItemId(), cer.getAmount());
                 }
                 if (!"APPROVED".equals(cer.getStatus())) {
-                    // P4-3 审计扩面：改状态前采集旧值
+                    // 审计扩面：改状态前采集旧值
                     String oldStatus = cer.getStatus();
-                    com.fssc.asset.entity.FaCerRequest upd = new com.fssc.asset.entity.FaCerRequest();
+                    FaCerRequest upd = new FaCerRequest();
                     upd.setId(cerId);
                     upd.setStatus("APPROVED");
                     cerRequestMapper.updateById(upd);
-                    java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                    Map<String, Object> auditBefore = new LinkedHashMap<>();
                     auditBefore.put("status", oldStatus);
-                    java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                    Map<String, Object> auditAfter = new LinkedHashMap<>();
                     auditAfter.put("status", upd.getStatus());
                     auditTrailService.recordUpdate(event.getBizType(), cerId, cer.getRequestNo(), "fa_cer_request",
                             String.valueOf(cerId), auditBefore, auditAfter,
@@ -221,22 +235,22 @@ public class AssetWfEventListener implements WfBizAction {
                 }
             } else {
                 if (cer.getBudgetItemId() != null && cer.getAmount() != null) {
-                    java.math.BigDecimal occupied = cerOccupyAmount(cerId);
-                    if (occupied.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                    BigDecimal occupied = cerOccupyAmount(cerId);
+                    if (occupied.compareTo(BigDecimal.ZERO) > 0) {
                         budgetService.release(cer.getBudgetItemId(), occupied, "FA_CER", cerId, cer.getRequestNo());
                         log.info("资本性支出申请 {} 审批驳回，释放预算占用 {}", cer.getRequestNo(), occupied);
                     }
                 }
                 if (!"REJECTED".equals(cer.getStatus())) {
-                    // P4-3 审计扩面：改状态前采集旧值
+                    // 审计扩面：改状态前采集旧值
                     String oldStatus = cer.getStatus();
-                    com.fssc.asset.entity.FaCerRequest upd = new com.fssc.asset.entity.FaCerRequest();
+                    FaCerRequest upd = new FaCerRequest();
                     upd.setId(cerId);
                     upd.setStatus("REJECTED");
                     cerRequestMapper.updateById(upd);
-                    java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                    Map<String, Object> auditBefore = new LinkedHashMap<>();
                     auditBefore.put("status", oldStatus);
-                    java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                    Map<String, Object> auditAfter = new LinkedHashMap<>();
                     auditAfter.put("status", upd.getStatus());
                     auditTrailService.recordUpdate(event.getBizType(), cerId, cer.getRequestNo(), "fa_cer_request",
                             String.valueOf(cerId), auditBefore, auditAfter,
@@ -251,9 +265,9 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /** 汇总 FA_CER 申请已发生的预算占用(OCCUPY−RELEASE 净额)，用于去重占用与驳回释放 */
-    private java.math.BigDecimal cerOccupyAmount(Long cerId) {
-        java.math.BigDecimal net = bgOccupyMapper.sumAmountByBiz("FA_CER", cerId);
-        return net == null ? java.math.BigDecimal.ZERO : net;
+    private BigDecimal cerOccupyAmount(Long cerId) {
+        BigDecimal net = bgOccupyMapper.sumAmountByBiz("FA_CER", cerId);
+        return net == null ? BigDecimal.ZERO : net;
     }
 
     /**
@@ -295,10 +309,10 @@ public class AssetWfEventListener implements WfBizAction {
                     upd.setAssetNo(assetNo);
                 }
                 assetMapper.updateById(upd);
-                // P4-3 审计扩面：本次实际变化为 status（INIT→USING），资产编号为空时一并记录
-                java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                // 审计扩面：本次实际变化为 status（INIT→USING），资产编号为空时一并记录
+                Map<String, Object> auditBefore = new LinkedHashMap<>();
                 auditBefore.put("status", asset.getStatus());
-                java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
                 if (upd.getAssetNo() != null) {
                     auditBefore.put("assetNo", asset.getAssetNo());
@@ -340,10 +354,10 @@ public class AssetWfEventListener implements WfBizAction {
                     upd.setId(assetId);
                     upd.setAssetNo(nextAssetNo());
                     assetMapper.updateById(upd);
-                    // P4-3 审计扩面：本次实际变化为补写资产编号（asset_no）
-                    java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                    // 审计扩面：本次实际变化为补写资产编号（asset_no）
+                    Map<String, Object> auditBefore = new LinkedHashMap<>();
                     auditBefore.put("assetNo", asset.getAssetNo());
-                    java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                    Map<String, Object> auditAfter = new LinkedHashMap<>();
                     auditAfter.put("assetNo", upd.getAssetNo());
                     auditTrailService.recordUpdate(event.getBizType(), assetId, upd.getAssetNo(), "md_asset",
                             String.valueOf(assetId), auditBefore, auditAfter,
@@ -361,7 +375,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_DISPOSE 资产处置（报废）审批结束收尾（合规整改 + D-DEC-428 甲案改账时点后移）：
+     * FA_DISPOSE 资产处置（报废）审批结束收尾（合规整改 + 甲案改账时点后移）：
      * <p>通过 → 此刻才改账（累计折旧补提到顶＝原值−残值、账面净值冲至残值、状态置 SCRAP），
      * 再生成处置凭证（借 累计折旧+处置净损失 贷 固定资产，金额=资产原值）；
      * 驳回 → <b>卡片零改动</b>，只记录（发起侧已不预写，故无需回冲路径）。
@@ -383,17 +397,17 @@ public class AssetWfEventListener implements WfBizAction {
         }
         try {
             if (Boolean.TRUE.equals(event.getApproved())) {
-                // D-DEC-428：改账时点＝审批通过此刻（原值−残值为累计折旧上限，只补提不回退）
-                java.math.BigDecimal original = asset.getOriginalAmount() == null
-                        ? java.math.BigDecimal.ZERO : asset.getOriginalAmount();
-                java.math.BigDecimal residual = asset.getResidualValue() == null
-                        ? java.math.BigDecimal.ZERO : asset.getResidualValue();
-                java.math.BigDecimal accum = asset.getAccumDepr() == null
-                        ? java.math.BigDecimal.ZERO : asset.getAccumDepr();
-                java.math.BigDecimal base = original.subtract(residual);
+                // 改账时点＝审批通过此刻（原值−残值为累计折旧上限，只补提不回退）
+                BigDecimal original = asset.getOriginalAmount() == null
+                        ? BigDecimal.ZERO : asset.getOriginalAmount();
+                BigDecimal residual = asset.getResidualValue() == null
+                        ? BigDecimal.ZERO : asset.getResidualValue();
+                BigDecimal accum = asset.getAccumDepr() == null
+                        ? BigDecimal.ZERO : asset.getAccumDepr();
+                BigDecimal base = original.subtract(residual);
                 if (!"SCRAP".equals(asset.getStatus()) || accum.compareTo(base) < 0) {
-                    java.math.BigDecimal newAccum = accum.compareTo(base) >= 0 ? accum : base;
-                    java.util.Map<String, Object> before = new java.util.LinkedHashMap<>();
+                    BigDecimal newAccum = accum.compareTo(base) >= 0 ? accum : base;
+                    Map<String, Object> before = new LinkedHashMap<>();
                     before.put("status", asset.getStatus());
                     before.put("accumDepr", asset.getAccumDepr());
                     before.put("netAmount", asset.getNetAmount());
@@ -403,7 +417,7 @@ public class AssetWfEventListener implements WfBizAction {
                     upd.setNetAmount(original.subtract(newAccum));
                     upd.setStatus("SCRAP");
                     assetMapper.updateById(upd);
-                    java.util.Map<String, Object> after = new java.util.LinkedHashMap<>();
+                    Map<String, Object> after = new LinkedHashMap<>();
                     after.put("status", "SCRAP");
                     after.put("accumDepr", newAccum);
                     after.put("netAmount", original.subtract(newAccum));
@@ -433,7 +447,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_TRANSFER 部门间（同公司）调拨收尾（D-DEC-319，批次0 P-4 / A1）：
+     * FA_TRANSFER 部门间（同公司）调拨收尾（批次0 P-4 / A1）：
      * 发起侧（MdAssetService.transfer）不再预写 dept/company，目标值经流程变量传递；
      * 通过 → 落 targetDeptId（targetCompanyId 非空且不同时一并落，防御性）；驳回 → 资产零改动，只记录。
      * 去重：目标值与现值一致时跳过更新（重复事件无害）。
@@ -457,12 +471,12 @@ public class AssetWfEventListener implements WfBizAction {
                 log.warn("部门间调拨审批通过但未读到目标部门变量，资产 {} 部门未更新", assetId);
                 return;
             }
-            java.util.Map<String, Object> before = new java.util.LinkedHashMap<>();
+            Map<String, Object> before = new LinkedHashMap<>();
             before.put("deptId", asset.getDeptId());
             MdAsset upd = new MdAsset();
             upd.setId(assetId);
             upd.setDeptId(targetDeptId);
-            java.util.Map<String, Object> after = new java.util.LinkedHashMap<>();
+            Map<String, Object> after = new LinkedHashMap<>();
             after.put("deptId", upd.getDeptId());
             if (targetCompanyId != null && !targetCompanyId.equals(asset.getCompanyId())) {
                 upd.setCompanyId(targetCompanyId);
@@ -487,12 +501,12 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_VALUE_ADJUST 原值调整收尾（D-DEC-319，批次0 P-4 / A1）：
+     * FA_VALUE_ADJUST 原值调整收尾（批次0 P-4 / A1）：
      * 通过 → 按流程变量落 originalAmount/netAmount；驳回 → 资产零改动。
      */
     private void handleValueAdjustEnded(WfProcessEndedEvent event) {
         Long assetId = event.getBizId();
-        // X-06（D-DEC-431）：台账最终状态回写放在资产判空之前——卡片缺失也不该让台账行永远停在 APPROVING
+        // X-06：台账最终状态回写放在资产判空之前——卡片缺失也不该让台账行永远停在 APPROVING
         markChangeLogTerminated(event);
         MdAsset asset = assetId == null ? null : assetMapper.selectById(assetId);
         if (asset == null) {
@@ -505,13 +519,13 @@ public class AssetWfEventListener implements WfBizAction {
                         assetId, event.getComment() == null ? "" : event.getComment());
                 return;
             }
-            java.math.BigDecimal newOriginal = readDecimalVar(event.getProcInstId(), "newOriginalAmount");
-            java.math.BigDecimal newNet = readDecimalVar(event.getProcInstId(), "newNetAmount");
+            BigDecimal newOriginal = readDecimalVar(event.getProcInstId(), "newOriginalAmount");
+            BigDecimal newNet = readDecimalVar(event.getProcInstId(), "newNetAmount");
             if (newOriginal == null) {
                 log.warn("原值调整审批通过但未读到新原值变量，资产 {} 未更新", assetId);
                 return;
             }
-            java.util.Map<String, Object> before = new java.util.LinkedHashMap<>();
+            Map<String, Object> before = new LinkedHashMap<>();
             before.put("originalAmount", asset.getOriginalAmount());
             before.put("netAmount", asset.getNetAmount());
             MdAsset upd = new MdAsset();
@@ -521,7 +535,7 @@ public class AssetWfEventListener implements WfBizAction {
                 upd.setNetAmount(newNet);
             }
             assetMapper.updateById(upd);
-            java.util.Map<String, Object> after = new java.util.LinkedHashMap<>();
+            Map<String, Object> after = new LinkedHashMap<>();
             after.put("originalAmount", upd.getOriginalAmount());
             after.put("netAmount", upd.getNetAmount());
             auditTrailService.recordUpdate(event.getBizType(), assetId, asset.getAssetNo(), "md_asset",
@@ -535,7 +549,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_IMPAIRMENT 减值准备收尾（D-DEC-319，批次0 P-4 / A1）：
+     * FA_IMPAIRMENT 减值准备收尾（批次0 P-4 / A1）：
      * 通过 → 按流程变量落 netAmount；驳回 → 资产零改动。
      */
     private void handleImpairmentEnded(WfProcessEndedEvent event) {
@@ -551,18 +565,18 @@ public class AssetWfEventListener implements WfBizAction {
                         assetId, event.getComment() == null ? "" : event.getComment());
                 return;
             }
-            java.math.BigDecimal newNet = readDecimalVar(event.getProcInstId(), "newNetAmount");
+            BigDecimal newNet = readDecimalVar(event.getProcInstId(), "newNetAmount");
             if (newNet == null) {
                 log.warn("减值准备审批通过但未读到新净值变量，资产 {} 未更新", assetId);
                 return;
             }
-            java.util.Map<String, Object> before = new java.util.LinkedHashMap<>();
+            Map<String, Object> before = new LinkedHashMap<>();
             before.put("netAmount", asset.getNetAmount());
             MdAsset upd = new MdAsset();
             upd.setId(assetId);
             upd.setNetAmount(newNet);
             assetMapper.updateById(upd);
-            java.util.Map<String, Object> after = new java.util.LinkedHashMap<>();
+            Map<String, Object> after = new LinkedHashMap<>();
             after.put("netAmount", newNet);
             auditTrailService.recordUpdate(event.getBizType(), assetId, asset.getAssetNo(), "md_asset",
                     String.valueOf(assetId), before, after,
@@ -574,17 +588,17 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_CHECK_DIFF 盘点差异作业确认闭环（D-DEC-322，批次2 B-12）：
+     * FA_CHECK_DIFF 盘点差异作业确认闭环（批次2 B-12）：
      * 作业侧只记录不记科目——差异结转凭证由总账凭证载体（GL_CHECK_DIFF 盘点结转档）依记账单生成，
      * 作业与账务分离（P-2 规则），此处保证审批最终状态有记录可溯。
      */
     private void handleCheckDiffEnded(WfProcessEndedEvent event) {
         Long assetId = event.getBizId();
-        // X-06（D-DEC-431）：差异说明的载体＝变动台账行（发起侧 MdAssetService#checkDiff 插入），此处回写最终状态
+        // X-06：差异说明的载体＝变动台账行（发起侧 MdAssetService#checkDiff 插入），此处回写最终状态
         markChangeLogTerminated(event);
         try {
             MdAsset asset = assetId == null ? null : assetMapper.selectById(assetId);
-            java.util.Map<String, Object> same = new java.util.LinkedHashMap<>();
+            Map<String, Object> same = new LinkedHashMap<>();
             same.put("assetNo", asset == null ? null : asset.getAssetNo());
             auditTrailService.recordUpdate(event.getBizType(), assetId,
                     asset == null ? String.valueOf(assetId) : asset.getAssetNo(), "md_asset",
@@ -598,9 +612,9 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * X-06（D-DEC-431）：按 proc_inst_id 把变动台账从 APPROVING 回写为最终状态（通过 APPROVED／驳回 REJECTED）。
+     * X-06：按 proc_inst_id 把变动台账从 APPROVING 回写为最终状态（通过 APPROVED／驳回 REJECTED）。
      *
-     * <p>只回写状态，不改卡片——改账环节各自保持原规则（D-DEC-319 原值调整、D-DEC-322 盘点差异作业与账务分离），
+     * <p>只回写状态，不改卡片——改账环节各自保持原规则（原值调整、盘点差异作业与账务分离），
      * 本方法解决的是"这次变动最后成没成"在库里没有答案。
      * <p>键＝proc_inst_id（发起侧起流后拿到的返回值），不用 asset_id 猜在途行；
      * 去重＝只更新 status 仍为 APPROVING 的行，重复事件第二次 0 行命中。
@@ -614,11 +628,11 @@ public class AssetWfEventListener implements WfBizAction {
             return;
         }
         try {
-            com.fssc.asset.entity.MdAssetChangeLog upd = new com.fssc.asset.entity.MdAssetChangeLog();
+            MdAssetChangeLog upd = new MdAssetChangeLog();
             upd.setStatus(Boolean.TRUE.equals(event.getApproved()) ? "APPROVED" : "REJECTED");
-            int n = changeLogMapper.update(upd, new LambdaQueryWrapper<com.fssc.asset.entity.MdAssetChangeLog>()
-                    .eq(com.fssc.asset.entity.MdAssetChangeLog::getProcInstId, procInstId)
-                    .eq(com.fssc.asset.entity.MdAssetChangeLog::getStatus, "APPROVING"));
+            int n = changeLogMapper.update(upd, new LambdaQueryWrapper<MdAssetChangeLog>()
+                    .eq(MdAssetChangeLog::getProcInstId, procInstId)
+                    .eq(MdAssetChangeLog::getStatus, "APPROVING"));
             if (n == 0) {
                 log.info("变动台账按流程号 {} 未命中在途行（可能为改造前发起的存量流程）", procInstId);
             } else {
@@ -655,7 +669,7 @@ public class AssetWfEventListener implements WfBizAction {
         return readLongVar(procInstId, "targetCompanyId");
     }
 
-    /** 从流程历史变量读 Long（D-DEC-319）：值为空/类型不符返回 null，异常只告警不阻断收尾 */
+    /** 从流程历史变量读 Long：值为空/类型不符返回 null，异常只告警不阻断收尾 */
     private Long readLongVar(String procInstId, String name) {
         Object v = readVarRaw(procInstId, name);
         if (v == null) return null;
@@ -668,14 +682,14 @@ public class AssetWfEventListener implements WfBizAction {
         }
     }
 
-    /** 从流程历史变量读 BigDecimal（D-DEC-319）：同上 fail-soft 规则 */
-    private java.math.BigDecimal readDecimalVar(String procInstId, String name) {
+    /** 从流程历史变量读 BigDecimal：同上 fail-soft 规则 */
+    private BigDecimal readDecimalVar(String procInstId, String name) {
         Object v = readVarRaw(procInstId, name);
         if (v == null) return null;
-        if (v instanceof java.math.BigDecimal bd) return bd;
-        if (v instanceof Number num) return java.math.BigDecimal.valueOf(num.doubleValue());
+        if (v instanceof BigDecimal bd) return bd;
+        if (v instanceof Number num) return BigDecimal.valueOf(num.doubleValue());
         try {
-            return new java.math.BigDecimal(String.valueOf(v));
+            return new BigDecimal(String.valueOf(v));
         } catch (NumberFormatException ex) {
             log.warn("流程变量 {} 非数值: {}", name, v);
             return null;

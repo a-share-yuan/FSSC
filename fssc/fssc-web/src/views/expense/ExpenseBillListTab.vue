@@ -11,7 +11,7 @@
         <el-option :label="$t('expense.ledger.optLoan')" value="LOAN" />
         <el-option :label="$t('expense.preapply.tabRequisition')" value="APPLY" />
       </el-select>
-      <!-- P2-1 渠道筛选：走服务端 source 参数（myPage 等值过滤），不做前端本地筛——
+      <!-- 渠道筛选：走服务端 source 参数（myPage 等值过滤），不做前端本地筛——
            本地只能在已加载的 50 条里挑，挑出来的"0 条手机端"是假结论。 -->
       <el-select v-model="filterSource" style="width: 120px" @change="loadBills">
         <el-option :label="$t('expense.ledger.phAllChannels')" value="" />
@@ -31,7 +31,7 @@
       <el-table-column :label="$t('field.type')" width="80">
         <template #default="{ row }">{{ billTypeLabel(row.billType) }}</template>
       </el-table-column>
-      <!-- P2-1 渠道列：枚举取名称表、禁中英直接显示（既有枚举治理约定）；未知值显「—」不猜 -->
+      <!-- 渠道列：枚举取名称表、禁中英直接显示（既有枚举治理约定）；未知值显「—」不猜 -->
       <el-table-column :label="$t('expense.ledger.colChannel')" width="72">
         <template #default="{ row }">{{ sourceLabel(row.source) }}</template>
       </el-table-column>
@@ -184,13 +184,13 @@ import { hasPerm } from '@/utils/perm'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => loadBills(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
 })
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -213,7 +213,7 @@ const currentRoute = useRoute()
 
 const bills = ref([])
 const filterType = ref('')
-// P2-1 渠道（exp_bill.source）：筛选值与服务端白名单同域（只认 PC/H5，见 ExpenseBillService#normalizeBillSource）
+// 渠道（exp_bill.source）：筛选值与服务端白名单同域（只认 PC/H5，见 ExpenseBillService#normalizeBillSource）
 const filterSource = ref('')
 /** 渠道中文名名称表：库里存枚举码、界面显中文（枚举治理约定：禁中英直接显示、缺失不猜） */
 function sourceLabel(v) {
@@ -270,7 +270,7 @@ function onRowClick(row) { openDetailById(row.id, row.billType, row.billNo) }
 
 async function loadBills() {
   // keyword 交服务端过滤（后端 myPage 已补该入参）：原先只在已加载的前 50 条里前端筛，
-  // 单据一多，深链携带的单号/标题就筛不到（D-DEC-245 遗留第 3 项）。前端过滤保留，两者同一规则不冲突。
+  // 单据一多，深链携带的单号/标题就筛不到（遗留第 3 项）。前端过滤保留，两者同一规则不冲突。
   const kw = keyword.value.trim()
   bills.value = (await billApi.myPage({
     pageNum: 1, pageSize: 50, billType: filterType.value, keyword: kw || undefined,

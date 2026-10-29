@@ -40,13 +40,13 @@ public class ExpBillShare implements Serializable {
     private Long deptId;
     private Long costCenterId;
     private Long projectId;
-    /** 预算明细ID（bg_item，本行摊到哪个预算项，D-DEC-374） */
+    /** 预算明细ID（bg_item，本行摊到哪个预算项） */
     private Long budgetItemId;
     /** 分摊比例(%) */
     private BigDecimal shareRatio;
     /** 分摊金额 */
     private BigDecimal shareAmount;
-    /** 分摊规则：COST_CENTER 成本中心承担/PROJECT 项目承担（与单据页「费用承担类型」同码，D-DEC-374） */
+    /** 分摊规则：COST_CENTER 成本中心承担/PROJECT 项目承担（与单据页「费用承担类型」同码） */
     private String shareType;
     private String remark;
 

@@ -3,11 +3,14 @@
 
 package com.fssc.workflow.action;
 
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
 import com.fssc.sharing.service.VoucherService;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,7 +19,7 @@ import java.math.BigDecimal;
 import java.util.Set;
 
 /**
- * 收款认领审批收尾（P0-1 事件编排总线 + P0-2 凭证引擎接线）。
+ * 收款认领审批收尾（事件编排总线 + 凭证引擎接线）。
  * <p>
  * RECEIVABLE_COLLECT 审批通过 → 自动核销应收余额 + 生成收款核销凭证：
  * 1. 查应收单（bizId 即应收单 ID）
@@ -33,8 +36,8 @@ public class CollectBizAction implements WfBizAction {
 
     private final RcReceivableMapper rcReceivableMapper;
     private final VoucherService voucherService;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -55,7 +58,7 @@ public class CollectBizAction implements WfBizAction {
                 log.info("收款认领 {} 审批驳回，不核销", rec.getBillNo());
                 return;
             }
-            // D-DEC-409（甲）：核销金额原取<b>票面全额</b>（rec.getAmount()），与本方法注释、wf_event_action_config
+            // 甲：核销金额原取<b>票面全额</b>（rec.getAmount()），与本方法注释、wf_event_action_config
             // id=81 的 description 和 VoucherService.generateCollectVoucher 的 javadoc 三处规则都写着的
             // 「取应收余额作为核销金额」相反。后果两处（现库实证风险，非理论）：
             //   ①部分收款后再认领 ⇒ received 翻倍、remain 转负（127,200 单再走一次即 −127,200）；
@@ -89,19 +92,19 @@ public class CollectBizAction implements WfBizAction {
                 log.info("收款认领 {} 审批通过: 部分核销，已收 {} 余额 {}", rec.getBillNo(), newReceived, newRemain);
             }
             rcReceivableMapper.updateById(upd);
-            // P4-3 审计扩面：本次实际变化为 status/receivedAmount/remainAmount 三字段
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            // 审计扩面：本次实际变化为 status/receivedAmount/remainAmount 三字段
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("status", rec.getStatus());
             auditBefore.put("receivedAmount", rec.getReceivedAmount());
             auditBefore.put("remainAmount", rec.getRemainAmount());
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", upd.getStatus());
             auditAfter.put("receivedAmount", upd.getReceivedAmount());
             auditAfter.put("remainAmount", upd.getRemainAmount());
             auditTrailService.recordUpdate(event.getBizType(), recId, rec.getBillNo(), "rc_receivable",
                     String.valueOf(recId), auditBefore, auditAfter,
                     "审批通过" + (event.getComment() == null || event.getComment().isBlank() ? "" : "：" + event.getComment()));
-            // P0-2: 生成收款核销凭证——金额＝本次核销额（余额），不是票面额（D-DEC-409 甲）
+            // 生成收款核销凭证——金额＝本次核销额（余额），不是票面额（甲）
             try {
                 voucherService.generateCollectVoucher(rec, remain);
             } catch (Exception vex) {

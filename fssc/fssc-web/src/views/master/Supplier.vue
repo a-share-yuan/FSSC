@@ -31,7 +31,7 @@
             </el-table-column>
             <el-table-column label="操作" width="120" align="center">
               <template #default="{ row }">
-                <!-- D-UI-06（2026-10-19）：此前非 PENDING 行没有任何显式控件，选中/进编辑只能靠整行点击，
+                <!-- 此前非 PENDING 行没有任何显式控件，选中/进编辑只能靠整行点击，
                      键盘用户彻底不可达。补「编辑」按钮与 onSelect 同源（.stop 防冒泡再触发一次行点击）。 -->
                 <el-button v-if="row.status !== 'PENDING'" link size="small" type="primary" @click.stop="onSelect(row)">编辑</el-button>
                 <el-button v-if="row.status === 'PENDING'" v-permission="'md:supplier:approve'" type="success" size="small" @click="approveSupplier(row)">核准</el-button>
@@ -217,7 +217,7 @@
 
 <script setup>
 /**
- * 供应商专属档案页(41号审查 P1-8 主数据深化第一批)
+ * 供应商专属档案页(41号审查 主数据深化第一批)
  * 基本信息 + 银行账户(N) + 联系人(N) + 资质证照(N) 多 Tab 档案,
  * 替代原 MasterConfigTable 3 列通用表;证照临期/过期自动预警着色。
  */

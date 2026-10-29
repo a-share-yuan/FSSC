@@ -2,12 +2,12 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <template>
-  <!-- D-V3-146：sub-type 动态绑定路由 props（/corp-pay/settle → SETTLE）。
+  <!-- sub-type 动态绑定路由 props（/corp-pay/settle → SETTLE）。
        原写死 PREPAY 导致 SETTLE 深链落单 bill_sub_type 恒 PREPAY；
        onTypeChange/onBeforeSubmit 既有 patch 逻辑保持不变，此处仅为初始化规则对齐。 -->
   <BillWorkbench ref="wb" bill-type="PAY" :sub-type="subType" :pay="true" :before-submit="onBeforeSubmit" :before-save-draft="onBeforeSaveDraft" :on-counter-pick="onCounterChange">
     <template #create="b">
-      <!-- ============ 单据类型 ============ -->
+      <!-- 单据类型 -->
       <el-card v-if="!isSingle" :header="$t('field.billType')">
         <el-radio-group v-model="subType" @change="onTypeChange(b)">
           <el-radio-button value="PREPAY">{{ $t('pay.corp.tabPrepayApply') }}</el-radio-button>
@@ -15,7 +15,7 @@
         </el-radio-group>
       </el-card>
 
-      <!-- ============ 子类型业务说明 ============ -->
+      <!-- 子类型业务说明 -->
       <el-alert
         :title="subTypeDesc.title"
         type="info"
@@ -31,7 +31,7 @@
         </template>
       </el-alert>
 
-      <!-- ============ 单据概要 ============ -->
+      <!-- 单据概要 -->
       <el-card :header="$t('pay.corp.secBillSummary')" style="margin-top: 12px">
         <el-form ref="formRef" :rules="formRules" :model="b.form.bill" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -140,7 +140,7 @@
         </el-form>
       </el-card>
 
-      <!-- ============ 费用详情 ============ -->
+      <!-- 费用详情 -->
       <el-card :header="$t('pay.corp.secExpenseDetail')" style="margin-top: 12px">
         <el-form :model="shareForm" :rules="shareTypeRules" label-width="110px" size="default">
           <!-- 单选组恒有默认值，不存在漏填，故不加红星 -->
@@ -236,7 +236,7 @@
         <div style="margin-top: 2px; color:#606266">{{ $t('pay.corp.amountInWords', { v1: b.form.bill.amountCn || t('expense.createTab.txtAmountPending') }) }}</div>
       </el-card>
 
-      <!-- ============ 付款信息 ============ -->
+      <!-- 付款信息 -->
       <el-card :header="$t('pay.corp.secPayInfo')" style="margin-top: 12px">
         <el-form ref="payFormRef" :rules="formRules" :model="b.form.bill" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -251,7 +251,7 @@
                 <el-select v-model="b.form.bill.payTarget" style="width: 100%" :placeholder="$t('pay.corp.phPickPayTarget')">
 <el-option v-for="o in payeeTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
 
-                  
+
                 </el-select>
               </el-form-item>
             </el-col>
@@ -300,7 +300,7 @@ import BillWorkbench from '../../components/bill/BillWorkbench.vue'
 import PayMatchRoute from './PayMatchRoute.vue'
 import PayPrepayOffset from './PayPrepayOffset.vue'
 import { userApi, billApi, contractApi, reportApi, purchaseApi, supplierApi, store } from '../../api'
-// D-DEC-346：收货单候选是辅助加载，需 silent（无 po:receipt:list 时不可弹误导性报错），
+// 收货单候选是辅助加载，需 silent（无 po:receipt:list 时不可弹误导性报错），
 // 而 purchaseApi.receiptPage 未开 cfg 位，故按本页既有写法直取共享 http 实例。
 import { http } from '../../request'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
@@ -321,13 +321,13 @@ const { t } = useI18n()
 //    值域与 pay_method 不同，属另一个业务维度（缺陷⑥ 已修正其选项与默认值）。
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CORP)
 const payMethodOptions = payMethodDict.options
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+s': () => { try { wb.value?.b?.saveDraft() } catch { /* noop */ } },
   'ctrl+r': () => location.reload(),
 })
 const { saveFormHistory } = useAutoFill()
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -341,7 +341,7 @@ provide('wb', wb)
 
 const props = defineProps({ subType: { type: String, default: 'PREPAY' } })
 // P: 一 TAB = 一菜单——由独立子路由(费用预付款/对公结算)深链进入时，隐藏单据类型切换按钮。
-// R5-D-080(b)：AGENCY(代收代付)/AIR(机票结算) 在流程登记层零登记（BillRouteRegistry/ExpenseWfEventListener
+// (b)：AGENCY(代收代付)/AIR(机票结算) 在流程登记层零登记（BillRouteRegistry/ExpenseWfEventListener
 // 无该两子类型）且库内 0 行写入数据库，依唯一荐法(b) 下线该两子类型入口与其深链路由，收敛 isSingle 路径集。
 const route = useRoute()
 const router = useRouter()
@@ -501,7 +501,7 @@ function onCounterChange(b, id) {
     if (subType.value === 'SETTLE') loadPos(b, c.customerName)
   }
 }
-/** D-DEC-346：slot 下发的 b 每轮渲染都是浅拷贝 ⇒ 对 b.pos/b.receipts 整体赋值会丢。
+/** slot 下发的 b 每轮渲染都是浅拷贝 ⇒ 对 b.pos/b.receipts 整体赋值会丢。
  *  容器已预声明这两个数组，页面侧只做原地增删，靠引用共享回写。 */
 function setArr(target, next) {
   target.splice(0, target.length, ...(next || []))
@@ -510,13 +510,13 @@ async function loadPos(b, counterName) {
   setArr(b.receipts, [])
   try {
     // silent: 这是辅助性后台加载(为用户准备 PO 下拉)，失败(如无 po:order:list 权限)不应打扰用户
-    // D-DEC-346 查询键：此前把「往来单位名」当 keyword 打给 order/page，而后端只按
+    // 查询键：此前把「往来单位名」当 keyword 打给 order/page，而后端只按
     // po_no/supplier_name 模糊匹配 —— crm_customer 无 supplier_id 可映射、两套名称不同源
     // （实测「苏州科韵精密设备有限公司」在 crm_customer 里 0 命中）⇒ 下拉恒空。
     // 现改为不带 keyword 取单，名称只做尽力收窄：命中才收窄，落空退回全量，绝不再恒空。
     const r = await purchaseApi.orderPage({ pageNum: 1, pageSize: 100 }, { silent: true })
     const all0 = r.list || []
-    // D-V4R-47：已作废（VOID）的采购订单不得再进结算候选——原先只按供应商名收窄，
+    // 已作废（VOID）的采购订单不得再进结算候选——原先只按供应商名收窄，
     // 实测本轮作废的 PO1791909414058 仍挂在第二枚候选上，能把钱结算到一张作废订单上。
     const all = all0.filter((p) => String((p && p.status) || '').toUpperCase() !== 'VOID')
     all0.forEach((p) => { if (p && p.id != null) poSupplierNames.set(Number(p.id), String(p.supplierName || '').trim()) })
@@ -527,7 +527,7 @@ async function loadPos(b, counterName) {
           return s && (s.includes(key) || key.includes(s))
         })
       : []
-    // D-DEC-346 第二重必空：原「剩余可收>0」是收货页规则，结算时 PO 通常已全量收货
+    // 第二重必空：原「剩余可收>0」是收货页规则，结算时 PO 通常已全量收货
     // ⇒ 该过滤会把要匹配的单全部剔掉，故去除（选项标签本就展示剩余额，由人判断）。
     setArr(b.pos, named.length ? named : all)
     // 草稿重编辑：PO 候选到位后才能判「往来单位 vs PO 供应商」是否同主体，此前无从比
@@ -539,7 +539,7 @@ async function loadPos(b, counterName) {
 }
 /** 用户改选 PO ⇒ 原收货单归属失效，重取候选 */
 function onPoPick(b, poId) {
-  // D-V4R-27：下拉绑定的是 ext_json.poId（展示/收货单候选都读它），但 exp_bill.po_id 列的取值源
+  // 下拉绑定的是 ext_json.poId（展示/收货单候选都读它），但 exp_bill.po_id 列的取值源
   // 是顶层 bill.poId。保存草稿不经 onBeforeSubmit 的顶层拷贝，若只写 ext_json 则列位为空——
   // 服务端收款方交叉校验看不到 PO、两源不同家也会被放过。这里把「选中那条 PO 的主键」同步进列位字段。
   b.form.bill.poId = b.form.bill.extJson.poId
@@ -548,7 +548,7 @@ function onPoPick(b, poId) {
   refreshSubjectConflict(b)
   if (subjectConflict.value) ElMessage.warning(subjectConflict.value)
 }
-/** D-DEC-346 死控件补齐：b.receipts 此前全仓无赋值点 ⇒「收货单」下拉恒 0 项 */
+/** 死控件补齐：b.receipts 此前全仓无赋值点 ⇒「收货单」下拉恒 0 项 */
 async function loadReceipts(b, poId) {
   setArr(b.receipts, [])
   const po = b.pos.find((x) => x.id === poId)
@@ -565,7 +565,7 @@ async function onReceiptChange(b, rid) {
   const rc = b.receipts.find((x) => x.id === rid)
   if (rc && rc.poId && !b.form.bill.extJson.poId) {
     b.form.bill.extJson.poId = rc.poId
-    // D-V4R-27：由收货单反推出的 PO 主键同样要落进列位字段，保存草稿环节才能被服务端交叉校验看到
+    // 由收货单反推出的 PO 主键同样要落进列位字段，保存草稿环节才能被服务端交叉校验看到
     b.form.bill.poId = rc.poId
     refreshSubjectConflict(b)
   }
@@ -588,7 +588,7 @@ async function onApplicantChange(b, id) {
 }
 
 /**
- * D-V4R-76：把 ext_json 上的三单环节（PO / 收货单 / 合同）镜像到 exp_bill 的顶层列位。
+ * 把 ext_json 上的三单环节（PO / 收货单 / 合同）镜像到 exp_bill 的顶层列位。
  *
  * 背景：下拉绑定的是 `ext_json.{poId,poReceiptId,contractId}`，但后端与匹配台/齐套校验读的是
  * 顶层列 `po_id / po_receipt_id / contract_id`。原先这份拷贝只写在 `onBeforeSubmit` 里，
@@ -606,13 +606,13 @@ function syncSettleLegs(b) {
 }
 
 async function onBeforeSaveDraft(b) {
-  // D-V4R-76：与提交同一规则，草稿态也把三单环节写进顶层列
+  // 与提交同一规则，草稿态也把三单环节写进顶层列
   syncSettleLegs(b)
 }
 
 async function onBeforeSubmit(b) {
   b.form.bill.billSubType = subType.value
-  // P0-6 对公付款：extJson 收款账户字段同步到顶层 bill 字段（后端校验读取顶层 payeeAccountNo）
+  // 对公付款：extJson 收款账户字段同步到顶层 bill 字段（后端校验读取顶层 payeeAccountNo）
   b.form.bill.payeeAccountNo = b.form.bill.extJson.payeeAccountNo || b.form.bill.payeeAccountNo
   // 表头必填校验：红星与规则同源（constants/billRequired.js），漏填即中止、不发请求
   if (!(await validateForms([formRef, payFormRef]))) return false
@@ -627,7 +627,7 @@ async function onBeforeSubmit(b) {
   // 提交前复核一次两个来源的主体指向，提示与页面当前状态保持同步（强制校验在服务端，此处只负责少跑一趟）
   refreshSubjectConflict(b)
   if (!b.form.lines.filter((l) => l.itemId).length) { ElMessage.warning(t('pay.corp.errNeedExpenseLine')); return false }
-  // D-V4R-91：补齐逐行校验（与 ClaimExpense.vue 的同名循环对齐）。
+  // 补齐逐行校验（与 ClaimExpense.vue 的同名循环对齐）。
   // 原先本处只判「至少一行有费用项」，行内金额可填 0 —— 而金额列有红星，
   // 属"看起来必填、实际放行"：错误一路延后到服务端 submit 才被拦，用户无从知道是哪一行。
   // 更实际的风险：shareAmount 取 l.amount || 0，0 元行会被写进 exp_bill_share，
@@ -687,8 +687,9 @@ onMounted(async () => {
       await wb.value.b.loadBillForEdit({ id: Number(eb) })
       const st = wb.value?.b?.form?.bill?.billSubType || wb.value?.b?.form?.bill?.subType
       if (st) subType.value = st
-      router.replace({ query: {} })
-      // D-V4-007（D-V3-134 余量）：草稿重编辑此前不加载 PO/GRN 候选——
+      // 不回写路由 query：App.vue 按 route.fullPath 给页面挂 :key，改 query＝整页重挂载，
+      // 刚载入的草稿/驳回单会被一份空白新建态顶掉（toast 仍说「已载入」，界面却是空单）。
+      // 余量：草稿重编辑此前不加载 PO/GRN 候选——
       // loadPos 只挂在 onCounterChange（下拉 change 事件）上，深链载入不经过它，
       // 于是"已选好 PO/收货单的草稿"重开时两列下拉恒空、且看不到已选单的标签，
       // 用户一清空就再也选不回来。现按单上往来单位名补一次候选加载
@@ -697,7 +698,7 @@ onMounted(async () => {
       const cName = b0?.form?.bill?.extJson?.counterName
       if (subType.value === 'SETTLE' && b0 && cName) loadPos(b0, cName)
     }
-    // D-V4-007 补充：「我的单据→编辑」直接调 loadBillForEdit（不经深链），同样补候选加载。
+    // 补充：「我的单据→编辑」直接调 loadBillForEdit（不经深链），同样补候选加载。
     // 包装一次：编辑载入完成后按单上往来单位名补 PO/收货单候选（SETTLE 专属）。
     const wbHost = wb.value
     if (wbHost?.b?.loadBillForEdit && !wbHost.b.__loadPosWrapped) {
@@ -716,14 +717,14 @@ onMounted(async () => {
     }
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   try {
-    // P0 修复（2026-10-21）：默认只加载同公司人员
+    // P0 修复：默认只加载同公司人员
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('pay.corp.lblCurrentUser')
     const b = wb.value && wb.value.b
     const uid = store.user?.userId ?? store.user?.id
     if (b && !b.form.bill.applyUserId) {
-      // P1-5 默认申请人 = 当前登录人，严格匹配 me.id，不回退 list[0]
+      // 默认申请人 = 当前登录人，严格匹配 me.id，不回退 list[0]
       const me = uid ? list.find((x) => x.id === uid) : null
       if (me) {
         b.form.bill.applyUserId = me.id
@@ -734,7 +735,7 @@ currentUserName.value = store.user?.realName || store.user?.nickName || store.us
         if (uid != null) ElMessage.warning(t('pay.corp.errApplicantMissing'))
       }
     }
-    // R5-D-082：默认标题随子类型取 subTypeLabel（原先不分 subType 硬编码「费用预付款」，
+    // 默认标题随子类型取 subTypeLabel（原先不分 subType 硬编码「费用预付款」，
     // 在 /corp-pay/settle 留空提交也拿预付款标题，与 bill_sub_type 矛盾污染凭证摘要/台账检索）
     if (b && b.form.bill.title === '') b.form.bill.title = subTypeLabel.value
     if (b) {
@@ -757,7 +758,7 @@ currentUserName.value = store.user?.realName || store.user?.nickName || store.us
         if (d.applyNo == null) d.applyNo = ''
       })
     }
-    // D-V4R-78（P0 根因修复）：合同下拉的数据源是 contractApi.page，而 paidAmount 只是选项标签上的
+    // P0 根因修复：合同下拉的数据源是 contractApi.page，而 paidAmount 只是选项标签上的
     // 「已付合计」装饰。此前把两者串在一个 try 里、且 reportApi.contractSummary() 抛错被
     // `catch { ignore }` 吞掉 ⇒ contracts 整行赋值不执行 ⇒ 「付款合同」下拉对所有未授 report:view
     // 的角色（应付会计、普通员工）永久为空 ⇒ 三单/四单匹配的合同环节挂不上、付款齐套校验以「缺合同环节」

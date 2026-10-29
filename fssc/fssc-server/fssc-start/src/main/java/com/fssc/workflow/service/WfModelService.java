@@ -9,8 +9,12 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.common.util.AssertUtil;
+import com.fssc.framework.tenant.TenantContext;
+import com.fssc.workflow.entity.WfBusinessFlow;
 import com.fssc.workflow.entity.WfModel;
+import com.fssc.workflow.mapper.WfBusinessFlowMapper;
 import com.fssc.workflow.mapper.WfModelMapper;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.annotation.PostConstruct;
@@ -25,14 +29,14 @@ import org.springframework.stereotype.Service;
 public class WfModelService {
 
     private final WfModelMapper modelMapper;
-    private final com.fssc.workflow.mapper.WfBusinessFlowMapper wfBusinessFlowMapper;
+    private final WfBusinessFlowMapper wfBusinessFlowMapper;
     private final WfBpmnTemplateService bpmnTemplateService;
     private final RepositoryService repositoryService;
-    /** G3-4：每次真实部署把 XML 快照 + 统一 diff 落到仓库目录，流程变更可追溯 */
+    /** 每次真实部署把 XML 快照 + 统一 diff 落到仓库目录，流程变更可追溯 */
     private final WfBpmnRepoService bpmnRepoService;
-    /** G3-3：发布时统计在途旧实例，写进发布日志 */
+    /** 发布时统计在途旧实例，写进发布日志 */
     private final WfQueryService wfQueryService;
-    /** A4（2026-10-14）：assign_type 可解析性 fast-fail——部署前拒绝"无默认方案的 POST/EXPRESSION 节点" */
+    /** A4：assign_type 可解析性 fast-fail——部署前拒绝"无默认方案的 POST/EXPRESSION 节点" */
     private final WfAssigneeTypeGuard assigneeTypeGuard;
 
     public PageResult<WfModel> page(long pageNum, long pageSize, String keyword, String category, String status) {
@@ -96,7 +100,7 @@ public class WfModelService {
         validateKeyAndName(model);
         boolean redeploy = model.getBpmnXml() != null && !model.getBpmnXml().isBlank()
                 && !model.getBpmnXml().equals(old.getBpmnXml());
-        // A4 fast-fail（2026-10-14）：仅重部署路径校验（与 publish 同一规则），且同样先于写库，
+        // A4 fast-fail：仅重部署路径校验（与 publish 同一规则），且同样先于写库，
         // 避免"库已改、部署被拒"的不一致态；纯字段更新（不重部署）不受影响。
         if (redeploy) {
             assigneeTypeGuard.assertModelAssigneesResolvable(old.getModelKey());
@@ -130,7 +134,7 @@ public class WfModelService {
         if (model.getBpmnXml() == null || model.getBpmnXml().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "发布失败：BPMN 内容为空");
         }
-        // A4 fast-fail（2026-10-14）：必须在写库之前校验——publish 先 updateById 再部署，
+        // A4 fast-fail：必须在写库之前校验——publish 先 updateById 再部署，
         // 若部署前才抛错会留下"库中新 XML、引擎中旧定义"的不一致态。
         assigneeTypeGuard.assertModelAssigneesResolvable(old.getModelKey());
         modelMapper.updateById(model);
@@ -178,13 +182,13 @@ public class WfModelService {
     /** 模板同步：把 wf_business_flow（需求标准流程）合并为 wf_model 模型（source=TEMPLATE）；已存在则刷新 bpmn_xml（模板生成规则变化时生效） */
     @PostConstruct
     public void initSync() {
-        com.fssc.framework.tenant.TenantContext.runIgnoreTenant(this::syncFromTemplates);
+        TenantContext.runIgnoreTenant(this::syncFromTemplates);
     }
 
     public void syncFromTemplates() {
         try {
-            java.util.List<com.fssc.workflow.entity.WfBusinessFlow> flows = wfBusinessFlowMapper.selectList(null);
-            for (com.fssc.workflow.entity.WfBusinessFlow f : flows) {
+            List<WfBusinessFlow> flows = wfBusinessFlowMapper.selectList(null);
+            for (WfBusinessFlow f : flows) {
                 if (f.getNodeJson() == null || f.getNodeJson().isBlank()) continue;
                 String key = f.getBizType();
                 String xml = bpmnTemplateService.build(f.getFlowName(), key, f.getNodeJson());
@@ -230,11 +234,11 @@ public class WfModelService {
     /**
      * 删除模型（物理删，删后释放 model_key 唯一键，见 {@code WfModelMapper.hardDelete} 注释）。
      *
-     * <p><b>D-DEC-281：先拦在途实例。</b>原实现一句 {@code modelMapper.hardDelete(id)} 裸删，
+     * <p><b>先拦在途实例。</b>原实现一句 {@code modelMapper.hardDelete(id)} 裸删，
      * 于是「删模型带在途单」：wf_model 行没了，在跑实例的 {@code proc_inst_id} 仍在引擎里推进，
      * 而节点配置按 model_key 关联（{@code wf_node_config}/{@code wf_process_config}）从此解析不到——
      * 催办/超时/改派这类按节点配置驱动的动作静默失效，单据既不推进也不报警，只在待办里发臭
-     * （册载"节点配置失效永不催办"）。修法取<b>禁删</b>而非软删：本表 status 名称表
+     * 册载"节点配置失效永不催办"。修法取<b>禁删</b>而非软删：本表 status 名称表
      * （DRAFT/ACTIVE/DEPLOYED/DISABLED，同 {@link #enable}）里没有"已删除"一格，
      * 新造状态会污染所有按 status 过滤的读侧，而"停用"诉求 {@code enable(id,false)} 已是独立动作。
      *

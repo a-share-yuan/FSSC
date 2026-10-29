@@ -3,11 +3,16 @@
 
 package com.fssc.workflow.action;
 
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.bank.entity.BankReconcile;
 import com.fssc.bank.mapper.BankReconcileMapper;
+import com.fssc.bank.service.BankReconcileService;
 import com.fssc.sharing.service.VoucherService;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -15,10 +20,10 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 银行对账审批收尾（P0-1 事件编排总线 + P0-2 凭证引擎接线）。
+ * 银行对账审批收尾（事件编排总线 + 凭证引擎接线）。
  * <p>
  * TR_BANK_RECON 审批通过 → bank_reconcile.matchStatus: MATCHED → CONFIRMED + 生成对账差异凭证
- * （锁定对账结果，差异金额入财务费用）
+ * 锁定对账结果，差异金额入财务费用
  */
 @Slf4j
 @Component("bankReconBizAction")
@@ -27,10 +32,10 @@ public class BankReconBizAction implements WfBizAction {
 
     private final BankReconcileMapper bankReconcileMapper;
     private final VoucherService voucherService;
-    /** W2（D-DEC-313）：定稿前取当月余额调节差额 */
-    private final com.fssc.bank.service.BankReconcileService bankReconcileService;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** W2：定稿前取当月余额调节差额 */
+    private final BankReconcileService bankReconcileService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -47,16 +52,16 @@ public class BankReconBizAction implements WfBizAction {
             return;
         }
         try {
-            // P4-3 审计扩面：改状态前采集旧值
+            // 审计扩面：改状态前采集旧值
             String oldMatchStatus = recon.getMatchStatus();
             BankReconcile upd = new BankReconcile();
             upd.setId(reconId);
             if (Boolean.TRUE.equals(event.getApproved())) {
-                // W2（D-DEC-313）：调节差额非零＝当月还有没对平的未达账项，不静默定稿。
+                // W2：调节差额非零＝当月还有没对平的未达账项，不静默定稿。
                 // 留在 MATCHED 并逐条记录交人工处理——Task_4 人工复核这道挡位按裁决保留不动。
-                java.math.BigDecimal diff = bankReconcileService.reconDiff(reconId);
+                BigDecimal diff = bankReconcileService.reconDiff(reconId);
                 if (diff != null && diff.signum() != 0) {
-                    java.util.Map<String, Object> unchanged = new java.util.LinkedHashMap<>();
+                    Map<String, Object> unchanged = new LinkedHashMap<>();
                     unchanged.put("matchStatus", oldMatchStatus);
                     auditTrailService.recordUpdate(event.getBizType(), reconId, recon.getSerialNo(), "bank_reconcile",
                             String.valueOf(reconId), unchanged, unchanged,
@@ -74,22 +79,22 @@ public class BankReconBizAction implements WfBizAction {
                 log.info("银行对账 {} 审批驳回: → REJECTED", reconId);
             }
             bankReconcileMapper.updateById(upd);
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("matchStatus", oldMatchStatus);
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("matchStatus", upd.getMatchStatus());
             auditTrailService.recordUpdate(event.getBizType(), reconId, recon.getSerialNo(), "bank_reconcile",
                     String.valueOf(reconId), auditBefore, auditAfter,
                     (Boolean.TRUE.equals(event.getApproved()) ? "审批通过" : "审批驳回")
                             + (event.getComment() == null || event.getComment().isBlank() ? "" : "：" + event.getComment()));
-            // P0-2: 生成银行对账差异凭证
+            // 生成银行对账差异凭证
             if (Boolean.TRUE.equals(event.getApproved())) {
                 try {
                     voucherService.generateBankReconVoucher(recon);
                 } catch (Exception vex) {
                     log.error("银行对账 {} 凭证生成失败（不影响状态更新）: {}", reconId, vex.getMessage(), vex);
                 }
-                // D-DEC-164：定稿即关闭未达账项（OPEN → CLEARED），补齐"审批结论"在业务表上的落点；
+                // 定稿即关闭未达账项（OPEN → CLEARED），补齐"审批结论"在业务表上的落点；
                 // 勾对经办人（bank_reconcile.match_by）作为清结操作人——引擎线程无登录上下文。
                 try {
                     bankReconcileService.closeReconItems(reconId, recon.getMatchBy());

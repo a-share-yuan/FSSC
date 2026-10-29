@@ -13,7 +13,7 @@
       </div>
     </template>
 
-    <!-- R5-D-033：汇总文案随列表返回读数生成，不再静态宣称已启用 -->
+    <!-- 汇总文案随列表返回读数生成，不再静态宣称已启用 -->
     <el-tag :type="summaryType" style="margin-bottom: 10px" :closable="false">{{ summaryText }}</el-tag>
 
     <el-table :data="rows" size="small" border stripe v-loading="loading" @selection-change="handleSelectionChange">
@@ -132,7 +132,7 @@ const loading = ref(false)
 const pageNum = ref(1)
 const pageSize = ref(20)
 const dialogVisible = ref(false)
-// R5-D-033：后端 /compliance/rule 只有 list（无 page），全量取回后本地切片分页
+// 后端 /compliance/rule 只有 list（无 page），全量取回后本地切片分页
 const allRows = ref([])
 const rows = computed(() => {
   const from = (pageNum.value - 1) * pageSize.value
@@ -185,7 +185,7 @@ async function load() {
     const maxPage = Math.max(1, Math.ceil(allRows.value.length / pageSize.value))
     if (pageNum.value > maxPage) pageNum.value = maxPage
   } catch (e) {
-    // R5-D-033：查询失败置空并转空态，不透出后端原文
+    // 查询失败置空并转空态，不透出后端原文
     allRows.value = []
     loadError.value = true
     ElMessage.error('合规规则未能加载，请重新进入本页或稍后重试')

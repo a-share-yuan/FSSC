@@ -9,7 +9,7 @@
   </el-radio-group>
   <BillWorkbench ref="wb" :bill-type="mode === 'LOAN' ? 'LOAN' : 'REPAY'" :sub-type="mode" :before-submit="onBeforeSubmit">
     <template #create="b">
-      <!-- ============ 单据概要 ============ -->
+      <!-- 单据概要 -->
       <el-card :header="$t('expense.claim.colBillSummary')">
         <el-form ref="formRef" :rules="formRules" :model="b.form.bill" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -33,8 +33,8 @@
                 <el-select v-model="b.form.bill.currencyCode" style="width: 100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 
-                  
-                  
+
+
                 </el-select>
               </el-form-item>
             </el-col>
@@ -60,7 +60,7 @@
         </el-form>
       </el-card>
 
-      <!-- ============ 借款申请：借款详情 ============ -->
+      <!-- 借款申请：借款详情 -->
       <el-card v-if="mode === 'LOAN'" :header="$t('expense.loan.secLoanDetail')" style="margin-top: 12px">
         <el-form ref="loanFormRef" :model="b.form.bill.extJson" :rules="loanRules" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -94,7 +94,7 @@
         </el-form>
       </el-card>
 
-      <!-- ============ 借款申请：未冲销详情 ============ -->
+      <!-- 借款申请：未冲销详情 -->
       <el-card v-if="mode === 'LOAN'" :header="$t('expense.loan.secOpenLoans')" style="margin-top: 12px">
         <div style="margin-bottom: 8px">
       <el-button type="info" size="small" @click="exportCsv">{{ $t('expense.common.btnExportCsv') }}</el-button>
@@ -114,7 +114,7 @@
         <TablePager :pager="pager" @change="loadOpenLoans" />
       </el-card>
 
-      <!-- ============ 还款申请：还款详情 ============ -->
+      <!-- 还款申请：还款详情 -->
       <el-card v-if="mode === 'REPAY'" :header="$t('expense.loan.secRepayDetail')" style="margin-top: 12px">
         <el-button type="primary" size="small" @click="openRepayLoan">{{ $t('expense.loan.btnPickLoanWriteOff') }}</el-button>
         <el-table :data="b.form.loanOffsets" size="small" border style="margin-top: 8px" v-loading="loading">
@@ -134,7 +134,7 @@
         </el-table>
       </el-card>
 
-      <!-- ============ 还款申请：公司收款账号 ============ -->
+      <!-- 还款申请：公司收款账号 -->
       <el-card v-if="mode === 'REPAY'" :header="$t('expense.loan.secCompanyBankInfo')" style="margin-top: 12px">
         <el-form ref="companyFormRef" :model="b.form.bill.extJson" :rules="companyRules" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -154,7 +154,7 @@
     </template>
   </BillWorkbench>
 
-  <!-- 还款：选择借款单弹窗（D-UI-04：勾选+可改金额+【确定】，取代行点即全额冲抵并关窗） -->
+  <!-- 还款：选择借款单弹窗（勾选+可改金额+【确定】，取代行点即全额冲抵并关窗） -->
   <CandidatePickerDialog v-model="repayDialog" :title="$t('expense.loan.dlgPickLoanWriteOff')"
                         :rows="b_loanCandidates" :loading="loading" max-field="availableBalance"
                         extra-prop="title" :extra-label="$t('expense.common.colTitle')"
@@ -192,7 +192,7 @@ const { t } = useI18n()
 const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18N_CLAIM)
 const payMethodOptions = payMethodDict.options
 const { saveFormHistory } = useAutoFill()
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -209,7 +209,7 @@ const wb = ref(null)
 const users = ref([])
 const openLoans = ref([])
 
-// ---------- 表头必填：通用字段走登记表（红星/校验同源），单据说明本页加严 ----------
+// 表头必填：通用字段走登记表（红星/校验同源），单据说明本页加严
 const formRules = computed(() => ({
   ...billRules(props.mode === 'LOAN' ? 'LOAN' : 'REPAY', ''),
   // 还款单上这个字段是「还款人」，提示语随场景改口
@@ -272,7 +272,7 @@ function syncRepayLine(b) {
   b.form.lines[0].amount = Math.round(total * 100) / 100
   b.form.lines[0].itemId = loanItemId(b)
 }
-/** 已入账的借款单 id —— 选择器里置灰，防同一张借款单重复入账（D-UI-04） */
+/** 已入账的借款单 id —— 选择器里置灰，防同一张借款单重复入账 */
 const loanOffsetIds = computed(() => (wb.value?.b?.form?.loanOffsets || []).map((o) => o.loanBillId))
 function loanItemId(b) {
   const it = b.items.find((x) => (x.itemName || '').includes('借款') || (x.itemName || '').includes('备用'))
@@ -281,7 +281,7 @@ function loanItemId(b) {
 function ensureLine(b) {
   if (!b.form.lines.length) b.form.lines.push(b.newLine())
 }
-// D-TR-02 同一规则：冲销清单双向同步 extJson.loanOffsets——草稿即存，编辑重提回读回填
+// 同一规则：冲销清单双向同步 extJson.loanOffsets——草稿即存，编辑重提回读回填
 // （此前只在提交时写入，重开还款草稿冲销行整块丢失）
 watch(() => {
   const b = wb.value && wb.value.b
@@ -313,7 +313,7 @@ async function onBeforeSubmit(b) {
   if (props.mode === 'LOAN') {
     syncLoanLine(b)
     b.form.bill.expectRepayDate = b.form.bill.extJson.expectRepayDate || null
-    // P1-1 借款详情必填（类型/金额/收款方式/账户名称/账号/开户行）
+    // 借款详情必填（类型/金额/收款方式/账户名称/账号/开户行）
     if (!(await validateForms([loanFormRef]))) return false
     // 预计还款日不得早于借款申请日（前端禁选 + 提交默认处理）
     const applyDay = b.form.bill.applyDate || b.today()
@@ -324,15 +324,15 @@ async function onBeforeSubmit(b) {
   } else {
     syncRepayLine(b)
     b.form.bill.extJson.loanOffsets = b.form.loanOffsets.map((o) => ({ ...o }))
-    // P1-1 还款：至少一条冲销记录
+    // 还款：至少一条冲销记录
     if (!b.form.loanOffsets.length) {
       ElMessage.warning(t('expense.loan.errNeedLoanPick')); return false
     }
-    // P1-1 还款：每笔冲销金额 > 0
+    // 还款：每笔冲销金额 > 0
     if (b.form.loanOffsets.some((o) => !(Number(o.offsetAmount) > 0))) {
       ElMessage.warning(t('expense.loan.errRepayPositive')); return false
     }
-    // P1-1 公司收款账号必填（户名/账号/开户行/还款方式）
+    // 公司收款账号必填（户名/账号/开户行/还款方式）
     if (!(await validateForms([companyFormRef]))) return false
   }
   return true
@@ -346,10 +346,10 @@ async function removeOffset(b, i) {
 }
 
 /**
- * D-UI-03（2026-10-19）：候选面改走 /loan-candidates，一次查询取回。
+ * 候选面改走 /loan-candidates，一次查询取回。
  *
  * <p>此前这里按 {@code APPROVED／PARTIAL_REPAID／REPAID} 三次 myPage 再合并去重
- * （D-DEC-396 的历史补丁：借款被在途冲抵会迁 PARTIAL_REPAID，单查 APPROVED 会失明）。
+ * （的历史补丁：借款被在途冲抵会迁 PARTIAL_REPAID，单查 APPROVED 会失明）。
  * 新接口在服务端一次取齐三态、并已把 {@code loan_balance ≤ 0} 的滤掉，三分支拼装随之删除。</p>
  *
  * <p>更要紧的是它给的是 {@code availableBalance}（账面余额 − <b>在途占用</b>）：
@@ -357,7 +357,7 @@ async function removeOffset(b, i) {
  * （即 {@code ExpenseDetailService} 类注释里登记的「已知现有残口①」）。</p>
  */
 async function openRepayLoan() {
-  //  本函数原先直接写 `b.form.bill.companyId`，但脚本作用域里并没有裸的 `b`
+  // 本函数原先直接写 `b.form.bill.companyId`，但脚本作用域里并没有裸的 `b`
   //   （b 是 BillWorkbench 经 ref="wb" 暴露出来的，只能用 `wb.value && wb.value.b`
   //     取得 —— 本文件其余 12 处函数都是这么写的）。
   //   结果点按钮即抛 ReferenceError，loan-candidates 请求根本没发出、repayDialog
@@ -374,7 +374,7 @@ async function openRepayLoan() {
   repayDialog.value = true
 }
 /**
- * D-UI-04（2026-10-19）：【确定】后才入账，且金额以对话框里改过的值为准（支持部分冲抵）。
+ * 【确定】后才入账，且金额以对话框里改过的值为准（支持部分冲抵）。
  * 改前是点任意行立刻按未还余额全额冲抵并关窗——误点即产生财务动作、无确认、金额不可调。
  */
 function confirmRepayLoans(items) {
@@ -425,23 +425,24 @@ onMounted(async () => {
   // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
   payMethodDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单（LOAN/REPAY 同组件，按单据实际类型载入）
+  // 不要此处不得回写路由 query：App.vue 按 route.fullPath 给页面挂 :key，改 query＝整页重挂载，
+  // 刚载入的表单会被一份空白新建态顶掉（toast 仍说「已载入」，界面却是空单）。
   try {
     const eb = route.query.editBillId
     if (eb && wb.value?.b?.loadBillForEdit) {
       await wb.value.b.loadBillForEdit({ id: Number(eb) })
-      router.replace({ query: {} })
     }
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   loading.value = true
   try {
-    // P0 修复（2026-10-21）：默认只加载同公司人员
+    // P0 修复：默认只加载同公司人员
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
     currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
     const b = wb.value && wb.value.b
     const uid = store.user?.userId ?? store.user?.id
     if (b && !b.form.bill.applyUserId) {
-      // P1-5 默认申请人 = 当前登录人，严格匹配 me.id，不回退 list[0]
+      // 默认申请人 = 当前登录人，严格匹配 me.id，不回退 list[0]
       const me = uid ? list.find((x) => x.id === uid) : null
       if (me) {
         b.form.bill.applyUserId = me.id

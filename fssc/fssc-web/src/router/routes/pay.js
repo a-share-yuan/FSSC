@@ -12,7 +12,7 @@ export default [
   // 一 TAB = 一菜单：对公支付各类型拆为独立菜单（CorpPay.vue 深链隐藏类型切换按钮）；父路径重定向到首个类型
   { path: 'corp-pay/prepay', component: () => import('../../views/pay/CorpPay.vue'), props: { subType: 'PREPAY' }, meta: { title: '费用预付款' } },
   { path: 'corp-pay/settle', component: () => import('../../views/pay/CorpPay.vue'), props: { subType: 'SETTLE' }, meta: { title: '对公结算' } },
-  // R5-D-080(b)：代收代付(AGENCY)/机票结算(AIR) 两子类型与深链路由一并下线——
+  // (b)：代收代付(AGENCY)/机票结算(AIR) 两子类型与深链路由一并下线——
   // BillRouteRegistry/ExpenseWfEventListener 零登记（一旦写入数据库会并档到 EXP_PAY 链，规则全错），且库内 0 行无历史包袱。
   // 菜单侧 261/262/263 本为 del_flag=1 软删（深链可直达为遗留后门，统一治理面转人工登记）。
   // P2 对公付款凭证与总账落账

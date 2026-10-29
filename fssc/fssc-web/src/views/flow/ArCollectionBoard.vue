@@ -32,7 +32,7 @@
       <el-table-column :label="$t('flow.arColl.colNote')" min-width="160" show-overflow-tooltip>
         <template #default="{ row }">{{ row.note || '—' }}</template>
       </el-table-column>
-      <!-- D-DEC-410 乙：同人多岗只做复核提示，不拦办结——提示必须在界面看得见才算控制点 -->
+      <!-- 乙：同人多岗只做复核提示，不拦办结——提示必须在界面看得见才算控制点 -->
       <el-table-column :label="$t('flow.arColl.colReview')" width="80" align="center">
         <template #default="{ row }">
           <el-tooltip v-if="row.multiRoleWarning" :content="row.multiRoleWarning" placement="top">
@@ -104,7 +104,7 @@ function overdueBaselineParams() {
   return v ? { asOfDate: v } : {}
 }
 
-// D-DEC-407：批处理基准日与原应收工作台同一规则——留空＝系统当前日，选日期则按该日跑
+// 批处理基准日与原应收工作台同一规则——留空＝系统当前日，选日期则按该日跑
 function baselineSuffix(baseline) {
   return baseline.period || baseline.asOfDate
     ? t('flow.arColl.msgBaselineSuffix', { v1: baseline.asOfDate || baseline.period })
@@ -130,7 +130,7 @@ async function createOverdue() {
 
 async function solveCollect(row) {
   try {
-    // D-DEC-410 乙：办结照做，只把"同一人在这条催收任务上占多岗"的复核提示显示出来（不拦、不报错）
+    // 乙：办结照做，只把"同一人在这条催收任务上占多岗"的复核提示显示出来（不拦、不报错）
     const r = await receivableApi.collectSolve(row.id)
     if (r && r.warning) ElMessage({ type: 'warning', message: t('flow.arColl.msgSolvedWithWarn', { v1: r.warning }), duration: 6000 })
     else ElMessage.success(t('flow.arColl.msgSolved'))

@@ -153,7 +153,7 @@
 
 <script setup>
 /**
- * D-DEC-320：流程收尾动作配置管理面（wf_event_action_config）。
+ * 流程收尾动作配置管理面（wf_event_action_config）。
  * 表原本只有引擎读环节、没有任何 Controller 与页面，配置只能靠 SQL 手改。
  * 本页＝只读清单（可按状态/收尾动作/业务类型筛）＋字段级有限编辑（启用状态、配置说明）
  * ＋运行期生效快照（引擎启动时构建的分发映射投影）。
@@ -232,7 +232,7 @@ function reloadAll() {
 
 function openRowDetail(row) { return showRowDetail(row, { title: '收尾动作配置详情' }) }
 
-// ---------------- 编辑 ----------------
+// 编辑
 const edit = reactive({ visible: false, saving: false, row: {}, form: { enabled: 1, description: '' } })
 // 第2批：编辑弹窗接入——配置说明 256 字默认处理；启用状态恒有值（1/0）不建规则
 const editFormRef = ref(null)
@@ -269,7 +269,7 @@ async function saveEdit() {
   } catch (e) { /* 错误文案已由请求拦截器统一提示 */ } finally { edit.saving = false }
 }
 
-// ---------------- 运行期快照 ----------------
+// 运行期快照
 const snapLoading = ref(false)
 const snap = reactive({ visible: false, data: null })
 

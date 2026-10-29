@@ -3,6 +3,7 @@
 
 package com.fssc.workflow.service;
 
+import java.util.HashSet;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,7 +33,7 @@ import java.util.Set;
  *   <li><b>R2 汇报线断裂</b>：公司内部门<b>不得全部 {@code parent_id=0}</b> ——
  *       断在第一层时 {@code escalateTarget} 与 {@code empty_strategy=ESCALATE} 全部失效。</li>
  *   <li><b>R3 leader 即提单人</b>：某部门 leader 若同时是该部门主要提单人，
- *       他本人发起的单在该节点必然无人可办（本项目已由 D-WF-15 三级降级默认处理，
+ *       他本人发起的单在该节点必然无人可办（本项目已由 三级降级默认处理，
  *       但组织上仍应避免，属<b>提醒级</b>）。</li>
  *   <li><b>R4 leader 跨公司</b>：{@code sys_dept.leader_id} 指向的人不属于本公司 ⇒
  *       「直属上级」跨公司，本地公司的事务由外公司人审批。<b>本项目代码当前不校验此项（R4 属组织治理规则）</b>，
@@ -40,7 +41,7 @@ import java.util.Set;
  *   <li><b>R5 节点名一致性</b>（2026-10-19 E-1 新增）：流程已部署的节点显示名与
  *       {@code wf_node_config.node_name} 失配。引擎按 {@code taskDefinitionKey} 取人故
  *       <b>功能不受影响</b>，但按显示名排查必然取错角色 ⇒ 只报警、不自动改
- *       （BPMN 已部署，改任一侧都牵动另一侧）。</li>
+ *       BPMN 已部署，改任一侧都牵动另一侧。</li>
  * </ol>
  *
  * <h3>设计原则</h3>
@@ -58,7 +59,7 @@ public class OrgHealthChecker {
 
     private final JdbcTemplate jdbc;
 
-    /** R5：model_key → node_key 集合，巡检时判断「引擎侧是否已有该 key」。 */
+    /** model_key → node_key 集合，巡检时判断「引擎侧是否已有该 key」。 */
     private volatile Map<String, Set<String>> keyCache;
 
     /** 巡检入口：跑一次全量体检，返回报告（与 HTTP 层 org-health/overview 同源）。 */
@@ -174,7 +175,7 @@ public class OrgHealthChecker {
             Map<String, Set<String>> nameByModel = new LinkedHashMap<>();
             for (Map<String, Object> n : jdbc.queryForList(
                     "SELECT model_key mk, node_name nm FROM wf_node_config WHERE del_flag = 0")) {
-                nameByModel.computeIfAbsent(str(n.get("mk")), k -> new java.util.HashSet<>())
+                nameByModel.computeIfAbsent(str(n.get("mk")), k -> new HashSet<>())
                         .add(str(n.get("nm")));
             }
             Map<String, Set<String>> keyByModel = keyIndex();
@@ -224,7 +225,7 @@ public class OrgHealthChecker {
         try {
             for (Map<String, Object> n : jdbc.queryForList(
                     "SELECT model_key mk, node_key nk FROM wf_node_config WHERE del_flag = 0")) {
-                built.computeIfAbsent(String.valueOf(col(n, "mk")), k -> new java.util.HashSet<>())
+                built.computeIfAbsent(String.valueOf(col(n, "mk")), k -> new HashSet<>())
                         .add(String.valueOf(col(n, "nk")));
             }
         } catch (Exception ignored) {

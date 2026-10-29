@@ -8,10 +8,25 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.notify.NotifyService;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
+import com.fssc.system.entity.SysRole;
+import com.fssc.system.entity.SysUser;
+import com.fssc.system.entity.SysUserRole;
+import com.fssc.system.mapper.SysRoleMapper;
+import com.fssc.system.mapper.SysUserMapper;
+import com.fssc.system.mapper.SysUserRoleMapper;
+import com.fssc.system.service.ConfigService;
 import com.fssc.workflow.entity.WfDelegate;
 import com.fssc.workflow.mapper.WfDelegateMapper;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,16 +40,16 @@ import java.time.LocalDateTime;
 public class WfDelegateService {
 
     private final WfDelegateMapper delegateMapper;
-    private final com.fssc.system.mapper.SysUserMapper sysUserMapper;
-    private final com.fssc.system.mapper.SysUserRoleMapper sysUserRoleMapper;
+    private final SysUserMapper sysUserMapper;
+    private final SysUserRoleMapper sysUserRoleMapper;
     /** A2①：受托人须持有"未停用"的角色，判定要读到角色本体的 status */
-    private final com.fssc.system.mapper.SysRoleMapper sysRoleMapper;
+    private final SysRoleMapper sysRoleMapper;
     /** 租户参数（sys_config）：跨公司委托白名单，每次实时读取，改配置无需重启 */
-    private final com.fssc.system.service.ConfigService configService;
+    private final ConfigService configService;
     /** 站内信发信通道（委托建立/改派/回跳三处出声） */
-    private final com.fssc.framework.notify.NotifyService notifyService;
+    private final NotifyService notifyService;
     /**
-     * 委托改派 / 回跳的执行通道（F4-1）：走引擎 {@code taskService.setAssignee} + 待办镜像 + 记录，
+     * 委托改派 / 回跳的执行通道：走引擎 {@code taskService.setAssignee} + 待办镜像 + 记录，
      * 本服务不直写 {@code wf_task}（直写会让 Flowable 与镜像两套数据分叉，正是本轮体检要消灭的病根）。
      */
     private final WfEngineFacade wfEngineFacade;
@@ -61,7 +76,7 @@ public class WfDelegateService {
     private static final int MAX_DELEGATE_CHAIN_DEPTH = 10;
 
     /**
-     * 委托列表的身份可见范围（E-12 / 方案 F1-2）。
+     * 委托列表的身份可见范围（E-12 / 方案）。
      *
      * <p><b>为什么要过滤</b>：此端点原先没有任何身份条件，任何持有 {@code wf:delegate:list}
      * 的普通员工都能翻到<b>全租户</b>的委托安排——谁把审批权临时借给了谁、借到哪天、覆盖哪些单据。
@@ -102,11 +117,11 @@ public class WfDelegateService {
      * 列表展示回填：实体只存 {@code fromUserId/toUserId}，前端两列要显示姓名。
      * 一次 {@code selectBatchIds} 取齐，避免逐行查（N+1）。
      */
-    private void fillUserNames(java.util.List<WfDelegate> rows) {
+    private void fillUserNames(List<WfDelegate> rows) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
-        java.util.Set<Long> ids = new java.util.HashSet<>();
+        Set<Long> ids = new HashSet<>();
         for (WfDelegate r : rows) {
             if (r.getFromUserId() != null) {
                 ids.add(r.getFromUserId());
@@ -118,8 +133,8 @@ public class WfDelegateService {
         if (ids.isEmpty()) {
             return;
         }
-        java.util.Map<Long, String> nameById = new java.util.HashMap<>();
-        for (com.fssc.system.entity.SysUser u : sysUserMapper.selectBatchIds(ids)) {
+        Map<Long, String> nameById = new HashMap<>();
+        for (SysUser u : sysUserMapper.selectBatchIds(ids)) {
             nameById.put(u.getId(), u.getNickName() == null || u.getNickName().isBlank()
                     ? u.getUserName() : u.getNickName());
         }
@@ -136,9 +151,9 @@ public class WfDelegateService {
         if (delegate.getToUserId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择代理人");
         }
-        // 越权修复（V1.3.19）：委托人必须是当前登录用户，杜绝请求体伪造他人 fromUserId
+        // 越权修复：委托人必须是当前登录用户，杜绝请求体伪造他人 fromUserId
         LoginUser u = UserContext.getRequired();
-        if (!java.util.Objects.equals(u.getUserId(), delegate.getFromUserId())) {
+        if (!Objects.equals(u.getUserId(), delegate.getFromUserId())) {
             throw new BizException(ErrorCode.FORBIDDEN, "只能委托本人的待办");
         }
         if (delegate.getBeginTime() == null || delegate.getEndTime() == null
@@ -154,13 +169,13 @@ public class WfDelegateService {
         //    被 B 公司的人代审：委托只是把"办理资格"临时借出，但写入数据库的 oper_user_id 是受托人本人，
         //    于是审批记录上会出现不属于该公司的经办人（数据隔离/内控可见性问题）。
         // 「只支持一级委托」无需实现：canOperate 只做受托人→委托人一跳，不存在链式递归。
-        if (java.util.Objects.equals(delegate.getFromUserId(), delegate.getToUserId())) {
+        if (Objects.equals(delegate.getFromUserId(), delegate.getToUserId())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "不能把待办委托给自己");
         }
         assertDelegateTargetUsable(delegate.getToUserId());
         // ⑤ 公司维度边界（2026-09-23 补）：默认禁止跨公司委托，命中白名单才放行
         assertCompanyBoundary(delegate.getFromUserId(), delegate.getToUserId());
-        java.time.LocalDateTime begin = delegate.getBeginTime(), end = delegate.getEndTime();
+        LocalDateTime begin = delegate.getBeginTime(), end = delegate.getEndTime();
         if (countActiveInRange(delegate.getFromUserId(), null, begin, end) > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "该时间段你已有一条生效中的委托（同一时间只能委托给一个人），请先取消或调整区间");
@@ -171,11 +186,11 @@ public class WfDelegateService {
             delegate.setStatus("NORMAL");
         }
         delegateMapper.insert(delegate);
-        // F4-2 通知补全：委托建立当即告知受托人——改造前只有"办结响应"，受托人从来不知道自己被委托了。
+        // 通知补全：委托建立当即告知受托人——改造前只有"办结响应"，受托人从来不知道自己被委托了。
         notifyDelegateCreated(delegate);
-        // F4-1 历史改派：窗口已开（begin<=now）才动别人的待办，未来生效的委托由
+        // 历史改派：窗口已开（begin<=now）才动别人的待办，未来生效的委托由
         // {@code WfDelegateExpireJob} 的生效扫描在窗口开启那一刻补做，避免"提前建委托就提前抢单"。
-        if (delegate.getBeginTime() == null || !delegate.getBeginTime().isAfter(java.time.LocalDateTime.now())) {
+        if (delegate.getBeginTime() == null || !delegate.getBeginTime().isAfter(LocalDateTime.now())) {
             try {
                 int moved = wfEngineFacade.takeOverDelegatedTasks(
                         delegate.getFromUserId(), delegate.getToUserId(), delegate.getId());
@@ -192,7 +207,7 @@ public class WfDelegateService {
     }
 
     /**
-     * 委托建立通知受托人（F4-2）。发信失败不阻断委托本身——委托是配置动作，通知是附加出声，
+     * 委托建立通知受托人。发信失败不阻断委托本身——委托是配置动作，通知是附加出声，
      * 但异常必须留日志，否则受托人"被委托却不知情"这一条又回到无声状态。
      */
     private void notifyDelegateCreated(WfDelegate delegate) {
@@ -216,7 +231,7 @@ public class WfDelegateService {
             return "未知用户";
         }
         try {
-            com.fssc.system.entity.SysUser u = sysUserMapper.selectById(userId);
+            SysUser u = sysUserMapper.selectById(userId);
             if (u == null) {
                 return String.valueOf(userId);
             }
@@ -229,8 +244,8 @@ public class WfDelegateService {
         }
     }
 
-    private String formatWindow(java.time.LocalDateTime begin, java.time.LocalDateTime end) {
-        java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private String formatWindow(LocalDateTime begin, LocalDateTime end) {
+        DateTimeFormatter f = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
         return (begin == null ? "—" : f.format(begin)) + " ~ " + (end == null ? "—" : f.format(end));
     }
 
@@ -244,16 +259,16 @@ public class WfDelegateService {
         if (exist == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "委托不存在: " + id);
         }
-        // 越权修复（V1.3.19）：只能取消本人的委托，集团级账号（无公司）除外
+        // 越权修复：只能取消本人的委托，集团级账号（无公司）除外
         LoginUser u = UserContext.getRequired();
-        if (u.getCompanyId() != null && !java.util.Objects.equals(u.getUserId(), exist.getFromUserId())) {
+        if (u.getCompanyId() != null && !Objects.equals(u.getUserId(), exist.getFromUserId())) {
             throw new BizException(ErrorCode.FORBIDDEN, "只能取消本人的委托");
         }
         WfDelegate d = new WfDelegate();
         d.setId(id);
         d.setStatus("DISABLED");
         delegateMapper.updateById(d);
-        // F4-1 反向回跳：撤销授权的同时把还压在受托人名下的待办收回来（已办的不动）。
+        // 反向回跳：撤销授权的同时把还压在受托人名下的待办收回来（已办的不动）。
         // 缺这一步，"取消委托"只改了配置表，单子却永久留在别人待办里＝又造一个配置与行为分叉。
         try {
             int back = wfEngineFacade.revertDelegatedTasks(exist.getFromUserId(), exist.getToUserId(),
@@ -282,7 +297,7 @@ public class WfDelegateService {
      * <p>admin 是铁律红线（任何流程节点不得由 admin 办理）。
      */
     private void assertDelegateTargetUsable(Long toUserId) {
-        com.fssc.system.entity.SysUser su = toUserId == null ? null : sysUserMapper.selectById(toUserId);
+        SysUser su = toUserId == null ? null : sysUserMapper.selectById(toUserId);
         if (su == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "受托人不存在（ID " + toUserId + "）");
         }
@@ -293,18 +308,18 @@ public class WfDelegateService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "受托人 " + su.getNickName() + " 状态为 " + su.getStatus() + "，无法代为办理");
         }
-        java.util.List<Long> roleIds = sysUserRoleMapper.selectList(
-                        new LambdaQueryWrapper<com.fssc.system.entity.SysUserRole>()
-                                .eq(com.fssc.system.entity.SysUserRole::getUserId, toUserId))
-                .stream().map(com.fssc.system.entity.SysUserRole::getRoleId).filter(java.util.Objects::nonNull)
+        List<Long> roleIds = sysUserRoleMapper.selectList(
+                        new LambdaQueryWrapper<SysUserRole>()
+                                .eq(SysUserRole::getUserId, toUserId))
+                .stream().map(SysUserRole::getRoleId).filter(Objects::nonNull)
                 .toList();
         if (roleIds.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "受托人 " + su.getNickName() + "（" + su.getUserName() + "）未持有任何角色，委托后无人可办");
         }
-        Long usable = sysRoleMapper.selectCount(new LambdaQueryWrapper<com.fssc.system.entity.SysRole>()
-                .in(com.fssc.system.entity.SysRole::getId, roleIds)
-                .eq(com.fssc.system.entity.SysRole::getStatus, "NORMAL"));
+        Long usable = sysRoleMapper.selectCount(new LambdaQueryWrapper<SysRole>()
+                .in(SysRole::getId, roleIds)
+                .eq(SysRole::getStatus, "NORMAL"));
         if (usable == null || usable == 0L) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "受托人 " + su.getNickName() + "（" + su.getUserName() + "）持有的角色已全部停用，"
@@ -316,7 +331,7 @@ public class WfDelegateService {
      * 公司维度边界校验（2026-09-23 补，方案 §1.4-2）。
      *
      * <p><b>缺口的实证</b>：{@code create()} 原有四条 U9 规则全都与"人"有关，没有任何一条看"公司"，
-     * 而现网 {@code sys_user.company_id} 有 5 家公司。运行期实测（2026-09-23）：
+     * 而现网 {@code sys_user.company_id} 有 5 家公司。运行期实测：
      * <pre>
      *   3818 陈修利（company 33 昆山）→ 3797 付程鹏（company 1 集团）：HTTP 200，委托建立成功
      *   随后 3819（company 32）作为受托人成功办理了 company 1 的任务，wf_task_history.oper_user_id=3819
@@ -339,7 +354,7 @@ public class WfDelegateService {
     private void assertCompanyBoundary(Long fromUserId, Long toUserId) {
         Long fromCompany = companyOf(fromUserId);
         Long toCompany = companyOf(toUserId);
-        if (java.util.Objects.equals(fromCompany, toCompany)) {
+        if (Objects.equals(fromCompany, toCompany)) {
             return;
         }
         if (fromCompany == null || toCompany == null) {
@@ -396,13 +411,13 @@ public class WfDelegateService {
         if (userId == null) {
             return null;
         }
-        com.fssc.system.entity.SysUser u = sysUserMapper.selectById(userId);
+        SysUser u = sysUserMapper.selectById(userId);
         return u == null ? null : u.getCompanyId();
     }
 
     /** 统计与 [begin,end] 重叠的生效委托条数；toUserId 为 null 时不限受托人。 */
     private long countActiveInRange(Long fromUserId, Long toUserId,
-                                    java.time.LocalDateTime begin, java.time.LocalDateTime end) {
+                                    LocalDateTime begin, LocalDateTime end) {
         LambdaQueryWrapper<WfDelegate> qw = new LambdaQueryWrapper<WfDelegate>()
                 .eq(WfDelegate::getFromUserId, fromUserId)
                 .eq(WfDelegate::getStatus, "NORMAL")
@@ -416,8 +431,8 @@ public class WfDelegateService {
     }
 
     /** 与 [begin,end] 重叠的生效委托的受托人（同委托人多条时取 id 最大，与 {@link #activeDelegateTo} 同一规则）；无则 null。 */
-    private Long delegateTargetInRange(Long fromUserId, java.time.LocalDateTime begin,
-                                       java.time.LocalDateTime end) {
+    private Long delegateTargetInRange(Long fromUserId, LocalDateTime begin,
+                                       LocalDateTime end) {
         WfDelegate d = delegateMapper.selectOne(new LambdaQueryWrapper<WfDelegate>()
                 .eq(WfDelegate::getFromUserId, fromUserId)
                 .eq(WfDelegate::getStatus, "NORMAL")
@@ -437,11 +452,11 @@ public class WfDelegateService {
      * 「<b>不允许循环委托！</b>」——外部资料未把该禁令限定在两跳。
      *
      * <p>深度上限 {@value #MAX_DELEGATE_CHAIN_DEPTH}：链上每一跳都要查一次库，且现网委托窗口互斥
-     * （同一委托人同期只能委托一人）本就让链难以变长；超限只记日志放行，
+     * 同一委托人同期只能委托一人 本就让链难以变长；超限只记日志放行，
      * 不让一条校验把建委托的耗时拖成不可控。
      */
     private void assertNoCircularChain(Long fromUserId, Long toUserId,
-                                       java.time.LocalDateTime begin, java.time.LocalDateTime end) {
+                                       LocalDateTime begin, LocalDateTime end) {
         StringBuilder chain = new StringBuilder(String.valueOf(fromUserId)).append(" → ")
                 .append(toUserId);
         Long cursor = toUserId;
@@ -451,7 +466,7 @@ public class WfDelegateService {
                 return;
             }
             chain.append(" → ").append(next);
-            if (java.util.Objects.equals(next, fromUserId)) {
+            if (Objects.equals(next, fromUserId)) {
                 throw new BizException(ErrorCode.PARAM_INVALID,
                         "委托链 " + chain + " 构成回环，系统不支持循环委托（委托链上任一环都不允许绕回起点）");
             }

@@ -27,7 +27,7 @@
         <el-table-column prop="accountName" label="账户名称" min-width="160" show-overflow-tooltip />
         <el-table-column prop="bankName" label="开户行" min-width="140" show-overflow-tooltip />
         <el-table-column prop="bankBranch" label="支行" min-width="120" show-overflow-tooltip />
-        <!-- R5-D-051：账号列展示层脱敏（首尾各留4位）；编辑框仍回填全号（openForm 拷贝原行），保存不受影响 -->
+        <!-- 账号列展示层脱敏（首尾各留4位）；编辑框仍回填全号（openForm 拷贝原行），保存不受影响 -->
         <el-table-column prop="bankAccount" label="银行账号" min-width="160" show-overflow-tooltip :formatter="(row) => maskAccount(row.bankAccount)" />
         <el-table-column prop="bankCode" label="联行号" width="120" show-overflow-tooltip />
         <el-table-column prop="currencyCode" label="币种" width="70" align="center" />
@@ -116,7 +116,7 @@
 
 <script setup>
 /**
- * 银行账户专属页(41号审查 P1-8 主数据深化第一批)
+ * 银行账户专属页(41号审查 主数据深化第一批)
  * 全要素列(编码/户名/开户行/支行/账号/联行号/币种/余额/组织/默认/状态)
  * + 组织筛选 + 印鉴/网银变更审批入口(TR01-02) + 导出,替代原通用 3 列表。
  */
@@ -132,7 +132,7 @@ import { maskAccount } from '../../utils/mask'
 import { hasPerm } from '../../utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
 
-// D-DEC-158：账户性质（人民银行银行结算账户分类）——基本户唯一性判据，与后端 ACCOUNT_TYPES 同名称表
+// 账户性质（人民银行银行结算账户分类）——基本户唯一性判据，与后端 ACCOUNT_TYPES 同名称表
 const ACCOUNT_TYPES = [
   { value: 'BASIC', label: '基本存款账户' },
   { value: 'GENERAL', label: '一般存款账户' },
@@ -150,7 +150,7 @@ const pageNum = ref(1)
 const pageSize = ref(20)
 const q = reactive({ companyId: null, keyword: '' })
 /**
- * 本单上下文（D-DEC-153 的主数据半）：TR_BANK_MASTER / TR_SEAL_CHANGE 的「去处理」现在
+ * 本单上下文（的主数据半）：TR_BANK_MASTER / TR_SEAL_CHANGE 的「去处理」现在
  * 解析到本页（与后端 BillRouteRegistry.TABLE_LEDGER 的 md_bank_account→/master/bank 同判据），
  * 深链带来的是 ?billId=<md_bank_account.id>——这张表没有业务单号列（注册表 bizNoCol 为空＝预期），
  * 所以只能按主键定位：首屏一次性取回宽页后筛出本单，其后翻页恢复正常页宽。
@@ -174,7 +174,7 @@ const formRules = computed(() => ({
   bankCode: commonRules.bankCode(),
   // 期初余额不能为负（后端 @DecimalMin 默认处理）
   balance: commonRules.amountRange(0, null, '期初余额不能为负'),
-  // D-DEC-158：账户性质是「一司一基本户」判据的来源，新增即必选；历史现有账户允许先改其它字段
+  // 账户性质是「一司一基本户」判据的来源，新增即必选；历史现有账户允许先改其它字段
   accountType: form.id ? [] : [{ required: true, message: '请选择账户性质' }],
 }))
 
@@ -191,7 +191,7 @@ function fmtMoney(v) {
   return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-// R5-D-174：4030 权限拒绝独立空态（改前与「暂无数据」同形，无权限被读成没数据）
+// 4030 权限拒绝独立空态（改前与「暂无数据」同形，无权限被读成没数据）
 const denied = ref(false)
 
 async function load() {
@@ -216,7 +216,7 @@ async function load() {
     rows.value = list
     denied.value = false
   } catch (e) {
-    // R5-D-174：4030（无账户读权限）置权限空态，不再落到「暂无数据」
+    // 4030（无账户读权限）置权限空态，不再落到「暂无数据」
     if (e?.code === 4030) { denied.value = true; return }
     ElMessage.error(e.message)
   } finally { loading.value = false }
@@ -286,7 +286,7 @@ async function del(row) {
 }
 
 function doExport() {
-  // R5-D-051：CSV 与屏上同一规则——投影时打码 bankAccount，堵住「列表打码、导出放全号」的旁路
+  // CSV 与屏上同一规则——投影时打码 bankAccount，堵住「列表打码、导出放全号」的旁路
   exportCsv(rows.value.map((r) => ({ ...r, bankAccount: maskAccount(r.bankAccount) })), [
     { prop: 'accountCode', label: '账户编码' }, { prop: 'accountName', label: '账户名称' },
     { prop: 'bankName', label: '开户行' }, { prop: 'bankBranch', label: '支行' },

@@ -3,15 +3,23 @@
 
 package com.fssc.framework.exception;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.Result;
 import com.fssc.common.exception.BizException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.common.engine.api.FlowableException;
+import org.flowable.common.engine.api.FlowableObjectNotFoundException;
+import org.flowable.common.engine.api.FlowableOptimisticLockingException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -79,7 +87,7 @@ public class GlobalExceptionHandler {
         String msg = errors.isEmpty()
                 ? "参数校验失败"
                 : errors.stream().map(FieldError::getDefaultMessage)
-                        .filter(java.util.Objects::nonNull).distinct()
+                        .filter(Objects::nonNull).distinct()
                         .collect(Collectors.joining("；"));
         return Result.fail(ErrorCode.PARAM_INVALID.getCode(), msg);
     }
@@ -132,7 +140,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 唯一键冲突（R5-D-110）：此前落到下方默认分支变成 {@code code=500「系统异常」}，
+     * 唯一键冲突：此前落到下方默认分支变成 {@code code=500「系统异常」}，
      * 而 {@code sys_oper_log.error_msg} 又把整段 SQL 原文带回页面（既暴露库面结构，又让
      * 调用方以为服务端坏了、去重试同一笔）。这里显式回 4090 业务可读文案——
      * SQL 原文、索引名、mapper 路径只落服务端日志，绝不出现在响应里。
@@ -146,10 +154,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * D-V4R-89：工作流引擎异常（FlowableException / BpmnModelException 等）单独接管。
+     * 工作流引擎异常（FlowableException / BpmnModelException 等）单独接管。
      * 此前落默认处理 500「系统异常，请稍后重试」，操作人无从判断是自己填错了还是系统坏了，
      * 于是反复重试同一笔——而这类故障（流程定义缺失/损坏、部署缓存为空）重试永远无效。
-     * 典型现场（2026-10-16 D-V4R-88）：清库误删 {@code act_ge_bytearray}（BPMN 资源字节流），
+     * 典型现场：清库误删 {@code act_ge_bytearray}（BPMN 资源字节流），
      * 点【提交审批】报
      * {@code deployment '4e682bf3-…' didn't put process definition 'PTP02-02:1:4e6ebba6-…' in the cache}，
      * 界面只给"系统异常，请稍后重试"，数据库侧自检完全查不出（引用链完整、无孤儿记录），
@@ -157,9 +165,9 @@ public class GlobalExceptionHandler {
      * <p>此处回 5001 专用码 + 明确指向"联系管理员"而非"重试"，避免无谓重试与误报。
      * 引擎原始异常仍完整落服务端日志，响应里不带任何 SQL / 表名 / 部署 ID。
      */
-    @ExceptionHandler({org.flowable.common.engine.api.FlowableException.class,
-            org.flowable.common.engine.api.FlowableOptimisticLockingException.class,
-            org.flowable.common.engine.api.FlowableObjectNotFoundException.class})
+    @ExceptionHandler({FlowableException.class,
+            FlowableOptimisticLockingException.class,
+            FlowableObjectNotFoundException.class})
     public Result<Void> handleFlowable(Exception ex, HttpServletRequest req) {
         log.error("工作流引擎异常 uri={} type={}", req.getRequestURI(), ex.getClass().getName(), ex);
         return Result.fail(ErrorCode.WORKFLOW_ENGINE_ERROR.getCode(),
@@ -167,7 +175,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * D-DATE-01：请求体反序列化失败（日期格式、字段名、类型不匹配）→ 400 + 可执行提示。
+     * 请求体反序列化失败（日期格式、字段名、类型不匹配）→ 400 + 可执行提示。
      *
      * <p>此前这类一律落到默认处理 {@link #handleOther} 返回 500「系统异常，请稍后重试」，
      * 把**调用方的参数问题**误导成系统故障。实测四例同源：
@@ -177,9 +185,9 @@ public class GlobalExceptionHandler {
      *
      * <p>现在把 Jackson 的三类解析异常单独办结，并从 message 里抽出最可能的原因提示。
      */
-    @ExceptionHandler({com.fasterxml.jackson.databind.exc.InvalidFormatException.class,
-            com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException.class,
-            org.springframework.http.converter.HttpMessageNotReadableException.class})
+    @ExceptionHandler({InvalidFormatException.class,
+            UnrecognizedPropertyException.class,
+            HttpMessageNotReadableException.class})
     public Result<Void> handleJsonParse(Exception ex, HttpServletRequest req) {
         log.warn("请求体解析失败 uri={} type={} msg={}", req.getRequestURI(),
                 ex.getClass().getSimpleName(), ex.getMessage());
@@ -188,14 +196,14 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * D-DATE-01：数据层「值放不进去」的异常（列太短 / 非空约束 / 类型越界）→ 400 + 可执行提示。
+     * 数据层「值放不进去」的异常（列太短 / 非空约束 / 类型越界）→ 400 + 可执行提示。
      *
      * <p>{@code BadSqlGrammarException} 里嵌的 {@code SQLSyntaxErrorException} 同属此类，
      * 但真正的「列不存在 / 列名写错」要交给 500 + 详细日志（那是代码缺陷不是参数问题），
      * 因此这里只兜「值不合法」三类：Data too long / cannot be null / Out of range / 精度截断。
      */
-    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
-    public Result<Void> handleDataIntegrity(org.springframework.dao.DataIntegrityViolationException ex,
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public Result<Void> handleDataIntegrity(DataIntegrityViolationException ex,
                                              HttpServletRequest req) {
         log.warn("数据约束校验失败 uri={} msg={}", req.getRequestURI(), rootMsg(ex));
         String m = rootMsg(ex);

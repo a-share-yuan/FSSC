@@ -34,7 +34,7 @@ import java.util.Set;
 
 /**
  * 影像调阅评价与异常处理（需求 6.5/6.7）。
- * 分库改造：直连 image_review/image_exception/img_batch  Mapper，类级路由 fssc_image 库。
+ * 分库改造：直连 image_review/image_exception/img_batch Mapper，类级路由 fssc_image 库。
  */
 @RestController
 @RequestMapping("/api/tenant/image")
@@ -46,7 +46,7 @@ public class ImageReviewController {
     private final ImgExceptionMapper exceptionMapper;
     private final ImgBatchMapper batchMapper;
 
-    // ---------------- 影像调阅评价 ----------------
+    // 影像调阅评价
 
     @RequiresPerm("image:review")
     @GetMapping("/review/page")
@@ -94,7 +94,7 @@ public class ImageReviewController {
         }
         review.setReviewStatus(req.getAction());
         review.setReviewTime(LocalDateTime.now());
-        // R5-D-225：评价记录回填评价人（此前 review_user_id 恒 NULL，审核责任不可追溯）
+        // 评价记录回填评价人（此前 review_user_id 恒 NULL，审核责任不可追溯）
         review.setReviewUserId(UserContext.getRequired().getUserId());
         review.setRemark(req.getRemark());
         reviewMapper.updateById(review);
@@ -112,7 +112,7 @@ public class ImageReviewController {
     @OperLog(module = "IMAGE", operType = "INSERT", desc = "录入待评价影像")
     @PostMapping("/review/create")
     public Result<Long> reviewCreate(@RequestBody ImgReview review) {
-        // R5-D-226：服务端非空校验（与前端 reviewRules 同一规则，双侧失效→双侧办结）
+        // 服务端非空校验（与前端 reviewRules 同一规则，双侧失效→双侧办结）
         AssertUtil.notBlank(review.getBatchNo(), ErrorCode.PARAM_INVALID, "请填写影像批次号");
         AssertUtil.notBlank(review.getBizNo(), ErrorCode.PARAM_INVALID, "请填写业务单号");
         review.setReviewStatus("PENDING");
@@ -137,7 +137,7 @@ public class ImageReviewController {
         return Result.success();
     }
 
-    // ---------------- 影像异常处理 ----------------
+    // 影像异常处理
 
     @RequiresPerm("image:review")
     @GetMapping("/exception/page")
@@ -153,7 +153,7 @@ public class ImageReviewController {
     @OperLog(module = "IMAGE", operType = "INSERT", desc = "上报影像异常")
     @PostMapping("/exception/create")
     public Result<Long> exceptionCreate(@RequestBody ImgException e) {
-        // R5-D-226：服务端非空校验（此前业务单号为空仍成功入库 image_exception id=3 biz_no=''）
+        // 服务端非空校验（此前业务单号为空仍成功入库 image_exception id=3 biz_no=''）
         AssertUtil.notBlank(e.getBatchNo(), ErrorCode.PARAM_INVALID, "请填写影像批次号");
         AssertUtil.notBlank(e.getBizNo(), ErrorCode.PARAM_INVALID, "请填写业务单号");
         AssertUtil.notBlank(e.getExceptionType(), ErrorCode.PARAM_INVALID, "请选择异常类型");
@@ -175,7 +175,7 @@ public class ImageReviewController {
         }
         e.setStatus("FIXED");
         e.setHandleTime(LocalDateTime.now());
-        // R5-D-225：处理记录回填处理人（此前 handle_user_id 恒 NULL）
+        // 处理记录回填处理人（此前 handle_user_id 恒 NULL）
         e.setHandleUserId(UserContext.getRequired().getUserId());
         if (remark != null) e.setRemark(remark);
         exceptionMapper.updateById(e);

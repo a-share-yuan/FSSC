@@ -3,16 +3,27 @@
 
 package com.fssc.workflow.controller;
 
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
+import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
+import com.fssc.framework.security.annotation.DataScope;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.workflow.entity.WfCc;
 import com.fssc.workflow.entity.WfInstance;
 import com.fssc.workflow.entity.WfTask;
 import com.fssc.workflow.entity.WfTaskHistory;
+import com.fssc.workflow.service.NodeOrgResolver;
+import com.fssc.workflow.service.WfCcService;
 import com.fssc.workflow.service.WfQueryService;
+import com.fssc.workflow.service.WfReadGuard;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,12 +44,12 @@ public class WfQueryController {
 
     private final WfQueryService wfQueryService;
     /** G2 传阅：抄送候选人只读查询（审批弹窗「抄送给」的数据源） */
-    private final com.fssc.workflow.service.WfCcService wfCcService;
+    private final WfCcService wfCcService;
     /** 审批历史读侧归属判定（RA-TRC-04 前置：授权扩面前先办结） */
-    private final com.fssc.framework.org.OrgGuard orgGuard;
-    private final com.fssc.workflow.service.NodeOrgResolver nodeOrgResolver;
-    /** D-DEC-229：流程侧只读预览的归属校验（chain 与四个预览端点同一把尺） */
-    private final com.fssc.workflow.service.WfReadGuard wfReadGuard;
+    private final OrgGuard orgGuard;
+    private final NodeOrgResolver nodeOrgResolver;
+    /** 流程侧只读预览的归属校验（chain 与四个预览端点同一把尺） */
+    private final WfReadGuard wfReadGuard;
 
     /**
      * 流程实例列表（流程<b>管理</b>中心）。
@@ -49,13 +60,13 @@ public class WfQueryController {
      * 开关缺省关 ⇒ 本注解不产生任何过滤（零行为变化），也不影响既有权限判定。
      */
     @RequiresPerm({"wf:manage:instance", "wf:instance:list"})
-    @com.fssc.framework.security.annotation.DataScope
+    @DataScope
     @GetMapping("/instance/page")
     public Result<PageResult<WfInstance>> instancePage(PageQuery query,
                                                        @RequestParam(required = false) String bizType,
                                                        @RequestParam(required = false) String status,
                                                        @RequestParam(required = false) String keyword,
-                                                       // RA-D248a：模型详情抽屉的「本模型实例」一直在传 modelKey，
+                                                       // 模型详情抽屉的「本模型实例」一直在传 modelKey，
                                                        // 端点不接 ⇒ 参数被丢弃、实际返回全模型。补签名接回，不传则不过滤。
                                                        @RequestParam(required = false) String modelKey) {
         return Result.success(wfQueryService.instancePage(
@@ -82,7 +93,7 @@ public class WfQueryController {
     /**
      * 审批历史分页。
      *
-     * <p>D-TRC-03：新增 {@code bizNo} 入参——按单号查历史不再要求调用方先知道 bizId。
+     * <p>新增 {@code bizNo} 入参——按单号查历史不再要求调用方先知道 bizId。
      *
      * <p><b>RA-TRC-04 前置（读侧归属过滤）</b>：本接口要授给全业务角色，所以先办结再放权——
      * 按单/按号查询走 {@code OrgGuard.assertVisible}（本公司 / 本人提单 / 集团数据范围放行）；
@@ -93,9 +104,9 @@ public class WfQueryController {
      * <p>解析到流程实例时按 {@code (biz_type,biz_id)} <b>成对</b>查询，不再把调用方传来的
      * bizType 直接当过滤条件——运行期真值可能带 {@code EXP_} 前缀，按传值硬筛会把在途单筛成空。
      *
-     * <p><b>D-DEC-079 后端环节</b>：传值连实例都解析不到时，以前会退回「bizId＋bizType 双硬筛」，
+     * <p><b>后端环节</b>：传值连实例都解析不到时，以前会退回「bizId＋bizType 双硬筛」，
      * 而 {@code wf_task_history.biz_type} 存的同样是运行期真值 ⇒ 两个名称表都对不上就必筛成空页
-     * （HTTP 200、list 为空），读侧把这种空当成业务结论「本单没有前序环节」。现改为：
+     * HTTP 200、list 为空，读侧把这种空当成业务结论「本单没有前序环节」。现改为：
      * bizType 只当<b>提示</b>，兜一次 {@code instancesById(bizId)}；仍空则页上带可诊断标记，
      * 服务端同文 {@code log.warn}，空页自此可自证成因。
      */
@@ -105,34 +116,34 @@ public class WfQueryController {
                                                          @RequestParam(required = false) Long bizId,
                                                          @RequestParam(required = false) String bizType,
                                                          @RequestParam(required = false) String bizNo) {
-        com.fssc.framework.security.LoginUser me = UserContext.getRequired();
-        java.util.List<WfInstance> docs = null;
+        LoginUser me = UserContext.getRequired();
+        List<WfInstance> docs = null;
         Long restrictToUserId = null;
         boolean pairFiltered = false;
-        // D-DEC-079：rawBizType 是「确实可以当硬筛的那份传值」——降级为提示后置空；
+        // rawBizType 是「确实可以当硬筛的那份传值」——降级为提示后置空；
         // emptyHint 记录空页成因，仅在 total=0 时随响应回带（见 withEmptyPageHint）。
         String rawBizType = bizType;
         String emptyHint = null;
         if (bizNo != null && !bizNo.isBlank()) {
-            java.util.List<WfInstance> byNo = wfQueryService.instancesByBizNo(bizNo).stream()
+            List<WfInstance> byNo = wfQueryService.instancesByBizNo(bizNo).stream()
                     .filter(i -> bizType == null || bizType.isBlank() || bizType.equals(i.getBizType()))
                     .filter(i -> bizId == null || bizId.equals(i.getBizId()))
-                    .collect(java.util.stream.Collectors.toList());
-            java.util.List<WfInstance> visible = byNo.stream().filter(this::isVisibleDoc).toList();
+                    .collect(Collectors.toList());
+            List<WfInstance> visible = byNo.stream().filter(this::isVisibleDoc).toList();
             if (visible.isEmpty()) {
                 if (!byNo.isEmpty()) {
-                    throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.FORBIDDEN,
+                    throw new BizException(ErrorCode.FORBIDDEN,
                             "无权查看该单据的审批历史");
                 }
                 // 单号没有任何流程实例：确实没有历史，空页而不是报错（草稿单从未进流程）
-                return withEmptyPageHint(PageResult.of(java.util.List.of(), 0L, query.getPageNum(), query.getPageSize()),
+                return withEmptyPageHint(PageResult.of(List.of(), 0L, query.getPageNum(), query.getPageSize()),
                         "单号 " + bizNo.trim() + " 没有任何流程实例（草稿单从未进流程）");
             }
             docs = visible;
             pairFiltered = true;
         } else if (bizId != null) {
             boolean typeGiven = bizType != null && !bizType.isBlank();
-            java.util.List<WfInstance> found = typeGiven
+            List<WfInstance> found = typeGiven
                     ? wfQueryService.instancesByBiz(bizType, bizId)
                     : wfQueryService.instancesById(bizId);
             if (typeGiven && found.isEmpty()) {
@@ -144,7 +155,7 @@ public class WfQueryController {
                         ? "bizId=" + bizId + " 没有任何流程实例，传值 bizType=" + bizType + " 亦未命中（只按 bizId 查询本人参与过的记录）"
                         : "传值 bizType=" + bizType + " 与该单据在途实例的 biz_type 不一致，已按 bizId 默认解析（bizType 仅作提示，未参与过滤）";
             }
-            java.util.List<WfInstance> visible = found.stream().filter(this::isVisibleDoc).toList();
+            List<WfInstance> visible = found.stream().filter(this::isVisibleDoc).toList();
             if (visible.isEmpty()) {
                 // 单据不可见（或从未进流程）：只看本人参与过的行
                 restrictToUserId = me.getUserId();
@@ -171,12 +182,12 @@ public class WfQueryController {
     }
 
     /**
-     * D-DEC-079：空页要能自证成因，不再让「查询范围没命中」和「这单确实没审过」在页面上同形。
+     * 空页要能自证成因，不再让「查询范围没命中」和「这单确实没审过」在页面上同形。
      *
      * <p>{@code code} 仍为 0——空页是合法结果（草稿单从未进流程），不能伪装成 4xx 打断详情页；
      * 成因写在 {@code msg}，服务端同时 {@code log.warn}。
      *
-     * <p> 可见性：前端响应拦截器在 {@code code=0} 时只回传 {@code data}，页面要显示这条成因
+     * <p>可见性：前端响应拦截器在 {@code code=0} 时只回传 {@code data}，页面要显示这条成因
      * 需另落一环节（WEB 侧禁改，已列入移交）。此处不改 {@code PageResult}/{@code Result} 的字段——
      * 那两个类不在本面内。
      */
@@ -198,7 +209,7 @@ public class WfQueryController {
             orgGuard.assertVisible(nodeOrgResolver.companyIdOfBill(inst.getBizType(), inst.getBizId()),
                     inst.getStartUserId());
             return true;
-        } catch (com.fssc.common.exception.BizException ex) {
+        } catch (BizException ex) {
             return false;
         }
     }
@@ -207,11 +218,11 @@ public class WfQueryController {
      * 单据审批链全景（全节点 + 已过/当前/待到达 + 办理人与意见），填单侧与审批侧共用。
      *
      * <p>不挂 wf:node:list / wf:history:list：业务角色看不到节点配置也读不到历史分页，
-     * 却必须知道单据走到了哪一节。不靠「实例 UUID 不可枚举」——见下方 D-DEC-229 归属校验。
+     * 却必须知道单据走到了哪一节。不靠「实例 UUID 不可枚举」——见下方 归属校验。
      */
     @GetMapping("/chain")
-    public Result<java.util.List<java.util.Map<String, Object>>> chain(@RequestParam String procInstId) {
-        // D-DEC-229：本端点连同四个预览端点此前只靠「实例 UUID 不可枚举」当防线。
+    public Result<List<Map<String, Object>>> chain(@RequestParam String procInstId) {
+        // 本端点连同四个预览端点此前只靠「实例 UUID 不可枚举」当防线。
         // 实测同租户他公司账号换个 UUID 就能读到整条链（含各节点审批意见原文），
         // 而单据联查侧同类查询早被 OrgGuard 拒 403 ⇒ 补齐，规则一致。
         wfReadGuard.assertInstanceReadable(procInstId);
@@ -241,20 +252,20 @@ public class WfQueryController {
      * 返回范围限本租户<b>在职</b>用户、排除管理员，上限 500 条。
      */
     @GetMapping("/cc/candidates")
-    public Result<java.util.List<java.util.Map<String, Object>>> ccCandidates(
+    public Result<List<Map<String, Object>>> ccCandidates(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer limit) {
         return Result.success(wfCcService.candidates(keyword, limit));
     }
 
     /**
-     * 标记抄送已读（D-DEC-187）。
+     * 标记抄送已读。
      *
      * <p>此前挂 {@code @RequiresPerm("wf:cc:update")}，而该码只授 CONFIG_ADMIN／FIN_MANAGER／IT_ADMIN，
      * 真正收到抄送的岗位（现网收件人 3901／3915＝FSSC_SUPERVISOR＋COMMON_EMP）皆不持 ⇒
      * 收件人永远点不动「标记已读」，{@code wf_cc.is_read} 结构性恒 0（实测 12 行全未读）。
      * 已读是收件人自己的状态，与 {@code GET /cc/mine} 同一规则改为<b>本人视角免权限码</b>，
-     * 归属判据在 {@link com.fssc.workflow.service.WfCcService#markRead} 内硬校验（id 可枚举，不可裸放行）；
+     * 归属判据在 {@link WfCcService#markRead} 内硬校验（id 可枚举，不可裸放行）；
      * 持 {@code wf:cc:update} 者代人标记的维护通道保留。
      */
     @PostMapping("/cc/{id}/read")

@@ -4,8 +4,10 @@
 package com.fssc.receivable.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
@@ -15,6 +17,10 @@ import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceiptLineMapper;
 import com.fssc.receivable.mapper.RcReceiptMapper;
 import com.fssc.receivable.mapper.RcReceivableMapper;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,13 +48,13 @@ public class RcReceiptService {
     private final RcReceiptMapper receiptMapper;
     private final RcReceiptLineMapper receiptLineMapper;
     private final RcReceivableMapper receivableMapper;
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** R5-D-097：公司维度读取守卫（rc_receipt 无 company_id 列，经源应收单派生过滤） */
-    private final com.fssc.framework.org.OrgGuard orgGuard;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
+    /** 公司维度读取守卫（rc_receipt 无 company_id 列，经源应收单派生过滤） */
+    private final OrgGuard orgGuard;
 
     /**
-     * 收款核销列表（R5-D-097：公司维度读取过滤）。
+     * 收款核销列表（公司维度读取过滤）。
      * rc_receipt 无 company_id 列（本批不补列，补列走人工裁决登记件
      * _w20_097_rc_receipt_company_id_ddl.sql），公司范围经源应收单 rc_receivable.company_id 派生，
      * 与 RcReceivableService.page 同守卫（OrgGuard.enforceCompany()）同一规则。
@@ -64,7 +70,7 @@ public class RcReceiptService {
     }
 
     /**
-     * R5-D-097 收款单→公司归属派生 SQL（rc_receipt 无 company_id 列）：
+     * 收款单→公司归属派生 SQL（rc_receipt 无 company_id 列）：
      * 主通路＝核销明细 rc_receipt_line.receivable_id（create 两分支均落明细，机器路径 ArWriteoffService 同）；
      * 遗留通路＝rc_receipt.receivable_ids 逗号串（#12 明细核销上线前的历史行）。
      * 无从派生的行＝无公司归属，公司账号不可见（与 RcReceivableService.page 的 eq 规则一致）；
@@ -104,7 +110,7 @@ public class RcReceiptService {
         if (e.getLines() == null || e.getLines().isEmpty()) {
             List<RcReceivable> open = receivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                     .eq(RcReceivable::getCustomerId, e.getCustomerId())
-                    // D-H3-02（P1，2026-10-24 H3.4 实测）：FIFO 候选必须限定在建单人所属法人主体内。
+                    // （P1，2026-10-24 H3.4 实测）：FIFO 候选必须限定在建单人所属法人主体内。
                     // 原查询只按往来单位+余额>0 取候选，而同一往来单位（客户主数据是全租户共享的）
                     // 在别的法人主体下也有应收 ⇒ 公司 1 的一笔收款把 company_id=35 的 2025 年应收
                     // 冲销掉：两个法人主体的债权/资金被串账，账务上不成立（收款进 1 号主体的银行账，
@@ -113,8 +119,8 @@ public class RcReceiptService {
                     // 的 derivedCompanyScopeSql）：看不见的单也不该被自动核销；集团级账号 scopeC=null 不限制。
                     .eq(scopeC != null, RcReceivable::getCompanyId, scopeC)
                     .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
-                    // D-V4R-71（V5 册任务3 重跑 2026-10-15 实测）：候选只筛"余额>0"⇒ 一张从未确认
-                    // （status=NONE，含流程卡死件）的应收会被收款喂满转 DONE，而同额、已走完审批的
+                    // （V5 册任务3 重跑 2026-10-15 实测）：候选只筛"余额>0"⇒ 一张从未确认
+                    // status=NONE，含流程卡死件 的应收会被收款喂满转 DONE，而同额、已走完审批的
                     // CONFIRMED 孪生单分文未收（实案：158,200 两笔收款把 RC…2259131/2259521/2300311
                     // 三枚 NONE 结清，RC…2314441/2316491/2317271 三枚 CONFIRMED 仍挂全额）。
                     // 规则与门户侧"已确认才进分母"对齐：未确认／被驳回的单不构成可收款债权。
@@ -123,7 +129,7 @@ public class RcReceiptService {
                     .orderByAsc(RcReceivable::getDueDate)
                     .orderByAsc(RcReceivable::getId));
             BigDecimal rest0 = e.getAmount();
-            if (e.getLines() == null) e.setLines(new java.util.ArrayList<>());
+            if (e.getLines() == null) e.setLines(new ArrayList<>());
             for (RcReceivable r : open) {
                 if (rest0.compareTo(BigDecimal.ZERO) <= 0) break;
                 BigDecimal pay = r.getRemainAmount().compareTo(rest0) <= 0 ? r.getRemainAmount() : rest0;
@@ -134,14 +140,14 @@ public class RcReceiptService {
                 rest0 = rest0.subtract(pay);
             }
             if (rest0.compareTo(BigDecimal.ZERO) > 0) {
-                // D-N2-02（2026-10-18）：此处 rest0 是「自动核销后仍未被任何应收单吃下的余量」，
+                // 此处 rest0 是「自动核销后仍未被任何应收单吃下的余量」，
                 // 真实未核销余额 = 本次收款额 − rest0（等价于 open 各单 remain 合计）。
                 // 旧文案误写成 rest0 + e.getAmount()＝2×收款额 − 余额，把可用额虚增（N2 实证：
                 // 收款 85,000、真实可核销余额 0，却回显 170,000），会误导操作人以为还有额度。
                 throw new BizException(ErrorCode.PARAM_INVALID,
                         "收款金额(" + e.getAmount() + ")超出该往来单位未核销应收余额("
                                 + e.getAmount().subtract(rest0) + ")"
-                                // D-H3-02：候选加了法人主体校验后，"余额"是本主体规则的余额；
+                                // 候选加了法人主体校验后，"余额"是本主体规则的余额；
                                 // 不点破这一层，操作人会拿全租户余额对不上号（他公司同客户的应收不计入）。
                                 + (scopeC != null ? "（仅统计公司 " + scopeC + " 本法人主体的应收；"
                                         + "他公司同往来单位的应收不参与核销）" : ""));
@@ -176,7 +182,7 @@ public class RcReceiptService {
                     throw new BizException(ErrorCode.PARAM_INVALID,
                             "第 " + (i + 1) + " 行应收单(" + rec.getBillNo() + ")往来单位与此收款单不一致");
                 }
-                // D-H3-02：指定应收单核销同样不得跨法人主体——FIFO 候选加了公司校验，
+                // 指定应收单核销同样不得跨法人主体——FIFO 候选加了公司校验，
                 // 手工指定通道若无同一道校验就成旁路（换一条路照样串账）。
                 if (scopeC != null && rec.getCompanyId() != null && !scopeC.equals(rec.getCompanyId())) {
                     throw new BizException(ErrorCode.FORBIDDEN,
@@ -194,7 +200,7 @@ public class RcReceiptService {
                         "明细核销合计(" + lineSum + ")与收款金额(" + e.getAmount() + ")不一致");
             }
             receiptLineMapper.insert(lines);
-            // D-V3-143：登记即核销必须同步回写应收环节——received += amt / remain -= amt（归零置 DONE）。
+            // 登记即核销必须同步回写应收环节——received += amt / remain -= amt（归零置 DONE）。
             // 原缺陷只落 rc_receipt_line 不回写应收主表：①应收余额虚高；②下一笔收款的 FIFO 按
             // 未回写的 remain 再从已核销单起配（实测 M1 被双计核销 45,200）。
             for (RcReceiptLine line : lines) {
@@ -213,7 +219,7 @@ public class RcReceiptService {
                 }
                 receivableMapper.updateById(upd);
             }
-            // D-H3-03（P2，2026-10-24 H3 真跑）：单头冗余列 receivable_ids 必须与明细同源回填。
+            // P2，2026-10-24 H3 真跑：单头冗余列 receivable_ids 必须与明细同源回填。
             // 该列不是历史包袱——银企对账（BankReconcileService 的银行流水↔应收勾稽）与 LinkU 开放查询
             // （LinkuOpenQueryMapper 用 FIND_IN_SET(rr.id, r.receivable_ids) 反推公司）都还在读它，
             // 明细环节上线后新建的收款单该列恒 NULL ⇒ 这两条链只看得到 #12 之前的老单（H3 实测
@@ -222,7 +228,7 @@ public class RcReceiptService {
             String ids = lines.stream()
                     .map(l -> String.valueOf(l.getReceivableId()))
                     .distinct()
-                    .collect(java.util.stream.Collectors.joining(","));
+                    .collect(Collectors.joining(","));
             RcReceipt head = new RcReceipt();
             head.setId(e.getId());
             head.setReceivableIds(ids);
@@ -234,20 +240,20 @@ public class RcReceiptService {
 
     /**
      * 已核销（最终状态）名称表：这些状态＝本笔收款的冲减<b>已经发生</b>，{@link #applyReceipt} 只去重跳过。
-     * <p>D-DEC-423：登记环节 {@code create()} 自 D-V3-143 起在<b>同一事务</b>内既建明细又冲减应收环节并置
+     * <p>登记环节 {@code create()} 自 起在<b>同一事务</b>内既建明细又冲减应收环节并置
      * {@code WRITTEN_OFF}，故 WRITTEN_OFF 就是"已核销"最终状态（台账 甲案拟新增的 APPLIED 态已被
-     * D-V3-143 的"登记即冲减"取代——若照原案把 WRITTEN_OFF 当"待冲减"再核销一次，就会二次冲减）。
+     * 的"登记即冲减"取代——若照原案把 WRITTEN_OFF 当"待冲减"再核销一次，就会二次冲减）。
      * 同义词 WRITE_OFF／APPLIED 一并认，避免旁路写点（{@code ExpenseWfEventListener} 还款收款环节）漏网。
      */
-    private static final java.util.Set<String> APPLIED_RECEIPT_STATUSES =
-            java.util.Set.of("WRITTEN_OFF", "WRITE_OFF", "APPLIED");
+    private static final Set<String> APPLIED_RECEIPT_STATUSES =
+            Set.of("WRITTEN_OFF", "WRITE_OFF", "APPLIED");
 
     /**
-     * 核销执行（D-DEC-423①②：去重守卫判据方向纠正）：
+     * 核销执行（①②：去重守卫判据方向纠正）：
      * <p>原判据 {@code if (!"WRITTEN_OFF".equals(status)) throw "收款单已核销，不能重复核销"}
      * <b>方向写反</b>——登记时状态<b>已经</b>是 WRITTEN_OFF，条件恒 false ⇒ 该 throw 永不触发＝死码，
      * "重复核销"只由 {@link #applyByLines} 的余额算术校验兜住（实测 17:05:07 二次点击即如此）；
-     * 一旦余额被别的通道推高（D-DEC-409 的 {@code received_amount} 双写通道），
+     * 一旦余额被别的通道推高（的 {@code received_amount} 双写通道），
      * 同一笔收款就能<b>再次核销成功</b>＝二次冲减。
      * <p>现规则：已核销最终状态＝去重跳过（不再二次冲减、也不再靠余额碰运气）；
      * 其余状态＝非登记态，显式拒绝（措辞按真实语义改正）。
@@ -310,10 +316,10 @@ public class RcReceiptService {
         BigDecimal balance = nvl(r.getRemainAmount());
         BigDecimal newRemain = balance.subtract(pay);
         BigDecimal newReceived = nvl(r.getReceivedAmount()).add(pay);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("receivedAmount", r.getReceivedAmount());
         auditBefore.put("remainAmount", r.getRemainAmount());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("receivedAmount", newReceived);
         auditAfter.put("remainAmount", newRemain);
         RcReceivable u = new RcReceivable();
@@ -338,7 +344,7 @@ public class RcReceiptService {
         return v == null ? BigDecimal.ZERO : v;
     }
 
-    /** 返回收款单的核销明细（供前端回显）；R5-D-097：详情按 list 同派生规则守卫，防按 id 直查绕过数据范围 */
+    /** 返回收款单的核销明细（供前端回显）；详情按 list 同派生规则守卫，防按 id 直查绕过数据范围 */
     public List<RcReceiptLine> lines(Long receiptId) {
         require(receiptId);
         Long scopeC = orgGuard.enforceCompany();
@@ -350,7 +356,7 @@ public class RcReceiptService {
                 .orderByAsc(RcReceiptLine::getId));
     }
 
-    /** R5-D-097：收款单在公司维度是否可见（复用 list 同款派生 SQL 的单据版） */
+    /** 收款单在公司维度是否可见（复用 list 同款派生 SQL 的单据版） */
     private boolean visibleInCompany(Long receiptId, Long scopeC) {
         Long hit = receiptMapper.selectCount(new LambdaQueryWrapper<RcReceipt>()
                 .eq(RcReceipt::getId, receiptId)

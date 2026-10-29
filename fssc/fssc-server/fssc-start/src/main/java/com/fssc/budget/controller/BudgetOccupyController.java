@@ -4,13 +4,19 @@
 package com.fssc.budget.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.budget.entity.BgOccupy;
 import com.fssc.budget.mapper.BgOccupyMapper;
 import com.fssc.budget.service.BudgetService;
+import com.fssc.budget.vo.BgOccupyVO;
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
+import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.system.entity.SysUser;
@@ -49,34 +55,34 @@ public class BudgetOccupyController {
     private final BudgetService budgetService;
     private final BgOccupyMapper bgOccupyMapper;
     private final SysUserMapper sysUserMapper;
-    /** D-BG-02：补销/释放需要读单据状态，费用单据只读查询。 */
-    private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
+    /** 补销/释放需要读单据状态，费用单据只读查询。 */
+    private final ExpBillMapper expBillMapper;
 
     /** 占用流水查询（需求 3.10 查看占用明细，真分页）。2026-09-17：支持 budgetItemId 穿透过滤 */
     @RequiresPerm("budget:occupy:list")
     @GetMapping("/page")
-    public Result<PageResult<com.fssc.budget.vo.BgOccupyVO>> page(PageQuery query,
+    public Result<PageResult<BgOccupyVO>> page(PageQuery query,
                                              @RequestParam(required = false) Long budgetItemId,
                                              @RequestParam(required = false) String operType,
                                              @RequestParam(required = false) String bizType,
                                              @RequestParam(required = false) String keyword) {
-        com.baomidou.mybatisplus.core.metadata.IPage<com.fssc.budget.vo.BgOccupyVO> p = bgOccupyMapper.searchPageWithItemName(
-                com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(query.getPageNum(), query.getPageSize()),
+        IPage<BgOccupyVO> p = bgOccupyMapper.searchPageWithItemName(
+                Page.of(query.getPageNum(), query.getPageSize()),
                 budgetItemId, operType, bizType, keyword);
         fillOperatorNames(p.getRecords());
         return Result.success(PageResult.of(p.getRecords(), p.getTotal(), query.getPageNum(), query.getPageSize()));
     }
 
     /**
-     * R5-D-269：分页结果由后端一次批查 sys_user，把裸 user_id 补成「姓名/工号」可读规则（与审计轨迹同法）。
+     * 分页结果由后端一次批查 sys_user，把裸 user_id 补成「姓名/工号」可读规则（与审计轨迹同法）。
      * 查不到或异常时留空——前端回退显示裸 id，绝不臆造姓名。
      */
-    private void fillOperatorNames(List<com.fssc.budget.vo.BgOccupyVO> rows) {
+    private void fillOperatorNames(List<BgOccupyVO> rows) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
         Set<Long> ids = new LinkedHashSet<>();
-        for (com.fssc.budget.vo.BgOccupyVO r : rows) {
+        for (BgOccupyVO r : rows) {
             if (r.getOperUserId() != null) {
                 ids.add(r.getOperUserId());
             }
@@ -89,7 +95,7 @@ public class BudgetOccupyController {
             for (SysUser u : sysUserMapper.selectBatchIds(ids)) {
                 userMap.put(u.getId(), u);
             }
-            for (com.fssc.budget.vo.BgOccupyVO r : rows) {
+            for (BgOccupyVO r : rows) {
                 SysUser u = userMap.get(r.getOperUserId());
                 if (u == null) {
                     continue;
@@ -103,7 +109,7 @@ public class BudgetOccupyController {
     }
 
     /**
-     * 预算准入判定（D-DEC-424 乙）：不占用、不打挂提交——超出只回结论与金额（available/over/overAmount），
+     * 预算准入判定（乙）：不占用、不打挂提交——超出只回结论与金额（available/over/overAmount），
      * 提交继续走 {@code /occupy} 与单据占用环节，那里才按 bg_scheme.control_type 档位执行扣减校验。
      */
     @RequiresPerm("budget:occupy:check")
@@ -124,7 +130,7 @@ public class BudgetOccupyController {
     @OperLog(module = "BUDGET", operType = "UPDATE", desc = "释放预算")
     @PostMapping("/release")
     public Result<Void> release(@Validated @RequestBody OccupyReq req) {
-        // D-BG-02：释放只要求单据存在且未作废（占用本就该在作废/驳回时退回），不要求已 PAID。
+        // 释放只要求单据存在且未作废（占用本就该在作废/驳回时退回），不要求已 PAID。
         assertBizBillState(req.getBizType(), req.getBizNo(), null);
         budgetService.release(req.getBudgetItemId(), req.getAmount(), req.getBizType(), req.getBizId(), req.getBizNo());
         return Result.success();
@@ -134,7 +140,7 @@ public class BudgetOccupyController {
     @OperLog(module = "BUDGET", operType = "UPDATE", desc = "核销预算")
     @PostMapping("/write-off")
     public Result<Void> writeOff(@Validated @RequestBody OccupyReq req) {
-        // D-BG-02：手工补销口必须校验单据状态。流程内部核销（PayBatchBizAction 付款执行、
+        // 手工补销口必须校验单据状态。流程内部核销（PayBatchBizAction 付款执行、
         // ExpenseWfEventListener 报销核销）走 Service 直调，不经此入口，不受影响。
         assertBizBillState(req.getBizType(), req.getBizNo(), "PAID");
         budgetService.writeOff(req.getBudgetItemId(), req.getAmount(), req.getBizType(), req.getBizId(), req.getBizNo());
@@ -142,7 +148,7 @@ public class BudgetOccupyController {
     }
 
     /**
-     * D-BG-02：预算占用三动作的单据状态前置校验。
+     * 预算占用三动作的单据状态前置校验。
      *
      * <p>背景：补销口原先只认 {@code bizId} 落流水，完全不读单据状态，实测对
      * {@code APPROVED}（钱尚未付）的对公结算单也能核销成功 ⇒ 预算在未付时转「已用」，
@@ -155,21 +161,21 @@ public class BudgetOccupyController {
         if (bizType == null || !bizType.startsWith("EXP_") || bizNo == null || bizNo.isBlank()) {
             return; // 非费用域或未给单号，交由原有校验处理
         }
-        com.fssc.expense.entity.ExpBill bill = expBillMapper.selectOne(
-                new LambdaQueryWrapper<com.fssc.expense.entity.ExpBill>()
-                        .eq(com.fssc.expense.entity.ExpBill::getBillNo, bizNo)
+        ExpBill bill = expBillMapper.selectOne(
+                new LambdaQueryWrapper<ExpBill>()
+                        .eq(ExpBill::getBillNo, bizNo)
                         .last("LIMIT 1"));
         if (bill == null) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(ErrorCode.PARAM_INVALID,
                     "单据不存在：" + bizNo + "，无法执行预算" + ("PAID".equals(requiredStatus) ? "核销" : "释放"));
         }
         String st = bill.getStatus();
         if ("VOID".equals(st) || "CANCELLED".equals(st)) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(ErrorCode.PARAM_INVALID,
                     "单据 " + bizNo + " 已作废（status=" + st + "），不允许再动预算；如需修正请先恢复单据");
         }
         if (requiredStatus != null && !requiredStatus.equals(st)) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(ErrorCode.PARAM_INVALID,
                     "单据 " + bizNo + " 当前状态为「" + st + "」，预算核销要求已「" + requiredStatus
                             + "」：钱未付出去就核销会让预算被提前占用且无回滚路径。请先完成付款，或改用「释放」退回占用");
         }
@@ -184,7 +190,7 @@ public class BudgetOccupyController {
         @NotBlank(message = "bizType 必填")
         private String bizType;
         /**
-         * D-BG-04：{@code bizId} 实为必传（{@code writeOff}/{@code release} 都靠它归属占用流水，
+         * {@code bizId} 实为必传（{@code writeOff}/{@code release} 都靠它归属占用流水，
          * 缺传时在 Service 里对 null 解引用抛 NPE ⇒ 全局处理器包成 HTTP 500，调用方无从判断是参数问题）。
          * 补上 {@code @NotNull} 让缺参在入口就被 400 挡下。
          */

@@ -10,6 +10,7 @@ import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysConfigMapper;
 import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.system.service.MessageService;
+import java.util.Properties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.mail.internet.MimeMessage;
@@ -59,7 +60,7 @@ public class NotifyService {
     /**
      * 通知用户（多渠道）：站内信必发；企微/邮件按配置启用。
      *
-     * <p>D-DEC-162：{@code sys_message.biz_type} 列的语义是<b>业务域</b>（列注释「业务类型，如 EXP_CLAIM」），
+     * <p>{@code sys_message.biz_type} 列的语义是<b>业务域</b>（列注释「业务类型，如 EXP_CLAIM」），
      * 本重载沿用它改造前的写法恒记 {@code APPROVAL}，于是 {@code biz_id} 成了无域可依的裸主键——
      * 同一列值既可能是报销单 id 也可能是供应商 id，收件人点进去无法定位。
      * 需要可联查的调用方改走 {@link #notifyUser(Long, String, String, String, String, Long, String)}
@@ -74,7 +75,7 @@ public class NotifyService {
      *
      * @param bizType 业务域标识，取 {@code wf_task.biz_type}/{@code wf_cc.biz_type} 原值
      *                （{@code EXP_CLAIM}/{@code SUPPLIER_ADD}/…），与 {@code bizId} 成对使用：
-     *                {@code (biz_type, biz_id)} 才唯一定位一张单据（D-DEC-162 的 biz_id 规则统一）
+     *                {@code (biz_type, biz_id)} 才唯一定位一张单据（的 biz_id 规则统一）
      */
     public void notifyUser(Long userId, String msgType, String title, String content,
                            String bizType, Long bizId, String linkUrl) {
@@ -149,7 +150,7 @@ public class NotifyService {
             sender.setUsername(username);
             sender.setPassword(password);
             sender.setDefaultEncoding("UTF-8");
-            java.util.Properties props = sender.getJavaMailProperties();
+            Properties props = sender.getJavaMailProperties();
             props.put("mail.transport.protocol", "smtp");
             props.put("mail.smtp.auth", (username == null || username.isBlank()) ? "false" : "true");
             props.put("mail.smtp.connectiontimeout", "5000");

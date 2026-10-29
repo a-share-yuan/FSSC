@@ -16,17 +16,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * R5-D-034：职责分离（SoD）「执行检查 + 结果查询」入口。
+ * 职责分离（SoD）「执行检查 + 结果查询」入口。
  *
  * <p>既有端点只按单一维度返回裸数组且字段与页面列不对齐，本控制器返回 {@link PageResult}
- * （前端分页契约 list/total），行字段为用户可读的 用户/工号/冲突岗位/冲突描述/严重度/检测时间。
+ * 前端分页契约 list/total，行字段为用户可读的 用户/工号/冲突岗位/冲突描述/严重度/检测时间。
  * 检查为无状态实时计算：sod_role_conflict / sod_perm_conflict 是互斥【规则定义表】而非结果表，
  * 故本链路不需要新建表或列。</p>
  *
  * <p>权限码：{@code system:sod:list} 与 {@code system:sod:scan} 两个码都按「多码 OR、新旧同认」
  * 同时挂在查询与执行端点上。实测 sys_menu 中两码均有在用行——
  * {@code system:sod:list} 挂在菜单 3621（逗号打包码）；{@code system:sod:scan} 已播种为按钮菜单 3762
- * （del_flag=0）。仅持有 3762 的角色（如合规管理岗 99031）若只认 list 会在首屏查询即 403，
+ * del_flag=0。仅持有 3762 的角色（如合规管理岗 99031）若只认 list 会在首屏查询即 403，
  * 故两个端点都并认两码。旧的菜单 3080（system:sod:list）已 del_flag=1，不再作为依据。</p>
  */
 @RestController
@@ -36,7 +36,7 @@ public class SoDCheckController {
 
     private final SoDService soDService;
 
-    /** R5-D-034：SoD 检查结果分页查询（dimension=ALL/ROLE/PERM） */
+    /** SoD 检查结果分页查询（dimension=ALL/ROLE/PERM） */
     @RequiresPerm({"system:sod:list", "system:sod:scan"})
     @GetMapping("/check/list")
     public Result<PageResult<SoDService.SodCheckRow>> checkList(@RequestParam(required = false) String dimension,
@@ -46,7 +46,7 @@ public class SoDCheckController {
         return Result.success(soDService.checkPage(dimension, keyword, pageNum, pageSize));
     }
 
-    /** R5-D-034：执行 SoD 检查（两维度一次跑完，操作记录） */
+    /** 执行 SoD 检查（两维度一次跑完，操作记录） */
     @RequiresPerm({"system:sod:scan", "system:sod:list"})
     @OperLog(module = "COMPLIANCE", operType = "OTHER", desc = "执行职责分离检查")
     @PostMapping("/check/run")

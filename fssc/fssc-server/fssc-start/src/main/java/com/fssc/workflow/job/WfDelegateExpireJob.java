@@ -4,10 +4,13 @@
 package com.fssc.workflow.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fssc.framework.job.JobHeartbeatService;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.entity.WfDelegate;
 import com.fssc.workflow.mapper.WfDelegateMapper;
+import com.fssc.workflow.service.NodeOrgResolver;
+import com.fssc.workflow.service.WfEngineFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -44,7 +47,7 @@ import java.util.function.Supplier;
  * 逐个推送只会制造噪音；此处仅落日志 + 心跳记录。需要"到期提醒"属产品决策，如后续要加，
  * 建议改为"到期前 1 天提醒"而非"到期后告知"。
  *
- * <p><b>与超时 Job 的关系</b>：本 Job 的第二段（F4-1 委托改派）确实会动 Flowable 的办理人，
+ * <p><b>与超时 Job 的关系</b>：本 Job 的第二段（委托改派）确实会动 Flowable 的办理人，
  * 但只在 {@code wf.delegate.mode=REASSIGN} 且该流程在灰度清单内时；缺省（该键库里不存在）
  * 两段都短路返回，行为与改造前逐字一致。回跳/改派一律经引擎 {@code setAssignee} + 镜像同步 + 记录，
  * 绝不直写 {@code wf_task}。
@@ -56,10 +59,10 @@ public class WfDelegateExpireJob {
 
     private final WfDelegateMapper delegateMapper;
     private final JobHeartbeatService jobHeartbeatService;
-    /** 委托到期时的待办回跳通道（F4-1，与"取消委托"同一实现，避免两处规则漂移） */
-    private final com.fssc.workflow.service.WfEngineFacade wfEngineFacade;
+    /** 委托到期时的待办回跳通道（与"取消委托"同一实现，避免两处规则漂移） */
+    private final WfEngineFacade wfEngineFacade;
     /** 改派档是否启用（缺省关＝本 Job 的委托改派两段全部短路） */
-    private final com.fssc.workflow.service.NodeOrgResolver nodeOrgResolver;
+    private final NodeOrgResolver nodeOrgResolver;
 
     /** 单轮回收上限：防御性上限，避免历史脏数据一次性全表回写 */
     private static final int BATCH_LIMIT = 2000;
@@ -91,13 +94,13 @@ public class WfDelegateExpireJob {
                         upd.setStatus("EXPIRED");
                         Boolean[] changed = new Boolean[1];
                         TenantContext.callAs(tenantId, () -> changed[0] = delegateMapper.update(upd,
-                                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<WfDelegate>()
+                                new LambdaUpdateWrapper<WfDelegate>()
                                         .eq(WfDelegate::getId, d.getId())
                                         .eq(WfDelegate::getStatus, "NORMAL")) > 0);
                         if (Boolean.TRUE.equals(changed[0])) {
                             ok++;
                             byTenant.merge(tenantId, 1, Integer::sum);
-                            // F4-1 到期回跳：只在改派档下有意义（借资格档从未把单子移出委托人名下，无单可回）。
+                            // 到期回跳：只在改派档下有意义（借资格档从未把单子移出委托人名下，无单可回）。
                             // 配置读取与待办改派都在该委托自己的租户里做——缺上下文会被 fail-closed 拦下，
                             // 表现就是"到期了单子却永久留在受托人待办里"。
                             int[] back = new int[1];
@@ -142,7 +145,7 @@ public class WfDelegateExpireJob {
     }
 
     /**
-     * 委托窗口开启时的历史改派扫描（F4-1 的第二段）。
+     * 委托窗口开启时的历史改派扫描（的第二段）。
      *
      * <p><b>为什么需要</b>：委托可以在窗口尚未开始时就建立（例如 06:47 建、09-27 00:00 才开始生效）。
      * 只在"建立委托那一刻"改派会漏掉这类预约——窗口开了一直没人把历史待办转过去，
@@ -151,7 +154,7 @@ public class WfDelegateExpireJob {
      * <p>改派天然去重：一条待办被转走后其 assignee 就不再等于委托人，下一轮查不出来＝不会二次改派。
      *
      * <p>缺省（{@code wf.delegate.mode} 不存在或非 REASSIGN）时，每行都在租户内被
-     * {@link com.fssc.workflow.service.NodeOrgResolver#delegateReassignActive()} 短路，
+     * {@link NodeOrgResolver#delegateReassignActive()} 短路，
      * 不查引擎、不动待办，与改造前行为一致。
      */
     @Scheduled(fixedDelay = 600_000, initialDelay = 180_000)

@@ -9,12 +9,14 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.Result;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.datasource.FsscDataSource;
+import com.fssc.framework.facade.ImageFacade;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.image.entity.ImgBatch;
 import com.fssc.image.entity.ImgFile;
 import com.fssc.image.service.ImageService;
 import com.fssc.image.service.OcrService;
+import java.util.Map;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +44,7 @@ public class ImageController {
 
     private final ImageService imageService;
     /** 影像统计（报表只读服务的远程取数面；ImageFacade extends ImageStatsFacade） */
-    private final com.fssc.framework.facade.ImageFacade imageFacade;
+    private final ImageFacade imageFacade;
     private final OcrService ocrService;
 
     /** 影像上传允许格式：图片 + PDF/OFD/XML（本地版式解析）；其余一律 BizException 拒绝 */
@@ -76,7 +78,7 @@ public class ImageController {
     /** 上传后自动触发 OCR（识别失败不阻塞上传，页面可手动重试） */
     private void autoOcr(Long batchId) {
         try {
-            // D-DEC-009：未识别现在是 warning（页态 FAILED＋异常池记录），不再以抛错收场 ⇒ 日志如实记生成了几张
+            // 未识别现在是 warning（页态 FAILED＋异常池记录），不再以抛错收场 ⇒ 日志如实记生成了几张
             int pooled = ocrService.recognizeBatch(batchId);
             log.info("影像批次 {} 上传后自动OCR完成：生成发票 {} 张", batchId, pooled);
         } catch (Exception e) {
@@ -91,7 +93,7 @@ public class ImageController {
         return Result.success(imageService.batches(bizType, bizId));
     }
 
-    // ---------- 影像任务（需求 6.4：创建/查询/封单/状态） ----------
+    // 影像任务（需求 6.4：创建/查询/封单/状态）
 
     @RequiresPerm("image:batch:list")
     @GetMapping("/task/page")
@@ -137,7 +139,7 @@ public class ImageController {
     /** 按业务类型统计影像批次（同上，报表只读服务的远程取数面） */
     @RequiresPerm({"image:batch:list", "report:view"})
     @GetMapping("/stats/by-biz-type")
-    public Result<List<java.util.Map<String, Object>>> statsByBizType() {
+    public Result<List<Map<String, Object>>> statsByBizType() {
         return Result.success(imageFacade.statBatchByBizType());
     }
 

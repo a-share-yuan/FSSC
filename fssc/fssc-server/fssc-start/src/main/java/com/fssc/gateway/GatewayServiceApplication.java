@@ -1,5 +1,7 @@
 package com.fssc.gateway;
 
+import com.fssc.system.service.ExtInterfaceConfigService;
+import com.fssc.system.service.MessageService;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -11,7 +13,7 @@ import org.springframework.context.annotation.Import;
  *
  * <pre>
  * java -Dloader.main=com.fssc.gateway.GatewayServiceApplication \
- *      -cp fssc-server.jar org.springframework.boot.loader.launch.PropertiesLauncher \
+ *      -cp fssc-server.jar PropertiesLauncher \
  *      --spring.profiles.active=gateway,dev
  * </pre>
  *
@@ -44,8 +46,8 @@ import org.springframework.context.annotation.Import;
         "com.fssc.platform.mapper",
         "com.fssc.framework.job.mapper"
 })
-@Import({com.fssc.system.service.ExtInterfaceConfigService.class,
-        com.fssc.system.service.MessageService.class})
+@Import({ExtInterfaceConfigService.class,
+        MessageService.class})
 public class GatewayServiceApplication {
 
     public static void main(String[] args) {

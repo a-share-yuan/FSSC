@@ -3,10 +3,13 @@
 
 package com.fssc.workflow.action;
 
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.purchase.entity.PoOrder;
 import com.fssc.purchase.mapper.PoOrderMapper;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -14,11 +17,11 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 采购订单审批收尾（P0-1 事件编排总线）。
+ * 采购订单审批收尾（事件编排总线）。
  * <p>
  * PURCHASE_ORDER_REVIEW 审批通过 → po_order.status: OPEN → APPROVED。
  * <p>
- * <b>D-DEC-333（甲档）：订单审批通过环节不再出证。</b>「审批不产生入库」——入库的账实动作在收货侧，
+ * <b>（甲档）：订单审批通过环节不再出证。</b>「审批不产生入库」——入库的账实动作在收货侧，
  * 采购循环的出证环节本来就有一条完整的：<br>
  * {@code PurchaseService.createReceipt:502 → VoucherService.generateEstimateOnReceipt}（借 1405／贷 2203 暂估）
  * → {@code InvoiceService:641 → VoucherService.reverseEstimateOnInvoiceMatch}（三单匹配红冲暂估）
@@ -37,8 +40,8 @@ import java.util.Set;
 public class PurchaseOrderBizAction implements WfBizAction {
 
     private final PoOrderMapper poOrderMapper;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -56,34 +59,34 @@ public class PurchaseOrderBizAction implements WfBizAction {
         }
         try {
             if (Boolean.TRUE.equals(event.getApproved())) {
-                // P4-3 审计扩面：改状态前采集旧值
+                // 审计扩面：改状态前采集旧值
                 String oldStatus = order.getStatus();
                 PoOrder upd = new PoOrder();
                 upd.setId(orderId);
                 upd.setStatus("APPROVED");
                 poOrderMapper.updateById(upd);
-                java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditBefore = new LinkedHashMap<>();
                 auditBefore.put("status", oldStatus);
-                java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
                 auditTrailService.recordUpdate(event.getBizType(), orderId, order.getPoNo(), "po_order",
                         String.valueOf(orderId), auditBefore, auditAfter,
                         "审批通过" + (event.getComment() == null || event.getComment().isBlank() ? "" : "：" + event.getComment()));
                 log.info("采购订单 {} 审批通过: OPEN → APPROVED", order.getPoNo());
-                // D-DEC-333（甲档）：订单审批通过不出证——入库出证环节在收货侧
+                // 甲档：订单审批通过不出证——入库出证环节在收货侧
                 // PurchaseService.createReceipt → VoucherService.generateEstimateOnReceipt（借 1405／贷 2203 暂估），
                 // 三单匹配再由 generateInvoiceMatchVoucher 出正式应付。此处出证＝库存与负债双计。
                 log.info("采购订单 {} 审批通过腿按 D-DEC-333 不出证，入库凭证由收货暂估腿生成", order.getPoNo());
             } else {
-                // P4-3 审计扩面：改状态前采集旧值
+                // 审计扩面：改状态前采集旧值
                 String oldStatus = order.getStatus();
                 PoOrder upd = new PoOrder();
                 upd.setId(orderId);
                 upd.setStatus("REJECTED");
                 poOrderMapper.updateById(upd);
-                java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditBefore = new LinkedHashMap<>();
                 auditBefore.put("status", oldStatus);
-                java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
                 auditTrailService.recordUpdate(event.getBizType(), orderId, order.getPoNo(), "po_order",
                         String.valueOf(orderId), auditBefore, auditAfter,

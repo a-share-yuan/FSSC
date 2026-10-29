@@ -11,11 +11,11 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * 月结检查校验清单（V2.2.38 K128/K129，结账中心"复选项全勾才可结账"＋结账监控中心
+ * 月结检查校验清单（K128/K129，结账中心"复选项全勾才可结账"＋结账监控中心
  * "阶段/任务/责任人/计划完成时间"）。
  * close() 硬校验：该公司当期清单存在且全部 DONE 才允许月结；缺行/未勾齐一律拦截。
  */
-/** D-V4R-60 同族：gl_close_check_item 的 create_by/update_by 是 bigint ⇒ 审计基类取 TenantAuditBase（Long），否则「生成检查清单」插行即 1366。 */
+/** 同族：gl_close_check_item 的 create_by/update_by 是 bigint ⇒ 审计基类取 TenantAuditBase（Long），否则「生成检查清单」插行即 1366。 */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("gl_close_check_item")

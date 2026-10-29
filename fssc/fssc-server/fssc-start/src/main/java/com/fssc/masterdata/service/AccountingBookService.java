@@ -16,6 +16,7 @@ import com.fssc.masterdata.mapper.GlCurrencyMapper;
 import com.fssc.masterdata.mapper.GlStandardMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -23,13 +24,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 多账簿服务（V1.4.87）——闭环差距③「无账簿/准则/多本位币体系（多账簿零代码）」。
+ * 多账簿服务——闭环差距③「无账簿/准则/多本位币体系（多账簿零代码）」。
  *
  * <p><b>参考规则逐条落地</b>：
  * <ul>
  *   <li>「账簿类型分为主账簿和副账簿，一个核算组织在同一核算体系内仅能存在唯一的主账簿」
  *       → {@link #createBook} 显式校验 + {@code uk_gab_main} 唯一索引<b>双层默认处理</b>
- *       （应用层给可读报错，数据库层防并发穿透）;</li>
+ *       应用层给可读报错，数据库层防并发穿透 ;</li>
  *   <li>「按不同的会计准则与制度出具多套财务核算数据」
  *       → 同一 company 可在多个 standard 下各持一本 MAIN 账簿，
  *       {@link #listBooksOf} 按公司列出全部账簿即「多套核算数据」的载体;</li>
@@ -53,7 +54,7 @@ public class AccountingBookService {
     /** 只用于按 id 批量回填名称（避免在服务里硬编码 JDBC 凭据） */
     private final JdbcTemplate jdbcTemplate;
 
-    // ==================== 查询 ====================
+    // 查询
 
     public List<GlStandard> listStandards() {
         return standardMapper.selectList(new LambdaQueryWrapper<GlStandard>()
@@ -117,7 +118,7 @@ public class AccountingBookService {
         return b;
     }
 
-    // ==================== 建账 ====================
+    // 建账
 
     /**
      * 建账。
@@ -129,7 +130,7 @@ public class AccountingBookService {
      *       一个成功一个撞 1062，转成 BizException 后用户看到的是同一句话。</li>
      * </ol>
      * 注意：同一核算组织在<b>不同准则</b>下建 MAIN 账簿是<b>允许</b>的
-     * （按不同准则出具多套核算数据）。
+     * 按不同准则出具多套核算数据。
      */
     public Long createBook(GlAccountingBook book) {
         if (book.getCompanyId() == null || book.getStandardId() == null) {
@@ -153,7 +154,7 @@ public class AccountingBookService {
         }
         try {
             bookMapper.insert(book);
-        } catch (org.springframework.dao.DuplicateKeyException e) {
+        } catch (DuplicateKeyException e) {
             // 并发穿透由唯一索引兜住，转成同一规则的业务错误
             throw new BizException(ErrorCode.DATA_ALREADY_EXISTS,
                     "同一核算组织在同一准则与年度下已存在" + ("MAIN".equals(type) ? "主" : "副")
@@ -165,7 +166,7 @@ public class AccountingBookService {
         return book.getId();
     }
 
-    // ==================== 科目映射 ====================
+    // 科目映射
 
     /** 取账簿的科目映射表（key=本准则科目ID，value=通用科目ID） */
     public Map<Long, Long> subjectMapOf(Long bookId) {
@@ -214,7 +215,7 @@ public class AccountingBookService {
         return m.getId();
     }
 
-    // ==================== 多账簿总览 ====================
+    // 多账簿总览
 
     /**
      * 多账簿总览：按核算组织聚合，展示其名下各准则/各类型的账簿。

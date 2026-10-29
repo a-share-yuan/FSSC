@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * D-WF-12（2026-10-19 人工测试 G 册实测修）：<b>业务级流程撤销入口</b>。
+ * （2026-10-19 人工测试 G 册实测修）：<b>业务级流程撤销入口</b>。
  *
  * <h3>要解决的实际问题</h3>
  * 此前清理僵尸/悬挂流程实例<b>只能走 {@code POST /api/tenant/wf/dev/instance/cancel}</b>，
@@ -55,7 +55,7 @@ import java.util.Map;
  *   <li>管理员入口<b>强制填原因</b>，空原因直接 400，保证撤销可追溯。</li>
  * </ul>
  *
- * <p><b>与 D-WF-14 的分工</b>：本类是<b>人工按需</b>撤销；
+ * <p><b>与 的分工</b>：本类是<b>人工按需</b>撤销；
  * {@code WfZombieReconcileJob} 是<b>每日自动</b>办结「单据已最终状态/未提交却仍 RUNNING」的脱节实例。
  */
 @Slf4j

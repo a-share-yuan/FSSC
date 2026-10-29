@@ -79,7 +79,7 @@ public class SupplierRecon implements Serializable {
     /** LinkU侧供应商ID(partnerId) */
     private Long linkuPartnerId;
 
-    /** DRAFT待确认（已生成未发函，D-H2-06 词面统一）/SENT已发函/CONFIRMED双方确认/DIFF有差异/RESOLVED差异已处理 */
+    /** DRAFT待确认（已生成未发函，词面统一）/SENT已发函/CONFIRMED双方确认/DIFF有差异/RESOLVED差异已处理 */
     private String status;
     private String diffRemark;
     private LocalDateTime confirmTime;

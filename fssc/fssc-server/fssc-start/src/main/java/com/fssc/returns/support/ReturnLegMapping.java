@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.util.Locale;
 
 /**
- * 退货下游环节分流映射表 —— 采购退货（R5-D-084）与销售退货（R5-D-089）共用同一套规则。
+ * 退货下游环节分流映射表 —— 采购退货与销售退货共用同一套规则。
  *
  * <p>与实体 javadoc、界面下拉文案同源的规则：</p>
  * <ul>
@@ -18,7 +18,7 @@ import java.util.Locale;
  *   <li>{@code EXCHANGE} 退货补货：不冲减应付/应收、不进对账，仅单据登记。</li>
  * </ul>
  *
- * <p>两域服务只准消费本表，禁止各自另写一份模式判断（R5-D-089 修法与 R5-D-084 落在同一套
+ * <p>两域服务只准消费本表，禁止各自另写一份模式判断（修法与 落在同一套
  * 映射表上，避免两域规则漂移、各修一次）。</p>
  */
 public final class ReturnLegMapping {

@@ -4,15 +4,21 @@
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fssc.arflow.entity.ArClaim;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.masterdata.entity.MdSubject;
 import com.fssc.masterdata.mapper.MdSubjectMapper;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
 import com.fssc.sharing.mapper.OpVoucherLineMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
+import com.fssc.sharing.service.VoucherService;
+import com.fssc.system.service.NumberRuleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,13 +50,13 @@ public class ArFlowVoucherService {
     private final OpVoucherMapper opVoucherMapper;
     private final OpVoucherLineMapper opVoucherLineMapper;
     private final MdSubjectMapper mdSubjectMapper;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
+    private final NumberRuleService numberRuleService;
     /**
-     * R5-D-216（月结链自锁）：月结过总账凭证「制单即审」复用共享凭证正规过账通道
-     * （{@link com.fssc.sharing.service.VoucherService#postSystem}，与 GlProfitCarryService 损益结转同一范式），
+     * 月结链自锁：月结过总账凭证「制单即审」复用共享凭证正规过账通道
+     * （{@link VoucherService#postSystem}，与 GlProfitCarryService 损益结转同一范式），
      * 不自实现过账、不裸 UPDATE status。
      */
-    private final com.fssc.sharing.service.VoucherService voucherPostService;
+    private final VoucherService voucherPostService;
 
     /** AR服务申请凭证（审单过账调用）。金额：对冲用借贷金额，其余用申请金额。 */
     public String generateClaimVoucher(ArClaim c) {
@@ -86,9 +92,9 @@ public class ArFlowVoucherService {
         }
         List<Map<String, Object>> rows;
         try {
-            rows = com.fasterxml.jackson.databind.json.JsonMapper.builder().build().readValue(
+            rows = JsonMapper.builder().build().readValue(
                     c.getLinesJson(),
-                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {
+                    new TypeReference<List<Map<String, Object>>>() {
                     });
         } catch (Exception e) {
             throw new BizException(ErrorCode.PARAM_INVALID, "对冲分录解析失败：" + e.getMessage());
@@ -255,7 +261,7 @@ public class ArFlowVoucherService {
         }
         String voucherNo = createVoucher(tenantId, companyId, "1122", "6001", amount,
                 nullToBlank(summary), "AR_MONTH_CLOSE", docId, summary, null);
-        // R5-D-216（月结链自锁）：月结链结转凭证「制单即审」——生成后立即走共享凭证正规过账通道
+        // 月结链自锁：月结链结转凭证「制单即审」——生成后立即走共享凭证正规过账通道
         // （GlProfitCarryService:189 损益结转同一范式），不再以 DRAFT 停留；否则本链制造的 DRAFT
         // 会撞 GlMonthCloseService.close()「期间无 DRAFT 方可月结」守卫，月结链自己过不去。
         autoPostMonthCloseVoucher(docId);
@@ -263,11 +269,11 @@ public class ArFlowVoucherService {
     }
 
     /**
-     * R5-D-216：月结过总账凭证制单即审（DRAFT → POSTED，过账人＝当前月结操作人并记录）。
+     * 月结过总账凭证制单即审（DRAFT → POSTED，过账人＝当前月结操作人并记录）。
      * <p>复用共享凭证正规过账通道 {@code VoucherService.postSystem}（含公司可见性、期间开账、
      * 分录非空、末级科目、辅助核算、借贷平衡整套校验，写 post_user_id/post_time 并落总账）；
      * 月结结转属月结作业的系统动作、无人工审核环节，与 GlProfitCarryService 损益结转同一
-     * 制审分离豁免规则（D-DEC-166，通道内留 warn 日志供事后核查），不自实现过账、不裸 UPDATE status。
+     * 制审分离豁免规则（通道内留 warn 日志供事后核查），不自实现过账、不裸 UPDATE status。
      * <p>去重：仅 DRAFT 才过账（重跑 postGl 时同源凭证已 POSTED 则跳过）；VOID 不复活。</p>
      */
     private void autoPostMonthCloseVoucher(Long docId) {
@@ -280,7 +286,7 @@ public class ArFlowVoucherService {
         if (v == null || !"DRAFT".equals(v.getStatus())) {
             return;
         }
-        com.fssc.framework.security.LoginUser lu = com.fssc.framework.security.UserContext.get();
+        LoginUser lu = UserContext.get();
         Long operUser = lu == null ? null : lu.getUserId();
         voucherPostService.postSystem(v.getId(), operUser);
         log.info("[arflow] 月结过总账凭证 {} 制单即审（POSTED，过账人 {}，月结单 {}）",
@@ -296,7 +302,7 @@ public class ArFlowVoucherService {
         return existed == null ? null : existed.getVoucherNo();
     }
 
-    // ---------------- 内部 ----------------
+    // 内部
 
     private BigDecimal claimAmount(ArClaim c) {
         BigDecimal amt = c.getHeadquartersAmount() != null ? c.getHeadquartersAmount() : c.getAmount();
@@ -306,7 +312,7 @@ public class ArFlowVoucherService {
     private String createVoucher(Long tenantId, Long companyId, String debitCode, String creditCode,
                                  BigDecimal amount, String summary, String sourceType, Long sourceDocId,
                                  String billNo, String partnerName) {
-        // 同源判重（P0-5 去重范式）：同 sourceType + sourceDocId 已有凭证（非VOID）直接返回其凭证号
+        // 同源判重（去重范式）：同 sourceType + sourceDocId 已有凭证（非VOID）直接返回其凭证号
         OpVoucher existed = opVoucherMapper.selectOne(new LambdaQueryWrapper<OpVoucher>()
                 .eq(OpVoucher::getSourceType, sourceType)
                 .eq(OpVoucher::getSourceDocId, sourceDocId)
@@ -379,7 +385,7 @@ public class ArFlowVoucherService {
     }
 
     private Long findSubjectIdByCode(String code) {
-        java.util.List<MdSubject> list = mdSubjectMapper.selectList(
+        List<MdSubject> list = mdSubjectMapper.selectList(
                 new LambdaQueryWrapper<MdSubject>().eq(MdSubject::getSubjectCode, code).last("limit 1"));
         return list.isEmpty() ? null : list.get(0).getId();
     }

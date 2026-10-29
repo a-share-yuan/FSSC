@@ -11,6 +11,8 @@ import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.SysConfig;
 import com.fssc.system.mapper.SysConfigMapper;
 import jakarta.annotation.PostConstruct;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -121,7 +123,7 @@ public class QxyGatewayOcrChannel implements OcrChannel {
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (resp.statusCode() / 100 != 2) {
                 // 网关侧未配置上游凭证/上游异常都会走到这里（如 503 UPSTREAM_NOT_CONFIGURED）：
-                // 只回失败原因，不退化成 mock 识别，与 D-DEC-115「没有真实凭据就不给结论」同一规则。
+                // 只回失败原因，不退化成 mock 识别，与 「没有真实凭据就不给结论」同一规则。
                 return OcrResult.fail("发票能力网关 HTTP " + resp.statusCode() + ": " + brief(resp.body()));
             }
             JsonNode root = objectMapper.readTree(resp.body());
@@ -178,7 +180,7 @@ public class QxyGatewayOcrChannel implements OcrChannel {
         return r;
     }
 
-    // ===================== 配置读取（sys_config 优先，yml 回落） =====================
+    // 配置读取（sys_config 优先，yml 回落）
 
     /** 生效网关基址：去尾部斜杠；sys_config 未配置时用 yml 默认值 */
     public String baseUrl() {
@@ -223,11 +225,11 @@ public class QxyGatewayOcrChannel implements OcrChannel {
         return def;
     }
 
-    // ===================== 小工具 =====================
+    // 小工具
 
     private static String text(JsonNode n, String f) {
         JsonNode v = n.path(f);
-        // R5-D-224：Jackson 对 NullNode 调 asText("") 会返回字面量 "null" 字符串，
+        // Jackson 对 NullNode 调 asText("") 会返回字面量 "null" 字符串，
         // 上游字段为 JSON null 时会把 "null" 写进票面（购方名等列随之错乱）；先显式判空。
         if (v == null || v.isNull()) {
             return null;
@@ -248,7 +250,7 @@ public class QxyGatewayOcrChannel implements OcrChannel {
     }
 
     /**
-     * 开票日期归一为 yyyy-MM-dd。R5-D-224：原实现对取不到日期的杂串（发票号等）原样透传、
+     * 开票日期归一为 yyyy-MM-dd。原实现对取不到日期的杂串（发票号等）原样透传、
      * 或截成伪日期，与"invoice_date 存成发票号"的错乱互为因果；现改为严格校验——
      * 取前 8 位数字组成日期并做真实月日校验，非法一律返回 null（宁可留空、不得存错），
      * 后续由 OcrService 的要素强制校验拦住不判「通过」。
@@ -264,9 +266,9 @@ public class QxyGatewayOcrChannel implements OcrChannel {
         }
         String ymd = v.substring(0, 4) + "-" + v.substring(4, 6) + "-" + v.substring(6, 8);
         try {
-            java.time.LocalDate.parse(ymd);
+            LocalDate.parse(ymd);
             return ymd;
-        } catch (java.time.format.DateTimeParseException e) {
+        } catch (DateTimeParseException e) {
             return null;
         }
     }

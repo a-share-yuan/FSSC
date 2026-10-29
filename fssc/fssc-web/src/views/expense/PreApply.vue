@@ -4,7 +4,7 @@
 <template>
   <BillWorkbench ref="wb" :bill-type="'APPLY'" :sub-type="subType" :travel="isTravel" :before-submit="onBeforeSubmit">
     <template #create="b">
-      <!-- ============ 单据概要 ============ -->
+      <!-- 单据概要 -->
       <el-card :header="$t('expense.claim.colBillSummary')">
         <el-form ref="formRef" :rules="formRules" :model="b.form.bill" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -44,8 +44,8 @@
                 <el-select v-model="b.form.bill.currencyCode" style="width: 100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 
-                  
-                  
+
+
                 </el-select>
               </el-form-item>
             </el-col>
@@ -109,7 +109,7 @@
         </el-form>
       </el-card>
 
-      <!-- ============ 会议申请：会议信息 ============ -->
+      <!-- 会议申请：会议信息 -->
       <el-card v-if="isMeeting" :header="$t('expense.preapply.secMeetingInfo')" style="margin-top: 12px">
 <el-form ref="meetingFormRef" :model="b.form.bill.extJson" :rules="meetingRules" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -141,7 +141,7 @@
         </el-form>
       </el-card>
 
-      <!-- ============ 出差申请：行程信息（费用详情） ============ -->
+      <!-- 出差申请：行程信息（费用详情） -->
       <el-card v-if="isTravel" :header="$t('expense.preapply.secTripInfoDetail')" style="margin-top: 12px">
         <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center">
           <el-button size="small" type="primary" :loading="calcLoading" @click="autoCalcTravel(b)">{{ $t('expense.preapply.btnAutoByPolicy') }}</el-button>
@@ -228,7 +228,7 @@
         </el-form>
       </el-card>
 
-      <!-- ============ 培训申请：培训信息 ============ -->
+      <!-- 培训申请：培训信息 -->
       <el-card v-if="isTrain" :header="$t('expense.preapply.secTrainingInfo')" style="margin-top: 12px">
         <el-form ref="trainFormRef" :rules="trainRules" :model="b.form.bill.extJson" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -299,8 +299,8 @@
         <div style="margin-top: 6px; font-size: 12px; color: #909399">{{ $t('expense.preapply.hintTotalCostFormula') }}</div>
       </el-card>
 
-      <!-- ============ 分摊信息 ============ -->
-      <!-- D-V4R-42：分摊的"写"权限（exp:share:create/update/delete）只授予财务/共享/审批类角色，普通员工没有 ⇒
+      <!-- 分摊信息 -->
+      <!-- 分摊的"写"权限（exp:share:create/update/delete）只授予财务/共享/审批类角色，普通员工没有 ⇒
            原先这张卡对员工照常渲染、两列还挂必填红星，一保存就红字「缺少权限：exp:share:update」且分摊行不写入数据库。
            现规则：读＝随单据走（exp:bill:list，与单据母表同校验，见 BillShareController.byBill），
            写＝随岗位走（exp:share:update）⇒ 员工看得到这张单已分摊到哪（只读），改不了也不必填；
@@ -384,7 +384,7 @@ import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 const { saveFormHistory } = useAutoFill()
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -402,13 +402,13 @@ const isTravel = computed(() => props.subType === 'TRAVEL')
 const isTrain = computed(() => props.subType === 'TRAIN')
 const subTypeLabel = computed(() => ({ MEETING: t('expense.preapply.subMeeting'), TRAVEL: t('expense.preapply.subTravel'), TRAIN: t('expense.preapply.subTrain') })[props.subType] || t('expense.preapply.tabRequisition'))
 
-// D-V4R-42：分摊的"写"（exp:share:create/update/delete）授权名册里只有财务/共享/审批类角色（普通员工不现有）；
+// 分摊的"写"（exp:share:create/update/delete）授权名册里只有财务/共享/审批类角色（普通员工不现有）；
 // "读"随单据走（exp:bill:list，BillShareController.byBill 已改同校验）⇒ 能读才显示、能写才可编辑，
 // 员工看到的是只读分摊行＋下方说明，不再挂必填红星、也不再吃 4030。
 const canEditShares = computed(() => hasPerm('exp:share:update'))
 const canViewShares = computed(() => canEditShares.value || hasPerm('exp:share:list') || hasPerm('exp:bill:list'))
 
-// ---------- 表单校验：登记表规则的通用/年度字段 + 各子类型特有字段 ----------
+// 表单校验：登记表规则的通用/年度字段 + 各子类型特有字段
 const formRules = computed(() => ({
   ...billRules('APPLY', props.subType),
   remark: isTrain.value
@@ -508,7 +508,7 @@ function newPerson() {
 }
 const years = [new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1]
 
-// ---------- 金额计算 ----------
+// 金额计算
 function travelTotal(row) {
   return Number(row.trafficAmount || 0) + Number(row.hotelAmount || 0) + Number(row.allowanceAmount || 0) + Number(row.localTrafficAmount || 0) + Number(row.otherAmount || 0)
 }
@@ -562,10 +562,10 @@ function calcTravel(b, row) {
 }
 function copyTravel(b, i) {
   const trip = b.form.travels[i]
-  // 复制行清空日期：同人同日两段行程＝重复登记（D-TR-01），由用户填新段日期
+  // 复制行清空日期：同人同日两段行程＝重复登记，由用户填新段日期
   b.form.travels.push({ ...trip, id: null, beginDate: '', endDate: '', days: 0 })
 }
-// D-TR-01 同类规则：同一人同一天出现两条行程＝重复登记（多段行程日期不同，不受影响）
+// 同类规则：同一人同一天出现两条行程＝重复登记（多段行程日期不同，不受影响）
 function travelDup(b, index, name) {
   const cur = b.form.travels[index]
   if (!cur || !name) return false
@@ -625,11 +625,11 @@ function calcPerson(b, row) {
 // 确保存在一条费用明细行（预算占用/提交都依赖 lines）
 function ensureLine(b) {
   if (!b.form.lines.length) b.form.lines.push(b.newLine())
-  // D-V4R-35：合成行的预算科目取分摊行那枚——服务端占用/核销只读明细行的科目，
+  // 合成行的预算科目取分摊行那枚——服务端占用/核销只读明细行的科目，
   // 分摊行的科目本身没有任何消费方，不写回去就是「屏幕选招待费、系统占差旅费」两套规则。
   shareBudgetToLine(b.form.lines, b.form.shares)
 }
-// D-TR-02：persons 与 extJson.persons 双向同步——草稿即存（此前只在提交时写，重开草稿人员丢失），
+// persons 与 extJson.persons 双向同步——草稿即存（此前只在提交时写，重开草稿人员丢失），
 // 编辑重提 loadBillForEdit 回读 extJson 时反向回填本地清单（此前永远停在一行空人员）
 watch(persons, () => {
   const b = wb.value && wb.value.b
@@ -644,7 +644,7 @@ watch(() => {
   if (!isTrain.value || !Array.isArray(v)) return
   if (JSON.stringify(persons.value) !== JSON.stringify(v)) persons.value = v.map((p) => ({ ...newPerson(), ...p }))
 }, { deep: true })
-// D-V4R-35：分摊行的预算科目一变就同步进承载金额的那条行——保存草稿也要带一致科目
+// 分摊行的预算科目一变就同步进承载金额的那条行——保存草稿也要带一致科目
 // （服务端提交时是从库里读 exp_bill_line 做占用，草稿阶段没写进去，提交就还是两套规则）
 watch(() => {
   const b = wb.value && wb.value.b
@@ -660,7 +660,7 @@ function totalAmount(b) {
   return b.sumAmount()
 }
 
-// ---------- 提交前同步（把子类型特有内容写入 extJson/明细行） ----------
+// 提交前同步（把子类型特有内容写入 extJson/明细行）
 async function onBeforeSubmit(b) {
   // 表头必填校验：与红星同源，提示具体漏填项并定位
   if (!(await validateForms([formRef]))) return false
@@ -672,7 +672,7 @@ async function onBeforeSubmit(b) {
     if (b.form.travels.some((t) => t.beginDate && t.endDate && t.beginDate > t.endDate)) {
       ElMessage.warning(t('expense.preapply.errTripDateOrder')); return false
     }
-    // D-TR-01 同类规则：同人同日重复行程提交校验
+    // 同类规则：同人同日重复行程提交校验
     const dupT = b.form.travels.find((t, i) => travelDup(b, i, t.travelerName))
     if (dupT) { ElMessage.warning(t('expense.preapply.errDuplicateTrip', { v1: dupT.travelerName })); return false }
     if (!(await validateForms([loanFormRef]))) return false
@@ -696,7 +696,7 @@ async function onBeforeSubmit(b) {
   if (isMeeting.value) syncMeetingLine(b)
   if (isTravel.value) syncTravelLine(b)
   if (isTrain.value) {
-    // D-TR-01：姓名必填 + 同名唯一（同名重复会把人员费用直接翻倍进单据金额）
+    // 姓名必填 + 同名唯一（同名重复会把人员费用直接翻倍进单据金额）
     const named = persons.value.map((p) => (p.name || '').trim()).filter(Boolean)
     if (named.length < persons.value.length) { ElMessage.warning(t('expense.preapply.errTraineeNameRequired')); return false }
     const dup = named.find((n, i) => named.indexOf(n) !== i)
@@ -717,9 +717,9 @@ async function onBeforeSubmit(b) {
     if (shareType.value === 'PROJECT') s.costCenterId = null
     else s.projectId = null
   })
-  // D-V4R-35：一屏一尺。分摊行的科目写进承载金额的那条明细行（服务端占用/核销只认行上的科目）；
-  // 多科目分摊或一页多行＝这一条预算线承载不了，当场拒提点名，静默择一科目把钱占进别的预算线。
-  // D-V4R-42：只读态（无 exp:share:update）不下这条校验——用户改不动分摊行，拦他＝死路
+  // 一屏一尺。分摊行的科目写进承载金额的那条明细行（服务端占用/核销只认行上的科目）；
+  // 多科目分摊或一页多行＝这一条预算线承载不了，当场拒提点名，不要静默择一科目把钱占进别的预算线。
+  // 只读态（无 exp:share:update）不下这条校验——用户改不动分摊行，拦他＝死路
   if (canEditShares.value && shareBudgetToLine(b.form.lines, b.form.shares).conflict) {
     ElMessage.warning(t('expense.preapply.errShareBudgetMixed'))
     return false
@@ -727,7 +727,7 @@ async function onBeforeSubmit(b) {
   return true
 }
 
-// ---------- 超标 ----------
+// 超标
 function overContent(b) {
   if (isTravel.value) {
     const overRows = b.form.travels.filter((t) => t.overStd === 1)
@@ -737,7 +737,7 @@ function overContent(b) {
 }
 function hasOverStd(b) { return !!overContent(b) }
 
-// ---------- 分摊 ----------
+// 分摊
 function shareTotal(b) { return b.form.shares.reduce((a, s) => a + Number(s.shareAmount || 0), 0) }
 function shareBudget(b, row) {
   const bg = b.budgets.find((x) => String(x.id) === String(row.budgetItemId)) || {}
@@ -745,10 +745,10 @@ function shareBudget(b, row) {
   return { available: avail, over: Number(row.shareAmount || 0) > avail }
 }
 
-// ---------- 申请人 ----------
+// 申请人
 async function loadUsers() {
   try {
-    // P0 修复（2026-10-21）：默认只加载同公司人员
+    // P0 修复：默认只加载同公司人员
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
   } catch (e) { users.value = [] }
@@ -801,7 +801,7 @@ const travelTypeDict = useBaseDict('travel_type',
   { DOMESTIC: 'expense.preapply.optDomesticTrip', ABROAD: 'expense.preapply.optAbroadTrip', TRIAREA: 'expense.preapply.optThreeCityTrip' })
 const travelTypeOptions = travelTypeDict.options
 
-// ---------- 城市联动：出发地/目的地随 境内/境外 过滤 ----------
+// 城市联动：出发地/目的地随 境内/境外 过滤
 // md_city.is_abroad（0=国内，1=国外）。境内(境内)只显示国内城市、境外(境外)只显示国外城市，三地显示全部；
 // 培训页按 extJson.abroadFlag 同步过滤。切换类型时清空已选城市，避免脏值残留（选了国内城市后切到境外，旧值不在新范围内）。
 const travelCities = computed(() => {
@@ -835,7 +835,7 @@ const trafficDict = useBaseDict('traffic_mode', TRAFFIC_LOCAL, TRAFFIC_I18N)
 const trafficOptions = trafficDict.options
 const seatDict = useBaseDict('seat_class', SEAT_LOCAL, SEAT_I18N)
 const seatOptions = seatDict.options
-// 座位等级随交通工具变化（新机制：只在既有 seat_class 字典上做取值窄化）
+// 座位等级随交通工具变化（不要新机制：只在既有 seat_class 字典上做取值窄化）
 const SEAT_CABIN = ['ECONOMY', 'BUSINESS', 'FIRST']
 const SEAT_RAIL = ['FIRST_SEAT', 'SECOND']
 function seatOptionsOf(trafficType) {
@@ -844,7 +844,7 @@ function seatOptionsOf(trafficType) {
   if (trafficType === 'RAIL' || trafficType === 'TRAIN') return all.filter((o) => SEAT_RAIL.includes(o.value))
   return all // CAR 等：字典里没有该方式的专属席别 ⇒ 保持全量，缺项待补（见登记）
 }
-// 换交通工具后，原席别若已不在合法集合里就清空（留着错配继续提交）
+// 换交通工具后，原席别若已不在合法集合里就清空（不要留着错配继续提交）
 function onTrafficTypeChange(row) {
   const keep = seatOptionsOf(row.trafficType)
   if (row.trafficClass && !keep.some((o) => o.value === row.trafficClass)) row.trafficClass = ''
@@ -864,11 +864,12 @@ onMounted(async () => {
   seatDict.load()
   trainingTypeDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单（子类型页面壳由路由保证）
+  // 不要此处不得回写路由 query：App.vue 按 route.fullPath 给页面挂 :key，改 query＝整页重挂载，
+  // 刚载入的表单会被一份空白新建态顶掉（toast 仍说「已载入」，界面却是空单）。
   try {
     const eb = route.query.editBillId
     if (eb && wb.value?.b?.loadBillForEdit) {
       await wb.value.b.loadBillForEdit({ id: Number(eb) })
-      router.replace({ query: {} })
     }
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   await loadUsers()
@@ -877,7 +878,7 @@ currentUserName.value = store.user?.realName || store.user?.nickName || store.us
   const b = wb.value && wb.value.b
 const uid = store.user?.userId ?? store.user?.id
   if (b && !b.form.bill.applyUserId) {
-    // P1-5 默认申请人 = 当前登录人，严格匹配 me.id，不回退 users[0]（users 分页可能含非本人/残留账号）
+    // 默认申请人 = 当前登录人，严格匹配 me.id，不回退 users[0]（users 分页可能含非本人/残留账号）
     const me = uid ? users.value.find((x) => x.id === uid) : null
     if (me) {
       b.form.bill.applyUserId = me.id

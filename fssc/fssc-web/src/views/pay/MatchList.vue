@@ -60,7 +60,7 @@
             <el-option :label="$t('pay.match.stMatched')" value="MATCHED" />
             <el-option :label="$t('pay.match.stWarnDiff')" value="WARN" />
             <el-option :label="$t('pay.match.stFailed')" value="FAILED" />
-            <!-- D-DEC-077：手工匹配链办结后的最终状态，结论落 exp_bill.ext_json.matchVerdict，此前无处显形 -->
+            <!-- 手工匹配链办结后的最终状态，结论落 exp_bill.ext_json.matchVerdict，此前无处显形 -->
             <el-option :label="$t('pay.match.stManualClosed')" value="MANUAL_MATCHED" />
           </el-select>
           <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
@@ -154,7 +154,7 @@
             <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('pay.shared.btnTrace') }}</el-button>
             <el-button link size="small" type="primary" @click.stop="openDetail(row)">{{ $t('pay.shared.btnDetails') }}</el-button>
             <el-button link size="small" type="warning" @click.stop="openLinkDialog(row)">{{ $t('pay.match.btnLinkBills') }}</el-button>
-            <!-- D-DEC-077：人工匹配链已办结的行不再提供「派单」出口，否则最终状态会被重复派工淹没 -->
+            <!-- 人工匹配链已办结的行不再提供「派单」出口，否则最终状态会被重复派工淹没 -->
             <el-button v-if="row.matchStatus !== 'MATCHED' && row.matchStatus !== 'MANUAL_MATCHED'" link size="small" type="danger" @click.stop="routeIssue(row)">{{ $t('pay.match.btnRoute') }}</el-button>
             <el-button link size="small" type="primary" @click.stop="manualMatch(row)">{{ $t('pay.match.btnManualMatch') }}</el-button>
             <el-button link size="small" @click.stop="checkOne(row)">{{ $t('pay.match.btnRecalc') }}</el-button>
@@ -186,7 +186,7 @@
           <el-descriptions-item :label="$t('pay.match.ctxPayFrozen')">
             <el-tag :type="detail.frozen ? 'danger' : 'success'" size="small">{{ detail.frozen ? t('pay.match.stFrozen') : t('pay.match.stNotFrozen') }}</el-tag>
           </el-descriptions-item>
-          <!-- D-DEC-077：人工匹配链的办结结论（此前最终状态零回写，判定意见无处留存） -->
+          <!-- 人工匹配链的办结结论（此前最终状态零回写，判定意见无处留存） -->
           <el-descriptions-item v-if="detail.matchStatus === 'MANUAL_MATCHED'" :label="$t('pay.match.ctxManualVerdict')" :span="3">
             <span style="color: #67c23a; font-weight: 600">{{ detail.manualVerdict || t('pay.match.stManualClosed') }}</span>
             <span v-if="detail.manualProcInstId" style="margin-left: 12px; color: #909399; font-size: 12px">
@@ -333,7 +333,7 @@
         <el-button @click="detailVisible = false">{{ $t('common.close') }}</el-button>
         <el-button type="warning" @click="openLinkDialog(detail)">{{ $t('pay.match.btnLinkBills') }}</el-button>
         <el-button v-if="detail && detail.matchStatus !== 'MATCHED' && detail.matchStatus !== 'MANUAL_MATCHED'" type="danger" @click="routeIssue(detail)">{{ $t('pay.shared.btnExceptionRoute') }}</el-button>
-        <!-- D-DEC-077：人工匹配链办结后，派单/复审两个「未办结」出口必须收起，否则同一单据可被反复发起人工链 -->
+        <!-- 人工匹配链办结后，派单/复审两个「未办结」出口必须收起，否则同一单据可被反复发起人工链 -->
         <el-button v-if="detail && detail.matchStatus !== 'MATCHED' && detail.matchStatus !== 'MANUAL_MATCHED'" type="primary" @click="reviewBill(detail)">{{ $t('pay.match.btnStartReview') }}</el-button>
         <el-button v-if="detail && detail.matchStatus !== 'MANUAL_MATCHED'" type="primary" plain @click="manualMatch(detail)">{{ $t('pay.match.btnManualMatch') }}</el-button>
         <el-button v-if="detail && detail.matchStatus === 'MANUAL_MATCHED'" type="primary" plain @click="viewManualVerdict">{{ $t('pay.match.btnViewVerdict') }}</el-button>
@@ -405,14 +405,14 @@ import { formatDate, formatDateTime } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => location.reload(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
 })
 const matchCm = ref(null)
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -443,13 +443,13 @@ function statusType(s) {
     : s === 'MANUAL_MATCHED' ? 'success' : 'info'
 }
 function statusLabel(s) {
-  // D-DEC-077：MANUAL_MATCHED＝人工匹配链已办结并解除冻结（自动判定仍存在的差异在明细里照常列出，
+  // MANUAL_MATCHED＝人工匹配链已办结并解除冻结（自动判定仍存在的差异在明细里照常列出，
   // 最终状态结论与原判定两件事都要看得见，故文案写"人工匹配已办结"而不是"三单一致"）
   // 状态全集＝后端 setMatchStatus 五值（MATCHED/WARN/FAILED/UNMATCHED/MANUAL_MATCHED），漏一枚就直接显示英文
   return { MATCHED: t('pay.match.stMatched'), UNMATCHED: t('pay.match.stUnmatched'), WARN: t('pay.match.stWarnDiff'), FAILED: t('pay.match.stFailed'), MANUAL_MATCHED: t('pay.match.stManualClosed') }[s] || s
 }
 
-// ========== 可视化匹配链路 ==========
+// 可视化匹配链路
 function matchRowClass({ row }) {
   if (row.matchStatus === 'MATCHED') return 'row-green'
   if (row.matchStatus === 'FAILED') return 'row-red'
@@ -686,7 +686,7 @@ async function batchRecheck() {
   ElMessage.success(t('pay.match.msgBatchRecalcDone', { v1: ok, v2: rows.value.length }))
 }
 
-// ---- 明细弹窗 ----
+// 明细弹窗
 const detailVisible = ref(false)
 const detail = ref(null)
 const invoiceList = ref([])
@@ -712,7 +712,7 @@ const comparisonRows = computed(() => {
   ]
 })
 
-// ---- 手工关联PO/收货单 ----
+// 手工关联PO/收货单
 const linkVisible = ref(false)
 const linkRow = ref(null)
 const linkForm = reactive({ poId: null, poReceiptId: null, contractId: null })
@@ -742,7 +742,7 @@ async function openLinkDialog(row) {
   poLoading.value = true
   try {
     const r = await purchaseApi.orderPage({ pageNum: 1, pageSize: 100 })
-    // D-V4R-47 同族：三单匹配的 PO 候选同样出现已作废订单
+    // 同族：三单匹配的 PO 候选同样不要出现已作废订单
     poOptions.value = (r.list || []).filter((p) => String((p && p.status) || '').toUpperCase() !== 'VOID')
   } catch (e) { ElMessage.error(t('pay.match.msgLoadPoFail')) } finally { poLoading.value = false }
   // 加载合同候选（G2R-01）
@@ -784,7 +784,7 @@ async function doLink() {
   } catch (e) { ElMessage.error(e.message) } finally { linkLoading.value = false }
 }
 
-// ---- 异常派单 ----
+// 异常派单
 async function routeIssue(row) {
   try {
     await ElMessageBox.confirm(
@@ -801,7 +801,7 @@ async function routeIssue(row) {
   }
 }
 
-// ---- 发起复审 ----
+// 发起复审
 async function reviewBill(row) {
   try {
     await ElMessageBox.confirm(
@@ -816,7 +816,7 @@ async function reviewBill(row) {
   }
 }
 
-// ---- 手工三单匹配 ----
+// 手工三单匹配
 async function manualMatch(row) {
   const matched = row.matchStatus === 'MATCHED'
   try {
@@ -889,7 +889,7 @@ function batchExport() {
 }
 
 
-// R4-06: Show guide on first visit
+// Show guide on first visit
 const _guideKey = 'fssc_guide_matchCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => matchCm.value?.show(), 800) } } catch {}
 </script>

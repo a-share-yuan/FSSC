@@ -15,6 +15,7 @@ import com.fssc.compliance.mapper.ReviewRuleMapper;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
+import java.math.RoundingMode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,14 +41,14 @@ public class SmartReviewService {
     private final EmployeeCreditService employeeCreditService;
     private final AiReviewService aiReviewService;
 
-    /** D-DEC-175：create_by 列是 varchar 且不在 MP 自动填充六列之内，取当前登录人 id 显式落串；无上下文（作业/内部调用）留空不冒充。 */
+    /** create_by 列是 varchar 且不在 MP 自动填充六列之内，取当前登录人 id 显式落串；无上下文（作业/内部调用）留空不冒充。 */
     private static String currentOperatorId() {
         LoginUser u = UserContext.get();
         return u == null || u.getUserId() == null ? null : String.valueOf(u.getUserId());
     }
 
     /**
-     * D-DEC-018（X-31，乙）：AI 未采纳的业务记录。
+     * X-31，乙：AI 未采纳的业务记录。
      * <p>AI 通道现与端点不同型、调用恒失败，改前只剩一行 WARN 后静默走规则引擎 ⇒ 单据的审单记录里
      * 看不出"这一单是谁判的"。现把未采纳本身落成一条记录：{@code action=SKIP} 与既有"未命中"行同族，
      * 不污染 AUTO_PASS/AUTO_REJECT/MANUAL_REVIEW 三个统计方式，也不给 AUTO_PASS 链路喂 AI 结论。
@@ -56,7 +57,7 @@ public class SmartReviewService {
     private static final String AI_FALLBACK_RULE_NAME = "AI 审单未采纳";
     private static final String AI_FALLBACK_REMARK = "AI 未采纳·回退规则引擎（检查点）";
 
-    // ==================== 规则 CRUD ====================
+    // 规则 CRUD
 
     public PageResult<ReviewRule> pageRules(long pageNum, long pageSize, String ruleCategory) {
         LambdaQueryWrapper<ReviewRule> qw = new LambdaQueryWrapper<>();
@@ -128,7 +129,7 @@ public class SmartReviewService {
         reviewRuleMapper.updateById(rule);
     }
 
-    // ==================== 批量操作 ====================
+    // 批量操作
 
     @Transactional(rollbackFor = Exception.class)
     public void batchEnable(List<Long> ids) {
@@ -145,7 +146,7 @@ public class SmartReviewService {
         ids.forEach(this::deleteRule);
     }
 
-    // ==================== 核心审单引擎 ====================
+    // 核心审单引擎
 
     /**
      * 对单据执行智能审单。
@@ -154,15 +155,15 @@ public class SmartReviewService {
      * 匹配则执行对应动作，记录日志并返回最终结果。
      * 若所有规则均未匹配，则默认 MANUAL_REVIEW。
      *
-     * @param billId   单据ID
-     * @param billNo   单据编号
+     * @param billId 单据ID
+     * @param billNo 单据编号
      * @param billData 单据数据（用于表达式求值）
      * @return 审单结果
      */
     public ReviewResult executeReview(Long billId, String billNo, Map<String, Object> billData) {
-        // D-DEC-018：本单是否走了"AI 未采纳→回退规则引擎（检查点）"——记录要在结论里说一次
+        // 本单是否走了"AI 未采纳→回退规则引擎（检查点）"——记录要在结论里说一次
         boolean aiNotAdopted = false;
-        // P2-5: AI 审单前置（启用且配置有效时优先调用 AI；失败/未启用回退规则引擎）
+        // AI 审单前置（启用且配置有效时优先调用 AI；失败/未启用回退规则引擎）
         if (aiReviewService.isEnabled()) {
             Map<String, Object> riskContext = new LinkedHashMap<>();
             riskContext.put("billId", billId);
@@ -186,7 +187,7 @@ public class SmartReviewService {
                 aiLog.setRiskLevel(aiResult.getRiskLevel() != null ? aiResult.getRiskLevel() : "LOW");
                 aiLog.setRiskScore(aiResult.getRiskScore());
                 aiLog.setRemark(aiResult.getRemark() != null ? aiResult.getRemark() : "AI 审单");
-                // D-DEC-175：review_time 两支 insert 环节从未置值、create_by 非 TenantBase 字段 ⇒ 双双恒空，写点显式回写
+                // review_time 两支 insert 环节从未置值、create_by 非 TenantBase 字段 ⇒ 双双恒空，写点显式回写
                 aiLog.setReviewTime(LocalDateTime.now());
                 aiLog.setCreateBy(currentOperatorId());
                 aiLog.setCreateTime(LocalDateTime.now());
@@ -223,7 +224,7 @@ public class SmartReviewService {
                 // MANUAL_REVIEW → 继续走规则引擎
                 log.info("AI 审单建议人工审核，继续规则引擎: billNo={}", billNo);
             } else {
-                // D-DEC-018（乙）：AI 未采纳不再只是日志里一行 warn——本单落一条业务记录，结论由规则引擎（检查点）给
+                // 乙：AI 未采纳不再只是日志里一行 warn——本单落一条业务记录，结论由规则引擎（检查点）给
                 aiNotAdopted = true;
                 recordAiFallback(billId, billNo);
             }
@@ -277,7 +278,7 @@ public class SmartReviewService {
             logEntry.setRiskLevel(matched ? rule.getRiskLevel() : "LOW");
             logEntry.setRiskScore(matched ? riskScore(rule.getRiskLevel()) : 0);
             logEntry.setRemark(matched ? "命中规则: " + rule.getRuleName() : "未命中");
-            // D-DEC-175：同 AI 环节——review_time/create_by 恒空根因，显式回写
+            // 同 AI 环节——review_time/create_by 恒空根因，显式回写
             logEntry.setReviewTime(LocalDateTime.now());
             logEntry.setCreateBy(currentOperatorId());
             logEntry.setCreateTime(LocalDateTime.now());
@@ -305,7 +306,7 @@ public class SmartReviewService {
             }
         }
 
-        // P1-5: 信用分驱动免审——规则未命中 AUTO_PASS/AUTO_REJECT 时，检查信用免审额度
+        // 信用分驱动免审——规则未命中 AUTO_PASS/AUTO_REJECT 时，检查信用免审额度
         if ("MANUAL_REVIEW".equals(finalAction)) {
             Long submitterId = billData.get("submitterId") != null
                     ? Long.valueOf(billData.get("submitterId").toString()) : null;
@@ -328,7 +329,7 @@ public class SmartReviewService {
             }
         }
 
-        // D-DEC-018（乙）：AI 未采纳这事实既进审单记录（recordAiFallback 那一行），也进本次结论，
+        // 乙：AI 未采纳这事实既进审单记录（recordAiFallback 那一行），也进本次结论，
         // 经办人不必去翻日志就知道这一单的判定来自规则引擎（检查点）。
         if (aiNotAdopted) {
             ruleResults.add(0, aiFallbackRuleResult());
@@ -338,7 +339,7 @@ public class SmartReviewService {
         return new ReviewResult(finalAction, finalRisk, finalScore, finalRemark, ruleResults);
     }
 
-    /** D-DEC-018：AI 未采纳的记录行（op_review_log 既有列，零新列；action=SKIP 与"未命中"行同族） */
+    /** AI 未采纳的记录行（op_review_log 既有列，零新列；action=SKIP 与"未命中"行同族） */
     private void recordAiFallback(Long billId, String billNo) {
         try {
             ReviewLog fb = new ReviewLog();
@@ -362,7 +363,7 @@ public class SmartReviewService {
         }
     }
 
-    /** D-DEC-018：记录行的返回视图（与 ReviewRuleResult 同构，前端审单明细直接可见） */
+    /** 记录行的返回视图（与 ReviewRuleResult 同构，前端审单明细直接可见） */
     private ReviewRuleResult aiFallbackRuleResult() {
         return new ReviewRuleResult(null, AI_FALLBACK_RULE_CODE, AI_FALLBACK_RULE_NAME,
                 false, "SKIP", "LOW", AI_FALLBACK_REMARK);
@@ -403,7 +404,7 @@ public class SmartReviewService {
         };
     }
 
-    // ==================== 审单日志 ====================
+    // 审单日志
 
     public PageResult<ReviewLog> pageLogs(long pageNum, long pageSize, Long billId, String action) {
         LambdaQueryWrapper<ReviewLog> qw = new LambdaQueryWrapper<>();
@@ -421,7 +422,7 @@ public class SmartReviewService {
                         .orderByAsc(ReviewLog::getId));
     }
 
-    // ==================== 审单统计 ====================
+    // 审单统计
 
     /** 审单统计：按动作分组 */
     public Map<String, Object> reviewStats() {
@@ -441,13 +442,13 @@ public class SmartReviewService {
         result.put("autoReject", autoReject);
         result.put("manualReview", manualReview);
         result.put("autoRate", total > 0
-                ? BigDecimal.valueOf((autoPass + autoReject) * 100.0 / total).setScale(2, java.math.RoundingMode.HALF_UP)
+                ? BigDecimal.valueOf((autoPass + autoReject) * 100.0 / total).setScale(2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO);
         result.put("highRiskCount", highRisk);
         return result;
     }
 
-    // ==================== 内部类 ====================
+    // 内部类
 
     /** 审单结果 */
     @lombok.Data

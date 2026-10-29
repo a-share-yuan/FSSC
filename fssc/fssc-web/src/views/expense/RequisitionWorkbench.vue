@@ -255,7 +255,7 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 const reqCm = ref(null)
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -312,7 +312,6 @@ function formatMoney(val) {
   return Number(val || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-// 加载场景
 async function loadScenes() {
   try {
     const res = await http.get('/tenant/workbench/scenes')
@@ -320,7 +319,6 @@ async function loadScenes() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// 加载概览
 async function loadDashboard() {
   try {
     const res = await http.get('/tenant/workbench/dashboard')
@@ -329,7 +327,7 @@ async function loadDashboard() {
 }
 
 // 加载我的单据：全类型（后端 MyDocumentService 按 BillRouteRegistry 逐表查询归并）。
-// 旧 /my-bills 只查 exp_bill 一表，合同/采购/预算/总账的驳回单在列表里根本看不见（D-CON-01）。
+// 旧 /my-bills 只查 exp_bill 一表，合同/采购/预算/总账的驳回单在列表里根本看不见。
 async function loadMine() {
   mine.loading = true
   try {
@@ -359,7 +357,6 @@ const typeOptions = computed(() => (mine.types || []).map((t) => {
   return { value: t.bizType, label }
 }))
 
-// 加载我的待办
 async function loadTodo() {
   todo.loading = true
   try {
@@ -369,7 +366,6 @@ async function loadTodo() {
   } catch (e) { ElMessage.error(e.message) } finally { todo.loading = false }
 }
 
-// 加载我的已办
 async function loadDone() {
   done.loading = true
   try {
@@ -430,7 +426,7 @@ async function doApprove(row, decision) {
     await loadTodo()
     await loadDashboard()
   } catch (e) {
-    // 作业池（POOL）任务未领取时服务端拒办（D-DEC-014）：就地引导领取后重放本次审批，
+    // 作业池（POOL）任务未领取时服务端拒办：就地引导领取后重放本次审批，
     // 别让"待办页能点通过、点了只弹一句错"变成死路（本列表没有池标记与领取按钮可用）。
     if (String(e?.message || '').includes('须先「领取」')) {
       try {
@@ -458,7 +454,7 @@ onMounted(() => {
   onTabChange(activeTab.value)
 })
 
-// R4-06: Show guide on first visit
+// Show guide on first visit
 const _guideKey = 'fssc_guide_reqCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => reqCm.value?.show(), 800) } } catch {}
 </script>

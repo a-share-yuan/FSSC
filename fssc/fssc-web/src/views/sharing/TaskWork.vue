@@ -28,13 +28,13 @@
       <el-table-column :label="$t('sharing.common.colWorkItem')" width="90">
         <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
       </el-table-column>
-      <!-- R5-D-238：认领时间此前直出后端原始串（ISO 带 T），与页面其余时间列格式不一致，统一走 formatDateTime -->
+      <!-- 认领时间此前直出后端原始串（ISO 带 T），与页面其余时间列格式不一致，统一走 formatDateTime -->
       <el-table-column prop="receiveTime" :label="$t('sharing.common.colClaimTime')" width="160" sortable :formatter="(r, c, v) => formatDateTime(v)" />
       <el-table-column prop="remark" :label="$t('common.remark')" min-width="120" show-overflow-tooltip  sortable />
       <el-table-column :label="$t('common.operation')" width="380" fixed="right">
         <template #default="{ row }">
           <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('sharing.common.btnTrace') }}</el-button>
-          <!-- D-DEC-029：凭证面按 sharing:voucher:list 前置办结。该接口无权限时服务端只回
+          <!-- 凭证面按 sharing:voucher:list 前置办结。该接口无权限时服务端只回
                HTTP 200 + 业务码 4030，按钮照旧亮着、点了没抽屉＝"看得见点得动永远失败"，
                故无权限账号直接不渲染本入口（与同页 canGenerateVoucher 同一规则）。 -->
           <el-button v-if="canVoucherList" link size="small" type="primary" @click="openVoucher(row)">{{ $t('sharing.taskWork.btnVoucherEdit') }}</el-button>
@@ -113,7 +113,7 @@
 
     <!-- 退单 -->
     <el-dialog v-model="returnVis" :title="$t('sharing.taskWork.titleReturn')" width="460px">
-      <!-- R5-D-235：退单原因与后端 SharingService.returnTask「请填写退单原因」断言对齐为前端必填 -->
+      <!-- 退单原因与后端 SharingService.returnTask「请填写退单原因」断言对齐为前端必填 -->
       <el-form ref="returnFormRef" :model="returnForm" :rules="returnFormRules" label-width="80px">
         <el-form-item :label="$t('sharing.common.colTask')">{{ current?.billNo }}</el-form-item>
         <el-form-item :label="$t('sharing.taskWork.colReturnReason')" prop="reason">
@@ -149,7 +149,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -165,7 +165,7 @@ function openRowDetail(row) {
 }
 
 const selRows = ref([])
-// 服务端分页（P0-1）：改造前固定 pageNum:1/pageSize:100，超 100 条静默截断
+// 服务端分页：改造前固定 pageNum:1/pageSize:100，超 100 条静默截断
 const pager = useTablePager({ mode: 'server', storageKey: 'sharing_taskwork' })
 const { rows, loading, pageNum, pageSize, total } = pager
 const voucherVis = ref(false)
@@ -174,7 +174,7 @@ const editableLines = ref([])
 const readonly = ref(false)
 const returnVis = ref(false)
 const current = ref(null)
-// R5-D-235：退单原因此前只有裸 ref + 空 rules（reactive({})），既无必填校验也无任何提示；
+// 退单原因此前只有裸 ref + 空 rules（reactive({})），既无必填校验也无任何提示；
 // 现改为表单绑定 + 必填规则，与后端 SharingService.returnTask 的「请填写退单原因」断言同一把尺。
 const returnFormRef = ref(null)
 const returnForm = reactive({ reason: '' })
@@ -185,7 +185,7 @@ const fileViewer = ref(null)
 const subjectOptions = ref([])
 const generating = ref(false)
 const canGenerateVoucher = hasPerm('sharing:voucher:generate')
-// D-DEC-029：预览/改分录的查询接口 GET /tenant/sharing/voucher/page 需 sharing:voucher:list，
+// 预览/改分录的查询接口 GET /tenant/sharing/voucher/page 需 sharing:voucher:list，
 // 无该码时服务端以业务码 4030 拒绝（HTTP 仍是 200），故入口按同一码前置隐藏。
 const canVoucherList = hasPerm('sharing:voucher:list')
 
@@ -237,7 +237,7 @@ async function openVoucher(row) {
     await searchSubjects('')
     voucherVis.value = true
   } catch (e) {
-    // D-DEC-029：查询失败（含权限码 4030）必须带单据号如实报出，不能"点了没抽屉"就完事；
+    // 查询失败（含权限码 4030）必须带单据号如实报出，不能"点了没抽屉"就完事；
     // 弹窗保持关闭，避免呈现一张空凭证表让人误判"该单没有凭证"。
     voucherVis.value = false
     ElMessage.error(t('sharing.taskWork.msgLoadFail', { v1: row.billNo || row.billId || t('sharing.taskWork.txtCurrentTicket'), v2: e?.message || t('sharing.ops.fallbackUnknown') }))
@@ -285,7 +285,7 @@ function openReturn(row) {
 }
 
 async function doReturn() {
-  // R5-D-235：先过表单必填校验（allow-create 输入即触发 change），未填不发服务端请求
+  // 先过表单必填校验（allow-create 输入即触发 change），未填不发服务端请求
   try { await returnFormRef.value?.validate() } catch { return }
   const reason = (returnForm.reason || '').trim()
   if (!reason) return ElMessage.warning(t('sharing.taskWork.errReturnReason'))
@@ -296,7 +296,7 @@ async function doReturn() {
 }
 
 async function finish(row) {
-  // D-DEC-024/D-DEC-030：完成弹窗由纯 confirm 改为带备注输入框——
+  // /完成弹窗由纯 confirm 改为带备注输入框——
   // 此前办结是 MessageBox.confirm，审计口语无处可写、更无处可提交，三张工单 remark 恒 NULL。
   // 备注选填（不阻断办结），提交后服务端落 op_audit_task.remark 并随「备注」列回显。
   const { value: remark } = await ElMessageBox.prompt(

@@ -3,6 +3,7 @@
 
 package com.fssc.auth;
 
+import com.fssc.framework.security.LoginGuardService;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
@@ -11,6 +12,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,7 +31,7 @@ import org.springframework.stereotype.Service;
  * 接口形态一致（一次性 captchaId + base64 dataURL 图片）。
  *
  * <p><b>部署语义</b>：进程内 Map 即"单实例可见"（与 BCP 现状、与
- * {@code com.fssc.framework.security.LoginGuardService} 未启用 Redis 时的规则相同）。
+ * {@code LoginGuardService} 未启用 Redis 时的规则相同）。
  * 多实例部署时把 {@link #store} 换成 {@code DistributedState}／Redis 即可——
  * generate/validate 两步语义已收敛，替换零改动。
  *
@@ -153,9 +155,9 @@ public class CaptchaService {
             return;
         }
         store.entrySet().stream()
-                .sorted(java.util.Comparator.comparingLong(en -> en.getValue().expiresAt))
+                .sorted(Comparator.comparingLong(en -> en.getValue().expiresAt))
                 .limit(store.size() / 2L)
-                .map(java.util.Map.Entry::getKey)
+                .map(Map.Entry::getKey)
                 .toList()
                 .forEach(store::remove);
     }

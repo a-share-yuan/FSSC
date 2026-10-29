@@ -11,7 +11,6 @@
           <el-select v-if="canPickBatch" v-model="q.batchId" placeholder="按批次筛选" clearable filterable style="width:220px" size="small" @change="search">
             <el-option v-for="b in batchOptions" :key="b.id" :label="b.batchNo || ('#' + b.id)" :value="b.id" />
           </el-select>
-          <el-input v-else v-model="q.batchId" placeholder="批次ID" clearable style="width:130px" size="small" @keyup.enter="search" />
           <el-input v-model="q.invoiceNo" placeholder="发票号" clearable style="width:160px" size="small" @keyup.enter="search" />
           <el-button size="small" type="primary" @click="search">查询</el-button>
           <el-button size="small" @click="reset">重置</el-button>
@@ -26,10 +25,10 @@
         <template #default="{ $index }">{{ $index + 1 }}</template>
       </el-table-column>
       <el-table-column prop="batchId" label="批次" width="90" sortable>
-        <template #default="{ row }">{{ row.batchNo || `批次#${row.batchId}` }}</template>
+        <template #default="{ row }">{{ row.batchNo || (row.batchId ? `批次#${row.batchId}` : '—') }}</template>
       </el-table-column>
       <el-table-column prop="imgFileId" label="影像页" width="100">
-        <template #default="{ row }">{{ row.fileName || `页#${row.imgFileId}` }}</template>
+        <template #default="{ row }">{{ row.fileName || (row.imgFileId ? `页#${row.imgFileId}` : '—') }}</template>
       </el-table-column>
       <el-table-column prop="invoiceNo" label="发票号" min-width="150" show-overflow-tooltip>
         <template #default="{ row }">{{ row.invoiceNo || '—' }}</template>
@@ -56,7 +55,7 @@
       <el-table-column prop="channelName" label="识别通道" width="110" align="center">
         <template #default="{ row }">{{ ocrChannelLabel(row.channelName) || '—' }}</template>
       </el-table-column>
-      <!-- D-H7-01：识别失败此前不落本表 ⇒ 记录页对一次失败恒 0 行、无从复核。
+      <!-- 识别失败此前不落本表 ⇒ 记录页对一次失败恒 0 行、无从复核。
            现失败也有一行（recognizeStatus=FAILED），本列区分成功/失败，失败原因见下一列。 -->
       <el-table-column label="识别结果" width="90" align="center">
         <template #default="{ row }">
@@ -183,7 +182,7 @@ async function getFileUrl(fileId) {
     const suffix = (detail.fileSuffix || (name.split('.').pop() || '')).toLowerCase()
     if (!IMG_EXTS.includes(suffix)) return null
     const token = await fileApi.createToken(fileId)
-    // R5-D-223：令牌签发异常时服务端曾回 data:null，此处绝不能拼 download?token=null
+    // 令牌签发异常时服务端曾回 data:null，此处绝不能拼 download?token=null
     // ——浏览器只会得到 400「令牌无效」，预览静默"加载失败"且用户无从重试；显式失败并给可重试提示。
     if (!token || String(token).trim() === '' || String(token) === 'null') {
       ElMessage.error('预览令牌签发失败，请稍后重试')
@@ -193,7 +192,7 @@ async function getFileUrl(fileId) {
   } catch { return null }
 }
 
-// 41号审查 P1-9：导出当前查询结果（全列）
+// 41号审查 导出当前查询结果（全列）
 function doExport() {
   exportCsv(records.value, [
     { prop: 'id', label: 'ID' }, { prop: 'batchId', label: '批次' }, { prop: 'imgFileId', label: '页ID' },

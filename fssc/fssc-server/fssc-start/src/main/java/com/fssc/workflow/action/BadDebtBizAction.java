@@ -3,10 +3,14 @@
 
 package com.fssc.workflow.action;
 
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.receivable.entity.RcBadDebt;
 import com.fssc.receivable.mapper.RcBadDebtMapper;
+import com.fssc.sharing.service.VoucherService;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -14,9 +18,9 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 坏账审批收尾（P0-1 事件编排总线）。
+ * 坏账审批收尾（事件编排总线）。
  * <p>
- * BAD_DEBT_PROV    → rc_bad_debt.status: PROVISIONED（已计提）+ 凭证：借 信用减值损失(6113)/贷 坏账准备(1231)
+ * BAD_DEBT_PROV → rc_bad_debt.status: PROVISIONED（已计提）+ 凭证：借 信用减值损失(6113)/贷 坏账准备(1231)
  * BAD_DEBT_CONFIRM → rc_bad_debt.status: CONFIRMED（已确认核销）+ 凭证：借 坏账准备(1231)/贷 应收账款(1122)
  */
 @Slf4j
@@ -25,9 +29,9 @@ import java.util.Set;
 public class BadDebtBizAction implements WfBizAction {
 
     private final RcBadDebtMapper rcBadDebtMapper;
-    private final com.fssc.sharing.service.VoucherService voucherService;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    private final VoucherService voucherService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -49,15 +53,15 @@ public class BadDebtBizAction implements WfBizAction {
                 return;
             }
             String targetStatus = "BAD_DEBT_PROV".equals(event.getBizType()) ? "PROVISIONED" : "CONFIRMED";
-            // P4-3 审计扩面：改状态前采集旧值（rc_bad_debt 无业务单号，bizNo 传 null）
+            // 审计扩面：改状态前采集旧值（rc_bad_debt 无业务单号，bizNo 传 null）
             String oldStatus = badDebt.getStatus();
             RcBadDebt upd = new RcBadDebt();
             upd.setId(badDebtId);
             upd.setStatus(targetStatus);
             rcBadDebtMapper.updateById(upd);
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("status", oldStatus);
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", upd.getStatus());
             auditTrailService.recordUpdate(event.getBizType(), badDebtId, null, "rc_bad_debt",
                     String.valueOf(badDebtId), auditBefore, auditAfter,

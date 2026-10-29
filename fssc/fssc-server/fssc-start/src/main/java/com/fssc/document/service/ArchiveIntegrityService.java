@@ -21,14 +21,14 @@ import java.util.List;
 import java.util.TreeSet;
 
 /**
- * 档案完整性快照哈希（D-DEC-180，P1，证据 12-31:158）。
+ * 档案完整性快照哈希（P1，证据 12-31:158）。
  *
  * <p><b>本类是哈希算式的唯一权威</b>：写入侧（{@code ArchiveService.archive/autoArchive}、
  * {@code BillArchiveService.doArchive}）与校验/对账读侧（{@code verifyIntegrity}、
  * {@code verifyIntegrityFull}、{@code preArchiveFailures}）一律调本方法，
  * 不允许再出现第二套算式。
  *
- * <p><b>D-DEC-180 的三条根因（本类逐条对症）</b>：
+ * <p><b>的三条根因（本类逐条对症）</b>：
  * <ol>
  *   <li><b>两套算式并存 ⇒ 同单异值（误报）</b>：整改前 {@code ArchiveService} 里有
  *       {@code computeIntegrityHash(archiveNo|refId|archiveType|fileId+文件MD5)} 与
@@ -41,7 +41,7 @@ import java.util.TreeSet;
  *   </li>
  *   <li><b>输入集不含区分要素 ⇒ 异卷同值（漏报）</b>：{@code calculateIntegrityHash} 的输入是
  *       {@code archive_code|archive_type|bill_id|voucher_id|附件清单}，而现网
- *       ① {@code archive_code} 大面积 NULL（D-DEC-184）、② 由时间戳后 5 位生成（100 秒内必重码）、
+ *       ① {@code archive_code} 大面积 NULL、② 由时间戳后 5 位生成（100 秒内必重码）、
  *       ③ {@code archive_attachment} 库里 0 行（实测 COUNT=0）⇒ 同类型的两卷档案输入完全相同，
  *       哈希必然相等，「内容被换掉」根本检不出来。
  *       实测证据：id=21（BX202609250004）与 id=23（BX202609250005）<b>两张不同档案同一哈希</b>
@@ -69,7 +69,7 @@ import java.util.TreeSet;
  *       （{@code archive_status/integrity_status/archived_at} 由 FM_ARCHIVE 审批闭环写、
  *       {@code filing_user_id/filing_time} 由 {@code ArchiveFacadeImpl.handleArchiveApproval} 默认处理补写），
  *       进算式就会把「正常回写」算成「篡改」；要么与内容无关。
- *       归属/标题若要改，走 {@code D-DEC-184} 的建档补齐（在 insert 之前），不影响已固化快照。</li>
+ *       归属/标题若要改，走 {@code } 的建档补齐（在 insert 之前），不影响已固化快照。</li>
  *   <li><b>清单排序后入算</b>：{@code related_ids} 的存储顺序取决于查询顺序（附件表/影像表 join），
  *       不排序就会出现「内容没变、顺序变了 ⇒ 哈希变了」的假阳性，故一律升序去重。</li>
  * </ul>
@@ -80,7 +80,7 @@ import java.util.TreeSet;
  * 本轮不执行、不改写历史行（演练数据保留铁律）。
  *
  * <p>查询失败（sys_file 查不到／附件表异常）不抛异常——完整性哈希是附加能力，
- * 档案主链路（立卷/审批/检索）不得因它中断；此时以占位段 {@code file:<id>:no-md5} 入算，
+ * 档案主链路（立卷/审批/检索）不得因它中断；此时以占位段 {@code file:<id>no-md5} 入算，
  * 保证同一卷重算结果稳定。
  */
 @Slf4j
@@ -133,8 +133,8 @@ public class ArchiveIntegrityService {
 
     /**
      * 归档载体清单：主件 {@code file_id} ＋ 关联件 {@code related_ids}（逗号串/JSON 数组串均可解析），
-     * 每项取 {@code sys_file.file_md5}；文件不存在或无 MD5 时以 {@code file:<id>:no-md5} 占位
-     * （占位也是确定的，重算仍自洽）。
+     * 每项取 {@code sys_file.file_md5}；文件不存在或无 MD5 时以 {@code file:<id>no-md5} 占位
+     * 占位也是确定的，重算仍自洽。
      */
     private List<String> fileDigests(OpArchive a) {
         TreeSet<String> entries = new TreeSet<>();

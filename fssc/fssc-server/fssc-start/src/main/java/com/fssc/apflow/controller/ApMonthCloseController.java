@@ -62,7 +62,7 @@ public class ApMonthCloseController {
                 (String) body.get("note"), (String) body.get("handler")));
     }
 
-    /** 前置自动检查（P1-6）：自动跑 未审凭证/未匹配三单/未达账项 数，人工仅确认异常项 */
+    /** 前置自动检查：自动跑 未审凭证/未匹配三单/未达账项 数，人工仅确认异常项 */
     @RequiresPerm("apflow:close:item")
     @OperLog(module = "AP_MONTH_CLOSE", operType = "UPDATE", desc = "关账前置自动检查")
     @PostMapping("/{id}/auto-check")
@@ -86,7 +86,7 @@ public class ApMonthCloseController {
         return Result.success(service.unClose(id, (String) body.get("reason")));
     }
 
-    /** R5-D-218 作废（最终状态 VOID）：body {reason}，原因必填记录；解冻协同、行止不删 */
+    /** 作废（最终状态 VOID）：body {reason}，原因必填记录；解冻协同、行止不删 */
     @RequiresPerm("apflow:close:reopen")
     @OperLog(module = "AP_MONTH_CLOSE", operType = "UPDATE", desc = "作废关账单")
     @PostMapping("/{id}/void")

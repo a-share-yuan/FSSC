@@ -26,7 +26,7 @@
       </div>
     </template>
 
-    <!-- R5-D-072：无查看权限时显式无权限态（4030 不得被吞成「没数据」空表） -->
+    <!-- 无查看权限时显式无权限态（4030 不得被吞成「没数据」空表） -->
     <el-empty v-if="!canList" description="当前账号无采购订单查看权限，请联系管理员开通" />
     <SkeletonList v-if="loading && canList" :rows="8" :cols="5" />
     <el-table v-else-if="canList" :data="rows" size="small" stripe max-height="520" border @selection-change="handleSelectionChange" @row-dblclick="viewDetail" empty-text="暂无数据">
@@ -145,11 +145,11 @@
               <el-select v-model="form.currency" style="width: 100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 
-                
-                
-                
-                
-                
+
+
+
+
+
               </el-select>
             </el-form-item>
           </el-col>
@@ -220,7 +220,7 @@
         <el-table :data="formLines" size="small" border style="margin-bottom: 8px" max-height="240" @selection-change="handleSelectionChange" empty-text="暂无数据">
         <el-table-column type="selection" width="45" />
           <el-table-column label="行号" width="55" align="center">
-            <!-- D-UI-02（2026-10-19 G2 幕真跑发现）：行项目明细不在 el-form 内，guardSubmit 校验不到，
+            <!-- 2026-10-19 G2 幕真跑发现：行项目明细不在 el-form 内，guardSubmit 校验不到，
                  validateLines 失败只弹一条 3 秒即逝的 ElMessage.warning ⇒ 点【保存并提交】毫无反应，
                  自动化脚本与新手都抓不到原因。此处把出错行号染红，配合下方持久提示条形成可见反馈。 -->
             <template #default="{ $index }">
@@ -288,11 +288,11 @@
         </el-table>
         <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px">
           <el-button size="small" type="primary" plain @click="addLine">+ 添加行</el-button>
-          <!-- D-UI-02：行项目校验失败的持久提示条（红色，不随时间消失） -->
+          <!-- 行项目校验失败的持久提示条（红色，不随时间消失） -->
           <span v-if="lineError" style="color: #f56c6c; font-size: 13px; font-weight: 600">
              {{ lineError }}（请修正标  的行后再提交）
           </span>
-          <!-- D-V4R-91：勾稽实时提示。原先行项目合计只作展示、与订单金额毫无比对，
+          <!-- 勾稽实时提示。原先行项目合计只作展示、与订单金额毫无比对，
                导致「表头 60000 / 行合计 0」一路放行。 -->
           <span v-if="amountMismatch" style="color: #f56c6c; font-size: 13px">
              行项目合计 {{ fmt(lineTotal) }} 与订单金额 {{ fmt(Number(form.amount || 0)) }} 不一致，保存将被拒
@@ -309,7 +309,7 @@
       <template #footer>
         <el-button @click="dlg = false">取消</el-button>
         <el-button type="primary" @click="save(false)">保存</el-button>
-        <!-- D-V4R-89(P3-UI-01)：弹窗内补【保存并提交】，免去"关闭弹窗→回列表找行→点提交"三步跳转 -->
+        <!-- (P3-UI-01)：弹窗内补【保存并提交】，免去"关闭弹窗→回列表找行→点提交"三步跳转 -->
         <el-button type="success" @click="save(true)">保存并提交</el-button>
         <div style="flex:1"></div>
         <span style="font-size:12px;color:#909399;margin-right:8px">
@@ -379,13 +379,13 @@ import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
 import { useCurrency } from '@/composables/useCurrency'
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+s': () => { try { save() } catch { /* noop */ } },
   'ctrl+r': () => { try { loadData() } catch { /* noop */ } },
 })
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 // 工作台「我的单据」深链：?kw=订单号 直接定位该行（台账页自带行内「编辑重提」）
@@ -395,7 +395,7 @@ function openTrace(row) {
   traceVisible.value = true
 }
 
-/** R5-D-072：列表权限预判（与后端 @RequiresPerm("po:order:list") 同码）——无权不打接口、渲染无权限态 */
+/** 列表权限预判（与后端 @RequiresPerm("po:order:list") 同码）——无权不打接口、渲染无权限态 */
 const canList = hasPerm('po:order:list')
 const selRows = ref([])
 const rows = ref([])
@@ -424,7 +424,7 @@ const formRef = ref(null)
 const { submit: guardSubmit } = useSubmitGuard(formRef)
 const { autofill, saveFormHistory } = useAutoFill()
 const formLines = ref([])
-// D-UI-02：行项目校验失败的持久提示（原文案只有 3 秒即逝的 toast，点【保存并提交】等于毫无反应）
+// 行项目校验失败的持久提示（原文案只有 3 秒即逝的 toast，点【保存并提交】等于毫无反应）
 const lineError = ref('')
 const lineErrorRows = ref([])
 function lineErrorAt(rowIndex) {
@@ -434,7 +434,7 @@ const detailLines = ref([])
 const materialOptions = ref([])
 const materialSearching = ref(false)
 
-// ---------------- 采购订单关联在建工程（CIP 项目） 
+// 采购订单关联在建工程（CIP 项目）
 // 数据源 GET /api/tenant/cip/list?status=IN_PROGRESS（后端并行部署中）：
 // 404/加载失败/空列表时隐藏「CIP 项目」字段，不弹错误、不影响新增/编辑
 const cipAvailable = ref(false)
@@ -465,7 +465,7 @@ const detailCipLabel = computed(() => {
 
 const lineTotal = computed(() => formLines.value.reduce((s, r) => s + Number(r.amount || 0), 0))
 
-// D-V4R-91：表头金额与行项目合计勾稽（容差 0.01，与后端 assertHeaderLineAmountConsistent 同一规则）
+// 表头金额与行项目合计勾稽（容差 0.01，与后端 assertHeaderLineAmountConsistent 同一规则）
 // 无行项目时不判（采购订单允许只录表头金额）
 const amountMismatch = computed(() => {
   const header = Number(form.value?.amount || form.amount || 0)
@@ -480,7 +480,7 @@ function addLine() {
 }
 
 /**
- * D-H2-09：判断一行是否仍是 addLine() 追加时的原样空行。
+ * 判断一行是否仍是 addLine() 追加时的原样空行。
  * 旧「全空行忽略」判据按 quantity!==0 认定已填写，而空行的默认数量恰是 1 ⇒ 自动追加的空行
  * 被当成有效行，行项目校验报「物料名称必填」拦下【保存并提交】（save 的 payload 又会把该行丢掉），
  * 用户看到的就是"点了没反应"。判据改为与默认值逐字段一致才算空行；
@@ -543,7 +543,7 @@ function viewDetail(row) {
 }
 
 /**
- * D-V4R-91：行项目逐行校验（与后端 PurchaseService.assertOrderLine 同一规则）。
+ * 行项目逐行校验（与后端 PurchaseService.assertOrderLine 同一规则）。
  * guardSubmit 只能校验带 prop 的表单项，行项目明细不在 el-form 内，
  * 历史上从未被任何一层校验过——自动化脚本把 60000 填进「物料名称」、
  * 数量/单价留默认值(1/0) 时照样写入数据库，直到三单匹配才暴露。
@@ -554,7 +554,7 @@ function validateLines() {
   const lines = formLines.value || []
   // 全空行忽略（模板新增的空行不算填写内容）
   const active = lines.filter(l => !isBlankLine(l))
-  // D-UI-02：active 是过滤后的下标，原实现按 active 下标提示「第 N 行」，
+  // active 是过滤后的下标，原实现按 active 下标提示「第 N 行」，
   // 与表格实际行号可能错位（空行夹在中间时）。此处回填真实表格下标供行号染红用。
   const activeIdx = []
   lines.forEach((l, i) => { if (!isBlankLine(l)) activeIdx.push(i) })
@@ -604,10 +604,10 @@ function validateLines() {
 }
 
 /**
- * D-V4R-89：保存 / 保存并提交。
+ * 保存 / 保存并提交。
  * 历史设计把「提交审批」只放在列表行内（PoOrder.vue 行操作列），弹窗底部只有【保存】，
  * 新手按手册「→【保存】→【提交】」操作时会在弹窗里找不到提交键，误以为功能缺失
- * （P3-UI-01）。此处补【保存并提交】：一次点击完成「保存 → 提交审批」，
+ * P3-UI-01。此处补【保存并提交】：一次点击完成「保存 → 提交审批」，
  * 省掉关闭弹窗、回列表找行、再点一次的三步跳转。
  * 编辑态（form.id 已存在且已是草稿）同样允许——驳回重提场景也需要一键重提。
  */
@@ -753,7 +753,7 @@ async function archiveOrderRow(row) {
 
 const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()
 
-// D-BIZ-01：关联合同下拉恒空＝contracts 声明后从未查询。ContractController.page 按设计对所有登录用户
+// 关联合同下拉恒空＝contracts 声明后从未查询。ContractController.page 按设计对所有登录用户
 // 开放（无 @RequiresPerm），故这里只按状态办结：草稿/审批中的合同不能作下单依据。
 const contractsDenied = ref(false)
 async function loadContracts() {
@@ -828,7 +828,7 @@ function batchExport() {
 </script>
 
 <style scoped>
-/* D-V4R-89：footer 内说明文案靠弹性占位推到右端 */
+/* footer 内说明文案靠弹性占位推到右端 */
 :deep(.el-dialog__footer) {
   display: flex;
   align-items: center;

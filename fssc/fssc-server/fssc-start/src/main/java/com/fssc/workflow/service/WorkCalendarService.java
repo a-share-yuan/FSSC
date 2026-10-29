@@ -4,6 +4,9 @@
 package com.fssc.workflow.service;
 
 import com.fssc.framework.tenant.TenantContext;
+import java.time.Duration;
+import java.time.ZoneId;
+import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -51,7 +54,7 @@ import java.util.Map;
  * 唯一性。公司 id 自 1 起，0 不可能是真实公司，故不冲突。
  *
  * <p><b>缺省语义（零行为变化的前提）</b>：某天在日历里<b>没有行</b> ⇒ 视为正常工作日、用默认在岗时段
- * （08:30–17:30）。现网 {@code op_calendar} 只有 1 行（2026-10-01 节假日），若把"无行"当休息日，
+ * 08:30–17:30。现网 {@code op_calendar} 只有 1 行（2026-10-01 节假日），若把"无行"当休息日，
  * 所有 SLA 都会无限后推——所以"无行＝工作日"是唯一安全缺省。
  */
 @Slf4j
@@ -116,7 +119,7 @@ public class WorkCalendarService {
     /**
      * 从 {@code from} 起推进 {@code hours} 个<b>工作小时</b>后的时刻（<b>按组织取日历</b>）。
      *
-     * @param hours     可为小数（如 4.5）；&lt;=0 或 from 为空时按"不推进"处理（返回 from 或 now）
+     * @param hours 可为小数（如 4.5）；&lt;=0 或 from 为空时按"不推进"处理（返回 from 或 now）
      * @param companyId 组织（公司）ID；{@code null} = 调用方拿不到组织，回落租户规则（与旧重载逐字一致）
      */
     public LocalDateTime plusWorkingHours(LocalDateTime from, double hours, Long companyId) {
@@ -169,7 +172,7 @@ public class WorkCalendarService {
                     windowStart = base;
                 }
                 if (windowEnd.isAfter(windowStart)) {
-                    long available = java.time.Duration.between(windowStart, windowEnd).toMinutes();
+                    long available = Duration.between(windowStart, windowEnd).toMinutes();
                     if (available >= remaining) {
                         return windowStart.plusMinutes(remaining);
                     }
@@ -289,7 +292,7 @@ public class WorkCalendarService {
             return ld;
         }
         if (o instanceof java.util.Date ud) {
-            return ud.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+            return ud.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         }
         try {
             return o == null ? null : LocalDate.parse(String.valueOf(o));
@@ -305,7 +308,7 @@ public class WorkCalendarService {
     /** 一天的工作日历：是否工作日 + 在岗时段（解析失败一律回落默认时段，不让脏值把整天判成休息） */
     private record CalDay(String dayType, String workStart, String workEnd) {
         boolean working() {
-            String t = dayType == null ? "" : dayType.trim().toUpperCase(java.util.Locale.ROOT);
+            String t = dayType == null ? "" : dayType.trim().toUpperCase(Locale.ROOT);
             return !("REST".equals(t) || "HOLIDAY".equals(t));
         }
 

@@ -11,8 +11,8 @@ import java.security.MessageDigest;
 /**
  * 回调签名校验工具（HMAC-SHA256 + 时间窗），中立包工具，不依赖任何业务域。
  *
- * <p>由 {@code com.fssc.connector.callback.InboundCallbackVerifier} 统一调用。
- * 本类系自 {@code com.fssc.sharing.util.LinkuCrypto} 迁入：连接域（connector）不应反向依赖
+ * <p>由 {@code InboundCallbackVerifier} 统一调用。
+ * 本类系自 {@code LinkuCrypto} 迁入：连接域（connector）不应反向依赖
  * 业务域（sharing），验签属通用密码学工具，归位到 fssc-common 中立包后反向依赖消除。</p>
  *
  * <p>验签规则（对齐对端 BCP / LinkU 侧生成规则）：</p>
@@ -33,12 +33,12 @@ public final class HmacSignatures {
     /**
      * 校验回调签名与时间窗。
      *
-     * @param secret    共享密钥（非空；空密钥由调用方先行拒绝，本方法不判定）
-     * @param tsHeader  时间戳头（Unix 秒），如 {@code X-BCP-Timestamp}
+     * @param secret 共享密钥（非空；空密钥由调用方先行拒绝，本方法不判定）
+     * @param tsHeader 时间戳头（Unix 秒），如 {@code X-BCP-Timestamp}
      * @param sigHeader 签名头（{@code sha256=} 前缀可选），如 {@code X-BCP-Signature}
-     * @param body      原始请求体（参与签名的原文）
-     * @param nowEpoch  当前 Unix 秒
-     * @param maxSkew   允许的时间偏差（秒）
+     * @param body 原始请求体（参与签名的原文）
+     * @param nowEpoch 当前 Unix 秒
+     * @param maxSkew 允许的时间偏差（秒）
      * @return null=校验通过；否则为失败原因（{@code ts|} 前缀表示时间窗错误，应对应 400）
      */
     public static String verify(String secret, String tsHeader, String sigHeader,

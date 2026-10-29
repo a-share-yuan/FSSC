@@ -8,8 +8,12 @@ import com.fssc.arflow.entity.ArClaim;
 import com.fssc.arflow.entity.ArDispatchRule;
 import com.fssc.arflow.mapper.ArClaimMapper;
 import com.fssc.arflow.mapper.ArDispatchRuleMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.security.LoginUser;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -39,8 +43,8 @@ public class ArDispatchService {
     private final ArDispatchRuleMapper ruleMapper;
     private final ArClaimMapper claimMapper;
 
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /** 规则列表（维护页）。 */
     public List<ArDispatchRule> rules() {
@@ -94,7 +98,7 @@ public class ArDispatchService {
         }
         List<String> handlers = Arrays.stream(rule.getHandlers().split(","))
                 .map(String::trim).filter(StringUtils::hasText).toList();
-        // R5-D-096：候选排除当前登录人——自动派工不得回派给单据制单人自己（自审自办）
+        // 候选排除当前登录人——自动派工不得回派给单据制单人自己（自审自办）
         String me = currentOperator();
         if (me != null) {
             handlers = handlers.stream().filter(h -> !me.equals(h)).toList();
@@ -125,10 +129,10 @@ public class ArDispatchService {
         claimMapper.updateById(u);
         // 仅单人直派/负载均衡分支改变了状态与处理人（多人进选单池分支不动状态，不记轨迹）
         if (u.getStatus() != null) {
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("status", auditOldStatus);
             auditBefore.put("handler", auditOldHandler);
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", u.getStatus());
             auditAfter.put("handler", u.getHandler());
             auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
@@ -145,9 +149,9 @@ public class ArDispatchService {
         return true;
     }
 
-    /** R5-D-096：当前登录人显示名（username→realName→userId 回退），未登录返回 null。 */
+    /** 当前登录人显示名（username→realName→userId 回退），未登录返回 null。 */
     private String currentOperator() {
-        com.fssc.framework.security.LoginUser u = UserContext.get();
+        LoginUser u = UserContext.get();
         if (u == null) return null;
         if (StringUtils.hasText(u.getUsername())) return u.getUsername();
         if (StringUtils.hasText(u.getRealName())) return u.getRealName();
@@ -168,13 +172,18 @@ public class ArDispatchService {
         List<ArClaim> processing = claimMapper.selectList(new LambdaQueryWrapper<ArClaim>()
                 .eq(ArClaim::getStatus, ArClaim.ST_DISPATCHED)
                 .isNotNull(ArClaim::getDispatchTime));
+        // 规则表整表读一次，而不是逐单再读一次：在办单到万级时，逐单 matchRule 会把
+        // 同一张 ar_dispatch_rule 反复查上千遍，库侧往返吃掉整轮时间。
+        // 规则在一轮内不变，提到循环外语义等价。
+        List<ArDispatchRule> enabledRules = ruleMapper.selectList(new LambdaQueryWrapper<ArDispatchRule>()
+                .eq(ArDispatchRule::getEnabled, 1));
         for (ArClaim c : processing) {
             if (!StringUtils.hasText(c.getGroupLeader())) {
                 continue;
             }
             Long ruleId = null;
             Integer slaHours = null;
-            ArDispatchRule rule = matchRule(c.getClaimType(), c.getCustomerCode());
+            ArDispatchRule rule = matchRule(enabledRules, c.getClaimType(), c.getCustomerCode());
             if (rule != null) {
                 slaHours = rule.getSlaHours();
             }
@@ -193,12 +202,16 @@ public class ArDispatchService {
         }
     }
 
-    // ---------------- 内部 ----------------
+    // 内部
 
     /** 规则命中：最长前缀 → 类型精确 → priority。 */
     private ArDispatchRule matchRule(String claimType, String customerCode) {
-        List<ArDispatchRule> rules = ruleMapper.selectList(new LambdaQueryWrapper<ArDispatchRule>()
-                .eq(ArDispatchRule::getEnabled, 1));
+        return matchRule(ruleMapper.selectList(new LambdaQueryWrapper<ArDispatchRule>()
+                .eq(ArDispatchRule::getEnabled, 1)), claimType, customerCode);
+    }
+
+    /** 同上，规则集由调用方给（批量场景一轮只读一次）。 */
+    private ArDispatchRule matchRule(List<ArDispatchRule> rules, String claimType, String customerCode) {
         return rules.stream()
                 .filter(r -> r.getClaimType() == null || r.getClaimType().isBlank()
                         || r.getClaimType().equals(claimType))

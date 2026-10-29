@@ -14,14 +14,14 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import java.util.Set;
 
 /**
- * D-DEC-099（代码半）／D-DEC-084：付款条目在<strong>审批通过的收尾</strong>里自动组批，而不是等出纳打开付款页。
+ * 代码半 ／付款条目在<strong>审批通过的收尾</strong>里自动组批，而不是等出纳打开付款页。
  *
  * <p><b>缺陷原文</b>
  * <ul>
- *  <li>D-DEC-099（12-23:58）：组批挂在出纳页加载（{@code Pay.vue} 的 {@code load()} 里调 autoGroup），
+ *  <li>组批挂在出纳页加载（{@code Pay.vue} 的 {@code load()} 里调 autoGroup），
  *      且该接口要求 {@code pay:batch:create} 权限——出纳（3259/3264）按治理定案<strong>不授</strong>该权限，
  *      于是"打开付款页才组批"这条链在真实权限模型下根本不成立，付款条目长期无人产出批次。</li>
- *  <li>D-DEC-084（12-22:76）：审批通过后付款行未进任何批次，出纳无入口（原判"查询未覆盖 PAY/SETTLE"
+ *  <li>审批通过后付款行未进任何批次，出纳无入口（原判"查询未覆盖 PAY/SETTLE"
  *      已被 12-23:58 更正——查询范围本身是通的，卡点是触发点错位＋权限门槛）。</li>
  * </ul>
  *

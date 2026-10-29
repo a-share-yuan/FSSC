@@ -6,6 +6,7 @@ package com.fssc.expense.facade;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.framework.facade.event.BillImageEvent;
+import com.fssc.image.service.ImageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -37,7 +38,7 @@ public class BillImageEventListener {
         // 缺陷修复（H-0）：原仅处理 EXP_CLAIM，报销域其他单据类型
         // （CLAIM/TRAVEL/PREPAY/SETTLE/PAY 等，均落 exp_bill 表）影像状态不回写。
         // 统一按 exp_bill 单据类型集合判定（与 ImageService.isExpBillBizType 同一规则）。
-        if (event.getBillId() == null || !com.fssc.image.service.ImageService.isExpBillBizType(event.getBizType())) {
+        if (event.getBillId() == null || !ImageService.isExpBillBizType(event.getBizType())) {
             return;
         }
         ExpBill update = new ExpBill();

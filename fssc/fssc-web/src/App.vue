@@ -11,20 +11,20 @@
       </span>
       <el-button size="small" type="warning" plain :loading="retrying" @click="retry">重试</el-button>
     </div>
-    <!-- 移动报销端 P0-8「返回不丢数据」：
+    <!-- 移动报销端 「返回不丢数据」：
          只对 meta.keepAlive 的 /h5 路由族套 keep-alive，PC 路由走原来的裸 <component>，
          结构不变 ⇒ 不引入 PC 侧回归。key 用 fullPath：同一条地址返回即复用实例
-         （列表滚动位置、已填表单、分页进度都在），换单据/换任务则另起一份。
+         列表滚动位置、已填表单、分页进度都在，换单据/换任务则另起一份。
          缓存上限 5 页，超出按 LRU 淘汰；离开 /h5 路由族（如退出登录）缓存随容器卸载销毁。 -->
-    <!-- D-H8-01（P2，2026-10-24 H8.8/H8.9 真跑）：/glex/consolidate 与 /glex/fx-reval 曾整页白屏
+    <!-- （P2，2026-10-24 H8.8/H8.9 真跑）：/glex/consolidate 与 /glex/fx-reval 曾整页白屏
          （控制台只有 `Unhandled error during execution of setup function` ＋ `Cannot read properties of null
-         (reading 'subTree')`，界面表格空态提示），用户无从得知原因。ErrorBoundary（R5-05）此前只在
-         main.js 里全局注册、任何一处使用 ⇒ 这里把它真正套到路由出口上：页面组件 setup/render 抛错时
+         (reading 'subTree')`，界面不要表格不要空态不要提示），用户无从得知原因。ErrorBoundary此前只在
+         main.js 里全局注册、不要任何一处使用 ⇒ 这里把它真正套到路由出口上：页面组件 setup/render 抛错时
          显示可读默认处理＋重试入口，而不是留一片空白。
-         :key 用 route.fullPath —— 边界自身不监听路由，换页必须重新挂载一份干净的边界，
+         key 用 route.fullPath —— 边界自身不监听路由，换页必须重新挂载一份干净的边界，
          否则上一页捕获过的错误会把后续所有页面都挡在默认处理页上。
-          边界必须套在 keep-alive **内层**：套在外层且带 key 会让 keep-alive 实例随每次换页重建，
-         缓存全丢 ⇒ 移动报销端 P0-8「返回不丢数据」直接退化。 -->
+         边界必须套在 keep-alive **内层**：套在外层且带 key 会让 keep-alive 实例随每次换页重建，
+         缓存全丢 ⇒ 移动报销端 「返回不丢数据」直接退化。 -->
     <router-view v-slot="{ Component, route }">
       <keep-alive v-if="route.meta?.keepAlive" :max="5">
         <ErrorBoundary :key="route.fullPath">
@@ -106,7 +106,7 @@ watch(() => backend.online, (v, old) => {
  *
  * 修法：监听 token 由空变非空，触发一次预热（已加载的类型在 useDict 内短路，不会重复请求）。
  */
-//  不能用 watch(() => store.token)：store 是普通对象（getter/setter 直读 localStorage），
+// 不能用 watch(() => store.token)：store 是普通对象（getter/setter 直读 localStorage），
 //    不是 reactive，Vue 追踪不到依赖 ⇒ 监听永不触发。故改由 api.js 的 token setter 派发
 //    'fssc:auth' 事件（见 api.js:43 附近）来通知。
 function onAuth(e) {

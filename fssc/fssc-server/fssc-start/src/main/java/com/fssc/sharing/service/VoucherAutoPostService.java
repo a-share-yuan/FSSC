@@ -8,14 +8,24 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.expense.entity.ExpBillPayment;
 import com.fssc.expense.mapper.ExpBillPaymentMapper;
+import com.fssc.glex.entity.GlSalaryRun;
+import com.fssc.glex.mapper.GlSalaryRunMapper;
 import com.fssc.sharing.entity.OpPayBatch;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.mapper.OpPayBatchMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
+import com.fssc.system.service.ConfigService;
+import com.fssc.treasury.entity.TrTransfer;
+import com.fssc.treasury.mapper.TrTransferMapper;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -25,27 +35,27 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * P1-3 实付入账：付款成功后自动过账关联凭证（DRAFT→POSTED）。
+ * 实付入账：付款成功后自动过账关联凭证（DRAFT→POSTED）。
  * <p>
  * 独立事务（REQUIRES_NEW）：凭证过账失败只影响凭证状态，绝不回滚已成功的付款；
- * 失败后可在凭证工作台用批量记账手工补账（P1-2 提供）。
+ * 失败后可在凭证工作台用批量记账手工补账（提供）。
  * <p>
- * D-DEC-288「凭证与电子归档早于资金指令」逐段核对后的两条落码环节（本类是"实付入账"语义的唯一持有者）：
+ * 「凭证与电子归档早于资金指令」逐段核对后的两条落码环节（本类是"实付入账"语义的唯一持有者）：
  * <ol>
  *  <li><b>串号封堵</b>（{@link #autoPostDraftByBill} / {@link #autoPostDraftByBatch}）：
  *      {@code op_voucher.bill_id} 存的粒度按来源分家——单据级凭证（EXPENSE_PAY／CIP_PAY）存
  *      {@code exp_bill.id}，批次级凭证（TREASURY_PAY／CIP_PAY_BATCH，见
- *      {@code VoucherService.generateTreasuryPayVoucher} 与 D-DEC-036 后半）存
+ *      {@code VoucherService.generateTreasuryPayVoucher} 与 后半）存
  *      {@code op_pay_batch.id}。原方法对两族凭证用同一条 {@code bill_id = ? OR source_doc_id = ?}
  *      查询，而两张表的 id 各自全局自增、数值区间重叠（现库 op_pay_batch 1~7 与 exp_bill 1~12 同段），
  *      于是"执行批次 2"会把<b>单据 2</b> 名下 80,000 元的付款环节凭证一并过账并盖上本批次号
- *      （D-DEC-288 真错位：凭证在自身的资金指令未下发时就被记账）。现按来源族划界；</li>
+ *      （真错位：凭证在自身的资金指令未下发时就被记账）。现按来源族划界；</li>
  *  <li><b>人工过账口的实付校验</b>（{@link #assertPaymentLegSettled} /
  *      {@link #findUnsettledPaymentLegs}）：自动通道只在银行指令成功之后推
  *      （{@code PayBatchService.writeBackPayment} 与 {@code PayBatchBizAction.closeAccountingForLateApproval}
  *      的 {@code if (!paid) return} 两环节），但凭证工作台的人工记账口（
  *      {@code POST /sharing/voucher/{id}/post}、{@code /sharing/voucher/batch-post}）
- *      只校验制审分离（D-DEC-166），谁都能把"贷 银行存款"的付款环节凭证在款未付出时入账——
+ *      只校验制审分离，谁都能把"贷 银行存款"的付款环节凭证在款未付出时入账——
  *      现库实证 4 张（凭证 14/15/16/23，对应单据 1/2/3/8 的付款记录至今 {@code WAITING}、
  *      {@code paid_amount=0}、{@code pay_time} 空，却在 2026-10-01 02:37:57～02:39:05 被置 POSTED）。
  *      本校验把"款未付出不得入账"从代码注释里的规则变成可执行判据，只校验付款环节、逐张给原因，
@@ -56,8 +66,8 @@ import org.springframework.transaction.annotation.Transactional;
  *      避免看凭证的人把"账面已记账"读成"款已付出"。</li>
  * </ol>
  * 不在本类处置的半条（属裁决面，见回报"需主窗裁决清单"）：制证时点本身是否参数化
- * （审批后即出 DRAFT 凭证 vs 付款后才出）——已由 D-DEC-288（X-48 甲）在 {@code VoucherService}
- * 一侧落成出纳参数，默认＝否＝现网行为不变；"归档早于付款"半条已按 既有裁决 判不修（RA-D288b）。
+ * （审批后即出 DRAFT 凭证 vs 付款后才出）——已由 （X-48 甲）在 {@code VoucherService}
+ * 一侧落成出纳参数，默认＝否＝现网行为不变；"归档早于付款"半条已按 既有裁决 判不修。
  */
 @Slf4j
 @Service
@@ -66,22 +76,22 @@ public class VoucherAutoPostService {
 
     /**
      * 批次级付款环节凭证来源族：{@code bill_id}/{@code source_doc_id} 存的是 {@code op_pay_batch.id}。
-     * D-DEC-288 串号封堵的划界依据。
+     * 串号封堵的划界依据。
      */
     private static final Set<String> BATCH_LEG_SOURCE_TYPES = Set.of("TREASURY_PAY", "CIP_PAY_BATCH");
 
     /**
      * 实付校验默认覆盖族（贷方为银行存款 1002，款未付出即入账＝虚减银行）：
      * 单据级 EXPENSE_PAY／CIP_PAY ＋ 批次级 TREASURY_PAY／CIP_PAY_BATCH。
-     * <p>D-DEC-288（X-50 甲）：这四族＝加参数化之前的既有覆盖面，默认值逐字不变。
-     * <p>不含 EXPENSE_SETTLE（D-DEC-083：结算审批通过出的是"借 6602／贷 2202"计提应付凭证，
+     * <p>（X-50 甲）：这四族＝加参数化之前的既有覆盖面，默认值逐字不变。
+     * <p>不含 EXPENSE_SETTLE（结算审批通过出的是"借 6602／贷 2202"计提应付凭证，
      * 付款环节另由批次凭证承载，审批后即入账是正确的）。
      */
     private static final Set<String> DEFAULT_PAYMENT_LEG_SOURCE_TYPES =
             Set.of("EXPENSE_PAY", "CIP_PAY", "TREASURY_PAY", "CIP_PAY_BATCH");
 
     /**
-     * D-DEC-288（X-50 甲）：可<b>逐族</b>加校验的候选族——默认<b>关</b>（不在默认集内），
+     * X-50 甲：可<b>逐族</b>加校验的候选族——默认<b>关</b>（不在默认集内），
      * 由 {@link #CFG_PAYMENT_LEG_SOURCE_TYPES} 点名后才纳入实付校验，避免新增拦口堵期末批量记账。
      * <p>FA_ADD 无资金环节证据通道（凭证按资产卡片落账，本环境没有对应的付款记录/批次），
      * 即便点名也按"无证据可判＝放行"，与改前一致。
@@ -90,18 +100,18 @@ public class VoucherAutoPostService {
             Set.of("EXP_LOAN", "GL_SALARY_PAY", "FA_ADD", "TR_TRANSFER");
 
     /**
-     * D-DEC-288（X-50 甲）：实付校验覆盖族的逐族配置键（sys_config 逗号串，如
+     * X-50 甲：实付校验覆盖族的逐族配置键（sys_config 逗号串，如
      * {@code EXP_LOAN,GL_SALARY_PAY}＝在默认四族之外再加两族；{@code -CIP_PAY}＝把某默认族撤校验）。
      * <b>读不到＝用默认四族</b>（本轮不向库里插参数行）。
      */
     private static final String CFG_PAYMENT_LEG_SOURCE_TYPES = "voucher.post.payment-leg.source-types";
 
     /**
-     * D-DEC-288（X-49 乙）：读侧注记可判定的付款环节族——只收录<b>本类已有资金证据通道</b>的族，
-     * 且证据键按 D-DEC-288 的划界规则取（批次级族＝{@code op_pay_batch.id}，其余＝{@code exp_bill.id}）。
+     * X-49 乙：读侧注记可判定的付款环节族——只收录<b>本类已有资金证据通道</b>的族，
+     * 且证据键按 的划界规则取（批次级族＝{@code op_pay_batch.id}，其余＝{@code exp_bill.id}）。
      * <p>不含 GL_SALARY_PAY／TR_TRANSFER／FA_ADD：前两族的实付证据在各自域的另一张表
      * （{@link #settledPayrollOrTransfer} 走 selectById，未做列表批量化），FA_ADD 本就无资金环节证据通道；
-     * 把它们塞进这条批量通道＝拿别的域主键去查 {@code exp_bill_payment}，正是 D-DEC-244 那类跨域裸主键串号。
+     * 把它们塞进这条批量通道＝拿别的域主键去查 {@code exp_bill_payment}，正是 那类跨域裸主键串号。
      */
     private static final Set<String> FLAG_LEG_SOURCE_TYPES =
             Set.of("EXPENSE_PAY", "CIP_PAY", "EXP_LOAN", "TREASURY_PAY", "CIP_PAY_BATCH");
@@ -110,18 +120,18 @@ public class VoucherAutoPostService {
     private final VoucherService voucherService;
     private final ExpBillPaymentMapper expBillPaymentMapper;
     private final OpPayBatchMapper opPayBatchMapper;
-    private final com.fssc.system.service.ConfigService configService;
-    private final com.fssc.glex.mapper.GlSalaryRunMapper glSalaryRunMapper;
-    private final com.fssc.treasury.mapper.TrTransferMapper trTransferMapper;
+    private final ConfigService configService;
+    private final GlSalaryRunMapper glSalaryRunMapper;
+    private final TrTransferMapper trTransferMapper;
 
     /**
      * 付款完成后自动过账该<b>单据</b>的全部 DRAFT 凭证（单据级环节：bill_id / source_doc_id = 单据 id）。
      *
-     * <p>D-DEC-288：查询排除批次级来源族，避免单据 id 与付款批次 id 数值相同时串到批次凭证。
+     * <p>查询排除批次级来源族，避免单据 id 与付款批次 id 数值相同时串到批次凭证。
      *
-     * @param billId  来源单据 ID（bill_id / source_doc_id 双字段兼容）
+     * @param billId 来源单据 ID（bill_id / source_doc_id 双字段兼容）
      * @param batchNo 付款批次号（写入凭证备注，便于溯源）
-     * @param userId  过账人（付款执行人）
+     * @param userId 过账人（付款执行人）
      * @return 过账结果 Map（凭证ID → OK/失败原因）；无 DRAFT 凭证时返回空
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
@@ -130,22 +140,22 @@ public class VoucherAutoPostService {
     }
 
     /**
-     * 付款完成后自动过账该<b>付款批次</b>名下的批次级 DRAFT 凭证（D-DEC-036 后半的批次环节）。
+     * 付款完成后自动过账该<b>付款批次</b>名下的批次级 DRAFT 凭证（后半的批次环节）。
      *
-     * <p>D-DEC-288：只取 {@code source_type ∈ {TREASURY_PAY, CIP_PAY_BATCH}} 的凭证——
+     * <p>只取 {@code source_type ∈ {TREASURY_PAY, CIP_PAY_BATCH}} 的凭证——
      * 这三个入参在旧实现里与单据通道共用一条 {@code bill_id = ?} 谓词，而批次 id 与单据 id 同段自增，
      * 于是批次执行成功会连带过账"同号单据"的单据级付款凭证（那张凭证的钱并未在本批次付出）。
      *
      * @param batchId 付款批次 ID（op_pay_batch.id）
      * @param batchNo 付款批次号
-     * @param userId  过账人（付款执行人）
+     * @param userId 过账人（付款执行人）
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public Map<Long, String> autoPostDraftByBatch(Long batchId, String batchNo, Long userId) {
         return postDrafts(batchId, batchNo, userId, true);
     }
 
-    /** 实付入账查询并过账；{@code batchScope=true} 只碰批次级凭证，false 只碰单据级凭证（D-DEC-288） */
+    /** 实付入账查询并过账；{@code batchScope=true} 只碰批次级凭证，false 只碰单据级凭证 */
     private Map<Long, String> postDrafts(Long docId, String batchNo, Long userId, boolean batchScope) {
         if (docId == null) {
             return Map.of();
@@ -159,7 +169,7 @@ public class VoucherAutoPostService {
             qw.in(OpVoucher::getSourceType, BATCH_LEG_SOURCE_TYPES);
         } else {
             // source_type 未知的凭证仍走单据通道：NULL NOT IN (…) 在三值逻辑下恒不成立，
-            // 直接用 notIn 会让这类凭证凭空从过账队列消失（同 D-DEC-276b 的 ne＋isNull 规则）
+            // 直接用 notIn 会让这类凭证凭空从过账队列消失（同 的 ne＋isNull 规则）
             qw.and(w -> w.isNull(OpVoucher::getSourceType)
                     .or()
                     .notIn(OpVoucher::getSourceType, BATCH_LEG_SOURCE_TYPES));
@@ -178,7 +188,7 @@ public class VoucherAutoPostService {
             opVoucherMapper.updateById(u);
         }
         List<Long> ids = drafts.stream().map(OpVoucher::getId).toList();
-        // D-DEC-166：实付入账＝付款流程已通过后的系统动作，职责分离在流程侧（提单/审批/付款执行三岗）已完成，
+        // 实付入账＝付款流程已通过后的系统动作，职责分离在流程侧（提单/审批/付款执行三岗）已完成，
         // 这里显式声明系统过账，避免"付款执行人恰是凭证制单人"时钱已付而账不落（人工过账口仍强制制审分离）
         Map<Long, String> result = voucherService.batchPost(ids, userId, true);
         long ok = result.values().stream().filter("OK"::equals).count();
@@ -195,7 +205,7 @@ public class VoucherAutoPostService {
     }
 
     /**
-     * D-DEC-288：人工过账口（凭证工作台单张/批量记账）的实付校验——付款环节凭证在款项实际付出前不得置 POSTED。
+     * 人工过账口（凭证工作台单张/批量记账）的实付校验——付款环节凭证在款项实际付出前不得置 POSTED。
      * <p>只在<b>拿得到资金证据且证据说"未付"</b>时拦截：单据一张付款记录都没有（历史单、
      * 借款/还款族在本环境无资金环节）或批次行查不到时一律放行，避免把正常记账路径堵死。
      * 部分付款（单据有多条付款记录且至少一条 PAID）放行——那是人工判断范围，本校验不越权。
@@ -208,7 +218,7 @@ public class VoucherAutoPostService {
         if (voucherIds == null || voucherIds.isEmpty()) {
             return blocked;
         }
-        List<Long> ids = voucherIds.stream().filter(java.util.Objects::nonNull).distinct().collect(Collectors.toList());
+        List<Long> ids = voucherIds.stream().filter(Objects::nonNull).distinct().collect(Collectors.toList());
         if (ids.isEmpty()) {
             return blocked;
         }
@@ -223,7 +233,7 @@ public class VoucherAutoPostService {
     }
 
     /**
-     * D-DEC-288：单张记账入口用的强制校验版本——被拦时抛业务异常，界面直接回显原因。
+     * 单张记账入口用的强制校验版本——被拦时抛业务异常，界面直接回显原因。
      * <p>红字冲销／作废不走本校验（纠错通道必须始终可用）。
      */
     public void assertPaymentLegSettled(Long voucherId) {
@@ -234,7 +244,7 @@ public class VoucherAutoPostService {
     }
 
     /**
-     * D-DEC-288（X-49 乙）裁决落地：<b>只读补充</b>——给"账面已记账、资金指令未下发"的付款环节凭证
+     * X-49 乙 裁决落地：<b>只读补充</b>——给"账面已记账、资金指令未下发"的付款环节凭证
      * 打 {@code payLegUnsettled} 展示标记，凭证台账据此在行上注记"资金指令未下发"。
      *
      * <p><b>零账务动作</b>：本方法不 {@code update} 任何表、不改 {@code op_voucher.status}，
@@ -256,7 +266,7 @@ public class VoucherAutoPostService {
             return;
         }
         Set<String> gated = gatedPaymentLegSourceTypes();
-        List<OpVoucher> targets = new java.util.ArrayList<>();
+        List<OpVoucher> targets = new ArrayList<>();
         for (OpVoucher v : vouchers) {
             if (v == null || v.getId() == null) {
                 continue;
@@ -277,19 +287,19 @@ public class VoucherAutoPostService {
         if (targets.isEmpty()) {
             return;
         }
-        Set<Long> billIds = new java.util.HashSet<>();
-        Set<Long> batchIds = new java.util.HashSet<>();
+        Set<Long> billIds = new HashSet<>();
+        Set<Long> batchIds = new HashSet<>();
         for (OpVoucher v : targets) {
             (BATCH_LEG_SOURCE_TYPES.contains(upperSourceType(v)) ? batchIds : billIds).add(legDocId(v));
         }
-        java.util.Map<Long, List<ExpBillPayment>> paysByBill = new java.util.HashMap<>();
+        Map<Long, List<ExpBillPayment>> paysByBill = new HashMap<>();
         if (!billIds.isEmpty()) {
             for (ExpBillPayment p : expBillPaymentMapper.selectList(new LambdaQueryWrapper<ExpBillPayment>()
                     .in(ExpBillPayment::getBillId, billIds))) {
-                paysByBill.computeIfAbsent(p.getBillId(), k -> new java.util.ArrayList<>()).add(p);
+                paysByBill.computeIfAbsent(p.getBillId(), k -> new ArrayList<>()).add(p);
             }
         }
-        java.util.Map<Long, OpPayBatch> batchById = new java.util.HashMap<>();
+        Map<Long, OpPayBatch> batchById = new HashMap<>();
         if (!batchIds.isEmpty()) {
             for (OpPayBatch b : opPayBatchMapper.selectBatchIds(batchIds)) {
                 batchById.putIfAbsent(b.getId(), b);
@@ -325,7 +335,7 @@ public class VoucherAutoPostService {
     }
 
     /**
-     * D-DEC-288（X-50 甲）：实付校验当前的覆盖族＝默认四族 ＋ 配置点名的候选族（－ 配置撤校验的默认族）。
+     * X-50 甲：实付校验当前的覆盖族＝默认四族 ＋ 配置点名的候选族（－ 配置撤校验的默认族）。
      * <p>参数读不到／读失败＝默认四族（＝加本参数前的硬编码覆盖面），现网行为不变。
      */
     private Set<String> gatedPaymentLegSourceTypes() {
@@ -339,7 +349,7 @@ public class VoucherAutoPostService {
         if (raw == null || raw.isBlank()) {
             return DEFAULT_PAYMENT_LEG_SOURCE_TYPES;
         }
-        Set<String> gated = new java.util.LinkedHashSet<>(DEFAULT_PAYMENT_LEG_SOURCE_TYPES);
+        Set<String> gated = new LinkedHashSet<>(DEFAULT_PAYMENT_LEG_SOURCE_TYPES);
         for (String token : raw.split(",")) {
             String t = token.trim().toUpperCase();
             if (t.isEmpty()) {
@@ -406,12 +416,12 @@ public class VoucherAutoPostService {
     }
 
     /**
-     * D-DEC-288（X-50 甲）：薪酬发放／资金调拨两族的实付证据——各自域自己的资金状态列，
+     * X-50 甲：薪酬发放／资金调拨两族的实付证据——各自域自己的资金状态列，
      * 查不到行／状态不认识＝无证据可判 ⇒ 放行（与 fail-open 同一规则，不新增拦口）。
      */
     private String settledPayrollOrTransfer(String sourceType, Long docId) {
         if ("GL_SALARY_PAY".equals(sourceType)) {
-            com.fssc.glex.entity.GlSalaryRun run = glSalaryRunMapper.selectById(docId);
+            GlSalaryRun run = glSalaryRunMapper.selectById(docId);
             if (run == null || run.getPayStatus() == null || run.getPayStatus().isBlank()) {
                 return null;
             }
@@ -422,7 +432,7 @@ public class VoucherAutoPostService {
             return "该凭证是薪酬发放的付款凭证（贷 银行存款），发放批次 " + run.getRunNo()
                     + " 当前付款状态为 " + st + "，款项尚未实际发放；请先完成发放执行后再记账（按实际付款入账）。";
         }
-        com.fssc.treasury.entity.TrTransfer transfer = trTransferMapper.selectById(docId);
+        TrTransfer transfer = trTransferMapper.selectById(docId);
         if (transfer == null || transfer.getStatus() == null || transfer.getStatus().isBlank()) {
             return null;
         }

@@ -24,7 +24,7 @@
 
 <script setup>
 /**
- * ErrorBoundary 错误边界组件 (R5-05)
+ * ErrorBoundary 错误边界组件 ()
  *
  * 用法：
  *   <ErrorBoundary>
@@ -43,7 +43,7 @@ const errorStack = ref('')
 const showDetail = ref(false)
 
 onErrorCaptured((err, instance, info) => {
-  // D-V4R-1026-03：一次崩溃通常连着抛多条错误（首错 → 组件卸载期的二次错误）。
+  // -03：一次崩溃通常连着抛多条错误（首错 → 组件卸载期的二次错误）。
   // 原先每条都覆盖同一组 ref，留在「查看详情」里的往往是卸载期那条（实测 unregisterPane 读 undefined），
   // 真实首错被掩盖、用户与开发都无从定位。现只登记首条，后续错误带生命周期标签追加进详情。
   const cause = err?.cause ? '\n原因链：' + String(err?.cause?.message || err?.cause) : ''

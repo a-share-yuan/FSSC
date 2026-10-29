@@ -36,7 +36,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 资金头寸视图（P1-4 资金域补齐：无资金头寸视图 → 建成）。
+ * 资金头寸视图（资金域补齐：无资金头寸视图 → 建成）。
  * <p>
  * 一个接口聚合四类数据，形成司库日幕：
  * <ul>
@@ -60,7 +60,7 @@ public class TreasuryPositionController {
     private final OrgGuard orgGuard;
 
     /**
-     * 资金头寸日幕视图（越权读修复 R5-D-187，级别 高）。
+     * 资金头寸日幕视图（越权读修复，级别 高）。
      * <p>授权校验：新增 {@code @RequiresPerm}。台账命名码为 {@code treasury:position:list}；本页面挂在
      * 资金管理工作台菜单（sys_menu 3072，perms {@code treasury:fundplan:list,treasury:creditbill:list}）
      * 之下、前端未按页签单独设权，故采用全项目既有「多码 OR 迁移」写法（见 {@link RequiresPerm} javadoc
@@ -102,7 +102,7 @@ public class TreasuryPositionController {
             }
             for (MdBankAccount a : accounts) {
                 BankBalance b = latest.get(a.getId());
-                // R5-D-185：余额表未登记时退化为账户主数据当前余额（改前恒 0，与"账户确实没钱"同形，
+                // 余额表未登记时退化为账户主数据当前余额（改前恒 0，与"账户确实没钱"同形，
                 // 界面按 balanceDate 是否为空标注「未登记（取账户余额）」；登记入口见资金管理→头寸→登记余额）
                 BigDecimal bal = b == null || b.getBalance() == null
                         ? (a.getBalance() == null ? BigDecimal.ZERO : a.getBalance())

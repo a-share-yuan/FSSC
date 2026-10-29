@@ -20,7 +20,7 @@ public class ArchiveRegisterDTO {
     private String title;
     private Long fileId;
     private Long filingUserId;
-    /** R5-D-210：来源公司（回单立卷等跨域登记必须带公司，档案读面按公司数据域办结） */
+    /** 来源公司（回单立卷等跨域登记必须带公司，档案读面按公司数据域办结） */
     private Long companyId;
     private String archiveStatus;
     private String status;

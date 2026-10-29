@@ -42,11 +42,11 @@ public class ExpBill extends TenantAuditBase {
     private Long applyUserId;
     private String applyUserName;
     /**
-     * 代理人（代他人报销，代填单）。D-DEC-179 甲：本列此前全仓零生产端写入，
+     * 代理人（代他人报销，代填单）。甲：本列此前全仓零生产端写入，
      * 现由 ExpenseBillService 保存/提交环节显式落值——代理人恒等于填单登录人，且与报销人（apply_user_id）不同人。
      */
     private Long agentUserId;
-    /** 共享审核人（AUDIT 环节完成经办人，D-DEC-179；此前实体无字段致列恒空） */
+    /** 共享审核人（AUDIT 环节完成经办人，；此前实体无字段致列恒空） */
     private Long auditUserId;
     /** 收款人：代理报销场景下报销人≠收款人（张三填、李四报、赵五收），款项付给本字段（P2 代理报销） */
     private Long receiverUserId;
@@ -58,7 +58,7 @@ public class ExpBill extends TenantAuditBase {
     private String priceType;
     private BigDecimal exchangeRate;
     private BigDecimal totalAmount;
-    /** 金额大写（中文大写，打印/OA 用；P0-4 新增，随 totalAmount 写入数据库） */
+    /** 金额大写（中文大写，打印/OA 用；新增，随 totalAmount 写入数据库） */
     private String amountCn;
     private BigDecimal taxAmount;
     private BigDecimal netAmount;
@@ -73,7 +73,7 @@ public class ExpBill extends TenantAuditBase {
     /** 应付金额 */
     private BigDecimal payableAmount;
     private BigDecimal paidAmount;
-    /** 关键字段校验和（SHA-256，提交时生成；P0-2 金额防篡改） */
+    /** 关键字段校验和（SHA-256，提交时生成；金额防篡改） */
     private String amountChecksum;
     /** 借款余额（借款单用） */
     private BigDecimal loanBalance;
@@ -131,10 +131,10 @@ public class ExpBill extends TenantAuditBase {
     private String remark;
     private String extJson;
 
-    /** P0-5 驳回类型：THROW_BACK 漏单驳回 / GRADE_BY_GRADE 逐级驳回（仅被驳回时置位） */
+    /** 驳回类型：THROW_BACK 漏单驳回 / GRADE_BY_GRADE 逐级驳回（仅被驳回时置位） */
     private String rejectType;
-    /** P0-5 无纸化标志：Y 无纸化（免实物）/ N 需实物 */
+    /** 无纸化标志：Y 无纸化（免实物）/ N 需实物 */
     private String paperless;
-    /** P0-5 实物流签收状态：NOT_REQUIRED 无需（无纸化）/ UNSIGNED 待签收 / SIGNED 已签收 */
+    /** 实物流签收状态：NOT_REQUIRED 无需（无纸化）/ UNSIGNED 待签收 / SIGNED 已签收 */
     private String deliveryStatus;
 }

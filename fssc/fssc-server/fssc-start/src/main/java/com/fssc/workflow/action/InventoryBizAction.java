@@ -3,6 +3,7 @@
 
 package com.fssc.workflow.action;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fssc.asset.entity.MdInventory;
 import com.fssc.asset.entity.StockMove;
 import com.fssc.asset.mapper.MdInventoryMapper;
@@ -17,7 +18,7 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 存货域审批收尾（P1-2 存货成本模型补齐）。
+ * 存货域审批收尾（存货成本模型补齐）。
  * <p>
  * 覆盖 11 个存货流程审批通过后的收尾动作：
  * <ul>
@@ -69,7 +70,7 @@ public class InventoryBizAction implements WfBizAction {
                 upd.setStatus("REJECTED");
                 // 按来源单据ID更新移动单状态
                 stockMoveMapper.update(upd,
-                        new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<StockMove>()
+                        new LambdaUpdateWrapper<StockMove>()
                                 .eq(StockMove::getSourceDocId, bizId)
                                 .eq(StockMove::getStatus, "PENDING"));
             } catch (Exception ex) {
@@ -83,7 +84,7 @@ public class InventoryBizAction implements WfBizAction {
             StockMove upd = new StockMove();
             upd.setStatus("APPROVED");
             stockMoveMapper.update(upd,
-                    new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<StockMove>()
+                    new LambdaUpdateWrapper<StockMove>()
                             .eq(StockMove::getSourceDocId, bizId)
                             .eq(StockMove::getStatus, "PENDING"));
         } catch (Exception ex) {
@@ -111,7 +112,7 @@ public class InventoryBizAction implements WfBizAction {
                     stockCostSettleService.settleDevalProvision(bizId, event.getProcInstId());
                     break;
                 case "INV_PHYSICAL_CHECK":
-                    // 盘点差异 → 生成盘点差异结转（存货规则；FA_CHECK_DIFF 资产规则结转走 GL_VOUCHER 盘点结转档，见 D-DEC-323）
+                    // 盘点差异 → 生成盘点差异结转（存货规则；FA_CHECK_DIFF 资产规则结转走 GL_VOUCHER 盘点结转档，见）
                     stockCostSettleService.settleCheckDiff(bizId, event.getProcInstId());
                     break;
                 default:

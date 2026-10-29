@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * ⑤ 境外凭证合规纯规则集（V1.3.14，国家税务总局 2016年19号公告规则）：
+ * ⑤ 境外凭证合规纯规则集（国家税务总局 2016年19号公告规则）：
  * 收据/行程单中文说明必填 / 境外票据无进项抵扣 / 差旅补贴超标并入个税判定。
  *
  * <p>全部静态纯函数，不依赖 Spring 与数据库，供 ExpenseBillService（提交校验链）、
@@ -58,7 +58,7 @@ public final class OverseasVoucherRule {
 
     /**
      * 补贴超标并入个税：actual &gt; standardDaily × days → 超标额 = actual − 标准额
-     * （2 位小数四舍五入）；不超标或参数缺失返回 0（0=不超，无需并入工资薪金计税）。
+     * 2 位小数四舍五入；不超标或参数缺失返回 0（0=不超，无需并入工资薪金计税）。
      */
     public static BigDecimal allowanceTaxable(BigDecimal actual, BigDecimal standardDaily, BigDecimal days) {
         if (actual == null || standardDaily == null || days == null

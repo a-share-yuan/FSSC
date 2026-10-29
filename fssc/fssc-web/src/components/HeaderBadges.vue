@@ -43,8 +43,11 @@ let pollTimer = null
 async function fetchCounts() {
   try {
     // silent：30s 轮询失败不走全局错误弹窗（避免 toast 风暴），由横幅与下次轮询默认处理
-    const todo = await wfApi.todo(null, { silent: true })
-    todoCount.value = Array.isArray(todo) ? todo.length : (todo?.total || 0)
+    // 只要一个数字，却曾每 30 秒拉一整页 200 条待办回前端数长度
+    // （服务端 /wf/todo 的 limit 默认 200 且逐行回填单据信息）。改走服务端分页的计数用法：
+    // total 与旧口径同源（WfTaskController:95 total=tasks.size()），补账只做 1 行。H5 工作台同一写法。
+    const r = await wfApi.todoPage({ pageNum: 1, pageSize: 1 }, { silent: true })
+    todoCount.value = Number(r?.total) || 0
   } catch { /* 后端不可达不阻塞 */ }
 }
 

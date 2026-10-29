@@ -4,6 +4,11 @@
 package com.fssc.receivable.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.audit.service.AuditTrailService;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
+import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.receivable.entity.RcBadDebt;
@@ -20,7 +25,10 @@ import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
 import com.fssc.sharing.mapper.OpVoucherMapper;
 import com.fssc.sharing.mapper.OpVoucherLineMapper;
+import com.fssc.system.service.ConfigService;
+import com.fssc.system.service.NumberRuleService;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.util.LinkedHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,13 +57,13 @@ public class RcBadDebtService {
     private final OpVoucherLineMapper voucherLineMapper;
     private final MdSubjectMapper subjectMapper;
     private final SysCompanyMapper sysCompanyMapper;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
-    private final com.fssc.system.service.ConfigService configService;
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** R5-D-097：公司维度读取守卫（坏账计提列表接 OrgGuard，与应收单同一规则） */
-    private final com.fssc.framework.org.OrgGuard orgGuard;
-    /** R5-D-094：客户主数据解析（列表补客户名称，前端不裸出 FK id） */
+    private final NumberRuleService numberRuleService;
+    private final ConfigService configService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
+    /** 公司维度读取守卫（坏账计提列表接 OrgGuard，与应收单同一规则） */
+    private final OrgGuard orgGuard;
+    /** 客户主数据解析（列表补客户名称，前端不裸出 FK id） */
     private final CrmCustomerMapper crmCustomerMapper;
 
     /**
@@ -91,8 +99,8 @@ public class RcBadDebtService {
     public int provisionScan(String period) {
         // 期间空值会让"同一应收单同一期仅一次"的去重查询（period = NULL 永不成立）失效，重复计提
         if (period == null || period.isBlank()) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "计提期间必填（yyyy-MM）");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "计提期间必填（yyyy-MM）");
         }
         LocalDate today = LocalDate.now();
         List<RcReceivable> overdue = receivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
@@ -119,11 +127,11 @@ public class RcBadDebtService {
             d.setProvisionRate(rate);
             d.setPeriod(period);
             d.setStatus("PROVISIONED");
-            // 多分子公司审批路由 V1.3.17：优先取来源应收单的公司，取不到回退登录用户
+            // 多分子公司审批路由：优先取来源应收单的公司，取不到回退登录用户
             if (d.getCompanyId() == null) {
                 Long cid = r.getCompanyId();
                 if (cid == null) {
-                    com.fssc.framework.security.LoginUser lu = UserContext.get();
+                    LoginUser lu = UserContext.get();
                     if (lu != null) cid = lu.getCompanyId();
                 }
                 d.setCompanyId(cid);
@@ -164,27 +172,27 @@ public class RcBadDebtService {
     public Map<String, Object> reverse(Long id) {
         RcBadDebt d = mapper.selectById(id);
         if (d == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "坏账计提记录不存在: " + id);
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "坏账计提记录不存在: " + id);
         }
         if (!"PROVISIONED".equals(d.getStatus())) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID,
                     "仅已计提(PROVISIONED)的坏账可转回，当前状态: " + d.getStatus());
         }
         Long voucherId = createReversalVoucher(d);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", d.getStatus());
         RcBadDebt u = new RcBadDebt();
         u.setId(id);
         u.setStatus("REVERSED");
         mapper.updateById(u);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "REVERSED");
         auditTrailService.recordUpdate("RC_BAD_DEBT", id, null, "rc_bad_debt",
                 String.valueOf(id), auditBefore, auditAfter, "坏账转回");
 
-        Map<String, Object> res = new java.util.LinkedHashMap<>();
+        Map<String, Object> res = new LinkedHashMap<>();
         res.put("badDebtId", id);
         res.put("amount", d.getAmount());
         res.put("voucherId", voucherId);
@@ -197,12 +205,12 @@ public class RcBadDebtService {
     public void confirm(Long id, String reason) {
         RcBadDebt d = mapper.selectById(id);
         if (d == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "坏账计提记录不存在: " + id);
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "坏账计提记录不存在: " + id);
         }
         if ("CONFIRMED".equals(d.getStatus())) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "该坏账已确认，请勿重复操作");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "该坏账已确认，请勿重复操作");
         }
         try {
             wfEngineFacade.start("BAD_DEBT_CONFIRM", id, userId(),
@@ -223,8 +231,8 @@ public class RcBadDebtService {
         SysCompany comp = sysCompanyMapper.selectOne(new LambdaQueryWrapper<SysCompany>()
                 .orderByAsc(SysCompany::getId).last("limit 1"));
         if (comp == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "本租户未维护公司档案，无法生成坏账转回凭证");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "本租户未维护公司档案，无法生成坏账转回凭证");
         }
         v.setCompanyId(comp.getId());
         v.setTenantId(TenantContext.getTenantId());
@@ -256,8 +264,8 @@ public class RcBadDebtService {
         MdSubject s = subjectMapper.selectOne(new LambdaQueryWrapper<MdSubject>()
                 .eq(MdSubject::getSubjectCode, subjectCode).last("limit 1"));
         if (s == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID,
                     "科目 " + subjectCode + "(" + subjectName + ") 未配置，无法生成坏账转回凭证，请先维护科目表");
         }
         OpVoucherLine l = new OpVoucherLine();
@@ -285,30 +293,30 @@ public class RcBadDebtService {
     public Map<String, Object> writeOff(Long id, BigDecimal amount, String reason, String basisNo) {
         // 核销原因与认定依据是坏账税前列销/审计的凭据，缺任一条都不能核销（页面红星同源）
         if (reason == null || reason.isBlank()) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "核销原因必填");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "核销原因必填");
         }
         if (basisNo == null || basisNo.isBlank()) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "认定依据编号必填（破产说明等《坏账认定依据》编号）");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "认定依据编号必填（破产说明等《坏账认定依据》编号）");
         }
         RcBadDebt d = mapper.selectById(id);
         if (d == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "坏账计提记录不存在: " + id);
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "坏账计提记录不存在: " + id);
         }
         if ("WRITTEN_OFF".equals(d.getStatus())) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "该坏账已核销，请勿重复操作");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "该坏账已核销，请勿重复操作");
         }
         if (!"PROVISIONED".equals(d.getStatus())) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID,
                     "仅已计提(PROVISIONED)的坏账可核销，当前状态: " + d.getStatus());
         }
         if (amount == null || amount.signum() <= 0) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "核销金额必须大于0");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "核销金额必须大于0");
         }
         // 客户维度坏账准备余额 = 累计计提 - 累计核销（蓝图规则：核销金额不能超过已计提的坏账准备余额）
         List<RcBadDebt> customerRows = mapper.selectList(new LambdaQueryWrapper<RcBadDebt>()
@@ -323,8 +331,8 @@ public class RcBadDebtService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal balance = provisioned.subtract(writtenOff);
         if (amount.compareTo(balance) > 0) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID,
                     "核销金额(" + amount + ")超过该客户坏账准备余额(" + balance + ")");
         }
         RcReceivable receivable = d.getReceivableId() == null ? null : receivableMapper.selectById(d.getReceivableId());
@@ -332,9 +340,9 @@ public class RcBadDebtService {
         if (receivable != null) {
             BigDecimal remain = receivable.getRemainAmount() == null ? BigDecimal.ZERO : receivable.getRemainAmount();
             BigDecimal cut = remain.min(amount);
-            java.util.Map<String, Object> recAuditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> recAuditBefore = new LinkedHashMap<>();
             recAuditBefore.put("remainAmount", receivable.getRemainAmount());
-            java.util.Map<String, Object> recAuditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> recAuditAfter = new LinkedHashMap<>();
             recAuditAfter.put("remainAmount", remain.subtract(cut));
             RcReceivable u = new RcReceivable();
             u.setId(receivable.getId());
@@ -349,7 +357,7 @@ public class RcBadDebtService {
                     String.valueOf(receivable.getId()), recAuditBefore, recAuditAfter, "坏账核销冲减应收余额");
         }
         LocalDate today = LocalDate.now();
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", d.getStatus());
         auditBefore.put("writeoffAmount", d.getWriteoffAmount());
         auditBefore.put("writeoffDate", d.getWriteoffDate());
@@ -365,7 +373,7 @@ public class RcBadDebtService {
         u.setBasisNo(basisNo);
         u.setWriteoffVoucherNo(voucherNo);
         mapper.updateById(u);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "WRITTEN_OFF");
         auditAfter.put("writeoffAmount", amount);
         auditAfter.put("writeoffDate", today);
@@ -375,7 +383,7 @@ public class RcBadDebtService {
         auditTrailService.recordUpdate("RC_BAD_DEBT", id, null, "rc_bad_debt",
                 String.valueOf(id), auditBefore, auditAfter, "坏账核销");
 
-        Map<String, Object> res = new java.util.LinkedHashMap<>();
+        Map<String, Object> res = new LinkedHashMap<>();
         res.put("badDebtId", id);
         res.put("writeoffAmount", amount);
         res.put("voucherNo", voucherNo);
@@ -397,8 +405,8 @@ public class RcBadDebtService {
         SysCompany comp = sysCompanyMapper.selectOne(new LambdaQueryWrapper<SysCompany>()
                 .orderByAsc(SysCompany::getId).last("limit 1"));
         if (comp == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "本租户未维护公司档案，无法生成坏账核销凭证");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "本租户未维护公司档案，无法生成坏账核销凭证");
         }
         OpVoucher v = new OpVoucher();
         v.setCompanyId(comp.getId());
@@ -425,7 +433,7 @@ public class RcBadDebtService {
     public List<RcBadDebt> listByPeriod(String period) {
         LambdaQueryWrapper<RcBadDebt> qw = new LambdaQueryWrapper<>();
         if (period != null && !period.isEmpty()) {
-            // R5-D-098：账期入参归一——yyyyMM/yyyy-MM-dd/yyyyMMdd 与库内 yyyy-MM/yyyyMM 两种历史形态对齐；
+            // 账期入参归一——yyyyMM/yyyy-MM-dd/yyyyMMdd 与库内 yyyy-MM/yyyyMM 两种历史形态对齐；
             // 原实现按原样 eq，前端 YYYYMM 直查 yyyy-MM 历史行恒空。
             String digits = period.replaceAll("[^0-9]", "");
             if (digits.length() >= 6) {
@@ -436,13 +444,13 @@ public class RcBadDebtService {
                 qw.eq(RcBadDebt::getPeriod, period);
             }
         }
-        // R5-D-097：公司维度读取过滤，与 RcReceivableService.page 同款守卫同一规则（rc_bad_debt.company_id 为直接列）
+        // 公司维度读取过滤，与 RcReceivableService.page 同款守卫同一规则（rc_bad_debt.company_id 为直接列）
         Long scopeC = orgGuard.enforceCompany();
         if (scopeC != null) {
             qw.eq(RcBadDebt::getCompanyId, scopeC);
         }
         List<RcBadDebt> list = mapper.selectList(qw.orderByDesc(RcBadDebt::getId));
-        // R5-D-094：列表补全客户名称/应收单号（前端不再裸出 customerId/receivableId 主键）
+        // 列表补全客户名称/应收单号（前端不再裸出 customerId/receivableId 主键）
         for (RcBadDebt d : list) {
             if (d.getCustomerId() != null) {
                 CrmCustomer c = crmCustomerMapper.selectById(d.getCustomerId());

@@ -4,6 +4,7 @@
 package com.fssc.system.gateway;
 
 import com.fssc.system.entity.ExtInterfaceConfig;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -27,7 +28,7 @@ import org.springframework.stereotype.Component;
  * 例如 provider=ERP_A、动作 AP → 通道分类 {@code ERP_A_AP}（此时在 ext_interface_config
  * 再配置一条 category=ERP_A_AP 的接口实例即可生效；未配置时网关默认使用模拟通道，行为安全）。</p>
  *
- * <p>兼容策略：租户未配置 ERP 实例时默认使用既有通道（V1.3 蓝图默认对接对象），
+ * <p>兼容策略：租户未配置 ERP 实例时默认使用既有通道（蓝图默认对接对象），
  * 现网已配置的默认通道完全不受影响，历史行为零变化。</p>
  */
 @Component
@@ -41,8 +42,8 @@ public class ErpChannelResolver {
     public static final String DEFAULT_PROVIDER = "EBS";
 
     /** 支持的 ERP 品牌（与前端配置页下拉一致） */
-    public static final java.util.Set<String> SUPPORTED_PROVIDERS =
-            java.util.Set.of("EBS", "SAP", "YONYOU", "KINGDEE", "CUSTOM");
+    public static final Set<String> SUPPORTED_PROVIDERS =
+            Set.of("EBS", "SAP", "YONYOU", "KINGDEE", "CUSTOM");
 
     private final IntegrationGateway integrationGateway;
 

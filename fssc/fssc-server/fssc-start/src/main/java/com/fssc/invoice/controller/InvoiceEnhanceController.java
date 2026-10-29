@@ -38,7 +38,7 @@ public class InvoiceEnhanceController {
 
     private final InvoiceEnhanceService enhanceService;
 
-    // ---------- 明细行 ----------
+    // 明细行
 
     @RequiresPerm("inv:line:list")
     @GetMapping("/line/list")
@@ -69,7 +69,7 @@ public class InvoiceEnhanceController {
         return Result.success();
     }
 
-    // ---------- 验真日志（审计表只增） ----------
+    // 验真日志（审计表只增）
 
     @RequiresPerm("inv:verify:list")
     @GetMapping("/verify/page")

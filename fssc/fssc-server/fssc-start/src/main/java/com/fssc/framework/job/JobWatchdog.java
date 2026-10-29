@@ -46,7 +46,7 @@ public class JobWatchdog {
     /**
      * 期望表：任务名 -> 最大允许执行间隔。
      *
-     * <p>D-DEC-163 同族的「统计方式漏」环节（现库实测 2026-10-01）：代码侧
+     * <p>同族的「统计方式漏」环节（现库实测 2026-10-01）：代码侧
      * {@code jobHeartbeatService.run(...)} 包装的任务名共 <b>20</b> 个，本表原先只登记 <b>9</b> 个，
      * 其余 <b>11</b> 个有心跳行却不在期望表里——它们停摆了不会有任何告警。
      * 现按各自 {@code @Scheduled} 注解的真实频率补齐（月度型给 33 天）。
@@ -59,7 +59,7 @@ public class JobWatchdog {
         EXPECTED.put("ReconcileService", HOUR_26);         // cron 每日 02:00
         EXPECTED.put("RptSummaryService", HOUR_26);        // cron 每日 01:30
         EXPECTED.put("ArchiveService", HOUR_26);           // cron 每日 02:00（共享归档）
-        // D-DEC-163：本任务已从「周日 03:00 一瞬」改为「每日 03:30 tick + 6 天节奏校验」，
+        // 本任务已从「周日 03:00 一瞬」改为「每日 03:30 tick + 6 天节奏校验」，
         // 最大间隔＝6 天校验 + 1 天 tick = 7 天，8 天的容忍度仍然够用（不改，避免放宽成漏检）。
         EXPECTED.put("WfHistoryArchiveService", DAY_8);
         EXPECTED.put("InvoiceAbnormalAlertJob", MIN_15);   // fixedDelay 5min
@@ -105,7 +105,7 @@ public class JobWatchdog {
         String detail;
         if (hb == null) {
             type = "MISSING";
-            // D-DEC-163：把"无行"说清楚——心跳行是 JobHeartbeatService.doRun 进方法第一件事就写的，
+            // 把"无行"说清楚——心跳行是 JobHeartbeatService.doRun 进方法第一件事就写的，
             // 跑成功、跑失败、清理 0 条，三种结局都会留下一行（例外只有"写心跳本身报错"与
             // "调度锁被他实例持有"，两者在日志里都有独立 warn/info 痕迹）。所以缺行最可能的解释是：
             // 该 @Scheduled 方法<b>从未被调度器触发</b>（调度未生效 / 触发窗口从未被进程存活期覆盖），

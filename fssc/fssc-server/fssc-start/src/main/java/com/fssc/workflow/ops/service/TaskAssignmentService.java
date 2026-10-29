@@ -4,7 +4,10 @@
 package com.fssc.workflow.ops.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
+import com.fssc.common.core.PageQuery;
+import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.Reviewer;
 import com.fssc.compliance.mapper.ReviewerMapper;
@@ -39,7 +42,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * G3（2026-09-24）分配规则顺序解析 ＋ 自动分配执行 ＋ 自动分配日志。
+ * G3分配规则顺序解析 ＋ 自动分配执行 ＋ 自动分配日志。
  *
  * <p>{@code 分配规则表}「条件命中→处理人，多条件逐个解析直到命中」，
  * 复用既有 {@code op_dispatch_rule} 表（该表在 {@code fssc/db/Dump20260911/fssc_dispatch_rule}
@@ -47,7 +50,7 @@ import java.util.Set;
  * <ol>
  *   <li><b>顺序解析</b>：按 {@code priority} <b>升序</b>逐条评估，命中即止，
  *       未命中的规则也进轨迹（{@link RuleHit}），使"为什么没走那条规则"可回答。
- *        既有 {@code DispatchService.findMatchingRule} 用的是 {@code orderByDesc(priority)}，
+ *       既有 {@code DispatchService.findMatchingRule} 用的是 {@code orderByDesc(priority)}，
  *       与本规则相反；本类不改动它，只在新链路上按"数值小优先"实现，差异已如实标注。</li>
  *   <li><b>条件维度</b>：类型化列（task_type/company_id/expense_item_id/currency_code，为空＝不限制）
  *       与「维度＋条件」对（TYPE/AMOUNT/LEGAL/COMPLEXITY/REGION）两类条件<b>取与</b>；
@@ -75,20 +78,18 @@ public class TaskAssignmentService {
     private final WfQueryService wfQueryService;
     private final TaskService taskService;
 
-    // ------------------------------------------------------------------
     // 1. 规则顺序解析
-    // ------------------------------------------------------------------
 
     /**
      * 按顺序解析分配规则：返回第一条命中的规则（无命中返回 null），
      * 轨迹里含全部被评估过的规则（含未命中原因）。
      *
-     * @param taskType      共享作业项
-     * @param bizType       单据类型
-     * @param amount        金额
-     * @param companyId     公司
+     * @param taskType 共享作业项
+     * @param bizType 单据类型
+     * @param amount 金额
+     * @param companyId 公司
      * @param expenseItemId 费用项目
-     * @param currencyCode  币种
+     * @param currencyCode 币种
      * @param legalEntityId 法人主体
      */
     public RuleResolution resolveRule(String taskType, String bizType, BigDecimal amount, Long companyId,
@@ -182,9 +183,7 @@ public class TaskAssignmentService {
         }
     }
 
-    // ------------------------------------------------------------------
     // 2. 自动分配（试算 / 执行）
-    // ------------------------------------------------------------------
 
     /**
      * 自动分配：规则顺序解析 → 目标分组 → 候选画像 → 策略选人 → （非试算时）指派 + 落日志。
@@ -334,11 +333,9 @@ public class TaskAssignmentService {
         }
     }
 
-    // ------------------------------------------------------------------
     // 3. 日志查询
-    // ------------------------------------------------------------------
 
-    public com.fssc.common.core.PageResult<OpDispatchLog> logPage(com.fssc.common.core.PageQuery q,
+    public PageResult<OpDispatchLog> logPage(PageQuery q,
                                                                  String taskId, String bizNo, String strategy) {
         LambdaQueryWrapper<OpDispatchLog> w = new LambdaQueryWrapper<>();
         if (notBlank(taskId)) {
@@ -351,9 +348,9 @@ public class TaskAssignmentService {
             w.eq(OpDispatchLog::getStrategy, strategy.trim().toUpperCase());
         }
         w.orderByDesc(OpDispatchLog::getId);
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<OpDispatchLog> p =
-                logMapper.selectPage(com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(q.getPageNum(), q.getPageSize()), w);
-        return com.fssc.common.core.PageResult.of(p.getRecords(), p.getTotal(), q.getPageNum(), q.getPageSize());
+        Page<OpDispatchLog> p =
+                logMapper.selectPage(Page.of(q.getPageNum(), q.getPageSize()), w);
+        return PageResult.of(p.getRecords(), p.getTotal(), q.getPageNum(), q.getPageSize());
     }
 
     /** "这单为什么派给了他"：按任务 ID 取全部决策记录（时间正序，读成一条决策链） */

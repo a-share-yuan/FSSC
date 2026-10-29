@@ -39,7 +39,7 @@
           <el-tag size="small" :type="row.scpFrozen === 1 && row.status !== 'CLOSED' ? 'danger' : 'info'">{{ row.scpFrozen === 1 && row.status !== 'CLOSED' ? t('flow.close.stFrozenDone') : t('flow.close.stRestored') }}</el-tag>
         </template>
       </el-table-column>
-      <!-- R5-D-212：人员存工号，展示层映射花名（历史昵称数据原值回显） -->
+      <!-- 人员存工号，展示层映射花名（历史昵称数据原值回显） -->
       <el-table-column :label="$t('field.leader')" width="95" show-overflow-tooltip>
         <template #default="{ row }">{{ personLabel(row.groupLeader) }}</template>
       </el-table-column>
@@ -61,7 +61,7 @@
           <el-button v-if="!['INIT', 'CLOSED', 'VOID'].includes(row.status)" v-permission="'apflow:close:item'" link type="primary" size="small" @click="openItems(row)">{{ $t('flow.close.maintainChecks') }}</el-button>
           <el-button v-if="row.status === 'CHECKING'" v-permission="'apflow:close:close'" link type="success" size="small" @click="doClose(row)">{{ $t('flow.close.btnGlClose') }}</el-button>
           <el-button v-if="row.status === 'CLOSED'" v-permission="'apflow:close:reopen'" link type="danger" size="small" @click="openReopen(row)">{{ $t('flow.close.btnReopen') }}</el-button>
-          <!-- R5-D-218：未关账的关账单可作废（最终状态 VOID，行止不删；已关账须走反关账） -->
+          <!-- 未关账的关账单可作废（最终状态 VOID，行止不删；已关账须走反关账） -->
           <el-button v-if="!['CLOSED', 'VOID'].includes(row.status)" v-permission="'apflow:close:reopen'" link type="warning" size="small" @click="openVoid(row)">{{ $t('field.void') }}</el-button>
           <el-button link type="info" size="small" @click="openTrace(row)">{{ $t('field.trace') }}</el-button>
         </template>
@@ -69,7 +69,7 @@
     </el-table>
     <TablePager v-model:page="page.pageNum" v-model:size="page.pageSize" :total="filteredRows.length" />
 
-    <!-- 发起关账：组织必选 + 组长选人组件（P0-1：废弃 companyId=1 硬编码与纯文本组长） -->
+    <!-- 发起关账：组织必选 + 组长选人组件（废弃 companyId=1 硬编码与纯文本组长） -->
     <el-dialog v-model="initVisible" :title="$t('flow.close.btnStartDlg')" width="460px" destroy-on-close>
       <el-form ref="initFormRef" :model="form" :rules="initRules" label-width="90px" size="small">
         <el-form-item :label="$t('flow.close.labelOrg')" prop="companyId">
@@ -90,7 +90,7 @@
       </template>
     </el-dialog>
 
-    <!-- 组长派工：人员多选（P0-1：废弃 window.prompt） -->
+    <!-- 组长派工：人员多选（废弃 window.prompt） -->
     <el-dialog v-model="dispatchVisible" :title="$t('flow.close.dlgDispatch')" width="440px" destroy-on-close>
       <el-form ref="dispatchFormRef" :model="dispatchModel" :rules="dispatchRules" label-width="90px" size="small">
         <el-form-item :label="$t('flow.close.colDoc')">{{ dispatchRow?.closeNo }}</el-form-item>
@@ -106,7 +106,7 @@
       </template>
     </el-dialog>
 
-    <!-- 检查项维护：支持 通过/退回/挂起 + 处理说明 + 前置自动检查（P0-2/P1-6） -->
+    <!-- 检查项维护：支持 通过/退回/挂起 + 处理说明 + 前置自动检查（/） -->
     <el-dialog v-model="itemsVisible" :title="$t('flow.close.colChecks')" width="860px" destroy-on-close>
       <div class="items-ops">
         <el-button size="small" type="primary" plain :loading="autoChecking" @click="runAutoCheck">{{ $t('flow.close.btnRunAutoCheck') }}</el-button>
@@ -152,7 +152,7 @@
       <div class="tip">{{ $t('flow.close.hintChecks') }}</div>
     </el-dialog>
 
-    <!-- 反关账：原因必填（P0-2） -->
+    <!-- 反关账：原因必填 -->
     <el-dialog v-model="reopenVisible" :title="$t('flow.close.btnReopenFull')" width="440px" destroy-on-close>
       <el-alert type="warning" :closable="false" style="margin-bottom: 10px"
         :title="$t('flow.close.dlgDocTitle', { v1: reopenRow?.closeNo, v2: reopenRow?.period })"
@@ -164,7 +164,7 @@
       </template>
     </el-dialog>
 
-    <!-- R5-D-218 作废：原因必填记录（最终状态 VOID，行止不删；解冻协同） -->
+    <!-- 作废：原因必填记录（最终状态 VOID，行止不删；解冻协同） -->
     <el-dialog v-model="voidVisible" :title="$t('flow.close.btnVoid')" width="440px" destroy-on-close>
       <el-alert type="error" :closable="false" style="margin-bottom: 10px"
         :title="$t('flow.close.dlgDocTitle', { v1: voidRow?.closeNo, v2: voidRow?.period })"
@@ -176,7 +176,7 @@
       </template>
     </el-dialog>
 
-    <!-- 全程操作记录（P0-2）/ 关账报告导出（P2-10） -->
+    <!-- 全程操作记录/ 关账报告导出 -->
     <el-drawer v-model="traceVisible" size="460px" destroy-on-close>
       <template #header>
         <div style="display:flex; justify-content:space-between; align-items:center">
@@ -224,7 +224,7 @@ const rows = ref([])
 const loading = ref(false)
 const companies = ref([])
 const users = ref([])
-// R5-D-212：当前用户以工号（user_name）入库，花名仅展示
+// 当前用户以工号（user_name）入库，花名仅展示
 const me = store.user?.username || store.user?.realName || ''
 const q = reactive({ companyId: null, period: '', status: '' })
 const page = reactive({ pageNum: 1, pageSize: 10 })
@@ -268,7 +268,7 @@ function companyName(id) {
   return c ? c.name : (id != null ? t('flow.close.companyLabel', { v1: id }) : '—')
 }
 
-// R5-D-212：库里存工号→显示花名；历史遗留的昵称/花名按原值回显（找不到不改写）
+// 库里存工号→显示花名；历史遗留的昵称/花名按原值回显（找不到不改写）
 function personLabel(name) {
   if (!name) return '—'
   const u = users.value.find((x) => x.userName === name)
@@ -311,11 +311,11 @@ async function loadCompanies() {
 }
 
 async function loadUsers() {
-  // P0 修复（2026-10-21）：月结负责人通常为本财务人员，按同公司过滤
+  // P0 修复：月结负责人通常为本财务人员，按同公司过滤
   try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch { users.value = [] }
 }
 
-// ---- 发起 ----
+// 发起
 function openInit() {
   form.companyId = null
   form.period = ''
@@ -326,7 +326,7 @@ function openInit() {
 }
 
 function onLeaderChange(id, u) {
-  // R5-D-212：存工号（user_name），昵称仅供下拉展示
+  // 存工号（user_name），昵称仅供下拉展示
   form.leaderName = u ? (u.userName || u.nickName || '') : ''
 }
 
@@ -343,10 +343,10 @@ async function doInit() {
   await load()
 }
 
-// ---- 派工 ----
+// 派工
 function openDispatch(row) {
   dispatchRow.value = row
-  // R5-D-212：优先按工号回填（历史昵称/花名数据默认处理按昵称匹配）
+  // 优先按工号回填（历史昵称/花名数据默认处理按昵称匹配）
   memberIds.value = (row.members || '').split(',').map((s) => s.trim()).filter(Boolean)
     .map((name) => (users.value.find((u) => u.userName === name) || users.value.find((u) => u.nickName === name))?.id)
     .filter((id) => id != null)
@@ -355,7 +355,7 @@ function openDispatch(row) {
 
 async function doDispatch() {
   if (!(await validateForms([dispatchFormRef]))) return
-  // R5-D-212：派工名单存工号（user_name），展示层再映射花名
+  // 派工名单存工号（user_name），展示层再映射花名
   const names = memberIds.value.map((id) => {
     const u = users.value.find((x) => x.id === id)
     return u ? (u.userName || u.nickName) : String(id)
@@ -366,7 +366,7 @@ async function doDispatch() {
   await load()
 }
 
-// ---- 检查项 ----
+// 检查项
 function openItems(row) {
   current.value = row
   try { items.value = JSON.parse(row.checkItemsJson || '[]') } catch { items.value = [] }
@@ -403,7 +403,7 @@ async function doItem(item, status) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// ---- 关账 / 反关账 ----
+// 关账 / 反关账
 async function doClose(row) {
   await ElMessageBox.confirm(t('flow.close.askClosePeriod', { v1: row.period, v2: companyName(row.companyId) }), t('flow.close.btnGlClose'), { type: 'warning' })
   await apFlowApi.monthCloseClose(row.id)
@@ -425,7 +425,7 @@ async function doReopen() {
   await load()
 }
 
-// ---- 作废（R5-D-218 最终状态 VOID） ----
+// 作废（最终状态 VOID）
 function openVoid(row) {
   voidRow.value = row
   voidReason.value = ''
@@ -440,14 +440,14 @@ async function doVoid() {
   await load()
 }
 
-// ---- 轨迹 ----
+// 轨迹
 function openTrace(row) {
   current.value = row
   try { traceList.value = JSON.parse(row.traceJson || '[]') } catch { traceList.value = [] }
   traceVisible.value = true
 }
 
-// P2-10 关账报告导出:关账信息 + 检查项结论(含自动检查) + 操作轨迹 三段式 CSV
+// 关账报告导出:关账信息 + 检查项结论(含自动检查) + 操作轨迹 三段式 CSV
 function exportReport() {
   const row = current.value
   if (!row) return ElMessage.warning(t('flow.close.errPickDoc'))

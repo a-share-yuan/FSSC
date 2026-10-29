@@ -1,5 +1,6 @@
 package com.fssc.report.health;
 
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.config.DataSourceConfig;
 import com.fssc.framework.datasource.DataSourceContextHolder;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +35,7 @@ import java.util.Map;
  *       只报连通性，不参与整域判定（影像不可用只影响影像统计两张报表，其余报表照常）。</li>
  * </ul>
  *
- * <p>本组件只进 readiness 组：副本抖动应摘流量，不应触发 Pod 重启。</p>
+ * <p>不要本组件只进 readiness 组：副本抖动应摘流量，不应触发 Pod 重启。</p>
  */
 @Slf4j
 @Component("reportDomain")
@@ -124,7 +125,7 @@ public class ReportDomainHealthIndicator implements HealthIndicator {
             m.put("status", "OPEN");
             m.put("detail", "只读守卫未拦截 UPDATE");
             log.error("reportDomain.writeGuard=OPEN：replica 路由接受了写语句，只读副本可能被写入");
-        } catch (com.fssc.common.exception.BizException be) {
+        } catch (BizException be) {
             m.put("status", "BITES");
             m.put("detail", be.getMessage());
         } catch (Throwable t) {

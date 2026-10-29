@@ -18,6 +18,7 @@ import com.fssc.workflow.ops.service.DispatchPolicyService;
 import com.fssc.workflow.ops.service.TaskAssignmentService;
 import com.fssc.workflow.ops.service.TaskQualityReportService;
 import com.fssc.workflow.ops.service.TaskTimeLimitService;
+import java.util.LinkedHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
@@ -34,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * G3（2026-09-24）共享作业层（{@code /api/tenant/wf/ops/**}）：分配策略四模式 ＋ 双时限 ＋
+ * G3共享作业层（{@code /api/tenant/wf/ops/**}）：分配策略四模式 ＋ 双时限 ＋
  * 分配规则顺序解析 ＋ 自动分配日志 ＋ 批退原因/质量报表。
  *
  * <p><b>权限码的选择（为什么不新造 wf:ops:*）</b>：新造权限码意味着上线后所有角色都拿不到，
@@ -56,9 +57,7 @@ public class WfSharedOpsController {
     private final TaskQualityReportService qualityService;
     private final OpTaskDueTimeScanJob dueTimeScanJob;
 
-    // ------------------------------------------------------------------
     // 1. 分配策略配置（四模式 + 普通/加急双时限）
-    // ------------------------------------------------------------------
 
     /** 策略配置分页 */
     @RequiresPerm("wf:config:list")
@@ -113,9 +112,7 @@ public class WfSharedOpsController {
         return Result.success();
     }
 
-    // ------------------------------------------------------------------
     // 2. 分配规则顺序解析（只读试算）
-    // ------------------------------------------------------------------
 
     /**
      * 规则顺序解析试算（只读）：按 {@code priority} 升序逐条评估、命中即止，
@@ -133,7 +130,7 @@ public class WfSharedOpsController {
         TaskAssignmentService.RuleResolution r = assignmentService.resolveRule(
                 taskType, bizType, amount, companyId, expenseItemId, currencyCode, legalEntityId);
         List<RuleHit> trace = r.trace();
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("matchedRuleId", r.matched() == null ? null : r.matched().getId());
         out.put("matchedRuleCode", r.matched() == null ? null : r.matched().getRuleCode());
         out.put("matchedRuleName", r.matched() == null ? null : r.matched().getRuleName());
@@ -143,9 +140,7 @@ public class WfSharedOpsController {
         return Result.success(out);
     }
 
-    // ------------------------------------------------------------------
     // 3. 自动分配（试算 / 执行）＋ 自动分配日志
-    // ------------------------------------------------------------------
 
     /**
      * 自动分配：{@code dryRun=true} 只试算不写入数据库（前端可先给运营看决策依据）；
@@ -175,9 +170,7 @@ public class WfSharedOpsController {
         return Result.success(assignmentService.decisionChain(taskId));
     }
 
-    // ------------------------------------------------------------------
     // 4. 双时限（优先级标记 / 补账 / 超时扫描）
-    // ------------------------------------------------------------------
 
     /**
      * 给任务打优先级并落双时限：写回 {@code wf_task.due_time}（既有列，成为唯一真值）
@@ -213,9 +206,7 @@ public class WfSharedOpsController {
         return Result.success(dueTimeScanJob.lastReport());
     }
 
-    // ------------------------------------------------------------------
     // 5. 批退原因 / 任务质量报表（规则见 TaskQualityReportService）
-    // ------------------------------------------------------------------
 
     /** 质量总览：批退率、一次通过率、平均节点停留、批退原因 Top 榜 */
     @RequiresPerm("wf:instance:list")

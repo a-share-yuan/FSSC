@@ -4,7 +4,9 @@
 package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -20,6 +22,8 @@ import com.fssc.masterdata.mapper.MdSupplierContactMapper;
 import com.fssc.masterdata.mapper.MdSupplierMapper;
 import com.fssc.masterdata.mapper.MdSupplierQualificationMapper;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,7 +35,7 @@ import java.util.List;
 /**
  * 主数据 Supplier 服务（带 tenant_id，租户拦截器自动隔离）。
  * P1：供应商新增走准入审批（PTP01 SUPPLIER_ADD），创建后自动发起流程。
- * 41号审查 P1-8：专属页子表 —— 银行账户(N)/联系人(N)/资质证照(N)。
+ * 41号审查 专属页子表 —— 银行账户(N)/联系人(N)/资质证照(N)。
  */
 @Slf4j
 @Service
@@ -43,7 +47,7 @@ public class SupplierService {
     private final MdSupplierContactMapper contactMapper;
     private final MdSupplierQualificationMapper qualMapper;
     private final WfEngineFacade wfEngineFacade;
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    private final AuditTrailService auditTrailService;
 
     public PageResult<MdSupplier> page(long pageNum, long pageSize, String keyword) {
         LambdaQueryWrapper<MdSupplier> qw = new LambdaQueryWrapper<>();
@@ -62,14 +66,14 @@ public class SupplierService {
         assertCodeUnique(e.getSupplierCode(), null);
         assertTaxIdentityUnique(e, null);
         e.setId(null);
-        // V2.2.38 B-14 落地（K130/K131/K133：主数据零审批、状态位核准）：
+        // B-14 落地（K130/K131/K133：主数据零审批、状态位核准）：
         // 建档落「未核准(PENDING)」状态位，不再发起 MD_MASTER 审批流；由持核准权限的岗位
         // 经 POST /{id}/approve 把状态位翻到 ACTIVE（页面「核准」按钮）。
         if (e.getStatus() == null || "NORMAL".equals(e.getStatus())) {
             e.setStatus("PENDING");
         }
         mapper.insert(e);
-        // V2.2.38 B-14：审批流退役（MD_MASTER 已删），建档即 PENDING 状态位，核准走 approve() 翻转
+        // B-14：审批流退役（MD_MASTER 已删），建档即 PENDING 状态位，核准走 approve() 翻转
         log.info("供应商 {} 建档完成（PENDING，待核准）", e.getSupplierCode());
         return e.getId();
     }
@@ -105,7 +109,7 @@ public class SupplierService {
         assertOneFieldUnique(e.getCreditCode(), MdSupplier::getCreditCode, selfId, "统一社会信用代码");
     }
 
-    private void assertOneFieldUnique(String value, com.baomidou.mybatisplus.core.toolkit.support.SFunction<MdSupplier, ?> col, Long selfId, String label) {
+    private void assertOneFieldUnique(String value, SFunction<MdSupplier, ?> col, Long selfId, String label) {
         if (!StringUtils.hasText(value)) return; // 选填：留空不查重
         Long n = mapper.selectCount(new LambdaQueryWrapper<MdSupplier>()
                 .eq(col, value.trim())
@@ -125,7 +129,7 @@ public class SupplierService {
         mapper.hardDelete(id);
     }
 
-    // ================= 41号审查 P1-8：专属页子表(银行账户/联系人/资质证照) =================
+    // 41号审查 专属页子表(银行账户/联系人/资质证照)
 
     public List<MdSupplierBank> banks(Long supplierId) {
         require(supplierId);
@@ -213,7 +217,7 @@ public class SupplierService {
         }
     }
     /**
-     * V2.2.38 B-14 状态位核准（K130：未核准→核准）：PENDING→ACTIVE。
+     * B-14 状态位核准（K130：未核准→核准）：PENDING→ACTIVE。
      * 权限 md:supplier:approve；去重：已是 ACTIVE 跳过。审计记录。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -231,9 +235,9 @@ public class SupplierService {
         upd.setStatus("ACTIVE");
         mapper.updateById(upd);
         if (auditTrailService != null) {
-            java.util.Map<String, Object> before = new java.util.LinkedHashMap<>();
+            Map<String, Object> before = new LinkedHashMap<>();
             before.put("status", old);
-            java.util.Map<String, Object> after = new java.util.LinkedHashMap<>();
+            Map<String, Object> after = new LinkedHashMap<>();
             after.put("status", "ACTIVE");
             auditTrailService.recordUpdate("SUPPLIER_ADD", id, sup.getSupplierCode(), "md_supplier",
                     String.valueOf(id), before, after, "状态位核准（B-14 页面直核）");

@@ -4,6 +4,7 @@
 package com.fssc.asset.controller;
 
 import com.fssc.asset.entity.MdAsset;
+import com.fssc.asset.entity.MdAssetChangeLog;
 import com.fssc.asset.service.MdAssetService;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
@@ -51,10 +52,10 @@ public class MdAssetController {
         return Result.success(service.get(id));
     }
 
-    /** X-06（D-DEC-431）读取环节：单卡变动台账（原值调整/盘点差异的原因、前后镜像、审批最终状态），最新在前 */
+    /** X-06读取环节：单卡变动台账（原值调整/盘点差异的原因、前后镜像、审批最终状态），最新在前 */
     @RequiresPerm("asset:list")
     @GetMapping("/{id}/change-logs")
-    public Result<List<com.fssc.asset.entity.MdAssetChangeLog>> changeLogs(@PathVariable Long id) {
+    public Result<List<MdAssetChangeLog>> changeLogs(@PathVariable Long id) {
         return Result.success(service.changeLogs(id));
     }
 

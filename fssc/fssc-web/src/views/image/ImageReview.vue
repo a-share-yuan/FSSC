@@ -3,7 +3,7 @@
 
 <template>
   <el-tabs v-model="tab" :class="{ tabless: isSingle }">
-    <!-- ============ 影像调阅评价 ============ -->
+    <!-- 影像调阅评价 -->
     <el-tab-pane label="影像调阅评价" name="review">
       <el-card>
         <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center">
@@ -65,7 +65,7 @@
       </el-card>
     </el-tab-pane>
 
-    <!-- ============ 影像异常处理 ============ -->
+    <!-- 影像异常处理 -->
     <el-tab-pane label="影像异常处理" name="exc">
       <el-card>
         <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center">
@@ -117,7 +117,7 @@
 
   <!-- 录入待评价 -->
   <el-dialog v-model="reviewForm.visible" title="录入待评价影像" width="520px" destroy-on-close>
-    <!-- R5-D-226：表单项此前未绑 prop ⇒ reviewRules 永不触发（必填校验双向失效）；补 prop + 提交前 validate -->
+    <!-- 表单项此前未绑 prop ⇒ reviewRules 永不触发（必填校验双向失效）；补 prop + 提交前 validate -->
     <el-form ref="reviewFormRef" :model="reviewForm" :rules="reviewRules" label-width="100px" size="default">
       <el-form-item label="影像批次号" prop="batchNo"><el-input v-model="reviewForm.batchNo" /></el-form-item>
       <el-form-item label="业务单号" prop="bizNo"><el-input v-model="reviewForm.bizNo" /></el-form-item>
@@ -143,7 +143,7 @@
 
   <!-- 上报异常 -->
   <el-dialog v-model="excForm.visible" title="上报影像异常" width="560px" destroy-on-close>
-    <!-- R5-D-226：同 review 弹窗——补 prop 使 excRules 真正生效 -->
+    <!-- 同 review 弹窗——补 prop 使 excRules 真正生效 -->
     <el-form ref="excFormRef" :model="excForm" :rules="excRules" label-width="100px" size="default">
       <el-form-item label="影像批次号" prop="batchNo"><el-input v-model="excForm.batchNo" /></el-form-item>
       <el-form-item label="业务单号" prop="bizNo"><el-input v-model="excForm.bizNo" /></el-form-item>
@@ -167,7 +167,7 @@ import { imageApi } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -194,7 +194,7 @@ const ePage = reactive({ pageNum: 1, pageSize: 20, total: 0 })
 // 业务类型翻译
 const reviewForm = reactive({ visible: false, batchNo: '', bizNo: '', bizType: '', remark: '' })
 const excForm = reactive({ visible: false, batchNo: '', bizNo: '', exceptionType: 'VERIFY_FAIL', exceptionDesc: '' })
-// R5-D-226：表单实例引用——save 前先 validate，避免必填规则只摆设不拦截
+// 表单实例引用——save 前先 validate，避免必填规则只摆设不拦截
 const reviewFormRef = ref(null)
 const excFormRef = ref(null)
 
@@ -217,7 +217,7 @@ const EXC_TYPES = {
   OCR_INCOMPLETE: '发票数据识别不完整或缺失',
   VERIFY_FAIL: '发票验真失败',
   INVOICE_DUP_IN_BILL: '单据内发票重复',
-  // R5-D-227：OCR 自动记录枚举入字典（此前直出英文枚举与中文混排）。
+  // OCR 自动记录枚举入字典（此前直出英文枚举与中文混排）。
   // 约定：后端新增异常类型须同步本字典；字典未收录的未知值显示默认处理文案而非裸码。
   OCR_NOT_RECOGNIZED: '票面未识别',
   OCR_POOL_FAILED: '发票未入池',
@@ -270,7 +270,7 @@ async function delReview(row) {
   loadReview()
 }
 async function saveReview() {
-  // R5-D-226：先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
+  // 先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
   if (reviewFormRef.value) { try { await reviewFormRef.value.validate() } catch { return } }
   await imageApi.reviewCreate({ batchNo: reviewForm.batchNo, bizNo: reviewForm.bizNo, bizType: reviewForm.bizType, remark: reviewForm.remark })
   ElMessage.success('已录入'); reviewForm.visible = false; Object.assign(reviewForm, { batchNo: '', bizNo: '', bizType: '', remark: '' }); loadReview()
@@ -289,7 +289,7 @@ async function delExc(row) {
   loadExc()
 }
 async function saveExc() {
-  // R5-D-226：先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
+  // 先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
   if (excFormRef.value) { try { await excFormRef.value.validate() } catch { return } }
   await imageApi.exceptionCreate({ batchNo: excForm.batchNo, bizNo: excForm.bizNo, exceptionType: excForm.exceptionType, exceptionDesc: excForm.exceptionDesc })
   ElMessage.success('已上报'); excForm.visible = false; Object.assign(excForm, { batchNo: '', bizNo: '', exceptionType: 'VERIFY_FAIL', exceptionDesc: '' }); loadExc()

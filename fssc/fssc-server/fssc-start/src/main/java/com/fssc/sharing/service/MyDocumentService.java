@@ -8,6 +8,7 @@ import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.service.BillRouteRegistry;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,10 +17,10 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 
 /**
- * 「我的单据」全类型读侧聚合（D-CON-01 办结）。
+ * 「我的单据」全类型读侧聚合（办结）。
  *
  * <p>改前 {@code RequisitionWorkbenchService.myBills()} 只查 {@code exp_bill}，接口注释却写"全类型"
- * ⇒ 合同/采购/预算/总账/档案的驳回单在工作台里根本看不见，用户只能新建（＝D-CON-01 的死循环）。
+ * ⇒ 合同/采购/预算/总账/档案的驳回单在工作台里根本看不见，用户只能新建（＝的死循环）。
  * 这里按 {@link BillRouteRegistry} 的"bizType→业务主表→归属人列"逐表查询后内存归并，
  * 覆盖范围由注册表决定，不再另立一份表清单。
  *
@@ -35,7 +36,7 @@ import java.util.*;
  *   <li><b>列名先过 information_schema 再拼 SQL</b>：这些表的列并不齐（{@code gl_inter_offset}/
  *       {@code gl_salary_run} 无 status，{@code pay_plan}/{@code archive_*} 无 del_flag，
  *       {@code archive_access_log} 无 update_time），一项缺失就整条 SQL 报错会被吞成"该域无数据"
- *       ——正是 D-B3-01 那个"缺列连累整条"的老坑，故此处逐列降级为 NULL 常量而不是连坐。</li>
+ *       ——正是 那个"缺列连累整条"的老坑，故此处逐列降级为 NULL 常量而不是连坐。</li>
  * </ol>
  */
 @Service
@@ -49,8 +50,8 @@ public class MyDocumentService {
     private static final int PER_TABLE_CAP = 300;
 
     /** 列元数据缓存：表名 → 小写列名集合（空集＝表不存在；null＝元数据查询失败，不校验） */
-    private final Map<String, Set<String>> tableColumns = new java.util.concurrent.ConcurrentHashMap<>();
-    private final Set<String> warnedKeys = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final Map<String, Set<String>> tableColumns = new ConcurrentHashMap<>();
+    private final Set<String> warnedKeys = ConcurrentHashMap.newKeySet();
 
     /** exp_bill 一张表承载 10+ 种单据，真类型/报账人只能从行内列取，其余表 bizType 是常量 */
     private static final String EXP_BILL = "exp_bill";
@@ -85,12 +86,15 @@ public class MyDocumentService {
         return Map.copyOf(m);
     }
 
+    /** 本服务会查的全部主表（含费用族共表），供列元数据一次装载 */
+    private static final List<String> ALL_TABLES = List.copyOf(TABLE_BIZ_TYPES.keySet());
+
     /** 一张业务主表的一条查询范围（同表多 bizType 时列名一致，取首行的列配置） */
     private record Source(String table, String filterKey, String bizType, String ownerCol,
                           String noCol, String amtCol, String titleCol) {
     }
 
-    // ======================== 对外查询 ========================
+    // 对外查询
 
     /**
      * 我登记的全类型单据。
@@ -98,7 +102,7 @@ public class MyDocumentService {
      * @param bizType 场景卡片名称表的类型（{@code CLAIM}/{@code APPLY_MEETING}/{@code CONTRACT}…），
      *                或 {@code table:<表名>}（一表多类型时按表筛，见 {@link #supportedTypes()}）；
      *                空＝全部可支持的类型
-     * @param status  单据状态（DRAFT/APPROVING/REJECTED/…）；空＝全部
+     * @param status 单据状态（DRAFT/APPROVING/REJECTED/…）；空＝全部
      */
     public Map<String, Object> myDocs(PageQuery query, String bizType, String status) {
         LoginUser me = UserContext.get();
@@ -211,7 +215,7 @@ public class MyDocumentService {
         return s.isEmpty() ? b : s + "," + b;
     }
 
-    // ======================== 查询 ========================
+    // 查询
 
     /** 按 bizType/status 过滤出本轮要查的表；同一张表只查一次 */
     private List<Source> selectSources(String bizType, String status) {
@@ -372,12 +376,53 @@ public class MyDocumentService {
         }
     }
 
-    // ======================== 列元数据（同 WfTaskController 的逐列降级规则） ========================
+    // 列元数据（同 WfTaskController 的逐列降级规则）
 
+    /**
+     * 表 → 列名（小写）。
+     *
+     * <p>改前逐表懒查 {@code information_schema}：29 张表各一条，重启后首个请求要连发 35 条
+     * 元数据查询（S-WF-06 冷启动实测 11 s，10-29 档位 H）。改为首次需要时<b>一条 IN 查完</b>整批表，
+     * 之后照旧走进程内缓存。降级语义不变：批量装载失败返回 {@code null}＝本轮不校验列名（原来单表失败也是这条）。
+     */
     private Set<String> columnsOf(String table) {
         if (table == null || table.isBlank()) return Set.of();
         Set<String> cached = tableColumns.get(table);
         if (cached != null) return cached;
+        synchronized (tableColumns) {
+            if (tableColumns.containsKey(table)) return tableColumns.get(table);
+            loadAllColumns();
+            // 不在批量范围内（unsupported() 侧那些缺归属人列的表）才回落到单表查询
+            if (!tableColumns.containsKey(table)) loadColumns(table);
+            return tableColumns.get(table);
+        }
+    }
+
+    private void loadAllColumns() {
+        List<String> tables = ALL_TABLES;
+        if (tables.isEmpty()) return;
+        String in = String.join(",", java.util.Collections.nCopies(tables.size(), "?"));
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "SELECT LOWER(table_name) AS t, LOWER(column_name) AS c FROM information_schema.columns "
+                            + "WHERE table_schema = DATABASE() AND LOWER(table_name) IN (" + in + ")",
+                    tables.toArray());
+            Map<String, Set<String>> m = new HashMap<>();
+            for (Map<String, Object> r : rows) {
+                Object t = r.get("t");
+                Object c = r.get("c");
+                if (t == null || c == null) continue;
+                m.computeIfAbsent(t.toString(), k -> new HashSet<>()).add(c.toString());
+            }
+            for (String t : tables) {
+                tableColumns.put(t.toLowerCase(), m.getOrDefault(t.toLowerCase(), Set.of()));
+            }
+        } catch (Exception ex) {
+            log.warn("我的单据列元数据批量装载失败（本轮不校验列名）: {}", ex.getMessage());
+        }
+    }
+
+    private void loadColumns(String table) {
         try {
             Set<String> cols = new HashSet<>();
             for (String c : jdbcTemplate.queryForList(
@@ -387,10 +432,8 @@ public class MyDocumentService {
                 if (c != null) cols.add(c);
             }
             tableColumns.put(table, cols);
-            return cols;
         } catch (Exception ex) {
             log.warn("我的单据列元数据查询失败 表={}（本轮不校验列名）", table, ex);
-            return null;
         }
     }
 

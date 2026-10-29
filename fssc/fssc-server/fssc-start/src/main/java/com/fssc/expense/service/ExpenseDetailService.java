@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.budget.service.BudgetService;
+import com.fssc.expense.dto.LoanCandidateDTO;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.entity.ExpBillLine;
 import com.fssc.expense.entity.ExpBillRelation;
@@ -17,11 +18,20 @@ import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.expense.mapper.ExpBillRelationMapper;
 import com.fssc.expense.mapper.ExpLoanOffsetMapper;
 import com.fssc.expense.mapper.ExpTravelMapper;
+import com.fssc.framework.org.OrgGuard;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.masterdata.entity.MdExpenseStandard;
 import com.fssc.masterdata.mapper.MdExpenseStandardMapper;
 import com.fssc.system.entity.SysConfig;
 import com.fssc.system.mapper.SysConfigMapper;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,9 +59,9 @@ public class ExpenseDetailService {
     private final MdExpenseStandardMapper mdExpenseStandardMapper;
     private final SysConfigMapper sysConfigMapper;
     private final BudgetService budgetService;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
+    private final OrgGuard orgGuard;
 
-    // ---------- 差旅明细 ----------
+    // 差旅明细
 
     /** 保存差旅行（整表替换，仅 DRAFT） */
     @Transactional(rollbackFor = Exception.class)
@@ -62,7 +72,7 @@ public class ExpenseDetailService {
         }
         assertTravelRows(travels);
         expTravelMapper.delete(new LambdaQueryWrapper<ExpTravel>().eq(ExpTravel::getBillId, billId));
-        // 境外凭证合规⑤（V1.3.14）：开关关闭时补贴超标并入个税标记跳过（回退旧行为）
+        // 境外凭证合规⑤：开关关闭时补贴超标并入个税标记跳过（回退旧行为）
         boolean overseasCompliance = isOverseasComplianceEnabled();
         if (travels != null) {
             int no = 1;
@@ -71,7 +81,7 @@ public class ExpenseDetailService {
                 t.setId(null);
                 t.setBillId(billId);
                 t.setLineNo(no++);
-                // 海外报账③（V1.3.10）：days 缺失按 起止日期含首末日全算 自动补
+                // 海外报账③：days 缺失按 起止日期含首末日全算 自动补
                 // （end − begin + 1；半天/比例折算法留待配置化扩展）
                 t.setDays(AbroadStandardRule.resolveDays(t.getDays(), t.getBeginDate(), t.getEndDate()));
                 // 补贴按天自动核算：days 有值且补贴未填 → allowance = days × 境外补贴标准 allowance_daily；
@@ -86,7 +96,7 @@ public class ExpenseDetailService {
                         allowanceAutoCount++;
                     }
                 }
-                // 境外凭证合规⑤（V1.3.14）：境外差旅行（destCountry 非空且非国内）补贴超过 标准/日×天数 时，
+                // 境外凭证合规⑤：境外差旅行（destCountry 非空且非国内）补贴超过 标准/日×天数 时，
                 // 超标部分并入工资薪金计税 → allowance_taxable=1（19号公告+个税规则）
                 if (overseasCompliance && t.getDestCountry() != null && !t.getDestCountry().isBlank()
                         && !AbroadStandardRule.isDomestic(t.getDestCountry())) {
@@ -104,7 +114,7 @@ public class ExpenseDetailService {
                     }
                 }
                 if (t.getTotalAmount() == null) {
-                    // D-V4R-33：默认处理合计原先只加 住宿+长途交通+补贴+其他，漏了市内交通费
+                    // 默认处理合计原先只加 住宿+长途交通+补贴+其他，漏了市内交通费
                     // ——前端「小计」一直把这栏算进去，两边不一致时草稿重开就会出现"分量 5,400 / 合计 6,000"。
                     BigDecimal total = nvl(t.getHotelAmount()).add(nvl(t.getTrafficAmount()))
                             .add(nvl(t.getAllowanceAmount())).add(nvl(t.getLocalTrafficAmount()))
@@ -187,7 +197,7 @@ public class ExpenseDetailService {
     }
 
     /**
-     * 境外凭证合规⑤总开关：sys_config overseas.compliance_enabled（V1.3.14 种子=1，租户拦截器自动过滤）。
+     * 境外凭证合规⑤总开关：sys_config overseas.compliance_enabled（种子=1，租户拦截器自动过滤）。
      * 无记录/读取异常一律视为开启（参照 ExpenseBillService），值=0 时回退旧行为。
      */
     private boolean isOverseasComplianceEnabled() {
@@ -211,13 +221,13 @@ public class ExpenseDetailService {
                 .eq(ExpTravel::getBillId, billId).orderByAsc(ExpTravel::getLineNo));
     }
 
-    // ---------- 借款冲抵 ----------
+    // 借款冲抵
 
     /**
      * 添加借款冲抵：记录冲抵 + 更新单据 offset_amount/payable_amount。
      * P1-强制冲销（#2 借款余额台账）：当指定 loanBillId（借款单）时，校验冲抵金额 ≤ 该借款单可用余额。
      *
-     * <p><b>D-DEC-384/391（X-40 甲·①提交环节）</b>：报销冲抵（CLAIM）与还款冲抵（REPAY）<b>两环节同一规则</b>，
+     * <p><b>/391（X-40 甲·①提交环节）</b>：报销冲抵（CLAIM）与还款冲抵（REPAY）<b>两环节同一规则</b>，
      * 提交期一律<b>只登记占用量</b>——载体是现列现表的
      * {@code exp_bill_relation(LOAN_CLAIM).use_amount}，不写 {@code exp_loan_offset} 流水、
      * 不减 {@code loan_balance}、不迁借款单状态；冲抵流水与余额减记改由审批通过环节落
@@ -225,14 +235,14 @@ public class ExpenseDetailService {
      * 「借款额 − Σ现存冲抵流水」<b>绝对量重算</b>（甲②），报销/还款单驳回、撤回、反审核时
      * 在途占用自然释放或流水作废重算（甲③）。三段同波，缺一即台账失真。治的三条病灶：
      * <ol>
-     *  <li>提单期就把台账真值扣掉 ⇒ 审批链对「是否已结清」不具控制力（D-DEC-106 同病灶的残留半条，
+     *  <li>提单期就把台账真值扣掉 ⇒ 审批链对「是否已结清」不具控制力（同病灶的残留半条，
      *      原 REPAY 环节即此形；本号把它与 CLAIM 环节并到同一个环节上）；</li>
      *  <li>草稿改额只加不减 ⇒ {@code offset_amount} 翻倍、余额越改越少（本方法原「累加写表头」）；</li>
      *  <li>报销单被驳回/撤回无人回补（{@code restoreLoanBalanceOnReject} 只管 REPAY 环节）
      *      ⇒ 借款余额永久停在扣后值。</li>
      * </ol>
      *
-     * <p><b>登记人（D-DEC-391③）</b>：本方法不再 INSERT {@code exp_loan_offset}，故 {@code create_by}
+     * <p><b>登记人（③）</b>：本方法不再 INSERT {@code exp_loan_offset}，故 {@code create_by}
      * 的显式补写随之下移到两处通过环节——{@code repayLoan}（一直是 {@code currentUserOr(申请人)}）与
      * {@code offsetLoansByClaim}（本号由「恒写申请人」对齐到同一规则）。该列<b>没有</b>
      * {@code @TableField(fill=...)}，本仓库的 {@code FsscMetaObjectHandler} 是注解驱动填充，
@@ -265,7 +275,7 @@ public class ExpenseDetailService {
     }
 
     /**
-     * 借款冲抵的在途登记（D-DEC-384/391 甲①，CLAIM 与 REPAY 共用）：占用量写
+     * 借款冲抵的在途登记（/391 甲①，CLAIM 与 REPAY 共用）：占用量写
      * {@code exp_bill_relation(LOAN_CLAIM).use_amount}，去重 upsert；
      * 借款单余额与冲抵流水一律留给审批通过环节，提单期不动台账。
      *
@@ -273,7 +283,7 @@ public class ExpenseDetailService {
      * 余额不再于提单期扣减，故必须在服务端自己扣在途，否则同一笔在贷余额可被任意多张草稿重复全额勾走
      * ——这一句就是 R-18「还款/冲抵超额」的实际拦校验点（本方法末段）。
      *
-     * <p>{@code relation_type} 沿用 {@code LOAN_CLAIM}：还款冲销也挂这个类型是 D-DEC-393 已现有的
+     * <p>{@code relation_type} 沿用 {@code LOAN_CLAIM}：还款冲销也挂这个类型是 已现有的
      * 语义复用缺陷（枚举里没有还款型关系），本号不扩名称表、只按同一载体查询。
      *
      * @return 关系行 id（在途登记的载体；不再是 exp_loan_offset id）
@@ -354,7 +364,7 @@ public class ExpenseDetailService {
     }
 
     /**
-     * 借款冲抵候选面（D-UI-03 配套，2026-10-19）：列出<b>本人名下</b>仍有可冲抵余额的借款单，
+     * 借款冲抵候选面（配套，2026-10-19）：列出<b>本人名下</b>仍有可冲抵余额的借款单，
      * 并吐出与放行校验同源的 {@code availableBalance = 账面余额 − 在途占用}。
      *
      * <p><b>修的是什么</b>：候选面此前直接给前端 {@code loanBalance}（账面余额，<b>不含在途占用</b>），
@@ -363,19 +373,19 @@ public class ExpenseDetailService {
      * 前端的默认值/上限与服务端放行规则同源，用户不必白填一遍表再吃一次拒。</p>
      *
      * <p>规则：① 只列本人（{@code apply_user_id = 当前用户}）——服务端本就只允许冲销本人借款；
-     * ② 状态含 {@code APPROVED/PARTIAL_REPAID/REPAID}（D-DEC-396：借款被在途冲抵会迁 PARTIAL_REPAID，
+     * ② 状态含 {@code APPROVED/PARTIAL_REPAID/REPAID}（借款被在途冲抵会迁 PARTIAL_REPAID，
      * 单查 APPROVED 会立刻失明）；③ {@code availableBalance ≤ 0} 的不返回（无可冲抵）；
      * ④ 公司维度按入参过滤（可空＝不过滤）。</p>
      *
      * @param companyId 公司ID（可空＝不过滤）
-     * @param limit     返回上限（空或 ≤0 取 50，上限 200）
+     * @param limit 返回上限（空或 ≤0 取 50，上限 200）
      */
-    public java.util.List<com.fssc.expense.dto.LoanCandidateDTO> loanCandidates(Long companyId, Integer limit) {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+    public List<LoanCandidateDTO> loanCandidates(Long companyId, Integer limit) {
+        LoginUser u = UserContext.get();
         Long me = u == null ? null : u.getUserId();
         int cap = (limit == null || limit <= 0) ? 50 : Math.min(limit, 200);
         if (me == null) {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
         List<ExpBill> loans = expBillMapper.selectList(new LambdaQueryWrapper<ExpBill>()
                 .eq(ExpBill::getBillType, "LOAN")
@@ -385,7 +395,7 @@ public class ExpenseDetailService {
                 .eq(companyId != null, ExpBill::getCompanyId, companyId)
                 .orderByAsc(ExpBill::getId)
                 .last("limit " + cap));
-        java.util.List<com.fssc.expense.dto.LoanCandidateDTO> out = new java.util.ArrayList<>(loans.size());
+        List<LoanCandidateDTO> out = new ArrayList<>(loans.size());
         for (ExpBill loan : loans) {
             BigDecimal book = nvl(loan.getLoanBalance());
             BigDecimal transit = transitLoanOccupancy(loan.getId(), null);
@@ -393,7 +403,7 @@ public class ExpenseDetailService {
             if (available.signum() <= 0) {
                 continue;   // 已被在途占满：列出来也只能是死路
             }
-            com.fssc.expense.dto.LoanCandidateDTO dto = new com.fssc.expense.dto.LoanCandidateDTO();
+            LoanCandidateDTO dto = new LoanCandidateDTO();
             dto.setId(loan.getId());
             dto.setBillNo(loan.getBillNo());
             dto.setTitle(loan.getTitle());
@@ -425,9 +435,9 @@ public class ExpenseDetailService {
     }
 
     public List<ExpLoanOffset> loanOffsets(Long billId) {
-        List<ExpLoanOffset> rows = new java.util.ArrayList<>(expLoanOffsetMapper.selectList(
+        List<ExpLoanOffset> rows = new ArrayList<>(expLoanOffsetMapper.selectList(
                 new LambdaQueryWrapper<ExpLoanOffset>().eq(ExpLoanOffset::getBillId, billId)));
-        // D-DEC-384/391（X-40 甲①配套·回读）：报销/还款冲抵的在途量不再于提单期落流水，
+        // /391（X-40 甲①配套·回读）：报销/还款冲抵的在途量不再于提单期落流水，
         // 草稿「编辑重提」必须从 LOAN_CLAIM 关系行把它补回来，否则冲销借款清单整块看不见。
         // 已生效环节（审批后落的流水）优先，同一借款单不再重复补在途行。
         // 补出来的行 offsetType 统一按 CLAIM 呈现（关系表不存类型）——两环节的提交期登记已并为同一动作，
@@ -459,13 +469,13 @@ public class ExpenseDetailService {
 
     /** 在途合成行只带借款单 id，单据号回查补齐（关系表只存 id，界面按单号展示）。 */
     private void fillTransitLoanBillNo(List<ExpLoanOffset> rows) {
-        java.util.Set<Long> missing = rows.stream()
+        Set<Long> missing = rows.stream()
                 .filter(o -> o.getLoanBillNo() == null && o.getLoanBillId() != null)
                 .map(ExpLoanOffset::getLoanBillId).collect(Collectors.toSet());
         if (missing.isEmpty()) {
             return;
         }
-        java.util.Map<Long, String> noById = new java.util.HashMap<>();
+        Map<Long, String> noById = new HashMap<>();
         for (ExpBill b : expBillMapper.selectBatchIds(missing)) {
             noById.put(b.getId(), b.getBillNo());
         }
@@ -476,7 +486,7 @@ public class ExpenseDetailService {
         }
     }
 
-    // ---------- 单据关联 ----------
+    // 单据关联
 
     @Transactional(rollbackFor = Exception.class)
     public Long addRelation(Long sourceBillId, Long targetBillId, String relationType, BigDecimal useAmount) {
@@ -549,7 +559,7 @@ public class ExpenseDetailService {
                         .eq(relationType != null, ExpBillRelation::getRelationType, relationType)
                         .ne(targetBillId != null, ExpBillRelation::getTargetBillId, targetBillId));
         // 合规整改( 续):仅统计在途/已批目标单的占用——草稿/已驳回/已作废单不占额度
-        // D-DEC-384/391（X-40 甲③）：WITHDRAWN（撤回）补进排除名单——撤回后单据不可复活，
+        // /391（X-40 甲③）：WITHDRAWN（撤回）补进排除名单——撤回后单据不可复活，
         // 但关系行按追溯规则保留，若仍计占用就会把借款/申请额度锁死在一张已终止的单上。
         BigDecimal used = BigDecimal.ZERO;
         for (ExpBillRelation e : existed) {
@@ -561,19 +571,18 @@ public class ExpenseDetailService {
             }
             used = used.add(nvl(e.getUseAmount()));
         }
-        // D-G1R-17（2026-10-19 G1 幕真跑发现，上线阻断级）：原实现用 total_amount（借款总额）做上限，
-        // 而报销冲抵时 useAmount 由前端硬取全额（见 D-UI-01，pickLoan 里 offsetAmount = row.loanBalance），
+        // （2026-10-19 G1 幕真跑发现，上线阻断级）：原实现用 total_amount（借款总额）做上限，
+        // 而报销冲抵时 useAmount 由前端硬取全额（见，pickLoan 里 offsetAmount = row.loanBalance），
         // 于是「已占用」被记成整笔借款额、把尚未冲抵的差额一并锁死：
         //   借款 5000 → 报销 4600（占用记 5000）→ 还款 400 时 used(5000)+400 > limit(5000) 被拒，
         //   差额 400 永远还不了，借款单卡死在 PARTIAL_REPAID。
-        //
         // 修正后的统一规则：LOAN_CLAIM（借款被占用/被冲销）一律以 **借款未还余额** 为上限，
         // 且 used 只统计「非还款单」的占用——还款单本身是核销动作，不是对借款额度的再占用，
         // 若把它算进 used 会出现 used(4600报销 + 400还款)=5000、再加本次 400 ⇒ 5400 > 400 恒被拒。
         BigDecimal limit = nvl(source.getTotalAmount());
         if ("LOAN_CLAIM".equals(relationType)) {
             // 借款额度的权威规则是「未还余额」：total_amount − 已实际冲抵（exp_loan_offset/CLAIM）− 在途还款占用。
-            //  这里**不能**再叠加旧的 used：used 是关系行规则（报销冲抵时曾被硬记成全额 5000），
+            // 这里**不能**再叠加旧的 used：used 是关系行规则（报销冲抵时曾被硬记成全额 5000），
             //   与 repaid 指向同一笔钱，两者相加会把同一笔占用算两遍 ⇒ used(4600)+本次400 > limit(400) 恒被拒。
             //   故 LOAN_CLAIM 分支彻底改用余额规则，used 不参与。
             BigDecimal repaid = repaidAmountOfLoan(sourceBillId);
@@ -599,16 +608,16 @@ public class ExpenseDetailService {
         }
     }
 
-    /** D-G1R-17：借款已被报销实际冲抵的金额（exp_loan_offset 里 offset_type=CLAIM 的生效合计）。 */
+    /** 借款已被报销实际冲抵的金额（exp_loan_offset 里 offset_type=CLAIM 的生效合计）。 */
     private BigDecimal repaidAmountOfLoan(Long loanBillId) {
         return nvl(expLoanOffsetMapper.selectList(new LambdaQueryWrapper<ExpLoanOffset>()
                         .eq(ExpLoanOffset::getLoanBillId, loanBillId)
                         .eq(ExpLoanOffset::getOffsetType, "CLAIM"))
                 .stream().map(ExpLoanOffset::getOffsetAmount)
-                .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
-    /** D-G1R-17：该借款单上尚未终结的还款单占用合计（还款＝核销动作，单独统计不与冲抵混算）。 */
+    /** 该借款单上尚未终结的还款单占用合计（还款＝核销动作，单独统计不与冲抵混算）。 */
     private BigDecimal repaidAmountOfRepay(Long loanBillId, Long excludeTargetBillId) {
         BigDecimal sum = BigDecimal.ZERO;
         for (ExpBillRelation e : expBillRelationMapper.selectList(
@@ -639,7 +648,7 @@ public class ExpenseDetailService {
         return "源单据";
     }
 
-    // ---------- 预付冲销（#13） ----------
+    // 预付冲销（#13）
 
     /**
      * 预付冲销（#13）：报销单冲销预付款单（bill_type=PAY 且 bill_sub_type=PREPAY）。
@@ -728,7 +737,7 @@ public class ExpenseDetailService {
 
     /** 关系表只存 id：批量补源/目标单据号，草稿重开时「关联事前申请」才认得出是哪张单 */
     private void fillRelationBillNos(List<ExpBillRelation> list) {
-        java.util.Set<Long> ids = new java.util.HashSet<>();
+        Set<Long> ids = new HashSet<>();
         for (ExpBillRelation r : list) {
             if (r.getSourceBillId() != null) ids.add(r.getSourceBillId());
             if (r.getTargetBillId() != null) ids.add(r.getTargetBillId());
@@ -736,7 +745,7 @@ public class ExpenseDetailService {
         if (ids.isEmpty()) {
             return;
         }
-        java.util.Map<Long, String> noById = new java.util.HashMap<>();
+        Map<Long, String> noById = new HashMap<>();
         for (ExpBill b : expBillMapper.selectBatchIds(ids)) {
             noById.put(b.getId(), b.getBillNo());
         }
@@ -746,7 +755,7 @@ public class ExpenseDetailService {
         }
     }
 
-    // ---------- 工具 ----------
+    // 工具
 
     private ExpBill requireBill(Long billId) {
         ExpBill bill = expBillMapper.selectById(billId);

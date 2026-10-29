@@ -3,18 +3,33 @@
 
 package com.fssc.workflow.action;
 
+import com.fssc.audit.service.AuditTrailService;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
+import com.fssc.contract.entity.ContContract;
+import com.fssc.contract.mapper.ContContractMapper;
+import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.framework.security.UserContext;
 import com.fssc.purchase.entity.PoOrder;
 import com.fssc.purchase.mapper.PoOrderMapper;
+import com.fssc.sharing.service.ThreeWayMatchService;
+import com.fssc.sharing.service.VoucherService;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
 /**
- * 三单匹配审批收尾（P0-1 事件编排总线）。
+ * 三单匹配审批收尾（事件编排总线）。
  * <p>
  * INVOICE_MATCH / INVOICE_MATCH_MANUAL 审批通过 → 确认匹配结果，po_order: APPROVED → INVOICED
  * + 应付确认凭证（借 库存商品(1405)/贷 应付账款(2202)）。
@@ -28,17 +43,17 @@ import java.util.Set;
 public class InvoiceMatchBizAction implements WfBizAction {
 
     private final PoOrderMapper poOrderMapper;
-    private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
-    private final com.fssc.sharing.service.VoucherService voucherService;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** D-DEC-077：人工匹配结论写入数据库载体（写 exp_bill.ext_json.matchVerdict）。
+    private final ExpBillMapper expBillMapper;
+    private final VoucherService voucherService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
+    /** 人工匹配结论写入数据库载体（写 exp_bill.ext_json.matchVerdict）。
      *  @Lazy 必需——ThreeWayMatchService → WfEngineFacade → 事件总线 → 本类，直接构造注入会成环 */
-    @org.springframework.context.annotation.Lazy
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.fssc.sharing.service.ThreeWayMatchService threeWayMatchService;
-    /** D-DEC-071：四单齐套检查（含合同环节）所需 */
-    private final com.fssc.contract.mapper.ContContractMapper contractMapper;
+    @Lazy
+    @Autowired
+    private ThreeWayMatchService threeWayMatchService;
+    /** 四单齐套检查（含合同环节）所需 */
+    private final ContContractMapper contractMapper;
 
     @Override
     public Set<String> bizTypes() {
@@ -49,7 +64,7 @@ public class InvoiceMatchBizAction implements WfBizAction {
     public void execute(WfProcessEndedEvent event) {
         Long billId = event.getBizId();
         if (billId == null) return;
-        com.fssc.expense.entity.ExpBill bill = expBillMapper.selectById(billId);
+        ExpBill bill = expBillMapper.selectById(billId);
         if (bill == null) {
             log.warn("三单匹配收尾: 不存在的付款单 {}", billId);
             return;
@@ -61,9 +76,9 @@ public class InvoiceMatchBizAction implements WfBizAction {
             return;
         }
         boolean approved = Boolean.TRUE.equals(event.getApproved());
-        // D-V4R-85（P0）办结前强制校验：付款单仍有三单匹配硬异常（超付/超容差 ⇒ frozen）时，**禁止**在本链办结放行。
+        // P0 办结前强制校验：付款单仍有三单匹配硬异常（超付/超容差 ⇒ frozen）时，**禁止**在本链办结放行。
         //   此前本钩子对任意 approved 的 INVOICE_MATCH(_MANUAL) 链都无条件把结论写成 MANUAL_MATCHED，
-        //   等于「谁点通过谁放行」，付款强制校验形同虚设。实证（2026-10-16，V4 人工 N1-B 幕）：
+        //   等于「谁点通过谁放行」，付款强制校验形同虚设。实证（V4 人工 N1-B 幕）：
         //   付款单 FK202610160003（120,000 超付、无发票覆盖、缺合同环节）先被付款校验正确拦下
         //   （code=400「三单匹配拦截：超付（关联发票 0＋容差 0.00 < 本次付款 120,000.00）」），
         //   随后仅把该单的 INVOICE_MATCH 复审链点通过两节，结论即被改写为 MANUAL_MATCHED，
@@ -74,14 +89,14 @@ public class InvoiceMatchBizAction implements WfBizAction {
         }
         try {
             if (approved) {
-                // D-DEC-077：先落人工/自动匹配链的<b>最终状态结论</b>（去重覆盖，异常只 warn）——
+                // 先落人工/自动匹配链的<b>最终状态结论</b>（去重覆盖，异常只 warn）——
                 // 此前本钩子只把 po_order 置 INVOICED，付款单侧的匹配结论没有任何写入数据库载体，
                 // ThreeWayMatchService.check() 每次现算现判，办结后仍回显 FAILED 并继续冻结付款。
                 threeWayMatchService.recordMatchVerdict(billId, event.getBizType(), event.getProcInstId(),
-                        com.fssc.sharing.service.ThreeWayMatchService.VERDICT_MANUAL_MATCHED,
+                        ThreeWayMatchService.VERDICT_MANUAL_MATCHED,
                         event.getComment());
 
-                // D-DEC-071：四单齐套检查把「合同环节」纳入同一判据——
+                // 四单齐套检查把「合同环节」纳入同一判据——
                 // 付款单 contract_id 与采购订单 contract_id 两环节皆无（或挂了不存在的合同）即缺环节。
                 // 本轮只做<b>如实报告 + WARN 记录，不硬拦</b>：
                 // 「缺合同是否硬拦」仍属 P2-B 现有待裁（分级册§六），裁决落地时把下面的 log.warn
@@ -93,26 +108,26 @@ public class InvoiceMatchBizAction implements WfBizAction {
                             bill.getBillNo(), order.getPoNo(), contractGap);
                 }
 
-                // P4-3 审计扩面：改状态前采集旧值
+                // 审计扩面：改状态前采集旧值
                 String oldStatus = order.getStatus();
                 PoOrder upd = new PoOrder();
                 upd.setId(order.getId());
                 upd.setStatus("INVOICED");
-                // D-DEC-051 规则（主窗 10-01 更正）：引擎线程 UserContext 为空时，"如实留 NULL"的说法
+                // 规则（主窗 10-01 更正）：引擎线程 UserContext 为空时，"如实留 NULL"的说法
                 // 不成立——FsscMetaObjectHandler 对 null 补 0L，写入数据库是 update_by=0（现库正证 exp_bill
-                // 0值2行/NULL 0行）。D-DEC-093 消费环节：办结人改从事件取 endOperUserId，取不到才落 0；
+                // 0值2行/NULL 0行）。消费环节：办结人改从事件取 endOperUserId，取不到才落 0；
                 // 不用 order.create_by / bill.apply_user_id 顶替——那会把"建单人"冒充成"审批办结人"。
                 // 办结人另可由 wf_task_history 末节点 + exp_bill.ext_json.matchVerdict.procInstId 交叉验证。
                 upd.setUpdateBy(event.getEndOperUserId() != null ? event.getEndOperUserId()
-                        : (com.fssc.framework.security.UserContext.get() == null
-                                ? null : com.fssc.framework.security.UserContext.get().getUserId()));
-                upd.setUpdateTime(java.time.LocalDateTime.now());
+                        : (UserContext.get() == null
+                                ? null : UserContext.get().getUserId()));
+                upd.setUpdateTime(LocalDateTime.now());
                 poOrderMapper.updateById(upd);
-                java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditBefore = new LinkedHashMap<>();
                 auditBefore.put("status", oldStatus);
-                java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
-                // D-DEC-342（未标级修复战役 K4-C）：记录的 biz 坐标必须与流程实例同轨。
+                // 未标级修复战役 K4-C：记录的 biz 坐标必须与流程实例同轨。
                 // 本链 wf_instance 的坐标是 INVOICE_MATCH(_MANUAL)／exp_bill.id／FK 单号，此前这里写的是
                 // PO 侧（po_order.id／PO 单号）⇒ 台账 16:58 实测 audit_trail id=17 按付款单号或实例联查＝0 命中，
                 // 而同一窗内 PAY_PLAN_BASE（id=18）／RECON_ACTIVE（id=19）都写的是单据坐标，属正证。
@@ -144,28 +159,28 @@ public class InvoiceMatchBizAction implements WfBizAction {
     }
 
     /**
-     * D-V4R-85（P0）：三单匹配硬异常校验（办结前）。
+     * P0：三单匹配硬异常校验（办结前）。
      *
-     * <p>判据＝{@link com.fssc.sharing.service.ThreeWayMatchService#check(Long)} 现算的 {@code frozen}：
+     * <p>判据＝{@link ThreeWayMatchService#check(Long)} 现算的 {@code frozen}：
      * 超付、发票超收货超容差等 ERROR 级差异会把付款单冻住，此时付款执行接口会拒绝。
      * 人工/复审链<b>不得</b>把这种单据放行——否则只要在链上点一次通过就能绕过付款强制校验。
      * 查询失败同样不放行（无法确认可否放行时按保守处理）。
      */
-    private void assertNoHardMatch(com.fssc.expense.entity.ExpBill bill) {
-        com.fssc.sharing.service.ThreeWayMatchService.MatchRow live;
+    private void assertNoHardMatch(ExpBill bill) {
+        ThreeWayMatchService.MatchRow live;
         try {
             live = threeWayMatchService.check(bill.getId());
         } catch (Exception ex) {
             log.warn("三单匹配收尾：付款单 {} 实时判定取数失败，按不放行处理：{}",
                     bill.getBillNo(), ex.getMessage());
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(ErrorCode.PARAM_INVALID,
                     "三单匹配实时判定读取失败，无法确认可否放行，请稍后重试或联系管理员：" + ex.getMessage());
         }
         if (live == null || !live.isFrozen()) {
             return;
         }
         int issueCount = live.getIssues() == null ? 0 : live.getIssues().size();
-        throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+        throw new BizException(ErrorCode.PARAM_INVALID,
                 "三单匹配仍有硬异常，禁止在本链办结放行：付款单 " + bill.getBillNo()
                         + " 当前判定 " + live.getMatchStatus() + "（主异常码 " + live.getMatchCode()
                         + "，异常明细 " + issueCount + " 条"
@@ -177,19 +192,19 @@ public class InvoiceMatchBizAction implements WfBizAction {
     }
 
     /**
-     * D-DEC-071：四单齐套的合同环节判据——付款单 contract_id 与采购订单 contract_id 是同一事实的两个登记点，
+     * 四单齐套的合同环节判据——付款单 contract_id 与采购订单 contract_id 是同一事实的两个登记点，
      * 任一侧有值且合同档案真实存在即算齐；两环节皆空＝缺合同环节，挂了但查不到＝合同悬空。
      *
      * @return 缺失描述；合同环节在位时返回 null（调用方据此决定是否记录）
      */
-    private String contractGapOf(com.fssc.expense.entity.ExpBill bill, PoOrder order) {
+    private String contractGapOf(ExpBill bill, PoOrder order) {
         Long contractId = bill.getContractId() != null ? bill.getContractId() : order.getContractId();
         String where = bill.getContractId() != null ? "付款单" : "采购订单";
         if (contractId == null) {
             return "付款单与采购订单均未登记合同";
         }
         try {
-            com.fssc.contract.entity.ContContract c = contractMapper.selectById(contractId);
+            ContContract c = contractMapper.selectById(contractId);
             if (c == null) {
                 return where + "登记的合同 id=" + contractId + " 在 cont_contract 查无";
             }

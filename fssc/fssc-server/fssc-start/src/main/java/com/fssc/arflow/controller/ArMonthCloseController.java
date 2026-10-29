@@ -98,7 +98,7 @@ public class ArMonthCloseController {
         return Result.success(monthCloseService.unClose(id, (String) body.get("reason")));
     }
 
-    /** R5-D-218 作废（最终状态 VOID）：body {reason}，原因必填记录；未关闭账期的月结单可作废 */
+    /** 作废（最终状态 VOID）：body {reason}，原因必填记录；未关闭账期的月结单可作废 */
     @OperLog(module = "AR_FLOW", operType = "UPDATE", desc = "AR月结作废")
     @RequiresPerm("arflow:monthclose:manage")
     @PostMapping("/{id}/void")

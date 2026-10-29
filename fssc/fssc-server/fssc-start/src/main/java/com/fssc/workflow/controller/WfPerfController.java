@@ -5,6 +5,8 @@ package com.fssc.workflow.controller;
 
 import com.fssc.common.core.Result;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.workflow.job.WfInstanceArchiveJob;
+import com.fssc.workflow.job.WfLedgerReconcileJob;
 import com.fssc.workflow.service.WfPerfService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 流程绩效与积压分析（/api/tenant/wf/perf/**，方案 G3-2 真规则）。
+ * 流程绩效与积压分析（/api/tenant/wf/perf/**，方案 真规则）。
  *
  * <p>权限与监控大屏同一档（{@code wf:instance:list}）：这里给的是全公司在途/办结的聚合读数，
  * 业务角色不需要、也不应该看到别人的时效。
@@ -27,9 +29,9 @@ public class WfPerfController {
 
     private final WfPerfService wfPerfService;
     /** G0 止血（F13）：双账对账最近一次报告（只报不修，供运维核对差异样本） */
-    private final com.fssc.workflow.job.WfLedgerReconcileJob wfLedgerReconcileJob;
+    private final WfLedgerReconcileJob wfLedgerReconcileJob;
     /** G4 第 6 条：流程实例归档只读预览（不触发任何搬移） */
-    private final com.fssc.workflow.job.WfInstanceArchiveJob wfInstanceArchiveJob;
+    private final WfInstanceArchiveJob wfInstanceArchiveJob;
 
     /**
      * 流程实例归档预览：按当前配置回答"当前会归档多少条、N 是多少"。
@@ -58,7 +60,7 @@ public class WfPerfController {
     }
 
     /**
-     * R5-D-036：实例状态<b>全量</b>计数（{@code /wf/board} 顶部四卡的规则源）。
+     * 实例状态<b>全量</b>计数（{@code /wf/board} 顶部四卡的规则源）。
      *
      * <p>与 {@code /overview} 同一把权限校验（该页的实例列表本就要求 {@code wf:instance:list}），
      * 因此本端点不引入新的授权面；只做 5 次 COUNT，不跑 SLA/桑基的重聚合。</p>

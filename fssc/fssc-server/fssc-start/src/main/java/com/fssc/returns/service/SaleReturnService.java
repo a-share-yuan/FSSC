@@ -4,8 +4,10 @@
 package com.fssc.returns.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.arflow.entity.ArStatement;
 import com.fssc.arflow.mapper.ArStatementMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -23,11 +25,18 @@ import com.fssc.returns.entity.SaleReturnLine;
 import com.fssc.returns.mapper.SaleReturnLineMapper;
 import com.fssc.returns.mapper.SaleReturnMapper;
 import com.fssc.returns.support.ReturnLegMapping;
+import com.fssc.sharing.service.VoucherService;
+import com.fssc.system.entity.SysCompany;
 import com.fssc.system.entity.SysConfig;
 import com.fssc.system.entity.SysUser;
+import com.fssc.system.mapper.SysCompanyMapper;
 import com.fssc.system.mapper.SysConfigMapper;
 import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.system.service.NumberRuleService;
+import java.math.RoundingMode;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,23 +69,23 @@ public class SaleReturnService {
     private final NumberRuleService numberRuleService;
     /** 租户参数（sys_config）：审核/驳回/作废读 approve.deny_self 自审禁止开关，与 Flowable 路径共用同一开关 */
     private final SysConfigMapper sysConfigMapper;
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** R5-D-089 下游环节：REFUND 退货退款 → 应收域（红字贷项 + FIFO 冲减 + 客户对账基础表），EXCHANGE 不写 */
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
+    /** 下游环节：REFUND 退货退款 → 应收域（红字贷项 + FIFO 冲减 + 客户对账基础表），EXCHANGE 不写 */
     private final RcReceivableMapper rcReceivableMapper;
     private final ArStatementMapper arStatementMapper;
-    /** R5-D-089 客户解析：customer_code → crm_customer（应收单以 customer_id 挂账） */
+    /** 客户解析：customer_code → crm_customer（应收单以 customer_id 挂账） */
     private final CrmCustomerMapper crmCustomerMapper;
-    /** D-H3-04：红字应收（贷项）走应收族同一制证钩子——RECEIVABLE 族本就有制证写入位置
+    /** 红字应收（贷项）走应收族同一制证钩子——RECEIVABLE 族本就有制证写入位置
      *  （应收审批收尾 ReceivableBizAction、开票收尾 InvoiceIssueBizAction 都出证），
      *  唯独本环节自建的红字应收不制证 ⇒ 应收侧账面净额与总账差一笔退货额（实测 −5,000 零凭证）。 */
-    private final com.fssc.sharing.service.VoucherService voucherService;
-    /** D-H2-03：company_code/company_name 按 company_id 补充（原两列恒 NULL） */
-    private final com.fssc.system.mapper.SysCompanyMapper sysCompanyMapper;
-    /** D-H2-04（历史行）：读时把 approver 工号换成真名 */
+    private final VoucherService voucherService;
+    /** company_code/company_name 按 company_id 补充（原两列恒 NULL） */
+    private final SysCompanyMapper sysCompanyMapper;
+    /** 历史行：读时把 approver 工号换成真名 */
     private final SysUserMapper sysUserMapper;
 
-    // ---------------- 创建 ----------------
+    // 创建
 
     @Transactional(rollbackFor = Exception.class)
     public SaleReturn create(SaleReturn r) {
@@ -96,7 +105,7 @@ public class SaleReturnService {
         fillCompanyCoords(r);        // D-H2-03
         List<SaleReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
-        // R5-D-091：表头税额按明细整算回写（不信任前端 taxAmount）
+        // 表头税额按明细整算回写（不信任前端 taxAmount）
         r.setTaxAmount(deriveTaxAmount(lines));
 
         r.setId(null);
@@ -132,7 +141,7 @@ public class SaleReturnService {
         fillCompanyCoords(r);        // D-H2-03
         List<SaleReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
-        // R5-D-091：编辑整单覆盖时税额同样按明细整算回写
+        // 编辑整单覆盖时税额同样按明细整算回写
         r.setTaxAmount(deriveTaxAmount(lines));
 
         old.setCompanyId(r.getCompanyId());
@@ -159,7 +168,7 @@ public class SaleReturnService {
         return old;
     }
 
-    // ---------------- 状态机 ----------------
+    // 状态机
 
     @Transactional(rollbackFor = Exception.class)
     public SaleReturn submit(Long id) {
@@ -167,13 +176,13 @@ public class SaleReturnService {
         if (!List.of(SaleReturn.ST_DRAFT, SaleReturn.ST_REJECTED).contains(r.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + r.getBillNo() + " 当前状态不可提交");
         }
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         r.setStatus(SaleReturn.ST_PENDING);
         mapper.updateById(r);
         auditTrailService.recordUpdate("SALE_RETURN", id, r.getBillNo(), "sale_return",
                 String.valueOf(id),
-                auditBefore, java.util.Collections.singletonMap("status", SaleReturn.ST_PENDING), "提交");
+                auditBefore, Collections.singletonMap("status", SaleReturn.ST_PENDING), "提交");
         return r;
     }
 
@@ -185,7 +194,7 @@ public class SaleReturnService {
         }
         // 第二道防线：单据级「审批人 ≠ 制单人」（与角色隔离互补，齐平 Flowable 的 approve.deny_self）
         assertNotSelf(r, "审核");
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("approver", r.getApprover());
         auditBefore.put("approveTime", r.getApproveTime());
@@ -193,17 +202,17 @@ public class SaleReturnService {
         r.setApprover(currentUserName());
         r.setApproveTime(LocalDateTime.now());
         mapper.updateById(r);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("approver", r.getApprover());
         auditAfter.put("approveTime", r.getApproveTime());
         auditTrailService.recordUpdate("SALE_RETURN", id, r.getBillNo(), "sale_return",
                 String.valueOf(id), auditBefore, auditAfter, "审核通过");
-        // R5-D-089（D-V4-005 边界）：APPROVED 收尾下游环节——按 return_mode 分流（ReturnLegMapping 为
+        // 边界：APPROVED 收尾下游环节——按 return_mode 分流（ReturnLegMapping 为
         // 采购/销售两域共用映射表）：REFUND 退货退款 ⇒ 生成红字应收（贷项，amount 取负）并 FIFO 冲减
         // 对应 rc_receivable.remain_amount，「进对账」写入客户对账基础表（ar_statement 且置
         // check_status=UNCHECKED 待核对）；EXCHANGE 退货补货 ⇒ 不进对账。与审核同事务收尾
-        // （复用 D-DEC-334 收尾事件规则），不另建定时任务。
+        // 复用 收尾事件规则，不另建定时任务。
         if (ReturnLegMapping.entersRecon(r.getReturnMode())) {
             postRefundToAr(r);
         }
@@ -221,13 +230,13 @@ public class SaleReturnService {
         if (reason == null || reason.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "驳回必须填写原因");
         }
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("voidReason", r.getVoidReason());
         r.setStatus(SaleReturn.ST_REJECTED);
         r.setVoidReason(reason);
         mapper.updateById(r);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("voidReason", r.getVoidReason());
         auditTrailService.recordUpdate("SALE_RETURN", id, r.getBillNo(), "sale_return",
@@ -250,13 +259,13 @@ public class SaleReturnService {
         if (SaleReturn.ST_APPROVED.equals(r.getStatus())) {
             assertNotSelf(r, "作废");
         }
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("voidReason", r.getVoidReason());
         r.setStatus(SaleReturn.ST_VOIDED);
         r.setVoidReason(reason);
         mapper.updateById(r);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("voidReason", r.getVoidReason());
         auditTrailService.recordUpdate("SALE_RETURN", id, r.getBillNo(), "sale_return",
@@ -274,13 +283,13 @@ public class SaleReturnService {
         mapper.deleteById(id);
     }
 
-    // ---------------- 查询 ----------------
+    // 查询
 
     public SaleReturn get(Long id) {
         SaleReturn r = require(id);
         r.setLines(lineMapper.selectList(new LambdaQueryWrapper<SaleReturnLine>()
                 .eq(SaleReturnLine::getReturnId, id).orderByAsc(SaleReturnLine::getLineNo)));
-        fillApproverNames(java.util.Collections.singletonList(r));
+        fillApproverNames(Collections.singletonList(r));
         return r;
     }
 
@@ -305,16 +314,16 @@ public class SaleReturnService {
         }
         DataScopeKit.apply(q, SaleReturn::getCompanyId, null, null);
         q.orderByDesc(SaleReturn::getId);
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<SaleReturn> p =
-                mapper.selectPage(new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(pageNum, pageSize), q);
+        Page<SaleReturn> p =
+                mapper.selectPage(new Page<>(pageNum, pageSize), q);
         fillApproverNames(p.getRecords());
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    // ---------------- 内部工具 ----------------
+    // 内部工具
 
     /**
-     * D-H2-04（历史行补齐）：读取时把 approver 的工号批量换成真名。
+     * 历史行补齐：读取时把 approver 的工号批量换成真名。
      * <p>写入侧 {@link #currentUserName()} 只对"本次审批"生效；审批发生在修复前的老单据
      * 仍存工号（实测 sale_return.approver='100002'），列表「审核人」列因此直接显示数字。
      * 与应付域 {@code ApRequestService.fillDisplayNames} 同一读时解析规则，写入数据库值不动。</p>
@@ -352,7 +361,7 @@ public class SaleReturnService {
             ln.setReturnId(r.getId());
             if (ln.getLineNo() == null) ln.setLineNo(no);
             if (ln.getAmount() == null) ln.setAmount(BigDecimal.ZERO);
-            // D-H2-07：单位由界面明细行带入（销售域无订单行模型可派生：so_order/so_order_line 实测 0 行），
+            // 单位由界面明细行带入（销售域无订单行模型可派生：so_order/so_order_line 实测 0 行），
             // 这里只做去空白归一，避免写入数据库成 ' ' 这种"看着有值其实没有"的脏数据。
             if (ln.getUom() != null) {
                 String u = ln.getUom().trim();
@@ -365,7 +374,7 @@ public class SaleReturnService {
     }
 
     /**
-     * D-H2-02：客户代码必须在客户主数据（{@code crm_customer}）现有，名称一律以主数据为准回填。
+     * 客户代码必须在客户主数据（{@code crm_customer}）现有，名称一律以主数据为准回填。
      * <p>与采购侧同缺陷同修：原实现代码是纯输入框、名称手填 ⇒ 任意字符串可入库，
      * {@code customer_name} 落空串，列表「客户」列空白，下游对账/函证缺关键字段。
      * <p>原先只有审核收尾环节 {@link #postRefundToAr} 才做客户解析（解析不到就报"无法挂账进对账"），
@@ -383,12 +392,12 @@ public class SaleReturnService {
     }
 
     /**
-     * D-H2-03：按 company_id 补充 company_code/company_name（原两列恒 NULL，台账/导出只有 id 无从对号）。
+     * 按 company_id 补充 company_code/company_name（原两列恒 NULL，台账/导出只有 id 无从对号）。
      * 公司 id 不现有时如实报错，不静默留空。
      */
     private void fillCompanyCoords(SaleReturn r) {
         if (r.getCompanyId() == null) return;
-        com.fssc.system.entity.SysCompany c = sysCompanyMapper.selectById(r.getCompanyId());
+        SysCompany c = sysCompanyMapper.selectById(r.getCompanyId());
         if (c == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "所属公司不存在: " + r.getCompanyId());
         }
@@ -403,15 +412,17 @@ public class SaleReturnService {
         }
     }
 
-    /** R5-D-091：税额＝Σ 明细行 amount×taxRate/100（四舍五入 2 位），create/update 双入口整算回写。 */
+    /** ＋税额＝Σ 明细行 amount×taxRate/(100+taxRate)（行金额为价税合计），create/update 双入口整算回写。 */
     private BigDecimal deriveTaxAmount(List<SaleReturnLine> lines) {
         BigDecimal tax = BigDecimal.ZERO;
         for (SaleReturnLine ln : lines) {
             if (ln.getAmount() == null || ln.getTaxRate() == null) continue;
-            tax = tax.add(ln.getAmount().multiply(ln.getTaxRate())
-                    .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP));
+            BigDecimal rate = ln.getTaxRate();
+            if (rate.signum() <= 0) continue;
+            tax = tax.add(ln.getAmount().multiply(rate)
+                    .divide(new BigDecimal("100").add(rate), 2, RoundingMode.HALF_UP));
         }
-        return tax.setScale(2, java.math.RoundingMode.HALF_UP);
+        return tax.setScale(2, RoundingMode.HALF_UP);
     }
 
     private void validateLineSum(BigDecimal headerAmount, List<SaleReturnLine> lines) {
@@ -426,10 +437,10 @@ public class SaleReturnService {
         }
     }
 
-    // ---------------- R5-D-089 下游环节（APPROVED 收尾按 return_mode 分流） ----------------
+    // 下游环节（APPROVED 收尾按 return_mode 分流）
 
     /**
-     * REFUND 退货退款 → 应收域（与采购侧 R5-D-084 同一套 ReturnLegMapping 映射）：
+     * REFUND 退货退款 → 应收域（与采购侧 同一套 ReturnLegMapping 映射）：
      * 1）红字应收（贷项）：rc_receivable 新增负向行（amount 取负、sourceDocType=SALE_RETURN）；
      * 2）冲减：对该客户未清应收按到期日 FIFO 冲减 remain_amount（减为 0 置 DONE，规则同收款核销）；
      * 3）进对账：写入客户对账基础表 ar_statement 并置 check_status=UNCHECKED（待核对）。
@@ -454,7 +465,7 @@ public class SaleReturnService {
         BigDecimal offset = BigDecimal.ZERO;
         List<RcReceivable> open = rcReceivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .eq(RcReceivable::getCustomerId, cust.getId())
-                // D-H3-02 同族：冲减候选限定在本退货单所属法人主体内。客户主数据全租户共享，
+                // 同族：冲减候选限定在本退货单所属法人主体内。客户主数据全租户共享，
                 // 不限主体就会拿本公司的一笔退货去冲他公司的应收（与收款环节 H3.4 实测同一形态的串账）。
                 .eq(r.getCompanyId() != null, RcReceivable::getCompanyId, r.getCompanyId())
                 .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
@@ -469,11 +480,11 @@ public class SaleReturnService {
             BigDecimal cut = balance.compareTo(rest) <= 0 ? balance : rest;
             BigDecimal newRemain = balance.subtract(cut);
             BigDecimal newReceived = nz(rec.getReceivedAmount()).add(cut);
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("remainAmount", rec.getRemainAmount());
             auditBefore.put("receivedAmount", rec.getReceivedAmount());
             auditBefore.put("status", rec.getStatus());
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("remainAmount", newRemain);
             auditAfter.put("receivedAmount", newReceived);
             RcReceivable u = new RcReceivable();
@@ -507,7 +518,7 @@ public class SaleReturnService {
         credit.setSourceDocType("SALE_RETURN");
         credit.setSourceDocId(r.getId());
         rcReceivableMapper.insert(credit);
-        // —— D-H3-04：红字应收出证（借 1122 应收账款／贷 6001 主营业务收入，金额取负＝红字冲销）。
+        // —— 红字应收出证（借 1122 应收账款／贷 6001 主营业务收入，金额取负＝红字冲销）。
         // 走应收族既有钩子 generateReceivableVoucher：它按 rec 的 companyId/币种/单号建头、
         // 分录金额直接取 amount（负数即红字），凭证四键落在派生应收单上 ⇒ 应收侧联查能取到这张证。
         // 出证失败不回滚退货审核（该环节是 REQUIRES_NEW，且退货本身已合规成立），但必须记录不得静默：
@@ -531,7 +542,7 @@ public class SaleReturnService {
         // —— 3) 客户对账基础表：写入红字对账行并置 check_status（UNCHECKED 待核对）
         ArStatement stmt = new ArStatement();
         stmt.setTenantId(TenantContext.getTenantId());
-        stmt.setBillNo("ARB" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+        stmt.setBillNo("ARB" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + UUID.randomUUID().toString().substring(0, 4).toUpperCase());
         stmt.setCompanyId(r.getCompanyId());
         stmt.setCustomerCode(r.getCustomerCode());
@@ -539,11 +550,16 @@ public class SaleReturnService {
         stmt.setBillType("DOMESTIC");
         stmt.setCcy(credit.getCurrencyCode());
         BigDecimal tax = ReturnLegMapping.negate(r.getTaxAmount() == null ? BigDecimal.ZERO : r.getTaxAmount());
-        stmt.setAmount(amount);
+        // 表头 amount 是「价税合计」（数量×单价，与红字应收同值），税额是从中拆出来的一部分，
+        // 不要再往合计上加一次。修前写 total=amount+tax ⇒ 对账行 -5,650 比红字应收 -5,000 多出一整个税额。
+        // 本表按「amount＝不含税额、total＝价税合计」落数：total 仍等于 amount+tax（等式不破），
+        // 但合计取的是这笔退货的钱，与应收侧红字一致。
+        BigDecimal netAmount = amount.subtract(tax);
+        stmt.setAmount(netAmount);
         stmt.setTaxAmount(tax);
-        stmt.setTotalAmount(amount.add(tax));
+        stmt.setTotalAmount(netAmount.add(tax));
         if ("CNY".equalsIgnoreCase(credit.getCurrencyCode())) {
-            stmt.setRmbAmount(amount);
+            stmt.setRmbAmount(netAmount);
             stmt.setRmbTaxAmount(tax);
         }
         stmt.setPreInvoiceFlag(0);
@@ -587,7 +603,7 @@ public class SaleReturnService {
         try {
             LoginUser u = UserContext.get();
             if (u == null) return null;
-            // D-H2-04：审核人列直接显示工号（实测 sale_return.approver='100002'）——真名在 nickName，
+            // 审核人列直接显示工号（实测 sale_return.approver='100002'）——真名在 nickName，
             // getUserName() 是登录账号；与应付域 ApRequestService、采购退货侧同一规则。
             String real = u.getNickName();
             return real != null && !real.isBlank() ? real : u.getUserName();

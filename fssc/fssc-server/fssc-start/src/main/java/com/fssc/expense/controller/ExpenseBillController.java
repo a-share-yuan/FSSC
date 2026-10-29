@@ -12,6 +12,7 @@ import com.fssc.expense.entity.ExpBillLine;
 import com.fssc.expense.service.ExpenseBillService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import java.util.LinkedHashMap;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -99,7 +100,7 @@ public class ExpenseBillController {
         int ps = Math.max(1, pageSize);
         int from = Math.min((pn - 1) * ps, all.size());
         int to = Math.min(from + ps, all.size());
-        Map<String, Object> resp = new java.util.LinkedHashMap<>();
+        Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("list", all.subList(from, to));
         resp.put("total", all.size());
         return Result.success(resp);
@@ -137,7 +138,7 @@ public class ExpenseBillController {
     }
 
     /**
-     * 反审核（D-V3-135 配套 · 单据反操作链第二环）：APPROVED → DRAFT，退回申请人修改后重提。
+     * 反审核（配套 · 单据反操作链第二环）：APPROVED → DRAFT，退回申请人修改后重提。
      * 仅制单人本人可反审本人单据（撤回同族，exp:bill:withdraw；SoD：财务不代制单人反审）；
      * 前置校验在服务层（已制证/付款已执行/批次在途/存在有效勾稽均拒绝，文案给可执行指引）。
      */
@@ -190,7 +191,7 @@ public class ExpenseBillController {
     @RequiresPerm("exp:bill:list")
     @GetMapping("/myPage")
     public Result<PageResult<ExpBill>> myPage(PageQuery query, String billType, String status,
-                                              @RequestParam(required = false) java.math.BigDecimal minBalance,
+                                              @RequestParam(required = false) BigDecimal minBalance,
                                               @RequestParam(required = false) String keyword,
                                               String startDate, String endDate, String source) {
         return Result.success(expenseBillService.myPage(query.getPageNum(), query.getPageSize(),

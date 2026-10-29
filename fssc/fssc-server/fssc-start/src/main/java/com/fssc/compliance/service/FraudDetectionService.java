@@ -5,14 +5,21 @@ package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.FraudDetectionLog;
 import com.fssc.compliance.mapper.FraudDetectionLogMapper;
+import com.fssc.compliance.vo.FraudDetectionLogVO;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.system.entity.SysUser;
+import com.fssc.system.mapper.SysUserMapper;
+import com.fssc.system.service.ConfigService;
+import java.math.RoundingMode;
+import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,7 +43,7 @@ public class FraudDetectionService {
     private static final BigDecimal AMOUNT_LIMIT = new BigDecimal("50000");
     /** 反欺诈频次类规则白名单配置键（sys_config.config_key，值为逗号分隔的 user_name 列表） */
     private static final String WHITELIST_CONFIG_KEY = "fraud.whitelist.users";
-    /** D-FRD-1：频次阈值可配置键（sys_config，正整数；未配置/非法则回退默认 10） */
+    /** 频次阈值可配置键（sys_config，正整数；未配置/非法则回退默认 10） */
     private static final String FREQUENCY_THRESHOLD_CONFIG_KEY = "fraud.frequency.threshold";
     /**
      * 批次 1 ⑤：提单侧是否硬阻断（sys_config，'1'=阻断）。<b>缺省 0＝不阻断</b>——
@@ -49,9 +56,9 @@ public class FraudDetectionService {
 
     private final FraudDetectionLogMapper fraudDetectionLogMapper;
     /** 白名单配置来源（sys_config），无该 key 时视为空白名单，行为与原先完全一致 */
-    private final com.fssc.system.service.ConfigService configService;
+    private final ConfigService configService;
     /** 白名单 user_name → 用户ID 解析 */
-    private final com.fssc.system.mapper.SysUserMapper sysUserMapper;
+    private final SysUserMapper sysUserMapper;
 
     /**
      * 判断员工是否命中反欺诈频次类规则白名单。
@@ -115,9 +122,9 @@ public class FraudDetectionService {
             return false;
         }
         try {
-            List<com.fssc.system.entity.SysUser> users = sysUserMapper.selectList(
-                    new LambdaQueryWrapper<com.fssc.system.entity.SysUser>()
-                            .in(com.fssc.system.entity.SysUser::getUserName, names));
+            List<SysUser> users = sysUserMapper.selectList(
+                    new LambdaQueryWrapper<SysUser>()
+                            .in(SysUser::getUserName, names));
             boolean hit = users.stream().anyMatch(u -> employeeId.equals(u.getId()));
             if (hit) {
                 log.info("反欺诈检测: 员工 {} 命中白名单（{}），跳过频次类规则", employeeId, WHITELIST_CONFIG_KEY);
@@ -130,7 +137,7 @@ public class FraudDetectionService {
     }
 
     /**
-     * D-FRD-1：生效的频次阈值 —— sys_config.fraud.frequency.threshold（正整数）优先，
+     * 生效的频次阈值 —— sys_config.fraud.frequency.threshold（正整数）优先，
      * 未配置/解析失败/非正数回退默认 10（行为与硬编码时代一致）。
      */
     private int frequencyThreshold() {
@@ -381,8 +388,8 @@ public class FraudDetectionService {
         return fraudDetectionLogMapper.selectList(qw);
     }
 
-    /** P2-5: 分页查询检测记录（风控看板数据源；detectionResult=HIGH_RISK/SUSPICIOUS/NORMAL） */
-    public PageResult<com.fssc.compliance.vo.FraudDetectionLogVO> page(long pageNum, long pageSize, String detectionResult,
+    /** 分页查询检测记录（风控看板数据源；detectionResult=HIGH_RISK/SUSPICIOUS/NORMAL） */
+    public PageResult<FraudDetectionLogVO> page(long pageNum, long pageSize, String detectionResult,
                                               Long employeeId, String detectionType,
                                               String actionTaken, Boolean unreviewed,
                                               Boolean pendingRelease) {
@@ -399,13 +406,13 @@ public class FraudDetectionService {
         if (actionTaken != null && !actionTaken.isBlank()) {
             qw.eq(FraudDetectionLog::getActionTaken, actionTaken);
         }
-        // D-F1R-07：待处置队列必须与付款校验 {@link #paymentBlockReason} <b>同源同判据</b>，
+        // 待处置队列必须与付款校验 {@link #paymentBlockReason} <b>同源同判据</b>，
         // 否则风控看到的"待复审"和真正卡住付款的那批记录不是同一批。
         // 原判据只按 actionTaken 精确相等筛选，而记录写入数据库时 actionTaken 的初值就是 'REVIEW'
-        // （＝转人工待审），既不是空也不是 'PENDING' ⇒ 按"未处置/空值"筛必然得到 0 条，
+        // ＝转人工待审，既不是空也不是 'PENDING' ⇒ 按"未处置/空值"筛必然得到 0 条，
         // 风控会误以为没有待办，付款却一直被拦。现在两条专用队列：
         //  · pendingRelease=true → 正在阻断付款的记录（与 paymentBlockReason 逐条对齐）
-        //  · unreviewed=true      → 未做终局处置的记录（语义＝无终局处置人且未放行）
+        //  · unreviewed=true → 未做终局处置的记录（语义＝无终局处置人且未放行）
         if (Boolean.TRUE.equals(pendingRelease)) {
             qw.eq(FraudDetectionLog::getDetectionResult, "HIGH_RISK")
                     .isNull(FraudDetectionLog::getReviewedBy)
@@ -417,9 +424,9 @@ public class FraudDetectionService {
                             .or().ne(FraudDetectionLog::getActionTaken, "RELEASE"));
         }
         qw.orderByDesc(FraudDetectionLog::getId);
-        
+
         // 使用关联查询补充员工姓名和单据编号
-        com.baomidou.mybatisplus.core.metadata.IPage<com.fssc.compliance.vo.FraudDetectionLogVO> p = 
+        IPage<FraudDetectionLogVO> p =
             fraudDetectionLogMapper.selectPageWithRelations(Page.of(pageNum, pageSize), qw);
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
@@ -442,7 +449,7 @@ public class FraudDetectionService {
     }
 
     /**
-     * 41号审查 P2-12 申诉闭环：被拦截/预警方登记申诉。原因追加进 details 记录，
+     * 41号审查 申诉闭环：被拦截/预警方登记申诉。原因追加进 details 记录，
      * 处置状态不变（等待财务申诉复审）；同一单可多次申诉记录。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -454,7 +461,7 @@ public class FraudDetectionService {
         if (reason == null || reason.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "申诉原因必填");
         }
-        String stamp = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
         String mark = "[申诉待审 " + stamp + "] " + reason.trim();
         logEntity.setDetails((logEntity.getDetails() == null ? "" : logEntity.getDetails() + "\n") + mark);
         fraudDetectionLogMapper.updateById(logEntity);
@@ -462,7 +469,7 @@ public class FraudDetectionService {
     }
 
     /**
-     * 41号审查 P2-12 申诉复审：approve=true → 放行(RELEASE)并结案；false → 维持原处置并记录驳回。
+     * 41号审查 申诉复审：approve=true → 放行(RELEASE)并结案；false → 维持原处置并记录驳回。
      */
     @Transactional(rollbackFor = Exception.class)
     public void appealReview(Long logId, boolean approve, String note, Long reviewerId) {
@@ -470,7 +477,7 @@ public class FraudDetectionService {
         if (logEntity == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "欺诈检测记录不存在: " + logId);
         }
-        String stamp = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
         String suffix = (logEntity.getDetails() == null ? "" : logEntity.getDetails() + "\n");
         if (approve) {
             logEntity.setActionTaken("RELEASE");
@@ -578,7 +585,7 @@ public class FraudDetectionService {
         return total;
     }
 
-    // ==================== 增强检测（P1 增强） ====================
+    // 增强检测（P1 增强）
 
     private final ExpBillMapper expBillMapper;
 
@@ -741,17 +748,17 @@ public class FraudDetectionService {
         result.put("normal", normal);
         result.put("pendingReview", pendingReview);
         result.put("riskRate", total > 0
-                ? BigDecimal.valueOf((highRisk + suspicious) * 100.0 / total).setScale(2, java.math.RoundingMode.HALF_UP)
+                ? BigDecimal.valueOf((highRisk + suspicious) * 100.0 / total).setScale(2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO);
         result.put("byType", byType);
 
         return result;
     }
 
-    // ==================== P2-5: 风险模型拦截/预警 ====================
+    // 风险模型拦截/预警
 
     /**
-     * P2-5: 提交时反欺诈检测 + 拦截/预警。
+     * 提交时反欺诈检测 + 拦截/预警。
      * <p>
      * 在 {@link #detectFraud} 基础上聚合结果：
      * <ul>
@@ -761,7 +768,7 @@ public class FraudDetectionService {
      * </ul>
      *
      * @param employeeId 提交人ID
-     * @param billId     单据ID
+     * @param billId 单据ID
      * @return 聚合后的风险检查结果
      */
     @Transactional(rollbackFor = Exception.class)
@@ -808,7 +815,7 @@ public class FraudDetectionService {
         return new FraudCheckResult(blockAtSubmit, shouldWarn, maxRiskLevel, maxScore, summary, logs);
     }
 
-    /** P2-5: 风险检查聚合结果 */
+    /** 风险检查聚合结果 */
     @lombok.Data
     @lombok.AllArgsConstructor
     @lombok.NoArgsConstructor

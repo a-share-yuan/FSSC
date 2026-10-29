@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fssc.arflow.entity.ArMonthClose;
 import com.fssc.arflow.mapper.ArMonthCloseMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.tenant.TenantContext;
@@ -16,6 +17,10 @@ import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.mapper.OpVoucherMapper;
 import com.fssc.system.service.ConfigService;
 import com.fssc.system.service.PeriodLockService;
+import java.math.RoundingMode;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -55,8 +60,8 @@ public class ArMonthCloseService {
     private final ConfigService configService;
     private final PeriodLockService periodLockService;
 
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /** 发起月结：同一公司同一期间同一类型不允许存在未完成月结单。 */
     @Transactional(rollbackFor = Exception.class)
@@ -72,7 +77,7 @@ public class ArMonthCloseService {
                 .eq(ArMonthClose::getCompanyId, cid)
                 .eq(ArMonthClose::getPeriod, period)
                 .eq(ArMonthClose::getCloseType, closeType)
-                // R5-D-218：已关闭/已作废的旧单不占用本期间（作废后可重新发起）
+                // 已关闭/已作废的旧单不占用本期间（作废后可重新发起）
                 .notIn(ArMonthClose::getStatus, ArMonthClose.ST_CLOSED, ArMonthClose.ST_VOID));
         if (exists != null && exists > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -105,8 +110,8 @@ public class ArMonthCloseService {
         c.setOperator(currentUser());
         mapper.updateById(c);
         auditTrailService.recordUpdate("AR_MONTH_CLOSE", c.getId(), c.getCloseNo(), "ar_month_close",
-                String.valueOf(c.getId()), java.util.Collections.singletonMap("status", auditOldStatus),
-                java.util.Collections.singletonMap("status", c.getStatus()), "清接口行");
+                String.valueOf(c.getId()), Collections.singletonMap("status", auditOldStatus),
+                Collections.singletonMap("status", c.getStatus()), "清接口行");
         return c;
     }
 
@@ -147,11 +152,11 @@ public class ArMonthCloseService {
         c.setStatus(ArMonthClose.ST_DATA_PULLED);
         c.setOperator(currentUser());
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("pulledAmount", auditOldPulledAmount);
         auditBefore.put("pulledCount", auditOldPulledCount);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("pulledAmount", c.getPulledAmount());
         auditAfter.put("pulledCount", c.getPulledCount());
@@ -177,11 +182,11 @@ public class ArMonthCloseService {
         }
         c.setOperator(currentUser());
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("adjustNote", auditOldAdjustNote);
         auditBefore.put("diffFlag", auditOldDiffFlag);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("adjustNote", c.getAdjustNote());
         auditAfter.put("diffFlag", c.getDiffFlag());
@@ -211,11 +216,11 @@ public class ArMonthCloseService {
         c.setStatus(ArMonthClose.ST_GL_POSTED);
         c.setOperator(currentUser());
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("voucherNo", auditOldVoucherNo);
         auditBefore.put("glAmount", auditOldGlAmount);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("voucherNo", c.getVoucherNo());
         auditAfter.put("glAmount", c.getGlAmount());
@@ -273,11 +278,11 @@ public class ArMonthCloseService {
         c.setStatus(ArMonthClose.ST_RECONCILED);
         c.setOperator(currentUser());
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("diffAmount", auditOldDiffAmount);
         auditBefore.put("diffFlag", auditOldDiffFlag);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("diffAmount", c.getDiffAmount());
         auditAfter.put("diffFlag", c.getDiffFlag());
@@ -297,19 +302,19 @@ public class ArMonthCloseService {
         c.setOperator(currentUser());
         mapper.updateById(c);
         auditTrailService.recordUpdate("AR_MONTH_CLOSE", c.getId(), c.getCloseNo(), "ar_month_close",
-                String.valueOf(c.getId()), java.util.Collections.singletonMap("status", auditOldStatus),
-                java.util.Collections.singletonMap("status", c.getStatus()), "关闭账期");
+                String.valueOf(c.getId()), Collections.singletonMap("status", auditOldStatus),
+                Collections.singletonMap("status", c.getStatus()), "关闭账期");
         // 蓝图规则6.5：关闭账期后当月不允许再录入业务（sys_config 锁标记，各业务入口判定）
         periodLockService.lock(c.getCompanyId(), c.getPeriod());
-        // D-V4R-65：应收月结不再复写 md_period——期间状态机唯一归属总账月结审批末节点（D-DEC-189）。
+        // 应收月结不再复写 md_period——期间状态机唯一归属总账月结审批末节点。
         // 本子账的「当月不再录入」由上面 periodLockService.lock 承担，无需撬动会计期间表。
         log.info("[arflow] {} 月结 {} 完成，期间 {} 已关闭（会计期间由总账月结末节点结账）", typeName(c.getCloseType()), c.getCloseNo(), c.getPeriod());
         return c;
     }
 
     /**
-     * 反月结（41号审查报告 P0-2 同源整改）：CLOSED → RECONCILED，
-     * 账期解锁（ar.period.lock），原因必填并追加进 remark 记录（D-V4R-65：不再动 md_period）。
+     * 反月结（41号审查报告 同源整改）：CLOSED → RECONCILED，
+     * 账期解锁（ar.period.lock），原因必填并追加进 remark 记录（不再动 md_period）。
      */
     @Transactional(rollbackFor = Exception.class)
     public ArMonthClose unClose(Long id, String reason) {
@@ -327,29 +332,29 @@ public class ArMonthCloseService {
         String mark = "[反月结 " + stamp + " " + currentUser() + "] " + reason;
         c.setRemark(c.getRemark() == null || c.getRemark().isBlank() ? mark : c.getRemark() + "；" + mark);
         mapper.updateById(c);
-        // R5-D-214：反月结须清位关账人/关账时间（operator/closed_time）——updateById 对 null 值一律跳过，
+        // 反月结须清位关账人/关账时间（operator/closed_time）——updateById 对 null 值一律跳过，
         // 残留会让读面把"已重开"的单项继续显示成"某时刻已关闭账期"；清列走 UpdateWrapper.set(null)，
         // 操作与原因已并入 remark 记录（不删行，可回溯反月结历史）。
         mapper.update(null, new LambdaUpdateWrapper<ArMonthClose>()
                 .eq(ArMonthClose::getId, c.getId())
                 .set(ArMonthClose::getClosedTime, null)
                 .set(ArMonthClose::getOperator, null));
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("remark", c.getRemark());
         auditTrailService.recordUpdate("AR_MONTH_CLOSE", c.getId(), c.getCloseNo(), "ar_month_close",
                 String.valueOf(c.getId()), auditBefore, auditAfter, "反月结");
         periodLockService.unlock(c.getCompanyId(), c.getPeriod());
-        // D-V4R-65：与 closePeriod 对称——反月结只解本子账的账期锁，不撬 md_period
+        // 与 closePeriod 对称——反月结只解本子账的账期锁，不撬 md_period
         log.info("[arflow] {} 月结 {} 反月结，期间 {} 解锁：{}", typeName(c.getCloseType()), c.getCloseNo(), c.getPeriod(), reason);
         return c;
     }
 
     /**
-     * R5-D-218 作废（最终状态 VOID）：未关闭账期的月结单整体废弃——置 VOID、原因并入 remark
+     * 作废（最终状态 VOID）：未关闭账期的月结单整体废弃——置 VOID、原因并入 remark
      * 记录（不删行）；已关闭账期须先反月结，不能直接作废（账期锁/期间联动只在关闭账期
      * 时建立，故作废路径无需解锁，也避免误放同期间他单的锁）。
      */
@@ -372,10 +377,10 @@ public class ArMonthCloseService {
         String mark = "[作废 " + stamp + " " + currentUser() + "] " + reason;
         c.setRemark(c.getRemark() == null || c.getRemark().isBlank() ? mark : c.getRemark() + "；" + mark);
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("remark", c.getRemark());
         auditTrailService.recordUpdate("AR_MONTH_CLOSE", c.getId(), c.getCloseNo(), "ar_month_close",
@@ -407,14 +412,14 @@ public class ArMonthCloseService {
         return mapper.selectList(q.orderByDesc(ArMonthClose::getId));
     }
 
-    // ---------------- 内部 ----------------
+    // 内部
 
     private BigDecimal tolerancePct() {
         String v = configService.getValue("ar.recon.tolerance-amt-pct");
         if (v == null || v.isBlank()) {
             return BigDecimal.ZERO;
         }
-        return new BigDecimal(v.trim()).divide(BigDecimal.valueOf(100), 6, java.math.RoundingMode.HALF_UP);
+        return new BigDecimal(v.trim()).divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
     }
 
     private static String typeName(String closeType) {

@@ -10,7 +10,7 @@ import lombok.EqualsAndHashCode;
 
 /**
  * 查询方案（Variant）——保存个人常用筛选组合。
- * <p>P1-3：参考常用查询方案，每个用户可保存多套筛选方案，并设默认方案。</p>
+ * <p>参考常用查询方案，每个用户可保存多套筛选方案，并设默认方案。</p>
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

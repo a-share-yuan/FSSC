@@ -155,7 +155,7 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => loadList(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
@@ -171,7 +171,7 @@ function openRowDetail(row) {
   return showRowDetail(row, { title: t('field.detail') })
 }
 
-/* ---- Create / Edit ---- */
+/* Create / Edit */
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const saving = ref(false)
@@ -190,7 +190,7 @@ const formRules = computed(() => ({
   roleName: [{ required: true, message: t('system.role.errRoleNameRequired') }],
 }))
 
-/* ---- Menu Assignment ---- */
+/* Menu Assignment */
 const menuDialogVisible = ref(false)
 const menuLoading = ref(false)
 const menuSaving = ref(false)
@@ -198,7 +198,7 @@ const menuTreeRef = ref()
 const menuTree = ref([])
 const currentRole = ref(null)
 
-// ---- 目录树搜索 / 展开收起 / 已选清单（2026-09-17 重构） ----
+// 目录树搜索 / 展开收起 / 已选清单（2026-09-17 重构）
 const menuKeyword = ref('')
 const checkedList = ref([])
 const rootMenuIds = computed(() => menuTree.value.map((m) => m.id))
@@ -241,7 +241,7 @@ function leafOnlyIds(ids) {
   return (ids || []).filter((id) => !parentIds.has(id))
 }
 
-/* ---- 右侧已选清单：按一级业务域分组（按模块归类） ---- */
+/* 右侧已选清单：按一级业务域分组（按模块归类） */
 const rightKeyword = ref('')
 const foldedGroups = ref(new Set())
 
@@ -367,7 +367,7 @@ async function onDelete(row) {
   }
 }
 
-/* ---- Menu Assignment ---- */
+/* Menu Assignment */
 async function openAssignMenu(row) {
   currentRole.value = row
   menuDialogVisible.value = true
@@ -437,7 +437,7 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-/* ---- 分配菜单大弹窗（左树右清单） ---- */
+/* 分配菜单大弹窗（左树右清单） */
 .menu-assign { display: flex; flex-direction: column; gap: 10px; }
 .assign-tip { font-size: 13px; color: #606266; line-height: 1.5; }
 .assign-body { display: flex; gap: 12px; min-height: 420px; }

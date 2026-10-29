@@ -84,7 +84,7 @@ public class WfProjectionService {
         });
     }
 
-    // ---------------- 六个投影动作（与改造前监听器逐个 handler 一一对应） ----------------
+    // 六个投影动作（与改造前监听器逐个 handler 一一对应）
 
     /** PROCESS_STARTED → 建 wf_instance（RUNNING）。 */
     private void onProcessStarted(WfProjectionEvent e, Long tenantId) {
@@ -172,7 +172,7 @@ public class WfProjectionService {
         if (e.getTaskId() == null) {
             return;
         }
-        // D-DEC-275：只翻状态不写记录 ⇒ 追溯链上这一节凭空消失（判「尚未到达」）。
+        // 只翻状态不写记录 ⇒ 追溯链上这一节凭空消失（判「尚未到达」）。
         // 引擎删除的因由不在投影契约里（信封无 deleteReason），故按"未办理即作废"如实记，
         // 具体死因由同实例的实例级行（CANCEL / WITHDRAW / REJECTED / APPROVED）对读。
         wfQueryService.markTaskCancelled(e.getTaskId(),
@@ -187,14 +187,14 @@ public class WfProjectionService {
         wfQueryService.updateInstanceStatus(e.getProcInstId(),
                 Boolean.TRUE.equals(e.getApproved()) ? "APPROVED" : "REJECTED", LocalDateTime.now());
         // 幽灵待办办结：实例结束后会签/票签同节点兄弟任务被引擎删除，wf_task 的 PENDING 行须同步关闭
-        // D-DEC-275：关闭动作配一行作废记录，否则该节在审批链/追溯链上判「尚未到达」
+        // 关闭动作配一行作废记录，否则该节在审批链/追溯链上判「尚未到达」
         wfQueryService.closePendingTasksByInstance(e.getProcInstId(),
                 Boolean.TRUE.equals(e.getApproved())
                         ? "流程已办结，同节点未办理的会签/票签任务自动作废"
                         : "流程已按驳回结束，未办理的在办任务作废");
     }
 
-    // ---------------- 投影构造与工具 ----------------
+    // 投影构造与工具
 
     /**
      * 由事件信封构造 wf_task 投影行（字段含义与改造前监听器的 {@code buildTaskRow} 逐字一致，

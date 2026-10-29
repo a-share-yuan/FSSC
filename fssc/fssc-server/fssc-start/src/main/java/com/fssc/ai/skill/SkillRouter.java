@@ -5,6 +5,8 @@ package com.fssc.ai.skill;
 
 import com.fssc.ai.memory.SessionStore;
 import com.fssc.ai.skill.SlotExtractor.Slots;
+import java.math.RoundingMode;
+import java.util.regex.Matcher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -17,7 +19,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 确定性技能路由（P0-2）：先于模型执行，零外部依赖。
+ * 确定性技能路由：先于模型执行，零外部依赖。
  *
  * <p>判据不是"多堆关键词"，而是结构化槽位：金额/日期/状态/单号从问句抽出后交给技能声明的参数映射，
  * 产出可直接调用的动作参数。模型只在这层匹配不到时接管长尾；写技能始终只出票、不执行。
@@ -43,7 +45,7 @@ public class SkillRouter {
 
     /**
      * @param permBlocked true 表示技能本身命中了语义，但它的 backing 动作不在本人可见范围
-     *                    （权限不足）。此时不执行、也不猜别的动作，改为如实报 NO_PERM。
+     *                    权限不足。此时不执行、也不猜别的动作，改为如实报 NO_PERM。
      */
     public record Match(Skill skill, Map<String, Object> args, String reason, BigDecimal amount,
                         boolean inherited, String navRoute, boolean permBlocked) {
@@ -54,10 +56,10 @@ public class SkillRouter {
     }
 
     /**
-     * @param q            用户原话
-     * @param withWrites   指令通道=true；问数通道=false（写技能不参与）
+     * @param q 用户原话
+     * @param withWrites 指令通道=true；问数通道=false（写技能不参与）
      * @param visibleCodes 本人可见的目录动作码（技能的全部 backing 必须都在其中）
-     * @param ses          会话状态（可为空状态对象）
+     * @param ses 会话状态（可为空状态对象）
      */
     public Match route(String q, boolean withWrites, Set<String> visibleCodes, Slots slots,
                        SessionStore.SessionState ses) {
@@ -204,7 +206,7 @@ public class SkillRouter {
         if (!withWrites || ses == null || ses.getLastWriteSkill() == null) {
             return null;
         }
-        java.util.regex.Matcher cm = CHANGE.matcher(q);
+        Matcher cm = CHANGE.matcher(q);
         boolean change = cm.find();
         boolean again = AGAIN.matcher(q).find();
         if (!change && !again) {
@@ -234,7 +236,7 @@ public class SkillRouter {
     }
 
     /** 解析「改成 1200（万元）」；单位缺省按元，万元/万按一万倍。 */
-    private static BigDecimal changedAmount(java.util.regex.Matcher m) {
+    private static BigDecimal changedAmount(Matcher m) {
         if (!m.reset().find()) {
             return null;
         }
@@ -252,7 +254,7 @@ public class SkillRouter {
         if ("万元".equals(unit) || "万".equals(unit)) {
             v = v.multiply(BigDecimal.valueOf(10000));
         }
-        return v.setScale(2, java.math.RoundingMode.HALF_UP);
+        return v.setScale(2, RoundingMode.HALF_UP);
     }
 
     private static void putAmount(Map<String, Object> args, BigDecimal amount) {

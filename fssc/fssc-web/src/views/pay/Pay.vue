@@ -6,7 +6,7 @@
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
         <b>{{ $t('pay.batch.pageTitle') }}</b>
-        <!-- D-DEC-037：文案对齐「先审后付」时序——原文「出纳确认后执行付款」正是把先付后审写成操作指引，
+        <!-- 文案对齐「先审后付」时序——原文「出纳确认后执行付款」正是把先付后审写成操作指引，
              与下方 CONFIRMED 只读提示（同一缺陷的按钮）矛盾，改为「确认→审批办结→执行」。 -->
         <span style="color: #909399; font-size: 13px">{{ $t('pay.batch.hintAutoGroup') }}</span>
         <div style="margin-left: auto">
@@ -52,7 +52,7 @@
             <span v-else style="color: #e6a23c; font-size: 12px">{{ $t('pay.batch.stToPost') }}</span>
           </div>
           <span v-else style="color: #c0c4cc; font-size: 12px">—</span>
-          <!-- R5-D-079③：账证勾稽红标——「已作废却仍挂已记账凭证」「已付款却查无凭证」两组合给红色标记，
+          <!-- ③：账证勾稽红标——「已作废却仍挂已记账凭证」「已付款却查无凭证」两组合给红色标记，
                并禁止再次付款（按钮侧由下方 !row.voucherAnomaly 门控＋executeBatch 守卫，服务端 execute 另有同源强制校验） -->
           <el-tooltip v-if="row.voucherAnomaly" :content="voucherAnomalyHint(row.voucherAnomaly)" placement="top">
             <div style="display: inline-flex; align-items: center; gap: 2px; margin-top: 2px">
@@ -68,8 +68,8 @@
           <el-button v-if="canConfirm && row.status === BillStatus.DRAFT" link type="primary" @click="confirmBatch(row)">{{ $t('pay.batch.btnConfirm') }}</el-button>
           <el-button v-if="canVoid && row.status === BillStatus.DRAFT" link type="danger" @click="voidBatch(row)">{{ $t('field.void') }}</el-button>
           <el-button v-if="canExecute && row.status === BillStatus.APPROVED && !row.voucherAnomaly" link type="success" @click="executeBatch(row)">{{ $t('pay.batch.btnExecute') }}</el-button>
-          <!-- D-DEC-037：CONFIRMED＝出纳已确认、TR_PAY 审批仍在途。服务端已有两道校验（D-DEC-287 前置收窄为
-               APPROVED/FAILED ＋ D-DEC-199 打款前 hasActiveTask("TR_PAY") 复确认），此处同步撤下「执行付款」
+          <!-- CONFIRMED＝出纳已确认、TR_PAY 审批仍在途。服务端已有两道校验（前置收窄为
+               APPROVED/FAILED ＋ 打款前 hasActiveTask("TR_PAY") 复确认），此处同步撤下「执行付款」
                按钮改只读提示＝按钮，不再给出纳一个点了必被拒的付款入口（不新建校验，只对齐既有校验）。 -->
           <el-tag v-if="row.status === 'CONFIRMED'" type="warning" size="small" effect="plain">{{ $t('pay.batch.tagApproving') }}</el-tag>
           <el-button v-if="canExecute && row.status === 'FAILED' && !row.voucherAnomaly" link type="warning" @click="executeBatch(row)">{{ $t('pay.batch.btnRetryPayment') }}</el-button>
@@ -123,7 +123,7 @@
     </template>
   </el-dialog>
 
-  <!-- D-DEC-438：执行付款被拦时的拦口详情。真缺陷是「校验无出口」——原来只有一条拼好的 toast，
+  <!-- 执行付款被拦时的拦口详情。真缺陷是「校验无出口」——原来只有一条拼好的 toast，
        出纳看不出是哪条明细、缺哪一环节、该去哪个界面补，批次原地锁死在已审批态。
        本弹窗把后端同一条判据的结构化结果逐条列出：拦口原因 + 缺环节清单 + 处理出口。 -->
   <el-dialog v-model="dlgBlock" :title="$t('pay.pay.titleBlocked', { v1: blockBatchNo })" width="1000px">
@@ -136,7 +136,7 @@
       {{ $t('pay.batch.hintNoBlockDetails') }}
       {{ $t('pay.pay.txtHandlePerBackend') }}
     </div>
-    <!-- D-DEC-438：一条拦口三段读法——缺哪一张单 / 涉及哪些单据号 / 下一步走哪条正式通道 -->
+    <!-- 一条拦口三段读法——缺哪一张单 / 涉及哪些单据号 / 下一步走哪条正式通道 -->
     <div v-for="(b, bi) in blockRows" :key="b.detailId" style="border:1px solid #e4e7ed;border-radius:6px;padding:10px 12px;margin-bottom:10px">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
         <b>{{ b.billNo || $t('pay.batch.textDetailNo', { v1: b.detailId }) }}</b>
@@ -184,7 +184,7 @@
     </template>
   </el-dialog>
 
-  <!-- D-DEC-277（C1）：选待付记录成批 -->
+  <!-- C1：选待付记录成批 -->
   <el-dialog v-model="dlgPick" :title="$t('pay.batch.btnPickPending')" width="1000px" @open="loadAccounts">
     <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap">
       <el-input v-model="pickKeyword" :placeholder="$t('pay.batch.phPickKeyword')" clearable style="width: 200px"
@@ -263,14 +263,14 @@ const { t } = useI18n()
 // 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => location.reload(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
 })
 const payCm = ref(null)
 
-// ---------- 权限收敛 ----------
+// 权限收敛
 // 本页菜单是 op:pay:list（出纳付款），但页面首屏实际调用的是 pay:batch:* 系列接口，
 // 两套码不一致 → 实测 FIN_MANAGER/BIZ_FIN_MANAGER/FIN_DIRECTOR/BASE_FIN_MANAGER/PLATE_FIN_MANAGER
 // 这 5 个角色（有 op:pay:list、无 pay:batch:list）进页即弹「缺少权限：pay:batch:list」；
@@ -283,10 +283,10 @@ const canConfirm = hasPerm('pay:batch:confirm')
 const canVoid = hasPerm('pay:batch:void')
 const canExecute = hasPerm('pay:batch:execute')
 
-// D-DEC-277（C2②′）：自动组批被跳过时的面向出纳的说明
+// C2②′：自动组批被跳过时的面向出纳的说明
 const groupNotice = ref('')
 
-// R5-D-079③：账证不符红标映射与解说出处（与后端 voucherAnomaly 判据同源，两组合：
+// ③：账证不符红标映射与解说出处（与后端 voucherAnomaly 判据同源，两组合：
 // 已作废却仍挂已记账凭证 / 已付款却查无任何凭证）。红标行禁止再次付款——按钮门控＋executeBatch 守卫，
 // 服务端 execute 入口另有同源强制校验默认处理。
 const VOUCHER_ANOMALY_LABEL = computed(() => ({
@@ -302,7 +302,7 @@ function voucherAnomalyHint(code) {
     : t('pay.batch.anomalyPaidNoVoucherMsg')
 }
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -322,7 +322,7 @@ const bankAccounts = ref([])
 async function load() {
   // 无 pay:batch:list（如只有 op:pay:list 的财务经理类角色）：不请求接口，页面显示无权限空态
   if (!canList) return
-  // D-DEC-099：本方法改为纯读。原先在列表加载里调 autoGroup()——读动作带写副作用，
+  // 本方法改为纯读。原先在列表加载里调 autoGroup()——读动作带写副作用，
   // 批次生成时点与审批时点解耦（实测差 1 小时 46 分），且不持 pay:batch:create 的出纳（CASHIER）
   // 永远组不出批次。组批现由服务端在单据审批通过收尾时触发（PayBatchAutoGroupListener），
   // 页面只负责看；需要手工补组时用「立即组批」显式触发（仍限建批权限）。
@@ -335,14 +335,14 @@ async function load() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// D-DEC-099：手工默认处理的组批入口（显式点击才写数据）。服务端收尾已覆盖常态，
+// 手工默认处理的组批入口（显式点击才写数据）。服务端收尾已覆盖常态，
 // 这里只处理历史遗留/收尾异常留下的 WAITING 记录。
 async function groupNow() {
   if (!canCreate) return
   try {
     const g = (await payApi.autoGroup()) || { batchCount: 0, skippedReasons: [] }
     if (g.batchCount > 0) ElMessage.success(t('pay.batch.msgGrouped', { v1: g.batchCount }))
-    // D-DEC-277（C2②′）：缺默认出账账户造成的"没建批"原先只写后端日志，界面上表现为批次凭空不变多。
+    // C2②′：缺默认出账账户造成的"没建批"原先只写后端日志，界面上表现为批次凭空不变多。
     // 现在把原因摊在页面顶部（不用 toast，避免每次刷新都打断操作）。
     groupNotice.value = (g.skippedReasons || [])[0] || ''
     if (!(g.batchCount > 0) && !groupNotice.value) ElMessage.info(t('pay.batch.msgNothingToGroup'))
@@ -350,7 +350,7 @@ async function groupNow() {
   await load()
 }
 
-// ---------- D-DEC-277（C1）：选待付记录一步成批 ----------
+// C1：选待付记录一步成批
 // 原先这里是"先建空批次（账户取本公司任一账户默认处理）→ 再逐笔挂明细"，而挂明细接口 payApi.addDetail
 // 在本页从未被调用过，所以手工建出的批次永远是 0 笔、确认时被空批校验拒掉，等于没有出口。
 // 现在改为在待付清单里勾选记录、一次请求成批；出账账户可显式选择，不选就用本公司默认账户，
@@ -454,18 +454,18 @@ async function voidBatch(row) {
 }
 
 async function executeBatch(row) {
-  // R5-D-079③：账证不符（红标）批次禁止再次付款——前端硬停（服务端 execute 入口有同源强制校验，
+  // ③：账证不符（红标）批次禁止再次付款——前端硬停（服务端 execute 入口有同源强制校验，
   // 此处只是把白跑一趟的网络往返与后端异常提示前置）。核对补平后红标消失，自然恢复可付。
   if (row.voucherAnomaly) {
     ElMessageBox.alert(voucherAnomalyHint(row.voucherAnomaly), t('pay.batch.ctxAnomalyTitle'), { type: 'error' })
     return
   }
-  // D-DEC-438：执行付款被拦时（后端抛 BizException → code!=0 → api.js 拦截器 reject），
+  // 执行付款被拦时（后端抛 BizException → code!=0 → api.js 拦截器 reject），
   // 不再只留一条 toast：额外调只读拦口报告，把「哪条明细 / 缺哪一环节 / 去哪儿补」逐条摆出来。
   // 本改动不放宽那道校验，只是给它一个看得见的出口。
   try {
     const result = await payApi.execute(row.id)
-    // D-DEC-088（X-39 丙）：DEFERRED＝收款账号未经供应商档案核对，整批<b>未提交银企</b>、
+    // X-39 丙：DEFERRED＝收款账号未经供应商档案核对，整批<b>未提交银企</b>、
     // 批次状态未动 ⇒ 绝不能报"付款执行完成"。同样走拦口弹窗看逐条缺档明细与补录出口。
     if (result === 'DEFERRED') {
       await openBlockReport(row, { message: t('pay.batch.msgBankNotSubmitted') })
@@ -480,7 +480,7 @@ async function executeBatch(row) {
   load()
 }
 
-/** D-DEC-438 拦口详情弹窗状态 */
+/** 拦口详情弹窗状态 */
 const dlgBlock = ref(false)
 const blockRows = ref([])
 const blockBatchNo = ref('')
@@ -505,7 +505,7 @@ function missingLegNames(b) {
 }
 
 /**
- * D-DEC-438：拦口 → 可走的正式通道。校验本身不提供放行出口，所以每条拦口都要落到
+ * 拦口 → 可走的正式通道。校验本身不提供放行出口，所以每条拦口都要落到
  * 「补齐后重试」之外的真路子：发票未到的可先付（费用预付款，票到冲销），
  * 按合同/发票到期日排期的走采购付款计划。
  */
@@ -521,7 +521,7 @@ function blockChannels(b) {
     out.push(t('pay.batch.exitLegMissing'))
   }
   if (has('RECON_UNCONFIRMED')) out.push(t('pay.batch.exitReconUnconfirmed'))
-  // D-DEC-088（X-39 丙）：账号"无出处"＝整批暂缓提交银企（DEFERRED），补档案后原地重试，不写 FAILED
+  // X-39 丙：账号"无出处"＝整批暂缓提交银企（DEFERRED），补档案后原地重试，不写 FAILED
   if (has('PAYEE_ACCOUNT_NOT_ARCHIVED')) out.push(t('pay.batch.exitAccountNotArchived'))
   if (has('BANK_ACCOUNT_MISSING')) out.push(t('pay.batch.exitAccountEmpty'))
   if (has('SUPPLIER_BLACKLISTED', 'SUPPLIER_DISABLED')) out.push(t('pay.batch.exitBlacklisted'))
@@ -531,7 +531,7 @@ function blockChannels(b) {
 }
 
 /**
- * G2R-03（2026-10-19）：顶部「处理出口」此前恒取 pay.batch.hintNoBypass（三单匹配规则），
+ * G2R-03：顶部「处理出口」此前恒取 pay.batch.hintNoBypass（三单匹配规则），
  * 反欺诈／供应商停用／账号未核档等非三单匹配校验被拦时，出纳按提示去补 PO／合同／发票，
  * 永远解不掉校验。此处按后端拦截原文识别校验类型，给出对应的真出口。
  */
@@ -588,7 +588,7 @@ function openVoucher(row) {
   }
 }
 
-// D-DEC-026＋102（枚举直接显示·第三类根因＝列配置写在 JS）：
+// ＋102（枚举直接显示·第三类根因＝列配置写在 JS）：
 // 表格里的状态列已经过 billStatusLabel 翻档，但本页两处导出走的是 JS 列配置——
 // 单元格直接把库中枚举码（CONFIRMED/APPROVED/PAID/FAILED…）写进 CSV，出纳拿到的文件仍是英文，
 // 同一份数据在屏上中文、在导出里英文＝两套规则。这里只在显示层映射，库里存的值不动。
@@ -641,7 +641,7 @@ function batchExport() {
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
   if (!keys.length) { ElMessage.warning(t('pay.shared.msgNoColumns')); return }
   const header = keys.join(',')
-  // D-DEC-026＋102：全字段导出同样过一遍显示层枚举映射（status／billStatus／voucherStatus／payFlowStatus）
+  // ＋102：全字段导出同样过一遍显示层枚举映射（status／billStatus／voucherStatus／payFlowStatus）
   const lines = selRows.value.map((row) => keys.map((k) => csvCell(k, row[k])).join(','))
   const csv = '\ufeff' + [header, ...lines].join('\r\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -653,7 +653,7 @@ function batchExport() {
 }
 
 
-// R4-06: Show guide on first visit
+// Show guide on first visit
 const _guideKey = 'fssc_guide_payCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => payCm.value?.show(), 800) } } catch {}
 // InlineActions handlers

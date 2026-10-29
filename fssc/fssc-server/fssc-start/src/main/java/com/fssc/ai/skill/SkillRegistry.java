@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 技能注册表加载器（P0-1）。
+ * 技能注册表加载器。
  *
  * <p>产物由 {@code scripts/ai/build-skill-registry.js} 生成并打包进 classpath。启动时按动作目录再校验一次：
  * backing 必须存在、aiAllowed=true、kind 与技能类型一致。不合格的技能被剔除（fail-closed），

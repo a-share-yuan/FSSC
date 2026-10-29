@@ -90,7 +90,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <!-- D-DEC-025：上传人显姓名（uploadByName 服务端批量反查 sys_user），空显「—」不显裸 id -->
+            <!-- 上传人显姓名（uploadByName 服务端批量反查 sys_user），空显「—」不显裸 id -->
             <el-table-column label="上传人" width="90">
               <template #default="{ row }">{{ row.uploadByName || '—' }}</template>
             </el-table-column>
@@ -146,7 +146,7 @@
         <el-tab-pane :label="`审批历史 (${history.length})`" name="history">
           <el-alert v-if="!canViewHistory" type="info" :closable="false" show-icon
                     title="当前账号无查看审批历史的权限，请联系管理员开通。" />
-          <!-- D-DEC-086：查询失败要说"取不到"，不能空着让人以为"没有" -->
+          <!-- 查询失败要说"取不到"，不能空着让人以为"没有" -->
           <el-alert v-else-if="historyError" type="error" :closable="false" show-icon
                     :title="`审批历史加载失败：${historyError}`">
             <div style="font-size:12px; color:#606266; line-height:20px">
@@ -250,7 +250,7 @@ const bill = ref(null)
 const lines = ref([])
 const attaches = ref([])
 const history = ref([])
-// D-DEC-086：审批历史查询失败的原因（空＝没失败过）。查询失败与"真的没有记录"必须分开呈现，
+// 审批历史查询失败的原因（空＝没失败过）。查询失败与"真的没有记录"必须分开呈现，
 // 否则前序环节明明有记录，界面却对谁说"暂无审批记录"。
 const historyError = ref('')
 const invoices = ref([])
@@ -288,7 +288,7 @@ function sumLine({ columns, data }) {
 }
 
 /**
- * D-DEC-023：招待三项（接待对象 / 接待人数 / 人均标准）详情渲染，查询范围见 utils/format.js。
+ * 招待三项（接待对象 / 接待人数 / 人均标准）详情渲染，查询范围见 utils/format.js。
  */
 const hasEntertainLine = computed(() => hasEntertainLines(lines.value))
 
@@ -354,7 +354,7 @@ async function load() {
 }
 
 /**
- * 审批历史查询（D-DEC-086）。
+ * 审批历史查询。
  * 与旧实现的区别：失败不再等价于「暂无审批记录」——把原因留在时间线位置上，给一句实话和重试入口，
  * 让办理人能自证"是取不到，不是没有"。
  */

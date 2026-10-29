@@ -3,23 +3,42 @@
 
 package com.fssc.arflow.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.arflow.entity.ArClaim;
+import com.fssc.arflow.entity.ArDispatchRule;
+import com.fssc.arflow.entity.ArEbsAdjust;
 import com.fssc.arflow.entity.ArInvoiceRule;
 import com.fssc.arflow.entity.ArMailNotifyLog;
 import com.fssc.arflow.entity.ArMailPackage;
 import com.fssc.arflow.entity.ArMailRecipient;
 import com.fssc.arflow.entity.ArPreInvoice;
 import com.fssc.arflow.entity.ArStatement;
+import com.fssc.arflow.mapper.ArInvoiceRuleMapper;
 import com.fssc.arflow.service.ArClaimService;
+import com.fssc.arflow.service.ArDispatchService;
+import com.fssc.arflow.service.ArEbsAdjustService;
 import com.fssc.arflow.service.ArMailPackageService;
 import com.fssc.arflow.service.ArMailRecipientService;
+import com.fssc.arflow.service.ArOffsetExcelService;
 import com.fssc.arflow.service.ArPreInvoiceService;
+import com.fssc.arflow.service.ArReceiptExcelService;
+import com.fssc.arflow.service.ArStatementExcelService;
 import com.fssc.arflow.service.ArStatementService;
 import com.fssc.common.core.Result;
+import com.fssc.customer.entity.CrmCustomer;
+import com.fssc.customer.mapper.CrmCustomerMapper;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.masterdata.entity.MdSubject;
 import com.fssc.masterdata.service.SubjectService;
+import com.fssc.receivable.entity.RcReceipt;
+import com.fssc.receivable.entity.RcReceiptLine;
+import com.fssc.receivable.entity.RcReceivable;
+import com.fssc.receivable.mapper.RcReceivableMapper;
+import com.fssc.receivable.service.RcReceiptService;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -45,17 +64,17 @@ public class ArFlowController {
     private final ArMailPackageService mailPackageService;
     private final ArMailRecipientService mailRecipientService;
     private final SubjectService subjectService;
-    private final com.fssc.arflow.mapper.ArInvoiceRuleMapper ruleMapper;
-    private final com.fssc.arflow.service.ArReceiptExcelService receiptExcelService;
-    private final com.fssc.receivable.service.RcReceiptService rcReceiptService;
-    private final com.fssc.customer.mapper.CrmCustomerMapper crmCustomerMapper;
-    private final com.fssc.arflow.service.ArStatementExcelService statementExcelService;
-    private final com.fssc.arflow.service.ArOffsetExcelService offsetExcelService;
-    private final com.fssc.arflow.service.ArEbsAdjustService ebsAdjustService;
-    private final com.fssc.arflow.service.ArDispatchService dispatchService;
-    private final com.fssc.receivable.mapper.RcReceivableMapper rcReceivableMapper;
+    private final ArInvoiceRuleMapper ruleMapper;
+    private final ArReceiptExcelService receiptExcelService;
+    private final RcReceiptService rcReceiptService;
+    private final CrmCustomerMapper crmCustomerMapper;
+    private final ArStatementExcelService statementExcelService;
+    private final ArOffsetExcelService offsetExcelService;
+    private final ArEbsAdjustService ebsAdjustService;
+    private final ArDispatchService dispatchService;
+    private final RcReceivableMapper rcReceivableMapper;
 
-    // ---------------- 对账单 ----------------
+    // 对账单
 
     @RequiresPerm("arflow:billing:manage")
     @GetMapping("/statements")
@@ -92,7 +111,7 @@ public class ArFlowController {
         return Result.success(statementService.adjust(id, (String) body.get("note")));
     }
 
-    // ---------------- 预制发票 ----------------
+    // 预制发票
 
     @RequiresPerm("arflow:billing:manage")
     @GetMapping("/pre-invoices")
@@ -181,7 +200,7 @@ public class ArFlowController {
         return Result.success(preInvoiceService.preCheck(id, matched, (String) body.get("note")));
     }
 
-    // ---------------- 服务申请单（10类） ----------------
+    // 服务申请单（10类）
 
     @RequiresPerm("arflow:claim:manage")
     @GetMapping("/claims")
@@ -207,18 +226,18 @@ public class ArFlowController {
         return Result.success(offsetExcelService.importAndCreate(file, reason));
     }
 
-    // ---------------- AR接口2/4：ERP 推送 ----------------
+    // AR接口2/4：ERP 推送
 
     /** 接口2 财务调整数据推送：body {adjustNo, customerCode, adjustType, amount, taxAmount, ebsVoucherNo, statementNo}，关联异常对账单自动重核 */
     @OperLog(module = "AR_FLOW", operType = "ADD", desc = "外部财务系统财务调整推送")
     @RequiresPerm("arflow:billing:manage")
     @PostMapping("/ebs-adjustments")
-    public Result<com.fssc.arflow.entity.ArEbsAdjust> pushAdjust(@RequestBody Map<String, Object> body) {
+    public Result<ArEbsAdjust> pushAdjust(@RequestBody Map<String, Object> body) {
         return Result.success(ebsAdjustService.pushAdjust(body));
     }
 
     @GetMapping("/ebs-adjustments")
-    public Result<List<com.fssc.arflow.entity.ArEbsAdjust>> adjusts(@RequestParam(required = false) String customerCode) {
+    public Result<List<ArEbsAdjust>> adjusts(@RequestParam(required = false) String customerCode) {
         return Result.success(ebsAdjustService.adjusts(customerCode));
     }
 
@@ -230,18 +249,18 @@ public class ArFlowController {
         return Result.success(ebsAdjustService.pushRedInvoice(body));
     }
 
-    // ---------------- AR派工规则（蓝图5.2） ----------------
+    // AR派工规则（蓝图5.2）
 
     @RequiresPerm("ar:dispatch:manage")
     @GetMapping("/dispatch-rules")
-    public Result<List<com.fssc.arflow.entity.ArDispatchRule>> dispatchRules() {
+    public Result<List<ArDispatchRule>> dispatchRules() {
         return Result.success(dispatchService.rules());
     }
 
     @OperLog(module = "AR_FLOW", operType = "UPDATE", desc = "保存AR派工规则")
     @RequiresPerm("ar:dispatch:manage")
     @PostMapping("/dispatch-rules")
-    public Result<com.fssc.arflow.entity.ArDispatchRule> saveDispatchRule(@RequestBody com.fssc.arflow.entity.ArDispatchRule rule) {
+    public Result<ArDispatchRule> saveDispatchRule(@RequestBody ArDispatchRule rule) {
         return Result.success(dispatchService.saveRule(rule));
     }
 
@@ -299,7 +318,7 @@ public class ArFlowController {
         return Result.success(claimService.complete(id));
     }
 
-    // ---------------- 邮包 ----------------
+    // 邮包
 
     @RequiresPerm("arflow:billing:manage")
     @GetMapping("/mail-packages")
@@ -341,7 +360,7 @@ public class ArFlowController {
         return Result.success(mailPackageService.archive(id));
     }
 
-    // ---------------- 邮包收件人地址簿 / 邮件记录 ----------------
+    // 邮包收件人地址簿 / 邮件记录
 
     @RequiresPerm("arflow:billing:manage")
     @GetMapping("/mail-recipients")
@@ -379,7 +398,7 @@ public class ArFlowController {
         return Result.success(mailPackageService.notifyLogs(packageNo, status));
     }
 
-    // ---------------- 会计科目选项（应收补录科目等） ----------------
+    // 会计科目选项（应收补录科目等）
 
     /** 可选叶子科目：本公司科目 ∪ 租户共享科目，仅启用状态；返回编码+名称供下拉。 */
     @RequiresPerm({"arflow:billing:manage", "arflow:claim:manage"})
@@ -389,12 +408,12 @@ public class ArFlowController {
         return Result.success(subjectService.options(companyId, keyword));
     }
 
-    // ---------------- 客户开票规则 ----------------
+    // 客户开票规则
 
     @RequiresPerm("arflow:billing:manage")
     @GetMapping("/invoice-rules")
     public Result<List<ArInvoiceRule>> invoiceRules() {
-        return Result.success(ruleMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ArInvoiceRule>()
+        return Result.success(ruleMapper.selectList(new LambdaQueryWrapper<ArInvoiceRule>()
                 .orderByAsc(ArInvoiceRule::getCustomerCode)));
     }
 
@@ -422,40 +441,40 @@ public class ArFlowController {
     @RequiresPerm("arflow:writeoff:manage")
     @PostMapping(value = "/receipts/import-excel", consumes = {"multipart/form-data"})
     public Result<Map<String, Object>> importReceiptExcel(@RequestParam("file") MultipartFile file) throws Exception {
-        com.fssc.arflow.service.ArReceiptExcelService.ParseResult parsed = receiptExcelService.parse(file);
+        ArReceiptExcelService.ParseResult parsed = receiptExcelService.parse(file);
         int created = 0;
         for (Map<String, Object> row : parsed.rows()) {
             try {
                 String customerName = (String) row.get("customerName");
-                com.fssc.customer.entity.CrmCustomer cust = crmCustomerMapper.selectOne(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.customer.entity.CrmCustomer>()
-                                .eq(com.fssc.customer.entity.CrmCustomer::getCustomerName, customerName)
+                CrmCustomer cust = crmCustomerMapper.selectOne(
+                        new LambdaQueryWrapper<CrmCustomer>()
+                                .eq(CrmCustomer::getCustomerName, customerName)
                                 .last("LIMIT 1"));
                 if (cust == null) {
                     throw new BizExceptionLike("客户 " + customerName + " 不存在于客户主数据");
                 }
-                com.fssc.receivable.entity.RcReceipt r = new com.fssc.receivable.entity.RcReceipt();
+                RcReceipt r = new RcReceipt();
                 r.setCustomerId(cust.getId());
                 Object no = row.get("receiptNo");
                 r.setBillNo(no == null ? null : String.valueOf(no));
                 Object rd = row.get("receiptDate");
-                r.setReceiptDate(rd == null ? java.time.LocalDate.now() : (java.time.LocalDate) rd);
+                r.setReceiptDate(rd == null ? LocalDate.now() : (LocalDate) rd);
                 Object amt = row.get("amount");
-                r.setAmount(new java.math.BigDecimal(String.valueOf(amt)));
+                r.setAmount(new BigDecimal(String.valueOf(amt)));
                 String invoiceNo = (String) row.get("invoiceNo");
                 if (invoiceNo != null && !invoiceNo.isBlank()) {
-                    com.fssc.receivable.entity.RcReceivable rec = rcReceivableMapper.selectOne(
-                            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.receivable.entity.RcReceivable>()
-                                    .eq(com.fssc.receivable.entity.RcReceivable::getBillNo, "AR-INV-" + invoiceNo.trim())
+                    RcReceivable rec = rcReceivableMapper.selectOne(
+                            new LambdaQueryWrapper<RcReceivable>()
+                                    .eq(RcReceivable::getBillNo, "AR-INV-" + invoiceNo.trim())
                                     .last("LIMIT 1"));
                     if (rec == null) {
                         throw new BizExceptionLike("发票号 " + invoiceNo + " 未找到应收单（AR-INV-" + invoiceNo + "）");
                     }
-                    com.fssc.receivable.entity.RcReceiptLine line = new com.fssc.receivable.entity.RcReceiptLine();
+                    RcReceiptLine line = new RcReceiptLine();
                     line.setReceivableId(rec.getId());
                     Object off = row.get("offsetAmount");
-                    line.setOffsetAmount(off == null ? r.getAmount() : new java.math.BigDecimal(String.valueOf(off)));
-                    java.util.List<com.fssc.receivable.entity.RcReceiptLine> lines = new java.util.ArrayList<>();
+                    line.setOffsetAmount(off == null ? r.getAmount() : new BigDecimal(String.valueOf(off)));
+                    List<RcReceiptLine> lines = new ArrayList<>();
                     lines.add(line);
                     r.setLines(lines);
                 }
@@ -466,7 +485,7 @@ public class ArFlowController {
                 parsed.errors().add("第" + row.get("_excelRow") + "行核销失败：" + e.getMessage());
             }
         }
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("created", created);
         out.put("errors", parsed.errors());
         return Result.success(out);

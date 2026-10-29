@@ -4,6 +4,7 @@
 package com.fssc.platform.service;
 
 import com.fssc.framework.tenant.TenantContext;
+import java.sql.Date;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -31,24 +32,24 @@ public class PlatformHealthService {
         TenantContext.runIgnoreTenant(() -> {
             LocalDate today = LocalDate.now();
 
-            // ---------- 租户概览（pf_tenant，平台表白名单，无需租户条件） ----------
+            // 租户概览（pf_tenant，平台表白名单，无需租户条件）
             result.put("totalTenants", count("select count(*) from pf_tenant where del_flag = 0"));
             result.put("normalTenants", count("select count(*) from pf_tenant where del_flag = 0 and status = 'NORMAL'"));
             result.put("frozenTenants", count("select count(*) from pf_tenant where del_flag = 0 and status = 'FROZEN'"));
             result.put("expiringSoon", count("select count(*) from pf_tenant where del_flag = 0 and status = 'NORMAL' "
                     + "and expire_time >= now() and expire_time <= date_add(now(), interval 30 day)"));
 
-            // ---------- 活跃租户（近 7 天 pf_tenant_stat 有记录） ----------
+            // 活跃租户（近 7 天 pf_tenant_stat 有记录）
             result.put("activeTenants7d", count("select count(distinct ref_tenant_id) from pf_tenant_stat where stat_date >= ?",
                     today.minusDays(7)));
 
-            // ---------- 今日操作量（跨租户 sys_oper_log 今日计数） ----------
+            // 今日操作量（跨租户 sys_oper_log 今日计数）
             result.put("todayOperCount", count("select count(*) from sys_oper_log where date(oper_time) = curdate()"));
 
-            // ---------- 运行中流程实例（wf_instance status=RUNNING，等价 ACT_RU_EXECUTION 在途规则） ----------
+            // 运行中流程实例（wf_instance status=RUNNING，等价 ACT_RU_EXECUTION 在途规则）
             result.put("runningInstances", count("select count(*) from wf_instance where status = 'RUNNING'"));
 
-            // ---------- 近 7 天每日：活跃租户数 + 单据增量（bill_count 日快照做差） ----------
+            // 近 7 天每日：活跃租户数 + 单据增量（bill_count 日快照做差）
             LocalDate winFrom = today.minusDays(7);
             List<Map<String, Object>> daily = jdbcTemplate.queryForList(
                     "select stat_date, count(distinct ref_tenant_id) as active_tenants, "
@@ -80,7 +81,7 @@ public class PlatformHealthService {
         return result;
     }
 
-    // ---------- 工具 ----------
+    // 工具
 
     private long count(String sql, Object... args) {
         Long n = jdbcTemplate.queryForObject(sql, Long.class, args);
@@ -92,7 +93,7 @@ public class PlatformHealthService {
     }
 
     private static LocalDate toDate(Object v) {
-        if (v instanceof java.sql.Date sd) {
+        if (v instanceof Date sd) {
             return sd.toLocalDate();
         }
         return LocalDate.parse(String.valueOf(v));

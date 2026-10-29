@@ -10,10 +10,17 @@ import com.fssc.compliance.entity.PrecheckResult;
 import com.fssc.compliance.entity.ReviewRule;
 import com.fssc.compliance.mapper.PrecheckResultMapper;
 import com.fssc.compliance.mapper.ReviewRuleMapper;
+import com.fssc.expense.entity.ExpBillAttach;
+import com.fssc.expense.mapper.ExpBillAttachMapper;
 import com.fssc.framework.facade.ImageFacade;
 import com.fssc.framework.tenant.TenantContext;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,11 +37,11 @@ public class PrecheckEngineService {
 
     private final ReviewRuleMapper reviewRuleMapper;
     private final PrecheckResultMapper precheckResultMapper;
-    private final com.fssc.expense.mapper.ExpBillAttachMapper expBillAttachMapper;
+    private final ExpBillAttachMapper expBillAttachMapper;
     /** 票面键/票号查重经影像域 Facade（服务化断点）：本类不再直连 fssc_image 库 */
     private final ImageFacade imageFacade;
-    @org.springframework.beans.factory.annotation.Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     public List<ReviewRule> listRules(String category, String status) {
         LambdaQueryWrapper<ReviewRule> qw = new LambdaQueryWrapper<>();
@@ -196,7 +203,7 @@ public class PrecheckEngineService {
      * （此前仅注入 4 个标量，INVOICE 类规则拿不到 invoiceNumber 而空转放行）。
      */
     private Map<String, Object> buildInputData(Long billId, String billType, String expenseType, Long employeeId) {
-        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        Map<String, Object> data = new LinkedHashMap<>();
         data.put("billId", billId != null ? billId : "");
         data.put("billType", billType != null ? billType : "");
         data.put("expenseType", expenseType != null ? expenseType : "");
@@ -204,10 +211,10 @@ public class PrecheckEngineService {
         if (billId == null) return data;
         try {
             List<Long> fileIds = expBillAttachMapper.selectList(
-                            new LambdaQueryWrapper<com.fssc.expense.entity.ExpBillAttach>()
-                                    .eq(com.fssc.expense.entity.ExpBillAttach::getBillId, billId))
-                    .stream().map(com.fssc.expense.entity.ExpBillAttach::getFileId)
-                    .filter(java.util.Objects::nonNull).distinct().toList();
+                            new LambdaQueryWrapper<ExpBillAttach>()
+                                    .eq(ExpBillAttach::getBillId, billId))
+                    .stream().map(ExpBillAttach::getFileId)
+                    .filter(Objects::nonNull).distinct().toList();
             data.put("hasAttachment", !fileIds.isEmpty());
             if (!fileIds.isEmpty()) {
                 Map<String, Object> r = imageFacade.latestInvoiceKeysByFileIds(TenantContext.getTenantId(), fileIds);
@@ -329,7 +336,7 @@ public class PrecheckEngineService {
         }
     }
 
-    // ---- 复合表达式（支持 && / ||） ----
+    // 复合表达式（支持 && / ||）
 
     private boolean evaluateCompoundExpression(String expr, Map<String, Object> data) {
         expr = expr.trim();
@@ -401,7 +408,7 @@ public class PrecheckEngineService {
         return -1;
     }
 
-    // ---- 原子表达式求值 ----
+    // 原子表达式求值
 
     private boolean evaluateAtomicExpression(String expr, Map<String, Object> data) {
         expr = expr.trim();
@@ -421,7 +428,7 @@ public class PrecheckEngineService {
             return evaluateCompoundExpression(expr.substring(1, expr.length() - 1), data);
         }
 
-        // === 函数调用风格 ===
+        // 函数调用风格
         // contains(str, substr)
         if (expr.startsWith("contains(") && expr.endsWith(")")) {
             String args = expr.substring(9, expr.length() - 1);
@@ -454,7 +461,7 @@ public class PrecheckEngineService {
             return data != null && data.containsKey(arg) && data.get(arg) != null;
         }
 
-        // === in 操作符 ===  value in (a, b, c)
+        // in 操作符 === value in (a, b, c)
         int inIdx = findTopLevelKeyword(expr, "in");
         if (inIdx >= 0) {
             String left = expr.substring(0, inIdx).trim();
@@ -462,7 +469,7 @@ public class PrecheckEngineService {
             return evaluateIn(left, right, data);
         }
 
-        // === 标准二元比较 ===
+        // 标准二元比较
         return evaluateBinaryExpression(expr, data);
     }
 
@@ -528,7 +535,7 @@ public class PrecheckEngineService {
         };
     }
 
-    // ---- 函数类操作 ----
+    // 函数类操作
 
     private boolean evaluateContains(String args, Map<String, Object> data) {
         // contains(str, substr) or contains(field, "literal")
@@ -589,7 +596,7 @@ public class PrecheckEngineService {
         return false;
     }
 
-    // ---- 工具 ----
+    // 工具
 
     /** 在顶层查找关键字（不在字符串或括号内） */
     private int findTopLevelKeyword(String expr, String keyword) {
@@ -872,7 +879,7 @@ public class PrecheckEngineService {
                 try {
                     LocalDateTime expDate = LocalDateTime.parse(expenseDate.toString());
                     LocalDateTime subDate = LocalDateTime.parse(submitDate.toString());
-                    long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(expDate, subDate);
+                    long daysBetween = ChronoUnit.DAYS.between(expDate, subDate);
                     int maxAllowed = maxDays != null ? Integer.parseInt(maxDays.toString()) : 30;
                     if (daysBetween > maxAllowed) {
                         log.warn("提交超时: daysBetween={}, maxAllowed={}", daysBetween, maxAllowed);
@@ -890,7 +897,7 @@ public class PrecheckEngineService {
                 try {
                     LocalDateTime expDate = LocalDateTime.parse(expenseDate.toString());
                     LocalDateTime subDate = LocalDateTime.parse(submitDate.toString());
-                    long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(expDate, subDate);
+                    long daysBetween = ChronoUnit.DAYS.between(expDate, subDate);
                     int hardLimit = 90;
                     if (daysBetween > hardLimit) {
                         log.warn("严重逾期提交: daysBetween={}", daysBetween);
@@ -995,7 +1002,7 @@ public class PrecheckEngineService {
         return true;
     }
 
-    // ========== 批量操作 ==========
+    // 批量操作
 
     @Transactional(rollbackFor = Exception.class)
     public void batchEnable(List<Long> ids) {
@@ -1015,11 +1022,11 @@ public class PrecheckEngineService {
         log.info("批量删除预检规则: ids={}", ids);
     }
 
-    // ========== 脚本验证 ==========
+    // 脚本验证
 
     /** 验证脚本语法并返响应行结果，不持久化 */
     public Map<String, Object> validateScript(String scriptContent, Map<String, Object> sampleData) {
-        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        Map<String, Object> result = new LinkedHashMap<>();
         result.put("script", scriptContent);
         result.put("sampleData", sampleData);
 
@@ -1050,7 +1057,7 @@ public class PrecheckEngineService {
         return result;
     }
 
-    /******************************** P0-5 无纸化准入（TC04） ********************************/
+    /******************************** 无纸化准入（TC04） */
 
     /**
      * 无纸化准入结果：eligible=true 可走无纸化（免实物）；否则需纸质交单。
@@ -1069,7 +1076,7 @@ public class PrecheckEngineService {
     }
 
     /**
-     * P0-5 无纸化准入校验（模板 TC04）：
+     * 无纸化准入校验（模板 TC04）：
      * <ul>
      *   <li>电子发票（专票/普票） + 电汇/银行转账付款 → 可无纸化，无需交实物</li>
      *   <li>纸质发票 → 禁止无纸化，必须交实物</li>
@@ -1077,7 +1084,7 @@ public class PrecheckEngineService {
      * </ul>
      * @param invoiceKind 发票介质：ELECTRONIC 电子 / PAPER 纸质 / null 未知
      * @param invoiceType 发票类型：SPECIAL 专票 / NORMAL 普票 / 其他
-     * @param payMethod   付款方式：BANK/TT/电汇 视为电子转账；CASH 现金视为非电汇
+     * @param payMethod 付款方式：BANK/TT/电汇 视为电子转账；CASH 现金视为非电汇
      */
     public PaperlessEligibility checkPaperlessEligibility(String invoiceKind, String invoiceType, String payMethod) {
         // 纸质发票禁止无纸化

@@ -3,11 +3,13 @@
 
 package com.fssc.workflow.action;
 
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.masterdata.entity.MdBankAccount;
 import com.fssc.masterdata.mapper.MdBankAccountMapper;
 import com.fssc.sharing.entity.OpPayBatch;
 import com.fssc.sharing.mapper.OpPayBatchMapper;
 import com.fssc.sharing.service.VoucherService;
+import com.fssc.system.service.NumberRuleService;
 import com.fssc.treasury.entity.TrBillSettle;
 import com.fssc.treasury.entity.TrCreditBill;
 import com.fssc.treasury.entity.TrFundPlan;
@@ -18,6 +20,10 @@ import com.fssc.treasury.mapper.TrFundPlanMapper;
 import com.fssc.treasury.mapper.TrTransferMapper;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -25,7 +31,7 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 资金域审批收尾（P0-1 事件编排总线 + P0-2 凭证引擎接线）。
+ * 资金域审批收尾（事件编排总线 + 凭证引擎接线）。
  * <p>
  * 覆盖 TR_TRANSFER / TR_UPLOAD / TR_RECEIPT / TR_BILL / TR_PAY_FAIL /
  * TR_BANK_MASTER / TR_SEAL_CHANGE / TR_PLAN_ADJUST 八类资金域流程。
@@ -53,9 +59,9 @@ public class TreasuryBizAction implements WfBizAction {
     private final OpPayBatchMapper opPayBatchMapper;
     private final MdBankAccountMapper mdBankAccountMapper;
     private final VoucherService voucherService;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    private final NumberRuleService numberRuleService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -103,15 +109,15 @@ public class TreasuryBizAction implements WfBizAction {
         }
         try {
             if (approved) {
-                // P4-3 审计扩面：改状态前采集旧值
+                // 审计扩面：改状态前采集旧值
                 String oldStatus = t.getStatus();
                 TrTransfer upd = new TrTransfer();
                 upd.setId(id);
                 upd.setStatus("APPROVED");
                 trTransferMapper.updateById(upd);
-                java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditBefore = new LinkedHashMap<>();
                 auditBefore.put("status", oldStatus);
-                java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
                 auditTrailService.recordUpdate(event.getBizType(), id, t.getTransferNo(), "tr_transfer",
                         String.valueOf(id), auditBefore, auditAfter,
@@ -141,21 +147,21 @@ public class TreasuryBizAction implements WfBizAction {
         }
         try {
             if (approved) {
-                // P4-3 审计扩面：改状态前采集旧值
+                // 审计扩面：改状态前采集旧值
                 String oldStatus = b.getStatus();
                 TrCreditBill upd = new TrCreditBill();
                 upd.setId(id);
                 upd.setStatus("RECONCILED");
-                // D-DEC-421 甲案：状态翻档同处补写核销双列——此前薄更新只带 id＋status，
+                // 甲案：状态翻档同处补写核销双列——此前薄更新只带 id＋status，
                 // recon_flag/recon_time 恒 0/NULL，按这两列查询的报表与去重判断永远看不到这笔到账
                 upd.setReconFlag(Boolean.TRUE);
-                upd.setReconTime(java.time.LocalDateTime.now());
+                upd.setReconTime(LocalDateTime.now());
                 trCreditBillMapper.updateById(upd);
-                java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditBefore = new LinkedHashMap<>();
                 auditBefore.put("status", oldStatus);
                 auditBefore.put("reconFlag", b.getReconFlag());
                 auditBefore.put("reconTime", b.getReconTime());
-                java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
                 auditAfter.put("reconFlag", upd.getReconFlag()); // D-DEC-421：字段级 before/after 补齐核销段
                 auditAfter.put("reconTime", upd.getReconTime());
@@ -211,16 +217,16 @@ public class TreasuryBizAction implements WfBizAction {
             return;
         }
         try {
-            // P4-3 审计扩面：改状态前采集旧值
+            // 审计扩面：改状态前采集旧值
             String oldStatus = batch.getStatus();
             OpPayBatch upd = new OpPayBatch();
             upd.setId(id);
-            // D-DEC-287：失败处理核准后回到"已审批"而非"已确认"——execute 前置已收窄，CONFIRMED 不再可打款
+            // 失败处理核准后回到"已审批"而非"已确认"——execute 前置已收窄，CONFIRMED 不再可打款
             upd.setStatus(approved ? "APPROVED" : "FAILED");
             opPayBatchMapper.updateById(upd);
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("status", oldStatus);
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", upd.getStatus());
             auditTrailService.recordUpdate(event.getBizType(), id, batch.getBatchNo(), "op_pay_batch",
                     String.valueOf(id), auditBefore, auditAfter,
@@ -244,15 +250,15 @@ public class TreasuryBizAction implements WfBizAction {
         }
         try {
             if (approved) {
-                // P4-3 审计扩面：改状态前采集旧值
+                // 审计扩面：改状态前采集旧值
                 String oldStatus = acc.getStatus();
                 MdBankAccount upd = new MdBankAccount();
                 upd.setId(id);
                 upd.setStatus("NORMAL");
                 mdBankAccountMapper.updateById(upd);
-                java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditBefore = new LinkedHashMap<>();
                 auditBefore.put("status", oldStatus);
-                java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
                 auditTrailService.recordUpdate(event.getBizType(), id, acc.getAccountCode(), "md_bank_account",
                         String.valueOf(id), auditBefore, auditAfter,
@@ -277,7 +283,7 @@ public class TreasuryBizAction implements WfBizAction {
         }
         try {
             if (approved) {
-                // P4-3 审计扩面：改状态前采集旧值
+                // 审计扩面：改状态前采集旧值
                 String oldStatus = plan.getStatus();
                 TrFundPlan upd = new TrFundPlan();
                 upd.setId(id);
@@ -288,9 +294,9 @@ public class TreasuryBizAction implements WfBizAction {
                     log.info("资金计划 {} 调整审批结束兜底回填 plan_no={}", id, upd.getPlanNo());
                 }
                 trFundPlanMapper.updateById(upd);
-                java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditBefore = new LinkedHashMap<>();
                 auditBefore.put("status", oldStatus);
-                java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+                Map<String, Object> auditAfter = new LinkedHashMap<>();
                 auditAfter.put("status", upd.getStatus());
                 // 本次实际变化：plan_no 默认处理回填时一并记录
                 if (upd.getPlanNo() != null) {
@@ -316,8 +322,8 @@ public class TreasuryBizAction implements WfBizAction {
             return numberRuleService.next("TR_PLAN");
         } catch (Exception ex) {
             log.warn("资金计划兜底取号失败，降级时间戳编号: {}", ex.getMessage());
-            return "FP" + java.time.LocalDateTime.now()
-                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+            return "FP" + LocalDateTime.now()
+                    .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         }
     }
 }

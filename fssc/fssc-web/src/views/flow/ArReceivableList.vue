@@ -7,7 +7,7 @@
       <el-input v-model="kw" :placeholder="$t('flow.arRecv.phKw')" clearable style="width:220px" @keyup.enter="loadReceivable" />
       <el-button type="primary" @click="loadReceivable">{{ $t('common.search') }}</el-button>
       <el-button type="success" @click="openReceivable">{{ $t('flow.arRecv.btnGenFromSo') }}</el-button>
-      <!-- D-DEC-407：留空＝按系统当前日跑（旧行为）；业务日期晚于系统日时必须选基准日，
+      <!-- 留空＝按系统当前日跑（旧行为）；业务日期晚于系统日时必须选基准日，
            否则到期日永不早于基准日、逾期集恒空。与催收待办页签共用同一把尺子。 -->
       <el-date-picker v-model="overdueBaseline" type="date" value-format="YYYY-MM-DD" :placeholder="$t('flow.arRecv.phBaseline')" clearable size="small" style="width:250px" />
       <el-button type="warning" @click="accrueOverdue">{{ $t('flow.arRecv.btnOverdueProvision') }}</el-button>
@@ -52,7 +52,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <!-- D-H3-01：单据态是「收款规则」（NONE 直译"未开始"），审批期间看不出流程在跑 ⇒
+      <!-- 单据态是「收款规则」（NONE 直译"未开始"），审批期间看不出流程在跑 ⇒
            后端 page() 按 wf_instance 投影一列流程态（未起流程/审批中/审批通过/已驳回/已撤销/已终止）。
            当前节点与办理人仍在「流程进度」面板里看，本列只回答"审批走到没走完"。 -->
       <el-table-column :label="$t('flow.arRecv.colFlowState')" width="100" align="center">
@@ -119,7 +119,7 @@ useKeyboard({
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 
-// D-H3-01：流程态配色（wf_instance.status）——审批中给主色，最终状态按结果分色，未起流程灰
+// 流程态配色（wf_instance.status）——审批中给主色，最终状态按结果分色，未起流程灰
 function flowTagType(s) {
   return { RUNNING: 'primary', APPROVED: 'success', REJECTED: 'danger', CANCELLED: 'info', TERMINATED: 'info' }[s] || 'info'
 }
@@ -152,7 +152,7 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const receivables = ref([])
 const recvTotal = ref(0)
-// R5-D-174：4030 权限拒绝独立空态（改前与「暂无数据」同形，无权限被读成没数据）
+// 4030 权限拒绝独立空态（改前与「暂无数据」同形，无权限被读成没数据）
 const denied = ref(false)
 const overdueBaseline = ref('')
 
@@ -175,7 +175,7 @@ async function loadReceivable() {
     recvTotal.value = Number(d.total || 0)
     denied.value = false
   } catch (e) {
-    // R5-D-174：4030（无应收读权限）置权限空态，不再落到「暂无数据」
+    // 4030（无应收读权限）置权限空态，不再落到「暂无数据」
     if (e?.code === 4030) { denied.value = true; return }
     ElMessage.error(e.message)
   } finally { loading.value = false }
@@ -189,7 +189,7 @@ async function saveReceivable() {
   })
 }
 
-/** D-DEC-407：界面按截点日期选择，留空＝后端回退系统当前日 */
+/** 界面按截点日期选择，留空＝后端回退系统当前日 */
 function overdueBaselineParams() {
   const v = String(overdueBaseline.value || '').trim()
   return v ? { asOfDate: v } : {}
@@ -213,7 +213,7 @@ async function accrueOverdue() {
 
 function reload() { loadReceivable() }
 
-// D-DEC-404 消费半：工作台台账跳转同写 kw 与 billNo/billId 两套取参规则，本页两套都吃
+// 消费半：工作台台账跳转同写 kw 与 billNo/billId 两套取参规则，本页两套都吃
 onMounted(() => {
   loadCurrency()
   const q = route.query || {}

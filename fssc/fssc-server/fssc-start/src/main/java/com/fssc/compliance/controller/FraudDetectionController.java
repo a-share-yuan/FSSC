@@ -9,7 +9,10 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.FraudDetectionLog;
 import com.fssc.compliance.service.FraudDetectionService;
+import com.fssc.compliance.vo.FraudDetectionLogVO;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -76,7 +79,7 @@ public class FraudDetectionController {
     @PostMapping("/review/{id}")
     public Result<Void> review(@PathVariable Long id,
                                @RequestBody(required = false) Map<String, Object> req) {
-        // D-F1R-05：@RequestBody 未设 required=false 时，客户端漏发 body 会抛
+        // @RequestBody 未设 required=false 时，客户端漏发 body 会抛
         // HttpMessageNotReadableException（"Required request body is missing"），被全局兜成 500「系统异常」；
         // 置为可选后 req 可能为 null，若不解判又会 NPE 再兜 500。两者都属客户端请求格式问题，
         // 必须给 400 并讲清期望的请求体，避免排查期误判成"复审/放行功能坏了"。
@@ -86,7 +89,7 @@ public class FraudDetectionController {
         return Result.success();
     }
 
-    /** 41号审查 P2-12 申诉登记：body {reason}，原因必填记录，处置状态不变待复审 */
+    /** 41号审查 申诉登记：body {reason}，原因必填记录，处置状态不变待复审 */
     @RequiresPerm("compliance:fraud:list")
     @OperLog(module = "FRAUD_DETECTION", operType = "UPDATE", desc = "欺诈风险申诉登记")
     @PostMapping("/{id}/appeal")
@@ -96,7 +99,7 @@ public class FraudDetectionController {
         return Result.success();
     }
 
-    /** 41号审查 P2-12 申诉复审：body {approve:true/false, note}，通过则放行结案 */
+    /** 41号审查 申诉复审：body {approve:true/false, note}，通过则放行结案 */
     @RequiresPerm("compliance:fraud:review")
     @OperLog(module = "FRAUD_DETECTION", operType = "UPDATE", desc = "欺诈风险申诉复审")
     @PostMapping("/{id}/appeal-review")
@@ -134,10 +137,10 @@ public class FraudDetectionController {
         return Result.success(fraudDetectionService.getFraudSummary());
     }
 
-    /** P2-5: 分页查询（风控看板 / 人工待审队列：actionTaken=REVIEW + unreviewed=true） */
+    /** 分页查询（风控看板 / 人工待审队列：actionTaken=REVIEW + unreviewed=true） */
     @RequiresPerm("compliance:fraud:list")
     @GetMapping("/page")
-    public Result<PageResult<com.fssc.compliance.vo.FraudDetectionLogVO>> page(
+    public Result<PageResult<FraudDetectionLogVO>> page(
             @RequestParam(defaultValue = "1") long pageNum,
             @RequestParam(defaultValue = "20") long pageSize,
             @RequestParam(required = false) String detectionResult,
@@ -151,7 +154,7 @@ public class FraudDetectionController {
     }
 
     /**
-     * D-F1R-05：请求体缺失的统一默认处理。
+     * 请求体缺失的统一默认处理。
      * <p>本控制器对 body 一律按「可选接收 + 显式判空」处理，原因见 {@code review} 处注释；
      * 缺失时抛 400 {@code PARAM_INVALID} 并把期望的 body 形态写进提示，
      * 而不是让 {@code null.get()} 一路 NPE 到全局默认处理成 500「系统异常」。
@@ -164,9 +167,9 @@ public class FraudDetectionController {
     }
 
     private Long currentReviewerId() {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.getRequired();
+        LoginUser u = UserContext.getRequired();
         if ("admin".equals(u.getUsername()) || u.getUserId() == null || u.getUserId() == 0L) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(ErrorCode.PARAM_INVALID,
                     "风控复审不得由管理员办理，请使用合规/风控岗账号");
         }
         return u.getUserId();

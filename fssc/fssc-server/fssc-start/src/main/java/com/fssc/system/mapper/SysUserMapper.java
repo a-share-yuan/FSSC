@@ -5,6 +5,7 @@ package com.fssc.system.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.fssc.system.entity.SysUser;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -44,15 +45,15 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
 
     /**
      * 用户权限码集合（菜单+按钮 perms，去重；直接角色 ∪ 用户组派生角色）
-     * <p>★D-DEC-468：追加 {@code m.del_flag = 0} —— 停用的功能节点不再参与鉴权。
+     * <p>追加 {@code m.del_flag = 0} —— 停用的功能节点不再参与鉴权。
      * 规则＝权限项必须挂在启用的功能节点上，授权与节点生命周期一致；
      * 此前只有 status=1 条件，软删（del_flag=1）菜单仍持续供码，导致
-     * 「树上看不见→角色保存即被摘除、但登录仍生效」的双规则漂移（D-DEC-467 普查＝
+     * 「树上看不见→角色保存即被摘除、但登录仍生效」的双规则漂移（普查＝
      * 127 枚软删载体挂 736 条授权）。
-     * <p>上线前置校验＝必须先跑「活载体归位」数据环节（D-DEC-467），并用
+     * <p>上线前置校验＝必须先跑「活载体归位」数据环节，并用
      * {@code 临时脚本/菜单治理/D-DEC-468_部署前校验.sql} 证明「有持有人却无活载体的码＝0 行」，
      * 否则本条件会瞬时缩权。
-     * <p>★A-01a：追加启用角色条件 —— 停用角色即便仍有授权行也不再供码。
+     * <p>A-01a：追加启用角色条件 —— 停用角色即便仍有授权行也不再供码。
      */
     @Select("select distinct m.perms from sys_menu m " +
             "join sys_role_menu rm on m.id = rm.menu_id " +
@@ -80,12 +81,12 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
     List<String> selectRoles(@Param("userId") Long userId);
 
     /**
-     * G2 传阅（2026-09-23）：按角色编码集合反查<b>在职</b>用户ID。
+     * G2 传阅：按角色编码集合反查<b>在职</b>用户ID。
      *
      * @deprecated 2026-10-15 起不再使用（唯一调用方 {@code WfCcService} 已改为走
      * {@code NodeOrgResolver.listRoleCandidatesInScope} 按 {@code org_scope} + 单据公司收敛）。
      * 本方法<b>无任何 company/scope 条件</b>，直接调用会造成「审批收敛、抄送撒全网」的跨公司过度知会
-     * （不变量 II）。保留声明仅为历史追溯，<b>禁止在新代码中调用</b>。
+     * 不变量 II。保留声明仅为历史追溯，<b>禁止在新代码中调用</b>。
      */
     @Deprecated
     @Select("<script>"
@@ -106,6 +107,6 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
     List<Long> selectUserIdsByRoleCodes(@Param("roleCodes") List<String> roleCodes);
 
     /** 物理删除（绕过 @TableLogic，供管理端删除后释放唯一键） */
-    @org.apache.ibatis.annotations.Delete("DELETE FROM `sys_user` WHERE id = #{id}")
-    int hardDelete(@org.apache.ibatis.annotations.Param("id") Long id);
+    @Delete("DELETE FROM `sys_user` WHERE id = #{id}")
+    int hardDelete(@Param("id") Long id);
 }

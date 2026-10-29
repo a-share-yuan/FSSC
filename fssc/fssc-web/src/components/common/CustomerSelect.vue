@@ -16,7 +16,7 @@
     @update:model-value="onUpdate"
     @change="onChange"
   >
-    <!-- 编码仍在（同名往来单位的唯一辨认手段），但退到次要位；从 label 里带编码＝选中框与输入回显都会显出「（S001）」这种开发腔 -->
+    <!-- 编码仍在（同名往来单位的唯一辨认手段），但退到次要位；不要从 label 里带编码＝选中框与输入回显都会显出「（S001）」这种开发腔 -->
     <el-option v-for="c in options" :key="c.id" :label="nameOf(c)" :value="valueOf(c)">
       <span class="opt-row"><span class="opt-name">{{ nameOf(c) }}</span><span class="opt-code">{{ c.customerCode }}</span></span>
     </el-option>
@@ -29,8 +29,8 @@
  *
  * props:
  *   modelValue 选中值（默认客户编码；valueKey='id' 时为客户ID）
- *   valueKey   'code'（默认）/ 'id'
- *   pageSize   拉查询量（默认 300）
+ *   valueKey 'code'（默认）/ 'id'
+ *   pageSize 拉查询量（默认 300）
  *   clearable / disabled / placeholder
  *
  * emits:

@@ -10,7 +10,7 @@
       </template>
 
       <el-tabs v-model="tab" @tab-change="onTabChange">
-        <!-- ---------------- 1. 分配策略配置 ---------------- -->
+        <!-- 1. 分配策略配置 -->
         <el-tab-pane :label="$t('sharing.ops.tabPolicy')" name="policy">
           <el-form :inline="true" size="small" style="margin-bottom: 10px">
             <el-form-item :label="$t('sharing.common.colKeyword')">
@@ -57,7 +57,7 @@
           <TablePager :pager="policyPager" @change="loadPolicy" />
         </el-tab-pane>
 
-        <!-- ---------------- 2. 分配规则顺序解析试算 ---------------- -->
+        <!-- 2. 分配规则顺序解析试算 -->
         <el-tab-pane :label="$t('sharing.ops.tabRule')" name="rule">
           <el-alert
             type="info"
@@ -124,12 +124,17 @@
           </el-table>
         </el-tab-pane>
 
-        <!-- ---------------- 3. 自动分配 + 调度日志 ---------------- -->
+        <!-- 3. 自动分配 + 调度日志 -->
         <el-tab-pane :label="$t('sharing.ops.tabDispatch')" name="dispatch">
           <el-card shadow="never" class="sub-card">
             <template #header><b>{{ $t('sharing.ops.subAutoAssign') }}</b>{{ $t('sharing.ops.hintAutoAssignDryRun') }}</template>
             <el-form :inline="true" size="small">
-              <el-form-item :label="$t('sharing.ops.labTaskRowId')"><el-input-number v-model="assignForm.taskRowId" :min="0" :controls="false" style="width: 140px" /></el-form-item>
+              <el-form-item :label="$t('sharing.ops.labTaskRowId')">
+                <el-select v-model="assignForm.taskRowId" filterable remote clearable :remote-method="loadTaskOptions"
+                           :loading="taskLoading" :placeholder="$t('sharing.ops.phTaskPick')" style="width: 260px" @focus="ensureTaskOptions">
+                  <el-option v-for="tk in taskOptions" :key="tk.id" :label="taskOptionLabel(tk)" :value="tk.id" />
+                </el-select>
+              </el-form-item>
               <el-form-item :label="$t('sharing.common.colPriority')">
                 <el-select v-model="assignForm.priority" style="width: 110px">
                   <el-option :label="$t('sharing.common.colNormal')" value="NORMAL" />
@@ -159,7 +164,12 @@
           <el-card shadow="never" class="sub-card" style="margin-top: 12px">
             <template #header><b>{{ $t('sharing.ops.subDispatchLog') }}</b>{{ $t('sharing.ops.hintDispatchLog') }}</template>
             <el-form :inline="true" size="small" style="margin-bottom: 8px">
-              <el-form-item :label="$t('sharing.ops.labTaskId')"><el-input v-model="logQ.taskId" clearable style="width: 150px" @keyup.enter="logReset" /></el-form-item>
+              <el-form-item :label="$t('sharing.ops.labTaskId')">
+                <el-select v-model="logQ.taskId" filterable remote clearable :remote-method="loadLogTaskOptions"
+                           :loading="logTaskLoading" :placeholder="$t('sharing.ops.phTaskPick')" style="width: 220px">
+                  <el-option v-for="tk in logTaskOptions" :key="tk.taskId" :label="taskOptionLabel(tk)" :value="tk.taskId" />
+                </el-select>
+              </el-form-item>
               <el-form-item :label="$t('field.docNo')"><el-input v-model="logQ.bizNo" clearable style="width: 150px" @keyup.enter="logReset" /></el-form-item>
               <el-form-item :label="$t('sharing.common.colStrategy')">
                 <el-select v-model="logQ.strategy" clearable :placeholder="$t('common.all')" style="width: 130px" @change="logReset">
@@ -194,7 +204,7 @@
           </el-card>
         </el-tab-pane>
 
-        <!-- ---------------- 4. 双时限 ---------------- -->
+        <!-- 4. 双时限 -->
         <el-tab-pane :label="$t('sharing.ops.tabTimeLimit')" name="timelimit">
           <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
             :title="$t('sharing.ops.hintDueRule')" />
@@ -217,8 +227,9 @@
           <el-table v-if="dueScan" :data="dueScan.overdue || []" size="small" stripe border max-height="320" :empty-text="$t('sharing.ops.emptyNoOverdue')">
             <el-table-column prop="bizNo" :label="$t('field.docNo')" width="140" show-overflow-tooltip />
             <el-table-column prop="nodeName" :label="$t('sharing.common.colNode')" width="140" show-overflow-tooltip />
-            <el-table-column prop="taskId" :label="$t('sharing.ops.labTaskId')" width="150" show-overflow-tooltip />
-            <el-table-column prop="assigneeId" :label="$t('sharing.ops.colAssigneeId')" width="110" />
+            <el-table-column :label="$t('sharing.ops.colAssignee')" width="110">
+              <template #default="{ row }">{{ userNameById[String(row.assigneeId)] || '—' }}</template>
+            </el-table-column>
             <el-table-column :label="$t('sharing.common.colPriority')" width="88" align="center">
               <template #default="{ row }">{{ row.priority === 'URGENT' ? t('sharing.common.colUrgent') : t('sharing.common.colNormal') }}</template>
             </el-table-column>
@@ -235,7 +246,12 @@
 
           <el-dialog v-model="markVisible" :title="$t('sharing.ops.titleMark')" width="420px">
             <el-form ref="markFormRef" :model="markForm" :rules="markRules" label-width="100px" size="small">
-              <el-form-item :label="$t('sharing.ops.labTaskRowId')" prop="taskRowId"><el-input-number v-model="markForm.taskRowId" :min="0" :controls="false" style="width: 100%" /></el-form-item>
+              <el-form-item :label="$t('sharing.ops.labTaskRowId')" prop="taskRowId">
+                <el-select v-model="markForm.taskRowId" filterable remote clearable :remote-method="loadTaskOptions"
+                           :loading="taskLoading" :placeholder="$t('sharing.ops.phTaskPick')" style="width: 100%" @focus="ensureTaskOptions">
+                  <el-option v-for="tk in taskOptions" :key="tk.id" :label="taskOptionLabel(tk)" :value="tk.id" />
+                </el-select>
+              </el-form-item>
               <el-form-item :label="$t('sharing.common.colPriority')" prop="priority">
                 <el-select v-model="markForm.priority" style="width: 100%">
                   <el-option :label="$t('sharing.common.colNormal')" value="NORMAL" />
@@ -250,7 +266,7 @@
           </el-dialog>
         </el-tab-pane>
 
-        <!-- ---------------- 5. 制证失败·执行结果视图（A12） ---------------- -->
+        <!-- 5. 制证失败·执行结果视图（A12） -->
         <el-tab-pane :label="$t('sharing.ops.tabVoucherFail')" name="vouchfail">
           <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
             :title="$t('sharing.ops.hintVoucherFail')" />
@@ -420,7 +436,7 @@
 import { dispatchModeLabel, dispatchDimensionLabel, billTypeLabel, taskTypeLabel } from '@/constants/enums'
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { wfOpsApi, sharingApi, orgApi, mdApi } from '../../api'
+import { wfOpsApi, sharingApi, orgApi, mdApi, flowApi } from '../../api'
 import TablePager from '../../components/common/TablePager.vue'
 import { useTablePager } from '../../composables/useTablePager'
 import { formatDateTime } from '@/utils/format'
@@ -469,7 +485,7 @@ function onTabChange(name) {
   if (name === 'timelimit') loadDueScan()
 }
 
-// ---------------- 1. 分配策略 ----------------
+// 1. 分配策略
 const policyQ = reactive({ keyword: '', strategy: '' })
 const policyPager = useTablePager({ mode: 'server', storageKey: 'sharing_ops_policy' })
 const { rows: policyRows, loading: policyLoading } = policyPager
@@ -543,11 +559,11 @@ async function doEffective() {
   } catch (e) { ElMessage.error(e.message) } finally { effectiveLoading.value = false }
 }
 
-// ---------------- 2. 规则试算 ----------------
+// 2. 规则试算
 const ruleForm = reactive({ taskType: '', bizType: '', amount: null, companyId: null, expenseItemId: null, currencyCode: '', legalEntityId: null })
 const ruleLoading = ref(false)
 const ruleResult = ref(null)
-// 试算入参里的公司/费项/法人是主键：给选择器，让运维同学在试算台上猜号
+// 试算入参里的公司/费项/法人是主键：给选择器，不要让运维同学在试算台上猜号
 const companies = ref([])
 const expenseItems = ref([])
 async function loadRuleRefs() {
@@ -573,7 +589,43 @@ async function doRuleResolve() {
   } catch (e) { ElMessage.error(e.message) } finally { ruleLoading.value = false }
 }
 
-// ---------------- 3. 自动分配 + 日志 ----------------
+// 3. 自动分配 + 日志
+/**
+ * 任务选择器候选：统一取 wf_task（单号/标题远程检索）。
+ * 自动分配/标记优先级只吃在办（PENDING）任务；调度日志要能查历史任务，故不筛状态。
+ */
+const taskOptions = ref([])
+const taskLoading = ref(false)
+const logTaskOptions = ref([])
+const logTaskLoading = ref(false)
+async function loadTaskOptions(keyword) {
+  taskLoading.value = true
+  try {
+    const r = await flowApi.taskPage({ pageNum: 1, pageSize: 20, status: 'PENDING', keyword: keyword || undefined })
+    taskOptions.value = r?.list || []
+  } catch { taskOptions.value = [] } finally { taskLoading.value = false }
+}
+async function loadLogTaskOptions(keyword) {
+  logTaskLoading.value = true
+  try {
+    const r = await flowApi.taskPage({ pageNum: 1, pageSize: 20, keyword: keyword || undefined })
+    logTaskOptions.value = r?.list || []
+  } catch { logTaskOptions.value = [] } finally { logTaskLoading.value = false }
+}
+function ensureTaskOptions() { if (!taskOptions.value.length) loadTaskOptions('') }
+function taskOptionLabel(tk) {
+  return [tk.bizNo || tk.title || '', tk.nodeName, tk.assigneeName].filter(Boolean).join(' · ') || tk.taskId
+}
+
+// 超期扫描行的办理人只有 assigneeId（后端 dueScan 无姓名列）：用候选人清单换姓名，不要数字主键上屏
+const userNameById = ref({})
+async function loadUserNames() {
+  try {
+    const arr = (await flowApi.ccCandidates({ limit: 500 })) || []
+    userNameById.value = Object.fromEntries(arr.map((u) => [String(u.userId), u.name || u.userName || '']))
+  } catch { userNameById.value = {} }
+}
+
 const assignForm = reactive({ taskRowId: null, priority: 'NORMAL', dryRun: true })
 const assignLoading = ref(false)
 const assignResult = ref(null)
@@ -614,7 +666,7 @@ async function openChain(row) {
   } catch (e) { ElMessage.error(e.message); chainRows.value = [] } finally { chainLoading.value = false }
 }
 
-// ---------------- 4. 双时限 ----------------
+// 4. 双时限
 const limitQ = reactive({ limit: 200 })
 const dueLoading = ref(false)
 const dueScan = ref(null)
@@ -632,6 +684,7 @@ const markRules = {
 
 async function loadDueScan() {
   dueLoading.value = true
+  if (!Object.keys(userNameById.value).length) loadUserNames()
   try { dueScan.value = await wfOpsApi.timeLimitDueScan(limitQ.limit) } catch (e) { ElMessage.error(e.message) } finally { dueLoading.value = false }
 }
 async function doBackfill() {
@@ -662,7 +715,7 @@ onMounted(() => {
   loadRuleRefs()
 })
 
-// ---------------- 5. 制证失败·执行结果视图（A12） ----------------
+// 5. 制证失败·执行结果视图（A12）
 const VF_SOURCES = computed(() => ([
   { value: 'EXPENSE', label: t('sharing.ops.srcExpense') },
   { value: 'EXPENSE_PAY', label: t('sharing.ops.srcVendorPay') },
@@ -729,7 +782,7 @@ function openVfDetail(row) {
 
 /**
  * 补生成＝调用既有记账凭证生成接口（同源已有凭证时后端去重返回，不会重复入账）。
- * 仅对后端判定 retriable 的行开放：借款/还款的来源走该入口会落错来源，见 D-DEC-271。
+ * 仅对后端判定 retriable 的行开放：借款/还款的来源走该入口会落错来源，见。
  */
 async function doVfRetry(row) {
   if (!row || !row.retriable) return

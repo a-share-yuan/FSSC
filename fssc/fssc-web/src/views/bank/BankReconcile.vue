@@ -111,7 +111,7 @@
       </el-col>
     </el-row>
 
-    <!-- D-H6-02（P3，2026-10-24 H6 真跑）：本分页器驱动的是「对账记录」两张表（bank_reconcile），
+    <!-- P3，2026-10-24 H6 真跑：本分页器驱动的是「对账记录」两张表（bank_reconcile），
          改前页面上只有这一个分页器，记录 0 行时它显示「共 0 条」，而下方待勾对银行流水实有 200 行 ⇒
          被读成"流水表 0 条"。现给它挂上归属标签，且待勾对两张表各自带计数（银行流水侧另有自己的分页器），
          空表计数不再遮蔽有数表。 -->
@@ -128,7 +128,7 @@
       />
     </div>
 
-    <!-- 待勾对候选（R5-D-184）：人工勾对只允许从真身数据源选行——银行流水取 op_bank_statement、
+    <!-- 待勾对候选：人工勾对只允许从真身数据源选行——银行流水取 op_bank_statement、
          付款侧取「企业已付银行未付」付款明细；勾选行 id 即 op_bank_statement.id / exp_bill_payment.id，
          与记录行（bank_reconcile.id）彻底分开，杜绝三表 id 数字相近串表 -->
     <el-card shadow="never" style="margin-top:12px">
@@ -226,7 +226,7 @@ const canOpenSheet = () => !pathDenyReason('/bank/reconcile-sheet')
 const canOpenSlip = () => !pathDenyReason('/bank/slip')
 const reconcileCm = ref(null)
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -236,14 +236,14 @@ function openTrace(row) {
 
 const router = useRouter()
 
-// ========== 数据 ==========
+// 数据
 const allRows = ref([])
 const bankRows = ref([])
 const payRows = ref([])
-// R5-D-184：待勾对候选（人工勾对面，真身 id 数据源）——银行侧取 op_bank_statement、付款侧取付款明细
+// 待勾对候选（人工勾对面，真身 id 数据源）——银行侧取 op_bank_statement、付款侧取付款明细
 const pendingBankRows = ref([])
 const pendingPayRows = ref([])
-// D-H6-01：待勾对银行流水改服务端分页（源表 op_bank_statement 2376 行、其中 UNRECON 711，
+// 待勾对银行流水改服务端分页（源表 op_bank_statement 2376 行、其中 UNRECON 711，
 // 旧写法一次拉 200 行且客户端排除表从不命中 ⇒ 硬截断＋混入已勾对行）。
 const pendingBankPageNum = ref(1)
 const pendingBankPageSize = ref(50)
@@ -260,7 +260,7 @@ const pageSize = ref(20)
 const total = ref(0)
 
 /**
- * 本单上下文（D-DEC-153「去处理跳到资金计划页且无本单据上下文」的对账半）。
+ * 本单上下文（「去处理跳到资金计划页且无本单据上下文」的对账半）。
  * 待办/我的单据带 ?billNo=SER…&billId=20 进来时：
  *  · billNo 写进搜索框（本列即 bank_reconcile.serial_no，与 BillRouteRegistry:229 的 bizNoCol 同列）；
  *  · billId 作精确默认处理——md_bank_account 无单号列、对账域也无 keyword 入参，光靠单号可能筛空。
@@ -276,7 +276,7 @@ if (deepLink.billNo) searchKey.value = deepLink.billNo
 
 const summary = computed(() => {
   const total = allRows.value.length
-  // R5-D-182：已勾对规则四处一次办结——MATCHED（自动勾对）＋CONFIRMED（审批定稿）＋CLAIMED（收款认领）
+  // 已勾对规则四处一次办结——MATCHED（自动勾对）＋CONFIRMED（审批定稿）＋CLAIMED（收款认领）
   // 同属"已勾对"，统计/筛选（服务端 page() 同步）/状态文案/勾选禁用四处共用 isMatched()，不得各自漂移
   const matched = allRows.value.filter(r => isMatched(r.matchStatus)).length
   const manual = allRows.value.filter(r => r.matchStatus === 'MANUAL').length
@@ -284,7 +284,6 @@ const summary = computed(() => {
   return { total, matched, manual, totalAmount }
 })
 
-// ========== 加载 ==========
 async function loadReconcile() {
   loading.bank = true
   loading.pay = true
@@ -341,7 +340,7 @@ function filterRows() {
   payRows.value = allRows.value.filter(r => r.paymentNo && hit(r))
 }
 
-// ========== 一键勾对 ==========
+// 一键勾对
 async function runReconcile() {
   try {
     await ElMessageBox.confirm('执行自动勾对？将匹配金额一致的银行流水与系统付款记录。', '勾对', { type: 'info' })
@@ -351,8 +350,8 @@ async function runReconcile() {
     const unmatched = Number(r?.unmatched || 0)
     const ambiguous = Number(r?.ambiguous || 0)
     const foreign = Number(r?.foreignSerialBlocked || 0)
-    // D-DEC-157：勾对结果必须当场反馈——未勾对的流水要当场看见，而不是等调节表环节才算出来
-    // D-DEC-420 丙：同人建单—同人勾对的收款核销单在此当场提示复核，不阻断本轮勾对
+    // 勾对结果必须当场反馈——未勾对的流水要当场看见，而不是等调节表环节才算出来
+    // 丙：同人建单—同人勾对的收款核销单在此当场提示复核，不阻断本轮勾对
     ElMessage({
       type: (unmatched > 0 || r?.selfMatchWarning) ? 'warning' : 'success',
       duration: 6000,
@@ -373,7 +372,7 @@ async function runReconcile() {
   }
 }
 
-// ========== 待勾对候选（R5-D-184） ==========
+// 待勾对候选
 /**
  * 人工勾对面的真身数据源：
  *  · 银行流水侧：GET /bank/reconcile/statement/page（op_bank_statement），剔除已勾对规则
@@ -385,7 +384,7 @@ async function runReconcile() {
 async function loadPendingBank() {
   loading.pendingBank = true
   try {
-    // D-H6-01：服务端按 reconStatus=UNRECON 过滤「未勾对」集合并分页回传总数。
+    // 服务端按 reconStatus=UNRECON 过滤「未勾对」集合并分页回传总数。
     // 旧写法 pageSize:200 一次拉回后再用 !['MATCHED','RECONED','MANUAL'].includes(reconStatus) 客户端排除——
     // 而本列 reconStatus 实值只有 RECON/UNRECON，排除表从不命中（等于没排除），且 200 行硬截断漏掉其余未勾对流水。
     const r = await p2Api.bankStatementPage({
@@ -429,7 +428,7 @@ async function loadPendingCandidates() {
   await Promise.all([loadPendingBank(), loadPendingPay()])
 }
 
-// ========== 人工勾对 ==========
+// 人工勾对
 async function manualMatch() {
   if (selPendingBank.value.length !== 1 || selPendingPay.value.length !== 1) {
     ElMessage.warning('请各勾选一条银行流水与一条付款记录（人工勾对一次只配一对）')
@@ -461,15 +460,15 @@ async function manualMatch() {
   await loadPendingCandidates()
 }
 
-// ========== 导航 ==========
+// 导航
 function goSheet() { router.push('/bank/reconcile-sheet') }
 function goSlip() { router.push('/bank/slip') }
 
-// ========== 辅助方法 ==========
+// 辅助方法
 function fmt(v) {
   return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
-// R5-D-182：MATCHED（自动勾对）＋CONFIRMED（审批定稿）＋CLAIMED（收款认领核销）同属"已勾对"——
+// MATCHED（自动勾对）＋CONFIRMED（审批定稿）＋CLAIMED（收款认领核销）同属"已勾对"——
 // 统计卡、服务端「已勾对」筛选、状态文案、待勾对勾选禁用四处共用本判定，不得按单值判
 function isMatched(s) {
   return s === 'MATCHED' || s === 'CONFIRMED' || s === 'CLAIMED'
@@ -492,7 +491,7 @@ onMounted(() => {
   loadPendingCandidates()
 })
 
-// R4-06: Show guide on first visit
+// Show guide on first visit
 const _guideKey = 'fssc_guide_reconcileCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => reconcileCm.value?.show(), 800) } } catch {}
 </script>

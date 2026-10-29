@@ -15,7 +15,7 @@
         <div class="trace-bill-no">{{ billInfo.billNo || '-' }}</div>
         <div class="trace-bill-meta">
           <el-tag size="small" :type="statusType(billInfo.status)">{{ headStatusLabel(billInfo.status) }}</el-tag>
-          <!-- D-DEC-265：原先非费用域直出 billType 原码（采购订单审批抽屉头显示 PURCHASE_ORDER_REVIEW）；
+          <!-- 原先非费用域直出 billType 原码（采购订单审批抽屉头显示 PURCHASE_ORDER_REVIEW）；
                docTypeLabel 先查 BILL_TYPE 再查 BIZ_TYPE，费用域规则不变。 -->
           <span class="trace-type">{{ docTypeLabel(billInfo.billType) }}</span>
           <span class="trace-amount" v-if="billInfo.totalAmount != null">金额 ¥{{ fmt(billInfo.totalAmount) }}</span>
@@ -23,14 +23,14 @@
         </div>
       </div>
 
-      <!-- D-DEC-148：一张单据表可挂多条流程域（gl_salary_run 同一行既挂计提链也挂发放链）。
+      <!-- 一张单据表可挂多条流程域（gl_salary_run 同一行既挂计提链也挂发放链）。
            入口声明的域在该行没有实例时，后端只在「同表业务域」内纠正查询并如实标注，
-           避免把「本轮走的是另一条域」显示成「本单没有流程」。跨表撞号（D-DEC-152）不走此路径。 -->
+           避免把「本轮走的是另一条域」显示成「本单没有流程」。跨表撞号不走此路径。 -->
       <el-alert
         v-if="chain && supported && chain.summary?.bizTypeCorrected"
         type="warning" :closable="false" show-icon
-        :title="`本单实际走「${docTypeLabel(chain.summary.scope)}」流程链`"
-        :description="`入口声明的单据类型 ${chain.summary.declaredBizType} 下此单没有流程记录，已按同一业务范围改为按 ${chain.summary.scope} 加载数据；如需查看 ${chain.summary.declaredBizType} 业务记录，请从该业务的入口进入。`"
+        :title="`本单实际走「${scopeLabel(chain.summary.scope)}」流程链`"
+        :description="`入口声明的单据类型「${docTypeLabel(chain.summary.declaredBizType)}」下此单没有流程记录，已按同一业务范围改为按「${scopeLabel(chain.summary.scope)}」加载数据；如需查看「${docTypeLabel(chain.summary.declaredBizType)}」业务记录，请从该业务的入口进入。`"
         style="margin:0 0 10px" />
 
       <!-- 方案 A：下一跳行动条（按状态+链缺口算下一步；规则是费用单据状态机，他域不渲染） -->
@@ -45,12 +45,12 @@
         :description="notSupportReason"
         style="margin:10px 0 14px" />
 
-      <!-- D-DEC-446 甲-1：删除 status 驱动的生命周期步进条。
+      <!-- 甲-1：删除 status 驱动的生命周期步进条。
            它与上方 BillChainTimeline 在同一抽屉里并存且互相打架（前者读 exp_bill.status，
            后者读各段证据），且第 5/6 格取的列（op_voucher.status / op_archive.archive_status）
            根本不由 exp_bill.status 承载 ⇒ 结构性永灰。进度规则统一走证据链时间线。 -->
 
-      <!-- P2-1 联查明细（五段链路） -->
+      <!-- 联查明细（五段链路） -->
       <el-collapse v-if="chain && supported" v-model="openSections" class="chain-collapse">
         <!-- 付款记录（exp_bill_payment 属费用域专属表，他域不按 bill_id 借用 ⇒ 不渲染该段） -->
         <el-collapse-item v-if="isExpense" name="payments">
@@ -88,7 +88,9 @@
           <el-empty v-if="!chain.vouchers?.length" description="无凭证（未审核通过或非凭证域单据）" :image-size="48" />
           <div v-else v-for="v in chain.vouchers" :key="v.id" class="voucher-card">
             <div class="voucher-head">
-              <span class="voucher-no">{{ v.voucherWord || '记' }}-{{ v.voucherNo }}</span>
+              <!-- P-EN 2026-10-27：op_voucher.voucher_word 存的是英文枚举 JOURNAL，原先直接拼在凭证号前
+                   ⇒ 抽屉里显示「JOURNAL-JZ2026102700016」。字号走 VOUCHER_WORD 名称表（记／付／转／收）。 -->
+              <span class="voucher-no">{{ voucherWordLabel(v.voucherWord) }}-{{ v.voucherNo }}</span>
               <el-tag size="small" :type="v.status === 'POSTED' ? 'success' : 'warning'">{{ v.status === 'POSTED' ? '已过账' : '草稿' }}</el-tag>
               <span class="voucher-meta">{{ v.voucherDate || '' }}</span>
               <span class="voucher-meta">借 {{ fmt(v.debitTotal) }} = 贷 {{ fmt(v.creditTotal) }}</span>
@@ -101,7 +103,7 @@
               <el-table-column label="科目" min-width="130">
                 <template #default="{ row }">{{ row.subjectCode || '' }} {{ row.subjectName || '' }}</template>
               </el-table-column>
-              <!-- D-DEC-355：op_voucher_line.direction 实测只有 DEBIT／CREDIT（43/42 行），
+              <!-- op_voucher_line.direction 实测只有 DEBIT／CREDIT（43/42 行），
                    原先写 row.direction === 'D' ⇒ 借方行恒落 else，两行都显示「贷」，
                    与同卡片「借 80,000.00 = 贷 80,000.00」自相矛盾。改走共用名称表 DIRECTION。 -->
               <el-table-column label="方向" width="55" align="center">
@@ -121,13 +123,13 @@
             <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
             <el-table-column prop="archiveType" label="类型" width="80" align="center" :formatter="enumFormatter(ARCHIVE_TYPE)" />
             <el-table-column label="状态" width="90" align="center">
-              <template #default="{ row }"><el-tag size="small" :type="row.archiveStatus === 'ARCHIVED' ? 'success' : 'info'">{{ ARC_ST[row.archiveStatus] || row.archiveStatus }}</el-tag></template>
+              <template #default="{ row }"><el-tag size="small" :type="row.archiveStatus === 'ARCHIVED' ? 'success' : 'info'">{{ ARC_ST[row.archiveStatus] || '其他状态' }}</el-tag></template>
             </el-table-column>
             <el-table-column label="归档时间" width="150"><template #default="{ row }">{{ row.archivedAt ? shortTime(row.archivedAt) : '—' }}</template></el-table-column>
           </el-table>
         </el-collapse-item>
 
-        <!-- 审批轨迹（D-TRC-06：直读 wf_task_history，含提交/审批/驳回/转办/加签/催办/撤销，多轮次全含） -->
+        <!-- 审批轨迹（直读 wf_task_history，含提交/审批/驳回/转办/加签/催办/撤销，多轮次全含） -->
         <el-collapse-item name="traces">
           <template #title><b>审批轨迹</b><el-tag size="small" style="margin-left:8px" :type="chain.traces?.length ? 'success' : 'info'">{{ chain.traces?.length || 0 }} 条</el-tag></template>
           <el-empty v-if="!chain.traces?.length" description="本单还没有流程动作（未提单或流程未发起）" :image-size="48" />
@@ -152,7 +154,7 @@
 import { ref, watch, computed } from 'vue'
 import { billApi } from '../api'
 import { statusLabel, statusType } from '../constants/billStatus'
-import { docTypeLabel, wfActionLabel, wfActionType, ARCHIVE_TYPE, enumFormatter, payStatusLabel, voucherSourceLabel, directionLabel } from '@/constants/enums.js'
+import { docTypeLabel, wfActionLabel, wfActionType, ARCHIVE_TYPE, enumFormatter, payStatusLabel, voucherSourceLabel, directionLabel, voucherWordLabel } from '@/constants/enums.js'
 // 方案 A：业务链可视化 + 下一跳行动条（纯前端，复用 traceChain 契约）
 import BillChainTimeline from './BillChainTimeline.vue'
 import NextActionBar from './NextActionBar.vue'
@@ -161,9 +163,9 @@ const props = defineProps({
   modelValue: Boolean,
   billId: { type: [String, Number], default: null },
   /**
-   * D-TRC-06：单据域。后端据此选择联查关联点（exp_bill 主键 vs 本域 bizType+bizId）。
+   * 单据域。后端据此选择联查关联点（exp_bill 主键 vs 本域 bizType+bizId）。
    * 各业务页传的是本域自增主键，与 exp_bill.id 不是同一坐标系——不声明就只能按费用单解释，
-   * 撞号时会读到别人的单据（D-TRC-04 / D-PO-03）。未声明时后端宁缺勿错、不猜域。
+   * 撞号时会读到别人的单据（/）。未声明时后端宁缺勿错、不猜域。
    */
   bizType: { type: String, default: null },
 })
@@ -175,7 +177,7 @@ const visible = computed({
 })
 const loading = ref(false)
 const billInfo = ref(null)
-// P2-1 全链路联查数据
+// 全链路联查数据
 const chain = ref(null)
 const openSections = ref([])
 // 后端是否取得了本单据的链路数据（关联点未命中 → NOT_SUPPORTED）
@@ -192,7 +194,12 @@ function openSeg(key) {
   const sec = SEG2SECTION[key]
   if (sec && !openSections.value.includes(sec)) openSections.value.push(sec)
 }
-const ARC_ST = { PENDING: '待归档', ARCHIVING: '归档中', ARCHIVED: '已归档', DISPOSED: '已处置' }
+// P-EN 2026-10-27：补 UNARCHIVED（exp_bill.archive_status 实测取值），字典外不再回显英文
+const ARC_ST = { PENDING: '待归档', ARCHIVING: '归档中', ARCHIVED: '已归档', DISPOSED: '已处置', UNARCHIVED: '未归档', DESTROYED: '已销毁' }
+/** summary.scope 是「流程域」而非单据类型（实测只有 EXPENSE／NOT_SUPPORTED），
+ *  走 BIZ_TYPE 会显示成「费用组」，语义不对，故单独定名。 */
+const SCOPE_LABEL = { EXPENSE: '费用报销', NOT_SUPPORTED: '未接入' }
+function scopeLabel(s) { return SCOPE_LABEL[s] || docTypeLabel(s) || '' }
 /** 他域单据头部取的是流程实例状态，不在费用单据状态名称表里 */
 const WF_ST = { RUNNING: '在办', APPROVED: '已审批', COMPLETED: '已完成', REJECTED: '已驳回', CANCELLED: '已撤销', TERMINATED: '已终止' }
 function headStatusLabel(s) {
@@ -240,7 +247,7 @@ watch(() => [props.modelValue, props.billId, props.bizType], async ([v, bid]) =>
     chain.value = { summary: { scope: 'NOT_SUPPORTED', reason: (e && e.message) || '联查失败' } }
   }
   // 默认处理：只有「后端确认这是费用域、且链路响应里确实没带头部」才回退费用单详情接口。
-  // D-DEC-197/D-TRC-04：他域主键（抄送记录 id、方案 id…）与 exp_bill.id 不是同一坐标系，
+  // /他域主键（抄送记录 id、方案 id…）与 exp_bill.id 不是同一坐标系，
   // 关联点未命中（NOT_SUPPORTED）或已按他域解析时再拿这个数字去查详情，就会把别人的报销单头贴进来。
   const scope = chain.value?.summary?.scope
   if (!billInfo.value && scope === 'EXPENSE') {
@@ -261,7 +268,7 @@ watch(() => [props.modelValue, props.billId, props.bizType], async ([v, bid]) =>
 .trace-type { font-size: 13px; color: #909399; }
 .trace-amount { font-size: 13px; font-weight: 600; color: #303133; }
 
-/* P2-1 链路完整度条 */
+/* 链路完整度条 */
 .chain-strip { display: flex; align-items: center; gap: 6px; margin: 10px 0 14px; padding: 8px 12px; background: #f5f7fa; border-radius: 6px; }
 .chain-seg { text-align: center; padding: 4px 10px; border-radius: 4px; background: #fff; border: 1px solid #e4e7ed; opacity: 0.55; }
 .chain-seg.reached { opacity: 1; border-color: #67c23a; background: #f0f9eb; }

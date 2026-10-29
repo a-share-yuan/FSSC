@@ -49,7 +49,7 @@
 <el-table :data="rows" v-else size="small" stripe border max-height="560" @row-dblclick="openRowDetail"
         :row-class-name="rowClass" :empty-text="denied ? t('sharing.statement.emptyNoPerm') : t('common.empty')">
         <el-table-column prop="bankSerial" :label="$t('sharing.statement.phBankSerial')" width="150" show-overflow-tooltip sortable />
-        <!-- D-DEC-159：此列原先直挂 prop，后端 LocalDateTime 序列化成 `2026-12-24T10:50:31` 原样上屏。
+        <!-- 此列原先直挂 prop，后端 LocalDateTime 序列化成 `2026-12-24T10:50:31` 原样上屏。
              现走全站唯一日期规则 formatDateTime（YYYY-MM-DD HH:mm），与同族页 BankSlip.vue 一致。 -->
         <el-table-column prop="transDate" :label="$t('sharing.statement.colTransTime')" width="160" sortable :formatter="(row, col, val) => formatDateTime(val)" />
         <el-table-column :label="$t('field.direction')" width="70" align="center">
@@ -109,7 +109,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -127,9 +127,9 @@ const rows = ref([])
 const page = reactive({ current: 1, size: 20, total: 0 })
 const q = reactive({ bankSerial: '', reconStatus: '', transType: '' })
 
-// D-BS-1：CSV 批量导入需先选定目标银行账户（company_id/bank_account_id 由后端按账户回填）
+// CSV 批量导入需先选定目标银行账户（company_id/bank_account_id 由后端按账户回填）
 const importBankAccountId = ref(null)
-// R5-D-174：4030 权限拒绝独立空态（改前被统一渲染成「暂无数据」，用户把「无权限」读成「没数据」；
+// 4030 权限拒绝独立空态（改前被统一渲染成「暂无数据」，用户把「无权限」读成「没数据」；
 // 权限码文案由 api.js 拦截器 toast，表体这里只把空态的语义纠正过来）
 const denied = ref(false)
 const bankOptions = ref([])
@@ -148,7 +148,7 @@ const statementSearchRules = reactive({})
 async function load() {
   loading.value = true
   try {
-    // 同族于 D-DEC-168「前端环节」的一处裸错（本域未登记新条目，随手随 159 一并如实修正并回报）：
+    // 同族于 「前端环节」的一处裸错（本域未登记新条目，随手随 159 一并如实修正并回报）：
     // 原发的是 page/size，而后端 PageQuery 只认 pageNum/pageSize ⇒ 两个名字从未生效，
     // 每页条数下拉（10/20/50）与翻页点击都被打回默认第 1 页 10 条，列表看着"翻不动、切了没反应"。
     const p = { pageNum: page.current, pageSize: page.size }
@@ -160,7 +160,7 @@ async function load() {
     page.total = res?.total || rows.value.length
     denied.value = false
   } catch (e) {
-    // R5-D-174：4030（无 op:bank:list）置权限空态，不再落到「暂无数据」
+    // 4030（无 op:bank:list）置权限空态，不再落到「暂无数据」
     if (e?.code === 4030) { denied.value = true; return }
     ElMessage.error(e.message)
   } finally {
@@ -209,14 +209,14 @@ function downloadTemplate() {
   URL.revokeObjectURL(url)
 }
 
-// D-DEC-159：金额/余额统一走全站金额定义 formatMoney（千分位 + 2 位小数），
+// 金额/余额统一走全站金额定义 formatMoney（千分位 + 2 位小数），
 // 并修掉「余额列把 NULL 显示成 0.00」——op_bank_statement.balance 是可空列（导入时不填即 NULL），
 // 原先本地 fmt 的 `Number(v || 0)` 会把"没有余额"渲染成"余额 0.00"，看着像一笔真余额。
 const fmt = (v) => formatMoney(v, '—')
 
-// 41号审查 P1-9：导出当前查询结果
+// 41号审查 导出当前查询结果
 function doExport() {
-  // D-DEC-159 同一规则导出：原先把 transDate 原样写进 CSV，导出件里仍是 `2026-12-24T10:50:31`，
+  // 同一规则导出：原先把 transDate 原样写进 CSV，导出件里仍是 `2026-12-24T10:50:31`，
   // 与本文件自带的导入模板（"交易时间格式 yyyy-MM-dd HH:mm:ss"）对不上，导出→再导入是回环脏值。
   const data = (rows.value || []).map((r) => ({ ...r, transDate: formatDateTime(r.transDate) }))
   exportCsv(data, [

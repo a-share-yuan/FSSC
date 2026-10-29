@@ -29,7 +29,7 @@
       </div>
     </div>
 
-    <!-- D-DEC-208：超时处置档计数——节点超时配置改了档（催办/催满升级/自动通过），
+    <!-- 超时处置档计数——节点超时配置改了档（催办/催满升级/自动通过），
          这张表按档给出"配置了多少节点、窗口内真发生了多少行动作、当前有多少在办落在该档"。
          纯只读聚合：本页不触发升级、不触发自动通过，也不改任何单据状态。 -->
     <div class="table-card tier-card">
@@ -74,7 +74,7 @@
               <div class="chart-title">单据流转路径（实例真实路径）
                 <span class="chart-sub">标签截断＋避让，悬停看全名</span>
               </div>
-              <!-- D-DEC-210：画布高度随节点数长，节点多时不再把标签挤成一团 -->
+              <!-- 画布高度随节点数长，节点多时不再把标签挤成一团 -->
               <div v-show="hasPaths" ref="sankeyRef" class="chart-body" :style="{ height: sankeyHeight + 'px' }"></div>
               <el-empty v-if="!hasPaths" :image-size="60" :description="pathsEmptyText" />
             </div>
@@ -114,14 +114,14 @@
                 <el-table-column prop="node" label="节点" min-width="160" show-overflow-tooltip>
                   <template #default="{ row }">
                     {{ row.node }}
-                    <!-- D-DEC-210：与时效榜同一处理——缺名记录如实标，不并成伪节点 -->
+                    <!-- 与时效榜同一处理——缺名记录如实标，不并成伪节点 -->
                     <el-tag v-if="row.unnamedTrace" size="small" type="info">记录缺名</el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column prop="count" label="在办" width="70" />
                 <el-table-column label="已超时" width="90">
                   <template #default="{ row }">
-                    <!-- D-DEC-206：本列按 due_time 实算；行尾括注＝其中没有 due_time、走默认处理规则的条数 -->
+                    <!-- 本列按 due_time 实算；行尾括注＝其中没有 due_time、走默认处理规则的条数 -->
                     <span :class="row.overdue ? 'text-danger' : ''">{{ row.overdue }}</span>
                     <span v-if="row.overdueFallback" class="basis-mark">（†{{ row.overdueFallback }}）</span>
                   </template>
@@ -129,7 +129,7 @@
                 <el-table-column label="最长账龄" width="100">
                   <template #default="{ row }">{{ formatDuration(row.maxAgeHours * 60) }}</template>
                 </el-table-column>
-                <!-- D-DEC-208：该节点配置的处置档 + 落在该档的在办数 + 催办/卡单规则 -->
+                <!-- 该节点配置的处置档 + 落在该档的在办数 + 催办/卡单规则 -->
                 <el-table-column label="处置档" width="120">
                   <template #default="{ row }">{{ tierLabel(row.timeoutAction) }}</template>
                 </el-table-column>
@@ -159,12 +159,12 @@
                 <el-table-column prop="node" label="节点" min-width="130" show-overflow-tooltip>
                   <template #default="{ row }">
                     {{ row.node }}
-                    <!-- D-DEC-210：记录没写节点名的行如实标出来（后端有 key 显 key，全无则标缺名），不当真节点 -->
+                    <!-- 记录没写节点名的行如实标出来（后端有 key 显 key，全无则标缺名），不当真节点 -->
                     <el-tag v-if="row.unnamedTrace" size="small" type="info">记录缺名</el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column prop="bizNo" label="单据号" width="130" show-overflow-tooltip />
-                <!-- D-DEC-206：本列＝now − wf_task.due_time（到期真值），不再是「停留 − 配置 SLA」；带 1 位小数 -->
+                <!-- 本列＝now − wf_task.due_time（到期真值），不再是「停留 − 配置 SLA」；带 1 位小数 -->
                 <el-table-column label="已超时" width="110">
                   <template #default="{ row }">
                     <span class="text-danger">{{ row.overdueHours }}h</span>
@@ -177,17 +177,16 @@
                 </el-table-column>
                 <el-table-column label="催办" width="120">
                   <template #default="{ row }">{{ row.urgedCount }} 次
-                    <!-- 卡单红牌（F3-2）：催满阈值仍无人办理＝派生标记，不代表系统已处置（不会自动改派/自动通过） -->
+                    <!-- 卡单红牌：催满阈值仍无人办理＝派生标记，不代表系统已处置（不会自动改派/自动通过） -->
                     <el-tag v-if="row.stuck" size="small" type="danger">卡单待处置</el-tag>
                   </template>
                 </el-table-column>
-                <!-- D-DEC-208：这一单所在节点配的处置档（催办/催满升级/自动通过），只读显示 -->
+                <!-- 这一单所在节点配的处置档（催办/催满升级/自动通过），只读显示 -->
                 <el-table-column label="处置档" width="110">
                   <template #default="{ row }">{{ tierLabel(row.timeoutAction) }}</template>
                 </el-table-column>
               </el-table>
-              <!-- D-DEC-206：规则写 in 页面，不再让读者拿「停留」去反算「已超时」 -->
-              <!-- R5-D-036 -->
+              <!-- 规则写 in 页面，不再让读者拿「停留」去反算「已超时」 -->
               <div class="perf-note">
                 已超时＝现在 − 该单据的到期时间（与超时提醒、任务池看待的是同一个到期时点），
                 不再用「停留时长 − 配置时限」推算（发起时间早于流程真正启动时，旧算法会虚报数十小时）。
@@ -202,7 +201,7 @@
           <div class="table-card" style="margin-top:16px">
             <div class="table-title">办理人时效 Top（近 {{ days }} 天，办理人 {{ handlerTotal }} 位）
               <span v-if="handlerRecon" class="recon-hint">
-                <!-- D-DEC-208/D-DEC-204：两列不再是恒 0 的死列，并把与同页 KPI 的对账式并排给出 -->
+                <!-- /两列不再是恒 0 的死列，并把与同页 KPI 的对账式并排给出 -->
                 ｜屏上两列合计 在办 {{ handlerRecon.onHandCellSum }} · 超时 {{ handlerRecon.overdueOnHandCellSum }}
                 ＝全部人名下 {{ handlerRecon.onHandAllHandlersSum }} · {{ handlerRecon.overdueOnHandAllHandlersSum }}
                 ｜顶部卡片 待办 {{ handlerRecon.pendingTasks }} · 超时 {{ handlerRecon.overdueTasks }}
@@ -214,7 +213,7 @@
               <el-table-column label="办理人" min-width="150">
                 <template #default="{ row }">
                   {{ row.name }}
-                  <!-- D-DEC-204：窗口内没办结、但名下有在办的人补在表尾（否则这一屏两列仍会看着是 0） -->
+                  <!-- 窗口内没办结、但名下有在办的人补在表尾（否则这一屏两列仍会看着是 0） -->
                   <el-tag v-if="row.onHandOnly" size="small" type="info">仅在办·补行</el-tag>
                 </template>
               </el-table-column>
@@ -236,7 +235,7 @@
                   <span :class="row.overdueOnHand ? 'text-danger' : ''">{{ row.overdueOnHand }}</span>
                 </template>
               </el-table-column>
-              <!-- D-DEC-208：在办量按处置档拆开，改档后"谁的单子会被催满升级/自动通过"看得见 -->
+              <!-- 在办量按处置档拆开，改档后"谁的单子会被催满升级/自动通过"看得见 -->
               <el-table-column prop="onLadderTier" label="催满升级档在办" width="140" />
               <el-table-column prop="onAutoPassTier" label="自动通过档在办" width="140" />
             </el-table>
@@ -251,7 +250,7 @@
               <el-table-column prop="node" label="节点" min-width="220" show-overflow-tooltip>
                 <template #default="{ row }">
                   {{ row.node }}
-                  <!-- D-DEC-210：这一行不是节点，是 wf_task_history 没写 node_name 的记录 -->
+                  <!-- 这一行不是节点，是 wf_task_history 没写 node_name 的记录 -->
                   <el-tag v-if="row.unnamedTrace" size="small" type="info">记录缺名</el-tag>
                 </template>
               </el-table-column>
@@ -272,7 +271,7 @@
                 </template>
               </el-table-column>
               <el-table-column prop="overdue" label="超时次数" width="100" />
-              <!-- D-DEC-208：改档可见的两组列——该节点配置的处置档 + 窗口内该档真发生的机器动作行数 -->
+              <!-- 改档可见的两组列——该节点配置的处置档 + 窗口内该档真发生的机器动作行数 -->
               <el-table-column label="处置档" width="130">
                 <template #default="{ row }">
                   <el-tag v-if="!row.timeoutAction || row.timeoutAction === 'UNSPECIFIED'" size="small" type="info">未配置</el-tag>
@@ -326,7 +325,7 @@
         </el-table-column>
       </el-table>
       <TablePager :pager="pager" @change="fetchData" />
-      <!-- D-DEC-206：接口侧 WfQueryService.fillStay 已合入 due_time 优先规则（主窗移交合入完成），
+      <!-- 接口侧 WfQueryService.fillStay 已合入 due_time 优先规则（主窗移交合入完成），
            本页与上方两表同源；无 due_time 的实例双方同走「create_time+节点 SLA」推算默认处理 -->
       <div class="perf-note">
         本表「停留时长 / 超时」的计算方式＝<b>按单据到期时间实算优先</b>，没有到期时间的才按节点配置的超时时长推算，与上方「超时未办 Top 榜」同源。
@@ -372,7 +371,6 @@ let sankeyChart = null
 let heatChart = null
 let pollTimer = null
 
-// R5-D-036
 const listFailed = ref(false)
 const overviewFailed = ref(false)
 const chartsFailed = ref(false)
@@ -402,19 +400,19 @@ const pathNote = ref('')
 const dwellNote = ref('')
 const backlogNote = ref('')
 const handlerNote = ref('')
-/** D-DEC-208/D-DEC-204：时效榜与同页 KPI 的对账数（后端 handler-top.reconcile） */
+/** /时效榜与同页 KPI 的对账数（后端 handler-top.reconcile） */
 const handlerReconcile = ref(null)
-// D-DEC-204：门控从"两列有数"改成"有待办"——对账串的作用正是解释"为什么这两列是 0"，
+// 门控从"两列有数"改成"有待办"——对账串的作用正是解释"为什么这两列是 0"，
 // 列真有数时它也要在（否则读者只看得到 0，看不到 0 的理由）。
 const handlerRecon = computed(() => {
   const r = handlerReconcile.value
   return r && (r.pendingTasks || 0) > 0 ? r : null
 })
 const droppedNodes = ref(0)
-// D-DEC-210：无名记录的规模（后端 node-dwell 的 unnamedNodeRows/Events），页面上如实交代
+// 无名记录的规模（后端 node-dwell 的 unnamedNodeRows/Events），页面上如实交代
 const unnamedEvents = ref(0)
 const unnamedRows = ref(0)
-// D-DEC-208：超时处置档台账（后端 /wf/perf/{overview,paths,node-dwell,backlog} 同一份聚合，任一应答取用）
+// 超时处置档台账（后端 /wf/perf/{overview,paths,node-dwell,backlog} 同一份聚合，任一应答取用）
 const tierLedger = ref({})
 /** 台账对应的回看天数（由后端应答携带，避免卡片标题与窗口规则错配） */
 const tierDays = ref(0)
@@ -436,7 +434,7 @@ const tierLoaded = computed(() => !!((tierLedger.value || {}).configuredNodes))
 const tierInFlight = computed(() => (tierLedger.value || {}).inFlight || {})
 const tierByTier = computed(() => tierInFlight.value.byTier || {})
 /**
- * D-DEC-208 对账：五档「在办落该档」合计 + 无配置行数 ＝ 同页 KPI 待办数
+ * 对账：五档「在办落该档」合计 + 无配置行数 ＝ 同页 KPI 待办数
  * （两侧都是 wf_task PENDING 的同一份快照，逐档出数后这条恒等式在屏幕上可自查）。
  */
 const tierCellSum = computed(() => Object.values(tierByTier.value).reduce((s, v) => s + ((v || {}).tasks || 0), 0))
@@ -481,7 +479,6 @@ const tierNote = computed(() => {
   const recon = tierPendingTotal.value
     ? `对账：五档在办合计 ${tierCellSum.value} + 无配置行 ${tierUnclassified.value} ＝ 待办任务 ${tierPendingTotal.value}（＝顶部卡片，同一份待办快照）。`
     : ''
-  // R5-D-036
   return '统计方式：配置节点数＝按节点超时处置配置归类后的节点计数（改档后此处即时可见）；'
     + '动作行数＝窗口内审批记录里的系统自动动作次数（催满后升级与直接升级同记为升级动作，两档合并计入）；'
     + '卡单＝已催办满 ' + (infl.stuckAfterUrges ?? '-') + ' 次仍在办（催办提醒阈值与升级阈值可各自配置、默认同为 3 次，故本列≠已升级）。'
@@ -500,7 +497,6 @@ function pickTierLedger(...payloads) {
   }
 }
 
-// R5-D-036
 function statNum(val, noData) {
   if (val === undefined || val === null) return noData ? '-' : 0
   return val
@@ -521,13 +517,13 @@ const hasPaths = computed(() => (paths.value.links || []).length > 0)
 const hasDwell = computed(() => dwellRows.value.length > 0)
 
 /**
- * D-DEC-210：画布高度随内容长。桑基每节点留 ~26px、热力每行 ~34px，
+ * 画布高度随内容长。桑基每节点留 ~26px、热力每行 ~34px，
  * 否则 20+ 个节点名挤在固定 300px 里必然互相叠压（12-31 截图就是这个形状）；上限 640 防撑爆页面。
  */
 const sankeyHeight = computed(() => Math.min(640, Math.max(300, ((paths.value.nodes || []).length) * 26 + 70)))
 const heatHeight = computed(() => Math.min(640, Math.max(300, dwellRows.value.length * 34 + 120)))
 
-/** D-DEC-210：节点标签截断（全名交给 tooltip），「账龄催收派单作业【催收专员】」这类长名不再压住相邻标签 */
+/** 节点标签截断（全名交给 tooltip），「账龄催收派单作业【催收专员】」这类长名不再压住相邻标签 */
 function shortNodeLabel(name, max = 12) {
   const s = String(name ?? '')
   return s.length <= max ? s : s.slice(0, max) + '…'
@@ -545,7 +541,6 @@ function formatDuration(min) {
   return (min / 60).toFixed(1) + '小时'
 }
 
-// R5-D-036
 async function loadOverview() {
   if (!canView) return
   try {
@@ -600,7 +595,7 @@ async function loadCharts() {
     dwellBuckets.value = d?.buckets || []
     dwellNote.value = d?.note || ''
     droppedNodes.value = d?.droppedNodes || 0
-    // D-DEC-210：无名记录规模（SLA 明细档的表下说明用）
+    // 无名记录规模（SLA 明细档的表下说明用）
     unnamedEvents.value = d?.unnamedNodeEvents || 0
     unnamedRows.value = d?.unnamedNodeRows || 0
     pickTierLedger(d, p)
@@ -613,7 +608,6 @@ async function loadCharts() {
   renderHeatmap()
 }
 
-// R5-D-036
 async function loadSla() {
   if (!canView) return
   try {
@@ -656,7 +650,6 @@ async function loadPerf() {
   pickTierLedger(overview.value, b)
 }
 
-// R5-D-036
 function onDaysChange() {
   loadCharts()
   loadOverview()
@@ -683,7 +676,7 @@ function renderSankey() {
   sankeyChart.setOption({
     tooltip: {
       trigger: 'item',
-      // 标签截断后（D-DEC-210），全名与经过实例数都在这里给回
+      // 标签截断后，全名与经过实例数都在这里给回
       formatter: (p) => p.dataType === 'edge'
         ? `${p.data.source} → ${p.data.target}<br/>${p.data.value} 笔单据`
         : `${p.name}<br/>经过 ${hits[p.name] || 0} 个实例`,
@@ -694,7 +687,7 @@ function renderSankey() {
       nodeWidth: 14, nodeGap: 14,
       lineStyle: { color: 'gradient', opacity: 0.3 },
       itemStyle: { borderWidth: 0 },
-      // D-DEC-210：标签截断到 12 字，并开 hideOverlap 让 ECharts 主动隐去避让不开的相邻标签
+      // 标签截断到 12 字，并开 hideOverlap 让 ECharts 主动隐去避让不开的相邻标签
       //（叠加高度自适应，节点再多也只会出现"少几个标签"，不会出现整片文字压字）
       label: {
         fontSize: 11,
@@ -724,11 +717,11 @@ function renderHeatmap() {
     })
   })
   heatChart.setOption({
-    // 行名同样给全（截断只发生在轴标签上，D-DEC-210）
+    // 行名同样给全（截断只发生在轴标签上）
     tooltip: { position: 'top', formatter: (p) => `${nodes[p.value[1]]}<br/>${buckets[p.value[0]]}：${p.value[2]} 次` },
     grid: { left: 150, right: 20, top: 24, bottom: 56 },
     xAxis: { type: 'category', data: buckets, splitArea: { show: true }, axisLabel: { fontSize: 10, hideOverlap: true, interval: 0 } },
-    // D-DEC-210：宽度截断＋ellipsis＋hideOverlap，长节点名不再溢出到格子上互相压字
+    // 宽度截断＋ellipsis＋hideOverlap，长节点名不再溢出到格子上互相压字
     yAxis: {
       type: 'category', data: nodes, splitArea: { show: true },
       axisLabel: { fontSize: 10, width: 140, overflow: 'truncate', ellipsis: '…', hideOverlap: true },
@@ -740,14 +733,14 @@ function renderHeatmap() {
     },
     series: [{
       type: 'heatmap', data: data,
-      // 格内只标非 0（0 满屏时数字互相压字且没有信息量，D-DEC-210）
+      // 格内只标非 0（0 满屏时数字互相压字且没有信息量）
       label: { show: true, fontSize: 10, formatter: (p) => (p.value[2] > 0 ? p.value[2] : '') },
       emphasis: { itemStyle: { shadowBlur: 10 } },
     }],
   }, true)
 }
 
-/** P1-3 一键跳转到单据对应业务处理页（复用 bizEntry 分发器） */
+/** 一键跳转到单据对应业务处理页（复用 bizEntry 分发器） */
 function goBiz(row) {
   if (!goBizPage(router, row)) {
     ElMessage.warning('当前账号不能直接进入该单据的业务页面，请用行内「追溯」查看全链路')
@@ -758,7 +751,6 @@ onMounted(async () => {
   await nextTick()
   // 无权限时不请求、不启动轮询（原实现无条件 fetch + setInterval → 每 30 秒弹一次错误）
   if (canView) {
-    // R5-D-036
     fetchData()
     loadOverview()
     loadCharts()
@@ -814,7 +806,7 @@ function onResize() {
 .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .chart-title .chart-sub { margin-left: 8px; font-size: 11px; font-weight: 400; color: #c0c4cc; }
 .chart-body { height: 300px; }
-/* D-DEC-206：默认处理规则的行内标注（†），与表下的规则说明成对出现 */
+/* 默认处理规则的行内标注（†），与表下的规则说明成对出现 */
 .basis-mark { margin-left: 2px; color: #e6a23c; font-weight: 600; font-size: 11px; }
 .perf-note code {
   background: #f4f4f5; padding: 0 4px; border-radius: 3px;

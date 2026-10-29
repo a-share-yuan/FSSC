@@ -170,7 +170,7 @@ import { cipApi, orgApi, assetApi } from '../../api'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 
-// ========== 枚举 ==========
+// 枚举
 // 工程类别名称表已并入 constants/enums.js 的 PROJECT_CATEGORY（本地原缺 TECH_REVAMP，导致该值显示为「—」）
 const CATEGORIES = Object.entries(PROJECT_CATEGORY).map(([value, label]) => ({ value, label }))
 const COST_TYPES = [
@@ -187,7 +187,7 @@ const statusType = (v) => (v === 'NORMAL' ? 'success' : v === 'DISABLED' ? 'info
 const editable = (row) => row.status === 'NORMAL' || row.status === 'DISABLED'
 const canTransfer = (row) => editable(row) && Number(row.accruedAmount || 0) > 0
 
-// ========== 状态 ==========
+// 状态
 const rows = ref([])
 const total = ref(0)
 const pageNum = ref(1)
@@ -224,7 +224,7 @@ const { submit: guardTransfer } = useSubmitGuard(transferFormRef)
 
 const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// ========== 列表 ==========
+// 列表
 async function load() {
   loading.value = true
   try {
@@ -235,7 +235,7 @@ async function load() {
 }
 function search() { pageNum.value = 1; load() }
 
-// ========== 主数据 ==========
+// 主数据
 async function loadCompanies() {
   try {
     const flat = []
@@ -256,7 +256,7 @@ async function loadCategories() {
   try { categories.value = (await assetApi.categoryPage({ pageNum: 1, pageSize: 200 })).list || [] } catch (e) { /* ignore */ }
 }
 
-// ========== 新增/编辑 ==========
+// 新增/编辑
 function openCreate() {
   Object.keys(form).forEach((k) => delete form[k])
   Object.assign(form, { status: 'NORMAL', accruedAmount: 0, transferredAmount: 0 })
@@ -285,7 +285,7 @@ async function del(row) {
   } catch (e) { /* cancelled */ }
 }
 
-// ========== 成本归集 ==========
+// 成本归集
 async function openCost(row) {
   costCip.value = row
   costForm.costType = ''; costForm.amount = null; costForm.occurDate = ''; costForm.description = ''
@@ -311,7 +311,7 @@ async function delCostRow(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// ========== 转固定资产 ==========
+// 转固定资产
 function openTransfer(row) {
   transferRow.value = row
   Object.assign(transferForm, { transferDate: '', categoryId: null, deptId: row.deptId || null, depreciationMethod: 'LINEAR', depreciationMonths: null, taxLifeMonths: null, remark: '' })

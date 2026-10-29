@@ -3,6 +3,10 @@
 
 package com.fssc.workflow.action;
 
+import com.fssc.audit.service.AuditTrailService;
+import com.fssc.customer.entity.CrmCustomer;
+import com.fssc.customer.mapper.CrmCustomerMapper;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.receivable.entity.RcReceivable;
@@ -10,6 +14,8 @@ import com.fssc.receivable.mapper.RcReceivableMapper;
 import com.fssc.sharing.service.VoucherService;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,7 +27,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 开票审批收尾（P0-1 事件编排总线）。
+ * 开票审批收尾（事件编排总线）。
  * <p>
  * INVOICE_ISSUE 审批通过 → inv_invoice.status: DRAFT → ISSUED
  */
@@ -33,9 +39,9 @@ public class InvoiceIssueBizAction implements WfBizAction {
     private final InvoiceDomainFacade invoiceFacade;
     private final RcReceivableMapper receivableMapper;
     private final VoucherService voucherService;
-    private final com.fssc.customer.mapper.CrmCustomerMapper crmCustomerMapper;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    private final CrmCustomerMapper crmCustomerMapper;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -52,13 +58,13 @@ public class InvoiceIssueBizAction implements WfBizAction {
             return;
         }
         try {
-            // P4-3 审计扩面：改状态前采集旧值
+            // 审计扩面：改状态前采集旧值
             String oldStatus = invoice.getStatus();
             String newStatus = Boolean.TRUE.equals(event.getApproved()) ? "ISSUED" : "REJECTED";
             invoiceFacade.updateStatus(invoiceId, newStatus);
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("status", oldStatus);
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", newStatus);
             auditTrailService.recordUpdate(event.getBizType(), invoiceId, invoice.getInvoiceNo(), "inv_invoice",
                     String.valueOf(invoiceId), auditBefore, auditAfter,
@@ -97,7 +103,7 @@ public class InvoiceIssueBizAction implements WfBizAction {
             return;
         }
         RcReceivable rec = new RcReceivable();
-        rec.setTenantId(com.fssc.framework.tenant.TenantContext.getTenantId());
+        rec.setTenantId(TenantContext.getTenantId());
         rec.setBillNo("AR-INV-" + (invoice.getInvoiceNo() == null ? String.valueOf(invoiceId) : invoice.getInvoiceNo()));
         rec.setCustomerId(customerId);
         rec.setBillDate(invoice.getInvoiceDate() != null ? invoice.getInvoiceDate() : LocalDate.now());
@@ -117,14 +123,14 @@ public class InvoiceIssueBizAction implements WfBizAction {
 
     private Long resolveOrCreateCustomer(String buyerName, String buyerTaxNo) {
         if (buyerName == null || buyerName.isBlank()) return null;
-        List<com.fssc.customer.entity.CrmCustomer> hits = crmCustomerMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.customer.entity.CrmCustomer>()
-                        .eq(com.fssc.customer.entity.CrmCustomer::getCustomerName, buyerName.trim())
-                        .orderByAsc(com.fssc.customer.entity.CrmCustomer::getId)
+        List<CrmCustomer> hits = crmCustomerMapper.selectList(
+                new LambdaQueryWrapper<CrmCustomer>()
+                        .eq(CrmCustomer::getCustomerName, buyerName.trim())
+                        .orderByAsc(CrmCustomer::getId)
                         .last("limit 1"));
         if (!hits.isEmpty()) return hits.get(0).getId();
-        com.fssc.customer.entity.CrmCustomer c = new com.fssc.customer.entity.CrmCustomer();
-        c.setTenantId(com.fssc.framework.tenant.TenantContext.getTenantId());
+        CrmCustomer c = new CrmCustomer();
+        c.setTenantId(TenantContext.getTenantId());
         c.setCustomerCode("CUST" + System.currentTimeMillis());
         c.setCustomerName(buyerName.trim());
         c.setCustomerType("CUSTOMER");

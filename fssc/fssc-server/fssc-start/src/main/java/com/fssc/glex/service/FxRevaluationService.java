@@ -18,6 +18,7 @@ import com.fssc.glex.mapper.GlFxRevaluationMapper;
 import com.fssc.masterdata.entity.MdSubject;
 import com.fssc.masterdata.mapper.MdSubjectMapper;
 import com.fssc.masterdata.service.ExchangeRateService;
+import com.fssc.masterdata.service.PeriodService;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
 import com.fssc.sharing.entity.OpVoucher;
@@ -28,6 +29,7 @@ import com.fssc.system.entity.SysCompany;
 import com.fssc.system.entity.SysConfig;
 import com.fssc.system.mapper.SysCompanyMapper;
 import com.fssc.system.mapper.SysConfigMapper;
+import com.fssc.system.service.NumberRuleService;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
@@ -94,10 +96,10 @@ public class FxRevaluationService {
     private final OpVoucherMapper voucherMapper;
     private final OpVoucherLineMapper voucherLineMapper;
     private final SysConfigMapper configMapper;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
-    private final com.fssc.masterdata.service.PeriodService periodService;
+    private final NumberRuleService numberRuleService;
+    private final PeriodService periodService;
 
-    // ============================ 纯函数（可脱离 Spring 单测）============================
+    // 纯函数（可脱离 Spring 单测）
 
     /** 重估方向：损益方向。GAIN 收益（汇兑收益，冲减财务费用）/ LOSS 损失（计入财务费用）/ SKIP 无差异。 */
     public enum FxDirection { GAIN, LOSS, SKIP }
@@ -175,7 +177,7 @@ public class FxRevaluationService {
         }
     }
 
-    // ============================ 主流程 ============================
+    // 主流程
 
     /**
      * 逐外币货币性项目期末重估。{@code fx.reval_enabled=0} 直接返回。
@@ -286,7 +288,7 @@ public class FxRevaluationService {
         return PageResult.of(pg.getRecords(), pg.getTotal(), pageNum, pageSize);
     }
 
-    // ============================ 试算 / 反冲（P1-7 四步化：试算→确认→凭证→反冲）============================
+    // 试算 / 反冲（四步化：试算→确认→凭证→反冲）
 
     /**
      * 重估试算（第一步，只算不写入数据库）：逐 公司+币种+方向 桶取期末汇率并算预计差异，
@@ -412,13 +414,13 @@ public class FxRevaluationService {
         return ret;
     }
 
-    // ============================ 查询聚合 ============================
+    // 查询聚合
 
     /** 三类货币性项目聚合为 公司+币种+方向 桶。 */
     private LinkedHashMap<String, Bucket> collectBuckets(String p, LocalDate monthEnd, Long defaultCompany) {
         LinkedHashMap<String, Bucket> map = new LinkedHashMap<>();
 
-        // ---- AP 外币应付 ----
+        // AP 外币应付
         List<ExpBill> apBills = expBillMapper.selectList(new LambdaQueryWrapper<ExpBill>()
                 .in(ExpBill::getBillType, AP_BILL_TYPES)
                 .eq(ExpBill::getStatus, "APPROVED")
@@ -457,7 +459,7 @@ public class FxRevaluationService {
             }
         }
 
-        // ---- LOAN 员工外币借款（bill_type=LOAN，loan_balance>0）----
+        // LOAN 员工外币借款（bill_type=LOAN，loan_balance>0）
         List<ExpBill> loans = expBillMapper.selectList(new LambdaQueryWrapper<ExpBill>()
                 .eq(ExpBill::getBillType, "LOAN")
                 .gt(ExpBill::getLoanBalance, BigDecimal.ZERO));
@@ -474,7 +476,7 @@ public class FxRevaluationService {
                     cur, "LOAN", book, orig);
         }
 
-        // ---- AR 外币应收（rc_receivable 无公司维度，取租户首个公司默认处理）----
+        // AR 外币应收（rc_receivable 无公司维度，取租户首个公司默认处理）
         List<RcReceivable> receivables = rcReceivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
                 .gt(RcReceivable::getRemainAmount, BigDecimal.ZERO)
                 .ne(RcReceivable::getCurrencyCode, HOME));
@@ -513,7 +515,7 @@ public class FxRevaluationService {
         b.count++;
     }
 
-    // ============================ 凭证生成 ============================
+    // 凭证生成
 
     /** 一公司一币种一方向一张重估凭证（DRAFT，不自动记账）。 */
     private Long createRevalVoucher(String p, LocalDate monthEnd, Bucket b, BigDecimal diff,
@@ -581,7 +583,7 @@ public class FxRevaluationService {
         return s;
     }
 
-    // ============================ 工具 ============================
+    // 工具
 
     private Long firstCompanyId() {
         SysCompany c = sysCompanyMapper.selectOne(new LambdaQueryWrapper<SysCompany>()

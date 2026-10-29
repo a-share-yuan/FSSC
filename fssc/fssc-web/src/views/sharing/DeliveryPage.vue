@@ -14,7 +14,7 @@
 
     <!-- Tab 切换 -->
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
-      <!-- ==================== 签收中心 ==================== -->
+      <!-- 签收中心 -->
       <el-tab-pane :label="$t('sharing.delivery.tabSign')" name="sign">
         <!-- 扫码签收栏 -->
         <div class="scan-bar">
@@ -84,7 +84,7 @@
           <el-table-column :label="$t('common.operation')" width="190" fixed="right">
             <template #default="{ row }">
               <el-button link size="small" type="primary" @click="openTrace(row)">{{ $t('sharing.common.btnTrace') }}</el-button>
-              <!-- R5-D-243：单据 DRAFT/CANCELLED 时后端签收/拒签校验必拒（先提交单据才能签），
+              <!-- 单据 DRAFT/CANCELLED 时后端签收/拒签校验必拒（先提交单据才能签），
                    前端同一规则隐藏入口并给出原因，避免"点了必失败"；billStatus 由服务端批量回填。 -->
               <template v-if="row.status === 'PENDING'">
                 <template v-if="!isDraftLike(row)">
@@ -108,7 +108,7 @@
           @current-change="(p) => { pageNum = p; load() }" />
       </el-tab-pane>
 
-      <!-- ==================== 交单登记 ==================== -->
+      <!-- 交单登记 -->
       <el-tab-pane :label="$t('sharing.delivery.tabApply')" name="apply">
         <el-form ref="applyFormRef" :model="applyForm" :rules="applyFormRules" label-width="100px" style="max-width:600px" size="default">
           <el-form-item :label="$t('sharing.delivery.btnPickBill')" prop="billId">
@@ -131,7 +131,7 @@
               />
             </el-select>
           </el-form-item>
-          <!-- V1.4.92（AMC-01）：非集中档案管理公司的纸质原件留原单位，后端 applyDelivery 必拒，前端同一规则前置说明 -->
+          <!-- AMC-01：非集中档案管理公司的纸质原件留原单位，后端 applyDelivery 必拒，前端同一规则前置说明 -->
           <el-form-item v-if="applyNonCentral">
             <el-alert type="info" :closable="false" show-icon :title="$t('sharing.delivery.hintNonCentralArchive')" />
           </el-form-item>
@@ -198,7 +198,7 @@
           @current-change="(p) => { myPageNum = p; loadMyDeliveries() }" />
       </el-tab-pane>
 
-      <!-- ==================== 条码管理 ==================== -->
+      <!-- 条码管理 -->
       <el-tab-pane :label="$t('sharing.delivery.tabBarcode')" name="barcode">
         <div class="filter-bar">
           <el-select v-model="barcodeFilters.bizType" :placeholder="$t('sharing.common.colBizType')" clearable size="small" style="width:120px">
@@ -214,7 +214,7 @@
           </el-select>
           <el-input v-model="barcodeFilters.keyword" :placeholder="$t('sharing.delivery.phBarcodeKeyword')" clearable size="small" style="width:200px" @keyup.enter="loadBarcodes" />
           <el-button type="primary" size="small" @click="loadBarcodes">{{ $t('common.search') }}</el-button>
-          <!-- R5-D-245：条码管理此前只读列表，无生成/上架入口；后端 /barcode/generate、/barcode/shelve 早已在 -->
+          <!-- 条码管理此前只读列表，无生成/上架入口；后端 /barcode/generate、/barcode/shelve 早已在 -->
           <el-button type="success" size="small" @click="openGenerateBarcode">{{ $t('sharing.delivery.btnGenByBill') }}</el-button>
         </div>
 
@@ -237,7 +237,7 @@
           <el-table-column prop="location" :label="$t('sharing.delivery.colLocation')" width="120"  sortable />
           <el-table-column :label="$t('common.operation')" width="80" fixed="right">
             <template #default="{ row }">
-              <!-- R5-D-245：档案上架入口（扫码/输入位置）——未上架条码可操作，已上架只读展示 -->
+              <!-- 档案上架入口（扫码/输入位置）——未上架条码可操作，已上架只读展示 -->
               <el-button v-if="row.status !== 'SHELVED'" link type="primary" v-prevent-double-click @click="shelveBarcode(row)">{{ $t('sharing.delivery.btnShelve') }}</el-button>
               <span v-else style="color:#909399; font-size:12px">{{ $t('sharing.delivery.optShelved') }}</span>
             </template>
@@ -299,7 +299,7 @@
       </el-table>
     </el-dialog>
 
-    <!-- R5-D-245：按单据生成条码（重打/补打场景，每次生成产生新条码值） -->
+    <!-- 按单据生成条码（重打/补打场景，每次生成产生新条码值） -->
     <el-dialog v-model="genBarcodeVisible" :title="$t('sharing.delivery.btnGenByBill')" width="480px">
       <el-select
         v-model="genBarcodeBill"
@@ -343,7 +343,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -358,8 +358,8 @@ function openRowDetail(row) {
   return showRowDetail(row, { title: t('field.detail') })
 }
 
-// ==================== Common ====================
-// P: tab 页拆分——菜单深链传入 tab 时只作为默认页签，页签条保持可点（D-BIZ-05）
+// Common
+// P: tab 页拆分——菜单深链传入 tab 时只作为默认页签，页签条保持可点
 const props = defineProps({ tab: { type: String, default: '' } })
 const activeTab = ref(props.tab || 'sign')
 
@@ -387,7 +387,7 @@ function barcodeStatusType(s) {
   return { GENERATED: 'info', PRINTED: '', SCANNED: 'warning', SHELVED: 'success' }[s] || 'info'
 }
 
-// ==================== Sign Center ====================
+// Sign Center
 const rows = ref([])
 const total = ref(0)
 const pageNum = ref(1)
@@ -435,7 +435,7 @@ function resetSearch() {
   doSearch()
 }
 
-// R5-D-243：与后端 DeliveryService.sign/reject 的 DRAFT/CANCELLED 守卫同一规则（billStatus 由服务端回填）
+// 与后端 DeliveryService.sign/reject 的 DRAFT/CANCELLED 守卫同一规则（billStatus 由服务端回填）
 function isDraftLike(row) {
   return ['DRAFT', 'CANCELLED'].includes(row?.billStatus)
 }
@@ -448,7 +448,7 @@ async function sign(row) {
   if (signPromptOpen) return
   signPromptOpen = true
   try {
-    // R5-D-241：后端签收已支持签收备注（signRemark），前端由 confirm 改为 prompt 收集记录；
+    // 后端签收已支持签收备注（signRemark），前端由 confirm 改为 prompt 收集记录；
     // 用户取消（undefined）时直接返回，不再把 cancel 当错误弹。
     const { value: signRemark } = await ElMessageBox.prompt(
       t('sharing.delivery.confirmSign', { v1: row.billNo }), t('sharing.delivery.titleSignConfirm'), {
@@ -491,7 +491,7 @@ function openReject(row) {
   rejectVisible.value = true
 }
 
-// R5-D-247：上次校验失败的错误文案会残留在重新打开的拒签弹窗上（数据已重置、提示未清），
+// 上次校验失败的错误文案会残留在重新打开的拒签弹窗上（数据已重置、提示未清），
 // 打开即清校验状态。
 function onRejectOpen() {
   rejectFormRef.value?.clearValidate()
@@ -531,7 +531,7 @@ async function showByBill(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// ==================== Apply (交单登记) ====================
+// Apply (交单登记)
 const applyFormRef = ref(null)
 const applyForm = ref({ billId: null, expressCompany: '', expressNo: '', packageCount: 1, deliveryType: 'POST', remark: '' })
 const applyFormRules = computed(() => ({
@@ -547,7 +547,7 @@ const myTotal = ref(0)
 const myPageNum = ref(1)
 const billOptions = ref([])
 const billSearching = ref(false)
-// V1.4.92（AMC-01）：公司档案管理模式（companyTree 返回 SysCompany.archiveMode）
+// AMC-01：公司档案管理模式（companyTree 返回 SysCompany.archiveMode）
 const companyById = ref({})
 const applyBill = ref(null)
 const applyNonCentral = computed(() => {
@@ -602,7 +602,7 @@ async function loadMyDeliveries() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// ==================== Barcode ====================
+// Barcode
 const barcodes = ref([])
 const barcodeTotal = ref(0)
 const barcodePageNum = ref(1)
@@ -616,7 +616,7 @@ async function loadBarcodes() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// R5-D-245：按单据生成条码（条码管理页此前无写入出口；后端 /barcode/generate 早已在）
+// 按单据生成条码（条码管理页此前无写入出口；后端 /barcode/generate 早已在）
 const genBarcodeVisible = ref(false)
 const genBarcodeBill = ref(null)
 const genBarcodeOptions = ref([])
@@ -652,7 +652,7 @@ async function doGenerateBarcode() {
   finally { genBarcodeLoading.value = false }
 }
 
-// R5-D-245：档案上架（扫码/输入位置），走后端 /barcode/shelve
+// 档案上架（扫码/输入位置），走后端 /barcode/shelve
 let shelvePromptOpen = false
 async function shelveBarcode(row) {
   if (shelvePromptOpen) return
@@ -673,7 +673,7 @@ async function shelveBarcode(row) {
   finally { shelvePromptOpen = false }
 }
 
-// ==================== Tab Change ====================
+// Tab Change
 function onTabChange(tab) {
   if (tab === 'apply') loadMyDeliveries()
   else if (tab === 'barcode') loadBarcodes()
@@ -724,6 +724,6 @@ function exportCsv() {
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
-/* R5-D-243：草稿/已取消单据的签收/拒签被校验时的灰态说明（hover 出原因） */
+/* 草稿/已取消单据的签收/拒签被校验时的灰态说明（hover 出原因） */
 .sign-blocked-tip { color: #c0c4cc; font-size: 12px; cursor: not-allowed; }
 </style>

@@ -18,10 +18,12 @@ import com.fssc.workflow.entity.WfInstance;
 import com.fssc.workflow.mapper.WfAssigneeDimMapper;
 import com.fssc.workflow.mapper.WfAssigneeSchemeMapper;
 import com.fssc.workflow.mapper.WfInstanceMapper;
+import java.util.Collection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.task.api.Task;
 import org.springframework.stereotype.Service;
 
@@ -93,10 +95,10 @@ public class WfAssigneeResolver {
     /**
      * 解析某节点的办理人（维度并集/交集/排除，多方案按优先级降级）。
      *
-     * @param modelKey   流程定义 key（与 wf_node_config.model_key 同源）
-     * @param nodeKey    节点 key（BPMN userTask id）
+     * @param modelKey 流程定义 key（与 wf_node_config.model_key 同源）
+     * @param nodeKey 节点 key（BPMN userTask id）
      * @param procInstId 流程实例 ID（维度解析的组织上下文；可空，空则退化为"无单据上下文"规则）
-     * @param task       当前任务（EXCLUDE 组合模式需要它取候选组；可空）
+     * @param task 当前任务（EXCLUDE 组合模式需要它取候选组；可空）
      * @return {@code configured=false} ⇒ 该节点无方案，调用方必须保持原行为；
      *         {@code configured=true} ⇒ {@code userIds} 必然非空
      * @throws BizException 配了方案但全部方案都解析不出人（禁止静默留候选组）
@@ -238,7 +240,7 @@ public class WfAssigneeResolver {
         return preview(mk, nk, pi, task);
     }
 
-    // ---------- 方案 / 维度装载 ----------
+    // 方案 / 维度装载
 
     private List<WfAssigneeScheme> enabledSchemes(String modelKey, String nodeKey) {
         if (modelKey == null || modelKey.isBlank() || nodeKey == null || nodeKey.isBlank()) {
@@ -269,7 +271,7 @@ public class WfAssigneeResolver {
                 .orderByAsc(WfAssigneeDim::getId));
     }
 
-    // ---------- 组合 ----------
+    // 组合
 
     private List<Long> combine(WfAssigneeScheme scheme, List<WfAssigneeDim> dims,
                                String procInstId, Task task, Map<String, Object> vars) {
@@ -314,7 +316,7 @@ public class WfAssigneeResolver {
         return new ArrayList<>(out);
     }
 
-    // ---------- 单维度解析 ----------
+    // 单维度解析
 
     private List<Long> resolveDim(WfAssigneeDim dim, String procInstId, Map<String, Object> vars) {
         String type = dim.getDimType() == null ? "" : dim.getDimType().trim().toUpperCase();
@@ -515,7 +517,7 @@ public class WfAssigneeResolver {
         }
         Set<Long> out = new LinkedHashSet<>();
         try {
-            for (org.flowable.identitylink.api.IdentityLink il : flowTaskService.getIdentityLinksForTask(task.getId())) {
+            for (IdentityLink il : flowTaskService.getIdentityLinksForTask(task.getId())) {
                 if ("candidate".equals(il.getType()) && il.getGroupId() != null) {
                     out.addAll(nodeOrgResolver.listRoleCandidates(procInstId, il.getGroupId()));
                 }
@@ -527,7 +529,7 @@ public class WfAssigneeResolver {
         return new ArrayList<>(out);
     }
 
-    // ---------- 组织数据 ----------
+    // 组织数据
 
     /** 按 parent_id 向下展开 depth 层子孙部门 */
     private Set<Long> descendantDeptIds(Set<Long> roots, int depth) {
@@ -608,7 +610,7 @@ public class WfAssigneeResolver {
         return out;
     }
 
-    // ---------- 条件表达式 ----------
+    // 条件表达式
 
     private static final Pattern PREDICATE = Pattern.compile(
             "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(==|!=|>=|<=|>|<)\\s*(.+?)\\s*$");
@@ -700,7 +702,7 @@ public class WfAssigneeResolver {
         }
     }
 
-    // ---------- 小工具 ----------
+    // 小工具
 
     private Map<String, Object> variables(String procInstId) {
         if (procInstId == null || procInstId.isBlank()) {
@@ -748,7 +750,7 @@ public class WfAssigneeResolver {
         if (v == null) {
             return null;
         }
-        if (v instanceof java.util.Collection<?> c) {
+        if (v instanceof Collection<?> c) {
             StringBuilder sb = new StringBuilder();
             for (Object o : c) {
                 if (o != null) {

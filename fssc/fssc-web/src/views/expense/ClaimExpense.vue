@@ -4,7 +4,7 @@
 <template>
   <BillWorkbench ref="wb" bill-type="CLAIM" sub-type="" :claim="true" :before-submit="onBeforeSubmit">
     <template #create="b">
-      <!-- ============ 单据概要 ============ -->
+      <!-- 单据概要 -->
       <el-card :header="$t('expense.claim.colBillSummary')">
         <el-form ref="formRef" :rules="formRules" :model="b.form.bill" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -33,8 +33,8 @@
                 <el-select v-model="b.form.bill.currencyCode" style="width: 100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 
-                  
-                  
+
+
                 </el-select>
               </el-form-item>
             </el-col>
@@ -72,7 +72,7 @@
         </el-form>
       </el-card>
 
-      <!-- ============ 费用详情 ============ -->
+      <!-- 费用详情 -->
       <el-card :header="$t('expense.claim.colExpenseDetail')" style="margin-top: 12px">
         <el-form :model="shareForm" :rules="shareTypeRules" label-width="110px" size="default">
           <!-- 单选组恒有默认值，不存在漏填，故不加红星 -->
@@ -140,7 +140,7 @@
           </el-table-column>
           <el-table-column :label="$t('expense.claim.colEntertainType')" width="130">
             <template #default="{ row }">
-              <!-- D-DEC-373：绑真实列 entertain_type，ext_json 仅作历史单据回显默认处理（查询范围见 entertainOfLine） -->
+              <!-- 绑真实列 entertain_type，ext_json 仅作历史单据回显默认处理（查询范围见 entertainOfLine） -->
               <el-select :model-value="entertainOfLine(row).type" style="width: 100%" :disabled="!isEntertain(b, row)" clearable
                 :placeholder="isEntertain(b, row) ? t('expense.claim.dlgPickEntertainType') : t('expense.claim.phEntertainAfter')"
                 @update:model-value="(v) => setEntertain(row, { entertainType: v })">
@@ -150,21 +150,21 @@
           </el-table-column>
           <el-table-column :label="$t('expense.claim.colGuests')" width="110">
             <template #default="{ row }">
-              <!-- D-DEC-023：接待对象 → exp_bill_line.attendees（列注释即「参与人员(招待费/会议费)」） -->
+              <!-- 接待对象 → exp_bill_line.attendees（列注释即「参与人员(招待费/会议费)」） -->
               <el-input :model-value="row.attendees || ''" :disabled="!isEntertain(b, row)" size="small" :placeholder="$t('expense.claim.colEntertainGuests')"
                 @update:model-value="(v) => setEntertain(row, { attendees: v })" />
             </template>
           </el-table-column>
           <el-table-column :label="$t('expense.claim.colHeadcount')" width="120">
             <template #default="{ row }">
-              <!-- D-DEC-023：接待人数 → exp_bill_line.person_count（列注释「涉及人数(招待费必填)」） -->
+              <!-- 接待人数 → exp_bill_line.person_count（列注释「涉及人数(招待费必填)」） -->
               <el-input-number :model-value="row.personCount ?? undefined" :min="1" :disabled="!isEntertain(b, row)" style="width: 100%" :controls-position="'right'"
                 @update:model-value="(v) => setEntertain(row, { personCount: v })" />
             </template>
           </el-table-column>
           <el-table-column :label="$t('expense.claim.colStdPerPerson')" width="100">
             <template #default="{ row }">
-              <!-- D-DEC-023：人均标准随单入库（ext_json.perCapita），审批人不再只能口述 -->
+              <!-- 人均标准随单入库（ext_json.perCapita），审批人不再只能口述 -->
               <span style="font-size:12px">{{ perCapita(row) != null ? b.fmt(perCapita(row)) : '—' }}</span>
             </template>
           </el-table-column>
@@ -201,7 +201,7 @@
         <div style="margin-top: 6px">{{ $t('expense.claim.labFeeTotal') }}<span style="color:#f59a23;font-weight:700">{{ b.fmt(totalAmount(b)) }}</span> {{ $t('expense.claim.txtTaxSuffix', { v1: b.fmt(b.sumTax()) }) }}</div>
       </el-card>
 
-      <!-- ============ 结算信息 ============ -->
+      <!-- 结算信息 -->
       <el-card :header="$t('expense.claim.secSettlement')" style="margin-top: 12px">
 <el-form ref="settleFormRef" :model="b.form.bill" :rules="formRules" label-width="110px" size="default">
           <el-row :gutter="12">
@@ -223,9 +223,9 @@
                 <el-select v-model="b.form.bill.payTarget" style="width: 100%" :placeholder="$t('expense.common.phPickPayeeType')">
 <el-option v-for="o in payeeTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
 
-                  
-                  
-                  
+
+
+
                 </el-select>
               </el-form-item>
             </el-col>
@@ -303,7 +303,7 @@ const payMethodDict = useBaseDict('pay_method', PAY_METHOD_LOCAL, PAY_METHOD_I18
 const payMethodOptions = payMethodDict.options
 const { saveFormHistory } = useAutoFill()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -323,12 +323,12 @@ const shareTypeRules = { shareType: commonRules.select('请选择分摊方式') 
 const currentUserName = ref(store.user?.username || store.user?.userName || t('expense.common.optCurrentUser'))
 const years = [new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1]
 
-// ---------- 表头必填：红星/规则/提交校验同源（constants/billRequired.js），两个 el-form 共用一份 rules ----------
+// 表头必填：红星/规则/提交校验同源（constants/billRequired.js），两个 el-form 共用一份 rules
 const formRules = computed(() => billRules('CLAIM', ''))
 const formRef = ref(null)
 const settleFormRef = ref(null)
 
-// ---------------- 海外报账①：外币行汇率（留空自动带出当月汇率 + 系统价只读提示） ----------------
+// 海外报账①：外币行汇率（留空自动带出当月汇率 + 系统价只读提示）
 const currencies = ['CNY', 'USD', 'EUR', 'JPY', 'HKD', 'GBP', 'SGD']
 function lineCur(row) { return row.currencyCode || 'CNY' }
 function isForeignLine(row) { return lineCur(row) !== 'CNY' }
@@ -355,7 +355,7 @@ async function fetchSysRate(b, row) {
     const r = await masterApi.rate.lookup(row.currencyCode, 'CNY', date)
     if (r != null) {
       row._sysRate = Number(r)
-      // 汇率留空时仅前端预览本位币金额；保存草稿由后端按表价权威反算（R3）
+      // 汇率留空时仅前端预览本位币金额；保存草稿由后端按表价权威反算
       if (!(Number(row.exchangeRate) > 0) && row.origAmount != null) {
         row.amount = Math.round(row.origAmount * row._sysRate * 100) / 100
       }
@@ -368,7 +368,7 @@ function onOrigAmt(b, row, v) {
     const r = effRate(row)
     row.amount = r > 0 ? Math.round(v * r * 100) / 100 : v
   } else {
-    // R5-D-055：本币行同步回写原币金额与汇率（与后端 saveDraft 默认处理形成双侧保证）
+    // 本币行同步回写原币金额与汇率（与后端 saveDraft 默认处理形成双侧保证）
     row.amount = v
     row.origAmount = v
     row.exchangeRate = 1
@@ -387,7 +387,7 @@ function onRateInput(b, row, v) {
 function newLine(b) {
   const l = b.newLine()
   l.priceType = b.form.bill.priceType || null
-  // 境外凭证合规⑤（V1.3.14）：凭证形态默认境内发票；选境外收据/行程单时中文说明必填（19号公告）
+  // 境外凭证合规⑤：凭证形态默认境内发票；选境外收据/行程单时中文说明必填（19号公告）
   l.voucherForm = 'FAPIAO'
   l.cnDesc = ''
   return l
@@ -396,7 +396,7 @@ function needCnDesc(row) { return row.voucherForm === 'RECEIPT' || row.voucherFo
 function recalcLine(b, row) {
   if (b.form.bill.priceType) row.priceType = b.form.bill.priceType
   b.recalcLine(row)
-  // D-DEC-023：金额变了，人均标准（ext_json.perCapita）要跟着重算，不能只在人数输入时刷新
+  // 金额变了，人均标准（ext_json.perCapita）要跟着重算，不能只在人数输入时刷新
   syncPerCapitaExt(row)
 }
 // 录入规则变化：表头统一规则，逐行同步 priceType（行不单独选，保存草稿时随每行提交）
@@ -413,13 +413,13 @@ function isEntertain(b, row) {
   return it && (it.itemName || '').includes('招待')
 }
 
-// ───────── D-DEC-023：招待三项（接待对象 / 接待人数 / 人均标准）随单入库 ─────────
+// ───────── 招待三项（接待对象 / 接待人数 / 人均标准）随单入库 ─────────
 // 原实现把三项绑在 row.entertainTarget / row.entertainCount / row.entertainType 三个「裸字段」上，
-// 后端 ExpBillLine 实体没有这三个同名属性 ⇒ 请求体反序列化时被丢弃 ⇒ exp_bill_line.ext_json={} ，
+// 后端 ExpBillLine 实体没有这三个同名属性 ⇒ 请求体反序列化时被丢弃 ⇒ exp_bill_line.ext_json={}，
 // 详情页三项全空、人均标准校验只能靠审批人口述（12-09 单A/单B 两次实测）。
 // 现按真实承载写入数据库：接待对象→attendees、接待人数→person_count、人均标准→ext_json.perCapita，
 // 三项另冗余写进 ext_json（后端可据此做标准校验）。
-// D-DEC-373：招待费类型改落真实列 exp_bill_line.entertain_type，ext_json.entertainType 同步写一份以兼容历史查询。
+// 招待费类型改落真实列 exp_bill_line.entertain_type，ext_json.entertainType 同步写一份以兼容历史查询。
 function lineExt(row) {
   if (typeof row.extJson === 'string') {
     try { row.extJson = JSON.parse(row.extJson || '{}') } catch { row.extJson = {} }
@@ -500,7 +500,7 @@ function applyUserName(b) {
 }
 
 async function onBeforeSubmit(b) {
-  // D-V4R-46：页面级拦截原因同步写 b.submitHint（3 秒 toast 会消失，常驻横幅靠它显示具体原因）
+  // 页面级拦截原因同步写 b.submitHint（3 秒 toast 会消失，常驻横幅靠它显示具体原因）
   const warnStop = (msg) => { b.submitHint = msg; ElMessage.warning(msg); return false }
   // 表头 + 结算必填校验（红星同源，见 constants/billRequired.js）
   if (!(await validateForms([formRef, settleFormRef]))) {
@@ -515,7 +515,7 @@ async function onBeforeSubmit(b) {
     const future = b.form.lines.find((l) => l.expenseDate && l.expenseDate > todayStr())
     if (future) return warnStop(t('expense.claim.errExpenseDateFuture', { v1: future.expenseDate }))
   }
-  // P0-6 防付错的后端默认处理规则（assertPayeeAccount）：payTarget 驱动 payeeAccountNo，已由红星+校验覆盖
+  // 防付错的后端默认处理规则（assertPayeeAccount）：payTarget 驱动 payeeAccountNo，已由红星+校验覆盖
   // 收款账号同步到 extJson（兼容既有打印/导出规则）
   if (b.form.bill.payeeAccountNo) b.form.bill.extJson.accountNo = b.form.bill.payeeAccountNo
   // 费用承担：把每行的成本中心/项目/预算科目同步到分摊信息（exp_bill_share 持久化）
@@ -546,8 +546,8 @@ async function onBeforeSubmit(b) {
       return warnStop(t('expense.claim.errProjectRequired'))
     }
     if (isEntertain(b, l)) {
-      // D-DEC-023：三项承载＝entertain_type 列 / attendees / person_count
-      // D-DEC-373：历史草稿类型只在 ext_json 里，提交前回填进列，否则随单丢掉
+      // 三项承载＝entertain_type 列 / attendees / person_count
+      // 历史草稿类型只在 ext_json 里，提交前回填进列，否则随单丢掉
       if (!l.entertainType && lineExt(l).entertainType) l.entertainType = lineExt(l).entertainType
       if (!l.entertainType) { return warnStop(t('expense.claim.errEntertainType')) }
       if (!(Number(l.personCount) >= 1)) { return warnStop(t('expense.claim.errEntertainHeadcount')) }
@@ -555,7 +555,7 @@ async function onBeforeSubmit(b) {
       syncPerCapitaExt(l)
     }
   }
-  // 境外凭证合规⑤（V1.3.14）：境外收据/行程单必填中文说明（后端 submit 同一规则默认处理）
+  // 境外凭证合规⑤：境外收据/行程单必填中文说明（后端 submit 同一规则默认处理）
   if (b.form.lines.some((l) => l.itemId && needCnDesc(l) && !(l.cnDesc || '').trim())) {
     return warnStop(t('expense.claim.errAbroadCnDesc'))
   }
@@ -638,22 +638,23 @@ onMounted(async () => {
   // 字典不可用时 useBaseDict 自动回落到本地常量，界面与改造前逐字一致
   payMethodDict.load()
   // 编辑草稿/驳回单重提：携带 editBillId 深链时载入该单据到表单
+  // 不要此处不得回写路由 query：App.vue 按 route.fullPath 给页面挂 :key，改 query＝整页重挂载，
+  // 刚载入的表单会被一份空白新建态顶掉（toast 仍说「已载入」，界面却是空单）。
   try {
     const eb = route.query.editBillId
     if (eb && wb.value?.b?.loadBillForEdit) {
       await wb.value.b.loadBillForEdit({ id: Number(eb) })
-      router.replace({ query: {} })
     }
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   try {
-    // P0 修复（2026-10-21）：默认只加载同公司人员，解决性能与安全问题
+    // P0 修复：默认只加载同公司人员，解决性能与安全问题
     const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
     const b = wb.value && wb.value.b
     const uid = store.user?.userId ?? store.user?.id
     if (b && !b.form.bill.applyUserId) {
-      // P1-5 默认申请人 = 当前登录人，严格匹配 me.id，不回退 list[0]
+      // 默认申请人 = 当前登录人，严格匹配 me.id，不回退 list[0]
       const me = uid ? list.find((x) => x.id === uid) : null
       if (me) {
         b.form.bill.applyUserId = me.id

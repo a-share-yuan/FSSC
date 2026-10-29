@@ -5,9 +5,13 @@ package com.fssc.masterdata.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.PageResult;
 import com.fssc.masterdata.entity.MdPayee;
 import com.fssc.masterdata.mapper.MdPayeeMapper;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -18,8 +22,8 @@ import org.springframework.util.StringUtils;
 public class PayeeService {
 
     private final MdPayeeMapper mapper;
-    /** P4-3 审计扩面（D 类）：付款账户变更记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面（D 类）：付款账户变更记录 */
+    private final AuditTrailService auditTrailService;
 
     public PageResult<MdPayee> page(long pageNum, long pageSize, String keyword) {
         LambdaQueryWrapper<MdPayee> qw = new LambdaQueryWrapper<>();
@@ -41,7 +45,7 @@ public class PayeeService {
     }
 
     /**
-     * P4-3 审计扩面（D 类·付款账户变更）：改前采集旧值，**仅当银行账户/开户行实际变化时**记录
+     * 审计扩面（D 类·付款账户变更）：改前采集旧值，**仅当银行账户/开户行实际变化时**记录
      * （规则：before/after 只含本次实际变化字段；取不到旧实体则不写、不伪造）。
      */
     public void update(MdPayee e) {
@@ -50,13 +54,13 @@ public class PayeeService {
         if (old == null) {
             return;
         }
-        java.util.Map<String, Object> before = new java.util.LinkedHashMap<>();
-        java.util.Map<String, Object> after = new java.util.LinkedHashMap<>();
-        if (e.getBankAccount() != null && !java.util.Objects.equals(old.getBankAccount(), e.getBankAccount())) {
+        Map<String, Object> before = new LinkedHashMap<>();
+        Map<String, Object> after = new LinkedHashMap<>();
+        if (e.getBankAccount() != null && !Objects.equals(old.getBankAccount(), e.getBankAccount())) {
             before.put("bankAccount", old.getBankAccount());
             after.put("bankAccount", e.getBankAccount());
         }
-        if (e.getBankName() != null && !java.util.Objects.equals(old.getBankName(), e.getBankName())) {
+        if (e.getBankName() != null && !Objects.equals(old.getBankName(), e.getBankName())) {
             before.put("bankName", old.getBankName());
             after.put("bankName", e.getBankName());
         }

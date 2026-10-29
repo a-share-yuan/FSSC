@@ -48,7 +48,7 @@ public class InvoiceFacadeImpl implements InvoiceFacade, InvoiceDomainFacade {
     /**
      * 用 ObjectProvider 延迟解析：共享域 {@code VoucherService} 反向依赖本 Facade，
      * 而 {@code InvoiceService} 又依赖 {@code VoucherService}，直接构造注入会构成构造器循环
-     * （Spring Boot 默认禁止循环引用）。读方法只碰两个 Mapper，不需要服务实例。
+     * Spring Boot 默认禁止循环引用。读方法只碰两个 Mapper，不需要服务实例。
      */
     private final ObjectProvider<InvoiceService> invoiceServiceProvider;
 
@@ -72,17 +72,17 @@ public class InvoiceFacadeImpl implements InvoiceFacade, InvoiceDomainFacade {
         invoice.setImgFileId(dto.getImgFileId());
         // 与 OcrService#toInvoice 原语义一致：票面状态由主域补齐
         invoice.setStatus("NORMAL");
-        // 【D-DEC-115】OCR 识别成功 ≠ 验真通过：旧写法入池即 verify_status=PASS，
+        // 【】OCR 识别成功 ≠ 验真通过：旧写法入池即 verify_status=PASS，
         // 系统内没有任何外部验真报文支撑，却等于「已验真」；且 PASS 不在定时验真捞取集合
-        // （NONE/PENDING/FAILED）内，这张票此后再也不会被真正验真。
-        // 改为 NONE=待验真：OCR 入池票带影像（img_file_id 非空），满足 D-DEC-074 前置谓词，
+        // NONE/PENDING/FAILED 内，这张票此后再也不会被真正验真。
+        // 改为 NONE=待验真：OCR 入池票带影像（img_file_id 非空），满足 前置谓词，
         // 会被定时验真捞取；外部验真通道启用后由 InvoiceVerifyScheduler 落真实结论。
         invoice.setVerifyStatus("NONE");
         return invoiceServiceProvider.getObject().create(invoice);
     }
 
     /**
-     * D-DEC-463（去重环节②）：入池前的"已在池"判定，装配规则与本类的查重列一致——
+     * 去重环节②：入池前的"已在池"判定，装配规则与本类的查重列一致——
      * 全电票的 invoiceCode 归一为空串（{@code create} 里同样把 NULL 归一为 ''，否则 {@code = ''} 永不命中）。
      */
     @Override
@@ -94,7 +94,7 @@ public class InvoiceFacadeImpl implements InvoiceFacade, InvoiceDomainFacade {
         return invoiceServiceProvider.getObject().existsInPool(code, dto.getInvoiceNo());
     }
 
-    // ==================== 发票主表读 ====================
+    // 发票主表读
 
     @Override
     public InvInvoice findById(Long invoiceId) {
@@ -190,7 +190,7 @@ public class InvoiceFacadeImpl implements InvoiceFacade, InvoiceDomainFacade {
                 .orderByDesc(InvInvoice::getCreateTime));
     }
 
-    // ==================== 发票主表写 ====================
+    // 发票主表写
 
     @Override
     public Long insertInvoice(InvInvoice invoice) {
@@ -209,7 +209,7 @@ public class InvoiceFacadeImpl implements InvoiceFacade, InvoiceDomainFacade {
         return invInvoiceMapper.updateById(upd) > 0;
     }
 
-    // ==================== 单据-发票勾稽 ====================
+    // 单据-发票勾稽
 
     @Override
     public List<InvBillInvoice> findLinksByBillId(Long billId) {

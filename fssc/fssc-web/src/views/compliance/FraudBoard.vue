@@ -14,7 +14,7 @@
       </div>
     </template>
 
-    <!-- R5-D-049：阻断档位当前 0 命中——说明卡解释开/关两种行为，避免用户误判"风控失效" -->
+    <!-- 阻断档位当前 0 命中——说明卡解释开/关两种行为，避免用户误判"风控失效" -->
     <el-alert type="info" show-icon :closable="false" style="margin-bottom:12px"
               title="阻断档位说明：配置键 fraud.block_on_submit.enabled 默认关闭——关闭时仅记录并进人工待审，开启后命中阻断规则的单据在提交时硬拦。" />
 
@@ -109,7 +109,7 @@
             <el-button link size="small" type="success" @click="doAppealReview(row, true)">申诉通过</el-button>
             <el-button link size="small" type="danger" @click="doAppealReview(row, false)">申诉驳回</el-button>
           </template>
-          <!-- D-V5R-10（F-run-1017b 实测）：人工放行只对「会拦付款的行」渲染——与后端
+          <!-- F-run-1017b 实测：人工放行只对「会拦付款的行」渲染——与后端
                paymentBlockReason / fraud/page pendingRelease 同一规则（HIGH_RISK 且未复审且未人工放行）。
                原实现按 actionTaken==='REVIEW' 渲染，预警行（WARN）与待审行的按钮混排，
                按行文本定位极易点到预警行的【申诉】（实测首轮脚本就点错行）。 -->
@@ -156,7 +156,7 @@ const TYPE_ST = {
   ENTERTAINMENT: '招待费', SAME_SUPPLIER: '同供应商频次', HOLIDAY: '节假日', TYPE_AMOUNT_MISMATCH: '类型金额匹配', MULTI_SUPPLIER: '多笔拆分',
 }
 const RESULT_ST = { HIGH_RISK: '高风险', SUSPICIOUS: '可疑', NORMAL: '正常' }
-// R5-D-049：ALLOW 是自动放行、RELEASE 是人工放行，两者同义不同源，文案必须区分
+// ALLOW 是自动放行、RELEASE 是人工放行，两者同义不同源，文案必须区分
 const ACTION_ST = { ALLOW: '自动放行', WARN: '预警', REVIEW: '人工待审', BLOCK: '阻断', MONITOR: '监控', RELEASE: '人工放行' }
 function riskTag(r) { return r === 'HIGH_RISK' ? 'danger' : (r === 'SUSPICIOUS' ? 'warning' : 'success') }
 function actionTag(a) { return a === 'BLOCK' ? 'danger' : ((a === 'WARN' || a === 'MONITOR' || a === 'REVIEW') ? 'warning' : 'success') }
@@ -196,12 +196,12 @@ async function doReview(row, action) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// P2-12 申诉闭环
+// 申诉闭环
 function hasPendingAppeal(row) {
   return !row.reviewedAt && (row.details || '').includes('[申诉待审')
 }
 
-/** D-V5R-10：是否「待人工放行」行——与后端 paymentBlockReason / /fraud/page pendingRelease 同一规则：
+/** 是否「待人工放行」行——与后端 paymentBlockReason / /fraud/page pendingRelease 同一规则：
  *  HIGH_RISK 且未复审且未人工放行。只有这些行会拦付款，才给【人工放行/阻断】；
  *  预警（WARN）/可疑（SUSPICIOUS）行不拦付款，只留【申诉】，避免两类按钮混排点错。 */
 function isPendingRelease(row) {
@@ -242,12 +242,12 @@ function shortTime(t) {
   try { return new Date(t).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) } catch { return t }
 }
 
-// 双击行：展示行数据详情（41号审查 P1-9）
+// 双击行：展示行数据详情（41号审查）
 function openRowDetail(row) {
   return showRowDetail(row, { title: '风险检测详情' })
 }
 
-// 41号审查 P1-9：导出当前查询结果
+// 41号审查 导出当前查询结果
 function doExport() {
   exportCsv(logs.value.map((r) => ({
     ...r,

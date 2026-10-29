@@ -12,13 +12,13 @@
         </el-radio-group>
         <el-input v-model="kw" :placeholder="$t('system.image.phSearchCodeName')" clearable style="width: 180px" @keyup.enter="load" />
         <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
-        <!-- R5-D-251：写入口按 image:setting:update 前置隐藏（无权限时点了必 4030）；导出属读操作按 list -->
+        <!-- 写入口按 image:setting:update 前置隐藏（无权限时点了必 4030）；导出属读操作按 list -->
         <el-button v-if="canSettingUpdate" size="small" type="success" @click="openForm()">{{ $t('system.common.btnAdd') }}</el-button>
         <el-button v-if="canSettingList" size="small" @click="doExport">{{ $t('system.common.btnExportCsv') }}</el-button>
       </div>
     </template>
 
-    <!-- R5-D-251：无 image:setting:list 时不渲染表格、也不发必 4030 的请求，直接给可行动空态 -->
+    <!-- 无 image:setting:list 时不渲染表格、也不发必 4030 的请求，直接给可行动空态 -->
     <template v-if="canSettingList">
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
     <el-table :data="pagedData" size="small" stripe v-else max-height="480" :empty-text="$t('common.empty')">
@@ -78,14 +78,14 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R5-D-251：镜像设置项读写权限办结——此前页面无任何前端权限校验：
+// 镜像设置项读写权限办结——此前页面无任何前端权限校验：
 // 无 image:setting:list 的账号进来即连环弹 4030；无 update 的账号看得见新增/编辑/删除且点了必失败。
 const canSettingList = hasPerm('image:setting:list')
 const canSettingUpdate = hasPerm('image:setting:update')
 
 const tab = ref('BIZ_TYPE')
 const rows = ref([])
-// P0-1: 本地分页（前端切片已拉取的全量设置项，避免一次性渲染全部行）
+// 本地分页（前端切片已拉取的全量设置项，避免一次性渲染全部行）
 const pager = useTablePager({ mode: 'server', storageKey: 'system_image_setting' })
 const { pagedData } = pager
 const loading = ref(false)
@@ -98,7 +98,7 @@ const settingRules = computed(() => (reactive({
   settingName: [{ required: true, message: t('system.image.errNameRequired') }],
 })))
 
-// R5-D-251：同一文案 3 秒内只弹一次（切 Tab/翻页/连续查询时同一个错误会连环弹 toast）
+// 同一文案 3 秒内只弹一次（切 Tab/翻页/连续查询时同一个错误会连环弹 toast）
 let lastErrMsg = ''
 let lastErrAt = 0
 function toastOnce(msg) {
@@ -110,7 +110,7 @@ function toastOnce(msg) {
 }
 
 async function load() {
-  // R5-D-251：无 list 权限时不发请求（服务端必 4030），直接给空态
+  // 无 list 权限时不发请求（服务端必 4030），直接给空态
   if (!canSettingList) { rows.value = []; return }
   loading.value = true
   try {
@@ -128,7 +128,7 @@ function openForm(row) {
   vis.value = true
 }
 
-// 41号审查 P1-9：导出当前 Tab 设置项
+// 41号审查 导出当前 Tab 设置项
 function doExport() {
   exportCsv(rows.value, [
     { prop: 'settingType', label: t('system.image.colSettingType') }, { prop: 'settingCode', label: t('system.common.colCode') },
@@ -137,7 +137,7 @@ function doExport() {
   ], 'ImageSetting_' + tab.value)
 }
 
-// R5-D-249：系统列（审计/租户/逻辑删）不回传，避免旧行回显触发后端填充跳过或入参伪造
+// 系统列（审计/租户/逻辑删）不回传，避免旧行回显触发后端填充跳过或入参伪造
 const SYSTEM_COLS = ['createBy', 'createTime', 'updateBy', 'updateTime', 'delFlag', 'tenantId']
 function stripSystemCols(o) {
   const c = { ...o }

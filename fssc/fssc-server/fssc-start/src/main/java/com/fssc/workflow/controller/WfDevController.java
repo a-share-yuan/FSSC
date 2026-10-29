@@ -40,18 +40,18 @@ public class WfDevController {
 
     private final WfEngineFacade wfEngineFacade;
 
-    /** P1-4：流程调试工具开关，默认开启（联调/自动化测试用），生产置 false */
+    /** 流程调试工具开关，默认开启（联调/自动化测试用），生产置 false */
     @Value("${fssc.wf.dev-tool-enabled:true}")
     private boolean devToolEnabled;
 
     /**
      * ST-03：取消僵尸流程实例（测试数据卫生；PROCESS_CANCELLED 不触发业务收尾事件）
      *
-     * <p>D-DEC-455：本方法曾与类注释宣称的办结不一致——{@code /start} 与
+     * <p>本方法曾与类注释宣称的办结不一致——{@code /start} 与
      * {@code /instance/refresh-biz-no} 都挂了权限校验，唯独这条「取消任意实例」的环节裸奔，
      * 任何登录用户都能作废他人 in-flight 流程。现与同族端点同码办结，并补 {@code @OperLog}
      * 让作废动作进 {@code sys_oper_log}（此前只在 {@code wf_task_history} 留 CANCEL，
-     * 平台侧记录零痕迹）。业务单据的正当作废出口＝D-DEC-454 的 {@code pay-plan/{id}/void}，
+     * 平台侧记录零痕迹）。业务单据的正当作废出口＝的 {@code pay-plan/{id}/void}，
      * 该端点会同步回写单据状态，不需要走这里。</p>
      */
     @RequiresPerm({"wf:design:update", "wf:model:update"})
@@ -70,13 +70,13 @@ public class WfDevController {
     private static final AtomicLong ID_SEQ = new AtomicLong(System.currentTimeMillis() % 100000000L + 8000000000L);
 
     /**
-     * 批次3 R3-C（D-B3-03）：按实例补救业务单据号（去重，单实例）。
+     * 批次3 R3-C：按实例补救业务单据号（去重，单实例）。
      *
      * <p>请求体：{@code instanceId}（{@code wf_instance.id}）。行为与发起时同源：重新解析单据号，
      * 只在"解析得到且与现值不同"时写回 {@code wf_instance.biz_no}（并同步 {@code wf_task.biz_no} 冗余列）；
      * 解析不到 ⇒ 保持原值，<b>不会</b>把已有单号刷成 null。重复调用同一实例结果一致。</p>
      *
-     * <p>不提供批量入口，也不自动回填 2026-09-23 之前的 32 条历史 NULL——那批属裁决项（V1.4.37 备而未执行）。
+     * <p>不提供批量入口，也不自动回填 2026-09-23 之前的 32 条历史 NULL——那批属裁决项（备而未执行）。
      * 为什么放在 dev 工具下：它写的是流程侧展示列，不改业务表、不改流转状态，但可被用来伪造单号列，
      * 故与 {@code /start} 同级办结在 {@code wf:model:update} + {@code dev-tool-enabled} 之后。</p>
      *
@@ -115,7 +115,7 @@ public class WfDevController {
     @RequiresPerm({"wf:design:update", "wf:model:update"})
     @PostMapping("/start")
     public Result<Map<String, Object>> start(@RequestBody Map<String, Object> body) {
-        // P1-4：生产环境可通过 fssc.wf.dev-tool-enabled=false 关闭该调试入口
+        // 生产环境可通过 fssc.wf.dev-tool-enabled=false 关闭该调试入口
         if (!devToolEnabled) {
             return Result.fail(403, "流程调试工具已禁用（fssc.wf.dev-tool-enabled=false）");
         }

@@ -49,12 +49,12 @@ public class BgOccupy implements Serializable {
     private String remark;
     private LocalDateTime createTime;
 
-    /** R5-D-269：操作人姓名（非表列）——page 时由控制器批查 sys_user 填充（nickName 缺省回退 userName），
+    /** 操作人姓名（非表列）——page 时由控制器批查 sys_user 填充（nickName 缺省回退 userName），
      *  查不到时留空由前端回退显示裸 id，禁自造码值。 */
     @TableField(exist = false)
     private String operUserName;
 
-    /** R5-D-269：操作人工号（非表列，取 sys_user.emp_no），供「姓名（工号）」可读规则展示与导出。 */
+    /** 操作人工号（非表列，取 sys_user.emp_no），供「姓名（工号）」可读规则展示与导出。 */
     @TableField(exist = false)
     private String operUserNo;
 }

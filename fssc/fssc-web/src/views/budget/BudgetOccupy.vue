@@ -50,11 +50,11 @@
         </el-table-column>
         <el-table-column prop="bizType" label="业务类型" width="130" :formatter="(row, col, val) => bizTypeLabel(val)" />
         <el-table-column prop="bizNo" label="单据号" width="160" sortable />
-        <!-- R5-D-269：操作人改「姓名（工号）」可读规则（后端批查 sys_user 回填）；查不到回退裸 id -->
+        <!-- 操作人改「姓名（工号）」可读规则（后端批查 sys_user 回填）；查不到回退裸 id -->
         <el-table-column prop="operUserId" label="操作人" width="130" sortable :formatter="(row) => operatorText(row)" />
         <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
         <el-table-column prop="createTime" label="时间" width="160" sortable :formatter="(row, col, val) => formatDateTime(val)" />
-        <!-- D-V4R-39：审批收尾的「占用转消耗」撞行锁失败时，日志让用户去 预算›占用 点【核销】——
+        <!-- 审批收尾的「占用转消耗」撞行锁失败时，日志让用户去 预算›占用 点【核销】——
              接口 /budget/occupy/write-off 与权限点 budget:occupy:do 一直都在，缺的只是这扇门。 -->
         <el-table-column label="操作" width="80" fixed="right">
           <template #default="{ row }">
@@ -73,7 +73,7 @@
   </div>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
 
-<!-- P2-14 预算占用→余额双向穿透 -->
+<!-- 预算占用→余额双向穿透 -->
 <el-dialog v-model="balanceVisible" title="预算项余额联查" width="480px" destroy-on-close>
   <el-descriptions v-if="balanceInfo" :column="2" border size="small">
     <el-descriptions-item label="预算明细ID">{{ balanceInfo.id }}</el-descriptions-item>
@@ -90,7 +90,7 @@
   <el-empty v-else description="未找到该预算明细" :image-size="60" />
 </el-dialog>
 
-<!-- D-V4R-39：占用核销入口（后端 budget:occupy:do 校验在，缺的是门） -->
+<!-- 占用核销入口（后端 budget:occupy:do 校验在，缺的是门） -->
 <el-dialog v-model="woVisible" title="核销预算占用" width="470px" destroy-on-close>
   <el-alert type="warning" :closable="false" show-icon style="margin-bottom:12px"
     title="核销＝把这笔占用转成已用（消耗）。只在系统自动结转失败、账本上出现「只有占用没有核销」的单子上用；操作会留流水，不可撤销。" />
@@ -122,7 +122,7 @@ import { commonRules, validateForm } from '../../composables/useFormRules'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -147,7 +147,7 @@ const bizTypes = [
   { label: '资金付款', value: 'TR_PAY' },
 ]
 
-// D-V4R-39：核销入口——从一条「占用」流水带出同一枚预算明细与同一张单据，金额取该笔占用的绝对值
+// 核销入口——从一条「占用」流水带出同一枚预算明细与同一张单据，金额取该笔占用的绝对值
 const woVisible = ref(false)
 const woBusy = ref(false)
 const woForm = reactive({ budgetItemId: null, amount: 0, bizType: null, bizId: null, bizNo: '' })
@@ -210,7 +210,7 @@ function resetFilter() {
 function operTypeLabel(v) {
   return { OCCUPY: '占用', RELEASE: '释放', WRITE_OFF: '核销' }[v] || v
 }
-// R5-D-269：操作人显示「姓名（工号）」；姓名缺失回退裸 id，工号缺失只显姓名——绝不臆造
+// 操作人显示「姓名（工号）」；姓名缺失回退裸 id，工号缺失只显姓名——绝不臆造
 function operatorText(row) {
   const name = row.operUserName
   if (!name) return row.operUserId == null ? '—' : String(row.operUserId)
@@ -237,7 +237,7 @@ function openRowDetail(row) {
   return showRowDetail(row, { title: '详情' })
 }
 
-// P2-14:点击预算明细ID 联查该项预算余额(总额/调整/占用/使用/可用)
+// 点击预算明细ID 联查该项预算余额(总额/调整/占用/使用/可用)
 const balanceVisible = ref(false)
 const balanceInfo = ref(null)
 const availAmount = computed(() => {
@@ -257,7 +257,7 @@ async function openBalance(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// 41号审查 P1-9：导出当前查询结果；R5-D-269：操作人同步「姓名（工号）」可读规则
+// 41号审查 导出当前查询结果；操作人同步「姓名（工号）」可读规则
 function doExport() {
   const rows = list.value.map((r) => ({ ...r, operatorText: operatorText(r) }))
   exportCsv(rows, [

@@ -13,7 +13,7 @@ import java.util.Set;
  * 发票域跨域读写契约：费用域、共享域、合规域、财务域、流程收尾通过此接口访问发票池，
  * 不直接依赖 InvInvoiceMapper / InvBillInvoiceMapper / InvoiceService。
  *
- * <p><b>分库同前（2026-10-27）</b>：发票域登记了独立路由键 {@code invoice}（{@code fssc.datasource.invoice}），
+ * <p><b>分库同前</b>：发票域登记了独立路由键 {@code invoice}（{@code fssc.datasource.invoice}），
  * 独立库就绪前该路由别名到 master，实现类（{@code InvoiceFacadeImpl}）同时标注类级
  * {@code @FsscDataSource("invoice")}——今天走的是主库，独立库一开即自动改道，调用方零改动。
  * 跨域共享的是<b>数据形状</b>（实体字段，前端序列化不变），不是仓储：查询语义全部留在实现类里。
@@ -27,7 +27,7 @@ import java.util.Set;
  */
 public interface InvoiceDomainFacade {
 
-    // ==================== 发票主表读 ====================
+    // 发票主表读
 
     /** 按主键取一张发票；不存在／已逻辑删返回 null。 */
     InvInvoice findById(Long invoiceId);
@@ -62,7 +62,7 @@ public interface InvoiceDomainFacade {
     /** 按来源单据反查发票（按创建时间倒序）。 */
     List<InvInvoice> findBySourceDoc(String sourceDocType, Long sourceDocId);
 
-    // ==================== 发票主表写 ====================
+    // 发票主表写
 
     /**
      * 原始入池（<b>不走</b> {@code InvoiceService#create} 的全校验链，仅登记），
@@ -75,7 +75,7 @@ public interface InvoiceDomainFacade {
     /** 只改票面状态；发票不存在返回 false。 */
     boolean updateStatus(Long invoiceId, String status);
 
-    // ==================== 单据-发票勾稽（inv_bill_invoice） ====================
+    // 单据-发票勾稽（inv_bill_invoice）
 
     /** 按单据取勾稽行（租户内）。 */
     List<InvBillInvoice> findLinksByBillId(Long billId);
@@ -93,7 +93,7 @@ public interface InvoiceDomainFacade {
      * 一组发票被「非本单」占用的勾稽行数（预检跨单占用计数）。
      *
      * @param invoiceIds 同号票的 ID 集合（空集合直接返回 0）
-     * @param billId     当前单据 ID
+     * @param billId 当前单据 ID
      */
     long countLinksByInvoiceIdsExcludingBill(Collection<Long> invoiceIds, Long billId);
 

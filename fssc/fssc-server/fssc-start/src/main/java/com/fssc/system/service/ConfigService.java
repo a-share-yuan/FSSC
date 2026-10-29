@@ -8,10 +8,16 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.cache.TenantCache;
 import com.fssc.framework.datasource.FsscDataSource;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.SysConfig;
+import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysConfigMapper;
+import com.fssc.system.mapper.SysUserMapper;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -23,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConfigService {
 
     private final SysConfigMapper sysConfigMapper;
-    private final com.fssc.system.mapper.SysUserMapper sysUserMapper;
+    private final SysUserMapper sysUserMapper;
 
     /**
      * 平台属主参数键前缀（G4 参数权属显式化，2026-09-24）。
@@ -36,7 +42,7 @@ public class ConfigService {
      *
      * <p>校验只作用于这两个前缀，<b>其它域配置的现有行为完全不变</b>（本类其余方法亦不改）。
      */
-    private static final java.util.List<String> PLATFORM_OWNED_PREFIXES = java.util.List.of("wf.", "approve.");
+    private static final List<String> PLATFORM_OWNED_PREFIXES = List.of("wf.", "approve.");
 
     public PageResult<SysConfig> page(long pageNum, long pageSize, String keyword) {
         LambdaQueryWrapper<SysConfig> qw = new LambdaQueryWrapper<>();
@@ -58,6 +64,7 @@ public class ConfigService {
         }
         config.setId(null);
         sysConfigMapper.insert(config);
+        evictValueCache(config.getConfigKey());
         return config.getId();
     }
 
@@ -73,6 +80,9 @@ public class ConfigService {
             throw new BizException(ErrorCode.PARAM_INVALID, "该参数为平台下发只读，租户不可修改");
         }
         sysConfigMapper.updateById(config);
+        // 改键场景两份都要清（旧键的缓存不清就会继续供 getValue 命中旧值）
+        evictValueCache(exist.getConfigKey());
+        evictValueCache(config.getConfigKey());
     }
 
     /** 工作流域参数键是否受平台属主约束（键名前缀 wf. 或 approve.） */
@@ -94,7 +104,7 @@ public class ConfigService {
      *
      * <p><b>administrator 的真实判定依据（库内实测）</b>：{@code sys_user.is_admin = 1}
      * —— 当前库中同时满足 {@code user_name='admin'} 与 {@code is_admin=1} 的账号只有一个
-     * （id=1 / tenant_id=1），与 {@code NodeOrgResolver.isAdministrator()} 全仓规则一致
+     * id=1 / tenant_id=1，与 {@code NodeOrgResolver.isAdministrator()} 全仓规则一致
      * （is_admin=1 <b>或</b> user_name='admin'）；此外 {@code LoginUser.isAdmin()}（perms 含
      * {@code *:*:*}）亦视为平台超管。三者取并集，避免出现"铁律判定说他是 admin、参数校验说不算"的漂移。</p>
      */
@@ -112,7 +122,7 @@ public class ConfigService {
 
     /** 当前登录人是否平台 administrator：perms 含 *:*:* ∪ sys_user.is_admin=1 ∪ user_name='admin' */
     private boolean isPlatformAdministrator() {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         if (u == null) {
             return false;
         }
@@ -122,7 +132,7 @@ public class ConfigService {
         if (u.getUserId() == null) {
             return false;
         }
-        com.fssc.system.entity.SysUser su = sysUserMapper.selectById(u.getUserId());
+        SysUser su = sysUserMapper.selectById(u.getUserId());
         if (su == null) {
             return false;
         }
@@ -138,12 +148,28 @@ public class ConfigService {
     @FsscDataSource("master")
     @Transactional(propagation = Propagation.NOT_SUPPORTED, readOnly = true)
     public String getValue(String key) {
+        // 实测一次「付款批次确认」把这条只读参数取数打了 26 遍：sys_config 才几十行，
+        // 但每遍都是一个独立往返，而这台库单语句固定成本 1~17ms ⇒ 走主数据缓存门面 TenantCache
+        // （默认进程内 TTL，置 fssc.redis.enabled=true 自动切集中式；与字典/组织同一套设施，不自建缓存）。
+        // 三个写入口 create/update/setValue 都挂 evict，改参数当场生效，不会读到旧值。
         Long tenantId = TenantContext.getTenantId();
-        SysConfig c = sysConfigMapper.selectOne(new LambdaQueryWrapper<SysConfig>()
-                .eq(SysConfig::getConfigKey, key)
-                .eq(SysConfig::getTenantId, tenantId)
-                .last("limit 1"));
-        return c == null ? null : c.getConfigValue();
+        return TenantCache.get(
+                TenantCache.mdKey("config:" + key),
+                () -> {
+                    SysConfig c = sysConfigMapper.selectOne(new LambdaQueryWrapper<SysConfig>()
+                            .eq(SysConfig::getConfigKey, key)
+                            .eq(SysConfig::getTenantId, tenantId)
+                            .last("limit 1"));
+                    return c == null ? null : c.getConfigValue();
+                });
+    }
+
+    /** 参数值写入口统一失效：getValue 走 TenantCache，改完必须当场读到新值 */
+    private static void evictValueCache(String key) {
+        if (key != null && !key.isBlank()) {
+            TenantCache.evict(
+                    TenantCache.mdKey("config:" + key));
+        }
     }
 
     /**
@@ -172,5 +198,6 @@ public class ConfigService {
             u.setConfigValue(value);
             sysConfigMapper.updateById(u);
         }
+        evictValueCache(key);
     }
 }
