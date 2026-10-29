@@ -3,8 +3,14 @@
 
 package com.fssc.receivable.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
+import com.fssc.receivable.entity.RcBadDebt;
+import com.fssc.receivable.entity.RcReceivable;
+import com.fssc.receivable.mapper.RcBadDebtMapper;
+import com.fssc.receivable.mapper.RcReceivableMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -13,6 +19,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -40,10 +47,10 @@ public class RcBadDebtExcelService {
     public record ParseResult(List<Map<String, Object>> rows, List<String> errors) {
     }
 
-    private final com.fssc.receivable.mapper.RcBadDebtMapper badDebtMapper;
-    private final com.fssc.receivable.mapper.RcReceivableMapper receivableMapper;
-    /** R5-D-097：Excel 通道公司维度守卫（模板导入与列表/回显同一规则，不绕过数据范围） */
-    private final com.fssc.framework.org.OrgGuard orgGuard;
+    private final RcBadDebtMapper badDebtMapper;
+    private final RcReceivableMapper receivableMapper;
+    /** Excel 通道公司维度守卫（模板导入与列表/回显同一规则，不绕过数据范围） */
+    private final OrgGuard orgGuard;
 
     public ParseResult parse(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -106,7 +113,7 @@ public class RcBadDebtExcelService {
     }
 
     /** 逐行执行核销（OA 仅推申请人，明细由模板导入——蓝图流程22）。返回 {writtenOff, errors}。 */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> importAndWriteOff(MultipartFile file, RcBadDebtService writeOffService) {
         ParseResult parsed = parse(file);
         int writtenOff = 0;
@@ -115,22 +122,22 @@ public class RcBadDebtExcelService {
             try {
                 String invoiceNo = String.valueOf(row.get("invoiceNo"));
                 String billNo = invoiceNo.startsWith("AR-INV-") ? invoiceNo : "AR-INV-" + invoiceNo;
-                com.fssc.receivable.entity.RcReceivable rec = receivableMapper.selectOne(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.receivable.entity.RcReceivable>()
-                                .and(w -> w.eq(com.fssc.receivable.entity.RcReceivable::getBillNo, billNo)
-                                        .or().eq(com.fssc.receivable.entity.RcReceivable::getBillNo, invoiceNo))
+                RcReceivable rec = receivableMapper.selectOne(
+                        new LambdaQueryWrapper<RcReceivable>()
+                                .and(w -> w.eq(RcReceivable::getBillNo, billNo)
+                                        .or().eq(RcReceivable::getBillNo, invoiceNo))
                                 .last("LIMIT 1"));
                 if (rec == null) {
                     throw new BizException(ErrorCode.PARAM_INVALID, "发票号/应收单号 " + invoiceNo + " 未找到应收单");
                 }
-                // R5-D-097：Excel 通道同步办结——模板行指向他公司应收时按可见性守卫行级拒绝，
+                // Excel 通道同步办结——模板行指向他公司应收时按可见性守卫行级拒绝，
                 // 坏账列表/导入/回显规则一致（集团账号与 data_scope=1 仍按 OrgGuard 既有豁免）
                 orgGuard.assertVisible(rec.getCompanyId(), null);
-                com.fssc.receivable.entity.RcBadDebt debt = badDebtMapper.selectOne(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.receivable.entity.RcBadDebt>()
-                                .eq(com.fssc.receivable.entity.RcBadDebt::getReceivableId, rec.getId())
-                                .eq(com.fssc.receivable.entity.RcBadDebt::getStatus, "PROVISIONED")
-                                .orderByDesc(com.fssc.receivable.entity.RcBadDebt::getId)
+                RcBadDebt debt = badDebtMapper.selectOne(
+                        new LambdaQueryWrapper<RcBadDebt>()
+                                .eq(RcBadDebt::getReceivableId, rec.getId())
+                                .eq(RcBadDebt::getStatus, "PROVISIONED")
+                                .orderByDesc(RcBadDebt::getId)
                                 .last("LIMIT 1"));
                 if (debt == null) {
                     throw new BizException(ErrorCode.PARAM_INVALID,

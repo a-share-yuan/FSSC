@@ -17,6 +17,11 @@ import com.fssc.invoice.mapper.InvInvoiceLineMapper;
 import com.fssc.invoice.mapper.InvInvoiceMapper;
 import com.fssc.invoice.mapper.InvVerifyLogMapper;
 import com.fssc.framework.datasource.FsscDataSource;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,7 +44,7 @@ public class InvoiceEnhanceService {
     private final InvVerifyLogMapper verifyLogMapper;
     private final InvInvoiceMapper invoiceMapper;
 
-    // ---------- 发票明细行 ----------
+    // 发票明细行
 
     public List<InvInvoiceLine> linesByInvoice(Long invoiceId) {
         return lineMapper.selectList(new LambdaQueryWrapper<InvInvoiceLine>()
@@ -81,7 +86,7 @@ public class InvoiceEnhanceService {
         lineMapper.deleteById(id);
     }
 
-    // ---------- 发票验真日志（审计表，只增不改） ----------
+    // 发票验真日志（审计表，只增不改）
 
     public PageResult<InvVerifyLog> verifyLogPage(long pageNum, long pageSize, Long invoiceId) {
         LambdaQueryWrapper<InvVerifyLog> qw = new LambdaQueryWrapper<>();
@@ -90,16 +95,16 @@ public class InvoiceEnhanceService {
         }
         qw.orderByDesc(InvVerifyLog::getId);
         Page<InvVerifyLog> p = verifyLogMapper.selectPage(Page.of(pageNum, pageSize), qw);
-        // R5-D-122：inv_verify_log 无 invoice_no 列（审计表按真实列声明，加列属 DDL 裁决）——
+        // inv_verify_log 无 invoice_no 列（审计表按真实列声明，加列属 DDL 裁决）——
         // 列表查询后按 invoiceId 一次批查发票号码，回填到实体 transient 列供「发票号码」列按票稽核
         List<InvVerifyLog> records = p.getRecords();
         if (!records.isEmpty()) {
-            java.util.Set<Long> invIds = records.stream()
+            Set<Long> invIds = records.stream()
                     .map(InvVerifyLog::getInvoiceId)
-                    .filter(java.util.Objects::nonNull)
-                    .collect(java.util.stream.Collectors.toSet());
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
             if (!invIds.isEmpty()) {
-                java.util.Map<Long, String> noMap = new java.util.HashMap<>();
+                Map<Long, String> noMap = new HashMap<>();
                 for (InvInvoice inv : invoiceMapper.selectBatchIds(invIds)) {
                     noMap.put(inv.getId(), inv.getInvoiceNo());
                 }
@@ -112,7 +117,7 @@ public class InvoiceEnhanceService {
     /**
      * 记录一次验真（税务/第三方/人工渠道；审计表不提供更新/删除）。
      *
-     * <p><b>D-DEC-174 写环节补齐</b>：本表两个"人/时间"列此前全程无人赋值，
+     * <p><b>写环节补齐</b>：本表两个"人/时间"列此前全程无人赋值，
      * 验真记录页的「验真时间」「验真人」因此恒空——
      * <ul>
      *   <li>{@code verify_time}：实体上写的是 {@code @TableField(fill = FieldFill.INSERT)}，
@@ -155,10 +160,10 @@ public class InvoiceEnhanceService {
      * 报文随结论一起进 {@code inv_verify_log}，事后能被复核；没有报文的模拟请求请走
      * {@link #verifyNow(Long, String, String, Long)}，它不给「验真通过」。
      *
-     * @param pass        通道给出的判定
-     * @param msg         说明（空值时按判定给默认文案）
-     * @param channel     验真渠道，取 {@code inv_verify_log.channel} 既有名称表；为空按 {@code SYSTEM}（系统作业）
-     * @param reqParam    请求报文（为空回落 invoiceNo）
+     * @param pass 通道给出的判定
+     * @param msg 说明（空值时按判定给默认文案）
+     * @param channel 验真渠道，取 {@code inv_verify_log.channel} 既有名称表；为空按 {@code SYSTEM}（系统作业）
+     * @param reqParam 请求报文（为空回落 invoiceNo）
      * @param respContent 返回报文（真实通道的证据本体）
      */
     @Transactional(rollbackFor = Exception.class)
@@ -182,7 +187,7 @@ public class InvoiceEnhanceService {
     /**
      * 实时/手动验真（需求 7.1/7.2）：发票池按钮与批量入口共用的「发起」出口。
      *
-     * <p><b>【D-DEC-115】模拟通道不再产出「验真通过」。</b>本方法拿不到任何外部报文——调用方是浏览器
+     * <p><b>【】模拟通道不再产出「验真通过」。</b>本方法拿不到任何外部报文——调用方是浏览器
      * （{@code POST /verify/now}、{@code /verify/batch}，前端把 result 硬编码成 PASS、按钮文案写着
      * 「模拟税务通道」）或旧定时作业的回退分支。旧实现把这些请求一律按 {@code result≠FAIL 即通过}
      * 写成 {@code verify_status=SUCCESS}，并顺手在 inv_verify_log 落一行 {@code resp_content=result=PASS}
@@ -229,7 +234,7 @@ public class InvoiceEnhanceService {
     /**
      * 批量验真（发票列表多选 → 一键验真）：逐张走 {@link #verifyNow} 的发起规则并返回受理张数。
      *
-     * <p>D-DEC-115：旧实现在这里硬编码 {@code result="PASS"}（注释自陈「当前模拟 PASS」），
+     * <p>旧实现在这里硬编码 {@code result="PASS"}（注释自陈「当前模拟 PASS」），
      * 每张被点选的发票都直接变成 SUCCESS；真实通道接入前不产出通过结论。
      */
     @Transactional(rollbackFor = Exception.class)

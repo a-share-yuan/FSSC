@@ -6,8 +6,10 @@ package com.fssc.apflow.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fssc.apflow.entity.ApMonthClose;
 import com.fssc.apflow.mapper.ApMonthCloseMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.bank.entity.BankReconItem;
 import com.fssc.bank.mapper.BankReconItemMapper;
 import com.fssc.collab.entity.CollabSyncLog;
@@ -22,6 +24,9 @@ import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.mapper.OpVoucherMapper;
 import com.fssc.system.entity.SysCompany;
 import com.fssc.system.mapper.SysCompanyMapper;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,10 +47,10 @@ import java.util.UUID;
  *
  * <p>整改（41-非费用域完成度审查 P0/P1）：companyId 必填并校验组织存在；检查项不再只能"通过"；
  * 全程动作写 traceJson 记录；提供前置自动检查
- * （未审凭证数/未匹配三单数/未达账项数），人工仅处理异常项。
+ * 未审凭证数/未匹配三单数/未达账项数，人工仅处理异常项。
  *
- * <p>D-V4R-65：本服务不再复写 md_period。会计期间状态机的唯一归属是总账月结审批末节点
- * （见 GlMonthCloseService#applyApprovalOutcome 与 D-DEC-189），子账月结抢先封期会让
+ * <p>本服务不再复写 md_period。会计期间状态机的唯一归属是总账月结审批末节点
+ * （见 GlMonthCloseService#applyApprovalOutcome 与），子账月结抢先封期会让
  * AP→AR→GL 的同主体月结链在后两环被"期间已结账"拦死。
  */
 @Slf4j
@@ -63,8 +68,8 @@ public class ApMonthCloseService {
     private final OpVoucherMapper voucherMapper;
     private final ExpBillMapper expBillMapper;
     private final BankReconItemMapper bankReconItemMapper;
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /** 发起关账：body {companyId,period,groupLeader,remark}；组织必填、期间冲突拦截。 */
     @Transactional(rollbackFor = Exception.class)
@@ -82,13 +87,13 @@ public class ApMonthCloseService {
         Long exists = mapper.selectCount(new LambdaQueryWrapper<ApMonthClose>()
                 .eq(ApMonthClose::getCompanyId, companyId)
                 .eq(ApMonthClose::getPeriod, period)
-                // R5-D-218：已关账/已作废的旧单不占用本期间（作废后可重新发起）
+                // 已关账/已作废的旧单不占用本期间（作废后可重新发起）
                 .notIn(ApMonthClose::getStatus, ApMonthClose.ST_CLOSED, ApMonthClose.ST_VOID));
         if (exists > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "期间 " + period + " 已存在未完成的关账单");
         }
         ApMonthClose c = new ApMonthClose();
-        c.setCloseNo("MC" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+        c.setCloseNo("MC" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + UUID.randomUUID().toString().substring(0, 4).toUpperCase());
         c.setCompanyId(companyId);
         c.setPeriod(period);
@@ -100,7 +105,7 @@ public class ApMonthCloseService {
         mapper.insert(c);
         trace(c, "INIT", "发起关账并冻结协同（组织 " + company.getCompanyName() + "）");
         mapper.updateById(c);
-        // P4-3 规则：新建写入数据库无旧值，不接入审计（不伪造 before），故此处刻意不写 audit_trail
+        // 规则：新建写入数据库无旧值，不接入审计（不伪造 before），故此处刻意不写 audit_trail
         // 打通点7：关账触发 → SCP 状态通知（禁止发送数据至ERP，R-14）
         collabSyncService.log(CollabSyncLog.IF_SCP_FREEZE, "AP_TO_SCP", c.getCloseNo(),
                 CollabSyncLog.ST_SUCCESS, "关账触发：公司 " + companyId + " 期间 " + period + " 协同冻结", null);
@@ -116,13 +121,13 @@ public class ApMonthCloseService {
             throw new BizException(ErrorCode.PARAM_INVALID, "组长派工必须指定组员清单");
         }
         c.setMembers(members);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", c.getStatus());
         c.setStatus(ApMonthClose.ST_DISPATCHED);
         trace(c, "DISPATCH", "组长派工：组员 " + members);
         mapper.updateById(c);
-        // P4-3 审计：状态跃迁
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        // 审计：状态跃迁
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditTrailService.recordUpdate("AP_MONTH_CLOSE", c.getId(), c.getCloseNo(), "ap_month_close",
                 String.valueOf(c.getId()), auditBefore, auditAfter, "组长派工");
@@ -162,7 +167,7 @@ public class ApMonthCloseService {
             throw new BizException(ErrorCode.PARAM_INVALID, "检查项不存在：" + code);
         }
         c.setCheckItemsJson(toJson(items));
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", c.getStatus());
         boolean allOk = items.stream().allMatch(i -> "OK".equals(String.valueOf(i.get("status"))));
         if (allOk && !ApMonthClose.ST_CHECKING.equals(c.getStatus())) {
@@ -175,9 +180,9 @@ public class ApMonthCloseService {
                 + (handler == null || handler.isBlank() ? "" : "（处理人 " + handler + "）")
                 + (note == null || note.isBlank() ? "" : "：" + note));
         mapper.updateById(c);
-        // P4-3 审计：仅当检查项签认实际推动状态跃迁时记录
-        if (!java.util.Objects.equals(auditBefore.get("status"), c.getStatus())) {
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        // 审计：仅当检查项签认实际推动状态跃迁时记录
+        if (!Objects.equals(auditBefore.get("status"), c.getStatus())) {
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", c.getStatus());
             auditTrailService.recordUpdate("AP_MONTH_CLOSE", c.getId(), c.getCloseNo(), "ap_month_close",
                     String.valueOf(c.getId()), auditBefore, auditAfter, "维护检查项签认");
@@ -185,7 +190,7 @@ public class ApMonthCloseService {
         return c;
     }
 
-    /** 前置自动检查（P1-6）：自动跑数，人工仅确认。返回更新后的检查项列表。 */
+    /** 前置自动检查：自动跑数，人工仅确认。返回更新后的检查项列表。 */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> autoCheck(Long id) {
         ApMonthClose c = require(id);
@@ -260,15 +265,15 @@ public class ApMonthCloseService {
         c.setClosedTime(LocalDateTime.now());
         c.setClosedBy(currentUser());
         mapper.updateById(c);
-        // P4-3 审计：状态跃迁（检查处理中 → 已关账）
+        // 审计：状态跃迁（检查处理中 → 已关账）
         auditTrailService.recordUpdate("AP_MONTH_CLOSE", c.getId(), c.getCloseNo(), "ap_month_close",
                 String.valueOf(c.getId()),
-                java.util.Collections.singletonMap("status", ApMonthClose.ST_CHECKING),
-                java.util.Collections.singletonMap("status", c.getStatus()), "总账关账完成");
-        // P0-3 期间联动（D-V4R-65 改规则）：AP 月结是子账清单，不再替总账关闭会计期间。
+                Collections.singletonMap("status", ApMonthClose.ST_CHECKING),
+                Collections.singletonMap("status", c.getStatus()), "总账关账完成");
+        // 期间联动（改规则）：AP 月结是子账清单，不再替总账关闭会计期间。
         // 原实现此处调 periodService.closeByPeriod()，会把 md_period 直接置 CLOSED，
         // 于是随后的应收月结「过总账」与总账月结「发起」都被"期间已结账"拦死（GlMonthCloseService:276），
-        // 手册既定的 AP→AR→GL 顺序在同主体上根本走不通；期间状态机的唯一归属是总账月结审批末节点（D-DEC-189）。
+        // 手册既定的 AP→AR→GL 顺序在同主体上根本走不通；期间状态机的唯一归属是总账月结审批末节点。
         trace(c, "CLOSE", "总账关账完成，协同恢复；会计期间 " + c.getPeriod() + " 的结账由总账月结（GL）审批末节点联动");
         mapper.updateById(c);
         // 打通点7：关账完成 → SCP 状态通知（恢复数据交互）
@@ -279,7 +284,7 @@ public class ApMonthCloseService {
     }
 
     /**
-     * 反关账（P0-2）：关账单 CLOSED → 回到检查处理中，期间重开（md_period 回 NORMAL），
+     * 反关账：关账单 CLOSED → 回到检查处理中，期间重开（md_period 回 NORMAL），
      * 协同重新冻结；原因必填，全程记录（reopenTime/reopenReason + trace）。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -296,19 +301,19 @@ public class ApMonthCloseService {
         c.setReopenTime(LocalDateTime.now());
         c.setReopenReason(reason);
         mapper.updateById(c);
-        // R5-D-214：反关账须清位关账人/关账时间——updateById 对 null 值一律跳过，
+        // 反关账须清位关账人/关账时间——updateById 对 null 值一律跳过，
         // 残留的 closed_time/closed_by 会让读面把"已重开"的单继续显示成"某时刻已关账"；
         // 清列走 UpdateWrapper.set(null)（历史值由 reopen_time/reopen_reason/trace_json 记录，不删行）。
         mapper.update(null, new LambdaUpdateWrapper<ApMonthClose>()
                 .eq(ApMonthClose::getId, c.getId())
                 .set(ApMonthClose::getClosedTime, null)
                 .set(ApMonthClose::getClosedBy, null));
-        // P4-3 审计：状态跃迁（已关账 → 检查处理中）
+        // 审计：状态跃迁（已关账 → 检查处理中）
         auditTrailService.recordUpdate("AP_MONTH_CLOSE", c.getId(), c.getCloseNo(), "ap_month_close",
                 String.valueOf(c.getId()),
-                java.util.Collections.singletonMap("status", ApMonthClose.ST_CLOSED),
-                java.util.Collections.singletonMap("status", c.getStatus()), "反关账重开期间");
-        // P0-3 期间联动（D-V4R-65 改规则）：既然本口不再关闭期间，反关账也就不再重开期间
+                Collections.singletonMap("status", ApMonthClose.ST_CLOSED),
+                Collections.singletonMap("status", c.getStatus()), "反关账重开期间");
+        // 期间联动（改规则）：既然本口不再关闭期间，反关账也就不再重开期间
         // （否则 AP 反关账会把总账月结已封的期间撬开，比原缺陷更危险）。
         trace(c, "REOPEN", "反关账重开检查：" + reason + "（协同重新冻结；会计期间状态不由 AP 侧改动）");
         mapper.updateById(c);
@@ -319,7 +324,7 @@ public class ApMonthCloseService {
     }
 
     /**
-     * R5-D-218 作废（最终状态 VOID）：未关账的关账单整体废弃——置 VOID、解冻协同
+     * 作废（最终状态 VOID）：未关账的关账单整体废弃——置 VOID、解冻协同
      * （scpFrozen=0，不再参与 isFrozen 拦截）、全程记录不删行；已关账须先反关账，
      * 不能直接作废（期间锁只在关账完成时建立，故作废路径只需解冻协同）。
      */
@@ -335,14 +340,14 @@ public class ApMonthCloseService {
         if (reason == null || reason.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "作废必须填写原因（审计记录要求）");
         }
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", c.getStatus());
         c.setStatus(ApMonthClose.ST_VOID);
         c.setScpFrozen(0); // 最终状态：解冻协同，本单不再参与 isFrozen 拦截
         trace(c, "VOID", "作废关账单：" + reason);
         mapper.updateById(c);
-        // P4-3 审计：状态跃迁（未完成 → 已作废）
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        // 审计：状态跃迁（未完成 → 已作废）
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditTrailService.recordUpdate("AP_MONTH_CLOSE", c.getId(), c.getCloseNo(), "ap_month_close",
                 String.valueOf(c.getId()), auditBefore, auditAfter, "作废关账单");
@@ -377,7 +382,7 @@ public class ApMonthCloseService {
         return require(id);
     }
 
-    // ---------------- 内部 ----------------
+    // 内部
 
     /** 蓝图 9.5 检查项清单默认四项。 */
     static String defaultItems() {
@@ -506,7 +511,7 @@ public class ApMonthCloseService {
 
     static String toJson(Object o) {
         try {
-            return com.fasterxml.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(o);
+            return JsonMapper.builder().build().writeValueAsString(o);
         } catch (Exception e) {
             throw new BizException(ErrorCode.SYSTEM_ERROR, "JSON序列化失败:" + e.getMessage());
         }
@@ -514,7 +519,7 @@ public class ApMonthCloseService {
 
     private List<Map<String, Object>> parseItems(String json) {
         try {
-            return com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+            return JsonMapper.builder().build()
                     .readValue(json, new TypeReference<List<Map<String, Object>>>() {
                     });
         } catch (Exception e) {
@@ -524,7 +529,7 @@ public class ApMonthCloseService {
 
     private List<Map<String, Object>> parseList(String json) {
         try {
-            return com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+            return JsonMapper.builder().build()
                     .readValue(json, new TypeReference<List<Map<String, Object>>>() {
                     });
         } catch (Exception e) {

@@ -2,7 +2,7 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * 基础数据下拉的「字典 + i18n」合并层（2026-10-18）
+ * 基础数据下拉的「字典 + i18n」合并层
  *
  * ## 为什么需要这一层（不要直接用 useDict 的 options 当 label）
  *
@@ -85,9 +85,8 @@ export function useBaseDict(dictType, localFallback = {}, i18nKeys = {}) {
  *   各写一份必然漂移 —— 加一个选项要改 8 次，漏一处就出现"两个页面选项不一致"。
  *  办结到基础数据字典的目的正是消灭这种漂移。
  *
- *  值必须与 sys_dict_data.dict_value 逐字一致；
+ * 值必须与 sys_dict_data.dict_value 逐字一致；
  *    字典缺失时默认处理到这里的常量，行为与改造前逐字相同（零风险）。
- * ------------------------------------------------------------------ */
 
 /** 交通方式（traffic_mode） */
 export const TRAFFIC_LOCAL = {
@@ -125,7 +124,7 @@ export const TRAINING_I18N = {
 
 /**
  * 付款方式（pay_method）。
- *  各页面 i18n 前缀不同（expense.claim.* / pay.corp.*），故映射按页面区分，见下方各常量。
+ * 各页面 i18n 前缀不同（expense.claim.* / pay.corp.*），故映射按页面区分，见下方各常量。
  */
 export const PAY_METHOD_LOCAL = {
   BANK: '银行转账', CASH: '现金', CHECK: '支票', TELEGRAPHIC: '电汇', DRAFT: '承兑汇票'

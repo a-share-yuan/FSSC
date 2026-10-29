@@ -7,7 +7,7 @@
  */
 export default [
   { path: 'invoice', redirect: '/invoice/query' },
-  // R5-D-116：发票域路由补 meta.perms（router.js 全局守卫 beforeEach 统一消费；后端 @RequiresPerm 不动）。
+  // 发票域路由补 meta.perms（router.js 全局守卫 beforeEach 统一消费；后端 @RequiresPerm 不动）。
   // 无对应权限的账号 URL 直达时挡回工作台并提示，不再渲染空壳列表。
   { path: 'invoice/certify', component: () => import('../../views/invoice/InvoiceCertify.vue'), meta: { title: '进项发票认证', perms: ['inv:certify'] } },
   // RA-PAGE-21 2.7：/invoice/query 为发票工作台宿主（全页签 pool/create/issue/verify/certify 门控），不传 tab；

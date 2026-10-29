@@ -2,7 +2,7 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /**
- * 币种下拉的数据源办结（2026-10-18，B 级）
+ * 币种下拉的数据源办结（B 级）
  *
  * ## 背景
  *
@@ -102,9 +102,9 @@ async function fetchAll() {
  * ## 为什么需要 i18n 版本（2026-10-18 实施时发现）
  *
  * 原写死下拉的 label **走 vue-i18n 双语**，而各页面中英格式并不统一：
- *   expense.common.curCny : zh='人民币 CNY'  en='CNY'
- *   pay.corp.optCny        : zh='人民币 CNY'  en='CNY (RMB)'
- *   pay.corp.optUsd        : zh='美元 USD'    en='USD (US Dollar)'
+ *   expense.common.curCny : zh='人民币 CNY' en='CNY'
+ *   pay.corp.optCny : zh='人民币 CNY' en='CNY (RMB)'
+ *   pay.corp.optUsd : zh='美元 USD' en='USD (US Dollar)'
  * 如果直接用主数据的 currencyName（纯中文名），切英文时币种下拉会全变中文 —— 功能倒退。
  *
  * 故规则与 useBaseDict 一致：**主数据定值域 + i18n 定文案**。
@@ -112,8 +112,8 @@ async function fetchAll() {
  * 无 key 时回落到主数据名称 + 目标格式，绝不显示裸 code。
  *
  * @param {object} opts
- *   opts.i18nKeys  { CNY: 'expense.common.curCny', ... } 该页面的 i18n 映射
- *   opts.format    无 i18n key 时使用的格式：'name' | 'code-name' | 'name-code'
+ *   opts.i18nKeys { CNY: 'expense.common.curCny', ... } 该页面的 i18n 映射
+ *   opts.format 无 i18n key 时使用的格式：'name' | 'code-name' | 'name-code'
  */
 export function useCurrency(opts = {}) {
   const i18nKeys = opts.i18nKeys || {}
@@ -168,7 +168,7 @@ export function useCurrency(opts = {}) {
 
   /**
    * 按页面原有展示格式输出 label：i18n 优先，无 key 时用主数据名 + 格式拼接。
-   * @param {string} value  币种代码
+   * @param {string} value 币种代码
    * @param {'name'|'code-name'|'name-code'} [formatOverride] 覆盖默认格式
    */
   function formatLabel(value, formatOverride) {

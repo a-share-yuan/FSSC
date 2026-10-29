@@ -8,6 +8,7 @@ import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,7 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-/** 审计记录（P0-3）：分页查询 + 按单据导出 CSV + 内部记录。 */
+/** 审计记录：分页查询 + 按单据导出 CSV + 内部记录。 */
 @RestController
 @RequestMapping("/api/tenant/audit/trail")
 @RequiredArgsConstructor
@@ -83,7 +84,7 @@ public class AuditTrailController {
         return Result.success();
     }
 
-    private static String ts(java.time.LocalDateTime t) {
+    private static String ts(LocalDateTime t) {
         return t == null ? "" : t.toString().replace("T", " ");
     }
 

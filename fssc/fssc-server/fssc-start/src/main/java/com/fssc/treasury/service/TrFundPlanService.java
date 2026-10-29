@@ -8,15 +8,23 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.UserContext;
+import com.fssc.framework.spi.DistributedState;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.system.service.NumberRuleService;
 import com.fssc.treasury.entity.TrFundPlan;
 import com.fssc.treasury.mapper.TrFundPlanMapper;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -33,14 +41,14 @@ public class TrFundPlanService {
 
     private final TrFundPlanMapper mapper;
     private final WfEngineFacade wfEngineFacade;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
-    private final com.fssc.framework.spi.DistributedState distributedState;
+    private final OrgGuard orgGuard;
+    private final NumberRuleService numberRuleService;
+    private final DistributedState distributedState;
 
     /** 同一笔提交的防重窗口：超时重发的第二笔（F1 场景，两次请求相隔约 20s）落在窗口内被拒 */
-    private static final java.time.Duration SUBMIT_DEDUP_WINDOW = java.time.Duration.ofSeconds(60);
+    private static final Duration SUBMIT_DEDUP_WINDOW = Duration.ofSeconds(60);
     /** 在途互斥锁的默认处理存活时间：远大于单次编制耗时，防止异常退出后锁泄漏 */
-    private static final java.time.Duration SUBMIT_LOCK_TTL = java.time.Duration.ofMinutes(5);
+    private static final Duration SUBMIT_LOCK_TTL = Duration.ofMinutes(5);
 
     /** 编制资金计划（草稿） */
     public Long create(TrFundPlan plan) {
@@ -102,8 +110,8 @@ public class TrFundPlanService {
     private static String submitSignature(TrFundPlan plan, Long creatorId) {
         String raw = plan.getTenantId() + ':' + plan.getCompanyId() + ':' + plan.getPeriod() + ':' + creatorId
                 + ':' + plan.getIncomeAmount().toPlainString() + ':' + plan.getOutcomeAmount().toPlainString();
-        return "fssc:tr:fp:create:" + org.springframework.util.DigestUtils
-                .md5DigestAsHex(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return "fssc:tr:fp:create:" + DigestUtils
+                .md5DigestAsHex(raw.getBytes(StandardCharsets.UTF_8));
     }
 
     /** 当前登录用户（未登录返回 null，审批按候选组角色派单） */
@@ -158,7 +166,7 @@ public class TrFundPlanService {
     }
 
     /**
-     * D-G5-05：作废资金计划（<b>不是物理删除</b>）。
+     * 作废资金计划（<b>不是物理删除</b>）。
      *
      * <p><b>为什么需要这个出口</b>：此前资金计划<b>没有删除/作废端点</b>，
      * 跑测者想清理一张重复的草稿只能直接删表 ⇒ 产生两个后果：
@@ -172,7 +180,7 @@ public class TrFundPlanService {
      * <p><b>本方法的规则</b>：单据置 {@code VOIDED}（记录，不删行）＋
      * <b>联动终止</b>该单名下所有 RUNNING 流程实例。
      * 流程终止<b>不自己实现</b>，直接复用已验证可用的
-     * {@link WfEngineFacade#cancelRunningInstancesByBiz}（D-DEC-068 确立的标准收尾入口：
+     * {@link WfEngineFacade#cancelRunningInstancesByBiz}（确立的标准收尾入口：
      * 引擎实例删除＋wf_instance 置 CANCELLED＋wf_task 的 PENDING 置 CANCELLED＋双记录）。
      *
      * <p><b>可作废的状态</b>：DRAFT / SELECTED / REJECTED（尚未进入实质执行）。
@@ -187,14 +195,14 @@ public class TrFundPlanService {
                     "仅草稿/已选中/已驳回的资金计划可作废，当前状态: " + status);
         }
         // 流程收尾：作废必须同时终止在办流程，否则待办镜像滞留 PENDING、催办扫描持续空转
-        // （D-DEC-068 规则）。该方法去重：无 RUNNING 实例返回 0，不抛错。
+        // 规则。该方法去重：无 RUNNING 实例返回 0，不抛错。
         int cancelled = wfEngineFacade.cancelRunningInstancesByBiz("TR_PLAN", planId,
                 "资金计划作废（操作人 id=" + userId() + "）：" + (reason == null || reason.isBlank() ? "未填原因" : reason));
         TrFundPlan upd = new TrFundPlan();
         upd.setId(planId);
         upd.setStatus("VOIDED");
         upd.setUpdateBy(userId());
-        upd.setUpdateTime(java.time.LocalDateTime.now());
+        upd.setUpdateTime(LocalDateTime.now());
         mapper.updateById(upd);
         log.info("资金计划已作废：id={} 单号={} 原状态={} 终止流程实例数={} 原因={}",
                 planId, plan.getPlanNo(), status, cancelled, reason);
@@ -260,8 +268,8 @@ public class TrFundPlanService {
             return numberRuleService.next("TR_PLAN");
         } catch (Exception ex) {
             log.warn("资金计划取号失败（规则 TR_PLAN 缺失/停用?），降级时间戳编号: {}", ex.getMessage());
-            return "FP" + java.time.LocalDateTime.now()
-                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+            return "FP" + LocalDateTime.now()
+                    .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         }
     }
 
@@ -301,9 +309,9 @@ public class TrFundPlanService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    // ---------------- P0-5 状态机：APPROVED→PAID→CLOSED→ARCHIVED ----------------
+    // 状态机：APPROVED→PAID→CLOSED→ARCHIVED
 
-    /** P0-5：资金计划 APPROVED/COMPLETED→PAID（资金拨付完成时触发） */
+    /** 资金计划 APPROVED/COMPLETED→PAID（资金拨付完成时触发） */
     @Transactional
     public void markPaid(Long planId) {
         TrFundPlan plan = requireExist(planId);
@@ -318,7 +326,7 @@ public class TrFundPlanService {
         log.info("资金计划 {} 状态 →PAID", planId);
     }
 
-    /** P0-5：资金计划 PAID→CLOSED（关账） */
+    /** 资金计划 PAID→CLOSED（关账） */
     @Transactional
     public void closePlan(Long planId) {
         TrFundPlan plan = requireExist(planId);
@@ -333,7 +341,7 @@ public class TrFundPlanService {
         log.info("资金计划 {} 状态 PAID→CLOSED", planId);
     }
 
-    /** P0-5：资金计划 CLOSED→ARCHIVED（归档，最终状态） */
+    /** 资金计划 CLOSED→ARCHIVED（归档，最终状态） */
     @Transactional
     public void archivePlan(Long planId) {
         TrFundPlan plan = requireExist(planId);

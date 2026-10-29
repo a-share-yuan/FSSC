@@ -46,7 +46,7 @@ public class ReadOnlyGuardDataSource implements DataSource {
         this.label = label;
     }
 
-    // ------------------------------------------------------------------ 判定
+    // 判定
 
     /** 只读判定；不合规直接抛，不降级为"试一下再说"。 */
     public static void assertReadOnly(String sql) {
@@ -89,7 +89,7 @@ public class ReadOnlyGuardDataSource implements DataSource {
         return s;
     }
 
-    // ------------------------------------------------------------------ 代理
+    // 代理
 
     @Override
     public Connection getConnection() throws SQLException {
@@ -157,7 +157,7 @@ public class ReadOnlyGuardDataSource implements DataSource {
         }
     }
 
-    // ------------------------------------------------------------------ 透传
+    // 透传
 
     @Override
     public PrintWriter getLogWriter() throws SQLException {

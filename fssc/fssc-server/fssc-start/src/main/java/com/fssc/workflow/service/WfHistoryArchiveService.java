@@ -4,6 +4,7 @@
 package com.fssc.workflow.service;
 
 import com.fssc.framework.job.JobHeartbeatService;
+import java.sql.Timestamp;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,12 +16,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Flowable 历史数据归档（P1-2，需求文档 12.5）。
+ * Flowable 历史数据归档（需求文档 12.5）。
  * 按保留月数定时清理结束超过保留期的引擎账 {@code ACT_HI_*}；
  * 业务侧 wf_instance/wf_task_history 不由本类清理（单据追溯依赖，见 {@code WfInstanceArchiveJob}）。
  * 配置：fssc.wf.history-retention-months（默认 6）
  *
- * <p><b>P4-1（2026-09-24）保留策略改「归档后删」</b>：本类此前对超期实例<b>直接物理删除</b>
+ * <p><b>保留策略改「归档后删」</b>：本类此前对超期实例<b>直接物理删除</b>
  * {@code ACT_HI_*}，而业务账 {@code wf_*} 要等 {@code WfInstanceArchiveJob} 且开关
  * {@code sys_config.wf.archive.enabled} 缺省为 0 ⇒ <b>引擎账可能在业务账尚未异地留存时就被销毁，
  * 不可恢复</b>。现加一道校验：只有该实例已落冷表 {@code wf_instance_cold} 才允许清理其引擎账；
@@ -46,14 +47,14 @@ public class WfHistoryArchiveService {
     private int retentionMonths;
 
     /**
-     * D-DEC-163 调度补偿：本任务原为 {@code @Scheduled(cron = "0 0 3 ? * SUN")}——全周只有<b>周日 03:00 那一分钟</b>
+     * 调度补偿：本任务原为 {@code @Scheduled(cron = "0 0 3 ? * SUN")}——全周只有<b>周日 03:00 那一分钟</b>
      * 是触发窗口。现库实测（op_job_heartbeat 全表重跑）：表内共 19 行，而代码侧
      * {@code jobHeartbeatService.run(...)} 包装的任务名共 20 个，<b>缺的那一行正是本任务</b>；而心跳行是在 {@code JobHeartbeatService.doRun} 的第一行无条件写入的
-     * （跑成功/跑失败/清理 0 条都会留下行）⇒ 无行＝本方法的 {@code @Scheduled} 从未触发，
+     * 跑成功/跑失败/清理 0 条都会留下行 ⇒ 无行＝本方法的 {@code @Scheduled} 从未触发，
      * 看门狗报"从未执行"是<b>真没跑</b>，不是统计方式漏。
      *
      * <p>根因＝触发面只有一周一瞬：Spring cron 无 missed-fire 补偿，进程只要没恰好覆盖住周日 03:00 那一分钟
-     * （重启、发版、停机、周末不起服），整周的那一次就永久丢失，且下一周还得再赌同一个窗口。
+     * 重启、发版、停机、周末不起服，整周的那一次就永久丢失，且下一周还得再赌同一个窗口。
      *
      * <p>修法＝把"每周一次"从<b>日历时刻</b>改成<b>节奏校验</b>：日频 tick（每天 03:30 判定一次，
      * 与同族 ColdArchiveJob 03:40 错开 10 分钟）＋ "距上次执行不足 6 天就跳过"。
@@ -83,9 +84,9 @@ public class WfHistoryArchiveService {
      */
     private boolean weeklyWindowPassed() {
         try {
-            java.sql.Timestamp last = jdbcTemplate.queryForObject(
+            Timestamp last = jdbcTemplate.queryForObject(
                     "SELECT last_run_at FROM op_job_heartbeat WHERE job_name = 'WfHistoryArchiveService' LIMIT 1",
-                    java.sql.Timestamp.class);
+                    Timestamp.class);
             if (last == null) {
                 return true;
             }
@@ -107,7 +108,7 @@ public class WfHistoryArchiveService {
             int purgedInBatch = 0;
             for (Long id : ids) {
                 try {
-                    // P4-1 校验：业务账未落冷表则跳过——引擎账删了不可恢复，必须先异地留存
+                    // 校验：业务账未落冷表则跳过——引擎账删了不可恢复，必须先异地留存
                     if (!coldArchived(id)) {
                         skipped++;
                         continue;
@@ -142,7 +143,7 @@ public class WfHistoryArchiveService {
     }
 
     /**
-     * P4-1 校验：该流程实例的业务账是否已落冷表（{@code wf_instance_cold}）。
+     * 校验：该流程实例的业务账是否已落冷表（{@code wf_instance_cold}）。
      *
      * <p>只有已落冷才允许物理清理其 {@code ACT_HI_*}——判据即"已异地留存，销毁不可恢复的引擎账是安全的"。
      * 查询异常（冷表未建／权限异常等）一律按"未落冷"返回（fail-closed，宁留不删）；

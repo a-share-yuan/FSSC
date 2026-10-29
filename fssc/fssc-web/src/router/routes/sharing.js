@@ -9,7 +9,7 @@ export default [
   // 档案（RA-PAGE-21：归档+借阅销毁收敛为一个工作区；/archive 深链保留）
   { path: 'sharing/archive', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'archive' }, meta: { title: '档案管理' } },
   { path: 'sharing/statement', component: () => import('../../views/sharing/SharingStatement.vue'), meta: { title: '银行流水' } },
-  // R5-D-250：共享配置四个独立页已收进「共享运营配置」工作区（/cfg/sharing，query.tab 直达）；
+  // 共享配置四个独立页已收进「共享运营配置」工作区（/cfg/sharing，query.tab 直达）；
   // 旧路径保留为永久深链重定向，书签/外链不悬空（菜单 visible='N' 属 DB 面，另列转人工）。
   { path: 'sharing/job', redirect: '/cfg/sharing?tab=job' },
   { path: 'sharing/group', redirect: '/cfg/sharing?tab=group' },
@@ -18,14 +18,14 @@ export default [
   { path: 'sharing/task-pool', component: () => import('../../views/sharing/TaskPool.vue'), meta: { title: '任务池' } },
   { path: 'sharing/task-work', component: () => import('../../views/sharing/TaskWork.vue'), meta: { title: '工单处理' } },
   // G3 共享作业层（2026-09-24 新视图，数据源 /api/tenant/wf/pool|ops/**）
-  // R5-D-258②：三个视图页补 perms 前置校验（码集=其端点实需码的并集；全局守卫在 router.js 消费）：
+  // ②：三个视图页补 perms 前置校验（码集=其端点实需码的并集；全局守卫在 router.js 消费）：
   // shared-pool：/wf/pool/views|mine 需 wf:task:list、/wf/pool/all 需 wf:instance:list
   { path: 'sharing/shared-pool', component: () => import('../../views/sharing/SharedPool.vue'), meta: { title: '共享任务池（五视图）', perms: ['wf:task:list', 'wf:instance:list'] } },
   // shared-ops：/wf/ops/** 读 wf:config:list|wf:instance:list（含 policy/dispatch-log/quality/time-limit）
   { path: 'sharing/shared-ops', component: () => import('../../views/sharing/SharedOpsConsole.vue'), meta: { title: '共享作业控制台', perms: ['wf:config:list', 'wf:instance:list'] } },
   // task-quality：/wf/ops/quality/** 全部需 wf:instance:list
   { path: 'sharing/task-quality', component: () => import('../../views/sharing/TaskQualityReport.vue'), meta: { title: '任务质量报表', perms: ['wf:instance:list'] } },
-  // P0-5 实物流签收：父路径重定向到首个 tab，不渲染汇总的 hub 页
+  // 实物流签收：父路径重定向到首个 tab，不渲染汇总的 hub 页
   { path: 'sharing/delivery', redirect: '/sharing/delivery/sign' },
   { path: 'sharing/delivery/sign', component: () => import('../../views/sharing/DeliveryPage.vue'), props: { tab: 'sign' }, meta: { title: '签收中心' } },
   { path: 'sharing/delivery/apply', component: () => import('../../views/sharing/DeliveryPage.vue'), props: { tab: 'apply' }, meta: { title: '交单登记' } },
@@ -38,6 +38,6 @@ export default [
   { path: 'image/exception', component: () => import('../../views/image/ImageReview.vue'), props: { tab: 'exc' }, meta: { title: '影像异常处理' } },
   { path: 'image/task', component: () => import('../../views/image/ImageTask.vue'), meta: { title: '影像任务' } },
   { path: 'image/ocr-records', component: () => import('../../views/image/OcrRecords.vue'), meta: { title: 'OCR识别记录' } },
-  // R5-D-251：页面级 perms 前置校验（ImageSettingController 全端点需 image:setting:list/update）
+  // 页面级 perms 前置校验（ImageSettingController 全端点需 image:setting:list/update）
   { path: 'image/setting', component: () => import('../../views/system/ImageSetting.vue'), meta: { title: '系统设置', perms: ['image:setting:list'] } },
 ]

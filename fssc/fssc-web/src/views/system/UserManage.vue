@@ -4,7 +4,7 @@
 <template>
   <div class="user-manage">
     <el-row :gutter="12">
-      <!-- ============ 左侧：机构目录树（公司 → 部门，左树右表） ============ -->
+      <!-- 左侧：机构目录树（公司 → 部门，左树右表） -->
       <el-col :span="5">
         <el-card shadow="never" class="org-tree-card">
           <template #header>
@@ -37,7 +37,7 @@
         </el-card>
       </el-col>
 
-      <!-- ============ 右侧：用户列表 ============ -->
+      <!-- 右侧：用户列表 -->
       <el-col :span="19">
         <el-card shadow="never">
           <div class="toolbar">
@@ -139,7 +139,7 @@
       </template>
     </el-dialog>
 
-    <!-- 分配角色 Dialog（D-UR-1）：一用户一角色——单选，保存即覆盖为唯一角色 -->
+    <!-- 分配角色 Dialog：一用户一角色——单选，保存即覆盖为唯一角色 -->
     <el-dialog v-model="roleDialogVisible" :title="$t('system.user.btnAssignRoles')" width="460px">
       <div class="role-assign-tip">
         {{ $t('system.user.txtForEmployee') }}<b>[{{ currentUser?.nickName || currentUser?.userName }}]</b> {{ $t('system.user.txtAssignRoleTail') }}
@@ -176,7 +176,7 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => loadList(),
 })
@@ -186,7 +186,7 @@ const list = ref([])
 const total = ref(0)
 const query = reactive({ keyword: '', pageNum: 1, pageSize: 10, deptIds: null, companyId: null })
 
-/* ---- 机构目录树（左树右表） ---- */
+/* 机构目录树（左树右表） */
 const orgTreeRef = ref()
 const orgTree = ref([])
 const orgKeyword = ref('')
@@ -365,7 +365,7 @@ async function openEdit(row) {
   isEdit.value = true
   Object.assign(form, { id: row.id, username: row.userName, realName: row.nickName, deptId: row.deptId, phone: '', email: '', password: '', status: row.status })
   dialogVisible.value = true
-  // P1-3：列表 phone/email 为脱敏值（138****8000），编辑时拉取明文回填，避免把脱敏串存回库
+  // 列表 phone/email 为脱敏值（138****8000），编辑时拉取明文回填，避免把脱敏串存回库
   try {
     const f = await userApi.full(row.id)
     form.phone = f?.phone || ''
@@ -451,7 +451,7 @@ async function handleBatchImport({ file }) {
   }
 }
 
-/* ---- D-UR-1：分配角色（一用户一角色） ---- */
+/* 分配角色（一用户一角色） */
 const roleDialogVisible = ref(false)
 const roleLoading = ref(false)
 const roleSaving = ref(false)
@@ -533,7 +533,7 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 
-/* ---- 分配角色弹窗（D-UR-1） ---- */
+/* 分配角色弹窗 */
 .role-assign-tip { font-size: 13px; color: #606266; line-height: 1.5; margin-bottom: 10px; }
 .role-radio { display: flex; flex-direction: column; width: 100%; }
 .role-radio-item { height: auto; margin-right: 0; padding: 6px 4px; width: 100%; }

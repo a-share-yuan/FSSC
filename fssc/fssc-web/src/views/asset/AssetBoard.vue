@@ -40,29 +40,29 @@ import AssetCategoryTab from './AssetCategoryTab.vue'
 import InventoryTab from './InventoryTab.vue'
 import TaxDiffTab from './TaxDiffTab.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => { try { reload() } catch { /* noop */ } },
 })
 
-// D-BIZ-05：资产与存货在 sys_menu 里只有 3071「资产与存货」一条菜单行，四个子视图没有拆出的子菜单。
+// 资产与存货在 sys_menu 里只有 3071「资产与存货」一条菜单行，四个子视图没有拆出的子菜单。
 // 原先按「一 TAB = 一菜单」的约定隐藏页签条 ⇒ 资产类别/存货收发存/税会差异只能手敲 URL。
 // 菜单未拆的页不藏页签：深链进来仍定位到指定页签，同时把其余页签露出来可点。
 const props = defineProps({ tab: { type: String, default: '' } })
 const tab = ref(props.tab || 'asset')
 const loading = ref(false)
 
-// ========== 共享主数据 ==========
+// 共享主数据
 const categories = ref([])
 const depts = ref([])
 const companies = ref([])
 const suppliers = ref([])
-// D-BIZ-03：供应商查询被 4030 拒时前端把错误吞成空列表，用户只看到「下拉是空的」。
+// 供应商查询被 4030 拒时前端把错误吞成空列表，用户只看到「下拉是空的」。
 // 记下该标志，供建档弹窗把提示改成「无查看权限」而不是静默空表。
 const suppliersDenied = ref(false)
 const warehouses = ref([])
 
-// ========== 共享工具函数 ==========
+// 共享工具函数
 const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmt0 = (v) => Number(v || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 
@@ -78,13 +78,12 @@ provide('assetShared', {
   fmt, fmt0, categoryName, deptName, companyName, supplierName, warehouseName,
 })
 
-// ========== 子组件 refs ==========
+// 子组件 refs
 const assetTabRef = ref(null)
 const categoryTabRef = ref(null)
 const inventoryTabRef = ref(null)
 const taxDiffTabRef = ref(null)
 
-// ========== 加载主数据 ==========
 async function loadMasters() {
   try {
     const [deptRes, compRes, supplierRes] = await Promise.allSettled([
@@ -113,7 +112,6 @@ async function loadMasters() {
   } catch (e) { /* ignore */ }
 }
 
-// 加载资产类别（共享数据，子组件依赖）
 async function loadCategories() {
   try { categories.value = (await assetApi.categoryPage({ pageNum: 1, pageSize: 200 })).list || [] } catch (e) { ElMessage.error(e.message) }
 }

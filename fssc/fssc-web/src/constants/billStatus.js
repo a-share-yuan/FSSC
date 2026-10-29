@@ -45,7 +45,7 @@ export const STATUS_LABEL = {
   VOID: '已作废',
   CLOSED: '已关闭',
   TERMINATED: '已终止',
-  // 记账域红字冲销/作废后的单据最终状态（gl_journal_entry.status=REVERSED，D-DEC-128）；
+  // 记账域红字冲销/作废后的单据最终状态（gl_journal_entry.status=REVERSED）；
   // 缺键时列表直接显示英文码，故在此登记（与汇兑重估反冲 REVERSED 同码同义）
   REVERSED: '已冲销',
   // 流程实例（wf_instance.status）
@@ -90,7 +90,7 @@ export const STATUS_LABEL = {
   // 采购收货态（po_receipt.status / quality_status）
   RECEIVED: '已收货',
   PASSED: '已验收',
-  // 批次级补充哨兵：一个批次覆盖多张单据且状态不一致时，后端置 MIXED（D-DEC-252）
+  // 批次级补充哨兵：一个批次覆盖多张单据且状态不一致时，后端置 MIXED
   MIXED: '状态不一',
   // 合同生命周期（cont_contract.status=EFFECTIVE，变更/关闭按钮的判据）
   EFFECTIVE: '已生效',
@@ -105,14 +105,14 @@ export const STATUS_LABEL = {
   DEPLOYED: '已发布',
   // 角色停用态：界面开关写 DISABLED，历史种子用的是 DISABLE
   DISABLE: '已停用',
-  // —— 跨域「我发起的单据」汇总进来的各域本表状态码（D-DEC-406：工作台该卡由费用单表改跨域归并后，
+  // —— 跨域「我发起的单据」汇总进来的各域本表状态码（工作台该卡由费用单表改跨域归并后，
   //    这些列值第一次被喂进统一 statusLabel，缺键即直接显示英文）——
   // 采购：po_order／po_receipt 关联发票后 RECEIVED/APPROVED→INVOICED，冲销后回退（PurchaseService:636-648）
   INVOICED: '已开票',
   // 合并报表已出表（gl_consolidate.status，GlConsolidateService:75）
   CONSOLIDATED: '已合并',
   // 内部往来抵消已记账（gl_inter_offset.offset_status，GlInterOffsetService:148/246 写入 OFFSET；
-  // R5-D-161 补：此前名称表无此键，GL 专项页签状态列直接显示英文 OFFSET）
+  // 补：此前名称表无此键，GL 专项页签状态列直接显示英文 OFFSET）
   OFFSET: '已抵消',
   // 供应商对账不平（supplier_recon.status，SupplierReconService:386/433/596）
   DIFF: '有差异',
@@ -157,7 +157,7 @@ export const STATUS_TYPE = {
   PROCESSING: 'warning',
   OVERDUE: 'warning',
   EXPIRED: 'warning',
-  // R5-D-161：内部往来抵消已记账态与「已合并」同色（成功最终状态）
+  // 内部往来抵消已记账态与「已合并」同色（成功最终状态）
   OFFSET: 'success',
   // 催收进行中（rc_collect_todo.status=DOING）
   DOING: 'warning',
@@ -179,10 +179,10 @@ export const STATUS_TYPE = {
  *     · 字典没到 ⇒ 结果与改造前**逐字一致**（不会白屏、不会变英文码）；
  *     · 字典到了 ⇒ 以字典为准，运营可在界面改文案而不必重新发版。
  *
- *  这里是**同步**取值：不发请求，只读 useDict 的内存缓存（由 App.vue 预热填充）。
+ * 这里是**同步**取值：不发请求，只读 useDict 的内存缓存（由 App.vue 预热填充）。
  *    绝不能在此处 await —— statusLabel 被 55 个文件当作纯函数直接调用。
  *
- *  用扁平字典 bill_status_display 而非按域拆的 15 个字典：
+ * 用扁平字典 bill_status_display 而非按域拆的 15 个字典：
  *    statusLabel 是**全局单一映射**，调用方不带域上下文，
  *    CLOSED/DRAFT/NORMAL 等跨义键无法判定归属 ⇒ 展示规则另立一套扁平字典。
  *    域字典用于下拉可选值，本字典用于列表展示，两者职责不同、互不覆盖。
@@ -213,7 +213,7 @@ export function statusType(s) {
 }
 
 /**
- * 驳回类型（exp_bill.reject_type，P0-5）→ 中文 label。
+ * 驳回类型（exp_bill.reject_type）→ 中文 label。
  * 取值规则与写侧一致（ExpenseWfEventListener:628 只落 THROW_BACK / GRADE_BY_GRADE 两值），
  * 未登记值原样返回，避免静默吞值。
  */

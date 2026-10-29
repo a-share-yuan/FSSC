@@ -26,21 +26,19 @@
     <!-- 待归档清单 -->
     <div v-if="tab === 'pending'">
       <div style="margin-bottom: 8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-        <!-- D-DEC-046：归档执行面（POST /tenant/sharing/enhance/archive/do-archive）服务端要
-             op:archive:create，而本页菜单按 op:archive:list 授权 ⇒ 档案岗"看得见、点得动、必失败"。
-             可见性规则改为与接口一致：无执行码不渲染按钮，只留一句去向说明，避免误点后零反馈。 -->
+        <!-- 当年把"看得见点不动"改成"无执行码不渲染按钮 ＋ 一句去向说明"，结果那句说明
+             变成了对档案岗的"你看得到但你不配"——页面按 op:archive:list 授权给档案序列，动作却要
+             op:archive:create（共享支持岗/共享主管），是<b>权限码错配</b>，不要用文案兜。
+             改法：服务端动作端点同时接受档案域创建码（compliance:archive:create，档案岗/主管已授），
+             前端门控与后端同规则；无任一码时按钮不渲染、也不要留任何"无权限"提示。 -->
         <el-button v-if="canArchive" type="primary" size="small" :disabled="!selected.length || q.archiveStatus !== ''"
                    :title="q.archiveStatus === '' ? '' : t('sharing.archive.hintOnlyUnarchived')"
                    @click="doArchive">{{ $t('sharing.archive.btnArchiveSel', { v1: selected.length }) }}</el-button>
-        <span v-else style="color:#909399; font-size:12px">
-          {{ $t('sharing.archive.hintNoArchivePerm') }}
-          {{ $t('sharing.archive.txtOrVoucherFlow') }}
-        </span>
         <el-button size="small" @click="viewSelected">{{ $t('sharing.archive.btnViewSelImages') }}</el-button>
       </div>
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
 <el-table :data="pendingRows" size="small" stripe v-else max-height="460" @row-dblclick="openRowDetail"
-                @selection-change="(s) => (selected = s.map((r) => r.id))" :empty-text="$t('common.empty')">
+                @selection-change="onPendingSelection" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="40" />
         <el-table-column prop="billNo" :label="$t('field.docNo')" width="150"  sortable />
         <el-table-column prop="title" :label="$t('sharing.common.colTitle')" min-width="150" show-overflow-tooltip  sortable />
@@ -85,14 +83,14 @@
     <div v-else>
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
       <el-table :data="archiveRows" size="small" stripe v-else max-height="460" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
-        <!-- D-DEC-047／D-DEC-254 定案：档案号列绑 archiveNo（op_archive.archive_no，NOT NULL＋取号器唯一），
+        <!-- 定案：档案号列绑 archiveNo（op_archive.archive_no，NOT NULL＋取号器唯一），
              不绑冗余列 archiveCode——该列在 184 的"编号镜像"上线前整列 NULL，绑上去就是"档案编码列全空"。 -->
         <el-table-column prop="archiveNo" :label="$t('sharing.archive.colArchiveNo')" width="180"  sortable />
         <el-table-column prop="title" :label="$t('sharing.common.colTitle')" min-width="150" show-overflow-tooltip  sortable />
         <el-table-column prop="refNo" :label="$t('sharing.archive.colBizNo')" width="150"  sortable />
         <el-table-column prop="archiveType" :label="$t('field.type')" width="80" :formatter="enumFormatter(ARCHIVE_TYPE)" sortable />
         <el-table-column prop="retentionYears" :label="$t('sharing.archive.colRetention')" width="90"  sortable />
-        <!-- V1.4.92（AMC-05）：非集中模式原件留原单位，登记保管单位与存放位置；集中模式原件已寄送共享中心 -->
+        <!-- AMC-05：非集中模式原件留原单位，登记保管单位与存放位置；集中模式原件已寄送共享中心 -->
         <el-table-column :label="$t('sharing.archive.colPaperKeeper')" min-width="170" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.paperKeeperCompanyId">
@@ -103,14 +101,14 @@
         </el-table-column>
         <el-table-column :label="$t('sharing.archive.colArchStatus')" width="110">
           <template #default="{ row }">
-            <!-- D-DEC-182：判定列取真相源 archive_status（归档流程轴）。原取 status 镜像列，
+            <!-- 判定列取真相源 archive_status（归档流程轴）。原取 status 镜像列，
                  而该列历史上被归档链路写过 'ARCHIVED' 这种另一轴的取值，档案板与本表互相打脸。 -->
             <el-tag :type="archTag(row.archiveStatus)" size="small">{{ archLabel(row.archiveStatus) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="$t('sharing.archive.colArchFlow')" width="150" show-overflow-tooltip>
           <template #default="{ row }">
-            <!-- D-DEC-185／D-DEC-028：这一列是本卷 FM_ARCHIVE 归档审批流自身的实例号（后端读侧补充），
+            <!-- 这一列是本卷 FM_ARCHIVE 归档审批流自身的实例号（后端读侧补充），
                  与 row.procInstId（被归档那张单的审批流）不是一回事，两列并存在此才可核对"哪次审批定的稿"。 -->
             <span v-if="row.archiveProcInstId">{{ archFlowLabel(row.archiveFlowStatus) }} · {{ shortProc(row.archiveProcInstId) }}</span>
             <span v-else style="color:#909399">{{ $t('sharing.archive.labelNotStarted') }}</span>
@@ -138,7 +136,7 @@
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { showRowDetail, formatDateTime } from '@/utils/format'
-import { opApi, billApi, orgApi } from '../../api'
+import { opApi, fmApi, orgApi } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import FileViewer from '../../components/FileViewer.vue'
 import SkeletonList from '../../components/SkeletonList.vue'
@@ -149,7 +147,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -170,7 +168,7 @@ const pendingRows = ref([])
 const pendingTotal = ref(0)
 const archiveRows = ref([])
 const archiveTotal = ref(0)
-// V1.4.92（AMC-05）：原件保管单位 id → 公司名（companyTree 只读接口，普通用户仅见本公司）
+// AMC-05：原件保管单位 id → 公司名（companyTree 只读接口，普通用户仅见本公司）
 const companyNames = ref({})
 const companyName = (id) => companyNames.value[id] || t('sharing.archive.labelCompanyId', { v1: id })
 async function loadCompanies() {
@@ -182,21 +180,24 @@ async function loadCompanies() {
   } catch { /* 名称不可得时回落显示公司编号，不阻断归档列表 */ }
 }
 const selected = ref([])
+// 「查看所选影像」要按行判断这张单立过卷没有⇒行对象也要留着（不要再靠单据详情接口去问，档案岗必 4030）
+const selectedRows = ref([])
 const fileViewer = ref(null)
 const q = reactive({ pageNum: 1, pageSize: 20, keyword: '', archiveStatus: '' })
 const a = reactive({ pageNum: 1, pageSize: 20, keyword: '' })
-// D-DEC-046：与后端 /tenant/sharing/enhance/archive/do-archive 的 @RequiresPerm("op:archive:create") 同码
-const canArchive = hasPerm('op:archive:create')
+// 与后端 /tenant/sharing/enhance/archive/do-archive 同一 OR 规则——运营档案创建码
+// 或档案域创建码任一即可（档案序列本就持后者），不要再让档案岗"进得来、点不动"。
+const canArchive = hasPerm('op:archive:create') || hasPerm('compliance:archive:create')
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 
-// D-DEC-182：归档流程轴名称表（与后端 op_archive.archive_status 列注释、
+// 归档流程轴名称表（与后端 op_archive.archive_status 列注释、
 // ArchiveBoard.vue 的 archStatusLabel 同一套，三处必须一起改）
 const ARCH_STATUS_LABEL = computed(() => ({ PENDING: t('sharing.archive.labelPending'), ARCHIVING: t('sharing.archive.labelArchiving'), ARCHIVED: t('sharing.common.colArchived'), DISPOSED: t('sharing.archive.labelDestroyed') }))
 const archLabel = computed(() => (s) => ARCH_STATUS_LABEL.value[s] || s || t('sharing.archive.labelUnknown'))
 const archTag = (s) => (s === 'ARCHIVED' ? 'success' : s === 'DISPOSED' ? 'danger' : s === 'ARCHIVING' ? 'warning' : 'info')
 
-// D-DEC-185／D-DEC-028：归档审批流（FM_ARCHIVE）自身状态与实例号
+// 归档审批流（FM_ARCHIVE）自身状态与实例号
 const ARCH_FLOW_LABEL = computed(() => ({ RUNNING: t('status.approving'), APPROVED: t('field.passTag'), REJECTED: t('status.rejected'), CANCELLED: t('status.void'), TERMINATED: t('sharing.archive.labelTerminated') }))
 const archFlowLabel = (s) => ARCH_FLOW_LABEL.value[s] || s || '—'
 const shortProc = (p) => (p && p.length > 8 ? p.slice(0, 8) : (p || '—'))
@@ -219,7 +220,7 @@ async function load() {
 async function doArchive() {
   if (!selected.value.length) return
   // 双保险：按钮已按 op:archive:create 前置隐藏，若因数据/角色变化仍走到这里，
-  // 就在发起请求前如实说明缺哪张码，不再让服务端 4030 空转一趟（D-DEC-046）
+  // 就在发起请求前如实说明缺哪张码，不再让服务端 4030 空转一趟
   if (!canArchive) { ElMessage.warning(t('sharing.archive.msgNoPerm')); return }
   try {
     await ElMessageBox.confirm(t('sharing.archive.confirmArchive', { v1: selected.value.length }), t('sharing.archive.titleConfirm'), { type: 'warning' })
@@ -236,44 +237,108 @@ async function doArchive() {
   }
 }
 
-/** 查看单据影像/附件（附件 fileId + 影像页 fileId） */
-async function viewBillImages(row) {
+function onPendingSelection(rows) {
+  selectedRows.value = rows || []
+  selected.value = (rows || []).map((r) => r.id)
+}
+
+/** 未立卷的单没有卷⇒也就没有可查阅的卷内文件，说清去哪儿办（不要再打单据详情，档案岗必 4030） */
+const MSG_NOT_FILED = '该单据尚未立卷，暂无可查阅的卷内文件；请先在「档案管理 · 凭证归档」新建案卷'
+
+/**
+ * 卷内文件读取：清单与取流令牌都取自案卷自己的端点（读码 compliance:archive:list）。
+ * FileViewer 第三个参数按 fileId 索引——给了 name 就不再打文件域详情、给了 tokenProvider 就不打文件域令牌。
+ */
+async function collectVolumeFiles(volumeId) {
+  const files = await fmApi.archiveVolumeFiles(volumeId)
+  const ids = []
+  const opts = {}
+  ;(files || []).forEach((f) => {
+    if (!f || f.fileId === null || f.fileId === undefined) return
+    if (ids.some((x) => String(x) === String(f.fileId))) return
+    ids.push(f.fileId)
+    opts[f.fileId] = {
+      name: f.fileName || `文件 ${f.fileId}`,
+      tokenProvider: (fileId) => fmApi.archiveVolumeFileToken(volumeId, fileId),
+    }
+  })
+  return { ids, opts }
+}
+
+// 待归档清单的行上只有单号没有卷 id（服务端 BillArchiveDTO 未带），按单号回查目录一次并缓存
+const volumeIdByBill = reactive({})
+async function resolveVolumeId(bill) {
+  const key = String(bill?.id ?? bill?.billId ?? '')
+  if (!key) return null
+  if (volumeIdByBill[key]) return volumeIdByBill[key]
+  const kw = bill.billNo || bill.refNo || ''
+  if (!kw) return null
   try {
-    const fileIds = []
-    const d = await billApi.detail(row.id)
-    ;(d?.attaches || []).forEach((x) => x.fileId && fileIds.push(x.fileId))
-    if (!fileIds.length) { ElMessage.info(t('sharing.common.msgNoDocImages')); return }
-    fileViewer.value?.open(fileIds, t('sharing.common.titleDocImages') + (row.billNo || row.id))
+    const res = await fmApi.archivePage({ pageNum: 1, pageSize: 20, keyword: kw })
+    const hit = (res?.list || []).find((x) => String(x.billId ?? x.refId ?? '') === key
+      || (!!bill.billNo && x.refNo === bill.billNo))
+    if (hit) volumeIdByBill[key] = hit.id
+    return hit ? hit.id : null
+  } catch { return null }
+}
+
+/** 查看单据影像：已立卷的走卷端点，未立卷的如实说明去向 */
+async function viewBillImages(row) {
+  if (row.archiveStatus !== 'ARCHIVED') { ElMessage.info(MSG_NOT_FILED); return }
+  try {
+    const volumeId = await resolveVolumeId(row)
+    if (!volumeId) { ElMessage.info('未能定位该单据所在案卷，请到「档案管理 · 凭证归档」按卷查阅'); return }
+    const { ids, opts } = await collectVolumeFiles(volumeId)
+    if (!ids.length) { ElMessage.info('本卷暂无文件'); return }
+    fileViewer.value?.open(ids, `${t('sharing.common.titleDocImages')}${row.billNo || ''}`, opts)
   } catch (e) { ElMessage.error(e.message) }
 }
 
-/** 查看所选单据影像（合并全部 fileId） */
+/** 查看所选单据影像：已立卷的并卷取文件，未立卷的计入提示 */
 async function viewSelected() {
-  const ids = selected.value || []
-  if (!ids.length) return
-  const fileIds = []
-  for (const id of ids) {
+  const rows = selectedRows.value || []
+  if (!rows.length) return
+  const filed = rows.filter((r) => r.archiveStatus === 'ARCHIVED')
+  const unfiled = rows.length - filed.length
+  if (!filed.length) { ElMessage.info(MSG_NOT_FILED); return }
+  const ids = []
+  const opts = {}
+  const failed = []
+  for (const row of filed) {
     try {
-      const d = await billApi.detail(id)
-      ;(d?.attaches || []).forEach((x) => x.fileId && fileIds.push(x.fileId))
-    } catch (e) { /* 跳过 */ }
+      const volumeId = await resolveVolumeId(row)
+      if (!volumeId) { failed.push(row.billNo || row.id); continue }
+      const one = await collectVolumeFiles(volumeId)
+      one.ids.forEach((fid) => {
+        if (ids.some((x) => String(x) === String(fid))) return
+        ids.push(fid)
+        opts[fid] = one.opts[fid]
+      })
+    } catch { failed.push(row.billNo || row.id) }
   }
-  if (!fileIds.length) { ElMessage.info(t('sharing.archive.msgNoSelImages')); return }
-  fileViewer.value?.open(fileIds, t('sharing.archive.titleSelDocImages'))
+  if (!ids.length) {
+    const why = unfiled ? `${unfiled} 张尚未立卷` : ''
+    ElMessage.warning(`所选单据暂无可查阅的卷内文件${why ? `（${why}）` : ''}，请先在「档案管理 · 凭证归档」新建案卷`)
+    return
+  }
+  if (unfiled || failed.length) {
+    const parts = []
+    if (unfiled) parts.push(`${unfiled} 张尚未立卷`)
+    if (failed.length) parts.push(`${failed.length} 张未定位到案卷（${failed.join('、')}）`)
+    ElMessage.info(`已打开 ${filed.length - failed.length} 张已立卷单据的卷内文件；${parts.join('；')}`)
+  }
+  fileViewer.value?.open(ids, t('sharing.archive.titleSelDocImages'), opts)
 }
 
-/** 查看已归档档案影像（档案 fileId + 关联单据附件） */
+/** 查看已归档档案影像：卷内文件清单走案卷端点（档案岗无单据归属，不走 billApi.detail） */
 async function viewArchive(row) {
-  const fileIds = []
-  if (row.fileId) fileIds.push(row.fileId)
-  if (row.refId) {
-    try {
-      const d = await billApi.detail(row.refId)
-      ;(d?.attaches || []).forEach((x) => x.fileId && !fileIds.includes(x.fileId) && fileIds.push(x.fileId))
-    } catch (e) { /* 跳过 */ }
-  }
-  if (!fileIds.length) { ElMessage.info(t('sharing.archive.msgNoArchiveImage')); return }
-  fileViewer.value?.open(fileIds, t('sharing.archive.titleArchiveImages') + (row.archiveNo || row.title || ''))
+  const volumeId = row.id ?? row.archiveId
+  if (!volumeId) { ElMessage.info(t('sharing.archive.msgNoArchiveImage')); return }
+  try {
+    const { ids, opts } = await collectVolumeFiles(volumeId)
+    if (!ids.length) { ElMessage.info('本卷暂无文件'); return }
+    fileViewer.value?.open(ids, `${t('sharing.archive.titleArchiveImages')}${row.archiveNo || row.title || ''}`, opts)
+  } catch (e) { ElMessage.error(e.message) }
 }
 
 onMounted(() => { load(); loadCompanies() })

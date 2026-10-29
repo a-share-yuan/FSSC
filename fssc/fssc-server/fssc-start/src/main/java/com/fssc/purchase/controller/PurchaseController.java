@@ -3,13 +3,16 @@
 
 package com.fssc.purchase.controller;
 
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.purchase.entity.PoOrder;
 import com.fssc.purchase.entity.PoReceipt;
 import com.fssc.purchase.service.PurchaseService;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,8 +32,8 @@ public class PurchaseController {
 
     private final PurchaseService purchaseService;
 
-    // ---- 采购订单 ----
-    /** @param receivable 收货选单专用：true 时只出可收货订单（C-9 / D-RCV-02） */
+    // 采购订单
+    /** @param receivable 收货选单专用：true 时只出可收货订单（C-9 /） */
     @RequiresPerm("po:order:list")
     @GetMapping("/order/page")
     public Result<PageResult<PoOrder>> orderPage(@RequestParam(defaultValue = "1") long pageNum,
@@ -89,17 +92,17 @@ public class PurchaseController {
     @RequiresPerm("po:order:list")
     @OperLog(module = "PURCHASE", operType = "VOID", desc = "作废采购订单")
     @PostMapping("/order/void")
-    public Result<Void> voidOrder(@RequestBody java.util.Map<String, Object> req) {
+    public Result<Void> voidOrder(@RequestBody Map<String, Object> req) {
         if (req == null || req.get("orderId") == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "orderId 必填");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "orderId 必填");
         }
         Long orderId;
         try {
             orderId = Long.valueOf(req.get("orderId").toString().trim());
         } catch (NumberFormatException ex) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "orderId 须为数字，收到: " + req.get("orderId"));
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "orderId 须为数字，收到: " + req.get("orderId"));
         }
         String reason = req.get("reason") == null ? null : req.get("reason").toString();
         purchaseService.voidOrder(orderId, reason);
@@ -107,7 +110,7 @@ public class PurchaseController {
     }
 
     /**
-     * P0-5 最终状态机分治·乙（X-20 裁定）：终止采购订单＝人工决策，故留显式入口。
+     * 最终状态机分治·乙（X-20 裁定）：终止采购订单＝人工决策，故留显式入口。
      * POST /api/tenant/purchase/order/{id}/terminate，body {reason: string}。
      * 与 /order/void 的分工：作废处理「无下游动作」的单，终止处理「已收货/已挂付款但不再履约」的单；
      * 两者同落既有最终状态 VOID。鉴权走写专码 po:order:update（写读分面治理规则，不复用 list 码）。
@@ -117,14 +120,14 @@ public class PurchaseController {
     @OperLog(module = "PURCHASE", operType = "VOID", desc = "终止采购订单")
     @PostMapping("/order/{id}/terminate")
     public Result<Void> terminateOrder(@PathVariable("id") Long id,
-                                       @RequestBody(required = false) java.util.Map<String, Object> req) {
+                                       @RequestBody(required = false) Map<String, Object> req) {
         String reason = req == null || req.get("reason") == null ? null : req.get("reason").toString();
         purchaseService.terminateOrder(id, reason);
         return Result.success();
     }
 
     /**
-     * P0-5 最终状态机分治·乙（X-20 裁定）：归档采购订单（CLOSED → ARCHIVED）＝人工结案判断，
+     * 最终状态机分治·乙（X-20 裁定）：归档采购订单（CLOSED → ARCHIVED）＝人工结案判断，
      * 没有累计量判据可给批处理用（要的是「这批单可以结案」的决定），故留显式入口＋前端按钮。
      * POST /api/tenant/purchase/order/{id}/archive；鉴权写专码 po:order:update。
      */
@@ -136,7 +139,7 @@ public class PurchaseController {
         return Result.success();
     }
 
-    // ---- 收货单 ----
+    // 收货单
     /** @param poId 可选：按采购订单收口候选集（付款勾稽「手工关联收货单」必传，否则会拿到全租户收货单） */
     @RequiresPerm("po:receipt:list")
     @GetMapping("/receipt/page")

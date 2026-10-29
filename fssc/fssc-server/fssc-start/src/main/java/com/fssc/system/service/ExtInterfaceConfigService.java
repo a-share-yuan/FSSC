@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -38,7 +39,7 @@ import java.util.Set;
  * <p>集中管理发票验真、发票认证、OCR 影像识别、AI 大模型四类外部接口的连接参数。
  * 支持增删改查、启用/停用、设为默认、连接测试。</p>
  *
- * <p>R5-D-038：本服务一律出真值（掩码只做在控制器 HTTP 边界），否则网关与定时任务会拿到星号串。
+ * <p>本服务一律出真值（掩码只做在控制器 HTTP 边界），否则网关与定时任务会拿到星号串。
  * 写入时 apiKey / apiSecret / extraConfig 内的凭据若为空或掩码形态，视为「未修改」，沿用库中原值。</p>
  */
 @Slf4j
@@ -49,15 +50,15 @@ public class ExtInterfaceConfigService {
 
     private final ExtInterfaceConfigMapper configMapper;
     /** 仅用于 AI 模型连通性测试的最小报文序列化（单例、无状态）。 */
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
-            new com.fasterxml.jackson.databind.ObjectMapper();
+    private final ObjectMapper objectMapper =
+            new ObjectMapper();
 
     private static final Duration TEST_TIMEOUT = Duration.ofSeconds(10);
     private static final Set<String> VALID_CATEGORIES = Set.of(
             "INVOICE_VERIFY", "INVOICE_CERTIFY", "OCR", "AI_MODEL", "LINKU", "BANK",
             // 应收应付蓝图直连通道（任务3.1：接口配置功能，未配置走模拟回退）
             "EKP", "EBS", "GOLDEN_TAX", "ECDS", "GL_PUSH",
-            // 多 ERP 适配（V1.4，见 ErpChannelResolver）：ERP=租户级 ERP 实例声明（provider 由租户配置，含 CUSTOM），
+            // 多 ERP 适配（见 ErpChannelResolver）：ERP=租户级 ERP 实例声明（provider 由租户配置，含 CUSTOM），
             // {PROVIDER}_{ACTION} 为对应通道的具体接口（如 {PROVIDER}_AP / {PROVIDER}_ORDER_GET）
             "ERP", "SAP", "YONYOU", "KINGDEE",
             "EBS_AP", "EBS_AP_BLUE", "EBS_ORDER_GET",
@@ -81,11 +82,11 @@ public class ExtInterfaceConfigService {
           .orderByDesc(ExtInterfaceConfig::getIsDefault)
           .orderByDesc(ExtInterfaceConfig::getId);
         Page<ExtInterfaceConfig> p = configMapper.selectPage(Page.of(pageNum, pageSize), qw);
-        // R5-D-038 此处出真值，掩码由控制器在 HTTP 边界完成
+        // 此处出真值，掩码由控制器在 HTTP 边界完成
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** R5-D-039：按 category 汇总配置条数（含 0 条类别，供前端页签 (n) 徽标） */
+    /** 按 category 汇总配置条数（含 0 条类别，供前端页签 (n) 徽标） */
     public List<Map<String, Object>> categoryStats() {
         QueryWrapper<ExtInterfaceConfig> qw = new QueryWrapper<>();
         qw.select("category", "count(*) as cnt").groupBy("category");
@@ -114,7 +115,7 @@ public class ExtInterfaceConfigService {
         return out;
     }
 
-    /** 查询单条详情（R5-D-038：返真值，出参掩码在控制器做） */
+    /** 查询单条详情（返真值，出参掩码在控制器做） */
     public ExtInterfaceConfig getById(Long id) {
         ExtInterfaceConfig c = configMapper.selectById(id);
         if (c == null) {
@@ -130,7 +131,7 @@ public class ExtInterfaceConfigService {
         AssertUtil.notBlank(config.getInterfaceName(), ErrorCode.PARAM_INVALID, "请输入接口名称");
         AssertUtil.notBlank(config.getInterfaceCode(), ErrorCode.PARAM_INVALID, "请输入接口编码");
         validateCategory(config.getCategory());
-        // R5-D-038 新增场景掩码串不是可用凭据，写入数据库即坏数据，直接拦下
+        // 新增场景掩码串不是可用凭据，写入数据库即坏数据，直接拦下
         rejectMaskedCredential(config.getApiKey(), "API Key");
         rejectMaskedCredential(config.getApiSecret(), "API Secret");
         if (ExtInterfaceConfig.hasMaskedSecretMember(config.getExtraConfig())) {
@@ -159,7 +160,7 @@ public class ExtInterfaceConfigService {
         return config.getId();
     }
 
-    /** 更新（R5-D-038：凭据字段传 null/空串/掩码形态均表示不修改） */
+    /** 更新（凭据字段传 null/空串/掩码形态均表示不修改） */
     @Transactional(rollbackFor = Exception.class)
     public void update(ExtInterfaceConfig config) {
         ExtInterfaceConfig exist = configMapper.selectById(config.getId());
@@ -172,7 +173,7 @@ public class ExtInterfaceConfigService {
         if (config.getCategory() != null) {
             validateCategory(config.getCategory());
         }
-        // R5-D-038 留空或掩码形态一律视为「未修改」，星号串不得覆盖库中真值
+        // 留空或掩码形态一律视为「未修改」，星号串不得覆盖库中真值
         config.setApiKey(keepIfUnchanged(config.getApiKey(), exist.getApiKey()));
         config.setApiSecret(keepIfUnchanged(config.getApiSecret(), exist.getApiSecret()));
         config.setExtraConfig(ExtInterfaceConfig.restoreExtraConfigSecrets(
@@ -265,7 +266,7 @@ public class ExtInterfaceConfigService {
             saveTestResult(id, "FAIL", "未配置 API 地址");
             return result;
         }
-        // R5-D-039：自指配置先拦下（实测 id=2 曾把本服务的管理端点填成外部发票验真接口）
+        // 自指配置先拦下（实测 id=2 曾把本服务的管理端点填成外部发票验真接口）
         if (isSelfReference(url)) {
             result.put("success", false);
             result.put("message", "API 地址指向本服务自身（" + url + "），属配置错误，请填真实外部接口地址");
@@ -280,7 +281,7 @@ public class ExtInterfaceConfigService {
                     .timeout(TEST_TIMEOUT);
             // Add Authorization header if apiKey is present
             if (c.getApiKey() != null && !c.getApiKey().isBlank()) {
-                // R5-D-038 库里存了掩码占位（历史脏数据）时不做无谓外发
+                // 库里存了掩码占位（历史脏数据）时不做无谓外发
                 if (ExtInterfaceConfig.looksMasked(c.getApiKey())) {
                     result.put("success", false);
                     result.put("message", "API Key 为掩码占位，请先填入真实值");
@@ -318,7 +319,7 @@ public class ExtInterfaceConfigService {
             String msg = scrubCredential("HTTP " + resp.statusCode() + (resp.body() != null && !resp.body().isBlank()
                     ? " (" + resp.body().substring(0, Math.min(resp.body().length(), 200)) + ")" : ""), c);
 
-            // R5-D-039 修正（2026-10-17 运行期实测）：原实现只看 HTTP 状态码，
+            // 修正（2026-10-17 运行期实测）：原实现只看 HTTP 状态码，
             // 而大量国内接口在鉴权/参数错误时仍返回 HTTP 200，把业务错误写进 body
             // （如百度 OCR `{"error_code":23,"error_msg":"IAM API-KEY authentication failed"}`）。
             // ⇒ 2xx 被一律判为「连接成功」，运维据此认为通道已接通，实际一调就失败。
@@ -345,7 +346,7 @@ public class ExtInterfaceConfigService {
         return result;
     }
 
-    // ---------- private helpers ----------
+    // private helpers
 
     /**
      * 从响应体里识别「业务错误」，返回可读描述；没有则返回 {@code null}（视为成功）。
@@ -365,8 +366,8 @@ public class ExtInterfaceConfigService {
         }
         String b = body.trim();
         try {
-            com.fasterxml.jackson.databind.JsonNode n =
-                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(b);
+            JsonNode n =
+                    new ObjectMapper().readTree(b);
             if (n.isObject()) {
                 JsonNode ec = n.get("error_code");
                 if (ec != null && !ec.isNull() && ec.asInt() != 0) {
@@ -433,7 +434,7 @@ public class ExtInterfaceConfigService {
         configMapper.updateById(update);
     }
 
-    /** R5-D-038 留空 / 掩码形态 / 等于原值的出参掩码 —— 均判定为「未修改」，返回库中原值 */
+    /** 留空 / 掩码形态 / 等于原值的出参掩码 —— 均判定为「未修改」，返回库中原值 */
     private String keepIfUnchanged(String incoming, String stored) {
         if (incoming == null || incoming.isBlank()
                 || ExtInterfaceConfig.looksMasked(incoming)
@@ -444,7 +445,7 @@ public class ExtInterfaceConfigService {
         return incoming;
     }
 
-    /** R5-D-038 本缺陷修复前的旧出参掩码形态（前 2 + **** + 后 2），防历史缓存把星号串写回 */
+    /** 本缺陷修复前的旧出参掩码形态（前 2 + **** + 后 2），防历史缓存把星号串写回 */
     private String previousMaskShape(String v) {
         if (v == null || v.isEmpty()) {
             return "";
@@ -452,14 +453,14 @@ public class ExtInterfaceConfigService {
         return v.length() <= 4 ? "****" : v.substring(0, 2) + "****" + v.substring(v.length() - 2);
     }
 
-    /** R5-D-038 新增场景：掩码串不是可用凭据，拦下避免写入数据库脏数据 */
+    /** 新增场景：掩码串不是可用凭据，拦下避免写入数据库脏数据 */
     private void rejectMaskedCredential(String value, String label) {
         if (ExtInterfaceConfig.looksMasked(value)) {
             throw new BizException(ErrorCode.PARAM_INVALID, label + " 请填入真实值，掩码占位不能被保存");
         }
     }
 
-    /** R5-D-038 上游可能回显我们发出的凭据，写入数据库／回显／打日志前先替换成掩码 */
+    /** 上游可能回显我们发出的凭据，写入数据库／回显／打日志前先替换成掩码 */
     private String scrubCredential(String text, ExtInterfaceConfig c) {
         if (text == null || text.isEmpty()) {
             return text;

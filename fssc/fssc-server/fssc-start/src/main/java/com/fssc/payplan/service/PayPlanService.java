@@ -5,19 +5,26 @@ package com.fssc.payplan.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
+import com.fssc.framework.spi.DistributedState;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.payplan.entity.PayPlan;
 import com.fssc.payplan.mapper.PayPlanMapper;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Collections;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -39,16 +46,16 @@ public class PayPlanService {
 
     private static final DateTimeFormatter NO_FMT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final BigDecimal ZERO = BigDecimal.ZERO;
-    private static final java.time.Duration SUBMIT_DEDUP_WINDOW = java.time.Duration.ofSeconds(60);
-    private static final java.time.Duration SUBMIT_LOCK_TTL = java.time.Duration.ofMinutes(5);
+    private static final Duration SUBMIT_DEDUP_WINDOW = Duration.ofSeconds(60);
+    private static final Duration SUBMIT_LOCK_TTL = Duration.ofMinutes(5);
 
     private final PayPlanMapper mapper;
     private final WfEngineFacade wfEngineFacade;
     private final OrgGuard orgGuard;
-    /** P4-3 审计：驳回重提状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** D-DEC-453 去重校验载体（与 TrFundPlanService B6 同用 DistributedState） */
-    private final com.fssc.framework.spi.DistributedState distributedState;
+    /** 审计：驳回重提状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
+    /** 去重校验载体（与 TrFundPlanService B6 同用 DistributedState） */
+    private final DistributedState distributedState;
 
     public PageResult<PayPlan> page(long pn, long ps, String keyword, String planType) {
         LambdaQueryWrapper<PayPlan> qw = new LambdaQueryWrapper<>();
@@ -87,7 +94,7 @@ public class PayPlanService {
         plan.setCreateTime(LocalDateTime.now());
         plan.setUpdateTime(LocalDateTime.now());
 
-        // D-DEC-453（F1 后端环节，与 B6/TrFundPlanService 同型）：一次点击被重试机制原样重发的第二笔，
+        // （F1 后端环节，与 B6/TrFundPlanService 同型）：一次点击被重试机制原样重发的第二笔，
         // 在这里撞防重窗口或锁。签名不能用 planNo——genNo 带秒级时间戳＋随机数，重发两笔必然不同号，拿它去重等于不设校验。
         String submitKey = submitSignature(plan, uid);
         if (distributedState.marked(submitKey)) {
@@ -123,22 +130,22 @@ public class PayPlanService {
     /**
      * 提交去重签名（租户＋公司＋期间＋供应商＋金额＋用途＋经办人）。
      * 末段 MD5：本地实现取 MySQL GET_LOCK，锁名上限 64 字符（实测超长报 4163 把接口打成 500）。
-     * 供应商优先取档案 id，档案缺失时退供应商名（D-DEC-348 允许 supplier_id 为 NULL）。
+     * 供应商优先取档案 id，档案缺失时退供应商名（允许 supplier_id 为 NULL）。
      */
     private static String submitSignature(PayPlan plan, Long applicantId) {
         String supplier = plan.getSupplierId() != null ? String.valueOf(plan.getSupplierId()) : plan.getSupplier();
-        String raw = com.fssc.framework.tenant.TenantContext.getTenantId() + ':' + plan.getCompanyId() + ':'
+        String raw = TenantContext.getTenantId() + ':' + plan.getCompanyId() + ':'
                 + plan.getPeriod() + ':' + supplier + ':' + plan.getAmount().toPlainString() + ':'
                 + plan.getPurpose() + ':' + applicantId;
-        return "fssc:pay:plan:create:" + org.springframework.util.DigestUtils
-                .md5DigestAsHex(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return "fssc:pay:plan:create:" + DigestUtils
+                .md5DigestAsHex(raw.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
-     * D-DEC-454：提单人作废在途付款计划 APPROVING → VOID。此前 APPROVING 单没有任何出口，
-     * 只能任其挂在审批池，或由引擎开发端点裸作废实例（D-DEC-455：那条环节不写业务状态、不记录）。
+     * 提单人作废在途付款计划 APPROVING → VOID。此前 APPROVING 单没有任何出口，
+     * 只能任其挂在审批池，或由引擎开发端点裸作废实例（那条环节不写业务状态、不记录）。
      * 前置＝提单人本人＋APPROVING＋未发生核销；审批链由 cancelInstance 同步终止，失败冒泡回滚（ROOT-2）。
-     * ★D-DEC-476：若审批链此前已被引擎开发端点"裸作废"（该端点按设计只终结流程、不回写业务态），
+     * 若审批链此前已被引擎开发端点"裸作废"（该端点按设计只终结流程、不回写业务态），
      * cancelInstance 会抛「实例不存在或已结束」＝这条单永远废不掉＝死单。现只对该种异常放行、照常落 VOID。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -164,10 +171,10 @@ public class PayPlanService {
         }
         boolean engineAlreadyEnded = false;
         if (StringUtils.hasText(plan.getProcInstId())) {
-            // D-DEC-476：审批面可能已被"裸作废"终结（引擎开发端点 cancelInstance 只删流程实例＋回写
+            // 审批面可能已被"裸作废"终结（引擎开发端点 cancelInstance 只删流程实例＋回写
             // wf_instance，按设计不触发业务收尾），于是业务单仍挂 APPROVING、待办却一条不剩＝既办不了也废不掉。
             // 这里把"引擎终止"做成去重臂：只吞「实例不存在或已结束」这一种 PARAM_INVALID，其余异常照旧冒泡
-            // （ROOT-2「流程失败不得静默」语义不变），业务侧 VOID＋audit_trail 照常办结。
+            // ROOT-2「流程失败不得静默」语义不变，业务侧 VOID＋audit_trail 照常办结。
             try {
                 wfEngineFacade.cancelInstance(plan.getProcInstId(), "提单人作废 " + plan.getPlanNo() + "：" + reason);
             } catch (BizException ex) {
@@ -188,8 +195,8 @@ public class PayPlanService {
         mapper.updateById(upd);
         auditTrailService.recordUpdate("PAY_PLAN", planId, plan.getPlanNo(), "pay_plan",
                 String.valueOf(planId),
-                java.util.Collections.singletonMap("status", "APPROVING"),
-                java.util.Collections.singletonMap("status", "VOID"),
+                Collections.singletonMap("status", "APPROVING"),
+                Collections.singletonMap("status", "VOID"),
                 "提单人作废：" + reason + (engineAlreadyEnded ? "（审批面此前已由运维终结，本次仅办结业务状态）" : ""));
         log.info("付款计划 {} 作废: APPROVING→VOID（原因：{}{}）", plan.getPlanNo(), reason,
                 engineAlreadyEnded ? "，审批面此前已终结" : "");
@@ -231,8 +238,8 @@ public class PayPlanService {
         }
         auditTrailService.recordUpdate("PAY_PLAN", planId, plan.getPlanNo(), "pay_plan",
                 String.valueOf(planId),
-                java.util.Collections.singletonMap("status", "REJECTED"),
-                java.util.Collections.singletonMap("status", "APPROVING"), "驳回后重报审批");
+                Collections.singletonMap("status", "REJECTED"),
+                Collections.singletonMap("status", "APPROVING"), "驳回后重报审批");
         log.info("付款计划 {} 驳回重报: REJECTED→APPROVING", plan.getPlanNo());
     }
 

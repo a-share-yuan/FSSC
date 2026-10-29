@@ -5,14 +5,22 @@ package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.glex.entity.GlJournalEntry;
 import com.fssc.glex.mapper.GlJournalEntryMapper;
+import com.fssc.masterdata.entity.MdSubject;
+import com.fssc.masterdata.mapper.MdSubjectMapper;
+import com.fssc.sharing.service.VoucherService;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,19 +39,19 @@ import java.math.BigDecimal;
 public class GlJournalService {
 
     private final GlJournalEntryMapper mapper;
-    /** D-GL-03：按科目编码解析真实主键，并校验传入科目存在性（默认科目不再是幽灵 ID）。 */
-    private final com.fssc.masterdata.mapper.MdSubjectMapper subjectMapper;
+    /** 按科目编码解析真实主键，并校验传入科目存在性（默认科目不再是幽灵 ID）。 */
+    private final MdSubjectMapper subjectMapper;
     private final WfEngineFacade wfEngineFacade;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
-    /** D-DEC-128：记账域冲销走凭证引擎的统一出口 */
-    private final com.fssc.sharing.service.VoucherService voucherService;
-    /** P4-3 审计扩面：冲销这类状态跃迁须记录（与审批回写同一规则） */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    private final OrgGuard orgGuard;
+    /** 记账域冲销走凭证引擎的统一出口 */
+    private final VoucherService voucherService;
+    /** 审计扩面：冲销这类状态跃迁须记录（与审批回写同一规则） */
+    private final AuditTrailService auditTrailService;
 
     /**
      * 默认借贷科目的<b>科目编码</b>（不是主键！）。
      *
-     * <p>D-GL-03：原实现把 6602/2241 当主键写死（{@code DEFAULT_DEBIT=6602L}、{@code DEFAULT_CREDIT=2241L}），
+     * <p>原实现把 6602/2241 当主键写死（{@code DEFAULT_DEBIT=6602L}、{@code DEFAULT_CREDIT=2241L}），
      * 而 md_subject 里 6602 的主键是 919、1002 是 967，<b>2241 更是查无此行</b>（幽灵 ID）。
      * 结果未传科目的手工凭证会落成「借 6602 管理费用 / 贷 2241 其他应付款」——账实不符。
      * 原注释「仅展示用，非外键约束」与实现不符：凭证引擎直接拿这两个值生成分录。
@@ -75,7 +83,7 @@ public class GlJournalService {
     }
 
     /**
-     * D-GL-04：会计期间归一化为 {@code yyyyMM}（底表列宽只有 6 位）。
+     * 会计期间归一化为 {@code yyyyMM}（底表列宽只有 6 位）。
      * <p>容忍 {@code yyyy-MM} 输入并去掉横杠；月份越界或格式非法时抛 400 业务异常，
      * 而不是让它一路走到 INSERT 变成「列长不足」的 HTTP 500。
      */
@@ -96,7 +104,7 @@ public class GlJournalService {
     }
 
     /**
-     * D-GL-03：把科目主键解析成「库里真实存在的那个」。
+     * 把科目主键解析成「库里真实存在的那个」。
      * <p>{@code subjectId} 为空时按科目编码取默认科目（6602 管理费用 / 1002 银行存款）；
      * 非空时必须能在 md_subject 命中，否则 400 拒绝——避免幽灵 ID 静默写入数据库、直到生成凭证才暴露。
      */
@@ -108,7 +116,7 @@ public class GlJournalService {
             }
             return subjectId;
         }
-        com.fssc.masterdata.entity.MdSubject def = subjectByCode(defaultCode);
+        MdSubject def = subjectByCode(defaultCode);
         if (def == null) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     side + "默认科目编码 " + defaultCode + " 在会计科目表中不存在，请显式指定科目");
@@ -116,18 +124,18 @@ public class GlJournalService {
         return def.getId();
     }
 
-    private com.fssc.masterdata.entity.MdSubject subjectById(Long id) {
+    private MdSubject subjectById(Long id) {
         return subjectMapper.selectById(id);
     }
 
-    private com.fssc.masterdata.entity.MdSubject subjectByCode(String code) {
-        return subjectMapper.selectOne(new LambdaQueryWrapper<com.fssc.masterdata.entity.MdSubject>()
-                .eq(com.fssc.masterdata.entity.MdSubject::getSubjectCode, code)
+    private MdSubject subjectByCode(String code) {
+        return subjectMapper.selectOne(new LambdaQueryWrapper<MdSubject>()
+                .eq(MdSubject::getSubjectCode, code)
                 .last("LIMIT 1"));
     }
 
     private String subjectName(Long id) {
-        com.fssc.masterdata.entity.MdSubject s = subjectMapper.selectById(id);
+        MdSubject s = subjectMapper.selectById(id);
         return s == null ? ("id=" + id) : (s.getSubjectCode() + " " + s.getSubjectName());
     }
 
@@ -141,8 +149,8 @@ public class GlJournalService {
         if (!StringUtils.hasText(period)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "会计期间不能为空");
         }
-        // D-GL-04：period 列是 varchar(6)=yyyyMM，传 yyyy-MM 会因列长不足触发 SQL 异常被包成 HTTP 500，
-        // 调用方无从判断是格式问题（与 D-INV-01 同源）。先归一化，非法格式显式 400 拒绝。
+        // period 列是 varchar(6)=yyyyMM，传 yyyy-MM 会因列长不足触发 SQL 异常被包成 HTTP 500，
+        // 调用方无从判断是格式问题（与 同源）。先归一化，非法格式显式 400 拒绝。
         period = normalizePeriod(period);
         if (!StringUtils.hasText(entryType)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "记账类型不能为空");
@@ -160,10 +168,10 @@ public class GlJournalService {
         e.setTenantId(tenantId);
         e.setPeriod(period);
         e.setEntryType(entryType);
-        // V2.2.38（K127 期间去重，"一个会计期间只能生成一张凭证"）：同期间同类型
+        // （K127 期间去重，"一个会计期间只能生成一张凭证"）：同期间同类型
         // 已存在未驳回的记账单（APPROVING/APPROVED/POSTED）时拒绝重复生成——防重复提单重复入账；
         // 被驳回(REJECTED)的单不占校验，可修正后重新生成。
-        GlJournalEntry dup = mapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<GlJournalEntry>()
+        GlJournalEntry dup = mapper.selectOne(new LambdaQueryWrapper<GlJournalEntry>()
                 .eq(GlJournalEntry::getPeriod, period)
                 .eq(GlJournalEntry::getEntryType, entryType)
                 .in(GlJournalEntry::getStatus, "APPROVING", "APPROVED", "POSTED")
@@ -182,7 +190,7 @@ public class GlJournalService {
         }
         e.setAmount(amount);
         e.setEntryNo("JRN" + period + String.format("%03d", seq));
-        // D-DEC-291/292：发起≠记账。凭证号只能由办结时生成的凭证对象给出，此处不预造号、不置 POSTED。
+        // /292：发起≠记账。凭证号只能由办结时生成的凭证对象给出，此处不预造号、不置 POSTED。
         e.setStatus("APPROVING");
         if (e.getCompanyId() == null) {
             e.setCompanyId(orgGuard.currentCompany());
@@ -192,7 +200,7 @@ public class GlJournalService {
         // G1：一般总账记账即发起对应记账审批流（总账会计制单→共享主管复核→财务经理阈值审批）
         try {
             // ENG-02(20260921)：传入公司上下文变量，避免 COMPANY 范围角色（财务审核等）解析"无成员"卡死
-            java.util.Map<String, Object> extraVars = new java.util.HashMap<>();
+            Map<String, Object> extraVars = new HashMap<>();
             extraVars.put("companyId", e.getCompanyId());
             wfEngineFacade.start(bizType, e.getId(), userId(),
                     typeName(entryType) + "-" + period + " " + e.getSummary(), amount, null, extraVars);
@@ -204,7 +212,7 @@ public class GlJournalService {
     }
 
     /**
-     * D-DEC-128：一般总账记账（费用预提/待摊/手工凭证/其他收款）冲销出口。
+     * 一般总账记账（费用预提/待摊/手工凭证/其他收款）冲销出口。
      *
      * <p>此前记账域只有 list/generate 两个动作：预提单办结后凭证停在 DRAFT，
      * 而全系统唯一的冲销入口是凭证台账的「红字冲销」按钮，其前置条件是
@@ -216,12 +224,12 @@ public class GlJournalService {
      * 凭证仍是草稿则作废原凭证（账面本无此笔，红字反而造两张空凭证）。
      * 冲销后单据置 REVERSED，期间去重校验（APPROVING/APPROVED/POSTED）随之放开，可重新生成正确的一笔。
      *
-     * @param id     记账单主键
+     * @param id 记账单主键
      * @param reason 冲销原因（必填，落凭证备注与审计记录）
      * @return 冲销结果（action=REVERSE|VOID、原凭证与红字凭证号、单据号与状态）
      */
     @Transactional(rollbackFor = Exception.class)
-    public java.util.Map<String, Object> reverse(Long id, String reason) {
+    public Map<String, Object> reverse(Long id, String reason) {
         GlJournalEntry e = mapper.selectById(id);
         if (e == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "总账记账不存在: " + id);
@@ -237,16 +245,16 @@ public class GlJournalService {
         if (bizType == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "不支持的记账类型: " + e.getEntryType());
         }
-        java.util.Map<String, Object> ret =
-                new java.util.LinkedHashMap<>(voucherService.reverseBySource(bizType, id, userId(), reason));
+        Map<String, Object> ret =
+                new LinkedHashMap<>(voucherService.reverseBySource(bizType, id, userId(), reason));
         String oldStatus = e.getStatus();
         GlJournalEntry upd = new GlJournalEntry();
         upd.setId(id);
         upd.setStatus("REVERSED");
         mapper.updateById(upd);
-        java.util.Map<String, Object> before = new java.util.LinkedHashMap<>();
+        Map<String, Object> before = new LinkedHashMap<>();
         before.put("status", oldStatus);
-        java.util.Map<String, Object> after = new java.util.LinkedHashMap<>();
+        Map<String, Object> after = new LinkedHashMap<>();
         after.put("status", upd.getStatus());
         after.put("reverse", ret.get("action"));
         after.put("voucherNo", ret.get("action").equals("REVERSE") ? ret.get("reverseVoucherNo") : ret.get("originVoucherNo"));
@@ -265,7 +273,7 @@ public class GlJournalService {
             case "DEFER" -> "GL_DEFER";
             case "MANUAL" -> "GL_MANUAL_VOUCHER";
             case "OTHER_RECEIPT" -> "GL_OTHER_RECEIPT";
-            // D-DEC-323（批次2 B-12）：盘点差异结转做账档——资产/存货盘点差异结转凭证统一走总账凭证载体
+            // 批次2 B-12：盘点差异结转做账档——资产/存货盘点差异结转凭证统一走总账凭证载体
             case "CHECK_DIFF" -> "GL_CHECK_DIFF";
             default -> null;
         };

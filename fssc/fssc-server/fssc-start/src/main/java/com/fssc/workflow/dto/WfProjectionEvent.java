@@ -34,17 +34,17 @@ public class WfProjectionEvent implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    // ---------- 事件标识 ----------
+    // 事件标识
 
     /** 事件类型：{@code PROCESS_STARTED / TASK_CREATED / TASK_ASSIGNED / TASK_COMPLETED / TASK_DELETED / PROCESS_COMPLETED} */
     private String eventType;
 
-    // ---------- 归属 ----------
+    // 归属
 
     /** 归属租户（事件当场解析：镜像实例行优先 → 当前线程租户）。null＝上下文不可恢复，投影方记缺陷后跳过。 */
     private Long tenantId;
 
-    // ---------- 实例 ----------
+    // 实例
 
     private String procInstId;
     private String procDefId;
@@ -61,7 +61,7 @@ public class WfProjectionEvent implements Serializable {
     /** 流程结束时的结果（{@code approved} 流程变量）：true＝APPROVED / false＝REJECTED；null＝非结束事件或变量已清理 */
     private Boolean approved;
 
-    // ---------- 任务（任务级事件才有） ----------
+    // 任务（任务级事件才有）
 
     private String taskId;
     private String nodeKey;
@@ -84,7 +84,7 @@ public class WfProjectionEvent implements Serializable {
     /** 到期时刻（epoch 毫秒，来源 {@code wf_node_config.timeout_hours}；未配置超时则为 null） */
     private Long dueTimeMillis;
 
-    // ---------- 记录 ----------
+    // 记录
 
     /** 审批意见（{@code comment} 流程变量） */
     private String comment;

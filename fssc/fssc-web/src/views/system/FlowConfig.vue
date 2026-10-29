@@ -399,7 +399,13 @@
           <el-col :span="12"
                   v-if="nodeDialog.form.assignType !== 'INITIATOR' && nodeDialog.form.assignType !== 'DEPT_LEADER_UP'">
             <el-form-item :label="$t('system.flow.lblApproverValue')" prop="assignValue">
-              <el-input v-model="nodeDialog.form.assignValue" :placeholder="assignValuePlaceholder" />
+              <!-- 指定用户＝人员多选（存逗号串，引擎按逗号拆）；角色仍按角色编码手填 -->
+              <el-select v-if="nodeDialog.form.assignType === 'USER'" v-model="assignUserIds" multiple filterable remote clearable
+                         :remote-method="searchCcUsers" :loading="ccLoading" :placeholder="assignValuePlaceholder"
+                         style="width:100%" @focus="ensureCcUsers">
+                <el-option v-for="u in ccOptions" :key="u.userId" :label="userOptionLabel(u)" :value="String(u.userId)" />
+              </el-select>
+              <el-input v-else v-model="nodeDialog.form.assignValue" :placeholder="assignValuePlaceholder" />
               <div class="field-hint">{{ assignValueHint }}</div>
               <RoleHolderHint v-if="nodeDialog.form.assignType === 'ROLE'" :role-code="firstAssignRole" />
             </el-form-item>
@@ -505,7 +511,11 @@
 
         <div class="form-section-title">{{ $t('system.flow.secCcReject') }}</div>
         <el-form-item :label="$t('system.flow.lblCcAfter')">
-          <el-input v-model="nodeDialog.form.ccUsers" :placeholder="$t('system.flow.phCcUserIds')" />
+          <el-select v-model="ccUserIds" multiple filterable remote clearable
+                     :remote-method="searchCcUsers" :loading="ccLoading" :placeholder="$t('system.flow.phCcUserIds')"
+                     style="width:100%" @focus="ensureCcUsers">
+            <el-option v-for="u in ccOptions" :key="u.userId" :label="userOptionLabel(u)" :value="String(u.userId)" />
+          </el-select>
           <div class="field-hint">{{ $t('system.flow.hintCcUsersBrief') }}</div>
         </el-form-item>
         <el-form-item :label="$t('system.flow.lblCcRoles')">
@@ -590,7 +600,7 @@
         <el-form-item :label="$t('system.flow.colCfgCode')" prop="cfgCode"><el-input v-model="configDialog.form.cfgCode" /></el-form-item>
         <el-form-item :label="$t('system.flow.colCfgName')" prop="cfgName"><el-input v-model="configDialog.form.cfgName" /></el-form-item>
 
-        <!-- ===== 按配置类型动态渲染结构化表单 ===== -->
+        <!-- 按配置类型动态渲染结构化表单 -->
         <!-- 金额阈值 -->
         <template v-if="configDialog.form.cfgType === 'THRESHOLD'">
           <el-form-item :label="$t('system.flow.lblAmountMinIncl')">
@@ -702,7 +712,7 @@
           <el-input :model-value="currentUserName" disabled />
         </el-form-item>
         <el-form-item :label="$t('system.flow.colDelegate')" prop="toUserId">
-          <!-- P0 修复（2026-10-21）：默认只加载同公司人员 -->
+          <!-- P0 修复：默认只加载同公司人员 -->
           <UserSelect v-model="delegateDialog.form.toUserId" scope="same-company" show-dept />
         </el-form-item>
         <el-form-item :label="$t('system.flow.lblApplyDocTypes')">
@@ -787,7 +797,7 @@
       <el-empty v-else :description="$t('system.flow.emptySimResult')" :image-size="60" />
     </el-dialog>
 
-    <!-- G3-3/G3-4 发布影响面：在途旧实例清单 + 发布 diff 记录（抽屉，不挤占配置页） -->
+    <!-- /发布影响面：在途旧实例清单 + 发布 diff 记录（抽屉，不挤占配置页） -->
     <el-drawer v-model="inFlight.visible" :title="$t('system.flow.ttlPublishImpact', { v1: inFlight.modelName || '' })" size="60%" direction="rtl">
       <el-tabs v-model="inFlight.tab">
         <el-tab-pane v-if="canInstanceList" :label="$t('system.flow.lblStaleInstances')" name="inflight">
@@ -863,7 +873,7 @@ import { enumLabel, bizTypeLabel, modelCategoryLabel, BIZ_TYPE, WF_MODEL_CATEGOR
 import { useDict } from '@/composables/useDict.js'
 // 第1批：多实例相关标签走字典
 const multiTypeDict = useDict('wf_node_multi_type', MULTI_TYPE)
-// 第2批：取人方式 / 取人档位 / 超时处置三处也走字典（字典为 V1.4.69 灌入，取值与本地常量一致）
+// 第2批：取人方式 / 取人档位 / 超时处置三处也走字典（字典为 灌入，取值与本地常量一致）
 //   —— 本地常量继续作为默认处理常量传入，两边取值若有差异，以字典为准（运营可维护的权威源）
 const assignTypeDict = useDict('wf_assign_type', ASSIGN_TYPE)
 const handlingModeDict = useDict('wf_handling_mode', HANDLING_MODE)
@@ -871,7 +881,7 @@ const timeoutActionDict = useDict('wf_timeout_action', TIMEOUT_ACTION)
 
 /** 统一触发本组件用到的全部枚举字典加载（第1批 1 个 + 第2批 3 个）。
  *  useDict 内部有 inflight 去重与 fail-soft，这里只负责"一次触发、全部并发"。
- *   不 await、不catch 抛出：字典不可用时标签函数已回落本地常量，界面零影响。 */
+ *  不 await、不catch 抛出：字典不可用时标签函数已回落本地常量，界面零影响。 */
 function useDictsReady() {
   return Promise.all([
     multiTypeDict.load(),
@@ -896,7 +906,7 @@ function openRowDetail(row) {
   return showRowDetail(row, { title: t('field.detail') })
 }
 
-// ========== 模型列表 ==========
+// 模型列表
 const models = ref([])
 const filteredModels = ref([])
 const selectedModel = ref(null)
@@ -908,7 +918,7 @@ const loading = reactive({ models: false, nodes: false, bindings: false, configs
 const detailTab = ref('info')
 const saving = ref(false)
 
-// ---------- 权限门控（P0 修复 · 2026-09-16） ----------
+// 权限门控（P0 修复 · 2026-09-16）
 // 本页是「六页签聚合页」，但菜单 104「流程管理」只挂了一个码 wf:model:list，
 // 而各页签分别打不同接口、要不同权限码。改前 selectModel() 会并行拉取
 // 节点/绑定/实例/委托四份数据，导致仅有 wf:model:list 的角色（如普通员工
@@ -945,7 +955,7 @@ const hiddenTabDesc = computed(() => {
 })
 
 /**
- * 业务单据类型选项＝BIZ_TYPE 字典全集（2026-09-24）。
+ * 业务单据类型选项＝BIZ_TYPE 字典全集。
  * 原先是手写的 12 项静态清单，而库里 biz_type 有 84 种 ⇒ 基本信息页选中任何一项都显示成全大写英文码。
  * 中间版本曾把「模型名称」当作缺省标签默认处理（`bt → modelName`），结果 MEETING/SUPPLIER_ADD 这类
  * 行的单据类型显示得跟模型名称一模一样，用户判定为"显示的是其它字段的数据"——已回退。
@@ -1038,7 +1048,7 @@ async function loadAllDetails(m) {
   await Promise.all(jobs)
 }
 
-// ========== 基本信息 ==========
+// 基本信息
 const modelForm = reactive({})
 
 const modelFormRules = computed(() => ({
@@ -1121,12 +1131,38 @@ async function saveModel() {
   } catch (e) { ElMessage.error(e.message) } finally { saving.value = false }
 }
 
-// ========== 节点配置 ==========
+// 节点配置
 const nodes = ref([])
 const nodeDialog = reactive({
   visible: false, editing: false, saving: false,
   form: {},
 })
+
+/**
+ * 人员候选（抄送人 / 指定用户共用）：走 wf 抄送候选人只读清单，
+ * 界面按姓名挑选，不再让人手输用户ID。配置行仍存逗号串（引擎按逗号拆）。
+ */
+const ccOptions = ref([])
+const ccLoading = ref(false)
+async function searchCcUsers(keyword) {
+  ccLoading.value = true
+  try { ccOptions.value = (await flowApi.ccCandidates({ keyword: keyword || undefined, limit: 200 })) || [] }
+  catch { ccOptions.value = [] } finally { ccLoading.value = false }
+}
+function ensureCcUsers() { if (!ccOptions.value.length) searchCcUsers('') }
+function userOptionLabel(u) {
+  const name = u.name || u.userName || ''
+  return u.userName && u.userName !== u.name ? `${name}（${u.userName}）` : name
+}
+/** 多选数组 ⇄ 逗号串（既有配置行存 "3892,3893" 形态） */
+function csvModel(key) {
+  return computed({
+    get: () => String(nodeDialog.form[key] || '').split(/[,，\s]+/).filter(Boolean),
+    set: (v) => { nodeDialog.form[key] = (v || []).join(',') },
+  })
+}
+const ccUserIds = csvModel('ccUsers')
+const assignUserIds = csvModel('assignValue')
 
 async function loadNodes(modelKey) {
   if (!modelKey) { nodes.value = []; return }
@@ -1162,7 +1198,7 @@ function openNodeDialog(row) {
     ? { ...row }
     : {
       modelKey: selectedModel.value.modelKey, nodeKey: '', nodeName: '',
-      // F1-6：不再下发 nodeType（wf_node_config 无此列、后端不读，Jackson 静默丢弃＝假配置）
+      // 不再下发 nodeType（wf_node_config 无此列、后端不读，Jackson 静默丢弃＝假配置）
       assignType: 'USER', assignValue: '',
       handlingMode: 'AUTO',
       timeoutHours: 24, timeoutAction: 'NOTIFY', emptyStrategy: 'ERROR', allowTransfer: 1, allowAddsign: 1,
@@ -1183,6 +1219,8 @@ function openNodeDialog(row) {
   // up_level 列默认 1；老接口不回传时补 1，避免「升级层级」控件空值被当作未配置
   if (form.upLevel == null) form.upLevel = 1
   Object.assign(nodeDialog, { visible: true, saving: false, form })
+  // 已有配置里的抄送人/指定用户要能显示成姓名：打开即预拉候选人清单
+  if (form.ccUsers || form.assignValue) ensureCcUsers()
 }
 
 async function saveNode() {
@@ -1206,7 +1244,7 @@ async function deleteNode(row) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-// ========== 流程绑定 ==========
+// 流程绑定
 const bindings = ref([])
 const bindingDialog = reactive({
   visible: false, editing: false, saving: false,
@@ -1259,7 +1297,7 @@ async function deleteBinding(row) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-// ========== 全局配置 ==========
+// 全局配置
 const configs = ref([])
 const cfgType = ref('THRESHOLD')
 const configDialog = reactive({
@@ -1378,7 +1416,7 @@ async function deleteConfig(row) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-// ========== 运行实例 ==========
+// 运行实例
 const instances = ref([])
 const instPageNum = ref(1)
 const instPageSize = ref(20)
@@ -1405,7 +1443,7 @@ function handleInstCurrentChange(val) {
   if (selectedModel.value) loadInstances(selectedModel.value.modelKey)
 }
 
-// ========== 委托代理 ==========
+// 委托代理
 const delegates = ref([])
 const dlgPageNum = ref(1)
 const dlgPageSize = ref(20)
@@ -1418,7 +1456,7 @@ const delegateDialog = reactive({
 async function loadDelegates() {
   loading.delegates = true
   try {
-    // E-12/F1-2：委托关系是审批授权信息，服务端已按身份过滤。本 tab 是流程管理视角——
+    // E-12/委托关系是审批授权信息，服务端已按身份过滤。本 tab 是流程管理视角——
     // 集团级（无公司维度）账号看全量，公司级账号只剩本人相关。
     const scope = store.user?.companyId == null ? 'all' : 'mine'
     const r = await flowApi.delegatePage({ pageNum: dlgPageNum.value, pageSize: dlgPageSize.value, scope })
@@ -1470,7 +1508,7 @@ async function cancelDelegate(row) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-// ========== 模型操作 ==========
+// 模型操作
 const checkResult = reactive({ visible: false, data: null })
 const checkFailDesc = computed(() => {
   const errors = Array.isArray(checkResult.data?.errors) ? checkResult.data.errors.filter(Boolean) : []
@@ -1566,7 +1604,7 @@ async function publishModel() {
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || t('system.flow.msgPublishFail')) }
 }
 
-// ========== G3-3/G3-4 发布影响面（在途旧实例 + BPMN 仓库化 diff） ==========
+// /发布影响面（在途旧实例 + BPMN 仓库化 diff）
 const inFlight = reactive({ visible: false, tab: 'inflight', modelName: '', data: null, history: [], diff: '' })
 
 async function openInFlight() {
@@ -1677,7 +1715,7 @@ async function importFlow() {
   input.click()
 }
 
-// ========== 辅助方法 ==========
+// 辅助方法
 /** 流程/单据类型 → 中文：先查业务类型字典（唯一规则），字典没有才退回同名模型的名称 */
 function flowTypeLabel(v) {
   if (!v) return ''
@@ -1727,7 +1765,7 @@ function handlingModeTag(v) {
 }
 function timeoutActionLabel(v) {
   // 【第2批】字典优先；字典未到/失败 ⇒ 回落本地常量。
-  //  TIMEOUT_ACTION 在前端是「别名多对一」映射（NOTIFY/REMIND/URGE 都标"催办通知"），
+  // TIMEOUT_ACTION 在前端是「别名多对一」映射（NOTIFY/REMIND/URGE 都标"催办通知"），
   //    而字典只登记后端真正读的值（含库中历史 16 个节点的 NOTIFY 旧拼写）。
   //    两边标签有差异（如 AUTO_TRANSFER：前端"超时升级转办"vs 字典无此项），
   //    故字典没命中时必须回落本地常量，否则历史别名会显示成英文码。
@@ -1738,9 +1776,9 @@ function timeoutActionLabel(v) {
 /** 会签模式：ANY 为列默认值（普通单任务），显示"任一通过"而非空白
  *
  *  【2026-10-15 第1批枚举办结】标签改为「字典优先、本地常量默认处理」：
- *   字典 wf_node_multi_type（V1.4.67 灌入 4 项）的文案比本地常量更贴合业务
- *   （字典："或签（任一人办理即可）"／常量："任一通过（单人办理）"），且字典由运营可维护。
- *    但字典是**运行时远程数据**，接口不可用时必须回落本地常量 —— 否则配置页一打开就空白。
+ *   字典 wf_node_multi_type（灌入 4 项）的文案比本地常量更贴合业务
+ *   字典："或签（任一人办理即可 "／常量："任一通过（单人办理）"），且字典由运营可维护。
+ *   但字典是**运行时远程数据**，接口不可用时必须回落本地常量 —— 否则配置页一打开就空白。
  *   useDict 内部已做 fail-soft：加载中/失败/未配置 ⇒ 一律用本地常量，界面零变化。
  */
 function multiTypeLabel(v) {
@@ -1767,7 +1805,7 @@ function onTabChange(tab) {
   if (tab === 'configs' && !configs.value.length) loadConfigs()
 }
 
-// ========== 流程图全屏设计 ==========
+// 流程图全屏设计
 const bpmnRef = ref(null)
 const diagramWrapRef = ref(null)
 const isDiagramFullscreen = ref(false)
@@ -1813,7 +1851,7 @@ onBeforeUnmount(() => {
   try { if (document.fullscreenElement) document.exitFullscreen() } catch (e) { /* ignore */ }
 })
 
-// R4-06: Show guide on first visit
+// Show guide on first visit
 const _guideKey = 'fssc_guide_flowConfigCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.value?.show(), 800) } } catch {}
 </script>

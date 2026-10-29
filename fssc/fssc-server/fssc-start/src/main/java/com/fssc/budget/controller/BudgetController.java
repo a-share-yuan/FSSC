@@ -12,7 +12,16 @@ import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** 预算方案与明细（/api/tenant/budget/scheme、/api/tenant/budget/item） */
 @RestController
@@ -28,18 +38,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class BudgetController {
 
     private final BudgetService budgetService;
-    private final com.fssc.budget.service.BudgetItemExcelService budgetItemExcelService;
+    private final BudgetItemExcelService budgetItemExcelService;
 
     // 预算执行明细（占用/核销/余额）
     @RequiresPerm("budget:scheme:list")
     @GetMapping("/execution")
-    public Result<java.util.List<java.util.Map<String, Object>>> execution(
+    public Result<List<Map<String, Object>>> execution(
             @RequestParam(value = "period", required = false) String period,
             @RequestParam(value = "deptId", required = false) Long deptId) {
         return Result.success(budgetService.executionSummary(period, deptId));
     }
 
-    // ---------- 方案 ----------
+    // 方案
 
     @RequiresPerm("budget:scheme:list")
     @GetMapping("/scheme/page")
@@ -100,7 +110,7 @@ public class BudgetController {
         private Long schemeId;
     }
 
-    // ---------- 明细 ----------
+    // 明细
 
     // 只读查询放开给所有登录租户用户：单据发起页的预算占用预览必用（写操作仍需权限）
     // ids：逗号分隔的预算明细主键，供单据页精确取回"自动映射科目未在前 200 行预载内"的额度
@@ -108,9 +118,9 @@ public class BudgetController {
     @GetMapping("/item/page")
     public Result<PageResult<BgItem>> itemPage(PageQuery query, Long schemeId, Long deptId, Long itemId,
                                                @RequestParam(required = false) String ids) {
-        java.util.List<Long> idList = null;
+        List<Long> idList = null;
         if (ids != null && !ids.isBlank()) {
-            idList = new java.util.ArrayList<>();
+            idList = new ArrayList<>();
             for (String s : ids.split(",")) {
                 String t = s.trim();
                 if (!t.isEmpty()) {
@@ -122,7 +132,7 @@ public class BudgetController {
     }
 
     /**
-     * D-DEC-042：单据发起页「预算科目」红星下拉查询端点。
+     * 单据发起页「预算科目」红星下拉查询端点。
      * <p>与 {@code /item/page} 的差别只在数据范围规则：本端点按<b>公司/法人</b>维度放行
      * （{@code BudgetService#itemPickPage}），不再套个人 data_scope 五级——普通员工
      * （COMMON_EMP data_scope=4 本部门）在旧规则下 {@code bg_item.dept_id} 恒 NULL，命中 0 行、
@@ -133,9 +143,9 @@ public class BudgetController {
     public Result<PageResult<BgItem>> itemPick(PageQuery query, Long schemeId, Long deptId, Long itemId,
                                                @RequestParam(required = false) Integer budgetYear,
                                                @RequestParam(required = false) String ids) {
-        java.util.List<Long> idList = null;
+        List<Long> idList = null;
         if (ids != null && !ids.isBlank()) {
-            idList = new java.util.ArrayList<>();
+            idList = new ArrayList<>();
             for (String s : ids.split(",")) {
                 String t = s.trim();
                 if (!t.isEmpty()) {
@@ -155,21 +165,21 @@ public class BudgetController {
         return Result.success();
     }
 
-    // ---------- 明细 Excel 导入/导出（2026-09-17） ----------
+    // 明细 Excel 导入/导出
 
     /** 导出预算明细 xlsx（可选按方案/部门/费用项过滤） */
     @RequiresPerm("budget:scheme:list")
     @GetMapping("/item/export")
-    public void itemExport(jakarta.servlet.http.HttpServletResponse response,
+    public void itemExport(HttpServletResponse response,
                            @RequestParam(required = false) Long schemeId,
                            @RequestParam(required = false) Long deptId,
-                           @RequestParam(required = false) Long itemId) throws java.io.IOException {
+                           @RequestParam(required = false) Long itemId) throws IOException {
         byte[] data = budgetItemExcelService.exportItems(schemeId, deptId, itemId);
-        response.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM_VALUE);
-        String name = java.net.URLEncoder.encode("预算明细.xlsx", java.nio.charset.StandardCharsets.UTF_8);
+        response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+        String name = URLEncoder.encode("预算明细.xlsx", StandardCharsets.UTF_8);
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + name);
         response.setContentLength(data.length);
-        try (java.io.OutputStream out = response.getOutputStream()) {
+        try (OutputStream out = response.getOutputStream()) {
             out.write(data);
         }
     }
@@ -178,7 +188,7 @@ public class BudgetController {
     @RequiresPerm("budget:item:create")
     @OperLog(module = "BUDGET", operType = "INSERT", desc = "导入预算明细")
     @PostMapping("/item/import")
-    public Result<BudgetItemExcelService.ImportResult> itemImport(            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+    public Result<BudgetItemExcelService.ImportResult> itemImport(            @RequestParam("file") MultipartFile file,
             @RequestParam("schemeId") Long schemeId) {
         return Result.success(budgetItemExcelService.importItems(schemeId, file));
     }

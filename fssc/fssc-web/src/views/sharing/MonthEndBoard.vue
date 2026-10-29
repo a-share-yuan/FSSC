@@ -83,7 +83,7 @@
           <el-radio-button value="overdue">{{ $t('sharing.common.colOverdue') }}</el-radio-button>
         </el-radio-group>
       </div>
-      <!-- R5-11: 月末提醒 -->
+      <!-- 月末提醒 -->
       <el-alert
         v-if="monthEndAlert.shouldAlert"
         :title="monthEndAlert.message"
@@ -92,7 +92,7 @@
         :closable="false"
         style="margin-bottom: 8px"
       />
-      <!-- R5-11: 自动调度下一个任务 -->
+      <!-- 自动调度下一个任务 -->
       <el-alert
         v-if="nextTask"
         :title="$t('sharing.monthEnd.alertNextTask', { v1: nextTask.name, v2: nextTask.dept })"
@@ -143,7 +143,7 @@ import { TooltipComponent, GridComponent, LegendComponent, DataZoomComponent } f
 import { CanvasRenderer } from 'echarts/renderers'
 import { glexApi, periodApi, flowApi } from '../../api'
 import { hasPerm } from '@/utils/perm'
-// R5-11: 月结调度自动化
+// 月结调度自动化
 import { useMonthEndSchedule } from '@/composables/useMonthEndSchedule'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
@@ -152,14 +152,14 @@ import { useTablePager } from '../../composables/useTablePager'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => { try { loadData() } catch { /* noop */ } },
 })
 
 echarts.use([BarChart, ScatterChart, TooltipComponent, GridComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
 
-// R5-11: 调度 composable
+// 调度 composable
 const { checkMonthEndAlert, autoSchedule, startAutoCheck, stopAutoCheck } = useMonthEndSchedule()
 const monthEndAlert = ref({ shouldAlert: false, message: '', daysLeft: 0 })
 const nextTask = ref(null)
@@ -169,8 +169,8 @@ const nextTask = ref(null)
  *
  * 本页是无菜单承载的全局入口页（Layout 用户下拉「月结看板」+ 路由 /month-end）。
  * 首屏三个接口分两层：
- *   - **主数据** glexApi.monthClosePage → gl:monthclose:list（必需，页面内容来源）
- *   - **可选增强** periodApi.page → md:period:list（有 fallback：缺权限时退回当前月）
+ *   主数据** glexApi.monthClosePage → gl:monthclose:list（必需，页面内容来源）
+ *   可选增强** periodApi.page → md:period:list（有 fallback：缺权限时退回当前月）
  *                 flowApi.instancePage → wf:instance:list（"在途审批作为参考"，本就是补充项）
  * 故门控用主码，可选接口另做判权 + silent（它们各有 try/catch，但 catch 吞不掉
  * api.js 响应拦截器的全局 toast，只有 silent 能抑制）。
@@ -229,7 +229,7 @@ const filteredTasks = computed(() => {
   })
 })
 
-// P0-1: 本地分页（任务清单为前端已聚合的全量数据，切片显示避免一次性渲染全部行）
+// 本地分页（任务清单为前端已聚合的全量数据，切片显示避免一次性渲染全部行）
 const pager = useTablePager({ mode: 'local', storageKey: 'sharing_monthend_board' })
 const { pagedData } = pager
 watch(filteredTasks, (v) => pager.setSource(v || []), { immediate: true })
@@ -320,7 +320,7 @@ async function loadPeriods() {
   try {
     const res = await periodApi.page({ pageNum: 1, pageSize: 50 }, { silent: true })
     const list = res.list || res.records || []
-    // D-DEC-195：期间查询两处错位是「看板恒空」的另一半——
+    // 期间查询两处错位是「看板恒空」的另一半——
     // ① md_period 实体字段是 periodYear/periodMonth，原代码读 p.year/p.month ⇒ 期间串成 'undefined-undefined'；
     // ② 状态过滤只认 OPEN，而会计期间主数据的开账态实为 NORMAL ⇒ 下拉恒空，永远走默认处理当月。
     // 看板仍传 'YYYY-MM'（展示规则），由后端 GlMonthCloseService.normalizePeriod 统一折成库内 yyyyMM 再 eq，
@@ -431,7 +431,7 @@ async function markDone(row) {
   if (mod) mod.done++
   renderStatusChart()
   renderTimelineChart()
-  // R5-11: 自动调度下一个任务
+  // 自动调度下一个任务
   nextTask.value = autoSchedule ? null : null
   // 在任务完成后重新检查月末提醒
   monthEndAlert.value = checkMonthEndAlert()
@@ -450,7 +450,7 @@ onMounted(async () => {
   await loadData()
   initCharts()
   window.addEventListener('resize', handleResize)
-  // R5-11: 月末提醒 + 自动检查
+  // 月末提醒 + 自动检查
   monthEndAlert.value = checkMonthEndAlert()
   startAutoCheck()
 })
@@ -459,7 +459,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
   statusChart?.dispose()
   timelineChart?.dispose()
-  // R5-11: 停止自动检查
+  // 停止自动检查
   stopAutoCheck()
 })
 </script>

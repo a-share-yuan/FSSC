@@ -4,7 +4,7 @@
 <template>
   <div :class="['reports', { tabless: isSingle }]">
     <el-card header="费用概览">
-      <!-- R5-D-020：四格只摆服务端概览接口的真返回值；查询失败如实标「本次未刷新成功」，不再拿 0 顶数 -->
+      <!-- 四格只摆服务端概览接口的真返回值；查询失败如实标「本次未刷新成功」，不再拿 0 顶数 -->
       <el-alert v-if="overviewError" type="error" :closable="false" show-icon style="margin-bottom:12px"
         title="本次未刷新成功：费用概览未取到服务端数据" />
       <el-row :gutter="16">
@@ -283,7 +283,7 @@
           <el-table :data="paged.taxRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" empty-text="暂无数据">
         <el-table-column type="selection" width="45" />
             <el-table-column prop="period" label="期间" width="100"  sortable />
-            <!-- D-H10-01：手册 H10.4a 期望表头「税种/税基/税额/税负率」，原页只有三个税额列。
+            <!-- 手册 H10.4a 期望表头「税种/税基/税额/税负率」，原页只有三个税额列。
                  税种＝增值税（inv_invoice 全量为 VAT/VAT_NORMAL，本系统无其它税种）；
                  税基＝销项不含税金额（后端 taxBurdenAnalysis 新增 taxBase）；税负率＝应纳税额/税基。 -->
             <el-table-column label="税种" width="90">
@@ -421,7 +421,7 @@ import { formatMoney, formatDate } from '@/utils/format'
 import { hasPerm } from '@/utils/perm'
 
 // G1（2026-10-09 权限治理）：25 tab 按 12 报表域门控。
-// 每枚 tab 绑定一个 report:<domain>:view 权限码，无权则隐藏 tab（不发请求、不渲染）。
+// 每枚 tab 绑定一个 report:<domain>view 权限码，无权则隐藏 tab（不发请求、不渲染）。
 // 域定义见后端 ReportDomain.java（EXP/AR/P2P/CASH/ASSET/GL/BUDGET/CONTRACT/SHARING/APPROVAL/IMAGE/TAX）。
 const TAB_DOMAIN = {
   dept: 'report:exp:view', summary: 'report:exp:view', trend: 'report:exp:view',
@@ -486,7 +486,7 @@ const REPORT_GROUPS = [
     { name: 'voucherStats', label: '凭证生成统计' } ] },
 ]
 const loading = ref(false)
-// R5-D-020：概览四格的值一律来自服务端概览接口；取不到即置 overviewError，界面上摆「本次未刷新成功」，
+// 概览四格的值一律来自服务端概览接口；取不到即置 overviewError，界面上摆「本次未刷新成功」，
 // 不再用 ?? 0 把「没取到」说成「金额为 0」。初值为 null（渲染「查询中…」），成功回填后才出数。
 const overviewError = ref(false)
 // 预算执行率由服务端回两位小数的百分数（如 81.55），裸渲染会被统计卡按默认精度抹成「81」，
@@ -512,7 +512,7 @@ const trendRows = ref([])
 const compRows = ref([])
 const compItem = ref('')
 
-// ---- 扩展报表数据 ----
+// 扩展报表数据
 const apAgingRows = ref([])
 const arAgingRows = ref([])
 const cashFlowRows = ref([])
@@ -529,7 +529,7 @@ const budgetAlertRows = ref([])
 const loanOverdueRows = ref([])
 const voucherRows = ref([])
 
-// ===================== P0 遗留专项：逐 tab 本地分页 =====================
+// P0 遗留专项：逐 tab 本地分页
 // 25 个报表 tab 各自独立 local pager（watch 数据源→setSource，total/页码自动 clamp）；
 // 底部单个 <TablePager> 只渲染当前激活 tab 的 pager；跨页勾选导出仅限当前页（ERP 标准行为）。
 function makeTabPager(srcRef, key) {
@@ -556,7 +556,7 @@ for (const [name, src, key] of __tabPagedDefs) {
 }
 const activePager = computed(() => tabPagers[tab.value] || null)
 
-// ---- ECharts computed options ----
+// ECharts computed options
 const deptChart = computed(() => {
   const rows = deptRows.value || []
   const sorted = [...rows].sort((a, b) => (b.totalAmount || 0) - (a.totalAmount || 0)).slice(0, 15)
@@ -684,7 +684,7 @@ const taxBurdenChart = computed(() => {
     ],
   }
 })
-// D-H10-01：税负率＝应纳税额 / 税基（销项不含税金额）。分母为 0 时无从计算，显式「—」而非 0%。
+// 税负率＝应纳税额 / 税基（销项不含税金额）。分母为 0 时无从计算，显式「—」而非 0%。
 function taxBurdenRate(row) {
   const base = Number(row?.taxBase || 0)
   if (!base) return '—'
@@ -724,7 +724,7 @@ const budgetAlertChart = computed(() => {
   }
 })
 
-// ===================== R5-D-323：报表按需加载（波次十八） =====================
+// 报表按需加载（波次十八）
 // 规则取自报表平台对 Tab 块的既有做法——「首次加载第一个 Tab 块，后续点哪个 Tab 块即加载哪个」，
 // 预加载其余 Tab 是可选项而非默认项（FineReport 帮助文档《决策报表新自适应》）。
 // 旧规则一次挂载并发 26 请求、同屏渲染 50 张表；改为「公司列表＋费用概览＋当前页签」3 枚起量，
@@ -733,7 +733,7 @@ const budgetAlertChart = computed(() => {
 // 每枚报表＝{ get 请求, empty 默认处理, put 落值 }；枚名与 el-tab-pane 的 name 一一对应，ensureTab 按名直取。
 const REPORTS = {
   overview: {
-    // R5-D-020：概览四格改指服务端真汇总（单枚 camelCase Map），不再拿分组明细数组去凑。
+    // 概览四格改指服务端真汇总（单枚 camelCase Map），不再拿分组明细数组去凑。
     // 查询失败或缺任一指标都置错误态，界面直说「本次未刷新成功」；原 ?? 0 的默认处理已删。
     get: () => http.get('/tenant/dashboard/expense/overview').catch((e) => { overviewError.value = true; throw e }),
     empty: null, put: (v) => {
@@ -795,7 +795,7 @@ watch(tab, (v) => ensureTab(v))
 
 // 「查询/重置」按钮＝条件已变，强制重取该枚（绕过 fetchedReports 去重）
 async function loadSummary() {
-  // R5-D-323 同期加的第一道查询校验：费用发生汇总按年度查询，年度为空即查询＝跨年全表扫描，
+  // 同期加的第一道查询校验：费用发生汇总按年度查询，年度为空即查询＝跨年全表扫描，
   // 与报表平台「参数界面的不能为空校验需要在查询按钮中设置」同一规则（先拦再查，不放行空参查询）。
   if (!sumYear.value) { ElMessage.warning('请先选择年度后再查询'); return }
   await fetchReports(['summary'], true)
@@ -803,7 +803,7 @@ async function loadSummary() {
 async function loadComposition() { await fetchReports(['composition'], true) }
 async function loadDetail() { await fetchReports(['detail'], true) }
 
-// R5-D-045：导出改走原始 fetch 直取二进制——http 通道会把非 JSON 响应按 code!==0 业务错拒绝，
+// 导出改走原始 fetch 直取二进制——http 通道会把非 JSON 响应按 code!==0 业务错拒绝，
 // 且无 blob 绕过；xlsx 由后端返回，失败时按 JSON 错误体提示。
 async function exp(kind, name) {
   const path = kind.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
@@ -834,7 +834,7 @@ onMounted(() => {
     walk(tree || [])
     companies.value = flat
   }).catch(() => {})
-  // R5-D-323：首屏只发「公司列表＋费用概览＋当前页签」，其余 24 枚页签点亮时才取（见 REPORTS/ensureTab）
+  // 首屏只发「公司列表＋费用概览＋当前页签」，其余 24 枚页签点亮时才取（见 REPORTS/ensureTab）
   fetchReports(['overview'], false)
   ensureTab(tab.value)
 })
@@ -866,7 +866,7 @@ function batchExport() {
 
 <style scoped>
 .toolbar { margin-bottom: 12px; }
-/* R5-D-020：概览格在「查询中／本次未刷新成功」两态下的占位样式，与 el-statistic 同排不跳版 */
+/* 概览格在「查询中／本次未刷新成功」两态下的占位样式，与 el-statistic 同排不跳版 */
 .overview-missing { padding: 0; }
 .overview-missing-label { font-size: 14px; color: #909399; line-height: 24px; }
 .overview-missing-value { margin-top: 8px; font-size: 18px; font-weight: 500; color: #f56c6c; }

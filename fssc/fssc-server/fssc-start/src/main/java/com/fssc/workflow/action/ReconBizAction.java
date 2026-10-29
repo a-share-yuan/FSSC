@@ -3,10 +3,15 @@
 
 package com.fssc.workflow.action;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.sharing.entity.SupplierRecon;
 import com.fssc.sharing.mapper.SupplierReconMapper;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
@@ -16,9 +21,9 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 供应商对账确认（RECON_ACTIVE）收尾环节（P0-1 事件编排总线策略实现）。
+ * 供应商对账确认（RECON_ACTIVE）收尾环节（事件编排总线策略实现）。
  *
- * <p>D-DEC-319（批次0 P-4 / A2 回滚环节）：此前 RECON_ACTIVE 是"无收尾环节"七条之一——
+ * <p>（批次0 P-4 / A2 回滚环节）：此前 RECON_ACTIVE 是"无收尾环节"七条之一——
  * {@code SupplierReconService.supplierConfirm} 先把对账单置 CONFIRMED 才发起（同事务），审批驳回后
  * 无人把状态洗回＝脏账。本动作按发起时写入的流程变量快照（prevStatus / prevSupplierConfirmStatus）
  * 在驳回侧恢复确认前状态并清空确认时间戳；通过侧 CONFIRMED 已在发起时写入数据库（去重维持），无需重复动作。
@@ -32,8 +37,8 @@ public class ReconBizAction implements WfBizAction {
 
     private final SupplierReconMapper reconMapper;
     private final HistoryService historyService;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -52,7 +57,7 @@ public class ReconBizAction implements WfBizAction {
         try {
             if (Boolean.TRUE.equals(event.getApproved())) {
                 // CONFIRMED 在 supplierConfirm 写入数据库（同事务）；这里只补一条通过记录，不重复改状态
-                java.util.Map<String, Object> same = new java.util.LinkedHashMap<>();
+                Map<String, Object> same = new LinkedHashMap<>();
                 same.put("status", recon.getStatus());
                 auditTrailService.recordUpdate(event.getBizType(), reconId, recon.getReconNo(), "supplier_recon",
                         String.valueOf(reconId), same, same,
@@ -65,16 +70,16 @@ public class ReconBizAction implements WfBizAction {
             String prevStatus = readStringVar(event.getProcInstId(), "prevStatus");
             String prevConfirmStatus = readStringVar(event.getProcInstId(), "prevSupplierConfirmStatus");
             if (prevStatus == null || prevStatus.isBlank()) {
-                // 无快照＝历史在途单（D-DEC-319 前发起），保守洗回 DIFF 人工档并记录
+                // 无快照＝历史在途单（前发起），保守洗回 DIFF 人工档并记录
                 log.warn("对账单 {} 驳回但无确认前快照（历史在途单），按 DIFF 人工档处理", reconId);
                 prevStatus = "DIFF";
             }
-            java.util.Map<String, Object> before = new java.util.LinkedHashMap<>();
+            Map<String, Object> before = new LinkedHashMap<>();
             before.put("status", recon.getStatus());
             before.put("supplierConfirmStatus", recon.getSupplierConfirmStatus());
             // 清空确认时间戳必须走 UpdateWrapper：updateById 默认跳过 null 字段，set null 不生效
-            com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<SupplierRecon> uw =
-                    new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
+            LambdaUpdateWrapper<SupplierRecon> uw =
+                    new LambdaUpdateWrapper<>();
             uw.eq(SupplierRecon::getId, reconId)
                     .set(SupplierRecon::getStatus, prevStatus)
                     .set(SupplierRecon::getSupplierConfirmStatus,
@@ -84,9 +89,9 @@ public class ReconBizAction implements WfBizAction {
                     .set(SupplierRecon::getSupplierConfirmRemark,
                             "审批驳回自动回滚" + (event.getComment() == null || event.getComment().isBlank()
                                     ? "" : "：" + event.getComment()))
-                    .set(SupplierRecon::getUpdateTime, java.time.LocalDateTime.now());
+                    .set(SupplierRecon::getUpdateTime, LocalDateTime.now());
             reconMapper.update(null, uw);
-            java.util.Map<String, Object> after = new java.util.LinkedHashMap<>();
+            Map<String, Object> after = new LinkedHashMap<>();
             after.put("status", prevStatus);
             after.put("supplierConfirmStatus", prevConfirmStatus);
             auditTrailService.recordUpdate(event.getBizType(), reconId, recon.getReconNo(), "supplier_recon",

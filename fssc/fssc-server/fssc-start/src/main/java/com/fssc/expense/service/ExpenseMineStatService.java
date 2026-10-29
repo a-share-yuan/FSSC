@@ -8,6 +8,7 @@ import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
+import java.util.Objects;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,7 +28,7 @@ import java.util.Map;
  * 与页面上分页能取到多少条彻底解耦——**不受任何分页条数截断影响**。</p>
  *
  * <p><b>人范围与 {@link ExpenseBillService#myPage} 完全一致</b>（源码 :1777-1807）：
- * {@code apply_user_id = 登录人 ∪ agent_user_id = 登录人}（D-DEC-179 甲：报销人 ∪ 该单登记的代理人）。
+ * {@code apply_user_id = 登录人 ∪ agent_user_id = 登录人}（甲：报销人 ∪ 该单登记的代理人）。
  * 只有这一个环节一致，「我的」页与「单据」tab 才对得上——代理人代填的单在两处都算他的。
  * 其余两道条件也不由本类手写：
  * <ul>
@@ -49,14 +50,14 @@ public class ExpenseMineStatService {
 
     /**
      * 借款"未冲销完毕"的状态面。
-     * 名单不是新造的，是仓内 D-DEC-106 办结后的同一组：{@code ExpenseWfEventListener}（:648-656 判据说明、
-     * :743 {@code .in(status, APPROVED, PARTIAL_REPAID, REPAID)}）与 PC 侧
+     * 名单不是新造的，是仓内 办结后的同一组：{@code ExpenseWfEventListener}（:648-656 判据说明、
+     * 743 {@code .in(status, APPROVED, PARTIAL_REPAID, REPAID)}）与 PC 侧
      * {@code LoanApply.vue#LOAN_OPEN_STATUSES}（:328）逐字相同；
      * 提单期预分配环节（{@code ExpenseBillService}:929）也含 PARTIAL_REPAID。
      * 结清最终状态由 {@code ExpenseWfEventListener#settleLoanAfterRepay}（:783，判余额落 REPAID／PARTIAL_REPAID）。
      * <p>为什么不能只筛 {@code status='APPROVED'}（＝H5 老算法的查询条件）：
      * 借款单一旦挂上冲抵/还款就从 APPROVED 迁档到 PARTIAL_REPAID，只认 APPROVED 会把"仍在贷、真有钱可冲"
-     * 的单整片读成看不见——这正是 D-DEC-106 当年点在还款环节上的同一个洞。
+     * 的单整片读成看不见——这正是 当年点在还款环节上的同一个洞。
      * 本库实测（10-04 00:3x 只读）：LOAN 共 3 张，状态为 REPAID／WITHDRAWN／PARTIAL_REPAID 各 1，
      * 处于 APPROVED 的 0 张 ⇒ 老算法的「借款余额」对任何人都恒显示 ￥0.00，
      * 而 SQL 规则真值是 PARTIAL_REPAID 那 1 张的 15000.00。
@@ -93,7 +94,7 @@ public class ExpenseMineStatService {
         // 直接往 List 里塞一个 null 元素（启动日志 `Row: null, null, null, null / Total: 1`）
         // ⇒ rows 非空、rows.get(0) 为 null ⇒ 原写法在 row.get(...) 处 NPE、接口 500。
         // 兜法＝取首个非 null 行，取不到就用空 Map 走下面的 toDecimal/toLong，二者都已把 null 兜成 0。
-        Map<String, Object> row = rows.stream().filter(java.util.Objects::nonNull).findFirst().orElse(Map.of());
+        Map<String, Object> row = rows.stream().filter(Objects::nonNull).findFirst().orElse(Map.of());
 
         MineStat s = new MineStat();
         s.setLoanBalance(toDecimal(row.get("loan_bal")));
@@ -139,7 +140,7 @@ public class ExpenseMineStatService {
 
     /**
      * 出参：字段名与 H5「我的」页现有展示位一一对应（{@code H5Workbench.vue} 的 loanBalance / loanCount /
-     * 打回列表），外加方案册 P1-9 点名但页面上尚未落卡的「在途」。
+     * 打回列表），外加方案册 点名但页面上尚未落卡的「在途」。
      * <ul>
      *   <li>{@code loanBalance} —— 「借款余额」大数字：未冲销完毕借款的 Σ loan_balance（库里聚合，非前 N 条）</li>
      *   <li>{@code loanCount} —— 同一规则下的借款笔数（页面括号里的「N 笔」）</li>

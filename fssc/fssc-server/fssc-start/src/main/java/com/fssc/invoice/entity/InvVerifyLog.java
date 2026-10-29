@@ -44,7 +44,7 @@ public class InvVerifyLog implements Serializable {
     private Long verifyUserId;
 
     /**
-     * 验真时间。<b>不用 {@code FieldFill.INSERT}</b>（D-DEC-174）：
+     * 验真时间。<b>不用 {@code FieldFill.INSERT}</b>：
      * {@code FsscMetaObjectHandler.insertFill} 只认 createBy/updateBy/createTime/updateTime/delFlag/tenantId
      * 六个名字，本列名 {@code verifyTime} 不在其列 ⇒ 带填充标记的列会被 MyBatis-Plus 无条件写成
      * {@code #{verifyTime}}（即 NULL），连带跳过表上的 {@code DEFAULT CURRENT_TIMESTAMP}——
@@ -55,7 +55,7 @@ public class InvVerifyLog implements Serializable {
     private LocalDateTime verifyTime;
 
     /**
-     * 发票号码：非表列（inv_verify_log 按真实列声明，无 invoice_no 列，加列属 DDL 裁决，R5-D-122）。
+     * 发票号码：非表列（inv_verify_log 按真实列声明，无 invoice_no 列，加列属 DDL 裁决）。
      * 「验真记录」列表按票号稽核用——查询侧按 invoiceId 批查 inv_invoice 回填，不写入数据库。
      */
     @TableField(exist = false)

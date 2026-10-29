@@ -30,10 +30,10 @@ public class MdExpenseStandard extends TenantAuditBase {
     private LocalDate effectDate;
     private LocalDate expireDate;
     private Integer priority;
-    /** 1=境外标准档（V1.3.10，海外报账②）；0/NULL=国内通用 */
+    /** 1=境外标准档（海外报账②）；0/NULL=国内通用 */
     private Integer abroad;
     /** 国家档位：DEV(发达)/EMG(新兴)/OTH，NULL=境外通用档 */
     private String countryTier;
-    /** 补贴/日（本位币，V1.3.10 海外报账③：出差补贴按天自动核算查询） */
+    /** 补贴/日（本位币，海外报账③：出差补贴按天自动核算查询） */
     private BigDecimal allowanceDaily;
 }

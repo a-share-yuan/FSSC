@@ -20,7 +20,7 @@
       </div>
     </template>
 
-    <!-- R5-D-072：无查看权限时显式无权限态（4030 不得被吞成「没数据」空表） -->
+    <!-- 无查看权限时显式无权限态（4030 不得被吞成「没数据」空表） -->
     <el-empty v-if="!canList" description="当前账号无收货单查看权限，请联系管理员开通" />
     <SkeletonList v-if="loading && canList" :rows="8" :cols="5" />
     <el-table v-else-if="canList" :data="rows" size="small" stripe max-height="520" border @selection-change="handleSelectionChange" @row-dblclick="openRowDetail" empty-text="暂无数据">
@@ -37,7 +37,7 @@
       </el-table-column>
       <el-table-column label="未开票" width="110" align="right">
         <template #default="{ row }">
-          <!-- R5-D-070：负值＝累计开票超收货额（异常/超额），红字加粗显性提示并示"超额 xx"语义 -->
+          <!-- 负值＝累计开票超收货额（异常/超额），红字加粗显性提示并示"超额 xx"语义 -->
           <span :style="{ color: unInvoicedOf(row) < 0 ? '#f56c6c' : unInvoicedOf(row) > 0 ? '#e6a23c' : '#909399', fontWeight: unInvoicedOf(row) < 0 ? 600 : 400 }">
             {{ unInvoicedOf(row) < 0 ? '超额 ' + fmt(-unInvoicedOf(row)) : fmt(unInvoicedOf(row)) }}
           </span>
@@ -61,7 +61,7 @@
       <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
           <el-button link type="info" size="small" @click="viewDetail(row)">详情</el-button>
-          <!-- D-DEC-334：行内追溯入口——此前抽屉死挂载（openTrace 零调用点），数据在、页面不给看 -->
+          <!-- 行内追溯入口——此前抽屉死挂载（openTrace 零调用点），数据在、页面不给看 -->
           <el-button link size="small" @click.stop="openTrace(row)">追溯</el-button>
         </template>
       </el-table-column>
@@ -166,7 +166,7 @@
         <el-descriptions-item label="收货日期">{{ detailRow.receiptDate }}</el-descriptions-item>
         <el-descriptions-item label="收货金额">{{ fmt(detailRow.amount) }}</el-descriptions-item>
         <el-descriptions-item label="累计开票">{{ fmt(detailRow.invoiceAmount) }}</el-descriptions-item>
-        <!-- R5-D-070：详情与列表同一规则——负值红字并示"超额 xx" -->
+        <!-- 详情与列表同一规则——负值红字并示"超额 xx" -->
         <el-descriptions-item label="未开票">
           <span v-if="unInvoicedOf(detailRow) < 0" style="color:#f56c6c;font-weight:600">超额 {{ fmt(-unInvoicedOf(detailRow)) }}</span>
           <span v-else>{{ fmt(unInvoicedOf(detailRow)) }}</span>
@@ -184,7 +184,7 @@
       </template>
     </el-dialog>
   </el-card>
-<!-- D-DEC-334：声明单据域 PO_RECEIPT——不声明则收货主键会被后端按 exp_bill.id 解释（D-TRC-04 跨域串号）。
+<!-- 声明单据域 PO_RECEIPT——不声明则收货主键会被后端按 exp_bill.id 解释（跨域串号）。
      后端已配无审批流配对关联点（BillRouteRegistry.isNoFlowVoucherDomain⇒pairOnlyChain 直读凭证段），行内「追溯」入口已开。 -->
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" biz-type="PO_RECEIPT" />
 </template>
@@ -204,13 +204,13 @@ import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+s': () => { try { save() } catch { /* noop */ } },
   'ctrl+r': () => { try { loadData() } catch { /* noop */ } },
 })
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -225,7 +225,7 @@ function openRowDetail(row) {
 
 const selRows = ref([])
 const rows = ref([])
-/** R5-D-072：列表权限预判（与后端 @RequiresPerm("po:receipt:list") 同码）——无权不打接口、渲染无权限态 */
+/** 列表权限预判（与后端 @RequiresPerm("po:receipt:list") 同码）——无权不打接口、渲染无权限态 */
 const canList = hasPerm('po:receipt:list')
 const total = ref(0)
 const loading = ref(false)
@@ -241,7 +241,7 @@ const { submit: guardSubmit } = useSubmitGuard(formRef)
 const { autofill, saveFormHistory } = useAutoFill()
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
-// R5-D-070：未开票规则＝收货额 − 累计开票；为负即累计开票超收货额（后端已设强制校验拒绝回写，历史/异常数据仍须显性提示）
+// 未开票规则＝收货额 − 累计开票；为负即累计开票超收货额（后端已设强制校验拒绝回写，历史/异常数据仍须显性提示）
 function unInvoicedOf(row) { return Number(row.amount || 0) - Number(row.invoiceAmount || 0) }
 function qualityTag(s) { return s === 'PASSED' ? 'success' : s === 'FAILED' ? 'danger' : 'warning' }
 function qualityLabel(s) { return ({ PENDING: '待检', PASSED: '合格', FAILED: '不合格' })[s] || '待检' }

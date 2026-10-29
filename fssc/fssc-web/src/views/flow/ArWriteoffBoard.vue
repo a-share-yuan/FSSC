@@ -196,7 +196,7 @@ const manualVisible = ref(false)
 const offsetVisible = ref(false)
 const current = ref(null)
 const noteOptions = ref([])
-// R5-D-104：资金池类型名称表（含 RECEIVABLE 历史/外部来源值），未收录值回落 enums 名称表
+// 资金池类型名称表（含 RECEIVABLE 历史/外部来源值），未收录值回落 enums 名称表
 const FUND_TYPE_LABEL = computed(() => ({ RECEIPT: t('flow.wfo.fundTypeReceipt'), NOTE: t('flow.wfo.fundTypeNote'), OFFSET: t('flow.wfo.fundTypeOffset'), RECEIVABLE: t('flow.wfo.fundTypeReceipt'), PAYABLE: t('flow.wfo.fundTypePayment') }))
 const fundForm = reactive({ fundType: 'RECEIPT' })
 const offsetForm = reactive({})

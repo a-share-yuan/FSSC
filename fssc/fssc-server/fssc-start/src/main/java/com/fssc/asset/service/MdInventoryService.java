@@ -12,6 +12,8 @@ import com.fssc.asset.mapper.StockMoveMapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
+import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.workflow.service.WfEngineFacade;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +43,7 @@ public class MdInventoryService {
     private final MdInventoryMapper mapper;
     private final StockMoveMapper stockMoveMapper;
     private final WfEngineFacade wfEngineFacade;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
+    private final OrgGuard orgGuard;
 
     public PageResult<MdInventory> page(long pn, long ps, String keyword) {
         LambdaQueryWrapper<MdInventory> qw = new LambdaQueryWrapper<>();
@@ -58,7 +60,7 @@ public class MdInventoryService {
         return PageResult.of(p.getRecords(), p.getTotal(), pn, ps);
     }
 
-    /** R5-D-189：出入库流水读点（stock_move 此前只写不读）——按物料编码/仓库倒序分页。 */
+    /** 出入库流水读点（stock_move 此前只写不读）——按物料编码/仓库倒序分页。 */
     public PageResult<StockMove> movesPage(long pn, long ps, String itemCode, Long warehouseId) {
         LambdaQueryWrapper<StockMove> qw = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(itemCode)) {
@@ -105,11 +107,11 @@ public class MdInventoryService {
             n.setInAmount(amount);
             n.setRemainingNum(qty);
             n.setRemainingAmount(amount);
-            // 多分子公司审批路由 V1.3.17：仅新建存货行补公司（key 已带则沿用），已存在行不覆盖
+            // 多分子公司审批路由：仅新建存货行补公司（key 已带则沿用），已存在行不覆盖
             if (n.getCompanyId() == null) {
                 Long cid = key.getCompanyId();
                 if (cid == null) {
-                    com.fssc.framework.security.LoginUser lu = UserContext.get();
+                    LoginUser lu = UserContext.get();
                     if (lu != null) cid = lu.getCompanyId();
                 }
                 n.setCompanyId(cid);
@@ -405,7 +407,7 @@ public class MdInventoryService {
     }
 
     /**
-     * P1-2: 写入 stock_move 交易记录。
+     * 写入 stock_move 交易记录。
      * 每笔出入库/报废/处置均落盘一笔移动单，替代此前"流程跑在空模型上"。
      */
     private void recordMove(String moveType, MdInventory row, BigDecimal qty,
@@ -427,7 +429,7 @@ public class MdInventoryService {
             m.setStatus("APPROVED");
             m.setCreateBy(userId());
             stockMoveMapper.insert(m);
-            // P4-3 规则：移动记录为本方法新建写入数据库、无旧值，不接入审计（不伪造 before）
+            // 规则：移动记录为本方法新建写入数据库、无旧值，不接入审计（不伪造 before）
         } catch (Exception ex) {
             log.error("写入存货移动记录失败(moveType={}, item={}): {}", moveType, row.getItemCode(), ex.getMessage(), ex);
         }

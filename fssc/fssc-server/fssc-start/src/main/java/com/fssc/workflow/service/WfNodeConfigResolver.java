@@ -4,9 +4,13 @@
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fssc.framework.cache.TenantCache;
 import com.fssc.workflow.entity.WfNodeConfig;
 import com.fssc.workflow.entity.WfTask;
 import com.fssc.workflow.mapper.WfNodeConfigMapper;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -22,7 +26,7 @@ import java.util.Set;
 /**
  * 流程节点配置解析器（wf_node_config）——超时判定 / 催办链路的唯一入口。
  *
- * <p><b>契约（V1.3.24 起）</b>：{@code wf_node_config.node_key} 必须与该模型 BPMN 的 userTask
+ * <p><b>契约（起）</b>：{@code wf_node_config.node_key} 必须与该模型 BPMN 的 userTask
  * {@code taskDefinitionKey} <b>逐字符一致</b>，即精确键 {@code modelKey:nodeKey}。
  * 解析器只做精确匹配，匹配不到即返回 {@code null}（该节点无配置 → 超时/空策略不生效，
  * 行为等同默认 ERROR/不催办），<b>不再做任何位置默认处理</b>。
@@ -45,6 +49,29 @@ import java.util.Set;
 public class WfNodeConfigResolver {
 
     private final WfNodeConfigMapper wfNodeConfigMapper;
+
+    /**
+     * 全表节点配置的缓存位。实测单次 /wf/approve 把这张 465 行表整表载入 6 遍、
+     * /wf/start-candidates 2 遍；写侧 WfNodeConfigService / WfAssigneeReplaceService 均挂 evictAll。
+     * key 由 TenantCache 统一带租户前缀，置 fssc.redis.enabled=true 即切集中式缓存（多实例一致）。
+     */
+    public static String allCacheKey() {
+        return TenantCache.mdKey("wf:nodeConfig:all");
+    }
+
+    /** 供其它读取方（如 WfPerfService 统计腿）复用同一缓存位，不要各建各的 */
+    public static List<WfNodeConfig> loadAllCachedWith(Supplier<List<WfNodeConfig>> loader) {
+        return TenantCache.get(allCacheKey(), loader);
+    }
+
+    /** 节点配置有任何写入即整位失效：代价只是一次全表回源，换来的是不要按旧档位派工 */
+    public static void evictAll() {
+        TenantCache.evict(allCacheKey());
+    }
+
+    private List<WfNodeConfig> loadAllCached() {
+        return loadAllCachedWith(() -> wfNodeConfigMapper.selectList(new LambdaQueryWrapper<>()));
+    }
 
     /** 按待办列表批量构建 {@code modelKey:nodeKey -> WfNodeConfig} 索引 */
     public Map<String, WfNodeConfig> index(Collection<WfTask> tasks) {
@@ -76,7 +103,7 @@ public class WfNodeConfigResolver {
      */
     public Set<String> poolNodeKeys() {
         Set<String> out = new LinkedHashSet<>();
-        for (WfNodeConfig nc : wfNodeConfigMapper.selectList(new LambdaQueryWrapper<>())) {
+        for (WfNodeConfig nc : loadAllCached()) {
             if (nc.getModelKey() == null || nc.getNodeKey() == null) {
                 continue;
             }
@@ -89,7 +116,7 @@ public class WfNodeConfigResolver {
     }
 
     /**
-     * D-GL-02：AUTO（按角色自动指派）档节点的 {@code modelKey:nodeKey -> assign_value 角色码} 映射。
+     * AUTO（按角色自动指派）档节点的 {@code modelKey:nodeKey -> assign_value 角色码} 映射。
      *
      * <p>为什么需要：Flowable 的 {@code taskCandidateGroupIn} 只回「未指派」的任务，而 AUTO 档在节点
      * 激活时就把 assignee 写死（实测 {@code act_ru_task.ASSIGNEE_} 有值、候选组 identityLink 失效）。
@@ -102,7 +129,7 @@ public class WfNodeConfigResolver {
      */
     public Map<String, String> autoNodeRoleMap() {
         Map<String, String> out = new HashMap<>();
-        for (WfNodeConfig nc : wfNodeConfigMapper.selectList(new LambdaQueryWrapper<>())) {
+        for (WfNodeConfig nc : loadAllCached()) {
             if (nc.getModelKey() == null || nc.getNodeKey() == null) {
                 continue;
             }
@@ -119,7 +146,7 @@ public class WfNodeConfigResolver {
     }
 
     /**
-     * 全部 {@code allow_addsign=0}（未开放加签）的节点键集合，形如 {@code modelKey:nodeKey}（F3-3）。
+     * 全部 {@code allow_addsign=0}（未开放加签）的节点键集合，形如 {@code modelKey:nodeKey}。
      *
      * <p>与 {@link #poolNodeKeys()} 同一做法：待办列表要按行决定「加签」按钮是否隐藏，
      * 逐行 resolve 会把整张配置表查 N 遍。仅加签校验总开关打开时才被调用（缺省关，零额外查询）。
@@ -158,8 +185,8 @@ public class WfNodeConfigResolver {
         }
         Map<String, String> out = new HashMap<>();
         try {
-            Map<String, Object> raw = new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readValue(cfg.getFormPerm(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+            Map<String, Object> raw = new ObjectMapper()
+                    .readValue(cfg.getFormPerm(), new TypeReference<Map<String, Object>>() { });
             for (Map.Entry<String, Object> e : raw.entrySet()) {
                 String field = e.getKey() == null ? "" : e.getKey().trim();
                 String code = normalizePerm(e.getValue());
@@ -203,13 +230,13 @@ public class WfNodeConfigResolver {
 
     /**
      * 按 key 集合构建索引：一次性载入全部节点配置（量级数百行，与原实现一致），
-     * <b>仅注册精确键</b> {@code modelKey:nodeKey}。V1.3.24 已移除 {@code Task_N} 位置默认处理。
+     * <b>仅注册精确键</b> {@code modelKey:nodeKey}。已移除 {@code Task_N} 位置默认处理。
      */
     private Map<String, WfNodeConfig> indexByKeys(Set<String> keys) {
         if (keys.isEmpty()) {
             return Collections.emptyMap();
         }
-        List<WfNodeConfig> allConfigs = wfNodeConfigMapper.selectList(new LambdaQueryWrapper<>());
+        List<WfNodeConfig> allConfigs = loadAllCached();
         Map<String, WfNodeConfig> map = new HashMap<>();
         for (WfNodeConfig nc : allConfigs) {
             if (nc.getModelKey() == null || nc.getNodeKey() == null) {

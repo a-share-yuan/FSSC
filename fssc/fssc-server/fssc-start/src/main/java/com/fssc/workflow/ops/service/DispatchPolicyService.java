@@ -19,6 +19,7 @@ import com.fssc.workflow.ops.dto.AssignmentDecision;
 import com.fssc.workflow.ops.dto.CandidateLoad;
 import com.fssc.workflow.ops.entity.OpDispatchPolicy;
 import com.fssc.workflow.ops.mapper.OpDispatchPolicyMapper;
+import com.fssc.workflow.service.WfQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,7 +40,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * G3（2026-09-24）共享作业分配策略：配置读取 ＋ 四模式策略解析器 ＋ 普通/加急双时限。
+ * G3共享作业分配策略：配置读取 ＋ 四模式策略解析器 ＋ 普通/加急双时限。
  *
  * <p><b>分配规则</b>（方案 §三 ③ 共享作业层，{@code 分配策略表}）：
  * <ul>
@@ -50,7 +51,7 @@ import java.util.Set;
  * </ul>
  *
  * <p><b>为什么预计耗时按节点历史平均停留估算</b>：{@code wf_task_history.duration} 是既有真值
- * （每个节点办理的真实停留毫秒），比"给所有人一个固定系数"更贴近"按时均衡"的本意；
+ * 每个节点办理的真实停留毫秒，比"给所有人一个固定系数"更贴近"按时均衡"的本意；
  * 该节点无历史样本时退回"时限的 1/3"作默认处理，并在决策理由里如实标注估算来源。
  *
  * <p><b>死配置教训</b>（方案 §二 F6~F8）：本类的每一个配置列都有读取点——
@@ -82,9 +83,7 @@ public class DispatchPolicyService {
     private static final Set<String> VALID_STRATEGIES =
             Set.of("PICK", "BALANCE_TIME", "BALANCE_VOLUME", "SMART");
 
-    // ------------------------------------------------------------------
     // 1. 配置 CRUD（列表/详情/新增/修改/删除）
-    // ------------------------------------------------------------------
 
     public PageResult<OpDispatchPolicy> page(PageQuery q, String keyword, String strategy) {
         LambdaQueryWrapper<OpDispatchPolicy> w = new LambdaQueryWrapper<>();
@@ -160,9 +159,7 @@ public class DispatchPolicyService {
         }
     }
 
-    // ------------------------------------------------------------------
     // 2. 配置解析：节点级 → 全局默认行 → 内置默认处理
-    // ------------------------------------------------------------------
 
     /**
      * 解析某节点的生效策略：先按 {@code modelKey:nodeKey} 精确匹配（与
@@ -210,9 +207,7 @@ public class DispatchPolicyService {
         return h;
     }
 
-    // ------------------------------------------------------------------
     // 3. 四模式策略解析器（可解释）
-    // ------------------------------------------------------------------
 
     /**
      * 按策略从候选池里挑出目标办理人，并给出可解释的决策说明。
@@ -261,9 +256,9 @@ public class DispatchPolicyService {
      * 智能分配：在均衡基础上加权。
      *
      * <pre>
-     *   score = wVol  * 在手量归一        // 手上任务少的人优先
-     *         + wUrg  * 超时风险（已超时/在手）
-     *         + (本单加急 ? wPri * 在手量归一 : 0)   // 加急单再压一次"手上多的"
+     *   score = wVol * 在手量归一 // 手上任务少的人优先
+     *         + wUrg * 超时风险（已超时/在手）
+     *         + (本单加急 ? wPri * 在手量归一 : 0) // 加急单再压一次"手上多的"
      * </pre>
      * 分数低者胜；权重来自 {@code op_dispatch_policy.smart_weight_*}，运营可调。
      */
@@ -341,9 +336,7 @@ public class DispatchPolicyService {
         return v == null ? "-" : v.setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
     }
 
-    // ------------------------------------------------------------------
     // 4. 均衡·按量：累积 N 单一分配（3 人得 4/3/3）
-    // ------------------------------------------------------------------
 
     /**
      * 均衡·按量的批量分配计划：把 {@code taskIds} 逐单派给"当前在手量 + 本轮已派量"最少的人，
@@ -371,9 +364,7 @@ public class DispatchPolicyService {
         return plan;
     }
 
-    // ------------------------------------------------------------------
     // 5. 候选人负载画像（三种策略共用的唯一规则）
-    // ------------------------------------------------------------------
 
     /**
      * 构建候选人的负载画像。数据源：{@code wf_task} 的 PENDING 行（在手量 + due_time 超时）
@@ -417,7 +408,7 @@ public class DispatchPolicyService {
             }
             // 未指派（任务池候选组态）：候选人也算"潜在承接人"，否则池内节点永远算不出负载
             if (t.getAssigneeId() == null && t.getCandidateIds() != null) {
-                for (Long cid : com.fssc.workflow.service.WfQueryService.parseCandidateIds(t.getCandidateIds())) {
+                for (Long cid : WfQueryService.parseCandidateIds(t.getCandidateIds())) {
                     if (ids.contains(cid)) {
                         owners.add(cid);
                     }

@@ -12,9 +12,15 @@ import com.fssc.arflow.mapper.ArMailNotifyLogMapper;
 import com.fssc.arflow.mapper.ArMailPackageMapper;
 import com.fssc.arflow.mapper.ArMailRecipientMapper;
 import com.fssc.arflow.mapper.ArPreInvoiceMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.notify.NotifyService;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,8 +44,8 @@ public class ArMailPackageService {
     private final ArMailNotifyLogMapper notifyLogMapper;
     private final NotifyService notifyService;
 
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /** 创建邮包：invoiceNos 逗号分隔，须已开票并打印。 */
     @Transactional(rollbackFor = Exception.class)
@@ -52,7 +58,7 @@ public class ArMailPackageService {
         if (nos.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "邮包必须包含至少一张已开发票");
         }
-        List<ArPreInvoice> invoices = new java.util.ArrayList<>();
+        List<ArPreInvoice> invoices = new ArrayList<>();
         for (String no : nos) {
             ArPreInvoice inv = preInvoiceMapper.selectOne(new LambdaQueryWrapper<ArPreInvoice>()
                     .eq(ArPreInvoice::getPreInvoiceNo, no).last("LIMIT 1"));
@@ -65,7 +71,7 @@ public class ArMailPackageService {
             invoices.add(inv);
         }
         p.setId(null);
-        p.setPackageNo("FSC" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+        p.setPackageNo("FSC" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + UUID.randomUUID().toString().substring(0, 4).toUpperCase(Locale.ROOT));
         p.setInvoiceNosJson(nos.toString());
         // 客户与公司随发票带出，避免邮包落在列表里成为无客户归属的孤儿
@@ -136,10 +142,10 @@ public class ArMailPackageService {
         p.setCourierNo(courierNo);
         p.setStatus(ArMailPackage.ST_SENT);
         mapper.updateById(p);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("courierNo", auditOldCourierNo);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", p.getStatus());
         auditAfter.put("courierNo", p.getCourierNo());
         auditTrailService.recordUpdate("AR_MAIL_PACKAGE", p.getId(), p.getPackageNo(), "ar_mail_package",
@@ -225,8 +231,8 @@ public class ArMailPackageService {
         p.setSignTime(LocalDateTime.now());
         mapper.updateById(p);
         auditTrailService.recordUpdate("AR_MAIL_PACKAGE", p.getId(), p.getPackageNo(), "ar_mail_package",
-                String.valueOf(p.getId()), java.util.Collections.singletonMap("status", auditOldStatus),
-                java.util.Collections.singletonMap("status", p.getStatus()), "邮包确认签收");
+                String.valueOf(p.getId()), Collections.singletonMap("status", auditOldStatus),
+                Collections.singletonMap("status", p.getStatus()), "邮包确认签收");
         return p;
     }
 
@@ -239,8 +245,8 @@ public class ArMailPackageService {
         p.setArchiveTime(LocalDateTime.now());
         mapper.updateById(p);
         auditTrailService.recordUpdate("AR_MAIL_PACKAGE", p.getId(), p.getPackageNo(), "ar_mail_package",
-                String.valueOf(p.getId()), java.util.Collections.singletonMap("status", auditOldStatus),
-                java.util.Collections.singletonMap("status", p.getStatus()), "邮包归档");
+                String.valueOf(p.getId()), Collections.singletonMap("status", auditOldStatus),
+                Collections.singletonMap("status", p.getStatus()), "邮包归档");
         return p;
     }
 

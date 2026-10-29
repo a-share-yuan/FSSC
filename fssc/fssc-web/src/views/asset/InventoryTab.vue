@@ -65,7 +65,7 @@
         <el-select v-model="invForm.warehouseId" filterable clearable placeholder="请选择仓库" style="width:100%">
           <el-option v-for="w in warehouses" :key="w.id" :label="w.name" :value="w.id" />
         </el-select>
-        <!-- D-DEC-429：仓库候选的唯一来源＝本页存货台账行去重（见 script 内 loadInventory），台账 0 行⇒候选 0 个，
+        <!-- 仓库候选的唯一来源＝本页存货台账行去重（见 script 内 loadInventory），台账 0 行⇒候选 0 个，
              而「仓库」是必填项⇒点确认只报「请选择仓库」却看不出为什么没得选，与"无权限被画成空态"看不出差别。
              系统当前没有仓库主数据载体（information_schema 实测 table_name LIKE '%warehouse%' 命中 0 张表，
              后端无实体/端点、菜单无该面），故这里只把成因说实：不造候选、不放宽必填、不写库。 -->
@@ -92,7 +92,7 @@
         <el-select v-model="invTargetW" filterable clearable placeholder="请选择目标仓库" style="width:100%">
           <el-option v-for="w in warehouses" :key="w.id" :label="w.name" :value="w.id" />
         </el-select>
-        <!-- D-DEC-429 同因第二处：目标仓与本源共用同一份候选（本页台账行派生），台账为空时同样是 0 个选项 -->
+        <!-- 同因第二处：目标仓与本源共用同一份候选（本页台账行派生），台账为空时同样是 0 个选项 -->
         <div v-if="!warehouses.length" style="font-size:12px;color:#e6a23c;line-height:1.5">暂无可选目标仓库（候选来源同上，取自本页存货台账行）</div>
       </el-form-item>
     </el-form>
@@ -102,7 +102,7 @@
     </template>
   </el-dialog>
 
-  <!-- R5-D-189：出入库流水（stock_move 只读回放；此前该表只写不读，结存对不上时无从逐笔追溯） -->
+  <!-- 出入库流水（stock_move 只读回放；此前该表只写不读，结存对不上时无从逐笔追溯） -->
   <el-drawer v-model="movesVisible" title="出入库流水" size="760px">
     <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
       <el-input v-model="movesItemCode" placeholder="按物料编码过滤" clearable style="width: 200px" @keyup.enter="loadMoves" />
@@ -156,7 +156,7 @@ const selRows = ref([])
 const pager = useTablePager({ mode: 'server', storageKey: 'asset_inventory' })
 const { pagedData } = pager
 
-// R5-D-189：出入库流水抽屉（stock_move 只读回放）
+// 出入库流水抽屉（stock_move 只读回放）
 const movesVisible = ref(false)
 const movesItemCode = ref('')
 const movesWarehouseId = ref(null)
@@ -290,7 +290,7 @@ async function queryBalance() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// R5-D-189：moveType 中文映射规则与 StockMove 实体注释一致
+// moveType 中文映射规则与 StockMove 实体注释一致
 const MOVE_TYPE_META = { RECEIVE: '入库', ISSUE: '领用出库', SCRAP: '报废', DISPOSAL: '处置', INTERNAL_SALE: '内部销售', CHECK: '盘点', DEVAL: '跌价' }
 function moveTypeName(t) { return MOVE_TYPE_META[t] || t || '—' }
 

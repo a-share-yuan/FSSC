@@ -48,14 +48,14 @@ public class RcReceivable extends TenantAuditBase {
     private String status;
     /** 期间（yyyy-MM 或 yyyyMM） */
     private String period;
-    /** 所属公司（多分子公司审批路由 V1.3.17） */
+    /** 所属公司（多分子公司审批路由） */
     private Long companyId;
-    /** P0-4 溯源：来源单据类型 SALES_ORDER销售订单/MANUAL手工 */
+    /** 溯源：来源单据类型 SALES_ORDER销售订单/MANUAL手工 */
     private String sourceDocType;
-    /** P0-4 溯源：来源单据ID */
+    /** 溯源：来源单据ID */
     private Long sourceDocId;
 
-    // ---- D-H3-01：流程态投影（非表列，只出参、不进 SQL、不改状态机） ----
+    // 流程态投影（非表列，只出参、不进 SQL、不改状态机）
 
     /**
      * 审批流状态（wf_instance.status）：RUNNING／APPROVED／REJECTED／CANCELLED／TERMINATED；

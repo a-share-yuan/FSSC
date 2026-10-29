@@ -15,7 +15,7 @@
         <el-radio-button label="CFO">财务总监</el-radio-button>
         <el-radio-button label="ADMIN">管理员</el-radio-button>
       </el-radio-group>
-      <!-- D-DEC-308：切换器与登录人真实角色无关，不写破这句就会被读成"切了就看到那个角色的数" -->
+      <!-- 切换器与登录人真实角色无关，不写破这句就会被读成"切了就看到那个角色的数" -->
       <span class="role-scope-note">当前为全局视图：切换只决定显示哪几张卡，读数不随所选角色收窄</span>
     </div>
 
@@ -30,7 +30,7 @@
         </div>
       </div>
     </div>
-    <!-- D-DEC-308：四项 KPI 的规则说明（原先是写死字面量，看不出数从哪来） -->
+    <!-- 四项 KPI 的规则说明（原先是写死字面量，看不出数从哪来） -->
     <div v-if="hasPerfKpi" class="kpi-note">{{ kpiNote }}</div>
 
     <!-- Widget 区 -->
@@ -96,9 +96,9 @@
 
 <script setup>
 /**
- * D-DEC-302（2026-09-28 处置＝下架入口、内容暂不修）：
+ * （2026-09-28 处置＝下架入口、内容暂不修）：
  * 本页 KPI 中 monthExp/monthPay/monthProgress 无赋值点、inTransit/timeout/budgetRate 查询键与后端返回不符，
- * 另有 done/avgTime/timeoutRate/sysHealth 四项为写死的展示值（D-DEC-308；10-01 已办结＝改接
+ * 另有 done/avgTime/timeoutRate/sysHealth 四项为写死的展示值（10-01 已办结＝改接
  * /wf/perf/overview 与 /api/health 两条真实读数，取不到显示「—」，见下方 kpiCards/kpiNote）。
  * 且「当前角色」由本页单选按钮自行切换，与登录人真实角色无关。
  * 可修，但等于重做：八项指标要各自接一条查询环节（全局规则在 /wf/perf/overview、预算在 budget/execution、
@@ -121,15 +121,15 @@ const monthPay = ref(0)
 const budgetRate = ref(0)
 const monthProgress = ref(0)
 const flowStats = ref({ inTransit: 0, timeout: 0 })
-// D-DEC-308：原先 done/avgTime/timeoutRate/sysHealth 四项是写死在 valMap 里的展示值
-// （0／'12分'／'5%'／'正常'），无论谁登录都长一个样。现改接两条真实读数：
+// 原先 done/avgTime/timeoutRate/sysHealth 四项是写死在 valMap 里的展示值
+// 0／'12分'／'5%'／'正常'，无论谁登录都长一个样。现改接两条真实读数：
 //  · 流程绩效 overview（GET /tenant/wf/perf/overview，WfPerfService.overview）——
 //    finishedToday／avgNodeMinutes／slaRate+slaMeasured 三个键在同一个响应里，已在 FlowMonitor／FlowCenter 消费；
 //  · 后端探活（GET /api/health，免鉴权，RunStatus.vue:91 同款用法）——status==='UP' 才算正常。
 // 取不到就显示「—」：绩效端点带 wf:instance:list 权限校验，普通岗拿不到时不弹错、更不拿 0 冒充真实计数。
 const perf = ref(null)
 const sysHealth = ref('')
-// D-DEC-308：查询窗口与界面规则标签同源，改这里即改文案，不会出现"写着本周、算的是 30 天"
+// 查询窗口与界面规则标签同源，改这里即改文案，不会出现"写着本周、算的是 30 天"
 const PERF_WINDOW_DAYS = 30
 
 /**
@@ -186,7 +186,7 @@ const roleConfig = {
 }
 
 /**
- * D-DEC-308：规则标签与规则说明只挂在"确实按这条规则查询"的卡上——
+ * 规则标签与规则说明只挂在"确实按这条规则查询"的卡上——
  * 财务总监那一组四枚卡不来自流程绩效，套同一句规则会变成假说明。
  */
 const PERF_KPI_KEYS = ['done', 'avgTime', 'timeoutRate', 'sysHealth']
@@ -194,7 +194,7 @@ const hasPerfKpi = computed(() =>
   (roleConfig[currentRole.value]?.kpis || []).some((k) => PERF_KPI_KEYS.includes(k.key)))
 
 /**
- * D-DEC-308 三项绩效读数：全部来自 /wf/perf/overview 的同一份响应，缺任一键即回「—」（不补 0）。
+ * 三项绩效读数：全部来自 /wf/perf/overview 的同一份响应，缺任一键即回「—」（不补 0）。
  * 超时率＝未按节点 SLA 完成的占比，与 slaRate（达成率）互补，且只在"可测"时给数：
  * slaMeasured=0 表示没有任何事件配了 SLA，此时"0%"是假绿，故显示「—」。
  */
@@ -213,7 +213,7 @@ const perfTimeout = computed(() => {
   return `${(Math.round((100 - Number(p.slaRate)) * 10) / 10)}%`
 })
 const kpiWindowDays = computed(() => Number(perf.value?.days || PERF_WINDOW_DAYS))
-/** D-DEC-308：规则标签写业务规则，不写"全域/近30天"——权限范围内、不区分人员，时间窗按查询窗口如实标注 */
+/** 规则标签写业务规则，不写"全域/近30天"——权限范围内、不区分人员，时间窗按查询窗口如实标注 */
 const kpiScopeText = computed(() => `权限范围内 · 全部人员 · 近 ${kpiWindowDays.value} 天`)
 const kpiNote = computed(() => {
   const d = kpiWindowDays.value
@@ -232,7 +232,7 @@ const kpiCards = computed(() => {
   return cfg.kpis.map(k => {
     const valMap = {
       todo: myTasks.value.length,
-      // D-DEC-308：以下四项由写死字面量改为真实读数（取不到显示「—」，不再伪造 0/'12分'/'5%'/'正常'）
+      // 以下四项由写死字面量改为真实读数（取不到显示「—」，不再伪造 0/'12分'/'5%'/'正常'）
       done: perfDone.value,
       avgTime: perfAvg.value,
       timeoutRate: perfTimeout.value,
@@ -266,7 +266,7 @@ async function fetchData() {
     const budget = await dashApi.budget().catch((e) => { ElMessage.error(e.message); return null })
     if (budget) budgetRate.value = budget.executionRate || 0
   } catch (e) { ElMessage.error(e.message) }
-  // D-DEC-308：绩效三卡静默查询——无 wf:instance:list 的岗位会得到 4030/403，这里不弹全局错误、
+  // 绩效三卡静默查询——无 wf:instance:list 的岗位会得到 4030/403，这里不弹全局错误、
   // 也不把失败当成"0 件"，perf 保持 null 由 kpiCards 渲染「—」。
   try {
     perf.value = await flowApi.perfOverview(PERF_WINDOW_DAYS, { silent: true })
@@ -285,7 +285,7 @@ function onRoleChange() {
   }
 }
 
-// R5-14: KPI 钻取
+// KPI 钻取
 function drillKpi(kpi) {
   const drillRoutes = {
     todo: '/approval',

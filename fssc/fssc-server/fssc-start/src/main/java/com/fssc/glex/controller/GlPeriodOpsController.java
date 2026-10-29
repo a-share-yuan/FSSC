@@ -3,7 +3,13 @@
 
 package com.fssc.glex.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.common.core.Result;
+import com.fssc.framework.security.UserContext;
+import com.fssc.glex.entity.GlCloseCheckItem;
+import com.fssc.glex.mapper.GlCloseCheckItemMapper;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.fssc.common.exception.BizException;
@@ -37,7 +43,7 @@ import java.util.Map;
 public class GlPeriodOpsController {
 
     private final GlMonthCloseService monthCloseService;
-    private final com.fssc.glex.mapper.GlCloseCheckItemMapper closeCheckItemMapper;
+    private final GlCloseCheckItemMapper closeCheckItemMapper;
     private final GlProfitCarryService profitCarryService;
 
     /** 反结账：期间 CLOSED 回退开账；下一期间须未结账（逐期回退）；仅财务总监(CFO)/总账会计(FIN_GL)/租户管理员。body: {"period":"202609"} */
@@ -65,26 +71,24 @@ public class GlPeriodOpsController {
         private Long companyId;
     }
 
-    // ---------------- V2.2.38 K128/K129 月结检查校验清单 ----------------
+    // K128/K129 月结检查校验清单
 
     /** 检查校验清单：GET /close-check/list?period=202611&companyId=1（公司缺省取登录上下文，与月结 close 同一规则） */
-    // R5-D-215
     @RequiresPerm("gl:monthclose:close")
     @GetMapping("/close-check/list")
-    public Result<java.util.List<com.fssc.glex.entity.GlCloseCheckItem>> closeCheckList(
+    public Result<List<GlCloseCheckItem>> closeCheckList(
             @RequestParam String period,
             @RequestParam(required = false) Long companyId) {
         String p = requireCheckPeriod(period);
         Long cid = resolveCheckCompany(companyId);
         return Result.success(closeCheckItemMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.glex.entity.GlCloseCheckItem>()
-                        .eq(com.fssc.glex.entity.GlCloseCheckItem::getCompanyId, cid)
-                        .eq(com.fssc.glex.entity.GlCloseCheckItem::getPeriod, p)
-                        .orderByAsc(com.fssc.glex.entity.GlCloseCheckItem::getId)));
+                new LambdaQueryWrapper<GlCloseCheckItem>()
+                        .eq(GlCloseCheckItem::getCompanyId, cid)
+                        .eq(GlCloseCheckItem::getPeriod, p)
+                        .orderByAsc(GlCloseCheckItem::getId)));
     }
 
     /** 生成当期默认清单（8 项，已存在则跳过）：POST /close-check/seed?period=202611&companyId=1 */
-    // R5-D-215
     @RequiresPerm("gl:monthclose:close")
     @PostMapping("/close-check/seed")
     public Result<Integer> closeCheckSeed(
@@ -105,12 +109,12 @@ public class GlPeriodOpsController {
         int n = 0;
         for (String[] d : defaults) {
             boolean exists = closeCheckItemMapper.selectCount(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.glex.entity.GlCloseCheckItem>()
-                            .eq(com.fssc.glex.entity.GlCloseCheckItem::getCompanyId, cid)
-                            .eq(com.fssc.glex.entity.GlCloseCheckItem::getPeriod, p)
-                            .eq(com.fssc.glex.entity.GlCloseCheckItem::getItemName, d[0])) > 0;
+                    new LambdaQueryWrapper<GlCloseCheckItem>()
+                            .eq(GlCloseCheckItem::getCompanyId, cid)
+                            .eq(GlCloseCheckItem::getPeriod, p)
+                            .eq(GlCloseCheckItem::getItemName, d[0])) > 0;
             if (exists) continue;
-            com.fssc.glex.entity.GlCloseCheckItem it = new com.fssc.glex.entity.GlCloseCheckItem();
+            GlCloseCheckItem it = new GlCloseCheckItem();
             it.setCompanyId(cid);
             it.setPeriod(p);
             it.setItemName(d[0]);
@@ -122,24 +126,23 @@ public class GlPeriodOpsController {
         return Result.success(n);
     }
 
-    /** 勾项/回退：POST /close-check/check  body={id, done, remark} */
+    /** 勾项/回退：POST /close-check/check body={id, done, remark} */
     @RequiresPerm("gl:monthclose:close")
     @PostMapping("/close-check/check")
-    public Result<Void> closeCheckTick(@RequestBody java.util.Map<String, Object> body) {
+    public Result<Void> closeCheckTick(@RequestBody Map<String, Object> body) {
         Long id = Long.valueOf(String.valueOf(body.get("id")));
         boolean done = Boolean.parseBoolean(String.valueOf(body.getOrDefault("done", "true")));
-        com.fssc.glex.entity.GlCloseCheckItem it = closeCheckItemMapper.selectById(id);
+        GlCloseCheckItem it = closeCheckItemMapper.selectById(id);
         if (it == null) throw new BizException(ErrorCode.PARAM_INVALID, "检查项不存在: " + id);
         it.setStatus(done ? "DONE" : "PENDING");
-        it.setCheckTime(done ? java.time.LocalDateTime.now() : null);
-        it.setChecker(done ? (com.fssc.framework.security.UserContext.get() != null
-                ? com.fssc.framework.security.UserContext.get().getUserName() : null) : null);
+        it.setCheckTime(done ? LocalDateTime.now() : null);
+        it.setChecker(done ? (UserContext.get() != null
+                ? UserContext.get().getUserName() : null) : null);
         if (body.get("remark") != null) it.setRemark(String.valueOf(body.get("remark")));
         closeCheckItemMapper.updateById(it);
         return Result.success();
     }
 
-    // R5-D-215
     /**
      * 检查校验清单的建/查公司范围与月结 close 逐字对齐（GlMonthCloseService:248 comp = companyId != null ? companyId : 1L）：
      * 显式入参 → 1。此处若改成取登录主体公司，清单会建在 A 公司、校验口查的是 B 公司，校验永远过不去。
@@ -148,7 +151,6 @@ public class GlPeriodOpsController {
         return companyId != null ? companyId : 1L;
     }
 
-    // R5-D-215
     /** 期间必输且必须是 6 位 yyyyMM（gl_close_check_item.period varchar(6)，与月结入库规则一致） */
     private String requireCheckPeriod(String period) {
         String p = period == null ? "" : period.trim();

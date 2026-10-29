@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * P0-5 采购订单最终状态推进 Job（X-20 裁定甲＋乙之「甲」）。
+ * 采购订单最终状态推进 Job（X-20 裁定甲＋乙之「甲」）。
  *
  * <p>累计量达标型最终状态（APPROVED/INVOICED→PAID、PAID→CLOSED 业务关闭）不由人工按钮触发，
  * 改为本 Job 每日扫描推进；人工决策型最终状态（终止）另有显式端点

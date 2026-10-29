@@ -10,10 +10,14 @@ import com.fssc.arflow.entity.ArStatement;
 import com.fssc.arflow.mapper.ArEbsAdjustMapper;
 import com.fssc.arflow.mapper.ArPreInvoiceMapper;
 import com.fssc.arflow.mapper.ArStatementMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.collab.entity.CollabSyncLog;
 import com.fssc.collab.service.CollabSyncService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,10 +45,10 @@ public class ArEbsAdjustService {
     private final ArStatementService statementService;
     private final CollabSyncService syncService;
 
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
-    /** 接口2：ERP 财务调整推送。body 见 V1.3.7 ar_ebs_adjust。 */
+    /** 接口2：ERP 财务调整推送。body 见 ar_ebs_adjust。 */
     @Transactional(rollbackFor = Exception.class)
     public ArEbsAdjust pushAdjust(Map<String, Object> body) {
         String adjustNo = str(body.get("adjustNo"));
@@ -64,10 +68,10 @@ public class ArEbsAdjustService {
         a.setStatementNo(str(body.get("statementNo")));
         a.setStatus(ArEbsAdjust.ST_RECEIVED);
         if (body.get("amount") != null) {
-            a.setAmount(new java.math.BigDecimal(String.valueOf(body.get("amount"))));
+            a.setAmount(new BigDecimal(String.valueOf(body.get("amount"))));
         }
         if (body.get("taxAmount") != null) {
-            a.setTaxAmount(new java.math.BigDecimal(String.valueOf(body.get("taxAmount"))));
+            a.setTaxAmount(new BigDecimal(String.valueOf(body.get("taxAmount"))));
         }
         adjustMapper.insert(a);
         syncService.log(CollabSyncLog.IF_AR_RECON_SYNC, "EBS_TO_SHARED", adjustNo,
@@ -86,14 +90,14 @@ public class ArEbsAdjustService {
                 a.setStatus(ArEbsAdjust.ST_APPLIED);
                 adjustMapper.updateById(a);
                 auditTrailService.recordUpdate("AR_EBS_ADJUST", a.getId(), a.getAdjustNo(), "ar_ebs_adjust",
-                        String.valueOf(a.getId()), java.util.Collections.singletonMap("status", auditOldStatus),
-                        java.util.Collections.singletonMap("status", a.getStatus()), "关联对账单异常已自动重核");
+                        String.valueOf(a.getId()), Collections.singletonMap("status", auditOldStatus),
+                        Collections.singletonMap("status", a.getStatus()), "关联对账单异常已自动重核");
             }
         }
         return a;
     }
 
-    public java.util.List<ArEbsAdjust> adjusts(String customerCode) {
+    public List<ArEbsAdjust> adjusts(String customerCode) {
         LambdaQueryWrapper<ArEbsAdjust> q = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(customerCode)) {
             q.eq(ArEbsAdjust::getCustomerCode, customerCode);

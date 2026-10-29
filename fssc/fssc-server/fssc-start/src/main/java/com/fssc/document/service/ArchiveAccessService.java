@@ -12,9 +12,16 @@ import com.fssc.document.entity.ArchiveAccessLog;
 import com.fssc.document.mapper.ArchiveAccessLogMapper;
 import com.fssc.document.entity.OpArchive;
 import com.fssc.document.mapper.OpArchiveMapper;
+import com.fssc.framework.security.PermDependency;
 import com.fssc.framework.security.UserContext;
+import com.fssc.system.entity.SysUser;
+import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.workflow.service.WfEngineFacade;
 import com.fssc.framework.datasource.FsscDataSource;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.TreeSet;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,26 +38,26 @@ import java.util.Map;
 public class ArchiveAccessService {
 
     private final ArchiveAccessLogMapper archiveAccessLogMapper;
-    /** R5-D-207：调阅申请前置档案状态守卫（DISPOSED 卷拒绝新申请） */
+    /** 调阅申请前置档案状态守卫（DISPOSED 卷拒绝新申请） */
     private final OpArchiveMapper archiveCatalogMapper;
     private final WfEngineFacade wfEngineFacade;
-    /** RA-D248b：申请人姓名/工号回查（显示层补充，不改任何历史行） */
-    private final com.fssc.system.mapper.SysUserMapper sysUserMapper;
+    /** 申请人姓名/工号回查（显示层补充，不改任何历史行） */
+    private final SysUserMapper sysUserMapper;
 
     /**
-     * 调阅类型名称表（RA-D263a · 2026-09-27 人工裁决）：取**前端可渲染的键集**
+     * 调阅类型名称表（· 2026-09-27 人工裁决）：取**前端可渲染的键集**
      * （ArchiveBoard.vue accessTypeLabel 的 READ/VIEW/COPY），写进去的值必然读得出来。
      * archive_access_log.access_type 的列注释写着 VIEW/DOWNLOAD/PRINT，但现网零行
      * 用过后两者，且前端无对应文案 ⇒ 列注释非权威，不并入白名单（仅登记，DDL 不动）。
      */
-    static final java.util.Set<String> ACCESS_TYPES = java.util.Set.of("READ", "COPY", "VIEW");
+    static final Set<String> ACCESS_TYPES = Set.of("READ", "COPY", "VIEW");
 
     /** 名称表守卫：集外值拒写，不静默清洗成默认值（清洗会把错值变成"看不见的错值"）。历史越词行不回写。 */
     private static String assertAccessType(String accessType) {
         String v = accessType == null ? null : accessType.trim().toUpperCase();
         if (v == null || !ACCESS_TYPES.contains(v)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "调阅类型取值不在词表内: " + accessType + "，可选 " + new java.util.TreeSet<>(ACCESS_TYPES));
+                    "调阅类型取值不在词表内: " + accessType + "，可选 " + new TreeSet<>(ACCESS_TYPES));
         }
         return v;
     }
@@ -65,7 +72,7 @@ public class ArchiveAccessService {
         if (reason == null || reason.trim().isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请填写申请理由");
         }
-        // R5-D-207：已销毁（DISPOSED）的档案是最终状态、实体已不在 ⇒ 拒绝新调阅申请；
+        // 已销毁（DISPOSED）的档案是最终状态、实体已不在 ⇒ 拒绝新调阅申请；
         // 与销毁事务内的级联关闭互为成对：前脚销毁的卷后脚也不能被新申请挂上。
         OpArchive arc = archiveCatalogMapper.selectById(archiveId);
         if (arc == null) {
@@ -133,15 +140,15 @@ public class ArchiveAccessService {
     }
 
     /**
-     * A4 第③层·运行时默认处理（RA-D258a · 2026-09-27 人工裁决第三轮）：批准/授予都必须同时持有
+     * A4 第③层·运行时默认处理（· 2026-09-27 人工裁决第三轮）：批准/授予都必须同时持有
      * 「调阅申请查看」{@code compliance:archiveaccess:list}。依据与依赖真值见 {@code PermDependency}：
      * 配置期拦截（「查看是其余权限的前置权限…不能设置为有权」），运行层只是第二道。
      * 现网取证：approve 与 list 持有人<b>零交集</b> ⇒ 有 approve 的人列不出申请却仍能批准放行，
-     * 等于在看不见台账的情况下开放档案访问，与 D-TRC-04（审批历史读侧未办结）同类。
+     * 等于在看不见台账的情况下开放档案访问，与 （审批历史读侧未办结）同类。
      * 本轮只加代码校验，不动任何权限数据；是否收敛授权矩阵留 ④ 组裁决。
      */
     private void assertApproverCanList() {
-        com.fssc.framework.security.PermDependency
+        PermDependency
                 .assertHolds(UserContext.get(), "compliance:archiveaccess:approve");
     }
 
@@ -191,13 +198,13 @@ public class ArchiveAccessService {
         return rows;
     }
 
-    /** P0-2：待审批调阅申请分页（前端 server 模式用；原 listPendingApproval 保留兼容） */
+    /** 待审批调阅申请分页（前端 server 模式用；原 listPendingApproval 保留兼容） */
     public PageResult<ArchiveAccessLog> pagePendingApproval(long pageNum, long pageSize) {
         return pageApproval("PENDING", pageNum, pageSize);
     }
 
     /**
-     * D-DEC-257：调阅审批分页按状态可查。
+     * 调阅审批分页按状态可查。
      * 原端点只返回 PENDING ⇒ 已批准/已驳回的调阅记录在界面上永不可见
      * （库内实测 3 行：1 APPROVED / 1 REJECTED / 1 PENDING，页面只见 1 行）。
      * status 传空或 ALL 返回全部，其余按等值过滤；控制器默认给 PENDING 以保持既有调用方行为不变。
@@ -215,14 +222,14 @@ public class ArchiveAccessService {
     }
 
     /**
-     * 申请人姓名/工号回填（RA-D248b，2026-09-27 人工裁决第三轮）：
+     * 申请人姓名/工号回填（2026-09-27 人工裁决第三轮）：
      * 后端只给裸 requester_id，前端本地 join 出来的是<b>工号</b>（现网显示 Y006083）；
      * 且本地用户表只拉一页 500 行，翻页外的申请人直接退化成「用户#ID」。
      * 规则与流程侧 {@code WfQueryService.namesByIds} 一致：nick_name 优先、缺失回退登录号；
      * 姓名与工号<b>并存</b>，不做互相替换、也不改任何历史行。
      */
     private void fillRequesters(List<ArchiveAccessLog> rows) {
-        java.util.Set<Long> ids = new java.util.HashSet<>();
+        Set<Long> ids = new HashSet<>();
         for (ArchiveAccessLog r : rows) {
             if (r.getRequesterId() != null) {
                 ids.add(r.getRequesterId());
@@ -231,10 +238,10 @@ public class ArchiveAccessService {
         if (ids.isEmpty()) {
             return;
         }
-        Map<Long, com.fssc.system.entity.SysUser> byId = new java.util.HashMap<>();
+        Map<Long, SysUser> byId = new HashMap<>();
         sysUserMapper.selectBatchIds(ids).forEach(u -> byId.put(u.getId(), u));
         for (ArchiveAccessLog r : rows) {
-            com.fssc.system.entity.SysUser u = r.getRequesterId() == null ? null : byId.get(r.getRequesterId());
+            SysUser u = r.getRequesterId() == null ? null : byId.get(r.getRequesterId());
             if (u == null) {
                 continue;
             }

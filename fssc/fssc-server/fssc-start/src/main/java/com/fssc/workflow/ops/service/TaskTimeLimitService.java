@@ -11,6 +11,8 @@ import com.fssc.workflow.mapper.WfTaskMapper;
 import com.fssc.workflow.ops.entity.OpDispatchPolicy;
 import com.fssc.workflow.ops.entity.OpTaskTimeLimit;
 import com.fssc.workflow.ops.mapper.OpTaskTimeLimitMapper;
+import com.fssc.workflow.service.NodeOrgResolver;
+import com.fssc.workflow.service.WorkCalendarService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * G3（2026-09-24）普通/加急双时限：计算并回写 {@code wf_task.due_time}，让它成为真值。
+ * G3普通/加急双时限：计算并回写 {@code wf_task.due_time}，让它成为真值。
  *
  * <p><b>为什么必须做这件事</b>：方案 §二 F6 指出 {@code wf_task.due_time} 是"写了没人读的死列"——
  * 全仓只有一处 {@code setDueTime} 写入、零处读取，真超时判断在 {@code WfTimeoutJob} 里用
@@ -45,10 +47,10 @@ import java.util.Map;
  * <p><b>按组织取日历</b>：本类按单据所属<b>公司</b>（{@code NodeOrgResolver.companyIdOfBill}）
  * 把组织下传给日历服务；<b>解析不到组织（或组织列尚未建）时按 {@code null} 调用，回落租户规则</b>，
  * 与改造前逐字一致。组织维＝公司（见 {@code WfManageOrgScope} 类注释）；组织列由
- * {@code fssc/sql/V2.2.0_g2_calendar_org_20260924.sql} 新增，服务端在列不存在时自动降级。
+ * {@code fssc/sql.2.0_g2_calendar_org_20260924.sql} 新增，服务端在列不存在时自动降级。
  * <p>代价（如实说明）：解析组织需按 {@code bizType/bizId} 反查单据表（公司列，取不到再按建单人默认处理），
  * 单任务路径一次查询可接受；{@link #backfillMissingDueTime} 批量补账时逐任务解析，属一次性维护动作
- * （上限 2000 条），成本可接受但非零。
+ * 上限 2000 条，成本可接受但非零。
  */
 @Slf4j
 @Service
@@ -59,12 +61,12 @@ public class TaskTimeLimitService {
     private final WfTaskMapper taskMapper;
     private final DispatchPolicyService policyService;
     /** G2 第 3 条：到期时间按共享工作日历（op_calendar）以"工作小时"计算 */
-    private final com.fssc.workflow.service.WorkCalendarService workCalendarService;
+    private final WorkCalendarService workCalendarService;
     /**
      * G2 第 3 条：单据所属组织（公司）解析——{@code companyIdOfBill} 为全库唯一组织维解析入口
      * （规则同 NodeOrgResolver/WfManageOrgScope）。解析不到返回 null，日历服务会回落租户规则。
      */
-    private final com.fssc.workflow.service.NodeOrgResolver nodeOrgResolver;
+    private final NodeOrgResolver nodeOrgResolver;
 
     /** 优先级的两个取值（与 op_task_time_limit.priority 列注释一致） */
     public static final String PRIORITY_NORMAL = "NORMAL";
@@ -192,10 +194,14 @@ public class TaskTimeLimitService {
         if (taskIds == null || taskIds.isEmpty()) {
             return out;
         }
-        List<OpTaskTimeLimit> rows = timeLimitMapper.selectList(new LambdaQueryWrapper<OpTaskTimeLimit>()
-                .in(OpTaskTimeLimit::getTaskId, taskIds));
-        for (OpTaskTimeLimit r : rows) {
-            out.put(r.getTaskId(), OpTaskTimeLimit.normalizePriority(r.getPriority()));
+        // 10-29 万级在办实测：IN 参数按 1000 一批，避免 3 万+ 参数的单条 SQL 撑爆解析器。
+        for (int i = 0; i < taskIds.size(); i += 1000) {
+            List<String> chunk = taskIds.subList(i, Math.min(i + 1000, taskIds.size()));
+            List<OpTaskTimeLimit> rows = timeLimitMapper.selectList(new LambdaQueryWrapper<OpTaskTimeLimit>()
+                    .in(OpTaskTimeLimit::getTaskId, chunk));
+            for (OpTaskTimeLimit r : rows) {
+                out.put(r.getTaskId(), OpTaskTimeLimit.normalizePriority(r.getPriority()));
+            }
         }
         return out;
     }
@@ -210,38 +216,55 @@ public class TaskTimeLimitService {
     public Map<String, Object> dueScan(int limit) {
         int cap = limit <= 0 ? 200 : Math.min(limit, 2000);
         LocalDateTime now = LocalDateTime.now();
-        List<WfTask> pending = taskMapper.selectList(new LambdaQueryWrapper<WfTask>()
+        // 万级在办实测：原写法把全部 PENDING 行（4.4 万，含 30 列正文）读进内存
+        // 再逐条判超时，本 Job 每 5 分钟一次，实测 73,692 ms，期间报表/待办请求被挤到 20~240 s。
+        // 本方法只对外报「三个计数 + 最早期限的 cap 条样本」，故三个计数走 count(*)、样本走
+        // due_time 升序 limit cap：与原实现「按超时小时数降序取前 cap」同序（due_time 升序 ⇔ 超时越久越靠前），
+        // 且彻底不再把在办全量装进堆。
+        Long pendingTotal = taskMapper.selectCount(new LambdaQueryWrapper<WfTask>()
+                .eq(WfTask::getStatus, "PENDING"));
+        Long noDueL = taskMapper.selectCount(new LambdaQueryWrapper<WfTask>()
                 .eq(WfTask::getStatus, "PENDING")
-                .orderByAsc(WfTask::getDueTime));
-
-        int noDue = 0;
-        List<Map<String, Object>> overdue = new ArrayList<>();
-        for (WfTask t : pending) {
-            if (t.getDueTime() == null) {
-                noDue++;
-                continue;
-            }
-            if (t.getDueTime().isBefore(now)) {
-                Map<String, Object> one = new LinkedHashMap<>();
-                one.put("taskId", t.getTaskId());
-                one.put("procInstId", t.getProcInstId());
-                one.put("modelKey", t.getModelKey());
-                one.put("nodeKey", t.getNodeKey());
-                one.put("nodeName", t.getNodeName());
-                one.put("bizNo", t.getBizNo());
-                one.put("assigneeId", t.getAssigneeId());
-                one.put("dueTime", t.getDueTime());
-                one.put("overdueHours", Duration.between(t.getDueTime(), now).toHours());
-                one.put("priority", priorityOf(t.getTaskId()));
-                overdue.add(one);
-            }
+                .isNull(WfTask::getDueTime));
+        Long overdueTotalL = taskMapper.selectCount(new LambdaQueryWrapper<WfTask>()
+                .eq(WfTask::getStatus, "PENDING")
+                .isNotNull(WfTask::getDueTime)
+                .lt(WfTask::getDueTime, now));
+        int noDue = noDueL == null ? 0 : noDueL.intValue();
+        int overdueTotal = overdueTotalL == null ? 0 : overdueTotalL.intValue();
+        List<WfTask> overdueTasks = taskMapper.selectList(new LambdaQueryWrapper<WfTask>()
+                .eq(WfTask::getStatus, "PENDING")
+                .isNotNull(WfTask::getDueTime)
+                .lt(WfTask::getDueTime, now)
+                .orderByAsc(WfTask::getDueTime)
+                .last("limit " + cap));
+        // 优先级仍走批量 IN（每 1000 一批），只是样本最多 cap 条；无落账记录的任务按「普通」。
+        List<String> overdueIds = new ArrayList<>(overdueTasks.size());
+        for (WfTask t : overdueTasks) {
+            overdueIds.add(t.getTaskId());
+        }
+        Map<String, String> priorities = priorityIndex(overdueIds);
+        List<Map<String, Object>> overdue = new ArrayList<>(overdueTasks.size());
+        for (WfTask t : overdueTasks) {
+            Map<String, Object> one = new LinkedHashMap<>();
+            one.put("taskId", t.getTaskId());
+            one.put("procInstId", t.getProcInstId());
+            one.put("modelKey", t.getModelKey());
+            one.put("nodeKey", t.getNodeKey());
+            one.put("nodeName", t.getNodeName());
+            one.put("bizNo", t.getBizNo());
+            one.put("assigneeId", t.getAssigneeId());
+            one.put("dueTime", t.getDueTime());
+            one.put("overdueHours", Duration.between(t.getDueTime(), now).toHours());
+            one.put("priority", priorities.getOrDefault(t.getTaskId(), PRIORITY_NORMAL));
+            overdue.add(one);
         }
         overdue.sort(Comparator.comparingLong(o -> -((Number) o.get("overdueHours")).longValue()));
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("scannedAt", now);
-        out.put("pendingTotal", pending.size());
-        out.put("overdueTotal", overdue.size());
+        out.put("pendingTotal", pendingTotal == null ? 0 : pendingTotal.intValue());
+        out.put("overdueTotal", overdueTotal);
         out.put("noDueTimeCount", noDue);
         out.put("overdue", overdue.size() > cap ? overdue.subList(0, cap) : overdue);
         out.put("note", noDue > 0

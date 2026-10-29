@@ -22,7 +22,7 @@ export function money(v) {
  * **Java Date.toString() 串**：`"Sat Oct 03 15:23:10 CST 2026"`；
  * 而业务表接口（/budget/item/pick 等）是 ISO 串 `"2026-09-29T11:14:07"`。两套都要能吃。
  *
- *  不能用 new Date(str) 默认处理：V8 把 "CST" 认成**美国中部标准时间（UTC−6）**，
+ * 不能用 new Date(str) 默认处理：V8 把 "CST" 认成**美国中部标准时间（UTC−6）**，
  * 实测 `new Date("Sat Oct 03 15:23:10 CST 2026")` 解出 10-04 05:23（本地 +08:00），
  * 差 14 小时 ⇒ 停留时长会算成负数。这里按「钟点即本机时区」直接取年月日时分秒，
  * 前提是服务端与浏览器同时区（本演示环境＝Asia/Shanghai，成立）；跨时区部署时该规则要重定。
@@ -119,7 +119,7 @@ export function docTypeKey(billType, billSubType) {
  *    ⇒ 交了就是脏单；PAY/REPAY 的收款方与付款通道、还款计划段也不在移动端 ⇒ 同样未启用。
  * 未启用类型明示列在灰区并给"去电脑端"的出口，而不是从下拉里静默消失（看不见 ≠ 不存在）。
  *
- *  10-04 P2-3 甲案：这份清单的**权威来源已改成库里表 `exp_mobile_template`**
+ * 10-04 甲案：这份清单的**权威来源已改成库里表 `exp_mobile_template`**
  * （接口 `/api/tenant/expense/mobile/templates`，见 api.js#mobileTemplates）。本常量只在
  * 「接口未上线（404）／读失败／返回空清单」时默认处理——所以它的取值域与排列规则必须和 seed
  * 逐条对得上（六档、只有 CLAIM 主型启用）：配置接口一上线界面就变样＝又一个假功能。
@@ -198,7 +198,7 @@ export function docTypeDenyReason(d) {
 }
 
 
-// ---------------- 本地草稿（UX-06/07：填一半被返回就没了） ----------------
+// 本地草稿（UX-06/07：填一半被返回就没了）
 const DRAFT_PREFIX = 'fssc.h5.draft.v1.'
 const RECENT_PREFIX = 'fssc.h5.recent-items.v1.'
 

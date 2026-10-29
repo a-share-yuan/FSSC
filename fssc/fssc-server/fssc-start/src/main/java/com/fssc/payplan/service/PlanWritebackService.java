@@ -9,6 +9,7 @@ import com.fssc.payplan.entity.PayPlan;
 import com.fssc.payplan.mapper.OpPlanPaidLogMapper;
 import com.fssc.payplan.mapper.PayPlanMapper;
 import com.fssc.sharing.entity.OpPayBatchDetail;
+import java.util.LinkedHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,7 +32,7 @@ import java.util.Map;
  *
  * <h3>规则（Phase 1 最小闭环）</h3>
  * <ul>
- *   <li><b>匹配</b>（D-DEC-348）：批次明细 {@code supplier_id} = 计划 {@code supplier_id} 优先；
+ *   <li><b>匹配</b>：批次明细 {@code supplier_id} = 计划 {@code supplier_id} 优先；
  *       <b>计划行 supplier_id 为 NULL</b> 时回退 {@code pay_plan.supplier = 批次明细 payee_name}；
  *       明细侧无 id 时整条按名称归集（与改造前同一规则）。status=APPROVED 且未全额核销；
  *       同主体多笔时本公司计划优先、期间升序 FIFO 分配。</li>
@@ -41,7 +42,7 @@ import java.util.Map;
  *   <li><b>开关</b>：fssc.plan-writeback.enabled（默认 true）。</li>
  * </ul>
  *
- * <h3>D-DEC-348：勾稽键由供应商名称文本改为档案 id 优先（本轮已落码）</h3>
+ * <h3>勾稽键由供应商名称文本改为档案 id 优先（本轮已落码）</h3>
  * 原判词：{@link #writeBackOnBatchPaid} 的匹配键实为 {@code pay_plan.supplier = 批次明细 payee_name}
  * 的<b>字符串相等</b>，名称近似即错配（现网实证 {@code md_supplier} 现库 60 行按 supplier_name 分组零重名，
  * 所以此前未爆雷；但 id=53「东昇贸易有限公司」与 id=42「东昇实业有限公司」这类同前缀异主体，
@@ -95,7 +96,7 @@ public class PlanWritebackService {
             return;
         }
         // 按收款主体归集本次打款金额：有档案 id 的按 id 归集，无 id 的（历史行／非供应商收款方）按收款方名称归集
-        Map<PayeeGroup, BigDecimal> byPayee = new java.util.LinkedHashMap<>();
+        Map<PayeeGroup, BigDecimal> byPayee = new LinkedHashMap<>();
         for (OpPayBatchDetail d : details) {
             if (d.getAmount() == null) {
                 continue;
@@ -108,10 +109,10 @@ public class PlanWritebackService {
         }
         LocalDateTime now = LocalDateTime.now();
         // 同批同计划只落一条核销台账（uk_batch_plan），故 id 命中组与名称回退组命中同一条计划时按批次汇总
-        Map<Long, BigDecimal> allocByPlan = new java.util.LinkedHashMap<>();
-        Map<Long, String> planNoById = new java.util.LinkedHashMap<>();
+        Map<Long, BigDecimal> allocByPlan = new LinkedHashMap<>();
+        Map<Long, String> planNoById = new LinkedHashMap<>();
         // 本轮累计后的计划已付额：同一条计划可被多个归集组命中，以本表为准，避免同批次重复占用
-        Map<Long, BigDecimal> paidByPlan = new java.util.LinkedHashMap<>();
+        Map<Long, BigDecimal> paidByPlan = new LinkedHashMap<>();
         for (Map.Entry<PayeeGroup, BigDecimal> e : byPayee.entrySet()) {
             BigDecimal remaining = e.getValue();
             if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
@@ -164,7 +165,7 @@ public class PlanWritebackService {
     }
 
     /**
-     * 计划候选查询（D-DEC-348 双路）：
+     * 计划候选查询（双路）：
      * <ul>
      *   <li>明细带档案 id → {@code supplier_id = id} 为主路，另并一条 {@code supplier_id IS NULL 且
      *       supplier = 收款方名称} 的回退路，专供本条上线前的历史计划（不回填，回退即它们的唯一出口）；
@@ -195,7 +196,7 @@ public class PlanWritebackService {
         return value == null || value.isBlank() ? null : value;
     }
 
-    /** 收款主体归集键：供应商档案 id 优先，无 id 时用收款方名称（D-DEC-348） */
+    /** 收款主体归集键：供应商档案 id 优先，无 id 时用收款方名称 */
     private record PayeeGroup(Long supplierId, String payeeName) {
     }
 }

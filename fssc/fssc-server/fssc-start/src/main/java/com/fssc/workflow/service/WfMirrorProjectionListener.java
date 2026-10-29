@@ -3,6 +3,10 @@
 
 package com.fssc.workflow.service;
 
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.dto.WfProjectionEvent;
 import com.fssc.workflow.entity.WfInstance;
@@ -16,6 +20,7 @@ import org.flowable.common.engine.api.delegate.event.FlowableEvent;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -51,7 +56,7 @@ import java.util.Map;
  * 改为无条件注册后，默认态的代价是<b>每个流程事件一次内存布尔判定</b>（{@link WfProcessOutboxService#queueModeEnabled()}
  * 带 5 秒 TTL 缓存，非每次查库），且判定失败一律 fail-closed 到 SYNC：
  * <pre>
- *   if (!queueMode &amp;&amp; !projectionEnabled) return;   // 默认态：不读库、不解析、不写任何行
+ *   if (!queueMode &amp;&amp; !projectionEnabled) return; // 默认态：不读库、不解析、不写任何行
  * </pre>
  *
  * <p><b>失败语义</b>：与 G0 一致——写失败调 {@link WfMirrorDefectRecorder#record} 记缺陷并冒泡
@@ -79,7 +84,7 @@ import java.util.Map;
  *       机器路径的 {@code AUTO_PASS}/{@code ESCALATE}/{@code TIMEOUT_RELEASE} 精细化动作
  *       仍由门面双写那一行承载——过渡期不丢信息；等门面停写历史后再单独办结。</li>
  *   <li>{@code TIMER_FIRED} 只记录：当前架构超时走 {@code WfTimeoutJob} 轮询镜像表，引擎定时器未启用
- *       （方案 §二 F5/F7），此处仅把事件记下来供可观测，不做镜像投影、也不入队。</li>
+ *       方案 §二 F5/F7，此处仅把事件记下来供可观测，不做镜像投影、也不入队。</li>
  *   <li>{@code TASK_DELETED} 在方案里是"任务删除"语义，Flowable 8 的 {@code FlowableEngineEventType}
  *       没有该常量，实际由通用 {@code ENTITY_DELETED} 承载，故注册的是后者、在监听器内按实体类型
  *       （{@code instanceof Task}）过滤。副作用是订阅面变宽（其他实体的删除也会到达本监听器），
@@ -112,7 +117,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
      * <p>本类<b>无条件注册</b>（见类注释），故该开关在本类内的语义是"是否内联投影"：
      * 关闭且模式为 SYNC ⇒ 本监听器什么都不做（门面照旧手工写，行为与改造前逐字一致）。
      */
-    @org.springframework.beans.factory.annotation.Value("${fssc.wf.mirror.projection-enabled:false}")
+    @Value("${fssc.wf.mirror.projection-enabled:false}")
     private boolean projectionEnabled;
 
     @Override
@@ -165,8 +170,8 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
             if (ex instanceof RuntimeException re) {
                 throw re;
             }
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.SYSTEM_ERROR, "流程镜像投影失败: " + ex.getMessage());
+            throw new BizException(
+                    ErrorCode.SYSTEM_ERROR, "流程镜像投影失败: " + ex.getMessage());
         }
     }
 
@@ -177,7 +182,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
         return true;
     }
 
-    // ---------------- 事件信封构造（解析在此完成，写库在 WfProjectionService） ----------------
+    // 事件信封构造（解析在此完成，写库在 WfProjectionService）
 
     private WfProjectionEvent buildEnvelope(FlowableEngineEventType type, Object entity) {
         if (entity instanceof Task task) {
@@ -288,7 +293,7 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
         return e;
     }
 
-    // ---------------- 解析工具 ----------------
+    // 解析工具
 
     /** 候选组任务的可办理人（与门面 {@code recordTaskMirror} 同一规则与同一列宽截断） */
     private String resolveCandidateIds(Task task) {
@@ -450,24 +455,24 @@ public class WfMirrorProjectionListener extends AbstractFlowableEventListener {
 
     /** 当前登录用户 ID，无则 0（与门面 approverUserIdOrDefault 同一规则） */
     private static Long currentUserId() {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         return u == null || u.getUserId() == null ? 0L : u.getUserId();
     }
 
     /**
      * 当前登录用户姓名（无登录上下文则 null）。
      *
-     * <p>D-DEC-161：这里原来直取 {@code getUsername()}，而 {@code username} 在本系统是<b>工号</b>
+     * <p>这里原来直取 {@code getUsername()}，而 {@code username} 在本系统是<b>工号</b>
      * （sys_user.user_name，如 Y000147），写进 {@code wf_task_history.oper_user_name} 后
      * 审批链上就显示成一串工号；读侧 {@code WfQueryService#namesByIds} 早已是
      * 「nick_name（姓名）优先、空则回落 user_name（工号）」，两条规则不一致会让同一份历史
      * 里既有人名又有工号。改为同一规则：realName（=nick_name）优先，空白才回落 username。
      *
-     * <p>登录态缺失仍返回 null（D-DEC-280）：定时任务/引擎回调等没有 UserContext 的链路
+     * <p>登录态缺失仍返回 null：定时任务/引擎回调等没有 UserContext 的链路
      * 不能拿工号或姓名冒充经办人，宁可留空由读侧按 oper_user_id 默认处理。
      */
     private static String currentUserName() {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         if (u == null) {
             return null;
         }

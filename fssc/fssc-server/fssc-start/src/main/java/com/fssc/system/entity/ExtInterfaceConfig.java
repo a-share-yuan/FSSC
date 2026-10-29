@@ -27,7 +27,7 @@ public class ExtInterfaceConfig extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
 
-    // R5-D-038 出参凭据掩码规则：固定长度星号 + 后 4 位供人工识别，不泄露原文长度
+    // 出参凭据掩码规则：固定长度星号 + 后 4 位供人工识别，不泄露原文长度
     /** 凭据掩码前缀（定长） */
     public static final String CRED_MASK = "********";
     /** 掩码保留的尾部可读位数 */
@@ -35,19 +35,19 @@ public class ExtInterfaceConfig extends BaseEntity {
     /** 短于此长度的凭据只出全星，避免尾部可读位把原文暴露大半 */
     public static final int CRED_MASK_MIN_LEN = 8;
 
-    /** R5-D-038 extraConfig 中按词元判定为凭据的键名片段 */
+    /** extraConfig 中按词元判定为凭据的键名片段 */
     private static final Set<String> SECRET_NAME_TOKENS = Set.of(
             "key", "secret", "token", "password", "pwd", "passwd",
             "credential", "credentials", "signature");
 
-    /** R5-D-038 extraConfig 中按整名判定为凭据的键名（小写） */
+    /** extraConfig 中按整名判定为凭据的键名（小写） */
     private static final Set<String> SECRET_NAMES = Set.of(
             "apikey", "apisecret", "secretkey", "accesskey", "accesssecret",
             "appkey", "appsecret", "clientsecret", "accesstoken",
             "refreshtoken", "authtoken", "secret", "token", "password",
             "pwd", "passwd", "credential", "credentials", "signature", "signkey");
 
-    /** R5-D-038 JSON 文本成员（键名 + 冒号 + 字符串值），值内允许转义 */
+    /** JSON 文本成员（键名 + 冒号 + 字符串值），值内允许转义 */
     private static final Pattern JSON_TEXT_MEMBER = Pattern.compile(
             "\"((?:[^\"\\\\]|\\\\.)+)\"(\\s*:\\s*)\"((?:[^\"\\\\]|\\\\.)*)\"");
 
@@ -66,10 +66,10 @@ public class ExtInterfaceConfig extends BaseEntity {
     /** 接口请求地址 */
     private String apiUrl;
 
-    /** API Key / AppKey（出参掩码，R5-D-038） */
+    /** API Key / AppKey（出参掩码） */
     private String apiKey;
 
-    /** API Secret / SecretKey（出参掩码，R5-D-038） */
+    /** API Secret / SecretKey（出参掩码） */
     private String apiSecret;
 
     /** 模型名称（AI 模型专用，如 ERNIE-4.0-Turbo-8K） */
@@ -96,9 +96,9 @@ public class ExtInterfaceConfig extends BaseEntity {
     /** 最后一次测试消息 */
     private String lastTestMsg;
 
-    // ---------- R5-D-038 凭据掩码 / 反掩码工具（仅供出参与写侧判等使用，不参与持久化） ----------
+    // 凭据掩码 / 反掩码工具（仅供出参与写侧判等使用，不参与持久化）
 
-    /** R5-D-038 出参掩码：空值返空串，短凭据只出全星，其余定长星号 + 后 4 位；去重 */
+    /** 出参掩码：空值返空串，短凭据只出全星，其余定长星号 + 后 4 位；去重 */
     public static String maskCredential(String v) {
         if (v == null || v.isBlank()) {
             return "";
@@ -111,7 +111,7 @@ public class ExtInterfaceConfig extends BaseEntity {
                 : CRED_MASK + s.substring(s.length() - CRED_MASK_TAIL);
     }
 
-    /** R5-D-038 是否为本类掩码串：≥8 个前导星号且星号后非星字符 ≤4 */
+    /** 是否为本类掩码串：≥8 个前导星号且星号后非星字符 ≤4 */
     public static boolean looksMasked(String v) {
         if (v == null) {
             return false;
@@ -124,12 +124,12 @@ public class ExtInterfaceConfig extends BaseEntity {
         return stars >= CRED_MASK.length() && s.length() - stars <= CRED_MASK_TAIL;
     }
 
-    /** R5-D-038 extraConfig 内凭据类键的值出参掩码，非凭据键保持原样可读可编辑 */
+    /** extraConfig 内凭据类键的值出参掩码，非凭据键保持原样可读可编辑 */
     public static String maskExtraConfigSecrets(String json) {
         return rewriteSecretMembers(json, null, true);
     }
 
-    /** R5-D-038 写侧防线：入参 extraConfig 中掩码形态的凭据值用库中原值回填 */
+    /** 写侧防线：入参 extraConfig 中掩码形态的凭据值用库中原值回填 */
     public static String restoreExtraConfigSecrets(String incoming, String stored) {
         if (incoming == null || incoming.isBlank() || stored == null || stored.isBlank()) {
             return incoming;
@@ -137,7 +137,7 @@ public class ExtInterfaceConfig extends BaseEntity {
         return rewriteSecretMembers(incoming, collectSecretMembers(stored), false);
     }
 
-    /** R5-D-038 extraConfig 中是否存在掩码形态的凭据值（新增场景拦脏数据） */
+    /** extraConfig 中是否存在掩码形态的凭据值（新增场景拦脏数据） */
     public static boolean hasMaskedSecretMember(String json) {
         if (json == null || json.isBlank()) {
             return false;
@@ -151,7 +151,7 @@ public class ExtInterfaceConfig extends BaseEntity {
         return false;
     }
 
-    /** R5-D-038 masking=true 出掩码；false 时按 stored 回填掩码值 */
+    /** masking=true 出掩码；false 时按 stored 回填掩码值 */
     private static String rewriteSecretMembers(String json, Map<String, String> stored, boolean masking) {
         if (json == null || json.isBlank()) {
             return json;
@@ -185,7 +185,7 @@ public class ExtInterfaceConfig extends BaseEntity {
         return sb.toString();
     }
 
-    /** R5-D-038 收集 JSON 中凭据类键的原值（键名小写 → 原文捕获值） */
+    /** 收集 JSON 中凭据类键的原值（键名小写 → 原文捕获值） */
     private static Map<String, String> collectSecretMembers(String json) {
         Map<String, String> out = new HashMap<>();
         Matcher m = JSON_TEXT_MEMBER.matcher(json);
@@ -198,7 +198,7 @@ public class ExtInterfaceConfig extends BaseEntity {
         return out;
     }
 
-    /** R5-D-038 键名是否属凭据类：整名命中或下划线/中划线词元命中 */
+    /** 键名是否属凭据类：整名命中或下划线/中划线词元命中 */
     private static boolean isSecretName(String name) {
         if (name == null || name.isEmpty()) {
             return false;

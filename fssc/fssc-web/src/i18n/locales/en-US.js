@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-//
+
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 // English (US) locale pack — must stay key-aligned with zh-CN.js (CI gate checks).
-// ---------------------------------------------------------------------------
 
 export default {
-  // ---- Common ---------------------------------------------------------
+  // Common
   common: {
     confirm: 'OK',
     cancel: 'Cancel',
@@ -41,13 +42,13 @@ export default {
     gotIt: 'Got it',
   },
 
-  // ---- Locale switcher -------------------------------------------------
+  // Locale switcher
   locale: {
     switch: 'Switch language',
     current: 'Current language: {lang}',
   },
 
-  // ---- Login ----------------------------------------------------------
+  // Login
   login: {
     title: 'Financial Shared Service Center',
     subtitle: 'Financial Shared Service Center',
@@ -66,7 +67,7 @@ export default {
     recovered: 'The system is back online, reloading...',
   },
 
-  // ---- Layout / navigation --------------------------------------------
+  // Layout / navigation
   layout: {
     profile: 'Profile',
     logout: 'Sign out',
@@ -78,7 +79,7 @@ export default {
     backHome: 'Back to home',
   },
 
-  // ---- Status ---------------------------------------------------------
+  // Status
   status: {
     draft: 'Draft',
     submitted: 'Submitted',
@@ -93,8 +94,8 @@ export default {
     pending: 'Pending',
   },
 
-  // ---- Error codes (front-end fallback; backend returns localized msgs) -
-  // ---- gl：总账域（域8B/T1.6 第 1 批）----
+  // Error codes (front-end fallback; backend returns localized msgs) -
+  // gl：总账域（域8B/T1.6 第 1 批）
   // 键名遵循本文件顶部的 <层级>.<模块>.<键>；本批＝合并底稿 consolidate / 总账分录台账 ledger /
   // 特殊业务 special / 退税 refund 四个模块。模板取词用 $t（基座 globalInjection 注入）。
   gl: {
@@ -501,7 +502,7 @@ export default {
       periodOpened: 'Currently open period',
     },
   },
-  // ---- field：跨域共用的列名/字段名（域8B/T1.6）----
+  // field：跨域共用的列名/字段名（域8B/T1.6）
   // 各业务域的同名标签一律复用这里，避免同一句中文在每个域各建一枚键。
   field: {
     account: 'Bank Account',
@@ -557,7 +558,7 @@ export default {
     summary: 'Summary',
     batchNo: 'Batch No.',
   },
-  // ---- 业务域命名空间（域8B/T1.6 逐域填充）----
+  // 业务域命名空间（域8B/T1.6 逐域填充）
   // 先立空块：落地器拒绝自己新造一级命名空间（避免同一域出现两种层次写法）。
   flow: {
     arClose: {
@@ -1783,8 +1784,8 @@ export default {
       errNodeNameRequired: 'Enter the node name',
       errRoleCodeRequired: 'Enter the role code',
       errStartRequired: 'Select a start time',
-      errUserIdFormat: 'User IDs must be numeric; separate several with commas',
-      errUserIdRequired: 'Enter the user ID (numeric)',
+      errUserIdFormat: 'Invalid user selection; pick again from the people list',
+      errUserIdRequired: 'Select a user',
       hintAddSignBrief: 'When off, this node cannot add approvers.',
       hintApproverTypeBrief: 'Specific user or role: the system picks the approver by configuration; manager chain: follows the reporting line upward.',
       hintAssignModeBrief: 'Auto-assign: the system picks one candidate; chosen-in-previous-step and task pool apply only to a specific role.',
@@ -1795,7 +1796,7 @@ export default {
       hintCountersignBrief: 'Applies when a role resolves to several people; publish the process again after changing it.',
       hintEmptyBrief: 'What to do when a role resolves no approver.',
       hintFirstNodeBrief: 'When on, submitting completes this node and creates no to-do.',
-      hintHardAssign: 'Assign directly by user ID.',
+      hintHardAssign: 'Assign directly to the selected people.',
       hintLevelLonger: 'A higher level means a longer approval chain',
       hintMultistageRepublish: 'This model has countersign or voting nodes. Publish the process again after changing the countersign mode for it to take effect.',
       hintNeedModelPerm: 'Contact your system administrator to enable process modelling permission.',
@@ -1815,7 +1816,7 @@ export default {
       hintRoleCodesValue: 'Role codes, comma separated',
       hintRoleResolve: 'Resolves approvers from role members; the no-candidate policy applies when none is found.',
       hintStaleLimit: 'Only the first 100 are shown. See Process Monitoring → In-flight instances for the full list.',
-      hintUserIdValue: 'User IDs, comma separated',
+      hintUserIdValue: 'Select one or more people',
       hintViewOnly: 'Your account can only view process models. Contact the configuration administrator for node settings, bindings, or running instances.',
       lblAllowAddSign: 'Allow adding approvers',
       lblAllowTransfer: 'Allow transfer',
@@ -1913,7 +1914,7 @@ export default {
       optUnclassified: 'Unclassified',
       phApplyDocTypes: 'Comma separated; empty means all. e.g. EXP_CLAIM,EXP_LOAN',
       phCcRoleCodes: 'Role codes, comma separated, e.g. FIN_AUDIT,FIN_MANAGER (optional)',
-      phCcUserIds: 'CC user IDs, comma separated, e.g. 3892,3893 (optional)',
+      phCcUserIds: 'Select CC recipients (multiple, optional)',
       phCfgJsonFallback: 'e.g. {\'{\'}"min":5000,"max":50000,"level":2{\'}\'}',
       phDefaultRemark: 'Remark filled in automatically when approving',
       phModelCodeUnique: 'Enter a unique model code',
@@ -2918,7 +2919,7 @@ export default {
   },
   sharing: {
     archive: {
-      btnArchiveSel: 'Archive Selected ({v1})',
+      btnArchiveSel: 'File Selected Volumes ({v1})',
       btnViewSelImages: 'View Selected Images',
       colApproveTime: 'Approval Completed At',
       colArchFlow: 'Archive Approval Flow',
@@ -2929,10 +2930,9 @@ export default {
       colImage: 'Images',
       colPaperKeeper: 'Paper Originals',
       colRetention: 'Retention (Years)',
-      confirmArchive: 'Archive the selected {v1} document(s)? Their files will be moved to the archive store.',
+      confirmArchive: 'File the selected {v1} document(s)? Files move to the archive store and the volume is registered as pending archiving; the final archived state is written when the archiving approval closes.',
       hintAutoFiled: '(Archived automatically by the system)',
-      hintFlow: 'Archiving moves the files to the archive store, creates the archive record and marks the documents as archived.',
-      hintNoArchivePerm: 'This account cannot execute archiving; this list is for viewing and verification only. Contact the shared-services support desk to archive.',
+      hintFlow: 'Batch filing: moves files to the archive store and creates a pending volume; document archive status is written back when the archiving approval closes.',
       hintOnlyUnarchived: 'Archiving is available only under the "Not archived" filter, to avoid re-filing an archived document',
       labelArchiving: 'Archiving',
       labelCompanyId: 'Company #{v1}',
@@ -2943,18 +2943,17 @@ export default {
       labelTerminated: 'Terminated',
       labelUnfiled: 'Not Archived',
       labelUnknown: 'Unknown',
-      msgDone: 'Archived {v1} document(s)',
-      msgFail: 'Archiving failed: {v1}',
+      msgDone: 'Filed {v1} document(s) (pending archiving)',
+      msgFail: 'Filing failed: {v1}',
       msgNoArchiveImage: 'This archive has no images',
-      msgNoPerm: 'Your account cannot execute archiving. Ask a shared-services support agent to run it.',
+      msgNoPerm: 'This account lacks the filing permission; refresh the page and try again',
       msgNoSelImages: 'None of the selected documents have images',
       pageTitle: 'Document Archiving',
       tabFiled: 'Archived Files',
       tabPending: 'To Archive ({v1})',
       titleArchiveImages: 'Archive Images:',
-      titleConfirm: 'Confirm Archiving',
+      titleConfirm: 'Confirm Filing',
       titleSelDocImages: 'Selected Document Images',
-      txtOrVoucherFlow: 'or start an archiving approval in “Archive Management · Voucher Archiving”.',
       txtNoReason: 'The server returned no reason; try again later or contact the shared-service desk',
     },
     cfg: {
@@ -3227,8 +3226,8 @@ export default {
       btnMarkPriority: 'Flag Priority',
       btnRefreshStats: 'Refresh Counts',
       btnRegenerate: 'Regenerate',
+      colAssignee: 'Assignee',
       colAssignMode: 'Assignment Mode',
-      colAssigneeId: 'Assignee ID',
       colBalanceBatch: 'Balance Batch Size',
       colBalanceInterval: 'Balance Interval (h)',
       colBySource: 'By Source',
@@ -3277,7 +3276,7 @@ export default {
       errNodeKey: 'Enter the node key (* for the global default)',
       errPolicyName: 'Enter the strategy name',
       errProcessKey: 'Enter the process key (* for the global default)',
-      errTaskRowId: 'Enter the task row ID',
+      errTaskRowId: 'Select a pending task',
       errVoucherRead: 'Failed to read voucher failure events: ',
       fallbackNoRule: 'No rule matched',
       fallbackUnassigned: 'Unassigned (waiting in the pool)',
@@ -3297,8 +3296,8 @@ export default {
       labExpenseItemId: 'Expense Item ID',
       labLegalEntityId: 'Legal Entity ID',
       labScanLimit: 'Max Rows to Scan',
-      labTaskId: 'Task ID',
-      labTaskRowId: 'Task Row ID',
+      labTaskId: 'Task',
+      labTaskRowId: 'Pending task',
       labelApproved: 'Approved',
       labelCaution: 'Needs Attention',
       labelMarked: 'Flagged',
@@ -3321,6 +3320,7 @@ export default {
       phPolicyKeyword: 'Strategy name / process / node',
       phProcessKey: 'Process key',
       phStarDefault: '* = global default',
+      phTaskPick: 'Search tasks by document no. / title',
       srcExpense: 'Expense Reimbursement',
       srcVendorPay: 'Vendor Payment',
       subAutoAssign: 'Auto Assignment',
@@ -3583,7 +3583,7 @@ export default {
       exitAccountNotArchived: 'The payee account is not backed by supplier master data: add or correct the supplier\'s bank account under Master Data › Supplier › Bank Account so the record matches the payee account, then retry Execute Payment on this batch (nothing was sent to the bank and the status is unchanged).',
       exitBlacklisted: 'The supplier is blacklisted or disabled: this line enters no payment channel until the master data status is corrected.',
       exitFraudOpen: 'A risk-control case is still open: retry this batch after the review is closed.',
-      // D-R1020-16：与 zh-CN 同改——反欺诈校验确有放行出口（Risk Control > Fraud Detection 的 release），
+      // 与 zh-CN 同改——反欺诈校验确有放行出口（Risk Control > Fraud Detection 的 release），
       // 旧文案 "This gate offers no bypass" 与后半句自相矛盾。
       hintBypassFraud: 'This batch page has no direct-release button; the release exit lives on the risk-control side: go to Risk Control > Fraud Detection and release / close the high-risk records for this bill, then retry this batch directly (no rebuild). Filling PO / GRN / contract / invoice legs does not clear this gate.',
       hintBypassSupplier: 'This gate offers no bypass: the payee is disabled or blacklisted. Restore the supplier or correct the payee in the supplier master, then retry the batch.',

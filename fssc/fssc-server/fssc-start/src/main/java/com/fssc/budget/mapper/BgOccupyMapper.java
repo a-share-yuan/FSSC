@@ -3,7 +3,11 @@
 
 package com.fssc.budget.mapper;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.fssc.budget.entity.BgOccupy;
+import com.fssc.budget.vo.BgOccupyVO;
+import java.math.BigDecimal;
+import java.util.Map;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -34,8 +38,8 @@ public interface BgOccupyMapper {
             "<if test='bizType != null and bizType != \"\"'>and biz_type = #{bizType}</if> " +
             "<if test='keyword != null and keyword != \"\"'>and biz_no like concat('%',#{keyword},'%')</if> " +
             "</where> order by id desc</script>")
-    com.baomidou.mybatisplus.core.metadata.IPage<BgOccupy> searchPage(
-            com.baomidou.mybatisplus.core.metadata.IPage<BgOccupy> page,
+    IPage<BgOccupy> searchPage(
+            IPage<BgOccupy> page,
             @Param("budgetItemId") Long budgetItemId,
             @Param("operType") String operType,
             @Param("bizType") String bizType,
@@ -43,17 +47,17 @@ public interface BgOccupyMapper {
 
     /** 按业务单据汇总净占用额（OCCUPY 为正、RELEASE 为负），用于 CER 占用去重与驳回释放 */
     @Select("select coalesce(sum(amount), 0) from bg_occupy where biz_type = #{bizType} and biz_id = #{bizId}")
-    java.math.BigDecimal sumAmountByBiz(@Param("bizType") String bizType, @Param("bizId") Long bizId);
+    BigDecimal sumAmountByBiz(@Param("bizType") String bizType, @Param("bizId") Long bizId);
 
     /**
-     * R5-D-265：某预算行的全行流水净占用（bg_occupy.amount 代数和，OCCUPY 正 / RELEASE、WRITE_OFF 负）。
+     * 某预算行的全行流水净占用（bg_occupy.amount 代数和，OCCUPY 正 / RELEASE、WRITE_OFF 负）。
      * 供提交链路「表头 occupy_amount vs 流水净额」一致性校验逐行对点（bg_occupy 只增不改，是本行的真相账本）。
      */
     @Select("select coalesce(sum(amount), 0) from bg_occupy where budget_item_id = #{budgetItemId}")
-    java.math.BigDecimal sumNetOccupyByItem(@Param("budgetItemId") Long budgetItemId);
+    BigDecimal sumNetOccupyByItem(@Param("budgetItemId") Long budgetItemId);
 
     /**
-     * （2026-09-14）：单据是否已发生过预算执行核销（WRITE_OFF）。
+     * 单据是否已发生过预算执行核销（WRITE_OFF）。
      * 仅统计费用/付款域三种 biz_type（EXP_CLAIM 报销审批核销 / EXP_PAY 对公付款审批核销 /
      * TR_PAY 资金付款批次支付核销），其 biz_id 均为 exp_bill 主键；
      * 排除 FA_CER 等其他域（biz_id 为各自表主键，数值可能与 exp_bill 撞号）。
@@ -77,7 +81,7 @@ public interface BgOccupyMapper {
             "and (biz_type = #{bizType}" +
             "<if test='crossExpense'> or biz_type in ('EXP_CLAIM','EXP_PAY','EXP_APPLY','EXP_LOAN','EXP_REPAY','TR_PAY')</if>" +
             ")</script>")
-    java.math.BigDecimal sumNetOccupyByItemAndBiz(@Param("budgetItemId") Long budgetItemId,
+    BigDecimal sumNetOccupyByItemAndBiz(@Param("budgetItemId") Long budgetItemId,
                                                   @Param("bizId") Long bizId,
                                                   @Param("bizType") String bizType,
                                                   @Param("crossExpense") boolean crossExpense);
@@ -93,13 +97,13 @@ public interface BgOccupyMapper {
             "and (biz_type = #{bizType}" +
             "<if test='crossExpense'> or biz_type in ('EXP_CLAIM','EXP_PAY','EXP_APPLY','EXP_LOAN','EXP_REPAY','TR_PAY')</if>" +
             ")</script>")
-    java.math.BigDecimal sumOccupiedByItemAndBiz(@Param("budgetItemId") Long budgetItemId,
+    BigDecimal sumOccupiedByItemAndBiz(@Param("budgetItemId") Long budgetItemId,
                                                  @Param("bizId") Long bizId,
                                                  @Param("bizType") String bizType,
                                                  @Param("crossExpense") boolean crossExpense);
 
     /**
-     * 单据曾经占用过哪些预算明细（D-DEC-105 还款冲减：冲减对象要按借款单的真实占用行找，
+     * 单据曾经占用过哪些预算明细（还款冲减：冲减对象要按借款单的真实占用行找，
      * 不能只看还款行解析出的科目）。
      * <p>仅限费用/付款域 biz_type：其余域（FA_CER／EXP_CONTRACT）的 biz_id 与 exp_bill 主键会撞号。
      */
@@ -109,7 +113,7 @@ public interface BgOccupyMapper {
     List<Long> selectOccupiedItemsByBill(@Param("bizId") Long bizId);
 
     /**
-     * 某业务单据在指定 biz_type 下曾经占用过的预算明细行（D-DEC-145 薪酬域）。
+     * 某业务单据在指定 biz_type 下曾经占用过的预算明细行（薪酬域）。
      * <p>薪酬的占用/核销/释放三步都以「当初真实占在哪几行」为准回查账本，不在收尾时重解析科目：
      * 费用项→预算行的映射可能被人在两步之间改过，重解析会把消耗记到另一条线上（同
      * {@link #selectOccupiedItemsByBill} 的理由，但薪酬的 biz_id 是 gl_salary_run 主键，
@@ -120,7 +124,7 @@ public interface BgOccupyMapper {
     List<Long> selectOccupiedItemsByBiz(@Param("bizType") String bizType, @Param("bizId") Long bizId);
 
     /**
-     * 还款单对某借款单的冲减/回补台账（D-DEC-105，逐预算行一行）。
+     * 还款单对某借款单的冲减/回补台账（逐预算行一行）。
      * <p>冲减流水（RELEASE，负数）与回补流水（OCCUPY，正数）都归户在<b>借款单</b> biz_id 上、
      * biz_no 记<b>还款单号</b>，因此"本还款单在这行冲了多少 / 又补回多少"一次查得，
      * 结清重放与驳回回补都按它做去重，绝不新增第二笔占用。
@@ -133,12 +137,12 @@ public interface BgOccupyMapper {
             "from bg_occupy " +
             "where biz_type = #{bizType} and biz_id = #{loanBillId} and biz_no = #{repayBillNo} " +
             "and oper_type in ('RELEASE','OCCUPY') group by budget_item_id")
-    List<java.util.Map<String, Object>> selectRepayOffsetLedger(@Param("bizType") String bizType,
+    List<Map<String, Object>> selectRepayOffsetLedger(@Param("bizType") String bizType,
                                                                 @Param("loanBillId") Long loanBillId,
                                                                 @Param("repayBillNo") String repayBillNo);
 
     /**
-     * 某还款单冲减过哪些借款单的预算占用（D-DEC-105 驳回/撤回回补的自寻址入口）。
+     * 某还款单冲减过哪些借款单的预算占用（驳回/撤回回补的自寻址入口）。
      * <p>回补只需要「当初冲在哪些借款单上」，这一个事实已经完整记在 {@code bg_occupy}
      * （biz_type=EXP_REPAY + biz_no=还款单号，biz_id=借款单 id）里，
      * 无需再回查 {@code exp_loan_offset}／FIFO 分配，避免两处规则分叉。
@@ -163,8 +167,8 @@ public interface BgOccupyMapper {
             "<if test='keyword != null and keyword != \"\"'>and bo.biz_no like concat('%',#{keyword},'%')</if> " +
             "</where> order by bo.id desc" +
             "</script>")
-    com.baomidou.mybatisplus.core.metadata.IPage<com.fssc.budget.vo.BgOccupyVO> searchPageWithItemName(
-            com.baomidou.mybatisplus.core.metadata.IPage<com.fssc.budget.vo.BgOccupyVO> page,
+    IPage<BgOccupyVO> searchPageWithItemName(
+            IPage<BgOccupyVO> page,
             @Param("budgetItemId") Long budgetItemId,
             @Param("operType") String operType,
             @Param("bizType") String bizType,

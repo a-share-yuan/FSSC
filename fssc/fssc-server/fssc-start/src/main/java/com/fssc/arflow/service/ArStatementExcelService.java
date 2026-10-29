@@ -3,6 +3,8 @@
 
 package com.fssc.arflow.service;
 
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fssc.arflow.entity.ArStatement;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -134,14 +137,14 @@ public class ArStatementExcelService {
     }
 
     /** 导入并写入数据库（每客户一张对账单，走既有容差校验逻辑）。返回 {created, errors, billNos}。 */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> importAndSave(MultipartFile file, Long companyId) {
         ParseResult parsed = parse(file);
         int created = 0;
         List<String> billNos = new ArrayList<>();
         for (Map<String, Object> stmt : parsed.statements()) {
             try {
-                com.fssc.arflow.entity.ArStatement bill = new com.fssc.arflow.entity.ArStatement();
+                ArStatement bill = new ArStatement();
                 bill.setCustomerCode(String.valueOf(stmt.get("customerCode")));
                 Object name = stmt.get("customerName");
                 bill.setCustomerName(name == null ? null : String.valueOf(name));
@@ -155,12 +158,12 @@ public class ArStatementExcelService {
                 if (companyId != null) {
                     bill.setCompanyId(companyId);
                 }
-                com.fssc.arflow.entity.ArStatement saved = statementService.importBill(bill);
+                ArStatement saved = statementService.importBill(bill);
                 // 明细回写
                 try {
-                    com.fssc.arflow.entity.ArStatement u = new com.fssc.arflow.entity.ArStatement();
+                    ArStatement u = new ArStatement();
                     u.setId(saved.getId());
-                    u.setLinesJson(com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                    u.setLinesJson(JsonMapper.builder().build()
                             .writeValueAsString(stmt.get("lines")));
                     statementService.updateLinesJson(u);
                 } catch (Exception ignore) {

@@ -11,13 +11,13 @@ import lombok.Data;
  * 业务域（如报销）监听后执行核销/释放等收尾动作。
  * 事件携带流程变量 bizType/bizId/approved。
  *
- * <p>P0-5：新增 rejectType（驳回类型，仅驳回时非空）。
+ * <p>新增 rejectType（驳回类型，仅驳回时非空）。
  * <ul>
  *   <li>THROW_BACK（漏单驳回）：电子流直接送回申请人，仅可重传影像/改简字段，流程即刻终止</li>
  *   <li>GRADE_BY_GRADE（逐级驳回，默认）：按审批链逐级驳回，字段可全改</li>
  * </ul>
  *
- * <p>ROOT-17（2026-09-27）：新增 {@link #endType} 显式区分"驳回"与"申请人撤回"。
+ * <p>ROOT-17：新增 {@link #endType} 显式区分"驳回"与"申请人撤回"。
  * 此前唯一的判据是消费方拿 {@code comment} 与中文字面量「申请人撤回」做 {@code equals}
  * （{@code ExpenseWfEventListener:119}），而 {@code comment} 是给人看的文案：
  * 改一个字、或将来让撤回带自定义原因，收尾分支就静默走成"驳回"——单据状态、
@@ -33,7 +33,7 @@ public class WfProcessEndedEvent {
     /** 审批结果：true 通过 / false 驳回 */
     private Boolean approved;
     /**
-     * 租户ID（P0-1 架构修复）：流程结束事件脱离发起请求的租户上下文，
+     * 租户ID（架构修复）：流程结束事件脱离发起请求的租户上下文，
      * 若不在事件上携带租户，业务收尾（状态翻转/凭证生成）将在无租户上下文下执行，
      * 导致 MP 租户拦截器跳过 WHERE 条件或 TenantContext.getTenantId() fail-closed 抛异常。
      * 由 WfEngineFacade 从 wf_instance.tenant_id 填充，EventOrchestrationBus 据其重建上下文。
@@ -43,7 +43,7 @@ public class WfProcessEndedEvent {
     private String comment;
     /** 驳回类型：THROW_BACK 漏单驳回 / GRADE_BY_GRADE 逐级驳回；通过或未指定时为空 */
     private String rejectType;
-    /** Flowable 流程实例ID（V1.3.17 新增）：业务收尾可读流程变量，如跨法人调拨 targetCompanyId */
+    /** Flowable 流程实例ID（新增）：业务收尾可读流程变量，如跨法人调拨 targetCompanyId */
     private String procInstId;
     /**
      * 结束类型（ROOT-17）：仅"撤回"路径显式置 {@link #END_WITHDRAWN}；
@@ -52,11 +52,11 @@ public class WfProcessEndedEvent {
     private String endType;
 
     /**
-     * 办结本流程的<b>操作人</b>用户ID（P3-A2 前置件 · D-DEC-093，2026-10 未标级修复战役 K4 批）。
+     * 办结本流程的<b>操作人</b>用户ID（P3-A2 前置件 ·，2026-10 未标级修复战役 K4 批）。
      *
      * <p>为什么必须有：业务收尾要落"复核人/审核人"这类追责列（如 {@code exp_bill.audit_user_id}），
      * 而本事件此前只携带 bizType/bizId/approved/comment——收尾方拿不到"是谁点的最后一节"，
-     * 于是那些列建成建表以来恒 NULL（D-DEC-093：{@code audit_time}/{@code audit_user_id} 审完仍空）。
+     * 于是那些列建成建表以来恒 NULL（{@code audit_time}/{@code audit_user_id} 审完仍空）。
      *
      * <p><b>取值规则（硬约束，改动前请读全）</b>：只可来自 {@code WfEngineFacade.complete()} 的
      * {@code operUserId} 形参（人工办结链与超时自动通过链两处 {@code taskService.complete()}），
@@ -65,10 +65,10 @@ public class WfProcessEndedEvent {
      * {@code taskService.complete()} <b>内</b>同步触发本事件，而它自己的
      * {@code writeHistory(APPROVE)} 在 complete() <b>之后</b>才写——事件时刻末节办理行还没写入数据库，
      * 反查只会取到<b>上一节</b>的人，那是伪造追责证据（时序坑实证见
-     * {@code WfQueryService} 的 D-DEC-109 段与 {@code ExpenseWfEventListener} 的复核人注释）。
+     * {@code WfQueryService} 的 段与 {@code ExpenseWfEventListener} 的复核人注释）。
      *
      * <p><b>为空是合法状态</b>：机器路径（超时自动通过、候选组未认领）本就没有确定的人，
-     * 保持为空与 D-DEC-280「取不到就留空，绝不写猜测」同一规则；消费方不得把空值当"系统"回填。
+     * 保持为空与 「取不到就留空，绝不写猜测」同一规则；消费方不得把空值当"系统"回填。
      */
     private Long endOperUserId;
 

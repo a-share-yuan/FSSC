@@ -62,7 +62,7 @@
             <el-button link type="primary" size="small" @click.stop="openTrace(row)">查看</el-button>
           </template>
         </el-table-column>
-        <!-- ：数据为空时展示空态 -->
+        <!-- 数据为空时展示空态 -->
         <template #empty>
           <el-empty description="暂无预算执行明细，请调整查询条件后重试" />
         </template>
@@ -127,7 +127,7 @@ const canViewFlow = hasPerm('budget:occupy:list')
 
 const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// ---- 名称默认处理：后端未重启时 itemName 形如「预算项#96994 2026-COMPANY33-DEPT1302-ITEM335」，
+// 名称默认处理：后端未重启时 itemName 形如「预算项#96994 2026-COMPANY33-DEPT1302-ITEM335」，
 // 前端从 dimKey 解析出公司/部门/费用项 id，用主数据映射补名（后端重启后直接用返回的名称字段）
 function enrichRow(row) {
   const m = (row.dimKey || row.itemName || '').match(/COMPANY(\d+)-DEPT(\d+)-ITEM(\d+)/)
@@ -188,7 +188,7 @@ function resetFilter() {
   loadList()
 }
 
-// ---- 流水穿透 ----
+// 流水穿透
 const trace = reactive({ visible: false, loading: false, title: '', rows: [] })
 
 async function openTrace(row) {

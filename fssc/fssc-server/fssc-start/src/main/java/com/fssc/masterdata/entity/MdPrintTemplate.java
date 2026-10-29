@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 打印模板头（V1.4.81，套打平台 / 单据设计器）。
+ * 打印模板头（套打平台 / 单据设计器）。
  *
  * <p><b>为什么建这张表</b>：此前全仓 print_template 零命中，5 套打印模板硬编码在
  * {@code fssc-web/src/composables/usePrintTemplate.js} 的 TEMPLATES 常量里。

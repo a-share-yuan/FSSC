@@ -17,10 +17,10 @@
  *       但缺键时回落本地常量，不把英文码放上台面。
  *
  * 用法（Vue3 setup）：
- *   const dict = useDict('wf_node_multi_type', MULTI_TYPE)   // 传入本地常量作默认处理
- *   dict.label(v)          // 取标签（同步，永不返回 undefined）
- *   dict.load()            // 挂载时调一次（或用 onMounted(dict.load)）
- *   dict.options           // 下拉用 [{value,label,cssClass}]，字典未到时来自本地常量
+ *   const dict = useDict('wf_node_multi_type', MULTI_TYPE) // 传入本地常量作默认处理
+ *   dict.label(v) // 取标签（同步，永不返回 undefined）
+ *   dict.load() // 挂载时调一次（或用 onMounted(dict.load)）
+ *   dict.options // 下拉用 [{value,label,cssClass}]，字典未到时来自本地常量
  *
  * 【2026-10-15 前置A 双通道设计】
  *   system:dict:list 只授予 CONFIG_ADMIN/IT_ADMIN，业务角色读不到 ⇒ 新增免权限端点
@@ -29,7 +29,7 @@
  *     ② 失败/为空 ⇒ 回退带权限通道（管理员可用，兼容"端点尚未部署"的过渡期）
  *   这样后端未重启时 404 ⇒ 自动走 ②，行为与改造前完全一致；重启后自动切到 ①。
  *
- *  本层是**纯增量**：不修改 enums.js / billStatus.js 的任何既有导出，
+ * 本层是**纯增量**：不修改 enums.js / billStatus.js 的任何既有导出，
  *    消费方按需引入即可，不引用的地方行为完全不变。
  */
 import { ref, computed } from 'vue'
@@ -44,7 +44,7 @@ const failed = {}
 /**
  * 把字典数据行转成 {value,label,cssClass} 形态。
  *
- *  **字段名必须兼容驼峰与下划线两种形态**（2026-10-15 实测踩过）：
+ * **字段名必须兼容驼峰与下划线两种形态**（2026-10-15 实测踩过）：
  *   后端 `/dict/data/list` 返回的是 **Jackson 默认驼峰**（dictValue/dictLabel/cssClass/delFlag），
  *   而库里列名是下划线（dict_value/dict_label/css_class/del_flag）。
  *   只按下划线取值 ⇒ 全部读成 undefined ⇒ 字典项全空 ⇒ 界面比不办结更糟。
@@ -221,7 +221,7 @@ export async function preloadBuiltinDicts(types) {
 /**
  * 逐个拉取（批量通道不可用时的默认处理，也是改造前的原有行为）。
  *
- *  必须**限并发**：第 4 批后待预热的有 67 个字典，Promise.all 一把梭就是 67 个并发请求，
+ * 必须**限并发**：第 4 批后待预热的有 67 个字典，Promise.all 一把梭就是 67 个并发请求，
  *    登录首屏直接把浏览器连接池和后端打满（表现为其它接口排队、首屏明显变慢）。
  *    分成每批 6 个串行推进，总耗时仍远小于一次页面加载，但不会挤占业务请求。
  */

@@ -13,6 +13,7 @@ import com.fssc.workflow.entity.WfTask;
 import com.fssc.workflow.mapper.WfNodeConfigMapper;
 import com.fssc.workflow.mapper.WfTaskMapper;
 import com.fssc.workflow.mapper.WfFlowConfigMapper;
+import com.fssc.workflow.service.WfNodeConfigResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,7 +46,7 @@ public class WfTimeoutController {
     private final WfNodeConfigMapper wfNodeConfigMapper;
     private final WfFlowConfigMapper wfFlowConfigMapper;
     /** 节点键解析（含 Task_N → 业务节点默认处理映射），与超时催办 Job 共用同一实现 */
-    private final com.fssc.workflow.service.WfNodeConfigResolver wfNodeConfigResolver;
+    private final WfNodeConfigResolver wfNodeConfigResolver;
 
     /**
      * 超时统计：返回总待办数、已超时数、未超时数、平均处理时长。

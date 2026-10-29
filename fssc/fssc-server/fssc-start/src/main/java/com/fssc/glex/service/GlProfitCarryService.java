@@ -6,11 +6,14 @@ package com.fssc.glex.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.gl.service.GlService;
 import com.fssc.glex.entity.GlMonthClose;
 import com.fssc.glex.mapper.GlMonthCloseMapper;
+import com.fssc.masterdata.entity.MdPeriod;
 import com.fssc.masterdata.entity.MdSubject;
+import com.fssc.masterdata.mapper.MdPeriodMapper;
 import com.fssc.masterdata.mapper.MdSubjectMapper;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
@@ -18,6 +21,8 @@ import com.fssc.sharing.mapper.OpVoucherLineMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
 import com.fssc.sharing.service.VoucherService;
 import com.fssc.framework.org.OrgGuard;
+import com.fssc.system.service.NumberRuleService;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,7 +38,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 损益结转服务（ 2026-09-14）：把原内嵌于月结的损益结转逻辑抽为可独立执行的 service 动作。
+ * 损益结转服务：把原内嵌于月结的损益结转逻辑抽为可独立执行的 service 动作。
  * <p>
  * 规则：对指定公司+期间的<b>损益类科目</b>（科目编码以 6 开头，md_subject.subject_code 前缀判定，
  * 按当期总账发生额 net = 借 − 贷）生成结转凭证，余额结转至 本年利润(4103)：
@@ -66,15 +71,15 @@ public class GlProfitCarryService {
     private final GlService glService;
     private final VoucherService voucherService;
     private final OrgGuard orgGuard;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
+    private final NumberRuleService numberRuleService;
     private final GlMonthCloseMapper glMonthCloseMapper;
-    /** R5-D-168：损益结转的期间态前置校验（已关账期间快拒，不再跑全量损益计算后才被拒） */
-    private final com.fssc.masterdata.mapper.MdPeriodMapper mdPeriodMapper;
+    /** 损益结转的期间态前置校验（已关账期间快拒，不再跑全量损益计算后才被拒） */
+    private final MdPeriodMapper mdPeriodMapper;
 
     /**
      * 执行损益结转：对 公司+期间 的损益类科目生成并过账结转凭证，回写最近一条月结记录的 voucher_no（如有）。
      *
-     * @param period    会计期间 yyyyMM
+     * @param period 会计期间 yyyyMM
      * @param companyId 结转公司（空则 1，与月结 close 同一规则）
      * @return 结转结果摘要（voucherId/voucherNo/期间/借方合计/贷方合计/结转科目数）
      */
@@ -89,13 +94,13 @@ public class GlProfitCarryService {
         Long comp = companyId != null ? companyId : 1L;
         orgGuard.assertVisible(comp, null);
 
-        // R5-D-168：期间态前置校验——已关账(CLOSED)期间直接早退。原实现把 glService.balance 全量损益
+        // 期间态前置校验——已关账(CLOSED)期间直接早退。原实现把 glService.balance 全量损益
         // 计算跑完才在关账侧被拒（记录实测拒绝耗时 20,003ms），用户等 20s 才拿到一句拒绝。
-        com.fssc.masterdata.entity.MdPeriod periodRow = mdPeriodMapper.selectOne(
-                new LambdaQueryWrapper<com.fssc.masterdata.entity.MdPeriod>()
-                        .eq(com.fssc.masterdata.entity.MdPeriod::getCompanyId, comp)
-                        .eq(com.fssc.masterdata.entity.MdPeriod::getPeriodYear, year)
-                        .eq(com.fssc.masterdata.entity.MdPeriod::getPeriodMonth, month)
+        MdPeriod periodRow = mdPeriodMapper.selectOne(
+                new LambdaQueryWrapper<MdPeriod>()
+                        .eq(MdPeriod::getCompanyId, comp)
+                        .eq(MdPeriod::getPeriodYear, year)
+                        .eq(MdPeriod::getPeriodMonth, month)
                         .last("limit 1"));
         if (periodRow != null && "CLOSED".equals(periodRow.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -200,14 +205,14 @@ public class GlProfitCarryService {
         opVoucherMapper.updateById(upd);
 
         // 立即过账（含末级科目/辅助/借贷平衡校验 + 落总账），保证月结试算/关账包含结转影响
-        Long operUser = com.fssc.framework.security.UserContext.get() == null
-                ? null : com.fssc.framework.security.UserContext.get().getUserId();
-        // D-DEC-166：结转凭证由本次操作的会计当场生成、当场入账（create_by＝过账人），
+        Long operUser = UserContext.get() == null
+                ? null : UserContext.get().getUserId();
+        // 结转凭证由本次操作的会计当场生成、当场入账（create_by＝过账人），
         // 属无人工审核环节的系统机制凭证，走系统过账口，否则损益结转被自家制审分离校验自锁。
         voucherService.postSystem(v.getId(), operUser);
 
         // 回写最近一条月结记录的结转凭证号（便于追溯；UNCLOSED 日志行不回写）
-        // D-DEC-189 连带：月结发起态由 CLOSED 改为 RUNNING（末节点通过才 CLOSED），若仍只认 CLOSED，
+        // 连带：月结发起态由 CLOSED 改为 RUNNING（末节点通过才 CLOSED），若仍只认 CLOSED，
         // 在月结审批在途期间做的损益结转就找不到落点、凭证号不回写。改为「已结/在途/审批通过未关账」
         // 三态取最新一条，查询范围与月结单本身一致。
         GlMonthClose latest = glMonthCloseMapper.selectOne(new LambdaQueryWrapper<GlMonthClose>()
@@ -250,7 +255,7 @@ public class GlProfitCarryService {
         l.setDirection(direction);
         l.setAmount(amount);
         l.setCurrencyCode("CNY");
-        l.setCreateTime(java.time.LocalDateTime.now());
+        l.setCreateTime(LocalDateTime.now());
         return l;
     }
 

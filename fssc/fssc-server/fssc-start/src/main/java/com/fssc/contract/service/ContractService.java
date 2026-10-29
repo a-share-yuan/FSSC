@@ -2,6 +2,11 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 package com.fssc.contract.service;
+import com.fssc.audit.service.AuditTrailService;
+import com.fssc.contract.entity.ContPayCondition;
+import com.fssc.contract.entity.ContPayRecord;
+import com.fssc.contract.mapper.ContPayConditionMapper;
+import com.fssc.contract.mapper.ContPayRecordMapper;
 import com.fssc.framework.security.UserContext;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -18,7 +23,11 @@ import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.DataScopeKit;
 import com.fssc.framework.security.annotation.DataScope;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.sharing.service.VoucherService;
 import com.fssc.system.service.NumberRuleService;
+import com.fssc.workflow.service.WfEngineFacade;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,7 +44,7 @@ import java.time.LocalDate;
  *   <li>无固定金额（长期协议/以量定额）合同不控制预算</li>
  * </ul>
  *
- * <p>D-DEC-329（X-09，乙）：合同审批存在两条链并存——本类的<b>手工直批环节</b>（approve/reject，落 EFFECTIVE/DRAFT）
+ * <p>（X-09，乙）：合同审批存在两条链并存——本类的<b>手工直批环节</b>（approve/reject，落 EFFECTIVE/DRAFT）
  * 与 Flowable 的<b>流程环节</b>（submit 起流程，收尾在 ContractBizAction，落 APPROVED/REJECTED）。裁定<b>不归一</b>，
  * 改为各补状态互斥校验：直批环节执行前必须"已提交且不在流程在途"（{@link #assertNotInFlow}，服务端可阻断）；
  * 反向那一半（流程收尾不得覆写已被直批处理的单）落在 workflow/action/{@code ContractBizAction}，本波禁改，已回主窗。
@@ -46,19 +55,19 @@ import java.time.LocalDate;
 public class ContractService {
 
     private final ContContractMapper mapper;
-    /** D-V4R-91：付款条件/支付记录子表写入办结到本 Service，两个 Mapper 由 Controller 直连改为经此校验 */
-    private final com.fssc.contract.mapper.ContPayConditionMapper payConditionMapper;
-    private final com.fssc.contract.mapper.ContPayRecordMapper payRecordMapper;
+    /** 付款条件/支付记录子表写入办结到本 Service，两个 Mapper 由 Controller 直连改为经此校验 */
+    private final ContPayConditionMapper payConditionMapper;
+    private final ContPayRecordMapper payRecordMapper;
     private final BudgetService budgetService;
-    private final com.fssc.sharing.service.VoucherService voucherService;
-    private final com.fssc.workflow.service.WfEngineFacade wfEngineFacade;
-    /** 组织合法性守卫（V1.3.20 安全审计①）：读路径公司隔离 + 写路径公司归属校验 */
+    private final VoucherService voucherService;
+    private final WfEngineFacade wfEngineFacade;
+    /** 组织合法性守卫（安全审计①）：读路径公司隔离 + 写路径公司归属校验 */
     private final OrgGuard orgGuard;
     /** 编号规则取号（合同号等主数据编号的唯一正经来源） */
     private final NumberRuleService numberRuleService;
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** 合同审批流业务类型：提交起流程与直批环节的在途互斥判据共用同一字面量（D-DEC-329） */
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
+    /** 合同审批流业务类型：提交起流程与直批环节的在途互斥判据共用同一字面量 */
     private static final String CONTRACT_BIZ_TYPE = "CONTRACT_APPROVE";
 
     @DataScope("合同列表数据范围")
@@ -88,7 +97,7 @@ public class ContractService {
             throw new BizException(ErrorCode.PARAM_INVALID, "合同总额必填（勾选「无固定金额」时可留空）");
         }
         assertDateOrder(e.getBeginDate(), e.getEndDate());
-        // D-CON-1：前端「签订公司」下拉常只回传名称而 companyId 缺省 → cont_contract.company_id=NULL，
+        // 前端「签订公司」下拉常只回传名称而 companyId 缺省 → cont_contract.company_id=NULL，
         // 列表按 DataScope 过滤公司，新建合同随即"隐身"。写守卫本就要求单据公司==登录公司，
         // 故缺省按当前登录人公司回填，杜绝 NULL 归属。
         if (e.getCompanyId() == null) {
@@ -138,7 +147,7 @@ public class ContractService {
     }
 
     /**
-     * D-DEC-329（X-09，乙）：废弃/终止类动作走配置状态，不留按钮旁路。
+     * X-09，乙：废弃/终止类动作走配置状态，不留按钮旁路。
      * 改前此处直接 deleteById ⇒ 审批中的单可被删掉（流程任务变悬空）、已生效/已审批的单可绕过
      * 「手工关闭」把已冻结的预算与已生成的凭证留在原地。现只允许未生效的草稿/已驳回作废。
      */
@@ -162,10 +171,10 @@ public class ContractService {
     public void submit(Long id) {
         ContContract c = require(id);
         if (!"DRAFT".equals(c.getStatus())) throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿可提交");
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", c.getStatus());
         setStatus(id, "APPROVING");
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "APPROVING");
         auditTrailService.recordUpdate("CONTRACT", id, c.getContractNo(), "cont_contract",
                 String.valueOf(id), auditBefore, auditAfter, "提交审批");
@@ -179,10 +188,10 @@ public class ContractService {
         ContContract c = require(id);
         if (!"APPROVING".equals(c.getStatus())) throw new BizException(ErrorCode.PARAM_INVALID, "仅审批中可审批通过");
         assertNotInFlow(id, "审批通过");
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", c.getStatus());
         setStatus(id, "EFFECTIVE");
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "EFFECTIVE");
         auditTrailService.recordUpdate("CONTRACT", id, c.getContractNo(), "cont_contract",
                 String.valueOf(id), auditBefore, auditAfter, "审批通过");
@@ -202,17 +211,17 @@ public class ContractService {
         ContContract c = require(id);
         if (!"APPROVING".equals(c.getStatus())) throw new BizException(ErrorCode.PARAM_INVALID, "仅审批中可驳回");
         assertNotInFlow(id, "驳回");
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", c.getStatus());
         setStatus(id, "DRAFT");
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "DRAFT");
         auditTrailService.recordUpdate("CONTRACT", id, c.getContractNo(), "cont_contract",
                 String.valueOf(id), auditBefore, auditAfter, "审批驳回");
     }
 
     /**
-     * D-CON-01：驳回合同编辑重提 REJECTED → DRAFT（对齐 exp_bill returnToEdit 的乙方案——
+     * 驳回合同编辑重提 REJECTED → DRAFT（对齐 exp_bill returnToEdit 的乙方案——
      * REJECTED 保留作历史，重提走显式端点回草稿后修改，再经 submit 起【新】流程实例）。
      */
     public void returnToEdit(Long id) {
@@ -220,10 +229,10 @@ public class ContractService {
         if (!"REJECTED".equals(c.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "仅已驳回合同可编辑重提，当前状态: " + c.getStatus());
         }
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", c.getStatus());
         setStatus(id, "DRAFT");
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "DRAFT");
         auditTrailService.recordUpdate("CONTRACT", id, c.getContractNo(), "cont_contract",
                 String.valueOf(id), auditBefore, auditAfter, "驳回后编辑重提");
@@ -233,11 +242,11 @@ public class ContractService {
     public void close(Long id) {
         ContContract c = require(id);
         if (!"EFFECTIVE".equals(c.getStatus())) throw new BizException(ErrorCode.PARAM_INVALID, "仅生效合同可关闭");
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", c.getStatus());
         releaseBudget(c);
         setStatus(id, "CLOSED");
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "CLOSED");
         auditTrailService.recordUpdate("CONTRACT", id, c.getContractNo(), "cont_contract",
                 String.valueOf(id), auditBefore, auditAfter, "手工关闭");
@@ -247,11 +256,11 @@ public class ContractService {
     public Long change(Long id) {
         ContContract c = require(id);
         if (!"EFFECTIVE".equals(c.getStatus())) throw new BizException(ErrorCode.PARAM_INVALID, "仅生效合同可发起变更");
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", c.getStatus());
         releaseBudget(c);
         setStatus(id, "CLOSED");
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "CLOSED");
         auditTrailService.recordUpdate("CONTRACT", id, c.getContractNo(), "cont_contract",
                 String.valueOf(id), auditBefore, auditAfter, "合同变更（原合同关闭）");
@@ -275,7 +284,7 @@ public class ContractService {
         return c.getId();
     }
 
-    // ---------------- 预算冻结 / 释放 ----------------
+    // 预算冻结 / 释放
 
     /** 预算行年度就近匹配用；冻结与释放取同一入参，保证占用/释放落在同一预算行 */
     private static Integer budgetYearOf(ContContract c) {
@@ -353,7 +362,7 @@ public class ContractService {
     }
 
     /**
-     * D-DEC-329（X-09，乙）：两条审批链并存<b>不归一</b>，改为各补一道服务端状态互斥校验。
+     * X-09，乙：两条审批链并存<b>不归一</b>，改为各补一道服务端状态互斥校验。
      * 本方法是<b>手工直批环节</b>的校验：单据除"已提交（APPROVING）"外还必须<b>不在审批流在途</b>才可执行——
      * 有在办流程任务说明这张单正由待办人签核，直批会把流程结论架空（同一张单两个结论、凭证重复生成）。
      * 可阻断的前置校验，不是文案提示；引擎查询异常时按"在途"处置（fail-closed，拿不准就不动）。
@@ -386,7 +395,7 @@ public class ContractService {
         mapper.updateById(u);
     }
 
-    // ================= D-V4R-91：付款条件 / 支付记录子表入库校验 =================
+    // 付款条件 / 支付记录子表入库校验
     // 背景：这两个子表此前由 ContractController 直接 conditionMapper.insert(c) /
     //      recordMapper.insert(r) 裸写，**零校验**（同文件主表 create 却有完整断言），
     //      可灌入「计划额 99999999」的付款条件或「付款金额 0 / 负数」的台账记录，
@@ -395,7 +404,7 @@ public class ContractService {
     //      合同归属（orgGuard，防跨公司挂靠）、计划额不超合同总额。
 
     /** 合同付款条件新增：写入数据库前必须过合同归属 + 节点必填 + 金额>0 + 不超合同总额 四道校验 */
-    public Long createPayCondition(com.fssc.contract.entity.ContPayCondition c) {
+    public Long createPayCondition(ContPayCondition c) {
         if (c.getContractId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "付款条件必须挂在某份合同下");
         }
@@ -424,7 +433,7 @@ public class ContractService {
     }
 
     /** 支付记录（台账）新增：金额>0 + 结算量/单价非负 + 合同归属 + 累计已付不超合同总额 */
-    public Long createPayRecord(com.fssc.contract.entity.ContPayRecord r) {
+    public Long createPayRecord(ContPayRecord r) {
         if (r.getContractId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "支付记录必须挂在某份合同下");
         }
@@ -456,30 +465,30 @@ public class ContractService {
 
     /** 既有付款条件计划额合计（excludeId 非空时排除自身，供编辑场景复用） */
     private BigDecimal payConditionSum(Long contractId, Long excludeId) {
-        LambdaQueryWrapper<com.fssc.contract.entity.ContPayCondition> qw =
-                new LambdaQueryWrapper<com.fssc.contract.entity.ContPayCondition>()
-                        .eq(com.fssc.contract.entity.ContPayCondition::getContractId, contractId)
-                        .select(com.fssc.contract.entity.ContPayCondition::getPayAmount);
+        LambdaQueryWrapper<ContPayCondition> qw =
+                new LambdaQueryWrapper<ContPayCondition>()
+                        .eq(ContPayCondition::getContractId, contractId)
+                        .select(ContPayCondition::getPayAmount);
         if (excludeId != null) {
-            qw.ne(com.fssc.contract.entity.ContPayCondition::getId, excludeId);
+            qw.ne(ContPayCondition::getId, excludeId);
         }
         return payConditionMapper.selectList(qw).stream()
-                .map(com.fssc.contract.entity.ContPayCondition::getPayAmount)
+                .map(ContPayCondition::getPayAmount)
                 .map(ContractService::nzZero)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /** 既有支付记录已付合计（excludeId 非空时排除自身） */
     private BigDecimal payRecordSum(Long contractId, Long excludeId) {
-        LambdaQueryWrapper<com.fssc.contract.entity.ContPayRecord> qw =
-                new LambdaQueryWrapper<com.fssc.contract.entity.ContPayRecord>()
-                        .eq(com.fssc.contract.entity.ContPayRecord::getContractId, contractId)
-                        .select(com.fssc.contract.entity.ContPayRecord::getPayAmount);
+        LambdaQueryWrapper<ContPayRecord> qw =
+                new LambdaQueryWrapper<ContPayRecord>()
+                        .eq(ContPayRecord::getContractId, contractId)
+                        .select(ContPayRecord::getPayAmount);
         if (excludeId != null) {
-            qw.ne(com.fssc.contract.entity.ContPayRecord::getId, excludeId);
+            qw.ne(ContPayRecord::getId, excludeId);
         }
         return payRecordMapper.selectList(qw).stream()
-                .map(com.fssc.contract.entity.ContPayRecord::getPayAmount)
+                .map(ContPayRecord::getPayAmount)
                 .map(ContractService::nzZero)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }

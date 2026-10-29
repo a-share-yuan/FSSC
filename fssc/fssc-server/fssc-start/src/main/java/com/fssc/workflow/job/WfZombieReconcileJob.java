@@ -3,9 +3,13 @@
 
 package com.fssc.workflow.job;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.common.core.Result;
 import com.fssc.framework.job.JobHeartbeatService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import java.time.Duration;
+import java.util.Map;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.fssc.framework.tenant.TenantContext;
@@ -23,7 +27,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * D-WF-14（2026-10-19 人工测试 G册实测修）：<b>流程实例与单据状态的双向收敛对账Job</b>。
+ * （2026-10-19 人工测试 G册实测修）：<b>流程实例与单据状态的双向收敛对账Job</b>。
  *
  * <h3>要解决的实测问题</h3>
  * 本次人工测试发现 6 条「流程与单据状态脱节」的 RUNNING 实例：
@@ -53,7 +57,7 @@ import java.util.List;
  *   <li><b>读不到即放行</b>：单据表/列读不到时 fail-open（不撤销）——
  *       <b>误杀正在办的单，远比留一个僵尸实例严重</b>；</li>
  *   <li><b>成熟期门槛</b>：只处理创建已满 {@code min-age-minutes} 的实例
- *       （默认 30 分钟），避开「刚提交还没写完状态」的瞬时窗口；</li>
+ *       默认 30 分钟，避开「刚提交还没写完状态」的瞬时窗口；</li>
  *   <li><b>分布式单跑</b>：多实例部署时用 {@link DistributedState} 抢锁，保证一个集群只有一个节点在扫。</li>
  * </ol>
  *
@@ -99,10 +103,10 @@ public class WfZombieReconcileJob {
     @PostMapping("/api/tenant/wf/zombie-reconcile/run")
     @RequiresPerm("wf:instance:admin")
     @OperLog(module = "WF", operType = "OTHER", desc = "手工触发僵尸流程实例对账")
-    public com.fssc.common.core.Result<java.util.Map<String, Object>> runNow() {
+    public Result<Map<String, Object>> runNow() {
         int[] stat = new int[3]; // [0]=最终状态办结 [1]=未提交办结 [2]=跳过
         jobHeartbeatService.run("WfZombieReconcileJob", () -> doReconcile(stat));
-        return com.fssc.common.core.Result.success(java.util.Map.of(
+        return Result.success(Map.of(
                 "terminalClosed", stat[0],
                 "draftClosed", stat[1],
                 "skipped", stat[2]));
@@ -116,7 +120,7 @@ public class WfZombieReconcileJob {
         }
         jobHeartbeatService.run("WfZombieReconcileJob", () -> {
             try {
-                if (!distributedState.tryLock("wf:zombie-reconcile", java.time.Duration.ofMinutes(30))) {
+                if (!distributedState.tryLock("wf:zombie-reconcile", Duration.ofMinutes(30))) {
                     log.info("[僵尸实例对账] 其他节点正在执行，本次跳过");
                     return;
                 }
@@ -137,7 +141,7 @@ public class WfZombieReconcileJob {
         // 多租户：RUNNING 实例跨租户，先在忽略租户上下文里捞全量
         TenantContext.runIgnoreTenant(() ->
                 holder[0] = wfInstanceMapper.selectList(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WfInstance>()
+                        new LambdaQueryWrapper<WfInstance>()
                                 .eq(WfInstance::getStatus, "RUNNING")
                                 .isNotNull(WfInstance::getProcInstId)
                                 .lt(WfInstance::getCreateTime, before)

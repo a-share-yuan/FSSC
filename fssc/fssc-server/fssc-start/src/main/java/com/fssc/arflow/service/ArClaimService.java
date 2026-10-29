@@ -6,12 +6,24 @@ package com.fssc.arflow.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.arflow.entity.ArClaim;
 import com.fssc.arflow.mapper.ArClaimMapper;
+import com.fssc.arflow.service.ArDispatchService;
+import com.fssc.arflow.service.ArFlowVoucherService;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.customer.entity.CrmCustomer;
 import com.fssc.customer.mapper.CrmCustomerMapper;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
+import com.fssc.system.service.PeriodLockService;
+import com.fssc.workflow.service.WfEngineFacade;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,16 +45,16 @@ import java.util.UUID;
 public class ArClaimService {
 
     private final ArClaimMapper mapper;
-    private final com.fssc.arflow.service.ArDispatchService arDispatchService;
+    private final ArDispatchService arDispatchService;
 
-    private final com.fssc.system.service.PeriodLockService periodLockService;
+    private final PeriodLockService periodLockService;
     private final RcReceivableMapper receivableMapper;
     private final CrmCustomerMapper customerMapper;
-    private final com.fssc.arflow.service.ArFlowVoucherService voucherService;
-    private final com.fssc.workflow.service.WfEngineFacade wfEngineFacade;
+    private final ArFlowVoucherService voucherService;
+    private final WfEngineFacade wfEngineFacade;
 
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /** Flowable 首节点审批人默认处理（无 Web 上下文的系统调用才落到平台管理员；见 currentOperator） */
     private static final Long FLOW_APPROVER_ID = 1L;
@@ -52,7 +64,7 @@ public class ArClaimService {
      * 发起/OA代审批的操作人一律取当前登录用户；仅无 Web 上下文（定时/系统任务）才默认处理平台管理员。
      */
     private static Long currentOperator() {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         return (u != null && u.getUserId() != null) ? u.getUserId() : FLOW_APPROVER_ID;
     }
 
@@ -60,9 +72,9 @@ public class ArClaimService {
     public ArClaim create(ArClaim c) {
 
         // 蓝图规则6.5：账期已被月结关闭时禁止录入当月业务
-        periodLockService.assertNotLocked(c.getCompanyId(), java.time.YearMonth.now().toString(), "录入服务申请");
+        periodLockService.assertNotLocked(c.getCompanyId(), YearMonth.now().toString(), "录入服务申请");
         c.setId(null);
-        c.setBillNo("ARC" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+        c.setBillNo("ARC" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + UUID.randomUUID().toString().substring(0, 4).toUpperCase());
         if (c.getAmount() == null || c.getAmount().signum() <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "申请金额必须大于0");
@@ -147,9 +159,9 @@ public class ArClaimService {
             String auditDegradeBeforeStatus = c.getStatus();
             c.setStatus(ArClaim.ST_PENDING_DISPATCH);
             mapper.updateById(c);
-            java.util.Map<String, Object> auditDegradeBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditDegradeBefore = new LinkedHashMap<>();
             auditDegradeBefore.put("status", auditDegradeBeforeStatus);
-            java.util.Map<String, Object> auditDegradeAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditDegradeAfter = new LinkedHashMap<>();
             auditDegradeAfter.put("status", c.getStatus());
             auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
                     String.valueOf(c.getId()), auditDegradeBefore, auditDegradeAfter, "OA审批通过（无流程实例降级过渡）");
@@ -168,9 +180,9 @@ public class ArClaimService {
         fresh.setStatus(ArClaim.ST_DISPATCHED); // 审批通过即自动派工（单据级语义保持）
         fresh.setDispatchTime(LocalDateTime.now());
         mapper.updateById(fresh);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", fresh.getStatus());
         auditTrailService.recordUpdate("AR_CLAIM", fresh.getId(), fresh.getBillNo(), "ar_claim",
                 String.valueOf(fresh.getId()), auditBefore, auditAfter, "OA审批通过自动派工");
@@ -190,10 +202,10 @@ public class ArClaimService {
         c.setStatus(ArClaim.ST_DISPATCHED);
         c.setDispatchTime(LocalDateTime.now());
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("handler", auditOldHandler);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("handler", c.getHandler());
         auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
@@ -246,10 +258,10 @@ public class ArClaimService {
             c.setUnfreezeResult("订单 " + c.getOrderNo() + " 已解冻（ERP返回）");
         }
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("voucherNo", auditOldVoucherNo);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("voucherNo", c.getVoucherNo());
         auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
@@ -269,10 +281,10 @@ public class ArClaimService {
         c.setRemark((c.getRemark() == null ? "" : c.getRemark() + " | ") + "驳回:" + reason);
         c.setStatus(ArClaim.ST_REJECTED);
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("remark", c.getRemark());
         auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
@@ -296,10 +308,10 @@ public class ArClaimService {
         c.setRemark((c.getRemark() == null ? "" : c.getRemark() + " | ")
                 + "暂估已冲回（红字凭证 " + redVoucherNo + "）");
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("reverseFlag", auditOldReverseFlag);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", c.getStatus());
         auditAfter.put("reverseFlag", c.getReverseFlag());
         auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
@@ -317,8 +329,8 @@ public class ArClaimService {
         c.setStatus(ArClaim.ST_COMPLETED);
         mapper.updateById(c);
         auditTrailService.recordUpdate("AR_CLAIM", c.getId(), c.getBillNo(), "ar_claim",
-                String.valueOf(c.getId()), java.util.Collections.singletonMap("status", auditOldStatus),
-                java.util.Collections.singletonMap("status", c.getStatus()), "归档完成");
+                String.valueOf(c.getId()), Collections.singletonMap("status", auditOldStatus),
+                Collections.singletonMap("status", c.getStatus()), "归档完成");
         return c;
     }
 
@@ -340,7 +352,7 @@ public class ArClaimService {
         return require(id);
     }
 
-    // ---------------- 附件四/附件五默认值 ----------------
+    // 附件四/附件五默认值
 
     /** SEC-02: 中和 <script> 块与内联事件载荷；普通文本（含合法 <、>）不受影响 */
     private static void sanitizeText(ArClaim c) {
@@ -379,7 +391,7 @@ public class ArClaimService {
                 c.setTaxAccount(ArClaimAccounts.NOTE_DISCOUNT_TAX);
             }
             case ArClaim.T_REVENUE_EST -> {
-                // R5-D-095：收入暂估默认科目（借 1122 应收账款 / 贷 6001 主营业务收入），原实现落 default 科目全空
+                // 收入暂估默认科目（借 1122 应收账款 / 贷 6001 主营业务收入），原实现落 default 科目全空
                 c.setDebitAccount("1122");
                 c.setCreditAccount("6001");
             }
@@ -409,11 +421,11 @@ public class ArClaimService {
         c.setCreditAccount(creditAccount.trim());
         c.setTaxAccount(taxAccount == null || taxAccount.isBlank() ? null : taxAccount.trim());
         mapper.updateById(c);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("debitAccount", oldDebit);
         auditBefore.put("creditAccount", oldCredit);
         auditBefore.put("taxAccount", oldTax);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("debitAccount", c.getDebitAccount());
         auditAfter.put("creditAccount", c.getCreditAccount());
         auditAfter.put("taxAccount", c.getTaxAccount());

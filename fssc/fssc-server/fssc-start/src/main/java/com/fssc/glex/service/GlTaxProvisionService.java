@@ -8,12 +8,23 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.gl.entity.GlEntry;
+import com.fssc.gl.mapper.GlEntryMapper;
 import com.fssc.glex.entity.GlTaxProvision;
 import com.fssc.glex.mapper.GlTaxProvisionMapper;
+import com.fssc.sharing.entity.OpVoucher;
+import com.fssc.sharing.mapper.OpVoucherMapper;
 import com.fssc.workflow.entity.WfInstance;
+import com.fssc.workflow.mapper.WfInstanceMapper;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,13 +46,13 @@ public class GlTaxProvisionService {
 
     private final GlTaxProvisionMapper mapper;
     private final WfEngineFacade wfEngineFacade;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
-    /** D-DEC-135：漏挂断言与挂接核查只读流程实例表（wf_instance），不改引擎、不写引擎 */
-    private final com.fssc.workflow.mapper.WfInstanceMapper wfInstanceMapper;
-    /** D-DEC-135：挂接核查按 source_doc_type + source_doc_id 查真实凭证（op_voucher） */
-    private final com.fssc.sharing.mapper.OpVoucherMapper opVoucherMapper;
-    // R5-D-154：挂接核查再往下探一层——凭证出了但 op_gl_entry 零分录即「应落未落」，只读探测，不写任何表
-    private final com.fssc.gl.mapper.GlEntryMapper glEntryMapper;
+    private final OrgGuard orgGuard;
+    /** 漏挂断言与挂接核查只读流程实例表（wf_instance），不改引擎、不写引擎 */
+    private final WfInstanceMapper wfInstanceMapper;
+    /** 挂接核查按 source_doc_type + source_doc_id 查真实凭证（op_voucher） */
+    private final OpVoucherMapper opVoucherMapper;
+    // 挂接核查再往下探一层——凭证出了但 op_gl_entry 零分录即「应落未落」，只读探测，不写任何表
+    private final GlEntryMapper glEntryMapper;
 
     /** 税率常量：增值税13%、附加12%、所得税25%（百分比） */
     private static final BigDecimal RATE_VAT = new BigDecimal("13.00");
@@ -72,7 +83,7 @@ public class GlTaxProvisionService {
     /**
      * 按期间批量计提税金：对增值税/附加/所得税各计提一条，税额=计税基数×税率，
      * 关联科目并生成凭证号。
-     * <p><b>D-DEC-135 整改（2026-10-01）：逐条起流，不再"3 条记录只挂第 1 条"</b>。
+     * <p><b>整改：逐条起流，不再"3 条记录只挂第 1 条"</b>。
      * 整改前循环落 3 行后只以 {@code created.get(0).getId()} 起一条 GL_TAX_PROV，
      * 另两条（附加 1,440 + 所得税 12,500＝13,940 元）无流程、无审批、无凭证；
      * 且流程金额取三条合计（26,940）而审批屏展示第 1 条（13,000），审批人审的与被背书的不是同一件事。
@@ -102,10 +113,10 @@ public class GlTaxProvisionService {
             e.setSubjectId(spec.subjectId);
             e.setBaseAmount(spec.baseAmount);
             e.setRate(spec.rate);
-            // P0-3 税金金额公式强校验：taxAmount = baseAmount × rate / 100（四舍五入取 2 位）
+            // 税金金额公式强校验：taxAmount = baseAmount × rate / 100（四舍五入取 2 位）
             e.setTaxAmount(calcTaxAmount(spec.baseAmount, spec.rate));
             e.setProvisionNo("TX" + period + String.format("%03d", seq++));
-            // D-DEC-136：提交只建在途态——旧写法 insert 前硬置 POSTED＋预造 GLTX 号＝提交瞬间即最终状态、
+            // 提交只建在途态——旧写法 insert 前硬置 POSTED＋预造 GLTX 号＝提交瞬间即最终状态、
             // 审批链退化为事后追认。最终状态（POSTED/APPROVED/REJECTED）与凭证真号（JZ…）由
             // GlBizAction.handleTax 在流程办结时回写。
             e.setStatus("APPROVING");
@@ -114,7 +125,7 @@ public class GlTaxProvisionService {
             created.add(e);
         }
         // P6：税金计提即发起 GL_TAX_PROV 税金计提审批流（拆分后：计提走 GL_TAX_PROV，支付走 GL_TAX_PAY）
-        // D-DEC-135：一条记录一个流程实例（逐条起流），审批对象=金额=凭证三者同源
+        // 一条记录一个流程实例（逐条起流），审批对象=金额=凭证三者同源
         for (GlTaxProvision e : created) {
             try {
                 wfEngineFacade.start("GL_TAX_PROV", e.getId(), userId(),
@@ -131,7 +142,7 @@ public class GlTaxProvisionService {
     }
 
     /**
-     * 漏挂断言（D-DEC-135）：本批每条计提记录都必须有 GL_TAX_PROV 流程实例，
+     * 漏挂断言：本批每条计提记录都必须有 GL_TAX_PROV 流程实例，
      * 条数与实例数不等即显式抛错并回滚整批——整改前正是"只挂第 1 条"却无人报错。
      */
     private void assertAllLinked(List<GlTaxProvision> created) {
@@ -158,30 +169,30 @@ public class GlTaxProvisionService {
     }
 
     /**
-     * 计提挂接核查（D-DEC-135 的"可见、可查、不静默"面）：按期间列出每条计提记录的
+     * 计提挂接核查（的"可见、可查、不静默"面）：按期间列出每条计提记录的
      * ①审批流程（wf_instance GL_TAX_PROV，在途/已通过）②凭证（op_voucher source_doc_id）③缴款流程（GL_TAX_PAY，同上规则）
      * 挂接情况，并给出未挂接计数。历史上"只挂第 1 条"留下的无流程/无凭证行在此一览可查。
      *
      * @param period 会计期间 yyyyMM（必输，防全表扫）
      */
-    public java.util.Map<String, Object> linkCheck(String period) {
+    public Map<String, Object> linkCheck(String period) {
         if (!StringUtils.hasText(period)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "会计期间不能为空");
         }
         List<GlTaxProvision> rows = mapper.selectList(new LambdaQueryWrapper<GlTaxProvision>()
                 .eq(GlTaxProvision::getPeriod, period)
                 .orderByAsc(GlTaxProvision::getId));
-        List<java.util.Map<String, Object>> items = new ArrayList<>();
+        List<Map<String, Object>> items = new ArrayList<>();
         List<Long> ids = new ArrayList<>();
         for (GlTaxProvision r : rows) {
             ids.add(r.getId());
         }
-        java.util.Set<Long> withProvFlow = new java.util.HashSet<>();
-        java.util.Set<Long> withPayFlow = new java.util.HashSet<>();
-        java.util.Set<Long> withVoucher = new java.util.HashSet<>();
-        // R5-D-154：计提记录ID → 凭证ID，凭证ID → op_gl_entry 分录行数（只读探测「应落未落」）
-        java.util.Map<Long, Long> voucherIdByDoc = new java.util.HashMap<>();
-        java.util.Map<Long, Integer> entryCountByVoucher = new java.util.HashMap<>();
+        Set<Long> withProvFlow = new HashSet<>();
+        Set<Long> withPayFlow = new HashSet<>();
+        Set<Long> withVoucher = new HashSet<>();
+        // 计提记录ID → 凭证ID，凭证ID → op_gl_entry 分录行数（只读探测「应落未落」）
+        Map<Long, Long> voucherIdByDoc = new HashMap<>();
+        Map<Long, Integer> entryCountByVoucher = new HashMap<>();
         if (!ids.isEmpty()) {
             // 规则与发起侧一致：只有「在途/已通过」的实例才算挂上（LIVE_FLOW_STATUS）。
             // 已驳回/已撤回的流程按未挂处理——该行自身的 status（REJECTED）仍在明细里，不丢信息。
@@ -195,20 +206,20 @@ public class GlTaxProvisionService {
                     withPayFlow.add(wi.getBizId());
                 }
             }
-            for (com.fssc.sharing.entity.OpVoucher v : opVoucherMapper.selectList(
-                    new LambdaQueryWrapper<com.fssc.sharing.entity.OpVoucher>()
-                            .eq(com.fssc.sharing.entity.OpVoucher::getSourceDocType, "GL_TAX_PROV")
-                            .in(com.fssc.sharing.entity.OpVoucher::getSourceDocId, ids)
-                            .ne(com.fssc.sharing.entity.OpVoucher::getStatus, "VOID"))) {
+            for (OpVoucher v : opVoucherMapper.selectList(
+                    new LambdaQueryWrapper<OpVoucher>()
+                            .eq(OpVoucher::getSourceDocType, "GL_TAX_PROV")
+                            .in(OpVoucher::getSourceDocId, ids)
+                            .ne(OpVoucher::getStatus, "VOID"))) {
                 withVoucher.add(v.getSourceDocId());
                 voucherIdByDoc.putIfAbsent(v.getSourceDocId(), v.getId());
             }
-            // R5-D-154：凭证出了 ≠ 落了总账——按 voucher_id 数 op_gl_entry 分录行数，零行即「应落未落」
+            // 凭证出了 ≠ 落了总账——按 voucher_id 数 op_gl_entry 分录行数，零行即「应落未落」
             if (!voucherIdByDoc.isEmpty()) {
-                List<com.fssc.gl.entity.GlEntry> entryRows = glEntryMapper.selectList(
-                        new LambdaQueryWrapper<com.fssc.gl.entity.GlEntry>()
-                                .in(com.fssc.gl.entity.GlEntry::getVoucherId, voucherIdByDoc.values()));
-                for (com.fssc.gl.entity.GlEntry e : entryRows) {
+                List<GlEntry> entryRows = glEntryMapper.selectList(
+                        new LambdaQueryWrapper<GlEntry>()
+                                .in(GlEntry::getVoucherId, voucherIdByDoc.values()));
+                for (GlEntry e : entryRows) {
                     entryCountByVoucher.merge(e.getVoucherId(), 1, Integer::sum);
                 }
             }
@@ -216,9 +227,9 @@ public class GlTaxProvisionService {
         int missFlow = 0;
         int missVoucher = 0;
         int missEntry = 0;
-        java.math.BigDecimal missFlowAmount = BigDecimal.ZERO;
-        java.math.BigDecimal missVoucherAmount = BigDecimal.ZERO;
-        java.math.BigDecimal missEntryAmount = BigDecimal.ZERO;
+        BigDecimal missFlowAmount = BigDecimal.ZERO;
+        BigDecimal missVoucherAmount = BigDecimal.ZERO;
+        BigDecimal missEntryAmount = BigDecimal.ZERO;
         for (GlTaxProvision r : rows) {
             boolean hasFlow = withProvFlow.contains(r.getId());
             boolean hasVoucher = withVoucher.contains(r.getId());
@@ -238,7 +249,7 @@ public class GlTaxProvisionService {
                 missEntry++;
                 missEntryAmount = missEntryAmount.add(nvl0(r.getTaxAmount()));
             }
-            java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
+            Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", r.getId());
             item.put("provisionNo", r.getProvisionNo());
             item.put("taxType", r.getTaxType());
@@ -248,7 +259,6 @@ public class GlTaxProvisionService {
             item.put("hasApproveFlow", hasFlow);
             item.put("hasVoucher", hasVoucher);
             item.put("hasPayFlow", withPayFlow.contains(r.getId()));
-            // R5-D-154
             item.put("entryCount", entryCount);
             item.put("postedWithoutEntry", missEntryRow);
             items.add(item);
@@ -258,19 +268,17 @@ public class GlTaxProvisionService {
                             "存在未挂接条目，请到「税金计提」按单号处理或重新计提",
                     period, missFlow, missFlowAmount, missVoucher, missVoucherAmount);
         }
-        // R5-D-154
         if (missEntry > 0) {
             log.warn("税金计提落账核查 期间 {}：{} 条状态已入账但总账分录为 0（¥{}）——应落未落，需查凭证生成腿",
                     period, missEntry, missEntryAmount);
         }
-        java.util.Map<String, Object> res = new java.util.LinkedHashMap<>();
+        Map<String, Object> res = new LinkedHashMap<>();
         res.put("period", period);
         res.put("total", rows.size());
         res.put("missingFlowCount", missFlow);
         res.put("missingFlowAmount", missFlowAmount);
         res.put("missingVoucherCount", missVoucher);
         res.put("missingVoucherAmount", missVoucherAmount);
-        // R5-D-154
         res.put("missingEntryCount", missEntry);
         res.put("missingEntryAmount", missEntryAmount);
         res.put("rows", items);
@@ -281,7 +289,7 @@ public class GlTaxProvisionService {
         return v == null ? BigDecimal.ZERO : v;
     }
 
-    /** 税种中文名（流程标题用；D-DEC-135 后可按标题区分同批三条） */
+    /** 税种中文名（流程标题用；后可按标题区分同批三条） */
     private static String taxTypeName(String taxType) {
         if (taxType == null) {
             return "税金";
@@ -304,10 +312,10 @@ public class GlTaxProvisionService {
     }
 
     /** 缴款流"已挂"判定规则：只算在途/已通过的实例。已驳回（REJECTED）/已撤回（CANCELLED）/已终止
-     *  （TERMINATED）的缴款流不算挂过——挂接核查按本规则报「已挂缴款流程」，历史在途缴款流才看得见。 */
+     *  TERMINATED 的缴款流不算挂过——挂接核查按本规则报「已挂缴款流程」，历史在途缴款流才看得见。 */
     private static final List<String> LIVE_FLOW_STATUS = Arrays.asList("RUNNING", "APPROVED");
 
-    // D-DEC-440（X-42 甲）：原 pay(period) 缴款发起环节已删除——GL_TAX_PAY 那条独立缴款流既不产生付款动作
+    // X-42 甲：原 pay(period) 缴款发起环节已删除——GL_TAX_PAY 那条独立缴款流既不产生付款动作
     // 也不出缴纳凭证（VoucherService.generateTaxVoucher 同批办结），留下的只会是一条「审批通过、什么也没发生」
     // 的僵尸流。税金缴款的真相由对公付款通道承载：应付税额的付款单／付款批次执行后才出「借 2221／贷 1002」。
     // 页面入口（GlSpecial.vue「缴纳」按钮）与前端调用环节（api.js glexApi）同步删除；库里 wf_model 的 GL_TAX_PAY
@@ -316,7 +324,7 @@ public class GlTaxProvisionService {
         return mapper.selectCount(new LambdaQueryWrapper<GlTaxProvision>().eq(GlTaxProvision::getPeriod, period));
     }
 
-    /** P0-3 税金金额公式强校验：taxAmount = baseAmount × rate / 100，且基数 ≥ 0、税率 > 0。 */
+    /** 税金金额公式强校验：taxAmount = baseAmount × rate / 100，且基数 ≥ 0、税率 > 0。 */
     private static BigDecimal calcTaxAmount(BigDecimal baseAmount, BigDecimal rate) {
         if (baseAmount == null || baseAmount.compareTo(BigDecimal.ZERO) < 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "计税基数不能为负: " + baseAmount);

@@ -40,21 +40,21 @@ public class OpVoucher extends TenantAuditBase {
     private Long postUserId;
     private LocalDateTime postTime;
     private String remark;
-    /** P0-4 溯源：来源单据类型（标准化字段，与sourceType语义一致） */
+    /** 溯源：来源单据类型（标准化字段，与sourceType语义一致） */
     private String sourceDocType;
-    /** P0-4 溯源：来源单据ID（标准化字段，与billId语义一致） */
+    /** 溯源：来源单据ID（标准化字段，与billId语义一致） */
     private Long sourceDocId;
-    /** P2-4 展示：来源单据号（transient，查询时冗余，便于列表核对） */
+    /** 展示：来源单据号（transient，查询时冗余，便于列表核对） */
     @TableField(exist = false)
     private String sourceBillNo;
-    /** P2-4 展示：来源单据状态（transient，查询时冗余，便于列表核对） */
+    /** 展示：来源单据状态（transient，查询时冗余，便于列表核对） */
     @TableField(exist = false)
     private String sourceBillStatus;
     /** 展示：制单人姓名（transient；create_by 存的是 sys_user.id，列表不能直接甩数字） */
     @TableField(exist = false)
     private String createByName;
     /**
-     * D-DEC-288（X-49 乙）展示：付款环节凭证"资金指令未下发"标记（transient，只读补充，零写库）。
+     * X-49 乙 展示：付款环节凭证"资金指令未下发"标记（transient，只读补充，零写库）。
      * <p>true＝本凭证是付款环节、账面已记账（POSTED）但资金证据说款还没付出；
      * false＝资金证据已实付；null＝不是付款环节／无资金证据可判（界面不注记）。
      * <p>由 {@code VoucherAutoPostService.fillPayLegUnsettledFlag} 在凭证台账读侧打标，
@@ -63,13 +63,13 @@ public class OpVoucher extends TenantAuditBase {
     @TableField(exist = false)
     private Boolean payLegUnsettled;
     /**
-     * R5-D-075 展示：该凭证在 op_gl_entry 的落账分录行数（transient，列表接口一次性聚合带回，零写库）。
+     * 展示：该凭证在 op_gl_entry 的落账分录行数（transient，列表接口一次性聚合带回，零写库）。
      * <p>>0＝已落账、0＝未落账，由 {@code GlService.countGlEntriesByVoucherIds} 单条 GROUP BY 聚合
      * 给出整页读数（取代前端逐张 {@code /op/gl/posted} 的 N+1 串行探测，杜绝"探测失败被降级成未落账"）；
      * null＝本次列表没带回聚合——前端须显式标「校验失败」并可重试，不得降级显示成「未落账」。
      */
     @TableField(exist = false)
     private Integer glEntryCount;
-    /** D-TRC-05：来源单据的审批流程实例ID，使凭证能反查"是哪次审批产生的"；非费用域来源暂留 NULL */
+    /** 来源单据的审批流程实例ID，使凭证能反查"是哪次审批产生的"；非费用域来源暂留 NULL */
     private String procInstId;
 }

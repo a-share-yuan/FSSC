@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import H5FoldCard from './H5FoldCard.vue'
 
 /**
- * H5 卡片折叠（2026-10-27）回归护栏。
+ * H5 卡片折叠回归护栏。
  *
  * 折叠是为了把审批详情/提单页从五六屏压到一屏多，但两条底线不能破：
  *   ① 收起态必须给摘要，否则关键数（金额/张数/待补项）全藏进二次点击里；

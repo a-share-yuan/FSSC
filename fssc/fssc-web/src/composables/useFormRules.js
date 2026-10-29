@@ -3,8 +3,8 @@
 
 /**
  * useFormRules - 表单联动校验 composable
- * R5-06: 封装跨字段联动校验规则
- * R5-20: 统一表单校验规则
+ * 封装跨字段联动校验规则
+ * 统一表单校验规则
  *
  * 用法：
  *   import { useFormRules } from '@/composables/useFormRules'
@@ -289,7 +289,7 @@ const formTypeRules = {
   ASSET_TRANSFER: {
     targetDeptId: commonRules.select('请选择目标部门'),
   },
-  // 资产原值调整（X-06/D-DEC-431）：原因必输——旧版前端把原因写死成一句固定文案传给后端，
+  // 资产原值调整（X-06/）：原因必输——旧版前端把原因写死成一句固定文案传给后端，
   // 写入数据库的"原因"与真实成因无关，事后追溯看到的是同一句话。金额绑 el-input，值为字符串⇒用 amountText。
   ASSET_ADJUST: {
     newOriginalAmount: commonRules.amountText('请输入调整后原值（须大于 0）'),
@@ -396,7 +396,7 @@ const formTypeRules = {
     toleranceType: commonRules.select('请选择容差类型'),
     toleranceValue: [{ required: true, type: 'number', min: 0, message: '请输入容差值' }],
   },
-  // ================= 主数据（第1批 P0）：供应商 / 客户 / 供应商子表 =================
+  // 主数据（第1批 P0）：供应商 / 客户 / 供应商子表
   // 供应商基本信息 Tab：编码/名称必填；信用代码与税号「选填但填了就必须合规」——
   // jakarta/前端 pattern 对空串天然放行，故基座侧只挂格式校验，必填由页面 rules 另配。
   SUPPLIER: {
@@ -478,7 +478,6 @@ export function invoiceAmountMatch(getForm, msg) {
 export function useFormRules(formType) {
   const customRules = computed(() => formTypeRules[formType] || {})
 
-  // 获取指定字段的校验规则
   function getRule(field) {
     return customRules.value[field] || []
   }

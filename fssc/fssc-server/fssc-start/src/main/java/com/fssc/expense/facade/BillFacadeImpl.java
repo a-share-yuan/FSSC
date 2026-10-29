@@ -10,6 +10,7 @@ import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.entity.ExpBillAttach;
 import com.fssc.expense.mapper.ExpBillAttachMapper;
 import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.facade.BillFacade;
 import com.fssc.framework.facade.dto.BillArchiveDTO;
 import com.fssc.framework.org.OrgGuard;
@@ -30,7 +31,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
-@com.fssc.framework.datasource.FsscDataSource("master")
+@FsscDataSource("master")
 public class BillFacadeImpl implements BillFacade {
 
     private final ExpBillMapper expBillMapper;
@@ -44,7 +45,7 @@ public class BillFacadeImpl implements BillFacade {
         LambdaQueryWrapper<ExpBill> qw = new LambdaQueryWrapper<>();
         qw.in(ExpBill::getStatus, "APPROVED", "PAID", "CLOSED")
                 .in(ExpBill::getImageStatus, "PARTIAL", "COMPLETE");
-        // D-DEC-276b（B1，2026-09-28 已裁）：原先无条件 `ne ARCHIVED` 把已归档单据从清单里彻底抹掉
+        // B1，2026-09-28 已裁：原先无条件 `ne ARCHIVED` 把已归档单据从清单里彻底抹掉
         // ⇒ 归档后无法在同一页面核对"归到哪一档、谁归的"，也让去重只能靠运气。
         // 归档记录序时簿是**状态四值筛选**（已归档/未归档/归档中/不限），已归档项仍在列表内。
         // 故改为按入参筛选，默认（空值）＝只看未归档，与页面原行为一致；重复立卷由 ArchiveService 的状态机强制校验拦（B2）。
@@ -120,7 +121,7 @@ public class BillFacadeImpl implements BillFacade {
         dto.setStatus(bill.getStatus());
         dto.setArchiveStatus(bill.getArchiveStatus());
         dto.setImageStatus(bill.getImageStatus());
-        // R5-D-244：实物流交付状态外传（归档前置校验：未签收不得归档）
+        // 实物流交付状态外传（归档前置校验：未签收不得归档）
         dto.setDeliveryStatus(bill.getDeliveryStatus());
         dto.setCompanyId(bill.getCompanyId());
         dto.setPeriodYear(bill.getPeriodYear());
@@ -130,6 +131,8 @@ public class BillFacadeImpl implements BillFacade {
         dto.setProcInstId(bill.getProcInstId());
         dto.setArchiveTime(bill.getArchiveTime());
         dto.setArchiveBy(bill.getArchiveBy());
+        dto.setTotalAmount(bill.getTotalAmount());
+        dto.setApproveTime(bill.getApproveTime());
         return dto;
     }
 }

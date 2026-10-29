@@ -6,6 +6,7 @@ package com.fssc.arflow.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.arflow.entity.ArStatement;
 import com.fssc.arflow.mapper.ArStatementMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.customer.entity.CrmCustomer;
@@ -14,6 +15,14 @@ import com.fssc.masterdata.service.ExchangeRateService;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
 import com.fssc.system.service.ConfigService;
+import com.fssc.system.service.PeriodLockService;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,7 +48,7 @@ public class ArStatementService {
     public static final String CFG_TOL_TAX = "ar.recon.tolerance-tax-pct";
 
     private final ArStatementMapper mapper;
-    private final com.fssc.system.service.PeriodLockService periodLockService;
+    private final PeriodLockService periodLockService;
     private final RcReceivableMapper receivableMapper;
     private final CrmCustomerMapper customerMapper;
     private final ConfigService configService;
@@ -50,8 +59,8 @@ public class ArStatementService {
      */
     private final ExchangeRateService exchangeRateService;
 
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /** 导入对账单：必含客户代码；外币按 sys_config 汇率 ar.fx.{ccy} 折RMB。 */
     @Transactional(rollbackFor = Exception.class)
@@ -63,12 +72,12 @@ public class ArStatementService {
         // 共享服务操作人常跨公司作业：单据公司须取业务所属公司，不能沿用登录人公司
         bill.setCompanyId(resolveStatementCompany(bill));
         // 蓝图规则6.5：账期已被月结关闭时禁止录入当月业务
-        periodLockService.assertNotLocked(bill.getCompanyId(), java.time.YearMonth.now().toString(), "导入对账单");
+        periodLockService.assertNotLocked(bill.getCompanyId(), YearMonth.now().toString(), "导入对账单");
         if (bill.getAmount() == null || bill.getTaxAmount() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "对账单金额与税额必填");
         }
         bill.setId(null);
-        bill.setBillNo("ARB" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+        bill.setBillNo("ARB" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + UUID.randomUUID().toString().substring(0, 4).toUpperCase());
         if (bill.getCcy() == null || bill.getCcy().isBlank()) {
             bill.setCcy("CNY");
@@ -103,7 +112,7 @@ public class ArStatementService {
             qw.eq(RcReceivable::getCurrencyCode, bill.getCcy());
         }
         List<Long> companies = receivableMapper.selectList(qw).stream()
-                .map(RcReceivable::getCompanyId).filter(java.util.Objects::nonNull).distinct().toList();
+                .map(RcReceivable::getCompanyId).filter(Objects::nonNull).distinct().toList();
         if (companies.contains(bill.getCompanyId())) {
             return bill.getCompanyId();
         }
@@ -161,11 +170,11 @@ public class ArStatementService {
             bill.setStatus(ArStatement.ST_ABNORMAL);
         }
         mapper.updateById(bill);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("checkStatus", auditOldCheckStatus);
         auditBefore.put("diffReason", auditOldDiffReason);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", bill.getStatus());
         auditAfter.put("checkStatus", bill.getCheckStatus());
         auditAfter.put("diffReason", bill.getDiffReason());
@@ -188,11 +197,11 @@ public class ArStatementService {
         bill.setCheckStatus("CHECK_OK");
         bill.setDiffReason("财务调整后确认：" + (note == null ? "" : note));
         mapper.updateById(bill);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("checkStatus", auditOldCheckStatus);
         auditBefore.put("diffReason", auditOldDiffReason);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", bill.getStatus());
         auditAfter.put("checkStatus", bill.getCheckStatus());
         auditAfter.put("diffReason", bill.getDiffReason());
@@ -217,7 +226,7 @@ public class ArStatementService {
         return mapper.selectList(q.orderByDesc(ArStatement::getId));
     }
 
-    // ---------------- 工具 ----------------
+    // 工具
 
     private void applyFx(ArStatement bill) {
         boolean foreign = !"CNY".equalsIgnoreCase(bill.getCcy());
@@ -228,8 +237,8 @@ public class ArStatementService {
         }
         BigDecimal rate = resolveFxRate(bill.getCcy(), bill.getCompanyId());
         bill.setFxRate(rate);
-        bill.setRmbAmount(bill.getAmount().multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP));
-        bill.setRmbTaxAmount(bill.getTaxAmount().multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP));
+        bill.setRmbAmount(bill.getAmount().multiply(rate).setScale(2, RoundingMode.HALF_UP));
+        bill.setRmbTaxAmount(bill.getTaxAmount().multiply(rate).setScale(2, RoundingMode.HALF_UP));
     }
 
     /**
@@ -251,7 +260,7 @@ public class ArStatementService {
      */
     private BigDecimal resolveFxRate(String ccy, Long companyId) {
         String cur = ccy == null ? "" : ccy.trim().toUpperCase();
-        java.time.LocalDate bizDate = java.time.LocalDate.now();
+        LocalDate bizDate = LocalDate.now();
 
         BigDecimal fromTable = null;
         try {
@@ -281,7 +290,7 @@ public class ArStatementService {
         if (v == null || v.isBlank()) {
             return BigDecimal.ZERO;
         }
-        return new BigDecimal(v.trim()).divide(BigDecimal.valueOf(100), 6, java.math.RoundingMode.HALF_UP);
+        return new BigDecimal(v.trim()).divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
     }
 
     private void compare(String label, BigDecimal expect, BigDecimal actual,

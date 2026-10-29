@@ -61,6 +61,7 @@ public class WfNodeConfigService {
         normalizeGovernance(cfg);
         assertNodeKeyMatchesBpmn(cfg);
         nodeConfigMapper.insert(cfg);
+        WfNodeConfigResolver.evictAll();
         return cfg.getId();
     }
 
@@ -75,6 +76,7 @@ public class WfNodeConfigService {
         normalizeGovernance(cfg);
         assertNodeKeyMatchesBpmn(cfg);
         nodeConfigMapper.updateById(cfg);
+        WfNodeConfigResolver.evictAll();
     }
 
     /**
@@ -88,7 +90,7 @@ public class WfNodeConfigService {
     }
 
     /**
-     * 治理字段写入校验（V1.3.23，2026-09-20 用户铁律：admin 不得作为流程节点用户参与任何流程）。
+     * 治理字段写入校验（2026-09-20 用户铁律：admin 不得作为流程节点用户参与任何流程）。
      *
      * <p><b>为什么要有它</b>：{@code wf_node_config} 曾因列默认值为 {@code ADMIN}、{@code auto_pass_self=1}，
      * 使新建节点静默继承两项违规默认——前者在"节点找不到审批人"时把待办<b>直派租户管理员 admin</b>
@@ -123,7 +125,7 @@ public class WfNodeConfigService {
         if (cfg.getAutoPassSelf() != null && cfg.getAutoPassSelf() != 0) {
             cfg.setAutoPassSelf(0);
         }
-        // P1 多实例写入校验（2026-09-23）：multi_type 与 BPMN multiInstanceLoopCharacteristics 一一对应，
+        // P1 多实例写入校验：multi_type 与 BPMN multiInstanceLoopCharacteristics 一一对应，
         // 后端 WfBpmnTemplateService.build() 只消费 ALL/SEQ/VOTE（其余值含 ANY 一律生成普通单任务节点）。
         // 名称表以 wf_node_config.multi_type 列注释为唯一基准：
         //   ANY 任一通过（默认，单任务）/ ALL 会签（全员通过）/ SEQ 顺序会签 / VOTE 票签（按 vote_ratio）。
@@ -152,7 +154,7 @@ public class WfNodeConfigService {
                 }
             }
         }
-        // P2 升级层级写入校验（2026-09-23）：up_level 是 NodeOrgResolver.escalateTarget 的消费点，
+        // P2 升级层级写入校验：up_level 是 NodeOrgResolver.escalateTarget 的消费点，
         // 决定 ESCALATE 档（超时升级 + 空策略升级两条路径共用）沿汇报线向上取第几级真实负责人。
         // 上限 10 与 escalateTarget 的"防环最多 10 跳"一致——配了比 10 大的值没有任何一跳能到达，
         // 只会让人误以为"升得更高"，属"看着能配、实际不生效"，故超界即拒。
@@ -171,11 +173,11 @@ public class WfNodeConfigService {
     }
 
     /** 多实例会签模式合法值（wf_node_config.multi_type，与 DB 列注释一致） */
-    private static final java.util.Set<String> MULTI_TYPES =
-            java.util.Set.of("ANY", "ALL", "SEQ", "VOTE");
+    private static final Set<String> MULTI_TYPES =
+            Set.of("ANY", "ALL", "SEQ", "VOTE");
 
     /**
-     * node_key 合法性校验（V1.3.24，2026-09-20）：{@code node_key} 必须是该模型 BPMN 的
+     * node_key 合法性校验：{@code node_key} 必须是该模型 BPMN 的
      * userTask {@code taskDefinitionKey}，拒绝 {@code CLAIM_T1 / N010} 这类业务码写入——
      * 它们是"两表脱节"的根源，且经位置默认处理会污染到无关节点（造成越权/超时错位）。
      *

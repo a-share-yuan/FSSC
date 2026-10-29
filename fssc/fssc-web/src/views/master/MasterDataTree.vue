@@ -22,7 +22,7 @@
               </div>
             </div>
           </template>
-          <!-- R5-D-042（公司维度缺失）：公司筛选与弹窗「所属公司」同源（orgApi.companyTree 名称表，不另造清单）；
+          <!-- 公司维度缺失：公司筛选与弹窗「所属公司」同源（orgApi.companyTree 名称表，不另造清单）；
                选中值随树请求入服务端 query.companyId，服务端再叠加登录人 data_scope（选了公司只会更窄） -->
           <el-select v-model="query.companyId" placeholder="公司" clearable filterable size="small"
                      style="width:100%;margin-bottom:8px" @change="loadTree">
@@ -48,7 +48,7 @@
                   <span>{{ node.label }}</span>
                   <span class="tree-node-code" v-if="getCode(nodeData)">[{{ getCode(nodeData) }}]</span>
                   <el-tag v-if="nodeData.status === 'DISABLED'" size="small" type="danger" style="margin-left:4px">停用</el-tag>
-                  <!-- R5-D-042：行归属公司——值取服务端 nodeData.companyId，名称按 orgApi.companyTree 名称表翻译
+                  <!-- 行归属公司——值取服务端 nodeData.companyId，名称按 orgApi.companyTree 名称表翻译
                        （md_subject／md_cost_center 均无 company_name 列，加列＝DDL，禁） -->
                   <span class="tree-node-company" v-if="companyLabel(nodeData)">[{{ companyLabel(nodeData) }}]</span>
                   <span v-if="canCreate" class="tree-node-actions">
@@ -83,7 +83,7 @@
             <el-form-item label="上级科目">
               <el-input :model-value="selectedNode.parentId ? findName(selectedNode.parentId) : '（根节点）'" disabled />
             </el-form-item>
-            <!-- R5-D-042：只读展示行归属公司（建档时的公司主体由后端按登录主体落，不在本页改规则） -->
+            <!-- 只读展示行归属公司（建档时的公司主体由后端按登录主体落，不在本页改规则） -->
             <el-form-item v-if="selectedNode.id" label="所属公司">
               <el-input :model-value="companyLabel(selectedNode) || '（未定）'" disabled />
             </el-form-item>
@@ -125,7 +125,7 @@
             <el-form-item label="上级成本中心">
               <el-input :model-value="selectedNode.parentId ? findName(selectedNode.parentId) : '（根节点）'" disabled />
             </el-form-item>
-            <!-- R5-D-042：只读展示行归属公司 -->
+            <!-- 只读展示行归属公司 -->
             <el-form-item v-if="selectedNode.id" label="所属公司">
               <el-input :model-value="companyLabel(selectedNode) || '（未定）'" disabled />
             </el-form-item>
@@ -156,7 +156,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-// R5-D-042：http/orgApi 直取——masterApi.subject.tree／costCenter.tree 是无参闭包（api.js 不在本缺陷改动面内），
+// http/orgApi 直取——masterApi.subject.tree／costCenter.tree 是无参闭包（api.js 不在本缺陷改动面内），
 // 公司维度必须随请求入服务端，故本页按同一 /tenant/masterdata/** 前缀自行带参调用，不改公共 api 层
 import { masterApi, orgApi, http } from '../../api'
 import { hasPerm } from '../../utils/perm'
@@ -191,9 +191,9 @@ const formRef = ref(null)
 
 const api = computed(() => props.mode === 'subject' ? masterApi.subject : masterApi.costCenter)
 
-// ---------------- R5-D-042：公司维度（列表/树归属可见＋可筛） ----------------
+// 公司维度（列表/树归属可见＋可筛）
 // 筛选值走服务端（?companyId=），服务端 SubjectService.tree(Long) 已按 md_subject.company_id 落谓词并叠 @DataScope；
-// 未选＝不带参，由服务端按登录人 data_scope 办结。SubjectController.tree() 已补绑 companyId（R5-D-043/158 顺带修，
+// 未选＝不带参，由服务端按登录人 data_scope 办结。SubjectController.tree() 已补绑 companyId（/158 顺带修，
 // 见其控制器注解）；CostCenterController.tree() 暂不绑（不在本次改动面），故下方另做一道「按 id 精确」的可见集
 // 办结默认处理——它只收窄、不放宽，控制器补参后与服务端结果同一规则（去重），不会掩盖越权数据。
 const query = reactive({ companyId: null })
@@ -242,7 +242,7 @@ function withinCompany(rows) {
 }
 
 // 编码/名称＝主数据业务键，人工维护（非系统取号，不适用规则 Q1）；与后端 SubjectService / CostCenterService 同一规则。
-// R5-D-043／R5-D-158：科目编码加「仅 ASCII」规则（与后端 CODE_PATTERN 同源：以数字开头、只含数字与 . - _、≤30 位），
+// 科目编码加「仅 ASCII」规则（与后端 CODE_PATTERN 同源：以数字开头、只含数字与 . - _、≤30 位），
 // 拦掉中文/全角/空格（历史 265 行把中文名写进编码列）；名称 required（历史 216 行空名，后端 assertWritable 已同判）。
 const SUBJECT_CODE_ASCII = /^[0-9][0-9._-]{0,29}$/
 const subjectRules = {
@@ -273,7 +273,7 @@ function findName(id) {
 async function loadTree() {
   loading.value = true
   try {
-    // R5-D-042：公司维度入请求（服务端谓词＋data_scope 为权威规则），返回后再按 id 精确办结默认处理
+    // 公司维度入请求（服务端谓词＋data_scope 为权威规则），返回后再按 id 精确办结默认处理
     const data = await http.get(treeUrl.value, {
       params: query.companyId != null ? { companyId: query.companyId } : {},
     })
@@ -409,7 +409,7 @@ function collapseAll() {
 }
 
 onMounted(async () => {
-  // R5-D-042：先取公司名称表（只用于「公司」归属翻译），再拉树（树数据本身由服务端按公司维度办结）
+  // 先取公司名称表（只用于「公司」归属翻译），再拉树（树数据本身由服务端按公司维度办结）
   await loadCompanies()
   loadTree()
 })

@@ -19,9 +19,14 @@ import com.fssc.sharing.entity.OpPhysicalDelivery;
 import com.fssc.sharing.mapper.OpAuditTaskMapper;
 import com.fssc.sharing.mapper.OpBarcodeMapper;
 import com.fssc.sharing.mapper.OpPhysicalDeliveryMapper;
+import com.fssc.system.entity.SysCompany;
 import com.fssc.system.entity.SysUser;
+import com.fssc.system.mapper.SysCompanyMapper;
 import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.framework.datasource.FsscDataSource;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,7 +36,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * P0-5 实物流签收服务（行业特性 TC12：电子流 + 实物流双到达）。
+ * 实物流签收服务（行业特性 TC12：电子流 + 实物流双到达）。
  * 传统交单模式：实物未签收前，共享会计（AUDIT）待办不暴露对应审核任务；
  * 共享会计签收实物后才激活首环节审核任务。
  */
@@ -45,12 +50,12 @@ public class DeliveryService {
     private final OpAuditTaskMapper opAuditTaskMapper;
     private final ExpBillMapper expBillMapper;
     private final OpBarcodeMapper barcodeMapper;
-    /** R5-D-231：交单登记自动生成条码 */
+    /** 交单登记自动生成条码 */
     private final BarcodeService barcodeService;
-    /** R5-D-239：交付人姓名统一取 nick_name */
+    /** 交付人姓名统一取 nick_name */
     private final SysUserMapper sysUserMapper;
-    /** 档案管理模式读点（V1.4.92）：公司级 CENTRAL／NON_CENTRAL，缺省按 CENTRAL */
-    private final com.fssc.system.mapper.SysCompanyMapper sysCompanyMapper;
+    /** 档案管理模式读点：公司级 CENTRAL／NON_CENTRAL，缺省按 CENTRAL */
+    private final SysCompanyMapper sysCompanyMapper;
 
     /**
      * 判定单据是否需要实物签收：
@@ -69,7 +74,7 @@ public class DeliveryService {
         if (companyId == null) {
             return false;
         }
-        com.fssc.system.entity.SysCompany c = sysCompanyMapper.selectById(companyId);
+        SysCompany c = sysCompanyMapper.selectById(companyId);
         return c != null && "NON_CENTRAL".equalsIgnoreCase(c.getArchiveMode());
     }
 
@@ -82,7 +87,7 @@ public class DeliveryService {
         if (bill == null || bill.getId() == null) {
             return;
         }
-        // R5-D-243：草稿/已取消单据不得进入交付链（此前 DRAFT 单也登记了 PENDING 交付与共享作业任务）
+        // 草稿/已取消单据不得进入交付链（此前 DRAFT 单也登记了 PENDING 交付与共享作业任务）
         if ("DRAFT".equals(bill.getStatus()) || "CANCELLED".equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "单据处于草稿/已取消状态，不可登记实物流（请先提交单据）");
@@ -101,7 +106,7 @@ public class DeliveryService {
                 .eq(OpPhysicalDelivery::getBillId, bill.getId())
                 .eq(OpPhysicalDelivery::getStatus, "PENDING"));
         if (cnt != null && cnt > 0) {
-            // R5-D-229 同一规则：已有在途 PENDING 单而单据侧无痕（NULL）时补 UNSIGNED，消除双轨
+            // 同一规则：已有在途 PENDING 单而单据侧无痕（NULL）时补 UNSIGNED，消除双轨
             markBillUnsignedInTransit(bill);
             return;
         }
@@ -111,7 +116,7 @@ public class DeliveryService {
         d.setBillNo(bill.getBillNo());
         d.setBillType(bill.getBillType());
         d.setDeliverBy(bill.getApplyUserId());
-        // R5-D-239：姓名统一取 nick_name（此前取 applyUserName＝裸工号，如 Y005713）
+        // 姓名统一取 nick_name（此前取 applyUserName＝裸工号，如 Y005713）
         d.setDeliverName(resolveDisplayName(bill.getApplyUserId(), bill.getApplyUserName()));
         d.setDeliveryType("HANDOVER");
         d.setStatus("PENDING");
@@ -126,7 +131,7 @@ public class DeliveryService {
 
     /**
      * 共享会计/档案岗签收实物：置 SIGNED，单据 deliveryStatus=SIGNED，
-     * 并激活该单据首个共享 AUDIT 审核任务（R5-D-230：仅当存在共享任务链时——APPLY/事前申请类
+     * 并激活该单据首个共享 AUDIT 审核任务（仅当存在共享任务链时——APPLY/事前申请类
      * 单据不入共享作业、无任务链，此时静默跳过，属设计规则而非链路缺口）。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -134,7 +139,7 @@ public class DeliveryService {
         sign(deliveryId, signBy, signName, null);
     }
 
-    /** R5-D-241：带签收备注的签收（sign_remark 随签收一次写入，此前单条签收路径恒 NULL） */
+    /** 带签收备注的签收（sign_remark 随签收一次写入，此前单条签收路径恒 NULL） */
     @Transactional(rollbackFor = Exception.class)
     public void sign(Long deliveryId, Long signBy, String signName, String signRemark) {
         OpPhysicalDelivery d = deliveryMapper.selectById(deliveryId);
@@ -144,7 +149,7 @@ public class DeliveryService {
         if (!"PENDING".equals(d.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "该签收单已处理，当前状态: " + d.getStatus());
         }
-        // R5-D-243：草稿/已取消单据不可签收（签收后无审批对象，故前置拦截）
+        // 草稿/已取消单据不可签收（签收后无审批对象，故前置拦截）
         if (d.getBillId() != null) {
             ExpBill bill = expBillMapper.selectById(d.getBillId());
             if (bill != null && ("DRAFT".equals(bill.getStatus()) || "CANCELLED".equals(bill.getStatus()))) {
@@ -167,7 +172,7 @@ public class DeliveryService {
             bUpd.setId(d.getBillId());
             bUpd.setDeliveryStatus("SIGNED");
             expBillMapper.updateById(bUpd);
-            // 激活首环节共享审核任务（若存在任务链则激活首环节；APPLY 类单据无链，静默跳过——R5-D-230）
+            // 激活首环节共享审核任务（若存在任务链则激活首环节；APPLY 类单据无链，静默跳过——）
             OpAuditTask first = opAuditTaskMapper.selectOne(new LambdaQueryWrapper<OpAuditTask>()
                     .eq(OpAuditTask::getBillId, d.getBillId())
                     .eq(OpAuditTask::getTaskType, "AUDIT")
@@ -205,7 +210,7 @@ public class DeliveryService {
         return "SIGNED".equals(bill.getDeliveryStatus());
     }
 
-    // ==================== 增强功能 ====================
+    // 增强功能
 
     /**
      * 分页查询签收单（支持多条件筛选）。
@@ -235,23 +240,23 @@ public class DeliveryService {
         }
         w.orderByDesc(OpPhysicalDelivery::getId);
         Page<OpPhysicalDelivery> p = deliveryMapper.selectPage(Page.of(pageNum, pageSize), w);
-        // R5-D-243：批量回填关联单据状态（UI 对 DRAFT/CANCELLED 单隐藏签收/拒签并给原因）
+        // 批量回填关联单据状态（UI 对 DRAFT/CANCELLED 单隐藏签收/拒签并给原因）
         enrichBillStatus(p.getRecords());
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** R5-D-243：批量填充关联单据状态（仅出参，零加列） */
+    /** 批量填充关联单据状态（仅出参，零加列） */
     private void enrichBillStatus(List<OpPhysicalDelivery> rows) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
         List<Long> billIds = rows.stream().map(OpPhysicalDelivery::getBillId)
-                .filter(java.util.Objects::nonNull).distinct().toList();
+                .filter(Objects::nonNull).distinct().toList();
         if (billIds.isEmpty()) {
             return;
         }
-        java.util.Map<Long, String> statusMap = expBillMapper.selectBatchIds(billIds).stream()
-                .collect(java.util.stream.Collectors.toMap(ExpBill::getId,
+        Map<Long, String> statusMap = expBillMapper.selectBatchIds(billIds).stream()
+                .collect(Collectors.toMap(ExpBill::getId,
                         b -> b.getStatus() == null ? "" : b.getStatus(), (a, b) -> a));
         for (OpPhysicalDelivery r : rows) {
             if (r.getBillId() != null) {
@@ -319,7 +324,7 @@ public class DeliveryService {
                     .last("limit 1"));
         }
         if (d == null) {
-            // R5-D-231：无匹配给出可行动文案（此前仅报未找到，用户不知下一步）
+            // 无匹配给出可行动文案（此前仅报未找到，用户不知下一步）
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "未找到匹配的待签收单据，扫描值: " + scanValue
                             + "；可扫描条码/单据号/运单号，或先在条码管理中按单据生成条码后重试");
@@ -338,13 +343,13 @@ public class DeliveryService {
                 barcodeMapper.updateById(bcUpd);
             }
         }
-        // Sign it（R5-D-241：签收备注与签收同步写入，避免先签后补的中间态）
+        // Sign it（签收备注与签收同步写入，避免先签后补的中间态）
         sign(d.getId(), signBy, signName, signRemark);
         return deliveryMapper.selectById(d.getId());
     }
 
     /**
-     * 拒签退件（R5-D-240：与 sign() 对称回写——拒签不能只改签收单状态）。
+     * 拒签退件（与 sign() 对称回写——拒签不能只改签收单状态）。
      * 同一事务内：单据侧交付状态退回待签收等待重新交单；未办环节撤回任务池并置签收前挂起态。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -356,7 +361,7 @@ public class DeliveryService {
         if (!"PENDING".equals(d.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "该签收单已处理，当前状态: " + d.getStatus());
         }
-        // R5-D-243：草稿/已取消单据不可拒签（与签收同校验，防呆）
+        // 草稿/已取消单据不可拒签（与签收同校验，防呆）
         if (d.getBillId() != null) {
             ExpBill bill = expBillMapper.selectById(d.getBillId());
             if (bill != null && ("DRAFT".equals(bill.getStatus()) || "CANCELLED".equals(bill.getStatus()))) {
@@ -375,7 +380,7 @@ public class DeliveryService {
         upd.setRejectReason(rejectReason);
         deliveryMapper.updateById(upd);
         if (d.getBillId() != null) {
-            // R5-D-240 ①：单据侧对称回写——退回待签收等待重新交单。delivery_status 既有取值域
+            // ①：单据侧对称回写——退回待签收等待重新交单。delivery_status 既有取值域
             // NOT_REQUIRED/UNSIGNED/SIGNED 无「已拒签」码，拒签事实由 op_physical_delivery.REJECTED
             // 与 reject_reason 承载，不发明新码；update_time 随 updateById 经 FsscMetaObjectHandler
             // 的 updateFill 无条件刷新（与 sign() 同一机制）。
@@ -383,7 +388,7 @@ public class DeliveryService {
             bUpd.setId(d.getBillId());
             bUpd.setDeliveryStatus("UNSIGNED");
             expBillMapper.updateById(bUpd);
-            // R5-D-240 ②：撤链——未办环节（WAITING/RECEIVED）退回任务池并置 activeFlag=N 签收前挂起态
+            // ②：撤链——未办环节（WAITING/RECEIVED）退回任务池并置 activeFlag=N 签收前挂起态
             // （与 SharingService 入池挂起同一规则），已认领环节清回认领人与认领时间；不发明新状态，
             // 重新签收后由 sign() 再激活首环节。
             opAuditTaskMapper.update(null, new LambdaUpdateWrapper<OpAuditTask>()
@@ -411,17 +416,17 @@ public class DeliveryService {
         if (bill == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据不存在: " + billId);
         }
-        // R5-D-243：草稿/已取消单据不得进入交付链（此前 DRAFT 单 id=6 也建了交付与 6 条工单）
+        // 草稿/已取消单据不得进入交付链（此前 DRAFT 单 id=6 也建了交付与 6 条工单）
         if ("DRAFT".equals(bill.getStatus()) || "CANCELLED".equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "单据处于草稿/已取消状态，不可交单登记（请先提交单据）");
         }
-        // V1.4.92：非集中管理公司不产生实物流，交单入口直接拒绝（否则会造出无签收意义的幽灵签收单）
+        // 非集中管理公司不产生实物流，交单入口直接拒绝（否则会造出无签收意义的幽灵签收单）
         if (isNonCentralArchive(bill.getCompanyId())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "该公司为档案非集中管理，纸质原件留原单位保管，无需登记实物流");
         }
-        // R5-D-239：交付人姓名统一取 sys_user.nick_name（此前存裸工号如 Y005713，与人员列治理同批）
+        // 交付人姓名统一取 sys_user.nick_name（此前存裸工号如 Y005713，与人员列治理同批）
         Long effectiveDeliverBy = deliverBy != null ? deliverBy : bill.getApplyUserId();
         String effectiveDeliverName = resolveDisplayName(effectiveDeliverBy,
                 deliverName != null ? deliverName : bill.getApplyUserName());
@@ -445,7 +450,7 @@ public class DeliveryService {
             upd.setDeliverBy(effectiveDeliverBy);
             upd.setDeliverName(effectiveDeliverName);
             upd.setDeliverTime(LocalDateTime.now());
-            // R5-D-231：历史在途单补生条码（此前邮寄交单 barcode 恒 NULL，条码管理与扫码签收无输入）
+            // 历史在途单补生条码（此前邮寄交单 barcode 恒 NULL，条码管理与扫码签收无输入）
             if (existing.getBarcode() == null || existing.getBarcode().isBlank()) {
                 OpBarcode bc = barcodeService.generateForRef("BILL", billId, bill.getBillNo(),
                         effectiveDeliverBy, effectiveDeliverName);
@@ -454,7 +459,7 @@ public class DeliveryService {
                 }
             }
             deliveryMapper.updateById(upd);
-            // R5-D-229：交单在途期单据侧同步置 UNSIGNED（去重）
+            // 交单在途期单据侧同步置 UNSIGNED（去重）
             markBillUnsignedInTransit(bill);
             return existing.getId();
         }
@@ -474,7 +479,7 @@ public class DeliveryService {
         d.setStatus("PENDING");
         d.setDeliverTime(LocalDateTime.now());
         deliveryMapper.insert(d);
-        // R5-D-231：登记成功即生成条码并回写签收单（扫码签收/条码管理页随即可用）
+        // 登记成功即生成条码并回写签收单（扫码签收/条码管理页随即可用）
         OpBarcode bc = barcodeService.generateForRef("BILL", billId, bill.getBillNo(),
                 effectiveDeliverBy, effectiveDeliverName);
         if (bc != null) {
@@ -483,7 +488,7 @@ public class DeliveryService {
             bcUpd.setBarcode(bc.getBarcode());
             deliveryMapper.updateById(bcUpd);
         }
-        // R5-D-229：交单成功后同步置 UNSIGNED（去重），使在途可视并供 SLA 统计
+        // 交单成功后同步置 UNSIGNED（去重），使在途可视并供 SLA 统计
         markBillUnsignedInTransit(bill);
         log.info("Delivery applied billNo={} expressNo={} deliveryId={} barcode={}", bill.getBillNo(), expressNo, d.getId(),
                 bc == null ? null : bc.getBarcode());
@@ -518,7 +523,7 @@ public class DeliveryService {
     }
 
     /**
-     * R5-D-229：交单在途期单据侧记录——将 exp_bill.deliveryStatus 置 UNSIGNED（去重）。
+     * 交单在途期单据侧记录——将 exp_bill.deliveryStatus 置 UNSIGNED（去重）。
      * 已有 SIGNED/NOT_REQUIRED 最终状态记不回退（重复交单/签收后再登记不产生状态倒挂）；
      * 历史裸工号姓名等历史脏行不在本方法治理范围（只读清单交人工）。
      */
@@ -537,7 +542,7 @@ public class DeliveryService {
     }
 
     /**
-     * R5-D-239：姓名取值规则统一——sys_user.nick_name 优先，回退 user_name → fallback。
+     * 姓名取值规则统一——sys_user.nick_name 优先，回退 user_name → fallback。
      * （历史已写入裸工号的历史行由人工只读清单处置，本方法只办结新写入侧）
      */
     private String resolveDisplayName(Long userId, String fallback) {

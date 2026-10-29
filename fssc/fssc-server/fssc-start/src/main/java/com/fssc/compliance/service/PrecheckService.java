@@ -5,6 +5,7 @@ package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -14,6 +15,7 @@ import com.fssc.expense.entity.ExpBillLine;
 import com.fssc.expense.mapper.ExpBillAttachMapper;
 import com.fssc.expense.mapper.ExpBillLineMapper;
 import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.expense.service.ExpenseBillService;
 import com.fssc.framework.facade.ImageFacade;
 import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.framework.tenant.TenantContext;
@@ -23,9 +25,14 @@ import com.fssc.masterdata.entity.MdExpenseItem;
 import com.fssc.masterdata.mapper.MdExpenseItemMapper;
 import com.fssc.compliance.entity.ExpensePolicy;
 import com.fssc.compliance.mapper.ExpensePolicyMapper;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -47,7 +54,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PrecheckService {
 
-    // ---- 拆单检测（SPLIT_ORDER_DETECT）参数：与 md_compliance_rule SPLIT_ORDER_DETECT 的 threshold_config 保持一致 ----
+    // 拆单检测（SPLIT_ORDER_DETECT）参数：与 md_compliance_rule SPLIT_ORDER_DETECT 的 threshold_config 保持一致
     /** 审批阈值：报销金额达到该值需升级更高层审批（默认 5000 元；调整时同步规则表 threshold_config） */
     private static final BigDecimal SPLIT_APPROVAL_THRESHOLD = new BigDecimal("5000");
     /** 命中区间：阈值下方 10%（[阈值×(1-10%), 阈值)——拆单规避审批的典型落点） */
@@ -66,8 +73,8 @@ public class PrecheckService {
     private final InvoiceDomainFacade invoiceFacade;
     /** 票面键/票号查重经影像域 Facade（服务化断点）：本类不再直连 fssc_image 库 */
     private final ImageFacade imageFacade;
-    @org.springframework.beans.factory.annotation.Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     /** 对草稿单据执行合规预检（一次性返回全部不合规项） */
     public List<PrecheckItem> precheck(Long billId) {
@@ -136,13 +143,13 @@ public class PrecheckService {
             }
         }
 
-        // 3.2) 跨单重复发票（合规整改 ）：明细行解析出的发票号已被其他单据关联即拦截
-        java.util.Set<String> parsedNos = new java.util.HashSet<>();
+        // 3.2) 跨单重复发票（合规整改）：明细行解析出的发票号已被其他单据关联即拦截
+        Set<String> parsedNos = new HashSet<>();
         for (ExpBillLine line : lines) {
             String ext = line.getExtJson();
             if (ext == null || !ext.contains("invoiceNo")) continue;
             try {
-                String no = new com.fasterxml.jackson.databind.ObjectMapper().readTree(ext)
+                String no = new ObjectMapper().readTree(ext)
                         .path("invoice").path("invoiceNo").asText("");
                 if (!no.isBlank()) parsedNos.add(no);
             } catch (Exception ignore) { /* 元信息异常不作为预检失败 */ }
@@ -162,11 +169,11 @@ public class PrecheckService {
         //      本单附件影像经 OCR 识别出的票号，若已被其他单据的在用附件使用，即判重复发票
         if (isClaim) {
             try {
-                java.util.Set<Long> myFileIds = attachMapper.selectList(new LambdaQueryWrapper<ExpBillAttach>()
+                Set<Long> myFileIds = attachMapper.selectList(new LambdaQueryWrapper<ExpBillAttach>()
                                 .eq(ExpBillAttach::getBillId, billId))
                         .stream().map(ExpBillAttach::getFileId)
-                        .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
-            java.util.Set<String> ocrNos = new java.util.HashSet<>(parsedNos);
+                        .filter(Objects::nonNull).collect(Collectors.toSet());
+            Set<String> ocrNos = new HashSet<>(parsedNos);
                 if (!myFileIds.isEmpty()) {
                     ocrNos.addAll(imageFacade.invoiceNosByFileIds(TenantContext.getTenantId(), new ArrayList<>(myFileIds)));
                 }
@@ -229,9 +236,9 @@ public class PrecheckService {
             }
         }
 
-        // 7) P0-3b：借款逾期拦截（提交新 LOAN 时，检查申请人名下是否有逾期未还的 LOAN）
+        // 7) 借款逾期拦截（提交新 LOAN 时，检查申请人名下是否有逾期未还的 LOAN）
         if ("LOAN".equals(bill.getBillType()) && bill.getApplyUserId() != null
-                && com.fssc.expense.service.ExpenseBillService.LOAN_OVERDUE_BLOCK_NEW_LOAN) {
+                && ExpenseBillService.LOAN_OVERDUE_BLOCK_NEW_LOAN) {
             LocalDate today = LocalDate.now();
             List<ExpBill> openLoans = expBillMapper.selectList(new LambdaQueryWrapper<ExpBill>()
                     .eq(ExpBill::getApplyUserId, bill.getApplyUserId())
@@ -264,7 +271,7 @@ public class PrecheckService {
 
         // 8) 拆单检测（SPLIT_ORDER_DETECT，WARN 提示不拦截）：跨单据聚合超出预检表达式引擎的能力边界
         //    （引擎仅对注入 Map 中的标量变量求值，无窗口/聚合/他单数据访问），故落在 Java 侧审核链；
-        //    md_compliance_rule 已登记同名规则（V1.3.5）保持规则清单可见性。
+        //    md_compliance_rule 已登记同名规则保持规则清单可见性。
         if (isClaim) {
             PrecheckItem split = detectSplitOrder(bill, total);
             if (split != null) {

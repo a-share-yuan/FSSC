@@ -4,13 +4,19 @@
 package com.fssc.invoice.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.entity.ExpBillPayment;
+import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.expense.mapper.ExpBillPaymentMapper;
 import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.notify.NotifyService;
+import com.fssc.framework.org.OrgGuard;
+import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.glex.entity.GlTaxProvision;
@@ -23,6 +29,9 @@ import com.fssc.invoice.mapper.InvInvoiceGlobalMapper;
 import com.fssc.invoice.mapper.InvInvoiceMapper;
 import com.fssc.masterdata.entity.MdSupplier;
 import com.fssc.masterdata.mapper.MdSupplierMapper;
+import com.fssc.purchase.entity.PoReceipt;
+import com.fssc.purchase.service.PurchaseService;
+import com.fssc.sharing.service.VoucherService;
 import com.fssc.system.entity.SysRole;
 import com.fssc.system.entity.SysUser;
 import com.fssc.system.entity.SysUserRole;
@@ -30,6 +39,10 @@ import com.fssc.system.mapper.SysRoleMapper;
 import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.system.mapper.SysUserRoleMapper;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.Collection;
+import java.util.Objects;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,14 +79,14 @@ public class InvoiceService {
     private final SysRoleMapper sysRoleMapper;
     private final SysUserRoleMapper sysUserRoleMapper;
     private final SysUserMapper sysUserMapper;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
-    private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
-    private final com.fssc.expense.mapper.ExpBillPaymentMapper expBillPaymentMapper;
-    private final com.fssc.purchase.service.PurchaseService purchaseService;
+    private final OrgGuard orgGuard;
+    private final ExpBillMapper expBillMapper;
+    private final ExpBillPaymentMapper expBillPaymentMapper;
+    private final PurchaseService purchaseService;
     /** 发票与收货单匹配时自动生成暂估冲回 + 正式入账凭证（内部 REQUIRES_NEW + 全量默认处理） */
-    private final com.fssc.sharing.service.VoucherService voucherService;
+    private final VoucherService voucherService;
 
-    // ---------------- P1-5 进项发票全生命周期：认证勾选 / 进项转出 / 票账比对·申报 ----------------
+    // 进项发票全生命周期：认证勾选 / 进项转出 / 票账比对·申报
 
     /**
      * 批量进项认证勾选：仅增值税专用发票（invoiceKind=SPECIAL 或 invoiceType=VAT）可抵扣。
@@ -86,7 +99,7 @@ public class InvoiceService {
         if (period == null || period.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请指定勾选认证所属期(如 202608)");
         }
-        // D-INV-01（2026-10-19 G5 幕真跑发现）：period 原样落 certify_period 列（varchar(6)），
+        // 2026-10-19 G5 幕真跑发现：period 原样落 certify_period 列（varchar(6)），
         // 传 "2026-10" 这类带横杠格式会因列宽不足抛 DataTooLong → 整单 500「系统异常」，
         // 调用方无法从错误信息判断是格式问题（易被当成系统故障排查）。
         // 此处显式归一为 yyyyMM 并给出可执行提示，不再让格式问题走到 DB 层炸 500。
@@ -118,7 +131,7 @@ public class InvoiceService {
     }
 
     /**
-     * D-INV-01：认证所属期归一化为 {@code yyyyMM}。
+     * 认证所属期归一化为 {@code yyyyMM}。
      * <p>接受 {@code yyyy-MM}（界面/手册规则）与 {@code yyyyMM}（列宽规则），非法格式显式 400 拒绝——
      * 整改前带横杠格式直接落 varchar(6) 列触发 DataTooLong，整单 500，调用方无从判断是格式问题。
      */
@@ -134,7 +147,7 @@ public class InvoiceService {
                 "认证所属期格式不正确：" + period + "（应为 yyyy-MM 如 2026-10，或 yyyyMM 如 202610）");
     }
 
-    /** D-INV-01 补正：仅做格式归一会放行 {@code 2026-13} 这类不存在月份，归一后必须再校验月份范围。 */
+    /** 补正：仅做格式归一会放行 {@code 2026-13} 这类不存在月份，归一后必须再校验月份范围。 */
     private String checkMonth(String year, String month, String raw) {
         int m = Integer.parseInt(month);
         if (m < 1 || m > 12) {
@@ -154,10 +167,10 @@ public class InvoiceService {
             if (!"CERTIFIED".equals(inv.getCertifyStatus())) {
                 continue;
             }
-            // R5-D-113：认证期间/认证时间必须显式置 NULL——MyBatis-Plus 默认 NOT_NULL 更新策略会
+            // 认证期间/认证时间必须显式置 NULL——MyBatis-Plus 默认 NOT_NULL 更新策略会
             // 跳过实体里的 null 字段，旧写法 updateById 置 null 实际把残留期间留在行上
             // （取消勾选后 certify_status 回 NOT_CERTIFIED 而 certify_period/certify_date 残留，界面自相矛盾）。
-            invInvoiceMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<InvInvoice>()
+            invInvoiceMapper.update(null, new LambdaUpdateWrapper<InvInvoice>()
                     .set(InvInvoice::getCertifyStatus, "NOT_CERTIFIED")
                     .set(InvInvoice::getCertifyPeriod, null)
                     .set(InvInvoice::getCertifyDate, null)
@@ -283,7 +296,7 @@ public class InvoiceService {
                     "价税不符：价税合计 " + invoice.getAmount() + " ≠ 不含税 " + invoice.getNetAmount()
                             + " + 税额 " + invoice.getTaxAmount());
         }
-        // R5-D-109 票号级去重（超时重试防重）：外部网关慢（实测 45.9s）而前端 20s 超时重试，
+        // 票号级去重（超时重试防重）：外部网关慢（实测 45.9s）而前端 20s 超时重试，
         // 同租户同票号已开票成功即直接返回既有票（最早一张）id +「已开票成功」语义，不再重复写入数据库、
         // 不再调外部网关；tenant_id 由 FsscTenantLineHandler 自动追加（与 existsInPool 同一规则），
         // 竞态默认处理仍靠 uk_tenant_inv + 4090（GlobalExceptionHandler）。
@@ -301,9 +314,9 @@ public class InvoiceService {
         if (invoice.getStatus() == null) {
             invoice.setStatus("ISSUING");
         }
-        // 多分子公司审批路由 V1.3.17：前端已传不覆盖，否则取当前登录用户所属公司
+        // 多分子公司审批路由：前端已传不覆盖，否则取当前登录用户所属公司
         if (invoice.getCompanyId() == null) {
-            com.fssc.framework.security.LoginUser lu = UserContext.get();
+            LoginUser lu = UserContext.get();
             if (lu != null) invoice.setCompanyId(lu.getCompanyId());
         }
         invoice.setSourceDocType("SALES_INVOICE");
@@ -336,9 +349,9 @@ public class InvoiceService {
         if (invoice.getInvoiceDate() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择开票日期");
         }
-        // R5-D-123：开票日期不得晚于当前系统日期——未来票入池后会被定时作业当场验真，
+        // 开票日期不得晚于当前系统日期——未来票入池后会被定时作业当场验真，
         // 落出「验真时间早于开票日期」的怪证据（历史 25000001/25000002 两行即此）。
-        if (invoice.getInvoiceDate().isAfter(java.time.LocalDate.now())) {
+        if (invoice.getInvoiceDate().isAfter(LocalDate.now())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "开票日期不得晚于当前日期，请核实后重新录入");
         }
         if (isBlank(invoice.getSellerName())) {
@@ -368,7 +381,7 @@ public class InvoiceService {
     public Long create(InvInvoice invoice) {
         orgGuard.assertCompanyAllowed(invoice.getCompanyId());
         invoice.setId(null);
-        // 全电票无发票代码：NULL 归一为空串（V1.3.4 列已 NOT NULL DEFAULT ''），
+        // 全电票无发票代码：NULL 归一为空串（列已 NOT NULL DEFAULT ''），
         // 使 uk_tenant_inv 租户内查重对全电票生效，且与 inv_invoice_global 空串规则一致
         if (invoice.getInvoiceCode() == null) {
             invoice.setInvoiceCode("");
@@ -390,7 +403,7 @@ public class InvoiceService {
         }
         invoice.setAnomalyFlag(detectAnomaly(invoice));
         Long tenantId = invoice.getTenantId() == null ? TenantContext.getTenantId() : invoice.getTenantId();
-        // 【修复 2026-09-14】手工补录防重：同租户同票号发票已被非 VOID 单据占用 → 拦截；
+        // 手工补录防重：同租户同票号发票已被非 VOID 单据占用 → 拦截；
         // 同 code+no 精确重复（原依赖 uk_tenant_inv 抛裸 500）→ 友好报错
         assertNotDuplicateEntry(invoice);
         // 电子发票全局查重（跨租户预警）：同一"发票代码+号码"已在【其他企业】出现即预警，
@@ -399,15 +412,15 @@ public class InvoiceService {
         if (crossTenantDup && "NORMAL".equals(invoice.getAnomalyFlag())) {
             invoice.setAnomalyFlag("DUP_GLOBAL");
         }
-        // 多分子公司审批路由 V1.3.17：入库前补所属公司，前端已传不覆盖
+        // 多分子公司审批路由：入库前补所属公司，前端已传不覆盖
         if (invoice.getCompanyId() == null) {
-            com.fssc.framework.security.LoginUser lu = UserContext.get();
+            LoginUser lu = UserContext.get();
             if (lu != null) invoice.setCompanyId(lu.getCompanyId());
         }
         invoice.setSourceDocType("MANUAL");
         // D3：购方信息在本表有两组语义重复的列，一组空则按该规则查询的报表必然漏行。
-        //   invoice_title  注释「购方名称」   ← 手工补录表单填这一组
-        //   buyer_name     注释「购方抬头」   ← OCR 链（OcrService#toPoolDto → InvoiceFacadeImpl）填这一组
+        //   invoice_title 注释「购方名称」 ← 手工补录表单填这一组
+        //   buyer_name 注释「购方抬头」 ← OCR 链（OcrService#toPoolDto → InvoiceFacadeImpl）填这一组
         // 两条链路各填一半，导致 5/5 张票 invoice_title 有值而 buyer_name 全空，
         // 「按购买方过滤」的报表一条都查不到（create 方法头注释自认「购方抬头/税号写入数据库」是 P1 遗留）。
         // 此处按互补规则双向补齐：任一组有值就回填另一组，单条链路与未来新调用方都自动受益；
@@ -433,18 +446,18 @@ public class InvoiceService {
     }
 
     /**
-     * D-DEC-463（去重环节②·主域实现）：这张「发票代码＋号码」是否已在当前租户的发票池里。
+     * 去重环节②·主域实现：这张「发票代码＋号码」是否已在当前租户的发票池里。
      *
      * <p>给 OCR 链的入池前置判定用（见 {@code OcrService#recognizeAndRecord}）。命中即跳过入池，
      * 不再靠 {@link #create} 里的 {@code assertNotDuplicateEntry} 抛异常后被调用方误记成"入池失败"。
      *
      * <p>过滤规则与 {@code assertNotDuplicateEntry} 的②（精确重复）一致：
      * {@code tenant_id} 由 {@code FsscTenantLineHandler} 自动追加、{@code del_flag=0} 由实体的
-     * {@code @TableLogic} 自动追加，故此处再手工拼 tenant/del_flag（会变成重复条件、且无上下文时反被拦）。
-     * 全电票的 {@code invoice_code} 在库里是空串（V1.3.4 列 NOT NULL DEFAULT ''），入参须已由调用方归一。
+     * {@code @TableLogic} 自动追加，故此处不要再手工拼 tenant/del_flag（会变成重复条件、且无上下文时反被拦）。
+     * 全电票的 {@code invoice_code} 在库里是空串（列 NOT NULL DEFAULT ''），入参须已由调用方归一。
      *
      * @param invoiceCode 发票代码（已归一，null 由调用方转空串）
-     * @param invoiceNo   发票号码；为空＝无法判定 ⇒ 返回 false，让调用方按原路走查重
+     * @param invoiceNo 发票号码；为空＝无法判定 ⇒ 返回 false，让调用方按原路走查重
      * @return true＝池内有未作废的同码同号发票
      */
     @FsscDataSource("master")
@@ -460,7 +473,7 @@ public class InvoiceService {
     }
 
     /**
-     * 【修复 2026-09-14】发票手工补录防重（补录入口统一校验）：
+     * 发票手工补录防重（补录入口统一校验）：
      * <ol>
      *  <li>同租户同票号发票已被其他单据占用（inv_bill_invoice 勾稽，排除已作废 VOID 单据的关联）
      *      → 报「发票已存在于单据X，不得重复补录」；</li>
@@ -490,7 +503,7 @@ public class InvoiceService {
                 if (link.getBillId() == null) {
                     continue;
                 }
-                com.fssc.expense.entity.ExpBill linked = expBillMapper.selectById(link.getBillId());
+                ExpBill linked = expBillMapper.selectById(link.getBillId());
                 if (linked == null || "VOID".equals(linked.getStatus())) {
                     continue; // 已作废(VOID)单据的关联不算占用
                 }
@@ -656,7 +669,7 @@ public class InvoiceService {
      * 占用累计 = Σ(inv_bill_invoice.amount)，超出发票金额即拦截，防发票被重复超额报销。
      */
     /**
-     * D-PTP-1：发票剩余可用面额 = 票面额 − 其他单据已占用合计（不小于 0）。
+     * 发票剩余可用面额 = 票面额 − 其他单据已占用合计（不小于 0）。
      * 供批量绑票通道逐票自动占用时使用。
      */
     public BigDecimal remainingAmount(Long invoiceId) {
@@ -674,7 +687,7 @@ public class InvoiceService {
     }
 
     /**
-     * uxfix W1（2026-10-08）：销项票判定＝direction 列 或 开票链推导
+     * uxfix W1：销项票判定＝direction 列 或 开票链推导
      * （sourceDocType=SALES_INVOICE/RED_FLUSH、状态 ISSUING/ISSUED/RED_FLUSHED/RED_FLUSH）。
      * 推导项是为覆盖 direction 列 DDL 之前/旧 jar 代次差窗内产生的历史票。
      */
@@ -696,7 +709,7 @@ public class InvoiceService {
      * 同一（单据, 单据行）是否已勾稽过这张发票。bindToBill 每次调用都新插一行，重复提交即为重复占用，
      * 所以关联前先按这一对判重；lineId 为空表示整单关联，只与同样为空的既有行相撞。
      */
-    static boolean alreadyBound(java.util.Collection<InvBillInvoice> links, Long billId, Long lineId) {
+    static boolean alreadyBound(Collection<InvBillInvoice> links, Long billId, Long lineId) {
         if (links == null || billId == null) {
             return false;
         }
@@ -783,16 +796,16 @@ public class InvoiceService {
             lock.setSourceDocId(billId);
             invInvoiceMapper.updateById(lock);
         }
-        // P0-3 PTP接通：发票绑定对公付款单时回写收货单开票金额（激活原零调用方 markInvoiced）
+        // PTP接通：发票绑定对公付款单时回写收货单开票金额（激活原零调用方 markInvoiced）
         // PO → 收货 → 发票(markInvoiced) → 三单匹配 → 付款，采购循环第一环闭合
         try {
-            com.fssc.expense.entity.ExpBill bill = expBillMapper.selectById(billId);
+            ExpBill bill = expBillMapper.selectById(billId);
             if (bill != null && "PAY".equals(bill.getBillType()) && bill.getPoReceiptId() != null) {
                 purchaseService.markInvoiced(bill.getPoReceiptId(), occupyAmount);
                 log.info("[PTP] 发票 {} 绑定付款单 {} → 回写收货单 {} 开票金额 {}", invoiceId, billId, bill.getPoReceiptId(), occupyAmount);
                 // 发票与收货单匹配登记点——红字冲回暂估（借 暂估应付/贷 存货）+ 正式入账（借 存货/贷 应付），
                 // 去重（冲回按收货单、入账按发票），科目缺失/异常仅 warn 不阻断发票绑定
-                com.fssc.purchase.entity.PoReceipt matchedReceipt = null;
+                PoReceipt matchedReceipt = null;
                 try {
                     matchedReceipt = purchaseService.receiptById(bill.getPoReceiptId());
                 } catch (Exception ignore) {
@@ -812,17 +825,17 @@ public class InvoiceService {
     }
 
     /** 按单据号取单（反核销按号解析入口）。 */
-    public com.fssc.expense.entity.ExpBill billByNo(String billNo) {
-        return expBillMapper.selectOne(new LambdaQueryWrapper<com.fssc.expense.entity.ExpBill>()
-                .eq(com.fssc.expense.entity.ExpBill::getBillNo, billNo)
+    public ExpBill billByNo(String billNo) {
+        return expBillMapper.selectOne(new LambdaQueryWrapper<ExpBill>()
+                .eq(ExpBill::getBillNo, billNo)
                 .last("limit 1"));
     }
 
-    /** 不再接受发票勾稽占用的单据最终状态（三单匹配候选窗口排除项，D-DEC-113） */
+    /** 不再接受发票勾稽占用的单据最终状态（三单匹配候选窗口排除项） */
     private static final List<String> BIND_DEAD_BILL_STATUS = List.of("VOID", "TERMINATED", "REJECTED", "WITHDRAWN");
 
     /**
-     * 发票「关联单据」候选单据页（D-DEC-113 的程序半：把唯一业务出口修通）。
+     * 发票「关联单据」候选单据页（的程序半：把唯一业务出口修通）。
      *
      * <p><b>缺陷根因</b>：弹窗此前取的是 {@code /expense/bill/myPage}，服务端硬过滤
      * {@code apply_user_id = 当前登录人}，于是集中作业模式下的共享会计（代位制单/代位录票）
@@ -831,7 +844,7 @@ public class InvoiceService {
      * 出口本身不可达 ⇒ 批次判超付后永久停在执行环节（{@code PayBatchService.execute} 每次现算现拦）。</p>
      *
      * <p><b>规则变更</b>：候选单据按<b>操作权限</b>查询（能绑票＝能选单，端点权限码 {@code inv:bind}），
-     * 不再按提单人查询。组织维度仍受 {@link com.fssc.framework.org.OrgGuard} 约束——
+     * 不再按提单人查询。组织维度仍受 {@link OrgGuard} 约束——
      * 集团级账号（无公司）跨公司可见，普通账号只见本公司单据 + 无公司维度的历史单据 + 本人提的单，
      * 与 {@code OrgGuard.assertVisible} 同一套 fail-open 规则，不放宽越权面。</p>
      *
@@ -839,9 +852,9 @@ public class InvoiceService {
      * {@code invoiceGap}＝应付额 − 已覆盖额），使经办在绑票前就能看清"还差多少票"，
      * 绑完再跑一次三单匹配即知是否解开。</p>
      *
-     * @param keyword  单号/标题/提单人/收款方 模糊匹配（弹窗按单号回车检索）
+     * @param keyword 单号/标题/提单人/收款方 模糊匹配（弹窗按单号回车检索）
      * @param billType 单据类型（PAY/CLAIM/SETTLE…），空＝不限
-     * @param status   单据状态，空＝不限；作废/终止/驳回/撤回的死单一律排除
+     * @param status 单据状态，空＝不限；作废/终止/驳回/撤回的死单一律排除
      */
     public PageResult<Map<String, Object>> bindableBills(long pageNum, long pageSize, String keyword,
                                                          String billType, String status) {
@@ -875,7 +888,7 @@ public class InvoiceService {
         // 发票环节现算：一页 ≤ 若干行，一次 in 查询取回勾稽占用合计（与三单匹配同一规则 inv_bill_invoice）
         Map<Long, BigDecimal> boundByBill = new HashMap<>();
         if (!records.isEmpty()) {
-            List<Long> ids = records.stream().map(ExpBill::getId).filter(java.util.Objects::nonNull)
+            List<Long> ids = records.stream().map(ExpBill::getId).filter(Objects::nonNull)
                     .collect(Collectors.toList());
             if (!ids.isEmpty()) {
                 for (InvBillInvoice link : invBillInvoiceMapper.selectList(
@@ -918,7 +931,7 @@ public class InvoiceService {
     }
 
     /**
-     * 反核销（D-V3-135 配套 · 单据反操作链第一环）：解除发票-单据勾稽并解锁发票。
+     * 反核销（配套 · 单据反操作链第一环）：解除发票-单据勾稽并解锁发票。
      *
      * <p>前置：本单据不存在 PAID 付款记录——付款落地后勾稽是既成资金事实的凭证线索，不得反；
      * 资金差错走付款退款单（同一规则）。</p>
@@ -934,16 +947,16 @@ public class InvoiceService {
         if (billId == null || invoiceId == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请指定单据与发票");
         }
-        java.util.List<InvBillInvoice> links = invBillInvoiceMapper.selectList(new LambdaQueryWrapper<InvBillInvoice>()
+        List<InvBillInvoice> links = invBillInvoiceMapper.selectList(new LambdaQueryWrapper<InvBillInvoice>()
                 .eq(InvBillInvoice::getBillId, billId)
                 .eq(InvBillInvoice::getInvoiceId, invoiceId)
                 .eq(InvBillInvoice::getDelFlag, 0));
         if (links.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "未找到该发票与本单据的有效勾稽记录");
         }
-        Long paidCnt = expBillPaymentMapper.selectCount(new LambdaQueryWrapper<com.fssc.expense.entity.ExpBillPayment>()
-                .eq(com.fssc.expense.entity.ExpBillPayment::getBillId, billId)
-                .eq(com.fssc.expense.entity.ExpBillPayment::getPayStatus, "PAID"));
+        Long paidCnt = expBillPaymentMapper.selectCount(new LambdaQueryWrapper<ExpBillPayment>()
+                .eq(ExpBillPayment::getBillId, billId)
+                .eq(ExpBillPayment::getPayStatus, "PAID"));
         if (paidCnt != null && paidCnt > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "该单据付款已执行，勾稽不可反核销（资金差错请走付款退款单）");
         }
@@ -954,8 +967,8 @@ public class InvoiceService {
             n += invBillInvoiceMapper.deleteById(link.getId());
         }
         // 解锁发票（清占用溯源需置 NULL，updateById 跳过空值 → 用 UpdateWrapper）
-        com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<InvInvoice> unlock =
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<InvInvoice>()
+        LambdaUpdateWrapper<InvInvoice> unlock =
+                new LambdaUpdateWrapper<InvInvoice>()
                         .eq(InvInvoice::getId, invoiceId)
                         .set(InvInvoice::getLockStatus, "NONE")
                         .set(InvInvoice::getSourceDocType, null)
@@ -964,7 +977,7 @@ public class InvoiceService {
         recalcUsedCount(invoiceId);
         // 反核销同步释放收货单开票额（勾稽列两向都要跟着明细走，否则 po_receipt.invoice_amount 只增不减）
         try {
-            com.fssc.expense.entity.ExpBill b = expBillMapper.selectById(billId);
+            ExpBill b = expBillMapper.selectById(billId);
             if (b != null && b.getPoReceiptId() != null) {
                 purchaseService.markInvoiced(b.getPoReceiptId(), BigDecimal.ZERO);
             }
@@ -1025,7 +1038,7 @@ public class InvoiceService {
                 .eq(InvBillInvoice::getBillId, billId));
     }
 
-    // ---------------- 销项发票作废与红冲（2026-09-14） ----------------
+    // 销项发票作废与红冲
 
     /**
      * 销项发票作废（当月作废）：仅当月（开票日期与当前同月）且未被收款核销/单据占用引用时
@@ -1052,10 +1065,10 @@ public class InvoiceService {
                             + " 方向: " + inv.getDirection());
         }
         // 仅当月可作废：开票日期与当前同月（未填开票日期按录入当月处理）
-        java.time.LocalDate invDate = inv.getInvoiceDate() != null
-                ? inv.getInvoiceDate() : (inv.getCreateTime() != null ? inv.getCreateTime().toLocalDate() : java.time.LocalDate.now());
-        java.time.YearMonth invMonth = java.time.YearMonth.from(invDate);
-        if (!invMonth.equals(java.time.YearMonth.now())) {
+        LocalDate invDate = inv.getInvoiceDate() != null
+                ? inv.getInvoiceDate() : (inv.getCreateTime() != null ? inv.getCreateTime().toLocalDate() : LocalDate.now());
+        YearMonth invMonth = YearMonth.from(invDate);
+        if (!invMonth.equals(YearMonth.now())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "发票 " + noOf(inv) + " 开票日期 " + invDate + " 非当月，不可作废，请走跨月红冲（/invoice/red-flush）");
         }
@@ -1077,13 +1090,13 @@ public class InvoiceService {
     }
 
     /**
-     * 进项「发票补录」金额更正（D-V4R-46 的出口）：补录时把税额填成 0，会让三单匹配按
+     * 进项「发票补录」金额更正（的出口）：补录时把税额填成 0，会让三单匹配按
      * 「价税 − 税额」折算后判成「发票超收货超容差」，而票号上有 uk_tenant_inv 唯一键 ⇒ 作废后同号码录不回来，
      * 光补 inv:void/inv:unbind 两道门并不能纠错。这里给一张<b>未被占用</b>的进项票一个改额通道：
      * 只改三个金额字段并把 VOID/NORMAL 归位成 NORMAL，票号、销方、日期、影像一律不动，记录追加进 remark。
      */
-    public void correctEntry(Long invoiceId, java.math.BigDecimal netAmount, java.math.BigDecimal taxAmount,
-                             java.math.BigDecimal amount, String reason) {
+    public void correctEntry(Long invoiceId, BigDecimal netAmount, BigDecimal taxAmount,
+                             BigDecimal amount, String reason) {
         if (reason == null || reason.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "更正原因必填");
         }
@@ -1103,7 +1116,7 @@ public class InvoiceService {
         if (netAmount.signum() < 0 || taxAmount.signum() < 0 || amount.signum() <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "金额不能为负且价税合计必须大于 0");
         }
-        if (netAmount.add(taxAmount).subtract(amount).abs().compareTo(new java.math.BigDecimal("0.01")) > 0) {
+        if (netAmount.add(taxAmount).subtract(amount).abs().compareTo(new BigDecimal("0.01")) > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "价税不符：价税合计 " + amount + " ≠ 不含税 " + netAmount + " + 税额 " + taxAmount);
         }
@@ -1167,7 +1180,7 @@ public class InvoiceService {
         red.setSellerTaxNo(origin.getSellerTaxNo());
         red.setBuyerName(origin.getBuyerName());
         red.setBuyerTaxNo(origin.getBuyerTaxNo());
-        red.setInvoiceDate(java.time.LocalDate.now());
+        red.setInvoiceDate(LocalDate.now());
         // 负数金额（红冲）：amount = -(net + tax)，保持价税分离勾稽
         BigDecimal net = origin.getNetAmount() == null ? BigDecimal.ZERO : origin.getNetAmount();
         BigDecimal tax = origin.getTaxAmount() == null ? BigDecimal.ZERO : origin.getTaxAmount();

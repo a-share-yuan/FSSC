@@ -21,7 +21,7 @@
           <el-input v-model="kw" placeholder="单据号/往来单位" clearable style="width:220px" @keyup.enter="loadReceivable" />
           <el-button type="primary" @click="loadReceivable">查询</el-button>
           <el-button type="success" @click="openReceivable">按销售订单生成应收</el-button>
-          <!-- D-DEC-407：逾期批处理补「账期／截止日」入参。留空＝按系统当前日跑（旧行为）；
+          <!-- 逾期批处理补「账期／截止日」入参。留空＝按系统当前日跑（旧行为）；
                业务期间晚于系统日（补跑历史／跑到未来账期）时必须填期间，否则到期日永不早于基准日、逾期集恒空。 -->
           <el-input v-model="overdueBaseline" placeholder="账期/截止日（202611 或 2026-11-30，留空＝当天）" clearable size="small" style="width:250px" />
           <el-button type="warning" @click="accrueOverdue">逾期坏账计提批处理</el-button>
@@ -66,7 +66,7 @@
               </el-tag>
             </template>
           </el-table-column>
-          <!-- D-H3-01：单据态是「收款规则」（NONE 直译"未开始"），审批期间看不出流程在跑 ⇒
+          <!-- 单据态是「收款规则」（NONE 直译"未开始"），审批期间看不出流程在跑 ⇒
                后端 page() 按 wf_instance 投影一列流程态（未起流程/审批中/审批通过/已驳回/已撤销/已终止）。 -->
           <el-table-column label="流程态" width="100" align="center">
             <template #default="{ row }">
@@ -100,9 +100,9 @@
           </el-table-column>
           <el-table-column label="操作" width="140" fixed="right">
             <template #default="{ row }">
-              <!-- D-DEC-423④：原判据 row.status !== 'APPLIED' 与库值名称表不匹配（登记环节写的是 WRITTEN_OFF），
+              <!-- ④：原判据 row.status !== 'APPLIED' 与库值名称表不匹配（登记环节写的是 WRITTEN_OFF），
                    于是"已核销"行的「先进先出核销」按钮常驻可点＝重复核销的诱因；现按真实最终状态名称表隐藏。
-                   后端 applyReceipt 同步改去重跳过（登记即冲减，D-V3-143），二次点击也不会再冲一遍余额。 -->
+                   后端 applyReceipt 同步改去重跳过（登记即冲减），二次点击也不会再冲一遍余额。 -->
               <el-button v-if="!receiptAppliedStatuses.includes(row.status)" link size="small" type="primary" @click="applyReceipt(row)">先进先出核销</el-button>
               <el-tag v-else size="small" type="success" effect="plain">登记时已核销</el-tag>
             </template>
@@ -114,7 +114,7 @@
       <el-tab-pane label="催收待办" name="collect">
         <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center">
           <el-input-number v-model="overdueDays" :min="0" size="small" />
-          <!-- D-DEC-407：与「应收单」tab 共用同一个账期基准日（逾期天数阈值 days 不是空集成因，已自纠）；
+          <!-- 与「应收单」tab 共用同一个账期基准日（逾期天数阈值 days 不是空集成因，已自纠）；
                打卡 OVERDUE 与本处生成待办必须同一把尺子，否则扫描与催收各按各的基准日。 -->
           <el-input v-model="overdueBaseline" placeholder="账期/截止日（202611 或 2026-11-30，留空＝当天）" clearable size="small" style="width:250px" />
           <el-button type="warning" @click="createOverdue">扫描逾期生成待办</el-button>
@@ -129,7 +129,7 @@
             <template #default="{ row }">{{ rcStatusLabel(row.status) }}</template>
           </el-table-column>
           <el-table-column prop="contactName" label="联系人" width="100" show-overflow-tooltip  sortable />
-          <!-- D-DEC-410 乙：同人多岗只做复核提示，不拦办结——提示必须在界面看得见才算控制点 -->
+          <!-- 乙：同人多岗只做复核提示，不拦办结——提示必须在界面看得见才算控制点 -->
           <el-table-column label="复核" width="80" align="center">
             <template #default="{ row }">
               <el-tooltip v-if="row.multiRoleWarning" :content="row.multiRoleWarning" placement="top">
@@ -204,10 +204,10 @@
           <el-select v-model="rForm.currencyCode" style="width:100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 
-            
-            
-            
-            
+
+
+
+
           </el-select>
         </el-form-item>
         <el-form-item label="到期日" prop="dueDate"><el-date-picker v-model="rForm.dueDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
@@ -258,12 +258,12 @@ import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useCurrency } from '@/composables/useCurrency'
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => { try { reload() } catch { /* noop */ } },
 })
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -284,7 +284,7 @@ const selRows = ref([])
 const customers = ref([])
 function customerName(id) { const c = customers.value.find((x) => x.id === id); return c ? (c.customerName || c.supplierName || c.name || '—') : (id ? '#' + id : '—') }
 
-// D-H3-01：流程态配色（wf_instance.status）——审批中给主色，最终状态按结果分色，未起流程灰
+// 流程态配色（wf_instance.status）——审批中给主色，最终状态按结果分色，未起流程灰
 function flowTagType(s) {
   return { RUNNING: 'primary', APPROVED: 'success', REJECTED: 'danger', CANCELLED: 'info', TERMINATED: 'info' }[s] || 'info'
 }
@@ -302,7 +302,7 @@ function isHighRiskCustomer(id) {
 
 // 应收状态翻译
 
-// D-BIZ-05：四个子视图在 sys_menu 里只有 3070「应收管理」一条菜单行，没有拆出的子菜单。
+// 四个子视图在 sys_menu 里只有 3070「应收管理」一条菜单行，没有拆出的子菜单。
 // 原先按「一 TAB = 一菜单」的约定隐藏页签条 ⇒ 收款核销/催收待办/坏账计提只能手敲 URL。
 // 菜单未拆的页不藏页签：深链进来仍定位到指定页签，同时把其余页签露出来可点。
 const props = defineProps({ tab: { type: String, default: '' } })
@@ -313,13 +313,13 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const receivables = ref([])
 const recvTotal = ref(0)
-// R5-D-174：4030 权限拒绝独立空态（改前与「暂无数据」同形，无权限被读成没数据）
+// 4030 权限拒绝独立空态（改前与「暂无数据」同形，无权限被读成没数据）
 const denied = ref(false)
 const receipts = ref([])
 const collects = ref([])
 const badDebts = ref([])
 const overdueDays = ref(30)
-// D-DEC-407：逾期批处理的账期基准日（留空＝系统当前日）。批处理原本把 LocalDate.now() 写死在判据里，
+// 逾期批处理的账期基准日（留空＝系统当前日）。批处理原本把 LocalDate.now() 写死在判据里，
 // "业务期间晚于系统日"时到期日永不早于基准日 ⇒ 逾期集恒空、催收池零成员、坏账计提与账龄同因空转。
 const overdueBaseline = ref('')
 const badDebtPeriod = ref('')
@@ -347,7 +347,7 @@ async function loadReceivable() {
     recvTotal.value = Number(d.total || 0)
     denied.value = false
   } catch (e) {
-    // R5-D-174：4030（无应收读权限）置权限空态，不再落到「暂无数据」
+    // 4030（无应收读权限）置权限空态，不再落到「暂无数据」
     if (e?.code === 4030) { denied.value = true; return }
     ElMessage.error(e.message)
   } finally { loading.value = false }
@@ -364,7 +364,7 @@ async function saveReceivable() {
   })
 }
 /**
- * D-DEC-407：把界面填的基准日折成后端两个可选入参之一——
+ * 把界面填的基准日折成后端两个可选入参之一——
  * yyyyMM／yyyy-MM ＝期间（后端按期末日跑），yyyy-MM-dd／yyyy/MM/dd／yyyyMMdd ＝截止日（逐字取该日）；
  * 留空＝不传（后端回退系统当前日，与改造前逐字一致）；格式不认识时显式提示，不静默默认处理。
  * @returns {{asOfDate?: string, period?: string}}
@@ -396,14 +396,14 @@ async function accrueOverdue() {
 async function openReceipt() { rcForm.value = { customerId: null, amount: 0, receiptDate: '' }; dlgReceipt.value = true }
 async function saveReceipt() {
   await guardReceipt(async () => {
-    // D-H3-06（孪生面同修）：保存后 await 刷新，避免"点了没反应"的误判；
+    // 孪生面同修：保存后 await 刷新，避免"点了没反应"的误判；
     // 本页无检索工具条，新行必在列表首屏（后端按 id 倒序），故不做「不在视野」提示。
     try { await receivableApi.receiptCreate(rcForm.value); ElMessage.success('收款单已登记'); dlgReceipt.value = false; await loadReceipt() }
     catch (e) { ElMessage.error(e.message) }
   })
 }
-// D-DEC-423④：收款单"已核销"最终状态名称表（后端 RcReceiptService.APPLIED_RECEIPT_STATUSES 同一规则）。
-// 登记环节 create() 自 D-V3-143 起在同一事务里建明细＋冲减应收环节＋置 WRITTEN_OFF，
+// ④：收款单"已核销"最终状态名称表（后端 RcReceiptService.APPLIED_RECEIPT_STATUSES 同一规则）。
+// 登记环节 create() 自 起在同一事务里建明细＋冲减应收环节＋置 WRITTEN_OFF，
 // 故 WRITTEN_OFF／WRITE_OFF／APPLIED 都＝冲减已发生，行内不再给「先进先出核销」按钮。
 const receiptAppliedStatuses = ['WRITTEN_OFF', 'WRITE_OFF', 'APPLIED']
 
@@ -426,7 +426,7 @@ async function createOverdue() {
 }
 async function solveCollect(row) {
   try {
-    // D-DEC-410 乙：办结照做，只把"同一人在这条催收任务上占多岗"的复核提示显示出来（不拦、不报错）
+    // 乙：办结照做，只把"同一人在这条催收任务上占多岗"的复核提示显示出来（不拦、不报错）
     const r = await receivableApi.collectSolve(row.id)
     if (r && r.warning) ElMessage({ type: 'warning', message: '待办已解决：' + r.warning, duration: 6000 })
     else ElMessage.success('待办已解决')
@@ -465,7 +465,7 @@ async function reconStart() {
 function reload() {
   loadReceivable(); loadReceipt(); loadCollect(); loadBadDebt()
 }
-// D-DEC-404 消费半：工作台「我的单据」台账跳转同写 kw 与 billNo/billId 两套取参规则（Workbench:269-275），
+// 消费半：工作台「我的单据」台账跳转同写 kw 与 billNo/billId 两套取参规则（Workbench:269-275），
 // 本页此前完全不吃 URL——跳过来落的仍是全量首屏，"别的页面能定位到这一单"在此失明。
 const route = useRoute()
 const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel } = useCurrency()

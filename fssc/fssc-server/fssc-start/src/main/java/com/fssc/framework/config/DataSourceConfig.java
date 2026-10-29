@@ -21,13 +21,13 @@ import java.util.Map;
 /**
  * 多数据源配置（分库改造）。
  * <p>
- * master  ：主库 fssc，承载除影像 6 表外的全部业务表、平台表与 Flowable 流程表；
- * image   ：影像库 fssc_image，承载 img_batch/img_file/img_setting/image_exception/image_review/ocr_record；
- * replica ：报表/追溯只读副本。未配置独立副本时（fssc.datasource.replica.enabled≠true）
+ * master：主库 fssc，承载除影像 6 表外的全部业务表、平台表与 Flowable 流程表；
+ * image：影像库 fssc_image，承载 img_batch/img_file/img_setting/image_exception/image_review/ocr_record；
+ * replica：报表/追溯只读副本。未配置独立副本时（fssc.datasource.replica.enabled≠true）
  *           别名到 master，但<b>同样</b>套 {@link ReadOnlyGuardDataSource}——先证明"只读"，
  *           等真副本就绪只改连接串即可切换；
  * document：档案域自治库（fssc.datasource.document.enabled≠true 时别名 master）；
- * invoice ：发票域自治库（fssc.datasource.invoice.enabled≠true 时别名 master）。
+ * invoice：发票域自治库（fssc.datasource.invoice.enabled≠true 时别名 master）。
  * <p>
  * 各 Hikari 连接池的属性直接绑定各自前缀（fssc.datasource.*，使用 jdbc-url 等 Hikari 原生键），
  * 不依赖 Boot 的 DataSourceAutoConfiguration —— 本类声明 DataSource bean 后该自动配置退避。

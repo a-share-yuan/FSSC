@@ -8,6 +8,8 @@ import com.fssc.arflow.entity.ArWriteoffFund;
 import com.fssc.arflow.entity.ArWriteoffRecord;
 import com.fssc.arflow.mapper.ArWriteoffFundMapper;
 import com.fssc.arflow.mapper.ArWriteoffRecordMapper;
+import com.fssc.audit.service.AuditTrailService;
+import com.fssc.collab.service.ScpReconService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.security.LoginUser;
@@ -18,6 +20,10 @@ import com.fssc.receivable.entity.RcReceiptLine;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
 import com.fssc.receivable.service.RcReceiptService;
+import com.fssc.system.service.PeriodLockService;
+import java.time.YearMonth;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,24 +50,24 @@ import java.util.UUID;
 public class ArWriteoffService {
 
     private final ArWriteoffFundMapper fundMapper;
-    private final com.fssc.collab.service.ScpReconService scpReconService;
-    private final com.fssc.system.service.PeriodLockService periodLockService;
+    private final ScpReconService scpReconService;
+    private final PeriodLockService periodLockService;
     private final ArWriteoffRecordMapper recordMapper;
     private final RcReceivableMapper receivableMapper;
     private final RcReceiptService receiptService;
     private final ArFlowVoucherService voucherService;
 
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
-    // ---------------- 资金池 ----------------
+    // 资金池
 
     /** 资金登记（收款/票据来源）；票据资金带 noteId 供票据核销归类。 */
     @Transactional(rollbackFor = Exception.class)
     public ArWriteoffFund registerFund(ArWriteoffFund f) {
 
         // 蓝图规则6.5：账期已被月结关闭时禁止录入当月业务
-        periodLockService.assertNotLocked(null, java.time.YearMonth.now().toString(), "登记核销资金");
+        periodLockService.assertNotLocked(null, YearMonth.now().toString(), "登记核销资金");
         if (f.getFundAmount() == null || f.getFundAmount().signum() <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "资金金额必须大于0");
         }
@@ -117,14 +123,14 @@ public class ArWriteoffService {
         }
         q.gt(RcReceivable::getRemainAmount, BigDecimal.ZERO);
         q.ne(RcReceivable::getStatus, "DONE");
-        // D-V4R-71（与 RcReceiptService 同一处规则，2026-10-15 实测）：只排 DONE ⇒ 未确认（NONE，
+        // （与 RcReceiptService 同一处规则，2026-10-15 实测）：只排 DONE ⇒ 未确认（NONE，
         // 含流程卡死件）与被驳回（REJECTED）的应收仍会进自动核销候选。
         q.notIn(RcReceivable::getStatus, "NONE", "REJECTED");
         q.orderByAsc(RcReceivable::getDueDate).orderByAsc(RcReceivable::getId);
         return receivableMapper.selectList(q);
     }
 
-    // ---------------- 匹配核销 ----------------
+    // 匹配核销
 
     /** 自动核销（蓝图：系统自动匹配）：按到期日+id FIFO 拆分资金核销未清应收。 */
     @Transactional(rollbackFor = Exception.class)
@@ -198,7 +204,7 @@ public class ArWriteoffService {
                                            String agreementNo, List<RcReceiptLine> lines) {
 
         // 蓝图规则6.5：账期已被月结关闭时禁止录入当月业务
-        periodLockService.assertNotLocked(null, java.time.YearMonth.now().toString(), "对冲核销");
+        periodLockService.assertNotLocked(null, YearMonth.now().toString(), "对冲核销");
         if (customerId == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "对冲客户必填");
         }
@@ -241,7 +247,7 @@ public class ArWriteoffService {
             RcReceipt receipt = createAndApplyReceipt(fund, effective);
             rec.setInvoiceNos(invoiceNosOf(effective));
             rec.setReceiptNo(receipt.getBillNo());
-            // D-DEC-409（X-28 甲）：出证前已先立到账载体（上面的 rc_receipt 核销单），且对冲环节＝借 2202／贷 1122 不动银行存款，
+            // X-28 甲：出证前已先立到账载体（上面的 rc_receipt 核销单），且对冲环节＝借 2202／贷 1122 不动银行存款，
             // 不属"无到账凭空出核销凭证"那一族；借 1002 的收款核销环节校验在 VoucherService.generateCollectVoucher。
             rec.setVoucherNo(voucherService.generateOffsetVoucher(fund.getTenantId(), companyId(), amount,
                     customerName, rec.getRecordNo(), rec.getId()));
@@ -253,11 +259,11 @@ public class ArWriteoffService {
             throw e;
         }
         recordMapper.updateById(rec);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("receiptNo", null);
         auditBefore.put("voucherNo", null);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", rec.getStatus());
         auditAfter.put("receiptNo", rec.getReceiptNo());
         auditAfter.put("voucherNo", rec.getVoucherNo());
@@ -267,7 +273,7 @@ public class ArWriteoffService {
         return rec;
     }
 
-    // ---------------- 核销查询 ----------------
+    // 核销查询
 
     public List<ArWriteoffRecord> records(String writeoffType, String status, String keyword) {
         LambdaQueryWrapper<ArWriteoffRecord> q = new LambdaQueryWrapper<>();
@@ -285,7 +291,7 @@ public class ArWriteoffService {
         return recordMapper.selectList(q.orderByDesc(ArWriteoffRecord::getId));
     }
 
-    // ---------------- 内部 ----------------
+    // 内部
 
     /** 执行核销：建收款单（明细强勾稽）→ 即时冲减应收 → 扣资金池余额 → 记录核销结果。 */
     private ArWriteoffRecord execute(ArWriteoffFund fund, List<RcReceiptLine> lines, boolean auto, String note) {
@@ -345,10 +351,10 @@ public class ArWriteoffService {
         BigDecimal auditOldRemain = fund.getRemainAmount();
         u.setStatus(remain.signum() <= 0 ? ArWriteoffFund.ST_EXHAUSTED : ArWriteoffFund.ST_AVAILABLE);
         fundMapper.updateById(u);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldFundStatus);
         auditBefore.put("remainAmount", auditOldRemain);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", u.getStatus());
         auditAfter.put("remainAmount", remain);
         auditTrailService.recordUpdate("AR_WRITEOFF", fund.getId(), fund.getFundNo(), "ar_writeoff_fund",

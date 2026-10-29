@@ -47,12 +47,12 @@ public class BgItem extends TenantAuditBase {
     private String ifsAccount;
     private String remark;
 
-    /** D-DEC-372：控制方式（HARD/SOFT/WARN）在方案表 bg_scheme.control_type，本表无列；
+    /** 控制方式（HARD/SOFT/WARN）在方案表 bg_scheme.control_type，本表无列；
      *  pick 接口按 BudgetService.controlTypeOf 同一规则批量解析后带出，供前端校验分档（非表列）。 */
     @TableField(exist = false)
     private String controlType;
 
-    /** R5-D-264：执行率（%），非表列——由 BudgetService.execRateOf 单点计算后填充：
+    /** 执行率（%），非表列——由 BudgetService.execRateOf 单点计算后填充：
      *  分子 = occupy_amount + used_amount（与"可用余额"列同轴），分母 = total_amount + adjust_amount，
      *  不封顶（可 >100 表示超支）；分母 <=0 时为 null（前端显示「—」）。 */
     @TableField(exist = false)

@@ -3,13 +3,14 @@
 
 package com.fssc.masterdata.dto;
 
+import java.util.Map;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * 打印引擎输出 DTO（V1.4.81）。
+ * 打印引擎输出 DTO。
  *
  * <p>后端把「模板 + 数据 + 版式换算」一次性算好下发，前端只做绘制与打印，
  * 避免把毫米换算/必录校验规则散落到每个前端页面。
@@ -160,7 +161,7 @@ public class PrintDto {
         /** 模板套编码（传则按套内顺序渲染多个模板） */
         private String setCode;
         /** 查询对象：{head:{...}, lines:[...]} */
-        private java.util.Map<String, Object> data;
+        private Map<String, Object> data;
         /** 是否服务端直接渲染 HTML（默认 true；false 只返回模板与坐标，前端自绘） */
         private Boolean renderHtml;
     }

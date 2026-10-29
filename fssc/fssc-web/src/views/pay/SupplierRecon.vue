@@ -252,13 +252,13 @@ import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => loadDetails(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
 })
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -281,7 +281,7 @@ const q = reactive({ pageNum: 1, pageSize: 20, keyword: '', status: '' })
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 
 function statusLabel(s) {
-  // D-H2-06：DRAFT 原直译「已生成」，与库面态是两套语言——采购退货审核通过的同一秒会自动生成
+  // DRAFT 原直译「已生成」，与库面态是两套语言——采购退货审核通过的同一秒会自动生成
   // 一张 recon_type=AUTO 的负数对账单（实测 supplier_recon 19／RC2026102400001／-16,000／DRAFT），
   // 界面却显示「已生成」，读起来像已走完对账。词面统一按"这一态还没发函、还没被供应商确认"＝待确认。
   return { DRAFT: t('pay.recon.stDraft'), SENT: t('pay.recon.stLetterSent'), CONFIRMED: t('pay.shared.stConfirmed'), DIFF: t('pay.recon.stDiff'), RESOLVED: t('pay.recon.stDiffResolved') }[s] || s || ''
@@ -296,7 +296,7 @@ function letterTagType(s) {
   return { NONE: 'info', SENT: 'warning', RECEIVED: 'success' }[s] || 'info'
 }
 function confirmLabel(s) {
-  // R5-D-074②：未发函（NONE/空）不显示「待确认」——那是发函后才存在的状态，
+  // ②：未发函（NONE/空）不显示「待确认」——那是发函后才存在的状态，
   // 一律显 '-'，杜绝「未发函却显示待确认/驳回」的状态机矛盾呈现。
   return { NONE: '-', PENDING: t('pay.recon.lblConfirmPending'), CONFIRMED: t('pay.recon.btnConfirmAgreed'), REJECTED: t('pay.recon.btnDispute') }[s] || '-'
 }
@@ -331,7 +331,7 @@ async function generate() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// ---- 明细勾对 ----
+// 明细勾对
 const detailVisible = ref(false)
 const currentRow = ref(null)
 const summary = ref(null)
@@ -410,7 +410,7 @@ async function unmatch(row) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-// ---- 对账函 ----
+// 对账函
 async function sendLetter(row) {
   try {
     await ElMessageBox.confirm(t('pay.recon.ctxSendConfirm', { v1: row.supplierName }), t('pay.recon.btnSendLetter'), { type: 'warning' })
@@ -420,7 +420,7 @@ async function sendLetter(row) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-// ---- 供应商确认 ----
+// 供应商确认
 async function supplierConfirm(row, status) {
   const action = status === 'CONFIRMED' ? t('pay.recon.btnConfirmAgreed') : t('pay.recon.btnDispute')
   try {
@@ -437,7 +437,7 @@ async function supplierConfirm(row, status) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-// ---- 差异调节 ----
+// 差异调节
 const diffVisible = ref(false)
 const diffs = ref([])
 const newDiff = reactive({ diffType: 'AMOUNT_DIFF', ourAmount: '', supplierAmount: '', reason: '' })
@@ -495,7 +495,7 @@ async function resolveDiff() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// ---- LinkU 状态查看（只读） ----
+// LinkU 状态查看（只读）
 async function syncLinkU(row) {
   try {
     const r = await opApi.reconLinkUStatus(row.id)

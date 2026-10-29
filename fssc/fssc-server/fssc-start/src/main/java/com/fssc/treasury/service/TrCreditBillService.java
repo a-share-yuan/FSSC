@@ -8,13 +8,28 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.receivable.entity.RcReceipt;
+import com.fssc.receivable.entity.RcReceiptLine;
+import com.fssc.receivable.mapper.RcReceiptLineMapper;
+import com.fssc.receivable.mapper.RcReceiptMapper;
 import com.fssc.sharing.entity.OpBankStatement;
+import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.mapper.OpBankStatementMapper;
+import com.fssc.sharing.mapper.OpVoucherMapper;
+import com.fssc.system.service.NumberRuleService;
 import com.fssc.treasury.entity.TrCreditBill;
 import com.fssc.treasury.mapper.TrCreditBillMapper;
+import com.fssc.workflow.entity.WfInstance;
+import com.fssc.workflow.mapper.WfInstanceMapper;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,23 +56,23 @@ public class TrCreditBillService {
     private final TrCreditBillMapper creditMapper;
     private final OpBankStatementMapper statementMapper;
     private final WfEngineFacade wfEngineFacade;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
+    private final NumberRuleService numberRuleService;
+    private final OrgGuard orgGuard;
     /**
-     * D-DEC-418 丙：到账环节 ↔ 核销环节 勾稽体检的三张只读 mapper。
+     * 丙：到账环节 ↔ 核销环节 勾稽体检的三张只读 mapper。
      * 跨域引用与本包既有惯例一致（本类已引 sharing 域的 OpBankStatement/Mapper；
      * bank 域的 BankReconcileService:133 也直接读 rc_receipt）。仅用于 {@link #reconTrace(Long)}
      * 的 SELECT，本类所有写方法不触碰它们。
      */
-    private final com.fssc.sharing.mapper.OpVoucherMapper voucherMapper;
-    private final com.fssc.receivable.mapper.RcReceiptMapper rcReceiptMapper;
-    private final com.fssc.receivable.mapper.RcReceiptLineMapper rcReceiptLineMapper;
+    private final OpVoucherMapper voucherMapper;
+    private final RcReceiptMapper rcReceiptMapper;
+    private final RcReceiptLineMapper rcReceiptLineMapper;
     /**
-     * D-DEC-420 丙：只读取 TR_RECEIPT 流程实例的发起人当"建单人"——tr_credit_bill 无建单列，
+     * 丙：只读取 TR_RECEIPT 流程实例的发起人当"建单人"——tr_credit_bill 无建单列，
      * 而 {@code receiveRecord()} 起流时已把登录人写进 wf_instance.start_user_id，是现成记录。
      * 本字段仅 SELECT，不写流程表、不改审批环节。
      */
-    private final com.fssc.workflow.mapper.WfInstanceMapper wfInstanceMapper;
+    private final WfInstanceMapper wfInstanceMapper;
 
     /** 渠道流水认领，生成应收收款（PENDING 已认领） */
     public Long receiveRecord(TrCreditBill bill) {
@@ -106,8 +121,8 @@ public class TrCreditBillService {
                 .eq(TrCreditBill::getStatus, "PENDING")
                 .last("limit 200"));
         int count = 0;
-        // D-DEC-420 丙：本轮"本人建单—本人核销"的单据号（批量端点只回条数，提示位落日志）
-        List<String> selfReconNos = new java.util.ArrayList<>();
+        // 丙：本轮"本人建单—本人核销"的单据号（批量端点只回条数，提示位落日志）
+        List<String> selfReconNos = new ArrayList<>();
         Map<Long, Long> creators = creatorsOf(pending.stream().map(TrCreditBill::getId).toList());
         Long operator = userId();
         for (TrCreditBill bill : pending) {
@@ -142,10 +157,10 @@ public class TrCreditBillService {
 
     /**
      * 人工核销（确认对账）。
-     * <p>D-DEC-420 丙档：只做提示校验——确认核销的人与该单建单人相同时，返回非阻断的复核提示位
+     * <p>丙档：只做提示校验——确认核销的人与该单建单人相同时，返回非阻断的复核提示位
      * （{@code selfRecon}／{@code warning}），核销照常完成、不抛异常、不动审批环节与权限。
      * <p>返回体由 Void 改为结构化 Map 是<b>增量</b>：该端点原 data 恒为 null，现调用方
-     * （资金收款看板）忽略返回值，查询改从 data 里读不影响既有行为。
+     * 资金收款看板 忽略返回值，查询改从 data 里读不影响既有行为。
      */
     @Transactional
     public Map<String, Object> confirmRecon(Long id) {
@@ -158,7 +173,7 @@ public class TrCreditBillService {
             bill.setReconTime(LocalDateTime.now());
             creditMapper.updateById(bill);
         }
-        Map<String, Object> res = new java.util.LinkedHashMap<>();
+        Map<String, Object> res = new LinkedHashMap<>();
         res.put("creditBillId", bill.getId());
         res.put("billNo", bill.getBillNo());
         res.put("status", bill.getStatus());
@@ -174,19 +189,19 @@ public class TrCreditBillService {
     }
 
     /**
-     * D-DEC-420 丙：建单人一次批量取（避开自动核销的逐单查流程表）。
+     * 丙：建单人一次批量取（避开自动核销的逐单查流程表）。
      *
      * @return 收款单 id → 建单人（无流程实例／发起人为 0 时该键缺位，一律按"判不出"处理，不猜人）
      */
     private Map<Long, Long> creatorsOf(List<Long> billIds) {
-        Map<Long, Long> map = new java.util.HashMap<>();
+        Map<Long, Long> map = new HashMap<>();
         if (billIds == null || billIds.isEmpty()) return map;
-        List<com.fssc.workflow.entity.WfInstance> ins = wfInstanceMapper.selectList(
-                new LambdaQueryWrapper<com.fssc.workflow.entity.WfInstance>()
-                        .eq(com.fssc.workflow.entity.WfInstance::getBizType, "TR_RECEIPT")
-                        .in(com.fssc.workflow.entity.WfInstance::getBizId, billIds)
-                        .orderByAsc(com.fssc.workflow.entity.WfInstance::getId));
-        for (com.fssc.workflow.entity.WfInstance wi : ins) {
+        List<WfInstance> ins = wfInstanceMapper.selectList(
+                new LambdaQueryWrapper<WfInstance>()
+                        .eq(WfInstance::getBizType, "TR_RECEIPT")
+                        .in(WfInstance::getBizId, billIds)
+                        .orderByAsc(WfInstance::getId));
+        for (WfInstance wi : ins) {
             if (wi.getBizId() == null || wi.getStartUserId() == null || wi.getStartUserId() == 0L) continue;
             map.putIfAbsent(wi.getBizId(), wi.getStartUserId());
         }
@@ -194,7 +209,7 @@ public class TrCreditBillService {
     }
 
     /**
-     * D-DEC-420 丙：同人建单并同人确认核销的复核提示；判不出人或判不出单时为 null（宁缺不猜）。
+     * 丙：同人建单并同人确认核销的复核提示；判不出人或判不出单时为 null（宁缺不猜）。
      * <p>制单↔审批的分岗要求由流程节点候选承担，本提示只覆盖"建单—确认核销"这条不经审批的旁路。
      */
     private String selfReconWarning(Long creator, Long operator) {
@@ -203,7 +218,7 @@ public class TrCreditBillService {
     }
 
     /** 按金额匹配未对账的收款方向银行流水 */
-    private OpBankStatement findStatement(java.math.BigDecimal amount) {
+    private OpBankStatement findStatement(BigDecimal amount) {
         if (amount == null) return null;
         List<OpBankStatement> hit = statementMapper.selectList(new LambdaQueryWrapper<OpBankStatement>()
                 .and(w -> w.isNull(OpBankStatement::getReconStatus)
@@ -235,7 +250,7 @@ public class TrCreditBillService {
         return bill;
     }
 
-    // ---------------- D-DEC-418 丙档：到账环节 ↔ 核销环节 勾稽预警与联查提示（只读，不改账） ----------------
+    // 丙档：到账环节 ↔ 核销环节 勾稽预警与联查提示（只读，不改账）
 
     /**
      * 到账环节与核销环节的勾稽体检（<b>纯读</b>：不写 tr_credit_bill、不写 rc_receipt、不出证、不冲减余额）。
@@ -243,14 +258,14 @@ public class TrCreditBillService {
      * <h3>两环节现状（读准的结论，均有 file:line 与现库读数支撑）</h3>
      * <ul>
      *   <li><b>到账环节</b>：{@code receiveRecord()} 建 tr_credit_bill 并起 TR_RECEIPT 流
-     *       （本类 :43-64）；审批收尾在 {@code TreasuryBizAction:145-150} 置 RECONCILED、
+     *       本类 :43-64；审批收尾在 {@code TreasuryBizAction:145-150} 置 RECONCILED、
      *       {@code TreasuryBizAction:164} 调 {@code VoucherService.generateReceiptVoucher}
      *       （{@code VoucherService:2571+}，借 1002 银行存款／贷 1122 应收账款）。
      *       <b>出证，但零核销</b>——全链路不碰 rc_receipt / rc_receivable。</li>
      *   <li><b>核销环节</b>：{@code RcReceiptService.create()}（{@code RcReceiptService.java:56-151}）
-     *       建 rc_receipt ＋ rc_receipt_line 并同事务冲减 rc_receivable.received/remain（D-V3-143）。
+     *       建 rc_receipt ＋ rc_receipt_line 并同事务冲减 rc_receivable.received/remain。
      *       <b>核销，但零出证</b>——{@code RcReceiptService} 全文无 {@code voucherService} 引用
-     *       （grep 命中 0），现库 {@code op_voucher} 按 source_doc_type 分组 <b>没有 RC_RECEIPT 这一类</b>
+     *       grep 命中 0，现库 {@code op_voucher} 按 source_doc_type 分组 <b>没有 RC_RECEIPT 这一类</b>
      *       （实测 21 类里有 TR_RECEIPT=1、RECEIVABLE=7，无收款核销凭证）。</li>
      *   <li><b>共同键：没有</b>。{@code tr_credit_bill} 与 {@code rc_receipt} 互不引用对方主键，
      *       两侧只剩「customer_id ＋ amount ＋ 日期」这组业务同义维度可对齐——正是本条判词说的
@@ -281,7 +296,7 @@ public class TrCreditBillService {
      */
     public Map<String, Object> reconTrace(Long id) {
         TrCreditBill bill = requireExist(id);
-        Map<String, Object> res = new java.util.LinkedHashMap<>();
+        Map<String, Object> res = new LinkedHashMap<>();
         res.put("creditBillId", bill.getId());
         res.put("creditBillNo", bill.getBillNo());
         res.put("customerId", bill.getCustomerId());
@@ -291,15 +306,15 @@ public class TrCreditBillService {
         res.put("reconFlag", bill.getReconFlag());
         res.put("reconTime", bill.getReconTime());
 
-        // ① 到账环节出证侧：TR_RECEIPT 凭证（四键维持收款单坐标，D-DEC-419 已裁不可挪用）
-        List<com.fssc.sharing.entity.OpVoucher> vouchers = voucherMapper.selectList(
-                new LambdaQueryWrapper<com.fssc.sharing.entity.OpVoucher>()
-                        .eq(com.fssc.sharing.entity.OpVoucher::getSourceDocType, "TR_RECEIPT")
-                        .eq(com.fssc.sharing.entity.OpVoucher::getSourceDocId, id)
-                        .orderByAsc(com.fssc.sharing.entity.OpVoucher::getId));
-        List<Map<String, Object>> voucherRows = new java.util.ArrayList<>();
-        for (com.fssc.sharing.entity.OpVoucher v : vouchers) {
-            Map<String, Object> vm = new java.util.LinkedHashMap<>();
+        // ① 到账环节出证侧：TR_RECEIPT 凭证（四键维持收款单坐标，已裁不可挪用）
+        List<OpVoucher> vouchers = voucherMapper.selectList(
+                new LambdaQueryWrapper<OpVoucher>()
+                        .eq(OpVoucher::getSourceDocType, "TR_RECEIPT")
+                        .eq(OpVoucher::getSourceDocId, id)
+                        .orderByAsc(OpVoucher::getId));
+        List<Map<String, Object>> voucherRows = new ArrayList<>();
+        for (OpVoucher v : vouchers) {
+            Map<String, Object> vm = new LinkedHashMap<>();
             vm.put("voucherId", v.getId());
             vm.put("voucherNo", v.getVoucherNo());
             vm.put("summary", v.getSummary());
@@ -311,16 +326,16 @@ public class TrCreditBillService {
         res.put("hasVoucher", !voucherRows.isEmpty());
 
         // ② 核销环节候选：同客户＋同金额的 rc_receipt。<b>这是启发式现算，不是勾稽事实</b>。
-        List<com.fssc.receivable.entity.RcReceipt> cands = rcReceiptMapper.selectList(
-                new LambdaQueryWrapper<com.fssc.receivable.entity.RcReceipt>()
+        List<RcReceipt> cands = rcReceiptMapper.selectList(
+                new LambdaQueryWrapper<RcReceipt>()
                         .eq(bill.getCustomerId() != null,
-                                com.fssc.receivable.entity.RcReceipt::getCustomerId, bill.getCustomerId())
+                                RcReceipt::getCustomerId, bill.getCustomerId())
                         .eq(bill.getAmount() != null,
-                                com.fssc.receivable.entity.RcReceipt::getAmount, bill.getAmount())
-                        .orderByAsc(com.fssc.receivable.entity.RcReceipt::getId));
-        List<Map<String, Object>> rcRows = new java.util.ArrayList<>();
-        for (com.fssc.receivable.entity.RcReceipt rc : cands) {
-            Map<String, Object> rm = new java.util.LinkedHashMap<>();
+                                RcReceipt::getAmount, bill.getAmount())
+                        .orderByAsc(RcReceipt::getId));
+        List<Map<String, Object>> rcRows = new ArrayList<>();
+        for (RcReceipt rc : cands) {
+            Map<String, Object> rm = new LinkedHashMap<>();
             rm.put("receiptId", rc.getId());
             rm.put("receiptBillNo", rc.getBillNo());
             rm.put("amount", rc.getAmount());
@@ -330,12 +345,12 @@ public class TrCreditBillService {
             // 名义勾稽列现状：登记环节从不写，只有银企自动勾对会写 ⇒ 全 NULL 属预期，不是数据损坏
             rm.put("bankSerial", rc.getBankSerial());
             rm.put("bankMatched", rc.getBankMatched());
-            List<com.fssc.receivable.entity.RcReceiptLine> lines = rcReceiptLineMapper.selectList(
-                    new LambdaQueryWrapper<com.fssc.receivable.entity.RcReceiptLine>()
-                            .eq(com.fssc.receivable.entity.RcReceiptLine::getReceiptId, rc.getId()));
+            List<RcReceiptLine> lines = rcReceiptLineMapper.selectList(
+                    new LambdaQueryWrapper<RcReceiptLine>()
+                            .eq(RcReceiptLine::getReceiptId, rc.getId()));
             rm.put("offsetReceivableNos", lines.stream()
-                    .map(com.fssc.receivable.entity.RcReceiptLine::getReceivableNo)
-                    .filter(java.util.Objects::nonNull).toList());
+                    .map(RcReceiptLine::getReceivableNo)
+                    .filter(Objects::nonNull).toList());
             rcRows.add(rm);
         }
         res.put("writeoffCandidates", rcRows);
@@ -346,7 +361,7 @@ public class TrCreditBillService {
         res.put("matchBasis", "customer_id ＋ amount 现算（无外键，非勾稽事实）");
         boolean sameDay = rcRows.stream().anyMatch(x -> bill.getReceiveDate() != null
                 && bill.getReceiveDate().equals(x.get("receiptDate")));
-        List<String> warns = new java.util.ArrayList<>();
+        List<String> warns = new ArrayList<>();
         if (rcRows.isEmpty()) {
             warns.add("到账记录没有同客户同金额的收款核销单：本笔到账只在资金业务中记录，"
                     + "应收子账（rc_receivable.remain_amount）从未因此冲减，账证与子账可能不符");

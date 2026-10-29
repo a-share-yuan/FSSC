@@ -5,6 +5,8 @@ package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.audit.service.AuditTrailService;
+import com.fssc.budget.service.BudgetService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -15,6 +17,7 @@ import com.fssc.compliance.service.SmartReviewService.ReviewResult;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.entity.ExpBillLine;
 import com.fssc.expense.mapper.ExpBillLineMapper;
+import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
@@ -23,6 +26,10 @@ import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.sharing.entity.OpAuditTask;
 import com.fssc.sharing.mapper.OpAuditTaskMapper;
+import java.lang.Character;
+import java.util.ArrayList;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -51,24 +58,29 @@ public class SharingService {
     private final OpAuditTaskMapper opAuditTaskMapper;
     private final ExpBillLineMapper expBillLineMapper;
     private final InvoiceDomainFacade invoiceFacade;
-    private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
+    private final ExpBillMapper expBillMapper;
     private final SmartReviewService smartReviewService;
     private final FraudDetectionService fraudDetectionService;
     private final DeliveryService deliveryService;
+    /** 自动驳回腿要复用人工驳回的善后（释放占用／作废草稿凭证／留痕），故在此直连预算与凭证服务。 */
+    private final BudgetService budgetService;
+    private final VoucherService voucherService;
+    private final AuditTrailService auditTrailService;
 
     /** 按业务类型生成共享作业链（仅纳入共享中心的单据调用）。返回首环节任务ID。 */
     public Long createChain(ExpBill bill, String bizType) {
-        java.util.List<String[]> chain = chainOf(bizType);
+        List<String[]> chain = chainOf(bizType);
         if (chain.isEmpty()) {
             return null;
         }
 
-        // ★ 智能审单：审批通过进入审核环节前，先跑规则引擎自动裁决
+        // 智能审单：审批通过进入审核环节前，先跑规则引擎自动裁决
         ReviewResult review = runSmartReview(bill);
         if ("AUTO_REJECT".equals(review.getAction())) {
             // 高风险/欺诈：自动驳回，不入作业池
             log.warn("智能审单自动驳回 billNo={}, 原因={}", bill.getBillNo(), review.getRemark());
             updateBillRejected(bill.getId(), "智能审单自动驳回：" + review.getRemark());
+            undoAfterAutoReject(bill);
             return null;
         }
 
@@ -86,13 +98,13 @@ public class SharingService {
             log.info("单据 {} 关联发票均为电子介质，自动无纸化豁免实物签收", bill.getBillNo());
         }
 
-        // V1.4.92：档案非集中管理公司整段实物流不发生（原件留原单位），单据侧记录 NOT_REQUIRED。
+        // 档案非集中管理公司整段实物流不发生（原件留原单位），单据侧记录 NOT_REQUIRED。
         // 走 registerIfNeeded 的既有豁免分支，不另写一套状态写入。
         if (deliveryService.isNonCentralArchive(bill.getCompanyId())) {
             deliveryService.registerIfNeeded(bill);
         }
 
-        // P0-5 实物流门控（TC12）：无纸化单据免签收；需实物且未签收 → 登记签收单并挂起首环节
+        // 实物流门控（TC12）：无纸化单据免签收；需实物且未签收 → 登记签收单并挂起首环节
         boolean sendable = deliveryService.canEnterSharedPool(bill.getId());
         if (!sendable) {
             deliveryService.registerIfNeeded(bill);
@@ -122,7 +134,7 @@ public class SharingService {
     private boolean allInvoicesElectronic(Long billId) {
         try {
             List<Long> invIds = invoiceFacade.findLinksByBillId(billId)
-                    .stream().map(InvBillInvoice::getInvoiceId).filter(java.util.Objects::nonNull).distinct().toList();
+                    .stream().map(InvBillInvoice::getInvoiceId).filter(Objects::nonNull).distinct().toList();
             if (invIds.isEmpty()) return false;
             List<InvInvoice> invs = invoiceFacade.findByIds(invIds);
             if (invs.isEmpty()) return false;
@@ -143,7 +155,7 @@ public class SharingService {
         if (type.equals("ELECTRONIC") || type.equals("RAIL_HIGH") || type.equals("AIR")) return true;
         String no = iv.getInvoiceNo() == null ? "" : iv.getInvoiceNo().trim();
         String code = iv.getInvoiceCode() == null ? "" : iv.getInvoiceCode().trim();
-        return no.length() == 20 && no.chars().allMatch(java.lang.Character::isDigit) && code.isEmpty();
+        return no.length() == 20 && no.chars().allMatch(Character::isDigit) && code.isEmpty();
     }
 
     /** 组装审单输入并调用智能审单引擎。 */
@@ -185,12 +197,12 @@ public class SharingService {
     }
 
     /** 生成作业链（首环节 WAITING 可认领）。 */
-    private Long buildChain(ExpBill bill, java.util.List<String[]> chain) {
+    private Long buildChain(ExpBill bill, List<String[]> chain) {
         Long firstId = null;
         int total = chain.size();
         for (int i = 0; i < total; i++) {
             String[] seg = chain.get(i); // {taskType, taskName}
-            // R5-D-242：链生成去重——同 bill_id+task_type 已有未最终状态（WAITING/RECEIVED）任务即跳过重建
+            // 链生成去重——同 bill_id+task_type 已有未最终状态（WAITING/RECEIVED）任务即跳过重建
             // （此前 3 张单各出现两套 AUDIT/PAY/BOOKKEEP，认领量/SLA/质量报表分母虚高；
             //  DDL 唯一索引 uk(bill_id,task_type,chain_seq,del_flag) 已注释态待放行 M-20）
             Long dup = opAuditTaskMapper.selectCount(new LambdaQueryWrapper<OpAuditTask>()
@@ -245,14 +257,14 @@ public class SharingService {
         if (task == null || task.getBillId() == null || !"AUDIT".equals(task.getTaskType())) {
             return;
         }
-        com.fssc.expense.entity.ExpBill cur = expBillMapper.selectById(task.getBillId());
+        ExpBill cur = expBillMapper.selectById(task.getBillId());
         if (cur == null || cur.getAuditTime() != null) {
             return;
         }
-        com.fssc.expense.entity.ExpBill upd = new com.fssc.expense.entity.ExpBill();
+        ExpBill upd = new ExpBill();
         upd.setId(task.getBillId());
         upd.setAuditTime(LocalDateTime.now());
-        // D-DEC-179：audit_user_id 同刻随审核人落值；自动完成环节无认领人时留空不冒充
+        // audit_user_id 同刻随审核人落值；自动完成环节无认领人时留空不冒充
         if (task.getAssigneeId() != null) {
             upd.setAuditUserId(task.getAssigneeId());
         }
@@ -281,11 +293,11 @@ public class SharingService {
     }
 
     /**
-     * ⑨（D-V4R-49，2026-10-16 晚间场实测）：单据到达业务最终状态时，办结其共享作业链上所有未办结任务。
+     * ⑨（2026-10-16 晚间场实测）：单据到达业务最终状态时，办结其共享作业链上所有未办结任务。
      *
      * <p>缺陷现场：BX202610160002 已 APPROVED（凭证已过账、借款冲抵已核销），派工池仍挂着
      * 「审核/待认领」——全库 11 条池任务全部是最终状态单上的僵尸行（0 认领 0 办结），且
-     * {@link #createChain} 的去重查重（R5-D-242，只认 WAITING/RECEIVED）会让这些残留
+     * {@link #createChain} 的去重查重（只认 WAITING/RECEIVED）会让这些残留
      * 永久占位。根因：业务侧的「钱/账/核销」闭环（付款批次执行、还款入账、无现金环节平账、
      * 驳回/撤回）与共享作业链之间没有任何联动办结点。
      *
@@ -325,16 +337,60 @@ public class SharingService {
 
     /** 智能审单驳回：回写单据状态为 REJECTED。 */
     private void updateBillRejected(Long billId, String remark) {
-        com.fssc.expense.entity.ExpBill upd = new com.fssc.expense.entity.ExpBill();
+        ExpBill upd = new ExpBill();
         upd.setId(billId);
         upd.setStatus("REJECTED");
         upd.setAuditRemark(remark);
         expBillMapper.updateById(upd);
     }
 
+    /**
+     * P2·状态一致性：智能审单自动驳回必须落与人工驳回同源的善后。
+     * <p>修前只置 REJECTED，留下三处悬空事实：① 提交时按行 OCCUPY 的预算永不 RELEASE
+     * （实测行政办公费净占 5,200,000 挂在已驳回单上，预算执行数失真）；② 审批收尾自动生成的
+     * DRAFT 凭证仍挂在被驳回的单上；③ 单据侧无结论留痕，重提后旧「自动驳回」文案与状态并存。
+     * <p>释放口径与 {@code ExpenseWfEventListener.handleRejected} 同源：按 billType 还原占用类型、
+     * 逐行 release；重复调用由 {@code BudgetService.release} 的 净占用上限兜底，不会记成负数流水。
+     * 凭证只作废 DRAFT——已过账凭证不得由驳回腿撤销，更正只能走红字冲销（{@link VoucherService#voidVoucher} 同一道闸）。
+     */
+    private void undoAfterAutoReject(ExpBill bill) {
+        String occupyBizType = BudgetService.occupyBizTypeOf(bill.getBillType());
+        BigDecimal released = BigDecimal.ZERO;
+        try {
+            for (ExpBillLine line : expBillLineMapper.selectList(
+                    new LambdaQueryWrapper<ExpBillLine>().eq(ExpBillLine::getBillId, bill.getId()))) {
+                if (line.getBudgetItemId() != null && line.getAmount() != null) {
+                    budgetService.release(line.getBudgetItemId(), line.getAmount(),
+                            occupyBizType, bill.getId(), bill.getBillNo());
+                    released = released.add(line.getAmount());
+                }
+            }
+        } catch (Exception rex) {
+            log.error("智能审单自动驳回 {} 释放预算占用失败（状态已置 REJECTED，占用需人工平账）: {}",
+                    bill.getBillNo(), rex.getMessage());
+        }
+        List<Long> draftVouchers = voucherService.draftVoucherIdsOfBill(bill.getId());
+        Long me = UserContext.get() == null ? null : UserContext.get().getUserId();
+        for (Long vid : draftVouchers) {
+            try {
+                voucherService.voidVoucher(vid, me);
+            } catch (Exception vex) {
+                log.error("智能审单自动驳回 {} 作废草稿凭证 {} 失败: {}", bill.getBillNo(), vid, vex.getMessage());
+            }
+        }
+        try {
+            auditTrailService.record(bill.getBillType(), bill.getId(), bill.getBillNo(), "exp_bill",
+                    String.valueOf(bill.getId()), "AUTO_REJECT", null, null,
+                    "智能审单自动驳回善后：释放预算占用 " + released.toPlainString()
+                            + "，作废草稿凭证 " + draftVouchers.size() + " 张");
+        } catch (Exception aex) {
+            log.warn("智能审单自动驳回 {} 审计留痕失败: {}", bill.getBillNo(), aex.getMessage());
+        }
+    }
+
     /** 业务类型 → 共享作业链（按业务规则表）。空列表 = 不进共享中心。 */
-    private java.util.List<String[]> chainOf(String bizType) {
-        java.util.List<String[]> chain = new java.util.ArrayList<>();
+    private List<String[]> chainOf(String bizType) {
+        List<String[]> chain = new ArrayList<>();
         switch (bizType) {
             case "EXP_CLAIM" -> {
                 chain.add(new String[]{"AUDIT", "票据审核/制度校验"});
@@ -408,7 +464,7 @@ public class SharingService {
 
     /**
      * 完成（审核通过；串行作业链自动激活下一环节）。
-     * D-DEC-024/D-DEC-030：办结备注（审计口语）必须落 op_audit_task.remark——此前请求不带备注、
+     * /办结备注（审计口语）必须落 op_audit_task.remark——此前请求不带备注、
      * 服务端也不写列，三张工单（AUDIT/PAY/BOOKKEEP）办结后 remark 恒 NULL，记录全丢。
      * 备注为选填：空白不覆盖既有值（避免把退单原因等历史记录擦掉）。
      */
@@ -466,13 +522,13 @@ public class SharingService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** 任务池管理（需求 8.2.2）：全量任务，支持状态/类型/关键字筛选；R5-D-236 增 activeFlag（未激活值域）+ R5-D-237 回填单据状态 */
+    /** 任务池管理（需求 8.2.2）：全量任务，支持状态/类型/关键字筛选；增 activeFlag（未激活值域）+ 回填单据状态 */
     public PageResult<OpAuditTask> manage(long pageNum, long pageSize, String poolStatus, String taskType,
                                           String keyword, String activeFlag) {
         LambdaQueryWrapper<OpAuditTask> w = new LambdaQueryWrapper<>();
         if (poolStatus != null && !poolStatus.isBlank()) w.eq(OpAuditTask::getPoolStatus, poolStatus);
         if (taskType != null && !taskType.isBlank()) w.eq(OpAuditTask::getTaskType, taskType);
-        // R5-D-236：状态筛选值域补「未激活（待实物签收）」——前端以 activeFlag=N 定位该值域
+        // 状态筛选值域补「未激活（待实物签收）」——前端以 activeFlag=N 定位该值域
         if (activeFlag != null && !activeFlag.isBlank()) w.eq(OpAuditTask::getActiveFlag, activeFlag);
         if (keyword != null && !keyword.isBlank()) {
             w.and(x -> x.like(OpAuditTask::getBillNo, keyword).or().like(OpAuditTask::getTitle, keyword));
@@ -480,23 +536,23 @@ public class SharingService {
         // 排序：最新任务排在最前面（按创建时间降序 + ID降序）
         w.orderByDesc(OpAuditTask::getCreateTime).orderByDesc(OpAuditTask::getId);
         Page<OpAuditTask> p = opAuditTaskMapper.selectPage(Page.of(pageNum, pageSize), w);
-        // R5-D-237：分页 VO 补 billStatus（UI「单据状态」列此前全「—」，同页同批办结）
+        // 分页 VO 补 billStatus（UI「单据状态」列此前全「—」，同页同批办结）
         enrichBillStatus(p.getRecords());
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** R5-D-237：批量回填关联单据状态（仅出参，零加列） */
+    /** 批量回填关联单据状态（仅出参，零加列） */
     private void enrichBillStatus(List<OpAuditTask> rows) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
         List<Long> billIds = rows.stream().map(OpAuditTask::getBillId)
-                .filter(java.util.Objects::nonNull).distinct().toList();
+                .filter(Objects::nonNull).distinct().toList();
         if (billIds.isEmpty()) {
             return;
         }
         Map<Long, String> statusMap = expBillMapper.selectBatchIds(billIds).stream()
-                .collect(java.util.stream.Collectors.toMap(ExpBill::getId,
+                .collect(Collectors.toMap(ExpBill::getId,
                         b -> b.getStatus() == null ? "" : b.getStatus(), (a, b) -> a));
         for (OpAuditTask r : rows) {
             if (r.getBillId() != null) {
@@ -543,9 +599,9 @@ public class SharingService {
         if (!"RECEIVED".equals(task.getPoolStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "仅已认领任务可退单，当前: " + task.getPoolStatus());
         }
-        // R5-D-235：退单原因必填双校验（与前端红星+行内校验同一规则）——此前直连接口可空原因退单
+        // 退单原因必填双校验（与前端红星+行内校验同一规则）——此前直连接口可空原因退单
         AssertUtil.notBlank(reason, ErrorCode.PARAM_INVALID, "请填写退单原因");
-        // 与 withdraw 同一规则（R5-D-234）：updateById 的实体在默认 NOT_NULL 字段策略下会跳过 null 字段，
+        // 与 withdraw 同一规则：updateById 的实体在默认 NOT_NULL 字段策略下会跳过 null 字段，
         // 表现是"退单成功、状态回池了，但认领人/认领时间还挂在原人名下"（任务池同行同时显示「待认领」＋认领人）。
         opAuditTaskMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update
                 .LambdaUpdateWrapper<OpAuditTask>()
@@ -557,7 +613,7 @@ public class SharingService {
     }
 
     /**
-     * 办结备注归一（D-DEC-024/D-DEC-030）：去首尾空白、加「办结: 」前缀与「退单: 」记录区分；
+     * 办结备注归一（/）：去首尾空白、加「办结: 」前缀与「退单: 」记录区分；
      * op_audit_task.remark 为 varchar(500)，超限明确拒绝而不是静默截断（截断会让审计口语变味）。
      */
     private String normalizeFinishRemark(String remark) {

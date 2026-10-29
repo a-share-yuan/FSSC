@@ -7,9 +7,12 @@ import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
 import com.fssc.customer.entity.CrmCustomer;
+import com.fssc.customer.service.CounterpartyCandidateService;
 import com.fssc.customer.service.CustomerService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,7 +31,7 @@ public class CustomerController {
 
     private final CustomerService service;
 
-    private final com.fssc.customer.service.CounterpartyCandidateService counterpartyCandidateService;
+    private final CounterpartyCandidateService counterpartyCandidateService;
 
     // 只读查询放开给所有登录租户用户：对公付款等单据发起页往来单位下拉必用（写操作仍需权限）
     @GetMapping("/page")
@@ -37,7 +40,7 @@ public class CustomerController {
     }
 
     /**
-     * D-V4R-96 修复：往来单位候选（客户档案 ∪ 供应商主数据）。
+     * 修复：往来单位候选（客户档案 ∪ 供应商主数据）。
      *
      * <p>原 {@code /page} 只读 {@code crm_customer}，而供应商落在 {@code md_supplier} 且两表零同步
      * ⇒ 对公结算的往来单位下拉里一个供应商都没有 ⇒ SETTLE 单据挂不上三单环节、根本提交不了。</p>
@@ -49,7 +52,7 @@ public class CustomerController {
      * <p>只读语义放开给所有登录租户用户（同 {@code /page}），建档走按需最小写入。</p>
      */
     @GetMapping("/candidates")
-    public Result<java.util.List<java.util.Map<String, Object>>> candidates(
+    public Result<List<Map<String, Object>>> candidates(
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "onlySupplier", defaultValue = "false") boolean onlySupplier,
             @RequestParam(value = "limit", defaultValue = "300") int limit) {
@@ -86,8 +89,8 @@ public class CustomerController {
     }
 
     /**
-     * V2.2.38 B-14：建档即 PENDING，核准走状态位翻转（PENDING → ACTIVE，去重）。
-     * D-V3-139：前端【核准】按钮自 B-14 上线即调用本端点，但路由一直未登记——
+     * B-14：建档即 PENDING，核准走状态位翻转（PENDING → ACTIVE，去重）。
+     * 前端【核准】按钮自 B-14 上线即调用本端点，但路由一直未登记——
      * service.approve() 成了无暴露路径的死代码，核准通路断头（实测 404 落"目录外动作不可调用"）。
      * 权限沿用 customer:update（核准属档案维护动作，不新设权限点，避免目录漂移）。
      */

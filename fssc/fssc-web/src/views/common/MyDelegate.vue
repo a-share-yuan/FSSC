@@ -11,7 +11,7 @@
             <span class="panel-hint">出差/休假期间，可把待办审批临时委托给他人代为处理</span>
           </div>
           <div class="panel-actions">
-            <!-- E-12/F1-2：服务端已按身份过滤，这里只是切换"我委托的 / 由我代办"两个视角。
+            <!-- E-12/服务端已按身份过滤，这里只是切换"我委托的 / 由我代办"两个视角。
                  「全部」是无公司维度的集团级账号才有的一档。 -->
             <el-radio-group v-model="scope" size="small" @change="onScopeChange">
               <el-radio-button value="mine">我委托的</el-radio-button>
@@ -40,7 +40,7 @@
                 <span>{{ bizTypesText(row.bizTypes) }}</span>
               </template>
             </el-table-column>
-            <!-- E-12/F1-2：后端给的是 LocalDateTime 原样串（2026-12-25T09:00:00），
+            <!-- E-12/后端给的是 LocalDateTime 原样串（2026-12-25T09:00:00），
                  直接铺在列上不可读，统一走 formatDateTime（YYYY-MM-DD HH:mm） -->
             <el-table-column prop="beginTime" label="开始时间" width="150"
                              :formatter="(row, col) => formatDateTime(row[col.property])" />
@@ -80,12 +80,12 @@
     <el-dialog v-model="dialog.visible" title="新增委托代理" width="600px" destroy-on-close>
       <el-form ref="formRef" :model="dialog.form" :rules="delegateRules" label-width="120px" size="default">
         <el-form-item label="委托人">
-          <!-- 后端硬校验「委托人必须是当前登录用户」（WfDelegateService.create，V1.3.19 越权修复），
+          <!-- 后端硬校验「委托人必须是当前登录用户」（WfDelegateService.create，越权修复），
                故这里是系统带出的只读值，不是人工填项 ⇒ 按 Q1 规则不加红星 -->
           <el-input :model-value="currentUserName" disabled />
         </el-form-item>
         <el-form-item label="代理人" prop="toUserId">
-          <!-- P0 修复（2026-10-21）：默认只加载同公司人员，解决全量加载的性能与安全问题 -->
+          <!-- P0 修复：默认只加载同公司人员，解决全量加载的性能与安全问题 -->
           <UserSelect v-model="dialog.form.toUserId" scope="same-company" show-dept />
         </el-form-item>
         <el-form-item label="适用单据类型">
@@ -120,7 +120,7 @@
 
 <script setup>
 /**
- * 我的委托代理（P0-4 权限治理新增）
+ * 我的委托代理（权限治理新增）
  *
  * 背景：委托代理（wf:delegate:*）本是**员工自助**功能，但原先只作为
  * 「流程管理」(/expense/flow, 菜单 104) 的一个页签存在，而菜单 104

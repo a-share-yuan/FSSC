@@ -47,7 +47,7 @@ const router = useRouter()
 const trendRefs = ref([])
 
 /**
- * D-DEC-303：本卡区此前有两个问题——① 未查询的槽位与"取到 0"显示成同一个 0，观感＝系统没数据；
+ * 本卡区此前有两个问题——① 未查询的槽位与"取到 0"显示成同一个 0，观感＝系统没数据；
  * ② 全页无权限门控，无 dashboard:view / exp:bill:list 的角色进来会连弹两次「缺少权限」，
  * 而后端的 code=4030 在页面上又伪装成「暂无数据」。现改为：null＝未接通（显示「－」＋原因），
  * 数字＝真实查询结果；查询失败与无权都落到卡片脚注，不再弹全局错误。
@@ -146,7 +146,7 @@ function renderMiniTrends() {
       el.innerHTML = ''
       const biz = bizList.value[i]
       const slots = [biz?.stats.inTransit, biz?.stats.done, biz?.stats.timeout]
-      // P1-8：不再用 Math.random 伪造趋势线；三项全部未接通的卡片不绘制（空图同样是在误导）
+      // 不再用 Math.random 伪造趋势线；三项全部未接通的卡片不绘制（空图同样是在误导）
       if (slots.every((v) => v === null || v === undefined)) return
       const data = slots.map((v) => Number(v) || 0)
       const max = Math.max(...data, 1)

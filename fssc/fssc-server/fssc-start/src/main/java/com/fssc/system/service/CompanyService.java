@@ -12,6 +12,7 @@ import com.fssc.framework.security.OrgVisibility;
 import com.fssc.framework.security.UserContext;
 import com.fssc.system.entity.SysCompany;
 import com.fssc.system.mapper.SysCompanyMapper;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -46,7 +47,7 @@ public class CompanyService {
      * <p>缓存里保留"整租户全量"才能被所有用户共用；裁剪放在每次出参，既保住缓存命中，
      * 又保证普通员工的下拉里不会出现其他法人主体（改前 9 家公司全员可见）。</p>
      *
-     * @param all               已按租户缓存的全量启用公司
+     * @param all 已按租户缓存的全量启用公司
      * @param overrideCompanyId 显式指定的公司（跨公司查看用），null＝按登录人范围
      */
     public List<SysCompany> visibleForUser(List<SysCompany> all, Long overrideCompanyId) {
@@ -100,11 +101,11 @@ public class CompanyService {
     }
 
     /**
-     * 档案管理模式取值办结（V1.4.92）：空值按 defaultMode 处理（create 传 CENTRAL、update 传 null＝不改）；
+     * 档案管理模式取值办结：空值按 defaultMode 处理（create 传 CENTRAL、update 传 null＝不改）；
      * 非空必须是 CENTRAL/NON_CENTRAL，防止脏值绕过 DeliveryService 的等值判定。
      */
     private String normalizeArchiveMode(String mode, String defaultMode) {
-        String m = mode == null ? "" : mode.trim().toUpperCase(java.util.Locale.ROOT);
+        String m = mode == null ? "" : mode.trim().toUpperCase(Locale.ROOT);
         if (m.isEmpty()) {
             return defaultMode;
         }

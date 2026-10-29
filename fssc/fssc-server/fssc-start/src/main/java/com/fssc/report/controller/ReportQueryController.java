@@ -32,7 +32,7 @@ import java.util.Set;
  * 管理报表查询（需求文档 11 章）：借款余额汇总 / 合同汇总 / 费用明细表。
  * 只读聚合，租户拦截器自动注入 tenant_id。
  *
- * <p><b>数据权限（R5-D-026）</b>：本控制器 24 个查询端点补 {@code @DataScope}，由
+ * <p><b>数据权限</b>：本控制器 24 个查询端点补 {@code @DataScope}，由
  * {@code PermissionAspect.aroundDataScope} 把登录人 data_scope 写入 {@link DataScopeHolder}，
  * 再由 {@link #resolveScope} 翻译成 {@link ScopeFilter} 三元组传给 ReportMapper 的
  * {@code <if>} 动态条件。未挂注解的 4 个端点（ops-statistics／ops-efficiency／quality-pass-rate／
@@ -50,7 +50,7 @@ public class ReportQueryController {
     /** 分库改造：img_batch 在 fssc_image 库，影像统计经 Facade 跨库访问（image 路由） */
     private final ImageStatsFacade imageFacade;
 
-    // ==================== 数据范围解析（R5-D-026） ====================
+    // 数据范围解析
 
     /**
      * 数据范围解析结果。三个维度各为 null 表示"该维度不追加条件"，由
@@ -128,7 +128,7 @@ public class ReportQueryController {
         return ScopeFilter.DENY;
     }
 
-    // ==================== 端点 ====================
+    // 端点
 
     /** 11.4 借款余额汇总：公司下员工借款金额、未冲销金额明细及汇总 */
     @RequiresPerm("report:view")
@@ -150,7 +150,7 @@ public class ReportQueryController {
         return Result.success(reportMapper.contractSummary(f.companyId(), f.deptIds()));
     }
 
-    /** P0-2：合同汇总分页（含关键字过滤；原 /contract-summary 保留给单行查找/多tab报表用） */
+    /** 合同汇总分页（含关键字过滤；原 /contract-summary 保留给单行查找/多tab报表用） */
     @RequiresPerm("report:view")
     @DataScope("合同汇总分页数据范围")
     @ReportDomain("CONTRACT")
@@ -177,7 +177,7 @@ public class ReportQueryController {
 
     /** 11.8 运营数据统计：共享作业情况（派工/凭证/付款/质检 + 影像）。
      *  分库改造：影像批次计数在 fssc_image 库，经 ImageFacade 应用层拼接，行结构 {kpi, val} 不变。
-     *  R5-D-026：本端点不办结——op_audit_task/op_quality 无公司列，且共享作业 KPI 为跨公司集中办理规则。 */
+     *  本端点不办结——op_audit_task/op_quality 无公司列，且共享作业 KPI 为跨公司集中办理规则。 */
     @RequiresPerm("report:view")
     @ReportDomain("SHARING")
     @GetMapping("/ops-statistics")
@@ -220,7 +220,7 @@ public class ReportQueryController {
         return Result.success(reportMapper.expenseComposition(itemName, f.companyId(), f.deptIds(), f.userId()));
     }
 
-    // ==================== 扩展报表 ====================
+    // 扩展报表
 
     /** 1. 应付账龄分析 */
     @RequiresPerm("report:view")
@@ -275,7 +275,7 @@ public class ReportQueryController {
     /** 6. 进项发票统计 */
     @RequiresPerm("report:view")
     @DataScope("进项发票统计数据范围")
-    // R5-D-114：发票族统计读侧仅凭报表基础码 report:view 放行；域校验（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域校验致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
+    // 发票族统计读侧仅凭报表基础码 report:view 放行；域校验（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域校验致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
     @GetMapping("/input-invoice")
     public Result<List<Map<String, Object>>> inputInvoiceStats() {
         ScopeFilter f = resolveScope(false, false);
@@ -285,7 +285,7 @@ public class ReportQueryController {
     /** 7. 销项发票统计 */
     @RequiresPerm("report:view")
     @DataScope("销项发票统计数据范围")
-    // R5-D-114：发票族统计读侧仅凭报表基础码 report:view 放行；域校验（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域校验致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
+    // 发票族统计读侧仅凭报表基础码 report:view 放行；域校验（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域校验致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
     @GetMapping("/output-invoice")
     public Result<List<Map<String, Object>>> outputInvoiceStats() {
         ScopeFilter f = resolveScope(false, false);
@@ -295,14 +295,14 @@ public class ReportQueryController {
     /** 8. 税负分析 */
     @RequiresPerm("report:view")
     @DataScope("税负分析数据范围")
-    // R5-D-114：发票族统计读侧仅凭报表基础码 report:view 放行；域校验（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域校验致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
+    // 发票族统计读侧仅凭报表基础码 report:view 放行；域校验（@ReportDomain）保留给业务域明细/写侧接口，不在统计读上重复卡域权限——原 P2P/AR/TAX 三把域校验致无岗可全取三页（税务岗缺销项页、部门经理缺税负页）。
     @GetMapping("/tax-burden")
     public Result<List<Map<String, Object>>> taxBurdenAnalysis() {
         ScopeFilter f = resolveScope(false, false);
         return Result.success(reportMapper.taxBurdenAnalysis(f.companyId()));
     }
 
-    /** 9. 运营效率分析。R5-D-026：本端点不办结——op_audit_task 无公司列（共享作业池跨公司范围）。 */
+    /** 9. 运营效率分析。本端点不办结——op_audit_task 无公司列（共享作业池跨公司范围）。 */
     @RequiresPerm("report:view")
     @ReportDomain("SHARING")
     @GetMapping("/ops-efficiency")
@@ -310,7 +310,7 @@ public class ReportQueryController {
         return Result.success(reportMapper.opsEfficiency());
     }
 
-    /** 10. 质检合格率。R5-D-026：本端点不办结——op_quality 无任何组织列（全中心规则）。 */
+    /** 10. 质检合格率。本端点不办结——op_quality 无任何组织列（全中心规则）。 */
     @RequiresPerm("report:view")
     @ReportDomain("SHARING")
     @GetMapping("/quality-pass-rate")
@@ -320,7 +320,7 @@ public class ReportQueryController {
 
     /** 11. 影像统计。
      *  分库改造：img_batch 在 fssc_image 库，改经 ImageFacade 查询（列结构不变）。
-     *  R5-D-026：本端点不办结——跨库 Facade 出数，办结需改 ImageFacade（非本文件面）。 */
+     *  本端点不办结——跨库 Facade 出数，办结需改 ImageFacade（非本文件面）。 */
     @RequiresPerm("report:view")
     @ReportDomain("IMAGE")
     @GetMapping("/image-statistics")
@@ -369,7 +369,7 @@ public class ReportQueryController {
         return Result.success(reportMapper.voucherStats(f.companyId()));
     }
 
-    // ==================== P1-6 预置分析报表体系（新增5个预置报表） ====================
+    // 预置分析报表体系（新增5个预置报表）
 
     /** 16. 资产台账报表 */
     @RequiresPerm("report:view")

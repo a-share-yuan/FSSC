@@ -30,8 +30,8 @@ const router = useRouter()
 const status = computed(() => props.billInfo?.status || '')
 const reached = computed(() => props.chain?.summary?.reached || [])
 
-/** D-DEC-362：本域无出证/付款环节的单据不再引导「去凭证台账」「去出纳付款」——
- *  判据与 BillChainTimeline／D-DEC-446 甲-2 同源：优先 summary.segmentSupport，旧包回落 paymentSupported，缺省视为有环节。 */
+/** 本域无出证/付款环节的单据不再引导「去凭证台账」「去出纳付款」——
+ *  判据与 BillChainTimeline／甲-2 同源：优先 summary.segmentSupport，旧包回落 paymentSupported，缺省视为有环节。 */
 const segOk = (k) => {
   const s = props.chain?.summary
   const seg = s && s.segmentSupport
@@ -41,11 +41,11 @@ const segOk = (k) => {
 }
 
 /**
- * D-DEC-369：「付款已完成」这句话此前在归档引导里是无条件写的，而同抽屉的付款记录段可能正显示
+ * 「付款已完成」这句话此前在归档引导里是无条件写的，而同抽屉的付款记录段可能正显示
  * 「待付款」（exp_bill_payment.pay_status=WAITING、pay_time NULL、paid_amount=0）。
  * 判据一律复用后端同一份读数，前端只负责把话说实，不另算一套：
- *  · 是否有付款环节 ＝ summary.segmentSupport.PAYMENT（沿用上方 segOk，与 D-DEC-446 甲-2 同源）；
- *  · 是否付讫 ＝ summary.paidPaymentCount（D-DEC-446 乙-2 的最终状态计数，只算 pay_status='PAID'）
+ *  · 是否有付款环节 ＝ summary.segmentSupport.PAYMENT（沿用上方 segOk，与 甲-2 同源）；
+ *  · 是否付讫 ＝ summary.paidPaymentCount（乙-2 的最终状态计数，只算 pay_status='PAID'）
  *    对比 summary.paymentCount（记录存在数）。
  * 旧包没有 paidPaymentCount 时判据不可知 ⇒ 维持原措辞（按 reached 段走），不臆断"未付讫"。
  */
@@ -78,7 +78,7 @@ const action = computed(() => {
     return { title: '生成凭证', desc: '审批已通过，去总账查看/补录凭证', route: '/op/gl/voucher', btn: '去凭证台账', tone: 'primary', done: false }
   if (segOk('PAYMENT') && !has('PAYMENT'))
     return { title: '执行付款', desc: '凭证已生成，去出纳付款', route: '/pay', btn: '去出纳付款', tone: 'primary', done: false }
-  // D-DEC-369：到了归档这一句，付款段的实况必须跟着 summary 的最终状态计数说，不能再一律说"付款已完成"
+  // 到了归档这一句，付款段的实况必须跟着 summary 的最终状态计数说，不能再一律说"付款已完成"
   if (!has('ARCHIVE')) {
     const pf = payFact.value
     if (pf.kind === 'unpaid')

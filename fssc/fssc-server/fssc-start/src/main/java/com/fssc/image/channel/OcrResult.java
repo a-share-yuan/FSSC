@@ -18,10 +18,10 @@ public class OcrResult {
 
     /** 识别是否成功（票面是否拿到响应）；字段是否齐全由调用方按 #15 自洽校验裁断 */
     private boolean ok = true;
-    /** 失败原因（ok=false 时有值；D-DEC-461 起 ok=true 但 inPool=false 时也带值＝未入池的真实原因） */
+    /** 失败原因（ok=false 时有值；起 ok=true 但 inPool=false 时也带值＝未入池的真实原因） */
     private String errorMsg;
     /**
-     * D-DEC-461（「已识别」的界面语义 ≠ 已入池）：票面是否真的进了发票池 {@code inv_invoice}。
+     * 「已识别」的界面语义 ≠ 已入池：票面是否真的进了发票池 {@code inv_invoice}。
      * <ul>
      *  <li>{@link Boolean#TRUE}＝已在池（本次入池成功，或去重命中改前已录）；</li>
      *  <li>{@link Boolean#FALSE}＝拿到票面但没进池（要素不全／金额不自洽／入池被拒），原因见 {@link #errorMsg}；</li>

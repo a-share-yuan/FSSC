@@ -5,7 +5,7 @@
  * 通用格式化工具：日期 + 金额 + 数量。
  * - 纯日期列显示 YYYY-MM-DD
  * - 含时间的列显示 YYYY-MM-DD HH:mm
- * - 金额列统一千分位 + 2 位小数（第 5 轮体检 P1-1 共性问题①）
+ * - 金额列统一千分位 + 2 位小数
  */
 import { statusLabel } from '../constants/billStatus'
 import {
@@ -20,7 +20,7 @@ import {
  */
 export function formatDate(val) {
   if (!val) return ''
-  // R5-D-029：后端主格式是 ISO 'T' 分隔，先原样解析（'/' 替换法会把它打成 Invalid Date），
+  // 后端主格式是 ISO 'T' 分隔，先原样解析（'/' 替换法会把它打成 Invalid Date），
   // 失败再回退老写法（同 formatDateTime 的处理）。
   if (typeof val === 'string' && val.includes('T')) {
     const native = new Date(val)
@@ -122,7 +122,7 @@ export function projectLabel(p) {
 
 /**
  * 明细行 ext_json 解析（字符串/对象两种写入数据库形态都要认）。
- * D-DEC-023：招待三项的 ext_json 镜像就放在这一列里。
+ * 招待三项的 ext_json 镜像就放在这一列里。
  */
 export function parseLineExt(row) {
   const e = row?.extJson
@@ -133,7 +133,7 @@ export function parseLineExt(row) {
 
 /**
  * 招待三项（接待对象 / 接待人数 / 人均标准）查询，供单据详情与费用明细表回显。
- * 优先真实列 exp_bill_line.attendees / person_count / entertain_type（D-DEC-373 落列），
+ * 优先真实列 exp_bill_line.attendees / person_count / entertain_type（落列），
  * 缺失回退行 ext_json（entertainTarget / entertainCount / entertainType / perCapita）；
  * 人均标准两处都没有时按 金额 ÷ 人数 现算，使历史单据（ext_json={}）也能按金额与人数复核。
  */
@@ -163,7 +163,7 @@ export function hasEntertainLines(lines) {
  * 预算科目展示标签：把预算明细的维度串拼成可读名称（如 "上海公司 · 总裁办公室 · 行政办公费"）。
  * dimKey 有两套写法都要认：写入数据库规则为连字符式 `2026-COMPANY33-DEPT1311-ITEM331`
  * （bg_item 现存 1324 行全部是这一种），早期规则为冒号式 `DEPT:1_ITEM:5`。
- * 只认冒号式会让整列退化成原始 dimKey 串，用户无法判断选的是哪条预算线（D-P2-03）。
+ * 只认冒号式会让整列退化成原始 dimKey 串，用户无法判断选的是哪条预算线。
  * 解析失败再回退到 外部财务系统科目码或 dimKey。
  *
  * @param ctx 可选 {companies, projects}，用于解析 COMPANY/PROJECT 段
@@ -201,7 +201,7 @@ export function budgetLabel(items, depts, costCenters, bg, ctx) {
 /**
  * 选中的预算明细不在可见列表内（跨公司/部门、方案未下达）时的占位标签。
  * el-select 找不到匹配 option 会退回显示原始主键（用户看到的就是"20"这种数字），
- * 补一个说明性 option 才能把"这行为什么不可选"讲清楚（D-P2-01）。
+ * 补一个说明性 option 才能把"这行为什么不可选"讲清楚。
  */
 export function budgetUnseenLabel(id) {
   return id == null || id === '' ? '' : `预算明细 #${id}（非本单位可见，请重选）`
@@ -240,7 +240,7 @@ const COMMON_LABELS = {
   quantity: '数量', qty: '数量', taxRate: '税率', taxAmount: '税额', noTaxAmount: '不含税金额',
   settleMode: '结算方式', employeeName: '员工', departmentName: '部门',
   modelKey: '流程编码', modelVersion: '流程版本', procInstId: '流程实例ID', taskId: '任务ID',
-  // ---- 申请类单据（出差行程 / 培训人员 / 会议信息 / 分摊）行详情 ----
+  // 申请类单据（出差行程 / 培训人员 / 会议信息 / 分摊）行详情
   // 这些键此前没有中文标签，行详情弹窗会走 prettyKey() 回落成
   // "Traffic Type / Allowance Amount / Round Trip" 这种英文标题，
   // 中文界面里看着像半截 JSON。统一在此登记，凡是走 showRowDetail 的页面一律变中文。

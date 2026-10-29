@@ -3,6 +3,7 @@
 
 package com.fssc.framework.facade;
 
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.facade.dto.InvoicePoolDTO;
 
 /**
@@ -18,7 +19,7 @@ import com.fssc.framework.facade.dto.InvoicePoolDTO;
  */
 public interface InvoiceFacade {
 
-    // ==================== 入池（影像域 → 发票域） ====================
+    // 入池（影像域 → 发票域）
 
     /**
      * 将一张识别完成的票面录入发票池（复用发票域全校验链：价税强校验、租户内硬查重、
@@ -26,13 +27,13 @@ public interface InvoiceFacade {
      *
      * @param dto 票面数据（含 tenantId）
      * @return 新建发票 ID
-     * @throws com.fssc.common.exception.BizException 校验不通过或发票号重复（调用方应 catch，
+     * @throws BizException 校验不通过或发票号重复（调用方应 catch，
      *                                                入池失败不得回滚 OCR 识别记录）
      */
     Long poolFromOcr(InvoicePoolDTO dto);
 
     /**
-     * D-DEC-463（去重环节②）：入池前先问一次「这张票是不是已经在池」。
+     * 去重环节②：入池前先问一次「这张票是不是已经在池」。
      *
      * <p>改前 OCR 链每次识别都无条件调 {@link #poolFromOcr}，同一票面重复上传（客户端断开后重试／
      * 双提交／同一张票传两次）时由发票域 {@code InvoiceService#create} 的查重抛

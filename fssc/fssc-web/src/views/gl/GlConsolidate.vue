@@ -22,7 +22,7 @@
       <el-table-column prop="reportNo" :label="$t('gl.consolidate.colNo')" width="170" sortable />
       <el-table-column prop="period" :label="$t('gl.consolidate.colBelong')" width="90" sortable />
       <el-table-column :label="$t('gl.consolidate.colScope')" min-width="200" show-overflow-tooltip>
-        <!-- R5-D-150：公司 ID 串按 orgApi.companyTree 名称表映射为公司名（取不到回落裸 ID，不造词） -->
+        <!-- 公司 ID 串按 orgApi.companyTree 名称表映射为公司名（取不到回落裸 ID，不造词） -->
         <template #default="{ row }">{{ companyRangeText(row) }}</template>
       </el-table-column>
       <el-table-column :label="$t('common.status')" width="100">
@@ -166,7 +166,7 @@ async function doAdjust() {
   }
 }
 
-// R5-D-150：合并范围「公司 ID 串 → 公司名」映射（名称表＝orgApi.companyTree 摊平，与 BankAccount/MasterDataTree 同机制；
+// 合并范围「公司 ID 串 → 公司名」映射（名称表＝orgApi.companyTree 摊平，与 BankAccount/MasterDataTree 同机制；
 // 取不到时回落裸 ID，不造词）
 const companyMap = ref({})
 async function loadCompanyMap() {

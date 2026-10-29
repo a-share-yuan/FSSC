@@ -35,7 +35,7 @@ import java.util.TreeSet;
 import java.util.function.Consumer;
 
 /**
- * 流程事件收尾动作配置管理面（D-DEC-320，{@code /api/tenant/wf/event-action-config/**}）。
+ * 流程事件收尾动作配置管理面（{@code /api/tenant/wf/event-action-config/**}）。
  *
  * <p><b>为什么要有这个面</b>：{@code wf_event_action_config} 是
  * {@link EventOrchestrationBus} 的表驱动钩子配置（bizType → actionBean + triggerWhen + 排序 + 启用），
@@ -45,7 +45,7 @@ import java.util.function.Consumer;
  *
  * <p><b>刻意不做的能力</b>：不提供新增与删除。配置行的增删等于给某条业务流挂/摘收尾动作，
  * 属裁决面（要连带校验 actionBean 是否真在 Spring 容器里、bizType 是否与
- * {@code WfBizAction#bizTypes()} 声明一致），按 D-DEC-320 规则不在此开放。
+ * {@code WfBizAction#bizTypes()} 声明一致），按 规则不在此开放。
  * 同理不提供"热重载"入口——总线只在 {@code @PostConstruct} 读一次表，
  * 手工触发 {@code refreshDispatchMap()} 会改写运行中的分发映射，属引擎行为变更，需另行裁决。
  * 因此本页改完 enabled/description 后，<b>下次应用重启才影响运行期</b>，页面已按此规则提示。
@@ -88,9 +88,7 @@ public class WfEventActionConfigController {
         this.orchestrationBus = orchestrationBus;
     }
 
-    // ------------------------------------------------------------------
     // 1. 只读列表
-    // ------------------------------------------------------------------
 
     /**
      * 分页列表：可按 {@code enabled}（1=启用 0=停用）、{@code actionBean}、{@code bizType} 过滤，
@@ -186,9 +184,7 @@ public class WfEventActionConfigController {
         return Result.success(out);
     }
 
-    // ------------------------------------------------------------------
     // 2. 有限编辑（只碰 description / enabled 两个字段）
-    // ------------------------------------------------------------------
 
     /**
      * 字段级编辑：只接受 id + description + enabled，其余列（biz_type / action_bean / trigger_when /
@@ -226,9 +222,7 @@ public class WfEventActionConfigController {
         return Result.success();
     }
 
-    // ------------------------------------------------------------------
     // 3. 内部工具
-    // ------------------------------------------------------------------
 
     private LambdaQueryWrapper<WfEventActionConfig> buildListWrapper(Long tid, Integer enabled, String actionBean,
                                                                      String bizType, String keyword) {

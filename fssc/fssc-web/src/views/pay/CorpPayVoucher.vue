@@ -7,7 +7,7 @@
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
         <b>{{ $t('pay.voucher.pageTitle') }}</b>
         <el-select v-model="sourceType" :placeholder="$t('pay.voucher.colBizType')" clearable style="width: 220px">
-          <!-- R5-D-078：默认规则＝对公付款族（页名与实际查询同一规则，后端 page 已支持逗号族 IN 过滤）；
+          <!-- 默认规则＝对公付款族（页名与实际查询同一规则，后端 page 已支持逗号族 IN 过滤）；
                选项按共享名称表（= 库内实际枚举，bizEntry.VOUCHER_SOURCE_LABEL）动态生成——
                原先硬编码 4 值，20+ 类里 16+ 类既出现在列表又无法被筛出。 -->
           <el-option :label="$t('pay.voucher.optFamilyDefault')" value="EXPENSE_PAY,EXPENSE_SETTLE,TREASURY_PAY" />
@@ -17,7 +17,7 @@
           <el-option :label="$t('status.draft')" value="DRAFT" />
           <el-option :label="$t('pay.shared.stPosted')" value="POSTED" />
         </el-select>
-        <!-- D-H8-04：补「会计期间」过滤，默认当前期间；清空＝不限期间 -->
+        <!-- 补「会计期间」过滤，默认当前期间；清空＝不限期间 -->
         <el-date-picker v-model="period" type="month" value-format="YYYY-MM" :clearable="true"
                         :placeholder="$t('pay.voucher.phPeriod')" style="width: 150px" />
 <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
@@ -58,14 +58,14 @@
           <el-tag v-else type="info" size="small">{{ $t('status.draft') }}</el-tag>
         </template>
       </el-table-column>
-      <!-- P2-4 来源单据列：单据号 + 状态，随手核对来源（孤儿凭证显示—） -->
+      <!-- 来源单据列：单据号 + 状态，随手核对来源（孤儿凭证显示—） -->
       <el-table-column :label="$t('pay.voucher.colSourceBill')" width="150" show-overflow-tooltip>
         <template #default="{ row }">
           <template v-if="row.sourceBillNo && isExpenseFamilyVoucherSource(row.sourceType)">
             <span>{{ row.sourceBillNo }}</span>
             <el-tag v-if="row.sourceBillStatus" size="small" :type="statusType(row.sourceBillStatus)" style="margin-left: 4px">{{ statusLabel(row.sourceBillStatus) }}</el-tag>
           </template>
-          <!-- R5-D-076：来源列不直出裸主键（「#主键」外显＝与 R5-D-039 裸主键族同判据，跨域还易串号）。 -->
+          <!-- 来源列不直出裸主键（「#主键」外显＝与 裸主键族同判据，跨域还易串号）。 -->
           <span v-else-if="row.billId && !isExpenseFamilyVoucherSource(row.sourceType)" style="color: #909399">{{ $t('pay.voucher.srcByDomain', { v1: voucherSourceLabel(row.sourceType) }) }}</span>
           <!-- 费用族查不到来源单据（或本就不带来源）＝真孤儿凭证，显「孤儿凭证」而非 #id -->
           <span v-else style="color: #c45656">{{ $t('pay.voucher.orphanVoucher') }}</span>
@@ -73,7 +73,7 @@
       </el-table-column>
       <el-table-column :label="$t('pay.voucher.colGlEntry')" width="100" align="center">
         <template #default="{ row }">
-          <!-- R5-D-075：落账态来自列表接口一次性聚合（row.glEntryCount，后端 SQL 侧按 voucher_id 分组计数），
+          <!-- 落账态来自列表接口一次性聚合（row.glEntryCount，后端 SQL 侧按 voucher_id 分组计数），
                不再由页内逐张探测；聚合缺失＝「校验失败」显式态（可点击重试），禁止降级显示成「未落账」 -->
           <el-tag v-if="row.glEntryCount > 0" type="success" size="small">{{ $t('pay.voucher.stPostedGl') }}</el-tag>
           <el-tag v-else-if="row.glEntryCount === 0" type="warning" size="small">{{ $t('pay.voucher.stNotPostedGl') }}</el-tag>
@@ -102,7 +102,7 @@
     <el-card v-if="current" :header="$t('pay.voucher.ctxEntriesTitle')" shadow="never" style="margin-top: 14px">
       <el-descriptions :column="4" border size="small" style="margin-bottom: 10px">
         <el-descriptions-item :label="$t('pay.shared.colVoucherNo')">{{ current.voucherNo }}</el-descriptions-item>
-        <!-- R5-D-076：明细卡同样不直出裸主键；无可信单号时引导走「追溯」 -->
+        <!-- 明细卡同样不直出裸主键；无可信单号时引导走「追溯」 -->
         <el-descriptions-item :label="$t('pay.voucher.colSourceBill')">{{ current.sourceBillNo || t('pay.voucher.lblTraceByDomain') }}</el-descriptions-item>
         <el-descriptions-item :label="$t('common.status')">{{ statusLabel(current.status) }}</el-descriptions-item>
         <el-descriptions-item :label="$t('field.summary')">{{ current.summary }}</el-descriptions-item>
@@ -138,7 +138,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -149,10 +149,10 @@ function openTrace(row) {
 }
 
 const selRows = ref([])
-// R5-D-078：默认＝对公付款族（页名「对公付款凭证」与查询同一规则；清空筛选可看全库）
+// 默认＝对公付款族（页名「对公付款凭证」与查询同一规则；清空筛选可看全库）
 const sourceType = ref('EXPENSE_PAY,EXPENSE_SETTLE,TREASURY_PAY')
 const status = ref(null)
-// D-H8-04：默认当前会计期间（YYYY-MM）；清空＝不限期间
+// 默认当前会计期间（YYYY-MM）；清空＝不限期间
 const now = new Date()
 const period = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
 const rows = ref([])
@@ -164,7 +164,7 @@ const lines = ref([])
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
-// D-DEC-264 + R5-D-077：原先页内私有表只有对公支付四键，而本页列的是全部凭证（库内 source_type 已达 20+ 种，
+// + 原先页内私有表只有对公支付四键，而本页列的是全部凭证（库内 source_type 已达 20+ 种，
 // r325 普查：AR_MONTH_CLOSE/ASSET_DEPRECIATION/BAD_DEBT_PROV/CONTRACT/FA_*/GL_*/TREASURY_PAY/RECEIVABLE…），
 // 其余一律直出英文码 ⇒ 名称表以 bizEntry.VOUCHER_SOURCE_LABEL 为单一出处（与凭证台账同词）。
 // 治理判据（走查）：op_voucher.source_type 键集与该名称表差集必须为空——每接一类自动凭证须同步补名称表。
@@ -175,7 +175,7 @@ async function load() {
     const p = { pageNum: pageNum.value, pageSize: pageSize.value }
     if (sourceType.value) p.sourceType = sourceType.value
     if (status.value) p.status = status.value
-    // D-H8-04：会计期间按月下发（后端 voucherPage 已支持 periodYear/periodMonth）
+    // 会计期间按月下发（后端 voucherPage 已支持 periodYear/periodMonth）
     if (period.value) {
       const [y, m] = String(period.value).split('-')
       p.periodYear = Number(y)
@@ -184,7 +184,7 @@ async function load() {
     const d = await sharingApi.voucherPage(p)
     rows.value = d.list || []
     total.value = Number(d.total || 0)
-    // R5-D-075：落账态由列表接口一次性返回（row.glEntryCount，后端 SQL 侧按 voucher_id 聚合）。
+    // 落账态由列表接口一次性返回（row.glEntryCount，后端 SQL 侧按 voucher_id 聚合）。
     // 原页内 for 循环逐张串行探测（逐行调用 posted 接口）已删除——探测失败不得再降级显示「未落账」；
     // 聚合缺失的行显示「校验失败」并可由 retryGlCheck 人工重试。
     if (current.value) {
@@ -194,7 +194,7 @@ async function load() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-/** R5-D-075：仅在列表聚合缺失（行显示「校验失败」）时由人工点击触发的单张重试校验；
+/** 仅在列表聚合缺失（行显示「校验失败」）时由人工点击触发的单张重试校验；
  *  失败仍显式提示「校验失败」并可再点，绝不把探测失败降级成「未落账」。 */
 async function retryGlCheck(row) {
   try {
@@ -227,7 +227,7 @@ async function repost(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// P1-2: 批量记账（仅对未 POSTED 的勾选行）
+// 批量记账（仅对未 POSTED 的勾选行）
 const selDraftIds = ref([])
 const batchPosting = ref(false)
 

@@ -3,15 +3,22 @@
 
 package com.fssc.system.controller;
 
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.system.entity.SysUser;
 import com.fssc.system.service.SoDService;
 import com.fssc.system.service.UserService;
 import com.fssc.system.service.UserService.BatchImportResult;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,8 +44,7 @@ public class TenantUserController {
 
     // 只读查询放开给所有登录租户用户：报销/还款等单据发起页的申请人、还款人下拉必用（写操作仍需权限）
     // SOX-02：无 system:user:list 权限的调用方裁剪为下拉最小字段集，避免向全员暴露 phone/email
-    //
-    // P0 组织办结（2026-10-21）：companyId 由前端传入，**不可信**——直接调 API 不传/乱传就能拉全租户人员。
+    // P0 组织办结：companyId 由前端传入，**不可信**——直接调 API 不传/乱传就能拉全租户人员。
     // 无 system:user:list 的调用方一律以登录人公司为准（跨公司请求直接拒绝，不静默改写）；
     // 只有持用户管理权限的角色可跨公司检索。
     @GetMapping("/page")
@@ -46,9 +52,9 @@ public class TenantUserController {
                                       @RequestParam(required = false) String deptIds,
                                       @RequestParam(required = false) Long companyId) {
         // 机构目录树联动：deptIds 为逗号分隔的部门 ID（选中节点及其全部子部门）
-        java.util.List<Long> deptIdList = null;
+        List<Long> deptIdList = null;
         if (deptIds != null && !deptIds.isBlank()) {
-            deptIdList = new java.util.ArrayList<>();
+            deptIdList = new ArrayList<>();
             for (String s : deptIds.split(",")) {
                 try {
                     long v = Long.parseLong(s.trim());
@@ -58,11 +64,11 @@ public class TenantUserController {
         }
         boolean canListAll = hasUserListPerm();
         if (!canListAll) {
-            com.fssc.framework.security.LoginUser me = com.fssc.framework.security.UserContext.getRequired();
+            LoginUser me = UserContext.getRequired();
             if (me.getCompanyId() != null) {
                 if (companyId != null && !companyId.equals(me.getCompanyId())) {
-                    throw new com.fssc.common.exception.BizException(
-                            com.fssc.common.core.ErrorCode.PERMISSION_DENIED,
+                    throw new BizException(
+                            ErrorCode.PERMISSION_DENIED,
                             "只能查看本公司人员（公司 " + me.getCompanyId() + "）");
                 }
                 companyId = me.getCompanyId();
@@ -78,7 +84,7 @@ public class TenantUserController {
         trimmed.setTotal(page.getTotal());
         trimmed.setPages(page.getPages());
         trimmed.setList(page.getList().stream().map(u -> {
-            Map<String, Object> m = new java.util.HashMap<>();
+            Map<String, Object> m = new HashMap<>();
             m.put("id", u.getId());
             m.put("userName", u.getUserName());
             m.put("nickName", u.getNickName());
@@ -89,14 +95,14 @@ public class TenantUserController {
             m.put("status", u.getStatus());
             m.put("createTime", u.getCreateTime());
             return m;
-        }).collect(java.util.stream.Collectors.toList()));
+        }).collect(Collectors.toList()));
         return Result.success(trimmed);
     }
 
     private boolean hasUserListPerm() {
         // 走 LoginUser#hasPerm 以覆盖通配 *:*:*（租户管理员只持有通配码，逐字比会把它判成无权，
         // 进而被强制收敛到本公司并裁剪字段——管理页会只剩一家公司的人）
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         return u != null && u.hasPerm("system:user:list");
     }
 
@@ -146,7 +152,7 @@ public class TenantUserController {
     }
 
     /**
-     * P1-3：授权查看用户明文联系方式。列表接口对 phone/email 已脱敏，
+     * 授权查看用户明文联系方式。列表接口对 phone/email 已脱敏，
      * 编辑表单打开前调用本接口回填明文（需 system:user:update）。
      */
     @RequiresPerm("system:user:update")

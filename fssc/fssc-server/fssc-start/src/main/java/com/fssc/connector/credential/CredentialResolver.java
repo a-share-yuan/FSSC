@@ -3,6 +3,7 @@
 
 package com.fssc.connector.credential;
 
+import com.fssc.system.entity.ExtInterfaceConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -33,7 +34,7 @@ public class CredentialResolver {
     /** 凭据是否可外发：非空且非掩码占位。传库中原始值（自动先解密）。 */
     public boolean shouldSend(String stored) {
         String plain = cipher.decrypt(stored);
-        return plain != null && !plain.isBlank() && !com.fssc.system.entity.ExtInterfaceConfig.looksMasked(plain);
+        return plain != null && !plain.isBlank() && !ExtInterfaceConfig.looksMasked(plain);
     }
 
     public boolean isEncrypted(String stored) {

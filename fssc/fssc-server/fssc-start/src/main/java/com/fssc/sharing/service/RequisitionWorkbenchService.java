@@ -4,6 +4,7 @@
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.expense.entity.ExpBill;
@@ -38,7 +39,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * P0-6 统一收单工作台 Service
+ * 统一收单工作台 Service
  * 聚合多数据源为统一视图：场景卡片 + 概览看板 + 我的单据/待办/已办 + 单据全链路详情
  */
 @Service
@@ -58,7 +59,7 @@ public class RequisitionWorkbenchService {
     private final MenuService menuService;
     private final MyDocumentService myDocumentService;
 
-    // ======================== 场景卡片 ========================
+    // 场景卡片
 
     /**
      * 返回当前用户可发起单据的场景卡片（按菜单权限过滤）
@@ -67,7 +68,7 @@ public class RequisitionWorkbenchService {
     public List<Map<String, Object>> getScenes() {
         // 提取当前用户的菜单路径集合
         Set<String> menuPaths = extractMenuPaths();
-        
+
         return List.of(
             group("费用报销", List.of(
                 scene("CLAIM", "员工费用报销", "ExpenseClaim", "/expense/claim", "daily-reimbursement"),
@@ -169,7 +170,7 @@ public class RequisitionWorkbenchService {
         return m;
     }
 
-    // ======================== 概览看板 ========================
+    // 概览看板
 
     public Map<String, Object> getDashboard() {
         Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
@@ -186,7 +187,7 @@ public class RequisitionWorkbenchService {
         long mineCount;
         if (userId != null) {
             try {
-                var pageQuery = new com.fssc.common.core.PageQuery();
+                var pageQuery = new PageQuery();
                 pageQuery.setPageNum(1);
                 pageQuery.setPageSize(1);
                 @SuppressWarnings("unchecked")
@@ -205,8 +206,8 @@ public class RequisitionWorkbenchService {
         // 我的已办——与「我的已办」tab 同一规则（wf_task_history 由我办理），改前按
         // wf_instance.status=COMPLETED 过滤，而该取值全库 0 行（最终状态实际写 APPROVED/REJECTED/CANCELLED）
         // ⇒ 卡片恒为 0，和 tab 里的列表自相矛盾。
-        // D-DEC-109：最终状态收尾行自本轮起也带 oper_user_id（"谁的最后一票定论"），但它不是"我办了这一节"，
-        // 计入就是把同一节数两遍（同 D-DEC-275 对作废行的处理），故与 tab 一并排除。
+        // 最终状态收尾行自本轮起也带 oper_user_id（"谁的最后一票定论"），但它不是"我办了这一节"，
+        // 计入就是把同一节数两遍（同 对作废行的处理），故与 tab 一并排除。
         long doneCount = wfTaskHistoryMapper.selectCount(new LambdaQueryWrapper<WfTaskHistory>()
                 .eq(WfTaskHistory::getOperUserId, userId)
                 .notIn(WfTaskHistory::getAction, WfQueryService.TERMINAL_ACTIONS));
@@ -219,11 +220,11 @@ public class RequisitionWorkbenchService {
         return result;
     }
 
-    // ======================== 我的单据（费用域 exp_bill 一表） ========================
+    // 我的单据（费用域 exp_bill 一表）
 
     /**
      * 旧规则：只查 exp_bill（10+ 种 bill_type 都在这一张表，但合同/采购/预算/总账都不在）。
-     * 全类型见 {@code MyDocumentService.myDocs()}（批次5 / D-CON-01）；本方法保留一个版本给旧入口。
+     * 全类型见 {@code MyDocumentService.myDocs()}（批次5 /）；本方法保留一个版本给旧入口。
      */
     public PageResult<Map<String, Object>> myBills(PageQuery query, String billType, String status) {
         Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
@@ -239,8 +240,8 @@ public class RequisitionWorkbenchService {
             qw.eq(ExpBill::getStatus, status);
         }
 
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<ExpBill> p =
-                expBillMapper.selectPage(com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(
+        Page<ExpBill> p =
+                expBillMapper.selectPage(Page.of(
                         query.getPageNum(), query.getPageSize()), qw);
 
         List<Map<String, Object>> list = new ArrayList<>();
@@ -266,7 +267,7 @@ public class RequisitionWorkbenchService {
         return m;
     }
 
-    // ======================== 我的待办 ========================
+    // 我的待办
 
     public PageResult<Map<String, Object>> myTodo(PageQuery query) {
         Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
@@ -277,8 +278,8 @@ public class RequisitionWorkbenchService {
                         .or().like(WfTask::getCandidateIds, "," + userId + ","))
                 .orderByDesc(WfTask::getId);
 
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<WfTask> p =
-                wfTaskMapper.selectPage(com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(
+        Page<WfTask> p =
+                wfTaskMapper.selectPage(Page.of(
                         query.getPageNum(), query.getPageSize()), qw);
 
         List<Map<String, Object>> list = new ArrayList<>();
@@ -303,19 +304,19 @@ public class RequisitionWorkbenchService {
         return m;
     }
 
-    // ======================== 我的已办 ========================
+    // 我的已办
 
     public PageResult<Map<String, Object>> myDone(PageQuery query) {
         Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
 
         LambdaQueryWrapper<WfTaskHistory> qw = new LambdaQueryWrapper<WfTaskHistory>()
                 .eq(WfTaskHistory::getOperUserId, userId)
-                // D-DEC-109：与上方卡片同一规则——最终状态收尾行不算"我办理的某一节"
+                // 与上方卡片同一规则——最终状态收尾行不算"我办理的某一节"
                 .notIn(WfTaskHistory::getAction, WfQueryService.TERMINAL_ACTIONS)
                 .orderByDesc(WfTaskHistory::getId);
 
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<WfTaskHistory> p =
-                wfTaskHistoryMapper.selectPage(com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(
+        Page<WfTaskHistory> p =
+                wfTaskHistoryMapper.selectPage(Page.of(
                         query.getPageNum(), query.getPageSize()), qw);
 
         List<Map<String, Object>> list = new ArrayList<>();
@@ -335,11 +336,11 @@ public class RequisitionWorkbenchService {
         return PageResult.of(list, p.getTotal(), query.getPageNum(), query.getPageSize());
     }
 
-    // ======================== 单据全链路详情 ========================
+    // 单据全链路详情
 
     /**
      * 聚合单据全链路：单据基础 + 流程轨迹 + 凭证 + 付款 + 影像 + 档案
-     * 参考方案 P0-6 "单据详情内联展示流程轨迹 + 凭证 + 付款 + 影像 + 档案"
+     * 参考方案 "单据详情内联展示流程轨迹 + 凭证 + 付款 + 影像 + 档案"
      *
      * <p>本方法按 <b>exp_bill 主键</b>查询。"我的单据"扩到全类型后（批次5），各域 id 空间互不相干
      * （合同 id=7 与报销单 id=7 同时存在），故只有<b>明确是费用域</b>的类型才放行——

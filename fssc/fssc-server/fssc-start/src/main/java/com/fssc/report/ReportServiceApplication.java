@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Import;
  * <p>启动方式（PropertiesLauncher 覆盖 Start-Class，无需二次打包）：</p>
  * <pre>
  * java -Dloader.main=com.fssc.report.ReportServiceApplication \
- *      -cp fssc-server.jar org.springframework.boot.loader.launch.PropertiesLauncher \
+ *      -cp fssc-server.jar PropertiesLauncher \
  *      --spring.profiles.active=report,dev
  * </pre>
  *

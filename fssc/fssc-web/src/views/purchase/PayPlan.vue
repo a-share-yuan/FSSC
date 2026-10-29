@@ -56,7 +56,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="计划期间" prop="period">
-          <!-- D-BIZ-06：手输「2026-11」会被控件按自身格式解析后写进 value-format=YYYYMM 的模型，
+          <!-- 手输「2026-11」会被控件按自身格式解析后写进 value-format=YYYYMM 的模型，
                写入数据库期间就成了非预期值（实测能写出 2026-11 这类带横线值）。期间只允许从面板选。 -->
           <el-date-picker v-model="form.period" type="month" value-format="YYYYMM" format="YYYY-MM" :editable="false" unlink-panels style="width: 100%" placeholder="请选择年月" />
         </el-form-item>
@@ -92,13 +92,13 @@ import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { hasPerm } from '../../utils/perm'
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+s': () => { try { submit() } catch { /* noop */ } },
   'ctrl+r': () => { try { loadData() } catch { /* noop */ } },
 })
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 // 工作台「我的单据」深链：?kw=计划单号 直接定位该行（台账页自带行内「重报审批」）
@@ -115,7 +115,7 @@ function openRowDetail(row) {
 
 const selRows = ref([])
 const rows = ref([])
-/** R5-D-072：列表权限预判（与后端 @RequiresPerm("payplan:list") 同码）——无权不打接口、渲染无权限态 */
+/** 列表权限预判（与后端 @RequiresPerm("payplan:list") 同码）——无权不打接口、渲染无权限态 */
 const canList = hasPerm('payplan:list')
 const total = ref(0)
 const loading = ref(false)
@@ -172,7 +172,7 @@ async function resubmitPlan(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// D-DEC-454：在途计划的正当出口。按钮只对提单人本人出现（服务端同校验＝第二道），
+// 在途计划的正当出口。按钮只对提单人本人出现（服务端同校验＝第二道），
 // 已核销行由服务端拦下；作废会同步终止审批链，单据不再挂在审批池里。
 function canVoid(row) {
   const uid = store.user?.userId ?? store.user?.id

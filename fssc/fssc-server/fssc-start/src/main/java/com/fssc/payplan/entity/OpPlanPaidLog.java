@@ -6,6 +6,7 @@ package com.fssc.payplan.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fssc.payplan.service.PlanWritebackService;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 
 /**
  * 付款批次→付款计划 核销台账（op_plan_paid_log，D6）。
- * <p>批次执行打款成功后由 {@link com.fssc.payplan.service.PlanWritebackService} 逐计划记录本次核销额；
+ * <p>批次执行打款成功后由 {@link PlanWritebackService} 逐计划记录本次核销额；
  * (batch_no, plan_id) 唯一键保证批次重试/重执行不重复核销（去重）。</p>
  */
 @Data

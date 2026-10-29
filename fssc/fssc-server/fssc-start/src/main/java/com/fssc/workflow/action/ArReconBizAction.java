@@ -3,10 +3,13 @@
 
 package com.fssc.workflow.action;
 
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.receivable.entity.ArReconRecord;
 import com.fssc.receivable.mapper.ArReconRecordMapper;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -14,7 +17,7 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 应收域流程收尾（P0-1 事件编排总线）。
+ * 应收域流程收尾（事件编排总线）。
  * <p>
  * 覆盖 AR_RECON（应收账款对账 OTC04）/ AR_REPORT（应收管理分析报告 OTC05）。
  * 二者为纯审批流（无资金收付、无总账过账），收尾即翻转 ar_recon_record 状态：
@@ -28,8 +31,8 @@ import java.util.Set;
 public class ArReconBizAction implements WfBizAction {
 
     private final ArReconRecordMapper arReconRecordMapper;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -53,15 +56,15 @@ public class ArReconBizAction implements WfBizAction {
             return;
         }
         try {
-            // P4-3 审计扩面：改状态前采集旧值（ar_recon_record 无业务单号，bizNo 传 null）
+            // 审计扩面：改状态前采集旧值（ar_recon_record 无业务单号，bizNo 传 null）
             String oldStatus = rec.getStatus();
             ArReconRecord upd = new ArReconRecord();
             upd.setId(id);
             upd.setStatus(approved ? "CONFIRMED" : "REJECTED");
             arReconRecordMapper.updateById(upd);
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("status", oldStatus);
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", upd.getStatus());
             auditTrailService.recordUpdate(event.getBizType(), id, null, "ar_recon_record",
                     String.valueOf(id), auditBefore, auditAfter,

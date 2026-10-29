@@ -27,9 +27,9 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 流程侧只读预览端点的归属校验（D-DEC-229）。
+ * 流程侧只读预览端点的归属校验。
  *
- * <p><b>补的是哪一段</b>：写路径有 {@code canOperate} 越权守卫（V1.3.19，fail-closed），
+ * <p><b>补的是哪一段</b>：写路径有 {@code canOperate} 越权守卫（fail-closed），
  * 但同一批「只读预览」端点按 {@code taskId}/{@code procInstId} 查询时<b>不做任何归属校验</b>。
  * 2026-09-26 实测（同一在办 TR_PAY，批次 PB202609260002）：
  * <ul>
@@ -39,7 +39,7 @@ import java.util.Objects;
  *       ⇒ 缺口只在流程侧，TRC-B 那次办结没覆盖到这批后来加的预览端点。</li>
  * </ul>
  *
- * <p><b>规则选择（刻意与 D-TRC-04 已裁决规则对齐，不另立标准）</b>：先认「与本单的关系」，
+ * <p><b>规则选择（刻意与 已裁决规则对齐，不另立标准）</b>：先认「与本单的关系」，
  * 关系不成立再按单据公司默认处理——
  * <ol>
  *   <li><b>可办理</b>：{@link NodeOrgResolver#canOperate}（办理人 / 候选组角色∩公司维度 / 委托受托人 /
@@ -50,11 +50,11 @@ import java.util.Objects;
  *   <li><b>集团岗</b>：无公司维度账号或 data_scope=1，流程监控/运营岗据此通行；</li>
  *   <li>以上都不成立 ⇒ 走 {@link OrgGuard#assertVisible}（本公司可见、他公司拒绝），
  *       与 {@code bill-trace-chain}、{@code history/page} 同一把尺。公司维度解析不出来的域
- *       （{@code companyIdOfBill} 返回 null，见 D-B3-06）在 OrgGuard 里是 fail-open，
+ *       （{@code companyIdOfBill} 返回 null，见）在 OrgGuard 里是 fail-open，
  *       故此处补一条「无公司维度 ⇒ 仅关系人可见」，与 {@code assertGenericVisible} 同一规则。</li>
  * </ol>
- * 也就是说：本校验把<b>跨公司</b>读取封死，<b>同公司非参与人</b>维持现状（那是 D-TRC-04 已裁决的
- * 「本公司单据可见」，不在修复批次里单方面收紧；若要收到「仅参与人可见」，见交付文档 RA-D229a）。
+ * 也就是说：本校验把<b>跨公司</b>读取封死，<b>同公司非参与人</b>维持现状（那是 已裁决的
+ * 「本公司单据可见」，不在修复批次里单方面收紧；若要收到「仅参与人可见」，见交付文档）。
  *
  * <p><b>fail-closed</b>：解析不到流程实例（无 {@code wf_instance} 镜像行）时一律拒绝，
  * 与 {@code canOperate} 的铁律同一规则——判不出归属就宁拒不放。
@@ -122,7 +122,7 @@ public class WfReadGuard {
             }
         }
         if (company == null) {
-            // 该域没有公司维度可依据 ⇒ 不 fail-open，按「仅关系人」办结（同 bill-trace-chain 的 D-B3-06 处理）
+            // 该域没有公司维度可依据 ⇒ 不 fail-open，按「仅关系人」办结（同 bill-trace-chain 的 处理）
             throw new BizException(ErrorCode.FORBIDDEN,
                     "无权查看该单据的流程信息：仅发起人、可办理人、流程参与人与集团岗可见");
         }

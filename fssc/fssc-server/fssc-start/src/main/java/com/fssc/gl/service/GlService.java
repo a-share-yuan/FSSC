@@ -14,7 +14,9 @@ import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
 import com.fssc.sharing.mapper.OpVoucherLineMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
+import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysUserMapper;
+import java.util.Collection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,7 +45,7 @@ public class GlService {
     private final GlEntryMapper glEntryMapper;
     private final OpVoucherMapper opVoucherMapper;
     private final OpVoucherLineMapper opVoucherLineMapper;
-    /** D-DEC-167：落账时把过账人姓名冗余进分录（列待人工裁决执行 DDL，见 {@code GlEntry}） */
+    /** 落账时把过账人姓名冗余进分录（列待人工裁决执行 DDL，见 {@code GlEntry}） */
     private final SysUserMapper sysUserMapper;
 
     /**
@@ -57,7 +59,7 @@ public class GlService {
     }
 
     /**
-     * 凭证 POSTED 落账（D-DEC-167：分录侧带过账人）。
+     * 凭证 POSTED 落账（分录侧带过账人）。
      *
      * @param operatorId 触发落账的操作人；为空时回退凭证头 {@code op_voucher.post_user_id}——
      *                   该列由 {@code VoucherService.post()} 在落账<b>之前</b>写好，
@@ -77,7 +79,7 @@ public class GlService {
             return 0;
         }
         LocalDateTime now = LocalDateTime.now();
-        // D-DEC-167：过账人落到每一行分录上（列未写入数据库前这两个值不会写库，见 GlEntry 的注释态 DDL）
+        // 过账人落到每一行分录上（列未写入数据库前这两个值不会写库，见 GlEntry 的注释态 DDL）
         Long poster = operatorId != null ? operatorId : v.getPostUserId();
         String posterName = poster == null ? null : userName(poster);
         for (OpVoucherLine ln : lines) {
@@ -116,7 +118,7 @@ public class GlService {
     /** 过账人姓名（分录侧冗余一份，防人员离职后只剩裸 ID 查不到人）；查不到就留空不编 */
     private String userName(Long userId) {
         try {
-            com.fssc.system.entity.SysUser u = sysUserMapper.selectById(userId);
+            SysUser u = sysUserMapper.selectById(userId);
             if (u == null) {
                 return null;
             }
@@ -134,9 +136,9 @@ public class GlService {
     }
 
     /**
-     * R5-D-075：一页凭证的落账分录数批量聚合——SQL 侧按 {@code voucher_id} 分组计数，<b>单条查询</b>
+     * 一页凭证的落账分录数批量聚合——SQL 侧按 {@code voucher_id} 分组计数，<b>单条查询</b>
      * 返回整页读数，供凭证列表接口一次性带回落账态（{@code glEntryCount}），取代页面逐张
-     * /op/gl/posted 的 N+1 串行探测（该探测失败还曾被降级显示成「未落账」，R5-D-075 根因）。
+     * /op/gl/posted 的 N+1 串行探测（该探测失败还曾被降级显示成「未落账」，根因）。
      *
      * <p>租户过滤由框架层拦截器自动追加（与 {@link #isPostedToGl} 同一张表、同一规则）；
      * 未出现在结果里的凭证＝库内没有落账分录，由调用方按 0（未落账）落值——
@@ -145,7 +147,7 @@ public class GlService {
      * @param voucherIds 本页凭证 ID 集（空集直接返回空 Map，不发 SQL）
      * @return voucherId → op_gl_entry 行数（仅含计数 &gt; 0 的凭证）
      */
-    public Map<Long, Integer> countGlEntriesByVoucherIds(java.util.Collection<Long> voucherIds) {
+    public Map<Long, Integer> countGlEntriesByVoucherIds(Collection<Long> voucherIds) {
         if (voucherIds == null || voucherIds.isEmpty()) {
             return Map.of();
         }
@@ -179,7 +181,7 @@ public class GlService {
     }
 
     /**
-     * 总账分录分页（R5-D-149：支持列头服务端排序）。
+     * 总账分录分页（支持列头服务端排序）。
      *
      * <p>背景：前端列头原为裸 {@code sortable}——element-plus 只对「当前页 20 行」做前端排序，
      * 翻页即乱序。排序收到后端：{@code orderBy} 为前端列 prop（camelCase），
@@ -215,7 +217,7 @@ public class GlService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** R5-D-149：orderBy 前端列 prop（camelCase）→ 实体列白名单；白名单外的值返回 null（回退默认 id 升序）。 */
+    /** orderBy 前端列 prop（camelCase）→ 实体列白名单；白名单外的值返回 null（回退默认 id 升序）。 */
     private static SFunction<GlEntry, ?> sortColumnOf(String orderBy) {
         if (orderBy == null) {
             return null;
@@ -237,7 +239,7 @@ public class GlService {
      * 总账科目余额（含期初）。期初 = 该科目在小于本期期间的全部发生合计；
      * 本期借/贷 = 本期发生；期末 = 期初 + 本期借 - 本期贷，返回方向与绝对值。
      *
-     * <p><b>D-DEC-196（证据 12-31:174，科目余额表合计借贷不平）</b>：本方法原先<b>只遍历本期发生行</b>，
+     * <p><b>（证据 12-31:174，科目余额表合计借贷不平）</b>：本方法原先<b>只遍历本期发生行</b>，
      * 期初集合只是拿来"按编码查一下"——于是<b>只有期初余额、本期没有发生</b>的科目整行消失，
      * 它的期初金额也跟着凭空不见，合计行自然对不平（现网实测：公司 1 / 2026-11，
      * 11 个科目被丢掉、期初借 3,446,200 与期初贷 2,133,891.67 蒸发，页面读数变成
@@ -381,7 +383,7 @@ public class GlService {
         return out;
     }
 
-    // ---------- 工具 ----------
+    // 工具
 
     private static final BigDecimal ZERO = BigDecimal.ZERO;
 

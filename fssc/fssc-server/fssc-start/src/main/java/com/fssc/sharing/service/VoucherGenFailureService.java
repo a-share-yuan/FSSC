@@ -9,6 +9,7 @@ import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.mapper.OpVoucherMapper;
+import com.fssc.sharing.service.VoucherService;
 import com.fssc.system.entity.SysOperLog;
 import com.fssc.system.mapper.SysOperLogMapper;
 import lombok.RequiredArgsConstructor;
@@ -64,15 +65,15 @@ public class VoucherGenFailureService {
             "sourceType=(\\S+)\\s+billNo=(\\S+)\\s+billId=(\\d+)(?:\\s+companyId=(\\S+?))?\\s*\\|\\s*(.*)",
             Pattern.DOTALL);
 
-    /** 与 VoucherService 各 generate* 入口的 P0-4 状态校验同一规则 */
+    /** 与 VoucherService 各 generate* 入口的 状态校验同一规则 */
     private static final Set<String> BILL_STATUS_OK_FOR_VOUCHER = Set.of("APPROVED", "PAID", "CLOSED");
 
     /** 来源类型中文名（仅显示层，界面不出现产品名或对比字样） */
     private static final Map<String, String> SOURCE_TYPE_NAMES = Map.of(
             "EXPENSE", "费用报销",
             "EXPENSE_PAY", "对公付款",
-            // D-DEC-083：对公结算（PAY/SETTLE）审批通过出的是计提应付凭证，来源与付款凭证分家
-            com.fssc.sharing.service.VoucherService.SOURCE_SETTLE, "对公结算计提应付",
+            // 对公结算（PAY/SETTLE）审批通过出的是计提应付凭证，来源与付款凭证分家
+            VoucherService.SOURCE_SETTLE, "对公结算计提应付",
             "EXP_LOAN", "借款",
             "EXP_REPAY", "还款");
 
@@ -91,9 +92,9 @@ public class VoucherGenFailureService {
     /**
      * 失败事件分页视图。
      *
-     * @param status     PENDING（未补生成）/ RESOLVED（已补生成）；<b>传空＝不限</b>（默认规则）
+     * @param status PENDING（未补生成）/ RESOLVED（已补生成）；<b>传空＝不限</b>（默认规则）
      * @param sourceType EXPENSE / EXPENSE_PAY / EXP_LOAN / EXP_REPAY；传空＝不限
-     * @param billNo     单据号模糊匹配；传空＝不限
+     * @param billNo 单据号模糊匹配；传空＝不限
      */
     public PageResult<Map<String, Object>> page(long pageNum, long pageSize,
                                                 String status, String sourceType, String billNo) {
@@ -147,9 +148,7 @@ public class VoucherGenFailureService {
         return r;
     }
 
-    // ------------------------------------------------------------------
     // 组装
-    // ------------------------------------------------------------------
 
     private List<Map<String, Object>> scan() {
         List<SysOperLog> logs = sysOperLogMapper.selectByTitleRecent(FAILURE_LOG_TITLE, SCAN_LIMIT);
@@ -287,10 +286,10 @@ public class VoucherGenFailureService {
      * 补生成可行性：只承认与既有入口派发结果<b>一致</b>的来源。
      *
      * <p>{@code POST /voucher/generate/{billId}} 按 billType 派发：PAY → generatePtpPayment
-     * （来源 EXPENSE_PAY），其余一律 generate（来源写死 EXPENSE）。所以
+     * 来源 EXPENSE_PAY，其余一律 generate（来源写死 EXPENSE）。所以
      * EXP_LOAN / EXP_REPAY 的失败单走该入口会落错来源、并绕过 EXP_LOAN/EXP_REPAY 唯一键，
      * 结果是「补出一张费用凭证 + 借款凭证仍然缺」；本视图对这类行直接判定不可重推并说明原因，
-     * 不把错规则的按钮递给财务（D-DEC-271）。
+     * 不把错规则的按钮递给财务。
      */
     private void applyRetryGate(Map<String, Object> row, Parsed p, ExpBill bill) {
         if (bill == null) {
@@ -309,7 +308,7 @@ public class VoucherGenFailureService {
             return;
         }
         boolean ptp = "PAY".equals(bill.getBillType());
-        // D-DEC-083：PAY 单里对公结算（SETTLE）出的是计提应付凭证（来源 EXPENSE_SETTLE），
+        // PAY 单里对公结算（SETTLE）出的是计提应付凭证（来源 EXPENSE_SETTLE），
         // 与其余对公付款（来源 EXPENSE_PAY）同走 generatePtpPayment 派发，两者都可由补生成入口重推。
         boolean match = ("EXPENSE".equals(p.sourceType) && !ptp)
                 || (("EXPENSE_PAY".equals(p.sourceType)

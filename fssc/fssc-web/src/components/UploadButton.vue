@@ -6,8 +6,8 @@
     <el-upload class="upload-btn-upload" :show-file-list="false" :http-request="doUpload" :accept="accept" :multiple="multiple">
       <el-button :type="type" size="small">{{ busy ? busyText : label }}</el-button>
     </el-upload>
-    <!-- D-DEC-463（10-05）：识别是同步串行的长请求（扫描版 PDF 可达几十秒），给用户一个"不再等"的出口。
-         按钮只说"取消等待"、不说"取消上传"——前端 abort() 并不会让服务端停手（识别链是 REQUIRES_NEW），
+    <!-- 识别是同步串行的长请求（扫描版 PDF 可达几十秒），给用户一个"不再等"的出口。
+         不要按钮只说"取消等待"、不说"取消上传"——前端 abort() 并不会让服务端停手（识别链是 REQUIRES_NEW），
          中断后一律按"结果未知"提示，并让用户先去票夹核对，别再传同一张票。 -->
     <el-button v-if="busy && parse" size="small" text type="danger" @click="cancelWaiting">取消等待</el-button>
   </span>
@@ -49,7 +49,7 @@ const props = defineProps({
 const MAX_SIZE_MB = 20
 
 /**
- * D-DEC-463：本按钮在飞的请求集合。
+ * 本按钮在飞的请求集合。
  * 写成数组而不是单枚＝el-upload 的 multiple 会**逐文件各调一次** doUpload，
  * 单枚 controller 会被后一次赋值顶掉 ⇒「取消等待」只中断最后一条、其余仍在跑却不再有任何出口
  * （10-05 登记时已把这条列为已知限制，本轮收掉）。
@@ -92,7 +92,7 @@ async function doUpload({ file, onSuccess, onError }) {
     onError && onError(new Error('FILE_TOO_LARGE'))
     return
   }
-  // D-DEC-474 界面环节：PDF 这一支的等待时长由文件类型决定，事先说明免得用户以为卡死重复上传。
+  // 界面环节：PDF 这一支的等待时长由文件类型决定，事先说明免得用户以为卡死重复上传。
   // 电子发票（有文本层）走本地版式解析＝秒级；扫描版 PDF 才会转图像识别通道＝几十秒量级。
   // 文案只陈述后端真实次序（本地解析优先，解析不出才发识别请求），不承诺结果。
   if (props.parse && /\.pdf$/i.test((file && file.name) || '')) {
@@ -124,7 +124,7 @@ async function doUpload({ file, onSuccess, onError }) {
     props.onDone && props.onDone(rec)
   } catch (e) {
     if (isRequestCancelled(e)) {
-      // D-DEC-463：用户中断的是"等待"，不是服务端的写入 ⇒ 明示结果未知、先去票夹核对
+      // 用户中断的是"等待"，不是服务端的写入 ⇒ 明示结果未知、先去票夹核对
       const out = abortedOutcome(file && file.name)
       ElMessage({ type: out.tone, duration: 6000, message: out.message })
       onError && onError(e)
@@ -135,7 +135,7 @@ async function doUpload({ file, onSuccess, onError }) {
     onError && onError(e)
   } finally {
     dropController(controller)
-    // multiple 批量时仍有别的文件在飞 ⇒ busy 取"还有没有在等的请求"，一个完成就把整排的等待态熄掉
+    // multiple 批量时仍有别的文件在飞 ⇒ busy 取"还有没有在等的请求"，不要一个完成就把整排的等待态熄掉
     busy.value = controllers.length > 0
   }
 }

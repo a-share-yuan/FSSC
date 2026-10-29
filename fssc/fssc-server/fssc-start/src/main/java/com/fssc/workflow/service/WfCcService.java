@@ -4,6 +4,10 @@
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
+import com.fssc.framework.notify.NotifyService;
+import com.fssc.framework.security.LoginUser;
 import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.workflow.entity.WfCc;
@@ -11,6 +15,9 @@ import com.fssc.workflow.entity.WfInstance;
 import com.fssc.workflow.entity.WfNodeConfig;
 import com.fssc.workflow.mapper.WfCcMapper;
 import com.fssc.workflow.mapper.WfInstanceMapper;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -34,7 +41,7 @@ import java.util.Set;
  * <p><b>抄送人来源（取并集后去重）</b>：
  * <ol>
  *   <li><b>节点级配置</b>：{@code wf_node_config.cc_users}（用户ID）∪ {@code cc_roles}
- *       （角色编码，运行期展开为在职成员）。按 {@code model_key + node_key} <b>精确匹配</b>
+ *       角色编码，运行期展开为在职成员。按 {@code model_key + node_key} <b>精确匹配</b>
  *       —— 与 timeout_hours / up_level 同一条规则，<b>孤儿行配置一律不读</b>
  *       （当前配置表约 42.7% 的行 node_key 不在已部署 BPMN 的 userTask 集合内）。</li>
  *   <li><b>运行时入参</b>：审批人在审批弹窗临时指定的「抄送给」，不依赖任何配置，
@@ -44,7 +51,7 @@ import java.util.Set;
  * <p><b>投递时机</b>：仅在审批<b>通过并推进</b>后投递（驳回会终止实例，且已有独立终止通知链路；
  * 给已终止的实例挂抄送点击价值低）。若后续需要「驳回也抄送」，在此处放开即可。
  *
- * <p><b>通知出口（D-DEC-119/149/187，2026-10-01 办结）</b>：投递成功后逐条发 {@code sys_message}
+ * <p><b>通知出口（/149/187，2026-10-01 办结）</b>：投递成功后逐条发 {@code sys_message}
  * 站内信（{@value #CC_MSG_TYPE}）。此前本服务只写 {@code wf_cc}，而 {@code wf_cc} 不是任何人会主动去翻的
  * 地方 —— 抄送在数据层成立、在运营层失效，被抄送人永远不知道有单可看。站内信与 {@code wf_cc} 行
  * <b>同一条据</b>：{@code (biz_type, biz_id)} 直接取 {@code wf_cc} 上的业务域与单据主键，
@@ -70,8 +77,8 @@ public class WfCcService {
     static final String CC_MSG_TYPE = "CC_NOTICE";
 
     /**
-     * 抄送维护通道权限码（D-DEC-187）：持有者可<b>代人</b>标记已读（流程管理员整理收件状态的通道）。
-     * 普通收件人不再需要它——见 {@link #markRead(Long, com.fssc.framework.security.LoginUser)}。
+     * 抄送维护通道权限码：持有者可<b>代人</b>标记已读（流程管理员整理收件状态的通道）。
+     * 普通收件人不再需要它——见 {@link #markRead(Long, LoginUser)}。
      */
     static final String MAINTAIN_PERM = "wf:cc:update";
 
@@ -79,9 +86,9 @@ public class WfCcService {
     private final WfInstanceMapper wfInstanceMapper;
     private final WfNodeConfigResolver nodeConfigResolver;
     private final SysUserMapper sysUserMapper;
-    private final com.fssc.framework.notify.NotifyService notifyService;
+    private final NotifyService notifyService;
     /**
-     * 不变量 II（2026-10-15）：抄送角色展开复用<b>取人侧</b>的 scope 规则——
+     * 不变量 II：抄送角色展开复用<b>取人侧</b>的 scope 规则——
      * {@code COMPANY} 角色只投单据公司持有人、{@code GROUP} 角色投全局（本公司优先），
      * 与 {@code NodeOrgResolver} 的指派/候选人查询完全同源，杜绝「审批收敛、抄送撒全网」的规则分裂。
      */
@@ -105,7 +112,7 @@ public class WfCcService {
      * <p>顺带说明：{@code wf_node_config} 键为 {@code model_key + node_key}，<b>没有公司维度</b>，
      * 所以"各公司配各自抄送人"在配置层无法表达——收敛只能落在代码层，这也是本方法存在的理由。
      */
-    private void expandRoleTargets(java.util.Set<Long> targets, WfNodeConfig cfg, WfInstance inst) {
+    private void expandRoleTargets(Set<Long> targets, WfNodeConfig cfg, WfInstance inst) {
         List<String> roles = parseCodes(cfg.getCcRoles());
         if (roles.isEmpty()) {
             return;
@@ -130,9 +137,9 @@ public class WfCcService {
     /**
      * 按「节点配置 ∪ 运行时入参」投递抄送。
      *
-     * @param procInstId   Flowable 流程实例 ID
-     * @param nodeKey      刚办结的任务的 taskDefinitionKey（写入 {@code wf_cc.from_node}）
-     * @param operator     本次操作人；抄送给操作人自己无意义，会被剔除
+     * @param procInstId Flowable 流程实例 ID
+     * @param nodeKey 刚办结的任务的 taskDefinitionKey（写入 {@code wf_cc.from_node}）
+     * @param operator 本次操作人；抄送给操作人自己无意义，会被剔除
      * @param runtimeCcCsv 审批人临时指定的抄送人用户ID，逗号分隔，可空
      * @return 本次实际新增的抄送条数（已存在的重复项不计）
      */
@@ -219,7 +226,7 @@ public class WfCcService {
                 log.warn("抄送投递失败 procInst={} node={} uid={}", procInstId, nodeKey, uid, ex);
             }
         }
-        // ⑥ 通知出口（D-DEC-119/149/187）：抄送行写入数据库后补发站内信，被抄送人才可能知道有单可看。
+        // ⑥ 通知出口（/149/187）：抄送行写入数据库后补发站内信，被抄送人才可能知道有单可看。
         //    整段独立 try/catch——传阅提醒失败绝不回滚已成的抄送，也绝不阻断审批。
         for (WfCc cc : delivered) {
             notifyCc(cc);
@@ -249,7 +256,7 @@ public class WfCcService {
     }
 
     /**
-     * 抄送已读回写（D-DEC-187，2026-10-01 办结）。
+     * 抄送已读回写（2026-10-01 办结）。
      *
      * <p><b>为什么改</b>：{@code wf_cc.is_read} 是<b>收件人的个人状态</b>，不是流程管理动作，
      * 而端点此前挂 {@code wf:cc:update}——该码在授权表里只授 CONFIG_ADMIN／FIN_MANAGER／IT_ADMIN 三岗
@@ -257,8 +264,8 @@ public class WfCcService {
      * （现网 wf_cc 收件人 3901／3915 = FSSC_SUPERVISOR＋COMMON_EMP）一个都不持 ⇒
      * 前端「标记已读」按钮对他们<b>不渲染</b>、接口对他们 403，{@code is_read} 结构性恒为 0
      * （实测 {@code wf_cc} 12 行全部 {@code is_read=0}、{@code read_time} 全 NULL，
-     * 与 D-DEC-187 登记的「5 条未读」同因，只是行数随投递增加）。
-     * 光补通知（D-DEC-149）不解决这一半：提醒发得出去，已读状态仍永远翻不过来。
+     * 与 登记的「5 条未读」同因，只是行数随投递增加）。
+     * 光补通知不解决这一半：提醒发得出去，已读状态仍永远翻不过来。
      *
      * <p><b>规则</b>：与 {@code GET /cc/mine} 的「本人视角免权限码」一致——自己的抄送行不需要权限码；
      * 持 {@code wf:cc:update}（或通配 {@code *:*:*}）者仍可代人标记，原维护通道不缩。
@@ -270,28 +277,28 @@ public class WfCcService {
      * @param operator 当前登录人（控制器传入，不接受裸 userId——需要它的 perms 判维护通道）
      * @return {@code true} 本次真的把该行从 unread 置为 read；{@code false} 该行本就已是已读（重复点击去重）
      */
-    public boolean markRead(Long id, com.fssc.framework.security.LoginUser operator) {
+    public boolean markRead(Long id, LoginUser operator) {
         if (id == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "抄送记录 ID 必填");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "抄送记录 ID 必填");
         }
         if (operator == null || operator.getUserId() == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.UNAUTHORIZED, "未登录，无法标记抄送已读");
+            throw new BizException(
+                    ErrorCode.UNAUTHORIZED, "未登录，无法标记抄送已读");
         }
         WfCc cc = wfCcMapper.selectById(id);
         if (cc == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.NOT_FOUND, "抄送记录不存在: " + id);
+            throw new BizException(
+                    ErrorCode.NOT_FOUND, "抄送记录不存在: " + id);
         }
-        java.util.Set<String> perms = operator.getPerms();
+        Set<String> perms = operator.getPerms();
         boolean privileged = perms != null
                 && (perms.contains("*:*:*") || perms.contains(MAINTAIN_PERM));
         if (!privileged && !operator.getUserId().equals(cc.getCcUserId())) {
             // 只回结果不回「谁的」：id 可枚举时，差异化的报错文本就是抄送名册的拖库接口。
             log.warn("抄送已读越权被拒 ccId={} 操作人={}", id, operator.getUserId());
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.FORBIDDEN, "只能将自己的抄送标记为已读");
+            throw new BizException(
+                    ErrorCode.FORBIDDEN, "只能将自己的抄送标记为已读");
         }
         if (Integer.valueOf(1).equals(cc.getIsRead())) {
             return false;
@@ -299,7 +306,7 @@ public class WfCcService {
         WfCc upd = new WfCc();
         upd.setId(id);
         upd.setIsRead(1);
-        upd.setReadTime(java.time.LocalDateTime.now());
+        upd.setReadTime(LocalDateTime.now());
         wfCcMapper.updateById(upd);
         return true;
     }
@@ -311,9 +318,9 @@ public class WfCcService {
      * 同一规则，抄送同样不往 admin 投）。租户条件由 MyBatis-Plus 拦截器注入。
      *
      * @param keyword 姓名或登录名模糊匹配，可空
-     * @param limit   返回上限，缺省 200、硬顶 500（抄送是辅助动作，不允许拉全量表）
+     * @param limit 返回上限，缺省 200、硬顶 500（抄送是辅助动作，不允许拉全量表）
      */
-    public java.util.List<java.util.Map<String, Object>> candidates(String keyword, Integer limit) {
+    public List<Map<String, Object>> candidates(String keyword, Integer limit) {
         int cap = (limit == null || limit <= 0) ? 200 : Math.min(limit, 500);
         LambdaQueryWrapper<SysUser> qw = new LambdaQueryWrapper<>();
         qw.eq(SysUser::getStatus, "NORMAL");
@@ -325,9 +332,9 @@ public class WfCcService {
         }
         qw.orderByAsc(SysUser::getId);
         qw.last("limit " + cap);
-        java.util.List<java.util.Map<String, Object>> out = new ArrayList<>();
+        List<Map<String, Object>> out = new ArrayList<>();
         for (SysUser u : sysUserMapper.selectList(qw)) {
-            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            Map<String, Object> m = new LinkedHashMap<>();
             m.put("userId", u.getId());
             m.put("name", u.getNickName() != null && !u.getNickName().isBlank()
                     ? u.getNickName() : u.getUserName());

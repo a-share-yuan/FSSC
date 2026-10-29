@@ -3,10 +3,16 @@
 
 package com.fssc.workflow.action;
 
+import com.fssc.audit.service.AuditTrailService;
+import com.fssc.system.service.NumberRuleService;
 import com.fssc.treasury.entity.TrFundPlan;
 import com.fssc.treasury.mapper.TrFundPlanMapper;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -14,7 +20,7 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * 资金计划审批收尾（P0-1 事件编排总线）。
+ * 资金计划审批收尾（事件编排总线）。
  * <p>
  * TR_PLAN 审批通过 → tr_fund_plan.status: DRAFT → APPROVED
  * <p>
@@ -27,9 +33,9 @@ import java.util.Set;
 public class TreasuryPlanBizAction implements WfBizAction {
 
     private final TrFundPlanMapper trFundPlanMapper;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    private final NumberRuleService numberRuleService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -46,7 +52,7 @@ public class TreasuryPlanBizAction implements WfBizAction {
             return;
         }
         try {
-            // P4-3 审计扩面：改状态前采集旧值
+            // 审计扩面：改状态前采集旧值
             String oldStatus = plan.getStatus();
             TrFundPlan upd = new TrFundPlan();
             upd.setId(planId);
@@ -56,9 +62,9 @@ public class TreasuryPlanBizAction implements WfBizAction {
                 log.info("资金计划 {} 审批结束兜底回填 plan_no={}", planId, upd.getPlanNo());
             }
             trFundPlanMapper.updateById(upd);
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("status", oldStatus);
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", upd.getStatus());
             // 本次实际变化：plan_no 默认处理回填时一并记录
             if (upd.getPlanNo() != null) {
@@ -84,8 +90,8 @@ public class TreasuryPlanBizAction implements WfBizAction {
             return numberRuleService.next("TR_PLAN");
         } catch (Exception ex) {
             log.warn("资金计划兜底取号失败，降级时间戳编号: {}", ex.getMessage());
-            return "FP" + java.time.LocalDateTime.now()
-                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+            return "FP" + LocalDateTime.now()
+                    .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         }
     }
 }

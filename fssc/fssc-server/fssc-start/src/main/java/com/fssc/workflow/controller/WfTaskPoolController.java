@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * G3（2026-09-24）任务池五视图（{@code /api/tenant/wf/pool/**}）。
+ * G3任务池五视图（{@code /api/tenant/wf/pool/**}）。
  *
  * <p>五个视图：我的待办 / 可认领 / 被他人锁定 / 我已认领 / 池内全部（语义与取舍见
  * {@link TaskPoolQueryService} 类注释）。<b>超时列读 {@code wf_task.due_time} 真值</b>，
@@ -40,7 +40,7 @@ public class WfTaskPoolController {
 
     private final TaskPoolQueryService poolQueryService;
 
-    /** 视图清单（前端下拉数据源，避免前端硬编码视图名；R5-D-258①：按当前账号权限裁剪，无权视图不返回） */
+    /** 视图清单（前端下拉数据源，避免前端硬编码视图名；①：按当前账号权限裁剪，无权视图不返回） */
     @RequiresPerm("wf:task:list")
     @GetMapping("/views")
     public Result<List<String>> views() {

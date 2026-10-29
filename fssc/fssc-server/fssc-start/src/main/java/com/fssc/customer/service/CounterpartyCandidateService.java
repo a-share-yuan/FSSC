@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 往来单位候选聚合服务（D-V4R-97 之邻缺陷 D-V4R-96 修复）。
+ * 往来单位候选聚合服务（之邻缺陷 修复）。
  *
  * <h3>缺陷背景</h3>
  * 对公结算（SETTLE）的「往来单位」下拉只读 {@code crm_customer}（客户档案），
@@ -82,7 +82,7 @@ public class CounterpartyCandidateService {
             return out;
         }
 
-        // ---- ① 已有客户档案（del_flag 由 @TableLogic 自动过滤，不手写条件）----
+        // ① 已有客户档案（del_flag 由 @TableLogic 自动过滤，不手写条件）
         LambdaQueryWrapper<CrmCustomer> cw = new LambdaQueryWrapper<CrmCustomer>()
                 .eq(CrmCustomer::getTenantId, tenantId)
                 .orderByAsc(CrmCustomer::getId)
@@ -107,7 +107,7 @@ public class CounterpartyCandidateService {
             }
         }
 
-        // ---- ② 供应商主数据：crm_customer 里没有的才建档 ----
+        // ② 供应商主数据：crm_customer 里没有的才建档
         LambdaQueryWrapper<MdSupplier> sw = new LambdaQueryWrapper<MdSupplier>()
                 .eq(MdSupplier::getTenantId, tenantId)
                 .eq(MdSupplier::getStatus, "NORMAL")
@@ -181,7 +181,7 @@ public class CounterpartyCandidateService {
         return c.getId();
     }
 
-    /** CrmCustomer → 候选 Map（字段名与既有前端用法对齐：id/customerName/customerType）；联系人在此留空，由 {@code CustomerService#page} 的回查规则统一（两处各拷一份）。 */
+    /** CrmCustomer → 候选 Map（字段名与既有前端用法对齐：id/customerName/customerType）；联系人在此留空，由 {@code CustomerService#page} 的回查规则统一（不要两处各拷一份）。 */
     private Map<String, Object> toCandidate(CrmCustomer c) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", c.getId());
@@ -210,7 +210,7 @@ public class CounterpartyCandidateService {
                 .eq(MdSupplier::getSupplierCode, String.valueOf(code).trim())
                 .last("LIMIT 1"));
         if (s == null) return;
-        // D-V4R-96：crm_customer 无 supplierId 字段，这里补挂来源供应商 id
+        // crm_customer 无 supplierId 字段，这里补挂来源供应商 id
         m.put("supplierId", s.getId());
         m.put("supplierName", s.getSupplierName());
         m.put("blacklist", s.getBlacklist());

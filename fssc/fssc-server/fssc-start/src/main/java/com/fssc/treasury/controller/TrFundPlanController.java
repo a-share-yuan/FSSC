@@ -22,7 +22,7 @@ import java.math.BigDecimal;
 
 /**
  * 资金计划管理（/api/tenant/treasury/fund-plan/**）
- * <p>D-DEC-422 扩展（台账 §4.5 观察「TrFundPlanController 零 {@code @OperLog}」）：
+ * <p>扩展（台账 §4.5 观察「TrFundPlanController 零 {@code @OperLog}」）：
  * 写端点补操作审计记录，读端点按全项目惯例不打点。
  */
 @RestController
@@ -71,7 +71,7 @@ public class TrFundPlanController {
     }
 
     /**
-     * D-G5-05：作废资金计划（记录，不物理删除；联动终止在办流程）。
+     * 作废资金计划（记录，不物理删除；联动终止在办流程）。
      *
      * <p>此前没有作废/删除出口，跑测清理重复草稿只能直接删表 ⇒ 留下 RUNNING 僵尸流程实例
      * 与无 assignee 的僵尸待办。作废走标准收尾入口 {@code cancelRunningInstancesByBiz}。</p>

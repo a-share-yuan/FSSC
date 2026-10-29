@@ -22,6 +22,6 @@ export default [
   // 独立于 apflow/arflow：两个域的岗都要用，故不按域归属路径，菜单由 sys_menu 种子决定挂点。
   { path: 'bcp-objection', component: () => import('../../views/flow/BcpObjectionBoard.vue'),
     meta: { title: 'BCP异议审核', perms: ['bcp:objection:list'] } },
-  // 后端 /api/tenant/wf/timeout/** 三端点早有、界面无（D-V4R-62）；path 与测试手册写的默认处理地址一致
+  // 后端 /api/tenant/wf/timeout/** 三端点早有、界面无；path 与测试手册写的默认处理地址一致
   { path: 'wf/timeout/stats', component: () => import('../../views/flow/WfTimeoutStatsBoard.vue'), meta: { title: '超时升级统计' } },
 ]

@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * G3（2026-09-24）任务池五视图。
+ * G3任务池五视图。
  *
  * <p>通行规则的五视图是「待办／已办／流程消息／待分配任务／我管理的任务」；
  * 本系统"流程消息"已由 {@code wf_cc} 独立承载、"已办"已由 {@code wf_task_history} 承载，
@@ -67,8 +67,8 @@ public class TaskPoolQueryService {
     /**
      * 五视图分页查询。
      *
-     * @param view    视图名，见 {@link #VIEWS}
-     * @param userId  当前用户（POOL_ALL 之外必填）
+     * @param view 视图名，见 {@link #VIEWS}
+     * @param userId 当前用户（POOL_ALL 之外必填）
      * @param keyword 单号/标题模糊
      */
     public PageResult<Map<String, Object>> view(String view, PageQuery q, Long userId, String keyword) {

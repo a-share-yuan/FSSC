@@ -9,6 +9,8 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.common.util.AssertUtil;
+import com.fssc.framework.cache.CacheUtil;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.SysDictData;
 import com.fssc.system.entity.SysDictType;
 import com.fssc.system.mapper.SysDictDataMapper;
@@ -36,7 +38,7 @@ public class DictService {
     private final SysDictTypeMapper sysDictTypeMapper;
     private final SysDictDataMapper sysDictDataMapper;
 
-    // ---------- 字典类型 ----------
+    // 字典类型
 
     public PageResult<SysDictType> typePage(long pageNum, long pageSize, String keyword) {
         LambdaQueryWrapper<SysDictType> qw = new LambdaQueryWrapper<>();
@@ -56,8 +58,8 @@ public class DictService {
         long dup = sysDictTypeMapper.selectCount(new LambdaQueryWrapper<SysDictType>()
                 .eq(SysDictType::getDictType, type.getDictType()));
         if (dup > 0) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "字典类型已存在: " + type.getDictType());
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "字典类型已存在: " + type.getDictType());
         }
         type.setId(null);
         sysDictTypeMapper.insert(type);
@@ -84,7 +86,7 @@ public class DictService {
         sysDictTypeMapper.hardDelete(id);
     }
 
-    // ---------- 字典数据 ----------
+    // 字典数据
 
     public List<SysDictData> dataList(String dictType) {
         return sysDictDataMapper.selectList(new LambdaQueryWrapper<SysDictData>()
@@ -92,7 +94,7 @@ public class DictService {
                 .orderByAsc(SysDictData::getSort));
     }
 
-    // ---------- 内置字典（免权限只读通道的校验） ----------
+    // 内置字典（免权限只读通道的校验）
 
     /**
      * 当前租户的「内置字典类型」编码集合（is_builtin=1 且 status=NORMAL），按租户缓存 5 分钟。
@@ -102,8 +104,8 @@ public class DictService {
      * 故新增/改内置标记后不会长时间读到旧集合。
      */
     private Set<String> builtinTypes() {
-        Long tid = com.fssc.framework.tenant.TenantContext.getTenantId();
-        return com.fssc.framework.cache.CacheUtil.get("dictbuiltin:" + tid, () ->
+        Long tid = TenantContext.getTenantId();
+        return CacheUtil.get("dictbuiltin:" + tid, () ->
                 sysDictTypeMapper.selectList(new LambdaQueryWrapper<SysDictType>()
                         .eq(SysDictType::getIsBuiltin, 1)
                         .eq(SysDictType::getStatus, "NORMAL"))
@@ -117,7 +119,7 @@ public class DictService {
      * 非内置（租户自定义）字典一律返回空列表 —— 因为该端点不带任何权限码，
      * 任何登录用户都能调，绝不能成为"绕过 system:dict:list 偷看租户自定义配置"的侧门。
      *
-     *  越权请求**不抛异常**：返回空即可让调用方自然回落本地常量（fail-soft），
+     * 越权请求**不抛异常**：返回空即可让调用方自然回落本地常量（fail-soft），
      *    抛错反而会在每个业务页面刷 400 日志。这里只记一条 warn 便于排查。
      *
      * @return 内置字典的数据行；非内置/不存在 ⇒ 空列表（绝不返回租户自定义字典）
@@ -129,7 +131,7 @@ public class DictService {
         Set<String> allow = builtinTypes();
         if (!allow.contains(dictType)) {
             log.warn("[dict] 拒绝非内置字典读取请求 dictType={} tenantId={}（该端点免权限，仅暴露 is_builtin=1 的类型）",
-                    dictType, com.fssc.framework.tenant.TenantContext.getTenantId());
+                    dictType, TenantContext.getTenantId());
             return List.of();
         }
         return dataList(dictType);
@@ -163,7 +165,7 @@ public class DictService {
         List<String> denied = req.stream().filter(t -> !allow.contains(t)).toList();
         if (!denied.isEmpty()) {
             log.warn("[dict] 批量内置字典读取剔除非内置类型 denied={} tenantId={}（该端点免权限，仅暴露 is_builtin=1 的类型）",
-                    denied, com.fssc.framework.tenant.TenantContext.getTenantId());
+                    denied, TenantContext.getTenantId());
         }
         if (ok.isEmpty()) {
             return Map.of();

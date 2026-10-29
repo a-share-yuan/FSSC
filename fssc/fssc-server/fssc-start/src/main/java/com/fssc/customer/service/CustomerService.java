@@ -36,9 +36,9 @@ import org.springframework.util.StringUtils;
 public class CustomerService {
 
     /**
-     * 关键字过滤的第四臂＝供应商侧联查。影子行的联系人已不再落 crm 列（V1.4.91 清历史后全空），
-     * 让「按联系人姓名/电话/地址搜客户」这条既有手感在清列那天静默失效。
-     * 参数一律走 {0} 占位（拼接用户输入）；两侧都锁自家 tenant_id，不依赖拦截器是否会下推进子查询。
+     * 关键字过滤的第四臂＝供应商侧联查。影子行的联系人已不再落 crm 列（清历史后全空），
+     * 不要让「按联系人姓名/电话/地址搜客户」这条既有手感在清列那天静默失效。
+     * 参数一律走 {0} 占位（不要拼接用户输入）；两侧都锁自家 tenant_id，不依赖拦截器是否会下推进子查询。
      */
     private static final String SUPPLIER_CONTACT_EXISTS =
             "exists (select 1 from md_supplier ms where ms.del_flag = 0"
@@ -77,11 +77,11 @@ public class CustomerService {
             assertCodeUnique(e.getCustomerCode(), null);
         }
         e.setId(null);
-        // V2.2.38 B-14（K130 客户"未核准/核准/禁用"状态位）：建档即 PENDING，核准走 approve()
+        // B-14（K130 客户"未核准/核准/禁用"状态位）：建档即 PENDING，核准走 approve()
         if (e.getStatus() == null || "NORMAL".equals(e.getStatus())) e.setStatus("PENDING");
         e.setTenantId(TenantContext.getTenantId());
         mapper.insert(e);
-        // V2.2.38 B-14：审批流退役，建档即 PENDING 状态位，核准走 approve() 翻转
+        // B-14：审批流退役，建档即 PENDING 状态位，核准走 approve() 翻转
         return e.getId();
     }
 
@@ -116,7 +116,7 @@ public class CustomerService {
         u.setStatus(enable ? "NORMAL" : "DISABLED");
         mapper.updateById(u);
     }
-    /** V2.2.38 B-14 状态位核准：PENDING→ACTIVE（去重） */
+    /** B-14 状态位核准：PENDING→ACTIVE（去重） */
     @Transactional(rollbackFor = Exception.class)
     public void approve(Long id) {
         CrmCustomer cust = mapper.selectById(id);
@@ -133,7 +133,7 @@ public class CustomerService {
     /**
      * 供应商影子行的联系人三列（contactName/contactPhone/address）按编码回查 md_supplier 补齐。
      * crm_customer 建档不再拷这三列（同编码 51 行三列逐值全同＝纯冗余；该数为 2026-10-23 现盘快照，库可被整体重建⇒以现盘为准），出参规则保持不变，界面「带出联系人」照旧。
-     * 每页只发一条 IN 查询（客户下拉每页都走这里，逐行回查）；只填空缺，人工在客户档案上改过的值不覆盖。
+     * 每页只发一条 IN 查询（客户下拉每页都走这里，不要逐行回查）；只填空缺，人工在客户档案上改过的值不覆盖。
      * 关键字侧另有第四臂＝SUPPLIER_CONTACT_EXISTS 联查供应商侧三列，影子行清空后按 联系人/电话/地址 仍搜得到。
      */
     private void fillContactFromSupplier(List<CrmCustomer> rows) {

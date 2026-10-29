@@ -45,7 +45,7 @@
       </el-table-column>
       <el-table-column :label="$t('common.operation')" width="170" fixed="right">
         <template #default="{ row }">
-          <!-- D-DEC-423④：登记即冲减（D-V3-143），最终状态行不再给「先进先出核销」按钮，避免重复核销 -->
+          <!-- ④：登记即冲减，最终状态行不再给「先进先出核销」按钮，避免重复核销 -->
           <el-button v-if="!receiptAppliedStatuses.includes(row.status)" link size="small" type="primary" @click="applyReceipt(row)">{{ $t('flow.arRcpt.btnFifoApply') }}</el-button>
           <el-tag v-else size="small" type="success" effect="plain">{{ $t('flow.arRcpt.tagAppliedOnRegister') }}</el-tag>
         </template>
@@ -67,7 +67,7 @@
           </el-select>
         </el-form-item>
         <el-form-item :label="$t('flow.arRcpt.labBankSerial')"><el-input v-model="rcForm.bankSerial" :placeholder="$t('flow.arRcpt.phBankSerial')" /></el-form-item>
-        <!-- D-H3-02：核销方式二选一。原对话框只有自动先进先出一条路，操作人无法把一笔收款
+        <!-- 核销方式二选一。原对话框只有自动先进先出一条路，操作人无法把一笔收款
              指定冲某几张应收（后端 /receipt/create 的 lines 通道早已支持，界面无入口）；
              自动路径又会跨法人主体串账（H3.4 实测：公司 1 的收款冲了 company_id=35 的 2025 年应收）。
              后端已加公司校验，这里把手工指定通道也开出来，并明示自动路径的取单规则。 -->
@@ -142,7 +142,7 @@ const dateRange = ref([])
 function customerName(id) { const c = customers.value.find((x) => x.id === id); return c ? (c.customerName || c.supplierName || c.name || '—') : (id ? '#' + id : '—') }
 function operatorName(id) { const u = users.value.find((x) => x.id === id); return u ? (u.nickName || u.userName) : (id ? '#' + id : '—') }
 
-// D-DEC-423④：收款单"已核销"最终状态名称表（后端 RcReceiptService.APPLIED_RECEIPT_STATUSES 同一规则）
+// ④：收款单"已核销"最终状态名称表（后端 RcReceiptService.APPLIED_RECEIPT_STATUSES 同一规则）
 const receiptAppliedStatuses = ['WRITTEN_OFF', 'WRITE_OFF', 'APPLIED']
 
 const filtered = computed(() => receipts.value.filter((r) => {
@@ -177,7 +177,7 @@ const { rules: receiptRules } = useFormRules('RECEIPT')
 const { submit: guardReceipt } = useSubmitGuard(receiptFormRef)
 
 /**
- * D-H3-02：手工指定应收单核销（后端 /receipt/create 的 lines 通道）。
+ * 手工指定应收单核销（后端 /receipt/create 的 lines 通道）。
  * 候选＝该往来单位在**本法人主体**下的未清应收（后端 listByCustomer 已加公司校验，
  * 且排序＝到期日+id 升序，与自动 FIFO 同序）；status 排除 NONE/REJECTED 与后端候选规则一致。
  */
@@ -252,7 +252,7 @@ async function saveReceipt() {
       const newId = await receivableApi.receiptCreate(payload)
       ElMessage.success(t('flow.arRcpt.msgRegistered'))
       dlgReceipt.value = false
-      // D-H3-06：保存即刷新，并复核新行是否真的进了视野。
+      // 保存即刷新，并复核新行是否真的进了视野。
       // 原实现 fire-and-forget 调 loadReceipt()，一旦新行被工具条检索条件（关键字/日期区间/银行勾对）
       // 过滤掉或不在本账号可见范围内，列表看起来"没变化"，操作人会误判成没写入数据库（H3.3 本轮即如此）。
       await loadReceipt()

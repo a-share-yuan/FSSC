@@ -55,7 +55,7 @@ public class ApDispatchRule implements Serializable {
     @TableField(exist = false)
     private String groupLeaderName;
 
-    /** 编辑凭据（只读下发、保存原样回传）＝六个可编辑字段的 SHA-256，用于并发覆盖检测；写入数据库。 */
+    /** 编辑凭据（只读下发、保存原样回传）＝六个可编辑字段的 SHA-256，用于并发覆盖检测；不要写入数据库。 */
     @TableField(exist = false)
     private String editFingerprint;
 }

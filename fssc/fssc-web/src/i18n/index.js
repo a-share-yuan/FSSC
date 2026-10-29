@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-//
+
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 // i18n 基座（域8A / 任务 T0.5）
-// ---------------------------------------------------------------------------
 // 目标：一处配置、全局可切、语言包按 locale 分目录（新增语种=加目录，不改业务码）。
-//
 // 设计要点（对应方案 §8.2「抽取纪律」）：
 //  1. **静态 key 强制**：语言包 key 一律静态字面量，调用侧写 $t('xxx.yyy')；
 //     严禁 $t('menu.' + name) 动态拼接——否则残留扫描/键对齐 CI 全部失效。
 //  2. **缺失默认处理回落 zh-CN**：缺 key 时回落中文并 DEV 环境告警，避免白屏。
 //  3. **数字/日期/币种统一 Intl**：不在业务里手写 toLocaleString，统一走 $n/$d。
 //  4. 语言持久化：localStorage 记住选择，刷新不丢；首访按浏览器语言探测。
-//
 // 注意：本文件只做「基座 + 通用键」。业务页面文案属域8B 历史抽取范围，
 //       按域分批迁移，届时只往 locales/*.js 追加键，不改本文件结构。
 

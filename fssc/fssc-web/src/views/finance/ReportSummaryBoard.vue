@@ -96,7 +96,6 @@ const month = ref(now.getMonth() + 1)
 const refreshing = ref(false)
 const loading = ref(false)
 
-// R5-D-035
 const summary = reactive({
   totalBills: 0,
   totalAmount: 0,
@@ -122,12 +121,10 @@ const breakdown = computed(() => {
   return all.slice(start, start + pageSize.value)
 })
 
-// R5-D-035
 function periodKey(y, m) {
   return `${y}${String(m).padStart(2, '0')}`
 }
 
-// R5-D-035
 function periodLabel(p) {
   const s = String(p || '')
   return s.length === 6 ? `${s.slice(0, 4)}-${s.slice(4)}` : s
@@ -155,7 +152,6 @@ function handleCurrentChange(val) {
 async function loadSummary() {
   loading.value = true
   try {
-    // R5-D-035
     const res = await p2Api.summaryQuery({ period: periodKey(year.value, month.value), dimType: 'EXPENSE_TYPE' })
     const rows = Array.isArray(res) ? res : []
     let bills = 0
@@ -203,7 +199,6 @@ function onParamChange() {
 
 function onPeriodSelect(val) {
   if (!val) return
-  // R5-D-035
   const s = String(val)
   year.value = Number(s.slice(0, 4))
   month.value = Number(s.slice(4, 6))
@@ -229,10 +224,9 @@ function openRowDetail(row) {
   return showRowDetail(row, { title: '详情' })
 }
 
-// 41号审查 P1-9：导出当前期间费用类别分解
+// 41号审查 导出当前期间费用类别分解
 function doExport() {
-  // R5-D-035
-  // D-H10-02：导出列与页面列同源同序（原缺「占比」列，页面 5 列导出只有 4 列）。
+  // 导出列与页面列同源同序（原缺「占比」列，页面 5 列导出只有 4 列）。
   // 导出取 summary.breakdown 全集而非分页切片，与页面「导出全部」语义一致。
   exportCsv(summary.breakdown || [], [
     { prop: 'category', label: '单据类型' }, { prop: 'billCount', label: '单据数' },
@@ -274,7 +268,6 @@ onMounted(() => {
   color: #409eff;
   margin-bottom: 6px;
 }
-/* R5-D-035 */
 .stat-value-sm {
   font-size: 15px;
   line-height: 32px;

@@ -9,6 +9,7 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.DispatchTask;
+import com.fssc.compliance.entity.EmployeeCredit;
 import com.fssc.compliance.entity.Reviewer;
 import com.fssc.compliance.mapper.DispatchTaskMapper;
 import com.fssc.compliance.mapper.ReviewerMapper;
@@ -17,6 +18,7 @@ import com.fssc.sharing.entity.OpDispatchRule;
 import com.fssc.sharing.entity.ShGroup;
 import com.fssc.sharing.mapper.OpDispatchRuleMapper;
 import com.fssc.sharing.mapper.ShGroupMapper;
+import com.fssc.system.service.NumberRuleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,7 +42,7 @@ public class DispatchService {
     private final ShGroupMapper shGroupMapper;
     private final SlaMonitorService slaMonitorService;
     private final EmployeeCreditService employeeCreditService;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
+    private final NumberRuleService numberRuleService;
 
     @Transactional(rollbackFor = Exception.class)
     public DispatchTask dispatch(String billId, String billType, String expenseType,
@@ -69,7 +71,7 @@ public class DispatchService {
             throw new BizException(ErrorCode.PARAM_INVALID, "未找到匹配的派单规则");
         }
 
-        // R5-D-201：派单去重——同一 (bill_id, matched_rule_id) 已有任务即复用，不再重复落 dispatch_task
+        // 派单去重——同一 (bill_id, matched_rule_id) 已有任务即复用，不再重复落 dispatch_task
         //（改前每次调用都新插一行，重复点「发起派单/自动派单」得到多条任务，审核人收到重复工单；
         // 库级唯一键 uk_dispatch_task_bill_rule 属 DDL 变更，转人工在人工清单登记）
         DispatchTask existing = dispatchTaskMapper.selectOne(new LambdaQueryWrapper<DispatchTask>()
@@ -112,10 +114,10 @@ public class DispatchService {
             task.setAssignedAt(LocalDateTime.now());
             dispatchTaskMapper.insert(task);
 
-            // P1-5: 派单后设置 SLA 到期时间
+            // 派单后设置 SLA 到期时间
             slaMonitorService.setSlaDueTime(task);
 
-            // P1-5: 记录提交人信用
+            // 记录提交人信用
             Long submitterId = userId();
             if (submitterId != null) {
                 employeeCreditService.onSubmitted(submitterId);
@@ -203,7 +205,7 @@ public class DispatchService {
         return dispatchTaskMapper.selectList(qw);
     }
 
-    /** P0-2：派单任务分页（原 listByStatus 保留兼容） */
+    /** 派单任务分页（原 listByStatus 保留兼容） */
     public PageResult<DispatchTask> pageByStatus(String status, long pageNum, long pageSize) {
         LambdaQueryWrapper<DispatchTask> qw = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(status)) {
@@ -407,7 +409,7 @@ public class DispatchService {
 
             case "SKILL_MATCH" -> selectBySkill(candidates);
 
-            // P1-5: 信用分驱动派单——优先派给高信用审核员
+            // 信用分驱动派单——优先派给高信用审核员
             case "CREDIT_BASED" -> selectByCredit(candidates);
 
             default -> candidates.stream()
@@ -429,12 +431,12 @@ public class DispatchService {
     }
 
     /**
-     * P1-5: 信用分驱动派单——优先派给信用分最高的审核员。
+     * 信用分驱动派单——优先派给信用分最高的审核员。
      */
     private Reviewer selectByCredit(List<Reviewer> candidates) {
         return candidates.stream()
                 .max(Comparator.comparingInt(r -> {
-                    com.fssc.compliance.entity.EmployeeCredit credit = employeeCreditService.findByUserId(r.getUserId());
+                    EmployeeCredit credit = employeeCreditService.findByUserId(r.getUserId());
                     return credit != null && credit.getCreditScore() != null ? credit.getCreditScore() : 500;
                 }))
                 .orElse(candidates.get(0));

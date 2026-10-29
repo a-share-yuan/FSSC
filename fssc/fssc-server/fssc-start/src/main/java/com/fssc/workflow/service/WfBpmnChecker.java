@@ -4,13 +4,22 @@
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
 import com.fssc.system.entity.SysRole;
 import com.fssc.system.mapper.SysRoleMapper;
 import com.fssc.workflow.entity.WfModel;
 import com.fssc.workflow.entity.WfProcessConfig;
+import com.fssc.workflow.mapper.WfModelMapper;
+import com.fssc.workflow.mapper.WfProcessConfigMapper;
+import java.math.BigDecimal;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -27,6 +36,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.xml.sax.InputSource;
 
 /**
  * BPMN 静态体检（批次 2 发版）。原实现只查"有没有配参与人"，改不了三类真事故：
@@ -40,8 +50,8 @@ import java.util.Set;
 public class WfBpmnChecker {
 
     private final SysRoleMapper sysRoleMapper;
-    private final com.fssc.workflow.mapper.WfProcessConfigMapper processConfigMapper;
-    private final com.fssc.workflow.mapper.WfModelMapper modelMapper;
+    private final WfProcessConfigMapper processConfigMapper;
+    private final WfModelMapper modelMapper;
 
     public static class Report {
         public final List<String> errors = new ArrayList<>();
@@ -99,7 +109,7 @@ public class WfBpmnChecker {
             DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
             f.setNamespaceAware(true);
             DocumentBuilder b = f.newDocumentBuilder();
-            org.w3c.dom.Document doc = b.parse(new org.xml.sax.InputSource(new StringReader(bpmnXml)));
+            Document doc = b.parse(new InputSource(new StringReader(bpmnXml)));
             NodeList ps = doc.getElementsByTagNameNS("*", "process");
             if (ps.getLength() == 0) {
                 r.errors.add("缺少 process 流程定义");
@@ -300,7 +310,7 @@ public class WfBpmnChecker {
      *   <li><b>error</b> 零审批短路：网关在"开始→网关"之间没有任何人工节点，且金额不达标时直通 End
      *       （＝不传 amount 引擎按 0 计算，整单无人审批即通过，现网 0 例）；</li>
      *   <li><b>warning</b> 低档出口直达 End 但网关上游已有人工审批＝批次2 金额升级链的标准形态
-     *       （金额不达标就不再追加高管审批）。按 R3-E 回滚判据降级并登记，不默默扩大拦截面。</li>
+     *       金额不达标就不再追加高管审批。按 R3-E 回滚判据降级并登记，不默默扩大拦截面。</li>
      * </ul>
      * 只要有一条出口条件静态求不出（{@code &&}/{@code ||}/函数/未传变量），本网关整体不给结论——
      * 宁可漏报，也不给设计器一个假的"档位可达"。
@@ -312,13 +322,13 @@ public class WfBpmnChecker {
         if (!amountGw) return;
         r.amountTiered = true;
         String defaultId = gw.getAttribute("default");
-        java.util.TreeSet<Double> probes = new java.util.TreeSet<>();
-        java.util.TreeSet<Double> thresholds = new java.util.TreeSet<>();
+        TreeSet<Double> probes = new TreeSet<>();
+        TreeSet<Double> thresholds = new TreeSet<>();
         probes.add(0d);   // 发起不传 amount 时引擎实际写入的值
         boolean evaluable = true;
         for (FlowRef f : outs) {
             if (f.cond().isEmpty()) continue;
-            java.util.regex.Matcher m = AMOUNT_CMP.matcher(f.cond());
+            Matcher m = AMOUNT_CMP.matcher(f.cond());
             if (!m.find() || evalCondition(f.cond(), Map.of("amount", 1.0)) == null) {
                 evaluable = false;
                 continue;
@@ -370,7 +380,7 @@ public class WfBpmnChecker {
     }
 
     private static String trimNum(double d) {
-        return java.math.BigDecimal.valueOf(d).stripTrailingZeros().toPlainString();
+        return BigDecimal.valueOf(d).stripTrailingZeros().toPlainString();
     }
 
     /**
@@ -464,11 +474,11 @@ public class WfBpmnChecker {
         return expr != null && AMOUNT_REF.matcher(expr).find();
     }
 
-    private static final java.util.regex.Pattern AMOUNT_REF = java.util.regex.Pattern.compile("\\bamount\\b");
+    private static final Pattern AMOUNT_REF = Pattern.compile("\\bamount\\b");
 
     /** {@code amount 与数字字面量的比较}——组1＝阈值。金额网关的档位枚举用它取阈值，取不到就不参与可达性判定 */
-    private static final java.util.regex.Pattern AMOUNT_CMP =
-            java.util.regex.Pattern.compile("amount\\s*(?:>=|<=|!=|==|>|<)\\s*([0-9]+(?:\\.[0-9]+)?)");
+    private static final Pattern AMOUNT_CMP =
+            Pattern.compile("amount\\s*(?:>=|<=|!=|==|>|<)\\s*([0-9]+(?:\\.[0-9]+)?)");
 
     /**
      * 静态条件求值：只支持 {@code ${var op literal}} 的单个比较（现网全部 DOA/类型分支都是这个形态）。
@@ -480,7 +490,7 @@ public class WfBpmnChecker {
         if (s.startsWith("${")) s = s.substring(2);
         if (s.endsWith("}")) s = s.substring(0, s.length() - 1);
         s = s.trim();
-        java.util.regex.Matcher m = java.util.regex.Pattern
+        Matcher m = Pattern
                 .compile("^(\\w+)\\s*(>=|<=|!=|==|>|<)\\s*(.+)$").matcher(s);
         if (!m.matches()) return null;
         Object left = vars.get(m.group(1));
@@ -518,8 +528,8 @@ public class WfBpmnChecker {
     public void assertPublishable(String bpmnXml) {
         Report r = check(bpmnXml);
         if (!r.valid()) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID,
                     "流程校验未通过: " + String.join("; ", r.errors));
         }
     }
@@ -541,30 +551,30 @@ public class WfBpmnChecker {
      * 经验证：全库 66 条条件表达式仅引用 {@code amount} 一个变量，本白名单覆盖全部已注入变量，
      * 不会对任何在用流程误报，仅拦截真正未注入/拼错的变量。
      */
-    private static final java.util.Set<String> BRANCH_VAR_WHITELIST = java.util.Set.of(
+    private static final Set<String> BRANCH_VAR_WHITELIST = Set.of(
             "amount", "orgType", "expenseType", "overStandard", "abroad",
             "hasLoan", "outOfPlan", "overLimit", "hasContract", "billType",
-            // D-DEC-389 同批补漏：bizType / subType 一直由 start() 真实注入（:516-:517 与 billType 归一环节），
+            // 同批补漏：bizType / subType 一直由 start() 真实注入（:516-:517 与 billType 归一环节），
             // 但白名单从未收录 ⇒ 设计器里把分支条件写在 bizType 上会被本校验误拦（"变量没注入"），
             // 而写在 subType 上（simulate 面板一直列着它）运行时又真的取不到。门面已把 subType 补为
             // 真实注入变量，两侧规则在此办结：白名单＝start() 实际注入集。
             "bizType", "subType");
 
-    private static final java.util.Set<String> JUEL_KEYWORDS = java.util.Set.of(
+    private static final Set<String> JUEL_KEYWORDS = Set.of(
             "true", "false", "null", "and", "or", "not", "eq", "ne", "gt", "lt", "ge", "le", "empty");
 
     private void branchVarCoverage(Element process, Report r) {
-        org.w3c.dom.NodeList flows = process.getElementsByTagNameNS("*", "sequenceFlow");
+        NodeList flows = process.getElementsByTagNameNS("*", "sequenceFlow");
         for (int i = 0; i < flows.getLength(); i++) {
-            org.w3c.dom.Element fl = (org.w3c.dom.Element) flows.item(i);
-            org.w3c.dom.NodeList ce = fl.getElementsByTagNameNS("*", "conditionExpression");
+            Element fl = (Element) flows.item(i);
+            NodeList ce = fl.getElementsByTagNameNS("*", "conditionExpression");
             String cond = ce.getLength() > 0 && ce.item(0).getTextContent() != null
                     ? ce.item(0).getTextContent().trim()
                     : (fl.getTextContent() == null ? "" : fl.getTextContent().trim());
             if (cond.isBlank()) continue;
             String s = cond.replaceAll("\\$\\{", " ").replaceAll("\\}", " ");
             s = s.replaceAll("'[^']*'", " ").replaceAll("\"[^\"]*\"", " ");
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\b[A-Za-z_]\\w*\\b").matcher(s);
+            Matcher m = Pattern.compile("\\b[A-Za-z_]\\w*\\b").matcher(s);
             while (m.find()) {
                 String tok = m.group();
                 if (JUEL_KEYWORDS.contains(tok.toLowerCase())) continue;

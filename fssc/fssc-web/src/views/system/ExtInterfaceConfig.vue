@@ -178,7 +178,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -194,7 +194,7 @@ function openRowDetail(row) {
 const activeTab = ref('INVOICE_VERIFY')
 const keyword = ref('')
 const tableData = ref([])
-// P0-1: 本地分页（前端切片已拉取的全量接口配置，避免一次性渲染全部行）
+// 本地分页（前端切片已拉取的全量接口配置，避免一次性渲染全部行）
 const pager = useTablePager({ mode: 'server', storageKey: 'ext_interface_config' })
 const { pagedData } = pager
 const loading = ref(false)
@@ -202,14 +202,14 @@ const dialogVisible = ref(false)
 const saving = ref(false)
 const testingId = ref(null)
 
-// R5-D-038 入口显隐办结（hasPerm 已处理通配码，管理员不会被误隐藏）
+// 入口显隐办结（hasPerm 已处理通配码，管理员不会被误隐藏）
 const canList = hasPerm('system:extiface:list')
 const canCreate = hasPerm('system:extiface:create')
 const canUpdate = hasPerm('system:extiface:update')
 const canDelete = hasPerm('system:extiface:delete')
 const canTest = hasPerm('system:extiface:test')
 
-// R5-D-038 出参凭据掩码规则：定长星号 + 后 4 位，与后端 ExtInterfaceConfig.maskCredential 同型
+// 出参凭据掩码规则：定长星号 + 后 4 位，与后端 ExtInterfaceConfig.maskCredential 同型
 const CRED_MASK = '*'.repeat(8)
 const CRED_TAIL = 4
 const CRED_MIN_LEN = 8
@@ -225,7 +225,7 @@ const maskCredential = (v) => {
   if (isMaskForm(s)) return s
   return s.length < CRED_MIN_LEN ? CRED_MASK : CRED_MASK + s.slice(-CRED_TAIL)
 }
-// R5-D-038 附加配置里凭据类键的值一并脱敏（仅动字符串值，非凭据键保持可读）
+// 附加配置里凭据类键的值一并脱敏（仅动字符串值，非凭据键保持可读）
 const SECRET_KEY_TOKENS = ['key', 'secret', 'token', 'password', 'pwd', 'passwd', 'credential', 'credentials', 'signature']
 const SECRET_KEY_NAMES = ['apikey', 'apisecret', 'secretkey', 'accesskey', 'accesssecret', 'appkey', 'appsecret',
   'clientsecret', 'accesstoken', 'refreshtoken', 'authtoken', 'secret', 'token', 'password', 'pwd',
@@ -290,10 +290,10 @@ const providerTagType = (p) => ({
   EBS: 'warning', SAP: 'primary', YONYOU: 'success', KINGDEE: 'warning', CUSTOM: '',
 })[p] || ''
 
-// R5-D-039：服务商枚举中文化（CUSTOM 直接显示 "CUSTOM" 对用户无意义）
+// 服务商枚举中文化（CUSTOM 直接显示 "CUSTOM" 对用户无意义）
 const providerText = computed(() => (p) => (p === 'CUSTOM' ? t('system.extInterface.catCustom') : erpProviderLabel(p) || '-'))
 
-// R5-D-039：页签由 category 字典驱动（tabDefs 与会话内既有点位/图标一致），计数来自后端汇总
+// 页签由 category 字典驱动（tabDefs 与会话内既有点位/图标一致），计数来自后端汇总
 const tabDefs = ref([
   { name: 'INVOICE_VERIFY', label: t('system.extInterface.catInvoiceVerify'), icon: CircleCheck },
   { name: 'INVOICE_CERTIFY', label: t('system.extInterface.catInvoiceAuth'), icon: Stamp },
@@ -324,7 +324,7 @@ async function loadData() {
   try {
     await pager.load(async ({ pageNum, pageSize }) => {
       const d = await extInterfaceApi.page({ pageNum, pageSize, category: activeTab.value, keyword: keyword.value })
-      // R5-D-038 默认处理脱敏：即使出参未掩码，行数据/详情弹层也不会拿到凭据原文
+      // 默认处理脱敏：即使出参未掩码，行数据/详情弹层也不会拿到凭据原文
       tableData.value = (d.list || []).map(desensitize)
       return { list: tableData.value, total: d.total || tableData.value.length }
     })
@@ -345,7 +345,7 @@ function openCreate() {
 
 function openEdit(row) {
   resetForm()
-  // R5-D-038 弹窗只回填掩码，绝不回填凭据原文；保存时掩码形态按「未修改」处理
+  // 弹窗只回填掩码，绝不回填凭据原文；保存时掩码形态按「未修改」处理
   Object.assign(editing, desensitize({ ...row }))
   dialogVisible.value = true
 }
@@ -380,7 +380,7 @@ async function save() {
   saving.value = true
   try {
     const body = { ...editing }
-    // R5-D-038 留空或掩码形态＝未修改，星号串不得回写覆盖已保存的凭据
+    // 留空或掩码形态＝未修改，星号串不得回写覆盖已保存的凭据
     if (!body.apiKey || !body.apiKey.trim() || isMaskForm(body.apiKey)) delete body.apiKey
     if (!body.apiSecret || !body.apiSecret.trim() || isMaskForm(body.apiSecret)) delete body.apiSecret
     if (body.id) {

@@ -251,7 +251,7 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 
 /**
- * 域归属（41-非费用域完成度审查 P1-5 后续）：
+ * 域归属（41-非费用域完成度审查 后续）：
  * SCP 是供应商发票链（应付方向），CCP 是客户发运/对账同步（应收方向），原先合并成一个 tab 挂在应收工作台，
  * 默认页签还是 SCP ⇒ 应收角色打开看到应付内容、应付角色又因门控码错位看不到。
  * 现按宿主拆分：'ap' 只渲染 SCP + SCP 日志，'ar' 只渲染 CCP + CCP 日志；'' 保留旧合并页形态。
@@ -279,7 +279,7 @@ const IFACES = computed(() => ({
   AR_IF10_RECON_SYNC: t('flow.collab.actStatusSync'),
 }))
 
-// R5-D-104：协同日志方向英文枚举→中文映射（未收录值原样默认处理）
+// 协同日志方向英文枚举→中文映射（未收录值原样默认处理）
 const DIRECTION_LABEL = computed(() => ({ SCP_TO_AP: 'SCP→AP', AP_TO_SCP: 'AP→SCP', SCP_TO_EBS: 'SCP→ERP', EBS_TO_SHARED: t('flow.collab.ebsToShared'), SHARED_TO_EBS: t('flow.collab.sharedToEbs'), CCP_TO_SHARED: t('flow.collab.ccpToShared') }))
 
 // 日志接口码按域办结：接口前缀即方向（SCP_* 供应商链 / AR_* 客户端）

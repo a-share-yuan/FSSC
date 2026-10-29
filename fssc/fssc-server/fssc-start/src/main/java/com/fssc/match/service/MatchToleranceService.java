@@ -4,11 +4,16 @@
 package com.fssc.match.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.match.entity.MatchTolerance;
 import com.fssc.match.mapper.MatchToleranceMapper;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,8 +40,8 @@ import java.time.LocalDateTime;
 public class MatchToleranceService {
 
     private final MatchToleranceMapper toleranceMapper;
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /** 默认金额容差百分比：0.5 = 0.5% */
     public static final BigDecimal DEFAULT_AMOUNT_PCT = new BigDecimal("0.5");
@@ -55,7 +60,7 @@ public class MatchToleranceService {
     public MatchTolerance getTolerance(Long companyId) {
         Long cid = companyId;
         if (cid == null) {
-            com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+            LoginUser u = UserContext.get();
             cid = u == null ? null : u.getCompanyId();
         }
         if (cid == null) {
@@ -146,7 +151,7 @@ public class MatchToleranceService {
                     in.getCompanyId(), in.getAmountPct(), in.getAmountAbs(), in.getStatus());
             return in;
         }
-        // P4-3：exist 即将被就地覆盖，更新前先采集旧值（状态/百分比/绝对值）
+        // exist 即将被就地覆盖，更新前先采集旧值（状态/百分比/绝对值）
         String prevStatus = exist.getStatus();
         BigDecimal prevAmountPct = exist.getAmountPct();
         BigDecimal prevAmountAbs = exist.getAmountAbs();
@@ -159,12 +164,12 @@ public class MatchToleranceService {
         toleranceMapper.updateById(exist);
         log.info(" 更新三单匹配容差参数 companyId={} pct={} abs={} status={}",
                 exist.getCompanyId(), exist.getAmountPct(), exist.getAmountAbs(), exist.getStatus());
-        // P4-3 审计记录：容差参数变更（状态/百分比/绝对值）
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        // 审计记录：容差参数变更（状态/百分比/绝对值）
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", prevStatus);
         auditBefore.put("amountPct", prevAmountPct);
         auditBefore.put("amountAbs", prevAmountAbs);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", exist.getStatus());
         auditAfter.put("amountPct", exist.getAmountPct());
         auditAfter.put("amountAbs", exist.getAmountAbs());

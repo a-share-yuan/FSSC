@@ -5,9 +5,11 @@ package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.glex.entity.TaxRefund;
@@ -15,6 +17,8 @@ import com.fssc.glex.mapper.TaxRefundMapper;
 import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.workflow.service.WfEngineFacade;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,8 +36,8 @@ import java.util.Set;
 /**
  * 税务退税三场景（tax_refund）：
  * <ul>
- *   <li>EXPORT_REFUND    出口免抵退：可退税额 = 出口销售额 × 免抵退率 / 100（税目下不重复退）。</li>
- *   <li>CREDIT_REFUND    留抵退税：申请退税额 ≤ 认证进项可留抵余额 avg_quota（Σ inv_invoice.deduct_amount 已认证 − 已退）。</li>
+ *   <li>EXPORT_REFUND 出口免抵退：可退税额 = 出口销售额 × 免抵退率 / 100（税目下不重复退）。</li>
+ *   <li>CREDIT_REFUND 留抵退税：申请退税额 ≤ 认证进项可留抵余额 avg_quota（Σ inv_invoice.deduct_amount 已认证 − 已退）。</li>
  *   <li>IMMEDIATE_REFUND 即征即退：可退税额 = 已缴增值税 × 即征即退比例 / 100。</li>
  * </ul>
  * 状态：DRAFT → APPLYING → APPROVED → REFUNDING → REFUNDED（驳回 REJECTED）。
@@ -49,9 +53,9 @@ public class TaxRefundService {
     private final TaxRefundMapper mapper;
     private final InvoiceDomainFacade invoiceFacade;
     private final WfEngineFacade wfEngineFacade;
-    private final com.fssc.framework.org.OrgGuard orgGuard;
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    private final OrgGuard orgGuard;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     public PageResult<TaxRefund> page(long pageNum, long pageSize, String refundType, String status, String period, String keyword) {
         LambdaQueryWrapper<TaxRefund> qw = new LambdaQueryWrapper<>();
@@ -137,12 +141,12 @@ public class TaxRefundService {
             log.error("退税单 {} 发起审批失败: {}", t.getRefundNo(), ex.getMessage(), ex);
             throw ex;  // ROOT-2: 流程发起失败必须冒泡，不得静默降级成无流程孤儿单
         }
-        // P4-3 审计记录：状态跃迁 DRAFT → APPLYING，并记录申请人与申请时间
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        // 审计记录：状态跃迁 DRAFT → APPLYING，并记录申请人与申请时间
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", t.getStatus());
         auditBefore.put("applyBy", t.getApplyBy());
         auditBefore.put("applyTime", t.getApplyTime());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "APPLYING");
         auditAfter.put("applyBy", u.getApplyBy());
         auditAfter.put("applyTime", u.getApplyTime());
@@ -184,10 +188,10 @@ public class TaxRefundService {
             u.setRefundedAmount(refundedAmount);
         }
         mapper.updateById(u);
-        // P4-3 审计记录：状态跃迁（到账时并记实际到账金额变化）
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        // 审计记录：状态跃迁（到账时并记实际到账金额变化）
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", t.getStatus());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", to);
         if ("REFUNDED".equals(to)) {
             auditBefore.put("refundedAmount", t.getRefundedAmount());
@@ -197,7 +201,7 @@ public class TaxRefundService {
                 String.valueOf(id), auditBefore, auditAfter, "退税状态流转（" + t.getStatus() + "→" + to + "）");
     }
 
-    // ---------------- 三场景金额强校验 ----------------
+    // 三场景金额强校验
 
     private BigDecimal differ(TaxRefund t) {
         return switch (t.getRefundType()) {
@@ -276,7 +280,7 @@ public class TaxRefundService {
         return certified.subtract(refunded).max(BigDecimal.ZERO);
     }
 
-    // ---------------- 辅助 ----------------
+    // 辅助
 
     /** 正向流转顺序：DRAFT → APPLYING → APPROVED → REFUNDING → REFUNDED */
     private static final List<String> FLOW_FORWARD = List.of(

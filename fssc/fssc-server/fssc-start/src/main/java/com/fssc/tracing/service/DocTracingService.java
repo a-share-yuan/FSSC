@@ -39,7 +39,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 单据全链路溯源服务（P2-1 页面勾稽联查）。
+ * 单据全链路溯源服务（页面勾稽联查）。
  * 给定 sourceDocType + sourceDocId，返回单据→发票→凭证→付款→银行对账→档案全链路。
  * 联查、单据追溯。
  */
@@ -52,7 +52,7 @@ public class DocTracingService {
     private final ExpBillMapper expBillMapper;
     private final ExpBillReceiptMapper expBillReceiptMapper;
     private final PoOrderMapper poOrderMapper;
-    //  跨域直连的唯一允许点（read-only 联查聚合）：本服务类级路由 replica，全链路溯源天生跨域；
+    // 不要跨域直连的唯一允许点（read-only 联查聚合）：本服务类级路由 replica，全链路溯源天生跨域；
     //    发票/档案域 Facade 的实现在本进程不装配，故保留 Mapper 只读。
     private final InvInvoiceMapper invInvoiceMapper;
     private final RcReceivableMapper rcReceivableMapper;
@@ -65,7 +65,7 @@ public class DocTracingService {
      * 全链路溯源：单据→发票→凭证→付款→银行对账→档案。
      *
      * @param sourceDocType 来源单据类型（EXP_BILL/PO_ORDER/INV_INVOICE/RC_RECEIVABLE等）
-     * @param sourceDocId   来源单据ID
+     * @param sourceDocId 来源单据ID
      */
     public DocTraceChain trace(String sourceDocType, Long sourceDocId) {
         DocTraceChain chain = new DocTraceChain();
@@ -106,7 +106,7 @@ public class DocTracingService {
         List<OpPayBatch> payBatches = opPayBatchMapper.selectList(pq);
         chain.setPayBatches(payBatches.stream().map(this::toPayBatchNode).collect(Collectors.toList()));
 
-        // 4b. 查收款事实（资金流入侧，D-DEC-394）。bill_id 指向 exp_bill.id ⇒ 只在费用域单据类型下查，
+        // 4b. 查收款事实（资金流入侧）。bill_id 指向 exp_bill.id ⇒ 只在费用域单据类型下查，
         //     否则 PO/发票/应收的同值主键会串出无关收款行。
         chain.setReceipts(queryReceipts(sourceDocType, sourceDocId));
 

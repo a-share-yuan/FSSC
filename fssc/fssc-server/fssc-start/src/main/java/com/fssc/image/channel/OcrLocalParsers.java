@@ -39,7 +39,7 @@ import org.w3c.dom.NodeList;
  * <p>按文件扩展名分派，PDF/OFD 直接从文件字节解析票面，无需图像 OCR：</p>
  * <ul>
  *   <li>{@code .pdf}：Apache PDFBox {@link PDFTextStripper} 抽取文本层 → 中文标签正则解析
- *       （数电票版式文本顺序稳定）；文本层去空白后过短判定为"扫描版 PDF"→ {@link PDFRenderer} 渲染首页 PNG，
+ *       数电票版式文本顺序稳定；文本层去空白后过短判定为"扫描版 PDF"→ {@link PDFRenderer} 渲染首页 PNG，
  *       返回 {@link OcrResult#isScanned()}=true + renderedImageBytes，由调用方转图像 OCR 通道（渲染失败→ ok=false）；</li>
  *   <li>{@code .ofd}：OFD 本质是 ZIP，零第三方依赖（{@link ZipInputStream} + 内置 DOM）——
  *       优先读数电票内嵌 XML（{@code Doc_0/Attachs/TTSRCdata.xml} 等 {@code *TTSRC*}/{@code *invoice*}.xml）
@@ -68,7 +68,7 @@ public final class OcrLocalParsers {
     /** 扫描版 PDF 首页渲染分辨率 */
     private static final float SCAN_DPI = 150f;
 
-    // ===== 中文标签正则（容忍标签内空格与全/半角冒号；数电票版式文本顺序稳定）=====
+    // 中文标签正则（容忍标签内空格与全/半角冒号；数电票版式文本顺序稳定）
     // 增值税发票号 / 车票航空报销凭证号 通用：数字8~20位（部分长途票可能短于8，放宽到6位）
     // 标签与数字间允许夹 0~6 个非数字杂字（PDF 文本层会把"制通发票""监制"等混入号码行，如"发票号码:制通发票37697930"）
     private static final Pattern P_INVOICE_NO =
@@ -142,7 +142,7 @@ public final class OcrLocalParsers {
         return OcrResult.fail("不支持的本地解析格式: " + ext);
     }
 
-    // ============================ PDF ============================
+    // PDF
 
     /** PDFBox 抽取文本层；异常/无文本返回 null（调用方转失败） */
     static String extractPdfText(byte[] bytes) {
@@ -190,7 +190,7 @@ public final class OcrLocalParsers {
         }
     }
 
-    // ============================ OFD ============================
+    // OFD
 
     /** OFD（ZIP）解析：内嵌数电票 XML 结构映射优先，退化为 Content.xml TextCode 文本正则。 */
     static OcrResult parseOfd(byte[] bytes) {
@@ -483,7 +483,7 @@ public final class OcrLocalParsers {
         return b.parse(new ByteArrayInputStream(xml));
     }
 
-    // ============================ 数电票 XML ============================
+    // 数电票 XML
 
     /**
      * 电子发票服务平台下载的数电票原始 XML 解析。DOM（{@link #parseXml} 已禁 DTD，防 XXE：含 DOCTYPE
@@ -565,7 +565,7 @@ public final class OcrLocalParsers {
         return sb.toString().trim();
     }
 
-    // ===================== 中文标签正则解析（纯函数，PDF 与 OFD 文本默认处理共用） =====================
+    // 中文标签正则解析（纯函数，PDF 与 OFD 文本默认处理共用）
 
     /**
      * 从票据纯文本按中文标签抽取票面字段（数电票版式文本顺序稳定，容错空格与全/半角冒号）。
@@ -727,7 +727,7 @@ public final class OcrLocalParsers {
         return t;
     }
 
-    // ===================== 票据类型（报销场景，编码与前端 constants/invoiceType.js 对齐） =====================
+    // 票据类型（报销场景，编码与前端 constants/invoiceType.js 对齐）
     public static final String T_VAT_SPECIAL = "VAT_SPECIAL";   // 增值税专用发票
     public static final String T_VAT_NORMAL = "VAT_NORMAL";     // 增值税普通发票
     public static final String T_ELECTRONIC = "ELECTRONIC";     // 电子发票/数电票
@@ -799,7 +799,7 @@ public final class OcrLocalParsers {
                 || T_QUOTA.equals(type) || T_TOLL.equals(type) || T_PARKING.equals(type) || T_MEDICAL.equals(type);
     }
 
-    // ===================== 工具 =====================
+    // 工具
 
     private static String group(Pattern p, String text) {
         Matcher m = p.matcher(text);

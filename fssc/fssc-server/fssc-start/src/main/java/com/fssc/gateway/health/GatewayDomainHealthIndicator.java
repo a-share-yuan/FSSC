@@ -3,6 +3,10 @@ package com.fssc.gateway.health;
 import com.fssc.bcp.BcpOpenProperties;
 import com.fssc.openapi.linku.LinkuOpenProperties;
 import com.zaxxer.hikari.HikariDataSource;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -61,9 +65,9 @@ public class GatewayDomainHealthIndicator implements HealthIndicator {
 
         Map<String, Object> db = new LinkedHashMap<>();
         long t0 = System.currentTimeMillis();
-        try (java.sql.Connection c = master.getConnection();
-             java.sql.Statement st = c.createStatement();
-             java.sql.ResultSet rs = st.executeQuery("select 1")) {
+        try (Connection c = master.getConnection();
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("select 1")) {
             rs.next();
             db.put("status", "UP");
             db.put("latencyMs", System.currentTimeMillis() - t0);
@@ -101,7 +105,7 @@ public class GatewayDomainHealthIndicator implements HealthIndicator {
                         if (parsed != null) {
                             return parsed.getPatterns().stream().map(pp -> pp.getPatternString());
                         }
-                        return java.util.stream.Stream.empty();
+                        return Stream.empty();
                     })
                     .filter(p -> p != null && p.startsWith(INBOUND_PREFIX))
                     .distinct()

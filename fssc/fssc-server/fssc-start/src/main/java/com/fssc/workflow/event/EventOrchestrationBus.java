@@ -4,6 +4,7 @@
 package com.fssc.workflow.event;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.entity.WfEventActionConfig;
 import com.fssc.workflow.mapper.WfEventActionConfigMapper;
@@ -18,7 +19,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 事件编排总线（P0-1）。
+ * 事件编排总线。
  * <p>
  * 替代散落在各业务域的 {@code @EventListener}，作为 {@link WfProcessEndedEvent} 的
  * <b>唯一统一监听入口</b>，按 bizType 策略路由到对应的 {@link WfBizAction} 收尾动作。
@@ -30,8 +31,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>自动发现：启动时扫描所有 {@link WfBizAction} Spring Bean，与配置表交叉校验</li>
  *   <li>零代码接入：新流程仅需在配置表 INSERT 一行 + 实现 WfBizAction Bean</li>
  *   <li>原子化执行：每个 Action 独立 try-catch，单个失败不中断其他动作
- *       <br> <b>D-V4R-87 例外</b>：{@link com.fssc.common.exception.BizException}
- *       （业务校验，例如三单匹配硬异常）必须冒泡，见 {@code onProcessEnded} 注释。</li>
+ *       <br><b>例外</b>：{@link BizException}
+ *       业务校验，例如三单匹配硬异常 必须冒泡，见 {@code onProcessEnded} 注释。</li>
  * </ul>
  *
  * @see WfBizAction
@@ -51,7 +52,7 @@ public class EventOrchestrationBus {
     /** 所有已注册的 WfBizAction Bean：beanName → 实例 */
     private Map<String, WfBizAction> actionBeans = Collections.emptyMap();
 
-    // ------------------------------------------------------------------ init
+    // init
 
     @PostConstruct
     public void init() {
@@ -131,7 +132,7 @@ public class EventOrchestrationBus {
         log.info("EventOrchestrationBus 初始化完成: {} 个 bizType, {} 个动作配置", bizTypeCount, actionCount);
     }
 
-    // ------------------------------------------------------------- dispatch
+    // dispatch
 
     /**
      * 统一事件监听入口（Spring @EventListener）。
@@ -148,7 +149,7 @@ public class EventOrchestrationBus {
             return;
         }
         boolean approved = Boolean.TRUE.equals(event.getApproved());
-        // P0-1 架构修复（铁律）：流程结束事件由 Flowable 引擎线程异步发布，
+        // 架构修复（铁律）：流程结束事件由 Flowable 引擎线程异步发布，
         // 不继承发起请求的租户上下文（TenantContext 为线程级 ThreadLocal）。
         // 收尾动作涉及业务表 UPDATE/INSERT（含凭证 op_voucher 的 tenant_id/company_id NOT NULL），
         // 必须在正确的租户上下文内执行，否则：
@@ -156,17 +157,15 @@ public class EventOrchestrationBus {
         //   - 或 MP 租户拦截器在无上下文时跳过 WHERE，造成串户风险。
         // 故在此据事件携带的 tenantId 重建上下文；tenantId 缺失则用 runIgnoreTenant 默认处理（仍不串户）。
         Long tenantId = event.getTenantId();
-        // D-V4R-87：业务校验失败必须冒泡，技术异常仍按「原子化」吞掉。
-        //
+        // 业务校验失败必须冒泡，技术异常仍按「原子化」吞掉。
         // 【原缺陷】本层对所有 Action 一律 catch(Exception) 只记 ERROR 日志，而上游
         //   WfEngineFacade:269-281 的设计意图明写「业务收尾事件…同样失败即冒泡」，
         //   PROCESS_COMPLETED 监听器的 isFailOnException() 也已返回 true。
         //   两层意图一致，却被这里截断 ⇒ InvoiceMatchBizAction.assertNoHardMatch
         //   抛出的「三单匹配仍有硬异常」被吞成日志，POST /wf/approve 仍回 code=0、
         //   wf_instance 照转 APPROVED、act_ru_task 清零 —— 审批人界面零红字，
-        //   校验有实体无出口。这正是 D-V4R-85「复审链点通过即绕过付款强制校验」的
+        //   校验有实体无出口。这正是 「复审链点通过即绕过付款强制校验」的
         //   另一半伤：修好了不放行，却让审批人以为自己办成了。
-        //
         // 【为何只放 BizException 冒泡】两类异常的性质不同：
         //   - BizException = 业务规则显式拒绝（如三单匹配有 PAY_EXCEED_INVOICE 硬异常）。
         //     这是「校验」，必须让审批人看见红字并可改数据后重试，否则等于没校验。
@@ -174,7 +173,6 @@ public class EventOrchestrationBus {
         //     这些偶发问题若一并冒泡，会让整条审批链因一次网络抖动整体失败回滚，
         //     与本类「原子化、单动作失败不中断其他」的既有契约冲突，风险更大。
         //   故维持原行为：技术异常只记 ERROR、不阻断其余 Action。
-        //
         // 【冒泡后的效果】事件在 PROCESS_COMPLETED 监听器内同步发布（见 WfEngineFacade:272），
         // 异常上抛 ⇒ isFailOnException()=true ⇒ 回滚流程结束动作 ⇒ 审批接口回失败，
         // 界面可见红字、wf_instance 停在在办、用户改完数据可重试。
@@ -186,7 +184,7 @@ public class EventOrchestrationBus {
                 }
                 try {
                     entry.action.execute(event);
-                } catch (com.fssc.common.exception.BizException be) {
+                } catch (BizException be) {
                     // 业务校验：记录后原样上抛，不中断后续 Action（让它们把该做的办结做完），
                     // 循环结束后统一抛第一个，避免中途抛导致后续 Action 全不执行。
                     log.error("EventOrchestrationBus: 业务闸拒绝收尾（将冒泡回滚流程结束） bizType={}, bean={}, error={}",
@@ -210,7 +208,7 @@ public class EventOrchestrationBus {
         }
     }
 
-    // ------------------------------------------------------------- helpers
+    // helpers
 
     /** 获取当前分发映射表快照（只读，供管理接口查看） */
     public Map<String, List<ActionEntry>> getDispatchMap() {

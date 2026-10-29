@@ -3,11 +3,13 @@
 
 package com.fssc.asset.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.asset.entity.StockCostSettle;
 import com.fssc.asset.entity.StockMove;
 import com.fssc.asset.mapper.StockCostSettleMapper;
 import com.fssc.asset.mapper.StockMoveMapper;
 import com.fssc.sharing.service.VoucherService;
+import com.fssc.system.service.NumberRuleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,7 +21,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * 存货成本结转服务（P1-2 存货成本模型补齐）。
+ * 存货成本结转服务（存货成本模型补齐）。
  * <p>
  * 月度成本结转：将领用成本/处置成本/跌价准备/盘点差异汇总到 stock_cost_settle 批次，
  * 并调用 {@link VoucherService#generateStockCostVoucher} 生成会计凭证。
@@ -34,7 +36,7 @@ public class StockCostSettleService {
     private final StockCostSettleMapper settleMapper;
     private final StockMoveMapper stockMoveMapper;
     private final VoucherService voucherService;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
+    private final NumberRuleService numberRuleService;
 
     /**
      * 领用出库成本结转：按 bizId（inventoryId）查 stock_move(ISSUE) 汇总成本。
@@ -50,7 +52,7 @@ public class StockCostSettleService {
         settle.setItemCount(moves.size());
         settle.setTotalAmount(total);
         settleMapper.insert(settle);
-        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
+        // 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         if (total.signum() > 0) {
             voucherService.generateStockCostVoucher(settle, "ISSUE_COST");
         }
@@ -71,7 +73,7 @@ public class StockCostSettleService {
         settle.setItemCount(moves.size());
         settle.setTotalAmount(total);
         settleMapper.insert(settle);
-        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
+        // 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         if (total.signum() > 0) {
             voucherService.generateStockCostVoucher(settle, "DISPOSAL_COST");
         }
@@ -93,7 +95,7 @@ public class StockCostSettleService {
         settle.setItemCount(moves.size());
         settle.setTotalAmount(total);
         settleMapper.insert(settle);
-        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
+        // 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         if (total.signum() > 0) {
             voucherService.generateStockCostVoucher(settle, "INTERNAL_SALE_COST");
         }
@@ -111,7 +113,7 @@ public class StockCostSettleService {
         settle.setItemCount(1);
         settle.setTotalAmount(BigDecimal.ZERO);
         settleMapper.insert(settle);
-        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
+        // 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         log.info("跌价准备结转: period={}, bizId={}", period, bizId);
     }
 
@@ -129,7 +131,7 @@ public class StockCostSettleService {
         settle.setItemCount(moves.size());
         settle.setTotalAmount(total);
         settleMapper.insert(settle);
-        // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
+        // 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
         if (total.signum() > 0) {
             voucherService.generateStockCostVoucher(settle, "CHECK_DIFF");
         }
@@ -153,7 +155,7 @@ public class StockCostSettleService {
     private void settleByPeriod(String moveType, String settleType, String period) {
         try {
             List<StockMove> moves = stockMoveMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<StockMove>()
+                    new LambdaQueryWrapper<StockMove>()
                             .eq(StockMove::getMoveType, moveType)
                             .eq(StockMove::getStatus, "APPROVED"));
             if (moves.isEmpty()) return;
@@ -165,7 +167,7 @@ public class StockCostSettleService {
             settle.setItemCount(moves.size());
             settle.setTotalAmount(total);
             settleMapper.insert(settle);
-            // P4-3 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
+            // 规则：结转批次由 newBatch 新建写入数据库、无旧值，不接入审计（不伪造 before）
             if (total.signum() > 0) {
                 voucherService.generateStockCostVoucher(settle, settleType);
             }
@@ -175,7 +177,7 @@ public class StockCostSettleService {
         }
     }
 
-    // ============ 辅助方法 ============
+    // 辅助方法
 
     private StockCostSettle newBatch(String settleType, String period, String procInstId) {
         StockCostSettle s = new StockCostSettle();
@@ -188,7 +190,7 @@ public class StockCostSettleService {
 
     private List<StockMove> findMoves(Long bizId, String moveType) {
         return stockMoveMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<StockMove>()
+                new LambdaQueryWrapper<StockMove>()
                         .eq(StockMove::getSourceDocId, bizId)
                         .eq(StockMove::getMoveType, moveType)
                         .eq(StockMove::getStatus, "APPROVED"));

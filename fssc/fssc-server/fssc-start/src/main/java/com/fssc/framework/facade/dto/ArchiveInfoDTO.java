@@ -23,14 +23,14 @@ public class ArchiveInfoDTO {
     private String archivePeriod;
     private Long refId;
     private Long billId;
-    /** D-TRC-05：来源单据的审批流程实例ID（非费用域联查的唯一档案关联点） */
+    /** 来源单据的审批流程实例ID（非费用域联查的唯一档案关联点） */
     private String procInstId;
     /**
-     * D-DEC-028／D-DEC-185：本卷<b>归档审批流（FM_ARCHIVE）自身</b>的实例号（读侧补充，非表列）。
+     * 本卷<b>归档审批流（FM_ARCHIVE）自身</b>的实例号（读侧补充，非表列）。
      * 与上一列语义不同，跨域联查两侧都拿得到，不必再靠 {@code op_archive.proc_inst_id} 反推。
      */
     private String archiveProcInstId;
-    /** D-DEC-028／D-DEC-185：归档审批流自身状态 RUNNING/APPROVED/REJECTED/CANCELLED（未起流则空） */
+    /** 归档审批流自身状态 RUNNING/APPROVED/REJECTED/CANCELLED（未起流则空） */
     private String archiveFlowStatus;
     private Long voucherId;
     private String relatedIds;

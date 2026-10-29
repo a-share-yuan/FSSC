@@ -17,14 +17,14 @@ import { pathDenyReason } from '../router/pathAccess'
  *     既无列表也无查询，待办点「去处理」会得到一张空白新建单（历史缺陷 的根因之一）。
  *     /expense/my 已支持 ?billNo= 定位与 ?billId= 直接打开详情抽屉。
  *
- * 【为什么要逐类型登记，而不是靠下面的前缀默认处理（D-DEC-127/139/148/153 的共同根因）】
+ * 【为什么要逐类型登记，而不是靠下面的前缀默认处理（/139/148/153 的共同根因）】
  * 前缀默认处理只看 bizType 的头两个字母，于是
  *   GL_TAX_PROV / GL_SALARY_PROV 没有 GL 前缀项 ⇒ 解析不到路径 ⇒「去处理」按空白处理；
  *   TR_BANK_RECON / TR_PLAN / TRAIN / TRAVEL 全都以 TR 开头 ⇒ 一律被 ['TR','/treasury'] 吞掉，
  *   而 /treasury 又 redirect 到 /treasury/plan ⇒ 五个不相干的单据共用一个资金计划页，
- *   且落地页拿不到本单上下文（12-30:183 韩雪梅还在该页吃了「缺少权限：treasury:creditbill:list」）。
+ *   且落地页拿不到本单上下文（183 韩雪梅还在该页吃了「缺少权限：treasury:creditbill:list」）。
  * 类型 → 页面 的唯一真值在后端 `BillRouteRegistry.TABLE_LEDGER`（表 → 台账页），
- * 本表是它在「审批工作台·去处理」这条链路上的镜像：**同一判据、两处独立**（与 D-DEC-244 的
+ * 本表是它在「审批工作台·去处理」这条链路上的镜像：**同一判据、两处独立**（与 的
  * 凭证来源列同一处置方式——后端 `VoucherService.EXPENSE_BILL_SOURCES` ＋ 前端镜像判定）。
  * 新增业务域时两处都要登记；改这里请顺手核对 `TABLE_LEDGER` 的对应行是否同页。
  */
@@ -68,7 +68,7 @@ const BILL_TYPE_ROUTE = {
   INVOICE_MATCH_MANUAL: '/pay/match',
   PTP03: '/pay/match',
 
-  // —— GL 总账域（D-DEC-127/139/148：此前整体无登记项 ⇒「去处理」解析不到路径）——
+  // —— GL 总账域（/139/148：此前整体无登记项 ⇒「去处理」解析不到路径）——
   // 一般记账四合一（gl_journal_entry 一张表按 entryType 分 5 个流程域）⇒ 同一页签，靠 ?billNo= 定位本单。
   GL_ACCRUAL: '/glex/special/journal',
   GL_DEFER: '/glex/special/journal',
@@ -77,7 +77,7 @@ const BILL_TYPE_ROUTE = {
   GL_CHECK_DIFF: '/glex/special/journal',
   GL_TAX_PROV: '/glex/special/tax',
   GL_TAX_PAY: '/glex/special/tax',
-  // 计提与发放共用 gl_salary_run 同一行（D-DEC-239 已挂账）⇒ 同页签，链由各自 bizType 区分。
+  // 计提与发放共用 gl_salary_run 同一行（已挂账）⇒ 同页签，链由各自 bizType 区分。
   GL_SALARY_PROV: '/glex/special/salary',
   GL_SALARY_PAY: '/glex/special/salary',
   GL_OFFSET: '/glex/special/inter',
@@ -86,7 +86,7 @@ const BILL_TYPE_ROUTE = {
   GL_SHARED_MASTER: '/glex/special/master',
   GL_TAX_REFUND: '/glex/tax-refund',
 
-  // —— TR 资金域逐类型登记（D-DEC-153：不再让 TR 前缀把它们全塞进 /treasury/plan）——
+  // —— TR 资金域逐类型登记（不再让 TR 前缀把它们全塞进 /treasury/plan）——
   TR_PLAN: '/treasury/plan',
   TR_PLAN_ADJUST: '/treasury/plan',
   TR_RECEIPT: '/treasury/credit',
@@ -118,7 +118,7 @@ const BILL_TYPE_ROUTE = {
 // 前缀映射（如 FA03 / BG_ADJUST / RC_XXX / INV_XXX 等复合类型）
 // 这只是**未登记类型的默认处理**：判据是 bizType 的字符串头部，不是单据归属的表。
 //    任何以已登记类型（上面的精确表）命中的都不走这里，所以修跨域误跳的正确做法
-//    是**在上面补一行精确项**，而不是加/调前缀（D-DEC-153 的教训）。
+//    是**在上面补一行精确项**，而不是加/调前缀（的教训）。
 const BILL_TYPE_PREFIX = [
   ['FA', '/asset'],
   ['BG', '/budget/adjust'],
@@ -175,7 +175,7 @@ export function goBizPage(router, row) {
 /**
  * 读取「去处理／我的单据」深链携带的本单上下文（与 {@link goBizPage} 写出的查询参数成对）。
  *
- * <p>D-DEC-127/139/148/153 的后半段都是同一件事：路径对了，落地页却把 URL 上的
+ * <p>/139/148/153 的后半段都是同一件事：路径对了，落地页却把 URL 上的
  * billNo/billId 丢掉，列表照旧从第一页全量显示 ⇒ 办理人仍然看不到被审对象本身。
  * 各业务页统一按本函数取参，再各按自己的查询形态落地：
  * <ul>
@@ -234,14 +234,14 @@ export function bizTypeOfVoucherSource(sourceType) {
 
 /**
  * 凭证「来源类型」中文规则（列表列用）。bill_id 是跨域裸主键，只有费用族能解析成费用单号，
- * 其余来源列里显示的是「来源域＋主键」，避免把同号的费用单号当成本张凭证的原始单据（D-DEC-244）。
+ * 其余来源列里显示的是「来源域＋主键」，避免把同号的费用单号当成本张凭证的原始单据。
  */
 export const VOUCHER_SOURCE_LABEL = {
   EXPENSE: '费用报销', EXPENSE_PAY: '费用付款', EXP_LOAN: '借款', EXP_REPAY: '还款',
   PURCHASE: '采购入库', INVOICE_MATCH: '三单匹配', INVOICE_MATCH_MANUAL: '手工匹配',
   RECEIVABLE: '应收确认', RECEIVABLE_COLLECT: '应收收款', TREASURY_PAY: '出纳付款',
   BANK_RECON: '银行对账', ASSET_DEPRECIATION: '资产折旧', CONTRACT: '合同', ESTIMATE: '暂估',
-  // R5-D-150（2026-10-11 补）：凭证台账来源列实测 RECEIPT_INVOICE/ESTIMATE_REVERSE 直接显示英文
+  // 2026-10-11 补：凭证台账来源列实测 RECEIPT_INVOICE/ESTIMATE_REVERSE 直接显示英文
   // （含「来源单据」列回落成 RECEIPT_INVOICE #12 的形态）；EXPENSE_SETTLE 同域预留。
   RECEIPT_INVOICE: '发票入账', ESTIMATE_REVERSE: '暂估冲回', EXPENSE_SETTLE: '费用结算',
   GL_ACCRUAL: '预提', GL_TAX_PROV: '税金计提', GL_SALARY_PROV: '薪酬计提', GL_SALARY_PAY: '薪酬发放',
@@ -249,21 +249,21 @@ export const VOUCHER_SOURCE_LABEL = {
   AR_CLAIM: '应收认领', AR_NOTE_DISCOUNT: '票据贴现', FX_REVALUATION: '汇兑重估',
   FX_REVAL_REVERSE: '重估冲销', TR_RECEIPT: '票据收票', TR_BILL: '票据开立',
   TR_TRANSFER: '资金调拨', TR_UPLOAD: '资金上存',
-  // R5-D-077（2026-10-11 补）：库内 source_type 已长到 20+ 类，逐类补齐；规则＝各制证出口
+  // 2026-10-11 补：库内 source_type 已长到 20+ 类，逐类补齐；规则＝各制证出口
   // （setSourceType 字面量 / createVoucher sourceType 实参）全量比对，差集必须为空。
   AR_MONTH_CLOSE: 'AR月末结转', BAD_DEBT_PROV: '坏账计提', STOCK_COST_SETTLE: '库存成本结算',
   FA_DEPRECIATION: '资产折旧', FA_CER: '资产立项',
-  // D-H8-03（2026-10-24 H8 真跑）：资产凭证 source_type 直写 bizType（VoucherService.generateAssetVoucher），
+  // 2026-10-24 H8 真跑：资产凭证 source_type 直写 bizType（VoucherService.generateAssetVoucher），
   // 三支资产族此前只在 constants/enums 的 VOUCHER_SOURCE 里补了键，而**本页（凭证台账/总账）取词走的是
   // 本文件这张表** ⇒ 界面上 FA_ADD 仍直接显示英文。措辞与 enums 侧逐字一致，并与后端凭证摘要前缀同字
   // （实测 op_voucher：FA_ADD 1 行、摘要「资产新增-FA20261024000001」）。
   FA_ADD: '资产新增', FA_CIP_TO_ASSET: '在建工程转固', FA_DISPOSE: '资产处置',
-  // 同族补：实测 op_voucher.source_type 里 EXPENSE_REIM 有 198 行同样直接显示英文。产品代码任何
+  // 同族补：实测 op_voucher.source_type 里 EXPENSE_REIM 有 198 行同样直接显示英文。产品代码不要任何
   // setSourceType('EXPENSE_REIM') 出口（全仓仅 3 处引用且都在追溯/血缘的读侧白名单里），这批行的摘要
   // 一律是「费用重分类」⇒ 判定为报表数据模拟（S2）写入的数据侧枚举，措辞查询据自身摘要；
   // 若将来接入真实的费用重分类制证环节，须回来复核这条措辞。
   EXPENSE_REIM: '费用重分类',
-  // D-UI-07（2026-10-26）：op_voucher.source_doc_type 实测 PO_RECEIPT/INV_INVOICE 无键 ⇒ 凭证台账/总账来源列直显英文。
+  // op_voucher.source_doc_type 实测 PO_RECEIPT/INV_INVOICE 无键 ⇒ 凭证台账/总账来源列直显英文。
   // 与 constants/enums.js 的 VOUCHER_SOURCE 同名键逐字一致（两处须同步补，见上方 FA_ADD 注释）。
   PO_RECEIPT: '采购收货', INV_INVOICE: '发票入账',
 }
@@ -277,7 +277,7 @@ export function voucherSourceLabel(sourceType) {
 /**
  * 与后端 VoucherService.EXPENSE_BILL_SOURCES 同一规则：仅这些来源的 bill_id 才是 exp_bill 主键。
  * 后端校验上线前，列表以此判定 sourceBillNo 是否可信 —— 非费用族即便后端回了单号也不显示，
- * 因为那只是同号费用单被错认成本张凭证的原始单据（D-DEC-244 的 4 例串号）。
+ * 因为那只是同号费用单被错认成本张凭证的原始单据（的 4 例串号）。
  */
 const EXPENSE_BILL_SOURCES = ['EXPENSE', 'EXPENSE_PAY', 'EXP_LOAN', 'EXP_REPAY']
 

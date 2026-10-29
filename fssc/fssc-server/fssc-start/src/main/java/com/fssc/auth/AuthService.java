@@ -9,6 +9,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.enums.SubjectType;
 import com.fssc.common.exception.BizException;
+import com.fssc.common.util.StrUtil;
 import com.fssc.framework.security.LoginGuardService;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.TokenService;
@@ -77,7 +78,7 @@ public class AuthService {
     /** 通配权限：平台超管 / 租户管理员 */
     public static final String WILDCARD_PERM = "*:*:*";
 
-    // ---------------- 租户登录 ----------------
+    // 租户登录
 
     public LoginResult tenantLogin(String tenantCode, String username, String password, boolean rememberMe,
                                    String captchaId, String captchaCode, HttpServletRequest req) {
@@ -172,7 +173,7 @@ public class AuthService {
             perms = new HashSet<>();
             perms.add(WILDCARD_PERM);
         } else {
-            perms = com.fssc.common.util.StrUtil.expandPerms(sysUserMapper.selectPerms(user.getId()));
+            perms = StrUtil.expandPerms(sysUserMapper.selectPerms(user.getId()));
         }
         // USG-06: 过滤空白项;有角色但权限装载为空=加载异常(曾致签发全空权限降级 token)——
         // fail-closed 拒绝登录而非放行无权限会话
@@ -194,7 +195,7 @@ public class AuthService {
         return u;
     }
 
-    // ---------------- 平台登录 ----------------
+    // 平台登录
 
     public LoginResult platformLogin(String username, String password, boolean rememberMe,
                                      String captchaId, String captchaCode, HttpServletRequest req) {
@@ -241,7 +242,7 @@ public class AuthService {
         u.setRealName(user.getRealName());
         u.setLoginAt(System.currentTimeMillis());
         // 平台端权限模型收敛为"超管通配";非超管账号无可授予权限来源(pf_menu RBAC 读路径
-        // 已随 pf_menu/pf_role_menu/pf_user_role 下线,见 V9.9.14),登录后权限为空集
+        // 已随 pf_menu/pf_role_menu/pf_user_role 下线,见 ),登录后权限为空集
         u.setPerms((user.getIsSuper() != null && user.getIsSuper() == 1)
                 ? Set.of(WILDCARD_PERM)
                 : Set.of());
@@ -255,7 +256,7 @@ public class AuthService {
         return new LoginResult(token, u);
     }
 
-    // ---------------- 图形验证码校验（C-3） ----------------
+    // 图形验证码校验（C-3）
 
     /**
      * 验证码校验：<b>失败阈值触发</b>，不是无条件强校验。
@@ -287,7 +288,7 @@ public class AuthService {
         return s == null || s.isBlank();
     }
 
-    // ---------------- 租户生命周期校验（登录侧） ----------------
+    // 租户生命周期校验（登录侧）
 
     /** 返回 null 表示可登录；否则返回拦截原因 */
     private String checkTenantStatus(PfTenant tenant) {
@@ -307,7 +308,7 @@ public class AuthService {
         };
     }
 
-    // ---------------- 登录日志 ----------------
+    // 登录日志
 
     private void savePfLogin(String username, boolean ok, String msg, HttpServletRequest req) {
         PfLoginLog l = new PfLoginLog();
@@ -352,7 +353,7 @@ public class AuthService {
         return req.getRemoteAddr();
     }
 
-    // ---------------- 个人中心 ----------------
+    // 个人中心
 
     /** 获取个人资料（含权限） */
     public ProfileVo getProfile(LoginUser ctx) {

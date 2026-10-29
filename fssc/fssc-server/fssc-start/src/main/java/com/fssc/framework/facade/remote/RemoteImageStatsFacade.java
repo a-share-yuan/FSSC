@@ -9,12 +9,14 @@ import com.fssc.framework.facade.ImageStatsFacade;
 import com.fssc.framework.trace.TraceIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -32,7 +34,7 @@ import java.util.Map;
  * <p>身份透传：报表请求是<b>真人触发</b>的，直接转发现有 {@code Authorization}
  * （以及 X-Company-Id、traceId），影像服务按同一把尺子做鉴权与数据范围判定，
  * 不引入服务账号/内部密钥。影像服务不可用时<b>抛错</b>而不是返回 0
- * （报表若因上游不可用而显示 0，是伪造数据）。</p>
+ * 报表若因上游不可用而显示 0，是伪造数据。</p>
  */
 @Slf4j
 @Component
@@ -50,8 +52,8 @@ public class RemoteImageStatsFacade implements ImageStatsFacade {
     }
 
     private static RestTemplate build() {
-        org.springframework.http.client.SimpleClientHttpRequestFactory f =
-                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        SimpleClientHttpRequestFactory f =
+                new SimpleClientHttpRequestFactory();
         f.setConnectTimeout(3_000);
         f.setReadTimeout(15_000);
         return new RestTemplate(f);
@@ -122,6 +124,6 @@ public class RemoteImageStatsFacade implements ImageStatsFacade {
     }
 
     private static String currentTraceId() {
-        return org.slf4j.MDC.get(TraceIdFilter.MDC_KEY);
+        return MDC.get(TraceIdFilter.MDC_KEY);
     }
 }

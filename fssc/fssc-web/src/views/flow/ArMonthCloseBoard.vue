@@ -43,7 +43,7 @@
         <template #default="{ row }">
           <el-button v-for="a in actions(row)" :key="a.key" link type="primary" size="small" @click="act(row, a)">{{ a.label }}</el-button>
           <el-button v-if="row.status === 'CLOSED'" link type="danger" size="small" @click="openReopen(row)">{{ $t('flow.arClose.btnReopen') }}</el-button>
-          <!-- R5-D-218：未关闭账期的月结单可作废（最终状态 VOID，记录不删行） -->
+          <!-- 未关闭账期的月结单可作废（最终状态 VOID，记录不删行） -->
           <el-button v-if="!['CLOSED', 'VOID'].includes(row.status)" link type="warning" size="small" @click="openVoid(row)">{{ $t('field.void') }}</el-button>
           <el-button link type="info" size="small" @click="openDetail(row)">{{ $t('field.detail') }}</el-button>
         </template>
@@ -84,7 +84,7 @@
       </template>
     </el-dialog>
 
-    <!-- 反月结：原因必填记录（41号审查报告 P0-2 同源整改） -->
+    <!-- 反月结：原因必填记录（41号审查报告 同源整改） -->
     <el-dialog v-model="reopenVisible" :title="$t('flow.arClose.dlgReopenTitle')" width="440px" destroy-on-close>
       <el-alert type="warning" :closable="false" style="margin-bottom: 10px"
         :title="$t('flow.arClose.dlgReopenDoc', { v1: reopenRow?.closeNo, v2: reopenRow?.period })"
@@ -96,7 +96,7 @@
       </template>
     </el-dialog>
 
-    <!-- R5-D-218 作废：原因必填记录（最终状态 VOID，行止不删） -->
+    <!-- 作废：原因必填记录（最终状态 VOID，行止不删） -->
     <el-dialog v-model="voidVisible" :title="$t('flow.arClose.dlgVoidTitle')" width="440px" destroy-on-close>
       <el-alert type="error" :closable="false" style="margin-bottom: 10px"
         :title="$t('flow.arClose.dlgReopenDoc', { v1: voidRow?.closeNo, v2: voidRow?.period })"
@@ -167,14 +167,14 @@ const voidRow = ref(null)
 const voidReason = ref('')
 const users = ref([])
 
-// R5-D-212：库内存工号→展示花名；历史遗留的昵称按原值回显（找不到不改写）
+// 库内存工号→展示花名；历史遗留的昵称按原值回显（找不到不改写）
 function personLabel(name) {
   if (!name) return '—'
   const u = users.value.find((x) => x.userName === name)
   return (u && (u.nickName || u.userName)) || name
 }
 async function loadUsers() {
-  // P0 修复（2026-10-21）：月结负责人通常为本财务人员，按同公司过滤
+  // P0 修复：月结负责人通常为本财务人员，按同公司过滤
   try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch { users.value = [] }
 }
 
@@ -264,7 +264,7 @@ async function loadCompanies() {
   } catch { /* 组织树加载失败不阻断列表 */ }
 }
 
-// ---- 反月结 ----
+// 反月结
 function openReopen(row) {
   reopenRow.value = row
   reopenReason.value = ''
@@ -277,7 +277,7 @@ async function doReopen() {
   reopenVisible.value = false
 }
 
-// ---- 作废（R5-D-218 最终状态） ----
+// 作废（最终状态）
 function openVoid(row) {
   voidRow.value = row
   voidReason.value = ''
@@ -290,7 +290,7 @@ async function doVoid() {
   voidVisible.value = false
 }
 
-// ---- 详情 ----
+// 详情
 function openDetail(row) {
   detailRow.value = row
   detailVisible.value = true

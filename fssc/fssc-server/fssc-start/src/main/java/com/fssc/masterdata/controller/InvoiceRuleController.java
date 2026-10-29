@@ -28,10 +28,9 @@ public class InvoiceRuleController {
     private final InvoiceRuleService service;
 
     // 分页列表：管理员维护规则用
-    // D-DEC-310：本类两个读口原先零注解——菜单已登记 md:invoiceRule:list（sys_menu 3395，
+    // 本类两个读口原先零注解——菜单已登记 md:invoiceRule:list（sys_menu 3395，
     // 现有且只有 CONFIG_ADMIN/IT_ADMIN 持有），但该码在 Java 侧零消费，等于"有码、无"。
     // 现按同包既有写口的授码规则（create/update/delete 各用其码，不新造码）把列表口挂上 list 码。
-    //
     // 【match 不加注解，是刻意的】/match 是报销页勾选发票时的费用类型预填助手
     // （fssc-web src/composables/useBill.js、views/expense/ExpenseCreateTab.vue 调用），
     // 面向全体提单人；给它挂 list 码＝把管理员码塞给普通员工，既扩语义又会让预填功能对

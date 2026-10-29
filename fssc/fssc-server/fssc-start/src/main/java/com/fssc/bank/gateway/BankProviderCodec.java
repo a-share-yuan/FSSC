@@ -46,8 +46,8 @@ public interface BankProviderCodec {
      * 按该银行形态组装付款批次报文底稿。
      *
      * @param batchNo 付款批次号（唯一键组成部分）
-     * @param items   付款明细
-     * @param cfg     当前通道配置（可读 {@code extraConfig} 做字段映射/开关）
+     * @param items 付款明细
+     * @param cfg 当前通道配置（可读 {@code extraConfig} 做字段映射/开关）
      * @return 交给通用网关外呼的请求体
      */
     Map<String, Object> buildPayload(String batchNo, List<BankGateway.PayItem> items,
@@ -59,7 +59,7 @@ public interface BankProviderCodec {
      * <p>最小契约：能解析出逐笔流水号则返回等长列表；解析不出时返回 {@code null}，
      * 由调用方降级为「整批一个流水号 + 序号」（与收编前行为一致）。</p>
      *
-     * @param body      响应体原文
+     * @param body 响应体原文
      * @param itemCount 本批笔数
      * @return 逐笔流水号；无法解析返回 {@code null}
      */

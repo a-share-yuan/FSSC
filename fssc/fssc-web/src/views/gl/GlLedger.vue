@@ -17,7 +17,7 @@
         </el-select>
         <el-input-number v-model="year" :min="2000" :max="2100" controls-position="right" style="width: 130px" />
         <el-input-number v-model="month" :min="1" :max="12" controls-position="right" style="width: 120px" />
-        <!-- D-DEC-168：本页唯一的「查询」入口（原凭证台账页签内还有一只同名同行为的重复按钮，已去除） -->
+        <!-- 本页唯一的「查询」入口（原凭证台账页签内还有一只同名同行为的重复按钮，已去除） -->
         <el-button type="primary" size="small" @click="runQuery">{{ $t('common.search') }}</el-button>
         <el-tag v-if="trial" :type="trial.balanced ? 'success' : 'danger'" effect="dark">
           {{ trial.balanced ? $t('gl.ledger.balancedPair') : $t('gl.ledger.unbalanced') }}
@@ -39,7 +39,7 @@
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">{{ $t('gl.ledger.btnExportSel', { v1: selRows.length }) }}</el-button>
         </el-col>
       </el-row>
-      <!-- R5-D-149：排序改服务端 custom（sortable="custom" + @sort-change 回后端白名单重排全量结果）——
+      <!-- 排序改服务端 custom（sortable="custom" + @sort-change 回后端白名单重排全量结果）——
            原裸 sortable 只排当前页 20 行，翻页即乱序，且与后端默认 id 升序矛盾 -->
       <el-table :data="rows" size="small" border stripe v-loading="loading" :max-height="520" @selection-change="handleSelectionChange" @row-dblclick="openVoucherDetail" @sort-change="onEntrySortChange">
         <el-table-column type="selection" width="45" />
@@ -80,7 +80,7 @@
     <template v-else-if="tab === 'balance'">
       <el-alert type="info" :closable="false" style="margin-bottom: 10px"
         :title="$t('gl.ledger.balanceRule')" />
-      <!-- R5-D-149：本页签为不分页的完整聚合列表，列头 sortable 对全量数据前端排序即正确（无需服务端排序）；
+      <!-- 本页签为不分页的完整聚合列表，列头 sortable 对全量数据前端排序即正确（无需服务端排序）；
            分页的总账分录/凭证台账两个页签已改服务端 custom 排序 -->
       <el-table :data="balance" size="small" border stripe v-loading="loading" :max-height="560"
                 show-summary :summary-method="balanceSummary" @selection-change="handleSelectionChange">
@@ -127,7 +127,7 @@
           </el-select>
         </el-col>
         <el-col :span="16">
-          <!-- D-DEC-168：这里原本还有一只「查询」按钮（与表头那只同名、同 @click），同屏两只 → 已去除。
+          <!-- 这里原本还有一只「查询」按钮（与表头那只同名、同 @click），同屏两只 → 已去除。
                过账状态、公司、年度、月度统一由表头「查询」提交；本页签改状态筛选时自动重取，少一次点击。 -->
           <el-tooltip v-if="canPost" :content="$t('gl.ledger.msgPickPostable')" placement="top" :disabled="postableRows.length > 0">
             <el-button type="success" size="small" :loading="batchPosting" :disabled="!postableRows.length" @click="batchPost">
@@ -138,10 +138,10 @@
           <el-button size="small" type="warning" plain :disabled="!singleVoucher" @click="reverseSel">{{ $t('gl.ledger.actRedReverse') }}</el-button>
         </el-col>
       </el-row>
-      <!-- D-DEC-288（X-49 乙）：仅当本页有"已记账而资金指令未下发"的凭证时出现；样式沿用上面那行次要文字（不新开弹窗） -->
+      <!-- X-49 乙：仅当本页有"已记账而资金指令未下发"的凭证时出现；样式沿用上面那行次要文字（不新开弹窗） -->
       <div v-if="unsettledLegCount" style="margin: -2px 0 8px; color: #909399; font-size: 12px">
         {{ $t('gl.ledger.hintUnsettled', { v1: unsettledLegCount }) }}</div>
-      <!-- R5-D-149：凭证台账排序同为服务端 custom（凭证号/摘要两列白名单） -->
+      <!-- 凭证台账排序同为服务端 custom（凭证号/摘要两列白名单） -->
       <el-table ref="voucherTableRef" :data="voucherRows" size="small" border stripe v-loading="loading" :max-height="520"
                 @selection-change="handleVoucherSelectionChange" @sort-change="onVoucherSortChange">
         <el-table-column type="selection" width="45" />
@@ -155,7 +155,7 @@
         </el-table-column>
         <el-table-column :label="$t('gl.ledger.colSourceBill')" width="160" show-overflow-tooltip>
           <template #default="{ row }">
-            <!-- 费用族的 bill_id 才是费用单主键；其余来源 bill_id 是别域主键，只标来源域＋主键，不猜单号（D-DEC-244） -->
+            <!-- 费用族的 bill_id 才是费用单主键；其余来源 bill_id 是别域主键，只标来源域＋主键，不猜单号 -->
             <span v-if="row.sourceBillNo && isExpenseFamilyVoucherSource(row.sourceType)">{{ row.sourceBillNo }}</span>
             <span v-else-if="row.billId" style="color: #909399">{{ voucherSourceLabel(row.sourceType) }} #{{ row.billId }}</span>
             <span v-else>—</span>
@@ -171,7 +171,7 @@
           <template #default="{ row }">
             <!-- 凭证 status：DRAFT=未过账 / POSTED=已过账 / VOID=已作废 -->
             <el-tag :type="row.status === 'POSTED' ? 'success' : row.status === 'VOID' ? 'info' : 'warning'" size="small">{{ voucherStatusLabel(row.status) }}</el-tag>
-            <!-- D-DEC-288（X-49 乙）：付款环节凭证已记账而资金指令未下发——历史保持不动账，只在行上明示注记 -->
+            <!-- X-49 乙：付款环节凭证已记账而资金指令未下发——历史保持不动账，只在行上明示注记 -->
             <div v-if="row.payLegUnsettled === true" style="color: #e6a23c; font-size: 12px; line-height: 1.4">{{ $t('gl.ledger.payNotIssued') }}</div>
           </template>
         </el-table-column>
@@ -184,7 +184,7 @@
             <span v-else>{{ creatorLabel(row) }}</span>
           </template>
         </el-table-column>
-        <!-- D-BIZ-09：此前过账只有一条「勾选若干行→工具栏批量过账」的路，行上没有任何入口，
+        <!-- 此前过账只有一条「勾选若干行→工具栏批量过账」的路，行上没有任何入口，
              台账里那批自动生成的凭证因此看不见「怎么过账」。补按行入口，与批量口同一个权限码、同一道制审分离校验。 -->
         <el-table-column v-if="canPost" :label="$t('gl.ledger.colAction')" width="90" fixed="right">
           <template #default="{ row }">
@@ -237,7 +237,7 @@
         </el-col>
         <el-col :span="6">
           <el-card shadow="hover">
-            <!-- R5-D-219：el-statistic 的 value 是数值型组件（内部 Number 化+分组/精度格式化），
+            <!-- el-statistic 的 value 是数值型组件（内部 Number 化+分组/精度格式化），
                  「截至期间」是 YYYY-MM 期间标识而非统计量，穿字符串会被当数值渲染成乱码/NaN；
                  期间语义改普通文本渲染（与同排三张统计卡视觉对齐）。 -->
             <div class="period-stat">
@@ -306,7 +306,7 @@ function openVoucherDetail(row) {
   voucherDrawer.value = true
 }
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -315,7 +315,7 @@ function traceBill(row) {
   traceBizType.value = bizTypeOfVoucherSource(row.bizType)
   traceVisible.value = true
 }
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => location.reload(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
@@ -374,14 +374,14 @@ const pageNum = ref(1)
 const pageSize = ref(20)
 const balance = ref([])
 const trial = ref(null)
-// D-H8-04：「含未过账凭证」默认关闭——op_gl_entry 只在过账时落账，默认口径＝本期已过账分录合计
+// 「含未过账凭证」默认关闭——op_gl_entry 只在过账时落账，默认口径＝本期已过账分录合计
 const includeUnposted = ref(false)
-// R5-D-219：截至期间文本（YYYY-MM）——试算结果未回时以当前查询条件默认处理，替换原被当数字渲染的 el-statistic
+// 截至期间文本（YYYY-MM）——试算结果未回时以当前查询条件默认处理，替换原被当数字渲染的 el-statistic
 const trialPeriod = computed(() => String(trial.value?.periodYear || year.value) + '-' + String(trial.value?.periodMonth || month.value).padStart(2, '0'))
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
-// D-DEC-196：科目余额表合计行——期初/本期/期末<b>各自成对</b>合计（此前无合计行，
+// 科目余额表合计行——期初/本期/期末<b>各自成对</b>合计（此前无合计行，
 // 且接口只列"本期有发生"的科目，只有期初余额的科目连金额一起被吞 ⇒ 手工相加必然不平）。
 // 三对里任何一对不等就是规则问题，直接在"科目名称"列点出来，不留给人肉核对。
 const BALANCE_SUM_PROPS = ['openDebit', 'openCredit', 'periodDebit', 'periodCredit', 'endDebit', 'endCredit']
@@ -401,7 +401,7 @@ function balanceSummary({ columns, data }) {
   })
 }
 
-// ---------------- 凭证台账：过账状态 + 批量过账 + 制审分离 
+// 凭证台账：过账状态 + 批量过账 + 制审分离
 // 凭证 status 映射（DRAFT=未过账 / POSTED=已过账，缺失取值原样回显）
 // 用 computed 而非静态对象：静态对象在 setup 求值时就把语言固化，切语言后标签仍是旧语言
 const VOUCHER_STATUS_LABEL = computed(() => ({ DRAFT: t('gl.ledger.stUnposted'), POSTED: t('gl.ledger.stPosted'), VOID: t('gl.ledger.stVoided') }))
@@ -436,13 +436,13 @@ function creatorLabel(row) {
 }
 // 可过账：未过账 且 非本人制单
 function canPostRow(row) { return row?.status !== 'POSTED' && !isSelfCreated(row) }
-// D-BIZ-09：过账码与后端同校验（SharingController 的 /voucher/{id}/post、/voucher/batch-post 都是
+// 过账码与后端同校验（SharingController 的 /voucher/{id}/post、/voucher/batch-post 都是
 // @RequiresPerm("sharing:voucher:post")）。有权才放行内【过账】与工具栏【批量过账】，
 // 无权账号不再看见「点了必吃 4030」的入口。
 const canPost = hasPerm('sharing:voucher:post')
 // 勾选区中可过账的行（按钮计数与提交均以此为准）
 const postableRows = computed(() => (voucherSelRows.value || []).filter(canPostRow))
-// D-DEC-288（X-49 乙）：后端读侧打标的"已过账而资金指令未下发"行数（只注记、不动账，判据＝行上 payLegUnsettled === true）
+// X-49 乙：后端读侧打标的"已过账而资金指令未下发"行数（只注记、不动账，判据＝行上 payLegUnsettled === true）
 const unsettledLegCount = computed(() => (voucherRows.value || []).filter((r) => r.payLegUnsettled === true).length)
 
 async function loadVouchers() {
@@ -450,13 +450,13 @@ async function loadVouchers() {
   try {
     const p = { pageNum: voucherPageNum.value, pageSize: voucherPageSize.value }
     if (voucherStatus.value) p.status = voucherStatus.value
-    // D-DEC-168 根因一（前端环节）：表头的公司/年度/月度控件此前只喂给「总账分录／科目余额表／试算平衡」三个页签，
+    // 根因一（前端环节）：表头的公司/年度/月度控件此前只喂给「总账分录／科目余额表／试算平衡」三个页签，
     // 凭证页签的查询函数只发 pageNum/pageSize/status —— 屏幕上摆着的三个条件从未进入请求，
     // 所以点「查询」列表纹丝不动。现按与「总账分录」相同的规则带上（未选＝不限，不臆造默认值）。
     if (companyId.value) p.companyId = companyId.value
     if (year.value) p.periodYear = year.value
     if (month.value) p.periodMonth = month.value
-    // R5-D-149：排序状态随请求下发（凭证号/摘要列白名单；未排序不带参数＝后端默认 id 倒序）
+    // 排序状态随请求下发（凭证号/摘要列白名单；未排序不带参数＝后端默认 id 倒序）
     if (voucherOrderBy.value) { p.orderBy = voucherOrderBy.value; p.order = voucherOrder.value || 'asc' }
     const d = await sharingApi.voucherPage(p)
     voucherRows.value = d.list || []
@@ -464,7 +464,7 @@ async function loadVouchers() {
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
-// D-DEC-168：「查询/筛选」＝条件变了，先回第 1 页再查询。
+// 「查询/筛选」＝条件变了，先回第 1 页再查询。
 // 此前直接 load()：停在第 3 页时改条件仍然只翻第 3 页，窄条件下往往没有第 3 页，
 // 界面看起来就是「点了没反应」的第二半原因。翻页路径（pagination 回调）不受影响。
 function runQuery() {
@@ -475,7 +475,7 @@ function runQuery() {
 
 function handleVoucherSelectionChange(val) { voucherSelRows.value = val }
 
-// ---------------- R5-D-149：服务端排序（分页页签专用） ----------------
+// 服务端排序（分页页签专用）
 // element-plus 的裸 sortable 只对「当前页 20 行」做前端排序——翻页即乱序，用户看到的「排好了」
 // 只是页内假象；且与后端默认 id 升序相互矛盾。改为 sortable="custom" + 本回调把 { prop, order }
 // 回传后端，由白名单列在 SQL 层重排全量结果（orderBy/order 参数）；取消排序回默认序。
@@ -498,9 +498,8 @@ function onVoucherSortChange({ prop, order }) {
 
 // 批量过账：POST /tenant/sharing/voucher/batch-post，请求体为凭证 id 数组
 // 响应 data={ success, fail:[{id, reason}] }，按 Approval.vue 批量审批的失败明细模式展示
-//
-// D-DEC-165（前后端契约断裂 → 说明整段丢弃）：原实现用 ElMessageBox.prompt 把「过账说明」设成必填
-// （≥2 字，不填就无法过账），但适配层只发纯 id 数组、端点签名就是 @RequestBody List<Long> ids、
+// 前后端契约断裂 → 说明整段丢弃：原实现用 ElMessageBox.prompt 把「过账说明」设成必填
+// ≥2 字，不填就无法过账，但适配层只发纯 id 数组、端点签名就是 @RequestBody List<Long> ids、
 // VoucherService.post() 也没有 comment 形参 ⇒ 用户键入的说明 100% 静默丢弃，
 // 界面承诺了一条根本不存在的入账记录（假必填）。这里先停止假必填，改为不带输入框的确认。
 // 记录的两条真出路（择一落地，均需后端改动／人工裁决）：
@@ -510,7 +509,7 @@ function onVoucherSortChange({ prop, order }) {
 //   B. 若要的是「每次过账一条独立入账理由」（不覆盖凭证备注、一次批量共用一条并留操作人），
 //      则需新列或新表 ⇒ DDL 变更，需人工裁决。
 // 任一方案落地后，把下面的 confirm 换回 prompt 并随 body.comment 送出即可（适配层按 body 透传 id）。
-// D-BIZ-09：单张过账走 /tenant/sharing/voucher/{id}/post（后端同码校验＋实付校验＋制审分离校验）
+// 单张过账走 /tenant/sharing/voucher/{id}/post（后端同码校验＋实付校验＋制审分离校验）
 async function postOne(row) {
   const label = row.voucherNo || (t('gl.ledger.voucherPrefix') + row.id)
   try {
@@ -583,7 +582,7 @@ async function load() {
   loading.value = true
   try {
     if (tab.value === 'entry') {
-      // R5-D-149：orderBy/order 走后端白名单排序；未排序时传空＝后端默认 id 升序
+      // orderBy/order 走后端白名单排序；未排序时传空＝后端默认 id 升序
       const d = await glApi.entry(pageNum.value, pageSize.value, companyId.value, year.value, month.value, subjectId.value, entryOrderBy.value || undefined, entryOrder.value || undefined)
       rows.value = d.list || []
       total.value = Number(d.total || 0)
@@ -598,7 +597,7 @@ async function load() {
 }
 
 watch(tab, () => { pageNum.value = 1; load() })
-// R5-D-220：props.tab 此前只取一次初值（深链进入时定页签），同路由复用组件/父级改 tab 时
+// props.tab 此前只取一次初值（深链进入时定页签），同路由复用组件/父级改 tab 时
 // 页签不跟随，界面停留旧页签。补 watcher 同步 props → tab（重载交由上面的 watch(tab) 处理）。
 watch(() => props.tab, (v) => { if (v && v !== tab.value) tab.value = v })
 
@@ -663,7 +662,7 @@ function batchExport() {
 .deb { color: #f56c6c; font-weight: 600; }
 .crd { color: #67c23a; font-weight: 600; }
 .tabless :deep(.el-tabs__header) { display: none; }
-/* R5-D-219：期间文本卡样式——对齐同排 el-statistic 的标题/值两行视觉 */
+/* 期间文本卡样式——对齐同排 el-statistic 的标题/值两行视觉 */
 .period-stat__title { font-size: 14px; color: var(--el-text-color-secondary, #909399); margin-bottom: 10px; line-height: 1; }
 .period-stat__value { font-size: 24px; color: var(--el-text-color-primary, #303133); font-weight: 400; line-height: 1; }
 </style>

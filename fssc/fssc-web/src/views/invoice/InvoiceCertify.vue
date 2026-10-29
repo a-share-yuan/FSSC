@@ -93,7 +93,7 @@ import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -134,7 +134,7 @@ const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('zh-CN', { mini
 const kindText = (k) => ({ SPECIAL: '专票', NORMAL: '普票', ELECTRONIC: '电子', VATN: '普票', VAT: '专票' }[k] || k || '—')
 const certifyText = (s) => ({ NOT_CERTIFIED: '未勾选', CERTIFIED: '已勾选', REVERSED: '进项转出' }[s] || s || '—')
 const certifyTag = (s) => ({ NOT_CERTIFIED: 'info', CERTIFIED: 'success', REVERSED: 'danger' }[s] || 'info')
-// R5-D-120：专票（invoiceKind=SPECIAL 或 invoiceType=VAT）才可抵扣，与服务端 isVatDeductible 同一规则；
+// 专票（invoiceKind=SPECIAL 或 invoiceType=VAT）才可抵扣，与服务端 isVatDeductible 同一规则；
 // 用于认证勾选时回显「本次可抵扣合计」（此前按 0 抵扣也无任何提示）
 const isDeductible = (r) => String(r.invoiceKind || '').toUpperCase() === 'SPECIAL'
   || String(r.invoiceType || '').toUpperCase() === 'VAT'
@@ -159,7 +159,7 @@ async function doCertify() {
     try {
       await ElMessageBox.confirm('确认对所选 ' + selRows.value.length + ' 张发票进行进项认证勾选？', '确认', { type: 'warning' })
       const n = await invoiceApi.certify(requireSel(), certifyPeriod.value)
-      // R5-D-120：服务端按「专票→deduct_amount=taxAmount」回填；此处把本次可抵扣合计回显，
+      // 服务端按「专票→deduct_amount=taxAmount」回填；此处把本次可抵扣合计回显，
       // 让用户当场看清「勾了 n 张、按多少税额抵扣」（此前按 0 抵扣也无提示）
       const deductSum = selRows.value.reduce((sum, r) => sum + (isDeductible(r) ? Number(r.taxAmount || 0) : 0), 0)
       ElMessage.success('认证勾选 ' + n + ' 张，本次可抵扣合计 ¥' + fmt(deductSum))

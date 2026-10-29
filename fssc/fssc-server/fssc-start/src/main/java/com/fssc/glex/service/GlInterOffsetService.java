@@ -16,6 +16,10 @@ import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceivableMapper;
+import com.fssc.sharing.entity.OpVoucher;
+import com.fssc.sharing.mapper.OpVoucherMapper;
+import com.fssc.sharing.service.VoucherService;
+import com.fssc.system.service.ConfigService;
 import com.fssc.workflow.service.WfEngineFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,10 +44,9 @@ public class GlInterOffsetService {
     private final WfEngineFacade wfEngineFacade;
     private final RcReceivableMapper rcReceivableMapper;
     private final InvoiceDomainFacade invoiceFacade;
-    private final com.fssc.system.service.ConfigService configService;
-    // R5-D-153
-    private final com.fssc.sharing.service.VoucherService voucherService;
-    private final com.fssc.sharing.mapper.OpVoucherMapper opVoucherMapper;
+    private final ConfigService configService;
+    private final VoucherService voucherService;
+    private final OpVoucherMapper opVoucherMapper;
 
     public PageResult<GlInterOffset> page(long pageNum, long pageSize, String period, String interFlag, String keyword) {
         LambdaQueryWrapper<GlInterOffset> qw = new LambdaQueryWrapper<>();
@@ -87,10 +90,10 @@ public class GlInterOffsetService {
             seq++;
             GlInterOffset in = newEntry(tenantId, period, p[1], p[0], "RECEIVABLE", amount, seq);
             seq++;
-            // P0-3 往来抵消金额公式强校验：金额 > 0、方向合法
+            // 往来抵消金额公式强校验：金额 > 0、方向合法
             assertOffset(out.getAmount(), out.getInterFlag());
             assertOffset(in.getAmount(), in.getInterFlag());
-            // P0-3 显式断言：同一公司对的来账(应收)与往账(应付)金额必须成对相等，否则内部勾不平
+            // 显式断言：同一公司对的来账(应收)与往账(应付)金额必须成对相等，否则内部勾不平
             assertPairEqual(in.getAmount(), out.getAmount());
             mapper.insert(out);
             mapper.insert(in);
@@ -127,7 +130,7 @@ public class GlInterOffsetService {
         if ("OFFSET".equals(e.getOffsetStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "已抵消");
         }
-        // R5-D-153：抵消记账即出证，凭证号取凭证对象上的真号；出证不成功不置 OFFSET、不写自造号
+        // 抵消记账即出证，凭证号取凭证对象上的真号；出证不成功不置 OFFSET、不写自造号
         Long voucherId;
         try {
             voucherId = voucherService.generateInterOffsetVoucher(e);
@@ -141,7 +144,7 @@ public class GlInterOffsetService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "抵消记账未完成：抵消凭证未生成，该分录保持未抵消");
         }
-        com.fssc.sharing.entity.OpVoucher v = opVoucherMapper.selectById(voucherId);
+        OpVoucher v = opVoucherMapper.selectById(voucherId);
         String realNo = v == null ? null : v.getVoucherNo();
         if (!StringUtils.hasText(realNo)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -149,7 +152,7 @@ public class GlInterOffsetService {
         }
         e.setVoucherNo(realNo);
         e.setOffsetStatus("OFFSET");
-        // R5-D-160：post 也是状态写入，记账人须写入数据库
+        // post 也是状态写入，记账人须写入数据库
         e.setUpdateBy(userId());
         mapper.updateById(e);
         log.info("内部往来抵消 {} 记账完成，凭证 {}（凭证状态 {}）",
@@ -160,7 +163,7 @@ public class GlInterOffsetService {
         return mapper.selectCount(new LambdaQueryWrapper<GlInterOffset>().eq(GlInterOffset::getPeriod, period));
     }
 
-    /** P0-3 往来抵消强校验：抵消金额必须 > 0，方向必须为 RECEIVABLE/PAYABLE。
+    /** 往来抵消强校验：抵消金额必须 > 0，方向必须为 RECEIVABLE/PAYABLE。
      *  内部往来抵消要求同一公司对的应收/应付金额相等（镜像勾销），此处做数据合法性默认处理。 */
     private static void assertOffset(BigDecimal amount, String interFlag) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -171,14 +174,14 @@ public class GlInterOffsetService {
         }
     }
 
-    /** P0-3 内部抵消铁律：同一公司对的来账(应收)与往账(应付)金额必须成对相等，否则内部勾不平。 */
+    /** 内部抵消铁律：同一公司对的来账(应收)与往账(应付)金额必须成对相等，否则内部勾不平。 */
     public static void assertPairEqual(BigDecimal inAmount, BigDecimal outAmount) {
         if (inAmount == null || outAmount == null || inAmount.compareTo(outAmount) != 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "内部抵消来账与往账金额不一致");
         }
     }
 
-    /** R5-D-159：内部抵消公司对必须跨主体——同一公司自我抵消无业务意义（历史 3 条脏数据含 0.00 元行），前后端双拦。 */
+    /** 内部抵消公司对必须跨主体——同一公司自我抵消无业务意义（历史 3 条脏数据含 0.00 元行），前后端双拦。 */
     public static void assertDistinctCompanies(Long fromCompanyId, Long toCompanyId) {
         if (fromCompanyId != null && fromCompanyId.equals(toCompanyId)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -200,12 +203,12 @@ public class GlInterOffsetService {
         assertOffset(in.getAmount(), in.getInterFlag());
         // 手工录入路径同样调用成对相等断言（复用 assertPairEqual）
         assertPairEqual(in.getAmount(), out.getAmount());
-        // R5-D-159：拒绝 from==to 自我抵消（来账/往账两环节各自校验，同主体直拦）
+        // 拒绝 from==to 自我抵消（来账/往账两环节各自校验，同主体直拦）
         assertDistinctCompanies(in.getFromCompanyId(), in.getToCompanyId());
         assertDistinctCompanies(out.getFromCompanyId(), out.getToCompanyId());
         Long tenantId = TenantContext.getTenantId();
         long seq = countByPeriod(period) + 1;
-        // R5-D-160：手工录入路径的审计人同样由服务端覆盖，采信请求体里的 createBy/updateBy
+        // 手工录入路径的审计人同样由服务端覆盖，不要采信请求体里的 createBy/updateBy
         Long uid = userId();
         in.setId(null);
         in.setTenantId(tenantId);
@@ -246,7 +249,7 @@ public class GlInterOffsetService {
                                    String interFlag, BigDecimal amount, long seq) {
         GlInterOffset e = new GlInterOffset();
         e.setTenantId(tenantId);
-        // R5-D-160：审计人取服务端登录态，与同族 gl_tax_provision/gl_month_close 同一规则；
+        // 审计人取服务端登录态，与同族 gl_tax_provision/gl_month_close 同一规则；
         // 缺这一步时 create_by/update_by 全 NULL，事后无法回答「谁做的抵消」。
         Long uid = userId();
         e.setCreateBy(uid);
@@ -258,7 +261,7 @@ public class GlInterOffsetService {
         e.setAmount(amount);
         e.setOffsetNo("IO" + period + String.format("%03d", seq));
         e.setOffsetStatus("OFFSET");
-        // R5-D-153：不预造 GLIO 号——凭证号只由真实凭证回写（GL_OFFSET 办结时 GlBizAction.handleOffset 回写）
+        // 不预造 GLIO 号——凭证号只由真实凭证回写（GL_OFFSET 办结时 GlBizAction.handleOffset 回写）
         return e;
     }
 

@@ -18,7 +18,7 @@
       <el-col v-if="!isSingle" :span="4">
         <el-card shadow="hover"><el-statistic title="已上线流程定义" :value="defs.length" /></el-card>
       </el-col>
-      <!-- R5-D-036：实例统计改走服务端聚合口；查询中/失败时显示「-」而非 0，避免空数被读成真实读数 -->
+      <!-- 实例统计改走服务端聚合口；查询中/失败时显示「-」而非 0，避免空数被读成真实读数 -->
       <el-col :span="4">
         <el-card shadow="hover">
           <el-statistic v-if="!instStatsNoData" title="实例总数" :value="instStats.total" />
@@ -182,7 +182,7 @@
         <el-form-item label="单据">{{ reassignRow?.bizNo }}</el-form-item>
         <el-form-item label="当前节点">{{ reassignRow?.currentNode }}（{{ reassignRow?.currentAssigneeNames || reassignRow?.currentAssignee || '候选组' }}）</el-form-item>
         <el-form-item label="新处理人" prop="target">
-          <!-- P0 修复（2026-10-21）：默认只加载同公司人员，流程管理员改派也须遵循同公司原则 -->
+          <!-- P0 修复：默认只加载同公司人员，流程管理员改派也须遵循同公司原则 -->
           <UserSelect v-model="reassignForm.target" scope="same-company" placeholder="选择接办人(任意在职真人)" />
         </el-form-item>
         <el-form-item label="改派原因" prop="reason"><el-input v-model="reassignForm.reason" type="textarea" :rows="2" placeholder="必填:如 原审批人离职/换岗/本节点无人可办(将记录)" /></el-form-item>
@@ -209,7 +209,7 @@ import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { goBizPage } from '@/utils/bizEntry'
 import { formatDateTime } from '@/utils/format'
-// ---- MEDIUM 增强:催办 / 改派 ----
+// MEDIUM 增强:催办 / 改派
 import UserSelect from '../../components/common/UserSelect.vue'
 import { messageApi, wfApi, store } from '../../api'
 import { hasPerm } from '@/utils/perm'
@@ -275,7 +275,7 @@ async function doReassign() {
   } catch (e) { ElMessage.error(e.message) } finally { reassignSaving.value = false }
 }
 
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => { try { reload() } catch { /* noop */ } },
 })
@@ -383,7 +383,7 @@ async function reloadInst() {
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
-/** P1-3 一键跳转到实例对应业务处理页（复用 bizEntry 分发器） */
+/** 一键跳转到实例对应业务处理页（复用 bizEntry 分发器） */
 const router = useRouter()
 function goBiz(row) {
   if (!goBizPage(router, row)) {
@@ -391,7 +391,7 @@ function goBiz(row) {
   }
 }
 
-// R5-D-036：顶部四卡读数改取服务端<b>全量</b>聚合，从「当前页」的 insts 切片现算
+// 顶部四卡读数改取服务端<b>全量</b>聚合，不要从「当前页」的 insts 切片现算
 // （整改前翻页/筛选都会让四卡随页大小漂移，实测真值 11 的在途实例恒显 0）
 const instStats = ref({ total: 0, running: 0, completed: 0, rejected: 0 })
 const instStatsPending = ref(true)
@@ -481,7 +481,7 @@ function batchExport() {
 <style scoped>
 /* 一 TAB = 一菜单：从菜单深链进来（tab 命中）时隐藏 tab 导航条，只显示该页 */
 .tabless :deep(.el-tabs__header) { display: none; }
-/* R5-D-036：统计口查询中/失败时的默认处理形态——沿用 el-statistic 的字号与标题样式 */
+/* 统计口查询中/失败时的默认处理形态——沿用 el-statistic 的字号与标题样式 */
 .st-fallback { display: flex; flex-direction: column; }
 .st-fallback .st-title { font-size: 12px; color: var(--el-text-color-secondary); line-height: 1.2; margin-bottom: 4px; }
 .st-fallback .st-dash { font-size: 22px; color: var(--el-text-color-placeholder); line-height: 1; }

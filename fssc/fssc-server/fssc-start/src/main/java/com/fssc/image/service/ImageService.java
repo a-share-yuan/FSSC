@@ -4,6 +4,7 @@
 package com.fssc.image.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -17,6 +18,7 @@ import com.fssc.image.mapper.ImgBatchMapper;
 import com.fssc.image.mapper.ImgFileMapper;
 import com.fssc.system.entity.SysFile;
 import com.fssc.system.service.FileService;
+import com.fssc.system.service.NumberRuleService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,7 +51,7 @@ public class ImageService {
     private final ImgBatchMapper imgBatchMapper;
     private final ImgFileMapper imgFileMapper;
     private final FileService fileService;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
+    private final NumberRuleService numberRuleService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -183,8 +185,8 @@ public class ImageService {
                     .or().like(ImgBatch::getBizNo, keyword));
         }
         w.orderByDesc(ImgBatch::getId);
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<ImgBatch> p =
-                imgBatchMapper.selectPage(com.baomidou.mybatisplus.extension.plugins.pagination.Page.of(pageNum, pageSize), w);
+        Page<ImgBatch> p =
+                imgBatchMapper.selectPage(Page.of(pageNum, pageSize), w);
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
@@ -205,7 +207,7 @@ public class ImageService {
 
     /**
      * 调阅审核状态更新（需求 6.5：审核后回写）。
-     * W2 非人性化整改（2026-10-08）：
+     * W2 非人性化整改：
      * ① 枚举白名单校验——此前任意字符串可直写 review_status，静默产生坏数据；
      * ② 存在性校验——批次不存在时不再"静默成功"；
      * ③ 状态机——OK/REJECTED 只允许从「待审核」判定，已判定批次不可重复判定
@@ -248,7 +250,7 @@ public class ImageService {
     }
 
     /**
-     * P0-5 影像替扫（TC10）：扫描件错误时的替换链路。
+     * 影像替扫（TC10）：扫描件错误时的替换链路。
      * 旧影像页面标记 REPLACED（文件本体保留在文件存储，记录可审计），
      * 新影像上传后以相同批次/页码插入，供审批流后续可见。
      * @return 新影像页 ID；@param toReplaceId 被替换的旧影像页 ID

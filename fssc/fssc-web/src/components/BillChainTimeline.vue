@@ -21,14 +21,14 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-// D-DEC-265：提单节点 detail 原是后端 summary.billStatus 原码直出（非费用域显示 APPROVED）
+// 提单节点 detail 原是后端 summary.billStatus 原码直出（非费用域显示 APPROVED）
 import { statusLabel } from '@/constants/billStatus'
 
 /**
  * 业务链时间线：把后端 BillTraceChainController 已发生的单据链路渲染成可点击时间线。
  *
  * 【单一数据源】各环节的 reached 一律取自后端 chain.summary.reached，前端不再自行拼装；
- * 格子数随单据类型而变（D-DEC-446 甲-2：summary.segmentSupport 标记本域无付款/组批环节的单据不再画该格）。
+ * 格子数随单据类型而变（甲-2：summary.segmentSupport 标记本域无付款/组批环节的单据不再画该格）。
  * 历史缺陷：节点 1/2 靠另一个接口（/expense/bill/detail，被「仅限本人单据」守卫拦截，
  * 非申请人必 4030 → billInfo 为空 → status 缺失），节点 3-6 靠 traceChain；
  * 两条规则一旦前一个断供，就出现「提单灰 / 审批通过灰 / 生成凭证绿」的跳环节错觉，
@@ -58,7 +58,7 @@ const BLOCK_LABEL = { REJECTED: '已驳回', WITHDRAWN: '已撤回', VOID: '已�
 
 /** 各段「存在计数」——用于副标题的分母，不代表已达 */
 const EXIST_KEY = { VOUCHER: 'voucherCount', PAYMENT: 'paymentCount', BATCH: 'batchCount', ARCHIVE: 'archiveCount' }
-/** D-DEC-446 乙：各段「最终状态计数」（凭证 POSTED／付款 PAID／批次已出账／档案 ARCHIVED）——已达判据 */
+/** 乙：各段「最终状态计数」（凭证 POSTED／付款 PAID／批次已出账／档案 ARCHIVED）——已达判据 */
 const TERM_KEY = { VOUCHER: 'postedVoucherCount', PAYMENT: 'paidPaymentCount', BATCH: 'settledBatchCount', ARCHIVE: 'archivedCount' }
 const UNIT = { VOUCHER: '张', PAYMENT: '笔', BATCH: '批', ARCHIVE: '卷' }
 
@@ -75,7 +75,7 @@ function existCount(key) {
   return num(EXIST_KEY[key]) || 0
 }
 
-/** D-DEC-446 甲：付款/组批段对本单据类型不适用时整段不画（后端 segmentSupport，旧包回落 paymentSupported） */
+/** 甲：付款/组批段对本单据类型不适用时整段不画（后端 segmentSupport，旧包回落 paymentSupported） */
 const paySegment = computed(() => {
   const seg = summary.value.segmentSupport
   if (seg && seg.PAYMENT !== undefined) return seg.PAYMENT !== false
@@ -84,11 +84,11 @@ const paySegment = computed(() => {
 })
 
 /**
- * D-DEC-060 前端侧：审批段未达时，说清「主流程真实卡点」与「派单链已办结」是两条并存的事实。
+ * 前端侧：审批段未达时，说清「主流程真实卡点」与「派单链已办结」是两条并存的事实。
  * 改前这里只有一句「待审批」，而后端摘要一度关联的是 id 最大＝最后完成的那枚实例（常是三单匹配派单链），
  * 于是 12-18:74 出现「匹配链批完 → 这单显示已批，主流程还停在扫描岗」。后端已改关联主流程，
  * 本组件把主流程卡点显出来（默认处理档不谎报具体节点），派单链完成数单列。
- * 只加文案：reached / segmentSupport / 最终状态计数（D-DEC-446 甲+乙）规则一律不动。
+ * 只加文案：reached / segmentSupport / 最终状态计数（甲+乙）规则一律不动。
  */
 // 派单/子流程实例的「已办结」＝与后端 BillTraceChainController.INST_APPROVED 同一规则的两枚末态
 const SUB_DONE = ['APPROVED', 'COMPLETED']
@@ -128,7 +128,7 @@ const stages = computed(() => {
     { key: 'VOUCHER', label: '生成凭证', hint: '审批后自动生成' },
     { key: 'PAYMENT', label: '付款', hint: '出纳执行' },
     { key: 'BATCH', label: '组批', hint: '付款组批' },
-    { key: 'ARCHIVE', label: '归档', hint: '最终状态' },
+    { key: 'ARCHIVE', label: '归档', hint: '待归档／归档审批中' },
   ]
 
   return all

@@ -10,9 +10,12 @@ import com.fssc.common.core.Result;
 import com.fssc.common.exception.BizException;
 import com.fssc.common.util.AssertUtil;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.system.entity.SysMessage;
 import com.fssc.system.service.MessageService;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -45,7 +48,7 @@ public class TenantMessageController {
     }
 
     /**
-     * 消息分页（D-DEC-149 通知出口可达性办结）。
+     * 消息分页（通知出口可达性办结）。
      *
      * <p>原规则：无论查谁都要求 {@code system:message:list}。收件人读<b>自己的</b>站内信是个人视角，
      * 与 {@code /wf/query/cc/mine} 同型——该码在授权表里并非人人有（现网 COMMON_EMP 持，
@@ -58,7 +61,7 @@ public class TenantMessageController {
                                                @RequestParam(required = false) Long receiverId,
                                                @RequestParam(required = false) String msgType,
                                                @RequestParam(required = false) Integer isRead) {
-        com.fssc.framework.security.LoginUser me = com.fssc.framework.security.UserContext.getRequired();
+        LoginUser me = UserContext.getRequired();
         boolean self = receiverId != null && receiverId.equals(me.getUserId());
         if (!self) {
             assertPerm(me, "system:message:list");
@@ -70,7 +73,7 @@ public class TenantMessageController {
     /** 未读数：本人视角免权限码（铃铛徽标），查他人仍需 {@code system:message:list}。规则同 {@link #page} */
     @GetMapping("/unreadCount")
     public Result<Long> unreadCount(@RequestParam Long receiverId) {
-        com.fssc.framework.security.LoginUser me = com.fssc.framework.security.UserContext.getRequired();
+        LoginUser me = UserContext.getRequired();
         if (!receiverId.equals(me.getUserId())) {
             assertPerm(me, "system:message:list");
         }
@@ -78,10 +81,10 @@ public class TenantMessageController {
     }
 
     /**
-     * 标记已读（D-DEC-149/187 已读回写链路）。
+     * 标记已读（/187 已读回写链路）。
      *
      * <p>原规则只认 {@code system:message:update}，而 FIND_IN_SET 反查授权表＝该码<b>仅 IT_ADMIN 一岗</b>
-     * （sys_menu id=3319）。业务岗位读不到也清不掉 ⇒ 抄送/待办提醒发出后永久停在未读态，
+     * sys_menu id=3319。业务岗位读不到也清不掉 ⇒ 抄送/待办提醒发出后永久停在未读态，
      * 徽标按整页计数越积越多，"有出口"退化成"一屏过期噪声"（前端 {@code catch{}} 还会把 403 吞掉，
      * 用户连失败都看不见）。现改为：<b>收件人本人免权限码</b>，代他人标记仍需该码。
      * 归属校验必须留着——{@code sys_message.id} 是自增主键、可枚举。
@@ -89,7 +92,7 @@ public class TenantMessageController {
     @OperLog(module = "SYSTEM_MESSAGE", operType = "UPDATE", desc = "消息已读")
     @PostMapping("/{id}/read")
     public Result<Void> markRead(@PathVariable Long id) {
-        com.fssc.framework.security.LoginUser me = com.fssc.framework.security.UserContext.getRequired();
+        LoginUser me = UserContext.getRequired();
         SysMessage msg = messageService.find(id);
         if (msg == null) {
             throw new BizException(ErrorCode.NOT_FOUND, "消息不存在: " + id);
@@ -105,7 +108,7 @@ public class TenantMessageController {
     @OperLog(module = "SYSTEM_MESSAGE", operType = "UPDATE", desc = "全部已读")
     @PostMapping("/readAll")
     public Result<Void> markAllRead(@RequestParam Long receiverId) {
-        com.fssc.framework.security.LoginUser me = com.fssc.framework.security.UserContext.getRequired();
+        LoginUser me = UserContext.getRequired();
         if (!receiverId.equals(me.getUserId())) {
             assertPerm(me, "system:message:update");
         }
@@ -122,13 +125,13 @@ public class TenantMessageController {
     }
 
     /**
-     * 编程式权限判定（D-DEC-149/187）：这些端点按「本人视角免码、涉他人视角要码」分叉，
+     * 编程式权限判定（/187）：这些端点按「本人视角免码、涉他人视角要码」分叉，
      * 注解 {@code @RequiresPerm} 是方法级一刀切、表达不了这个条件，故就地复刻切面的语义——
      * 通配 {@code *:*:*}（平台超管/租户管理员）视同持有，与 {@code PermissionAspect} 逐字一致，
      * 免得改了反而把管理员挡在外面。
      */
-    private void assertPerm(com.fssc.framework.security.LoginUser me, String code) {
-        java.util.Set<String> perms = me == null ? null : me.getPerms();
+    private void assertPerm(LoginUser me, String code) {
+        Set<String> perms = me == null ? null : me.getPerms();
         if (perms != null && (perms.contains("*:*:*") || perms.contains(code))) {
             return;
         }

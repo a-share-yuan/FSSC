@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 
 /**
  * 关键变更审计流水（audit_trail，只追加，无 del_flag，禁止物理删除）。
- * P0-3 审计记录：凭证修改/付款账户变更/审批意见/预算调整/校验和失败等关键变更 before/after 记录。
+ * 审计记录：凭证修改/付款账户变更/审批意见/预算调整/校验和失败等关键变更 before/after 记录。
  */
 @TableName("audit_trail")
 public class AuditTrail implements Serializable {

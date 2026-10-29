@@ -25,8 +25,8 @@
               <el-select v-model="form.bill.currencyCode" style="width: 120px">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 
-                
-                
+
+
               </el-select>
             </el-form-item>
 <el-form-item v-if="currentType.pay" :label="$t('expense.create.colReceivingParty')">
@@ -38,9 +38,9 @@
               <el-select v-model="form.bill.payTarget" style="width: 100%" :placeholder="$t('expense.common.phPickPayeeType')">
 <el-option v-for="o in payeeTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
 
-                
-                
-                
+
+
+
               </el-select>
             </el-form-item>
             <el-form-item v-if="currentType.pay" :label="$t('expense.common.colPayeeAccount')" prop="payeeAccountNo">
@@ -274,7 +274,7 @@
       </el-col>
     </el-row>
 
-    <!-- 借款单选择（D-UI-02：勾选+可改金额+【确定】） -->
+    <!-- 借款单选择（勾选+可改金额+【确定】） -->
     <CandidatePickerDialog v-model="loanDialog" :title="$t('expense.create.dlgPickLoanOffset')"
                           :rows="loanCandidates" :loading="loading" max-field="availableBalance"
                           extra-prop="title" :extra-label="$t('expense.common.colTitle')"
@@ -284,7 +284,7 @@
                           input-label="冲抵金额" :picked-ids="loanOffsetIds"
                           @confirm="confirmLoanPicks" />
 
-    <!-- 事前申请选择（D-UI-03：关联金额可改，支持部分关联） -->
+    <!-- 事前申请选择（关联金额可改，支持部分关联） -->
     <CandidatePickerDialog v-model="applyDialog" :title="$t('expense.create.dlgPickRequisition')"
                           :rows="applyCandidates" :loading="loading" max-field="totalAmount"
                           :show-max-column="false"
@@ -329,7 +329,7 @@ const { autofill, saveFormHistory } = useAutoFill()
 const formRef = ref(null)
 const guard = useSubmitGuard(formRef)
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -340,7 +340,7 @@ function openTrace(row) {
 const emit = defineEmits(['saved', 'submitted'])
 const attachViewer = inject('attachViewer')
 
-// D-DEC-361：预填日期与后端写入数据库时区对齐——toISOString() 是 UTC 串，东八区恒差 −8h、跨零点错成昨天，
+// 预填日期与后端写入数据库时区对齐——toISOString() 是 UTC 串，东八区恒差 −8h、跨零点错成昨天，
 // 故按本地时钟取 YYYY-MM-DD（与 composables/useBill.js today() 同一规则，不引日期库）。
 function todayLocal() {
   const d = new Date()
@@ -390,7 +390,7 @@ function newLine() {
   return { itemId: null, itemName: '', expenseDate: todayLocal(), amount: 0, taxRate: 0, taxAmount: 0, netAmount: 0, budgetItemId: null, stdAmount: null, overStd: 0, overReason: '', remark: '', invoice: null }
 }
 function newTravel() {
-  // 同 useBill.js：出差人员默认本人，空值＋全员名单首位是平台管理员
+  // 同 useBill.js：出差人员默认本人，不要空值＋全员名单首位是平台管理员
   return { travelerName: store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || '', fromCityId: null, toCityId: null, beginDate: '', endDate: '', days: 0, trafficType: 'RAIL', trafficClass: '', hotelAmount: 0, trafficAmount: 0, allowanceAmount: 0, otherAmount: 0, totalAmount: 0, overStd: 0, remark: '' }
 }
 function fmt(v) { return formatMoney(v, '0.00') }
@@ -414,7 +414,7 @@ function onItemChange(row, id) {
 }
 // FINAL-01: 费用类型→预算科目映射缓存(itemId→budgetItemId)
 const budgetMap = ref({})
-// ---------- 发票清单（上传解析 + 手动录入）→ 生成费用明细行 ----------
+// 发票清单（上传解析 + 手动录入）→ 生成费用明细行
 let invoiceSeq = 0
 function newInvoice() {
   return { uid: ++invoiceSeq, checked: false, lineRef: null, fileId: null, invoiceNo: '', invoiceDate: '', amount: 0, netAmount: 0, taxAmount: 0, taxRate: 0, sellerName: '', sellerTaxNo: '', invoiceType: '', primaryItemName: '', parsed: false, sourceName: '' }
@@ -500,11 +500,11 @@ const budgetPreview = computed(() => {
     const occupy = Number(b0.occupyAmount || 0)
     const used = Number(b0.usedAmount || 0)
     const avail = total + adjust - occupy - used
-    // D-P2-02：科目取不到（跨主体/未下达）时按未知处理，不能拿 avail=0 误判成"超预算"，也不能显示空白
+    // 科目取不到（跨主体/未下达）时按未知处理，不能拿 avail=0 误判成"超预算"，也不能显示空白
     return {
       label: loaded ? budgetLabel(items.value, [], [], b0) : budgetUnseenLabel(bid),
       used: map[bid], available: loaded ? avail : null, over: loaded && map[bid] > avail, unknown: !loaded,
-      // D-DEC-372：控制方式随 pick 行带出，预览提示按档位改口（缺失按 HARD fail-closed，与服务端同一规则）
+      // 控制方式随 pick 行带出，预览提示按档位改口（缺失按 HARD fail-closed，与服务端同一规则）
       control: b0.controlType || 'HARD',
     }
   })
@@ -524,7 +524,7 @@ async function loadMd() {
     } catch (e) { budgetMap.value = {} }
     cities.value = (await mdApi.cities({ pageNum: 1, pageSize: 2000 })).list || []
     payees.value = (await mdApi.payees({ pageNum: 1, pageSize: 200 })).list || []
-    // P2-3 出差人受控选择 + P0 修复（2026-10-21）：加载同公司用户列表供出行人下拉
+    // 出差人受控选择 + P0 修复：加载同公司用户列表供出行人下拉
     users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -561,9 +561,9 @@ function onAttachUploaded(rec) {
     if (inc.netAmount > 0 && inc.amount > 0) inc.taxRate = Math.round(((inc.amount - inc.netAmount) / inc.netAmount) * 10000) / 100
     inc.sourceName = rec.fileName
     form.invoices = [...form.invoices, inc]
-    // D-DEC-009：解析失败此前也弹绿条"已识别发票"，提单人会以为票面已入单、直接提交一张没有票面的报销单
-    // D-DEC-461（10-05）：只看 ok 还不够——"识别成功"和"票进了发票池"是两件事，
-    // 分档一律走 invoiceOutcome（判据在后端 invoice.inPool，此处不重算金额自洽）
+    // 解析失败此前也弹绿条"已识别发票"，提单人会以为票面已入单、直接提交一张没有票面的报销单
+    // 只看 ok 还不够——"识别成功"和"票进了发票池"是两件事，
+    // 分档一律走 invoiceOutcome（判据在后端 invoice.inPool，不要此处不重算金额自洽）
     const out = invoiceOutcome(rec.invoice, { fileName: rec.fileName || '', end: 'pc' })
     ElMessage({ type: out.tone, duration: 6000, message: out.message })
   } else {
@@ -591,7 +591,7 @@ async function saveDraft() {
     })
     form.bill.id = id
     if (currentType.value.travel && form.travels.length) await detailApi.saveTravels(id, form.travels)
-    // D-V4R-42：无 exp:share:update 就不发这一跳（员工角色不在授权名册内 ⇒ 原先每次保存都红一发 4030、
+    // 无 exp:share:update 就不发这一跳（员工角色不在授权名册内 ⇒ 原先每次保存都红一发 4030、
     // 分摊行零写入数据库）。承担规则权威值在 exp_bill_line 各列上，分摊行至今无消费方（同 useBill.js 那条）。
     if (form.shares.length && hasPerm('exp:share:update')) await detailApi.replaceShares(id, form.shares)
     for (const o of form.loanOffsets) await detailApi.addLoanOffset(id, { ...o, billId: id })
@@ -608,13 +608,13 @@ async function submit() {
     // 表头必填由 formRules + guard 统一办结；明细/差旅的逐行规则在表格内，el-form 覆盖不到，仍在此校验
     await guard.submit(async () => {
       if (!form.lines.filter((l) => l.itemId || Number(l.amount || 0) > 0).length) { ElMessage.warning(t('expense.create.errNeedExpenseLine')); return }
-      // P1-1 提交前逐行校验：金额必须大于 0
+      // 提交前逐行校验：金额必须大于 0
       const badAmt = form.lines.find((l) => Number(l.amount || 0) <= 0)
       if (badAmt) { ElMessage.warning(t('expense.create.errAmountMissing')); return }
-      // P1-1 差旅明细日期范围校验：止日不得早于起日
+      // 差旅明细日期范围校验：止日不得早于起日
       const badTravel = form.travels.find((t) => t.beginDate && t.endDate && t.endDate < t.beginDate)
       if (badTravel) { ElMessage.warning(t('expense.create.errTravelDateOrder')); return }
-      // P1-1 差旅明细交通/住宿金额不得为负
+      // 差旅明细交通/住宿金额不得为负
       if (form.travels.some((t) => Number(t.hotelAmount) < 0 || Number(t.trafficAmount) < 0 || Number(t.allowanceAmount) < 0 || Number(t.otherAmount) < 0)) { ElMessage.warning(t('expense.create.errTravelNegative')); return }
       const id = await saveDraft()
       await billApi.submit(id)
@@ -636,8 +636,8 @@ function resetForm() {
 
 async function openLoanDialog() {
   try {
-    // D-UI-03：改用候选面接口——availableBalance 已扣在途占用，与服务端放行校验同源
-    //  同 LoanApply.vue / useBill.js：新建单时 companyId 为空会序列化成字符串 "null"
+    // 改用候选面接口——availableBalance 已扣在途占用，与服务端放行校验同源
+    // 同 LoanApply.vue / useBill.js：新建单时 companyId 为空会序列化成字符串 "null"
     //   导致后端 400、await 抛错把下面的 loanDialog=true 一起吞掉（按钮点了没反应）。
     const lp = { limit: 50 }
     const cid = form.bill.companyId
@@ -647,7 +647,7 @@ async function openLoanDialog() {
   } catch (e) { ElMessage.error(e.message) }
 }
 /**
- * D-UI-02（2026-10-19）：【确定】后按对话框里改过的金额入账（默认=未还余额，可改，支持部分冲抵）。
+ * 【确定】后按对话框里改过的金额入账（默认=未还余额，可改，支持部分冲抵）。
  * 改前点任意行立刻按未还余额全额冲抵并关窗——误点即产生财务动作、无确认、键盘不可达。
  */
 function confirmLoanPicks(items) {
@@ -666,7 +666,7 @@ function confirmLoanPicks(items) {
   if (added) ElMessage.success(t('expense.create.msgLoanOffsetAdded', { v: added }))
 }
 
-/** D-UI-03（2026-10-19）：申请关联金额改为可改（此前硬取申请全额且入表后不可编辑） */
+/** 申请关联金额改为可改（此前硬取申请全额且入表后不可编辑） */
 function confirmApplyPicks(items) {
   let added = 0
   for (const { row, amount } of items || []) {
@@ -686,8 +686,8 @@ async function openApplyDialog() {
     applyDialog.value = true
   } catch (e) { ElMessage.error(e.message) }
 }
-// D-UI-03：旧的「点行即按申请全额关联并关窗」pickApply 已整体删除，由 confirmApplyPicks
-// （勾选 + 可改金额 + 【确定】）取代；模板中无残留引用（grep pickApply 在本文件为 0）。
+// 旧的「点行即按申请全额关联并关窗」pickApply 已整体删除，由 confirmApplyPicks
+// 勾选 + 可改金额 + 【确定】 取代；模板中无残留引用（grep pickApply 在本文件为 0）。
 
 function handleSelectionChange(val) { selRows.value = val }
 

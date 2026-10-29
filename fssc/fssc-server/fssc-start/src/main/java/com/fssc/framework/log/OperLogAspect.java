@@ -4,9 +4,11 @@
 package com.fssc.framework.log;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fssc.common.exception.BizException;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.framework.trace.TraceIdFilter;
 import com.fssc.platform.entity.PfOperLog;
 import com.fssc.system.entity.SysDept;
 import com.fssc.system.entity.SysOperLog;
@@ -19,6 +21,8 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.slf4j.MDC;
+import org.springframework.core.NestedRuntimeException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -36,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 本切面在请求线程内同步采集上下文并组装实体，仅把 INSERT 动作交给 {@link OperLogWriter}
  * 异步写入数据库（专用线程池），避免高并发下写库阻塞业务线程；日志失败仍不影响业务结果。
  * <p>
- * 【D-DEC-178】{@code sys_oper_log.oper_dept_name} 此前"列在、实体字段在、全仓零赋值"
+ * 【】{@code sys_oper_log.oper_dept_name} 此前"列在、实体字段在、全仓零赋值"
  * ⇒ 现网 604/604 行全 NULL，日志页/审计面的"办理人部门"无从追溯。
  * {@link LoginUser} 只带 deptId（部门名不入 Token，免得改名后长期签发旧名），
  * 故在<b>请求线程内</b>按 deptId 反查 sys_dept（该表受租户过滤，异步写入线程没有租户上下文，
@@ -51,7 +55,7 @@ public class OperLogAspect {
 
     private final OperLogWriter operLogWriter;
     private final ObjectMapper objectMapper;
-    /** D-DEC-178：按 deptId 反查部门名（sys_dept 主键查询，租户条件由拦截器注入） */
+    /** 按 deptId 反查部门名（sys_dept 主键查询，租户条件由拦截器注入） */
     private final SysDeptMapper sysDeptMapper;
 
     /** 部门名缓存 TTL（毫秒）＝改名后最长可见滞后 */
@@ -111,7 +115,7 @@ public class OperLogAspect {
         } else if (u != null && u.isTenant() && TenantContext.hasContext() && !TenantContext.isIgnoreTenant()) {
             SysOperLog l = new SysOperLog();
             l.setTenantId(TenantContext.getTenantId());
-            l.setTraceId(org.slf4j.MDC.get(com.fssc.framework.trace.TraceIdFilter.MDC_KEY));
+            l.setTraceId(MDC.get(TraceIdFilter.MDC_KEY));
             l.setTitle(operLog.module());
             l.setBusinessType(operLog.operType());
             l.setMethod(truncate(((MethodSignature) pjp.getSignature()).getMethod().toString(), 500)); // SOX-04: 全签名超长致 sys_oper_log 写入失败
@@ -131,10 +135,10 @@ public class OperLogAspect {
         }
     }
 
-    // ---------- 工具 ----------
+    // 工具
 
     /**
-     * R5-D-111：审计记录的 error_msg 只落「异常类型＋业务可读摘要」，长度压到 200 以内。
+     * 审计记录的 error_msg 只落「异常类型＋业务可读摘要」，长度压到 200 以内。
      *
      * <p>改前实测：一次开票失败把 MyBatis 包装件的整段文本（含 {@code ### SQL:} 原文与
      * {@code for key '表名.PRIMARY'}）落进了 sys_oper_log.error_msg，日志页把库面结构整片摊给
@@ -145,12 +149,12 @@ public class OperLogAspect {
      * 技术异常只留最内层异常的类型名＋一句业务含义，SQL 原文/索引名/表名/mapper 路径一概不落。</p>
      */
     private String readableError(Throwable error) {
-        if (error instanceof com.fssc.common.exception.BizException) {
+        if (error instanceof BizException) {
             String m = error.getMessage();
             return truncate(m == null || m.isBlank() ? "业务校验未通过" : m, 200);
         }
         Throwable root = error;
-        if (error instanceof org.springframework.core.NestedRuntimeException nre) {
+        if (error instanceof NestedRuntimeException nre) {
             root = nre.getMostSpecificCause();
         }
         String type = root.getClass().getSimpleName();
@@ -167,7 +171,7 @@ public class OperLogAspect {
             "DataAccessResourceFailureException", "数据源暂不可用");
 
     /**
-     * 按 deptId 取部门名（D-DEC-178）。
+     * 按 deptId 取部门名。
      *
      * <p><b>调用位置约束</b>：只能在请求线程（本切面组装实体处）调用——sys_dept 是租户过滤表，
      * 需要 {@link TenantContext}；异步写入线程里没有它，查了会抛 TENANT_CONTEXT_MISSING。</p>

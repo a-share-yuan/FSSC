@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.audit.entity.AuditTrail;
 import com.fssc.audit.mapper.AuditTrailMapper;
 import com.fssc.common.core.PageResult;
+import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.system.entity.SysUser;
@@ -24,13 +25,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 审计记录服务（P0-3）。
+ * 审计记录服务。
  * 记录关键业务变更 before/after，只追加不更新；提供分页查询与按单据导出。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@com.fssc.framework.datasource.FsscDataSource("master")
+@FsscDataSource("master")
 public class AuditTrailService {
 
     private final AuditTrailMapper trailMapper;
@@ -81,7 +82,7 @@ public class AuditTrailService {
 
     /**
      * 便捷：变更类审计（入参为对象，由本服务内部序列化）。
-     * <p>P4-3 扩面：调用点无需各自注入 ObjectMapper，统一复用容器里的带 JavaTimeModule 的 mapper
+     * <p>扩面：调用点无需各自注入 ObjectMapper，统一复用容器里的带 JavaTimeModule 的 mapper
      * （裸 new 遇 LocalDateTime 会抛，此前已踩过）；序列化失败降级为 null，由 {@link #record} 统一告警，不阻断业务。
      * <p>典型用法：纯状态跃迁传 {@code Collections.singletonMap("status", 旧值)}；
      * 同时改了多个字段的点传一个只含本次实际变化字段的 Map。

@@ -7,7 +7,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.audit.entity.AuditReconcile;
 import com.fssc.audit.mapper.AuditReconcileMapper;
+import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
+import com.fssc.common.exception.BizException;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.entity.ExpBillPayment;
 import com.fssc.expense.mapper.ExpBillMapper;
@@ -20,6 +22,8 @@ import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
 import com.fssc.sharing.mapper.OpVoucherLineMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
+import com.fssc.sharing.service.VoucherService;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -31,7 +35,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 长链路一致性对账（P0-1）。
+ * 长链路一致性对账。
  * 恒等式：单据总额 = 凭证借贷合计 = 已付金额 + 未付金额；最终状态单据应有凭证/付款记录。
  * 定时每日 02:00 + 手动触发；不一致落 audit_reconcile，支持人工闭环。
  */
@@ -80,16 +84,16 @@ public class ReconcileService {
         return count.get();
     }
 
-    // ---------------- 三条核对规则 ----------------
+    // 三条核对规则
 
     /** ① 凭证核对：单据关联凭证借贷合计 == 单据总额 */
     private void checkVoucher(ExpBill bill, AtomicInteger count) {
         if (bill.getTotalAmount() == null) return;
-        // R5-D-041：仅取本费用族来源的活凭证——裸 bill_id 会撞上跨域同 id 单据的凭证（幻影差异行）；
+        // 仅取本费用族来源的活凭证——裸 bill_id 会撞上跨域同 id 单据的凭证（幻影差异行）；
         // 剔 VOID 取活凭证规则（写侧已「作废即级联」办结，历史历史差异照常落台账交人工）
         List<OpVoucher> vouchers = voucherMapper.selectList(new LambdaQueryWrapper<OpVoucher>()
                 .eq(OpVoucher::getBillId, bill.getId())
-                .in(OpVoucher::getSourceType, com.fssc.sharing.service.VoucherService.EXPENSE_BILL_SOURCES)
+                .in(OpVoucher::getSourceType, VoucherService.EXPENSE_BILL_SOURCES)
                 .ne(OpVoucher::getStatus, "VOID"));
         if (vouchers.isEmpty()) return; // 无凭证不算异常（未到凭证环节）
         BigDecimal debit = BigDecimal.ZERO;
@@ -126,11 +130,11 @@ public class ReconcileService {
     private void checkStatus(ExpBill bill, AtomicInteger count) {
         String st = bill.getStatus();
         if (!"APPROVED".equals(st) && !"PAID".equals(st)) return;
-        // R5-D-041：凭证计数仅取本费用族来源——裸 bill_id 会被跨域同 id 凭证虚增计数，
+        // 凭证计数仅取本费用族来源——裸 bill_id 会被跨域同 id 凭证虚增计数，
         // 掩盖「最终状态单据实际无凭证」的真实异常（不加状态过滤：VOID 也是走过凭证环节的记录）
         long voucherCnt = voucherMapper.selectCount(new LambdaQueryWrapper<OpVoucher>()
                 .eq(OpVoucher::getBillId, bill.getId())
-                .in(OpVoucher::getSourceType, com.fssc.sharing.service.VoucherService.EXPENSE_BILL_SOURCES));
+                .in(OpVoucher::getSourceType, VoucherService.EXPENSE_BILL_SOURCES));
         long payCnt = paymentMapper.selectCount(new LambdaQueryWrapper<ExpBillPayment>()
                 .eq(ExpBillPayment::getBillId, bill.getId()));
         if (voucherCnt == 0 && payCnt == 0) {
@@ -140,7 +144,7 @@ public class ReconcileService {
         }
     }
 
-    // ---------------- 异常写入数据库（同项 OPEN 更新，否则插入） ----------------
+    // 异常写入数据库（同项 OPEN 更新，否则插入）
 
     private void upsert(ExpBill bill, String item, String expect, String actual, String diff, AtomicInteger count) {
         try {
@@ -174,7 +178,7 @@ public class ReconcileService {
         }
     }
 
-    // ---------------- 查询 / 人工处理 ----------------
+    // 查询 / 人工处理
 
     public PageResult<AuditReconcile> page(long pageNum, long pageSize, String billType, String status) {
         LambdaQueryWrapper<AuditReconcile> qw = new LambdaQueryWrapper<>();
@@ -193,13 +197,13 @@ public class ReconcileService {
     public void resolve(Long id, String remark) {
         AuditReconcile r = reconcileMapper.selectById(id);
         if (r == null) {
-            throw new com.fssc.common.exception.BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "对账记录不存在: " + id);
+            throw new BizException(ErrorCode.PARAM_INVALID, "对账记录不存在: " + id);
         }
         AuditReconcile upd = new AuditReconcile();
         upd.setId(id);
         upd.setStatus("RESOLVED");
         upd.setResolveRemark(remark);
-        upd.setResolveTime(java.time.LocalDateTime.now());
+        upd.setResolveTime(LocalDateTime.now());
         try {
             upd.setResolveBy(UserContext.getRequired().getUserId());
         } catch (Exception ignored) {

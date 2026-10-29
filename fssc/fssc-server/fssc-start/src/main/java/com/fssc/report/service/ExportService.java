@@ -14,6 +14,7 @@ import com.fssc.framework.security.DataScopeHolder;
 import com.fssc.framework.security.DataScopeKit;
 import com.fssc.framework.security.annotation.DataScope;
 import com.fssc.report.mapper.ReportMapper;
+import java.util.Collection;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -38,7 +39,7 @@ public class ExportService {
     private final ExpBillMapper expBillMapper;
     private final BgItemMapper bgItemMapper;
     private final ReportMapper reportMapper;
-    /** 组织合法性守卫（V1.3.20 安全审计①）：导出规则公司隔离 */
+    /** 组织合法性守卫（安全审计①）：导出规则公司隔离 */
     private final OrgGuard orgGuard;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -172,7 +173,7 @@ public class ExportService {
         return new ScopeArgs(s.getDeptAndChild(), null);
     }
 
-    private record ScopeArgs(java.util.Collection<Long> deptIds, Long userId) {
+    private record ScopeArgs(Collection<Long> deptIds, Long userId) {
     }
 
     private byte[] toBytes(XSSFWorkbook wb) throws IOException {

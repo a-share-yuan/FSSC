@@ -37,7 +37,7 @@ public class LinkuSyncLog implements Serializable {
     private String requestBody;
 
     /**
-     * 唯一键（D-V5R-03 修复）：与 event_type 合成生成列 active_idem_key
+     * 唯一键（修复）：与 event_type 合成生成列 active_idem_key
      * （{@code event_type:ifnull(idempotency_key,'')}），唯一索引 uk_linku_sync_log_idem 建在它上面。
      *
      * <p>修复前本字段在实体里缺位 ⇒ 回调写入时恒为 NULL ⇒ 生成列退化为

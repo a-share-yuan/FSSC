@@ -5,6 +5,7 @@ package com.fssc.ai.skill;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fssc.ai.AiGatewayService;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -13,10 +14,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 技能注册表条目（方案 §5.2 / P0-1）。
+ * 技能注册表条目（方案 §5.2 /）。
  *
  * <p>技能是"业务语言"与"目录动作"之间的一层策展：一个技能可绑定一个或多个 backing 动作码，
- * 但执行仍走 {@link com.fssc.ai.AiGatewayService} 的同一套红线/权限/票据校验——技能只改"怎么理解"，
+ * 但执行仍走 {@link AiGatewayService} 的同一套红线/权限/票据校验——技能只改"怎么理解"，
  * 不改"能不能做"。
  */
 @Data

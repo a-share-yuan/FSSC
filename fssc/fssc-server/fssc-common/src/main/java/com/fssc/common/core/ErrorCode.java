@@ -5,13 +5,13 @@ package com.fssc.common.core;
 
 /**
  * 平台统一错误码。约定：
- * 0    = 成功
- * 4xx  = 客户端/权限类（400 参数、401 未登录、403 无权限、404 端点不存在、405 动词不支持）
+ * 0 = 成功
+ * 4xx = 客户端/权限类（400 参数、401 未登录、403 无权限、404 端点不存在、405 动词不支持）
  * 4010 = 租户上下文缺失（多租户铁律触发，fail-closed）
  * 401x = 认证链细分（4011 需携带图形验证码、4012 图形验证码无效；均仍属客户端可自解的 401 族）
  * 403x = 权限/功能开关/两级路由类
  * 4090 = 唯一键冲突（数据已存在，客户端可自解，非服务端故障）
- * 5xx  = 服务端异常
+ * 5xx = 服务端异常
  * 5001 = 工作流引擎异常（流程定义缺失/损坏，管理员介入，重试无效）
  */
 public enum ErrorCode {
@@ -32,7 +32,7 @@ public enum ErrorCode {
     DATA_SCOPE_EMPTY(4034, "数据权限范围未配置"),
 
     /**
-     * R5-D-110：唯一键冲突（DuplicateKeyException）专用码。此前落默认处理 500「系统异常」，
+     * 唯一键冲突（DuplicateKeyException）专用码。此前落默认处理 500「系统异常」，
      * 调用方无法区分"我重复提交了"与"服务端坏了"，会自动重试；对外文案只说业务含义，
      * 不回显 SQL 语句、索引名或 mapper 路径（详细原因由 log.warn 落服务端日志）。
      */
@@ -48,7 +48,7 @@ public enum ErrorCode {
     CAPTCHA_INVALID(4012, "图形验证码错误或已失效，请重新输入"),
 
     /**
-     * D-V4R-89：工作流引擎运行异常（FlowableException）专用码。
+     * 工作流引擎运行异常（FlowableException）专用码。
      * 此前落默认处理 500「系统异常，请稍后重试」，操作人无法区分"我填错了"与"系统坏了"，
      * 于是反复重试同一笔。实测最典型的一次是清库误删 {@code act_ge_bytearray}（BPMN 资源字节流），
      * 引擎起流程时读不到流程定义 → {@code deployment 'X' didn't put process definition 'Y' in the cache}，

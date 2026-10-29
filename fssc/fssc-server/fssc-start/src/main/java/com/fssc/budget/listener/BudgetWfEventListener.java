@@ -4,11 +4,14 @@
 package com.fssc.budget.listener;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.budget.entity.BgScheme;
 import com.fssc.budget.mapper.BgSchemeMapper;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -30,8 +33,8 @@ import java.util.Set;
 public class BudgetWfEventListener implements WfBizAction {
 
     private final BgSchemeMapper bgSchemeMapper;
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     @Override
     public Set<String> bizTypes() {
@@ -51,13 +54,13 @@ public class BudgetWfEventListener implements WfBizAction {
         }
         BgScheme upd = new BgScheme();
         upd.setId(scheme.getId());
-        // P4-3 审计扩面：改状态前采集旧值
+        // 审计扩面：改状态前采集旧值
         String oldStatus = scheme.getStatus();
         upd.setStatus(Boolean.TRUE.equals(event.getApproved()) ? "APPROVED" : "DRAFT");
         bgSchemeMapper.updateById(upd);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", oldStatus);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", upd.getStatus());
         auditTrailService.recordUpdate(event.getBizType(), scheme.getId(), scheme.getSchemeCode(), "bg_scheme",
                 String.valueOf(scheme.getId()), auditBefore, auditAfter,

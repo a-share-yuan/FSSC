@@ -43,7 +43,7 @@ public class TrTransfer implements Serializable {
     private String purpose;
     /** DRAFT草稿/APPROVED已审批/PAID已执行 */
     private String status;
-    /** 登记人（D-DEC-298/420 补列；此前本表无提交人列 ⇒ deny_self 与自审回避只能回落实例发起人） */
+    /** 登记人（/420 补列；此前本表无提交人列 ⇒ deny_self 与自审回避只能回落实例发起人） */
     @TableField(fill = FieldFill.INSERT)
     private Long createBy;
 
@@ -56,7 +56,7 @@ public class TrTransfer implements Serializable {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 
-    // ---- D-DEC-439 乙：审批/动账/登账三件事的明示位（均为非表列，只出参、不进 SQL、不改状态机） ----
+    // 乙：审批/动账/登账三件事的明示位（均为非表列，只出参、不进 SQL、不改状态机）
 
     /** 审批是否已完成（APPROVED 或已执行的 PAID） */
     @TableField(exist = false)
@@ -90,7 +90,7 @@ public class TrTransfer implements Serializable {
     private String nextActionText;
 
     /**
-     * D-H4-02：执行人真名（非表列）——由 {@code update_by} 批查 sys_user 解析，
+     * 执行人真名（非表列）——由 {@code update_by} 批查 sys_user 解析，
      * 与执行时间 {@code update_time} 配对，供列表页外显"执行"两列。
      * <p>执行记录此前只能去 {@code sys_oper_log} 里翻（H4 真跑实测），而 execute() 是
      * {@code tr_transfer} 唯一的 PAID 写环节 ⇒ status=PAID 时 update_by/update_time 就是执行人/执行时刻。
