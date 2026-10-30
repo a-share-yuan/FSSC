@@ -42,7 +42,7 @@
     </el-table>
     <TablePager :pager="pager" @change="load" />
 
-    <el-dialog v-model="recVis" :title="$t('pay.contract.titleRecords', { v1: current?.contractName || '' })" width="640px" destroy-on-close>
+    <el-dialog v-model="recVis" :title="$t('pay.contract.titleRecords', { v1: current?.contractName || '' })" width="700px" destroy-on-close>
       <el-table :data="records" size="small" border max-height="360" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
         <el-table-column type="selection" width="45" />
         <el-table-column prop="bizNo" :label="$t('pay.contract.colBizNo')" width="150"  sortable />

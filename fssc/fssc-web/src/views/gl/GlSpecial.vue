@@ -430,7 +430,7 @@
       </template>
     </el-dialog>
     <!-- 落账挂接核查（只读）——审批流 / 凭证 / 总账分录 / 缴款流逐条对照，未落账条数与金额如实报出 -->
-    <el-dialog v-model="lcVisible" :title="$t('gl.special.provisionCheckTitle')" width="920px" destroy-on-close>
+    <el-dialog v-model="lcVisible" :title="$t('gl.special.provisionCheckTitle')" width="1060px" destroy-on-close>
       <el-alert :type="lcSummary.missingEntryCount || lcSummary.missingVoucherCount || lcSummary.missingFlowCount ? 'warning' : 'success'"
         :closable="false" show-icon style="margin-bottom: 10px"
         :title="t('gl.special.lcTitle', {

@@ -13,6 +13,7 @@ import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.masterdata.entity.MdSubject;
 import com.fssc.masterdata.mapper.MdSubjectMapper;
+import com.fssc.masterdata.service.PostableSubjectResolver;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
 import com.fssc.sharing.mapper.OpVoucherLineMapper;
@@ -50,6 +51,7 @@ public class ArFlowVoucherService {
     private final OpVoucherMapper opVoucherMapper;
     private final OpVoucherLineMapper opVoucherLineMapper;
     private final MdSubjectMapper mdSubjectMapper;
+    private final PostableSubjectResolver postableSubjectResolver;
     private final NumberRuleService numberRuleService;
     /**
      * 月结链自锁：月结过总账凭证「制单即审」复用共享凭证正规过账通道
@@ -361,27 +363,20 @@ public class ArFlowVoucherService {
 
     private OpVoucherLine line(Long tenantId, Long vId, int no, String summary,
                                Long subjectId, String code, String partnerName, String dir, BigDecimal amount) {
+        MdSubject postable = subjectId == null ? null : postableSubjectResolver.resolve(mdSubjectMapper.selectById(subjectId), code);
         OpVoucherLine l = new OpVoucherLine();
         l.setTenantId(tenantId);
         l.setVoucherId(vId);
         l.setLineNo(no);
         l.setSummary(summary);
-        l.setSubjectId(subjectId);
-        l.setSubjectCode(code);
-        l.setSubjectName(subjectNameOf(code, subjectId));
+        l.setSubjectId(postable == null ? subjectId : postable.getId());
+        l.setSubjectCode(postable == null ? code : (postable.getSubjectCode() == null || postable.getSubjectCode().isBlank() ? code : postable.getSubjectCode()));
+        l.setSubjectName(postable == null ? code : (postable.getSubjectName() == null || postable.getSubjectName().isBlank() ? code : postable.getSubjectName()));
         l.setDirection(dir);
         l.setAmount(amount);
         l.setCurrencyCode("CNY");
         l.setCreateTime(LocalDateTime.now());
         return l;
-    }
-
-    private String subjectNameOf(String code, Long subjectId) {
-        if (subjectId == null) {
-            return code;
-        }
-        MdSubject s = mdSubjectMapper.selectById(subjectId);
-        return s == null || s.getSubjectName() == null ? code : s.getSubjectName();
     }
 
     private Long findSubjectIdByCode(String code) {

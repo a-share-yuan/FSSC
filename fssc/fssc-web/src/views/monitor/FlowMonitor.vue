@@ -61,7 +61,7 @@
         <el-tab-pane label="流程全景" name="panorama">
           <div class="pane-toolbar">
             <span class="tb-label">统计窗口</span>
-            <el-select v-model="days" size="small" style="width:110px" @change="onDaysChange">
+            <el-select v-model="days" size="small" style="width:132px" @change="onDaysChange">
               <el-option :value="7" label="近 7 天" />
               <el-option :value="30" label="近 30 天" />
               <el-option :value="90" label="近 90 天" />
@@ -93,7 +93,7 @@
         <el-tab-pane label="积压与时效" name="perf">
           <div class="pane-toolbar">
             <span class="tb-label">统计窗口</span>
-            <el-select v-model="days" size="small" style="width:110px" @change="loadPerf">
+            <el-select v-model="days" size="small" style="width:132px" @change="loadPerf">
               <el-option :value="7" label="近 7 天" />
               <el-option :value="30" label="近 30 天" />
               <el-option :value="90" label="近 90 天" />

@@ -85,7 +85,7 @@
     </el-card>
 
     <!-- 试算预览弹窗（第一步：只算不写入数据库） -->
-    <el-dialog v-model="trialVisible" title="重估试算预览（仅试算不保存）" width="900px" destroy-on-close>
+    <el-dialog v-model="trialVisible" title="重估试算预览（仅试算不保存）" width="920px" destroy-on-close>
       <el-alert v-if="trial.existingCount > 0" type="warning" :closable="false" style="margin-bottom:8px"
         :title="`该期间已有 ${trial.existingCount} 条重估记录，正式执行时同组合将自动跳过`" />
       <el-table :data="trial.rows" size="small" border max-height="420">

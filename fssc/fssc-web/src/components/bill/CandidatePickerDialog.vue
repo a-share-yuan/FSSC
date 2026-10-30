@@ -9,7 +9,7 @@
     新形态：勾选生效 + 每行金额可改（上限=可冲抵余额，支持部分冲抵）+ 底部【确定】统一提交。
   -->
   <el-dialog :model-value="modelValue" @update:modelValue="onVisibleChange"
-             :title="title" width="680px" @closed="resetState">
+             :title="title" width="900px" @closed="resetState">
     <el-alert v-if="tip" type="info" :closable="false" :title="tip" style="margin-bottom: 8px" />
     <slot name="toolbar" />
     <el-table :data="rows" size="small" v-loading="loading" row-key="id"

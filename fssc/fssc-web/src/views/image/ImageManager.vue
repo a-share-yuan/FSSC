@@ -434,13 +434,18 @@ async function runOcr(b, page) {
   ocrRunning.value = true
   try {
     const count = await imageApi.ocr(b.id)
-    // 整批报绿会把"有几页没解析出来"盖掉——批次只要存在 FAILED 页就按警示报，
+    // 整批报绿会把"有几页没解析出来"盖掉——批次只要存在未识别页或待复核页就按警示报，
     // 并把两条真路说清楚（换版式文件重传 / 手工录入发票要素）。
-    let failed = 0
-    try { failed = ((await imageApi.pages(b.id)) || []).filter((p) => p.ocrStatus === 'FAILED').length } catch { /* 页态取不到时沿用原提示 */ }
-    if (failed) {
-      ElMessage.warning(`${failed} 页未解析出票面（本批入池 ${count} 张）：可改传 XML/OFD 版式文件重新上传，`
+    let handoff = 0
+    try {
+      handoff = ((await imageApi.pages(b.id)) || [])
+        .filter((p) => p.ocrStatus === 'FAILED' || p.ocrStatus === 'NEED_REVIEW').length
+    } catch { /* 页态取不到时沿用原提示 */ }
+    if (handoff) {
+      ElMessage.warning(`${handoff} 页未解析出可入池的票面（本批入池 ${count} 张）：可改传 XML/OFD 版式文件重新上传，`
         + '或在「发票管理 › 发票补录」手工录入发票要素')
+    } else if (!count) {
+      ElMessage.warning('OCR 识别完成，本批未生成发票（页面票面要素不足以入池，见页面 OCR 标注）')
     } else {
       ElMessage.success(`OCR 识别完成，创建发票 ${count} 张`)
     }
@@ -448,12 +453,11 @@ async function runOcr(b, page) {
     if (drawerVisible.value && currentBatch.value && currentBatch.value.id === b.id) {
       await openBatch(b)
     }
-    // Update batch status
-    b.status = 'CHECKED'
-    b._ocrDone = true
-    b._ocrStatus = 'SUCCESS'
-    // Reload batch list thumbnails
-    load()
+    // 批次状态与 OCR 徽标一律回读后端：是否置「已质检」由后端按页判定
+    // （有页待人工处置或一张没入池时批次保持「已上传」）。
+    // 这里曾把 status 硬写成 CHECKED、徽标硬写成 SUCCESS，界面上于是出现
+    // 「没质检过却显示已质检、没识别出票面却显示已识别」。
+    await load()
   } catch (e) {
     ElMessage.error('OCR 识别失败：' + e.message)
   } finally { ocrRunning.value = false }

@@ -100,7 +100,7 @@
     <el-empty v-else description="选择账户和月份后生成调节表" />
 
     <!-- 未达账差异明细追溯（bank_recon_item 写入数据库记录） -->
-    <el-dialog v-model="itemsVisible" title="未达账差异明细追溯（已保存）" width="720px">
+    <el-dialog v-model="itemsVisible" title="未达账差异明细追溯（已保存）" width="920px">
       <template #header>
         <div style="display: flex; gap: 8px; align-items: center; width: 100%">
           <span>未达账差异明细追溯（已保存）</span>

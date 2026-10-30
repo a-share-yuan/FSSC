@@ -89,7 +89,7 @@
                    :total="total" :page-size="q.pageSize" :current-page="q.pageNum" @current-change="(n) => { q.pageNum = n; load() }" />
 
     <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="dlg" :title="form.id ? '编辑采购订单' : '新增采购订单'" width="780px">
+    <el-dialog v-model="dlg" :title="form.id ? '编辑采购订单' : '新增采购订单'" width="900px">
       <el-form ref="formRef" :rules="formRules" :model="form" label-width="100px" size="small">
         <el-divider content-position="left">基本信息</el-divider>
         <el-row :gutter="16">
@@ -319,7 +319,7 @@
     </el-dialog>
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="dlgDetail" title="采购订单详情" width="700px">
+    <el-dialog v-model="dlgDetail" title="采购订单详情" width="780px">
       <el-descriptions :column="2" border size="small" v-if="detailRow">
         <el-descriptions-item label="订单号">{{ detailRow.poNo }}</el-descriptions-item>
         <el-descriptions-item label="状态">
