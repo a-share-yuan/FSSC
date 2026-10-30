@@ -226,7 +226,12 @@ const formTypeRules = {
   PAY_PLAN: {
     planType: commonRules.select('请选择计划类型'),
     supplierId: commonRules.select('请选择供应商'),
-    period: commonRules.required('请选择计划期间'),
+    // D-BIZ-06：选择器虽已 value-format=YYYYMM 且 :editable=false，仍补一道格式闸
+    // （防其它入口回填出 2026-11 之类值被后端静默拒绝＝弹窗不关、无红字）。
+    // 形状照本文件 GLEX_CONSOLIDATE.period：commonRules.required() 本身返回数组，不能嵌套塞。
+    period: [{ required: true, message: '请选择计划期间', validator: requiredValidator('请选择计划期间') },
+      { pattern: /^\d{6}$/, message: '期间格式应为 YYYYMM（如 202611）', trigger: 'blur' }],
+
     amount: commonRules.amount('请输入计划金额（须大于 0）'),
     purpose: commonRules.required('请填写用途说明'),
   },
