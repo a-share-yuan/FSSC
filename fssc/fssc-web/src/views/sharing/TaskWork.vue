@@ -50,7 +50,7 @@
     <el-empty v-if="!loading && !rows.length" :description="$t('sharing.taskWork.emptyNoClaimed')" />
 
     <!-- 凭证预览 + 分录修改 -->
-    <el-dialog v-model="voucherVis" :title="$t('sharing.taskWork.titleVoucherEdit')" width="720px" destroy-on-close>
+    <el-dialog v-model="voucherVis" :title="$t('sharing.taskWork.titleVoucherEdit')" width="780px" destroy-on-close>
       <el-alert v-if="voucherInfo" :title="$t('sharing.taskWork.titleVoucherBar', { v1: voucherInfo.voucherNo, v2: voucherInfo.status === BillStatus.POSTED ? t('sharing.taskWork.msgPosted') : t('sharing.taskWork.txtNotPosted'), v3: fmt(voucherInfo.debitTotal), v4: fmt(voucherInfo.creditTotal) })"
         :type="voucherInfo.status === BillStatus.POSTED ? 'info' : 'warning'" :closable="false" show-icon style="margin-bottom: 8px" />
       <el-table :data="editableLines" size="small" border max-height="380" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">

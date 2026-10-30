@@ -244,7 +244,7 @@
     </el-dialog>
 
     <!-- 邮件记录 -->
-    <el-dialog v-model="logVisible" :title="$t('flow.bill.mailLog')" width="960px" destroy-on-close>
+    <el-dialog v-model="logVisible" :title="$t('flow.bill.mailLog')" width="1000px" destroy-on-close>
       <div class="ops" style="margin-bottom: 8px">
         <el-input v-model="logQuery.packageNo" size="small" style="width: 220px" :placeholder="$t('flow.bill.mailLogSearchPh')" clearable @keyup.enter="loadMailLog" />
         <el-select v-model="logQuery.status" size="small" style="width: 140px" clearable :placeholder="$t('common.status')">

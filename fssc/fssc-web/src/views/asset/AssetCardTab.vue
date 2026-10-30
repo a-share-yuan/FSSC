@@ -191,7 +191,7 @@
   </el-dialog>
 
   <!-- 变动台账：原值调整/盘点差异的原因、前后镜像与审批最终状态 -->
-  <el-dialog v-model="dlgChangeLog" :title="`变动台账 - ${changeLogAssetName}`" width="920px" destroy-on-close>
+  <el-dialog v-model="dlgChangeLog" :title="`变动台账 - ${changeLogAssetName}`" width="960px" destroy-on-close>
     <el-table :data="changeLogs" size="small" max-height="380" v-loading="changeLogLoading"
               empty-text="该资产暂无变动台账（原值调整/盘点差异审批发起后在此记录）">
       <el-table-column prop="changeType" label="变动类型" width="100">
@@ -262,7 +262,7 @@
   </el-dialog>
 
   <!-- 在建工程转固入口弹窗：选择在途 CIP 项目 → 补齐转固要素 → 走 /masterdata/config/cip/{id}/transferToAsset -->
-  <el-dialog v-model="dlgCipFlow" title="在建工程转固" width="680px" destroy-on-close>
+  <el-dialog v-model="dlgCipFlow" title="在建工程转固" width="700px" destroy-on-close>
     <el-alert type="info" :closable="false" style="margin-bottom: 10px"
       title="以下为在途在建工程项目，选择一项并补齐转固要素后确认；按归集成本生成固定资产并发起转固审批。" />
     <el-table :data="cipFlowRows" size="small" border stripe max-height="320" v-loading="cipFlowLoading"

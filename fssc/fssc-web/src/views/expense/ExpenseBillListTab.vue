@@ -71,7 +71,7 @@
   </el-card>
 
   <!-- 员工借款余额台账 -->
-  <el-dialog v-model="loanLedgerDialog" :title="$t('expense.ledger.titleLoanLedger')" width="720px">
+  <el-dialog v-model="loanLedgerDialog" :title="$t('expense.ledger.titleLoanLedger')" width="780px">
     <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px">
       <span style="font-size: 13px; color: #606266">{{ $t('expense.ledger.btnOverdueOnly') }}</span>
       <el-switch v-model="onlyOverdue" @change="loadLoanLedger" />

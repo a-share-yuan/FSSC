@@ -388,7 +388,7 @@
     </el-dialog>
 
     <!-- 决策链 -->
-    <el-dialog v-model="chainVisible" :title="$t('sharing.ops.titleChain')" width="640px">
+    <el-dialog v-model="chainVisible" :title="$t('sharing.ops.titleChain')" width="700px">
       <el-table :data="chainRows" v-loading="chainLoading" size="small" stripe border max-height="400" :empty-text="$t('sharing.ops.emptyDecision')">
         <el-table-column prop="dispatchMode" :label="$t('sharing.common.colMethod')" width="90" :formatter="(row, col, val) => dispatchModeLabel(val)" />
         <el-table-column prop="strategy" :label="$t('sharing.common.colStrategy')" width="100">

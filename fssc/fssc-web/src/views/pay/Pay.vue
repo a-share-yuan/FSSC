@@ -88,7 +88,7 @@
   </el-card>
 
   <!-- 批次明细弹窗（表格展示） -->
-  <el-dialog v-model="dlgDetails" :title="$t('pay.pay.titleBatchDetail', { v1: detailBatchNo })" width="900px">
+  <el-dialog v-model="dlgDetails" :title="$t('pay.pay.titleBatchDetail', { v1: detailBatchNo })" width="1140px">
     <el-table :data="detailRows" size="small" border stripe v-loading="detailLoading" :empty-text="$t('pay.batch.hintNoDetails')" max-height="440">
       <el-table-column type="index" label="#" width="50" align="center" />
       <el-table-column prop="payeeName" :label="$t('pay.batch.colPayee')" min-width="150" show-overflow-tooltip />

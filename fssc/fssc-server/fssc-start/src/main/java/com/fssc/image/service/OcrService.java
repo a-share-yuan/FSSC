@@ -166,6 +166,16 @@ public class OcrService {
                                 page.getPageNo(), nvl(result.getInvoiceNo()), result.getAmount(),
                                 result.getNetAmount(), result.getTaxAmount()));
                     }
+                } else {
+                    // 识别回来了但票面没有发票号：这一页同样入不了池，必须计入待人工处置。
+                    // 漏计这一支时 needManual 仍为 0，批次会被盖成「已质检」——
+                    // 界面就是「一张发票没生成，批次却显示已质检，异常池里也查不到记录」。
+                    needManual++;
+                    log.warn("页面 {} OCR 未取到发票号，票面要素不足以入池，转人工复核：购方={} 价税合计={}",
+                            page.getId(), result.getBuyerName(), result.getAmount());
+                    recordException(batch, "OCR_AMOUNT_INCONSISTENT", page.getPageNo(), String.format(
+                            "第 %d 页未识别出发票号码，票面要素不足以入池：价税合计=%s 不含税=%s 税额=%s",
+                            page.getPageNo(), result.getAmount(), result.getNetAmount(), result.getTaxAmount()));
                 }
                 page.setOcrStatus(consistent ? "SUCCESS" : "NEED_REVIEW");
                 page.setVerifyStatus(consistent ? "PASS" : "FAIL");

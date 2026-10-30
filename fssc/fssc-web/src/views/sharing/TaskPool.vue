@@ -7,7 +7,7 @@
       <div style="display: flex; gap: 8px; align-items: center">
         <b>{{ $t('sharing.taskPool.pageTitle') }}</b>
         <el-tag v-if="overdueCount" type="danger" size="small" effect="light">{{ $t('sharing.taskPool.tagPageOverdue', { v1: overdueCount }) }}</el-tag>
-        <el-select v-model="filter.poolStatus" :placeholder="$t('sharing.taskPool.colTaskStatus')" clearable style="width: 150px" @change="load">
+        <el-select v-model="filter.poolStatus" :placeholder="$t('sharing.taskPool.colTaskStatus')" clearable style="width: 192px" @change="load">
           <el-option :label="$t('sharing.taskPool.optWaiting')" value="WAITING" />
           <el-option :label="$t('sharing.taskPool.optAssigned')" value="RECEIVED" />
           <el-option :label="$t('sharing.taskPool.optFinished')" value="FINISHED" />

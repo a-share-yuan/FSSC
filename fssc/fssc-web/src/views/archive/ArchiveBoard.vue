@@ -230,7 +230,7 @@
                     {{ row.carrierType === 'ELECTRONIC' ? '电子载体' : '纸质载体·须编页' }}
                   </el-tag>
                   <!-- 待归档卷可直接订正载体（建卷选错了不必求 SQL）；审批在途/已定稿只读 -->
-                  <el-select v-else :model-value="row.carrierType || 'PAPER'" size="small" style="width:150px"
+                  <el-select v-else :model-value="row.carrierType || 'PAPER'" size="small" style="width:172px"
                              :loading="busy('archive-carrier-' + row.id)"
                              @change="(v) => changeCarrier(row, v)">
                     <el-option label="纸质载体·须编页" value="PAPER" />
