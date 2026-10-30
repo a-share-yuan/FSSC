@@ -5,12 +5,18 @@ package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.security.DataScopeKit;
 import com.fssc.glex.entity.TaxDeclaration;
 import com.fssc.glex.mapper.TaxDeclarationMapper;
+import com.fssc.system.service.NumberRuleService;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,7 +29,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 /**
- * 全税种申报服务（P1-3 税务一体化）。
+ * 全税种申报服务（税务一体化）。
  * <p>
  * 覆盖增值税(VAT)/企业所得税(CIT)/个人所得税(IIT)/印花税(STAMP)/
  * 房产税(PROPERTY)/土地使用税(LAND)/车船税(VEHICLE)。
@@ -36,9 +42,9 @@ import java.time.format.DateTimeFormatter;
 public class TaxDeclarationService {
 
     private final TaxDeclarationMapper declarationMapper;
-    private final com.fssc.system.service.NumberRuleService numberRuleService;
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    private final NumberRuleService numberRuleService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /**
      * 创建申报记录。
@@ -50,7 +56,7 @@ public class TaxDeclarationService {
         if (!StringUtils.hasText(record.getPeriod())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "申报属期必填");
         }
-        record.setDeclarationNo(java.util.Optional.ofNullable(record.getDeclarationNo())
+        record.setDeclarationNo(Optional.ofNullable(record.getDeclarationNo())
                 .orElseGet(() -> { try { return numberRuleService.next("TAX_DECLARATION"); }
                     catch (Exception e) { return "TX" + System.currentTimeMillis(); } }));
         record.setStatus("DRAFT");
@@ -79,11 +85,11 @@ public class TaxDeclarationService {
         return record.getId();
     }
 
-    // ROOT-11（人工裁决 09-27 第三轮·明写自定）：下面四个状态跃迁都是"写 tax_declaration 一张业务表
+    // 下面四个状态跃迁都是"写 tax_declaration 一张业务表
     // + 写 audit_trail 一条记录"成对写入数据库，没有事务边界时记录写失败会留下"状态跃迁了却查不到谁跃的"的
-    // 半截记录。两套外部资料都不覆盖"哪些方法必须有事务边界"（最近旁证只有〔丙·开发指南〕把状态
+    // 半截记录。外部资料没有覆盖"哪些方法必须有事务边界"（最近旁证只有〔丙·开发指南〕把状态
     // 回写分"聚合 VO／数据库表"两层），故本条按自定处理，不写成对比结论。
-    // 单表写、无记录的方法一律不补（同一裁定的另一半）。
+    // 单表写、无记录的方法一律不补。
     /**
      * 提交申报：DRAFT → PENDING。
      */
@@ -98,9 +104,9 @@ public class TaxDeclarationService {
         upd.setStatus("PENDING");
         declarationMapper.updateById(upd);
         log.info("税务申报 {} 提交审批", row.getDeclarationNo());
-        // P4-3 审计记录：状态跃迁 DRAFT → PENDING
-        java.util.Map<String, Object> auditBefore = java.util.Collections.singletonMap("status", row.getStatus());
-        java.util.Map<String, Object> auditAfter = java.util.Collections.singletonMap("status", "PENDING");
+        // 审计记录：状态跃迁 DRAFT → PENDING
+        Map<String, Object> auditBefore = Collections.singletonMap("status", row.getStatus());
+        Map<String, Object> auditAfter = Collections.singletonMap("status", "PENDING");
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
                 String.valueOf(id), auditBefore, auditAfter, "提交税务申报（DRAFT→PENDING）");
     }
@@ -119,9 +125,9 @@ public class TaxDeclarationService {
         upd.setStatus("APPROVED");
         declarationMapper.updateById(upd);
         log.info("税务申报 {} 审批通过", row.getDeclarationNo());
-        // P4-3 审计记录：状态跃迁 PENDING → APPROVED
-        java.util.Map<String, Object> auditBefore = java.util.Collections.singletonMap("status", row.getStatus());
-        java.util.Map<String, Object> auditAfter = java.util.Collections.singletonMap("status", "APPROVED");
+        // 审计记录：状态跃迁 PENDING → APPROVED
+        Map<String, Object> auditBefore = Collections.singletonMap("status", row.getStatus());
+        Map<String, Object> auditAfter = Collections.singletonMap("status", "APPROVED");
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
                 String.valueOf(id), auditBefore, auditAfter, "审批通过税务申报（PENDING→APPROVED）");
     }
@@ -141,11 +147,11 @@ public class TaxDeclarationService {
         upd.setDeclareDate(LocalDate.now());
         declarationMapper.updateById(upd);
         log.info("税务申报 {} 已申报", row.getDeclarationNo());
-        // P4-3 审计记录：状态跃迁 APPROVED → FILED，并记录申报日期变化
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        // 审计记录：状态跃迁 APPROVED → FILED，并记录申报日期变化
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", row.getStatus());
         auditBefore.put("declareDate", row.getDeclareDate());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "FILED");
         auditAfter.put("declareDate", upd.getDeclareDate());
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
@@ -170,12 +176,12 @@ public class TaxDeclarationService {
         }
         declarationMapper.updateById(upd);
         log.info("税务申报 {} 已缴纳, 金额={}", row.getDeclarationNo(), paidAmount);
-        // P4-3 审计记录：状态跃迁 FILED → PAID，并记录已缴/余额金额变化
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        // 审计记录：状态跃迁 FILED → PAID，并记录已缴/余额金额变化
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", row.getStatus());
         auditBefore.put("paidAmount", row.getPaidAmount());
         auditBefore.put("balanceAmount", row.getBalanceAmount());
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", "PAID");
         auditAfter.put("paidAmount", upd.getPaidAmount());
         auditAfter.put("balanceAmount", upd.getBalanceAmount());

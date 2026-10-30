@@ -29,7 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 通用 HTTP OCR 通道（fssc.ocr.channel=http 时生效，java.net.http.HttpClient 零新依赖）。
+ * 通用 HTTP OCR 通道（fssc.ocr.channel=http 时生效，HttpClient 零新依赖）。
  *
  * <p>接入任意真通道（百度/腾讯/开灵等）只需配置、无需改代码：在「系统设置 → 全局参数」（sys_config）维护——</p>
  * <ul>
@@ -40,7 +40,7 @@ import java.util.Map;
  * </ul>
  *
  * <p>约定：超时 10s；一切失败（未配置/网络/非200/响应非法）均以 ok=false + errorMsg 返回，不抛穿，
- * 由 OcrService 置页面 FAILED（与改造前识别失败语义一致）。每次实时读 sys_config，改配置即生效。</p>
+ * 由 OcrService 置页面 FAILED（与原先识别失败语义一致）。每次实时读 sys_config，改配置即生效。</p>
  */
 @Slf4j
 @Component
@@ -64,7 +64,7 @@ public class HttpOcrChannel implements OcrChannel {
     }
 
     /** 分库改造：每次实时读的 sys_config 在 master 库；NOT_SUPPORTED 挂起外层
-     *  （OcrService 的 image 库）事务后取 master 连接，私有 getConfig 随之同连接。 */
+     *  OcrService 的 image 库 事务后取 master 连接，私有 getConfig 随之同连接。 */
     @Override
     @FsscDataSource("master")
     @Transactional(propagation = Propagation.NOT_SUPPORTED, readOnly = true)
@@ -108,10 +108,10 @@ public class HttpOcrChannel implements OcrChannel {
     }
 
     /**
-     * P0-1 凭据读取路径收敛：优先取统一凭据表 {@code ext_interface_config(category=OCR)}——
-     * 集中托管、出参自动掩码（R5-D-038），凭据不再只散落在 sys_config 明文；
+     * 凭据读取路径收敛：优先取统一凭据表 {@code ext_interface_config(category=OCR)}——
+     * 集中托管、出参自动掩码，凭据不再只散落在 sys_config 明文；
      * 该分类未配置时回退 sys_config {@code ocr.api.token}，兼容历史配置、行为不变。
-     * 取值顺序：api_secret（Bearer 令牌）→ api_key → sys_config 默认处理。
+     * 取值顺序：api_secret（Bearer 令牌）→ api_key → sys_config 兜底。
      */
     private String resolveCredential() {
         try {

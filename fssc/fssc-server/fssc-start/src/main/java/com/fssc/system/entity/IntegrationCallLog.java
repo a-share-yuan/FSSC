@@ -49,15 +49,15 @@ public class IntegrationCallLog extends BaseEntity {
     /** Error message if failed */
     private String errorMsg;
 
-    /** P0-2 唯一键：{domain}:{tenantId}:{businessNo}[:{detail}]，同 (tenant,key) 重复调用不重复外呼 */
+    /** 唯一键：{domain}:{tenantId}:{businessNo}[:{detail}]，同 (tenant,key) 重复调用不重复外呼 */
     private String idempotencyKey;
 
-    /** P0-2 1=本条为去重命中回放（未真实外呼） */
+    /** 1=本条为去重命中回放（未真实外呼） */
     private Integer isDuplicate;
 
-    /** P0-3 已重试/重投次数（含 Job 重投），用于封顶 */
+    /** 已重试/重投次数（含 Job 重投），用于封顶 */
     private Integer retryCount;
 
-    /** P0-3 链路追踪号（TraceIdFilter 的 MDC traceId），串联业务日志排障 */
+    /** 链路追踪号（TraceIdFilter 的 MDC traceId），串联业务日志排障 */
     private String traceId;
 }

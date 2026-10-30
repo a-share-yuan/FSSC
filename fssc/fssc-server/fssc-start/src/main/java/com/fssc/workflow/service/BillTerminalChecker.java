@@ -5,6 +5,9 @@ package com.fssc.workflow.service;
 
 import com.fssc.purchase.entity.PoOrder;
 import com.fssc.purchase.mapper.PoOrderMapper;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -18,19 +21,19 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 业务单据「最终状态」判定——<b>唯一真值表</b>（P4：一个概念只在一处定义）。
+ * 业务单据「最终状态」判定——<b>唯一真值表</b>（一个概念只在一处定义）。
  *
- * <p>背景（真跑业务-V4 实测）：作废等收尾动作只改了业务单据状态，若流程终止入口漏走、
+ * <p>背景：作废等收尾动作只改了业务单据状态，若流程终止入口漏走、
  * 或存在历史脏数据，{@code wf_instance} 会滞留 RUNNING、{@code wf_task} 镜像行滞留 PENDING；
  * 而待办查询（{@code WfQueryService.myTodo} / {@code WfEngineFacade.todo}）只按任务状态查询、
  * 不回查业务单据，于是<b>作废单会同时挂在角标 / 审批工作台 / 工作台「我的待办」三处</b>，
  * 点「去处理」还只看到空状态。
  *
- * <p>本类把「单据是否已收尾」办结成一处规则，供三处待办查询默认处理剔除，也供超时催办校验复用
- * （{@code WfTimeoutJob}）——避免同一判定在多处各写一遍而静默漂移。
+ * <p>本类把「单据是否已收尾」办结成一处规则，供三处待办查询兜底剔除，也供超时催办校验复用
+ * {@code WfTimeoutJob} ——避免同一判定在多处各写一遍而静默漂移。
  *
  * <p>现只按采购订单面落表（{@link #BIZ_PURCHASE_ORDER_REVIEW} → {@code po_order}）；
- * 其余 bizType 返回 false＝维持改造前行为（放行）。扩面时在此逐 bizType 加一条映射，不改调用方。
+ * 其余 bizType 返回 false＝维持原先行为（放行）。扩面时在此逐 bizType 加一条映射，不改调用方。
  */
 @Slf4j
 @Service
@@ -39,7 +42,7 @@ public class BillTerminalChecker {
 
     private final PoOrderMapper poOrderMapper;
 
-    /**通用单据最终状态探测：走 JdbcTemplate，避免为每个域都注入一个 Mapper。*/
+    /**通用单据最终状态探测：走 JdbcTemplate，避免为每个域都注入一个 Mapper。 */
     private final JdbcTemplate jdbcTemplate;
 
     /** 采购订单审批流程 bizType（{@code wf_task}/{@code wf_instance}.biz_type 的实态取值） */
@@ -52,24 +55,24 @@ public class BillTerminalChecker {
     public static final Set<String> PO_TERMINAL_STATUSES = Set.of("VOID", "CLOSED", "ARCHIVED");
 
     /**
-     * D-WF-14（2026-10-19 人工测试 G 册实测）：除采购订单面外，补齐实测已确认会脱节的 bizType 映射。
+     * 采购订单面之外的 bizType 映射：这些流程与单据状态之间会脱节。
      *
-     * <p>背景：本次实测发现 6 条流程与单据状态脱节的实例（3 条「单据已 PAID、INVOICE_MATCH 派单仍 RUNNING」
-     * ＋ 3 条「单据仍 DRAFT、流程却已发起」）。根因是<b>单据从别的路径走到最终状态时没有任何一方回调流程</b>：
-     * 作废/回退类收尾都调了 {@code cancelRunningInstancesByBiz}，但「付款批次直接走通」这条路没人管。
+     * <p>脱节有两类：单据已经 PAID 而 INVOICE_MATCH 派单仍 RUNNING；单据还是 DRAFT 而流程已经发起。
+     * 根因是<b>单据从别的路径走到最终状态时没有任何一方回调流程</b>——作废/回退类收尾都调了
+     * {@code cancelRunningInstancesByBiz}，唯独「付款批次直接走通」这条路没人管。
      *
-     * <p>本表只收<b>已实测脱节</b>的bizType，未列的仍返回 false（fail-open，维持改造前行为），
+     * <p>本表只收<b>确认会脱节</b>的 bizType，未列的仍返回 false（fail-open，维持放行），
      * 避免把「猜错的表名/状态列」变成线上误杀。
      *
-     * <p> <b>声明位置铁律</b>：本字段必须声明在<b>所有 {@code *_TERMINAL} 常量之后</b>。
+     * <p><b>声明位置铁律</b>：本字段必须声明在<b>所有 {@code *_TERMINAL} 常量之后</b>。
      * 静态初始化按声明顺序执行，若本行在最终状态集之前，{@link #buildProbes()} 读到的是
-     * 尚未初始化的 null（实测踩过：所有探测规则 terminalStatuses 全null，判定直接 NPE）。
+     * null，判定直接 NPE。
      */
     public static final Map<String, BillProbe> BILL_PROBES;
 
     /**
      * 单据最终状态探测规则：{@code table}（物理表）、{@code statusCol}（状态列）、
-     * {@code terminalStatuses}（该表的最终状态集，<b>按表各自定义，不共用一套</b>）。
+     * {@code terminalStatuses}（该表的最终状态集，按表各自定义，不共用一套）。
      */
     public record BillProbe(String table, String statusCol, Set<String> terminalStatuses) {
         /** 白名单表名/列名：全部来自代码内常量，不接受外部拼接，杜绝 SQL 注入面。 */
@@ -126,14 +129,14 @@ public class BillTerminalChecker {
 
     /**
      * 业务单据是否已收尾（最终状态）。读取失败按非最终状态放行（fail-open，不阻断待办查询）；
-     * bizType 落在采购订单面之外、或 bizId 缺失时一律返回 false（维持改造前行为）。
+     * bizType 落在采购订单面之外、或 bizId 缺失时一律返回 false（维持原先行为）。
      */
     public boolean isBillTerminal(String bizType, Long bizId) {
         if (bizId == null || bizType == null) {
             return false;
         }
         String bt = bizType.trim();
-        // 通用探测面（D-WF-14 扩面）
+        // 通用探测面（扩面）
         BillProbe probe = BILL_PROBES.get(bt.toUpperCase(Locale.ROOT));
         if (probe != null) {
             String st = readStatus(probe, bizId);
@@ -158,9 +161,9 @@ public class BillTerminalChecker {
     }
 
     /**
-     * D-WF-14 B 类：单据是否<b>还没进入流程态</b>（草稿/待提交）。
+     * B 类：单据是否<b>还没进入流程态</b>（草稿/待提交）。
      *
-     * <p>实测发现 3 条「单据 status=DRAFT 却已有 RUNNING 流程实例」的脱节。
+     * <p>这类单据存在「status=DRAFT 却已有 RUNNING 流程实例」的脱节。
      * 业务含义：这张单用户还没提交，挂在待办里点了也是空的，<b>应当撤销而不是等它提交</b>。
      *
      * <p>与 {@link #isBillTerminal} 严格区分：
@@ -183,6 +186,50 @@ public class BillTerminalChecker {
 
     /** 草稿/未提交态（各表共用的「尚未进入流程」名称表）。 */
     public static final Set<String> DRAFT_STATUSES = Set.of("DRAFT", "PENDING_SUBMIT", "UNSUBMITTED");
+
+    /**
+     * 批量终态判定：待办列表一次 IN 查完同 bizType 下的全部 biz_id，
+     * 取代「每行一条 {@code SELECT status FROM exp_bill WHERE id=?}」的 N+1。
+     *
+     * <p>规则与 {@link #isBillTerminal} 逐条同源：同一张 {@code BILL_PROBES} 映射、同一份最终状态集、
+     * 同一 fail-open 方向；未登记映射的 bizType 返回空集＝放行（与逐行判定返回 false 等价）。
+     *
+     * @return 已收尾的 biz_id 集合；查询失败的分片按未收尾放行，不误杀正在办的单
+     */
+    public Set<Long> terminalBillIds(String bizType, Collection<Long> bizIds) {
+        if (bizType == null || bizIds == null || bizIds.isEmpty()) {
+            return Set.of();
+        }
+        String bt = bizType.trim().toUpperCase(Locale.ROOT);
+        BillProbe probe = BILL_PROBES.get(bt);
+        if (probe != null) {
+            String st = probe.terminalStatuses().stream().map(s -> "'" + s + "'").collect(Collectors.joining(","));
+            return queryTerminalIds("SELECT id FROM " + probe.table() + " WHERE id IN (%s) AND "
+                    + probe.statusCol() + " IN (" + st + ")", bizIds);
+        }
+        if (BIZ_PURCHASE_ORDER_REVIEW.equals(bizType.trim())) {
+            String st = PO_TERMINAL_STATUSES.stream().map(s -> "'" + s + "'").collect(Collectors.joining(","));
+            return queryTerminalIds("SELECT id FROM po_order WHERE id IN (%s) AND (del_flag = 1 OR status IN ("
+                    + st + "))", bizIds);
+        }
+        return Set.of();
+    }
+
+    /** IN 分片查询（每片 500 个 id）；单片失败只让该片按未收尾放行。 */
+    private Set<Long> queryTerminalIds(String sqlTemplate, Collection<Long> bizIds) {
+        Set<Long> out = new HashSet<>();
+        List<Long> list = new ArrayList<>(bizIds);
+        for (int i = 0; i < list.size(); i += 500) {
+            List<Long> chunk = list.subList(i, Math.min(list.size(), i + 500));
+            String in = chunk.stream().map(String::valueOf).collect(Collectors.joining(","));
+            try {
+                out.addAll(jdbcTemplate.queryForList(String.format(sqlTemplate, in), Long.class));
+            } catch (Exception e) {
+                log.warn("单据终态批量读取失败（该片按非终态放行） ids={}: {}", chunk.size(), e.getMessage());
+            }
+        }
+        return out;
+    }
 
     /**
      * 按 {@link BillProbe} 读单据状态。失败一律返回 null（上层按 fail-open放行），

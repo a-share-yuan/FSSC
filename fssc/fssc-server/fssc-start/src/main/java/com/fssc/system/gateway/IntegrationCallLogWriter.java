@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 集成外呼记录写入器。
  *
- * <p>P0-3「失败记录」的关键点：外呼多发生在业务事务内（如金税开票、ERP 记账），失败会抛异常回滚整个事务。
+ * <p>「失败记录」的关键点：外呼多发生在业务事务内（如金税开票、ERP 记账），失败会抛异常回滚整个事务。
  * 若日志与业务同事务，失败记录会一起被回滚 →「失败不可查、重试无依据」。
  * 因此单独成类并以 {@code REQUIRES_NEW} 独立提交，与 {@code CollabSyncService.log} 同一范式。</p>
  */

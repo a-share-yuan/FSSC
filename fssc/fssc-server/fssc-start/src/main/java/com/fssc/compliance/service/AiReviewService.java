@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.system.entity.ExtInterfaceConfig;
 import com.fssc.connector.api.ConnectorFacade;
 import com.fssc.connector.api.ChannelResponse;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,9 +17,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * P2-5 AI 审单服务（P2-7 重构：通过 IntegrationGateway 统一网关调用大模型接口）。
+ * AI 审单服务（重构：通过 IntegrationGateway 统一网关调用大模型接口）。
  * <p>
- * 原 P2-5 实现直接读 {@code sys_config} + 裸 {@code HttpClient}，现改为：
+ * 原 实现直接读 {@code sys_config} + 裸 {@code HttpClient}，现改为：
  * <ul>
  *   <li>配置来源：{@code ext_interface_config} 表 category=AI_MODEL（URL/Key/超时统一管理）</li>
  *   <li>HTTP 调用：经 {@link IntegrationGateway#post} 统一鉴权/超时/日志</li>
@@ -32,9 +33,9 @@ import java.util.Map;
  * <p>
  * 一切失败（未配置/网络/超时/非200/响应非法）均返回 null，调用方回退规则引擎。
  * <p>
- * D-DEC-018（X-31，乙）：现网 {@code AI_MODEL} 配的是会话补全接口（chat/completions），与本请求体不同型，
- * 调用恒失败 ⇒ 本类不再每单刷一条 WARN（改按时间窗聚合、累计计数），失败结论由调用方落
- * 「AI 未采纳·回退规则引擎（检查点）」业务记录；真接 AI 属另一裁，本轮不启用、AI 结论也不得进 AUTO_PASS 链路。
+ * 现网 {@code AI_MODEL} 配的是会话补全接口（chat/completions），与本请求体不同型，
+ * 调用恒失败 ⇒ 本类不每单刷一条 WARN（按时间窗聚合、累计计数），失败结论由调用方落
+ * 「AI 未采纳·回退规则引擎（检查点）」业务记录；真实 AI 接入另行判定，当前不启用，AI 结论也不得进 AUTO_PASS 链路。
  */
 @Slf4j
 @Service
@@ -46,16 +47,16 @@ public class AiReviewService {
 
     private static final String CATEGORY = "AI_MODEL";
 
-    /** D-DEC-018：失败日志时间窗——同因失败 10 分钟内只复述一次，累计次数进日志，避免每单刷噪音 */
+    /** 失败日志时间窗——同因失败 10 分钟内只复述一次，累计次数进日志，避免每单刷噪音 */
     private static final long FAIL_LOG_WINDOW_MS = 600_000L;
-    private final java.util.concurrent.atomic.AtomicLong failCount = new java.util.concurrent.atomic.AtomicLong();
-    private final java.util.concurrent.atomic.AtomicLong lastFailLogAt = new java.util.concurrent.atomic.AtomicLong();
+    private final AtomicLong failCount = new AtomicLong();
+    private final AtomicLong lastFailLogAt = new AtomicLong();
 
     /**
      * 调用 AI 审单接口。
      *
-     * @param billNo      单据编号
-     * @param billData    单据数据（费用明细、金额、供应商等）
+     * @param billNo 单据编号
+     * @param billData 单据数据（费用明细、金额、供应商等）
      * @param riskContext 风险上下文（反欺诈检测结果、信用分等）
      * @return AI 审单结果；未启用/配置缺失/调用失败返回 null（回退规则引擎）
      */
@@ -87,7 +88,7 @@ public class AiReviewService {
     }
 
     /**
-     * D-DEC-018（乙）：AI 未采纳的累计次数（日志降噪后仍可从日志的累计值读出，不静默丢失败）。
+     * 乙：AI 未采纳的累计次数（日志降噪后仍可从日志的累计值读出，不静默丢失败）。
      * 首失败即报 WARN，其后同因失败在一个时间窗内只留 DEBUG＋计数。
      */
     private void noteFailure(String billNo, String detail) {
@@ -126,7 +127,7 @@ public class AiReviewService {
                     ? root.get("confidence").asDouble() : 0.0;
             return new AiReviewResult(action, riskLevel, riskScore, remark, confidence);
         } catch (Exception e) {
-            // D-DEC-018：解析失败的 WARN 已收拢到 noteFailure（带累计），此处降为 DEBUG 不再重复刷
+            // 解析失败的 WARN 已收拢到 noteFailure（带累计），此处降为 DEBUG 不再重复刷
             log.debug("AI 审单响应解析失败: {}", truncate(json));
             return null;
         }

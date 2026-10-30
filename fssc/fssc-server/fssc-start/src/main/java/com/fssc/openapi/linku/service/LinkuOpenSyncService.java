@@ -6,6 +6,10 @@ package com.fssc.openapi.linku.service;
 import com.fssc.common.exception.BizException;
 import com.fssc.openapi.linku.LinkuOpenProperties;
 import com.fssc.openapi.linku.mapper.LinkuOpenSyncMapper;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * LinkU 开放接口写入服务（F-3 / F-7）。语义逐条移植自 {@code FsscArApAdapter} 的回写路径。
+ * LinkU 开放接口写入服务。语义逐条移植自 {@code FsscArApAdapter} 的回写路径。
  *
  * <h3>原子性</h3>
  * 每个入口方法以 {@code @Transactional} 包裹：一次回写（头表 + 明细 + 差异 + 余额 + 记录）
@@ -51,7 +55,7 @@ public class LinkuOpenSyncService {
     private final LinkuOpenSyncMapper mapper;
     private final LinkuOpenProperties props;
 
-    // ==================== 对账（AP / AR 共用入口） ====================
+    // 对账（AP / AR 共用入口）
 
     /** 对账结果回写：{@code direction=AP} → {@code supplier_recon} 三表；{@code AR} → {@code ar_recon_record}。 */
     @Transactional(rollbackFor = Exception.class)
@@ -117,7 +121,7 @@ public class LinkuOpenSyncService {
         log.info("[LinkU开放接口] AP 对账已回写 supplier_recon reconId={} rowId={} period={} 明细={} 差异={}",
                 reconId, rowId, period, detailInserted, diffInserted);
 
-        Map<String, Object> out = new java.util.HashMap<>();
+        Map<String, Object> out = new HashMap<>();
         out.put("reconRowId", rowId);
         out.put("period", period);
         out.put("detailsInserted", detailInserted);
@@ -155,7 +159,7 @@ public class LinkuOpenSyncService {
         }
         log.info("[LinkU开放接口] AR 对账已回写 ar_recon_record reconId={} period={} customer={} status={} 已对账={} 异常={}",
                 body.get("linkuReconId"), period, body.get("partnerId"), status, matched.size(), diff.size());
-        Map<String, Object> out = new java.util.HashMap<>();
+        Map<String, Object> out = new HashMap<>();
         out.put("recordType", "ar_recon_record");
         out.put("period", period);
         out.put("status", status);
@@ -222,13 +226,13 @@ public class LinkuOpenSyncService {
                 summaryAmount(summary, "anchorTotal", "payableAmount"),
                 summaryAmount(summary, "settledAmount", "paidAmount"),
                 summaryAmount(summary, "balance", "balanceAmount"), LocalDateTime.now());
-        Map<String, Object> out = new java.util.HashMap<>();
+        Map<String, Object> out = new HashMap<>();
         out.put("reconRowId", rowId);
         out.put("diffsInserted", inserted);
         return out;
     }
 
-    // ==================== 核销（AR / AP 共用入口） ====================
+    // 核销（AR / AP 共用入口）
 
     /** 核销回写：AR → 收款核销／对冲；AP → 应付单最终状态（蓝图代）或结构性跳过（OTC 代）。 */
     @Transactional(rollbackFor = Exception.class)
@@ -251,7 +255,7 @@ public class LinkuOpenSyncService {
             writeApWriteoff(tenantId, asLong(body.get("companyId")), str(body.get("partnerId")), items,
                     isOffset, now);
         }
-        Map<String, Object> out = new java.util.HashMap<>();
+        Map<String, Object> out = new HashMap<>();
         out.put("direction", direction);
         out.put("offset", isOffset);
         out.put("items", items.size());
@@ -281,7 +285,7 @@ public class LinkuOpenSyncService {
 
     /**
      * AR/AP 对冲记录：仅调应收余额 + 写 {@code gl_inter_offset}，<b>不</b>生成收款单
-     * （对冲无现金流入，写成收款会虚增当期收款）。与原直连 OTC 规则一致。
+     * 对冲无现金流入，写成收款会虚增当期收款。与原直连 OTC 规则一致。
      */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> syncOffsetTrace(Map<String, Object> body) {
@@ -294,9 +298,9 @@ public class LinkuOpenSyncService {
         if (customerId == null) {
             throw new BizException(400, "客户编码未在 crm_customer 建档 partner=" + partnerCode);
         }
-        List<Map<String, Object>> valid = new java.util.ArrayList<>();
-        List<Long> validRids = new java.util.ArrayList<>();
-        List<String> unresolved = new java.util.ArrayList<>();
+        List<Map<String, Object>> valid = new ArrayList<>();
+        List<Long> validRids = new ArrayList<>();
+        List<String> unresolved = new ArrayList<>();
         for (Map<String, Object> item : items) {
             BigDecimal amount = asDecimal(item.get("amount"));
             String billNo = str(item.get("sourceBillNo"));
@@ -408,7 +412,7 @@ public class LinkuOpenSyncService {
         }
     }
 
-    // ==================== 发票（验真状态） ====================
+    // 发票（验真状态）
 
     /**
      * 发票写入：现役库（OTC 代）无 {@code ar_pre_invoice}，此时不落业务表，
@@ -427,13 +431,13 @@ public class LinkuOpenSyncService {
             return Map.of("persisted", false, "invoiceNo", billNo == null ? "" : billNo);
         }
         int affected = mapper.updateArPreInvoiceStatus(tenantId, billNo, status);
-        Map<String, Object> out = new java.util.HashMap<>();
+        Map<String, Object> out = new HashMap<>();
         out.put("persisted", true);
         out.put("affected", affected);
         return out;
     }
 
-    // ==================== 付款/收款状态 ====================
+    // 付款/收款状态
 
     /**
      * 付款/收款状态回写。
@@ -461,16 +465,16 @@ public class LinkuOpenSyncService {
             log.warn("[LinkU开放接口] OTC 代 AP 付款状态无对应写入目标（pay_plan/op_pay_batch 取值域不同），"
                     + "已跳过 billNo={}", billNo);
         }
-        Map<String, Object> out = new java.util.HashMap<>();
+        Map<String, Object> out = new HashMap<>();
         out.put("direction", direction);
         out.put("sourceBillNo", billNo);
         out.put("status", status);
         return out;
     }
 
-    // ==================== 代际判定 ====================
+    // 代际判定
 
-    private final Map<String, Boolean> tableCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Boolean> tableCache = new ConcurrentHashMap<>();
 
     private boolean apServiceRequestAvailable() {
         return tableAvailable("ap_service_request");
@@ -496,7 +500,7 @@ public class LinkuOpenSyncService {
         return exists;
     }
 
-    // ==================== 工具 ====================
+    // 工具
 
     private Long tenantId(Map<String, Object> body) {
         Long t = asLong(body.get("tenantId"));
@@ -595,7 +599,7 @@ public class LinkuOpenSyncService {
         if (!(o instanceof List<?> list)) {
             return List.of();
         }
-        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        List<Map<String, Object>> out = new ArrayList<>();
         for (Object e : list) {
             if (e instanceof Map<?, ?> m) {
                 out.add((Map<String, Object>) m);
@@ -608,7 +612,7 @@ public class LinkuOpenSyncService {
         if (!(o instanceof List<?> list)) {
             return List.of();
         }
-        return list.stream().filter(java.util.Objects::nonNull).map(String::valueOf).toList();
+        return list.stream().filter(Objects::nonNull).map(String::valueOf).toList();
     }
 
     private static String str(Object o) {

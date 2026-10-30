@@ -30,7 +30,7 @@
       <el-table-column label="状态" width="92">
         <template #default="{ row }"><el-tag size="small" :type="statusTag(row.status)">{{ returnStatusLabel(row.status) }}</el-tag></template>
       </el-table-column>
-      <!-- D-H2-04：审核人列外显，与采购退货单同一规则（真名由后端读时解析，历史行亦不显工号） -->
+      <!-- 审核人列外显，与采购退货单同一规则（真名由后端读时解析，历史行亦不显工号） -->
       <el-table-column prop="approver" label="审核人" width="110" />
       <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
@@ -70,7 +70,7 @@
               <el-option label="手工录入" value="MANUAL" />
             </el-select>
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="源单号"><el-input v-model="form.sourceBillNo" placeholder="对账明细追溯用" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="源单号"><el-input v-model="form.sourceBillNo" placeholder="对账明细追溯用" maxlength="48" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="退货原因">
             <el-select v-model="form.returnReason" clearable style="width: 100%" placeholder="请选择退货原因">
               <el-option v-for="r in reasonOptions" :key="r.value" :label="r.label" :value="r.value" />
@@ -80,10 +80,12 @@
 
         <el-divider content-position="left">明细行</el-divider>
         <el-table :data="form.lines" size="small" border>
-          <el-table-column label="物料编码" width="130"><template #default="{ row }"><el-input v-model="row.itemCode" /></template></el-table-column>
+          <el-table-column label="物料编码" width="130"><template #default="{ row }"><el-input v-model="row.itemCode" maxlength="64" /></template></el-table-column>
           <el-table-column label="物料名称" min-width="140"><template #default="{ row }"><el-input v-model="row.itemName" /></template></el-table-column>
-          <el-table-column label="数量" width="100"><template #default="{ row }"><el-input v-model="row.qty" /></template></el-table-column>
-          <el-table-column label="单位" width="80"><template #default="{ row }"><el-input v-model="row.uom" placeholder="个/箱" /></template></el-table-column>
+          <!-- 数量列原先不挂 recalc ⇒ 先填单价后改数量时行金额停在旧值，
+               表头也随明细合计同步错下去，"表头＝明细合计"的等式校验查不出。数量与单价同权：任一变更即重算行金额。 -->
+          <el-table-column label="数量" width="100"><template #default="{ row }"><el-input v-model="row.qty" @change="recalc(row)" /></template></el-table-column>
+          <el-table-column label="单位" width="80"><template #default="{ row }"><el-input v-model="row.uom" placeholder="个/箱" maxlength="16" /></template></el-table-column>
           <el-table-column label="单价" width="110"><template #default="{ row }"><el-input v-model="row.price" @change="recalc(row)" /></template></el-table-column>
           <el-table-column label="税率%" width="90"><template #default="{ row }"><el-input v-model="row.taxRate" /></template></el-table-column>
           <el-table-column label="金额" width="120"><template #default="{ row }"><el-input v-model="row.amount" /></template></el-table-column>
@@ -114,7 +116,7 @@
         <el-descriptions-item label="方式">{{ returnModeLabel(detail.returnMode) }}</el-descriptions-item>
         <el-descriptions-item label="源单">{{ detail.sourceBillNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="退货原因">{{ detail.returnReason || '—' }}</el-descriptions-item>
-        <!-- D-H2-04：审核记录外显（approver/approve_time 列已在库） -->
+        <!-- 审核记录外显（approver/approve_time 列已在库） -->
         <el-descriptions-item label="审核人">{{ detail.approver || '—' }}</el-descriptions-item>
         <el-descriptions-item label="审核时间">{{ formatDateTime(detail.approveTime) || '—' }}</el-descriptions-item>
       </el-descriptions>
@@ -152,18 +154,18 @@ import TablePager from '@/components/common/TablePager.vue'
 import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import { useDict } from '@/composables/useDict'
 
-// D-H2-05：退货原因改由数据字典 enum_return_reason_sale 驱动（缺字典时回落同一组内置值，界面行为不变），
+// 退货原因改由数据字典 enum_return_reason_sale 驱动（缺字典时回落同一组内置值，界面行为不变），
 // 原写死数组导致「原因清单只能改代码」且与销售域其它单据的原因规则各写各的。
 const REASON_FALLBACK = { 质量不合格: '质量不合格', 破损: '破损', 错发: '错发', 客户取消: '客户取消', 合同终止: '合同终止', 其他: '其他' }
 const reasonDict = useDict('enum_return_reason_sale', REASON_FALLBACK)
 const reasonOptions = reasonDict.options
 
-// D-H2-02：客户代码改下拉取主数据，客户名称按主数据带出（只读），杜绝手输一个不存在的往来单位代码
+// 客户代码改下拉取主数据，客户名称按主数据带出（只读），杜绝手输一个不存在的往来单位代码
 function onCustomerChange(cust) { form.customerName = cust ? (cust.customerName || cust.name || '') : '' }
 
 // 公司列表（用于下拉选择）
 const companies = ref([])
-// D-BIZ-02（同族）：orgApi 没有 companyList，可选链把「方法不存在」吞成 undefined ⇒ 下拉恒空无提示。
+// 同族：orgApi 没有 companyList，可选链把「方法不存在」吞成 undefined ⇒ 下拉恒空无提示。
 async function loadCompanies() {
   try {
     const tree = await orgApi.companyTree()
@@ -195,7 +197,7 @@ const formDialogRef = ref(null)
 const { rules: formRules } = useFormRules('SALES_RETURN')
 const { submit: guardSubmit } = useSubmitGuard(formRef)
 
-// R5-D-107 脏值守卫：开场（新建/编辑载入）打一次快照，关窗当场比对——
+// 脏值守卫：开场（新建/编辑载入）打一次快照，关窗当场比对——
 // 已填客户/日期/方式/原因＋明细行任一有变即视为脏，交给 DirtyGuardDialog 弹二次确认，
 // 杜绝 Escape/点遮罩/右上 X 一次动作丢掉整张退货单。
 let formSnapshot = ''
@@ -249,10 +251,16 @@ function rawActions(row) {
 }
 
 const lineSum = () => (form.lines || []).reduce((s, l) => s + (Number(l.amount) || 0), 0).toFixed(2)
-// D-H2-01（同采购退货）：明细变更即把合计回填表头金额；表头仍可手改，doSave 再做等式强校验。
+// 同采购退货：明细变更即把合计回填表头金额；表头仍可手改，doSave 再做等式强校验。
 watch(() => form.lines, () => { form.amount = lineSum() }, { deep: true })
-// R5-D-091：表头税额由明细行派生（Σ 含税前金额×税率/100），提交时回写，杜绝恒空/脏值
-const derivedTax = () => (form.lines || []).reduce((s, l) => s + (Number(l.amount) || 0) * (Number(l.taxRate) || 0) / 100, 0).toFixed(2)
+// 行金额为价税合计，税额按含税规则拆＝amount×rate/(100+rate)，
+// 与采购退货 PurchaseReturn.vue:293 与后端 SaleReturnService.deriveTaxAmount 同一式（不要本文件旧写法 amount×rate/100）。
+const lineTax = (l) => {
+  const a = Number(l.amount) || 0
+  const r = Number(l.taxRate) || 0
+  return r > 0 ? (a * r) / (100 + r) : 0
+}
+const derivedTax = () => (form.lines || []).reduce((s, l) => s + lineTax(l), 0).toFixed(2)
 
 async function load() {
   loading.value = true
@@ -279,7 +287,7 @@ async function doSave() {
     // 明细行校验与后端 validateLineSum 同一规则（后端还会比对"合计=表头金额，尾差≤0.01"）
     const filled = (form.lines || []).filter(l => (l.itemName || l.itemCode) && Number(l.amount) > 0)
     if (!filled.length) { ElMessage.warning('请至少填写一行退货明细（物料＋金额）'); return }
-    // D-H2-01：表头金额＝明细合计的等式强校验（前端先拦，后端 validateLineSum 再拦一道）
+    // 表头金额＝明细合计的等式强校验（前端先拦，后端 validateLineSum 再拦一道）
     const headAmt = Number(form.amount) || 0
     const sumAmt = Number(lineSum())
     if (Math.abs(headAmt - sumAmt) > 0.01) {

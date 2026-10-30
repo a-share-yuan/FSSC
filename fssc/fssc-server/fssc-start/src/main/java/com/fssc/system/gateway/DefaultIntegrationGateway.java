@@ -5,6 +5,7 @@ package com.fssc.system.gateway;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fssc.common.util.Backoff;
 import com.fssc.connector.credential.CredentialResolver;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.framework.trace.TraceIdFilter;
@@ -39,10 +40,10 @@ import java.util.UUID;
  * <p>Production can override with a @Primary bean that adds retry, circuit-breaker,
  * message transformation, or ESB routing — business services are agnostic.</p>
  *
- * <p><b>P0-2 唯一键强制化</b>：{@link #post(String, Object, String)} 同 (租户, 唯一键) 只真实外呼一次，
+ * <p><b>唯一键强制化</b>：{@link #post(String, Object, String)} 同 (租户, 唯一键) 只真实外呼一次，
  * 之后回放首次 {@code response_body} 并落 {@code is_duplicate=1} 记录，防重复付款/重复推送。</p>
  *
- * <p><b>P0-3 失败记录与重试</b>：每次外呼记录 {@code trace_id}/{@code retry_count}；只读类通道
+ * <p><b>失败记录与重试</b>：每次外呼记录 {@code trace_id}/{@code retry_count}；只读类通道
  * （AI_MODEL/OCR/INVOICE_VERIFY/INVOICE_CERTIFY，以及 ERP 查询动作 {PROVIDER}_{ACTION} 中
  * {@code *_GET}/{@code *_QUERY}）失败可有界重试，变更类无唯一键时禁止自动重试；
  * 历史失败由 {@link #retryFailed(int, int)} 供扫描 Job 串行重投。</p>
@@ -56,12 +57,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DefaultIntegrationGateway implements IntegrationGateway {
 
-    /** P0-3 只读类分类：重试安全（无副作用），失败可就地重试并被 Job 重投 */
+    /** 只读类分类：重试安全（无副作用），失败可就地重试并被 Job 重投 */
     private static final Set<String> READ_ONLY_CATEGORIES =
             Set.of("AI_MODEL", "OCR", "INVOICE_VERIFY", "INVOICE_CERTIFY");
 
     /**
-     * P0-3 ERP 只读动作后缀：多 ERP 通道分类为 {PROVIDER}_{ACTION}（如 {PROVIDER}_ORDER_GET /
+     * ERP 只读动作后缀：多 ERP 通道分类为 {PROVIDER}_{ACTION}（如 {PROVIDER}_ORDER_GET /
      * {PROVIDER}_ORDER_QUERY），动作后缀命中即为查询类，无副作用，可与固定分类一样安全重试。
      */
     private static final List<String> READ_ONLY_SUFFIXES = List.of("_GET", "_QUERY");
@@ -77,7 +78,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
     private final CredentialResolver credentialResolver;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /** F 步：报文记录体积上限（字符）；≤0 表示不截断（全量）。默认 4000，与改造前一致。 */
+    /** F 步：报文记录体积上限（字符）；≤0 表示不截断（全量）。默认 4000，与原先一致。 */
     @Value("${fssc.connector.log.body-max:4000}")
     private int logBodyMax = 4000;
 
@@ -139,7 +140,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
     }
 
     /**
-     * P0-3 失败外呼重投：跨租户扫描近期 success=0 且未达上限的记录，逐条在原租户上下文内重投，
+     * 失败外呼重投：跨租户扫描近期 success=0 且未达上限的记录，逐条在原租户上下文内重投，
      * 复用同一 log 行（自增 retry_count 封顶），避免无限重试。返回本轮成功数。
      */
     @Override
@@ -226,7 +227,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
             return resp;
         }
 
-        // P0-2 去重命中：不重复外呼，回放首次结果
+        // 去重命中：不重复外呼，回放首次结果
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             IntegrationCallLog prev = findPrior(cfg, idempotencyKey);
             if (prev != null) {
@@ -278,7 +279,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
                     .timeout(Duration.ofSeconds(timeoutSec))
                     .header("Content-Type", "application/json; charset=utf-8");
 
-            // R5-D-038 真值只从 Mapper/Service 出，掩码只存在于 HTTP 出参；此处拒把星号串当凭据外发
+            // 真值只从 Mapper/Service 出，掩码只存在于 HTTP 出参；此处拒把星号串当凭据外发
             String apiKey = credentialResolver.effective(cfg.getApiKey());
             if (apiKey != null && !apiKey.isBlank()) {
                 if (ExtInterfaceConfig.looksMasked(apiKey)) {
@@ -330,7 +331,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
         }
     }
 
-    /** P0-2 查询首次调用记录（is_duplicate=0），用于去重回放 */
+    /** 查询首次调用记录（is_duplicate=0），用于去重回放 */
     private IntegrationCallLog findPrior(ExtInterfaceConfig cfg, String idempotencyKey) {
         try {
             Long tenantId = TenantContext.getTenantId();
@@ -348,7 +349,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
     }
 
     /**
-     * P0-3 内联重试次数：优先读 extra_config.retry；未配置时只读类默认 2 次、变更类默认 0 次。
+     * 内联重试次数：优先读 extra_config.retry；未配置时只读类默认 2 次、变更类默认 0 次。
      * 安全护栏：非只读类（付款/凭证推送）且无唯一键时一律 0 次，防重复提交。
      */
     private int resolveMaxRetry(ExtInterfaceConfig cfg, String idempotencyKey) {
@@ -364,7 +365,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
         return readOnly ? 2 : 0;
     }
 
-    /** P0-3 只读判定：固定分类命中，或 ERP {PROVIDER}_{ACTION} 的查询类动作后缀命中。 */
+    /** 只读判定：固定分类命中，或 ERP {PROVIDER}_{ACTION} 的查询类动作后缀命中。 */
     private static boolean isReadOnly(String category) {
         if (category == null || category.isBlank()) {
             return false;
@@ -400,7 +401,7 @@ public class DefaultIntegrationGateway implements IntegrationGateway {
     private void sleepBackoff(int attempt) {
         long ms = Math.min(300L * (1L << Math.min(attempt - 1, 3)), 3000L);
         // 退避等待：LockSupport 不抛 InterruptedException；中断时提前返回（中断位保留）
-        com.fssc.common.util.Backoff.pauseMillis(ms);
+        Backoff.pauseMillis(ms);
     }
 
     /** 通道侧错误信封识别：命中返回人话错误，未命中（含非 JSON 体）返回 null。 */

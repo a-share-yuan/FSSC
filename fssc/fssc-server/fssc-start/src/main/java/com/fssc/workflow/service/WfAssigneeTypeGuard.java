@@ -22,7 +22,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * A4（2026-10-14）：assign_type 可解析性 fast-fail 守卫。
+ * A4：assign_type 可解析性 fast-fail 守卫。
  *
  * <p><b>背景</b>：{@code WfEngineFacade.applyNodeConfig} 的 switch 只为
  * USER / ROLE / INITIATOR / DEPT_LEADER / DEPT_LEADER_UP <b>五档</b>写了专用分支；
@@ -48,7 +48,7 @@ import java.util.Set;
  * 分支<b>逐字对应</b>；方案存在性判定（{@code enabled=1}）与 {@code WfAssigneeResolver
  * #enabledSchemes} 同一规则。两边脱节时以运行时为准修订本类，不允许第三套规则。
  *
- * <p><b>现网影响</b>：2026-10-14 现查 {@code wf_node_config} 存活 176 行 assign_type
+ * <p><b>现网影响</b>：现查 {@code wf_node_config} 存活 176 行 assign_type
  * <b>全为 ROLE</b> ⇒ 发布校验与启动扫描当前零命中，接入后零行为差异。
  */
 @Slf4j
@@ -59,7 +59,7 @@ public class WfAssigneeTypeGuard {
     /**
      * 运行时真正有专用分支的 assign_type（与 WfEngineFacade.applyNodeConfig switch 对应）。
      * 其余取值（POST / EXPRESSION / SHARE_POOL / 拼错的值 / null 之外的一切）都依赖
-     * wf_assignee_scheme 默认处理，无方案即静默 no-op。
+     * wf_assignee_scheme 兜底，无方案即静默 no-op。
      */
     private static final Set<String> NATIVE_TYPES = Set.of(
             "USER", "ROLE", "INITIATOR", "DEPT_LEADER", "DEPT_LEADER_UP");
@@ -98,7 +98,7 @@ public class WfAssigneeTypeGuard {
             cfgs = nodeConfigMapper.selectList(new LambdaQueryWrapper<WfNodeConfig>()
                     .eq(WfNodeConfig::getModelKey, modelKey));
         } catch (Exception ex) {
-            // 配置表不可读时不阻断发布（与 WfAssigneeResolver 的"无方案默认处理"同一规则：
+            // 配置表不可读时不阻断发布（与 WfAssigneeResolver 的"无方案兜底"同一规则：
             // 读不到 ≠ 配错；真配错由发布路径上的正常查询暴露）。
             log.warn("A4 校验跳过（节点配置读取失败）modelKey={}: {}", modelKey, ex.getMessage());
             return List.of();

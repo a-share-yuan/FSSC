@@ -31,7 +31,7 @@ import java.util.Map;
  * <b>驳回</b>则明细行一字不动。
  *
  * <h3>它不改 FSSC 的账</h3>
- * 本轮规则（Q3=A）只改 BCP 的对账规则，<b>不回写 FSSC 业务单据</b>：
+ * 异议处理只改 BCP 的对账规则，<b>不回写 FSSC 业务单据</b>：
  * 应付/应收/入库/收付款单的权威值仍归财务系统，异议只在对账记录里体现"从多少改成了多少"。
  *
  * <h3>查询与回写都走 BCP 开放通道</h3>
@@ -49,7 +49,7 @@ public class BcpObjectionController {
      * 待审异议清单。
      *
      * @param direction 可选 AP（供应商侧）/ AR（客户侧）过滤；不传=两侧全查
-     * @param limit     条数上限（BCP 侧钳位 1..500）
+     * @param limit 条数上限（BCP 侧钳位 1..500）
      */
     @RequiresPerm("bcp:objection:list")
     @GetMapping("/pending")
@@ -61,7 +61,7 @@ public class BcpObjectionController {
     /**
      * 审核结论。
      *
-     * @param id   异议 id（{@code bcp_recon_objection.id}）
+     * @param id 异议 id（{@code bcp_recon_objection.id}）
      * @param body {@code {"approve":true,"remark":"..."}} —— approve 必填，
      *             显式区分"同意"与"驳回"；缺省不得被当作任一方，否则一次漏参就等于替审核人下了结论
      */

@@ -8,14 +8,26 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.ai.entity.AiActionConfirm;
 import com.fssc.ai.entity.AiInspectRule;
+import com.fssc.ai.entity.AiToolCallLog;
 import com.fssc.ai.mapper.AiActionConfirmMapper;
 import com.fssc.ai.mapper.AiInspectRuleMapper;
+import com.fssc.ai.mapper.AiToolCallLogMapper;
 import com.fssc.common.core.ErrorCode;
+import com.fssc.common.enums.SubjectType;
 import com.fssc.common.exception.BizException;
+import com.fssc.connector.api.ConnectorFacade;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.system.entity.SysUser;
+import com.fssc.system.mapper.SysUserMapper;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HashSet;
+import java.util.HexFormat;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -27,15 +39,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 常驻巡检规则（AI 平权 P5"可组织"）：自然语言→规则写入数据库，job 按频率复跑，
- * 命中即产生"待确认队列"条目——低风险自动读、高风险写进队列等人确认（§5-P5 判据）。
+ * 常驻巡检规则：自然语言→规则写入数据库，job 按频率复跑，
+ * 命中即产生"待确认队列"条目——低风险自动读、高风险写进队列等人确认（§5 判据）。
  *
  * <p>刻意复用的既有件：
  * <ul>
  *   <li>读动作走 {@link AiAskService} 同一目录规则（只 read∧aiAllowed∧LOW 可做巡检源）；</li>
  *   <li>待确认条目直接落 {@code ai_action_confirm}（人侧队列 UI/确认接口零新增）；</li>
  *   <li>调度线程无租户上下文 ⇒ {@code TenantContext.callAs} 逐租户回灌（WfTimeoutJob 同款纪律，
- *       2026-09-22 现网教训：漏了会整批 fail-closed 抛错）。</li>
+ *       漏一个租户就会让整批巡检 fail-closed 抛错）。</li>
  * </ul>
  */
 @Slf4j
@@ -47,14 +59,14 @@ public class AiInspectService {
 
     private final AiInspectRuleMapper ruleMapper;
     private final AiActionConfirmMapper confirmMapper;
-    private final com.fssc.ai.mapper.AiToolCallLogMapper toolCallLogMapper;
+    private final AiToolCallLogMapper toolCallLogMapper;
     private final AiAskService askService;
     private final AiActionCatalog catalog;
-    private final com.fssc.system.mapper.SysUserMapper userMapper;
-    private final com.fssc.connector.api.ConnectorFacade connector;
+    private final SysUserMapper userMapper;
+    private final ConnectorFacade connector;
     private final ObjectMapper objectMapper;
 
-    // ------------------------------------------------------------- 规则管理面
+    // 规则管理面
 
     /** 建规则（真人操作：页面按钮或 AI 助手"帮我把这条巡检固化下来"）。动作必须是目录内只读 LOW 动作。 */
     public AiInspectRule create(String instructionText, AiInspectRule form, LoginUser user) {
@@ -66,7 +78,7 @@ public class AiInspectService {
         form.setTenantId(user.getTenantId());
         form.setEnabled(form.getEnabled() == null ? 1 : form.getEnabled());
         form.setIntervalMinutes(form.getIntervalMinutes() == null ? 60 : Math.max(5, form.getIntervalMinutes()));
-        form.setOnBreach("QUEUE"); // 本阶段唯一处置；AUTO_EXECUTE 需另立裁决
+        form.setOnBreach("QUEUE"); // 本阶段唯一处置；AUTO_EXECUTE 需另行设定
         form.setCreatedBy(user.getUsername());
         form.setInstructionText(truncate(instructionText, 2000));
         form.setCreateTime(LocalDateTime.now());
@@ -76,7 +88,7 @@ public class AiInspectService {
     }
 
     /**
-     * 自然语言→规则草稿（P5"可组织"的表达载体）。有大模型通道时由模型从本人可见只读动作里挑选；
+     * 自然语言→规则草稿。有大模型通道时由模型从本人可见只读动作里挑选；
      * 无通道/解析失败⇒返回 null，前端引导人工填表 —— 绝不瞎编一条规则。
      */
     public AiInspectRule suggest(String instruction, LoginUser user) {
@@ -100,11 +112,11 @@ public class AiInspectService {
                     + "\"jsonPath\":\"如 $.total 或 $.list\",\"op\":\"LT|LTE|GT|GTE|EQ|EMPTY|NOT_EMPTY\","
                     + "\"expected\":\"数字或空\",\"intervalMinutes\":数字}。清单里没有能回答该诉求的动作时输出 {\"none\":true}。"
                     + "\n动作清单=" + actionList;
-            var resp = connector.invokeRead("AI_MODEL", java.util.Map.of(
+            var resp = connector.invokeRead("AI_MODEL", Map.of(
                     "model", cfg.getModelName(),
-                    "messages", java.util.List.of(
-                            java.util.Map.of("role", "system", "content", sys),
-                            java.util.Map.of("role", "user", "content", instruction)),
+                    "messages", List.of(
+                            Map.of("role", "system", "content", sys),
+                            Map.of("role", "user", "content", instruction)),
                     "temperature", 0));
             if (!resp.isOk()) {
                 return null;
@@ -148,11 +160,21 @@ public class AiInspectService {
                 .orderByDesc(AiInspectRule::getId));
     }
 
-    // ---------------------------------------------------------------- 执行面
+    // 执行面
+
+    /**
+     * 巡检作业是否在本进程执行。巡检源执行依赖同进程内的业务控制器反射（{@code AiLocalReadInvoker}），
+     * 独立 AI 服务里没有这些控制器 ⇒ 该进程关闭作业，由单体执行，避免双进程对同一规则重复出票。
+     */
+    @Value("${fssc.ai.inspect.enabled:true}")
+    private boolean inspectEnabled = true;
 
     /** 每 5 分钟扫一轮到期的规则（心跳包装由 JobHeartbeatService 统一记账，这里只包最简 try-catch）。 */
     @Scheduled(fixedDelay = 300_000, initialDelay = 90_000)
     public void runDueRules() {
+        if (!inspectEnabled) {
+            return;
+        }
         try {
             TenantContext.runIgnoreTenant(() -> {
                 List<AiInspectRule> due = ruleMapper.selectList(new LambdaQueryWrapper<AiInspectRule>()
@@ -175,7 +197,7 @@ public class AiInspectService {
         }
         r.setLastRunAt(LocalDateTime.now());
         long t0 = System.currentTimeMillis();
-        String traceId = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        String traceId = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         LoginUser owner = null;
         try {
             // 以"规则创建人"的权限视角执行：创建人已离职/失权 ⇒ 规则自然失效（fail-closed）
@@ -203,7 +225,7 @@ public class AiInspectService {
     private void logToolCall(AiInspectRule r, LoginUser owner, String traceId, long t0, int status, String err, String detail) {
         try {
             AiAction a = catalog.byCode(r.getActionCode());
-            com.fssc.ai.entity.AiToolCallLog l = new com.fssc.ai.entity.AiToolCallLog();
+            AiToolCallLog l = new AiToolCallLog();
             l.setTenantId(r.getTenantId());
             l.setTraceId(traceId);
             l.setInstructionText("inspect://" + r.getRuleName() + (r.getInstructionText() == null ? "" : " | " + r.getInstructionText()));
@@ -230,20 +252,20 @@ public class AiInspectService {
     }
 
     private LoginUser ownerIdentity(AiInspectRule r) {
-        com.fssc.system.entity.SysUser su = userMapper.selectOne(new LambdaQueryWrapper<com.fssc.system.entity.SysUser>()
-                .eq(com.fssc.system.entity.SysUser::getUserName, r.getCreatedBy()).last("LIMIT 1"));
+        SysUser su = userMapper.selectOne(new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getUserName, r.getCreatedBy()).last("LIMIT 1"));
         if (su == null || !"NORMAL".equals(su.getStatus())) {
             throw new BizException(ErrorCode.FORBIDDEN, "规则创建人 " + r.getCreatedBy() + " 已不存在或停用，规则失效");
         }
         LoginUser u = new LoginUser();
-        u.setSubjectType(com.fssc.common.enums.SubjectType.TENANT);
+        u.setSubjectType(SubjectType.TENANT);
         u.setTenantId(r.getTenantId());
         u.setUserId(su.getId());
         u.setUsername(su.getUserName());
         u.setRealName(su.getNickName());
         u.setCompanyId(su.getCompanyId());
         u.setDeptId(su.getDeptId());
-        u.setPerms(new java.util.HashSet<>(userMapper.selectPerms(su.getId())));
+        u.setPerms(new HashSet<>(userMapper.selectPerms(su.getId())));
         return u;
     }
 
@@ -256,14 +278,12 @@ public class AiInspectService {
         c.setParamsDigest(sha1(r.getId() + "|" + actual + "|" + System.currentTimeMillis()));
         c.setApplicantUserId(0L); // 机器发起：无"申请人"，确认时不受自确约束
         c.setStatus("PENDING");
-        c.setReason(String.format("巡检规则[%s]命中：动作 %s 的 %s %s %s，实测=%s。请人工研判后续处置。",
+        c.setReason(String.format("巡检规则[%s]命中：动作 %s 的 %s %s %s，实际值=%s。请人工研判后续处置。",
                 r.getRuleName(), r.getActionCode(), r.getJsonPath(), opText(r.getOp()), r.getExpected(), actual));
         c.setExpireAt(LocalDateTime.now().plusHours(24));
         c.setCreateTime(LocalDateTime.now());
         confirmMapper.insert(c);
     }
-
-    // ---------------------------------------------------------------- 判据面
 
     static String fill(String template) {
         if (template == null) {
@@ -348,8 +368,8 @@ public class AiInspectService {
 
     private static String sha1(String s) {
         try {
-            return java.util.HexFormat.of().formatHex(
-                    java.security.MessageDigest.getInstance("SHA-1").digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-1").digest(s.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             return String.valueOf(s.hashCode());
         }

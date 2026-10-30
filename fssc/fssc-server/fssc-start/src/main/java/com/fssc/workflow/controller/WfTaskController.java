@@ -10,14 +10,25 @@ import com.fssc.common.core.Result;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.workflow.entity.WfAddSign;
+import com.fssc.workflow.entity.WfApprovalItem;
 import com.fssc.workflow.entity.WfTask;
+import com.fssc.workflow.job.WfTimeoutJob;
 import com.fssc.workflow.mapper.WfTaskMapper;
 import com.fssc.workflow.service.BillRouteRegistry;
+import com.fssc.workflow.service.NodeOrgResolver;
+import com.fssc.workflow.service.WfAddSignService;
 import com.fssc.workflow.service.WfEngineFacade;
 import com.fssc.workflow.service.WfNodeConfigResolver;
+import com.fssc.workflow.service.WfReadGuard;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +36,7 @@ import org.flowable.task.api.Task;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -52,19 +64,19 @@ public class WfTaskController {
     private final JdbcTemplate jdbcTemplate;
     private final WfTaskMapper wfTaskMapper;
     private final WfNodeConfigResolver wfNodeConfigResolver;
-    /** 催办的发信/限频/记录通道（超时作业与发起人催办共用同一实现，见 E-10 / F1-5） */
-    private final com.fssc.workflow.job.WfTimeoutJob wfTimeoutJob;
-    /** 待办代办标识（F4-1）：委托关系读取走取人解析器的同一份规则 */
-    private final com.fssc.workflow.service.NodeOrgResolver nodeOrgResolver;
-    /** D-DEC-229：只读预览端点的归属校验（换 ID 即读他人单据全链，写路径的 canOperate 管不到读路径） */
-    private final com.fssc.workflow.service.WfReadGuard wfReadGuard;
-    /** D-DEC-065：待办「加签」标识的读侧数据源（wf_add_sign 只读，不参与任何指派/回跳判定） */
-    private final com.fssc.workflow.service.WfAddSignService wfAddSignService;
+    /** 催办的发信/限频/记录通道（超时作业与发起人催办共用同一实现，见 E-10 /） */
+    private final WfTimeoutJob wfTimeoutJob;
+    /** 待办代办标识：委托关系读取走取人解析器的同一份规则 */
+    private final NodeOrgResolver nodeOrgResolver;
+    /** 只读预览端点的归属校验（换 ID 即读他人单据全链，写路径的 canOperate 管不到读路径） */
+    private final WfReadGuard wfReadGuard;
+    /** 待办「加签」标识的读侧数据源（wf_add_sign 只读，不参与任何指派/回跳判定） */
+    private final WfAddSignService wfAddSignService;
 
     /**
      * 我的待办（兼容版，返回数组）。工作台徽标 / 个人中心 / AI 助手等取前 N 条或仅计数的场景使用。
      *
-     * <p>性能约定（P0 优化）：
+     * <p>性能约定：
      * <ol>
      *  <li>单据补齐走【批量查询】（按 bizType 分组 IN 查询），杜绝逐条 selectById 的 N+1；</li>
      *  <li>限制返回条数上限，避免待办堆积时把全量数据拉回前端。</li>
@@ -75,8 +87,9 @@ public class WfTaskController {
         if (limit < 1) limit = 200;
         if (limit > MAX_PAGE_SIZE) limit = MAX_PAGE_SIZE;
         List<Task> tasks = wfEngineFacade.todo(UserContext.getRequired().getUserId());
-        List<Task> slice = tasks.size() > limit ? tasks.subList(0, limit) : tasks;
-        return Result.success(buildTodoItems(slice, false));
+        List<Task> slice = tasks.size() > limit ? new ArrayList<>(tasks.subList(0, limit)) : tasks;
+        // todo() 只为全量取单据键（不加载变量），本端点的行字段仍需变量 ⇒ 按条数上限补载
+        return Result.success(buildTodoItems(wfEngineFacade.withProcessVariables(slice), false));
     }
 
     /**
@@ -96,9 +109,11 @@ public class WfTaskController {
         long total = tasks.size();
         int from = (int) Math.min((long) (pageNum - 1) * pageSize, total);
         int to = (int) Math.min((long) from + pageSize, total);
-        List<Task> pageTasks = (from >= to) ? List.of() : tasks.subList(from, to);
+        List<Task> pageTasks = (from >= to) ? List.of() : new ArrayList<>(tasks.subList(from, to));
 
-        return Result.success(PageResult.of(buildTodoItems(pageTasks, true), total, pageNum, pageSize));
+        // 只给当页（≤200 行）补回运行态变量，避免万级在办时全量连表拉变量
+        return Result.success(PageResult.of(
+                buildTodoItems(wfEngineFacade.withProcessVariables(pageTasks), true), total, pageNum, pageSize));
     }
 
     /** 待办每页条数硬上限，防止超大页把整表拉回 */
@@ -111,7 +126,7 @@ public class WfTaskController {
         Map<String, Map<Long, Map<String, Object>>> needFill = new HashMap<>();
         // procInstId -> 行（旧数据无 bizId，按流程实例回退）
         Map<String, Map<String, Object>> needFallback = new HashMap<>();
-        // 运行态变量缺失时的历史变量默认处理（业务行被清理 / 变量被删的场景）
+        // 运行态变量缺失时的历史变量兜底（业务行被清理 / 变量被删的场景）
         Map<String, Map<String, Object>> hisVars = loadHistoricalVars(tasks);
         // POOL 软锁标注：一次判定（一次节点配置查询），不在按行循环里反复查库
         Map<String, Long> locks;
@@ -133,7 +148,7 @@ public class WfTaskController {
             m.put("processInstanceId", t.getProcessInstanceId());
             m.put("taskName", t.getName());
             m.put("nodeKey", t.getTaskDefinitionKey());
-            // D-DEC-160②：模型键随行带出（Flowable 定义 ID 形如 modelKey:version:deployId，
+            // ②：模型键随行带出（Flowable 定义 ID 形如 modelKey:version:deployId，
             // 与 NodeOrgResolver.isPoolTask 的取法逐字同源）。零次查库——待办每页最多 200 行，
             // 若这里再走 loadModelKeys 的 wf_instance IN 查询，徽标轮询（/todo）就要多打一次库。
             m.put("modelKey", t.getProcessDefinitionId() == null
@@ -210,7 +225,7 @@ public class WfTaskController {
                 ids.addAll(cands);
             }
         }
-        // D-DEC-160②：节点取人方式（handling_mode）一次查完，供「释放」按钮按行标注。
+        // ②：节点取人方式（handling_mode）一次查完，供「释放」按钮按行标注。
         // 判据与 NodeOrgResolver.isPoolTask 逐字一致（poolNodeKeys() 就是该判据的批量形态，
         // 同一份 handling_mode=POOL 规则；见 WfNodeConfigResolver.poolNodeKeys 注释「待办列表批量判定」）。
         // 失败退空集 = 全部按"非池"标注，按钮少给不误给，服务端 unclaim 仍会硬拦。
@@ -222,8 +237,8 @@ public class WfTaskController {
             poolKeys = Set.of();
         }
         names.putAll(loadUserNames(ids));
-        Long me = com.fssc.framework.security.UserContext.get() != null
-                ? com.fssc.framework.security.UserContext.get().getUserId() : null;
+        Long me = UserContext.get() != null
+                ? UserContext.get().getUserId() : null;
         for (Map<String, Object> m : rows) {
             Long a = toUserId(m.get("assigneeId"));
             m.put("assigneeName", a == null ? "" : names.getOrDefault(a, UNKNOWN_USER));
@@ -232,11 +247,11 @@ public class WfTaskController {
             boolean pool = isPoolNode(poolKeys, str(m.get("modelKey")), str(m.get("nodeKey")));
             m.put("poolTask", pool);
             m.put("canClaim", a == null);
-            // D-DEC-160（②按钮环节，与门面 unclaim 同判据）：原先只看 Flowable assignee 是否等于我，
-            // 于是 AUTO/PICK 节点「按配置直接指派到我」也回 canUnclaim=true——这类节点本没有任务池，
-            // 点「释放」只会把已指派到人的单子打回无人可办（①领取后徽标不刷新属另一环节，见回报）。
+            // 释放按钮（与门面 unclaim 同判据）：只看 Flowable assignee 是否等于我是不够的，
+            // AUTO/PICK 节点「按配置直接指派到我」也会命中，而这类节点本没有任务池，
+            // 点「释放」只会把已指派到人的单子打回无人可办。
             m.put("canUnclaim", a != null && a.equals(me) && pool);
-            // 被他人锁定的作业任务：把领取人姓名给前端做灰显提示（批次 1 ①）
+            // 被他人锁定的作业任务：把领取人姓名给前端做灰显提示
             if (Boolean.TRUE.equals(m.get("lockedByOther"))) {
                 m.put("lockOwnerName", names.getOrDefault(a, UNKNOWN_USER));
             }
@@ -257,13 +272,13 @@ public class WfTaskController {
     /**
      * 本行节点是否任务池（{@code handling_mode=POOL}）。
      *
-     * <p>D-DEC-160②：键形态 {@code modelKey:nodeKey} 与 {@link com.fssc.workflow.service.WfNodeConfigResolver#poolNodeKeys()}、
+     * <p>②：键形态 {@code modelKey:nodeKey} 与 {@link WfNodeConfigResolver#poolNodeKeys()}、
      * {@code NodeOrgResolver.isPoolTask(Task)} 完全同源（同一配置列、同一 trim + equalsIgnoreCase 规则），
      * 只是列表侧手上没有 Flowable {@code Task}、只有行字段，故走批量集合而不是逐行 resolve。
      *
      * <p><b>刻意不含 {@code assign_type=SHARE_POOL}</b>：那是 {@code WfTimeoutJob.isWorkNode} 的「作业档」双条件，
      * 与本处的「有没有任务池」不是同一件事；若把它并进 {@code isPoolTask} 的判据，会连带改动
-     * claim() 的 {@code deny_self} 自审限制语义（POOL 不走 deny_self 是 09-26 裁决，不得回退）。
+     * claim() 的 {@code deny_self} 自审限制语义（POOL 不走 deny_self 是 09-26 判定，不得回退）。
      * 现网 {@code wf_node_config} 亦无 SHARE_POOL 行（AUTO/POOL/PICK × ROLE/USER/INITIATOR）。
      */
     private static boolean isPoolNode(Set<String> poolKeys, String modelKey, String nodeKey) {
@@ -276,22 +291,22 @@ public class WfTaskController {
     private static final String UNKNOWN_USER = "（账号已停用或注销）";
 
     /**
-     * 「加签校验」标注（F3-3 / UR-12）：总开关 {@code approve.addsign_gate.enabled} 打开后，
+     * 「加签校验」标注：总开关 {@code approve.addsign_gate.enabled} 打开后，
      * 灰度模型内 {@code allow_addsign=0} 的待办行下发 {@code addSignAllowed=false}，前端据此隐藏「加签」按钮。
      *
-     * <p>缺省（总开关关）时<b>一个字段都不下发、一次库都不查</b>——前端拿不到该字段即按"可加签"渲染，
-     * 与改造前逐字一致。服务端 {@code addSign()} 里的拒绝判定读的是同一份配置，不会出现"看得见却办不动"。
+     * <p>总开关关着时<b>一个字段都不下发、一次库都不查</b>——前端拿不到该字段即按"可加签"渲染。
+     * 服务端 {@code addSign()} 里的拒绝判定读的是同一份配置，不会出现"看得见却办不动"。
      */
     private void annotateAddSignGate(List<Map<String, Object>> rows) {
         if (rows.isEmpty() || !wfEngineFacade.isAddSignGateEnabled()) {
             return;
         }
         try {
-            java.util.Set<String> grey = wfEngineFacade.addSignGateModels();
+            Set<String> grey = wfEngineFacade.addSignGateModels();
             if (grey.isEmpty()) {
                 return;
             }
-            java.util.Set<String> disabled = wfNodeConfigResolver.addsignDisabledNodeKeys();
+            Set<String> disabled = wfNodeConfigResolver.addsignDisabledNodeKeys();
             Map<String, String> modelKeys = loadModelKeys(rows);
             for (Map<String, Object> m : rows) {
                 String modelKey = modelKeys.get(String.valueOf(m.get("processInstanceId")));
@@ -306,8 +321,8 @@ public class WfTaskController {
     }
 
     /**
-     * 待办「加签」标识（D-DEC-065 症状②）：这一行是别人临时插的一道审——前加签被改派到我名下、
-     * 或后加签在推进后落在我名下。改造前它与普通环节<b>视觉完全同一</b>，于是加签人不知道自己
+     * 待办「加签」标识：这一行是别人临时插的一道审——前加签被改派到我名下、
+     * 或后加签在推进后落在我名下。若不区分，它与普通环节<b>视觉完全同一</b>，加签人不知道自己
      * 这一签只代表"加签这道审完了"（签完回跳原办理人、不推进流程），按普通环节的心态去点通过，
      * 事后既说不清自己签过什么，也说不清这单为什么还在原来那个人手上。
      *
@@ -316,7 +331,7 @@ public class WfTaskController {
      * 同一状态规则，不另立第二套判据。审结/取消后记录转 DONE/CANCELLED ⇒ 角标随之消失，
      * 原办理人的待办回到"普通环节"呈现。
      *
-     * <p><b>缺省零变化</b>：本页没有任何进行中的加签时，一个字段都不下发，返回体与改造前逐字一致。
+     * <p><b>缺省零下发</b>：本页没有任何进行中的加签时，一个字段都不下发。
      * 成本控制：一次 {@code task_id IN (本页)} 批量查询（与 POOL 软锁标注同型），
      * 失败退化为"不标注"——只影响角标，指派/回跳/服务端校验一律不受影响。
      */
@@ -335,13 +350,13 @@ public class WfTaskController {
             if (taskIds.isEmpty()) {
                 return;
             }
-            List<com.fssc.workflow.entity.WfAddSign> recs = wfAddSignService.activeByTaskIds(taskIds);
+            List<WfAddSign> recs = wfAddSignService.activeByTaskIds(taskIds);
             if (recs == null || recs.isEmpty()) {
                 return;
             }
-            Map<String, com.fssc.workflow.entity.WfAddSign> byTask = new HashMap<>();
+            Map<String, WfAddSign> byTask = new HashMap<>();
             Set<Long> initiatorIds = new HashSet<>();
-            for (com.fssc.workflow.entity.WfAddSign r : recs) {
+            for (WfAddSign r : recs) {
                 // activeByTaskIds 已按 id 倒序 ⇒ 同任务多条（连环加签）时取最近一条
                 if (r.getTaskId() != null) {
                     byTask.putIfAbsent(r.getTaskId(), r);
@@ -352,7 +367,7 @@ public class WfTaskController {
             }
             Map<Long, String> names = loadUserNames(initiatorIds);
             for (Map<String, Object> m : rows) {
-                com.fssc.workflow.entity.WfAddSign r = byTask.get(str(m.get("taskId")));
+                WfAddSign r = byTask.get(str(m.get("taskId")));
                 if (r == null) {
                     continue;
                 }
@@ -369,17 +384,17 @@ public class WfTaskController {
     }
 
     /**
-     * 「代办标识」标注（F4-1，治 D-DEC-120 归因失真）：委托期内待办归属对两边都说清楚——
+     * 「代办标识」标注：委托期内待办归属对两边都说清楚——
      * <ul>
      *   <li>受托人侧：本行的真实办理人是我的某位<b>委托人</b> ⇒ 下发 {@code delegatedFrom / delegatedFromName}
-     *       （前端渲染「代 张三 办理」）。借资格档下这行同时挂在委托人名下，不标注就会出现
+     *       前端渲染「代 张三 办理」。借资格档下这行同时挂在委托人名下，不标注就会出现
      *       "两边都以为是对方在办"的空洞；</li>
      *   <li>委托人侧：本行办理人是我、而我此刻有生效委托 ⇒ 下发 {@code delegatedToNames}
-     *       （「已委托给 李四 代管」），改派档下另有 {@code delegatedTo} 单个受托人 ID。</li>
+     *       「已委托给 李四 代管」，改派档下另有 {@code delegatedTo} 单个受托人 ID。</li>
      * </ul>
      *
-     * <p><b>缺省零变化</b>：本人名下没有任何生效委托时，两份映射都为空 ⇒ <b>一个字段都不下发</b>，
-     * 返回体与改造前逐字一致。标注的是"谁委托给谁"这一既有事实，不改变任何可办性判定——
+     * <p>本人名下没有任何生效委托时，两份映射都为空 ⇒ <b>一个字段都不下发</b>。
+     * 标注的是"谁委托给谁"这一既有事实，不改变任何可办性判定——
      * 能不能办仍由 {@code NodeOrgResolver.canOperate} 与服务端守卫说了算。
      *
      * <p>刻意<b>不</b>按 {@code wf.delegate.mode} 收窄：借资格档（现网默认）才是归属最容易混的档位，
@@ -460,7 +475,7 @@ public class WfTaskController {
     }
 
     /**
-     * 历史变量默认处理：运行态变量（ACT_RU_VARIABLE）缺失时，回读 ACT_HI_VARINST 里的
+     * 历史变量兜底：运行态变量（ACT_RU_VARIABLE）缺失时，回读 ACT_HI_VARINST 里的
      * bizType / bizId / title。
      *
      * <p>典型场景：流程实例仍在跑，但业务行被清理（测试数据删除 / 归档搬运），
@@ -529,13 +544,12 @@ public class WfTaskController {
             }
         }
         // 2) 其它业务类型：每个 bizType 各一次 IN 查询。
-        // 批次3 R3-B（D-B3-02 办结）：这里原先是 50 多行手写的 fillBySql，与 {@code NodeOrgResolver.companyTable()}
-        // 的 117 行 switch、{@code WfEngineFacade.BIZ_NO_TABLES} 三处各写一遍"bizType→表/列"，
-        // round 1 实测的三处漂移（RECEIVABLE_COLLECT/FA_CER/FA_DEPRECIATION 取人侧与查询侧不一致）就是这么来的。
-        // 现在唯一真值在 {@link BillRouteRegistry}，本方法只负责遍历；表/列名与改前一一对应（差异见注册表逐行注释）。
-        // 跳过两类：fillTable=null（改前不回填，或由 fillBadDebt 这类特例承担）、费用族（上面 mapper 成对匹配已覆盖）。
-        // 遗留死映射 TREASURY→treasury_transfer、ASSET→asset_card 目标表在库里不存在（D-B3-05，全库无发起点），
-        // 原样保留、不猜表；改后由 fillBySql 的"表不存在"分支一次 warn 后跳过，不再抛 Unknown table。
+        // 表/列映射的唯一真值在 {@link BillRouteRegistry}，本方法只负责遍历。
+        // 不在这里再写一份 switch，是为了避免"bizType→表/列"在取人侧与查询侧各写一遍后漂移
+        // （RECEIVABLE_COLLECT / FA_CER / FA_DEPRECIATION 就因此出现过两处不一致）。
+        // 跳过两类：fillTable=null（不回填，或由 fillBadDebt 这类特例承担）、费用族（上面 mapper 成对匹配已覆盖）。
+        // 遗留死映射 TREASURY→treasury_transfer、ASSET→asset_card 目标表在库里不存在（全库无发起点），
+        // 原样保留、不猜表；fillBySql 的"表不存在"分支一次 warn 后跳过，不抛 Unknown table。
         for (Map.Entry<String, BillRouteRegistry.Route> e : BillRouteRegistry.exactRoutes().entrySet()) {
             String bt = e.getKey();
             BillRouteRegistry.Route r = e.getValue();
@@ -546,12 +560,12 @@ public class WfTaskController {
         // 3) BAD_DEBT 需要 JOIN rc_receivable 获取单据号
         fillBadDebt(needFill);
         // 4) 前缀匹配批量回填：只服务未显式登记的族（存货 INV_*、资产 FA_*）。
-        // TR 系列【禁止】按前缀统一映射：各类型目标表不同、id 空间互不相干（旧写法 fillByPrefixSql("TR",
+        // TR 系列【禁止】按前缀统一映射：各类型目标表不同、id 空间互不相干（fillByPrefixSql("TR",
         // "tr_transfer") 会让 TR_PAY/TR_RECEIPT 等按 id 借用调拨单号）⇒ 全部走上面的显式行。
-        // 批次3 R3-B 刻意更正②：前缀查询现在给显式行让路（{@code hasExact}）——改前 "INV" 前缀会把
+        // 前缀查询必须给显式行让路（{@code hasExact}）：否则 "INV" 前缀会把
         // INVOICE_ISSUE/INVOICE_MATCH_MANUAL 已按 inv_invoice/exp_bill 精确回填好的三项，
-        // 用 md_inventory 里<b>同 id 的另一张存货</b>覆盖掉（发票 id 撞进存货 id 空间时；D-FAM4-01 同一类，
-        // 错值比空值危险）。FA_CER/FA_DEPRECIATION 同理改走各自本表。
+        // 用 md_inventory 里<b>同 id 的另一张存货</b>覆盖掉（发票 id 撞进存货 id 空间时；同一类，
+        // 错值比空值危险）。FA_CER/FA_DEPRECIATION 同理走各自本表。
         fillByPrefixSql(needFill, "FA", "md_asset", "asset_no", "original_amount", "asset_name");
         fillByPrefixSql(needFill, "INV", "md_inventory", "item_code", "out_amount", "item_name");
 
@@ -559,7 +573,7 @@ public class WfTaskController {
         if (!needFallback.isEmpty()) {
             try {
                 List<ExpBill> bills = expBillMapper.selectList(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ExpBill>()
+                        new LambdaQueryWrapper<ExpBill>()
                                 .in(ExpBill::getProcInstId, needFallback.keySet()));
                 for (ExpBill bill : bills) {
                     if (bill == null || bill.getProcInstId() == null) continue;
@@ -576,9 +590,9 @@ public class WfTaskController {
      * 通用批量回填：单次 IN 查询补齐 billNo/totalAmount/title。
      * 表名与列名均为本类硬编码常量（非用户输入），不存在 SQL 注入面。
      *
-     * 批次3 R3-A（D-B3-01 根治）：单号/金额/标题三项原先共用一条 SQL，任一列不存在即整条抛
+     * 单号/金额/标题三项不能共用一条硬拼的 SQL：任一列不存在即整条抛
      * {@code Unknown column}，被下面的 catch 吞成一行不带列名的 warn ⇒ 该域<b>三项全丢</b>
-     * （"合同待办没有单号"这类分别上报的症状共享同一个根因）。现按 information_schema
+     * （"合同待办没有单号"这类分别上报的症状共享同一个根因）。故按 information_schema
      * 逐列校验，缺列只把<b>该项</b>置为 NULL 常量，并把表名/列名打进 warn（同列只报一次）。
      */
     private void fillBySql(Map<String, Map<Long, Map<String, Object>>> needFill, String bizType,
@@ -611,18 +625,18 @@ public class WfTaskController {
         }
     }
 
-    /** 表列元数据缓存（每表一次 information_schema 查询）；null＝元数据查不到，按旧行为不过滤 */
-    private final Map<String, Set<String>> tableColumns = new java.util.concurrent.ConcurrentHashMap<>();
-    private final Set<String> warnedKeys = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** 表列元数据缓存（每表一次 information_schema 查询）；null＝元数据查不到，此时不按列名过滤 */
+    private final Map<String, Set<String>> tableColumns = new ConcurrentHashMap<>();
+    private final Set<String> warnedKeys = ConcurrentHashMap.newKeySet();
 
-    /** 表在当前库中的列名集合（小写）；表不存在返回空集；元数据查询失败返回 null（不过滤、保持旧行为） */
+    /** 表在当前库中的列名集合（小写）；表不存在返回空集；元数据查询失败返回 null（不按列名过滤） */
     private Set<String> columnsOf(String table) {
         if (table == null || table.isBlank()) return null;
         Set<String> cached = tableColumns.get(table);
         if (cached != null) return cached;
         Set<String> cols;
         try {
-            cols = new java.util.HashSet<>();
+            cols = new HashSet<>();
             for (String c : jdbcTemplate.queryForList(
                     "SELECT LOWER(column_name) FROM information_schema.columns "
                             + "WHERE table_schema = DATABASE() AND LOWER(table_name) = LOWER(?)",
@@ -630,7 +644,7 @@ public class WfTaskController {
                 if (c != null) cols.add(c);
             }
         } catch (Exception ex) {
-            log.warn("待办回填列元数据查询失败 表={}（本轮不校验列名）", table, ex);
+            log.warn("待办回填列元数据查询失败 表={}（本次不校验列名）", table, ex);
             return null;
         }
         tableColumns.put(table, cols);
@@ -657,8 +671,8 @@ public class WfTaskController {
      * 批量回填前缀匹配类型：所有 bizType 前缀匹配的都会走该表查询。
      * 例如 bt.startsWith("FA_") → 走 md_asset 表。
      *
-     * <p>批次3 R3-B：已登记<b>显式行</b>的 bizType 一律让路（改前只有 FA_CER 一处手工 continue，
-     * 于是 INVOICE_ISSUE/INVOICE_MATCH_MANUAL 被 "INV" 前缀二次覆盖成另一张存货的单号）。
+     * <p>已登记<b>显式行</b>的 bizType 一律让路：原先只有 FA_CER 一处手工 continue，
+     * 于是 INVOICE_ISSUE/INVOICE_MATCH_MANUAL 被 "INV" 前缀二次覆盖成另一张存货的单号。
      */
     private void fillByPrefixSql(Map<String, Map<Long, Map<String, Object>>> needFill,
                                 String prefix, String table, String noCol, String amtCol, String titleCol) {
@@ -752,10 +766,10 @@ public class WfTaskController {
     @OperLog(module = "WF_TASK", operType = "UPDATE", desc = "审批")
     @PostMapping("/approve")
     public Result<Void> approve(@Validated @RequestBody ApproveReq req) {
-        // G2 传阅：ccUserIds 为审批人临时指定的抄送人（可空），与节点配置取并集后投递到 wf_cc
-        // D-V3-148：数组/逗号串两形态在 req.ccUserIdsNormalized() 归一，门面仍收逗号分隔串
-        // G4 自由驳回：rejectToNodeKey 为驳回目标节点（可空）；空 ⇒ 原「终止本流程」路径逐字不变
-        // G2 ①层审批项：approvalItemCode 为节点上配置的自定义审批结果（可空）；空 ⇒ 逐字不变
+        // 抄送：ccUserIds 为审批人临时指定的抄送人（可空），与节点配置取并集后投递到 wf_cc
+        // 数组/逗号串两形态在 req.ccUserIdsNormalized() 归一，门面仍收逗号分隔串
+        // 自由驳回：rejectToNodeKey 为驳回目标节点（可空）；空 ⇒ 走「终止本流程」路径
+        // 审批项：approvalItemCode 为节点上配置的自定义审批结果（可空）；空 ⇒ 不走审批项分支
         wfEngineFacade.complete(req.getTaskId(), req.isApproved(), req.getComment(),
                 UserContext.getRequired().getUserId(), req.getNextAssigneeUserId(), req.ccUserIdsNormalized(),
                 req.getRejectToNodeKey(), req.getApprovalItemCode());
@@ -763,13 +777,13 @@ public class WfTaskController {
     }
 
     /**
-     * G2 ①层「审批项」（2026-09-24）：当前任务节点上启用的自定义审批结果（只读）。
+     * 「审批项」：当前任务节点上启用的自定义审批结果（只读）。
      *
-     * <p>审批弹窗打开时调用；返回空数组即不渲染自定义按钮（与改造前完全一致）。
+     * <p>审批弹窗打开时调用；返回空数组即不渲染自定义按钮。
      * 与 {@code /approve} 的 {@code approvalItemCode} 同源同一解析器，不存在"看得见点不动"。
      */
     @GetMapping("/approval-items")
-    public Result<java.util.List<com.fssc.workflow.entity.WfApprovalItem>> approvalItems(@RequestParam String taskId) {
+    public Result<List<WfApprovalItem>> approvalItems(@RequestParam String taskId) {
         wfReadGuard.assertTaskReadable(taskId);
         return Result.success(wfEngineFacade.approvalItemsOf(taskId));
     }
@@ -788,8 +802,8 @@ public class WfTaskController {
     }
 
     /**
-     * 「自由驳回」只读预览（P4 G4）：给定当前待办任务，列出可退回的上游节点及各自影响面
-     * （退回到它将作废哪些后续节点），<b>不修改任何流程数据</b>。
+     * 「自由驳回」只读预览：给定当前待办任务，列出可退回的上游节点及各自影响面
+     * 退回到它将作废哪些后续节点，<b>不修改任何流程数据</b>。
      *
      * <p>与 {@code /withdraw-preview} 的区别：撤销是发起人视角（退回后自己重办），
      * 本接口是审批人视角（驳回时选级次）。候选集两条规则同源（{@code wfQueryService.chain}），
@@ -803,7 +817,7 @@ public class WfTaskController {
     }
 
     /**
-     * 「已办撤销回原节点」只读预览（P3 G3）：列出可回退的已办节点与各自的影响面，
+     * 「已办撤销回原节点」只读预览：列出可回退的已办节点与各自的影响面，
      * <b>不修改任何流程数据</b>。
      *
      * <p>执行面尚未开放 —— Flowable 8 没有 {@code ProcessInstanceModification}，等价原语
@@ -825,7 +839,7 @@ public class WfTaskController {
             pi = wfEngineFacade.resolvePreviewTarget(keyword);
         }
         if (pi == null || pi.isBlank()) {
-            return Result.fail(com.fssc.common.core.ErrorCode.PARAM_INVALID.getCode(),
+            return Result.fail(ErrorCode.PARAM_INVALID.getCode(),
                     "请提供 procInstId、taskId 或 keyword 之一");
         }
         wfReadGuard.assertInstanceReadable(pi);
@@ -845,7 +859,7 @@ public class WfTaskController {
     }
 
     /**
-     * 提单态首审环节候选办理人（方案 G2-3）：提单页据此决定是否显示"第一道审批给谁"下拉。
+     * 提单态首审环节候选办理人（方案）：提单页据此决定是否显示"第一道审批给谁"下拉。
      *
      * <p>只读、按配置驱动：首审节点不是 PICK 档（含灰度未放行）时返回 mode=AUTO，前端不显示任何选人控件。
      * 需要单据已保存（{@code bizId} 必填）——候选人按单据所属公司过滤，而公司只能从单据行取。
@@ -854,27 +868,27 @@ public class WfTaskController {
     public Result<Map<String, Object>> startCandidates(@RequestParam String bizType,
                                                        @RequestParam Long bizId,
                                                        @RequestParam(required = false) String subType,
-                                                       @RequestParam(required = false) java.math.BigDecimal amount) {
+                                                       @RequestParam(required = false) BigDecimal amount) {
         return Result.success(wfEngineFacade.startCandidates(bizType, bizId, subType, amount,
                 UserContext.getRequired().getUserId()));
     }
 
     /**
      *  批次3 R2：路由试算（只读，不写库、不发起实例）。返回绑定表命中值与最终落点，
-     * 用于流程绑定镜像迁移的改前/改后比对，也回答运维"这张单点提交会落到哪条流程"。
+     * 用于流程绑定镜像迁移的变更前/变更后比对，也回答运维"这张单点提交会落到哪条流程"。
      */
     @GetMapping("/routing-preview")
     public Result<Map<String, Object>> routingPreview(@RequestParam String bizType,
                                                       @RequestParam(required = false) String subType,
-                                                      @RequestParam(required = false) java.math.BigDecimal amount) {
+                                                      @RequestParam(required = false) BigDecimal amount) {
         return Result.success(wfEngineFacade.previewRouting(bizType, subType, amount));
     }
 
     /**
-     * P0 治理校验③：分支变量实算透出（只读，不写库、不发起实例）。给定 bizType + bizId，
+     * 分支变量实算透出（只读，不写库、不发起实例）。给定 bizType + bizId，
      * 返回该单会注入引擎的全部分支变量真值（amount / orgType / expenseType / hasLoan / outOfPlan /
-     * overLimit / hasContract / abroad / ...），便于运维在设计器外核查"这张单的分支会怎么走"——
-     * 尤其是此前被写死 FALSE 的 4 个变量，现在是否真实生效一目了然。
+     * overLimit / hasContract / abroad / ...），便于在设计器外核查"这张单的分支会怎么走"——
+     * 变量若被常量写死，在这里会直接看到，而不是等到流程走岔再回头查。
      */
     @GetMapping("/branch-vars")
     public Result<Map<String, Object>> branchVars(@RequestParam String bizType,
@@ -905,7 +919,7 @@ public class WfTaskController {
     }
 
     /**
-     * 加签（前/后加签，G1）：把当前任务临时交给加签人先审（BEFORE）或后审（AFTER），
+     * 加签（前/后加签）：把当前任务临时交给加签人先审（BEFORE）或后审（AFTER），
      * 加签人办完<b>自动回跳</b>，不改变流程走向。
      *
      * <p>与 {@code /transfer} 的区别：转办是「受理人永久变更」；加签是「临时插一道」——
@@ -915,7 +929,7 @@ public class WfTaskController {
     @OperLog(module = "WF_TASK", operType = "UPDATE", desc = "加签")
     @PostMapping("/add-sign")
     public Result<Map<String, Object>> addSign(@Validated @RequestBody AddSignReq req) {
-        com.fssc.workflow.entity.WfAddSign rec = wfEngineFacade.addSign(
+        WfAddSign rec = wfEngineFacade.addSign(
                 req.getTaskId(), req.getPosition(), req.getSignUsers(), req.getReason());
         Map<String, Object> out = new HashMap<>();
         out.put("id", rec.getId());
@@ -928,7 +942,7 @@ public class WfTaskController {
     /** 取消加签：加签发起人或当期加签人本人可取消；进行中的加签取消时任务先交还回跳目标 */
     @OperLog(module = "WF_TASK", operType = "UPDATE", desc = "取消加签")
     @PostMapping("/add-sign/{id}/cancel")
-    public Result<Void> cancelAddSign(@org.springframework.web.bind.annotation.PathVariable Long id) {
+    public Result<Void> cancelAddSign(@PathVariable Long id) {
         wfEngineFacade.cancelAddSign(id);
         return Result.success();
     }
@@ -938,7 +952,7 @@ public class WfTaskController {
      * 不传 {@code procInstId} 而传 {@code taskId} 时，自动用该任务所属实例查询。
      */
     @GetMapping("/add-sign/open")
-    public Result<List<com.fssc.workflow.entity.WfAddSign>> openAddSign(
+    public Result<List<WfAddSign>> openAddSign(
             @RequestParam(required = false) String procInstId,
             @RequestParam(required = false) String taskId) {
         return Result.success(wfEngineFacade.openAddSign(procInstId, taskId));
@@ -954,16 +968,16 @@ public class WfTaskController {
     }
 
     /**
-     * G13 字段级节点权限（P3，2026-09-23）：按任务解析当前节点 {@code wf_node_config.form_perm}，
+     * 字段级节点权限：按任务解析当前节点 {@code wf_node_config.form_perm}，
      * 返回 {@code field -> H|R|W}（H 隐藏 / R 只读 / W 可编辑），供审批页渲染（隐藏/禁用字段）。
      *
      * <p>规则与 {@code /task-candidates} 一致——本节点可办场景才谈得上字段权限；解析逻辑集中在
      * {@link WfNodeConfigResolver#resolveFormFieldPerm}（取严不取宽 H&gt;R&gt;W，fail-open：
-     * 未配置/损坏返回空 Map，即不裁剪，保持历史行为）。此前该列只有实体字段、零消费。
+     * 未配置/损坏返回空 Map，即不裁剪）。
      */
     @GetMapping("/task-form-perm")
     public Result<Map<String, Object>> taskFormPerm(@RequestParam String taskId) {
-        // B1 扩点（2026-10-14）：补读护栏，与 /approval-items、/mi-progress、/reject-targets 同一规则——
+        // 读护栏，与 /approval-items、/mi-progress、/reject-targets 同一规则——
         // 本端点可读出节点字段级权限结构（哪些字段被隐藏/只读），属任务敏感信息，
         // 仅本节点可办场景（办理人/候选人）可读，杜绝越权探知他人节点的表单裁剪配置。
         wfReadGuard.assertTaskReadable(taskId);
@@ -1018,9 +1032,9 @@ public class WfTaskController {
     }
 
     /**
-     * 发起人催办（体检 E-10 / 方案 F1-5）：提单人问一句"我这单卡在哪"。
+     * 发起人催办：提单人问一句"我这单卡在哪"。
      *
-     * <p>此前催办只有超时作业会触发，提单人侧零入口；审批工作台的催办视图又是流程管理员视角。
+     * <p>催办若只由超时作业触发，提单人侧就没有入口；审批工作台的催办视图又是流程管理员视角。
      * 鉴权、24 小时限频、站内信投递与 {@code URGE} 记录都在 {@code WfTimeoutJob.urgeAsInitiator}，
      * 与超时催办共用同一发信通道，规则不漂移。命中限频时以业务异常返回（界面需要明确文案，
      * 而不是"催办成功"却什么都没发）。
@@ -1030,7 +1044,7 @@ public class WfTaskController {
     @OperLog(module = "WF_TASK", operType = "UPDATE", desc = "发起人催办")
     @PostMapping("/instance/urge-initiator")
     public Result<Integer> urgeAsInitiator(@RequestParam @NotBlank(message = "procInstId 必填") String procInstId) {
-        com.fssc.framework.security.LoginUser u = UserContext.getRequired();
+        LoginUser u = UserContext.getRequired();
         String label = u.getRealName() == null || u.getRealName().isBlank() ? u.getUsername() : u.getRealName();
         return Result.success(wfTimeoutJob.urgeAsInitiator(procInstId, u.getUserId(), label));
     }
@@ -1044,37 +1058,37 @@ public class WfTaskController {
         /** 取人方式 PICK 的下一节点必填：点名由谁来办下一环节。其余节点忽略此字段。 */
         private Long nextAssigneeUserId;
         /**
-         * G2 传阅：本次审批通过后要抄送给谁（用户ID，逗号分隔），可空。
+         * 抄送：本次审批通过后要抄送给谁（用户ID，逗号分隔），可空。
          *
          * <p>与节点配置 {@code wf_node_config.cc_users/cc_roles} 取<b>并集</b>后写入 {@code wf_cc}，
          * 由前端「审批弹窗 → 抄送给」多选产生。不传＝只按节点配置抄送（节点未配则不产生任何抄送），
-         * 故对该字段的历史调用方<b>完全向后兼容</b>。
+         * 不传的调用方不受影响。
          *
-         * <p>D-V3-148：前端（useApprovalDialog/ApprovalDialog）传的是 <b>JSON 数组</b>
-         * （数字或字符串元素均有），按 String 反序列化直接 HttpMessageNotReadable → 500，
-         * 传阅功能整链不可用。改为 List 反序列化、入口处归一为逗号分隔串，
+         * <p>前端（useApprovalDialog/ApprovalDialog）传的是 <b>JSON 数组</b>，
+         * 数字或字符串元素均有；若按 String 反序列化会直接 HttpMessageNotReadable → 500，
+         * 传阅功能整链不可用。故用 List 反序列化、入口处归一为逗号分隔串，
          * 字符串逗号分隔的旧调用方同样兼容（Jackson 对 String→List 单元素也兼容，
-         * 统一在 ccUserIdsNormalized() 办结）。
+         * 统一在 ccUserIdsNormalized() 处理）。
          */
-        private java.util.List<Object> ccUserIds;
+        private List<Object> ccUserIds;
 
-        /** D-V3-148：数组/逗号分隔串两种形态归一为门面期望的 "1,2,3" 串；空返回 null。 */
+        /** 数组/逗号分隔串两种形态归一为门面期望的 "1,2,3" 串；空返回 null。 */
         public String ccUserIdsNormalized() {
             if (ccUserIds == null || ccUserIds.isEmpty()) {
                 return null;
             }
             String joined = ccUserIds.stream()
-                    .filter(java.util.Objects::nonNull)
+                    .filter(Objects::nonNull)
                     .map(v -> String.valueOf(v).trim())
                     .filter(s -> !s.isEmpty())
                     .distinct()
-                    .collect(java.util.stream.Collectors.joining(","));
+                    .collect(Collectors.joining(","));
             return joined.isEmpty() ? null : joined;
         }
         /**
-         * G4 自由驳回：驳回时指定的目标节点 key（仅 approved=false 时生效），可空。
+         * 自由驳回：驳回时指定的目标节点 key（仅 approved=false 时生效），可空。
          *
-         * <p>为空 ⇒ 走原「终止本流程」默认处理，行为与改造前逐字一致；非空且开关
+         * <p>为空 ⇒ 走「终止本流程」默认路径；非空且开关
          * {@code sys_config.wf.reject.free.enabled}=1 时，改由引擎把执行退回该上游节点，
          * 单据在同一实例内继续流转（可选驳回级次）。
          * 候选集从 {@code GET /wf/reject-targets} 只读预览获取。
@@ -1098,7 +1112,7 @@ public class WfTaskController {
     public static class TransferReq {
         @NotBlank(message = "taskId 必填")
         private String taskId;
-        @jakarta.validation.constraints.NotNull(message = "targetUserId 必填")
+        @NotNull(message = "targetUserId 必填")
         private Long targetUserId;
         private String comment;
     }
@@ -1119,7 +1133,7 @@ public class WfTaskController {
     public static class ReassignReq {
         @NotBlank(message = "taskId 必填")
         private String taskId;
-        @jakarta.validation.constraints.NotNull(message = "targetUserId 必填")
+        @NotNull(message = "targetUserId 必填")
         private Long targetUserId;
         @NotBlank(message = "请填写改派原因")
         private String reason;

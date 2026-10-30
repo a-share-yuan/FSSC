@@ -4,7 +4,7 @@
 <template>
   <div class="h5-page h5-page--bar">
     <header class="h5-header">
-      <!-- P0-5 同类修复：这里的返回原来是 `history.state`，而 setup 里有一个名为 history 的
+      <!-- 同类修复：这里的返回原来是 `history.state`，而 setup 里有一个名为 history 的
            ref（审批历史数组），把 window.history 遮蔽了 ⇒ 判断恒假，返回永远只能回工作台。
            现用真 router 返回。 -->
       <button class="h5-back" aria-label="返回" @click="leave">&lt;</button>
@@ -29,24 +29,25 @@
 
       <template v-else-if="bill">
         <section class="h5-body">
-          <!-- D-DEC-446 甲-1：status 驱动的生命周期步骤条已删除（记账/付款/组批/归档四格取的是
+          <!-- 甲-1：status 驱动的生命周期步骤条已删除（记账/付款/组批/归档四格取的是
                其它域的列，不由 exp_bill.status 承载，永灰）。移动端改由状态标签 + 审批记录承担。 -->
           <div v-if="abnormalText" class="h5-abnormal">
             <div class="h5-error__d">这张单当前是「{{ abnormalText }}」，不能再在这里办理。</div>
           </div>
 
-          <!-- 待办不可办的原因（改造前是"点得进、提交才发现办不了"） -->
+          <!-- 待办不可办的原因（原先是"点得进、提交才发现办不了"） -->
           <div v-if="taskId && blockedReason" class="h5-denied">
             <div class="h5-denied__t">这条待办现在办不了</div>
             <div class="h5-denied__d">{{ blockedReason }}</div>
           </div>
 
-          <!-- 基本信息 -->
-          <div class="h5-card">
-            <div class="h5-card__row">
+          <!-- 基本信息（本页唯一默认展开的一段；其余各段收起，收起态标题行带摘要，
+               审批人不展开也能核对金额/张数/条数，见 H5FoldCard.vue） -->
+          <H5FoldCard v-model:open="folds.base" :summary="baseSum">
+            <template #head>
               <span class="no">{{ bill.billNo }}</span>
               <el-tag size="small" :type="statusType(bill.status)">{{ statusLabel(bill.status) }}</el-tag>
-            </div>
+            </template>
             <div class="h5-card__title">{{ bill.title }}</div>
             <div class="h5-amount-row">
               <span class="h5-big-num">￥{{ money(bill.totalAmount) }}</span>
@@ -56,11 +57,10 @@
             <div class="h5-card__meta">公司 {{ bill.companyId || '—' }} · 部门 {{ bill.deptId || '—' }}</div>
             <div v-if="bill.remark" class="h5-card__meta">说明：{{ bill.remark }}</div>
             <div v-if="bill.currentNode" class="h5-card__meta">当前节点：{{ bill.currentNode }}</div>
-          </div>
+          </H5FoldCard>
 
           <!-- 费用明细 -->
-          <div class="h5-card">
-            <div class="h5-section-title h5-flush">费用明细（{{ lines.length }} 行）</div>
+          <H5FoldCard v-model:open="folds.lines" title="费用明细" :summary="linesSum">
             <div v-for="(l, i) in lines" :key="i" class="h5-row-sub h5-row-sub--block">
               <div class="h5-card__row">
                 <span>{{ l.itemName || '—' }}</span>
@@ -73,11 +73,10 @@
               </div>
             </div>
             <div v-if="!lines.length" class="h5-tip">这张单没有费用明细行</div>
-          </div>
+          </H5FoldCard>
 
-          <!-- 附件 / 票据影像（P0-7：改造前审批页整块看不到附件，审批人只能凭标题签字） -->
-          <div class="h5-card">
-            <div class="h5-section-title h5-flush">附件 / 票据影像（{{ attaches.length }}）</div>
+          <!-- 附件 / 票据影像（原先审批页整块看不到附件，审批人只能凭标题签字） -->
+          <H5FoldCard v-model:open="folds.attach" title="附件 / 票据影像" :summary="attachSum" :tone="attachTone">
             <div v-if="thumbs.length" class="h5-thumb-grid">
               <button v-for="(t, i) in thumbs" :key="t.url" class="h5-thumb" @click="openLightbox(i)">
                 <img :src="t.url" :alt="t.name" loading="lazy" />
@@ -94,11 +93,10 @@
             <div v-if="!attaches.length" class="h5-tip">提单人没上传任何附件</div>
             <div v-else-if="attachTokenFailed" class="h5-tip h5-tip--left">影像取址失败，可点「打开」逐份重试。</div>
             <div class="h5-tip h5-tip--left">图片可直接放大查看；PDF / OFD 走系统查看器打开。</div>
-          </div>
+          </H5FoldCard>
 
-          <!-- 关联发票（三态分立：缺权 ≠ 没票 ≠ 加载失败） -->
-          <div class="h5-card">
-            <div class="h5-section-title h5-flush">关联发票</div>
+          <!-- 关联发票（三态分立：缺权 ≠ 没票 ≠ 加载失败；三态同样反映在收起态摘要上） -->
+          <H5FoldCard v-model:open="folds.inv" title="关联发票" :summary="invSum" :tone="invTone">
             <div v-if="invDenied" class="h5-denied">
               <div class="h5-denied__t">发票台账对当前账号不开放</div>
               <div class="h5-denied__d">发票台账属发票管理岗权限。上面附件区里的票据影像仍可查看、照常审核，不依赖这个权限；需要核对票面要素时请到电脑端由发票岗协查。</div>
@@ -117,15 +115,14 @@
               </div>
               <div v-if="!invoices.length" class="h5-tip">这张单没有关联发票</div>
             </template>
-          </div>
+          </H5FoldCard>
 
-          <!-- 审批记录（D-H5M-02/03：改走 /wf/query/chain）
+          <!-- 审批记录（/03：改走 /wf/query/chain）
                旧实现传 businessKey，后端无此入参 ⇒ 落进「只查本人参与过的全部留痕」分支，
-               面板里混入别的单据、别的域的节点（D-H5M-02）；
-               而该端点挂 wf:history:list，提单岗等业务账号直接被拒（D-H5M-03）。
+               面板里混入别的单据、别的域的节点；
+               而该端点挂 wf:history:list，提单岗等业务账号直接被拒。
                /chain 按本单实例取数、以「能读这张单据即可读这张单据的轨迹」守卫，
-          <div class="h5-card">
-            <div class="h5-section-title h5-flush">审批记录</div>
+          <H5FoldCard v-model:open="folds.hist" title="审批记录" :summary="histSum" :tone="histTone">
             <div v-if="histDenied" class="h5-denied">
               <div class="h5-denied__t">这张单的审批记录对你不开放</div>
               <div class="h5-denied__d">{{ histDenied.msg || '你不是本单的办理人，也没有本单的数据可见范围。' }}</div>
@@ -147,9 +144,13 @@
               </div>
               <div v-if="!hist.length" class="h5-tip">还没有审批记录</div>
             </template>
-          </div>
+          </H5FoldCard>
 
-          <!-- 下一环节办理人（D-H5M-01）
+          <!-- 下面两段（下一环节办理人、审批意见）是办理动作区不是信息区，不折叠：
+               点名环节收起会让人在"请先指定下一环节办理人"的红字前找不到选人入口，
+               意见框收起则等于把必填项藏起来。 -->
+
+          <!-- 下一环节办理人
                服务端 enforcePickOnApprove：点名档节点必须由本环节指定下一环节办理人，
                未点名直接拒收提交。移动端原先没有这一区 ⇒ 点名环节在 H5 永远办不下去。
                规则与电脑端 ApprovalDialog 逐条对齐：候选唯一自动带出、候选多名必须手选、
@@ -185,7 +186,7 @@
               </template>
             </template>
             <div v-else-if="nextBlock.pool" class="h5-tip h5-tip--left">
-              该节点由共享任务池承接，提交后不指派到具体人，谁先「领取」谁办理<template v-if="nextBlock.candidates.length">（本单公司下 {{ nextBlock.candidates.length }} 人可办）</template>。
+              该节点由共享任务池承接<template v-if="nextBlock.candidates.length">（本单公司下 {{ nextBlock.candidates.length }} 人可办）</template>；开启「自动指派」时提交即落到其中一人名下，未开启才需先「领取」。
             </div>
             <div v-else class="h5-tip h5-tip--left">
               该节点按配置自动取人<template v-if="nextBlock.candidates.length">：{{ nextBlock.candidates.map((c) => c.name).join('、') }}</template>。
@@ -201,7 +202,7 @@
           </div>
         </section>
 
-        <!-- 吸底动作栏：通过/驳回常驻，转办/加签收进「更多」-->
+        <!-- 吸底动作栏：通过/驳回常驻，转办/加签收进「更多」 -->
         <footer v-if="canApprove" class="h5-actionbar">
           <button class="h5-btn--sub h5-btn h5-actionbar__more" @click="showOps = true">更多</button>
           <button class="h5-btn-danger" :disabled="busy" :aria-busy="busy ? 'true' : 'false'" @click="decide(false)"><i v-if="busy" class="h5-spin" />驳回</button>
@@ -218,8 +219,8 @@
       </div>
     </template>
 
-    <!-- 更多操作面板（P1-6：转办 / 加签，与 PC 复用同一套接口与语义）
-         P2-5：进出场交给 <Transition name="h5-pop">，面板位移动画见 h5-tokens.css 动效层④ -->
+    <!-- 更多操作面板（转办 / 加签，与 PC 复用同一套接口与语义）
+         进出场交给 <Transition name="h5-pop">，面板位移动画见 h5-tokens.css 动效层④ -->
     <Transition name="h5-pop">
       <div v-if="showOps" class="h5-mask" @click="showOps = false">
         <div class="h5-sheet" @click.stop>
@@ -298,21 +299,22 @@
 
 <script setup>
 /**
- * 移动报销端 · 审批详情页（P0-1/P0-6/P0-7 + P1-3/P1-6 落点）
+ * 移动报销端 · 审批详情页（//+ /落点）
  *
- * 改造前的第一条就是致命环节：`wfApi.approve({ taskId: Number(taskId) })`。
- * /wf/todo 下发的 taskId 是 **UUID 字符串**（ApproveReq.taskId 是 @NotBlank String），
+ * 原先的第一条就是致命环节：`wfApi.approve({ taskId: Number(taskId) })`。
+ * /wf/todo 下发的 taskId 是 UUID 字符串（ApproveReq.taskId 是 @NotBlank String），
  * Number(uuid)＝NaN ⇒ JSON 序列化成 {taskId:null} ⇒ 服务端 PARAM_INVALID/500，
  * 也就是"移动端从来没有批成功过一张单"。现原样传字符串。
  *
- * 第二条：canApprove 只看 URL 上有没有 taskId。现加三条真实判据
+ * 第二条：canApprove 只看 URL 上有没有 taskId 不够，还要满足三条判据
  *  ①单据状态在可办理区间（SUBMITTED/APPROVING；DRAFT/PAID/VOID 这些一律不给出动作）
  *  ②工作台带过来的锁定标记 lk=1（同池他人正在办）不放开
  *  ③bizResolved===false（待办关联单据没取到）不放开
  */
-import { computed, nextTick, onActivated, onMounted, ref } from 'vue'
+import { computed, nextTick, onActivated, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import H5FoldCard from '@/components/h5/H5FoldCard.vue'
 import { billApi, wfApi, invoiceApi, flowApi, fileApi, store } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import { statusType as _statusType, statusLabel as _statusLabel } from '../../constants/billStatus'
@@ -339,7 +341,7 @@ const myName = computed(() => store.user?.realName || store.user?.nickName || st
 const taskId = computed(() => route.query.taskId ? String(route.query.taskId) : '')
 const billId = computed(() => route.params.id)
 const billType = computed(() => route.query.billType || '')
-// 工作台跳转时带过来的两条真实判据（刷新页面会丢，丢了也只是回到"只看 taskId"的原规则）
+// 工作台跳转时带过来的两个标记（刷新页面会丢，丢了也只是回到"只看 taskId"的原规则）
 const lockedByOther = computed(() => route.query.lk === '1')
 const bizUnresolved = computed(() => route.query.bz === '0')
 const addSignAllowed = computed(() => route.query.as !== '0')
@@ -369,7 +371,47 @@ function leave() {
   else router.replace('/h5')
 }
 
-/* ---------------- 影像（P0-7） ---------------- */
+/* 折叠态与摘要
+ * 页面顺排七段卡片，整页要滚五六屏；现只默认展开「单据概要」，其余收起，
+ * 收起态标题行给一句摘要，审批人不展开也能核对关键数（金额/张数/条数与最后一条留痕）。
+ * 摘要一律取本页已有的响应式数据现算，缺权/加载失败照实说，不渲染成"暂无"。 */
+const folds = reactive({ base: true, lines: false, attach: false, inv: false, hist: false })
+
+const baseSum = computed(() => {
+  const b = bill.value
+  if (!b) return ''
+  return `￥${money(b.totalAmount)} · ${docTypeLabel(b.billType)}${b.billSubType === 'TRAVEL' ? '（差旅）' : ''}`
+})
+const linesSum = computed(() => {
+  const n = lines.value.length
+  const amt = lines.value.reduce((a, l) => a + (Number(l.amount) || 0), 0)
+  return n ? `${n} 行 · ￥${money(amt)}` : '没有明细行'
+})
+const attachSum = computed(() => {
+  if (!attaches.value.length) return '未上传'
+  const img = thumbs.value.length
+  return `${attaches.value.length} 份` + (img ? ` · 图片 ${img}` : '') + (attachTokenFailed.value ? ' · 取址失败' : '')
+})
+const attachTone = computed(() => (attachTokenFailed.value ? 'warn' : ''))
+const invSum = computed(() => {
+  if (invDenied.value) return '台账对当前账号不开放'
+  if (invError.value) return '加载失败'
+  if (!invoices.value.length) return '没有关联发票'
+  const amt = invoices.value.reduce((a, x) => a + (Number(x.amount) || 0), 0)
+  return `${invoices.value.length} 张 · ￥${money(amt)}`
+})
+const invTone = computed(() => (invDenied.value ? 'warn' : (invError.value ? 'err' : '')))
+const histSum = computed(() => {
+  if (histDenied.value) return '对你不开放'
+  if (histError.value) return '加载失败'
+  if (!hist.value.length) return '还没有记录'
+  const last = hist.value[hist.value.length - 1]
+  const act = last.action ? histLabel(last.action) : stateLabel(last.state)
+  return `${hist.value.length} 条 · ${last.handler || '—'} ${act}`
+})
+const histTone = computed(() => (histDenied.value ? 'warn' : (histError.value ? 'err' : '')))
+
+/* 影像 */
 const IMG_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'jfif']
 const thumbs = ref([])
 const otherFiles = ref([])
@@ -417,7 +459,7 @@ function stepThumb(d) {
   viewer.value = { ...thumbs.value[next], index: next }
 }
 
-/* ---------------- 加载 ---------------- */
+/* 加载 */
 const invDenied = ref(null)
 const invError = ref('')
 const histDenied = ref(null)
@@ -425,9 +467,9 @@ const histError = ref('')
 
 /**
  * 「关联发票」面板的数据源是 /invoice/bill-invoices，后端挂 inv:list——
- * 该码只授发票、税务、共享三岗（实测七个 H5 岗位只有共享会计赵勇持），
+ * 该码只授发票、税务、共享三岗（H5 岗位里只有共享会计持），
  * 于是提报岗与审批岗每次进详情页都会被全局拦截器弹一次「您没有「发票·list」权限，请联系管理员开通」。
- * 面板本就分「缺权／出错／真没票」三态呈现（把缺权渲染成「暂无」＝假空，见 D-TRC 系列），
+ * 面板本就分「缺权／出错／真没票」三态呈现（不要把缺权渲染成「暂无」＝假空），
  * 所以无权时不必先撞一次再降级：直接落缺权态。有权才取数，并带 silent——
  * 服务端还有权限依赖闭包等第二道口径可能拒，那一次也不该在审批中途弹出来。
  * 票据影像走 fileApi（无权限闸），与本面板无关，审批照常可看。
@@ -443,7 +485,7 @@ async function loadInvoices() {
   try {
     invoices.value = (await invoiceApi.billInvoices(billId.value, { silent: true })) || []
   } catch (e) {
-    // 实测：提报岗在发票/验真/历史三个面板都是 code:4030，之前一律渲染成「暂无」＝假空
+    // 提报岗在发票/验真/历史三个面板都会拿到 code:4030，之前一律渲染成「暂无」＝假空
     const d = permDeniedOf(e)
     if (d) invDenied.value = d
     else invError.value = e.message || '发票加载失败'
@@ -452,7 +494,7 @@ async function loadInvoices() {
 async function loadHistory() {
   histDenied.value = null
   histError.value = ''
-  // D-H5M-02/03：改走 /wf/query/chain（按本单实例取数，按单据可读性守卫）。
+  // /03：改走 /wf/query/chain（按本单实例取数，按单据可读性守卫）。
   // 旧实现传 businessKey ⇒ 后端落进「只查本人参与过的全部留痕」分支（混入别的单据），
   // 且该端点挂 wf:history:list ⇒ 多数业务账号直接 4030 看不到面板。
   const pid = bill.value?.procInstId
@@ -467,7 +509,7 @@ async function loadHistory() {
   }
 }
 
-/* ---------------- 下一环节办理人（D-H5M-01） ---------------- */
+/* 下一环节办理人 */
 const nextInfo = ref(null)
 const nextUserId = ref(null)
 const nextErr = ref(false)
@@ -521,7 +563,7 @@ async function loadDetail() {
     loadHistory()
     loadNext()
   } catch (e) {
-    // R5-D-052：拦截器已 toast 一次，closeAll 去重——本页只留 loadError 正文一处
+    // 拦截器已 toast 一次，closeAll 去重——本页只留 loadError 正文一处
     ElMessage.closeAll()
     const d = permDeniedOf(e)
     loadError.value = (d ? `无权查看这张单：${d.msg}` : `加载失败：${e.message || '网络异常'}`)
@@ -530,7 +572,7 @@ async function loadDetail() {
   }
 }
 
-/* ---------------- 审批动作 ---------------- */
+/* 审批动作 */
 function requireOpinion(ok) {
   const c = String(comment.value || '').trim()
   if (c.length < 2) {
@@ -543,7 +585,7 @@ function requireOpinion(ok) {
 async function decide(ok) {
   const c = requireOpinion(ok)
   if (!c) return
-  // D-H5M-01：点名环节必须带上下一环节办理人（服务端 enforcePickOnApprove 拒收未点名的提交）。
+  // 点名环节必须带上下一环节办理人（服务端 enforcePickOnApprove 拒收未点名的提交）。
   // 与电脑端同一判定：候选为空＝该节无人可派（提示补岗，不再让提交去吃红字）；候选非空未选＝拦回。
   if (ok && nextBlock.value?.pick) {
     if (!nextBlock.value.candidates.length) {
@@ -566,7 +608,7 @@ async function decide(ok) {
   } catch { return }
   busy.value = true
   try {
-    // P0-1：taskId 原样传字符串（UUID），不再 Number()
+    // taskId 原样传字符串（UUID），不再 Number()
     await wfApi.approve({
       taskId: taskId.value,
       approved: ok,
@@ -580,7 +622,7 @@ async function decide(ok) {
   } finally { busy.value = false }
 }
 
-/* ---------------- 转办 / 加签（P1-6） ---------------- */
+/* 转办 / 加签 */
 const showOps = ref(false)
 const pickMode = ref('')       // '' | 'transfer' | 'addSign'
 const candidates = ref([])

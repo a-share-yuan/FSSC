@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 /**
  * 凭证推送服务：将已记账凭证推送至 外部财务系统。
  *
- * <p>P1-8 整改说明（消除 Mock 残留）：</p>
+ * <p>整改说明（消除 Mock 残留）：</p>
  * <ul>
  *   <li>传输方式改为可插拔通道 SPI（{@link VoucherPushChannelRouter}，
  *       sys_config {@code voucher.push.channel} 控制 local/http），业务不感知具体实现；</li>
@@ -67,7 +67,7 @@ public class VoucherPushService {
             target = "IFS_SYSTEM";
         }
 
-        // P0-2 去重：同一凭证 + 同一目标已成功推送过则回放，不再外呼（防重复点击/超时重发致外部重复建账）。
+        // 去重：同一凭证 + 同一目标已成功推送过则回放，不再外呼（防重复点击/超时重发致外部重复建账）。
         // 失败记录不在此拦截，仍可重推。
         OpVoucherPushLog prior = pushLogMapper.selectOne(new LambdaQueryWrapper<OpVoucherPushLog>()
                 .eq(OpVoucherPushLog::getVoucherId, voucherId)

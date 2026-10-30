@@ -21,7 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * LinkU 开放接口统一守卫（F-1 / F-4）：验签 → 去重 → 执行 → 审计。
+ * LinkU 开放接口统一守卫：验签 → 去重 → 执行 → 审计。
  *
  * <p>与既有回调 {@code SupplierReconController#guardAndExecute} 同范式，差异点：</p>
  * <ol>
@@ -29,10 +29,10 @@ import java.util.Map;
  *   <li>唯一键取请求体的 {@code idempotencyKey}（而非回调的事件+对账单 id），
  *       以支撑「查询无关、写入可重放」的语义；列缺失时自动降级为无去重保护并告警；</li>
  *   <li>全部 DB 访问包在 {@code TenantContext.runIgnoreTenant} 内：开放端点为匿名调用，
- *       无租户上下文，业务 SQL 一律以入参 tenantId 显式过滤（fail-closed 由入参校验默认处理）。</li>
+ *       无租户上下文，业务 SQL 一律以入参 tenantId 显式过滤（fail-closed 由入参校验兜底）。</li>
  * </ol>
  *
- * <p><b>未过签不落业务表、也不写审计表</b>（D-DEC-241 规则）：仅记应用日志（IP + 事件类型 + 拒绝码），
+ * <p><b>未过签不落业务表、也不写审计表</b>（规则）：仅记应用日志（IP + 事件类型 + 拒绝码），
  * 不落请求体，避免未鉴权写入面。已过签的业务失败仍照常写入数据库 —— 那是合法来源的审计线索。</p>
  */
 @Slf4j
@@ -55,9 +55,9 @@ public class LinkuOpenGuard {
     /**
      * 统一入口。
      *
-     * @param rawBody          参与验签的原始请求体（GET 为空串）
+     * @param rawBody 参与验签的原始请求体（GET 为空串）
      * @param defaultEventType 未带 {@code X-BCP-Event-Type} 时的缺省事件类型
-     * @param action           业务动作（内部自行按 tenantId 读写；本方法已建忽略租户上下文）
+     * @param action 业务动作（内部自行按 tenantId 读写；本方法已建忽略租户上下文）
      */
     public Result<Object> guard(HttpServletRequest req, HttpServletResponse resp, String rawBody,
                                 String defaultEventType, LinkuAction action) {

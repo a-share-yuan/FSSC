@@ -3,9 +3,11 @@
 
 package com.fssc.openapi.linku.service;
 
+import com.fssc.openapi.linku.LinkuOpenGuard;
 import com.fssc.openapi.linku.LinkuOpenProperties;
 import com.fssc.openapi.linku.mapper.LinkuOpenQueryMapper;
 import com.fssc.openapi.linku.mapper.LinkuOpenSyncMapper;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -16,12 +18,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * LinkU 开放接口查询服务（F-2 / F-7）。
+ * LinkU 开放接口查询服务。
  *
  * <p>把 BCP 侧的查询语义在 FSSC 内部收敛：BCP 只送「公司 + 伙伴码 + 期间 + 条数」，
  * 返回稳定 JSON（列别名即键），不暴露表结构。</p>
  *
- * <p>调用方（{@link com.fssc.openapi.linku.LinkuOpenGuard}）已建立「忽略租户」上下文，
+ * <p>调用方（{@link LinkuOpenGuard}）已建立「忽略租户」上下文，
  * 本服务的全部 SQL 以入参 {@code tenantId} 显式过滤。</p>
  *
  * <p><b>代际优雅降级</b>：{@code ar_pre_invoice} 等蓝图代专有表在现役库不存在时，
@@ -47,7 +49,7 @@ public class LinkuOpenQueryService {
         if (!paid.isEmpty()) {
             return paid;
         }
-        // 默认处理：实付台账无数据时回退付款计划（与原直连适配器 D-V4R-97 规则一致）
+        // 兜底：实付台账无数据时回退付款计划（与原直连适配器 规则一致）
         log.info("[LinkU开放接口] exp_bill_payment 无数据（company={}, partner={}），回退 pay_plan 付款计划腿",
                 companyId, partnerCode);
         return queryMapper.selectPayPlanFallback(tenantId, companyId, partnerCode, l);
@@ -88,7 +90,7 @@ public class LinkuOpenQueryService {
     }
 
     /**
-     * AR 销售订单环节（P0-C《AR 三单匹配改造》）：候选表 {@code so_order}(+行) 缺失时返回空并告警。
+     * AR 销售订单环节（三单匹配改造的一腿）：候选表 {@code so_order}(+行) 缺失时返回空并告警。
      *
      * <p>与 {@link #preInvoices} 同一规则：表不存在不抛错、返回空列表 ——
      * 让 BCP 侧 AR 三单匹配判定为"缺订单环节 → 不自动通过"，<b>不回退采购订单</b>（回退即错配）。</p>
@@ -108,7 +110,7 @@ public class LinkuOpenQueryService {
         }
     }
 
-    /** AR 销售出库发货环节（P0-C）：候选表 {@code so_shipment} 缺失时返回空并告警。 */
+    /** AR 销售出库发货环节：候选表 {@code so_shipment} 缺失时返回空并告警。 */
     public List<Map<String, Object>> saleShipments(Long tenantId, Long companyId, String partnerCode,
                                                    Integer limit) {
         if (!tableAvailable("so_shipment")) {
@@ -154,7 +156,7 @@ public class LinkuOpenQueryService {
     }
 
     /** 表存在性缓存（首次探测后按表名缓存，避免每次查询都打 information_schema）。 */
-    private final Map<String, Boolean> tableCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Boolean> tableCache = new ConcurrentHashMap<>();
 
     private boolean tableAvailable(String table) {
         Boolean cached = tableCache.get(table);

@@ -4,8 +4,8 @@
 <!--
   流程进度卡片：单据页顶部常驻，回答两件事——
   ① 这张单现在停在流程的哪一节、是否还在办；② 该节谁在办、已停留多久。
-  逐节谁在什么时间签了什么意见收在「展开审批链」「展开流程明细」两个模态框里：
-  审批链环节多时（实测对公结算 15 节）不再把下方的单据操作顶出首屏——单据操作是页面主体，审批链是旁证。
+  逐节谁在什么时间签了什么意见收在「展开审批链」一个模态框里（上半时间轴、下半逐节明细表）：
+  审批链环节多时（对公结算有十几节）不再把下方的单据操作顶出首屏——单据操作是页面主体，审批链是旁证。
   数据源：单据本身（status / procInstId / voucherNo）+ GET /tenant/wf/query/chain（节点配置 + 审批轨迹 + 在办任务三源合一）。
   chain 不挂配置权限，制单岗拿得到，因此不再依赖 wf:history:list 的审批轨迹接口。
 -->
@@ -34,7 +34,7 @@
       <div class="fp-cur-meta">{{ curMeta }}</div>
     </div>
 
-    <!-- D-DEC-446 甲-1：status 驱动的生命周期步进条已删除。
+    <!-- 甲-1：status 驱动的生命周期步进条已删除。
          它与下方审批链（FlowChain，取 /wf/query/chain 的逐节证据）在同一卡片里并存、规则不同；
          后半截（记账/付款/组批/归档）取的列不由 exp_bill.status 承载 ⇒ 点了也不会绿。
          「走到哪一步」由 fp-cur 一格 + 审批链格子承担。 -->
@@ -43,50 +43,27 @@
       <div class="fp-chain-head">
         <span class="fp-chain-title">{{ chainSummary }}</span>
         <div class="fp-chain-btns">
-          <!-- 审批链与流程明细默认收起、改由模态框查看：环节多时（实测对公结算 15 节）
-               纵向时间轴会把下面的单据操作顶出首屏，而这一页的主体是单据操作，不是审批链。 -->
+          <!-- 审批链默认收起、改由模态框查看：环节多时纵向时间轴会把下面的
+               单据操作顶出首屏，而这一页的主体是单据操作，不是审批链。
+               原「展开审批链」「展开流程明细」两枚按钮/两个框合并成一框——两者读的都是
+               同一份 /wf/query/chain 行集，只是排法不同（时间轴 vs 表格），并排放等于把一条链摆两次。 -->
           <el-button size="small" @click="chainVis = true">展开审批链</el-button>
-          <el-button size="small" @click="detailVis = true">展开流程明细</el-button>
         </div>
       </div>
     </div>
     <div v-else-if="bill && bill.id" class="fp-noflow">
-      <!-- R5-D-054：DRAFT 判定走脚本里的 status 计算属性（bill.id 在而 status 字段缺失＝刚保存的草稿，
+      <!-- DRAFT 判定走脚本里的 status 计算属性（bill.id 在而 status 字段缺失＝刚保存的草稿，
            缺省即 DRAFT），不再直读 bill.status——否则上方「尚未提交」与下方「未取到审批链数据」同屏自相矛盾。 -->
       {{ status === 'DRAFT' ? '草稿尚未提交，暂无审批链；提交后此处显示每一节的进度与办理人。' : '未取到审批链数据（流程实例缺失或接口异常），可点右上「刷新进度」重试。' }}
     </div>
 
-    <el-dialog v-model="chainVis" :title="dialogTitle('审批链')" width="min(680px, 92vw)" append-to-body>
+    <el-dialog v-model="chainVis" :title="dialogTitle('审批链')" width="min(900px, 94vw)" append-to-body>
       <div class="fp-dialog-head">{{ chainSummary }}</div>
       <div class="fp-dialog-scroll">
         <FlowChain :nodes="nodes2" mode="timeline" />
       </div>
-    </el-dialog>
-
-    <el-dialog v-model="detailVis" :title="dialogTitle('流程明细')" width="min(880px, 94vw)" append-to-body>
-      <el-table :data="nodes2" size="small" border class="fp-table" max-height="64vh">
-        <el-table-column label="#" width="46">
-          <template #default="{ $index }">{{ stepNoAt($index) || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="nodeName" label="节点" min-width="180" />
-        <el-table-column label="状态" width="92">
-          <template #default="{ row }">
-            <el-tag :type="STATE_TYPE[row.state] || 'info'" size="small">{{ STATE_LABEL[row.state] || '尚未到达' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="动作" width="80">
-          <template #default="{ row }">{{ row.action ? wfActionLabel(row.action) : '—' }}</template>
-        </el-table-column>
-        <el-table-column label="办理人" width="110">
-          <template #default="{ row }">{{ row.handler || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="时间" width="120">
-          <template #default="{ row }">{{ fmtTime(row.time) }}</template>
-        </el-table-column>
-        <el-table-column prop="comment" label="意见 / 备注" min-width="240" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.comment || '—' }}</template>
-        </el-table-column>
-      </el-table>
+      <div class="fp-dialog-sub">逐节明细（含动作与意见，可整行选中抄录）</div>
+      <FlowChain :nodes="nodes2" mode="table" />
     </el-dialog>
   </div>
 </template>
@@ -95,7 +72,6 @@
 import { computed, ref, watch } from 'vue'
 import FlowChain from '../FlowChain.vue'
 import { statusLabel, statusType } from '../../constants/billStatus'
-import { wfActionLabel } from '@/constants/enums.js'
 
 const props = defineProps({
   // 当前聚焦的单据：{ id, billNo, title, status, procInstId, voucherNo, currentNode, flowName }
@@ -105,26 +81,33 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   updatedAt: { type: String, default: '' },
 })
-defineEmits(['refresh'])
+const emit = defineEmits(['refresh'])
 
 const chainVis = ref(false)
-const detailVis = ref(false)
-// 换单时收起两个模态框，免得停留在上一张单的链上（卡片本身跨页签常驻，换单不重建）
+// 换单时收起模态框，免得停留在上一张单的链上（卡片本身跨页签常驻，换单不重建）
 watch(() => props.bill?.id, () => {
   chainVis.value = false
-  detailVis.value = false
 })
+/**
+ * 提交成功后卡片可能比流程实例慢一拍——toast 已说「已提交审批：BX…」，
+ * 这里却报「未取到审批链数据」，屏幕上两条互相打脸。
+ * 有 procInstId、非加载中、链 yet 空 ⇒ 自己重试两轮（1.2s 间隔）再让人工【刷新进度】兜底；
+ * 换单或取到数据即清零，不会无限轮询。
+ */
+let retryTimer = null
+let retryCount = 0
+watch(() => [props.bill?.procInstId, (props.nodes || []).length, props.loading],
+  ([pid, n, ld]) => {
+    if (retryTimer && (n > 0 || !pid)) { clearTimeout(retryTimer); retryTimer = null }
+    if (n > 0) { retryCount = 0; return }
+    if (!pid || ld || retryCount >= 2) return
+    retryCount += 1
+    retryTimer = setTimeout(() => { retryTimer = null; emit('refresh') }, 1200)
+  })
+watch(() => props.bill?.id, () => { retryCount = 0 })
 const dialogTitle = (base) => (props.bill?.billNo ? `${base} · ${props.bill.billNo}` : base)
 
-const STATE_LABEL = {
-  DONE: '已通过', CURRENT: '当前节点', REJECTED: '曾驳回', VOID: '已作废', TODO: '尚未到达',
-  SKIPPED: '未经过（他档分支）', ADDSIGN: '加签（临时插一道）',
-}
-const STATE_TYPE = {
-  DONE: 'success', CURRENT: 'primary', REJECTED: 'danger', VOID: 'warning', TODO: 'info',
-  SKIPPED: 'info', ADDSIGN: 'warning',
-}
-// D-DEC-386：负面末态集与 SRV BillTraceChainController.STATUS_NEGATIVE 同一规则（撤回/取消原缺，卡片头误落默认处理档「审批链已办结」）
+// 负面末态集与 SRV BillTraceChainController.STATUS_NEGATIVE 同一规则（撤回/取消原缺，卡片头误落成笼统的档「审批链已办结」）
 const ABNORMAL = ['REJECTED', 'WITHDRAWN', 'VOID', 'TERMINATED', 'CANCELLED', 'CLOSED']
 
 // 提单节在 wf_node_config 的 sort 里排在末位，链上却是最先发生的一步：显示时提到首位
@@ -136,9 +119,9 @@ const nodes2 = computed(() => {
   return [...arr.filter(isSubmitNode), ...arr.filter((n) => !isSubmitNode(n))]
 })
 /**
- * D-DEC-091/110/147：分母＝本单实际会经过的节（后端 counted/seqTotal），不再是 wf_node_config 的行数。
+ * /110/147：分母＝本单实际会经过的节（后端 counted/seqTotal），不再是 wf_node_config 的行数。
  * counted=false 的两类：分支未走（SKIPPED）与加签插道（addSignOnly）；老实例没有 counted 字段时
- * 回落成"全部计入"，与改造前逐字一致（后端新字段是纯增量，新旧包共存期不报错也不掉节）。
+ * 回落成"全部计入"，与原先逐字一致（后端新字段是纯增量，新旧包共存期不报错也不掉节）。
  */
 const isCounted = (n) => n.counted !== false
 const stepNodes = computed(() => nodes2.value.filter(isCounted))
@@ -158,12 +141,6 @@ const currentIndex = computed(() => {
   const n = current.value || lastRejected.value
   return n ? stepNodes.value.indexOf(n) + 1 : 0
 })
-/** 明细表首列：不进分母的节（分支未走/加签插道）显示「—」而不是一个假序号（D-DEC-147） */
-function stepNoAt(displayIndex) {
-  const n = nodes2.value[displayIndex]
-  return n && isCounted(n) ? stepNodes.value.indexOf(n) + 1 : null
-}
-
 // 刚保存的草稿行未必带 status 字段，缺省按草稿处理，不能当成「无单据」
 const status = computed(() => props.bill?.status || (props.bill?.id ? 'DRAFT' : ''))
 const tone = computed(() => {
@@ -201,7 +178,7 @@ const curMeta = computed(() => {
     .filter(Boolean).join(' · ')
 })
 /**
- * D-DEC-091/110：分母从「配置 N 节」改成「本单实际 N 节」。
+ * /110：分母从「配置 N 节」改成「本单实际 N 节」。
  * 配置节数与加签道数仍如实报出来，免得只看数字的人以为系统漏了几节——
  * 条件分支没命中的节与加签插的道都不属于本单的必经路线，不进分母。
  */
@@ -255,7 +232,9 @@ function humanizeDwell(t) {
 .fp-chain-title { font-size: 12px; color: #303133; font-weight: 600; }
 .fp-chain-btns { display: flex; gap: 8px; }
 .fp-dialog-head { font-size: 12px; color: #606266; margin-bottom: 10px; }
-.fp-dialog-scroll { max-height: 64vh; overflow: auto; padding-right: 4px; }
-.fp-table { margin-top: 0; }
+/* 时间轴与明细表同框：时间轴限高 38vh 内滚，下面接表格（表格自身 max-height 由 FlowChain 控制），
+   整框不会顶出视口——原来两框各占 64vh 是因为一框只装一种排法。 */
+.fp-dialog-scroll { max-height: 38vh; overflow: auto; padding-right: 4px; }
+.fp-dialog-sub { margin: 12px 0 6px; font-size: 12px; color: #909399; }
 .fp-noflow { font-size: 12px; color: #909399; border-top: 1px dashed #ebeef5; padding-top: 8px; }
 </style>

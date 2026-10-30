@@ -59,7 +59,7 @@ public class ChannelResponse {
         return body.length() > 4000 ? body.substring(0, 4000) : body;
     }
 
-    /** 连接失败 / 未配置 / 入参非法的默认处理响应。 */
+    /** 连接失败 / 未配置 / 入参非法的兜底响应。 */
     public static ChannelResponse fail(String error) {
         return new ChannelResponse(false, 0, null, error, 0L, false, false);
     }

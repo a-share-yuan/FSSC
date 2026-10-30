@@ -14,6 +14,7 @@ import com.fssc.framework.tenant.TenantContext;
 import com.fssc.connector.api.ChannelResponse;
 import com.fssc.connector.api.ConnectorFacade;
 import com.fssc.system.service.ConfigService;
+import java.util.ArrayList;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -81,7 +82,7 @@ public class ScpFlowService {
         b.setStatus(ScpBill.ST_WAIT_MATCH);
         b.setFailReason(null);
         mapper.insert(b);
-        // R5-D-100：SCP 对账开票数据落地记录（打通点1/2）——collab_sync_log 记方向/单号/结果，落地不再静默
+        // SCP 对账开票数据落地记录（打通点1/2）——collab_sync_log 记方向/单号/结果，落地不再静默
         syncService.log("SCP_IF01_LAND", "SCP_TO_AP", b.getPreInvoiceNo(),
                 CollabSyncLog.ST_SUCCESS, "对账开票数据落地：预制发票号 " + b.getPreInvoiceNo() + "，金额 " + b.getAmount(), null);
         return b;
@@ -98,7 +99,7 @@ public class ScpFlowService {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + b.getBillNo() + " 当前状态不可匹配");
         }
         BigDecimal tolerance = tolerancePct();
-        List<String> issues = new java.util.ArrayList<>();
+        List<String> issues = new ArrayList<>();
         if (b.getReconAmount() == null) {
             issues.add("对账单基准金额未提供（打通点1数据缺失）");
         } else {
@@ -227,7 +228,7 @@ public class ScpFlowService {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + b.getBillNo() + " 当前状态不可扫描");
         }
         b.setStatus(ScpBill.ST_CHECKING);
-        List<String> issues = new java.util.ArrayList<>();
+        List<String> issues = new ArrayList<>();
         if (scanned != null) {
             if (StringUtils.hasText(scanned.getBuyerTaxNo()) && !scanned.getBuyerTaxNo().equals(b.getBuyerTaxNo())) {
                 issues.add("购方税号不一致");
@@ -299,7 +300,7 @@ public class ScpFlowService {
         }
         boolean real = false;
         String result = "ERP通道未配置，模拟记账";
-        // 多 ERP 解析（V1.4）：通道 = {PROVIDER}_AP（蓝图默认 EBS_AP）；
+        // 多 ERP 解析：通道 = {PROVIDER}_AP（蓝图默认 EBS_AP）；
         // 接口变体细分（报文字典/接口注册）：蓝字专用通道优先，未配置回落统一 {PROVIDER}_AP
         String channel = connector.resolveErpChannel("AP");
         String variantCategory = connector.getConfig(connector.resolveErpChannel("AP_BLUE")) != null
@@ -311,7 +312,7 @@ public class ScpFlowService {
             payload.put("invoiceNo", b.getInvoiceNo());
             payload.put("supplierCode", b.getSupplierCode());
             payload.put("amount", b.getAmount());
-            // P0-2 唯一键：同一 SCP 单据重复记账（如超时重发）不重复生成 ERP 凭证，回放首次结果
+            // 唯一键：同一 SCP 单据重复记账（如超时重发）不重复生成 ERP 凭证，回放首次结果
             ChannelResponse resp = connector.invokeWrite(channel, payload,
                     "SCP_AP:" + TenantContext.getTenantId() + ":" + b.getBillNo());
             real = resp != null && resp.isOk();
@@ -507,7 +508,7 @@ public class ScpFlowService {
         return mapper.selectList(q.orderByDesc(ScpBill::getId));
     }
 
-    // ---------------- 工具 ----------------
+    // 工具
 
     private BigDecimal tolerancePct() {
         String v = configService.getValue("ar.recon.tolerance-amt-pct");

@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * LinkU 开放接口 <b>查询</b> Mapper（F-2 / F-7）。替代原 BCP 直连 FSSC 库的 10 个只读 Mapper。
+ * LinkU 开放接口 <b>查询</b> Mapper。替代原 BCP 直连 FSSC 库的 10 个只读 Mapper。
  *
  * <h3>设计要点</h3>
  * <ol>
@@ -36,19 +36,19 @@ public interface LinkuOpenQueryMapper {
      * 返回 {@code amount} 与 {@code receivedAmount}，未清规则交由 BCP 侧按自身配置推导
      * （{@code bcp.adapter.fssc.ap-outstanding-mode}），保持与原直连行为一致。
      *
-     * <p><b>G2R-10（2026-10-19 真跑实证，规则统一）</b>：{@code po_order.amount} 是<b>不含税</b>数
-     * （该表根本没有税额列，无从换算），而付款环节 {@code exp_bill_payment.amount} 是<b>价税合计</b>。
+     * <p>金额口径：{@code po_order.amount} 是<b>不含税</b>数
+     * 该表根本没有税额列，无从换算，而付款环节 {@code exp_bill_payment.amount} 是<b>价税合计</b>。
      * 两把尺子放在同一张对账单上 ⇒ 应付 96,000 vs 实付 108,480，核销永远核不平，
      * 对账单被判 SETTLED 时其实只结掉了部分。
      *
      * <p>此处把应付关联点环节统一到<b>价税合计</b>规则：已开票的 PO 取该 PO 名下发票的
      * {@code inv_invoice.amount}（价税合计）之和；未开票的 PO 仍退回 {@code po_order.amount}
-     * （此时它本身就是含税规则，无税可加）。{@code receivedAmount} 按同一比例缩放，
+     * 此时它本身就是含税规则，无税可加。{@code receivedAmount} 按同一比例缩放，
      * 保证 {@code MINUS_RECEIVED} 模式下两列同尺，不会算出一个"税额差"当未执行额。</p>
      */
     @Select("SELECT o.id AS id, o.po_no AS sourceBillNo, o.company_id AS companyId, "
             + "s.supplier_code AS partnerId, o.supplier_name AS partnerName, "
-            // G2R-10：有发票 ⇒ 价税合计；无发票 ⇒ 原值（未开票的订单额本身就是含税规则）
+    // 有发票 ⇒ 价税合计；无发票 ⇒ 原值（未开票的订单额本身就是含税规则）
             + "CASE WHEN inv.gross IS NOT NULL AND inv.gross > 0 THEN inv.gross ELSE o.amount END AS amount, "
             + "CASE WHEN inv.gross IS NOT NULL AND inv.gross > 0 AND o.amount IS NOT NULL AND o.amount > 0 "
             + "     THEN ROUND(COALESCE(o.received_amount, 0) * inv.gross / o.amount, 2) "
@@ -59,7 +59,7 @@ public interface LinkuOpenQueryMapper {
             + "FROM po_order o "
             + "LEFT JOIN md_supplier s ON s.id = o.supplier_id AND s.del_flag = 0 "
             + "  AND (#{tenantId} IS NULL OR s.tenant_id = #{tenantId}) "
-            // G2R-10：按 PO 聚合的发票价税合计（inv_bill_invoice → inv_invoice → exp_bill.po_id）
+    // 按 PO 聚合的发票价税合计（inv_bill_invoice → inv_invoice → exp_bill.po_id）
             + "LEFT JOIN (SELECT b.po_id AS po_id, SUM(i.amount) AS gross "
             + "           FROM inv_bill_invoice l "
             + "           JOIN inv_invoice i ON i.id = l.invoice_id AND i.del_flag = 0 "
@@ -80,7 +80,7 @@ public interface LinkuOpenQueryMapper {
                                              @Param("limit") int limit);
 
     /**
-     * AP 付款环节 —— {@code exp_bill_payment}（实付登记台账，D-V4R-97 权威查询面）。
+     * AP 付款环节 —— {@code exp_bill_payment}（实付登记台账，权威查询面）。
      * 仅 {@code pay_status IN ('PAID','PAYING')}。伙伴编码三重规则与原 Mapper 一致。
      */
     @Select("SELECT bp.id AS id, b.bill_no AS sourceBillNo, b.company_id AS companyId, "
@@ -105,7 +105,7 @@ public interface LinkuOpenQueryMapper {
                                              @Param("partnerCode") String partnerCode,
                                              @Param("limit") int limit);
 
-    /** AP 付款环节默认处理 —— {@code pay_plan}（付款计划；仅当实付台账取不到时使用）。 */
+    /** AP 付款环节兜底 —— {@code pay_plan}（付款计划；仅当实付台账取不到时使用）。 */
     @Select("SELECT p.id AS id, p.plan_no AS sourceBillNo, p.company_id AS companyId, "
             + "COALESCE(s.supplier_code, p.supplier) AS partnerId, p.amount AS amount, p.status AS status, "
             + "DATE_FORMAT(STR_TO_DATE(CONCAT(LEFT(REPLACE(IFNULL(p.period,''),'-',''),6),'01'), '%Y%m%d'), "
@@ -219,7 +219,7 @@ public interface LinkuOpenQueryMapper {
                                                 @Param("limit") int limit);
 
     /**
-     * AR 销售订单环节（P0-C《AR 三单匹配改造》）—— 候选表 {@code so_order} + {@code so_order_line}。
+     * AR 销售订单环节（三单匹配改造的一腿）—— 候选表 {@code so_order} + {@code so_order_line}。
      *
      * <p>ERP／销售模块物化表。现役 FSSC 库<b>不存在</b>该表（全仓 {@code so_order}/{@code sales_order}
      * 零命中），由服务层 {@link LinkuOpenQueryService#salesOrders} 先做表存在性探测，
@@ -254,7 +254,7 @@ public interface LinkuOpenQueryMapper {
                                                     @Param("limit") int limit);
 
     /**
-     * AR 销售出库发货环节（P0-C）—— 候选表 {@code so_shipment}。
+     * AR 销售出库发货环节—— 候选表 {@code so_shipment}。
      *
      * <p>发货环节→订单环节的桥为 {@code so_no}（列别名 {@code soNo}）。现役库缺失，服务层探测后降级为空。</p>
      */

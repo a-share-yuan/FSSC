@@ -7,7 +7,7 @@
   <FlowProgressPanel :bill="focusBill" :nodes="chainNodes" :loading="chainLoading"
                      :updated-at="chainAt" @refresh="refreshProgress" />
 
-  <!-- D-DEC-031（12-10:43）：提交审批的结果横幅，常驻到被手动关闭或下一次操作覆盖。
+  <!-- 提交审批的结果横幅，常驻到被手动关闭或下一次操作覆盖。
        放在页签之上（不是「发起单据」页内）—— 提交成功后 composable 会把页签切到「我的单据」，
        页内的提示条会跟着被藏起来，等于没有提示。 -->
   <el-alert v-if="submitOutcome" class="bw-outcome" :type="submitOutcome.ok ? 'success' : 'warning'"
@@ -15,7 +15,7 @@
             @close="submitOutcome = null" />
 
   <el-tabs v-model="b.activeTab">
-    <!-- ============ 发起单据 ============ -->
+    <!-- 发起单据 -->
     <el-tab-pane label="发起单据" name="create">
       <el-row :gutter="16">
         <!-- 左侧：概要 / 费用详情 / 分摊（由页面 slot 提供） -->
@@ -63,7 +63,7 @@
 
           <el-card header="发票 / 附件" style="margin-top: 12px">
             <div class="attach-row">
-              <!-- accept 同时放行普通附件（doc/xls/ppt/zip/txt 等）：此前只列发票格式，用户要传合同、
+              <!-- accept 同时放行普通附件（doc/xls/ppt/zip/txt 等）：只列发票格式的话，用户要传合同、
                    行程单一类附件得先在文件选择器里切「所有文件」，再挂上一个永远不会发生的「待识别」。
                    上传后由后端按扩展名定性：发票类 attachType=INVOICE 才识别，其余落 OTHER。 -->
               <UploadButton label="选择文件" :accept="ATTACH_ACCEPT" biz-type="INVOICE" :biz-id="b.form.bill.id || null" zone="TEMP" parse :on-done="onAttachUploaded" />
@@ -116,7 +116,7 @@
                   <template #default="{ row }"><el-checkbox v-model="row.checked" @change="b.toggleInvoice(row)" /></template>
                 </el-table-column>
                 <el-table-column label="发票号" min-width="150">
-                  <template #default="{ row }"><el-input v-model="row.invoiceNo" size="small" placeholder="发票号" @change="onInvoiceNoChange(row)" /></template>
+                  <template #default="{ row }"><el-input v-model="row.invoiceNo" size="small" placeholder="发票号" @change="onInvoiceNoChange(row)" maxlength="255" /></template>
                 </el-table-column>
                 <el-table-column label="开票日期" width="126">
                   <template #default="{ row }"><el-date-picker v-model="row.invoiceDate" type="date" value-format="YYYY-MM-DD" size="small" style="width:100%" /></template>
@@ -170,7 +170,7 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="往来单位">
-                <!-- D-V4R-45：这里与主表单是同一个 customerId，但原先没接 @change ⇒ 从右侧卡片选单位
+                <!-- 这里与主表单是同一个 customerId，但原先没接 @change ⇒ 从右侧卡片选单位
                      只改了 id，counterName/收款账号/PO 与收货单候选全不跑＝半初始化单据。
                      与主表单同源＝把变更交给宿主页面注册的 onCounterPick（页面侧才有那套派生逻辑）。 -->
                 <el-select v-model="b.form.bill.customerId" filterable clearable style="width:100%"
@@ -207,7 +207,7 @@
         </el-col>
       </el-row>
 
-      <!-- 首审环节办理人（提单选人 G2-3）：仅当该流程首审节点配成 PICK/POOL 档时出现，AUTO 不渲染 -->
+      <!-- 首审环节办理人（提单选人）：仅当该流程首审节点配成 PICK/POOL 档时出现，AUTO 不渲染 -->
       <el-card v-if="b.firstPick.mode === 'PICK' || b.firstPick.mode === 'POOL'" style="margin-top: 12px">
         <template #header>
           <span>第一道审批</span>
@@ -242,13 +242,13 @@
 
       <!-- 底部操作栏 -->
       <el-card style="margin-top: 12px">
-        <el-button @click="doSaveDraft">保存草稿</el-button>
-        <el-button type="primary" :loading="b.submitting" @click="doSubmit">提交审批</el-button>
+        <el-button :disabled="pendingWrite" @click="doSaveDraft">保存草稿</el-button>
+        <el-button type="primary" :loading="b.submitting" :disabled="pendingWrite" @click="doSubmit">提交审批</el-button>
         <el-button v-if="b.form.bill.id" link @click="b.resetForm()">新建空白单</el-button>
       </el-card>
     </el-tab-pane>
 
-    <!-- ============ 我的单据 ============ -->
+    <!-- 我的单据 -->
     <el-tab-pane label="我的单据" name="my">
       <el-card>
         <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
@@ -280,7 +280,7 @@
               <el-tag :type="b.statusType(row.status)" size="small">{{ b.statusLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
-          <!-- B8：驳回类型（exp_bill.reject_type）此前全仓零显示面——被驳回的单看不出是
+          <!-- 驳回类型（exp_bill.reject_type）：被驳回的单看不出是
                「漏单驳回（电子流直送填单人）」还是「逐级驳回（退回上一审批环节）」，重报路径只能靠猜。 -->
           <el-table-column label="驳回类型" width="100">
             <template #default="{ row }">
@@ -304,27 +304,27 @@
           <el-table-column label="操作" width="430" fixed="right">
             <template #default="{ row }">
               <el-button link size="small" @click.stop="b.openDetail(row)">详情</el-button>
-              <!-- D-V4R-79：WITHDRAWN（撤回）此前不在可编辑/可作废集合内，前端只剩「详情/追溯」，
+              <!-- WITHDRAWN（撤回）按「撤回 ≡ 退回草稿」处理：否则前端只剩「详情/追溯」，
                    后端 returnToEdit / voidBill 也只认 DRAFT/REJECTED ⇒ 撤回的单既不能改、不能重提、
-                   也不能作废，成为永久脏数据且白占单号与预算。规则对齐为：撤回 ≡ 退回草稿。 -->
+                   也不能作废，成为永久脏数据且白占单号与预算。 -->
               <el-tooltip v-if="editableStatus(row)" content="载入表单修改，重新提交走新流程实例" placement="top">
                 <el-button link size="small" type="primary" @click.stop="b.loadBillForEdit(row)">{{ row.status === 'DRAFT' ? '编辑' : '编辑重提' }}</el-button>
               </el-tooltip>
               <el-button v-if="row.status === 'DRAFT' || row.status === 'WITHDRAWN'" link size="small" type="danger" @click.stop="b.voidBill(row)">作废</el-button>
               <el-button v-if="row.status === 'APPROVING'" link size="small" type="warning" @click.stop="b.withdraw(row)">撤回</el-button>
-              <!-- E-10/F1-5：提单人的催办入口（服务端按发起人校验 + 同一环节 24 小时只催一次） -->
+              <!-- E-10/提单人的催办入口（服务端按发起人校验 + 同一环节 24 小时只催一次） -->
               <el-tooltip v-if="row.status === 'APPROVING'" content="给当前办理人发一次提醒；同一环节 24 小时内只催一次" placement="top">
                 <el-button link size="small" type="warning" @click.stop="b.urge(row)">催办</el-button>
               </el-tooltip>
               <el-button v-if="row.status === 'APPROVED'" link size="small" type="primary" @click.stop="b.copyBill(row)">复制</el-button>
-              <!-- 反审核（D-V3-135 配套 · 单据反操作链第二环）：APPROVED → DRAFT，前置校验在服务层 -->
+              <!-- 反审核（配套 · 单据反操作链第二环）：APPROVED → DRAFT，前置校验在服务层 -->
               <el-tooltip v-if="row.status === 'APPROVED'" content="退回草稿修改重提（已制证/付款已执行/批次在途/存在有效勾稽时服务端拒绝）" placement="top">
                 <el-button link size="small" type="danger" @click.stop="b.unaudit(row)">反审核</el-button>
               </el-tooltip>
               <el-button v-if="row.billType === 'APPLY' && row.status === 'APPROVED'" link size="small" type="warning" @click.stop="b.closeApply(row)">关闭</el-button>
               <el-button v-if="row.billType === 'APPLY' && row.status === 'APPROVED'" link size="small" type="danger" @click.stop="b.terminateApply(row)">终止报销</el-button>
               <el-button v-if="row.voucherNo" link size="small" type="success" @click.stop="b.openVoucher(row)">凭证</el-button>
-              <!-- D-DEC-380 甲：借款/还款等走本共享工作台的单据行内原本只有 详情/凭证，无七档联查入口 -->
+              <!-- 甲：借款/还款等走本共享工作台的单据行内原本只有 详情/凭证，无七档联查入口 -->
               <el-button link size="small" @click.stop="openTrace(row)">追溯</el-button>
             </template>
           </el-table-column>
@@ -332,7 +332,7 @@
       </el-card>
     </el-tab-pane>
 
-    <!-- ============ 凭证预览 / 记账 ============ -->
+    <!-- 凭证预览 / 记账 -->
     <el-tab-pane label="凭证" name="voucher">
       <el-card v-if="!b.voucher.id" header="凭证预览">
         <el-empty description="请在我的单据中选择带凭证号的单据查看" />
@@ -361,7 +361,7 @@
     </el-tab-pane>
   </el-tabs>
 
-  <!-- 借款单选择（D-UI-01：勾选 + 可改冲抵金额 + 底部【确定】，统一走 CandidatePickerDialog） -->
+  <!-- 借款单选择（勾选 + 可改冲抵金额 + 底部【确定】，统一走 CandidatePickerDialog） -->
   <CandidatePickerDialog v-model="b.loanDialog" title="选择借款单冲抵"
                         :rows="b.loanCandidates" max-field="availableBalance"
                         extra-prop="title" extra-label="标题"
@@ -370,7 +370,7 @@
                         :picked-ids="loanOffsetIds"
                         @confirm="b.confirmLoanPicks" />
 
-  <!-- 事前申请选择（D-UI-03：关联金额可改，支持部分关联） -->
+  <!-- 事前申请选择（关联金额可改，支持部分关联） -->
   <CandidatePickerDialog v-model="b.applyDialog" title="选择事前申请单"
                         :rows="b.applyCandidates" max-field="totalAmount" :show-max-column="false"
                         extra-prop="title" extra-label="标题"
@@ -399,7 +399,7 @@
         <el-table-column prop="itemName" label="费用项" :formatter="(row, col, v) => v || (row.itemId != null ? '费用项#' + row.itemId : '—')" />
         <el-table-column prop="amount" label="金额" width="100" :formatter="(r,c,v) => b.fmt(v)" />
         <el-table-column prop="taxAmount" label="税额" width="90" :formatter="(r,c,v) => b.fmt(v)" />
-        <!-- D-DEC-023：招待三项回显（真实列优先，缺失回退行 ext_json） -->
+        <!-- 招待三项回显（真实列优先，缺失回退行 ext_json） -->
         <el-table-column v-if="hasEntertainLine" label="接待对象" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ entertainOfLine(row).target || '—' }}</template>
         </el-table-column>
@@ -427,7 +427,7 @@
               <el-tag v-else type="info" size="small">附件</el-tag>
             </template>
           </el-table-column>
-          <!-- D-DEC-025：上传人显姓名（uploadByName 服务端批量反查 sys_user），空显「—」不显裸 id -->
+          <!-- 上传人显姓名（uploadByName 服务端批量反查 sys_user），空显「—」不显裸 id -->
           <el-table-column label="上传人" width="90">
             <template #default="{ row }">{{ row.uploadByName || '—' }}</template>
           </el-table-column>
@@ -501,7 +501,7 @@
   <!-- 文件预览器 -->
   <FileViewer ref="fileViewerRef" />
 
-  <!-- D-DEC-380：全链路追溯抽屉（单据→付款→批次→凭证→档案），与 ExpenseBillListTab 同组件复用 -->
+  <!-- 全链路追溯抽屉（单据→付款→批次→凭证→档案），与 ExpenseBillListTab 同组件复用 -->
   <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" :biz-type="traceBizType" />
   </div>
 </template>
@@ -533,18 +533,18 @@ const props = defineProps({
   pay: { type: Boolean, default: false },
   // 提交前钩子：允许页面同步 extJson/明细行后再校验提交（返回 false 阻止）
   beforeSubmit: { type: Function, default: null },
-  // D-V4R-76：保存草稿前钩子（与 beforeSubmit 同形）。此前顶层列位的同步逻辑只挂在提交钩子上，
+  // 保存草稿前钩子（与 beforeSubmit 同形）。顶层列位的同步逻辑若只挂在提交钩子上，
   // 而「保存草稿」按钮直调 b.saveDraft() 完全绕过它 ⇒ 草稿态三单环节列（po_id/po_receipt_id/contract_id）
   // 为空，被匹配台/手工关联/付款齐套校验读到就误判「缺环节」。此处补一个对称的前置钩子。
   beforeSaveDraft: { type: Function, default: null },
   // 关联事前申请后钩子：允许页面把申请单费用详情/分摊带入本单
   onApplyPick: { type: Function, default: null },
-  // D-V4R-45：右侧卡片「往来单位」变更钩子（与主表单同一套派生逻辑，由宿主页面注入）
+  // 右侧卡片「往来单位」变更钩子（与主表单同一套派生逻辑，由宿主页面注入）
   onCounterPick: { type: Function, default: null },
 })
 
 // reactive({...}) 会把返回对象中的 ref 全部深解包，slot v-bind 传参后可直接读写（form 为共享响应式代理）
-// D-DEC-346：`v-bind="b"` 每次渲染对 b 做浅拷贝 ⇒ 页面侧「新赋的顶层键」既不进 b、也不触发重渲染。
+// `v-bind="b"` 每次渲染对 b 做浅拷贝 ⇒ 页面侧「新赋的顶层键」既不进 b、也不触发重渲染。
 // 凡是页面自建的列表状态必须在容器上预声明，页面侧只对该数组做原地增删（splice），靠引用共享回写。
 const b = reactive({
   ...useBill({ billType: props.billType, subType: props.subType, claim: props.claim, travel: props.travel, pay: props.pay, onApplyPick: props.onApplyPick }),
@@ -553,11 +553,11 @@ const b = reactive({
   receipts: [],
 })
 
-// D-UI-01/D-UI-03：已入账的借款单/申请单 id —— 候选选择器里置灰，防同一张单重复入账
+// /已入账的借款单/申请单 id —— 候选选择器里置灰，防同一张单重复入账
 const loanOffsetIds = computed(() => (b.form?.loanOffsets || []).map((o) => o.loanBillId))
 const relationIds = computed(() => (b.form?.relations || []).map((r) => r.sourceBillId))
 
-// D-DEC-380：全链路追溯抽屉状态（行 billType 直传 biz-type，与抽屉 (bizType,bizId) 关联点同一规则）
+// 全链路追溯抽屉状态（行 billType 直传 biz-type，与抽屉 (bizType,bizId) 关联点同一规则）
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -574,7 +574,7 @@ function openTrace(row) {
   traceVisible.value = true
 }
 
-/** D-V3-136 发票行防重：同单内发票号重复会在票覆盖/核销合计中虚增（同一张票被计两次），
+/** 发票行防重：同单内发票号重复会在票覆盖/核销合计中虚增（同一张票被计两次），
  *  发票号失焦即校验，重复则清空本行发票号并提示（保留行供删除或改号）。 */
 function onInvoiceNoChange(row) {
   const no = (row.invoiceNo || '').trim()
@@ -587,7 +587,7 @@ function onInvoiceNoChange(row) {
 }
 
 /**
- * D-DEC-031（12-10:43）：借款单点「提交审批」后零可见反馈，只能刷新页面或去「我的单据」查才知道
+ * 借款单点「提交审批」后零可见反馈，只能刷新页面或去「我的单据」查才知道
  * 到底提上去没有。原 `doSubmit` 是 `b.submit()` 即发即忘 —— 页面不参与结果、读数一行不变，
  * "提交成功""被校验拦下""服务端报错"三种结果在屏幕上同形。现在：
  *   ① await 整条提交链，并用可复核的信号判成败（useBill.submit 只在 billApi.submit 返回成功后
@@ -597,25 +597,37 @@ function onInvoiceNoChange(row) {
  * 原因文案由 useBill 那一份给（缺项/预算/合规预检/首审未点名），submit 每拦一次写进 submitHint 一处，
  * 这里在失败分支原样带进横幅（⑤-Ⅳa）——toast 三秒就消失，"为什么没提上去"必须留在屏上可读。
  */
-/** D-V4R-79：可载入编辑的集合 = 草稿 / 已驳回 / 已撤回（撤回等同退回草稿，见台账） */
+/** 可载入编辑的集合 = 草稿 / 已驳回 / 已撤回（撤回等同退回草稿，见台账） */
 function editableStatus(row) {
   return row.status === 'DRAFT' || row.status === 'REJECTED' || row.status === 'WITHDRAWN'
 }
 
 /**
- * D-V4R-76：保存草稿入口。先跑 beforeSaveDraft（页面对齐顶层列位），再写入数据库。
+ * 一次点击只允许一条写链。b.submitting 只罩住 useBill.submit() 那一段——
+ * 前置本页校验、以及提交成功后的列表回读＋进度刷新（要好几秒）都落在它外面，
+ * 那几秒里按钮恢复可点，用户按不动的直觉再点一次，服务端就按「仅草稿可提交」拒掉，
+ * 于是"我自己把单子点坏了"是错觉、实际是被二次点击拦下。这里把罩子拉到整条点击跨度。
+ */
+const pendingWrite = ref(false)
+
+/**
+ * 保存草稿入口。先跑 beforeSaveDraft（页面对齐顶层列位），再写入数据库。
  * 不做返回值拦截——草稿允许半成品，钩子返回 false 也照常保存（与 doSubmit 的语义区别）。
  */
 async function doSaveDraft() {
-  if (props.beforeSaveDraft) {
-    try { await props.beforeSaveDraft(b) } catch (e) { /* 钩子异常不阻断保存 */ }
-  }
-  await b.saveDraft()
+  if (pendingWrite.value) return
+  pendingWrite.value = true
+  try {
+    if (props.beforeSaveDraft) {
+      try { await props.beforeSaveDraft(b) } catch (e) { /* 钩子异常不阻断保存 */ }
+    }
+    await b.saveDraft()
+  } finally { pendingWrite.value = false }
 }
 
 const submitOutcome = ref(null)
-// 第2批：单据信息区（公司/部门）原为装饰性红星——el-form-item required 无 prop 不触发任何校验，
-// 缺公司/部门时 useBill 默认处理只弹一句 toast，用户看不到是哪一项缺。现挂真 prop+rules，
+// 单据信息区（公司/部门）曾用装饰性红星——el-form-item required 无 prop 不触发任何校验，
+// 缺公司/部门时 useBill 兜底只弹一句 toast，用户看不到是哪一项缺。现挂真 prop+rules，
 // doSubmit 入口先跑本区校验，红字直接落在字段上。
 const billInfoFormRef = ref(null)
 const billExtraFormRef = ref(null)
@@ -626,6 +638,11 @@ const billInfoRules = {
 // 合同/往来单位辅助区：选填（clearable），customerId 由主表单校验，此处不强制
 const billExtraRules = { contractId: [], customerId: [] }
 async function doSubmit() {
+  if (pendingWrite.value) return
+  pendingWrite.value = true
+  try { await runSubmit() } finally { pendingWrite.value = false }
+}
+async function runSubmit() {
   submitOutcome.value = null
   if (billInfoFormRef.value) {
     try { await billInfoFormRef.value.validate() } catch { return }
@@ -633,7 +650,7 @@ async function doSubmit() {
   if (props.beforeSubmit) {
     const r = await props.beforeSubmit(b)
     if (r === false) {
-      // D-V4R-46：页面 beforeSubmit 的具体拦截原因此前只走 3 秒 toast（闪过即没），
+      // 页面 beforeSubmit 的具体拦截原因只走 3 秒 toast 的话（闪过即没），
       // 常驻横幅只有一句写死的「本页校验未通过」，用户根本不知道哪一项没过。
       // 页面各拦截点已同步写 b.submitHint，这里原样带进横幅。
       const why = String(b.submitHint || '').trim()
@@ -646,7 +663,7 @@ async function doSubmit() {
       return
     }
   }
-  // D-V3-136 默认处理校验：提交前再查一次发票号重复（防止绕过失焦校验的路径），重复即中止提交
+  // 兜底校验：提交前再查一次发票号重复（防止绕过失焦校验的路径），重复即中止提交
   const nos = (b.form.invoices || []).map((x) => (x.invoiceNo || '').trim()).filter(Boolean)
   const invDup = nos.filter((n, i) => nos.indexOf(n) !== i)
   if (invDup.length) {
@@ -658,7 +675,7 @@ async function doSubmit() {
     }
     return
   }
-  // D-V4R-45 一致性校验：每个 INVOICE 附件都应有对应发票明细行（1 附件↔1 发票），
+  // 一致性校验：每个 INVOICE 附件都应有对应发票明细行（1 附件↔1 发票），
   // 防止删附件不联动/手动乱序后，票面数据缺失还放行提交（票覆盖、影像核验都会缺票）。
   const invAttaches = (b.form.attaches || []).filter((a) => a && a.attachType === 'INVOICE')
   if (invAttaches.length) {
@@ -689,11 +706,16 @@ async function doSubmit() {
     }
   } else {
     const why = String(b.submitHint || '').trim()
+    // -05 同族：超时通道（服务端多半已受理、只是响应没回来）不能被写成"未受理"，
+    // 那句话与库内事实相反，正是诱导用户重复提单的那句 ⇒ 按原文分档出话。
+    const pending = /已提交，处理中|结果未知|仍在处理/.test(why)
     submitOutcome.value = {
       ok: false,
-      title: '本次提交未生效',
+      title: pending ? '提交结果待确认：服务端处理较慢' : '本次提交未生效',
       desc: (why ? `未通过的原因：\n${why}\n` : '')
-        + '服务端未受理本次提交，单据没有进入审批流（缺项、预算/合规校验、首审办理人未点名等原因见上行），页首流程进度与「我的单据」读数都不应发生变化；若与提示不一致请以「我的单据」列表读数为准并反馈。',
+        + (pending
+          ? '服务端多半已受理本次提交（超时≠失败）。不要重复点【提交审批】；请到「我的单据」刷新核对这张单的状态与页首流程进度，确认确实没进入审批流后再重提。'
+          : '服务端未受理本次提交，单据没有进入审批流（缺项、预算/合规校验、首审办理人未点名等原因见上行），页首流程进度与「我的单据」读数都不应发生变化；若与提示不一致请以「我的单据」列表读数为准并反馈。'),
     }
   }
 }
@@ -702,7 +724,7 @@ async function doSubmit() {
 function ccName(id) { const c = b.costCenters.find((x) => x.id === id); return c ? (c.ccName || '—') : '—' }
 function projName(id) { const p = b.projects.find((x) => x.id === id); return p ? (p.projectName || '—') : '—' }
 
-// D-DEC-023：仅当明细里确实存在招待三项时才追加这三列（非招待类单据不凭空多空白列）
+// 仅当明细里确实存在招待三项时才追加这三列（非招待类单据不凭空多空白列）
 const hasEntertainLine = computed(() => hasEntertainLines(b.detailData.lines))
 
 // 部门按公司过滤
@@ -719,7 +741,7 @@ function onCompanyChange() {
 
 defineExpose({ b })
 
-// ---------------- 缩略图预览 + OCR 角标 ----------------
+// 缩略图预览 + OCR 角标
 const fileViewerRef = ref(null)
 const thumbUrls = reactive({})   // fileId → download URL
 const ocrStatus = reactive({})   // fileId → 'idle' | 'processing' | 'done' | 'failed'
@@ -788,7 +810,7 @@ function removeAttach(i) {
     delete ocrStatus[a.fileId]
   }
   b.form.attaches.splice(i, 1)
-  // D-V4R-45 + 10-20：删除附件必须同时带走它解析出的发票行与勾选生成的费用明细行。
+  // + 10-20：删除附件必须同时带走它解析出的发票行与勾选生成的费用明细行。
   // 旧实现只删发票行，明细行仍留在 form.lines，保存后成为「没有附件却有条目」的脏单。
   if (!fid) return
   const removedInvs = (b.form.invoices || []).filter((x) => String(x.fileId || '') === fid)
@@ -833,7 +855,7 @@ async function triggerOcr(a) {
 }
 
 /**
- * 附件角标状态。取值顺序（后者只在前者缺失时默认处理）：
+ * 附件角标状态。取值顺序（后者只在前者缺失时兜底）：
  *  ① 非发票文件（Office/压缩包/文本…）→ 'other'，不参与识别，绝不显示"待识别"
  *  ② 本次会话内的识别进度 ocrStatus（点了「OCR识别」或上传时后端已解析）
  *  ③ 已解析出发票行（重新进页面 ocrStatus 已清空，用发票行的 parsed 反推，避免明明已识别却显示待识别）
@@ -862,7 +884,7 @@ function ocrBadgeText(a) {
 }
 
 // 流程进度卡片：跟着「当前这张单」走（详情抽屉 > 当前页签的选中行/正在编辑的单，见 useBill.focusedBill）。
-// 此前只看 detailData：抽屉开过一次就永久停在上一张单上，草稿态还会把步骤条钉死在第 1 步。
+// 只看 detailData 的话：抽屉开过一次就永久停在上一张单上，草稿态还会把步骤条钉死在第 1 步。
 const focusBill = computed(() => b.focusedBill)
 
 // 审批链全景：单据进入流程（有 procInstId）后给出全部节点与当前所在节点
@@ -897,7 +919,7 @@ async function refreshProgress() {
 </script>
 
 <style scoped>
-/* D-DEC-031：结果横幅与进度面板/页签之间留一档间距，标题按中文行长换行 */
+/* 结果横幅与进度面板/页签之间留一档间距，标题按中文行长换行 */
 .bw-outcome { margin-bottom: 12px; }
 .bw-outcome :deep(.el-alert__title) { font-size: 14px; font-weight: 600; }
 .bw-outcome :deep(.el-alert__description) { font-size: 12px; line-height: 20px; margin-top: 4px; white-space: pre-line; }

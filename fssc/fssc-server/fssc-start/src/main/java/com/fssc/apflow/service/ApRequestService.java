@@ -4,19 +4,33 @@
 package com.fssc.apflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.apflow.entity.ApDispatchRule;
 import com.fssc.apflow.entity.ApServiceRequest;
 import com.fssc.apflow.mapper.ApDispatchRuleMapper;
 import com.fssc.apflow.mapper.ApServiceRequestMapper;
+import com.fssc.arflow.service.ArFlowVoucherService;
 import com.fssc.audit.service.AuditTrailService;
 import com.fssc.bank.gateway.BankGateway;
 import com.fssc.bank.gateway.BankResult;
+import com.fssc.collab.entity.CollabSyncLog;
+import com.fssc.collab.service.CollabSyncService;
 import com.fssc.common.core.ErrorCode;
+import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.connector.api.ChannelResponse;
+import com.fssc.connector.api.ConnectorFacade;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysUserMapper;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -52,16 +66,16 @@ public class ApRequestService {
     private final ApServiceRequestMapper requestMapper;
     private final ApDispatchRuleMapper ruleMapper;
     private final ApMonthCloseService monthCloseService;
-    private final com.fssc.arflow.service.ArFlowVoucherService voucherService;
-    private final com.fssc.connector.api.ConnectorFacade connector;
-    private final com.fssc.collab.service.CollabSyncService collabSyncService;
+    private final ArFlowVoucherService voucherService;
+    private final ConnectorFacade connector;
+    private final CollabSyncService collabSyncService;
     /** 付款通道：与出纳付款批次共用 BankGateway；dev 默认模拟，生产 fssc.bank.gateway=http 切真实银企直联。 */
     private final BankGateway bankGateway;
     private final SysUserMapper sysUserMapper;
-    /** P4-3 审计扩面：单据级状态跃迁记录（接口级另有 @OperLog 双写） */
+    /** 审计扩面：单据级状态跃迁记录（接口级另有 @OperLog 双写） */
     private final AuditTrailService auditTrailService;
 
-    // ---------------- 创建 ----------------
+    // 创建
 
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest create(ApServiceRequest r) {
@@ -74,7 +88,7 @@ public class ApRequestService {
         validateForms(r);
         r.setId(null);
         r.setBillNo(ApServiceRequest.prefixOf(r.getReqType()) + LocalDateTime.now()
-                .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+                .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + UUID.randomUUID().toString().substring(0, 4).toUpperCase());
         if (r.getCcy() == null || r.getCcy().isBlank()) {
             r.setCcy("CNY");
@@ -86,11 +100,11 @@ public class ApRequestService {
             r.setPaymentConfig("payment process profile");
         }
         if (ApServiceRequest.TYPE_PREPAY.equals(r.getReqType())) {
-            r.setTaxAmount(java.math.BigDecimal.ZERO); // 预付款税额强制0
+            r.setTaxAmount(BigDecimal.ZERO); // 预付款税额强制0
             r09OrderCheck(r);
         }
         if (r.getRebateAmount() == null) {
-            r.setRebateAmount(java.math.BigDecimal.ZERO);
+            r.setRebateAmount(BigDecimal.ZERO);
         }
         r.setStatus(ApServiceRequest.ST_PENDING_DISPATCH);
         requestMapper.insert(r);
@@ -106,19 +120,19 @@ public class ApRequestService {
     private void r09OrderCheck(ApServiceRequest r) {
         String category = connector.resolveErpChannel("ORDER_GET");
         if (!connector.isConfigured(category)) {
-            collabSyncService.log(com.fssc.collab.entity.CollabSyncLog.IF_AR_SHIPPING, "SHARED_TO_EBS",
-                    r.getBillNo(), com.fssc.collab.entity.CollabSyncLog.ST_MOCK,
+            collabSyncService.log(CollabSyncLog.IF_AR_SHIPPING, "SHARED_TO_EBS",
+                    r.getBillNo(), CollabSyncLog.ST_MOCK,
                     "R-09 " + category + " 未配置，跳过 PO 校验（PO " + r.getPoNo() + "）", null);
             return;
         }
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("poNo", r.getPoNo());
-        com.fssc.connector.api.ChannelResponse resp = connector.invokeRead(category, payload);
+        ChannelResponse resp = connector.invokeRead(category, payload);
         if (resp == null || !resp.isOk()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "R-09 订单信息获取失败（PO " + r.getPoNo() + "）");
         }
-        collabSyncService.log(com.fssc.collab.entity.CollabSyncLog.IF_AR_SHIPPING, "SHARED_TO_EBS",
-                r.getBillNo(), com.fssc.collab.entity.CollabSyncLog.ST_SUCCESS,
+        collabSyncService.log(CollabSyncLog.IF_AR_SHIPPING, "SHARED_TO_EBS",
+                r.getBillNo(), CollabSyncLog.ST_SUCCESS,
                 "R-09 PO 校验通过（PO " + r.getPoNo() + "）", null);
     }
 
@@ -143,15 +157,15 @@ public class ApRequestService {
         return fresh;
     }
 
-    // ---------------- 派工（R-01~R-05） ----------------
+    // 派工（R-01~R-05）
 
     /** 自动派工：按单据类型+付款方法匹配规则；多负责人进入选单池（R-02）。 */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest dispatch(Long id) {
         ApServiceRequest r = require(id);
         requireStatus(r, ApServiceRequest.ST_PENDING_DISPATCH, "派工");
-        // P4-3 审计：改前快照（只记本次实际变化的字段）
-        Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        // 审计：变更前快照（只记本次实际变化的字段）
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("handler", r.getHandler());
         auditBefore.put("handlerPool", r.getHandlerPool());
@@ -176,7 +190,7 @@ public class ApRequestService {
         r.setStatus(ApServiceRequest.ST_DISPATCHED);
         r.setDispatchTime(LocalDateTime.now());
         requestMapper.updateById(r);
-        Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("handler", r.getHandler());
         auditAfter.put("handlerPool", r.getHandlerPool());
@@ -194,13 +208,13 @@ public class ApRequestService {
                 .noneMatch(s -> s.trim().equals(user))) {
             throw new BizException(ErrorCode.PARAM_INVALID, "用户 " + user + " 不在本单选单池内");
         }
-        Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("handler", r.getHandler());
         auditBefore.put("handlerPool", r.getHandlerPool());
         r.setHandler(user);
         r.setHandlerPool(null);
         requestMapper.updateById(r);
-        Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("handler", r.getHandler());
         auditAfter.put("handlerPool", r.getHandlerPool());
         auditTrailService.recordUpdate("AP_REQUEST", id, r.getBillNo(), "ap_service_request",
@@ -216,7 +230,7 @@ public class ApRequestService {
                 .contains(r.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + r.getBillNo() + " 当前状态不可派工/转单");
         }
-        Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("handler", r.getHandler());
         auditBefore.put("handlerPool", r.getHandlerPool());
@@ -227,7 +241,7 @@ public class ApRequestService {
             r.setDispatchTime(LocalDateTime.now());
         }
         requestMapper.updateById(r);
-        Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("handler", r.getHandler());
         auditAfter.put("handlerPool", r.getHandlerPool());
@@ -236,7 +250,7 @@ public class ApRequestService {
         return r;
     }
 
-    // ---------------- 确认（付款计划表解析确认） ----------------
+    // 确认（付款计划表解析确认）
 
     /**
      * 确认服务请求：可修改字段=付款类型/银行账户/付款方法/折扣额/到期日/付款额；
@@ -249,7 +263,7 @@ public class ApRequestService {
                 .contains(r.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + r.getBillNo() + " 当前状态不可确认服务请求");
         }
-        Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("paymentType", r.getPaymentType());
         auditBefore.put("bankNo", r.getBankNo());
@@ -290,7 +304,7 @@ public class ApRequestService {
             r.setStatus(ApServiceRequest.ST_GROUP_REVIEW);
         }
         requestMapper.updateById(r);
-        Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("paymentType", r.getPaymentType());
         auditAfter.put("bankNo", r.getBankNo());
@@ -315,7 +329,7 @@ public class ApRequestService {
         }
         String reviewer = currentUserName();
         String reason = note == null ? "" : note.trim();
-        Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("modifiedFlag", r.getModifiedFlag());
         r.setModifyNote((r.getModifyNote() == null ? "" : r.getModifyNote() + " | ")
@@ -325,7 +339,7 @@ public class ApRequestService {
             r.setModifiedFlag(0);
         }
         requestMapper.updateById(r);
-        Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("modifiedFlag", r.getModifiedFlag());
         auditTrailService.recordUpdate("AP_REQUEST", id, r.getBillNo(), "ap_service_request",
@@ -334,7 +348,7 @@ public class ApRequestService {
         return r;
     }
 
-    // ---------------- 过账/付款/作废/完成 ----------------
+    // 过账/付款/作废/完成
 
     /** 过账：ERP 生成付款凭证（多 ERP 适配；未配置外部通道时本地方案生成）。 */
     @Transactional(rollbackFor = Exception.class)
@@ -346,14 +360,14 @@ public class ApRequestService {
         }
         // 协同冻结门控（打通点7）：关账期间禁止发送数据产生凭证
         String period = r.getPaymentDate() == null ? null
-                : java.time.format.DateTimeFormatter.ofPattern("yyyy-MM").format(r.getPaymentDate());
+                : DateTimeFormatter.ofPattern("yyyy-MM").format(r.getPaymentDate());
         if (monthCloseService.isFrozen(r.getCompanyId(), period)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     (period == null ? "付款日期为空，无法确定所属会计期间；" : "期间 " + period + " ")
                             + "存在未完成的月末关账（协同冻结），禁止过账；请先填写付款日期或待关账完成");
         }
         // 真实分录凭证（补齐评估缺口2）：借2202应付账款/贷1002银行存款，失败阻断过账（fail-closed）
-        Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("voucherNo", r.getVoucherNo());
         String voucherNo = voucherService.generatePaymentVoucher(
@@ -363,7 +377,7 @@ public class ApRequestService {
         r.setStatus(ApServiceRequest.ST_POSTED);
         r.setPostTime(LocalDateTime.now());
         requestMapper.updateById(r);
-        Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("voucherNo", r.getVoucherNo());
         auditTrailService.recordUpdate("AP_REQUEST", id, r.getBillNo(), "ap_service_request",
@@ -399,14 +413,14 @@ public class ApRequestService {
         }
         String serial = (bank.getSerialNos() == null || bank.getSerialNos().isEmpty())
                 ? null : bank.getSerialNos().get(0);
-        Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("payVoucherNo", r.getPayVoucherNo());
         r.setPayVoucherNo(serial);
         r.setStatus(ApServiceRequest.ST_PAID);
         r.setPayTime(LocalDateTime.now());
         requestMapper.updateById(r);
-        Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("payVoucherNo", r.getPayVoucherNo());
         auditTrailService.recordUpdate("AP_REQUEST", id, r.getBillNo(), "ap_service_request",
@@ -427,13 +441,13 @@ public class ApRequestService {
         if (reason == null || reason.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "作废必须填写原因");
         }
-        Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         auditBefore.put("voidReason", r.getVoidReason());
         r.setVoidReason(reason);
         r.setStatus(ApServiceRequest.ST_VOIDED);
         requestMapper.updateById(r);
-        Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", r.getStatus());
         auditAfter.put("voidReason", r.getVoidReason());
         auditTrailService.recordUpdate("AP_REQUEST", id, r.getBillNo(), "ap_service_request",
@@ -448,17 +462,17 @@ public class ApRequestService {
                 ApServiceRequest.ST_DISPATCHED).contains(r.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "单据 " + r.getBillNo() + " 当前状态不可完成");
         }
-        Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", r.getStatus());
         r.setStatus(ApServiceRequest.ST_COMPLETED);
         requestMapper.updateById(r);
         auditTrailService.recordUpdate("AP_REQUEST", id, r.getBillNo(), "ap_service_request",
                 String.valueOf(id), auditBefore,
-                java.util.Collections.singletonMap("status", r.getStatus()), "完成");
+                Collections.singletonMap("status", r.getStatus()), "完成");
         return r;
     }
 
-    public com.fssc.common.core.PageResult<ApServiceRequest> page(long pageNum, long pageSize,
+    public PageResult<ApServiceRequest> page(long pageNum, long pageSize,
                                                                    String reqType, String status, String vendorName) {
         LambdaQueryWrapper<ApServiceRequest> q = new LambdaQueryWrapper<>();
         if (notBlank(reqType)) {
@@ -471,19 +485,19 @@ public class ApRequestService {
             q.like(ApServiceRequest::getVendorName, vendorName);
         }
         q.orderByDesc(ApServiceRequest::getId);
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<ApServiceRequest> p =
-                requestMapper.selectPage(new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(pageNum, pageSize), q);
-        return com.fssc.common.core.PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
+        Page<ApServiceRequest> p =
+                requestMapper.selectPage(new Page<>(pageNum, pageSize), q);
+        return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
     public ApServiceRequest get(Long id) {
         return require(id);
     }
 
-    // ---------------- 派工规则 ----------------
+    // 派工规则
 
-    public java.util.List<ApDispatchRule> listRules() {
-        java.util.List<ApDispatchRule> rules = ruleMapper.selectList(new LambdaQueryWrapper<ApDispatchRule>()
+    public List<ApDispatchRule> listRules() {
+        List<ApDispatchRule> rules = ruleMapper.selectList(new LambdaQueryWrapper<ApDispatchRule>()
                 .orderByAsc(ApDispatchRule::getId));
         fillDisplayNames(rules);
         rules.forEach(r -> r.setEditFingerprint(editFingerprint(r)));
@@ -492,10 +506,10 @@ public class ApRequestService {
 
     /**
      * 派工是跨法人的共享岗配置，而人员分页接口按登录人公司强制办结 ⇒ 界面取不到别公司同事的姓名。
-     * 这里在读取时按 user_name 回查补齐只读显示名：只覆盖**已写进规则**的工号，借此放开人员目录、写入数据库。
+     * 这里在读取时按 user_name 回查补齐只读显示名：只覆盖**已写进规则**的工号，不要借此放开人员目录、不要写入数据库。
      * 查不到（账号已删）时留空位，界面按纯工号显示。
      */
-    private void fillDisplayNames(java.util.List<ApDispatchRule> rules) {
+    private void fillDisplayNames(List<ApDispatchRule> rules) {
         if (rules == null || rules.isEmpty()) {
             return;
         }
@@ -516,7 +530,7 @@ public class ApRequestService {
         }
         for (ApDispatchRule r : rules) {
             r.setHandlerNames(r.getHandlers() == null ? null : split(r.getHandlers()).stream()
-                    .map(n -> display.getOrDefault(n, n)).collect(java.util.stream.Collectors.joining(",")));
+                    .map(n -> display.getOrDefault(n, n)).collect(Collectors.joining(",")));
             r.setGroupLeaderName(notBlank(r.getGroupLeader())
                     ? display.getOrDefault(r.getGroupLeader().trim(), r.getGroupLeader().trim()) : null);
         }
@@ -564,9 +578,9 @@ public class ApRequestService {
                 blankToEmpty(r.getGroupLeader()), String.valueOf(r.getEnabled()), blankToEmpty(r.getRemark()));
         byte[] digest;
         try {
-            digest = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(canonical.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        } catch (java.security.NoSuchAlgorithmException e) {
+            digest = MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 不可用", e);
         }
         StringBuilder sb = new StringBuilder(digest.length * 2);
@@ -580,10 +594,10 @@ public class ApRequestService {
         return v == null ? "" : v;
     }
 
-    // ---------------- 校验（蓝图附录三） ----------------
+    // 校验（蓝图附录三）
 
     private void validateForms(ApServiceRequest r) {
-        List<String> errors = new java.util.ArrayList<>();
+        List<String> errors = new ArrayList<>();
         if (r.getPaymentWay() == null || r.getPaymentWay().isBlank()) {
             errors.add("付款方法必填（支票/银行转账/应付票据）");
         }
@@ -596,7 +610,7 @@ public class ApRequestService {
             if (r.getPoNo() == null || r.getPoNo().isBlank()) {
                 errors.add("预付款必须录入PO编号");
             }
-            if (r.getTaxAmount() != null && r.getTaxAmount().compareTo(java.math.BigDecimal.ZERO) != 0) {
+            if (r.getTaxAmount() != null && r.getTaxAmount().compareTo(BigDecimal.ZERO) != 0) {
                 errors.add("预付款税额强制为0.0");
             }
         }
