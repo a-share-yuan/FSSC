@@ -39,7 +39,7 @@
                 <span v-else>正在加载审批轨迹…</span>
               </div>
               <div v-if="getHistory(row).length" class="history-detail">
-                <!-- P1-6 耗时摘要 -->
+                <!-- 耗时摘要 -->
                 <div class="duration-summary">
                   <span class="dur-badge">总耗时: {{ getTotalDuration(row) }}</span>
                   <span class="dur-badge">平均: {{ getAvgDuration(row) }}</span>
@@ -52,7 +52,7 @@
                     <span style="font-weight:600">{{ h.nodeName || '—' }}</span>
                     <el-tag :type="wfActionType(h.action)" size="small" style="margin:0 6px">{{ wfActionLabel(h.action) }}</el-tag>
                     <span style="color:#606266">{{ h.operUserName || '—' }}</span>
-                    <!-- P1-6 节点耗时 -->
+                    <!-- 节点耗时 -->
                     <el-tag v-if="getNodeDuration(row, i)" size="small" :type="getNodeDurationType(row, i)" effect="plain" style="margin-left: 8px">
                       <el-icon style="margin-right:2px"><Timer /></el-icon>{{ getNodeDuration(row, i) }}
                     </el-tag>
@@ -67,7 +67,7 @@
       <el-table-column label="流程标题" min-width="220" show-overflow-tooltip sortable prop="title">
         <template #default="{ row }">
           <span>{{ row.title || '—' }}</span>
-          <!-- ：业务单据已被清理 / 无法解析时明确标注，避免审批人对着一行空白盲审 -->
+          <!-- 业务单据已被清理 / 无法解析时明确标注，避免审批人对着一行空白盲审 -->
           <el-tag v-if="row.bizResolved === false" size="small" type="warning" effect="plain" style="margin-left:6px">无关联单据</el-tag>
         </template>
       </el-table-column>
@@ -77,7 +77,7 @@
           <span v-else style="color:#c0c4cc">—</span>
         </template>
       </el-table-column>
-      <!-- W4（2026-10-08 非人性化整改）：待办列表原无「单据类型」列，报销/借款/付款/合同混排只能逐行点开才知是什么单 -->
+      <!-- 待办列表要有「单据类型」列：报销/借款/付款/合同混排，缺这列只能逐行点开才知是什么单 -->
       <el-table-column label="单据类型" width="110" sortable>
         <template #default="{ row }">
           <span>{{ docTypeLabel(row.billType || row.bizType) || row.billType || row.bizType || '—' }}</span>
@@ -87,14 +87,14 @@
       <el-table-column label="当前在办人" width="180">
         <template #default="{ row }">
           <span v-if="row.assigneeName">{{ row.assigneeName }}</span>
-          <!-- D-DEC-160①：领取成功但列表回读还没追上的窗口期，不能再挂着「待领取」骗人；
+          <!-- 领取成功但列表回读还没追上的窗口期，不能再挂着「待领取」骗人；
                本地动作覆盖层生效期间显示本人＋「列表同步中」，读数追上后自动交回服务端规则。 -->
           <el-tooltip v-else-if="localOpOf(row)?.kind === 'claim'" content="本任务已由你领取成功，列表仍在刷新；可直接点「通过/驳回」办理" placement="top">
             <el-tag size="small" type="success" effect="plain">{{ myName() }}（本人 · 列表刷新中）</el-tag>
           </el-tooltip>
           <el-tag v-else size="small" type="warning" effect="plain">待领取</el-tag>
-          <!-- 委托归属（F4-1，治"两边都以为是对方在办"）：这行其实是委托人的单子，我作为受托人代他办。
-               字段仅在本人有生效委托时下发（缺省不带＝渲染与改造前逐字一致）。 -->
+          <!-- 委托归属（避免"两边都以为是对方在办"）：这行其实是委托人的单子，我作为受托人代他办。
+               字段仅在本人有生效委托时下发（缺省不带＝按普通待办渲染）。 -->
           <el-tooltip v-if="row.delegatedFromName" :content="'该单办理人为 ' + row.delegatedFromName + '，现处委托代办期，由你代为办理'" placement="top">
             <el-tag size="small" type="primary" effect="plain" style="margin-left:6px">代 {{ row.delegatedFromName }} 办理</el-tag>
           </el-tooltip>
@@ -103,14 +103,14 @@
                       :content="'本单已委托给 ' + row.delegatedToNames.join('、') + ' 代管，委托期内由他办理'" placement="top">
             <el-tag size="small" type="success" effect="plain" style="margin-left:6px">已委托</el-tag>
           </el-tooltip>
-          <!-- POOL 软锁（批次 1 ①，共享作业"任务被他人打开处理时其他用户看到锁定状态"）：
+          <!-- POOL 软锁（共享作业"任务被他人打开处理时其他用户看到锁定状态"）：
                行仍然可见（不藏单），但同池他人不能再点通过/驳回——服务端 canOperate 同一规则硬拦。 -->
           <el-tooltip v-if="row.lockedByOther" content="共享作业任务同时只允许一人办理；如需接办请联系其释放，或由其转办" placement="top">
             <el-tag size="small" type="danger" effect="plain" style="margin-left:6px">{{ row.lockOwnerName || '他人' }} 正在办理</el-tag>
           </el-tooltip>
-          <!-- 加签待办标识（D-DEC-065 症状②）：这一行是别人临时插的一道审，不是本来的环节。
-               没有角标时加签人与普通办理人视觉同一，会把自己的"签完回跳"当成"本节点定案"来理解。
-               字段仅在 wf_add_sign 有绑定本任务的进行中记录时下发（缺省不带＝渲染与改造前逐字一致）。 -->
+          <!-- 加签待办标识：这一行是别人临时插的一道审，不是本来的环节。
+没有角标时加签人与普通办理人视觉同一，会把自己的"签完回跳"当成"本节点已办结"来理解。
+               字段仅在 wf_add_sign 有绑定本任务的进行中记录时下发（缺省不带＝按普通待办行渲染）。 -->
           <el-tooltip v-if="row.addSignTodo" placement="top" :content="addSignTodoTip(row)">
             <el-tag size="small" type="warning" effect="plain" style="margin-left:6px">{{ row.addSignPosition === 'AFTER' ? '后加签' : '前加签' }}</el-tag>
           </el-tooltip>
@@ -122,8 +122,8 @@
         </template>
       </el-table-column>
       <el-table-column label="前序审批人" width="160">
-        <!-- D-DEC-086：四种状态如实分列，取不到数不再冒充「首节点」 -->
-        <!-- D-DEC-079 / D-DEC-112：本格与审批弹窗的「前序审批」段同源同一规则（prevTrackOf，按时间正序，
+        <!-- 四种状态如实分列，取不到数不再冒充「首节点」 -->
+        <!-- / 本格与审批弹窗的「前序审批」段同源同一规则（prevTrackOf，按时间正序，
              提单/同意/自动通过/驳回四类记录），并补 empty 档：接口零记录 ≠ 本单处于首节点。
              原来「首节点」这五个字既出现在"查询成功"之后，也出现在空页/规则不匹配之后，
              于是三个在办节点一起报「首节点」，而弹窗链上明明列得出前序已办。 -->
@@ -158,25 +158,25 @@
       <el-table-column label="操作" width="500">
         <template #default="{ row }">
           <!-- 任务池：无人认领的先领取（锁定到自己名下），已领取的可释放退回任务池。
-               批次 1 ①：一旦被同池他人领取，本行的办理动作全部灰显（显示"XX 正在办理"）——
+               一旦被同池他人领取，本行的办理动作全部灰显（显示"XX 正在办理"）——
                共享作业任务同时只允许一人办理；服务端 canOperate 同一规则硬拦，这里只是不让点了才报错。
                「去处理/追溯」不锁：看单据、看轨迹是只读动作。AUTO/PICK 审批节点不加锁（同角色通道是
-               自审拦截的既有绕行出口，见方案 §8.2 ①）。 -->
+               自审拦截的既有绕行出口）。 -->
           <el-button v-if="showClaim(row)" type="primary" size="small" v-prevent-double-click @click="claimTask(row)">领取</el-button>
-          <!-- D-DEC-160②：「释放」只在有池证据的节点上出现。后端的 canUnclaim 不区分取人方式
+          <!-- 「释放」只在有池证据的节点上出现。后端的 canUnclaim 不区分取人方式
                （AUTO/PICK 指派到我也照样 true），而释放会把节点打回"无人领取"态；
                非池节点要换人请走旁边既有的「转办」/管理员「改派」。 -->
           <el-button v-if="showUnclaim(row)" type="primary" plain size="small" v-prevent-double-click @click="unclaimTask(row)">释放</el-button>
-          <!-- D-DEC-078：落点被权限校验住的行，按钮如实改「查看单据」（点开即全链路追溯，不再"处理"个跳不动的页） -->
+          <!-- 落点被权限校验住的行，按钮直接显示「查看单据」（点开即全链路追溯，不再"处理"个跳不动的页） -->
           <el-button type="info" plain size="small" :disabled="row.bizResolved === false" @click="goBiz(row)">{{ bizLandingBlocked(row) ? '查看单据' : '去处理' }}</el-button>
           <el-button type="success" v-prevent-double-click size="small" :disabled="row.lockedByOther" @click="approve(row, true)">通过</el-button>
           <el-button type="danger" v-prevent-double-click size="small" :disabled="row.lockedByOther" @click="approve(row, false)">驳回</el-button>
           <el-button type="warning" size="small" :disabled="!row.billId || row.lockedByOther" @click="openDeduct(row)">核减</el-button>
           <!-- 转办：改派给其他用户办理（被他人锁定时也禁用——转办权归领取人） -->
           <el-button type="info" size="small" :disabled="row.lockedByOther" @click="openTransfer(row)">转办</el-button>
-          <!-- 加签（G1）：临时插一道 —— 前加签=加签人先审，后加签=我审完后加签人再审；
+          <!-- 加签：临时插一道 —— 前加签=加签人先审，后加签=我审完后加签人再审；
                两种都自动回跳、流程走向不变。与转办的区别写在弹窗说明里，避免两者被混用。
-               addSignAllowed=false 来自节点配置 allow_addsign=0（F3-3 接真，需先打开灰度总开关才下发该字段）：
+               addSignAllowed=false 来自节点配置 allow_addsign=0（接真，需先打开灰度总开关才下发该字段）：
                服务端同一份规则也会拒绝，这里隐藏按钮是为了不让人点了才知道不行。 -->
           <el-button v-if="row.addSignAllowed !== false" type="warning" plain size="small"
                      :disabled="row.lockedByOther" @click="openAddSign(row)">加签</el-button>
@@ -188,7 +188,7 @@
       </template>
     </el-table>
 
-    <!-- P0 性能：服务端分页，避免数据量增长后一次渲染上百条导致卡死 -->
+    <!-- 服务端分页：数据量增长后一次渲染上百条会卡死 -->
     <el-pagination
       v-if="total > 0"
       class="approval-pager"
@@ -202,7 +202,7 @@
       @size-change="onSize"
     />
 
-    <!-- P2 核定金额三层：审批核减弹层 -->
+    <!-- 核定金额三层：审批核减弹层 -->
     <el-dialog v-model="deductVisible" title="审批核减（核定三层）" width="520px">
       <el-form ref="deductFormRef" :model="deduct" :rules="deductRules" label-width="110px" v-if="deductVisible">
         <el-form-item label="单据编号">
@@ -263,7 +263,7 @@
       </template>
     </el-dialog>
 
-    <!-- 加签弹窗（G1）：前加签=加签人先审，后加签=我审完后加签人再审；两种都自动回跳 -->
+    <!-- 加签弹窗：前加签=加签人先审，后加签=我审完后加签人再审；两种都自动回跳 -->
     <el-dialog v-model="addSignVisible" title="加签（临时增加审批人）" width="540px">
       <el-form ref="addSignFormRef" :model="addSignForm" :rules="addSignFormRules" label-width="100px">
         <el-form-item label="待办任务">
@@ -302,7 +302,7 @@
   </el-card>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" :biz-type="traceBizType" />
 
-  <!-- ：去处理直达单据详情抽屉（附件预览 / OCR 结果 / 审批历史），行内操作与抽屉内操作共用同一套审批逻辑 -->
+  <!-- 去处理直达单据详情抽屉（附件预览 / OCR 结果 / 审批历史），行内操作与抽屉内操作共用同一套审批逻辑 -->
   <ApprovalDetailDrawer
     v-model="detailVisible"
     :row="cur"
@@ -333,7 +333,7 @@ import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useRouter } from 'vue-router'
 import { goBizPage, normalizeBillType, resolveBillRoute } from '../../utils/bizEntry'
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => load(),
 })
@@ -342,7 +342,7 @@ const approvalCm = ref(null)
 const cur = ref({})
 const router = useRouter()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
@@ -368,13 +368,12 @@ function isExpenseBill(row) {
 }
 
 /**
- * D-DEC-078（12-21:71）：审批落点校验。发票池（#/invoice/query）的数据面按 inv:list 门控，
+ * 审批落点校验。发票池（#/invoice/query）的数据面按 inv:list 门控，
  * 无该权限的审批岗点「去处理」会被丢进整页「暂无数据」＋一串「无该功能/按钮权限」报错——
- * 实测 FIN_AUDIT（财务审核岗，12-21 手工匹配链 Task_2 办理人孙燕飞3873）与 CFO（开票链
- * Task_5）均不持 inv:list，"审核岗看不到发票"只能回列表用行内快捷办理。
+ * 财务审核岗（FIN_AUDIT）与 CFO 这两个角色都不持 inv:list，"审核岗看不到发票"只能回列表用行内快捷办理。
  * 无权限时不再跳被校验住的业务页，改落全链路追溯（只读，exp:trace:list 审批岗在持）；
- * 授权轨（sys_role_menu 授 215/266，见 V1.4.48_fin_audit_inv_view_seed 注释态 SQL）执行并
- * 重新登录（权限烤进 JWT）后，本校验自动放行、按钮文案回到「去处理」。
+ * 待 sys_role_menu 把 inv:list 授给这两个角色并重新登录（权限烤进 JWT）后，
+ * 本校验自动放行、按钮文案回到「去处理」。
  */
 const canInvPool = hasPerm('inv:list')
 function bizLandingBlocked(row) {
@@ -407,7 +406,7 @@ function goBiz(row) {
     detailVisible.value = true
     return
   }
-  // D-DEC-078：落点是发票池而本账号无 inv:list ⇒ 不跳校验页，落全链路追溯
+  // 落点是发票池而本账号无 inv:list ⇒ 不跳校验页，落全链路追溯
   if (bizLandingBlocked(row)) {
     ElMessage.warning('当前账号无发票池查看权限（inv:list），已改为打开全链路追溯；如需在发票池核票请联系管理员授权')
     openTrace(row)
@@ -423,7 +422,7 @@ function goBiz(row) {
 const selRows = ref([])
 const tasks = ref([])
 const loading = ref(false)
-// 服务端分页状态（P0 性能：不再一次性拉取全部待办）
+// 服务端分页状态（不一次性拉取全部待办）
 const pageNum = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -437,19 +436,18 @@ const deductRules = reactive({
 })
 
 // 审批历史缓存：{ [billId]: WfTaskHistory[] }
-// 缓存键只到 billId、未带 bizType ⇒ 跨单据域的同值主键会串到同一份历史（D-DEC-236 家族，
-// 该条属待裁条目，本批不改键规则，仅在此立此存照，避免后来人以为键是安全的）。
-// D-DEC-079 续：键不动，但用 historyOwner 记住"这份值是替哪种 bizType 取的"，
+// 缓存键只到 billId、未带 bizType ⇒ 跨单据域的同值主键会串到同一份历史，键本身不安全。
+// 键规则暂不动，改为用 historyOwner 记住"这份值是替哪种 bizType 取的"，
 // 域不一致时按"本行未查询"处理（宁可让人多点一次「取审批历史」，也不拿别的单据域的空结果冒充「首节点」）。
 const historyMap = reactive({})
 const historyOwner = reactive({})
 /**
- * D-DEC-086：查询状态与缓存分开记。原先"没取到"和"没有记录"在界面上同形（都落进「首节点」），
+ * 查询状态与缓存分开记。否则"没取到"和"没有记录"在界面上同形（都落进「首节点」），
  * 而 /wf/query/history/page 对业务岗回 HTTP 200 + 4030，请求又被 silent 吞掉，
  * 于是"前序审批人恒显首节点""审批轨迹恒为空"。状态如实区分：
  *   loading 查询中 / done 取到了（可为空数组）/ noperm 本账号无 wf:history:list / fail 请求失败
- * D-DEC-079 续：再加一档 empty —— 接口正常返回但一条记录都没有。在途单不可能没有记录
- * （提单就是一条），空返回只可能是查询范围/权限问题，绝不能包装成「本单处于首节点」这条业务结论。
+ * 另加一档 empty —— 接口正常返回但一条记录都没有。在途单不可能没有记录
+ * 提单就是一条，空返回只可能是查询范围/权限问题，绝不能包装成「本单处于首节点」这条业务结论。
  */
 const historyState = reactive({})
 const historyMsg = reactive({})
@@ -461,7 +459,7 @@ const canViewHistory = hasPerm('wf:history:list')
 function wfActionLabel(a) { return a ? _wfActionLabel(a) : '—' }
 
 /**
- * 加签待办的说明文案（D-DEC-065 症状②）：把"这一道是什么、签完去哪"一次说清。
+ * 加签待办的说明文案：把"这一道是什么、签完去哪"一次说清。
  * 语义与后端加签回跳钩子一致——加签人的「通过」只代表加签这一道审完，
  * 任务交还原办理人/下一位加签人，流程不往前推（区别于转办＝受理人永久变更）。
  */
@@ -489,7 +487,7 @@ function histOwned(row) {
  * 后端 /wf/query/history/page 返回的是「最新在前」（WfQueryService.historyPage 的
  * orderByDesc(id) ＋ causalOrder 把实例定论行前置），而审批链、进度面板、展开行的耗时
  * 差分都是按"事情发生的先后"读的。这里统一翻正一次，三处同源，不再各排各的。
- * （顺带治好 P1-6 节点耗时：以前 list[i+1] 取到的是更早一条，差值恒为负，
+ * （顺带治好 节点耗时：以前 list[i+1] 取到的是更早一条，差值恒为负，
  *  fmtDuration 见负即返回空串 ⇒ 耗时徽标与总耗时从来不显示。）
  */
 function historyAsc(list) {
@@ -505,11 +503,11 @@ function getHistory(row) {
 }
 
 /**
- * D-DEC-079 / D-DEC-112：「前序审批人」列与审批弹窗的「前序审批」段必须同源同一规则。
- * 改造前三份 filter 各写各的 —— 列取 APPROVE|SUBMIT|AUTO_PASS（看不见驳回）、弹窗取
+ * 「前序审批人」列与审批弹窗的「前序审批」段必须同源同一规则。
+ * 三份 filter 各写各的就会各给一个答案 —— 列取 APPROVE|SUBMIT|AUTO_PASS（看不见驳回）、弹窗取
  * APPROVE|REJECT|AUTO_PASS（看不见提单）、展开行取全量且是最新在前；同一张单三处三种答案。
- * 现在只留这一份：节点办理记录四类动作，按时间正序，列与弹窗都读它。
- * 不含 APPROVED/REJECTED —— 那是实例级定论行（D-DEC-109），记的是整单结论不是某一节。
+ * 故只留这一份：节点办理记录四类动作，按时间正序，列与弹窗都读它。
+ * 不含 APPROVED/REJECTED —— 那是实例级定论行，记的是整单结论不是某一节。
  */
 const NODE_HANDLE_CODES = ['SUBMIT', 'APPROVE', 'AUTO_PASS', 'REJECT']
 function prevTrackOf(row) {
@@ -524,16 +522,15 @@ function prevTrackOf(row) {
     }))
 }
 
-// 获取前序审批人（已审批的人，按时间先后排列）
 function getPrevApprovers(row) {
   return prevTrackOf(row).map((t) => t.assignee).filter(Boolean)
 }
 
 /**
- * D-DEC-086：「前序审批人」这一格到底处于哪种状态，界面必须能自证。
+ * 「前序审批人」这一格到底处于哪种状态，界面必须能自证。
  *   nobill 该行没关联到业务单据 / noperm 账号无 wf:history:list / loading 查询中
- *   done   取到了（有记录、只是没有人工办理行） / empty 接口空返回（规则或权限问题，不是首节点）
- *   fail   查询失败（原因见 histMsgOf） / '' 尚未查询
+ *   done 取到了（有记录、只是没有人工办理行） / empty 接口空返回（规则或权限问题，不是首节点）
+ *   fail 查询失败（原因见 histMsgOf） / '' 尚未查询
  * 关键是把 done+空 与"没取到"分开：后者从前一律显示「首节点」，等于把权限缺陷与网络缺陷
  * 包装成一条假的业务结论。
  */
@@ -563,7 +560,7 @@ function fmt(v) {
   return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-// P1-6 审批节点耗时分析
+// 审批节点耗时分析
 function parseTime(s) {
   if (!s) return null
   const d = new Date(s.replace(/-/g, '/'))
@@ -630,12 +627,12 @@ function getMaxDurationNode(row) {
 }
 
 /**
- * D-DEC-160①②：任务池领取/释放的本地状态。
- *   poolArrived  taskId→true：该行进列表时即无人态（=任务池节点，唯一可自证的池证据）
- *   localOp      taskId→{kind:'claim'|'unclaim'}：本人刚发过且已成功的动作，服务端回读滞后时用来默认处理
- * 台账 2026-12-22:530 记录得很具体：领取已返回成功、提示语也弹了，同一行仍是
- * 「待领取／3 人可办」，要再手动刷新一次才见「孙良法（Y001072）／释放」⇒ 界面在把一次
- * 成功的操作说成没发生。这里既 await 刷新，也在刷新结果还没追上时如实标「列表同步中」。
+ * 任务池领取/释放的本地状态。
+ *   poolArrived taskId→true：该行进列表时即无人态（=任务池节点，唯一可自证的池证据）
+ *   localOp taskId→{kind:'claim'|'unclaim'}：本人刚发过且已成功的动作，服务端回读滞后时用来兜底
+ * 领取接口已返回成功、提示语也弹了，同一行仍显示「待领取／N 人可办」，要再手动刷新一次
+ * 才见「本人／释放」⇒ 界面把一次成功的操作说成没发生。这里既 await 刷新，
+ * 也在刷新结果还没追上时如实标「列表同步中」。
  */
 const poolArrived = reactive({})
 const localOp = reactive({})
@@ -643,11 +640,11 @@ function localOpOf(row) { return row?.taskId != null ? localOp[String(row.taskId
 
 /**
  * 本行是否任务池节点（决定「释放」是否出现）。
- * 后端 enrichHandlers 的 canUnclaim 只看「办理人是不是我」（WfTaskController:211-212），
+ * 后端 enrichHandlers 的 canUnclaim 只看「办理人是不是我」（WfTaskController），
  * 而 WfEngineFacade.unclaim 也只校验"是不是自己领的"、不校验池属性 ⇒ AUTO/PICK 节点指派到
  * 我名下后照样回 canUnclaim=true，界面上就多出一颗「释放」；真点下去会把任务退回候选态，
- * 凭空造出一个"无人领取"的节点（后端 :4349 还专门写了释放后清空 currentAssignee 的补丁）。
- * 后端补 poolTask 字段（见移交清单）之前，先在前端办结：无池证据就不给这颗按钮。
+ * 凭空造出一个"无人领取"的节点（后端 unclaim 里还有一处释放后清空 currentAssignee 的补丁）。
+ * 后端补 poolTask 字段之前，先在前端办结：无池证据就不给这颗按钮。
  */
 function isPoolRow(row) {
   if (!row) return false
@@ -675,11 +672,11 @@ async function load() {
   try {
     const res = await wfApi.todoPage({ pageNum: pageNum.value, pageSize: pageSize.value })
     const rows = res?.list || []
-    // D-DEC-160②：待办行里没有 handlingMode/assignType 可用，唯一能自证"这是任务池节点"的
+    // 待办行里没有 handlingMode/assignType 可用，唯一能自证"这是任务池节点"的
     // 服务端事实是「进列表时没有办理人」——Flowable 侧只有候选组，指派发生在领取那一刻
-    // （WfTaskController:138 注释同一规则）。先记下来，领取之后仍据此决定「释放」是否出现。
+    // （WfTaskController 注释同一规则）。先记下来，领取之后仍据此决定「释放」是否出现。
     rows.forEach((r) => { if (r.taskId != null && !r.assigneeId) poolArrived[r.taskId] = true })
-    // D-DEC-160①：服务端读数已经追上本人的领取/释放动作 ⇒ 撤掉本地覆盖层，徽标交回服务端说了算
+    // 服务端读数已经追上本人的领取/释放动作 ⇒ 撤掉本地覆盖层，徽标交回服务端说了算
     Object.keys(localOp).forEach((t) => {
       const r = rows.find((x) => String(x.taskId) === String(t))
       if (!r) { delete localOp[t]; return }
@@ -712,7 +709,7 @@ function onExpand(row, expandedRows) {
     ? expandedRows.some((r) => r.taskId === row.taskId)
     : true
   if (!expanded) return
-  // D-DEC-079：判断"该行是否已有可用历史"要连同单据域一起看（histOwned），
+  // 判断"该行是否已有可用历史"要连同单据域一起看（histOwned），
   // 同 billId 的另一域单据先取过数时，本行仍需自己取一次，不能沿用别人的空结果。
   if (row.billId != null && !histOwned(row)) {
     loadHistory(row)
@@ -728,7 +725,7 @@ async function loadHistory(row, force) {
   const k = row.billId
   if (k == null) return
   // 无权限不再发请求（请求了也只会被服务端 4030 拒），但界面要如实说"无权限"，
-  // 而不是把这格降级成「首节点」骗人（D-DEC-086）。
+  // 而不是把这格降级成「首节点」骗人。
   if (!canViewHistory) {
     historyOwner[k] = row.billType || ''
     historyState[k] = 'noperm'; historyMsg[k] = '当前账号没有查看审批历史的权限'; return
@@ -740,7 +737,7 @@ async function loadHistory(row, force) {
   historyMsg[k] = ''
   historyRawCount[k] = 0
   try {
-    // D-DEC-079 真因办结：从前这里把 row.billType（取自流程变量 bizType）原样当过滤条件，
+    // 真因办结：从前这里把 row.billType（取自流程变量 bizType）原样当过滤条件，
     // 而 wf_task_history.biz_type 的运行期真值可能带 EXP_ 前缀一类的域前缀，服务端按
     // (bizType,bizId) 硬筛就筛成空页（HTTP 200 + 空 list，WfQueryController:89-90 自己写明了这个坑）。
     // 前端接着把"空页"读成"没有前序环节" ⇒ 三个在办节点齐刷刷显示「首节点」，而弹窗的审批链
@@ -765,7 +762,7 @@ async function loadHistory(row, force) {
 }
 
 /**
- * D-DEC-079 / D-DEC-112：弹窗的「前序审批」段与列表那一格同源同一规则（都读 prevTrackOf），
+ * / 弹窗的「前序审批」段与列表那一格同源同一规则（都读 prevTrackOf），
  * 且开弹窗前先把数取到手 —— 从前只靠"该行恰好被展开过"，没展开就整段不显示，
  * 审批人对着空弹窗只能靠链上的节点名猜前面谁办过。silent 查询，取不到就维持不显示。
  */
@@ -782,12 +779,12 @@ async function ensureHistoryFor(row) {
 async function approve(row, approved) {
   if (!row?.taskId) { ElMessage.warning('该待办缺少任务标识，无法审批'); return }
   if (!approvalDlg.value) { ElMessage.error('审批弹窗未就绪，请刷新页面后重试'); return }
-  // 审批意见必经输入框且必填（合规整改 ：不留默认「同意/不同意」空意见，取消则不执行）。
+  // 审批意见必经输入框且必填（合规整改：不留默认「同意/不同意」空意见，取消则不执行）。
   // 弹窗在此之上补齐单据摘要与前序审批，审批人无需回列表展开行翻详情。
   approvalRow.value = row
-  detailVisible.value = false // BUG-04：弹窗与抽屉互斥，避免双审批入口同屏
-  // D-DEC-079/112：开弹窗前把该单的审批历史取到手，弹窗的「前序审批」与列表那一格才可能同源；
-  // silent 查询失败不拦审批（拿不到就不显示该段，与改造前一致）。
+  detailVisible.value = false // 弹窗与抽屉互斥，避免双审批入口同屏
+  // 开弹窗前把该单的审批历史取到手，弹窗的「前序审批」与列表那一格才可能同源；
+  // silent 查询失败不拦审批（拿不到就不显示该段）。
   await ensureHistoryFor(row)
   const res = await approvalDlg.value.open({
     row,
@@ -795,24 +792,24 @@ async function approve(row, approved) {
     decision: approved ? 'approve' : 'reject',
     history: historyForDialog(row),
     showDetail: isExpenseBill(row) && row.bizResolved !== false && row.billId != null,
-    // G2 传阅：只有「通过」才可能投递抄送（驳回会终止实例），故仅在通过时显示抄送区
+    // 传阅：只有「通过」才可能投递抄送（驳回会终止实例），故仅在通过时显示抄送区
     allowCc: approved,
-    // D-DEC-022（12-08:70）：审批请求改由弹窗执行 —— 成功才关窗；被服务端业务异常拒绝
+    // 审批请求改由弹窗执行 —— 成功才关窗；被服务端业务异常拒绝
     //（「任务已被处理」「禁止审批自己提交的单据」「会计期间已结账」等）时弹窗保持打开、
     // 意见与下一环节点名/审批项选择全部保留，失败原因就地显示并可原地重试。
-    // 原写法是先关窗再发请求，失败只剩一条飘过顶部的红条，审批人既丢了意见也不知卡在哪。
+    // 若先关窗再发请求，失败只剩一条飘过顶部的红条，审批人既丢了意见也不知卡在哪。
     submit: async (payload) => {
       try {
-        // R5-D-191：写动作统一包 try/catch。silent 只为压掉拦截器把后端原文/权限码直出成 toast，
+        // 写动作统一包 try/catch。silent 只为压掉拦截器把后端原文/权限码直出成 toast，
         // 失败规则统一由下面 catch 的业务语义提示承担（单号＋节点＋下一步）。
         await wfApi.approve({ taskId: row.taskId, approved: payload.approved, comment: payload.comment,
           nextAssigneeUserId: payload.nextAssigneeUserId, ccUserIds: payload.ccUserIds,
           rejectToNodeKey: payload.rejectToNodeKey, approvalItemCode: payload.approvalItemCode }, { silent: true })
       } catch (e) {
-        // R5-D-191（写侧零反馈）：通过/退回被服务端拒绝（如作业池任务未领取 code 400「须先领取再办理」）时，
+        // 写侧零反馈：通过/退回被服务端拒绝（如作业池任务未领取 code 400「须先领取再办理」）时，
         // 必须显式落业务语义 toast（含单号/节点与可执行的下一步），再把异常原样抛回弹窗 ——
         // 弹窗保持打开、意见/点名保留，可原地重试；不再出现"点了没反应、零提示、易重复点"。
-        // D-1B-02：本通道 silent=true ⇒ 拦截器不再回放后端原文，这里必须逐字补回（replayServerMsg=true），
+        // 本通道 silent=true ⇒ 拦截器不再回放后端原文，这里必须逐字补回（replayServerMsg=true），
         // 否则强制校验类拒绝（如三单匹配冻结）只剩通用「处置」文案，原因被丢。
         notifyRefused(payload.approved ? '通过' : '驳回', row, e, true)
         throw e
@@ -827,12 +824,12 @@ async function approve(row, approved) {
 
 // 批量审批：勾选行统一意见一次性提交后端批量接口
 // （wfApi.batchApprove → 主路径 POST /api/tenant/workflow/task/batch-approve，请求体 { taskIds, comment }；
-//   /api/tenant/wf/batch-approve 只是 404 时的防御性回退，经 2026-09-23 复核后端并无该路径）。
+//   /api/tenant/wf/batch-approve 只是 404 时的防御性回退，后端并无该路径）。
 // 完成后按返回的 fail 数组逐条展示失败明细并刷新列表；未勾选时按钮禁用并提示。
 const batchApproving = ref(false)
 const taskTableRef = ref(null)
 
-// ---------------- 转办 
+// 转办
 const transferVisible = ref(false)
 const transferRow = ref({})
 const transferFormRef = ref(null)
@@ -886,7 +883,7 @@ async function submitTransfer() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// ---------------- 加签（G1）：前加签 / 后加签 ----------------
+// 加签：前加签 / 后加签
 // 与转办的本质区别：转办是「受理人永久变更」，加签是「临时插一道」——
 // 加签人审完自动回跳（前→原办理人；后→下一节点应得的人），流程走向不变。
 // 加签人在待办里看到的是同一个任务，但他的「同意」只代表加签审完，不会推进流程。
@@ -943,30 +940,29 @@ async function submitAddSign() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-// ---------------- 任务池：领取 / 释放（节点取人方式=POOL 时该任务只有候选组、没有办理人）
+// 任务池：领取 / 释放（节点取人方式=POOL 时该任务只有候选组、没有办理人）
 // 领取＝把任务锁定到自己名下（并发抢单由后端 Flowable claim 保证只有一人成功）；
 // 释放＝退回任务池给同池其他人。两者都只刷新列表，不弹窗——没有需要征询的输入。
-//
-// D-DEC-038（负向操作零反馈）：这两条链路上的拒绝全是 HTTP 200 + {code,msg}
+// 负向操作零反馈：这两条链路上的拒绝全是 HTTP 200 + {code,msg}
 // （GlobalExceptionHandler 把 BizException 归一成 Result.fail，不是 4xx 状态码），
-// 拦截器 api.js:127-130 已把后端原文 toastBizError 出来，且 claim/unclaim 未传 silent ⇒
-// 原文不会丢。真正缺的是两件事：① 提示里不带单号/节点，屏上十来行时根本不知道说的是哪一条；
-// ② 服务端拒绝语只说"不许"，不说"那该怎么办"（台账 12-22:964/973/1025 记的正是这条：
-// 自审拦截校验没有任何"改派/绕行"出口提示，审批人只能反复点）。下面按后端逐条原文给出处置。
+// 拦截器已把后端原文 toastBizError 出来，且 claim/unclaim 未传 silent ⇒
+// 原文不会丢。真正缺的是两件事：一是提示里不带单号/节点，屏上十来行时根本不知道说的是哪一条；
+// 二是服务端拒绝语只说"不许"，不说"那该怎么办"（自审拦截校验没有任何"改派/绕行"出口提示，
+// 审批人只能反复点）。下面按后端逐条原文给出处置。
 const billLabel = (row) => `【${row?.billNo || row?.title || '未关联单据'}｜${row?.taskName || '当前节点'}】`
 /** 后端拒绝原文 → 可执行的下一步（判定顺序自严到宽，取第一条命中） */
 function refuseAdvice(msg) {
   const m = String(msg || '')
-  // D-V5R-08（F-run-1017b 实测）：原先把「自审/连办」三类归一成「本单是你自己提交的」，
-  // 实测连办校验命中时（同一人已办过本实例其他节点）文案指错方向，排查被带偏。
-  // 现按后端原文分流：连办优先（更具体），自审次之。
+  // 「自审/连办」三类若归一成「本单是你自己提交的」，
+  // 连办校验命中时（同一人已办过本实例其他节点）文案就指错方向，排查被带偏。
+  // 故按后端原文分流：连办优先（更具体），自审次之。
   if (/同一人在同一审批流程|连办/.test(m)) {
     return '你已在同一审批流程中办理过其他节点（连办/自审拦截）。请点「转办」把本节点交给同角色其他持有人，或联系流程管理员「改派」；反复点击不会放行。'
   }
   if (/自审|自己提交的|禁止审批自己/.test(m)) {
     return '本单是你自己提交的，内控规则不允许自审自批。请点「转办」把本节点交给同角色其他人，或联系流程管理员「改派」；反复点击不会放行。'
   }
-  // R5-D-191：审批提交侧校验（下一环节须点名到人）——原先这条会漏进默认处理文案，让人摸不到出口
+  // 审批提交侧校验（下一环节须点名到人）——漏进兜底文案就让人摸不到出口
   if (/指定.*办理人|未点名|下一环节/.test(m)) {
     return '本节点按配置需先指定下一环节办理人：请回到弹窗在上方「下一环节」区块点名到人后再提交。'
   }
@@ -979,12 +975,12 @@ function refuseAdvice(msg) {
   if (/已在你名下|无需重复领取/.test(m)) {
     return '该任务已在你名下，直接点「通过 / 驳回」办理即可，无需再领取。'
   }
-  // R5-D-191：作业池任务未领取即点通过/驳回的主路径——后端拒「作业池任务须先领取再办理」，
+  // 作业池任务未领取即点通过/驳回的主路径——后端拒「作业池任务须先领取再办理」，
   // 原样直出等于让用户猜；给出「先领取再办理」的明确出口，并说明本次未生效无须重复提交。
   if (/须先.*领取|先领取再办理|请先.*领取/.test(m)) {
     return '任务池（共享作业）节点要先「领取」再办理：请先回列表点该行「领取」把任务锁定到本人名下，再点「通过 / 驳回」；本次未生效，无须重复提交。'
   }
-  // R5-D-191：审批提交侧的期间校验（会计期间已结账）
+  // 审批提交侧的期间校验（会计期间已结账）
   if (/会计期间|结账/.test(m)) {
     return '单据所属会计期间已结账，本期间不能再办理。请联系总账会计按流程处理期间后再回来办理；重复提交不会放行。'
   }
@@ -997,8 +993,9 @@ function refuseAdvice(msg) {
   if (/不存在或已处理|已被处理/.test(m)) {
     return '该任务已被办理或已流转，列表稍后同步；请到「单据追溯」确认最新落点。'
   }
-  // R5-D-191：提交结果未知（超时）不能报成功也不能诱导重复点——先回读再用诊断规则办结
-  if (/超时|仍在处理/.test(m)) {
+  // 提交结果未知（超时）不能报成功也不能诱导重复点——先回读再用诊断规则办结
+  // longWrite 端点超时由 api.js 报成「已提交，处理中」，同一条处置规则要接住它
+  if (/超时|仍在处理|已提交，处理中/.test(m)) {
     return '请求超时：本次提交结果未知（服务端可能已受理）。请勿重复提交——先回列表刷新核对该任务是否已被办理，再决定是否重试。'
   }
   if (/未登录/.test(m)) {
@@ -1012,23 +1009,26 @@ function refuseAdvice(msg) {
 /**
  * 拒绝原因＋单号/节点＋处置：一次说全，可手动关闭，停留 8 秒。
  *
- * D-1B-02（V4-run-1017b 1B.16 实测）：审批提交链统一带 `{ silent: true }`（见 approve 的注释），
- * 拦截器因此不再把后端原文 toast 出来；本函数原先又只渲染 refuseAdvice 推出的「处置」，
- * 于是服务端红字（如三单匹配强制校验的拒付原因）永远到不了屏上——与 1B.24「执行付款拦停弹窗
- * 原文回放」两条通道规则不一致。现对有服务端原文的通道（replayServerMsg=true）先逐字回放
- * 服务端原文，再接「处置」建议；领取/释放等非 silent 通道原文已由拦截器给出，不重复回放。
+ * 审批提交链统一带 `{ silent: true }`（见 approve 的注释），拦截器因此不再把后端原文 toast 出来；
+ * 若这里只渲染 refuseAdvice 推出的「处置」，服务端红字（如三单匹配强制校验的拒付原因）就永远
+ * 到不了屏上——与「执行付款拦停弹窗原文回放」两条通道规则不一致。故对有服务端原文的通道
+ * （replayServerMsg=true）先逐字回放服务端原文，再接「处置」建议；领取/释放等非 silent 通道
+ * 原文已由拦截器给出，不重复回放。
  */
 function notifyRefused(action, row, e, replayServerMsg = false) {
   const raw = replayServerMsg ? String(e?.message || '').trim() : ''
   // axios 无业务响应体时的通用文案（"Request failed with status code 400" 等）不是原因，
   // 回放它反而把真原因挤没；只有拿到服务端 msg 才逐字显示。
   const replayable = raw && !/^Request failed with status code|^Network Error|^timeout of|^网络错误/i.test(raw)
+  // 服务端 37s 才回、前端 20s 断连那一类，库内其实已办结；
+  // 前缀写死「未生效」与事实相反，正是诱导审批人重复点击的那句话 ⇒ 超时通道改报「结果待确认」。
+  const head = `${billLabel(row)} ${e?.accepted ? `${action}提交结果待确认` : `${action}未生效`}`
   ElMessage({
     type: 'error',
     duration: 8000,
     showClose: true,
     grouping: true,
-    message: `${billLabel(row)} ${action}未生效${replayable ? `：${raw}` : ''} —— 处置：${refuseAdvice(raw || e?.message)}`,
+    message: `${head}${replayable ? `：${raw}` : ''} —— 处置：${refuseAdvice(raw || e?.message)}`,
   })
 }
 
@@ -1041,9 +1041,9 @@ async function claimTask(row) {
     await load()
     return
   }
-  // D-DEC-160①：成功即就地落账（不等列表回来），并 await 刷新 —— 原写法是先弹成功提示、
-  // 再发一个不 await 的 load()，同一行的徽标在响应回来前一直是「待领取／N 人可办」，
-  // 台账 12-22:530 就是这条：提示说"已领取"，界面说"没领取"。
+  // 成功即就地落账（不等列表回来），并 await 刷新 —— 若先弹成功提示、
+  // 再发一个不 await 的 load()，同一行的徽标在响应回来前一直是「待领取／N 人可办」：
+  // 提示说"已领取"，界面说"没领取"。
   const t = row.taskId != null ? String(row.taskId) : null
   if (t) localOp[t] = { kind: 'claim' }
   row.assigneeName = myName()
@@ -1072,10 +1072,10 @@ async function unclaimTask(row) {
   await load()
 }
 /**
- * D-DEC-198：批量摘要不再报「金额合计」。
+ * 批量摘要不再报「金额合计」。
  * 从前这里用 `Number(r.totalAmount || 0)` 累加，NULL 与 0 同形 ⇒ 6 单全取不到金额时照样打出
  * 「¥0.00」，一个语法正确、业务上虚假的合计把审批人哄过了。合计改由弹窗按明细真算
- * （只累加取到值的行，未取到的如实标注），一处真值不留两份。
+ * 只累加取到值的行，未取到的如实标注，一处真值不留两份。
  * 这里只保留"选了多少条、卡在哪些节点"，以及两条会在提交时逐条失败的风险提示。
  */
 function batchSummary(rows) {
@@ -1093,7 +1093,7 @@ function batchSummary(rows) {
 }
 
 /**
- * D-DEC-198（12-31:176）：批量逐单明细。
+ * 176：批量逐单明细。
  * 查询＝批量前已勾选的那几行（todo/page 的同一份数据），不另发请求、不新增查询范围，
  * 因此明细与审批人在列表里看到的单号/金额/节点逐字一致，不会出现"弹窗另一套数"。
  * amount 严格保留 null（后端该域无金额列或业务行取不到时 totalAmount 就是 NULL），
@@ -1118,8 +1118,8 @@ function batchItems(rows) {
 const BATCH_MAX = 100
 
 /**
- * D-DEC-198：批量提交的两条通道，返回同一种 { success, fail:[{taskId, billNo?, reason}] } 形状。
- * ① 未选抄送 ⇒ 后端批量接口一次请求（逐条独立事务），与改造前逐字一致；
+ * 批量提交的两条通道，返回同一种 { success, fail:[{taskId, billNo?, reason}] } 形状。
+ * ① 未选抄送 ⇒ 后端批量接口一次请求（逐条独立事务），无需逐单办理；
  * ② 选了抄送 ⇒ 批量接口的入参只有 {taskIds, comment, approved}，<b>没有</b> ccUserIds，
  *    抄送仅在单条 /wf/approve 生效（与节点配置取并集后写 wf_cc）。与其把选择悄悄丢掉，
  *    这里改走逐单通道：同一批单、同一条意见，逐条办理并各自投递抄送。
@@ -1127,7 +1127,7 @@ const BATCH_MAX = 100
  *    nextAssigneeUserId/ccUserIds/rejectToNodeKey/approvalItemCode = null 委托到 9 参实现），
  *    越权守卫、自审拦截、PICK 点名硬约束同一规则，换路不绕校验。
  * @returns Promise<{success:number, fail:Array}>；整体不可用（接口未部署/未登录等）时抛错，
- *          由弹窗就地回显并保持打开（D-DEC-022 手感），单条业务失败不算整体失败。
+ *          由弹窗就地回显并保持打开（手感），单条业务失败不算整体失败。
  */
 async function submitBatch(rows, payload) {
   const taskIds = rows.map((r) => String(r.taskId))
@@ -1147,8 +1147,8 @@ async function submitBatch(rows, payload) {
     // 宽容解析：data = { success?: <成功条数>, fail?: [{ taskId, reason }] }
     const failList = Array.isArray(res?.fail) ? res.fail : Array.isArray(res?.failed) ? res.failed : []
     // 后端 WfTaskBatchController 实际字段是 success；successCount/okCount 是历史假设名，
-    // 保留在后仅为兼容其它部署形态（此前只读后两者 ⇒ 恒 undefined，靠 fallback 兜住，
-    // 结果虽正确但属"靠默认处理"而非"直读"，任一条失败明细解析变动就会显示错数）。
+    // 保留在后仅为兼容其它部署形态（只读后两者会恒 undefined，只能靠 fallback 兜住，
+    // 结果虽正确但属"靠兜底"而非"直读"，任一条失败明细解析变动就会显示错数）。
     const declared = Number(res?.success ?? res?.successCount ?? res?.okCount)
     return { success: Number.isFinite(declared) ? declared : Math.max(0, rows.length - failList.length), fail: failList }
   }
@@ -1173,7 +1173,7 @@ async function batchApprove() {
   if (!rows.length) { ElMessage.warning('选中待办缺少任务标识，无法审批'); return }
   if (!approvalDlg.value) { ElMessage.error('审批弹窗未就绪，请刷新页面后重试'); return }
   if (rows.length > BATCH_MAX) { ElMessage.warning(`单次批量审批不能超过 ${BATCH_MAX} 条，请减少勾选后再点`); return }
-  // D-DEC-022 同款手感（从前批量是"先关窗再发请求"）：提交动作交给弹窗执行 ——
+  // 同款手感（从前批量是"先关窗再发请求"）：提交动作交给弹窗执行 ——
   // 接口整体不可用（未部署 404 / 登录态失效 / 后端不可达）时弹窗保持打开、425 字意见不丢，
   // 就地看原因并可原地重试；单条业务失败（任务已被处理、禁止自审）属批量接口的正常返回，
   // 照常关窗后逐条回显失败明细。
@@ -1185,8 +1185,8 @@ async function batchApprove() {
       batch: rows.length,
       allowReject: false,
       summary: batchSummary(rows),
-      items: batchItems(rows), // D-DEC-198：逐单明细
-      allowCc: true, // D-DEC-198：批量补抄送入口（选了人即改走逐单通道，见 submitBatch）
+      items: batchItems(rows), // 逐单明细
+      allowCc: true, // 批量补抄送入口（选了人即改走逐单通道，见 submitBatch）
       submit: async (payload) => { outcome = await submitBatch(rows, payload) },
     })
   } catch (_) {
@@ -1206,9 +1206,9 @@ async function batchApprove() {
     const lines = failList.map((f, i) => {
       const r = rows.find((x) => String(x.taskId) === String(f?.taskId))
       const name = f?.billNo || r?.billNo || r?.title || '任务 ' + (f?.taskId ?? r?.taskId ?? i + 1)
-      //  后端字段是 reason，不是 msg/message：此前只读后两者 ⇒ 后端精心构造的逐条失败原因
+      // 后端字段是 reason，不是 msg/message：只读后两者 ⇒ 后端精心构造的逐条失败原因
       //（「任务已被处理，请刷新待办」「禁止审批自己提交的单据」等）全部丢失，界面永远显示
-      // 默认处理文案「审批失败」，等于把最有用的排障信息吞掉了。reason 必须放最前。
+      // 兜底文案「审批失败」，等于把最有用的排障信息吞掉了。reason 必须放最前。
       return `${i + 1}. ${name}：${f?.reason || f?.msg || f?.message || '审批失败'}`
     })
     ElMessageBox.alert(
@@ -1256,7 +1256,7 @@ async function submitDeduct() {
   const a = Number(deduct.approvedAmount || 0)
   const p = Number(deduct.approvedPayAmount || 0)
   const r = Number(deduct.approvedRefundAmount || 0)
-  // 前端三层预校验（后端 assertApproveTrilogy 强校验默认处理）
+  // 前端三层预校验（后端 assertApproveTrilogy 强校验兜底）
   if (a > total + 0.01) { ElMessage.warning(`核定报销(${a})超出申请金额(${total})，审批只能核减不能核增`); return }
   if (p > a + 0.01) { ElMessage.warning(`核定付款(${p})超出核定报销(${a})`); return }
   if (Math.abs(r - (a - p)) > 0.01) { ElMessage.warning(`核定退款须等于 核定报销(${a}) − 核定付款(${p}) = ${round2(a - p)}`); return }
@@ -1319,7 +1319,7 @@ function batchExport() {
 }
 
 
-// R4-06: CoachMark 仅通过帮助按钮手动触发，不自动弹出避免遮挡页面
+// CoachMark 仅通过帮助按钮手动触发，不自动弹出避免遮挡页面
 </script>
 
 <style scoped>

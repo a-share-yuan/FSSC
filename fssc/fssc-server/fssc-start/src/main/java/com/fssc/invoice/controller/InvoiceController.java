@@ -8,12 +8,14 @@ import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
 import com.fssc.common.exception.BizException;
+import com.fssc.expense.entity.ExpBill;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.invoice.entity.InvBillInvoice;
 import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.invoice.service.InvoiceService;
+import com.fssc.framework.datasource.FsscDataSource;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,6 +33,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/tenant/invoice")
 @RequiredArgsConstructor
+@FsscDataSource("invoice")
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
@@ -39,7 +42,7 @@ public class InvoiceController {
     @OperLog(module = "INVOICE", operType = "INSERT", desc = "录入发票")
     @PostMapping("/create")
     public Result<Long> create(@RequestBody InvInvoice invoice) {
-        // 人工补录入口的必填默认处理（同一 service 方法还被 OCR 入池复用，故校验落在本边界）
+        // 人工补录入口的必填兜底（同一 service 方法还被 OCR 入池复用，故校验落在本边界）
         invoiceService.requireManualHeader(invoice);
         return Result.success(invoiceService.create(invoice));
     }
@@ -86,14 +89,14 @@ public class InvoiceController {
     @lombok.Data
     public static class InvoiceCorrectReq {
         private Long invoiceId;
-        private java.math.BigDecimal netAmount;
-        private java.math.BigDecimal taxAmount;
-        private java.math.BigDecimal amount;
+        private BigDecimal netAmount;
+        private BigDecimal taxAmount;
+        private BigDecimal amount;
         private String reason;
     }
 
     /**
-     * 进项「发票补录」金额更正（D-V4R-46 出口）：票号上有唯一键，录错额后作废也重录不回来，
+     * 进项「发票补录」金额更正（出口）：票号上有唯一键，录错额后作废也重录不回来，
      * 故给一张未被勾稽引用的进项票一个改额通道。鉴权走专码 inv:correct（与 inv:void/inv:unbind 同批授予）。
      */
     @RequiresPerm("inv:correct")
@@ -109,7 +112,7 @@ public class InvoiceController {
     @OperLog(module = "INVOICE", operType = "INSERT", desc = "发票关联单据")
     @PostMapping("/bind")
     public Result<Long> bind(@RequestBody BindReq req) {
-        // D-PTP-1：H5 建单批量绑票通道传 invoiceIds（无逐票金额）→ 逐票按"剩余可用面额"自动占用，
+        // H5 建单批量绑票通道传 invoiceIds（无逐票金额）→ 逐票按"剩余可用面额"自动占用，
         // 不再因 invoiceId=null 抛错被前端静默吞掉（历史上导致付款/报销单核销金额恒 0 → 三单匹配恒判超付）
         if (req.getInvoiceId() == null && req.getInvoiceIds() != null && !req.getInvoiceIds().isEmpty()) {
             Long first = null;
@@ -121,7 +124,7 @@ public class InvoiceController {
             }
             return Result.success(first);
         }
-        // 手工「关联单据」弹窗：覆盖金额是必填项（前端 INVOICE_BIND 规则已拦，此处默认处理）。
+        // 手工「关联单据」弹窗：覆盖金额是必填项（前端 INVOICE_BIND 规则已拦，此处兜底）。
         // 金额为 0 的占用记录会让发票置 LOCKED_IN_USE 却对核销毫无贡献，故一并拦下。
         // 批量通道（invoiceIds，H5 建单）按剩余面额自动占用，不走本分支。
         if (req.getAmount() == null || req.getAmount().signum() <= 0) {
@@ -145,7 +148,7 @@ public class InvoiceController {
     }
 
     /**
-     * 反核销（D-V3-135 配套 · 单据反操作链第一环）：解除发票-单据勾稽并解锁发票。
+     * 反核销（配套 · 单据反操作链第一环）：解除发票-单据勾稽并解锁发票。
      * 前置：本单据无 PAID 付款记录（付款已执行不可反）。权限用 inv:unbind（反核销独立授权）。
      */
     @RequiresPerm("inv:unbind")
@@ -160,7 +163,7 @@ public class InvoiceController {
             if (req.getBillNo() == null || req.getBillNo().isBlank()) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "请指定要解除关联的业务单据");
             }
-            com.fssc.expense.entity.ExpBill bill = invoiceService.billByNo(req.getBillNo().trim());
+            ExpBill bill = invoiceService.billByNo(req.getBillNo().trim());
             if (bill == null) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "业务单据不存在: " + req.getBillNo());
             }
@@ -181,7 +184,7 @@ public class InvoiceController {
                 scanDateFrom, scanDateTo, billNo, verifyStatus, certifyStatus, direction));
     }
 
-    // ---------------- P1-5 进项发票全生命周期 ----------------
+    // 进项发票全生命周期
 
     /** 批量进项认证勾选（仅专票可抵扣；指定所属期） */
     @RequiresFeature("FSSC_TAX")
@@ -218,7 +221,7 @@ public class InvoiceController {
         return Result.success(invoiceService.filingSummary(period));
     }
 
-    /** P1 剩余：发票异常清单（红冲/作废/销方黑名单），供 7×24 监控与税务岗复核 */
+    /** 发票异常清单（红冲/作废/销方黑名单），供 7×24 监控与税务岗复核 */
     @RequiresPerm("inv:list")
     @GetMapping("/anomaly")
     public Result<PageResult<InvInvoice>> anomaly(PageQuery query, @RequestParam(required = false) String anomalyFlag) {
@@ -250,10 +253,10 @@ public class InvoiceController {
     }
 
     /**
-     * 发票「关联单据」候选单据（D-DEC-113）。
+     * 发票「关联单据」候选单据。
      *
      * <p>权限用 {@code inv:bind} 而非 {@code exp:bill:list}：这是绑票动作自己的查询窗口，
-     * 能绑票的人必须能选到要绑的单据；此前它复用 {@code /expense/bill/myPage}（硬过滤
+     * 能绑票的人必须能选到要绑的单据；复用 {@code /expense/bill/myPage} 的话（硬过滤
      * {@code apply_user_id=登录人}），共享会计选不到他人单据，三单匹配的唯一出口不可达。</p>
      *
      * <p>只读：返回候选单据 + 本单已勾稽发票额与缺口，不写任何状态。</p>
@@ -275,7 +278,7 @@ public class InvoiceController {
         private Long lineId;
         private Long invoiceId;
         private BigDecimal amount;
-        /** D-PTP-1：H5 批量绑票通道（invoiceId 缺省时生效，逐票自动按剩余可用面额占用） */
-        private java.util.List<Long> invoiceIds;
+        /** H5 批量绑票通道（invoiceId 缺省时生效，逐票自动按剩余可用面额占用） */
+        private List<Long> invoiceIds;
     }
 }

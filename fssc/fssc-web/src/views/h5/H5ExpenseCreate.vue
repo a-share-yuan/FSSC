@@ -18,8 +18,8 @@
     </section>
 
     <template v-else>
-      <!-- 原单载入失败：必须明示。改造前是"catch 后照常显示空表单"⇒ 用户以为在改打回的单，
-           实际新建了一张，原单还在打回状态（P0 数据丢失环节之一）。 -->
+      <!-- 原单载入失败：必须明示。原先是"catch 后照常显示空表单"⇒ 用户以为在改打回的单，
+           实际新建了一张，原单还在打回状态（会造成数据丢失）。 -->
       <section v-if="loadError" class="h5-body">
         <div class="h5-error">
           <div class="h5-error__d">{{ loadError }}</div>
@@ -29,14 +29,14 @@
       </section>
 
       <section v-else class="h5-body">
-        <!-- 本机草稿恢复提示（P1-4 / UX-06：填一半被返回就没了） -->
+        <!-- 本机草稿恢复提示（/ UX-06：填一半被返回就没了） -->
         <div v-if="restoredAt" class="h5-denied">
           <div class="h5-denied__t">已恢复本机未提交的草稿</div>
           <div class="h5-denied__d">保存于 {{ timeText(restoredAt) }}。提交成功后会自动清掉；不想接着填可点下面丢弃。</div>
           <button class="h5-btn h5-btn--sub h5-mt-8" @click="discardDraft">丢弃本机草稿</button>
         </div>
 
-        <!-- D-H5M-07：上一轮被驳回的原因必须让人看见。
+        <!-- 上一轮被驳回的原因必须让人看见。
              原实现只把单子转回可编辑态就继续，用户看不到为什么被打回，
              改完再提交还是原样 ⇒ 同一个问题被打回两次。 -->
         <div v-if="rejectRemark" class="h5-denied">
@@ -49,23 +49,25 @@
           </div>
         </div>
 
-        <!-- 单据归属：只读展示，避免"我在哪个公司/部门"靠猜（跨法人会被 OrgGuard 拦下） -->
-        <div class="h5-card">
-          <div class="h5-card__row">
+        <!-- 单据归属：只读展示，避免"我在哪个公司/部门"靠猜（跨法人会被 OrgGuard 拦下）
+             本页唯一默认展开的一段，其余各段收起、收起态标题行带摘要（表单段带待补项计数）；
+             校验失败会自动展开出错那一段并滚到字段，不会把红字藏在收起的卡里，见 scrollToField。 -->
+        <H5FoldCard v-model:open="folds.owner" :summary="ownerSum">
+          <template #head>
             <span class="h5-card__title h5-flush">费用报销 · 人民币 CNY</span>
             <span class="h5-flag h5-flag--info">{{ isEdit ? '修改原单' : '新建' }}</span>
-          </div>
+          </template>
           <div class="h5-card__meta">申请人：{{ form.bill.applyUserName || myName }}（自动归属本人，不可代提）</div>
           <div class="h5-card__meta">公司 {{ form.bill.companyId || '—' }} · 部门 {{ form.bill.deptId || '—' }}</div>
           <div class="h5-tip h5-tip--left">
             移动端只收「费用报销」。差旅 / 事前申请 / 借款的明细段在电脑端才齐，手机上强提会交出一张缺件单，
             请到电脑端对应页面提单。
           </div>
-        </div>
+        </H5FoldCard>
 
-        <!-- ============ 表头（必输项与电脑端同一份登记表：constants/billRequired.js） ============ -->
-        <div class="h5-card">
-          <div class="h5-section-title h5-flush">基本信息</div>
+        <!-- 表头（必输项与电脑端同一份登记表：constants/billRequired.js） -->
+        <H5FoldCard v-model:open="folds.base" title="基本信息" :summary="baseSum" :tone="baseTone"
+                    @input="clearErrOnInput" @change="clearErrOnInput">
 
           <div class="h5-field" :class="{ 'is-error': errOf('title') }">
             <label for="h5-f-title">标题</label>
@@ -100,11 +102,11 @@
                    type="number" min="0" inputmode="numeric" placeholder="随单交上去的纸质票据张数" />
           </div>
           <div v-if="errOf('paperAttachCount')" class="h5-field__err">{{ errOf('paperAttachCount') }}</div>
-        </div>
+        </H5FoldCard>
 
-        <!-- ============ 费用明细（P0-9：逐行校验 + 字段级错误，不再只查第一行） ============ -->
-        <div class="h5-card">
-          <div class="h5-section-title h5-flush">费用明细（{{ form.lines.length }} 行）</div>
+        <!-- 费用明细（逐行校验 + 字段级错误，不再只查第一行） -->
+        <H5FoldCard v-model:open="folds.lines" title="费用明细" :summary="linesSum" :tone="linesTone"
+                    @input="clearErrOnInput" @change="clearErrOnInput">
 
           <!-- 常用费用项 Top5：一次点按填进当前空行，省掉在手机长下拉里翻（UX-08） -->
           <div v-if="recentChips.length" class="h5-chips">
@@ -154,14 +156,14 @@
               <input :id="`h5-f-line${i}-remark`" v-model="l.remark" type="text" placeholder="选填" />
             </div>
 
-            <!-- 预算占用实时预览（P1-7）：额度不够在提单前就知道，而不是提交被拦才发现 -->
+            <!-- 预算占用实时预览：额度不够在提单前就知道，而不是提交被拦才发现 -->
             <div v-if="l.budgetItemId" class="h5-budget">
               <div class="h5-card__row">
                 <span class="h5-card__meta">{{ budgetLabelOf(l.budgetItemId) }}</span>
                 <span class="h5-flag" :class="lineBudgetCls(l)">{{ lineBudgetText(l) }}</span>
               </div>
             </div>
-            <!-- D-H5M-06：年度内没有这条预算行时要说出来。
+            <!-- 年度内没有这条预算行时要说出来。
                  原来界面什么都不显示，用户以为"这单不用占预算"，实际是查不到行。 -->
             <div v-else-if="l.itemId != null" class="h5-card__meta">
               {{ form.bill.periodYear }} 年度未下达该费用项的预算行，本单不会占用预算。
@@ -169,11 +171,10 @@
           </div>
 
           <button class="h5-btn h5-btn--ghost h5-mt-8" @click="addLine">+ 添加明细</button>
-        </div>
+        </H5FoldCard>
 
-        <!-- ============ 预算占用汇总 + 校验状态（判据与 PC useBill.js:605-629 同源） ============ -->
-        <div v-if="budgetRows.length" class="h5-card">
-          <div class="h5-section-title h5-flush">预算占用</div>
+        <!-- 预算占用汇总 + 校验状态（判据与 PC useBill.js:605-629 同源） -->
+        <H5FoldCard v-if="budgetRows.length" v-model:open="folds.budget" title="预算占用" :summary="budgetSum" :tone="budgetTone">
           <div v-for="r in budgetRows" :key="r.bid" class="h5-row-sub h5-row-sub--block">
             <div class="h5-card__row">
               <span>{{ r.label }}</span>
@@ -196,16 +197,16 @@
           <div v-else-if="budgetWarnRows.length" class="h5-tip h5-tip--left">
             {{ budgetWarnRows.length }} 项预警超支：本次放行，占用流水会记录。
           </div>
-        </div>
+        </H5FoldCard>
 
-        <!-- ============ 附件 / 票据影像（P0-5：真 ref，原 document.getElementById 必报 TypeError） ============ -->
-        <div class="h5-card">
-          <div class="h5-section-title h5-flush">附件 / 票据影像</div>
+        <!-- 附件 / 票据影像（真 ref，原 document.getElementById 必报 TypeError）
+             折叠正文用 v-show（H5FoldCard 内），fileRef 收起时仍在 DOM ⇒ 上传按钮不会因为折叠而变死。 -->
+        <H5FoldCard v-model:open="folds.attach" title="附件 / 票据影像" :summary="attachSum" :tone="attachTone">
           <input ref="fileRef" type="file" accept="image/*,.pdf,.ofd,.xml" multiple hidden @change="onPickFile" />
           <button class="h5-btn h5-btn--ghost" :disabled="uploading" @click="pickFile">
             {{ uploading ? '上传识别中…' : (hasInvoiceAttach ? '继续上传' : '拍票据 / 上传发票') }}
           </button>
-          <!-- D-DEC-463：长请求（扫描版 PDF 图像识别 30~60 秒）必须给一个出口，
+          <!-- 长请求（扫描版 PDF 图像识别 30~60 秒）必须给一个出口，
                否则用户只会杀页面 ⇒ 服务端仍在写、回来看到一张"来历不明"的票。
                中断只是断开请求，文案如实说「结果未知」，见 abortedOutcome。 -->
           <button v-if="uploading" class="h5-btn h5-btn--ghost" @click="cancelUploadWait">取消等待</button>
@@ -225,11 +226,10 @@
             <button class="h5-btn-link" aria-label="移除附件" @click="removeAttach(a)">移除</button>
           </div>
           <div v-if="!attaches.length" class="h5-tip">还没上传附件</div>
-        </div>
+        </H5FoldCard>
 
-        <!-- ============ 关联票夹发票（三态：缺权 / 出错 / 真的空，P1-3） ============ -->
-        <div class="h5-card">
-          <div class="h5-section-title h5-flush">关联发票</div>
+        <!-- 关联票夹发票（三态：缺权 / 出错 / 真的空） -->
+        <H5FoldCard v-model:open="folds.inv" title="关联发票" :summary="invSum" :tone="invTone">
           <template v-if="invDenied">
             <div class="h5-denied">
               <div class="h5-denied__t">票夹列表对当前账号不开放</div>
@@ -255,13 +255,13 @@
               从票夹选择{{ invPool.length ? `（${invPool.length} 张）` : '' }}
             </button>
           </template>
-        </div>
+        </H5FoldCard>
 
-        <!-- ============ 收款信息（后端 assertPayeeAccount：CLAIM 金额>0 时收款对象＋收款账号硬必填） ============
-             改造前 H5 表单根本没有这一段 ⇒ 附件环节修好后，提交仍会被 PARAM_INVALID 打回，
+        <!-- 收款信息（后端 assertPayeeAccount：CLAIM 金额>0 时收款对象＋收款账号硬必填）
+             原先 H5 表单根本没有这一段 ⇒ 附件环节修好后，提交仍会被 PARAM_INVALID 打回，
              表现为「移动端提单一直失败」。这里补齐，判据与 ExpenseBillService.assertPayeeAccount 一致。 -->
-        <div class="h5-card">
-          <div class="h5-section-title h5-flush">收款信息</div>
+        <H5FoldCard v-model:open="folds.payee" title="收款信息" :summary="payeeSum" :tone="payeeTone"
+                    @input="clearErrOnInput" @change="clearErrOnInput">
           <div class="h5-field" :class="{ 'is-error': errOf('payTarget') }">
             <label for="h5-f-payTarget">收款对象</label>
             <select id="h5-f-payTarget" v-model="form.bill.payTarget" @change="onPayTargetChange">
@@ -298,9 +298,10 @@
             <input id="h5-f-bankName" v-model="form.bill.extJson.bankName" type="text" placeholder="选填" />
           </div>
           <div class="h5-tip h5-tip--left">账户名称与收款账号请与银行留存的完全一致，付错由提单人负责。</div>
-        </div>
+        </H5FoldCard>
 
-        <!-- 首审办理人（PICK 模式才出现；与 PC 同判据：需要点名却没点就不提交） -->
+        <!-- 首审办理人（PICK 模式才出现；与 PC 同判据：需要点名却没点就不提交）
+             这一段是提交前的必选动作区，不折叠：收起会让人在"还差首审办理人"的提示前找不到选人入口。 -->
         <div v-if="firstPick.mode === 'PICK' && firstPick.candidates.length" class="h5-card">
           <div class="h5-section-title h5-flush">首审办理人</div>
           <div class="h5-chips">
@@ -312,7 +313,7 @@
         </div>
       </section>
 
-      <!-- ============ 吸底三出口（§4.2-③：合计常驻＋存草稿＋提交；提交不再是唯一出口） ============ -->
+      <!-- 吸底三出口（§4.2-③：合计常驻＋存草稿＋提交；提交不再是唯一出口） -->
       <footer v-if="!loadError" class="h5-actionbar">
         <div class="h5-actionbar__sum">合计<b>￥{{ money(totalAmount) }}</b></div>
         <button class="h5-btn h5-btn--sub" :disabled="busy" :aria-busy="busy ? 'true' : 'false'" @click="saveDraftOnly">
@@ -325,7 +326,7 @@
     </template>
 
     <!-- 票夹选择弹层（唯一允许内层滚动的区块，见 h5-tokens.css 硬线 3 的例外说明）
-         P2-5：进出场走 <Transition name="h5-pop"> -->
+         进出场走 <Transition name="h5-pop"> -->
     <Transition name="h5-pop">
       <div v-if="showInvPicker" class="h5-mask" @click="showInvPicker = false">
         <div class="h5-sheet" @click.stop>
@@ -355,25 +356,23 @@
 
 <script setup>
 /**
- * 移动报销端 · 提单页（P0 止血 + P1-4/P1-7/P1-10 落点）
+ * 移动报销端 · 提单页
  *
- * 本窗改造前实测到的四条会丢数据的环节，逐条对应下面的注释：
- *  P0-2 `attaches: attaches.map(a => a.id)` —— 后端 BillReq.attaches 是 List<ExpBillAttach>，
- *       数字数组反序列化必炸（保存草稿即 500）。现按 PC 同形状传 {fileId,fileName,attachType}。
- *  P0-3 companyId/deptId 硬编码 1/1 —— 跨法人账号（如 co33）被 OrgGuard.assertCompanyAllowed 拒，
- *       即便通过也是把部门预算记到别的主体。现取登录态。
- *  P0-5 `@click="document.getElementById('h5-file').click()"` —— Vue 3 模板全局白名单不含 document，
- *       运行时 _ctx.document＝undefined ⇒ TypeError，两个上传按钮全是死的。现用真 ref。
- *  P0-9 校验只查 form.lines[0] —— 第二行起金额为空/没选费用项也照样提交，
- *       后端 item_id NOT NULL 直接 500（整单回滚，用户看不到原因）。现逐行校验＋字段级错误。
+ * 几处必须守住的约束，违反任一条提单都到不了后端或写错主体：
+ *  attaches 传 {fileId,fileName,attachType} 对象数组 —— 后端 BillReq.attaches 是
+ *       List<ExpBillAttach>，数字数组反序列化直接 500。
+ *  companyId/deptId 取登录态 —— 写死会被 OrgGuard.assertCompanyAllowed 拒掉跨法人账号，
+ *       侥幸通过也是把部门预算记到别的主体。
+ *  上传按钮用 ref 触发 —— Vue 3 模板全局白名单不含 document，取到 undefined 会抛 TypeError。
+ *  校验逐行做 —— 只查首行时，第二行起金额为空也照样提交，后端 item_id NOT NULL 报 500。
  *
- * 另补一段 PC 有、H5 整块缺失的「收款信息」：ExpenseBillService.assertPayeeAccount
- * （实测源码 1099-1122 行）对 CLAIM 且金额>0 强制 payTarget＋payeeAccountNo，
- * 缺任一条提交即 PARAM_INVALID。改造前 H5 表单没有这两个字段 ⇒ 移动端提单从来没可能成功。
+ * 「收款信息」段在 PC 一直有、H5 一度整块缺失：ExpenseBillService.assertPayeeAccount 对
+ * CLAIM 且金额>0 强制 payTarget＋payeeAccountNo，缺任一条即 PARAM_INVALID。
  */
 import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import H5FoldCard from '@/components/h5/H5FoldCard.vue'
 import { billApi, mdApi, masterCfgApi, orgApi, invoiceApi, fileApi, wfApi, flowApi, store, isRequestCancelled } from '../../api'
 import { requiredOf, missingBillField } from '../../constants/billRequired.js'
 import { invoiceOutcome, abortedOutcome } from '@/utils/invoiceOutcome'
@@ -382,21 +381,21 @@ import { splitTaxInclusive } from '../../utils/tax.js'
 import { budgetLabel, budgetUnseenLabel, formatDateTime } from '../../utils/format'
 import { money, dayText, permDeniedOf, saveLocalDraft, loadLocalDraft, clearLocalDraft, pushRecentItems, recentItemIds, compressImage } from '@/utils/h5.js'
 import { hasPerm } from '../../utils/perm'
-// 收款方式改为读 sys_dict 的 pay_method（2026-10-18 基础数据办结）。
-//  本页全站唯一未接 i18n 的页面（文案直接写中文），故 label 直接用字典 label，不做 i18n 合成。
-//    字典不可用时 useDict 自动回落到本地默认处理常量，界面与改造前一致。
+// 收款方式改为读 sys_dict 的 pay_method（基础数据办结）。
+// 本页全站唯一未接 i18n 的页面（文案直接写中文），故 label 直接用字典 label，不做 i18n 合成。
+//    字典不可用时 useDict 自动回落到本地兜底常量，界面与原先一致。
 import { useDict } from '@/composables/useDict.js'
 import { PAY_METHOD_LOCAL, PAYEE_TYPE_LOCAL } from '@/composables/useBaseDict'
 
-// 收款方式下拉的选项来源（本地默认处理常量，字典到位后被字典覆盖）
+// 收款方式下拉的选项来源（本地兜底常量，字典到位后被字典覆盖）
 const payMethodDict = useDict('pay_method', PAY_METHOD_LOCAL)
 const payMethodOptions = payMethodDict.options
 
 // 收款对象类型（enum_payee_type）。字典值域与本页原写死的 EMPLOYEE/SUPPLIER/CUSTOMER 一致。
 // EMPLOYEE 的「（报给自己）」是本页特有的业务提示（非字典文案），故在此拼接而非丢给字典。
 const payeeTypeDict = useDict('enum_payee_type', PAYEE_TYPE_LOCAL)
-//  useDict().options 是 computed ref（见 useDict.js:120），此处必须取 .value 再 map。
-// 直接 .map 会抛 "options.map is not a function"，导致 H5 制单页白屏（本轮实测暴露）。
+// useDict().options 是 computed ref（见 useDict.js:120），此处必须取 .value 再 map。
+// 直接 .map 会抛 "options.map is not a function"，导致 H5 制单页白屏。
 const payeeTypeOptions = computed(() => payeeTypeDict.options.value.map((o) => ({
   value: o.value,
   label: o.value === 'EMPLOYEE' ? `${o.label}（报给自己）` : o.label
@@ -416,7 +415,7 @@ const isEdit = computed(() => !!editId.value)
 const userId = computed(() => store.user?.userId ?? store.user?.id ?? null)
 const myName = computed(() => store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || '我')
 
-// D-DEC-361（补漏环节·H5 制单页）：预填日期不取 toISOString().slice(0,10)＝UTC 串——
+// 补漏环节·H5 制单页：预填日期不取 toISOString().slice(0,10)＝UTC 串——
 // 东八区恒差 −8h、0~8 点会把 apply_date/expense_date 预填成"昨天"。本地钟口，与 PC today() 同判据。
 function todayLocal() {
   const d = new Date()
@@ -442,7 +441,7 @@ function newLine() {
 function newBill() {
   return {
     id: null, billType: 'CLAIM', billSubType: '', title: '',
-    // P0-3：公司/部门取登录态（PC useBill.js 同一写法），跨法人单据会被后端 OrgGuard 拒
+    // 公司/部门取登录态（PC useBill.js 同一写法），跨法人单据会被后端 OrgGuard 拒
     companyId: store.user?.companyId ?? null,
     deptId: store.user?.deptId ?? null,
     applyUserId: store.user?.userId ?? store.user?.id ?? null,
@@ -457,16 +456,16 @@ function newBill() {
 const form = reactive({ bill: newBill(), lines: [newLine()] })
 
 /**
- * P2-6 埋点：本次移动端填报会话的起始钟点。
+ * 埋点：本次移动端填报会话的起始钟点。
  *
  * 规则写清楚，别把它当"提单耗时"的全生命周期指标：
- *  - 起点＝本页本次打开（新建走 onMounted boot、切回本页走 onActivated 复位），终点＝**这一次**组装载荷的时刻；
+ *  - 起点＝本页本次打开（新建走 onMounted boot、切回本页走 onActivated 复位），终点＝这一次组装载荷的时刻；
  *  - 中途离开页面再回来 ⇒ 计时重置，所以 `h5StayMs` 是"最后一段连续填报会话"的毫秒数，不是累计；
  *  - 存进 `exp_bill.ext_json` 的 `h5StayMs` 一个键，不新建表、不加接口、不动 PC 逻辑。
  * 两处已知失真，如实记下不掩饰：
  *  ① PC 端保存会按它自己的表单模型重写 ext_json ⇒ 该键可能被洗掉，本字段含义＝"最后一次保存方"；
  *  ② 页面停在后台（切走 App）也照常计时，手机上的"停留"不等于"在填"。
- * 方案册 P2-6 里"平均提单时长"用的就是这条环节，取值时须按 ext_json.h5StayMs 的 NULL/非 NULL 分档，
+ * 方案册 里"平均提单时长"用的就是这条环节，取值时须按 ext_json.h5StayMs 的 NULL/非 NULL 分档，
  * 不能拿全表平均值当移动端指标（PC 单没有这个键）。
  */
 let sessionOpenedAt = Date.now()
@@ -474,7 +473,7 @@ function resetSessionClock() { sessionOpenedAt = Date.now() }
 
 const items = ref([])
 const budgetPool = ref([])
-/** 当前预算池对应的费用年度（D-H5M-06：池按年度取，年度变了要重取） */
+/** 当前预算池对应的费用年度（池按年度取，年度变了要重取） */
 const budgetPoolYear = ref(null)
 const itemBudgetMap = ref({})
 const companies = ref([])
@@ -482,8 +481,8 @@ const depts = ref([])
 const attaches = ref([])
 const invPool = ref([])
 const invoiceIds = ref([])
-// 编辑态里"进页面时就已经挂在这张单上的发票"：bind 后端是**追加占用**语义
-// （InvoiceController.bind → 逐票 bindToBill，实测源码 85-95 行），把已绑过的再发一遍＝重复占用。
+// 编辑态里"进页面时就已经挂在这张单上的发票"：bind 后端是追加占用语义
+// （InvoiceController.bind → 逐票 bindToBill），把已绑过的再发一遍＝重复占用。
 // 故只对增量 id 调 bind、对被摘掉的原有发票调 unbind，避免"改一次单发票被占两次"。
 const boundInitially = ref(new Set())
 const boundRows = ref([])
@@ -492,9 +491,9 @@ const bootLoading = ref(true)
 const loadError = ref('')
 const busy = ref(false)
 const uploading = ref(false)
-/* D-DEC-463（10-05）：「上传＋识别」在同一个请求里串行，而后端识别链是 REQUIRES_NEW 独立事务 ⇒
-   用户按「取消等待」只是断开这一条 HTTP 连接，服务端并不会因此停手（实测 18:33:27 关浏览器后
-   18:33:33 仍落 ocr_record、18:33:37 仍入池）。所以中断只报「结果未知」，见 abortedOutcome。 */
+/* 「上传＋识别」在同一个请求里串行，而后端识别链是 REQUIRES_NEW 独立事务 ⇒
+   用户按「取消等待」只是断开这一条 HTTP 连接，服务端并不会因此停手（关掉页面后仍会写
+   ocr_record 并继续入池）。所以中断只报「结果未知」，见 abortedOutcome。 */
 let uploadController = null
 const uploadAborted = ref(false)
 function cancelUploadWait() {
@@ -503,7 +502,7 @@ function cancelUploadWait() {
 }
 const showInvPicker = ref(false)
 const restoredAt = ref(0)
-/* D-H5M-07：上一轮驳回意见 { comment, nodeName, handler, time } */
+/* 上一轮驳回意见 { comment, nodeName, handler, time } */
 const rejectRemark = ref(null)
 const errs = reactive({})
 const fileRef = ref(null)
@@ -530,17 +529,120 @@ const selectedInvoices = computed(() => invoiceIds.value
   .filter(Boolean))
 const hasInvoiceAttach = computed(() => attaches.value.some((a) => a.attachType === 'INVOICE'))
 
-/* ---------------- 字段级错误 ---------------- */
+/* 字段级错误 */
 function errOf(k) { return errs[k] || '' }
 function setErr(k, msg) { errs[k] = msg }
 function clearErrs() { Object.keys(errs).forEach((k) => delete errs[k]) }
+
+/** 字段属于哪一段折叠卡（明细行的 key 形如 `line0-amount`，按前缀归段） */
+const FIELD_FOLD = {
+  title: 'base', applyDate: 'base', remark: 'base', periodYear: 'base', paperAttachCount: 'base',
+  payTarget: 'payee', payMethod: 'payee', accountName: 'payee', payeeAccountNo: 'payee',
+}
+function foldOfField(k) {
+  const s = String(k || '')
+  if (s.startsWith('line')) return 'lines'
+  return FIELD_FOLD[s] || ''
+}
+
 async function scrollToField(k) {
+  // 卡片折叠后出错字段可能在收起的正文里：先展开所属段再滚，否则只弹一句 toast、红字看不见
+  const f = foldOfField(k)
+  if (f) folds[f] = true
   await nextTick()
   const el = document.getElementById('h5-f-' + k)
   if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' })
 }
 
-/* ---------------- 明细 ---------------- */
+/**
+ * 收起态摘要会写「N 项待补」，用户补完那一格就该消掉，否则红字挂在标题行上赖着不走。
+ * 原生 input/change 会冒泡到卡片根（H5FoldCard 单根 ⇒ 监听器随 $attrs 落到根 div），
+ * 按 id（h5-f-<key>）反查错误键即可，不改任何校验规则：清掉的这一格下次 validateForm 会重判。
+ */
+function clearErrOnInput(e) {
+  const id = String(e?.target?.id || '')
+  if (!id.startsWith('h5-f-')) return
+  delete errs[id.slice(5)]
+}
+
+/* 折叠态与收起态摘要
+ * 七段卡片顺排要滚五六屏，所以只默认展开「单据归属」，其余收起，
+ * 收起态标题行给一句摘要（合计与行数、发票张数、待补项计数）。
+ * 表单段收起会藏住字段级红字，故两条兜底：①有错时摘要换成红色「N 项待补」；
+ * ②scrollToField 先展开出错那一段。摘要一律现算本页已有数据，缺权/失败照实说。 */
+const folds = reactive({ owner: true, base: false, lines: false, budget: false, attach: false, inv: false, payee: false })
+
+const BASE_FIELDS = ['title', 'applyDate', 'remark', 'periodYear', 'paperAttachCount']
+const PAYEE_FIELDS = ['payTarget', 'payMethod', 'accountName', 'payeeAccountNo']
+function errCountOf(fields) { return fields.filter((k) => errs[k]).length }
+function lineErrCount() { return Object.keys(errs).filter((k) => k.startsWith('line')).length }
+
+/** 所选费用项里有「必附发票」的（与服务端 PrecheckService 同规则，见 gateInvoiceAttach） */
+const needInvoiceAttach = computed(() => form.lines
+  .filter((l) => l.itemId != null)
+  .some((l) => Number(items.value.find((x) => String(x.id) === String(l.itemId))?.needInvoice) === 1))
+
+const ownerSum = computed(() => `${form.bill.applyUserName || myName.value} · 公司 ${form.bill.companyId || '—'} · 部门 ${form.bill.deptId || '—'}`)
+
+const baseSum = computed(() => (errCountOf(BASE_FIELDS) ? `${errCountOf(BASE_FIELDS)} 项待补` : (form.bill.title || '标题未填')))
+const baseTone = computed(() => (errCountOf(BASE_FIELDS) ? 'err' : ''))
+
+const linesSum = computed(() => {
+  const n = lineErrCount()
+  if (n) return `${n} 项待补`
+  if (!form.lines.some((l) => l.itemId != null && Number(l.amount) > 0)) return '还没填完整明细（费用项＋金额）'
+  return `${form.lines.length} 行 · ￥${money(totalAmount.value)}`
+})
+const linesTone = computed(() => {
+  if (lineErrCount()) return 'err'
+  return form.lines.some((l) => l.itemId != null && Number(l.amount) > 0) ? '' : 'warn'
+})
+
+const budgetSum = computed(() => {
+  if (budgetHard.value.length) return `${budgetHard.value.length} 项超额度（硬控，不能提交）`
+  if (budgetSoft.value.length) return `${budgetSoft.value.length} 项软控超支·需填理由`
+  if (budgetWarnRows.value.length) return `${budgetWarnRows.value.length} 项预警超支`
+  return `${budgetRows.value.length} 项占用正常`
+})
+const budgetTone = computed(() => {
+  if (budgetHard.value.length) return 'err'
+  return (budgetSoft.value.length || budgetWarnRows.value.length) ? 'warn' : ''
+})
+
+const attachSum = computed(() => {
+  const lack = needInvoiceAttach.value && !hasInvoiceAttach.value
+  if (!attaches.value.length) return lack ? '缺发票附件' : '未上传'
+  const inv = attaches.value.filter((a) => a.attachType === 'INVOICE').length
+  return `${attaches.value.length} 份 · 发票 ${inv}` + (lack ? '（还缺发票）' : '')
+})
+const attachTone = computed(() => (needInvoiceAttach.value && !hasInvoiceAttach.value ? 'warn' : ''))
+
+const invSum = computed(() => {
+  if (invDenied.value) return '票夹对当前账号不开放'
+  if (invError.value) return '加载失败'
+  const n = invoiceIds.value.length
+  if (!n) return '未关联'
+  const rows = selectedInvoices.value
+  // 已勾稽回读行可能不在票夹分页里（invoiceIndex 也补不全时）⇒ 只报张数，不报一个偏小的合计
+  if (rows.length !== n) return `已关联 ${n} 张`
+  return `${n} 张 · ￥${money(rows.reduce((a, x) => a + (Number(x.amount) || 0), 0))}`
+})
+const invTone = computed(() => (invDenied.value ? 'warn' : (invError.value ? 'err' : '')))
+
+const payeeSum = computed(() => {
+  const n = errCountOf(PAYEE_FIELDS)
+  if (n) return `${n} 项待补`
+  const no = String(form.bill.payeeAccountNo || '')
+  if (!no) return '未填（金额＞0 时必填）'
+  const opt = payeeTypeOptions.value.find((o) => o.value === form.bill.payTarget)
+  return `${opt ? opt.label : (form.bill.payTarget || '—')} · 尾号 ${no.slice(-4)}`
+})
+const payeeTone = computed(() => {
+  if (errCountOf(PAYEE_FIELDS)) return 'err'
+  return form.bill.payeeAccountNo ? '' : 'warn'
+})
+
+/* 明细 */
 function addLine() {
   const l = newLine()
   l.expenseDate = form.bill.applyDate || todayLocal()
@@ -565,9 +667,9 @@ function recalcLine(l) {
 function onItemChange(l) {
   const it = items.value.find((x) => String(x.id) === String(l.itemId))
   l.itemName = it?.itemName || ''
-  // D-H5M-05：费用项一换，预算行必须跟着换。
+  // 费用项一换，预算行必须跟着换。
   // 原实现只在 budgetItemId 为空时取一次 ⇒ 换了费用项仍挂着上一个费用项的预算行，
-  // 占用因此记到别的科目（实测：行政办公费 333 的单占用到劳动保护费行 1001）。
+  // 占用便记到别的科目（例如行政办公费的单占到劳动保护费行）。
   // 移动端没有人工选预算科目这一步（预算区只读展示），所以这里无条件重取，取不到即置空。
   l.budgetItemId = pickBudgetFor(l.itemId)
   delete errs[`line${form.lines.indexOf(l)}-itemId`]
@@ -588,17 +690,17 @@ async function removeAttach(a) {
   attaches.value = attaches.value.filter((x) => x.fileId !== a.fileId)
 }
 
-/* ---------------- 预算（判据逐字对齐 useBill.js:319-343 / 605-629） ---------------- */
+/* 预算（判据逐字对齐 useBill.js:319-343 / 605-629） */
 function pickBudgetFor(itemId) {
   return pickBudgetLine({
     pool: budgetPool.value, itemId, map: itemBudgetMap.value,
     companyId: form.bill.companyId, deptId: form.bill.deptId,
-    // D-H5M-06：年度硬条件——预算行年度必须与单据费用年度一致
+    // 年度硬条件——预算行年度必须与单据费用年度一致
     budgetYear: form.bill.periodYear,
   })
 }
 /**
- * 按单据费用年度重取预算行（D-H5M-06）。
+ * 按单据费用年度重取预算行。
  * /budget/item/pick 支持 budgetYear；不按年取时前 200 行被最早年度占满
  * （bg_item 排序＝budget_year/budget_period/dim_key 升序），2026 年的单会命中 2025 年行。
  * 同一年度不重复取（载入旧单与年度变更都会走到这里）。
@@ -623,9 +725,9 @@ async function loadBudgetPool(year) {
   }
 }
 /**
- * 明细行的预算行重解析（D-H5M-05/D-H5M-06）。
- * 载入旧单与年度变更后都要走这里：旧行带的是上一轮/上一年度的预算行，
- * 留着就会把占用记到错的科目上（实测 1001＝2025 年劳动保护费）。
+ * 明细行的预算行重解析。
+ * 载入旧单与年度变更后都要走这里：旧行带的是上一年度的预算行，
+ * 留着就会把占用记到错的科目上（跨年的预算行仍会命中）。
  */
 function resolveLineBudgets() {
   form.lines.forEach((l) => {
@@ -637,7 +739,7 @@ function resolveLineBudgets() {
   })
 }
 /**
- * 费用年度一变，预算池与每行的预算行都要跟着变（D-H5M-06）。
+ * 费用年度一变，预算池与每行的预算行都要跟着变。
  * 原来年度只影响提交时的字段，不影响预算行的选取 ⇒ 改完年度单子还占着上一年度的额度。
  */
 watch(() => form.bill.periodYear, async (y) => {
@@ -661,7 +763,7 @@ const budgetRows = computed(() => Object.keys(budgetAgg.value).map((bid) => {
     : null
   const used = budgetAgg.value[bid]
   const over = loaded && used > avail
-  // D-DEC-372：控制方式随行带出，取不到按 HARD fail-closed（与 PC 同判据）
+  // 控制方式随行带出，取不到按 HARD fail-closed（与 PC 同判据）
   const control = (loaded && b.controlType) || 'HARD'
   return {
     bid, used, available: avail, over, unknown: !loaded, control,
@@ -691,7 +793,7 @@ function lineBudgetText(l) {
   return r ? r.flagText : '—'
 }
 
-/* ---------------- 收款对象联动 ---------------- */
+/* 收款对象联动 */
 function onPayTargetChange() {
   // 员工报销默认户名＝本人（可改）；对公收款的户名必须人工核对，不替用户猜
   if (form.bill.payTarget === 'EMPLOYEE' && !String(form.bill.extJson.accountName || '').trim()) {
@@ -700,7 +802,7 @@ function onPayTargetChange() {
   delete errs.payTarget
 }
 
-/* ---------------- 票夹 ---------------- */
+/* 票夹 */
 const invDenied = ref(null)
 const invError = ref('')
 async function loadInvoicePool() {
@@ -713,7 +815,7 @@ async function loadInvoicePool() {
     return
   }
   try {
-    // silent：员工岗通常没有 inv:list（实测 3867 只持申请类角色），刷新票夹被校验时
+    // silent：员工岗通常没有 inv:list，刷新票夹被校验时
     // 只走下面的 invDenied 降级面板；全局拦截器再弹一次 toast 会把"识别成功"盖成权限报错。
     const d = await invoiceApi.page({ pageNum: 1, pageSize: 50 }, { silent: true })
     invPool.value = (d && d.list) || []
@@ -730,13 +832,11 @@ function toggleInvoice(id) {
   else invoiceIds.value.push(id)
 }
 
-/* ---------------- 附件上传（走发票识别通道：/expense/attach/upload） ----------------
-     10-05 D-DEC-474：本环节与电脑端是同一个接口、同一优先级次序——OFD/PDF/XML 先本地版式解析（不发识别请求），
+/* 附件上传（走发票识别通道：/expense/attach/upload）
+     与电脑端同一接口、同一优先级次序——OFD/PDF/XML 先本地版式解析（不发识别请求），
      只有扫描版 PDF（无文本层）才由后端渲染首页 PNG 转图像识别通道。
-     10-04 实测：paddle 通道（本机 :8087）已在跑，图片票识别往返 23.1s／26.9s（暖机后），
-     冷启动首支 57.8s ⇒ 仍在本请求 120s 覆写超时内（api.js attachUpload）。
-      现网通道已不是 paddle：sys_config ocr.channel=gateway（发票能力网关 :8096，10-04 19:19 起），
-     10-05 11:1x 实测 :8096 LISTENING／invoice.gateway.enabled=true。
+     图像识别走发票能力网关（sys_config ocr.channel=gateway）；冷启动首支可能接近一分钟，
+     仍在本请求 120s 覆写超时内（api.js attachUpload）。
      后端对识别失败是 invoice.ok=false 且不阻断上传（ExpenseAttachController 类注释），
      所以识别服务离线时这条链依然安全，只是票面要手工填写。 */
 function pickFile() {
@@ -762,8 +862,8 @@ async function onPickFile(e) {
         attaches.value = [...attaches.value, { fileId: rec.id, fileName: rec.fileName || f.name, attachType }]
       }
       if (attachType === 'INVOICE') {
-        // D-DEC-461：档位由后端 inPool/errorMsg 判定（唯一分档口 invoiceOutcome），
-        // 在前端重算"金额自洽／发票号有无"，也只看 ok 就报「已识别发票」。
+        // 档位由后端 inPool/errorMsg 判定（唯一分档口 invoiceOutcome），
+        // 不要在前端重算"金额自洽／发票号有无"，也不要只看 ok 就报「已识别发票」。
         const out = invoiceOutcome(rec.invoice, { fileName: rec.fileName || f.name, end: 'h5' })
         ElMessage({ type: out.tone, duration: 6000, message: out.message })
       } else {
@@ -771,7 +871,7 @@ async function onPickFile(e) {
       }
     } catch (err) {
       if (isRequestCancelled(err)) {
-        // D-DEC-463：中断＝结果未知，报「上传失败」（用户会重传同一张票面 ⇒ ocr_record 叠记录）
+        // 中断＝结果未知，不要报「上传失败」（用户会重传同一张票面 ⇒ ocr_record 叠记录）
         const out = abortedOutcome(f.name)
         ElMessage({ type: out.tone, duration: 8000, message: out.message })
         break
@@ -786,7 +886,7 @@ async function onPickFile(e) {
   loadInvoicePool()
 }
 
-/* ---------------- 校验与校验 ---------------- */
+/* 校验与校验 */
 function validateForm() {
   clearErrs()
   // 表头必输：直接吃 PC 的登记表（同一份数据 ⇒ 两端不会再各说各话）
@@ -798,7 +898,7 @@ function validateForm() {
     scrollToField(leaf)
     return false
   }
-  // P0-9：逐行校验（原实现只查 lines[0]）
+  // 逐行校验（原实现只查 lines[0]）
   let firstBad = ''
   form.lines.forEach((l, i) => {
     if (l.itemId == null && Number(l.amount || 0) > 0) { setErr(`line${i}-itemId`, '这一行还没选费用项，选了才能提交'); firstBad = firstBad || `line${i}-itemId` }
@@ -842,40 +942,35 @@ async function askOverrunReason() {
     return true
   } catch { return false } // 取消＝不写理由
 }
-/** D-B4-01：「必附发票」判据前移到写库之前（服务端 PrecheckService 同一规则，不宽于后端） */
+/** 「必附发票」判据落在写库之前（服务端 PrecheckService 同一规则，不宽于后端）
+ *  判据收在 needInvoiceAttach 这个 computed 里，收起态的附件卡摘要也能提前说出"缺发票附件"。 */
 function gateInvoiceAttach() {
-  if (hasInvoiceAttach.value) return true
-  const need = form.lines.filter((l) => l.itemId != null).some((l) => {
-    const it = items.value.find((x) => String(x.id) === String(l.itemId))
-    return it && Number(it.needInvoice) === 1
-  })
-  if (need) {
-    ElMessage.error('所选费用项要求必须附发票：请用「拍票据 / 上传发票」上传后再提交（从票夹关联只登记票面信息，不构成发票附件）')
-    return false
-  }
-  return true
+  if (hasInvoiceAttach.value || !needInvoiceAttach.value) return true
+  ElMessage.error('所选费用项要求必须附发票：请用「拍票据 / 上传发票」上传后再提交（从票夹关联只登记票面信息，不构成发票附件）')
+  folds.attach = true
+  return false
 }
 
-/* ---------------- 写入数据库 ---------------- */
+/* 写入数据库 */
 function buildPayload() {
-  // P2-6 埋点：随载荷带出"本次移动端会话停留毫秒数"（规则与两处已知失真见 sessionOpenedAt 注释）。
+  // 埋点：随载荷带出"本次移动端会话停留毫秒数"（规则与两处已知失真见 sessionOpenedAt 注释）。
   // 只写进这次提交的 ext 副本，不回写 form.bill.extJson——否则页面上每次重新组包都会把停留数滚大。
   const ext = { ...form.bill.extJson, h5StayMs: Math.max(0, Date.now() - sessionOpenedAt) }
   return {
     bill: {
       ...form.bill,
-      // P2-1 渠道记录：新建环节显式标 H5（后端 ExpenseBillService#normalizeBillSource 白名单只认 PC/H5，
+      // 渠道记录：新建环节显式标 H5（后端 ExpenseBillService#normalizeBillSource 白名单只认 PC/H5，
       // 不传则由后端补 PC／由列默认值得到同一个结果）。
       // 编辑与打回重交环节原样回传库里既有值——source 记的是"这单从哪个渠道发起"，
       // PC 上建的单在手机改完重交仍算 PC 单；取不到既有值时整个键省略（JSON.stringify 丢 undefined），
       // 后端编辑环节走 keepBlank 分支保留原值，不会被静默洗成 PC。
       source: form.bill.id ? (form.bill.source || undefined) : 'H5',
       totalAmount: totalAmount.value,
-      // D-DEC-368（同 PC 前端载荷环节）：户名镜像进 payee_name，出纳与付款批次取的是这一列
+      // 同 PC 前端载荷环节：户名镜像进 payee_name，出纳与付款批次取的是这一列
       payeeName: form.bill.payeeName || ext.accountName || '',
       extJson: JSON.stringify(ext),
     },
-    // P0-9 配套：只提交选过费用项的行，未选行留在页面上
+    // 配套：只提交选过费用项的行，未选行留在页面上
     lines: form.lines.filter((l) => l.itemId != null).map((l) => ({
       ...l,
       amount: Number(l.amount || 0),
@@ -884,7 +979,7 @@ function buildPayload() {
       currencyCode: 'CNY',
       extJson: JSON.stringify(l.extJson || {}),
     })),
-    // P0-2：后端 BillReq.attaches 是 List<ExpBillAttach>，对象数组不是 id 数组
+    // 后端 BillReq.attaches 是 List<ExpBillAttach>，对象数组不是 id 数组
     attaches: attaches.value.map((a) => ({ fileId: a.fileId, fileName: a.fileName, attachType: a.attachType })),
   }
 }
@@ -934,7 +1029,6 @@ async function loadFirstPick(billId) {
   }
 }
 async function doSubmit(id) {
-  busy.value = true
   try {
     await billApi.submit(id, null, firstPick.mode === 'PICK' ? firstPick.userId : null)
     pushRecentItems(userId.value, form.lines.filter((l) => l.itemId != null).map((l) => l.itemId))
@@ -943,15 +1037,18 @@ async function doSubmit(id) {
     dirty.value = false
     ElMessage.success('已提交审批')
     router.replace('/h5')
-  } catch { /* 拦截器已弹错；草稿仍在页面与本机 */ } finally { busy.value = false }
+  } catch { /* 拦截器已弹错；草稿仍在页面与本机 */ }
 }
 async function submit() {
+  // 点击即占住 busy：前置校验、软控理由弹窗、存草稿、首审选人、提交整条链都在同一个罩子里。
+  // 罩子原来从 doSaveDraft 才开始，前面那段（校验＋弹窗＋一次预算判据）里按钮仍可点，
+  // 二次点击会开出第二条链 ⇒ 同一张单落两次草稿、起两个流程实例。
   if (busy.value) return
-  if (!validateForm()) return
-  if (!(await gateBudget())) return
-  if (!gateInvoiceAttach()) return
   busy.value = true
   try {
+    if (!validateForm()) return
+    if (!(await gateBudget())) return
+    if (!gateInvoiceAttach()) return
     const id = await doSaveDraft()
     if (id == null) return
     await loadFirstPick(id)
@@ -980,7 +1077,7 @@ async function saveDraftOnly() {
   } finally { busy.value = false }
 }
 
-/* ---------------- 本机草稿（P1-4） ---------------- */
+/* 本机草稿 */
 // 编辑态与新建态分开存，避免"改打回单"把新建草稿冲掉
 function draftDoc() { return isEdit.value ? `CLAIM#${editId.value}` : 'CLAIM' }
 let draftTimer = null
@@ -1016,9 +1113,9 @@ watch([() => form.bill, () => form.lines, attaches, invoiceIds], () => {
   draftTimer = setTimeout(dumpDraft, 800)
 }, { deep: true })
 
-/* ---------------- 原单载入（P1-10：打回重交留在移动端） ---------------- */
+/* 原单载入（打回重交留在移动端） */
 /**
- * 取上一轮的驳回意见（D-H5M-07）。
+ * 取上一轮的驳回意见。
  *
  * 时机是硬约束：editForResubmit 会把单子转回 DRAFT 并把 proc_inst_id 置 NULL
  * （ExpenseBillService.returnToEdit），之后审批链就查不到了 ⇒ 必须在转态之前取。
@@ -1083,8 +1180,8 @@ async function loadOriginal(id) {
     }))
   }
   attaches.value = Array.isArray(d.attaches) ? d.attaches.map((a) => ({ ...a, id: null })) : []
-  // 预算行按原单的年度重解析（D-H5M-05/D-H5M-06）：
-  // 原单带的是上一轮/上一年度的预算行，直接留着会把占用记到别的科目上（实测 1001＝2025 年劳动保护费）。
+  // 预算行按原单的年度重解析：
+  // 原单带的是上一年度的预算行，直接留着会把占用记到别的科目上。
   await loadBudgetPool(form.bill.periodYear)
   resolveLineBudgets()
   // 本单已勾稽发票回读（补充信息：无 inv:bind/读权限时静默失败，不该挡住"改这张单"本身）
@@ -1101,7 +1198,7 @@ async function loadOriginal(id) {
 }
 function safeParse(s) { try { return JSON.parse(s || '{}') } catch { return {} } }
 
-/* ---------------- 离开确认（UX-06） ---------------- */
+/* 离开确认（UX-06） */
 function leave() {
   if (window.history.state && window.history.state.back) router.back()
   else router.replace('/h5')
@@ -1119,7 +1216,7 @@ onBeforeRouteLeave(async () => {
   return true
 })
 
-/* ---------------- 基础数据 ---------------- */
+/* 基础数据 */
 async function loadMd() {
   const [it, map, comp, dept] = await Promise.all([
     mdApi.expenseItems().catch(() => null),
@@ -1127,7 +1224,7 @@ async function loadMd() {
     orgApi.companyTree().catch(() => null),
     orgApi.deptTree().catch(() => null),
   ])
-  // /expense-item/tree 实测返回**平铺**清单（ExpenseItemService.tree() 只做排序，不组装 children），
+  // /expense-item/tree 返回平铺清单（ExpenseItemService.tree() 只做排序，不组装 children），
   // 所以旧页面那段"展平 children"是死代码，这里直接按 itemName 过滤空名。
   items.value = (it || []).filter((x) => x && x.itemName && String(x.itemName).trim())
   const m = {}
@@ -1137,7 +1234,7 @@ async function loadMd() {
   companies.value = cf
   const df = []; (function walk(arr) { (arr || []).forEach((n) => { if (n) { df.push({ id: n.id, name: n.deptName || n.name || '' }); if (n.children?.length) walk(n.children) } }) })(dept)
   depts.value = df
-  // 预算行按单据费用年度取（D-H5M-06）
+  // 预算行按单据费用年度取
   await loadBudgetPool(form.bill?.periodYear)
 }
 
@@ -1148,7 +1245,7 @@ const recentChips = computed(() => recentItemIds(userId.value, 5)
 async function boot() {
   payMethodDict.load()
   payeeTypeDict.load()
-  resetSessionClock() // P2-6 埋点起点：本页本次打开（规则见 sessionOpenedAt 注释）
+  resetSessionClock() // 埋点起点：本页本次打开（规则见 sessionOpenedAt 注释）
   bootLoading.value = true
   loadError.value = ''
   try {
@@ -1176,8 +1273,8 @@ onActivated(() => {
 })
 onBeforeUnmount(() => {
   clearTimeout(draftTimer)
-  // D-DEC-463：离开本页会掐断进行中的识别请求，而后端识别链（REQUIRES_NEW）并不因此回滚 ⇒
-  // 只报「结果未知＋去「发票」列表核对」，报"已取消/未保存"（用户会重传同一张票面）。
+  // 离开本页会掐断进行中的识别请求，而后端识别链（REQUIRES_NEW）并不因此回滚 ⇒
+  // 只报「结果未知＋去「发票」列表核对」，不要报"已取消/未保存"（用户会重传同一张票面）。
   if (uploading.value) {
     if (uploadController) uploadController.abort()
     const out = abortedOutcome('')

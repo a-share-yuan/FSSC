@@ -4,17 +4,21 @@
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fssc.arflow.entity.ArInvoiceRule;
 import com.fssc.arflow.entity.ArPreInvoice;
 import com.fssc.arflow.entity.ArStatement;
 import com.fssc.arflow.mapper.ArInvoiceRuleMapper;
 import com.fssc.arflow.mapper.ArPreInvoiceMapper;
 import com.fssc.arflow.mapper.ArStatementMapper;
+import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.ExtInterfaceConfig;
 import com.fssc.connector.api.ChannelResponse;
 import com.fssc.connector.api.ConnectorFacade;
+import com.fssc.system.service.ConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -48,10 +52,10 @@ public class ArPreInvoiceService {
     private final ArStatementMapper statementMapper;
     private final ArInvoiceRuleMapper ruleMapper;
     private final ConnectorFacade connector;
-    private final com.fssc.system.service.ConfigService configService;
+    private final ConfigService configService;
 
-    /** P4-3 审计扩面：单据状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
+    /** 审计扩面：单据状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
 
     /** 换票重开时作废行仍占用预制发票号：从该对账单已用最大序号续编，避免撞 uk_pre_no。 */
     private int nextSeq(String reconBillNo) {
@@ -166,10 +170,10 @@ public class ArPreInvoiceService {
         inv.setRemark((inv.getRemark() == null ? "" : inv.getRemark() + " | ")
                 + "商务确认通过[" + (confirmer == null ? "-" : confirmer) + "]");
         mapper.updateById(inv);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", inv.getStatus());
         auditAfter.put("remark", inv.getRemark());
         auditTrailService.recordUpdate("AR_PRE_INVOICE", inv.getId(), inv.getPreInvoiceNo(), "ar_pre_invoice",
@@ -190,10 +194,10 @@ public class ArPreInvoiceService {
         inv.setStatus(ArPreInvoice.ST_VOIDED);
         inv.setRemark((inv.getRemark() == null ? "" : inv.getRemark() + " | ") + "商务确认驳回:" + reason);
         mapper.updateById(inv);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", inv.getStatus());
         auditAfter.put("remark", inv.getRemark());
         auditTrailService.recordUpdate("AR_PRE_INVOICE", inv.getId(), inv.getPreInvoiceNo(), "ar_pre_invoice",
@@ -218,9 +222,9 @@ public class ArPreInvoiceService {
             payload.put("amount", inv.getAmount());
             payload.put("taxAmount", inv.getTaxAmount());
             payload.put("totalAmount", inv.getTotalAmount());
-            // P0-2 唯一键：同一预制发票号重复推送（如超时重发）不重复开票，回放首次结果
+            // 唯一键：同一预制发票号重复推送（如超时重发）不重复开票，回放首次结果
             ChannelResponse resp = connector.invokeWrite(GOLDEN_TAX_CATEGORY, payload,
-                    "GOLDEN_TAX:" + com.fssc.framework.tenant.TenantContext.getTenantId() + ":" + inv.getPreInvoiceNo());
+                    "GOLDEN_TAX:" + TenantContext.getTenantId() + ":" + inv.getPreInvoiceNo());
             if (resp == null || !resp.isOk()) {
                 throw new BizException(ErrorCode.SYSTEM_ERROR, "金税开票推送失败: "
                         + (resp == null ? "无响应" : resp.getBody()));
@@ -235,10 +239,10 @@ public class ArPreInvoiceService {
         inv.setRemark((inv.getRemark() == null ? "" : inv.getRemark() + " | ")
                 + (cfg == null ? "金税推送[模拟]" : "金税推送[真实]"));
         mapper.updateById(inv);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", inv.getStatus());
         auditAfter.put("remark", inv.getRemark());
         auditTrailService.recordUpdate("AR_PRE_INVOICE", inv.getId(), inv.getPreInvoiceNo(), "ar_pre_invoice",
@@ -262,11 +266,11 @@ public class ArPreInvoiceService {
         inv.setInvoiceDate(invoiceDate == null ? LocalDate.now() : invoiceDate);
         inv.setStatus(ArPreInvoice.ST_INVOICED);
         mapper.updateById(inv);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("invoiceNo", auditOldInvoiceNo);
         auditBefore.put("invoiceCode", auditOldInvoiceCode);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", inv.getStatus());
         auditAfter.put("invoiceNo", inv.getInvoiceNo());
         auditAfter.put("invoiceCode", inv.getInvoiceCode());
@@ -295,10 +299,10 @@ public class ArPreInvoiceService {
         inv.setStatus(ArPreInvoice.ST_VOIDED);
         inv.setRemark((inv.getRemark() == null ? "" : inv.getRemark() + " | ") + "作废:" + reason);
         mapper.updateById(inv);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", inv.getStatus());
         auditAfter.put("remark", inv.getRemark());
         auditTrailService.recordUpdate("AR_PRE_INVOICE", inv.getId(), inv.getPreInvoiceNo(), "ar_pre_invoice",
@@ -319,10 +323,10 @@ public class ArPreInvoiceService {
         inv.setRedNoticeNo(redNoticeNo);
         inv.setStatus(ArPreInvoice.ST_RED_INVOICED);
         mapper.updateById(inv);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("redNoticeNo", auditOldRedNoticeNo);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", inv.getStatus());
         auditAfter.put("redNoticeNo", inv.getRedNoticeNo());
         auditTrailService.recordUpdate("AR_PRE_INVOICE", inv.getId(), inv.getPreInvoiceNo(), "ar_pre_invoice",
@@ -347,10 +351,10 @@ public class ArPreInvoiceService {
         origin.setStatus(ArPreInvoice.ST_VOIDED);
         origin.setRemark((origin.getRemark() == null ? "" : origin.getRemark() + " | ") + "换票作废:" + reason);
         mapper.updateById(origin);
-        java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", auditOldStatus);
         auditBefore.put("remark", auditOldRemark);
-        java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", origin.getStatus());
         auditAfter.put("remark", origin.getRemark());
         auditTrailService.recordUpdate("AR_PRE_INVOICE", origin.getId(), origin.getPreInvoiceNo(), "ar_pre_invoice",
@@ -392,7 +396,7 @@ public class ArPreInvoiceService {
         return require(id);
     }
 
-    // ---------------- 工具 ----------------
+    // 工具
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> parseLines(String json) {
@@ -400,7 +404,7 @@ public class ArPreInvoiceService {
             return List.of();
         }
         try {
-            Object parsed = com.fasterxml.jackson.databind.json.JsonMapper.builder().build().readValue(json, Object.class);
+            Object parsed = JsonMapper.builder().build().readValue(json, Object.class);
             if (parsed instanceof List<?> list) {
                 return (List<Map<String, Object>>) (List<?>) list;
             }
@@ -420,7 +424,7 @@ public class ArPreInvoiceService {
 
     static String toJson(Object o) {
         try {
-            return com.fasterxml.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(o);
+            return JsonMapper.builder().build().writeValueAsString(o);
         } catch (Exception e) {
             throw new BizException(ErrorCode.SYSTEM_ERROR, "JSON序列化失败:" + e.getMessage());
         }

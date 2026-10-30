@@ -28,7 +28,7 @@ public interface ConnectorFacade {
     /** 变更能力便捷调用（有外部副作用，调用方应携带唯一键）。 */
     ChannelResponse invokeWrite(String capability, Object payload, String idempotencyKey);
 
-    /** 该能力是否已配置可用的真实通道（未配置时业务侧走 MOCK/默认处理）。 */
+    /** 该能力是否已配置可用的真实通道（未配置时业务侧走 MOCK/兜底）。 */
     boolean isConfigured(String capability);
 
     /**

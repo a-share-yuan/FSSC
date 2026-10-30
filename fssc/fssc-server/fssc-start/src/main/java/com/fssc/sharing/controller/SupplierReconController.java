@@ -19,9 +19,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.InputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.util.StringUtils;
 import com.fssc.common.core.ErrorCode;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -95,7 +97,7 @@ public class SupplierReconController {
         }
     }
 
-    // ==================== 对账单 CRUD ====================
+    // 对账单 CRUD
 
     @RequiresPerm("pay:recon:list")
     @GetMapping("/page")
@@ -120,7 +122,7 @@ public class SupplierReconController {
         return Result.success(reconService.getSummary(id));
     }
 
-    // ==================== 逐笔明细与勾对 ====================
+    // 逐笔明细与勾对
 
     @RequiresPerm("pay:recon:list")
     @GetMapping("/{id}/details")
@@ -151,7 +153,7 @@ public class SupplierReconController {
         return Result.success();
     }
 
-    // ==================== 对账函 ====================
+    // 对账函
 
     @RequiresPerm("pay:recon:list")
     @PostMapping("/{id}/send-letter")
@@ -160,7 +162,7 @@ public class SupplierReconController {
         return Result.success(Map.of("letterNo", letterNo));
     }
 
-    // ==================== 供应商确认 ====================
+    // 供应商确认
 
     @RequiresPerm("pay:recon:list")
     @PostMapping("/{id}/supplier-confirm")
@@ -171,7 +173,7 @@ public class SupplierReconController {
         return Result.success();
     }
 
-    // ==================== 差异调节 ====================
+    // 差异调节
 
     @RequiresPerm("pay:recon:list")
     @GetMapping("/{id}/diffs")
@@ -201,7 +203,7 @@ public class SupplierReconController {
         return Result.success();
     }
 
-    // ==================== LinkU 对接接口（回调接收模式） ====================
+    // LinkU 对接接口（回调接收模式）
 
     /**
      * 查看 LinkU 同步状态（只读）。
@@ -276,13 +278,13 @@ public class SupplierReconController {
                 str(m, "verifyStatus"), str(m, "verifyRemark"), str(m, "duplicateCheck"), str(m, "ocrFileUrl")));
     }
 
-    // ==================== LinkU 回调统一守卫：验签 + 去重 + 落 log（P0-1） ====================
+    // LinkU 回调统一守卫：验签 + 去重 + 落 log
 
     /**
      * 统一起点：0) 无密钥 fail-fast；1) HMAC 验签+时间窗；2) 去重去重；3) 执行业务；4) 落 linku_sync_log。
      * 验签/执行失败返回对应 HTTP 非 2xx 状态码（body.code 保持一致），供 BCP 判为重试信号。
      *
-     * D-DEC-241 第二项（写入侧办结）：**未过签的请求不写 linku_sync_log**，改记应用日志。
+     * 第二项（写入侧办结）：**未过签的请求不写 linku_sync_log**，改记应用日志。
      * 回调端点对外可达，原先验签失败也 INSERT 一条含完整请求体的记录 ⇒
      * 任何人反复投递即可无界撑大该表（未鉴权写入面 + 请求体全量入库）。
      * 已过签的"业务执行失败"仍照常写入数据库——那是合法来源的审计线索，不能丢。
@@ -347,7 +349,7 @@ public class SupplierReconController {
             eventType = str(m, "bcpEventType");
         }
         if (eventType == null) {
-            throw new BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID, "envelope missing eventType");
+            throw new BizException(ErrorCode.PARAM_INVALID, "envelope missing eventType");
         }
         switch (eventType) {
             case "RECON_CONFIRM" -> {
@@ -373,14 +375,14 @@ public class SupplierReconController {
                     linkuId(m), str(m, "invoiceNo"), str(m, "invoiceCode"), str(m, "invoiceDate"),
                     dec(m, "invoiceAmount", BigDecimal.ZERO), dec(m, "taxAmount", BigDecimal.ZERO),
                     str(m, "verifyStatus"), str(m, "verifyRemark"), str(m, "duplicateCheck"), str(m, "ocrFileUrl"));
-            default -> throw new BizException(com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            default -> throw new BizException(ErrorCode.PARAM_INVALID,
                     "unsupported eventType: " + eventType);
         }
     }
 
     /** 读取原始请求体（保证参与签名的原文不被框架二次解析改动） */
     private String readBody(HttpServletRequest req) throws IOException {
-        try (java.io.InputStream in = req.getInputStream()) {
+        try (InputStream in = req.getInputStream()) {
             byte[] buf = in.readAllBytes();
             return buf == null || buf.length == 0 ? "" : new String(buf, StandardCharsets.UTF_8);
         }
@@ -415,7 +417,7 @@ public class SupplierReconController {
     }
 
     /**
-     * D-DEC-241 第二项：未过签请求的拒绝只记应用日志，不写 linku_sync_log。
+     * 第二项：未过签请求的拒绝只记应用日志，不写 linku_sync_log。
      * 记 IP + eventType + linkuReconId + 拒绝码；不落请求体、不落密钥值。
      */
     private void rejectWithoutPersist(HttpServletRequest req, String eventType, Long linkuReconId, String reason) {
@@ -438,8 +440,8 @@ public class SupplierReconController {
             log.setDurationMs((int) durationMs);
             log.setCreateTime(LocalDateTime.now());
             linkuSyncLogMapper.insert(log);
-        } catch (org.springframework.dao.DuplicateKeyException dup) {
-            // D-V5R-03：撞 uk_linku_sync_log_idem 说明"同一唯一键已有一条 SUCCESS 记录"，
+        } catch (DuplicateKeyException dup) {
+            // 撞 uk_linku_sync_log_idem 说明"同一唯一键已有一条 SUCCESS 记录"，
             // 即本事件已被处理过一次（重复投递/并发投递）。这属于去重命中，不是故障，
             // 不能按普通异常吞掉 —— 否则"记录丢失"会被伪装成"从未收到过该回调"。
             log.info("[LinkU回调] 幂等命中：同一幂等键已有成功留痕，本次不再重复落库 eventType={} idemKey={}",
@@ -450,14 +452,14 @@ public class SupplierReconController {
     }
 
     /**
-     * 回调唯一键（D-V5R-03）。
+     * 回调唯一键。
      *
      * <p>取键顺序：① 信封 body 的 {@code idempotencyKey}；② BCP 投递头 {@code X-BCP-Event-Id}
      * （每条发件箱事件唯一：重投同一事件取值相同 ⇒ 可去重；不同事件取值不同 ⇒ 不互撞）；
      * ③ 回落到 {@code linkuReconId}。三者皆空才退化为"无去重保护"。</p>
      *
      * <p>该键写入 {@code linku_sync_log.idempotency_key}，与 event_type 合成生成列
-     * {@code active_idem_key}。修复前该列恒为 NULL ⇒ 生成列恒等于
+     * {@code active_idem_key}。该列未回填时恒为 NULL ⇒ 生成列恒等于
      * {@code "RECON_MATCH:"}（冒号后为空），第二条成功记录必撞唯一键。</p>
      */
     private String callbackIdempotencyKey(HttpServletRequest req, Map<String, Object> m, Long linkuReconId) {

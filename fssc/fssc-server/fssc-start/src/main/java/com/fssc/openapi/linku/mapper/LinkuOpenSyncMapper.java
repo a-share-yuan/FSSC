@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * LinkU 开放接口 <b>写入</b> Mapper（F-3 / F-7）。替代原 BCP 直连 FSSC 库的写语句。
+ * LinkU 开放接口 <b>写入</b> Mapper。替代原 BCP 直连 FSSC 库的写语句。
  *
  * <p>全部语句逐条移植自 {@code FsscArApAdapter}（现役库 OTC 代规则），语义与守卫完全一致：</p>
  * <ul>
@@ -32,7 +32,7 @@ import java.util.List;
 @Mapper
 public interface LinkuOpenSyncMapper {
 
-    // ==================== 主数据解析 ====================
+    // 主数据解析
 
     @Select("SELECT id FROM md_supplier WHERE tenant_id = #{tenantId} AND supplier_code = #{code} "
             + "AND del_flag = 0 LIMIT 1")
@@ -50,7 +50,7 @@ public interface LinkuOpenSyncMapper {
             + "WHERE tenant_id = #{tenantId} AND bill_no = #{billNo} AND del_flag = 0 LIMIT 1")
     BigDecimal selectRemainAmount(@Param("tenantId") Long tenantId, @Param("billNo") String billNo);
 
-    // ==================== AP 对账（supplier_recon 三表） ====================
+    // AP 对账（supplier_recon 三表）
 
     @Select("SELECT id FROM supplier_recon WHERE tenant_id = #{tenantId} AND supplier_id = #{supplierId} "
             + "AND period = #{period} AND del_flag = 0 LIMIT 1")
@@ -130,7 +130,7 @@ public interface LinkuOpenSyncMapper {
                         @Param("reason") String reason,
                         @Param("now") LocalDateTime now);
 
-    // ==================== AR 对账（ar_recon_record） ====================
+    // AR 对账（ar_recon_record）
 
     @Select("SELECT id FROM ar_recon_record WHERE tenant_id = #{tenantId} AND company_id = #{companyId} "
             + "AND customer_id = #{customerId} "
@@ -160,7 +160,7 @@ public interface LinkuOpenSyncMapper {
                             @Param("remark") String remark,
                             @Param("now") LocalDateTime now);
 
-    // ==================== AR 收款核销（rc_receipt + rc_receipt_line + 余额） ====================
+    // AR 收款核销（rc_receipt + rc_receipt_line + 余额）
 
     @Insert("INSERT INTO rc_receipt (tenant_id, bill_no, receivable_ids, customer_id, receipt_date, pay_method, "
             + "amount, status, create_time, update_time, del_flag) "
@@ -190,7 +190,7 @@ public interface LinkuOpenSyncMapper {
                             @Param("now") LocalDateTime now);
 
     /**
-     * 应收余额回写（第13轮规则）：{@code status} 必须是第一个赋值（读原始 remain_amount），
+     * 应收余额回写：{@code status} 必须是第一个赋值（读原始 remain_amount），
      * 且带余额守卫，允许「正好结清」（差额 ≤ 0.01），禁止超额。
      */
     @Update("UPDATE rc_receivable "
@@ -205,7 +205,7 @@ public interface LinkuOpenSyncMapper {
                                @Param("amount") BigDecimal amount,
                                @Param("now") LocalDateTime now);
 
-    // ==================== 对冲记录（gl_inter_offset） ====================
+    // 对冲记录（gl_inter_offset）
 
     @Insert("INSERT INTO gl_inter_offset (tenant_id, offset_no, period, from_company_id, to_company_id, "
             + "inter_flag, amount, offset_status, create_time, update_time, del_flag) "
@@ -219,7 +219,7 @@ public interface LinkuOpenSyncMapper {
                             @Param("amount") BigDecimal amount,
                             @Param("now") LocalDateTime now);
 
-    // ==================== 状态回写 ====================
+    // 状态回写
 
     @Update("UPDATE rc_receipt SET status = #{status}, update_time = #{now} "
             + "WHERE tenant_id = #{tenantId} AND bill_no = #{billNo} AND del_flag = 0")

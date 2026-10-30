@@ -3,7 +3,7 @@
 
 <template>
   <div class="budget-item-page">
-    <!-- R5-D-263：页面层权限门控（/item/page 端点按设计保持开放供引用预览，管理页在此办结） -->
+    <!-- 页面层权限门控（/item/page 端点按设计保持开放供引用预览，管理页在此办结） -->
     <el-card v-if="canList" shadow="never">
       <template #header>
         <div class="card-header">
@@ -68,7 +68,7 @@
         </el-table-column>
         <el-table-column label="执行率" width="90" align="center">
           <template #default="{ row }">
-            <!-- R5-D-264：文本显真实值（超 100% 保留小数并转红）；进度条仅做可视化封顶 -->
+            <!-- 文本显真实值（超 100% 保留小数并转红）；进度条仅做可视化封顶 -->
             <el-progress :percentage="execRateBar(row)" :color="execColor(execRate(row))" :stroke-width="8" :show-text="false" />
             <small :class="execRate(row) > 100 ? 'text-red' : ''">{{ execRateText(row) }}</small>
           </template>
@@ -87,7 +87,7 @@
         @size-change="loadList" @current-change="loadList"
       />
     </el-card>
-    <!-- R5-D-263：无 budget:item:list 权限给显式空态（不再渲染真实预算行） -->
+    <!-- 无 budget:item:list 权限给显式空态（不再渲染真实预算行） -->
     <el-card v-else shadow="never">
       <el-result icon="warning" title="暂无访问权限"
         sub-title="当前账号缺少「预算明细」查看权限，如需查阅请向管理员申请授权。" />
@@ -137,7 +137,7 @@
             <el-option v-for="m in 12" :key="m" :label="m + '月'" :value="m" />
           </el-select>
         </el-form-item>
-        <!-- 公司留空时后端按方案所属公司默认处理，属可选项 -->
+        <!-- 公司留空时后端按方案所属公司兜底，属可选项 -->
         <el-form-item label="公司">
           <el-select v-model="dialog.form.companyId" placeholder="留空取方案所属公司" filterable style="width:100%">
             <el-option v-for="c in companies" :key="c.id" :label="c.companyName" :value="c.id" />
@@ -161,18 +161,18 @@
         <el-form-item label="预算总额" prop="totalAmount">
           <el-input-number v-model="dialog.form.totalAmount" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
-        <el-form-item label="总账科目码"><el-input v-model="dialog.form.ncAccount" placeholder="如 660101" /></el-form-item>
-        <el-form-item label="外部系统科目码"><el-input v-model="dialog.form.ifsAccount" placeholder="如 4001" /></el-form-item>
+        <el-form-item label="总账科目码"><el-input v-model="dialog.form.ncAccount" placeholder="如 660101" maxlength="64" /></el-form-item>
+        <el-form-item label="外部系统科目码"><el-input v-model="dialog.form.ifsAccount" placeholder="如 4001" maxlength="64" /></el-form-item>
         <el-form-item label="币种">
           <el-select v-model="dialog.form.currencyCode" style="width:100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'code-name')" :value="o.value" />
 
-            
-            
-            
+
+
+
           </el-select>
         </el-form-item>
-        <el-form-item label="备注"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialog.visible = false">{{ dialog.readonly ? '关闭' : '取消' }}</el-button>
@@ -209,14 +209,14 @@ import { useCurrency } from '@/composables/useCurrency'
 // 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
-// R5-13: 快捷键
+// 快捷键
 useKeyboard({
   'ctrl+r': () => loadList(),
   'ctrl+n': () => { try { router.push(currentRoute.path.replace(/\/list$/, '/create')) } catch { /* noop */ } },
 })
 const { autofill, saveFormHistory } = useAutoFill()
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -228,7 +228,7 @@ echarts.use([BarChart, LineChart, TooltipComponent, GridComponent, LegendCompone
 
 const route = useRoute()
 const list = ref([])
-// F-10：趋势图必须吃"筛选条件下的全量行"，不能吃当前页（原实现只聚合 list 的 10 行，
+// 趋势图必须吃"筛选条件下的全量行"，不能吃当前页（只聚合 list 的 10 行的话，
 // 翻页图形就漂移）。trendRows 单独拉全量，与表格分页解耦。
 const trendRows = ref([])
 const loading = ref(false)
@@ -239,10 +239,10 @@ const depts = ref([])
 const projects = ref([])
 const filter = reactive({ schemeId: null, itemId: null })
 const page = reactive({ current: 1, size: 10, total: 0 })
-// R5-D-263：读权限门控——无 budget:item:list 时不发起列表请求、不渲染数据区，给显式空态
+// 读权限门控——无 budget:item:list 时不发起列表请求、不渲染数据区，给显式空态
 const canList = hasPerm('budget:item:list')
 
-// ---------------- 预算执行月度趋势图 ----------------
+// 预算执行月度趋势图
 const trendChartRef = ref()
 let trendChart = null
 
@@ -323,7 +323,7 @@ const dialog = reactive({
   form: {},
 })
 
-// ---------------- Excel 导入/导出（2026-09-17） ----------------
+// Excel 导入/导出
 const exporting = ref(false)
 const importDlg = reactive({ visible: false, saving: false, schemeId: null, file: null, result: null })
 
@@ -379,7 +379,7 @@ async function loadTrend() {
 }
 
 async function loadList() {
-  if (!canList) return // R5-D-263：无查看权限不发列表请求
+  if (!canList) return // 无查看权限不发列表请求
   loading.value = true
   try {
     const r = await budgetApi.itemPage({
@@ -435,7 +435,7 @@ async function save() {
 function availBalance(row) {
   return Number(row.totalAmount || 0) + Number(row.adjustAmount || 0) - Number(row.occupyAmount || 0) - Number(row.usedAmount || 0)
 }
-// R5-D-264：执行率读后端单点字段（execRateOf：(占用+核销)/(总额+调整)×100，scale 1，不封顶）
+// 执行率读后端单点字段（execRateOf：(占用+核销)/(总额+调整)×100，scale 1，不封顶）
 function execRate(row) {
   const v = row.execRate
   return v === null || v === undefined || v === '' ? null : Number(v)
@@ -479,7 +479,7 @@ const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel
 
 onMounted(async () => {
   loadCurrency()
-  if (!canList) return // R5-D-263：无查看权限不预载主数据与列表
+  if (!canList) return // 无查看权限不预载主数据与列表
   // 从URL参数获取schemeId
   if (route.query.schemeId) filter.schemeId = Number(route.query.schemeId)
   await Promise.all([
@@ -516,7 +516,7 @@ function flattenTree(nodes) {
   walk(nodes)
   return result
 }
-// R5-01: InlineActions approve/reject handlers
+// InlineActions approve/reject handlers
 // 通过走 budgetApi.adjustApprove（预算调剂确认，后端无意见字段，故弹窗只给上下文不假装能记录）；
 // 驳回走 wfApi.approve，必须写明原因。
 const approvalRef = ref(null)

@@ -145,7 +145,7 @@ public class BcpOpenClient {
         }
     }
 
-    /** 解析成功信封；{@code success} 不为 true 视为失败（正常 2xx 不该出现，默认处理防静默）。 */
+    /** 解析成功信封；{@code success} 不为 true 视为失败（正常 2xx 不该出现，兜底防静默）。 */
     @SuppressWarnings("unchecked")
     private Map<String, Object> parseEnvelope(String body) {
         Map<String, Object> m = parseJson(body);

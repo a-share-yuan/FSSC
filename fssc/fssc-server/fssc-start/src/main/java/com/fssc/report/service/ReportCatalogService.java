@@ -4,6 +4,9 @@
 package com.fssc.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
+import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.security.UserContext;
 import com.fssc.report.entity.RptReportDef;
 import com.fssc.report.entity.RptUserFav;
@@ -30,7 +33,7 @@ public class ReportCatalogService {
     private final RptReportDefMapper reportDefMapper;
     private final RptUserFavMapper userFavMapper;
 
-    // ---------------- 报表目录 ----------------
+    // 报表目录
 
     /** 按分类列出启用报表（category 为 null 时返回全部） */
     public List<RptReportDef> listByCategory(String category) {
@@ -50,7 +53,7 @@ public class ReportCatalogService {
         return reportDefMapper.selectOne(qw);
     }
 
-    // ---------------- 用户收藏 ----------------
+    // 用户收藏
 
     /** 当前用户的收藏报表列表 */
     public List<RptReportDef> myFavorites() {
@@ -72,13 +75,14 @@ public class ReportCatalogService {
         return reportDefMapper.selectList(defQw);
     }
 
-    /** 收藏一个报表（去重：已存在则跳过） */
+    /** 收藏一个报表（去重：已存在则跳过）。写动作显式回主库——只读副本不能写。 */
     @Transactional(rollbackFor = Exception.class)
+    @FsscDataSource("master")
     public void addFavorite(String reportCode) {
         Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
         if (userId == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.UNAUTHORIZED, "请先登录");
+            throw new BizException(
+                    ErrorCode.UNAUTHORIZED, "请先登录");
         }
         LambdaQueryWrapper<RptUserFav> qw = new LambdaQueryWrapper<>();
         qw.eq(RptUserFav::getUserId, userId);
@@ -93,8 +97,9 @@ public class ReportCatalogService {
         userFavMapper.insert(fav);
     }
 
-    /** 取消收藏 */
+    /** 取消收藏。写动作显式回主库——只读副本不能写。 */
     @Transactional(rollbackFor = Exception.class)
+    @FsscDataSource("master")
     public void removeFavorite(String reportCode) {
         Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
         if (userId == null) {

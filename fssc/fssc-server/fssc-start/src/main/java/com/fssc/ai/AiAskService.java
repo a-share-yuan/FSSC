@@ -5,6 +5,8 @@ package com.fssc.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fssc.ai.AiGatewayService;
+import com.fssc.ai.entity.AiActionConfirm;
 import com.fssc.ai.knowledge.KnowledgeIndex;
 import com.fssc.ai.memory.SessionStore;
 import com.fssc.ai.resolve.EntityResolver;
@@ -15,11 +17,15 @@ import com.fssc.ai.skill.SlotExtractor;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.trace.TraceIdFilter;
 import com.fssc.system.entity.ExtInterfaceConfig;
 import com.fssc.connector.api.ChannelResponse;
 import com.fssc.connector.api.ConnectorFacade;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.LocalDate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,13 +39,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * P3 只读问答编排（自然语言 → 目录内 read 动作 → 网关执行 → 答案＋规则＋权限判定过程）。
+ * 只读问答编排（自然语言 → 目录内 read 动作 → 网关执行 → 答案＋规则＋权限判定过程）。
  *
  * <p>三条纪律：
  * <ol>
  *   <li>候选动作 = 目录里 kind=read ∧ aiAllowed ∧ risk=LOW ∧ 下令真人实际持有其权限码
  *       —— LLM 连"看不见的动作"都不知道，越权在提示词层就被剪枝；执行仍过网关全套校验。</li>
- *   <li>没有大模型通道或通道故障时走本地关键词匹配（确定性默认处理），§7 纵切问题不依赖外网。</li>
+ *   <li>没有大模型通道或通道故障时走本地关键词匹配（确定性兜底），§7 纵切问题不依赖外网。</li>
  *   <li>读不到就明确说读不到（作者："重点看它是否清楚自己不能做什么"）。</li>
  * </ol>
  */
@@ -108,15 +114,15 @@ public class AiAskService {
         r.setTraceId(traceId);
         Set<String> visibleCodes = visible.stream().map(AiAction::getCode).collect(Collectors.toSet());
 
-        // P0-7：红线/绕过检测必须先于任何路由。早先它挂在"选型失败"分支里，
-        // 于是「把今年所有单据都审批通过」一旦被只读技能或只读动作接住，就绕过了检测。
-        // 红线是系统规则，不是"没匹配到动作时的解释"，因此前置到入口第一道。
+        // 红线/绕过检测必须先于任何路由。挂在"选型失败"分支里的话，
+        // 「把今年所有单据都审批通过」一旦被只读技能或只读动作接住，就绕过了检测。
+        // 红线是系统规则，不是"没匹配到动作时的解释"，因此放在入口第一道。
         AskResult redlined = preRouteRedline(question, withWrites, user, traceId, r);
         if (redlined != null) {
             return redlined;
         }
 
-        // P0-2/P0-6：确定性技能优先于模型。零外部依赖，槽位（金额/日期/状态）由代码抽取，
+        // /确定性技能优先于模型。零外部依赖，槽位（金额/日期/状态）由代码抽取，
         // 模型只接管这层匹配不到的长尾；写技能永远只出票、不执行。
         SlotExtractor.Slots slots = slotExtractor.extract(question);
         if (withWrites) {
@@ -147,14 +153,14 @@ public class AiAskService {
         }
 
         ExtInterfaceConfig model = connector.getConfig("AI_MODEL");
-        // 通道故障必须能到达用户：原实现把"模型 403/超时"与"确实没有匹配动作"合并成 engine=null，
-        // 于是每次问数都像"没听懂"。这里记录首次失败原因，随结果一起回显。
+        // 通道故障必须能到达用户：把"模型 403/超时"与"确实没有匹配动作"合并成 engine=null，
+        // 每次问数都像"没听懂"。这里记录首次失败原因，随结果一起回显。
         LlmTrace llm = new LlmTrace();
         // 办理类指令（新建/提交/审批…）：模型不可用时绝不能拿只读列表冒充"已办"，
         // 也不能让关键词兜底把"建单"匹配成"我的单据"。
         boolean writeIntent = withWrites && looksLikeWriteIntent(question);
         Selection sel = selectByLlm(question, visible, withWrites, model, llm);
-        // 模型显式拒答也走关键词默认处理：规则只在"本人可见"集内匹配，不会造成越权
+        // 模型显式拒答也走关键词兜底：规则只在"本人可见"集内匹配，不会造成越权
         if (sel == null || sel.action() == null) {
             Selection byRule = writeIntent ? null : selectByKeyword(question, visible);
             if (byRule != null && byRule.action() != null) {
@@ -196,8 +202,8 @@ public class AiAskService {
                         + "（refusal=REDLINE_BLOCKED）");
                 return r;
             }
-            // D-N17：拒答分态并落 refusal_reason —— 原实现只判"缺权限"一维，而红线动作（aiAllowed=false）
-            // 在候选集构筑时就被剔除，于是"目录里有、但被 §6 红线封禁"被误报成"目录里没有"。
+            // 拒答分态并落 refusal_reason —— 只判"缺权限"一维不够：红线动作（aiAllowed=false）
+            // 在候选集构筑时就被剔除，于是"目录里有、但被红线封禁"会被误报成"目录里没有"。
             // 此处按 红线 → 缺码 → 通道档位 的次序单独探测（只做解释，绝不执行），三态不再是死状态。
             AiAction redlineAction = redlineGapAction(question, withWrites, model, llm);
             AiAction gap = redlineAction == null
@@ -267,8 +273,8 @@ public class AiAskService {
         }
         AiAction a = sel.action();
         Map<String, Object> args = sel.args() == null ? Map.of() : sel.args();
-        // 目录 v2：动作带机械采集的参数结构时，第二次调用只干"照结构填参"这一件事——
-        // 模型不再凭一行 Java 签名猜字段名（D-N12 的根因）。填参失败即沿用选型阶段的 args，不猜。
+        // 动作带机械采集的参数结构时，第二次调用只干"照结构填参"这一件事——
+        // 让模型凭一行 Java 签名猜字段名，猜错是必然的。填参失败即沿用选型阶段的 args，不猜。
         String missing = null;
         if (needFillArgs(a, args, model)) {
             Fill fill = fillArgs(a, question, model);
@@ -301,7 +307,7 @@ public class AiAskService {
                 ir.setMissing(missing);
                 return issueTicket(a, args, question, traceId, user, ir);
             }
-            // D-N17：此分支是"问数通道候选集只有 read∧LOW"这一不变量的守护——
+            // 此分支是"问数通道候选集只有 read∧LOW"这一不变量的守护——
             // 正常走不到（ask 的候选集本就剪过档位），"读动作但档位非 LOW"的解释性拒答
             // 由上面的 permGapAction（readAnyRisk）产出。留着它只为剪枝规则若被改动时不至于静默执行。
             r.setOk(false);
@@ -339,7 +345,7 @@ public class AiAskService {
         return r;
     }
 
-    // ---------------------------------------------------------------- P0 技能编排
+    // 技能编排
 
     /**
      * 入口级红线闸（先于技能路由与模型选型）。
@@ -567,7 +573,7 @@ public class AiAskService {
                 });
             }
         }
-        // P0 只落表头：行明细（费用项/金额拆分）不在本阶段自动编造
+        // 票据只落表头：行明细（费用项/金额拆分）不自动编造
         if ("CLAIM".equals(s.getBillType())) {
             missing.add(itemName == null ? "费用类别（费用项）与行明细" : "行明细（费用项已识别为「" + itemName + "」，金额待拆行）");
         } else {
@@ -612,7 +618,7 @@ public class AiAskService {
         ir.setRiskLevel(a.getRiskLevel());
 
         try {
-            com.fssc.ai.entity.AiActionConfirm c = gateway.requestConfirm(a, args, traceId, user);
+            AiActionConfirm c = gateway.requestConfirm(a, args, traceId, user);
             ir.setNeedsConfirm(true);
             ir.setConfirmId(c.getId());
             ir.setParamsDigest(c.getParamsDigest());
@@ -621,7 +627,7 @@ public class AiAskService {
                     + "<br>已出确认票据 #" + c.getId() + "（一次性、过期即废），须由<b>另一位</b>有确认权限的真人背书；"
                     + "确认后我仍以下令人本人的权限执行。"
                     + (ir.getMissing() == null ? "" : "<br>还缺：" + ir.getMissing() + "（我不会编造主数据 ID，请补全或驳回。）"));
-            // P0-6：「改成1200」产生新票后，上一张未用票立即作废，避免队列里留两张互相矛盾的票
+            // 「改成1200」产生新票后，上一张未用票立即作废，避免队列里留两张互相矛盾的票
             Long prev = ses.getLastConfirmId();
             if (prev != null && !prev.equals(c.getId())) {
                 try {
@@ -783,7 +789,7 @@ public class AiAskService {
         ir.setArgs(args);
         ir.setOk(false);
         try {
-            com.fssc.ai.entity.AiActionConfirm c = gateway.requestConfirm(a, args, traceId, user);
+            AiActionConfirm c = gateway.requestConfirm(a, args, traceId, user);
             ir.setNeedsConfirm(true);
             ir.setConfirmId(c.getId());
             ir.setParamsDigest(c.getParamsDigest());
@@ -832,16 +838,16 @@ public class AiAskService {
         }
         // 控制器是切面代理：本地反射同样会触发 PermissionAspect（要求登录态），
         // 必须把"规则创建人"绑进本线程 UserContext —— 权限校验与人侧同一把尺子。
-        com.fssc.framework.security.LoginUser prev = com.fssc.framework.security.UserContext.get();
-        com.fssc.framework.security.UserContext.set(owner);
+        LoginUser prev = UserContext.get();
+        UserContext.set(owner);
         Object data;
         try {
             data = localReadInvoker.invoke(a, args);
         } finally {
             if (prev != null) {
-                com.fssc.framework.security.UserContext.set(prev);
+                UserContext.set(prev);
             } else {
-                com.fssc.framework.security.UserContext.clear();
+                UserContext.clear();
             }
         }
         return objectMapper.valueToTree(data);
@@ -862,7 +868,7 @@ public class AiAskService {
                 .toList();
     }
 
-    /** 我的能力地图（P0-8）：技能按本人权限剪枝，越权的技能连名字都不出现。 */
+    /** 我的能力地图：技能按本人权限剪枝，越权的技能连名字都不出现。 */
     public List<Map<String, Object>> skills(LoginUser user) {
         Set<String> visibleCodes = visibleActions(user, true).stream()
                 .map(AiAction::getCode).collect(Collectors.toSet());
@@ -917,15 +923,15 @@ public class AiAskService {
     /**
      * 候选人机共用动作面：目录内 aiAllowed ∧ 非 §6 红线类型 ∧ 有权限码 ∧ 本人实际持码 ∧ 租户端点。
      * withWrites=false 时只留只读低风险（问数）；放开写动作时仍不含 approve/void/config/delete，
-     * 且写动作到网关侧必然还要过票据校验——可见集宽窄不改变执行判据。
+     * 且写动作到网关侧必然还要过票据校验——可见集宽窄不改变执行口径。
      */
     private List<AiAction> visibleActions(LoginUser user, boolean withWrites) {
         return visibleActions(user, withWrites, false, false);
     }
 
     /**
-     * @param ignorePerm   true 时放开"本人持码"这一层 —— 只用于 D-N17 判定"目录里有、但本人无权"。
-     * @param readAnyRisk  true 时放开"只读必须 LOW 档"这一层 —— 只用于 D-N17 判定
+     * @param ignorePerm true 时放开"本人持码"这一层 —— 只用于判定"目录里有、但本人无权"。
+     * @param readAnyRisk true 时放开"只读必须 LOW 档"这一层 —— 只用于判定
      *                     "目录里有、本人也持码，但风险档不是 LOW（问数通道只自动跑 LOW）"。
      */
     private List<AiAction> visibleActions(LoginUser user, boolean withWrites, boolean ignorePerm, boolean readAnyRisk) {
@@ -941,7 +947,7 @@ public class AiAskService {
     }
 
     /**
-     * D-N17 分态之"权限/档位缺口"：把本人权限面（必要时连风险档）放开后再选一次，
+     * "权限/档位缺口"分态：把本人权限面（必要时连风险档）放开后再选一次，
      * 若此时存在匹配动作，说明拒绝的真实原因不是"目录里没有"——返回该动作，否则返回 null。
      * <p>两种命中：本人不持其权限码 ⇒ NO_PERM；本人持码但风险档非 LOW（问数通道只自动跑 LOW）⇒ CHANNEL_READ_ONLY。
      * 只在选型失败路径调用，正常问答路径零额外开销。
@@ -976,9 +982,9 @@ public class AiAskService {
     }
 
     /**
-     * D-N17 分态之"红线缺口"：红线动作（aiAllowed=false）在建候选集时就被整族剔除，
+     * "红线缺口"分态：红线动作（aiAllowed=false）在建候选集时就被整族剔除，
      * 于是"目录里确实有、但被 §6 红线封禁"会被误报成 NO_MATCH（"目录里没有"与事实不符）。
-     * 本探测单独在红线池里选一次，<b>只用于解释拒答，绝不执行</b>；
+     * 本探测单独在红线池里选一次，只用于解释拒答，绝不执行；
      * 命中即说明存在同义动作被封禁，由调用方连族名一起回给人看。
      * <p>池内只取 kind 不在 {@link AiGatewayService#forbiddenKind} 里的条目：类型级红线
      * （approve/void/config/delete）语义过于宽泛，放进来只会让"审批/删除"这类词胡乱命中；
@@ -1057,11 +1063,10 @@ public class AiAskService {
     }
 
     /**
-     * 红线池的确定性默认处理：中文口语 → 端点特征。
-     * <p>为什么需要它：大模型在这条链上会偶发"多诉求句/口语化句认不出"——实测同一句
-     * 「把今年所有单据的期间强制反关账并清空审计日志」在两次运行间一次命中红线、一次回 null，
-     * 而"为什么不能做"是要如实回答用户的问题，不该靠模型运气。这几条把最常见的红线说法钉死，
-     * 使红线拒答既有一致性、又不依赖外网通道。命中只用于解释，绝不执行（池内动作过不了网关）。
+     * 红线池的确定性兜底：中文口语 → 端点特征。
+     * <p>为什么需要它：大模型在这条链上会偶发"多诉求句/口语化句认不出"——同一句话在两次运行间
+     * 可能一次命中红线、一次回 null，而"为什么不能做"是要如实回答用户的问题，不该靠模型运气。
+     * 这几条把最常见的红线说法钉死，使红线拒答既有一致性、又不依赖外网通道。命中只用于解释，绝不执行（池内动作过不了网关）。
      * <p>谓词匹配"动词+宾语"的组合（而非单个名词），避免把"查一下审计日志"这类正常问句错认成红线。
      */
     private Selection selectByRedlineKeyword(String q, List<AiAction> pool) {
@@ -1095,7 +1100,7 @@ public class AiAskService {
         return null;
     }
 
-    // ---------------------------------------------------------------- LLM 面
+    // LLM 面
 
     private record Selection(AiAction action, Map<String, Object> args, String engine, String reason) {
     }
@@ -1109,10 +1114,10 @@ public class AiAskService {
                     + "写动作会先经人工确认票据才真正执行，你无权跳过；清单里没有合适的动作就返回 {\"action\":null,\"reason\":\"...\"}。";
 
     /**
-     * D-N17 红线探测专用人设。清单里给的全是**已被永久禁止调用**的动作，本环节只做"识别"不做"执行"。
+     * 红线探测专用人设。清单里给的全是**已被永久禁止调用**的动作，本环节只做"识别"不做"执行"。
      * 沿用常规指令人设会坏在"模型自己也认定这事不该干 ⇒ 回 action=null"，把"识别得出"变成"识别不出"
-     * （实测：「把今年所有单据的期间强制反关账并清空审计日志」在常规人设下被判为"清单中不存在"，
-     * 而 /gl/month/unclose 就在池里）。
+     * （「把今年所有单据的期间强制反关账并清空审计日志」在常规人设下就被判成"清单中不存在"，
+     * 而 /gl/month/unclose 明明在池里）。
      */
     private static final String ROLE_REDLINE =
             "你是财务共享系统的动作识别器。下面这份清单是**系统已永久禁止由 AI 调用**的动作，用途只有一个："
@@ -1199,15 +1204,15 @@ public class AiAskService {
         return (a >= 0 && b > a) ? s.substring(a, b + 1) : "{}";
     }
 
-    // ------------------------------------------------------ 第二次调用：照结构填参
+    // 第二次调用：照结构填参
 
     private record Fill(Map<String, Object> args, String missing) {
     }
 
     /**
-     * chat/completions 请求体（OpenAI 兼容形）。{@code enable_thinking=false} 是实测结论：
-     * 选型与填参都是机械活，同一条 905 token 的填参提示词开思考链 16.4 s、关掉 1.2 s，
-     * 而 16.4 s 会把调用拖过模型通道超时、把整条填参链吃掉（D-N12 回归首轮就是这样失败的）。
+     * chat/completions 请求体（OpenAI 兼容形）。{@code enable_thinking=false}：
+     * 选型与填参都是机械活，开思考链会让一次填参的耗时膨胀十倍以上，足以拖过模型通道超时、
+     * 把整条填参链吃掉。
      */
     private Map<String, Object> chatBody(ExtInterfaceConfig cfg, String systemPrompt, String question) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -1232,7 +1237,7 @@ public class AiAskService {
     }
 
     /**
-     * D-N15：目录声明了请求体或必填参数，而模型一个值都没填上 —— 这种票不该出。
+     * 目录声明了请求体或必填参数，而模型一个值都没填上 —— 这种票不该出。
      * 只读/无 schema 的动作不受此约束（宁松勿严，不误伤本来就没有参数的写端点）。
      */
     private boolean declaresArgs(AiAction a) {
@@ -1253,7 +1258,7 @@ public class AiAskService {
         return false;
     }
 
-    /** 把目录 v2 的参数结构交给模型，只让它填值、不让它猜字段名；失败即回 null 由调用方沿用原 args。 */
+    /** 把动作的参数结构交给模型，只让它填值、不让它猜字段名；失败即回 null 由调用方沿用原 args。 */
     private Fill fillArgs(AiAction a, String question, ExtInterfaceConfig cfg) {
         try {
             String systemPrompt = "你是财务共享系统的接口填参器。根据用户指令为指定端点产出调用参数，只输出一个 JSON 对象，不要解释、不要代码块围栏。\n"
@@ -1262,7 +1267,7 @@ public class AiAskService {
                     + "2) 用户说了的才填；用户没说的可选字段一律省略，不要凑字段。\n"
                     + "3) 主数据引用（各类 ID／编码／用户／公司／部门／费用项／科目／供应商）用户没给就绝不编造，宁可留空——"
                     + "缺口会写进确认票据给真人看。\n"
-                    + "4) 金额用数字，日期用 yyyy-MM-dd，今天是 " + java.time.LocalDate.now() + "。\n"
+                    + "4) 金额用数字，日期用 yyyy-MM-dd，今天是 " + LocalDate.now() + "。\n"
                     + "5) 输出 {\"args\":{...},\"missing\":\"按必填清单还缺什么，没有则空串\"}。\n"
                     + "端点：" + a.getMethod() + " " + a.getUrl() + "\n"
                     + "前置条件：" + a.getPreconditions() + "\n"
@@ -1367,7 +1372,7 @@ public class AiAskService {
         return t;
     }
 
-    // ------------------------------------------------------------ 确定性默认处理
+    // 确定性兜底
 
     /** 是否是"要办一件事"（而非问一件事）：有办理动词、且没有查询类字眼。 */
     private static boolean looksLikeWriteIntent(String q) {
@@ -1392,8 +1397,8 @@ public class AiAskService {
         return (q.contains("报销") || q.contains("报账")) && (q.contains("我要") || q.contains("帮我") || q.contains("申请"));
     }
 
-    private static final java.util.regex.Pattern MONTH_PATTERN =
-            java.util.regex.Pattern.compile("(20\\d{2})\\s*[-年/]\\s*(\\d{1,2})\\s*月?");
+    private static final Pattern MONTH_PATTERN =
+            Pattern.compile("(20\\d{2})\\s*[-年/]\\s*(\\d{1,2})\\s*月?");
 
     /** 绕过规则/提示词注入识别：只做解释，不出票、不执行。 */
     private static boolean looksLikeBypass(String q) {
@@ -1446,11 +1451,11 @@ public class AiAskService {
 
     /** 从问句里抽"上个月/本月/今年/去年/YYYY年M月"→ startDate/endDate；抽不到原样返回。 */
     private static Map<String, Object> withDateArgs(Map<String, Object> args, String q) {
-        java.time.LocalDate today = java.time.LocalDate.now();
-        java.time.LocalDate from = null;
-        java.time.LocalDate to = null;
+        LocalDate today = LocalDate.now();
+        LocalDate from = null;
+        LocalDate to = null;
         if (q.contains("上个月") || q.contains("上月")) {
-            java.time.LocalDate first = today.minusMonths(1).withDayOfMonth(1);
+            LocalDate first = today.minusMonths(1).withDayOfMonth(1);
             from = first;
             to = first.withDayOfMonth(first.lengthOfMonth());
         } else if (q.contains("本月") || q.contains("这个月") || q.contains("当月")) {
@@ -1460,16 +1465,16 @@ public class AiAskService {
             from = today.withDayOfYear(1);
             to = today.withDayOfYear(today.lengthOfYear());
         } else if (q.contains("去年")) {
-            java.time.LocalDate last = today.minusYears(1);
+            LocalDate last = today.minusYears(1);
             from = last.withDayOfYear(1);
             to = last.withDayOfYear(last.lengthOfYear());
         } else {
-            java.util.regex.Matcher m = MONTH_PATTERN.matcher(q);
+            Matcher m = MONTH_PATTERN.matcher(q);
             if (m.find()) {
                 int y = Integer.parseInt(m.group(1));
                 int mo = Integer.parseInt(m.group(2));
                 if (mo >= 1 && mo <= 12) {
-                    from = java.time.LocalDate.of(y, mo, 1);
+                    from = LocalDate.of(y, mo, 1);
                     to = from.withDayOfMonth(from.lengthOfMonth());
                 }
             }
@@ -1503,7 +1508,7 @@ public class AiAskService {
         return null;
     }
 
-    /** §7 纵切问题等的本地匹配（无大模型也可跑通；动作仍全部来自目录、仍过网关）。 */
+    /** 关键词本地匹配（无大模型也能跑通；动作仍全部来自目录、仍过网关）。 */
     private Selection selectByKeyword(String q, List<AiAction> visible) {
         record Rule(String[] keywords, String urlRegex, Map<String, Object> args, String reason) {
         }
@@ -1545,12 +1550,12 @@ public class AiAskService {
     /** 通道故障说明：没有故障返回空串；有故障时如实标注（不把 403 粉饰成"没听懂"）。 */
     private String channelNote(LlmTrace llm, String fallback) {
         if (llm == null || llm.error == null) return "";
-        return "（大模型通道本轮不可用：" + llm.error + "；" + fallback + "）";
+        return "（大模型通道本次不可用：" + llm.error + "；" + fallback + "）";
     }
 
     /**
      * 成功读数的确定性中文答案：条数＋前几条关键字段，数据全部来自本次真实响应，不做推测。
-     * 原实现只回"结果见 data"，用户看到的是原始 JSON —— 这不是回答。
+     * 只回"结果见 data"等于把原始 JSON 丢给用户——这不是回答。
      */
     private String answerOf(AiAction a, Object data, LlmTrace llm) {
         if (data == null) {
@@ -1657,7 +1662,7 @@ public class AiAskService {
     /** 金额加千分位、保留两位；解析不了就原样返回。 */
     private static String money(String s) {
         try {
-            return String.format("%,.2f", new java.math.BigDecimal(s.replace(",", "")));
+            return String.format("%,.2f", new BigDecimal(s.replace(",", "")));
         } catch (Exception e) {
             return s;
         }
@@ -1730,7 +1735,7 @@ public class AiAskService {
     }
 
 
-    /** data 摘要：列表只回计数＋前 5 行，避免把整页数据塞进对话气泡。入参为 {@link com.fssc.ai.AiGatewayService.GatewayResult#data()} 的普通 Java 值（D-N09）。 */
+    /** data 摘要：列表只回计数＋前 5 行，避免把整页数据塞进对话气泡。入参为 {@link AiGatewayService.GatewayResult#data()} 的普通 Java 值。 */
     private Object summarize(Object data) {
         if (data == null) {
             return Map.of();
@@ -1761,14 +1766,14 @@ public class AiAskService {
         private boolean ok;
         private String answer;
         /**
-         * D-N17 拒答原因（也是"AI 清楚自己不能做什么"的机器可判据）：
+         * 拒答原因（也是"AI 清楚自己不能做什么"的机器可判定项）：
          * NO_MATCH＝目录内确无匹配动作；NO_PERM＝动作存在但本人不持其权限码；
          * REDLINE_BLOCKED＝动作在目录里存在，但被标为 AI 不可调用（§6 红线族／无权限码最严规则），永久不可执行；
          * CHANNEL_READ_ONLY＝命中的只读动作风险档非 LOW，问数通道只自动跑 read∧LOW（不执行写类）；
          * PARAM_MISSING＝必填参数一个没填上故不出票；EXEC_DENIED＝执行被服务端拒绝。非拒答时为 null。
          */
         private String refusalReason;
-        /** 本轮大模型通道的真实故障（如 "HTTP 403 ..."）；通道正常或无配置时为 null。 */
+        /** 本次大模型通道的真实故障（如 "HTTP 403 ..."）；通道正常或无配置时为 null。 */
         private String channelError;
         private Object data;
         /** 命中的技能名（确定性路由）或 null（模型/兜底路径）。 */
@@ -1783,7 +1788,7 @@ public class AiAskService {
         private String preview;
         /** 复合写指令的逐句结果（只在一次话说多件事时出现）。 */
         private List<StepResult> steps;
-        /** 本轮实际调用动作用的参数（读技能＝技能映射产出的查询条件；写技能＝票据参数）。 */
+        /** 本次实际调用动作用的参数（读技能＝技能映射产出的查询条件；写技能＝票据参数）。 */
         private Map<String, Object> args;
     }
 

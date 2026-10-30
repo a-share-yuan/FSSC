@@ -63,7 +63,7 @@ public class TaxInvoiceAdapter implements ChannelAdapter {
             ChannelResponse resp = ChannelResponseMapper.adapt(r, type());
             if (resp != null && !resp.isOk()) {
                 // 缺上游凭据（503 UPSTREAM_NOT_CONFIGURED）与业务失败同样透传，
-                // 只记日志不默认处理：不伪造票面、不给正向结论（对齐交付说明不变量 3）。
+                // 只记日志不兜底：不伪造票面、不给正向结论（对齐交付说明不变量 3）。
                 log.warn("[税务] 通道调用未成功 capability={} status={} key={} err={}",
                         capability, resp.getStatusCode(), request.idempotencyKey(), resp.getError());
             }

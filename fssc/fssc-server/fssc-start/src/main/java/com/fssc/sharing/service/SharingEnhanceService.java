@@ -11,14 +11,18 @@ import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.common.util.AssertUtil;
 import com.fssc.document.entity.OpArchive;
+import com.fssc.document.service.ArchiveDestroyService;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.framework.facade.ArchiveFacade;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
+import com.fssc.framework.tenant.TenantContext;
 import com.fssc.masterdata.entity.MdBankAccount;
 import com.fssc.masterdata.mapper.MdBankAccountMapper;
 import com.fssc.sharing.entity.OpBankStatement;
 import com.fssc.sharing.entity.OpQuality;
 import com.fssc.sharing.entity.OpVoucher;
-import com.fssc.document.mapper.OpArchiveMapper;
 import com.fssc.sharing.mapper.OpBankStatementMapper;
 import com.fssc.sharing.mapper.OpQualityMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
@@ -44,28 +48,14 @@ import java.util.Map;
 public class SharingEnhanceService {
 
     private final OpQualityMapper qualityMapper;
-    private final OpArchiveMapper archiveMapper;
+    private final ArchiveFacade archiveFacade;
     private final OpBankStatementMapper bankStatementMapper;
     private final MdBankAccountMapper bankAccountMapper;
     private final ExpBillMapper expBillMapper;
-    /** D-DEC-315／#56 甲档 W6：档案裸绑入口的 voucherId 存在性＋同租户校验 */
+    /** #56 甲档 W6：档案裸绑入口的 voucherId 存在性＋同租户校验 */
     private final OpVoucherMapper voucherMapper;
     /**
-     * D-DEC-185（读侧挂点办结）：档案行的「归档审批流自身实例号」补充由档案域单点实现
-     * （{@code ArchiveService.enrichFlowKey}，只读 wf_instance）。共享作业页的档案列表
-     * 就是 {@code ArchivePage.vue} 的「已归档档案」Tab，改前它不带这两个字段 ⇒
-     * 同一卷在「FM 档案管理」里有归档流号、在这里没有。
-     */
-    private final com.fssc.document.service.ArchiveService archiveFlowEnricher;
-
-    /**
-     * R5-D-197（内控红线，销毁不可逆）：销毁唯一合规链入口——本类原有的直置 DISPOSED 旁路已改道至它
-     * （到期校验＋双人复核双签＋FM_DESTROY 起流程由该服务单点将守）。
-     */
-    private final com.fssc.document.service.ArchiveDestroyService archiveDestroyService;
-
-    /**
-     * D-DEC-315／#56 甲档 W6：增强页的档案登记/更新直接把 OpArchive 绑进请求体，
+     * #56 甲档 W6：增强页的档案登记/更新直接把 OpArchive 绑进请求体，
      * voucherId 今天就能从 JSON 塞任意值 ⇒ 写入数据库前必须验凭证存在且同租户，否则扩面等于开了脏写入口。
      */
     private void assertVoucherBinding(Long voucherId) {
@@ -76,13 +66,13 @@ public class SharingEnhanceService {
         if (v == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "凭证不存在: " + voucherId);
         }
-        Long mine = com.fssc.framework.tenant.TenantContext.getTenantId();
+        Long mine = TenantContext.getTenantId();
         if (mine != null && !mine.equals(v.getTenantId())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "凭证不属于当前租户: " + voucherId);
         }
     }
 
-    // ---------- 质检 ----------
+    // 质检
 
     public PageResult<OpQuality> qualityPage(long pageNum, long pageSize, Long billId, String result) {
         LambdaQueryWrapper<OpQuality> qw = new LambdaQueryWrapper<>();
@@ -118,7 +108,7 @@ public class SharingEnhanceService {
         q.setId(null);
         // checker_id NOT NULL：缺省用当前操作人
         if (q.getCheckerId() == null) {
-            com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+            LoginUser u = UserContext.get();
             q.setCheckerId(u == null ? 0L : u.getUserId());
         }
         if (q.getAuditorId() == null) {
@@ -149,59 +139,17 @@ public class SharingEnhanceService {
         qualityMapper.deleteById(id);
     }
 
-    // ---------- 档案归档 ----------
+    // 档案归档
 
+    /** 档案列表（档案域单点：筛选口径＋状态轴折算＋归档流补充都在 Facade 内）。 */
     public PageResult<OpArchive> archivePage(long pageNum, long pageSize, String archiveType, String status) {
-        LambdaQueryWrapper<OpArchive> qw = new LambdaQueryWrapper<>();
-        if (archiveType != null && !archiveType.isBlank()) {
-            qw.eq(OpArchive::getArchiveType, archiveType);
-        }
-        if (status != null && !status.isBlank()) {
-            // D-DEC-182：入参名沿用前端的 status，但判定列改按真相源 archive_status——
-            // 传 ARCHIVED/PENDING/ARCHIVING/DISPOSED 现在按归档流程轴筛（原按镜像列筛会漏掉
-            // 只写了 archive_status 的行）；兼容老调用方传保管轴取值（FILED/DESTROYED）。
-            qw.eq(OpArchive::getArchiveStatus, toArchiveStatusAxis(status));
-        }
-        qw.orderByDesc(OpArchive::getId);
-        Page<OpArchive> p = archiveMapper.selectPage(Page.of(pageNum, pageSize), qw);
-        archiveFlowEnricher.enrichFlowKey(p.getRecords());   // D-DEC-185：档案列表端点统一挂归档流补充
-        return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
-    }
-
-    /** D-DEC-182：保管轴取值 → 归档流程轴取值的兼容折算（FILED→ARCHIVED、DESTROYED→DISPOSED，其余原样） */
-    private static String toArchiveStatusAxis(String status) {
-        String s = status.trim().toUpperCase();
-        return switch (s) {
-            case "FILED" -> "ARCHIVED";
-            case "DESTROYED" -> "DISPOSED";
-            default -> s;
-        };
+        return archiveFacade.pageArchives(pageNum, pageSize, archiveType, status);
     }
 
     public Long createArchive(OpArchive a) {
+        // 跨域前置留在调用方：凭证存在性/同租户（glex 域）＋按来源单据回填 procInstId（费用域）
         assertVoucherBinding(a.getVoucherId());
-        if (a.getArchiveNo() == null || a.getArchiveNo().isBlank()) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "档案编号必填");
-        }
-        // 查重：已销毁(DESTROYED)的档案释放档案号（物理清理），其余报重
-        var exist = archiveMapper.selectList(new LambdaQueryWrapper<OpArchive>()
-                .eq(OpArchive::getArchiveNo, a.getArchiveNo()));
-        for (OpArchive e : exist) {
-            if (!"DESTROYED".equals(e.getStatus())) {
-                throw new BizException(ErrorCode.PARAM_INVALID, "档案编号已存在: " + a.getArchiveNo());
-            }
-            archiveMapper.hardDelete(e.getId());
-        }
-        a.setId(null);
-        if (a.getStatus() == null) {
-            // D-DEC-182：status 是 archive_status 的冗余镜像，取值走档案域同一把尺（ArchiveService.dispositionOf）
-            String mirrored = com.fssc.document.service.ArchiveService.dispositionOf(a.getArchiveStatus());
-            a.setStatus(mirrored != null ? mirrored : "FILED");
-        }
-        if (a.getFilingTime() == null) {
-            a.setFilingTime(LocalDateTime.now());
-        }
-        // D-TRC-05：登记时按 billId 回溯来源审批流程实例（规则同 TRC-C 回填）；
+        // 登记时按 billId 回溯来源审批流程实例（规则同 TRC-C 回填）；
         // 只给 refId/billId 为空的档案不猜归属，留 NULL
         if (a.getProcInstId() == null && a.getBillId() != null) {
             ExpBill src = expBillMapper.selectById(a.getBillId());
@@ -209,31 +157,28 @@ public class SharingEnhanceService {
                 a.setProcInstId(src.getProcInstId());
             }
         }
-        archiveMapper.insert(a);
-        return a.getId();
+        // 档案域内规则（编号查重/释放、status 镜像兜底、filingTime 兜底、插入）收在 Facade
+        return archiveFacade.createArchive(a);
     }
 
     /** 更新档案信息 */
     public void updateArchive(OpArchive a) {
         assertVoucherBinding(a.getVoucherId());
-        if (archiveMapper.selectById(a.getId()) == null) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "档案不存在: " + a.getId());
-        }
-        archiveMapper.updateById(a);
+        archiveFacade.updateArchive(a);
     }
 
     /**
-     * R5-D-197（内控红线，销毁不可逆）：改前本方法直置 archive_status=DISPOSED＋destroyed_at——
+     * 内控红线，销毁不可逆：原先本方法直置 archive_status=DISPOSED＋destroyed_at——
      * 无到期校验、无销毁审批、不起 FM_DESTROY，是与 ArchiveDestroyService 合规链互不相容的第二条旁路。
-     * 现整体改道：一律转 {@link com.fssc.document.service.ArchiveDestroyService#createDestroyRequest}
+     * 现整体改道：一律转 {@link ArchiveDestroyService#createDestroyRequest}
      * 发起销毁申请（assertAllExpired 到期校验＋双人复核双签＋FM_DESTROY 起流程），本方法不再直改任何销毁列。
      */
     public Long destroyArchive(Long id, String reason) {
-        com.fssc.framework.security.LoginUser cu = com.fssc.framework.security.UserContext.get();
-        return archiveDestroyService.createDestroyRequest(List.of(id), reason, cu == null ? null : cu.getUserId());
+        LoginUser cu = UserContext.get();
+        return archiveFacade.requestDestroy(List.of(id), reason, cu == null ? null : cu.getUserId());
     }
 
-    // ---------- 银行流水（对账底稿） ----------
+    // 银行流水（对账底稿）
 
     public PageResult<OpBankStatement> statementPage(long pageNum, long pageSize,
                                                      Long bankAccountId, String reconStatus,
@@ -305,7 +250,7 @@ public class SharingEnhanceService {
         if (s.getReconStatus() == null) {
             s.setReconStatus("UNRECON");
         }
-        // D-DEC-155：导入记录——MetaObjectHandler 取不到登录人会落 0，这里显式回填真实操作人
+        // 导入记录——MetaObjectHandler 取不到登录人会落 0，这里显式回填真实操作人
         Long operator = currentOperator();
         if (operator != null) {
             s.setCreateBy(operator);
@@ -314,9 +259,9 @@ public class SharingEnhanceService {
         bankStatementMapper.insert(s);
     }
 
-    /** D-DEC-155：当前登录人（无上下文返回 null，交由 MetaObjectHandler 默认处理） */
+    /** 当前登录人（无上下文返回 null，交由 MetaObjectHandler 兜底） */
     private static Long currentOperator() {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         return u == null ? null : u.getUserId();
     }
 
@@ -414,7 +359,7 @@ public class SharingEnhanceService {
             if (slip != null) {
                 s.setSlipStatus(slip);
             }
-            // D-DEC-155：CSV 批量导入逐行记录导入人（同一次上传同一人，循环外取一次）
+            // CSV 批量导入逐行记录导入人（同一次上传同一人，循环外取一次）
             if (operator != null) {
                 s.setCreateBy(operator);
                 s.setUpdateBy(operator);
@@ -427,7 +372,7 @@ public class SharingEnhanceService {
                     "CSV 无有效数据行（列：银行流水号,交易时间,方向,金额,余额,对方户名,对方账号,摘要,对账状态,回单状态）");
         }
         Map<String, Object> result = new LinkedHashMap<>();
-        // R5-D-172（记录规则）：op_bank_statement 列面无 create_by/update_by（DDL 转人工），
+        // 记录规则：op_bank_statement 列面无 create_by/update_by（DDL 转人工），
         // 批量导入的逐批归属改由本次导入的审计记录承载——文件名＋行数＋操作人随响应落
         // sys_oper_log.json_result（@OperLog 批量导入银行流水），供「这批流水是哪次上传、
         // 由谁传的」回溯；行数含 total/inserted/skipped 三规则。

@@ -4,6 +4,8 @@
 package com.fssc.workflow.action;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fssc.audit.service.AuditTrailService;
+import com.fssc.budget.service.BudgetService;
 import com.fssc.glex.entity.GlInterOffset;
 import com.fssc.glex.entity.GlJournalEntry;
 import com.fssc.glex.entity.GlSalaryRun;
@@ -14,10 +16,13 @@ import com.fssc.glex.mapper.GlJournalEntryMapper;
 import com.fssc.glex.mapper.GlSalaryRunMapper;
 import com.fssc.glex.mapper.GlTaxProvisionMapper;
 import com.fssc.glex.mapper.TaxRefundMapper;
+import com.fssc.glex.service.GlMonthCloseService;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.service.VoucherService;
 import com.fssc.workflow.event.WfBizAction;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -26,7 +31,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 总账域流程收尾（P0-1 事件编排总线 + P0-2 凭证引擎接线）。
+ * 总账域流程收尾（事件编排总线 + 凭证引擎接线）。
  * <p>
  * 覆盖 GL_* 十四类总账流程：
  * <ul>
@@ -40,7 +45,7 @@ import java.util.Set;
  *   <li><b>内部往来抵消</b>（gl_inter_offset）：GL_OFFSET（借 2202 贷 1122）。</li>
  *   <li><b>税务退税</b>（tax_refund）：GL_TAX_REFUND 核准（借 1221 其他应收款 贷 2221 应交税费，
  *       按权责发生制确认应收退税款）；状态 APPLYING→APPROVED/REJECTED。</li>
- *   <li><b>月结</b>（gl_month_close）：GL_MONTH_CLOSE。<b>D-DEC-189 起本类是关账时点的唯一回写口</b>：
+ *   <li><b>月结</b>（gl_month_close）：GL_MONTH_CLOSE。<b>起本类是关账时点的唯一回写口</b>：
  *       发起只建在途单（RUNNING）、期间保持开账，末节点通过才 CLOSED＋md_period 联动关账，
  *       驳回/撤回落 REJECTED（判定逻辑在 GlMonthCloseService.applyApprovalOutcome）。</li>
  *   <li><b>其余总账业务</b>（GL_MERGE 合并报表 / GL_SHARED_MASTER 主数据 /
@@ -55,7 +60,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class GlBizAction implements WfBizAction {
 
-    /** 总账记账族（依记账单自身科目生成凭证）；D-DEC-323 批次2 增盘点差异结转档（B-12） */
+    /** 总账记账族（依记账单自身科目生成凭证）；批次2 增盘点差异结转档（B-12） */
     private static final Set<String> JOURNAL_TYPES =
             Set.of("GL_ACCRUAL", "GL_DEFER", "GL_MANUAL_VOUCHER", "GL_OTHER_RECEIPT", "GL_CHECK_DIFF");
 
@@ -71,19 +76,19 @@ public class GlBizAction implements WfBizAction {
     private final GlInterOffsetMapper glInterOffsetMapper;
     private final TaxRefundMapper taxRefundMapper;
     private final VoucherService voucherService;
-    // D-C2-2：凭证号回写改由 VoucherService.readVoucherCommitted（独立事务）读取，
+    // 凭证号回写改由 VoucherService.readVoucherCommitted（独立事务）读取，
     // 原 opVoucherMapper.selectById 直读受父事务 REPEATABLE READ 快照隔离，读不到出证环节刚提交的凭证行
-    /** P4-3 审计扩面：审批最终状态状态跃迁记录 */
-    private final com.fssc.audit.service.AuditTrailService auditTrailService;
-    /** D-DEC-189：月结「末节点通过才关账」的回写落点（业务判定全在 GlMonthCloseService，本类只做路由） */
-    private final com.fssc.glex.service.GlMonthCloseService glMonthCloseService;
-    /** D-DEC-145：薪酬计提占用／发放转已用／驳回释放的预算侧入口 */
-    private final com.fssc.budget.service.BudgetService budgetService;
+    /** 审计扩面：审批最终状态状态跃迁记录 */
+    private final AuditTrailService auditTrailService;
+    /** 月结「末节点通过才关账」的回写落点（业务判定全在 GlMonthCloseService，本类只做路由） */
+    private final GlMonthCloseService glMonthCloseService;
+    /** 薪酬计提占用／发放转已用／驳回释放的预算侧入口 */
+    private final BudgetService budgetService;
 
     @Override
     public Set<String> bizTypes() {
         return Set.of(
-                // 总账记账族（GL_CHECK_DIFF=盘点差异结转档，D-DEC-323 批次2）
+                // 总账记账族（GL_CHECK_DIFF=盘点差异结转档，批次2）
                 "GL_ACCRUAL", "GL_DEFER", "GL_MANUAL_VOUCHER", "GL_OTHER_RECEIPT", "GL_CHECK_DIFF",
                 // 税金族 / 薪酬族 / 内部往来抵消 / 税务退税
                 "GL_TAX_PROV", "GL_TAX_PAY", "GL_SALARY_PROV", "GL_SALARY_PAY", "GL_OFFSET",
@@ -91,7 +96,7 @@ public class GlBizAction implements WfBizAction {
                 // 其余总账业务（收尾确认闭环）
                 "GL_MERGE", "GL_MONTH_CLOSE", "GL_SHARED_MASTER", "GL_FX_REVAL",
                 // 遗留流程定义（wf_business_flow 中仅有定义、无代码发起；_PROV/_PAY 拆分前的旧模板）
-                // 注册为默认处理以免将来被发起时静默无收尾
+                // 注册为兜底以免将来被发起时静默无收尾
                 "GL_TAX", "GL_SALARY");
     }
 
@@ -130,7 +135,7 @@ public class GlBizAction implements WfBizAction {
     }
 
     /**
-     * 月结（GL_MONTH_CLOSE）审批最终状态回写 —— D-DEC-189。
+     * 月结（GL_MONTH_CLOSE）审批最终状态回写 ——。
      * <p>
      * 发起审批时月结单只是 RUNNING、md_period 依旧 NORMAL；真正的「关账」必须等最后一个节点通过。
      * 判定与写库都在 {@code GlMonthCloseService.applyApprovalOutcome}，本方法只做路由，
@@ -160,8 +165,8 @@ public class GlBizAction implements WfBizAction {
         }
         String prev = e.getStatus();
         if (!approved) {
-            // D-DEC-291：发起时已不再预置 POSTED，非通过最终状态须显性落到"不可入账"，界面才看得出单子死在哪一步。
-            // ROOT-17：撤回（申请人自己收回）与驳回（审批人否决）同落 REJECTED —— 该态在期间去重校验
+            // 发起时已不再预置 POSTED，非通过最终状态须显性落到"不可入账"，界面才看得出单子死在哪一步。
+            // 撤回（申请人自己收回）与驳回（审批人否决）同落 REJECTED —— 该态在期间去重校验
             // （APPROVING/APPROVED/POSTED）之外，修正后可重新制单；但日志与审计必须分开写，
             // 把"我撤回了"记成"被驳回了"会让审批轨迹失真。
             boolean withdrawn = event.withdrawn();
@@ -182,18 +187,18 @@ public class GlBizAction implements WfBizAction {
             log.error("总账记账 {}（{}）凭证生成失败（不影响流程闭环）: {}",
                     e.getEntryNo(), event.getBizType(), ex.getMessage(), ex);
         }
-        // D-DEC-292：办结才记账；凭证号取凭证对象上的真号回写，两轨号并存＋不可回查的问题在此消解。
+        // 办结才记账；凭证号取凭证对象上的真号回写，两轨号并存＋不可回查的问题在此消解。
         // 出证失败＝没记成账，停在 APPROVED（已审批·未记账），不冒充 POSTED。
         GlJournalEntry upd = new GlJournalEntry();
         upd.setId(id);
         upd.setStatus(voucherId == null ? "APPROVED" : "POSTED");
         String postedFlag = "";
         if (voucherId != null) {
-            com.fssc.sharing.entity.OpVoucher v = voucherService.readVoucherCommitted(voucherId);
+            OpVoucher v = voucherService.readVoucherCommitted(voucherId);
             if (v != null && v.getVoucherNo() != null && !v.getVoucherNo().isBlank()) {
                 upd.setVoucherNo(v.getVoucherNo());
             }
-            // 凭证默认落 DRAFT，过账由记账岗在凭证工作台完成（D-DEC-166 制审分离的人工控制点，
+            // 凭证默认落 DRAFT，过账由记账岗在凭证工作台完成（制审分离的人工控制点，
             // 月结侧 GlMonthCloseService.applyApprovalOutcome 会以"存在未过账凭证"拦关账）。
             // 记录须写明账面此刻有没有这笔数，否则单据 POSTED 会被读成"总账里已经有了"。
             postedFlag = v == null ? "（凭证对象不可读）"
@@ -211,7 +216,7 @@ public class GlBizAction implements WfBizAction {
     /**
      * 税金族：末节点通过 → 生成 op_voucher（计提/缴纳两套分录）→ 回写最终状态与真实凭证号。
      *
-     * <p>D-DEC-136（与 D-DEC-125/291/292 同一回写机制）：计提记录在 {@code GlTaxProvisionService.provision}
+     * <p>（与 /291/292 同一回写机制）：计提记录在 {@code GlTaxProvisionService.provision}
      * 的 insert 前就硬置 POSTED 并预造 {@code GLTX…} 号，流程随后才起 —— 提交瞬间即最终状态、审批链零回写。
      * 该文件属 tax 计提 job（他人独占面），本收尾不动它的置位语句，只把「状态置位」与「制证」解耦，
      * 在末节点回写钩子上做实最终状态：
@@ -222,7 +227,7 @@ public class GlBizAction implements WfBizAction {
      *   <li>缴纳链通过 → PAID（已缴纳）并出缴纳凭证，计提凭证号列不动；缴纳链驳回/撤回 → 回退计提链办结态
      *       （按计提凭证是否存在取 POSTED／APPROVED），已入账的计提不因缴款被驳而被抹成 REJECTED。</li>
      * </ul>
-     * gl_tax_provision 无 approve_time/audit_time/proc_inst_id 列，审批时间与实例号无法回写（DDL 裁决项）。
+     * gl_tax_provision 无 approve_time/audit_time/proc_inst_id 列，审批时间与实例号无法回写（DDL 待确认项）。
      */
     private void handleTax(WfProcessEndedEvent event, boolean approved) {
         Long id = event.getBizId();
@@ -300,25 +305,25 @@ public class GlBizAction implements WfBizAction {
                         : " 凭证号=" + upd.getVoucherNo());
     }
 
-    /** P4-3 审计扩面：税金族状态跃迁记录（改前/改后只带 status，不整实体 JSON） */
+    /** 审计扩面：税金族状态跃迁记录（变更前/变更后只带 status，不整实体 JSON） */
     private void recordTaxAudit(WfProcessEndedEvent event, Long id, String bizNo, String before, String after, boolean approved) {
         recordStatusAudit(event, id, bizNo, "gl_tax_provision", before, after,
                 (approved ? "审批通过" : "审批驳回") + withComment(event));
     }
 
     /**
-     * P4-3 审计扩面：审批最终状态引起的单据状态跃迁统一记录（总账记账族/薪酬族此前只有税金有，
+     * 审计扩面：审批最终状态引起的单据状态跃迁统一记录（总账记账族/薪酬族原先只有税金有，
      * 三族同走一个回写钩子却记录不齐，事后核查只能看出"变过"看不出"被谁审批变成这样"）。
      *
-     * @param before 改前状态（取事件到达时读到的单据原值）
-     * @param after  改后状态
-     * @param note   跃迁事由（含撤回/驳回/通过·出证结果，审批意见原文附后）
+     * @param before 原先状态（取事件到达时读到的单据原值）
+     * @param after 改后状态
+     * @param note 跃迁事由（含撤回/驳回/通过·出证结果，审批意见原文附后）
      */
     private void recordStatusAudit(WfProcessEndedEvent event, Long id, String bizNo, String table,
                                    String before, String after, String note) {
-        java.util.Map<String, Object> b = new java.util.LinkedHashMap<>();
+        Map<String, Object> b = new LinkedHashMap<>();
         b.put("status", before);
-        java.util.Map<String, Object> a = new java.util.LinkedHashMap<>();
+        Map<String, Object> a = new LinkedHashMap<>();
         a.put("status", after);
         auditTrailService.recordUpdate(event.getBizType(), id, bizNo, table, String.valueOf(id), b, a, note);
     }
@@ -332,17 +337,17 @@ public class GlBizAction implements WfBizAction {
     /**
      * 薪酬族：末节点通过 → 生成 op_voucher（计提/发放两套分录）→ 回写最终状态。
      *
-     * <p>D-DEC-141（同一回写机制）：计提写入数据库即 payStatus=PAID、发放提交瞬间又置 PAID，
+     * <p>（同一回写机制）：计提写入数据库即 payStatus=PAID、发放提交瞬间又置 PAID，
      * 两链共 8 节审批对单据零回写。现规则：
      * <ul>
      *   <li>计提链（GL_SALARY_PROV）通过且出证成功 → POSTED（已计提入账·未发放）；出证失败 → APPROVED；驳回 → REJECTED；</li>
-     *   <li>发放链（GL_SALARY_PAY）通过且出证成功 → PAID，并成对补出代扣缴纳凭证（D-DEC-142，
+     *   <li>发放链（GL_SALARY_PAY）通过且出证成功 → PAID，并成对补出代扣缴纳凭证（
      *       2211 的应发/实发差额自此有出口）；出证失败 → 状态原地不动（不冒充已付款）；
      *       驳回/撤回 → 回退计提链办结态（按计提凭证是否存在取 POSTED／APPROVED）。
-     *       两链每次跃迁均落 P4-3 状态审计（表无 approve_time/proc_inst_id 列，时间与实例号只能看审计与流程史）。</li>
+     *       两链每次跃迁均落 状态审计（表无 approve_time/proc_inst_id 列，时间与实例号只能看审计与流程史）。</li>
      * </ul>
      * <p>硬约束：gl_salary_run 一行同时承载计提与发放两条链（无 proc_inst_id、无 voucher_no、
-     * 无第二状态列），两条链在单据上只能各落一个状态值，中间态会互相覆盖 —— 拆行/补列属 DDL 裁决，
+     * 无第二状态列），两条链在单据上只能各落一个状态值，中间态会互相覆盖 —— 拆行/补列属 DDL 待确认，
      * 本回写按"发放是计提的下一步"的既有语义串行取态。
      */
     private void handleSalary(WfProcessEndedEvent event, boolean approved) {
@@ -380,7 +385,7 @@ public class GlBizAction implements WfBizAction {
             recordStatusAudit(event, id, e.getRunNo(), "gl_salary_run", prev, rej.getPayStatus(),
                     (withdrawn ? "薪酬计提审批被申请人撤回，批次退回可重办" : "薪酬计提审批被驳回，批次退回可重办")
                             + withComment(event));
-            // D-DEC-145：计提批次作废 → 等额释放它在预算上占的额度（否则被驳的批次长期挂着可用额度）
+            // 计提批次作废 → 等额释放它在预算上占的额度（否则被驳的批次长期挂着可用额度）
             releaseSalaryBudgetQuietly(id, e.getRunNo());
             log.info("薪酬批次 {}（{}）审批{}，payStatus {} → REJECTED", e.getRunNo(), event.getBizType(),
                     withdrawn ? "被撤回" : "被驳回", prev);
@@ -399,7 +404,7 @@ public class GlBizAction implements WfBizAction {
                         e.getRunNo(), prev);
                 return;
             }
-            // D-DEC-142：代扣（个税 + 代扣社保 + 其他扣除）承接凭证，缺它 2211 借贷差额永久挂账
+            // 代扣（个税 + 代扣社保 + 其他扣除）承接凭证，缺它 2211 借贷差额永久挂账
             Long withholdId = null;
             try {
                 withholdId = voucherService.generateSalaryWithholdingVoucher(e);
@@ -421,8 +426,8 @@ public class GlBizAction implements WfBizAction {
                     : "代扣凭证 id=" + withholdId;
             log.info("薪酬批次 {}（GL_SALARY_PAY）审批通过 → PAID，发放凭证 {}；{}",
                     e.getRunNo(), v == null ? String.valueOf(voucherId) : v.getVoucherNo(), withholdDesc);
-            // D-DEC-145：薪酬的预算「占用 → 已用」挂在这个时点——工资真发出去了（发放凭证已出、状态 PAID）
-            // 才确认消耗，计提链通过（POSTED）时只保留占用。时点规则与 D-DEC-104 一致。
+            // 薪酬的预算「占用 → 已用」挂在这个时点——工资真发出去了（发放凭证已出、状态 PAID）
+            // 才确认消耗，计提链通过（POSTED）时只保留占用。时点规则与 一致。
             settleSalaryBudgetQuietly(id, e.getRunNo());
             return;
         }
@@ -443,17 +448,17 @@ public class GlBizAction implements WfBizAction {
         glSalaryRunMapper.updateById(upd);
         recordStatusAudit(event, id, e.getRunNo(), "gl_salary_run", prev, upd.getPayStatus(),
                 "计提审批通过·已入账" + withComment(event));
-        // D-DEC-145：计提通过 → 预算侧仍只是占用（OCCUPIED），本步骤刻意不做消耗确认：
-        // 账上认了成本、钱却还没出去，转已用就是 D-DEC-104 要修的旧规则。
+        // 计提通过 → 预算侧仍只是占用（OCCUPIED），本步骤刻意不做消耗确认：
+        // 账上认了成本、钱却还没出去，转已用就是 要修的旧规则。
         OpVoucher v = voucherService.readVoucherCommitted(voucherId);
         String provVoucherNo = v == null || v.getVoucherNo() == null ? String.valueOf(voucherId) : v.getVoucherNo();
-        // gl_salary_run 无 voucher_no 列：真实凭证号只能按 op_voucher.source_doc_id 反查（补列＝DDL 裁决项）
+        // gl_salary_run 无 voucher_no 列：真实凭证号只能按 op_voucher.source_doc_id 反查（补列＝DDL 待确认项）
         log.info("薪酬批次 {}（{}）审批通过 → POSTED，计提凭证 {}（单据无凭证号列，按 source_doc_id 反查）",
                 e.getRunNo(), event.getBizType(), provVoucherNo);
     }
 
     /**
-     * D-DEC-145：发放办结后的预算消耗确认（占用转已用）。
+     * 发放办结后的预算消耗确认（占用转已用）。
      * <p>{@code BudgetService.settleSalaryOnPaid} 是 {@code REQUIRES_NEW} 独立事务，
      * 因此这里的异常不会把外层审批收尾事务标成 rollback-only，catch 掉即可：
      * 预算侧算不动，也不能把已经发出去的工资回退成未审批。
@@ -467,7 +472,7 @@ public class GlBizAction implements WfBizAction {
         }
     }
 
-    /** D-DEC-145：计提驳回后的预算占用释放，隔离理由同 {@link #settleSalaryBudgetQuietly} */
+    /** 计提驳回后的预算占用释放，隔离理由同 {@link #settleSalaryBudgetQuietly} */
     private void releaseSalaryBudgetQuietly(Long runId, String runNo) {
         try {
             budgetService.releaseSalaryOccupy(runId, runNo);
@@ -496,8 +501,8 @@ public class GlBizAction implements WfBizAction {
             boolean withdrawn = event.withdrawn();
             e.setOffsetStatus("REJECTED");
             glInterOffsetMapper.updateById(e);
-            // D-DEC-291：本族收尾记录补齐——记账族/税金族/薪酬族的最终状态跃迁早已统一走 recordStatusAudit，
-            // 内部往来抵消是同一个钩子里唯一"改了单据却零审计行"的一支（实测 audit_trail 无任何 GL_OFFSET 行），
+            // 本族收尾记录补齐——记账族/税金族/薪酬族的最终状态跃迁早已统一走 recordStatusAudit，
+            // 内部往来抵消是同一个钩子里唯一"改了单据却零审计行"的一支（audit_trail 里没有任何 GL_OFFSET 行），
             // 事后按审计表复核抵消轨迹只能回查 wf_task_history。只增审计行，不动单据语义。
             recordStatusAudit(event, id, e.getOffsetNo(), "gl_inter_offset", prev, "REJECTED",
                     (withdrawn ? "申请人撤回，抵消分录作废" : "审批驳回，抵消分录作废") + withComment(event));
@@ -531,10 +536,10 @@ public class GlBizAction implements WfBizAction {
             log.info("内部往来抵消 {} 审批驳回，状态 {} → REJECTED", e.getOffsetNo(), prev);
             return;
         }
-        // D-DEC-138（12-29:88 的"自写号 vs 真号"双轨在内部往来域同样成立）：
+        // （88 的"自写号 vs 真号"双轨在内部往来域同样成立）：
         // gl_inter_offset.voucher_no 由 GlInterOffsetService 自写（GLIO+期间+序号），真实凭证号
         // 另由 VoucherService.nextVoucherNo() 发一套 ⇒ 界面那串号在凭证台账按号查 0 命中。
-        // 按 D-DEC-292/136（记账族/税金族）既有回写规则，用凭证对象上的真号替换自写号；
+        // 按 /136（记账族/税金族）既有回写规则，用凭证对象上的真号替换自写号；
         // 出证失败就保持原号不动——既不冒充已出证，也不把已有号抹成空。
         Long voucherId = null;
         try {
@@ -554,15 +559,15 @@ public class GlBizAction implements WfBizAction {
         noUpd.setId(e.getId());
         noUpd.setVoucherNo(v.getVoucherNo());
         glInterOffsetMapper.updateById(noUpd);
-        // D-DEC-291：这一支改的是单据列（自写号→真号），同样要有审计行；跃迁字段记 voucherNo 而非 status
-        java.util.Map<String, Object> noBefore = new java.util.LinkedHashMap<>();
+        // 这一支改的是单据列（自写号→真号），同样要有审计行；跃迁字段记 voucherNo 而非 status
+        Map<String, Object> noBefore = new LinkedHashMap<>();
         noBefore.put("voucherNo", e.getVoucherNo());
-        java.util.Map<String, Object> noAfter = new java.util.LinkedHashMap<>();
+        Map<String, Object> noAfter = new LinkedHashMap<>();
         noAfter.put("voucherNo", v.getVoucherNo());
         auditTrailService.recordUpdate(event.getBizType(), id, e.getOffsetNo(), "gl_inter_offset",
                 String.valueOf(id), noBefore, noAfter,
                 "审批通过·抵消凭证已出，回写真实凭证号" + withComment(event));
-        log.info("内部往来抵消 {} 回写真实凭证号 {}（替换自写号 {}，D-DEC-138）",
+        log.info("内部往来抵消 {} 回写真实凭证号 {}（替换自写号 {}）",
                 e.getOffsetNo(), v.getVoucherNo(), e.getVoucherNo());
     }
 
@@ -582,15 +587,15 @@ public class GlBizAction implements WfBizAction {
         }
         String target = approved ? "APPROVED" : "REJECTED";
         if ("APPLYING".equals(e.getStatus())) {
-            // P4-3 审计扩面：改状态前采集旧值
+            // 审计扩面：改状态前采集旧值
             String oldStatus = e.getStatus();
             TaxRefund u = new TaxRefund();
             u.setId(id);
             u.setStatus(target);
             taxRefundMapper.updateById(u);
-            java.util.Map<String, Object> auditBefore = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditBefore = new LinkedHashMap<>();
             auditBefore.put("status", oldStatus);
-            java.util.Map<String, Object> auditAfter = new java.util.LinkedHashMap<>();
+            Map<String, Object> auditAfter = new LinkedHashMap<>();
             auditAfter.put("status", u.getStatus());
             auditTrailService.recordUpdate(event.getBizType(), id, e.getRefundNo(), "tax_refund",
                     String.valueOf(id), auditBefore, auditAfter,

@@ -40,7 +40,7 @@ import org.springframework.stereotype.Component;
  * 而不是抛异常打断事务。</p>
  *
  * <p><b>未注册时</b>：{@code ChannelAdapterRegistry.find()} 返回 {@code null}，
- * {@code DefaultConnectorFacade} 自动回落通用网关，行为与收编前一致（零回归默认处理）。</p>
+ * {@code DefaultConnectorFacade} 自动回落通用网关，行为与收编前一致（零回归兜底）。</p>
  */
 @Slf4j
 @Component

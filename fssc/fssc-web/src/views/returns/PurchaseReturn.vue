@@ -30,7 +30,7 @@
       <el-table-column label="状态" width="92">
         <template #default="{ row }"><el-tag size="small" :type="statusTag(row.status)">{{ returnStatusLabel(row.status) }}</el-tag></template>
       </el-table-column>
-      <!-- R5-D-086：审核人列外显（approver 列已在库，原列表 6 列读不到审核人） -->
+      <!-- 审核人列外显（approver 列已在库，原列表 6 列读不到审核人） -->
       <el-table-column prop="approver" label="审核人" width="110" />
       <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
@@ -45,10 +45,10 @@
 
     <TablePager v-model:page="q.pageNum" v-model:size="q.pageSize" :total="total" @change="load" />
 
-    <el-dialog v-model="formVisible" :title="editing ? '编辑采购退货单' : '新建采购退货单'" width="820px" destroy-on-close>
+    <el-dialog v-model="formVisible" :title="editing ? '编辑采购退货单' : '新建采购退货单'" width="900px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="96px" size="small">
         <el-row :gutter="12">
-          <!-- D-H2-02：供应商代码由纯输入框改远程检索下拉（与合同/付款计划同组件）。
+          <!-- 供应商代码由纯输入框改远程检索下拉（与合同/付款计划同组件）。
                原实现任意字符串都能提交（如 XXX-999），名称留空则 vendor_name 落空串⇒列表「供应商」列空白。
                名称改只读：一律以供应商主数据为准（后端 PurReturnService.assertVendorInMaster 同一规则），
                手填名称与现有名称分叉会让同一供应商在单据上出现两种写法。 -->
@@ -76,7 +76,7 @@
               <el-option label="采购入库单" value="PO_RECEIPT" />
             </el-select>
           </el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="源单号"><el-input v-model="form.sourceBillNo" placeholder="对账明细追溯用" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="源单号"><el-input v-model="form.sourceBillNo" placeholder="对账明细追溯用" maxlength="48" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="退货原因">
             <el-select v-model="form.returnReason" clearable style="width: 100%" placeholder="选择退货原因">
               <el-option v-for="r in reasonOptions" :key="r.value" :label="r.label" :value="r.value" />
@@ -86,12 +86,14 @@
 
         <el-divider content-position="left">明细行</el-divider>
         <el-table :data="form.lines" size="small" border>
-          <el-table-column label="物料编码" width="130"><template #default="{ row }"><el-input v-model="row.itemCode" /></template></el-table-column>
+          <el-table-column label="物料编码" width="130"><template #default="{ row }"><el-input v-model="row.itemCode" maxlength="64" /></template></el-table-column>
           <el-table-column label="物料名称" min-width="140"><template #default="{ row }"><el-input v-model="row.itemName" /></template></el-table-column>
-          <el-table-column label="数量" width="100"><template #default="{ row }"><el-input v-model="row.qty" /></template></el-table-column>
-          <!-- D-H2-07：明细补「单位」列（原 uom 恒 NULL，行级追溯断在单位）。
+          <!-- 数量列原先不挂 recalc ⇒ 先填单价后改数量时行金额停在旧值，
+               表头也随明细合计同步错下去，"表头＝明细合计"的等式校验查不出。数量与单价同权：任一变更即重算行金额。 -->
+          <el-table-column label="数量" width="100"><template #default="{ row }"><el-input v-model="row.qty" @change="recalc(row)" /></template></el-table-column>
+          <!-- 明细补「单位」列（原 uom 恒 NULL，行级追溯断在单位）。
                留空时后端按物料编码从采购订单行回填单位，填了以人工为准。 -->
-          <el-table-column label="单位" width="80"><template #default="{ row }"><el-input v-model="row.uom" placeholder="台/个" /></template></el-table-column>
+          <el-table-column label="单位" width="80"><template #default="{ row }"><el-input v-model="row.uom" placeholder="台/个" maxlength="16" /></template></el-table-column>
           <el-table-column label="单价" width="110"><template #default="{ row }"><el-input v-model="row.price" @change="recalc(row)" /></template></el-table-column>
           <el-table-column label="税率%" width="90"><template #default="{ row }"><el-input v-model="row.taxRate" /></template></el-table-column>
           <el-table-column label="金额" width="120"><template #default="{ row }"><el-input v-model="row.amount" /></template></el-table-column>
@@ -99,7 +101,7 @@
         </el-table>
         <div class="line-sum">
           明细合计：<b>{{ lineSum() }}</b>
-          <!-- R5-D-085：税额/价税合计为只读派生（含税规则：税额=Σ amount×taxRate/(100+taxRate)，
+          <!-- 税额/价税合计为只读派生（含税规则：税额=Σ amount×taxRate/(100+taxRate)，
                与后端 PurReturnService.deriveTaxAmount 同式；保存时按明细汇总回写表头 tax_amount） -->
           <span style="margin-left:12px">税额（派生）：<b>{{ derivedTax() }}</b></span>
           <span style="margin-left:12px">价税合计（派生）：<b>{{ derivedInclusive() }}</b></span>
@@ -126,7 +128,7 @@
         <el-descriptions-item label="方式">{{ returnModeLabel(detail.returnMode) }}</el-descriptions-item>
         <el-descriptions-item label="源单">{{ detail.sourceBillNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="退货原因">{{ detail.returnReason || '—' }}</el-descriptions-item>
-        <!-- R5-D-086：审核记录外显（approver/approve_time/void_reason/create_time 列已在库，纯显示办结） -->
+        <!-- 审核记录外显（approver/approve_time/void_reason/create_time 列已在库，纯显示办结） -->
         <el-descriptions-item label="审核人">{{ detail.approver || '—' }}</el-descriptions-item>
         <el-descriptions-item label="审核时间">{{ formatDateTime(detail.approveTime) || '—' }}</el-descriptions-item>
         <el-descriptions-item label="作废/驳回原因">{{ detail.voidReason || '—' }}</el-descriptions-item>
@@ -138,7 +140,7 @@
         <el-table-column prop="qty" label="数量" width="90" />
         <el-table-column prop="price" label="单价" width="110" />
         <el-table-column prop="amount" label="金额" width="110" />
-        <!-- R5-D-086：明细补 税率/单位/税额 三列（税额按含税规则派生，与 lineTax 同式） -->
+        <!-- 明细补 税率/单位/税额 三列（税额按含税规则派生，与 lineTax 同式） -->
         <el-table-column prop="taxRate" label="税率%" width="80" />
         <el-table-column prop="uom" label="单位" width="80" />
         <el-table-column label="税额" width="100"><template #default="{ row }">{{ lineTax(row).toFixed(2) }}</template></el-table-column>
@@ -169,10 +171,10 @@ import SupplierSelect from '@/components/common/SupplierSelect.vue'
 import { useDict } from '@/composables/useDict'
 
 /**
- * D-H2-05：退货原因改字典驱动（dict_type=enum_return_reason_pur，采购域单列，
+ * 退货原因改字典驱动（dict_type=enum_return_reason_pur，采购域单列，
  * 与销售域 enum_return_reason_sale 不共用一套——两域原因集本就不同：采购有「多发/合同取消」，
  * 销售有「客户取消/合同终止」）。
- * 下面这份本地常量是 useDict 的默认处理：字典未配置/接口不通时逐字回落成改造前的六项，界面零变化。
+ * 下面这份本地常量是 useDict 的兜底：字典未配置/接口不通时逐字回落成原先的六项，界面零变化。
  */
 const REASON_FALLBACK = {
   质量不合格: '质量不合格', 破损: '破损', 错发: '错发', 多发: '多发', 合同取消: '合同取消', 其他: '其他',
@@ -180,14 +182,14 @@ const REASON_FALLBACK = {
 const reasonDict = useDict('enum_return_reason_pur', REASON_FALLBACK)
 const reasonOptions = reasonDict.options
 
-/** D-H2-02：选中供应商后按主数据带出名称（名称框只读；后端保存时还会以主数据为准再覆盖一次） */
+/** 选中供应商后按主数据带出名称（名称框只读；后端保存时还会以主数据为准再覆盖一次） */
 function onVendorChange(sup) {
   form.vendorName = sup ? (sup.supplierName || sup.shortName || '') : ''
 }
 
 // 公司列表（用于下拉选择）
 const companies = ref([])
-// D-BIZ-02：orgApi 没有 companyList，`orgApi.companyList?.()` 的可选链把「方法不存在」吞成
+// orgApi 没有 companyList，`orgApi.companyList?.()` 的可选链把「方法不存在」吞成
 // undefined ⇒ 下拉恒空且无任何提示。公司树接口本就返回全量，改走 companyTree 并摊平。
 async function loadCompanies() {
   try {
@@ -241,7 +243,7 @@ function search() { q.pageNum = 1; load() }
 
 function actions(row) {
   const denied = isMine(row) ? (SELF_DENIED[row.status] || []) : []
-  // R5-D-087：带 need 的动作必须过 can(a.need)——原只滤「本人制单」，无 void 权限的角色仍见【作废】，
+  // 带 need 的动作必须过 can(a.need)——原只滤「本人制单」，无 void 权限的角色仍见【作废】，
   // 点击被后端 4030 拦＝看得见做不了；此处与授权同一规则（can 与 :14 openCreate 同函数）
   return rawActions(row).filter((a) => !denied.includes(a.key) && can(a.need))
 }
@@ -269,7 +271,7 @@ function rawActions(row) {
 
 const lineSum = () => (form.lines || []).reduce((s, l) => s + (Number(l.amount) || 0), 0).toFixed(2)
 
-// D-H2-01：明细变更即把合计回填表头金额（原表头为纯手输、仅校验 >0，易与明细合计不符）。
+// 明细变更即把合计回填表头金额（原表头为纯手输、仅校验 >0，易与明细合计不符）。
 // 表头仍可手改，doSave 再做等式强校验（与后端 validateLineSum 同一规则，尾差 ≤0.01）。
 watch(() => form.lines, () => { form.amount = lineSum() }, { deep: true })
 
@@ -289,10 +291,10 @@ function openCreate() {
 }
 
 function addLine() { form.lines.push(emptyLine()) }
-// D-H2-07：单位随行提交（原 emptyLine 无 uom 字段⇒后端恒收不到，pur_return_line.uom 全表 NULL）
+// 单位随行提交（原 emptyLine 无 uom 字段⇒后端恒收不到，pur_return_line.uom 全表 NULL）
 function emptyLine() { return { itemCode: '', itemName: '', qty: 1, uom: '', price: '', taxRate: 13, amount: '' } }
 function recalc(row) { row.amount = (Number(row.qty) * Number(row.price) || 0).toFixed(2) }
-/** R5-D-085：行税额（含税规则，与后端 PurReturnService.deriveTaxAmount 同式）：amount×rate/(100+rate) */
+/** 行税额（含税规则，与后端 PurReturnService.deriveTaxAmount 同式）：amount×rate/(100+rate) */
 const lineTax = (l) => {
   const a = Number(l.amount) || 0
   const r = Number(l.taxRate) || 0
@@ -306,7 +308,7 @@ async function doSave() {
     // 明细行校验与后端 validateLineSum 同一规则（后端还会比对"合计=表头金额，尾差≤0.01"）
     const filled = (form.lines || []).filter(l => (l.itemName || l.itemCode) && Number(l.amount) > 0)
     if (!filled.length) { ElMessage.warning('请至少填写一行退货明细（物料＋金额）'); return }
-    // D-H2-01：表头金额＝明细合计的等式强校验（前端先拦，后端 validateLineSum 再拦一道）
+    // 表头金额＝明细合计的等式强校验（前端先拦，后端 validateLineSum 再拦一道）
     const headAmt = Number(form.amount) || 0
     const sumAmt = Number(lineSum())
     if (Math.abs(headAmt - sumAmt) > 0.01) {
@@ -314,7 +316,7 @@ async function doSave() {
       return
     }
     const lines = (form.lines || []).map(l => ({ ...l, amount: Number(l.amount) || 0, qty: Number(l.qty) || 0, price: Number(l.price) || 0, taxRate: Number(l.taxRate) || 0 }))
-    // R5-D-085：表头税额不再吃空输入框（原 form.taxAmount 无输入框恒兜 0），按明细派生回写
+    // 表头税额不再吃空输入框（原 form.taxAmount 无输入框恒兜 0），按明细派生回写
     const body = { ...form, amount: Number(form.amount) || 0, taxAmount: Number(derivedTax()) || 0, companyId: Number(form.companyId) || 1, lines }
     try {
       if (editing.value) await returnApi.purUpdate(form.id, body)

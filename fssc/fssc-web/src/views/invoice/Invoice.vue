@@ -5,7 +5,7 @@
   <div :class="{ tabless: isSingle }">
     <el-card>
     <el-tabs v-model="tab">
-      <!-- ============ 7.1 发票验真（发票池 + 实时/定时验真） ============ -->
+      <!-- 7.1 发票验真（发票池 + 实时/定时验真） -->
       <el-tab-pane v-if="canList" label="发票池" name="pool">
         <div class="query-bar">
           <el-input v-model="q.invoiceNo" placeholder="发票号码" clearable style="width: 130px" @keyup.enter="loadPool(1)" />
@@ -22,7 +22,7 @@
             <!-- 历史取值 VERIFIED（3,327 行）→ 后端按值等值过滤，不单列这一项就永远筛不出来 -->
             <el-option label="已验真（历史）" value="VERIFIED" />
           </el-select>
-          <el-select v-model="q.direction" placeholder="方向" clearable style="width: 110px">
+          <el-select v-model="q.direction" placeholder="方向" clearable style="width: 172px">
             <el-option label="进项（收到的票）" value="INPUT" />
             <el-option label="销项（开出的票）" value="OUTPUT" />
           </el-select>
@@ -32,7 +32,7 @@
             批量验真（{{ poolSelected.length }}）
           </el-button>
           <el-button v-permission="'inv:audit'" type="warning" size="small" @click="openAudit">占用对账</el-button>
-      <!-- inv:export 在 sys_menu 中零登记（无人持有），按钮此前恒不可见；导出即为列表数据导出，随查询权限 -->
+      <!-- inv:export 在 sys_menu 中没有登记（无人持有），故导出按钮随查询权限放开 -->
       <el-button v-permission="'inv:list'" size="small" @click="exportCsv">导出</el-button>
           <span style="margin-left: auto; font-size: 13px; color: #909399">
             定时验真：每 5 分钟扫描待验发票，仅「有影像且非手工补录」的发票进队列（无影像票不参与定时验真，需走【实时验真】）；外部验真通道未启用时不判定通过（保持未验真/验真中）
@@ -71,7 +71,7 @@
               <el-button v-if="row.imgFileId" link type="success" size="small" @click="viewImage(row)">查看影像</el-button>
               <el-button v-if="dir(row) === 'INPUT' && row.verifyStatus !== 'SUCCESS'" v-permission="'inv:verify'" link type="primary" size="small" @click="verifyNow(row)">实时验真</el-button>
               <el-button v-if="dir(row) === 'INPUT'" v-permission="'inv:bind'" link size="small" @click="openBind(row)">关联单据</el-button>
-              <!-- 反核销（D-V3-135 配套 · 单据反操作链第一环）：解除勾稽+解锁发票；付款已执行时服务端拒绝 -->
+              <!-- 反核销（配套 · 单据反操作链第一环）：解除勾稽+解锁发票；付款已执行时服务端拒绝 -->
               <el-button v-if="dir(row) === 'INPUT' && row.lockStatus === 'LOCKED_IN_USE'" v-permission="'inv:unbind'" link size="small" type="danger" @click="unbindBill(row)">解除关联</el-button>
               <el-button v-permission="'inv:line:list'" link size="small" @click="showLines(row)">明细行</el-button>
               <!-- 销项发票作废/红冲：原因必填，后端校验当月/核销引用等条件，失败原样提示 -->
@@ -95,17 +95,17 @@
         />
       </el-tab-pane>
 
-      <!-- ============ 7.2 发票补录（人工录入 + 手动验真） ============ -->
+      <!-- 7.2 发票补录（人工录入 + 手动验真） -->
       <el-tab-pane v-if="canCreate" label="发票补录" name="create">
         <!-- label-width 110：必填项的星号+冒号占位后，90px 放不下 5 个汉字（销售方名称/购买方名称会折成两行） -->
         <el-form ref="formRef" :rules="entryRules" :model="form" label-width="110px" style="max-width: 720px" size="default">
           <el-row class="cm-target-invoice" :gutter="12">
-            <el-col :span="12"><el-form-item label="发票代码"><el-input v-model="form.invoiceCode" placeholder="数电票无发票代码，可留空" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="发票号码" prop="invoiceNo"><el-input v-model="form.invoiceNo" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="发票代码"><el-input v-model="form.invoiceCode" placeholder="数电票无发票代码，可留空" maxlength="64" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="发票号码" prop="invoiceNo"><el-input v-model="form.invoiceNo" maxlength="32" /></el-form-item></el-col>
             <el-col :span="12">
               <el-form-item label="发票类型" prop="invoiceType">
-                <!-- 与报销/OCR 共用同一份类型表（constants/invoiceType.js，13 类），此前这里只列 4 类，
-                     火车票/机票/出租车/定额等补录不进去；名称取字典（invoiceTypeLabel 字典优先） -->
+                <!-- 与报销/OCR 共用同一份类型表（constants/invoiceType.js，13 类），不再只列 4 类，
+                     火车票/机票/出租车/定额都能补录；名称取字典（invoiceTypeLabel 字典优先） -->
                 <el-select v-model="form.invoiceType" filterable style="width: 100%">
                   <el-option v-for="t in invoiceTypeOptions" :key="t.code" :label="invoiceTypeLabel(t.code)" :value="t.code" />
                 </el-select>
@@ -122,22 +122,21 @@
             </el-col>
             <el-col :span="12"><el-form-item label="开票日期" prop="invoiceDate"><el-date-picker v-model="form.invoiceDate" type="date" value-format="YYYY-MM-DD" :disabled-date="(d) => d.getTime() > Date.now()" style="width: 100%" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="销售方名称" prop="sellerName"><el-input v-model="form.sellerName" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="销售方税号"><el-input v-model="form.sellerTaxNo" /></el-form-item></el-col>
-            <!-- D3：购方信息此前只绑 form.invoiceTitle/form.taxNo，而 InvInvoice 上另有
-                 buyerName/buyerTaxNo 两列（注释分别为「购方名称」「购方抬头」）语义重复。
-                 结果：补录填的购方全落进 invoice_title/tax_no，buyer_name/buyer_tax_no 恒空，
-                 按 buyer_name 过滤的报表一条都查不到（实测 5/5 张票 buyer_name 为空）。
+            <el-col :span="12"><el-form-item label="销售方税号"><el-input v-model="form.sellerTaxNo" maxlength="64" /></el-form-item></el-col>
+            <!-- InvInvoice 上 invoice_title/tax_no 与 buyer_name/buyer_tax_no 语义重复，
+                 两种列都有报表和规则在读，补录时只填一套就会让另一套恒空，
+                 按那套列过滤的查询一条都查不到。
                  这里两个框都双向同步，两套列同时有值，两种规则的查询都能命中。 -->
             <el-col :span="12"><el-form-item label="购买方名称" prop="invoiceTitle"><el-input v-model="form.invoiceTitle" @input="form.buyerName = form.invoiceTitle" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="购买方税号"><el-input v-model="form.taxNo" @input="form.buyerTaxNo = form.taxNo" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="购买方税号"><el-input v-model="form.taxNo" @input="form.buyerTaxNo = form.taxNo" maxlength="64" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="未税金额" prop="netAmount"><el-input-number v-model="form.netAmount" :min="0" :precision="2" style="width: 100%" @change="syncCreateAmount" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="税额" prop="taxAmount"><el-input-number v-model="form.taxAmount" :min="0" :precision="2" style="width: 100%" @change="syncCreateAmount" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="价税合计" prop="amount"><el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="发票校验码"><el-input v-model="form.checkCode" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="发票校验码"><el-input v-model="form.checkCode" maxlength="64" /></el-form-item></el-col>
             <el-col :span="12"><el-form-item label="币种" prop="currencyCode"><el-select v-model="form.currencyCode" style="width: 100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 </el-select></el-form-item></el-col>
-            <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+            <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item></el-col>
           </el-row>
           <el-form-item>
             <el-button v-permission="'inv:create'" type="primary" @click="saveCreate">保存补录</el-button>
@@ -152,16 +151,16 @@
         </el-alert>
       </el-tab-pane>
 
-      <!-- ============ 7.3 销售开票（OTC02 INVOICE_ISSUE：登记发票并发起开票审批流） ============ -->
+      <!-- 7.3 销售开票（OTC02 INVOICE_ISSUE：登记发票并发起开票审批流） -->
       <el-tab-pane v-if="canIssue" label="销售开票" name="issue">
         <el-form ref="issueFormRef" :model="issueForm" :rules="issueRules" label-width="110px" style="max-width: 720px" size="default">
           <el-alert :closable="false" type="info" show-icon style="margin-bottom: 12px"
             title="销售发票开具登记：价税分离校验（价税合计 = 未税 + 税额）通过后，自动发起开票审批（应收会计 → 财务经理）" />
           <el-row :gutter="12">
-            <el-col :span="12"><el-form-item label="发票号码" prop="invoiceNo"><el-input v-model="issueForm.invoiceNo" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="发票号码" prop="invoiceNo"><el-input v-model="issueForm.invoiceNo" maxlength="32" /></el-form-item></el-col>
             <el-col :span="12">
               <el-form-item label="发票类型" prop="invoiceType">
-                <!-- 此前开票表单不带类型，落库 invoice_type 为空，发票池「类型」列对销项票恒显示「—」 -->
+                <!-- 开票表单必须带类型，否则 invoice_type 为空，发票池「类型」列对销项票只能显示「—」 -->
                 <el-select v-model="issueForm.invoiceType" filterable style="width: 100%">
                   <el-option v-for="t in invoiceTypeOptions" :key="t.code" :label="invoiceTypeLabel(t.code)" :value="t.code" />
                 </el-select>
@@ -176,7 +175,7 @@
             <el-col :span="12"><el-form-item label="币种" prop="currencyCode"><el-select v-model="issueForm.currencyCode" style="width: 100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 </el-select></el-form-item></el-col>
-            <el-col :span="24"><el-form-item label="备注"><el-input v-model="issueForm.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+            <el-col :span="24"><el-form-item label="备注"><el-input v-model="issueForm.remark" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item></el-col>
           </el-row>
           <el-form-item>
             <el-button v-permission="'inv:issue'" type="primary" :loading="submitting" :disabled="submitting" @click="saveIssue">登记并发起开票审批</el-button>
@@ -187,7 +186,7 @@
           :title="`已登记销售发票：${lastIssueNo}，开票审批流已发起`" style="max-width: 720px" />
       </el-tab-pane>
 
-      <!-- ============ 发票验真记录（7.1 单张实时验真 / 批量 / 定时 + 验真日志） ============ -->
+      <!-- 发票验真记录（7.1 单张实时验真 / 批量 / 定时 + 验真日志） -->
       <el-tab-pane v-if="canVerifyList" label="发票验真记录" name="verify">
         <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
           <el-select v-model="realtimeInv" placeholder="选择待验发票（实时验真）" filterable clearable style="width: 260px">
@@ -227,7 +226,7 @@
         />
       </el-tab-pane>
 
-      <!-- ============ 进项发票认证（RA-PAGE-21 2.7：原独立菜单 3075 并入；无 inv:certify 码不渲染，勿扩权） ============ -->
+      <!-- 进项发票认证（原独立菜单 3075 并入；无 inv:certify 码不渲染，勿扩权） -->
       <el-tab-pane v-if="canCertify" label="进项认证" name="certify" lazy>
         <InvoiceCertify />
       </el-tab-pane>
@@ -261,7 +260,7 @@
           <el-select v-model="bindBillId" filterable style="width: 100%">
             <el-option v-for="b in bills" :key="b.id" :label="b.billNo + ' ' + (b.title || '')" :value="b.id">
               <span>{{ b.billNo }} {{ b.title || '' }}</span>
-              <!-- D-DEC-113：绑票前就看清本单已勾稽多少票、还差多少（三单匹配按此判超付） -->
+              <!-- 绑票前就看清本单已勾稽多少票、还差多少（三单匹配按此判超付） -->
               <span style="float:right;margin-left:16px;color:#909399;font-size:12px">
                 已关联 {{ fmt(b.invoiceBound) }} ／ 缺口 {{ fmt(b.invoiceGap) }}
               </span>
@@ -331,12 +330,12 @@
 
 const { rules: formRules } = useFormRules('INVOICE')
 const { rules: bindRules } = useFormRules('INVOICE_BIND')
-// 第1批 P0：价税勾稽（价税合计 = 未税金额 + 税额，容差 1 分）前置到录入/开票两个表单。
+// 价税勾稽（价税合计 = 未税金额 + 税额，容差 1 分）前置到录入/开票两个表单。
 // 后端 InvoiceService.requireManualHeader/create 已有同一规则拦截，此处让用户录入当时就看到，
 // 而不是提交后拿 400。claim 表单只涉及 itemId，不挂金额三元组，继续复用 formRules。
 // 发票类型决定 invoice_kind（专票才可认证抵扣）：漏选会让专票按普票落库、认证页查不到，故两表单必选。
 // 只挂在本页两个表单上——共享的 formRules 还被「生成报销草稿」弹窗复用，那里没有该字段。
-const invoiceTypeRule = { invoiceType: [{ required: true, message: '请选择发票类型', trigger: 'change' }] }
+const invoiceTypeRule = { invoiceType: commonRules.select('请选择发票类型') }
 const entryRules = computed(() => ({ ...formRules.value, ...invoiceTypeRule, ...invoiceAmountMatch(() => form) }))
 const issueRules = computed(() => ({ ...formRules.value, ...invoiceTypeRule, ...invoiceAmountMatch(() => issueForm) }))
 import { onMounted, reactive, ref, watch, computed } from 'vue'
@@ -350,17 +349,17 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { useAutoFill } from '@/composables/useAutoFill'
 import CoachMark from '@/components/CoachMark.vue'
 import InlineActions from '@/components/InlineActions.vue'
-import { useFormRules, invoiceAmountMatch } from '@/composables/useFormRules'
+import { useFormRules, invoiceAmountMatch, commonRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
 import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
-// RA-PAGE-21 2.7：进项认证 tab（原独立页 3075 并入为第 5 页签）
+// 进项认证 tab（原独立页 3075 并入为第 5 页签）
 import InvoiceCertify from './InvoiceCertify.vue'
 import { hasPerm } from '@/utils/perm'
-// R5-D-121/122：发票类型/验真渠道名称表统一走共享字典（一处定义，禁止组件内局部映射）
+// /122：发票类型/验真渠道名称表统一走共享字典（一处定义，禁止组件内局部映射）
 import { invoiceTypeLabel, invoiceChannelLabel, verifyStatusLabel } from '@/constants/enums.js'
 // 发票类型下拉与报销/OCR 共用同一份类型表（13 类），不在此另抄一份
 import { INVOICE_TYPES } from '@/constants/invoiceType.js'
@@ -375,8 +374,8 @@ const canCertify = computed(() => hasPerm('inv:certify'))
 // 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
 const { canApprove, taskIdOf } = useApprovalScope()
-// R5-13: 快捷键（按当前页签分派）：此前 ctrl+s 无条件存补录表单，在「销售开票」页签按会去校验隐藏的补录表并报错；
-// ctrl+r 调用的 loadData 在本页从未定义（抛错被吞），刷新等于没反应。
+// 快捷键（按当前页签分派）：ctrl+s 只存当前页签的表单，不会在「销售开票」页签去校验隐藏的补录表；
+// ctrl+r 走本页自己的刷新，不依赖未定义的 loadData。
 useKeyboard({
   'ctrl+s': () => {
     if (tab.value === 'create' && canCreate.value) saveCreate()
@@ -388,7 +387,7 @@ useKeyboard({
 })
 const invoiceCm = ref(null)
 
-// 必填校验（治理规则 P1）：四个写入表单各自挂 ref，提交前先跑 rules 再发请求
+// 必填校验（治理规则）：四个写入表单各自挂 ref，提交前先跑 rules 再发请求
 const formRef = ref(null)
 const issueFormRef = ref(null)
 const bindFormRef = ref(null)
@@ -398,7 +397,7 @@ const { submit: guardIssue } = useSubmitGuard(issueFormRef)
 const { submit: guardBind } = useSubmitGuard(bindFormRef)
 const { submit: guardClaim } = useSubmitGuard(claimFormRef)
 
-// R4-02: BillTraceDrawer
+// BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 function openTrace(row) {
@@ -414,7 +413,7 @@ function userName(id) { const u = users.value.find((x) => x.id === id); return u
 
 // 默认 tab 支持路由 prop 指定（pool/create/issue/verify/certify）
 // 组件复用时不重建实例，必须 watch props 同步 tab（否则点左侧菜单无效）
-// RA-PAGE-21 2.7：default 由 'pool' 改 ''——宿主路由（/invoice/query 无 props）渲染全页签工作台；
+// default 由 'pool' 改 ''——宿主路由（/invoice/query 无 props）渲染全页签工作台；
 // 显式传 tab 的深链（/invoice/create 等）仍单页模式（isSingle）。
 // G13: 增加 direction prop，支持进项/销项发票池深链预设过滤
 const props = defineProps({ tab: { type: String, default: '' }, direction: { type: String, default: '' } })
@@ -428,7 +427,7 @@ const q = reactive({ pageNum: 1, pageSize: 20, invoiceNo: '', invoiceCode: '', s
   invoiceDate: [], scanDate: [], verifyStatus: '', direction: '' })
 
 // G13: direction prop 变化时同步到查询条件并刷新发票池
-// D-V4R-80（根因修复）：本 watch 原声明在 `const q = reactive(...)` **之前**且带 immediate:true，
+// 根因修复：本 watch 原声明在 `const q = reactive(...)` 之前且带 immediate:true，
 // immediate 回调在声明处同步执行 ⇒ 访问尚未初始化的 `q` 触发 TDZ ReferenceError，
 // setup 抛错 ⇒ `/invoice/input-pool`、`/invoice/output-pool` 直达时整页空白（只剩面包屑）。
 // `/invoice/query` 因 direction='' 短路未触发访问，故同文件另一路由正常，掩盖了这个 bug。
@@ -440,7 +439,7 @@ const form = reactive({ invoiceCode: '', invoiceNo: '', invoiceType: 'VAT_SPECIA
   // 补录时必须同时有值，否则按 buyer_name 过滤的报表查不到这张票（详见模板处注释）。
   sellerName: '', sellerTaxNo: '', invoiceTitle: '', taxNo: '', buyerName: '', buyerTaxNo: '', netAmount: 0, amount: 0, taxAmount: 0, checkCode: '', currencyCode: 'CNY', remark: '' })
 // invoiceType 是税局口径的票种（13 类）；invoiceKind 是库内的专票/普票/电子口径（认证抵扣、无纸化判定在用），
-// 两者由同一张票决定，不再让用户选两遍（此前两个下拉选项中文一模一样，极易选岔）。
+// 两者由同一张票决定，不再让用户选两遍。
 const invoiceTypeOptions = INVOICE_TYPES
 function kindOf(type) {
   if (type === 'VAT_SPECIAL' || type === 'VAT') return 'SPECIAL'
@@ -481,18 +480,18 @@ const auditRows = ref([])
 const auditLoading = ref(false)
 
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
-// R5-D-121：类型名称表统一走共享字典 constants/enums.js（VAT/OTHER 等缺档一处补齐，禁止组件内局部映射）
+// 类型名称表统一走共享字典 constants/enums.js（VAT/OTHER 等缺档一处补齐，禁止组件内局部映射）
 function invTypeLabel(t) { return invoiceTypeLabel(t) }
-// R5-D-122：渠道名称表同上（REALTIME/TAX 等缺档已补，验真记录页与详情共用一处定义）
+// 渠道名称表同上（REALTIME/TAX 等缺档已补，验真记录页与详情共用一处定义）
 function channelLabel(c) { return invoiceChannelLabel(c) }
 function vsType(s) { return s === 'SUCCESS' ? 'success' : s === 'FAILED' ? 'danger' : s === 'PENDING' ? 'warning' : 'info' }
 // 验真完成的两种取值：SUCCESS（现行）与 VERIFIED（历史 3,327 行）。历史上取值的票不再进批量选择/待验候选，
-// 但仍保留行内「实时验真」以便单张补做取证。
+// 但仍保留行内「实时验真」以便单张补做验真。
 function isVerified(s) { return s === 'SUCCESS' || s === 'VERIFIED' }
 
 /**
  * 发票方向判定（进项 INPUT／销项 OUTPUT）。
- * 优先取后端 direction 列；旧版后端未返回该列时按状态/来源单据类型默认处理推导，
+ * 优先取后端 direction 列；旧版后端未返回该列时按状态/来源单据类型兜底推导，
  * 保证「前端已热更、后端仍在跑旧 jar」的代次差窗口内方向语义依然可用。
  */
 function dir(row) {
@@ -540,7 +539,7 @@ async function verifyNow(row) {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-/* ---------------- 销项发票作废 / 红冲 
+/* 销项发票作废 / 红冲
  * 弹窗原因必填（≥2 字，对齐 PoOrder 作废范式）；成功后刷新列表；
  * 后端校验当月开票/核销引用等条件，失败错误经全局拦截器 + 此处 catch 原样展示（不吞错）。 */
 async function voidOutputInvoice(row) {
@@ -638,14 +637,14 @@ async function verifyLast() {
   } catch (e) { ElMessage.error(e.message) }
 }
 
-/* ---------------- 销售开票（OTC02 INVOICE_ISSUE） ---------------- */
+/* 销售开票（OTC02 INVOICE_ISSUE） */
 const issueForm = reactive({
   invoiceNo: '', invoiceType: 'VAT_SPECIAL', sellerName: '', invoiceTitle: '', invoiceDate: '',
   netAmount: 0, taxAmount: 0, amount: 0, currencyCode: 'CNY', remark: '',
 })
-// 提示显示发票号码（此前是库内自增 id，用户看不懂）
+// 提示显示发票号码（原先显示库内自增 id，用户看不懂）
 const lastIssueNo = ref('')
-// R5-D-109：提交即置灰。服务端实测处理 45.9s 而 axios 20s 超时，按钮不禁用会被连续重试（六发全打到服务端）
+// 提交即置灰。服务端一次要处理 45 秒上下而 axios 20 秒就超时，按钮不禁用会被连续重试（点几次就打几次服务端）
 const submitting = ref(false)
 
 function syncIssueAmount() { issueForm.amount = Number(Number(issueForm.netAmount || 0) + Number(issueForm.taxAmount || 0)) }
@@ -667,14 +666,14 @@ async function saveIssue() {
         resetIssue()
         loadPool()
       } catch (e) {
-        // R5-D-109：超时≠未受理——外部网关慢（实测 45.9s），服务端往往已开票成功，只提示勿重复提交并刷新核对
+        // 超时≠未受理——外部网关慢（一次开票要 45 秒上下），服务端往往已开票成功，只提示勿重复提交并刷新核对
         const isTimeout = e?.code === 'ECONNABORTED' || e?.code === 'ETIMEDOUT' || /timeout|超时/i.test(String(e?.message || ''))
         if (isTimeout) {
           ElMessage.warning('开票请求仍在处理中，请勿重复提交，稍后刷新列表查看结果')
           loadPool()
           return
         }
-        // R5-D-110：唯一键/去重默认处理命中（code=4090 或含「已存在」）＝该发票已开票成功，走成功引导，不报 error
+        // 唯一键/去重兜底命中（code=4090 或含「已存在」）＝该发票已开票成功，走成功引导，不报 error
         if (e?.code === 4090 || /已存在/.test(String(e?.message || ''))) {
           ElMessage.warning('该发票已开票成功，请勿重复提交')
           locateIssuedInvoice(issueForm.invoiceNo)
@@ -688,7 +687,7 @@ async function saveIssue() {
   }
 }
 
-/** R5-D-110：按票号在发票池内定位（从简：以票号作查询条件刷新列表，命中行置前可见） */
+/** 按票号在发票池内定位（从简：以票号作查询条件刷新列表，命中行置前可见） */
 async function locateIssuedInvoice(no) {
   q.invoiceNo = no || ''
   await loadPool(1)
@@ -697,8 +696,8 @@ async function locateIssuedInvoice(no) {
 async function batchVerify() {
   try {
     // 批量发起验真：取待验发票一次提交后端受理。
-    // D-DEC-115：这里原本逐张硬编码 result='PASS' 调实时验真，等于一次点击把最多 50 张票刷成「验真通过」
-    // （按钮文案当时就写着「模拟税务通道」）；现改为走批量受理口，无外部报文只到「验真中」。
+    // 这里原本逐张硬编码 result='PASS' 调实时验真，等于一次点击把最多 50 张票刷成「验真通过」
+    // 按钮文案当时就写着「模拟税务通道」；现改为走批量受理口，无外部报文只到「验真中」。
     const r = await invoiceApi.page({ pageNum: 1, pageSize: 50, verifyStatus: '' })
     const pending = (r.list || []).filter((x) => x.verifyStatus !== 'SUCCESS')
     if (!pending.length) return ElMessage.info('没有待验真发票')
@@ -757,8 +756,8 @@ async function openBind(row) {
 }
 
 /**
- * 关联单据候选：走发票域自己的查询窗口（D-DEC-113）。
- * 改前取 billApi.myPage，服务端硬过滤 apply_user_id=登录人，共享会计（代位录票）选不到他人单据，
+ * 关联单据候选：走发票域自己的查询窗口。
+ * 原先取 billApi.myPage，服务端硬过滤 apply_user_id=登录人，共享会计（代位录票）选不到他人单据，
  * 三单匹配「补录发票 → 关联单据」这条唯一出口不可达；现按 inv:bind 查询、带发票环节差额。
  */
 async function searchBill() {
@@ -780,7 +779,7 @@ async function doBind() {
   })
 }
 
-// 反核销（D-V3-135 配套 · 单据反操作链第一环）：解除勾稽+解锁发票，占用额度随之释放。
+// 反核销（配套 · 单据反操作链第一环）：解除勾稽+解锁发票，占用额度随之释放。
 // 仅 LOCKED_IN_USE 的发票显示入口；付款已执行时服务端拒绝（既成资金事实走付款退款单）。
 async function unbindBill(row) {
   try {
@@ -793,7 +792,7 @@ async function unbindBill(row) {
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
-/* ---------------- 生成报销草稿（发票→CLAIM 自动填单 + 自动占用） ---------------- */
+/* 生成报销草稿（发票→CLAIM 自动填单 + 自动占用） */
 const claimVis = ref(false)
 const claimInv = ref(null)
 const claimForm = reactive({ itemId: null, title: '' })
@@ -827,7 +826,7 @@ async function doClaim() {
   })
 }
 
-/* ---------------- 发票占用次数对账（used-count/audit） ---------------- */
+/* 发票占用次数对账（used-count/audit） */
 async function openAudit() { auditVis.value = true; loadAudit() }
 async function loadAudit() {
   auditLoading.value = true
@@ -847,11 +846,11 @@ const { options: currencyOptions, load: loadCurrency, formatLabel: currencyLabel
 onMounted(() => {
   loadCurrency()
   autofill(form, 'INVOICE')
-  // P0 修复（2026-10-21）：默认只加载同公司人员
+  // 默认只加载同公司人员
   loadPool(); loadVerify(); loadPendingInvs(); userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId }).then((d) => { users.value = d?.list || [] }).catch(() => {}) })
 
 async function exportCsv() {
-  // 此前只导出 rows（当前页 20 条），按钮却叫「导出 CSV」，翻页外的数据静默丢失
+  // 导出走全量查询，不只是当前页的 20 条
   if (!hasPerm('inv:list')) { ElMessage.warning('导出需要发票查询权限'); return }
   let list = []
   let total = 0
@@ -886,7 +885,7 @@ async function exportCsv() {
 }
 
 
-// R4-06: Show guide on first visit
+// Show guide on first visit
 const _guideKey = 'fssc_guide_invoiceCm'
 try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => invoiceCm.value?.show(), 800) } } catch {}
 // InlineActions handlers

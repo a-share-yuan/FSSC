@@ -3,14 +3,77 @@
 
 package com.fssc.workflow.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fssc.budget.entity.BgItem;
+import com.fssc.budget.mapper.BgItemMapper;
+import com.fssc.budget.service.BudgetService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.entity.ExpBillLine;
+import com.fssc.expense.entity.ExpLoanOffset;
+import com.fssc.expense.mapper.ExpBillLineMapper;
+import com.fssc.expense.mapper.ExpBillMapper;
+import com.fssc.expense.mapper.ExpLoanOffsetMapper;
+import com.fssc.framework.notify.NotifyService;
+import com.fssc.framework.security.LoginUser;
+import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.masterdata.entity.MdExpenseItem;
+import com.fssc.masterdata.entity.MdExpenseStandard;
+import com.fssc.masterdata.mapper.MdExpenseItemMapper;
+import com.fssc.masterdata.mapper.MdExpenseStandardMapper;
+import com.fssc.system.entity.SysCompany;
+import com.fssc.system.entity.SysConfig;
+import com.fssc.system.entity.SysUser;
+import com.fssc.system.entity.SysUserRole;
+import com.fssc.system.mapper.SysCompanyMapper;
+import com.fssc.system.mapper.SysConfigMapper;
+import com.fssc.system.mapper.SysRoleMapper;
+import com.fssc.system.mapper.SysUserMapper;
+import com.fssc.system.mapper.SysUserRoleMapper;
+import com.fssc.workflow.entity.WfAddSign;
+import com.fssc.workflow.entity.WfApprovalItem;
+import com.fssc.workflow.entity.WfBusinessFlow;
+import com.fssc.workflow.entity.WfDelegate;
+import com.fssc.workflow.entity.WfInstance;
+import com.fssc.workflow.entity.WfModel;
 import com.fssc.workflow.entity.WfNodeConfig;
+import com.fssc.workflow.entity.WfTask;
+import com.fssc.workflow.entity.WfTaskHistory;
 import com.fssc.workflow.event.WfProcessEndedEvent;
+import com.fssc.framework.datasource.FsscDataSource;
+import com.fssc.workflow.mapper.WfBusinessFlowMapper;
+import com.fssc.workflow.mapper.WfDelegateMapper;
+import com.fssc.workflow.mapper.WfInstanceMapper;
+import com.fssc.workflow.mapper.WfModelMapper;
+import com.fssc.workflow.mapper.WfNodeConfigMapper;
 import jakarta.annotation.PostConstruct;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+import java.util.StringJoiner;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.common.engine.api.FlowableObjectNotFoundException;
+import org.flowable.common.engine.api.FlowableOptimisticLockingException;
+import org.flowable.common.engine.api.FlowableTaskAlreadyClaimedException;
 import org.flowable.common.engine.api.delegate.event.AbstractFlowableEventListener;
 import org.flowable.common.engine.api.delegate.event.FlowableEntityEvent;
 import org.flowable.common.engine.api.delegate.event.FlowableEngineEventType;
@@ -23,6 +86,7 @@ import org.flowable.bpmn.model.Process;
 import org.flowable.bpmn.model.SequenceFlow;
 import org.flowable.bpmn.model.StartEvent;
 import org.flowable.bpmn.model.UserTask;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
@@ -30,7 +94,12 @@ import org.flowable.engine.repository.Deployment;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
+import org.flowable.task.api.history.HistoricTaskInstance;
+import org.flowable.variable.api.history.HistoricVariableInstance;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -46,81 +115,82 @@ import java.util.Map;
 
 /**
  * 流程引擎门面（Flowable 7 封装）。
- * 【架构红线】：业务域禁止直接使用 RuntimeService/TaskService 等 Flowable API，
+ * 架构红线：业务域禁止直接使用 RuntimeService/TaskService 等 Flowable API，
  * 一律经本门面。流程审计（wf_task_history）与业务收尾（WfProcessEndedEvent）在此统一挂接。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FsscDataSource("master")
 public class WfEngineFacade {
 
     private final RuntimeService runtimeService;
     private final TaskService taskService;
     private final RepositoryService repositoryService;
-    private final org.flowable.engine.HistoryService historyService;
+    private final HistoryService historyService;
     private final ApplicationEventPublisher eventPublisher;
     private final WfQueryService wfQueryService;
-    /** 默认处理（真跑业务-V4）：单据最终状态判定（作废/关闭/归档）——待办查询剔除最终状态单，与 WfQueryService.myTodo 同一规则 */
+    /** 单据最终状态判定（作废/关闭/归档）：待办查询要剔除最终状态单，规则与 WfQueryService.myTodo 一致 */
     private final BillTerminalChecker billTerminalChecker;
-    private final com.fssc.workflow.mapper.WfBusinessFlowMapper wfBusinessFlowMapper;
+    private final WfBusinessFlowMapper wfBusinessFlowMapper;
     private final WfBpmnTemplateService bpmnTemplateService;
     private final WfProcessConfigService processConfigService;
-    private final com.fssc.system.mapper.SysUserRoleMapper sysUserRoleMapper;
-    private final com.fssc.system.mapper.SysUserMapper sysUserMapper;
-    private final com.fssc.system.mapper.SysRoleMapper sysRoleMapper;
-    private final com.fssc.framework.notify.NotifyService notifyService;
-    private final com.fssc.workflow.mapper.WfNodeConfigMapper wfNodeConfigMapper;
+    private final SysUserRoleMapper sysUserRoleMapper;
+    private final SysUserMapper sysUserMapper;
+    private final SysRoleMapper sysRoleMapper;
+    private final NotifyService notifyService;
+    private final WfNodeConfigMapper wfNodeConfigMapper;
     private final DataSource dataSource;
     /**
-     * 节点配置解析器（V1.3.21）：wf_node_config.node_key 是业务节点编码（N0xx），
+     * 节点配置解析器：wf_node_config.node_key 是业务节点编码（N0xx），
      * 运行时 taskDefinitionKey 是 BPMN 生成的 {@code Task_N}，两者不同形、精确匹配恒不命中。
-     * 超时链路早已改走本解析器，节点审批人覆盖此前仍用精确匹配，导致「节点配置」页签整体空转。
+     * 超时链路和节点审批人覆盖都必须走本解析器，否则「节点配置」页签整页读不到值。
      */
     private final WfNodeConfigResolver wfNodeConfigResolver;
-    private final com.fssc.workflow.mapper.WfDelegateMapper wfDelegateMapper;
-    /** 加签（前/后加签）持久化层：P3 G1。能力边界见 {@code WfAddSign} 类注释 */
+    private final WfDelegateMapper wfDelegateMapper;
+    /** 加签（前/后加签）持久化层，能力边界见 {@code WfAddSign} 的类注释 */
     private final WfAddSignService wfAddSignService;
-    /** G2 传阅投递（wf_cc 的唯一写入位置；此前 recordCc 全仓零调用、表 0 行） */
+    /** 传阅投递：{@code wf_cc} 的唯一写入位置 */
     private final WfCcService wfCcService;
     /**
-     * G2 ①层「审批项」（2026-09-24）：{@code wf_approval_item} 的唯一消费点。
+     * 「审批项」：{@code wf_approval_item} 的唯一消费点。
      * 只有 {@code complete()} 收到 {@code approvalItemCode} 时才读表——未传时连查询都不发生，
-     * 历史调用方行为与改造前逐字一致。
+     * 不传审批项的调用方感受不到这次改动。
      */
     private final WfApprovalItemService approvalItemService;
     /**
-     * G4 ④层「流程处理详细日志」（2026-09-24）：{@code wf_process_log} 的唯一写入者（挂 Flowable 全局事件），
-     * 参考通行参数 4.3「勾选后流程处理详细日志写 log 与流程日志（管理中心可查）」。
-     * 无条件注册，是否写入数据库由 {@code sys_config.wf.log.detailed.enabled} 逐事件判定（勾选即生效、免重启）。
+     * 「流程处理详细日志」：{@code wf_process_log} 的唯一写入者（挂 Flowable 全局事件）。
+     * 监听器无条件注册，是否真的落库由 {@code sys_config.wf.log.detailed.enabled} 逐事件判定，
+     * 配置改动即时生效、不用重启。
      */
     private final WfProcessLogListener processLogListener;
     /**
-     * G2 参与人解析（2026-09-24）：wf_assignee_scheme / wf_assignee_dim 的唯一消费点，
-     * 只服务 {@code applyNodeConfig} 的 default 分支（POST/SHARE_POOL/EXPRESSION 等原本 no-op 的类型）。
-     * 未配置方案的节点完全不经过它，行为与改造前逐字一致。
+     * 参与人解析：{@code wf_assignee_scheme} / {@code wf_assignee_dim} 的唯一消费点，
+     * 只服务 {@code applyNodeConfig} 的 default 分支（POST/SHARE_POOL/EXPRESSION 这类原本 no-op 的类型）。
+     * 没配方案的节点完全不经过它。
      */
     private final WfAssigneeResolver assigneeResolver;
     /**
-     * G0 止血（2026-09-24）：镜像写失败的可见物载体。镜像（wf_instance/wf_task/wf_task_history）
-     * 写失败一律"记缺陷 + 冒泡"，不再只留一行 log（方案 §二 F2）。
+     * 镜像写失败的可见物载体。镜像（{@code wf_instance} / {@code wf_task} / {@code wf_task_history}）
+     * 写失败一律"记缺陷 + 冒泡"：只留一行 log 的话，镜像没写进去也没人知道。
      */
     private final WfMirrorDefectRecorder mirrorDefectRecorder;
     /**
-     * G1 单一真值（2026-09-24）：镜像投影监听器。开关打开时由它接管 wf_instance / wf_task 的写路径，
+     * 单一真值：镜像投影监听器。开关打开时由它接管 {@code wf_instance} / {@code wf_task} 的写路径，
      * 门面停止手工写（见 {@link #mirrorByFacade()}）；开关关闭时它根本不注册，本字段不参与任何分支。
      */
     private final WfMirrorProjectionListener mirrorProjectionListener;
     /**
-     * G1 开关：{@code fssc.wf.mirror.projection-enabled}，默认 {@code false}。
+     * 开关：{@code fssc.wf.mirror.projection-enabled}，默认 {@code false}。
      *
-     * <p>默认关闭 ⇒ 行为与改造前逐字一致（仍由门面手工写镜像）；打开 ⇒ 门面停写 wf_instance/wf_task、
-     * 由 {@link WfMirrorProjectionListener} 投影，wf_task_history 过渡期双写。开关即回滚路径。
+     * <p>关着时仍由门面手工写镜像；打开后门面停写 {@code wf_instance} / {@code wf_task}，
+     * 改由 {@link WfMirrorProjectionListener} 投影，{@code wf_task_history} 在过渡期双写。开关本身就是回滚路径。
      * 非 final + 字段注入：本类用 Lombok {@code @RequiredArgsConstructor} 只注入 final 字段。
      */
-    @org.springframework.beans.factory.annotation.Value("${fssc.wf.mirror.projection-enabled:false}")
+    @Value("${fssc.wf.mirror.projection-enabled:false}")
     private boolean projectionEnabled;
     /**
-     * ④层「流程处理模式＝消息队列」的投递载体与模式判定（2026-09-24）。
+     * 「流程处理模式＝消息队列」的投递载体与模式判定。
      *
      * <p>门面只用到它的一件事：{@link WfProcessOutboxService#queueModeEnabled()}——
      * 模式为 {@code QUEUE} 时门面同样必须停写镜像（投影改由发件箱消费者执行），
@@ -128,51 +198,57 @@ public class WfEngineFacade {
      * 判定带 5 秒 TTL 缓存，不会把 {@link #mirrorByFacade()} 变成逐次查库。
      */
     private final WfProcessOutboxService wfProcessOutboxService;
-    /** wf_task_history 过渡期双写的来源标记（开关打开时附加，便于与投影行区分、便于 G0 对账比对） */
+    /** {@code wf_task_history} 过渡期双写的来源标记（开关打开时附加，便于与投影行区分、便于对账比对） */
     private static final String HISTORY_DUAL_WRITE_MARK = "〔门面双写〕";
-    private final com.fssc.workflow.mapper.WfModelMapper wfModelMapper;
-    private final com.fssc.system.mapper.SysCompanyMapper sysCompanyMapper;
-    private final com.fssc.expense.mapper.ExpBillMapper expBillMapper;
-    private final com.fssc.expense.mapper.ExpBillLineMapper expBillLineMapper;
-    /** 借款冲抵（P0 修复 hasLoan：LOAN 借款单余额 − 冲抵额） */
-    private final com.fssc.expense.mapper.ExpLoanOffsetMapper expLoanOffsetMapper;
-    /** F2 资料齐套校验（SUBMIT 只告警／NODE 按规则硬拦）；只依赖各域 Mapper，与本类无循环 */
+    private final WfModelMapper wfModelMapper;
+    private final SysCompanyMapper sysCompanyMapper;
+    private final ExpBillMapper expBillMapper;
+    private final ExpBillLineMapper expBillLineMapper;
+    /** 借款冲抵：借款单余额要减去冲抵额 */
+    private final ExpLoanOffsetMapper expLoanOffsetMapper;
+    /** 资料齐套校验（SUBMIT 只告警／NODE 按规则硬拦）；只依赖各域 Mapper，与本类无循环依赖 */
     private final BillCompletenessGuard billCompletenessGuard;
     /**
-     * 预算占用域（P0 补齐 outOfPlan 2026-09-23）：复用 {@code resolveOccupyItem}（费用项→预算行，
-     * 含跨主体重定位）与 {@code available}（可用额＝总额+调整−占用−已用），不自行拼规则。
-     * 注意：BudgetService 反向依赖本门面（BudgetService.wfEngineFacade，发起 BG_SCHEME 审批流），
-     * 二者构成**构造器循环依赖**（Lombok @RequiredArgsConstructor 双向 final ⇒ 应用启动失败：
-     * "wfEngineFacade ↑↓ budgetService"）。故按本项目既有惯例（参见 PurchaseService.assetService）
-     * 改为 @Lazy 字段注入打破环；非 final 字段不参与 Lombok 构造器。
+     * 预算占用域：复用 {@code resolveOccupyItem}（费用项→预算行，含跨主体重定位）
+     * 与 {@code available}（可用额＝总额+调整−占用−已用），不自行拼规则。
+     * 注意：{@code BudgetService} 反向依赖本门面（发起 {@code BG_SCHEME} 审批流时调它），
+     * 二者构成**构造器循环依赖**（Lombok {@code @RequiredArgsConstructor} 双向 final ⇒ 应用启动失败：
+     * "wfEngineFacade ↑↓ budgetService"）。故按本项目既有惯例（参见 {@code PurchaseService.assetService}）
+     * 改为 {@code @Lazy} 字段注入打破环；非 final 字段不参与 Lombok 构造器。
      */
-    @org.springframework.context.annotation.Lazy
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.fssc.budget.service.BudgetService budgetService;
-    private final com.fssc.budget.mapper.BgItemMapper bgItemMapper;
-    private final com.fssc.masterdata.mapper.MdExpenseItemMapper mdExpenseItemMapper;
-    private final com.fssc.masterdata.mapper.MdExpenseStandardMapper mdExpenseStandardMapper;
-    /** 多分子公司审批路由解析器（V1.3.16）：候选组按公司过滤 + 直线上级/公司内角色办理人解析 */
+    @Lazy
+    @Autowired
+    private BudgetService budgetService;
+    private final BgItemMapper bgItemMapper;
+    private final MdExpenseItemMapper mdExpenseItemMapper;
+    private final MdExpenseStandardMapper mdExpenseStandardMapper;
+    /** 多分子公司审批路由解析器：候选组按公司过滤 + 直线上级/公司内角色办理人解析 */
     private final NodeOrgResolver nodeOrgResolver;
     /** 租户参数（sys_config）：complete 读取 approve.deny_self 自审禁止开关 */
-    private final com.fssc.system.mapper.SysConfigMapper sysConfigMapper;
+    private final SysConfigMapper sysConfigMapper;
+    /**
+     * 待办列表按流程实例批量取单据键（{@code wf_instance.biz_type/biz_id}）。
+     * 不再为了拿 bizType/bizId 去 {@code includeProcessVariables()}——那条路是 Flowable 的
+     * "任务+关联实体"查询，1,500 条在办会把全部运行态变量连表拉回，是万级待办的主要耗时。
+     */
+    private final WfInstanceMapper wfInstanceMapper;
     /** R1 金额分档流程判定缓存：processKey -> 是否含 金额>/原值> 条件，避免每次发起重复查库 */
-    private final java.util.concurrent.ConcurrentHashMap<String, Boolean> tieredCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Boolean> tieredCache = new ConcurrentHashMap<>();
 
     /** 报销审批流程定义KEY */
     public static final String PROC_EXPENSE_CLAIM = "expenseClaim";
 
     /**
-     * 本线程正在办结的任务操作人（D-DEC-093 前置件 · P3-A2 方案）。
+     * 本线程正在办结的任务操作人。
      *
      * <p>为什么用线程标记而不是流程变量：PROCESS_COMPLETED 监听器在
-     * {@code taskService.complete()} <b>内</b>同步派发（同线程、不换线程，实证见
-     * {@code WfQueryService.COMPLETING_TASK_ID} 的 D-DEC-283 段），而"谁点的这一节"是
+     * {@code taskService.complete()} <b>内</b>同步派发（同线程、不换线程，见
+     * {@code WfQueryService.COMPLETING_TASK_ID} 的同类做法），而"谁点的这一节"是
      * 一次<b>调用</b>的事实，不属于实例——写成流程变量会留下"最后一个点按钮的人"这一
-     * 跨调用的脏值，且要给每个实例加一列无业务语义的变量，属伪配置（引擎伪配置史现有）。
-     * 因此与 283 的 taskId 标记同源：由 complete() 的 {@code operUserId} 形参在
-     * {@code taskService.complete()} 前置入、finally 还原，监听器构造
-     * {@link com.fssc.workflow.event.WfProcessEndedEvent} 时读出。
+     * 跨调用的脏值，还要给每个实例加一列无业务语义的变量。
+     * 因此与 {@code COMPLETING_TASK_ID} 的 taskId 标记同源：由 {@code complete()} 的
+     * {@code operUserId} 形参在 {@code taskService.complete()} 前置入、finally 还原，
+     * 监听器构造 {@link WfProcessEndedEvent} 时读出。
      *
      * <p>用 save/restore 而非 remove：会签/子流程同线程嵌套办结时内层不得抹掉外层标记。
      */
@@ -231,50 +307,48 @@ public class WfEngineFacade {
                 // wf_task/wf_task_history）都带 tenant_id，缺上下文会被租户拦截器 fail-closed 拦下，
                 // 表现就是"实例状态永远 RUNNING、幽灵待办清不掉"的静默漂移。故先忽略租户取回归属租户，
                 // 再 callAs 建立上下文执行办结；取不到时保持原行为（由下游失败冒泡暴露）。
-                com.fssc.workflow.entity.WfInstance[] instHolder = new com.fssc.workflow.entity.WfInstance[1];
+                WfInstance[] instHolder = new WfInstance[1];
                 try {
-                    com.fssc.framework.tenant.TenantContext.runIgnoreTenant(
+                    TenantContext.runIgnoreTenant(
                             () -> instHolder[0] = wfQueryService.instanceByProcInstId(pi.getId()));
                 } catch (Exception ex) {
                     log.warn("流程结束取租户失败 procInstId={}: {}", pi.getId(), ex.getMessage());
                 }
-                com.fssc.workflow.entity.WfInstance inst = instHolder[0];
+                WfInstance inst = instHolder[0];
                 Long tenantId = inst == null ? null : inst.getTenantId();
                 runInTenant(tenantId, () -> {
-                    // 流程结束记录：APPROVED/REJECTED（wf_task_history 镜像，失败即冒泡）
-                    // D-DEC-067/080（12-18 #651/#652、12-21 #655/#656 两条链复现，非偶发）：
-                    // 定论行原先直接抄流程变量 comment＝末位审批人刚键入的那段意见，于是审计表里
-                    // 出现"同一签署内容重复记录"——定论行与真审批行只差一个 action，且定论行
-                    // oper_time 还早 1 秒，联查/追责无法分辨哪一行才是"那一节的结论"。
-                    // 判据修正：定论行只记<b>实例级结论</b>本身（驳回理由另有 REJECT 行为准，
-                    // 业务侧 exp_bill.reject_reason／WfProcessEndedEvent.comment 仍取原始变量，未受影响），
-                    // 原始意见不再二次抄写；两行的因果关系由读侧 causalOrder 排序键办结（D-DEC-054/089）。
+                    // 流程结束记录：APPROVED/REJECTED（wf_task_history 镜像，失败即冒泡）。
+                    // 定论行只记实例级结论本身，不能抄流程变量 comment —— 那是末位审批人刚键入的
+                    // 那段意见，抄过来会让审计表里出现两行同样的签署内容：定论行与真审批行只差
+                    // 一个 action，定论行的 oper_time 还早 1 秒，联查时无法分辨哪行才是"那一节的结论"。
+                    // 驳回理由另有 REJECT 行为准，业务侧 exp_bill.reject_reason／WfProcessEndedEvent.comment
+                    // 仍取原始变量，不受影响。两行的先后关系由读侧 causalOrder 排序键表达。
                     writeHistory(pi.getId(), null, null, null,
                             Boolean.TRUE.equals(approved) ? "APPROVED" : "REJECTED",
                             null, Boolean.TRUE.equals(approved)
                                     ? "流程定论：审批通过（末节办理意见见同实例 APPROVE 记录行）"
                                     : "流程定论：已驳回（驳回理由见同实例 REJECT 记录行）");
-                    // 实例视图状态回写。缺陷修复（H-02 / DA-01）：状态回写原被 bizId != null 一票拦截，
-                    // FA_CER（资本性支出申请，无业务单据表，bizId=null）流程结束后
-                    // wf_instance.status 永远停留 RUNNING。现改为：只要 bizType 非空即回写。
+                    // 实例视图状态回写：以 bizType 非空为准，不能拿 bizId != null 一票拦截：
+                    // FA_CER（资本性支出申请）没有业务单据表、bizId 恒为 null，那样它的
+                    // wf_instance.status 会永远停在 RUNNING。
                     wfQueryService.updateInstanceStatus(pi.getId(),
                             Boolean.TRUE.equals(approved) ? "APPROVED" : "REJECTED",
-                            java.time.LocalDateTime.now());
-                    // 幽灵待办办结（2026-09-23 遗留发现）：实例结束后，会签/票签同节点的
-                    // 兄弟任务被引擎删除，但 wf_task 的 PENDING 行此前无关闭通道 → 待办残留。
-                    // D-DEC-275：一并落节点级作废记录，否则这一节在审批链上判「尚未到达」。
+                            LocalDateTime.now());
+                    // 幽灵待办办结：实例结束后，会签/票签同节点的兄弟任务被引擎删掉，
+                    // wf_task 里的 PENDING 行没有别的关闭通道，不在这里关就永远挂在待办列表上。
+                    // 同时落节点级作废记录，否则这一节在审批链上会被判成「尚未到达」。
                     wfQueryService.closePendingTasksByInstance(pi.getId(),
                             Boolean.TRUE.equals(approved)
                                     ? "流程已办结，同节点未办理的会签/票签任务自动作废"
                                     : "流程已按驳回结束，未办理的在办任务作废");
                 });
                 if (bizId != null) {
-                    // 业务收尾事件：与镜像办结同属"流程结束必须发生的事"，同样失败即冒泡
-                    // （原实现把整段吞在 catch 里，收尾没跑成也无人知晓）。
+                    // 业务收尾事件：与镜像办结同属"流程结束必须发生的事"，同样失败即冒泡。
+                    // 吞进 catch 的话，收尾没跑成也没人知道。
                     WfProcessEndedEvent ended = new WfProcessEndedEvent(
                             bizType, bizId, approved, comment, rejectType, pi.getId());
                     ended.setTenantId(tenantId);
-                    // D-DEC-093 前置件（P3-A2 方案）：结束事件带出办结操作人，供业务收尾落追责列。
+                    // 结束事件带出办结操作人，供业务收尾落追责列。
                     // 取值只来自 complete() 的 operUserId 形参（见 END_OPER_USER_ID 注释）；
                     // 机器路径 / 未经 complete() 的引擎自动结束 ⇒ 保持为空，不反查 wf_task_history
                     // （末节 APPROVE 行晚于本事件写入数据库，反查＝取到上一节的人＝伪造）。
@@ -285,16 +359,16 @@ public class WfEngineFacade {
 
             @Override
             public boolean isFailOnException() {
-                // G0 止血（方案 §二 F2）：原返回 false ⇒ 监听器内异常被 Flowable 静默吞掉，
-                // 镜像办结与业务收尾"看起来跑了、其实没跑"。改 true：办结失败即回滚流程结束动作，
+                // 返回 true：监听器里的异常必须抛出去。返回 false 会被 Flowable 静默吞掉，
+                // 镜像办结与业务收尾"看起来跑了、其实没跑"；抛出后办结失败即回滚流程结束动作，
                 // 界面可见、可重试（唯一例外是上面 getVariables 的不可恢复分支，已提前 return）。
                 return true;
             }
         }, FlowableEngineEventType.PROCESS_COMPLETED);
-        // === G1 镜像投影化（2026-09-24）===
+        // 镜像投影化
         // 无条件注册：是否真正投影由监听器逐事件判定（projectionEnabled 开关 或 wf.process.mode=QUEUE）。
-        // 【为何不按开关注册】④层「流程处理模式」是运行时参数，运营在系统设置里勾选后必须免重启生效；
-        // 若在启动期决定是否注册，勾选后需重启才生效——那正是方案 §一 症状 2「配置界面向业务承诺引擎没做的事」。
+        // 不按开关注册的原因：「流程处理模式」是运行时参数，运营在系统设置里勾选后必须免重启生效；
+        // 若在启动期决定是否注册，勾选后要重启才生效，等于配置界面向业务承诺了引擎没做的事。
         // 默认态（开关关 + 模式 SYNC）的代价仅是每个相关事件一次内存布尔判定（且事件类型过滤在前，
         // 无关事件零代价），不做任何解析、不读库、不写行——满足硬约束：默认行为零变化。
         runtimeService.addEventListener(mirrorProjectionListener,
@@ -306,14 +380,14 @@ public class WfEngineFacade {
                 FlowableEngineEventType.ENTITY_DELETED,
                 FlowableEngineEventType.PROCESS_COMPLETED,
                 FlowableEngineEventType.TIMER_FIRED);
-        log.info("G1 镜像投影监听器已注册（逐事件判定）：投影开启条件 = fssc.wf.mirror.projection-enabled=true"
+        log.info("镜像投影监听器已注册（逐事件判定）：投影开启条件 = fssc.wf.mirror.projection-enabled=true"
                 + " 或 sys_config.wf.process.mode=QUEUE。两者皆默认关闭时，门面照旧手工写 wf_instance/wf_task，"
                 + "wf_task_history 双写标记 {}。", HISTORY_DUAL_WRITE_MARK);
-        // === G4 ④层「流程处理详细日志」（2026-09-24，参考通行参数 4.3）===
+        // 流程处理详细日志
         // 无条件注册：是否真正写入数据库由 sys_config.wf.log.detailed.enabled 逐事件判定（运行时勾选即生效，
         // 不需重启）。若像镜像投影那样在启动期决定是否注册，运营勾选后必须重启才生效——
-        // 那正是方案 §一 症状 2「配置界面向业务承诺引擎没做的事」。
-        // 与投影监听器同一规则挂全局事件：门面插桩会漏记 F3/F4 两条引擎旁路（SKIP/AUTO_PASS 直连
+        // 那样配置界面就向业务承诺了引擎没做的事。
+        // 与投影监听器同一规则挂全局事件：门面插桩会漏记两条引擎旁路（SKIP / AUTO_PASS 直连
         // taskService），而卡住的单子经常死在旁路上。失败不冒泡（观测增强不得升级为审批失败）。
         runtimeService.addEventListener(processLogListener,
                 FlowableEngineEventType.PROCESS_STARTED,
@@ -329,24 +403,24 @@ public class WfEngineFacade {
     }
 
     /**
-     * 门面是否仍手工写镜像（G1，2026-09-24）。
+     * 门面是否仍手工写镜像。
      *
-     * <p>返回 {@code !projectionEnabled && !queueModeEnabled()}：
-     * 两开关都处于默认态（投影关、模式 SYNC）⇒ true ⇒ 门面照旧手工写，行为零变化；
-     * 任一打开 ⇒ false ⇒ 门面跳过 wf_instance/wf_task 的手工写，交给投影（内联或经发件箱异步）。
-     * 旧写路径代码<b>保留不删</b>，正是方案 §六 G1 要求的回滚规则（"保留旧写路径，用开关切换"）。
+     * <p>返回 {@code !projectionEnabled && !queueModeEnabled()}：两个开关都在默认态
+     * （投影关、模式 SYNC）时返回 true，门面照旧手工写；任一打开则跳过 {@code wf_instance} /
+     * {@code wf_task} 的手工写，交给投影（内联或经发件箱异步）。
+     * 旧写路径<b>保留不删</b>，靠开关切换 —— 回滚时只需要改配置。
      */
     private boolean mirrorByFacade() {
-        // ④层（2026-09-24）：QUEUE 模式下投影由发件箱消费者执行，门面同样必须停写——
-        // 否则发件箱与门面会同时投影同一事件（两个写入者争抢同一行），这正是 G1 要消灭的形态。
+        // QUEUE 模式下投影由发件箱消费者执行，门面同样必须停写——
+        // 否则发件箱与门面会同时投影同一事件，两个写入者争抢同一行。
         return !projectionEnabled && !wfProcessOutboxService.queueModeEnabled();
     }
 
     /**
-     * 给过渡期双写的 wf_task_history 行附加来源标记（G1，2026-09-24）。
+     * 给过渡期双写的 {@code wf_task_history} 行附加来源标记。
      *
-     * <p>开关打开时门面与监听器都会写同一节点的历史行（方案要求的双写），两行 action 相同、内容相近，
-     * 必须能区分来源才能做"双写比对"。无 schema 变更（硬约束：不执行任何 DDL），故标记落在 comment 上。
+     * <p>开关打开时门面与监听器都会写同一节点的历史行，两行 action 相同、内容相近，
+     * 分不出来源就没法做双写比对。不执行任何 DDL，标记只能落在 comment 上。
      */
     private static String markDualWrite(String comment) {
         return (comment == null || comment.isBlank())
@@ -359,21 +433,21 @@ public class WfEngineFacade {
             action.run();
             return;
         }
-        com.fssc.framework.tenant.TenantContext.callAs(tenantId, action);
+        TenantContext.callAs(tenantId, action);
     }
 
     /**
      * 部署业务审批流模板（wf_business_flow → BPMN，key=bizType）。
      *
-     * <p>【R5-D-300】三处规则变化，改前实测依据见 V5 台账 §4v：</p>
+     * <p>三条规则都是有来由的：</p>
      * <ul>
-     *   <li>同 key 只部署一次：{@code wf_business_flow.uk_biz(tenant_id,biz_type)} 实测 NON_UNIQUE=1，
-     *       同 biz_type 可以有第二行；重复行只记 WARN 跳过，不再二次 deploy。</li>
-     *   <li>{@code enableDuplicateFiltering()}：BPMN 内容与上一版一致时 Flowable 复用既有部署、不产生新版本，
-     *       消掉"每次启动版本膨胀"（实测同一 key 8 天累积 31 版、历史 key 已到 235 版）；node_json 一改即出新版本，
-     *       P0-1「以 node_json 为唯一事实源」语义不变。</li>
-     *   <li>try/catch 下沉到单枚：改前整批共用一个 catch，一枚冲突即把后面的流全部吞掉
-     *       （2026-10-07 11:17 prod 起服实证：0 条部署成功日志，其余业务审批流静默未部署）。</li>
+     *   <li>同 key 只部署一次：{@code wf_business_flow.uk_biz(tenant_id,biz_type)} 并非唯一索引
+     *       （NON_UNIQUE=1），同一 biz_type 可以有第二行；重复行只记 WARN 跳过，不再二次 deploy。</li>
+     *   <li>开 {@code enableDuplicateFiltering()}：BPMN 内容与上一版一致时 Flowable 复用既有部署、
+     *       不产生新版本，否则每次启动都涨一个版本号（同一 key 八天涨过 31 版，历史 key 已到 235 版）；
+     *       node_json 一改即出新版本，「以 node_json 为唯一事实源」的语义不变。</li>
+     *   <li>try/catch 下沉到单枚：整批共用一个 catch 时，一枚冲突就把后面的流全部吞掉 ——
+     *       起服日志里只剩 0 条部署成功记录，其余业务审批流静默未部署。</li>
      * </ul>
      */
     public void deployBizFlows() {
@@ -382,11 +456,11 @@ public class WfEngineFacade {
             // 否则 build() 内按 node_key 读取 wf_node_config.multi_type（多实例会签/票签）时，会因无租户上下文
             // 触发 FsscTenantLineHandler.getTenantId() fail-closed 抛异常被吞，导致多实例节点无法生成
             // （现象：BPMN 退化为单办理人 userTask，流程无会签）。
-            com.fssc.framework.tenant.TenantContext.runIgnoreTenant(() -> {
-                java.util.List<com.fssc.workflow.entity.WfBusinessFlow> flows =
+            TenantContext.runIgnoreTenant(() -> {
+                List<WfBusinessFlow> flows =
                         wfBusinessFlowMapper.selectList(null);
-                java.util.Set<String> deployedKeys = new java.util.HashSet<>();
-                for (com.fssc.workflow.entity.WfBusinessFlow f : flows) {
+                Set<String> deployedKeys = new HashSet<>();
+                for (WfBusinessFlow f : flows) {
                     if (f.getNodeJson() == null || f.getNodeJson().isBlank()) continue;
                     // 停用流程（status=DISABLED）不部署 BPMN——保留定义、不产生流程定义版本；
                     // 「启用」操作 = UPDATE status='NORMAL' 后重启（或调用本方法）完成 BPMN 部署。
@@ -401,7 +475,7 @@ public class WfEngineFacade {
                                 f.getFlowCode(), key);
                         continue;
                     }
-                    // P0-1: 以 wf_business_flow.node_json 为唯一事实源生成 BPMN；内容变化即出新版本，
+                    // 以 wf_business_flow.node_json 为唯一事实源生成 BPMN；内容变化即出新版本，
                     // 内容未变则复用既有部署（enableDuplicateFiltering），不再每启动递增版本。
                     try {
                         String flowName = f.getFlowName() == null ? key : f.getFlowName();
@@ -426,13 +500,13 @@ public class WfEngineFacade {
     /** 部署公共子流程（wf_model source=SUBPROCESS，供主流程 callActivity 引用；已部署则跳过；UC12） */
     public void deploySubprocesses() {
         try {
-            java.util.List<com.fssc.workflow.entity.WfModel>[] holder = new java.util.List[1];
-            com.fssc.framework.tenant.TenantContext.runIgnoreTenant(() ->
-                    holder[0] = wfModelMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.workflow.entity.WfModel>()
-                            .eq(com.fssc.workflow.entity.WfModel::getSource, "SUBPROCESS")));
-            java.util.List<com.fssc.workflow.entity.WfModel> subs = holder[0];
+            List<WfModel>[] holder = new List[1];
+            TenantContext.runIgnoreTenant(() ->
+                    holder[0] = wfModelMapper.selectList(new LambdaQueryWrapper<WfModel>()
+                            .eq(WfModel::getSource, "SUBPROCESS")));
+            List<WfModel> subs = holder[0];
             if (subs == null) return;
-            for (com.fssc.workflow.entity.WfModel s : subs) {
+            for (WfModel s : subs) {
                 if (s.getBpmnXml() == null || s.getBpmnXml().isBlank()) continue;
                 long count = repositoryService.createProcessDefinitionQuery().processDefinitionKey(s.getModelKey()).count();
                 if (count > 0) continue;
@@ -464,60 +538,60 @@ public class WfEngineFacade {
     /**
      * 发起流程。
      *
-     * @param bizType  业务类型
-     * @param bizId    业务单据ID
+     * @param bizType 业务类型
+     * @param bizId 业务单据ID
      * @param approver 审批人用户ID（当前节点 assignee）
-     * @param title    流程标题
+     * @param title 流程标题
      * @return 流程实例ID
      */
     public String start(String bizType, Long bizId, Long approver, String title) {
         return start(bizType, bizId, approver, title, null, null);
     }
 
-    public String start(String bizType, Long bizId, Long approver, String title, java.math.BigDecimal amount) {
+    public String start(String bizType, Long bizId, Long approver, String title, BigDecimal amount) {
         return start(bizType, bizId, approver, title, amount, null);
     }
 
-    public String start(String bizType, Long bizId, Long approver, String title, java.math.BigDecimal amount, String subType) {
+    public String start(String bizType, Long bizId, Long approver, String title, BigDecimal amount, String subType) {
         return start(bizType, bizId, approver, title, amount, subType, null);
     }
 
     /** 带附加流程变量的启动（如跨法人调拨注入 targetCompanyId），供审批完成事件回调使用 */
-    public String start(String bizType, Long bizId, Long approver, String title, java.math.BigDecimal amount,
+    public String start(String bizType, Long bizId, Long approver, String title, BigDecimal amount,
                         String subType, Map<String, Object> extraVars) {
         return start(bizType, bizId, approver, title, amount, subType, extraVars, null);
     }
 
     /**
-     * 服务端"不可再发起"的流程配置状态集（ROOT-14）。
+     * 服务端"不可再发起"的流程配置状态集。
      *
-     * <p>{@code DISABLED} 才是本系统真正写出来的停用语义——界面启停走 {@code WfModelService#enable}，
-     * 而此前的发起校验只比对 {@code OFFLINE}（{@code wf_model.status} 现网取值仅 ACTIVE/DEPLOYED，
-     * 两值都不在拦截集内），于是"界面上停了、单据照样提"＝假开关（D-DEC-269）。
-     * {@code OFFLINE} 一并保留，兼容历史/外部写值。
+     * <p>{@code DISABLED} 才是本系统真正写出来的停用语义——界面启停走 {@code WfModelService#enable}。
+     * 发起校验如果只比对 {@code OFFLINE} 就形同虚设：{@code wf_model.status} 现网取值只有
+     * ACTIVE/DEPLOYED，两个值都不在拦截集里，于是"界面上停了、单据照样提"。
+     * {@code OFFLINE} 一并保留，用于兼容历史/外部写入的值。
      */
-    private static final java.util.Set<String> START_BLOCKED_MODEL_STATUS =
-            java.util.Set.of("OFFLINE", "DISABLED");
+    private static final Set<String> START_BLOCKED_MODEL_STATUS =
+            Set.of("OFFLINE", "DISABLED");
 
     /**
-     * 发起侧的"模型已下线/已停用"拦截（E-14 的落地前提，ROOT-14 办结）。
+     * 发起侧的"模型已下线/已停用"拦截。
      *
      * <p>在此之前 {@code wf_model.status} 只有界面读（列表标签 / 按状态筛选），发起走的是
      * {@code startProcessInstanceByKey}——引擎只认 ACT_RE 里有没有可用定义，不认这张配置表，
      * 所以把模型置成停用属于"看着下线了、照样能提单"的假开关。fail-open：查不到、
      * 为 NULL、抛异常一律放行，只拦 {@link #START_BLOCKED_MODEL_STATUS} 里的显式取值。
      *
-     * <p>只管新发起：已在途的实例不受启停位影响（"启用流程／禁用流程"只管后续单据、
-     * 在途实例仍可干预办理的规则〔E·行业元数据规范·330/328〕）。
+     * <p>只管新发起：已在途的实例不受启停位影响——「启用流程／禁用流程」管的是后续单据，
+     * 在途实例仍可干预办理。
      */
     private void rejectIfModelOffline(String processKey) {
         if (processKey == null || processKey.isBlank()) {
             return;
         }
         try {
-            com.fssc.workflow.entity.WfModel m = wfModelMapper.selectOne(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.workflow.entity.WfModel>()
-                            .eq(com.fssc.workflow.entity.WfModel::getModelKey, processKey)
+            WfModel m = wfModelMapper.selectOne(
+                    new LambdaQueryWrapper<WfModel>()
+                            .eq(WfModel::getModelKey, processKey)
                             .last("LIMIT 1"));
             if (m != null && m.getStatus() != null
                     && START_BLOCKED_MODEL_STATUS.contains(m.getStatus().trim().toUpperCase())) {
@@ -532,12 +606,12 @@ public class WfEngineFacade {
     }
 
     /**
-     * 提单时指定首审环节办理人（方案 G2-3）。
+     * 提单时指定首审环节办理人（方案）。
      *
      * @param pickedFirstAssignee 提单人点名的首审办理人；仅当首审节点配成 PICK 档且灰度放行时接受，
      *                            否则抛业务异常——静默丢弃等于让用户以为"我选的人收到了"
      */
-    public String start(String bizType, Long bizId, Long approver, String title, java.math.BigDecimal amount,
+    public String start(String bizType, Long bizId, Long approver, String title, BigDecimal amount,
                         String subType, Map<String, Object> extraVars, Long pickedFirstAssignee) {
         // 优先使用配置的业务审批流（按 业务类型+子类型 解析流程 key），未部署则回退内置报销流程
         String processKey = resolveStartProcessKey(bizType, bizId, subType, amount);
@@ -545,17 +619,17 @@ public class WfEngineFacade {
         Map<String, Object> vars = new HashMap<>();
         vars.put("bizType", bizType);
         vars.put("bizId", bizId);
-        // 缺陷修复（V1.3.17）：approver 为空时不得产生 "null" 字符串——动态指派节点（assignee=${approver}）
-        // 会派给不存在的 "null" 用户导致无人可审。统一用发起人默认处理（与 wf_instance.start_user_id 一致）。
-        // 缺陷D2(20260919)：调用方传入的 approverUserId 此前未经验证直入 ${approver}——零角色/停用用户
-        // 被指派为办理人后，其 JWT 无 per 声明且待办不可见，节点永久卡死。此处统一校验：
-        // 用户存在、NORMAL、未删除、且至少持有一个角色（零角色用户连候选组通道都进不去），否则回退发起人。
+        // approver 为空时不得产生 "null" 字符串——动态指派节点（assignee=${approver}）
+        // 会派给不存在的 "null" 用户，导致无人可审。统一回退到发起人（与 wf_instance.start_user_id 一致）。
+        // 调用方传入的 approverUserId 也不能直入 ${approver}：零角色/停用用户被指派为办理人后，
+        // 其 JWT 无 per 声明且待办不可见，节点永久卡死。这里统一校验用户存在、NORMAL、未删除、
+        // 且至少持有一个角色（零角色用户连候选组通道都进不去），否则回退发起人。
         vars.put("approver", String.valueOf(sanitizeApprover(approver)));
         vars.put("title", title);
         // R1 金额分档健壮性：金额分档流程（node_json 含 金额>/原值>）若调用方未传 amount，将按 0 执行，
         // 金额分档网关走默认流「金额不足→跳过连续分档→直达下个必办/直接结束」，可能静默绕过高级审批。
-        // 此处显式告警暴露风险，便于核查调用方是否漏传单据真实申请金额；行为仍保持（空金额=0）不破坏现有调用。
-        java.math.BigDecimal amt = amount == null ? java.math.BigDecimal.ZERO : amount;
+        // 这里显式告警暴露风险，便于核查调用方是否漏传单据真实申请金额；行为保持（空金额=0），不破坏现有调用。
+        BigDecimal amt = amount == null ? BigDecimal.ZERO : amount;
         if (amount == null && isAmountTieredFlow(processKey)) {
             log.warn("金额分档流程[{}]发起时未传入 amount(bizId={})，将按金额=0 执行并可能跳过分档审批节点，"
                     + "请调用方传入单据真实申请金额，避免静默绕过高级审批", processKey, bizId);
@@ -566,7 +640,7 @@ public class WfEngineFacade {
         // 生产应从提交人所属公司的组织类型驱动；此处按公司层级推断：有上级公司=基地，否则=板块。
         vars.put("orgType", isBaseCompany() ? "BASE" : "GROUP");
         // CLAIM 报销流程在排他网关 Gw_ENT 依据 expenseType 分支（ENTERTAIN=招待费特批链 / 其他=普通链）。
-        // D-DEC-317（批次0 P-2）起特批链由 CLAIM 模型内网关承载（原 CLAIM_G1 独立模型＋:878 硬编码改写已废）；
+        // 特批链由 CLAIM 模型内网关承载，不再有 CLAIM_G1 独立模型与硬编码改写；
         // 变量缺失会抛 "Unknown property"，故仍按单据费用明细是否为招待费(07)判定并注入。
         String expenseType = resolveExpenseType(processKey, bizId);
         if (expenseType != null) {
@@ -575,104 +649,93 @@ public class WfEngineFacade {
         // 导入的 TRAVEL/TRAIN/PREPAY 模型在排他网关依据以下分支变量判断，缺失会抛
         // "Cannot resolve identifier"；统一注入默认值（布尔分支默认 false，走默认序流）：
         //  TRAVEL/TRAIN_G1: hasLoan；G3/G5: overStandard/abroad(outOfPlan)；PREPAY_G1: billType。
-        // 缺陷10(20260918)：overStandard 此前被硬编码 FALSE——报销单差旅费用项目从未参与超标判定。
-        // 现按明细行实算注入（over_std 显式标记优先，否则行金额与费用项目同名标准族最高国内 HARD 标准比对）。
+        // overStandard 必须按明细行实算，不能硬编码 FALSE —— 那样报销单的差旅费用项目就从不参与超标判定。
+        // 算的时候 over_std 显式标记优先，否则拿行金额与费用项目同名标准族的最高国内 HARD 标准比对。
         vars.put("overStandard", resolveOverStandard(processKey, bizId));
         vars.put("abroad", resolveAbroad(processKey, bizId));
-        // P0 修复（2026-09-23）：以下 4 个分支变量此前被写死 Boolean.FALSE，导致以它们为条件的排他网关
-        // 永远走默认序流（"看着能配、实际不生效"）。现改为经解析器真实计算；解析失败或域未建模时
-        // fail-closed 返回 FALSE 并告警，且发布期/试算/预演三类治理点会显式暴露未取值变量（见 WfBpmnChecker 等）。
+        // 以下 4 个分支变量必须经解析器真实计算：写死 Boolean.FALSE 的话，以它们为条件的排他网关
+        // 永远走默认序流，配置看着能配、实际不生效。解析失败或域未建模时 fail-closed 返回 FALSE 并告警；
+        // 发布期/试算/预演三类治理点会显式暴露未取值变量（见 WfBpmnChecker 等）。
         vars.put("hasLoan", resolveHasLoan(processKey, bizId));
         vars.put("outOfPlan", resolveOutOfPlan(processKey, bizId));
         vars.put("overLimit", resolveOverLimit(processKey, bizId));
         vars.put("hasContract", resolveHasContract(processKey, bizId));
-        // D-DEC-389（未标级修复战役 K4）：{@code billType} 的取值域必须与 BPMN 条件字面量<b>同源</b>。
-        // 现网一手证据（wf_model.bpmn_xml 全量抽取，共 11 条 ${billType == '…'} 条件）：
-        //   LOAN:EXP_REPAY｜SETTLE:GL_SALARY_PAY、GL_TAX_PAY｜TR_PAY:TR_BILL、TR_PAY_FAIL｜TR_PLAN:TR_PLAN_ADJUST
-        //   FA_ADD:FA_CIP_TO_ASSET｜FA_DISPOSE:FA_ALIENATE｜FA_TRANSFER:FA_TRANSFER_CROSS｜INVOICE_ISSUE:AR_CLAIM
-        //   SETTLE:PREPAY（唯一一条子类型域字面量）
-        // 除最后一条，全部写在 <b>bizType 域</b>（＝wf_process_config.biz_type 登记值、＝wf_instance.biz_type 写入数据库值）；
-        // 而原实现在 subType 非空时<b>用它覆盖</b> billType，subType 取的是 exp_bill.bill_sub_type 域
-        // （REPAY/LOAN/TRAVEL/SETTLE/PREPAY）。两域不重合 ⇒ <b>修复前</b>条件恒 false：还款单（bizType=EXP_REPAY、
-        // subType=REPAY）在 GW_LN 的「还款反向档」永不命中，「出纳确认还款到账」「还款核销审核」两节
-        // 被整体跳过＝单据绕过出纳与财务审核直接定论（389 正证，与"引擎伪配置"同族）。
-        // <b>归一</b>：billType 一律取 bizType（条件字面量所在域）；单据子类型改由下方<b>新增</b>的
-        // {@code subType} 变量承载——设计器分支面板（{@code WfDesignerController#simulate}）早已把
-        // subType 列为可用条件变量，但门面从未注入，谁写谁"Cannot resolve identifier"，本次一并补齐。
-        //
-        // 【2026-10-15 复核：上方"永不命中"说的是<b>归一修复之前</b>，勿据本段误判 RP_1/RP_2 是死配置】
-        //   归一已随本批落地（下方两行 put），实测<b>还款反向档现已正常可达</b>：
-        //   dev/start(bizType=EXP_REPAY) ⇒ modelKey=LOAN，首节点<b>直接落在 RP_1「出纳确认还款到账【出纳】」</b>
-        //   （LOAN 的 GW_LN 有 {@code Flow_GW_LN_RP_1: GW_LN -> RP_1} 直连分支，RP_2 紧随其后）。
-        //   反向佐证：RP_1/RP_2 的 {@code allow_addsign=0}（全库 11 条禁止档节点之一）已在该节点上
-        //   被加签校验真实拦截并做��了"关闭放行/开启拒绝"对照（见 addSign():3814）。
-        //   ⇒ 「引擎伪配置」在 LOAN 还款档已<b>不成立</b>；排查该链路请按"可达"处理，不要跳过。
-        //  仍待同批改写的唯一一条：SETTLE 模型 GW_ST 的「预付核销档」条件
-        // {@code ${billType == 'PREPAY'}} 要改成 {@code ${subType == 'PREPAY'}}，否则预付单
-        // （现网 1 支：bizType=EXP_PAY + bill_sub_type=PREPAY）会从预付核销档掉进默认流、漏掉
-        // 「预付核销核对／预付复核」两节。该改写落在模型数据（wf_model.bpmn_xml）＋重新部署，
-        // 不属引擎面，已随本批以注释态 SQL 移交主窗发布窗口。<b>本条与上方 LOAN 不同，尚未改写</b>
-        //（LOAN 是引擎侧归一即生效，本条必须改模型数据，故仍以本注释标记待办）。
+        // billType 的取值域必须与 BPMN 条件的字面量同源。现网 {@code ${billType == '…'}}
+        // 条件共 11 条，除 SETTLE 的 {@code PREPAY} 一条用的是子类型，其余全部写在 bizType 域
+        // （＝wf_process_config.biz_type 登记值、＝wf_instance.biz_type 落库值）。
+        // 所以 billType 一律取 bizType；单据子类型另用下面的 subType 变量承载——
+        // 设计器分支面板早就把 subType 列为可用条件变量，门面必须真的注入，
+        // 否则用到它的条件会报 "Cannot resolve identifier"。
+        // 若拿 exp_bill.bill_sub_type（REPAY/LOAN/TRAVEL/SETTLE/PREPAY）去覆盖 billType，
+        // 两域不重合，条件会恒为 false：还款单（bizType=EXP_REPAY、subType=REPAY）在 GW_LN 的
+        // 「还款反向档」永不命中，「出纳确认还款到账」「还款核销审核」两节整体被跳过，
+        // 单据就绕过出纳与财务审核直接定了论。
+        // 注：归一之后还款反向档（RP_1/RP_2）是可达的，排查该链路时不要当成死配置跳过。
+        // 仍待改的一处：SETTLE 模型 GW_ST 的「预付核销档」写着 {@code ${billType == 'PREPAY'}}，
+        // 需改为 {@code ${subType == 'PREPAY'}}，否则预付单（bizType=EXP_PAY + bill_sub_type=PREPAY）
+        // 会掉进默认流、漏掉「预付核销核对／预付复核」两节。这一步要改模型数据并重新部署，
+        // 不在引擎面，已以注释态 SQL 移交发布窗口。
         vars.put("billType", bizType == null || bizType.isBlank() ? "" : bizType);
         vars.put("subType", subType == null || subType.isBlank() ? "" : subType);
         if (extraVars != null) {
             vars.putAll(extraVars);
         }
-        // D-DEC-055/124：镜像列 wf_instance.amount 的查询范围＝入参优先，其次认 extraVars 里显式给的
+        // 镜像列 wf_instance.amount 的取值范围＝入参优先，其次认 extraVars 里显式给的
         // amount 变量。上面 {@code vars.put("amount", amt)} 先落的是"缺参补 0"的执行值（网关判定用），
         // 而 extraVars 在它之后 putAll，可把该键覆盖成单据真实金额——只认 {@code amount} 形参就会把
         // 这类调用（跨法人调拨、批量起流等走 extraVars 传金额的）继续漏成 NULL。
         // 只在入参为空时兜这一步，且取不到数值就保持 NULL（不写 0，避免与"金额=0"档混淆）。
-        java.math.BigDecimal mirrorAmount = amount;
+        BigDecimal mirrorAmount = amount;
         if (mirrorAmount == null && extraVars != null && extraVars.get("amount") != null) {
             mirrorAmount = toAmountOrNull(extraVars.get("amount"));
         }
-        // P1 多实例（会签 ALL / 顺序会签 SEQ / 票签 VOTE）：从 wf_node_config 取本流程所有 multiType∈{ALL,SEQ,VOTE} 的节点，
-        // 把在办候选用户 ID 集合注入 <nodeKey>_assignees，供 BPMN multiInstanceLoopCharacteristics 的 flowable:collection 查询；
+        // 多实例（会签 ALL / 顺序会签 SEQ / 票签 VOTE）：从 wf_node_config 取本流程所有
+        // multiType∈{ALL,SEQ,VOTE} 的节点，把在办候选用户 ID 集合注入 <nodeKey>_assignees，
+        // 供 BPMN multiInstanceLoopCharacteristics 的 flowable:collection 查询；
         // VOTE 节点额外注入 <nodeKey>_approvedCount / <nodeKey>_rejectedCount 计数初值 0（由 complete() 累加驱动提前办结）。
-        // 加性改动：未配置 multiType 的历史 82 流程不会命中（selectList 为空），行为零变化。
+        // 未配置 multiType 的流程不会命中（selectList 为空），对这些流程零影响。
         injectMultiInstanceVars(processKey, vars, bizType, bizId, approver);
-        // === G2「重新提交跳回本节点」跨实例接力（2026-09-24）===
+        // 「重新提交跳回本节点」跨实例接力
         // 单据被驳回后走 REJECTED → DRAFT → 重新 submit，会起一枚【新】流程实例；新实例默认不继承
-        // 旧实例的流程变量，于是驳回时写入旧实例的 rejectOriginNode 从未被消费（只写不读）。此处把同一
+        // 旧实例的流程变量，于是驳回时写入旧实例的 rejectOriginNode 只写不读。这里把同一
         // 业务单据（bizType+bizId）最近一个已驳回历史实例上的关联点取回，并入本次启动变量，供流程定义
-        // （条件表达式/网关）或后续实例修改消费。加性改动：注入的键在无消费方时对引擎完全惰性。
-        // 零影响：本流程未配 resubmit_jump_back=1 节点即直接返回（不查 wf_instance、不注入任何键）；
-        // 全程 try/catch，任何异常只降级为"不注入"，绝不影响提交/重新提交主链路。
+        // 条件表达式/网关或后续实例修改消费。没有消费方时这些键对引擎完全惰性。
+        // 本流程没配 resubmit_jump_back=1 节点时直接返回（不查 wf_instance、不注入任何键）；
+        // 全程 try/catch，任何异常只降级为"不注入"，不影响提交/重新提交主链路。
         RejectAnchor jumpAnchor = injectResubmitJumpBackAnchor(processKey, bizType, bizId, vars);
-        // F2 齐套校验·提单层（人工裁决 RA-F2a：SUBMIT 档只告警不阻断，缺件由 NODE/CONFIRM 档办结）。
+        // 齐套校验·提单层：SUBMIT 档只告警不阻断，真正的缺件拦截在 NODE/CONFIRM 档办结时做。
         // 与下面的点名校验同理，必须排在 startProcessInstance 之前——本方法无事务包裹。
         billCompletenessGuard.assertComplete(processKey, BillCompletenessGuard.STAGE_SUBMIT, bizType, bizId);
         // 提单点名：校验必须在 startProcessInstance 之前——本门面方法无事务包裹，先启动再报错会留下
         // "单据已提交、流程已启动，但用户看到失败"的双态。
         enforcePickOnStart(bizType, bizId, processKey, vars, pickedFirstAssignee);
-        // G1（2026-09-24）：把 biz_no 也注入流程变量。此前它只在门面内现算（resolveBizNo）、不进变量，
-        // 于是镜像投影监听器从变量取不到单号（wf_task/wf_instance 的单号列会整列为空）。加性改动：
-        // 变量多一个键，不改变任何既有分支（原逻辑仍用下面同一个 bizNo 值）。
+        // biz_no 必须同时进流程变量，不能只在门面内现算：镜像投影监听器是从变量取单号的，
+        // 少了这个键，wf_task / wf_instance 的单号列会整列为空。多这一个键不改变既有分支——
+        // 下面各处仍用同一次 resolveBizNo 的结果。
         String bizNo = resolveBizNo(bizType, bizId);
         vars.put("bizNo", bizNo);
         ProcessInstance pi = runtimeService.startProcessInstanceByKey(processKey, vars);
         // 双写业务视图 wf_instance（查询/记录专用，流程门面统一保证）
         try {
-            com.fssc.workflow.entity.WfInstance inst = new com.fssc.workflow.entity.WfInstance();
+            WfInstance inst = new WfInstance();
             inst.setTenantId(TenantContext.getTenantId());
             inst.setProcInstId(pi.getId());
             inst.setProcDefId(pi.getProcessDefinitionId());
             inst.setModelKey(processKey);
             inst.setBizType(bizType);
             inst.setBizId(bizId);
-            // 整改(20260917, DEV-008/VER-016)：发起即回写业务单据号(biz_no)。
-            // 流程实例必须携带业务主键，待办联查、单据追踪、报表反查不依赖查询侧二次回填。
+            // 发起即回写 biz_no：流程实例自己带业务主键，待办联查、单据追踪、报表反查
+            // 就不必在查询侧再回填一次。
             inst.setBizNo(bizNo);
             inst.setTitle(title);
-            // D-DEC-063/055：调用方传入的单据真实金额必须落镜像。此前只写引擎变量 vars，wf_instance.amount 恒 NULL，
-            // 待办视图补账（recordTaskMirror 以 inst.getAmount() 为源）跟着一起空 ⇒ 审批工作台「申请金额」显「-」、
-            // 按金额查询的 DOA/分级/超时策略在镜像侧全部失效。amount 为空时保持 NULL（不写 0，避免与"金额=0"档混淆）。
-            // D-DEC-124 的 amount 环节与此同修点：TR_PAY 批次起流传的是 op_pay_batch.total_amount，
-            // 走 extraVars 传金额的调用由 mirrorAmount 兜住（见上方 D-DEC-055/124 注释）。
+            // 调用方传入的单据真实金额必须落镜像，不能只写引擎变量：wf_instance.amount 为 NULL 时，
+            // 待办视图补账（recordTaskMirror 以 inst.getAmount() 为源）跟着空 ⇒ 审批工作台「申请金额」显「-」，
+            // 按金额取数的 DOA/分级/超时策略在镜像侧全部失效。amount 为空就保持 NULL，
+            // 不写 0——0 是「金额为零」这个档位，两者不能混。TR_PAY 起流传的 op_pay_batch.total_amount
+            // 与经 extraVars 传入的金额都在 mirrorAmount 里汇合，口径见该字段的注释。
             inst.setAmount(mirrorAmount);
             inst.setStartUserId(approverUserIdOrDefault());
-            inst.setStartTime(java.time.LocalDateTime.now());
+            inst.setStartTime(LocalDateTime.now());
             inst.setStatus("RUNNING");
             // 当前节点：首个人工任务。并联会审网关会在启动瞬间扇出多条任务，逐条解析取人
             List<Task> firstTasks = openTasks(pi.getId());
@@ -680,18 +743,17 @@ public class WfEngineFacade {
                 inst.setCurrentNode(joinNodeNames(firstTasks));
                 inst.setCurrentAssignee(String.valueOf(approver));
             }
-            // G1（2026-09-24）：开关打开时门面停写 wf_instance，改由 WfMirrorProjectionListener 的
-            // PROCESS_STARTED 投影建行（它在 startProcessInstanceByKey 内同步执行，故下面依赖
-            // wf_instance 的 nodeOrgResolver.applyResolution 仍能读到该行）。旧写路径保留＝回滚路径。
-            //
-            // D-G46（2026-10-21 G 册实测修）：本行必须排在 applyNodeConfig 之前。首节点的 POOL 智能推送
-            // 在 applyNodeConfig 内同步发生，它经 listOperableUserIds → listRoleCandidates 反查 wf_instance
-            // 取单据公司；实例行尚未写入数据库时 companyIdOfBill 恒为 null，两个后果都实测到了：
-            // ① COMPANY 档角色（FUND_STAFF／FA_ASSET_ADMIN）候选人取空 ⇒ 日志「无可用候选人（含连办校验预检
-            //    筛除），保持抢单池」，TR_PLAN `Task_2`／TR_PAY `TB_1`／FA_ADD `FK_1` 首节全部退化成人工领取；
-            // ② GROUP 档丢掉 D-DEC-413 甲案的「本公司优先」重排（companyFirst 在 companyId==null 时原样返回）
-            //    ⇒ 扫描岗五次推送全落 33 号公司的 3818/莫芳，而本公司首选是 3832/邱雨欣。
-            // 写入内容与原位置逐字相同（inst 各列在上面已填完，applyNodeConfig 不改 inst），只是提前可见。
+            // 镜像开关打开时门面不再写 wf_instance，改由 WfMirrorProjectionListener 的 PROCESS_STARTED
+            // 投影建行（它在 startProcessInstanceByKey 内同步执行，故下面依赖 wf_instance 的
+            // nodeOrgResolver.applyResolution 仍能读到该行）。门面这条写路径保留，作为回滚开关。
+            // 这一行必须排在 applyNodeConfig 之前。首节点的 POOL 智能推送在 applyNodeConfig 内同步发生，
+            // 它经 listOperableUserIds → listRoleCandidates 反查 wf_instance 取单据公司；实例行还没落库时
+            // companyIdOfBill 恒为 null，会连带两处走样：
+            // ① COMPANY 档角色（FUND_STAFF / FA_ASSET_ADMIN）候选人取空，日志落「无可用候选人…保持抢单池」，
+            //    这批首节全部退化成人工领取；
+            // ② GROUP 档丢掉「本公司优先」重排（companyFirst 在 companyId == null 时原样返回），
+            //    推送结果会落到别家公司的人头上。
+            // 写入内容与原来完全一致——inst 各列在上面已填完，applyNodeConfig 也不改 inst——只是提前可见。
             if (mirrorByFacade()) {
                 wfQueryService.recordInstance(inst);
             }
@@ -701,24 +763,23 @@ public class WfEngineFacade {
                     applyNodeConfig(processKey, t);
                 }
             }
-            // ROOT-3 / D-TRC-01：审批/转办/撤回都有记录，唯独「提单」这一段从不落 wf_task_history，
+            // 审批、转办、撤回都有记录，唯独「提单」这一段从不落 wf_task_history，
             // 于是从提单到归档的时间线天生缺第一段，联查只能从第一个审批节点开始。发起动作必须自己记账。
             writeHistory(pi.getId(), null, "SUBMIT", "提单", "SUBMIT", inst.getStartUserId(), title);
-            // V1.3.16 多公司路由：首任务办理人解析（须在 recordInstance 之后，解析器依赖 wf_instance）
+            // 多公司路由：首任务办理人解析（须在 recordInstance 之后，解析器依赖 wf_instance）
             boolean firstNodeSkipped = false;
             for (Task t : firstTasks) {
-                // V1.3.22 同款修正补齐（complete 路径 assignApprover 已修，start 路径当时漏改，2026-09-23 补）：
-                // applyNodeConfig 可能刚按节点配置重设了首任务办理人，但 firstTasks 是**重设之前**查询的
-                // 快照（getAssignee() 仍为 null）。不重查就交给 applyResolution，其「已有 assignee 就跳过」
-                // 守卫会失效，把配置指定的人覆盖回 BPMN 候选组的首个持有人——表现为「指定审批人配了不生效」。
-                // 实测 2026-09-23：P2_TO 配 assign_type=USER/3899，被 FSSC_AUDITOR 候选组覆盖成 3797。
+                // 必须重查任务的活体状态，不能用 firstTasks 里的旧快照：applyNodeConfig 刚按节点配置
+                // 重设过首任务办理人，而 firstTasks 是重设<b>之前</b>查的，getAssignee() 仍为 null。
+                // 拿它交给 applyResolution，「已有 assignee 就跳过」这道守卫就失效了，配置指定的人会被
+                // 候选组的首个持有人覆盖掉——表面症状就是「指定审批人配了不生效」。
                 Task first = t.getId() == null ? t
                         : taskService.createTaskQuery().taskId(t.getId()).singleResult();
                 if (first == null) {
                     continue;
                 }
                 nodeOrgResolver.applyResolution(first);
-                // V1.3.21 空策略默认处理：首节点若在本单据公司内无候选办理人，按 wf_node_config.empty_strategy
+                // 空策略兜底：首节点若在本单据公司内无候选办理人，按 wf_node_config.empty_strategy
                 // 转管理员/跳过/报错，避免发起即静默滞留。首节点通常为 INITIATOR（已带 assignee），此处多为空操作。
                 String empty = nodeOrgResolver.applyEmptyStrategy(processKey, first);
                 recordEmptyStrategy(first, empty);
@@ -726,22 +787,21 @@ public class WfEngineFacade {
             }
             // 待办视图双写 wf_task（PENDING，处理人=解析后的真实办理人）
             if (!firstTasks.isEmpty() && !firstNodeSkipped) {
-                List<String> openAssignees = new java.util.ArrayList<>();
-                // ================ 自确认节点自动跳过 ================
+                List<String> openAssignees = new ArrayList<>();
+                // 自确认节点自动跳过
                 // 首节点（提交确认类）审批人=提交人时，流程启动即自动通过首节点（提交即通过）：
                 // 不通知、不产生人工待办（wf_task 随 complete 置 DONE）；仅跳过首节点，后续节点正常流转。
                 // 复用 complete() 审批通道且与 start 同事务执行，避免 ACT_RU_TASK 与 wf_* 视图状态不一致。
                 // 注意：须在 recordTask 之后执行，complete→markTaskDone 才能把本条待办置 DONE。
                 for (Task t : firstTasks) {
-                    // 双账对齐：①②级解析改的是引擎侧 ASSIGNEE_，内存里的任务对象仍是解析前的旧快照，
-                    // 沿用 approver 写镜像会让两本账从第一个节点起就不一致（实测镜像 assignee_id=3800、
-                    // 引擎 ASSIGNEE_=3805，而催办/看板/共享中心待办全部按镜像找人——单子在真人手里却催不到）。
-                    // 故一律按重查到的实时任务写镜像与实例视图。
+                    // 镜像一律按重查到的实时任务写：①②级解析改的是引擎侧 ASSIGNEE_，内存里的任务对象
+                    // 还是解析前的快照。沿用 approver 写镜像，两本账从第一个节点起就会叉开，而催办、看板、
+                    // 共享中心待办全部按镜像找人——单子在真人手里却催不到。
                     Task live = taskService.createTaskQuery().taskId(t.getId()).singleResult();
                     if (live == null) {
                         continue;   // 已被空策略处置掉，给消失的 taskId 写 PENDING＝永远办不掉的幽灵待办
                     }
-                    // G1（2026-09-24）：开关打开时停写 wf_task，改由监听器 TASK_CREATED 投影建行
+                    // 镜像开关打开时停写 wf_task，改由监听器 TASK_CREATED 投影建行
                     if (mirrorByFacade()) {
                         recordTaskMirror(processKey, live);
                     }
@@ -751,7 +811,7 @@ public class WfEngineFacade {
                     }
                     boolean autoSkipped = autoSkipSelfConfirmFirstNode(processKey, live);
                     // 消息多渠道：通知解析后的真实办理人（站内信 + 企微/邮件按配置）；该支已自动跳过则不产生待办通知
-                    // D-DEC-146/194：候选组/POOL 态不再回落 approver（＝提单人/首选审批人，
+                    // 候选组/POOL 态不回落 approver（＝提单人/首选审批人，
                     // 甚至被 deny_self 禁办的人）——按 todoNotifyTargets 发全体候选人，封顶 20。
                     if (!autoSkipped) {
                         for (Long target : todoNotifyTargets(live)) {
@@ -767,20 +827,18 @@ public class WfEngineFacade {
                 }
                 // 双账对齐回写：镜像写的是解析后的真人，实例视图"当前办理人"必须跟上一致；
                 // 并联扇出时＝各支在办人合集。
-                // D-DEC-228（2026-09-26）：无人认领（候选组/POOL）时**不能**沿用 recordInstance 写入的
-                // "提单人"——提单人那一环节早已办结，列表/看板/大屏的"当前在办人"会把单据挂在一个与本
-                // 环节无关的人身上（实测 14 条在办实例中 2 条中招：CLAIM id=45 显示 3795、SETTLE id=98
-                // 显示 3869，两者都是提单人，而活体任务的 assignee 为空、候选人里也没有这两人）。
-                // 规则与 {@code syncInstanceAfterAdvance} 逐字一致：按重查到的活体任务算，算不出人即空串。
+                // 无人认领（候选组/POOL）时不能沿用 recordInstance 写入的提单人：提单人那一环节早已办结，
+                // 列表/看板/大屏的"当前在办人"会把单据挂在跟本环节无关的人身上。
+                // 规则与 {@code syncInstanceAfterAdvance} 一致：按重查到的活体任务算，算不出人就是空串。
                 if (mirrorByFacade()) {
                     List<Task> liveOpen = openTasks(pi.getId());
                     if (liveOpen.isEmpty() && !openAssignees.isEmpty()) {
-                        // 首任务全被自动跳过/空策略吃掉：保持改造前规则（此刻实例视图已由推进路径同步）
-                        com.fssc.workflow.entity.WfInstance iupd = new com.fssc.workflow.entity.WfInstance();
+                        // 首任务全被自动跳过或空策略吃掉：沿用原规则（实例视图此刻已由推进路径同步过）
+                        WfInstance iupd = new WfInstance();
                         iupd.setCurrentAssignee(String.join(",", openAssignees));
                         wfQueryService.updateInstance(iupd, pi.getId());
                     } else if (!liveOpen.isEmpty()) {
-                        com.fssc.workflow.entity.WfInstance iupd = new com.fssc.workflow.entity.WfInstance();
+                        WfInstance iupd = new WfInstance();
                         iupd.setCurrentAssignee(liveOpen.stream()
                                 .map(t -> t.getAssignee() == null ? "" : t.getAssignee())
                                 .filter(s -> !s.isEmpty()).reduce((a, b) -> a + "," + b).orElse(""));
@@ -793,7 +851,7 @@ public class WfEngineFacade {
                 assignApprovers(processKey, pi.getId());
                 if (mirrorByFacade()) {
                     List<Task> after = openTasks(pi.getId());
-                    com.fssc.workflow.entity.WfInstance iupd = new com.fssc.workflow.entity.WfInstance();
+                    WfInstance iupd = new WfInstance();
                     iupd.setCurrentNode(joinNodeNames(after));
                     iupd.setCurrentAssignee(after.stream()
                             .map(t -> t.getAssignee() == null ? "" : t.getAssignee())
@@ -801,16 +859,15 @@ public class WfEngineFacade {
                     wfQueryService.updateInstance(iupd, pi.getId());
                 }
             }
-            // F5-②（2026-09-26，方案 §6 步骤 5）：重提跳响应行面。必须排在上面首任务镜像/通知<b>之后</b>——
-            // 搬执行要把这条刚建好的首任务连同镜像一起收尾，先搬后写＝给已消失的 taskId 写 PENDING 幽灵待办。
-            // 总开关缺省关（wf.resubmit.jumpback.enabled 未置 1）时本调用直接 return，行为与改造前逐字一致。
+            // 重提跳回必须排在上面首任务镜像/通知<b>之后</b>：搬运执行会把这条刚建好的首任务连同镜像
+            // 一起收尾，先搬后写等于给已消失的 taskId 写一行 PENDING 幽灵待办。
+            // 总开关缺省关（wf.resubmit.jumpback.enabled 未置 1）时这里直接 return，不发生任何搬运。
             consumeRejectAnchor(processKey, pi.getId(), amount, jumpAnchor);
         } catch (Exception ex) {
-            // G0 止血（方案 §二 F2）：整个 try 块都是"引擎之外的第二本账"（wf_instance/wf_task/
-            // wf_task_history）写入数据库，此前只打一行 log 就 return pi.getId()——调用方以为提单成功，
-            // 而待办/实例视图可能压根没写进去（F13 漂移来源之一）。现记缺陷后原样冒泡：
-            // 「保留业务不回滚」＝引擎侧流程实例已启动、不回滚；「冒泡」＝提单界面必须看见失败，
-            // 并附错误码与可对账的定位信息。
+            // 整个 try 块写的都是引擎之外的第二本账（wf_instance / wf_task / wf_task_history）。
+            // 这部分失败只打一行 log 就返回 pi.getId() 的话，调用方以为提单成功，而待办/实例视图
+            // 可能压根没写进去。所以先记缺陷再原样冒泡：引擎侧流程实例已启动、不回滚是既定行为，
+            // 但提单界面必须看见失败，并拿到错误码与可对账的 procInstId。
             mirrorDefectRecorder.record(WfMirrorDefectRecorder.CODE_MIRROR_WRITE_FAILED, "start",
                     null, "bizType=" + bizType + " bizId=" + bizId + " procInstId=" + pi.getId(), ex);
             if (ex instanceof RuntimeException re) {
@@ -835,49 +892,45 @@ public class WfEngineFacade {
      *      自审禁止（approve.deny_self）对"无历史任务的首节点"豁免，不会被误拦；</li>
      *  <li>与本方法同一事务（调用方事务）内完成，避免引擎与视图状态不一致；</li>
      *  <li>自动跳过失败（如权限校验异常）仅记录 error，首任务保留待办走人工审批，不阻断单据提交。</li>
-     *  <li><b>F10（G4 治理）</b>："提单即完成"由显式属性 {@code wf_node_config.first_node_auto_pass}
-     *      承载；RA-ROOT-16（2026-09-27 第三轮）摘除"列 NULL 时回退节点名含'提交'"的过渡分支，
-     *      名称不再参与（判据见 {@link #isFirstNodeAutoPass}）。</li>
+     *  <li><b>只看显式属性</b>："提单即完成"由 {@code wf_node_config.first_node_auto_pass}
+     *      承载，节点名不参与判定——名称是给人看的，改个名就换行为不算配置
+     *      （判断见 {@link #isFirstNodeAutoPass}）。</li>
      * </ul>
      *
      * @return true=首节点已自动通过
      */
     private boolean autoSkipSelfConfirmFirstNode(String processKey, Task firstTask) {
         try {
-            // POOL 作业池档一律不自动跳过（批次3 C6 / 挂账 R4-02）：任务池的语义是"池内谁做、记录到人"，
-            // 而本方法下面的两个判据都会把发起人自己算成命中——
+            // POOL 作业池档一律不自动跳过：任务池的语义是"池内谁做、记录到人"，
+            // 而本方法下面的两处判断都会把发起人自己算成命中——
             //   ① 节点名含"提交"即无条件自动完成；② firstNodeAssignedTo 除 assignee==发起人外，
             //      还认「候选组里含发起人自己的角色」。
-            // ⇒ 提单人若恰好持有首节点作业岗的角色（例如 FA_ADD.Task_1 建档池【FA_ASSET_ADMIN】、
-            //    GL_SALARY_PAY.Task_1 工资发放数据计算【FIN_GL】，均为 sort=1 的 POOL 链首），
+            // ⇒ 提单人若恰好持有首节点作业岗的角色（例如 FA_ADD.Task_1 建档池（FA_ASSET_ADMIN）、
+            //    GL_SALARY_PAY.Task_1 工资发放数据计算（FIN_GL），均为 sort=1 的 POOL 链首），
             //    作业节点<b>不产生待办、原地自动通过</b>，
             //    记录写"自确认节点自动跳过"——作业量从台账上消失，共享中心的抢单/派单规则也失真。
-            // 第七~十族把大量作业节点改判 POOL 后，链首（sort=1）POOL 节点已达 15 个、全库 POOL 48 行
-            // （bpmn-repo/drafts/batch3/pool-head.log），因此办结在池档这一侧：池内节点必须真实产生一次"领取→办理"。
+            // 池内节点必须真实产生一次"领取→办理"，扣子就留在池档这一侧。
             if (nodeOrgResolver.isPoolTask(firstTask)) {
                 log.info(" 流程 {} 首节点[{}]为 POOL 任务池档，不自确认跳过（作业须留痕到人）: procInstId={}, taskId={}",
                         processKey, firstTask.getName(), firstTask.getProcessInstanceId(), firstTask.getId());
                 return false;
             }
-            // ═══ 首节点"提单即自动通过"：只认节点级显式属性，名称一律不参与判定 ═══
-            // F10（G4 治理，2026-09-24）把语义挂到 wf_node_config.first_node_auto_pass；
-            // RA-ROOT-16（2026-09-27 人工裁决第三轮）摘除"属性为 NULL 时回退节点名含'提交'"的过渡分支：
-            // 通用做法把这类跳过写成节点级勾选且**默认不勾选**（〔E·行业元数据规范·436〕「没有参与人时跳过本节点…默认不勾选」），
-            // 名称从来不是判据；靠名称命中＝改个节点名就改了控制流，不可测试也不可审计。
-            // "参与人为空时跳过"另有节点级列 empty_strategy=SKIP 承载，与本判据分列、互不代偿。
+            // 首节点"提单即自动通过"只认节点级显式属性，名称不参与判定：
+            // 语义挂在 wf_node_config.first_node_auto_pass 上，这类跳过一律做成节点级勾选、且默认不勾选。
+            // 靠名称命中等于改个节点名就改了控制流，既不可测试也不可审计。
+            // "参与人为空时跳过"另有节点级列 empty_strategy=SKIP 承载，与本判断分列、互不代偿。
             WfNodeConfig firstNodeCfg = wfNodeConfigResolver.resolve(processKey,
                     firstTask == null ? null : firstTask.getTaskDefinitionKey());
             if (isFirstNodeAutoPass(firstNodeCfg)) {
                 log.info(" 流程 {} 首节点[{}]已勾选「提单即自动通过」（first_node_auto_pass=1），自动完成: procInstId={}, taskId={}",
                         processKey, firstTask.getName(), firstTask.getProcessInstanceId(), firstTask.getId());
-                // D-V5R-07（F-run-1017b 实测，借款链 JK202610170001）：提交节点自动通过前必须把办理人
-                // 归位到发起人本人。角色取人（如 LOAN.Task_1 assign_type=ROLE/COMMON_EMP）会把首任务派给
-                // 「角色下 sys_user.id 最小的持有人」（实测派给共享会计 100002/赵勇，而非申请人 100001/丁宇轩），
-                // 机器办结后该持有人即在审批历史里留下「办过本实例一个节点」，后续其本人节点
-                // （Task_9 共享费用审核）被连办校验 approve.deny_serial_same_handler 误拦：
-                // 403「禁止同一人在同一审批流程中连续办理多个节点（连办/自审拦截）」，只能转办才走完。
+                // 提交节点自动通过前必须把办理人归位到发起人本人。角色取人（如 LOAN 首节点
+                // assign_type=ROLE/COMMON_EMP）会把首任务派给角色下 sys_user.id 最小的持有人，
+                // 而不是申请人；机器办结后该持有人就在审批历史里留下"办过本实例一个节点"，
+                // 轮到他自己的节点时会被连办校验 approve.deny_serial_same_handler 误拦
+                // （403 禁止同一人连续办理多个节点），只能转办才走得完。
                 // 「提单即自动通过」的语义是发起人的提交动作本身，办结人理应记发起人；
-                // 归位后镜像 wf_task/实例视图同步更新，双账一致。
+                // 归位后镜像 wf_task 与实例视图同步更新，两本账一致。
                 Long initiator = approverUserIdOrDefault();
                 Long passOper = null;
                 if (initiator != null && initiator > 0) {
@@ -920,15 +973,14 @@ public class WfEngineFacade {
     }
 
     /**
-     * 首节点是否"提单即自动通过"——全局唯一判据（RA-ROOT-16 · 2026-09-27 人工裁决第三轮定档）。
+     * 首节点是否"提单即自动通过"——全局只有这一处判断。
      *
      * <p>只认节点级显式属性 {@code wf_node_config.first_node_auto_pass = 1}，<b>未配置＝不跳过</b>。
-     * 此前"列为 NULL 时回退节点名含'提交'"的过渡分支已摘除：通用做法把这类跳过做成节点级勾选、且原文写明
-     * <b>默认不勾选</b>（〔E·行业元数据规范·436〕「没有参与人时跳过本节点…默认不勾选」），名称从来不是判据。
+     * 这类跳过一律做成节点级勾选、默认不勾选，节点名从来不参与判断。
      *
-     * <p>行为变更如实登记：NULL 且名称含"提交"的历史首节点，改前被静默跳过、改后产生真实人工待办。
-     * 受影响面由 {@code 临时脚本/first_node_auto_pass_census_20260927.cjs} 只读普查给出。
-     * 「参与人为空时跳过」由 {@code empty_strategy=SKIP} 独立承载，不由本判据代偿。
+     * <p>取值从"未配置且名称含『提交』则跳过"收紧为"只认显式勾选"之后，那些没勾选、
+     * 名称里却带『提交』的首节点会从静默跳过变成产生真实人工待办 —— 这是有意的行为变化。
+     * 「参与人为空时跳过」由 {@code empty_strategy=SKIP} 独立承载，不由本方法代偿。
      */
     private boolean isFirstNodeAutoPass(WfNodeConfig cfg) {
         return cfg != null && cfg.getFirstNodeAutoPass() != null && cfg.getFirstNodeAutoPass() == 1;
@@ -945,19 +997,19 @@ public class WfEngineFacade {
             return true;
         }
         // 候选组（发起人角色码）
-        java.util.List<String> roleCodes = roleCodesOfUser(userId);
+        List<String> roleCodes = roleCodesOfUser(userId);
         return !roleCodes.isEmpty()
                 && taskService.createTaskQuery().taskId(task.getId()).taskCandidateGroupIn(roleCodes).count() > 0;
     }
 
     /** 用户角色码列表（候选组判定用），查询失败返回空列表 */
-    private java.util.List<String> roleCodesOfUser(Long userId) {
-        java.util.List<String> roleCodes = new java.util.ArrayList<>();
+    private List<String> roleCodesOfUser(Long userId) {
+        List<String> roleCodes = new ArrayList<>();
         try {
-            java.util.List<com.fssc.system.entity.SysUserRole> urs = sysUserRoleMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysUserRole>()
-                            .eq(com.fssc.system.entity.SysUserRole::getUserId, userId));
-            java.util.List<Long> roleIds = urs.stream().map(com.fssc.system.entity.SysUserRole::getRoleId).toList();
+            List<SysUserRole> urs = sysUserRoleMapper.selectList(
+                    new LambdaQueryWrapper<SysUserRole>()
+                            .eq(SysUserRole::getUserId, userId));
+            List<Long> roleIds = urs.stream().map(SysUserRole::getRoleId).toList();
             if (!roleIds.isEmpty()) {
                 sysRoleMapper.selectBatchIds(roleIds).forEach(r -> {
                     if (r.getRoleCode() != null) roleCodes.add(r.getRoleCode());
@@ -970,30 +1022,30 @@ public class WfEngineFacade {
     }
 
     /**
-     * 解析流程定义 key：<b>唯一权威＝流程绑定表 wf_process_config</b>（G4 第 2 条「路由合一」）。
+     * 解析流程定义 key：<b>唯一权威＝流程绑定表 {@code wf_process_config}</b>。
      *
-     * <p><b>为什么摘掉内置 switch</b>：此前本方法先查绑定表，未命中/目标未部署/查询异常三处
-     * 都 {@code log.warn} 后回退到一段 jar 内置的 {@code switch(bizType)} 硬编码映射。那等于
-     * 同一件事有两个真值来源：界面能改的绑定表，与改不动的代码常量。二者的差集就是"配了也不生效"
-     * 或"没配也能跑"的静默分叉，且回退路径只在日志里留一行 warn，无人会看。
-     * 现在 wf_process_config 是唯一路由权威：
+     * <p><b>为什么不留内置 switch</b>：若先查绑定表、未命中或查询异常时回退到 jar 内置的
+     * {@code switch(bizType)} 硬编码映射，同一件事就有了两个真值来源 —— 界面能改的绑定表，
+     * 与改不动的代码常量。二者的差集就是"配了也不生效"或"没配也能跑"的静默分叉，
+     * 而回退路径只在日志里留一行 warn，没人会去看。
+     * 现在 {@code wf_process_config} 是唯一路由权威：
      * <ul>
      *   <li>绑定表命中且目标已部署 → 返回；</li>
      *   <li>绑定表未命中 → {@link WfProcessConfigService#resolveModelKey} 自己抛
-     *       {@code BizException}，原样冒泡（不再吞掉后落 switch）；</li>
-     *   <li>绑定表查询异常 → 原样冒泡（配置面坏了就必须暴露，不能静默降级到硬编码）；</li>
+     *       {@code BizException}，原样冒泡；</li>
+     *   <li>绑定表查询异常 → 原样冒泡（配置面坏了必须暴露，不能静默降级到硬编码）；</li>
      *   <li>绑定表命中但目标未部署 → 直接抛 {@code BizException}（提示已绑定的 key 未部署）。</li>
      * </ul>
-     * 末尾"路由断链拒绝发起"（D-B3-11 的 P0 止血）保留：它是最后一道默认处理，防止任何路径
-     * 静默落到 jar 内置的孤儿流程 expenseClaim。
+     * 末尾"路由断链拒绝发起"保留：它是最后一道兜底，防止任何路径静默落到
+     * jar 内置的孤儿流程 expenseClaim。
      */
-    private String resolveProcessKey(String bizType, String subType, java.math.BigDecimal amount) {
+    private String resolveProcessKey(String bizType, String subType, BigDecimal amount) {
         if (bizType == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "业务类型为空，无法路由流程，已拒绝发起。");
         }
         // 绑定表精确匹配（同 bizType 多条按 priority 取金额区间命中的）
         Long companyId = null;
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         if (u != null) {
             companyId = u.getCompanyId();
         }
@@ -1005,13 +1057,13 @@ public class WfEngineFacade {
                             + " 的绑定规则未给出流程 key，已拒绝发起。"
                             + "请先在【单据类型流程绑定】配置流程后再提交。");
         }
-        // 批次3 R2 加固：绑定表这条路径原本不查部署存在性（内置映射查），
-        // 一旦有人把行指向未部署/已删除的 key，发起会直接抛 Flowable 异常而不是回退。
+        // 绑定表这条路径必须自己查部署存在性：内置映射在代码里查得到，绑定表里的一行却可能指向
+        // 未部署或已删除的 key，那样发起会直接抛 Flowable 异常而不是回退。
         long boundDefs = repositoryService.createProcessDefinitionQuery().processDefinitionKey(bound).count();
         if (boundDefs > 0) {
             return bound;
         }
-        // G4 第 2 条：命中但未部署不再回退 switch —— 绑定表说什么就是什么，断链即报错
+        // 绑定表命中但目标未部署：不回退 switch —— 绑定表说什么就是什么，断链即报错
         log.error("流程绑定表命中但目标未部署，拒绝发起: bizType={}, subType={}, boundKey={}", bizType, subType, bound);
         throw new BizException(ErrorCode.PARAM_INVALID,
                 "流程路由断链：业务类型 " + bizType + (subType == null ? "" : "/" + subType)
@@ -1020,36 +1072,36 @@ public class WfEngineFacade {
     }
 
     /**
-     * 发起用的流程 key＝{@link #resolveProcessKey} 的绑定表解析，无任何按 key 的改写。
+     * 发起用的流程 key＝{@link #resolveProcessKey} 的绑定表解析，没有任何按 key 的改写。
      *
-     * <p>D-DEC-317（20260928，批次0 P-2）：删除"CLAIM 明细含 07 招待费 ⇒ 改写 CLAIM_G1"的硬编码路由
-     * （缺陷9(20260918)接线）。招待费特批链改由 CLAIM 模型内部的 expenseType 排他网关承载
-     * （Gw_ENT：${expenseType=='ENTERTAIN'} 走特批分支，default 走普通链），
-     * 与其余 88 条流程的"绑定表命中＋流程内网关分档"规则一致；硬编码路径此前绕过
-     * {@code resolveProcessKey} 的 sub_type 面，并档后会造成网关与硬编码双命中。
-     * CLAIM_G1 模型转入只读留档（4 支历史实例 proc_inst_id 不动），待批次3 并档后软删。
+     * <p>招待费特批链由 CLAIM 模型内部的 {@code expenseType} 排他网关承载
+     * （Gw_ENT：{@code ${expenseType=='ENTERTAIN'}} 走特批分支，default 走普通链），
+     * 与其余流程"绑定表命中＋流程内网关分档"的规则一致。若在这里做"明细含 07 招待费 ⇒
+     * 改写 CLAIM_G1"的硬编码路由，就绕过了 {@code resolveProcessKey} 的 sub_type 面，
+     * 并档后还会造成网关与硬编码双命中。CLAIM_G1 模型已转入只读留档，
+     * 4 支历史实例的 proc_inst_id 保持不动。
      *
-     * <p>保留独立方法的原因不变：提单弹窗要先知道"这单会落到哪条流程的哪个节点"才能取候选人，
+     * <p>单独留一个方法的原因：提单弹窗要先知道"这单会落到哪条流程的哪个节点"才能取候选人，
      * 弹窗与实际启动必须走同一个入口。
      */
-    private String resolveStartProcessKey(String bizType, Long bizId, String subType, java.math.BigDecimal amount) {
+    private String resolveStartProcessKey(String bizType, Long bizId, String subType, BigDecimal amount) {
         return resolveProcessKey(bizType, subType, amount);
     }
 
     /**
-     * 批次3 R2 路由试算（只读，不写库、不发起实例）：把 {@link #resolveProcessKey} 的三级链路拆开返回。
+     * 路由试算（只读，不写库、不发起实例）：把 {@link #resolveProcessKey} 的三级链路拆开返回。
      *
-     * <p>用途＝wf_process_config 镜像迁移的改前/改后逐格比对：同一入参、同一登录人，落点必须一致。
+     * <p>用途＝wf_process_config 镜像迁移前后的逐格比对：同一入参、同一登录人，落点必须一致。
      * 与真实发起的唯一差异是 bizId 传 null，因此招待费特批链的 CLAIM→CLAIM_G1 改写不会发生；
      * 那一步发生在 resolveProcessKey 之后，不影响这里要证的「绑定表 vs 内置映射」等价性。
      */
-    public Map<String, Object> previewRouting(String bizType, String subType, java.math.BigDecimal amount) {
-        Map<String, Object> r = new java.util.LinkedHashMap<>();
+    public Map<String, Object> previewRouting(String bizType, String subType, BigDecimal amount) {
+        Map<String, Object> r = new LinkedHashMap<>();
         r.put("bizType", bizType);
         r.put("subType", subType);
         r.put("amount", amount);
         Long companyId = null;
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         if (u != null) {
             companyId = u.getCompanyId();
         }
@@ -1064,7 +1116,7 @@ public class WfEngineFacade {
         try {
             finalKey = resolveProcessKey(bizType, subType, amount);
         } catch (BizException ex) {
-            // D-B3-11 后断链会抛异常；试算端点仍须把"断链"作为可读数返回，供 110 格比对使用
+            // 后断链会抛异常；试算端点仍须把"断链"作为可读数返回，供 110 格比对使用
             r.put("finalKey", null);
             r.put("brokenLink", true);
             r.put("brokenLinkReason", ex.getMessage());
@@ -1079,14 +1131,14 @@ public class WfEngineFacade {
     }
 
     /**
-     * 判定流程是否真的按金额分档（批次3 R3-D 改判真值来源）。
+     * 判定流程是否真的按金额分档。
      *
-     * <p>改前读 {@code wf_business_flow.node_json} 里的「金额>／原值>」文案。那是导入期的<b>设计说明</b>，
-     * 与网关实际条件没有约束关系：批次2 起 BPMN 结构重造只改 XML 不改 node_json ⇒ 告警双向失真
-     * （XML 里新加了金额网关 ⇒ 这里不响，静默绕过高级审批；node_json 残留旧文案 ⇒ 一直空响）。</p>
+     * <p>判断不能读 {@code wf_business_flow.node_json} 里的「金额>／原值>」文案：那是导入期的<b>设计说明</b>，
+     * 与网关实际条件没有约束关系。BPMN 结构重造之后只改 XML 不改 node_json，告警就会双向失真
+     * （XML 里新加了金额网关这里不响，静默绕过高级审批；node_json 残留旧文案则一直空响）。</p>
      *
-     * <p>现与发布校验同源：取该 key 最新已部署定义的序列流条件，命中 {@code amount} 词元即算分档
-     * （判据在 {@link WfBpmnChecker#referencesAmount}，只写一遍）。缓存键改用 procDefId——
+     * <p>所以与发布校验同源：取该 key 最新已部署定义的序列流条件，命中 {@code amount} 词元即算分档
+     * （判断在 {@link WfBpmnChecker#referencesAmount}，只写一遍）。缓存键用 procDefId——
      * 重发布必然升版本，不会拿着上一版的结论。</p>
      */
     private boolean isAmountTieredFlow(String processKey) {
@@ -1120,7 +1172,7 @@ public class WfEngineFacade {
 
     /** 当前登录用户ID，无则取 0 */
     private Long approverUserIdOrDefault() {
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         return u == null || u.getUserId() == null ? 0L : u.getUserId();
     }
 
@@ -1136,7 +1188,7 @@ public class WfEngineFacade {
         if (userId == null || userId <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, actionLabel + "目标用户必填");
         }
-        com.fssc.system.entity.SysUser su = sysUserMapper.selectById(userId);
+        SysUser su = sysUserMapper.selectById(userId);
         if (su == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, actionLabel + "目标用户不存在（ID " + userId + "）");
         }
@@ -1150,8 +1202,8 @@ public class WfEngineFacade {
                             + su.getStatus() + "，指派后无人可办，单据会卡在节点上");
         }
         Long roleCount = sysUserRoleMapper.selectCount(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysUserRole>()
-                        .eq(com.fssc.system.entity.SysUserRole::getUserId, userId));
+                new LambdaQueryWrapper<SysUserRole>()
+                        .eq(SysUserRole::getUserId, userId));
         if (roleCount == null || roleCount == 0L) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     actionLabel + "目标 " + su.getNickName() + "（" + su.getUserName() + "）未持有任何角色，"
@@ -1171,11 +1223,11 @@ public class WfEngineFacade {
             return fallback;
         }
         try {
-            com.fssc.system.entity.SysUser su = sysUserMapper.selectById(approver);
+            SysUser su = sysUserMapper.selectById(approver);
             boolean usable = su != null
                     && "NORMAL".equals(su.getStatus())
-                    && sysUserRoleMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysUserRole>()
-                            .eq(com.fssc.system.entity.SysUserRole::getUserId, approver)) > 0;
+                    && sysUserRoleMapper.selectCount(new LambdaQueryWrapper<SysUserRole>()
+                            .eq(SysUserRole::getUserId, approver)) > 0;
             if (!usable) {
                 log.warn("动态指派人不合法(不存在/停用/零角色) approver={}，回退发起人={}", approver, fallback);
                 return fallback;
@@ -1193,11 +1245,11 @@ public class WfEngineFacade {
      */
     private boolean isBaseCompany() {
         try {
-            com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+            LoginUser u = UserContext.get();
             if (u == null || u.getCompanyId() == null) {
                 return false;
             }
-            com.fssc.system.entity.SysCompany c = sysCompanyMapper.selectById(u.getCompanyId());
+            SysCompany c = sysCompanyMapper.selectById(u.getCompanyId());
             return c != null && c.getParentId() != null && c.getParentId() > 0;
         } catch (Exception ex) {
             log.warn("解析提交公司组织类型失败，按板块处理: {}", ex.getMessage());
@@ -1215,24 +1267,24 @@ public class WfEngineFacade {
         if (!"CLAIM".equals(processKey) && !"CLAIM_TRAVEL".equals(processKey)
                 && !"CLAIM_G1".equals(processKey) && !"CLAIM_NC".equals(processKey)) return null;
         try {
-            java.util.List<com.fssc.expense.entity.ExpBillLine> lines = expBillLineMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.expense.entity.ExpBillLine>()
-                            .eq(com.fssc.expense.entity.ExpBillLine::getBillId, bizId));
+            List<ExpBillLine> lines = expBillLineMapper.selectList(
+                    new LambdaQueryWrapper<ExpBillLine>()
+                            .eq(ExpBillLine::getBillId, bizId));
             if (lines == null || lines.isEmpty()) return "NORMAL";
-            // P1-2: N+1 → 一次性收集所有 itemId 批量查询，内存匹配
-            java.util.List<Long> itemIds = lines.stream()
-                    .map(com.fssc.expense.entity.ExpBillLine::getItemId)
-                    .filter(java.util.Objects::nonNull)
+            // N+1 → 一次性收集所有 itemId 批量查询，内存匹配
+            List<Long> itemIds = lines.stream()
+                    .map(ExpBillLine::getItemId)
+                    .filter(Objects::nonNull)
                     .distinct()
-                    .collect(java.util.stream.Collectors.toList());
+                    .collect(Collectors.toList());
             if (itemIds.isEmpty()) return "NORMAL";
-            java.util.Map<Long, com.fssc.masterdata.entity.MdExpenseItem> itemMap =
+            Map<Long, MdExpenseItem> itemMap =
                     mdExpenseItemMapper.selectBatchIds(itemIds).stream()
-                            .collect(java.util.stream.Collectors.toMap(
-                                    com.fssc.masterdata.entity.MdExpenseItem::getId, java.util.function.Function.identity()));
-            for (com.fssc.expense.entity.ExpBillLine line : lines) {
+                            .collect(Collectors.toMap(
+                                    MdExpenseItem::getId, Function.identity()));
+            for (ExpBillLine line : lines) {
                 if (line.getItemId() == null) continue;
-                com.fssc.masterdata.entity.MdExpenseItem item = itemMap.get(line.getItemId());
+                MdExpenseItem item = itemMap.get(line.getItemId());
                 if (item != null && item.getItemCode() != null && item.getItemCode().startsWith("07")) {
                     return "ENTERTAIN";
                 }
@@ -1256,40 +1308,40 @@ public class WfEngineFacade {
         if (processKey == null || bizId == null) return false;
         if (!"CLAIM".equals(processKey) && !"CLAIM_TRAVEL".equals(processKey)) return false;
         try {
-            java.util.List<com.fssc.expense.entity.ExpBillLine> lines = expBillLineMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.expense.entity.ExpBillLine>()
-                            .eq(com.fssc.expense.entity.ExpBillLine::getBillId, bizId));
+            List<ExpBillLine> lines = expBillLineMapper.selectList(
+                    new LambdaQueryWrapper<ExpBillLine>()
+                            .eq(ExpBillLine::getBillId, bizId));
             if (lines == null || lines.isEmpty()) return false;
-            java.util.List<Long> itemIds = lines.stream()
-                    .map(com.fssc.expense.entity.ExpBillLine::getItemId)
-                    .filter(java.util.Objects::nonNull).distinct()
-                    .collect(java.util.stream.Collectors.toList());
-            java.util.Map<Long, com.fssc.masterdata.entity.MdExpenseItem> itemMap = itemIds.isEmpty()
-                    ? java.util.Collections.emptyMap()
-                    : mdExpenseItemMapper.selectBatchIds(itemIds).stream().collect(java.util.stream.Collectors.toMap(
-                            com.fssc.masterdata.entity.MdExpenseItem::getId, java.util.function.Function.identity()));
-            java.util.Map<String, java.math.BigDecimal> familyMaxStd = new java.util.HashMap<>();
-            for (com.fssc.expense.entity.ExpBillLine line : lines) {
+            List<Long> itemIds = lines.stream()
+                    .map(ExpBillLine::getItemId)
+                    .filter(Objects::nonNull).distinct()
+                    .collect(Collectors.toList());
+            Map<Long, MdExpenseItem> itemMap = itemIds.isEmpty()
+                    ? Collections.emptyMap()
+                    : mdExpenseItemMapper.selectBatchIds(itemIds).stream().collect(Collectors.toMap(
+                            MdExpenseItem::getId, Function.identity()));
+            Map<String, BigDecimal> familyMaxStd = new HashMap<>();
+            for (ExpBillLine line : lines) {
                 if (line.getOverStd() != null && line.getOverStd() == 1) {
                     return true;
                 }
-                com.fssc.masterdata.entity.MdExpenseItem item = line.getItemId() == null ? null : itemMap.get(line.getItemId());
+                MdExpenseItem item = line.getItemId() == null ? null : itemMap.get(line.getItemId());
                 if (item == null || item.getItemName() == null) continue;
                 String family = null;
                 for (String kw : new String[]{"住宿", "餐补", "交通"}) {
                     if (item.getItemName().contains(kw)) { family = kw; break; }
                 }
                 if (family == null) continue;
-                java.math.BigDecimal maxStd = familyMaxStd.computeIfAbsent(family, k -> mdExpenseStandardMapper.selectList(
-                                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.masterdata.entity.MdExpenseStandard>()
-                                        .eq(com.fssc.masterdata.entity.MdExpenseStandard::getControlType, "HARD")
-                                        .like(com.fssc.masterdata.entity.MdExpenseStandard::getStdName, k)
-                                        .likeRight(com.fssc.masterdata.entity.MdExpenseStandard::getCityLevel, "CITY")
-                                        .and(w -> w.isNull(com.fssc.masterdata.entity.MdExpenseStandard::getExpireDate)
-                                                .or().ge(com.fssc.masterdata.entity.MdExpenseStandard::getExpireDate, java.time.LocalDate.now())))
-                                .stream().map(com.fssc.masterdata.entity.MdExpenseStandard::getAmount)
-                                .filter(java.util.Objects::nonNull)
-                                .max(java.math.BigDecimal::compareTo).orElse(null));
+                BigDecimal maxStd = familyMaxStd.computeIfAbsent(family, k -> mdExpenseStandardMapper.selectList(
+                                new LambdaQueryWrapper<MdExpenseStandard>()
+                                        .eq(MdExpenseStandard::getControlType, "HARD")
+                                        .like(MdExpenseStandard::getStdName, k)
+                                        .likeRight(MdExpenseStandard::getCityLevel, "CITY")
+                                        .and(w -> w.isNull(MdExpenseStandard::getExpireDate)
+                                                .or().ge(MdExpenseStandard::getExpireDate, LocalDate.now())))
+                                .stream().map(MdExpenseStandard::getAmount)
+                                .filter(Objects::nonNull)
+                                .max(BigDecimal::compareTo).orElse(null));
                 if (maxStd != null && line.getAmount() != null && line.getAmount().compareTo(maxStd) > 0) {
                     log.info("报销单[{}]明细[{}:{}]金额{}超过标准族[{}]最高国内标准{}，判定超标",
                             bizId, item.getItemName(), line.getId(), line.getAmount(), family, maxStd);
@@ -1312,33 +1364,33 @@ public class WfEngineFacade {
     private Boolean resolveHasLoan(String processKey, Long bizId) {
         if (processKey == null || bizId == null) return Boolean.FALSE;
         try {
-            com.fssc.expense.entity.ExpBill bill = expBillMapper.selectById(bizId);
+            ExpBill bill = expBillMapper.selectById(bizId);
             if (bill == null) return Boolean.FALSE;
             Long applicant = bill.getCreateBy();
             Long companyId = bill.getCompanyId();
             if (applicant == null || companyId == null) return Boolean.FALSE;
-            java.util.List<com.fssc.expense.entity.ExpBill> loans = expBillMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.expense.entity.ExpBill>()
-                            .eq(com.fssc.expense.entity.ExpBill::getBillType, "LOAN")
-                            .eq(com.fssc.expense.entity.ExpBill::getCreateBy, applicant)
-                            .eq(com.fssc.expense.entity.ExpBill::getCompanyId, companyId)
-                            .eq(com.fssc.expense.entity.ExpBill::getDelFlag, 0));
+            List<ExpBill> loans = expBillMapper.selectList(
+                    new LambdaQueryWrapper<ExpBill>()
+                            .eq(ExpBill::getBillType, "LOAN")
+                            .eq(ExpBill::getCreateBy, applicant)
+                            .eq(ExpBill::getCompanyId, companyId)
+                            .eq(ExpBill::getDelFlag, 0));
             if (loans == null || loans.isEmpty()) return Boolean.FALSE;
-            java.math.BigDecimal loanTotal = loans.stream()
-                    .map(com.fssc.expense.entity.ExpBill::getTotalAmount)
-                    .filter(java.util.Objects::nonNull)
-                    .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
-            java.util.List<Long> loanIds = loans.stream()
-                    .map(com.fssc.expense.entity.ExpBill::getId)
-                    .collect(java.util.stream.Collectors.toList());
-            java.util.List<com.fssc.expense.entity.ExpLoanOffset> offsets = expLoanOffsetMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.expense.entity.ExpLoanOffset>()
-                            .in(com.fssc.expense.entity.ExpLoanOffset::getLoanBillId, loanIds));
-            java.math.BigDecimal offsetTotal = offsets == null ? java.math.BigDecimal.ZERO :
-                    offsets.stream().map(com.fssc.expense.entity.ExpLoanOffset::getOffsetAmount)
-                            .filter(java.util.Objects::nonNull)
-                            .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
-            boolean hasLoan = loanTotal.subtract(offsetTotal).compareTo(java.math.BigDecimal.ZERO) > 0;
+            BigDecimal loanTotal = loans.stream()
+                    .map(ExpBill::getTotalAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            List<Long> loanIds = loans.stream()
+                    .map(ExpBill::getId)
+                    .collect(Collectors.toList());
+            List<ExpLoanOffset> offsets = expLoanOffsetMapper.selectList(
+                    new LambdaQueryWrapper<ExpLoanOffset>()
+                            .in(ExpLoanOffset::getLoanBillId, loanIds));
+            BigDecimal offsetTotal = offsets == null ? BigDecimal.ZERO :
+                    offsets.stream().map(ExpLoanOffset::getOffsetAmount)
+                            .filter(Objects::nonNull)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+            boolean hasLoan = loanTotal.subtract(offsetTotal).compareTo(BigDecimal.ZERO) > 0;
             if (hasLoan) {
                 log.info("报销单[{}]申请人[{}]存在未结清借款(借款{}−冲抵{})，hasLoan=true", bizId, applicant, loanTotal, offsetTotal);
             }
@@ -1351,39 +1403,39 @@ public class WfEngineFacade {
 
     /**
      * 解析 overLimit（是否超标准/超限）：报销/差旅明细任一金额超过其费用项目的 HARD 国内标准即判定超限。
-     * 替代原写死的 Boolean.FALSE。沿用 resolveOverStandard 的标准比对范式，但覆盖全部费用项目
-     * （不限于住宿/餐补/交通三族），借款/预付款等其它流程暂未建模限额比对，fail-closed 返回 FALSE。
+     * 沿用 resolveOverStandard 的标准比对范式，但覆盖全部费用项目、不限于住宿/餐补/交通三族；
+     * 借款/预付款等其它流程暂未建模限额比对，一律 fail-closed 返回 FALSE。
      */
     private Boolean resolveOverLimit(String processKey, Long bizId) {
         if (processKey == null || bizId == null) return Boolean.FALSE;
         try {
             if ("CLAIM".equals(processKey) || "CLAIM_TRAVEL".equals(processKey)
                     || "TRAVEL".equals(processKey) || "TRAIN".equals(processKey)) {
-                java.util.List<com.fssc.expense.entity.ExpBillLine> lines = expBillLineMapper.selectList(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.expense.entity.ExpBillLine>()
-                                .eq(com.fssc.expense.entity.ExpBillLine::getBillId, bizId));
+                List<ExpBillLine> lines = expBillLineMapper.selectList(
+                        new LambdaQueryWrapper<ExpBillLine>()
+                                .eq(ExpBillLine::getBillId, bizId));
                 if (lines == null || lines.isEmpty()) return Boolean.FALSE;
-                java.util.List<Long> itemIds = lines.stream()
-                        .map(com.fssc.expense.entity.ExpBillLine::getItemId)
-                        .filter(java.util.Objects::nonNull).distinct()
-                        .collect(java.util.stream.Collectors.toList());
-                java.util.Map<Long, com.fssc.masterdata.entity.MdExpenseItem> itemMap = itemIds.isEmpty()
-                        ? java.util.Collections.emptyMap()
-                        : mdExpenseItemMapper.selectBatchIds(itemIds).stream().collect(java.util.stream.Collectors.toMap(
-                                com.fssc.masterdata.entity.MdExpenseItem::getId, java.util.function.Function.identity()));
-                for (com.fssc.expense.entity.ExpBillLine line : lines) {
+                List<Long> itemIds = lines.stream()
+                        .map(ExpBillLine::getItemId)
+                        .filter(Objects::nonNull).distinct()
+                        .collect(Collectors.toList());
+                Map<Long, MdExpenseItem> itemMap = itemIds.isEmpty()
+                        ? Collections.emptyMap()
+                        : mdExpenseItemMapper.selectBatchIds(itemIds).stream().collect(Collectors.toMap(
+                                MdExpenseItem::getId, Function.identity()));
+                for (ExpBillLine line : lines) {
                     if (line.getOverStd() != null && line.getOverStd() == 1) return Boolean.TRUE;
-                    com.fssc.masterdata.entity.MdExpenseItem item = line.getItemId() == null ? null : itemMap.get(line.getItemId());
+                    MdExpenseItem item = line.getItemId() == null ? null : itemMap.get(line.getItemId());
                     if (item == null || item.getItemName() == null) continue;
-                    java.math.BigDecimal maxStd = mdExpenseStandardMapper.selectList(
-                                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.masterdata.entity.MdExpenseStandard>()
-                                            .eq(com.fssc.masterdata.entity.MdExpenseStandard::getControlType, "HARD")
-                                            .like(com.fssc.masterdata.entity.MdExpenseStandard::getStdName, item.getItemName())
-                                            .and(w -> w.isNull(com.fssc.masterdata.entity.MdExpenseStandard::getExpireDate)
-                                                    .or().ge(com.fssc.masterdata.entity.MdExpenseStandard::getExpireDate, java.time.LocalDate.now())))
-                            .stream().map(com.fssc.masterdata.entity.MdExpenseStandard::getAmount)
-                            .filter(java.util.Objects::nonNull)
-                            .max(java.math.BigDecimal::compareTo).orElse(null);
+                    BigDecimal maxStd = mdExpenseStandardMapper.selectList(
+                                    new LambdaQueryWrapper<MdExpenseStandard>()
+                                            .eq(MdExpenseStandard::getControlType, "HARD")
+                                            .like(MdExpenseStandard::getStdName, item.getItemName())
+                                            .and(w -> w.isNull(MdExpenseStandard::getExpireDate)
+                                                    .or().ge(MdExpenseStandard::getExpireDate, LocalDate.now())))
+                            .stream().map(MdExpenseStandard::getAmount)
+                            .filter(Objects::nonNull)
+                            .max(BigDecimal::compareTo).orElse(null);
                     if (maxStd != null && line.getAmount() != null && line.getAmount().compareTo(maxStd) > 0) {
                         log.info("报销单[{}]明细[{}:{}]金额{}超过标准{}，判定超限", bizId, item.getItemName(), line.getId(), line.getAmount(), maxStd);
                         return Boolean.TRUE;
@@ -1402,9 +1454,9 @@ public class WfEngineFacade {
     /**
      * 解析 outOfPlan（是否超预算/无可用预算）：报销单据的费用明细映射到预算科目后，逐行取可用额度
      * （{@code total_amount + adjust_amount − occupy_amount − used_amount}）与行金额比对，
-     * 任一行金额 &gt; 可用额即判定超计划。替代原写死的 Boolean.FALSE（P0 补齐 2026-09-23）。
+     * 任一行金额 &gt; 可用额即判定超计划。
      *
-     * <p><b>规则决策（有意为之，勿当疏漏）</b>：费用项目在预算域<b>命中不到预算行</b>时判 FALSE 并记 debug——
+     * <p>规则决策（有意为之，勿当疏漏）：费用项目在预算域<b>命中不到预算行</b>时判 FALSE 并记 debug——
      * "未纳入预算管控"与"超预算"是两件事；前者若判 TRUE，会让所有未配预算的公司/科目单据凭空走超预算审批链，
      * 属误伤。只有"确实命中预算行且额度不足"才是真实超计划。跨主体且重定位不到时同样跳过
      * （{@code resolveOccupyItem(..., strict=false)} 返回 null，不抛异常阻断发起，也不把钱记到别人公司）。
@@ -1414,13 +1466,13 @@ public class WfEngineFacade {
         if (processKey == null || bizId == null) return Boolean.FALSE;
         try {
             if (!"CLAIM".equals(processKey) && !"CLAIM_TRAVEL".equals(processKey)) return Boolean.FALSE;
-            com.fssc.expense.entity.ExpBill bill = expBillMapper.selectById(bizId);
+            ExpBill bill = expBillMapper.selectById(bizId);
             if (bill == null) return Boolean.FALSE;
-            java.util.List<com.fssc.expense.entity.ExpBillLine> lines = expBillLineMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.expense.entity.ExpBillLine>()
-                            .eq(com.fssc.expense.entity.ExpBillLine::getBillId, bizId));
+            List<ExpBillLine> lines = expBillLineMapper.selectList(
+                    new LambdaQueryWrapper<ExpBillLine>()
+                            .eq(ExpBillLine::getBillId, bizId));
             if (lines == null || lines.isEmpty()) return Boolean.FALSE;
-            for (com.fssc.expense.entity.ExpBillLine line : lines) {
+            for (ExpBillLine line : lines) {
                 if (line.getItemId() == null || line.getAmount() == null) continue;
                 Long budgetItemId = budgetService.resolveOccupyItem(null, line.getItemId(),
                         bill.getCompanyId(), bill.getDeptId(), bill.getPeriodYear(), false);
@@ -1428,9 +1480,9 @@ public class WfEngineFacade {
                     log.debug("outOfPlan：费用项 {} 未命中预算行（未纳入预算管控），跳过 bizId={}", line.getItemId(), bizId);
                     continue;
                 }
-                com.fssc.budget.entity.BgItem bg = bgItemMapper.selectById(budgetItemId);
+                BgItem bg = bgItemMapper.selectById(budgetItemId);
                 if (bg == null) continue;
-                java.math.BigDecimal avail = budgetService.available(bg);
+                BigDecimal avail = budgetService.available(bg);
                 if (avail != null && line.getAmount().compareTo(avail) > 0) {
                     log.info("报销单[{}]明细[{}]金额{} 超过预算行[{}]可用额{}，判定超计划",
                             bizId, line.getId(), line.getAmount(), budgetItemId, avail);
@@ -1445,18 +1497,18 @@ public class WfEngineFacade {
     }
 
     /**
-     * 解析 hasContract（是否关联合同）：以单据头真实字段 {@code exp_bill.contract_id} 非空为判据
-     * （P0 补齐 2026-09-23），替代原"仅 CONTRACT 流程恒 TRUE、其余一律 fail-closed FALSE"的占位。
-     * 合同类流程（processKey 含 CONTRACT）审批对象本身即合同，保持恒 TRUE 以不破坏既有语义。
+     * 解析 hasContract（是否关联合同）：以单据头真实字段 {@code exp_bill.contract_id} 非空为准。
+     * 合同类流程（processKey 含 CONTRACT）审批对象本身就是合同，保持恒 TRUE 以不破坏既有语义，
+     * 其余流程一律 fail-closed 返回 FALSE。
      *
-     * <p>待接线项：退货单（PUR_RETURN/SALE_RETURN）的合同需经 源单→采购订单→合同 二级追溯，域耦合重，
-     * 仍 fail-closed 返回 FALSE。实测全库 {@code exp_bill.contract_id} 尚无填充（0/80 行），
-     * 故当前实际取值以 FALSE 为主——待合同域接线后本判定自动生效，无需再改本方法。
+     * <p>待接线项：退货单（PUR_RETURN/SALE_RETURN）的合同要经 源单→采购订单→合同 二级追溯，域耦合重，
+     * 仍 fail-closed 返回 FALSE。目前全库 {@code exp_bill.contract_id} 尚无填充，故实际取值以 FALSE 为主——
+     * 合同域接上之后本判定自动生效，不需要再改这个方法。
      */
     private Boolean resolveHasContract(String processKey, Long bizId) {
         if (processKey == null || bizId == null) return Boolean.FALSE;
         try {
-            com.fssc.expense.entity.ExpBill bill = expBillMapper.selectById(bizId);
+            ExpBill bill = expBillMapper.selectById(bizId);
             if (bill != null && bill.getContractId() != null) {
                 log.info("单据[{}]关联合同[{}]，hasContract=true", bizId, bill.getContractId());
                 return Boolean.TRUE;
@@ -1471,18 +1523,18 @@ public class WfEngineFacade {
     }
 
     /**
-     * P0 治理校验③：分支变量实算透出（预演期，只读）。返回 start() 会注入引擎的全部分支变量真值，
-     * 供运维/设计器"预演"某张单的分支走向——尤其是此前被写死 FALSE 的 4 个变量，现在能在这里看到真实取值
-     * （有未结清借款→hasLoan=true、明细超标准→overLimit=true、脱离预算计划→outOfPlan=true 等）。
-     * 解析器 fail-closed 返回 FALSE 时，对应条目同样入参（值=FALSE），调用方可据 processKey 判断该变量是否被建模。
+     * 分支变量实算透出（预演，只读）：返回 {@code start()} 会注入引擎的全部分支变量真值，
+     * 供运维/设计器"预演"某张单会走哪条分支（有未结清借款→hasLoan=true、明细超标准→overLimit=true、
+     * 脱离预算计划→outOfPlan=true 等）。解析器 fail-closed 返回 FALSE 时对应条目同样入参（值=FALSE），
+     * 调用方可据 processKey 判断该变量是否被建模。
      */
     public Map<String, Object> resolveBranchVars(String bizType, Long bizId, String subType) {
         Map<String, Object> out = new LinkedHashMap<>();
         String processKey = resolveStartProcessKey(bizType, bizId, subType, null);
         out.put("processKey", processKey);
-        java.math.BigDecimal amt = java.math.BigDecimal.ZERO;
+        BigDecimal amt = BigDecimal.ZERO;
         try {
-            com.fssc.expense.entity.ExpBill b = expBillMapper.selectById(bizId);
+            ExpBill b = expBillMapper.selectById(bizId);
             if (b != null && b.getTotalAmount() != null) amt = b.getTotalAmount();
         } catch (Exception ignored) { /* 预演取金额失败按 0 处理：预演是只读旁路，不因查询失败中断 */ }
         out.put("amount", amt);
@@ -1495,9 +1547,8 @@ public class WfEngineFacade {
         out.put("outOfPlan", resolveOutOfPlan(processKey, bizId));
         out.put("overLimit", resolveOverLimit(processKey, bizId));
         out.put("hasContract", resolveHasContract(processKey, bizId));
-        // D-DEC-389：预演必须与 start() 注入引擎的取值<b>逐字同源</b>，否则"预演说走 A 档、运行时走了 B 档"
-        // （本方法原先第三个域：直接取 exp_bill.bill_type＝CLAIM/LOAN/REPAY，与门面注入的都不是一回事）。
-        // 与 start() 同规则：billType＝bizType（BPMN 条件字面量所在域），子类型另列 subType。
+        // 预演必须与 start() 注入引擎的取值<b>逐字同源</b>，否则会出现"预演说走 A 档、运行时走了 B 档"。
+        // 规则同 start()：billType＝bizType（BPMN 条件字面量所在域），子类型另列 subType。
         out.put("billType", bizType == null || bizType.isBlank() ? "" : bizType);
         out.put("subType", subType == null || subType.isBlank() ? "" : subType);
         return out;
@@ -1512,18 +1563,18 @@ public class WfEngineFacade {
         if (processKey == null || bizId == null) return false;
         if (!"TRAVEL".equals(processKey)) return false;
         try {
-            com.fssc.expense.entity.ExpBill bill = expBillMapper.selectById(bizId);
+            ExpBill bill = expBillMapper.selectById(bizId);
             if (bill == null || bill.getExtJson() == null || bill.getExtJson().isBlank()) {
                 return false;
             }
-            com.fasterxml.jackson.databind.JsonNode root =
-                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(bill.getExtJson());
-            com.fasterxml.jackson.databind.JsonNode f = root.path("abroadFlag");
+            JsonNode root =
+                    new ObjectMapper().readTree(bill.getExtJson());
+            JsonNode f = root.path("abroadFlag");
             if (f.isBoolean()) return f.asBoolean();
             if (f.isTextual()) return Boolean.parseBoolean(f.asText());
             // 缺陷8(20260918)：出差申请页只有「出差类型」字段(extJson.travelType=DOMESTIC/ABROAD)，无独立 abroadFlag，
             // 导致 TRAVEL_G1 abroad=true 分支(国外出差→总裁特批)从页面永远无法触发。此处兼容 travelType=ABROAD。
-            com.fasterxml.jackson.databind.JsonNode tt = root.path("travelType");
+            JsonNode tt = root.path("travelType");
             if (tt.isTextual() && "ABROAD".equalsIgnoreCase(tt.asText())) {
                 return true;
             }
@@ -1539,22 +1590,22 @@ public class WfEngineFacade {
      * 把任务审批人重设为配置值（USER 指定人 / ROLE 角色 / DEPT_LEADER 部门负责人 / INITIATOR 发起人）。
      * 无配置则保持 BPMN 默认（candidateGroups 角色或 assignee）。节点配置 tab 由此真正生效。
      *
-     * <p><b>V1.3.21 修正</b>：原实现按 {@code node_key = taskDefinitionKey} 精确匹配，但运行时
-     * taskDefinitionKey 是 BPMN 动态生成的 {@code Task_N}，而配置表存业务节点编码
-     * （{@code N0xx}/{@code CLAIM_T1} 等），实测全库交叉匹配 0 命中 —— 本方法此前对所有节点都
-     * 读不到配置，"节点配置页签生效"实际从未发生（含 empty_strategy 空策略默认处理一并失效）。
-     * 改为统一经 {@link WfNodeConfigResolver} 解析（精确键优先，补 {@code Task_N → 按 sort 第 N 个节点}
-     * 默认处理键），与超时链路（WfTimeoutJob）共用同一套映射，避免两处规则漂移。
+     * <p><b>为什么不能按 node_key 精确匹配</b>：运行时 taskDefinitionKey 是 BPMN 动态生成的
+     * {@code Task_N}，而配置表存的是业务节点编码（{@code N0xx}/{@code CLAIM_T1} 等），
+     * 两者不同形，交叉匹配一个都命中不了。命中不了就等于节点配置全表失效，
+     * empty_strategy 空策略的兜底也一并失效。
+     * 所以统一经 {@link WfNodeConfigResolver} 解析（精确键优先，补 {@code Task_N → 按 sort 第 N 个节点}
+     * 兜底键），与超时链路（WfTimeoutJob）共用同一套映射，避免两处规则漂移。
      */
     private void applyNodeConfig(String processKey, Task task) {
         try {
             if (processKey == null || task == null) return;
-            com.fssc.workflow.entity.WfNodeConfig cfg =
+            WfNodeConfig cfg =
                     wfNodeConfigResolver.resolve(processKey, task.getTaskDefinitionKey());
             if (cfg == null || cfg.getAssignType() == null || cfg.getAssignType().isBlank()) {
                 return;
             }
-            // P1 多实例节点（会签 ALL / 顺序会签 SEQ / 票签 VOTE）：每实例办理人由 BPMN 元素变量
+            // 多实例节点（会签 ALL / 顺序会签 SEQ / 票签 VOTE）：每实例办理人由 BPMN 元素变量
             // ${assignee} 按 <nodeKey>_assignees 集合逐一分派。此处严禁再用"角色首个持有人"覆盖——
             // 否则所有实例被改成同一个人：SEQ 退化为同一人重复审批（元素变量已推进到 collection[i]，
             // 却被 tryResolveAssignee 改回首人），ALL 丢失"多人各一票"语义。候选集已在 start() 注入。
@@ -1578,7 +1629,7 @@ public class WfEngineFacade {
                     // POOL 任务池档：不自动指派首持有人，任务保持"仅候选组"态——todo()/myTodo 全员可见，
                     // 由候选人「领取」锁定办理（参考任务池抢单）。超时/空策略仍按节点配置走。
                     if ("POOL".equalsIgnoreCase(trim(cfg.getHandlingMode()))) {
-                        java.util.Set<String> have = new java.util.HashSet<>();
+                        Set<String> have = new HashSet<>();
                         taskService.getIdentityLinksForTask(task.getId()).forEach(il -> {
                             if ("candidate".equals(il.getType()) && il.getGroupId() != null) have.add(il.getGroupId());
                         });
@@ -1586,16 +1637,16 @@ public class WfEngineFacade {
                             String g = rc.trim();
                             if (!g.isBlank() && !have.contains(g)) taskService.addCandidateGroup(task.getId(), g);
                         }
-                        // V2.2.38 K123 智能推送（"优先分给处理中任务量最少的业务员"）：
+                        // 智能推送（"优先分给处理中任务量最少的业务员"）：
                         // 开关 pool.autoDispatch=1 时，在候选人中按当前在办任务量最少自动指派；
-                        // K124：unclaim 打了 pool_no_auto_assign 局部变量的任务不参与自动分配（回收后仅可人工领取）。
-                        // 无候选人/推送失败 → 保持候选组抢单（默认处理）。
+                        // unclaim 时打了 pool_no_auto_assign 局部变量的任务不参与自动分配（回收后仅可人工领取）。
+                        // 无候选人/推送失败 → 保持候选组抢单（兜底）。
                         Object noAuto = null;
                         try { noAuto = taskService.getVariableLocal(task.getId(), "pool_no_auto_assign"); } catch (Exception ignore) { /* 局部变量不存在/不可读按「未设置」处理（Flowable 缺变量会抛异常，属正常分支） */ }
                         if (noAuto == null && isPoolAutoDispatchEnabled()) {
                             try {
-                                java.util.List<Long> cands = nodeOrgResolver.listOperableUserIds(task);
-                                // D-DEC-365：推送前做连办预检（连办校验本身一字未动，校验是 413 的必然化产物）。
+                                List<Long> cands = nodeOrgResolver.listOperableUserIds(task);
+                                // 推送前做连办预检（连办校验本身一字未动，校验是 413 的必然化产物）。
                                 // 智能推送只看"在办量最少"，不看"这人在本实例已经办过哪一节"。POOL 链一旦
                                 // 落在 approve.deny_serial_same_handler 生效的域（现网＝GL_MONTH_CLOSE 月结链，
                                 // 按角色铺人 + 禁 admin），把节点推给刚办过上一节的人就是<b>明知必拒还推</b>：
@@ -1606,12 +1657,12 @@ public class WfEngineFacade {
                                 Long best = null; long bestLoad = Long.MAX_VALUE;
                                 if (cands != null) for (Long uid : cands) {
                                     if (uid == null || uid <= 0) continue;
-                                    com.fssc.system.entity.SysUser su = sysUserMapper.selectById(uid);
+                                    SysUser su = sysUserMapper.selectById(uid);
                                     if (su == null || !"NORMAL".equals(su.getStatus())
                                             || Boolean.TRUE.equals(su.getIsAdmin()) || "admin".equals(su.getUserName())) continue;
                                     if (serialPrecheck && !isSystemAutoAuditor(uid)
                                             && handledNodesInInstance(task.getProcessInstanceId(), uid)) {
-                                        log.info("K123 智能推送跳过 userId={}：本链有连办闸且其已办理本实例节点（推给他必被拒）", uid);
+                                        log.info("智能推送跳过 userId={}：本链有连办闸且其已办理本实例节点（推给他必被拒）", uid);
                                         continue;
                                     }
                                     long load = taskService.createTaskQuery().taskAssignee(String.valueOf(uid)).count();
@@ -1619,17 +1670,17 @@ public class WfEngineFacade {
                                 }
                                 if (best != null) {
                                     taskService.setAssignee(task.getId(), String.valueOf(best));
-                                    log.info("K123 智能推送: {} ← 候选中在办量最少者 userId={}（在办 {} 件）", cfg.getNodeName(), best, bestLoad);
+                                    log.info("智能推送: {} ← 候选中在办量最少者 userId={}（在办 {} 件）", cfg.getNodeName(), best, bestLoad);
                                 } else {
                                     // 全员被连办校验预检筛掉＝这节本来就只能由"没办过本实例的人"抢：
-                                    // 保持候选组抢单池（与无候选人同一默认处理路径，人工领取不受影响）。
-                                    log.info("K123 智能推送: {} 无可用候选人（含连办闸预检筛除），保持抢单池", cfg.getNodeName());
+                                    // 保持候选组抢单池（与无候选人同一兜底路径，人工领取不受影响）。
+                                    log.info("智能推送: {} 无可用候选人（含连办闸预检筛除），保持抢单池", cfg.getNodeName());
                                 }
                             } catch (Exception ex) {
-                                log.warn("K123 智能推送失败 {} 回退抢单池: {}", cfg.getNodeName(), ex.getMessage());
+                                log.warn("智能推送失败 {} 回退抢单池: {}", cfg.getNodeName(), ex.getMessage());
                             }
                         } else if (noAuto != null) {
-                            log.info("K124: 任务 {} 已打回收标记，不参与自动分配，仅可人工领取", task.getId());
+                            log.info("任务 {} 已打回收标记，不参与自动分配，仅可人工领取", task.getId());
                         }
                         log.info("节点配置 {} 为 POOL 任务池：候选组={} 待领取", cfg.getNodeName(), value);
                         break;
@@ -1644,8 +1695,8 @@ public class WfEngineFacade {
                         assignWithDelegateSubstitution(processKey, task, picked);
                         break;
                     }
-                    // V1.3.16 动态解析：直线上级沿部门汇报线、COMPANY 角色解析本公司唯一持有人；
-                    // 解析唯一则直接指派，否则维持候选组（todo 侧按公司过滤默认处理）
+                    // 动态解析：直线上级沿部门汇报线、COMPANY 角色解析本公司唯一持有人；
+                    // 解析唯一则直接指派，否则维持候选组（todo 侧按公司过滤兜底）
                     Long resolved = nodeOrgResolver.tryResolveAssignee(
                             task.getProcessInstanceId(), value.split(",")[0].trim());
                     if (resolved != null) {
@@ -1664,11 +1715,10 @@ public class WfEngineFacade {
                     }
                 }
                 case "DEPT_LEADER", "DEPT_LEADER_UP" -> {
-                    // P2 逐级上级（2026-09-23）：wf_node_config.up_level 的列注释原文就是
-                    // 「逐级上级时向上层数」——但此前 DEPT_LEADER_UP 与 up_level 双双零消费点：
-                    // 节点配了这个 assign_type 会静默落到下面的 default 分支保持 BPMN 默认，
+                    // 逐级上级：wf_node_config.up_level 就是「逐级上级时向上层数」。
+                    // 这条分支不能缺：缺了 DEPT_LEADER_UP 会静默落到 default 保持 BPMN 默认，
                     // 配置者以为"按汇报线自动找 N 级上级"，实际取的是 BPMN 里写死的候选组。
-                    // 现复用 ESCALATE 同一套"沿汇报线向上第 N 级"规则（跳过发起人本人、跳过 admin、
+                    // 取人复用 ESCALATE 那套"沿汇报线向上第 N 级"规则（跳过发起人本人、跳过 admin、
                     // 级数不足取已到最高级、再退单据公司组织负责人），单一实现避免两处规则漂移。
                     int lv = "DEPT_LEADER".equals(cfg.getAssignType()) ? 1
                             : (cfg.getUpLevel() == null ? 1 : cfg.getUpLevel());
@@ -1682,15 +1732,15 @@ public class WfEngineFacade {
                                 lv, processKey, cfg.getNodeName());
                     }
                 }
-                // G2 参与人解析（2026-09-24）：POST / SHARE_POOL / EXPRESSION 以及任何未识别类型，
-                // 此前一律静默 no-op（配置者以为配了、实际没人），现统一交给 WfAssigneeResolver 按
-                // 「维度组合（并且/或者/排除）＋ 参与人方案（优先级＋条件）」取人。
+                // 参与人解析：POST / SHARE_POOL / EXPRESSION 以及任何未识别类型，
+                // 一律交给 WfAssigneeResolver 按「维度组合（并且/或者/排除）＋ 参与人方案（优先级＋条件）」取人。
+                // 不接这段就是静默 no-op —— 配置者以为配了，实际一个人都没派。
                 default -> applyAssigneeSchemes(processKey, cfg, task);
             }
             log.info("节点配置已应用: key={}, node={}, type={}, value={}", processKey, cfg.getNodeName(), cfg.getAssignType(), value);
         } catch (BizException be) {
-            // G2：配了参与人方案却全部解析不出人 ⇒ 必须冒泡（禁止静默留一个没人可办的候选组），
-            // 不得被下面的默认处理 catch 吞成一行 log —— 那样等于把"配置错误"变成"单据永久滞留"。
+            // 配了参与人方案却全部解析不出人 ⇒ 必须冒泡（不能静默留一个没人可办的候选组），
+            // 更不得被下面的兜底 catch 吞成一行 log —— 那样等于把"配置错误"变成"单据永久滞留"。
             throw be;
         } catch (Exception ex) {
             log.warn("节点配置应用失败 key={} node={}: {}", processKey, task == null ? null : task.getTaskDefinitionKey(), ex.getMessage());
@@ -1698,12 +1748,12 @@ public class WfEngineFacade {
     }
 
     /**
-     * G2 参与人方案接线（2026-09-24）：{@code default} 分支（含 POST/SHARE_POOL/EXPRESSION）的取人出口。
+     * 参与人方案接线：{@code default} 分支（含 POST/SHARE_POOL/EXPRESSION）的取人出口。
      *
-     * <p><b>三种情形的行为是刻意分开的</b>：
+     * <p><b>三种情形的行为是刻意分开的：</b>
      * <ul>
-     *   <li><b>完全没配方案</b> ⇒ 直接返回，行为与改造前逐字一致（默认零变化，也是回滚路径）；</li>
-     *   <li><b>配了方案且解析出人</b> ⇒ 指派首个命中人（候选组仍保留，同角色同事依权可办，默认处理不断流）；</li>
+     *   <li><b>完全没配方案</b> ⇒ 直接返回，保持默认零变化（也是回滚路径）；</li>
+     *   <li><b>配了方案且解析出人</b> ⇒ 指派首个命中人（候选组仍保留，同角色同事依权可办，兜底不断流）；</li>
      *   <li><b>配了方案但全不中</b> ⇒ {@link WfAssigneeResolver#resolve} 抛 {@link BizException}，此处原样冒泡。</li>
      * </ul>
      * 解析器自身异常（如配置表不可读）由解析器内部按"无方案"兜住，不会把审批主链路打断。
@@ -1719,14 +1769,14 @@ public class WfEngineFacade {
     }
 
     /**
-     * 指派出口（F4-1）：所有"节点配置解析出的办理人 → 引擎 assignee"的唯一落点。
+     * 指派出口：所有"节点配置解析出的办理人 → 引擎 assignee"的唯一落点。
      *
      * <p>做一件事——委托语义为"改派"且该流程在灰度清单内、且这个人此刻确有生效委托时，
      * 把办理人换成受托人，并补一条 {@code DELEGATE_TAKEOVER} 记录（原办理人是谁、为什么换）。
-     * 三重条件任一不满足 ⇒ 行为与改造前逐字一致（现网 {@code wf.delegate.mode} 库里 0 行＝BORROW）。
+     * 三个条件缺一个就按原办理人指派，不做替换。
      *
      * <p>为什么记录不能省：改派后 {@code wf_task_history.oper_user_id} 是实际办理人（受托人），
-     * 没有这条"从谁改给谁"的行，跨公司/追责规则就只能靠猜（体检 E-07 的代价项，方案 §5）。
+     * 没有这条"从谁改给谁"的行，跨公司/追责规则就只能靠猜。
      */
     private void assignWithDelegateSubstitution(String modelKey, Task task, String rawAssignee) {
         if (task == null || rawAssignee == null || rawAssignee.isBlank()) {
@@ -1736,7 +1786,7 @@ public class WfEngineFacade {
         try {
             resolved = Long.valueOf(rawAssignee.trim());
         } catch (NumberFormatException nf) {
-            // 历史/外部集成里 assign_value 允许写非数字（表达式、用户名）：原样交给引擎，行为与改造前一致
+            // 历史/外部集成里 assign_value 允许写非数字（表达式、用户名）：原样交给引擎
             taskService.setAssignee(task.getId(), rawAssignee);
             return;
         }
@@ -1761,10 +1811,10 @@ public class WfEngineFacade {
     }
 
     /**
-     * 委托生效时的历史改派（F4-1 / 方案 §5）：把委托人手上<b>已指派给他</b>（assignee=委托人）的
+     * 委托生效时的历史改派：把委托人手上<b>已指派给他</b>（assignee=委托人）的
      * 在办待办改指受托人，走引擎通道 {@code taskService.setAssignee} + 镜像同步 + 记录，禁止直写 DB。
      *
-     * <p><b>只改 assignee 态，不动"仅候选组"态</b>：委托人角色候选的任务不属于他个人名下，
+     * <p>只改 assignee 态，不动"仅候选组"态：委托人角色候选的任务不属于他个人名下，
      * 把它 setAssignee 给受托人＝从同角色其他同事手上抢单，属越权。这类任务仍按"借资格"并入双方待办。
      *
      * @return 实际改派的条数（0＝无历史待办可改，或该流程不在灰度清单内）
@@ -1813,32 +1863,32 @@ public class WfEngineFacade {
     }
 
     /**
-     * 委托到期 / 取消时的反向回跳（F4-1）：只回跳"仍未被办理"的任务——受托人已办的不动，
+     * 委托到期 / 取消时的反向回跳：只回跳"仍未被办理"的任务——受托人已办的不动，
      * 期间被再次转办/改派走的（当前 assignee 已不是受托人）同样不动。
      *
      * <p>查询依据是 {@code DELEGATE_TAKEOVER} 记录行（委托人=操作人、受托人=target、时间落在委托区间内），
-     * 因此不需要给 {@code wf_task} 加列即可回跳；"待办没有代办归属列"这一规则缺陷已在 D-DEC-120 登记，
+     * 因此不需要给 {@code wf_task} 加列即可回跳；"待办没有代办归属列"这一规则缺陷已在 登记，
      * 注释态 DDL 随本批 seed 一并交付（执行需授权）。
      *
      * @return 实际回跳的条数
      */
     public int revertDelegatedTasks(Long fromUserId, Long toUserId,
-                                    java.time.LocalDateTime beginTime, java.time.LocalDateTime endTime) {
+                                    LocalDateTime beginTime, LocalDateTime endTime) {
         if (fromUserId == null || toUserId == null) {
             return 0;
         }
-        List<com.fssc.workflow.entity.WfTaskHistory> marks;
+        List<WfTaskHistory> marks;
         try {
-            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.workflow.entity.WfTaskHistory> qw =
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.workflow.entity.WfTaskHistory>()
-                            .eq(com.fssc.workflow.entity.WfTaskHistory::getAction, "DELEGATE_TAKEOVER")
-                            .eq(com.fssc.workflow.entity.WfTaskHistory::getOperUserId, fromUserId)
-                            .eq(com.fssc.workflow.entity.WfTaskHistory::getTargetUserId, toUserId);
+            LambdaQueryWrapper<WfTaskHistory> qw =
+                    new LambdaQueryWrapper<WfTaskHistory>()
+                            .eq(WfTaskHistory::getAction, "DELEGATE_TAKEOVER")
+                            .eq(WfTaskHistory::getOperUserId, fromUserId)
+                            .eq(WfTaskHistory::getTargetUserId, toUserId);
             if (beginTime != null) {
-                qw.ge(com.fssc.workflow.entity.WfTaskHistory::getOperTime, beginTime.minusDays(1));
+                qw.ge(WfTaskHistory::getOperTime, beginTime.minusDays(1));
             }
             if (endTime != null) {
-                qw.le(com.fssc.workflow.entity.WfTaskHistory::getOperTime, endTime);
+                qw.le(WfTaskHistory::getOperTime, endTime);
             }
             marks = wfQueryService.listHistory(qw);
         } catch (Exception ex) {
@@ -1848,9 +1898,9 @@ public class WfEngineFacade {
         if (marks == null || marks.isEmpty()) {
             return 0;
         }
-        java.util.Set<String> done = new java.util.HashSet<>();
+        Set<String> done = new HashSet<>();
         int moved = 0;
-        for (com.fssc.workflow.entity.WfTaskHistory h : marks) {
+        for (WfTaskHistory h : marks) {
             String taskId = h.getTaskId();
             if (taskId == null || !done.add(taskId)) {
                 continue;
@@ -1883,25 +1933,25 @@ public class WfEngineFacade {
      */
     public List<Long> listNodeCandidates(String modelKey, String nodeKey, String procInstId) {
         try {
-            com.fssc.workflow.entity.WfNodeConfig cfg = wfNodeConfigResolver.resolve(modelKey, nodeKey);
+            WfNodeConfig cfg = wfNodeConfigResolver.resolve(modelKey, nodeKey);
             if (cfg == null || !"ROLE".equals(cfg.getAssignType())
                     || cfg.getAssignValue() == null || cfg.getAssignValue().isBlank()) {
                 return List.of();
             }
-            java.util.LinkedHashSet<Long> ids = new java.util.LinkedHashSet<>();
+            LinkedHashSet<Long> ids = new LinkedHashSet<>();
             for (String rc : cfg.getAssignValue().split(",")) {
                 if (!rc.isBlank()) {
                     ids.addAll(nodeOrgResolver.listRoleCandidates(procInstId, rc.trim()));
                 }
             }
-            return new java.util.ArrayList<>(ids);
+            return new ArrayList<>(ids);
         } catch (Exception ex) {
             log.warn("节点候选人解析失败 model={} node={}: {}", modelKey, nodeKey, ex.getMessage());
             return List.of();
         }
     }
 
-    // ==================== 取人方式 PICK（V1.4.0，方案 流程节点指定处理人改造方案_20260922.md §5.3） ====================
+    // 取人方式 PICK（节点指定处理人）
 
     /** 上一环节点名结果的流程变量前缀（按被点名的节点键存放，避免网关分流后张冠李戴） */
     private static final String PICK_VAR_PREFIX = "pick_assignee_";
@@ -1938,9 +1988,9 @@ public class WfEngineFacade {
     }
 
     private String readConfig(String key) {
-        com.fssc.system.entity.SysConfig c = sysConfigMapper.selectOne(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysConfig>()
-                        .eq(com.fssc.system.entity.SysConfig::getConfigKey, key)
+        SysConfig c = sysConfigMapper.selectOne(
+                new LambdaQueryWrapper<SysConfig>()
+                        .eq(SysConfig::getConfigKey, key)
                         .last("limit 1"));
         return c == null || c.getConfigValue() == null ? null : c.getConfigValue().trim();
     }
@@ -1974,7 +2024,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * D-DEC-004 附随（X-37 丙案）：通过侧审批意见是否必填。总开关缺省关＝现网行为不变；
+     * 附随开关：通过侧审批意见是否必填。总开关缺省关＝现网行为不变；
      * 白名单为空＝对全部模型生效（避免"翻了开关却没反应"）；读取异常按关闭处理。
      */
     private boolean isApproveCommentRequired(Task task) {
@@ -2002,7 +2052,7 @@ public class WfEngineFacade {
         }
     }
 
-    /** 加签校验总开关（F3-3）：待办列表据此决定要不要下发 {@code addSignAllowed} 标注，缺省关＝不标注 */
+    /** 加签校验总开关：待办列表据此决定要不要下发 {@code addSignAllowed} 标注，缺省关＝不标注 */
     public boolean isAddSignGateEnabled() {
         try {
             return "1".equals(readConfig("approve.addsign_gate.enabled"));
@@ -2013,22 +2063,22 @@ public class WfEngineFacade {
     }
 
     /** 加签校验灰度模型清单（与 {@link #addSign} 读同一份 {@code approve.addsign_gate.models}） */
-    public java.util.Set<String> addSignGateModels() {
+    public Set<String> addSignGateModels() {
         try {
             String raw = readConfig("approve.addsign_gate.models");
             if (raw == null || raw.isBlank()) {
-                return java.util.Set.of();
+                return Set.of();
             }
-            return java.util.Arrays.stream(raw.split("[,，;；\\s]+")).map(String::trim)
-                    .filter(s -> !s.isEmpty()).collect(java.util.stream.Collectors.toUnmodifiableSet());
+            return Arrays.stream(raw.split("[,，;；\\s]+")).map(String::trim)
+                    .filter(s -> !s.isEmpty()).collect(Collectors.toUnmodifiableSet());
         } catch (Exception ex) {
             log.error("读取加签闸口灰度清单异常，按未生效处理: {}", ex.getMessage());
-            return java.util.Set.of();
+            return Set.of();
         }
     }
 
     /**
-     * 节点是否 PICK 档（含灰度判定）：开关未放行时所有节点等价 AUTO，行为与改造前完全一致。
+     * 节点是否 PICK 档（含灰度判定）：开关未放行时所有节点等价 AUTO，即不发生点名。
      *
      * <p>限定 {@code assign_type=ROLE}：点名值是在 {@code applyNodeConfig} 的 ROLE 分支里消费的，
      * USER/INITIATOR/DEPT_HEAD 等分支各按自己的规则指派。若把 PICK 配到那些节点上，就会出现
@@ -2045,7 +2095,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * PICK/POOL 共用候选集（方案 §5.1）：节点角色成员，规则与真正取人的 ROLE 分支同源
+     * PICK/POOL 共用候选集：节点角色成员，规则与真正取人的 ROLE 分支同源
      * （GROUP 跨公司 / COMPANY 按单据公司 / 排除停用与非 admin 账号），另按自审禁止开关剔除发起人——
      * 把单派回发起人会造成"下一节点被 deny_self 拒绝、流程就地卡死"，这不是可选优化而是必须剔除。
      */
@@ -2053,7 +2103,7 @@ public class WfEngineFacade {
         Long company = null;
         Long starter = null;
         try {
-            com.fssc.workflow.entity.WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
+            WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
             if (inst != null) {
                 company = nodeOrgResolver.companyIdOfBill(inst.getBizType(), inst.getBizId());
                 starter = inst.getStartUserId();
@@ -2090,7 +2140,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * P1 多实例候选注入：把本流程所有「会签/顺序会签/票签」节点的在办候选人集合写入流程变量，
+     * 多实例候选注入：把本流程所有「会签/顺序会签/票签」节点的在办候选人集合写入流程变量，
      * 供 BPMN {@code multiInstanceLoopCharacteristics.flowable:collection} 在启动/到达该节点时查询。
      * 仅依赖 wf_node_config（权威多签定义源），不解析 node_json，避免与并行会签(parallelGateway)分支混淆。
      */
@@ -2098,7 +2148,7 @@ public class WfEngineFacade {
                                          String bizType, Long bizId, Long approver) {
         try {
             List<WfNodeConfig> all = wfNodeConfigMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WfNodeConfig>()
+                    new LambdaQueryWrapper<WfNodeConfig>()
                             .eq(WfNodeConfig::getModelKey, processKey));
             if (all == null || all.isEmpty()) {
                 return;
@@ -2123,7 +2173,7 @@ public class WfEngineFacade {
                 // 候选为空：保持变量存在但为空集合——Flowable 多实例集合为空会即时以 0 实例结束该节点，
                 // 行为与「角色无成员」一致（宁可空过，不静默卡死/不静默绕过）。
                 vars.put(nodeKey + "_assignees", assignees);
-                // 应到人数快照（P1 票签聚合判定用）：多实例办结后 nrOfInstances 已随执行树销毁、
+                // 应到人数快照（票签聚合判定用）：多实例办结后 nrOfInstances 已随执行树销毁、
                 // 拿不到"应到几人"，而比例判定必须知道分母 ⇒ 发起时把候选人数固化下来。
                 vars.put(nodeKey + "_miTotal", (long) assignees.size());
                 // 多签类型快照：进度接口要如实回显 ALL/SEQ/VOTE（BPMN 里只有 isSequential 布尔，
@@ -2135,17 +2185,17 @@ public class WfEngineFacade {
                     // 通过阈值快照：BPMN completionCondition 里 ratio 是编译进 XML 的字面量，
                     // 运行期 Java 侧判定（票签办结）与进度展示都需要它，故一并注入。
                     vars.put(nodeKey + "_voteRatio", cfg.getVoteRatio() == null ? 50 : cfg.getVoteRatio());
-                    // === G2 票＋人双维 + 不达票默认处理（2026-09-24）===
+                    // 票＋人双维 + 不达票兜底
                     // 为什么必须在这里固化：BPMN 的 completionCondition 是编译期字面量，
-                    // 而办结裁决发生在运行期（Java 侧），两边必须拿到同一套规则，否则
+                    // 而办结判定发生在运行期（Java 侧），两边必须拿到同一套规则，否则
                     // "XML 判定办结了、Java 判定没达标"会互相打架。新列缺省时回落到遗留
                     // vote_ratio / BY_PERSON / REJECT —— 历史只配了 vote_ratio 的节点行为逐字不变。
                     String voteMode = cfg.getVoteMode() == null || cfg.getVoteMode().isBlank()
-                            ? "RATIO" : cfg.getVoteMode().trim().toUpperCase(java.util.Locale.ROOT);
+                            ? "RATIO" : cfg.getVoteMode().trim().toUpperCase(Locale.ROOT);
                     String voteBasis = cfg.getVoteBasis() == null || cfg.getVoteBasis().isBlank()
-                            ? "BY_PERSON" : cfg.getVoteBasis().trim().toUpperCase(java.util.Locale.ROOT);
+                            ? "BY_PERSON" : cfg.getVoteBasis().trim().toUpperCase(Locale.ROOT);
                     String voteFallback = cfg.getVoteFallback() == null || cfg.getVoteFallback().isBlank()
-                            ? "REJECT" : cfg.getVoteFallback().trim().toUpperCase(java.util.Locale.ROOT);
+                            ? "REJECT" : cfg.getVoteFallback().trim().toUpperCase(Locale.ROOT);
                     vars.put(nodeKey + "_voteMode", voteMode);
                     vars.put(nodeKey + "_voteValue",
                             cfg.getVoteValue() != null ? cfg.getVoteValue()
@@ -2198,7 +2248,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * P1 票签计票：任务所属节点若为 VOTE 多实例（启动期注入的 {@code <nodeKey>_approvedCount} 变量存在即判定），
+     * 票签计票：任务所属节点若为 VOTE 多实例（启动期注入的 {@code <nodeKey>_approvedCount} 变量存在即判定），
      * 按审批结果（approved=true 赞成 / false 反对）累加流程变量计数。该变量是 BPMN completionCondition 的命中条件，
      * 计满即由引擎提前终止其余未投票实例（提前办结），避免"3 人投票、第 4 人无需再投"仍需等人。
      */
@@ -2252,27 +2302,27 @@ public class WfEngineFacade {
     }
 
     /**
-     * 票签(VOTE)节点办结裁决：多实例全部实例已了结（同节点无在办任务）时给出节点结论。
+     * 票签(VOTE)节点办结判定：多实例全部实例已了结（同节点无在办任务）时给出节点结论。
      *
-     * <p><b>G2 改造（2026-09-24）：票＋人双维 + 不达票默认处理</b>。规则与 BPMN
+     * <p><b>票＋人双维 + 不达票兜底</b>。规则与 BPMN
      * {@code completionCondition}（{@code WfBpmnTemplateService.voteCompletionCondition}）
      * <b>逐字对齐</b>——XML 负责"什么时候办结"，Java 负责"办结后算不算通过"，两处若各算一遍必然漂移：
      * <ul>
      *   <li>{@code vote_mode=COUNT}：赞成票 ≥ {@code vote_value} 票即通过；</li>
      *   <li>{@code vote_mode=RATIO}：赞成 × 100 ≥ 百分比 × 分母，分母按 {@code vote_basis}
      *       取"应到人数"（{@code _miTotal}，默认）或"实到票数"（赞成+反对）；</li>
-     *   <li>新列缺省时回落遗留 {@code vote_ratio} + 应到分母，<b>历史行行为逐字不变</b>。</li>
+     *   <li>新列缺省时回落遗留 {@code vote_ratio} + 应到分母，历史行的判定结果不变。</li>
      * </ul>
      *
-     * <p><b>不达票默认处理（此前完全没有语义）</b>：多实例全部办完但未达阈值时，固定为
+     * <p><b>不达票兜底</b>：多实例全部办完但未达阈值时，固定为
      * "落默认审批项 + 流程继续"，具体落哪一项由 {@code vote_fallback} 决定——
      * {@code REJECT}（默认）以驳回语义收尾（见 {@link #terminateAsRejected}），
      * {@code PASS} 则记一条 {@code VOTE_NOT_REACHED} 记录后放行。两种结果都会写
-     * {@code voteResult} / {@code voteFallback} 流程变量，供进度展示与 G3 质量报表统计。
+     * {@code voteResult} / {@code voteFallback} 流程变量，供进度展示与质量报表统计。
      *
-     * <p><b>为什么必须在这里判</b>：{@code complete()} 的驳回默认处理是「一票否决」语义（approved=false 即终止
+     * <p><b>为什么必须在这里判</b>：{@code complete()} 的驳回兜底是「一票否决」语义（approved=false 即终止
      * 整个实例），对票签是错的——1 张反对票就把流程杀掉，比例判定根本没有生效机会。
-     * 故票签节点在 {@code complete()} 中<b>跳过即时终止</b>，改为逐票累计、办结后统一裁决。
+     * 故票签节点在 {@code complete()} 中<b>跳过即时终止</b>，改为逐票累计、办结后统一判定。
      *
      * <p>未办结（同节点仍有在办任务）时直接返回，什么都不做——其余投票人继续投。
      *
@@ -2302,7 +2352,7 @@ public class WfEngineFacade {
             // 分母：BY_VOTE＝已投票数（实到），BY_PERSON＝参与人总数（应到，升级前实例无 _miTotal 时退化为实到）
             long denom = "BY_VOTE".equals(basis) ? (ack + rjk) : (total > 0 ? total : ack + rjk);
             if (denom <= 0) {
-                return; // 无任何实例信息可判（如空候选集）：不擅自裁决（宁可漏判，不可错杀）
+                return; // 无任何实例信息可判（如空候选集）：不擅自判定（宁可漏判，不可错杀）
             }
             boolean pass;
             String needText;
@@ -2317,18 +2367,18 @@ public class WfEngineFacade {
                         + " " + denom + "）";
             }
             runtimeService.setVariable(pinst, nodeKey + "_voteResult", pass);
-            log.info("票签收口裁决 node={} 赞成={} 反对={} 应到={} 口径={}/{} 阈值={} 结论={}",
+            log.info("票签判定 node={} 赞成={} 反对={} 应到={} 口径={}/{} 阈值={} 结论={}",
                     nodeKey, ack, rjk, total, mode, basis, value, pass ? "通过" : "未达票");
             if (pass) {
                 return;
             }
-            // —— 不达票默认处理：固定语义＝落默认审批项 + 流程继续（REJECT 时"默认审批项"即驳回）——
+            // —— 不达票兜底：固定语义＝落默认审批项 + 流程继续（REJECT 时"默认审批项"即驳回）——
             runtimeService.setVariable(pinst, nodeKey + "_voteFallback", fallback);
             String reason = "票签未达通过阈值（赞成 " + ack + "/" + denom + "，" + needText + "）";
             if (comment != null && !comment.isBlank()) {
                 reason = reason + "；末票意见：" + comment;
             }
-            // 显式记录：不达票此前"无法解释、无法统计"，这条 VOTE_NOT_REACHED 就是它的可统计落点
+            // 未达票必须有可查询的落点：VOTE_NOT_REACHED 这条记录就是它的解释与统计来源
             writeHistory(pinst, task.getId(), nodeKey, task.getName(), "VOTE_NOT_REACHED",
                     operUserId, reason + "；默认=" + fallback);
             if ("PASS".equals(fallback)) {
@@ -2337,23 +2387,23 @@ public class WfEngineFacade {
             }
             terminateAsRejected(pinst, reason, rejectType);
         } catch (Exception ex) {
-            log.warn("票签收口裁决失败 taskId={}: {}", task.getId(), ex.getMessage());
+            log.warn("票签判定失败 taskId={}: {}", task.getId(), ex.getMessage());
         }
     }
 
-    /** 票签规则变量读取：空值/空串一律回落默认值（缺省语义＝改造前行为） */
+    /** 票签规则变量读取：空值/空串一律回落默认值（未配置即按默认口径判） */
     private String voteVar(String pinst, String name, String def) {
         Object v = runtimeService.getVariable(pinst, name);
         if (v == null || String.valueOf(v).isBlank()) {
             return def;
         }
-        return String.valueOf(v).trim().toUpperCase(java.util.Locale.ROOT);
+        return String.valueOf(v).trim().toUpperCase(Locale.ROOT);
     }
 
     /**
      * 以"驳回"语义收尾流程实例：终止实例 + wf_instance 置 REJECTED + 发布 WfProcessEndedEvent(成功=false)。
      *
-     * <p>从 {@code complete()} 的驳回默认处理抽出，供两条路径复用：① 普通节点驳回（approved=false）；
+     * <p>从 {@code complete()} 的驳回兜底抽出，供两条路径复用：① 普通节点驳回（approved=false）；
      * ② 票签节点办结后未达通过阈值。两条路径业务语义完全一致（"审批不通过"，业务监听置单据 REJECTED），
      * 因此合并为一处，避免"两条驳回路径的收尾动作日后各自漂移"。
      */
@@ -2365,18 +2415,18 @@ public class WfEngineFacade {
             }
             Long tenantId = null;
             try {
-                com.fssc.workflow.entity.WfInstance inst = wfQueryService.instanceByProcInstId(pinst);
+                WfInstance inst = wfQueryService.instanceByProcInstId(pinst);
                 if (inst != null) tenantId = inst.getTenantId();
-            } catch (Exception ignore) { /* 视图未写入数据库则交给总线默认处理 */ }
-            java.util.Map<String, Object> pv = runtimeService.getVariables(pinst);
+            } catch (Exception ignore) { /* 视图未写入数据库则交给总线兜底 */ }
+            Map<String, Object> pv = runtimeService.getVariables(pinst);
             runtimeService.deleteProcessInstance(pinst, "审批驳回");
-            // 缺陷修复（E2E 2026-09-16，原样保留）：驳回默认处理走 deleteProcessInstance，只产生 PROCESS_CANCELLED，
-            // 不会触发 PROCESS_COMPLETED 侧的 wf_instance 状态回写监听，实例会滞留 RUNNING。
-            // 此处随单据置 REJECTED 同步实例状态。
+            // 驳回走的是 deleteProcessInstance，引擎只发 PROCESS_CANCELLED，不触发 PROCESS_COMPLETED
+            // 侧的 wf_instance 状态回写监听，实例会一直停在 RUNNING。所以这里要随单据置 REJECTED
+            // 同步把实例状态改掉。
             try {
-                wfQueryService.updateInstanceStatus(pinst, "REJECTED", java.time.LocalDateTime.now());
+                wfQueryService.updateInstanceStatus(pinst, "REJECTED", LocalDateTime.now());
                 // 幽灵待办办结：驳回作废后，在办 wf_task 的 PENDING 行须同步关闭（引擎任务已随实例删除）
-                // D-DEC-275：关闭同时落作废记录——驳回单最常出现"链上凭空少几节、看不单子死在哪"
+                // 关闭同时落作废记录——驳回单最常出现"链上凭空少几节、看不单子死在哪"
                 wfQueryService.closePendingTasksByInstance(pinst, "审批驳回，流程终止；本节任务未办理即作废");
             } catch (Exception sex) {
                 log.warn("驳回实例状态回写失败 procInstId={}", pinst);
@@ -2392,7 +2442,7 @@ public class WfEngineFacade {
         }
     }
 
-    /** 变量查询容错：null / 非数值一律退化为默认值（票签裁决不能因一个脏变量就抛 500） */
+    /** 变量查询容错：null / 非数值一律退化为默认值（票签判定不能因一个脏变量就抛 500） */
     private static long numberOr(Object v, long def) {
         if (v instanceof Number n) {
             return n.longValue();
@@ -2428,17 +2478,17 @@ public class WfEngineFacade {
     }
 
     /**
-     * G2 ①层「审批项」读取（只读，2026-09-24）：按任务反查其节点上启用的自定义审批结果，
-     * 供审批弹窗渲染按钮。无配置返回空列表 ⇒ 前端不渲染自定义按钮，弹窗与改造前完全一致。
+     * 「审批项」读取（只读）：按任务反查其节点上启用的自定义审批结果，供审批弹窗渲染按钮。
+     * 无配置返回空列表，前端据此不渲染自定义按钮。
      *
      * <p>与执行面 {@link #complete(String, boolean, String, String, Long, Long, String, String, String)}
      * <b>同源同一解析器</b>（{@link WfApprovalItemService#listEnabled}，{@code modelKey:nodeKey} 精确匹配），
      * 不允许两处各写一套映射——否则会出现"按钮看得见、点下去报审批项不存在"。
      */
-    public java.util.List<com.fssc.workflow.entity.WfApprovalItem> approvalItemsOf(String taskId) {
+    public List<WfApprovalItem> approvalItemsOf(String taskId) {
         Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
         if (task == null || task.getProcessDefinitionId() == null) {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
         String modelKey = task.getProcessDefinitionId().split(":")[0];
         return approvalItemService.listEnabled(modelKey, task.getTaskDefinitionKey());
@@ -2451,7 +2501,7 @@ public class WfEngineFacade {
      * 不再另建计票表——避免"同一事实两处记录、日后必然漂移"。
      */
     public Map<String, Object> miProgress(String taskId) {
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("multi", false);
         try {
             Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
@@ -2469,7 +2519,7 @@ public class WfEngineFacade {
             }
             long total = numberOr(runtimeService.getVariable(pinst, nodeKey + "_miTotal"), 0L);
             // 引擎计票变量只在票签(VOTE)节点注入并由 complete() 累加（见 injectMultiInstanceVars /
-            // countVoteIfNeeded）；会签 ALL/SEQ 根本没有这两个变量 ⇒ 不能据此判"有人投过票"（D-DEC-098）。
+            // countVoteIfNeeded）；会签 ALL/SEQ 根本没有这两个变量 ⇒ 不能据此判"有人投过票"。
             boolean engineCounted = runtimeService.getVariable(pinst, nodeKey + "_approvedCount") != null;
             long ack = numberOr(runtimeService.getVariable(pinst, nodeKey + "_approvedCount"), 0L);
             long rjk = numberOr(runtimeService.getVariable(pinst, nodeKey + "_rejectedCount"), 0L);
@@ -2495,7 +2545,7 @@ public class WfEngineFacade {
             List<Map<String, Object>> votes = new ArrayList<>(raw == null ? 0 : raw.size());
             if (raw != null) {
                 for (Map<String, Object> r : raw) {
-                    Map<String, Object> v = new java.util.LinkedHashMap<>();
+                    Map<String, Object> v = new LinkedHashMap<>();
                     v.put("userId", pickIgnoreCase(r, "userId"));
                     v.put("userName", pickIgnoreCase(r, "userName"));
                     v.put("action", pickIgnoreCase(r, "action"));
@@ -2506,8 +2556,9 @@ public class WfEngineFacade {
                 }
             }
             out.put("votes", votes);
-            // D-DEC-098：会签（ALL/SEQ）没有上面那两个引擎计票变量，此前"已投 x/n"与同屏票列查询不同源，
-            // 第二人进弹窗看到的是"已投 0/2"，而票列已列出同伴的赞成票。记录即事实——非票签节点按记录计。
+            // 会签（ALL/SEQ）没有上面那两个引擎计票变量，若"已投 x/n"另走一条路算，就会和同屏的
+            // 票列对不上：第二人进弹窗看到"已投 0/2"，票列里却已经有同伴的赞同票。
+            // 记录即事实——非票签节点按记录计。
             // 票签(VOTE)仍读引擎变量：它是 BPMN completionCondition 的判定依据，两处互换会做出第二套真值。
             if (!engineCounted) {
                 long votedAck = 0L;
@@ -2522,7 +2573,7 @@ public class WfEngineFacade {
                 }
                 ack = votedAck;
                 rjk = votedRjk;
-                // 分母默认处理：升级前发起的实例没有 _miTotal 快照，按实到票数办结，避免"已投 1/0"
+                // 分母兜底：升级前发起的实例没有 _miTotal 快照，按实到票数办结，避免"已投 1/0"
                 if (total <= 0) {
                     total = ack + rjk;
                     out.put("total", total);
@@ -2590,13 +2641,13 @@ public class WfEngineFacade {
     }
 
     /**
-     * 提单时"第一个真正要审的人"所在的节点键（方案 G2-3）：从开始事件沿图走，穿过网关，
+     * 提单时"第一个真正要审的人"所在的节点键（方案）：从开始事件沿图走，穿过网关，
      * 命中人工节点即停。
      *
      * <p>还要再往后跳一步：这些流程的首节点是"提交XX单"这类自确认节点（提单即由
      * {@link #autoSkipSelfConfirmFirstNode} 自动完成，不产生人工待办），把它当成"下一环节"会让提单人
      * 去点名一个根本不需要人的节点。判定规则与自动跳过保持一致：显式属性
-     * {@code wf_node_config.first_node_auto_pass}（F10，G4 治理）为 1，或该列未配置时回退
+     * {@code wf_node_config.first_node_auto_pass} 为 1，或该列未配置时回退
      * 节点名含"提交"，或取人方式为 {@code INITIATOR}（发起人自审）。
      *
      * @return 0 个=流程无人工审批节点；1 个=落点唯一，可点名；>1 个=分支未办结，不可点名
@@ -2624,7 +2675,7 @@ public class WfEngineFacade {
             String first = keys.get(0);
             FlowElement el = p.getFlowElement(first);
             WfNodeConfig cfg = modelKey == null ? null : wfNodeConfigResolver.resolve(modelKey, first);
-            // RA-ROOT-16：与 autoSkipSelfConfirmFirstNode 走**同一个判据方法**（显式属性，名称不参与）。
+            // 与 autoSkipSelfConfirmFirstNode 走同一个判断方法（只看显式属性，名称不参与）。
             // 两处必须同源，否则"点名的下一环节"与实际"自动跳过的首节点"会各算各的。
             boolean submitNode = isFirstNodeAutoPass(cfg);
             boolean selfConfirm = submitNode
@@ -2641,12 +2692,12 @@ public class WfEngineFacade {
     }
 
     /**
-     * 审批入口的点名硬约束（方案 §5.5）：下一节点唯一且为 PICK 档时——
+     * 审批入口的点名硬约束：下一节点唯一且为 PICK 档时——
      * 无候选 → 阻断并提示补岗；未点名 → 阻断并提示需指定；点名不在候选集 → 阻断（防绕开下拉越权指派）。
      * 校验放在 {@code taskService.complete} <b>之前</b>：本门面没有事务包裹，complete 之后才报错会留下
      * "审批已生效但用户看到失败"的双态。
      */
-    private void enforcePickOnApprove(Task task, com.fssc.workflow.entity.WfInstance inst,
+    private void enforcePickOnApprove(Task task, WfInstance inst,
                                       Map<String, Object> vars, Long nextAssigneeUserId, Long operator) {
         if (inst == null || !isPickModeEnabled(inst.getModelKey())) {
             return;
@@ -2663,7 +2714,7 @@ public class WfEngineFacade {
         String nodeName = cfg.getNodeName() == null || cfg.getNodeName().isBlank() ? nodeKey : cfg.getNodeName();
         List<Long> cands = pickCandidates(inst.getModelKey(), cfg, task.getProcessInstanceId());
         if (cands.isEmpty()) {
-            // 零候选不等于必须在这里卡住：批次 1 ③ 之后审批节点的办结规则由 empty_strategy 决定
+            // 零候选不等于必须在这里卡住：审批节点的办结规则由 empty_strategy 决定
             // （ESCALATE 升级 / SKIP 跳过），而这两档只有在任务被创建之后才由三级解析执行得到——
             // 在此早退让 complete 继续，下一节点任务落地后再按档处置。
             // 只有 ERROR 档（作业节点「请先补岗」）维持审批入口硬拦：早晚报都是同一个 400，早报省一次无效提交。
@@ -2673,7 +2724,7 @@ public class WfEngineFacade {
                 throw new BizException(ErrorCode.PARAM_INVALID, "下一节点「" + nodeName
                         + "」当前无可选办理人（节点角色在本单据所属公司下没有在职非管理员成员），请先在角色授权中补岗");
             }
-            log.info("PICK 节点「{}」零候选，empty_strategy={} —— 交由节点三级解析收口，不在审批入口阻断",
+            log.info("PICK 节点「{}」零候选，empty_strategy={} —— 交由节点三级解析收尾，不在审批入口阻断",
                     nodeName, strategy);
             return;
         }
@@ -2689,11 +2740,11 @@ public class WfEngineFacade {
     }
 
     /**
-     * 提单入口的点名硬约束（方案 G2-3，与 {@link #enforcePickOnApprove} 同一规则）：首审节点唯一且为
+     * 提单入口的点名硬约束（方案，与 {@link #enforcePickOnApprove} 同一规则）：首审节点唯一且为
      * PICK 档才接受点名，点名对象必须落在本单据公司范围下的候选集内。
      *
      * <p>拒绝而非忽略：忽略等于"用户以为自己选了人，实际单流向了他没见过的人"。唯一不拒绝的情形是
-     * 灰度总开关关闭——那时系统行为要与改造前完全一致（含"不接受点名"），故告警后丢弃。
+     * 灰度总开关关闭——那个档位本就不接受点名，此时告警后丢弃。
      */
     private void enforcePickOnStart(String bizType, Long bizId, String processKey,
                                     Map<String, Object> vars, Long picked) {
@@ -2704,8 +2755,8 @@ public class WfEngineFacade {
             log.warn("PICK 灰度未放行 {}，忽略提单点名 user={}", processKey, picked);
             return;
         }
-        Long operator = com.fssc.framework.security.UserContext.get() == null
-                ? null : com.fssc.framework.security.UserContext.get().getUserId();
+        Long operator = UserContext.get() == null
+                ? null : UserContext.get().getUserId();
         if (operator == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "提单指定办理人需登录态，机器发起的流程请按节点配置自动取人");
         }
@@ -2746,14 +2797,14 @@ public class WfEngineFacade {
     }
 
     /**
-     * 供提单页展示"第一道审批给谁"（方案 G2-3 方案 B：配置驱动）：首审节点为 PICK 档才要求选人，
+     * 供提单页展示"第一道审批给谁"（方案 方案 B：配置驱动）：首审节点为 PICK 档才要求选人，
      * POOL 档只提示"任务池抢单"，其余（含 AUTO/USER/INITIATOR/分支未办结）返回 mode=AUTO 不渲染下拉。
      *
      * <p>与 {@link #nextCandidates} 的差别只有组织上下文来源：此刻还没有流程实例，公司从草稿单据
      * （{@code bizType}+{@code bizId}）解析、直线上级从提单人解析，其余候选人规则完全同源。
      */
     public Map<String, Object> startCandidates(String bizType, Long bizId, String subType,
-                                               java.math.BigDecimal amount, Long operator) {
+                                               BigDecimal amount, Long operator) {
         Map<String, Object> out = new HashMap<>();
         out.put("mode", "AUTO");
         out.put("nodeKey", null);
@@ -2786,10 +2837,10 @@ public class WfEngineFacade {
         boolean pick = role && isPickNode(modelKey, cfg);
         boolean pool = role && "POOL".equalsIgnoreCase(trim(cfg.getHandlingMode()));
         out.put("mode", pick ? "PICK" : (pool ? "POOL" : "AUTO"));
-        // D-DEC-097 同族（提单态）：首审环节本身就是会签/票签时，"这一环节交给谁"的答案是<b>全体候选</b>
+        // 同族（提单态）：首审环节本身就是会签/票签时，"这一环节交给谁"的答案是<b>全体候选</b>
         // ——引擎按 <nodeKey>_assignees 逐人生成待办。且多签节点常配成 assign_type=USER（点名式会签），
         // 会被下面的 !role 早退成 0 候选，弹窗上"下一环节"整块空着。取人算法与派发同一个
-        // {@link #resolveMiAssignees}，不新起规则；POOL 的 deny_self 豁免（2026-09-26 裁决）在本支之外，不受影响。
+        // {@link #resolveMiAssignees}，不新起规则；POOL 的 deny_self 豁免走的是另一支，不受这里影响。
         if (isMultiInstanceNode(cfg)) {
             Long miCompany = null;
             try {
@@ -2805,7 +2856,7 @@ public class WfEngineFacade {
                 }
             }
             out.put("multiInstance", true);
-            out.put("multiType", cfg.getMultiType().trim().toUpperCase(java.util.Locale.ROOT));
+            out.put("multiType", cfg.getMultiType().trim().toUpperCase(Locale.ROOT));
             out.put("candidates", describeUsers(mi));
             return out;
         }
@@ -2833,7 +2884,7 @@ public class WfEngineFacade {
 
     /**
      * 消费上一环节点名结果：命中则返回被点名用户并写 ASSIGN 记录；非 PICK 档/未点名/点名失效返回 null
-     * （由调用方退回 AUTO 取人）。
+     * 由调用方退回 AUTO 取人。
      */
     private Long consumePickedAssignee(String processKey, WfNodeConfig cfg, Task task) {
         if (!isPickNode(processKey, cfg)) {
@@ -2904,7 +2955,7 @@ public class WfEngineFacade {
         if (!nodeOrgResolver.canOperate(task, operator)) {
             throw new BizException(ErrorCode.FORBIDDEN, "非当前节点办理人/候选人，无权查看此任务候选人");
         }
-        com.fssc.workflow.entity.WfInstance inst = wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
+        WfInstance inst = wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
         String modelKey = inst == null ? null : inst.getModelKey();
         out.put("currentNodeName", task.getName());
         out.put("pickEnabled", isPickModeEnabled(modelKey));
@@ -2922,14 +2973,14 @@ public class WfEngineFacade {
         out.put("nodeKey", nodeKey);
         out.put("nodeName", cfg == null || cfg.getNodeName() == null ? nodeKey : cfg.getNodeName());
         boolean pick = isPickNode(modelKey, cfg);
-        // POOL 与 startCandidates 同一规则：任务池要如实报"池里有几个人可领"，
-        // 原先只分 pick/非 pick 两支，POOL 节点被当成 AUTO 报成 1 个人，弹窗上看不出这是抢单节点。
+        // POOL 与 startCandidates 同一规则：任务池要如实报"池里有几个人可领"。只分 pick/非 pick
+        // 两支的话，POOL 节点会落到 AUTO 档报成 1 个人，弹窗上看不出这是抢单节点。
         boolean pool = cfg != null && "ROLE".equals(cfg.getAssignType())
                 && "POOL".equalsIgnoreCase(trim(cfg.getHandlingMode()));
         out.put("mode", pick ? "PICK" : (pool ? "POOL" : "AUTO"));
         List<Long> ids = previewCandidates(modelKey, cfg, task.getProcessInstanceId(), pick, pool);
         out.put("candidates", describeUsers(ids));
-        // D-DEC-097：会签/票签下一环节是"每人一条待办"，不是"流转给其中一个人"。
+        // 会签/票签下一环节是"每人一条待办"，不是"流转给其中一个人"。
         // 把多签类型一并下发，前端据此说破"几人各生成一条"，而不是照单人选节点那样报"将流转给 X"。
         String miType = cfg == null || cfg.getMultiType() == null ? null : cfg.getMultiType().trim().toUpperCase();
         boolean mi = isMultiInstanceNode(cfg);
@@ -2946,24 +2997,24 @@ public class WfEngineFacade {
         if (cfg == null || cfg.getMultiType() == null) {
             return false;
         }
-        String mt = cfg.getMultiType().trim().toUpperCase(java.util.Locale.ROOT);
+        String mt = cfg.getMultiType().trim().toUpperCase(Locale.ROOT);
         return "ALL".equals(mt) || "SEQ".equals(mt) || "VOTE".equals(mt);
     }
 
     /**
-     * 下一环节预览的候选人（D-DEC-097：预览与派发<b>同源</b>）。
+     * 下一环节预览的候选人（预览与派发<b>同源</b>）。
      *
-     * <p><b>缺陷</b>：多签节点在预览里走的是 AUTO 档的 {@link #firstHolderOnly}——只取节点角色
-     * <b>第一个</b>持有人，而引擎按 {@code <nodeKey>_assignees} 集合<b>逐人</b>生成待办
-     * （12-23:56：预览列 1 人、实生成 2 条 Task_11）。_assignees 来自 ROLE 展开时更是把
-     * {@code assign_type=USER} 的会签节点直接报成 0 候选（原三元式里的 {@code !"ROLE".equals(assignType)}
-     * 早退），弹窗上"下一环节"整块空着，审批人以为没人会收到这张单。
+     * <p>多签节点不能走 AUTO 档的 {@link #firstHolderOnly}：那里只取节点角色<b>第一个</b>持有人，
+     * 而引擎按 {@code <nodeKey>_assignees} 集合<b>逐人</b>生成待办，预览就会说"转给 1 个人"、
+     * 实际生成好几条任务。ROLE 展开更糟：{@code assign_type=USER} 的会签节点会被那条
+     * {@code !"ROLE".equals(assignType)} 的早退判成 0 候选，弹窗上"下一环节"整块空着，
+     * 审批人以为没人会收到这张单。
      *
-     * <p><b>规则</b>：多签节点优先读启动期注入的流程变量（那正是 Flowable 派发用的集合，
-     * 读它＝与实发待办逐字一致）；变量拿不到（老实例／键改过／非本引擎发起）时退回
-     * {@link #resolveMiAssignees} ——与注入时<b>同一个方法</b>重算，不新起一份候选算法。
-     * PICK/POOL/AUTO 三档的非多签节点保持原路径逐字不变（POOL 的候选规则含 2026-09-26
-     * 「POOL 不走 deny_self」人工裁决，本轮不收权、不动那一支）。
+     * <p>所以多签节点优先读启动期注入的流程变量（那正是 Flowable 派发用的集合，读它＝与实发
+     * 待办同源）；变量拿不到（老实例／键改过／非本引擎发起）时退回 {@link #resolveMiAssignees}
+     * ——与注入时<b>同一个方法</b>重算，不新起一份候选算法。
+     * PICK/POOL/AUTO 三档的非多签节点走原路径（POOL 的候选规则另有「POOL 不走 deny_self」一条，
+     * 那一支不动）。
      */
     private List<Long> previewCandidates(String modelKey, WfNodeConfig cfg, String procInstId,
                                          boolean pick, boolean pool) {
@@ -2987,7 +3038,7 @@ public class WfEngineFacade {
     private List<Long> miPreviewCandidates(WfNodeConfig cfg, String procInstId) {
         try {
             Object raw = runtimeService.getVariable(procInstId, cfg.getNodeKey() + "_assignees");
-            if (raw instanceof java.util.Collection<?> col && !col.isEmpty()) {
+            if (raw instanceof Collection<?> col && !col.isEmpty()) {
                 List<Long> ids = new ArrayList<>();
                 for (Object o : col) {
                     Long id = toUserIdOrNull(o == null ? null : String.valueOf(o));
@@ -3006,7 +3057,7 @@ public class WfEngineFacade {
         Long company = null;
         Long applicant = null;
         try {
-            com.fssc.workflow.entity.WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
+            WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
             if (inst != null) {
                 company = nodeOrgResolver.companyIdOfBill(inst.getBizType(), inst.getBizId());
                 applicant = inst.getStartUserId();
@@ -3036,9 +3087,9 @@ public class WfEngineFacade {
         if (ids == null || ids.isEmpty()) {
             return out;
         }
-        Map<Long, com.fssc.system.entity.SysUser> users = new HashMap<>();
+        Map<Long, SysUser> users = new HashMap<>();
         try {
-            for (com.fssc.system.entity.SysUser u : sysUserMapper.selectBatchIds(ids)) {
+            for (SysUser u : sysUserMapper.selectBatchIds(ids)) {
                 users.put(u.getId(), u);
             }
         } catch (Exception ex) {
@@ -3046,7 +3097,7 @@ public class WfEngineFacade {
         }
         boolean withLoad = ids.size() <= 20;
         for (Long id : ids) {
-            com.fssc.system.entity.SysUser u = users.get(id);
+            SysUser u = users.get(id);
             if (u == null) {
                 continue;
             }
@@ -3069,7 +3120,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 空策略默认处理记录（批次 1 ③）：SKIP 自动跳过、ESCALATE 系统升级换人都是"系统代替人做的决定"，
+     * 空策略兜底记录：SKIP 自动跳过、ESCALATE 系统升级换人都是"系统代替人做的决定"，
      * 必须落进 {@code wf_task_history} 才对得上账——否则单据静默换人/跳节点，事后无从追溯是谁放的行。
      * ERROR（抛异常阻断）与 ADMIN 由各自的异常信息/告警日志暴露，此处不重复记。
      */
@@ -3086,32 +3137,32 @@ public class WfEngineFacade {
             writeHistory(task.getProcessInstanceId(), task.getId(), task.getTaskDefinitionKey(), task.getName(),
                     "SKIP".equals(action) ? "AUTO_SKIP" : "ESCALATE", null, target,
                     "SKIP".equals(action)
-                            ? "空策略默认处理：本节点在该单据所属公司内无可办理人，按节点配置自动跳过（仅知会/消息类节点允许此档）"
-                            : "空策略默认处理：本节点候选角色无可办理的持有人（含自审回避，提单人本人被排除），沿汇报线升级给真实负责人办理（绝不落 admin）");
+                            ? "空策略兜底：本节点在该单据所属公司内无可办理人，按节点配置自动跳过（仅知会/消息类节点允许此档）"
+                            : "空策略兜底：本节点候选角色无可办理的持有人（含自审回避，提单人本人被排除），沿汇报线升级给真实负责人办理（绝不落 admin）");
         } catch (Exception ex) {
             log.warn("空策略兜底留痕失败 task={} action={}: {}", task.getId(), action, ex.getMessage());
         }
     }
 
     /**
-     * 节点办理人三级解析统一入口（V1.3.21）：①节点配置覆盖 → ②组织解析 → ③空策略默认处理。
+     * 节点办理人三级解析统一入口：①节点配置覆盖 → ②组织解析 → ③空策略兜底。
      *
-     * <p>此前 ①②③ 只有前两级在跑，且③根本不存在，导致"某公司在节点角色下无成员"时任务既无
-     * assignee 也无合法办理人，单据静默永久滞留（典型：BASE_FIN_MANAGER 基地财务经理只对集团总部
-     * 铺开，子公司对公付款单必然卡在该节点）。③ 由 {@link NodeOrgResolver#applyEmptyStrategy} 提供，
-     * 按 {@code wf_node_config.empty_strategy} 处置为 ADMIN 转管理员 / SKIP 自动跳过 / ERROR 报错阻断。
+     * <p>少了第③级，"某公司在节点角色下无成员"时任务既无 assignee 也无合法办理人，单据会静默
+     * 永久滞留（典型：BASE_FIN_MANAGER 基地财务经理只对集团总部铺开，子公司对公付款单必然卡在
+     * 该节点）。③ 由 {@link NodeOrgResolver#applyEmptyStrategy} 提供，按
+     * {@code wf_node_config.empty_strategy} 处置为 ADMIN 转管理员 / SKIP 自动跳过 / ERROR 报错阻断。
      *
      * <p>SKIP 会把当前任务直接完成并产生新任务，故此处循环续跑，最多 8 跳防止配置成环空转。
      *
      * @param processKey 流程模型 key（wf_model.model_key）
-     * @param task       刚创建的人工任务（首节点或 complete 后的下一节点）
+     * @param task 刚创建的人工任务（首节点或 complete 后的下一节点）
      */
     private void assignApprover(String processKey, Task task) {
         Task cur = task;
         for (int hop = 0; hop < 8 && cur != null; hop++) {
             applyNodeConfig(processKey, cur);
-            // V1.3.22(E2E#11): refresh task so stage-2/3 see the assignee set by stage-1 USER config;
-            // stale snapshot caused ADMIN fallback to overwrite explicit node assignment.
+            // 重查任务，让第②③级看到第①级 USER 配置刚设的 assignee：拿旧快照的话，
+            // ADMIN 兜底会把显式指派覆盖掉。
             if (cur.getId() != null) {
                 Task freshTask = taskService.createTaskQuery().taskId(cur.getId()).singleResult();
                 if (freshTask == null) {
@@ -3135,14 +3186,14 @@ public class WfEngineFacade {
                 }
             }
         }
-        // 双账补账：此前 wf_task 只在 start() 记了首节点，第 2 个节点起引擎有任务、视图表没行，
-        // 于是「按 wf_task PENDING 扫描」的整条链路对后续节点全部失效——节点级超时（WfTimeoutJob
+        // 双账补账：wf_task 若只在 start() 记首节点，第 2 个节点起引擎有任务、视图表没行，
+        // 所有「按 wf_task PENDING 扫描」的链路就对后续节点全部失效——节点级超时（WfTimeoutJob
         // 读 model_key+node_key+create_time）、我的待办 myTodo、看板的当前办理人（fillCurrentHandlers
-        // 读 candidate_ids）都只能看到首节点。此处统一在三级解析收尾后补记真实落点。
+        // 读 candidate_ids）都只剩首节点可见。所以在三级解析收尾后统一补记真实落点。
         if (cur != null && cur.getId() != null) {
             // 必须重查再记账：empty_strategy 的 ESCALATE 是在这轮里 setAssignee 的，手头的 cur 是设派之前的快照，
             // 直接记会让 wf_task 镜像的 assignee_id 留空——按镜像跑的超时作业/看板当前办理人就看不到升级后的真人。
-            // G1（2026-09-24）：开关打开时停写 wf_task，改由监听器 TASK_CREATED 投影建行。
+            // 镜像开关打开时停写 wf_task，改由监听器 TASK_CREATED 投影建行。
             if (mirrorByFacade()) {
                 Task mirrored = taskService.createTaskQuery().taskId(cur.getId()).singleResult();
                 recordTaskMirror(processKey, mirrored != null ? mirrored : cur);
@@ -3151,7 +3202,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 待办视图补账（双账打通，P1-G22）：为 complete 推进出来的<b>非首节点</b>人工任务写 wf_task PENDING 行。
+     * 待办视图补账：为 complete 推进出来的<b>非首节点</b>人工任务写 wf_task PENDING 行。
      *
      * <p>字段含义与 {@code start()} 首节点那条保持一致（同一张表两套写法会漂移）：单据信息一律从
      * {@code wf_instance} 视图取，不再读流程变量（历史变量会被清理）；{@code candidate_ids} 只在
@@ -3166,10 +3217,10 @@ public class WfEngineFacade {
                 return;
             }
             if (wfQueryService.pendingTaskExists(task.getId())) {
-                // D-V4R-43：G1 监听器投影会先建 assignee 为空的镜像行；三级解析（empty_strategy ESCALATE）
-                // 补派出真人后必须回写 assignee，否则待办/看板/超时作业全部按镜像找人——单子在真人手里
-                // 却不在任何人待办里（实测 LOAN/CLAIM Task_2 卡死的最后一公里）。
-                com.fssc.workflow.entity.WfTask existing = wfQueryService.pendingTaskByTaskId(task.getId());
+                // 监听器投影会先建 assignee 为空的镜像行；三级解析（empty_strategy ESCALATE）补派出
+                // 真人后必须回写 assignee，否则待办/看板/超时作业全部按镜像找人——单子在真人手里，
+                // 却不在任何人的待办里。
+                WfTask existing = wfQueryService.pendingTaskByTaskId(task.getId());
                 Long assigneeLate = toUserIdOrNull(task.getAssignee());
                 if (existing != null && existing.getAssigneeId() == null && assigneeLate != null) {
                     wfQueryService.updateTaskAssignee(task.getId(), assigneeLate);
@@ -3178,7 +3229,7 @@ public class WfEngineFacade {
                 }
                 return;
             }
-            com.fssc.workflow.entity.WfInstance inst =
+            WfInstance inst =
                     wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
             if (inst == null || inst.getBizType() == null) {
                 // biz_type 为 NOT NULL：实例视图尚未写入数据库时无法补齐单据归属，交给 start() 那条链路负责
@@ -3186,10 +3237,10 @@ public class WfEngineFacade {
                         task.getProcessInstanceId(), task.getId());
                 return;
             }
-            java.time.LocalDateTime createAt = task.getCreateTime() == null ? java.time.LocalDateTime.now()
-                    : java.time.LocalDateTime.ofInstant(task.getCreateTime().toInstant(),
-                            java.time.ZoneId.systemDefault());
-            com.fssc.workflow.entity.WfTask t = new com.fssc.workflow.entity.WfTask();
+            LocalDateTime createAt = task.getCreateTime() == null ? LocalDateTime.now()
+                    : LocalDateTime.ofInstant(task.getCreateTime().toInstant(),
+                            ZoneId.systemDefault());
+            WfTask t = new WfTask();
             t.setTenantId(inst.getTenantId() != null ? inst.getTenantId() : TenantContext.getTenantId());
             t.setTaskId(task.getId());
             t.setProcInstId(task.getProcessInstanceId());
@@ -3237,7 +3288,7 @@ public class WfEngineFacade {
             log.info("待办视图补账: task={} node={} assignee={} candidates={}",
                     task.getId(), task.getTaskDefinitionKey(), assignee, t.getCandidateIds());
         } catch (Exception ex) {
-            // G0 止血（方案 §二 F2）：补账失败不再静默吞掉。先记缺陷（错误码 + 一条 sys_oper_log），
+            // 补账失败不能静默吞掉：先记缺陷（错误码 + 一条 sys_oper_log），
             // 再原样冒泡——引擎侧任务已经存在，镜像缺行意味着"单子在真人手里却不在任何人待办里"，
             // 这种漂移必须让调用方（start / assignApprovers）与界面看得见。
             mirrorDefectRecorder.record(WfMirrorDefectRecorder.CODE_MIRROR_WRITE_FAILED, "recordTaskMirror",
@@ -3251,19 +3302,19 @@ public class WfEngineFacade {
     }
 
     /**
-     * 流程变量值 → 金额（D-DEC-055/124 镜像列默认处理用）。取不到数值返回 {@code null}＝保持列空，
+     * 流程变量值 → 金额（/124 镜像列兜底用）。取不到数值返回 {@code null}＝保持列空，
      * 不写 0——0 在金额分档流程里是"金额=0 档"的真实语义，混进镜像就是把缺值说成小额。
      */
-    private static java.math.BigDecimal toAmountOrNull(Object value) {
-        if (value instanceof java.math.BigDecimal bd) {
+    private static BigDecimal toAmountOrNull(Object value) {
+        if (value instanceof BigDecimal bd) {
             return bd;
         }
         if (value instanceof Number n) {
-            return new java.math.BigDecimal(n.toString());
+            return new BigDecimal(n.toString());
         }
         if (value instanceof String s && !s.isBlank()) {
             try {
-                return new java.math.BigDecimal(s.trim());
+                return new BigDecimal(s.trim());
             } catch (NumberFormatException ignore) {
                 return null;
             }
@@ -3298,10 +3349,10 @@ public class WfEngineFacade {
     }
 
     /**
-     * 审批 + 下一环节点名 + 运行时抄送（G2 传阅）。rejectType 仍按老规则推断。
+     * 审批 + 下一环节点名 + 运行时抄送（传阅）。rejectType 仍按老规则推断。
      *
      * <p>与 {@code (String,boolean,String,String,Long,Long)} 重载仅第 4/6 个参数类型不同
-     * （Long/String 对调）。正常调用传入具体类型而非 {@code null} 字面量，不构成歧义。
+     * Long/String 对调。正常调用传入具体类型而非 {@code null} 字面量，不构成歧义。
      */
     public void complete(String taskId, boolean approved, String comment, Long operUserId,
                          Long nextAssigneeUserId, String ccUserIds) {
@@ -3310,7 +3361,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * P4 G4：审批 + 点名 + 抄送 + 自由驳回（rejectType 仍按 P0-5 老规则推断，调用方无需感知）。
+     * 审批 + 点名 + 抄送 + 自由驳回（rejectType 仍按老规则推断，调用方无需感知）。
      * 与 {@code (String,boolean,String,String,Long,Long,String)} 的第 4 参类型不同（Long/String），
      * 重载解析按实参类型精确匹配，不构成歧义。
      */
@@ -3324,21 +3375,20 @@ public class WfEngineFacade {
      * 按业务单据审批：bizType + bizId → 查找活跃任务 → complete。
      * 列表页通用审批入口，不需要调用方感知 taskId。
      *
-     * <p>并联会审网关（本族 INVOICE_MATCH 的 Task_8 成本费用岗 ∥ Task_11 资产核算岗）会让同一 bizId
-     * 同时挂着两条在办任务，旧实现的 {@code singleResult()} 直接抛
-     * {@code Query return 2 results instead of max 1} → 500 系统异常（实测堆栈在本方法）。
-     * 故改为取列表，并只办结操作人有权的那一条；无权区分时明确拒办并提示走待办逐条办理，
-     * 绝不代替用户挑一条办掉（会签的本意就是各岗位各自签核）。
+     * <p>并联会审网关（例如 INVOICE_MATCH 里成本费用岗与资产核算岗并行）会让同一 bizId 同时挂着
+     * 两条在办任务。用 {@code singleResult()} 查就会抛 {@code Query return 2 results instead of max 1}
+     * 包成 500。所以这里取列表，只办结操作人有权的那一条；分辨不出就明确拒办并提示走待办逐条
+     * 办理，绝不代替用户挑一条办掉——会签的本意就是各岗位各自签核。
      */
     public void completeByBill(String bizType, Long bizId, boolean approved, String comment, Long operUserId) {
-        java.util.List<Task> tasks = taskService.createTaskQuery()
+        List<Task> tasks = taskService.createTaskQuery()
                 .processVariableValueEquals("bizType", bizType)
                 .processVariableValueEquals("bizId", bizId)
                 .active()
                 .list();
         if (tasks.isEmpty()) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID,
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID,
                     "未找到待审批任务: bizType=" + bizType + ", bizId=" + bizId);
         }
         Task task;
@@ -3346,8 +3396,8 @@ public class WfEngineFacade {
             task = tasks.get(0);
         } else {
             Long operator = operUserId != null ? operUserId
-                    : (com.fssc.framework.security.UserContext.get() != null
-                            ? com.fssc.framework.security.UserContext.get().getUserId() : null);
+                    : (UserContext.get() != null
+                            ? UserContext.get().getUserId() : null);
             task = null;
             if (operator != null) {
                 for (Task t : tasks) {
@@ -3355,31 +3405,31 @@ public class WfEngineFacade {
                 }
             }
             if (task == null) {
-                java.util.StringJoiner nodes = new java.util.StringJoiner("、");
+                StringJoiner nodes = new StringJoiner("、");
                 for (Task t : tasks) nodes.add(t.getName());
-                throw new com.fssc.common.exception.BizException(
-                        com.fssc.common.core.ErrorCode.PARAM_INVALID,
+                throw new BizException(
+                        ErrorCode.PARAM_INVALID,
                         "该单据当前有 " + tasks.size() + " 个并联节点同时在办（" + nodes + "），请在待办中逐条办理");
             }
         }
         complete(task.getId(), approved, comment, operUserId);
     }
 
-    /** MF5-06/ST-03 配套：取消僵尸流程实例（仅测试/运维清理用；PROCESS_CANCELLED 不触发业务收尾） */
+    /** 取消僵尸流程实例（仅测试/运维清理用；PROCESS_CANCELLED 不触发业务收尾） */
     public void cancelInstance(String procInstId, String reason) {
         if (runtimeService.createProcessInstanceQuery().processInstanceId(procInstId).singleResult() == null) {
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "实例不存在或已结束: " + procInstId);
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "实例不存在或已结束: " + procInstId);
         }
         runtimeService.deleteProcessInstance(procInstId, reason);
         try {
-            wfQueryService.updateInstanceStatus(procInstId, "CANCELLED", java.time.LocalDateTime.now());
-            // 幽灵待办办结：清理后 wf_task 的 PENDING 行同步关闭（此前会残留，实测 30 条）
-            // D-DEC-275：与下一行的实例级 CANCEL 记录配对——那行只说明"实例被谁撤销"，
+            wfQueryService.updateInstanceStatus(procInstId, "CANCELLED", LocalDateTime.now());
+            // 幽灵待办办结：清理后 wf_task 的 PENDING 行必须同步关闭，否则会一直残留在待办里。
+            // 与下面那行实例级 CANCEL 记录配对——那行只说明"实例被谁撤销"，
             // 这一句说明"撤销时挂在哪几个节点上的任务一起作废"。
             wfQueryService.closePendingTasksByInstance(procInstId,
                     "流程实例被撤销，本节任务未办理即作废" + (reason == null || reason.isBlank() ? "" : "（撤销事由：" + reason + "）"));
-            // ROOT-3：撤销/终止此前只改视图状态、不记录，时间线看不出单子死于何时何人之手
+            // 撤销/终止必须自己落一条历史：只改视图状态不记录的话，时间线看不出单子死于何时何人之手
             writeHistory(procInstId, null, null, null, "CANCEL", approverUserIdOrDefault(), reason);
         } catch (Exception ex) {
             log.warn("僵尸实例清理后视图状态回写失败 {}: {}", procInstId, ex.getMessage());
@@ -3387,22 +3437,22 @@ public class WfEngineFacade {
     }
 
     /**
-     * R5-D-068 最终状态收尾（复用 D-DEC-334「直改状态型单据收尾须终止流程」规则）：按 biz_type+biz_id
+     * 最终状态收尾（复用 「直改状态型单据收尾须终止流程」规则）：按 biz_type+biz_id
      * 终止该业务单据名下所有 RUNNING 流程实例——逐实例复用 {@link #cancelInstance}（引擎实例删除＋
      * wf_instance 置 CANCELLED＋wf_task 的 PENDING 置 CANCELLED＋双记录）。作废/终止等只改业务状态
-     * 的收尾入口必须调用本方法，否则待办镜像滞留 PENDING、催办扫描持续空转打扰（实测 po_order 14/15）。
+     * 的收尾入口必须调用本方法，否则待办镜像滞留 PENDING，催办扫描会持续对空单空转。
      *
      * <p>去重与容错：该单没有 RUNNING 实例（未起流程/已终结）返回 0 不抛错，属正常；引擎侧实例
-     * 已被"裸作废"终结而视图仍 RUNNING 时（PayPlanService D-DEC-476 同族），只吞
-     * 「实例不存在或已结束」这一种 PARAM_INVALID 并补视图办结；其余异常一律冒泡（ROOT-2
-     * 「流程收尾失败不得静默」，调用方事务整体回滚、业务状态还原）。
+     * 已被"裸作废"终结而视图仍 RUNNING 时（PayPlanService 同族），只吞
+     * 「实例不存在或已结束」这一种 PARAM_INVALID 并补视图办结；其余异常一律冒泡——流程收尾失败
+     * 不得静默，调用方事务整体回滚、业务状态还原。
      *
      * @return 被办结的 RUNNING 实例数（0＝该单无在办流程）
      */
     public int cancelRunningInstancesByBiz(String bizType, Long bizId, String reason) {
-        java.util.List<com.fssc.workflow.entity.WfInstance> instances = wfQueryService.instancesByBiz(bizType, bizId);
+        List<WfInstance> instances = wfQueryService.instancesByBiz(bizType, bizId);
         int cancelled = 0;
-        for (com.fssc.workflow.entity.WfInstance inst : instances) {
+        for (WfInstance inst : instances) {
             // 只收在办实例：已终结轮次（驳回重提的历史实例、正常办结轮次）不动
             if (!"RUNNING".equalsIgnoreCase(inst.getStatus() == null ? "" : inst.getStatus().trim())) {
                 continue;
@@ -3413,14 +3463,14 @@ public class WfEngineFacade {
             }
             try {
                 cancelInstance(procInstId, reason);
-            } catch (com.fssc.common.exception.BizException ex) {
-                boolean alreadyEnded = ex.getCode() == com.fssc.common.core.ErrorCode.PARAM_INVALID.getCode()
+            } catch (BizException ex) {
+                boolean alreadyEnded = ex.getCode() == ErrorCode.PARAM_INVALID.getCode()
                         && ex.getMessage() != null && ex.getMessage().contains("实例不存在或已结束");
                 if (!alreadyEnded) {
-                    throw ex; // ROOT-2：流程终止失败必须冒泡（事务回滚，业务状态不落 VOID）
+                    throw ex; // 流程终止失败必须冒泡（事务回滚，业务状态不落 VOID）
                 }
                 // 引擎实例已不在：视图面补办结（否则 wf_instance 永久滞留 RUNNING、待办继续被催）
-                wfQueryService.updateInstanceStatus(procInstId, "CANCELLED", java.time.LocalDateTime.now());
+                wfQueryService.updateInstanceStatus(procInstId, "CANCELLED", LocalDateTime.now());
                 wfQueryService.closePendingTasksByInstance(procInstId,
                         reason == null ? "流程实例已被终结，视图补办" : reason);
             }
@@ -3430,7 +3480,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * MF5-08 配套：指定业务单据是否仍存在活动审批任务。
+     * 指定业务单据是否仍存在活动审批任务。
      * 用于 OA 桥接等"代审批"方判断是否需要继续完成后续节点（杜绝流程中途遗弃产生僵尸任务）。
      */
     public boolean hasActiveTask(String bizType, Long bizId) {
@@ -3454,14 +3504,14 @@ public class WfEngineFacade {
     }
 
     /**
-     * P0-5：审批支持指定驳回类型。
+     * 审批支持指定驳回类型。
      * @param rejectType THROW_BACK 漏单驳回（电子流直送我，只能重传影像/改简字段）/
      *                   GRADE_BY_GRADE 逐级驳回（字段可全改，默认）
-     * @param nextAssigneeUserId 下一环节办理人点名（取人方式 PICK 的节点必填）。不传且下一节点非 PICK
-     *                           时行为与改造前完全一致，属向后兼容参数。
-     * @param ccUserIds G2 传阅（2026-09-23）：审批人临时指定的抄送人用户ID，逗号分隔，可空。
+     * @param nextAssigneeUserId 下一环节办理人点名（取人方式 PICK 的节点必填）。下一节点不是 PICK 档时
+     *                           这个参数不参与取人。
+     * @param ccUserIds 传阅：审批人临时指定的抄送人用户ID，逗号分隔，可空。
      *                  与节点配置 {@code wf_node_config.cc_users/cc_roles} <b>取并集</b>后投递到
-     *                  {@code wf_cc}；不传且节点未配抄送时，本方法行为与改造前<b>逐字一致</b>。
+     *                  {@code wf_cc}；不传且节点未配抄送时这一步整段跳过。
      *                  抄送是附加可观测性，投递失败只记日志、绝不阻断审批主链路。
      */
     public void complete(String taskId, boolean approved, String comment, String rejectType,
@@ -3470,17 +3520,17 @@ public class WfEngineFacade {
     }
 
     /**
-     * P4 G4：审批 + 自由驳回（指定退回级次）。
+     * 审批 + 自由驳回（指定退回级次）。
      *
      * @param rejectToNodeKey 驳回目标节点 key（仅在 {@code approved=false} 时有意义）。
-     *        <b>为空 ⇒ 走原「终止本流程」默认处理，行为与改造前逐字一致</b>（默认路径零影响）；
+     *        <b>为空 ⇒ 走「终止本流程」兜底</b>，默认路径不受影响；
      *        非空且开关 {@code sys_config.wf.reject.free.enabled}=1 时，改用 Flowable「搬执行」
      *        把在办执行搬回该上游节点 —— 单据在<b>同一实例内</b>继续流转、审批历史保留，
      *        语义「允许选择驳回级次 / 默认驳回到开始节点」。
-     *        <p> 执行面属"搬执行"（{@code ChangeActivityStateBuilder.moveActivityIdTo}），
+     *        <p>执行面属"搬执行"（{@code ChangeActivityStateBuilder.moveActivityIdTo}），
      *        会真实改动在办单据本体；开关 fail-closed 默认关，<b>须先经
      *        {@code GET /wf/reject-targets} 只读预览核对影响面、并在重启窗口完成运行期验证后</b>
-     *        方可启用。详见 {@code docs/P4-G4自由驳回（任意级次回退）实现报告.md}。
+     *        方可启用。
      */
     public void complete(String taskId, boolean approved, String comment, String rejectType,
                          Long operUserId, Long nextAssigneeUserId, String ccUserIds, String rejectToNodeKey) {
@@ -3489,10 +3539,10 @@ public class WfEngineFacade {
     }
 
     /**
-     * G2 ①层「审批项」的 {@code rejectType} 自动推断版（rejectType 仍按 P0-5 老规则推断，调用方无需感知）。
+     * 「审批项」的 {@code rejectType} 自动推断版（rejectType 仍按老规则推断，调用方无需感知）。
      *
      * <p>与 {@code (String,boolean,String,String,Long,Long,String,String,String)} 仅第 4 个参数类型不同
-     * （Long/String），重载解析按实参类型精确匹配——正常调用传具体类型而非 {@code null} 字面量，不构成歧义。
+     * Long/String，重载解析按实参类型精确匹配——正常调用传具体类型而非 {@code null} 字面量，不构成歧义。
      */
     public void complete(String taskId, boolean approved, String comment, Long operUserId,
                          Long nextAssigneeUserId, String ccUserIds, String rejectToNodeKey,
@@ -3502,11 +3552,11 @@ public class WfEngineFacade {
     }
 
     /**
-     * G2 ①层「审批项」（2026-09-24）：9 参版本，多一个
-     * {@code approvalItemCode}。8 参版本以 {@code null} 委托到这里，因此<b>历史调用方行为逐字不变</b>。
+     * 「审批项」9 参版本，多一个 {@code approvalItemCode}。8 参版本以 {@code null} 委托到这里，
+     * 因此既有调用方不受影响。
      *
      * @param approvalItemCode 节点上配置的审批项编码（{@code wf_approval_item.item_code}）。
-     *        <b>为空 ⇒ 完全不走审批项分支</b>：不读表、不写结果变量、不改意见文案，等价改造前。
+     *        <b>为空 ⇒ 完全不走审批项分支</b>：不读表、不写结果变量、不改意见文案。
      *        <p>非空时语义（审批项是「输入」，approved/rejectToNodeKey 是「引擎指令」，二者分离）：
      *        <ul>
      *          <li>{@code POSITIVE} → {@code approved=true}，按原路径继续流转；</li>
@@ -3514,7 +3564,7 @@ public class WfEngineFacade {
      *              {@code rejectToNodeKey} 送进既有「自由驳回」通道（仍受 {@code reject_scope}
      *              节点校验 + {@code wf.reject.free.enabled} 总开关双重约束，校验未放行即落回
      *              「终止本流程」）；未配 {@code target_node} 时即普通驳回；</li>
-     *          <li>{@code TERMINATE} → {@code approved=false}，走原「终止本流程」路径。</li>
+     *          <li>{@code TERMINATE} → {@code approved=false}，走「终止本流程」路径。</li>
      *        </ul>
      *        编码在该节点解析不到（未配置/已停用）时<b>明确拒绝</b>，不静默降级为普通通过/驳回：
      *        审批人点了按钮却"什么都没发生"比报错更难排查。
@@ -3526,7 +3576,7 @@ public class WfEngineFacade {
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
-        // === G2 ①层「审批项」解析 ===
+        // 「审批项」解析
         // 位置铁律：必须在驳回原因校验、越权守卫、驳回校验判定<b>之前</b>——审批项会把 approved
         // 反转（点"终止"按钮时代码侧仍是 approved=true），后面所有分支都必须看到反转后的值，
         // 否则会出现"按终止项提交、引擎却当通过推进"的双真值。
@@ -3536,7 +3586,7 @@ public class WfEngineFacade {
         if (approvalItemCode != null && !approvalItemCode.isBlank()) {
             String modelKey = task.getProcessDefinitionId() == null
                     ? null : task.getProcessDefinitionId().split(":")[0];
-            com.fssc.workflow.entity.WfApprovalItem item =
+            WfApprovalItem item =
                     approvalItemService.resolve(modelKey, task.getTaskDefinitionKey(), approvalItemCode);
             if (item == null) {
                 throw new BizException(ErrorCode.PARAM_INVALID,
@@ -3546,11 +3596,11 @@ public class WfEngineFacade {
             approvalItemName = item.getItemName();
             approvalItemOper = item.getLinkedOper();
             approvalItemCategory = WfApprovalItemService.normalizeCategory(item.getCategory());
-            if (com.fssc.workflow.entity.WfApprovalItem.CAT_POSITIVE.equals(approvalItemCategory)) {
+            if (WfApprovalItem.CAT_POSITIVE.equals(approvalItemCategory)) {
                 approved = true;
             } else {
                 approved = false;
-                if (com.fssc.workflow.entity.WfApprovalItem.CAT_REJECT.equals(approvalItemCategory)
+                if (WfApprovalItem.CAT_REJECT.equals(approvalItemCategory)
                         && item.getTargetNode() != null && !item.getTargetNode().isBlank()
                         && (rejectToNodeKey == null || rejectToNodeKey.isBlank())) {
                     // 目标节点走既有驳回通道，校验逻辑一处不改（不新造第二条驳回路径）
@@ -3568,82 +3618,80 @@ public class WfEngineFacade {
         if (!approved && (comment == null || comment.trim().length() < 2)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "驳回必须填写原因（不少于 2 个字）");
         }
-        // D-DEC-004 附随（X-37 丙案）：通过侧审批意见必填，默认关＝现网行为一字不改（通过可留空）。
+        // 附随开关：通过侧审批意见必填，默认关＝现网行为一字不改（通过可留空）。
         // 与驳回校验同办结、同豁免面：超时 AUTO_PASS 与空节点自动跳过走 taskService 直连，不经过本方法。
         if (approved && isApproveCommentRequired(task) && (comment == null || comment.trim().length() < 2)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "本流程要求通过时填写审批意见（不少于 2 个字）");
         }
-        // === 审批越权守卫（V1.3.19）===：仅当前节点办理人/候选人/生效受托人可办理
+        // 审批越权守卫===：仅当前节点办理人/候选人/生效受托人可办理
         Long operator = operUserId != null ? operUserId
-                : (com.fssc.framework.security.UserContext.get() != null
-                        ? com.fssc.framework.security.UserContext.get().getUserId() : null);
+                : (UserContext.get() != null
+                        ? UserContext.get().getUserId() : null);
         if (operator == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "未登录，无法审批此任务");
         }
         if (!nodeOrgResolver.canOperate(task, operator)) {
             throw new BizException(ErrorCode.FORBIDDEN, operateDeniedMessage(task));
         }
-        // V2.2.38 K121（"处理类只是单纯的处理，没有审核通过、不通过"）：
-        // 作业池任务不提供驳回语义——处理异常走该链的升级档节点或共享主管，不在这里打回。
+        // 作业池任务是处理类节点，不提供驳回语义——处理异常走该链的升级档节点或共享主管，不在这里打回。
         if (!approved && nodeOrgResolver.isPoolTask(task)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "作业池任务为处理类节点，不支持驳回；处理异常请走升级档节点或联系共享主管");
         }
-        // D-DEC-014/186 领取前置校验：POOL 作业节点未领取（无办理人）时一律拒办。
-        // 此前 canOperate 的候选组通道让"同池任意候选人可直接审批"成立，池软锁形同虚设（待办页还能给 POOL 节点直接点「通过」），
-        // 实测同一批流程出现"有 CLAIM 记录"与"零 CLAIM 记录"两种走法。领取（claim）才是池档的必经动作；
-        // 已领取/被智能推送指派/被改派到名的任务不受影响，系统自动审核身份（K106 小额免审）豁免。
+        // 领取前置校验：POOL 作业节点未领取（无办理人）时一律拒办。只靠 canOperate 的候选组通道，
+        // "同池任意候选人可直接审批"就成立，池软锁形同虚设，同一批流程会走出"有 CLAIM 记录"与
+        // "零 CLAIM 记录"两种路径。领取（claim）才是池档的必经动作；已领取、被智能推送指派、
+        // 被改派到名的任务不受影响，系统自动审核身份豁免。
         if (nodeOrgResolver.isPoolTask(task) && !isSystemAutoAuditor(operator)
                 && (task.getAssignee() == null || task.getAssignee().isBlank())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "作业池任务须先「领取」再办理（池内抢单锁定到人）：请在待办中点「领取」锁定本任务后办理");
         }
         // 自审禁止开关：approve.deny_self=1 且流程发起人=操作人=单据提交人时拒绝（读取失败按 0 放行）
-        com.fssc.workflow.entity.WfInstance self = wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
-        // POOL 作业池档不走本校验（2026-09-26 人工裁决）：校验语义是"禁止审批自己提交的单据"，
-        // 而 POOL 节点办的是作业（取银行明细/编调节表/扫描齐套），不是审批；本流复核仍由下一节点另一岗完成
-        // （实测 TR_BANK_RECON：Task_1 出纳作业池自办 → Task_4 财务审核岗他人复核）。
-        // 拦截反而破坏 POOL 既定语义"池内谁做、记录到人"——提单人只要是该岗合法候选人就应能办。
-        // 引擎层审批节点无此属性；特殊数据权限「创建者无权」："单据的创建人不能**审核**
-        // 自己的单据"，业务参数「制单与审批不能为同一人」默认否——两处都指审批动作，不覆盖作业。
+        WfInstance self = wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
+        // POOL 作业池档不走本校验：这条校验的语义是"禁止审批自己提交的单据"，而 POOL 节点办的是
+        // 作业（取银行明细/编调节表/扫描齐套），不是审批；复核另有下一节点的另一岗承担。
+        // 拦截反而破坏 POOL 的既定语义"池内谁做、记录到人"——提单人只要是该岗合法候选人就应能办。
+        // 引擎层审批节点没有这个属性；特殊数据权限「创建者无权」讲的是"单据的创建人不能审核自己的
+        // 单据"，业务参数「制单与审批不能为同一人」默认否——两处都指审批动作，不覆盖作业。
         if (isDenySelfEnabled() && !nodeOrgResolver.isPoolTask(task)) {
             if (self != null && operator.equals(self.getStartUserId())) {
                 Long applyUser = nodeOrgResolver.resolveApplyUserId(task.getProcessInstanceId());
-                // D-B3-25（P0 止血）：提交人不可解析（域无申请人列/查询异常）时不再静默放行——
-                // 实测该路径曾让"提单人自批发票"零痕迹通过。fail-closed：以发起人=提交人最严规则拦截，
-                // 首节点豁免逻辑不变（见 doneTasks 判据）。
+                // 提交人不可解析（域无申请人列 / 查询异常）时不能静默放行——那样"提单人自批发票"
+                // 会零痕迹通过。这里 fail-closed：按发起人＝提交人这一最严口径拦截，
+                // 首节点豁免逻辑不变（见 doneTasks 的判定）。
                 if (applyUser == null || operator.equals(applyUser)) {
                     long doneTasks = historyService.createHistoricTaskInstanceQuery()
                             .processInstanceId(task.getProcessInstanceId()).finished().count();
                     if (doneTasks > 0) {
                         throw new BizException(ErrorCode.FORBIDDEN, applyUser == null
-                                ? "禁止审批自己提交的单据（该单据类型取不到提交人列，自审禁止按最严格规则拦截——D-B3-25）"
+                                ? "禁止审批自己提交的单据（该单据类型取不到提交人列，自审禁止按最严格规则拦截）"
                                 : "禁止审批自己提交的单据");
                     }
                 }
             }
         }
-        // D-MC-2 同人连办拦截：对 sys_config.approve.deny_serial_same_handler 指定的流程链
+        // 同人连办拦截：对 sys_config.approve.deny_serial_same_handler 指定的流程链
         // （月结链 GL_MONTH_CLOSE，按角色铺设备办理人 + 禁 admin 参与）——禁止同一操作人在同一
         // 流程实例内办理多个审批节点。默认关闭，仅由配置显式启用，避免误伤既有流程。
-        // V2.2.38 K106：系统自动审核身份（sysauto）豁免串行连办拦截——小额免审本来就是同一系统身份
+        // 系统自动审核身份（sysauto）豁免串行连办拦截——小额免审本来就是同一系统身份
         // 依次通过全部节点；人工审批人不受此豁免影响（制复核分离硬约束仍对真人生效）。
         if (self != null && isSerialSameHandlerDenied(self.getBizType()) && !isSystemAutoAuditor(operator)) {
-            // D-V4R-61：校验的语义是"同一人往前连办多个<b>不同</b>节点"，而自由驳回把令牌退回给
+            // 校验的语义是"同一人往前连办多个<b>不同</b>节点"，而自由驳回把令牌退回给
             // 某个人时，他要重办的正是自己办过的<b>同一节点</b>——按原写法一律算"连办"，
             // 于是单指派节点（candidate_ids=NULL）退回后既办不掉也驳不掉，只能转办/改派救。
             // 故排除同节点重办：跨节点（taskDefinitionKey 不同）才拦。
             long handled = historyService.createHistoricTaskInstanceQuery()
                     .processInstanceId(task.getProcessInstanceId())
                     .taskAssignee(String.valueOf(operator)).finished().list().stream()
-                    .filter(h -> !java.util.Objects.equals(h.getTaskDefinitionKey(), task.getTaskDefinitionKey()))
+                    .filter(h -> !Objects.equals(h.getTaskDefinitionKey(), task.getTaskDefinitionKey()))
                     .count();
             if (handled > 0) {
                 throw new BizException(ErrorCode.FORBIDDEN,
                         "禁止同一人在同一审批流程中连续办理多个节点（连办/自审拦截）");
             }
         }
-        // === F2 齐套校验·节点层（人工裁决 RA-F2a/b：缺件一律拒绝，无"带条件通过"）===
+        // 齐套校验·节点层：缺件一律拒绝，没有"带条件通过"
         // 排在越权/自审/连办三道既有校验之后、加签回跳之前：驳回永远放行（驳回是收紧控制，不是放行），
         // 只有"同意"这一步需要先确认资料齐不齐。灰度未开时 assertComplete 直接返回，行为零变化。
         if (approved && self != null) {
@@ -3651,37 +3699,37 @@ public class WfEngineFacade {
                     BillCompletenessGuard.STAGE_NODE_PREFIX + task.getTaskDefinitionKey(),
                     self.getBizType(), self.getBizId());
         }
-        // === 加签「回跳」钩子（P3 G1，2026-09-23）===
+        // 加签「回跳」钩子：
         // 若当前办理人正是某条加签记录的当期加签人，其「同意」只代表"加签这一道审完"，
-        // 必须回跳（前加签→原办理人；后加签→下一节点应得的人），**绝不推进流程**：
-        // 故此处直接 return，绕过下面全部 complete / 驳回默认处理 / 节点同步逻辑。
-        // 驳回相反——加签人驳回就是业务驳回，让正常驳回默认处理（terminateAsRejected）走完，
+        // 必须回跳（前加签→原办理人；后加签→下一节点应得的人），绝不推进流程：
+        // 故此处直接 return，绕过下面全部 complete / 驳回兜底 / 节点同步逻辑。
+        // 驳回相反——加签人驳回就是业务驳回，让正常驳回兜底（terminateAsRejected）走完，
         // 加签记录置 CANCELLED 即可，不做回跳。
-        com.fssc.workflow.entity.WfAddSign addSignOnTask =
+        WfAddSign addSignOnTask =
                 wfAddSignService.activeByTaskAndUser(taskId, operator);
         if (addSignOnTask != null) {
             if (!approved) {
                 wfAddSignService.markStatus(addSignOnTask.getId(),
-                        com.fssc.workflow.entity.WfAddSign.STATUS_CANCELLED);
+                        WfAddSign.STATUS_CANCELLED);
             } else {
                 returnFromAddSign(task, addSignOnTask, comment, operator);
                 return;
             }
         }
-        // === G2「重新提交跳回本节点」关联点（2026-09-24）===
+        // 「重新提交跳回本节点」关联点：
         // resubmit_jump_back=1 的节点一旦驳回（普通驳回与指定级次驳回都算），先把本节点 key 记入
         // 实例变量 rejectOriginNode，供"单据重新提交时跳回本节点"消费。未配该列的节点零副作用。
         if (!approved) {
             recordRejectOriginNode(task);
         }
-        // === G4 自由驳回钩子（P4，2026-09-23；G2 2026-09-24 把校验从私有开关升级为节点配置）===
-        // 位置铁律：必须在 taskService.complete() **之前**。驳回时本方法底部的默认处理是
+        // 自由驳回钩子：
+        // 位置铁律：必须在 taskService.complete() 之前。驳回时本方法底部的兜底是
         // 「先 complete 再 deleteProcessInstance」，执行已向前推进；若在此后才搬执行，
         // 就要从"推进后的新节点"往回搬，形成二次搬执行、极易错位。
-        // 提前 return 的范式与上面的加签回跳钩子一致：绕过 complete/票签/驳回默认处理/节点同步全部下游。
-        // 生效条件（G2 收紧；F5 2026-09-26 再补逐链灰度）：本节点 wf_node_config.reject_scope ≠ NONE
-        // **且** 全局总开关 wf.reject.free.enabled=1 **且** 本流程在 wf.reject.free.models 白名单内。
-        // 任一不满足 ⇒ 落回原「终止本流程」路径，与改造前逐字一致；
+        // 提前 return 的范式与上面的加签回跳钩子一致：绕过 complete/票签/驳回兜底/节点同步全部下游。
+        // 生效条件：本节点 wf_node_config.reject_scope ≠ NONE
+        // 并且全局总开关 wf.reject.free.enabled=1、本流程在 wf.reject.free.models 白名单内。
+        // 任一不满足 ⇒ 落回「终止本流程」路径；
         // 全局开关保留作总开关/kill-switch（回滚路径，勿删）。
         if (!approved && rejectToNodeKey != null && !rejectToNodeKey.isBlank()
                 && !isVoteNode(task) && isFreeRejectModelAllowed(modelKeyOf(task)) && freeRejectScopeOf(task) != null) {
@@ -3690,7 +3738,7 @@ public class WfEngineFacade {
         }
         // 审批项/调用方指定了目标节点、但校验未放行（节点 reject_scope=NONE 或总开关关闭）：
         // 如实留一行日志。否则"配了目标节点、实际却驳成了终止"在运行期无从解释——
-        // 这正是方案 §二 F8「伪配置」的成因，不能再用沉默制造第二个。
+        // 沉默的配置等于没有配置。
         if (!approved && rejectToNodeKey != null && !rejectToNodeKey.isBlank() && !isVoteNode(task)
                 && !(isFreeRejectModelAllowed(modelKeyOf(task)) && freeRejectScopeOf(task) != null)) {
             log.warn("驳回目标节点未生效（本节点 reject_scope 未开启，或总闸 wf.reject.free.enabled 关闭，"
@@ -3703,16 +3751,16 @@ public class WfEngineFacade {
         if (!approved) {
             vars.put("rejectType", "THROW_BACK".equals(rejectType) ? "THROW_BACK" : "GRADE_BY_GRADE");
         }
-        // === G2 ①层「审批结果变量」（2026-09-24，ActionResult）===
-        // 为什么必须有：改造前流转条件只能拿"这张单的静态属性"（金额/币种/是否境外）当参数，
-        // 无法按"上一节点审出了什么结果"分流；而月度会签的"半数以上反对即转上级"这类规则
-        // 根子上依赖审批结果。写入后 BPMN 排他网关可直接写 ${ActionResult == 'xxx'}。
+        // 审批结果变量（ActionResult）：
+        // 流转条件若只能拿"这张单的静态属性"（金额/币种/是否境外）当参数，就分不出"上一节点审出了
+        // 什么结果"；而月度会签的"半数以上反对即转上级"这类规则根子上依赖审批结果。
+        // 写入后 BPMN 排他网关可直接写 ${ActionResult == 'xxx'}。
         // 三个变量分工（不合并成一个 JSON：EL 表达式里字符串比对最直观，也不引入解析依赖）：
-        //   ActionResult         审批项编码（条件判断用的标识符）
-        //   ActionResultName     审批项名称（报表/时间线展示用，避免前端再查配置表）
+        //   ActionResult 审批项编码（条件判断用的标识符）
+        //   ActionResultName 审批项名称（报表/时间线展示用，避免前端再查配置表）
         //   ActionResultCategory POSITIVE/REJECT/TERMINATE（判定"这类结果会不会终止流程"）
-        //   ActionOper           关联表单操作（可空；仅供业务域订阅，引擎不执行——见 WfApprovalItem 注释）
-        // 未传 approvalItemCode 时一个变量都不写，实例变量集合与改造前逐字一致。
+        //   ActionOper 关联表单操作（可空；仅供业务域订阅，引擎不执行——见 WfApprovalItem 注释）
+        // 未传 approvalItemCode 时一个变量都不写，实例变量集合保持不变。
         if (approvalItemCode != null && !approvalItemCode.isBlank()) {
             vars.put("ActionResult", approvalItemCode.trim());
             vars.put("ActionResultName", approvalItemName == null ? approvalItemCode.trim() : approvalItemName);
@@ -3726,39 +3774,39 @@ public class WfEngineFacade {
         if (approved) {
             enforcePickOnApprove(task, self, vars, nextAssigneeUserId, operator);
         }
-        // E2E-003 审计追溯：候选组（角色）任务完成时 assignee 可能为空或被默认处理为 admin，
+        // 审计追溯：候选组（角色）任务完成时 assignee 可能为空或被兜底为 admin，
         // 完成前将 Flowable 任务 assignee 显式置为实际操作人，历史表方可定位真实审批人。
         try {
             taskService.setAssignee(task.getId(), String.valueOf(operator));
         } catch (Exception ex) {
             log.warn("回写 Flowable 任务办理人失败 taskId={} operator={}", taskId, operator, ex);
         }
-        // P1 票签计票：若本任务属于 VOTE 多实例节点（启动期注入的 <nodeKey>_approvedCount 变量存在），
-        // 按审批结果累加 赞成/反对 计数（流程变量），再 complete——引擎据 completionCondition 判断是否提前办结。
+        // 票签计票：若本任务属于 VOTE 多实例节点（启动期注入的 <nodeKey>_approvedCount 变量存在），
+        // 按审批结果累加赞成/反对计数（流程变量），再 complete——引擎据 completionCondition 判断是否提前办结。
         countVoteIfNeeded(task, approved);
-        // D-DEC-283：PROCESS_COMPLETED 监听器在 complete() 内<b>同步</b>派发，而镜像行的 DONE 是在下方
+        // PROCESS_COMPLETED 监听器在 complete() 内<b>同步</b>派发，而镜像行的 DONE 是在下方
         // markTaskDone 才写。不登记"本线程正在办结哪条任务"，实例级办结环节就会把这条真实办结的
-        // 收尾任务当成未办理，给它写一行作废记录（＝275 上线后实测到的三行假 VOID）。
+        // 收尾任务当成未办理，给它写一行作废记录——历史表里就凭空多出几条假 VOID。
         String completingPrev = WfQueryService.beginCompletingTask(taskId);
-        // D-DEC-093 前置件：同线程把本次办结的操作人带给 PROCESS_COMPLETED 监听器（见 END_OPER_USER_ID）。
+        // 前置件：同线程把本次办结的操作人带给 PROCESS_COMPLETED 监听器（见 END_OPER_USER_ID）。
         // 只传形参 operUserId（与下方 APPROVE/REJECT 记录的 oper_user_id 同一来源），不传 UserContext 默认值。
         Long endOperPrev = beginEndOperator(operUserId);
         try {
             taskService.complete(taskId, vars);
-        } catch (org.flowable.common.engine.api.FlowableOptimisticLockingException ex) {
+        } catch (FlowableOptimisticLockingException ex) {
             // ST-02: 并发双审的败者返回友好业务提示，而非 500 系统异常
-            throw new com.fssc.common.exception.BizException(
-                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "任务已被处理，请刷新待办");
+            throw new BizException(
+                    ErrorCode.PARAM_INVALID, "任务已被处理，请刷新待办");
         } finally {
             endEndOperator(endOperPrev);
             WfQueryService.endCompletingTask(completingPrev);
         }
-        // 待办视图双写：任务完成标记 DONE 并回写真实办理人（审计追溯）
-        // G0 止血（方案 §二 F2）：此前 catch 只打一行 log —— 引擎已推进、镜像仍 PENDING，
-        // 待办列表里这条单子永远办不掉。现改为"记缺陷 + 收尾后冒泡"：先记缺陷（错误码 + sys_oper_log），
-        // 把异常暂存，让下面的历史记录/实例推进/抄送等收尾步骤照常走完，最后再统一抛给界面。
+        // 待办视图双写：任务完成标记 DONE 并回写真实办理人（审计追溯）。
+        // 这一步失败只打一行 log 的话，引擎已推进、镜像仍是 PENDING，待办列表里这条单子永远办不掉。
+        // 所以按"记缺陷 + 收尾后冒泡"处理：先把错误码与 sys_oper_log 记下来、异常暂存，让下面的
+        // 历史记录/实例推进/抄送等收尾步骤照常走完，最后再统一抛给界面。
         Exception mirrorFailure = null;
-        // G1（2026-09-24）：开关打开时停写 wf_task，改由监听器 TASK_COMPLETED 投影（置 DONE + 回写真实办理人）。
+        // 镜像开关打开时停写 wf_task，改由监听器 TASK_COMPLETED 投影（置 DONE + 回写真实办理人）。
         // wf_task_history 是审计记录，过渡期双写——不在此守卫内（见 writeHistory 的来源标记）。
         if (mirrorByFacade()) {
             try {
@@ -3773,48 +3821,49 @@ public class WfEngineFacade {
         writeHistory(task.getProcessInstanceId(), task.getId(), task.getTaskDefinitionKey(),
                 task.getName(), approved ? "APPROVE" : "REJECT", operUserId,
                 commentWithApprovalItem(comment, approvalItemName, approvalItemOper));
-        // 票签(VOTE)多实例节点标记（P1 修复：一票否决杀死比例投票）——必须在驳回默认处理之<b>前</b>判定
+        // 票签(VOTE)多实例节点标记——必须在驳回兜底之<b>前</b>判定，否则一票否决会先把流程杀掉、
+        // 比例投票没有生效机会
         boolean voteNode = isVoteNode(task);
-        // === 票签办结裁决（先于驳回默认处理）===
+        // 票签办结判定（先于驳回兜底）：
         // VOTE 节点按 vote_ratio 聚合：逐票累计，办结（同节点无在办任务）后按"赞成×100 ≥ 阈值×应到"
-        // 给出节点结论；未达通过线才以驳回语义收尾。故 VOTE 节点<b>不得</b>走下面的"1 票即终止"默认处理。
+        // 给出节点结论；未达通过线才以驳回语义收尾。故 VOTE 节点<b>不得</b>走下面的"1 票即终止"兜底。
         if (voteNode) {
             resolveVoteOutcome(task, comment, rejectType, operUserId);
         }
-        // === 驳回默认处理（L3-02 缺陷修复；票签节点跳过）===
+        // 驳回兜底（票签节点跳过）：
         // 由 wf_business_flow.node_json 动态生成的 BPMN 只有「金额>阈值」排他网关，
         // 没有 ${approved == false} 的驳回分支（仅内置 expense-claim.bpmn20.xml 有）。
         // 结果是：approve(approved=false) 只把变量塞进去就 complete，流程继续往下走 → 驳回永远不生效。
-        // 此处统一默认处理：驳回后若流程仍在运行，说明模型无驳回分支，强制终止实例并发布"审批不通过"结束事件，
+        // 此处统一兜底：驳回后若流程仍在运行，说明模型无驳回分支，强制终止实例并发布"审批不通过"结束事件，
         // 业务监听（ExpenseWfEventListener 等）据此把单据置 REJECTED，语义等同"驳回至发起人、需重新提交"。
         // 【票签例外】VOTE 多实例的一票"反对"是投票而非定论：此处若即时终止，vote_ratio 的比例判定
-        // 就永无生效机会（3 人票签、阈值 50% 需 2 票赞成，投出第 1 张反对票即杀流程）⇒ 交给上面的办结裁决。
+        // 就永无生效机会（3 人票签、阈值 50% 需 2 票赞成，投出第 1 张反对票即杀流程）⇒ 交给上面的办结判定。
         if (!approved && !voteNode) {
             terminateAsRejected(task.getProcessInstanceId(), comment, rejectType);
         }
         // 单据流程感知：同步 wf_instance.current_node（推进到下一人工任务）
         try {
-            // D-DEC-130：办结推进路径负责给新生成的下一节点待办发提醒（此前只有 start() 发首节点）
+            // 办结推进路径负责给新生成的下一节点待办发提醒——发提醒不能只在 start() 发首节点
             syncInstanceAfterAdvance(task.getProcessInstanceId(), true);
-        } catch (com.fssc.common.exception.BizException be) {
-            // V1.3.21：空策略 ERROR 在此抛出的业务异常必须透出（否则被下面的默认处理 catch 吞掉，
+        } catch (BizException be) {
+            // 空策略 ERROR 在此抛出的业务异常必须透出（否则被下面的兜底 catch 吞掉，
             // 「报错阻断」等同于配置未生效，节点仍会静默滞留）。
             throw be;
         } catch (Exception ex) {
             log.warn("流程当前节点同步失败 taskId={}", taskId);
         }
-        // 委托完成响应（方案 §1.4-4）：操作人若正作为他人的受托人，回告委托人"你的待办已被代办"。
+        // 委托完成响应：操作人若正作为他人的受托人，回告委托人"你的待办已被代办"。
         // 放在推进办结之后、且内部整体 try/catch —— 响应是附加可观测性，绝不阻断审批主链路。
         notifyDelegatePrincipal(task.getProcessInstanceId(), operator, approved);
-        // 加签「后加签」生效（P3 G1）：本次审批通过并已推进，把下一节点新产生的任务改派给加签人。
+        // 加签「后加签」生效：本次审批通过并已推进，把下一节点新产生的任务改派给加签人。
         // 只换办理人、不改流程走向；内部整体 try/catch，失败绝不阻断审批主链路。
         applyPendingAfterAddSign(task.getProcessInstanceId(), taskId, approved, operator);
-        // === G2 传阅投递（P3，2026-09-23）===
-        // 背景：wf_cc 此前是「读端与前端 100% 齐备、生产端 0%」的空壳 ——
-        // WfQueryService.recordCc() 全仓零调用、wf_node_config 无抄送列、表实测 0 行。
+        // 传阅投递：
+        // wf_cc 一度是「读端与前端齐备、生产端缺失」的空壳——recordCc() 全仓无人调用、
+        // wf_node_config 没有抄送列、表里一行数据都没有。这里补上生产端这一半。
         // 只在「通过并推进」后投递：驳回会走 terminateAsRejected 终止实例，且已有独立终止
         // 通知链路，给已终止实例挂抄送点击价值低（如需「驳回也抄送」，放开此 if 即可）。
-        // 默认零影响：节点未配抄送且未传 ccUserIds 时不写任何行，行为与改造前一致。
+        // 节点未配抄送且未传 ccUserIds 时不写任何行。
         // 逐条内部 try/catch —— 传阅是附加可观测性，绝不阻断审批主链路。
         if (approved) {
             try {
@@ -3823,9 +3872,9 @@ public class WfEngineFacade {
                 log.warn("传阅投递失败 taskId={} procInst={}", taskId, task.getProcessInstanceId(), ex);
             }
         }
-        // G0 冒泡办结：引擎侧已推进、历史与实例视图均已收尾，此处把镜像写失败抛给调用方。
-        // 「保留业务不回滚」＝本方法无 @Transactional、也不回滚引擎推进；「冒泡」＝界面必须看得见
-        // （DoD：构造一次镜像写失败注入，界面可见）。错误码与 sys_oper_log 已在上方缺陷记录器写入数据库。
+        // 冒泡办结：引擎侧已推进、历史与实例视图均已收尾，此处把镜像写失败抛给调用方。
+        // 本方法没有 @Transactional、也不回滚引擎推进，业务不回滚是既定行为；但界面必须看得见。
+        // 错误码与 sys_oper_log 已在上方缺陷记录器写入数据库。
         if (mirrorFailure != null) {
             throw new BizException(ErrorCode.SYSTEM_ERROR,
                     "审批已提交，但待办视图（wf_task）回写失败[" + WfMirrorDefectRecorder.CODE_MIRROR_WRITE_FAILED
@@ -3833,11 +3882,11 @@ public class WfEngineFacade {
         }
     }
 
-    // ==================== 加签（前/后加签，P3 G1 · 2026-09-23） ====================
-    // 能力边界：Flowable 8 **没有** ProcessInstanceModification，无法在运行期动态插入 BPMN 节点
+    // 加签（前/后加签）
+    // 能力边界：Flowable 8 没有 ProcessInstanceModification，无法在运行期动态插入 BPMN 节点
     // （javap 核对 flowable-engine-8.0.0.jar 确认）。故本实现用「临时改派 + 回跳」做等价语义，
     // 详见 com.fssc.workflow.entity.WfAddSign 类注释。
-    // 默认零影响：库中没有任何 wf_add_sign 记录时，complete() 的行为与改造前逐字一致。
+    // 库中没有任何 wf_add_sign 记录时，complete() 不进入加签分支。
 
     /**
      * 发起加签（前加签 / 后加签）。
@@ -3848,21 +3897,21 @@ public class WfEngineFacade {
      * <p>同一任务已有进行中的加签时<b>直接拒绝而非排队</b>：加签链的顺序性一旦被静默重排，
      * 审批记录就无法解释"到底谁先审的"。
      */
-    public com.fssc.workflow.entity.WfAddSign addSign(String taskId, String position,
+    public WfAddSign addSign(String taskId, String position,
                                                       String signUsersCsv, String reason) {
         Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
-        Long operator = com.fssc.framework.security.UserContext.get() != null
-                ? com.fssc.framework.security.UserContext.get().getUserId() : null;
+        Long operator = UserContext.get() != null
+                ? UserContext.get().getUserId() : null;
         if (operator == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "未登录，无法发起加签");
         }
         if (!nodeOrgResolver.canOperate(task, operator)) {
             throw new BizException(ErrorCode.FORBIDDEN, "只能对当前由你办理的任务发起加签");
         }
-        // F3-3（体检 E-06a）：allow_addsign 从"实体不映射、界面不显示、运行时零读取"的三重落空
+        // allow_addsign 曾经"实体不映射、界面不显示、运行时零读取"三重落空
         // 变成真开关。现网 311 个节点配 0、44 个配 1——一接上就大面积禁签，故必须走灰度：
         // approve.addsign_gate.enabled=1 且模型在 approve.addsign_gate.models 内才拦，缺省＝不拦（现行为不变）。
         if (isConfigGatedOn("approve.addsign_gate.enabled", "approve.addsign_gate.models", modelKeyOf(task))) {
@@ -3875,11 +3924,11 @@ public class WfEngineFacade {
             }
         }
         String pos = position == null ? "" : position.trim().toUpperCase();
-        boolean before = com.fssc.workflow.entity.WfAddSign.POSITION_BEFORE.equals(pos);
-        if (!before && !com.fssc.workflow.entity.WfAddSign.POSITION_AFTER.equals(pos)) {
+        boolean before = WfAddSign.POSITION_BEFORE.equals(pos);
+        if (!before && !WfAddSign.POSITION_AFTER.equals(pos)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "加签位置只能是 BEFORE（前加签）或 AFTER（后加签）");
         }
-        java.util.List<Long> signers = new java.util.ArrayList<>();
+        List<Long> signers = new ArrayList<>();
         for (String s : (signUsersCsv == null ? "" : signUsersCsv).split(",")) {
             String t = s.trim();
             if (t.isEmpty()) {
@@ -3898,13 +3947,13 @@ public class WfEngineFacade {
         if (signers.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请至少选择一位加签人");
         }
-        java.util.StringJoiner names = new java.util.StringJoiner("、");
-        java.util.StringJoiner csv = new java.util.StringJoiner(",");
-        // D-DEC-192：本节点已投票者不得再被加签——同一节点二次出票破坏会签独立性（12-31:170：3929
-        // 先投会签票、其节点又出加签票）。加签人此前无任何名单约束，这里补第一道校验。
-        java.util.Set<Long> votedAtNode = votersAtNode(task.getProcessInstanceId(), task.getTaskDefinitionKey());
+        StringJoiner names = new StringJoiner("、");
+        StringJoiner csv = new StringJoiner(",");
+        // 本节点已投票者不得再被加签——同一节点二次出票破坏会签独立性（先投会签票、
+        // 之后其节点又出一张加签票）。这也就成了加签人的第一道名单约束。
+        Set<Long> votedAtNode = votersAtNode(task.getProcessInstanceId(), task.getTaskDefinitionKey());
         for (Long sid : signers) {
-            com.fssc.system.entity.SysUser u = sysUserMapper.selectById(sid);
+            SysUser u = sysUserMapper.selectById(sid);
             if (u == null) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "加签人不存在: " + sid);
             }
@@ -3927,7 +3976,7 @@ public class WfEngineFacade {
                 || !wfAddSignService.pendingAfterByProc(task.getProcessInstanceId(), task.getId()).isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "该任务已有进行中的加签，请等它走完或先取消");
         }
-        com.fssc.workflow.entity.WfAddSign rec = new com.fssc.workflow.entity.WfAddSign();
+        WfAddSign rec = new WfAddSign();
         rec.setProcInstId(task.getProcessInstanceId());
         rec.setSrcTaskId(task.getId());
         rec.setNodeKey(task.getTaskDefinitionKey());
@@ -3941,12 +3990,12 @@ public class WfEngineFacade {
             // 前加签：立刻改派，加签人审完由 returnFromAddSign 交还原办理人
             rec.setTaskId(task.getId());
             rec.setExitAssignee(task.getAssignee());
-            rec.setStatus(com.fssc.workflow.entity.WfAddSign.STATUS_ACTIVE);
+            rec.setStatus(WfAddSign.STATUS_ACTIVE);
             wfAddSignService.create(rec);
             reassignTask(task.getId(), String.valueOf(signers.get(0)));
         } else {
             // 后加签：先登记，等本任务办结推进时由 applyPendingAfterAddSign 落到新任务上
-            rec.setStatus(com.fssc.workflow.entity.WfAddSign.STATUS_PENDING);
+            rec.setStatus(WfAddSign.STATUS_PENDING);
             wfAddSignService.create(rec);
         }
         writeHistory(task.getProcessInstanceId(), task.getId(), task.getTaskDefinitionKey(),
@@ -3961,23 +4010,23 @@ public class WfEngineFacade {
 
     /** 取消加签。权限：加签发起人或当期加签人本人。进行中的加签取消时先把任务交还回跳目标。 */
     public void cancelAddSign(Long id) {
-        com.fssc.workflow.entity.WfAddSign rec = wfAddSignService.byId(id);
+        WfAddSign rec = wfAddSignService.byId(id);
         if (rec == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "加签记录不存在: " + id);
         }
-        Long operator = com.fssc.framework.security.UserContext.get() != null
-                ? com.fssc.framework.security.UserContext.get().getUserId() : null;
+        Long operator = UserContext.get() != null
+                ? UserContext.get().getUserId() : null;
         Long cur = wfAddSignService.currentSigner(rec);
         if (operator == null
                 || (!operator.equals(rec.getCreateUserId()) && !operator.equals(cur))) {
             throw new BizException(ErrorCode.FORBIDDEN, "只有加签发起人或当期加签人可以取消加签");
         }
-        if (com.fssc.workflow.entity.WfAddSign.STATUS_ACTIVE.equals(rec.getStatus())
+        if (WfAddSign.STATUS_ACTIVE.equals(rec.getStatus())
                 && cur != null && operator.equals(cur)) {
             // 当期加签人放弃：把任务交还回跳目标，避免单据卡在一个已放弃的加签人手上
             reassignTask(rec.getTaskId(), rec.getExitAssignee());
         }
-        wfAddSignService.markStatus(rec.getId(), com.fssc.workflow.entity.WfAddSign.STATUS_CANCELLED);
+        wfAddSignService.markStatus(rec.getId(), WfAddSign.STATUS_CANCELLED);
         writeHistory(rec.getProcInstId(), rec.getTaskId(), rec.getNodeKey(), rec.getNodeName(),
                 "ADDSIGN", operator, "取消加签");
     }
@@ -3986,21 +4035,21 @@ public class WfEngineFacade {
      * 该流程实例上仍在进行/待生效的加签（只读）。传 taskId 时自动解析其所属实例，
      * 便于前端在"正在办理某任务"的上下文里一次拿全；两者都取不到则返回空表（不抛异常）。
      */
-    public java.util.List<com.fssc.workflow.entity.WfAddSign> openAddSign(String procInstId, String taskId) {
+    public List<WfAddSign> openAddSign(String procInstId, String taskId) {
         String pid = procInstId;
         if ((pid == null || pid.isBlank()) && taskId != null && !taskId.isBlank()) {
             Task t = taskService.createTaskQuery().taskId(taskId).singleResult();
             if (t != null) {
                 pid = t.getProcessInstanceId();
             } else {
-                com.fssc.workflow.entity.WfAddSign rec = wfAddSignService.activeByTask(taskId);
+                WfAddSign rec = wfAddSignService.activeByTask(taskId);
                 if (rec != null) {
                     pid = rec.getProcInstId();
                 }
             }
         }
         if (pid == null || pid.isBlank()) {
-            return new java.util.ArrayList<>();
+            return new ArrayList<>();
         }
         return wfAddSignService.openByProc(pid);
     }
@@ -4010,23 +4059,23 @@ public class WfEngineFacade {
      * 后加签→下一节点应得的人）并<b>不推进流程</b>。可再加签靠记录嵌套天然支持：
      * 新记录的回跳目标是上一个加签人，回跳时取最近一条 ACTIVE 记录即可。
      */
-    private void returnFromAddSign(Task task, com.fssc.workflow.entity.WfAddSign rec,
+    private void returnFromAddSign(Task task, WfAddSign rec,
                                    String comment, Long operator) {
         Long nextSigner = wfAddSignService.advanceToNext(rec);
         String restore = nextSigner != null ? String.valueOf(nextSigner) : rec.getExitAssignee();
         reassignTask(task.getId(), restore);
         if (nextSigner == null) {
-            wfAddSignService.markStatus(rec.getId(), com.fssc.workflow.entity.WfAddSign.STATUS_DONE);
+            wfAddSignService.markStatus(rec.getId(), WfAddSign.STATUS_DONE);
         }
-        boolean before = com.fssc.workflow.entity.WfAddSign.POSITION_BEFORE.equals(rec.getPosition());
+        boolean before = WfAddSign.POSITION_BEFORE.equals(rec.getPosition());
         String tail = nextSigner != null
                 ? ("，转下一位加签人 " + nextSigner)
                 : ("，已交还" + (rec.getExitAssignee() == null
                         ? "候选组/任务池" : "原办理人 " + rec.getExitAssignee()));
         writeHistory(task.getProcessInstanceId(), task.getId(), task.getTaskDefinitionKey(),
-                // D-DEC-065：审结行改记 ADDSIGN_DONE，与发起行（ADDSIGN）分码——审计表自此一眼可见
+                // 审结行改记 ADDSIGN_DONE，与发起行（ADDSIGN）分码——审计表自此一眼可见
                 // "这一道加签有没有走完"，不再靠 target_user_id 与 wf_add_sign.status 反推。
-                // 读侧 WfQueryService.isAddSignTrail 两码同堆（D-DEC-147 的序号/分母规则零漂移）。
+                // 读侧 WfQueryService.isAddSignTrail 两码同堆（的序号/分母规则零漂移）。
                 task.getName(), WfQueryService.ACTION_ADDSIGN_DONE, operator,
                 (before ? "前加签" : "后加签") + "审完" + tail
                         + (comment == null || comment.isBlank() ? "" : "；意见：" + comment));
@@ -4040,22 +4089,22 @@ public class WfEngineFacade {
             if (!approved || procInstId == null || srcTaskId == null) {
                 return;
             }
-            java.util.List<com.fssc.workflow.entity.WfAddSign> pend =
+            List<WfAddSign> pend =
                     wfAddSignService.pendingAfterByProc(procInstId, srcTaskId);
             if (pend.isEmpty()) {
                 return;
             }
-            com.fssc.workflow.entity.WfAddSign rec = pend.get(0);
+            WfAddSign rec = pend.get(0);
             for (int i = 1; i < pend.size(); i++) {
                 wfAddSignService.markStatus(pend.get(i).getId(),
-                        com.fssc.workflow.entity.WfAddSign.STATUS_FAILED);
+                        WfAddSign.STATUS_FAILED);
                 log.warn("后加签重复登记，已置 FAILED recId={}", pend.get(i).getId());
             }
-            java.util.List<Task> live = taskService.createTaskQuery()
+            List<Task> live = taskService.createTaskQuery()
                     .processInstanceId(procInstId).active().list();
             if (live.size() != 1) {
                 // 0=流程已办结；>1=并联/多实例节点，无法确定"该加签哪一条" → 不生效并告知发起人
-                wfAddSignService.markStatus(rec.getId(), com.fssc.workflow.entity.WfAddSign.STATUS_FAILED);
+                wfAddSignService.markStatus(rec.getId(), WfAddSign.STATUS_FAILED);
                 log.warn("后加签未生效：推进后活跃任务数={}（需恰好 1）procInst={} recId={}",
                         live.size(), procInstId, rec.getId());
                 notifyAddSignFailed(rec, live.size());
@@ -4090,7 +4139,7 @@ public class WfEngineFacade {
     }
 
     /** 后加签未能生效时告知发起人 —— 「配了不生效」必须让人知道，绝不静默。 */
-    private void notifyAddSignFailed(com.fssc.workflow.entity.WfAddSign rec, int activeTasks) {
+    private void notifyAddSignFailed(WfAddSign rec, int activeTasks) {
         try {
             if (rec.getCreateUserId() == null) {
                 return;
@@ -4108,40 +4157,40 @@ public class WfEngineFacade {
     }
 
     /**
-     * 委托完成响应（方案 §1.4-4，2026-09-23 补）。
+     * 委托完成响应。
      *
-     * <p><b>为什么补</b>：委托人把待办委托出去之后，原任务从自己的「我的待办」里消失（可见性交给
-     * 受托人），于是委托人**无从知道**是"受托人办了"还是"流程卡住了"。行业资料明确有
-     * 「委托任务处理后通知委托人」；FSSC 此前只有委托建立/取消，缺完成响应。
+     * <p>委托人把待办委托出去之后，原任务从自己的「我的待办」里消失（可见性交给受托人），
+     * 于是**无从知道**是"受托人办了"还是"流程卡住了"。委托建立/取消都有通知，
+     * 唯独办完这一环没有，这里补上。
      *
-     * <p>判定规则与 {@code NodeOrgResolver.canOperate} 第 3 条（委托通道）**同源**：操作人作为受托人、
-     * 状态 NORMAL、且当前时间落在 [begin_time, end_time] 内。改派/转办等机器路径不产生响应
-     * （它们不经过本方法）。
+     * <p>判定规则与 {@code NodeOrgResolver.canOperate} 的委托通道**同源**：操作人作为受托人、
+     * 状态 NORMAL、且当前时间落在 [begin_time, end_time] 内。改派/转办等机器路径不经过本方法，
+     * 不产生响应。
      *
-     * <p>与 §1.4-3 的关系：本方法只做"通知"，**不参与任何权限判定**——自审禁止由
-     * {@code approve.deny_self} 在 complete() 前段统一拦截，与是否委托无关。
+     * <p>本方法只做"通知"，**不参与任何权限判定**——自审禁止由 {@code approve.deny_self}
+     * 在 complete() 前段统一拦截，与是否委托无关。
      */
     private void notifyDelegatePrincipal(String procInstId, Long operator, boolean approved) {
         try {
             if (operator == null || procInstId == null) {
                 return;
             }
-            java.time.LocalDateTime now = java.time.LocalDateTime.now();
-            List<com.fssc.workflow.entity.WfDelegate> ds = wfDelegateMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.workflow.entity.WfDelegate>()
-                            .eq(com.fssc.workflow.entity.WfDelegate::getToUserId, operator)
-                            .eq(com.fssc.workflow.entity.WfDelegate::getStatus, "NORMAL")
-                            .le(com.fssc.workflow.entity.WfDelegate::getBeginTime, now)
-                            .ge(com.fssc.workflow.entity.WfDelegate::getEndTime, now));
+            LocalDateTime now = LocalDateTime.now();
+            List<WfDelegate> ds = wfDelegateMapper.selectList(
+                    new LambdaQueryWrapper<WfDelegate>()
+                            .eq(WfDelegate::getToUserId, operator)
+                            .eq(WfDelegate::getStatus, "NORMAL")
+                            .le(WfDelegate::getBeginTime, now)
+                            .ge(WfDelegate::getEndTime, now));
             if (ds == null || ds.isEmpty()) {
                 return;
             }
-            com.fssc.workflow.entity.WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
+            WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
             String title = (inst == null || inst.getTitle() == null || inst.getTitle().isBlank())
                     ? procInstId : inst.getTitle();
             String opName = String.valueOf(operator);
             try {
-                com.fssc.system.entity.SysUser ou = sysUserMapper.selectById(operator);
+                SysUser ou = sysUserMapper.selectById(operator);
                 if (ou != null && (ou.getNickName() != null || ou.getUserName() != null)) {
                     opName = (ou.getNickName() == null ? ou.getUserName() : ou.getNickName())
                             + "(" + ou.getUserName() + ")";
@@ -4151,10 +4200,10 @@ public class WfEngineFacade {
             }
             String msg = (approved ? "你委托的待办已由 " : "你委托的待办已被 ") + opName
                     + (approved ? " 代办完成：" : " 驳回：") + title;
-            for (com.fssc.workflow.entity.WfDelegate d : ds) {
+            for (WfDelegate d : ds) {
                 try {
-                    // D-DEC-119：响应消息带 (bizType, bizId) 成对落 sys_message——此前 biz_id=NULL，
-                    // 委托人收到"你的委托已办"却点不回那张单（12-25:83）
+                    // 响应消息必须带 (bizType, bizId) 成对落 sys_message——少了 biz_id，
+                    // 委托人收到"你的委托已办"却点不回那张单
                     notifyService.notifyUser(d.getFromUserId(), "DELEGATE_DONE",
                             approved ? "受托代办完成" : "受托代办（已驳回）", msg,
                             inst == null ? null : inst.getBizType(),
@@ -4178,40 +4227,40 @@ public class WfEngineFacade {
      *
      * <p>空策略 ERROR 会抛 {@code BizException}，由调用方决定是否透出给终端用户。
      *
-     * <p>D-DEC-130：{@code notifyTodo=true} 时，节点刷新后给<b>本次新出现</b>的每条待办发"审批待办提醒"——
-     * 整改前提醒只在 start() 发首节点，后续节点生成时后几名审批人 0 条（12-28:79）。
-     * 自由驳回/重提跳回两个环节自带定向通知（:4800/:5161），须传 false 防双发。
+     * <p>{@code notifyTodo=true} 时，节点刷新后给<b>本次新出现</b>的每条待办发"审批待办提醒"——
+     * 只在 start() 给首节点发提醒的话，后续节点生成时后几名审批人一条都收不到。
+     * 自由驳回/重提跳回两个环节自带定向通知，须传 false 防双发。
      */
     private void syncInstanceAfterAdvance(String procInstId, boolean notifyTodo) {
-        com.fssc.workflow.entity.WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
+        WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
         if (inst == null || !"RUNNING".equals(inst.getStatus())) {
             return;
         }
         List<Task> open = openTasks(procInstId);
-        // 节点办理人三级解析（V1.3.21）：节点配置覆盖 → 组织解析 → 空策略默认处理
+        // 节点办理人三级解析：节点配置覆盖 → 组织解析 → 空策略兜底
         if (!open.isEmpty() && inst.getModelKey() != null) {
             assignApprovers(inst.getModelKey(), procInstId);
             // 解析会改派办理人，快照不刷新＝把"上一环节的办理人"写进实例视图
             open = openTasks(procInstId);
         }
-        com.fssc.workflow.entity.WfInstance upd = new com.fssc.workflow.entity.WfInstance();
+        WfInstance upd = new WfInstance();
         upd.setCurrentNode(joinNodeNames(open));
-        // 双账对齐：此前这里写的是"刚点通过的人"（operUserId），于是实例视图的"当前办理人"
-        // 永远是上一个审批人——列表、看板、监控大屏的"在谁手上"从头错到尾。改取下一任务
-        // 解析后的真实办理人；POOL/候选组态无人认领时置空串（update(entity,wrapper) 忽略 null 字段，
-        // 用 null 清不掉上一环节留下的旧值，界面会继续显示已办结的人）。
+        // 这里必须取下一任务解析后的真实办理人，不能写"刚点通过的人"（operUserId）：那样实例视图的
+        // "当前办理人"永远是上一个审批人，列表、看板、监控大屏的"在谁手上"从头错到尾。
+        // POOL/候选组态无人认领时置空串——update(entity,wrapper) 忽略 null 字段，
+        // 用 null 清不掉上一环节留下的旧值，界面会继续显示已办结的人。
         if (!open.isEmpty()) {
             upd.setCurrentAssignee(open.stream()
                     .map(t -> t.getAssignee() == null ? "" : t.getAssignee())
                     .filter(s -> !s.isEmpty()).reduce((a, b) -> a + "," + b).orElse(""));
         }
-        // G1（2026-09-24）：开关打开时门面停写 wf_instance.current_node/current_assignee，
+        // 镜像开关打开时门面停写 wf_instance.current_node/current_assignee，
         // 改由监听器 TASK_CREATED/TASK_ASSIGNED 的投影接管（注意：投影取"最后一条任务"，与这里
         // joinNodeNames 的并联合集规则存在差异，属过渡期已知取舍，见 WfMirrorProjectionListener 类注释）。
         if (mirrorByFacade()) {
             wfQueryService.updateInstance(upd, procInstId);
         }
-        // D-DEC-130：节点刷新后逐条给<b>本次新出现</b>的待办发提醒。只通知创建时刻落在办结窗内的任务——
+        // 节点刷新后逐条给<b>本次新出现</b>的待办发提醒。只通知创建时刻落在办结窗内的任务——
         // 并联分支在办结前就已存在的兄弟待办早发过，不重发。
         if (notifyTodo) {
             long cutoff = System.currentTimeMillis() - 120_000L;
@@ -4225,10 +4274,10 @@ public class WfEngineFacade {
     }
 
     /**
-     * 待办提醒收件人（D-DEC-146/194）：assignee 有值 ⇒ 只发本人；无 assignee（候选组/POOL 态）⇒
+     * 待办提醒收件人：assignee 有值 ⇒ 只发本人；无 assignee（候选组/POOL 态）⇒
      * 发镜像 candidate_ids 全体（无镜像行回退 {@code listOperableUserIds}），封顶 20 人防大角色群发。
-     * <b>绝不</b>回落 approver/提单人——整改前 POOL 态把提醒发给 approver，结果催到提单人名下
-     * （个别还是被 deny_self 禁办的人），实际可办人 0 条（12-30:174／12-31:172）。
+     * <b>绝不</b>回落 approver/提单人：POOL 态把提醒发给 approver 等于催到提单人名下，
+     * 其中个别人还被 deny_self 禁办，实际可办人一条都没有。
      * 只动提醒面：不套 deny_self、不加公司过滤——通知候选人≠授予办理权。
      */
     private List<Long> todoNotifyTargets(Task live) {
@@ -4242,7 +4291,7 @@ public class WfEngineFacade {
             return out;
         }
         try {
-            com.fssc.workflow.entity.WfTask mirror = wfQueryService.pendingTaskByTaskId(live.getId());
+            WfTask mirror = wfQueryService.pendingTaskByTaskId(live.getId());
             if (mirror != null && mirror.getCandidateIds() != null) {
                 for (String s : mirror.getCandidateIds().split(",")) {
                     Long id = toUserIdOrNull(s.trim());
@@ -4270,8 +4319,8 @@ public class WfEngineFacade {
         return out;
     }
 
-    /** 给一条待办的全体收件人发"审批待办提醒"（D-DEC-162 规则：bizType+bizId 成对，可联查） */
-    private void notifyTodoToTargets(Task live, com.fssc.workflow.entity.WfInstance inst) {
+    /** 给一条待办的全体收件人发"审批待办提醒"（规则：bizType+bizId 成对，可联查） */
+    private void notifyTodoToTargets(Task live, WfInstance inst) {
         for (Long target : todoNotifyTargets(live)) {
             try {
                 notifyService.notifyUser(target, "APPROVAL", "审批待办提醒",
@@ -4286,23 +4335,23 @@ public class WfEngineFacade {
     }
 
     /**
-     * 撤回告知（D-DEC-388）：给撤回瞬间仍在办的每一节，按其<b>收件人规则</b>发一条窄规则站内信
+     * 撤回告知：给撤回瞬间仍在办的每一节，按其<b>收件人规则</b>发一条窄规则站内信
      * 「单据已撤回，本环节无需处理」。
      *
      * <p>收件人复用 {@link #todoNotifyTargets(Task)} 而不是另起一套——同一条"这一节该谁办"的事实
      * 不允许有两处真值：assignee 有值只发本人，无 assignee（候选组/POOL 态）发全体候选人、封顶 20 人，
-     * <b>绝不</b>回落 approver／提单人（146/194 的教训：回落会把信发到被 deny_self 禁办的人名下）。
+     * <b>绝不</b>回落 approver／提单人（回落会把信发到被 deny_self 禁办的人名下）。
      * 提单人本人排除：撤回是他自己点的动作，页面已即时反馈，再发一条＝自问自答。
      *
      * <p>{@code msg_type} 沿用 {@code APPROVAL}（前端 {@code MSG_TYPE} 已登记该码＝「审批通知」），
      * 不新增类型码——新增会让通知中心直接显示英文原码（{@code NotificationCenter.vue} 未登记类型的既有行为），
      * 修一条缺陷造出另一条显示缺陷。撤回语义写在标题与正文里，与转办／改派／退回同一做法。
      *
-     * <p>单据坐标按 {@code (bizType, bizId)} 成对带出（D-DEC-162 规则），收件人可从通知联查该单；
+     * <p>单据坐标按 {@code (bizType, bizId)} 成对带出（规则），收件人可从通知联查该单；
      * 实例视图缺失时退回流程变量，两者都取不到则只发文本（不猜坐标）。
      */
     private void notifyWithdrawnToHandlers(List<Task> inFlight,
-                                           com.fssc.workflow.entity.WfInstance inst,
+                                           WfInstance inst,
                                            Map<String, Object> vars, Long withdrawnBy) {
         if (inFlight == null || inFlight.isEmpty()) {
             return;
@@ -4315,7 +4364,7 @@ public class WfEngineFacade {
                 : (vars == null || !(vars.get("bizId") instanceof Number n) ? null : n.longValue());
         String doc = (billNo == null || billNo.isBlank() ? "" : "《" + billNo.trim() + "》")
                 + (docTitle == null || docTitle.isBlank() ? "" : " " + docTitle.trim());
-        java.util.Set<Long> notified = new java.util.HashSet<>();
+        Set<Long> notified = new HashSet<>();
         for (Task t : inFlight) {
             for (Long target : todoNotifyTargets(t)) {
                 if (target == null || target.equals(withdrawnBy) || !notified.add(target)) {
@@ -4339,19 +4388,19 @@ public class WfEngineFacade {
     }
 
     /**
-     * 本（实例,节点）已投票者集合（D-DEC-192）：记录动作 APPROVE/REJECT/AUTO_PASS 的操作人。
+     * 本（实例,节点）已投票者集合：记录动作 APPROVE/REJECT/AUTO_PASS 的操作人。
      * 不加 catch——审计查询失败时宁可拒绝加签，也不放开"同节点二次出票"。
      */
-    private java.util.Set<Long> votersAtNode(String procInstId, String nodeKey) {
-        java.util.Set<Long> ids = new java.util.LinkedHashSet<>();
+    private Set<Long> votersAtNode(String procInstId, String nodeKey) {
+        Set<Long> ids = new LinkedHashSet<>();
         if (procInstId == null || nodeKey == null) {
             return ids;
         }
-        for (com.fssc.workflow.entity.WfTaskHistory h : wfQueryService.listHistory(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.workflow.entity.WfTaskHistory>()
-                        .eq(com.fssc.workflow.entity.WfTaskHistory::getProcInstId, procInstId)
-                        .eq(com.fssc.workflow.entity.WfTaskHistory::getNodeKey, nodeKey)
-                        .in(com.fssc.workflow.entity.WfTaskHistory::getAction, "APPROVE", "REJECT", "AUTO_PASS"))) {
+        for (WfTaskHistory h : wfQueryService.listHistory(
+                new LambdaQueryWrapper<WfTaskHistory>()
+                        .eq(WfTaskHistory::getProcInstId, procInstId)
+                        .eq(WfTaskHistory::getNodeKey, nodeKey)
+                        .in(WfTaskHistory::getAction, "APPROVE", "REJECT", "AUTO_PASS"))) {
             if (h.getOperUserId() != null) {
                 ids.add(h.getOperUserId());
             }
@@ -4371,12 +4420,12 @@ public class WfEngineFacade {
     private List<Task> openTasks(String procInstId) {
         List<Task> list = taskService.createTaskQuery().processInstanceId(procInstId).list();
         if (list == null) {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
         if (list.size() > 1) {
-            List<Task> sorted = new java.util.ArrayList<>(list);
-            sorted.sort(java.util.Comparator
-                    .comparing((Task t) -> t.getCreateTime() == null ? new java.util.Date(0) : t.getCreateTime())
+            List<Task> sorted = new ArrayList<>(list);
+            sorted.sort(Comparator
+                    .comparing((Task t) -> t.getCreateTime() == null ? new Date(0) : t.getCreateTime())
                     .thenComparing(t -> String.valueOf(t.getId())));
             return sorted;
         }
@@ -4388,13 +4437,13 @@ public class WfEngineFacade {
         for (int round = 0; round < 2; round++) {
             boolean progressed = false;
             for (Task t : openTasks(procInstId)) {
-                // D-V4R-43：G1 开关下监听器（TASK_CREATED 投影）会先于三级解析给新任务建 PENDING 镜像行
-                // （assignee 为空）。旧守卫「有 PENDING 镜像就跳过」把 assignApprover 的三级解析连同
-                // empty_strategy ESCALATE 默认处理一起跳掉——候选组有组码、组内却解析不出真人时（实测：
-                // 提单人＝顶级部门负责人本人，DIRECT_SUPERVISOR 判「无上级」），ASSIGNEE_ 永远为空、
+                // 镜像开关下，监听器（TASK_CREATED 投影）会先于三级解析给新任务建 PENDING 镜像行，
+                // 此时 assignee 为空。若守卫写成「有 PENDING 镜像就跳过」，assignApprover 的三级解析
+                // 连同 empty_strategy ESCALATE 兜底就一起被跳掉——候选组有组码、组内却解析不出真人时
+                // （例如提单人＝顶级部门负责人本人，DIRECT_SUPERVISOR 判「无上级」），ASSIGNEE_ 永远为空、
                 // 任务对所有人不可见、流程静默卡死（对账作业只报 WF-MIRROR-002 不修）。
-                // 改为：镜像已解析出真人（assignee_id 非空）才跳过；空 assignee 的镜像行仍走三级解析补派。
-                com.fssc.workflow.entity.WfTask mirror = wfQueryService.pendingTaskByTaskId(t.getId());
+                // 所以规则是：镜像已解析出真人（assignee_id 非空）才跳过；空 assignee 的镜像行仍走三级解析补派。
+                WfTask mirror = wfQueryService.pendingTaskByTaskId(t.getId());
                 if (mirror != null && mirror.getAssigneeId() != null) {
                     continue;
                 }
@@ -4431,7 +4480,7 @@ public class WfEngineFacade {
      */
     private String modelKeyOf(Task task) {
         try {
-            com.fssc.workflow.entity.WfInstance inst = wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
+            WfInstance inst = wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
             if (inst != null && inst.getModelKey() != null && !inst.getModelKey().isBlank()) {
                 return inst.getModelKey();
             }
@@ -4445,7 +4494,7 @@ public class WfEngineFacade {
     /** {@link #modelKeyOf(Task)} 的实例规则：委托待办过滤按流程实例缓存复用，避免同一实例重复查库 */
     private String modelKeyOfProc(String procInstId) {
         try {
-            com.fssc.workflow.entity.WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
+            WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
             if (inst != null && inst.getModelKey() != null && !inst.getModelKey().isBlank()) {
                 return inst.getModelKey();
             }
@@ -4466,8 +4515,8 @@ public class WfEngineFacade {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
         Long operator = operUserId != null ? operUserId
-                : (com.fssc.framework.security.UserContext.get() != null
-                        ? com.fssc.framework.security.UserContext.get().getUserId() : null);
+                : (UserContext.get() != null
+                        ? UserContext.get().getUserId() : null);
         if (operator == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "未登录，无法转办此任务");
         }
@@ -4477,15 +4526,15 @@ public class WfEngineFacade {
         if (targetUserId.equals(operator)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "不能把待办转办给自己");
         }
-        // 甲-1：目标必须是可办理的真人。此前只挡"必填/非本人"，把单子转给停用或零角色用户
-        // 就等于把节点做成无人可办的死节点 —— 同一缺陷在提单通道早已由 sanitizeApprover 修掉，
-        // 转办通道一直敞着（方案 §11.2 A-1）。
+        // 目标必须是可办理的真人：只挡"必填/非本人"的话，单子可以转给停用或零角色用户，
+        // 节点就成了无人可办的死节点。提单通道早有 sanitizeApprover 兜这一道，转办通道同样要有。
         assertAssignableUser(targetUserId, "转办");
         if (!nodeOrgResolver.canOperate(task, operator)) {
             throw new BizException(ErrorCode.FORBIDDEN, operateDeniedMessage(task));
         }
-        // 丁：allow_transfer 从"存了没人读"的伪配置变成真开关（现网 602 个节点全为 1，放开后行为不变）。
-        // 只管人工转办；超时自动转办由节点的 timeout_action 决定，属另一条通道（方案 §11.2 A 三层拆层的 L3）。
+        // allow_transfer 必须真的被读，存了不读等于伪配置。现网 602 个节点全为 1，
+        // 所以这道校验不影响现有流程。只管人工转办；超时自动转办由节点的 timeout_action 决定，
+        // 是另一条通道。
         WfNodeConfig transferCfg = wfNodeConfigResolver.resolve(modelKeyOf(task), task.getTaskDefinitionKey());
         if (transferCfg != null && Integer.valueOf(0).equals(transferCfg.getAllowTransfer())) {
             throw new BizException(ErrorCode.FORBIDDEN, "节点「"
@@ -4493,9 +4542,9 @@ public class WfEngineFacade {
                             ? task.getTaskDefinitionKey() : transferCfg.getNodeName())
                     + "」未开放转办（流程配置「允许转办」=否）；确需换人请联系流程管理员使用「改派」");
         }
-        // 乙-L1：转办目标收紧到本节点可办理名单（与 /task-candidates 同一规则）。
-        // 灰度键 approve.transfer_strict.enabled/models 默认关＝与拆层前行为一致；
-        // 开启前提是 L2 改派已可用（wf:task:reassign），否则"唯一候选人=发起人"的死锁失去出口。
+        // 转办目标收紧到本节点可办理名单（与 /task-candidates 同一规则）。
+        // 灰度键 approve.transfer_strict.enabled/models 默认关，此时不校验；
+        // 开启前提是改派已可用（wf:task:reassign），否则"唯一候选人＝发起人"的死锁会失去出口。
         if (isConfigGatedOn("approve.transfer_strict.enabled", "approve.transfer_strict.models",
                 modelKeyOf(task))) {
             List<Long> operable = nodeOrgResolver.listTransferTargets(task, operator);
@@ -4512,8 +4561,8 @@ public class WfEngineFacade {
         taskService.setAssignee(taskId, String.valueOf(targetUserId));
         // 待办/实例视图双写办结（与领取共用）：PENDING 行改派、缺行补账、实例当前办理人同步
         syncTaskViewAfterAssigneeChange(task, targetUserId, "转办");
-        // 甲-2：用 8 参版本把被转办人写进 target_user_id —— 此前只有自由文本"转办给用户 123"，
-        // 无法按人检索"这单是谁转给谁的"；操作人取已解析的 operator（入参 operUserId 在机器路径下为 null）。
+        // 用 8 参版本把被转办人写进 target_user_id：只留自由文本"转办给用户 123"的话，
+        // 无法按人检索"这单是谁转给谁的"。操作人取已解析的 operator（入参 operUserId 在机器路径下为 null）。
         writeHistory(task.getProcessInstanceId(), task.getId(), task.getTaskDefinitionKey(),
                 task.getName(), "TRANSFER", operator, targetUserId,
                 comment == null || comment.isBlank() ? "转办给用户 " + targetUserId : comment);
@@ -4528,10 +4577,10 @@ public class WfEngineFacade {
     }
 
     /**
-     * 本节点可转办名单（转办弹窗数据源，方案 §11.2 A-1）：规则与 {@link #transfer} 的目标校验完全一致
+     * 本节点可转办名单（转办弹窗数据源）：规则与 {@link #transfer} 的目标校验完全一致
      * （{@code NodeOrgResolver.listTransferTargets}＝可办理名单 ∪ canOperate 放行规则补齐 ∪ 生效受托人），
      * 再排除操作人本人。名单为空＝"本节点没有别人可办"，
-     * 前端此时引导找流程管理员改派（L2），而不是放开全局选人。
+     * 前端此时引导找流程管理员改派，而不是放开全局选人。
      *
      * <p>名单含他人姓名与在办量，属越权信息，故与 {@code /next-candidates} 同一守卫：只有本任务
      * 办理人/候选人/生效受托人可查。
@@ -4562,18 +4611,18 @@ public class WfEngineFacade {
     }
 
     /**
-     * 领取任务（POOL 任务池档，方案 §11.2 B / 抢单）：候选人把"仅候选组"态的任务
+     * 领取任务（POOL 任务池档 / 抢单）：候选人把"仅候选组"态的任务
      * 锁定到自己名下，之后由本人办理。
      *
-     * <p>与转办（L1）的区别：转办是<b>换人</b>（需要目标人、写 TRANSFER），领取是<b>认领</b>（不选人、
+     * <p>与转办的区别：转办是<b>换人</b>（需要目标人、写 TRANSFER），领取是<b>认领</b>（不选人、
      * 只能认领给自己，写 CLAIM）。用 {@code taskService.claim} 而非 setAssignee：Flowable 的 claim 在
      * 任务已被他人认领时抛 {@code FlowableTaskAlreadyClaimedException}，天然给出并发抢单的败者语义
-     * （此前 setAssignee 是后点覆盖先点，两个人各自以为拿到了同一张单）。
+     * （setAssignee 是后点覆盖先点，两个人会各自以为拿到了同一张单）。
      *
      * <p>守卫：① 必须是本节点可办理的人（与 {@code /task-candidates} 同一规则的候选判定，含公司维度）；
      * ② 任务已被指派给他人 → 明确提示"已被领取"；③ deny_self 开着时不放开给单据提交人
      * （否则领取后 complete 立刻被自审拦截，等于把人锁死在办不动的单子上）；POOL 作业池档不适用③——
-     * 作业节点不属自审规则，提单人是合法候选人（2026-09-26 裁决）。
+     * 作业节点不属自审规则，提单人是合法候选人。
      */
     public void claim(String taskId, Long operUserId) {
         Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
@@ -4581,8 +4630,8 @@ public class WfEngineFacade {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
         Long operator = operUserId != null ? operUserId
-                : (com.fssc.framework.security.UserContext.get() != null
-                        ? com.fssc.framework.security.UserContext.get().getUserId() : null);
+                : (UserContext.get() != null
+                        ? UserContext.get().getUserId() : null);
         if (operator == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "未登录，无法领取此任务");
         }
@@ -4607,10 +4656,10 @@ public class WfEngineFacade {
         }
         try {
             taskService.claim(taskId, uid);
-        } catch (org.flowable.common.engine.api.FlowableTaskAlreadyClaimedException ex) {
+        } catch (FlowableTaskAlreadyClaimedException ex) {
             throw new BizException(ErrorCode.FORBIDDEN, "该任务已由他人领取，请刷新待办列表");
-        } catch (org.flowable.common.engine.api.FlowableOptimisticLockingException
-                 | org.flowable.common.engine.api.FlowableObjectNotFoundException ex) {
+        } catch (FlowableOptimisticLockingException
+                 | FlowableObjectNotFoundException ex) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务已被处理，请刷新待办");
         }
         syncTaskViewAfterAssigneeChange(task, operator, "领取");
@@ -4630,18 +4679,18 @@ public class WfEngineFacade {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
         Long operator = operUserId != null ? operUserId
-                : (com.fssc.framework.security.UserContext.get() != null
-                        ? com.fssc.framework.security.UserContext.get().getUserId() : null);
+                : (UserContext.get() != null
+                        ? UserContext.get().getUserId() : null);
         if (operator == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "未登录，无法释放此任务");
         }
         if (!String.valueOf(operator).equals(task.getAssignee())) {
             throw new BizException(ErrorCode.FORBIDDEN, "只能释放自己领取的任务");
         }
-        // D-DEC-160（服务端环节，与待办列表 canUnclaim 同判据）：非池节点没有"释放回池"这回事。
+        // （服务端环节，与待办列表 canUnclaim 同口径）：非池节点没有"释放回池"这回事。
         // AUTO/PICK 档的 assignee 是节点配置解析出来的（指派到人即最终状态），unclaim 之后
         // 该节点既无候选组可回退、也没有第二个人会去领取，单据就地卡死（列表里消失、SLA 无人接）。
-        // 判据复用 NodeOrgResolver.isPoolTask（handling_mode=POOL），不在本类另造一套规则；
+        // 直接复用 NodeOrgResolver.isPoolTask（handling_mode=POOL），不在本类另造一套规则；
         // 换人的正当通道是「转办」与管理员「改派」，两者都有记录、都不改变节点归属。
         if (!nodeOrgResolver.isPoolTask(task)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -4652,8 +4701,8 @@ public class WfEngineFacade {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "本节点已无可领取的其他办理人，释放后单据将无人可办；确需换人请使用「转办」或联系流程管理员「改派」");
         }
-        // V2.2.38 K124：回收（释放）后打池局部标记——该任务不参与 K123 自动分配，仅可人工领取
-        try { taskService.setVariableLocal(taskId, "pool_no_auto_assign", Boolean.TRUE); } catch (Exception ex) { log.warn("K124 回收标记失败 taskId={}: {}", taskId, ex.getMessage()); }
+        // 回收（释放）后打池局部标记——该任务不参与智能推送，仅可人工领取
+        try { taskService.setVariableLocal(taskId, "pool_no_auto_assign", Boolean.TRUE); } catch (Exception ex) { log.warn("回收标记失败 taskId={}: {}", taskId, ex.getMessage()); }
         taskService.unclaim(taskId);
         try {
             wfQueryService.clearTaskAssignee(taskId);
@@ -4661,10 +4710,10 @@ public class WfEngineFacade {
             log.error("释放待办视图回写失败 taskId={}", taskId, ex);
         }
         try {
-            com.fssc.workflow.entity.WfInstance inst =
+            WfInstance inst =
                     wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
             if (inst != null && "RUNNING".equals(inst.getStatus())) {
-                com.fssc.workflow.entity.WfInstance upd = new com.fssc.workflow.entity.WfInstance();
+                WfInstance upd = new WfInstance();
                 // 置空串而非 null：MyBatis-Plus 的 update(entity, wrapper) 会忽略 null 字段，
                 // 用 null 释放不掉旧的"当前办理人"（表现是释放成功但列表仍显示原领取人）。
                 upd.setCurrentAssignee("");
@@ -4688,8 +4737,8 @@ public class WfEngineFacade {
                 // 此处保留为过渡期双写（去重、同值），以覆盖"监听器未注册期间就已存在的在途任务"。
                 wfQueryService.updateTaskAssignee(task.getId(), assignee);
             } else if (mirrorByFacade()) {
-                // G1（2026-09-24）：缺行补账在开关打开时由监听器 TASK_CREATED 负责；门面不再补，
-                // 否则会与投影争抢 wf_task 的唯一写入者身份（缺行＝投影失败，应由 G0 对账暴露而非门面静默补齐）。
+                // 缺行补账在开关打开时由监听器 TASK_CREATED 负责；门面不再补，
+                // 否则会与投影争抢 wf_task 的唯一写入者身份（缺行＝投影失败，应由对账器暴露而非门面静默补齐）。
                 recordTaskMirror(modelKeyOf(task), taskService.createTaskQuery()
                         .taskId(task.getId()).singleResult());
             }
@@ -4697,14 +4746,14 @@ public class WfEngineFacade {
             log.error("{}待办视图回写失败 taskId={} assignee={}", label, task.getId(), assignee, ex);
         }
         try {
-            // G1（2026-09-24）：实例视图的 current_assignee 由监听器 TASK_ASSIGNED 投影；门面在开关打开时
+            // 实例视图的 current_assignee 由监听器 TASK_ASSIGNED 投影；门面在开关打开时
             // 不再写，否则两个写入者争抢同一行（本块与上方 updateTaskAssignee 的区别：那条是过渡期有意双写，
             // 覆盖"监听器注册期间之前就已存在的在途任务"，本块无此必要）。
             if (mirrorByFacade()) {
-                com.fssc.workflow.entity.WfInstance inst =
+                WfInstance inst =
                         wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
                 if (inst != null && "RUNNING".equals(inst.getStatus())) {
-                    com.fssc.workflow.entity.WfInstance upd = new com.fssc.workflow.entity.WfInstance();
+                    WfInstance upd = new WfInstance();
                     upd.setCurrentAssignee(String.valueOf(assignee));
                     wfQueryService.updateInstance(upd, task.getProcessInstanceId());
                 }
@@ -4715,15 +4764,15 @@ public class WfEngineFacade {
     }
 
     /**
-     * 改派（L2 管理员通道，方案 §11.2 A）：流程管理员把在办任务改指给任意可办理的真人。
+     * 改派（管理员通道）：流程管理员把在办任务改指给任意可办理的真人。
      *
-     * <p>与转办（L1）的差别只在**授权来源**：转办要求操作人是本节点办理人/候选人，改派要求操作人持
+     * <p>与转办的差别只在**授权来源**：转办要求操作人是本节点办理人/候选人，改派要求操作人持
      * {@code wf:task:reassign} 权限点（Controller 的 {@code @RequiresPerm} 已校验），因此此处不做
      * {@code canOperate}，允许派给不在候选组的人——这正是"离职/换岗/唯一候选人是发起人本人"三条死路的出口
-     * （对应 {@code 流程移交}、 {@code Execute Work Items Without Agent Check}）。
+     * （「流程移交」这一类诉求就落在这条通道上）。
      *
      * <p>目标侧仍然硬校验：存在 / 在职 / 非 admin / 至少一个角色；并且 deny_self 开着时不派给该单据提交人
-     * （否则落地即被自审拦截＝又做一个办不动的节点）；POOL 作业池档不适用（作业不属自审规则，2026-09-26 裁决）。
+     * （否则落地即被自审拦截＝又做一个办不动的节点）；POOL 作业池档不适用（作业不属自审规则）。
      * 原因必填，写 REASSIGN 历史（带 target_user_id）可追溯。
      */
     public void reassign(String taskId, Long targetUserId, String reason, Long operUserId) {
@@ -4732,8 +4781,8 @@ public class WfEngineFacade {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
         Long operator = operUserId != null ? operUserId
-                : (com.fssc.framework.security.UserContext.get() != null
-                        ? com.fssc.framework.security.UserContext.get().getUserId() : null);
+                : (UserContext.get() != null
+                        ? UserContext.get().getUserId() : null);
         if (operator == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "未登录，无法改派此任务");
         }
@@ -4777,7 +4826,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * P0-5 驳回类型判断辅助：默认按"逐级驳回"处理。
+     * 驳回类型判断辅助：默认按"逐级驳回"处理。
      * 调用方可显式传 THROW_BACK（漏单驳回）走 5 参 complete。
      */
     private String rejectTypeOf(boolean approved, String comment) {
@@ -4785,15 +4834,15 @@ public class WfEngineFacade {
     }
 
     /**
-     * 超时自动通过（机器路径，方案 G3-1）：与人工审批同一套办结——引擎 complete → 待办镜像置 DONE
+     * 超时自动通过（机器路径）：与人工审批同一套办结——引擎 complete → 待办镜像置 DONE
      * → AUTO_PASS 记录 → 下一节点三级取人并推进实例视图。
      *
-     * <p>此前 {@code WfTimeoutJob} 直连 {@code taskService.complete()}，之后只把手上这条镜像行置 DONE：
-     * 推进出来的下一节点没人解析取人、也没有镜像行，单子"自动通过之后就从所有待办里消失"；
+     * <p>不能只直连 {@code taskService.complete()} 然后把手上这条镜像行置 DONE：推进出来的下一节点
+     * 没人解析取人、也没有镜像行，单子"自动通过之后就从所有待办里消失"；
      * 且不留审批历史＝审批链凭空少一节，事后无法解释这单为何到了下一环节。
      *
      * @param operUserId 超时时该节点的审批人（候选组未认领时为 null，仅作记录）
-     * @param reason     记录意见，如"节点 SLA 24 小时，已超时 6 小时"
+     * @param reason 记录意见，如"节点 SLA 24 小时，已超时 6 小时"
      */
     public void autoPassByTimeout(String taskId, Long operUserId, String reason) {
         Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
@@ -4803,15 +4852,15 @@ public class WfEngineFacade {
         Map<String, Object> vars = new HashMap<>();
         vars.put("approved", true);
         vars.put("comment", reason);
-        // D-DEC-283：与人工办结环节同源——PROCESS_COMPLETED 监听器在 complete() 内同步派发，
+        // 与人工办结环节同源——PROCESS_COMPLETED 监听器在 complete() 内同步派发，
         // 机器路径同样要先登记"本线程正在办结哪条任务"，否则超时自动通过的收尾任务会被写成假 VOID。
         String completingPrev = WfQueryService.beginCompletingTask(taskId);
-        // D-DEC-093 前置件（机器路径环节）：与人工办结环节同源带出操作人。本形参在候选组未认领时本就为
-        // null（仅记录用），结束事件随之为空——不猜人，与 D-DEC-280 规则一致。
+        // 与人工办结环节同源带出操作人。本形参在候选组未认领时本就为 null（仅记录用），
+        // 结束事件随之为空——不猜人。
         Long endOperPrev = beginEndOperator(operUserId);
         try {
             taskService.complete(taskId, vars);
-        } catch (org.flowable.common.engine.api.FlowableOptimisticLockingException ex) {
+        } catch (FlowableOptimisticLockingException ex) {
             log.info("超时自动通过遇并发办结，跳过 taskId={}", taskId);
             return;
         } finally {
@@ -4819,7 +4868,7 @@ public class WfEngineFacade {
             WfQueryService.endCompletingTask(completingPrev);
         }
         try {
-            // G1（2026-09-24）：本行置 DONE 已由监听器 TASK_COMPLETED 投影（上方 taskService.complete 触发）；
+            // 本行置 DONE 已由监听器 TASK_COMPLETED 投影（上方 taskService.complete 触发）；
             // 开关打开时门面停写，避免两个写入者对同一条 wf_task 行重复置最终状态。
             if (mirrorByFacade()) {
                 wfQueryService.markTaskDone(taskId, operUserId);
@@ -4830,7 +4879,7 @@ public class WfEngineFacade {
         writeHistory(task.getProcessInstanceId(), taskId, task.getTaskDefinitionKey(),
                 task.getName(), "AUTO_PASS", operUserId, null, reason);
         try {
-            // D-DEC-130：超时自动通过后推进出的下一节点同样要发待办提醒（机器路径此前 0 提醒）
+            // 超时自动通过后推进出的下一节点同样要发待办提醒——机器路径不能漏掉这一步
             syncInstanceAfterAdvance(task.getProcessInstanceId(), true);
         } catch (Exception ex) {
             log.error("超时自动通过后流程推进失败 taskId={} procInstId={}", taskId, task.getProcessInstanceId(), ex);
@@ -4838,7 +4887,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 超时升级转办（机器路径，方案 G3-1）：改派给真实上级，并补齐 ESCALATE 记录 + 双账同步 + 通知。
+     * 超时升级转办（机器路径）：改派给真实上级，并补齐 ESCALATE 记录 + 双账同步 + 通知。
      *
      * <p>与人工改派（{@link #reassign}）共用目标人硬校验（存在/在职/非 admin/至少一个角色）与
      * 视图办结 {@link #syncTaskViewAfterAssigneeChange}，差别只在授权来源：定时任务没有登录态，
@@ -4869,7 +4918,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 超时自动回收作业任务（批次 1 ①，机器路径）：把领取人卡住的 POOL 任务退回任务池，同池他人可再领取。
+     * 超时自动回收作业任务（机器路径）：把领取人卡住的 POOL 任务退回任务池，同池他人可再领取。
      *
      * <p>与人工「释放」的区别是不校验操作人（定时任务线程没有登录态），但走同一套双账回写与记录，
      * 动作记 {@code TIMEOUT_RELEASE} 以便与本人主动释放（{@code UNCLAIM}）区分。
@@ -4880,13 +4929,13 @@ public class WfEngineFacade {
             return; // 扫描与执行之间已被人工办结：机器路径让路
         }
         taskService.unclaim(taskId);
-        // D-V3-151：回池后必须保留/重建候选组——unclaim 只清 assignee，若任务创建时未落
+        // 回池后必须保留/重建候选组——unclaim 只清 assignee，若任务创建时未落
         // ACT_RU_IDENTITY_LINK（候选由 NodeOrgResolver 运行态解析的组态），回池后
         // taskCandidateGroupIn 查不到任何组 ⇒ 任务对所有 pool 成员不可见、任何人 403 无法领取，
-        // 成为孤儿任务（本轮实例 61 实证）。此处按节点组态回补候选组（assign_type=ROLE）。
+        // 成为孤儿任务。此处按节点组态回补候选组（assign_type=ROLE）。
         restorePoolCandidates(taskId, task.getProcessInstanceId(), task.getTaskDefinitionKey());
         try {
-            // G1（2026-09-24）：清办理人已由监听器 TASK_ASSIGNED（unclaim 触发）投影；开关打开时门面停写。
+            // 清办理人已由监听器 TASK_ASSIGNED（unclaim 触发）投影；开关打开时门面停写。
             if (mirrorByFacade()) {
                 wfQueryService.clearTaskAssignee(taskId);
             }
@@ -4894,12 +4943,12 @@ public class WfEngineFacade {
             log.error("超时回收待办视图回写失败 taskId={}", taskId, ex);
         }
         try {
-            // G1（2026-09-24）：实例视图同理由投影接管，门面在开关打开时整块跳过。
+            // 实例视图同理由投影接管，门面在开关打开时整块跳过。
             if (mirrorByFacade()) {
-                com.fssc.workflow.entity.WfInstance inst =
+                WfInstance inst =
                         wfQueryService.instanceByProcInstId(task.getProcessInstanceId());
                 if (inst != null && "RUNNING".equals(inst.getStatus())) {
-                    com.fssc.workflow.entity.WfInstance upd = new com.fssc.workflow.entity.WfInstance();
+                    WfInstance upd = new WfInstance();
                     // 置空串而非 null：MyBatis-Plus 的 update(entity, wrapper) 会忽略 null 字段
                     upd.setCurrentAssignee("");
                     wfQueryService.updateInstance(upd, task.getProcessInstanceId());
@@ -4922,7 +4971,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * D-V3-151：POOL 任务回池后按节点组态回补候选组（assign_type=ROLE → addCandidateGroup）。
+     * POOL 任务回池后按节点组态回补候选组（assign_type=ROLE → addCandidateGroup）。
      *
      * <p>背景：CLC_1（RECEIVABLE_COLLECT）超时回收后 ACT_RU_IDENTITY_LINK 0 行——
      * taskCandidateGroupIn 查不到组 ⇒ 该任务对所有 pool 成员不可见、任何人领取/办理 403，
@@ -4930,7 +4979,7 @@ public class WfEngineFacade {
      */
     private void restorePoolCandidates(String taskId, String procInstId, String nodeKey) {
         try {
-            com.fssc.workflow.entity.WfTask mirror = wfQueryService.pendingTaskByTaskId(taskId);
+            WfTask mirror = wfQueryService.pendingTaskByTaskId(taskId);
             String modelKey = mirror != null ? mirror.getModelKey() : null;
             if (modelKey == null || modelKey.isBlank()) {
                 // 镜像缺失时从流程定义反推（processDefinitionKey 即 modelKey）
@@ -4941,7 +4990,7 @@ public class WfEngineFacade {
             if (modelKey == null || nodeKey == null) {
                 return;
             }
-            com.fssc.workflow.entity.WfNodeConfig cfg = wfNodeConfigResolver.resolve(modelKey, nodeKey);
+            WfNodeConfig cfg = wfNodeConfigResolver.resolve(modelKey, nodeKey);
             if (cfg == null || !"ROLE".equalsIgnoreCase(cfg.getAssignType())
                     || cfg.getAssignValue() == null || cfg.getAssignValue().isBlank()) {
                 return;
@@ -4957,7 +5006,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 自审禁止开关（2026-08-31 改为 fail-closed）：
+     * 自审禁止开关（fail-closed）：
      * <ul>
      *  <li>sys_config.approve.deny_self = '1' → 开启（禁止审批本人提交的单据）；</li>
      *  <li>配置缺失（无记录）→ <b>默认开启</b>（fail-closed：宁可禁止，不静默放行）；</li>
@@ -4965,30 +5014,28 @@ public class WfEngineFacade {
      *  <li>读取异常 → 默认开启（fail-closed）。</li>
      * </ul>
      *
-     * <p><b>G4 治理（2026-09-24）缺省方向统一</b>：本方法与
-     * {@link #isSerialSameHandlerDenied(String)} 此前<b>方向相反</b>（一条 fail-closed、一条 fail-open），
-     * 同一份内控语义在两条校验上给出不同答案，无法解释、无法验收。现统一为
-     * <b>fail-closed（缺省即拦截/禁止）</b>——财务内控宁可少做不可误放。
-     * 两条开关的"当前实际生效值"已由 {@code V2.2.0_g4_governance_20260924.sql} 显式 seed 进
-     * {@code sys_config}，故语义从"隐式默认"变为"显式配置"，运行结果与改造前一致。</p>
+     * <p><b>缺省方向与同人连办保持统一</b>：本方法与 {@link #isSerialSameHandlerDenied(String)}
+     * 必须同向——同一份内控语义在两条校验上给出相反答案，就没法解释也没法验收。
+     * 统一为 <b>fail-closed（缺省即拦截/禁止）</b>：财务内控宁可少做不可误放。
+     * 两条开关的当前实际生效值已显式 seed 进 {@code sys_config}，缺省分支正常不会走到。</p>
      */
-    /** V2.2.38 K106：系统自动审核身份（sysauto）判定 */
+    /** 系统自动审核身份（sysauto）判定 */
     private boolean isSystemAutoAuditor(Long userId) {
         if (userId == null) return false;
         try {
-            com.fssc.system.entity.SysUser u = sysUserMapper.selectById(userId);
+            SysUser u = sysUserMapper.selectById(userId);
             return u != null && "sysauto".equals(u.getUserName());
         } catch (Exception ex) {
             return false;
         }
     }
 
-    /** V2.2.38 K123 智能推送开关：pool.autoDispatch（缺省=1 开启；参考智能推送，抢单默认处理） */
+    /** 智能推送开关：pool.autoDispatch（缺省=1 开启；抢单兜底） */
     private boolean isPoolAutoDispatchEnabled() {
         try {
-            com.fssc.system.entity.SysConfig c = sysConfigMapper.selectOne(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysConfig>()
-                            .eq(com.fssc.system.entity.SysConfig::getConfigKey, "pool.autoDispatch")
+            SysConfig c = sysConfigMapper.selectOne(
+                    new LambdaQueryWrapper<SysConfig>()
+                            .eq(SysConfig::getConfigKey, "pool.autoDispatch")
                             .last("limit 1"));
             if (c == null || c.getConfigValue() == null) return true;
             return "1".equals(c.getConfigValue().trim());
@@ -4999,7 +5046,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 实例的业务类型（D-DEC-365 连办校验预检查询用）：按镜像视图 {@code wf_instance.biz_type} 取，
+     * 实例的业务类型（连办校验预检查询用）：按镜像视图 {@code wf_instance.biz_type} 取，
      * 与审批校验 {@code complete()} 用的 {@code self.getBizType()} 同一来源；取不到返回 null，
      * {@link #isSerialSameHandlerDenied(String)} 对 null 一律放行 ⇒ 预检退化，不影响指派。
      */
@@ -5008,7 +5055,7 @@ public class WfEngineFacade {
             return null;
         }
         try {
-            com.fssc.workflow.entity.WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
+            WfInstance inst = wfQueryService.instanceByProcInstId(procInstId);
             return inst == null ? null : inst.getBizType();
         } catch (Exception ex) {
             log.debug("取实例 bizType 失败 procInstId={}: {}", procInstId, ex.getMessage());
@@ -5017,12 +5064,12 @@ public class WfEngineFacade {
     }
 
     /**
-     * 该用户在本实例<b>已经办结过节点</b>？判据与连办校验 {@code complete()} 内那条
-     * （D-MC-2：{@code historicTaskInstanceQuery.processInstanceId(...).taskAssignee(uid).finished().count()>0}）
+     * 该用户在本实例<b>已经办结过节点</b>？判断与连办校验 {@code complete()} 内那条
+     * （{@code historicTaskInstanceQuery.processInstanceId(...).taskAssignee(uid).finished().count()>0}）
      * <b>逐字同一</b>——预检必须与校验规则一致，否则"预检放行、审批被拒"或"预检误杀、能办不给办"。
      *
-     * <p>刻意不做成公共方法去替换 complete() 里的那一段：连办校验是 413 的必然化产物，本轮一字不动（禁回退项），
-     * 这里只是把同一判据在读侧再算一次，且只在校验生效时才会被调用。
+     * <p>刻意不做成公共方法去替换 complete() 里的那一段：连办校验那段一字不动，
+     * 这里只是把同一判断在读侧再算一次，且只在校验生效时才会被调用。
      */
     private boolean handledNodesInInstance(String procInstId, Long userId) {
         if (procInstId == null || userId == null) {
@@ -5033,7 +5080,7 @@ public class WfEngineFacade {
                     .processInstanceId(procInstId)
                     .taskAssignee(String.valueOf(userId)).finished().count() > 0;
         } catch (Exception ex) {
-            // 读取失败按"没办过"处理：预检是收紧推送，不是收紧办理权限，误判的后果只是回到改造前行为
+            // 读取失败按"没办过"处理：预检是收紧推送，不是收紧办理权限，误判的后果只是推送范围放宽一点
             log.debug("连办预检查历史失败 procInstId={} userId={}: {}", procInstId, userId, ex.getMessage());
             return false;
         }
@@ -5041,9 +5088,9 @@ public class WfEngineFacade {
 
     private boolean isDenySelfEnabled() {
         try {
-            com.fssc.system.entity.SysConfig c = sysConfigMapper.selectOne(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysConfig>()
-                            .eq(com.fssc.system.entity.SysConfig::getConfigKey, "approve.deny_self")
+            SysConfig c = sysConfigMapper.selectOne(
+                    new LambdaQueryWrapper<SysConfig>()
+                            .eq(SysConfig::getConfigKey, "approve.deny_self")
                             .last("limit 1"));
             if (c == null || c.getConfigValue() == null) {
                 return true; // 配置缺失 → 默认禁止自审（fail-closed）
@@ -5056,14 +5103,13 @@ public class WfEngineFacade {
     }
 
     /**
-     * 同人连办拦截开关（D-MC-2）：sys_config.approve.deny_serial_same_handler 指定生效流程链。
+     * 同人连办拦截开关：sys_config.approve.deny_serial_same_handler 指定生效流程链。
      * <ul>
-     *  <li>缺失（无记录）→ <b>拦截</b>（G4 治理：缺省方向与 {@link #isDenySelfEnabled()} 统一为
+     *  <li>缺失（无记录）→ <b>拦截</b>（缺省方向与 {@link #isDenySelfEnabled()} 统一为
      *      fail-closed「缺省即拦截」）；</li>
-     *  <li>空串 / '0' → 不拦截（<b>当前实际生效值</b>，已由 V2.2.0_g4_governance_20260924.sql 显式
-     *      seed 进 sys_config，故由"隐式 fail-open 默认"变为"显式配置"，运行结果与改造前一致）；</li>
+     *  <li>空串 / '0' → 不拦截（当前实际生效值，已显式 seed 进 sys_config）；</li>
      *  <li>'1' 或 'ALL' → 对所有流程启用；</li>
-     *  <li>逗号分隔 bizType（如 'GL_MONTH_CLOSE'）→ 仅对该流程链启用（月结链铺办理人+禁 admin 的强制默认处理）；</li>
+     *  <li>逗号分隔 bizType（如 'GL_MONTH_CLOSE'）→ 仅对该流程链启用（月结链铺办理人+禁 admin 的强制兜底）；</li>
      *  <li>读取异常 → fail-closed，但<b>只对代码层显式登记的强制流程链</b>
      *      {@link #SERIAL_SAME_HANDLER_ENFORCED_BIZTYPES} 生效（见下方取舍说明）。</li>
      * </ul>
@@ -5079,12 +5125,12 @@ public class WfEngineFacade {
             return false;
         }
         try {
-            com.fssc.system.entity.SysConfig c = sysConfigMapper.selectOne(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysConfig>()
-                            .eq(com.fssc.system.entity.SysConfig::getConfigKey, "approve.deny_serial_same_handler")
+            SysConfig c = sysConfigMapper.selectOne(
+                    new LambdaQueryWrapper<SysConfig>()
+                            .eq(SysConfig::getConfigKey, "approve.deny_serial_same_handler")
                             .last("limit 1"));
             if (c == null || c.getConfigValue() == null) {
-                // G4 治理：缺省方向统一为 fail-closed（与 approve.deny_self 一致）。
+                // 缺省方向统一为 fail-closed（与 approve.deny_self 一致）。
                 // 历史库已有该行（值为空串）⇒ 本分支不改变运行结果；见类上方 javadoc 与治理脚本。
                 log.warn("approve.deny_serial_same_handler 无配置行，按统一缺省方向 fail-closed 拦截 bizType={}", bizType);
                 return true;
@@ -5113,10 +5159,10 @@ public class WfEngineFacade {
      * 同人连办拦截在<b>代码层显式登记</b>的强制流程链（与 sys_config 值同形：bizType）。
      *
      * <p>仅在 sys_config <b>读取异常</b>时作为 fail-closed 的收窄依据——配置可读时一律以配置为准，
-     * 本常量不参与判定。登记规则＝"该链的办理人铺法与 admin 排除是强制默认处理、宁可停也不放行"。</p>
+     * 本常量不参与判定。登记规则＝"该链的办理人铺法与 admin 排除是强制兜底、宁可停也不放行"。</p>
      */
-    private static final java.util.Set<String> SERIAL_SAME_HANDLER_ENFORCED_BIZTYPES =
-            java.util.Set.of("GL_MONTH_CLOSE");
+    private static final Set<String> SERIAL_SAME_HANDLER_ENFORCED_BIZTYPES =
+            Set.of("GL_MONTH_CLOSE");
 
     /** 按任务 ID 反查流程实例 ID；任务已办结时退回历史表（撤销预览的入参便利方法）。 */
     public String procInstIdOfTask(String taskId) {
@@ -5127,7 +5173,7 @@ public class WfEngineFacade {
         if (t != null) {
             return t.getProcessInstanceId();
         }
-        org.flowable.task.api.history.HistoricTaskInstance h =
+        HistoricTaskInstance h =
                 historyService.createHistoricTaskInstanceQuery().taskId(taskId).singleResult();
         return h == null ? null : h.getProcessInstanceId();
     }
@@ -5156,14 +5202,13 @@ public class WfEngineFacade {
     }
 
     /**
-     * 「已办撤销回原节点」<b>只读预览</b>（P3 G3，2026-09-23）。
+     * 「已办撤销回原节点」<b>只读预览</b>。
      *
-     * <p><b>为什么本轮只做预览、不做执行</b>：Flowable 8 <b>没有</b>
+     * <p><b>只做预览、不做执行</b>：Flowable 8 <b>没有</b>
      * {@code ProcessInstanceModification}（javap 核对 flowable-engine-8.0.0.jar 确认），
      * 等价原语是 {@code ChangeActivityStateBuilder.moveActivityIdTo} —— 它属于「搬执行」：
      * 直接把运行中的执行实例挪到目标活动，会真实改动在办单据本体（作废既有任务、重放历史流转）。
-     * 一旦改错，破坏的是单据本身而非日志。当前 8089 已停、无任何运行期验证手段，
-     * 盲改在办单据的风险不可接受 ⇒ 本方法<b>只读、零副作用</b>，只回答
+     * 改错的代价落在单据本身而不是日志上 ⇒ 本方法<b>只读、零副作用</b>，只回答
      * "如果把这张单退回到某个节点重办，会发生什么"，供人工核对与后续开关放行。
      *
      * <p>开关 {@code sys_config.wf.withdraw.done.enabled} 缺省 0（关闭，fail-closed）。
@@ -5175,7 +5220,7 @@ public class WfEngineFacade {
         if (procInstId == null || procInstId.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "procInstId 不能为空");
         }
-        com.fssc.workflow.entity.WfInstance inst = null;
+        WfInstance inst = null;
         try {
             inst = wfQueryService.instanceByProcInstId(procInstId);
         } catch (Exception ex) {
@@ -5186,13 +5231,13 @@ public class WfEngineFacade {
             chain = wfQueryService.chain(procInstId);
         } catch (Exception ex) {
             log.warn("撤销预览：查审批链失败 procInst={}", procInstId, ex);
-            chain = java.util.Collections.emptyList();
+            chain = Collections.emptyList();
         }
         // 在办任务取引擎真实态（不只信 wf_task 镜像 —— 镜像有过滞后缺陷）
-        List<Map<String, Object>> active = new java.util.ArrayList<>();
+        List<Map<String, Object>> active = new ArrayList<>();
         try {
             for (Task t : taskService.createTaskQuery().processInstanceId(procInstId).active().list()) {
-                Map<String, Object> m = new java.util.LinkedHashMap<>();
+                Map<String, Object> m = new LinkedHashMap<>();
                 m.put("taskId", t.getId());
                 m.put("nodeKey", t.getTaskDefinitionKey());
                 m.put("nodeName", t.getName());
@@ -5205,18 +5250,18 @@ public class WfEngineFacade {
 
         // 可回退节点 = 链上「已办」节（DONE/REJECTED）。规则取「退回到该节点重办」：
         // 该节点本身需重办，其后所有节点（含未到达的 TODO）都会被作废后重新流转。
-        List<Map<String, Object>> candidates = new java.util.ArrayList<>();
+        List<Map<String, Object>> candidates = new ArrayList<>();
         for (int i = 0; i < chain.size(); i++) {
             Map<String, Object> n = chain.get(i);
             String state = String.valueOf(n.get("state"));
             if (!"DONE".equals(state) && !"REJECTED".equals(state)) {
                 continue;
             }
-            List<String> willVoid = new java.util.ArrayList<>();
+            List<String> willVoid = new ArrayList<>();
             for (int j = i + 1; j < chain.size(); j++) {
                 willVoid.add(String.valueOf(chain.get(j).get("nodeName")));
             }
-            Map<String, Object> c = new java.util.LinkedHashMap<>();
+            Map<String, Object> c = new LinkedHashMap<>();
             c.put("nodeKey", n.get("nodeKey"));
             c.put("nodeName", n.get("nodeName"));
             c.put("handler", n.get("handler"));
@@ -5229,7 +5274,7 @@ public class WfEngineFacade {
         }
 
         boolean enabled = isDoneWithdrawEnabled();
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("procInstId", procInstId);
         out.put("modelKey", inst == null ? null : inst.getModelKey());
         out.put("bizType", inst == null ? null : inst.getBizType());
@@ -5250,16 +5295,16 @@ public class WfEngineFacade {
         return out;
     }
 
-    // ==================== G4 自由驳回（任意级次回退，P4 · 2026-09-23） ====================
+    // 自由驳回（任意级次回退）
     // 能力边界：Flowable 8 无 ProcessInstanceModification；把执行退回上游节点的等价原语是
     // ChangeActivityStateBuilder.moveActivityIdTo —— 属「搬执行」，会真实改动在办单据本体。
-    // 规则与「已办撤销」（§6.9.4）完全一致：**只读预览先行（rejectTargets）+ 开关 fail-closed 默认关**。
-    // 开关未开时 complete() 走原 terminateAsRejected，行为与改造前逐字一致。
+    // 规则与「已办撤销」完全一致：只读预览先行（rejectTargets）+ 开关 fail-closed 默认关。
+    // 开关未开时 complete() 走 terminateAsRejected。
 
     /**
      * 「自由驳回」只读预览：给定当前待办任务，列出可退回的上游节点及各自影响面。
      *
-     * <p><b>纯查询，不修改任何数据</b>。候选集与 {@code withdrawPreview} 共用同一条链规则
+     * <p>纯查询，不修改任何数据。候选集与 {@code withdrawPreview} 共用同一条链规则
      * （{@code wfQueryService.chain} 的 DONE/REJECTED 节），不另造一套"哪些节点算上游"的判断 ——
      * 两处规则一旦分叉，预览说能退、执行说不能退，比没有预览更糟。
      *
@@ -5278,14 +5323,14 @@ public class WfEngineFacade {
         out.put("forNodeName", task.getName());
         out.remove("notice"); // 撤销语义的公告不适用于驳回页，换下方专用 notice
         // 自由驳回的可用性：总开关 + 灰度白名单 + 节点档位 + 并联在办任务数（>1 时"搬执行"语义不唯一，执行面会拒绝）
-        // F5（2026-09-26）放开条件是三把锁：总开关 ∧ 逐链灰度白名单 ∧ 本节点 reject_scope≠NONE。
+        // 放开条件是三把锁：总开关 ∧ 逐链灰度白名单 ∧ 本节点 reject_scope≠NONE。
         // 预览必须与执行面（complete 的同一判定）同源，且把三道校验分开回显——
         // 否则运维只看到"开关未开"，分不清是没开总开关还是本流程没进白名单。
         String gateModelKey = modelKeyOf(task);
         boolean masterOn = isFreeRejectEnabled();
         boolean whitelisted = isModelInList(readConfig("wf.reject.free.models"), gateModelKey);
         boolean enabled = masterOn && whitelisted;
-        // G2（2026-09-24）：校验从"私有全局开关"升级为"节点配置 reject_scope"，全局开关退化为总开关。
+        // 校验以节点配置 reject_scope 为准，全局开关退化为总开关。
         // 预览必须与执行面（complete 里的 freeRejectScopeOf 判定）同源，否则会出现
         // "预览说能退、执行说不能退"——比没有预览更糟。
         String scope = freeRejectScopeOf(task);
@@ -5296,7 +5341,7 @@ public class WfEngineFacade {
         // PREV_ONE 档下这是唯一合法目标，ANY_DONE 档下合法目标另有"声明集"（校验①.6），均显式回显，
         // 供前端把选择器收敛——预览必须与执行面同源，否则"预览说能退、执行说不能退"比没有预览更糟。
         out.put("prevNodeKey", prevNodeKey);
-        java.util.Set<String> declared = scopeEnabled && "ANY_DONE".equals(scope)
+        Set<String> declared = scopeEnabled && "ANY_DONE".equals(scope)
                 ? declaredRejectTargets(task, firstHandledNode(pi), prevNodeKey) : null;
         out.put("declaredTargets", declared);
         if (declared != null && out.get("candidates") instanceof List<?> cands) {
@@ -5326,7 +5371,8 @@ public class WfEngineFacade {
         out.put("modelWhitelisted", whitelisted);
         out.put("activeTaskCount", activeCount);
         out.put("voteNode", vote);
-        // 复用 withdrawPreview 产物时其 enabledHint 是「已办撤销」的文案，这里按驳回语义覆写（2026-09-23 复验发现串 key）
+        // 复用 withdrawPreview 产物时其 enabledHint 是「已办撤销」的文案，这里必须按驳回语义覆写，
+        // 否则两张预览页会显示同一句提示
         out.put("enabledHint", !enabled
                 ? (masterOn
                         ? "「自由驳回」总开关已开，但本流程未进灰度白名单 sys_config.wf.reject.free.models；本页为只读预览"
@@ -5344,7 +5390,7 @@ public class WfEngineFacade {
                     + "如需按节点放开，请把该节点 reject_scope 配为 PREV_ONE（仅退回上一节点）或 ANY_DONE"
                     + "（退回「声明集」内的节点：提单人节点／上一级／审批项 wf_approval_item.target_node 显式声明的目标）");
         } else if (vote) {
-            out.put("disabledReason", "票签（VOTE）节点按比例聚合裁决，不支持指定级次驳回");
+            out.put("disabledReason", "票签（VOTE）节点按比例聚合判定，不支持指定级次驳回");
         } else if (!singleActive) {
             out.put("disabledReason", "该单据当前有 " + activeCount + " 个在办节点（并联/会签），不支持指定级次驳回");
         } else {
@@ -5368,9 +5414,9 @@ public class WfEngineFacade {
      * <p>四道强制校验，任何一道不过都<b>抛业务异常而非降级</b>：静默降级回"终止本流程"会让
      * 审批人以为退回成功、实际单据已被作废 —— 这是比失败更糟的错位。
      * ① 目标节点必须属于本实例<b>已完成</b>节点（防跨实例/未来节点乱搬）；
-     * ①.5 G2 节点配置档位：{@code reject_scope=PREV_ONE} 时目标必须恰为紧邻上一已完成节点，
+     * ①.5 节点配置档位：{@code reject_scope=PREV_ONE} 时目标必须恰为紧邻上一已完成节点，
      *     {@code ANY_DONE} 时保持原行为（任一已完成节点）；{@code NONE} 直接拒绝；
-     * ①.6 A1「目标集限定」（2026-09-27 人工裁决 REF-A）：{@code ANY_DONE} 档下目标还须命中<b>声明集</b>，
+     * ①.6 「目标集限定」：{@code ANY_DONE} 档下目标还须命中<b>声明集</b>，
      *     见 {@link #declaredRejectTargets}；会签节点<b>不写死禁止</b>作目标；
      * ② 实例在办任务必须恰好 1 条（并联/会签时"搬执行"语义不唯一）；
      * ③ 总开关 {@code wf.reject.free.enabled}=1（调用方已判，此处不再重复判）。
@@ -5382,15 +5428,15 @@ public class WfEngineFacade {
     private void rejectToNode(Task task, String targetNodeKey, String comment, Long operator) {
         String pi = task.getProcessInstanceId();
         String fromNodeKey = task.getTaskDefinitionKey();
-        // 校验⓪（F5 2026-09-26）：逐链灰度白名单。执行面自己再判一次，不轻信调用方——
-        // 与本方法上方的节点档位判定同一取舍：校验升级时"只信入口"就是下一个假开关。
+        // 校验⓪：逐链灰度白名单。执行面自己再判一次，不轻信调用方——
+        // 与本方法上方的节点档位判定同一取舍："只信入口"就是下一个假开关。
         if (!isFreeRejectModelAllowed(modelKeyOf(task))) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "本流程未放开指定级次驳回（总开关 wf.reject.free.enabled 未置 1，或未进 "
                             + "wf.reject.free.models 灰度白名单），请改用普通驳回");
         }
         // 校验①：目标必须在本实例已完成节点集合内
-        java.util.Set<String> doneKeys = new java.util.HashSet<>();
+        Set<String> doneKeys = new HashSet<>();
         for (Map<String, Object> n : wfQueryService.chain(pi)) {
             String st = String.valueOf(n.get("state"));
             if (("DONE".equals(st) || "REJECTED".equals(st)) && n.get("nodeKey") != null) {
@@ -5401,8 +5447,8 @@ public class WfEngineFacade {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "驳回目标不属于本实例已完成节点，已拒绝: " + targetNodeKey);
         }
-        // 校验①.5（G2 2026-09-24）：节点配置档位。校验从"私有全局开关"升级为节点配置后，
-        // 执行面必须自己再判一次——不能只信调用方的入参（执行入口可能被其它路径复用）。
+        // 校验①.5：节点配置档位。校验走节点配置而非私有全局开关后，执行面仍须自己再判一次——
+        // 不能只信调用方的入参（执行入口可能被其它路径复用）。
         String scope = freeRejectScopeOf(task);
         if (scope == null) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -5417,8 +5463,8 @@ public class WfEngineFacade {
                                 + "，已拒绝目标 " + targetNodeKey);
             }
         } else {
-            // 校验①.6（A1 · 2026-09-27 REF-A）：ANY_DONE 档不再等于"链上任一已完成节点都可驳"。
-            java.util.Set<String> declared = declaredRejectTargets(task, firstHandledNode(pi), prev);
+            // 校验①.6：ANY_DONE 档不再等于"链上任一已完成节点都可驳"。
+            Set<String> declared = declaredRejectTargets(task, firstHandledNode(pi), prev);
             if (!declared.contains(targetNodeKey)) {
                 throw new BizException(ErrorCode.PARAM_INVALID,
                         "驳回目标不在本节点声明的可退回集合 " + declared
@@ -5447,9 +5493,9 @@ public class WfEngineFacade {
         }
         // 收尾：镜像 + 最终状态记录 + 指派重算 + 视图刷新（各自 try/catch，绝不因收尾失败掩盖搬执行已成功的事实）
         try {
-            // 【G1 已知刻意例外，不按 mirrorByFacade() 守卫】——不是遗漏，是判断后的保留：
+            // 【刻意不走 mirrorByFacade() 守卫】——不是遗漏，是判断后的保留：
             // 上方 changeActivityState().changeState() 会触发 Flowable ENTITY_DELETED，投影按实体类型
-            // 判定任务删除后把该行置 CANCELLED（搬执行把原节点任务物理删掉，引擎侧事实如此）；
+            // 判定任务删除后把该行置 CANCELLED（搬执行把原节点任务物理删掉，引擎侧事实如此），
             // 但业务语义上这次驳回是"该任务被办理了"（本次记录 REJECT_TO/REJECT_FROM 即证据），
             // 因此门面必须在其后把镜像行改写为 DONE。两种模式最终状态一致（投影 CANCELLED → 门面 DONE），
             // 且本行是"先 CANCELLED 再 DONE"的确定性覆盖、非并发争抢，故保留双写。
@@ -5460,7 +5506,7 @@ public class WfEngineFacade {
         writeHistory(pi, task.getId(), fromNodeKey, task.getName(),
                 "REJECT_TO_DONE", operator, null, comment);
         try {
-            // notifyTodo=false：下面 :4800+ 已对回退节点办理人定向通知，防双发
+            // notifyTodo=false：下面已对回退节点办理人定向通知，避免双发
             syncInstanceAfterAdvance(pi, false);
         } catch (Exception ex) {
             log.warn("自由驳回：实例视图同步失败 procInst={}", pi, ex);
@@ -5486,7 +5532,7 @@ public class WfEngineFacade {
 
     /**
      * 提单人节点＝本实例链上<b>最早一个已办理</b>节点（{@code chain()} 按 {@code wf_node_config.sort} 升序出链）。
-     * 驳回至该节点即"打回给提单人"（〔E·FSSC·52〕决策项）。找不到返回 null。
+     * 驳回至该节点即"打回给提单人"。找不到返回 null。
      */
     private String firstHandledNode(String procInstId) {
         for (Map<String, Object> n : wfQueryService.chain(procInstId)) {
@@ -5499,32 +5545,29 @@ public class WfEngineFacade {
     }
 
     /**
-     * 驳回目标「声明集」（A1／REF-A 2026-09-27 人工裁决）＝ <b>提单人节点 ∪ 紧邻上一已完成节点
+     * 驳回目标「声明集」＝ <b>提单人节点 ∪ 紧邻上一已完成节点
      * ∪ 本节点启用审批项显式声明的 {@code wf_approval_item.target_node}</b>。
      *
-     * <p><b>为什么不是"流程上所有走过的节点"</b>：{@code ANY_DONE} 字面含义过宽——驳回是把在办执行
-     * {@code moveActivityIdTo} 搬到目标节点，搬到金额审批已完成的中间节点等于凭空造出一个
-     * "该节点从未申请过的复审"，责任链从此对不上记录。驳回目标同样是<b>声明出来的集合</b>：
-     * 〔E·FSSC·52〕决策项逐项配置、〔E·FSSC·140〕打回后标识"打回/重审"、〔星·会签审批流程〕
-     * "支持驳回至开始节点、经理会签审批节点"（列举，非"任一节点"）。
+     * <p><b>为什么不是"流程上所有走过的节点"</b>：{@code ANY_DONE} 的字面含义太宽。驳回是把在办执行
+     * {@code moveActivityIdTo} 搬到目标节点，搬到金额审批已完成的中间节点，等于凭空造出一个
+     * "该节点从未申请过的复审"，责任链从此对不上记录。驳回目标必须是<b>声明出来的集合</b>。
      *
-     * <p><b>会签节点不写死禁止</b>：它能否作目标，取决于是否出现在本集合内（默认档只有上一级与提单人节点，
-     * 放开须配置）。 原〔E·行业元数据规范·450〕"会签操作设置里没有打回"是<b>层级读错</b>（该页是节点内操作设置，
-     * 不是"会签不可被驳回为目标"），已按规则核对更正；本方法不据其写死禁止。
+     * <p><b>会签节点不写死禁止</b>：它能否作目标，取决于是否出现在本集合内（默认档只有上一级与提单人
+     * 节点，放开须配置）。"会签操作设置里没有打回"说的是节点内操作设置，不是"会签不可被驳回为目标"。
      *
-     * <p><b>结构差异（须在交付报告写明）</b>：我方无连线/边实体（{@code workflow/entity} 17 个类
-     * 无 edge/transition），"决策项声明的目标集"只能由 {@code wf_approval_item.target_node} 承载；
+     * <p><b>结构差异</b>：我方无连线/边实体（{@code workflow/entity} 17 个类无 edge/transition），
+     * "决策项声明的目标集"只能由 {@code wf_approval_item.target_node} 承载；
      * BPMN 的 {@code SequenceFlow} 是<b>正向</b>流转边，不能当驳回目标声明用。
      */
-    private java.util.Set<String> declaredRejectTargets(Task task, String submitterNodeKey, String prevNodeKey) {
-        java.util.Set<String> declared = new java.util.LinkedHashSet<>();
+    private Set<String> declaredRejectTargets(Task task, String submitterNodeKey, String prevNodeKey) {
+        Set<String> declared = new LinkedHashSet<>();
         if (prevNodeKey != null) {
             declared.add(prevNodeKey);
         }
         if (submitterNodeKey != null) {
             declared.add(submitterNodeKey);
         }
-        for (com.fssc.workflow.entity.WfApprovalItem item : approvalItemService.listEnabled(
+        for (WfApprovalItem item : approvalItemService.listEnabled(
                 modelKeyOf(task), task.getTaskDefinitionKey())) {
             String tn = item.getTargetNode();
             if (tn != null && !tn.isBlank()) {
@@ -5544,11 +5587,10 @@ public class WfEngineFacade {
     }
 
     /**
-     * 驳回校验档位（G2 2026-09-24）：{@code wf_node_config.reject_scope} 的唯一读取点。
+     * 驳回校验档位：{@code wf_node_config.reject_scope} 的唯一读取点。
      *
      * <p><b>返回值语义</b>：{@code ANY_DONE} / {@code PREV_ONE} 表示本节点已开启指定级次驳回；
-     * {@code null} 表示未开启（配成 {@code NONE}、未配、或值无法识别）——未开启一律落回原
-     * 「终止本流程」路径，与改造前逐字一致。
+     * {@code null} 表示未开启（配成 {@code NONE}、未配、或值无法识别）——未开启时走「终止本流程」。
      *
      * <p><b>为什么全局开关还要留着</b>：本列负责"按节点分级放开"，全局开关
      * {@code wf.reject.free.enabled} 负责"一键全关"。搬执行（moveActivityIdTo）属破坏性能力，
@@ -5575,13 +5617,13 @@ public class WfEngineFacade {
     }
 
     /**
-     * G2「重新提交跳回本节点」关联点：{@code resubmit_jump_back=1} 的节点驳回时，把本节点 key 写入
+     * 「重新提交跳回本节点」关联点：{@code resubmit_jump_back=1} 的节点驳回时，把本节点 key 写入
      * <b>旧</b>流程实例变量 {@code rejectOriginNode}。
      *
      * <p><b>写与读</b>：本方法只负责"写"。跨实例的"读"分两步——
      * {@link #injectResubmitJumpBackAnchor} 把旧实例上的关联点接力进新实例的启动变量；
-     * {@link #consumeRejectAnchor}（F5-②，2026-09-26 接线）在新实例启动后<b>真正搬执行</b>到该节点。
-     * 接线前关联点"只写不读"，对引擎完全惰性＝又一枚配了不生效的假配置（体检 E-05 规则）。
+     * {@link #consumeRejectAnchor} 在新实例启动后<b>真正搬执行</b>到该节点。
+     * 少了后一步，关联点"只写不读"，对引擎完全惰性＝又一枚配了不生效的假配置。
      * 变量本身照常写入历史变量库（ACT_HI_VARINST）并在驳回预览里回显，两条通道都留得下证据。
      *
      * <p>零影响：未配该列的节点只多一次配置读取，不写任何变量。
@@ -5612,18 +5654,18 @@ public class WfEngineFacade {
     }
 
     /**
-     * G2「重新提交跳回本节点」跨实例关联点接力（2026-09-24）：把同一业务单据上一枚已驳回历史实例上
+     * 「重新提交跳回本节点」跨实例关联点接力：把同一业务单据上一枚已驳回历史实例上
      * 记录的 {@code rejectOriginNode} 取回，并入新实例的启动变量。
      *
      * <p><b>要解决的问题</b>：驳回时 {@link #recordRejectOriginNode} 把本节点 key 写进<b>旧</b>实例变量；
      * 而重提交走 REJECTED → DRAFT → 重新 submit，起的是<b>新</b>实例，新实例不继承旧实例变量，
-     * 于是关联点此前只写不读、从未被消费。本方法补上"读"这一半，使关联点能跨实例到达新实例。
+     * 于是关联点只写不读、从未被消费。本方法补上"读"这一半，使关联点能跨实例到达新实例。
      *
      * <p><b>做到哪一步</b>：本方法把关联点带到新实例的启动变量 {@code rejectOriginNode}，并回传
      * {@link RejectAnchor}（关联点＋来源旧实例＋旧实例金额）供执行面使用。真正的"跳回"由
      * {@link #consumeRejectAnchor} 在实例启动、首任务镜像与通知都落账<b>之后</b>执行
-     * （方案 §6 步骤 5 的②路线：{@code moveActivityIdTo} 搬执行＋回收首节点副作用）。
-     * 未选①（定义侧排他网关）的原因：现网 87 枚模型全部锁版本，改定义需重发布窗口且对历史实例不生效，
+     * （走 {@code moveActivityIdTo} 搬执行＋回收首节点副作用）。
+     * 没在定义侧加排他网关：现网 87 枚模型全部锁版本，改定义需重发布窗口且对历史实例不生效，
      * 而本能力要在灰度链上立刻可验。
      *
      * <p><b>零影响边界</b>：① 本流程（model_key）无 {@code resubmit_jump_back=1} 的节点 ⇒ 直接返回，
@@ -5638,18 +5680,18 @@ public class WfEngineFacade {
             }
             // ① 校验：本流程确有"重新提交跳回本节点"的节点才继续——未配则连查询都不做，历史零影响。
             Long jumpBackNodes = wfNodeConfigMapper.selectCount(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WfNodeConfig>()
+                    new LambdaQueryWrapper<WfNodeConfig>()
                             .eq(WfNodeConfig::getModelKey, processKey)
                             .eq(WfNodeConfig::getResubmitJumpBack, 1));
             if (jumpBackNodes == null || jumpBackNodes == 0) {
                 return null;
             }
             // ② 取同一业务单据的历史实例（instancesByBiz 已按 id 倒序，最新的在前），找最近的已驳回实例。
-            List<com.fssc.workflow.entity.WfInstance> history = wfQueryService.instancesByBiz(bizType, bizId);
+            List<WfInstance> history = wfQueryService.instancesByBiz(bizType, bizId);
             if (history == null || history.isEmpty()) {
                 return null;
             }
-            for (com.fssc.workflow.entity.WfInstance inst : history) {
+            for (WfInstance inst : history) {
                 if (inst == null || !"REJECTED".equals(inst.getStatus()) || inst.getProcInstId() == null) {
                     continue;
                 }
@@ -5677,14 +5719,14 @@ public class WfEngineFacade {
     }
 
     /**
-     * 重提跳回关联点（F5-②，2026-09-26）：驳回时写在<b>旧</b>实例上的 {@code rejectOriginNode}，
+     * 重提跳回关联点：驳回时写在<b>旧</b>实例上的 {@code rejectOriginNode}，
      * 连同"从哪一实例取到"的溯源信息一并交给启动侧。
      *
-     * @param nodeKey          要跳回的节点（＝当初驳回它的那个节点）
+     * @param nodeKey 要跳回的节点（＝当初驳回它的那个节点）
      * @param sourceProcInstId 关联点来源的旧实例（执行面据此核对上一轮实际路线与已完成节点）
-     * @param sourceAmount     旧实例金额（金额一变必须重走全链，见 {@link #consumeRejectAnchor}）
+     * @param sourceAmount 旧实例金额（金额一变必须重走全链，见 {@link #consumeRejectAnchor}）
      */
-    private record RejectAnchor(String nodeKey, String sourceProcInstId, java.math.BigDecimal sourceAmount) {
+    private record RejectAnchor(String nodeKey, String sourceProcInstId, BigDecimal sourceAmount) {
     }
 
     /**
@@ -5693,7 +5735,7 @@ public class WfEngineFacade {
      */
     private String historicVariableOf(String procInstId, String name) {
         try {
-            org.flowable.variable.api.history.HistoricVariableInstance v =
+            HistoricVariableInstance v =
                     historyService.createHistoricVariableInstanceQuery()
                             .processInstanceId(procInstId).variableName(name).singleResult();
             return v == null || v.getValue() == null ? null : String.valueOf(v.getValue());
@@ -5704,16 +5746,16 @@ public class WfEngineFacade {
     }
 
     /**
-     * F5-②「重新提交跳回被驳回节点」执行面（2026-09-26，方案 §6 步骤 5）：新实例启动后，把执行从
-     * 当前（重走一遍的）首节点直接搬到关联点节点，使编辑重做不再重复占用关联点<b>之前</b>的各岗。
+     * 「重新提交跳回被驳回节点」执行面：新实例启动后，把执行从当前（重走一遍的）首节点直接搬到
+     * 关联点节点，使编辑重做不再重复占用关联点<b>之前</b>的各岗。
      *
      * <p><b>为什么不走 {@link #complete} 自动通过</b>：跳过的节点办理人不是提单人，用提单人身份 complete
-     * 会被 {@code NodeOrgResolver.canOperate} 的越权守卫硬拒（fail-closed 铁律，2026-08-31）。
+     * 会被 {@code NodeOrgResolver.canOperate} 的越权守卫硬拒（fail-closed 是铁律）。
      * 为出功能去放宽那条守卫＝把越权通道打开，绝不允许。故这里与「自由驳回」同源，用引擎原语
      * {@code moveActivityIdTo} 搬执行，跳过动作只留一条 {@code RESUBMIT_SKIP} 痕，
      * <b>不给被跳过的节点伪造"已通过"记录</b>。
      *
-     * <p><b>六道校验，任一不过即"按全链重走"（降级不报错）</b>：
+     * <p>六道校验，任一不过即"按全链重走"（降级不报错）：
      * ① 总开关 {@code wf.resubmit.jumpback.enabled}=1 且 {@code wf.resubmit.jumpback.models} 含本流程
      *    （{@link #isConfigGatedOn}，与 PICK/加签校验同一灰度规则，空清单＝全库不生效）；
      * ② 关联点节点自身 {@code wf_node_config.resubmit_jump_back=1}；
@@ -5722,7 +5764,7 @@ public class WfEngineFacade {
      * ④ 上一轮驳回实例的<b>实际路线</b>可核对：当前节点在旧路线上、关联点也在，且二者之间的每个节点
      *    上一轮都已办结（有结束时间）；否则说明本轮路线与上轮不同或存在未审节点，不跳；
      * ⑤ 新定义图上关联点自当前节点可达（网关/事件/条件穿越，BFS）；
-     * ⑥ 关联点不是多签节点（ALL/SEQ/VOTE）——搬进多实例活动需集合变量随执行树重建，风险另计，本轮不做。
+     * ⑥ 关联点不是多签节点（ALL/SEQ/VOTE）——搬进多实例活动需集合变量随执行树重建，风险另计，暂不做。
      *
      * <p>副作用回收与 {@link #rejectToNode} 同一套规则：搬之前写一条试探痕（失败可追溯）→
      * 搬执行 → 被搬走的节点镜像置 DONE（引擎已物理删除该任务，镜像留 PENDING＝永远办不掉的幽灵待办）
@@ -5731,7 +5773,7 @@ public class WfEngineFacade {
      * <p>全过程 try/catch：跳回是增强语义，任何异常只降级为"按全链重走"，绝不让重新提交失败。
      */
     private void consumeRejectAnchor(String processKey, String procInstId,
-                                     java.math.BigDecimal newAmount, RejectAnchor anchor) {
+                                     BigDecimal newAmount, RejectAnchor anchor) {
         try {
             if (anchor == null || anchor.nodeKey() == null || anchor.nodeKey().isBlank()
                     || anchor.sourceProcInstId() == null) {
@@ -5770,8 +5812,8 @@ public class WfEngineFacade {
             }
             // 校验④：上一轮实际路线核对
             List<String> oldRoute = new ArrayList<>();
-            java.util.Set<String> oldFinished = new java.util.HashSet<>();
-            for (org.flowable.task.api.history.HistoricTaskInstance h :
+            Set<String> oldFinished = new HashSet<>();
+            for (HistoricTaskInstance h :
                     historyService.createHistoricTaskInstanceQuery().processInstanceId(anchor.sourceProcInstId()).list()) {
                 if (h.getTaskDefinitionKey() == null) {
                     continue;
@@ -5822,7 +5864,7 @@ public class WfEngineFacade {
                 log.error("重提跳回：被跳过节点的待办镜像收尾失败 taskId={}", cur.getId(), ex);
             }
             try {
-                // notifyTodo=false：下面 :5161+ 对跳回节点自带定向通知，防双发
+                // notifyTodo=false：下面已对被跳回的节点逐个发定向通知，防双发
                 syncInstanceAfterAdvance(procInstId, false);
             } catch (Exception ex) {
                 log.warn("重提跳回：实例视图同步失败 proc={}", procInstId, ex);
@@ -5860,7 +5902,7 @@ public class WfEngineFacade {
             if (!(fromEl instanceof FlowNode) || targetKey == null) {
                 return false;
             }
-            java.util.Set<String> seen = new java.util.HashSet<>();
+            Set<String> seen = new HashSet<>();
             ArrayDeque<FlowElement> queue = new ArrayDeque<>();
             for (SequenceFlow f : ((FlowNode) fromEl).getOutgoingFlows()) {
                 queue.add(p.getFlowElement(f.getTargetRef()));
@@ -5888,7 +5930,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 紧邻上一已完成节点（G2 {@code PREV_ONE} 档的唯一合法驳回目标）。
+     * 紧邻上一已完成节点（{@code PREV_ONE} 档的唯一合法驳回目标）。
      *
      * <p>链规则与 {@code rejectTargets} 完全同源（{@code wfQueryService.chain}，按节点配置 sort 顺序、
      * 状态取最后一次办理结果），不另造一套"哪些节点算上游"的判断——两处一旦分叉，预览说能退、
@@ -5930,9 +5972,9 @@ public class WfEngineFacade {
      */
     private boolean isFreeRejectEnabled() {
         try {
-            com.fssc.system.entity.SysConfig c = sysConfigMapper.selectOne(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysConfig>()
-                            .eq(com.fssc.system.entity.SysConfig::getConfigKey, "wf.reject.free.enabled")
+            SysConfig c = sysConfigMapper.selectOne(
+                    new LambdaQueryWrapper<SysConfig>()
+                            .eq(SysConfig::getConfigKey, "wf.reject.free.enabled")
                             .last("limit 1"));
             if (c == null || c.getConfigValue() == null) {
                 return false; // 配置缺失 → 默认关闭（fail-closed）
@@ -5945,15 +5987,14 @@ public class WfEngineFacade {
     }
 
     /**
-     * 「自由驳回」逐链灰度白名单 {@code sys_config.wf.reject.free.models}（F5，2026-09-26）。
+     * 「自由驳回」逐链灰度白名单 {@code sys_config.wf.reject.free.models}。
      *
-     * <p><b>为什么补这一道</b>：改造前放开条件是「总开关=1 <b>且</b> 本节点 reject_scope≠NONE」，而节点档位
-     * 是 355/355 一刀切的 {@code ANY_DONE}（现网实测）。于是总开关一开＝<b>全库所有审批节点同时</b>获得
-     * 搬执行能力，方案 §6 步骤 3 要求的"灰度到 1 条链"根本无法落实——只能全开或全关。
-     * 现按 F2/F3/F4 同一规则补 model 白名单：<b>空清单＝全库不生效（fail-closed）</b>，
-     * 逐链放开由 {@code RA-F5a} 裁决。
+     * <p><b>为什么要这一道</b>：只看「总开关=1 <b>且</b> 本节点 reject_scope≠NONE」的话，节点档位
+     * 现状是 355/355 一刀切的 {@code ANY_DONE}，总开关一开＝<b>全库所有审批节点同时</b>获得
+     * 搬执行能力，没法"灰度到 1 条链"——只能全开或全关。所以补一道 model 白名单，与
+     * PICK、加签的灰度同一规则：空清单＝全库不生效（fail-closed）。
      *
-     * <p>现网总开关实测 {@code wf.reject.free.enabled=0}（sys_config id=62），故本道校验接入时行为零变化。
+     * <p>现网总开关 {@code wf.reject.free.enabled=0}，本道校验接入时不改变任何行为。
      */
     private boolean isFreeRejectModelAllowed(String modelKey) {
         return isConfigGatedOn("wf.reject.free.enabled", "wf.reject.free.models", modelKey);
@@ -5980,9 +6021,9 @@ public class WfEngineFacade {
      */
     private boolean isDoneWithdrawEnabled() {
         try {
-            com.fssc.system.entity.SysConfig c = sysConfigMapper.selectOne(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysConfig>()
-                            .eq(com.fssc.system.entity.SysConfig::getConfigKey, "wf.withdraw.done.enabled")
+            SysConfig c = sysConfigMapper.selectOne(
+                    new LambdaQueryWrapper<SysConfig>()
+                            .eq(SysConfig::getConfigKey, "wf.withdraw.done.enabled")
                             .last("limit 1"));
             if (c == null || c.getConfigValue() == null) {
                 return false; // 配置缺失 → 默认关闭（fail-closed）
@@ -6013,25 +6054,20 @@ public class WfEngineFacade {
         Map<String, Object> vars = runtimeService.getVariables(procInstId);
         // 取回租户，避免收尾在无租户上下文执行
         Long tenantId = null;
-        com.fssc.workflow.entity.WfInstance inst = null;
+        WfInstance inst = null;
         try {
             inst = wfQueryService.instanceByProcInstId(procInstId);
             if (inst != null) tenantId = inst.getTenantId();
-        } catch (Exception ignore) { /* 视图未写入数据库则交给总线默认处理 */ }
-        // 撤回归属硬判据（ROOT-17 / ③ 组第 30 行"谁有权反审核"，2026-09-27）：
-        // 本方法此前**只看流程有没有被办理**，完全不看"操作人是不是提单人"——任何拿到 procInstId 的
-        // 调用方都能把别人的在办单据撤掉（撤完单据回到发起态、审批链作废）。现网唯一调用方
-        // ExpenseBillService.withdraw 自己有 requireMine 兜住，所以本校验**不改变任何现有行为**，
+        } catch (Exception ignore) { /* 视图未写入数据库则交给总线兜底 */ }
+        // 撤回归属是硬规则：只看流程有没有被办理、不看操作人是不是提单人的话，任何拿到 procInstId
+        // 的调用方都能把别人的在办单据撤掉（撤完单据回到发起态、审批链作废）。唯一调用方
+        // ExpenseBillService.withdraw 自己有 requireMine 兜住，所以这里不改变现有行为，
         // 补的是"引擎层裸通道"这一半：校验要落在被复用的方法里，不能指望每个调用方各自记得装。
-        //
-        // 规则来源：费用报销〔E·FSSC·360〕"审核中的单据，反审核人必须是工作流反审核节点
-        // 对应的处理人"。**本轮只落"提单人本人"这一半**——我方节点模型没有"反审核节点"类型，
-        // 所以"反审核节点处理人也可反审核"无对应物可实现，不写成已实现；待该节点类型落地后按同一规则放开。
-        //
-        // 取不到提单人时**拒绝**（fail-closed）：与下方 allow_withdraw 开关的 fail-open 相反，
-        // 因为那条是功能开关、这条是授权判定，与跨公司委托校验、admin 禁入同一风格。
-        // 现网 wf_instance.start_user_id 为 NULL 的行数＝0/108（2026-09-27 只读普查，
-        // 临时脚本/_proof/r17_census.txt），故该分支对真实用户不可达。
+        // "审核中的单据，反审核人必须是工作流反审核节点对应的处理人"只落到"提单人本人"这一半——
+        // 我方节点模型没有"反审核节点"类型，那一半无对应物，不写成已实现；待该节点类型落地后按同一规则放开。
+        // 取不到提单人时拒绝（fail-closed），与下方 allow_withdraw 开关的 fail-open 相反：
+        // 那条是功能开关，这条是授权判定，和跨公司委托校验、admin 禁入同一风格。
+        // 现存数据里 wf_instance.start_user_id 全都不为 NULL，该分支对真实用户不可达。
         Long starter = inst == null ? null : inst.getStartUserId();
         if (starter == null) {
             throw new BizException(ErrorCode.FORBIDDEN,
@@ -6041,15 +6077,15 @@ public class WfEngineFacade {
             throw new BizException(ErrorCode.FORBIDDEN,
                     "只能撤回本人提交的单据，该单据的提单人不是当前操作人");
         }
-        // 「允许撤回」开关真消费（P3 G3，2026-09-23）：wf_model.allow_withdraw 此前只有前端开关
-        // 与列表列、后端**零消费点** ⇒ 典型"配了不生效"死配置（见方案 §6.9）。
-        // 规则刻意取 fail-open：仅当能查到模型且该列显式为 0 时才拒绝；查不到/为 NULL 一律放行，
-        // 以保持既有行为不变（历史模型该列可能为空，不能当成"关闭撤回"）。
+        // 「允许撤回」开关要真的被消费：wf_model.allow_withdraw 若只有前端开关与列表列、后端零
+        // 消费点，就是典型"配了不生效"的死配置。
+        // 规则刻意取 fail-open：仅当能查到模型且该列显式为 0 时才拒绝；查不到/为 NULL 一律放行——
+        // 历史模型该列可能为空，不能当成"关闭撤回"。
         if (inst != null && inst.getModelKey() != null) {
             try {
-                com.fssc.workflow.entity.WfModel m = wfModelMapper.selectOne(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.workflow.entity.WfModel>()
-                                .eq(com.fssc.workflow.entity.WfModel::getModelKey, inst.getModelKey())
+                WfModel m = wfModelMapper.selectOne(
+                        new LambdaQueryWrapper<WfModel>()
+                                .eq(WfModel::getModelKey, inst.getModelKey())
                                 .last("LIMIT 1"));
                 if (m != null && Boolean.FALSE.equals(m.getAllowWithdraw())) {
                     throw new BizException(ErrorCode.FORBIDDEN, "流程【" + inst.getModelKey()
@@ -6062,38 +6098,36 @@ public class WfEngineFacade {
                         inst.getModelKey(), ex.getMessage());
             }
         }
-        // D-DEC-388（未标级修复战役 K4-C）：撤回瞬间仍在办的每一节要先取快照。
-        // deleteProcessInstance 之后 ACT_RU_TASK 无行、候选链接一并消失，届时再也答不出"该告知谁"。
-        // 这是"催办有通知、撤回零通知"（12-2x 实测 sys_message 全库仅 APPROVAL/ALERT/TIMEOUT_REMINDER/
-        // APPROVAL_URGE 四类，content LIKE '%撤回%' 唯一命中是标题假命中）唯一的查询环节。
+        // 撤回瞬间仍在办的每一节要先取快照：deleteProcessInstance 之后 ACT_RU_TASK 无行、
+        // 候选链接一并消失，届时再也答不出"该告知谁"。这是撤回通知唯一的查询环节。
         List<Task> inFlightOnWithdraw = openTasks(procInstId);
         runtimeService.deleteProcessInstance(procInstId, "申请人撤回");
-        // D-B5-01 同族办结：撤回走 deleteProcessInstance 只产生 PROCESS_CANCELLED，不触发
+        // 同族办结：撤回走 deleteProcessInstance 只产生 PROCESS_CANCELLED，不触发
         // PROCESS_COMPLETED 监听 ⇒ 实例视图滞留 RUNNING、wf_task 镜像滞留 PENDING
-        // （催办/超时会对已死实例空转）。与 terminateAsRejected/cancelInstance 同一办结规则。
+        // 催办/超时会对已死实例空转。与 terminateAsRejected/cancelInstance 同一办结规则。
         try {
-            wfQueryService.updateInstanceStatus(procInstId, "CANCELLED", java.time.LocalDateTime.now());
-            // D-DEC-275：撤回同样落节点级作废记录（撤回前在办的每一节都要在链上留下"到了但没办"）
+            wfQueryService.updateInstanceStatus(procInstId, "CANCELLED", LocalDateTime.now());
+            // 撤回同样落节点级作废记录（撤回前在办的每一节都要在链上留下"到了但没办"）
             wfQueryService.closePendingTasksByInstance(procInstId, "申请人撤回，流程终止；本节任务未办理即作废");
         } catch (Exception sex) {
-            log.warn("撤回后实例状态/待办镜像收口失败 procInstId={}: {}", procInstId, sex.getMessage());
+            log.warn("撤回后实例状态/待办镜像同步失败 procInstId={}: {}", procInstId, sex.getMessage());
         }
-        // D-DEC-388：撤回必须告知在办办理人——催办把人叫来"尽快处理"，撤回却让他手上的单子
+        // 撤回必须告知在办办理人——催办把人叫来"尽快处理"，撤回却让他手上的单子
         // 静默消失，两条体验叠在一起自相矛盾。通知失败只 warn：撤回本身必须成功，
-        // 不能让"发信"这条附加环节把已办结的撤回动作回滚成失败（与 130/146 待办提醒同一容错规则）。
+        // 不能让"发信"这条附加环节把已办结的撤回动作回滚成失败（与待办提醒同一容错规则）。
         try {
             notifyWithdrawnToHandlers(inFlightOnWithdraw, inst, vars, operUserId);
         } catch (Exception nex) {
             log.warn("撤回告知发送失败 procInstId={}: {}", procInstId, nex.getMessage());
         }
-        // 撤回也触发业务收尾（释放预算）。事件必须携带 procInstId：业务收尾可读流程变量
-        // （如 ReconBizAction 的 prevStatus/prevSupplierConfirmStatus 快照回滚）。此前用 4 参构造
-        // 导致撤回事件 procInstId=null，撤回的对账单永远落不进快照回滚分支、被默认处理成 DIFF——
-        // 驳回与通过两路本就带 procInstId，撤回这是漏带的第三条路。
+        // 撤回也触发业务收尾（释放预算）。事件必须携带 procInstId：业务收尾要读流程变量
+        // （如 ReconBizAction 的 prevStatus/prevSupplierConfirmStatus 快照回滚）。用 4 参构造的话
+        // 撤回事件 procInstId 为 null，回头就落不进快照回滚分支、被兜底成 DIFF——
+        // 驳回与通过两路都带 procInstId，撤回是漏带的第三条路。
         WfProcessEndedEvent ended = new WfProcessEndedEvent(
                 (String) vars.get("bizType"), (Long) vars.get("bizId"), false, "申请人撤回", null, procInstId);
         ended.setTenantId(tenantId);
-        // ROOT-17：显式标"撤回"，不再让消费方去比 comment 字面量
+        // 显式标"撤回"，消费方不必再去比 comment 字面量
         ended.setEndType(WfProcessEndedEvent.END_WITHDRAWN);
         eventPublisher.publishEvent(ended);
         writeHistory(procInstId, null, null, null, "WITHDRAW", operUserId, "申请人撤回");
@@ -6101,7 +6135,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 待办列表的 POOL 软锁标注（批次 1 ①）：{@code taskId -> 领取人用户ID}，
+     * 待办列表的 POOL 软锁标注：{@code taskId -> 领取人用户ID}，
      * 只含"作业节点且已被他人领取"的行，前端据此灰显「去处理」并显示"XX 正在办理"。
      * 与 {@code canOperate} 的拒办规则同源（见 {@link NodeOrgResolver#poolLockedByOthers}）。
      */
@@ -6110,8 +6144,8 @@ public class WfEngineFacade {
     }
 
     /**
-     * 越权拒办提示（批次 1 ①）：POOL 作业节点已被他人领取时，明说锁定人与出口（释放 / 转办 / 改派），
-     * 其余情形沿用原文案。只改提示文案，不改判定结果（拒办仍由 {@code canOperate} 说了算）。
+     * 越权拒办提示：POOL 作业节点已被他人领取时，明说锁定人与出口（释放 / 转办 / 改派），
+     * 其余情形沿用原有提示。这里只组织文案，判定仍由 {@code canOperate} 说了算。
      */
     private String operateDeniedMessage(Task task) {
         String owner = nodeOrgResolver.poolLockOwner(task);
@@ -6120,7 +6154,7 @@ public class WfEngineFacade {
         }
         String name = owner;
         try {
-            com.fssc.system.entity.SysUser u = sysUserMapper.selectById(Long.valueOf(owner));
+            SysUser u = sysUserMapper.selectById(Long.valueOf(owner));
             if (u != null) {
                 name = u.getNickName() == null || u.getNickName().isBlank() ? u.getUserName() : u.getNickName();
             }
@@ -6133,15 +6167,20 @@ public class WfEngineFacade {
 
     /** 我的待办 */
     public List<Task> todo(Long userId) {
+        // 两个主查询不再 includeProcessVariables()。带上它会走 "任务 + 关联实体" 查询，
+        // 把当页任务的运行态变量连表拉回，万级在办时单次请求就压在秒级。
+        // 现在连身份链接也不预取：候选组由 {@link NodeOrgResolver#filterGroupTasks} 一次 IN 批量装载
+        // 单据键由 wf_instance 批量取（{@link #bizKeyByProc}），
+        // 页面行变量由 {@link #withProcessVariables} 按当页 20 行补载。两条查询都回到最朴素的
+        // ACT_RU_TASK 分页查询，不再产生「任务+关联实体」连表。
         // 本人待办（assignee）
         List<Task> assigned = taskService.createTaskQuery()
                 .taskAssignee(String.valueOf(userId))
-                .includeProcessVariables()
                 .orderByTaskCreateTime().desc()
                 .list();
         // 角色候选组待办（审批人按角色路由）
-        // PERF-01: 角色码装载 2 查合一(原 sys_user_role+sys_role 两次往返,占待办慢请求 100%)
-        java.util.List<String> roleCodes = new java.util.ArrayList<>();
+        // 角色码装载两查合一：原本 sys_user_role + sys_role 两次往返，是待办慢请求的大头
+        List<String> roleCodes = new ArrayList<>();
         try {
             roleCodes.addAll(sysUserMapper.selectRoleCodes(userId));
         } catch (Exception ex) {
@@ -6152,17 +6191,16 @@ public class WfEngineFacade {
         }
         List<Task> group = taskService.createTaskQuery()
                 .taskCandidateGroupIn(roleCodes)
-                .includeProcessVariables()
                 .orderByTaskCreateTime().desc()
                 .list();
-        // V1.3.16 多分子公司路由：业务段角色按单据公司过滤，共享/集团角色跨公司可见
+        // 多分子公司路由：业务段角色按单据公司过滤，共享/集团角色跨公司可见
         group = nodeOrgResolver.filterGroupTasks(group, userId, roleCodes);
-        // POOL 软锁可见性（批次 1 ①）：同池他人已领取的任务不在候选组查询结果里，按镜像规则回捞回来，
+        // POOL 软锁可见性：同池他人已领取的任务不在候选组查询结果里，按镜像规则回捞回来，
         // 让它在待办中"可见但灰显"（锁定者规则），灰显与拒办由 lockedByOther/canOperate 负责。
         try {
-            java.util.Set<String> poolKeys = wfNodeConfigResolver.poolNodeKeys();
+            Set<String> poolKeys = wfNodeConfigResolver.poolNodeKeys();
             if (!poolKeys.isEmpty()) {
-                java.util.Set<String> seen = new java.util.HashSet<>();
+                Set<String> seen = new HashSet<>();
                 assigned.forEach(t -> seen.add(t.getId()));
                 group.forEach(t -> seen.add(t.getId()));
                 for (String lockedId : wfQueryService.poolTasksClaimedByOthers(userId, poolKeys)) {
@@ -6178,13 +6216,13 @@ public class WfEngineFacade {
         } catch (Exception ex) {
             log.warn("POOL 锁定任务回捞失败 userId={}: {}", userId, ex.getMessage());
         }
-        // D-GL-02：AUTO 档同岗回捞。AUTO 节点激活即写死 assignee，Flowable 的 taskCandidateGroupIn
+        // AUTO 档同岗回捞。AUTO 节点激活即写死 assignee，Flowable 的 taskCandidateGroupIn
         // 只回未指派任务 ⇒ 同岗位其他人在待办里看不到这条，但 approve 允许他们办（只看登录人权限与两道校验）。
         // 结果是「能办却看不见」：工作台空白、单子静默停摆。此处补回捞，可见即可（能否办理仍由 approve 判定）。
         try {
-            java.util.Map<String, String> autoRoleMap = wfNodeConfigResolver.autoNodeRoleMap();
+            Map<String, String> autoRoleMap = wfNodeConfigResolver.autoNodeRoleMap();
             if (!autoRoleMap.isEmpty()) {
-                java.util.Set<String> seen = new java.util.HashSet<>();
+                Set<String> seen = new HashSet<>();
                 assigned.forEach(t -> seen.add(t.getId()));
                 group.forEach(t -> seen.add(t.getId()));
                 for (String tid : wfQueryService.autoTasksOfSameRole(userId, autoRoleMap, roleCodes)) {
@@ -6202,17 +6240,17 @@ public class WfEngineFacade {
         }
         // 委托代理：当前用户是受托人（to_user）时，委托人（from_user）名下的待办也并入
         // （含 assignee 直接指定 + 委托人角色候选组任务，两类都转由受托人处理）
-        java.util.List<Task> delegated = new java.util.ArrayList<>();
+        List<Task> delegated = new ArrayList<>();
         try {
-            java.time.LocalDateTime now = java.time.LocalDateTime.now();
-            java.util.List<com.fssc.workflow.entity.WfDelegate> ds = wfDelegateMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.workflow.entity.WfDelegate>()
-                            .eq(com.fssc.workflow.entity.WfDelegate::getToUserId, userId)
-                            .eq(com.fssc.workflow.entity.WfDelegate::getStatus, "NORMAL")
-                            .le(com.fssc.workflow.entity.WfDelegate::getBeginTime, now)
-                            .ge(com.fssc.workflow.entity.WfDelegate::getEndTime, now));
-            java.util.Set<Long> fromIds = new java.util.HashSet<>();
-            for (com.fssc.workflow.entity.WfDelegate d : ds) {
+            LocalDateTime now = LocalDateTime.now();
+            List<WfDelegate> ds = wfDelegateMapper.selectList(
+                    new LambdaQueryWrapper<WfDelegate>()
+                            .eq(WfDelegate::getToUserId, userId)
+                            .eq(WfDelegate::getStatus, "NORMAL")
+                            .le(WfDelegate::getBeginTime, now)
+                            .ge(WfDelegate::getEndTime, now));
+            Set<Long> fromIds = new HashSet<>();
+            for (WfDelegate d : ds) {
                 if (d.getFromUserId() != null) fromIds.add(d.getFromUserId());
             }
             for (Long fromId : fromIds) {
@@ -6220,12 +6258,12 @@ public class WfEngineFacade {
                 delegated.addAll(taskService.createTaskQuery()
                         .taskAssignee(String.valueOf(fromId)).includeProcessVariables().orderByTaskCreateTime().desc().list());
                 // b) 委托人角色候选组的任务（角色码 → candidateGroup）
-                java.util.List<com.fssc.system.entity.SysUserRole> fromUrs = sysUserRoleMapper.selectList(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.system.entity.SysUserRole>()
-                                .eq(com.fssc.system.entity.SysUserRole::getUserId, fromId));
-                java.util.List<Long> fromRoleIds = fromUrs.stream().map(com.fssc.system.entity.SysUserRole::getRoleId).toList();
+                List<SysUserRole> fromUrs = sysUserRoleMapper.selectList(
+                        new LambdaQueryWrapper<SysUserRole>()
+                                .eq(SysUserRole::getUserId, fromId));
+                List<Long> fromRoleIds = fromUrs.stream().map(SysUserRole::getRoleId).toList();
                 if (!fromRoleIds.isEmpty()) {
-                    java.util.List<String> fromRoles = new java.util.ArrayList<>();
+                    List<String> fromRoles = new ArrayList<>();
                     sysRoleMapper.selectBatchIds(fromRoleIds).forEach(r -> {
                         if (r.getRoleCode() != null) fromRoles.add(r.getRoleCode());
                     });
@@ -6238,10 +6276,10 @@ public class WfEngineFacade {
         } catch (Exception ex) {
             log.warn("委托待办合并失败 userId={}", userId, ex);
         }
-        // F3-3（体检 E-06a）：wf_model.enable_delegate=0 的流程不支持委托代办——委托人的待办不并入受托人，
+        // wf_model.enable_delegate=0 的流程不支持委托代办——委托人的待办不并入受托人，
         // 与 NodeOrgResolver.canOperate 第 3 步同一规则（两处都读 delegateDisabledModels，不会一边显一边拦）。
         // 现网 87 个模型该列全为 1 ⇒ 清单为空 ⇒ 直接跳过，连实例都不查。
-        java.util.Set<String> delegateOff = nodeOrgResolver.delegateDisabledModels();
+        Set<String> delegateOff = nodeOrgResolver.delegateDisabledModels();
         if (!delegateOff.isEmpty() && !delegated.isEmpty()) {
             Map<String, String> modelByProc = new HashMap<>();
             delegated.removeIf(t -> {
@@ -6250,13 +6288,13 @@ public class WfEngineFacade {
             });
         }
         // 合并去重（assignee 优先）
-        java.util.Set<String> seen = new java.util.HashSet<>();
-        List<Task> merged = new java.util.ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        List<Task> merged = new ArrayList<>();
         for (Task t : delegated) { seen.add(t.getId()); merged.add(t); }
         for (Task t : group) { if (!seen.contains(t.getId())) { seen.add(t.getId()); merged.add(t); } }
         for (Task t : assigned) { if (!seen.contains(t.getId())) merged.add(t); }
         merged.sort((a, b) -> {
-            java.util.Date da = a.getCreateTime(), db = b.getCreateTime();
+            Date da = a.getCreateTime(), db = b.getCreateTime();
             if (da == null || db == null) return 0;
             return db.compareTo(da);
         });
@@ -6264,30 +6302,151 @@ public class WfEngineFacade {
     }
 
     /**
-     * 默认处理（真跑业务-V4）：剔除业务单据已最终状态（VOID/CLOSED/ARCHIVED）或已逻辑删除的待办。
+     * 兜底：剔除业务单据已最终状态（VOID/CLOSED/ARCHIVED）或已逻辑删除的待办。
      *
      * <p>待办查询只按 Flowable 任务状态出数，不回查业务单据——作废等终止入口漏走、或存在历史脏数据
      * 使流程实例滞留时，作废单会挂在角标 / 审批工作台 / 工作台「我的待办」三处。此处按单据最终状态就地剔除，
      * 与 {@code WfQueryService.myTodo}（分页审批台）共用 {@link BillTerminalChecker} 同一规则。
+     *
+     * <p><b>不能逐行 {@code isBillTerminal}</b>：那样每次待办请求都发 N 条
+     * {@code SELECT status FROM exp_bill WHERE id=?}，在办一多就成了该请求库侧耗时的首位。
+     * 这里按 bizType 分组一次 IN 批量判定，规则与逐行判定同源（{@link BillTerminalChecker#terminalBillIds}）。
      */
     private List<Task> excludeTerminalBills(List<Task> tasks) {
         if (tasks == null || tasks.isEmpty()) {
             return tasks;
         }
-        List<Task> out = new java.util.ArrayList<>(tasks);
-        out.removeIf(t -> {
-            if (t == null) {
-                return false;
+        // 单据键优先取 wf_instance 批量映射（一次 IN 查询），
+        // 不再依赖任务上已加载的流程变量；映射缺行时回落到变量（若有），两者皆无则放行（fail-open）。
+        Set<String> procs = new LinkedHashSet<>();
+        for (Task t : tasks) {
+            if (t != null && t.getProcessInstanceId() != null) {
+                procs.add(t.getProcessInstanceId());
             }
-            Map<String, Object> pv = t.getProcessVariables();
-            String bizType = pv == null ? null : asString(pv.get("bizType"));
-            Long bizId = (pv != null && pv.get("bizId") instanceof Number n) ? n.longValue() : null;
-            return billTerminalChecker.isBillTerminal(bizType, bizId);
-        });
+        }
+        Map<String, BizKey> bizByProc = bizKeyByProc(procs);
+        Map<String, Set<Long>> idsByType = new HashMap<>();
+        for (Task t : tasks) {
+            if (t == null) {
+                continue;
+            }
+            BizKey key = bizKeyOf(t, bizByProc);
+            if (key == null) {
+                continue;
+            }
+            idsByType.computeIfAbsent(key.type(), k -> new HashSet<>()).add(key.id());
+        }
+        Map<String, Set<Long>> terminalByType = new HashMap<>();
+        for (Map.Entry<String, Set<Long>> e : idsByType.entrySet()) {
+            terminalByType.put(e.getKey(), billTerminalChecker.terminalBillIds(e.getKey(), e.getValue()));
+        }
+        List<Task> out = new ArrayList<>(tasks.size());
+        for (Task t : tasks) {
+            if (t == null) {
+                continue;
+            }
+            BizKey key = bizKeyOf(t, bizByProc);
+            if (key != null
+                    && terminalByType.getOrDefault(key.type(), Set.of()).contains(key.id())) {
+                continue;
+            }
+            out.add(t);
+        }
         return out;
     }
 
-    // ---------- 审计（wf_task_history 等业务视图双写，只增不改） ----------
+    /** 任务对应单据键（bizType + bizId）。 */
+    private record BizKey(String type, Long id) { }
+
+    private BizKey bizKeyOf(Task t, Map<String, BizKey> bizByProc) {
+        if (t == null) {
+            return null;
+        }
+        BizKey byProc = bizByProc.get(t.getProcessInstanceId());
+        if (byProc != null) {
+            return byProc;
+        }
+        // 兜底：wf_instance 里查不到（历史脏数据 / 实例已归档）时，若任务恰好带着变量就用变量
+        Map<String, Object> pv = t.getProcessVariables();
+        String bizType = pv == null ? null : asString(pv.get("bizType"));
+        Long bizId = (pv != null && pv.get("bizId") instanceof Number n) ? n.longValue() : null;
+        return (bizType == null || bizId == null) ? null : new BizKey(bizType, bizId);
+    }
+
+    /**
+     * 按流程实例批量取单据键。一次 IN 查询代替"逐任务反序列化流程变量"。
+     *
+     * <p>等价性：全量比过 ACT_RU_TASK 与 {@code wf_instance}——每个在办任务对应的实例行都存在，
+     * {@code biz_type/biz_id} 与运行态变量 {@code bizType/bizId} 逐条一致。查不到的行不抛错、
+     * 不剔除（fail-open，与"无 bizType/bizId 就不参与终态剔除"同义）。
+     */
+    private Map<String, BizKey> bizKeyByProc(Collection<String> procs) {
+        Map<String, BizKey> out = new HashMap<>();
+        if (procs == null || procs.isEmpty()) {
+            return out;
+        }
+        List<String> ids = new ArrayList<>(procs);
+        for (int i = 0; i < ids.size(); i += 500) {
+            List<String> chunk = ids.subList(i, Math.min(i + 500, ids.size()));
+            try {
+                List<WfInstance> rows = wfInstanceMapper.selectList(
+                        new LambdaQueryWrapper<WfInstance>()
+                                .select(WfInstance::getProcInstId,
+                                        WfInstance::getBizType,
+                                        WfInstance::getBizId)
+                                .in(WfInstance::getProcInstId, chunk));
+                for (WfInstance inst : rows) {
+                    if (inst.getProcInstId() != null && inst.getBizType() != null && inst.getBizId() != null) {
+                        out.put(inst.getProcInstId(), new BizKey(inst.getBizType(), inst.getBizId()));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("wf_instance 批量取单据键失败（本批按无单据键放行）: {}", e.getMessage());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 给【当前页】任务补回运行态变量。
+     *
+     * <p>{@link #todo} 不再为全量在办加载变量，页面行仍需要 {@code title} 等展示字段；
+     * 这里按 taskId 批量查一次（待办页最多 200 行），语义与原 {@code includeProcessVariables}
+     * 逐字段同源。查询失败时原样返回（页面回退到 wf_instance / 历史变量兜底）。
+     */
+    public List<Task> withProcessVariables(List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return tasks;
+        }
+        List<String> ids = new ArrayList<>(tasks.size());
+        for (Task t : tasks) {
+            if (t != null && t.getId() != null) {
+                ids.add(t.getId());
+            }
+        }
+        if (ids.isEmpty()) {
+            return tasks;
+        }
+        Map<String, Task> loaded = new HashMap<>();
+        try {
+            // 身份链接一并取回：下游 poolLockedByOthers / candidateNames 需要候选组，否则会退化成逐行查库
+            for (Task t : taskService.createTaskQuery().taskIds(ids)
+                    .includeProcessVariables().includeIdentityLinks().list()) {
+                loaded.put(t.getId(), t);
+            }
+        } catch (Exception e) {
+            log.warn("待办当页变量补载失败（按无变量返回）: {}", e.getMessage());
+            return tasks;
+        }
+        List<Task> out = new ArrayList<>(tasks.size());
+        for (Task t : tasks) {
+            Task hit = t == null ? null : loaded.get(t.getId());
+            out.add(hit != null ? hit : t);
+        }
+        return out;
+    }
+
+    // 审计（wf_task_history 等业务视图双写，只增不改）
 
     /** 流程操作审计：落 wf_task_history（审计表，不提供删除） */
     private void writeHistory(String procInstId, String taskId, String nodeKey, String nodeName,
@@ -6296,7 +6455,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * G2 ①层「审批项」记录前缀（2026-09-24）：把自定义审批项名称（与关联表单操作）并入审批意见，
+     * 「审批项」记录前缀：把自定义审批项名称（与关联表单操作）并入审批意见，
      * 使时间线、批退原因统计与质量报表都能直接看到"这一票是什么结果"，而不必再去查配置表。
      *
      * <p><b>为什么不直接写进 {@code wf_task_history.action}</b>：该列 {@code varchar(20) NOT NULL}，
@@ -6315,7 +6474,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 供定时作业补记录（ROOT-3）：催办这类"系统替人敲的门"此前只自增 urged_count，
+     * 供定时作业补记录：催办这类"系统替人敲的门"若只自增 urged_count，
      * 时间线上完全看不出这一环节被催过几次、什么时候催的。
      */
     public void recordJobAction(String procInstId, String taskId, String nodeKey, String nodeName,
@@ -6339,12 +6498,12 @@ public class WfEngineFacade {
     private void writeHistory(String procInstId, String taskId, String nodeKey, String nodeName,
                               String action, Long operUserId, Long targetUserId, String comment) {
         try {
-            // G1（2026-09-24）取舍说明：wf_task_history 是审计记录，即使投影开关打开也<b>仍然写</b>
-            // （"节点历史"不能因架构切换而丢失，方案 §六 G1 要求过渡期双写并比对）。它与 wf_instance/wf_task
-            // 的处理刻意不同——后两者由监听器接管、门面停写；本表双写，只附加来源标记，便于 G0 对账器
+            // 取舍说明：wf_task_history 是审计记录，即使投影开关打开也<b>仍然写</b>
+            // （"节点历史"不能因架构切换而丢失，过渡期必须双写并比对）。它与 wf_instance/wf_task
+            // 的处理刻意不同——后两者由监听器接管、门面停写；本表双写，只附加来源标记，便于对账器
             // 与人工排查区分"门面双写行"与"监听器投影行"。
             String effectiveComment = mirrorByFacade() ? comment : markDualWrite(comment);
-            com.fssc.workflow.entity.WfTaskHistory h = new com.fssc.workflow.entity.WfTaskHistory();
+            WfTaskHistory h = new WfTaskHistory();
             h.setTenantId(TenantContext.getTenantId());
             h.setProcInstId(procInstId);
             h.setTaskId(taskId);
@@ -6354,9 +6513,9 @@ public class WfEngineFacade {
             h.setOperUserId(operUserId);
             h.setTargetUserId(targetUserId);
             h.setComment(effectiveComment);
-            h.setOperTime(java.time.LocalDateTime.now());
+            h.setOperTime(LocalDateTime.now());
             // biz_type/biz_id 为 NOT NULL：优先从 wf_instance 视图取（流程变量被引擎清理后取不到）
-            com.fssc.workflow.entity.WfInstance inst = null;
+            WfInstance inst = null;
             try {
                 inst = wfQueryService.instanceByProcInstId(procInstId);
             } catch (Exception ignore) {
@@ -6369,21 +6528,21 @@ public class WfEngineFacade {
                 h.setBizType("UNKNOWN");
                 h.setBizId(0L);
             }
-            // D-DEC-280：记录姓名只认操作人本人。此前无条件取登录态 ⇒ 系统代做的动作（空策略 SKIP/ESCALATE、
-            // 超时升级、作废、最终状态收尾）在记录里挂着"当时恰好点按钮的那个人"：oper_user_id 为空而姓名却有人，
-            // 事后既分不清系统放行与人工放行，也会把升级目标之外的无辜办理人写成升级人。
-            // operUserId 为空即保持为空，与作废记录（D-DEC-275）"id/姓名一律留空"同一规则。
+            // 记录姓名只认操作人本人。无条件取登录态的话，系统代做的动作（空策略 SKIP/ESCALATE、
+            // 超时升级、作废、最终状态收尾）会在记录里挂上"当时恰好点按钮的那个人"：oper_user_id 为空
+            // 而姓名却有人，事后既分不清系统放行与人工放行，也会把无关的办理人写成升级人。
+            // operUserId 为空即保持为空，与作废记录"id/姓名一律留空"同一规则。
             h.setOperUserName(operUserName(operUserId));
-            // ROOT-3：duration 列建表以来一直为空 ⇒ 时间线算不出「本环节压了多久」，
-            // 超时/瓶颈分析全靠人肉比时间戳。按 wf_task 创建时刻补齐。
+            // duration 列若一直为空，时间线就算不出「本环节压了多久」，超时/瓶颈分析只能靠人肉
+            // 比时间戳。这里按 wf_task 创建时刻补齐。
             if (taskId != null) {
                 h.setDuration(taskElapsedMinutes(taskId));
             }
             wfQueryService.recordHistory(h);
         } catch (Exception ex) {
-            // G0 止血（方案 §二 F2）：wf_task_history 是审批历史的唯一业务视图，此前"审计失败不影响
-            // 主流程"的规则让它成了静默漂移源（F13：294 行 vs act_hi_taskinst 211 行，差的就是被吞掉的那些）。
-            // 现改为记缺陷 + 冒泡：调用方（PROCESS_COMPLETED 监听器 / complete / start）必须看见。
+            // wf_task_history 是审批历史的唯一业务视图。按"审计失败不影响主流程"放过去，它就成了
+            // 静默漂移源——行数比 act_hi_taskinst 少的那部分，正是被吞掉的这些。
+            // 所以记缺陷并冒泡：调用方（PROCESS_COMPLETED 监听器 / complete / start）必须看见。
             mirrorDefectRecorder.record(WfMirrorDefectRecorder.CODE_MIRROR_WRITE_FAILED, "writeHistory",
                     null, "procInstId=" + procInstId + " action=" + action + " taskId=" + taskId, ex);
             if (ex instanceof RuntimeException re) {
@@ -6394,21 +6553,21 @@ public class WfEngineFacade {
     }
 
     /**
-     * 记录操作人姓名（D-DEC-280）：只按 {@code operUserId} 取值——与登录态同源才复用其姓名，
+     * 记录操作人姓名：只按 {@code operUserId} 取值——与登录态同源才复用其姓名，
      * 否则按 id 反查；{@code operUserId} 为空（系统代做的动作）返回 null，绝不借用登录态。
      */
     private String operUserName(Long operUserId) {
         if (operUserId == null) {
             return null;
         }
-        com.fssc.framework.security.LoginUser u = com.fssc.framework.security.UserContext.get();
+        LoginUser u = UserContext.get();
         if (u != null && operUserId.equals(u.getUserId())) {
-            // D-DEC-161：记录列此前只取 username（登录名＝工号），审批链上显示一串工号读不出是谁；
-            // 改真名优先、登录名默认处理（与 K5-C 备案规则一致）。
+            // 记录列不能只取 username（登录名＝工号）——审批链上显示一串工号读不出是谁；
+            // 按真名优先、登录名兜底。
             return u.getRealName() != null && !u.getRealName().isBlank() ? u.getRealName() : u.getUsername();
         }
         try {
-            com.fssc.system.entity.SysUser su = sysUserMapper.selectById(operUserId);
+            SysUser su = sysUserMapper.selectById(operUserId);
             if (su == null) {
                 return null;
             }
@@ -6422,12 +6581,20 @@ public class WfEngineFacade {
     /** 本环节办理耗时（分钟）＝待办镜像行创建时刻 → 现在；任务行已被引擎清理时返回 null。 */
     private Long taskElapsedMinutes(String taskId) {
         try {
-            List<java.time.LocalDateTime> ts = new JdbcTemplate(dataSource).queryForList(
-                    "SELECT create_time FROM wf_task WHERE task_id = ?", java.time.LocalDateTime.class, taskId);
+            // wf_task 的唯一键是 (tenant_id, task_id)：不带租户的裸 SQL 用不上它，EXPLAIN 是
+            // ALL / 160 万行（418 ms/次，每次办结都走一次）。补租户后走常量查找；取不到租户
+            // （作业线程）时保持原写法，宁可慢也不漏行。
+            Long tenantId = TenantContext.getTenantId();
+            List<LocalDateTime> ts = tenantId == null
+                    ? new JdbcTemplate(dataSource).queryForList(
+                            "SELECT create_time FROM wf_task WHERE task_id = ?", LocalDateTime.class, taskId)
+                    : new JdbcTemplate(dataSource).queryForList(
+                            "SELECT create_time FROM wf_task WHERE tenant_id = ? AND task_id = ?",
+                            LocalDateTime.class, tenantId, taskId);
             if (ts.isEmpty() || ts.get(0) == null) {
                 return null;
             }
-            return java.time.Duration.between(ts.get(0), java.time.LocalDateTime.now()).toMinutes();
+            return Duration.between(ts.get(0), LocalDateTime.now()).toMinutes();
         } catch (Exception ex) {
             log.warn("办理耗时取数失败 taskId={}: {}", taskId, ex.getMessage());
             return null;
@@ -6435,8 +6602,8 @@ public class WfEngineFacade {
     }
 
     /**
-     * 发起时解析业务单据号（整改 DEV-008）。
-     * 表/列取自 {@link BillRouteRegistry}（批次3 R3-B 起三处合一：这里、待办回填、COMPANY 取人）。
+     * 发起时解析业务单据号。
+     * 表/列取自 {@link BillRouteRegistry}（发起、待办回填、COMPANY 取人三处共用这一份真值）。
      * 解析失败不阻断发起（记 warn 返回 null），与"单号保持空属预期"的类型（TR_BANK_MASTER/TR_SEAL_CHANGE）兼容。
      */
     private String resolveBizNo(String bizType, Long bizId) {
@@ -6459,14 +6626,14 @@ public class WfEngineFacade {
     }
 
     /**
-     * 批次3 R3-C（D-B3-03）：按实例补解析业务单据号，<b>去重</b>，一次只作用一个实例。
+     * 按实例补解析业务单据号，<b>去重</b>，一次只作用一个实例。
      *
-     * <p>为什么需要：{@link #resolveBizNo} 只在发起那一瞬间跑一次，解析失败被吞成 warn 返回 null
-     * （不阻断发起是刻意取舍）。于是"发起时单号还没写好"／"当时路由表缺这一行"的实例会永久停在
-     * {@code biz_no = NULL}——列表页单号列空白，且 {@code wf_task} 上的同名冗余列一起空。
-     * 此前只能手写 UPDATE 改库治这类行；这里给出与发起<b>同一规则</b>（同一个 resolveBizNo）的补救入口。</p>
+     * <p>{@link #resolveBizNo} 只在发起那一瞬间跑一次，解析失败吞成 warn 返回 null、不阻断发起是
+     * 刻意取舍。于是"发起时单号还没写好"／"当时路由表缺这一行"的实例会永久停在
+     * {@code biz_no = NULL}——列表页单号列空白，{@code wf_task} 上的同名冗余列一起空。
+     * 这个入口用与发起<b>同一规则</b>（同一个 resolveBizNo）补救，不必再手写 UPDATE 改库。</p>
      *
-     * <p>刻意不做的两件事：①不批量回填历史 32 条 NULL（V1.4.37 备而未执行，属裁决项）；
+     * <p>刻意不做的两件事：①不批量回填历史 NULL 行（备而未执行）；
      * ②不把已有单号刷成 null——解析不到即返回 0，原值不动。返回 0 的每条路径都落日志说明原因。</p>
      *
      * @param instanceId {@code wf_instance.id}（不是 procInstId）
@@ -6520,7 +6687,7 @@ public class WfEngineFacade {
         }
         int taskRows = 0;
         if (procInstId != null) {
-            // wf_task.biz_no 是发起时从实例复制的冗余列（:1634），实例补好了任务侧不会自动跟上
+            // wf_task.biz_no 是发起时从实例复制的冗余列，实例补好了任务侧不会自动跟上
             taskRows = jdbc.update("UPDATE wf_task SET biz_no = ? WHERE proc_inst_id = ? AND tenant_id = ?"
                     + " AND (biz_no IS NULL OR biz_no <> ?)", resolved, procInstId, instanceTenant, resolved);
         }
@@ -6534,11 +6701,9 @@ public class WfEngineFacade {
     }
 
     /**
-     * 批次3 R3-B（D-B3-02 办结）：此处原先挂着两份手写路由真值——{@code BIZ_NO_TABLES}
-     * （bizType -> [表, 单号列]，60 行）与 {@code EXP_BILL_TYPES}（11 项费用类型），与
-     * {@code WfTaskController.fillBillInfoBatch} 的 50 多行 fillBySql、{@code NodeOrgResolver.companyTable}
-     * 的 117 行 switch 各写一遍同一件事；批次3 round 1 实测到的三处漂移（RECEIVABLE_COLLECT / FA_CER /
-     * FA_DEPRECIATION 三处规则不一致）正是这种重复的必然结果。三处已合一为 {@link BillRouteRegistry}，
+     * 路由真值（bizType → [表, 单号列]）只应有一份：{@code WfTaskController.fillBillInfoBatch}、
+     * {@code NodeOrgResolver.companyTable} 各写一遍同一件事，三份迟早会漂成三种规则，
+     * 所以统一到 {@link BillRouteRegistry}，
      */
 
 }

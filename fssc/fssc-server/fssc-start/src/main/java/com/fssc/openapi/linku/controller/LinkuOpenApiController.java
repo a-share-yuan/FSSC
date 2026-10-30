@@ -5,12 +5,15 @@ package com.fssc.openapi.linku.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
 import com.fssc.openapi.linku.LinkuOpenGuard;
 import com.fssc.openapi.linku.LinkuOpenProperties;
 import com.fssc.openapi.linku.service.LinkuOpenQueryService;
 import com.fssc.openapi.linku.service.LinkuOpenSyncService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.InputStream;
+import java.util.HashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -54,7 +57,7 @@ public class LinkuOpenApiController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // ==================== 查询（F-2） ====================
+    // 查询
 
     @GetMapping("/query/payables")
     public Result<Object> payables(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -114,7 +117,7 @@ public class LinkuOpenApiController {
     }
 
     /**
-     * AR 销售订单环节（P0-C《AR 三单匹配改造》）。候选表 {@code so_order} 缺失时返回空并告警
+     * AR 销售订单环节（三单匹配改造的一腿）。候选表 {@code so_order} 缺失时返回空并告警
      * —— 数据源未就绪，BCP 侧 AR 匹配缺订单环节不自动通过，不回退采购订单。
      */
     @GetMapping("/query/sales-orders")
@@ -125,7 +128,7 @@ public class LinkuOpenApiController {
                         str(p.get("period")), intOf(p.get("limit"))));
     }
 
-    /** AR 销售出库发货环节（P0-C）。候选表 {@code so_shipment} 缺失时返回空并告警。 */
+    /** AR 销售出库发货环节。候选表 {@code so_shipment} 缺失时返回空并告警。 */
     @GetMapping("/query/sale-shipments")
     public Result<Object> saleShipments(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         Map<String, Object> p = params(req);
@@ -151,7 +154,7 @@ public class LinkuOpenApiController {
                 () -> queryService.periodStatus(tenant(p), longOf(p.get("companyId")), str(p.get("period"))));
     }
 
-    // ==================== 写入（F-3 / F-7） ====================
+    // 写入
 
     /** 对账结果回写（AP → supplier_recon 三表；AR → ar_recon_record）。 */
     @PostMapping("/sync/recon")
@@ -216,11 +219,11 @@ public class LinkuOpenApiController {
         return guard.guard(req, resp, raw, "PAYMENT_STATUS_SYNC", () -> syncService.syncPaymentStatus(parse(raw)));
     }
 
-    // ==================== 工具 ====================
+    // 工具
 
     /** 读取原始请求体（保证参与签名的原文不被框架二次解析改动）。 */
     private String readBody(HttpServletRequest req) throws IOException {
-        try (java.io.InputStream in = req.getInputStream()) {
+        try (InputStream in = req.getInputStream()) {
             byte[] buf = in.readAllBytes();
             return buf == null || buf.length == 0 ? "" : new String(buf, StandardCharsets.UTF_8);
         }
@@ -234,12 +237,12 @@ public class LinkuOpenApiController {
         try {
             return objectMapper.readValue(raw, Map.class);
         } catch (Exception e) {
-            throw new com.fssc.common.exception.BizException(400, "请求体不是合法 JSON：" + e.getMessage());
+            throw new BizException(400, "请求体不是合法 JSON：" + e.getMessage());
         }
     }
 
     private Map<String, Object> params(HttpServletRequest req) {
-        Map<String, Object> m = new java.util.HashMap<>();
+        Map<String, Object> m = new HashMap<>();
         req.getParameterMap().forEach((k, v) -> {
             if (v != null && v.length > 0) {
                 m.put(k, v[0]);
