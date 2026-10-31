@@ -384,6 +384,12 @@ public class WfDesignerController {
         if (modelKey == null || modelKey.isBlank() || bpmnXml == null || bpmnXml.isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "模型编码与BPMN必填");
         }
+        // 只判空会放进来一份"永远校验不过、也发布不了"的草稿模型（人工测试反馈：校验/模拟/发布三处全卡在同一份坏 XML 上）
+        WfBpmnChecker.Report parsed = bpmnChecker.check(bpmnXml);
+        if (parsed.parseFailed) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    parsed.errors.isEmpty() ? "BPMN 文件无法解析，请改用系统导出的 .bpmn20.xml 再导入" : parsed.errors.get(0));
+        }
         long dup = modelMapper.selectCount(new LambdaQueryWrapper<WfModel>().eq(WfModel::getModelKey, modelKey));
         if (dup > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "模型编码已存在: " + modelKey);
