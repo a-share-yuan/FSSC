@@ -55,6 +55,8 @@ public class WfBpmnChecker {
 
     public static class Report {
         public final List<String> errors = new ArrayList<>();
+        /** 连解析都没过＝其余设计项无从谈起。导入/保存前的硬闸只认这一枚（其余 errors 属设计缺陷，允许留草稿）。 */
+        public boolean parseFailed;
         public final List<String> warnings = new ArrayList<>();
         /** 参与人引用了哪些角色（含停用/不存在），供批量改绑与影响面统计复用 */
         public final Set<String> roleRefs = new LinkedHashSet<>();
@@ -117,7 +119,12 @@ public class WfBpmnChecker {
             }
             return (Element) ps.item(0);
         } catch (Exception e) {
-            r.errors.add("BPMN 解析失败: " + e.getMessage());
+            // 把解析器原文（如「前言中不允许有内容」）抛给业务人员：那是 XML 层术语，看不出该干什么。
+            // 原文降级进日志备查，界面上给可执行结论。
+            log.warn("BPMN XML 解析失败，解析器原文：{}", e.getMessage());
+            r.parseFailed = true;
+            r.errors.add("流程图内容不是有效的 BPMN XML（常见原因：文件被截断、开头多了非 XML 内容，或选错了文件）。"
+                    + "请在「流程图」页签重新设计并保存，或改用系统导出的 .bpmn20.xml 再导入。");
             return null;
         }
     }
