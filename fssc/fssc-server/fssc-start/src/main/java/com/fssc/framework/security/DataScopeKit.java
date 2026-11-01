@@ -58,9 +58,7 @@ public final class DataScopeKit {
             return; // 本租户全部：不加条件
         }
         if (scope == DataScope.COMPANY.getCode()) {
-            if (companyCol != null && s.getCompanyId() != null) {
-                qw.eq(companyCol, s.getCompanyId());
-            }
+            companyEq(qw, companyCol, s.getCompanyId());
             return;
         }
         if (scope == DataScope.DEPT_AND_CHILD.getCode() || scope == DataScope.DEPT.getCode()) {
@@ -70,17 +68,80 @@ public final class DataScopeKit {
                 qw.in(deptCol, child);
             } else if (deptCol != null && s.getDeptId() != null) {
                 qw.eq(deptCol, s.getDeptId());
-            } else if (companyCol != null && s.getCompanyId() != null) {
-                qw.eq(companyCol, s.getCompanyId()); // 无部门信息降级本公司
+            } else {
+                companyEq(qw, companyCol, s.getCompanyId()); // 无部门信息降级本公司
             }
             return;
         }
         if (scope == DataScope.SELF.getCode()) {
             if (ownerCol != null && s.getUserId() != null) {
                 qw.eq(ownerCol, s.getUserId());
-            } else if (companyCol != null && s.getCompanyId() != null) {
-                qw.eq(companyCol, s.getCompanyId()); // 无本人列降级本公司
+            } else {
+                companyEq(qw, companyCol, s.getCompanyId()); // 无本人列降级本公司
             }
+        }
+    }
+
+    /**
+     * {@link #apply} 的「租户共用行可见」变体——专用于 {@code company_id IS NULL} 表示
+     * "租户级共用主数据"的表（md_subject；见其 {@code uk_tenant_subject} 规则与实体注释）。
+     *
+     * <p>与 {@link #apply} 唯一的差别：凡落到公司条件处都写成
+     * {@code (company_id = 登录人公司 OR company_id IS NULL)}。否则调用方先构造的
+     * 「本公司 ∪ 共用」并集会被这里追加的裸 {@code company_id = C} 收回——10-31 实测
+     * 会计科目树因此缺掉 2202/2221/6001/6401/6602 等共用父级，子级行挂在树上没有落点。</p>
+     *
+     * <p>不放开跨公司：仍按登录人公司取等值，只额外放行 company_id 为空的共用行。</p>
+     */
+    public static <T> void applyWithNullCompany(LambdaQueryWrapper<T> qw,
+                                                SFunction<T, ?> companyCol,
+                                                SFunction<T, ?> deptCol,
+                                                SFunction<T, ?> ownerCol) {
+        DataScopeHolder.Scope s = DataScopeHolder.get();
+        if (s == null) {
+            return; // 非 @DataScope 方法：不干预
+        }
+        int scope = s.getScope();
+        if (scope <= DataScope.TENANT.getCode()) {
+            return; // 本租户全部：不加条件
+        }
+        if (scope == DataScope.COMPANY.getCode()) {
+            companyOrEmpty(qw, companyCol, s.getCompanyId());
+            return;
+        }
+        if (scope == DataScope.DEPT_AND_CHILD.getCode() || scope == DataScope.DEPT.getCode()) {
+            Set<Long> child = s.getDeptAndChild();
+            if (deptCol != null && s.getDeptId() != null
+                    && scope == DataScope.DEPT_AND_CHILD.getCode() && child != null && !child.isEmpty()) {
+                qw.in(deptCol, child);
+            } else if (deptCol != null && s.getDeptId() != null) {
+                qw.eq(deptCol, s.getDeptId());
+            } else {
+                companyOrEmpty(qw, companyCol, s.getCompanyId()); // 无部门信息降级本公司
+            }
+            return;
+        }
+        if (scope == DataScope.SELF.getCode()) {
+            if (ownerCol != null && s.getUserId() != null) {
+                qw.eq(ownerCol, s.getUserId());
+            } else {
+                companyOrEmpty(qw, companyCol, s.getCompanyId()); // 无本人列降级本公司
+            }
+            return;
+        }
+    }
+
+    /** 公司谓词写法一：{@code company_id = C}（默认，严格公司隔离）。 */
+    private static <T> void companyEq(LambdaQueryWrapper<T> qw, SFunction<T, ?> companyCol, Long companyId) {
+        if (companyCol != null && companyId != null) {
+            qw.eq(companyCol, companyId);
+        }
+    }
+
+    /** 公司谓词写法二：{@code (company_id = C OR company_id IS NULL)}——放行租户共用行。 */
+    private static <T> void companyOrEmpty(LambdaQueryWrapper<T> qw, SFunction<T, ?> companyCol, Long companyId) {
+        if (companyCol != null && companyId != null) {
+            qw.and(w -> w.eq(companyCol, companyId).or().isNull(companyCol));
         }
     }
 

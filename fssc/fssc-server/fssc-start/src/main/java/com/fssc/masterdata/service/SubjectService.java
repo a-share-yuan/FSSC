@@ -68,7 +68,7 @@ public class SubjectService {
             qw.and(w -> w.like(MdSubject::getSubjectName, keyword).or().like(MdSubject::getSubjectCode, keyword));
         }
         applyCompanyDimension(qw, companyId);
-        DataScopeKit.apply(qw, MdSubject::getCompanyId, null, null);
+        DataScopeKit.applyWithNullCompany(qw, MdSubject::getCompanyId, null, null);
         qw.orderByDesc(MdSubject::getId);
         Page<MdSubject> p = mapper.selectPage(Page.of(pageNum, pageSize), qw);
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
@@ -125,7 +125,7 @@ public class SubjectService {
     private LambdaQueryWrapper<MdSubject> newCompanyScoped(Long companyId) {
         LambdaQueryWrapper<MdSubject> qw = new LambdaQueryWrapper<>();
         applyCompanyDimension(qw, companyId);
-        DataScopeKit.apply(qw, MdSubject::getCompanyId, null, null);
+        DataScopeKit.applyWithNullCompany(qw, MdSubject::getCompanyId, null, null);
         return qw.orderByAsc(MdSubject::getSubjectCode).orderByAsc(MdSubject::getSubjectLevel);
     }
 
@@ -154,7 +154,7 @@ public class SubjectService {
             String k = keyword.trim();
             qw.and(w -> w.like(MdSubject::getSubjectCode, k).or().like(MdSubject::getSubjectName, k));
         }
-        DataScopeKit.apply(qw, MdSubject::getCompanyId, null, null);
+        DataScopeKit.applyWithNullCompany(qw, MdSubject::getCompanyId, null, null);
         qw.orderByAsc(MdSubject::getSubjectCode);
         return mapper.selectList(qw.last("LIMIT 300"));
     }

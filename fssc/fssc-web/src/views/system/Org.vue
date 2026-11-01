@@ -439,7 +439,7 @@ function exportCsv() {
 .left-panel { border-right: 1px solid #e4e7ed; padding-right: 12px; min-height: 500px; }
 .right-panel { padding-left: 4px; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.panel-title { font-size: 15px; font-weight: 600; color: #303133; }
+.panel-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
 .dept-section { margin-bottom: 24px; }
 .post-section { border-top: 1px solid #e4e7ed; padding-top: 16px; }
 .tree-node { display: flex; justify-content: space-between; align-items: center; width: 100%; padding-right: 12px; }

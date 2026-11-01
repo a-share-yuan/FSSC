@@ -65,7 +65,7 @@ defineExpose({ refresh: fetchCounts })
   display: flex; align-items: center; gap: 4px;
 }
 .badge-btn {
-  padding: 6px 8px; color: #606266;
+  padding: 6px 8px; color: var(--app-text-secondary, #606266);
 }
 .badge-btn:hover { color: #409eff; }
 .badge-wrap { margin: 0 2px; }

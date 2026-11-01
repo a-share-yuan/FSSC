@@ -698,7 +698,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => wb.value?.show(),
   gap: 10px;
   padding: 12px;
   border-radius: 8px;
-  background: #fff;
+  background: var(--app-card-bg, #fff);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: box-shadow 0.2s, transform 0.2s;
@@ -717,8 +717,8 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => wb.value?.show(),
   color: #fff;
   flex-shrink: 0;
 }
-.biz-title { font-size: 14px; font-weight: 600; color: #303133; }
-.biz-desc { font-size: 12px; color: #909399; margin-top: 2px; }
+.biz-title { font-size: 14px; font-weight: 600; color: var(--app-text, #303133); }
+.biz-desc { font-size: 12px; color: var(--app-text-secondary, #909399); margin-top: 2px; }
 @media (max-width: 1400px) {
   .biz-entries { grid-template-columns: repeat(4, 1fr); }
 }

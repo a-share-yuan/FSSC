@@ -107,11 +107,11 @@ const filteredFaqs = computed(() => {
 .help-content { padding: 0 4px; }
 .section-title { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; margin-bottom: 10px; }
 .context-help { margin-bottom: 8px; }
-.help-text { font-size: 13px; color: #606266; line-height: 1.6; margin-bottom: 8px; }
-.help-tips { background: #ecf5ff; border-radius: 6px; padding: 8px; }
+.help-text { font-size: 13px; color: var(--app-text-secondary, #606266); line-height: 1.6; margin-bottom: 8px; }
+.help-tips { background: rgba(64, 158, 255, 0.12); border-radius: 6px; padding: 8px; }
 .tip-item { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; color: #409eff; margin-bottom: 4px; }
 .tip-icon { margin-top: 2px; flex-shrink: 0; }
 .faq-q { font-size: 13px; font-weight: 500; }
-.faq-a { font-size: 12px; color: #606266; line-height: 1.6; }
+.faq-a { font-size: 12px; color: var(--app-text-secondary, #606266); line-height: 1.6; }
 .quick-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 </style>

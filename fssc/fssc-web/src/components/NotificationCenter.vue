@@ -175,13 +175,13 @@ onBeforeUnmount(() => clearInterval(unreadTimer))
   padding: 10px; border-bottom: 1px solid #f5f5f5; cursor: pointer;
   transition: background 0.15s;
 }
-.notify-item:hover { background: #f5f7fa; }
-.notify-item.unread { background: #ecf5ff; }
+.notify-item:hover { background: var(--app-bg, #f5f7fa); }
+.notify-item.unread { background: rgba(64, 158, 255, 0.12); }
 .notify-item-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 4px;
 }
 .notify-time { font-size: 12px; color: #909399; }
-.notify-content { font-size: 13px; color: #303133; line-height: 1.5; }
+.notify-content { font-size: 13px; color: var(--app-text, #303133); line-height: 1.5; }
 .notify-link { font-size: 12px; color: #409eff; margin-top: 4px; }
 </style>

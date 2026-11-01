@@ -389,23 +389,18 @@ function filterNode(value, data) {
 
 watch(filterText, (v) => { treeRef.value?.filter(v) })
 
+function forEachTreeNode(cb) {
+  const map = treeRef.value?.store?.nodesMap || {}
+  Object.keys(map).forEach((k) => cb(map[k]))
+}
+
 function expandAll() {
-  const arr = [...treeData.value]
-  const set = new Set()
-  const walk = (nodes) => nodes.forEach(n => { set.add(n.id); if (n.children) walk(n.children) })
-  walk(arr)
-  treeRef.value?.setExpandedKeys([...set])
+  forEachTreeNode((node) => { if (!node.isLeaf) node.expand(null, false) })
 }
 
 function collapseAll() {
-  // el-tree 没有直接 collapseAll，遍历关闭
-  const collapse = (nodes) => {
-    nodes.forEach(n => {
-      if (n.id) treeRef.value?.setExpanded(n.id, false)
-      if (n.children) collapse(n.children)
-    })
-  }
-  collapse(treeData.value)
+  // el-tree 无 collapseAll：逐节点走 Node.collapse()（父折叠不影响子节点自身状态，故须全量遍历）
+  forEachTreeNode((node) => { if (!node.isLeaf) node.collapse() })
 }
 
 onMounted(async () => {

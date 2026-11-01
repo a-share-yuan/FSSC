@@ -294,16 +294,16 @@ onMounted(() => { load(); loadOptions() })
 .wf-eac-page { min-height: 100%; }
 .eac-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .eac-title-wrap { display: flex; flex-direction: column; gap: 4px; }
-.eac-title { font-size: 15px; font-weight: 600; color: #303133; }
+.eac-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
 .eac-sub { font-size: 12px; color: #909399; }
 .eac-tools { display: flex; align-items: center; gap: 8px; flex: none; }
 .eac-alert { margin-bottom: 10px; }
 .eac-filter { margin-bottom: 4px; }
-.eac-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 12px; color: #606266; margin: 0 0 8px; }
+.eac-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 12px; color: var(--app-text-secondary, #606266); margin: 0 0 8px; }
 .eac-tip { color: #909399; }
 .eac-code { font-size: 11px; color: #a8abb2; line-height: 16px; }
 .eac-code-inline { font-size: 11px; color: #909399; }
-.eac-readonly { color: #303133; }
+.eac-readonly { color: var(--app-text, #303133); }
 .eac-hint { font-size: 12px; color: #909399; line-height: 18px; margin-top: 2px; }
 .eac-chain { display: inline-block; margin-right: 4px; }
 </style>

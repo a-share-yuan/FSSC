@@ -265,11 +265,11 @@ onMounted(() => { loadedTabs.add('query'); load(); searchInstances('') })
 </script>
 
 <style scoped>
-.header-title { font-size: 15px; font-weight: 600; color: #303133; margin-right: 10px; }
+.header-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); margin-right: 10px; }
 .header-note { font-size: 12px; color: #909399; }
 .hint { margin-left: 8px; font-size: 12px; color: #909399; }
 .tl-title { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
 .tl-node { font-size: 12px; color: #909399; }
-.tl-content { color: #606266; font-size: 13px; }
-.detail-pre { max-height: 460px; overflow: auto; background: #f5f7fa; padding: 12px; border-radius: 4px; font-size: 12px; }
+.tl-content { color: var(--app-text-secondary, #606266); font-size: 13px; }
+.detail-pre { max-height: 460px; overflow: auto; background: var(--app-bg, #f5f7fa); padding: 12px; border-radius: 4px; font-size: 12px; }
 </style>

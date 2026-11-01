@@ -319,11 +319,11 @@ onMounted(() => { fetchData() })
 <style scoped>
 .role-dashboard { padding: 16px; }
 .role-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.role-label { font-size: 14px; color: #606266; }
+.role-label { font-size: 14px; color: var(--app-text-secondary, #606266); }
 .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
 .kpi-card {
   display: flex; align-items: center; gap: 12px;
-  background: #fff; border-radius: 10px; padding: 16px;
+  background: var(--app-card-bg, #fff); border-radius: 10px; padding: 16px;
   border-left: 4px solid #dcdfe6;
 }
 .kpi-card.blue { border-color: #409eff; }
@@ -334,17 +334,17 @@ onMounted(() => { fetchData() })
 .kpi-val { font-size: 22px; font-weight: 700; }
 .kpi-label { font-size: 12px; color: #909399; }
 .widget-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-.kpi-scope { margin-bottom: 8px; font-size: 12px; color: #606266; }
+.kpi-scope { margin-bottom: 8px; font-size: 12px; color: var(--app-text-secondary, #606266); }
 .role-scope-note { font-size: 12px; color: #e6a23c; }
 .kpi-note { margin: -8px 0 16px; font-size: 12px; color: #909399; line-height: 1.5; }
-.widget-card { background: #fff; border-radius: 10px; padding: 16px; border: 1px solid #ebeef5; }
+.widget-card { background: var(--app-card-bg, #fff); border-radius: 10px; padding: 16px; border: 1px solid var(--app-border, #ebeef5); }
 .widget-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
 .task-list, .alert-list { display: flex; flex-direction: column; gap: 8px; }
 .task-item, .alert-item {
   display: flex; align-items: center; gap: 8px; font-size: 13px;
   padding: 6px 8px; border-radius: 6px; cursor: pointer;
 }
-.task-item:hover { background: #f5f7fa; }
+.task-item:hover { background: var(--app-hover, #f5f7fa); }
 .task-no { flex: 1; }
 .task-time { font-size: 12px; color: #909399; }
 .alert-stay { color: #f56c6c; font-weight: 600; }
@@ -355,5 +355,5 @@ onMounted(() => { fetchData() })
 .text-blue { color: #409eff; }
 .text-red { color: #f56c6c; }
 .month-end { display: flex; align-items: center; gap: 12px; }
-.month-text { font-size: 13px; color: #606266; }
+.month-text { font-size: 13px; color: var(--app-text-secondary, #606266); }
 </style>

@@ -43,6 +43,7 @@ import * as echarts from 'echarts/core'
 import { PieChart, BarChart, LineChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { initThemedChart, onThemeChange } from '../../utils/echartsTheme'
 import { ElMessage } from 'element-plus'
 import { dashApi, store } from '../../api'
 import { hasPerm } from '../../utils/perm'
@@ -182,10 +183,13 @@ const dark = { text: '#e5eaf3', line: '#3a4b63' }
 const light = { text: '#333', line: '#e4e7ed' }
 const palette = ['#409eff', '#67c23a', '#f56c6c', '#e6a23c', '#909399', '#9b59b6']
 
-function theme() { return isFullscreen.value ? dark : light }
+function theme() {
+  // 大屏固定暗色；普通模式在系统深色主题下也走暗色配色，否则深底上会压着浅色主题的深灰字
+  return (isFullscreen.value || document.documentElement.classList.contains('dark')) ? dark : light
+}
 
 function initChart(el) {
-  const c = echarts.init(el)
+  const c = initThemedChart(el)
   charts.push(c)
   return c
 }
@@ -364,17 +368,24 @@ async function renderAll() {
   }
 }
 
+let offTheme = null
 onMounted(() => {
   renderAll()
   document.addEventListener('fullscreenchange', onFsChange)
   mq.addEventListener('change', resize)
   window.addEventListener('resize', resize)
+  offTheme = onThemeChange(() => {
+    charts.forEach((c) => c.dispose())
+    charts.length = 0
+    nextTick(renderAll)
+  })
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', onFsChange)
   mq.removeEventListener('change', resize)
   window.removeEventListener('resize', resize)
+  offTheme && offTheme()
   charts.forEach((c) => c.dispose())
 })
 </script>

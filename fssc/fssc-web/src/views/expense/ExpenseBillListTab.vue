@@ -73,7 +73,7 @@
   <!-- 员工借款余额台账 -->
   <el-dialog v-model="loanLedgerDialog" :title="$t('expense.ledger.titleLoanLedger')" width="780px">
     <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px">
-      <span style="font-size: 13px; color: #606266">{{ $t('expense.ledger.btnOverdueOnly') }}</span>
+      <span style="font-size: 13px; color: var(--app-text-secondary, #606266)">{{ $t('expense.ledger.btnOverdueOnly') }}</span>
       <el-switch v-model="onlyOverdue" @change="loadLoanLedger" />
     </div>
     <SkeletonList v-if="loanLedgerLoading" :rows="8" :cols="5" />
@@ -476,5 +476,5 @@ function onMoreCommand(row, cmd) {
 
 <style scoped>
 :deep(.loan-overdue-row) { color: #f56c6c; }
-:deep(.loan-overdue-row) td.el-table__cell { background-color: #fef0f0 !important; }
+:deep(.loan-overdue-row) td.el-table__cell { background-color: rgba(245, 108, 108, 0.13) !important; }
 </style>

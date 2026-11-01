@@ -112,7 +112,7 @@
           <el-button type="primary" @click="addCostRow">新增归集</el-button>
         </el-form-item>
       </el-form>
-      <div style="margin-bottom:10px; color:#606266">累计归集：<b style="font-family:monospace; color:#409EFF">{{ fmt(costCip ? costCip.accruedAmount : 0) }}</b></div>
+      <div style="margin-bottom:10px; color: var(--app-text-secondary, #606266)">累计归集：<b style="font-family:monospace; color:#409EFF">{{ fmt(costCip ? costCip.accruedAmount : 0) }}</b></div>
       <el-table :data="costRows" size="small" border stripe empty-text="暂无归集明细">
         <el-table-column prop="costType" label="类型" width="110">
           <template #default="{ row }">{{ costTypeLabel(row.costType) }}</template>

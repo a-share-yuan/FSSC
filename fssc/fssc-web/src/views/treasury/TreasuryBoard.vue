@@ -970,7 +970,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => treasuryCm.value?
 <style scoped>
 .pager { margin-top: 10px; justify-content: flex-end; }
 .tf-leg-note { color: #e6a23c; font-size: 12px; }
-.tf-exec-state { font-size: 12px; color: #606266; margin-top: 2px; line-height: 1.4; }
+.tf-exec-state { font-size: 12px; color: var(--app-text-secondary, #606266); margin-top: 2px; line-height: 1.4; }
 .tf-exec-state.tf-exec-wait { color: #e6a23c; font-weight: 600; }
 .tf-journal { font-size: 11px; color: #909399; line-height: 1.4; }
 .pos-card {
@@ -979,9 +979,9 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => treasuryCm.value?
   border-radius: 6px;
   padding: 10px 16px;
   min-width: 200px;
-  background: #fafafa;
+  background: var(--app-hover, #fafafa);
 }
 .pos-label { color: #909399; font-size: 12px; margin-bottom: 4px; }
-.pos-value { font-size: 20px; font-weight: 600; color: #303133; }
+.pos-value { font-size: 20px; font-weight: 600; color: var(--app-text, #303133); }
 .pos-sub { font-size: 12px; font-weight: 400; color: #909399; margin-left: 4px; }
 </style>

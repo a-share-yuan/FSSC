@@ -160,14 +160,14 @@ defineExpose({ start, restart })
 }
 .onboarding-card {
   position: absolute; width: 320px; z-index: 2;
-  background: #fff; border-radius: 10px; padding: 16px;
+  background: var(--app-card-bg, #fff); border-radius: 10px; padding: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.step-badge { font-size: 12px; color: #409eff; font-weight: 600; background: #ecf5ff; padding: 2px 8px; border-radius: 10px; }
+.step-badge { font-size: 12px; color: #409eff; font-weight: 600; background: var(--app-hover, #ecf5ff); padding: 2px 8px; border-radius: 10px; }
 .card-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-.card-desc { font-size: 13px; color: #606266; line-height: 1.6; margin-bottom: 14px; }
+.card-desc { font-size: 13px; color: var(--app-text-secondary, #606266); line-height: 1.6; margin-bottom: 14px; }
 .card-footer { display: flex; justify-content: flex-end; gap: 8px; }
-.progress-bar { height: 3px; background: #ebeef5; border-radius: 2px; margin-top: 12px; overflow: hidden; }
+.progress-bar { height: 3px; background: var(--app-border, #ebeef5); border-radius: 2px; margin-top: 12px; overflow: hidden; }
 .progress-fill { height: 100%; background: #409eff; transition: width 0.3s; border-radius: 2px; }
 </style>

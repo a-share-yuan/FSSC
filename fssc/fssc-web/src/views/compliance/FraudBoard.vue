@@ -271,9 +271,9 @@ onMounted(loadAll)
   border-radius: 6px;
   padding: 10px 16px;
   min-width: 150px;
-  background: #fafafa;
+  background: var(--app-hover, #fafafa);
 }
 .fraud-label { color: #909399; font-size: 12px; margin-bottom: 4px; }
-.fraud-value { font-size: 22px; font-weight: 600; color: #303133; }
+.fraud-value { font-size: 22px; font-weight: 600; color: var(--app-text, #303133); }
 .fraud-types { margin-top: 4px; }
 </style>

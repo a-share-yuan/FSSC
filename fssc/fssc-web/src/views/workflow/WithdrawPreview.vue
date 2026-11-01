@@ -123,9 +123,9 @@ async function load() {
 .wp-query { display: flex; gap: 8px; }
 .wp-input { max-width: 420px; }
 .wp-desc { margin-top: 12px; }
-.wp-sec { margin: 14px 0 6px; font-size: 13px; font-weight: 600; color: #303133; }
+.wp-sec { margin: 14px 0 6px; font-size: 13px; font-weight: 600; color: var(--app-text, #303133); }
 .wp-hint { font-size: 12px; color: #909399; font-weight: 400; margin-left: 6px; }
 .wp-vt { margin: 0 6px 4px 0; }
 .wp-notice { margin-top: 14px; font-size: 12px; color: #909399; line-height: 20px;
-  background: #f7f8fa; border-radius: 4px; padding: 8px 10px; }
+  background: var(--app-hover, #f7f8fa); border-radius: 4px; padding: 8px 10px; }
 </style>

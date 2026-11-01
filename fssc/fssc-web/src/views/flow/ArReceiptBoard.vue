@@ -292,5 +292,5 @@ onMounted(() => {
 <style scoped>
 .rc-wo-tip { font-size: 12px; color: #909399; line-height: 18px; margin-top: 4px; }
 .rc-wo { padding: 0 4px 4px; }
-.rc-wo-sum { font-size: 12px; color: #606266; margin-top: 6px; }
+.rc-wo-sum { font-size: 12px; color: var(--app-text-secondary, #606266); margin-top: 6px; }
 </style>

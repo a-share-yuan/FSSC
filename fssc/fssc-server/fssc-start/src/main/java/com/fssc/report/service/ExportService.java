@@ -4,8 +4,6 @@
 package com.fssc.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fssc.budget.entity.BgItem;
-import com.fssc.budget.mapper.BgItemMapper;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.framework.datasource.FsscDataSource;
@@ -37,8 +35,13 @@ import java.util.Map;
 public class ExportService {
 
     private final ExpBillMapper expBillMapper;
-    private final BgItemMapper bgItemMapper;
     private final ReportMapper reportMapper;
+    /**
+     * 预算执行导出的取数口＝页面「预算执行」表同一个方法。
+     * 起因（10-31 真跑）：本类原先自行按 bg_item 逐行取 {@code dim_key}，导出的首列是内部拼装键
+     * {@code 2026-COMPANY1-DEPTnull-ITEM333}，而页面显示的是费用项名称 ⇒ 同名异值即不同源。
+     */
+    private final DashboardService dashboardService;
     /** 组织合法性守卫（安全审计①）：导出规则公司隔离 */
     private final OrgGuard orgGuard;
 
@@ -94,7 +97,7 @@ public class ExportService {
         List<Map<String, Object>> rows = reportMapper.expenseByDept(mine, sc.deptIds(), sc.userId());
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("部门报销排行");
-            String[] heads = {"部门", "单据数", "报销金额"};
+            String[] heads = {"部门", "单量", "金额"};   // 与页面「部门报销排名」表头逐字一致（同名异称＝不同源）
             Row head = sheet.createRow(0);
             for (int i = 0; i < heads.length; i++) {
                 head.createCell(i).setCellValue(heads[i]);
@@ -112,42 +115,29 @@ public class ExportService {
         }
     }
 
-    /** 导出预算执行率（① 导出规则 + ③ data_scope：仅本登录人数据范围） */
+    /** 导出预算执行（列名/列序/取值与页面「预算执行」表同源：同一取数口＋同一聚合粒度＝按费用项） */
     @DataScope("预算导出数据范围")
     public byte[] exportBudgetExecution() {
-        LambdaQueryWrapper<BgItem> qw = new LambdaQueryWrapper<BgItem>()
-                .select(BgItem::getDimKey,
-                        BgItem::getTotalAmount,
-                        BgItem::getAdjustAmount,
-                        BgItem::getOccupyAmount,
-                        BgItem::getUsedAmount);
-        // 用 applyWithNullDept——bg_item 公司级下达行 dept_id 为 NULL，普通 apply 的
-        // dept_id = 本人部门 会把它们整批滤掉（屏幕有、导出为 0）。
-        DataScopeKit.applyWithNullDept(qw, BgItem::getCompanyId, BgItem::getDeptId, null);
-        List<Map<String, Object>> rows = bgItemMapper.selectMaps(qw);
+        List<Map<String, Object>> rows = dashboardService.budgetExecution();
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
-            Sheet sheet = wb.createSheet("预算执行率");
-            String[] heads = {"预算项", "总额", "调整", "占用", "已用", "执行率%"};
+            Sheet sheet = wb.createSheet("预算执行");
+            String[] heads = {"预算维度", "总额", "已用", "占用", "执行率(%)"};   // 逐字对齐页面表头
             Row head = sheet.createRow(0);
             for (int i = 0; i < heads.length; i++) {
                 head.createCell(i).setCellValue(heads[i]);
             }
             int r = 1;
             for (Map<String, Object> m : rows) {
-                double total = toDouble(m.get("total_amount")) + toDouble(m.get("adjust_amount"));
-                double used = toDouble(m.get("used_amount"));
-                double rate = total > 0 ? used / total * 100 : 0;
                 Row row = sheet.createRow(r++);
-                row.createCell(0).setCellValue(str(m.get("dim_key")));
-                row.createCell(1).setCellValue(toDouble(m.get("total_amount")));
-                row.createCell(2).setCellValue(toDouble(m.get("adjust_amount")));
-                row.createCell(3).setCellValue(toDouble(m.get("occupy_amount")));
-                row.createCell(4).setCellValue(used);
-                row.createCell(5).setCellValue(Math.round(rate * 10) / 10.0);
+                row.createCell(0).setCellValue(str(m.get("dimKey")));
+                row.createCell(1).setCellValue(toDouble(m.get("totalAmount")));
+                row.createCell(2).setCellValue(toDouble(m.get("usedAmount")));
+                row.createCell(3).setCellValue(toDouble(m.get("occupyAmount")));
+                row.createCell(4).setCellValue(Math.round(toDouble(m.get("executionRate")) * 10) / 10.0);
             }
             return toBytes(wb);
         } catch (IOException e) {
-            throw new RuntimeException("导出预算执行率失败", e);
+            throw new RuntimeException("导出预算执行失败", e);
         }
     }
 

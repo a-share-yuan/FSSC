@@ -99,14 +99,15 @@ function go(r) { router.push(r) }
 .nab {
   display: flex; align-items: center; gap: 10px;
   margin: 10px 0; padding: 10px 14px; border-radius: 8px;
-  background: #ecf5ff; border: 1px solid #d9ecff;
+  /* 半透明色把底色调成随主题走的浅/深两态，避免深色模式里出现整块浅色条 */
+  background: rgba(64, 158, 255, 0.12); border: 1px solid rgba(64, 158, 255, 0.3);
 }
 .nab-dot { width: 10px; height: 10px; border-radius: 50%; background: #409eff; flex: 0 0 auto; }
 .nab-body { flex: 1; min-width: 0; }
-.nab-step { font-size: 13px; font-weight: 700; color: #303133; }
-.nab-desc { font-size: 12px; color: #606266; margin-top: 2px; }
-.nab.tone-warn { background: #fdf6ec; border-color: #faecd8; } .nab.tone-warn .nab-dot { background: #e6a23c; }
-.nab.tone-danger { background: #fef0f0; border-color: #fde2e2; } .nab.tone-danger .nab-dot { background: #f56c6c; }
-.nab.tone-info { background: #f4f4f5; border-color: #e9e9eb; } .nab.tone-info .nab-dot { background: #909399; }
-.nab.tone-success { background: #f0f9eb; border-color: #e1f3d8; } .nab.tone-success .nab-dot { background: #67c23a; }
+.nab-step { font-size: 13px; font-weight: 700; color: var(--app-text, #303133); }
+.nab-desc { font-size: 12px; color: var(--app-text-secondary, #606266); margin-top: 2px; }
+.nab.tone-warn { background: rgba(230, 162, 60, 0.16); border-color: rgba(230, 162, 60, 0.35); } .nab.tone-warn .nab-dot { background: #e6a23c; }
+.nab.tone-danger { background: rgba(245, 108, 108, 0.14); border-color: rgba(245, 108, 108, 0.35); } .nab.tone-danger .nab-dot { background: #f56c6c; }
+.nab.tone-info { background: var(--app-hover, #f4f4f5); border-color: var(--app-border, #e9e9eb); } .nab.tone-info .nab-dot { background: #909399; }
+.nab.tone-success { background: rgba(103, 194, 58, 0.14); border-color: rgba(103, 194, 58, 0.35); } .nab.tone-success .nab-dot { background: #67c23a; }
 </style>

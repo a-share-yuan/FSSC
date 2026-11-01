@@ -61,7 +61,13 @@
           </el-table-column>
           <el-table-column label="验真状态" width="110">
             <template #default="{ row }">
-              <el-tag :type="vsType(row.verifyStatus)" size="small">{{ verifyStatusLabel(row.verifyStatus) }}</el-tag>
+              <!-- 未接外部通道时后端只推进到「验真中」并写 verify_msg 说明原因：
+                   悬停可见，避免用户以为卡住 -->
+              <el-tooltip v-if="row.verifyMsg && row.verifyStatus !== 'SUCCESS'" :content="row.verifyMsg"
+                          placement="top" :show-after="200">
+                <el-tag :type="vsType(row.verifyStatus)" size="small">{{ verifyStatusLabel(row.verifyStatus) }}</el-tag>
+              </el-tooltip>
+              <el-tag v-else :type="vsType(row.verifyStatus)" size="small">{{ verifyStatusLabel(row.verifyStatus) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="verifyTime" label="验真时间" width="160"  sortable :formatter="(row, col, val) => formatDateTime(val)" />

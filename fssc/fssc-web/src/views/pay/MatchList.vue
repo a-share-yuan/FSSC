@@ -896,9 +896,9 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => matchCm.value?.sh
 
 <style scoped>
 /* 行级颜色编码 */
-:deep(.row-green) { background-color: #f0f9eb !important; }
-:deep(.row-yellow) { background-color: #fdf6ec !important; }
-:deep(.row-red) { background-color: #fef0f0 !important; }
+:deep(.row-green) { background-color: rgba(103, 194, 58, 0.14) !important; }
+:deep(.row-yellow) { background-color: rgba(230, 162, 60, 0.14) !important; }
+:deep(.row-red) { background-color: rgba(245, 108, 108, 0.13) !important; }
 
 /* 匹配链路小圆点 */
 .chain-dots { display: flex; gap: 6px; justify-content: center; align-items: center; }
@@ -912,7 +912,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => matchCm.value?.sh
 .dot-red { background: #f56c6c; }
 
 /* 详情弹窗可视化链路 */
-.match-chain-vis { background: #f5f7fa; border-radius: 8px; padding: 16px; }
+.match-chain-vis { background: var(--app-bg, #f5f7fa); border-radius: 8px; padding: 16px; }
 .chain-flow { display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap; }
 .chain-node-wrapper { display: flex; align-items: center; }
 .chain-node {
@@ -921,9 +921,9 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => matchCm.value?.sh
 }
 .chain-node-label { font-size: 13px; font-weight: 600; }
 .chain-node-value { font-size: 12px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.node-green { border-color: #67c23a; background: #f0f9eb; color: #67c23a; }
-.node-yellow { border-color: #e6a23c; background: #fdf6ec; color: #e6a23c; }
-.node-red { border-color: #f56c6c; background: #fef0f0; color: #f56c6c; }
+.node-green { border-color: #67c23a; background: rgba(103, 194, 58, 0.14); color: #67c23a; }
+.node-yellow { border-color: #e6a23c; background: rgba(230, 162, 60, 0.14); color: #e6a23c; }
+.node-red { border-color: #f56c6c; background: rgba(245, 108, 108, 0.13); color: #f56c6c; }
 .chain-arrow { padding: 0 8px; color: #c0c4cc; }
 .arrow-green { color: #67c23a; }
 .arrow-yellow { color: #e6a23c; }
@@ -936,8 +936,8 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => matchCm.value?.sh
   font-size: 11px; font-weight: 600; margin-top: 2px; white-space: nowrap;
   padding: 1px 6px; border-radius: 8px;
 }
-.var-ok { color: #67c23a; background: #f0f9eb; }
-.var-warn { color: #f56c6c; background: #fef0f0; }
+.var-ok { color: #67c23a; background: rgba(103, 194, 58, 0.14); }
+.var-warn { color: #f56c6c; background: rgba(245, 108, 108, 0.13); }
 .var-none { color: #c0c4cc; }
 
 /* 规则合规指示 */
@@ -946,11 +946,11 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => matchCm.value?.sh
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 12px; padding: 3px 10px; border-radius: 12px; font-weight: 500;
 }
-.rule-ok { color: #67c23a; background: #f0f9eb; }
-.rule-bad { color: #f56c6c; background: #fef0f0; }
+.rule-ok { color: #67c23a; background: rgba(103, 194, 58, 0.14); }
+.rule-bad { color: #f56c6c; background: rgba(245, 108, 108, 0.13); }
 
 /* 行内联链路可视化 */
-.inline-chain-vis { padding: 8px 16px 12px; background: #f9fafc; }
+.inline-chain-vis { padding: 8px 16px 12px; background: var(--app-hover, #f9fafc); }
 .inline-chain-flow { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
 .inline-chain-item { display: flex; align-items: center; }
 .inline-chain-node {
@@ -958,13 +958,13 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => matchCm.value?.sh
   padding: 8px 14px; border-radius: 6px; border: 1.5px solid; min-width: 80px;
 }
 .inline-node-label { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
-.inline-node-no { font-size: 12px; color: #606266; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inline-node-no { font-size: 12px; color: var(--app-text-secondary, #606266); max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inline-node-amt { font-size: 11px; color: #409eff; font-weight: 600; }
-.ic-green { border-color: #67c23a; background: #f0f9eb; }
+.ic-green { border-color: #67c23a; background: rgba(103, 194, 58, 0.14); }
 .ic-green .inline-node-label { color: #67c23a; }
-.ic-yellow { border-color: #e6a23c; background: #fdf6ec; }
+.ic-yellow { border-color: #e6a23c; background: rgba(230, 162, 60, 0.14); }
 .ic-yellow .inline-node-label { color: #e6a23c; }
-.ic-red { border-color: #f56c6c; background: #fef0f0; }
+.ic-red { border-color: #f56c6c; background: rgba(245, 108, 108, 0.13); }
 .ic-red .inline-node-label { color: #f56c6c; }
 .inline-chain-variance {
   display: flex; align-items: center; gap: 2px;

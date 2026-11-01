@@ -8,7 +8,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.entity.ExpBillAttach;
 import com.fssc.expense.entity.ExpBillPayment;
+import com.fssc.expense.mapper.ExpBillAttachMapper;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.expense.mapper.ExpBillPaymentMapper;
 import com.fssc.framework.facade.ArchiveFacade;
@@ -48,6 +50,7 @@ import java.util.stream.Collectors;
 public class RequisitionWorkbenchService {
 
     private final ExpBillMapper expBillMapper;
+    private final ExpBillAttachMapper expBillAttachMapper;
     private final ExpBillPaymentMapper expBillPaymentMapper;
     private final OpVoucherMapper opVoucherMapper;
     private final OpVoucherLineMapper opVoucherLineMapper;
@@ -391,8 +394,11 @@ public class RequisitionWorkbenchService {
         result.put("wfInstance", instance);
 
         // 3. 凭证（OpVoucher by bill_id）
+        //    bill_id 是跨域裸主键：批次出纳凭证（TREASURY_PAY/CIP_PAY_BATCH）与各域凭证都写自己的主键，
+        //    只按 bill_id 取会把同号他域凭证挂到费用单上，必须限定费用族来源。
         OpVoucher voucher = opVoucherMapper.selectOne(new LambdaQueryWrapper<OpVoucher>()
                 .eq(OpVoucher::getBillId, billId)
+                .in(OpVoucher::getSourceType, VoucherService.EXPENSE_BILL_SOURCES)
                 .orderByDesc(OpVoucher::getId)
                 .last("LIMIT 1"));
         if (voucher != null) {
@@ -410,8 +416,29 @@ public class RequisitionWorkbenchService {
                 .orderByAsc(ExpBillPayment::getLineNo));
         result.put("payments", payments);
 
-        // 5. 影像/附件（断点5：通过 ImageFacade 查询，不再直接依赖 ImgFileMapper）
-        List<ImageFileDTO> images = imageFacade.findImageFilesByBizId(billId);
+        // 5. 影像/附件：影像工作台批次（img_file）+ 报销页上传（exp_bill_attach）两个来源合并，
+        //    按 fileId 去重。单据头 image_status 由 exp_bill_attach 计数得出，抽屉若只读 img_file
+        //    会出现「image_status=COMPLETE 但附件数 0」的矛盾。
+        List<ImageFileDTO> images = new ArrayList<>(imageFacade.findImageFilesByBizId(billId));
+        Set<Long> seenFileIds = images.stream()
+                .map(ImageFileDTO::getFileId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        List<ExpBillAttach> attaches = expBillAttachMapper.selectList(new LambdaQueryWrapper<ExpBillAttach>()
+                .eq(ExpBillAttach::getBillId, billId)
+                .orderByAsc(ExpBillAttach::getSort)
+                .orderByAsc(ExpBillAttach::getId));
+        for (ExpBillAttach attach : attaches) {
+            if (attach.getFileId() == null || !seenFileIds.add(attach.getFileId())) continue;
+            ImageFileDTO dto = new ImageFileDTO();
+            dto.setFileId(attach.getFileId());
+            dto.setBizId(billId);
+            dto.setBizType("EXPENSE_ATTACH");
+            dto.setPageType(attach.getAttachType());
+            dto.setPageNo(attach.getSort());
+            dto.setCreateTime(attach.getCreateTime());
+            images.add(dto);
+        }
         result.put("images", images);
         result.put("imageCount", images.size());
 

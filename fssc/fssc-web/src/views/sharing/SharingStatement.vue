@@ -252,8 +252,8 @@ onMounted(() => load())
 
 <style scoped>
 .card-header { display: flex; justify-content: space-between; align-items: center; }
-.header-title { font-size: 15px; font-weight: 600; color: #303133; }
-:deep(.row-green) { background-color: #f0f9eb !important; }
-:deep(.row-yellow) { background-color: #fdf6ec !important; }
-:deep(.row-red) { background-color: #fef0f0 !important; }
+.header-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
+:deep(.row-green) { background-color: rgba(103, 194, 58, 0.14) !important; }
+:deep(.row-yellow) { background-color: rgba(230, 162, 60, 0.14) !important; }
+:deep(.row-red) { background-color: rgba(245, 108, 108, 0.13) !important; }
 </style>

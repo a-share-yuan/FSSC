@@ -6,7 +6,13 @@
     <!-- PC 侧边栏（≥768px 显示） -->
     <el-aside width="210px" class="aside desktop-menu">
       <div class="logo"><img class="logo-img" src="../../assets/FSSC_LOGO_Blue.jpeg" alt="FSSC 财务共享" /></div>
-      <el-menu :default-active="$route.path" router background-color="#1f2d3d" text-color="#bfcbd9" active-text-color="#409eff">
+      <el-menu
+        :default-active="$route.path"
+        router
+        :background-color="isDark ? '#0f0f23' : '#1f2d3d'"
+        :text-color="isDark ? '#c8c9cc' : '#bfcbd9'"
+        active-text-color="#409eff"
+      >
         <MenuTree :nodes="menuTree" />
       </el-menu>
     </el-aside>
@@ -82,7 +88,13 @@
       <!-- 移动端抽屉菜单 -->
       <el-drawer v-model="drawer" direction="ltr" size="70%" :with-header="false" class="mobile-drawer">
         <div class="drawer-logo"><img class="drawer-logo-img" src="../../assets/FSSC_LOGO.png" alt="FSSC 财务共享" /></div>
-        <el-menu :default-active="$route.path" router background-color="#fff" @select="drawer = false">
+        <el-menu
+          :default-active="$route.path"
+          router
+          :background-color="isDark ? '#16213e' : '#fff'"
+          :text-color="isDark ? '#e0e0e0' : undefined"
+          @select="drawer = false"
+        >
           <MenuTree :nodes="menuTree" />
         </el-menu>
       </el-drawer>
@@ -99,7 +111,7 @@
     <el-dialog v-model="noticeVisible" title="系统公告" width="520px" :close-on-click-modal="false" append-to-body :close-on-press-escape="true" @closed="onNoticeClosed">
       <template v-if="currentNotice">
         <h3 style="margin: 0 0 8px">{{ currentNotice.noticeTitle }}</h3>
-        <div style="color: #666; font-size: 13px; margin-bottom: 12px">
+        <div style="color: var(--app-text-secondary, #666); font-size: 13px; margin-bottom: 12px">
           发布时间：{{ currentNotice.publishTime }}
         </div>
         <div style="white-space: pre-wrap; line-height: 1.6">{{ currentNotice.noticeContent }}</div>
@@ -430,26 +442,33 @@ async function onCommand(cmd) {
 
 <style scoped>
 .layout { height: 100%; }
-.aside { background: #1f2d3d; }
+.aside { background: var(--app-sidebar-bg, #1f2d3d); }
 .desktop-menu { display: none; }
 .logo { height: 56px; display: flex; align-items: center; justify-content: center; }
 .logo-img { height: 40px; border-radius: 8px; object-fit: contain; }
 .aside :deep(.el-menu) { border-right: none; }
 .header {
-  display: flex; align-items: center; background: #fff;
-  border-bottom: 1px solid #e4e7ed; height: 56px; padding: 0 16px; gap: 8px;
+  display: flex; align-items: center;
+  background: var(--app-header-bg, #fff);
+  color: var(--app-text, #303133);
+  border-bottom: 1px solid var(--app-border, #e4e7ed);
+  height: 56px; padding: 0 16px; gap: 8px;
 }
 .page-title { font-size: 16px; font-weight: 600; flex: 1; }
 .header-right { display: flex; align-items: center; gap: 8px; }
-.header-btn { color: #606266; }
+.header-btn { color: var(--app-text-secondary, #606266); }
 .header-btn:hover { color: #409eff; }
 .user { cursor: pointer; color: #409eff; }
 .breadcrumb-bar {
   padding: 8px 16px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #e4e7ed;
+  background: var(--app-bg, #f5f7fa);
+  border-bottom: 1px solid var(--app-border, #e4e7ed);
 }
-.main { padding: 16px; }
+.main {
+  padding: 16px;
+  background: var(--app-bg, #f5f7fa);
+  color: var(--app-text, #303133);
+}
 .drawer-logo { padding: 12px 16px; }
 .drawer-logo-img { height: 40px; object-fit: contain; }
 

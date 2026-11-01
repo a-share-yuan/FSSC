@@ -91,7 +91,7 @@ function handleReset() {
 .error-detail pre {
   margin: 0;
   padding: 12px;
-  background: #f5f7fa;
+  background: var(--app-bg, #f5f7fa);
   border-radius: 4px;
   font-size: 12px;
   line-height: 1.6;

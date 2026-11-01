@@ -214,5 +214,5 @@ onMounted(() => { loadData(); loadStats() })
 .integration-logs { padding: 0; }
 .stat-card { text-align: center; }
 .stat-label { color: #909399; font-size: 13px; margin-bottom: 8px; }
-.stat-value { font-size: 24px; font-weight: 700; color: #303133; }
+.stat-value { font-size: 24px; font-weight: 700; color: var(--app-text, #303133); }
 </style>

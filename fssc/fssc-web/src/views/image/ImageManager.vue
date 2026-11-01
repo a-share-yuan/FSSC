@@ -507,7 +507,7 @@ onMounted(() => { load() })
   position: relative;
   width: 100%;
   height: 140px;
-  background: #f5f7fa;
+  background: var(--app-bg, #f5f7fa);
   overflow: hidden;
 }
 .thumb-placeholder {
@@ -570,7 +570,7 @@ onMounted(() => { load() })
   gap: 4px;
   color: #c0c4cc;
   font-size: 12px;
-  background: #f5f7fa;
+  background: var(--app-bg, #f5f7fa);
   border-radius: 4px;
   border: 1px solid var(--el-border-color-lighter);
 }
@@ -596,7 +596,7 @@ onMounted(() => { load() })
 .image-area {
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
-  background: #f5f7fa;
+  background: var(--app-bg, #f5f7fa);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -617,7 +617,7 @@ onMounted(() => { load() })
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
   padding: 12px;
-  background: #fff;
+  background: var(--app-card-bg, #fff);
 }
 .ocr-panel-header {
   display: flex;
@@ -636,15 +636,15 @@ onMounted(() => { load() })
   padding: 6px 8px;
   border-radius: 4px;
   border: 1px solid var(--el-border-color-lighter);
-  background: #fafafa;
+  background: var(--app-hover, #fafafa);
 }
 .field-hit {
   border-color: #b3e19d;
-  background: #f0f9eb;
+  background: rgba(103, 194, 58, .16);
 }
 .field-miss {
   border-color: var(--el-border-color-lighter);
-  background: #f5f5f5;
+  background: var(--app-hover, #f5f5f5);
 }
 .field-label {
   font-size: 11px;
@@ -671,11 +671,11 @@ onMounted(() => { load() })
   font-weight: 600;
 }
 .amt-ok {
-  background: #f0f9eb;
+  background: rgba(103, 194, 58, .16);
   color: #67c23a;
 }
 .amt-fail {
-  background: #fef0f0;
+  background: rgba(245, 108, 108, .16);
   color: #f56c6c;
 }
 
@@ -687,7 +687,7 @@ onMounted(() => { load() })
 .raw-text {
   font-size: 11px;
   color: #909399;
-  background: #f5f7fa;
+  background: var(--app-bg, #f5f7fa);
   padding: 6px 8px;
   border-radius: 4px;
   max-height: 100px;

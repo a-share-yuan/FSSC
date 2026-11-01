@@ -1200,21 +1200,21 @@ defineExpose({ open })
 /* 弹窗级规则（高度封顶/正文滚动）写在文件末尾的非 scoped 块里：
    el-dialog 被 teleport 到 body 后根节点不带 data-v，scoped 选择器对它恒不命中（连 padding-top 都读成 0）。 */
 .ad-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px;
-  background: #f7f8fa; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
+  background: var(--app-hover, #f7f8fa); border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
 .ad-sum-item { min-width: 0; }
 .ad-sum-item.ad-full { grid-column: 1 / -1; }
 .ad-sum-k { color: #909399; font-size: 12px; margin-right: 6px; }
-.ad-sum-v { color: #303133; font-size: 13px; word-break: break-all; }
+.ad-sum-v { color: var(--app-text, #303133); font-size: 13px; word-break: break-all; }
 .ad-sum-v.ad-amt { font-weight: 600; color: #b8860b; }
 /* 审批链区块改为「标题行（文字进度＋图形进度条＋查看全部）＋ 下方折叠条」两行布局。
    单行 flex 挤不下进度条与节点条，分两行后每行各司其职、互不挤压。 */
 .ad-chain {
   border: 1px solid #e4e7ed; border-left: 3px solid #409eff; border-radius: 4px;
-  padding: 8px 10px; margin-bottom: 12px; background: #fff;
+  padding: 8px 10px; margin-bottom: 12px; background: var(--app-card-bg, #fff);
 }
-.ad-chain-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: #606266; }
-.ad-chain-title { color: #303133; font-weight: 600; }
-.ad-chain-prog { color: #606266; }
+.ad-chain-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--app-text-secondary, #606266); }
+.ad-chain-title { color: var(--app-text, #303133); font-weight: 600; }
+.ad-chain-prog { color: var(--app-text-secondary, #606266); }
 /* 图形化进度条：一节一格，等宽，颜色即状态 */
 .ad-chain-bar { display: inline-flex; gap: 2px; align-items: center; margin-left: 2px; }
 .ad-chain-seg { width: 16px; height: 8px; border-radius: 2px; background: #ebeef5; }
@@ -1226,13 +1226,13 @@ defineExpose({ open })
 /* 审批链框体内容：限高 + 纵向滚动 —— 不设 max-height 时节点一多就直接溢出窗口 */
 .ad-chain-pop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
   padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #ebeef5; font-size: 13px;
-  font-weight: 600; color: #303133; }
+  font-weight: 600; color: var(--app-text, #303133); }
 .ad-chain-pop-tip { font-size: 12px; font-weight: 400; color: #909399; }
 .ad-chain-pop-body { max-height: 46vh; overflow-y: auto; padding-right: 4px; }
 /* 会签/票签进度：与审批链同族边框，但用紫色区分"这是投票统计，不是流程位置" */
 .ad-mi { border: 1px solid #e4e7ed; border-left: 3px solid #9b59b6; border-radius: 4px;
-  padding: 8px 10px; margin-bottom: 10px; background: #fff; }
-.ad-mi-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: #606266; }
+  padding: 8px 10px; margin-bottom: 10px; background: var(--app-card-bg, #fff); }
+.ad-mi-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--app-text-secondary, #606266); }
 .ad-mi-title { color: #909399; }
 .ad-mi-count b { color: #9b59b6; }
 .ad-mi-hint { font-size: 12px; color: #909399; margin-top: 6px; line-height: 18px; }
@@ -1244,17 +1244,17 @@ defineExpose({ open })
 .ad-decision { margin-bottom: 10px; }
 /* 下一环节点名：与上方审批链同族边框，但用橙色（标签同色）表示"这里需要你做一次选择" */
 .ad-next { border: 1px solid #e4e7ed; border-left: 3px solid #e6a23c; border-radius: 4px;
-  padding: 8px 10px; margin-bottom: 10px; background: #fff; }
-.ad-next-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #606266; }
+  padding: 8px 10px; margin-bottom: 10px; background: var(--app-card-bg, #fff); }
+.ad-next-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--app-text-secondary, #606266); }
 .ad-next-title { color: #909399; }
-.ad-next-node { font-weight: 600; color: #303133; }
+.ad-next-node { font-weight: 600; color: var(--app-text, #303133); }
 .ad-next-select { width: 100%; margin-top: 8px; }
-.ad-next-one { font-size: 13px; color: #303133; margin-top: 6px; }
+.ad-next-one { font-size: 13px; color: var(--app-text, #303133); margin-top: 6px; }
 /* 会签名单单独一行，人数与人名分得清 */
-.ad-next-names { display: block; margin-top: 3px; font-size: 12px; color: #606266; }
+.ad-next-names { display: block; margin-top: 3px; font-size: 12px; color: var(--app-text-secondary, #606266); }
 .ad-next-auto { font-size: 12px; color: #909399; margin-top: 6px; }
 .ad-next-opt-sub { float: right; margin-left: 16px; color: #909399; font-size: 12px; }
-.ad-next-danger { font-size: 12px; color: #f56c6c; background: #fef0f0; border-radius: 4px;
+.ad-next-danger { font-size: 12px; color: #f56c6c; background: rgba(245, 108, 108, .16); border-radius: 4px;
   padding: 7px 9px; margin-top: 6px; line-height: 20px; }
 .ad-quick { margin-bottom: 8px; min-width: 0; }
 .ad-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; min-width: 0; }
@@ -1264,10 +1264,10 @@ defineExpose({ open })
 .ad-chip :deep(.el-tag__content) { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 「＋存为常用语」不参与收缩，否则长意见会把入口挤成竖排 */
 .ad-chip-save { flex: 0 0 auto; font-size: 12px; }
-.ad-nocmt { font-size: 12px; color: #909399; background: #f7f8fa; border-radius: 4px; padding: 8px 10px; }
+.ad-nocmt { font-size: 12px; color: #909399; background: var(--app-hover, #f7f8fa); border-radius: 4px; padding: 8px 10px; }
 /* 抄送：与「下一环节」同族边框，用青色区分"这只会多一条通知，不改变流程走向" */
 .ad-cc { border: 1px solid #e4e7ed; border-left: 3px solid #17b3a3; border-radius: 4px;
-  padding: 8px 10px; margin-top: 10px; background: #fff; }
+  padding: 8px 10px; margin-top: 10px; background: var(--app-card-bg, #fff); }
 .ad-cc-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .ad-cc-title { font-size: 12px; color: #909399; }
 .ad-cc-tip { font-size: 12px; color: #909399; }
@@ -1278,7 +1278,7 @@ defineExpose({ open })
 .ad-rt-warn { font-size: 12px; color: #e6a23c; margin-top: 6px; line-height: 18px; }
 /* 审批项：与「下一环节」同族边框，用深蓝区分"这是节点预置的结果，不只是同意/不同意" */
 .ad-ai { border: 1px solid #e4e7ed; border-left: 3px solid #2c6fbb; border-radius: 4px;
-  padding: 8px 10px; margin-bottom: 10px; background: #fff; }
+  padding: 8px 10px; margin-bottom: 10px; background: var(--app-card-bg, #fff); }
 .ad-ai-items { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ad-ai-tag { cursor: pointer; }
 .ad-ai-clear { font-size: 12px; margin-left: 4px; }
@@ -1288,16 +1288,16 @@ defineExpose({ open })
 .ad-cmt-hint { color: #e6a23c; font-size: 12px; line-height: 1.5; margin-top: 4px; }
 /* 批量逐单明细：与审批链同族边框，用绿色区分"这是你要签字的对象清单" */
 .ad-items { border: 1px solid #e4e7ed; border-left: 3px solid #67c23a; border-radius: 4px;
-  padding: 8px 10px; margin-bottom: 10px; background: #fff; }
+  padding: 8px 10px; margin-bottom: 10px; background: var(--app-card-bg, #fff); }
 .ad-items-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px;
-  color: #606266; margin-bottom: 6px; }
-.ad-items-sum { margin-left: auto; color: #606266; }
+  color: var(--app-text-secondary, #606266); margin-bottom: 6px; }
+.ad-items-sum { margin-left: auto; color: var(--app-text-secondary, #606266); }
 .ad-items-amt { color: #b8860b; font-size: 13px; }
 .ad-items-miss { color: #e6a23c; }
 .ad-items-none { color: #c0c4cc; font-size: 12px; }
 .ad-items-table { width: 100%; }
 /* 「同批共用意见」条：紧贴意见框上方，说破"这一句会复制 N 遍" */
-.ad-batch-cmt { font-size: 12px; color: #606266; background: #fdf6ec; border: 1px solid #faecd8;
+.ad-batch-cmt { font-size: 12px; color: var(--app-text-secondary, #606266); background: rgba(230, 162, 60, .14); border: 1px solid #faecd8;
   border-radius: 4px; padding: 7px 9px; margin-bottom: 8px; line-height: 19px; }
 /* 提交失败就地回显（弹窗不关，意见保留） */
 .ad-submit-err { margin-top: 12px; }
@@ -1306,7 +1306,7 @@ defineExpose({ open })
 .ad-history { margin-top: 14px; border-top: 1px dashed #dcdfe6; padding-top: 8px; }
 .ad-his-title { font-size: 12px; color: #909399; margin-bottom: 6px; }
 .ad-his-sub { color: #c0c4cc; font-weight: 400; margin-left: 4px; }
-.ad-his-warn { font-size: 12px; color: #e6a23c; background: #fdf6ec; border-left: 3px solid #e6a23c;
+.ad-his-warn { font-size: 12px; color: #e6a23c; background: rgba(230, 162, 60, .14); border-left: 3px solid #e6a23c;
   border-radius: 2px; padding: 5px 8px; margin-bottom: 6px; }
 .ad-his-warn .el-link { font-size: 12px; margin-left: 2px; vertical-align: baseline; }
 .ad-kbd { font-size: 12px; color: #a8abb2; }

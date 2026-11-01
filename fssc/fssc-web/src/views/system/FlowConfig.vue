@@ -804,7 +804,7 @@
           <el-alert type="warning" :closable="false" style="margin-bottom: 10px"
             :title="$t('system.flow.alertInFlightStale', { v1: inFlight.data?.runningTotal ?? 0, v2: inFlight.data?.staleCount ?? 0 })"
             :description="inFlight.data?.note" />
-          <div v-if="Object.keys(inFlight.data?.byProcDef || {}).length" style="margin-bottom:10px; font-size:12px; color:#606266">
+          <div v-if="Object.keys(inFlight.data?.byProcDef || {}).length" style="margin-bottom:10px; font-size:12px; color: var(--app-text-secondary, #606266)">
             {{ $t('system.flow.lblByProcDefDist') }}
             <el-tag v-for="(c, k) in (inFlight.data?.byProcDef || {})" :key="k" size="small" effect="plain"
               :type="k === inFlight.data?.newProcDefId ? 'success' : 'info'" style="margin-right:6px">
@@ -1860,15 +1860,15 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.valu
 .flow-config-page { min-height: 100%; }
 .model-list-card { height: 100%; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.panel-title { font-size: 15px; font-weight: 600; color: #303133; }
+.panel-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
 .model-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .model-actions .el-button + .el-button { margin-left: 0; }
 .model-list { max-height: 600px; overflow-y: auto; }
 .model-item { padding: 10px 12px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; margin-bottom: 6px; }
-.model-item:hover { background: #f5f7fa; border-color: #e4e7ed; }
-.model-item.active { background: #ecf5ff; border-color: #b3d8ff; }
+.model-item:hover { background: var(--app-bg, #f5f7fa); border-color: #e4e7ed; }
+.model-item.active { background: rgba(64, 158, 255, 0.12); border-color: #b3d8ff; }
 .model-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.model-name { font-weight: 600; font-size: 14px; color: #303133; }
+.model-name { font-weight: 600; font-size: 14px; color: var(--app-text, #303133); }
 .model-meta { display: flex; gap: 12px; font-size: 12px; color: #909399; }
 .model-detail-header { display: flex; align-items: center; }
 .cfg-hint { font-size: 12px; color: #909399; line-height: 1.4; margin-top: 4px; }
@@ -1876,7 +1876,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.valu
 /* 节点弹窗：分组标题＋内容区限高，避免整页过长 */
 .node-dialog :deep(.el-dialog__body) { max-height: 70vh; overflow-y: auto; padding-top: 8px; }
 .form-section-title {
-  font-size: 13px; font-weight: 600; color: #303133;
+  font-size: 13px; font-weight: 600; color: var(--app-text, #303133);
   margin: 4px 0 12px; padding-left: 8px; line-height: 16px;
   border-left: 3px solid var(--el-color-primary);
 }
@@ -1885,7 +1885,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.valu
 .sim-query { margin-bottom: 4px; }
 .sim-query :deep(.el-form-item) { margin-bottom: 12px; }
 .sim-warn { margin-top: 8px; }
-.sim-section-title { font-size: 13px; font-weight: 600; color: #303133; margin: 16px 0 8px; }
+.sim-section-title { font-size: 13px; font-weight: 600; color: var(--app-text, #303133); margin: 16px 0 8px; }
 .sim-path {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   padding: 10px 12px; background: #f8f9fb; border-radius: 4px;
@@ -1898,7 +1898,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.valu
 /* 流程图页签 */
 .diagram-tip {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 8px; font-size: 12px; color: #606266;
+  margin-bottom: 8px; font-size: 12px; color: var(--app-text-secondary, #606266);
 }
 .diagram-tip .ro { color: #e6a23c; }
 .diagram-wrap { height: 620px; min-height: 420px; }
@@ -1912,8 +1912,8 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.valu
 /* 发布 diff 展示区 */
 .diff-view {
   margin-top: 10px; max-height: 320px; overflow: auto;
-  background: #fafbfc; border: 1px solid #ebeef5; border-radius: 4px;
-  padding: 8px 10px; font-size: 12px; line-height: 1.5; color: #303133;
+  background: var(--app-hover, #fafbfc); border: 1px solid #ebeef5; border-radius: 4px;
+  padding: 8px 10px; font-size: 12px; line-height: 1.5; color: var(--app-text, #303133);
   white-space: pre-wrap; word-break: break-all;
 }
 </style>

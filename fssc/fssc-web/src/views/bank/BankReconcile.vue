@@ -499,14 +499,14 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => reconcileCm.value
 <style scoped>
 .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; }
-.panel-title { font-size: 14px; font-weight: 600; color: #303133; }
+.panel-title { font-size: 14px; font-weight: 600; color: var(--app-text, #303133); }
 .manual-bar { padding: 8px 0; text-align: center; }
-.pending-title { font-size: 13px; font-weight: 600; color: #606266; margin-bottom: 6px; }
+.pending-title { font-size: 13px; font-weight: 600; color: var(--app-text-secondary, #606266); margin-bottom: 6px; }
 .pager-scope { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
 .pager-scope-label { font-size: 12px; color: #909399; }
 .match-hint { color: #409eff; font-size: 14px; }
 .match-hint-muted { color: #909399; font-size: 13px; }
 .amt-matched { color: #67c23a; font-weight: 600; }
-:deep(.row-matched) { background-color: #f0f9eb !important; }
-:deep(.row-manual) { background-color: #fdf6ec !important; }
+:deep(.row-matched) { background-color: rgba(103, 194, 58, 0.14) !important; }
+:deep(.row-manual) { background-color: rgba(230, 162, 60, 0.14) !important; }
 </style>

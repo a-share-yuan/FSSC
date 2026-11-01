@@ -233,7 +233,7 @@
         </el-table>
         <el-button size="small" style="margin-top: 8px" @click="addLine(b)">{{ $t('pay.corp.btnAddLine') }}</el-button>
         <div style="margin-top: 6px">{{ $t('pay.corp.labFeeTotal') }}<span style="color:#f59a23;font-weight:700">{{ b.fmt(totalAmount(b)) }}</span> {{ $t('pay.shared.unitYuan') }}</div>
-        <div style="margin-top: 2px; color:#606266">{{ $t('pay.corp.amountInWords', { v1: b.form.bill.amountCn || t('expense.createTab.txtAmountPending') }) }}</div>
+        <div style="margin-top: 2px; color: var(--app-text-secondary, #606266)">{{ $t('pay.corp.amountInWords', { v1: b.form.bill.amountCn || t('expense.createTab.txtAmountPending') }) }}</div>
       </el-card>
 
       <!-- 付款信息 -->

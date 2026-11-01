@@ -188,7 +188,7 @@ export const ROUTE_PERMS = {
   '/sharing/group': { perms: ['sharing:config'] },
   '/sharing/job': { perms: ['sharing:config'] },
   '/sharing/quality': { perms: ['op:quality:list'] },
-  '/sharing/shared-ops': { perms: ['wf:config:list', 'wf:instance:list'] },
+  '/sharing/shared-ops': { perms: ['wf:config:list', 'wf:instance:list', 'sharing:voucher:generate'] },
   '/sharing/shared-pool': { perms: ['wf:task:list', 'wf:instance:list'] },
   '/sharing/statement': { perms: ['op:bank:list'] },
   '/sharing/task-pool': { perms: ['sharing:task:list'] },

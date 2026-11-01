@@ -168,12 +168,12 @@ function updateRect() {
 }
 .coachmark-bubble {
   position: absolute; width: 280px; z-index: 2;
-  background: #fff; border-radius: 8px; padding: 14px;
+  background: var(--app-card-bg, #fff); border-radius: 8px; padding: 14px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12);
 }
 .bubble-arrow { position: absolute; width: 0; height: 0; }
-.bubble-title { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: #303133; margin-bottom: 6px; }
-.bubble-text { font-size: 13px; color: #606266; line-height: 1.6; margin-bottom: 12px; }
+.bubble-title { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--app-text, #303133); margin-bottom: 6px; }
+.bubble-text { font-size: 13px; color: var(--app-text-secondary, #606266); line-height: 1.6; margin-bottom: 12px; }
 .bubble-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .bubble-ok { text-align: right; }
 </style>

@@ -496,5 +496,5 @@ defineExpose({ rows })
 .trace-card { font-size: 13px; }
 .trace-action { font-weight: 600; }
 .trace-oper { color: #409eff; font-weight: 400; }
-.trace-detail { color: #606266; font-size: 12px; margin-top: 2px; }
+.trace-detail { color: var(--app-text-secondary, #606266); font-size: 12px; margin-top: 2px; }
 </style>

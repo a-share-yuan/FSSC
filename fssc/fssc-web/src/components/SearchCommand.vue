@@ -243,13 +243,13 @@ watch(() => props.visible, (v) => {
 }
 .search-panel {
   width: 600px; max-width: 90vw;
-  background: #fff; border-radius: 12px;
+  background: var(--app-card-bg, #fff); border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
   overflow: hidden;
 }
 .search-input-bar {
   display: flex; align-items: center; gap: 10px;
-  padding: 14px 20px; border-bottom: 1px solid #e4e7ed;
+  padding: 14px 20px; border-bottom: 1px solid var(--app-border, #e4e7ed);
 }
 .search-icon { color: #909399; font-size: 18px; }
 .search-input {
@@ -258,7 +258,7 @@ watch(() => props.visible, (v) => {
 }
 .kbd-hint {
   font-size: 11px; color: #909399;
-  background: #f5f7fa; border: 1px solid #dcdfe6;
+  background: var(--app-bg, #f5f7fa); border: 1px solid var(--app-border, #dcdfe6);
   border-radius: 4px; padding: 2px 6px;
 }
 .search-results { max-height: 400px; overflow-y: auto; }
@@ -271,7 +271,7 @@ watch(() => props.visible, (v) => {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 20px; cursor: pointer; transition: background 0.15s;
 }
-.result-item.active { background: #ecf5ff; }
+.result-item.active { background: var(--app-hover, #ecf5ff); }
 .item-icon { color: #409eff; font-size: 16px; flex-shrink: 0; }
 .item-label { font-size: 14px; }
 .item-label :deep(em) { color: #409eff; font-style: normal; font-weight: 600; }
@@ -283,17 +283,17 @@ watch(() => props.visible, (v) => {
 .hint-items { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .hint-item {
   font-size: 13px; color: #409eff; cursor: pointer;
-  background: #ecf5ff; border-radius: 6px; padding: 6px 12px;
+  background: var(--app-hover, #ecf5ff); border-radius: 6px; padding: 6px 12px;
   transition: background 0.15s;
 }
-.hint-item:hover { background: #d9ecff; }
+.hint-item:hover { background: var(--app-hover, #d9ecff); }
 .hint-footer {
   display: flex; gap: 16px; justify-content: flex-end;
-  border-top: 1px solid #e4e7ed; padding-top: 10px;
+  border-top: 1px solid var(--app-border, #e4e7ed); padding-top: 10px;
   font-size: 12px; color: #909399;
 }
 .hint-footer kbd {
-  font-size: 11px; background: #f5f7fa; border: 1px solid #dcdfe6;
+  font-size: 11px; background: var(--app-bg, #f5f7fa); border: 1px solid #dcdfe6;
   border-radius: 3px; padding: 1px 5px; margin-right: 2px;
 }
 </style>

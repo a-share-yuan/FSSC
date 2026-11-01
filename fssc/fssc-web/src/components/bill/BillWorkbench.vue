@@ -927,10 +927,10 @@ async function refreshProgress() {
 .attach-hint { margin-top: 6px; font-size: 12px; color: #909399; line-height: 18px; }
 .attach-name { font-size: 12px; color: #67c23a; }
 .trace-node { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.trace-node-name { font-weight: 600; color: #303133; }
-.trace-user { color: #606266; margin-left: 4px; }
+.trace-node-name { font-weight: 600; color: var(--app-text, #303133); }
+.trace-user { color: var(--app-text-secondary, #606266); margin-left: 4px; }
 .trace-target { color: #e6a23c; font-size: 12px; }
-.trace-comment { margin-top: 4px; color: #606266; font-size: 12px; background: #f5f7fa; padding: 4px 8px; border-radius: 4px; }
+.trace-comment { margin-top: 4px; color: var(--app-text-secondary, #606266); font-size: 12px; background: var(--app-bg, #f5f7fa); padding: 4px 8px; border-radius: 4px; }
 
 /* 缩略图网格 */
 .thumb-grid {
@@ -943,7 +943,7 @@ async function refreshProgress() {
   border: 1px solid #e4e7ed;
   border-radius: 6px;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--app-hover, #fafafa);
 }
 .thumb-img-wrap {
   position: relative;
@@ -952,7 +952,7 @@ async function refreshProgress() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
+  background: var(--app-bg, #f5f7fa);
 }
 .thumb-img {
   width: 100%;
@@ -991,7 +991,7 @@ async function refreshProgress() {
 .thumb-name {
   padding: 4px 6px;
   font-size: 11px;
-  color: #606266;
+  color: var(--app-text-secondary, #606266);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -342,11 +342,11 @@ function segsNodeAt(i) {
 }
 .fc-tl-dot i { font-style: normal; }
 .fc-tl-dot em { font-style: normal; opacity: .6; }
-.fc-tl-DONE { color: #67c23a; border-color: #b3e19d; background: #f0f9eb; }
+.fc-tl-DONE { color: #67c23a; border-color: #b3e19d; background: rgba(103, 194, 58, 0.14); }
 .fc-tl-CURRENT { color: #fff; border-color: #409eff; background: #409eff;
   box-shadow: 0 0 0 3px rgba(64, 158, 255, .18); }
-.fc-tl-REJECTED { color: #f56c6c; border-color: #fbc4c4; background: #fef0f0; }
-.fc-tl-VOID, .fc-tl-TERMINATED, .fc-tl-WITHDRAWN, .fc-tl-CANCELLED { color: #e6a23c; border-color: #f5dab1; background: #fdf6ec; }
+.fc-tl-REJECTED { color: #f56c6c; border-color: #fbc4c4; background: rgba(245, 108, 108, 0.13); }
+.fc-tl-VOID, .fc-tl-TERMINATED, .fc-tl-WITHDRAWN, .fc-tl-CANCELLED { color: #e6a23c; border-color: #f5dab1; background: rgba(230, 162, 60, 0.14); }
 .fc-tl-TODO { color: #c0c4cc; border-style: dashed; }
 .fc-tl-SKIPPED { color: #c0c4cc; border-style: dashed; opacity: .8; }
 .fc-tl-ADDSIGN { color: #b88230; border-color: #f0dcc0; background: #fdf7ec; border-style: dashed; }
@@ -354,27 +354,27 @@ function segsNodeAt(i) {
 .fc-tl-line { flex: 1; width: 2px; background: #ebeef5; margin: 2px 0; border-radius: 1px; }
 .fc-tl-body { flex: 1; min-width: 0; padding: 0 0 12px 0; }
 .fc-tl-line1 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; line-height: 20px; }
-.fc-tl-name { color: #303133; font-size: 13px; font-weight: 600; max-width: 100%;
+.fc-tl-name { color: var(--app-text, #303133); font-size: 13px; font-weight: 600; max-width: 100%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fc-tl-row .fc-CURRENT-name { color: #409eff; }
 .fc-tl-addsign { font-size: 11px; font-weight: 600; color: #b88230; }
 .fc-tl-line2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px;
   color: #909399; line-height: 18px; margin-top: 2px; }
-.fc-tl-who { color: #606266; }
+.fc-tl-who { color: var(--app-text-secondary, #606266); }
 .fc-tl-cmt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 折叠条（横向） */
 .fc { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .fc-node {
   display: inline-flex; align-items: center; max-width: 100%; font-size: 12px; line-height: 20px;
-  padding: 0 8px; border-radius: 10px; border: 1px solid #dcdfe6; background: #fafafa; color: #606266;
+  padding: 0 8px; border-radius: 10px; border: 1px solid #dcdfe6; background: var(--app-hover, #fafafa); color: var(--app-text-secondary, #606266);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default;
 }
 .fc-idx { font-style: normal; margin-right: 4px; opacity: .65; }
-.fc-DONE { color: #67c23a; border-color: #b3e19d; background: #f0f9eb; }
+.fc-DONE { color: #67c23a; border-color: #b3e19d; background: rgba(103, 194, 58, 0.14); }
 .fc-CURRENT { color: #fff; border-color: #409eff; background: #409eff; font-weight: 600; }
-.fc-REJECTED { color: #f56c6c; border-color: #fbc4c4; background: #fef0f0; }
-.fc-VOID { color: #e6a23c; border-color: #f5dab1; background: #fdf6ec; }
+.fc-REJECTED { color: #f56c6c; border-color: #fbc4c4; background: rgba(245, 108, 108, 0.13); }
+.fc-VOID { color: #e6a23c; border-color: #f5dab1; background: rgba(230, 162, 60, 0.14); }
 .fc-TODO { color: #a8abb2; }
 .fc-SKIPPED { color: #c0c4cc; border-style: dashed; text-decoration: line-through; }
 .fc-ADDSIGN { color: #b88230; border-color: #f0dcc0; background: #fdf7ec; border-style: dashed; }
@@ -384,10 +384,10 @@ function segsNodeAt(i) {
 /* 折叠块：与节点同高，虚线框表达"这里被收起了，可点开" */
 .fc-fold {
   display: inline-flex; align-items: center; gap: 3px; font-size: 12px; line-height: 20px;
-  padding: 0 7px; border-radius: 10px; border: 1px dashed #c9cdd4; background: #f7f8fa;
+  padding: 0 7px; border-radius: 10px; border: 1px dashed #c9cdd4; background: var(--app-hover, #f7f8fa);
   color: #909399; cursor: pointer; white-space: nowrap;
 }
-.fc-fold:hover { border-color: #409eff; color: #409eff; background: #ecf5ff; }
+.fc-fold:hover { border-color: #409eff; color: #409eff; background: rgba(64, 158, 255, 0.12); }
 .fc-fold-dot { font-weight: 700; letter-spacing: -1px; }
 
 .fc-tip { max-width: 320px; line-height: 20px; }
@@ -402,24 +402,24 @@ function segsNodeAt(i) {
    未到达节灰显（它是"后面还有谁"的预告，不是事实）；曾驳回节红底。动作列用色块区分四类事实。 */
 .fc-tb { width: 100%; }
 .fc-tb :deep(.el-table__header th.el-table__cell) {
-  background: #f5f7fa; color: #303133; font-weight: 600; font-size: 12px; padding: 7px 0;
+  background: var(--app-bg, #f5f7fa); color: var(--app-text, #303133); font-weight: 600; font-size: 12px; padding: 7px 0;
 }
 .fc-tb :deep(.el-table__body td.el-table__cell) { padding: 7px 0; font-size: 12px; }
-.fc-tb :deep(tr.fc-tb-cur) { background: #ecf5ff; }
+.fc-tb :deep(tr.fc-tb-cur) { background: rgba(64, 158, 255, 0.12); }
 .fc-tb :deep(tr.fc-tb-cur > td:first-child) { box-shadow: inset 3px 0 0 #409eff; }
-.fc-tb :deep(tr.fc-tb-bad) { background: #fef0f0; }
+.fc-tb :deep(tr.fc-tb-bad) { background: rgba(245, 108, 108, 0.13); }
 .fc-tb :deep(tr.fc-tb-todo) .fc-tb-node,
 .fc-tb :deep(tr.fc-tb-todo) .fc-tb-cmt { color: #a8abb2; }
 .fc-tb-idx { display: inline-block; min-width: 16px; color: #909399; font-variant-numeric: tabular-nums; }
 .fc-tb-idx-x { color: #dcdfe6; }
-.fc-tb-node { color: #303133; }
+.fc-tb-node { color: var(--app-text, #303133); }
 .fc-tb-addsign { color: #b88230; font-weight: 600; margin-left: 4px; }
-.fc-tb-cmt { color: #606266; word-break: break-all; }
+.fc-tb-cmt { color: var(--app-text-secondary, #606266); word-break: break-all; }
 .fc-tb-act { display: inline-block; padding: 0 6px; border-radius: 2px; line-height: 18px; }
-.fc-tb-act-SUBMIT { color: #409eff; background: #ecf5ff; }
-.fc-tb-act-AUTO_PASS { color: #909399; background: #f4f4f5; }
-.fc-tb-act-REJECT, .fc-tb-act-TERMINATE { color: #f56c6c; background: #fef0f0; }
-.fc-tb-act-APPROVE, .fc-tb-act-PASS { color: #67c23a; background: #f0f9eb; }
+.fc-tb-act-SUBMIT { color: #409eff; background: rgba(64, 158, 255, 0.12); }
+.fc-tb-act-AUTO_PASS { color: #909399; background: var(--app-hover, #f4f4f5); }
+.fc-tb-act-REJECT, .fc-tb-act-TERMINATE { color: #f56c6c; background: rgba(245, 108, 108, 0.13); }
+.fc-tb-act-APPROVE, .fc-tb-act-PASS { color: #67c23a; background: rgba(103, 194, 58, 0.14); }
 .fc-tb-state { margin-left: 6px; }
 .fc-tb-time { color: #909399; }
 /* 「不计入」（分支未走/加签插道）与「尚未到达」都是灰底会读成一个意思，

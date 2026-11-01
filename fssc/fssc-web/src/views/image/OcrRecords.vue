@@ -89,7 +89,7 @@
 
     <!-- 明细抽屉：原始识别文本 -->
     <el-drawer v-model="rawVisible" title="OCR 原始识别结果" size="45%">
-      <pre v-if="rawText" style="white-space:pre-wrap; font-size:12px; background:#f5f7fa; padding:12px; border-radius:6px">{{ rawText }}</pre>
+      <pre v-if="rawText" style="white-space:pre-wrap; font-size:12px; background: var(--app-bg, #f5f7fa); padding:12px; border-radius:6px">{{ rawText }}</pre>
       <el-empty v-else description="无原始文本" />
     </el-drawer>
   </el-card>
@@ -214,5 +214,5 @@ onMounted(() => { load(); loadBatches() })
 <style scoped>
 .compare-wrap { display: flex; gap: 16px; }
 .compare-pane { flex: 1; min-width: 0; }
-.pane-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #303133; }
+.pane-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--app-text, #303133); }
 </style>

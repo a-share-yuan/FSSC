@@ -347,6 +347,13 @@ export const VOUCHER_SOURCE = {
   // 同族补齐：产品代码里没有写这个 source_type 的出口，摘要一律「费用重分类」
   // ⇒ 判为报表侧模拟写入的数据侧枚举，措辞从数据；详见 bizEntry.js 同名键注释。
   EXPENSE_REIM: '费用重分类',
+  // 与 utils/bizEntry.js 的 VOUCHER_SOURCE_LABEL 同步补齐的差集（10-31 实测：凭证生成统计
+  INVOICE_MATCH_MANUAL: '手工匹配', GL_MONTH_CLOSE: '月末结转',
+  BAD_DEBT_WRITEOFF: '坏账核销', BAD_DEBT_REVERSE: '坏账转回', BAD_DEBT_PROV: '坏账计提',
+  AR_CLAIM: '应收认领', AR_NOTE_DISCOUNT: '票据贴现', AR_MONTH_CLOSE: 'AR月末结转',
+  FX_REVALUATION: '汇兑重估', FX_REVAL_REVERSE: '重估冲销',
+  TR_RECEIPT: '票据收票', TR_BILL: '票据开立', TR_TRANSFER: '资金调拨', TR_UPLOAD: '资金上存',
+  STOCK_COST_SETTLE: '库存成本结算', FA_DEPRECIATION: '资产折旧', FA_CER: '资产立项',
   // op_voucher.source_doc_type 会写 PO_RECEIPT/INV_INVOICE，没有键 ⇒ 凭证台账来源列直接显示英文
   PO_RECEIPT: '采购收货', INV_INVOICE: '发票入账',
 }

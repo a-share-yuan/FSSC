@@ -343,6 +343,7 @@ import * as echarts from 'echarts/core'
 import { SankeyChart, HeatmapChart } from 'echarts/charts'
 import { TooltipComponent, GridComponent, VisualMapComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { initThemedChart, onThemeChange, isDarkTheme } from '../../utils/echartsTheme'
 import { flowApi } from '../../api'
 import { hasPerm } from '@/utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
@@ -370,6 +371,7 @@ const { pagedData } = pager
 let sankeyChart = null
 let heatChart = null
 let pollTimer = null
+let offTheme = null
 
 const listFailed = ref(false)
 const overviewFailed = ref(false)
@@ -665,7 +667,7 @@ function onTabChange(name) {
 /** 桑基：节点＝真实 nodeName，连线值＝窗口内该转移的真实发生次数 */
 function renderSankey() {
   if (!sankeyRef.value || !hasPaths.value) return
-  if (!sankeyChart) sankeyChart = echarts.init(sankeyRef.value)
+  if (!sankeyChart) sankeyChart = initThemedChart(sankeyRef.value)
   else sankeyChart.resize() // 容器高度随节点数变过，画布要先跟上再出图
   const hits = {}
   ;(paths.value.nodes || []).forEach(n => { hits[n.name] = n.hits })
@@ -703,7 +705,7 @@ function renderSankey() {
 /** 热力：行＝真实节点（命中数降序 Top12），列＝实际停留分桶，格值＝审批事件数 */
 function renderHeatmap() {
   if (!heatmapRef.value || !hasDwell.value) return
-  if (!heatChart) heatChart = echarts.init(heatmapRef.value)
+  if (!heatChart) heatChart = initThemedChart(heatmapRef.value)
   else heatChart.resize() // 同上，行数变化后先跟上容器高度
   const nodes = dwellRows.value.map(r => r.node).reverse()
   const buckets = dwellBuckets.value.length ? dwellBuckets.value : ['<1小时', '1-4小时', '4-8小时', '8-24小时', '>24小时']
@@ -729,7 +731,12 @@ function renderHeatmap() {
     visualMap: {
       min: 0, max: maxVal, calculable: true,
       orient: 'horizontal', left: 'center', bottom: 0,
-      inRange: { color: ['#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#d73027'] },
+      // 深色下浅色阶会整片发白，换成同序的深底低亮色阶
+      inRange: {
+        color: isDarkTheme()
+          ? ['#1e2b4a', '#27476f', '#356a9e', '#5c93c8', '#d73027']
+          : ['#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#d73027'],
+      },
     },
     series: [{
       type: 'heatmap', data: data,
@@ -760,10 +767,16 @@ onMounted(async () => {
     }, 30000)
   }
   window.addEventListener('resize', onResize)
+  offTheme = onThemeChange(() => {
+    sankeyChart?.dispose(); sankeyChart = null
+    heatChart?.dispose(); heatChart = null
+    nextTick(() => { renderSankey(); renderHeatmap() })
+  })
 })
 onBeforeUnmount(() => {
   clearInterval(pollTimer)
   window.removeEventListener('resize', onResize)
+  offTheme && offTheme()
   sankeyChart?.dispose()
   heatChart?.dispose()
 })
@@ -775,17 +788,17 @@ function onResize() {
 
 <style scoped>
 .flow-monitor { padding: 16px; }
-.no-perm { padding: 60px 20px; background: #fff; border-radius: 8px; }
-.no-perm .np-title { font-size: 15px; font-weight: 600; color: #303133; margin: 0 0 6px; }
-.no-perm .np-code { font-size: 13px; color: #606266; margin: 0 0 10px; }
+.no-perm { padding: 60px 20px; background: var(--app-card-bg, #fff); border-radius: 8px; }
+.no-perm .np-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); margin: 0 0 6px; }
+.no-perm .np-code { font-size: 13px; color: var(--app-text-secondary, #606266); margin: 0 0 10px; }
 .no-perm .np-code code {
-  background: #f4f4f5; padding: 1px 6px; border-radius: 3px;
+  background: var(--app-hover, #f4f4f5); padding: 1px 6px; border-radius: 3px;
   font-family: Consolas, Monaco, monospace; color: #c0392b;
 }
 .no-perm .np-tip { font-size: 12.5px; color: #909399; line-height: 1.9; margin: 0; }
 .stat-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; }
 .stat-card {
-  flex: 1 1 150px; background: #fff; border-radius: 8px; padding: 16px;
+  flex: 1 1 150px; background: var(--app-card-bg, #fff); border-radius: 8px; padding: 16px;
   border-left: 4px solid #dcdfe6; text-align: center;
 }
 .stat-card.blue { border-color: #409eff; }
@@ -795,30 +808,30 @@ function onResize() {
 .stat-card.purple { border-color: #7c5cff; }
 .stat-val { font-size: 24px; font-weight: 700; }
 .stat-label { font-size: 12px; color: #909399; margin-top: 4px; }
-.work-tabs { background: #fff; border-radius: 8px; padding: 4px 12px 12px; margin-bottom: 16px; }
-.tier-card { padding: 12px 12px 6px; margin-bottom: 16px; border: 1px solid #f0f0f0; }
+.work-tabs { background: var(--app-card-bg, #fff); border-radius: 8px; padding: 4px 12px 12px; margin-bottom: 16px; }
+.tier-card { padding: 12px 12px 6px; margin-bottom: 16px; border: 1px solid var(--app-border, #f0f0f0); }
 .tier-card .tier-code { margin-left: 6px; font-size: 11px; color: #c0c4cc; font-family: Consolas, Monaco, monospace; }
 .pane-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.pane-toolbar .tb-label { font-size: 12px; color: #606266; }
+.pane-toolbar .tb-label { font-size: 12px; color: var(--app-text-secondary, #606266); }
 .pane-toolbar .tb-note { font-size: 12px; color: #909399; }
 .chart-row { display: flex; gap: 16px; }
-.chart-card { flex: 1; border: 1px solid #f0f0f0; border-radius: 8px; padding: 12px; }
+.chart-card { flex: 1; border: 1px solid var(--app-border, #f0f0f0); border-radius: 8px; padding: 12px; }
 .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .chart-title .chart-sub { margin-left: 8px; font-size: 11px; font-weight: 400; color: #c0c4cc; }
 .chart-body { height: 300px; }
 /* 兜底规则的行内标注（†），与表下的规则说明成对出现 */
 .basis-mark { margin-left: 2px; color: #e6a23c; font-weight: 600; font-size: 11px; }
 .perf-note code {
-  background: #f4f4f5; padding: 0 4px; border-radius: 3px;
-  font-family: Consolas, Monaco, monospace; font-size: 11.5px; color: #606266;
+  background: var(--app-hover, #f4f4f5); padding: 0 4px; border-radius: 3px;
+  font-family: Consolas, Monaco, monospace; font-size: 11.5px; color: var(--app-text-secondary, #606266);
 }
 .table-row { display: flex; gap: 16px; }
 .table-row .table-card { flex: 1; }
-.table-card { background: #fff; border-radius: 8px; }
+.table-card { background: var(--app-card-bg, #fff); border-radius: 8px; }
 .table-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .recon-hint { font-size: 12px; font-weight: 400; color: #909399; margin-left: 4px; }
 .aging-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.aging-label { width: 60px; font-size: 12px; color: #606266; }
+.aging-label { width: 60px; font-size: 12px; color: var(--app-text-secondary, #606266); }
 .aging-bar { flex: 1; }
 .aging-count { width: 40px; text-align: right; font-size: 12px; }
 .perf-note { font-size: 12px; color: #909399; margin-top: 8px; line-height: 1.7; }

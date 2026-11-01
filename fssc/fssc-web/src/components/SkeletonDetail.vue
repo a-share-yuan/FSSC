@@ -40,7 +40,7 @@ defineProps({ rows: { type: Number, default: 4 } })
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
 }
 .skel-card {
-  background: #f5f7fa; border-radius: 8px; padding: 16px;
+  background: var(--app-bg, #f5f7fa); border-radius: 8px; padding: 16px;
 }
 .skel-bar {
   border-radius: 4px;

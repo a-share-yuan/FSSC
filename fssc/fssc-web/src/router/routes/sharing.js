@@ -22,7 +22,8 @@ export default [
   // shared-pool：/wf/pool/views|mine 需 wf:task:list、/wf/pool/all 需 wf:instance:list
   { path: 'sharing/shared-pool', component: () => import('../../views/sharing/SharedPool.vue'), meta: { title: '共享任务池（五视图）', perms: ['wf:task:list', 'wf:instance:list'] } },
   // shared-ops：/wf/ops/** 读 wf:config:list|wf:instance:list（含 policy/dispatch-log/quality/time-limit）
-  { path: 'sharing/shared-ops', component: () => import('../../views/sharing/SharedOpsConsole.vue'), meta: { title: '共享作业控制台', perms: ['wf:config:list', 'wf:instance:list'] } },
+  // 「补生成凭证」页签还需 sharing:voucher:generate：只持制证权的角色（FIN_GL/AUDITOR 等）也要能进
+  { path: 'sharing/shared-ops', component: () => import('../../views/sharing/SharedOpsConsole.vue'), meta: { title: '共享作业控制台', perms: ['wf:config:list', 'wf:instance:list', 'sharing:voucher:generate'] } },
   // task-quality：/wf/ops/quality/** 全部需 wf:instance:list
   { path: 'sharing/task-quality', component: () => import('../../views/sharing/TaskQualityReport.vue'), meta: { title: '任务质量报表', perms: ['wf:instance:list'] } },
   // 实物流签收：父路径重定向到首个 tab，不渲染汇总的 hub 页

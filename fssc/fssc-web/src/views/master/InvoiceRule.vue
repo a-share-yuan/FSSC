@@ -5,7 +5,7 @@
   <div>
     <!-- 说明提示 -->
     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap">
-      <span style="color: #606266; font-size: 13px">报销勾选发票时，按发票「货物或应税劳务、服务名称」自动预填费用类型；命中才改，未命中费用类型留空待填。</span>
+      <span style="color: var(--app-text-secondary, #606266); font-size: 13px">报销勾选发票时，按发票「货物或应税劳务、服务名称」自动预填费用类型；命中才改，未命中费用类型留空待填。</span>
       <span style="color: #909399; font-size: 12px; margin-left: auto">上移、排序越靠前，同关键词越优先（精确匹配优先于包含）</span>
     </div>
 

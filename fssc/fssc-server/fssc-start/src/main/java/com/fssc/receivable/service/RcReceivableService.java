@@ -9,6 +9,8 @@ import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
+import com.fssc.customer.entity.CrmCustomer;
+import com.fssc.customer.mapper.CrmCustomerMapper;
 import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
@@ -62,12 +64,25 @@ public class RcReceivableService {
     private final PeriodLockService periodLockService;
     /** 审计扩面：单据状态跃迁记录 */
     private final AuditTrailService auditTrailService;
+    /** 台账检索按「往来单位名/编码」反查主数据 id（提示文字承诺了这一维，缺它就只能按单号查） */
+    private final CrmCustomerMapper customerMapper;
 
     public PageResult<RcReceivable> page(long pn, long ps, String kw) {
         LambdaQueryWrapper<RcReceivable> qw = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(kw)) {
-            qw.and(w -> w.like(RcReceivable::getBillNo, kw)
-                    .or().eq(RcReceivable::getCustomerId, parseId(kw)));
+            // 检索框提示＝「单据号/往来单位」⇒ 三个维度都要命中：单据号、往来单位名/编码（按主数据反查 id 集合，
+            // 参数化查询，拼 SQL），以及直接给往来单位主键的老用法。
+            List<Long> hitCustomerIds = customerMapper.selectList(new LambdaQueryWrapper<CrmCustomer>()
+                            .select(CrmCustomer::getId)
+                            .and(w -> w.like(CrmCustomer::getCustomerName, kw)
+                                    .or().like(CrmCustomer::getCustomerCode, kw)))
+                    .stream().map(CrmCustomer::getId).filter(Objects::nonNull).toList();
+            qw.and(w -> {
+                w.like(RcReceivable::getBillNo, kw).or().eq(RcReceivable::getCustomerId, parseId(kw));
+                if (!hitCustomerIds.isEmpty()) {
+                    w.or().in(RcReceivable::getCustomerId, hitCustomerIds);
+                }
+            });
         }
         Long scopeC = orgGuard.enforceCompany();
         if (scopeC != null) {

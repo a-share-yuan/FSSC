@@ -1631,6 +1631,10 @@ public class PayBatchService {
             return "DEFERRED";
         }
 
+        // 执行前锁定账户行并核余额，不足整批拒付——避免「钱付出去了、账户余额页还是旧数字」。
+        MdBankAccount payAccount = lockPayAccountForDebit(batch);
+        assertEnoughPayBalance(payAccount, batch);
+
         // 调用银行网关（默认模拟成功；生产替换 DefaultBankGateway 为真实银企直联实现）
         List<BankGateway.PayItem> items = details.stream().map(d -> new BankGateway.PayItem(
                 d.getPayeeName(), d.getBankName(), d.getBankAccount(), d.getAmount(), d.getPostscript())).toList();
@@ -1656,6 +1660,8 @@ public class PayBatchService {
             return "FAILED";
         }
         List<String> serials = bankResult.getSerialNos();
+        // 银行已受理 → 同事务扣减出账账户余额（付款/放款共用本通道）
+        debitPayAccount(payAccount, batch);
         for (int i = 0; i < details.size(); i++) {
             OpPayBatchDetail d = details.get(i);
             String serial = serials != null && serials.size() > i ? serials.get(i) : "SER" + now.getNano() + i;
@@ -1972,6 +1978,58 @@ public class PayBatchService {
             throw new BizException(ErrorCode.PARAM_INVALID, "付款批次不存在: " + batchId);
         }
         return batch;
+    }
+
+    /**
+     * 出账账户：执行付款/放款前行锁（FOR UPDATE）读取，余额闸与扣减在同一事务内完成。
+     * 返回 null 表示不管理余额（历史批次未绑定账户，或账户/批次币种不一致）。
+     */
+    private MdBankAccount lockPayAccountForDebit(OpPayBatch batch) {
+        if (batch.getBankAccountId() == null) {
+            log.warn("付款批次 {} 未绑定出账账户，本次不扣减银行余额（历史批次兼容）", batch.getBatchNo());
+            return null;
+        }
+        MdBankAccount acc = mdBankAccountMapper.selectOne(new LambdaQueryWrapper<MdBankAccount>()
+                .eq(MdBankAccount::getId, batch.getBankAccountId())
+                .last("FOR UPDATE"));
+        if (acc == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "出账账户不存在（id=" + batch.getBankAccountId() + "），禁止执行付款");
+        }
+        if (acc.getCurrencyCode() != null && batch.getCurrencyCode() != null
+                && !acc.getCurrencyCode().equalsIgnoreCase(batch.getCurrencyCode())) {
+            log.warn("付款批次 {} 出账账户币种 {} 与批次币种 {} 不一致，本次跳过余额校验与扣减",
+                    batch.getBatchNo(), acc.getCurrencyCode(), batch.getCurrencyCode());
+            return null;
+        }
+        return acc;
+    }
+
+    /** 余额不足整批拒付（与资金调拨 execute 同口径）。须在提交银企之前调用。 */
+    private void assertEnoughPayBalance(MdBankAccount acc, OpPayBatch batch) {
+        if (acc == null) return;
+        BigDecimal amount = batch.getTotalAmount();
+        if (amount == null || amount.signum() <= 0) return;
+        BigDecimal balance = acc.getBalance() == null ? BigDecimal.ZERO : acc.getBalance();
+        if (balance.compareTo(amount) < 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "出账账户余额不足：账户[" + acc.getAccountName() + "/" + acc.getBankAccount() + "]当前余额 "
+                            + balance + "，本批应付 " + amount + "，禁止执行付款。请先入账资金或更换出账账户");
+        }
+    }
+
+    /** 银行受理后扣减出账账户余额（付款/借款放款共用）. */
+    private void debitPayAccount(MdBankAccount acc, OpPayBatch batch) {
+        if (acc == null) return;
+        BigDecimal amount = batch.getTotalAmount();
+        if (amount == null || amount.signum() <= 0) return;
+        BigDecimal balance = acc.getBalance() == null ? BigDecimal.ZERO : acc.getBalance();
+        MdBankAccount upd = new MdBankAccount();
+        upd.setId(acc.getId());
+        upd.setBalance(balance.subtract(amount));
+        mdBankAccountMapper.updateById(upd);
+        log.info("付款批次 {} 付讫，出账账户 {} 余额 {} → {}", batch.getBatchNo(),
+                acc.getId(), balance, balance.subtract(amount));
     }
 
     /** 当前登录用户（未登录返回 null，审批按候选组角色派单） */

@@ -978,4 +978,107 @@ onBeforeUnmount(() => {
   width: 15px; height: 15px;
   border-radius: 50%; background: #e6f1ff; color: #409eff; font-size: 11px; cursor: help;
 }
+
+/* ===== 深色模式：bpmn-js 自带白底画布/调色板/属性面板 ===== */
+html.dark .bpmn-toolbar {
+  background: linear-gradient(180deg, #1b2440 0%, #16213e 100%);
+  border-color: #2a2a4a;
+}
+html.dark .zoom-display { background: #1a1a3e; border-color: #2a2a4a; }
+html.dark .zoom-display:hover { background: rgba(64, 158, 255, 0.16); }
+html.dark .toolbar-hint { color: #a0a0b0; }
+html.dark .canvas {
+  background-color: #121a30;
+  border-color: #2a2a4a;
+  background-image:
+    linear-gradient(rgba(160, 180, 220, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(160, 180, 220, 0.07) 1px, transparent 1px);
+}
+html.dark .properties-panel { background: #16213e; border-color: #2a2a4a; }
+html.dark .status-bar { background: #14203a; border-color: #2a2a4a; color: #a0a0b0; }
+html.dark .finance-config { background: rgba(64, 158, 255, 0.10) !important; }
+html.dark .timeout-label { color: #a0a0b0; }
+html.dark .timeout-hint { background: rgba(64, 158, 255, 0.16); }
+
+/* 图形本体由 BpmnRenderer 写入内联 style，必须 !important 才盖得住 */
+html.dark .canvas :deep(.djs-shape .djs-visual > :first-child:not(text)) {
+  fill: #1d2a47 !important;
+  stroke: #7b95c0 !important;
+}
+html.dark .canvas :deep(.djs-shape .djs-visual > :not(:first-child):not(text)) {
+  stroke: #c8d4ea !important;
+}
+html.dark .canvas :deep(.djs-shape text),
+html.dark .canvas :deep(.djs-connection text),
+html.dark .canvas :deep(.djs-label) {
+  fill: #e0e0e0 !important;
+}
+html.dark .canvas :deep(.djs-connection .djs-visual > path) {
+  stroke: #8aa4cc !important;
+}
+html.dark .canvas :deep(marker path) {
+  fill: #8aa4cc !important;
+  stroke: #8aa4cc !important;
+}
+/* 调色板/右键菜单/上下文工具也走 diagram-js 的 CSS 变量 */
+html.dark .canvas :deep(.djs-parent) {
+  --color-white: #16213e;
+  --color-black: #e0e0e0;
+  --canvas-fill-color: #121a30;
+  --bendpoint-stroke-color: #121a30;
+  --palette-background-color: #16213e;
+  --palette-border-color: #2a2a4a;
+  --palette-entry-color: #c8c9cc;
+  --palette-entry-hover-color: #66b1ff;
+  --palette-separator-color: #2a2a4a;
+  --palette-toggle-hover-background-color: #24304f;
+  --context-pad-entry-background-color: #16213e;
+  --context-pad-entry-hover-background-color: #24304f;
+  --popup-background-color: #16213e;
+  --popup-border-color: #2a2a4a;
+  --popup-search-focus-background-color: #24304f;
+  --search-container-background-color: #16213e;
+}
+html.dark .canvas :deep(.djs-tooltip) {
+  background: #16213e;
+  color: #e0e0e0;
+  border-color: #2a2a4a;
+}
+/* 属性面板（@bpmn-io/properties-panel）的灰阶令牌整体反转 */
+html.dark .properties-panel :deep(.bio-properties-panel) {
+  --color-grey-225-10-15: #e0e0e0;
+  --color-grey-225-10-35: #a0a0b0;
+  --color-grey-225-10-55: #9098b8;
+  --color-grey-225-10-75: #3a3a5a;
+  --color-grey-225-10-80: #42426a;
+  --color-grey-225-10-85: #4a4a72;
+  --color-grey-225-10-90: #2a2a4a;
+  --color-grey-225-10-95: #1b2743;
+  --color-grey-225-10-97: #16213e;
+  --color-white: #16213e;
+  --color-black: #e0e0e0;
+  --color-blue-205-100-95: #1b2a4a;
+  --color-red-360-100-97: #3a1f28;
+  --color-red-360-100-92: #46262f;
+}
+html.dark .properties-panel :deep(.bio-properties-panel-header) {
+  background: #1b2a4a;
+  border-color: #2a2a4a;
+}
+html.dark .properties-panel :deep(.bio-properties-panel-header-label) { color: #e0e0e0; }
+html.dark .properties-panel :deep(.bio-properties-panel-group) {
+  background: #16213e;
+  border-color: #2a2a4a;
+}
+html.dark .properties-panel :deep(.bio-properties-panel-group-header) {
+  background: #1a2240;
+  border-color: #2a2a4a;
+}
+html.dark .properties-panel :deep(.bio-properties-panel-group-header-title) { color: #a0a0b0; }
+html.dark .properties-panel :deep(.bio-properties-panel-label) { color: #a0a0b0; }
+html.dark .properties-panel :deep(.bio-properties-panel-input) {
+  background: #101830;
+  border-color: #2a2a4a;
+  color: #e0e0e0;
+}
 </style>

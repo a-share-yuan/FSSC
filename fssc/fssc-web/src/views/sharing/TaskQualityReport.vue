@@ -193,11 +193,11 @@ onMounted(() => { loadedTabs.add('summary'); loadSummary() })
 
 <style scoped>
 .card-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-.header-title { font-size: 15px; font-weight: 600; color: #303133; }
+.header-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
 .toolbar { display: flex; gap: 8px; align-items: center; }
 .tb-label { font-size: 12px; color: #909399; }
 .stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
-.stat-card { flex: 1 1 150px; background: #f5f7fa; border-radius: 6px; padding: 14px; text-align: center; }
-.stat-val { font-size: 20px; font-weight: 700; color: #303133; }
+.stat-card { flex: 1 1 150px; background: var(--app-bg, #f5f7fa); border-radius: 6px; padding: 14px; text-align: center; }
+.stat-val { font-size: 20px; font-weight: 700; color: var(--app-text, #303133); }
 .stat-label { font-size: 12px; color: #909399; margin-top: 4px; }
 </style>

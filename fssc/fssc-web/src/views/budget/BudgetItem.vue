@@ -192,6 +192,7 @@ import * as echarts from 'echarts/core'
 import { BarChart, LineChart } from 'echarts/charts'
 import { TooltipComponent, GridComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { initThemedChart, onThemeChange } from '../../utils/echartsTheme'
 import { budgetApi, mdApi, orgApi, wfApi } from '../../api'
 import { useRoute } from 'vue-router'
 import SkeletonList from '../../components/SkeletonList.vue'
@@ -248,7 +249,7 @@ let trendChart = null
 
 function renderTrend() {
   if (!trendChartRef.value) return
-  if (!trendChart) trendChart = echarts.init(trendChartRef.value)
+  if (!trendChart) trendChart = initThemedChart(trendChartRef.value)
 
   // 按月聚合
   const months = Array.from({ length: 12 }, (_, i) => i + 1)
@@ -493,13 +494,21 @@ onMounted(async () => {
 })
 
 // 窗口缩放时自适应
+let offTheme = null
 onMounted(() => {
   autofill(dialog.form, 'BUDGET_ITEM')
 
   window.addEventListener('resize', onResize)
+  offTheme = onThemeChange(() => {
+    if (!trendChart || !trendChartRef.value) return
+    trendChart.dispose()
+    trendChart = null
+    nextTick(renderTrend)
+  })
 })
 onUnmounted(() => {
   window.removeEventListener('resize', onResize)
+  offTheme && offTheme()
   if (trendChart) { trendChart.dispose(); trendChart = null }
 })
 function onResize() { if (trendChart) trendChart.resize() }
