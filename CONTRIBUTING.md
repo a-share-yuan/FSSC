@@ -34,7 +34,7 @@ cd ../fssc-web  && npm install && npm run dev
 - 跨域调用走 `framework/facade`，**不要**直接引用别的域的 Mapper。
 - 访问影像域表要带 `@FsscDataSource("image")`，否则打到主库。
 - 涉及查询层改动（`@Select`/`@Insert` 注解 SQL、以及直连 `JdbcTemplate` 的写法）：必须自证租户条件生效。本项目**没有 Mapper XML**（全仓 `*Mapper.xml` 零命中），SQL 只有注解与 Java 两种形态；绕过 MyBatis-Plus 拦截器的写法是**跨租户泄漏**。
-- 注释与界面文案当前为中文，且项目**没有接国际化框架**（`package.json` 无 `vue-i18n`，全仓无 `createI18n`/`$t(` 调用）。新增用户可见文案就写中文字面量，别去造一份没人读的英文资源；状态/枚举码的中文显示统一登记在 `fssc-web/src/constants/billStatus.js`，做法见 `docs/workflow-engine.md` 9.5。
+- 国际化**已接入但未全量抽取**：`vue-i18n` 在依赖里，`src/i18n/index.js` 建实例，`main.js` 注册 i18n 与全局 `LocaleSwitch`，`src/i18n/locales/{zh-CN,en-US}.js` 各约 4,010 键。实测本快照 `src/` 下 263 枚 `.vue`/`.js` 里 72 枚走 `$t()`/`useI18n()`（4,038 处），其余仍是中文字面量。**新增用户可见文案**：改动的文件若已经在用 `$t()`，就照该文件的写法补 `zh-CN`/`en-US` 两键；若整篇还是字面量，就写中文字面量并别单为它建半套资源（半途抽取比不抽取更难核）。状态/枚举码的中文显示仍统一登记在 `fssc-web/src/constants/billStatus.js`，做法见 `docs/workflow-engine.md` 9.5。
 
 **前端**
 
