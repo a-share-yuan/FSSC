@@ -39,7 +39,7 @@
 
 首个公开版本。发布前提见 `docs/release-checklist.md`：
 
-- [ ] `db/schema-baseline.sql` + `db/seed-demo.sql` 就绪，全新数据库 0 报错
+- [ ] `db/schema-baseline.sql`（323 张表，仅结构、零数据行）已发布；演示数据不随仓发布（无 `seed-demo.sql`），**"全新数据库 0 报错导入"尚未真机验证**
 - [ ] 一台干净机器照 `docs/getting-started.md` 30 分钟内跑通并提出一张单
 - [ ] 默认凭据卫生完成（口令类环境变量无弱默认值）
 - [ ] 脱敏扫描通过（无生产数据、无密钥、无真实姓名工号）
