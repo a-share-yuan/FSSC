@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /** 流程中心（跨域统一流程门户）路由：流程概览 / 我的抄送 / 已办撤销预览 */

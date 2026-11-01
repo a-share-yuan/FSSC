@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 // 字典读取：同步、只读内存缓存，不发请求。

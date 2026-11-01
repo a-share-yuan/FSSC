@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /** 应收应付蓝图落地域路由（付款服务申请/月末关账/开票链/应收服务申请/核销工作台/票据/坏账/月结/报表/基础配置） */

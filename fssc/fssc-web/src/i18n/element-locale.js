@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 // Element Plus 组件文案跟随应用语言（域8A）
 // Element Plus 自带 locale 包（日期/分页/确认框等组件内文案）。若只切 vue-i18n

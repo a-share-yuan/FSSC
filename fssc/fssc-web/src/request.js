@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 // 双 http 合并：本文件曾是并行开发时复制的第二套同款 axios 实例（baseURL/超时/Token 头/统一响应解包
