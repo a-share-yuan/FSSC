@@ -20,7 +20,7 @@
 **Honest caveats.**
 - **The UI is Chinese-only, and there is no i18n framework in this repo** (no `vue-i18n`, no `createI18n`, no `$t()`; `src/i18n/` holds a single bpmn-js canvas translation patch). Localising the interface is a separate, unfunded effort — don't go looking for a language switch.
 - **Source-only release.** The front-end package keeps `"private": true`; there is no npm package and no hosted demo. You build the jar/image yourself.
-- **No published database baseline yet** (`schema-baseline.sql` / `seed-demo.sql` are still missing), so a fresh install today is not verified to work end-to-end.
+- **Database baseline is structure-only.** `db/schema-baseline.sql` (323 tables, DDL and nothing else) is published; **no demo data ships** — there is no `seed-demo.sql`, and dumps stay out of the repo (`db/Dump*/` is git-ignored). So a fresh install builds and boots, but logging in and running an end-to-end demo still needs you to create accounts/parameters/process definitions yourself; we have not verified a from-scratch demo on an empty database.
 - The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — see `docs/release-checklist.md` §8 ⑥.
 - This code has been hardened through long manual business drills; treat documented behaviour as *documented*, not *guaranteed*. Each doc states which claims were measured and which were only read off the code.
 
@@ -96,11 +96,9 @@ flowchart LR
 ### 三步跑起来
 
 ```bash
-# ① 建库（业务表基线 + 演示数据）
-mysql -uroot -p -e "CREATE DATABASE fssc DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
-                    CREATE DATABASE fssc_image DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;"
-mysql -uroot -p fssc       < db/schema-baseline.sql
-mysql -uroot -p fssc       < db/seed-demo.sql
+# ① 建库（只建结构；演示数据不随仓发布，见 db/README.md）
+mysql -uroot -p < db/schema-baseline.sql
+# 每个表文件自带 CREATE DATABASE + USE，主库 fssc 与影像库 fssc_image 一起建好，无需预先手工建库
 # Flowable 的 ACT_* / FLW_* 表无需手工建：flowable.database-schema-update=true 会在首启时自动建表
 
 # ② 配环境
@@ -113,7 +111,7 @@ java -jar fssc-start/target/fssc-server.jar            # → http://localhost:80
 cd ../fssc-web && npm install && npm run dev           # → http://localhost:8080
 ```
 
-浏览器打开 `http://localhost:8080`，用 `docs/demo-accounts.md` 里的演示账号登录，从「我的工作台 → 费用报销 → 新建」提一张单，走完审批 → 你就拥有了一个可演示的 FSSC。
+浏览器打开 `http://localhost:8080`。空库里没有账号数据，需要先自己建 [`docs/demo-accounts.md`](docs/demo-accounts.md) 里按角色列出的那几类身份（提单人／部门审批人／财务初审·复核／出纳——审批引擎不允许同人自审），再走「我的工作台 → 费用报销 → 新建」提一张单、把审批走完。口令一律来自 `.env`/你自己的初始化脚本，本仓库不发布任何明文口令或账号转储。
 
  端口、双库路由、OCR/银企 mock 通道、启动失败排查 → **[`docs/getting-started.md`](docs/getting-started.md)**
 

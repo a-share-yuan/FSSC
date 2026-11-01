@@ -6,8 +6,7 @@
 
 ```bash
 cp .env.example .env                 # 填 FSSC_DB_PASSWORD / FSSC_JWT_SECRET
-mysql -ufssc -p fssc < db/schema-baseline.sql
-mysql -ufssc -p fssc < db/seed-demo.sql
+mysql -uroot -p < db/schema-baseline.sql   # 自带 CREATE DATABASE + USE，主库与影像库一起建；只建结构，无数据行
 cd fssc-server && mvn clean package -DskipTests && java -jar fssc-start/target/fssc-server.jar
 cd ../fssc-web  && npm install && npm run dev
 ```
