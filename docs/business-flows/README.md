@@ -39,7 +39,7 @@
 ### 主数据与协同
 `MD_MASTER` 主数据变更 · `CUSTOMER_MAINT` 客户维护
 
-> **模型规模三个口径**（别混用）：`publish/` **77** 个已发布模型目录｜`models/` **83** 个模型编码、**289** 个版本 XML 快照｜库内 `wf_model` 的有效模型数**需以数据库为准**（`bpmn-repo` 只是文件侧快照，二者可能不同步，见 `docs/getting-started.md` 坑 9）。
+> **模型规模三个口径**（别混用）：`publish/` **77** 个已发布模型目录｜`models/` **83** 个模型编码、**289** 个版本 XML 快照｜库内 `wf_model` 的有效模型数**需以数据库为准**（`bpmn-repo` 只是文件侧快照，二者可能不同步，见 `docs/快速上手.md` 坑 9）。
 
 ## 主线：一张报销单的完整故事（示例，其余待写）
 
@@ -74,7 +74,7 @@ sequenceDiagram
   IM-->>E: 全链路联查（exp_bill_trace / tracing 域）
 ```
 
-涉及的表、状态值、账号角色与界面入口，见本目录 [`mainline-expense.md`](mainline-expense.md)（**待写，这是第一篇该写的文档**）。
+涉及的表、状态值、账号角色与界面入口，见本目录计划中的 `mainline-expense.md`（**待写，这是第一篇该写的文档**）。
 
 ## 每篇文档的模板
 
@@ -113,7 +113,7 @@ Mermaid 时序图 + 每步的 Controller/Service 位置（file:line）与落库�
 
 1. `mainline-expense.md` —— 主线一条，覆盖 8 个域，性价比最高
 2. `pay-and-voucher.md` —— 付款→凭证→归档（财务系统的心脏）
-3. `workflow-actions.md` —— 审批动作逐个（会签/加签/转办/委托/超时），配合 `docs/workflow-engine.md`
+3. `workflow-actions.md` —— 审批动作逐个（会签/加签/转办/委托/超时），配合 `docs/流程引擎技术说明.md`
 4. `ar-collection.md` / `ap-plan.md` / `invoice-verify.md`
 5. `month-close.md` —— 月结检查项（`gl_close_check_item`）
 6. `asset-lifecycle.md` / `archive.md` / `masterdata-change.md`
