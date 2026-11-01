@@ -5,7 +5,7 @@
 ## [Unreleased]
 
 ### Added
-- 开源发布骨架：`LICENSE`（Apache-2.0）、`NOTICE`、`README.md`、`CONTRIBUTING.md`、`SECURITY.md`、`CHANGELOG.md`
+- 开源发布骨架：`LICENSE`（立项时为 Apache-2.0，2026-11-01 改判 AGPL-3.0-or-later）、`NOTICE`、`README.md`、`CONTRIBUTING.md`、`SECURITY.md`、`CHANGELOG.md`
 - 文档体系：`docs/getting-started.md`、`docs/architecture.md`、`docs/module-map.md`、`docs/data-model.md`、`docs/permissions.md`、`docs/workflow-engine.md`、`docs/glossary.md`、`docs/deployment.md`、`docs/release-checklist.md`、`docs/demo-accounts.md`
 - `docs/how-to-read-this-code.md`：读懂一个不认识的模块的通用手法（从路由表倒推、从实体正推、从异常落点反推），配套 `docs/adr/` 与 `docs/business-flows/` 两个目录
 - `docs/workflow-engine.md` 补齐三章：**§8 流程设计器（前端 bpmn-js）**——设计器在哪个页签、画布内容存进哪一列、一次编辑经过哪几跳 HTTP、界面标签 → 数据库列 → 后端读取处的对照表、前端校验与后端那道闸的分歧清单；**§9 新手改动指引**——加查询条件 / 加字段 / 加权限 / 改审批节点 / 让状态码显示中文，每样都给了动哪几处、怎么验证、有什么坑；**§10 最需要人工复核的结论**——本文哪些结论是跑出来的、哪些只是读码推断，逐条标明复核办法
@@ -22,7 +22,7 @@
   - `CONTRIBUTING.md` 原文提到迁移工具——项目**没有 Flyway／Liquibase**，迁移是 `V*_seed.sql` ＋ `V*_rollback.sql` 成对脚本＋台账表 `sys_schema_version`，DDL 只向前、回滚靠还原迁移前备份；已改为成对提交的要求并指向 `docs/workflow-engine.md` 9.2
 - `README.md` 文档索引新增一行：第一次动手改代码、不知道该动哪几处的人直接指向 `docs/workflow-engine.md` §9；`CONTRIBUTING.md` 的"必读三页"改为"必读四页"并把同一章加进去
 - `docs/release-checklist.md` §4c 的记录基线与整改记录同步刷新（引用数随文档增补变化，引用前须重跑 `_tools/cite_check.mjs`，不要抄册子里的数字）
-- `docs/release-checklist.md` §8 的六项待决**全部代判**，每项给两条锚（外部原文带链接＋本仓实测 `路径:行号` 或读数），签字栏一律留空：① 许可证维持 Apache-2.0；② 发布形态＝仅源码、`private: true` 不动（npm 上 `fssc`/`fssc-web` 实测均 404，名字空闲但没有可发布的库层）；③ README 不做整篇英译，只加英文 TL;DR（项目没有国际化框架）；④ 命名保留 `fssc` 技术前缀，只补一句"取行业通用缩写、与同名产品无关"的说明（商标可注册性仍待法务）；⑤ 保留 MySQL Connector/J 9.7.0 不换 MariaDB 驱动（MySQL 发行方公布的 FOSS Exception 许可清单里明确列有 Apache-2.0）；⑥ 发布基线由 JDK 26 降到 25 LTS——26 是非 LTS 且 End of Availability 为 2026-09（今天 2026-10-07 已过），Boot 4.1 支持区间 17–26 覆盖 25。同时给阻断表新增第 13 行（1,049 个待发布的 `.java` 里带 Apache 许可头的 **0** 个）与第 14 行（JDK 基线待降，须走 CI＋构建窗）
+- `docs/release-checklist.md` §8 的六项待决**全部代判**，每项给两条锚（外部原文带链接＋本仓实测 `路径:行号` 或读数），签字栏一律留空：① 许可证当时判为维持 Apache-2.0（**2026-11-01 改判 AGPL-3.0-or-later**，全树逐文件头与骨架文档同步改口）；② 发布形态＝仅源码、`private: true` 不动（npm 上 `fssc`/`fssc-web` 实测均 404，名字空闲但没有可发布的库层）；③ README 不做整篇英译，只加英文 TL;DR（项目没有国际化框架）；④ 命名保留 `fssc` 技术前缀，只补一句"取行业通用缩写、与同名产品无关"的说明（商标可注册性仍待法务）；⑤ 保留 MySQL Connector/J 9.7.0 不换 MariaDB 驱动（MySQL 发行方公布的 FOSS Exception 许可清单里明确列有 Apache-2.0）；⑥ 发布基线由 JDK 26 降到 25 LTS——26 是非 LTS 且 End of Availability 为 2026-09（今天 2026-10-07 已过），Boot 4.1 支持区间 17–26 覆盖 25。同时给阻断表新增第 13 行（1,049 个待发布的 `.java` 里带 Apache 许可头的 **0** 个）与第 14 行（JDK 基线待降，须走 CI＋构建窗）
 
 ### Fixed
 - 已由并发施工会话修复并于 2026-10-07 07:40 实测复核：`fssc/docker/Dockerfile:8` 的 `COPY` 目标原先写作 `fssc-start-1.0.0.jar`，与 `fssc/fssc-server/fssc-start/pom.xml:178` 的 `<finalName>fssc-server</finalName>` 不一致 → 当时 `docker build` 必然失败；现名字已对上，同批新增此前缺失的 `fssc/.dockerignore`（构建上下文里单 `target/` 实测 4.5 G）。 **仍未实跑 `docker build`**（本机 `docker: command not found`），故 `docs/deployment.md` 第 2 节的容器行为仍属"读码＋读文件"级结论
