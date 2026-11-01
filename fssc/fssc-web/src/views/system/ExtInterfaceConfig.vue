@@ -37,7 +37,7 @@
       </el-table-column>
       <el-table-column prop="apiUrl" :label="$t('system.common.colApiUrl')" min-width="250" show-overflow-tooltip>
         <template #default="{ row }">
-          <span v-if="row.apiUrl" style="font-size: 12px; color: #606266">{{ row.apiUrl }}</span>
+          <span v-if="row.apiUrl" style="font-size: 12px; color: var(--app-text-secondary, #606266)">{{ row.apiUrl }}</span>
           <span v-else style="color: #c0c4cc">{{ $t('system.extInterface.stNotConfigured') }}</span>
         </template>
       </el-table-column>

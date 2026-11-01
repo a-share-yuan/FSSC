@@ -439,7 +439,7 @@ onMounted(() => {
 
 /* 分配菜单大弹窗（左树右清单） */
 .menu-assign { display: flex; flex-direction: column; gap: 10px; }
-.assign-tip { font-size: 13px; color: #606266; line-height: 1.5; }
+.assign-tip { font-size: 13px; color: var(--app-text-secondary, #606266); line-height: 1.5; }
 .assign-body { display: flex; gap: 12px; min-height: 420px; }
 .assign-left { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .tree-toolbar { display: flex; gap: 6px; align-items: center; }
@@ -465,7 +465,7 @@ onMounted(() => {
 .selected-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 8px 10px; border-bottom: 1px solid #e4e7ed;
-  font-size: 13px; font-weight: 600; color: #303133;
+  font-size: 13px; font-weight: 600; color: var(--app-text, #303133);
 }
 .selected-search { padding: 6px 8px 0; }
 .selected-list { flex: 1; overflow-y: auto; max-height: 400px; padding: 6px 8px; }
@@ -474,7 +474,7 @@ onMounted(() => {
   display: flex; align-items: center; gap: 4px;
   padding: 5px 6px; margin-bottom: 4px; cursor: pointer;
   background: #ecf2fe; border-radius: 4px;
-  font-size: 12px; font-weight: 600; color: #303133;
+  font-size: 12px; font-weight: 600; color: var(--app-text, #303133);
   user-select: none;
 }
 .sel-group-head:hover { background: #e0eafc; }
@@ -488,7 +488,7 @@ onMounted(() => {
 .selected-item {
   display: flex; justify-content: space-between; align-items: center;
   padding: 5px 8px; margin-bottom: 4px;
-  background: #f5f7fa; border-radius: 4px; font-size: 12px; color: #303133;
+  background: var(--app-bg, #f5f7fa); border-radius: 4px; font-size: 12px; color: var(--app-text, #303133);
 }
 .sel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sel-del { cursor: pointer; color: #c0c4cc; flex-shrink: 0; }

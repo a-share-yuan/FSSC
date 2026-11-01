@@ -513,13 +513,13 @@ onMounted(async () => {
 .org-tree-card { height: 100%; }
 .org-tree-card :deep(.el-tree) { max-height: 640px; overflow-y: auto; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; }
-.panel-title { font-size: 14px; font-weight: 600; color: #303133; }
+.panel-title { font-size: 14px; font-weight: 600; color: var(--app-text, #303133); }
 .org-node { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; }
 .org-node .el-icon { color: #409eff; font-size: 14px; }
 .org-node.active .org-label { color: #409eff; font-weight: 600; }
 .org-count {
   margin-left: auto; margin-right: 8px; font-size: 11px; color: #909399;
-  background: #f0f2f5; border-radius: 8px; padding: 0 6px; line-height: 16px;
+  background: var(--app-hover, #f0f2f5); border-radius: 8px; padding: 0 6px; line-height: 16px;
 }
 .toolbar {
   display: flex;
@@ -534,7 +534,7 @@ onMounted(async () => {
 }
 
 /* 分配角色弹窗 */
-.role-assign-tip { font-size: 13px; color: #606266; line-height: 1.5; margin-bottom: 10px; }
+.role-assign-tip { font-size: 13px; color: var(--app-text-secondary, #606266); line-height: 1.5; margin-bottom: 10px; }
 .role-radio { display: flex; flex-direction: column; width: 100%; }
 .role-radio-item { height: auto; margin-right: 0; padding: 6px 4px; width: 100%; }
 .role-code { margin-left: 8px; font-size: 11px; color: #a8abb2; font-family: Consolas, monospace; }

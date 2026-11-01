@@ -464,6 +464,6 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => taskPoolCm.value?
 
 <style scoped>
 /* SLA 逾期行整行标红（同 借款台账逾期规则），使抢单/分派时先看账龄再看单号 */
-:deep(.sla-overdue-row) td.el-table__cell { background-color: #fef0f0 !important; }
+:deep(.sla-overdue-row) td.el-table__cell { background-color: rgba(245, 108, 108, 0.13) !important; }
 .sla-overdue-text { color: #f56c6c; font-weight: 600; }
 </style>

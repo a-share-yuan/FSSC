@@ -51,7 +51,7 @@
                   <el-timeline-item v-for="(h, i) in getHistory(row)" :key="h.id || i" :timestamp="h.operTime" :type="wfActionType(h.action)" placement="top">
                     <span style="font-weight:600">{{ h.nodeName || '—' }}</span>
                     <el-tag :type="wfActionType(h.action)" size="small" style="margin:0 6px">{{ wfActionLabel(h.action) }}</el-tag>
-                    <span style="color:#606266">{{ h.operUserName || '—' }}</span>
+                    <span style="color: var(--app-text-secondary, #606266)">{{ h.operUserName || '—' }}</span>
                     <!-- 节点耗时 -->
                     <el-tag v-if="getNodeDuration(row, i)" size="small" :type="getNodeDurationType(row, i)" effect="plain" style="margin-left: 8px">
                       <el-icon style="margin-right:2px"><Timer /></el-icon>{{ getNodeDuration(row, i) }}
@@ -241,7 +241,7 @@
     <el-dialog v-model="transferVisible" title="转办（改派办理人）" width="460px">
       <el-form ref="transferFormRef" :model="transferForm" :rules="transferFormRules" label-width="100px">
         <el-form-item label="待办任务">
-          <span style="color:#606266">{{ transferRow.title || transferRow.billNo || ('任务 ' + (transferRow.taskId || '')) }}</span>
+          <span style="color: var(--app-text-secondary, #606266)">{{ transferRow.title || transferRow.billNo || ('任务 ' + (transferRow.taskId || '')) }}</span>
         </el-form-item>
         <el-form-item label="转办给" prop="target">
           <el-select v-model="transferForm.target" filterable :loading="transferCandLoading"
@@ -267,7 +267,7 @@
     <el-dialog v-model="addSignVisible" title="加签（临时增加审批人）" width="540px">
       <el-form ref="addSignFormRef" :model="addSignForm" :rules="addSignFormRules" label-width="100px">
         <el-form-item label="待办任务">
-          <span style="color:#606266">{{ addSignRow.title || addSignRow.billNo || ('任务 ' + (addSignRow.taskId || '')) }}</span>
+          <span style="color: var(--app-text-secondary, #606266)">{{ addSignRow.title || addSignRow.billNo || ('任务 ' + (addSignRow.taskId || '')) }}</span>
         </el-form-item>
         <el-form-item label="加签位置" prop="position">
           <el-radio-group v-model="addSignForm.position">
@@ -1324,13 +1324,13 @@ function batchExport() {
 
 <style scoped>
 .approval-pager { margin-top: 12px; display: flex; justify-content: flex-end; flex-wrap: wrap; }
-.expand-content { padding: 12px 20px; background: #fafafa; }
+.expand-content { padding: 12px 20px; background: var(--app-hover, #fafafa); }
 .hist-placeholder { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 20px; color: #909399; }
 .history-detail { margin-top: 12px; max-height: 280px; overflow-y: auto; }
 .duration-summary { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .dur-badge {
   font-size: 12px; padding: 2px 8px; border-radius: 10px;
-  background: #ecf5ff; color: #409eff; border: 1px solid #d9ecff;
+  background: rgba(64, 158, 255, 0.12); color: #409eff; border: 1px solid #d9ecff;
 }
-.dur-badge.warn { background: #fef0f0; color: #f56c6c; border-color: #fbc4c4; }
+.dur-badge.warn { background: rgba(245, 108, 108, 0.13); color: #f56c6c; border-color: #fbc4c4; }
 </style>

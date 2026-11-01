@@ -713,7 +713,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => contractCm.value?
 .pay-seg-label {
   font-size: 13px;
   font-weight: 600;
-  color: #303133;
+  color: var(--app-text, #303133);
 }
 .pay-seg-amount {
   font-size: 11px;
@@ -721,13 +721,13 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => contractCm.value?
 }
 .pay-seg-amount .amt-paid { color: #67c23a; font-weight: 600; }
 .pay-seg-amount .amt-sep { color: #c0c4cc; }
-.pay-seg-amount .amt-plan { color: #606266; }
+.pay-seg-amount .amt-plan { color: var(--app-text-secondary, #606266); }
 .pay-seg-summary {
   margin-top: 10px;
   padding: 8px 12px;
-  background: #f5f7fa;
+  background: var(--app-bg, #f5f7fa);
   border-radius: 6px;
   font-size: 13px;
-  color: #606266;
+  color: var(--app-text-secondary, #606266);
 }
 </style>

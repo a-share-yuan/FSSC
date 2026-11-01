@@ -112,7 +112,7 @@
           </el-table>
           <el-button size="small" style="margin-top: 8px" @click="form.lines.push(newLine())">{{ $t('expense.create.btnAddRow') }}</el-button>
           <div style="margin-top: 8px">{{ $t('expense.create.labTotal') }}<b>{{ fmt(sumAmount()) }}</b> {{ $t('expense.create.txtGrossWithTax', { v1: fmt(sumTax()) }) }}</div>
-          <div style="margin-top: 4px; color: #606266">{{ $t('expense.create.txtAmountInWords', { v1: form.bill.amountCn || t('expense.createTab.txtAmountPending') }) }}</div>
+          <div style="margin-top: 4px; color: var(--app-text-secondary, #606266)">{{ $t('expense.create.txtAmountInWords', { v1: form.bill.amountCn || t('expense.createTab.txtAmountPending') }) }}</div>
         </el-card>
 
         <el-card v-if="currentType.travel" :header="$t('expense.create.colTravelLines')" style="margin-top: 12px">

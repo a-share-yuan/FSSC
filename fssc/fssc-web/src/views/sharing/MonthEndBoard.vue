@@ -141,6 +141,7 @@ import * as echarts from 'echarts/core'
 import { BarChart, ScatterChart } from 'echarts/charts'
 import { TooltipComponent, GridComponent, LegendComponent, DataZoomComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { initThemedChart, onThemeChange } from '../../utils/echartsTheme'
 import { glexApi, periodApi, flowApi } from '../../api'
 import { hasPerm } from '@/utils/perm'
 // 月结调度自动化
@@ -247,15 +248,16 @@ function statusLabel(s) {
 const statusChartRef = ref(null)
 const timelineChartRef = ref(null)
 let statusChart, timelineChart
+let offTheme = null
 
 function initCharts() {
   nextTick(() => {
     if (statusChartRef.value) {
-      statusChart = echarts.init(statusChartRef.value)
+      statusChart = initThemedChart(statusChartRef.value)
       renderStatusChart()
     }
     if (timelineChartRef.value) {
-      timelineChart = echarts.init(timelineChartRef.value)
+      timelineChart = initThemedChart(timelineChartRef.value)
       renderTimelineChart()
     }
   })
@@ -450,6 +452,11 @@ onMounted(async () => {
   await loadData()
   initCharts()
   window.addEventListener('resize', handleResize)
+  offTheme = onThemeChange(() => {
+    statusChart?.dispose(); statusChart = null
+    timelineChart?.dispose(); timelineChart = null
+    initCharts()
+  })
   // 月末提醒 + 自动检查
   monthEndAlert.value = checkMonthEndAlert()
   startAutoCheck()
@@ -457,6 +464,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  offTheme && offTheme()
   statusChart?.dispose()
   timelineChart?.dispose()
   // 停止自动检查
@@ -472,27 +480,27 @@ onBeforeUnmount(() => {
 .header-left .period { font-size: 14px; color: #909399; }
 .header-right { display: flex; gap: 8px; align-items: center; }
 .overview-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
-.overview-card { display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.overview-card { display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--app-card-bg, #fff); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .card-icon { width: 48px; height: 48px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
-.card-value { font-size: 24px; font-weight: 700; color: #303133; }
+.card-value { font-size: 24px; font-weight: 700; color: var(--app-text, #303133); }
 .card-label { font-size: 13px; color: #909399; }
-.progress-section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.progress-section { background: var(--app-card-bg, #fff); border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .progress-title { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
 .progress-percent { font-size: 18px; color: #409eff; }
 .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-.chart-card { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.chart-card { background: var(--app-card-bg, #fff); border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .chart-body { height: 260px; }
-.task-section { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.task-section { background: var(--app-card-bg, #fff); border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
 .text-muted { color: #c0c4cc; }
 .text-success { color: #67c23a; }
 /* 权限门控占位 */
-.no-perm { padding: 60px 20px; background: #fff; border-radius: 8px; }
-.no-perm .np-title { font-size: 15px; font-weight: 600; color: #303133; margin: 0 0 6px; }
-.no-perm .np-code { font-size: 13px; color: #606266; margin: 0 0 10px; }
+.no-perm { padding: 60px 20px; background: var(--app-card-bg, #fff); border-radius: 8px; }
+.no-perm .np-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); margin: 0 0 6px; }
+.no-perm .np-code { font-size: 13px; color: var(--app-text-secondary, #606266); margin: 0 0 10px; }
 .no-perm .np-code code {
-  background: #f4f4f5; padding: 1px 6px; border-radius: 3px;
+  background: var(--app-hover, #f4f4f5); padding: 1px 6px; border-radius: 3px;
   font-family: Consolas, Monaco, monospace; color: #c0392b;
 }
 .no-perm .np-tip { font-size: 12.5px; color: #909399; line-height: 1.9; margin: 0; }

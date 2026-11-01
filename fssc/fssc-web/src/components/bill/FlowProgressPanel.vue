@@ -207,34 +207,34 @@ function humanizeDwell(t) {
 </script>
 
 <style scoped>
-.fp { border: 1px solid #ebeef5; border-radius: 6px; background: #fff; padding: 10px 12px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0, 21, 41, .04); }
+.fp { border: 1px solid var(--app-border, #ebeef5); border-radius: 6px; background: var(--app-card-bg, #fff); padding: 10px 12px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0, 21, 41, .04); }
 .fp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
 .fp-id { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-.fp-no { font-weight: 600; color: #303133; }
-.fp-title { color: #606266; font-size: 13px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fp-none { color: #909399; font-size: 13px; }
+.fp-no { font-weight: 600; color: var(--app-text, #303133); }
+.fp-title { color: var(--app-text-secondary, #606266); font-size: 13px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-none { color: var(--app-text-secondary, #909399); font-size: 13px; }
 .fp-ops { display: flex; align-items: center; gap: 10px; }
-.fp-updated { color: #909399; font-size: 12px; }
-.fp-cur { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; background: #f5f7fa; }
-.fp-cur-label { font-size: 12px; color: #606266; }
-.fp-cur-node { font-size: 17px; font-weight: 600; color: #303133; }
-.fp-cur-meta { font-size: 12px; color: #606266; }
-.fp-cur-run { background: #ecf5ff; }
+.fp-updated { color: var(--app-text-secondary, #909399); font-size: 12px; }
+.fp-cur { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; background: var(--app-bg, #f5f7fa); }
+.fp-cur-label { font-size: 12px; color: var(--app-text-secondary, #606266); }
+.fp-cur-node { font-size: 17px; font-weight: 600; color: var(--app-text, #303133); }
+.fp-cur-meta { font-size: 12px; color: var(--app-text-secondary, #606266); }
+.fp-cur-run { background: var(--app-hover, #ecf5ff); }
 .fp-cur-run .fp-cur-node { color: #409eff; }
-.fp-cur-bad { background: #fef0f0; }
+.fp-cur-bad { background: rgba(245, 108, 108, .14); }
 .fp-cur-bad .fp-cur-node { color: #f56c6c; }
-.fp-cur-done { background: #f0f9eb; }
+.fp-cur-done { background: rgba(103, 194, 58, .14); }
 .fp-cur-done .fp-cur-node { color: #67c23a; }
-.fp-cur-draft .fp-cur-node { color: #909399; }
+.fp-cur-draft .fp-cur-node { color: var(--app-text-secondary, #909399); }
 .fp-steps { margin-bottom: 10px; }
-.fp-chain { border-top: 1px dashed #ebeef5; padding-top: 8px; }
+.fp-chain { border-top: 1px dashed var(--app-border, #ebeef5); padding-top: 8px; }
 .fp-chain-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
-.fp-chain-title { font-size: 12px; color: #303133; font-weight: 600; }
+.fp-chain-title { font-size: 12px; color: var(--app-text, #303133); font-weight: 600; }
 .fp-chain-btns { display: flex; gap: 8px; }
-.fp-dialog-head { font-size: 12px; color: #606266; margin-bottom: 10px; }
+.fp-dialog-head { font-size: 12px; color: var(--app-text-secondary, #606266); margin-bottom: 10px; }
 /* 时间轴与明细表同框：时间轴限高 38vh 内滚，下面接表格（表格自身 max-height 由 FlowChain 控制），
    整框不会顶出视口——原来两框各占 64vh 是因为一框只装一种排法。 */
 .fp-dialog-scroll { max-height: 38vh; overflow: auto; padding-right: 4px; }
-.fp-dialog-sub { margin: 12px 0 6px; font-size: 12px; color: #909399; }
-.fp-noflow { font-size: 12px; color: #909399; border-top: 1px dashed #ebeef5; padding-top: 8px; }
+.fp-dialog-sub { margin: 12px 0 6px; font-size: 12px; color: var(--app-text-secondary, #909399); }
+.fp-noflow { font-size: 12px; color: var(--app-text-secondary, #909399); border-top: 1px dashed var(--app-border, #ebeef5); padding-top: 8px; }
 </style>

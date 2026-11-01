@@ -5,12 +5,16 @@ import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+// 暗色模式令牌：html.dark 下才生效，提供 --el-text-color-*/--el-bg-color-*/--el-border-color-*。
+// 不引这份，组件文字仍是浅色主题的深色值，深底上就看不清。
+import 'element-plus/theme-chalk/dark/css-vars.css'
 // 统一文件预览组件 @open-file-viewer 的全局样式（图片/PDF/Office 等在线预览）
 import '@open-file-viewer/core/style.css'
 import * as Icons from '@element-plus/icons-vue'
 import App from './App.vue'
 import router from './router'
-import { bootstrapSession } from './api'
+import { bootstrapSession, store } from './api'
+import { applyStoredTheme } from './composables/useTheme'
 // 国际化基座（域8A/T0.5）：i18n 实例 + 语言切换器 + Element Plus locale 跟随
 import i18n, { getLocale } from './i18n'
 import { elementLocaleOf } from './i18n/element-locale'
@@ -88,4 +92,6 @@ app.component('LocaleSwitch', LocaleSwitch)
 // 挂载前先探活 + 校验本地 token：
 // 后端返回 401（token 过期 / 后端重启后密钥变更）会清掉残留 token，
 // 随后 router 守卫按"无 token"把用户送去 /login，而不是直接跳进 /dashboard。
+// 有登录态时先套上本地主题偏好，登录页保持浅色不受影响。
+if (store.token) applyStoredTheme()
 bootstrapSession().finally(() => app.mount('#app'))

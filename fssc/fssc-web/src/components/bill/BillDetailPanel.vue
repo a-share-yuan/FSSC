@@ -149,7 +149,7 @@
           <!-- 查询失败要说"取不到"，不能空着让人以为"没有" -->
           <el-alert v-else-if="historyError" type="error" :closable="false" show-icon
                     :title="`审批历史加载失败：${historyError}`">
-            <div style="font-size:12px; color:#606266; line-height:20px">
+            <div style="font-size:12px; color: var(--app-text-secondary, #606266); line-height:20px">
               此处为空表示加载失败，不代表本单没有审批记录；请重试，仍失败时联系流程管理员核对。
               <div><el-button size="small" type="primary" plain style="margin-top:6px" @click="loadHistory(billId)">重新加载</el-button></div>
             </div>
@@ -391,13 +391,13 @@ watch(() => props.taskId, (v) => { void loadFieldPerm(v || '') })
 .bdp { min-height: 120px; }
 .bdp-head { margin-bottom: 8px; }
 .bdp-no { font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.bdp-title { font-size: 14px; font-weight: 600; margin-top: 6px; color: #303133; }
+.bdp-title { font-size: 14px; font-weight: 600; margin-top: 6px; color: var(--app-text, #303133); }
 .bdp-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .bdp-type { font-size: 13px; color: #909399; }
-.bdp-amt { font-size: 13px; font-weight: 600; color: #303133; }
+.bdp-amt { font-size: 13px; font-weight: 600; color: var(--app-text, #303133); }
 .bdp-sec { font-size: 14px; font-weight: 600; margin: 16px 0 8px; }
 .bdp-node { font-weight: 600; }
 .bdp-oper { font-size: 13px; color: #409eff; }
 .bdp-dur { font-size: 12px; color: #909399; margin-left: 8px; }
-.bdp-comment { font-size: 12px; color: #606266; margin-top: 2px; }
+.bdp-comment { font-size: 12px; color: var(--app-text-secondary, #606266); margin-top: 2px; }
 </style>

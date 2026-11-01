@@ -347,5 +347,5 @@ onMounted(() => {
 
 <style scoped>
 .card-header { display: flex; justify-content: space-between; align-items: center; }
-.header-title { font-size: 15px; font-weight: 600; color: #303133; }
+.header-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
 </style>

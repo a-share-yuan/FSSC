@@ -128,7 +128,7 @@ onMounted(() => loadFavorites())
   border: 1px solid #ebeef5; margin-bottom: 4px;
   transition: background 0.15s;
 }
-.fav-item:hover { background: #ecf5ff; }
+.fav-item:hover { background: rgba(64, 158, 255, 0.12); }
 .fav-drag { color: #c0c4cc; cursor: grab; font-size: 14px; }
 .fav-icon { color: #409eff; font-size: 16px; }
 .fav-name { flex: 1; font-size: 13px; }

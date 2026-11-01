@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 制证科目落末级：凭证分录只能挂末级科目。
@@ -20,7 +21,8 @@ import java.util.List;
  * <ul>
  *   <li>末级科目：原样返回；</li>
  *   <li>非末级但只有唯一一个启用的末级下级：下沉到它（纯结构节点，唯一解）；</li>
- *   <li>其余（有多个明细／没有明细）：拒绝制证——具体挂哪个明细要用账业务判断，
+ *   <li>非末级且有多个明细，但编码登记在 {@link #APPROVED_LEAF_CODE} 里：下沉到登记的明细；</li>
+ *   <li>其余（既无唯一解又未登记）：拒绝制证——具体挂哪个明细要用账业务判断，
  *       系统不替人猜，猜错就是把账记到了别的明细科目上。</li>
  * </ul>
  */
@@ -28,6 +30,21 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class PostableSubjectResolver {
+
+    /**
+     * 汇总层编码 → 制证挂账的末级明细（业务批准的口径，2026-10-31）。
+     * <p>自动出证的建单代码写的是上级编码（1002/1122/1405/2202/6001），而这些上级下面
+     * 挂着多条明细，主数据给不出唯一解 ⇒ 只能按业务口径钉死。钉的是<b>境内</b>那一条：
+     * 现下所有自动出证入口（合同/暂估/开票应收/调拨/资产/采购入库）都只走境内本位币业务，
+     * 涉外明细没有出证来源。日后真开涉外账，必须由出证侧直接传末级编码，再往本表加键。
+     */
+    private static final Map<String, String> APPROVED_LEAF_CODE = Map.of(
+            "1002", "100201",      // 银行存款 → 基本户
+            "1122", "112201",      // 应收账款 → 国内客户款
+            "1405", "140501",      // 库存商品 → 原材料
+            "2202", "220201",      // 应付账款 → 国内供应商
+            "6001", "60010103"     // 主营业务收入 → 国内销售
+    );
 
     private final MdSubjectMapper mapper;
 
@@ -52,6 +69,17 @@ public class PostableSubjectResolver {
                     subject.getSubjectCode(), subject.getSubjectName(),
                     leaf.getSubjectCode(), leaf.getSubjectName());
             return leaf;
+        }
+        String approvedCode = APPROVED_LEAF_CODE.get(subject.getSubjectCode());
+        if (approvedCode != null) {
+            for (MdSubject leaf : leaves) {
+                if (approvedCode.equals(leaf.getSubjectCode())) {
+                    log.info("科目 {} {} 非末级（下设 {} 个明细），制证按登记口径下沉到 {} {}",
+                            subject.getSubjectCode(), subject.getSubjectName(), leaves.size(),
+                            leaf.getSubjectCode(), leaf.getSubjectName());
+                    return leaf;
+                }
+            }
         }
         String code = codeForMsg == null || codeForMsg.isBlank() ? subject.getSubjectCode() : codeForMsg;
         String why = leaves.isEmpty()

@@ -48,6 +48,7 @@ import * as echarts from 'echarts/core'
 import { BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { initThemedChart, onThemeChange } from '../utils/echartsTheme'
 
 echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -152,7 +153,7 @@ function renderTrend() {
     chart.dispose()
     chart = null
   }
-  if (!chart) chart = echarts.init(trendRef.value)
+  if (!chart) chart = initThemedChart(trendRef.value)
   chart.setOption({
     grid: { left: 40, right: 10, top: 20, bottom: 30 },
     xAxis: { type: 'category', data: trendData.value.map((d) => d.name), axisLabel: { fontSize: 10, rotate: 30 } },
@@ -185,14 +186,24 @@ watch(() => props.data, () => {
   loadData()
 })
 
-onBeforeUnmount(() => chart?.dispose())
+onBeforeUnmount(() => {
+  offTheme()
+  chart?.dispose()
+})
+
+const offTheme = onThemeChange(() => {
+  if (!chart || !trendRef.value) return
+  chart.dispose()
+  chart = null
+  nextTick(renderTrend)
+})
 </script>
 
 <style scoped>
 .drill-content { display: flex; flex-direction: column; }
 .drill-crumbs { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; font-size: 13px; }
 .crumb-item { display: flex; align-items: center; gap: 4px; cursor: pointer; color: #409eff; }
-.crumb-item:last-child { color: #303133; cursor: default; font-weight: 600; }
+.crumb-item:last-child { color: var(--app-text, #303133); cursor: default; font-weight: 600; }
 .drill-level { flex: 1; }
 .drill-level.can-drill :deep(.el-table__row) { cursor: pointer; }
 .drill-trend { margin-top: 16px; }

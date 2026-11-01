@@ -222,7 +222,7 @@ onMounted(() => load())
 
 <style scoped>
 .card-header { display: flex; justify-content: space-between; align-items: center; }
-.header-title { font-size: 15px; font-weight: 600; color: #303133; }
-:deep(.row-red) { background-color: #fef0f0 !important; }
-:deep(.row-yellow) { background-color: #fdf6ec !important; }
+.header-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
+:deep(.row-red) { background-color: rgba(245, 108, 108, 0.13) !important; }
+:deep(.row-yellow) { background-color: rgba(230, 162, 60, 0.14) !important; }
 </style>

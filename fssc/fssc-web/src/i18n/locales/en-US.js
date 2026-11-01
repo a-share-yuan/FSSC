@@ -2882,6 +2882,7 @@ export default {
       colLastChange: 'Last Change',
       colNode: 'Node',
       colPaidTime: 'Paid At',
+      btnPreviewImages: 'Preview Attachments',
       emptyFlow: 'No workflow information',
       emptyImages: 'No images',
       emptyPayments: 'No payment records',

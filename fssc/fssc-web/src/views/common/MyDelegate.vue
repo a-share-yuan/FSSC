@@ -272,7 +272,7 @@ onMounted(load)
 .my-delegate-page { min-height: 100%; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; }
 .panel-actions { display: flex; align-items: center; gap: 10px; }
-.panel-title { font-size: 15px; font-weight: 600; color: #303133; }
+.panel-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
 .panel-hint { margin-left: 10px; font-size: 12px; color: #909399; }
 .pager { margin-top: 12px; justify-content: flex-end; }
 </style>

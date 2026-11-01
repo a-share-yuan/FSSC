@@ -160,9 +160,9 @@ onMounted(() => {
 .paper-title { font-size: 18px; font-weight: 700; }
 .paper-meta { font-size: 12px; color: #909399; margin-top: 4px; display: flex; justify-content: space-between; }
 .preview-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.preview-table th { background: #f5f7fa; border: 1px solid #ebeef5; padding: 6px 8px; text-align: left; font-weight: 600; }
+.preview-table th { background: var(--app-bg, #f5f7fa); border: 1px solid #ebeef5; padding: 6px 8px; text-align: left; font-weight: 600; }
 .preview-table td { border: 1px solid #ebeef5; padding: 4px 8px; }
-.preview-table tfoot td { background: #fafafa; font-weight: 600; border-top: 2px solid #dcdfe6; }
+.preview-table tfoot td { background: var(--app-hover, #fafafa); font-weight: 600; border-top: 2px solid #dcdfe6; }
 .paper-footer { text-align: center; margin-top: 16px; font-size: 11px; color: #c0c4cc; }
 .no-data { text-align: center; padding: 40px; color: #c0c4cc; }
 .no-data p { margin-top: 8px; font-size: 13px; }

@@ -584,8 +584,13 @@ public class VoucherService {
             Long drSubjectId; String drCode; String drName;
             if (bestDr != null && debitSubjectId(bestDr) != null) {
                 drSubjectId = debitSubjectId(bestDr);
-                drCode = pickNotEmpty(bestDr.getSubjectCode(), bestDr.getAuxRule(), "6602");
-                drName = pickNotEmpty(bestDr.getSubjectName(), bestDr.getAuxRule(), "管理费用");
+                // 配置行可能只写了 subject_id（界面新建时仅选科目），code/name 为空：
+                // 以 id 指向的主数据为准回填，避免分录文本回落成 "6602"/"管理费用"。
+                String[] coords = subjectCoords(drSubjectId,
+                        pickNotEmpty(bestDr.getSubjectCode(), bestDr.getAuxRule(), "6602"),
+                        pickNotEmpty(bestDr.getSubjectName(), bestDr.getAuxRule(), "管理费用"));
+                drCode = coords[0];
+                drName = coords[1];
             } else {
                 drSubjectId = resolveSubjectId(line.getSubjectId(), item);
                 MdSubject s = drSubjectId == null ? null : mdSubjectMapper.selectById(drSubjectId);
@@ -603,10 +608,13 @@ public class VoucherService {
             //    若规则未提供，则按旧行为汇总后一笔贷记 2241 兜底（由循环外处理）。
             MdGlConfig bestCr = bestMatch(rulePool, line, item, "CREDIT", dimType, ccType, travel, special, billStatus);
             if (bestCr != null && creditSubjectId(bestCr) != null) {
-                String crCode = pickNotEmpty(bestCr.getSubjectCode(), bestCr.getAuxRule(), "2241");
-                String crName = pickNotEmpty(bestCr.getSubjectName(), bestCr.getAuxRule(), "其他应付款");
+                String[] crCoords = subjectCoords(creditSubjectId(bestCr),
+                        pickNotEmpty(bestCr.getSubjectCode(), bestCr.getAuxRule(), "2241"),
+                        pickNotEmpty(bestCr.getSubjectName(), bestCr.getAuxRule(), "其他应付款"));
+                String crCode = crCoords[0];
+                String crName = crCoords[1];
                 OpVoucherLine crLine = buildLine(tenantId, v.getId(), no++,
-                        bestCr.getSubjectName() == null ? bestCr.getAuxRule() : bestCr.getSubjectName(),
+                        pickNotEmpty(bestCr.getSubjectName(), crName),
                         creditSubjectId(bestCr), crCode, crName, "CREDIT", amt,
                         line.getDeptId() != null ? line.getDeptId() : bill.getDeptId());
                 opVoucherLineMapper.insert(crLine);

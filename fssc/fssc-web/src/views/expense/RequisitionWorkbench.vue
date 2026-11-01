@@ -217,7 +217,8 @@
 
         <!-- 影像附件 -->
         <h4 style="margin: 14px 0 6px">{{ $t('expense.workbench.tabImages', { v1: detail.data.imageCount || 0 }) }}</h4>
-        <el-empty v-if="!detail.data.imageCount" :description="$t('expense.workbench.emptyImages')" :image-size="40" />
+        <el-button v-if="detail.data.imageCount" size="small" @click="previewImages">{{ $t('expense.workbench.btnPreviewImages') }}</el-button>
+        <el-empty v-else :description="$t('expense.workbench.emptyImages')" :image-size="40" />
 
         <!-- 档案 -->
         <h4 style="margin: 14px 0 6px">{{ $t('expense.workbench.tabFiling') }}</h4>
@@ -231,6 +232,7 @@
     </el-drawer>
   </div>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" :biz-type="traceBizType" />
+  <FileViewer ref="fileViewerRef" />
 
   <CoachMark ref="reqCm" :guide-key="_guideKey" :selector="'.cm-target-req'" :title="$t('expense.workbench.tabRequisitionWb')" :text="$t('expense.workbench.hintRequisitionWb')" />
   <ApprovalDialog ref="approvalRef" />
@@ -246,6 +248,7 @@ import { http, wfApi } from '../../api'
 import { statusLabel as _statusLabel, statusType as _statusType, BillStatus, canEditResubmit, editBillPath } from '../../constants/billStatus'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import FileViewer from '../../components/FileViewer.vue'
 import CoachMark from '@/components/CoachMark.vue'
 import InlineActions from '@/components/InlineActions.vue'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
@@ -259,6 +262,11 @@ const reqCm = ref(null)
 const traceVisible = ref(false)
 const traceBillId = ref(null)
 const traceBizType = ref(null)
+const fileViewerRef = ref(null)
+function previewImages() {
+  const ids = (detail.data.images || []).map(i => i.fileId).filter(Boolean)
+  if (ids.length) fileViewerRef.value?.open(ids, t('expense.workbench.tabImages', { v1: ids.length }))
+}
 function openTrace(row) {
   traceBillId.value = row.bizId || row.id
   traceBizType.value = row.bizType || null
@@ -462,12 +470,12 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => reqCm.value?.show
 <style scoped>
 .scene-section { margin-bottom: 16px; }
 .scene-group { margin-bottom: 12px; }
-.group-title { font-weight: 700; font-size: 14px; color: #303133; margin-bottom: 8px; }
+.group-title { font-weight: 700; font-size: 14px; color: var(--app-text, #303133); margin-bottom: 8px; }
 .scene-items { display: flex; flex-direction: column; gap: 6px; }
 .scene-card { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
-.scene-card:hover { background: #ecf5ff; }
+.scene-card:hover { background: var(--app-hover, #ecf5ff); }
 .scene-icon { font-size: 16px; color: #409eff; }
-.scene-label { font-size: 13px; }
+.scene-label { font-size: 13px; color: var(--app-text, #303133); }
 .stats-row { margin-bottom: 16px; }
 .stat { text-align: center; cursor: pointer; }
 .stat .num { font-size: 28px; font-weight: 700; }

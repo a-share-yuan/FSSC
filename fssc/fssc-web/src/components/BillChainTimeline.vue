@@ -169,8 +169,8 @@ function onClick(s) {
 </script>
 
 <style scoped>
-.bct { margin: 10px 0 14px; padding: 12px; background: #f5f7fa; border-radius: 8px; }
-.bct-title { font-size: 13px; font-weight: 600; color: #303133; margin-bottom: 10px; }
+.bct { margin: 10px 0 14px; padding: 12px; background: var(--app-bg, #f5f7fa); border-radius: 8px; }
+.bct-title { font-size: 13px; font-weight: 600; color: var(--app-text, #303133); margin-bottom: 10px; }
 .bct-track { display: flex; align-items: flex-start; }
 .bct-node { flex: 1; text-align: center; cursor: pointer; user-select: none; }
 .bct-dot {
@@ -179,10 +179,10 @@ function onClick(s) {
   background: #fff; border: 2px solid #dcdfe6; color: #909399;
 }
 .bct-node.reached .bct-dot { background: #67c23a; border-color: #67c23a; color: #fff; }
-.bct-node.blocked .bct-dot { background: #fef0f0; border-color: #f56c6c; color: #f56c6c; }
+.bct-node.blocked .bct-dot { background: rgba(245, 108, 108, 0.13); border-color: #f56c6c; color: #f56c6c; }
 .bct-node.pending .bct-dot { background: #fff; }
-.bct-label { font-size: 12px; color: #606266; font-weight: 600; }
-.bct-node.reached .bct-label { color: #303133; }
+.bct-label { font-size: 12px; color: var(--app-text-secondary, #606266); font-weight: 600; }
+.bct-node.reached .bct-label { color: var(--app-text, #303133); }
 .bct-node.blocked .bct-label { color: #f56c6c; }
 .bct-sub { font-size: 11px; color: #c0c4cc; margin-top: 2px; }
 .bct-node.reached .bct-sub { color: #909399; }

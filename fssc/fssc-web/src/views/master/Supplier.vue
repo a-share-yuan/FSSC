@@ -434,5 +434,5 @@ onMounted(() => { load(); loadCurrencies() })
 .form-row { display: flex; gap: 12px; }
 .half { flex: 1; }
 .sub-ops { display: flex; justify-content: flex-end; margin-bottom: 8px; }
-:deep(.row-active) { background-color: #ecf5ff !important; }
+:deep(.row-active) { background-color: rgba(64, 158, 255, 0.12) !important; }
 </style>

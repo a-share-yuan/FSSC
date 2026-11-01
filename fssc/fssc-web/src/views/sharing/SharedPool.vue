@@ -160,10 +160,10 @@ onMounted(async () => {
 
 <style scoped>
 .card-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-.header-title { font-size: 15px; font-weight: 600; color: #303133; }
+.header-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .muted { color: #c0c4cc; font-size: 12px; }
 .text-danger { color: #f56c6c; font-weight: 600; }
-:deep(.row-overdue) td.el-table__cell { background-color: #fef0f0 !important; }
-:deep(.row-no-due) td.el-table__cell { background-color: #fdf6ec !important; }
+:deep(.row-overdue) td.el-table__cell { background-color: rgba(245, 108, 108, 0.13) !important; }
+:deep(.row-no-due) td.el-table__cell { background-color: rgba(230, 162, 60, 0.14) !important; }
 </style>

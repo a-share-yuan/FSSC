@@ -11,7 +11,7 @@
 
       <el-tabs v-model="tab" @tab-change="onTabChange">
         <!-- 1. 分配策略配置 -->
-        <el-tab-pane :label="$t('sharing.ops.tabPolicy')" name="policy">
+        <el-tab-pane v-if="tabVisible('policy')" :label="$t('sharing.ops.tabPolicy')" name="policy">
           <el-form :inline="true" size="small" style="margin-bottom: 10px">
             <el-form-item :label="$t('sharing.common.colKeyword')">
               <el-input v-model="policyQ.keyword" :placeholder="$t('sharing.ops.phPolicyKeyword')" clearable style="width: 200px" @keyup.enter="policyReset" />
@@ -58,7 +58,7 @@
         </el-tab-pane>
 
         <!-- 2. 分配规则顺序解析试算 -->
-        <el-tab-pane :label="$t('sharing.ops.tabRule')" name="rule">
+        <el-tab-pane v-if="tabVisible('rule')" :label="$t('sharing.ops.tabRule')" name="rule">
           <el-alert
             type="info"
             :closable="false"
@@ -125,7 +125,7 @@
         </el-tab-pane>
 
         <!-- 3. 自动分配 + 调度日志 -->
-        <el-tab-pane :label="$t('sharing.ops.tabDispatch')" name="dispatch">
+        <el-tab-pane v-if="tabVisible('dispatch')" :label="$t('sharing.ops.tabDispatch')" name="dispatch">
           <el-card shadow="never" class="sub-card">
             <template #header><b>{{ $t('sharing.ops.subAutoAssign') }}</b>{{ $t('sharing.ops.hintAutoAssignDryRun') }}</template>
             <el-form :inline="true" size="small">
@@ -205,7 +205,7 @@
         </el-tab-pane>
 
         <!-- 4. 双时限 -->
-        <el-tab-pane :label="$t('sharing.ops.tabTimeLimit')" name="timelimit">
+        <el-tab-pane v-if="tabVisible('timelimit')" :label="$t('sharing.ops.tabTimeLimit')" name="timelimit">
           <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
             :title="$t('sharing.ops.hintDueRule')" />
           <el-form :inline="true" size="small">
@@ -267,7 +267,7 @@
         </el-tab-pane>
 
         <!-- 5. 制证失败·执行结果视图 -->
-        <el-tab-pane :label="$t('sharing.ops.tabVoucherFail')" name="vouchfail">
+        <el-tab-pane v-if="tabVisible('vouchfail')" :label="$t('sharing.ops.tabVoucherFail')" name="vouchfail">
           <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
             :title="$t('sharing.ops.hintVoucherFail')" />
           <el-alert v-if="vfError" type="error" :closable="false" show-icon style="margin-bottom: 10px" :title="vfError" />
@@ -440,6 +440,7 @@ import { wfOpsApi, sharingApi, orgApi, mdApi, flowApi } from '../../api'
 import TablePager from '../../components/common/TablePager.vue'
 import { useTablePager } from '../../composables/useTablePager'
 import { formatDateTime } from '@/utils/format'
+import { hasPerm } from '@/utils/perm'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
@@ -477,12 +478,23 @@ function strategyTag(s) {
 
 const tab = ref('policy')
 const loadedTabs = new Set()
+// 本页汇集四类权限（配置/任务/流程监控/凭证），角色通常只持其中一部分。
+// 页签按读权限显隐：否则切到无权页签立刻弹「您没有…权限」红字，页面看着像坏了。
+const TAB_PERM = {
+  policy: 'wf:config:list', rule: 'wf:task:list', dispatch: 'wf:instance:list',
+  timelimit: 'wf:instance:list', vouchfail: 'sharing:voucher:list',
+}
+const TAB_ORDER = ['policy', 'vouchfail', 'rule', 'dispatch', 'timelimit']
+function tabVisible(name) { return hasPerm(TAB_PERM[name]) }
 function onTabChange(name) {
   if (loadedTabs.has(name)) return
   loadedTabs.add(name)
   if (name === 'policy') loadPolicy()
   if (name === 'dispatch') loadLog()
   if (name === 'timelimit') loadDueScan()
+  // 制证失败页签此前不自动取数：切过去显示「暂无制证失败事件」，与真实有事件的事实相反，
+  // 财务会以为没有待补生成的单据。首次进入必须同时拉列表与计数。
+  if (name === 'vouchfail') { loadVfPage(); loadVfStats() }
 }
 
 // 1. 分配策略
@@ -710,8 +722,13 @@ async function doMark() {
 }
 
 onMounted(() => {
-  loadedTabs.add('policy')
-  loadPolicy()
+  // 默认停在本人可见的第一个页签：共享会计直接落在「制证失败」办补生成，
+  // 流程配置员仍是「分配策略」。无任何读权时保持默认，不再发请求。
+  const first = TAB_ORDER.find(tabVisible)
+  if (first) {
+    tab.value = first
+    onTabChange(first)
+  }
   loadRuleRefs()
 })
 
@@ -803,7 +820,7 @@ async function doVfRetry(row) {
 </script>
 
 <style scoped>
-.header-title { font-size: 15px; font-weight: 600; color: #303133; margin-right: 10px; }
+.header-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); margin-right: 10px; }
 .header-note { font-size: 12px; color: #909399; }
 .sub-card :deep(.el-card__header) { padding: 10px 14px; }
 </style>

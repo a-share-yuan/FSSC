@@ -141,7 +141,7 @@
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
         <b>{{ b.billNo || $t('pay.batch.textDetailNo', { v1: b.detailId }) }}</b>
         <el-tag size="small" type="danger" effect="plain">{{ b.payeeName || t('pay.batch.stNoPayee') }}</el-tag>
-        <span style="color:#606266;font-size:13px">{{ formatMoney(b.amount) }}</span>
+        <span style="color: var(--app-text-secondary, #606266);font-size:13px">{{ formatMoney(b.amount) }}</span>
         <el-tag v-if="b.matchStatus" size="small" :type="b.matchStatus === 'FAILED' ? 'danger' : 'warning'" effect="plain">
           {{ $t('pay.batch.matchStatus', { v1: b.matchStatus }) }}</el-tag>
       </div>
@@ -155,7 +155,7 @@
       </div>
       <div class="blk-sec">
         <span class="blk-sec-label">{{ $t('pay.batch.secBillInvolved') }}</span>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#606266">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color: var(--app-text-secondary, #606266)">
           <span>{{ $t('pay.batch.legPayBill', { v1: b.billNo || '—' }) }}</span>
           <span>{{ $t('pay.batch.legGrn', { v1: b.receiptNo || t('pay.match.stUnlinked'), v2: formatMoney(b.receiptAmount) }) }}</span>
           <span>{{ $t('pay.batch.legPo', { v1: b.poNo || t('pay.match.stUnlinked'), v2: formatMoney(b.poAmount) }) }}</span>
@@ -169,7 +169,7 @@
           <li v-for="(c, ci) in blockChannels(b)" :key="'c' + ci">{{ c }}</li>
         </ul>
       </div>
-      <div v-if="b.payeeNameOnBill || b.poSupplierName" style="margin-bottom:8px;font-size:12px;color:#606266">
+      <div v-if="b.payeeNameOnBill || b.poSupplierName" style="margin-bottom:8px;font-size:12px;color: var(--app-text-secondary, #606266)">
         {{ $t('pay.batch.payeeVsPoSupplier', { v1: b.payeeNameOnBill || '—', v2: b.poSupplierName || t('pay.match.noPoLinked') }) }}</div>
       <div v-for="(r, ri) in (b.reasons || [])" :key="'r' + ri" style="border-top:1px dashed #ebeef5;padding-top:6px;margin-top:6px">
         <div style="font-size:13px;color:#a32d2d">{{ r.msg }}</div>

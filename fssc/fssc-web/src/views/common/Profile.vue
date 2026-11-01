@@ -629,8 +629,8 @@ const todosRef = ref()
 }
 .user-meta { flex: 1; min-width: 200px; }
 .user-name-line { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.user-name { font-size: 20px; font-weight: 700; color: #1f2d3d; }
-.user-sub-line { display: flex; flex-wrap: wrap; gap: 16px; color: #909399; font-size: 13px; }
+.user-name { font-size: 20px; font-weight: 700; color: var(--app-text, #303133); }
+.user-sub-line { display: flex; flex-wrap: wrap; gap: 16px; color: var(--app-text-secondary, #909399); font-size: 13px; }
 .meta-item { display: flex; align-items: center; gap: 4px; }
 .meta-item .el-icon { font-size: 14px; }
 .user-actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -640,7 +640,7 @@ const todosRef = ref()
 .stat-card {
   display: flex; align-items: center; gap: 12px; padding: 16px;
   border-radius: 8px; cursor: pointer; transition: all 0.2s;
-  border: 1px solid #ebeef5; background: #fff;
+  border: 1px solid var(--app-border, #ebeef5); background: var(--app-card-bg, #fff);
 }
 .stat-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); transform: translateY(-2px); }
 .stat-icon {
@@ -653,14 +653,14 @@ const todosRef = ref()
 .stat-perm .stat-icon { background: linear-gradient(135deg, #67c23a, #95d475); }
 .stat-todo .stat-icon { background: linear-gradient(135deg, #e6a23c, #f3d19e); }
 .stat-done .stat-icon { background: linear-gradient(135deg, #909399, #b1b3b8); }
-.stat-num { font-size: 24px; font-weight: 700; color: #1f2d3d; line-height: 1.2; }
-.stat-label { font-size: 12px; color: #909399; }
+.stat-num { font-size: 24px; font-weight: 700; color: var(--app-text, #303133); line-height: 1.2; }
+.stat-label { font-size: 12px; color: var(--app-text-secondary, #909399); }
 
 /* 区域卡片通用 */
 .section-card { margin-bottom: 16px; border-radius: 8px; }
 .section-card :deep(.el-card__header) { padding: 14px 20px; }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
-.card-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 15px; color: #1f2d3d; }
+.card-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 15px; color: var(--app-text, #303133); }
 .card-title .el-icon { color: #409eff; font-size: 16px; }
 .perm-header-right { display: flex; align-items: center; gap: 8px; }
 
@@ -668,15 +668,15 @@ const todosRef = ref()
 .role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
 .role-item {
   display: flex; align-items: center; gap: 10px; padding: 12px 14px;
-  border-radius: 8px; background: #f5f7fa; border: 1px solid #ebeef5; transition: all 0.2s;
+  border-radius: 8px; background: var(--app-bg, #f5f7fa); border: 1px solid var(--app-border, #ebeef5); transition: all 0.2s;
 }
-.role-item:hover { border-color: #409eff; background: #ecf5ff; }
+.role-item:hover { border-color: #409eff; background: var(--app-hover, #ecf5ff); }
 .role-icon {
   width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0;
   background: #e1f3d8; color: #67c23a;
   display: flex; align-items: center; justify-content: center; font-size: 16px;
 }
-.role-name { font-size: 14px; font-weight: 500; color: #303133; }
+.role-name { font-size: 14px; font-weight: 500; color: var(--app-text, #303133); }
 
 /* 权限目录树 */
 .perm-tree-wrap { padding: 4px 0; }
@@ -685,22 +685,22 @@ const todosRef = ref()
 .perm-tree { max-height: 480px; overflow-y: auto; }
 .perm-tree :deep(.el-tree-node__content) { height: 34px; }
 .perm-tree-node { display: flex; align-items: center; gap: 6px; flex: 1; }
-.perm-tree-label { font-size: 14px; color: #303133; }
+.perm-tree-label { font-size: 14px; color: var(--app-text, #303133); }
 .perm-tree-code {
   font-size: 11px; color: #c0c4cc; font-family: 'Consolas', 'Monaco', monospace;
-  background: #f5f7fa; padding: 1px 6px; border-radius: 3px;
+  background: var(--app-bg, #f5f7fa); padding: 1px 6px; border-radius: 3px;
 }
-.perm-tree :deep(.el-tree-node__content:hover) { background: #f5f7fa; }
-.perm-tree :deep(.el-tree-node.is-current > .el-tree-node__content) { background: #ecf5ff; }
+.perm-tree :deep(.el-tree-node__content:hover) { background: var(--app-bg, #f5f7fa); }
+.perm-tree :deep(.el-tree-node.is-current > .el-tree-node__content) { background: var(--app-hover, #ecf5ff); }
 
 /* 待办列表 */
 .todo-card :deep(.el-card__body) { padding: 0; }
 .todo-list { max-height: 480px; overflow-y: auto; }
 .todo-item {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 20px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s;
+  padding: 12px 20px; border-bottom: 1px solid var(--app-border, #f0f0f0); cursor: pointer; transition: background 0.2s;
 }
-.todo-item:hover { background: #f5f7fa; }
+.todo-item:hover { background: var(--app-bg, #f5f7fa); }
 .todo-item:last-child { border-bottom: none; }
 .todo-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .todo-priority { width: 4px; height: 36px; border-radius: 2px; flex-shrink: 0; }
@@ -709,7 +709,7 @@ const todosRef = ref()
 .todo-priority.normal { background: #409eff; }
 .todo-content { flex: 1; min-width: 0; }
 .todo-title {
-  font-size: 14px; font-weight: 500; color: #303133;
+  font-size: 14px; font-weight: 500; color: var(--app-text, #303133);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;
 }
 .todo-sub { display: flex; align-items: center; gap: 8px; }

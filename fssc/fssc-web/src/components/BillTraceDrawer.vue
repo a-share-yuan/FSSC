@@ -286,27 +286,27 @@ watch(() => [props.modelValue, props.billId, props.bizType], async ([v, bid]) =>
 .trace-bill-no { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
 .trace-bill-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .trace-type { font-size: 13px; color: #909399; }
-.trace-amount { font-size: 13px; font-weight: 600; color: #303133; }
+.trace-amount { font-size: 13px; font-weight: 600; color: var(--app-text, #303133); }
 
 /* 链路完整度条 */
-.chain-strip { display: flex; align-items: center; gap: 6px; margin: 10px 0 14px; padding: 8px 12px; background: #f5f7fa; border-radius: 6px; }
-.chain-seg { text-align: center; padding: 4px 10px; border-radius: 4px; background: #fff; border: 1px solid #e4e7ed; opacity: 0.55; }
-.chain-seg.reached { opacity: 1; border-color: #67c23a; background: #f0f9eb; }
-.seg-name { font-size: 12px; color: #606266; }
-.seg-count { font-size: 14px; font-weight: 700; color: #303133; }
+.chain-strip { display: flex; align-items: center; gap: 6px; margin: 10px 0 14px; padding: 8px 12px; background: var(--app-bg, #f5f7fa); border-radius: 6px; }
+.chain-seg { text-align: center; padding: 4px 10px; border-radius: 4px; background: var(--app-card-bg, #fff); border: 1px solid var(--app-border, #e4e7ed); opacity: 0.55; }
+.chain-seg.reached { opacity: 1; border-color: #67c23a; background: rgba(103, 194, 58, .16); }
+.seg-name { font-size: 12px; color: var(--app-text-secondary, #606266); }
+.seg-count { font-size: 14px; font-weight: 700; color: var(--app-text, #303133); }
 .chain-arrow { color: #c0c4cc; font-weight: 700; }
 
 .chain-collapse { margin-bottom: 16px; }
 .chain-collapse :deep(.el-collapse-item__header) { font-size: 13px; }
 
-.voucher-card { border: 1px solid #e4e7ed; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
+.voucher-card { border: 1px solid var(--app-border, #e4e7ed); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
 .voucher-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
-.voucher-no { font-weight: 700; color: #303133; }
+.voucher-no { font-weight: 700; color: var(--app-text, #303133); }
 .voucher-meta { font-size: 12px; color: #909399; }
-.voucher-summary { font-size: 12px; color: #606266; margin-bottom: 6px; }
+.voucher-summary { font-size: 12px; color: var(--app-text-secondary, #606266); margin-bottom: 6px; }
 
 .trace-action { font-weight: 600; margin-right: 8px; }
 .trace-trans { font-size: 12px; color: #909399; margin-right: 8px; }
 .trace-oper { font-size: 12px; color: #409eff; }
-.trace-remark { font-size: 12px; color: #606266; margin-top: 2px; }
+.trace-remark { font-size: 12px; color: var(--app-text-secondary, #606266); margin-top: 2px; }
 </style>

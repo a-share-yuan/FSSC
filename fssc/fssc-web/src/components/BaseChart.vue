@@ -14,6 +14,7 @@ import {
   DataZoomComponent, ToolboxComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { initThemedChart, onThemeChange } from '../utils/echartsTheme'
 
 echarts.use([
   BarChart, LineChart, PieChart, GaugeChart,
@@ -29,11 +30,12 @@ const props = defineProps({
 
 const chartRef = ref(null)
 let chart = null
+let offTheme = null
 
 function renderChart() {
   if (!chartRef.value) return
   if (!chart) {
-    chart = echarts.init(chartRef.value)
+    chart = initThemedChart(chartRef.value)
     window.addEventListener('resize', resize)
   }
   if (props.option) {
@@ -41,15 +43,25 @@ function renderChart() {
   }
 }
 
+// 深浅色切换：画布颜色不会随 CSS 变量变，重建实例后重新铺一遍数据
+function onThemeSwitch() {
+  if (!chartRef.value) return
+  chart && chart.dispose()
+  chart = null
+  renderChart()
+}
+
 function resize() {
   chart && chart.resize()
 }
 
 onMounted(() => {
+  offTheme = onThemeChange(onThemeSwitch)
   nextTick(renderChart)
 })
 
 onUnmounted(() => {
+  offTheme && offTheme()
   window.removeEventListener('resize', resize)
   chart && chart.dispose()
   chart = null

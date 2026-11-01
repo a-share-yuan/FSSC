@@ -259,7 +259,7 @@ onMounted(() => {
 }
 .label {
   font-size: 14px;
-  color: #606266;
+  color: var(--app-text-secondary, #606266);
   white-space: nowrap;
 }
 .reval-positive {

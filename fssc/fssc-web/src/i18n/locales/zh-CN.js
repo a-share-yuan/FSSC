@@ -2886,6 +2886,7 @@ export default {
       colLastChange: '最近变动',
       colNode: '节点',
       colPaidTime: '付款时间',
+      btnPreviewImages: '预览附件',
       emptyFlow: '无流程信息',
       emptyImages: '无影像',
       emptyPayments: '无付款记录',

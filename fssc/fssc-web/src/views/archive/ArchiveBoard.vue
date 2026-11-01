@@ -222,7 +222,7 @@
           <!-- 展开行＝卷内目录（案卷→件→页的中间一层），展开时按需拉取 -->
           <el-table-column type="expand">
             <template #default="{ row }">
-              <div style="padding:8px 14px 12px; background:#fafcff">
+              <div style="padding:8px 14px 12px; background:var(--app-hover, #fafcff)">
                 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px">
                   <b style="font-size:13px">卷内目录（{{ (volumeItems[row.id] || []).length }} 件）</b>
                   <el-tag v-if="!(canEditVolume && !isLibrary && !volumeLocked(row))" size="small" effect="plain"
@@ -397,7 +397,7 @@
       <el-form ref="destroyFormRef" :model="destroyModel" :rules="destroyRules" label-width="100px" size="small">
         <el-form-item label="销毁档案" prop="archiveIds">
           <div style="display:flex; gap:8px; width:100%; align-items:flex-start">
-            <div style="flex:1; min-height:32px; padding:4px 8px; border:1px solid #dcdfe6; border-radius:4px; background:#f5f7fa">
+            <div style="flex:1; min-height:32px; padding:4px 8px; border:1px solid #dcdfe6; border-radius:4px; background: var(--app-bg, #f5f7fa)">
               <template v-if="selectedDestroyArchives.length">
                 <el-tag v-for="a in selectedDestroyArchives" :key="a.id" closable size="small" style="margin:2px" @close="removeDestroyArchive(a.id)">{{ archiveRealNo(a) || ('档案#' + a.id) }} ({{ archiveTypeLabel(a.archiveType) }})</el-tag>
               </template>
@@ -545,7 +545,7 @@
 
     <!-- 卷内追加件弹窗（往已存在的卷里再加单据） -->
     <el-dialog v-model="dlgAppend" title="向本卷追加单据" width="560px" destroy-on-close>
-      <div style="margin-bottom:10px; color:#606266; font-size:12px">
+      <div style="margin-bottom:10px; color: var(--app-text-secondary, #606266); font-size:12px">
         案卷 {{ appendVolumeNo }}：选中的单据按先后续编件号加入本卷，已在卷内的单据不会重复加入。
       </div>
       <el-select v-model="appendBillIds"

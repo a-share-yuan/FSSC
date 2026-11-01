@@ -51,6 +51,7 @@ import * as echarts from 'echarts/core'
 import { BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { initThemedChart, onThemeChange } from '../utils/echartsTheme'
 import { flowApi, store } from '../api'
 import { hasPerm } from '../utils/perm'
 
@@ -169,7 +170,7 @@ function renderTrend() {
     chart.dispose()
     chart = null
   }
-  if (!chart) chart = echarts.init(trendRef.value)
+  if (!chart) chart = initThemedChart(trendRef.value)
   chart.setOption({
     grid: { left: 30, right: 10, top: 20, bottom: 30 },
     xAxis: { type: 'category', data: trendData.value.map((d) => d.label), axisLabel: { fontSize: 11 } },
@@ -183,12 +184,20 @@ function renderTrend() {
   }, true)
 }
 
+let offTheme = null
 onMounted(() => {
   if (props.modelValue) fetchData()
   window.addEventListener('resize', onResize)
+  offTheme = onThemeChange(() => {
+    if (!chart || !trendRef.value) return
+    chart.dispose()
+    chart = null
+    nextTick(renderTrend)
+  })
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
+  offTheme && offTheme()
   chart?.dispose()
 })
 function onResize() { chart?.resize() }
@@ -203,7 +212,7 @@ watch(() => props.modelValue, (v) => {
 .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
 .stat-card {
   text-align: center; border-radius: 8px; padding: 16px;
-  border-left: 4px solid #dcdfe6; background: #f5f7fa;
+  border-left: 4px solid #dcdfe6; background: var(--app-bg, #f5f7fa);
 }
 .stat-card.blue { border-color: #409eff; }
 .stat-card.green { border-color: #67c23a; }
@@ -223,9 +232,9 @@ watch(() => props.modelValue, (v) => {
 .rank-num {
   width: 24px; height: 24px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; background: #f0f2f5; color: #909399;
+  font-size: 12px; font-weight: 700; background: var(--app-hover, #f0f2f5); color: #909399;
 }
-.rank-num.rank-top { background: #fdf6ec; color: #e6a23c; }
+.rank-num.rank-top { background: rgba(230, 162, 60, 0.14); color: #e6a23c; }
 .rank-name { flex: 1; }
-.rank-val { color: #606266; font-weight: 600; }
+.rank-val { color: var(--app-text-secondary, #606266); font-weight: 600; }
 </style>

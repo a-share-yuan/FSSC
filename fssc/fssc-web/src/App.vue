@@ -118,7 +118,12 @@ onBeforeUnmount(() => window.removeEventListener('fssc:auth', onAuth))
 
 <style>
 html, body, #app { height: 100%; margin: 0; }
-body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f5f7fa; }
+/* 跟随主题变量：深色模式下 body 不再透出浅灰，页面四周（含滚动条外侧）不留白边 */
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--app-bg, #f5f7fa);
+  color: var(--app-text, #303133);
+}
 .app-shell { height: 100%; }
 
 /* 原生 file 控件兜底隐藏：el-upload 依赖 .el-upload__input{display:none}，一旦全局样式
@@ -182,11 +187,11 @@ body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f
   line-height: 22px;
   font-size: 13px;
 }
-.row-detail-item:nth-child(odd) { background: #fafafa; }
+.row-detail-item:nth-child(odd) { background: var(--app-hover, #fafafa); }
 .rd-key {
   flex: none;
   width: 140px;
-  color: #909399;
+  color: var(--app-text-secondary, #909399);
   padding-right: 8px;
   text-align: right;
   /* break-all 会把 "Allowance Amount" 切成 "Allowance Amoun / t"；中文标签过长时按词换行即可 */
@@ -195,7 +200,7 @@ body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f
 }
 .rd-val {
   flex: 1;
-  color: #303133;
+  color: var(--app-text, #303133);
   font-weight: 500;
   word-break: break-all;
 }

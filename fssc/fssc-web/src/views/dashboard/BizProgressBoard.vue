@@ -192,9 +192,9 @@ onMounted(() => {
   gap: 16px;
 }
 .biz-card {
-  background: #fff; border-radius: 10px; padding: 16px;
+  background: var(--app-card-bg, #fff); border-radius: 10px; padding: 16px;
   cursor: pointer; transition: box-shadow 0.2s;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--app-border, #ebeef5);
 }
 .biz-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
 .biz-header {

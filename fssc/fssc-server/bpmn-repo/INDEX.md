@@ -1,6 +1,6 @@
 # BPMN 模型仓库化导出清单
 
-> 生成时间：2026-10-24 13:05:25
+> 生成时间：2026-10-31 12:13:55
 >
 > 事实来源：`wf_model.bpmn_xml`（设计态唯一权威）。本目录是它的文件化快照，请连同代码一起提交，用于 diff、review 与误覆盖回滚。
 > 手工全量导出：`POST /api/tenant/wf/designer/export-repo`；发布动作会自动补写版本快照与 diff。
@@ -29,7 +29,7 @@
 | GL_MERGE | 合并报表（作业） | 5 | c12f7d43af1a | f3902e67-c84f-11f1-9186-d8bbc1e55a1a |
 | GL_MONTH_CLOSE | 期间关账（作业） | 7 | 3eb002447e8b | d74d2385-bb5f-11f1-8f3d-d8bbc1e55a1a |
 | GL_OFFSET | 内部往来抵消（作业） | 4 | 0ebb16df6cf2 | da7146ed-bb5f-11f1-8f3d-d8bbc1e55a1a |
-| GTEST_ADMIN_FLOW | 管理测试流程 | 2 | f3aeeaf38b6d | 5d13e7d1-cf68-11f1-81df-d8bbc1e55a1a |
+| GTEST_ADMIN_FLOW | 管理测试流程 | 2 | 53005c30c0ac | 61fb11d2-d4e1-11f1-aabf-d8bbc1e55a1a |
 | INV_DISPOSAL_APPLY | 存货处置审批流程（申请→确认→执行） | 4 | 5598b4ffe7a4 | 3971e346-bb62-11f1-8f3d-d8bbc1e55a1a |
 | INV_ISSUE_PROJECT | 存货领用出库（作业） | 5 | 2070d8a41f4e | 394220b2-bb62-11f1-8f3d-d8bbc1e55a1a |
 | INVOICE_ISSUE | 开票与收入确认审批流程（含服务申请档） | 8 | 3013ff943e2d | 275c45db-c855-11f1-a6c4-d8bbc1e55a1a |

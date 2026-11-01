@@ -44,8 +44,10 @@ import com.fssc.invoice.entity.InvBillInvoice;
 import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.invoice.service.InvoiceService;
+import com.fssc.masterdata.entity.MdCity;
 import com.fssc.masterdata.entity.MdExpenseItem;
 import com.fssc.masterdata.entity.MdExpenseStandard;
+import com.fssc.masterdata.mapper.MdCityMapper;
 import com.fssc.masterdata.mapper.MdExpenseItemMapper;
 import com.fssc.masterdata.mapper.MdExpenseStandardMapper;
 import com.fssc.masterdata.service.ExchangeRateService;
@@ -59,10 +61,12 @@ import com.fssc.sharing.mapper.OpPayBatchMapper;
 import com.fssc.sharing.service.VoucherService;
 import com.fssc.system.entity.SysConfig;
 import com.fssc.system.entity.SysFile;
+import com.fssc.system.entity.SysPost;
 import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.system.mapper.SysConfigMapper;
 import com.fssc.system.mapper.SysFileMapper;
+import com.fssc.system.mapper.SysPostMapper;
 import com.fssc.system.service.FileService;
 import com.fssc.workflow.entity.WfInstance;
 import com.fssc.workflow.entity.WfModel;
@@ -129,7 +133,9 @@ public class ExpenseBillService {
     private final ExpTravelMapper expTravelMapper;
     private final MdExpenseItemMapper mdExpenseItemMapper;
     private final MdExpenseStandardMapper mdExpenseStandardMapper;
+    private final MdCityMapper mdCityMapper;
     private final SysUserMapper sysUserMapper;
+    private final SysPostMapper sysPostMapper;
     private final SysConfigMapper sysConfigMapper;
     private final SysFileMapper sysFileMapper;
     /** 1b：附件覆盖后回收孤儿文件登记，走与【删除附件】同一个出口（含令牌清理） */
@@ -912,6 +918,10 @@ public class ExpenseBillService {
         // 发票必填放宽、境外行可抵扣税额归零；sys_config overseas.compliance_enabled=0 全部跳过（回退旧行为）。
         // 国内（abroad=false）行为零变化。
         boolean overseasCompliance = abroad && isOverseasComplianceEnabled();
+        // 费用标准维度：申请人职级 + 差旅目的地城市等级 + 出差天数（均来自关联 APPLY 的差旅明细）
+        Integer stdPostLevel = resolvePostLevel(bill.getApplyUserId());
+        String stdCityLevel = resolveStdCityLevel(billId, bill);
+        BigDecimal stdTravelDays = resolveTravelDays(billId, bill);
         for (ExpBillLine line : lines) {
             MdExpenseItem item = mdExpenseItemMapper.selectById(line.getItemId());
             if (item == null) {
@@ -942,13 +952,22 @@ public class ExpenseBillService {
                 }
             }
             // ④ 差旅/费用标准校验：超标标记（不拦截，仅提示，审批人据实裁断）；
-            //   abroad=true 时住宿/交通/餐饮行换源境外标准（abroad=1 且档位匹配），超标机制沿用
-            MdExpenseStandard std = findExpenseStandard(line.getItemId(), bill.getCompanyId(), abroad, countryTier);
+            //   abroad=true 时住宿/交通/餐饮行换源境外标准（abroad=1 且档位匹配），超标机制沿用；
+            //   国内按「申请人职级 × 差旅城市等级」取档，DAY 类按日均金额比较。
+            MdExpenseStandard std = findExpenseStandard(line.getItemId(), bill.getCompanyId(), abroad, countryTier,
+                    stdPostLevel, stdCityLevel);
             if (std != null && std.getAmount() != null) {
                 line.setStdAmount(std.getAmount());
-                if (line.getAmount().compareTo(std.getAmount()) > 0) {
+                BigDecimal compare = line.getAmount();
+                boolean perDay = "DAY".equalsIgnoreCase(std.getStdType() == null ? "" : std.getStdType().trim());
+                if (perDay && stdTravelDays != null && stdTravelDays.signum() > 0) {
+                    compare = compare.divide(stdTravelDays, 2, RoundingMode.HALF_UP);
+                }
+                if (compare.compareTo(std.getAmount()) > 0) {
                     line.setOverStd(1);
-                    line.setOverReason("超过报销标准 " + line.getAmount().subtract(std.getAmount()) + " 元");
+                    line.setOverReason(perDay
+                            ? "日均 " + compare + " 元超过标准 " + std.getAmount() + " 元/日"
+                            : "超过报销标准 " + compare.subtract(std.getAmount()) + " 元");
                 } else {
                     line.setOverStd(0);
                     line.setOverReason(null);
@@ -1204,10 +1223,12 @@ public class ExpenseBillService {
         }
     }
 
-    private MdExpenseStandard findExpenseStandard(Long itemId, Long companyId, boolean abroad, String countryTier) {
+    private MdExpenseStandard findExpenseStandard(Long itemId, Long companyId, boolean abroad, String countryTier,
+                                                  Integer postLevel, String cityLevel) {
         if (itemId == null) return null;
         String cacheKey = TenantCache.mdKey(EXP_STD_DOMAIN + ":" + itemId + ":" + companyId
-                + (abroad ? ":AB:" + countryTier : ""));
+                + (abroad ? ":AB:" + countryTier : "")
+                + ":PL" + postLevel + ":CL" + cityLevel);
         return TenantCache.get(cacheKey, () -> {
             if (abroad) {
                 LambdaQueryWrapper<MdExpenseStandard> aw = new LambdaQueryWrapper<>();
@@ -1225,6 +1246,12 @@ public class ExpenseBillService {
                 }
                 // 无境外档可配 → 回退国内标准（不改变旧规则）
             }
+            // 国内：先按 职级档 + 城市等级 取精确档（缺维度视为通配行）
+            MdExpenseStandard dimmed = pickDomesticStandard(itemId, companyId, postLevel, cityLevel);
+            if (dimmed != null) {
+                return dimmed;
+            }
+            // 维度无命中 → 回落旧口径（不看职级/城市），保证历史种子标准仍生效
             LambdaQueryWrapper<MdExpenseStandard> w = new LambdaQueryWrapper<>();
             w.eq(MdExpenseStandard::getItemId, itemId);
             w.ne(MdExpenseStandard::getAbroad, 1);
@@ -1235,6 +1262,90 @@ public class ExpenseBillService {
             w.last("ORDER BY company_id IS NULL, priority DESC LIMIT 1");
             return mdExpenseStandardMapper.selectOne(w);
         });
+    }
+
+    /** 按职级档（post_level_min/max）与城市等级（CITY_1/2/3）取档；两者均未知时返回 null 走旧口径 */
+    private MdExpenseStandard pickDomesticStandard(Long itemId, Long companyId, Integer postLevel, String cityLevel) {
+        if (postLevel == null && cityLevel == null) return null;
+        LambdaQueryWrapper<MdExpenseStandard> w = new LambdaQueryWrapper<>();
+        w.eq(MdExpenseStandard::getItemId, itemId);
+        w.ne(MdExpenseStandard::getAbroad, 1);
+        if (companyId != null) {
+            w.and(x -> x.eq(MdExpenseStandard::getCompanyId, companyId)
+                    .or().isNull(MdExpenseStandard::getCompanyId));
+        }
+        if (postLevel != null) {
+            w.and(x -> x.isNull(MdExpenseStandard::getPostLevelMin)
+                    .or().le(MdExpenseStandard::getPostLevelMin, postLevel));
+            w.and(x -> x.isNull(MdExpenseStandard::getPostLevelMax)
+                    .or().ge(MdExpenseStandard::getPostLevelMax, postLevel));
+        }
+        if (cityLevel != null) {
+            w.and(x -> x.isNull(MdExpenseStandard::getCityLevel)
+                    .or().eq(MdExpenseStandard::getCityLevel, cityLevel));
+        }
+        w.orderByDesc(MdExpenseStandard::getPriority)
+                .orderByAsc(MdExpenseStandard::getId)
+                .last("LIMIT 1");
+        return mdExpenseStandardMapper.selectOne(w);
+    }
+
+    /** 申请人职级：sys_user.post_id → sys_post.post_level；无岗位/未设职级返回 null */
+    private Integer resolvePostLevel(Long userId) {
+        if (userId == null) return null;
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null || user.getPostId() == null) return null;
+        SysPost post = sysPostMapper.selectById(user.getPostId());
+        return post == null ? null : post.getPostLevel();
+    }
+
+    /** 差旅明细来源单：本单是 APPLY 取自身，否则按 APPLY_CLAIM 关系取源申请单 */
+    private Long travelSourceBillId(Long billId, ExpBill bill) {
+        if (bill != null && "APPLY".equals(bill.getBillType())) return billId;
+        ExpBillRelation rel = expBillRelationMapper.selectOne(new LambdaQueryWrapper<ExpBillRelation>()
+                .eq(ExpBillRelation::getTargetBillId, billId)
+                .eq(ExpBillRelation::getRelationType, "APPLY_CLAIM")
+                .orderByDesc(ExpBillRelation::getId)
+                .last("LIMIT 1"));
+        return rel == null ? null : rel.getSourceBillId();
+    }
+
+    private List<ExpTravel> travelLinesOf(Long billId, ExpBill bill) {
+        Long src = travelSourceBillId(billId, bill);
+        if (src == null) return new ArrayList<>();
+        return expTravelMapper.selectList(new LambdaQueryWrapper<ExpTravel>()
+                .eq(ExpTravel::getBillId, src).orderByAsc(ExpTravel::getLineNo));
+    }
+
+    /** 差旅目的地城市等级 → 标准表口径 CITY_1/2/3；无城市/非 A/B/C 返回 null */
+    private String resolveStdCityLevel(Long billId, ExpBill bill) {
+        for (ExpTravel t : travelLinesOf(billId, bill)) {
+            if (t.getToCityId() == null) continue;
+            MdCity city = mdCityMapper.selectById(t.getToCityId());
+            String mapped = toStdCityLevel(city == null ? null : city.getCityLevel());
+            if (mapped != null) return mapped;
+        }
+        return null;
+    }
+
+    /** 出差天数：取关联差旅明细的最大 days；无明细返回 null（DAY 类标准退化为整单金额比较） */
+    private BigDecimal resolveTravelDays(Long billId, ExpBill bill) {
+        BigDecimal max = null;
+        for (ExpTravel t : travelLinesOf(billId, bill)) {
+            if (t.getDays() == null) continue;
+            if (max == null || t.getDays().compareTo(max) > 0) max = t.getDays();
+        }
+        return max;
+    }
+
+    private String toStdCityLevel(String cityLevel) {
+        if (cityLevel == null || cityLevel.isBlank()) return null;
+        switch (cityLevel.trim().toUpperCase(Locale.ROOT)) {
+            case "A": case "CITY_1": return "CITY_1";
+            case "B": case "CITY_2": return "CITY_2";
+            case "C": case "CITY_3": return "CITY_3";
+            default: return null;
+        }
     }
 
     /** 出差目的国集合（exp_travel.dest_country），供出国判定 */

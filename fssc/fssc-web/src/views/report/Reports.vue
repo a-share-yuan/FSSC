@@ -52,9 +52,7 @@
             <el-table-column prop="totalAmount" label="总额" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
             <el-table-column prop="usedAmount" label="已用" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
             <el-table-column prop="occupyAmount" label="占用" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
-            <el-table-column label="状态" width="100">
-              <template #default="{ row }">{{ statusLabel(row.status) }}</template>
-            </el-table-column>
+            <el-table-column prop="executionRate" label="执行率(%)" width="110" sortable />
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="审批效率" name="eff" v-if="tabAllowed('eff')">

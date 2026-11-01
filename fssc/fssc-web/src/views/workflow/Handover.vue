@@ -177,6 +177,6 @@ onMounted(() => { loadedTabs.add('execute'); searchTasks('') })
 </script>
 
 <style scoped>
-.header-title { font-size: 15px; font-weight: 600; color: #303133; margin-right: 10px; }
+.header-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); margin-right: 10px; }
 .header-note { font-size: 12px; color: #909399; }
 </style>
