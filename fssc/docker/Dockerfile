@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 # 维度8 STAB-08：FSSC 容器化部署

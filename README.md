@@ -4,7 +4,7 @@
 >
 > 名称说明：这里的 **FSSC** 是"财务共享服务中心"这一行业通用缩写的字面含义，指本软件所服务的业务形态本身；本项目与任何同名或近名的商业软件、认证体系没有隶属或关联关系，也不包含其代码、界面素材或文档。
 
-![license](https://img.shields.io/badge/license-Apache--2.0-blue) ![java](https://img.shields.io/badge/JDK-26-orange) ![spring-boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-green) ![vue](https://img.shields.io/badge/Vue-3.5-brightgreen) ![flowable](https://img.shields.io/badge/Flowable-8.0.0-yellow)
+![license](https://img.shields.io/badge/license-AGPL--3.0-blue) ![java](https://img.shields.io/badge/JDK-26-orange) ![spring-boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-green) ![vue](https://img.shields.io/badge/Vue-3.5-brightgreen) ![flowable](https://img.shields.io/badge/Flowable-8.0.0-yellow)
 
 > ** 发布前校准状态**：本 README 的代码事实（域/表/端点/版本）由脚本从源码实测抽取（见 `docs/_facts/`）；`docs/getting-started.md` 中的启动步骤**尚未在一台干净机器上端到端跑通验证**。在标记为"已验证"之前，请把 Quickstart 视为高置信度草案而非承诺。
 
@@ -179,9 +179,14 @@ cd ../fssc-web && npm install && npm run dev           # → http://localhost:80
 
 ## 许可
 
-Apache License 2.0，见 [`LICENSE`](LICENSE)。包含 `NOTICE` 时需一并保留。
-选型说明：专利授权条款对含自研流程引擎接入的项目是必要的；若你倾向更宽松，需重新决策并由维护者批准。
+本项目采用**双许可**模式：
+
+- **开源许可（默认）**：GNU Affero General Public License v3.0（AGPL-3.0），见 [`LICENSE`](LICENSE)。AGPL-3.0 是强 copyleft 许可且含网络条款——若你修改本程序并作为网络服务向他人提供，必须按 AGPL-3.0 开源你的修改。
+- **商业许可**：如你希望在不遵守 AGPL-3.0 网络 / copyleft 条款的前提下将本程序用于闭源或商业场景，可另行取得商业许可，见 [`LICENSE-COMMERCIAL.md`](LICENSE-COMMERCIAL.md)（条款待补，采购联系见该文件）。
+
+分发时 `NOTICE` 须一并保留。
+选型说明：AGPL-3.0 的专利授权与网络条款对含自研流程引擎接入的项目是必要的；如需更宽松的闭源路径，请通过商业许可取得授权，而非改用其它开源许可。
 
 ## 免责声明
 
-本仓库不提供任何形式的商业支持或 SLA。财务与税务处理请以你所在司法辖区的法规与准则为准。
+开源通道（AGPL-3.0）下本仓库不提供任何形式的商业支持或 SLA；商业支持与 SLA 以 [`LICENSE-COMMERCIAL.md`](LICENSE-COMMERCIAL.md) 约定的商业许可为准。财务与税务处理请以你所在司法辖区的法规与准则为准。

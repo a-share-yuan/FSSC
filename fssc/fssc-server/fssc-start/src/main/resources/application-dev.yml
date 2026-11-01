@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
   # 数据源在下方 fssc.datasource.master / fssc.datasource.image（分库：影像域独立一库）
