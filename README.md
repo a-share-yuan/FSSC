@@ -6,7 +6,7 @@
 
 ![license](https://img.shields.io/badge/license-AGPL--3.0-blue) ![java](https://img.shields.io/badge/JDK-26-orange) ![spring-boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-green) ![vue](https://img.shields.io/badge/Vue-3.5-brightgreen) ![flowable](https://img.shields.io/badge/Flowable-8.0.0-yellow)
 
-> ** 发布前校准状态**：本 README 的代码事实（域/表/端点/版本）由脚本从源码实测抽取（见 `docs/_facts/`）；`docs/getting-started.md` 中的启动步骤**尚未在一台干净机器上端到端跑通验证**。在标记为"已验证"之前，请把 Quickstart 视为高置信度草案而非承诺。
+> ** 发布前校准状态**：本 README 的代码事实（域/表/端点/版本）由脚本从源码实测抽取（见 `docs/_facts/`）；`docs/快速上手.md` 中的启动步骤**尚未在一台干净机器上端到端跑通验证**。在标记为"已验证"之前，请把 Quickstart 视为高置信度草案而非承诺。
 
 <details open>
 <summary><b>English TL;DR</b>（本仓库不做整篇中英对照，理由见下）</summary>
@@ -15,13 +15,13 @@
 
 **Stack.** JDK 26 + Spring Boot 4.1 + Flowable 8 + MyBatis-Plus (245 mappers, **no Mapper XML**) on MySQL 8; Vue 3.5 + Vite 6 + Element Plus + bpmn-js 16.5 for the front end and the process designer.
 
-**Read this first.** `docs/how-to-read-this-code.md` (how to orient in a large codebase), then `docs/module-map.md`, `docs/data-model.md`, `docs/permissions.md`, `docs/workflow-engine.md` §9 ("I need to change something — where do I touch?"). Every `path:line` citation in the docs is checked by `_tools/cite_check.mjs` in CI.
+**Read this first.** `docs/代码阅读指南.md` (how to orient in a large codebase), then `docs/模块地图.md`, `docs/数据模型.md`, `docs/权限与多租户.md`, `docs/流程引擎技术说明.md` §9 ("I need to change something — where do I touch?"). Every `path:line` citation in the docs is checked by `_tools/cite_check.mjs` in CI.
 
 **Honest caveats.**
 - **Internationalisation is wired up but only partly extracted.** `fssc-web/package.json` depends on `vue-i18n`, `src/i18n/index.js` builds the instance, `main.js` registers it plus a global `LocaleSwitch`, and `src/i18n/locales/{zh-CN,en-US}.js` carry ≈4,010 keys each. Measured on this snapshot: 72 of 263 `.vue`/`.js` files under `src/` call `$t()`/`useI18n()` (4,038 call sites) — the rest are still hard-coded Chinese literals, so switching to English leaves parts of the UI untranslated.
 - **Source-only release.** The front-end package keeps `"private": true`; there is no npm package and no hosted demo. You build the jar/image yourself.
 - **Database bootstrap = one full database dump.** `db/Dump20261101/` (323 files, one table per file, ≈6.8 MB) is the supported way to create the databases; import it as `db/README.md` describes. The accumulated per-version migration scripts under `fssc-server/sql/` are **not** published — there is no Flyway/Liquibase, so nobody outside the project can order them anyway. Note that the dump is an export of a real drill database: it carries business rows (bills, vouchers, approval history) and 2.3 MB of uploaded attachment bytes in `act_ge_bytearray`.
-- The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — see `docs/release-checklist.md` §8 ⑥.
+- The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — see `docs/开源发布前置检查清单.md` §8 ⑥.
 - This code has been hardened through long manual business drills; treat documented behaviour as *documented*, not *guaranteed*. Each doc states which claims were measured and which were only read off the code.
 
 </details>
@@ -66,7 +66,7 @@ flowchart LR
 
 `workflow` 31.9k · `sharing` 15.1k · `compliance` 8.1k · `expense` 8.0k · `system` 6.4k · `glex` 5.7k · `arflow` 5.7k · `framework` 5.6k · `masterdata` 5.6k · `image` 3.8k · `asset` 3.6k · `document` 3.6k
 
- 逐域职责、API 前缀与对应表 → **[`docs/module-map.md`](docs/module-map.md)**
+ 逐域职责、API 前缀与对应表 → **[`docs/模块地图.md`](docs/模块地图.md)**
 
 ### 功能域一览
 
@@ -112,9 +112,9 @@ java -jar fssc-start/target/fssc-server.jar            # → http://localhost:80
 cd ../fssc-web && npm install && npm run dev           # → http://localhost:8080
 ```
 
-浏览器打开 `http://localhost:8080`。dump 里带着演练期间的账号、组织、菜单、参数与单据数据，导入后界面就有内容可点；但**口令值不在本仓库里**——[`docs/demo-accounts.md`](docs/demo-accounts.md) 目前仍是"待补、刻意不列口令"的角色说明，所以登录要按你自己的口令策略重置目标账号（本系统的审批引擎不允许同人自审，演示一条完整链路至少需要提单人／部门审批人／财务初审·复核／出纳这几类身份）。审批链路与状态语义以 `docs/` 各册为准，不要用截图或印象推断。
+浏览器打开 `http://localhost:8080`。dump 里带着演练期间的账号、组织、菜单、参数与单据数据，导入后界面就有内容可点；但**口令值不在本仓库里**——[`docs/演示账号.md`](docs/演示账号.md) 目前仍是"待补、刻意不列口令"的角色说明，所以登录要按你自己的口令策略重置目标账号（本系统的审批引擎不允许同人自审，演示一条完整链路至少需要提单人／部门审批人／财务初审·复核／出纳这几类身份）。审批链路与状态语义以 `docs/` 各册为准，不要用截图或印象推断。
 
- 端口、双库路由、OCR/银企 mock 通道、启动失败排查 → **[`docs/getting-started.md`](docs/getting-started.md)**
+ 端口、双库路由、OCR/银企 mock 通道、启动失败排查 → **[`docs/快速上手.md`](docs/快速上手.md)**
 
 ## 技术栈
 
@@ -126,10 +126,9 @@ cd ../fssc-web && npm install && npm run dev           # → http://localhost:80
 
 ## 界面
 
-<!-- TODO(release-blocker): 以下截图为发布阻断项，缺图的 README 转化率极低 -->
-| 工作台 | 报销提单 | 流程设计器 | 共享作业池 | 单据全链路联查 |
-|---|---|---|---|---|
-| ![](docs/images/01-dashboard.png) | ![](docs/images/02-expense-form.png) | ![](docs/images/03-bpmn-designer.png) | ![](docs/images/04-work-pool.png) | ![](docs/images/05-trace-chain.png) |
+<!-- TODO(release-blocker): 缺图的 README 转化率极低；下面五个图位建好后把 ![]() 补上 -->
+本节计划放 5 张界面截图，图位与文件名已定（目录尚未建立，**现在这里没有图**）：
+`docs/images/01-dashboard.png`（工作台）、`02-expense-form.png`（报销提单）、`03-bpmn-designer.png`（流程设计器）、`04-work-pool.png`（共享作业池）、`05-trace-chain.png`（单据全链路联查）。
 
 截图须取自演示数据环境，且**不得**包含真实姓名、工号、手机号、身份证号、公司实名。
 
@@ -137,17 +136,21 @@ cd ../fssc-web && npm install && npm run dev           # → http://localhost:80
 
 | 想做什么 | 读哪份 |
 |---|---|
-| 5 分钟跑起来、排查启动失败 | [`docs/getting-started.md`](docs/getting-started.md) |
-| 找一个功能在哪改 | [`docs/module-map.md`](docs/module-map.md) |
-| 理解分层与请求生命周期 | [`docs/architecture.md`](docs/architecture.md) |
-| **第一次接手这个库、不知从哪读起** | [`docs/how-to-read-this-code.md`](docs/how-to-read-this-code.md) |
-| 查表 / 写 SQL / 加字段 | [`docs/data-model.md`](docs/data-model.md) |
-| 看不懂业务黑话（会签、核销、联查…） | [`docs/glossary.md`](docs/glossary.md) |
-| 搞清审批引擎能配什么、不能配什么 | [`docs/workflow-engine.md`](docs/workflow-engine.md) |
-| **第一次动手改代码，不知道要动哪几处**（加查询条件 / 加字段 / 加权限 / 改节点 / 改状态文案） | [`docs/workflow-engine.md`](docs/workflow-engine.md) §9，末尾 §10 是本文结论的可靠性清单 |
-| 权限怎么加、为什么 403 显示"暂无数据" | [`docs/permissions.md`](docs/permissions.md) |
+| 5 分钟跑起来、排查启动失败 | [`docs/快速上手.md`](docs/快速上手.md) |
+| 找一个功能在哪改 | [`docs/模块地图.md`](docs/模块地图.md) |
+| 理解分层与请求生命周期 | [`docs/架构总览.md`](docs/架构总览.md) |
+| **第一次接手这个库、不知从哪读起** | [`docs/代码阅读指南.md`](docs/代码阅读指南.md) |
+| 查表 / 写 SQL / 加字段 | [`docs/数据模型.md`](docs/数据模型.md) |
+| 看不懂业务黑话（会签、核销、联查…） | [`docs/术语表.md`](docs/术语表.md) |
+| 搞清审批引擎能配什么、不能配什么 | [`docs/流程引擎技术说明.md`](docs/流程引擎技术说明.md) |
+| **第一次动手改代码，不知道要动哪几处**（加查询条件 / 加字段 / 加权限 / 改节点 / 改状态文案） | [`docs/流程引擎技术说明.md`](docs/流程引擎技术说明.md) §9，末尾 §10 是本文结论的可靠性清单 |
+| 权限怎么加、为什么 403 显示"暂无数据" | [`docs/权限与多租户.md`](docs/权限与多租户.md) |
 | 业务故事：这张单据是谁提的、谁审的、钱怎么出去 | [`docs/business-flows/`](docs/business-flows/) |
-| 部署到生产 | [`docs/deployment.md`](docs/deployment.md) |
+| 部署到生产 | [`docs/部署手册.md`](docs/部署手册.md) · [`docs/部署运维.md`](docs/部署运维.md) |
+| 想知道这系统解决什么问题、给谁用 | [`docs/系统介绍.md`](docs/系统介绍.md) · [`docs/系统特点.md`](docs/系统特点.md) |
+| 演示环境该登哪个账号、要准备哪几类身份 | [`docs/演示账号.md`](docs/演示账号.md) |
+| 发布／上线前逐项核对 | [`docs/开源发布前置检查清单.md`](docs/开源发布前置检查清单.md) |
+| 全部文档一览 | [`docs/README.md`](docs/README.md)（每篇散文文档另有同名 `.docx`） |
 | 提 PR 前必读 | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) |
 
 ## 项目是怎么来的（以及这意味着什么）
@@ -156,7 +159,7 @@ cd ../fssc-web && npm install && npm run dev           # → http://localhost:80
 
 由此产生两条你需要知道的事：
 
-1. **文档里的"配置项"不保证生效。** 大型代码库常见"配置读进来了但没人用"。我们在 `docs/workflow-engine.md` 等处标注了**已验证生效 / 仅登记未接线**的区分，改动前请先看该文档。
+1. **文档里的"配置项"不保证生效。** 大型代码库常见"配置读进来了但没人用"。我们在 `docs/流程引擎技术说明.md` 等处标注了**已验证生效 / 仅登记未接线**的区分，改动前请先看该文档。
 2. **判断"哪份代码是活的"要用构建产物，别看文件名。** 仓库历史上存在同名多版本文件（不同 `dist*`、`*_v3.md` 与 `*_v3.0_*`）。发布版已剔除产物，源码树单一。
 
 ## 成熟度声明

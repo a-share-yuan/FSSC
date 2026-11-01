@@ -4,7 +4,7 @@
 
 如果你发现本项目的安全问题（鉴权绕过、越权、注入、密钥泄漏等），请通过私密渠道报告：
 
-- GitHub Security Advisory → [Report a vulnerability](../../security/advisories/new)
+- GitHub Security Advisory → 仓库首页 **Security → Report a vulnerability**（入库地址为 `https://github.com/<owner>/<repo>/security/advisories/new`，公开后请把 `<owner>/<repo>` 换成实际地址）
 - 邮箱：`security@<你的域名>`（发布前替换为真实地址）
 
 我们承诺 72 小时内响应，并在修复后公开致谢（如你愿意）。**在修复发布前请勿公开披露细节。**
@@ -21,7 +21,7 @@
 | `FSSC_JWT_SECRET` | 内置占位串 | `openssl rand -base64 48`，≥32 字节，多实例一致 |
 | `FSSC_LINKU_CALLBACK_SECRET` | 空 | 与对接方约定后注入（空值时回调已全部拒绝，fail-fast） |
 | `INVOICE_GATEWAY_API_KEY` | 空 | 网关启用内网免密钥模式时才可留空 |
-| 演示账号 | 见 `docs/demo-accounts.md` | **上线前必须全部改密或删除** |
+| 演示账号 | 见 `docs/演示账号.md` | **上线前必须全部改密或删除** |
 
 非 `dev` profile 下若仍在使用默认 JWT 密钥，`TokenService` 启动自检会**直接拒绝启动**。这是设计，不是 bug。
 
