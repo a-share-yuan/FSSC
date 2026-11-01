@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 // English (US) locale pack — must stay key-aligned with zh-CN.js (CI gate checks).
 

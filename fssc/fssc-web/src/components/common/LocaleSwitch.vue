@@ -1,6 +1,9 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
+
 <template>
   <el-dropdown trigger="click" @command="onPick" :title="t('locale.switch')">
     <el-button text size="small" :aria-label="t('locale.switch')">
