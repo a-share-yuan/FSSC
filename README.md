@@ -18,7 +18,7 @@
 **Read this first.** `docs/how-to-read-this-code.md` (how to orient in a large codebase), then `docs/module-map.md`, `docs/data-model.md`, `docs/permissions.md`, `docs/workflow-engine.md` §9 ("I need to change something — where do I touch?"). Every `path:line` citation in the docs is checked by `_tools/cite_check.mjs` in CI.
 
 **Honest caveats.**
-- **The UI is Chinese-only, and there is no i18n framework in this repo** (no `vue-i18n`, no `createI18n`, no `$t()`; `src/i18n/` holds a single bpmn-js canvas translation patch). Localising the interface is a separate, unfunded effort — don't go looking for a language switch.
+- **Internationalisation is wired up but only partly extracted.** `fssc-web/package.json` depends on `vue-i18n`, `src/i18n/index.js` builds the instance, `main.js` registers it plus a global `LocaleSwitch`, and `src/i18n/locales/{zh-CN,en-US}.js` carry ≈4,010 keys each. Measured on this snapshot: 72 of 263 `.vue`/`.js` files under `src/` call `$t()`/`useI18n()` (4,038 call sites) — the rest are still hard-coded Chinese literals, so switching to English leaves parts of the UI untranslated.
 - **Source-only release.** The front-end package keeps `"private": true`; there is no npm package and no hosted demo. You build the jar/image yourself.
 - **Database bootstrap = one full database dump.** `db/Dump20261101/` (323 files, one table per file, ≈6.8 MB) is the supported way to create the databases; import it as `db/README.md` describes. The accumulated per-version migration scripts under `fssc-server/sql/` are **not** published — there is no Flyway/Liquibase, so nobody outside the project can order them anyway. Note that the dump is an export of a real drill database: it carries business rows (bills, vouchers, approval history) and 2.3 MB of uploaded attachment bytes in `act_ge_bytearray`.
 - The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — see `docs/release-checklist.md` §8 ⑥.
@@ -166,7 +166,7 @@ cd ../fssc-web && npm install && npm run dev           # → http://localhost:80
 |  已实现且真实运行验证 | 报销主线、多级审批与会签、凭证生成、多租户与权限、影像与 OCR 通道框架、共享作业池、单据联查 |
 |  已实现，功能验证有限 | 资产折旧与存货、资金计划与银企（mock）、预算控制细则、合规规则引擎多数规则、AI 动作网关 |
 |  需要自行扩展才能生产 | 真实 OCR/发票查验通道接入、银企直联真实实现、对象存储、SSO/LDAP、短信渠道 |
-|  明确不具备 | 生产级高可用验证（未经大规模压测）、财务报表准则级审计背书、多语言界面（**没有接国际化框架**，界面文案就是中文字面量） |
+|  明确不具备 | 生产级高可用验证（未经大规模压测）、财务报表准则级审计背书、界面文案的全量英文抽取（i18n 已接入，但实测仅 72/263 个源件走 `$t()`，其余仍是中文字面量） |
 
 本项目**不适合**直接当生产财务系统上线，适合作为二次开发底座、教学参考或同类系统能力研究。
 
