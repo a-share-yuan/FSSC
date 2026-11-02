@@ -14,8 +14,6 @@
 
 ![flowable](https://img.shields.io/badge/Flowable-8.0.0-yellow)
 
-> ** 发布前校准状态**：本 README 的代码事实（域/表/端点/版本）由脚本从源码实测抽取（见 `docs/_facts/`）；`docs/快速上手.md` 中的启动步骤**尚未在一台干净机器上端到端跑通验证**。在标记为"已验证"之前，请把 Quickstart 视为高置信度草案而非承诺。
-
 <details>
 
 <summary>English 本仓库不做整篇中英对照，理由见下）</summary>
@@ -72,7 +70,7 @@ flowchart LR
 | 前端页面组件     |                   141 | `fssc/fssc-web/src/views/**/*.vue`          |
 | 流程模型（BPMN） | 见 `bpmn-repo/publish` | 审批流模板库                                      |
 
-> 数字由 `_tools/emit_facts.mjs` 从源码实测抽取，落在 `docs/_facts/facts.json`（本表与其同源，改代码后重跑该脚本即可刷新）。
+> 数字由 `_tools/emit_facts.mjs` 从源码抽取，落在 `docs/_facts/facts.json`（本表与其同源，改代码后重跑该脚本即可刷新）。
 
 按域看规模（代码行排序，前 12）：
 
@@ -176,7 +174,6 @@ cd ../fssc-web && npm install && npm run dev
 
 想跑完整业务链路，照 **[`docs/真实场景测试/`](docs/真实场景测试/) 的三本逐步操作手册**做——不讲概念，每步写清"谁、登哪个账号、点哪里、应该看到什么"。**同一张单不能由同一个人既提单又审批**（引擎有防自审判定），至少需要提单人（`100001` 丁宇轩）+ 部门审批人（`100005` 叶思琪）+ 共享会计（`100002` 赵勇）+ 出纳（`100003` 雷子涵）四类身份，各册 §1.2 有本册完整账号表。审批链路与状态语义以 `docs/` 各册为准，不要用截图或印象推断。
 
-
  端口、双库路由、OCR/银企 mock 通道、启动失败排查 → **[`docs/快速上手.md`](docs/快速上手.md)**
 
 ## 技术栈
@@ -219,7 +216,6 @@ cd ../fssc-web && npm install && npm run dev
 
 ![组织机构](docs/images/05-org-structure.png)
 
-
 ## 文档索引
 
 | 想做什么                                                   | 读哪份                                                                 |
@@ -231,7 +227,7 @@ cd ../fssc-web && npm install && npm run dev
 | 查表 / 写 SQL / 加字段                                       | [`docs/数据模型.md`](docs/数据模型.md)                                      |
 | 看不懂业务黑话（会签、核销、联查…）                                     | [`docs/术语表.md`](docs/术语表.md)                                        |
 | 搞清审批引擎能配什么、不能配什么                                       | [`docs/流程引擎技术说明.md`](docs/流程引擎技术说明.md)                              |
-| **第一次动手改代码，不知道要动哪几处**（加查询条件 / 加字段 / 加权限 / 改节点 / 改状态文案） | [`docs/流程引擎技术说明.md`](docs/流程引擎技术说明.md) §9，末尾 §10 是本文结论的可靠性清单        |
+| **第一次动手改代码，不知道要动哪几处**（加查询条件 / 加字段 / 加权限 / 改节点 / 改状态文案） | [`docs/流程引擎技术说明.md`](docs/流程引擎技术说明.md) §9        |
 | 权限怎么加、为什么 403 显示"暂无数据"                                 | [`docs/权限与多租户.md`](docs/权限与多租户.md)                                  |
 | 业务故事：这张单据是谁提的、谁审的、钱怎么出去                                | [`docs/business-flows/`](docs/business-flows/)                      |
 | 部署到生产                                                  | [`docs/部署手册.md`](docs/部署手册.md) · [`docs/部署运维.md`](docs/部署运维.md)     |
