@@ -66,6 +66,9 @@ _*.log
 _*.txt
 _*.json
 _*.sql
+
+# Office/WPS 打开文档时写在同目录的所有者锁文件（曾被 `git add docs` 卷进发布面）
+~$*
 login_resp*.json
 token.txt
 nul
