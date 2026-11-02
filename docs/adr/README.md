@@ -32,7 +32,7 @@
 | 001 | 多租户采用共库 + `tenant_id` 拦截器，而非独立 schema | `framework/tenant/`、MyBatis-Plus 拦截器；`application-dev.yml` 注释直述该选择 |
 | 002 | 鉴权用自研 `JwtAuthFilter` 而非 Spring Security 过滤链 | `framework/security/` 19 文件；配置里 `JwtAuthFilter` 白名单说明；Actuator 因自研鉴权而"无法感知已登录" |
 | 003 | 权限清单放进 JWT，导致大 token 与 64KB 请求头上限 | `server.max-http-request-header-size: 64KB` 及其注释（300+ 权限 → ~8.7KB token） |
-| 004 | 影像域独立分库 `fssc_image` | 双数据源 + `@FsscDataSource("image")` + AOP 路由 |
+| 004 | 影像域独立分库 `fssc_image`；档案/发票/只读副本三枚路由键就位待开 | 多路由键数据源 + `@FsscDataSource` + AOP 路由，见 `docs/分库路由与服务拆分.md` |
 | 005 | Flowable 引擎表与自研 `wf_*` 业务台账并存 | `wf_model/wf_instance/wf_task/wf_task_history` vs `ACT_RE/RU/HI`；历史保留 6 个月只清 `ACT_HI_` |
 | 006 | 流程超时从轮询作业改为 BPMN 边界定时器 + 异步执行器 | `flowable.async-executor-activate: true` 及其长篇理由注释（旧 60s 轮询与执行器无关，掩盖了开关必要性） |
 | 007 | BPMN 仓库化：模型 XML 落 git 目录而非只存库 | `fssc.wf.bpmn-repo-dir` 配置注释（获得 review/回溯能力、发布自动补写快照） |
