@@ -1,0 +1,106 @@
+# ============================================================================
+# FSSC 单机编排：MySQL（建库 + 导入整库 dump）+ 后端 jar + 前端静态站
+#
+# 跑起来（四条命令，Windows / Linux / macOS 同）：
+#   ① cd fssc/docker && cp .env.example .env        # 填两个必填项
+#   ② cd ../fssc-server && mvn -q clean package -DskipTests
+#   ③ cd ../docker && docker compose up -d --build
+#   ④ 浏览器 http://localhost:8080 —— 租户 DEMO1，账号 admin 或 100001，口令 123456
+#
+# 首轮 up 会等 MySQL 把 db/Dump*/ 的整库 dump 导完（实测 fssc 317 张表 + fssc_image 6 张表），
+# 机械快慢不同约 3~10 分钟；backend 挂在 db 的健康检查上，导完才启动，不用手工等。
+# 停：docker compose down（加 -v 才会连库数据一起清掉，下次 up 重新导入 dump）。
+# ============================================================================
+
+name: fssc
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${FSSC_DB_PASSWORD:?FSSC_DB_PASSWORD 未填：cp .env.example .env 后写入}
+      TZ: Asia/Shanghai
+    volumes:
+      - db-data:/var/lib/mysql
+      # 整库 dump 一表一文件，每个文件自带 CREATE DATABASE + USE + SET FOREIGN_KEY_CHECKS=0，
+      # 所以整个目录直接挂进 initdb 即可，文件先后不影响成败。换演示数据版本只改 .env 的 FSSC_DUMP_DIR。
+      # 注意：initdb 只在 db-data 卷为空时执行一次；想重导就 docker compose down -v 再 up。
+      - ${FSSC_DUMP_DIR:-../../db/Dump20261102}:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:3306:3306"          # 只绑回环：供本机客户端排查，不对局域网开放
+    healthcheck:
+      # 判据用"关键表是否真的落齐"，不用 mysqladmin ping —— 官方镜像在导入期间会先起一个
+      # 临时服务器，ping 早就通了而 schema 还是空的，backend 赶上这个窗口启动就会撞空库。
+      # 挑三张标志性表而不是数总表量：换一份 Dump 目录（表数会变）也不用回来改这里。
+      # 当前这份 dump 实测 fssc 317 张表 + fssc_image 6 张表。
+      test: ["CMD-SHELL", "mysql -uroot -p\"$$MYSQL_ROOT_PASSWORD\" -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE (table_schema='fssc' AND table_name IN ('sys_menu','wf_model')) OR (table_schema='fssc_image' AND table_name='img_file')\" 2>/dev/null | grep -q 3"]
+      interval: 10s
+      timeout: 10s
+      retries: 180
+      start_period: 30s
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile     # 该镜像只 COPY 已打好的 fat jar ⇒ 必须先跑 ②
+    image: fssc-server:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8089
+      # prod 数据源键名（application-prod.yml 里是 ${FSSC_DB_MASTER_JDBC_URL:}，空串即建池失败）
+      FSSC_DB_MASTER_JDBC_URL: jdbc:mysql://db:3306/fssc?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false
+      FSSC_DB_IMAGE_JDBC_URL: jdbc:mysql://db:3306/fssc_image?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false
+      FSSC_DB_USERNAME: root
+      FSSC_DB_PASSWORD: ${FSSC_DB_PASSWORD}
+      FSSC_JWT_SECRET: ${FSSC_JWT_SECRET:?FSSC_JWT_SECRET 未填：openssl rand -base64 48}
+      # 出厂不带发票/税务能力网关与真实 OCR、银企实现（按设计无通道即原样失败，不是回落 mock），
+      # 所以离线演示这三项必须显式关掉，否则首启日志一片通道失败。接真实通道时改这三行即可。
+      INVOICE_GATEWAY_ENABLED: "false"
+      FSSC_OCR_CHANNEL: mock
+      FSSC_BANK_GATEWAY: mock
+      FSSC_OPENAPI_ENABLED: "false"     # 演示实例不对外暴露 /swagger-ui.html
+      # 覆盖 Dockerfile 里的 4g 默认堆：单机评估机器通常没有那么多空闲内存
+      JAVA_OPTS: "-Xms1g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/heapdump/ -XX:+ExitOnOutOfMemoryError"
+      TZ: Asia/Shanghai
+    volumes:
+      - fssc-files:/app/data/files      # 附件与影像字节：sys_file 行在主库，字节在这里，删卷即丢附件
+      - fssc-logs:/app/logs
+    ports:
+      - "127.0.0.1:${FSSC_API_PORT:-8089}:8089"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8089/actuator/health/readiness || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 60
+      start_period: 90s
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile-web   # 多阶段：node:24 里 npm ci + vite build，产物交 nginx
+    image: fssc-web:local
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FSSC_WEB_PORT:-8080}:80"       # 唯一对外发布的端口：局域网/公网即可访问演示站
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  db-data:
+  fssc-files:
+  fssc-logs:

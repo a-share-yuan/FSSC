@@ -6,7 +6,11 @@
 # 运行：docker run -d -p 8089:8089 -e FSSC_DB_PASSWORD=xxx -v fssc-logs:/app/logs fssc-server:1.0.0
 FROM eclipse-temurin:26-jre-alpine
 
-RUN mkdir -p /app/logs/heapdump && addgroup -S fssc && adduser -S fssc -G fssc
+# /app/data/files 在这里预建并属主给 fssc：编排时用一个空卷挂在这个点上，
+# Docker 会以镜像内该目录的属主初始化空卷；不预建则卷归 root，容器内写附件直接失败。
+RUN mkdir -p /app/logs/heapdump /app/data/files \
+    && addgroup -S fssc && adduser -S fssc -G fssc \
+    && chown -R fssc:fssc /app/logs /app/data
 WORKDIR /app
 COPY fssc-server/fssc-start/target/fssc-server.jar /app/fssc-start.jar
 
