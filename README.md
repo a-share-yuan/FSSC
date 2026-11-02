@@ -1,6 +1,6 @@
 # FSSC · 集团财务共享服务平台
 
-> 多租户 SaaS 财务共享中心（Financial Shared Service Center）——覆盖费用报销、应收应付、总账凭证、资产存货、资金票据、影像 OCR、共享作业运营与 BPMN 审批引擎的完整业务底座。
+> 多租户 SaaS 财务共享中心（Financial Shared Service Center）——覆盖费用报账、应收应付、总账凭证、资产存货、资金票据、影像 OCR、共享作业运营与 BPMN 审批引擎的完整业务底座。
 >
 > 名称说明：这里的 **FSSC** 是"财务共享服务中心"这一行业通用缩写的字面含义，指本软件所服务的业务形态本身；本项目与任何同名或近名的商业软件、认证体系没有隶属或关联关系，也不包含其代码、界面素材或文档。
 
@@ -119,6 +119,8 @@ flowchart LR
 
 ```bash
 # ── ① 建库：导入整库 dump（结构 + 演示数据，建库入口只有这一条）
+bash db/import.sh          # 脚本自动选最新的 db/Dump<日期>/ 并逐文件导入（Windows 用 db\import.bat）
+# 等价手工命令：
 for f in db/Dump*/fssc_*.sql; do mysql --default-character-set=utf8mb4 -uroot -p < "$f"; done
 # 每个文件自带 CREATE DATABASE + USE，主库 fssc 与影像库 fssc_image 一起建好；
 # 都是 DROP TABLE IF EXISTS + CREATE + INSERT，可重复执行，文件顺序不影响成败（各自关掉外键检查）

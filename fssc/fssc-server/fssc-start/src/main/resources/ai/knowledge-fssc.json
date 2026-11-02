@@ -317,7 +317,7 @@
    "docPath": "docs/快速上手.md",
    "title": "快速开始（getting-started）",
    "heading": "快速开始（getting-started） / 2. 导入演示数据库",
-   "text": "导入内容：`db/demo-db/` 下 323 个分表 SQL → 主库 `fssc`（316 表）+ 影像库\n`fssc_image`（6 表），含 460 个演示用户、694 个菜单、315 个已部署流程定义。\n**幂等**：可重复执行（每表 DROP 后重建）。",
+   "text": "导入内容：`db/Dump20261102/` 下 323 个一表一文件 → 主库 `fssc`（317 表）+ 影像库\n`fssc_image`（6 表），含 460 个演示用户、694 个菜单、315 个已部署流程定义。\n**幂等**：可重复执行（每表 DROP 后重建）。",
    "restricted": false,
    "length": 135
   },
