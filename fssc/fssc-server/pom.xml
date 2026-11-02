@@ -14,6 +14,19 @@
     <name>fssc-server</name>
     <description>集团财务共享平台 FSSC 后端（多租户 SaaS 底座）</description>
 
+    <licenses>
+        <license>
+            <name>GNU Affero General Public License v3.0 or later</name>
+            <url>https://www.gnu.org/licenses/agpl-3.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>FSSC Commercial License</name>
+            <comments>闭源/商业场景需另行取得商业授权；条款见仓库根 LICENSE-COMMERCIAL.md</comments>
+            <distribution>manual</distribution>
+        </license>
+    </licenses>
+
     <modules>
         <module>fssc-common</module>
         <module>fssc-start</module>
