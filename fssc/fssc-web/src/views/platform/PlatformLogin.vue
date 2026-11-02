@@ -15,15 +15,15 @@
           <div class="brand-logo">
             <el-icon :size="26"><Platform /></el-icon>
           </div>
-          <span class="brand-name">FSSC 运营平台</span>
+          <span class="brand-name">{{ $t('platform.platformLogin.FSSC') }}</span>
         </div>
-        <h1 class="brand-title">平台运营<br />管理中心</h1>
+        <h1 class="brand-title">平台运营<br />{{ $t('platform.platformLogin.Management') }}</h1>
         <p class="brand-sub">租户 · 套餐 · 监控 · 平台级统一运营</p>
         <ul class="brand-feats">
-          <li><el-icon><OfficeBuilding /></el-icon><div><strong>租户全生命周期</strong><span>注册审核、开通、冻结与注销一站式管理</span></div></li>
-          <li><el-icon><Box /></el-icon><div><strong>套餐与配额</strong><span>功能包开关、用户数与存储配额灵活下发</span></div></li>
-          <li><el-icon><TrendCharts /></el-icon><div><strong>运营监控</strong><span>租户统计、运行状态、系统日志一屏总览</span></div></li>
-          <li><el-icon><Lock /></el-icon><div><strong>平台级合规</strong><span>统一身份鉴权、登录凭证管控、操作全程记录</span></div></li>
+          <li><el-icon><OfficeBuilding /></el-icon><div><strong>{{ $t('platform.platformLogin.Full') }}</strong><span>{{ $t('platform.platformLogin.One') }}</span></div></li>
+          <li><el-icon><Box /></el-icon><div><strong>{{ $t('platform.platformLogin.Packages') }}</strong><span>{{ $t('platform.platformLogin.Flexible') }}</span></div></li>
+          <li><el-icon><TrendCharts /></el-icon><div><strong>{{ $t('platform.platformLogin.Operations') }}</strong><span>{{ $t('platform.platformLogin.Tenant') }}</span></div></li>
+          <li><el-icon><Lock /></el-icon><div><strong>{{ $t('platform.platformLogin.Platform') }}</strong><span>{{ $t('platform.platformLogin.Unified') }}</span></div></li>
         </ul>
         <p class="brand-foot">© 2026 FSSC 财务共享服务中心</p>
       </aside>
@@ -31,29 +31,29 @@
       <!-- 右侧表单区 -->
       <main class="form-side">
         <div class="form-box">
-          <h2 class="form-title">平台管理员登录</h2>
+          <h2 class="form-title">{{ $t('platform.platformLogin.Platform2') }}</h2>
           <p class="form-sub">仅限平台运营人员，管理全部租户与套餐</p>
 
           <el-form :model="form" :rules="loginRules" label-position="top" size="large" @submit.prevent="doLogin">
-            <el-form-item label="账号" prop="username">
-              <el-input v-model="form.username" placeholder="请输入平台管理员账号" :prefix-icon="User" clearable maxlength="64" />
+            <el-form-item :label="$t('login.main.Account')" prop="username">
+              <el-input v-model="form.username" :placeholder="$t('platform.platformLogin.Enter')" :prefix-icon="User" clearable maxlength="64" />
             </el-form-item>
-            <el-form-item label="密码" prop="password">
-              <el-input v-model="form.password" type="password" show-password placeholder="请输入登录密码" :prefix-icon="Lock" @keyup.enter="doLogin" />
+            <el-form-item :label="$t('login.main.Password')" prop="password">
+              <el-input v-model="form.password" type="password" show-password :placeholder="$t('login.main.Please')" :prefix-icon="Lock" @keyup.enter="doLogin" />
             </el-form-item>
             <!-- 图形验证码：仅在服务端回 4011/4012（连续失败达阈值）时出现，平时不打扰登录 -->
-            <el-form-item v-if="captchaVisible" label="图形验证码" prop="captchaCode">
+            <el-form-item v-if="captchaVisible" :label="$t('login.main.Captcha')" prop="captchaCode">
               <div class="captcha-line">
-                <el-input v-model="form.captchaCode" placeholder="请输入图中字符" :prefix-icon="Picture" maxlength="6" clearable @keyup.enter="doLogin" />
+                <el-input v-model="form.captchaCode" :placeholder="$t('login.main.Enter3')" :prefix-icon="Picture" maxlength="6" clearable @keyup.enter="doLogin" />
                 <img
                   v-if="captchaSrc"
                   class="captcha-img"
                   :src="captchaSrc"
                   alt="点击刷新验证码"
-                  title="看不清？点击刷新"
+                  :title="$t('login.main.Can')"
                   @click="loadCaptcha"
                 />
-                <el-button v-else class="captcha-img captcha-img-fallback" :loading="captchaLoading" @click="loadCaptcha">获取</el-button>
+                <el-button v-else class="captcha-img captcha-img-fallback" :loading="captchaLoading" @click="loadCaptcha">{{ $t('common.get') }}</el-button>
               </div>
               <div class="captcha-hint">连续登录失败次数已达阈值，请输入右侧字符（点击图片可换一张）</div>
             </el-form-item>
@@ -63,7 +63,7 @@
                 <el-icon class="row-link-icon"><OfficeBuilding /></el-icon>企业员工入口
               </el-link>
             </div>
-            <el-button class="submit-btn" type="primary" size="large" :loading="loading" @click="doLogin">登 录</el-button>
+            <el-button class="submit-btn" type="primary" size="large" :loading="loading" @click="doLogin">{{ $t('login.main.Sign') }}</el-button>
             <el-alert v-if="error" :title="error" type="error" :closable="false" class="error-tip" />
           </el-form>
         </div>
@@ -78,6 +78,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Platform, OfficeBuilding, Box, TrendCharts, Picture } from '@element-plus/icons-vue'
 import { login, store, getCaptcha, CAPTCHA_ERROR_CODES } from '../../api'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const router = useRouter()
 const form = reactive({ username: '', password: '', rememberMe: false, captchaId: '', captchaCode: '' })
@@ -92,8 +94,8 @@ const captchaSrc = ref('')
 const captchaLoading = ref(false)
 
 const loginRules = reactive({
-  username: [{ required: true, message: '请输入账号' }],
-  password: [{ required: true, message: '请输入密码' }],
+  username: [{ required: true, message: t('login.main.Please2') }],
+  password: [{ required: true, message: t('login.main.Please3') }],
 })
 
 /** 拉一张一次性验证码（点击图片也走这里）：captchaId 与 image 成对下发，一次一用 */
@@ -127,7 +129,7 @@ async function doLogin() {
     const data = await login({ ...form, subjectType: 'PLATFORM' })
     store.token = data.token
     store.user = data.user
-    ElMessage.success('登录成功')
+    ElMessage.success(t('login.main.Signed'))
     router.push('/platform/console')
   } catch (e) {
     error.value = e.message

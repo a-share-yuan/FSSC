@@ -4,7 +4,7 @@
 <template>
   <div class="h5-page h5-page--bar">
     <header class="h5-header">
-      <button class="h5-back" aria-label="返回" @click="leave">&lt;</button>
+      <button class="h5-back" :aria-label="$t('common.back')" @click="leave">&lt;</button>
       <span class="h5-header__title">{{ isEdit ? '修改报销单' : '费用报销' }}</span>
       <span class="h5-header__sub">{{ myName }}</span>
     </header>
@@ -386,6 +386,8 @@ import { hasPerm } from '../../utils/perm'
 //    字典不可用时 useDict 自动回落到本地兜底常量，界面与原先一致。
 import { useDict } from '@/composables/useDict.js'
 import { PAY_METHOD_LOCAL, PAYEE_TYPE_LOCAL } from '@/composables/useBaseDict'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 收款方式下拉的选项来源（本地兜底常量，字典到位后被字典覆盖）
 const payMethodDict = useDict('pay_method', PAY_METHOD_LOCAL)
@@ -1006,7 +1008,7 @@ async function syncInvoiceBinding(billId) {
   if (toUnbind.length && form.bill.billNo) {
     for (const iid of toUnbind) {
       try { await invoiceApi.unbind({ billNo: form.bill.billNo, invoiceId: Number(iid) }) }
-      catch (e) { ElMessage.warning(`发票 ${iid} 取消关联没成功（单据已保存）：${e.message}`) }
+      catch (e) { ElMessage.warning(`${t('image.imageManager.Invoice')} ${iid} 取消关联没成功（单据已保存）：${e.message}`) }
     }
   }
   boundInitially.value = new Set(now)
@@ -1035,7 +1037,7 @@ async function doSubmit(id) {
     clearLocalDraft(userId.value, draftDoc())
     savedJustNow = true
     dirty.value = false
-    ElMessage.success('已提交审批')
+    ElMessage.success(t('asset.deprBatch.Submitted'))
     router.replace('/h5')
   } catch { /* 拦截器已弹错；草稿仍在页面与本机 */ }
 }

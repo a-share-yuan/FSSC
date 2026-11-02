@@ -17,12 +17,13 @@ import financeRoutes from './router/routes/finance'
 import flowRoutes from './router/routes/flow'
 import returnsRoutes from './router/routes/returns'
 import workflowRoutes from './router/routes/workflow'
+import { i18n } from './i18n'
 
 const routes = [
   { path: '/login', component: () => import('./views/common/Login.vue'), meta: { public: true } },
   // 平台管理员独立登录页（与企业员工登录页分离）
   { path: '/platform/login', component: () => import('./views/platform/PlatformLogin.vue'), meta: { public: true } },
-  { path: '/profile', component: () => import('./views/common/Profile.vue'), meta: { title: '个人中心' } },
+  { path: '/profile', component: () => import('./views/common/Profile.vue'), meta: { title: i18n.global.t('router.main.Profile') } },
   // H5 独立移动端工作台（无侧边栏布局，窄屏专用）
   // 移动报销端 meta.keepAlive ＝ 交给 App.vue 的 <keep-alive>，从「提报/审批」返回
   // 「单据/待办」时列表与滚动位置、已填内容都在（原先每次返回都整页重建 ⇒ UX-06「数据会丢，
@@ -43,21 +44,21 @@ const routes = [
     component: () => import('./views/common/Layout.vue'),
     children: [
       { path: '', redirect: '/workbench' }, // USG-01: 默认落地工作台(全员可用),报表看板走菜单按权限进入
-      { path: 'dashboard', component: () => import('./views/dashboard/Dashboard.vue'), meta: { title: '报表看板' } },
+      { path: 'dashboard', component: () => import('./views/dashboard/Dashboard.vue'), meta: { title: i18n.global.t('router.main.Report') } },
       // 角色化首页（用户下拉入口已下架，路由保留供直接访问；恢复入口的前置条件是补齐后端聚合规则）
       { path: 'role-dashboard', component: () => import('./views/dashboard/RoleDashboard.vue'), meta: { title: '角色化首页' } },
       // 流程监控大屏
-      { path: 'flow-monitor', component: () => import('./views/monitor/FlowMonitor.vue'), meta: { title: '流程监控大屏' } },
+      { path: 'flow-monitor', component: () => import('./views/monitor/FlowMonitor.vue'), meta: { title: i18n.global.t('router.main.Workflow') } },
       // 业务实时进度看板
       { path: 'biz-progress', component: () => import('./views/dashboard/BizProgressBoard.vue'), meta: { title: '业务进度看板' } },
       // 流程导航地图：7 大域端到端可点击流程（解"菜单多一头懵"），入口仅在我的工作台卡片，不新增侧边栏菜单
-      { path: 'process-nav', component: () => import('./views/dashboard/ProcessNavMap.vue'), meta: { title: '流程导航地图' } },
+      { path: 'process-nav', component: () => import('./views/dashboard/ProcessNavMap.vue'), meta: { title: i18n.global.t('dashboard.processNavMap.Workflow') } },
       // 月结看板
       { path: 'month-end', component: () => import('./views/sharing/MonthEndBoard.vue'), meta: { title: '月结看板' } },
       // 权限治理：我的委托代理 —— 曾是「流程管理」下的一个页签，
       // 但委托代理属员工自助功能，而「流程管理」属系统配置域（已从全员基础角色收回），
       // 故拆为独立入口，保证普通员工仍能自助设置审批委托。
-      { path: 'my/delegate', component: () => import('./views/common/MyDelegate.vue'), meta: { title: '我的委托代理' } },
+      { path: 'my/delegate', component: () => import('./views/common/MyDelegate.vue'), meta: { title: i18n.global.t('common.myDelegate.My') } },
       // 按业务域聚合子路由
       ...expenseRoutes,
       ...payRoutes,

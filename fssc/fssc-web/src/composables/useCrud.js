@@ -9,7 +9,7 @@
  *   const crud = useCrud({
  *     api: customerApi, // 含 page/create/update/delete/enable
  *     defaultForm: () => ({ customerCode: '', customerName: '', ... }),
- *     csvColumns: [{ prop: 'customerCode', label: '编码' }, ...],
+ *     csvColumns: [{ prop: 'customerCode', label: i18n.global.t('master.customer.Code') }, ...],
  *     csvName: '客户',
  *     formRef, // el-form 的 ref；传入后 save() 先跑必填校验，不过就不发请求
  *   })
@@ -22,6 +22,7 @@ import { reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { exportCsv, exportBatchCsv } from '../utils/csv'
 import { useSubmitGuard } from './useSubmitGuard'
+import { i18n } from '../i18n'
 
 export function useCrud(opts) {
   const { api, defaultForm, csvColumns = [], csvName = 'export', formRef = null } = opts
@@ -69,7 +70,7 @@ export function useCrud(opts) {
           const id = await api.create(form)
           form.id = id
         }
-        ElMessage.success('已保存')
+        ElMessage.success(i18n.global.t('useCrud.main.Saved'))
         vis.value = false
         await load()
       })
@@ -82,7 +83,7 @@ export function useCrud(opts) {
     try {
       await ElMessageBox.confirm(confirmMsg, '删除', { type: 'warning' })
       await api.delete(row.id)
-      ElMessage.success('已删除')
+      ElMessage.success(i18n.global.t('useCrud.main.Deleted'))
       await load()
     } catch (e) {
       if (e !== 'cancel' && e?.message) ElMessage.error(e.message)

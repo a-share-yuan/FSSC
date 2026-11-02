@@ -5,17 +5,17 @@
   <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>进项发票全生命周期</b>
-        <span style="color:#909399; font-size:12px">认证勾选(仅专票可抵扣) / 取消勾选 / 进项转出 / 票账比对申报汇总</span>
+        <b>{{ $t('invoice.invoiceCertify.Full') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('invoice.invoiceCertify.Certify') }}</span>
         <span style="display:flex; gap:8px; margin-left:auto; align-items:center">
           <el-form ref="certifyFormRef" :model="certifyForm" :rules="certifyRules" inline class="toolbar-form">
-            <el-form-item label="认证所属期" prop="certifyPeriod">
-              <el-date-picker v-model="certifyPeriod" type="month" value-format="YYYYMM" placeholder="选择认证所属期" style="width:130px" clearable />
+            <el-form-item :label="$t('invoice.invoiceCertify.Certification')" prop="certifyPeriod">
+              <el-date-picker v-model="certifyPeriod" type="month" value-format="YYYYMM" :placeholder="$t('invoice.invoiceCertify.Select')" style="width:130px" clearable />
             </el-form-item>
           </el-form>
-          <el-button v-permission="'inv:certify'" type="success" :disabled="!selRows.length" @click="doCertify">批量认证勾选</el-button>
-          <el-button v-permission="'inv:certify'" :disabled="!selRows.length" @click="doCancelCertify">取消勾选</el-button>
-          <el-button v-permission="'inv:certify'" type="warning" :disabled="!selRows.length" @click="doTransferOut">进项转出</el-button>
+          <el-button v-permission="'inv:certify'" type="success" :disabled="!selRows.length" @click="doCertify">{{ $t('invoice.invoiceCertify.Batch') }}</el-button>
+          <el-button v-permission="'inv:certify'" :disabled="!selRows.length" @click="doCancelCertify">{{ $t('invoice.invoiceCertify.Deselect') }}</el-button>
+          <el-button v-permission="'inv:certify'" type="warning" :disabled="!selRows.length" @click="doTransferOut">{{ $t('invoice.invoiceCertify.Input') }}</el-button>
         </span>
       </div>
     </template>
@@ -92,6 +92,8 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // BillTraceDrawer
 const traceVisible = ref(false)
@@ -171,7 +173,7 @@ async function doCancelCertify() {
   try {
     await ElMessageBox.confirm('确认取消所选发票的勾选认证？', '确认', { type: 'warning' })
     const n = await invoiceApi.cancelCertify(requireSel())
-    ElMessage.success('取消勾选 ' + n + ' 张')
+    ElMessage.success(t('asset.deprBatch.Sheets'))
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || String(e)) }
   load()
 }
@@ -179,7 +181,7 @@ async function doTransferOut() {
   try {
     await ElMessageBox.confirm('进项转出后该批发票不可再认证抵扣，确认转出？', '确认', { type: 'warning' })
     const n = await invoiceApi.transferOut(requireSel())
-    ElMessage.success('进项转出 ' + n + ' 张')
+    ElMessage.success(t('asset.deprBatch.Sheets'))
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || String(e)) }
   load()
 }
@@ -191,14 +193,14 @@ async function loadSummary() {
 }
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 onMounted(load)
 
 function exportCsv() {
-  if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'invoiceCode', label: '发票代码' }, { prop: 'invoiceNo', label: '发票号码' }, { prop: 'sellerName', label: '销方' }, { prop: 'certifyPeriod', label: '所属期' }, { prop: 'certifyDate', label: '认证时间' }]
+  if (!rows.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'invoiceCode', label: t('invoice.main.Invoice3') }, { prop: 'invoiceNo', label: t('invoice.main.Invoice2') }, { prop: 'sellerName', label: t('image.ocrRecords.Seller') }, { prop: 'certifyPeriod', label: t('invoice.invoiceCertify.Period') }, { prop: 'certifyDate', label: t('invoice.invoiceCertify.Certification2') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -212,7 +214,7 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `InvoiceCertify_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 </script>

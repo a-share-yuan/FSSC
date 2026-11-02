@@ -6,10 +6,10 @@
     <el-card>
       <!-- 步骤条（四步化：试算预览 → 确认执行 → 生成凭证 → 反冲） -->
       <el-steps :active="stepActive" align-center finish-status="success" style="margin-bottom: 16px">
-        <el-step title="① 试算预览" description="仅试算不保存，核对外币敞口与预计损益" />
-        <el-step title="② 确认执行" description="按试算结果正式重估" />
-        <el-step title="③ 凭证生成" description="差异生成 草稿转账凭证" />
-        <el-step title="④ 反冲（如需）" description="对已生成凭证反向冲销" />
+        <el-step :title="$t('finance.fxReval.Simulation')" :description="$t('finance.fxReval.Simulation2')" />
+        <el-step :title="$t('finance.fxReval.Confirm')" :description="$t('finance.fxReval.Revalue')" />
+        <el-step :title="$t('finance.fxReval.Voucher')" :description="$t('finance.fxReval.Difference')" />
+        <el-step :title="$t('finance.fxReval.Reverse')" :description="$t('finance.fxReval.Reverse2')" />
       </el-steps>
 
       <!-- Toolbar -->
@@ -20,19 +20,19 @@
           type="month"
           format="YYYY-MM"
           value-format="YYYY-MM"
-          placeholder="选择月份"
+          :placeholder="$t('bank.reconcileSheet.Select')"
           style="width:180px"
           @change="onPeriodChange"
         />
-        <el-button type="primary" plain @click="onTrial">① 试算预览</el-button>
-        <el-button type="primary" :loading="running" @click="onRun">② 确认执行重估</el-button>
-        <el-button @click="loadList">刷新</el-button>
+        <el-button type="primary" plain @click="onTrial">{{ $t('finance.fxReval.Simulation') }}</el-button>
+        <el-button type="primary" :loading="running" @click="onRun">{{ $t('finance.fxReval.Confirm2') }}</el-button>
+        <el-button @click="loadList">{{ $t('common.refresh') }}</el-button>
       </div>
 
       <!-- Table -->
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
-      <el-table :data="list" v-else border stripe empty-text="暂无数据">
-        <el-table-column label="类型" width="80" align="center">
+      <el-table :data="list" v-else border stripe :empty-text="$t('common.empty')">
+        <el-table-column :label="$t('finance.fxReval.Type')" width="80" align="center">
           <template #default="{ row }">{{ TYPE_CN[row.itemType] || row.itemType || '-' }}</template>
         </el-table-column>
         <el-table-column prop="fromCurrency" label="币种" width="80" align="center" />
@@ -132,6 +132,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { fxRevalApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const ST_LABEL = { GENERATED: '已生成凭证', SKIPPED: '已跳过', REVERSED: '已反冲' }
 const ST_TAG = { GENERATED: 'success', SKIPPED: 'info', REVERSED: 'danger' }
@@ -176,7 +178,7 @@ async function loadList() {
     list.value = res.records || res.list || []
     total.value = res.total || 0
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(t('audit.main.Failed'))
   } finally {
     loading.value = false
   }
@@ -189,13 +191,13 @@ function onPeriodChange() {
 
 // ① 试算预览：只算不写入数据库
 async function onTrial() {
-  if (!period.value) return ElMessage.warning('请选择重估期间')
+  if (!period.value) return ElMessage.warning(t('finance.fxReval.Please'))
   try {
     const ret = await fxRevalApi.trial(normPeriod())
     trial.value = { rows: ret.rows || [], existingCount: (ret.rows || []).filter((r) => r.trialStatus === 'EXIST').length }
     trialVisible.value = true
   } catch (e) {
-    ElMessage.error(e.message || '试算失败')
+    ElMessage.error(t('finance.fxReval.Simulation3'))
   }
 }
 
@@ -211,7 +213,7 @@ async function confirmFromTrial() {
 
 // ② 确认执行：正式重估并生成凭证
 async function onRun() {
-  if (!period.value) return ElMessage.warning('请选择重估期间')
+  if (!period.value) return ElMessage.warning(t('finance.fxReval.Please'))
   await ElMessageBox.confirm(`确认对期间 [${period.value}] 正式执行外币汇兑重估？将按月末汇率生成 草稿转账凭证（不自动记账）。`, '执行重估', { type: 'warning' })
   doRun()
 }
@@ -224,7 +226,7 @@ async function doRun() {
     query.pageNum = 1
     loadList()
   } catch (e) {
-    ElMessage.error(e.message || '重估失败')
+    ElMessage.error(t('finance.fxReval.Revaluation'))
   } finally {
     running.value = false
   }
@@ -240,7 +242,7 @@ async function onReverse(row) {
     ElMessage.success(`反冲完成，反向凭证：${ret.reverseVoucherNo}`)
     loadList()
   } catch (e) {
-    ElMessage.error(e.message || '反冲失败')
+    ElMessage.error(t('finance.fxReval.Reverse3'))
   }
 }
 

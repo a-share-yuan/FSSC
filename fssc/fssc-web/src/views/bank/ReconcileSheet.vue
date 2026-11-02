@@ -5,19 +5,17 @@
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <b>未达账项调节表</b>
-        <el-select v-model="bankAccountId" placeholder="银行账户" clearable filterable style="width: 220px">
+        <b>{{ $t('bank.reconcileSheet.Unreconciled') }}</b>
+        <el-select v-model="bankAccountId" :placeholder="$t('bank.reconcileSheet.Bank')" clearable filterable style="width: 220px">
           <el-option v-for="a in accounts" :key="a.id" :label="a.accountName + '（' + a.bankAccount + '）'" :value="a.id" />
         </el-select>
-        <el-date-picker v-model="month" type="month" value-format="YYYYMM" placeholder="选择月份" style="width: 140px" />
-        <el-button type="primary" size="small" @click="load">生成调节表</el-button>
-        <el-button size="small" @click="runReconcile">立即勾对</el-button>
-        <el-button v-if="bankAccountId" size="small" type="warning" @click="loadItems">追溯记录明细</el-button>
-      <el-button size="small" @click="exportCsv">导出</el-button>
+        <el-date-picker v-model="month" type="month" value-format="YYYYMM" :placeholder="$t('bank.reconcileSheet.Select')" style="width: 140px" />
+        <el-button type="primary" size="small" @click="load">{{ $t('bank.reconcileSheet.Generate') }}</el-button>
+        <el-button size="small" @click="runReconcile">{{ $t('bank.reconcileSheet.Match') }}</el-button>
+        <el-button v-if="bankAccountId" size="small" type="warning" @click="loadItems">{{ $t('bank.reconcileSheet.Trace') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-        <span style="margin-left: auto; color: #909399; font-size: 13px">
-          调节后余额 = 银行余额 − 企业已付银行未付 + 企业已收银行未收 + 银行已付企业未付 − 银行已收企业未收
-        </span>
+        <span style="margin-left: auto; color: #909399; font-size: 13px">{{ $t('bank.reconcileSheet.Balance') }}</span>
       </div>
     </template>
 
@@ -149,6 +147,8 @@ import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useTablePager } from '@/composables/useTablePager'
 import TablePager from '@/components/common/TablePager.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // BillTraceDrawer
 const traceVisible = ref(false)
@@ -204,7 +204,7 @@ async function loadItems() {
       month: month.value || '',
       itemType: itemsType.value || null,
     })
-    if (!items.value.length) ElMessage.info('该账户与月份暂无未达账项明细，请先生成调节表')
+    if (!items.value.length) ElMessage.info(t('bank.reconcileSheet.No'))
     itemsPager.setSource(items.value)
   } catch (e) { ElMessage.error(e.message) } finally { itemsLoading.value = false }
 }
@@ -222,7 +222,7 @@ async function runReconcile() {
     ElMessage({
       type: (unmatched > 0 || r?.selfMatchWarning) ? 'warning' : 'success',
       duration: 6000,
-      message: `勾对完成：命中 ${matched} 条、未勾对 ${unmatched} 条`
+      message: `勾对完成：命中 ${matched} 条、未勾对 ${unmatched} ${t('approval.main.Records')}`
         + (ambiguous > 0 ? `（同金额多候选拒配 ${ambiguous} 条，请人工勾对）` : '')
         + (foreign > 0 ? `（${foreign} 条的同金额单据已归属其他银行流水号，拒绝顶替）` : '')
         + (r?.selfMatchWarning ? `（${r.selfMatchWarning}）` : ''),
@@ -249,8 +249,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!items.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'itemType', label: '未达类型' }, { prop: 'serialNo', label: '流水号' }, { prop: 'oppositeName', label: '对方' }, { prop: 'amount', label: '金额' }, { prop: 'bizDate', label: '日期' }, { prop: 'sourceRef', label: '来源引用' }]
+  if (!items.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'itemType', label: t('bank.reconcileSheet.Unreached') }, { prop: 'serialNo', label: t('bank.reconcileSheet.Serial') }, { prop: 'oppositeName', label: t('bank.reconcileSheet.Counterparty') }, { prop: 'amount', label: t('common.amount') }, { prop: 'bizDate', label: t('bank.reconcileSheet.Date') }, { prop: 'sourceRef', label: t('bank.reconcileSheet.Source') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = items.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -264,20 +264,20 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `ReconcileSheet_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -292,7 +292,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `ReconcileSheet_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 </script>

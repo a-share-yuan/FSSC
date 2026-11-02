@@ -5,8 +5,8 @@
   <div class="handover-page">
     <el-card shadow="never">
       <template #header>
-        <span class="header-title">流程移交</span>
-        <span class="header-note">员工离职/换岗时把名下在办审批任务批量交给接手人；逐单独立成败，失败明细照实返回。</span>
+        <span class="header-title">{{ $t('workflow.handover.Workflow') }}</span>
+        <span class="header-note">{{ $t('workflow.handover.When') }}</span>
       </template>
 
       <el-tabs v-model="tab" @tab-change="onTabChange">
@@ -92,6 +92,8 @@ import { useTablePager } from '../../composables/useTablePager'
 import { formatDateTime } from '@/utils/format'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 /**
  * 流程批量移交（G3）：数据源 WfHandoverController（/api/tenant/wf/handover/**）。
@@ -133,7 +135,7 @@ async function doExecute() {
   if (!(await validateForms([handoverFormRef]))) return
   const taskIds = form.taskIds || []
   if (!taskIds.length && !form.fromUserId) {
-    ElMessage.warning('请选择「指定任务」或「原办理人」之一')
+    ElMessage.warning(t('workflow.handover.Please'))
     return
   }
   execLoading.value = true
@@ -145,7 +147,7 @@ async function doExecute() {
       reason: form.reason,
       remark: form.remark || null,
     })
-    ElMessage.success(`移交完成：成功 ${execResult.value?.successCount ?? 0} 条，失败 ${execResult.value?.failCount ?? 0} 条`)
+    ElMessage.success(`移交完成：成功 ${execResult.value?.successCount ?? 0} 条，失败 ${execResult.value?.failCount ?? 0} ${t('approval.main.Records')}`)
     if (loadedTabs.has('log')) loadLog()
   } catch (e) { ElMessage.error(e.message) } finally { execLoading.value = false }
 }

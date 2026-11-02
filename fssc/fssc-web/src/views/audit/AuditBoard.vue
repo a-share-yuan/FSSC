@@ -4,29 +4,29 @@
 <template>
   <div :class="['audit-board', { tabless: isSingle }]">
     <div class="page-header" style="margin-bottom: 16px;">
-      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">审计看板</h2>
+      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">{{ $t('audit.main.Audit') }}</h2>
     </div>
     <el-tabs v-model="activeTab">
       <!-- Tab 1: Reconcile -->
-      <el-tab-pane label="数据一致性" name="reconcile">
+      <el-tab-pane :label="$t('audit.main.Data')" name="reconcile">
         <div class="toolbar">
-          <el-button type="primary" :loading="running" @click="onRunReconcile">执行对账</el-button>
-          <el-select v-model="reconcileQuery.status" placeholder="处理状态" clearable style="width:140px" @change="onReconcileQuery">
-            <el-option label="未处理" value="OPEN" />
-            <el-option label="已处理" value="RESOLVED" />
+          <el-button type="primary" :loading="running" @click="onRunReconcile">{{ $t('audit.main.Run') }}</el-button>
+          <el-select v-model="reconcileQuery.status" :placeholder="$t('audit.main.Processing')" clearable style="width:140px" @change="onReconcileQuery">
+            <el-option :label="$t('audit.main.Not')" value="OPEN" />
+            <el-option :label="$t('audit.main.Processed')" value="RESOLVED" />
           </el-select>
-          <el-input v-model="reconcileQuery.billType" placeholder="单据类型（如 LOAN/CLAIM）" clearable style="width:200px" @keyup.enter="onReconcileQuery" />
-          <el-button @click="loadReconcile">刷新</el-button>
+          <el-input v-model="reconcileQuery.billType" :placeholder="$t('audit.main.Document')" clearable style="width:200px" @keyup.enter="onReconcileQuery" />
+          <el-button @click="loadReconcile">{{ $t('common.refresh') }}</el-button>
         </div>
         <SkeletonList v-if="reconcileLoading" :rows="8" :cols="5" />
-        <el-table :data="reconcileList" v-else border stripe empty-text="暂无数据" @row-dblclick="handleView">
-          <el-table-column prop="checkItem" label="检查项" min-width="140" :formatter="(row) => checkItemText(row.checkItem)" />
-          <el-table-column prop="billNo" label="业务单号" min-width="160" />
-          <el-table-column prop="billType" label="单据类型" width="110" :formatter="(row) => billTypeText(row.billType)" />
-          <el-table-column prop="expectValue" label="期望值" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="actualValue" label="实际值" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="diffDesc" label="差异说明" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="status" label="状态" width="110" align="center" sortable>
+        <el-table :data="reconcileList" v-else border stripe :empty-text="$t('common.empty')" @row-dblclick="handleView">
+          <el-table-column prop="checkItem" :label="$t('audit.main.Check')" min-width="140" :formatter="(row) => checkItemText(row.checkItem)" />
+          <el-table-column prop="billNo" :label="$t('audit.main.Business')" min-width="160" />
+          <el-table-column prop="billType" :label="$t('audit.main.Document2')" width="110" :formatter="(row) => billTypeText(row.billType)" />
+          <el-table-column prop="expectValue" :label="$t('audit.main.Expected')" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="actualValue" :label="$t('audit.main.Actual')" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="diffDesc" :label="$t('audit.main.Difference')" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="status" :label="$t('common.status')" width="110" align="center" sortable>
             <template #default="{ row }">
               <el-tag :type="reconcileStatusType(row.status)">{{ reconcileStatusText(row.status) }}</el-tag>
             </template>
@@ -110,6 +110,8 @@ import { formatDateTime, showRowDetail } from '@/utils/format'
 // 本页手写名称表只覆盖旧值域，audit_trail 里还有 RC_RECEIVABLE / ARCHIVE /
 // SALE_RETURN / PUR_RETURN 等无键值 ⇒ 业务类型列直显英文。保留本地措辞优先，未命中回落全站名称表。
 import { bizTypeLabel, actionLabel } from '@/constants/enums.js'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // D-42 整改：本页原先绑的是 operation/module/operateTime/detail/ipAddress ——
 // audit_trail 实体与表里根本没有这些列，故 6 列有 5 列恒空、且无法按业务单号检索。
@@ -162,7 +164,7 @@ async function loadReconcile() {
     reconcileList.value = res.records || res.list || []
     reconcileTotal.value = res.total || 0
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(t('audit.main.Failed'))
   } finally {
     reconcileLoading.value = false
   }
@@ -180,10 +182,10 @@ async function onRunReconcile() {
   running.value = true
   try {
     const n = await auditApi.reconcileRun()
-    ElMessage.success(`对账执行完成，异常 ${n ?? 0} 条`)
+    ElMessage.success(`对账执行完成，异常 ${n ?? 0} ${t('approval.main.Records')}`)
     loadReconcile()
   } catch (e) {
-    ElMessage.error(e.message || '对账失败')
+    ElMessage.error(t('audit.main.Reconciliation'))
   } finally {
     running.value = false
   }
@@ -212,10 +214,10 @@ async function onResolve(row) {
   } catch { return }
   try {
     await auditApi.reconcileResolve(row.id, { remark: value })
-    ElMessage.success('已标记处理')
+    ElMessage.success(t('audit.main.Marked'))
     loadReconcile()
   } catch (e) {
-    ElMessage.error(e.message || '处理失败')
+    ElMessage.error(t('audit.main.Processing2'))
   }
 }
 
@@ -261,7 +263,7 @@ async function loadTrail() {
     trailList.value = res.records || res.list || []
     trailTotal.value = res.total || 0
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(t('audit.main.Failed'))
   } finally {
     trailLoading.value = false
   }
@@ -297,9 +299,9 @@ async function onTrailExport() {
     a.download = `审计轨迹_${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(a.href)
-    ElMessage.success('已导出 CSV')
+    ElMessage.success(t('useBill.main.CSV'))
   } catch (e) {
-    ElMessage.error(e.message || '导出失败')
+    ElMessage.error(t('audit.main.Export'))
   } finally {
     exporting.value = false
   }

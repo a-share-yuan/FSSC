@@ -5,12 +5,12 @@
   <div class="pc-wrap">
     <!-- 顶栏（平台端独立于租户 Layout：/api/tenant/** 对 PLATFORM Token 封闭，菜单树不可用） -->
     <div class="pc-header">
-      <span class="pc-logo">FSSC 平台运营控制台</span>
+      <span class="pc-logo">{{ $t('platform.platformConsole.FSSC') }}</span>
       <el-tabs v-model="tab" class="pc-tabs" @tab-change="onTabChange">
-        <el-tab-pane label="平台看板" name="dash" />
-        <el-tab-pane label="租户管理" name="tenant" />
-        <el-tab-pane label="套餐功能开关" name="feature" />
-        <el-tab-pane label="数据导出" name="export" />
+        <el-tab-pane :label="$t('platform.platformConsole.Platform')" name="dash" />
+        <el-tab-pane :label="$t('platform.platformConsole.Tenant')" name="tenant" />
+        <el-tab-pane :label="$t('platform.platformConsole.Package')" name="feature" />
+        <el-tab-pane :label="$t('platform.platformConsole.Data')" name="export" />
       </el-tabs>
       <el-dropdown @command="onCommand">
         <span class="pc-user">{{ user?.realName || user?.username || '平台管理员' }}</span>
@@ -151,6 +151,8 @@ import { LineChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { store, logout, platformApi } from '../../api'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 echarts.use([LineChart, TooltipComponent, LegendComponent, GridComponent, CanvasRenderer])
 
@@ -175,7 +177,7 @@ function fmt(v) {
 
 // 双击行：展示行数据详情
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 // 平台看板
@@ -341,7 +343,7 @@ async function saveFeatures() {
       packageId: fq.packageId,
       features: matrix.value.map((f) => ({ code: f.code, enabled: f.on ? 1 : 0 })),
     })
-    ElMessage.success(`已保存 ${affected} 个功能开关`)
+    ElMessage.success(`${t('useCrud.main.Saved')} ${affected} 个功能开关`)
   } catch (e) {
     ElMessage.error(e.message)
   } finally {

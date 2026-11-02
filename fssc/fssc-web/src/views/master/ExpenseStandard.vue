@@ -6,18 +6,18 @@
     <el-card shadow="never">
       <template #header>
         <div class="toolbar">
-          <span>报销标准(专属页 · 费用类型 × 岗位职级 × 城市等级 三维标准 + 生效期/优先级/控制方式)</span>
+          <span>{{ $t('master.expenseStandard.Expense2') }}</span>
           <div class="ops">
-            <el-select v-model="q.cityLevel" size="small" style="width: 130px" placeholder="城市等级" clearable @change="search">
+            <el-select v-model="q.cityLevel" size="small" style="width: 130px" :placeholder="$t('master.expenseStandard.City')" clearable @change="search">
               <el-option v-for="(v, k) in CITY_LEVELS" :key="k" :label="v" :value="k" />
             </el-select>
-            <el-select v-model="q.itemId" size="small" style="width: 170px" placeholder="费用类型" clearable filterable @change="search">
+            <el-select v-model="q.itemId" size="small" style="width: 170px" :placeholder="$t('master.expenseStandard.Expense')" clearable filterable @change="search">
               <el-option v-for="i in itemOptions" :key="i.id" :label="i.name" :value="i.id" />
             </el-select>
-            <el-input v-model="q.keyword" size="small" style="width: 150px" placeholder="编码/名称" clearable @keyup.enter="search" />
-            <el-button size="small" type="primary" @click="search">查询</el-button>
-            <el-button size="small" @click="doExport">导出</el-button>
-            <el-button size="small" type="success" @click="openForm()">新增标准</el-button>
+            <el-input v-model="q.keyword" size="small" style="width: 150px" :placeholder="$t('master.expenseStandard.Code')" clearable @keyup.enter="search" />
+            <el-button size="small" type="primary" @click="search">{{ $t('common.search') }}</el-button>
+            <el-button size="small" @click="doExport">{{ $t('common.export') }}</el-button>
+            <el-button size="small" type="success" @click="openForm()">{{ $t('master.expenseStandard.Add') }}</el-button>
           </div>
         </div>
       </template>
@@ -149,6 +149,8 @@ import { masterApi, orgApi } from '../../api'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import { exportCsv } from '../../utils/csv'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const CITY_LEVELS = { CITY_1: '一线城市', CITY_2: '二线城市', CITY_3: '三线及以下', ABROAD_1: '海外一类', ABROAD_2: '海外二类' }
 const STD_TYPES = { DAY: '每天限额', TIMES: '每次限额', MONTH: '每月限额', MEAL: '餐补/次', TRANSPORT: '交通/次' }
@@ -169,12 +171,12 @@ const form = reactive({})
 const formRef = ref(null)
 const guard = useSubmitGuard(formRef)
 const formRules = {
-  stdCode: [{ required: true, message: '请输入标准编码' }],
-  stdName: [{ required: true, message: '请输入标准名称' }],
-  itemId: [{ required: true, message: '请选择费用类型' }],
-  stdType: [{ required: true, message: '请选择标准类型' }],
-  amount: [{ required: true, message: '请输入标准金额' }],
-  controlType: [{ required: true, message: '请选择控制方式' }],
+  stdCode: [{ required: true, message: t('master.expenseStandard.Please') }],
+  stdName: [{ required: true, message: t('master.expenseStandard.Please2') }],
+  itemId: [{ required: true, message: t('master.expenseStandard.Please3') }],
+  stdType: [{ required: true, message: t('master.expenseStandard.Please4') }],
+  amount: [{ required: true, message: t('master.expenseStandard.Please5') }],
+  controlType: [{ required: true, message: t('master.expenseStandard.Please6') }],
 }
 
 const itemMap = computed(() => Object.fromEntries(itemOptions.value.map((i) => [i.id, i.name])))
@@ -240,7 +242,7 @@ async function save() {
     await guard.submit(async () => {
       if (form.id) await masterApi.std.update({ ...form })
       else await masterApi.std.create({ ...form })
-      ElMessage.success('已保存')
+      ElMessage.success(t('useCrud.main.Saved'))
       formVisible.value = false
       await load()
     })
@@ -251,7 +253,7 @@ async function del(row) {
   await ElMessageBox.confirm(`确认删除标准 [${row.stdName}]?`, '删除', { type: 'warning' })
   try {
     await masterApi.std.delete(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('useCrud.main.Deleted'))
     await load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -266,11 +268,11 @@ function doExport() {
     controlText: CONTROL_TEXT[r.controlType] || r.controlType,
     effectText: `${(r.effectDate || '').slice(0, 10) || '长期'} ~ ${(r.expireDate || '').slice(0, 10) || '长期'}`,
   })), [
-    { prop: 'stdCode', label: '标准编码' }, { prop: 'stdName', label: '标准名称' }, { prop: 'itemName', label: '费用类型' },
-    { prop: 'levelRange', label: '岗位职级区间' }, { prop: 'cityLevelText', label: '城市等级' },
-    { prop: 'stdTypeText', label: '标准类型' }, { prop: 'amount', label: '标准金额' }, { prop: 'currencyCode', label: '币种' },
-    { prop: 'controlText', label: '控制方式' }, { prop: 'effectText', label: '生效期' },
-    { prop: 'priority', label: '优先级' }, { prop: 'status', label: '状态' }, { prop: 'remark', label: '备注' },
+    { prop: 'stdCode', label: t('master.expenseStandard.Standard') }, { prop: 'stdName', label: t('master.expenseStandard.Standard2') }, { prop: 'itemName', label: t('master.expenseStandard.Expense') },
+    { prop: 'levelRange', label: t('master.expenseStandard.Position') }, { prop: 'cityLevelText', label: t('master.expenseStandard.City') },
+    { prop: 'stdTypeText', label: t('master.expenseStandard.Standard3') }, { prop: 'amount', label: t('master.expenseStandard.Standard4') }, { prop: 'currencyCode', label: t('bill.billDetailPanel.Currency') },
+    { prop: 'controlText', label: t('master.expenseStandard.Control') }, { prop: 'effectText', label: t('master.expenseStandard.Effective') },
+    { prop: 'priority', label: t('master.expenseStandard.Priority') }, { prop: 'status', label: t('common.status') }, { prop: 'remark', label: t('common.remark') },
   ], 'ExpenseStandard')
 }
 

@@ -287,9 +287,9 @@ async function viewBillImages(row) {
   if (row.archiveStatus !== 'ARCHIVED') { ElMessage.info(MSG_NOT_FILED); return }
   try {
     const volumeId = await resolveVolumeId(row)
-    if (!volumeId) { ElMessage.info('未能定位该单据所在案卷，请到「档案管理 · 凭证归档」按卷查阅'); return }
+    if (!volumeId) { ElMessage.info(t('sharing.archive.Volume')); return }
     const { ids, opts } = await collectVolumeFiles(volumeId)
-    if (!ids.length) { ElMessage.info('本卷暂无文件'); return }
+    if (!ids.length) { ElMessage.info(t('archive.main.No')); return }
     fileViewer.value?.open(ids, `${t('sharing.common.titleDocImages')}${row.billNo || ''}`, opts)
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -336,7 +336,7 @@ async function viewArchive(row) {
   if (!volumeId) { ElMessage.info(t('sharing.archive.msgNoArchiveImage')); return }
   try {
     const { ids, opts } = await collectVolumeFiles(volumeId)
-    if (!ids.length) { ElMessage.info('本卷暂无文件'); return }
+    if (!ids.length) { ElMessage.info(t('archive.main.No')); return }
     fileViewer.value?.open(ids, `${t('sharing.archive.titleArchiveImages')}${row.archiveNo || row.title || ''}`, opts)
   } catch (e) { ElMessage.error(e.message) }
 }

@@ -51,7 +51,7 @@
         </span>
       </div>
       <el-table :data="st.items" size="small" max-height="220" class="ad-items-table" row-key="key">
-        <el-table-column label="单号" min-width="150" show-overflow-tooltip>
+        <el-table-column :label="$t('approval.approvalDialog.Document')" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.billNo">{{ row.billNo }}</span>
             <span v-else style="color:#c0c4cc">{{ row.title || ('任务 ' + (row.taskId || '—')) }}</span>

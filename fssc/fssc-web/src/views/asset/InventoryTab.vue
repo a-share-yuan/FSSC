@@ -4,26 +4,26 @@
 <template>
   <div>
     <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
-      <el-button type="success" @click="openInv('IN')">入库</el-button>
-      <el-button type="warning" @click="openInv('OUT')">出库</el-button>
-      <el-button type="primary" @click="queryBalance">结存查询</el-button>
-      <el-button plain @click="openMoves">出入库流水</el-button>
-      <el-button type="primary" plain @click="openInv('ISSUE')">领用出库</el-button>
-      <el-button type="danger" plain @click="openInv('DISPOSAL')">存货处置(申请)</el-button>
-      <el-button type="warning" plain @click="openInv('DISPOSAL_CHECK')">处置-状态确认</el-button>
-      <el-button type="danger" plain @click="openInv('DISPOSAL_EXEC')">处置-执行账务</el-button>
-      <el-button type="danger" @click="openInv('INTERNAL_SALE')">内部销售</el-button>
-      <el-button size="small" @click="exportCsv">导出</el-button>
+      <el-button type="success" @click="openInv('IN')">{{ $t('asset.inventory.Stock') }}</el-button>
+      <el-button type="warning" @click="openInv('OUT')">{{ $t('asset.inventory.Stock2') }}</el-button>
+      <el-button type="primary" @click="queryBalance">{{ $t('asset.inventory.Closing') }}</el-button>
+      <el-button plain @click="openMoves">{{ $t('asset.inventory.Stock3') }}</el-button>
+      <el-button type="primary" plain @click="openInv('ISSUE')">{{ $t('asset.inventory.Issue') }}</el-button>
+      <el-button type="danger" plain @click="openInv('DISPOSAL')">{{ $t('asset.inventory.Inventory') }}</el-button>
+      <el-button type="warning" plain @click="openInv('DISPOSAL_CHECK')">{{ $t('asset.inventory.Disposition') }}</el-button>
+      <el-button type="danger" plain @click="openInv('DISPOSAL_EXEC')">{{ $t('asset.inventory.Disposition2') }}</el-button>
+      <el-button type="danger" @click="openInv('INTERNAL_SALE')">{{ $t('asset.inventory.Internal') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
     </div>
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="pagedData" size="small" border stripe v-else empty-text="暂无存货台账；历史收发记录可在「出入库流水」查看" v-loading="loading" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
+    <el-table :data="pagedData" size="small" border stripe v-else :empty-text="$t('asset.inventory.No')" v-loading="loading" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
       <el-table-column type="selection" width="45" />
-      <el-table-column prop="itemCode" label="物料编码" width="140" sortable />
-      <el-table-column prop="itemName" label="物料名称" min-width="150" sortable />
-      <el-table-column prop="spec" label="规格" width="120" sortable />
-      <el-table-column prop="unit" label="单位" width="70" sortable />
-      <el-table-column label="计价方式" width="90" align="center">
+      <el-table-column prop="itemCode" :label="$t('asset.inventory.Material')" width="140" sortable />
+      <el-table-column prop="itemName" :label="$t('asset.inventory.Material2')" min-width="150" sortable />
+      <el-table-column prop="spec" :label="$t('asset.inventory.Specification')" width="120" sortable />
+      <el-table-column prop="unit" :label="$t('asset.inventory.Unit')" width="70" sortable />
+      <el-table-column :label="$t('asset.inventory.Pricing')" width="90" align="center">
         <template #default="{ row }">{{ priceMethodName(row.priceMethod) }}</template>
       </el-table-column>
       <el-table-column label="仓库" width="100">
@@ -148,6 +148,8 @@ import { useTablePager } from '../../composables/useTablePager'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import TablePager from '../../components/common/TablePager.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const { warehouses, fmt, fmt0, warehouseName, loading } = inject('assetShared')
 
@@ -224,7 +226,7 @@ async function saveInv() {
       switch (invMode.value) {
         case 'IN':
           await assetApi.inventoryInStock(invForm.value, invQty.value, invPrice.value)
-          ElMessage.success('入库完成')
+          ElMessage.success(t('asset.inventory.Stock4'))
           break
         case 'OUT': {
           const cost = await assetApi.inventoryOutStock(invForm.value, invQty.value)
@@ -233,26 +235,26 @@ async function saveInv() {
         }
         case 'ISSUE':
           await assetApi.inventoryIssue(invForm.value, invQty.value, invExtra.value, invProjType.value)
-          ElMessage.success(invProjType.value === 'NONPROJECT' ? '项目外领用已提交审批' : '项目内领用已提交审批')
+          ElMessage.success(t('asset.inventory.Project'))
           break
         case 'DISPOSAL':
           await assetApi.inventoryDisposal(invForm.value, invQty.value, invExtra.value)
-          ElMessage.success('存货处置已提交审批')
+          ElMessage.success(t('asset.inventory.Inventory2'))
           break
         case 'DISPOSAL_CHECK':
           await assetApi.inventoryDisposalCheck(invForm.value, invQty.value, invExtra.value)
-          ElMessage.success('处置-状态确认已提交审批')
+          ElMessage.success(t('asset.inventory.Disposition3'))
           break
         case 'DISPOSAL_EXEC':
           await assetApi.inventoryDisposalExec(invForm.value, invQty.value, invExtra.value)
-          ElMessage.success('处置-执行账务已提交审批')
+          ElMessage.success(t('asset.inventory.Disposition4'))
           break
         case 'INTERNAL_SALE':
           await assetApi.inventoryInternalSale(invForm.value, invQty.value, invTargetW.value)
-          ElMessage.success('内部销售已提交审批')
+          ElMessage.success(t('asset.inventory.Internal2'))
           break
         default:
-          ElMessage.warning('未知操作类型')
+          ElMessage.warning(t('asset.inventory.Unknown'))
           return
       }
       dlgInv.value = false; loadInventory()
@@ -263,23 +265,23 @@ async function saveInv() {
 const invKey = (row) => ({ itemCode: row.itemCode, itemName: row.itemName, spec: row.spec, unit: row.unit, warehouseId: row.warehouseId, priceMethod: row.priceMethod })
 async function doInvScrap(row) {
   try {
-    const { value: qty } = await ElMessageBox.prompt('输入报废数量', '存货报废（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^\d+(\.\d+)?$/, inputErrorMessage: '请输入数量' })
+    const { value: qty } = await ElMessageBox.prompt('输入报废数量', '存货报废（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^\d+(\.\d+)?$/, inputErrorMessage: t('asset.inventory.Please') })
     await assetApi.inventoryDisposeScrap(invKey(row), Number(qty))
-    ElMessage.success('存货报废已提交审批'); loadInventory()
+    ElMessage.success(t('asset.inventory.Inventory3')); loadInventory()
   } catch (e) { /* cancelled */ }
 }
 async function doInvCheck(row) {
   try {
-    const { value: diffQty } = await ElMessageBox.prompt('输入盘点差异数量（正=盘盈/负=盘亏）', '盘点差异处理（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^-?\d+(\.\d+)?$/, inputErrorMessage: '请输入数量' })
+    const { value: diffQty } = await ElMessageBox.prompt('输入盘点差异数量（正=盘盈/负=盘亏）', '盘点差异处理（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^-?\d+(\.\d+)?$/, inputErrorMessage: t('asset.inventory.Please') })
     await assetApi.inventoryPhysicalCheck(invKey(row), Number(diffQty), '实物盘点差异')
-    ElMessage.success('盘点差异已提交审批'); loadInventory()
+    ElMessage.success(t('asset.inventory.Stocktake')); loadInventory()
   } catch (e) { /* cancelled */ }
 }
 async function doInvDevalue(row) {
   try {
-    const { value: devalueAmount } = await ElMessageBox.prompt('输入跌价准备金额', '存货跌价准备（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^\d+(\.\d+)?$/, inputErrorMessage: '请输入金额' })
+    const { value: devalueAmount } = await ElMessageBox.prompt('输入跌价准备金额', '存货跌价准备（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^\d+(\.\d+)?$/, inputErrorMessage: t('asset.assetCard.Please') })
     await assetApi.inventoryDevalue(invKey(row), Number(devalueAmount))
-    ElMessage.success('跌价准备已提交审批'); loadInventory()
+    ElMessage.success(t('asset.inventory.Write')); loadInventory()
   } catch (e) { /* cancelled */ }
 }
 
@@ -310,14 +312,14 @@ async function loadMoves() {
 }
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function exportCsv() {
-  if (!inventories.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'itemCode', label: '物料编码' }, { prop: 'itemName', label: '物料名称' }, { prop: 'spec', label: '规格' }, { prop: 'unit', label: '单位' }]
+  if (!inventories.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'itemCode', label: t('asset.inventory.Material') }, { prop: 'itemName', label: t('asset.inventory.Material2') }, { prop: 'spec', label: t('asset.inventory.Specification') }, { prop: 'unit', label: t('asset.inventory.Unit') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = inventories.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -331,13 +333,13 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `AssetBoard_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -352,7 +354,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `AssetBoard_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 onMounted(() => { loadInventory() })

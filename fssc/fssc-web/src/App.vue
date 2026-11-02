@@ -9,7 +9,7 @@
       <span class="bd-text">
         {{ backend.msg || '系统服务暂时无法连接，请稍后重试或联系管理员' }}
       </span>
-      <el-button size="small" type="warning" plain :loading="retrying" @click="retry">重试</el-button>
+      <el-button size="small" type="warning" plain :loading="retrying" @click="retry">{{ $t('common.retry') }}</el-button>
     </div>
     <!-- 移动报销端 「返回不丢数据」：
          只对 meta.keepAlive 的 /h5 路由族套 keep-alive，PC 路由走原来的裸 <component>，
@@ -46,6 +46,8 @@ import { preloadBuiltinDicts, PRELOAD_DICT_TYPES } from './composables/useDict.j
 // enums.js 的 66 个展示字典（enum_*）也要预热：
 // enumLabel() 同为纯同步函数，被各页直接调用，没有生命周期可挂。
 import { ENUM_DICT_TYPES } from './constants/enums.js'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const retrying = ref(false)
 let timer = null
@@ -74,7 +76,7 @@ async function retry() {
   retrying.value = true
   try {
     await probeBackend()
-    if (!backend.online) ElMessage.warning('系统服务暂时无法连接，请稍后重试或联系管理员')
+    if (!backend.online) ElMessage.warning(t('App.main.System'))
   } finally {
     retrying.value = false
   }
@@ -91,7 +93,7 @@ onBeforeUnmount(() => clearInterval(timer))
 
 watch(() => backend.online, (v, old) => {
   if (v && old === false) {
-    ElMessage.success('服务已恢复连接，正在刷新页面…')
+    ElMessage.success(t('App.main.Service'))
     setTimeout(() => location.reload(), 600)
   }
 })

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <template>
-  <el-drawer v-model="visible" title="个人效率统计" direction="rtl" size="420px" :destroy-on-close="true" @opened="renderTrend">
+  <el-drawer v-model="visible" :title="$t('MyStats.main.Individual')" direction="rtl" size="420px" :destroy-on-close="true" @opened="renderTrend">
     <div v-loading="loading" class="stats-content">
       <!-- 今日概览 -->
       <div class="stat-grid">

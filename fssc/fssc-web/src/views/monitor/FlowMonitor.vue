@@ -9,7 +9,7 @@
          入口已在 Layout.vue 用户菜单/快捷键中隐藏，此处为第二道防线（防直达 URL）。
          无权限时给出说明而非弹全局错误提示 —— 该提示来自 api.js 响应拦截器，catch 吞不掉。 -->
     <div v-if="!canView" class="no-perm">
-      <el-empty description="无权限查看流程监控大屏">
+      <el-empty :description="$t('monitor.flowMonitor.No')">
         <template #description>
           <p class="np-title">无权限查看流程监控大屏</p>
           <p class="np-code">该大屏展示全公司在办流程与办理时效，仅向财务管理人员与共享运营岗开放。</p>
@@ -352,6 +352,8 @@ import TablePager from '../../components/common/TablePager.vue'
 import { formatDateTime, formatMoney } from '@/utils/format'
 import { bizTypeLabel } from '@/constants/enums.js'
 import { goBizPage } from '@/utils/bizEntry'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 echarts.use([SankeyChart, HeatmapChart, TooltipComponent, GridComponent, VisualMapComponent, CanvasRenderer])
 
@@ -387,9 +389,9 @@ function emptyTextOf(noData, emptyText) {
 }
 const overviewNoData = computed(() => overviewPending.value || overviewFailed.value)
 const listTotal = computed(() => Number(pager.total.value) || 0)
-const tierEmptyText = computed(() => emptyTextOf(overviewNoData.value, '暂无超时处置档统计'))
-const pathsEmptyText = computed(() => emptyTextOf(chartsFailed.value, '窗口内没有可还原的审批事件'))
-const dwellEmptyText = computed(() => emptyTextOf(chartsFailed.value, '窗口内没有可测停留的节点'))
+const tierEmptyText = computed(() => emptyTextOf(t('monitor.flowMonitor.No2')))
+const pathsEmptyText = computed(() => emptyTextOf(t('monitor.flowMonitor.No3')))
+const dwellEmptyText = computed(() => emptyTextOf(t('monitor.flowMonitor.No4')))
 
 const overview = ref({})
 const paths = ref({ nodes: [], links: [] })
@@ -750,7 +752,7 @@ function renderHeatmap() {
 /** 一键跳转到单据对应业务处理页（复用 bizEntry 分发器） */
 function goBiz(row) {
   if (!goBizPage(router, row)) {
-    ElMessage.warning('当前账号不能直接进入该单据的业务页面，请用行内「追溯」查看全链路')
+    ElMessage.warning(t('SearchCommand.main.Current'))
   }
 }
 

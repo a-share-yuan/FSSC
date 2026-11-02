@@ -13,10 +13,10 @@
 
     <template #footer>
       <div class="apd-foot">
-        <el-button @click="visible = false">关闭</el-button>
-        <el-button type="warning" :disabled="!hasBill" @click="emit('deduct')">核减</el-button>
-        <el-button type="danger" :disabled="!hasBill" @click="emit('approve', false)">驳回</el-button>
-        <el-button type="success" :disabled="!hasBill" @click="emit('approve', true)">通过</el-button>
+        <el-button @click="visible = false">{{ $t('common.close') }}</el-button>
+        <el-button type="warning" :disabled="!hasBill" @click="emit('deduct')">{{ $t('approval.approvalDetailDrawer.Reduce') }}</el-button>
+        <el-button type="danger" :disabled="!hasBill" @click="emit('approve', false)">{{ $t('approval.approvalDetailDrawer.Reject') }}</el-button>
+        <el-button type="success" :disabled="!hasBill" @click="emit('approve', true)">{{ $t('common.pass') }}</el-button>
       </div>
     </template>
   </el-drawer>

@@ -4,8 +4,8 @@
 <template>
   <div class="expense-policy-manage">
     <el-alert type="info" :closable="false" show-icon class="mb12"
-              title="费用标准三层结构"
-              description="① 政策（expense_policy）定义适用费用类型/组织/金额上限与有效期；② 标准明细（expense_policy_standard）按员工级别/职位/部门定额度与超标动作；③ 版本（expense_policy_version）留存每次变更快照并走审批生效。先在左侧维护政策，选中后再维护其标准明细与版本。" />
+              :title="$t('compliance.expensePolicy.Three')"
+              :description="$t('compliance.expensePolicy.Policy')" />
 
     <el-row :gutter="16">
       <!-- 左：政策主表 -->
@@ -14,7 +14,7 @@
           <template #header>
             <div class="panel-header">
               <span class="panel-title">政策（{{ rows.length }}）</span>
-              <el-button v-if="canCreate" type="success" size="small" @click="openCreate">新增政策</el-button>
+              <el-button v-if="canCreate" type="success" size="small" @click="openCreate">{{ $t('compliance.expensePolicy.Add') }}</el-button>
             </div>
           </template>
 
@@ -219,6 +219,8 @@ import { expensePolicyApi, policyStandardApi, policyVersionApi, orgApi } from '@
 import { hasPerm } from '@/utils/perm'
 import { commonRules } from '@/composables/useFormRules'
 import SkeletonList from '@/components/SkeletonList.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 枚举名称表：取值严格对齐后端实体注释（ExpensePolicyStandard.standardType / levelType / overtimeAction）
 const STD_TYPE = {
@@ -340,7 +342,7 @@ async function save() {
   try {
     if (form.id) await expensePolicyApi.update(form)
     else await expensePolicyApi.create(form)
-    ElMessage.success('已保存')
+    ElMessage.success(t('useCrud.main.Saved'))
     dlg.value = false
     await load()
   } catch (e) { ElMessage.error(e.message) } finally { saving.value = false }
@@ -361,7 +363,7 @@ async function removePolicy(row) {
       `确认删除政策「${row.policyName}」？其下的标准明细与版本记录也可能一并失效。`,
       '删除确认', { type: 'warning' })
     await expensePolicyApi.remove(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('useCrud.main.Deleted'))
     if (current.value?.id === row.id) current.value = null
     await load()
   } catch (e) {
@@ -385,14 +387,14 @@ async function saveStd() {
   try { await stdRef.value.validate() } catch { return }
   if (stdForm.standardValueMin != null && stdForm.standardValueMax != null
       && stdForm.standardValueMin > stdForm.standardValueMax) {
-    ElMessage.error('下限不能大于上限')
+    ElMessage.error(t('compliance.expensePolicy.Lower'))
     return
   }
   saving.value = true
   try {
     if (stdForm.id) await policyStandardApi.update(stdForm)
     else await policyStandardApi.create(stdForm)
-    ElMessage.success('已保存')
+    ElMessage.success(t('useCrud.main.Saved'))
     stdDlg.value = false
     await loadStd()
   } catch (e) { ElMessage.error(e.message) } finally { saving.value = false }
@@ -402,7 +404,7 @@ async function removeStd(row) {
   try {
     await ElMessageBox.confirm(`确认删除标准「${row.standardKey}」？`, '删除确认', { type: 'warning' })
     await policyStandardApi.remove(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('useCrud.main.Deleted'))
     await loadStd()
   } catch (e) {
     if (e !== 'cancel' && e !== 'close') ElMessage.error(e.message || '')
@@ -416,7 +418,7 @@ async function snapshotVer() {
       changeLog: '手工快照',
       snapshotData: JSON.stringify({ policy: current.value, standards: stds.value }),
     })
-    ElMessage.success('已存为新版本（草稿）')
+    ElMessage.success(t('compliance.expensePolicy.Saved'))
     await loadVer()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -424,18 +426,18 @@ async function snapshotVer() {
 async function approveVer(row) {
   try {
     await policyVersionApi.approve(row.id, 1)
-    ElMessage.success('已审批')
+    ElMessage.success(t('purchase.poOrder.Approved'))
     await loadVer()
   } catch (e) { ElMessage.error(e.message) }
 }
 
 async function activateVer(row) {
-  try { await policyVersionApi.activate(row.id); ElMessage.success('已生效'); await loadVer() }
+  try { await policyVersionApi.activate(row.id); ElMessage.success(t('compliance.expensePolicy.Effect')); await loadVer() }
   catch (e) { ElMessage.error(e.message) }
 }
 
 async function archiveVer(row) {
-  try { await policyVersionApi.archive(row.id); ElMessage.success('已归档'); await loadVer() }
+  try { await policyVersionApi.archive(row.id); ElMessage.success(t('purchase.poOrder.Archived')); await loadVer() }
   catch (e) { ElMessage.error(e.message) }
 }
 

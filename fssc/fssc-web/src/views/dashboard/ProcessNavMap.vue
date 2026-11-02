@@ -6,21 +6,21 @@
     <!-- 顶部说明 -->
     <div class="map-header">
       <div>
-        <h2 class="map-title">流程导航地图</h2>
+        <h2 class="map-title">{{ $t('dashboard.processNavMap.Workflow') }}</h2>
         <p class="map-sub">7 大业务域端到端链路 · 点任意节点直达对应菜单页面 · 底层按业务单号串联成连续数据链</p>
       </div>
       <div class="map-legend">
-        <span class="lg lg-start">发起</span>
-        <span class="lg lg-review">审核</span>
-        <span class="lg lg-account">记账</span>
-        <span class="lg lg-close">办结</span>
-        <el-button size="small" @click="goTraceDemo">查看全链路联查示例</el-button>
+        <span class="lg lg-start">{{ $t('common.start') }}</span>
+        <span class="lg lg-review">{{ $t('dashboard.processNavMap.Review') }}</span>
+        <span class="lg lg-account">{{ $t('dashboard.processNavMap.Post') }}</span>
+        <span class="lg lg-close">{{ $t('common.closeout') }}</span>
+        <el-button size="small" @click="goTraceDemo">{{ $t('dashboard.processNavMap.View') }}</el-button>
       </div>
     </div>
 
     <!-- 按角色聚焦（复用 RoleDashboard 角色枚举；当前前端未绑定真实登录角色，故本地切换） -->
     <div class="role-filter">
-      <span class="rf-label">聚焦角色:</span>
+      <span class="rf-label">{{ $t('dashboard.processNavMap.Focus') }}</span>
       <el-radio-group v-model="roleFilter" size="small">
         <el-radio-button label="ALL">全部域</el-radio-button>
         <el-radio-button label="OPERATOR">操作员</el-radio-button>
@@ -36,13 +36,13 @@
     <!-- 贯穿全程控制点 -->
     <el-alert type="info" :closable="false" class="ctrl-strip">
       <template #title>
-        <span class="ctrl-title">贯穿 7 域的全程控制点（每个域都会经过）</span>
+        <span class="ctrl-title">{{ $t('dashboard.processNavMap.Control') }}</span>
         <span class="ctrl-items">
-          <b :class="!canAccess('/budget/occupy') ? 'no-perm' : ''" @click="go('/budget/occupy','预算占用')">预算占用</b>
-          <b :class="!canAccess('/compliance/fraud') ? 'no-perm' : ''" @click="go('/compliance/fraud','反欺诈风控')">反欺诈风控</b>
-          <b :class="!canAccess('/image/review') ? 'no-perm' : ''" @click="go('/image/review','影像核对')">影像核对</b>
-          <b :class="!canAccess('/sharing/quality') ? 'no-perm' : ''" @click="go('/sharing/quality','SLA 质检')">SLA 质检</b>
-          <b :class="!canAccess('/sharing/task-pool') ? 'no-perm' : ''" @click="go('/sharing/task-pool','共享任务池')">共享任务池</b>
+          <b :class="!canAccess('/budget/occupy') ? 'no-perm' : ''" @click="go('/budget/occupy','预算占用')">{{ $t('dashboard.processNavMap.Budget') }}</b>
+          <b :class="!canAccess('/compliance/fraud') ? 'no-perm' : ''" @click="go('/compliance/fraud','反欺诈风控')">{{ $t('compliance.fraud.Anti') }}</b>
+          <b :class="!canAccess('/image/review') ? 'no-perm' : ''" @click="go('/image/review','影像核对')">{{ $t('dashboard.processNavMap.Image') }}</b>
+          <b :class="!canAccess('/sharing/quality') ? 'no-perm' : ''" @click="go('/sharing/quality','SLA 质检')">{{ $t('dashboard.processNavMap.SLA') }}</b>
+          <b :class="!canAccess('/sharing/task-pool') ? 'no-perm' : ''" @click="go('/sharing/task-pool','共享任务池')">{{ $t('dashboard.processNavMap.Shared') }}</b>
         </span>
       </template>
     </el-alert>

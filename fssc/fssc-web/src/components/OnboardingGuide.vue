@@ -21,13 +21,13 @@
       >
         <div class="card-header">
           <span class="step-badge">{{ currentIdx + 1 }} / {{ steps.length }}</span>
-          <el-button link size="small" @click="skip">跳过</el-button>
+          <el-button link size="small" @click="skip">{{ $t('common.skip') }}</el-button>
         </div>
         <div class="card-title">{{ currentStep.title }}</div>
         <div class="card-desc">{{ currentStep.desc }}</div>
         <div class="card-footer">
-          <el-button v-if="currentIdx > 0" size="small" @click="prev">上一步</el-button>
-          <el-button size="small" @click="skip">跳过引导</el-button>
+          <el-button v-if="currentIdx > 0" size="small" @click="prev">{{ $t('common.prev') }}</el-button>
+          <el-button size="small" @click="skip">{{ $t('OnboardingGuide.main.Skip') }}</el-button>
           <el-button type="primary" size="small" @click="next">
             {{ currentIdx < steps.length - 1 ? '下一步' : '完成' }}
           </el-button>
@@ -43,16 +43,18 @@
 
 <script setup>
 import { ref, computed, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const STORAGE_KEY = 'fssc_onboarding_done'
 
 const steps = [
-  { selector: '.logo', title: '欢迎使用 FSSC', desc: '财务共享服务中心，一站式业财税金全链路管理平台。' },
-  { selector: '.header-right', title: '全局搜索与通知', desc: '点击搜索图标或按 Ctrl+K 快速搜索单据、菜单。铃铛显示待办通知。' },
-  { selector: '.breadcrumb-bar', title: '面包屑导航', desc: '随时知道你在哪里，点击可快速返回上级页面。' },
-  { selector: '.el-aside', title: '功能菜单', desc: '左侧菜单按业务域分组：费用报账、付款对账、采购管理、发票管理等。' },
-  { selector: '.main', title: '工作区域', desc: '所有单据、审批、报表都在这里操作。支持快捷键、骨架屏加载。' },
-  { selector: '.header-right', title: '更多功能', desc: '用户菜单中有流程监控大屏、业务进度看板、效率统计、水印开关等。按 ? 查看快捷键。' },
+  { selector: '.logo', title: '欢迎使用 FSSC', desc: t('OnboardingGuide.main.Financial') },
+  { selector: '.header-right', title: '全局搜索与通知', desc: t('OnboardingGuide.main.Click') },
+  { selector: '.breadcrumb-bar', title: '面包屑导航', desc: t('OnboardingGuide.main.Always') },
+  { selector: '.el-aside', title: '功能菜单', desc: t('OnboardingGuide.main.Left') },
+  { selector: '.main', title: '工作区域', desc: t('OnboardingGuide.main.All') },
+  { selector: '.header-right', title: '更多功能', desc: t('OnboardingGuide.main.User') },
 ]
 
 const active = ref(false)

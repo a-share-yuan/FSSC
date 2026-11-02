@@ -4,7 +4,7 @@
 <template>
   <el-drawer
     v-model="visible"
-    title="单据全链路联查"
+    :title="$t('BillTraceDrawer.main.Full')"
     direction="rtl"
     size="640px"
     :destroy-on-close="true"
@@ -41,7 +41,7 @@
       <el-alert
         v-if="chain && !supported"
         type="info" :closable="false" show-icon
-        title="该单据未能取得全链路数据"
+        :title="$t('BillTraceDrawer.main.Full2')"
         :description="notSupportReason"
         style="margin:10px 0 14px" />
 
@@ -54,7 +54,7 @@
       <el-collapse v-if="chain && supported" v-model="openSections" class="chain-collapse">
         <!-- 付款记录（exp_bill_payment 属费用域专属表，他域不按 bill_id 借用 ⇒ 不渲染该段） -->
         <el-collapse-item v-if="isExpense && showSeg('PAYMENT', chain.payments)" name="payments">
-          <template #title><b>付款记录</b><el-tag size="small" style="margin-left:8px" :type="chain.payments?.length ? 'success' : 'info'">{{ chain.payments?.length || 0 }} 笔</el-tag></template>
+          <template #title><b>{{ $t('BillTraceDrawer.main.Payment') }}</b><el-tag size="small" style="margin-left:8px" :type="chain.payments?.length ? 'success' : 'info'">{{ chain.payments?.length || 0 }} 笔</el-tag></template>
           <el-table :data="chain.payments || []" size="small" border>
             <el-table-column prop="payeeName" label="收款方" min-width="120" show-overflow-tooltip />
             <el-table-column prop="bankAccount" label="账号" min-width="140" show-overflow-tooltip />

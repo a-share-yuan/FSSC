@@ -56,9 +56,9 @@
    "docPath": "docs/README.md",
    "title": "FSSC 配套文档索引",
    "heading": "FSSC 配套文档索引 / 文档清单 / 交付与运维",
-   "text": "- [部署运维](部署运维.md)：jar/docker/k8s 三种形态、配置项、监控、备份\n- [发布检查单](release-checklist.md)：版本发布前的逐项核对清单",
+   "text": "- [部署运维](部署运维.md)：jar/docker/k8s 三种形态、配置项、监控、备份",
    "restricted": true,
-   "length": 92
+   "length": 65
   },
   {
    "id": "docs/README.md#7",

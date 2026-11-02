@@ -25,17 +25,17 @@
     <el-row :gutter="16">
       <!-- 我的待办 -->
       <el-col :span="12">
-        <el-card header="我的待办">
+        <el-card :header="$t('common.workbench.My')">
           <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center">
-            <el-button size="small" @click="exportTableCsv('todo')">导出</el-button>
+            <el-button size="small" @click="exportTableCsv('todo')">{{ $t('common.export') }}</el-button>
             <el-button v-if="todoSel.length" type="success" plain size="small" @click="exportSelected('todo')">导出选中({{ todoSel.length }})</el-button>
           </div>
           <SkeletonList v-if="loading.todo" :rows="8" :cols="5" />
-          <el-table class="cm-target-workbench" :data="pagedTodo" size="small" stripe v-else max-height="320" empty-text="暂无数据" v-loading="loading.todo" @selection-change="(val) => todoSel = val" @row-dblclick="openTrace">
+          <el-table class="cm-target-workbench" :data="pagedTodo" size="small" stripe v-else max-height="320" :empty-text="$t('common.empty')" v-loading="loading.todo" @selection-change="(val) => todoSel = val" @row-dblclick="openTrace">
             <el-table-column type="selection" width="45" />
-            <el-table-column prop="billNo" label="单号" width="150" sortable />
+            <el-table-column prop="billNo" :label="$t('approval.approvalDialog.Document')" width="150" sortable />
             <!-- W4（非人性化整改）：待办混排报销/借款/付款/合同等，原列表无类型列，逐行点开才知是什么单 -->
-            <el-table-column label="单据类型" width="100" sortable>
+            <el-table-column :label="$t('audit.main.Document2')" width="100" sortable>
               <template #default="{ row }">{{ docTypeLabel(row.billType || row.bizType) || '—' }}</template>
             </el-table-column>
             <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip sortable />
@@ -258,6 +258,8 @@ import BillTraceDrawer from '@/components/BillTraceDrawer.vue'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 import { goBizPage, resolveBillRoute } from '@/utils/bizEntry'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 const wb = ref(null)
 
 const router = useRouter()
@@ -328,18 +330,18 @@ function goBiz(row, from) {
   // 审批工作台对同一判据早已改为「打开单据详情抽屉」（见 Approval.vue goBiz 注释），本卡按同规则落该页。
   if (from === 'todo' && APPLICANT_SCOPED_ROUTES.includes(blockedPath)) {
     if (billPageBlocked('/approval')) {
-      ElMessage.info('当前账号打不开审批工作台，已打开全链路追溯；需办理请联系流程管理员补授 wf:task:list')
+      ElMessage.info(t('common.workbench.Current'))
       openTrace(row)
       return
     }
-    ElMessage.info('该单据由本人在业务页维护，办理审批请到审批工作台待办行内操作')
+    ElMessage.info(t('common.workbench.This'))
     router.push({ path: '/approval' })
     return
   }
   // 与 Approval.vue 同一落点校验——发票池数据面按 inv:list 门控，
   // 无权限岗不跳校验页（落地只会吃「暂无数据」＋一串「缺少权限」报错），改落全链路追溯。
   if (!canInvPool && blockedPath === '/invoice') {
-    ElMessage.info('当前账号没有发票池的查看权限，已打开全链路追溯')
+    ElMessage.info(t('common.workbench.Current2'))
     openTrace(row)
     return
   }
@@ -349,7 +351,7 @@ function goBiz(row, from) {
     // 按 billType 的映射表必然落空。这类行带的是表级台账坐标（ledgerRoute），跳台账并按单号定位。
     if (row.ledgerRoute) {
       if (billPageBlocked(row.ledgerRoute)) {
-        ElMessage.info('当前账号没有该台账页面的查看权限，已打开全链路追溯；需办理请到 流程中心›我的待办')
+        ElMessage.info(t('common.workbench.Current3'))
         openTrace(row)
         return
       }
@@ -363,7 +365,7 @@ function goBiz(row, from) {
       router.push({ path: row.ledgerRoute, query: q })
       return
     }
-    ElMessage.info('当前账号不能直接进入该单据的业务页面，已打开全链路追溯')
+    ElMessage.info(t('common.workbench.Current4'))
     openTrace(row)
   }
 }
@@ -371,7 +373,7 @@ function goBiz(row, from) {
 // 派工池：跳到任务池管理页并按单号定位该任务（无该页权限时兜底打开全链路追溯，不弹回报错）
 function goPoolWork(row) {
   if (billPageBlocked('/sharing/task-pool')) {
-    ElMessage.info('当前账号没有共享任务池的查看权限，已打开全链路追溯')
+    ElMessage.info(t('common.workbench.Current5'))
     openTrace(row)
     return
   }
@@ -426,14 +428,14 @@ const loading = reactive({ todo: false, pool: false, mine: false, cc: false, don
 // 表格元数据：列定义 + 数据源 + selection + 文件名
 const TABLE_META = {
   todo: { label: '我的待办', data: () => todos.value, sel: () => todoSel.value, cols: [
-    { prop: 'billNo', label: '单号' }, { prop: 'title', label: '标题' }, { prop: 'taskName', label: '节点' } ] },
+    { prop: 'billNo', label: t('approval.approvalDialog.Document') }, { prop: 'title', label: t('useBill.main.Title') }, { prop: 'taskName', label: t('approval.main.Node') } ] },
   pool: { label: '待派工任务池', data: () => pools.value, sel: () => poolSel.value, cols: [
-    { prop: 'billNo', label: '业务单号' }, { prop: 'taskType', label: '类型' }, { prop: 'poolStatus', label: '状态' } ] },
+    { prop: 'billNo', label: t('audit.main.Business') }, { prop: 'taskType', label: t('finance.fxReval.Type') }, { prop: 'poolStatus', label: t('common.status') } ] },
   mine: { label: '我发起的单据', data: () => mines.value, sel: () => mineSel.value, cols: [
-    { prop: 'billNo', label: '单号' }, { prop: 'typeLabel', label: '类型' }, { prop: 'title', label: '标题' },
-    { prop: 'totalAmount', label: '金额' }, { prop: 'status', label: '状态' } ] },
+    { prop: 'billNo', label: t('approval.approvalDialog.Document') }, { prop: 'typeLabel', label: t('finance.fxReval.Type') }, { prop: 'title', label: t('useBill.main.Title') },
+    { prop: 'totalAmount', label: t('common.amount') }, { prop: 'status', label: t('common.status') } ] },
   cc: { label: '我的抄送', data: () => ccs.value, sel: () => ccSel.value, cols: [
-    { prop: 'bizNo', label: '业务单号' }, { prop: 'title', label: '标题' }, { prop: 'ccUserName', label: '抄送人' } ] },
+    { prop: 'bizNo', label: t('audit.main.Business') }, { prop: 'title', label: t('useBill.main.Title') }, { prop: 'ccUserName', label: t('common.workbench.Cc') } ] },
 }
 
 async function loadTodo() {
@@ -589,7 +591,7 @@ async function doApprove() {
   const decision = approveDecision.value
   const comment = approveComment.value
   if (decision === BillStatus.REJECTED && !comment.trim()) {
-    ElMessage.warning('驳回时请选择或输入驳回原因')
+    ElMessage.warning(t('common.workbench.Select'))
     return
   }
   // ⑯：PICK 档提交校验——与服务端 enforcePickOnApprove 同一规则，先在前端说破省得吃红字
@@ -599,7 +601,7 @@ async function doApprove() {
       return
     }
     if (!nextPickUserId.value) {
-      ElMessage.warning('请指定下一环节办理人后再提交')
+      ElMessage.warning(t('common.workbench.Specify'))
       return
     }
   }
@@ -613,13 +615,13 @@ async function doApprove() {
       // ⑯：PICK 点名随单上送；非 PICK/驳回传 null（契约：其余节点忽略此字段）
       nextAssigneeUserId: decision === BillStatus.APPROVED && nextPick.value ? (nextPickUserId.value || null) : null,
     })
-    ElMessage.success('已处理')
+    ElMessage.success(t('audit.main.Processed'))
     approveVisible.value = false
     await load()
   } catch (e) { ElMessage.error(e.message) } finally { approving.value = false }
 }
 async function receive(row) {
-  try { await sharingApi.receive(row.id); ElMessage.success('已抢单'); await load() } catch (e) { ElMessage.error(e.message) }
+  try { await sharingApi.receive(row.id); ElMessage.success(t('common.workbench.Task')); await load() } catch (e) { ElMessage.error(e.message) }
 }
 async function finish(row) {
   // 否则一键完成不带任何输入，备注列恒 NULL。
@@ -632,7 +634,7 @@ async function finish(row) {
       inputValidator: (v) => ((v || '').length > 490 ? '完成备注不得超过 490 字' : true),
     }).catch(() => ({}))
   if (remark === undefined) return // 用户取消
-  try { await sharingApi.finish(row.id, remark); ElMessage.success('已完成'); await load() } catch (e) { ElMessage.error(e.message) }
+  try { await sharingApi.finish(row.id, remark); ElMessage.success(t('common.workbench.Completed')); await load() } catch (e) { ElMessage.error(e.message) }
 }
 
 onMounted(() => { ensureMenuPaths(); load() })
@@ -663,21 +665,21 @@ function downloadCsv(csv, filename) {
 function exportTableCsv(key) {
   const meta = TABLE_META[key]
   const rows = meta.data()
-  if (!rows.length) { ElMessage.warning('当前无数据可导出'); return }
+  if (!rows.length) { ElMessage.warning(t('useBill.main.There')); return }
   const csv = toCsv(rows, meta.cols)
   const date = new Date().toISOString().slice(0, 10)
   downloadCsv(csv, `${meta.label}_${date}.csv`)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 function exportSelected(key) {
   const meta = TABLE_META[key]
   const rows = meta.sel()
-  if (!rows.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!rows.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const csv = toCsv(rows, meta.cols)
   const date = new Date().toISOString().slice(0, 10)
   downloadCsv(csv, `${meta.label}_${date}_selected.csv`)
-  ElMessage.success(`已导出 ${rows.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${rows.length} 条记录`)
 }
 
 // Show guide on first visit

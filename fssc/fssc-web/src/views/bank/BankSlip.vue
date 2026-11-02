@@ -5,15 +5,15 @@
   <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>收款认领核销与回单归档</b>
-        <span style="color:#909399; font-size:12px">银行流水 → 关联应收单冲余额（强勾稽防超领）→ 回单归档</span>
+        <b>{{ $t('bank.bankSlip.Receipt') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('bank.bankSlip.Bank') }}</span>
         <span style="margin-left:auto; display:flex; gap:8px">
-          <el-select v-model="reconStatus" placeholder="对账状态" clearable size="small" style="width:140px" @change="reload">
-            <el-option label="未对账" value="UNRECON" />
-            <el-option label="已对账" value="RECON" />
-            <el-option label="全部" value="ALL" />
+          <el-select v-model="reconStatus" :placeholder="$t('bank.bankSlip.Reconciliation')" clearable size="small" style="width:140px" @change="reload">
+            <el-option :label="$t('bank.bankSlip.Not')" value="UNRECON" />
+            <el-option :label="$t('bank.bankSlip.Reconciled')" value="RECON" />
+            <el-option :label="$t('common.all')" value="ALL" />
           </el-select>
-          <el-button type="primary" size="small" @click="reload">刷新</el-button>
+          <el-button type="primary" size="small" @click="reload">{{ $t('common.refresh') }}</el-button>
         </span>
       </div>
     </template>
@@ -131,6 +131,8 @@ import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
@@ -145,7 +147,7 @@ function openTrace(row) {
 }
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 const rows = ref([])
@@ -334,7 +336,7 @@ async function doArchive() {
       slipError.value = ''
       try {
         await p2Api.bankSlipArchive(cur.value.id, Number(slipFileId.value))
-        ElMessage.success('回单已归档')
+        ElMessage.success(t('bank.bankSlip.Receipt2'))
         slipError.value = ''
         dlgSlip.value = false
         load()

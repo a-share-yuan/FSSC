@@ -7,15 +7,15 @@
       <!-- Toolbar -->
       <div class="toolbar">
         <span class="label">年度：</span>
-        <el-select v-model="year" placeholder="选择年度" style="width:120px" @change="onParamChange">
+        <el-select v-model="year" :placeholder="$t('finance.reportSummary.Select')" style="width:120px" @change="onParamChange">
           <el-option v-for="y in yearOptions" :key="y" :label="y + '年'" :value="y" />
         </el-select>
         <span class="label">月份：</span>
-        <el-select v-model="month" placeholder="选择月份" style="width:100px" @change="onParamChange">
+        <el-select v-model="month" :placeholder="$t('bank.reconcileSheet.Select')" style="width:100px" @change="onParamChange">
           <el-option v-for="m in 12" :key="m" :label="m + '月'" :value="m" />
         </el-select>
-        <el-button type="primary" :loading="refreshing" @click="onRefresh">刷新预聚合</el-button>
-        <el-button @click="doExport">导出</el-button>
+        <el-button type="primary" :loading="refreshing" @click="onRefresh">{{ $t('finance.reportSummary.Refresh') }}</el-button>
+        <el-button @click="doExport">{{ $t('common.export') }}</el-button>
       </div>
 
       <!-- Stats Cards -->
@@ -49,17 +49,17 @@
       <!-- Period Dropdown -->
       <div class="period-section">
         <span class="label">历史期间：</span>
-        <el-select v-model="selectedPeriod" placeholder="选择历史期间查看" clearable style="width:200px" @change="onPeriodSelect">
+        <el-select v-model="selectedPeriod" :placeholder="$t('finance.reportSummary.Select2')" clearable style="width:200px" @change="onPeriodSelect">
           <el-option v-for="p in periods" :key="p" :label="periodLabel(p)" :value="p" />
         </el-select>
       </div>
 
       <!-- Summary Breakdown Table -->
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
-      <el-table :data="breakdown" v-else border stripe style="margin-top:16px" @row-dblclick="openRowDetail" empty-text="该期间暂无预聚合数据，可点击「刷新预聚合」或切换期间">
-        <el-table-column prop="category" label="单据类型" min-width="140" />
-        <el-table-column prop="billCount" label="单据数" width="100" align="center" />
-        <el-table-column label="金额" width="150" align="right">
+      <el-table :data="breakdown" v-else border stripe style="margin-top:16px" @row-dblclick="openRowDetail" :empty-text="$t('finance.reportSummary.No')">
+        <el-table-column prop="category" :label="$t('audit.main.Document2')" min-width="140" />
+        <el-table-column prop="billCount" :label="$t('finance.reportSummary.Document')" width="100" align="center" />
+        <el-table-column :label="$t('common.amount')" width="150" align="right">
           <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
         </el-table-column>
         <el-table-column label="占比" width="120" align="center">
@@ -89,6 +89,8 @@ import { billTypeLabel } from '@/constants/enums.js'
 import { p2Api } from '../../api'
 import { exportCsv } from '../../utils/csv'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const now = new Date()
 const year = ref(now.getFullYear())
@@ -177,7 +179,7 @@ async function loadSummary() {
     total.value = rows.length
     pageNum.value = 1
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(t('audit.main.Failed'))
   } finally {
     loading.value = false
   }
@@ -206,22 +208,22 @@ function onPeriodSelect(val) {
 }
 
 async function onRefresh() {
-  await ElMessageBox.confirm(`确认刷新 ${year.value}年${month.value}月 的报表预聚合数据？`, '刷新预聚合', { type: 'warning' })
+  await ElMessageBox.confirm(`确认刷新 ${year.value}${t('dashboard.main.Year')}${month.value}月 的报表预聚合数据？`, '刷新预聚合', { type: 'warning' })
   refreshing.value = true
   try {
     await p2Api.summaryRefresh(year.value, month.value)
-    ElMessage.success('预聚合刷新完成')
+    ElMessage.success(t('finance.reportSummary.Pre'))
     loadSummary()
     loadPeriods()
   } catch (e) {
-    ElMessage.error(e.message || '刷新失败')
+    ElMessage.error(t('finance.reportSummary.Refresh2'))
   } finally {
     refreshing.value = false
   }
 }
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 // 41号审查 导出当前期间费用类别分解
@@ -229,10 +231,10 @@ function doExport() {
   // 导出列与页面列同源同序（原缺「占比」列，页面 5 列导出只有 4 列）。
   // 导出取 summary.breakdown 全集而非分页切片，与页面「导出全部」语义一致。
   exportCsv(summary.breakdown || [], [
-    { prop: 'category', label: '单据类型' }, { prop: 'billCount', label: '单据数' },
-    { prop: 'amount', label: '金额' },
-    { value: (row) => formatPercent(row.amount, summary.totalAmount), label: '占比' },
-    { prop: 'refreshText', label: '最近刷新' },
+    { prop: 'category', label: t('audit.main.Document2') }, { prop: 'billCount', label: t('finance.reportSummary.Document') },
+    { prop: 'amount', label: t('common.amount') },
+    { value: (row) => formatPercent(row.amount, summary.totalAmount), label: t('finance.reportSummary.Share') },
+    { prop: 'refreshText', label: t('finance.reportSummary.Last') },
   ], `ReportSummary_${periodKey(year.value, month.value)}`)
 }
 

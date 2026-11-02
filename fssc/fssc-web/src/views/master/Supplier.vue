@@ -10,19 +10,19 @@
           <div class="panel-header">
             <span class="panel-title">供应商(共 {{ total }})</span>
             <div>
-              <el-button size="small" @click="doExport">导出</el-button>
-              <el-button v-permission="'md:supplier:create'" type="primary" size="small" @click="openCreate">新增</el-button>
+              <el-button size="small" @click="doExport">{{ $t('common.export') }}</el-button>
+              <el-button v-permission="'md:supplier:create'" type="primary" size="small" @click="openCreate">{{ $t('common.add') }}</el-button>
             </div>
           </div>
           <div style="display:flex; gap:6px; margin-bottom:8px">
-            <el-input v-model="q.keyword" size="small" placeholder="编码/名称" clearable @keyup.enter="search" />
-            <el-button size="small" type="primary" @click="search">查询</el-button>
+            <el-input v-model="q.keyword" size="small" :placeholder="$t('master.expenseStandard.Code')" clearable @keyup.enter="search" />
+            <el-button size="small" type="primary" @click="search">{{ $t('common.search') }}</el-button>
           </div>
           <el-table :data="rows" v-loading="loading" size="small" border stripe highlight-current
             max-height="560" @row-click="onSelect" :row-class-name="rowClass" style="cursor:pointer">
-            <el-table-column prop="supplierCode" label="编码" width="100" show-overflow-tooltip />
-            <el-table-column prop="supplierName" label="名称" min-width="150" show-overflow-tooltip />
-            <el-table-column label="状态" width="70" align="center">
+            <el-table-column prop="supplierCode" :label="$t('master.customer.Code')" width="100" show-overflow-tooltip />
+            <el-table-column prop="supplierName" :label="$t('master.customer.Name')" min-width="150" show-overflow-tooltip />
+            <el-table-column :label="$t('common.status')" width="70" align="center">
               <template #default="{ row }">
                 <el-tag v-if="row.status === 'PENDING'" size="small" type="warning">未核准</el-tag>
                 <el-tag v-else size="small" :type="isSupplierActive(row.status) ? 'success' : 'info'">{{ isSupplierActive(row.status) ? '启用' : '停用' }}</el-tag>
@@ -228,6 +228,8 @@ import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import { useFormRules } from '../../composables/useFormRules'
 import { exportCsv } from '../../utils/csv'
 import { hasPerm } from '@/utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const SUPPLIER_TYPES = ['物料供应商', '服务供应商', '物流供应商', '代理商', '其他']
 const PAY_TERMS = ['月结30', '月结60', '货到付款', '预付款', '预付30%尾款70%']
@@ -296,9 +298,9 @@ async function approveSupplier(row) {
   } catch (_) { return }
   try {
     await supplierApi.approve(row.id)
-    ElMessage.success('已核准（ACTIVE）')
+    ElMessage.success(t('master.supplier.Approved'))
     load()
-  } catch (e) { ElMessage.error(e?.message || '核准失败') }
+  } catch (e) { ElMessage.error(t('master.customer.Approval')) }
 }
 
 async function load() {
@@ -353,10 +355,10 @@ async function saveBasic() {
       if (current.value.id) {
         body.id = current.value.id
         await supplierApi.update(body)
-        ElMessage.success('资料已保存')
+        ElMessage.success(t('master.supplier.Profile'))
       } else {
         const id = await supplierApi.create(body)
-        ElMessage.success('供应商已创建(准入审批已发起)')
+        ElMessage.success(t('master.supplier.Supplier'))
         current.value = { id, supplierName: form.supplierName, status: 'NORMAL' }
       }
       await load()
@@ -370,7 +372,7 @@ const isSupplierActive = (s) => s === 'NORMAL' || s === 'ACTIVE'
 async function toggleEnable() {
   const enable = !isSupplierActive(current.value.status)
   await supplierApi.enable(current.value.id, enable)
-  ElMessage.success(enable ? '已启用' : '已停用')
+  ElMessage.success(t('budget.budgetScheme.Disabled'))
   await load()
   const fresh = rows.value.find((r) => r.id === current.value.id)
   if (fresh) onSelect(fresh)
@@ -378,7 +380,7 @@ async function toggleEnable() {
 
 async function saveSub() {
   const id = current.value.id
-  if (!id) return ElMessage.warning('请先选择或创建供应商')
+  if (!id) return ElMessage.warning(t('master.supplier.Select'))
   try {
     await subGuard.submit(async () => {
       if (subDialog.value === 'bank') {
@@ -388,7 +390,7 @@ async function saveSub() {
       } else {
         await supplierApi.addQual(id, { ...qualForm })
       }
-      ElMessage.success('已保存')
+      ElMessage.success(t('useCrud.main.Saved'))
       subDialog.value = ''
       Object.keys(bankForm).forEach((k) => delete bankForm[k])
       Object.keys(contactForm).forEach((k) => delete contactForm[k])
@@ -404,7 +406,7 @@ async function delSub(kind, subId) {
     if (kind === 'bank') await supplierApi.deleteBank(subId)
     else if (kind === 'contact') await supplierApi.deleteContact(subId)
     else await supplierApi.deleteQual(subId)
-    ElMessage.success('已删除')
+    ElMessage.success(t('useCrud.main.Deleted'))
     await loadSubs()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -415,12 +417,12 @@ function daysLeft(d) {
 
 function doExport() {
   exportCsv(rows.value, [
-    { prop: 'supplierCode', label: '编码' }, { prop: 'supplierName', label: '名称' }, { prop: 'shortName', label: '简称' },
-    { prop: 'supplierType', label: '类型' }, { prop: 'creditCode', label: '统一社会信用代码' }, { prop: 'taxNo', label: '税号' },
-    { prop: 'taxType', label: '纳税人资质' }, { prop: 'invoiceType', label: '发票类型' }, { prop: 'payTerms', label: '付款条件' },
-    { prop: 'currencyCode', label: '结算币种' }, { prop: 'address', label: '地址' }, { prop: 'tel', label: '电话' },
-    { prop: 'contactName', label: '联系人' }, { prop: 'contactPhone', label: '联系电话' },
-    { prop: 'blacklist', label: '黑名单(1是)' }, { prop: 'status', label: '状态' }, { prop: 'remark', label: '备注' },
+    { prop: 'supplierCode', label: t('master.customer.Code') }, { prop: 'supplierName', label: t('master.customer.Name') }, { prop: 'shortName', label: t('master.supplier.Short') },
+    { prop: 'supplierType', label: t('finance.fxReval.Type') }, { prop: 'creditCode', label: t('master.supplier.Unified') }, { prop: 'taxNo', label: t('master.supplier.Tax') },
+    { prop: 'taxType', label: t('master.supplier.Taxpayer') }, { prop: 'invoiceType', label: t('master.supplier.Invoice') }, { prop: 'payTerms', label: t('master.supplier.Payment') },
+    { prop: 'currencyCode', label: t('master.supplier.Settlement') }, { prop: 'address', label: t('master.supplier.Address') }, { prop: 'tel', label: t('master.customer.Phone') },
+    { prop: 'contactName', label: t('login.main.Contact') }, { prop: 'contactPhone', label: t('login.main.Contact2') },
+    { prop: 'blacklist', label: t('master.supplier.Blacklist') }, { prop: 'status', label: t('common.status') }, { prop: 'remark', label: t('common.remark') },
   ], 'Supplier')
 }
 

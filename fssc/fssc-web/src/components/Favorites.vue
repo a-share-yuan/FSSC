@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <template>
-  <el-drawer v-model="visible" title="收藏夹" direction="rtl" size="360px" :destroy-on-close="true">
+  <el-drawer v-model="visible" :title="$t('Favorites.main.Favorites')" direction="rtl" size="360px" :destroy-on-close="true">
     <div class="fav-content">
       <div class="fav-tabs">
         <el-radio-group v-model="activeType" size="small">
@@ -24,12 +24,12 @@
             <el-icon><Delete /></el-icon>
           </el-button>
         </div>
-        <el-empty v-if="filteredList.length === 0" description="暂无收藏，点击星标添加" :image-size="48" />
+        <el-empty v-if="filteredList.length === 0" :description="$t('Favorites.main.No')" :image-size="48" />
       </div>
 
       <div class="fav-hint">
         <el-icon><InfoFilled /></el-icon>
-        <span>拖拽排序 · 点击星标添加收藏</span>
+        <span>{{ $t('Favorites.main.Drag') }}</span>
       </div>
     </div>
   </el-drawer>
@@ -42,6 +42,8 @@ import { Rank, Delete, InfoFilled, Document, DataAnalysis, Menu, Star } from '@e
 import { store } from '../api'
 import { ElMessage } from 'element-plus'
 import { pathDenyReason } from '../router/pathAccess'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const props = defineProps({ modelValue: Boolean })
 const emit = defineEmits(['update:modelValue'])
@@ -76,7 +78,7 @@ function removeFav(item) {
 function navigate(item) {
   // 收藏夹存的是路径：角色调整后原收藏可能已不可达，直推会被守卫弹回并提示无权限
   if (item.path && pathDenyReason(item.path)) {
-    ElMessage.warning('该页面当前账号无法访问，请联系管理员')
+    ElMessage.warning(t('Favorites.main.Current'))
     return
   }
   if (item.path) router.push(item.path)

@@ -6,8 +6,8 @@
     <el-card class="cm-target-dialog" shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="header-title">预算调整</span>
-          <el-button type="primary" size="small" @click="openDialog">新建调整单</el-button>
+          <span class="header-title">{{ $t('budget.budgetAdjust.Budget') }}</span>
+          <el-button type="primary" size="small" @click="openDialog">{{ $t('budget.budgetAdjust.New') }}</el-button>
         </div>
       </template>
       <el-form :inline="true" size="small" style="margin-bottom:12px">
@@ -240,6 +240,8 @@ import CoachMark from '@/components/CoachMark.vue'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { hasPerm } from '../../utils/perm'
 import { formatDate, formatDateTime } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 const budgetAdjCm = ref(null)
 
 // BillTraceDrawer
@@ -360,7 +362,7 @@ async function save() {
       },
       lines: dialog.lines,
     })
-    ElMessage.success('提交成功')
+    ElMessage.success(t('budget.budgetAdjust.Submitted'))
     dialog.visible = false
     await loadList()
   } catch (e) { ElMessage.error(e.message) } finally { dialog.saving = false }
@@ -370,7 +372,7 @@ async function approve(row) {
   try {
     await ElMessageBox.confirm(`审批通过调整单「${row.adjustNo}」？审批后将更新预算额度`, '审批', { type: 'warning' })
     await budgetApi.adjustApprove(row.id)
-    ElMessage.success('审批通过')
+    ElMessage.success(t('budget.budgetAdjust.Approved'))
     await loadList()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
@@ -392,7 +394,7 @@ async function viewDetail(row) {
     detailDialog.lines = lines.map((l) => ({ ...l, amount: l.amount != null ? Number(l.amount) : null }))
   } catch (e) {
     detailDialog.lines = (row.lines || []).map((l) => ({ ...l }))
-    if (detailDialog.editable) ElMessage.info('明细行编辑功能暂未开放，请在调整单据中逐行提交')
+    if (detailDialog.editable) ElMessage.info(t('budget.budgetAdjust.Detail'))
   } finally { detailDialog.loading = false }
 }
 
@@ -425,7 +427,7 @@ async function saveDetail() {
       adjust: { id: detailDialog.row.id, adjustType: f.adjustType, schemeId: f.schemeId, reason: f.reason },
       lines,
     })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('budget.budgetAdjust.Saved'))
     detailDialog.visible = false
     await loadList()
   } catch (e) { ElMessage.error(e.message) } finally { detailDialog.saving = false }
@@ -448,7 +450,7 @@ async function approveFromDetail() {
       lines,
     })
     await budgetApi.adjustApprove(detailDialog.row.id)
-    ElMessage.success('已保存并审批通过')
+    ElMessage.success(t('budget.budgetAdjust.Saved2'))
     detailDialog.visible = false
     await loadList()
   } catch (e) { ElMessage.error(e.message) } finally { detailDialog.saving = false }

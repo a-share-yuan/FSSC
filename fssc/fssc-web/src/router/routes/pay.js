@@ -2,8 +2,9 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 /** 付款与对账域路由（出纳/三单匹配/对公支付/供应商对账） */
+import { i18n } from '../../i18n'
 export default [
-  { path: 'pay', component: () => import('../../views/pay/Pay.vue'), meta: { title: '出纳付款' } },
+  { path: 'pay', component: () => import('../../views/pay/Pay.vue'), meta: { title: i18n.global.t('router.pay.Cashier') } },
   // 对公三单匹配（匹配操作+容差收敛为一个工作区；/pay/match-tolerance 深链保留）
   { path: 'pay/match', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'match' }, meta: { title: '对公三单匹配' } },
   { path: 'pay/match-tolerance', component: () => import('../../views/pay/MatchTolerance.vue'), meta: { title: '三单匹配容差' } },

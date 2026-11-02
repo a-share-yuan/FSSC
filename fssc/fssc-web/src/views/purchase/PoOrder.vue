@@ -5,24 +5,24 @@
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <b>采购订单（PO）</b>
-        <el-button type="primary" size="small" @click="openCreate()">新增采购订单</el-button>
-        <el-input v-model="q.keyword" placeholder="订单号/供应商" clearable style="width: 180px" @keyup.enter="load" />
-        <el-select v-model="q.status" placeholder="状态" clearable style="width: 120px" @change="load">
-          <el-option label="草稿" value="DRAFT" />
-          <el-option label="执行中" value="OPEN" />
-          <el-option label="已审批" value="APPROVED" />
-          <el-option label="已驳回" value="REJECTED" />
-          <el-option label="已开票" value="INVOICED" />
-          <el-option label="已付款" value="PAID" />
-          <el-option label="已关闭" value="CLOSED" />
-          <el-option label="已归档" value="ARCHIVED" />
-          <el-option label="已作废" value="VOID" />
+        <b>{{ $t('purchase.poOrder.Purchase') }}</b>
+        <el-button type="primary" size="small" @click="openCreate()">{{ $t('purchase.poOrder.New') }}</el-button>
+        <el-input v-model="q.keyword" :placeholder="$t('purchase.poOrder.Order')" clearable style="width: 180px" @keyup.enter="load" />
+        <el-select v-model="q.status" :placeholder="$t('common.status')" clearable style="width: 120px" @change="load">
+          <el-option :label="$t('purchase.poOrder.Draft')" value="DRAFT" />
+          <el-option :label="$t('purchase.poOrder.Running')" value="OPEN" />
+          <el-option :label="$t('purchase.poOrder.Approved')" value="APPROVED" />
+          <el-option :label="$t('purchase.poOrder.Rejected')" value="REJECTED" />
+          <el-option :label="$t('purchase.poOrder.Invoiced')" value="INVOICED" />
+          <el-option :label="$t('purchase.poOrder.Paid')" value="PAID" />
+          <el-option :label="$t('purchase.poOrder.Closed')" value="CLOSED" />
+          <el-option :label="$t('purchase.poOrder.Archived')" value="ARCHIVED" />
+          <el-option :label="$t('purchase.poOrder.Voided')" value="VOID" />
         </el-select>
-        <el-button type="primary" size="small" @click="load">查询</el-button>
-      <el-button type="info" size="small" @click="exportCsv">导出</el-button>
+        <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
+      <el-button type="info" size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-        <span style="margin-left: auto; color: #909399; font-size: 12px">采购订单 -> 收货(GRN) -> 三单匹配 -> 发票校验 -> 付款</span>
+        <span style="margin-left: auto; color: #909399; font-size: 12px">采购订单 -> 收货(GRN) -> 三单匹配 -> 发票校验 ->{{ $t('purchase.poOrder.Payment') }}</span>
       </div>
     </template>
 
@@ -379,6 +379,8 @@ import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
 import { useCurrency } from '@/composables/useCurrency'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // 快捷键
 useKeyboard({
   'ctrl+s': () => { try { save() } catch { /* noop */ } },
@@ -623,7 +625,7 @@ async function save(thenSubmit = false) {
       else saved = await purchaseApi.orderCreate(payload)
 
       if (!thenSubmit) {
-        ElMessage.success('已保存')
+        ElMessage.success(t('useCrud.main.Saved'))
         dlg.value = false
         load()
         return
@@ -633,13 +635,13 @@ async function save(thenSubmit = false) {
       //              update 返回 void，故编辑态用回原 form.id。
       const id = form.id ?? (typeof saved === 'number' ? saved : saved?.id ?? saved?.data?.id ?? null)
       if (!id) {
-        ElMessage.warning('已保存，但未能取得单据标识，请到列表中点击【提交审批】')
+        ElMessage.warning(t('purchase.poOrder.Saved'))
         dlg.value = false
         load()
         return
       }
       await purchaseApi.orderSubmit(id)
-      ElMessage.success('已保存并提交审批')
+      ElMessage.success(t('purchase.poOrder.Saved2'))
       dlg.value = false
       load()
     } catch (e) {
@@ -655,7 +657,7 @@ async function save(thenSubmit = false) {
 async function submitOrder(row) {
   try {
     await purchaseApi.orderSubmit(row.id)
-    ElMessage.success(`订单 ${row.poNo} 已提交审批`)
+    ElMessage.success(`订单 ${row.poNo} ${t('asset.deprBatch.Submitted')}`)
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -667,7 +669,7 @@ async function returnToEdit(row) {
     await load()
     const fresh = rows.value.find((x) => x.id === row.id)
     openCreate(fresh || { ...row, status: 'DRAFT' })
-    ElMessage.success('已转回草稿，修改后请重新提交审批')
+    ElMessage.success(t('purchase.poOrder.Returned'))
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -682,7 +684,7 @@ async function removeOrder(row) {
   } catch (_) { return }
   try {
     await purchaseApi.orderDelete(row.id)
-    ElMessage.success(`订单 ${row.poNo} 已删除`)
+    ElMessage.success(`订单 ${row.poNo} ${t('useCrud.main.Deleted')}`)
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -706,7 +708,7 @@ async function voidOrder(row) {
   } catch (_) { return } // 用户取消
   try {
     await purchaseApi.orderVoid({ orderId: row.id, reason })
-    ElMessage.success('已作废')
+    ElMessage.success(t('purchase.poOrder.Voided'))
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -730,7 +732,7 @@ async function terminateOrderRow(row) {
   } catch (_) { return } // 用户取消
   try {
     await purchaseApi.orderTerminate(row.id, { reason })
-    ElMessage.success('已终止')
+    ElMessage.success(t('purchase.poOrder.Terminated'))
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -746,7 +748,7 @@ async function archiveOrderRow(row) {
   } catch (_) { return }
   try {
     await purchaseApi.orderArchive(row.id)
-    ElMessage.success(`订单 ${row.poNo} 已归档`)
+    ElMessage.success(`订单 ${row.poNo} ${t('purchase.poOrder.Archived')}`)
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -783,8 +785,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'poNo', label: '订单号' }, { prop: 'supplierName', label: '供应商' }, { prop: 'orderDate', label: '下单日期' }, { prop: 'deliveryDate', label: '交货日期' }, { prop: 'paymentTerms', label: '付款条件' }, { prop: 'buyerName', label: '采购员' }]
+  if (!rows.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'poNo', label: t('purchase.poOrder.Order2') }, { prop: 'supplierName', label: t('purchase.payPlan.Supplier') }, { prop: 'orderDate', label: t('purchase.poOrder.Order3') }, { prop: 'deliveryDate', label: t('purchase.poOrder.Delivery') }, { prop: 'paymentTerms', label: t('master.supplier.Payment') }, { prop: 'buyerName', label: t('purchase.poOrder.Buyer') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -798,16 +800,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `PoOrder_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -822,7 +824,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `PoOrder_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 </script>

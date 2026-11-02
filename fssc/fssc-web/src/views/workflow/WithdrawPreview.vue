@@ -17,9 +17,9 @@
     <el-card shadow="never">
       <template #header>
         <div class="wp-head">
-          <span>已办撤销预览</span>
+          <span>{{ $t('workflow.withdrawPreview.Completed') }}</span>
           <el-tag size="small" type="info">只读</el-tag>
-          <el-button link type="primary" size="small" @click="load" :disabled="!keyword">刷新</el-button>
+          <el-button link type="primary" size="small" @click="load" :disabled="!keyword">{{ $t('common.refresh') }}</el-button>
         </div>
       </template>
 
@@ -87,6 +87,8 @@ import { wfActionLabel } from '@/constants/enums'
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { wfApi } from '@/api'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const keyword = ref('')
 const loading = ref(false)
@@ -95,7 +97,7 @@ const data = ref(null)
 
 async function load() {
   const kw = String(keyword.value || '').trim()
-  if (!kw) { ElMessage.warning('请输入流程实例ID 或 任务ID'); return }
+  if (!kw) { ElMessage.warning(t('workflow.withdrawPreview.Please')); return }
   loading.value = true
   try {
     // keyword 走后端自动识别（实例ID 与 任务ID 都是 Flowable 数字串，前端无法区分）
@@ -103,12 +105,12 @@ async function load() {
     searched.value = true
     if (!data.value?.procInstId || !(data.value.candidates || []).length) {
       // 仍可能是合法但无已办节点的实例，故只提示不报错
-      if (!data.value?.instanceStatus && !data.value?.bizNo) ElMessage.info('未查询到该流程实例')
+      if (!data.value?.instanceStatus && !data.value?.bizNo) ElMessage.info(t('workflow.withdrawPreview.Process'))
     }
   } catch (e) {
     data.value = null
     searched.value = true
-    ElMessage.error(e?.message || '查询失败')
+    ElMessage.error(t('workflow.withdrawPreview.Query'))
   } finally {
     loading.value = false
   }

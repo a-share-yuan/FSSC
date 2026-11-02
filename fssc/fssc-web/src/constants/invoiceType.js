@@ -4,13 +4,14 @@
 // 票据类型编码与中文标签（报销场景）。编码与后端 OcrLocalParsers.inferType 返回值对齐。
 // 新增类型需同步修改本文件 与 后端 OcrLocalParsers 的 inferType/常量。
 import { dictLabelOf } from '../composables/useDict.js'
+import { i18n } from '../i18n'
 
 /** 本名称表对应的字典类型（起为文案权威源） */
 export const INVOICE_DICT_TYPE = 'enum_invoice_type'
 
 export const INVOICE_TYPES = [
-  { code: 'VAT_SPECIAL', label: '增值税专用发票' },
-  { code: 'VAT_NORMAL', label: '增值税普通发票' },
+  { code: 'VAT_SPECIAL', label: i18n.global.t('constants.invoiceType.VAT') },
+  { code: 'VAT_NORMAL', label: i18n.global.t('constants.invoiceType.VAT2') },
   { code: 'ELECTRONIC', label: '电子发票' },
   { code: 'RAIL_HIGH', label: '高铁 / 动车' },
   { code: 'TRAIN', label: '火车票' },
@@ -21,7 +22,7 @@ export const INVOICE_TYPES = [
   { code: 'TOLL', label: '通行费 / ETC' },
   { code: 'PARKING', label: '停车费' },
   { code: 'MEDICAL', label: '医疗收费票据' },
-  { code: 'OTHER', label: '其他' },
+  { code: 'OTHER', label: i18n.global.t('login.main.Other') },
 ]
 
 // code → 中文标签；兼容历史编码（VAT/VATN/TRAIN 为旧值）

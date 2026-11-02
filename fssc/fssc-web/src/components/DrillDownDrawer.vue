@@ -14,7 +14,7 @@
 
       <!-- 当前层级数据 -->
       <div class="drill-level" :class="{ 'can-drill': canDrillDeeper }">
-        <el-table :data="tableData" stripe size="small" @row-click="onRowClick" highlight-current-row empty-text="暂无数据">
+        <el-table :data="tableData" stripe size="small" @row-click="onRowClick" highlight-current-row :empty-text="$t('common.empty')">
           <el-table-column v-for="col in visibleColumns" :key="col.prop" :prop="col.prop" :label="col.label"
             :width="col.width" :align="col.align || 'left'" sortable>
             <template #default="{ row }">
@@ -49,12 +49,18 @@ import { BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { initThemedChart, onThemeChange } from '../utils/echartsTheme'
+import { i18n } from '../i18n'
+import { useI18n } from 'vue-i18n'
 
 echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer])
 
+// setup 体内的 t() 取词；defineProps 默认值仍用 i18n.global.t
+// （defineProps 宏不能引用 setup 内的局部变量）。
+const { t } = useI18n()
+
 const props = defineProps({
   modelValue: Boolean,
-  title: { type: String, default: '数据钻取' },
+  title: { type: String, default: i18n.global.t('DrillDownDrawer.main.Data') },
   columns: { type: Array, default: () => [] },
   data: { type: Array, default: () => [] },
   drillKey: { type: String, default: '' }, // 第一层分组字段
@@ -72,7 +78,7 @@ const visible = computed({
   set: (v) => emit('update:modelValue', v),
 })
 
-const crumbs = ref([{ label: '汇总' }])
+const crumbs = ref([{ label: t('DrillDownDrawer.main.Summary') }])
 const currentLevel = ref(0)
 const tableData = ref([])
 const trendData = ref([])
@@ -174,7 +180,7 @@ function onOpened() {
 
 watch(() => props.modelValue, (v) => {
   if (!v) return
-  crumbs.value = [{ label: '汇总' }]
+  crumbs.value = [{ label: t('DrillDownDrawer.main.Summary') }]
   currentLevel.value = 0
   tableData.value = props.data
   buildTrend(props.data, props.drillKey, props.labelFormatter)

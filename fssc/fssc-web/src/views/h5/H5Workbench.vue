@@ -7,7 +7,7 @@
          「退出」已移入「我的」页并加二次确认：它原先的点击热区只有 42px，
          而破坏性动作不该和常规动作同排。 -->
     <header class="h5-header">
-      <span class="h5-header__title">FSSC 移动报销</span>
+      <span class="h5-header__title">{{ $t('h5.main.FSSC') }}</span>
       <span class="h5-header__sub">{{ myName }}</span>
     </header>
 
@@ -349,6 +349,8 @@ import { invoiceOutcome, abortedOutcome, INVOICE_TIERS } from '@/utils/invoiceOu
 import { BillStatus, statusLabel, statusType, editBillPath } from '@/constants/billStatus.js'
 import { docTypeLabel, BILL_TYPE } from '@/constants/enums.js'
 import { H5_DOC_TYPES, normalizeMobileTemplates, docTypeDenyReason, isExpBillCarrier, money, dayText, stayOf, permDeniedOf, loadLocalDraft } from '@/utils/h5.js'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 defineOptions({ name: 'H5Workbench' })
 
@@ -445,7 +447,7 @@ function goCreate(d) {
 const canRunVerify = hasPerm('inv:verify:run')
 
 const BILL_STATUS_CHIPS = [
-  { value: '', label: '全部' },
+  { value: '', label: t('common.all') },
   { value: BillStatus.DRAFT, label: statusLabel(BillStatus.DRAFT) },
   { value: BillStatus.APPROVING, label: statusLabel(BillStatus.APPROVING) },
   { value: BillStatus.REJECTED, label: statusLabel(BillStatus.REJECTED) },
@@ -744,7 +746,7 @@ async function runVerify() {
     // /verify/run 是「单张验真结果登记」口，服务端取不到 invoiceId 即 NPE ⇒ 有权限的人点了反而必炸。
     // 本按钮语义是「把待验的票一次受理」，改走与 PC 发票池同一批量受理口 /verify/batch（同码 inv:verify:run）。
     const pending = invoices.value.filter((x) => x.verifyStatus !== 'SUCCESS')
-    if (!pending.length) { ElMessage.info('没有待验真发票'); return }
+    if (!pending.length) { ElMessage.info(t('h5.main.No')); return }
     const ok = await invoiceApi.verifyBatch(pending.map((x) => x.id))
     ElMessage.success(`批量验真已受理：${ok ?? 0} 张置「验真中」（无外部报文不判定通过）`)
     loadInvoices()

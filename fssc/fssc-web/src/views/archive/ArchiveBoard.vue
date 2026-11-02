@@ -7,9 +7,9 @@
     <!-- 单页模式（菜单/工作区传入 tab）由宿主给标题，卡头不再重复一遍「档案管理」 -->
     <template v-if="!isSingle" #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>档案管理</b>
-        <span style="color:#909399; font-size:12px">归档整理 / 档案库 / 借阅利用 / 鉴定销毁</span>
-        <el-button type="info" size="small" style="margin-left:auto" @click="reload">刷新</el-button>
+        <b>{{ $t('archive.main.Archive') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('archive.main.Archiving') }}</span>
+        <el-button type="info" size="small" style="margin-left:auto" @click="reload">{{ $t('common.refresh') }}</el-button>
       </div>
     </template>
 
@@ -652,6 +652,8 @@ import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import TablePager from '../../components/common/TablePager.vue'
 import { hasPerm } from '@/utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // 快捷键
 useKeyboard({
   'ctrl+r': () => { try { reload() } catch { /* noop */ } },
@@ -1105,10 +1107,10 @@ function onPickerRowClick(row) {
 
 function confirmPicker() {
   if (pickerMode.value === 'single') {
-    if (!pickerSingleId.value) { ElMessage.warning('请选择一个档案'); return }
+    if (!pickerSingleId.value) { ElMessage.warning(t('archive.main.Please')); return }
     accForm.value.archiveId = pickerSingleId.value
   } else {
-    if (!pickerMultiSelection.value.length) { ElMessage.warning('请至少选择一个档案'); return }
+    if (!pickerMultiSelection.value.length) { ElMessage.warning(t('archive.main.Select')); return }
     selectedDestroyArchives.value = [...pickerMultiSelection.value]
   }
   dlgPicker.value = false
@@ -1151,7 +1153,7 @@ async function saveAccess() {
         requesterId: currentUserId.value,
       }
       await archiveAccessApi.request(body)
-      ElMessage.success('调阅申请已提交')
+      ElMessage.success(t('archive.main.Retrieval'))
       dlgAccess.value = false
       // request 已成功，随后的记录刷新才撞 compliance:archiveaccess:list 缺权——
       // 原样 ElMessage.error 会把成功报成失败（建单成功＋同秒弹「缺少权限」）。
@@ -1159,19 +1161,19 @@ async function saveAccess() {
       try {
         await loadAccess(true)
       } catch {
-        ElMessage.warning('调阅申请已提交成功；当前账号没有「调阅记录」查询权限，列表暂未刷新')
+        ElMessage.warning(t('archive.main.Retrieval2'))
       }
     } catch (e) { ElMessage.error(e.message) }
   })
 }
 
 async function approveAccess(row, approved) {
-  try { await archiveAccessApi.approve(row.id, currentUserId.value, approved); ElMessage.success(approved ? '已批准' : '已驳回'); loadAccess() }
+  try { await archiveAccessApi.approve(row.id, currentUserId.value, approved); ElMessage.success(t('purchase.poOrder.Rejected')); loadAccess() }
   catch (e) { ElMessage.error(e.message) }
 }
 
 async function grantAccess(row) {
-  try { await archiveAccessApi.grant(row.id); ElMessage.success('已授予档案访问权限'); loadAccess() }
+  try { await archiveAccessApi.grant(row.id); ElMessage.success(t('archive.main.Archive2')); loadAccess() }
   catch (e) { ElMessage.error(e.message) }
 }
 
@@ -1199,7 +1201,7 @@ async function saveDestroy() {
       try {
         const ids = selectedDestroyArchives.value.map((a) => a.id)
         await archiveDestroyApi.create(ids, destroyReason.value, currentUserId.value)
-        ElMessage.success('销毁申请已提交')
+        ElMessage.success(t('archive.main.Destruction'))
         dlgDestroy.value = false
         loadDestroy()
       } catch (e) {
@@ -1215,7 +1217,7 @@ async function saveDestroy() {
 }
 
 async function approveDestroy(row, approved) {
-  try { await archiveDestroyApi.approve(row.id, currentUserId.value, approved); ElMessage.success(approved ? '已批准' : '已驳回'); loadDestroy() }
+  try { await archiveDestroyApi.approve(row.id, currentUserId.value, approved); ElMessage.success(t('purchase.poOrder.Rejected')); loadDestroy() }
   catch (e) { ElMessage.error(e.message) }
 }
 
@@ -1224,7 +1226,7 @@ async function executeDestroy(row) {
     try {
       await ElMessageBox.confirm('确认执行销毁该批档案？此操作不可恢复！', '危险操作', { type: 'warning' })
       await archiveDestroyApi.execute(row.id)
-      ElMessage.success('销毁已执行')
+      ElMessage.success(t('archive.main.Destruction2'))
       loadDestroy()
     } catch (e) {
       if (e === 'cancel' || e === 'close') return // 用户取消，静默
@@ -1257,7 +1259,7 @@ async function saveDispatch() {
   await guardDispatch(async () => {
     try {
       await fmApi.dispatchRun({ ...dpForm.value })
-      ElMessage.success('单据流转已发起')
+      ElMessage.success(t('archive.main.Document'))
       dlgDispatch.value = false
       loadDispatch()
     } catch (e) { ElMessage.error(e.message) }
@@ -1265,13 +1267,13 @@ async function saveDispatch() {
 }
 
 async function completeDispatch(row) {
-  try { await fmApi.dispatchComplete(row.id); ElMessage.success('派单已完成'); loadDispatch() } catch (e) { ElMessage.error(e.message) }
+  try { await fmApi.dispatchComplete(row.id); ElMessage.success(t('archive.main.Dispatch')); loadDispatch() } catch (e) { ElMessage.error(e.message) }
 }
 
 async function escalateDispatch(row) {
   try {
     await ElMessageBox.prompt('请输入升级原因', '升级派单', { inputValue: '' })
-      .then(async ({ value }) => { await fmApi.dispatchEscalate(row.id, value || ''); ElMessage.success('已升级'); loadDispatch() })
+      .then(async ({ value }) => { await fmApi.dispatchEscalate(row.id, value || ''); ElMessage.success(t('archive.main.Escalated')); loadDispatch() })
       .catch(() => {})
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -1370,11 +1372,11 @@ function openAppendItems(row) {
 
 async function submitAppendItems() {
   const ids = toBillIds(appendBillIds.value)
-  if (!ids.length) { ElMessage.warning('请选择要加入本卷的单据'); return }
+  if (!ids.length) { ElMessage.warning(t('archive.main.Please2')); return }
   await runLocked('archive-item-add-' + appendVolumeId.value, async () => {
     try {
       const n = await fmApi.archiveItemAdd(appendVolumeId.value, ids)
-      ElMessage.success(`已加入 ${n ?? 0} 件`)
+      ElMessage.success(`已加入 ${n ?? 0} ${t('archive.main.Items')}`)
       dlgAppend.value = false
       appendBillIds.value = []
       await loadVolumeItems(appendVolumeId.value)
@@ -1391,7 +1393,7 @@ async function removeVolumeItem(volume, item) {
         `确认把${item.seqNo ? `第 ${item.seqNo} 件` : '这一件'}（${item.billNo || `单据 ${item.billId}`}）移出${archiveSubject(volume)}？单据本身不删除，可再加入其他案卷。`,
         '移出卷内件', { type: 'warning' })
       await fmApi.archiveItemRemove(volume.id, item.id)
-      ElMessage.success('已移出卷内')
+      ElMessage.success(t('archive.main.Removed'))
       await loadVolumeItems(volume.id)
       loadArchive()
       loadCandidates()
@@ -1410,13 +1412,13 @@ async function saveItemPages(volume, item) {
   const from = item.pageFrom == null || item.pageFrom === '' ? null : Number(item.pageFrom)
   const count = item.pageCount == null || item.pageCount === '' ? null : Number(item.pageCount)
   if ((from === null) !== (count === null)) {
-    ElMessage.warning('起页与页数须同时填写，或同时清空')
+    ElMessage.warning(t('archive.main.Start'))
     return
   }
   await runLocked('archive-item-pages-' + item.id, async () => {
     try {
       await fmApi.archiveItemPages(volume.id, item.id, { pageFrom: from, pageCount: count })
-      ElMessage.success(from === null ? '已清除该件页号' : `第 ${item.seqNo} 件编页：${from} 起、共 ${count} 页`)
+      ElMessage.success(from === null ? '已清除该件页号' : `第 ${item.seqNo} 件编页：${from} 起、共 ${count} ${t('archive.main.Pages')}`)
       await loadVolumeItems(volume.id)
     } catch (e) {
       ElMessage.error(e.message)
@@ -1454,7 +1456,7 @@ async function viewVolumeFiles(row) {
     try {
       const files = await fmApi.archiveVolumeFiles(row.id)
       const list = (files || []).filter((f) => f && f.fileId !== null && f.fileId !== undefined)
-      if (!list.length) { ElMessage.info('本卷暂无文件'); return }
+      if (!list.length) { ElMessage.info(t('archive.main.No')); return }
       const opts = {}
       const ids = []
       list.forEach((f) => {
@@ -1523,12 +1525,12 @@ const appendBillIds = ref([])
 async function saveArchive() {
   await guardArchive(async () => {
     const billIds = toBillIds(arForm.value.billIds)
-    if (!billIds.length) { ElMessage.warning('请至少选择一张待归档单据'); return }
+    if (!billIds.length) { ElMessage.warning(t('archive.main.Select2')); return }
     await runLocked('archive-volume-create', async () => {
       try {
         const { archiveType, carrierType, archiveYear, archivePeriod, retentionPeriod } = arForm.value
         const volumeId = await fmApi.archiveVolumeCreate({ archiveType, carrierType, archiveYear, archivePeriod, retentionPeriod, billIds })
-        ElMessage.success(`案卷已创建，卷内 ${billIds.length} 件`)
+        ElMessage.success(`案卷已创建，卷内 ${billIds.length} ${t('archive.main.Items')}`)
         dlgArchive.value = false
         candSelected.value = []
         arForm.value.billIds = []
@@ -1550,7 +1552,7 @@ async function doArchive(row) {
       // 号缺位时整段换成「该档案（ID …，档案编号尚未生成）」，不再出现「档案「null」？」
       await ElMessageBox.confirm(`确认执行归档${archiveSubject(row)}？将发起凭证归档审批流。`, '执行归档', { type: 'warning' })
       await fmApi.archiveDo(row.id)
-      ElMessage.success('归档已执行，审批流已发起')
+      ElMessage.success(t('archive.main.Archiving2'))
       loadArchive()
     } catch (e) {
       if (e === 'cancel' || e === 'close') return // 用户取消，静默
@@ -1577,7 +1579,7 @@ async function deleteEmptyVolume(row) {
   try {
     await ElMessageBox.confirm(`确认删除空案卷${archiveSubject(row)}？该卷没有任何卷内件，删除后不可恢复，单据不受影响。`, '删除空卷', { type: 'warning' })
     await fmApi.archiveVolumeDelete(row.id)
-    ElMessage.success('空案卷已删除')
+    ElMessage.success(t('archive.main.Empty'))
     loadArchive()
   } catch (e) {
     if (e === 'cancel' || e === 'close') return
@@ -1597,9 +1599,9 @@ async function verifyArchive(row) {
     // 老包（未发布新服务端）只回布尔时按二态回落，且此时无法区分"未固化哈希"
     const status = r && typeof r === 'object' ? r.status : (r ? 'VERIFIED' : 'MISMATCH')
     row.integrityStatus = status
-    if (status === 'VERIFIED') { ElMessage.success('完整性校验通过') }
-    else if (status === 'UNVERIFIABLE') { ElMessage.warning('无法校验：该档案未固化完整性哈希（历史档案），本次不产生篡改结论；建议重新归档后再校验') }
-    else { ElMessage.error('完整性校验不一致，档案可能被篡改') }
+    if (status === 'VERIFIED') { ElMessage.success(t('archive.main.Integrity')) }
+    else if (status === 'UNVERIFIABLE') { ElMessage.warning(t('archive.main.Cannot')) }
+    else { ElMessage.error(t('archive.main.Integrity2')) }
     loadArchive()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -1644,8 +1646,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!dispatches.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'id', label: '编号' }, { prop: 'billId', label: '单据标识' }, { prop: 'expenseType', label: '费项' }, { prop: 'reviewerName', label: '审核员' }, { prop: 'taskCode', label: '任务编码' }]
+  if (!dispatches.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'id', label: t('archive.main.No2') }, { prop: 'billId', label: t('archive.main.Document2') }, { prop: 'expenseType', label: t('archive.main.Fee') }, { prop: 'reviewerName', label: t('archive.main.Auditor') }, { prop: 'taskCode', label: t('archive.main.Task') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = dispatches.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -1659,12 +1661,12 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `ArchiveBoard_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 /** 档案目录导出（与列表同一批筛选结果，供离职交接／审计取档） */
 function exportArchiveCsv() {
-  if (!archives.value.length) { ElMessage.warning('当前无数据可导出'); return }
+  if (!archives.value.length) { ElMessage.warning(t('useBill.main.There')); return }
   const cols = [
     { label: '档案编号', get: (r) => r.archiveNo },
     { label: '题名', get: (r) => r.title },
@@ -1690,7 +1692,7 @@ function exportArchiveCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `${isLibrary.value ? '档案库目录' : '归档整理'}_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 

@@ -4,22 +4,22 @@
 <template>
   <div>
     <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
-      <el-input v-model="kw" placeholder="资产编号/名称" clearable style="width: 220px" @keyup.enter="loadAssets" />
-      <el-button type="primary" @click="loadAssets">查询</el-button>
-      <el-button type="success" @click="openAsset">资产建档</el-button>
-      <el-button type="warning" @click="depreciateMonthBatch">月度折旧批处理</el-button>
-      <el-button type="primary" plain @click="openCapital">资本性支出申请</el-button>
+      <el-input v-model="kw" :placeholder="$t('asset.assetCard.Asset')" clearable style="width: 220px" @keyup.enter="loadAssets" />
+      <el-button type="primary" @click="loadAssets">{{ $t('common.search') }}</el-button>
+      <el-button type="success" @click="openAsset">{{ $t('asset.assetCard.Create') }}</el-button>
+      <el-button type="warning" @click="depreciateMonthBatch">{{ $t('asset.assetCard.Monthly') }}</el-button>
+      <el-button type="primary" plain @click="openCapital">{{ $t('asset.assetCard.Capital') }}</el-button>
       <!-- 在建工程转固入口：拉取在途 CIP（IN_PROGRESS）弹窗选择后转固；接口未部署（404）时友好提示不阻断 -->
-      <el-button type="success" plain @click="openCipFlow">转固</el-button>
+      <el-button type="success" plain @click="openCipFlow">{{ $t('asset.assetCard.Capitalization') }}</el-button>
     </div>
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="assets" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据">
+    <el-table :data="assets" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
       <el-table-column type="selection" width="45" />
       <!-- 无编号卡片（盘点导入等）首列空值文案，按卡片 ID 追溯 -->
-      <el-table-column label="资产编号" width="140" sortable>
+      <el-table-column :label="$t('asset.assetCard.Asset2')" width="140" sortable>
         <template #default="{ row }">
           <span v-if="row.assetNo">{{ row.assetNo }}</span>
-          <span v-else class="muted-no">—（待审批通过后生成）</span>
+          <span v-else class="muted-no">{{ $t('asset.assetCard.Generated') }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="assetName" label="资产名称" min-width="150" show-overflow-tooltip sortable />
@@ -329,6 +329,8 @@ import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
@@ -490,7 +492,7 @@ async function saveAsset() {
         f.netAmount = Math.round((orig - accum) * 100) / 100
         await assetApi.update(f)
       } else { await assetApi.create(aForm.value) }
-      ElMessage.success('已保存'); dlgAsset.value = false; loadAssets()
+      ElMessage.success(t('useCrud.main.Saved')); dlgAsset.value = false; loadAssets()
     } catch (e) { ElMessage.error(e.message) }
   })
 }
@@ -500,12 +502,12 @@ async function depreciate(row) {
 }
 async function depreciateMonthBatch() {
   try { await ElMessageBox.confirm('将对全部在用资产按月生成折旧批单并提交审批？', '批量计提折旧', { type: 'warning' }) } catch { return }
-  try { const n = await assetApi.depreciateMonth(); ElMessage.success('已生成折旧批单并提交审批，待计提 ' + n + ' 项'); loadAssets() } catch (e) { ElMessage.error(e.message) }
+  try { const n = await assetApi.depreciateMonth(); ElMessage.success(t('asset.assetCard.Items')); loadAssets() } catch (e) { ElMessage.error(e.message) }
 }
 async function scrap(row) {
   try {
     await ElMessageBox.confirm('确认报废资产「' + row.assetName + '」？', '报废（提交审批）', { type: 'warning' })
-    await assetApi.scrap(row.id); ElMessage.success('报废已提交审批'); loadAssets()
+    await assetApi.scrap(row.id); ElMessage.success(t('asset.assetCard.Scrapping')); loadAssets()
   } catch (e) {
     // 只放行取消/关闭，真实 API 错误必须可见（旧版整段吞掉＝「点了没反应」）
     if (e === 'cancel' || e === 'close') return
@@ -523,15 +525,15 @@ async function confirmTransfer() {
   await guardTransfer(async () => {
     try {
       await assetApi.transfer(row.id, f.targetDeptId, f.targetCompanyId, f.remark || '手工调拨')
-      ElMessage.success('调拨已提交审批'); dlgTransfer.value = false; loadAssets()
+      ElMessage.success(t('asset.assetCard.Transfer')); dlgTransfer.value = false; loadAssets()
     } catch (e) { ElMessage.error(e.message) }
   })
 }
 async function doDisposeSell(row) {
   try {
-    const { value: sellAmount } = await ElMessageBox.prompt('输入对外销售金额', '对外销售处置（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^\d+(\.\d+)?$/, inputErrorMessage: '请输入金额' })
+    const { value: sellAmount } = await ElMessageBox.prompt('输入对外销售金额', '对外销售处置（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^\d+(\.\d+)?$/, inputErrorMessage: t('asset.assetCard.Please') })
     await assetApi.disposeSell(row.id, Number(sellAmount))
-    ElMessage.success('外销处置已提交审批'); loadAssets()
+    ElMessage.success(t('asset.assetCard.External')); loadAssets()
   } catch (e) {
     // 同上——外销金额非法/权限不足/状态机拦截都发生在 prompt 之后的同一个 try 里
     if (e === 'cancel' || e === 'close') return
@@ -542,12 +544,12 @@ async function doCheckDiff(row) {
   try {
     // 本审批只作差异确认——通过环节不产生结转凭证，账面在总账域结转前分文不动。
     // 单据 APPROVED＋记录现有却呈现"差异已处理"＝语义与账实脱节 ⇒ 把规则如实写进发起提示。
-    const { value: diffAmount } = await ElMessageBox.prompt('输入盘点差异金额（正=盘盈/负=盘亏）。注意：本审批仅为差异确认，通过后不自动生成结转凭证，账面不变；差异结转须在总账域另起「盘点差异结转」做账，请在提交前知会总账岗。', '盘点差异处理（提交审批）', { confirmButtonText: '下一步', cancelButtonText: '取消', inputPattern: /^-?\d+(\.\d+)?$/, inputErrorMessage: '请输入金额' })
+    const { value: diffAmount } = await ElMessageBox.prompt('输入盘点差异金额（正=盘盈/负=盘亏）。注意：本审批仅为差异确认，通过后不自动生成结转凭证，账面不变；差异结转须在总账域另起「盘点差异结转」做账，请在提交前知会总账岗。', '盘点差异处理（提交审批）', { confirmButtonText: '下一步', cancelButtonText: '取消', inputPattern: /^-?\d+(\.\d+)?$/, inputErrorMessage: t('asset.assetCard.Please') })
     // 差异说明改人工输入。旧版直接传死值 '盘点差异'，而后端 checkDiff 又把该形参整个丢弃
     // ⇒ 差异成因从来没有载体；现说明随变动台账写入数据库，故必须先有内容才放行。
     const { value: remark } = await ElMessageBox.prompt('填写差异说明（盘盈/盘亏成因，随变动台账记录，事后追溯看这一句）', '盘点差异说明', { confirmButtonText: '提交审批', cancelButtonText: '取消', inputValidator: (v) => (v && v.trim() ? true : '请填写差异说明') })
     await assetApi.checkDiff(row.id, Number(diffAmount), remark.trim())
-    ElMessage.success('盘点差异已提交审批；审批通过仅为差异确认，结转凭证需在总账域另行制单（盘点差异结转）'); loadAssets()
+    ElMessage.success(t('asset.assetCard.Stocktake')); loadAssets()
   } catch (e) {
     if (e === 'cancel' || e === 'close') return
     ElMessage.error(e && e.message ? e.message : String(e))
@@ -564,15 +566,15 @@ async function confirmAdjustValue() {
   await guardAdjust(async () => {
     try {
       await assetApi.adjustValue(row.id, Number(f.newOriginalAmount), f.reason.trim())
-      ElMessage.success('原值调整已提交审批'); dlgAdjust.value = false; loadAssets()
+      ElMessage.success(t('asset.assetCard.Original')); dlgAdjust.value = false; loadAssets()
     } catch (e) { ElMessage.error(e.message) }
   })
 }
 async function doImpair(row) {
   try {
-    const { value: impairmentAmount } = await ElMessageBox.prompt('输入减值金额', '减值准备（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^\d+(\.\d+)?$/, inputErrorMessage: '请输入金额' })
+    const { value: impairmentAmount } = await ElMessageBox.prompt('输入减值金额', '减值准备（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputPattern: /^\d+(\.\d+)?$/, inputErrorMessage: t('asset.assetCard.Please') })
     await assetApi.impair(row.id, Number(impairmentAmount))
-    ElMessage.success('减值已提交审批'); loadAssets()
+    ElMessage.success(t('asset.assetCard.Impairment')); loadAssets()
   } catch (e) {
     // 同上——减值分支的服务端拒绝不能被静默丢弃，否则列表不刷新、也无任何提示
     if (e === 'cancel' || e === 'close') return
@@ -607,7 +609,7 @@ async function saveCapital() {
   await guardCapital(async () => {
     try {
       await assetApi.capitalRequest(capForm.value.amount, capForm.value.assetName, capForm.value.deptId, capForm.value.companyId, capForm.value.remark, capForm.value.budgetItemId)
-      ElMessage.success('资本性支出申请已提交审批')
+      ElMessage.success(t('asset.assetCard.Capital2'))
       dlgCapital.value = false
     } catch (e) { ElMessage.error(e.message) }
   })
@@ -671,7 +673,7 @@ async function confirmCipToAsset() {
   await guardCipToAsset(async () => {
     try {
       await assetApi.cipToAsset(cipRow.value.id, cipForm.value.transferDate, cipForm.value.remark)
-      ElMessage.success('转固已提交审批'); dlgCipToAsset.value = false; loadAssets()
+      ElMessage.success(t('asset.assetCard.Capitalization2')); dlgCipToAsset.value = false; loadAssets()
     } catch (e) { ElMessage.error(e.message) }
   })
 }
@@ -705,13 +707,13 @@ async function openCipFlow() {
     const list = Array.isArray(d) ? d : (d?.list || d?.records || [])
     // 在途 = 尚未进入转固流程的 CIP（NORMAL）；TRANSFERRING/TRANSFERRED 已在途/已转固
     cipFlowRows.value = list.filter((r) => !r.status || r.status === 'NORMAL')
-    if (!cipFlowRows.value.length) ElMessage.info('当前无在途在建工程项目')
+    if (!cipFlowRows.value.length) ElMessage.info(t('asset.assetCard.No'))
   } catch (e) {
     // 404（契约未部署）→ 友好提示，不阻断
     if (e?.status === 404 || /404/.test(String(e?.message))) {
-      ElMessage.info('转固流程入口准备中')
+      ElMessage.info(t('asset.assetCard.Capitalization3'))
     } else {
-      ElMessage.error(e?.message || '获取在建工程列表失败')
+      ElMessage.error(t('asset.assetCard.Failed'))
     }
   } finally { cipFlowLoading.value = false }
   // 选项惰性加载（类别 + 部门树），失败不阻断
@@ -729,7 +731,7 @@ async function openCipFlow() {
 
 async function confirmCipFlow() {
   const row = cipFlowSelected.value
-  if (!row?.id) { ElMessage.warning('请先选择在建工程项目'); return }
+  if (!row?.id) { ElMessage.warning(t('asset.assetCard.Select')); return }
   try {
     await ElMessageBox.confirm(`确认将在建工程「${row.cipName || row.id}」转固为固定资产？`, '转固确认', { type: 'warning', closeOnClickModal: false })
   } catch (_) { return }
@@ -745,15 +747,15 @@ async function confirmCipFlow() {
       depreciationMonths: cipFlowForm.value.depreciationMonths,
       remark: cipFlowForm.value.remark,
     })
-    ElMessage.success('转固已提交（转固审批已发起）')
+    ElMessage.success(t('asset.assetCard.Capitalization4'))
     dlgCipFlow.value = false
     loadAssets()
   } catch (e) {
     // 404（契约未部署）→ 友好提示；业务校验失败原样展示后端错误
     if (e?.status === 404 || /404/.test(String(e?.message))) {
-      ElMessage.info('转固流程入口准备中')
+      ElMessage.info(t('asset.assetCard.Capitalization3'))
     } else {
-      ElMessage.error(e?.message || '转固失败，请稍后重试')
+      ElMessage.error(t('asset.assetCard.Capitalization5'))
     }
   } finally { cipFlowSubmitting.value = false }
 }

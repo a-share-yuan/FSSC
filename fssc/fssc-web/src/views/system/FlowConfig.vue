@@ -1536,8 +1536,16 @@ function simTagType(type) {
   return { task: 'primary', gateway: 'warning', join: 'info', end: 'success', error: 'danger' }[type] || 'info'
 }
 function simTypeLabel(type) {
-  const key = { task: 'simTypeTask', gateway: 'simTypeGateway', join: 'simTypeJoin', end: 'simTypeEnd', error: 'simTypeError' }[type]
-  return key ? t('system.flow.' + key) : type
+  // 静态键映射：i18n 禁止动态拼接 key
+  // （拼接会让残留扫描/悬空引用校验/回退全部失效）。
+  const key = {
+    task: 'system.flow.simTypeTask',
+    gateway: 'system.flow.simTypeGateway',
+    join: 'system.flow.simTypeJoin',
+    end: 'system.flow.simTypeEnd',
+    error: 'system.flow.simTypeError',
+  }[type]
+  return key ? t(key) : type
 }
 function normalizeSimTrace(t) {
   const type = t?.type || ''

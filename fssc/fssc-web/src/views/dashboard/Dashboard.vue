@@ -4,20 +4,20 @@
 <template>
   <div class="dash" :class="{ 'dash-full': isFullscreen }">
     <div class="dash-toolbar">
-      <el-button size="small" @click="exportXlsx('bills')">导出单据</el-button>
-      <el-button size="small" @click="exportXlsx('dept-ranking')">导出部门排行</el-button>
-      <el-button size="small" @click="exportXlsx('budget-execution')">导出预算执行率</el-button>
+      <el-button size="small" @click="exportXlsx('bills')">{{ $t('dashboard.main.Export') }}</el-button>
+      <el-button size="small" @click="exportXlsx('dept-ranking')">{{ $t('dashboard.main.Export2') }}</el-button>
+      <el-button size="small" @click="exportXlsx('budget-execution')">{{ $t('dashboard.main.Export3') }}</el-button>
       <el-button :icon="isFullscreen ? 'Close' : 'FullScreen'" size="small" @click="toggleFullscreen">
         {{ isFullscreen ? '退出大屏' : '进入大屏' }}
       </el-button>
     </div>
     <el-row :gutter="16">
-      <el-col :xs="24" :md="8"><el-card header="报销统计（按状态）"><div ref="statusChart" class="chart" @click="drillStatus" /></el-card></el-col>
-      <el-col :xs="24" :md="8"><el-card header="付款进度"><div ref="payChart" class="chart" @click="drillPay" /></el-card></el-col>
-      <el-col :xs="24" :md="8"><el-card header="审批时效（分钟）"><div ref="effChart" class="chart" @click="drillEff" /></el-card></el-col>
-      <el-col :xs="24" :md="12" style="margin-top: 16px"><el-card header="月度趋势（单量/金额）"><div ref="trendChart" class="chart" @click="drillTrend" /></el-card></el-col>
-      <el-col :xs="24" :md="12" style="margin-top: 16px"><el-card header="部门报销排行（金额）"><div ref="deptChart" class="chart" @click="drillDept" /></el-card></el-col>
-      <el-col :xs="24" :md="12" style="margin-top: 16px"><el-card header="预算执行率"><div ref="budgetChart" class="chart" @click="drillBudget" /></el-card></el-col>
+      <el-col :xs="24" :md="8"><el-card :header="$t('dashboard.main.Reimbursement')"><div ref="statusChart" class="chart" @click="drillStatus" /></el-card></el-col>
+      <el-col :xs="24" :md="8"><el-card :header="$t('dashboard.main.Payment')"><div ref="payChart" class="chart" @click="drillPay" /></el-card></el-col>
+      <el-col :xs="24" :md="8"><el-card :header="$t('dashboard.main.Approval')"><div ref="effChart" class="chart" @click="drillEff" /></el-card></el-col>
+      <el-col :xs="24" :md="12" style="margin-top: 16px"><el-card :header="$t('dashboard.main.Monthly')"><div ref="trendChart" class="chart" @click="drillTrend" /></el-card></el-col>
+      <el-col :xs="24" :md="12" style="margin-top: 16px"><el-card :header="$t('dashboard.main.Department')"><div ref="deptChart" class="chart" @click="drillDept" /></el-card></el-col>
+      <el-col :xs="24" :md="12" style="margin-top: 16px"><el-card :header="$t('dashboard.main.Budget')"><div ref="budgetChart" class="chart" @click="drillBudget" /></el-card></el-col>
     </el-row>
 
     <!-- 数据钻取抽屉 -->
@@ -51,10 +51,12 @@ import DrillDownDrawer from '../../components/DrillDownDrawer.vue'
 import { docTypeLabel } from '@/constants/enums.js'
 import { statusLabel } from '@/constants/billStatus.js'
 import { pathDenyReason } from '@/router/pathAccess'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 /** 图表下钻统一入口：先按路由守卫同一把钥匙预判，避免点了图被弹回并吃一句「无权限访问该页面」。 */
 function drill(path) {
-  if (pathDenyReason(path)) { ElMessage.info('当前账号没有该业务页面的查看权限'); return }
+  if (pathDenyReason(path)) { ElMessage.info(t('dashboard.main.Current')); return }
   router.push(path)
 }
 
@@ -118,7 +120,7 @@ function drillPay() {
   drillTitle.value = '付款进度 - 明细'
   drillKey.value = 'name'
   drillColumns.value = [
-    { prop: 'name', label: '付款状态' },
+    { prop: 'name', label: t('dashboard.main.Payment2') },
     { prop: 'value', label: '笔数', numeric: true, align: 'right' },
   ]
   drillData.value = [
@@ -144,8 +146,8 @@ function drillTrend() {
   drillTitle.value = '月度趋势 - 明细'
   drillKey.value = 'period_month'
   drillColumns.value = [
-    { prop: 'period_year', label: '年' },
-    { prop: 'period_month', label: '月' },
+    { prop: 'period_year', label: t('dashboard.main.Year') },
+    { prop: 'period_month', label: t('dashboard.main.Month') },
     { prop: 'cnt', label: '单量', numeric: true, align: 'right' },
     { prop: 'amount', label: '金额', numeric: true, align: 'right' },
   ]
@@ -159,8 +161,8 @@ function drillDept() {
   drillTitle.value = '部门报销排行 - 明细'
   drillKey.value = 'dept_name'
   drillColumns.value = [
-    { prop: 'dept_name', label: '部门名称' },
-    { prop: 'dept_id', label: '部门ID' },
+    { prop: 'dept_name', label: t('dashboard.main.Department2') },
+    { prop: 'dept_id', label: t('dashboard.main.Department3') },
     { prop: 'amount', label: '报销金额', numeric: true, align: 'right' },
   ]
   drillData.value = rawData.dept
@@ -171,7 +173,7 @@ function drillBudget() {
   drillTitle.value = '预算执行率 - 明细'
   drillKey.value = 'itemName'
   drillColumns.value = [
-    { prop: 'itemName', label: '预算项' },
+    { prop: 'itemName', label: t('dashboard.main.Budget2') },
     { prop: 'executionRate', label: '执行率(%)', numeric: true, align: 'right' },
   ]
   drillData.value = rawData.budget
@@ -205,7 +207,7 @@ function axisBase() {
 function renderStatus(rows) {
   const chart = initChart(statusChart.value)
   chart.setOption({
-    tooltip: { trigger: 'item', formatter: '{b}: {c}张 ({d}%)' },
+    tooltip: { trigger: 'item', formatter: t('dashboard.main.B') },
     legend: { bottom: 0, type: 'scroll', textStyle: { color: theme().text } },
     series: [{
       type: 'pie', radius: ['40%', '65%'], center: ['50%', '45%'],

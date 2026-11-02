@@ -10,6 +10,8 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { flowApi } from '../../api'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const props = defineProps({ roleCode: { type: String, default: '' } })
 
@@ -33,7 +35,7 @@ function describe(code, r) {
   if (!r) return []
   const out = []
   if (r.roleExists === false) {
-    out.push({ level: 'bad', text: `角色编码 ${code} 在 sys_role 中不存在：挂这个码的节点不会有任何人可办` })
+    out.push({ level: 'bad', text: `${t('common.roleHolderHint.Role')} ${code} 在 sys_role 中不存在：挂这个码的节点不会有任何人可办` })
     return out
   }
   const scopeLabel = r.orgScope === 'GROUP' ? '集团级（不分公司）' : '按单据公司取人'

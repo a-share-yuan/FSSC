@@ -7,8 +7,8 @@
       <template #header>
         <div class="panel-header">
           <div>
-            <span class="panel-title">我的委托代理</span>
-            <span class="panel-hint">出差/休假期间，可把待办审批临时委托给他人代为处理</span>
+            <span class="panel-title">{{ $t('common.myDelegate.My') }}</span>
+            <span class="panel-hint">{{ $t('common.myDelegate.During') }}</span>
           </div>
           <div class="panel-actions">
             <!-- E-12/服务端已按身份过滤，这里只是切换"我委托的 / 由我代办"两个视角。
@@ -18,7 +18,7 @@
               <el-radio-button value="agent">由我代办</el-radio-button>
               <el-radio-button v-if="isGroupLevel" value="all">全部</el-radio-button>
             </el-radio-group>
-            <el-button v-if="canCreate" type="primary" size="small" @click="openDialog">新增委托</el-button>
+            <el-button v-if="canCreate" type="primary" size="small" @click="openDialog">{{ $t('common.myDelegate.Add') }}</el-button>
           </div>
         </div>
       </template>
@@ -139,6 +139,8 @@ import { billTypeLabel } from '@/constants/enums.js'
 import { hasPerm } from '@/utils/perm'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const canList = hasPerm('wf:delegate:list')
 const canCreate = hasPerm('wf:delegate:create')
@@ -240,7 +242,7 @@ async function save() {
   dialog.saving = true
   try {
     await flowApi.delegateCreate({ ...dialog.form })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('budget.budgetAdjust.Saved'))
     dialog.visible = false
     await load()
   } catch (e) {
@@ -258,7 +260,7 @@ async function cancelDelegate(row) {
   }
   try {
     await flowApi.delegateCancel(row.id)
-    ElMessage.success('已取消')
+    ElMessage.success(t('common.myDelegate.Cancelled'))
     await load()
   } catch (e) {
     ElMessage.error(e.message)

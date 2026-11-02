@@ -41,15 +41,16 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { isAmountValid } from './candidateAmount'
+import { i18n } from '../../i18n'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  title: { type: String, default: '选择单据' },
+  title: { type: String, default: i18n.global.t('bill.candidatePickerDialog.Select') },
   rows: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   /** 已入账（表单里已有的）候选 id —— 置灰不可再选，防同一张单重复入账 */
   pickedIds: { type: Array, default: () => [] },
-  tip: { type: String, default: '勾选候选行，在「本次金额」列输入金额（默认=可冲抵余额，可改），点【确定】后入账' },
+  tip: { type: String, default: i18n.global.t('bill.candidatePickerDialog.Select2') },
   // 列配置
   noLabel: { type: String, default: '单号' },
   extraProp: { type: String, default: '' },
@@ -61,7 +62,7 @@ const props = defineProps({
   /** 上限字段名：借款=loanBalance、预付=available、申请=totalAmount */
   maxField: { type: String, default: 'loanBalance' },
   inputLabel: { type: String, default: '本次金额' },
-  emptyText: { type: String, default: '暂无数据' },
+  emptyText: { type: String, default: i18n.global.t('common.empty') },
   cancelText: { type: String, default: '取消' },
   confirmText: { type: String, default: '确定' },
 })

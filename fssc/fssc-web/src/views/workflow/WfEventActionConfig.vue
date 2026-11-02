@@ -7,12 +7,12 @@
       <template #header>
         <div class="eac-header">
           <div class="eac-title-wrap">
-            <span class="eac-title">流程收尾动作配置</span>
-            <span class="eac-sub">审批办结后的收尾动作按配置表驱动（业务类型 → 收尾动作）· 本页提供只读清单与有限编辑</span>
+            <span class="eac-title">{{ $t('workflow.wfEventAction.Workflow') }}</span>
+            <span class="eac-sub">{{ $t('workflow.wfEventAction.Closing') }}</span>
           </div>
           <div class="eac-tools">
-            <el-button size="small" @click="reloadAll">刷新</el-button>
-            <el-button size="small" type="primary" plain :loading="snapLoading" @click="openSnapshot">运行期生效快照</el-button>
+            <el-button size="small" @click="reloadAll">{{ $t('common.refresh') }}</el-button>
+            <el-button size="small" type="primary" plain :loading="snapLoading" @click="openSnapshot">{{ $t('workflow.wfEventAction.Runtime') }}</el-button>
           </div>
         </div>
       </template>
@@ -168,6 +168,8 @@ import { useTablePager } from '../../composables/useTablePager'
 import { bizTypeLabel } from '@/constants/enums.js'
 import { formatDateTime, showRowDetail } from '@/utils/format'
 import { hasPerm } from '@/utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const PERM_LIST = 'wf:config:list'
 const PERM_UPDATE = 'wf:config:update'
@@ -230,13 +232,13 @@ function reloadAll() {
   if (snap.visible) loadSnapshot()
 }
 
-function openRowDetail(row) { return showRowDetail(row, { title: '收尾动作配置详情' }) }
+function openRowDetail(row) { return showRowDetail(row, { title: t('workflow.wfEventAction.Closing2') }) }
 
 // 编辑
 const edit = reactive({ visible: false, saving: false, row: {}, form: { enabled: 1, description: '' } })
 // 编辑弹窗接入——配置说明 256 字兜底；启用状态恒有值（1/0）不建规则
 const editFormRef = ref(null)
-const editRules = { description: commonRules.maxLength(256, '配置说明最多 256 个字符') }
+const editRules = { description: commonRules.maxLength(t('workflow.wfEventAction.Configuration')) }
 
 async function openEdit(row) {
   edit.row = { ...row }
@@ -262,7 +264,7 @@ async function saveEdit() {
       enabled: edit.form.enabled,
       description: edit.form.description == null ? '' : String(edit.form.description),
     })
-    ElMessage.success('已保存（运行期需应用重启后生效）')
+    ElMessage.success(t('workflow.wfEventAction.Saved'))
     edit.visible = false
     await load()
     await loadOptions()
@@ -278,7 +280,7 @@ async function loadSnapshot() {
   try {
     snap.data = await wfEventActionApi.runtimeSnapshot()
   } catch (e) {
-    ElMessage.error(e.message || '读取运行期快照失败')
+    ElMessage.error(t('workflow.wfEventAction.Failed'))
     snap.data = null
   } finally { snapLoading.value = false }
 }

@@ -15,6 +15,7 @@ import { splitTaxInclusive } from '../utils/tax'
 import { requiredOf, missingBillField } from '../constants/billRequired'
 import { invoiceOutcome } from '../utils/invoiceOutcome'
 import { isInvoiceFile } from '../utils/attachKind'
+import { i18n } from '../i18n'
 
 
 // 预填值必须与后端写入数据库时区一致。`toISOString()` 给的是 UTC 串，东八区读出来恒差 −8h
@@ -1015,7 +1016,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       // 关联申请单后自动带入费用详情/分摊（差旅培训报销等页面可覆写）
       if (opts.onApplyPick) opts.onApplyPick(row, form)
     }
-    if (added) ElMessage.success(`已关联 ${added} 张事前申请`)
+    if (added) ElMessage.success(`${i18n.global.t('useBill.main.Linked')} ${added} 张事前申请`)
     applyDialog.value = false
   }
 
@@ -1035,7 +1036,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       } else {
         voucher.id = null
         voucherLines.value = []
-        ElMessage.warning(`凭证 ${row.voucherNo} 未出现在凭证台账首页，请到「凭证」台账按期间翻查`)
+        ElMessage.warning(`${i18n.global.t('useBill.main.Voucher')} ${row.voucherNo} 未出现在凭证台账首页，请到「凭证」台账按期间翻查`)
       }
     } catch (e) { if (e?.message) ElMessage.error(e.message) }
   }
@@ -1102,7 +1103,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     try {
       await ElMessageBox.confirm('确认作废该草稿？此操作不可恢复。', '作废确认', { type: 'warning' })
       await billApi.voidBill(row.id)
-      ElMessage.success('已作废'); loadBills()
+      ElMessage.success(i18n.global.t('purchase.poOrder.Voided')); loadBills()
     } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
   }
   // 副环节：撤回确认后到接口返回前按钮实际可连点，加防重入校验
@@ -1153,11 +1154,11 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
   }
   function exportCsv() {
-    if (!bills.value.length) { ElMessage.warning('当前无数据可导出'); return }
+    if (!bills.value.length) { ElMessage.warning(i18n.global.t('useBill.main.There')); return }
     const cols = [
-      { prop: 'billNo', label: '单号' }, { prop: 'billType', label: '类型' },
-      { prop: 'billSubType', label: '子类' }, { prop: 'title', label: '标题' },
-      { prop: 'totalAmount', label: '金额' }, { prop: 'status', label: '状态' }, { prop: 'voucherNo', label: '凭证号' },
+      { prop: 'billNo', label: i18n.global.t('approval.approvalDialog.Document') }, { prop: 'billType', label: i18n.global.t('finance.fxReval.Type') },
+      { prop: 'billSubType', label: i18n.global.t('useBill.main.Subcategory') }, { prop: 'title', label: i18n.global.t('useBill.main.Title') },
+      { prop: 'totalAmount', label: i18n.global.t('common.amount') }, { prop: 'status', label: i18n.global.t('common.status') }, { prop: 'voucherNo', label: i18n.global.t('useBill.main.Voucher2') },
     ]
     const header = cols.map((c) => c.label).join(',')
     const lines = bills.value.map((row) => cols.map((c) => {
@@ -1172,7 +1173,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     a.href = URL.createObjectURL(blob)
     a.download = `单据_${today()}.csv`
     a.click(); URL.revokeObjectURL(a.href)
-    ElMessage.success('已导出 CSV')
+    ElMessage.success(i18n.global.t('useBill.main.CSV'))
   }
 
   onMounted(() => { loadMd(); loadBills() })

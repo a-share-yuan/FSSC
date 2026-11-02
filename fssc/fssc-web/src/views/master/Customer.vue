@@ -4,19 +4,19 @@
 <template>
   <el-card>
     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-      <el-button type="primary" size="small" @click="crud.openCreate()">新增客户</el-button>
-      <el-input v-model="crud.query.keyword" placeholder="搜索编码/名称/联系人" style="width: 240px" @keyup.enter="crud.load()" />
-      <el-button size="small" @click="crud.load()">查询</el-button>
-      <el-button size="small" @click="crud.query.keyword = ''; crud.load()">重置</el-button>
-      <el-button size="small" @click="crud.exportCsv()">导出</el-button>
+      <el-button type="primary" size="small" @click="crud.openCreate()">{{ $t('master.customer.New') }}</el-button>
+      <el-input v-model="crud.query.keyword" :placeholder="$t('master.customer.Search')" style="width: 240px" @keyup.enter="crud.load()" />
+      <el-button size="small" @click="crud.load()">{{ $t('common.search') }}</el-button>
+      <el-button size="small" @click="crud.query.keyword = ''; crud.load()">{{ $t('common.reset') }}</el-button>
+      <el-button size="small" @click="crud.exportCsv()">{{ $t('common.export') }}</el-button>
       <el-button v-if="crud.selRows.value.length" type="success" plain size="small" @click="crud.batchExport()">导出选中({{ crud.selRows.value.length }})</el-button>
     </div>
     <SkeletonList v-if="crud.loading.value" :rows="8" :cols="5" />
-    <el-table :data="crud.rows.value" size="small" stripe border v-else v-loading="crud.loading.value" @selection-change="crud.handleSelectionChange" empty-text="暂无数据">
+    <el-table :data="crud.rows.value" size="small" stripe border v-else v-loading="crud.loading.value" @selection-change="crud.handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-      <el-table-column prop="customerCode" label="编码" width="120"  sortable />
-      <el-table-column prop="customerName" label="名称"  min-width="200" show-overflow-tooltip sortable />
-      <el-table-column label="类型" width="100">
+      <el-table-column prop="customerCode" :label="$t('master.customer.Code')" width="120"  sortable />
+      <el-table-column prop="customerName" :label="$t('master.customer.Name')"  min-width="200" show-overflow-tooltip sortable />
+      <el-table-column :label="$t('finance.fxReval.Type')" width="100">
         <template #default="{ row }">{{ customerTypeLabel(row.customerType) }}</template>
       </el-table-column>
       <el-table-column prop="contactName" label="联系人" width="100"  sortable />
@@ -84,6 +84,8 @@ import { useCrud } from '../../composables/useCrud'
 import { useFormRules } from '../../composables/useFormRules'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { customerTypeLabel } from '@/constants/enums.js'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const formRef = ref(null)
 
@@ -92,13 +94,13 @@ const crud = useCrud({
   formRef,
   defaultForm: () => ({ id: null, customerCode: '', customerName: '', customerType: 'CUSTOMER', contactName: '', contactPhone: '', email: '', address: '', creditLevel: 'A', status: 'NORMAL', remark: '' }),
   csvColumns: [
-    { prop: 'customerCode', label: '编码' },
-    { prop: 'customerName', label: '名称' },
-    { prop: 'customerType', label: '类型' },
-    { prop: 'contactName', label: '联系人' },
-    { prop: 'contactPhone', label: '电话' },
-    { prop: 'creditLevel', label: '信用' },
-    { prop: 'status', label: '状态' },
+    { prop: 'customerCode', label: t('master.customer.Code') },
+    { prop: 'customerName', label: t('master.customer.Name') },
+    { prop: 'customerType', label: t('finance.fxReval.Type') },
+    { prop: 'contactName', label: t('login.main.Contact') },
+    { prop: 'contactPhone', label: t('master.customer.Phone') },
+    { prop: 'creditLevel', label: t('master.customer.Credit') },
+    { prop: 'status', label: t('common.status') },
   ],
   csvName: '客户',
 })
@@ -114,9 +116,9 @@ function statusLabel(s) {
 async function approveCustomer(row) {
   try {
     await customerApi.approve(row.id)
-    ElMessage.success('已核准')
+    ElMessage.success(t('master.customer.Approved'))
     crud.load()
-  } catch (e) { ElMessage.error(e?.message || '核准失败') }
+  } catch (e) { ElMessage.error(t('master.customer.Approval')) }
 }
 
 function handleSizeChange(val) {

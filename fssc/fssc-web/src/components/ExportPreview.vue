@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <template>
-  <el-dialog v-model="visible" title="报表导出预览" width="900px" :destroy-on-close="true" class="export-dialog">
+  <el-dialog v-model="visible" :title="$t('ExportPreview.main.Report')" width="900px" :destroy-on-close="true" class="export-dialog">
     <div class="export-toolbar">
       <el-select v-model="exportFormat" size="small" style="width: 120px">
         <el-option label="Excel (.xlsx)" value="xlsx" />
@@ -10,15 +10,14 @@
         <el-option label="CSV (.csv)" value="csv" />
       </el-select>
       <el-select v-model="pageSize" size="small" style="width: 100px" @change="renderPreview">
-        <el-option label="A4 横向" value="a4-h" />
-        <el-option label="A4 纵向" value="a4-v" />
-        <el-option label="A3 横向" value="a3-h" />
+        <el-option :label="$t('ExportPreview.main.A4')" value="a4-h" />
+        <el-option :label="$t('ExportPreview.main.A42')" value="a4-v" />
+        <el-option :label="$t('ExportPreview.main.A3')" value="a3-h" />
       </el-select>
       <el-checkbox v-model="includeHeader">包含表头</el-checkbox>
       <el-checkbox v-model="includeSummary">包含合计行</el-checkbox>
       <el-button type="primary" size="small" @click="doExport" :loading="exporting">
-        <el-icon><Download /></el-icon> 导出
-      </el-button>
+        <el-icon><Download /></el-icon>{{ $t('common.export') }}</el-button>
     </div>
 
     <div class="preview-container" v-loading="exporting">
@@ -68,12 +67,13 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { Download, DocumentRemove } from '@element-plus/icons-vue'
 import { store } from '../api'
+import { i18n } from '../i18n'
 
 const props = defineProps({
   modelValue: Boolean,
   columns: { type: Array, default: () => [] },
   rows: { type: Array, default: () => [] },
-  title: { type: String, default: '报表' },
+  title: { type: String, default: i18n.global.t('ExportPreview.main.Reports') },
 })
 
 const emit = defineEmits(['update:modelValue', 'export'])

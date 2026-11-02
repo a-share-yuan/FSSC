@@ -3,10 +3,10 @@
 
 <template>
   <div :class="['reports', { tabless: isSingle }]">
-    <el-card header="费用概览">
+    <el-card :header="$t('report.main.Expense')">
       <!-- 四格只摆服务端概览接口的真返回值；查询失败如实标「本次未刷新成功」，不再拿 0 顶数 -->
       <el-alert v-if="overviewError" type="error" :closable="false" show-icon style="margin-bottom:12px"
-        title="本次未刷新成功：费用概览未取到服务端数据" />
+        :title="$t('report.main.Refresh')" />
       <el-row :gutter="16">
         <el-col :span="6" v-for="s in overview" :key="s.label">
           <el-statistic v-if="s.value != null" :title="s.label" :value="s.value" :precision="s.precision" :suffix="s.suffix" />
@@ -18,16 +18,16 @@
       </el-row>
     </el-card>
 
-    <el-card header="管理报表" style="margin-top:16px">
+    <el-card :header="$t('report.main.Management')" style="margin-top:16px">
       <div class="toolbar">
-        <el-button type="success" size="small" v-permission="'report:export'" @click="exp('bills','费用明细')">导出费用明细</el-button>
-        <el-button type="success" size="small" v-permission="'report:export'" @click="exp('deptRanking','部门排名')">导出部门排名</el-button>
-        <el-button type="success" size="small" v-permission="'report:export'" @click="exp('budgetExecution','预算执行')">导出预算执行</el-button>
+        <el-button type="success" size="small" v-permission="'report:export'" @click="exp('bills','费用明细')">{{ $t('report.main.Export') }}</el-button>
+        <el-button type="success" size="small" v-permission="'report:export'" @click="exp('deptRanking','部门排名')">{{ $t('report.main.Export2') }}</el-button>
+        <el-button type="success" size="small" v-permission="'report:export'" @click="exp('budgetExecution','预算执行')">{{ $t('report.main.Export3') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
       </div>
       <!-- W5（非人性化整改）：25 个页签横排难定位，提供分组下拉直达；页签本身保留不动 -->
       <div class="toolbar" style="margin-bottom:8px">
-        <el-select v-model="tab" filterable placeholder="报表快速定位（按分组跳转）" size="small" style="width: 260px">
+        <el-select v-model="tab" filterable :placeholder="$t('report.main.Quick')" size="small" style="width: 260px">
           <el-option-group v-for="g in REPORT_GROUPS" :key="g.label" :label="g.label">
             <el-option v-for="t in g.items" :key="t.name" :label="t.label" :value="t.name" />
           </el-option-group>
@@ -35,42 +35,42 @@
         <span style="margin-left:10px;color:#909399;font-size:12px">共 {{ REPORT_GROUPS.reduce((n, g) => n + g.items.length, 0) }} 张报表，可按分组直接跳转，无需在页签条上逐个数</span>
       </div>
       <el-tabs v-model="tab">
-        <el-tab-pane label="部门报销排名" name="dept" v-if="tabAllowed('dept')">
+        <el-tab-pane :label="$t('report.main.Department')" name="dept" v-if="tabAllowed('dept')">
           <BaseChart :option="deptChart" height="280px" style="margin-bottom:12px" />
-          <el-table :data="paged.deptRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" empty-text="暂无数据">
+          <el-table :data="paged.deptRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-            <el-table-column prop="deptName" label="部门"  min-width="120" sortable />
-            <el-table-column prop="billCount" label="单量" width="100"  sortable />
-            <el-table-column prop="totalAmount" label="金额" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
+            <el-table-column prop="deptName" :label="$t('bill.main.Department')"  min-width="120" sortable />
+            <el-table-column prop="billCount" :label="$t('report.main.Document')" width="100"  sortable />
+            <el-table-column prop="totalAmount" :label="$t('common.amount')" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
           </el-table>
         </el-tab-pane>
-        <el-tab-pane label="预算执行" name="budget" v-if="tabAllowed('budget')">
+        <el-tab-pane :label="$t('report.main.Budget')" name="budget" v-if="tabAllowed('budget')">
           <BaseChart :option="budgetChart" height="280px" style="margin-bottom:12px" />
-          <el-table :data="paged.budgetRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" empty-text="暂无数据">
+          <el-table :data="paged.budgetRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-            <el-table-column prop="dimKey" label="预算维度"  width="120" sortable />
-            <el-table-column prop="totalAmount" label="总额" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
-            <el-table-column prop="usedAmount" label="已用" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
-            <el-table-column prop="occupyAmount" label="占用" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
-            <el-table-column prop="executionRate" label="执行率(%)" width="110" sortable />
+            <el-table-column prop="dimKey" :label="$t('report.main.Budget2')"  width="120" sortable />
+            <el-table-column prop="totalAmount" :label="$t('report.main.Total')" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
+            <el-table-column prop="usedAmount" :label="$t('report.main.Used')" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
+            <el-table-column prop="occupyAmount" :label="$t('report.main.Occupied')" width="140"  sortable :formatter="(r,c,v) => formatMoney(v)" />
+            <el-table-column prop="executionRate" :label="$t('report.main.Execution')" width="110" sortable />
           </el-table>
         </el-tab-pane>
-        <el-tab-pane label="审批效率" name="eff" v-if="tabAllowed('eff')">
+        <el-tab-pane :label="$t('report.main.Approval')" name="eff" v-if="tabAllowed('eff')">
           <BaseChart :option="effChart" height="280px" style="margin-bottom:12px" />
-          <el-table :data="paged.effRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" empty-text="暂无数据">
+          <el-table :data="paged.effRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-            <el-table-column prop="nodeName" label="单据类型"  width="120" sortable :formatter="(row, col, val) => billTypeLabel(val)" />
-            <el-table-column prop="avgHours" label="平均耗时(时)" width="140"  sortable />
-            <el-table-column prop="maxHours" label="最长耗时(时)" width="140"  sortable />
+            <el-table-column prop="nodeName" :label="$t('audit.main.Document2')"  width="120" sortable :formatter="(row, col, val) => billTypeLabel(val)" />
+            <el-table-column prop="avgHours" :label="$t('report.main.Average')" width="140"  sortable />
+            <el-table-column prop="maxHours" :label="$t('report.main.Longest')" width="140"  sortable />
           </el-table>
         </el-tab-pane>
-        <el-tab-pane label="借款余额汇总" name="loan" v-if="tabAllowed('loan')">
-          <el-table :data="paged.loanRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" empty-text="暂无数据">
+        <el-tab-pane :label="$t('report.main.Loan')" name="loan" v-if="tabAllowed('loan')">
+          <el-table :data="paged.loanRows" size="small" stripe v-loading="loading" max-height="360" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-            <el-table-column prop="applyUserName" label="员工"  width="100" sortable />
-            <el-table-column prop="billCnt" label="借款笔数" width="100"  sortable />
-            <el-table-column prop="loanTotal" label="借款总额" width="140"  sortable :formatter="(r, c, v) => formatMoney(v)" />
-            <el-table-column prop="balance" label="未冲销余额" width="140" sortable>
+            <el-table-column prop="applyUserName" :label="$t('report.main.Employee')"  width="100" sortable />
+            <el-table-column prop="billCnt" :label="$t('report.main.Loan2')" width="100"  sortable />
+            <el-table-column prop="loanTotal" :label="$t('report.main.Total2')" width="140"  sortable :formatter="(r, c, v) => formatMoney(v)" />
+            <el-table-column prop="balance" :label="$t('report.main.Unwritten')" width="140" sortable>
               <template #default="{ row }"><span style="color:#f59a23;font-weight:600">{{ formatMoney(row.balance) }}</span></template>
             </el-table-column>
           </el-table>
@@ -417,6 +417,8 @@ import TablePager from '../../components/common/TablePager.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { formatMoney, formatDate } from '@/utils/format'
 import { hasPerm } from '@/utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // G1（权限治理）：25 tab 按 12 报表域门控。
 // 每枚 tab 绑定一个 report:<domain>view 权限码，无权则隐藏 tab（不发请求、不渲染）。
@@ -460,28 +462,28 @@ watch(() => props.tab, (v) => { if (v) tab.value = v })
 // name 必须与 el-tab-pane 的 name 逐一对应；新增/下线页签时两处同步。
 const REPORT_GROUPS = [
   { label: '费用报销与预算', items: [
-    { name: 'dept', label: '部门报销排名' }, { name: 'summary', label: '费用发生汇总' },
-    { name: 'trend', label: '费用月度变动' }, { name: 'composition', label: '费用构成情况' },
-    { name: 'detail', label: '费用明细表' }, { name: 'budget', label: '预算执行' },
-    { name: 'budgetAlert', label: '预算超支预警' } ] },
+    { name: 'dept', label: t('report.main.Department') }, { name: 'summary', label: t('router.finance.Expense') },
+    { name: 'trend', label: t('router.finance.Monthly') }, { name: 'composition', label: t('router.finance.Expense2') },
+    { name: 'detail', label: t('router.finance.Expense3') }, { name: 'budget', label: t('report.main.Budget') },
+    { name: 'budgetAlert', label: t('router.finance.Budget3') } ] },
   { label: '应付与采购付款', items: [
-    { name: 'apAging', label: '应付账龄分析' }, { name: 'supplierPay', label: '供应商付款汇总' },
-    { name: 'inputInvoice', label: '进项发票统计' } ] },
+    { name: 'apAging', label: t('router.finance.Payable') }, { name: 'supplierPay', label: t('router.finance.Supplier') },
+    { name: 'inputInvoice', label: t('router.finance.Input') } ] },
   { label: '应收与销售开票', items: [
-    { name: 'arAging', label: '应收账龄分析' }, { name: 'outputInvoice', label: '销项发票统计' } ] },
+    { name: 'arAging', label: t('router.finance.Receivable2') }, { name: 'outputInvoice', label: t('router.finance.Output') } ] },
   { label: '资金与税务', items: [
-    { name: 'cashFlow', label: '资金收支汇总' }, { name: 'bankBalance', label: '资金余额表' },
-    { name: 'taxBurden', label: '税负分析' } ] },
+    { name: 'cashFlow', label: t('router.finance.Cash') }, { name: 'bankBalance', label: t('router.finance.Cash2') },
+    { name: 'taxBurden', label: t('router.finance.Tax2') } ] },
   { label: '借款', items: [
-    { name: 'loan', label: '借款余额汇总' }, { name: 'loanOverdue', label: '借款逾期分析' } ] },
+    { name: 'loan', label: t('report.main.Loan') }, { name: 'loanOverdue', label: t('router.finance.Loan') } ] },
   { label: '合同', items: [
-    { name: 'contract', label: '合同汇总' }, { name: 'contractExec', label: '合同执行明细' } ] },
+    { name: 'contract', label: t('router.finance.Contract2') }, { name: 'contractExec', label: t('router.finance.Contract3') } ] },
   { label: '审批与共享运营', items: [
-    { name: 'eff', label: '审批效率' }, { name: 'ops', label: '运营数据统计' },
-    { name: 'opsEff', label: '运营效率分析' }, { name: 'quality', label: '质检合格率' },
-    { name: 'image', label: '影像统计' } ] },
+    { name: 'eff', label: t('report.main.Approval') }, { name: 'ops', label: t('router.finance.Operational') },
+    { name: 'opsEff', label: t('router.finance.Operational2') }, { name: 'quality', label: t('router.finance.Inspection') },
+    { name: 'image', label: t('router.finance.Image') } ] },
   { label: '记账凭证', items: [
-    { name: 'voucherStats', label: '凭证生成统计' } ] },
+    { name: 'voucherStats', label: t('router.finance.Voucher') } ] },
 ]
 const loading = ref(false)
 // 概览四格的值一律来自服务端概览接口；取不到即置 overviewError，界面上摆「本次未刷新成功」，
@@ -795,7 +797,7 @@ watch(tab, (v) => ensureTab(v))
 async function loadSummary() {
   // 同期加的第一道查询校验：费用发生汇总按年度查询，年度为空即查询＝跨年全表扫描，
   // 与报表平台「参数界面的不能为空校验需要在查询按钮中设置」同一规则（先拦再查，不放行空参查询）。
-  if (!sumYear.value) { ElMessage.warning('请先选择年度后再查询'); return }
+  if (!sumYear.value) { ElMessage.warning(t('report.main.Select')); return }
   await fetchReports(['summary'], true)
 }
 async function loadComposition() { await fetchReports(['composition'], true) }
@@ -820,8 +822,8 @@ async function exp(kind, name) {
     const a = document.createElement('a')
     a.href = url; a.download = `${name}_${new Date().toISOString().slice(0, 10)}.xlsx`
     a.click(); URL.revokeObjectURL(url)
-    ElMessage.success(`已导出 ${name}`)
-  } catch (e) { ElMessage.error(e.message || '导出失败') }
+    ElMessage.success(`${t('utils.csv.Exported')} ${name}`)
+  } catch (e) { ElMessage.error(t('audit.main.Export')) }
 }
 
 onMounted(() => {
@@ -840,9 +842,9 @@ onMounted(() => {
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -857,7 +859,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `Reports_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 </script>

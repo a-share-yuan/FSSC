@@ -4,7 +4,7 @@
 <template>
   <div class="header-badges">
     <!-- 全局搜索触发器 -->
-    <el-tooltip content="全局搜索 (Ctrl+K)" placement="bottom">
+    <el-tooltip :content="$t('HeaderBadges.main.Global')" placement="bottom">
       <el-button link class="badge-btn" @click="$emit('search')">
         <el-icon :size="18"><Search /></el-icon>
       </el-button>
@@ -13,7 +13,7 @@
     <!-- 通知铃铛不在这里：NotificationCenter 自带弹层触发器，两处各挂一个铃铛会重复渲染（且角标规则不一） -->
 
     <!-- 待办角标 -->
-    <el-tooltip content="待办任务" placement="bottom">
+    <el-tooltip :content="$t('HeaderBadges.main.Do')" placement="bottom">
       <el-badge :value="todoCount" :max="99" :hidden="todoCount === 0" class="badge-wrap">
         <el-button link class="badge-btn" @click="$emit('todo')">
           <el-icon :size="18"><List /></el-icon>
@@ -22,7 +22,7 @@
     </el-tooltip>
 
     <!-- 收藏夹 -->
-    <el-tooltip content="收藏夹" placement="bottom">
+    <el-tooltip :content="$t('Favorites.main.Favorites')" placement="bottom">
       <el-button link class="badge-btn" @click="$emit('favorites')">
         <el-icon :size="18"><Star /></el-icon>
       </el-button>

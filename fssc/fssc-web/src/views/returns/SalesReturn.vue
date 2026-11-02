@@ -5,16 +5,16 @@
   <el-card shadow="never">
     <template #header>
       <div class="toolbar">
-        <span>销售退货单（退货退款并冲减应收）</span>
+        <span>{{ $t('returns.salesReturn.Sales') }}</span>
         <div class="ops">
-          <el-input v-model="q.customerCode" size="small" style="width: 130px" placeholder="客户代码" clearable @keyup.enter="search" />
-          <el-input v-model="q.keyword" size="small" style="width: 130px" placeholder="单号/客户名" clearable @keyup.enter="search" />
-          <el-select v-model="q.status" size="small" style="width: 110px" placeholder="状态" clearable @change="search">
+          <el-input v-model="q.customerCode" size="small" style="width: 130px" :placeholder="$t('returns.salesReturn.Customer')" clearable @keyup.enter="search" />
+          <el-input v-model="q.keyword" size="small" style="width: 130px" :placeholder="$t('returns.salesReturn.Document')" clearable @keyup.enter="search" />
+          <el-select v-model="q.status" size="small" style="width: 110px" :placeholder="$t('common.status')" clearable @change="search">
             <el-option v-for="(l, c) in RETURN_STATUS" :key="c" :label="l" :value="c" />
           </el-select>
           <el-date-picker v-model="q.range" type="daterange" size="small" value-format="YYYY-MM-DD" range-separator="~" start-placeholder="退货起" end-placeholder="退货止" @change="onRange" style="width: 220px" />
-          <el-button size="small" @click="search">查询</el-button>
-          <el-button type="primary" size="small" @click="openCreate" v-if="can('returns:sale:create')">新建退货单</el-button>
+          <el-button size="small" @click="search">{{ $t('common.search') }}</el-button>
+          <el-button type="primary" size="small" @click="openCreate" v-if="can('returns:sale:create')">{{ $t('returns.purchaseReturn.New') }}</el-button>
         </div>
       </div>
     </template>
@@ -153,6 +153,8 @@ import DirtyGuardDialog from '@/components/common/DirtyGuardDialog.vue'
 import TablePager from '@/components/common/TablePager.vue'
 import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import { useDict } from '@/composables/useDict'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 退货原因改由数据字典 enum_return_reason_sale 驱动（缺字典时回落同一组内置值，界面行为不变），
 // 原写死数组导致「原因清单只能改代码」且与销售域其它单据的原因规则各写各的。
@@ -286,7 +288,7 @@ async function doSave() {
   await guardSubmit(async () => {
     // 明细行校验与后端 validateLineSum 同一规则（后端还会比对"合计=表头金额，尾差≤0.01"）
     const filled = (form.lines || []).filter(l => (l.itemName || l.itemCode) && Number(l.amount) > 0)
-    if (!filled.length) { ElMessage.warning('请至少填写一行退货明细（物料＋金额）'); return }
+    if (!filled.length) { ElMessage.warning(t('returns.purchaseReturn.Please')); return }
     // 表头金额＝明细合计的等式强校验（前端先拦，后端 validateLineSum 再拦一道）
     const headAmt = Number(form.amount) || 0
     const sumAmt = Number(lineSum())
@@ -299,7 +301,7 @@ async function doSave() {
     try {
       if (editing.value) await returnApi.saleUpdate(form.id, body)
       else await returnApi.saleCreate(body)
-      ElMessage.success('保存成功')
+      ElMessage.success(t('budget.budgetAdjust.Saved'))
       formVisible.value = false
       await load()
     } catch (e) { ElMessage.error(e.message) }
@@ -319,7 +321,7 @@ async function act(row, a) {
     approve: () => returnApi.saleApprove(id),
     delete: () => returnApi.saleDelete(id),
   }
-  if (m[a.key]) { try { await m[a.key](); ElMessage.success('操作成功'); await load() } catch (e) { ElMessage.error(e.message) }; return }
+  if (m[a.key]) { try { await m[a.key](); ElMessage.success(t('common.success')); await load() } catch (e) { ElMessage.error(e.message) }; return }
   if (a.key === 'edit') {
     detail.value = await returnApi.saleGet(id)
     editing.value = true
@@ -337,13 +339,13 @@ async function act(row, a) {
 async function doReason() {
   // 与后端 reject/void 的原因断言同一规则（原因会写进 void_reason 作为记录，不能空）
   if (!reasonText.value || !reasonText.value.trim()) {
-    ElMessage.warning(reasonKind.value === 'void' ? '请填写作废原因' : '请填写驳回原因'); return
+    ElMessage.warning(t('returns.purchaseReturn.Please2')); return
   }
   const id = current.value.id
   try {
     if (reasonKind.value === 'reject') await returnApi.saleReject(id, reasonText.value)
     else await returnApi.saleVoid(id, reasonText.value)
-    ElMessage.success('操作成功')
+    ElMessage.success(t('common.success'))
     reasonVisible.value = false
     await load()
   } catch (e) { ElMessage.error(e.message) }

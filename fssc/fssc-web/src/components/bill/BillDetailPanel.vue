@@ -17,7 +17,7 @@
       <div class="bdp-head">
         <div class="bdp-no">
           <span>{{ bill.billNo || '-' }}</span>
-          <el-button size="small" type="primary" plain @click="printVisible = true">打印</el-button>
+          <el-button size="small" type="primary" plain @click="printVisible = true">{{ $t('InlineActions.main.Print') }}</el-button>
         </div>
         <div class="bdp-meta">
           <el-tag size="small" :type="statusType(bill.status)">{{ statusLabel(bill.status) }}</el-tag>
@@ -31,29 +31,29 @@
 
       <el-tabs v-model="tab">
         <!-- 单据信息 -->
-        <el-tab-pane label="单据信息" name="info">
+        <el-tab-pane :label="$t('bill.billDetailPanel.Document')" name="info">
           <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="单据编号">{{ bill.billNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="单据状态">{{ statusLabel(bill.status) }}</el-descriptions-item>
-            <el-descriptions-item v-if="bill.rejectType" label="驳回类型">{{ rejectTypeLabel(bill.rejectType) }}</el-descriptions-item>
-            <el-descriptions-item label="申请人">{{ bill.applyUserName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="申请日期">{{ bill.applyDate || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('bill.billDetailPanel.Document2')">{{ bill.billNo || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('bill.billDetailPanel.Document3')">{{ statusLabel(bill.status) }}</el-descriptions-item>
+            <el-descriptions-item v-if="bill.rejectType" :label="$t('bill.billDetailPanel.Rejection')">{{ rejectTypeLabel(bill.rejectType) }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('bill.billDetailPanel.Applicant')">{{ bill.applyUserName || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('bill.billDetailPanel.Application')">{{ bill.applyDate || '-' }}</el-descriptions-item>
             <el-descriptions-item v-if="!isHidden('totalAmount')" :label="permLabel('totalAmount', '价税合计')">{{ fmt(bill.totalAmount) }}</el-descriptions-item>
             <el-descriptions-item v-if="!isHidden('taxAmount')" :label="permLabel('taxAmount', '其中税额')">{{ fmt(bill.taxAmount) }}</el-descriptions-item>
             <el-descriptions-item v-if="!isHidden('netAmount')" :label="permLabel('netAmount', '不含税金额')">{{ fmt(bill.netAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="币种">{{ bill.currencyCode || 'CNY' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('bill.billDetailPanel.Currency')">{{ bill.currencyCode || 'CNY' }}</el-descriptions-item>
             <el-descriptions-item v-if="!isHidden('payeeName')" :label="permLabel('payeeName', '收款方')">{{ bill.payeeName || '-' }}</el-descriptions-item>
             <el-descriptions-item v-if="!isHidden('payeeAccountNo')" :label="permLabel('payeeAccountNo', '收款账号')">{{ maskIfRo('payeeAccountNo', bill.payeeAccountNo) || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="当前流程" :span="2">{{ bill.flowName || '-' }} / {{ bill.currentNode || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('bill.billDetailPanel.Current')" :span="2">{{ bill.flowName || '-' }} / {{ bill.currentNode || '-' }}</el-descriptions-item>
             <el-descriptions-item v-if="!isHidden('remark')" :label="permLabel('remark', '备注')" :span="2">{{ bill.remark || '-' }}</el-descriptions-item>
           </el-descriptions>
 
           <div class="bdp-sec">费用明细（{{ lines.length }} 行）</div>
           <el-table v-if="lines.length" :data="lines" size="small" border show-summary :summary-method="sumLine">
             <el-table-column prop="lineNo" label="#" width="45" align="center" />
-            <el-table-column prop="itemName" label="费用项目" min-width="120" show-overflow-tooltip :formatter="(row, col, v) => v || (row.itemId != null ? '费用项#' + row.itemId : '—')" />
-            <el-table-column prop="expenseDate" label="发生日期" width="105" />
-            <el-table-column v-if="!isHidden('lineAmount')" label="金额" width="105" align="right"><template #default="{ row }">{{ fmt(row.amount) }}</template></el-table-column>
+            <el-table-column prop="itemName" :label="$t('bill.billDetailPanel.Expense')" min-width="120" show-overflow-tooltip :formatter="(row, col, v) => v || (row.itemId != null ? '费用项#' + row.itemId : '—')" />
+            <el-table-column prop="expenseDate" :label="$t('bill.billDetailPanel.Transaction')" width="105" />
+            <el-table-column v-if="!isHidden('lineAmount')" :label="$t('common.amount')" width="105" align="right"><template #default="{ row }">{{ fmt(row.amount) }}</template></el-table-column>
             <el-table-column v-if="!isHidden('taxRate')" label="税率" width="70" align="right"><template #default="{ row }">{{ row.taxRate != null ? row.taxRate + '%' : '-' }}</template></el-table-column>
             <el-table-column v-if="!isHidden('lineTaxAmount')" label="税额" width="100" align="right"><template #default="{ row }">{{ fmt(row.taxAmount) }}</template></el-table-column>
             <el-table-column v-if="hasEntertainLine" label="接待对象" min-width="110" show-overflow-tooltip>
@@ -192,6 +192,8 @@ import { wfActionLabel, wfActionType, billTypeLabel, billSubTypeLabel, verifySta
 import { hasPerm } from '@/utils/perm'
 import { entertainOfLine, hasEntertainLines, formatDateTime } from '@/utils/format'
 import { attachKindOf, ATTACH_KIND_TEXT } from '@/utils/attachKind'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 审批历史(wf:history:list) / 关联发票(inv:list) 为受控权限：无权限时不发请求，
 // 否则全局拦截器会对 4030 弹「缺少权限」错误（见 Y009154 工单）。
@@ -306,7 +308,7 @@ async function runOcr(row) {
     ElMessage.success(`识别完成${typeof n === 'number' ? '，共处理 ' + n + ' 页' : ''}；结构化结果见下方「关联发票」`)
     await loadInvoices(props.billId)
   } catch (e) {
-    ElMessage.error(e?.message || 'OCR 识别失败')
+    ElMessage.error(t('bill.billDetailPanel.OCR'))
   } finally {
     ocrBusy.value = null
   }

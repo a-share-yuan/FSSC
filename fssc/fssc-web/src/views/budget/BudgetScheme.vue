@@ -6,8 +6,8 @@
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="header-title">预算方案</span>
-          <el-button type="primary" size="small" @click="openDialog(null)">新增方案</el-button>
+          <span class="header-title">{{ $t('budget.budgetScheme.Budget') }}</span>
+          <el-button type="primary" size="small" @click="openDialog(null)">{{ $t('budget.budgetScheme.Add') }}</el-button>
         </div>
       </template>
       <!-- 搜索 -->
@@ -127,6 +127,8 @@ import { useAutoFill } from '@/composables/useAutoFill'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // BillTraceDrawer
 const traceVisible = ref(false)
 const traceBillId = ref(null)
@@ -195,7 +197,7 @@ async function save() {
   try {
     if (dialog.editing) await budgetApi.schemeUpdate({ ...dialog.form })
     else await budgetApi.schemeCreate({ ...dialog.form })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('budget.budgetAdjust.Saved'))
     dialog.visible = false
     await loadList()
   } catch (e) { ElMessage.error(e.message) } finally { dialog.saving = false }
@@ -206,7 +208,7 @@ async function toggleEnable(row) {
   try {
     await ElMessageBox.confirm(`${enable ? '启用' : '停用'}方案「${row.schemeName}」？`, '确认', { type: 'warning' })
     await budgetApi.schemeEnable(row.id, enable)
-    ElMessage.success(enable ? '已启用' : '已停用')
+    ElMessage.success(t('budget.budgetScheme.Disabled'))
     await loadList()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
@@ -218,14 +220,14 @@ async function submitApprove(row) {
   } catch (e) { return }
   try {
     await budgetApi.schemeSubmit(row.id)
-    ElMessage.success('已提交审批')
+    ElMessage.success(t('asset.deprBatch.Submitted'))
     await loadList()
   } catch (e) { if (e?.message) ElMessage.error(e.message) }
 }
 async function issue(row) {
   try {
     await budgetApi.schemeIssue(row.id)
-    ElMessage.success('已下达')
+    ElMessage.success(t('budget.budgetScheme.Issued'))
     await loadList()
   } catch (e) { if (e?.message) ElMessage.error(e.message) }
 }
@@ -252,7 +254,7 @@ function controlTypeTag(v) {
 function statusTag(v) { return STATUS_TYPE[v] || 'info' }
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 onMounted(() => loadList())

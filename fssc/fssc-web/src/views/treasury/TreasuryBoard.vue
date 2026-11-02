@@ -6,9 +6,9 @@
     <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>资金管理</b>
-        <span style="color:#909399; font-size:12px">资金计划 / 收款(渠道流水) / 资金调拨 / 票据结算 —— 编制、选中、核销、执行全流程可视化</span>
-        <el-button size="small" style="margin-left:auto" @click="reload">刷新</el-button>
+        <b>{{ $t('treasury.main.Treasury') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('treasury.main.Cash') }}</span>
+        <el-button size="small" style="margin-left:auto" @click="reload">{{ $t('common.refresh') }}</el-button>
       </div>
     </template>
 
@@ -432,6 +432,8 @@ import { useKeyboard } from '@/composables/useKeyboard'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 import { useCurrency } from '@/composables/useCurrency'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // 快捷键
 useKeyboard({
   'ctrl+r': () => { try { reload() } catch { /* noop */ } },
@@ -673,15 +675,15 @@ async function savePlan() {
   if (planSaving.value) return
   if (!(await validateForms([planFormRef]))) return
   planSaving.value = true
-  try { await treasuryApi.fundPlanCreate(planForm.value); ElMessage.success('计划已编制'); dlgPlan.value = false; loadPlan() }
+  try { await treasuryApi.fundPlanCreate(planForm.value); ElMessage.success(t('treasury.main.Plan')); dlgPlan.value = false; loadPlan() }
   catch (e) { ElMessage.error(e.message) }
   finally { planSaving.value = false }
 }
-async function selectPlan(row) { try { await treasuryApi.fundPlanSelect(row.id); ElMessage.success('已选中'); loadPlan() } catch (e) { ElMessage.error(e.message) } }
+async function selectPlan(row) { try { await treasuryApi.fundPlanSelect(row.id); ElMessage.success(t('treasury.main.Selected')); loadPlan() } catch (e) { ElMessage.error(e.message) } }
 // 驳回计划唯一正规出口——REJECTED→DRAFT 并重新发起 TR_PLAN 审批流
 async function resubmitPlan(row) {
   try { await ElMessageBox.confirm('确认将该驳回计划转回草稿并重新发起审批流？', '编辑重提', { type: 'warning' }) } catch { return }
-  try { await treasuryApi.fundPlanResubmit(row.id); ElMessage.success('已重新提交审批'); loadPlan() } catch (e) { ElMessage.error(e.message) }
+  try { await treasuryApi.fundPlanResubmit(row.id); ElMessage.success(t('purchase.payPlan.Resubmitted')); loadPlan() } catch (e) { ElMessage.error(e.message) }
 }
 function openCombine(row) {
   combineId.value = row.id
@@ -694,7 +696,7 @@ async function saveCombine() {
   if (combineSaving.value) return
   if (!(await validateForms([combineFormRef]))) return
   combineSaving.value = true
-  try { await treasuryApi.fundPlanCombine(combineId.value, combineForm.value.incomeActual, combineForm.value.outcomeActual); ElMessage.success('已回填'); dlgCombine.value = false; loadPlan() }
+  try { await treasuryApi.fundPlanCombine(combineId.value, combineForm.value.incomeActual, combineForm.value.outcomeActual); ElMessage.success(t('treasury.main.Filled')); dlgCombine.value = false; loadPlan() }
   catch (e) { ElMessage.error(e.message) }
   finally { combineSaving.value = false }
 }
@@ -704,7 +706,7 @@ async function saveCredit() {
   if (creditSaving.value) return
   if (!(await validateForms([creditFormRef]))) return
   creditSaving.value = true
-  try { await treasuryApi.creditBillReceive(creditForm.value); ElMessage.success('已认领'); dlgCredit.value = false; loadCredit() }
+  try { await treasuryApi.creditBillReceive(creditForm.value); ElMessage.success(t('treasury.main.Claimed')); dlgCredit.value = false; loadCredit() }
   catch (e) { ElMessage.error(e.message) }
   finally { creditSaving.value = false }
 }
@@ -716,8 +718,8 @@ async function autoRecon() {
   try {
     const n = await treasuryApi.creditBillAutoRecon()
     const hit = Number(n || 0)
-    if (hit <= 0) ElMessage({ type: 'warning', message: '自动核销完成：命中 0 条（无同金额未对账银行流水），未产生任何核销' })
-    else ElMessage.success('自动核销完成，命中 ' + hit + ' 条')
+    if (hit <= 0) ElMessage({ type: 'warning', message: t('treasury.main.Auto') })
+    else ElMessage.success(t('approval.main.Records'))
     loadCredit()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -727,7 +729,7 @@ async function confirmRecon(row) {
     // 丙：核销照做，只把"本人建单—本人确认核销"这条不经审批的旁路显示给经办看（不拆权、不拦操作）
     const r = await treasuryApi.creditBillConfirmRecon(row.id)
     if (r && r.warning) ElMessage({ type: 'warning', message: '已核销：' + r.warning, duration: 6000 })
-    else ElMessage.success('已核销')
+    else ElMessage.success(t('treasury.main.Written'))
     loadCredit()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -738,8 +740,8 @@ async function saveTransfer() {
   if (!(await validateForms([tfFormRef]))) return
   tfSaving.value = true
   try {
-    if (tfMode.value === 'upload') { await treasuryApi.transferUpload(tfForm.value); ElMessage.success('上存已发起，进入资金上存审批') }
-    else { await treasuryApi.transferCreate(tfForm.value); ElMessage.success('调拨已发起') }
+    if (tfMode.value === 'upload') { await treasuryApi.transferUpload(tfForm.value); ElMessage.success(t('treasury.main.Deposit')) }
+    else { await treasuryApi.transferCreate(tfForm.value); ElMessage.success(t('treasury.main.Transfer')) }
     dlgTransfer.value = false; loadTransfer()
   } catch (e) { ElMessage.error(e.message) }
   finally { tfSaving.value = false }
@@ -747,9 +749,9 @@ async function saveTransfer() {
 // 草稿/驳回待重提调拨单的正规重提通道（上存单按 purpose 标记切 TR_UPLOAD 流）
 async function submitTransfer(row) {
   const flow = (row.purpose || '').includes('上存') ? 'TR_UPLOAD' : 'TR_TRANSFER'
-  try { await treasuryApi.transferSubmit(row.id, flow); ElMessage.success('已提交审批'); loadTransfer() } catch (e) { ElMessage.error(e.message) }
+  try { await treasuryApi.transferSubmit(row.id, flow); ElMessage.success(t('asset.deprBatch.Submitted')); loadTransfer() } catch (e) { ElMessage.error(e.message) }
 }
-async function approveTransfer(row) { try { await treasuryApi.transferApprove(row.id); ElMessage.success('已审批'); loadTransfer() } catch (e) { ElMessage.error(e.message) } }
+async function approveTransfer(row) { try { await treasuryApi.transferApprove(row.id); ElMessage.success(t('purchase.poOrder.Approved')); loadTransfer() } catch (e) { ElMessage.error(e.message) } }
 // 核准按钮的可见条件：草稿态 + 不是本人创建。取不到登录用户时按「可核准」放行，
 // 宁可多画一枚被后端 4030 拦，也不要把有权限的人误锁在门外。
 function canApproveTransfer(row) {
@@ -762,7 +764,7 @@ async function executeTransfer(row) {
   // 调拨执行发生在实例已 APPROVED 之后，执行动作只落账、不再新起任何审批节点
   // （sys_oper_log 有记录而 wf_task_history 无新行）。文案若暗示还有后续审批，会把用户引到空等。
   try { await ElMessageBox.confirm('执行后款项余额将直接落账、不可直接撤销，确认执行？', '执行调拨', { type: 'warning' }) } catch { return }
-  try { await treasuryApi.transferExecute(row.id); ElMessage.success('已执行，余额已落账'); loadTransfer() } catch (e) { ElMessage.error(e.message) }
+  try { await treasuryApi.transferExecute(row.id); ElMessage.success(t('treasury.main.Executed')); loadTransfer() } catch (e) { ElMessage.error(e.message) }
 }
 
 function openAdjust(row) {
@@ -777,7 +779,7 @@ async function saveAdjust() {
   if (adjustSaving.value) return
   if (!(await validateForms([adjustFormRef]))) return
   adjustSaving.value = true
-  try { await treasuryApi.fundPlanAdjust(adjustId.value, adjustForm.value.incomeAdjust, adjustForm.value.outcomeAdjust); ElMessage.success('计划调整已提交，进入审批'); dlgAdjust.value = false; loadPlan() }
+  try { await treasuryApi.fundPlanAdjust(adjustId.value, adjustForm.value.incomeAdjust, adjustForm.value.outcomeAdjust); ElMessage.success(t('treasury.main.Plan2')); dlgAdjust.value = false; loadPlan() }
   catch (e) { ElMessage.error(e.message) }
   finally { adjustSaving.value = false }
 }
@@ -787,13 +789,13 @@ async function saveSettle() {
   if (stSaving.value) return
   if (!(await validateForms([settleFormRef]))) return
   stSaving.value = true
-  try { await treasuryApi.billSettleCreate(stForm.value); ElMessage.success('票据已登记'); dlgSettle.value = false; loadSettle() }
+  try { await treasuryApi.billSettleCreate(stForm.value); ElMessage.success(t('treasury.main.Bill')); dlgSettle.value = false; loadSettle() }
   catch (e) { ElMessage.error(e.message) }
   finally { stSaving.value = false }
 }
-async function endorse(row) { try { await treasuryApi.billSettleEndorse(row.id); ElMessage.success('已背书转让'); loadSettle() } catch (e) { ElMessage.error(e.message) } }
-async function discount(row) { try { await treasuryApi.billSettleDiscount(row.id); ElMessage.success('已贴现'); loadSettle() } catch (e) { ElMessage.error(e.message) } }
-async function collect(row) { try { await treasuryApi.billSettleCollection(row.id); ElMessage.success('已托收到期收妥'); loadSettle() } catch (e) { ElMessage.error(e.message) } }
+async function endorse(row) { try { await treasuryApi.billSettleEndorse(row.id); ElMessage.success(t('treasury.main.Endorsed')); loadSettle() } catch (e) { ElMessage.error(e.message) } }
+async function discount(row) { try { await treasuryApi.billSettleDiscount(row.id); ElMessage.success(t('treasury.main.Discounted')); loadSettle() } catch (e) { ElMessage.error(e.message) } }
+async function collect(row) { try { await treasuryApi.billSettleCollection(row.id); ElMessage.success(t('treasury.main.Sent')); loadSettle() } catch (e) { ElMessage.error(e.message) } }
 
 // 银行主数据
 const emptyAcc = () => ({ accountCode: '', accountName: '', bankName: '', bankAccount: '', currencyCode: 'CNY', status: 'NORMAL' })
@@ -821,11 +823,11 @@ async function saveAccount() {
   if (accSaving.value) return
   if (!(await validateForms([accFormRef]))) return
   accSaving.value = true
-  try { await masterApi.bank.create(accForm.value); ElMessage.success('银行主数据已提交，进入「银行主数据」审批'); dlgAccount.value = false; loadBank() }
+  try { await masterApi.bank.create(accForm.value); ElMessage.success(t('treasury.main.Bank')); dlgAccount.value = false; loadBank() }
   catch (e) { ElMessage.error(e.message) }
 }
 async function toggleAccount(row) {
-  try { await masterApi.bank.enable(row.id, row.status !== 'NORMAL'); ElMessage.success('已更新账户状态'); loadBank() }
+  try { await masterApi.bank.enable(row.id, row.status !== 'NORMAL'); ElMessage.success(t('treasury.main.Account')); loadBank() }
   catch (e) { ElMessage.error(e.message) }
 }
 
@@ -855,7 +857,7 @@ async function saveBalance() {
   if (balanceSaving.value) return
   if (!(await validateForms([balanceFormRef]))) return
   balanceSaving.value = true
-  try { await p2Api.bankBalanceSave(balanceForm.value); ElMessage.success('余额已登记，头寸已刷新'); dlgBalance.value = false; loadPosition() }
+  try { await p2Api.bankBalanceSave(balanceForm.value); ElMessage.success(t('treasury.main.Balance')); dlgBalance.value = false; loadPosition() }
   catch (e) { ElMessage.error(e.message) }
   finally { balanceSaving.value = false }
 }
@@ -919,8 +921,8 @@ onMounted(async () => { await loadMasters(); reload() })
  loadCurrency()
 
 function exportCsv() {
-  if (!credits.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'billNo', label: '单据号' }, { prop: 'receiveDate', label: '收款日期' }, { prop: 'payerBank', label: '付款方银行' }, { prop: 'payerAccount', label: '付款方账号' }, { prop: 'sourceChannel', label: '渠道' }]
+  if (!credits.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'billNo', label: t('budget.budgetOccupy.Document') }, { prop: 'receiveDate', label: t('treasury.main.Receipt') }, { prop: 'payerBank', label: t('treasury.main.Payer') }, { prop: 'payerAccount', label: t('treasury.main.Payer2') }, { prop: 'sourceChannel', label: t('treasury.main.Channel') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = credits.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -934,16 +936,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `TreasuryBoard_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -958,7 +960,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `TreasuryBoard_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 

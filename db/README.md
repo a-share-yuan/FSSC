@@ -36,6 +36,6 @@ for %f in (db\Dump20261102\fssc_*.sql) do mysql --default-character-set=utf8mb4 
 
 ## 与 `fssc-server/sql/` 的关系
 
-那批按施工顺序累积的增量迁移脚本已退出发布面（本仓库不再提供"从空库跑迁移建库"的路径，
+那批按施工顺序累积的增量迁移脚本已不在本仓库（本仓库不再提供"从空库跑迁移建库"的路径，
 项目也没有引入 Flyway/Liquibase，外人无法据此定序）。源码树里仍保留它们作为施工记录，
 但文档、README、CI 都不应以建库入口引用它。

@@ -7,7 +7,7 @@
       <template #header>
         <div class="card-header">
           <span class="header-title">{{ title }}</span>
-          <el-button type="primary" size="small" @click="openDialog(null)">新增</el-button>
+          <el-button type="primary" size="small" @click="openDialog(null)">{{ $t('common.add') }}</el-button>
         </div>
       </template>
       <el-form :inline="true" size="small" style="margin-bottom:12px">
@@ -75,6 +75,8 @@ import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
@@ -181,7 +183,7 @@ async function save() {
   try {
     if (dialog.editing) await api.value.update({ ...dialog.form })
     else await api.value.create({ ...dialog.form })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('budget.budgetAdjust.Saved'))
     dialog.visible = false
     await loadList()
   } catch (e) { ElMessage.error(e.message) } finally { dialog.saving = false }
@@ -191,7 +193,7 @@ async function del(row) {
   try {
     await ElMessageBox.confirm('确认删除？', '删除', { type: 'warning' })
     await api.value.delete(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('useCrud.main.Deleted'))
     await loadList()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }

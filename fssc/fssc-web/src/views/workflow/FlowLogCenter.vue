@@ -5,8 +5,8 @@
   <div class="flow-log-center">
     <el-card shadow="never">
       <template #header>
-        <span class="header-title">流程日志中心</span>
-        <span class="header-note">流程处理详细日志（诊断说明）· 实例时间线 · 开关与清理 · 归档预览</span>
+        <span class="header-title">{{ $t('workflow.flowLog.Workflow') }}</span>
+        <span class="header-note">{{ $t('workflow.flowLog.Detailed') }}</span>
       </template>
 
       <el-tabs v-model="tab" @tab-change="onTabChange">
@@ -146,19 +146,21 @@ import { wfOpsApi, flowApi } from '../../api'
 import TablePager from '../../components/common/TablePager.vue'
 import { useTablePager } from '../../composables/useTablePager'
 import { formatDateTime } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 /**
  * 流程日志中心（G3）：数据源 WfProcessLogController（/api/tenant/wf/process-log/**，读 wf:instance:list、清理 wf:config:update）
  * 与 WfPerfController 的归档预览（/api/tenant/wf/perf/archive-preview，wf:instance:list）。
  */
 const LOG_TYPES = [
-  { value: 'PROCESS_STARTED', label: '流程发起' },
-  { value: 'TASK_CREATED', label: '任务生成' },
-  { value: 'TASK_ASSIGNED', label: '任务指派' },
-  { value: 'TASK_COMPLETED', label: '任务办结' },
-  { value: 'TASK_CANCELLED', label: '任务取消' },
-  { value: 'PROCESS_COMPLETED', label: '流程结束' },
-  { value: 'TIMER_FIRED', label: '定时器触发' },
+  { value: 'PROCESS_STARTED', label: t('workflow.flowLog.Workflow2') },
+  { value: 'TASK_CREATED', label: t('workflow.flowLog.Task') },
+  { value: 'TASK_ASSIGNED', label: t('workflow.flowLog.Task2') },
+  { value: 'TASK_COMPLETED', label: t('workflow.flowLog.Task3') },
+  { value: 'TASK_CANCELLED', label: t('workflow.flowLog.Task4') },
+  { value: 'PROCESS_COMPLETED', label: t('workflow.flowLog.Workflow3') },
+  { value: 'TIMER_FIRED', label: t('workflow.flowLog.Timer') },
 ]
 const LOG_TYPE_MAP = Object.fromEntries(LOG_TYPES.map((t) => [t.value, t.label]))
 function logTypeLabel(t) { return LOG_TYPE_MAP[t] || t || '—' }
@@ -219,7 +221,7 @@ function openTimeline(row) {
   loadTimeline()
 }
 async function loadTimeline() {
-  if (!timelineInstId.value) { ElMessage.warning('请选择流程实例'); return }
+  if (!timelineInstId.value) { ElMessage.warning(t('workflow.flowLog.Please')); return }
   timelineLoading.value = true
   try { timelineRows.value = await wfOpsApi.processLogByInstance(timelineInstId.value) }
   catch (e) { ElMessage.error(e.message); timelineRows.value = [] } finally { timelineLoading.value = false }

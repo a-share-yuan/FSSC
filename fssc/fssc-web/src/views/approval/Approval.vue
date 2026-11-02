@@ -2,12 +2,12 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <template>
-  <el-card class="cm-target-table" header="我的待办审批">
+  <el-card class="cm-target-table" :header="$t('approval.main.My')">
     <div style="margin-bottom: 8px">
-      <el-button type="info" size="small" @click="exportCsv">导出</el-button>
+      <el-button type="info" size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
       <!-- 批量审批：勾选 ≥1 行启用「批量审批」；未勾选时禁用并给出 tooltip 提示 -->
-      <el-tooltip content="请先勾选要批量审批的待办" placement="top" :disabled="selRows.length > 0">
+      <el-tooltip :content="$t('approval.main.Select')" placement="top" :disabled="selRows.length > 0">
         <span style="margin-left: 12px; display: inline-block">
           <el-button type="success" size="small" :loading="batchApproving" :disabled="!selRows.length" @click="batchApprove">
             批量审批({{ selRows.length }})
@@ -25,12 +25,12 @@
               <!-- 无记录时不再画一枚假的「提交」环节：展开区必须如实说明查询状态，
                    否则「一个圆圈＋提交」会被读成"本单刚提交、后面还没人审"。 -->
               <div v-else class="hist-placeholder">
-                <span v-if="histStateOf(row) === 'loading'">正在加载审批轨迹…</span>
-                <span v-else-if="histStateOf(row) === 'noperm'">当前账号无审批历史查看权限，暂不能展示轨迹。</span>
-                <span v-else-if="histStateOf(row) === 'nobill'">该待办未关联到业务单据，无法加载审批轨迹。</span>
+                <span v-if="histStateOf(row) === 'loading'">{{ $t('approval.main.Loading') }}</span>
+                <span v-else-if="histStateOf(row) === 'noperm'">{{ $t('approval.main.Current') }}</span>
+                <span v-else-if="histStateOf(row) === 'nobill'">{{ $t('approval.main.This') }}</span>
                 <template v-else-if="histStateOf(row) === 'fail'">
                   <span>审批轨迹加载失败：{{ histMsgOf(row) }}</span>
-                  <el-button link type="primary" size="small" @click="reloadHistory(row)">重试</el-button>
+                  <el-button link type="primary" size="small" @click="reloadHistory(row)">{{ $t('common.retry') }}</el-button>
                 </template>
                 <template v-else-if="histStateOf(row) === 'empty'">
                   <span>{{ histEmptyTip(row) }}</span>
@@ -333,6 +333,8 @@ import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useRouter } from 'vue-router'
 import { goBizPage, normalizeBillType, resolveBillRoute } from '../../utils/bizEntry'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // 快捷键
 useKeyboard({
   'ctrl+r': () => load(),
@@ -396,7 +398,7 @@ function openDetailFromDialog() {
  */
 function goBiz(row) {
   if (row?.bizResolved === false || row?.billId == null) {
-    ElMessage.warning('该待办未关联到业务单据（可能单据已被清理），已打开全链路联查')
+    ElMessage.warning(t('approval.main.This2'))
     openTrace(row)
     return
   }
@@ -408,14 +410,14 @@ function goBiz(row) {
   }
   // 落点是发票池而本账号无 inv:list ⇒ 不跳校验页，落全链路追溯
   if (bizLandingBlocked(row)) {
-    ElMessage.warning('当前账号无发票池查看权限（inv:list），已改为打开全链路追溯；如需在发票池核票请联系管理员授权')
+    ElMessage.warning(t('approval.main.Current2'))
     openTrace(row)
     return
   }
   if (billRouteOf(row) && goBizPage(router, row)) {
     return
   }
-  ElMessage.warning('当前账号不能直接进入该单据的业务页面，已打开全链路联查')
+  ElMessage.warning(t('approval.main.Current3'))
   openTrace(row)
 }
 
@@ -430,9 +432,9 @@ const deductVisible = ref(false)
 const deduct = reactive({ approvedAmount: 0, approvedPayAmount: 0, approvedRefundAmount: 0, remark: '' })
 
 const deductRules = reactive({
-  approvedAmount: [{ required: true, message: '请输入核定报销金额' }],
-  approvedPayAmount: [{ required: true, message: '请输入核定付款金额' }],
-  approvedRefundAmount: [{ required: true, message: '请输入核定退款金额' }],
+  approvedAmount: [{ required: true, message: t('approval.main.Please') }],
+  approvedPayAmount: [{ required: true, message: t('approval.main.Please2') }],
+  approvedRefundAmount: [{ required: true, message: t('approval.main.Please3') }],
 })
 
 // 审批历史缓存：{ [billId]: WfTaskHistory[] }
@@ -777,8 +779,8 @@ async function ensureHistoryFor(row) {
 }
 
 async function approve(row, approved) {
-  if (!row?.taskId) { ElMessage.warning('该待办缺少任务标识，无法审批'); return }
-  if (!approvalDlg.value) { ElMessage.error('审批弹窗未就绪，请刷新页面后重试'); return }
+  if (!row?.taskId) { ElMessage.warning(t('approval.main.This3')); return }
+  if (!approvalDlg.value) { ElMessage.error(t('useApprovalDialog.main.Approval')); return }
   // 审批意见必经输入框且必填（合规整改：不留默认「同意/不同意」空意见，取消则不执行）。
   // 弹窗在此之上补齐单据摘要与前序审批，审批人无需回列表展开行翻详情。
   approvalRow.value = row
@@ -814,7 +816,7 @@ async function approve(row, approved) {
         notifyRefused(payload.approved ? '通过' : '驳回', row, e, true)
         throw e
       }
-      ElMessage.success(payload.approved ? '已通过' : '已驳回')
+      ElMessage.success(t('purchase.poOrder.Rejected'))
       detailVisible.value = false
       load()
     },
@@ -851,7 +853,7 @@ function onTransferPick(id) {
 }
 
 async function openTransfer(row) {
-  if (!row?.taskId) { ElMessage.warning('该待办缺少任务标识，无法转办'); return }
+  if (!row?.taskId) { ElMessage.warning(t('approval.main.This4')); return }
   transferRow.value = row
   transferForm.target = null
   transferTargetName.value = ''
@@ -901,7 +903,7 @@ const addSignCandLoading = ref(false)
 const addSignCandEmpty = ref(false)
 
 async function openAddSign(row) {
-  if (!row?.taskId) { ElMessage.warning('该待办缺少任务标识，无法加签'); return }
+  if (!row?.taskId) { ElMessage.warning(t('approval.main.This5')); return }
   addSignRow.value = row
   addSignForm.position = 'BEFORE'
   addSignForm.signUsers = []
@@ -957,10 +959,10 @@ function refuseAdvice(msg) {
   // 连办校验命中时（同一人已办过本实例其他节点）文案就指错方向，排查被带偏。
   // 故按后端原文分流：连办优先（更具体），自审次之。
   if (/同一人在同一审批流程|连办/.test(m)) {
-    return '你已在同一审批流程中办理过其他节点（连办/自审拦截）。请点「转办」把本节点交给同角色其他持有人，或联系流程管理员「改派」；反复点击不会放行。'
+    return '你已在同一审批流程中办理过其他节点（连办/自审拦截）。本弹窗内没有「转办」入口：请先点「取消」回到待办列表，在该行行内点「转办」把本节点交给同角色其他持有人，或联系流程管理员「改派」；反复点击不会放行。'
   }
   if (/自审|自己提交的|禁止审批自己/.test(m)) {
-    return '本单是你自己提交的，内控规则不允许自审自批。请点「转办」把本节点交给同角色其他人，或联系流程管理员「改派」；反复点击不会放行。'
+    return '本单是你自己提交的，内控规则不允许自审自批。本弹窗内没有「转办」入口：请先点「取消」回到待办列表，在该行行内点「转办」把本节点交给同角色其他人，或联系流程管理员「改派」；反复点击不会放行。'
   }
   // 审批提交侧校验（下一环节须点名到人）——漏进兜底文案就让人摸不到出口
   if (/指定.*办理人|未点名|下一环节/.test(m)) {
@@ -1168,10 +1170,10 @@ async function submitBatch(rows, payload) {
 
 async function batchApprove() {
   const all = selRows.value || []
-  if (!all.length) { ElMessage.warning('请先勾选要批量审批的待办'); return }
+  if (!all.length) { ElMessage.warning(t('approval.main.Select')); return }
   const rows = all.filter((r) => r?.taskId)
-  if (!rows.length) { ElMessage.warning('选中待办缺少任务标识，无法审批'); return }
-  if (!approvalDlg.value) { ElMessage.error('审批弹窗未就绪，请刷新页面后重试'); return }
+  if (!rows.length) { ElMessage.warning(t('approval.main.Selected')); return }
+  if (!approvalDlg.value) { ElMessage.error(t('useApprovalDialog.main.Approval')); return }
   if (rows.length > BATCH_MAX) { ElMessage.warning(`单次批量审批不能超过 ${BATCH_MAX} 条，请减少勾选后再点`); return }
   // 同款手感（从前批量是"先关窗再发请求"）：提交动作交给弹窗执行 ——
   // 接口整体不可用（未部署 404 / 登录态失效 / 后端不可达）时弹窗保持打开、425 字意见不丢，
@@ -1199,7 +1201,7 @@ async function batchApprove() {
   const failList = Array.isArray(outcome.fail) ? outcome.fail : []
   const okCount = Number.isFinite(Number(outcome.success)) ? Number(outcome.success) : Math.max(0, rows.length - failList.length)
   if (!failList.length) {
-    ElMessage.success(`批量审批完成：成功 ${okCount}/${rows.length} 条`)
+    ElMessage.success(`批量审批完成：成功 ${okCount}/${rows.length} ${t('approval.main.Records')}`)
   } else {
     ElMessage.warning(`批量审批完成：成功 ${okCount} 条，失败 ${failList.length} 条，明细见弹窗`)
     // 失败明细逐条展示（VNode 渲染，避免把后端文案当 HTML 注入）
@@ -1276,8 +1278,8 @@ async function submitDeduct() {
 onMounted(load)
 
 function exportCsv() {
-  if (!tasks.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'title', label: '流程标题' }, { prop: 'billNo', label: '单据编号' }, { prop: 'taskName', label: '节点' }, { prop: 'assigneeName', label: '当前在办人' }]
+  if (!tasks.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'title', label: t('approval.main.Workflow') }, { prop: 'billNo', label: t('bill.billDetailPanel.Document2') }, { prop: 'taskName', label: t('approval.main.Node') }, { prop: 'assigneeName', label: t('approval.main.Current4') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = tasks.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -1291,16 +1293,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `Approval_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -1315,7 +1317,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `Approval_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 
