@@ -6,7 +6,7 @@
 
 ```bash
 cp .env.example .env                 # 填 FSSC_DB_PASSWORD / FSSC_JWT_SECRET
-for f in db/Dump20261101/fssc_*.sql; do mysql --default-character-set=utf8mb4 -uroot -p < "$f"; done   # 建库只有这一条入口：整库 dump（结构＋数据）
+for f in db/Dump*/fssc_*.sql; do mysql --default-character-set=utf8mb4 -uroot -p < "$f"; done   # 建库只有这一条入口：整库 dump（结构＋数据）
 cd fssc-server && mvn clean package -DskipTests && java -jar fssc-start/target/fssc-server.jar
 cd ../fssc-web  && npm install && npm run dev
 ```

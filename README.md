@@ -20,7 +20,7 @@
 **Honest caveats.**
 - **Internationalisation is wired up but only partly extracted.** `fssc-web/package.json` depends on `vue-i18n`, `src/i18n/index.js` builds the instance, `main.js` registers it plus a global `LocaleSwitch`, and `src/i18n/locales/{zh-CN,en-US}.js` carry ≈4,010 keys each. Measured on this snapshot: 72 of 263 `.vue`/`.js` files under `src/` call `$t()`/`useI18n()` (4,038 call sites) — the rest are still hard-coded Chinese literals, so switching to English leaves parts of the UI untranslated.
 - **Source-only release.** The front-end package keeps `"private": true`; there is no npm package and no hosted demo. You build the jar/image yourself.
-- **Database bootstrap = one full database dump.** `db/Dump20261101/` (323 files, one table per file, ≈6.8 MB) is the supported way to create the databases; import it as `db/README.md` describes. The accumulated per-version migration scripts under `fssc-server/sql/` are **not** published — there is no Flyway/Liquibase, so nobody outside the project can order them anyway. Note that the dump is an export of a real drill database: it carries business rows (bills, vouchers, approval history) and 2.3 MB of uploaded attachment bytes in `act_ge_bytearray`.
+- **Database bootstrap = one full database dump.** `db/Dump<导出日期>/` (323 files, one table per file, ≈6.8 MB) is the supported way to create the databases; import it as `db/README.md` describes. The accumulated per-version migration scripts under `fssc-server/sql/` are **not** published — there is no Flyway/Liquibase, so nobody outside the project can order them anyway. Note that the dump is an export of a real drill database: it carries business rows (bills, vouchers, approval history) and 2.3 MB of uploaded attachment bytes in `act_ge_bytearray`.
 - The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — see `docs/开源发布前置检查清单.md` §8 ⑥.
 - This code has been hardened through long manual business drills; treat documented behaviour as *documented*, not *guaranteed*. Each doc states which claims were measured and which were only read off the code.
 
@@ -97,7 +97,7 @@ flowchart LR
 
 ```bash
 # ① 建库：导入整库 dump（结构 + 演示数据，建库入口只有这一条）
-for f in db/Dump20261101/fssc_*.sql; do mysql --default-character-set=utf8mb4 -uroot -p < "$f"; done
+for f in db/Dump*/fssc_*.sql; do mysql --default-character-set=utf8mb4 -uroot -p < "$f"; done
 # 每个文件自带 CREATE DATABASE + USE，主库 fssc 与影像库 fssc_image 一起建好；
 # 都是 DROP TABLE IF EXISTS + CREATE + INSERT，可重复执行，文件顺序不影响成败（各自关掉外键检查）
 # Flowable 的 ACT_* / FLW_* 表已在 dump 内，首启时 database-schema-update=true 会补齐缺项
