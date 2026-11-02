@@ -60,6 +60,7 @@ desktop.ini
 # ---- 会话/临时施工产物 ----
 .tmp*
 _tmp*
+_*backup/
 temp_*
 _*.log
 _*.txt
