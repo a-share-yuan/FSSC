@@ -383,7 +383,7 @@ public class AssetDeprBatchService {
     /**
      * 批头存在性断言（fail-closed）：折旧计提明细只允许写在真实存在的批单下。
      *
-     * <p>本仓唯一的明细写点是 {@link #applyDepr}（batch_id 取自批单主键），
+     * <p>本仓库唯一的明细写点是 {@link #applyDepr}（batch_id 取自批单主键），
      * 「头行 0 行 + 明细指向不存在批次」并非代码造出的半截批次，而是外部清理脚本
      * （{@code fssc/sql/V9.9.9_cleanup_garbage_data.sql:161}、{@code V9.9.12_cleanup_after_wf_refactor.sql:265}
      * 都 {@code TRUNCATE TABLE asset_depr_batch} 而不清 {@code md_asset_depr_detail}）

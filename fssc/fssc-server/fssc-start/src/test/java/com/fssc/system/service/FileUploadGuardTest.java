@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   <li><b>拒绝文案</b>：给用户的 {@code BizException} 文案不回显配置原文与内部清单。</li>
  * </ul>
  *
- * <p>不用 Mockito（JDK 26 下 byte-buddy 自附加受限，与本仓 {@code PermissionAspectTest} 同一取舍），
+ * <p>不用 Mockito（JDK 26 下 byte-buddy 自附加受限，与本仓库 {@code PermissionAspectTest} 同一取舍），
  * Mapper 用 JDK 动态代理伪造；不启动 Spring 上下文、不连数据库。</p>
  */
 class FileUploadGuardTest {

@@ -119,7 +119,7 @@ public class WfBpmnChecker {
             }
             return (Element) ps.item(0);
         } catch (Exception e) {
-            // 把解析器原文（如「前言中不允许有内容」）抛给业务人员：那是 XML 层术语，看不出该干什么。
+            // 禁止把解析器原文（如「前言中不允许有内容」）抛给业务人员：那是 XML 层术语，看不出该干什么。
             // 原文降级进日志备查，界面上给可执行结论。
             log.warn("BPMN XML 解析失败，解析器原文：{}", e.getMessage());
             r.parseFailed = true;

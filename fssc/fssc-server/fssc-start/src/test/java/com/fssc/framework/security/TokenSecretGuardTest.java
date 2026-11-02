@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code spring.profiles.active: dev}）——于是"内置默认密钥"在生产也是<b>放行</b>的。
  * 本测试用「默认密钥 / 缺失密钥」两类输入实证失败分支，不依赖 Spring 容器与数据库。</p>
  *
- * <p>字段注入用 {@link ReflectionTestUtils}（与本仓既有单测同一依赖线：spring-boot-starter-test），
+ * <p>字段注入用 {@link ReflectionTestUtils}（与本仓库既有单测同一依赖线：spring-boot-starter-test），
  * 目的是脱离容器直调 {@code checkSecret()} 与签发/验签两条链路。</p>
  */
 class TokenSecretGuardTest {

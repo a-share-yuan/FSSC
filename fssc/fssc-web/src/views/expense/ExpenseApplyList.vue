@@ -230,7 +230,7 @@ async function onViewDetail(row) {
   detail.value = {}
   try {
     const env = await billApi.detail(row.id) || {}
-    // 接口回的是信封 {attaches, bill, lines} ⇒ 详情按 bill 那层平铺取值（同仓惯例）
+    // 接口回的是信封 {attaches, bill, lines} ⇒ 详情按 bill 那层平铺取值（同仓库惯例）
     detail.value = env.bill || {}
   } catch (e) {
     ElMessage.error(e.message || t('expense.applyList.msgLoadDetailFailed'))

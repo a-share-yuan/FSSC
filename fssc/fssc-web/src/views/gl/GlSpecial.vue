@@ -483,7 +483,7 @@ import { readBillDeepLink } from '../../utils/bizEntry'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { glexApi, glApi, orgApi, mdApi, masterApi, periodApi } from '../../api'
 // 月结检查校验三端点与计提落账挂接核查端点未收进 api.js（该文件为多页共享面，暂不改动），
-// 走本仓既有的复用路径——request.js 再导出的同一个 http 实例（baseURL /api、鉴权头、响应解包与 api.js 完全一致），
+// 走本仓库既有的复用路径——request.js 再导出的同一个 http 实例（baseURL /api、鉴权头、响应解包与 api.js 完全一致），
 // TaxDiffTab/ArchiveBoard/CorpPay 等页即用此法。
 import { http } from '../../request'
 import { formatDateTime } from '../../utils/format'
@@ -960,7 +960,7 @@ const mcCompLabel = computed(() => {
 function isCcDone(row) { return String(row?.status || '').toUpperCase() === 'DONE' }
 const ccDone = computed(() => closeCheck.value.filter((r) => isCcDone(r)).length)
 const ccPercent = computed(() => (closeCheck.value.length ? Math.round((ccDone.value * 100) / closeCheck.value.length) : 0))
-// 负责岗位显示名：取会计期间检查项的责任岗位编码对应的岗位名称（岗位名称与本仓 sys_role 种子一致），
+// 负责岗位显示名：取会计期间检查项的责任岗位编码对应的岗位名称（岗位名称与本仓库 sys_role 种子一致），
 // 界面只出中文岗位名，不把岗位编码/权限码这类内部标识摆给业务用户看。
 // computed：静态对象会在 setup 求值时固化语言（切语言后岗位名不换）
 const CC_OWNER_LABEL = computed(() => ({ FIN_GL: t('gl.special.posGlAccountant'), CASHIER: t('gl.special.posCashier'), FIN_AR: t('gl.special.posArAccountant'), FA_ASSET_ACCOUNT: t('gl.special.posAssetAccountant') }))

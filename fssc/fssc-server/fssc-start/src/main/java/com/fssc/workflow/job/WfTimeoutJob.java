@@ -302,7 +302,7 @@ public class WfTimeoutJob {
                     // 全是租户表，缺上下文会被拦截器 fail-closed 拦下，整批抛错、三档动作一条都触发不了
                     Gate gate = null;
                     try {
-                        // TenantContext.callAs 返回 void（本仓既定用法）：结果用一元数组带回
+                        // TenantContext.callAs 返回 void（本仓库既定用法）：结果用一元数组带回
                         Gate[] holder = new Gate[1];
                         TenantContext.callAs(tenantId, () -> holder[0] = loadGate(tasks));
                         gate = holder[0];

@@ -26,7 +26,7 @@ import java.math.BigDecimal;
  * {@code GlSalaryRunService.calculateRun} 的「人数 × sys_config 人均标准」算出（salary.std.basic 等 4 个参数），
  * 审批人看到的"工资"是一个总数，核不到人，代扣额也失去唯一可信来源。</p>
  *
- * <p>本类只落代码侧载体，不落数据：建表属 DDL，按本仓 114/167/028 同模式以<b>注释态</b>交付于下方
+ * <p>本类只落代码侧载体，不落数据：建表属 DDL，按本仓库 114/167/028 同模式以<b>注释态</b>交付于下方
  * {@code <pre>} 块，修复批次不执行；读侧 {@code GlSalaryRunService.listDetailOfRun} 在未建表期 fail-soft
  * 只留 WARN、返回空集，不抛给界面；写侧<b>刻意不建档</b>——现库无行级来源，若按「人数 × 人均标准」
  * 生成 10 条完全相同的"人"，等于把配置参数伪造成到人证据，比现状（一个总数）更坏，故宁缺毋滥。</p>

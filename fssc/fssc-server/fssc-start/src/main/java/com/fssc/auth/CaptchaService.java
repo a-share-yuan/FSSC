@@ -25,8 +25,8 @@ import org.springframework.stereotype.Service;
 /**
  * 登录图形验证码本体。
  *
- * <p>与同仓 BCP 门户 {@code com.unierp.bcp.portal.auth.CaptchaService} <b>同构移植</b>，
- * 不另发明第二套机制：纯 JDK {@code java.awt} 渲染 PNG（零新增三方依赖——本仓 Maven 离线，
+ * <p>与同仓库 BCP 门户 {@code com.unierp.bcp.portal.auth.CaptchaService} <b>同构移植</b>，
+ * 不另发明第二套机制：纯 JDK {@code java.awt} 渲染 PNG（零新增三方依赖——本仓库 Maven 离线，
  * 加依赖会打断后续构建窗），校验码存<b>进程内一次性</b>缓存（TTL 120s、取用即删防重放），
  * 接口形态一致（一次性 captchaId + base64 dataURL 图片）。
  *

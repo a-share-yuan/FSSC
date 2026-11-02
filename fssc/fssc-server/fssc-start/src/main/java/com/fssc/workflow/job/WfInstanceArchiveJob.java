@@ -54,7 +54,7 @@ import java.util.function.Supplier;
  * "插冷表 → 删在线表" 成对完成；任一步失败整实例回滚，在线数据不受影响，继续下一个实例。
  *
  * <p><b>为什么不搬 {@code ACT_*}</b>：{@code ACT_*} 是 Flowable 的<b>引擎账</b>，它的保留与清理
- * 是引擎自己的生命周期——本仓已有 {@code WfHistoryArchiveService} 按周清理超期历史。把 {@code ACT_*}
+ * 是引擎自己的生命周期——本仓库已有 {@code WfHistoryArchiveService} 按周清理超期历史。把 {@code ACT_*}
  * 纳入本作业的事务边界会造成两套规则打架（例如引擎账先被引擎清掉、业务账再删时对不上），
  * 且引擎表的分区/外键关系不受我们控制。故本作业只搬 wf_* 镜像表，绝不增删任何 ACT_* 行。
  *

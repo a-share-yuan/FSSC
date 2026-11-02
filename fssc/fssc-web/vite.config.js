@@ -27,7 +27,7 @@ const backendProxy = {
             success: false,
             data: null,
             msg: down
-              ? '后端服务未启动：请在 fssc/fssc-server 下起后端（源码调试 cd fssc/fssc-server/fssc-start && mvn spring-boot:run；或打 jar 后 java -jar fssc-start/target/fssc-server.jar），端口 8089'
+              ? '后端服务未启动：请先运行 fssc-server（java -jar fssc-start/target/fssc-server.jar，端口 8089）'
               : '代理转发失败：' + (err?.message || '未知错误'),
           }))
         } else if (res) {

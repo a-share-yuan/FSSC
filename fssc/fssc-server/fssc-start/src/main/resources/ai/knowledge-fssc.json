@@ -1874,7 +1874,7 @@
    "docPath": "docs/流程说明/00-总览与索引.md",
    "title": "FSSC 流程说明总览与索引",
    "heading": "FSSC 流程说明总览与索引 / 口径",
-   "text": "- 档案集中/非集中两种模式的流程差异见 [业务流程-档案管理模式](../业务流程-档案管理模式.md)；非集中变体（`*_NC`）只在其公司档案模式为 NON_CENTRAL 时启用；\n- 节点／角色／条件＝流程定义原文，⛔不按\"上一轮印象\"外推；\n- 运行期状态取自 `bpmn-repo/runtime-baseline-20261025/manifest.tsv`（只读导出：`wf_model` 未删行 ＋ `ACT_RE_PROCDEF` 最高版本），名册之外的记「未在名册」；\n- 流程图按 BPMN 设计器坐标（bpmndi）绘制，切成不超过 720px 宽的横片，片间空白下刀。",
+   "text": "- 档案集中/非集中两种模式的流程差异见 [业务流程-档案管理模式](../业务流程-档案管理模式.md)；非集中变体（`*_NC`）只在其公司档案模式为 NON_CENTRAL 时启用；\n- 节点／角色／条件＝流程定义原文，不按\"上一轮印象\"外推；\n- 运行期状态取自 `bpmn-repo/runtime-baseline-20261025/manifest.tsv`（只读导出：`wf_model` 未删行 ＋ `ACT_RE_PROCDEF` 最高版本），名册之外的记「未在名册」；\n- 流程图按 BPMN 设计器坐标（bpmndi）绘制，切成不超过 720px 宽的横片，片间空白下刀。",
    "restricted": false,
    "length": 299
   },

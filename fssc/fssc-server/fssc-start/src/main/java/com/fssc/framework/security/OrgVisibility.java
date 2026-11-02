@@ -27,7 +27,7 @@ public final class OrgVisibility {
 
     /** 组织管理的明示权限码（公司管理菜单实际授予的码） */
     public static final String PERM_ORG_MANAGE = "system:company:list";
-    /** 跨公司查看的扩展码（本仓暂无授予，留作管理员显式放行位） */
+    /** 跨公司查看的扩展码（本仓库暂无授予，留作管理员显式放行位） */
     public static final String PERM_ORG_VIEW_ALL = "system:org:view-all";
 
     private OrgVisibility() {
