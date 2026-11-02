@@ -1,19 +1,29 @@
 # 贡献指南
 
-谢谢你想改这个项目。它体量不小（**1,007 个 Java 文件 / 131,428 行 / 33 个业务域 / 1,257 个接口 / 243 张映射表**），请务必先读完本页再动手，能省下你两天时间。
+谢谢你想改这个项目。它体量不小（**1,123 个 Java 文件 / 163,759 行 / 36 个业务域 / 1,365 个接口 / 259 张映射表**），请务必先读完本页再动手，能省下你两天时间。
 
 ## 10 分钟准备
 
 ```bash
 cp .env.example .env                 # 填 FSSC_DB_PASSWORD / FSSC_JWT_SECRET
 for f in db/Dump*/fssc_*.sql; do mysql --default-character-set=utf8mb4 -uroot -p < "$f"; done   # 建库只有这一条入口：整库 dump（结构＋数据）
-cd fssc-server && mvn clean package -DskipTests && java -jar fssc-start/target/fssc-server.jar
-cd ../fssc-web  && npm install && npm run dev
+
+# 源码调试（推荐）：不起 jar，改代码即时生效
+cd fssc/fssc-server/fssc-start
+mvn spring-boot:run -Dspring-boot.run.arguments="--spring.config.import=optional:file:../../../../.env"
+# 或打 jar 运行（部署用）：
+# cd fssc/fssc-server && mvn clean package -DskipTests && java -jar fssc-start/target/fssc-server.jar
+
+cd fssc/fssc-web  && npm install && npm run dev
 ```
+
+> 本仓不含 dotenv 加载器 ⇒ `.env` 不会自动生效。源码调试用 `--spring.config.import=optional:file:<仓库根>/.env` 读入；
+> 打 jar 时先 `set -a && . ./.env && set +a` 导出为环境变量。
+> IDE 调试：导入 `fssc/fssc-server/` 为 Maven 工程，运行 `com.fssc.FsscApplication`。
 
 **动手前先跑起来，并且走通一张报销单。** 这个项目大量行为只有运行期才看得出来。
 
-**发布形态（已定，别开新路子）**：本仓库**只发源码**。前端包保持 `"private": true`（`fssc-web/package.json`），不发 npm 包、不提供托管 demo；jar 与镜像由使用者自己 `mvn clean package` / `docker build` 产出。所以：不要把任何子包拆成"可独立发布的库"，也不要在 PR 里把 `private` 改成 `false`。判词与依据见 [`docs/开源发布前置检查清单.md`](docs/开源发布前置检查清单.md) §8 第 ② 项。
+**发布形态（已定，别开新路子）**：本仓库**只发源码**。前端包保持 `"private": true`（`fssc-web/package.json`），不发 npm 包、不提供托管 demo；jar 与镜像由使用者自己 `mvn clean package` / `docker build` 产出。所以：不要把任何子包拆成"可独立发布的库"，也不要在 PR 里把 `private` 改成 `false`。这条形态决定不要改。
 
 ## 必读四页
 
@@ -34,7 +44,7 @@ cd ../fssc-web  && npm install && npm run dev
 - 跨域调用走 `framework/facade`，**不要**直接引用别的域的 Mapper。
 - 访问影像域表要带 `@FsscDataSource("image")`，否则打到主库。
 - 涉及查询层改动（`@Select`/`@Insert` 注解 SQL、以及直连 `JdbcTemplate` 的写法）：必须自证租户条件生效。本项目**没有 Mapper XML**（全仓 `*Mapper.xml` 零命中），SQL 只有注解与 Java 两种形态；绕过 MyBatis-Plus 拦截器的写法是**跨租户泄漏**。
-- 国际化**已接入但未全量抽取**：`vue-i18n` 在依赖里，`src/i18n/index.js` 建实例，`main.js` 注册 i18n 与全局 `LocaleSwitch`，`src/i18n/locales/{zh-CN,en-US}.js` 各约 4,010 键。实测本快照 `src/` 下 263 枚 `.vue`/`.js` 里 72 枚走 `$t()`/`useI18n()`（4,038 处），其余仍是中文字面量。**新增用户可见文案**：改动的文件若已经在用 `$t()`，就照该文件的写法补 `zh-CN`/`en-US` 两键；若整篇还是字面量，就写中文字面量并别单为它建半套资源（半途抽取比不抽取更难核）。状态/枚举码的中文显示仍统一登记在 `fssc-web/src/constants/billStatus.js`，做法见 `docs/流程引擎技术说明.md` 9.5。
+- 国际化**已接入且界面文案已全量抽取**：`vue-i18n` 在依赖里，`src/i18n/index.js` 建实例，`main.js` 注册 i18n 与全局 `LocaleSwitch`，`src/i18n/locales/{zh-CN,en-US}.js` 各 4,948 键。实测本快照 `src/` 下 268 枚 `.vue`/`.js` 里 175 枚走 `$t()`/`t()`（7,715 处）。**新增用户可见文案**：一律走 `$t('域.模块.键')`，并在 `zh-CN.js` 与 `en-US.js` **两侧同批**补键；键名静态、不许拼接（`$t('x.' + v)` 会让残留扫描与悬空引用校验全部失效，会拦）；中文相同则复用同一键（`common.*` 已收高频动作词）。 `scripts/i18n_check.py` 查键对齐、悬空引用、动态拼接、消息编译与硬编码中文基线（只许下降不许上升）。状态/枚举码的中文显示仍统一登记在 `fssc-web/src/constants/billStatus.js`，做法见 `docs/流程引擎技术说明.md` 9.5。
 
 **前端**
 
@@ -59,7 +69,7 @@ cd ../fssc-web  && npm install && npm run dev
 - [ ] 改了配置项 → 在 `docs/` 里同步该项说明（含是否需要重启）
 - [ ] 改了表结构 → 变更 SQL 与回滚 SQL **成对**提交（本项目**没有接 Flyway / Liquibase**，靠人工按序执行；约定与坑见 `docs/流程引擎技术说明.md` 9.2 与它的 §10 第 7 条），并说明在全新库上如何复现；同时更新 `docs/数据模型.md` 的表清单
 - [ ] 改了文档 → `node _tools/cite_check.mjs <改动的 md>` 绿（引用路径与行号能跳到，且不指向未发布的转储/备份）
-- [ ] 改了文档 → 顺手自查**作用域**：只写本项目三棵树（`fssc/`、`bpmn-repo/`、本仓库自身）里看得见的东西。不写绝对机器路径（`D:\…`、`C:\…`、你的用户名），不点名工作区里跟本项目同级的那些目录/工程，也不把内部施工件的编号当出处。闸现在会拦"作用域外引用"，但**别把它当唯一防线**——散文里提一句"我本机怎么配的"它抓不到，而对外部读者那就是噪声＋隐私泄漏。判词与实测记录见 `docs/开源发布前置检查清单.md` §4c 整改记录④
+- [ ] 改了文档 → 顺手自查**作用域**：只写本项目三棵树（`fssc/`、`bpmn-repo/`、本仓库自身）里看得见的东西。不写绝对机器路径（`D:\…`、`C:\…`、你的用户名），不点名工作区里跟本项目同级的那些目录/工程，也不把内部施工件的编号当出处。闸现在会拦"作用域外引用"，但**别把它当唯一防线**——散文里提一句"我本机怎么配的"它抓不到，而对外部读者那就是噪声＋隐私泄漏。（这条是踩过坑之后加的）
 - [ ] 改了枚举/状态码/用户可见文案 → 说明中文显示登记在哪（`billStatus.js` 的三张表），以及是否需要重跑 `npm run test`（本项目当前无国际化，不需要补英文资源）
 
 ## 测试
@@ -70,7 +80,7 @@ cd fssc-web && npm run test:coverage
 cd fssc-server && mvn test           # 后端测试（surefire）
 ```
 
-端到端 UI 脚本**不在这个仓库里**（它是内部施工目录，里面有把口令写成字面值、把真实 JWT 落盘的调试件，已从发布白名单整体剔除，理由见 `docs/开源发布前置检查清单.md` 第 2 节）。想在 CI 里跑界面级冒烟，请按那份清单的口径另制 `examples/api-smoke/`（2~3 个文件，凭据一律从 `process.env` 取），**不要**从施工目录拷任何子集进来。
+端到端 UI 脚本**不在这个仓库里**（它是一处内部调试目录，里面有把口令写成字面值、把真实 JWT 落盘的调试件，已整体剔除，不随本仓库发布）。想在 CI 里跑界面级冒烟，请在仓库内另建 `examples/api-smoke/`（2~3 个文件，凭据一律从 `process.env` 取），**不要**从施工目录拷任何子集进来。
 
 **注意**：这个项目的正确性判定高度依赖运行期行为。数据库、流程引擎、多租户上下文相关的用例**必须打真库**，不要用 mock 掩盖问题（历史上出现过 mock 通过但生产迁移失败的情形）。
 

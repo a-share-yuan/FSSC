@@ -23,6 +23,8 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 // 提单节点 detail 原是后端 summary.billStatus 原码直出（非费用域显示 APPROVED）
 import { statusLabel } from '@/constants/billStatus'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 /**
  * 业务链时间线：把后端 BillTraceChainController 已发生的单据链路渲染成可点击时间线。
@@ -136,10 +138,10 @@ const stages = computed(() => {
       state: has('APPROVED') ? 'reached' : (blocked ? 'blocked' : 'pending'),
       detail: has('APPROVED') ? '已完成' : '',
       hint: blocked ? (BLOCK_LABEL[billStatus] || '未通过') : approvalPendingHint.value },
-    { key: 'VOUCHER', label: '生成凭证', hint: '审批后自动生成' },
-    { key: 'PAYMENT', label: '付款', hint: '出纳执行' },
-    { key: 'BATCH', label: '组批', hint: '付款组批' },
-    { key: 'ARCHIVE', label: '归档', hint: '待归档／归档审批中' },
+    { key: 'VOUCHER', label: '生成凭证', hint: t('BillChainTimeline.main.Generated') },
+    { key: 'PAYMENT', label: '付款', hint: t('BillChainTimeline.main.Cashier') },
+    { key: 'BATCH', label: '组批', hint: t('BillChainTimeline.main.Payment') },
+    { key: 'ARCHIVE', label: '归档', hint: t('BillChainTimeline.main.Pending') },
   ]
 
   // 不适用即整段不画；但若确实取到了该段数据（存在计数>0 或已达），照常画出来——

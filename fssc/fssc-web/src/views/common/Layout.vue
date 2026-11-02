@@ -28,11 +28,11 @@
         <!-- Header 右侧功能区 -->
         <div class="header-right">
           <!-- 暗色模式切换 -->
-          <el-button link class="header-btn" @click="toggleTheme" title="切换深/浅色模式">
+          <el-button link class="header-btn" @click="toggleTheme" :title="$t('layout.main.Toggle')">
             <el-icon :size="18"><Sunny v-if="!isDark" /><Moon v-else /></el-icon>
           </el-button>
           <!-- 快捷键帮助 -->
-          <el-button link class="header-btn" @click="kbHelpVisible = true" title="快捷键 (?)">
+          <el-button link class="header-btn" @click="kbHelpVisible = true" :title="$t('layout.main.Shortcuts')">
             <el-icon :size="18"><Key /></el-icon>
           </el-button>
           <!-- 待办角标 + 搜索 + 通知 + 收藏 -->
@@ -193,6 +193,8 @@ import { useKeyboard } from '../../composables/useKeyboard'
 import { useTheme } from '../../composables/useTheme'
 import { useNetworkDegradation } from '../../composables/useNetworkDegradation'
 import { hasPerm } from '../../utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -282,7 +284,7 @@ function addCurrentPageToFav() {
     name: route.meta.title || route.path,
     path: route.path,
   })
-  ElMessage.success('已收藏当前页面')
+  ElMessage.success(t('layout.main.Current'))
 }
 
 // 面包屑以登录菜单树为准（菜单挂在哪，面包屑就走哪），仅菜单树无匹配时按路径首段兜底
@@ -429,7 +431,7 @@ async function onCommand(cmd) {
   } else if (cmd === 'toggle-watermark') {
     watermarkEnabled.value = !watermarkEnabled.value
     localStorage.setItem('fssc_watermark_enabled', String(watermarkEnabled.value))
-    ElMessage.success(watermarkEnabled.value ? '水印已开启' : '水印已关闭')
+    ElMessage.success(t('layout.main.Watermark'))
   } else if (cmd === 'onboarding') {
     onboardingRef.value?.start()
   } else if (cmd === 'help') {

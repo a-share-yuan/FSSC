@@ -5,9 +5,9 @@
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <b>三单匹配容差参数</b>
-        <el-button size="small" @click="reload">刷新</el-button>
-        <span style="margin-left: auto; color: #909399; font-size: 12px">采购订单 -> 收货(GRN) -> 发票 三单匹配的金额容差控制（按公司维度维护）</span>
+        <b>{{ $t('purchase.matchTolerance.Three') }}</b>
+        <el-button size="small" @click="reload">{{ $t('common.refresh') }}</el-button>
+        <span style="margin-left: auto; color: #909399; font-size: 12px">采购订单 -> 收货(GRN) ->{{ $t('purchase.matchTolerance.Amount') }}</span>
       </div>
     </template>
 
@@ -70,6 +70,8 @@ import { ElMessage } from 'element-plus'
 import { orgApi, matchToleranceApi } from '../../api'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const companies = ref([])
 const loading = ref(false)
@@ -115,10 +117,10 @@ async function save() {
         amountAbs: Number(form.amountAbs || 0),
         status: form.status || 'NORMAL',
       })
-      ElMessage.success('容差参数已保存')
+      ElMessage.success(t('purchase.matchTolerance.Tolerance'))
       loadTolerance(form.companyId)
     } catch (e) {
-      ElMessage.error(e?.message || '容差参数保存失败')
+      ElMessage.error(t('purchase.matchTolerance.Failed'))
     } finally { saving.value = false }
   })
 }

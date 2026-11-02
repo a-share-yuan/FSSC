@@ -13,6 +13,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { i18n } from '../i18n'
 
 function isBlank(v) {
   return v === null || v === undefined || (typeof v === 'string' && !v.trim())
@@ -191,7 +192,7 @@ const formTypeRules = {
     schemeId: commonRules.select('请选择预算方案'),
     budgetYear: commonRules.required('请输入预算年度'),
     itemId: commonRules.select('请选择费用项'),
-    totalAmount: [{ required: true, type: 'number', min: 0, message: '请输入预算总额（不能为负）' }],
+    totalAmount: [{ required: true, type: 'number', min: 0, message: i18n.global.t('useFormRules.main.Please') }],
   },
   // 三场景条件必输（出口/即征即退填计税基数+退税率，留抵退税填申请税额），
   // 页面用 v-if 挂载对应表单项，未挂载的字段天然不参与校验，故此处一律按必输登记。
@@ -416,8 +417,8 @@ const formTypeRules = {
   },
   // 供应商子表-银行账户：账号格式 6-30 位数字（与 md_supplier_bank 后端 @Pattern 同一规则）
   SUPPLIER_BANK: {
-    bankName: [{ required: true, message: '请输入开户行', validator: requiredValidator('请输入开户行') }],
-    bankAccount: [{ required: true, message: '请输入银行账号', validator: requiredValidator('请输入银行账号') },
+    bankName: [{ required: true, message: '请输入开户行', validator: requiredValidator(i18n.global.t('useFormRules.main.Please2')) }],
+    bankAccount: [{ required: true, message: '请输入银行账号', validator: requiredValidator(i18n.global.t('useFormRules.main.Enter')) },
       { pattern: /^\d{6,30}$/, message: '银行账号应为 6-30 位数字', trigger: 'blur' }],
   },
   // 供应商子表-联系人：电话/邮箱选填但填了就必须合规

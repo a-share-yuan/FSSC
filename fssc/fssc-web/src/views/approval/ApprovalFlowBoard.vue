@@ -7,8 +7,8 @@
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
         <b>{{ isSingle ? (tab === 'inst' ? '流程实例监控' : '流程定义') : '审批流看板' }}</b>
-<el-button type="info" size="small" style="margin-left:auto" @click="refreshAll">刷新</el-button>
-      <el-button type="info" size="small" @click="exportCsv">导出</el-button>
+<el-button type="info" size="small" style="margin-left:auto" @click="refreshAll">{{ $t('common.refresh') }}</el-button>
+      <el-button type="info" size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
       </div>
     </template>
@@ -213,6 +213,8 @@ import { formatDateTime } from '@/utils/format'
 import UserSelect from '../../components/common/UserSelect.vue'
 import { messageApi, wfApi, store } from '../../api'
 import { hasPerm } from '@/utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 /**
  * 改派入口是否可见：要 wf:task:reassign 权限点，且排除 admin 账号。
@@ -240,13 +242,13 @@ const reassignFormRules = {
 /** 催办:给当前所有可办理人发站内信(提醒尽快审批)。办理人由后端按 wf_task 镜像回填。 */
 async function urge(row) {
   const ids = (row.currentAssigneeIds || '').split(',').filter(Boolean).map(Number)
-  if (!ids.length) return ElMessage.warning('未解析到当前在办人(可能刚流转),请刷新后重试')
+  if (!ids.length) return ElMessage.warning(t('approval.approvalFlow.Current'))
   try {
     await Promise.all(ids.map((receiverId) => messageApi.send({
       receiverId,
       msgType: 'URGE',
       title: '【催办】' + (row.title || row.bizNo),
-      content: `单据 ${row.bizNo} 当前节点「${row.currentNode || ''}」等待处理,请尽快审批。`,
+      content: `${t('approval.approvalFlow.Document')} ${row.bizNo} 当前节点「${row.currentNode || ''}」等待处理,请尽快审批。`,
       bizType: row.bizType || '',
       bizId: row.id,
       linkUrl: '',
@@ -265,11 +267,11 @@ function openReassign(row) {
 async function doReassign() {
   if (!(await validateForms([reassignFormRef]))) return
   const taskId = reassignRow.value?.currentTaskId
-  if (!taskId) return ElMessage.warning('未找到该实例的当前在办任务(可能刚流转,请刷新后重试)')
+  if (!taskId) return ElMessage.warning(t('approval.approvalFlow.Current2'))
   reassignSaving.value = true
   try {
     await wfApi.reassign({ taskId, targetUserId: reassignForm.value.target, reason: reassignForm.value.reason.trim() })
-    ElMessage.success('改派成功')
+    ElMessage.success(t('approval.approvalFlow.Reassigned'))
     reassignVisible.value = false
     reloadInst()
   } catch (e) { ElMessage.error(e.message) } finally { reassignSaving.value = false }
@@ -343,7 +345,7 @@ function buildChain(xml) {
   const conds = [...xml.matchAll(/<conditionExpression[^>]*>([^<]*)<\/conditionExpression>/g)]
   tasks.forEach((m) => out.push({ type: 'task', text: m[2] }))
   conds.forEach((m) => out.push({ type: 'branch', text: '[' + m[1] + ']' }))
-  if (!out.length) out.push({ type: 'task', text: '（模板已生成，未识别到节点）' })
+  if (!out.length) out.push({ type: 'task', text: t('approval.approvalFlow.Template') })
   return out
 }
 
@@ -387,7 +389,7 @@ async function reloadInst() {
 const router = useRouter()
 function goBiz(row) {
   if (!goBizPage(router, row)) {
-    ElMessage.warning('当前账号不能直接进入该单据的业务页面，请用行内「追溯」查看全链路')
+    ElMessage.warning(t('SearchCommand.main.Current'))
   }
 }
 
@@ -434,8 +436,8 @@ function refreshAll() { loadDefs(); reloadInst(); loadInstStats() }
 onMounted(() => { load(); loadInstStats() })
 
 function exportCsv() {
-  if (!defs.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'flowCode', label: '流程编码' }, { prop: 'flowName', label: '流程名称' }, { prop: 'bizType', label: '业务类型' }, { prop: 'modelKey', label: '模型Key' }, { prop: 'remark', label: '备注' }]
+  if (!defs.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'flowCode', label: t('approval.approvalFlow.Workflow') }, { prop: 'flowName', label: t('approval.approvalFlow.Workflow2') }, { prop: 'bizType', label: t('image.imageManager.Business') }, { prop: 'modelKey', label: t('approval.approvalFlow.Model') }, { prop: 'remark', label: t('common.remark') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = defs.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -449,16 +451,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `ApprovalFlowBoard_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -473,7 +475,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `ApprovalFlowBoard_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 </script>

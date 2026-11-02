@@ -5,45 +5,45 @@
   <div class="bpmn-designer">
     <!-- 只读提示：无编辑权限时给出明确说明，而不是让用户以为页面坏了 -->
     <el-alert v-if="readonly" type="info" :closable="false" show-icon
-              title="只读预览：可拖动或缩放查看流程图。如需修改，请联系系统管理员开通流程建模权限。" />
+              :title="$t('BpmnDesigner.main.Read')" />
 
     <!-- 专业工具栏（参照主流流程设计器） -->
     <div class="bpmn-toolbar" v-if="!readonly">
       <div class="toolbar-group">
-        <el-tooltip content="保存流程" placement="bottom">
-          <el-button size="small" type="success" :icon="Check" @click="exportXml">保存</el-button>
+        <el-tooltip :content="$t('BpmnDesigner.main.Save')" placement="bottom">
+          <el-button size="small" type="success" :icon="Check" @click="exportXml">{{ $t('common.save') }}</el-button>
         </el-tooltip>
       </div>
       <el-divider direction="vertical" />
       <div class="toolbar-group">
-        <el-tooltip content="撤销 (Ctrl+Z)" placement="bottom">
+        <el-tooltip :content="$t('BpmnDesigner.main.Undo')" placement="bottom">
           <el-button size="small" :icon="RefreshLeft" :disabled="!canUndo" @click="undo" />
         </el-tooltip>
-        <el-tooltip content="重做 (Ctrl+Y)" placement="bottom">
+        <el-tooltip :content="$t('BpmnDesigner.main.Redo')" placement="bottom">
           <el-button size="small" :icon="RefreshRight" :disabled="!canRedo" @click="redo" />
         </el-tooltip>
       </div>
       <el-divider direction="vertical" />
       <div class="toolbar-group">
-        <el-tooltip content="放大" placement="bottom">
+        <el-tooltip :content="$t('BpmnDesigner.main.Zoom')" placement="bottom">
           <el-button size="small" :icon="ZoomIn" @click="zoomIn" />
         </el-tooltip>
         <div class="zoom-display" @click="resetZoom">
           <span class="zoom-value">{{ zoomPct }}%</span>
         </div>
-        <el-tooltip content="缩小" placement="bottom">
+        <el-tooltip :content="$t('BpmnDesigner.main.Zoom2')" placement="bottom">
           <el-button size="small" :icon="ZoomOut" @click="zoomOut" />
         </el-tooltip>
-        <el-tooltip content="重置缩放(100%)" placement="bottom">
+        <el-tooltip :content="$t('BpmnDesigner.main.Reset')" placement="bottom">
           <el-button size="small" :icon="Aim" @click="resetZoom" />
         </el-tooltip>
-        <el-tooltip content="适应视图" placement="bottom">
+        <el-tooltip :content="$t('BpmnDesigner.main.Fit')" placement="bottom">
           <el-button size="small" :icon="FullScreen" @click="fitView" />
         </el-tooltip>
       </div>
       <el-divider direction="vertical" />
       <div class="toolbar-group">
-        <el-tooltip content="属性面板" placement="bottom">
+        <el-tooltip :content="$t('BpmnDesigner.main.Properties')" placement="bottom">
           <el-button size="small" :type="showPanel ? 'primary' : 'default'" :icon="Setting" @click="togglePanel">
             {{ showPanel ? '隐藏面板' : '属性面板' }}
           </el-button>
@@ -52,7 +52,7 @@
       <el-divider direction="vertical" />
       <div class="toolbar-hint">
         <el-icon><InfoFilled /></el-icon>
-        <span>从左侧拖拽节点：开始 / 用户任务(审批) / 网关 / 结束，连线设置流转；点击节点配置审批人、会签、超时</span>
+        <span>{{ $t('BpmnDesigner.main.Drag') }}</span>
       </div>
     </div>
 
@@ -77,8 +77,7 @@
         <span class="legend-dot" style="background:#f3e8ff"></span>共享审批
         <span class="legend-dot" style="background:#eceff1"></span>系统自动
         <span class="legend-dot" style="background:#fff3e0"></span>网关
-        <span class="legend-dot" style="background:#e1f5e8"></span>开始/结束
-      </span>
+        <span class="legend-dot" style="background:#e1f5e8"></span>{{ $t('BpmnDesigner.main.Start') }}</span>
     </div>
 
     <!-- UC03 财务节点快捷配置：选中节点后显示 -->
@@ -92,20 +91,20 @@
     <div v-if="!readonly && selTask" class="finance-config">
       <b>节点配置：{{ selTask.name }}</b>
       <el-select v-model="selApproverType" size="small" style="width: 130px" @change="applyNodeFinance">
-        <el-option label="按角色" value="ROLE" />
-        <el-option label="指定用户" value="USER" />
-        <el-option label="发起人(自审)" value="INITIATOR" />
+        <el-option :label="$t('BpmnDesigner.main.Role')" value="ROLE" />
+        <el-option :label="$t('BpmnDesigner.main.Specified')" value="USER" />
+        <el-option :label="$t('BpmnDesigner.main.Initiator')" value="INITIATOR" />
       </el-select>
       <el-select v-if="selApproverType === 'ROLE'" v-model="selApproverValue" size="small" filterable clearable allow-create default-first-option
-                 style="width: 140px" placeholder="选角色或直接输入角色编码" @change="applyNodeFinance">
+                 style="width: 140px" :placeholder="$t('BpmnDesigner.main.Select')" @change="applyNodeFinance">
         <el-option v-for="r in roleOptions" :key="r.value" :label="r.label" :value="r.value" />
       </el-select>
       <el-select v-else-if="selApproverType === 'USER'" v-model="selApproverValue" size="small" filterable remote clearable
-                 :remote-method="searchAssignUsers" :loading="userLoading" placeholder="按姓名选择用户"
+                 :remote-method="searchAssignUsers" :loading="userLoading" :placeholder="$t('BpmnDesigner.main.Select2')"
                  style="width: 180px" @focus="ensureAssignUsers" @change="applyNodeFinance">
         <el-option v-for="u in userOptions" :key="u.userId" :label="userLabel(u)" :value="String(u.userId)" />
       </el-select>
-      <el-button size="small" type="primary" @click="applyNodeFinance">应用</el-button>
+      <el-button size="small" type="primary" @click="applyNodeFinance">{{ $t('common.apply') }}</el-button>
       <!-- 选完角色即体检：把"某公司 0 人 / 多公司 ≥2 人"这种运行期才炸的问题提到配置时 -->
       <div v-if="selApproverType === 'ROLE'" style="width:100%">
         <RoleHolderHint :role-code="selApproverValue" />
@@ -114,31 +113,31 @@
 
     <!-- UC06 连线条件快捷配置 -->
     <div v-if="!readonly && selFlow" class="finance-config" style="border-color:#e6a23c; background:#fdf6ec">
-      <b>连线条件</b>
-      <el-select v-model="condField" size="small" style="width: 105px" placeholder="字段">
+      <b>{{ $t('BpmnDesigner.main.Connection') }}</b>
+      <el-select v-model="condField" size="small" style="width: 105px" :placeholder="$t('BpmnDesigner.main.Field')">
         <el-option v-for="(l, v) in flowFields" :key="v" :label="l" :value="v" />
       </el-select>
-      <el-select v-model="condOp" size="small" style="width: 72px" placeholder="运算">
+      <el-select v-model="condOp" size="small" style="width: 72px" :placeholder="$t('BpmnDesigner.main.Operation')">
         <el-option v-for="op in condOps" :key="op" :label="op" :value="op" />
       </el-select>
-      <el-input v-model="condValue" size="small" style="width: 105px" placeholder="值" clearable />
-      <el-button size="small" @click="applyCondExpr">生成</el-button>
+      <el-input v-model="condValue" size="small" style="width: 105px" :placeholder="$t('BpmnDesigner.main.Value')" clearable />
+      <el-button size="small" @click="applyCondExpr">{{ $t('common.generate') }}</el-button>
       <el-divider direction="vertical" style="margin: 0 4px" />
       <el-input v-model="selCondExpr" size="small" style="width: 230px" placeholder="${amount > 5000}" clearable />
-      <el-button size="small" type="primary" @click="applyFlowCondition">应用条件</el-button>
-      <el-button size="small" @click="clearFlowCondition">清除</el-button>
-      <el-switch v-if="selFlowCanDefault" v-model="selFlowDefault" size="small" active-text="默认流"
-                 inactive-text="非默认" style="margin-left: 6px" @change="setDefaultFlow" />
+      <el-button size="small" type="primary" @click="applyFlowCondition">{{ $t('BpmnDesigner.main.Apply') }}</el-button>
+      <el-button size="small" @click="clearFlowCondition">{{ $t('common.clear') }}</el-button>
+      <el-switch v-if="selFlowCanDefault" v-model="selFlowDefault" size="small" :active-text="$t('BpmnDesigner.main.Default')"
+                 :inactive-text="$t('BpmnDesigner.main.Non')" style="margin-left: 6px" @change="setDefaultFlow" />
     </div>
 
     <!-- UC12 子流程调用配置 -->
     <div v-if="!readonly && selSubprocess" class="finance-config" style="border-color:#7c4dff; background:#f5f0ff">
       <b>子流程调用：{{ selSubprocess.name }}</b>
-      <el-select v-model="subprocessKey" size="small" style="width: 280px" filterable placeholder="选择公共子流程" clearable>
+      <el-select v-model="subprocessKey" size="small" style="width: 280px" filterable :placeholder="$t('BpmnDesigner.main.Select3')" clearable>
         <el-option v-for="s in subprocessOptions" :key="s.value" :label="s.label" :value="s.value" />
       </el-select>
-      <el-button size="small" type="primary" @click="applySubprocessFinance">应用</el-button>
-      <el-button size="small" @click="loadSubprocesses">刷新列表</el-button>
+      <el-button size="small" type="primary" @click="applySubprocessFinance">{{ $t('common.apply') }}</el-button>
+      <el-button size="small" @click="loadSubprocesses">{{ $t('BpmnDesigner.main.Refresh') }}</el-button>
     </div>
 
     <el-alert v-if="error" type="error" :closable="false" :title="error" style="margin-top: 6px" />
@@ -165,6 +164,8 @@ import zhModule, { DEFAULT_NODE_NAMES } from '../i18n/bpmn-zh'
 import fsscPalette from './bpmn-palette'
 import { flowApi, roleApi } from '../api'
 import RoleHolderHint from './common/RoleHolderHint.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -451,10 +452,10 @@ async function loadSubprocesses() {
 function applySubprocessFinance() {
   if (!selSubprocess.value) return
   try {
-    if (!subprocessKey.value) { ElMessage.warning('请选择公共子流程'); return }
+    if (!subprocessKey.value) { ElMessage.warning(t('BpmnDesigner.main.Please')); return }
     const element = modeler.get('elementRegistry').get(selSubprocess.value.id)
     modeler.get('modeling').updateProperties(element, { calledElement: subprocessKey.value })
-    ElMessage.success('已引用子流程「' + subprocessKey.value + '」，保存后随流程生效')
+    ElMessage.success(t('BpmnDesigner.main.Effective'))
     colorizeNodes()
   } catch (e) { ElMessage.error('配置失败：' + e.message) }
 }
@@ -507,7 +508,7 @@ function parseCondExpr(expr) {
 
 function applyCondExpr() {
   const v = condValue.value.trim()
-  if (!v) { ElMessage.warning('请填写条件值'); return }
+  if (!v) { ElMessage.warning(t('BpmnDesigner.main.Fill')); return }
   const num = Number(v)
   selCondExpr.value = `\${${condField.value} ${condOp.value} ${Number.isNaN(num) ? "'" + v.replace(/'/g, "\\'") + "'" : num}}`
 }
@@ -516,12 +517,12 @@ function applyFlowCondition() {
   if (!selFlow.value) return
   try {
     const expr = selCondExpr.value.trim()
-    if (!expr) { ElMessage.warning('条件表达式为空，请先填写（如 ${amount > 5000}）'); return }
+    if (!expr) { ElMessage.warning(t('BpmnDesigner.main.Condition')); return }
     const element = modeler.get('elementRegistry').get(selFlow.value.id)
     const moddle = modeler.get('moddle')
     const condition = moddle.create('bpmn:FormalExpression', { body: expr })
     modeler.get('modeling').updateProperties(element, { conditionExpression: condition })
-    ElMessage.success('连线条件已应用')
+    ElMessage.success(t('BpmnDesigner.main.Connection2'))
   } catch (e) { ElMessage.error('配置失败：' + e.message) }
 }
 
@@ -531,7 +532,7 @@ function clearFlowCondition() {
     const element = modeler.get('elementRegistry').get(selFlow.value.id)
     modeler.get('modeling').updateProperties(element, { conditionExpression: null })
     selCondExpr.value = ''
-    ElMessage.success('连线条件已清除')
+    ElMessage.success(t('BpmnDesigner.main.Connection3'))
   } catch (e) { ElMessage.error('清除失败：' + e.message) }
 }
 
@@ -542,7 +543,7 @@ function setDefaultFlow(v) {
     const source = element.source
     if (!source) return
     modeler.get('modeling').updateProperties(source, { default: v ? element.businessObject : null })
-    ElMessage.success(v ? '已设为默认流（其余分支未命中时走此线）' : '已取消默认流')
+    ElMessage.success(t('BpmnDesigner.main.Default2'))
   } catch (e) { ElMessage.error('设置失败：' + e.message) }
 }
 
@@ -553,12 +554,12 @@ function applyNodeFinance() {
     const attrs = {}
     const val = String(selApproverValue.value || '').trim()
     if (selApproverType.value === 'ROLE') {
-      if (!val) { ElMessage.warning('请选择/输入角色编码'); return }
+      if (!val) { ElMessage.warning(t('BpmnDesigner.main.Please2')); return }
       attrs['flowable:candidateGroups'] = val
       delete attrs['flowable:assignee']
     } else if (selApproverType.value === 'USER') {
       // assignee 必须是可登录的真人 ID：历史误存角色编码会让任务永远无人可见
-      if (!/^\d+$/.test(val)) { ElMessage.warning('指定用户无效，请从人员列表重新选择'); return }
+      if (!/^\d+$/.test(val)) { ElMessage.warning(t('BpmnDesigner.main.Specified2')); return }
       attrs['flowable:assignee'] = val
       delete attrs['flowable:candidateGroups']
     } else if (selApproverType.value === 'INITIATOR') {
@@ -571,7 +572,7 @@ function applyNodeFinance() {
     attrs['flowable:approverType'] = null
     const modeling = modeler.get('modeling')
     modeling.updateProperties(element, attrs)
-    ElMessage.success('已应用到节点，点击「保存流程」后随流程生效')
+    ElMessage.success(t('BpmnDesigner.main.Applied'))
     colorizeNodes()
   } catch (e) {
     ElMessage.error('配置失败：' + e.message)
@@ -625,7 +626,7 @@ async function exportXml() {
     const { xml } = await modeler.saveXML({ format: true })
     emit('update:modelValue', xml)
     emit('saved', xml)
-    ElMessage.success('流程已保存，点击弹窗「保存」提交')
+    ElMessage.success(t('BpmnDesigner.main.Workflow'))
     return xml
   } catch (e) {
     ElMessage.error('导出失败：' + e.message)

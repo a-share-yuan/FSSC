@@ -5,23 +5,23 @@
   <div>
     <!-- 说明提示 -->
     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap">
-      <span style="color: var(--app-text-secondary, #606266); font-size: 13px">报销勾选发票时，按发票「货物或应税劳务、服务名称」自动预填费用类型；命中才改，未命中费用类型留空待填。</span>
-      <span style="color: #909399; font-size: 12px; margin-left: auto">上移、排序越靠前，同关键词越优先（精确匹配优先于包含）</span>
+      <span style="color: var(--app-text-secondary, #606266); font-size: 13px">{{ $t('master.invoiceRule.When') }}</span>
+      <span style="color: #909399; font-size: 12px; margin-left: auto">{{ $t('master.invoiceRule.Higher') }}</span>
     </div>
 
     <!-- Toolbar -->
     <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center">
-      <el-input v-model="keyword" placeholder="搜索关键词 / 费用类型" clearable style="width: 240px" @keyup.enter="load" />
-      <el-button type="primary" @click="load">查询</el-button>
-      <el-button @click="keyword = ''; load()">重置</el-button>
-      <el-button type="success" @click="openCreate">新增</el-button>
-      <el-button type="primary" plain @click="load">刷新</el-button>
+      <el-input v-model="keyword" :placeholder="$t('master.invoiceRule.Search')" clearable style="width: 240px" @keyup.enter="load" />
+      <el-button type="primary" @click="load">{{ $t('common.search') }}</el-button>
+      <el-button @click="keyword = ''; load()">{{ $t('common.reset') }}</el-button>
+      <el-button type="success" @click="openCreate">{{ $t('common.add') }}</el-button>
+      <el-button type="primary" plain @click="load">{{ $t('common.refresh') }}</el-button>
     </div>
 
     <!-- Table -->
     <SkeletonList v-if="loading" :rows="8" :cols="6" />
-    <el-table :data="rows" size="small" border stripe v-else empty-text="暂无规则">
-      <el-table-column label="关键词" min-width="160">
+    <el-table :data="rows" size="small" border stripe v-else :empty-text="$t('master.invoiceRule.No')">
+      <el-table-column :label="$t('master.invoiceRule.Keyword')" min-width="160">
         <template #default="{ row }"><span style="font-family: monospace">{{ row.keyword }}</span></template>
       </el-table-column>
       <el-table-column label="匹配方式" width="110" align="center">
@@ -92,6 +92,8 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { masterApi, mdApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const rows = ref([])
 const total = ref(0)
@@ -104,8 +106,8 @@ const editing = ref({})
 const itemOptions = ref([])
 
 const formRules = {
-  keyword: [{ required: true, message: '请输入关键词' }],
-  expenseItemId: [{ required: true, message: '请选择费用类型' }],
+  keyword: [{ required: true, message: t('master.invoiceRule.Please') }],
+  expenseItemId: [{ required: true, message: t('master.expenseStandard.Please3') }],
 }
 
 async function load() {
@@ -154,7 +156,7 @@ async function save() {
   editing.value.itemName = it ? it.label.replace(/^\s*　*/, '') : ''
   try {
     if (editing.value.id) { await masterApi.invoiceRule.update(editing.value) } else { await masterApi.invoiceRule.create(editing.value) }
-    ElMessage.success('已保存'); dlg.value = false; load()
+    ElMessage.success(t('useCrud.main.Saved')); dlg.value = false; load()
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -162,7 +164,7 @@ async function del(row) {
   try {
     await ElMessageBox.confirm('确认删除该规则？', '提示', { type: 'warning' })
     await masterApi.invoiceRule.delete(row.id)
-    ElMessage.success('已删除'); load()
+    ElMessage.success(t('useCrud.main.Deleted')); load()
   } catch (e) { /* cancelled */ }
 }
 
@@ -171,7 +173,7 @@ async function toggleEnable(row) {
     const on = (row.status || 'NORMAL') === 'NORMAL'
     await masterApi.invoiceRule.enable(row.id, !on)
     row.status = !on ? 'NORMAL' : 'DISABLED'
-    ElMessage.success(on ? '已停用' : '已启用')
+    ElMessage.success(t('master.invoiceRule.Enabled'))
   } catch (e) { ElMessage.error(e.message) }
 }
 

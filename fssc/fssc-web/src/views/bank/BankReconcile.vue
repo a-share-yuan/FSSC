@@ -4,28 +4,28 @@
 <template>
   <div class="bank-reconcile-page">
     <div class="page-header" style="margin-bottom: 16px;">
-      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">银行对账</h2>
+      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">{{ $t('bank.bankReconcile.Bank') }}</h2>
     </div>
     <!-- 顶部汇总 -->
     <el-row class="cm-target-reconcile" :gutter="12" style="margin-bottom:12px">
       <el-col :span="6">
         <el-card class="cm-target-reconcile" shadow="never">
-          <el-statistic title="对账记录总数" :value="summary.total" />
+          <el-statistic :title="$t('bank.bankReconcile.Total')" :value="summary.total" />
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="never">
-          <el-statistic title="自动勾对" :value="summary.matched" :value-style="{ color: '#67c23a' }" />
+          <el-statistic :title="$t('bank.bankReconcile.Auto')" :value="summary.matched" :value-style="{ color: '#67c23a' }" />
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="never">
-          <el-statistic title="人工处理" :value="summary.manual" :value-style="{ color: '#e6a23c' }" />
+          <el-statistic :title="$t('bank.bankReconcile.Manual')" :value="summary.manual" :value-style="{ color: '#e6a23c' }" />
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="never">
-          <el-statistic title="勾对总金额" :value="summary.totalAmount" :precision="2" :value-style="{ color: '#409eff' }" />
+          <el-statistic :title="$t('bank.bankReconcile.Total2')" :value="summary.totalAmount" :precision="2" :value-style="{ color: '#409eff' }" />
         </el-card>
       </el-col>
     </el-row>
@@ -38,12 +38,12 @@
           <el-radio-button value="MATCHED">已勾对</el-radio-button>
           <el-radio-button value="MANUAL">人工处理</el-radio-button>
         </el-radio-group>
-        <el-input v-model="searchKey" placeholder="搜索流水号/付款号..." clearable size="small" style="width:240px" @input="filterRows" />
-        <el-button type="primary" size="small" :loading="running" @click="runReconcile">一键勾对</el-button>
-        <el-button size="small" @click="loadReconcile">刷新</el-button>
-        <el-button size="small" @click="searchKey = ''; filterStatus = ''; loadReconcile()">重置</el-button>
-        <el-button v-if="canOpenSheet()" size="small" type="warning" @click="goSheet">调节表</el-button>
-        <el-button v-if="canOpenSlip()" size="small" @click="goSlip">回单认领</el-button>
+        <el-input v-model="searchKey" :placeholder="$t('bank.bankReconcile.Search')" clearable size="small" style="width:240px" @input="filterRows" />
+        <el-button type="primary" size="small" :loading="running" @click="runReconcile">{{ $t('bank.bankReconcile.Match') }}</el-button>
+        <el-button size="small" @click="loadReconcile">{{ $t('common.refresh') }}</el-button>
+        <el-button size="small" @click="searchKey = ''; filterStatus = ''; loadReconcile()">{{ $t('common.reset') }}</el-button>
+        <el-button v-if="canOpenSheet()" size="small" type="warning" @click="goSheet">{{ $t('bank.bankReconcile.Reconciliation') }}</el-button>
+        <el-button v-if="canOpenSlip()" size="small" @click="goSlip">{{ $t('bank.bankReconcile.Claim') }}</el-button>
       </div>
     </el-card>
 
@@ -54,7 +54,7 @@
         <el-card shadow="never">
           <template #header>
             <div class="panel-header">
-              <span class="panel-title">银行流水（对账记录）</span>
+              <span class="panel-title">{{ $t('bank.bankReconcile.Bank2') }}</span>
               <el-tag size="small" type="info">{{ bankRows.length }} 条</el-tag>
             </div>
           </template>
@@ -220,6 +220,8 @@ import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import CoachMark from '@/components/CoachMark.vue'
 import { pathDenyReason } from '@/router/pathAccess'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 兄弟页深链：本账号打不开的就不给按钮（点了被弹回工作台并提示无权限，等于假入口）
 const canOpenSheet = () => !pathDenyReason('/bank/reconcile-sheet')
@@ -355,7 +357,7 @@ async function runReconcile() {
     ElMessage({
       type: (unmatched > 0 || r?.selfMatchWarning) ? 'warning' : 'success',
       duration: 6000,
-      message: `自动勾对完成：勾对 ${matched} 条、未勾对 ${unmatched} 条`
+      message: `自动勾对完成：勾对 ${matched} 条、未勾对 ${unmatched} ${t('approval.main.Records')}`
         + (ambiguous > 0 ? `（其中同金额多候选拒配 ${ambiguous} 条，请人工勾对）` : '')
         + (foreign > 0 ? `（其中 ${foreign} 条的同金额付款已归属其他银行流水号，拒绝顶替）` : '')
         + (r?.selfMatchWarning ? `（${r.selfMatchWarning}）` : ''),
@@ -431,7 +433,7 @@ async function loadPendingCandidates() {
 // 人工勾对
 async function manualMatch() {
   if (selPendingBank.value.length !== 1 || selPendingPay.value.length !== 1) {
-    ElMessage.warning('请各勾选一条银行流水与一条付款记录（人工勾对一次只配一对）')
+    ElMessage.warning(t('bank.bankReconcile.Select'))
     return
   }
   const b = selPendingBank.value[0]
@@ -441,7 +443,7 @@ async function manualMatch() {
   const diff = Math.abs(bankAmount - payAmount)
   // 金额一致强制校验（与后端 AMOUNT_DIFF_TOLERANCE 双层同一规则，超差直接拒绝，不再"确认后仍勾对"）
   if (bankAmount <= 0) {
-    ElMessage.warning('所选流水金额缺失或非正数，无法勾对')
+    ElMessage.warning(t('bank.bankReconcile.Selected'))
     return
   }
   if (diff > 0.01) {
@@ -455,7 +457,7 @@ async function manualMatch() {
     ElMessage.error('人工勾对保存失败：' + (e.message || e))
     return
   }
-  ElMessage.success('人工勾对完成')
+  ElMessage.success(t('bank.bankReconcile.Manual2'))
   await loadReconcile()
   await loadPendingCandidates()
 }

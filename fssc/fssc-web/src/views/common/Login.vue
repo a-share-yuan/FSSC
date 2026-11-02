@@ -13,14 +13,14 @@
       <aside class="brand-side">
         <div class="brand-head">
           <img class="brand-logo-img" src="../../assets/FSSC_LOGO.png" alt="FSSC 财务共享" />
-          <h1 class="brand-title">集团财务<br />共享服务平台</h1>
+          <h1 class="brand-title">集团财务<br />{{ $t('login.main.Shared') }}</h1>
         </div>
         <p class="brand-sub">费控 · 共享 · 资金 · 全流程数字化审批</p>
         <ul class="brand-feats">
-          <li><el-icon><Connection /></el-icon><div><strong>业财税金 · 全流程贯通</strong><span>费用、应付、应收、总账、资产、税务、资金、合同八大业务域，单据到凭证全链路闭环</span></div></li>
-          <li><el-icon><Tickets /></el-icon><div><strong>智能三单匹配 · 识票验真</strong><span>采购订单/入库/发票自动比对，OCR 识票、验真验重、数电票一键认证抵扣</span></div></li>
-          <li><el-icon><Link /></el-icon><div><strong>产业链协同</strong><span>供应商门户与客户门户，在线对账、开票、付款状态实时同步</span></div></li>
-          <li><el-icon><Money /></el-icon><div><strong>银企直联 · 资金统筹</strong><span>银企直联一键付款，资金池归集下拨，现金流实时滚动预测</span></div></li>
+          <li><el-icon><Connection /></el-icon><div><strong>{{ $t('login.main.Finance') }}</strong><span>{{ $t('login.main.Eight') }}</span></div></li>
+          <li><el-icon><Tickets /></el-icon><div><strong>{{ $t('login.main.Smart') }}</strong><span>{{ $t('login.main.Automatically') }}</span></div></li>
+          <li><el-icon><Link /></el-icon><div><strong>{{ $t('login.main.Supply') }}</strong><span>{{ $t('login.main.Supplier') }}</span></div></li>
+          <li><el-icon><Money /></el-icon><div><strong>{{ $t('login.main.Bank') }}</strong><span>{{ $t('login.main.One') }}</span></div></li>
         </ul>
         <p class="brand-foot">© 2026 FSSC 财务共享服务中心</p>
       </aside>
@@ -28,32 +28,32 @@
       <!-- 右侧表单区 -->
       <main class="form-side">
         <div class="form-box">
-          <h2 class="form-title">企业员工登录</h2>
+          <h2 class="form-title">{{ $t('login.main.Employee') }}</h2>
           <p class="form-sub">使用企业编码与员工工号进入办公门户</p>
 
           <el-form :model="form" :rules="loginRules" label-position="top" size="large" @submit.prevent="doLogin">
-            <el-form-item label="企业编码" prop="tenantCode">
-              <el-input v-model="form.tenantCode" placeholder="请输入企业编码" :prefix-icon="OfficeBuilding" clearable />
+            <el-form-item :label="$t('login.main.Enterprise')" prop="tenantCode">
+              <el-input v-model="form.tenantCode" :placeholder="$t('login.main.Enter')" :prefix-icon="OfficeBuilding" clearable />
             </el-form-item>
-            <el-form-item label="账号" prop="username">
-              <el-input v-model="form.username" placeholder="请输入工号或用户名" :prefix-icon="User" clearable maxlength="64" />
+            <el-form-item :label="$t('login.main.Account')" prop="username">
+              <el-input v-model="form.username" :placeholder="$t('login.main.Enter2')" :prefix-icon="User" clearable maxlength="64" />
             </el-form-item>
-            <el-form-item label="密码" prop="password">
-              <el-input v-model="form.password" type="password" show-password placeholder="请输入登录密码" :prefix-icon="Lock" @keyup.enter="doLogin" />
+            <el-form-item :label="$t('login.main.Password')" prop="password">
+              <el-input v-model="form.password" type="password" show-password :placeholder="$t('login.main.Please')" :prefix-icon="Lock" @keyup.enter="doLogin" />
             </el-form-item>
             <!-- 图形验证码：仅在服务端回 4011/4012（连续失败达阈值）时出现，平时不打扰登录 -->
-            <el-form-item v-if="captchaVisible" label="图形验证码" prop="captchaCode">
+            <el-form-item v-if="captchaVisible" :label="$t('login.main.Captcha')" prop="captchaCode">
               <div class="captcha-line">
-                <el-input v-model="form.captchaCode" placeholder="请输入图中字符" :prefix-icon="Picture" maxlength="6" clearable @keyup.enter="doLogin" />
+                <el-input v-model="form.captchaCode" :placeholder="$t('login.main.Enter3')" :prefix-icon="Picture" maxlength="6" clearable @keyup.enter="doLogin" />
                 <img
                   v-if="captchaSrc"
                   class="captcha-img"
                   :src="captchaSrc"
                   alt="点击刷新验证码"
-                  title="看不清？点击刷新"
+                  :title="$t('login.main.Can')"
                   @click="loadCaptcha"
                 />
-                <el-button v-else class="captcha-img captcha-img-fallback" :loading="captchaLoading" @click="loadCaptcha">获取</el-button>
+                <el-button v-else class="captcha-img captcha-img-fallback" :loading="captchaLoading" @click="loadCaptcha">{{ $t('common.get') }}</el-button>
               </div>
               <div class="captcha-hint">连续登录失败次数已达阈值，请输入右侧字符（点击图片可换一张）</div>
             </el-form-item>
@@ -63,7 +63,7 @@
                 <el-icon class="row-link-icon"><Platform /></el-icon>平台管理员入口
               </el-link>
             </div>
-            <el-button class="submit-btn" type="primary" size="large" :loading="loading" @click="doLogin">登 录</el-button>
+            <el-button class="submit-btn" type="primary" size="large" :loading="loading" @click="doLogin">{{ $t('login.main.Sign') }}</el-button>
             <el-alert v-if="error" :title="error" type="error" :closable="false" class="error-tip" />
             <div class="reg-link">
               <el-link type="primary" :underline="false" @click="regVisible = true">企业还没有账号？立即注册</el-link>
@@ -74,53 +74,53 @@
     </div>
 
     <!-- 企业自助注册弹窗 -->
-    <el-dialog v-model="regVisible" title="企业注册" width="480px" destroy-on-close>
+    <el-dialog v-model="regVisible" :title="$t('login.main.Enterprise2')" width="480px" destroy-on-close>
       <el-form :model="reg" :rules="regRules" label-width="100px" size="default">
-        <el-form-item label="企业编码" prop="tenantCode" required>
-          <el-input v-model="reg.tenantCode" placeholder="2-20 位大写字母/数字/下划线，登录用" maxlength="64" />
+        <el-form-item :label="$t('login.main.Enterprise')" prop="tenantCode" required>
+          <el-input v-model="reg.tenantCode" :placeholder="$t('login.main.Uppercase')" maxlength="64" />
         </el-form-item>
-        <el-form-item label="企业名称" prop="tenantName" required>
-          <el-input v-model="reg.tenantName" placeholder="企业全称" />
+        <el-form-item :label="$t('login.main.Enterprise3')" prop="tenantName" required>
+          <el-input v-model="reg.tenantName" :placeholder="$t('login.main.Full')" />
         </el-form-item>
-        <el-form-item label="企业简称" prop="shortName">
+        <el-form-item :label="$t('login.main.Enterprise4')" prop="shortName">
           <el-input v-model="reg.shortName" />
         </el-form-item>
-        <el-form-item label="统一信用码" prop="creditCode">
+        <el-form-item :label="$t('login.main.Unified')" prop="creditCode">
           <el-input v-model="reg.creditCode" maxlength="64" />
         </el-form-item>
-        <el-form-item label="行业" prop="industry">
+        <el-form-item :label="$t('login.main.Industry')" prop="industry">
           <el-select v-model="reg.industry" clearable style="width: 100%">
-            <el-option label="制造业" value="MANUFACTURING" />
-            <el-option label="批发零售" value="TRADE" />
-            <el-option label="信息技术" value="IT" />
-            <el-option label="服务业" value="SERVICE" />
-            <el-option label="其他" value="OTHER" />
+            <el-option :label="$t('login.main.Manufacturing')" value="MANUFACTURING" />
+            <el-option :label="$t('login.main.Wholesale')" value="TRADE" />
+            <el-option :label="$t('login.main.Information')" value="IT" />
+            <el-option :label="$t('login.main.Service')" value="SERVICE" />
+            <el-option :label="$t('login.main.Other')" value="OTHER" />
           </el-select>
         </el-form-item>
-        <el-form-item label="企业规模" prop="scale">
+        <el-form-item :label="$t('login.main.Enterprise5')" prop="scale">
           <el-select v-model="reg.scale" clearable style="width: 100%">
-            <el-option label="微型" value="MICRO" />
-            <el-option label="小型" value="SMALL" />
-            <el-option label="中型" value="MEDIUM" />
-            <el-option label="大型" value="LARGE" />
+            <el-option :label="$t('login.main.Micro')" value="MICRO" />
+            <el-option :label="$t('login.main.Small')" value="SMALL" />
+            <el-option :label="$t('login.main.Medium')" value="MEDIUM" />
+            <el-option :label="$t('login.main.Large')" value="LARGE" />
           </el-select>
         </el-form-item>
-        <el-form-item label="联系人" prop="contactName" required>
+        <el-form-item :label="$t('login.main.Contact')" prop="contactName" required>
           <el-input v-model="reg.contactName" maxlength="50" />
         </el-form-item>
-        <el-form-item label="联系电话" prop="contactPhone" required>
+        <el-form-item :label="$t('login.main.Contact2')" prop="contactPhone" required>
           <el-input v-model="reg.contactPhone" maxlength="30" />
         </el-form-item>
-        <el-form-item label="联系邮箱" prop="contactEmail">
+        <el-form-item :label="$t('login.main.Contact3')" prop="contactEmail">
           <el-input v-model="reg.contactEmail" />
         </el-form-item>
-        <el-form-item label="申请说明" prop="remark">
+        <el-form-item :label="$t('login.main.Application')" prop="remark">
           <el-input v-model="reg.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="regVisible = false">取消</el-button>
-        <el-button type="primary" :loading="regLoading" @click="doRegister">提交注册</el-button>
+        <el-button @click="regVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="regLoading" @click="doRegister">{{ $t('login.main.Submit') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -133,6 +133,8 @@ import { ElMessage } from 'element-plus'
 import { OfficeBuilding, User, Lock, Tickets, Connection, Link, Money, Platform, Picture } from '@element-plus/icons-vue'
 import { login, registerTenant, store, getCaptcha, CAPTCHA_ERROR_CODES, clearGlobalOverlays } from '../../api'
 import { hasPerm } from '../../utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const router = useRouter()
 const form = reactive({ tenantCode: '', username: '', password: '', rememberMe: false, captchaId: '', captchaCode: '' })
@@ -156,16 +158,16 @@ const reg = reactive({
 })
 
 const loginRules = reactive({
-  tenantCode: [{ required: true, message: '请输入企业编码' }],
-  username: [{ required: true, message: '请输入账号' }],
-  password: [{ required: true, message: '请输入密码' }],
+  tenantCode: [{ required: true, message: t('login.main.Enter') }],
+  username: [{ required: true, message: t('login.main.Please2') }],
+  password: [{ required: true, message: t('login.main.Please3') }],
 })
 
 const regRules = reactive({
-  tenantCode: [{ required: true, message: '请输入企业编码' }],
-  tenantName: [{ required: true, message: '请输入企业名称' }],
-  contactName: [{ required: true, message: '请输入联系人' }],
-  contactPhone: [{ required: true, message: '请输入联系电话' }],
+  tenantCode: [{ required: true, message: t('login.main.Enter') }],
+  tenantName: [{ required: true, message: t('login.main.Please4') }],
+  contactName: [{ required: true, message: t('login.main.Please5') }],
+  contactPhone: [{ required: true, message: t('login.main.Please6') }],
   contactEmail: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }],
 })
 
@@ -203,7 +205,7 @@ async function doLogin() {
     // 快速切换账号时，上一会话挂在 body 上的提示条/确认框不会随路由卸载：
     // 登录成功即清场，避免新用户看到前任的提醒（本条「登录成功」在清场之后再弹）。
     clearGlobalOverlays()
-    ElMessage.success('登录成功')
+    ElMessage.success(t('login.main.Signed'))
     // USG-01: 落地页按权限分流 —— 无 dashboard:view 的角色落工作台,避免默认页触发6个无权限聚合调用
     // 同族第三处落点：判定必须走 hasPerm()，否则 admin 的 *:*:* 通配码被 includes() 误判为无权、
     // 管理员登录会被分流到 /workbench 而不是 /dashboard（store.user 已在上一行赋好，此处读得到新 perms）
@@ -225,7 +227,7 @@ async function doLogin() {
 
 async function doRegister() {
   if (!reg.tenantCode || !reg.tenantName || !reg.contactName || !reg.contactPhone) {
-    ElMessage.warning('请填写企业编码、企业名称、联系人、联系电话')
+    ElMessage.warning(t('login.main.Fill'))
     return
   }
   regLoading.value = true
@@ -233,7 +235,7 @@ async function doRegister() {
     await registerTenant({ ...reg })
     // 此处原有一枚「管理员账号＋初始口令」明文提示，并被下方预填进登录表单 ⇒ 初始口令等同公开
     // （任何读过发布件的人都可用该口令登录新开通租户）。文案改为指向平台下发流程，初始口令不再出现在前端。
-    ElMessage.success('注册申请已提交，请等待平台审核开通；管理员账号为 admin_{企业编码}，初始口令请向平台管理员索取')
+    ElMessage.success(t('login.main.Registration'))
     regVisible.value = false
     form.tenantCode = reg.tenantCode.toUpperCase()
     form.username = 'admin_' + reg.tenantCode.toLowerCase()

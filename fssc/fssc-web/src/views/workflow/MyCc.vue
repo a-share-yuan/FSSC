@@ -6,10 +6,10 @@
     <el-card shadow="never">
       <template #header>
         <div class="mc-head">
-          <span>我的抄送</span>
+          <span>{{ $t('workflow.myCc.My') }}</span>
           <div class="mc-head-right">
             <el-tag size="small" type="warning" v-if="unread > 0">未读 {{ unread }}</el-tag>
-            <el-button link type="primary" size="small" @click="load">刷新</el-button>
+            <el-button link type="primary" size="small" @click="load">{{ $t('common.refresh') }}</el-button>
           </div>
         </div>
       </template>
@@ -52,6 +52,8 @@ import { goBizPage } from '@/utils/bizEntry'
 import { formatDateTime } from '../../utils/format'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const router = useRouter()
 
@@ -109,10 +111,10 @@ function open(row) {
     // 与他域主键撞号时打开的就是别人的单据全链（含他人审批意见）——宁可不打开，也不能猜关联点。
     const bizId = row.bizId != null ? row.bizId : row.billId
     if (bizId == null || !row.bizType) {
-      ElMessage.warning('该抄送记录缺少单据域或单据主键，无法定位全链路；请从原单据的「追溯」入口进入')
+      ElMessage.warning(t('workflow.myCc.This'))
       return
     }
-    ElMessage.info('当前账号不能直接进入该单据的业务页面，已打开全链路追溯')
+    ElMessage.info(t('common.workbench.Current4'))
     traceBillId.value = bizId
     traceBizType.value = row.bizType
     traceVisible.value = true

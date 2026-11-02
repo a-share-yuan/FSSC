@@ -16,9 +16,9 @@
             <div class="card-header">
               <span class="header-title">{{ title }}</span>
               <div>
-                <el-button size="small" @click="expandAll">展开</el-button>
-                <el-button size="small" @click="collapseAll">收起</el-button>
-                <el-button v-if="canCreate" type="primary" size="small" @click="addRoot">新增根节点</el-button>
+                <el-button size="small" @click="expandAll">{{ $t('common.expand') }}</el-button>
+                <el-button size="small" @click="collapseAll">{{ $t('common.collapse') }}</el-button>
+                <el-button v-if="canCreate" type="primary" size="small" @click="addRoot">{{ $t('master.masterDataTree.Add') }}</el-button>
               </div>
             </div>
           </template>
@@ -163,6 +163,8 @@ import { hasPerm } from '../../utils/perm'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const props = defineProps({
   mode: { type: String, required: true }, // 'subject' | 'costCenter'
@@ -353,7 +355,7 @@ async function save() {
     } else {
       await api.value.create({ ...selectedNode.value })
     }
-    ElMessage.success('保存成功')
+    ElMessage.success(t('budget.budgetAdjust.Saved'))
     await loadTree()
   } catch (e) { ElMessage.error(e.message) } finally { saving.value = false }
 }
@@ -362,7 +364,7 @@ async function toggleEnable() {
   const enable = selectedNode.value.status !== 'NORMAL'
   try {
     await api.value.enable(selectedNode.value.id, enable)
-    ElMessage.success(enable ? '已启用' : '已停用')
+    ElMessage.success(t('budget.budgetScheme.Disabled'))
     selectedNode.value.status = enable ? 'NORMAL' : 'DISABLED'
     await loadTree()
   } catch (e) { ElMessage.error(e.message) }
@@ -372,7 +374,7 @@ async function del() {
   try {
     await ElMessageBox.confirm(`确认删除「${getCode(selectedNode.value)} ${findName(selectedNode.value.id)}」？`, '删除', { type: 'warning' })
     await api.value.delete(selectedNode.value.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('useCrud.main.Deleted'))
     selectedNode.value = null
     await loadTree()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }

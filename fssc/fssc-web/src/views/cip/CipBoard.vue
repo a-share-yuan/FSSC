@@ -6,9 +6,9 @@
     <el-card>
     <template #header>
       <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap">
-        <b>在建工程中心</b>
-        <span style="color: #909399; font-size: 12px">在建工程卡片 / 成本归集 / 转固定资产 —— 归集成本、监督余额、转固进固定资产全流程</span>
-        <el-button type="info" size="small" style="margin-left: auto" @click="load">刷新</el-button>
+        <b>{{ $t('cip.main.Construction') }}</b>
+        <span style="color: #909399; font-size: 12px">{{ $t('cip.main.Construction2') }}</span>
+        <el-button type="info" size="small" style="margin-left: auto" @click="load">{{ $t('common.refresh') }}</el-button>
       </div>
     </template>
 
@@ -169,6 +169,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { cipApi, orgApi, assetApi } from '../../api'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 枚举
 // 工程类别名称表已并入 constants/enums.js 的 PROJECT_CATEGORY（本地原缺 TECH_REVAMP，导致该值显示为「—」）
@@ -273,7 +275,7 @@ async function saveForm() {
     try {
       const body = { ...form }
       if (body.id) { await cipApi.update(body) } else { await cipApi.create(body) }
-      ElMessage.success('已保存'); dlgForm.value = false; load()
+      ElMessage.success(t('useCrud.main.Saved')); dlgForm.value = false; load()
     } catch (e) { ElMessage.error(e.message) }
   })
 }
@@ -281,7 +283,7 @@ async function del(row) {
   try {
     await ElMessageBox.confirm('确认删除该在建工程？', '提示', { type: 'warning' })
     await cipApi.delete(row.id)
-    ElMessage.success('已删除'); load()
+    ElMessage.success(t('useCrud.main.Deleted')); load()
   } catch (e) { /* cancelled */ }
 }
 
@@ -299,7 +301,7 @@ async function addCostRow() {
   await guardAddCost(async () => {
     try {
       await cipApi.costAdd(costCip.value.id, { costType: costForm.costType, amount: costForm.amount, occurDate: costForm.occurDate || null, description: costForm.description })
-      ElMessage.success('已归集'); costForm.costType = ''; costForm.amount = null; costForm.occurDate = ''; costForm.description = ''
+      ElMessage.success(t('cip.main.Collected')); costForm.costType = ''; costForm.amount = null; costForm.occurDate = ''; costForm.description = ''
       await loadCosts(costCip.value.id); load()
     } catch (e) { ElMessage.error(e.message) }
   })
@@ -307,7 +309,7 @@ async function addCostRow() {
 async function delCostRow(row) {
   try {
     await cipApi.costDelete(row.id)
-    ElMessage.success('已删除'); await loadCosts(costCip.value.id); load()
+    ElMessage.success(t('useCrud.main.Deleted')); await loadCosts(costCip.value.id); load()
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -322,7 +324,7 @@ async function confirmTransfer() {
   await guardTransfer(async () => {
     try {
       await cipApi.transferToAsset(transferRow.value.id, { ...transferForm })
-      ElMessage.success('已提交转固审批'); dlgTransfer.value = false; load()
+      ElMessage.success(t('cip.main.Capitalization')); dlgTransfer.value = false; load()
     } catch (e) { ElMessage.error(e.message) }
   })
 }

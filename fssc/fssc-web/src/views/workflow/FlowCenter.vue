@@ -11,8 +11,8 @@
           <div class="fc-sub">跨业务域统一流程入口：待办 · 已办 · 我发起 · 抄送 · 委托 · 监控</div>
         </div>
         <div class="fc-head-actions">
-          <el-button type="primary" @click="go('/requisition/todo')">去处理待办</el-button>
-          <el-button @click="go('/requisition/mine')">我发起的</el-button>
+          <el-button type="primary" @click="go('/requisition/todo')">{{ $t('workflow.flow.Go') }}</el-button>
+          <el-button @click="go('/requisition/mine')">{{ $t('workflow.flow.Started') }}</el-button>
         </div>
       </div>
     </el-card>
@@ -36,11 +36,11 @@
           <span>流程效率（近 {{ perfDays }} 天）</span>
           <div class="fc-perf-actions">
             <el-select v-model="perfDays" size="small" style="width:110px" @change="loadPerf">
-              <el-option :value="7" label="近 7 天" />
-              <el-option :value="30" label="近 30 天" />
-              <el-option :value="90" label="近 90 天" />
+              <el-option :value="7" :label="$t('workflow.flow.Last')" />
+              <el-option :value="30" :label="$t('workflow.flow.Last2')" />
+              <el-option :value="90" :label="$t('workflow.flow.Last3')" />
             </el-select>
-            <el-button link type="primary" size="small" @click="go('/flow-monitor')">监控大屏 / 效率分析</el-button>
+            <el-button link type="primary" size="small" @click="go('/flow-monitor')">{{ $t('workflow.flow.Monitoring') }}</el-button>
           </div>
         </div>
       </template>
@@ -110,6 +110,8 @@ import { hasPerm } from '../../utils/perm'
 import { goBizPage, resolveBillRoute } from '@/utils/bizEntry'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const router = useRouter()
 
@@ -189,14 +191,14 @@ function handle(row) {
     traceBillId.value = row.bizId || row.billId || row.id
     traceBizType.value = row.bizType || row.billType || null
     traceVisible.value = true
-    ElMessage.info('当前账号无发票池查看权限（inv:list），已打开全链路追溯')
+    ElMessage.info(t('workflow.flow.Current'))
     return
   }
   if (!goBizPage(router, row)) {
     traceBillId.value = row.bizId || row.billId || row.id
     traceBizType.value = row.bizType || row.billType || null
     traceVisible.value = true
-    ElMessage.info('当前账号不能直接进入该单据的业务页面，已打开全链路追溯')
+    ElMessage.info(t('common.workbench.Current4'))
   }
 }
 

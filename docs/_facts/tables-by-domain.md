@@ -1,6 +1,6 @@
 # 表清单（按业务域分组）
 
-> 由 `_tools/inventory.mjs` 同源生成。数据源 = 源码 `@TableName` 注解，共 258 张。
+> 由 `_tools/inventory.mjs` 同源生成。数据源 = 源码 `@TableName` 注解，共 259 张。
 > 未映射到实体的表（视图/临时表/纯 SQL 表）不在此列，真实 schema 以 `mysqldump --no-data` 为准。
 
 ## `masterdata` — 51 张
@@ -101,6 +101,11 @@
 `bg_adjust` · `bg_adjust_line` · `bg_item` · `bg_occupy`
 `bg_scheme`
 
+## `document` — 5 张
+
+`archive_access_log` · `archive_attachment` · `archive_destroy_approval` · `op_archive`
+`op_archive_item`
+
 ## `invoice` — 5 张
 
 `inv_bill_invoice` · `inv_invoice` · `inv_invoice_global` · `inv_invoice_line`
@@ -113,10 +118,6 @@
 ## `collab` — 4 张
 
 `collab_ccp_shipping` · `collab_scp_bill` · `collab_scp_recon` · `collab_sync_log`
-
-## `document` — 4 张
-
-`archive_access_log` · `archive_attachment` · `archive_destroy_approval` · `op_archive`
 
 ## `returns` — 4 张
 
@@ -179,4 +180,4 @@
 | 表 | 被这些域映射 |
 |---|---|
 
-共 0 张表存在跨域映射（占 258 张的 0%）。
+共 0 张表存在跨域映射（占 259 张的 0%）。

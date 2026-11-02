@@ -24,9 +24,9 @@
           </div>
         </div>
         <div class="user-actions">
-          <el-button size="small" plain @click="router.push('/')"><el-icon><Back /></el-icon>&nbsp;返回主页</el-button>
-          <el-button type="primary" size="small" @click="openEditProfile">编辑资料</el-button>
-          <el-button type="warning" plain size="small" @click="openChangePassword">修改密码</el-button>
+          <el-button size="small" plain @click="router.push('/')"><el-icon><Back /></el-icon>{{ $t('common.profile.Nbsp') }}</el-button>
+          <el-button type="primary" size="small" @click="openEditProfile">{{ $t('common.profile.Edit') }}</el-button>
+          <el-button type="warning" plain size="small" @click="openChangePassword">{{ $t('common.profile.Change') }}</el-button>
           <el-dropdown trigger="click" @command="onMoreAction">
             <el-button size="small" plain>更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
             <template #dropdown>
@@ -276,6 +276,8 @@ import {
   CircleCheck, ArrowDown, ArrowRight, Folder, Search, Back,
 } from '@element-plus/icons-vue'
 import { formatDate, formatDateTime } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const router = useRouter()
 const user = store.user
@@ -307,25 +309,25 @@ const emailVisible = ref(false)
 const emailForm = ref({ newEmail: '', verifyCode: '' })
 
 const editProfileRules = {
-  nickName: [{ required: true, message: '请输入姓名' }],
+  nickName: [{ required: true, message: t('common.profile.Please') }],
   phone: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号格式', trigger: 'blur' }],
   email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }],
 }
 
 const pwdRules = {
-  oldPassword: [{ required: true, message: '请输入旧密码' }],
-  newPassword: [{ required: true, message: '请输入新密码' }, { min: 6, message: '密码至少6位', trigger: 'blur' }],
-  confirmPassword: [{ required: true, message: '请确认密码' }],
+  oldPassword: [{ required: true, message: t('common.profile.Please2') }],
+  newPassword: [{ required: true, message: t('common.profile.Please3') }, { min: 6, message: '密码至少6位', trigger: 'blur' }],
+  confirmPassword: [{ required: true, message: t('common.profile.Confirm') }],
 }
 
 const phoneRules = {
-  newPhone: [{ required: true, message: '请输入新手机号' }, { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号格式', trigger: 'blur' }],
-  verifyCode: [{ required: true, message: '请输入验证码' }],
+  newPhone: [{ required: true, message: t('common.profile.Enter') }, { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号格式', trigger: 'blur' }],
+  verifyCode: [{ required: true, message: t('common.profile.Please4') }],
 }
 
 const emailRules = {
-  newEmail: [{ required: true, message: '请输入新邮箱' }, { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }],
-  verifyCode: [{ required: true, message: '请输入验证码' }],
+  newEmail: [{ required: true, message: t('common.profile.Please5') }, { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }],
+  verifyCode: [{ required: true, message: t('common.profile.Please4') }],
 }
 
 // 头像首字母
@@ -485,21 +487,21 @@ function openEditProfile() {
 
 async function saveProfile() {
   if (editForm.value.phone && !/^1[3-9]\d{9}$/.test(editForm.value.phone)) {
-    ElMessage.warning('手机号格式不正确')
+    ElMessage.warning(t('common.profile.Invalid'))
     return
   }
   if (editForm.value.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.value.email)) {
-    ElMessage.warning('邮箱格式不正确')
+    ElMessage.warning(t('common.profile.Invalid2'))
     return
   }
   saving.value = true
   try {
     await profileApi.update(editForm.value)
-    ElMessage.success('更新成功')
+    ElMessage.success(t('common.profile.Updated'))
     editVisible.value = false
     loadProfile()
   } catch (e) {
-    ElMessage.error(e.message || '更新失败')
+    ElMessage.error(t('common.profile.Update'))
   } finally {
     saving.value = false
   }
@@ -512,22 +514,22 @@ function openChangePassword() {
 
 async function savePassword() {
   if (pwdForm.value.newPassword !== pwdForm.value.confirmPassword) {
-    ElMessage.warning('两次输入的密码不一致')
+    ElMessage.warning(t('common.profile.Two'))
     return
   }
   if (pwdForm.value.newPassword.length < 6) {
-    ElMessage.warning('新密码至少6位')
+    ElMessage.warning(t('common.profile.New'))
     return
   }
   saving.value = true
   try {
     await profileApi.changePassword({ oldPassword: pwdForm.value.oldPassword, newPassword: pwdForm.value.newPassword })
-    ElMessage.success('密码修改成功，请重新登录')
+    ElMessage.success(t('common.profile.Password'))
     pwdVisible.value = false
     store.logout()
     location.hash = '#/login'
   } catch (e) {
-    ElMessage.error(e.message || '修改失败')
+    ElMessage.error(t('common.profile.Update2'))
   } finally {
     saving.value = false
   }
@@ -540,17 +542,17 @@ function openChangePhone() {
 
 async function savePhone() {
   if (!/^1[3-9]\d{9}$/.test(phoneForm.value.newPhone)) {
-    ElMessage.warning('手机号格式不正确')
+    ElMessage.warning(t('common.profile.Invalid'))
     return
   }
   saving.value = true
   try {
     await profileApi.changePhone(phoneForm.value)
-    ElMessage.success('手机号更换成功')
+    ElMessage.success(t('common.profile.Mobile'))
     phoneVisible.value = false
     loadProfile()
   } catch (e) {
-    ElMessage.error(e.message || '更换失败')
+    ElMessage.error(t('common.profile.Change2'))
   } finally {
     saving.value = false
   }
@@ -563,17 +565,17 @@ function openChangeEmail() {
 
 async function saveEmail() {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailForm.value.newEmail)) {
-    ElMessage.warning('邮箱格式不正确')
+    ElMessage.warning(t('common.profile.Invalid2'))
     return
   }
   saving.value = true
   try {
     await profileApi.changeEmail(emailForm.value)
-    ElMessage.success('邮箱更换成功')
+    ElMessage.success(t('common.profile.Email'))
     emailVisible.value = false
     loadProfile()
   } catch (e) {
-    ElMessage.error(e.message || '更换失败')
+    ElMessage.error(t('common.profile.Change2'))
   } finally {
     saving.value = false
   }

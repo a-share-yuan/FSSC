@@ -20,10 +20,10 @@
       <div class="ai-header">
         <div class="ai-title">
           <el-icon><ChatRound /></el-icon>
-          <span>AI 助手</span>
+          <span>{{ $t('AIAssistant.main.AI') }}</span>
         </div>
         <div class="ai-header-right">
-          <el-button link size="small" @click="switchTab('chat')">对话</el-button>
+          <el-button link size="small" @click="switchTab('chat')">{{ $t('AIAssistant.main.Chat') }}</el-button>
           <el-button link size="small" @click="switchTab('confirm')">
             待我确认<template v-if="confirmList.length">（{{ confirmList.length }}）</template>
           </el-button>

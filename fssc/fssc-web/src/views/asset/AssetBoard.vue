@@ -6,9 +6,9 @@
     <el-card>
     <template #header>
       <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap">
-        <b>资产与存货管理</b>
-        <span style="color: #909399; font-size: 12px">资产卡片 / 资产类别 / 存货收发存 / 税会差异 —— 折旧、报废、出入库全流程可视化</span>
-        <el-button type="info" size="small" style="margin-left: auto" @click="reload">刷新</el-button>
+        <b>{{ $t('asset.main.Asset') }}</b>
+        <span style="color: #909399; font-size: 12px">{{ $t('asset.main.Asset2') }}</span>
+        <el-button type="info" size="small" style="margin-left: auto" @click="reload">{{ $t('common.refresh') }}</el-button>
       </div>
     </template>
 

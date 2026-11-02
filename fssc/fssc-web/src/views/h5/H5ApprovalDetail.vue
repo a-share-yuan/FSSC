@@ -7,8 +7,8 @@
       <!-- 同类修复：这里的返回原来是 `history.state`，而 setup 里有一个名为 history 的
            ref（审批历史数组），把 window.history 遮蔽了 ⇒ 判断恒假，返回永远只能回工作台。
            现用真 router 返回。 -->
-      <button class="h5-back" aria-label="返回" @click="leave">&lt;</button>
-      <span class="h5-header__title">审批详情</span>
+      <button class="h5-back" :aria-label="$t('common.back')" @click="leave">&lt;</button>
+      <span class="h5-header__title">{{ $t('h5.approvalDetail.Approval') }}</span>
       <span class="h5-header__sub">{{ myName }}</span>
     </header>
 
@@ -321,6 +321,8 @@ import { statusType as _statusType, statusLabel as _statusLabel } from '../../co
 import { verifyStatusLabel, docTypeLabel, wfActionLabel, wfActionType, wfNodeStateLabel, wfNodeStateType } from '../../constants/enums'
 import { money, dayText, permDeniedOf, isExpBillCarrier } from '@/utils/h5.js'
 import { formatDateTime } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 defineOptions({ name: 'H5ApprovalDetail' })
 
@@ -577,7 +579,7 @@ function requireOpinion(ok) {
   const c = String(comment.value || '').trim()
   if (c.length < 2) {
     // 原先留空会被静默补成「同意/驳回」——等于系统替审批人签了个字，现在一律拦回
-    ElMessage.warning(ok ? '请填写审批意见（不少于 2 个字）' : '请填写驳回原因（不少于 2 个字）')
+    ElMessage.warning(t('h5.approvalDetail.Fill'))
     return null
   }
   return c
@@ -590,12 +592,12 @@ async function decide(ok) {
   if (ok && nextBlock.value?.pick) {
     if (!nextBlock.value.candidates.length) {
       nextErr.value = true
-      ElMessage.warning('下一环节没有可选办理人，请先在「系统管理 · 角色授权」补岗')
+      ElMessage.warning(t('h5.approvalDetail.No'))
       return
     }
     if (!nextUserId.value) {
       nextErr.value = true
-      ElMessage.warning('请先指定下一环节办理人')
+      ElMessage.warning(t('h5.approvalDetail.Specify'))
       return
     }
   }
@@ -615,10 +617,10 @@ async function decide(ok) {
       comment: c,
       nextAssigneeUserId: ok && nextUserId.value ? nextUserId.value : null,
     })
-    ElMessage.success(ok ? '已通过' : '已驳回')
+    ElMessage.success(t('purchase.poOrder.Rejected'))
     router.replace('/h5')
   } catch (e) {
-    ElMessage.error(e.message || '办理失败')
+    ElMessage.error(t('h5.approvalDetail.Handling'))
   } finally { busy.value = false }
 }
 
@@ -661,15 +663,15 @@ function tapCandidate(c) {
   picked.value = isPicked(c.userId) ? picked.value.filter((x) => String(x) !== String(c.userId)) : [...picked.value, c.userId]
 }
 async function confirmPick() {
-  if (!picked.value.length) return ElMessage.warning('请先选人')
+  if (!picked.value.length) return ElMessage.warning(t('h5.approvalDetail.Select'))
   const reason = String(pickReason.value || '').trim()
-  if (pickMode.value === 'addSign' && reason.length < 2) return ElMessage.warning('加签理由必填（不少于 2 个字）')
-  if (pickMode.value === 'transfer' && reason.length < 2) return ElMessage.warning('转办说明必填（审批人要看得见为什么转）')
+  if (pickMode.value === 'addSign' && reason.length < 2) return ElMessage.warning(t('h5.approvalDetail.Reason'))
+  if (pickMode.value === 'transfer' && reason.length < 2) return ElMessage.warning(t('h5.approvalDetail.Reassignment'))
   busy.value = true
   try {
     if (pickMode.value === 'transfer') {
       await wfApi.transfer({ taskId: taskId.value, targetUserId: picked.value[0], comment: reason })
-      ElMessage.success('已转办')
+      ElMessage.success(t('h5.approvalDetail.Reassigned'))
     } else {
       await wfApi.addSign({
         taskId: taskId.value,
@@ -677,12 +679,12 @@ async function confirmPick() {
         signUsers: picked.value.join(','),
         reason,
       })
-      ElMessage.success('已加签')
+      ElMessage.success(t('h5.approvalDetail.Signer'))
     }
     closePick()
     router.replace('/h5')
   } catch (e) {
-    ElMessage.error(e.message || '操作失败')
+    ElMessage.error(t('common.failed'))
   } finally { busy.value = false }
 }
 

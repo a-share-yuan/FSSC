@@ -4,16 +4,16 @@
 <template>
   <div>
     <div style="display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap">
-      <el-button type="primary" @click="loadTaxDiff">刷新税会差异</el-button>
-      <el-button @click="doExport">导出</el-button>
-      <span style="color: #909399; font-size: 12px">会计折旧与税法折旧差异汇总，支撑企业所得税 A105080「固定资产折旧纳税调整」</span>
+      <el-button type="primary" @click="loadTaxDiff">{{ $t('asset.taxDiff.Refresh') }}</el-button>
+      <el-button @click="doExport">{{ $t('common.export') }}</el-button>
+      <span style="color: #909399; font-size: 12px">{{ $t('asset.taxDiff.Summary') }}</span>
     </div>
     <SkeletonList v-if="taxDiffLoading" :rows="8" :cols="5" />
-    <el-table :data="taxDiffs" size="small" border stripe v-else empty-text="暂无税会差异数据" v-loading="taxDiffLoading" @row-dblclick="openRowDetail">
+    <el-table :data="taxDiffs" size="small" border stripe v-else :empty-text="$t('asset.taxDiff.No')" v-loading="taxDiffLoading" @row-dblclick="openRowDetail">
       <el-table-column type="selection" width="45" />
-      <el-table-column prop="assetNo" label="资产编号" width="140" sortable />
-      <el-table-column prop="assetName" label="资产名称" min-width="150" show-overflow-tooltip sortable />
-      <el-table-column label="原值" width="110" align="right">
+      <el-table-column prop="assetNo" :label="$t('asset.assetCard.Asset2')" width="140" sortable />
+      <el-table-column prop="assetName" :label="$t('asset.taxDiff.Asset')" min-width="150" show-overflow-tooltip sortable />
+      <el-table-column :label="$t('asset.taxDiff.Original')" width="110" align="right">
         <template #default="{ row }">{{ fmt(row.originalAmount) }}</template>
       </el-table-column>
       <el-table-column prop="accountMonths" label="会计年限(月)" width="110" align="center" sortable />
@@ -55,6 +55,8 @@ import { showRowDetail } from '@/utils/format'
 import { http } from '../../request'
 import { exportCsv } from '../../utils/csv'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const { fmt } = inject('assetShared')
 
@@ -89,16 +91,16 @@ function handleCurrentChange(val) {
 }
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 // 41号审查 导出当前页税会差异
 function doExport() {
   exportCsv(taxDiffs.value, [
-    { prop: 'assetNo', label: '资产编号' }, { prop: 'assetName', label: '资产名称' },
-    { prop: 'originalAmount', label: '原值' }, { prop: 'accountMonths', label: '会计年限(月)' },
-    { prop: 'taxMonths', label: '税法年限(月)' }, { prop: 'accountMonthlyDepr', label: '会计月折旧' },
-    { prop: 'taxMonthlyDepr', label: '税法月折旧' }, { prop: 'diffAmount', label: '差异金额' },
+    { prop: 'assetNo', label: t('asset.assetCard.Asset2') }, { prop: 'assetName', label: t('asset.taxDiff.Asset') },
+    { prop: 'originalAmount', label: t('asset.taxDiff.Original') }, { prop: 'accountMonths', label: t('asset.taxDiff.Accounting') },
+    { prop: 'taxMonths', label: t('asset.taxDiff.Tax') }, { prop: 'accountMonthlyDepr', label: t('asset.taxDiff.Monthly') },
+    { prop: 'taxMonthlyDepr', label: t('asset.taxDiff.Monthly2') }, { prop: 'diffAmount', label: t('asset.taxDiff.Difference') },
   ], 'TaxDiff')
 }
 

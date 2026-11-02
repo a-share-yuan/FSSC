@@ -11,7 +11,7 @@
             ref="inputRef"
             v-model="keyword"
             class="search-input"
-            placeholder="搜索功能菜单 / 我的单据号 (Ctrl+K)"
+            :placeholder="$t('SearchCommand.main.Search')"
             @input="onInput"
             @keydown.enter="onEnter"
             @keydown.esc="close"
@@ -75,6 +75,8 @@ import { billApi } from '../api'
 import { goBizPage } from '../utils/bizEntry'
 import { docTypeLabel } from '../constants/enums'
 import { pathDenyReason } from '../router/pathAccess'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const props = defineProps({ visible: Boolean })
 const emit = defineEmits(['update:visible'])
@@ -164,7 +166,7 @@ function selectItem(item) {
   // 跳过去只会得到一张空白新单（「搜到单据却看不到单据」的断链）。
   if (item.bill) {
     if (!goBizPage(router, item.bill)) {
-      ElMessage.warning('当前账号不能直接进入该单据的业务页面，请用行内「追溯」查看全链路')
+      ElMessage.warning(t('SearchCommand.main.Current'))
       return
     }
     close()

@@ -7,11 +7,11 @@
     <el-card v-if="canList" shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="header-title">预算明细</span>
+          <span class="header-title">{{ $t('budget.budgetItem.Budget') }}</span>
           <div style="display:flex;gap:8px">
-            <el-button size="small" @click="handleExport" :loading="exporting">导出 Excel</el-button>
-            <el-button size="small" type="success" @click="importDlg.visible = true">导入 Excel</el-button>
-            <el-button type="primary" size="small" @click="openDialog(null)">录入预算</el-button>
+            <el-button size="small" @click="handleExport" :loading="exporting">{{ $t('budget.budgetItem.Export') }}</el-button>
+            <el-button size="small" type="success" @click="importDlg.visible = true">{{ $t('budget.budgetItem.Import') }}</el-button>
+            <el-button type="primary" size="small" @click="openDialog(null)">{{ $t('budget.budgetItem.Enter') }}</el-button>
           </div>
         </div>
       </template>
@@ -206,6 +206,8 @@ import { useApprovalScope } from '../../composables/useApprovalScope'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 import { hasPerm } from '../../utils/perm'
 import { useCurrency } from '@/composables/useCurrency'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
@@ -336,7 +338,7 @@ async function handleExport() {
     const a = document.createElement('a')
     a.href = url; a.download = `预算明细_${new Date().toISOString().slice(0, 10)}.xlsx`
     a.click(); URL.revokeObjectURL(url)
-    ElMessage.success('已导出')
+    ElMessage.success(t('utils.csv.Exported'))
   } catch (e) { ElMessage.error(e.message) } finally { exporting.value = false }
 }
 
@@ -363,7 +365,7 @@ const itemFormRules = reactive({
   budgetYear: commonRules.required('请输入预算年度'),
   itemId: commonRules.select('请选择费用项'),
   // 允许 0（先建维度占位、后续走调整单增拨），只拦"没填"和"负数"
-  totalAmount: [{ required: true, type: 'number', min: 0, message: '请输入预算总额（不能为负）' }],
+  totalAmount: [{ required: true, type: 'number', min: 0, message: t('useFormRules.main.Please') }],
 })
 const formRef = ref(null)
 
@@ -427,7 +429,7 @@ async function save() {
   dialog.saving = true
   try {
     await budgetApi.itemUpsert({ ...dialog.form })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('budget.budgetAdjust.Saved'))
     dialog.visible = false
     await loadList()
   } catch (e) { ElMessage.error(e.message) } finally { dialog.saving = false }
@@ -531,7 +533,7 @@ function flattenTree(nodes) {
 const approvalRef = ref(null)
 
 async function handleApprove(row) {
-  if (!approvalRef.value) { ElMessage.error('审批弹窗未就绪，请刷新页面后重试'); return }
+  if (!approvalRef.value) { ElMessage.error(t('useApprovalDialog.main.Approval')); return }
   const res = await approvalRef.value.open({
     row, allowReject: false, allowComment: false,
     notice: '预算调剂为业务确认动作，本操作不记录审批意见。',
@@ -539,20 +541,20 @@ async function handleApprove(row) {
   if (!res) return
   try {
     await budgetApi.adjustApprove(row.id)
-    ElMessage.success('已通过')
+    ElMessage.success(t('image.imageReview.Passed'))
     loadList()
   } catch (e) { ElMessage.error(e.message) }
 }
 
 async function handleReject(row) {
-  if (!approvalRef.value) { ElMessage.error('审批弹窗未就绪，请刷新页面后重试'); return }
+  if (!approvalRef.value) { ElMessage.error(t('useApprovalDialog.main.Approval')); return }
   const taskId = taskIdOf(row)
-  if (!taskId) { ElMessage.warning('该单据不在您的待办中（可能已被他人办理），请刷新列表后重试'); return }
+  if (!taskId) { ElMessage.warning(t('useApprovalDialog.main.This')); return }
   const res = await approvalRef.value.open({ row, decision: 'reject', allowApprove: false })
   if (!res) return
   try {
     await wfApi.approve({ taskId, approved: false, comment: res.comment })
-    ElMessage.success('已驳回')
+    ElMessage.success(t('purchase.poOrder.Rejected'))
     loadList()
   } catch (e) { ElMessage.error(e.message) }
 }

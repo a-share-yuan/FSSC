@@ -6,8 +6,8 @@
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="header-title">预算执行明细</span>
-          <span style="color:#909399; font-size:12px">按期间/部门/科目查询预算项的占用、核销与余额（占用与核销的统计方式）</span>
+          <span class="header-title">{{ $t('budget.budgetExecution.Budget') }}</span>
+          <span style="color:#909399; font-size:12px">{{ $t('budget.budgetExecution.Query') }}</span>
         </div>
       </template>
 

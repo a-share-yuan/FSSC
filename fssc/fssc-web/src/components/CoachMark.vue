@@ -19,12 +19,12 @@
           </div>
           <div class="bubble-text">{{ text }}</div>
           <div class="bubble-actions" v-if="showActions">
-            <el-button v-if="hasPrev" size="small" @click="$emit('prev')">上一步</el-button>
-            <el-button size="small" @click="dismiss">知道了</el-button>
-            <el-button v-if="hasNext" type="primary" size="small" @click="$emit('next')">下一步</el-button>
+            <el-button v-if="hasPrev" size="small" @click="$emit('prev')">{{ $t('common.prev') }}</el-button>
+            <el-button size="small" @click="dismiss">{{ $t('common.gotIt') }}</el-button>
+            <el-button v-if="hasNext" type="primary" size="small" @click="$emit('next')">{{ $t('common.next') }}</el-button>
           </div>
           <div v-else class="bubble-ok">
-            <el-button type="primary" size="small" @click="dismiss">知道了</el-button>
+            <el-button type="primary" size="small" @click="dismiss">{{ $t('common.gotIt') }}</el-button>
           </div>
         </div>
       </div>
@@ -34,10 +34,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { i18n } from '../i18n'
 
 const props = defineProps({
   selector: { type: String, default: '' },
-  title: { type: String, default: '提示' },
+  title: { type: String, default: i18n.global.t('common.tip') },
   text: { type: String, default: '' },
   position: { type: String, default: 'bottom' }, // top/bottom/left/right
   showActions: { type: Boolean, default: false },

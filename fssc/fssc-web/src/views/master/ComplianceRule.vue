@@ -5,10 +5,10 @@
   <el-card>
     <template #header>
       <div style="display: flex; gap: 10px; align-items: center">
-        <b>合规规则配置</b>
-        <span style="color:#909399; font-size:12px">重复发票 / 费用不一致 / 超标 / 黑名单四类风险规则</span>
-      <el-button v-permission="'compliance:rule:edit'" type="primary" size="small" style="margin-left:auto" @click="openCreate">新增规则</el-button>
-      <el-button size="small" @click="exportCsv(allRows, CSV_COLS, 'ComplianceRule')">导出</el-button>
+        <b>{{ $t('master.complianceRule.Compliance') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('master.complianceRule.Four') }}</span>
+      <el-button v-permission="'compliance:rule:edit'" type="primary" size="small" style="margin-left:auto" @click="openCreate">{{ $t('master.complianceRule.Add') }}</el-button>
+      <el-button size="small" @click="exportCsv(allRows, CSV_COLS, 'ComplianceRule')">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="exportBatchCsv(selRows, 'ComplianceRule')">导出选中({{ selRows.length }})</el-button>
       </div>
     </template>
@@ -124,6 +124,8 @@ import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
 import { ruleTypeLabel, riskLevelLabel, ruleActionLabel } from '@/constants/enums.js'
 import { hasPerm } from '../../utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const canEdit = computed(() => hasPerm('compliance:rule:edit'))
 
@@ -163,10 +165,10 @@ const complianceRules = {
 }
 
 const CSV_COLS = [
-  { prop: 'ruleCode', label: '规则编码' }, { prop: 'ruleName', label: '规则名称' },
-  { prop: 'ruleType', label: '类别' }, { prop: 'riskLevel', label: '风险等级' },
-  { prop: 'action', label: '处置动作' }, { prop: 'matchExpression', label: '判定表达式' },
-  { prop: 'relatedExpenseTypes', label: '适用费用类型' }, { prop: 'sortNo', label: '排序' },
+  { prop: 'ruleCode', label: t('master.complianceRule.Rule') }, { prop: 'ruleName', label: t('master.complianceRule.Rule2') },
+  { prop: 'ruleType', label: t('master.complianceRule.Category') }, { prop: 'riskLevel', label: t('compliance.fraud.Risk2') },
+  { prop: 'action', label: t('compliance.fraud.Disposition') }, { prop: 'matchExpression', label: t('master.complianceRule.Evaluation') },
+  { prop: 'relatedExpenseTypes', label: t('master.complianceRule.Applicable') }, { prop: 'sortNo', label: t('master.complianceRule.Sort') },
 ]
 
 function riskType(r) {
@@ -188,7 +190,7 @@ async function load() {
     // 查询失败置空并转空态，不透出后端原文
     allRows.value = []
     loadError.value = true
-    ElMessage.error('合规规则未能加载，请重新进入本页或稍后重试')
+    ElMessage.error(t('master.complianceRule.Compliance2'))
   } finally { loading.value = false }
 }
 
@@ -210,9 +212,9 @@ async function toggle(row) {
   const next = row.status !== 'ENABLED'
   try {
     await complianceRuleApi.toggle(row.id, next)
-    ElMessage.success('状态已切换')
+    ElMessage.success(t('master.complianceRule.Status'))
     load()
-  } catch (e) { ElMessage.error('启停未生效，请稍后重试') }
+  } catch (e) { ElMessage.error(t('master.complianceRule.Enable')) }
 }
 
 async function save() {
@@ -220,7 +222,7 @@ async function save() {
   try {
     if (editing.value) await complianceRuleApi.update(form)
     else await complianceRuleApi.create(form)
-    ElMessage.success('保存成功')
+    ElMessage.success(t('budget.budgetAdjust.Saved'))
     dialogVisible.value = false
     load()
   } catch (e) { ElMessage.error(e.message) }

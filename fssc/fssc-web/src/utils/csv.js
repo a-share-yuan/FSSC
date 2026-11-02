@@ -7,6 +7,7 @@
  */
 
 import { ElMessage } from 'element-plus'
+import { i18n } from '../i18n'
 
 /**
  * 导出 CSV 文件。
@@ -40,7 +41,7 @@ export function exportCsv(rows, cols, filename) {
   a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(i18n.global.t('useBill.main.CSV'))
 }
 
 /**
@@ -50,12 +51,12 @@ export function exportCsv(rows, cols, filename) {
  */
 export function exportBatchCsv(selRows, filename) {
   if (!selRows || !selRows.length) {
-    ElMessage.warning('请先勾选要导出的记录')
+    ElMessage.warning(i18n.global.t('utils.csv.Select'))
     return
   }
   const keys = selRows[0] ? Object.keys(selRows[0]) : []
   if (!keys.length) {
-    ElMessage.warning('无法获取列信息')
+    ElMessage.warning(i18n.global.t('utils.csv.Cannot'))
     return
   }
   const header = keys.join(',')
@@ -77,7 +78,7 @@ export function exportBatchCsv(selRows, filename) {
   a.download = `${filename}_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click()
   URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.length} 条记录`)
+  ElMessage.success(`${i18n.global.t('utils.csv.Exported')} ${selRows.length} 条记录`)
 }
 
 /** 数字格式化（千分位 + 2 位小数） */

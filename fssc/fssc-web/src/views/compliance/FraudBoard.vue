@@ -5,11 +5,11 @@
   <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>反欺诈风控</b>
-        <span style="color:#909399; font-size:12px">三档处置：提示 → 人工待审（进队列不挡流程） → 阻断（硬阻断位在付款指令执行前） —— 风险概览 + 检测记录 + 人工复审</span>
+        <b>{{ $t('compliance.fraud.Anti') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('compliance.fraud.Three') }}</span>
         <div style="margin-left:auto; display:flex; gap:8px">
-          <el-button size="small" @click="doExport">导出</el-button>
-          <el-button size="small" @click="loadAll">刷新</el-button>
+          <el-button size="small" @click="doExport">{{ $t('common.export') }}</el-button>
+          <el-button size="small" @click="loadAll">{{ $t('common.refresh') }}</el-button>
         </div>
       </div>
     </template>
@@ -140,6 +140,8 @@ import UserSelect from '@/components/common/UserSelect.vue'
 import { showRowDetail } from '@/utils/format'
 import { exportCsv } from '../../utils/csv'
 import { getUserName, preloadMappers } from '@/utils/idMapper'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 预加载主数据映射（用户、部门、公司）
 onMounted(() => { preloadMappers() })
@@ -191,7 +193,7 @@ async function doReview(row, action) {
   await ElMessageBox.confirm(tip, '反欺诈复审', { type: 'warning' })
   try {
     await complianceApi.fraudReview(row.id, action)
-    ElMessage.success('复审完成')
+    ElMessage.success(t('compliance.fraud.Re'))
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -216,7 +218,7 @@ function openAppeal(row) {
   }).then(async ({ value }) => {
     try {
       await complianceApi.fraudAppeal(row.id, value.trim())
-      ElMessage.success('申诉已登记,待财务复审')
+      ElMessage.success(t('compliance.fraud.Appeal'))
       load()
     } catch (e) { ElMessage.error(e.message) }
   }).catch(() => {})
@@ -231,7 +233,7 @@ function doAppealReview(row, approve) {
   }).then(async ({ value }) => {
     try {
       await complianceApi.fraudAppealReview(row.id, approve, value || '')
-      ElMessage.success(approve ? '申诉通过,已放行结案' : '申诉已驳回,维持原处置')
+      ElMessage.success(t('compliance.fraud.Appeal2'))
       load()
     } catch (e) { ElMessage.error(e.message) }
   }).catch(() => {})
@@ -244,7 +246,7 @@ function shortTime(t) {
 
 // 双击行：展示行数据详情（41号审查）
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '风险检测详情' })
+  return showRowDetail(row, { title: t('compliance.fraud.Risk') })
 }
 
 // 41号审查 导出当前查询结果
@@ -255,10 +257,10 @@ function doExport() {
     resultCn: RESULT_ST[r.detectionResult] || r.detectionResult,
     actionCn: ACTION_ST[r.actionTaken] || r.actionTaken || '',
   })), [
-    { prop: 'id', label: 'ID' }, { prop: 'detectionTypeCn', label: '检测类型' }, { prop: 'resultCn', label: '风险等级' },
-    { prop: 'riskScore', label: '风险分' }, { prop: 'details', label: '检测详情' }, { prop: 'actionCn', label: '处置动作' },
-    { prop: 'employeeId', label: '员工' }, { prop: 'billId', label: '单据' },
-    { prop: 'reviewedAt', label: '复审时间' }, { prop: 'createTime', label: '检测时间' },
+    { prop: 'id', label: 'ID' }, { prop: 'detectionTypeCn', label: t('compliance.fraud.Inspection') }, { prop: 'resultCn', label: t('compliance.fraud.Risk2') },
+    { prop: 'riskScore', label: t('compliance.fraud.Risk3') }, { prop: 'details', label: t('compliance.fraud.Inspection2') }, { prop: 'actionCn', label: t('compliance.fraud.Disposition') },
+    { prop: 'employeeId', label: t('report.main.Employee') }, { prop: 'billId', label: t('approval.approvalFlow.Document') },
+    { prop: 'reviewedAt', label: t('compliance.fraud.Re2') }, { prop: 'createTime', label: t('compliance.fraud.Inspection3') },
   ], 'FraudRecords')
 }
 onMounted(loadAll)

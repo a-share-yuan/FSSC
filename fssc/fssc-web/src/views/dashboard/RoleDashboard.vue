@@ -4,11 +4,11 @@
 <template>
   <div class="role-dashboard">
     <div class="page-header" style="margin-bottom: 16px;">
-      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">角色工作台</h2>
+      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">{{ $t('dashboard.roleDashboard.Role') }}</h2>
     </div>
     <!-- 角色切换 -->
     <div class="role-bar">
-      <span class="role-label">当前角色:</span>
+      <span class="role-label">{{ $t('dashboard.roleDashboard.Current') }}</span>
       <el-radio-group v-model="currentRole" size="small" @change="onRoleChange">
         <el-radio-button label="OPERATOR">操作员</el-radio-button>
         <el-radio-button label="SUPERVISOR">主管</el-radio-button>
@@ -16,7 +16,7 @@
         <el-radio-button label="ADMIN">管理员</el-radio-button>
       </el-radio-group>
       <!-- 切换器与登录人真实角色无关，不写破这句就会被读成"切了就看到那个角色的数" -->
-      <span class="role-scope-note">当前为全局视图：切换只决定显示哪几张卡，读数不随所选角色收窄</span>
+      <span class="role-scope-note">{{ $t('dashboard.roleDashboard.This') }}</span>
     </div>
 
     <!-- KPI 卡片区 -->
@@ -45,7 +45,7 @@
               <span class="task-no">{{ t.billNo }}</span>
               <span class="task-time">{{ t.createTime?.slice(0, 10) }}</span>
             </div>
-            <el-empty v-if="myTasks.length === 0" description="暂无待办" :image-size="40" />
+            <el-empty v-if="myTasks.length === 0" :description="$t('dashboard.roleDashboard.No')" :image-size="40" />
           </div>
           <!-- 主管：超时预警 -->
           <div v-else-if="w.key === 'timeoutAlert'" class="alert-list">
@@ -54,20 +54,20 @@
               <span>{{ a.billNo }}</span>
               <span class="alert-stay">超时 {{ a.stayHours }}h</span>
             </div>
-            <el-empty v-if="alerts.length === 0" description="无超时预警" :image-size="40" />
+            <el-empty v-if="alerts.length === 0" :description="$t('dashboard.roleDashboard.No2')" :image-size="40" />
           </div>
           <!-- 总监：经营驾驶舱 -->
           <div v-else-if="w.key === 'kpiBoard'" class="mini-board">
             <div class="mini-stat">
-              <span class="mini-label">本月报销</span>
+              <span class="mini-label">{{ $t('dashboard.roleDashboard.This2') }}</span>
               <span class="mini-val">{{ monthExp }}</span>
             </div>
             <div class="mini-stat">
-              <span class="mini-label">本月付款</span>
+              <span class="mini-label">{{ $t('dashboard.roleDashboard.This3') }}</span>
               <span class="mini-val">{{ monthPay }}</span>
             </div>
             <div class="mini-stat">
-              <span class="mini-label">预算执行率</span>
+              <span class="mini-label">{{ $t('dashboard.main.Budget') }}</span>
               <span class="mini-val">{{ budgetRate }}%</span>
             </div>
           </div>
@@ -79,14 +79,14 @@
           <!-- 流程监控 -->
           <div v-else-if="w.key === 'flowMonitor'" class="flow-mini">
             <div class="mini-stat">
-              <span class="mini-label">在途</span>
+              <span class="mini-label">{{ $t('dashboard.roleDashboard.Transit') }}</span>
               <span class="mini-val text-blue">{{ flowStats.inTransit }}</span>
             </div>
             <div class="mini-stat">
-              <span class="mini-label">超时</span>
+              <span class="mini-label">{{ $t('dashboard.roleDashboard.Overdue') }}</span>
               <span class="mini-val text-red">{{ flowStats.timeout }}</span>
             </div>
-            <el-button v-if="canFlowMonitor" type="primary" link size="small" @click="$router.push('/flow-monitor')">查看大屏</el-button>
+            <el-button v-if="canFlowMonitor" type="primary" link size="small" @click="$router.push('/flow-monitor')">{{ $t('dashboard.roleDashboard.View') }}</el-button>
           </div>
         </div>
       </div>
@@ -111,6 +111,8 @@ import { ElMessage } from 'element-plus'
 import { store, wfApi, dashApi, flowApi, healthApi } from '../../api'
 import { hasPerm } from '@/utils/perm'
 import { docTypeLabel } from '@/constants/enums.js'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const router = useRouter()
 const currentRole = ref('OPERATOR')
@@ -148,7 +150,7 @@ const roleConfig = {
       { label: '平均耗时', key: 'avgTime', icon: '', cls: 'yellow' },
       { label: '超时率', key: 'timeoutRate', icon: '', cls: 'red' },
     ],
-    widgets: [{ key: 'myTasks', title: '我的待办任务' }],
+    widgets: [{ key: 'myTasks', title: t('dashboard.roleDashboard.My') }],
   },
   SUPERVISOR: {
     kpis: [
@@ -158,8 +160,8 @@ const roleConfig = {
       { label: '平均耗时', key: 'avgTime', icon: '', cls: 'yellow' },
     ],
     widgets: [
-      { key: 'timeoutAlert', title: '超时预警' },
-      { key: 'myTasks', title: '团队任务' },
+      { key: 'timeoutAlert', title: t('dashboard.roleDashboard.Overdue2') },
+      { key: 'myTasks', title: t('dashboard.roleDashboard.Team') },
     ],
   },
   CFO: {
@@ -170,8 +172,8 @@ const roleConfig = {
       { label: '月结进度', key: 'monthProgress', icon: '', cls: 'blue' },
     ],
     widgets: [
-      { key: 'kpiBoard', title: '经营驾驶舱' },
-      { key: 'monthEnd', title: '月结进度' },
+      { key: 'kpiBoard', title: t('dashboard.roleDashboard.Management') },
+      { key: 'monthEnd', title: t('dashboard.roleDashboard.Month') },
     ],
   },
   ADMIN: {
@@ -181,7 +183,7 @@ const roleConfig = {
       { label: '超时流程', key: 'timeout', icon: '', cls: 'red' },
       { label: '系统状态', key: 'sysHealth', icon: '', cls: 'green' },
     ],
-    widgets: [{ key: 'flowMonitor', title: '流程监控' }],
+    widgets: [{ key: 'flowMonitor', title: t('dashboard.roleDashboard.Workflow') }],
   },
 }
 
@@ -303,11 +305,11 @@ function drillKpi(kpi) {
   const route = drillRoutes[kpi.key]
   // 无菜单承载的外跳页按各自权限码收敛：无权限给提示，不跳进必然报错的页面
   if (route === '/flow-monitor' && !canFlowMonitor) {
-    ElMessage.warning('当前账号没有查看流程监控大屏的权限，请联系管理员开通')
+    ElMessage.warning(t('dashboard.roleDashboard.Current2'))
     return
   }
   if (route === '/month-end' && !canMonthEnd) {
-    ElMessage.warning('当前账号没有查看月结看板的权限，请联系管理员开通')
+    ElMessage.warning(t('dashboard.roleDashboard.Current3'))
     return
   }
   if (route) router.push(route)

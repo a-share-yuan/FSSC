@@ -6,45 +6,43 @@
     <el-card>
     <el-tabs v-model="tab">
       <!-- 7.1 发票验真（发票池 + 实时/定时验真） -->
-      <el-tab-pane v-if="canList" label="发票池" name="pool">
+      <el-tab-pane v-if="canList" :label="$t('invoice.main.Invoice')" name="pool">
         <div class="query-bar">
-          <el-input v-model="q.invoiceNo" placeholder="发票号码" clearable style="width: 130px" @keyup.enter="loadPool(1)" />
-          <el-input v-model="q.invoiceCode" placeholder="发票代码" clearable style="width: 130px" @keyup.enter="loadPool(1)" />
-          <el-input v-model="q.sellerName" placeholder="销售方" clearable style="width: 140px" @keyup.enter="loadPool(1)" />
-          <el-input v-model="q.billNo" placeholder="业务单号" clearable style="width: 140px" @keyup.enter="loadPool(1)" />
+          <el-input v-model="q.invoiceNo" :placeholder="$t('invoice.main.Invoice2')" clearable style="width: 130px" @keyup.enter="loadPool(1)" />
+          <el-input v-model="q.invoiceCode" :placeholder="$t('invoice.main.Invoice3')" clearable style="width: 130px" @keyup.enter="loadPool(1)" />
+          <el-input v-model="q.sellerName" :placeholder="$t('invoice.main.Seller')" clearable style="width: 140px" @keyup.enter="loadPool(1)" />
+          <el-input v-model="q.billNo" :placeholder="$t('audit.main.Business')" clearable style="width: 140px" @keyup.enter="loadPool(1)" />
           <el-date-picker v-model="q.invoiceDate" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开票起" end-placeholder="开票止" style="width: 240px" />
           <el-date-picker v-model="q.scanDate" type="daterange" value-format="YYYY-MM-DD" start-placeholder="录入起" end-placeholder="录入止" style="width: 240px" />
-          <el-select v-model="q.verifyStatus" placeholder="验真状态" clearable style="width: 150px">
-            <el-option label="未验真" value="NONE" />
-            <el-option label="验真中" value="PENDING" />
-            <el-option label="验真通过" value="SUCCESS" />
-            <el-option label="验真失败" value="FAILED" />
+          <el-select v-model="q.verifyStatus" :placeholder="$t('invoice.main.Verification')" clearable style="width: 150px">
+            <el-option :label="$t('invoice.main.Not')" value="NONE" />
+            <el-option :label="$t('invoice.main.Verifying')" value="PENDING" />
+            <el-option :label="$t('invoice.main.Verification2')" value="SUCCESS" />
+            <el-option :label="$t('invoice.main.Verification3')" value="FAILED" />
             <!-- 历史取值 VERIFIED（3,327 行）→ 后端按值等值过滤，不单列这一项就永远筛不出来 -->
-            <el-option label="已验真（历史）" value="VERIFIED" />
+            <el-option :label="$t('invoice.main.Verified')" value="VERIFIED" />
           </el-select>
-          <el-select v-model="q.direction" placeholder="方向" clearable style="width: 172px">
-            <el-option label="进项（收到的票）" value="INPUT" />
-            <el-option label="销项（开出的票）" value="OUTPUT" />
+          <el-select v-model="q.direction" :placeholder="$t('invoice.main.Orientation')" clearable style="width: 172px">
+            <el-option :label="$t('invoice.main.Input')" value="INPUT" />
+            <el-option :label="$t('invoice.main.Output')" value="OUTPUT" />
           </el-select>
-          <el-button type="primary" size="small" @click="loadPool(1)">查询</el-button>
-          <el-button size="small" @click="reset">重置</el-button>
+          <el-button type="primary" size="small" @click="loadPool(1)">{{ $t('common.search') }}</el-button>
+          <el-button size="small" @click="reset">{{ $t('common.reset') }}</el-button>
           <el-button v-permission="'inv:verify'" type="success" size="small" :disabled="!poolSelected.length" @click="verifyBatch">
             批量验真（{{ poolSelected.length }}）
           </el-button>
-          <el-button v-permission="'inv:audit'" type="warning" size="small" @click="openAudit">占用对账</el-button>
+          <el-button v-permission="'inv:audit'" type="warning" size="small" @click="openAudit">{{ $t('invoice.main.Occupation') }}</el-button>
       <!-- inv:export 在 sys_menu 中没有登记（无人持有），故导出按钮随查询权限放开 -->
-      <el-button v-permission="'inv:list'" size="small" @click="exportCsv">导出</el-button>
-          <span style="margin-left: auto; font-size: 13px; color: #909399">
-            定时验真：每 5 分钟扫描待验发票，仅「有影像且非手工补录」的发票进队列（无影像票不参与定时验真，需走【实时验真】）；外部验真通道未启用时不判定通过（保持未验真/验真中）
-          </span>
+      <el-button v-permission="'inv:list'" size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
+          <span style="margin-left: auto; font-size: 13px; color: #909399">{{ $t('invoice.main.Scheduled') }}</span>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
         <el-table class="cm-target-invoice" :data="rows" size="small" stripe v-else max-height="480" row-key="id"
                   @selection-change="(s) => (poolSelected = s)" @row-dblclick="handleView">
           <el-table-column type="selection" width="40" reserve-selection :selectable="(row) => dir(row) === 'INPUT' && !isVerified(row.verifyStatus)" />
-          <el-table-column prop="invoiceNo" label="发票号码" width="150"  sortable />
-          <el-table-column prop="invoiceCode" label="发票代码" width="120"  sortable />
-          <el-table-column label="类型" width="100">
+          <el-table-column prop="invoiceNo" :label="$t('invoice.main.Invoice2')" width="150"  sortable />
+          <el-table-column prop="invoiceCode" :label="$t('invoice.main.Invoice3')" width="120"  sortable />
+          <el-table-column :label="$t('finance.fxReval.Type')" width="100">
             <template #default="{ row }">{{ invTypeLabel(row.invoiceType) }}</template>
           </el-table-column>
           <el-table-column label="方向" width="80" sortable>
@@ -370,6 +368,8 @@ import { invoiceTypeLabel, invoiceChannelLabel, verifyStatusLabel } from '@/cons
 // 发票类型下拉与报销/OCR 共用同一份类型表（13 类），不在此另抄一份
 import { INVOICE_TYPES } from '@/constants/invoiceType.js'
 import { useCurrency } from '@/composables/useCurrency'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // G14: 逐 tab 权限门控
 const canList = computed(() => hasPerm('inv:list'))
 const canCreate = computed(() => hasPerm('inv:create'))
@@ -470,7 +470,7 @@ const fileViewer = ref(null)
 
 /** 查看发票影像（imgFileId → 通用查看器） */
 function viewImage(row) {
-  if (!row.imgFileId) { ElMessage.info('该发票无影像文件'); return }
+  if (!row.imgFileId) { ElMessage.info(t('invoice.main.This')); return }
   fileViewer.value?.open([row.imgFileId], '发票影像：' + (row.invoiceNo || row.id))
 }
 const bindVis = ref(false)
@@ -540,7 +540,7 @@ function reset() {
 async function verifyNow(row) {
   try {
     await invoiceApi.verifyNow(row.id, '', '发票池行内发起验真')
-    ElMessage.success(`发票 ${row.invoiceNo} 验真已发起：无外部报文时只置「验真中」，不判定验真通过`)
+    ElMessage.success(`${t('image.imageManager.Invoice')} ${row.invoiceNo} 验真已发起：无外部报文时只置「验真中」，不判定验真通过`)
     loadPool()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -566,7 +566,7 @@ async function voidOutputInvoice(row) {
   } catch (_) { return } // 用户取消
   try {
     await invoiceApi.voidInvoice({ invoiceId: row.id, reason })
-    ElMessage.success('发票已作废')
+    ElMessage.success(t('invoice.main.Invoice4'))
     loadPool()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -589,7 +589,7 @@ async function redFlushInvoice(row) {
   } catch (_) { return } // 用户取消
   try {
     await invoiceApi.redFlush({ invoiceId: row.id, reason })
-    ElMessage.success('红冲已提交')
+    ElMessage.success(t('invoice.main.Red'))
     loadPool()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -636,7 +636,7 @@ async function saveCreate() {
 async function verifyLast() {
   try {
     await invoiceApi.verifyNow(lastCreatedId.value, '', '补录后手动发起验真')
-    ElMessage.success('验真已发起：无外部报文时只置「验真中」，不判定验真通过')
+    ElMessage.success(t('invoice.main.Verification4'))
     lastCreatedId.value = null
     lastCreatedNo.value = ''
     loadPool()
@@ -675,13 +675,13 @@ async function saveIssue() {
         // 超时≠未受理——外部网关慢（一次开票要 45 秒上下），服务端往往已开票成功，只提示勿重复提交并刷新核对
         const isTimeout = e?.code === 'ECONNABORTED' || e?.code === 'ETIMEDOUT' || /timeout|超时/i.test(String(e?.message || ''))
         if (isTimeout) {
-          ElMessage.warning('开票请求仍在处理中，请勿重复提交，稍后刷新列表查看结果')
+          ElMessage.warning(t('invoice.main.Invoicing'))
           loadPool()
           return
         }
         // 唯一键/去重兜底命中（code=4090 或含「已存在」）＝该发票已开票成功，走成功引导，不报 error
         if (e?.code === 4090 || /已存在/.test(String(e?.message || ''))) {
-          ElMessage.warning('该发票已开票成功，请勿重复提交')
+          ElMessage.warning(t('invoice.main.This2'))
           locateIssuedInvoice(issueForm.invoiceNo)
           return
         }
@@ -706,7 +706,7 @@ async function batchVerify() {
     // 按钮文案当时就写着「模拟税务通道」；现改为走批量受理口，无外部报文只到「验真中」。
     const r = await invoiceApi.page({ pageNum: 1, pageSize: 50, verifyStatus: '' })
     const pending = (r.list || []).filter((x) => x.verifyStatus !== 'SUCCESS')
-    if (!pending.length) return ElMessage.info('没有待验真发票')
+    if (!pending.length) return ElMessage.info(t('h5.main.No'))
     const ok = await invoiceApi.verifyBatch(pending.map((x) => x.id))
     ElMessage.success(`批量验真已受理：${ok} 张置「验真中」（无外部报文不判定通过）`)
     loadPool(); loadVerify()
@@ -717,7 +717,7 @@ async function verifyRealtime() {
   if (!realtimeInv.value) return
   try {
     await invoiceApi.verifyNow(realtimeInv.value, '', '实时验真（发票验真记录页发起）')
-    ElMessage.success('验真已发起：无外部报文时只置「验真中」，不判定验真通过')
+    ElMessage.success(t('invoice.main.Verification4'))
     realtimeInv.value = null
     loadVerify()
   } catch (e) { ElMessage.error(e.message) }
@@ -770,7 +770,7 @@ async function searchBill() {
   try {
     const r = await invoiceApi.bindableBills({ pageNum: 1, pageSize: 20, keyword: bindBillNo.value || undefined })
     bills.value = r.list || []
-    if (!bills.value.length) ElMessage.info('没有可关联的单据（已排除作废/终止/驳回/撤回单，或不在本公司数据范围内）')
+    if (!bills.value.length) ElMessage.info(t('invoice.main.No'))
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -778,7 +778,7 @@ async function doBind() {
   await guardBind(async () => {
     try {
       await invoiceApi.bind({ billId: bindBillId.value, invoiceId: currentInv.value.id, amount: bindAmount.value })
-      ElMessage.success('已关联')
+      ElMessage.success(t('useBill.main.Linked'))
       bindVis.value = false
       loadPool()
     } catch (e) { ElMessage.error(e.message) }
@@ -842,7 +842,7 @@ async function loadAudit() {
 async function runAuditFix() {
   try {
     await http.get('/tenant/invoice/used-count/audit', { params: { fix: true } })
-    ElMessage.success('已执行占用次数修复重算')
+    ElMessage.success(t('invoice.main.Occupation2'))
     loadAudit()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -857,7 +857,7 @@ onMounted(() => {
 
 async function exportCsv() {
   // 导出走全量查询，不只是当前页的 20 条
-  if (!hasPerm('inv:list')) { ElMessage.warning('导出需要发票查询权限'); return }
+  if (!hasPerm('inv:list')) { ElMessage.warning(t('invoice.main.Export')); return }
   let list = []
   let total = 0
   try {
@@ -865,8 +865,8 @@ async function exportCsv() {
     list = r.list || []
     total = Number(r.total || 0)
   } catch (e) { ElMessage.error(e.message); return }
-  if (!list.length) { ElMessage.warning('当前筛选条件下无数据可导出'); return }
-  const cols = [{ prop: 'invoiceNo', label: '发票号码' }, { prop: 'invoiceCode', label: '发票代码' }, { prop: 'direction', label: '方向' }, { prop: 'sellerName', label: '销售方' }, { prop: 'invoiceDate', label: '开票日期' }, { prop: 'amount', label: '价税合计' }, { prop: 'verifyTime', label: '验真时间' }]
+  if (!list.length) { ElMessage.warning(t('invoice.main.There')); return }
+  const cols = [{ prop: 'invoiceNo', label: t('invoice.main.Invoice2') }, { prop: 'invoiceCode', label: t('invoice.main.Invoice3') }, { prop: 'direction', label: t('invoice.main.Orientation') }, { prop: 'sellerName', label: t('invoice.main.Seller') }, { prop: 'invoiceDate', label: t('image.ocrRecords.Invoice2') }, { prop: 'amount', label: t('image.ocrRecords.Total') }, { prop: 'verifyTime', label: t('invoice.main.Verification5') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = list.map((row) => cols.map((c) => {
     if (c.prop === 'direction') return dir(row) === 'OUTPUT' ? '销项' : '进项'
@@ -887,7 +887,7 @@ async function exportCsv() {
   a.download = `Invoice_${stamp}.csv`
   a.click(); URL.revokeObjectURL(a.href)
   if (total > list.length) ElMessage.warning(`当前筛选共 ${total} 张，本次导出前 ${list.length} 张；请缩小筛选条件后再导出`)
-  else ElMessage.success(`已导出 ${list.length} 张发票`)
+  else ElMessage.success(`${t('utils.csv.Exported')} ${list.length} 张发票`)
 }
 
 

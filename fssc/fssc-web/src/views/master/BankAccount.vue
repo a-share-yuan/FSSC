@@ -6,15 +6,15 @@
     <el-card shadow="never">
       <template #header>
         <div class="toolbar">
-          <span>银行账户管理（账户全要素维护 · 印鉴/网银变更审批）</span>
+          <span>{{ $t('master.bankAccount.Bank') }}</span>
           <div class="ops">
-            <el-select v-model="q.companyId" size="small" style="width: 160px" placeholder="组织" clearable filterable @change="search">
+            <el-select v-model="q.companyId" size="small" style="width: 160px" :placeholder="$t('master.bankAccount.Organization')" clearable filterable @change="search">
               <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
             </el-select>
-            <el-input v-model="q.keyword" size="small" style="width: 180px" placeholder="账号/户名/开户行" clearable @keyup.enter="search" />
-            <el-button size="small" type="primary" @click="search">查询</el-button>
-            <el-button size="small" @click="doExport">导出</el-button>
-            <el-button v-permission="'md:bankaccount:create'" size="small" type="success" @click="openForm()">新增账户</el-button>
+            <el-input v-model="q.keyword" size="small" style="width: 180px" :placeholder="$t('master.bankAccount.Account')" clearable @keyup.enter="search" />
+            <el-button size="small" type="primary" @click="search">{{ $t('common.search') }}</el-button>
+            <el-button size="small" @click="doExport">{{ $t('common.export') }}</el-button>
+            <el-button v-permission="'md:bankaccount:create'" size="small" type="success" @click="openForm()">{{ $t('master.bankAccount.Add') }}</el-button>
           </div>
         </div>
       </template>
@@ -131,13 +131,15 @@ import { exportCsv } from '../../utils/csv'
 import { maskAccount } from '../../utils/mask'
 import { hasPerm } from '../../utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 账户性质（人民银行银行结算账户分类）——基本户唯一性判据，与后端 ACCOUNT_TYPES 同名称表
 const ACCOUNT_TYPES = [
-  { value: 'BASIC', label: '基本存款账户' },
-  { value: 'GENERAL', label: '一般存款账户' },
-  { value: 'SPECIAL', label: '专用存款账户' },
-  { value: 'TEMPORARY', label: '临时存款账户' },
+  { value: 'BASIC', label: t('master.bankAccount.Basic') },
+  { value: 'GENERAL', label: t('master.bankAccount.General') },
+  { value: 'SPECIAL', label: t('master.bankAccount.Special') },
+  { value: 'TEMPORARY', label: t('master.bankAccount.Temporary') },
 ]
 const accountTypeLabel = (t) => (ACCOUNT_TYPES.find((x) => x.value === t)?.label) || (t || '—')
 
@@ -165,9 +167,9 @@ const form = reactive({})
 const formRef = ref(null)
 const guard = useSubmitGuard(formRef)
 const formRules = computed(() => ({
-  accountName: [{ required: true, message: '请输入账户名称' }],
-  companyId: [{ required: true, message: '请选择所属组织' }],
-  bankName: [{ required: true, message: '请输入开户行' }],
+  accountName: [{ required: true, message: t('master.bankAccount.Enter') }],
+  companyId: [{ required: true, message: t('master.bankAccount.Please') }],
+  bankName: [{ required: true, message: t('useFormRules.main.Please2') }],
   // 资金路由字段：银行账号必填 + 格式（6-30 位数字）；唯一性由后端兜底（同租户同号拒登记）
   bankAccount: [...commonRules.required('请输入银行账号'), ...commonRules.bankAccount()],
   // 联行号选填，填了就必须是 12 位数字
@@ -175,7 +177,7 @@ const formRules = computed(() => ({
   // 期初余额不能为负（后端 @DecimalMin 兜底）
   balance: commonRules.amountRange(0, null, '期初余额不能为负'),
   // 账户性质是「一司一基本户」判据的来源，新增即必选；历史现有账户允许先改其它字段
-  accountType: form.id ? [] : [{ required: true, message: '请选择账户性质' }],
+  accountType: form.id ? [] : [{ required: true, message: t('master.bankAccount.Please2') }],
 }))
 
 function companyName(id) {
@@ -254,7 +256,7 @@ async function save() {
       const body = { ...form, isDefault: form.isDefault ? 1 : 0 }
       if (form.id) await masterApi.bank.update(body)
       else await masterApi.bank.create(body)
-      ElMessage.success('已保存')
+      ElMessage.success(t('useCrud.main.Saved'))
       formVisible.value = false
       await load()
     })
@@ -264,7 +266,7 @@ async function save() {
 async function toggleEnable(row) {
   const enable = row.status !== 'NORMAL'
   await masterApi.bank.enable(row.id, enable)
-  ElMessage.success(enable ? '已启用' : '已停用')
+  ElMessage.success(t('budget.budgetScheme.Disabled'))
   await load()
 }
 
@@ -280,7 +282,7 @@ async function del(row) {
   await ElMessageBox.confirm(`确认删除账户 [${row.accountName}]?`, '删除', { type: 'warning' })
   try {
     await masterApi.bank.delete(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('useCrud.main.Deleted'))
     await load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -288,11 +290,11 @@ async function del(row) {
 function doExport() {
   // CSV 与屏上同一规则——投影时打码 bankAccount，堵住「列表打码、导出放全号」的旁路
   exportCsv(rows.value.map((r) => ({ ...r, bankAccount: maskAccount(r.bankAccount) })), [
-    { prop: 'accountCode', label: '账户编码' }, { prop: 'accountName', label: '账户名称' },
-    { prop: 'bankName', label: '开户行' }, { prop: 'bankBranch', label: '支行' },
-    { prop: 'bankAccount', label: '银行账号' }, { prop: 'bankCode', label: '联行号' },
-    { prop: 'currencyCode', label: '币种' }, { prop: 'balance', label: '余额' },
-    { prop: 'isDefault', label: '默认(1是)' }, { prop: 'status', label: '状态' }, { prop: 'remark', label: '备注' },
+    { prop: 'accountCode', label: t('master.bankAccount.Account2') }, { prop: 'accountName', label: t('master.bankAccount.Account3') },
+    { prop: 'bankName', label: t('master.bankAccount.Bank2') }, { prop: 'bankBranch', label: t('master.bankAccount.Branch') },
+    { prop: 'bankAccount', label: t('master.bankAccount.Bank3') }, { prop: 'bankCode', label: t('master.bankAccount.Bank4') },
+    { prop: 'currencyCode', label: t('bill.billDetailPanel.Currency') }, { prop: 'balance', label: t('master.bankAccount.Balance') },
+    { prop: 'isDefault', label: t('master.bankAccount.Default') }, { prop: 'status', label: t('common.status') }, { prop: 'remark', label: t('common.remark') },
   ], 'BankAccount')
 }
 

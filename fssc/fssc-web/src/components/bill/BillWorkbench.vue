@@ -16,7 +16,7 @@
 
   <el-tabs v-model="b.activeTab">
     <!-- 发起单据 -->
-    <el-tab-pane label="发起单据" name="create">
+    <el-tab-pane :label="$t('bill.main.Initiate')" name="create">
       <el-row :gutter="16">
         <!-- 左侧：概要 / 费用详情 / 分摊（由页面 slot 提供） -->
         <el-col :xs="24" :md="14">
@@ -25,27 +25,27 @@
 
         <!-- 右侧：通用区块（公司/部门/预算/附件/冲借款/关联/合同） -->
         <el-col :xs="24" :md="10">
-          <el-card header="单据信息">
+          <el-card :header="$t('bill.billDetailPanel.Document')">
             <el-form ref="billInfoFormRef" :model="b.form.bill" :rules="billInfoRules" label-width="80px" size="default">
-              <el-form-item label="公司" prop="companyId">
-                <el-select v-model="b.form.bill.companyId" filterable placeholder="选择公司" style="width:100%" @change="onCompanyChange">
+              <el-form-item :label="$t('bill.main.Company')" prop="companyId">
+                <el-select v-model="b.form.bill.companyId" filterable :placeholder="$t('bill.main.Select')" style="width:100%" @change="onCompanyChange">
                   <el-option v-for="c in b.companies" :key="c.id" :label="c.name" :value="c.id" />
                 </el-select>
               </el-form-item>
-              <el-form-item label="部门" prop="deptId">
-                <el-select v-model="b.form.bill.deptId" filterable placeholder="选择部门" style="width:100%">
+              <el-form-item :label="$t('bill.main.Department')" prop="deptId">
+                <el-select v-model="b.form.bill.deptId" filterable :placeholder="$t('bill.main.Select2')" style="width:100%">
                   <el-option v-for="d in filteredDepts" :key="d.id" :label="d.name" :value="d.id" />
                 </el-select>
               </el-form-item>
             </el-form>
           </el-card>
 
-          <el-card header="预算占用预览" style="margin-top: 12px">
+          <el-card :header="$t('bill.main.Budget')" style="margin-top: 12px">
             <el-alert v-if="b.budgetWarn.length" type="warning" :closable="false" show-icon
-              title="以下预算科目将超出可用额度（提交时会被拦截）" style="margin-bottom: 8px" />
-            <el-table :data="b.budgetPreview" size="small" border empty-text="暂无预算科目占用">
-              <el-table-column prop="label" label="预算科目" />
-              <el-table-column label="本次申请" width="110">
+              :title="$t('bill.main.Following')" style="margin-bottom: 8px" />
+            <el-table :data="b.budgetPreview" size="small" border :empty-text="$t('bill.main.No')">
+              <el-table-column prop="label" :label="$t('bill.main.Budget2')" />
+              <el-table-column :label="$t('bill.main.This')" width="110">
                 <template #default="{ row }"><span style="color:#f59a23;font-weight:600">{{ b.fmt(row.used) }}</span></template>
               </el-table-column>
               <el-table-column label="可用余额" width="110">
@@ -524,6 +524,8 @@ import { INVOICE_TYPES } from '../../constants/invoiceType'
 import { rejectTypeLabel } from '@/constants/billStatus.js'
 import { ElMessage } from 'element-plus'
 import { commonRules } from '../../composables/useFormRules'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const props = defineProps({
   billType: { type: String, required: true },
@@ -582,7 +584,7 @@ function onInvoiceNoChange(row) {
   const dup = (b.form.invoices || []).filter((x) => x !== row && (x.invoiceNo || '').trim() === no)
   if (dup.length) {
     row.invoiceNo = ''
-    ElMessage.warning(`发票号 ${no} 在本单据中已存在（${dup.length} 行），请勿重复录入；如需调整请修改原行或删除本行`)
+    ElMessage.warning(`${t('image.ocrRecords.Invoice')} ${no} 在本单据中已存在（${dup.length} 行），请勿重复录入；如需调整请修改原行或删除本行`)
   }
 }
 
@@ -846,7 +848,7 @@ async function triggerOcr(a) {
     // 原先误把 fileId 当 batchId 调 /image/batch/{id}/ocr，必然 "影像批次不存在" 而静默失败
     await imageApi.ocrByFile(a.fileId)
     ocrStatus[a.fileId] = 'done'
-    ElMessage.success('OCR 识别完成')
+    ElMessage.success(t('bill.main.OCR'))
   } catch (e) {
     ocrStatus[a.fileId] = 'failed'
     // 失败必须回显后端原因（如"图片发票需配置图像识别通道"），不再只显示一个"失败"角标

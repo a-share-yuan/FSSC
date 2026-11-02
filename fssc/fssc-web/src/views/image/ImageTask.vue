@@ -5,26 +5,24 @@
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <b>影像任务</b>
-        <el-select v-model="q.bizType" placeholder="业务类型" clearable style="width: 130px" @change="load">
-          <el-option label="费用报销" value="EXP_CLAIM" />
-          <el-option label="合同" value="CONTRACT" />
+        <b>{{ $t('image.imageTask.Image') }}</b>
+        <el-select v-model="q.bizType" :placeholder="$t('image.imageManager.Business')" clearable style="width: 130px" @change="load">
+          <el-option :label="$t('image.imageManager.Expense')" value="EXP_CLAIM" />
+          <el-option :label="$t('image.imageManager.Contract')" value="CONTRACT" />
         </el-select>
-        <el-input v-model="q.keyword" placeholder="批次号/业务单号" clearable style="width: 180px" @keyup.enter="load" />
-        <el-select v-model="q.sealStatus" placeholder="封单状态" clearable style="width: 120px" @change="load">
-          <el-option label="已封单" value="SEALED" />
-          <el-option label="未封单" value="UNSEALED" />
+        <el-input v-model="q.keyword" :placeholder="$t('image.imageManager.Batch')" clearable style="width: 180px" @keyup.enter="load" />
+        <el-select v-model="q.sealStatus" :placeholder="$t('image.imageTask.Document')" clearable style="width: 120px" @change="load">
+          <el-option :label="$t('image.imageTask.Sealed')" value="SEALED" />
+          <el-option :label="$t('image.imageTask.Not')" value="UNSEALED" />
         </el-select>
-        <el-select v-model="q.status" placeholder="任务状态" clearable style="width: 130px" @change="load">
-          <el-option label="已上传" value="UPLOADED" />
-          <el-option label="已质检" value="CHECKED" />
+        <el-select v-model="q.status" :placeholder="$t('image.imageTask.Task')" clearable style="width: 130px" @change="load">
+          <el-option :label="$t('image.imageManager.Uploaded')" value="UPLOADED" />
+          <el-option :label="$t('image.imageManager.Quality')" value="CHECKED" />
         </el-select>
-        <el-button type="primary" size="small" @click="load">查询</el-button>
-      <el-button size="small" @click="exportCsv">导出</el-button>
+        <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-        <span style="margin-left: auto; color: #909399; font-size: 13px">
-          采集来源：80 扫描客户端 / 81 手机 / 82 人工上传 / 83 第三方系统
-        </span>
+        <span style="margin-left: auto; color: #909399; font-size: 13px">{{ $t('image.imageTask.Collection') }}</span>
       </div>
     </template>
 
@@ -92,6 +90,8 @@ import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { formatDate, formatDateTime } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // BillTraceDrawer
 const traceVisible = ref(false)
@@ -121,7 +121,7 @@ async function viewPages(row) {
   try {
     const pages = await imageApi.pages(row.id)
     const fileIds = (pages || []).map((p) => p.fileId).filter((x) => x != null)
-    if (!fileIds.length) { ElMessage.info('该批次暂无影像页'); return }
+    if (!fileIds.length) { ElMessage.info(t('image.imageTask.This')); return }
     fileViewer.value?.open(fileIds, '影像查看：' + (row.batchNo || row.id))
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -148,7 +148,7 @@ async function load() {
 async function toggleSeal(row) {
   const sealed = row.sealStatus !== 'SEALED'
   await imageApi.seal(row.id, sealed)
-  ElMessage.success(sealed ? '已封单' : '已解锁')
+  ElMessage.success(t('image.imageTask.Unlocked'))
   load()
 }
 
@@ -161,7 +161,7 @@ async function setReview(row, status) {
   } catch (e) { return }
   try {
     await imageApi.reviewStatus(row.id, status)
-    ElMessage.success('已更新调阅审核')
+    ElMessage.success(t('image.imageTask.Retrieval'))
   } catch (e) { ElMessage.error(e.message) }
   load()
 }
@@ -170,7 +170,7 @@ async function del(row) {
   await ElMessageBox.confirm(`删除影像任务 ${row.batchNo}？`, '删除', { type: 'warning' })
     .then(async () => {
       await imageApi.batchDelete(row.id)
-      ElMessage.success('已删除')
+      ElMessage.success(t('useCrud.main.Deleted'))
       load()
     }).catch(() => {})
 }
@@ -182,8 +182,8 @@ onMounted(() => {
 })
 
 function exportCsv() {
-  if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'batchNo', label: '批次号' }, { prop: 'bizNo', label: '业务单号' }, { prop: 'source', label: '采集来源' }, { prop: 'docCount', label: '页数' }, { prop: 'status', label: '任务状态' }, { prop: 'createTime', label: '提单时间' }]
+  if (!rows.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'batchNo', label: t('image.imageTask.Batch') }, { prop: 'bizNo', label: t('audit.main.Business') }, { prop: 'source', label: t('image.imageTask.Collection2') }, { prop: 'docCount', label: t('image.imageTask.Pages') }, { prop: 'status', label: t('image.imageTask.Task') }, { prop: 'createTime', label: t('image.imageTask.Submission') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -197,16 +197,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `ImageTask_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -221,7 +221,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `ImageTask_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 </script>

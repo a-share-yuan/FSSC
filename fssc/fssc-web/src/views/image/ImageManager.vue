@@ -6,33 +6,31 @@
     <!-- Toolbar -->
     <el-card shadow="never" body-style="padding:12px 16px">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <b style="font-size:15px">影像管理</b>
-        <el-select v-model="q.bizType" placeholder="业务类型" clearable style="width:130px" @change="load">
-          <el-option label="费用报销" value="EXP_CLAIM" />
-          <el-option label="事前申请" value="APPLY" />
-          <el-option label="对公付款" value="EXP_PAY" />
-          <el-option label="借款" value="LOAN" />
-          <el-option label="还款" value="REPAY" />
-          <el-option label="合同" value="CONTRACT" />
-          <el-option label="发票" value="INVOICE" />
+        <b style="font-size:15px">{{ $t('image.imageManager.Image') }}</b>
+        <el-select v-model="q.bizType" :placeholder="$t('image.imageManager.Business')" clearable style="width:130px" @change="load">
+          <el-option :label="$t('image.imageManager.Expense')" value="EXP_CLAIM" />
+          <el-option :label="$t('image.imageManager.Pre')" value="APPLY" />
+          <el-option :label="$t('image.imageManager.Corporate')" value="EXP_PAY" />
+          <el-option :label="$t('image.imageManager.Loan')" value="LOAN" />
+          <el-option :label="$t('image.imageManager.Repayment')" value="REPAY" />
+          <el-option :label="$t('image.imageManager.Contract')" value="CONTRACT" />
+          <el-option :label="$t('image.imageManager.Invoice')" value="INVOICE" />
         </el-select>
-        <el-input v-model="q.keyword" placeholder="批次号/业务单号" clearable style="width:180px" @keyup.enter="load" />
-        <el-select v-model="q.status" placeholder="状态" clearable style="width:110px" @change="load">
-          <el-option label="已上传" value="UPLOADED" />
-          <el-option label="已质检" value="CHECKED" />
+        <el-input v-model="q.keyword" :placeholder="$t('image.imageManager.Batch')" clearable style="width:180px" @keyup.enter="load" />
+        <el-select v-model="q.status" :placeholder="$t('common.status')" clearable style="width:110px" @change="load">
+          <el-option :label="$t('image.imageManager.Uploaded')" value="UPLOADED" />
+          <el-option :label="$t('image.imageManager.Quality')" value="CHECKED" />
         </el-select>
-        <el-button type="primary" size="small" @click="load">查询</el-button>
+        <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
         <el-upload
           :show-file-list="false"
           :before-upload="handleUpload"
           multiple
           accept=".jpg,.jpeg,.png,.bmp,.webp,.pdf,.ofd,.xml"
         >
-          <el-button type="success" size="small" :loading="uploading">+ 上传影像</el-button>
+          <el-button type="success" size="small" :loading="uploading">{{ $t('image.imageManager.Upload') }}</el-button>
         </el-upload>
-        <span style="margin-left:auto;color:#909399;font-size:12px">
-          缩略图模式 | 点击批次查看页面 | 点击页面预览大图 + OCR 标注
-        </span>
+        <span style="margin-left:auto;color:#909399;font-size:12px">{{ $t('image.imageManager.Thumbnail') }}</span>
       </div>
     </el-card>
 
@@ -60,7 +58,7 @@
                 <template #error>
                   <div class="thumb-placeholder">
                     <el-icon size="32"><Picture /></el-icon>
-                    <span>无法预览</span>
+                    <span>{{ $t('image.imageManager.Cannot') }}</span>
                   </div>
                 </template>
                 <template #placeholder>
@@ -274,6 +272,8 @@ import { Picture, Document, Loading, CircleCheck, Warning, DocumentRemove } from
 import { imageApi, fileApi } from '../../api'
 import { invoiceTypeLabel } from '../../constants/invoiceType'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const loading = ref(false)
 const pageLoading = ref(false)
@@ -312,7 +312,7 @@ async function getFileUrl(fileId) {
     // 令牌签发异常时服务端曾回 data:null，此处绝不能拼 download?token=null
     // ——浏览器只会得到 400「令牌无效」，预览静默"加载失败"且用户无从重试；显式失败并给可重试提示。
     if (!token || String(token).trim() === '' || String(token) === 'null') {
-      ElMessage.error('预览令牌签发失败，请稍后重试')
+      ElMessage.error(t('image.imageManager.Failed'))
       return null
     }
     return '/api/tenant/system/file/download?token=' + token
@@ -445,9 +445,9 @@ async function runOcr(b, page) {
       ElMessage.warning(`${handoff} 页未解析出可入池的票面（本批入池 ${count} 张）：可改传 XML/OFD 版式文件重新上传，`
         + '或在「发票管理 › 发票补录」手工录入发票要素')
     } else if (!count) {
-      ElMessage.warning('OCR 识别完成，本批未生成发票（页面票面要素不足以入池，见页面 OCR 标注）')
+      ElMessage.warning(t('image.imageManager.OCR'))
     } else {
-      ElMessage.success(`OCR 识别完成，创建发票 ${count} 张`)
+      ElMessage.success(`OCR 识别完成，创建发票 ${count} ${t('asset.deprBatch.Sheets')}`)
     }
     // Reload pages if drawer is open
     if (drawerVisible.value && currentBatch.value && currentBatch.value.id === b.id) {
@@ -467,7 +467,7 @@ async function delBatch(b) {
   try {
     await ElMessageBox.confirm(`删除影像批次 ${b.batchNo || '#' + b.id}？`, '删除确认', { type: 'warning' })
     await imageApi.batchDelete(b.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('useCrud.main.Deleted'))
     load()
   } catch { /* cancel */ }
 }
@@ -484,7 +484,7 @@ async function handleUpload(file) {
     fd.append('bizType', q.bizType || 'INVOICE')
     fd.append('bizNo', q.keyword || '')
     await imageApi.batchUpload(fd)
-    ElMessage.success('影像上传成功')
+    ElMessage.success(t('image.imageManager.Images'))
     load()
   } catch (e) {
     ElMessage.error('上传失败：' + e.message)

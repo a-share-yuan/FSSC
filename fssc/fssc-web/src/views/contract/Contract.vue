@@ -4,26 +4,26 @@
 <template>
   <el-card>
     <div class="page-header" style="margin-bottom: 16px;">
-      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">合同管理</h2>
+      <h2 style="margin: 0; font-size: 18px; font-weight: 600;">{{ $t('contract.main.Contract') }}</h2>
     </div>
     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-      <el-button type="primary" size="small" @click="openCreate">新增合同</el-button>
-      <el-input v-model="kw" placeholder="搜索合同号/名称/乙方" style="width: 240px" @keyup.enter="load" />
-      <el-button type="primary" size="small" @click="load">查询</el-button>
-      <el-button size="small" @click="kw = ''; load()">重置</el-button>
-      <el-button type="info" size="small" @click="exportCsv">导出</el-button>
+      <el-button type="primary" size="small" @click="openCreate">{{ $t('contract.main.New') }}</el-button>
+      <el-input v-model="kw" :placeholder="$t('contract.main.Search')" style="width: 240px" @keyup.enter="load" />
+      <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
+      <el-button size="small" @click="kw = ''; load()">{{ $t('common.reset') }}</el-button>
+      <el-button type="info" size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-      <el-button type="info" size="small" @click="downloadTemplate">导出导入模板</el-button>
-      <el-button type="success" size="small" @click="importVis = true">导入历史合同</el-button>
+      <el-button type="info" size="small" @click="downloadTemplate">{{ $t('contract.main.Export') }}</el-button>
+      <el-button type="success" size="small" @click="importVis = true">{{ $t('contract.main.Import') }}</el-button>
     </div>
     <!-- 导入历史合同 -->
-    <el-dialog v-model="importVis" title="导入历史合同" width="620px" destroy-on-close>
+    <el-dialog v-model="importVis" :title="$t('contract.main.Import')" width="620px" destroy-on-close>
       <el-alert type="info" :closable="false" show-icon
-        title="格式：合同编号,合同名称,合同类型,乙方名称,合同金额,签订公司ID,费用类型ID,开始日期,结束日期,备注（可先点「导出导入模板」获取示例，去表头后粘贴）" style="margin-bottom: 8px" />
-      <el-input v-model="importCsv" type="textarea" :rows="8" placeholder="粘贴 CSV 内容，一行一条合同" />
+        :title="$t('contract.main.Format')" style="margin-bottom: 8px" />
+      <el-input v-model="importCsv" type="textarea" :rows="8" :placeholder="$t('contract.main.Paste')" />
       <template #footer>
-        <el-button @click="importVis = false">取消</el-button>
-        <el-button type="primary" @click="doImport">导入</el-button>
+        <el-button @click="importVis = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="doImport">{{ $t('common.import') }}</el-button>
       </template>
     </el-dialog>
     <el-table class="cm-target-contract" :data="pagedData" size="small" stripe border v-loading="loading" @selection-change="handleSelectionChange" empty-text="暂无数据" @row-dblclick="openDetail">
@@ -264,6 +264,8 @@ import { formatDate, formatDateTime } from '@/utils/format'
 import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 import { useCurrency } from '@/composables/useCurrency'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // 快捷键
 useKeyboard({
   'ctrl+s': () => { try { save() } catch { /* noop */ } },
@@ -323,11 +325,11 @@ const condFormRef = ref(null)
 const recFormRef = ref(null)
 const condRules = {
   payNode: commonRules.required('请填写付款节点'),
-  payAmount: [{ required: true, type: 'number', min: 0, message: '请输入支付金额（不能为负）' }],
+  payAmount: [{ required: true, type: 'number', min: 0, message: t('contract.main.Please') }],
   planDate: commonRules.date('请选择预计付款日期'),
 }
 const recRules = {
-  payAmount: [{ required: true, type: 'number', min: 0.01, message: '请输入实际付款金额（须大于 0）' }],
+  payAmount: [{ required: true, type: 'number', min: 0.01, message: t('contract.main.Please2') }],
   payDate: commonRules.date('请选择支付日期'),
 }
 
@@ -483,7 +485,7 @@ async function changeContract(row) {
   try {
     await ElMessageBox.confirm('变更将复制生成新合同版本并关闭原合同（释放预算），确认变更？', '合同变更', { type: 'warning' })
     await contractApi.change(row.id)
-    ElMessage.success('已生成变更版本，请完善后提交审批')
+    ElMessage.success(t('contract.main.Change'))
     await load()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
@@ -491,7 +493,7 @@ async function closeContract(row) {
   try {
     await ElMessageBox.confirm('关闭后该合同不能再被业务单据引用，并释放冻结预算，确认关闭？', '合同关闭', { type: 'warning' })
     await contractApi.close(row.id)
-    ElMessage.success('已关闭')
+    ElMessage.success(t('purchase.poOrder.Closed'))
     await load()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
@@ -503,7 +505,7 @@ function dayBefore(d, min) { return !!min && dayStr(d) < min }
 function dayAfter(d, max) { return !!max && dayStr(d) > max }
 async function save() {
   if (form.beginDate && form.endDate && form.beginDate > form.endDate) {
-    ElMessage.error('合同有效期止不得早于有效期起'); return
+    ElMessage.error(t('contract.main.Contract2')); return
   }
   saveFormHistory('CONTRACT', form.value || form)
 
@@ -511,12 +513,12 @@ async function save() {
     await guard.submit(async () => {
       if (form.id) await contractApi.update(form)
       else { const id = await contractApi.create(form); form.id = id }
-      ElMessage.success('已保存'); vis.value = false; await load()
+      ElMessage.success(t('useCrud.main.Saved')); vis.value = false; await load()
     })
   } catch (e) { ElMessage.error(e.message) }
 }
 async function act(op, row) {
-  try { await contractApi[op](row.id); ElMessage.success('操作成功'); await load() }
+  try { await contractApi[op](row.id); ElMessage.success(t('common.success')); await load() }
   catch (e) { ElMessage.error(e.message) }
 }
 /** 驳回合同编辑重提（后端 REJECTED→DRAFT），随即打开编辑表单 */
@@ -526,23 +528,23 @@ async function returnToEdit(row) {
     await load()
     const fresh = rows.value.find((x) => x.id === row.id)
     openEdit(fresh || row)
-    ElMessage.success('已转回草稿，修改后请重新提交')
+    ElMessage.success(t('contract.main.Returned'))
   } catch (e) { ElMessage.error(e.message) }
 }
 async function del(row) {
   try {
     await ElMessageBox.confirm('确认删除该草稿合同？', '删除', { type: 'warning' })
-    await contractApi.delete(row.id); ElMessage.success('已删除'); await load()
+    await contractApi.delete(row.id); ElMessage.success(t('useCrud.main.Deleted')); await load()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 function exportCsv() {
-  if (!rows.value.length) { ElMessage.warning('无数据'); return }
-  const cols = [{ prop: 'contractNo', label: '合同号' }, { prop: 'contractName', label: '合同' ? '名称' : '名称' }, { prop: 'contractType', label: '类型' }, { prop: 'partyBName', label: '乙方' }, { prop: 'amount', label: '金额' }, { prop: 'status', label: '状态' }]
+  if (!rows.value.length) { ElMessage.warning(t('contract.main.No')); return }
+  const cols = [{ prop: 'contractNo', label: t('contract.main.Contract3') }, { prop: 'contractName', label: '合同' ? '名称' : '名称' }, { prop: 'contractType', label: t('finance.fxReval.Type') }, { prop: 'partyBName', label: t('contract.main.Party') }, { prop: 'amount', label: t('common.amount') }, { prop: 'status', label: t('common.status') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((r) => cols.map((c) => { const v = r?.[c.prop]; let s = v == null ? '' : String(v); if (s.includes(',') || s.includes('"')) s = '"' + s + '"'; return s }).join(','))
   const csv = '\ufeff' + [header, ...lines].join('\r\n')
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `合同_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出')
+  ElMessage.success(t('utils.csv.Exported'))
 }
 const importVis = ref(false)
 const importCsv = ref('')
@@ -556,10 +558,10 @@ async function downloadTemplate() {
   } catch (e) { ElMessage.error(e.message) }
 }
 async function doImport() {
-  if (!importCsv.value.trim()) return ElMessage.warning('请粘贴 CSV 内容')
+  if (!importCsv.value.trim()) return ElMessage.warning(t('contract.main.Paste2'))
   try {
     const r = await contractApi.importContract(importCsv.value)
-    ElMessage.success(r.msg || '导入完成')
+    ElMessage.success(t('contract.main.Import2'))
     importVis.value = false
     importCsv.value = ''
     load()
@@ -611,9 +613,9 @@ async function openDetail(row) {
 }
 async function saveCondition() {
   if (!(await validateForm(condFormRef.value))) return
-  if (!condForm.payNode) return ElMessage.warning('请填写付款节点')
+  if (!condForm.payNode) return ElMessage.warning(t('contract.main.Fill'))
   contractApi.conditionCreate({ contractId: detail.id, ...condForm })
-    .then(async () => { ElMessage.success('已保存'); condDialog.value = false; Object.assign(condForm, { payNode: '', payAmount: 0, planDate: '', remark: '' }); conditions.value = await contractApi.conditions(detail.id) })
+    .then(async () => { ElMessage.success(t('useCrud.main.Saved')); condDialog.value = false; Object.assign(condForm, { payNode: '', payAmount: 0, planDate: '', remark: '' }); conditions.value = await contractApi.conditions(detail.id) })
     .catch((e) => ElMessage.error(e.message))
 }
 function delCondition(i) {
@@ -622,9 +624,9 @@ function delCondition(i) {
 }
 async function saveRecord() {
   if (!(await validateForm(recFormRef.value))) return
-  if (!recForm.payAmount) return ElMessage.warning('请填写实际付款金额')
+  if (!recForm.payAmount) return ElMessage.warning(t('contract.main.Fill2'))
   contractApi.recordCreate({ contractId: detail.id, ...recForm })
-    .then(async () => { ElMessage.success('已保存'); recDialog.value = false; Object.assign(recForm, { payAmount: 0, settleQty: 0, unitPrice: 0, billNo: '', billType: 'PAY', payDate: '', status: 'PAID' }); records.value = await contractApi.records(detail.id) })
+    .then(async () => { ElMessage.success(t('useCrud.main.Saved')); recDialog.value = false; Object.assign(recForm, { payAmount: 0, settleQty: 0, unitPrice: 0, billNo: '', billType: 'PAY', payDate: '', status: 'PAID' }); records.value = await contractApi.records(detail.id) })
     .catch((e) => ElMessage.error(e.message))
 }
 function delRecord(i) {
@@ -635,9 +637,9 @@ function delRecord(i) {
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -652,7 +654,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `Contract_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 

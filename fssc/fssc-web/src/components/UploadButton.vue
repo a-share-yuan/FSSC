@@ -9,7 +9,7 @@
     <!-- 识别是同步串行的长请求（扫描版 PDF 可达几十秒），给用户一个"不再等"的出口。
          不要按钮只说"取消等待"、不说"取消上传"——前端 abort() 并不会让服务端停手（识别链是 REQUIRES_NEW），
          中断后一律按"结果未知"提示，并让用户先去票夹核对，别再传同一张票。 -->
-    <el-button v-if="busy && parse" size="small" text type="danger" @click="cancelWaiting">取消等待</el-button>
+    <el-button v-if="busy && parse" size="small" text type="danger" @click="cancelWaiting">{{ $t('UploadButton.main.Cancel') }}</el-button>
   </span>
 </template>
 
@@ -19,13 +19,19 @@ import { ElMessage } from 'element-plus'
 import { fileApi, imageApi, isRequestCancelled } from '../api'
 import { abortedOutcome } from '../utils/invoiceOutcome'
 import { isInvoiceFile } from '../utils/attachKind'
+import { i18n } from '../i18n'
+import { useI18n } from 'vue-i18n'
+
+// setup 体内的 t() 取词；defineProps 默认值仍用 i18n.global.t
+// （defineProps 宏不能引用 setup 内的局部变量）。
+const { t } = useI18n()
 
 /**
  * 通用上传按钮（修复"点上传无反应"：改用 el-upload http-request 标准链路，走 axios 带 token）。
  * mode=file 走文件服务 /tenant/system/file/upload；mode=image 走影像服务 /tenant/image/batch/upload。
  */
 const props = defineProps({
-  label: { type: String, default: '上传文件' },
+  label: { type: String, default: i18n.global.t('UploadButton.main.Upload') },
   type: { type: String, default: 'warning' },
   accept: { type: String, default: '' },
   multiple: { type: Boolean, default: false },
@@ -119,7 +125,7 @@ async function doUpload({ file, onSuccess, onError }) {
         ? await fileApi.attachUpload(file, props.bizId == null ? null : props.bizId, controller.signal)
         : await fileApi.upload(file, props.bizType || 'OTHER', props.bizId, props.zone || 'BUSINESS')
     }
-    ElMessage.success('上传成功')
+    ElMessage.success(t('UploadButton.main.Uploaded'))
     onSuccess && onSuccess()
     props.onDone && props.onDone(rec)
   } catch (e) {

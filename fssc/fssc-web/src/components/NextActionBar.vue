@@ -16,6 +16,8 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 /**
  * 下一跳行动条：根据单据状态 + 业务链缺口，计算流程当前「该去哪一步」，
@@ -82,7 +84,7 @@ const action = computed(() => {
   if (!has('ARCHIVE')) {
     const pf = payFact.value
     if (pf.kind === 'unpaid')
-      return { title: '执行付款', desc: `付款记录 ${pf.total} 笔尚未付讫（待付款），先去出纳付款/组批再归档`, route: '/pay', btn: '去出纳付款', tone: 'warn', done: false }
+      return { title: '执行付款', desc: `${t('BillTraceDrawer.main.Payment')} ${pf.total} 笔尚未付讫（待付款），先去出纳付款/组批再归档`, route: '/pay', btn: '去出纳付款', tone: 'warn', done: false }
     if (pf.kind === 'partial')
       return { title: '执行付款', desc: `付款已付讫 ${pf.paid}/${pf.total} 笔，其余仍未到账`, route: '/pay', btn: '去出纳付款', tone: 'warn', done: false }
     if (pf.kind === 'none')

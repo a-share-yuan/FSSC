@@ -2,10 +2,10 @@
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 
 <template>
-  <el-drawer v-model="visible" title="上下文帮助" direction="rtl" size="400px" :destroy-on-close="true">
+  <el-drawer v-model="visible" :title="$t('HelpPanel.main.Contextual')" direction="rtl" size="400px" :destroy-on-close="true">
     <div class="help-content">
       <!-- 搜索帮助 -->
-      <el-input v-model="search" placeholder="搜索帮助文档..." :prefix-icon="Search" clearable size="small" style="margin-bottom: 12px" />
+      <el-input v-model="search" :placeholder="$t('HelpPanel.main.Search')" :prefix-icon="Search" clearable size="small" style="margin-bottom: 12px" />
 
       <!-- 当前页面上下文帮助 -->
       <div v-if="currentHelp" class="context-help">
@@ -27,7 +27,7 @@
       <!-- 常见问题 -->
       <div class="section-title">
         <el-icon><QuestionFilled /></el-icon>
-        <span>常见问题</span>
+        <span>{{ $t('HelpPanel.main.FAQ') }}</span>
       </div>
       <el-collapse v-model="activeFaq">
         <el-collapse-item v-for="(faq, i) in filteredFaqs" :key="i" :name="i">

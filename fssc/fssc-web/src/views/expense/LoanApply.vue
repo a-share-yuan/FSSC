@@ -363,7 +363,7 @@ async function openRepayLoan() {
   //   结果点按钮即抛 ReferenceError，loan-candidates 请求根本没发出、repayDialog
   //   也永不置 true，表现为「点了『选择借款单冲销』毫无反应」。
   const b = wb.value && wb.value.b
-  if (!b || !b.form || !b.form.bill) { ElMessage.warning('单据尚未初始化，请稍后重试'); return }
+  if (!b || !b.form || !b.form.bill) { ElMessage.warning(t('expense.loanApply.Document')); return }
   // 另外：新建还款单时 companyId 还是空值，原样传会被序列化成字符串 "null"，
   // 后端 @RequestParam Long companyId 转换失败返回 400，await 抛错同样会把后半段吞掉。
   // 故只在拿到有效 companyId 时才带该参数（后端 required=false，可省略）。

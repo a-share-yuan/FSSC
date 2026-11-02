@@ -5,16 +5,16 @@
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <b>收货单</b>
-        <el-button type="primary" size="small" @click="openCreate">新增收货单</el-button>
-        <el-input v-model="q.keyword" placeholder="收货单号/PO/供应商/送货单号" clearable style="width: 200px" @keyup.enter="load" />
-        <el-select v-model="q.status" placeholder="状态" clearable style="width: 120px" @change="load">
-          <el-option label="已收货" value="RECEIVED" />
-          <el-option label="已开票" value="INVOICED" />
-          <el-option label="已关闭" value="CLOSED" />
+        <b>{{ $t('purchase.poReceipt.Goods') }}</b>
+        <el-button type="primary" size="small" @click="openCreate">{{ $t('purchase.poReceipt.Add') }}</el-button>
+        <el-input v-model="q.keyword" :placeholder="$t('purchase.poReceipt.Receipt')" clearable style="width: 200px" @keyup.enter="load" />
+        <el-select v-model="q.status" :placeholder="$t('common.status')" clearable style="width: 120px" @change="load">
+          <el-option :label="$t('purchase.poReceipt.Received')" value="RECEIVED" />
+          <el-option :label="$t('purchase.poOrder.Invoiced')" value="INVOICED" />
+          <el-option :label="$t('purchase.poOrder.Closed')" value="CLOSED" />
         </el-select>
-        <el-button size="small" @click="load">查询</el-button>
-      <el-button size="small" @click="exportCsv">导出</el-button>
+        <el-button size="small" @click="load">{{ $t('common.search') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         <span style="margin-left: auto; color: #909399; font-size: 12px">收货金额 <= 采购订单剩余可收（自动校验并回写累计收货）</span>
       </div>
@@ -204,6 +204,8 @@ import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // 快捷键
 useKeyboard({
   'ctrl+s': () => { try { save() } catch { /* noop */ } },
@@ -354,10 +356,10 @@ async function save() {
     }
     try {
       await purchaseApi.receiptCreate(payload)
-      ElMessage.success('已保存（收货超单会自动拦截）')
+      ElMessage.success(t('purchase.poReceipt.Saved'))
       dlg.value = false
       load()
-    } catch (e) { ElMessage.error(e?.message || '收货单保存失败') }
+    } catch (e) { ElMessage.error(t('purchase.poReceipt.Failed')) }
   })
 }
 
@@ -375,8 +377,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'receiptNo', label: '收货单号' }, { prop: 'poNo', label: '采购订单' }, { prop: 'supplierName', label: '供应商' }, { prop: 'receiptDate', label: '收货日期' }, { prop: 'receiverName', label: '收货人' }, { prop: 'warehouse', label: '仓库' }, { prop: 'deliveryNote', label: '送货单号' }]
+  if (!rows.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'receiptNo', label: t('purchase.poReceipt.Receipt2') }, { prop: 'poNo', label: t('router.purchase.Purchase') }, { prop: 'supplierName', label: t('purchase.payPlan.Supplier') }, { prop: 'receiptDate', label: t('purchase.poReceipt.Receipt3') }, { prop: 'receiverName', label: t('purchase.poReceipt.Receiver') }, { prop: 'warehouse', label: t('purchase.poReceipt.Warehouse') }, { prop: 'deliveryNote', label: t('purchase.poReceipt.Delivery') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -390,16 +392,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `PoReceipt_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -414,7 +416,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `PoReceipt_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 </script>

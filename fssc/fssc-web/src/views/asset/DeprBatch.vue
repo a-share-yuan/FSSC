@@ -5,9 +5,9 @@
   <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>折旧计提批单</b>
-        <span style="color:#909399; font-size:12px">月度折旧计提两阶段：生成批单 → 审批通过后自动落账（共享中心资产核算岗）</span>
-        <el-button type="info" size="small" style="margin-left:auto" @click="reload">刷新</el-button>
+        <b>{{ $t('asset.deprBatch.Depreciation') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('asset.deprBatch.Monthly') }}</span>
+        <el-button type="info" size="small" style="margin-left:auto" @click="reload">{{ $t('common.refresh') }}</el-button>
       </div>
     </template>
 
@@ -116,6 +116,8 @@ import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useApprovalScope } from '../../composables/useApprovalScope'
 import { useApprovalDialog } from '@/composables/useApprovalDialog'
 import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // 审批按钮归属门控：仅当该单据存在派给当前用户的待办任务时才显示，
 // 杜绝「申请人看到自己单据的审批通过/驳回」「非办理人看到审批按钮」这类无效按钮。
@@ -152,7 +154,7 @@ async function doSubmit() {
   await guardPeriod(async () => {
     await ElMessageBox.confirm('确认对本期间资产生成折旧批单并发起折旧计提审批？', '发起月度计提', { type: 'warning' })
     const b = await deprBatchApi.submit(period.value)
-    ElMessage.success('已生成批单并提交审批，待计提 ' + b.assetCount + ' 项'); load()
+    ElMessage.success(t('asset.assetCard.Items')); load()
   })
 }
 async function doCreate() {
@@ -164,11 +166,11 @@ async function doCreate() {
 }
 async function submitById(row) {
   await ElMessageBox.confirm('确认发起批单「' + row.batchNo + '」审批？', '提交审批', { type: 'warning' })
-  await deprBatchApi.submitById(row.id); ElMessage.success('已提交审批'); load()
+  await deprBatchApi.submitById(row.id); ElMessage.success(t('asset.deprBatch.Submitted')); load()
 }
 async function execute(row) {
   await ElMessageBox.confirm('确认对批单「' + row.batchNo + '」执行落账？', '执行落账', { type: 'warning' })
-  await deprBatchApi.execute(row.id); ElMessage.success('已执行落账'); load()
+  await deprBatchApi.execute(row.id); ElMessage.success(t('asset.deprBatch.Posting')); load()
 }
 
 // 折旧凭证查看与过账
@@ -201,7 +203,7 @@ async function openVouchers(row) {
       if (!list.length || (t && p * 100 >= t)) break
     }
     vouchers.value = found
-    if (!found.length) ElMessage.info('未找到该批次的折旧凭证（批单审批通过执行落账时逐资产生成）')
+    if (!found.length) ElMessage.info(t('asset.deprBatch.Depreciation2'))
   } catch (e) { ElMessage.error(e.message) } finally { vLoading.value = false }
 }
 
@@ -211,14 +213,14 @@ async function postOne(v) {
   } catch { return }
   try {
     await sharingApi.voucherPost(v.id)
-    ElMessage.success(`凭证 ${v.voucherNo} 已过账`)
+    ElMessage.success(`${t('useBill.main.Voucher')} ${v.voucherNo} ${t('asset.deprBatch.Posted')}`)
     openVouchers(curBatch.value)
   } catch (e) { ElMessage.error(e.message) }
 }
 
 async function postSelected() {
   const ids = (vSelRows.value || []).map((v) => v.id).filter(Boolean)
-  if (!ids.length) { ElMessage.warning('请先勾选要过账的草稿凭证'); return }
+  if (!ids.length) { ElMessage.warning(t('asset.deprBatch.Select')); return }
   try {
     await ElMessageBox.confirm(`确认批量过账选中的 ${ids.length} 张凭证？`, '批量过账', { type: 'warning' })
   } catch { return }
@@ -227,7 +229,7 @@ async function postSelected() {
     const vals = Object.values(r || {})
     const ok = vals.filter((s) => s === 'OK').length
     const bad = vals.filter((s) => s !== 'OK')
-    if (!bad.length) ElMessage.success(`批量过账完成：成功 ${ok}/${ids.length} 张`)
+    if (!bad.length) ElMessage.success(`批量过账完成：成功 ${ok}/${ids.length} ${t('asset.deprBatch.Sheets')}`)
     else ElMessage.warning(`批量过账完成：成功 ${ok} 张，失败 ${bad.length} 张；${bad.slice(0, 2).join('；')}`)
     openVouchers(curBatch.value)
   } catch (e) { ElMessage.error(e.message) }
@@ -236,8 +238,8 @@ async function postSelected() {
 onMounted(load)
 
 function exportCsv() {
-  if (!batches.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'batchNo', label: '批号' }, { prop: 'period', label: '计提期间' }, { prop: 'assetCount', label: '待计提数' }, { prop: 'createTime', label: '创建时间' }]
+  if (!batches.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'batchNo', label: t('asset.deprBatch.Batch') }, { prop: 'period', label: t('asset.deprBatch.Accrual') }, { prop: 'assetCount', label: t('asset.deprBatch.Pending') }, { prop: 'createTime', label: t('common.createTime') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = batches.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -251,16 +253,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `DeprBatch_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -275,7 +277,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `DeprBatch_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 // InlineActions approve/reject/view/trace handlers
@@ -289,7 +291,7 @@ async function handleView(row) {
       assetCount: d.assetCount,
       totalAmount: d.totalAmount,
       status: statusTxt(d.status),
-    }, { title: '批单详情', labels: { batchNo: '批号', period: '期间', assetCount: '待计提数', totalAmount: '应计提总额', status: '状态' } })
+    }, { title: '批单详情', labels: { batchNo: '批号', period: '期间', assetCount: '待计提数', totalAmount: '应计提总额', status: t('common.status') } })
   } catch (e) { ElMessage.error(e.message) }
 }
 

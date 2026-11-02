@@ -17,16 +17,17 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { wfApi } from '../api'
 import { useApprovalScope } from './useApprovalScope'
+import { i18n } from '../i18n'
 
 export function useApprovalDialog({ taskIdOf, reload }) {
   const approvalRef = ref(null)
   const { refresh } = useApprovalScope()
 
   async function run(row, decision) {
-    if (!approvalRef.value) { ElMessage.error('审批弹窗未就绪，请刷新页面后重试'); return }
+    if (!approvalRef.value) { ElMessage.error(i18n.global.t('useApprovalDialog.main.Approval')); return }
     const taskId = taskIdOf ? taskIdOf(row) : null
     if (!taskId) {
-      ElMessage.warning('该单据不在您的待办中（可能已被他人办理），请刷新列表后重试')
+      ElMessage.warning(i18n.global.t('useApprovalDialog.main.This'))
       refresh()
       return
     }
@@ -47,7 +48,7 @@ export function useApprovalDialog({ taskIdOf, reload }) {
           rejectToNodeKey: payload.rejectToNodeKey || undefined,
           approvalItemCode: payload.approvalItemCode || undefined,
         })
-        ElMessage.success(payload.approved ? '已通过' : '已驳回')
+        ElMessage.success(i18n.global.t('purchase.poOrder.Rejected'))
         refresh() // 待办缓存立即对齐，避免已办结的行还挂着审批按钮
         if (reload) reload()
       },

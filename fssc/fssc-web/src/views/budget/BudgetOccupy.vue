@@ -6,7 +6,7 @@
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="header-title">预算占用流水</span>
+          <span class="header-title">{{ $t('budget.budgetOccupy.Budget') }}</span>
         </div>
       </template>
       <el-form :inline="true" :rules="filterRules" size="small" label-width="100px" style="margin-bottom:12px">
@@ -121,6 +121,8 @@ import SkeletonList from '../../components/SkeletonList.vue'
 import { commonRules, validateForm } from '../../composables/useFormRules'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // BillTraceDrawer
 const traceVisible = ref(false)
@@ -154,10 +156,10 @@ const woForm = reactive({ budgetItemId: null, amount: 0, bizType: null, bizId: n
 // 预算核销弹窗接入中央框架（原只有一句组合 toast，字段级错误不落位）
 const woFormRef = ref(null)
 const woRules = {
-  budgetItemId: [{ required: true, type: 'number', min: 1, message: '请选择预算明细' }],
-  amount: [{ required: true, type: 'number', min: 0.01, message: '请输入核销金额（须大于 0）' }],
+  budgetItemId: [{ required: true, type: 'number', min: 1, message: t('budget.budgetOccupy.Please') }],
+  amount: [{ required: true, type: 'number', min: 0.01, message: t('budget.budgetOccupy.Please2') }],
   bizType: commonRules.select('请选择业务类型'),
-  bizId: [{ required: true, type: 'number', min: 1, message: '请确认关联单据' }],
+  bizId: [{ required: true, type: 'number', min: 1, message: t('budget.budgetOccupy.Confirm') }],
 }
 function openWriteOff(row) {
   woForm.budgetItemId = row.budgetItemId
@@ -170,7 +172,7 @@ function openWriteOff(row) {
 async function doWriteOff() {
   if (!(await validateForm(woFormRef.value))) return
   if (!woForm.budgetItemId || !(Number(woForm.amount) > 0) || !woForm.bizType || !woForm.bizId) {
-    ElMessage.warning('预算明细、核销金额、业务类型、关联单据都要填齐才能核销')
+    ElMessage.warning(t('budget.budgetOccupy.Budget2'))
     return
   }
   woBusy.value = true
@@ -179,7 +181,7 @@ async function doWriteOff() {
       budgetItemId: Number(woForm.budgetItemId), amount: Number(woForm.amount),
       bizType: woForm.bizType, bizId: Number(woForm.bizId), bizNo: woForm.bizNo || null,
     })
-    ElMessage.success('已核销：这笔占用已转消耗，账本会多一条 WRITE_OFF 流水')
+    ElMessage.success(t('budget.budgetOccupy.Written'))
     woVisible.value = false
     loadList()
   } catch (e) {
@@ -234,7 +236,7 @@ function getSummary({ columns, data }) {
 }
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 // 点击预算明细ID 联查该项预算余额(总额/调整/占用/使用/可用)
@@ -261,9 +263,9 @@ async function openBalance(row) {
 function doExport() {
   const rows = list.value.map((r) => ({ ...r, operatorText: operatorText(r) }))
   exportCsv(rows, [
-    { prop: 'budgetItemId', label: '预算明细ID' }, { prop: 'operType', label: '操作类型' },
-    { prop: 'amount', label: '金额' }, { prop: 'bizType', label: '业务类型' }, { prop: 'bizNo', label: '单据号' },
-    { prop: 'operatorText', label: '操作人' }, { prop: 'remark', label: '备注' }, { prop: 'createTime', label: '时间' },
+    { prop: 'budgetItemId', label: t('budget.budgetOccupy.Budget3') }, { prop: 'operType', label: t('budget.budgetOccupy.Operation') },
+    { prop: 'amount', label: t('common.amount') }, { prop: 'bizType', label: t('image.imageManager.Business') }, { prop: 'bizNo', label: t('budget.budgetOccupy.Document') },
+    { prop: 'operatorText', label: t('budget.budgetOccupy.Operator') }, { prop: 'remark', label: t('common.remark') }, { prop: 'createTime', label: t('budget.budgetOccupy.Time') },
   ], 'BudgetOccupy')
 }
 

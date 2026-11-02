@@ -5,16 +5,16 @@
   <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>OCR识别记录</b>
-        <span style="color:#909399; font-size:12px">OCR 结构化票面识别结果 —— 发票号/购销方/价税明细/票面自洽校验</span>
+        <b>{{ $t('image.ocrRecords.OCR') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('image.ocrRecords.Structured') }}</span>
         <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
-          <el-select v-if="canPickBatch" v-model="q.batchId" placeholder="按批次筛选" clearable filterable style="width:220px" size="small" @change="search">
+          <el-select v-if="canPickBatch" v-model="q.batchId" :placeholder="$t('image.ocrRecords.Filter')" clearable filterable style="width:220px" size="small" @change="search">
             <el-option v-for="b in batchOptions" :key="b.id" :label="b.batchNo || ('#' + b.id)" :value="b.id" />
           </el-select>
-          <el-input v-model="q.invoiceNo" placeholder="发票号" clearable style="width:160px" size="small" @keyup.enter="search" />
-          <el-button size="small" type="primary" @click="search">查询</el-button>
-          <el-button size="small" @click="reset">重置</el-button>
-          <el-button size="small" @click="doExport">导出</el-button>
+          <el-input v-model="q.invoiceNo" :placeholder="$t('image.ocrRecords.Invoice')" clearable style="width:160px" size="small" @keyup.enter="search" />
+          <el-button size="small" type="primary" @click="search">{{ $t('common.search') }}</el-button>
+          <el-button size="small" @click="reset">{{ $t('common.reset') }}</el-button>
+          <el-button size="small" @click="doExport">{{ $t('common.export') }}</el-button>
         </div>
       </div>
     </template>
@@ -107,6 +107,8 @@ import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { hasPerm } from '@/utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const loading = ref(false)
 const records = ref([])
@@ -162,12 +164,12 @@ async function openCompare(row) {
 
 async function reRecognize(row) {
   const fileId = row.fileId || row.imgFileId
-  if (!fileId) return ElMessage.warning('该记录无关联附件,无法回源重识别')
+  if (!fileId) return ElMessage.warning(t('image.ocrRecords.This'))
   await ElMessageBox.confirm('确认对该附件回源重新识别?将覆盖更新本条识别记录。', '回源重识别', { type: 'warning' })
   reRecognizing.value = row.id
   try {
     await imageApi.ocrByFile(fileId)
-    ElMessage.success('重识别完成')
+    ElMessage.success(t('image.ocrRecords.Re'))
     search()
   } catch (e) { ElMessage.error(e.message) } finally { reRecognizing.value = null }
 }
@@ -185,7 +187,7 @@ async function getFileUrl(fileId) {
     // 令牌签发异常时服务端曾回 data:null，此处绝不能拼 download?token=null
     // ——浏览器只会得到 400「令牌无效」，预览静默"加载失败"且用户无从重试；显式失败并给可重试提示。
     if (!token || String(token).trim() === '' || String(token) === 'null') {
-      ElMessage.error('预览令牌签发失败，请稍后重试')
+      ElMessage.error(t('image.imageManager.Failed'))
       return null
     }
     return '/api/tenant/system/file/download?token=' + token
@@ -195,11 +197,11 @@ async function getFileUrl(fileId) {
 // 41号审查 导出当前查询结果（全列）
 function doExport() {
   exportCsv(records.value, [
-    { prop: 'id', label: 'ID' }, { prop: 'batchId', label: '批次' }, { prop: 'imgFileId', label: '页ID' },
-    { prop: 'invoiceNo', label: '发票号' }, { prop: 'invoiceType', label: '类型' }, { prop: 'invoiceDate', label: '开票日期' },
-    { prop: 'amount', label: '价税合计' }, { prop: 'netAmount', label: '不含税' }, { prop: 'taxAmount', label: '税额' },
-    { prop: 'sellerName', label: '销方' }, { prop: 'buyerName', label: '购方' }, { prop: 'channelName', label: '识别通道' },
-    { prop: 'consistent', label: '票面自洽(1通过/0超差)' }, { prop: 'createdAt', label: '识别时间' },
+    { prop: 'id', label: 'ID' }, { prop: 'batchId', label: t('image.ocrRecords.Batch') }, { prop: 'imgFileId', label: t('image.ocrRecords.Page') },
+    { prop: 'invoiceNo', label: t('image.ocrRecords.Invoice') }, { prop: 'invoiceType', label: t('finance.fxReval.Type') }, { prop: 'invoiceDate', label: t('image.ocrRecords.Invoice2') },
+    { prop: 'amount', label: t('image.ocrRecords.Total') }, { prop: 'netAmount', label: t('image.ocrRecords.Excluding') }, { prop: 'taxAmount', label: t('image.ocrRecords.Tax') },
+    { prop: 'sellerName', label: t('image.ocrRecords.Seller') }, { prop: 'buyerName', label: t('image.ocrRecords.Buyer') }, { prop: 'channelName', label: t('image.ocrRecords.Recognition') },
+    { prop: 'consistent', label: t('image.ocrRecords.Bill') }, { prop: 'createdAt', label: t('image.ocrRecords.Recognition2') },
   ], 'OcrRecords')
 }
 

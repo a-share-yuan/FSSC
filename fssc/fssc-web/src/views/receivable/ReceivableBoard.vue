@@ -6,10 +6,10 @@
     <el-card>
     <template #header>
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-        <b>应收管理</b>
-        <span style="color:#909399; font-size:12px">应收单 / 收款核销 / 催收待办 / 坏账计提 —— 全流程可视化</span>
+        <b>{{ $t('receivable.main.Receivables') }}</b>
+        <span style="color:#909399; font-size:12px">{{ $t('receivable.main.Receivables2') }}</span>
         <span style="display:flex; gap:8px; margin-left:auto; align-items:center">
-          <el-button size="small" @click="reload">刷新</el-button>
+          <el-button size="small" @click="reload">{{ $t('common.refresh') }}</el-button>
         </span>
       </div>
     </template>
@@ -258,6 +258,8 @@ import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useCurrency } from '@/composables/useCurrency'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // 快捷键
 useKeyboard({
   'ctrl+r': () => { try { reload() } catch { /* noop */ } },
@@ -276,7 +278,7 @@ function openTrace(row) {
 
 // 双击行：展示行数据详情
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 // 客户/供应商列表（用于往来单位 ID → 名称）
@@ -359,7 +361,7 @@ async function loadBadDebt() { try { badDebts.value = await receivableApi.badDeb
 async function openReceivable() { rForm.value = { customerId: null, orderId: null, amount: 0, currencyCode: 'CNY', dueDate: '', batchNo: '' }; dlgReceivable.value = true }
 async function saveReceivable() {
   await guardReceivable(async () => {
-    try { await receivableApi.create(rForm.value); ElMessage.success('应收单已生成'); dlgReceivable.value = false; loadReceivable() }
+    try { await receivableApi.create(rForm.value); ElMessage.success(t('receivable.main.Receivable')); dlgReceivable.value = false; loadReceivable() }
     catch (e) { ElMessage.error(e.message) }
   })
 }
@@ -398,7 +400,7 @@ async function saveReceipt() {
   await guardReceipt(async () => {
     // 孪生面同修：保存后 await 刷新，避免"点了没反应"的误判；
     // 本页无检索工具条，新行必在列表首屏（后端按 id 倒序），故不做「不在视野」提示。
-    try { await receivableApi.receiptCreate(rcForm.value); ElMessage.success('收款单已登记'); dlgReceipt.value = false; await loadReceipt() }
+    try { await receivableApi.receiptCreate(rcForm.value); ElMessage.success(t('receivable.main.Receipt')); dlgReceipt.value = false; await loadReceipt() }
     catch (e) { ElMessage.error(e.message) }
   })
 }
@@ -410,7 +412,7 @@ const receiptAppliedStatuses = ['WRITTEN_OFF', 'WRITE_OFF', 'APPLIED']
 async function applyReceipt(row) {
   try {
     await receivableApi.receiptApply(row.id)
-    ElMessage.success('该收款单登记时已完成核销冲减，本次未重复冲减')
+    ElMessage.success(t('receivable.main.Write'))
     loadReceipt(); loadReceivable()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -429,14 +431,14 @@ async function solveCollect(row) {
     // 乙：办结照做，只把"同一人在这条催收任务上占多岗"的复核提示显示出来（不拦、不报错）
     const r = await receivableApi.collectSolve(row.id)
     if (r && r.warning) ElMessage({ type: 'warning', message: '待办已解决：' + r.warning, duration: 6000 })
-    else ElMessage.success('待办已解决')
+    else ElMessage.success(t('receivable.main.Do'))
     loadCollect()
   } catch (e) { ElMessage.error(e.message) }
 }
 
 async function provision() {
-  if (!badDebtPeriod.value) return ElMessage.warning('请选择计提期间（yyyyMM）')
-  try { const n = await receivableApi.badDebtProvision(badDebtPeriod.value); ElMessage.success('计提完成，新增 ' + n + ' 条'); loadBadDebt() }
+  if (!badDebtPeriod.value) return ElMessage.warning(t('receivable.main.Please'))
+  try { const n = await receivableApi.badDebtProvision(badDebtPeriod.value); ElMessage.success(t('approval.main.Records')); loadBadDebt() }
   catch (e) { ElMessage.error(e.message) }
 }
 async function reverseBadDebt(row) {
@@ -448,9 +450,9 @@ async function reverseBadDebt(row) {
 }
 async function confirmBadDebt(row) {
   try {
-    const { value: reason } = await ElMessageBox.prompt('确认该笔坏账核销？输入确认说明', '坏账确认（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputValue: '坏账确认核销' })
+    const { value: reason } = await ElMessageBox.prompt('确认该笔坏账核销？输入确认说明', '坏账确认（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputValue: t('receivable.main.Bad') })
     await receivableApi.badDebtConfirm(row.id, reason)
-    ElMessage.success('坏账确认已提交审批')
+    ElMessage.success(t('receivable.main.Bad2'))
     loadBadDebt()
   } catch (e) { /* cancelled */ }
 }
@@ -458,7 +460,7 @@ async function reconStart() {
   try {
     const { value: period } = await ElMessageBox.prompt('输入对账期间(yyyyMM)', '应收账款对账（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputValue: badDebtPeriod.value || '', inputValidator: (v) => (v != null && String(v).trim().length >= 6) || '请填写对账期间（yyyyMM）' })
     await receivableApi.reconStart(period, null)
-    ElMessage.success('对账已提交审批')
+    ElMessage.success(t('receivable.main.Reconciliation'))
   } catch (e) { /* cancelled */ }
 }
 
@@ -481,8 +483,8 @@ onMounted(() => {
 })
 
 function exportCsv() {
-  if (!receivables.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'billNo', label: '单据号' }, { prop: 'batchNo', label: '批次号' }, { prop: 'currencyCode', label: '币种' }, { prop: 'dueDate', label: '到期日' }]
+  if (!receivables.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'billNo', label: t('budget.budgetOccupy.Document') }, { prop: 'batchNo', label: t('image.imageTask.Batch') }, { prop: 'currencyCode', label: t('bill.billDetailPanel.Currency') }, { prop: 'dueDate', label: t('receivable.main.Due') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = receivables.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -496,16 +498,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `ReceivableBoard_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -520,7 +522,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `ReceivableBoard_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 </script>

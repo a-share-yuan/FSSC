@@ -3,27 +3,27 @@
 
 <template>
   <div class="inline-actions" v-if="visible">
-    <el-tooltip content="查看" placement="top">
+    <el-tooltip :content="$t('InlineActions.main.View')" placement="top">
       <el-button link size="small" @click.stop="$emit('view')">
         <el-icon><View /></el-icon>
       </el-button>
     </el-tooltip>
-    <el-tooltip v-if="showApprove" content="审批" placement="top">
+    <el-tooltip v-if="showApprove" :content="$t('InlineActions.main.Approval')" placement="top">
       <el-button link size="small" type="success" @click.stop="$emit('approve')">
         <el-icon><Check /></el-icon>
       </el-button>
     </el-tooltip>
-    <el-tooltip v-if="showReject" content="退回" placement="top">
+    <el-tooltip v-if="showReject" :content="$t('InlineActions.main.Return')" placement="top">
       <el-button link size="small" type="danger" @click.stop="$emit('reject')">
         <el-icon><Close /></el-icon>
       </el-button>
     </el-tooltip>
-    <el-tooltip v-if="showPrint" content="打印" placement="top">
+    <el-tooltip v-if="showPrint" :content="$t('InlineActions.main.Print')" placement="top">
       <el-button link size="small" @click.stop="$emit('print')">
         <el-icon><Printer /></el-icon>
       </el-button>
     </el-tooltip>
-    <el-tooltip v-if="showTrace" content="全链路追溯" placement="top">
+    <el-tooltip v-if="showTrace" :content="$t('InlineActions.main.Full')" placement="top">
       <el-button link size="small" @click.stop="$emit('trace')">
         <el-icon><Connection /></el-icon>
       </el-button>

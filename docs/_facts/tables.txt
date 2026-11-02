@@ -142,6 +142,7 @@ md_tax_rate
 md_vehicle
 ocr_record
 op_archive
+op_archive_item
 op_audit_task
 op_bank_statement
 op_barcode

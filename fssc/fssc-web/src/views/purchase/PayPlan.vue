@@ -5,15 +5,13 @@
   <el-card>
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <b>采购付款计划</b>
-        <el-button type="primary" size="small" @click="openDialog()">+ 新建付款计划</el-button>
-        <el-input v-model="q.keyword" placeholder="单号/供应商/用途" clearable style="width: 180px" @keyup.enter="load" />
-        <el-button size="small" @click="load">查询</el-button>
-      <el-button size="small" @click="exportCsv">导出</el-button>
+        <b>{{ $t('purchase.payPlan.Procurement') }}</b>
+        <el-button type="primary" size="small" @click="openDialog()">{{ $t('purchase.payPlan.New') }}</el-button>
+        <el-input v-model="q.keyword" :placeholder="$t('purchase.payPlan.Document')" clearable style="width: 180px" @keyup.enter="load" />
+        <el-button size="small" @click="load">{{ $t('common.search') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-        <span style="margin-left: auto; color: #909399; font-size: 13px">
-          合同/采购订单签订后提交付款计划 → 审批通过后流转付款申请
-        </span>
+        <span style="margin-left: auto; color: #909399; font-size: 13px">{{ $t('purchase.payPlan.Submit') }}</span>
       </div>
     </template>
 
@@ -92,6 +90,8 @@ import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { hasPerm } from '../../utils/perm'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 // 快捷键
 useKeyboard({
   'ctrl+s': () => { try { submit() } catch { /* noop */ } },
@@ -110,7 +110,7 @@ function openTrace(row) {
 
 // 双击行：展示行数据详情
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 const selRows = ref([])
@@ -153,7 +153,7 @@ async function submit() {
     submitting.value = true
     try {
       await payPlanApi.create({ ...form })
-      ElMessage.success('已发起【采购付款计划】审批')
+      ElMessage.success(t('purchase.payPlan.Procurement2'))
       dialogVisible.value = false
       load()
     } catch (e) { ElMessage.error(e.message) } finally { submitting.value = false }
@@ -167,7 +167,7 @@ async function resubmitPlan(row) {
   } catch { return }
   try {
     await payPlanApi.resubmit(row.id)
-    ElMessage.success('已重新提交审批')
+    ElMessage.success(t('purchase.payPlan.Resubmitted'))
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -190,7 +190,7 @@ async function voidPlan(row) {
   } catch { return }
   try {
     await payPlanApi.voidPlan(row.id, reason)
-    ElMessage.success('已作废，审批链同步终止')
+    ElMessage.success(t('purchase.payPlan.Voided'))
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
@@ -206,8 +206,8 @@ onMounted(async () => {
 })
 
 function exportCsv() {
-  if (!rows.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'planNo', label: '单号' }, { prop: 'supplier', label: '供应商' }, { prop: 'period', label: '期间' }, { prop: 'amount', label: '计划金额' }, { prop: 'purpose', label: '用途' }, { prop: 'createTime', label: '创建时间' }]
+  if (!rows.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'planNo', label: t('approval.approvalDialog.Document') }, { prop: 'supplier', label: t('purchase.payPlan.Supplier') }, { prop: 'period', label: t('purchase.payPlan.Period') }, { prop: 'amount', label: t('purchase.payPlan.Planned') }, { prop: 'purpose', label: t('purchase.payPlan.Purpose') }, { prop: 'createTime', label: t('common.createTime') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = rows.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -221,16 +221,16 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `PayPlan_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -245,7 +245,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `PayPlan_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 </script>

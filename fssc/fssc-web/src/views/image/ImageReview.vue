@@ -4,26 +4,26 @@
 <template>
   <el-tabs v-model="tab" :class="{ tabless: isSingle }">
     <!-- 影像调阅评价 -->
-    <el-tab-pane label="影像调阅评价" name="review">
+    <el-tab-pane :label="$t('image.imageReview.Image')" name="review">
       <el-card>
         <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center">
-          <el-select v-model="rStatus" clearable placeholder="评价状态" style="width:140px" @change="loadReview">
-            <el-option label="待评价" value="PENDING" />
-            <el-option label="已通过" value="OK" />
-            <el-option label="整单重采集" value="RE_COLLECT" />
-            <el-option label="补采集" value="RESCAN" />
-            <el-option label="整单作废" value="REJECT" />
+          <el-select v-model="rStatus" clearable :placeholder="$t('image.imageReview.Evaluation')" style="width:140px" @change="loadReview">
+            <el-option :label="$t('image.imageReview.Pending')" value="PENDING" />
+            <el-option :label="$t('image.imageReview.Passed')" value="OK" />
+            <el-option :label="$t('image.imageReview.Re')" value="RE_COLLECT" />
+            <el-option :label="$t('image.imageReview.Supplementary')" value="RESCAN" />
+            <el-option :label="$t('image.imageReview.Void')" value="REJECT" />
           </el-select>
-          <el-button size="small" @click="loadReview">查询</el-button>
-          <el-button size="small" type="primary" @click="reviewForm.visible = true">+ 录入待评价影像</el-button>
-      <el-button size="small" @click="exportCsv">导出</el-button>
+          <el-button size="small" @click="loadReview">{{ $t('common.search') }}</el-button>
+          <el-button size="small" type="primary" @click="reviewForm.visible = true">{{ $t('image.imageReview.Enter') }}</el-button>
+      <el-button size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
         </div>
         <el-table :data="reviews" size="small" stripe border v-loading="loading" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
         <el-table-column type="selection" width="45" />
-          <el-table-column prop="batchNo" label="影像批次" width="140"  sortable />
-          <el-table-column prop="bizNo" label="业务单号" width="160"  sortable />
-          <el-table-column label="业务类型" width="100">
+          <el-table-column prop="batchNo" :label="$t('image.imageReview.Image2')" width="140"  sortable />
+          <el-table-column prop="bizNo" :label="$t('audit.main.Business')" width="160"  sortable />
+          <el-table-column :label="$t('image.imageManager.Business')" width="100">
             <template #default="{ row }">{{ bizTypeLabel(row.bizType) }}</template>
           </el-table-column>
           <el-table-column label="评价状态" width="120">
@@ -166,6 +166,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { imageApi } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 // BillTraceDrawer
 const traceVisible = ref(false)
@@ -199,15 +201,15 @@ const reviewFormRef = ref(null)
 const excFormRef = ref(null)
 
 const reviewRules = {
-  batchNo: [{ required: true, message: '请输入影像批次号' }],
-  bizNo: [{ required: true, message: '请输入业务单号' }],
-  bizType: [{ required: true, message: '请选择业务类型' }],
+  batchNo: [{ required: true, message: t('image.imageReview.Please') }],
+  bizNo: [{ required: true, message: t('image.imageReview.Please2') }],
+  bizType: [{ required: true, message: t('image.imageReview.Please3') }],
 }
 const excRules = {
-  batchNo: [{ required: true, message: '请输入影像批次号' }],
-  bizNo: [{ required: true, message: '请输入业务单号' }],
-  exceptionType: [{ required: true, message: '请选择异常类型' }],
-  exceptionDesc: [{ required: true, message: '请输入异常说明' }],
+  batchNo: [{ required: true, message: t('image.imageReview.Please') }],
+  bizNo: [{ required: true, message: t('image.imageReview.Please2') }],
+  exceptionType: [{ required: true, message: t('image.imageReview.Please4') }],
+  exceptionDesc: [{ required: true, message: t('image.imageReview.Please5') }],
 }
 
 const EXC_TYPES = {
@@ -258,14 +260,14 @@ async function evaluate(row, action) {
     await ElMessageBox.confirm(`确认执行「${rLabel(action)}」？`, '影像评价', { type: 'warning' })
   } catch (e) { return }
   await imageApi.reviewEvaluate({ id: row.id, batchId: row.imgBatchId, action, remark: action === 'REJECT' ? '整单作废' : '' })
-  ElMessage.success('评价完成'); loadReview()
+  ElMessage.success(t('image.imageReview.Evaluation2')); loadReview()
 }
 async function delReview(row) {
   try {
     await ElMessageBox.confirm(`删除待评价影像记录 ${row.batchNo || row.id}？删除后不再进入评价列表。`, '删除', { type: 'warning' })
   } catch (e) { return }
   try {
-    await imageApi.reviewDelete(row.id); ElMessage.success('已删除')
+    await imageApi.reviewDelete(row.id); ElMessage.success(t('useCrud.main.Deleted'))
   } catch (e) { ElMessage.error(e.message) }
   loadReview()
 }
@@ -273,18 +275,18 @@ async function saveReview() {
   // 先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
   if (reviewFormRef.value) { try { await reviewFormRef.value.validate() } catch { return } }
   await imageApi.reviewCreate({ batchNo: reviewForm.batchNo, bizNo: reviewForm.bizNo, bizType: reviewForm.bizType, remark: reviewForm.remark })
-  ElMessage.success('已录入'); reviewForm.visible = false; Object.assign(reviewForm, { batchNo: '', bizNo: '', bizType: '', remark: '' }); loadReview()
+  ElMessage.success(t('image.imageReview.Entered')); reviewForm.visible = false; Object.assign(reviewForm, { batchNo: '', bizNo: '', bizType: '', remark: '' }); loadReview()
 }
 async function fix(row) {
   await imageApi.exceptionFix(row.id, '人工核实处理完成')
-  ElMessage.success('已处理'); loadExc()
+  ElMessage.success(t('audit.main.Processed')); loadExc()
 }
 async function delExc(row) {
   try {
     await ElMessageBox.confirm(`删除影像异常记录（${eTypeLabel(row.exceptionType)}）？已处理的异常属于记录，删除后不可恢复。`, '删除', { type: 'warning' })
   } catch (e) { return }
   try {
-    await imageApi.exceptionDelete(row.id); ElMessage.success('已删除')
+    await imageApi.exceptionDelete(row.id); ElMessage.success(t('useCrud.main.Deleted'))
   } catch (e) { ElMessage.error(e.message) }
   loadExc()
 }
@@ -292,14 +294,14 @@ async function saveExc() {
   // 先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
   if (excFormRef.value) { try { await excFormRef.value.validate() } catch { return } }
   await imageApi.exceptionCreate({ batchNo: excForm.batchNo, bizNo: excForm.bizNo, exceptionType: excForm.exceptionType, exceptionDesc: excForm.exceptionDesc })
-  ElMessage.success('已上报'); excForm.visible = false; Object.assign(excForm, { batchNo: '', bizNo: '', exceptionType: 'VERIFY_FAIL', exceptionDesc: '' }); loadExc()
+  ElMessage.success(t('image.imageReview.Reported')); excForm.visible = false; Object.assign(excForm, { batchNo: '', bizNo: '', exceptionType: 'VERIFY_FAIL', exceptionDesc: '' }); loadExc()
 }
 
 onMounted(() => { loadReview(); loadExc() })
 
 function exportCsv() {
-  if (!reviews.value.length) { ElMessage.warning('当前无数据可导出'); return }
-  const cols = [{ prop: 'batchNo', label: '影像批次' }, { prop: 'bizNo', label: '业务单号' }, { prop: 'reviewTime', label: '评价时间' }, { prop: 'remark', label: '备注' }]
+  if (!reviews.value.length) { ElMessage.warning(t('useBill.main.There')); return }
+  const cols = [{ prop: 'batchNo', label: t('image.imageReview.Image2') }, { prop: 'bizNo', label: t('audit.main.Business') }, { prop: 'reviewTime', label: t('image.imageReview.Evaluation3') }, { prop: 'remark', label: t('common.remark') }]
   const header = cols.map((c) => c.label).join(',')
   const lines = reviews.value.map((row) => cols.map((c) => {
     const v = row?.[c.prop]; if (v == null) return ''
@@ -313,20 +315,20 @@ function exportCsv() {
   a.href = URL.createObjectURL(blob)
   a.download = `ImageReview_${new Date().toISOString().slice(0, 10)}.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success('已导出 CSV')
+  ElMessage.success(t('useBill.main.CSV'))
 }
 
 
 function openRowDetail(row) {
-  return showRowDetail(row, { title: '详情' })
+  return showRowDetail(row, { title: t('common.details') })
 }
 
 function handleSelectionChange(val) { selRows.value = val }
 
 function batchExport() {
-  if (!selRows.value.length) { ElMessage.warning('请先勾选要导出的记录'); return }
+  if (!selRows.value.length) { ElMessage.warning(t('utils.csv.Select')); return }
   const keys = selRows.value[0] ? Object.keys(selRows.value[0]) : []
-  if (!keys.length) { ElMessage.warning('无法获取列信息'); return }
+  if (!keys.length) { ElMessage.warning(t('utils.csv.Cannot')); return }
   const header = keys.join(',')
   const lines = selRows.value.map((row) => keys.map((k) => {
     const v = row[k]
@@ -341,7 +343,7 @@ function batchExport() {
   a.href = URL.createObjectURL(blob)
   a.download = `ImageReview_${new Date().toISOString().slice(0, 10)}_batch.csv`
   a.click(); URL.revokeObjectURL(a.href)
-  ElMessage.success(`已导出 ${selRows.value.length} 条记录`)
+  ElMessage.success(`${t('utils.csv.Exported')} ${selRows.value.length} 条记录`)
 }
 
 </script>

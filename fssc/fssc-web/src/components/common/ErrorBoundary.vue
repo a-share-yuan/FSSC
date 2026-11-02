@@ -6,8 +6,8 @@
   <div v-else class="error-boundary">
     <el-result icon="error" :title="errorTitle" :sub-title="errorDesc">
       <template #extra>
-        <el-button type="primary" @click="handleRetry">重试</el-button>
-        <el-button @click="handleReset">重置页面</el-button>
+        <el-button type="primary" @click="handleRetry">{{ $t('common.retry') }}</el-button>
+        <el-button @click="handleReset">{{ $t('common.errorBoundary.Reset') }}</el-button>
         <el-button text @click="showDetail = !showDetail">
           {{ showDetail ? '隐藏详情' : '查看详情' }}
         </el-button>

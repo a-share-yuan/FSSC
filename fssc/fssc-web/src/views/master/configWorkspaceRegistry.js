@@ -37,6 +37,7 @@ import ComplianceRule from './ComplianceRule.vue'
 import WfEventActionConfig from '../workflow/WfEventActionConfig.vue'
 // SoD 检查改为独立页（通用配置表无执行入口、列与返回体错位）
 import SoDCheck from '../system/SoDCheck.vue'
+import { i18n } from '../../i18n'
 
 export const CONFIG_GROUPS = {
   sharing: {
@@ -95,7 +96,7 @@ export const CONFIG_GROUPS = {
       { key: 'budgetType', label: '预算类型', comp: MasterConfigTable, props: { configKey: 'budgetType' } },
       { key: 'budgetCategory', label: '预算类别', comp: BudgetConfigTable, props: { configType: 'budgetCategory', title: '预算类别' } },
       { key: 'budgetOrg', label: '预算组织', comp: BudgetConfigTable, props: { configType: 'budgetOrg', title: '预算组织' } },
-      { key: 'budgetPeriod', label: '预算期间', comp: BudgetConfigTable, props: { configType: 'budgetPeriod', title: '预算期间' } },
+      { key: 'budgetPeriod', label: '预算期间', comp: BudgetConfigTable, props: { configType: 'budgetPeriod', title: i18n.global.t('router.finance.Budget2') } },
       { key: 'itemBudgetMap', label: '费用-预算科目映射', comp: BudgetConfigTable, props: { configType: 'itemBudgetMap', title: '费用类型-预算科目映射' } },
       { key: 'costCenterMap', label: '成本中心映射', comp: MasterConfigTable, props: { configKey: 'costCenterMap' } },
     ],
