@@ -6,8 +6,7 @@
 
 - 首选：Gitee 站内私信仓库所有者（[a-share-yuan](https://gitee.com/a-share-yuan)）——本仓库托管在 Gitee，**没有** GitHub 那套 Security Advisory 页面
 - 若日后镜像到 GitHub：用镜像仓库首页的 **Security → Report a vulnerability**
--  下面这枚邮箱仍是占位，对外公告前必须换成真实地址（现在它不属于任何人）
-- 邮箱：`security@<你的域名>`（发布前替换为真实地址）
+- 邮箱：`marketing@a-share.com.cn` —— 邮件标题请以 **[安全报告]** 开头（这枚信箱同时是 `LICENSE-COMMERCIAL.md` 里的采购信箱，靠前缀分流）；**首封邮件请勿直接贴漏洞细节**，写清受影响版本、复现难度与你的联系方式即可，我会回信开一个私密通道
 
 我们承诺 72 小时内响应，并在修复后公开致谢（如你愿意）。**在修复发布前请勿公开披露细节。**
 
