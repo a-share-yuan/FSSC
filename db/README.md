@@ -5,6 +5,8 @@
 
 ## 导入
 
+推荐使用 MySQL Workbench 选择 Dump20261102 目录后全部导入。
+
 ```bash
 # 每个文件自带 CREATE DATABASE IF NOT EXISTS + USE，两个库一起建好，无需预先手工建库
 for f in db/Dump20261102/fssc_*.sql; do
