@@ -11,25 +11,25 @@
 ## 78 个已发布流程模型（按业务族分组）
 
 ### 报销与借款（费用域 `expense` + 审批 `workflow`）
-`CLAIM` 费用报销主流程 · `CLAIM_G1` 报销变体G1  · `CLAIM_TRAVEL` 差旅报销 · `TRAVEL` 差旅  · `LOAN` 借款申请 · `REPAY` 还款 · `PREPAY` 预付 · `SETTLE` 结清  · `MEETING` 会议费  · `TRAIN` 培训费 
+`CLAIM` 费用报销主流程 · `CLAIM_G1` 报销变体G1 【推断】· `CLAIM_TRAVEL` 差旅报销 · `TRAVEL` 差旅 【推断】· `LOAN` 借款申请 · `REPAY` 还款 · `PREPAY` 预付 · `SETTLE` 结清 【推断】· `MEETING` 会议费 【推断】· `TRAIN` 培训费 【推断】
 
 ### 应收（`arflow` / `receivable`）
-`RECEIVABLE` 应收确认 · `RECEIVABLE_COLLECT` 收款/催收  · `AR_RECON` 应收对账 · `AR_REPORT` 应收报表  · `RECON_ACTIVE` 主动对账 · `RECON_PASSIVE` 被动对账 · `BAD_DEBT_CONFIRM` 坏账确认 · `BAD_DEBT_PROV` 坏账计提
+`RECEIVABLE` 应收确认 · `RECEIVABLE_COLLECT` 收款/催收 【推断】· `AR_RECON` 应收对账 · `AR_REPORT` 应收报表 【推断】· `RECON_ACTIVE` 主动对账 · `RECON_PASSIVE` 被动对账 · `BAD_DEBT_CONFIRM` 坏账确认 · `BAD_DEBT_PROV` 坏账计提
 
 ### 应付与付款（`apflow` / `payplan` / `sharing` / `bank`）
-`PAY_PLAN_BASE` 付款计划基础 · `PAY_PLAN_PLATE` 付款计划板  · `SUPPLIER_ADD` 供应商新增 · `CONTRACT` 合同
+`PAY_PLAN_BASE` 付款计划基础 · `PAY_PLAN_PLATE` 付款计划板 【推断】· `SUPPLIER_ADD` 供应商新增 · `CONTRACT` 合同
 
 ### 资金与票据（`treasury` / `bank`）
-`TR_PAY` 付款 · `TR_PAY_FAIL` 付款失败处理  · `TR_PLAN` 资金计划 · `TR_PLAN_ADJUST` 计划调整 · `TR_RECEIPT` 到账与核销 · `TR_TRANSFER` 内部划转 · `TR_UPLOAD` 上传  · `TR_BILL` 票据 · `TR_BANK_MASTER` 银行主数据 · `TR_BANK_RECON` 银行对账 · `TR01-02` 资金子流程 
+`TR_PAY` 付款 · `TR_PAY_FAIL` 付款失败处理 【推断】· `TR_PLAN` 资金计划 · `TR_PLAN_ADJUST` 计划调整 · `TR_RECEIPT` 到账与核销 · `TR_TRANSFER` 内部划转 · `TR_UPLOAD` 上传 【推断】· `TR_BILL` 票据 · `TR_BANK_MASTER` 银行主数据 · `TR_BANK_RECON` 银行对账 · `TR01-02` 资金子流程 【推断】
 
 ### 发票（`invoice`）
-`INVOICE_ISSUE` 开票 · `INVOICE_MATCH` 发票匹配 · `INVOICE_MATCH_MANUAL` 人工匹配 · `INV_ISSUE_PROJECT` 项目开票 · `INV_ISSUE_NONPROJECT` 非项目开票 · `INV_DEVAL` 发票降级/作废  · `INV_DISPOSE` / `INV_DISPOSAL_APPLY` / `INV_DISPOSAL_CHECK` / `INV_DISPOSAL_EXEC` 发票处置三段 · `INV_INTERNAL_SALE` 内部销售 · `INV_PHYSICAL_CHECK` 实物查验
+`INVOICE_ISSUE` 开票 · `INVOICE_MATCH` 发票匹配 · `INVOICE_MATCH_MANUAL` 人工匹配 · `INV_ISSUE_PROJECT` 项目开票 · `INV_ISSUE_NONPROJECT` 非项目开票 · `INV_DEVAL` 发票降级/作废 【推断】· `INV_DISPOSE` / `INV_DISPOSAL_APPLY` / `INV_DISPOSAL_CHECK` / `INV_DISPOSAL_EXEC` 发票处置三段 · `INV_INTERNAL_SALE` 内部销售 · `INV_PHYSICAL_CHECK` 实物查验
 
 ### 固定资产与在建工程（`asset`）
-`FA_ADD` 资产新增 · `FA_DEPRECIATION` 折旧 · `FA_VALUE_ADJUST` 价值调整 · `FA_IMPAIRMENT` 减值 · `FA_DISPOSE` 处置 · `FA_TRANSFER` 转移 · `FA_TRANSFER_CROSS` 跨主体转移 · `FA_ALIENATE` 出让  · `FA_CHECK_DIFF` 盘点差异 · `FA_CER` 资产证书  · `FA_CIP_TO_ASSET` 在建转固 · `FA11-01` / `FA11-04` 资产子流程 
+`FA_ADD` 资产新增 · `FA_DEPRECIATION` 折旧 · `FA_VALUE_ADJUST` 价值调整 · `FA_IMPAIRMENT` 减值 · `FA_DISPOSE` 处置 · `FA_TRANSFER` 转移 · `FA_TRANSFER_CROSS` 跨主体转移 · `FA_ALIENATE` 出让 【推断】· `FA_CHECK_DIFF` 盘点差异 · `FA_CER` 资产证书 【推断】· `FA_CIP_TO_ASSET` 在建转固 · `FA11-01` / `FA11-04` 资产子流程 【推断】
 
 ### 总账与月结（`glex` / `gl`）
-`GL_MANUAL_VOUCHER` 手工凭证 · `GL_ACCRUAL` 计提 · `GL_DEFER` 待摊/递延 · `GL_OFFSET` 内部往来对冲 · `GL_MERGE` 合并 · `GL_MONTH_CLOSE` 月末结账 · `GL_SHARED_MASTER` 共享主数据  · `GL_OTHER_RECEIPT` 其他收款  · `GL_SALARY_PROV` 薪酬计提 · `GL_SALARY_PAY` 薪酬发放 · `GL_TAX_PROV` 税金计提 · `GL_TAX_PAY` 税金缴纳 · `GL_TAX_REFUND` 退税
+`GL_MANUAL_VOUCHER` 手工凭证 · `GL_ACCRUAL` 计提 · `GL_DEFER` 待摊/递延 · `GL_OFFSET` 内部往来对冲 · `GL_MERGE` 合并 · `GL_MONTH_CLOSE` 月末结账 · `GL_SHARED_MASTER` 共享主数据 【推断】· `GL_OTHER_RECEIPT` 其他收款 【推断】· `GL_SALARY_PROV` 薪酬计提 · `GL_SALARY_PAY` 薪酬发放 · `GL_TAX_PROV` 税金计提 · `GL_TAX_PAY` 税金缴纳 · `GL_TAX_REFUND` 退税
 
 ### 会计档案（`compliance` / `document`）
 `FM_ARCHIVE` 归档 · `FM_BORROW` 借阅 · `FM_DESTROY` 销毁 · `FM_DOC_FLOW` 单据流转
