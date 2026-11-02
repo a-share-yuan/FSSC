@@ -16,9 +16,9 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   * 多租户 SaaS：tenant_id 列级隔离 + 拦截器自动重写，一套系统服务多家企业；
   * 流程引擎：Flowable 8 + bpmn-js 在线设计器，条件分支/会签/票签/转办/
     加签/撤回/传阅/自由驳回全套能力，流程变更不发版；
-  * 业务完整：费用报销、应收应付、总账凭证、资产存货、资金票据、影像 OCR、
+  * 业务完整：费用报账、应收应付、总账凭证、资产存货、资金票据、影像 OCR、
     共享作业运营六大域，后端约 160 个控制器 / 1,200+ HTTP 端点；
-  * 数据规模：主库 316 张表 + 影像库 6 张表，演示库内置 315 个已部署流程
+  * 数据规模：主库 317 张表 + 影像库 6 张表，演示库内置 315 个已部署流程
     定义，导入即可跑审批；
   * 开源协议：GNU Affero General Public License v3.0（SPDX 标识 AGPL-3.0-or-later，见 LICENSE / NOTICE）；闭源或商业使用需另行取得商业许可（见 LICENSE-COMMERCIAL.md）。
 
@@ -50,17 +50,21 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   默认连 127.0.0.1:3306 的 root；口令用环境变量 MYSQL_PWD 设置，或按提示输入。
   其他主机/端口/账号：bash db/import.sh -h <主机> -P <端口> -u <账号>
 
-  等价手工方式（不推荐，仅用于理解）：
-      mysql -uroot -p -e "CREATE DATABASE fssc DEFAULT CHARACTER SET utf8mb4
-                          COLLATE utf8mb4_general_ci;
-                          CREATE DATABASE fssc_image DEFAULT CHARACTER SET utf8mb4
-                          COLLATE utf8mb4_general_ci;"
-      cat $(ls db/demo-db/*.sql | grep -v routines) | mysql -uroot -p
-      mysql -uroot -p < db/demo-db/fssc_routines.sql
+  脚本会自动选中 db/ 下最新的一份 Dump<日期>/（当前是 db/Dump20261102/），
+  逐文件导入；主库 fssc 与影像库 fssc_image 在这个过程中自动建好。
 
-  注意：db/demo-db 共 323 个分表 SQL，每个文件自带建库/选库语句，可重复执行
-  （幂等）。fssc_routines.sql（视图）依赖业务表，必须最后导入——import 脚本
-  已自动处理该顺序，手工导入时请勿按字母序一把梭。
+  等价手工方式（不推荐，仅用于理解）：
+      for f in db/Dump20261102/*.sql; do
+        mysql --default-character-set=utf8mb4 -uroot -p < "$f"
+      done
+
+  Windows（CMD）：
+      for %f in (db\Dump20261102\*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
+
+  注意：db/Dump20261102/ 共 323 个文件 = 一表一文件（主库 fssc 317 表 + 影像库
+  fssc_image 6 表），每个文件自带 CREATE DATABASE IF NOT EXISTS、USE 与
+  SET FOREIGN_KEY_CHECKS=0，所以无需预先建库，文件顺序也不影响成败，可重复
+  执行（幂等）。dump 内容与脱敏说明见 db/README.md。
 
 第 2 步：配置环境变量
 
@@ -89,13 +93,14 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
        账号：admin      密码：123456      （系统管理员，全部功能）
        账号：100001     密码：123456      （普通员工，提单/审批）
      租户编码：DEMO1（爱共享公司）
-  3. 走一遍主链路：我的工作台 → 费用报销 → 新建 → 提交 → 审批 → 查看流程轨迹。
+  3. 走一遍主链路：我的工作台 → 费用报账 → 员工报销 → 员工费用报销（该页
+     页签即填单，没有【新建】钮）→ 提交 → 审批 → 查看流程轨迹。
   4. 后端健康检查：curl http://localhost:8089/actuator/health/liveness
 
    同一张单不能由同一个人既提单又审批（引擎有防自审判定）。想跑通完整链路，
     照 docs/真实场景测试/ 的三本逐步操作手册做——每步写明"谁、登哪个账号、
     点哪里、应该看到什么"，各册 §1.2 有本册完整账号表：
-        01-人工测试操作手册-费用报销全流程-新手版.docx
+        01-人工测试操作手册-费用报账全流程-新手版.docx
         02-人工测试操作手册-其它业务流程与功能-新手版.docx
         03-人工测试操作手册-系统管理员与流程配置-新手版.docx
     只用看手册时可以先记这几枚：100005/叶思琪（部门经理）、
@@ -116,9 +121,9 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
     docs/                   配套文档（业务流程/系统介绍/部署运维）
   bpmn-repo/                流程模型仓库（8 个流程，版本化管理）
   db/
-    demo-db/                演示数据库（323 个分表 SQL，含已部署流程）
-    import.sh / import.bat  一键导入脚本
-    README.md               数据库导入说明（含 dump 内容与导入顺序）
+    Dump20261102/           整库 dump（323 个一表一文件，含演示数据与已部署流程）
+    import.sh / import.bat  一键导入脚本（自动选最新的 Dump<日期>/）
+    README.md               数据库导入说明（dump 内容、导入与脱敏注意事项）
   _tools/                   开发辅助工具（密钥扫描/引用检查/事实件生成等）
 
 六、常见问题
@@ -131,7 +136,7 @@ Q2 前端页面打开但接口 401/跨域？
    FSSC_API_TARGET 仅影响 preview 模式。
 
 Q3 提示找不到表/flowable 相关错误？
-   确认 db/import.sh 完整执行过（323 个文件全部导入）；Flowable 的
+   确认 db/import.sh 完整执行过（db/Dump20261102/ 的 323 个文件全部导入）；Flowable 的
    ACT_* 表演示库已内置，首次启动只会做结构校准。
 
 Q4 JDK 版本报错？
