@@ -3,12 +3,14 @@
 
 name: 配置
 blank_issues_enabled: false
-#  发布前把 <owner>/<repo> 换成真实的 GitHub 命名空间（contact_links 的 url 必须是**绝对地址**，
-#    写成 ../../xxx 这种相对路径 GitHub 不会解析，点进去就是 404）。
+# 本仓库当前托管在 Gitee：https://gitee.com/a-share-yuan/FSSC
+#  下面这两条 contact_links **只有 GitHub 会渲染**（Gitee 没有 issue 表单 / Security Advisory /
+#    Discussions 这三样），所以在 Gitee 上它是惰性的；日后若镜像到 GitHub，把地址换成真实 GitHub 地址，
+#    url 必须写绝对地址（`../../xxx` 这种相对路径 GitHub 不解析，点进去就是 404）。
 contact_links:
   - name: 报告安全漏洞（请勿开公开 Issue）
-    url: https://github.com/<owner>/<repo>/security/advisories/new
-    about: 鉴权绕过、越权、注入、密钥泄漏等一律私密报告，见 SECURITY.md
+    url: https://gitee.com/a-share-yuan/FSSC
+    about: 鉴权绕过、越权、注入、密钥泄漏等一律私密报告——Gitee 上请走站内私信或 SECURITY.md 里的邮箱
   - name: 使用问答与讨论
-    url: https://github.com/<owner>/<repo>/discussions
-    about: "跑不起来""这个功能怎么用""设计为什么这样"请发到 Discussions，Issue 只留缺陷与需求
+    url: https://gitee.com/a-share-yuan/FSSC/issues
+    about: "跑不起来""这个功能怎么用"发 Issue 并打问答标签；缺陷与需求另开

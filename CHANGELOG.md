@@ -44,6 +44,6 @@
 - [ ] 默认凭据卫生完成（口令类环境变量无弱默认值）
 - [ ] 脱敏扫描通过（无生产数据、无密钥、无真实姓名工号）
 - [ ] README 截图补齐（取自演示环境）
-- [ ] CI 首次绿
+- [ ] CI 首次绿（ 本仓库托管在 Gitee，`.github/workflows/ci.yml` 不会被执行——两道文档闸要么接 Gitee Go，要么每次推送前本地跑：`node _tools/secret_scan.mjs --root=. --docs-only --fail-on-hit` 与 `node _tools/cite_check.mjs <全部在册 md>`）
 
-[Unreleased]: https://github.com/<owner>/<repo>/commits/main
+[Unreleased]: https://gitee.com/a-share-yuan/FSSC/commits/main
