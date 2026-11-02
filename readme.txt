@@ -17,9 +17,9 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   * 流程引擎：Flowable 8 + bpmn-js 在线设计器，条件分支/会签/票签/转办/
     加签/撤回/传阅/自由驳回全套能力，流程变更不发版；
   * 业务完整：费用报账、应收应付、总账凭证、资产存货、资金票据、影像 OCR、
-    共享作业运营六大域，后端约 160 个控制器 / 1,200+ HTTP 端点；
-  * 数据规模：主库 317 张表 + 影像库 6 张表，演示库内置 315 个已部署流程
-    定义，导入即可跑审批；
+    共享作业运营六大域，后端约 173 个控制器 / 1,500+ HTTP 端点；
+  * 数据规模：主库 317 张表 + 影像库 6 张表，演示库内置 57 条已部署流程
+    定义（42 条流程，余为历史版本），导入即可跑审批；
   * 开源协议：GNU Affero General Public License v3.0（SPDX 标识 AGPL-3.0-or-later，见 LICENSE / NOTICE）；闭源或商业使用需另行取得商业许可（见 LICENSE-COMMERCIAL.md）。
 
 二、运行环境（版本必须对齐）
@@ -113,13 +113,12 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
     fssc-server/            后端（Spring Boot 4.1 + JDK 26 + Flowable 8）
       fssc-common/          公共模块（租户/权限/工具）
       fssc-start/           启动模块（打包产物 fssc-server.jar）
-      sql/                  历史迁移脚本（V1.4.x 系列，新装无需执行）
-      scripts/              造数/巡检等辅助脚本
     fssc-web/               前端（Vue 3.5 + Vite 6 + Element Plus）
     docker/                 Dockerfile 与 k8s 编排样例
     image-service/          影像服务（可选独立部署）
-    docs/                   配套文档（业务流程/系统介绍/部署运维）
-  bpmn-repo/                流程模型仓库（8 个流程，版本化管理）
+    monitor/                Prometheus 抓取配置与告警规则
+  bpmn-repo/                流程模型仓库（publish/ 78 个已发布模型，
+                            models/ 88 个模型编码共 294 版 XML）
   db/
     Dump20261102/           整库 dump（323 个一表一文件，含演示数据与已部署流程）
     import.sh / import.bat  一键导入脚本（自动选最新的 Dump<日期>/）
