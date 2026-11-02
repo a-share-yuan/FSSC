@@ -4,7 +4,9 @@
 
 如果你发现本项目的安全问题（鉴权绕过、越权、注入、密钥泄漏等），请通过私密渠道报告：
 
-- GitHub Security Advisory → 仓库首页 **Security → Report a vulnerability**（入库地址为 `https://github.com/<owner>/<repo>/security/advisories/new`，公开后请把 `<owner>/<repo>` 换成实际地址）
+- 首选：Gitee 站内私信仓库所有者（[a-share-yuan](https://gitee.com/a-share-yuan)）——本仓库托管在 Gitee，**没有** GitHub 那套 Security Advisory 页面
+- 若日后镜像到 GitHub：用镜像仓库首页的 **Security → Report a vulnerability**
+-  下面这枚邮箱仍是占位，对外公告前必须换成真实地址（现在它不属于任何人）
 - 邮箱：`security@<你的域名>`（发布前替换为真实地址）
 
 我们承诺 72 小时内响应，并在修复后公开致谢（如你愿意）。**在修复发布前请勿公开披露细节。**
