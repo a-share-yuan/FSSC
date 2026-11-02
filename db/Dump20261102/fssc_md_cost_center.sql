@@ -1,0 +1,71 @@
+CREATE DATABASE  IF NOT EXISTS `fssc` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `fssc`;
+-- MySQL dump 10.13  Distrib 8.0.46, for Win64 (x86_64)
+--
+-- Host: localhost    Database: fssc
+-- ------------------------------------------------------
+-- Server version	8.4.11
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `md_cost_center`
+--
+
+DROP TABLE IF EXISTS `md_cost_center`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `md_cost_center` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `tenant_id` bigint NOT NULL COMMENT '租户ID【多租户隔离字段】',
+  `company_id` bigint NOT NULL COMMENT '所属公司ID',
+  `cc_code` varchar(64) NOT NULL COMMENT '成本中心编码',
+  `cc_name` varchar(200) NOT NULL COMMENT '成本中心名称',
+  `cc_type` varchar(20) NOT NULL DEFAULT 'DEPT' COMMENT '类型:DEPT部门/PROJECT项目/PRODUCT产品/OTHER其他',
+  `dept_id` bigint DEFAULT NULL COMMENT '关联部门ID',
+  `manager_id` bigint DEFAULT NULL COMMENT '责任人用户ID',
+  `parent_id` bigint NOT NULL DEFAULT '0' COMMENT '上级成本中心ID',
+  `sort` int NOT NULL DEFAULT '0',
+  `status` varchar(20) NOT NULL DEFAULT 'NORMAL' COMMENT '状态:NORMAL/DISABLED',
+  `remark` varchar(500) DEFAULT NULL,
+  `create_by` bigint DEFAULT NULL,
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_by` bigint DEFAULT NULL,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `del_flag` tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_tenant_cc_code` (`tenant_id`,`cc_code`),
+  KEY `idx_tenant` (`tenant_id`),
+  KEY `idx_tenant_company` (`tenant_id`,`company_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9082 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='成本中心';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `md_cost_center`
+--
+
+LOCK TABLES `md_cost_center` WRITE;
+/*!40000 ALTER TABLE `md_cost_center` DISABLE KEYS */;
+INSERT INTO `md_cost_center` VALUES (9001,1,1,'CC-HQ-01','总部管理成本中心','管理类',1003,NULL,0,1,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9002,1,1,'CC-HQ-02','财务共享运营成本中心','管理类',1004,NULL,0,2,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9003,1,1,'CC-HQ-03','人力行政成本中心','管理类',1005,NULL,0,3,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9004,1,1,'CC-HQ-04','信息技术成本中心','管理类',1006,NULL,0,4,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9011,1,31,'CC-SH-01','上海销售成本中心','销售类',1101,NULL,0,1,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9012,1,31,'CC-SH-02','上海市场成本中心','销售类',1103,NULL,0,2,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9021,1,32,'CC-HN-01','湖南销售成本中心','销售类',1201,NULL,0,1,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9022,1,32,'CC-HN-02','湖南综合管理成本中心','管理类',1203,NULL,0,2,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9031,1,33,'CC-KS-01','昆山生产成本中心','制造类',1301,NULL,0,1,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9032,1,33,'CC-KS-02','昆山设备工程成本中心','制造类',1302,NULL,0,2,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9033,1,33,'CC-KS-03','昆山质量成本中心','制造类',1303,NULL,0,3,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9034,1,33,'CC-KS-04','昆山物流成本中心','制造类',1304,NULL,0,4,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9041,1,34,'CC-SZ-01','苏州智造成本中心','制造类',1401,NULL,0,1,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9042,1,34,'CC-SZ-02','苏州设备成本中心','制造类',1402,NULL,0,2,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9051,1,35,'CC-RD-01','研发成本中心','管理类',1501,NULL,0,1,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9061,1,36,'CC-GZ-01','广州销售成本中心','销售类',1601,NULL,0,1,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9071,1,37,'CC-BJ-01','北京销售成本中心','销售类',1701,NULL,0,1,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0),(9081,1,38,'CC-CS-01','长沙服务成本中心','销售类',1801,NULL,0,1,'NORMAL',NULL,NULL,'2026-09-15 23:44:19',NULL,'2026-09-15 23:44:19',0);
+/*!40000 ALTER TABLE `md_cost_center` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-11-02  8:13:57

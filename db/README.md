@@ -1,13 +1,13 @@
 # db/ — 整库 dump（建库入口）
 
-`Dump20261101/` 是本项目一次演练库的 MySQL 整库导出，**建库、起服务、演示都以它为准**。
+`Dump20261102/` 是本项目一次演练库的 MySQL 整库导出，**建库、起服务、演示都以它为准**。
 323 个文件＝一表一文件（主库 `fssc` 317 枚，影像库 `fssc_image` 6 枚），合计约 6.8 MB。
 
 ## 导入
 
 ```bash
 # 每个文件自带 CREATE DATABASE IF NOT EXISTS + USE，两个库一起建好，无需预先手工建库
-for f in db/Dump20261101/fssc_*.sql; do
+for f in db/Dump20261102/fssc_*.sql; do
   mysql --default-character-set=utf8mb4 -uroot -p < "$f"
 done
 ```
@@ -15,7 +15,7 @@ done
 Windows（CMD）：
 
 ```bat
-for %f in (db\Dump20261101\fssc_*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
+for %f in (db\Dump20261102\fssc_*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
 ```
 
 - 依赖 MySQL 8.x，字符集 `utf8mb4`，排序规则 `utf8mb4_general_ci`。
@@ -32,7 +32,7 @@ for %f in (db\Dump20261101\fssc_*.sql) do mysql --default-character-set=utf8mb4 
 发布前请确认这些数据可以公开；要换一批干净数据，就重新导出一份同名结构的 dump 覆盖本目录并同步更新本文件的日期。
 
 `db/Dump*/` 与 `db/backup/` 在 `.gitignore` 里，是为了防止日后随手 dump 又被 `git add -A` 带进来；
-`Dump20261101/` 是**明确 `git add -f` 入库**的那一枚例外。
+`Dump20261102/` 是**明确 `git add -f` 入库**的那一枚例外。
 
 ## 与 `fssc-server/sql/` 的关系
 
