@@ -263,7 +263,7 @@
    "docPath": "docs/数据模型.md",
    "title": "数据模型（data-model）",
    "heading": "数据模型（data-model） / 8. 演示库数据规模",
-   "text": "| 表 | 行数 | 说明 |\n|---|---|---|\n| `sys_user` | 460 | 含 admin 与各岗位演示账号（口令 123456） |\n| `sys_menu` | 694 | 全量菜单 |\n| `md_bank_account` | 113 | 银行账户（脱敏后为虚构号） |\n| `crm_customer` | 63 | 客户/供应商主数据 |\n| `act_re_procdef` | 315 | 已部署流程定义 |\n| `wf_node_config` | — | 节点配置（**约四成 node_key 是孤儿行，引用统计前先扣**） |",
+   "text": "| 表 | 行数 | 说明 |\n|---|---|---|\n| `sys_user` | 453 | 含 admin 与各岗位演示账号（口令 123456） |\n| `sys_menu` | 697 | 全量菜单 |\n| `md_bank_account` | 113 | 银行账户（脱敏后为虚构号） |\n| `crm_customer` | 63 | 客户/供应商主数据 |\n| `act_re_procdef` | 57 | 已部署流程定义 |\n| `wf_node_config` | — | 节点配置（**约四成 node_key 是孤儿行，引用统计前先扣**） |",
    "restricted": false,
    "length": 288
   },
@@ -317,7 +317,7 @@
    "docPath": "docs/快速上手.md",
    "title": "快速开始（getting-started）",
    "heading": "快速开始（getting-started） / 2. 导入演示数据库",
-   "text": "导入内容：`db/Dump20261102/` 下 323 个一表一文件 → 主库 `fssc`（317 表）+ 影像库\n`fssc_image`（6 表），含 460 个演示用户、694 个菜单、315 个已部署流程定义。\n**幂等**：可重复执行（每表 DROP 后重建）。",
+   "text": "导入内容：`db/Dump20261102/` 下 323 个一表一文件 → 主库 `fssc`（317 表）+ 影像库\n`fssc_image`（6 表），含 453 个演示用户、697 个菜单、57 条已部署流程定义。\n**幂等**：可重复执行（每表 DROP 后重建）。",
    "restricted": false,
    "length": 135
   },
@@ -758,7 +758,7 @@
    "docPath": "docs/流程引擎技术说明.md",
    "title": "流程引擎（workflow-engine）",
    "heading": "流程引擎（workflow-engine） / 1. 技术底座",
-   "text": "- **引擎**：Flowable 8.0.0（`act_*`/`flw_*` 43 张表由引擎管理，首启自动建表校准）；\n- **设计器**：bpmn-js 16.5 在线画流程，模型版本化存于 `bpmn-repo/models/<流程>/`；\n- **部署**：设计器里**\"发布\"才生效**（保存 ≠ 部署），部署后生成\n`act_re_deployment`/`act_re_procdef`，演示库内置 315 个已部署定义，开箱可跑。",
+   "text": "- **引擎**：Flowable 8.0.0（`act_*`/`flw_*` 43 张表由引擎管理，首启自动建表校准）；\n- **设计器**：bpmn-js 16.5 在线画流程，模型版本化存于 `bpmn-repo/models/<流程>/`；\n- **部署**：设计器里**\"发布\"才生效**（保存 ≠ 部署），部署后生成\n`act_re_deployment`/`act_re_procdef`，演示库内置 57 条已部署定义，开箱可跑。",
    "restricted": false,
    "length": 224
   },
@@ -12197,7 +12197,7 @@
    "docPath": "docs/系统介绍.md",
    "title": "系统介绍",
    "heading": "系统介绍 / 5. 系统规模（实测）",
-   "text": "| 指标 | 数量 |\n|---|---|\n| 后端 Java 文件 | 1,156 |\n| REST 控制器 | 172 |\n| HTTP 端点 | 1,516 |\n| MyBatis Mapper | 249 |\n| 前端 Vue 组件 | 182 |\n| 业务域包 | 30+（`com.fssc.<domain>`） |\n| 主库表 | 316（含 Flowable 引擎表 43 张，业务表约 270 张） |\n| 影像库表 | 6 |\n| BPMN 流程模型 | 8（版本化管理于 `bpmn-repo/`） |\n| 演示库已部署流程定义 | 315 |",
+   "text": "| 指标 | 数量 |\n|---|---|\n| 后端 Java 文件 | 1,156 |\n| REST 控制器 | 172 |\n| HTTP 端点 | 1,516 |\n| MyBatis Mapper | 249 |\n| 前端 Vue 组件 | 182 |\n| 业务域包 | 30+（`com.fssc.<domain>`） |\n| 主库表 | 317（含 Flowable 引擎表 43 张，业务表约 274 张） |\n| 影像库表 | 6 |\n| BPMN 流程模型 | 78（`bpmn-repo/publish/`） |\n| 演示库已部署流程定义 | 57 |",
    "restricted": false,
    "length": 283
   },
