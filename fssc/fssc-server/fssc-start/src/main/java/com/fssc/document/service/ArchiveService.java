@@ -93,7 +93,7 @@ public class ArchiveService {
      *
      * <p><b>为什么不走可配置档案类型</b>：档案域从没接过字典表，库里
      * {@code sys_dict_type}／{@code sys_dict_data} 里只有费用类型，所谓「集团维护的可配置档案」
-     * 在本仓只有骨架没有实现。走它既扩建工程又要写库，不如把这套闭集写死在代码里。
+     * 在本仓库只有骨架没有实现。走它既扩建工程又要写库，不如把这套闭集写死在代码里。
      *
      * <p>已知不一致（<b>只登记、不改 DDL</b>）：{@code op_archive.archive_type}
      * 的列注释只写 5 项（BILL/VOUCHER/CONTRACT/REPORT/OTHER），库里却在用 EXPENSE——
@@ -138,15 +138,15 @@ public class ArchiveService {
      *
      * <p>逐类判据（按各建卡入口的实际写入路径判，不按类型名的字面意思猜）：
      * <ul>
-     *   <li>{@code BILL}＝{@code BillArchiveService.doArchive/eArchiveBill} 写入，{@code ref_id}＝单据主键 ✔</li>
+     *   <li>{@code BILL}＝{@code BillArchiveService.doArchive/eArchiveBill} 写入，{@code ref_id}＝单据主键 （正确）</li>
      *   <li>{@code EXPENSE}＝UI「新建档案目录→报销凭证」默认类型（{@code ArchiveController} 立卷入参），
-     *       {@code bill_id}＝{@code ref_id}＝单据主键 ✔</li>
+     *       {@code bill_id}＝{@code ref_id}＝单据主键 （正确）</li>
      *   <li>{@code PAYMENT}＝付款/结算类档案。本系统付款单/对公结算单<b>本身就在 {@code exp_bill}</b>
-     *       （{@code bill_type} APPLY/CLAIM/LOAN/REPAY/PAY，FK/HK 单号），与 {@code BILL}/{@code EXPENSE} 同类目 ✔</li>
+     *       （{@code bill_type} APPLY/CLAIM/LOAN/REPAY/PAY，FK/HK 单号），与 {@code BILL}/{@code EXPENSE} 同类目 （正确）</li>
      *   <li>{@code VOUCHER}＝凭证主键、{@code CONTRACT}＝{@code cont_contract} 主键、{@code INVOICE}＝发票主键、
-     *       {@code REPORT}＝报表主键——裸主键跨域回写必串号，各域的 id 段完全重叠 ✘</li>
+     *       {@code REPORT}＝报表主键——裸主键跨域回写必串号，各域的 id 段完全重叠 （错误）</li>
      *   <li>{@code BANK_SLIP}（{@code BankReconcileService:574} 登记，ref_id/bill_id 均为
-     *       {@code op_bank_statement.id}）与 {@code OTHER} ✘</li>
+     *       {@code op_bank_statement.id}）与 {@code OTHER} （错误）</li>
      * </ul>
      *
      * <p>白名单只是<b>第一道</b>；第二道是调用方的 {@code billFacade.findBillForArchive(id) != null} 反查，

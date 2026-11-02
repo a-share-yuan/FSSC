@@ -361,7 +361,7 @@ public class OcrService {
      * </ol>
      *
      * @param fileName 原始文件名，仅用于扩展名判定；转图像通道时按 {@code fileId.png} 重新命名——
-     *                 服务端（YonOcr {@code /invoice_ocr}）按扩展名分流，拿 {@code .pdf} 名字送 PNG 字节会被再当版式文件解。
+     *                 服务端（OCR 服务 {@code /invoice_ocr}）按扩展名分流，拿 {@code .pdf} 名字送 PNG 字节会被再当版式文件解。
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public OcrResult recognizeInvoiceBytes(byte[] bytes, String fileName, Long fileId) {

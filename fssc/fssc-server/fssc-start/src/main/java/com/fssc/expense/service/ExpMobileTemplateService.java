@@ -25,7 +25,7 @@ import java.util.List;
  * 前者会让人重复提单或干脆放弃。故排序规则是 {@code mobileEnabled} 降序 + {@code sort} 升序：
  * 可提的排前面，明示区保持 seed 原序。</p>
  *
- * <p><b>两道条件不在本类手写</b>（与本仓既有做法一致）：
+ * <p><b>两道条件不在本类手写</b>（与本仓库既有做法一致）：
  * <ul>
  *  <li>{@code del_flag = 0} —— 基类 {@code TenantAuditBase#delFlag} 的 {@code @TableLogic} 由 MP 自动追加；</li>
  *  <li>{@code tenant_id} —— {@code TenantLineInnerInterceptor} 自动注入（{@code MybatisPlusConfig}，

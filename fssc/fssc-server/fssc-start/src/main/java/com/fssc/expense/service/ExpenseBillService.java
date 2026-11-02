@@ -2229,7 +2229,7 @@ public class ExpenseBillService {
         BigDecimal total = paid.add(bill.getTotalAmount() == null ? BigDecimal.ZERO : bill.getTotalAmount());
         if (total.compareTo(limit) > 0) {
             // 文案腿：原提示只说「请先进行合同变更」，而入口与 change() 校验都要求合同状态＝EFFECTIVE，
-            // 流程腿办结的合同停在 APPROVED ⇒ 这句指引对本仓所有流程审批合同都走不通。改点名可达出口（补充协议／重签／调减本单）。
+            // 流程腿办结的合同停在 APPROVED ⇒ 这句指引对本仓库所有流程审批合同都走不通。改点名可达出口（补充协议／重签／调减本单）。
             throw new BizException(ErrorCode.PARAM_INVALID, "超合同金额付款：合同 " + c.getContractNo() + " 总额 "
                     + limit + "，已付 " + paid + "，本次 " + total.subtract(paid)
                     + "（状态「" + c.getStatus() + "」的合同：已生效可点【变更】调增合同总额；未生效请走【补充协议】或重新签订合同，或调减本单金额）");
@@ -2302,7 +2302,7 @@ public class ExpenseBillService {
      * keyword：单号/标题服务端模糊过滤。前端在已加载的几页里做过滤，翻到后面的单据就搜不到，
      * 故两个列表页的搜索都走这里。
      * startDate/endDate：申请日期（apply_date）闭区间，两端各自可缺；source：渠道（PC/H5）等值筛选。
-     * 三者均沿用本仓既有规则——String 直传、空值不加条件，前端不传时不缩小结果集。
+     * 三者均沿用本仓库既有规则——String 直传、空值不加条件，前端不传时不缩小结果集。
      */
     public PageResult<ExpBill> myPage(long pageNum, long pageSize, String billType, String status,
                                       BigDecimal minBalance, String keyword,

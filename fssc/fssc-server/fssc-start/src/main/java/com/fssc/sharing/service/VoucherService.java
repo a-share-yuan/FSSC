@@ -991,7 +991,7 @@ public class VoucherService {
      * <ul>
      *   <li>① {@code bill.poId → po_order.supplier_id}——与 结算凭证同一个环节；</li>
      *   <li>② 无采购订单时退 {@code bill.contractId → cont_contract.customer_id}。合同侧「往来单位」
-     *       在本仓就是按供应商维度使用的（合同凭证 {@code generateByTemplate} 写的就是
+     *       在本仓库就是按供应商维度使用的（合同凭证 {@code generateByTemplate} 写的就是
      *       {@code setSupplierId(contract.getCustomerId())}），付款记录也按同一列回查合同，
      *       所以这是<b>沿用既有映射</b>而不是新造一条；</li>
      *   <li>③ 两条都取不到＝留空，绝不按 {@code payee_name} 文本猜一个供应商挂上去（083 同一规则）。</li>
@@ -1475,7 +1475,7 @@ public class VoucherService {
         // 系统自动过账通道（VoucherAutoPostService→batchPost，以及 PayBatchBizAction:216/225 直传 null）
         // 的 userId 就是 null，而 MP 的 updateById 会忽略实体里的 null 字段 ⇒ post_time 写了、
         // post_user_id 恒 NULL，"谁记的账"这一列在自动过账的凭证上永远空着。
-        // 规则：优先调用方显式传入的过账人；没有则取当前登录人；再没有按本仓系统作业惯例记 0
+        // 规则：优先调用方显式传入的过账人；没有则取当前登录人；再没有按本仓库系统作业惯例记 0
         // （与 FsscMetaObjectHandler.fillAudit 的 0/"system" 同一约定）——留 0 是"系统干的"这个事实，
         // 留 NULL 才是缺陷。人工过账口（SharingController /post、/batch-post）传的是真人，不受影响。
         Long poster = userId != null ? userId : systemPosterId();
@@ -1537,7 +1537,7 @@ public class VoucherService {
 
     /**
      * 过账人兜底规则：调用方没显式传 userId 时，先取当前登录人，
-     * 仍无登录态（定时/自动过账通道）则按本仓系统作业惯例记 0——
+     * 仍无登录态（定时/自动过账通道）则按本仓库系统作业惯例记 0——
      * 与 {@code FsscMetaObjectHandler.fillAudit} 对 Long 型审计列填 0、String 型填 "system" 同一约定，
      * 不是"造一个操作人"，而是把"这次是系统干的"写成事实而不是留 NULL。
      * <p>注意：本方法只填 post_user_id（记录列），不参与 制审分离判定

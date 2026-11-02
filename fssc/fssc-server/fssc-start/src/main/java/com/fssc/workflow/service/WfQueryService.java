@@ -406,7 +406,7 @@ public class WfQueryService {
         // 仍然带着"当前节点=生成凭证【总账会计】、当前办理人=3836"，于是已结流程被计成在办。
         // 办结点选在本方法而不是各写入位置——引擎办结/驳回兜底/撤回/运维清理/投影
         // 五条最终状态路径全部经过这里，写在这些调用方里必然漏一条。
-        // 实现规则：<b>必须用 LambdaUpdateWrapper 显式 set null</b>——本仓已知坑：
+        // 实现规则：<b>必须用 LambdaUpdateWrapper 显式 set null</b>——本仓库已知坑：
         // {@code update(entity, wrapper)} 会忽略实体里的 null 字段（WfEngineFacade 空串清 current_assignee
         // 同因），传 null 等于什么都没改。current_assignee_ids/_names 是查询期由 wf_task PENDING 反查的
         // 非表列（见 WfInstance 的 @TableField(exist=false)），最终状态时那批 PENDING 行已由
@@ -434,7 +434,7 @@ public class WfQueryService {
      * RUNNING/APPROVED/REJECTED/CANCELLED/TERMINATED 五个，除 RUNNING 外都是"这单已经死了"。
      * 按白名单反向判（非 RUNNING 即最终状态）而不是枚举四个值，哪天加个新最终状态也不会漏清。
      *
-     * <p>起对本仓外可见（public）：联查面（BillTraceChainController）要用<b>同一把</b>
+     * <p>起对本仓库外可见（public）：联查面（BillTraceChainController）要用<b>同一把</b>
      * 最终状态尺子做"当前节/当前办理人"的展示抑制，两处各写一份规则必然漂移——清列的与露列的必须同一规则。
      */
     public static boolean isTerminalInstanceStatus(String status) {

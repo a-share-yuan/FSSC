@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 验证码触发判定（C-3）：失败阈值触发，而不是无条件强校验。
  *
- * <p>为什么必须按阈值触发：本仓有大量自动化脚本/冒烟清单（01 册 S1-01~S1-25）用真实业务账号
+ * <p>为什么必须按阈值触发：本仓库有大量自动化脚本/冒烟清单（01 册 S1-01~S1-25）用真实业务账号
  * 程序化登录，验证码若无条件必拦会打断每日开市。故规则为 ——
  * 同一身份（租户 {@code tenantCode + 账号}、平台 {@code PLATFORM + 账号}）连续<b>凭据</b>失败
  * 累计达到 {@code fssc.login.captcha-fail-threshold}（缺省 3）之后，后续登录才必须携带验证码；

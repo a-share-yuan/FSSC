@@ -71,7 +71,7 @@ public class RcReceivableService {
         LambdaQueryWrapper<RcReceivable> qw = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(kw)) {
             // 检索框提示＝「单据号/往来单位」⇒ 三个维度都要命中：单据号、往来单位名/编码（按主数据反查 id 集合，
-            // 参数化查询，拼 SQL），以及直接给往来单位主键的老用法。
+            // 参数化查询，禁止拼 SQL），以及直接给往来单位主键的老用法。
             List<Long> hitCustomerIds = customerMapper.selectList(new LambdaQueryWrapper<CrmCustomer>()
                             .select(CrmCustomer::getId)
                             .and(w -> w.like(CrmCustomer::getCustomerName, kw)
