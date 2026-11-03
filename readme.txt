@@ -17,8 +17,8 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   * 流程引擎：Flowable 8 + bpmn-js 在线设计器，条件分支/会签/票签/转办/
     加签/撤回/传阅/自由驳回全套能力，流程变更不发版；
   * 业务完整：费用报账、应收应付、总账凭证、资产存货、资金票据、影像 OCR、
-    共享作业运营六大域，后端约 173 个控制器 / 1,500+ HTTP 端点；
-  * 数据规模：主库 317 张表 + 影像库 6 张表，演示库内置 57 条已部署流程
+    共享作业运营，共 36 个业务域包，后端 173 个控制器 / 1,365 个 HTTP 端点；
+  * 数据规模：主库 318 张表 + 影像库 6 张表，演示库内置 57 条已部署流程
     定义（42 条流程，余为历史版本），导入即可跑审批；
   * 开源协议：GNU Affero General Public License v3.0（SPDX 标识 AGPL-3.0-or-later，见 LICENSE / NOTICE）；闭源或商业使用需另行取得商业许可（见 LICENSE-COMMERCIAL.md）。
 
@@ -61,8 +61,9 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   Windows（CMD）：
       for %f in (db\Dump20261102\*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
 
-  注意：db/Dump20261102/ 共 323 个文件 = 一表一文件（主库 fssc 317 表 + 影像库
-  fssc_image 6 表），每个文件自带 CREATE DATABASE IF NOT EXISTS、USE 与
+  注意：db/Dump20261102/ 共 325 个文件 = 一表一文件 324 枚（主库 fssc 318 表 +
+  影像库 fssc_image 6 表）＋ 1 枚 fssc_routines.sql（存储过程与函数）。
+  每个文件自带 CREATE DATABASE IF NOT EXISTS、USE 与
   SET FOREIGN_KEY_CHECKS=0，所以无需预先建库，文件顺序也不影响成败，可重复
   执行（幂等）。dump 内容与脱敏说明见 db/README.md。
 
@@ -120,7 +121,7 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   bpmn-repo/                流程模型仓库（publish/ 78 个已发布模型，
                             models/ 88 个模型编码共 294 版 XML）
   db/
-    Dump20261102/           整库 dump（323 个一表一文件，含演示数据与已部署流程）
+    Dump20261102/           整库 dump（325 个文件，一表一文件，含演示数据与已部署流程）
     import.sh / import.bat  一键导入脚本（自动选最新的 Dump<日期>/）
     README.md               数据库导入说明（dump 内容、导入与脱敏注意事项）
   _tools/                   开发辅助工具（密钥扫描/引用检查/事实件生成等）
@@ -135,7 +136,7 @@ Q2 前端页面打开但接口 401/跨域？
    FSSC_API_TARGET 仅影响 preview 模式。
 
 Q3 提示找不到表/flowable 相关错误？
-   确认 db/import.sh 完整执行过（db/Dump20261102/ 的 323 个文件全部导入）；Flowable 的
+   确认 db/import.sh 完整执行过（db/Dump20261102/ 的 325 个文件全部导入）；Flowable 的
    ACT_* 表演示库已内置，首次启动只会做结构校准。
 
 Q4 JDK 版本报错？

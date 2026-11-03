@@ -28,7 +28,7 @@
 
 - **Internationalisation is wired up and the UI text is extracted.** `fssc/fssc-web/package.json` depends on `vue-i18n`, `fssc/fssc-web/src/i18n/index.js` builds the instance, `main.js` registers it plus a global `LocaleSwitch`, and `src/i18n/locales/{zh-CN,en-US}.js` carry 4,948 keys each. Measured on this snapshot: 175 of 268 `.vue`/`.js` files under `src/` call `$t()`/`t()`/`useI18n()` (7,715 call sites) — every user-visible string in templates (labels, placeholders, table columns, button captions, dialog titles) and in the script layer (toasts, confirmations, table-column definitions) is routed through the locale files. The remaining Chinese literals are source comments, log text, data dictionaries (`enums.js`, `billStatus.js`, `permMappings.js`) and the bpmn-js canvas patch — none of which are interface copy. `scripts/i18n_check.py` gates this in CI: key-set alignment, dangling references, dynamic-key splicing, message compilation and a hard-coded-Chinese baseline that may only go down, never up.
 - **Source-only release.** The front-end package keeps `"private": true`; there is no npm package and no hosted demo. You build and run it yourself — from source (`mvn spring-boot:run` on `fssc/fssc-server/fssc-start`, `npm run dev` on `fssc/fssc-web`) or as a jar (`mvn package` then `java -jar`). See "Three steps to run it" above.
-- **Database bootstrap = one full database dump.** `db/Dump<导出日期>/` (323 files, one table per file, ≈6.8 MB) is the supported way to create the databases; import it as `db/README.md` describes. The accumulated per-version migration scripts under `fssc/fssc-server/sql/` are **not** published — there is no Flyway/Liquibase, so nobody outside the project can order them anyway. Note that the dump is an export of a real drill database: it carries business rows (bills, vouchers, approval history) and 2.3 MB of uploaded attachment bytes in `act_ge_bytearray`.
+- **Database bootstrap = one full database dump.** `db/Dump<导出日期>/` (325 files: 324 one-table-per-file dumps plus a routines file, ≈6.9 MB) is the supported way to create the databases; import it as `db/README.md` describes. The accumulated per-version migration scripts under `fssc/fssc-server/sql/` are **not** published — there is no Flyway/Liquibase, so nobody outside the project can order them anyway. Note that the dump is an export of a real drill database: it carries business rows (bills, vouchers, approval history) and 2.3 MB of uploaded attachment bytes in `act_ge_bytearray`.
 - The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — that migration is not yet verified by a build.
 - This code has been hardened through long manual business drills; treat documented behaviour as *documented*, not *guaranteed*. Each doc states which claims were measured and which were only read off the code.
 
@@ -172,6 +172,7 @@ cd ../fssc-web && npm install && npm run dev
 
 浏览器打开 `http://localhost:8080`。dump 里带着演练期间的账号、组织、菜单、参数与单据数据，导入后界面就有内容可点。登录用演示租户 **`DEMO1`**，口令统一 **`123456`**，工号即账号：`admin`（系统管理员）或 `100001`（普通员工）。
 
+
 想跑完整业务链路，照 **[`docs/真实场景测试/`](docs/真实场景测试/) 的三本逐步操作手册**做——不讲概念，每步写清"谁、登哪个账号、点哪里、应该看到什么"。**同一张单不能由同一个人既提单又审批**（引擎有防自审判定），至少需要提单人（`100001` 丁宇轩）+ 部门审批人（`100005` 叶思琪）+ 共享会计（`100002` 赵勇）+ 出纳（`100003` 雷子涵）四类身份，各册 §1.2 有本册完整账号表。审批链路与状态语义以 `docs/` 各册为准，不要用截图或印象推断。
 
 另见：端口、双库路由、数据源路由键、OCR/银企 mock 通道、启动失败排查 → **[`docs/快速上手.md`](docs/快速上手.md)**
@@ -186,8 +187,8 @@ cd ../fssc-web && npm install && npm run dev
 
 ## 界面
 
-截图取自本仓源码实跑（`fssc/fssc-web` + `fssc-server`，演示租户 `DEMO1`，行政管理员视角），
-数据来自 `db/` 的整库导出。重新生成：`node _tools/screenshot.mjs`（Playwright 驱动本机 Chrome，
+截图取自本仓源码实跑（`fssc/fssc-web` + `fssc-server`，演示租户 `DEMO1`，行政管理员视角），  
+数据来自 `db/` 的整库导出。重新生成：`node _tools/screenshot.mjs`（Playwright 驱动本机 Chrome，  
 已关水印与新手引导浮层；用法见脚本头注释）。
 
 **登录**（租户码 + 账号 + 口令三要素，租户隔离从登录第一屏就生效）
@@ -198,7 +199,7 @@ cd ../fssc-web && npm install && npm run dev
 
 ![工作台](docs/images/01-dashboard.png)
 
-**报账工作台 · 我的单据**（费用报账、资金收付、采购应付、应收收入、资产存货五条线统一收口；
+**报账工作台 · 我的单据**（费用报账、资金收付、采购应付、应收收入、资产存货五条线统一收口；  
 下方单据列表带状态、操作人与"去台账查看"跳转）
 
 ![我的单据](docs/images/04-my-bills.png)
@@ -207,7 +208,7 @@ cd ../fssc-web && npm install && npm run dev
 
 ![报销提单](docs/images/02-expense-form.png)
 
-**流程配置 · 流程图**（BPMN 画布，节点/网关/连线可拖拽；左侧模型列表带版本与发布状态，
+**流程配置 · 流程图**（BPMN 画布，节点/网关/连线可拖拽；左侧模型列表带版本与发布状态，  
 右侧七个页签覆盖节点配置、流程绑定、全局配置、运行实例、委托代理）
 
 ![流程设计器](docs/images/03-bpmn-designer.png)
@@ -227,23 +228,23 @@ cd ../fssc-web && npm install && npm run dev
 | 查表 / 写 SQL / 加字段                                       | [`docs/数据模型.md`](docs/数据模型.md)                                      |
 | 看不懂业务黑话（会签、核销、联查…）                                     | [`docs/术语表.md`](docs/术语表.md)                                        |
 | 搞清审批引擎能配什么、不能配什么                                       | [`docs/流程引擎技术说明.md`](docs/流程引擎技术说明.md)                              |
-| **第一次动手改代码，不知道要动哪几处**（加查询条件 / 加字段 / 加权限 / 改节点 / 改状态文案） | [`docs/流程引擎技术说明.md`](docs/流程引擎技术说明.md) §9        |
+| **第一次动手改代码，不知道要动哪几处**（加查询条件 / 加字段 / 加权限 / 改节点 / 改状态文案） | [`docs/流程引擎技术说明.md`](docs/流程引擎技术说明.md) §9                           |
 | 权限怎么加、为什么 403 显示"暂无数据"                                 | [`docs/权限与多租户.md`](docs/权限与多租户.md)                                  |
 | 业务故事：这张单据是谁提的、谁审的、钱怎么出去                                | [`docs/business-flows/`](docs/business-flows/)                      |
 | 部署到生产                                                  | [`docs/部署手册.md`](docs/部署手册.md) · [`docs/部署运维.md`](docs/部署运维.md)     |
 | 想知道这系统解决什么问题、给谁用                                       | [`docs/系统介绍.md`](docs/系统介绍.md) · [`docs/系统特点.md`](docs/系统特点.md)     |
-| 演示环境该登哪个账号、照着一步步跑通业务                                | [`docs/真实场景测试/`](docs/真实场景测试/)（3 本逐步操作手册，每步写明账号与预期状态）            |
+| 演示环境该登哪个账号、照着一步步跑通业务                                   | [`docs/真实场景测试/`](docs/真实场景测试/)（3 本逐步操作手册，每步写明账号与预期状态）               |
 | 全部文档一览                                                 | [`docs/README.md`](docs/README.md)（每篇散文文档另有同名 `.docx`）              |
 | 提 PR 前必读                                               | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) |
 
 ## 成熟度声明
 
-| 状态            | 内容                                                                                         |
-| ------------- | ------------------------------------------------------------------------------------------ |
-| 已实现且真实运行验证 | 费用报账全流程（事前申请→提单→多级审批→共享作业审核→发票查验→付款批次与执行→凭证生成与过账→归档联查，含差旅、借款核销、费用分摊、超标自动升级审批链与大额档）；合同、采购与应付三单匹配、应收对账开票与坏账、资金与付款、资产与存货、共享作业派工与 SLA、影像与发票、总账核算与月结、预算、管理报表共 **67 个页面**；系统管理员与流程配置。机制面：多级审批与会签／加签／转办／委托、凭证由业务单据自动生成并过账、多租户＋RBAC＋数据范围三层权限、单据全链路联查、影像采集与可插拔 OCR 通道框架、BPMN 在线设计器改完发布即生效、界面文案国际化（zh-CN / en-US 双语，4,948 键，含 CI ） |
-|  已实现，需结合客户业务定制 | 资产折旧与存货、资金计划与银企（内置 mock 通道）、预算控制细则、合规规则引擎多数规则、AI 动作网关——功能与界面都在，但科目口径、审批链、规则阈值与单据类型要按你自己的组织、政策和流程配一遍才算「能上线」 |
-|  需要自行扩展才能生产 | 真实 OCR/发票查验通道接入、银企直联真实实现、对象存储、SSO/LDAP、短信渠道                                                |
-|  明确不具备      | 生产级高可用验证（经大规模压测，但需要根据客户业务进行重新优化）、财务报表准则级审计背书                                               |
+| 状态               | 内容                                                                                                                                                                                                                                                                                                                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 已实现且真实运行验证       | 费用报账全流程（事前申请→提单→多级审批→共享作业审核→发票查验→付款批次与执行→凭证生成与过账→归档联查，含差旅、借款核销、费用分摊、超标自动升级审批链与大额档）；合同、采购与应付三单匹配、应收对账开票与坏账、资金与付款、资产与存货、共享作业派工与 SLA、影像与发票、总账核算与月结、预算、管理报表共 **67 个页面**；系统管理员与流程配置。机制面：多级审批与会签／加签／转办／委托、凭证由业务单据自动生成并过账、多租户＋RBAC＋数据范围三层权限、单据全链路联查、影像采集与可插拔 OCR 通道框架、BPMN 在线设计器改完发布即生效、界面文案国际化（zh-CN / en-US 双语，4,948 键，含 CI ） |
+| 已实现，需结合客户业务定制    | 税务链、预算链、SaaS 多租户、资产折旧与存货、资金计划与银企（内置 mock 通道）、预算控制细则、合规规则引擎多数规则、AI 动作网关——功能与界面都在，但科目口径、审批链、规则阈值与单据类型要按你自己的组织、政策和流程配一遍才算「能上线」                                                                                                                                                                                                |
+| 需要自行扩展才能生产       | 真实 OCR/发票查验通道接入、银企直联真实实现、对象存储、SSO/LDAP、短信渠道                                                                                                                                                                                                                                                                                |
+| 明确不具备            | 生产级高可用验证（经大规模压测，但需要根据客户业务进行重新优化）、财务报表准则级审计背书                                                                                                                                                                                                                                                                               |
 
 本项目内置脱敏后的真实系统数据，**不适合**直接当生产财务系统上线，适合作为二次开发底座、教学参考或同类系统能力研究。
 
