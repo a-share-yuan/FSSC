@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * 影像调阅评价（image_review，需求 6.5：整单重采集/整单作废/补采集）。
+ * 影像调阅评价（image_review，整单重采集/整单作废/补采集）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

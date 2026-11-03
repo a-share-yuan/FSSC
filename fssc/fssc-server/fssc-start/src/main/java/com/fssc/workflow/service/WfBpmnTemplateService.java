@@ -33,7 +33,7 @@ public class WfBpmnTemplateService {
     @Autowired
     private WfNodeConfigMapper wfNodeConfigMapper;
 
-    /** 审批角色中文名 → 角色编码（需求31 审批人角色体系） */
+    /** 审批角色中文名 → 角色编码（审批人角色体系） */
     private static final Map<String, String> ROLE_MAP = new LinkedHashMap<>();
     static {
         ROLE_MAP.put("部门经理", "DEPT_MANAGER");

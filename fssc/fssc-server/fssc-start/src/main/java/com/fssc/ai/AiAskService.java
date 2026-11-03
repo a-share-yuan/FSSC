@@ -122,7 +122,7 @@ public class AiAskService {
             return redlined;
         }
 
-        // /确定性技能优先于模型。零外部依赖，槽位（金额/日期/状态）由代码抽取，
+        // 确定性技能优先于模型。零外部依赖，槽位（金额/日期/状态）由代码抽取，
         // 模型只接管这层匹配不到的长尾；写技能永远只出票、不执行。
         SlotExtractor.Slots slots = slotExtractor.extract(question);
         if (withWrites) {

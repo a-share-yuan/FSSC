@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 预算组织（责任组织）（需求 3.4）。
+ * 预算组织（责任组织）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 表单详情配置（需求 2.27：配置各业务表单的字段/布局/规则）。
+ * 表单详情配置（配置各业务表单的字段/布局/规则）。
  * 扩展为单据类型管理：bill_type/bill_sub_type/category 标识单据类型，model_key 关联流程模型。
  */
 @Data

@@ -358,7 +358,7 @@ async function removeOffset(b, i) {
  */
 async function openRepayLoan() {
   // 本函数原先直接写 `b.form.bill.companyId`，但脚本作用域里并没有裸的 `b`
-  //   （b 是 BillWorkbench 经 ref="wb" 暴露出来的，只能用 `wb.value && wb.value.b`
+  // （b 是 BillWorkbench 经 ref="wb" 暴露出来的，只能用 `wb.value && wb.value.b`
   //     取得 —— 本文件其余 12 处函数都是这么写的）。
   //   结果点按钮即抛 ReferenceError，loan-candidates 请求根本没发出、repayDialog
   //   也永不置 true，表现为「点了『选择借款单冲销』毫无反应」。

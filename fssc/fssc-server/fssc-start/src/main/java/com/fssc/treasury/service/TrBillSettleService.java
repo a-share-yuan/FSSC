@@ -43,7 +43,7 @@ public class TrBillSettleService {
         }
         if (settle.getStatus() == null) settle.setStatus("STOCK");
         if (settle.getEndorseFlag() == null) settle.setEndorseFlag(Boolean.FALSE);
-        // 整改(20260917, DEV-008/VER-016)：创建即生成票据单号（口径：单据创建即有业务主键）。
+        // 创建即生成票据单号（口径：单据创建即有业务主键）。
         if (!StringUtils.hasText(settle.getBillNo())) {
             String date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
             long seq = mapper.selectCount(new LambdaQueryWrapper<TrBillSettle>()

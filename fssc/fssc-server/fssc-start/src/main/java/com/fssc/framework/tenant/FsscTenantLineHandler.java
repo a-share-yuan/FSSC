@@ -85,10 +85,10 @@ public class FsscTenantLineHandler implements TenantLineHandler {
         // fail-closed 改写（恒 true 时，拦截器在 INSERT 面既不注入也不校验）：
         // 1) 列清单已含 tenant_id（MetaObjectHandler 已按上下文填充，或业务代码显式赋值）：
         //    按 MP 默认语义跳过注入避免列重复；值面校验由 FsscMetaObjectHandler.fillTenant 把关
-        //    （入参携带却与上下文不一致即抛错，不静默改写）。
+        // （入参携带却与上下文不一致即抛错，不静默改写）。
         // 2) 列清单不含 tenant_id 且处于真实租户上下文：交给拦截器按上下文补注入，
         //    杜绝「实体缺列/值为空」时租户归属静默丢失；无上下文、平台端与聚合模式维持旧行为
-        //    （该区间的无列写入由 scripts/health/check_tenant_coverage.sql 巡检暴露）。
+        // （该区间的无列写入由 scripts/health/check_tenant_coverage.sql 巡检暴露）。
         if (columns != null && columns.stream()
                 .anyMatch(c -> tenantIdLine.equalsIgnoreCase(c.getColumnName()))) {
             return true;

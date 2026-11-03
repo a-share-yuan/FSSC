@@ -101,8 +101,8 @@ public class SaleReturnService {
         if (r.getReturnMode() == null || r.getReturnMode().isBlank()) {
             r.setReturnMode(SaleReturn.MODE_REFUND);
         }
-        assertCustomerInMaster(r);   // D-H2-02
-        fillCompanyCoords(r);        // D-H2-03
+        assertCustomerInMaster(r);
+        fillCompanyCoords(r);
         List<SaleReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
         // 表头税额按明细整算回写（不信任前端 taxAmount）
@@ -137,8 +137,8 @@ public class SaleReturnService {
         if (r.getBillDate() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "退货日期必填");
         }
-        assertCustomerInMaster(r);   // D-H2-02（与 create 同校验：编辑改客户代码同样要现有）
-        fillCompanyCoords(r);        // D-H2-03
+        assertCustomerInMaster(r);   // （与 create 同校验：编辑改客户代码同样要现有）
+        fillCompanyCoords(r);
         List<SaleReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
         // 编辑整单覆盖时税额同样按明细整算回写

@@ -28,7 +28,7 @@ import java.util.List;
 
 /**
  * 流程配置（/api/tenant/wf/flow-config/**）。
- * 需求31 附录：金额阈值 / 超时处理 / 审批动作 / 外部集成。
+ * 附录：金额阈值 / 超时处理 / 审批动作 / 外部集成。
  */
 @RestController
 @RequestMapping("/api/tenant/wf/flow-config")

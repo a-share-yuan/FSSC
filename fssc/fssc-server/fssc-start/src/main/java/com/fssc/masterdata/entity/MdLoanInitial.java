@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 初始借款余额（需求 2.29：导入上线前员工借款余额）。
+ * 初始借款余额（导入上线前员工借款余额）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

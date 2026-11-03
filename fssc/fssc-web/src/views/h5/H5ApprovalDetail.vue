@@ -496,7 +496,7 @@ async function loadInvoices() {
 async function loadHistory() {
   histDenied.value = null
   histError.value = ''
-  // /03：改走 /wf/query/chain（按本单实例取数，按单据可读性守卫）。
+  // 03：改走 /wf/query/chain（按本单实例取数，按单据可读性守卫）。
   // 旧实现传 businessKey ⇒ 后端落进「只查本人参与过的全部留痕」分支（混入别的单据），
   // 且该端点挂 wf:history:list ⇒ 多数业务账号直接 4030 看不到面板。
   const pid = bill.value?.procInstId

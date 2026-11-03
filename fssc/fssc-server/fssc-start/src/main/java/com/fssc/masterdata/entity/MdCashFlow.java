@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 现金流量码（需求 2.32：管理现金流量项目编码）。
+ * 现金流量码（管理现金流量项目编码）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

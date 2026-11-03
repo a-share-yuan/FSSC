@@ -45,7 +45,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 基础数据-配置类 CRUD（需求 2.17/2.23/2.27~2.34）。
+ * 基础数据-配置类 CRUD（/2.27~2.34）。
  * 统一路径 /api/tenant/masterdata/config/{type}/...，type 见各端点。
  */
 @RestController
@@ -504,7 +504,7 @@ public class MasterConfigController {
     }
 
 
-    // 金融机构（需求 2.10）
+    // 金融机构
     @RequiresPerm("md:fininst:list")
     @GetMapping("/bank/page")
     public Result<PageResult<MdBank>> bankPage(PageQuery q, String keyword) {
@@ -542,7 +542,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // 员工等级（需求 2.18）
+    // 员工等级
     @RequiresPerm("md:employeelevel:list")
     @GetMapping("/employeeLevel/page")
     public Result<PageResult<MdEmployeeLevel>> employeeLevelPage(PageQuery q, String keyword) {
@@ -580,7 +580,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // 记账配置（需求 2.20）
+    // 记账配置
     @RequiresPerm("md:glconfig:list")
     @GetMapping("/glConfig/page")
     public Result<PageResult<MdGlConfig>> glConfigPage(PageQuery q, String keyword) {
@@ -603,7 +603,7 @@ public class MasterConfigController {
     @PostMapping("/glConfig/{id}/delete")
     public Result<Void> glConfigDelete(@PathVariable Long id) { mdglconfigMapper.deleteById(id); return Result.success(); }
 
-    // 收支设置（需求 2.21）
+    // 收支设置
     @RequiresPerm("md:incomeexpense:list")
     @GetMapping("/incomeExpense/page")
     public Result<PageResult<MdIncomeExpense>> incomeExpensePage(PageQuery q, String keyword) {
@@ -641,7 +641,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // 借款付款类型（需求 2.26）
+    // 借款付款类型
     @RequiresPerm("md:loanpaytype:list")
     @GetMapping("/loanPayType/page")
     public Result<PageResult<MdLoanPayType>> loanPayTypePage(PageQuery q, String keyword) {
@@ -680,7 +680,7 @@ public class MasterConfigController {
     }
 
 
-    // 预算类别（需求 3.3）
+    // 预算类别
     @RequiresPerm("md:budgetcategory:list")
     @GetMapping("/budgetCategory/page")
     public Result<PageResult<MdBudgetCategory>> budgetCategoryPage(PageQuery q, String keyword) {
@@ -718,7 +718,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // 预算组织（需求 3.4）
+    // 预算组织
     @RequiresPerm("md:budgetorg:list")
     @GetMapping("/budgetOrg/page")
     public Result<PageResult<MdBudgetOrg>> budgetOrgPage(PageQuery q, String keyword) {
@@ -756,7 +756,7 @@ public class MasterConfigController {
         return Result.success();
     }
 
-    // 预算期间（需求 3.6）
+    // 预算期间
     @RequiresPerm("md:budgetperiod:list")
     @GetMapping("/budgetPeriod/page")
     public Result<PageResult<MdBudgetPeriod>> budgetPeriodPage(PageQuery q, Integer periodYear) {
@@ -798,7 +798,7 @@ public class MasterConfigController {
     }
 
 
-    // 合同类型（需求 5.1）
+    // 合同类型
     @RequiresPerm("md:contracttype:list")
     @GetMapping("/contractType/page")
     public Result<PageResult<MdContractType>> contractTypePage(PageQuery q, String keyword) {

@@ -114,7 +114,7 @@ public class OrgHealthChecker {
                 issues.add(issue("R3", "WARN", str(r.get("dept_name")),
                         "部门负责人「" + str(r.get("nick_name")) + "」(" + str(r.get("emp_no"))
                                 + ") 近 30 天在本部门发起过单据：他本人发起的单在该节点无人可办",
-                        "已由 D-WF-15 三级降级备用处理，不阻断流程；组织上建议由副职代发，或将该节点改派给上级"));
+                        "已由 三级降级备用处理，不阻断流程；组织上建议由副职代发，或将该节点改派给上级"));
             }
             // ── R4 leader 跨公司（WARN）──
             for (Map<String, Object> r : jdbc.queryForList(
@@ -246,7 +246,7 @@ public class OrgHealthChecker {
                 "汇报线断在第一层时 escalateTarget 与 empty_strategy=ESCALATE 全部失效"));
         c.add(rule("R3", "leader 即提单人", "WARN",
                 "部门 leader 近 30 天在本部门发起过单据",
-                "已由 D-WF-15 三级降级备用处理，不阻断流程，属组织管理提醒"));
+                "已由 三级降级备用处理，不阻断流程，属组织管理提醒"));
         c.add(rule("R4", "leader 跨公司", "WARN",
                 "sys_dept.leader_id 指向的人应属本公司",
                 "「直属上级」跨公司，本地公司的事务由外公司人审批（本项目代码不校验，属管理规则）"));

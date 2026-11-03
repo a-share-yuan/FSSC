@@ -1129,7 +1129,7 @@ async function loadAccess(quiet) {
       return { list: accesses.value, total: r.total || 0 }
     })
     // 调阅记录行只有裸 archive_id，「档案编码」列要靠档案目录才能出真号
-    //（改按 tab 查询后 archives 在本 tab 根本不加载，列就恒退化成 #ID）
+    // （改按 tab 查询后 archives 在本 tab 根本不加载，列就恒退化成 #ID）
     await ensureArchiveDir()
   } catch (e) {
     // quiet 严格判 true——本函数被 @click/@change/TablePager 直接绑定时会收到事件对象，

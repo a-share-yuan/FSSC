@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 发票定时验真（需求 7.1）：每 5 分钟扫描待验发票（verify_status IN NONE/PENDING/FAILED）自动验真。
+ * 发票定时验真：每 5 分钟扫描待验发票（verify_status IN NONE/PENDING/FAILED）自动验真。
  *
  * <p>验真通道由「外部接口配置」页面统一管理（category=INVOICE_VERIFY），并新增<b>发票能力网关</b>缺省环节：
  * <ul>

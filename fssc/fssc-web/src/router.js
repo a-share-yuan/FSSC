@@ -90,7 +90,7 @@ const router = createRouter({ history: createWebHashHistory(), routes })
 // 放行例外：H5 端页面（深链详情由后端按单据参与人校验）、工作台（拦截回落点，必须可达）、
 // 个人中心 / 流程导航地图（工作台卡片全员入口）。
 // 「我的待办/已办/我发起的/我的抄送」属本人视角自助页：对应后端端点（/tenant/workbench/**、
-// /wf/query/cc/mine）按当前登录人过滤、不设权限码；其中 todo/done/cc 的 sys_menu 行已软删，
+// wf/query/cc/mine）按当前登录人过滤、不设权限码；其中 todo/done/cc 的 sys_menu 行已软删，
 // 菜单树兜底永不命中 ⇒ 非超管一律被拦。页面级无权可收，数据面由后端本人视角兜底。
 function denyToWorkbench(msg) {
   ElMessage.warning(msg || '无权限访问该页面，请联系管理员')

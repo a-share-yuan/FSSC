@@ -170,7 +170,7 @@ const { t } = useI18n()
 const props = defineProps({
   modelValue: { type: String, default: '' },
   // 只读模式：仅渲染流程图 + 缩放/适应视图；隐藏调色板、工具栏、属性面板与节点快捷配置条
-  //（用于「流程配置」页的「流程图」页签——只有 wf:model:update 才允许编辑绘制）
+  // （用于「流程配置」页的「流程图」页签——只有 wf:model:update 才允许编辑绘制）
   readonly: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue', 'saved'])

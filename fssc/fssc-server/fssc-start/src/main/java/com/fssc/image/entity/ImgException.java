@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * 影像异常（image_exception，需求 6.7：6 类异常人工处理）。
+ * 影像异常（image_exception，：6 类异常人工处理）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

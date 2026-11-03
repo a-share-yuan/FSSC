@@ -165,7 +165,7 @@ public class PayBatchBizAction implements WfBizAction {
                     Long voucherId = null;
                     if (isLoanPayoutBatch(batch)) {
                         log.info("付款批次 {} 为借款放款（source_doc_type=EXP_LOAN），跳过批次出纳凭证："
-                                        + "资金腿已由借款审批的 EXP_LOAN 凭证（借1221/贷1002）承载（D-F1R-08）",
+                                        + "资金腿已由借款审批的 EXP_LOAN 凭证（借1221/贷1002）承载",
                                 batch.getBatchNo());
                     } else {
                         voucherId = voucherService.generateTreasuryPayVoucher(batch, event.getProcInstId());
@@ -240,7 +240,7 @@ public class PayBatchBizAction implements WfBizAction {
             // 借款放款批次同正常审批通道，跳过批次出纳凭证（理由见上方审批通过分支）
             Long voucherId = null;
             if (isLoanPayoutBatch(batch)) {
-                log.info("付款批次 {} 为借款放款（source_doc_type=EXP_LOAN），审批终态后到通道跳过批次出纳凭证（D-F1R-08）",
+                log.info("付款批次 {} 为借款放款（source_doc_type=EXP_LOAN），审批终态后到通道跳过批次出纳凭证",
                         batch.getBatchNo());
             } else {
                 voucherId = voucherService.generateTreasuryPayVoucher(batch, event.getProcInstId());

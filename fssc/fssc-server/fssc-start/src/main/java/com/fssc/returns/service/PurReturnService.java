@@ -110,9 +110,9 @@ public class PurReturnService {
         if (r.getReturnMode() == null || r.getReturnMode().isBlank()) {
             r.setReturnMode(PurReturn.MODE_REFUND);
         }
-        assertVendorInMaster(r);   // D-H2-02
-        fillCompanyCoords(r);      // D-H2-03
-        fillSourceDocId(r);        // D-H2-10
+        assertVendorInMaster(r);
+        fillCompanyCoords(r);
+        fillSourceDocId(r);
         List<PurReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
         // 表头税额按明细派生回写（不信任前端传值，含税规则）
@@ -148,9 +148,9 @@ public class PurReturnService {
         if (r.getBillDate() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "退货日期必填");
         }
-        assertVendorInMaster(r);   // D-H2-02（与 create 同校验：编辑改代码同样要现有）
-        fillCompanyCoords(r);      // D-H2-03
-        fillSourceDocId(r);        // D-H2-10
+        assertVendorInMaster(r);   // （与 create 同校验：编辑改代码同样要现有）
+        fillCompanyCoords(r);
+        fillSourceDocId(r);
         List<PurReturnLine> lines = normalizeLines(r);
         validateLineSum(r.getAmount(), lines);
         // 表头税额按明细派生回写（不信任前端传值，含税规则）
@@ -392,7 +392,7 @@ public class PurReturnService {
             out.add(ln);
             no++;
         }
-        fillLineTrace(r, out);   // D-H2-07
+        fillLineTrace(r, out);
         return out;
     }
 

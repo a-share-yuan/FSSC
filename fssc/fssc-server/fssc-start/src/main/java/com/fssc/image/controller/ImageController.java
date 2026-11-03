@@ -129,7 +129,7 @@ public class ImageController {
         return Result.success(imageService.batches(bizType, bizId));
     }
 
-    // 影像任务（需求 6.4：创建/查询/封单/状态）
+    // 影像任务（创建/查询/封单/状态）
 
     @RequiresPerm("image:batch:list")
     @GetMapping("/task/page")

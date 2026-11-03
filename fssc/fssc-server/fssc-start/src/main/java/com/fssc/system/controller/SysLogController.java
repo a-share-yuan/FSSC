@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 系统日志（需求 8 系统监控-系统日志）：查询租户操作日志。
+ * 系统日志（系统监控-系统日志）：查询租户操作日志。
  * 审计表只读，不提供增删改。
  */
 @RestController

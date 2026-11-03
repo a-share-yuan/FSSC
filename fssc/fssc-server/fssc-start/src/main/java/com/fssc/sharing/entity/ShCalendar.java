@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 
 /**
- * 共享工作日历（需求 8.1.3：工作日历，休息日/工作日/在岗时间定义）。
+ * 共享工作日历（.3：工作日历，休息日/工作日/在岗时间定义）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

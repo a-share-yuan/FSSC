@@ -72,7 +72,7 @@ public class DispatchService {
         }
 
         // 派单去重——同一 (bill_id, matched_rule_id) 已有任务即复用，不再重复落 dispatch_task
-        //（原先每次调用都新插一行，重复点「发起派单/自动派单」得到多条任务，审核人收到重复工单；
+        // （原先每次调用都新插一行，重复点「发起派单/自动派单」得到多条任务，审核人收到重复工单；
         // 库级唯一键 uk_dispatch_task_bill_rule 属 DDL 变更，转人工在人工清单登记）
         DispatchTask existing = dispatchTaskMapper.selectOne(new LambdaQueryWrapper<DispatchTask>()
                 .eq(DispatchTask::getBillId, billIdNum)

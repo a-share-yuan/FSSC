@@ -117,7 +117,7 @@ grep -nE "(wfEngineFacade|wfInstanceMapper|numberRuleService|deliveryService|bil
   document/service/*.java document/job/*.java document/facade/*.java invoice/service/*.java invoice/job/*.java invoice/facade/*.java
 ```
 
-（2026-10-27 01:4x 实测：该命令在 `document`／`invoice` 两域共命中 52 行，分布为
+（该命令在 `document`／`invoice` 两域共命中 52 行，分布为
 `BillArchiveService` 14 / `InvoiceService` 12 / `ArchiveService` 11 / `InvoiceAbnormalAlertJob` 3 /
 `ArchiveDestroyService` 3 / `ArchiveExpireJob` 3 / `ArchiveAccessService` 2 / `ArchiveFacadeImpl` 2 /
 `InvoiceVerifyScheduler` 1 / `ArchiveIntegrityService` 1。
@@ -207,7 +207,7 @@ fssc:
 profile 里排除 15 项 Flowable 自动配置、`xxxDomain` 健康组件只出现在 readiness。
 
 启动器（`start-{ai,gateway,report,image}.bat`）还带三条实测约束：① 现有 `fssc-server.jar`
-（2026-10-26 11:56）早于四个拆分主类，因此主类取不到时脚本用 `-Dloader.path=fssc-start\target\classes`
+早于四个拆分主类，因此主类取不到时脚本用 `-Dloader.path=fssc-start\target\classes`
 跑新编出的类，两边都没有就报错退出而不是抛 `ClassNotFoundException`；② `loader.path` 只放**一个**
 条目——分号分隔的多条目在 .bat 里会被静默吃掉（实测结果仍是 CNFE），而 `fssc-common` 的编译产物
 与 jar 内嵌 `fssc-common-1.1.0.jar` 逐字节一致（md5 `38a61d7a`），无需再挂第二条；③ `.bat` 内容

@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 费用类型与预算科目映射（需求 2.34）。
+ * 费用类型与预算科目映射。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

@@ -114,7 +114,7 @@ public class ContractController {
         return Result.success(service.supplement(id));
     }
 
-    // 付款条件 / 支付记录（需求 5.2）
+    // 付款条件 / 支付记录
 
     @RequiresPerm("contract:list")
     @GetMapping("/{id}/conditions")

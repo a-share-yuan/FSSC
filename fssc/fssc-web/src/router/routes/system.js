@@ -50,7 +50,7 @@ export default [
   { path: 'master/expense-standard', component: () => import('../../views/master/ExpenseStandard.vue'), meta: { title: i18n.global.t('router.system.Expense2') } },
   { path: 'master/payee', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'payee' }, meta: { title: i18n.global.t('router.system.Payee') } },
   { path: 'master/exchange-rate', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'exchange-rate' }, meta: { title: '汇率管理' } },
-  // 基础数据-配置类（需求 2 章）
+  // 基础数据-配置类（章）
   { path: 'master/form', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'form' }, meta: { title: '表单详情配置' } },
   { path: 'master/loanLimit', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'loanLimit' }, meta: { title: i18n.global.t('router.system.Loan') } },
   { path: 'master/loanInitial', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'loanInitial' }, meta: { title: i18n.global.t('router.system.Opening') } },

@@ -194,7 +194,7 @@ const RECON_CODES = ['MATCHED', 'RECON', 'RECONED']
 const isReconciled = (s) => RECON_CODES.includes(String(s || '').trim().toUpperCase())
 
 // 收款（贷方）方向的取值集——与服务端 BankReconcileService 里的同名值集逐字一致
-//（trans_type 取 CREDIT／RECEIPT／IN 者为收款，DEBIT 为付款方向，大小写不敏感）。
+// （trans_type 取 CREDIT／RECEIPT／IN 者为收款，DEBIT 为付款方向，大小写不敏感）。
 const CREDIT_TRANS_TYPES = ['CREDIT', 'RECEIPT', 'IN']
 const isReceiptDir = (t) => !!t && CREDIT_TRANS_TYPES.some(c => c.toLowerCase() === String(t).toLowerCase())
 /**

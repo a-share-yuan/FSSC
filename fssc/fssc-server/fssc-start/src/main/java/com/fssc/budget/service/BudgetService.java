@@ -371,7 +371,7 @@ public class BudgetService {
         }
         // ③ data_scope 五级：依据登录人 data_scope 注入 公司/部门/本人 过滤（TENANT 不加条件）
         // 部门档走 applyWithNullDept——dept_id=NULL 的公司级下达行对同公司人员可见
-        //（若按 dept_id=本人部门 过滤，公司级下达行会被全部滤掉，BUDGET_MANAGER 面板恒 0 行）
+        // （若按 dept_id=本人部门 过滤，公司级下达行会被全部滤掉，BUDGET_MANAGER 面板恒 0 行）
         DataScopeKit.applyWithNullDept(qw, BgItem::getCompanyId, BgItem::getDeptId, null);
         qw.orderByAsc(BgItem::getDimKey);
         Page<BgItem> p = bgItemMapper.selectPage(Page.of(pageNum, pageSize), qw);

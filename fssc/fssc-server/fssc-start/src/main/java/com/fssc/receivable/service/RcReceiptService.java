@@ -104,7 +104,7 @@ public class RcReceiptService {
         LoginUser user = UserContext.getRequired();
         e.setOperatorId(user.getUserId());
         e.setStatus("WRITTEN_OFF");
-        // 合规整改( )：无明细时按往来单位 OPEN 应收单先进先出自动核销——
+        // 合规无明细时按往来单位 OPEN 应收单先进先出自动核销——
         // 登记即核销与 WRITTEN_OFF 状态一致，修复"登记不冲减余额、事后 FIFO 无单可核"断层
         Long scopeC = orgGuard.enforceCompany();
         if (e.getLines() == null || e.getLines().isEmpty()) {

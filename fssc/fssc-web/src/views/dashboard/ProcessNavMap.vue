@@ -209,7 +209,7 @@ const GLOBAL_ENTRIES = {
 // 当前用户能否访问该路由：
 //  ① 超管（*:*:* / is_admin）→ 全放行
 //  ② 菜单树已加载 → 与左侧菜单严格同源：命中菜单 path，或是某菜单的父路由
-//     （如 /expense/apply → /expense/apply/meeting）
+// （如 /expense/apply → /expense/apply/meeting）
 //  ③ 菜单未命中不等于无权：一域一台改造后，工作台的页签级页面（/arflow/billing 等）
 //     不再有独立菜单行，只在 ROUTE_PERM 里留码——此处必须回退按码判定，
 //     否则这些真实可打开的页面会被整片标成「无权限」＝新造的假阴性。

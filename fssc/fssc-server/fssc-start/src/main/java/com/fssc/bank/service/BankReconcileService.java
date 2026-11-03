@@ -1051,7 +1051,7 @@ public class BankReconcileService {
             BigDecimal total = nz(rc.getAmount());
             upd.setBankMatched(after.compareTo(total) >= 0 ? 1 : 0);
             receiptMapper.updateById(upd);
-            log.info("D-G5-04 收款单已勾对金额回写：receipt={} 单号={} 已勾对 {} / 合计 {}",
+            log.info("收款单已勾对金额回写：receipt={} 单号={} 已勾对 {} / 合计 {}",
                     rc.getId(), rc.getBillNo(), after, total);
         }
     }

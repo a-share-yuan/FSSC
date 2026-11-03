@@ -6537,7 +6537,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.asset.controller",
    "controller": "AssetDeprBatchController",
@@ -6563,7 +6563,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.asset.controller",
    "controller": "AssetDeprBatchController",
@@ -6852,7 +6852,7 @@
       {
        "n": "accountType",
        "t": "String",
-       "d": "账户性质（D-DEC-158）：BASIC 基本存款户 GENERAL 一般存款户 SP"
+       "d": "账户性质：BASIC 基本存款户 GENERAL 一般存款户 SP"
       },
       {
        "n": "subjectId",
@@ -6991,7 +6991,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.masterdata.controller",
    "controller": "BankAccountController",
@@ -7071,7 +7071,7 @@
       {
        "n": "accountType",
        "t": "String",
-       "d": "账户性质（D-DEC-158）：BASIC 基本存款户 GENERAL 一般存款户 SP"
+       "d": "账户性质：BASIC 基本存款户 GENERAL 一般存款户 SP"
       },
       {
        "n": "subjectId",
@@ -7567,7 +7567,7 @@
       {
        "n": "budgetItemId",
        "t": "Long",
-       "d": "预算明细ID（bg_item，本行摊到哪个预算项，D-DEC-374）"
+       "d": "预算明细ID（bg_item，本行摊到哪个预算项）"
       },
       {
        "n": "shareRatio",
@@ -7718,7 +7718,7 @@
       {
        "n": "budgetItemId",
        "t": "Long",
-       "d": "预算明细ID（bg_item，本行摊到哪个预算项，D-DEC-374）"
+       "d": "预算明细ID（bg_item，本行摊到哪个预算项）"
       },
       {
        "n": "shareRatio",
@@ -8088,7 +8088,7 @@
       {
        "n": "controlType",
        "t": "String",
-       "d": "D-DEC-372：控制方式（HARD SOFT WARN）在方案表 bg_scheme"
+       "d": "控制方式（HARD SOFT WARN）在方案表 bg_scheme"
       },
       {
        "n": "execRate",
@@ -8295,7 +8295,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.budget.controller",
    "controller": "BudgetController",
@@ -8724,7 +8724,7 @@
        "n": "bizId",
        "t": "Long",
        "req": true,
-       "d": "D-BG-04：{@code bizId} 实为必传（{@code writeOff} "
+       "d": "{@code bizId} 实为必传（{@code writeOff} "
       },
       {
        "n": "bizNo",
@@ -8774,7 +8774,7 @@
        "n": "bizId",
        "t": "Long",
        "req": true,
-       "d": "D-BG-04：{@code bizId} 实为必传（{@code writeOff} "
+       "d": "{@code bizId} 实为必传（{@code writeOff} "
       },
       {
        "n": "bizNo",
@@ -8877,7 +8877,7 @@
        "n": "bizId",
        "t": "Long",
        "req": true,
-       "d": "D-BG-04：{@code bizId} 实为必传（{@code writeOff} "
+       "d": "{@code bizId} 实为必传（{@code writeOff} "
       },
       {
        "n": "bizNo",
@@ -8927,7 +8927,7 @@
        "n": "bizId",
        "t": "Long",
        "req": true,
-       "d": "D-BG-04：{@code bizId} 实为必传（{@code writeOff} "
+       "d": "{@code bizId} 实为必传（{@code writeOff} "
       },
       {
        "n": "bizNo",
@@ -11389,7 +11389,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.contract.controller",
    "controller": "ContractController",
@@ -11609,7 +11609,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.contract.controller",
    "controller": "ContractController",
@@ -14154,7 +14154,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.expense.controller",
    "controller": "ExpenseBillController",
@@ -14396,12 +14396,12 @@
         {
          "n": "agentUserId",
          "t": "Long",
-         "d": "代理人（代他人报销，代填单）。D-DEC-179 甲：本列此前全仓零生产端写入， 现由 "
+         "d": "代理人（代他人报销，代填单）。甲：本列此前全仓零生产端写入， 现由 "
         },
         {
          "n": "auditUserId",
          "t": "Long",
-         "d": "共享审核人（AUDIT 环节完成经办人，D-DEC-179；此前实体无字段致列恒空）"
+         "d": "共享审核人（AUDIT 环节完成经办人，；此前实体无字段致列恒空）"
         },
         {
          "n": "receiverUserId",
@@ -14597,7 +14597,7 @@
         {
          "n": "uploadByName",
          "t": "String",
-         "d": "D-DEC-025 显示面：上传人姓名。upload_by 存 sys_user.id，"
+         "d": "显示面：上传人姓名。upload_by 存 sys_user.id，"
         }
        ]
       }
@@ -14616,7 +14616,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.expense.controller",
    "controller": "ExpenseBillController",
@@ -19281,7 +19281,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.glex.controller",
    "controller": "GlSharedMasterController",
@@ -20546,7 +20546,7 @@
       {
        "n": "invoiceIds",
        "t": "java.util.List<Long>",
-       "d": "D-PTP-1：H5 批量绑票通道（invoiceId 缺省时生效，逐票自动按剩余可用面"
+       "d": "H5 批量绑票通道（invoiceId 缺省时生效，逐票自动按剩余可用面"
       }
      ]
     }
@@ -29298,32 +29298,32 @@
       {
        "n": "procInstId",
        "t": "String",
-       "d": "D-TRC-05：来源单据的审批流程实例ID；跨单合并批次留 NULL（多实例不可归一）"
+       "d": "来源单据的审批流程实例ID；跨单合并批次留 NULL（多实例不可归一）"
       },
       {
        "n": "billStatus",
        "t": "String",
-       "d": "D-DEC-252 展示：来源单据状态（transient，列表补充；批次内多单状态不一"
+       "d": "展示：来源单据状态（transient，列表补充；批次内多单状态不一"
       },
       {
        "n": "voucherNo",
        "t": "String",
-       "d": "D-DEC-252 展示：关联凭证号（transient，多张以「、」连接）"
+       "d": "展示：关联凭证号（transient，多张以「、」连接）"
       },
       {
        "n": "voucherStatus",
        "t": "String",
-       "d": "D-DEC-252 展示：关联凭证记账状态（transient，DRAFT POSTED"
+       "d": "展示：关联凭证记账状态（transient，DRAFT POSTED"
       },
       {
        "n": "payProcInstId",
        "t": "String",
-       "d": "D-DEC-114①：本批次<b>自身< b>的资金付款审批（TR_PAY）流程实例号（"
+       "d": "①：本批次<b>自身< b>的资金付款审批（TR_PAY）流程实例号（"
       },
       {
        "n": "payFlowStatus",
        "t": "String",
-       "d": "D-DEC-114① 展示：本批次 TR_PAY 审批流状态（transient，RUN"
+       "d": "① 展示：本批次 TR_PAY 审批流状态（transient，RUN"
       },
       {
        "n": "voucherAnomaly",
@@ -29407,7 +29407,7 @@
       {
        "n": "procInstId",
        "t": "String",
-       "d": "D-TRC-05：来源单据的审批流程实例ID，生成付款记录时随单写入"
+       "d": "来源单据的审批流程实例ID，生成付款记录时随单写入"
       },
       {
        "n": "lineNo",
@@ -29527,7 +29527,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.sharing.controller",
    "controller": "PayController",
@@ -29818,7 +29818,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.payplan.controller",
    "controller": "PayPlanController",
@@ -33245,7 +33245,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.returns.controller",
    "controller": "PurReturnController",
@@ -33828,7 +33828,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.purchase.controller",
    "controller": "PurchaseController",
@@ -33939,7 +33939,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.purchase.controller",
    "controller": "PurchaseController",
@@ -34779,12 +34779,12 @@
       {
        "n": "bankMatched",
        "t": "Integer",
-       "d": "是否与银行流水勾对：0未勾对(企业已收银行未收) 1已勾对 ⚠ D-G5-04：此位只表"
+       "d": "是否与银行流水勾对：0未勾对(企业已收银行未收) 1已勾对 ⚠ 此位只表"
       },
       {
        "n": "bankMatchedAmount",
        "t": "BigDecimal",
-       "d": "D-G5-04：已与银行流水勾对的<b>金额< b>（部分勾对按金额累计，非布尔）。 未"
+       "d": "已与银行流水勾对的<b>金额< b>（部分勾对按金额累计，非布尔）。 未"
       },
       {
        "n": "lines",
@@ -34998,7 +34998,7 @@
       {
        "n": "flowStatus",
        "t": "String",
-       "d": "---- D-H3-01：流程态投影（非表列，只出参、不进 SQL、不改状态机） ---"
+       "d": "---- 流程态投影（非表列，只出参、不进 SQL、不改状态机） ---"
       },
       {
        "n": "flowStatusText",
@@ -35088,7 +35088,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.receivable.controller",
    "controller": "RcReceivableController",
@@ -37411,7 +37411,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.returns.controller",
    "controller": "SaleReturnController",
@@ -37948,7 +37948,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.compliance.controller",
    "controller": "ServiceCatalogController",
@@ -39564,7 +39564,7 @@
    "domain": "com.fssc.sharing.controller",
    "controller": "SharingController",
    "source": "fssc-start/src/main/java/com/fssc/sharing/controller/SharingController.java",
-   "params": "Long id, // D-DEC-024/D-DEC-030：办结备注（审计口语）随请求提交并落 op_audit_task.remark String remark",
+   "params": "Long id, // 办结备注（审计口语）随请求提交并落 op_audit_task.remark String remark",
    "schema": {
     "path": [
      {
@@ -40250,17 +40250,17 @@
       {
        "n": "procInstId",
        "t": "String",
-       "d": "D-TRC-05：来源单据的审批流程实例ID，使档案可反查\"是哪次审批产生的\""
+       "d": "来源单据的审批流程实例ID，使档案可反查\"是哪次审批产生的\""
       },
       {
        "n": "archiveProcInstId",
        "t": "String",
-       "d": "D-DEC-028（证据 12-09A:57）：<b>档案自身< b>那条归档审批流（F"
+       "d": "（证据 12-09A:57）：<b>档案自身< b>那条归档审批流（F"
       },
       {
        "n": "archiveFlowStatus",
        "t": "String",
-       "d": "D-DEC-028：归档审批流自身状态（读侧补充，同上；未发起归档流则为空）"
+       "d": "归档审批流自身状态（读侧补充，同上；未发起归档流则为空）"
       },
       {
        "n": "voucherId",
@@ -40516,17 +40516,17 @@
       {
        "n": "procInstId",
        "t": "String",
-       "d": "D-TRC-05：来源单据的审批流程实例ID，使档案可反查\"是哪次审批产生的\""
+       "d": "来源单据的审批流程实例ID，使档案可反查\"是哪次审批产生的\""
       },
       {
        "n": "archiveProcInstId",
        "t": "String",
-       "d": "D-DEC-028（证据 12-09A:57）：<b>档案自身< b>那条归档审批流（F"
+       "d": "（证据 12-09A:57）：<b>档案自身< b>那条归档审批流（F"
       },
       {
        "n": "archiveFlowStatus",
        "t": "String",
-       "d": "D-DEC-028：归档审批流自身状态（读侧补充，同上；未发起归档流则为空）"
+       "d": "归档审批流自身状态（读侧补充，同上；未发起归档流则为空）"
       },
       {
        "n": "voucherId",
@@ -40950,12 +40950,12 @@
       {
        "n": "createBy",
        "t": "Long",
-       "d": "D-DEC-155：导入 直连写入数据库的操作人（bigint，与 md_ 同一规则）。"
+       "d": "导入 直连写入数据库的操作人（bigint，与 md_ 同一规则）。"
       },
       {
        "n": "updateBy",
        "t": "Long",
-       "d": "D-DEC-155：勾对 认领 归档等改单动作的操作人（列未上线，见上守卫说明）"
+       "d": "勾对 认领 归档等改单动作的操作人（列未上线，见上守卫说明）"
       },
       {
        "n": "claimed",
@@ -43946,7 +43946,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.glex.controller",
    "controller": "TaxManagementController",
@@ -44484,7 +44484,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.glex.controller",
    "controller": "TaxRefundController",
@@ -48752,7 +48752,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.treasury.controller",
    "controller": "TrFundPlanController",
@@ -48917,7 +48917,7 @@
       {
        "n": "approved",
        "t": "Boolean",
-       "d": "---- D-DEC-439 乙：审批 动账 登账三件事的明示位（均为非表列，只出参、不"
+       "d": "----  乙：审批 动账 登账三件事的明示位（均为非表列，只出参、不"
       },
       {
        "n": "executed",
@@ -48967,7 +48967,7 @@
       {
        "n": "executorName",
        "t": "String",
-       "d": "D-H4-02：执行人真名（非表列）——由 {@code update_by} 批查 s"
+       "d": "执行人真名（非表列）——由 {@code update_by} 批查 s"
       }
      ]
     }
@@ -49075,7 +49075,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "aiAllowed": true,
    "domain": "com.fssc.treasury.controller",
    "controller": "TrTransferController",
@@ -49157,7 +49157,7 @@
       {
        "n": "approved",
        "t": "Boolean",
-       "d": "---- D-DEC-439 乙：审批 动账 登账三件事的明示位（均为非表列，只出参、不"
+       "d": "----  乙：审批 动账 登账三件事的明示位（均为非表列，只出参、不"
       },
       {
        "n": "executed",
@@ -49207,7 +49207,7 @@
       {
        "n": "executorName",
        "t": "String",
-       "d": "D-H4-02：执行人真名（非表列）——由 {@code update_by} 批查 s"
+       "d": "执行人真名（非表列）——由 {@code update_by} 批查 s"
       }
      ]
     }
@@ -50856,7 +50856,7 @@
       {
        "n": "ccUsers",
        "t": "String",
-       "d": "G2 传阅（2026-09-23）：本节点办结后抄送的用户ID，逗号分隔。 <p>与运行"
+       "d": "G2 传阅：本节点办结后抄送的用户ID，逗号分隔。 <p>与运行"
       },
       {
        "n": "ccRoles",
@@ -50870,7 +50870,7 @@
       {
        "n": "firstNodeAutoPass",
        "t": "Integer",
-       "d": "==================== G4 治理新增列（2026-09-24）==="
+       "d": "==================== G4 治理新增列==="
       },
       {
        "n": "rejectScope",
@@ -51082,7 +51082,7 @@
       {
        "n": "ccUsers",
        "t": "String",
-       "d": "G2 传阅（2026-09-23）：本节点办结后抄送的用户ID，逗号分隔。 <p>与运行"
+       "d": "G2 传阅：本节点办结后抄送的用户ID，逗号分隔。 <p>与运行"
       },
       {
        "n": "ccRoles",
@@ -51096,7 +51096,7 @@
       {
        "n": "firstNodeAutoPass",
        "t": "Integer",
-       "d": "==================== G4 治理新增列（2026-09-24）==="
+       "d": "==================== G4 治理新增列==="
       },
       {
        "n": "rejectScope",
@@ -51891,7 +51891,7 @@
    "riskLevel": "MEDIUM",
    "reversibility": "yes(可驳回/撤回链已真跑验证)",
    "idempotency": "X-Idempotency-Key(网关强制)+服务端源单判重",
-   "preconditions": "单据状态=DRAFT；路由绑定存在（D-B3-11 后断链即拒）；金额分档需真实 amount",
+   "preconditions": "单据状态=DRAFT；路由绑定存在（后断链即拒）；金额分档需真实 amount",
    "redlineFamily": "D-N16③配置族",
    "aiAllowed": false,
    "domain": "com.fssc.workflow.controller",

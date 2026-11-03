@@ -143,7 +143,7 @@ public class BillTraceChainController {
     private static final Set<String> BATCH_IS_BILL = Set.of("TR_PAY", "TR_PAY_FAIL");
     /**
      * 他域「生成凭证」段不适用清单＝该 bizType 的审批收尾链路里<b>没有</b>凭证写入点。
-     * 逐项依据（2026-10-29 逐类核 {@code workflow/action/*BizAction} 与对应监听器）：
+     * 逐项依据（逐类核 {@code workflow/action/*BizAction} 与对应监听器）：
      * <ul>
      *   <li>档案四链——ArchiveBizAction 全程不调 VoucherService，凭证挂在被归档的源单据上；</li>
      *   <li>预算——BudgetWfEventListener/BudgetSchemeBizAction 只落状态与占用，预算不是会计凭证；</li>
@@ -355,8 +355,8 @@ public class BillTraceChainController {
         out.put("batches", batches);
 
         // 4) 凭证：source_doc_type + source_doc_id 成对精确匹配，或 回溯列命中本单流程。
-        //    /读侧：bizType 与凭证写侧域名可能不同名
-        //    （CONTRACT_APPROVE vs CONTRACT／FA_DEPRECIATION vs ASSET_DEPRECIATION，现库凭证 7/34 实证）⇒
+        // 读侧：bizType 与凭证写侧域名可能不同名
+        // （CONTRACT_APPROVE vs CONTRACT／FA_DEPRECIATION vs ASSET_DEPRECIATION，现库凭证 7/34 实证）⇒
         //    成对匹配并入 BillRouteRegistry 登记的写侧别名，消灭"凭证现有、页面 0 张"的假灰。
         //    仍按（域, 本域主键）配对＋回溯臂，不引入裸主键跨域关联。
         Set<String> voucherDomains = BillRouteRegistry.voucherSourceDomainsOf(bizType);

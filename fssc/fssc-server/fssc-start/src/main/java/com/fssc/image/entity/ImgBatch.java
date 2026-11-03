@@ -34,13 +34,13 @@ public class ImgBatch implements Serializable {
     private Integer docCount;
     private String bizType;
     private Long bizId;
-    /** 业务单号冗余（需求 6.4 影像任务） */
+    /** 业务单号冗余（影像任务） */
     private String bizNo;
     /** UPLOADED已上传 / CHECKED已质检 */
     private String status;
-    /** 封单状态 SEALED已封单 / UNSEALED未封单（需求 6.4） */
+    /** 封单状态 SEALED已封单 / UNSEALED未封单 */
     private String sealStatus;
-    /** 调阅审核 PENDING待审核 / OK已审核 / REJECTED已拒绝（需求 6.4） */
+    /** 调阅审核 PENDING待审核 / OK已审核 / REJECTED已拒绝 */
     private String reviewStatus;
     private Long checkUserId;
     private LocalDateTime checkTime;

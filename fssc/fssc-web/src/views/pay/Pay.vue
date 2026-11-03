@@ -417,7 +417,7 @@ async function submitPick() {
 
 const confirming = new Set()
 async function confirmBatch(row) {
-  if (confirming.has(row.id)) return // D-TR-1：防双击重复确认
+  if (confirming.has(row.id)) return // 防双击重复确认
   confirming.add(row.id)
   try {
     await payApi.confirm(row.id)

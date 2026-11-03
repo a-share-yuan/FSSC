@@ -363,7 +363,7 @@ import ApprovalDialog from '@/components/approval/ApprovalDialog.vue'
 // 进项认证 tab（原独立页 3075 并入为第 5 页签）
 import InvoiceCertify from './InvoiceCertify.vue'
 import { hasPerm } from '@/utils/perm'
-// /122：发票类型/验真渠道名称表统一走共享字典（一处定义，禁止组件内局部映射）
+// 122：发票类型/验真渠道名称表统一走共享字典（一处定义，禁止组件内局部映射）
 import { invoiceTypeLabel, invoiceChannelLabel, verifyStatusLabel } from '@/constants/enums.js'
 // 发票类型下拉与报销/OCR 共用同一份类型表（13 类），不在此另抄一份
 import { INVOICE_TYPES } from '@/constants/invoiceType.js'
@@ -521,7 +521,7 @@ function poolParams(pageNum = q.pageNum, pageSize = q.pageSize) {
 }
 
 async function loadPool(page) {
-  // /invoice/page 要 inv:list：只有补录/开票权的人进页面不该先吃一个 4030（页签本身已按权限隐藏）
+  // invoice/page 要 inv:list：只有补录/开票权的人进页面不该先吃一个 4030（页签本身已按权限隐藏）
   if (!hasPerm('inv:list')) return
   if (page) q.pageNum = page
   loading.value = true

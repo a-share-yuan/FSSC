@@ -21,7 +21,7 @@ spring:
     timeout-per-shutdown-phase: 30s
   profiles:
     active: dev
-  # 附件上传体积上限（DEV-10）：Spring multipart 在进入 Controller 前就拦请求，
+  # 附件上传体积上限：Spring multipart 在进入 Controller 前就拦请求，
   # 未显式配置时用 Boot 默认 1MB —— 大附件会被静默拒绝且业务侧拿不到原因。
   # 上限与 fssc.file.max-size（默认 20MB）保持一致，超限由 GlobalExceptionHandler 给出明确提示。
   servlet:

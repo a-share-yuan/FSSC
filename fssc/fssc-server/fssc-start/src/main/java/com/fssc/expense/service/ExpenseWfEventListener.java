@@ -359,7 +359,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 // 转已用的动作下移到 PayBatchService.execute 打款成功（settleOccupyOnPaid）。
                 // 例外：本单没有任何现金环节（全额由借款冲抵平账 / 报销<借款只产生退款记录）时，
                 // 钱已经在借款那一环节出去，此刻就地确认消耗，否则占用会永久悬空（见下方 payable 判定）。
-                // 分多次报销（需求 4.2.2 页面规则 7/8）：按关联金额核销事前申请占用，
+                // 分多次报销（.2 页面规则 7/8）：按关联金额核销事前申请占用，
                 // 累计已报销达到申请金额 → 申请单 COMPLETED（报销完毕）
                 writeOffApplyOccupy(bill);
                 // 报销 vs 借款 3 种差额（平账/补付/退款）：核销关联借款单余额，
@@ -854,7 +854,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                 log.info("借款单 {} 结清终态判定：{} → {}（余额 {}）", loan.getBillNo(), loan.getStatus(), target, bal);
                 if ("REPAID".equals(target)) {
                     // ⑨：借款结清=业务最终状态，合规审核/资金支付/账务处理链不会再有人办，全部办结
-                    //（借款的钱环节走付款批次但 规则下借款单不置 PAID，批次侧办结管不到它，只能在此收）
+                    // （借款的钱环节走付款批次但 规则下借款单不置 PAID，批次侧办结管不到它，只能在此收）
                     sharingService.closeOnBillTerminal(loanBillId, "借款已结清");
                 }
             }
@@ -1666,7 +1666,7 @@ public class ExpenseWfEventListener implements WfBizAction {
         final Long tenantId = TenantContext.getTenantId();
         // 事务外（事件重放/单测直调）没有同步器可用时，退化为立即执行，行为与原先一致
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            log.warn("报销单 {} 无事务同步上下文，预算消耗确认改为立即执行（D-F1R-06）", billNo);
+            log.warn("报销单 {} 无事务同步上下文，预算消耗确认改为立即执行", billNo);
             TenantContext.callAs(tenantId, () ->
                     doSettleBudgetOnNoCashLeg(billId, billNo, billType, companyId, deptId, periodYear));
             return;
@@ -1678,7 +1678,7 @@ public class ExpenseWfEventListener implements WfBizAction {
                         doSettleBudgetOnNoCashLeg(billId, billNo, billType, companyId, deptId, periodYear));
             }
         });
-        log.info("报销单 {} 无现金腿（平账/报销<借款退款），预算消耗确认已挂到审批事务提交后执行（D-F1R-06）", billNo);
+        log.info("报销单 {} 无现金腿（平账/报销<借款退款），预算消耗确认已挂到审批事务提交后执行", billNo);
     }
 
     /** {@link #scheduleSettleBudgetOnNoCashLeg} 的实际执行体（跑在事务提交后）。 */

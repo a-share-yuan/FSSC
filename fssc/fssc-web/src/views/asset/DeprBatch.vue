@@ -193,7 +193,7 @@ async function openVouchers(row) {
   try {
     const [y, m] = String(row.period || '').split('-').map(Number)
     const found = []
-    // /voucher/page 仅分页（按 id 倒序），折旧凭证为最新生成——扫描前 3 页按来源类型+期间过滤即可覆盖当月批次
+    // voucher/page 仅分页（按 id 倒序），折旧凭证为最新生成——扫描前 3 页按来源类型+期间过滤即可覆盖当月批次
     for (let p = 1; p <= 3; p++) {
       const r = await sharingApi.voucherPage({ pageNum: p, pageSize: 100 })
       const list = r?.list || []

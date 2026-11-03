@@ -254,7 +254,7 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 // 收货日期统一归一为后端 LocalDate 可解析的 'YYYY-MM-DD' 字符串
-//（日期选择器 value-format 已是字符串，但清空得 null、历史值可能是 Date/ISO，统一办结避免反序列化失败）
+// （日期选择器 value-format 已是字符串，但清空得 null、历史值可能是 Date/ISO，统一办结避免反序列化失败）
 function normalizeDate(v) {
   if (v instanceof Date && !isNaN(v.getTime())) {
     return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`

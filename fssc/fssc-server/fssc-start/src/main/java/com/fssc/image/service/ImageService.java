@@ -173,7 +173,7 @@ public class ImageService {
                 .orderByDesc(ImgBatch::getId));
     }
 
-    /** 影像任务分页（需求 6.4）：业务类型/单号/封单状态/任务状态/来源 筛选 */
+    /** 影像任务分页：业务类型/单号/封单状态/任务状态/来源 筛选 */
     public PageResult<ImgBatch> taskPage(long pageNum, long pageSize, String bizType, String keyword,
                                          String sealStatus, String status) {
         LambdaQueryWrapper<ImgBatch> w = new LambdaQueryWrapper<>();
@@ -190,7 +190,7 @@ public class ImageService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** 封单/解锁（需求 6.4：封单状态更新） */
+    /** 封单/解锁（封单状态更新） */
     public void seal(Long batchId, boolean sealed) {
         ImgBatch batch = imgBatchMapper.selectById(batchId);
         if (batch == null) {
@@ -206,7 +206,7 @@ public class ImageService {
     private static final List<String> REVIEW_STATUS_ALLOWED = List.of("PENDING", "OK", "REJECTED");
 
     /**
-     * 调阅审核状态更新（需求 6.5：审核后回写）。
+     * 调阅审核状态更新（审核后回写）。
      * 三条硬校验：
      * ① 枚举白名单校验——任意字符串直写 review_status 会静默产生坏数据；
      * ② 存在性校验——批次不存在时不再"静默成功"；

@@ -58,7 +58,7 @@ public class BudgetOccupyController {
     /** 补销/释放需要读单据状态，费用单据只读查询。 */
     private final ExpBillMapper expBillMapper;
 
-    /** 占用流水查询（需求 3.10 查看占用明细，真分页）。支持 budgetItemId 穿透过滤 */
+    /** 占用流水查询（查看占用明细，真分页）。支持 budgetItemId 穿透过滤 */
     @RequiresPerm("budget:occupy:list")
     @GetMapping("/page")
     public Result<PageResult<BgOccupyVO>> page(PageQuery query,

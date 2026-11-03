@@ -551,7 +551,7 @@ public class ExpenseDetailService {
             throw new BizException(ErrorCode.PARAM_INVALID, "占用金额必须大于 0");
         }
         // 累计占用（含本次）不得超出源单据金额
-        // 合规整改( ):排除本单自身在草稿保存阶段已写入的占用关联,否则提交时本单自占被重复计数,
+        // 合规排除本单自身在草稿保存阶段已写入的占用关联,否则提交时本单自占被重复计数,
         // 事前申请报销永远无法提交(已占用=本次来源均为同一 target)
         List<ExpBillRelation> existed = expBillRelationMapper.selectList(
                 new LambdaQueryWrapper<ExpBillRelation>()

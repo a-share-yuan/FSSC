@@ -10,7 +10,7 @@ export default [
   // 发票域路由补 meta.perms（router.js 全局守卫 beforeEach 统一消费；后端 @RequiresPerm 不动）。
   // 无对应权限的账号 URL 直达时挡回工作台并提示，不再渲染空壳列表。
   { path: 'invoice/certify', component: () => import('../../views/invoice/InvoiceCertify.vue'), meta: { title: '进项发票认证', perms: ['inv:certify'] } },
-  // /invoice/query 为发票工作台宿主（全页签 pool/create/issue/verify/certify 门控），不传 tab；
+  // invoice/query 为发票工作台宿主（全页签 pool/create/issue/verify/certify 门控），不传 tab；
   // 其余为成员深链路由（单页模式），菜单仅保留本宿主。
   { path: 'invoice/query', component: () => import('../../views/invoice/Invoice.vue'), meta: { title: '发票管理', perms: ['inv:list', 'inv:create', 'inv:issue', 'inv:verify:list', 'inv:certify'] } },
   // G13: 进项/销项发票池深链（direction prop 预设过滤）

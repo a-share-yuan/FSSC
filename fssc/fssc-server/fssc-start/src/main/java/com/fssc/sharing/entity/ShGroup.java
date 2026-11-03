@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 
 /**
- * 共享业务分组（需求 8.1.2：分组管理，按业务类型/区域划分，负责人+成员数上下限+任务提取方式）。
+ * 共享业务分组（.2：分组管理，按业务类型/区域划分，负责人+成员数上下限+任务提取方式）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

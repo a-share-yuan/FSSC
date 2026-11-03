@@ -41,7 +41,7 @@ export default [
   { path: 'contract', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'contract' }, meta: { title: i18n.global.t('contract.main.Contract') } },
   { path: 'contract/type', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'contractType' }, meta: { title: i18n.global.t('router.finance.Contract') } },
   // 总账：父路径重定向到首个 tab，不渲染汇总的 hub 页
-  // /op/gl 暂不并为工作区：总账分录、科目余额、试算平衡三个页签的权限码不是互相的子集，
+  // op/gl 暂不并为工作区：总账分录、科目余额、试算平衡三个页签的权限码不是互相的子集，
   // 直接并会砍访问或增权（总账分录还带 gl:entry:list、md:subject:list）——先裁授权面再并。
   { path: 'op/gl', redirect: '/op/gl/entry' },
   // 总账各页签拆为独立菜单（见下）
@@ -82,7 +82,7 @@ export default [
   { path: 'budget/execution', component: () => import('../../views/budget/BudgetExecution.vue'), meta: { title: i18n.global.t('budget.budgetExecution.Budget') } },
   // 报表
   { path: 'report/summary', component: () => import('../../views/finance/ReportSummaryBoard.vue'), meta: { title: '报表预聚合' } },
-  // /reports 为报表工作台宿主（25 页签），不传 tab；成员深链 /reports/* 保留单页模式
+  // reports 为报表工作台宿主（25 页签），不传 tab；成员深链 /reports/* 保留单页模式
   { path: 'reports', component: () => import('../../views/report/Reports.vue'), meta: { title: '管理报表工作台' } },
   { path: 'reports/summary', component: () => import('../../views/report/Reports.vue'), props: { tab: 'summary' }, meta: { title: i18n.global.t('router.finance.Expense') } },
   { path: 'reports/trend', component: () => import('../../views/report/Reports.vue'), props: { tab: 'trend' }, meta: { title: i18n.global.t('router.finance.Monthly') } },

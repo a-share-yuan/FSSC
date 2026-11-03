@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 合同付款条件（cont_pay_condition，需求 5.2：合同支付金额/付款节点说明/预计付款日期）。
+ * 合同付款条件（cont_pay_condition，合同支付金额/付款节点说明/预计付款日期）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

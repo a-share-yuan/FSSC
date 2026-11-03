@@ -50,7 +50,7 @@ async function load(force = false) {
   if (!force && loaded && Date.now() - lastAt < TTL) return pendingIds.value
   inflight = (async () => {
     try {
-      // /tenant/wf/todo 无权限码，只返回当前登录用户自己的待办；silent 防止异常弹窗
+      // tenant/wf/todo 无权限码，只返回当前登录用户自己的待办；silent 防止异常弹窗
       const list = (await wfApi.todo({ limit: 200 }, { silent: true })) || []
       const ids = new Set()
       const map = new Map()

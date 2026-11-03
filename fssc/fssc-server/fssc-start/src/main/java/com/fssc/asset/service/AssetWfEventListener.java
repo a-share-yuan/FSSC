@@ -43,7 +43,7 @@ import java.util.Set;
  * <ul>
  *  <li>FA_TRANSFER_CROSS 通过 → 资产归属公司更新为目标公司（此时审批链已走完，公司维度不再影响后续）</li>
  *  <li>FA_TRANSFER_CROSS 驳回 → 资产公司未动；部门已改需人工处理（记录日志提示）</li>
- *  <li>合规整改( )：FA_ADD / FA_CIP_TO_ASSET / FA_DISPOSE 审批通过 → 生成资产凭证落 op_voucher
+ *  <li>合规FA_ADD / FA_CIP_TO_ASSET / FA_DISPOSE 审批通过 → 生成资产凭证落 op_voucher
  *      （借固定资产/贷银行存款或在建工程；处置借累计折旧+处置损益贷固定资产），去重防重、科目缺失记 WARN 跳过不阻断审批</li>
  * </ul>
  * <p>
@@ -289,7 +289,7 @@ public class AssetWfEventListener implements WfBizAction {
         }
         try {
             if (Boolean.TRUE.equals(event.getApproved())) {
-                // 合规整改( )：资产新增审批通过 → 生成资产增加凭证（借固定资产1601/贷银行存款1002）。
+                // 合规资产新增审批通过 → 生成资产增加凭证（借固定资产1601/贷银行存款1002）。
                 // 去重：existingVoucherId 同源判重；失败仅记日志，不阻断状态收尾。
                 try {
                     voucherService.generateAssetVoucher(asset, "FA_ADD");
@@ -341,7 +341,7 @@ public class AssetWfEventListener implements WfBizAction {
         MdAsset asset = assetId == null ? null : assetMapper.selectById(assetId);
         try {
             if (Boolean.TRUE.equals(event.getApproved())) {
-                // 合规整改( )：转固审批通过 → 生成转固凭证（借固定资产1601/贷在建工程1604）
+                // 合规转固审批通过 → 生成转固凭证（借固定资产1601/贷在建工程1604）
                 if (asset != null) {
                     try {
                         voucherService.generateAssetVoucher(asset, "FA_CIP_TO_ASSET");

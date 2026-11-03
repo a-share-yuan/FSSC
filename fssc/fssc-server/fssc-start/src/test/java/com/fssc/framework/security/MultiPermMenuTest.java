@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 class MultiPermMenuTest {
 
-    /** sys_menu 中实际存在的 6 个多权限码菜单（2026-09 盘点） */
+    /** sys_menu 中实际存在的 6 个多权限码菜单 */
     private static final List<String> MULTI_PERM_MENUS = List.of(
             "wf:bizflow:list,wf:instance:list",
             "treasury:fundplan:list,treasury:creditbill:list",

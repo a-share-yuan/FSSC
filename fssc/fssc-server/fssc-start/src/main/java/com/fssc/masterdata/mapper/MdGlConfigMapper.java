@@ -12,7 +12,7 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.Collection;
 import java.util.List;
 
-/** 记账配置（分录生成规则）（需求 2.20） */
+/** 记账配置（分录生成规则） */
 @Mapper
 public interface MdGlConfigMapper extends BaseMapper<MdGlConfig> {
 
