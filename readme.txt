@@ -16,8 +16,8 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   * 多租户 SaaS：tenant_id 列级隔离 + 拦截器自动重写，一套系统服务多家企业；
   * 流程引擎：Flowable 8 + bpmn-js 在线设计器，条件分支/会签/票签/转办/
     加签/撤回/传阅/自由驳回全套能力，流程变更不发版；
-  * 业务完整：费用报账、应收应付、总账凭证、资产存货、资金票据、影像 OCR、
-    共享作业运营，共 36 个业务域包，后端 173 个控制器 / 1,365 个 HTTP 端点；
+  * 业务完整：费用报账、应收应付、总账凭证、税务与预算、资产存货、资金票据、
+    影像 OCR、共享作业运营，共 36 个业务域包，后端 173 个控制器 / 1,365 个 HTTP 端点；
   * 数据规模：主库 318 张表 + 影像库 6 张表，演示库内置 57 条已部署流程
     定义（42 条流程，余为历史版本），导入即可跑审批；
   * 开源协议：GNU Affero General Public License v3.0（SPDX 标识 AGPL-3.0-or-later，见 LICENSE / NOTICE）；闭源或商业使用需另行取得商业许可（见 LICENSE-COMMERCIAL.md）。
@@ -147,9 +147,12 @@ Q5 想清空演示数据重新开始？
    重复执行 bash db/import.sh 即可（幂等，DROP 后重建）；影像文件在
    fssc/fssc-server/data/files/ 下，按需清理。
 
-Q6 想接真实的发票 OCR / 银企直联？
-   .env.example 里有 FSSC_OCR_CHANNEL（mock/gateway/paddle/http）与
-   FSSC_BANK_GATEWAY 开关；生产凭据一律走环境变量，不要写进配置文件。
+Q6 想接真实的发票通道 / OCR / 银企直联？
+   .env.example 里有 FSSC_OCR_CHANNEL（mock/gateway/paddle/http）、
+   INVOICE_GATEWAY_ENABLED 与 INVOICE_GATEWAY_BASE_URL（发票识别·查验·
+   认证抵扣·数电开票四组能力，默认指向本机 8096 的发票网关）、
+   FSSC_BANK_GATEWAY 这几处开关。上游凭据只存在于网关进程内；
+   生产口令一律走环境变量，不要写进配置文件。
 
 七、更多文档
 --------------------------------------------------------------------------------
