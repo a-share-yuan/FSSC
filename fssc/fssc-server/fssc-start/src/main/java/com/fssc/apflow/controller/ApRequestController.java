@@ -27,7 +27,7 @@ import java.util.Map;
 
 /**
  * AP付款服务申请 OpenAPI（/api/tenant/ap-request/**）：
- * 五类付款服务申请统一状态机（蓝图 SCC_AP_15~19 + 派工规则 R-01~R-05）。
+ * 五类付款服务申请统一状态机（蓝图 SCC_AP_15~19 + 派工规则）。
  */
 @RestController
 @RequestMapping("/api/tenant/ap-request")
@@ -62,7 +62,7 @@ public class ApRequestController {
         return Result.success(service.create(r));
     }
 
-    /** OA作废后重拉覆盖（单号不变 R-10） */
+    /** OA作废后重拉覆盖（单号不变） */
     @OperLog(module = "AP_REQUEST", operType = "UPDATE", desc = "重拉覆盖服务申请单")
     @RequiresPerm("apflow:request:create")
     @PostMapping("/{id}/repull")
@@ -70,7 +70,7 @@ public class ApRequestController {
         return Result.success(service.repull(id, fresh));
     }
 
-    /** 自动派工（按付款方法 R-01/R-02） */
+    /** 自动派工（按付款方法） */
     @OperLog(module = "AP_REQUEST", operType = "UPDATE", desc = "服务申请单自动派工")
     @RequiresPerm("apflow:request:dispatch")
     @PostMapping("/{id}/dispatch")
@@ -78,7 +78,7 @@ public class ApRequestController {
         return Result.success(service.dispatch(id));
     }
 
-    /** 选单（多负责人池 R-02）：body {user} */
+    /** 选单（多负责人池）：body {user} */
     @OperLog(module = "AP_REQUEST", operType = "UPDATE", desc = "服务申请单选单")
     @RequiresPerm("apflow:request:dispatch")
     @PostMapping("/{id}/claim")
@@ -86,7 +86,7 @@ public class ApRequestController {
         return Result.success(service.claim(id, String.valueOf(body.get("user"))));
     }
 
-    /** 运营岗手工派工/转单（R-05）：body {user} */
+    /** 运营岗手工派工/转单：body {user} */
     @OperLog(module = "AP_REQUEST", operType = "UPDATE", desc = "服务申请单手工派工/转单")
     @RequiresPerm("apflow:request:dispatch")
     @PostMapping("/{id}/assign")
@@ -94,7 +94,7 @@ public class ApRequestController {
         return Result.success(service.assign(id, String.valueOf(body.get("user"))));
     }
 
-    /** 确认服务请求（可修改付款类型/银行账户/付款方法/折扣额/到期日/付款额；修改付款方式转组长 R-03） */
+    /** 确认服务请求（可修改付款类型/银行账户/付款方法/折扣额/到期日/付款额；修改付款方式转组长） */
     @OperLog(module = "AP_REQUEST", operType = "UPDATE", desc = "确认服务请求")
     @RequiresPerm("apflow:request:confirm")
     @PostMapping("/{id}/confirm")
@@ -102,7 +102,7 @@ public class ApRequestController {
         return Result.success(service.confirm(id, patch));
     }
 
-    /** 组长审核（R-04）：body {pass,note}；审核人一律取当前登录人，不接受客户端传入 */
+    /** 组长审核：body {pass,note}；审核人一律取当前登录人，不接受客户端传入 */
     @OperLog(module = "AP_REQUEST", operType = "APPROVE", desc = "服务申请单组长审核")
     @RequiresPerm("apflow:request:review")
     @PostMapping("/{id}/group-review")

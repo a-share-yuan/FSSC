@@ -62,6 +62,9 @@ export default [
   { path: 'glex/special/consolidate', component: () => import('../../views/gl/GlSpecial.vue'), props: { tab: 'consolidate' }, meta: { title: '合并报表' } },
   { path: 'glex/special/master', component: () => import('../../views/gl/GlSpecial.vue'), props: { tab: 'master' }, meta: { title: 'GL主数据' } },
   { path: 'glex/tax-refund', component: () => import('../../views/gl/TaxRefund.vue'), meta: { title: '税务退税三场景' } },
+  // 税务管理：计提规则 / 计提 / 申报台账 / 进项认证 / 风险指标收敛为一个工作区五个页签，
+  // 复用 ConfigWorkspace 的页签机制，不新建菜单树、不动权限模型（逐页签按既有 gl:tax* 码门控）
+  { path: 'tax/workbench', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'taxManage' }, meta: { title: '税务管理' } },
   { path: 'glex/fx-reval', component: () => import('../../views/finance/FxRevalBoard.vue'), meta: { title: '汇兑重估' } },
   // 银企对账（对账/回单认领/调节表收敛为一个工作区；/bank/slip、/bank/reconcile-sheet 深链保留）
   { path: 'bank/reconcile', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'bankRecon' }, meta: { title: i18n.global.t('router.finance.Bank') } },

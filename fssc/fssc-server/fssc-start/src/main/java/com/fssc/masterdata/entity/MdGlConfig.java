@@ -52,4 +52,11 @@ public class MdGlConfig extends TenantAuditBase {
     private String status;
     /** 备注 */
     private String remark;
+
+    /**
+     * 单据类型：如 GL_SALARY_PROV / GL_SALARY_PAY。
+     * 为空＝费用报销族（历史 3816 行全是这一族，靠 item_id 匹配，不靠本列）；
+     * 非空＝按「单据类型 + 方向」取科目，供薪酬/涉税族生成器消费。
+     */
+    private String docType;
 }

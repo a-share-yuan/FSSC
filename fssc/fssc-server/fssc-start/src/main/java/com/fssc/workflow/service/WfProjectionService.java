@@ -258,7 +258,7 @@ public class WfProjectionService {
         }
     }
 
-    /** 不可恢复分支：记缺陷（WF-MIRROR-003）后返回，绝不冒泡成死循环。 */
+    /** 不可恢复分支：记缺陷（WF-MIRRO3）后返回，绝不冒泡成死循环。 */
     private void recordContextMissing(String eventType, String procInstId) {
         mirrorDefectRecorder.record(WfMirrorDefectRecorder.CODE_ENGINE_BYPASS,
                 "WfProjectionService." + eventType, null,

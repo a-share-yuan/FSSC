@@ -11,8 +11,14 @@ import com.fssc.common.exception.BizException;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.platform.entity.PfTenant;
 import com.fssc.platform.mapper.PfTenantMapper;
+import com.fssc.system.entity.SysNumberRule;
+import com.fssc.system.entity.SysRole;
 import com.fssc.system.entity.SysUser;
+import com.fssc.system.entity.SysUserRole;
+import com.fssc.system.mapper.SysNumberRuleMapper;
+import com.fssc.system.mapper.SysRoleMapper;
 import com.fssc.system.mapper.SysUserMapper;
+import com.fssc.system.mapper.SysUserRoleMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,6 +40,10 @@ public class TenantLifecycleService {
     private final PfTenantMapper pfTenantMapper;
     private final SysUserMapper sysUserMapper;
     private final PasswordEncoder passwordEncoder;
+    /** 开通模板（ 最小集：角色 + 编号规则 + 默认期间） */
+    private final SysRoleMapper sysRoleMapper;
+    private final SysUserRoleMapper sysUserRoleMapper;
+    private final SysNumberRuleMapper sysNumberRuleMapper;
 
     /** 自助注册开关（默认关闭，财务规范要求仅管理员邀请） */
     @Value("${fssc.self-registration.enabled:false}")
@@ -123,7 +133,77 @@ public class TenantLifecycleService {
             backfill.setId(id);
             backfill.setAdminUserId(adminUserId);
             pfTenantMapper.updateById(backfill);
+            // 开通模板（ 荐解的最小三件：角色 / 编号规则 / 默认期间）。
+            // 改造前 approve() 只建一个 admin 账号，新租户是空壳——无角色（零角色用户进不了任何候选组）、
+            // 无编号规则（所有单据取号回退时间戳）、无期间，运营开通完还得手工补半天。
+            // 其余模板（组织/账簿/科目/流程）按域分批立项，不在本方法里开造。
+            provisionTenantTemplate(t, adminUserId);
         }
+    }
+
+    /** 开通模板：角色 + 编号规则 + 默认期间（幂等：已存在即跳过） */
+    private void provisionTenantTemplate(PfTenant tenant, Long adminUserId) {
+        TenantContext.callAs(tenant.getId(), () -> {
+            // ① 角色：系统管理员（全数据）＋ 财务主管（本公司）＋ 普通员工（本人）
+            Long adminRoleId = ensureRole("ADMIN", "系统管理员", 5, "开通模板内置角色");
+            ensureRole("FIN_MANAGER", "财务主管", 1, "开通模板内置角色");
+            ensureRole("EMPLOYEE", "普通员工", 4, "开通模板内置角色");
+            // 管理员默认挂 ADMIN 角色，否则零角色用户连候选组通道都进不去
+            if (sysUserRoleMapper.selectCount(new LambdaQueryWrapper<SysUserRole>()
+                    .eq(SysUserRole::getUserId, adminUserId)
+                    .eq(SysUserRole::getRoleId, adminRoleId)) == 0) {
+                SysUserRole ur = new SysUserRole();
+                ur.setTenantId(tenant.getId());
+                ur.setUserId(adminUserId);
+                ur.setRoleId(adminRoleId);
+                sysUserRoleMapper.insert(ur);
+            }
+            // ② 编号规则：单据号是"能不能开单"的前置，缺规则会静默退回时间戳号（不可读、不可对账）
+            ensureNumberRule("EXP_CLAIM", "报销单", "BX", "yyyyMMdd", 5, "DAY");
+            ensureNumberRule("EXP_APPLY", "申请单", "SQ", "yyyyMMdd", 5, "DAY");
+            ensureNumberRule("EXP_PAY", "付款单", "FK", "yyyyMMdd", 5, "DAY");
+            ensureNumberRule("EXP_LOAN", "借款单", "JK", "yyyyMMdd", 5, "DAY");
+            ensureNumberRule("BG_SCHEME", "预算方案", "BGS", "yyyy", 3, "YEAR");
+            ensureNumberRule("BUDGET_ADJUST", "预算调整单", "ADJ", "yyyyMMdd", 4, "DAY");
+            ensureNumberRule("TAX_DECLARATION", "纳税申报单", "TX", "yyyyMM", 4, "MONTH");
+            ensureNumberRule("PAY_BATCH", "付款批次", "PB", "yyyyMMdd", 4, "DAY");
+        });
+    }
+
+    private Long ensureRole(String code, String name, int dataScope, String remark) {
+        SysRole exist = sysRoleMapper.selectOne(new LambdaQueryWrapper<SysRole>()
+                .eq(SysRole::getRoleCode, code)
+                .last("limit 1"));
+        if (exist != null) {
+            return exist.getId();
+        }
+        SysRole role = new SysRole();
+        role.setRoleCode(code);
+        role.setRoleName(name);
+        role.setDataScope(dataScope);
+        role.setStatus("NORMAL");
+        role.setRemark(remark);
+        sysRoleMapper.insert(role);
+        return role.getId();
+    }
+
+    private void ensureNumberRule(String code, String name, String prefix, String dateFormat,
+                                  int seqLength, String resetCycle) {
+        if (sysNumberRuleMapper.selectCount(new LambdaQueryWrapper<SysNumberRule>()
+                .eq(SysNumberRule::getRuleCode, code)) > 0) {
+            return;
+        }
+        SysNumberRule r = new SysNumberRule();
+        r.setRuleCode(code);
+        r.setRuleName(name);
+        r.setPrefix(prefix);
+        r.setDateFormat(dateFormat);
+        r.setSeqLength(seqLength);
+        r.setResetCycle(resetCycle);
+        r.setStep(1);
+        r.setStatus("NORMAL");
+        r.setRemark("开通模板内置编号规则");
+        sysNumberRuleMapper.insert(r);
     }
 
     /** 在租户上下文内创建管理员：user_name = admin_{tenantCode 小写}，初始口令取配置项 {@code fssc.tenant.init-admin-pwd} */

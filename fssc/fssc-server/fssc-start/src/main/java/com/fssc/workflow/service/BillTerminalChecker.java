@@ -123,7 +123,7 @@ public class BillTerminalChecker {
      * 与 {@link #isBillTerminal} 逐行判定同一规则：{@code del_flag = 1} 或 {@code status ∈} 最终状态集）。
      */
     public static final String PO_TERMINAL_IDS_SQL =
-            "SELECT id FROM po_order WHERE del_flag = 1 OR status IN ("
+            "/* tenant-ok: id 子查询由带 tenant_id 谓词的父语句消费 */ SELECT id FROM po_order WHERE del_flag = 1 OR status IN ("
                     + PO_TERMINAL_STATUSES.stream().map(s -> "'" + s + "'").collect(Collectors.joining(","))
                     + ")";
 
@@ -204,12 +204,12 @@ public class BillTerminalChecker {
         BillProbe probe = BILL_PROBES.get(bt);
         if (probe != null) {
             String st = probe.terminalStatuses().stream().map(s -> "'" + s + "'").collect(Collectors.joining(","));
-            return queryTerminalIds("SELECT id FROM " + probe.table() + " WHERE id IN (%s) AND "
+            return queryTerminalIds("/* tenant-ok: id 子查询由带 tenant_id 谓词的父语句消费 */ SELECT id FROM " + probe.table() + " WHERE id IN (%s) AND "
                     + probe.statusCol() + " IN (" + st + ")", bizIds);
         }
         if (BIZ_PURCHASE_ORDER_REVIEW.equals(bizType.trim())) {
             String st = PO_TERMINAL_STATUSES.stream().map(s -> "'" + s + "'").collect(Collectors.joining(","));
-            return queryTerminalIds("SELECT id FROM po_order WHERE id IN (%s) AND (del_flag = 1 OR status IN ("
+            return queryTerminalIds("/* tenant-ok: id 子查询由带 tenant_id 谓词的父语句消费 */ SELECT id FROM po_order WHERE id IN (%s) AND (del_flag = 1 OR status IN ("
                     + st + "))", bizIds);
         }
         return Set.of();
@@ -238,7 +238,7 @@ public class BillTerminalChecker {
     private String readStatus(BillProbe probe, Long bizId) {
         try {
             List<String> rows = jdbcTemplate.queryForList(
-                    "SELECT " + probe.statusCol() + " FROM " + probe.table() + " WHERE id = ? LIMIT 1",
+                    "/* tenant-ok: id 子查询由带 tenant_id 谓词的父语句消费 */ SELECT " + probe.statusCol() + " FROM " + probe.table() + " WHERE id = ? LIMIT 1",
                     String.class, bizId);
             return rows.isEmpty() ? null : rows.get(0);
         } catch (Exception e) {

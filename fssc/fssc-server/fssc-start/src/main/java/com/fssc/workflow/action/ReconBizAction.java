@@ -28,7 +28,7 @@ import java.util.Set;
  * 无人把状态洗回＝脏账。本动作按发起时写入的流程变量快照（prevStatus / prevSupplierConfirmStatus）
  * 在驳回侧恢复确认前状态并清空确认时间戳；通过侧 CONFIRMED 已在发起时写入数据库（去重维持），无需重复动作。
  *
- * <p>批次3（T-PT-4）给通过侧补"差异核对+FIN_GL 过账"完整环节时，在本类扩展，不得另起炉灶。
+ * <p>给通过侧补"差异核对+FIN_GL 过账"完整环节时，在本类扩展，不得另起炉灶。
  */
 @Slf4j
 @Component("reconBizAction")

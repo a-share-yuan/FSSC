@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.List;
 import java.util.Set;
@@ -48,7 +49,8 @@ public class ImageController {
     /** 影像统计（报表只读服务的远程取数面；ImageFacade extends ImageStatsFacade） */
     private final ImageFacade imageFacade;
     private final OcrService ocrService;
-    private final BillFacade billFacade;
+    /** 单号→单据归属回查（仅单体进程有实现；独立影像服务下为空，见 resolveBill） */
+    private final ObjectProvider<BillFacade> billFacadeProvider;
 
     /** 影像上传允许格式：图片 + PDF/OFD/XML（本地版式解析）；其余一律 BizException 拒绝 */
     private static final Set<String> IMAGE_ALLOWED =
@@ -91,6 +93,13 @@ public class ImageController {
      */
     private BillRef resolveBill(String bizType, Long bizId, String bizNo) {
         if (bizId != null || bizNo == null || bizNo.isBlank()) {
+            return new BillRef(bizType, bizId, bizNo);
+        }
+        // 独立影像服务（profile=image）不加载费用域，BillFacade 实现不存在。
+        // 这里是「按单号补归属」的锦上添花，缺实现时按无归属继续（ 真机启动发现的硬依赖）。
+        BillFacade billFacade = billFacadeProvider.getIfAvailable();
+        if (billFacade == null) {
+            log.debug("影像服务未装配 BillFacade（独立进程），按单号 {} 回查归属跳过", bizNo);
             return new BillRef(bizType, bizId, bizNo);
         }
         try {

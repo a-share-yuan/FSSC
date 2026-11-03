@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 import * as echarts from 'echarts/core'
 
 // 深色模式下的图表令牌：坐标轴/图例/提示框与 --app-* 对齐，

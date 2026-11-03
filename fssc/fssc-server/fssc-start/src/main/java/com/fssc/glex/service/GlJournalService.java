@@ -6,6 +6,8 @@ package com.fssc.glex.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.audit.service.AuditTrailService;
+import com.fssc.budget.service.BudgetService;
+import com.fssc.budget.service.BudgetSwitchService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -47,6 +49,10 @@ public class GlJournalService {
     private final VoucherService voucherService;
     /** 审计扩面：冲销这类状态跃迁须记录（与审批回写同一规则） */
     private final AuditTrailService auditTrailService;
+    /** 预提/待摊的预算「申请占用」与「预算冲回」入口 */
+    private final BudgetService budgetService;
+    /** 口径开关：预提/待摊是否入占用由租户自行配置（缺省开） */
+    private final BudgetSwitchService budgetSwitchService;
 
     /**
      * 默认借贷科目的<b>科目编码</b>（不是主键！）。
@@ -60,6 +66,8 @@ public class GlJournalService {
      */
     private static final String DEFAULT_DEBIT_CODE = "6602";
     private static final String DEFAULT_CREDIT_CODE = "1002";
+    /** 费用预提的默认贷方：计提负债（2241 其他应付款），不默认落银行存款——见 generate 内注释 */
+    private static final String DEFAULT_ACCRUAL_CREDIT_CODE = "2241";
 
     public PageResult<GlJournalEntry> page(long pageNum, long pageSize, String period, String entryType, String keyword) {
         LambdaQueryWrapper<GlJournalEntry> qw = new LambdaQueryWrapper<>();
@@ -109,19 +117,20 @@ public class GlJournalService {
      * 非空时必须能在 md_subject 命中，否则 400 拒绝——避免幽灵 ID 静默写入数据库、直到生成凭证才暴露。
      */
     private Long resolveSubjectId(Long subjectId, String defaultCode, String side) {
-        if (subjectId != null) {
-            if (subjectById(subjectId) == null) {
-                throw new BizException(ErrorCode.PARAM_INVALID,
-                        side + "科目不存在（id=" + subjectId + "），请从会计科目表中选择");
-            }
-            return subjectId;
+        MdSubject s = subjectId != null ? subjectById(subjectId) : subjectByCode(defaultCode);
+        if (s == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, subjectId != null
+                    ? side + "科目不存在（id=" + subjectId + "），请从会计科目表中选择"
+                    : side + "默认科目编码 " + defaultCode + " 在会计科目表中不存在，请显式指定科目");
         }
-        MdSubject def = subjectByCode(defaultCode);
-        if (def == null) {
+        // 末级校验前移到这里：制证时才由 PostableSubjectResolver 拒绝，后果是「审批全过、状态 APPROVED、
+        // 一张凭证都出不来」——用户走完五六个节点才发现科目选错。制单即拦，代价一行，收益是即时可改。
+        if (s.getIsLeaf() != null && s.getIsLeaf() == 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    side + "默认科目编码 " + defaultCode + " 在会计科目表中不存在，请显式指定科目");
+                    side + "科目 " + s.getSubjectCode() + " " + s.getSubjectName()
+                            + " 不是末级科目（下设明细，无法确定用哪一个），无法制证；请在制单页选择末级明细科目");
         }
-        return def.getId();
+        return s.getId();
     }
 
     private MdSubject subjectById(Long id) {
@@ -142,10 +151,40 @@ public class GlJournalService {
     /**
      * 生成一般总账记账并置 APPROVING（不预造凭证号），随后按 entryType 发起对应审批流；
      * 审批办结才由 {@code GlBizAction} 置 POSTED 并回写凭证对象上的真实凭证号。
+     *
+     * <p>兼容旧调用：不指定预算维度（预提/待摊按映射表兜底定位预算行）。</p>
      */
     @Transactional(rollbackFor = Exception.class)
     public GlJournalEntry generate(String period, String entryType, String summary, BigDecimal amount,
                                    Long debitSubjectId, Long creditSubjectId) {
+        return generate(period, entryType, summary, amount, debitSubjectId, creditSubjectId, null, null, null);
+    }
+
+    /**
+     * 生成一般总账记账并置 APPROVING（不预造凭证号），随后按 entryType 发起对应审批流；
+     * 审批办结才由 {@code GlBizAction} 置 POSTED 并回写凭证对象上的真实凭证号。
+     *
+     * {@link BudgetService#occupyAccrualBudget}）：</p>
+     * <ul>
+     *   <li>ACCRUAL（费用预提）/ DEFER（费用待摊）在<b>提交（本方法）</b>即按「申请占用」扣减预算，
+     *       与费用域的提交时点一致；冲销/驳回/撤回按「预算冲回」释放；</li>
+     *   <li>定位不到预算行时<b>不阻断预提、也不臆造预算行</b>：{@code budget_occupy_status=NONE}
+     *       如实落库 + WARN 日志，避免「有预算却提示无预算」或反过来「没占上却看不出来」；</li>
+     *   <li>超预算按方案档位（HARD 拒提 / SOFT 需 {@code overrunReason} / WARN 留痕放行）；</li>
+     *   <li>MANUAL / OTHER_RECEIPT / CHECK_DIFF 不是预提类，不占预算（{@code budget_occupy_status} 留空）。</li>
+     * </ul>
+     *
+     * 已下推部分；我方语义等价于「关闭释放」——预提占着，直到被冲销。因此<b>同一笔费用若先预提后报销
+     * 且不冲销预提，会占用两次</b>。正确做法：报销前先冲销对应预提（本页「冲销」按钮即释放额度）。</p>
+     *
+     * @param expenseItemId  费用项目（md_expense_item.id），预提/待摊的预算维度来源，可空
+     * @param deptId         承担部门（sys_dept.id），可空
+     * @param overrunReason  软控方案下的超支理由，可空
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public GlJournalEntry generate(String period, String entryType, String summary, BigDecimal amount,
+                                   Long debitSubjectId, Long creditSubjectId,
+                                   Long expenseItemId, Long deptId, String overrunReason) {
         if (!StringUtils.hasText(period)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "会计期间不能为空");
         }
@@ -183,7 +222,10 @@ public class GlJournalService {
         }
         e.setSummary(StringUtils.hasText(summary) ? summary : defaultSummary(entryType, period));
         e.setDebitSubjectId(resolveSubjectId(debitSubjectId, DEFAULT_DEBIT_CODE, "借方"));
-        e.setCreditSubjectId(resolveSubjectId(creditSubjectId, DEFAULT_CREDIT_CODE, "贷方"));
+        // 预提的贷方是「计提出来的负债」，不是银行存款：默认落 1002 会把一笔尚未付款的预提
+        // 记成已付款，账面现金凭空减少。故 ACCRUAL 默认贷 2241 其他应付款；待摊/手工/其他收款仍用 1002。
+        String defCreditCode = "ACCRUAL".equals(entryType) ? DEFAULT_ACCRUAL_CREDIT_CODE : DEFAULT_CREDIT_CODE;
+        e.setCreditSubjectId(resolveSubjectId(creditSubjectId, defCreditCode, "贷方"));
         if (e.getDebitSubjectId().equals(e.getCreditSubjectId())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "借方与贷方科目不能相同（当前都是「"
                     + subjectName(e.getDebitSubjectId()) + "」），请选择两个不同的会计科目");
@@ -197,6 +239,33 @@ public class GlJournalService {
         }
         orgGuard.assertCompanyAllowed(e.getCompanyId());
         mapper.insert(e);
+        // 预提/待摊「申请占用」预算。插库后才占用——占用流水 biz_id 需要记账单主键。
+        // 若占用抛错（HARD 超预算 / 软控缺理由），本方法事务整体回滚，不会留下「已占额度但没有单据」的幽灵占用。
+        if ("ACCRUAL".equals(entryType) || "DEFER".equals(entryType)) {
+            e.setExpenseItemId(expenseItemId);
+            e.setDeptId(deptId);
+            // 口径开关（租户可配，缺省开）：关掉时只记维度不占额度，状态落 DISABLED，
+            // 与「NONE＝该占却没找到预算行」区分开——一个是配置选择，一个是数据缺口。
+            boolean occupyOn = budgetSwitchService.accrualOccupyEnabled();
+            Long occupyItem = null;
+            if (occupyOn) {
+                Integer bizYear = Integer.valueOf(period.substring(0, 4));
+                occupyItem = budgetService.occupyAccrualBudget(bizType, e.getId(), e.getEntryNo(),
+                        expenseItemId, e.getCompanyId(), deptId, bizYear, amount, overrunReason);
+            } else {
+                log.info("预提/待摊 {} 未占预算：租户已关闭「预提/待摊占用预算」开关（{}）",
+                        e.getEntryNo(), BudgetSwitchService.KEY_ACCRUAL_OCCUPY);
+            }
+            e.setBudgetItemId(occupyItem);
+            e.setBudgetOccupyStatus(!occupyOn ? "DISABLED" : (occupyItem == null ? "NONE" : "OCCUPIED"));
+            GlJournalEntry budgetUpd = new GlJournalEntry();
+            budgetUpd.setId(e.getId());
+            budgetUpd.setExpenseItemId(expenseItemId);
+            budgetUpd.setDeptId(deptId);
+            budgetUpd.setBudgetItemId(occupyItem);
+            budgetUpd.setBudgetOccupyStatus(e.getBudgetOccupyStatus());
+            mapper.updateById(budgetUpd);
+        }
         // G1：一般总账记账即发起对应记账审批流（总账会计制单→共享主管复核→财务经理阈值审批）
         try {
             // ENG-02(20260921)：传入公司上下文变量，避免 COMPANY 范围角色（财务审核等）解析"无成员"卡死
@@ -251,6 +320,14 @@ public class GlJournalService {
         GlJournalEntry upd = new GlJournalEntry();
         upd.setId(id);
         upd.setStatus("REVERSED");
+        // 与状态回写同事务：不允许「凭证已红字反向、预算还占着」。
+        if (("ACCRUAL".equals(e.getEntryType()) || "DEFER".equals(e.getEntryType()))
+                && !"RELEASED".equals(e.getBudgetOccupyStatus())) {
+            int released = budgetService.releaseAccrualOccupy(bizType, id, e.getEntryNo());
+            if (released > 0 || "OCCUPIED".equals(e.getBudgetOccupyStatus())) {
+                upd.setBudgetOccupyStatus("RELEASED");
+            }
+        }
         mapper.updateById(upd);
         Map<String, Object> before = new LinkedHashMap<>();
         before.put("status", oldStatus);

@@ -29,7 +29,7 @@ import static org.mockito.Mockito.when;
  * 线上一次都没响过也没人发现。只证"现网 82 个模型 0 error"无法区分
  * "规则对"与"规则永远不触发"，所以这里各造一个坏结构，要求它<b>必须</b>被判下来。
  *
- * <p>三条口径：①假档位=error；②零审批短路=error；③批次2 金额升级链的低档直达 End=warning
+ * <p>三条口径：①假档位=error；②零审批短路=error；③金额升级链的低档直达 End=warning
  * （21 处在用网关即此形态，判 error 会把在用流程挡在发布门外，故这一档按 warning 降级并登记）。
  */
 @DisplayName("L1-B-09 WfBpmnChecker 金额网关硬校验")
@@ -148,7 +148,7 @@ class L1B09WfBpmnAmountGateTest {
     // ③升级链低档直达 End = 只提示
 
     @Test
-    @DisplayName("批次2 金额升级链（网关前已有审批）⇒ 只 warning，不挡发布")
+    @DisplayName("金额升级链（网关前已有审批）⇒ 只 warning，不挡发布")
     void 升级链低档直达结束只告警() {
         String xml = HEAD + "<process id=\"LADDER\">"
                 + "<startEvent id=\"Start\"/>"

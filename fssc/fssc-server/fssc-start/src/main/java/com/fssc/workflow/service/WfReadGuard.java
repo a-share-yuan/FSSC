@@ -77,7 +77,7 @@ public class WfReadGuard {
             throw new BizException(ErrorCode.PARAM_INVALID, "taskId 不能为空");
         }
         Long me = UserContext.getRequired().getUserId();
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task != null && nodeOrgResolver.canOperate(task, me)) {
             return;
         }
@@ -108,7 +108,7 @@ public class WfReadGuard {
             return;
         }
         // 候选组/受托人通道：本实例在办任务里任一任务「我能办」即相关（与执行面同源）
-        for (Task t : taskService.createTaskQuery().processInstanceId(procInstId).list()) {
+        for (Task t : EngineTenantScope.taskQuery(taskService).processInstanceId(procInstId).list()) {
             if (nodeOrgResolver.canOperate(t, me)) {
                 return;
             }
@@ -156,7 +156,7 @@ public class WfReadGuard {
 
     private String historicProcInstId(String taskId) {
         try {
-            HistoricTaskInstance ht = historyService.createHistoricTaskInstanceQuery().taskId(taskId).singleResult();
+            HistoricTaskInstance ht = EngineTenantScope.historicTaskQuery(historyService).taskId(taskId).singleResult();
             return ht == null ? null : ht.getProcessInstanceId();
         } catch (Exception ex) {
             log.warn("历史任务反查实例失败 taskId={}: {}", taskId, ex.getMessage());

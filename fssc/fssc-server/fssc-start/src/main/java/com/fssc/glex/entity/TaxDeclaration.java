@@ -41,4 +41,13 @@ public class TaxDeclaration extends TenantAuditBase {
     private Long sourceVoucherId;
     private String attachmentUrl;
     private String remark;
+
+    /**
+     * 申报性质：NORMAL 正常申报 / ADJUST 调整（更正）申报。
+     * 两个概念混在一列会让「按季的正常申报」与「年度的更正申报」无法区分。
+     */
+    private String declarationKind;
+
+    /** 更正申报关联的原申报单 id（仅 declarationKind=ADJUST 时有值），用于勾稽「改了哪张表」 */
+    private Long relatedId;
 }

@@ -174,6 +174,24 @@
           </el-select>
           <el-input-number v-model="journalForm.amount" :min="1" :placeholder="$t('gl.ledger.fieldAmount')" style="width:120px" />
           <el-input v-model="journalForm.summary" :placeholder="$t('gl.special.phSummaryOpt')" style="width:160px" />
+          <!-- 借贷科目：留空则按类型取默认（预提默认借 6602 / 贷 2241）。默认科目若在科目表中是父级，
+               后端会在制单时直接拦下并提示选末级，不会等到审批走完才发现出不了证。 -->
+          <el-select v-model="journalForm.debitSubjectId" clearable filterable placeholder="借方科目（留空取默认）" style="width:210px">
+            <el-option v-for="s in leafSubjects" :key="'d' + s.id" :label="s.subjectCode + ' ' + s.subjectName" :value="s.id" />
+          </el-select>
+          <el-select v-model="journalForm.creditSubjectId" clearable filterable placeholder="贷方科目（留空取默认）" style="width:210px">
+            <el-option v-for="s in leafSubjects" :key="'c' + s.id" :label="s.subjectCode + ' ' + s.subjectName" :value="s.id" />
+          </el-select>
+          <template v-if="journalNeedsBudget">
+            <el-select v-model="journalForm.expenseItemId" clearable filterable
+                       placeholder="费用项目（预算维度）" style="width:190px" @visible-change="(v) => v && ensureExpenseItems()">
+              <el-option v-for="it in expenseItems" :key="it.id" :label="it.name" :value="it.id" />
+            </el-select>
+            <el-select v-model="journalForm.deptId" clearable filterable placeholder="承担部门（可空）" style="width:160px">
+              <el-option v-for="d in depts" :key="d.id" :label="d.name" :value="d.id" />
+            </el-select>
+            <el-input v-model="journalForm.overrunReason" placeholder="超支理由（软控方案必填）" style="width:180px" />
+          </template>
           <el-button type="success" :disabled="journalPeriodClosed" @click="doJournal">{{ $t('gl.special.btnPost') }}</el-button>
           <span v-if="journalPeriodClosed" class="period-note">{{ $t('gl.special.errPeriodClosed') }}</span>
           <span v-else-if="!canLoadPeriod" class="period-note">{{ $t('gl.special.warnNoPeriodRead') }}</span>
@@ -193,6 +211,23 @@
           <el-table-column :label="$t('common.status')" width="100" align="center">
             <template #default="{ row }">
               <el-tag :type="stTagType(row.status)" size="small">{{ stLabel(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <!-- 预算占用状态必须可见——「没占上」和「不涉及预算」看起来一样，
+               正是这类静默降级让预提与预算脱钩多年没人发现。 -->
+          <el-table-column label="预算占用" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.budgetOccupyStatus === 'OCCUPIED'" type="success" size="small">已占用</el-tag>
+              <el-tag v-else-if="row.budgetOccupyStatus === 'RELEASED'" type="info" size="small">已冲回</el-tag>
+              <el-tooltip v-else-if="row.budgetOccupyStatus === 'DISABLED'"
+                          content="租户已在「预算管理 → 预算口径」关闭「预提/待摊占用预算」，本单按配置不占额度" placement="top">
+                <el-tag type="info" size="small">按配置不占</el-tag>
+              </el-tooltip>
+              <el-tooltip v-else-if="row.budgetOccupyStatus === 'NONE'"
+                          content="未匹配到预算明细：本次未占预算。请核对费用项目/部门/年度下是否已下达预算" placement="top">
+                <el-tag type="warning" size="small">未占预算</el-tag>
+              </el-tooltip>
+              <span v-else style="color:#c0c4cc">—</span>
             </template>
           </el-table-column>
           <el-table-column prop="voucherNo" :label="$t('gl.special.colVoucherNo')" min-width="140" show-overflow-tooltip  sortable>
@@ -636,7 +671,34 @@ function shortProc(p) { return p && p.length > 8 ? p.slice(0, 8) : (p || '—') 
 // 原写死 '202609' 且该期在会计期间表已结账——用户不动输入框就直接提交，业务会整体落到禁入期间。
 const salaryForm = ref({ period: '', deptId: 0, empCount: 1 })
 const interForm = ref({ period: '' })
-const journalForm = ref({ period: '', entryType: 'ACCRUAL', amount: 10000, summary: '' })
+// ACCRUAL/DEFER 会按「申请占用」扣预算，故表单额外带预算维度（费用项目 + 承担部门）与软控超支理由；
+// MANUAL/OTHER_RECEIPT 不涉预算，这些字段在界面上直接隐藏，避免让人以为选个费用项就能占额度。
+const journalForm = ref({
+  period: '', entryType: 'ACCRUAL', amount: 10000, summary: '',
+  debitSubjectId: null, creditSubjectId: null,
+  expenseItemId: null, deptId: null, overrunReason: '',
+})
+// 只有末级科目可制证（父级无法确定用哪个明细）。前端先过滤掉父级，避免用户选了必被后端拒的科目。
+const leafSubjects = computed(() => (subjects.value || [])
+  .filter((s) => Number(s.isLeaf) === 1 && (!s.status || s.status === 'NORMAL')))
+const journalNeedsBudget = computed(() => ['ACCRUAL', 'DEFER'].includes(journalForm.value.entryType))
+const expenseItems = ref([])
+let expenseItemsLoaded = false
+async function ensureExpenseItems() {
+  if (expenseItemsLoaded) return
+  expenseItemsLoaded = true
+  try {
+    const tree = (await mdApi.expenseItems()) || []
+    const flat = []
+    // 接口返回树（children 嵌套），预算占用只认末级费用项，但选择器仍展示全量供按名检索
+    const walk = (ns) => (ns || []).forEach((n) => {
+      if (n.id) flat.push({ id: n.id, name: n.itemName || n.name || String(n.id) })
+      walk(n.children)
+    })
+    walk(tree)
+    expenseItems.value = flat
+  } catch (e) { expenseItemsLoaded = false }
+}
 const mcForm = ref({ period: '', companyId: null })
 const consForm = ref({ period: '' })
 const masterForm = ref({ period: '', type: 'SUBJECT', action: 'ADD', subjectCode: '', subjectName: '', description: '' })
@@ -834,6 +896,8 @@ function typeName(code) {
 }
 
 function loadJournal() {
+  // 预填费用项目下拉（ 预算维度）；失败不阻断列表——用户仍可只按映射表兜底占用
+  ensureExpenseItems()
   try { return pagerJournal.load(async ({ pageNum, pageSize }) => { const d = await glexApi.journalPage(pageNum, pageSize, '', '', deepKeyword.value); journals.value = d.list || []; return { list: d.list || [], total: d.total || 0 } }).catch((e) => ElMessage.error(e.message)) } catch (e) { /* noop */ }
 }
 function loadMonthClose() {
@@ -855,8 +919,22 @@ async function doJournal() {
   ]))) return
   try {
     const e = await glexApi.journalGenerate(period, journalForm.value.entryType,
-      journalForm.value.summary, amount)
+      journalForm.value.summary, amount,
+      journalForm.value.debitSubjectId || undefined,
+      journalForm.value.creditSubjectId || undefined, {
+        expenseItemId: journalNeedsBudget.value ? journalForm.value.expenseItemId : undefined,
+        deptId: journalNeedsBudget.value ? journalForm.value.deptId : undefined,
+        overrunReason: journalNeedsBudget.value ? (journalForm.value.overrunReason || undefined) : undefined,
+      })
     ElMessage.success(t('gl.special.ctxPosted', { kind: typeName(e.entryType), amount: fmt(e.amount) }))
+    // 未匹配到预算行时如实提示，不假装已占额度（后端同时落 budget_occupy_status=NONE）
+    if (e.budgetOccupyStatus === 'DISABLED') {
+      ElMessage.info('按「预算口径」配置，本次不计入预算占用')
+    } else if (e.budgetOccupyStatus === 'NONE') {
+      ElMessage.warning('本次未匹配到预算明细，未占用预算：请核对费用项目/承担部门/年度下是否已下达预算')
+    } else if (e.budgetOccupyStatus === 'OCCUPIED') {
+      ElMessage.info('已按「申请占用」扣减预算额度，冲销时自动冲回')
+    }
     loadJournal()
   } catch (e) { ElMessage.error(e.message) }
 }

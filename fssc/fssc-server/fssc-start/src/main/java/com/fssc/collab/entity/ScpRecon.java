@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 /**
  * SCP 供应商对账单（AP 蓝图 SCC_AP_01/02、外网菜单8.1 对账单管理、页面9.1 序号1~3）：
  * 收货/折扣/索赔信息导入（E1）→ 创建预制对账单（E4）→ 异议反馈（E5）→ 确认对账单（E6，
- * 选增专/增普 R-30，确认完成即打通点1 三单匹配数据源）→ 申请开票（打通点2 生成 ScpBill）。
+ * 选增专/增普，确认完成即打通点1 三单匹配数据源）→ 申请开票（打通点2 生成 ScpBill）。
  * 状态机：PRELIM 预制待确认 → CONFIRMED 最终对账单；VOIDED 已作废。
  */
 @Data
@@ -38,7 +38,7 @@ public class ScpRecon implements Serializable {
     private String supplierName;
     /** 购方公司代码 */
     private String buyerCompanyCode;
-    /** 专票/普票（确认对账单时选择，R-30） */
+    /** 专票/普票（确认对账单时选择） */
     private String invoiceType;
     private String ccy;
     private BigDecimal amount;

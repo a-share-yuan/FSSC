@@ -5,11 +5,10 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <!-- 移动报销端（H5）适配前置（方案 §5「视口与高度」/ AD-01）：
-       viewport-fit=cover ＝ 让 env(safe-area-inset-*) 在刘海屏/全面屏上真正生效，
+  <!-- 移动端适配：viewport-fit=cover 让 env(safe-area-inset-*) 在刘海屏/全面屏上真正生效，
        否则吸底 Tab Bar 与提交按钮会被 iOS 手势条、Android 三键导航遮住。
        不禁用缩放（maximum-scale=1 / user-scalable=no 会伤无障碍）：
-       「聚焦输入不放大」改由输入字号 ≥16px 达成（AD-07，见 styles/h5-tokens.css）。 -->
+       「聚焦输入不放大」改由输入字号 ≥16px 达成（见 styles/h5-tokens.css）。 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#409eff" />
   <title>FSSC 集团财务共享平台</title>

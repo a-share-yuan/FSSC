@@ -217,7 +217,7 @@ public class WfAssigneeResolver {
         Task task = null;
         if (taskId != null && !taskId.isBlank()) {
             try {
-                task = flowTaskService.createTaskQuery().taskId(taskId).singleResult();
+                task = EngineTenantScope.taskQuery(flowTaskService).taskId(taskId).singleResult();
             } catch (Exception ex) {
                 log.warn("参与人预览：按 taskId 查任务失败 taskId={}: {}", taskId, ex.getMessage());
             }

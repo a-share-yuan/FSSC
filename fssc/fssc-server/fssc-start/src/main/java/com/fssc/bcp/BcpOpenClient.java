@@ -176,9 +176,15 @@ public class BcpOpenClient {
         return bcpStatus >= 400 && bcpStatus < 500 ? bcpStatus : 500;
     }
 
+    /** 未配置密钥时给用户看的文案：只讲清「没开通、找谁」，不暴露环境变量名与部署细节。 */
+    private static final String SECRET_MISSING_USER_MSG =
+            "BCP 对接尚未开通，请联系系统管理员完成对接配置后重试";
+
     private void requireSecret() {
         if (!props.hasSecret()) {
-            throw new BizException(500, props.secretHint());
+            // 详细提示（含环境变量名）只进日志，不进响应体：页面会把 msg 原样弹给最终用户。
+            log.warn("BCP 异议审核调用被拒绝：{}", props.secretHint());
+            throw new BizException(503, SECRET_MISSING_USER_MSG);
         }
     }
 

@@ -16,7 +16,11 @@
  */
 
 import { ref, computed } from 'vue'
-import { http } from '@/api'
+
+// 说明：本 composable 只做「本地清单/依赖校验/提醒」的纯前端编排。
+// 月结进度的权威数据在服务端（/api/tenant/glex/month-close/**，见 MonthEndBoard.vue），
+// 这里不再调用任何后端端点——历史上曾请求 /tenant/monthend/tasks|check，
+// 后端并无这两个端点，catch 后又静默回落模板，等于把 404 藏起来。
 
 // 月结标准任务模板（按依赖排序）
 const STANDARD_TASKS = [
@@ -57,21 +61,15 @@ export function useMonthEndSchedule() {
     currentPeriod.value = period || getCurrentPeriod()
     loading.value = true
     try {
-      // 尝试从后端获取已保存的任务
-      const saved = await http.get('/tenant/monthend/tasks', { params: { period: currentPeriod.value } }).catch(() => null)
-      if (saved && Array.isArray(saved) && saved.length > 0) {
-        tasks.value = saved
-      } else {
-        // 初始化标准任务模板
-        tasks.value = STANDARD_TASKS.map((t) => ({
-          ...t,
-          status: 'pending', // pending / running / done / skipped
-          assignee: '',
-          startedAt: null,
-          finishedAt: null,
-          remark: '',
-        }))
-      }
+      // 本地标准任务模板（服务端进度请看 MonthEndBoard 的 month-close 数据）
+      tasks.value = STANDARD_TASKS.map((t) => ({
+        ...t,
+        status: 'pending', // pending / running / done / skipped
+        assignee: '',
+        startedAt: null,
+        finishedAt: null,
+        remark: '',
+      }))
     } finally {
       loading.value = false
     }
@@ -136,26 +134,14 @@ export function useMonthEndSchedule() {
     return null
   }
 
-  // 自动检查所有任务状态
+  // 自动检查所有任务状态（本地清单没有服务端信号源，保留为统一入口供调用方复用）
   async function checkAll() {
     loading.value = true
     try {
-      // 检查后端是否有任务完成信号
-      const result = await http.get('/tenant/monthend/check', { params: { period: currentPeriod.value } }).catch(() => null)
-      if (result && result.tasks) {
-        // 合并后端状态
-        result.tasks.forEach((rt) => {
-          const local = tasks.value.find((t) => t.id === rt.id)
-          if (local && rt.status === 'done' && local.status !== 'done') {
-            local.status = 'done'
-            local.finishedAt = rt.finishedAt
-          }
-        })
-      }
+      return tasks.value
     } finally {
       loading.value = false
     }
-    return tasks.value
   }
 
   // 启动定时自动检查（每5分钟）

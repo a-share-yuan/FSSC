@@ -10,10 +10,12 @@ import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.glex.entity.GlTaxProvision;
 import com.fssc.glex.service.GlTaxProvisionService;
+import java.math.BigDecimal;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,11 +36,22 @@ public class GlTaxProvisionController {
         return Result.success(service.page(query.getPageNum(), query.getPageSize(), period, taxType, keyword));
     }
 
+    /**
+     * 计提试算：按规则表算本期各税种应交基数与税额，不落库、不起流。
+     * 前端「手工录入基数」用它预填，用户改完再调 /provision 提交。
+     */
+    @RequiresPerm("gl:taxprov:list")
+    @GetMapping("/preview")
+    public Result<List<Map<String, Object>>> preview(@RequestParam String period) {
+        return Result.success(service.preview(period));
+    }
+
     @RequiresPerm("gl:taxprov:provision")
     @OperLog(module = "GL_TAX_PROVISION", operType = "INSERT", desc = "税金计提")
     @PostMapping("/provision")
-    public Result<List<GlTaxProvision>> provision(@RequestParam String period) {
-        return Result.success(service.provision(period));
+    public Result<List<GlTaxProvision>> provision(@RequestParam String period,
+                                                  @RequestBody(required = false) Map<String, BigDecimal> bases) {
+        return Result.success(service.provision(period, bases));
     }
 
     // 原 POST /pay（发起 GL_TAX_PAY 缴款审批）已作废删除——独立缴款流不出付款动作、

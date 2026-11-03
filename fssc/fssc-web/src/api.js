@@ -424,24 +424,12 @@ export const wfApi = {
   startCandidates: (params, cfg) => http.get('/tenant/wf/start-candidates', { params, ...cfg }),
   /**
    * 批量审批：统一通过一批待办任务。
-   * 主路径：POST /api/tenant/workflow/task/batch-approve（由 WfTaskBatchController 提供）
+   * 唯一路径：POST /api/tenant/workflow/task/batch-approve（WfTaskBatchController）。
    * 请求体 { taskIds: [...], comment: '...' }
    * 响应 data 宽容解析：{ successCount?, failCount?, total?, fail?/failed?: [{ taskId, msg, billNo? }] }
-   * 兼容回退：若后端部署在 /api/tenant/wf/batch-approve，404 时自动改走该路径。
-   * 唯一实现是 WfTaskBatchController 的 workflow/task 前缀，WfTaskController（前缀 /api/tenant/wf）
-   * 下没有该路径，回退分支属纯防御、实际不会命中。
-   * 两次尝试均 silent（404 属部署形态问题，由调用方按解析结果统一提示）。
+   * silent：失败原因由调用方按解析结果统一提示。
    */
-  batchApprove: async (body) => {
-    try {
-      return await http.post('/tenant/workflow/task/batch-approve', body, { silent: true })
-    } catch (e) {
-      if (e?.status === 404 || /404/.test(String(e?.message))) {
-        return await http.post('/tenant/wf/batch-approve', body, { silent: true })
-      }
-      throw e
-    }
-  },
+  batchApprove: (body) => http.post('/tenant/workflow/task/batch-approve', body, { silent: true }),
   /** 按业务单据审批（列表页通用入口，无需 taskId） */
   approveByBill: (bizType, bizId, approved, comment) =>
     http.post('/tenant/wf/approve-bill', null, { params: { bizType, bizId, approved, comment } }),
@@ -1431,7 +1419,16 @@ export const budgetApi = {
   adjustLines: (adjustId) => http.get(`/tenant/budget/adjust/lines/${adjustId}`),
   adjustUpdate: (body) => http.post('/tenant/budget/adjust/update', body),
   adjustApprove: (id) => http.post(`/tenant/budget/adjust/approve/${id}`),
+  // 调整单进流程（配置表早有 BG_ADJUST 路由，代码此前不发起）
+  adjustSubmit: (id) => http.post(`/tenant/budget/adjust/submit/${id}`),
+  adjustWithdraw: (id) => http.post(`/tenant/budget/adjust/withdraw/${id}`),
+  // 冻结/解冻预算行；：实际数导入
+  itemFreeze: (id, freeze) => http.post(`/tenant/budget/item/${id}/freeze`, null, { params: { freeze } }),
+  actualImport: (body) => http.post('/tenant/budget/actual/import', body),
   occupyPage: (params) => http.get('/tenant/budget/occupy/page', { params }),
+  // 口径开关：预提/待摊是否占预算、合同是否占预算（租户自助，缺省开）
+  switchGet: () => http.get('/tenant/budget/switch'),
+  switchSave: (body) => http.post('/tenant/budget/switch', body),
   occupyCheck: (body) => http.post('/tenant/budget/occupy/check', body),
   occupyOccupy: (body) => http.post('/tenant/budget/occupy/occupy', body),
   occupyRelease: (body) => http.post('/tenant/budget/occupy/release', body),
@@ -1531,8 +1528,20 @@ export const glexApi = {
   /* 税金计提 */
   taxPage: (pageNum, pageSize, period, taxType, keyword) =>
     http.get('/tenant/glex/tax-provision/page', { params: { pageNum, pageSize, period, taxType, keyword } }),
-  taxProvision: (period) =>
-    http.post('/tenant/glex/tax-provision/provision', null, { params: { period } }),
+  // 按规则表试算本期各税种基数与税额（不落库），手工录入基数前先预填
+  taxPreview: (period) =>
+    http.get('/tenant/glex/tax-provision/preview', { params: { period } }),
+  // bases 可选：{ VAT: 123456.78, ... }，只对 base_source=MANUAL 的税种生效
+  taxProvision: (period, bases) =>
+    http.post('/tenant/glex/tax-provision/provision', bases || null, { params: { period } }),
+  taxLinkCheck: (period) =>
+    http.get('/tenant/glex/tax-provision/link-check', { params: { period } }),
+  /* 税金计提规则 */
+  taxRuleList: () => http.get('/tenant/glex/tax-rule/list'),
+  taxRuleEffective: () => http.get('/tenant/glex/tax-rule/effective'),
+  taxRuleCreate: (body) => http.post('/tenant/glex/tax-rule', body),
+  taxRuleUpdate: (id, body) => http.put('/tenant/glex/tax-rule/' + id, body),
+  taxRuleDelete: (id) => http.delete('/tenant/glex/tax-rule/' + id),
   // 原 taxProvisionPay(/glex/tax-provision/pay → GL_TAX_PAY 独立缴款流) 已随端点作废删除；
   // 税金缴款走对公付款通道（付款单 / 付款批次），不再由税金页起流。
   /* 薪酬发放 */
@@ -1562,8 +1571,16 @@ export const glexApi = {
   /* 一般总账记账（G1：ACCRUAL/DEFER/MANUAL/OTHER_RECEIPT） */
   journalPage: (pageNum, pageSize, period, entryType, keyword) =>
     http.get('/tenant/glex/journal/page', { params: { pageNum, pageSize, period, entryType, keyword } }),
-  journalGenerate: (period, entryType, summary, amount, debitSubjectId, creditSubjectId) =>
-    http.post('/tenant/glex/journal/generate', null, { params: { period, entryType, summary, amount, debitSubjectId, creditSubjectId } }),
+  /**
+   * 故额外带预算维度（费用项目 + 承担部门）与软控超支理由；其余类型传了也被后端忽略。
+   */
+  journalGenerate: (period, entryType, summary, amount, debitSubjectId, creditSubjectId, extra = {}) =>
+    http.post('/tenant/glex/journal/generate', null, {
+      params: {
+        period, entryType, summary, amount, debitSubjectId, creditSubjectId,
+        expenseItemId: extra.expenseItemId, deptId: extra.deptId, overrunReason: extra.overrunReason,
+      },
+    }),
   // 记账域冲销（红字反向凭证 / 草稿作废）——GlJournalController:58 POST /{id}/reverse，
   // reason 为可选查询参数（后端 GlJournalService.reverse 校验已过账方可冲销）。
   journalReverse: (id, reason) =>
@@ -1598,6 +1615,32 @@ export const glexApi = {
     http.post('/tenant/glex/tax-refund/status', { id, to, remark, refundedAmount }),
   taxRefundCreditQuota: () =>
     http.get('/tenant/glex/tax-refund/credit-quota'),
+}
+
+// 税务管理（：申报台账 / 进项认证 / 风险指标）。后端 base path 已从 /api/tax 收到
+// api/tenant/tax，故这里一律走 /tenant/tax/**。
+export const taxApi = {
+  /* 申报台账 */
+  declarationPage: (params) => http.get('/tenant/tax/declaration/page', { params }),
+  declarationCreate: (body) => http.post('/tenant/tax/declaration', body),
+  declarationSubmit: (id) => http.put(`/tenant/tax/declaration/${id}/submit`),
+  declarationApprove: (id) => http.put(`/tenant/tax/declaration/${id}/approve`),
+  declarationFile: (id) => http.put(`/tenant/tax/declaration/${id}/file`),
+  declarationPay: (id, paidAmount) =>
+    http.put(`/tenant/tax/declaration/${id}/pay`, null, { params: { paidAmount } }),
+  declarationSum: (period, taxType) =>
+    http.get('/tenant/tax/declaration/sum', { params: { period, taxType } }),
+  // 补出/重出应缴凭证
+  declarationVoucher: (id) => http.post(`/tenant/tax/declaration/${id}/voucher`),
+  //  进项认证的接口不在这里：唯一入口是上面的 invoiceApi.certify / cancelCertify / transferOut
+  // （/api/tenant/invoice/certify/**）。税务侧那套 /tenant/tax/certify/** 已随重复页面一并删除。
+  /* 风险指标 */
+  riskPage: (params) => http.get('/tenant/tax/risk/page', { params }),
+  riskHigh: () => http.get('/tenant/tax/risk/high'),
+  riskResolve: (id, remark) => http.put(`/tenant/tax/risk/${id}/resolve`, null, { params: { remark } }),
+  riskSummary: (period) => http.get('/tenant/tax/risk/summary', { params: { period } }),
+  // 税负率自动算（唯一自动指标）
+  riskComputeBurden: (period) => http.post('/tenant/tax/risk/compute-burden', null, { params: { period } }),
 }
 
 // 月末外币汇兑重估（CAS 19，四步化：试算→确认→凭证→反冲）
@@ -2107,7 +2150,9 @@ export const collabApi = {
 // api/open/linku/**，因此本组端点的可用性取决于两侧共享密钥是否同值。
 // 读 = bcp:objection:list，写 = bcp:objection:review。
 export const bcpObjectionApi = {
-  pending: (params) => http.get('/tenant/bcp-objection/pending', { params }),
+  // silent：未开通对接时后端返回 503 的友好文案，由页面就地展示为说明条，
+  // 不再弹一次性 toast（否则每次进页都要用户点一次「知道了」）。
+  pending: (params) => http.get('/tenant/bcp-objection/pending', { params, silent: true }),
   review: (id, approve, remark) => http.post(`/tenant/bcp-objection/${id}/review`, { approve, remark }),
 }
 

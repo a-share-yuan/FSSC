@@ -36,6 +36,13 @@ public class MdItemBudgetMap extends TenantAuditBase {
     /** 状态 */
     private String status;
 
+    /**
+     * 控制档位：HARD/SOFT/WARN。
+     * 为空＝沿用方案级 {@code bg_scheme.control_type}（存量 211 行全部为空，改造后行为不变）；
+     * 有值＝「方案 + 费用项映射」级覆盖，粒度到费用项，不再整方案一个档位。
+     */
+    private String controlType;
+
     /** 备注 */
     private String remark;
 

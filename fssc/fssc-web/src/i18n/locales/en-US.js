@@ -1383,8 +1383,8 @@ export default {
       titleAr: 'Customer Collaboration (CCP shipping / reconciliation sync)',
       actReceiptImport: 'Import goods receipts to draft statements (supplier code, supplier name, amount excl. tax, tax, detail lines separated by {\'|\'})',
       fmtReceipt: 'Format: supplier code, supplier name, amount excl. tax, tax, details (separated by {\'|\'})',
-      frozenNoPeriod: 'R-14 close frozen: sending data to ERP is blocked',
-      frozenWithPeriod: 'R-14 close frozen ({v1}): sending data to ERP is blocked',
+      frozenNoPeriod: 'Close frozen: sending data to ERP is blocked',
+      frozenWithPeriod: 'Close frozen ({v1}): sending data to ERP is blocked',
     },
     entry: {
       apReconLink: 'AP Reconciliation (letter)  →',

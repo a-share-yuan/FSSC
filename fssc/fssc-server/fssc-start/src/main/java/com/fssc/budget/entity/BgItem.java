@@ -47,10 +47,34 @@ public class BgItem extends TenantAuditBase {
     private String ifsAccount;
     private String remark;
 
+    /**
+     * 预算类型：关联 {@code md_budget_type.id}。
+     * 此前四张预算主数据「配了不用」——表里有人在维护、代码零消费；本列是接入的第一处。
+     * 为空＝历史行，按常规预算处理（不强制回填，避免存量 108 行全部要人工补）。
+     */
+    private Long budgetTypeId;
+
+    /**
+     * 预算期间：关联 {@code md_budget_period.id}。
+     * 与 {@link #budgetYear}/{@link #budgetPeriod} 并存：整数两列保留为「快速归集键」，
+     * 本列提供期间主数据的起止日期，占用匹配时按日期覆盖优先于裸整数。
+     */
+    private Long budgetPeriodId;
+
+    /**
+     * 冻结标志：1=冻结，占用判定直接拒绝、释放/核销照常放行。
+     * 冻结用于「本期不再新增支出但不撤销已批预算」的场景，与停用整张方案不同粒度。
+     */
+    private Integer freeze;
+
     /** 控制方式（HARD/SOFT/WARN）在方案表 bg_scheme.control_type，本表无列；
      *  pick 接口按 BudgetService.controlTypeOf 同一规则批量解析后带出，供前端校验分档（非表列）。 */
     @TableField(exist = false)
     private String controlType;
+
+    /** 费用项映射级控制方式（md_item_budget_map.control_type），为空回落方案级；非表列 */
+    @TableField(exist = false)
+    private String itemControlType;
 
     /** 执行率（%），非表列——由 BudgetService.execRateOf 单点计算后填充：
      *  分子 = occupy_amount + used_amount（与"可用余额"列同轴），分母 = total_amount + adjust_amount，

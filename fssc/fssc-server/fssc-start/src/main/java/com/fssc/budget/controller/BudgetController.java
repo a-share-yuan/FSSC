@@ -7,6 +7,7 @@ import com.fssc.budget.entity.BgItem;
 import com.fssc.budget.entity.BgScheme;
 import com.fssc.budget.service.BudgetItemExcelService;
 import com.fssc.budget.service.BudgetService;
+import com.fssc.budget.service.BudgetSwitchService;
 import com.fssc.common.core.PageQuery;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
@@ -39,6 +40,8 @@ public class BudgetController {
 
     private final BudgetService budgetService;
     private final BudgetItemExcelService budgetItemExcelService;
+    /** 预算口径开关：预提/待摊占用、合同占用 */
+    private final BudgetSwitchService budgetSwitchService;
 
     // 预算执行明细（占用/核销/余额）
     @RequiresPerm("budget:scheme:list")
@@ -191,5 +194,72 @@ public class BudgetController {
     public Result<BudgetItemExcelService.ImportResult> itemImport(            @RequestParam("file") MultipartFile file,
             @RequestParam("schemeId") Long schemeId) {
         return Result.success(budgetItemExcelService.importItems(schemeId, file));
+    }
+
+    /**
+     * 实际数导入：JSON 批量导入，命中预算行即扣减已用（写 WRITE_OFF 流水留痕）。
+     * body: {"bizNo":"可选批次号","rows":[{"budgetItemId":1,"amount":100.00}, {"itemId":5,"companyId":1,"deptId":2,"amount":200}]}
+     */
+    @RequiresPerm("budget:item:create")
+    @OperLog(module = "BUDGET", operType = "INSERT", desc = "预算实际数导入")
+    @PostMapping("/actual/import")
+    public Result<java.util.Map<String, Object>> actualImport(@RequestBody java.util.Map<String, Object> req) {
+        String bizNo = req.get("bizNo") == null ? null : String.valueOf(req.get("bizNo"));
+        Object raw = req.get("rows");
+        if (!(raw instanceof java.util.List)) {
+            throw new com.fssc.common.exception.BizException(
+                    com.fssc.common.core.ErrorCode.PARAM_INVALID, "rows 必须是数组");
+        }
+        @SuppressWarnings("unchecked")
+        java.util.List<java.util.Map<String, Object>> rows = (java.util.List<java.util.Map<String, Object>>) raw;
+        return Result.success(budgetService.importActual(rows, bizNo));
+    }
+
+    /** 结余结转：把上年可用余额结转到下年同维度行 */
+    @RequiresPerm("budget:scheme:update")
+    @OperLog(module = "BUDGET", operType = "INSERT", desc = "预算结余结转")
+    @PostMapping("/carry-over")
+    public Result<java.util.Map<String, Object>> carryOver(@RequestParam int fromYear, @RequestParam int toYear) {
+        return Result.success(budgetService.carryOver(fromYear, toYear));
+    }
+
+    /** 冻结/解冻预算行：冻结后拒绝新增占用，释放与核销照常 */
+    @RequiresPerm("budget:item:create")
+    @OperLog(module = "BUDGET", operType = "UPDATE", desc = "冻结/解冻预算行")
+    @PostMapping("/item/{id}/freeze")
+    public Result<Void> freeze(@PathVariable Long id, @RequestParam boolean freeze) {
+        budgetService.setFreeze(id, freeze);
+        return Result.success();
+    }
+
+    // 预算口径开关
+
+    /**
+     * 读取预算口径开关：预提/待摊是否占预算、合同是否占预算。
+     * 缺省均为「开」，与改造前行为一致；权限复用方案读权限，预算岗即可见。
+     */
+    @RequiresPerm("budget:scheme:list")
+    @GetMapping("/switch")
+    public Result<Map<String, Boolean>> switchGet() {
+        return Result.success(budgetSwitchService.snapshot());
+    }
+
+    /**
+     * 保存预算口径开关。只写显式传入的项（null＝不改），避免前端少传字段把另一项误关。
+     * <p>改完即时生效（ConfigService 带缓存失效）；<b>关闭不追溯</b>，已占额度仍按原路径释放。</p>
+     */
+    @RequiresPerm("budget:scheme:update")
+    @OperLog(module = "BUDGET", operType = "UPDATE", desc = "预算口径开关")
+    @PostMapping("/switch")
+    public Result<Void> switchSave(@RequestBody SwitchReq req) {
+        budgetSwitchService.save(req.getAccrualOccupy(), req.getContractOccupy());
+        return Result.success();
+    }
+
+    /** 预算口径开关入参：字段为 null 表示本次不改该项 */
+    @lombok.Data
+    public static class SwitchReq {
+        private Boolean accrualOccupy;
+        private Boolean contractOccupy;
     }
 }

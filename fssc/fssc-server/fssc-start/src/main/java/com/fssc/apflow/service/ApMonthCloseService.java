@@ -41,7 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * AP月末关账服务（蓝图 SCC_AP_20）：发起（协同冻结打通点7）→组长派工（R-06）→
+ * AP月末关账服务（蓝图 SCC_AP_20）：发起（协同冻结打通点7）→组长派工→
  * 检查项签认（支持通过/退回/挂起+说明+前置自动检查）→ERP关账（恢复协同）→反关账（重开检查）。
  * 冻结语义：scpFrozen=1 期间，本服务提供 isFrozen(companyId) 供付款/协同通道拦截发送。
  *
@@ -106,13 +106,13 @@ public class ApMonthCloseService {
         trace(c, "INIT", "发起关账并冻结协同（组织 " + company.getCompanyName() + "）");
         mapper.updateById(c);
         // 规则：新建写入数据库无旧值，不接入审计（不伪造 before），故此处刻意不写 audit_trail
-        // 打通点7：关账触发 → SCP 状态通知（禁止发送数据至ERP，R-14）
+        // 打通点7：关账触发 → SCP 状态通知（禁止发送数据至ERP）
         collabSyncService.log(CollabSyncLog.IF_SCP_FREEZE, "AP_TO_SCP", c.getCloseNo(),
                 CollabSyncLog.ST_SUCCESS, "关账触发：公司 " + companyId + " 期间 " + period + " 协同冻结", null);
         return c;
     }
 
-    /** 组长派工（R-06）：body members 逗号分隔（前端人员选择器多选）。 */
+    /** 组长派工：body members 逗号分隔（前端人员选择器多选）。 */
     @Transactional(rollbackFor = Exception.class)
     public ApMonthClose dispatch(Long id, String members) {
         ApMonthClose c = require(id);

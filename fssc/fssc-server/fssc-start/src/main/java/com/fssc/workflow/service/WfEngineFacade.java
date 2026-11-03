@@ -289,7 +289,7 @@ public class WfEngineFacade {
                 } catch (Exception ex) {
                     // 不可恢复分支：引擎侧变量已随实例清理，重放/重试都取不回上下文。
                     // 若在此冒泡，isFailOnException=true 会让该流程实例永远无法结束（死循环），
-                    // 故记缺陷（WF-MIRROR-003）后返回——缺陷在对账作业下一轮会被重新暴露。
+                    // 故记缺陷（WF-MIRRO3）后返回——缺陷在对账作业下一轮会被重新暴露。
                     mirrorDefectRecorder.record(WfMirrorDefectRecorder.CODE_ENGINE_BYPASS,
                             "PROCESS_COMPLETED.getVariables", null, "procInstId=" + pi.getId(), ex);
                     return;
@@ -437,6 +437,29 @@ public class WfEngineFacade {
     }
 
     /**
+     * 按裸 {@code taskId} 解析任务并校验租户归属（(E)）。
+     *
+     * <p>引擎的 {@code taskService.complete/setAssignee/claim} 只认 taskId，本身不带租户谓词；
+     * 只要有人拿到别家的 taskId 就能直接推进别人的单（{@code canOperate} 是业务层的第二道闸，
+     * 但裸 taskId 直达引擎的调用不一定经过它）。这里用「带租户谓词的查询」把 taskId 解析成 Task：
+     * <b>解析不到即拒绝</b>——不区分「任务不存在」与「属于其它租户」，避免把归属信息泄露成探测面。
+     *
+     * <p>不要另立第二个 guard：{@link WfReadGuard} 已是"按镜像行判归属、判不出宁拒不放"的单一出处，
+     * 本方法是它在<b>写路径</b>的同口径延伸。
+     */
+    private Task requireTenantTask(String taskId) {
+        if (taskId == null || taskId.isBlank()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "任务ID不能为空");
+        }
+        Task t = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
+        if (t == null) {
+            log.warn("按 taskId={} 未在当前租户 {} 下解析到任务，拒绝写操作", taskId, EngineTenantScope.tenantStr());
+            throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或不属于当前租户: " + taskId);
+        }
+        return t;
+    }
+
+    /**
      * 部署业务审批流模板（wf_business_flow → BPMN，key=bizType）。
      *
      * <p>三条规则都是有来由的：</p>
@@ -452,78 +475,130 @@ public class WfEngineFacade {
      */
     public void deployBizFlows() {
         try {
-            // 应用启动阶段无租户上下文；整个「读取模板 + build() 生成 BPMN + 部署」须包在 runIgnoreTenant 内。
-            // 否则 build() 内按 node_key 读取 wf_node_config.multi_type（多实例会签/票签）时，会因无租户上下文
-            // 触发 FsscTenantLineHandler.getTenantId() fail-closed 抛异常被吞，导致多实例节点无法生成
-            // （现象：BPMN 退化为单办理人 userTask，流程无会签）。
-            TenantContext.runIgnoreTenant(() -> {
-                List<WfBusinessFlow> flows =
-                        wfBusinessFlowMapper.selectList(null);
-                Set<String> deployedKeys = new HashSet<>();
-                for (WfBusinessFlow f : flows) {
-                    if (f.getNodeJson() == null || f.getNodeJson().isBlank()) continue;
-                    // 停用流程（status=DISABLED）不部署 BPMN——保留定义、不产生流程定义版本；
-                    // 「启用」操作 = UPDATE status='NORMAL' 后重启（或调用本方法）完成 BPMN 部署。
-                    // 历史行为兼容：既有行均为 NORMAL，不受影响。
-                    if ("DISABLED".equalsIgnoreCase(f.getStatus())) {
-                        log.info("业务审批流 {} ({}) 已停用(DISABLED)，跳过 BPMN 部署", f.getFlowCode(), f.getBizType());
-                        continue;
-                    }
-                    String key = f.getBizType();
-                    if (!deployedKeys.add(key)) {
-                        log.warn("业务审批流 {} 与已部署的行同 biz_type={}，本行跳过（同 key 一轮启动只部署一次）",
-                                f.getFlowCode(), key);
-                        continue;
-                    }
-                    // 以 wf_business_flow.node_json 为唯一事实源生成 BPMN；内容变化即出新版本，
-                    // 内容未变则复用既有部署（enableDuplicateFiltering），不再每启动递增版本。
-                    try {
-                        String flowName = f.getFlowName() == null ? key : f.getFlowName();
-                        String xml = bpmnTemplateService.build(flowName, key, f.getNodeJson());
-                        Deployment dep = repositoryService.createDeployment()
-                                .addString(key + ".bpmn20.xml", xml)
-                                .name(flowName)
-                                .key(key)
-                                .enableDuplicateFiltering()
-                                .deploy();
-                        log.info("业务审批流部署完成: key={}, name={}, deploymentId={}", key, flowName, dep.getId());
-                    } catch (Exception e) {
-                        log.error("业务审批流 {} (key={}) 部署失败，跳过该枚，其余流程继续部署", f.getFlowCode(), key, e);
-                    }
+            // (A)：启动期部署改为<b>逐租户</b>部署（ 荐解）。
+            // 改造前在 runIgnoreTenant 内捞全量 wf_model 后全局 deploy，写出的是 TENANT_ID_ 为空的定义；
+            // 一旦发起/查询侧补上租户谓词，这批定义就再也查不到——所以部署与查询必须同窗改、同窗上。
+            for (Long tid : allTenantIds()) {
+                try {
+                    TenantContext.callAs(tid, () -> deployBizFlowsOfTenant(tid));
+                } catch (Exception e) {
+                    log.error("租户 {} 业务审批流部署失败，继续下一个租户", tid, e);
                 }
-            });
+            }
         } catch (Exception e) {
             log.error("业务审批流部署失败", e);
         }
     }
 
+    /** 单租户部署业务审批流（调用方已建立该租户上下文） */
+    private void deployBizFlowsOfTenant(Long tenantId) {
+        // 租户上下文内读取——MP 租户插件自动按 tenant_id 过滤，不必再 runIgnoreTenant；
+        // build() 生成 BPMN 时按 node_key 读 wf_node_config.multi_type 也拿到了租户，不会 fail-closed。
+        List<WfBusinessFlow> flows = wfBusinessFlowMapper.selectList(null);
+        Set<String> deployedKeys = new HashSet<>();
+        for (WfBusinessFlow f : flows) {
+            if (f.getNodeJson() == null || f.getNodeJson().isBlank()) continue;
+            // 停用流程（status=DISABLED）不部署 BPMN——保留定义、不产生流程定义版本；
+            // 「启用」操作 = UPDATE status='NORMAL' 后重启（或调用本方法）完成 BPMN 部署。
+            // 历史行为兼容：既有行均为 NORMAL，不受影响。
+            if ("DISABLED".equalsIgnoreCase(f.getStatus())) {
+                log.info("业务审批流 {} ({}) 已停用(DISABLED)，跳过 BPMN 部署", f.getFlowCode(), f.getBizType());
+                continue;
+            }
+            String key = f.getBizType();
+            if (!deployedKeys.add(key)) {
+                log.warn("业务审批流 {} 与已部署的行同 biz_type={}，本行跳过（同 key 一轮启动只部署一次）",
+                        f.getFlowCode(), key);
+                continue;
+            }
+            // 以 wf_business_flow.node_json 为唯一事实源生成 BPMN；内容变化即出新版本，
+            // 内容未变则复用既有部署（enableDuplicateFiltering），不再每启动递增版本。
+            try {
+                String flowName = f.getFlowName() == null ? key : f.getFlowName();
+                String xml = bpmnTemplateService.build(flowName, key, f.getNodeJson());
+                Deployment dep = repositoryService.createDeployment()
+                        .addString(key + ".bpmn20.xml", xml)
+                        .name(flowName)
+                        .key(key)
+                        .tenantId(String.valueOf(tenantId))
+                        .enableDuplicateFiltering()
+                        .deploy();
+                log.info("业务审批流部署完成: tenant={}, key={}, name={}, deploymentId={}",
+                        tenantId, key, flowName, dep.getId());
+            } catch (Exception e) {
+                log.error("业务审批流 {} (key={}) 部署失败，跳过该枚，其余流程继续部署", f.getFlowCode(), key, e);
+            }
+        }
+    }
+
+    /** 全部租户 id（启动期无上下文，只能跨租户扫 wf_model / wf_business_flow 的 tenant_id 去重） */
+    private List<Long> allTenantIds() {
+        List<Long> ids = new ArrayList<>();
+        TenantContext.runIgnoreTenant(() -> {
+            for (WfModel m : wfModelMapper.selectList(
+                    new LambdaQueryWrapper<WfModel>().select(WfModel::getTenantId))) {
+                if (m.getTenantId() != null && !ids.contains(m.getTenantId())) {
+                    ids.add(m.getTenantId());
+                }
+            }
+            for (WfBusinessFlow f : wfBusinessFlowMapper.selectList(
+                    new LambdaQueryWrapper<WfBusinessFlow>().select(WfBusinessFlow::getTenantId))) {
+                if (f.getTenantId() != null && !ids.contains(f.getTenantId())) {
+                    ids.add(f.getTenantId());
+                }
+            }
+        });
+        if (ids.isEmpty()) {
+            log.warn("未扫描到任何租户（wf_model/wf_business_flow 均无租户行），跳过启动期流程部署");
+        }
+        return ids;
+    }
+
     /** 部署公共子流程（wf_model source=SUBPROCESS，供主流程 callActivity 引用；已部署则跳过；UC12） */
     public void deploySubprocesses() {
-        try {
-            List<WfModel>[] holder = new List[1];
-            TenantContext.runIgnoreTenant(() ->
-                    holder[0] = wfModelMapper.selectList(new LambdaQueryWrapper<WfModel>()
-                            .eq(WfModel::getSource, "SUBPROCESS")));
-            List<WfModel> subs = holder[0];
-            if (subs == null) return;
-            for (WfModel s : subs) {
-                if (s.getBpmnXml() == null || s.getBpmnXml().isBlank()) continue;
-                long count = repositoryService.createProcessDefinitionQuery().processDefinitionKey(s.getModelKey()).count();
-                if (count > 0) continue;
-                Deployment dep = repositoryService.createDeployment()
-                        .addString(s.getModelKey() + ".bpmn20.xml", s.getBpmnXml())
-                        .name(s.getModelName() == null ? s.getModelKey() : s.getModelName())
-                        .deploy();
-                log.info("已部署公共子流程: key={}, name={}, deploymentId={}", s.getModelKey(), s.getModelName(), dep.getId());
+        // (A)：同样逐租户部署——子流程定义也参与「按租户取最新」，全局部署会让先部署的租户看不见。
+        for (Long tid : allTenantIds()) {
+            try {
+                TenantContext.callAs(tid, () -> deploySubprocessesOfTenant(tid));
+            } catch (Exception e) {
+                log.error("租户 {} 公共子流程部署失败，继续下一个租户", tid, e);
             }
-        } catch (Exception e) {
-            log.error("公共子流程部署失败", e);
+        }
+    }
+
+    private void deploySubprocessesOfTenant(Long tenantId) {
+        List<WfModel> subs = wfModelMapper.selectList(new LambdaQueryWrapper<WfModel>()
+                .eq(WfModel::getSource, "SUBPROCESS"));
+        if (subs == null) return;
+        for (WfModel s : subs) {
+            if (s.getBpmnXml() == null || s.getBpmnXml().isBlank()) continue;
+            long count = EngineTenantScope.definitionQuery(repositoryService)
+                    .processDefinitionKey(s.getModelKey()).count();
+            if (count > 0) continue;
+            Deployment dep = repositoryService.createDeployment()
+                    .addString(s.getModelKey() + ".bpmn20.xml", s.getBpmnXml())
+                    .name(s.getModelName() == null ? s.getModelKey() : s.getModelName())
+                    .tenantId(String.valueOf(tenantId))
+                    .deploy();
+            log.info("已部署公共子流程: tenant={}, key={}, name={}, deploymentId={}",
+                    tenantId, s.getModelKey(), s.getModelName(), dep.getId());
         }
     }
 
     /** 部署内置流程（已部署则跳过） */
     public void deployDefault() {
-        long count = repositoryService.createProcessDefinitionQuery()
+        // (A)：内置流程也必须逐租户部署，否则按租户谓词查不到它，费用报销直接无法发起。
+        for (Long tid : allTenantIds()) {
+            try {
+                TenantContext.callAs(tid, () -> deployDefaultOfTenant(tid));
+            } catch (Exception e) {
+                log.error("租户 {} 内置流程部署失败，继续下一个租户", tid, e);
+            }
+        }
+    }
+
+    private void deployDefaultOfTenant(Long tenantId) {
+        long count = EngineTenantScope.definitionQuery(repositoryService)
                 .processDefinitionKey(PROC_EXPENSE_CLAIM).count();
         if (count > 0) {
             return;
@@ -531,8 +606,9 @@ public class WfEngineFacade {
         Deployment dep = repositoryService.createDeployment()
                 .addClasspathResource("processes/expense-claim.bpmn20.xml")
                 .name("费用报销审批")
+                .tenantId(String.valueOf(tenantId))
                 .deploy();
-        log.info("已部署流程定义: {}, deploymentId={}", PROC_EXPENSE_CLAIM, dep.getId());
+        log.info("已部署流程定义: tenant={}, key={}, deploymentId={}", tenantId, PROC_EXPENSE_CLAIM, dep.getId());
     }
 
     /**
@@ -714,7 +790,13 @@ public class WfEngineFacade {
         // 下面各处仍用同一次 resolveBizNo 的结果。
         String bizNo = resolveBizNo(bizType, bizId);
         vars.put("bizNo", bizNo);
-        ProcessInstance pi = runtimeService.startProcessInstanceByKey(processKey, vars);
+        // (C)：发起必须带租户。无租户发起写出的实例 TENANT_ID_ 为空，
+        // 补上租户谓词后本租户的待办/在办列表再也查不到它（"提了单却没人看见"）。
+        String startTenant = EngineTenantScope.tenantStr();
+        if (startTenant == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "发起流程失败：缺少租户上下文");
+        }
+        ProcessInstance pi = runtimeService.startProcessInstanceByKeyAndTenantId(processKey, vars, startTenant);
         // 双写业务视图 wf_instance（查询/记录专用，流程门面统一保证）
         try {
             WfInstance inst = new WfInstance();
@@ -774,7 +856,7 @@ public class WfEngineFacade {
                 // 拿它交给 applyResolution，「已有 assignee 就跳过」这道守卫就失效了，配置指定的人会被
                 // 候选组的首个持有人覆盖掉——表面症状就是「指定审批人配了不生效」。
                 Task first = t.getId() == null ? t
-                        : taskService.createTaskQuery().taskId(t.getId()).singleResult();
+                        : EngineTenantScope.taskQuery(taskService).taskId(t.getId()).singleResult();
                 if (first == null) {
                     continue;
                 }
@@ -797,7 +879,7 @@ public class WfEngineFacade {
                     // 镜像一律按重查到的实时任务写：①②级解析改的是引擎侧 ASSIGNEE_，内存里的任务对象
                     // 还是解析前的快照。沿用 approver 写镜像，两本账从第一个节点起就会叉开，而催办、看板、
                     // 共享中心待办全部按镜像找人——单子在真人手里却催不到。
-                    Task live = taskService.createTaskQuery().taskId(t.getId()).singleResult();
+                    Task live = EngineTenantScope.taskQuery(taskService).taskId(t.getId()).singleResult();
                     if (live == null) {
                         continue;   // 已被空策略处置掉，给消失的 taskId 写 PENDING＝永远办不掉的幽灵待办
                     }
@@ -954,7 +1036,7 @@ public class WfEngineFacade {
                 return false;
             }
             // 指派覆盖可能已改派：重查 ACT_RU_TASK 最新 ASSIGNEE_/候选后再判定
-            Task task = taskService.createTaskQuery().taskId(firstTask.getId()).singleResult();
+            Task task = EngineTenantScope.taskQuery(taskService).taskId(firstTask.getId()).singleResult();
             if (task == null || !firstNodeAssignedTo(task, initiator)) {
                 return false;
             }
@@ -993,13 +1075,13 @@ public class WfEngineFacade {
             return true;
         }
         // 候选人
-        if (taskService.createTaskQuery().taskId(task.getId()).taskCandidateUser(uid).count() > 0) {
+        if (EngineTenantScope.taskQuery(taskService).taskId(task.getId()).taskCandidateUser(uid).count() > 0) {
             return true;
         }
         // 候选组（发起人角色码）
         List<String> roleCodes = roleCodesOfUser(userId);
         return !roleCodes.isEmpty()
-                && taskService.createTaskQuery().taskId(task.getId()).taskCandidateGroupIn(roleCodes).count() > 0;
+                && EngineTenantScope.taskQuery(taskService).taskId(task.getId()).taskCandidateGroupIn(roleCodes).count() > 0;
     }
 
     /** 用户角色码列表（候选组判定用），查询失败返回空列表 */
@@ -1059,7 +1141,7 @@ public class WfEngineFacade {
         }
         // 绑定表这条路径必须自己查部署存在性：内置映射在代码里查得到，绑定表里的一行却可能指向
         // 未部署或已删除的 key，那样发起会直接抛 Flowable 异常而不是回退。
-        long boundDefs = repositoryService.createProcessDefinitionQuery().processDefinitionKey(bound).count();
+        long boundDefs = EngineTenantScope.definitionQuery(repositoryService).processDefinitionKey(bound).count();
         if (boundDefs > 0) {
             return bound;
         }
@@ -1125,7 +1207,7 @@ public class WfEngineFacade {
             return r;
         }
         r.put("finalKey", finalKey);
-        r.put("deployedDefs", repositoryService.createProcessDefinitionQuery().processDefinitionKey(finalKey).count());
+        r.put("deployedDefs", EngineTenantScope.definitionQuery(repositoryService).processDefinitionKey(finalKey).count());
         r.put("viaTable", finalKey.equals(r.get("tableKey")));
         return r;
     }
@@ -1144,7 +1226,7 @@ public class WfEngineFacade {
     private boolean isAmountTieredFlow(String processKey) {
         if (processKey == null || processKey.isBlank()) return false;
         try {
-            ProcessDefinition def = repositoryService.createProcessDefinitionQuery()
+            ProcessDefinition def = EngineTenantScope.definitionQuery(repositoryService)
                     .processDefinitionKey(processKey).latestVersion().singleResult();
             if (def == null) return false;
             Boolean cached = tieredCache.get(def.getId());
@@ -1665,7 +1747,7 @@ public class WfEngineFacade {
                                         log.info("智能推送跳过 userId={}：本链有连办闸且其已办理本实例节点（推给他必被拒）", uid);
                                         continue;
                                     }
-                                    long load = taskService.createTaskQuery().taskAssignee(String.valueOf(uid)).count();
+                                    long load = EngineTenantScope.taskQuery(taskService).taskAssignee(String.valueOf(uid)).count();
                                     if (load < bestLoad) { bestLoad = load; best = uid; }
                                 }
                                 if (best != null) {
@@ -1825,7 +1907,7 @@ public class WfEngineFacade {
         }
         List<Task> held;
         try {
-            held = taskService.createTaskQuery()
+            held = EngineTenantScope.taskQuery(taskService)
                     .taskAssignee(String.valueOf(fromUserId)).active().list();
         } catch (Exception ex) {
             log.warn("委托改派取存量待办失败 from={}: {}", fromUserId, ex.getMessage());
@@ -1905,11 +1987,12 @@ public class WfEngineFacade {
             if (taskId == null || !done.add(taskId)) {
                 continue;
             }
-            Task t = taskService.createTaskQuery().taskId(taskId).singleResult();
+            Task t = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
             if (t == null || !String.valueOf(toUserId).equals(t.getAssignee())) {
                 continue; // 已办结 / 已被再次转走：不动别人的既成事实
             }
             try {
+                requireTenantTask(taskId);
                 taskService.setAssignee(taskId, String.valueOf(fromUserId));
                 syncTaskViewAfterAssigneeChange(t, fromUserId, "委托回跳");
                 writeHistory(t.getProcessInstanceId(), taskId, t.getTaskDefinitionKey(), t.getName(),
@@ -2335,7 +2418,7 @@ public class WfEngineFacade {
             if (pinst == null || nodeKey == null) {
                 return;
             }
-            long open = taskService.createTaskQuery().processInstanceId(pinst)
+            long open = EngineTenantScope.taskQuery(taskService).processInstanceId(pinst)
                     .taskDefinitionKey(nodeKey).count();
             if (open > 0) {
                 return; // 同节点仍有在办实例：未办结，等其余投票
@@ -2410,7 +2493,7 @@ public class WfEngineFacade {
     private void terminateAsRejected(String pinst, String reason, String rejectType) {
         try {
             if (pinst == null
-                    || runtimeService.createProcessInstanceQuery().processInstanceId(pinst).singleResult() == null) {
+                    || EngineTenantScope.processInstanceQuery(runtimeService).processInstanceId(pinst).singleResult() == null) {
                 return; // 实例已结束（并发下另一路已收尾）：不重复终止、不重复发事件
             }
             Long tenantId = null;
@@ -2486,7 +2569,7 @@ public class WfEngineFacade {
      * 不允许两处各写一套映射——否则会出现"按钮看得见、点下去报审批项不存在"。
      */
     public List<WfApprovalItem> approvalItemsOf(String taskId) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null || task.getProcessDefinitionId() == null) {
             return Collections.emptyList();
         }
@@ -2504,7 +2587,7 @@ public class WfEngineFacade {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("multi", false);
         try {
-            Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+            Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
             if (task == null) {
                 return out;
             }
@@ -2537,7 +2620,7 @@ public class WfEngineFacade {
             // 逐票明细：同一实例 + 同一节点 key 的历史办理记录（含"谁投了什么"）。
             // 键名按各驱动的大小写差异统一办结，前端只认小驼峰。
             List<Map<String, Object>> raw = new JdbcTemplate(dataSource).queryForList(
-                    "SELECT oper_user_id AS userId, oper_user_name AS userName, action, "
+                    "/* tenant-ok: 已按 tenantId 分支拼条件；作业线程无上下文时刻意不带 */ SELECT oper_user_id AS userId, oper_user_name AS userName, action, "
                             + "IFNULL(comment,'') AS comment, oper_time AS operTime "
                             + "FROM wf_task_history WHERE proc_inst_id = ? AND node_key = ? "
                             + "AND action IN ('APPROVE','REJECT') ORDER BY oper_time, id",
@@ -2782,7 +2865,7 @@ public class WfEngineFacade {
 
     /** 首审节点定位：唯一才返回键，否则抛错说明原因（多分支/无人工节点都无法点名） */
     private String soleStartApprovalNode(String processKey) {
-        ProcessDefinition def = repositoryService.createProcessDefinitionQuery()
+        ProcessDefinition def = EngineTenantScope.definitionQuery(repositoryService)
                 .processDefinitionKey(processKey).latestVersion().singleResult();
         if (def == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "流程定义尚未部署，请联系管理员");
@@ -2817,7 +2900,7 @@ public class WfEngineFacade {
         String modelKey = resolveStartProcessKey(bizType, bizId, subType, amount);
         out.put("modelKey", modelKey);
         out.put("pickEnabled", isPickModeEnabled(modelKey));
-        ProcessDefinition def = repositoryService.createProcessDefinitionQuery()
+        ProcessDefinition def = EngineTenantScope.definitionQuery(repositoryService)
                 .processDefinitionKey(modelKey).latestVersion().singleResult();
         if (def == null) {
             out.put("nodeName", "（流程定义未部署，按默认流程启动）");
@@ -2945,7 +3028,7 @@ public class WfEngineFacade {
      */
     public Map<String, Object> nextCandidates(String taskId, Long operator) {
         Map<String, Object> out = new HashMap<>();
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
@@ -3108,7 +3191,7 @@ public class WfEngineFacade {
             m.put("deptName", u.getDeptName());
             if (withLoad) {
                 try {
-                    m.put("pendingCount", taskService.createTaskQuery().taskAssignee(String.valueOf(id)).count());
+                    m.put("pendingCount", EngineTenantScope.taskQuery(taskService).taskAssignee(String.valueOf(id)).count());
                 } catch (Exception ex) {
                     // 在办数查询失败置 null（统计展示字段，不阻断主流程）
                     m.put("pendingCount", null);
@@ -3131,7 +3214,7 @@ public class WfEngineFacade {
         try {
             Long target = null;
             if ("ESCALATE".equals(action)) {
-                Task live = taskService.createTaskQuery().taskId(task.getId()).singleResult();
+                Task live = EngineTenantScope.taskQuery(taskService).taskId(task.getId()).singleResult();
                 target = live == null ? null : toUserIdOrNull(live.getAssignee());
             }
             writeHistory(task.getProcessInstanceId(), task.getId(), task.getTaskDefinitionKey(), task.getName(),
@@ -3164,7 +3247,7 @@ public class WfEngineFacade {
             // 重查任务，让第②③级看到第①级 USER 配置刚设的 assignee：拿旧快照的话，
             // ADMIN 兜底会把显式指派覆盖掉。
             if (cur.getId() != null) {
-                Task freshTask = taskService.createTaskQuery().taskId(cur.getId()).singleResult();
+                Task freshTask = EngineTenantScope.taskQuery(taskService).taskId(cur.getId()).singleResult();
                 if (freshTask == null) {
                     cur = null;
                     break;
@@ -3195,7 +3278,7 @@ public class WfEngineFacade {
             // 直接记会让 wf_task 镜像的 assignee_id 留空——按镜像跑的超时作业/看板当前办理人就看不到升级后的真人。
             // 镜像开关打开时停写 wf_task，改由监听器 TASK_CREATED 投影建行。
             if (mirrorByFacade()) {
-                Task mirrored = taskService.createTaskQuery().taskId(cur.getId()).singleResult();
+                Task mirrored = EngineTenantScope.taskQuery(taskService).taskId(cur.getId()).singleResult();
                 recordTaskMirror(processKey, mirrored != null ? mirrored : cur);
             }
         }
@@ -3381,7 +3464,7 @@ public class WfEngineFacade {
      * 办理，绝不代替用户挑一条办掉——会签的本意就是各岗位各自签核。
      */
     public void completeByBill(String bizType, Long bizId, boolean approved, String comment, Long operUserId) {
-        List<Task> tasks = taskService.createTaskQuery()
+        List<Task> tasks = EngineTenantScope.taskQuery(taskService)
                 .processVariableValueEquals("bizType", bizType)
                 .processVariableValueEquals("bizId", bizId)
                 .active()
@@ -3417,7 +3500,7 @@ public class WfEngineFacade {
 
     /** 取消僵尸流程实例（仅测试/运维清理用；PROCESS_CANCELLED 不触发业务收尾） */
     public void cancelInstance(String procInstId, String reason) {
-        if (runtimeService.createProcessInstanceQuery().processInstanceId(procInstId).singleResult() == null) {
+        if (EngineTenantScope.processInstanceQuery(runtimeService).processInstanceId(procInstId).singleResult() == null) {
             throw new BizException(
                     ErrorCode.PARAM_INVALID, "实例不存在或已结束: " + procInstId);
         }
@@ -3484,7 +3567,7 @@ public class WfEngineFacade {
      * 用于 OA 桥接等"代审批"方判断是否需要继续完成后续节点（杜绝流程中途遗弃产生僵尸任务）。
      */
     public boolean hasActiveTask(String bizType, Long bizId) {
-        return taskService.createTaskQuery()
+        return EngineTenantScope.taskQuery(taskService)
                 .processVariableValueEquals("bizType", bizType)
                 .processVariableValueEquals("bizId", bizId)
                 .active()
@@ -3572,7 +3655,7 @@ public class WfEngineFacade {
     public void complete(String taskId, boolean approved, String comment, String rejectType,
                          Long operUserId, Long nextAssigneeUserId, String ccUserIds, String rejectToNodeKey,
                          String approvalItemCode) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
@@ -3661,7 +3744,7 @@ public class WfEngineFacade {
                 // 会零痕迹通过。这里 fail-closed：按发起人＝提交人这一最严口径拦截，
                 // 首节点豁免逻辑不变（见 doneTasks 的判定）。
                 if (applyUser == null || operator.equals(applyUser)) {
-                    long doneTasks = historyService.createHistoricTaskInstanceQuery()
+                    long doneTasks = EngineTenantScope.historicTaskQuery(historyService)
                             .processInstanceId(task.getProcessInstanceId()).finished().count();
                     if (doneTasks > 0) {
                         throw new BizException(ErrorCode.FORBIDDEN, applyUser == null
@@ -3681,7 +3764,7 @@ public class WfEngineFacade {
             // 某个人时，他要重办的正是自己办过的<b>同一节点</b>——按原写法一律算"连办"，
             // 于是单指派节点（candidate_ids=NULL）退回后既办不掉也驳不掉，只能转办/改派救。
             // 故排除同节点重办：跨节点（taskDefinitionKey 不同）才拦。
-            long handled = historyService.createHistoricTaskInstanceQuery()
+            long handled = EngineTenantScope.historicTaskQuery(historyService)
                     .processInstanceId(task.getProcessInstanceId())
                     .taskAssignee(String.valueOf(operator)).finished().list().stream()
                     .filter(h -> !Objects.equals(h.getTaskDefinitionKey(), task.getTaskDefinitionKey()))
@@ -3792,6 +3875,7 @@ public class WfEngineFacade {
         // 只传形参 operUserId（与下方 APPROVE/REJECT 记录的 oper_user_id 同一来源），不传 UserContext 默认值。
         Long endOperPrev = beginEndOperator(operUserId);
         try {
+            requireTenantTask(taskId);
             taskService.complete(taskId, vars);
         } catch (FlowableOptimisticLockingException ex) {
             // ST-02: 并发双审的败者返回友好业务提示，而非 500 系统异常
@@ -3899,7 +3983,7 @@ public class WfEngineFacade {
      */
     public WfAddSign addSign(String taskId, String position,
                                                       String signUsersCsv, String reason) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
@@ -4038,7 +4122,7 @@ public class WfEngineFacade {
     public List<WfAddSign> openAddSign(String procInstId, String taskId) {
         String pid = procInstId;
         if ((pid == null || pid.isBlank()) && taskId != null && !taskId.isBlank()) {
-            Task t = taskService.createTaskQuery().taskId(taskId).singleResult();
+            Task t = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
             if (t != null) {
                 pid = t.getProcessInstanceId();
             } else {
@@ -4100,7 +4184,7 @@ public class WfEngineFacade {
                         WfAddSign.STATUS_FAILED);
                 log.warn("后加签重复登记，已置 FAILED recId={}", pend.get(i).getId());
             }
-            List<Task> live = taskService.createTaskQuery()
+            List<Task> live = EngineTenantScope.taskQuery(taskService)
                     .processInstanceId(procInstId).active().list();
             if (live.size() != 1) {
                 // 0=流程已办结；>1=并联/多实例节点，无法确定"该加签哪一条" → 不生效并告知发起人
@@ -4130,6 +4214,7 @@ public class WfEngineFacade {
                 taskService.unclaim(taskId);
                 wfQueryService.clearTaskAssignee(taskId);
             } else {
+                requireTenantTask(taskId);
                 taskService.setAssignee(taskId, target);
                 wfQueryService.updateTaskAssignee(taskId, toUserIdOrNull(target));
             }
@@ -4418,7 +4503,7 @@ public class WfEngineFacade {
      * 取"实例当前节点"一律走这条列表规则。
      */
     private List<Task> openTasks(String procInstId) {
-        List<Task> list = taskService.createTaskQuery().processInstanceId(procInstId).list();
+        List<Task> list = EngineTenantScope.taskQuery(taskService).processInstanceId(procInstId).list();
         if (list == null) {
             return Collections.emptyList();
         }
@@ -4441,7 +4526,7 @@ public class WfEngineFacade {
                 // 此时 assignee 为空。若守卫写成「有 PENDING 镜像就跳过」，assignApprover 的三级解析
                 // 连同 empty_strategy ESCALATE 兜底就一起被跳掉——候选组有组码、组内却解析不出真人时
                 // （例如提单人＝顶级部门负责人本人，DIRECT_SUPERVISOR 判「无上级」），ASSIGNEE_ 永远为空、
-                // 任务对所有人不可见、流程静默卡死（对账作业只报 WF-MIRROR-002 不修）。
+                // 任务对所有人不可见、流程静默卡死（对账作业只报 WF-MIRRO2 不修）。
                 // 所以规则是：镜像已解析出真人（assignee_id 非空）才跳过；空 assignee 的镜像行仍走三级解析补派。
                 WfTask mirror = wfQueryService.pendingTaskByTaskId(t.getId());
                 if (mirror != null && mirror.getAssigneeId() != null) {
@@ -4510,7 +4595,7 @@ public class WfEngineFacade {
      * 不能转给本人。转办不产生审批意见节点推进，仅变更受理人并记录 TRANSFER 历史 + 通知被转办人。
      */
     public void transfer(String taskId, Long targetUserId, String comment, Long operUserId) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
@@ -4558,6 +4643,7 @@ public class WfEngineFacade {
                                 + "确需派给名单外的人（换岗/离职/本岗位只有你一人）请联系流程管理员使用「改派」");
             }
         }
+        requireTenantTask(taskId);
         taskService.setAssignee(taskId, String.valueOf(targetUserId));
         // 待办/实例视图双写办结（与领取共用）：PENDING 行改派、缺行补账、实例当前办理人同步
         syncTaskViewAfterAssigneeChange(task, targetUserId, "转办");
@@ -4587,7 +4673,7 @@ public class WfEngineFacade {
      */
     public Map<String, Object> taskCandidates(String taskId, Long operator) {
         Map<String, Object> out = new HashMap<>();
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
@@ -4625,7 +4711,7 @@ public class WfEngineFacade {
      * 作业节点不属自审规则，提单人是合法候选人。
      */
     public void claim(String taskId, Long operUserId) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
@@ -4648,13 +4734,14 @@ public class WfEngineFacade {
         }
         if (isDenySelfEnabled() && !nodeOrgResolver.isPoolTask(task)
                 && operator.equals(nodeOrgResolver.resolveApplyUserId(task.getProcessInstanceId()))) {
-            long doneTasks = historyService.createHistoricTaskInstanceQuery()
+            long doneTasks = EngineTenantScope.historicTaskQuery(historyService)
                     .processInstanceId(task.getProcessInstanceId()).finished().count();
             if (doneTasks > 0) {
                 throw new BizException(ErrorCode.FORBIDDEN, "禁止领取自己提交单据的审批节点（自审拦截）");
             }
         }
         try {
+            requireTenantTask(taskId);
             taskService.claim(taskId, uid);
         } catch (FlowableTaskAlreadyClaimedException ex) {
             throw new BizException(ErrorCode.FORBIDDEN, "该任务已由他人领取，请刷新待办列表");
@@ -4674,7 +4761,7 @@ public class WfEngineFacade {
      * （{@code listOperableUserIds} 非空），否则会人为制造一个无人可办的死节点。
      */
     public void unclaim(String taskId, Long operUserId) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
@@ -4739,7 +4826,7 @@ public class WfEngineFacade {
             } else if (mirrorByFacade()) {
                 // 缺行补账在开关打开时由监听器 TASK_CREATED 负责；门面不再补，
                 // 否则会与投影争抢 wf_task 的唯一写入者身份（缺行＝投影失败，应由对账器暴露而非门面静默补齐）。
-                recordTaskMirror(modelKeyOf(task), taskService.createTaskQuery()
+                recordTaskMirror(modelKeyOf(task), EngineTenantScope.taskQuery(taskService)
                         .taskId(task.getId()).singleResult());
             }
         } catch (Exception ex) {
@@ -4776,7 +4863,7 @@ public class WfEngineFacade {
      * 原因必填，写 REASSIGN 历史（带 target_user_id）可追溯。
      */
     public void reassign(String taskId, Long targetUserId, String reason, Long operUserId) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
@@ -4795,7 +4882,7 @@ public class WfEngineFacade {
         }
         if (isDenySelfEnabled() && !nodeOrgResolver.isPoolTask(task)
                 && targetUserId.equals(nodeOrgResolver.resolveApplyUserId(task.getProcessInstanceId()))) {
-            long doneTasks = historyService.createHistoricTaskInstanceQuery()
+            long doneTasks = EngineTenantScope.historicTaskQuery(historyService)
                     .processInstanceId(task.getProcessInstanceId()).finished().count();
             if (doneTasks > 0) {
                 throw new BizException(ErrorCode.PARAM_INVALID,
@@ -4808,6 +4895,7 @@ public class WfEngineFacade {
         } catch (NumberFormatException ignored) {
             // 非数字 assignee（历史遗留/外部集成）：记录时按空处理
         }
+        requireTenantTask(taskId);
         taskService.setAssignee(taskId, String.valueOf(targetUserId));
         // 待办/实例视图双写办结（与转办/领取共用）：改派是历史在途单（无镜像行）最常见的补账入口
         syncTaskViewAfterAssigneeChange(task, targetUserId, "改派");
@@ -4845,7 +4933,7 @@ public class WfEngineFacade {
      * @param reason 记录意见，如"节点 SLA 24 小时，已超时 6 小时"
      */
     public void autoPassByTimeout(String taskId, Long operUserId, String reason) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             return; // 扫描与执行之间已被人工办结：机器路径让路
         }
@@ -4859,6 +4947,7 @@ public class WfEngineFacade {
         // 结束事件随之为空——不猜人。
         Long endOperPrev = beginEndOperator(operUserId);
         try {
+            requireTenantTask(taskId);
             taskService.complete(taskId, vars);
         } catch (FlowableOptimisticLockingException ex) {
             log.info("超时自动通过遇并发办结，跳过 taskId={}", taskId);
@@ -4894,7 +4983,7 @@ public class WfEngineFacade {
      * 也不做 canOperate（扫描线程本来就不是办理人）。
      */
     public void escalateByTimeout(String taskId, Long targetUserId, String reason) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             return;
         }
@@ -4903,6 +4992,7 @@ public class WfEngineFacade {
             return; // 没有可派的人或已在该人名下：交给调用方退化为催办，此处不制造空转
         }
         assertAssignableUser(targetUserId, "超时升级");
+        requireTenantTask(taskId);
         taskService.setAssignee(taskId, String.valueOf(targetUserId));
         syncTaskViewAfterAssigneeChange(task, targetUserId, "超时升级");
         writeHistory(task.getProcessInstanceId(), taskId, task.getTaskDefinitionKey(), task.getName(),
@@ -4924,7 +5014,7 @@ public class WfEngineFacade {
      * 动作记 {@code TIMEOUT_RELEASE} 以便与本人主动释放（{@code UNCLAIM}）区分。
      */
     public void releaseByTimeout(String taskId, Long ownerUserId, String reason) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             return; // 扫描与执行之间已被人工办结：机器路径让路
         }
@@ -4983,7 +5073,7 @@ public class WfEngineFacade {
             String modelKey = mirror != null ? mirror.getModelKey() : null;
             if (modelKey == null || modelKey.isBlank()) {
                 // 镜像缺失时从流程定义反推（processDefinitionKey 即 modelKey）
-                var pi = runtimeService.createProcessInstanceQuery()
+                var pi = EngineTenantScope.processInstanceQuery(runtimeService)
                         .processInstanceId(procInstId).singleResult();
                 modelKey = pi == null ? null : pi.getProcessDefinitionKey();
             }
@@ -5076,7 +5166,7 @@ public class WfEngineFacade {
             return false;
         }
         try {
-            return historyService.createHistoricTaskInstanceQuery()
+            return EngineTenantScope.historicTaskQuery(historyService)
                     .processInstanceId(procInstId)
                     .taskAssignee(String.valueOf(userId)).finished().count() > 0;
         } catch (Exception ex) {
@@ -5169,12 +5259,12 @@ public class WfEngineFacade {
         if (taskId == null || taskId.isBlank()) {
             return null;
         }
-        Task t = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task t = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (t != null) {
             return t.getProcessInstanceId();
         }
         HistoricTaskInstance h =
-                historyService.createHistoricTaskInstanceQuery().taskId(taskId).singleResult();
+                EngineTenantScope.historicTaskQuery(historyService).taskId(taskId).singleResult();
         return h == null ? null : h.getProcessInstanceId();
     }
 
@@ -5236,7 +5326,7 @@ public class WfEngineFacade {
         // 在办任务取引擎真实态（不只信 wf_task 镜像 —— 镜像有过滞后缺陷）
         List<Map<String, Object>> active = new ArrayList<>();
         try {
-            for (Task t : taskService.createTaskQuery().processInstanceId(procInstId).active().list()) {
+            for (Task t : EngineTenantScope.taskQuery(taskService).processInstanceId(procInstId).active().list()) {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("taskId", t.getId());
                 m.put("nodeKey", t.getTaskDefinitionKey());
@@ -5312,7 +5402,7 @@ public class WfEngineFacade {
      * 供审批人选级次时看清代价。当前节点是 TODO 态天然不在候选集内。
      */
     public Map<String, Object> rejectTargets(String taskId) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        Task task = EngineTenantScope.taskQuery(taskService).taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "任务不存在或已处理: " + taskId);
         }
@@ -5359,7 +5449,7 @@ public class WfEngineFacade {
         out.put("rejectOriginNode", rejectOriginNodeVar(pi));
         int activeCount;
         try {
-            activeCount = taskService.createTaskQuery().processInstanceId(pi).active().list().size();
+            activeCount = EngineTenantScope.taskQuery(taskService).processInstanceId(pi).active().list().size();
         } catch (Exception ex) {
             log.warn("驳回预览：查在办任务数失败 procInst={}", pi, ex);
             activeCount = -1;
@@ -5814,7 +5904,7 @@ public class WfEngineFacade {
             List<String> oldRoute = new ArrayList<>();
             Set<String> oldFinished = new HashSet<>();
             for (HistoricTaskInstance h :
-                    historyService.createHistoricTaskInstanceQuery().processInstanceId(anchor.sourceProcInstId()).list()) {
+                    EngineTenantScope.historicTaskQuery(historyService).processInstanceId(anchor.sourceProcInstId()).list()) {
                 if (h.getTaskDefinitionKey() == null) {
                     continue;
                 }
@@ -6042,11 +6132,11 @@ public class WfEngineFacade {
      * 传 {@code UserContext.getRequired().getUserId()}），不得取自请求体——本方法的归属判定全靠它。
      */
     public boolean withdraw(String procInstId, Long operUserId) {
-        long cnt = taskService.createTaskQuery().processInstanceId(procInstId).count();
+        long cnt = EngineTenantScope.taskQuery(taskService).processInstanceId(procInstId).count();
         if (cnt == 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "流程已处理，无法撤回");
         }
-        ProcessInstance pi = runtimeService.createProcessInstanceQuery()
+        ProcessInstance pi = EngineTenantScope.processInstanceQuery(runtimeService)
                 .processInstanceId(procInstId).singleResult();
         if (pi == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "流程实例不存在: " + procInstId);
@@ -6174,7 +6264,7 @@ public class WfEngineFacade {
         // 页面行变量由 {@link #withProcessVariables} 按当页 20 行补载。两条查询都回到最朴素的
         // ACT_RU_TASK 分页查询，不再产生「任务+关联实体」连表。
         // 本人待办（assignee）
-        List<Task> assigned = taskService.createTaskQuery()
+        List<Task> assigned = EngineTenantScope.taskQuery(taskService)
                 .taskAssignee(String.valueOf(userId))
                 .orderByTaskCreateTime().desc()
                 .list();
@@ -6189,7 +6279,7 @@ public class WfEngineFacade {
         if (roleCodes.isEmpty()) {
             return excludeTerminalBills(assigned);
         }
-        List<Task> group = taskService.createTaskQuery()
+        List<Task> group = EngineTenantScope.taskQuery(taskService)
                 .taskCandidateGroupIn(roleCodes)
                 .orderByTaskCreateTime().desc()
                 .list();
@@ -6207,7 +6297,7 @@ public class WfEngineFacade {
                     if (seen.contains(lockedId)) {
                         continue;
                     }
-                    Task locked = taskService.createTaskQuery().taskId(lockedId).includeProcessVariables().singleResult();
+                    Task locked = EngineTenantScope.taskQuery(taskService).taskId(lockedId).includeProcessVariables().singleResult();
                     if (locked != null && !String.valueOf(userId).equals(locked.getAssignee())) {
                         group.add(locked);
                     }
@@ -6229,7 +6319,7 @@ public class WfEngineFacade {
                     if (seen.contains(tid)) {
                         continue;
                     }
-                    Task extra = taskService.createTaskQuery().taskId(tid).includeProcessVariables().singleResult();
+                    Task extra = EngineTenantScope.taskQuery(taskService).taskId(tid).includeProcessVariables().singleResult();
                     if (extra != null && !String.valueOf(userId).equals(extra.getAssignee())) {
                         group.add(extra);
                     }
@@ -6255,7 +6345,7 @@ public class WfEngineFacade {
             }
             for (Long fromId : fromIds) {
                 // a) 委托人直接指定（assignee）的任务
-                delegated.addAll(taskService.createTaskQuery()
+                delegated.addAll(EngineTenantScope.taskQuery(taskService)
                         .taskAssignee(String.valueOf(fromId)).includeProcessVariables().orderByTaskCreateTime().desc().list());
                 // b) 委托人角色候选组的任务（角色码 → candidateGroup）
                 List<SysUserRole> fromUrs = sysUserRoleMapper.selectList(
@@ -6268,7 +6358,7 @@ public class WfEngineFacade {
                         if (r.getRoleCode() != null) fromRoles.add(r.getRoleCode());
                     });
                     if (!fromRoles.isEmpty()) {
-                        delegated.addAll(taskService.createTaskQuery()
+                        delegated.addAll(EngineTenantScope.taskQuery(taskService)
                                 .taskCandidateGroupIn(fromRoles).includeProcessVariables().orderByTaskCreateTime().desc().list());
                     }
                 }
@@ -6430,7 +6520,7 @@ public class WfEngineFacade {
         Map<String, Task> loaded = new HashMap<>();
         try {
             // 身份链接一并取回：下游 poolLockedByOthers / candidateNames 需要候选组，否则会退化成逐行查库
-            for (Task t : taskService.createTaskQuery().taskIds(ids)
+            for (Task t : EngineTenantScope.taskQuery(taskService).taskIds(ids)
                     .includeProcessVariables().includeIdentityLinks().list()) {
                 loaded.put(t.getId(), t);
             }
@@ -6587,7 +6677,7 @@ public class WfEngineFacade {
             Long tenantId = TenantContext.getTenantId();
             List<LocalDateTime> ts = tenantId == null
                     ? new JdbcTemplate(dataSource).queryForList(
-                            "SELECT create_time FROM wf_task WHERE task_id = ?", LocalDateTime.class, taskId)
+                            "/* tenant-ok: 已按 tenantId 分支拼条件；作业线程无上下文时刻意不带 */ SELECT create_time FROM wf_task WHERE task_id = ?", LocalDateTime.class, taskId)
                     : new JdbcTemplate(dataSource).queryForList(
                             "SELECT create_time FROM wf_task WHERE tenant_id = ? AND task_id = ?",
                             LocalDateTime.class, tenantId, taskId);
@@ -6615,7 +6705,7 @@ public class WfEngineFacade {
             String col = route.bizNoColOrDefault();
             if (table == null || col == null) return null;
             List<String> nos = new JdbcTemplate(dataSource)
-                    .queryForList("SELECT " + col + " FROM " + table + " WHERE id = ?", String.class, bizId);
+                    .queryForList("/* tenant-ok: 已按 tenantId 分支拼条件；作业线程无上下文时刻意不带 */ SELECT " + col + " FROM " + table + " WHERE id = ?", String.class, bizId);
             if (nos == null || nos.isEmpty()) return null;
             String no = nos.get(0);
             return (no == null || no.isBlank()) ? null : no;

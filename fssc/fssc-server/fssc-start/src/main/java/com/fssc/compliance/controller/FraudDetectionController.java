@@ -94,7 +94,7 @@ public class FraudDetectionController {
     @OperLog(module = "FRAUD_DETECTION", operType = "UPDATE", desc = "欺诈风险申诉登记")
     @PostMapping("/{id}/appeal")
     public Result<Void> appeal(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> req) {
-        requireBody(req, "申诉登记", "{reason: 申诉原因}"); //  同 review：漏 body 应给 400 而非 500
+        requireBody(req, "申诉登记", "{reason: 申诉原因}"); // D-F1 同 review：漏 body 应给 400 而非 500
         fraudDetectionService.appeal(id, (String) req.get("reason"));
         return Result.success();
     }
@@ -104,7 +104,7 @@ public class FraudDetectionController {
     @OperLog(module = "FRAUD_DETECTION", operType = "UPDATE", desc = "欺诈风险申诉复审")
     @PostMapping("/{id}/appeal-review")
     public Result<Void> appealReview(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> req) {
-        requireBody(req, "申诉复审", "{approve: true|false, note: 复审意见}"); //  同上
+        requireBody(req, "申诉复审", "{approve: true|false, note: 复审意见}"); // D-F1 同上
         boolean approve = Boolean.parseBoolean(String.valueOf(req.get("approve")));
         fraudDetectionService.appealReview(id, approve, (String) req.get("note"), currentReviewerId());
         return Result.success();
@@ -120,7 +120,7 @@ public class FraudDetectionController {
     @OperLog(module = "FRAUD_DETECTION", operType = "INSERT", desc = "执行增强反欺诈检测")
     @PostMapping("/enhanced-detect")
     public Result<List<FraudDetectionLog>> enhancedDetect(@RequestBody(required = false) Map<String, Object> req) {
-        requireBody(req, "增强检测", "{employeeId: 员工ID, billId: 单据ID, amount: 金额}"); //  同上
+        requireBody(req, "增强检测", "{employeeId: 员工ID, billId: 单据ID, amount: 金额}"); // D-F1 同上
         Long employeeId = req.get("employeeId") != null ? Long.valueOf(req.get("employeeId").toString()) : null;
         Long billId = req.get("billId") != null ? Long.valueOf(req.get("billId").toString()) : null;
         BigDecimal amount = req.get("amount") != null ? new BigDecimal(req.get("amount").toString()) : null;

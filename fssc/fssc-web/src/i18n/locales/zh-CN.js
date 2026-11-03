@@ -1387,8 +1387,8 @@ export default {
       titleAr: '客户协同（CCP 发运/对账同步）',
       actReceiptImport: '收货导入→预制对账单（供应商代码,供应商名称,不含税金额,税额,明细行用{\'|\'}分隔）',
       fmtReceipt: '格式：供应商代码,供应商名称,不含税金额,税额,明细(用{\'|\'}分隔)',
-      frozenNoPeriod: 'R-14 关账冻结中：禁止发送数据至ERP',
-      frozenWithPeriod: 'R-14 关账冻结中（{v1}）：禁止发送数据至ERP',
+      frozenNoPeriod: '关账冻结中：禁止发送数据至ERP',
+      frozenWithPeriod: '关账冻结中（{v1}）：禁止发送数据至ERP',
     },
     entry: {
       apReconLink: '应付对账（函） →',

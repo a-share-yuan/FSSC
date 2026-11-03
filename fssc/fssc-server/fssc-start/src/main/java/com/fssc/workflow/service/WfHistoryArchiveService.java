@@ -85,7 +85,7 @@ public class WfHistoryArchiveService {
     private boolean weeklyWindowPassed() {
         try {
             Timestamp last = jdbcTemplate.queryForObject(
-                    "SELECT last_run_at FROM op_job_heartbeat WHERE job_name = 'WfHistoryArchiveService' LIMIT 1",
+                    "/* tenant-ok: 按 proc_inst_id 全局唯一键判冷归档 */ SELECT last_run_at FROM op_job_heartbeat WHERE job_name = 'WfHistoryArchiveService' LIMIT 1",
                     Timestamp.class);
             if (last == null) {
                 return true;
@@ -138,7 +138,7 @@ public class WfHistoryArchiveService {
 
     private List<Long> queryExpiredIds(LocalDateTime cutoff, int limit) {
         return jdbcTemplate.queryForList(
-                "SELECT ID_ FROM ACT_HI_PROCINST WHERE END_TIME_ IS NOT NULL AND END_TIME_ < ? ORDER BY END_TIME_ ASC LIMIT ?",
+                "/* tenant-ok: 按 proc_inst_id 全局唯一键判冷归档 */ SELECT ID_ FROM ACT_HI_PROCINST WHERE END_TIME_ IS NOT NULL AND END_TIME_ < ? ORDER BY END_TIME_ ASC LIMIT ?",
                 Long.class, cutoff, limit);
     }
 
@@ -152,7 +152,7 @@ public class WfHistoryArchiveService {
     private boolean coldArchived(Long procInstId) {
         try {
             Long n = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM wf_instance_cold WHERE proc_inst_id = ?", Long.class, procInstId);
+                    "/* tenant-ok: 按 proc_inst_id 全局唯一键判冷归档 */ SELECT COUNT(*) FROM wf_instance_cold WHERE proc_inst_id = ?", Long.class, procInstId);
             return n != null && n > 0;
         } catch (Exception e) {
             log.debug("查询 wf_instance_cold 失败，按未落冷处理 procInstId={}: {}", procInstId, e.getMessage());

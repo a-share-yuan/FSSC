@@ -76,7 +76,7 @@ public class AssetWfEventListener implements WfBizAction {
         // 发起侧就只传目标值入流程变量，改账统一挪到本监听器 APPROVED 环节（驳回侧资产零改动）。
         // FA_ALIENATE 并档进 FA_DISPOSE 载体，事件 bizType 不变，
         // 对外销售通过侧复用处置凭证环节（§1.4 无环节 #3 消除）。
-        // 批次2：+FA_CHECK_DIFF 盘点差异作业确认闭环记录（结转凭证走 GL_CHECK_DIFF 做账档，账务分离）
+        // +FA_CHECK_DIFF 盘点差异作业确认闭环记录（结转凭证走 GL_CHECK_DIFF 做账档，账务分离）
         return Set.of("FA_DEPRECIATION", "FA_TRANSFER_CROSS", "FA_TRANSFER", "FA_VALUE_ADJUST", "FA_IMPAIRMENT",
                 "FA_ADD", "FA_CIP_TO_ASSET", "FA_DISPOSE", "FA_ALIENATE", "FA_CER", "FA_CHECK_DIFF");
     }
@@ -447,7 +447,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_TRANSFER 部门间（同公司）调拨收尾（批次0 P-4 / A1）：
+     * FA_TRANSFER 部门间（同公司）调拨收尾：
      * 发起侧（MdAssetService.transfer）不再预写 dept/company，目标值经流程变量传递；
      * 通过 → 落 targetDeptId（targetCompanyId 非空且不同时一并落，防御性）；驳回 → 资产零改动，只记录。
      * 去重：目标值与现值一致时跳过更新（重复事件无害）。
@@ -501,7 +501,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_VALUE_ADJUST 原值调整收尾（批次0 P-4 / A1）：
+     * FA_VALUE_ADJUST 原值调整收尾：
      * 通过 → 按流程变量落 originalAmount/netAmount；驳回 → 资产零改动。
      */
     private void handleValueAdjustEnded(WfProcessEndedEvent event) {
@@ -549,7 +549,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_IMPAIRMENT 减值准备收尾（批次0 P-4 / A1）：
+     * FA_IMPAIRMENT 减值准备收尾：
      * 通过 → 按流程变量落 netAmount；驳回 → 资产零改动。
      */
     private void handleImpairmentEnded(WfProcessEndedEvent event) {
@@ -588,7 +588,7 @@ public class AssetWfEventListener implements WfBizAction {
     }
 
     /**
-     * FA_CHECK_DIFF 盘点差异作业确认闭环（批次2 B-12）：
+     * FA_CHECK_DIFF 盘点差异作业确认闭环：
      * 作业侧只记录不记科目——差异结转凭证由总账凭证载体（GL_CHECK_DIFF 盘点结转档）依记账单生成，
      * 作业与账务分离（P-2 规则），此处保证审批最终状态有记录可溯。
      */

@@ -32,7 +32,7 @@ import java.util.Map;
 /**
  * SCP/CCP 协同平台打通 OpenAPI（/api/tenant/collab/**）：
  * SCP 供应商发票全流程（匹配/寄送/签收/扫描票核/记账/认证/付款回写，打通点1~7）、
- * CCP 客户对账与发运数据（接口1/2/3/对账状态同步）、接口日志、关账冻结状态（R-14）。
+ * CCP 客户对账与发运数据（接口1/2/3/对账状态同步）、接口日志、关账冻结状态。
  */
 @RestController
 @RequestMapping("/api/tenant/collab")
@@ -63,14 +63,14 @@ public class CollabController {
         return Result.success(scpFlowService.create(bill));
     }
 
-    /** 自动匹配（R-16 容差比对） */
+    /** 自动匹配（ 容差比对） */
     @RequiresPerm("collab:scp:supplier")
     @PostMapping("/scp/bills/{id}/match")
     public Result<ScpBill> match(@PathVariable Long id) {
         return Result.success(scpFlowService.match(id));
     }
 
-    /** 取消匹配（R-19，仅待寄送） */
+    /** 取消匹配（，仅待寄送） */
     @RequiresPerm("collab:scp:supplier")
     @PostMapping("/scp/bills/{id}/cancel-match")
     public Result<ScpBill> cancelMatch(@PathVariable Long id) {
@@ -92,7 +92,7 @@ public class CollabController {
         return Result.success(scpFlowService.sign(id));
     }
 
-    /** 扫描识别+票核（R-20 六要素）：body 为票面数据（可部分提供） */
+    /** 扫描识别+票核（ 六要素）：body 为票面数据（可部分提供） */
     @RequiresPerm("collab:scp:sign")
     @PostMapping("/scp/bills/{id}/scan")
     public Result<ScpBill> scan(@PathVariable Long id, @RequestBody(required = false) ScpBill scanned) {
@@ -106,7 +106,7 @@ public class CollabController {
         return Result.success(scpFlowService.reMatch(id));
     }
 
-    /** 记账（打通点3，受 R-14 关账冻结拦截） */
+    /** 记账（打通点3，受 关账冻结拦截） */
     @OperLog(module = "COLLAB", operType = "UPDATE", desc = "SCP三单匹配记账推送外部财务系统")
     @RequiresPerm("collab:scp:post")
     @PostMapping("/scp/bills/{id}/post")
@@ -165,7 +165,7 @@ public class CollabController {
         return Result.success(scpReconService.resolveObjection(id, (String) body.get("note")));
     }
 
-    /** E6 确认对账单（打通点1）：body {invoiceType:增专|增普, taxRatePct?}（R-30） */
+    /** E6 确认对账单（打通点1）：body {invoiceType:增专|增普, taxRatePct?} */
     @OperLog(module = "COLLAB", operType = "UPDATE", desc = "SCP确认对账单(打通点1)")
     @RequiresPerm("collab:scp:recon:supplier")
     @PostMapping("/scp/recons/{id}/confirm")
@@ -182,7 +182,7 @@ public class CollabController {
         return Result.success(scpReconService.voidRecon(id, body == null ? null : (String) body.get("reason")));
     }
 
-    /** E7 申请开票（打通点2）：body {poNo?}，生成 ScpBill（R-31 预制发票号） */
+    /** E7 申请开票（打通点2）：body {poNo?}，生成 ScpBill（ 预制发票号） */
     @OperLog(module = "COLLAB", operType = "ADD", desc = "SCP申请开票(打通点2)")
     @RequiresPerm("collab:scp:supplier")
     @PostMapping("/scp/recons/{id}/apply-invoice")
@@ -190,7 +190,7 @@ public class CollabController {
         return Result.success(scpReconService.applyInvoice(id, body == null ? null : (String) body.get("poNo")));
     }
 
-    /** R-17 手工匹配：body {reconAmount, reconTaxAmount, reconTotal}（人工核定基准后重匹配） */
+    /** 手工匹配：body {reconAmount, reconTaxAmount, reconTotal}（人工核定基准后重匹配） */
     @RequiresPerm("collab:scp:match:manual")
     @PostMapping("/scp/bills/{id}/manual-match")
     public Result<ScpBill> manualMatch(@PathVariable Long id, @RequestBody Map<String, Object> body) {
@@ -200,7 +200,7 @@ public class CollabController {
                 body.get("reconTotal") == null ? null : new BigDecimal(String.valueOf(body.get("reconTotal")))));
     }
 
-    /** R-18 申请强制匹配（四眼第一步，单据进 FORCE_PENDING 锁定）：body {reason} */
+    /** 申请强制匹配（四眼第一步，单据进 FORCE_PENDING 锁定）：body {reason} */
     @RequiresPerm("collab:scp:force-appr")
     @PostMapping("/scp/bills/{id}/force-apply")
     public Result<ScpBill> forceApply(@PathVariable Long id, @RequestBody Map<String, Object> body) {
@@ -209,7 +209,7 @@ public class CollabController {
         return Result.success(scpFlowService.forceApply(id, (String) body.get("reason"), operator));
     }
 
-    /** R-18 审批通过（分级审批做法：差额≤阈值需一级 force-appr；超阈值由二级岗 force-appr-l2 审批即可；四眼：审批人≠申请人） */
+    /** 审批通过（分级审批做法：差额≤阈值需一级 force-appr；超阈值由二级岗 force-appr-l2 审批即可；四眼：审批人≠申请人） */
     @PostMapping("/scp/bills/{id}/force-approve")
     public Result<ScpBill> forceApprove(@PathVariable Long id) {
         LoginUser u = UserContext.getRequired();
@@ -224,7 +224,7 @@ public class CollabController {
         return Result.success(scpFlowService.approveForce(id, u.getUsername()));
     }
 
-    /** R-18 审批驳回：body {reason} */
+    /** 审批驳回：body {reason} */
     @RequiresPerm("collab:scp:force-appr")
     @PostMapping("/scp/bills/{id}/force-reject")
     public Result<ScpBill> forceReject(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
@@ -257,7 +257,7 @@ public class CollabController {
         return Result.success(scpFlowService.preCertify(id));
     }
 
-    /** 发票替换（蓝图 ERP 接口6）：旧票作废，同对账单生成新票（R-31）；body {reason} */
+    /** 发票替换（蓝图 ERP 接口6）：旧票作废，同对账单生成新票；body {reason} */
     @OperLog(module = "COLLAB", operType = "UPDATE", desc = "SCP发票替换")
     @RequiresPerm("collab:scp:replace")
     @PostMapping("/scp/bills/{id}/replace")
@@ -314,7 +314,7 @@ public class CollabController {
 
     // 通用
 
-    /** 关账冻结状态（R-14/打通点7查询面）：SCP 发送侧按公司+期间校验 */
+    /** 关账冻结状态（/打通点7查询面）：SCP 发送侧按公司+期间校验 */
     @RequiresPerm("collab:freeze:view")
     @GetMapping("/freeze-status")
     public Result<Map<String, Object>> freezeStatus(@RequestParam(required = false) Long companyId,
@@ -324,7 +324,7 @@ public class CollabController {
         m.put("companyId", companyId == null ? 1L : companyId);
         m.put("period", period);
         m.put("frozen", frozen);
-        m.put("rule", frozen ? "R-14 关账期间禁止发送数据至外部财务系统产生凭证" : "数据交互正常");
+        m.put("rule", frozen ? "关账期间禁止发送数据至外部财务系统产生凭证" : "数据交互正常");
         return Result.success(m);
     }
 

@@ -78,11 +78,20 @@ public class JobWatchdog {
         EXPECTED.put("FxRevalJob", HOUR_26);               // cron 每日 01:10
         // 折旧自动批次＝每月 1 日 02:00，容忍度必须按"月"给，否则每天误报 STALE
         EXPECTED.put("AssetDeprAutoJob", DAY_33);          // cron 0 0 2 1 * ?（每月 1 日）
-        EXPECTED.put("PoOrderFinalStateJob", HOUR_26);     // purchase/job cron 每日 03:10（X-20 采购最终状态推进，心跳名＝类名）
+        EXPECTED.put("PoOrderFinalStateJob", HOUR_26);     // purchase/job cron 每日 03:10（ 采购最终状态推进，心跳名＝类名）
     }
 
     /** 进程内告警防重：job:类型 -> 上次告警时间 */
     private final Map<String, LocalDateTime> lastAlertAt = new ConcurrentHashMap<>();
+
+    /**
+     * 本次进程启动时刻。
+     *
+     * <p>用于「从未执行过」判定的宽限：月度任务（如每月 1 日 02:00 的折旧）在进程只跑了几天、
+     * 还没经过首个触发点时，心跳表本来就没有行。原先 MISSING 分支不看期望间隔，直接告警，
+     * 导致每次部署后都要误报一次「任务从未触发」。宽限窗口＝该任务的期望间隔。
+     */
+    private static final LocalDateTime STARTED_AT = LocalDateTime.now();
 
     @Scheduled(cron = "0 0 * * * ?")
     public void scan() {
@@ -104,6 +113,11 @@ public class JobWatchdog {
         String type;
         String detail;
         if (hb == null) {
+            // 宽限期：进程还没活过一个完整周期时，低频任务（月度/每周）无心跳行是正常的，
+            // 报出来就是「部署一次误报一次」。超过一个周期仍无行才说明调度真的没触发。
+            if (STARTED_AT.plus(maxInterval).isAfter(now)) {
+                return;
+            }
             type = "MISSING";
             // 把"无行"说清楚——心跳行是 JobHeartbeatService.doRun 进方法第一件事就写的，
             // 跑成功、跑失败、清理 0 条，三种结局都会留下一行（例外只有"写心跳本身报错"与

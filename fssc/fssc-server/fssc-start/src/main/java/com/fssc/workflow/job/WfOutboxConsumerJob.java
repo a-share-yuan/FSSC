@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p><b>它做什么</b>：把 {@code wf_process_outbox} 里 {@code PENDING} 的投影事件取出来，
  * 逐条交给 {@link WfProjectionService}（<b>与同步模式同一份投影实现</b>），成功后置 {@code CONSUMED}；
  * 失败按 2/4/8/16 秒退避重试，{@code MAX_ATTEMPTS}(5) 次仍失败转 {@code DEAD}
- * 并记缺陷（WF-MIRROR-001）——死信绝不静默丢弃，它意味着某个镜像行永久缺失。
+ * 并记缺陷（WF-MIRRO1）——死信绝不静默丢弃，它意味着某个镜像行永久缺失。
  *
  * <p><b>执行顺序（方案 §四 4.3）</b>：按 {@code id ASC} 领取、<b>单线程串行消费</b>
  * （{@link AsyncConfig#wfOutboxExecutor} 为 core=max=1），因此"同一实例的事件"

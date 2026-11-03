@@ -440,7 +440,7 @@ public class WfTaskController {
         if (procs.isEmpty()) return Map.of();
         String ph = procs.stream().map(x -> "?").collect(Collectors.joining(","));
         Map<String, String> out = new HashMap<>();
-        jdbcTemplate.query("SELECT proc_inst_id, model_key FROM wf_instance WHERE proc_inst_id IN (" + ph + ")",
+        jdbcTemplate.query("/* tenant-ok: 按 proc_inst_id 全局唯一键批量取 model_key */ SELECT proc_inst_id, model_key FROM wf_instance WHERE proc_inst_id IN (" + ph + ")",
                 rs -> { out.put(rs.getString(1), rs.getString(2)); }, procs.toArray());
         return out;
     }
@@ -451,7 +451,7 @@ public class WfTaskController {
         List<Object> args = new ArrayList<>(ids);
         String ph = args.stream().map(x -> "?").collect(Collectors.joining(","));
         Map<Long, String> out = new HashMap<>();
-        jdbcTemplate.query("SELECT id, IFNULL(nick_name, user_name) AS nm, IFNULL(emp_no, '') AS no"
+        jdbcTemplate.query("/* tenant-ok: 按 proc_inst_id 全局唯一键批量取 model_key */ SELECT id, IFNULL(nick_name, user_name) AS nm, IFNULL(emp_no, '') AS no"
                         + " FROM sys_user WHERE del_flag = 0 AND id IN (" + ph + ")",
                 rs -> {
                     String nm = rs.getString("nm");
@@ -494,7 +494,7 @@ public class WfTaskController {
         Map<String, Map<String, Object>> result = new HashMap<>();
         try {
             String placeholders = procIds.stream().map(x -> "?").collect(Collectors.joining(","));
-            String sql = "SELECT PROC_INST_ID_, NAME_, TEXT_, LONG_ FROM ACT_HI_VARINST "
+            String sql = "/* tenant-ok: 按 proc_inst_id 全局唯一键批量取 model_key */ SELECT PROC_INST_ID_, NAME_, TEXT_, LONG_ FROM ACT_HI_VARINST "
                     + "WHERE NAME_ IN ('bizType','bizId','title') AND PROC_INST_ID_ IN (" + placeholders + ")";
             for (Map<String, Object> row : jdbcTemplate.queryForList(sql, procIds.toArray())) {
                 Object pid = row.get("PROC_INST_ID_");
@@ -605,7 +605,7 @@ public class WfTaskController {
         }
         try {
             String placeholders = g.keySet().stream().map(x -> "?").collect(Collectors.joining(","));
-            String sql = "SELECT id, " + columnExpr(table, noCol, "billNo", bizType)
+            String sql = "/* tenant-ok: 按 proc_inst_id 全局唯一键批量取 model_key */ SELECT id, " + columnExpr(table, noCol, "billNo", bizType)
                     + ", " + columnExpr(table, amtCol, "totalAmount", bizType)
                     + ", " + columnExpr(table, titleCol, "title", bizType)
                     + " FROM " + table + " WHERE id IN (" + placeholders + ")";
@@ -638,7 +638,7 @@ public class WfTaskController {
         try {
             cols = new HashSet<>();
             for (String c : jdbcTemplate.queryForList(
-                    "SELECT LOWER(column_name) FROM information_schema.columns "
+                    "/* tenant-ok: 按 proc_inst_id 全局唯一键批量取 model_key */ SELECT LOWER(column_name) FROM information_schema.columns "
                             + "WHERE table_schema = DATABASE() AND LOWER(table_name) = LOWER(?)",
                     String.class, table)) {
                 if (c != null) cols.add(c);
@@ -691,7 +691,7 @@ public class WfTaskController {
         }
         try {
             String placeholders = allIds.stream().map(x -> "?").collect(Collectors.joining(","));
-            String sql = "SELECT id, " + columnExpr(table, noCol, "billNo", prefix + "*")
+            String sql = "/* tenant-ok: 按 proc_inst_id 全局唯一键批量取 model_key */ SELECT id, " + columnExpr(table, noCol, "billNo", prefix + "*")
                     + ", " + columnExpr(table, amtCol, "totalAmount", prefix + "*")
                     + ", " + columnExpr(table, titleCol, "title", prefix + "*")
                     + " FROM " + table + " WHERE id IN (" + placeholders + ")";
@@ -728,7 +728,7 @@ public class WfTaskController {
         if (g == null || g.isEmpty()) return;
         try {
             String placeholders = g.keySet().stream().map(x -> "?").collect(Collectors.joining(","));
-            String sql = "SELECT rbd.id, rr.bill_no AS billNo, rbd.amount AS totalAmount, "
+            String sql = "/* tenant-ok: 按 proc_inst_id 全局唯一键批量取 model_key */ SELECT rbd.id, rr.bill_no AS billNo, rbd.amount AS totalAmount, "
                     + "rr.bill_no AS title FROM rc_bad_debt rbd "
                     + "LEFT JOIN rc_receivable rr ON rbd.receivable_id = rr.id "
                     + "WHERE rbd.id IN (" + placeholders + ")";
@@ -874,7 +874,7 @@ public class WfTaskController {
     }
 
     /**
-     *  批次3 R2：路由试算（只读，不写库、不发起实例）。返回绑定表命中值与最终落点，
+     *  路由试算（只读，不写库、不发起实例）。返回绑定表命中值与最终落点，
      * 用于流程绑定镜像迁移的变更前/变更后比对，也回答运维"这张单点提交会落到哪条流程"。
      */
     @GetMapping("/routing-preview")

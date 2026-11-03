@@ -60,6 +60,9 @@ import com.fssc.purchase.mapper.PoOrderMapper;
 import com.fssc.receivable.entity.RcBadDebt;
 import com.fssc.receivable.entity.RcReceipt;
 import com.fssc.receivable.entity.RcReceiptLine;
+import com.fssc.glex.entity.TaxDeclaration;
+import com.fssc.glex.entity.TaxProvisionRule;
+import com.fssc.glex.service.TaxProvisionRuleService;
 import com.fssc.receivable.entity.RcReceivable;
 import com.fssc.receivable.mapper.RcReceiptLineMapper;
 import com.fssc.receivable.mapper.RcReceiptMapper;
@@ -95,10 +98,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -382,6 +387,8 @@ public class VoucherService {
      */
     private final RcReceiptMapper rcReceiptMapper;
     private final RcReceiptLineMapper rcReceiptLineMapper;
+    /** 税金计提规则：申报出证与缴税付款凭证的科目都从这里取，不另写默认值 */
+    private final TaxProvisionRuleService taxRuleService;
 
     /**
      * 出纳参数键——「付款完成后才允许生成付款环节凭证」。
@@ -2979,18 +2986,54 @@ public class VoucherService {
             }
         }
         BigDecimal claimAmt = BigDecimal.ZERO;
+        // 缴税走对公付款通道，借方必须落在应交税费(2221)明细，不能落 2202 应付账款。
+        // 判据是付款单据上的「缴纳税种」——带该字段即视为税款付款，科目按税种从规则表取。
+        Map<String, BigDecimal> taxBySubject = new LinkedHashMap<>();
         for (ExpBillPayment p : pays) {
             if (p == null || p.getBillId() == null) continue;
             BigDecimal lineAmt = amtByPayment.getOrDefault(p.getId(), BigDecimal.ZERO);
             if (lineAmt.signum() == 0) continue;
             ExpBill pb = expBillMapper.selectById(p.getBillId());
+            if (pb != null && StringUtils.hasText(pb.getTaxType())) {
+                TaxProvisionRule rule = taxRuleService.effectiveRuleOf(pb.getTaxType());
+                String code = rule != null && StringUtils.hasText(rule.getPayDebitSubjectCode())
+                        ? rule.getPayDebitSubjectCode() : "2221";
+                taxBySubject.merge(code, lineAmt, BigDecimal::add);
+                continue;
+            }
             if (pb != null && "CLAIM".equalsIgnoreCase(pb.getBillType())) {
                 claimAmt = claimAmt.add(lineAmt);
             }
         }
         // 明细归集与批次总额不一致时（部分明细无付款记录等）以批次额为准：差额并入对公侧，保证借贷平衡
         if (claimAmt.compareTo(amt) > 0) claimAmt = amt;
-        BigDecimal otherAmt = amt.subtract(claimAmt);
+        BigDecimal taxAmt = taxBySubject.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (claimAmt.add(taxAmt).compareTo(amt) > 0) {
+            // 归集额超过批次额：先压税款侧（税款付款通常整批单税种，压缩后仍可直接对账），再压报销侧
+            BigDecimal room = amt.subtract(claimAmt);
+            if (room.signum() < 0) {
+                room = BigDecimal.ZERO;
+            }
+            if (taxAmt.compareTo(room) > 0) {
+                log.warn("付款批次 {} 税款归集 {} 超过批次可分配额 {}，按可分配额截断", batch.getBatchNo(), taxAmt, room);
+                BigDecimal ratio = room.compareTo(taxAmt) == 0 ? BigDecimal.ONE
+                        : room.divide(taxAmt, 8, RoundingMode.HALF_UP);
+                Map<String, BigDecimal> scaled = new LinkedHashMap<>();
+                BigDecimal left = room;
+                int i = 0;
+                for (Map.Entry<String, BigDecimal> en : taxBySubject.entrySet()) {
+                    BigDecimal part = (++i == taxBySubject.size()) ? left
+                            : en.getValue().multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+                    if (part.signum() > 0) {
+                        scaled.put(en.getKey(), part);
+                        left = left.subtract(part);
+                    }
+                }
+                taxBySubject = scaled;
+                taxAmt = room;
+            }
+        }
+        BigDecimal otherAmt = amt.subtract(claimAmt).subtract(taxAmt);
 
         Long bankSubjectId = findSubjectIdByCode("1002");
         // 出纳付款凭证同样要带供应商辅助；跨供应商合并组批取不到唯一收款方＝留空（不猜）
@@ -3001,6 +3044,22 @@ public class VoucherService {
             OpVoucherLine empLine = buildLine(tenantId, v.getId(), lineNo,
                     "其他应付款-应付报销款", claimedSubjectId, "2241", "其他应付款", "DEBIT", claimAmt, null);
             opVoucherLineMapper.insert(empLine);
+            lineNo += 10;
+        }
+        // 税款付款：借方按税种取应交税费明细。这条腿是全仓唯一能产出
+        // 「借 应交税费／贷 银行存款」的路径——此前付款凭证借方只有 2241/2202，税永远挂不上账。
+        for (Map.Entry<String, BigDecimal> en : taxBySubject.entrySet()) {
+            if (en.getValue() == null || en.getValue().signum() <= 0) {
+                continue;
+            }
+            Long taxSubjectId = findSubjectIdByCode(en.getKey());
+            if (taxSubjectId == null) {
+                taxSubjectId = findSubjectIdByCode("2221");
+                log.warn("缴税付款借方科目 {} 不存在于科目表，回落 2221 应交税费", en.getKey());
+            }
+            OpVoucherLine taxLine = buildLine(tenantId, v.getId(), lineNo,
+                    "应交税费-缴税", taxSubjectId, en.getKey(), "应交税费", "DEBIT", en.getValue(), null);
+            opVoucherLineMapper.insert(taxLine);
             lineNo += 10;
         }
         if (otherAmt.signum() > 0) {
@@ -3018,8 +3077,8 @@ public class VoucherService {
                 "银行存款-付款", bankSubjectId, "1002", "银行存款", "CREDIT", amt, null));
 
         updateVoucherTotals(v.getId(), amt);
-        log.info("付款批次 {} 生成出纳凭证 {} 借应付报销款(2241){}/应付账款(2202){}/贷银行存款(1002) 金额={}",
-                batch.getBatchNo(), v.getVoucherNo(), claimAmt, otherAmt, amt);
+        log.info("付款批次 {} 生成出纳凭证 {} 借应付报销款(2241){}/应交税费(2221){}/应付账款(2202){}/贷银行存款(1002) 金额={}",
+                batch.getBatchNo(), v.getVoucherNo(), claimAmt, taxAmt, otherAmt, amt);
         return v.getId();
     }
 
@@ -3359,11 +3418,22 @@ public class VoucherService {
             log.warn("税金记录 {} 已存在凭证 id={}，跳过重复生成（幂等）", e.getId(), existed);
             return existed;
         }
-        Long taxPayableId = findSubjectIdByCode("2221");
-        Long expenseId = findSubjectIdByCode("INCOME".equals(e.getTaxType()) ? "6801" : "6403");
+        // /：借贷科目一律按「税种计提规则」取，不再写死 2221/6403/6801。
+        // 写死 2221 的实际后果是：2221 是父科目（下设明细），制证时被 PostableSubjectResolver 拒
+        // （"不是末级科目，无法确定用哪一个"），计提凭证永远出不来、单据永远停在 APPROVED。
+        TaxProvisionRule rule = taxRuleService.effectiveRuleOf(e.getTaxType());
+        String creditCode = rule != null && StringUtils.hasText(rule.getCreditSubjectCode())
+                ? rule.getCreditSubjectCode()
+                : ("INCOME".equals(e.getTaxType()) ? "22210201" : "22210101");
+        String debitCode = rule != null && StringUtils.hasText(rule.getDebitSubjectCode())
+                ? rule.getDebitSubjectCode()
+                : ("INCOME".equals(e.getTaxType()) ? "6801" : "6403");
+        Long taxPayableId = taxRuleService.subjectIdOf(creditCode);
+        Long expenseId = taxRuleService.subjectIdOf(debitCode);
         if (taxPayableId == null || expenseId == null) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "税金凭证科目缺失（需 2221 应交税费 + 6403/6801 损益），请先维护科目字典");
+                    "税金凭证科目缺失（需 " + creditCode + " 应交税费明细 + " + debitCode
+                            + " 损益），请先维护科目字典或在「税金计提规则」中改科目");
         }
         Long tenantId = TenantContext.getTenantId();
         int[] ym = parsePeriodYm(e.getPeriod());
@@ -3384,18 +3454,127 @@ public class VoucherService {
         v.setStatus("DRAFT");
         opVoucherMapper.insert(v);
 
-        String eCode = "INCOME".equals(e.getTaxType()) ? "6801" : "6403";
+        String eCode = debitCode;
         String eName = subjectNameOf(expenseId);
         opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 10,
                 "计提-" + (eName.isBlank() ? eCode : eName), expenseId, eCode,
                 eName.isBlank() ? eCode : eName, "DEBIT", amt, null));
         String cName = subjectNameOf(taxPayableId);
         opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 20,
-                "应交税费-计提" + e.getTaxType(), taxPayableId, "2221",
+                "应交税费-计提" + e.getTaxType(), taxPayableId, creditCode,
                 cName.isBlank() ? "应交税费" : cName, "CREDIT", amt, null));
         updateVoucherTotals(v.getId(), amt);
         log.info("税金 {}（{}）生成凭证 {} 金额={}", e.getProvisionNo(), bizType, v.getVoucherNo(), amt);
         return v.getId();
+    }
+
+    /**
+     * 申报凭证：申报确认（FILED）后按税种出一张「应缴」凭证，把计提时贷记的
+     * 应交税费明细<b>转出到未交税金</b>，与计提凭证成对。
+     * <ul>
+     *  <li>借：规则 {@code credit_subject_code}（计提时的贷方，如 22210101 销项税额）</li>
+     *  <li>贷：规则 {@code declare_credit_subject_code}（未交税金，缺省 2221）</li>
+     * </ul>
+     * 借贷同码时整笔是空转（SURCHARGE 等未细分科目的税种就是这种情形），此时<b>不生成</b>凭证并返回 null，
+     * 由调用方决定是否告警——生成一张借贷同科目的凭证只会污染总账。
+     *
+     * <p>{@code source_type = TAX_DECLARATION}，{@code source_doc_id = tax_declaration.id}；
+     * 凭证号由调用方回写 {@code tax_declaration.source_voucher_id}（该列此前全仓零读写）。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public Long generateDeclarationVoucher(TaxDeclaration d) {
+        if (d == null || d.getId() == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "税务申报记录不存在");
+        }
+        BigDecimal amt = d.getTaxAmount() == null ? BigDecimal.ZERO : d.getTaxAmount();
+        if (amt.signum() == 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "申报税额为 0，无需生成应缴凭证");
+        }
+        Long existed = existingVoucherId("TAX_DECLARATION", d.getId());
+        if (existed != null) {
+            log.warn("申报 {} 已存在凭证 id={}，跳过重复生成（幂等）", d.getDeclarationNo(), existed);
+            return existed;
+        }
+        TaxProvisionRule rule = taxRuleService.effectiveRuleOf(d.getTaxType());
+        if (rule == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "税种 " + d.getTaxType() + " 未配置计提规则，无法确定申报凭证科目，请先在「税金计提规则」中维护");
+        }
+        String debitCode = rule.getCreditSubjectCode();
+        String creditCode = StringUtils.hasText(rule.getDeclareCreditSubjectCode())
+                ? rule.getDeclareCreditSubjectCode() : "2221";
+        if (!StringUtils.hasText(debitCode) || debitCode.equals(creditCode)) {
+            log.info("申报 {}（{}）借贷科目同为 {}，属空转分录，不生成应缴凭证",
+                    d.getDeclarationNo(), d.getTaxType(), creditCode);
+            return null;
+        }
+        Long debitId = taxRuleService.subjectIdOf(debitCode);
+        Long creditId = taxRuleService.subjectIdOf(creditCode);
+        if (debitId == null || creditId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "申报凭证科目缺失（需 " + debitCode + " + " + creditCode + "），请先维护科目字典");
+        }
+        Long tenantId = TenantContext.getTenantId();
+        int[] ym = parsePeriodYm(d.getPeriod());
+        Long companyId = d.getCompanyId() != null ? d.getCompanyId() : resolveCompanyId(tenantId);
+        LocalDate today = landingDate(companyId, ym == null ? null : ym[0], ym == null ? null : ym[1]);
+        OpVoucher v = new OpVoucher();
+        v.setTenantId(tenantId);
+        v.setVoucherNo(nextVoucherNo());
+        v.setVoucherWord("JOURNAL");
+        v.setCompanyId(companyId);
+        v.setPeriodYear(today.getYear());
+        v.setPeriodMonth(today.getMonthValue());
+        v.setVoucherDate(today);
+        v.setBillId(d.getId());
+        v.setSourceType("TAX_DECLARATION");
+        v.setSourceDocType("TAX_DECLARATION");
+        v.setSourceDocId(d.getId());
+        v.setSummary("申报应缴-" + d.getPeriod() + "-" + d.getTaxType());
+        v.setStatus("DRAFT");
+        opVoucherMapper.insert(v);
+        String dName = subjectNameOf(debitId);
+        String cName = subjectNameOf(creditId);
+        opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 10,
+                "转出应交-" + d.getTaxType(), debitId, debitCode,
+                dName.isBlank() ? debitCode : dName, "DEBIT", amt, null));
+        opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 20,
+                "未交税金-" + d.getTaxType(), creditId, creditCode,
+                cName.isBlank() ? creditCode : cName, "CREDIT", amt, null));
+        updateVoucherTotals(v.getId(), amt);
+        log.info("税务申报 {}（{}）生成应缴凭证 {} 借{}/贷{} 金额={}",
+                d.getDeclarationNo(), d.getTaxType(), v.getVoucherNo(), debitCode, creditCode, amt);
+        return v.getId();
+    }
+
+    /**
+     * 按「单据类型 + 方向」取记账配置科目码。
+     *
+     * <p>配置表 {@code md_gl_config} 此前只被费用报销族消费（28 个生成器中 1 族可配、其余写死，
+     * 72 处按科目码取数、27 个科目字面量）。本方法把「单据类型＋方向 → 科目」扩到薪酬族：
+     * 有配置用配置，无配置用调用方给的 fallback（＝改造前的硬编码值），保证零配置时行为不变。
+     *
+     * <p>没有建模板引擎：只是一列 doc_type 加一条按类型取数，不引入分类条件/分录合并等 A20 能力。
+     */
+    private String configSubjectCode(String docType, String direction, String fallback) {
+        try {
+            MdGlConfig cfg = mdGlConfigMapper.selectOne(new LambdaQueryWrapper<MdGlConfig>()
+                    .eq(MdGlConfig::getDocType, docType)
+                    .eq(MdGlConfig::getDirection, direction)
+                    .eq(MdGlConfig::getStatus, "NORMAL")
+                    .orderByAsc(MdGlConfig::getId)
+                    .last("limit 1"));
+            if (cfg == null) {
+                return fallback;
+            }
+            String code = "DEBIT".equalsIgnoreCase(direction)
+                    ? pickNotEmpty(cfg.getDebitSubjectCode(), cfg.getSubjectCode())
+                    : pickNotEmpty(cfg.getCreditSubjectCode(), cfg.getSubjectCode());
+            return StringUtils.hasText(code) ? code : fallback;
+        } catch (Exception ex) {
+            log.debug("读取记账配置失败 type={} dir={}，用缺省 {}: {}", docType, direction, fallback, ex.getMessage());
+            return fallback;
+        }
     }
 
     /**
@@ -3427,12 +3606,19 @@ public class VoucherService {
             log.warn("薪酬批次 {} 已存在凭证 id={}，跳过重复生成（幂等）", e.getId(), existed);
             return existed;
         }
-        Long payableId = findSubjectIdByCode("2211");
-        Long bankId = findSubjectIdByCode("1002");
-        Long expenseId = findSubjectIdByCode("6602");
+        // 薪酬族科目改为可配（md_gl_config.doc_type + direction），无配置时沿用原硬编码
+        String provDocType = "GL_SALARY_PAY".equals(bizType) ? "GL_SALARY_PAY" : "GL_SALARY_PROV";
+        String payableCode = configSubjectCode(provDocType, "CREDIT", "2211");
+        String bankCode = configSubjectCode("GL_SALARY_PAY", "DEBIT", "1002");
+        String expenseCode = configSubjectCode("GL_SALARY_PROV", "DEBIT", "6602");
+        Long payableId = findSubjectIdByCode(payableCode);
+        Long bankId = findSubjectIdByCode(bankCode);
+        Long expenseId = findSubjectIdByCode(expenseCode);
         if (payableId == null || (pay ? bankId == null : expenseId == null)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "薪酬凭证科目缺失（需 2211 应付职工薪酬" + (pay ? " + 1002 银行存款" : " + 6602 管理费用") + "），请先维护科目字典");
+                    "薪酬凭证科目缺失（需 " + payableCode + " 应付职工薪酬"
+                            + (pay ? " + " + bankCode + " 银行存款" : " + " + expenseCode + " 管理费用")
+                            + "），请先维护科目字典/记账配置");
         }
         Long tenantId = TenantContext.getTenantId();
         int[] ym = parsePeriodYm(e.getPeriod());

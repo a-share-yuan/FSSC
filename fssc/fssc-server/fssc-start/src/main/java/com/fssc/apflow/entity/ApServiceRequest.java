@@ -51,7 +51,7 @@ public class ApServiceRequest implements Serializable {
     private BigDecimal exchangeRate;
     /** 付款类型 快速/人工/退款 */
     private String paymentType;
-    /** 付款方法 支票/银行转账/应付票据（派工维度 R-01） */
+    /** 付款方法 支票/银行转账/应付票据（派工维度） */
     private String paymentWay;
     private String bankNo;
     private LocalDateTime paymentDate;
@@ -78,12 +78,12 @@ public class ApServiceRequest implements Serializable {
     /** 办理人 */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String handler;
-    /** 选单池（多负责人逗号分隔，R-02） */
+    /** 选单池（多负责人逗号分隔） */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String handlerPool;
     /** AP组长 */
     private String groupLeader;
-    /** 确认时是否修改 1是（修改付款方式转审 R-03） */
+    /** 确认时是否修改 1是（修改付款方式转审） */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Integer modifiedFlag;
     /** 修改/审核说明（记录） */

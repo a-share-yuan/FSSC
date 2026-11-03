@@ -31,7 +31,7 @@ public class ArPreInvoice implements Serializable {
     @TableField(fill = FieldFill.INSERT)
     private Long tenantId;
 
-    /** 预制发票号=对账单号+三位流水（蓝图 R-31） */
+    /** 预制发票号=对账单号+三位流水（蓝图） */
     private String preInvoiceNo;
     private Long companyId;
     private String reconBillNo;

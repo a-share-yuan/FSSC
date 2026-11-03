@@ -11,7 +11,9 @@ import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.framework.security.DataScopeKit;
 import com.fssc.glex.entity.TaxDeclaration;
+import com.fssc.glex.entity.TaxProvisionRule;
 import com.fssc.glex.mapper.TaxDeclarationMapper;
+import com.fssc.sharing.service.VoucherService;
 import com.fssc.system.service.NumberRuleService;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -45,6 +47,10 @@ public class TaxDeclarationService {
     private final NumberRuleService numberRuleService;
     /** 审计扩面：单据状态跃迁记录 */
     private final AuditTrailService auditTrailService;
+    /** 申报确认后出「转出应交 → 未交税金」应缴凭证，并按税种取规则表科目 */
+    private final VoucherService voucherService;
+    /** 纳税周期与申报/缴款截止日按税种规则取（不再写死 15 号） */
+    private final TaxProvisionRuleService taxRuleService;
 
     /**
      * 创建申报记录。
@@ -60,6 +66,20 @@ public class TaxDeclarationService {
                 .orElseGet(() -> { try { return numberRuleService.next("TAX_DECLARATION"); }
                     catch (Exception e) { return "TX" + System.currentTimeMillis(); } }));
         record.setStatus("DRAFT");
+        // 申报性质缺省＝正常申报；缴款截止日未填时按税种规则的 payDeadlineDay 推算
+        if (!StringUtils.hasText(record.getDeclarationKind())) {
+            record.setDeclarationKind("NORMAL");
+        }
+        if (record.getPayDeadline() == null) {
+            record.setPayDeadline(defaultPayDeadline(record.getTaxType(), record.getPeriod()));
+        }
+        // 申报周期未填时按规则的纳税周期回填（月/季/半年/年/次）
+        if (!StringUtils.hasText(record.getDeclareType())) {
+            TaxProvisionRule rule = taxRuleService.effectiveRuleOf(record.getTaxType());
+            if (rule != null && StringUtils.hasText(rule.getPeriodType())) {
+                record.setDeclareType(rule.getPeriodType());
+            }
+        }
         // 自动计算应纳税额
         if (record.getBaseAmount() != null && record.getTaxRate() != null) {
             BigDecimal taxAmt = record.getBaseAmount()
@@ -147,6 +167,21 @@ public class TaxDeclarationService {
         upd.setDeclareDate(LocalDate.now());
         declarationMapper.updateById(upd);
         log.info("税务申报 {} 已申报", row.getDeclarationNo());
+        // 申报确认即出应缴凭证（转出应交 → 未交税金），凭证号回写 source_voucher_id。
+        // 出证失败不阻断申报——申报是法定动作，凭证是可重跑的派生数据；失败留 error 日志，
+        // 由「补出凭证」端点重试（POST /declaration/{id}/voucher）。
+        try {
+            Long voucherId = voucherService.generateDeclarationVoucher(row);
+            if (voucherId != null) {
+                TaxDeclaration link = new TaxDeclaration();
+                link.setId(id);
+                link.setSourceVoucherId(voucherId);
+                declarationMapper.updateById(link);
+            }
+        } catch (Exception ex) {
+            log.error("税务申报 {}（{}）应缴凭证生成失败，申报状态保留 FILED，可稍后补出: {}",
+                    row.getDeclarationNo(), row.getTaxType(), ex.getMessage(), ex);
+        }
         // 审计记录：状态跃迁 APPROVED → FILED，并记录申报日期变化
         Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", row.getStatus());
@@ -156,6 +191,78 @@ public class TaxDeclarationService {
         auditAfter.put("declareDate", upd.getDeclareDate());
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
                 String.valueOf(id), auditBefore, auditAfter, "确认申报（APPROVED→FILED）");
+    }
+
+    /**
+     * 更正（调整）申报：复制原申报表到新属期，置 {@code declarationKind=ADJUST} 并关联原单。
+     *
+     *
+     * @param sourceId 原申报单 id（须已申报 FILED 或已缴纳 PAID，草稿没有"更正"的含义）
+     * @param newPeriod 新属期 yyyyMM；为空＝沿用原属期（同期更正）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long copyForAdjust(Long sourceId, String newPeriod) {
+        TaxDeclaration src = requireRow(sourceId);
+        if (!"FILED".equals(src.getStatus()) && !"PAID".equals(src.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "仅已申报/已缴纳的申报单可发起更正，当前: " + src.getStatus());
+        }
+        TaxDeclaration copy = new TaxDeclaration();
+        copy.setCompanyId(src.getCompanyId());
+        copy.setTaxType(src.getTaxType());
+        copy.setTaxSubtype(src.getTaxSubtype());
+        copy.setPeriod(StringUtils.hasText(newPeriod) ? newPeriod : src.getPeriod());
+        copy.setDeclareType(src.getDeclareType());
+        copy.setBaseAmount(src.getBaseAmount());
+        copy.setTaxRate(src.getTaxRate());
+        copy.setTaxAmount(src.getTaxAmount());
+        copy.setPaidAmount(BigDecimal.ZERO);
+        copy.setBalanceAmount(src.getTaxAmount());
+        copy.setRemark("更正申报（原单 " + src.getDeclarationNo() + "）");
+        copy.setDeclarationKind("ADJUST");
+        copy.setRelatedId(sourceId);
+        Long id = create(copy);
+        log.info("更正申报生成：原单 {} → 新单 {}（属期 {}）", src.getDeclarationNo(), copy.getDeclarationNo(), copy.getPeriod());
+        return id;
+    }
+
+    /** 按税种规则推算缴款截止日：属期次月第 payDeadlineDay 日（缺省 15 日） */
+    private LocalDate defaultPayDeadline(String taxType, String period) {
+        try {
+            if (period == null || period.length() != 6) {
+                return null;
+            }
+            TaxProvisionRule rule = taxRuleService.effectiveRuleOf(taxType);
+            int day = rule == null || rule.getPayDeadlineDay() == null ? 15 : rule.getPayDeadlineDay();
+            int y = Integer.parseInt(period.substring(0, 4));
+            int m = Integer.parseInt(period.substring(4, 6));
+            LocalDate next = LocalDate.of(y, m, 1).plusMonths(1);
+            int maxDay = next.lengthOfMonth();
+            return next.withDayOfMonth(Math.min(Math.max(day, 1), maxDay));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 补出/重出应缴凭证：申报确认时出证失败、或历史申报单从未出证的，由本方法重试。
+     * 幂等——已有凭证直接返回原凭证 ID（{@code VoucherService.generateDeclarationVoucher} 内去重）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long generateVoucher(Long id) {
+        TaxDeclaration row = requireRow(id);
+        if (!"FILED".equals(row.getStatus()) && !"PAID".equals(row.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "申报 " + row.getDeclarationNo() + " 未确认申报（当前 " + row.getStatus() + "），不可出应缴凭证");
+        }
+        Long vid = voucherService.generateDeclarationVoucher(row);
+        if (vid != null) {
+            TaxDeclaration link = new TaxDeclaration();
+            link.setId(id);
+            link.setSourceVoucherId(vid);
+            declarationMapper.updateById(link);
+        }
+        return vid;
     }
 
     /**

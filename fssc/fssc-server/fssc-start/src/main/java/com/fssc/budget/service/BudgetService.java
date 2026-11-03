@@ -27,6 +27,9 @@ import com.fssc.framework.security.annotation.DataScope;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.masterdata.entity.MdExpenseItem;
 import com.fssc.masterdata.entity.MdItemBudgetMap;
+import com.fssc.masterdata.entity.MdBudgetPeriod;
+import com.fssc.masterdata.mapper.MdBudgetPeriodMapper;
+import com.fssc.masterdata.mapper.MdBudgetTypeMapper;
 import com.fssc.masterdata.mapper.MdExpenseItemMapper;
 import com.fssc.masterdata.mapper.MdItemBudgetMapMapper;
 import com.fssc.system.entity.SysCompany;
@@ -56,6 +59,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -99,6 +103,10 @@ public class BudgetService {
     private final MdExpenseItemMapper mdExpenseItemMapper;
     /** 费用类型→预算明细映射（主体化解析的兜底来源） */
     private final MdItemBudgetMapMapper mdItemBudgetMapMapper;
+    /** 预算期间主数据：期间起止日期与期次归属 */
+    private final MdBudgetPeriodMapper mdBudgetPeriodMapper;
+    /** 预算类型主数据：项目预算/常规预算 */
+    private final MdBudgetTypeMapper mdBudgetTypeMapper;
     /** 预算方案审批流发起（架构红线：业务域禁止直用 Flowable API，一律经门面） */
     private final WfEngineFacade wfEngineFacade;
     /** 审计扩面：单据状态跃迁记录 */
@@ -323,6 +331,24 @@ public class BudgetService {
         if (!"APPROVING".equals(st) && !"DRAFT".equals(st) && !"ACTIVE".equals(st) && !"APPROVED".equals(st)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "当前状态(" + st + ")不可下达");
         }
+        // 免审直下达必须换用独立权限点。DRAFT 直达 ISSUED 原本与「提交审批」共用
+        // budget:scheme:update——有编辑权的人可以完全绕过审批链。独立权限点后，只有初始化导入
+        // 场景的岗位才被授予 budget:scheme:issue，其余一律走审批。
+        if ("DRAFT".equals(st)) {
+            LoginUser _u = UserContext.get();
+            if (_u == null || !_u.hasPerm("budget:scheme:issue")) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "草稿方案不可直接下达（免审直下达需 budget:scheme:issue 权限，仅限初始化导入场景）；请先提交审批");
+            }
+        }
+        // （便宜的那一条）：下达前校验方案下至少有一条额度行——下达一张空方案等于给业务
+        // 一个「已下达」的假象，受控单据提交时又查不到预算，问题会推迟到制单环节才暴露。
+        Long itemCount = bgItemMapper.selectCount(new LambdaQueryWrapper<BgItem>()
+                .eq(BgItem::getSchemeId, schemeId));
+        if (itemCount == null || itemCount == 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "方案 " + scheme.getSchemeCode() + " 下没有任何预算明细，不可下达；请先录入/导入额度");
+        }
         BgScheme upd = new BgScheme();
         upd.setId(schemeId);
         upd.setStatus("ISSUED");
@@ -456,7 +482,13 @@ public class BudgetService {
      * @return 预算明细主键；{@code null} 表示未能定位（由调用方决定跳过还是提示）
      */
     public Long resolveOccupyItem(Long wantedItemId, Long expenseItemId, Long companyId, Long deptId, Integer bizYear) {
-        return resolveOccupyItem(wantedItemId, expenseItemId, companyId, deptId, bizYear, true);
+        return resolveOccupyItem(wantedItemId, expenseItemId, companyId, deptId, bizYear, null, true);
+    }
+
+    /** 带项目维度的解析：制单页/单据行带项目时按项目归集，不带时行为与旧签名一致 */
+    public Long resolveOccupyItem(Long wantedItemId, Long expenseItemId, Long companyId, Long deptId,
+                                  Integer bizYear, Long projectId) {
+        return resolveOccupyItem(wantedItemId, expenseItemId, companyId, deptId, bizYear, projectId, true);
     }
 
     /**
@@ -465,6 +497,14 @@ public class BudgetService {
      */
     public Long resolveOccupyItem(Long wantedItemId, Long expenseItemId, Long companyId, Long deptId,
                                   Integer bizYear, boolean strict) {
+        return resolveOccupyItem(wantedItemId, expenseItemId, companyId, deptId, bizYear, null, strict);
+    }
+
+    /**
+     * 六参全量解析：{@code projectId} 参与命中，给了项目就只认该项目行与通用行。
+     */
+    public Long resolveOccupyItem(Long wantedItemId, Long expenseItemId, Long companyId, Long deptId,
+                                  Integer bizYear, Long projectId, boolean strict) {
         if (wantedItemId != null) {
             BgItem wanted = bgItemMapper.selectById(wantedItemId);
             if (wanted == null) {
@@ -473,7 +513,7 @@ public class BudgetService {
             if (companyId == null || companyId.equals(wanted.getCompanyId())) {
                 return wantedItemId;
             }
-            Long relocated = matchItem(expenseItemId, companyId, deptId, bizYear);
+            Long relocated = matchItem(expenseItemId, companyId, deptId, bizYear, projectId);
             if (relocated != null) {
                 log.warn("预算明细 {} 属公司 {}，与单据公司 {} 不符，已按费用项 {} 重定位为 {}",
                         wantedItemId, wanted.getCompanyId(), companyId, expenseItemId, relocated);
@@ -487,7 +527,7 @@ public class BudgetService {
             throw new BizException(ErrorCode.PARAM_INVALID, "预算科目(预算明细 " + wantedItemId + ") 属于公司 "
                     + wanted.getCompanyId() + "，与单据公司 " + companyId + " 不一致，请在制单页重新选择预算科目");
         }
-        Long bySubject = matchItem(expenseItemId, companyId, deptId, bizYear);
+        Long bySubject = matchItem(expenseItemId, companyId, deptId, bizYear, projectId);
         if (bySubject != null) {
             return bySubject;
         }
@@ -513,6 +553,17 @@ public class BudgetService {
 
     /** 按 费用项 + 公司 命中预算明细行；部门精确者优先，业务年度就近优先，年度行(period=0)优先于分期行，年份新者优先 */
     private Long matchItem(Long expenseItemId, Long companyId, Long deptId, Integer bizYear) {
+        return matchItem(expenseItemId, companyId, deptId, bizYear, null);
+    }
+
+    /**
+     * 按 费用项 + 公司 + 项目 命中预算明细行。
+     *
+     * <p>项目维度参与命中：给了 {@code projectId} 时，<b>只认可该项目行与不带项目的通用行</b>
+     * （同费用项下其它项目的预算行一律排除，否则项目 A 的支出会占到项目 B 的额度上）；
+     * 两者都在时项目行优先（更具体者胜）。未给项目时行为与改造前完全一致。
+     */
+    private Long matchItem(Long expenseItemId, Long companyId, Long deptId, Integer bizYear, Long projectId) {
         if (expenseItemId == null) {
             return null;
         }
@@ -521,9 +572,15 @@ public class BudgetService {
                 .eq(companyId != null, BgItem::getCompanyId, companyId)
                 .last("limit 200");
         List<BgItem> rows = bgItemMapper.selectList(qw);
+        if (projectId != null) {
+            rows = rows.stream()
+                    .filter(b -> b.getProjectId() == null || projectId.equals(b.getProjectId()))
+                    .collect(Collectors.toList());
+        }
         return rows.stream()
                 .min(Comparator
-                        .comparing((BgItem b) -> deptId != null && deptId.equals(b.getDeptId()) ? 0 : 1)
+                        .comparing((BgItem b) -> projectId != null && projectId.equals(b.getProjectId()) ? 0 : 1)
+                        .thenComparing(b -> deptId != null && deptId.equals(b.getDeptId()) ? 0 : 1)
                         .thenComparing(b -> yearGap(b.getBudgetYear(), bizYear))
                         .thenComparing(b -> b.getBudgetPeriod() == null ? 0 : Math.abs(b.getBudgetPeriod()))
                         .thenComparing(b -> b.getBudgetYear() == null ? 0 : -b.getBudgetYear())
@@ -564,13 +621,33 @@ public class BudgetService {
         if (item.getBudgetPeriod() == null) {
             item.setBudgetPeriod(0);
         }
-        // 期间范围以 bg_scheme.period_type 为唯一权威——ANNUAL 方案统一落 budget_period=0；
-        // MONTH 方案保留 0~12（0=全年，页面按「全年」展示；是否收紧为严格 1~12 另议）。
-        if ("ANNUAL".equalsIgnoreCase(scheme.getPeriodType())) {
+        // 期间范围以 bg_scheme.period_type 为唯一权威——按年方案统一落 budget_period=0；
+        // MONTH 方案保留 0~12（0=全年，页面按「全年」展示）。
+        // 界面提交 YEAR、服务判 ANNUAL 的错位让这条规则永不生效，故两值同认（见 normalizePeriodType）。
+        String pt = normalizePeriodType(scheme.getPeriodType());
+        if ("ANNUAL".equals(pt)) {
             item.setBudgetPeriod(0);
         }
-        String dimKey = item.getBudgetYear() + "-COMPANY" + item.getCompanyId()
-                + "-DEPT" + item.getDeptId() + "-ITEM" + item.getItemId();
+        // 期间主数据接入。带 periodId 时以其年度/期次为准（整数两列降级为派生缓存），
+        // 起止日期在占用匹配时优先于裸整数（见 matchItem）。
+        if (item.getBudgetPeriodId() != null) {
+            MdBudgetPeriod period = mdBudgetPeriodMapper.selectById(item.getBudgetPeriodId());
+            if (period == null) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "预算期间不存在: " + item.getBudgetPeriodId());
+            }
+            if (period.getPeriodYear() != null && item.getBudgetYear() == null) {
+                item.setBudgetYear(period.getPeriodYear());
+            }
+            if ("ANNUAL".equals(pt)) {
+                item.setBudgetPeriod(0);
+            } else if (period.getPeriodNo() != null) {
+                item.setBudgetPeriod(period.getPeriodNo());
+            }
+        }
+        // 维度「勾了才可填」——未勾选的维度不允许填值，否则维度键里出现方案根本没控制的段，
+        // 同一方案下会产生「看着有项目、实际按非项目归集」的混合行。
+        assertDimensionAllowed(scheme.getDimension(), "PROJECT", item.getProjectId(), "项目");
+        String dimKey = buildDimKey(item);
         item.setDimKey(dimKey);
         BgItem sameKey = bgItemMapper.selectOne(new LambdaQueryWrapper<BgItem>()
                 .eq(BgItem::getSchemeId, item.getSchemeId())
@@ -626,6 +703,56 @@ public class BudgetService {
 
     // 预算校验与占用
 
+    /**
+     * 周期类型归一：界面提交的是 {@code YEAR}，服务原先判的是 {@code ANNUAL}，
+     * 两条分支永不相等 ⇒「按年方案统一落 period=0」整条规则失效。这里把同义值收敛成一个口径，
+     * 调用方不再各自比字符串。未知值按 MONTH（最细粒度，不会把月度行误当年度行）。
+     */
+    static String normalizePeriodType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "MONTH";
+        }
+        String v = raw.trim().toUpperCase();
+        return switch (v) {
+            case "YEAR", "ANNUAL" -> "ANNUAL";
+            case "QUARTER", "QUARTERLY" -> "QUARTER";
+            case "MONTH", "MONTHLY" -> "MONTH";
+            default -> "MONTH";
+        };
+    }
+
+    /**
+     * 维度键：项目段只在<b>确有项目</b>时拼入。
+     * 无条件拼 {@code -PROJECTnull} 会让存量 108 行全部换键、与新行并列成"两条同维度预算"；
+     * 只在有项目时追加，既让项目预算各行独立，又与存量键完全兼容。
+     */
+    static String buildDimKey(BgItem item) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(item.getBudgetYear()).append("-COMPANY").append(item.getCompanyId())
+                .append("-DEPT").append(item.getDeptId()).append("-ITEM").append(item.getItemId());
+        if (item.getProjectId() != null) {
+            sb.append("-PROJECT").append(item.getProjectId());
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 维度白名单：方案未勾选的维度不允许填值。
+     * {@code dimension} 为空视为未配置（历史方案），不拦——否则存量方案一编辑就报错。
+     */
+    private static void assertDimensionAllowed(String dimension, String code, Object value, String label) {
+        if (value == null || dimension == null || dimension.isBlank()) {
+            return;
+        }
+        for (String part : dimension.split(",")) {
+            if (part.trim().equalsIgnoreCase(code)) {
+                return;
+            }
+        }
+        throw new BizException(ErrorCode.PARAM_INVALID,
+                "本方案的预算维度未包含「" + label + "」，不允许填写该维度值；请先在方案上勾选该维度");
+    }
+
     /** 可用额度 */
     public BigDecimal available(BgItem item) {
         if (item == null) {
@@ -667,8 +794,43 @@ public class BudgetService {
         if (item == null) {
             return "HARD";
         }
+        // 映射级档位优先（md_item_budget_map.control_type），为空才回落到方案级。
+        // 档位下沉到费用项后，同一方案里「差旅硬控、办公费只提示」这类诉求不必再拆方案。
+        String mapped = itemControlTypeOf(item);
+        if (mapped != null) {
+            return mapped;
+        }
         BgScheme scheme = item.getSchemeId() == null ? null : bgSchemeMapper.selectById(item.getSchemeId());
         return resolveControlType(scheme);
+    }
+
+    /**
+     * 费用项映射级档位：只在映射行<b>同时命中费用项与预算明细</b>时生效。
+     * 只按 item_id 取会有「同费用项映射到别的预算行」的串档，故两个键都要对上。
+     *
+     * @return 合法档位值；无映射行/值为空/非法值一律返回 null（交回方案级判定）
+     */
+    private String itemControlTypeOf(BgItem item) {
+        if (item.getItemId() == null || item.getId() == null) {
+            return null;
+        }
+        try {
+            MdItemBudgetMap map = mdItemBudgetMapMapper.selectOne(new LambdaQueryWrapper<MdItemBudgetMap>()
+                    .eq(MdItemBudgetMap::getItemId, item.getItemId())
+                    .eq(MdItemBudgetMap::getBudgetItemId, item.getId())
+                    .last("limit 1"));
+            if (map == null || map.getControlType() == null || map.getControlType().isBlank()) {
+                return null;
+            }
+            String ct = map.getControlType().trim().toUpperCase();
+            return switch (ct) {
+                case "HARD", "SOFT", "WARN", "NONE" -> ct;
+                default -> null;
+            };
+        } catch (Exception ex) {
+            log.debug("读取费用项映射档位失败，回落方案级: {}", ex.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -716,6 +878,37 @@ public class BudgetService {
         }
         for (BgItem it : items) {
             it.setControlType(resolveControlType(it.getSchemeId() == null ? null : byId.get(it.getSchemeId())));
+        }
+        // 映射级档位覆盖方案级（一次批量取，避免 200 行 N+1）。
+        // 与 itemControlTypeOf 同一判定：费用项 + 预算明细双键命中才生效。
+        Set<Long> itemIds = new HashSet<>();
+        for (BgItem it : items) {
+            if (it.getItemId() != null) {
+                itemIds.add(it.getItemId());
+            }
+        }
+        if (itemIds.isEmpty()) {
+            return;
+        }
+        Map<String, String> mappedTier = new HashMap<>();
+        for (MdItemBudgetMap m : mdItemBudgetMapMapper.selectList(new LambdaQueryWrapper<MdItemBudgetMap>()
+                .in(MdItemBudgetMap::getItemId, itemIds))) {
+            if (m.getBudgetItemId() == null || m.getControlType() == null || m.getControlType().isBlank()) {
+                continue;
+            }
+            String ct = m.getControlType().trim().toUpperCase();
+            if (ct.equals("HARD") || ct.equals("SOFT") || ct.equals("WARN") || ct.equals("NONE")) {
+                mappedTier.put(m.getItemId() + ":" + m.getBudgetItemId(), ct);
+            }
+        }
+        if (mappedTier.isEmpty()) {
+            return;
+        }
+        for (BgItem it : items) {
+            String hit = mappedTier.get(it.getItemId() + ":" + it.getId());
+            if (hit != null) {
+                it.setControlType(hit);
+            }
         }
     }
 
@@ -837,6 +1030,11 @@ public class BudgetService {
         if (item == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "预算明细不存在: " + budgetItemId);
         }
+        // 冻结行不接新增占用（释放/核销仍放行——冻结的是"再花钱"，不是"清算已发生"）
+        if (item.getFreeze() != null && item.getFreeze() == 1) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "预算明细 " + budgetItemId + " 已冻结，不可新增占用；如需解冻请到预算科目页操作");
+        }
         // 提交链路一致性校验——表头 occupy_amount vs 全行流水净额（bg_occupy 只增不改＝真相账本）。
         // 最严格的做法是「不等即拒绝」，但 bg_item 表头含无流水对应的历史/导入占用，
         // 双向硬拦会把这类历史行全部锁死——故按方向分级：
@@ -872,6 +1070,11 @@ public class BudgetService {
                     }
                     remark = (neverIssued ? "零下达额度软控通过" : "超预算软控通过")
                             + "（理由：" + overrunReason + "）";
+                }
+                case "NONE" -> {
+                    // 映射级显式"不控制"——放行且不写超支备注（写了会被当成已发生的超支留痕）
+                    log.info("预算行 {} 费用项映射档位为 NONE（不控制），本次 {} 超可用 {} 仍放行",
+                            budgetItemId, amount, avail);
                 }
                 default -> {
                     remark = (neverIssued ? "零下达额度预警通过" : "超预算预警通过")
@@ -1454,6 +1657,122 @@ public class BudgetService {
         return done;
     }
 
+    // 预提/待摊的预算「申请占用」
+
+    /** 费用预提的占用流水业务类型＝流程 bizType（GL_ACCRUAL），与费用域 EXP_* 不互认，biz_id 不会撞号 */
+    public static final String BIZ_TYPE_ACCRUAL = "GL_ACCRUAL";
+    /** 费用待摊的占用流水业务类型 */
+    public static final String BIZ_TYPE_DEFER = "GL_DEFER";
+
+    /**
+     *
+     * 分为三类 —— ①<b>申请占用</b>「一般对应业务申请单……费用并没有实际执行」，「是对预算数的扣减」；
+     * ②<b>预算执行</b>「费用报销时，费用实际发生」；③<b>预算冲回</b>「一般对应业务发生的冲回/负数」。
+     * 同册《维度汇总预算执行分析》给出恒等式：<br>
+     * {@code 实际执行 = 申请占用 − 申请冲回 + 预算执行 − 执行冲回}；
+     * {@code 可用预算 = 调整后预算数 − 实际执行}。<br>
+     * 预提是「费用已确认、钱还没付、票可能还没到」，落在 ①；冲销预提是对它的负数，落在 ③。
+     * 手册还明确「申请占用和预算执行，对应受控单据将执行预算控制检查」——即申请占用是<b>真控制</b>，
+     * 不是只做展示，所以这里的超预算判定与费用域共用同一套档位（HARD 拒 / SOFT 要理由 / WARN 留痕）。
+     * 本方法的 {@code occupy}/{@code release} 把 ① 记成 +occupy、③ 记成 −occupy，
+     * 与月度 {@code available() = 总额+调整−净占用−已用} 天然同轴。</p>
+     *
+     * <p><b>定位不到预算行时不臆造、不阻断</b>：与 {@code occupySalaryBudget} 同一处理——
+     * 返回 {@code null} 并 WARN，由调用方把 {@code budget_occupy_status} 记成 {@code NONE}，
+     * 让「这张预提没占预算」在单据上看得见，而不是静默当成功。</p>
+     *
+     * <p><b>超支按方案档位</b>：HARD 直接抛（整张记账单回滚，用户改金额或走预算调整）；
+     * SOFT 需 {@code overrunReason}；WARN 留痕放行。</p>
+     *
+     * <p><b>去重</b>：本单名下已有 OCCUPY 流水即跳过（重放不二次占额）。</p>
+     *
+     * @param bizType        占用流水业务类型，只接受 {@link #BIZ_TYPE_ACCRUAL} / {@link #BIZ_TYPE_DEFER}
+     * @param expenseItemId  费用项目（md_expense_item.id），可空；空且未给预算明细时按映射表兜底
+     * @param companyId      记账公司（决定预算主体）
+     * @param deptId         承担部门，可空
+     * @param bizYear        预算年度，取会计期间前 4 位
+     * @param amount         本次预提/待摊金额
+     * @param overrunReason  软控超支理由，可空
+     * @return 实际占用的预算明细主键；{@code null}＝未占用（金额非正 / 已占过 / 定位不到预算行）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long occupyAccrualBudget(String bizType, Long bizId, String bizNo, Long expenseItemId,
+                                    Long companyId, Long deptId, Integer bizYear, BigDecimal amount,
+                                    String overrunReason) {
+        if (!BIZ_TYPE_ACCRUAL.equals(bizType) && !BIZ_TYPE_DEFER.equals(bizType)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "预提/待摊占用只接受 GL_ACCRUAL / GL_DEFER，实际 " + bizType);
+        }
+        if (bizId == null) {
+            return null;
+        }
+        if (amount == null || amount.signum() <= 0) {
+            log.info("预提/待摊 {} 金额为 {}，无额度可占用", bizNo, amount);
+            return null;
+        }
+        if (!bgOccupyMapper.selectOccupiedItemsByBiz(bizType, bizId).isEmpty()) {
+            log.info("预提/待摊 {} 名下已有占用流水，跳过重复占用（幂等）", bizNo);
+            return null;
+        }
+        // strict=false：定位不到预算行的成因归调用方（预提不一定落在已建预算的科目上），
+        // 不能让「没建预算」变成「不能预提」——但必须留痕，不能静默放行。
+        Long itemId = resolveOccupyItem(null, expenseItemId, companyId, deptId, bizYear, false);
+        if (itemId == null) {
+            log.warn("预提/待摊 {} 金额 {} 未定位到预算明细（费用项目 {}／公司 {}／年度 {} 下无可用预算行）——" +
+                            "本次不计入预算占用，单据 budget_occupy_status 记 NONE，需人工确认是否补建预算",
+                    bizNo, amount, expenseItemId, companyId, bizYear);
+            return null;
+        }
+        occupy(itemId, amount, bizType, bizId, bizNo, overrunReason);
+        log.info("预提/待摊 {} 申请占用预算：明细 {} 金额 {}（业务类型 {}）", bizNo, itemId, amount, bizType);
+        return itemId;
+    }
+
+    /**
+     *
+     * <p>参与调用方事务：与「记账单置 REJECTED/REVERSED」同生共死——冲销后凭证已红字反向，
+     * 而预算还占着（或反之）会让账与预算两本账对不上。收尾链路（流程已结束）请改用
+     * {@link #releaseAccrualOccupyIsolated}。</p>
+     *
+     * @return 实际释放的预算行数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int releaseAccrualOccupy(String bizType, Long bizId, String bizNo) {
+        return doReleaseAccrual(bizType, bizId, bizNo, "冲回");
+    }
+
+    /**
+     * 同 {@link #releaseAccrualOccupy}，但独立事务（{@code REQUIRES_NEW}）。
+     *
+     * <p>用于审批驳回/撤回的收尾：流程已经结束，预算侧异常（行锁等待、明细被删）只该留下
+     * 一条 error 供人工补偿，绝不能把「流程已结束」这个事实回滚掉。</p>
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public int releaseAccrualOccupyIsolated(String bizType, Long bizId, String bizNo) {
+        return doReleaseAccrual(bizType, bizId, bizNo, "驳回");
+    }
+
+    private int doReleaseAccrual(String bizType, Long bizId, String bizNo, String cause) {
+        if (bizId == null) {
+            return 0;
+        }
+        List<Long> items = bgOccupyMapper.selectOccupiedItemsByBiz(bizType, bizId);
+        int done = 0;
+        for (Long itemId : items) {
+            BigDecimal net = nvl(bgOccupyMapper.sumNetOccupyByItemAndBiz(itemId, bizId, bizType, false));
+            if (net.signum() <= 0) {
+                continue;
+            }
+            release(itemId, net, bizType, bizId, bizNo);
+            done++;
+        }
+        if (done == 0) {
+            log.info("预提/待摊 {} 名下无待冲回的净占用（未占预算／已冲回／流水尚未提交），不释放", bizNo);
+        } else {
+            log.info("预提/待摊 {} {} → 释放预算占用 {} 行", bizNo, cause, done);
+        }
+        return done;
+    }
+
     // 调整单
 
     /**
@@ -1503,6 +1822,8 @@ public class BudgetService {
             }
             i++;
         }
+        // 录入/编辑时就校验调出（调减）方余额，不等审批通过才炸
+        assertAdjustAvailable(adjust, lines);
     }
 
     /**
@@ -1608,15 +1929,160 @@ public class BudgetService {
         return bgAdjustLineMapper.selectByAdjustId(adjustId);
     }
 
-    /** 调整单审批通过：将调整额并入预算（ADD 增拨 / CUT 调减 / TRANSFER 调剂） */
+    /**
+     * 调整单提交审批：DRAFT → APPROVING，发起 {@code BG_ADJUST} 审批流。
+     *
+     * <p>配置表 {@code wf_process_config} 里 {@code BG_ADJUST → BG_SCHEME} 的路由行早已在盘，
+     * 而 {@code BG_ADJUST} 在 Java 侧只出现在注释里——「配置有路由、代码不发起」是另一种形态的配了不用。
+     * 这里补齐发起；不新建流程模型（沿用方案那条流的同族收尾件），收尾见
+     * {@code BudgetAdjustBizAction} → {@link #applyApprovedAdjust}。
+     *
+     * <p>提交前就跑一次余额校验（{@link #assertAdjustAvailable}）：等到审批通过才炸，
+     * 审批人的时间是白花的，且单子会卡在「已批但改不动」的两难里。
+     */
     @Transactional(rollbackFor = Exception.class)
-    public void adjustApprove(Long adjustId) {
+    public void adjustSubmit(Long adjustId) {
+        BgAdjust adjust = requireAdjust(adjustId);
+        if (!"DRAFT".equals(adjust.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿调整单可提交，当前: " + adjust.getStatus());
+        }
+        List<BgAdjustLine> lines = bgAdjustLineMapper.selectByAdjustId(adjustId);
+        if (lines == null || lines.isEmpty()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "调整单无明细，不可提交");
+        }
+        assertAdjustAvailable(adjust, lines);
+        BgAdjust upd = new BgAdjust();
+        upd.setId(adjustId);
+        upd.setStatus("APPROVING");
+        bgAdjustMapper.updateById(upd);
+        auditTrailService.recordUpdate("BUDGET", adjustId, adjust.getAdjustNo(), "bg_adjust",
+                String.valueOf(adjustId),
+                Collections.singletonMap("status", adjust.getStatus()),
+                Collections.singletonMap("status", "APPROVING"), "提交预算调整审批");
+        Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
+        try {
+            String instId = wfEngineFacade.start("BG_ADJUST", adjustId, userId,
+                    "预算调整审批-" + adjust.getAdjustNo(), null);
+            if (instId != null) {
+                BgAdjust link = new BgAdjust();
+                link.setId(adjustId);
+                link.setProcInstId(instId);
+                bgAdjustMapper.updateById(link);
+            }
+        } catch (Exception ex) {
+            BgAdjust back = new BgAdjust();
+            back.setId(adjustId);
+            back.setStatus("DRAFT");
+            bgAdjustMapper.updateById(back);
+            log.error("预算调整单 {} 发起 BG_ADJUST 审批流失败，已回退草稿: {}", adjust.getAdjustNo(), ex.getMessage(), ex);
+            throw new BizException(ErrorCode.PARAM_INVALID, "发起预算调整审批失败: " + ex.getMessage());
+        }
+        log.info("预算调整单 {} 已提交审批（DRAFT → APPROVING）", adjust.getAdjustNo());
+    }
+
+    /** 撤回审批中的调整单：流程撤回 + 状态回草稿，可改后重提 */
+    @Transactional(rollbackFor = Exception.class)
+    public void adjustWithdraw(Long adjustId) {
+        BgAdjust adjust = requireAdjust(adjustId);
+        if (!"APPROVING".equals(adjust.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅审批中的调整单可撤回，当前: " + adjust.getStatus());
+        }
+        Long userId = UserContext.get() == null ? null : UserContext.get().getUserId();
+        if (adjust.getProcInstId() != null && !adjust.getProcInstId().isBlank()) {
+            boolean ok = wfEngineFacade.withdraw(adjust.getProcInstId(), userId);
+            if (!ok) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "流程撤回失败（可能已有节点办理），请到流程中心处理");
+            }
+        }
+        BgAdjust upd = new BgAdjust();
+        upd.setId(adjustId);
+        upd.setStatus("DRAFT");
+        bgAdjustMapper.updateById(upd);
+        auditTrailService.recordUpdate("BUDGET", adjustId, adjust.getAdjustNo(), "bg_adjust",
+                String.valueOf(adjustId),
+                Collections.singletonMap("status", adjust.getStatus()),
+                Collections.singletonMap("status", "DRAFT"), "撤回预算调整审批");
+        log.info("预算调整单 {} 已撤回（APPROVING → DRAFT）", adjust.getAdjustNo());
+    }
+
+    private BgAdjust requireAdjust(Long adjustId) {
         BgAdjust adjust = bgAdjustMapper.selectById(adjustId);
         if (adjust == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "调整单不存在: " + adjustId);
         }
+        return adjust;
+    }
+
+    /**
+     * 调整额可用性校验。
+     *
+     * <p>改造前只校验「调入≠调出」，调减/调出直接 {@code addAmount(..., -amount)}，
+     * 可以把调出方调成负额度（可用＝总额＋调整−占用−已用 < 0），此后该预算线对任何正金额必拦。
+     * 现按<b>同一预算行累计需求</b>与可用余额比对（多行调同一行时逐行比会各自通过、合计超支）。
+     *
+     * <p>口径与 {@code available()} 完全一致（total + adjust − occupy − used），不另算一份。
+     */
+    private void assertAdjustAvailable(BgAdjust adjust, List<BgAdjustLine> lines) {
+        String type = adjust.getAdjustType();
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        // 调出/调减方 → 累计需求额
+        Map<Long, BigDecimal> demand = new LinkedHashMap<>();
+        BigDecimal inSum = BigDecimal.ZERO;
+        BigDecimal outSum = BigDecimal.ZERO;
+        for (BgAdjustLine line : lines) {
+            BigDecimal amt = line.getAmount() == null ? BigDecimal.ZERO : line.getAmount();
+            inSum = inSum.add(amt);
+            if ("TRANSFER".equals(type)) {
+                outSum = outSum.add(amt);
+                if (line.getOutItemId() != null) {
+                    demand.merge(line.getOutItemId(), amt, BigDecimal::add);
+                }
+            } else if ("CUT".equals(type)) {
+                demand.merge(line.getBudgetItemId(), amt, BigDecimal::add);
+            }
+        }
+        // 调剂总额必须为零（等额调剂）：借贷两侧金额不等的调剂单会把预算总量凭空放大/缩小
+        if ("TRANSFER".equals(type) && inSum.compareTo(outSum) != 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "调剂单调入合计 " + inSum + " 与调出合计 " + outSum + " 不相等，调剂必须等额（总额为零）");
+        }
+        for (Map.Entry<Long, BigDecimal> en : demand.entrySet()) {
+            Long itemId = en.getKey();
+            if (itemId == null) {
+                continue;
+            }
+            BgItem item = bgItemMapper.selectById(itemId);
+            if (item == null) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "调出/调减预算明细不存在: " + itemId);
+            }
+            BigDecimal avail = available(item);
+            if (avail.compareTo(en.getValue()) < 0) {
+                String who = "TRANSFER".equals(type) ? "调出方" : "调减方";
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        who + "预算明细 " + itemId + " 可用余额不足：可用 " + avail + "，本次需 " + en.getValue()
+                                + "；调整后将为负额度，请先增拨或改小调整额");
+            }
+        }
+    }
+
+    /**
+     * 审批通过：将调整额并入预算（ADD 增拨 / CUT 调减 / TRANSFER 调剂）。
+     *
+     * <p>两个入口、一份实现：
+     * <ul>
+     *   <li>{@link #adjustApprove}：历史单点 REST 直批（DRAFT 起手，兼容既有页面/脚本）；</li>
+     *   <li>{@link #applyApprovedAdjust}：{@code BG_ADJUST} 流程办结回调（APPROVING 起手）。</li>
+     * </ul>
+     * 金额计算与审计只有这一份，防两条腿各算一遍导致同一张单被加两次。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void adjustApprove(Long adjustId) {
+        BgAdjust adjust = requireAdjust(adjustId);
         if (!"DRAFT".equals(adjust.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿调整单可审批，当前: " + adjust.getStatus());
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "仅草稿调整单可在此直批，当前: " + adjust.getStatus() + "（审批中的单由流程办结回写）");
         }
         // ① 写路径公司归属校验：调整单所属方案公司必须等于登录人公司
         if (adjust.getSchemeId() != null) {
@@ -1626,6 +2092,35 @@ public class BudgetService {
             }
         }
         List<BgAdjustLine> lines = bgAdjustLineMapper.selectByAdjustId(adjustId);
+        assertAdjustAvailable(adjust, lines);
+        applyAdjustAmounts(adjust, lines, adjust.getStatus());
+    }
+
+    /**
+     * 流程办结回调：APPROVING → APPROVED 并落额度。
+     * 幂等：状态已不是 APPROVING 即跳过（撤回/驳回后再收到事件不会二次加额度）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void applyApprovedAdjust(Long adjustId) {
+        BgAdjust adjust = requireAdjust(adjustId);
+        if (!"APPROVING".equals(adjust.getStatus())) {
+            log.info("预算调整单 {} 当前状态 {}，跳过流程办结落额度（幂等）", adjust.getAdjustNo(), adjust.getStatus());
+            return;
+        }
+        if (adjust.getSchemeId() != null) {
+            BgScheme scheme = bgSchemeMapper.selectById(adjust.getSchemeId());
+            if (scheme != null) {
+                orgGuard.assertVisible(scheme.getCompanyId(), null);
+            }
+        }
+        List<BgAdjustLine> lines = bgAdjustLineMapper.selectByAdjustId(adjustId);
+        assertAdjustAvailable(adjust, lines);
+        applyAdjustAmounts(adjust, lines, adjust.getStatus());
+    }
+
+    /** 落额度 + 写状态与审计（调用方已完成状态守卫与余额校验） */
+    private void applyAdjustAmounts(BgAdjust adjust, List<BgAdjustLine> lines, String fromStatus) {
+        Long adjustId = adjust.getId();
         String type = adjust.getAdjustType();
         // 审计：先采集本次涉及的预算明细「调整前 adjust_amount」
         Set<Long> touchedItems = new LinkedHashSet<>();
@@ -1652,10 +2147,10 @@ public class BudgetService {
         update.setId(adjustId);
         update.setStatus("APPROVED");
         bgAdjustMapper.updateById(update);
-        // 审计：状态跃迁（草稿 → 已审批）
+        // 审计：状态跃迁（草稿/审批中 → 已审批）
         auditTrailService.recordUpdate("BUDGET", adjustId, adjust.getAdjustNo(), "bg_adjust",
                 String.valueOf(adjustId),
-                Collections.singletonMap("status", adjust.getStatus()),
+                Collections.singletonMap("status", fromStatus),
                 Collections.singletonMap("status", "APPROVED"), "审批预算调整单");
         // 审计：记录各预算明细「调整前后预算」（adjust_amount 增减）
         Map<String, Object> budgetAfter = new LinkedHashMap<>();
@@ -1668,6 +2163,221 @@ public class BudgetService {
             auditTrailService.recordUpdate("BUDGET", adjustId, adjust.getAdjustNo(), "bg_item",
                     String.valueOf(adjustId), budgetBefore, budgetAfter,
                     "调整额并入预算（明细 adjust_amount 变更）");
+        }
+        log.info("预算调整单 {}（{}）已生效：{} 行额度已并入预算", adjust.getAdjustNo(), type, lines.size());
+    }
+
+    // 实际数导入 / 结余结转 / 冻结
+
+    /**
+     * 实际数导入。
+     *
+     * <p>客户现系统在用的功能：《爱共享预算实际数导入指南》「预算管理 → 实际数导入 → 模板下载 → 导入 →
+     * 保存 → 审核即扣减对应预算」，并限定「仅扣减末级费用类型」「未匹配预算的导入记录不进费用统计报表」。
+     * 我方此前 {@code bg_item.used_amount} 只能由 {@code writeOff} 累加，全仓无"实际数"入口——
+     * 这是交付倒退项，优先级按客户培训面排。
+     *
+     * <p>实现口径：逐行解析预算行（未给 budgetItemId 时按 费用项+公司+部门 命中），
+     * 命中即 {@link #writeOff}(bizId=null) 累加已用并写 WRITE_OFF 流水（只增不改的账本照旧留痕）；
+     * 未命中的行进失败清单返回给调用方，<b>不静默丢弃</b>（手册明确这类记录不进统计，等于人间蒸发）。
+     *
+     * <p>不做取数公式引擎（ACCT/SJdata 那套），只做"导入即扣减"。
+     *
+     * @param rows 每行 {budgetItemId?, itemId?, companyId?, deptId?, projectId?, budgetYear?, period?, amount}
+     * @param bizNo 导入批次号（写进占用流水 biz_no，便于按批撤销与对账）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> importActual(List<Map<String, Object>> rows, String bizNo) {
+        if (rows == null || rows.isEmpty()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "导入数据为空");
+        }
+        String batchNo = StringUtils.hasText(bizNo) ? bizNo : "ACT" + System.currentTimeMillis();
+        int ok = 0;
+        BigDecimal total = BigDecimal.ZERO;
+        List<String> failed = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            Map<String, Object> r = rows.get(i);
+            String tag = "第 " + (i + 1) + " 行";
+            BigDecimal amt = toAmount(r.get("amount"));
+            if (amt == null || amt.signum() <= 0) {
+                failed.add(tag + "：金额为空或非正数");
+                continue;
+            }
+            Long itemId = toLong(r.get("budgetItemId"));
+            Long expenseItemId = toLong(r.get("itemId"));
+            Long companyId = toLong(r.get("companyId"));
+            Long deptId = toLong(r.get("deptId"));
+            Long projectId = toLong(r.get("projectId"));
+            Integer year = toInt(r.get("budgetYear"));
+            if (itemId == null) {
+                if (expenseItemId == null) {
+                    failed.add(tag + "：既未给预算明细，也未给费用项，无法定位预算行");
+                    continue;
+                }
+                itemId = resolveOccupyItem(null, expenseItemId, companyId, deptId, year, projectId, false);
+            }
+            if (itemId == null) {
+                failed.add(tag + "：未匹配到预算明细（按手册，此类记录不进统计报表）");
+                continue;
+            }
+            // 行级 try/catch：一行非法（明细不存在/已冻结）不应把整批 1000 行导入全部回滚，
+            // 也不应静默跳过——逐行进 failed 清单，调用方按行修正后重跑
+            try {
+                writeOff(itemId, amt, "ACTUAL_IMPORT", null, batchNo);
+            } catch (Exception ex) {
+                failed.add(tag + "：" + ex.getMessage());
+                continue;
+            }
+            ok++;
+            total = total.add(amt);
+        }
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("batchNo", batchNo);
+        res.put("successCount", ok);
+        res.put("failedCount", failed.size());
+        res.put("successAmount", total);
+        res.put("failures", failed);
+        log.info("实际数导入 {}：成功 {} 行 / {} 元，失败 {} 行", batchNo, ok, total, failed.size());
+        return res;
+    }
+
+    /**
+     * 结余结转：把「上年可用余额」写进下年同维度行，并留 WRITE_OFF/OCCUPY 流水痕迹。
+     *
+     * <p>{@code bg_scheme.carry_over} 此前只有实体列与界面开关，全仓无任何消费点——
+     * 勾了等于没勾。本方法做的是年末作业那一版：不做跨年累计控制引擎，只搬余额。
+     *
+     * <p>口径：可用余额 = 总额 + 调整 − 占用 − 已用；只有 {@code carry_over=1} 且未关闭的方案参与；
+     * 上一年度行必须 period=0（年度行），否则同一维度会有 12 条结转来源、金额重复。
+     * 下年行不存在则新建（total_amount=结转额），已存在则把结转额并入 adjust_amount（不覆盖原额度）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> carryOver(int fromYear, int toYear) {
+        if (toYear != fromYear + 1) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "结余结转只能逐年执行：fromYear=" + fromYear + " 的下一期应为 " + (fromYear + 1));
+        }
+        List<BgScheme> schemes = bgSchemeMapper.selectList(new LambdaQueryWrapper<BgScheme>()
+                .eq(BgScheme::getBudgetYear, fromYear)
+                .eq(BgScheme::getCarryOver, 1));
+        int created = 0;
+        int merged = 0;
+        BigDecimal totalCarried = BigDecimal.ZERO;
+        List<String> skipped = new ArrayList<>();
+        for (BgScheme scheme : schemes) {
+            List<BgItem> items = bgItemMapper.selectList(new LambdaQueryWrapper<BgItem>()
+                    .eq(BgItem::getSchemeId, scheme.getId())
+                    .eq(BgItem::getBudgetYear, fromYear)
+                    .eq(BgItem::getBudgetPeriod, 0));
+            for (BgItem it : items) {
+                BigDecimal avail = available(it);
+                if (avail.signum() <= 0) {
+                    continue;
+                }
+                BgItem target = bgItemMapper.selectOne(new LambdaQueryWrapper<BgItem>()
+                        .eq(BgItem::getSchemeId, scheme.getId())
+                        .eq(BgItem::getBudgetYear, toYear)
+                        .eq(BgItem::getBudgetPeriod, 0)
+                        .eq(BgItem::getDimKey, it.getDimKey())
+                        .last("limit 1"));
+                if (target != null) {
+                    addAmount(target.getId(), "adjust", avail);
+                    merged++;
+                } else {
+                    BgItem copy = new BgItem();
+                    copy.setSchemeId(scheme.getId());
+                    copy.setCompanyId(it.getCompanyId());
+                    copy.setBudgetYear(toYear);
+                    copy.setBudgetPeriod(0);
+                    copy.setDeptId(it.getDeptId());
+                    copy.setItemId(it.getItemId());
+                    copy.setProjectId(it.getProjectId());
+                    copy.setBudgetTypeId(it.getBudgetTypeId());
+                    copy.setDimKey(it.getDimKey() == null ? buildDimKey(it) : it.getDimKey());
+                    copy.setTotalAmount(avail);
+                    copy.setAdjustAmount(BigDecimal.ZERO);
+                    copy.setOccupyAmount(BigDecimal.ZERO);
+                    copy.setUsedAmount(BigDecimal.ZERO);
+                    copy.setCurrencyCode(it.getCurrencyCode());
+                    copy.setRemark("由 " + fromYear + " 年结余结转（源明细 " + it.getId() + "）");
+                    bgItemMapper.insert(copy);
+                    created++;
+                }
+                totalCarried = totalCarried.add(avail);
+            }
+        }
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("fromYear", fromYear);
+        res.put("toYear", toYear);
+        res.put("schemeCount", schemes.size());
+        res.put("createdRows", created);
+        res.put("mergedRows", merged);
+        res.put("carriedAmount", totalCarried);
+        res.put("skipped", skipped);
+        log.info("预算结余结转 {}→{}：新建 {} 行、并入 {} 行，合计 {} 元", fromYear, toYear, created, merged, totalCarried);
+        return res;
+    }
+
+    /** 冻结/解冻预算行：冻结后 occupy 拒绝、释放与核销照常 */
+    @Transactional(rollbackFor = Exception.class)
+    public void setFreeze(Long itemId, boolean freeze) {
+        BgItem cur = bgItemMapper.selectById(itemId);
+        if (cur == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "预算明细不存在: " + itemId);
+        }
+        BgItem upd = new BgItem();
+        upd.setId(itemId);
+        upd.setFreeze(freeze ? 1 : 0);
+        bgItemMapper.updateById(upd);
+        auditTrailService.recordUpdate("BUDGET", itemId, String.valueOf(itemId), "bg_item",
+                String.valueOf(itemId),
+                Collections.singletonMap("freeze", cur.getFreeze()),
+                Collections.singletonMap("freeze", freeze ? 1 : 0),
+                freeze ? "冻结预算行" : "解冻预算行");
+        log.info("预算明细 {} 已{}", itemId, freeze ? "冻结" : "解冻");
+    }
+
+    private static BigDecimal toAmount(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof BigDecimal bd) {
+            return bd;
+        }
+        if (v instanceof Number n) {
+            return new BigDecimal(n.toString());
+        }
+        try {
+            return new BigDecimal(String.valueOf(v).replace(",", "").trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Long toLong(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return Long.valueOf(String.valueOf(v).trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Integer toInt(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.valueOf(String.valueOf(v).trim());
+        } catch (Exception e) {
+            return null;
         }
     }
 

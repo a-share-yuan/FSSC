@@ -64,14 +64,14 @@ public class DashboardController {
     }
 
     @RequiresPerm("dashboard:view")
-    @DataScope("部门报销排行数据范围") // 原缺注解 ⇒ 普通员工看到与共享会计完全相同的全公司排名
+    @DataScope("部门报销排行数据范围") // D-F1：原缺注解 ⇒ 普通员工看到与共享会计完全相同的全公司排名
     @GetMapping("/dept/ranking")
     public Result<List<Map<String, Object>>> deptRanking() {
         return Result.success(dashboardService.expenseByDept());
     }
 
     @RequiresPerm("dashboard:view")
-    @DataScope("审批时效数据范围") // 同 deptRanking，缺注解即无部门/本人维办结
+    @DataScope("审批时效数据范围") // D-F1：同 deptRanking，缺注解即无部门/本人维办结
     @GetMapping("/approval/efficiency")
     public Result<List<Map<String, Object>>> approvalEfficiency() {
         return Result.success(dashboardService.approvalEfficiency());

@@ -17,6 +17,7 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.glex.entity.GlMonthClose;
+import com.fssc.glex.service.GlCloseCheckService;
 import com.fssc.glex.service.GlMonthCloseService;
 import com.fssc.glex.service.GlProfitCarryService;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,8 @@ public class GlPeriodOpsController {
     private final GlMonthCloseService monthCloseService;
     private final GlCloseCheckItemMapper closeCheckItemMapper;
     private final GlProfitCarryService profitCarryService;
+    /** 月结清单里系统可判的 3 项（凭证已过账/税金计提/内部往来） */
+    private final GlCloseCheckService closeCheckService;
 
     /** 反结账：期间 CLOSED 回退开账；下一期间须未结账（逐期回退）；仅财务总监(CFO)/总账会计(FIN_GL)/租户管理员。body: {"period":"202609"} */
     @RequiresPerm("gl:monthclose:close")
@@ -134,6 +137,14 @@ public class GlPeriodOpsController {
         boolean done = Boolean.parseBoolean(String.valueOf(body.getOrDefault("done", "true")));
         GlCloseCheckItem it = closeCheckItemMapper.selectById(id);
         if (it == null) throw new BizException(ErrorCode.PARAM_INVALID, "检查项不存在: " + id);
+        // 系统可判的 3 项不允许「人工勾上」——勾不上就是勾不上。
+        // 其余 5 项（银行对账/费用预提/薪酬/坏账/折旧）保留人工判断。
+        if (done && GlCloseCheckService.isSystemChecked(it.getItemName())) {
+            String err = closeCheckService.verifyOne(it.getItemName(), it.getPeriod(), it.getCompanyId());
+            if (err != null) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "「" + it.getItemName() + "」系统校验未通过：" + err);
+            }
+        }
         it.setStatus(done ? "DONE" : "PENDING");
         it.setCheckTime(done ? LocalDateTime.now() : null);
         it.setChecker(done ? (UserContext.get() != null
@@ -141,6 +152,18 @@ public class GlPeriodOpsController {
         if (body.get("remark") != null) it.setRemark(String.valueOf(body.get("remark")));
         closeCheckItemMapper.updateById(it);
         return Result.success();
+    }
+
+    /**
+     * 系统可判项预检：GET /close-check/verify?period=202611&companyId=1
+     * 只读，返回每项是否通过及具体原因，供清单页显示"系统判"标签。
+     */
+    @RequiresPerm("gl:monthclose:close")
+    @GetMapping("/close-check/verify")
+    public Result<List<Map<String, Object>>> closeCheckVerify(
+            @RequestParam String period,
+            @RequestParam(required = false) Long companyId) {
+        return Result.success(closeCheckService.verifyAll(requireCheckPeriod(period), resolveCheckCompany(companyId)));
     }
 
     /**

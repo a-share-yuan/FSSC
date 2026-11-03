@@ -63,7 +63,7 @@ public class RcBadDebtController {
     }
 
     /**
-     * 坏账核销（蓝图流程22，AR-16-2）：body {amount, reason, basisNo}。
+     * 坏账核销（蓝图流程22，A-2）：body {amount, reason, basisNo}。
      * 核销金额不能超过该客户已计提坏账准备余额；生成 借1231/贷1122 凭证并冲减应收余额。
      */
     /** 坏账核销模板 Excel 导入（附件11.4.2，9列；OA 仅推申请人，明细由模板导入——蓝图流程22） */

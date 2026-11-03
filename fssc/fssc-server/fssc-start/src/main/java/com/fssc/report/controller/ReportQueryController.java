@@ -351,15 +351,17 @@ public class ReportQueryController {
         return Result.success(reportMapper.contractExecution(f.companyId(), f.deptIds()));
     }
 
-    /** 13. 预算超支预警 */
+    /** 13. 预算超支预警（口径与执行率同轴，阈值可传，默认 80%） */
     @RequiresPerm("report:view")
     @DataScope("预算超支预警数据范围")
     @ReportDomain("BUDGET")
     @GetMapping("/budget-overrun")
-    public Result<List<Map<String, Object>>> budgetOverrunAlert() {
+    public Result<List<Map<String, Object>>> budgetOverrunAlert(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Double threshold) {
         // 只按公司维办结（hasDeptCol=false）：公司级预算 dept_id 常为 NULL，见 ReportMapper 同处说明
         ScopeFilter f = resolveScope(false, false);
-        return Result.success(reportMapper.budgetOverrunAlert(f.companyId()));
+        double pct = threshold == null || threshold <= 0 || threshold > 100 ? 80.0 : threshold;
+        return Result.success(reportMapper.budgetOverrunAlert(f.companyId(), pct));
     }
 
     /** 14. 借款逾期分析 */

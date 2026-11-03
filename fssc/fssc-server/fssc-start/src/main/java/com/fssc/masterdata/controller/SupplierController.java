@@ -38,7 +38,7 @@ public class SupplierController {
         return Result.success(service.page(query.getPageNum(), query.getPageSize(), keyword));
     }
 
-    /**  供应商下拉选择（供资产建档/付款计划/容差配置等业务页选供应商，不需要 md:supplier:list 权限）。
+    /** 供应商下拉选择（供资产建档/付款计划/容差配置等业务页选供应商，不需要 md:supplier:list 权限）。
      * 与 /page 同服务逻辑，但不挂 @RequiresPerm——选供应商是这些页面的基本功能，
      * 不应要求用户持有供应商主数据管理权限。
      * 注：等价于"任何登录用户可读供应商名单"，发布前请复核是否改按归属判或授只读点。 */
