@@ -53,7 +53,7 @@ CREATE TABLE `md_supplier` (
   UNIQUE KEY `uk_tenant_supplier_code` (`tenant_id`,`supplier_code`),
   KEY `idx_tenant` (`tenant_id`),
   KEY `idx_tenant_name` (`tenant_id`,`supplier_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=133293 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='只读快照(MDG-102③)：由 core MDM FsscSupplierSnapshotService 定时反向同步，唯一权威源=unierp_core.md_supplier，禁止业务直写；遗留非标码行待 MDG-207 处置';
+) ENGINE=InnoDB AUTO_INCREMENT=133302 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='只读快照(MDG-102③)：由 core MDM FsscSupplierSnapshotService 定时反向同步，唯一权威源=unierp_core.md_supplier，禁止业务直写；遗留非标码行待 MDG-207 处置';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -75,4 +75,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:13:50
+-- Dump completed on 2026-11-03 10:48:04

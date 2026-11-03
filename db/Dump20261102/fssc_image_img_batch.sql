@@ -49,7 +49,7 @@ CREATE TABLE `img_batch` (
   KEY `idx_tenant_biz` (`tenant_id`,`biz_type`,`biz_id`),
   KEY `idx_tenant_status` (`tenant_id`,`status`),
   KEY `idx_ib_tenant_del_biz` (`tenant_id`,`del_flag`,`biz_type`,`doc_count`,`review_status`,`seal_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='影像批次';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='影像批次';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -70,4 +70,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:14:24
+-- Dump completed on 2026-11-03 10:48:49

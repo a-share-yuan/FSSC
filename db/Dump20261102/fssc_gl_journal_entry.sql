@@ -42,10 +42,14 @@ CREATE TABLE `gl_journal_entry` (
   `update_time` datetime DEFAULT NULL COMMENT '更新时间',
   `del_flag` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除 0否/1是',
   `company_id` bigint DEFAULT NULL COMMENT '记账公司(组织合法性 V1.3.18)',
+  `expense_item_id` bigint DEFAULT NULL COMMENT '费用项目 md_expense_item.id（BUD-11 预算维度来源）',
+  `dept_id` bigint DEFAULT NULL COMMENT '承担部门 sys_dept.id（BUD-11 预算维度来源）',
+  `budget_item_id` bigint DEFAULT NULL COMMENT '实际占用到的预算明细 bg_item.id（BUD-11）',
+  `budget_occupy_status` varchar(16) DEFAULT NULL COMMENT '预算占用状态：OCCUPIED/RELEASED/NONE/null（BUD-11）',
   PRIMARY KEY (`id`),
   KEY `idx_gl_jrn_period` (`tenant_id`,`period`),
   KEY `idx_gl_jrn_type` (`entry_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='一般总账记账';
+) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='一般总账记账';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -66,4 +70,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:13:52
+-- Dump completed on 2026-11-03 10:47:49

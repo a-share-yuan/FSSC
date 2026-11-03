@@ -54,7 +54,7 @@ CREATE TABLE `wf_instance` (
   KEY `idx_tenant_end` (`tenant_id`,`end_time`),
   KEY `idx_proc_inst_model` (`proc_inst_id`,`model_key`),
   KEY `idx_tenant_bizid` (`tenant_id`,`biz_id`,`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='流程实例(业务视图)';
+) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='流程实例(业务视图)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -75,4 +75,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:14:09
+-- Dump completed on 2026-11-03 10:48:47

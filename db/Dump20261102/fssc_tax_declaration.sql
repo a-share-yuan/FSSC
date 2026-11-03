@@ -33,6 +33,8 @@ CREATE TABLE `tax_declaration` (
   `tax_subtype` varchar(32) DEFAULT NULL COMMENT '税种子类：如VAT-GENERAL一般纳税人/VAT-SMALL小规模',
   `period` varchar(6) NOT NULL COMMENT '申报属期 yyyyMM',
   `declare_type` varchar(16) DEFAULT NULL COMMENT '申报类型：MONTHLY月度/QUARTERLY季度/ANNUAL年度',
+  `declaration_kind` varchar(16) NOT NULL DEFAULT 'NORMAL' COMMENT '申报性质：NORMAL正常申报/ADJUST更正（调整）申报',
+  `related_id` bigint DEFAULT NULL COMMENT '更正申报关联的原申报单 id',
   `base_amount` decimal(18,2) DEFAULT NULL COMMENT '计税基数',
   `tax_rate` decimal(10,4) DEFAULT NULL COMMENT '税率',
   `tax_amount` decimal(18,2) DEFAULT NULL COMMENT '应纳税额',
@@ -53,7 +55,7 @@ CREATE TABLE `tax_declaration` (
   UNIQUE KEY `uk_decl_no` (`tenant_id`,`declaration_no`),
   KEY `idx_tax_type` (`tax_type`,`period`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全税种申报表（增值税/所得税/印花税等）';
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全税种申报表（增值税/所得税/印花税等）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -74,4 +76,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:13:43
+-- Dump completed on 2026-11-03 10:48:12

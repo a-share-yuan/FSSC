@@ -42,7 +42,7 @@ CREATE TABLE `audit_trail` (
   KEY `idx_tr_biz` (`tenant_id`,`biz_type`,`biz_id`),
   KEY `idx_tr_no` (`tenant_id`,`biz_no`),
   KEY `idx_tr_time` (`tenant_id`,`create_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='关键变更审计流水（只追加）';
+) ENGINE=InnoDB AUTO_INCREMENT=50 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='关键变更审计流水（只追加）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -51,6 +51,7 @@ CREATE TABLE `audit_trail` (
 
 LOCK TABLES `audit_trail` WRITE;
 /*!40000 ALTER TABLE `audit_trail` DISABLE KEYS */;
+INSERT INTO `audit_trail` VALUES (47,1,'SUPPLIER_ADD',133299,'TEST-SUP-101749','md_supplier','133299','UPDATE','{\"status\":\"PENDING\"}','{\"status\":\"ACTIVE\"}',3874,'状态位核准（页面直接核准）','2026-11-03 10:17:53'),(48,1,'SUPPLIER_ADD',133300,'TEST-SUP-102721','md_supplier','133300','UPDATE','{\"status\":\"PENDING\"}','{\"status\":\"ACTIVE\"}',3874,'状态位核准（页面直接核准）','2026-11-03 10:27:25'),(49,1,'SUPPLIER_ADD',133301,'TEST-SUP-103216','md_supplier','133301','UPDATE','{\"status\":\"PENDING\"}','{\"status\":\"ACTIVE\"}',3874,'状态位核准（页面直接核准）','2026-11-03 10:32:18');
 /*!40000 ALTER TABLE `audit_trail` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -63,4 +64,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:14:06
+-- Dump completed on 2026-11-03 10:48:37

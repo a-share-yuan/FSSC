@@ -36,7 +36,7 @@ CREATE TABLE `bg_adjust_line` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant` (`tenant_id`),
   KEY `idx_tenant_adjust` (`tenant_id`,`adjust_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='预算调整明细';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='预算调整明细';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -45,6 +45,7 @@ CREATE TABLE `bg_adjust_line` (
 
 LOCK TABLES `bg_adjust_line` WRITE;
 /*!40000 ALTER TABLE `bg_adjust_line` DISABLE KEYS */;
+INSERT INTO `bg_adjust_line` VALUES (1,1,1,7,5,5000.00,NULL,NULL),(2,1,2,7,5,200.00,NULL,NULL);
 /*!40000 ALTER TABLE `bg_adjust_line` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -57,4 +58,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:13:44
+-- Dump completed on 2026-11-03 10:48:15
