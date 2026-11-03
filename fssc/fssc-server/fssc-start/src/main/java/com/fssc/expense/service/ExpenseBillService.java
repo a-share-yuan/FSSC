@@ -126,6 +126,8 @@ public class ExpenseBillService {
 
     private final ExpBillMapper expBillMapper;
     private final ExpBillLineMapper expBillLineMapper;
+    /** 分摊行（exp_bill_share）驱动预算占用——多部门分摊时按分摊行分别占用 */
+    private final com.fssc.expense.mapper.ExpBillShareMapper expBillShareMapper;
     /** 表单元数据引擎：必录/长度/数值规则从代码搬到配置，此处做权威校验 */
     private final FormMetaService formMetaService;
     private final ExpBillAttachMapper expBillAttachMapper;
@@ -756,7 +758,7 @@ public class ExpenseBillService {
             throw new BizException(ErrorCode.PARAM_INVALID, "发票不存在: " + invoiceId);
         }
         // 销项票不可生成报销草稿。必须在 saveDraft 之前拦——
-        // 后置到 bindToBill 会先落一张脏 CLAIM 草稿（R-18 同型坑）。
+        // 后置到 bindToBill 会先落一张脏 CLAIM 草稿（ 同型坑）。
         if (InvoiceService.isOutputInvoice(inv)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "发票 " + inv.getInvoiceNo() + " 是销项发票（本公司开具），不能用于生成报销草稿");
@@ -1034,12 +1036,49 @@ public class ExpenseBillService {
         List<String> noBudgetLines = new ArrayList<>();
         BigDecimal noBudgetAmount = BigDecimal.ZERO;
         LinkedHashSet<Long> repayBudgetItems = new LinkedHashSet<>();
+        // 分摊行驱动占用。改造前整单只落一条预算线（exp_bill_share 全仓仅 CRUD 四个引用点、
+        // 无任何消费方），多部门分摊时要么被 conflict 拒提、要么全额占在制单人部门上。
+        // 现按分摊行（line_id 维度）逐行解析预算并分别占用；无分摊行的行保持原单线逻辑。
+        java.util.Map<Long, List<com.fssc.expense.entity.ExpBillShare>> sharesByLine = new java.util.HashMap<>();
+        if (!isRepayBill) {
+            List<com.fssc.expense.entity.ExpBillShare> shares = expBillShareMapper.selectList(
+                    new LambdaQueryWrapper<com.fssc.expense.entity.ExpBillShare>()
+                            .eq(com.fssc.expense.entity.ExpBillShare::getBillId, billId));
+            for (com.fssc.expense.entity.ExpBillShare sh : shares) {
+                if (sh.getLineId() != null && sh.getShareAmount() != null && sh.getShareAmount().signum() > 0) {
+                    sharesByLine.computeIfAbsent(sh.getLineId(), k -> new ArrayList<>()).add(sh);
+                }
+            }
+        }
         for (ExpBillLine line : lines) {
             if (line.getAmount() == null) {
                 continue;
             }
+            // 分摊行优先：一条明细被拆到多个承担部门时，按分摊金额分别占用各自部门预算
+            List<com.fssc.expense.entity.ExpBillShare> lineShares = sharesByLine.get(line.getId());
+            if (lineShares != null && !lineShares.isEmpty()) {
+                for (com.fssc.expense.entity.ExpBillShare sh : lineShares) {
+                    BigDecimal shAmt = sh.getShareAmount();
+                    Long shItem = budgetService.resolveOccupyItem(
+                            sh.getBudgetItemId(), line.getItemId(),
+                            sh.getCompanyId() != null ? sh.getCompanyId() : bill.getCompanyId(),
+                            sh.getDeptId() != null ? sh.getDeptId() : bill.getDeptId(),
+                            bill.getPeriodYear(),
+                            sh.getProjectId() != null ? sh.getProjectId() : bill.getProjectId());
+                    if (shItem == null) {
+                        noBudgetLines.add("行" + line.getLineNo() + "分摊至部门 " + sh.getDeptId()
+                                + "（" + shAmt + "）未命中预算明细");
+                        noBudgetAmount = noBudgetAmount.add(shAmt);
+                        continue;
+                    }
+                    budgetService.occupy(shItem, shAmt,
+                            BudgetService.occupyBizTypeOf(bill.getBillType()),
+                            billId, bill.getBillNo(), overrunReason);
+                }
+                continue;
+            }
             Long budgetItemId = budgetService.resolveOccupyItem(line.getBudgetItemId(), line.getItemId(),
-                    bill.getCompanyId(), bill.getDeptId(), bill.getPeriodYear());
+                    bill.getCompanyId(), bill.getDeptId(), bill.getPeriodYear(), bill.getProjectId());
             if (budgetItemId == null) {
                 if (!isRepayBill) {
                     noBudgetLines.add("行" + line.getLineNo() + "（费用项 " + line.getItemId() + "，" + line.getAmount() + "）");
@@ -2110,7 +2149,7 @@ public class ExpenseBillService {
         //   反审核是否连带冲销收款属产品规则，仍留原状待主窗裁。
         BigDecimal restoredLoan = expenseBizAction.rollbackLoanLedgerOnUnaudit(bill);
         if (restoredLoan.signum() > 0) {
-            log.info("单据 {} 反审核：借款台账已反冲 {}（冲抵流水作废＋余额/翻档按台账重算，X-40 甲成对腿）",
+            log.info("单据 {} 反审核：借款台账已反冲 {}（冲抵流水作废＋余额/翻档按台账重算）",
                     bill.getBillNo(), restoredLoan);
         }
         ExpBill update = new ExpBill();
@@ -2397,7 +2436,7 @@ public class ExpenseBillService {
      */
     private String relationBillIdsSql() {
         long t = TenantContext.getTenantId();
-        return "SELECT id FROM ("
+        return "/* tenant-ok: 按 file_id 全局唯一键计数附件引用，无跨租户撞号 */ SELECT id FROM ("
                 + "SELECT source_bill_id AS id FROM exp_bill_relation WHERE tenant_id = " + t
                 + " UNION SELECT target_bill_id FROM exp_bill_relation WHERE tenant_id = " + t
                 + ") d";
@@ -2484,7 +2523,7 @@ public class ExpenseBillService {
      */
     private String mineBillIdsSql(Long userId) {
         long t = TenantContext.getTenantId();
-        return "SELECT id FROM ("
+        return "/* tenant-ok: 按 file_id 全局唯一键计数附件引用，无跨租户撞号 */ SELECT id FROM ("
                 + "SELECT id FROM exp_bill WHERE tenant_id = " + t + " AND apply_user_id = " + userId
                 + " UNION SELECT id FROM exp_bill WHERE tenant_id = " + t + " AND agent_user_id = " + userId
                 + ") d";
@@ -2797,9 +2836,9 @@ public class ExpenseBillService {
             Long liveRefs = expBillAttachMapper.selectCount(
                     new LambdaQueryWrapper<ExpBillAttach>().eq(ExpBillAttach::getFileId, fid));
             Long coldRefs = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM exp_bill_attach_cold WHERE file_id = ? AND del_flag = 0", Long.class, fid);
+                    "/* tenant-ok: 按 file_id 全局唯一键计数附件引用，无跨租户撞号 */ SELECT COUNT(*) FROM exp_bill_attach_cold WHERE file_id = ? AND del_flag = 0", Long.class, fid);
             Long archRefs = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM op_archive WHERE file_id = ? AND del_flag = 0", Long.class, fid);
+                    "/* tenant-ok: 按 file_id 全局唯一键计数附件引用，无跨租户撞号 */ SELECT COUNT(*) FROM op_archive WHERE file_id = ? AND del_flag = 0", Long.class, fid);
             if ((liveRefs != null && liveRefs > 0) || (coldRefs != null && coldRefs > 0) || (archRefs != null && archRefs > 0)) {
                 continue;
             }

@@ -503,7 +503,7 @@ public class MdAssetService {
             throw new BizException(ErrorCode.PARAM_INVALID, "新原值必须大于0");
         }
         BigDecimal delta = newOriginalAmount.subtract(nvl(a.getOriginalAmount()));
-        // 批次0 P-4 / A1：原值/净值改账挪到审批通过后（assetBizAction 按流程变量写入数据库），
+        // 原值/净值改账挪到审批通过后（assetBizAction 按流程变量写入数据库），
         // 此处不再预写——驳回/起流失败资产零改动。新值经变量传递，审批人看标题金额=调整额。
         Map<String, Object> extra = new HashMap<>();
         extra.put("newOriginalAmount", newOriginalAmount);
@@ -532,7 +532,7 @@ public class MdAssetService {
             throw new BizException(ErrorCode.PARAM_INVALID, "减值金额不能为负");
         }
         BigDecimal net = nvl(a.getNetAmount()).subtract(impairmentAmount);
-        // 批次0 P-4 / A1：同 adjustValue——净值改账挪到审批通过后，目标值经变量传递。
+        // 同 adjustValue——净值改账挪到审批通过后，目标值经变量传递。
         Map<String, Object> extra = new HashMap<>();
         extra.put("newNetAmount", net.compareTo(ZERO) < 0 ? ZERO : net);
         extra.put("impairmentAmount", impairmentAmount);

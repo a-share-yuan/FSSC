@@ -36,4 +36,14 @@ public class GlJournalEntry extends TenantAuditBase {
     private String status;
     /** 记账凭证号 */
     private String voucherNo;
+
+
+    /** 费用项目（md_expense_item.id）：预提/待摊的预算维度来源 */
+    private Long expenseItemId;
+    /** 承担部门（sys_dept.id）：预算维度来源，可空（公司级预算行不区分部门） */
+    private Long deptId;
+    /** 实际占用到的预算明细（bg_item.id）；空＝未命中预算行（未占用，见 budgetOccupyStatus） */
+    private Long budgetItemId;
+    /** 预算占用状态：OCCUPIED 已申请占用 / RELEASED 已冲回 / NONE 未匹配预算行未占用 / null 本类型不涉预算 */
+    private String budgetOccupyStatus;
 }

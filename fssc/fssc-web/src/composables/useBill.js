@@ -15,6 +15,7 @@ import { splitTaxInclusive } from '../utils/tax'
 import { requiredOf, missingBillField } from '../constants/billRequired'
 import { invoiceOutcome } from '../utils/invoiceOutcome'
 import { isInvoiceFile } from '../utils/attachKind'
+import { fetchAllPages } from '../utils/paging'
 import { i18n } from '../i18n'
 
 
@@ -472,12 +473,13 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     const [it, bg, ct, py] = await Promise.all([
       safe(mdApi.expenseItems()),
       safe(mdApi.budgets({ pageNum: 1, pageSize: 200, budgetYear: form.bill.periodYear ?? undefined })),
-      safe(mdApi.cities({ pageNum: 1, pageSize: 2000 })),
+      // 城市是下拉全量项，不能写死上限：超过 pageSize 会静默截断，表现为「搜不到某个城市」。
+      safe(fetchAllPages((p) => mdApi.cities(p), { pageSize: 500 })),
       safe(mdApi.payees({ pageNum: 1, pageSize: 200 })),
     ])
     if (it !== null) fillArr(items.value, (it || []).filter((x) => x && x.itemName && x.itemName.trim()))
     if (bg !== null) { fillArr(budgets.value, (bg && bg.list) || []); budgetPoolYear.value = form.bill.periodYear ?? null }
-    if (ct !== null) fillArr(cities.value, (ct && ct.list) || [])
+    if (ct !== null) fillArr(cities.value, ct || [])
     if (py !== null) fillArr(payees.value, (py && py.list) || [])
     mdLoadFailed.value = it === null || bg === null || ct === null || py === null
     mdLoadFailed.value = it === null || bg === null || ct === null || py === null

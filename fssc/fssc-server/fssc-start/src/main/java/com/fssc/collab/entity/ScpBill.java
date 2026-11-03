@@ -17,8 +17,8 @@ import java.time.LocalDateTime;
 
 /**
  * SCP 供应商协同发票全流程单（AP 蓝图 SCC_AP_01~10、状态机4.3、打通点1~7）：
- * 待匹配 →(自动/手工匹配 R-16~18)→ 待寄送 →(创建邮包)→ 待签收 →(内网签收)→ 待扫描 →
- * 扫描+票核(R-20六要素) → 票核成功 →(记账·打通点3，受 R-14 关账冻结拦截)→ 记账成功 →
+ * 待匹配 →(自动/手工匹配 ~18)→ 待寄送 →(创建邮包)→ 待签收 →(内网签收)→ 待扫描 →
+ * 扫描+票核(六要素) → 票核成功 →(记账·打通点3，受 关账冻结拦截)→ 记账成功 →
  * 集中认证(打通点6) → 认证完成；付款回写(打通点5)落在已记账/已认证单上。
  * 失败分支：匹配失败（重新匹配）、票核失败（复核后回到待匹配）。
  */
@@ -38,7 +38,7 @@ public class ScpBill implements Serializable {
     private String billNo;
     /** 对账单号（三单匹配最小单位/匹配批次号，打通点1） */
     private String reconBillNo;
-    /** 预制发票号 = 对账单号+三位流水（R-31，打通点2） */
+    /** 预制发票号 = 对账单号+三位流水（，打通点2） */
     private String preInvoiceNo;
     /** 发票号码/代码（抽取回填/扫描匹配键） */
     private String invoiceNo;
@@ -48,7 +48,7 @@ public class ScpBill implements Serializable {
     private String supplierName;
     /** 购方公司代码 */
     private String buyerCompanyCode;
-    /** 专票/普票（供应商确认对账单时选择，R-30） */
+    /** 专票/普票（供应商确认对账单时选择） */
     private String invoiceType;
     private String ccy;
     /** 发票金额/税额/价税合计 */
@@ -60,7 +60,7 @@ public class ScpBill implements Serializable {
     private BigDecimal reconAmount;
     private BigDecimal reconTaxAmount;
     private BigDecimal reconTotal;
-    /** 票核六要素 R-20：购方税号/销方税号 + 上方金额/税额/价税合计/发票日期 */
+    /** 票核六要素 ：购方税号/销方税号 + 上方金额/税额/价税合计/发票日期 */
     private String buyerTaxNo;
     private String sellerTaxNo;
     /** 扫描件影像引用 */
@@ -75,7 +75,7 @@ public class ScpBill implements Serializable {
     private String certifyResult;
     private LocalDate certifyDate;
     /** WAIT_MATCH/WAIT_SEND/MATCH_FAILED/WAIT_SIGN/WAIT_SCAN/CHECKING/CHECK_OK/CHECK_FAILED/POSTED/CERTIFIED/FORCE_PENDING/VOIDED */
-    /** NONE/PENDING/APPROVED/REJECTED（R-18 强匹审批） */
+    /** NONE/PENDING/APPROVED/REJECTED（ 强匹审批） */
     private String forceStatus;
     private String forceReason;
     private String forceApplyUser;

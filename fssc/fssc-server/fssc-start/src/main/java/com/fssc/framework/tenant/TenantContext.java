@@ -65,6 +65,19 @@ public final class TenantContext {
         TL.set(new TenantInfo(null, false));
     }
 
+    /**
+     * 读取当前租户，<b>无上下文时返回 null 而不抛异常</b>。
+     *
+     * <p>只给「有上下文就收窄、没有就跨租户扫描」的调用点用（如
+     * {@code EngineTenantScope}）：调度线程本来就没有租户上下文，用
+     * {@link #getTenantId()} 会直接抛「TenantContext 未初始化」，把整个定时任务打死。
+     * <b>业务 SQL 一律用 {@link #getTenantId()}</b>，那里的 fail-closed 不能放松。
+     */
+    public static Long peekTenantId() {
+        TenantInfo info = TL.get();
+        return info == null ? null : info.tenantId;
+    }
+
     public static Long getTenantId() {
         TenantInfo info = TL.get();
         if (info == null) {

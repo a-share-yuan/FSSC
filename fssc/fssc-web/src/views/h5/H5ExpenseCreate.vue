@@ -29,7 +29,7 @@
       </section>
 
       <section v-else class="h5-body">
-        <!-- 本机草稿恢复提示（/ UX-06：填一半被返回就没了） -->
+        <!-- 本机草稿恢复提示（/ ：填一半被返回就没了） -->
         <div v-if="restoredAt" class="h5-denied">
           <div class="h5-denied__t">已恢复本机未提交的草稿</div>
           <div class="h5-denied__d">保存于 {{ timeText(restoredAt) }}。提交成功后会自动清掉；不想接着填可点下面丢弃。</div>
@@ -108,7 +108,7 @@
         <H5FoldCard v-model:open="folds.lines" title="费用明细" :summary="linesSum" :tone="linesTone"
                     @input="clearErrOnInput" @change="clearErrOnInput">
 
-          <!-- 常用费用项 Top5：一次点按填进当前空行，省掉在手机长下拉里翻（UX-08） -->
+          <!-- 常用费用项 Top5：一次点按填进当前空行，省掉在手机长下拉里翻 -->
           <div v-if="recentChips.length" class="h5-chips">
             <button v-for="c in recentChips" :key="c.id" class="h5-chip"
                     :class="{ on: form.lines.some((l) => String(l.itemId) === String(c.id)) }"
@@ -1200,7 +1200,7 @@ async function loadOriginal(id) {
 }
 function safeParse(s) { try { return JSON.parse(s || '{}') } catch { return {} } }
 
-/* 离开确认（UX-06） */
+/* 离开确认 */
 function leave() {
   if (window.history.state && window.history.state.back) router.back()
   else router.replace('/h5')

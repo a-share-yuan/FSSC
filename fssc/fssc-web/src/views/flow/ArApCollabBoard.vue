@@ -311,7 +311,7 @@ const preInvoiceOptions = ref([])
 const current = ref(null)
 const form = reactive({})
 const createFormRef = ref(null)
-// 对账单号是预制发票号的取号依据（R-31：预制发票号=对账单号+流水），留空整张票无从生成
+// 对账单号是预制发票号的取号依据（：预制发票号=对账单号+流水），留空整张票无从生成
 const createRules = computed(() => ({
   reconBillNo: commonRules.required(t('flow.collab.phStatementNo')),
   amount: commonRules.amountText(t('flow.collab.phInvoiceAmount')),

@@ -145,11 +145,21 @@ public class WfModelService {
     private void deployToEngine(WfModel model, WfModel old) {
         try {
             String key = old.getModelKey();
+            String tid = EngineTenantScope.tenantStr();
+            if (tid == null) {
+                // 发布必须在租户上下文内。无租户部署会写出 TENANT_ID_ 为空的定义，
+                // 之后本租户按租户谓词永远查不到它——"发布了却不生效"最难排查的一类。
+                throw new BizException(ErrorCode.PARAM_INVALID, "发布失败：缺少租户上下文，无法按租户部署流程定义");
+            }
+            // (A)：部署打租户。此前四个部署点从未调用 tenantId(...)，
+            // 而 wf_model 的唯一键是 (tenant_id, model_key)——两个租户可有同名 model_key，
+            // 谁后部署谁接管 latestVersion()，A 家改流程会作用到 B 家的在办与新发起实例。
             Deployment dep = repositoryService.createDeployment()
                     .addString(key + ".bpmn20.xml", model.getBpmnXml())
                     .name(model.getModelName() == null ? key : model.getModelName())
+                    .tenantId(tid)
                     .deploy();
-            var pd = repositoryService.createProcessDefinitionQuery()
+            var pd = EngineTenantScope.definitionQuery(repositoryService)
                     .deploymentId(dep.getId()).singleResult();
             WfModel upd = new WfModel();
             upd.setId(model.getId());

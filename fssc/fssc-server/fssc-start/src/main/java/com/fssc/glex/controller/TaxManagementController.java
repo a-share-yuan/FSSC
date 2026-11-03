@@ -11,9 +11,7 @@ import com.fssc.framework.security.annotation.DataScope;
 import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.glex.entity.TaxDeclaration;
-import com.fssc.glex.entity.TaxInputCertify;
 import com.fssc.glex.entity.TaxRiskIndicator;
-import com.fssc.glex.service.TaxCertifyService;
 import com.fssc.glex.service.TaxDeclarationService;
 import com.fssc.glex.service.TaxRiskService;
 import lombok.RequiredArgsConstructor;
@@ -25,101 +23,31 @@ import java.util.List;
 /**
  * 税务管理统一入口（税务一体化）。
  * <p>
- * 覆盖三大模块：
- * 1. 进项认证台账（/api/tax/certify/*）
- * 2. 全税种申报（/api/tax/declaration/*）
- * 3. 税务风险指标（/api/tax/risk/*）
+ * 覆盖两大模块：
+ * 1. 全税种申报（/api/tenant/tax/declaration/*）
+ * 2. 税务风险指标（/api/tenant/tax/risk/*）
+ * <p>
+ * <b>进项认证不在这里</b>：认证的对象是发票池里的进项发票，唯一写入口是
+ * {@code InvoiceService.certify/cancelCertify/transferOut}（{@code /api/tenant/invoice/certify/**}，
+ * 页面在「发票管理 → 进项发票认证」）。税务侧此前另有一套 {@code /tax/certify/**} 与独立页面，
+ * 与本域重复且状态口径不一致，已于 2026-11-03 合并删除——一套动作只能有一个入口。
  * <p>
  * WS-6 安全加固：全部端点补 {@code @DataScope}，由切面写入登录人数据范围，
  * 服务层据此按公司维度办结（读过滤 + 写归属校验），杜绝同租户内跨公司读写。
+ * <p>
+ * <b></b>：base path 由 {@code /api/tax} 收到 {@code /api/tenant/tax}。
+ * 原前缀既不在 {@code /api/platform/**} 也不在 {@code /api/tenant/**}，等于游离在两级路由闸之外
+ * （{@code JwtAuthFilter} 只对这两个前缀做身份维度拦截）；同时它与发票能力网关的中性契约
+ * {@code /api/tax/v1/**}（{@code TaxInvoiceAdapter}、{@code QxyGatewayOcrChannel}）撞面，
+ * 路由归属含糊。收进 tenant 前缀后平台账号调这些端点会被 TENANT_ONLY 直接拒。
  */
 @RestController
-@RequestMapping("/api/tax")
+@RequestMapping("/api/tenant/tax")
 @RequiredArgsConstructor
 public class TaxManagementController {
 
-    private final TaxCertifyService certifyService;
     private final TaxDeclarationService declarationService;
     private final TaxRiskService riskService;
-
-    // 进项认证台账
-
-    @RequiresFeature("FSSC_TAX")
-    @RequiresPerm("gl:taxcertify:list")
-    @DataScope("税务进项认证数据范围")
-    @GetMapping("/certify/page")
-    public Result<PageResult<TaxInputCertify>> certifyPage(
-            PageQuery query,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String status) {
-        return Result.success(certifyService.page(query.getPageNum(), query.getPageSize(), keyword, status));
-    }
-
-    @RequiresFeature("FSSC_TAX")
-    @RequiresPerm("gl:taxcertify:create")
-    @DataScope("税务进项认证数据范围")
-    @OperLog(module = "TAX_CERTIFY", operType = "INSERT", desc = "新增进项认证台账")
-    @PostMapping("/certify")
-    public Result<Long> createCertify(@RequestBody TaxInputCertify record) {
-        return Result.success(certifyService.create(record));
-    }
-
-    @RequiresFeature("FSSC_TAX")
-    @RequiresPerm("gl:taxcertify:certify")
-    @DataScope("税务进项认证数据范围")
-    @OperLog(module = "TAX_CERTIFY", operType = "UPDATE", desc = "认证发票")
-    @PutMapping("/certify/{id}/certify")
-    public Result<Void> certify(@PathVariable Long id, @RequestParam(required = false) String period) {
-        certifyService.certify(id, period);
-        return Result.success();
-    }
-
-    @RequiresFeature("FSSC_TAX")
-    @RequiresPerm("gl:taxcertify:certify")
-    @DataScope("税务进项认证数据范围")
-    @OperLog(module = "TAX_CERTIFY", operType = "UPDATE", desc = "批量认证")
-    @PutMapping("/certify/batch-certify")
-    public Result<Integer> batchCertify(@RequestBody List<Long> ids, @RequestParam(required = false) String period) {
-        return Result.success(certifyService.batchCertify(ids, period));
-    }
-
-    @RequiresFeature("FSSC_TAX")
-    @RequiresPerm("gl:taxcertify:deduct")
-    @DataScope("税务进项认证数据范围")
-    @OperLog(module = "TAX_CERTIFY", operType = "UPDATE", desc = "抵扣进项税")
-    @PutMapping("/certify/{id}/deduct")
-    public Result<Void> deduct(@PathVariable Long id, @RequestParam(required = false) String period) {
-        certifyService.deduct(id, period);
-        return Result.success();
-    }
-
-    @RequiresFeature("FSSC_TAX")
-    @RequiresPerm("gl:taxcertify:transfer")
-    @DataScope("税务进项认证数据范围")
-    @OperLog(module = "TAX_CERTIFY", operType = "UPDATE", desc = "进项转出")
-    @PutMapping("/certify/{id}/transfer")
-    public Result<Void> transfer(@PathVariable Long id, @RequestParam String reason) {
-        certifyService.transfer(id, reason);
-        return Result.success();
-    }
-
-    @RequiresFeature("FSSC_TAX")
-    @RequiresPerm("gl:taxcertify:revoke")
-    @DataScope("税务进项认证数据范围")
-    @OperLog(module = "TAX_CERTIFY", operType = "UPDATE", desc = "撤销认证")
-    @PutMapping("/certify/{id}/revoke")
-    public Result<Void> revoke(@PathVariable Long id) {
-        certifyService.revoke(id);
-        return Result.success();
-    }
-
-    @RequiresFeature("FSSC_TAX")
-    @RequiresPerm("gl:taxcertify:list")
-    @DataScope("税务进项认证数据范围")
-    @GetMapping("/certify/sum-deductible")
-    public Result<BigDecimal> sumDeductible(@RequestParam String period) {
-        return Result.success(certifyService.sumDeductible(period));
-    }
 
     // 全税种申报
 
@@ -183,6 +111,26 @@ public class TaxManagementController {
         return Result.success();
     }
 
+    /** 补出/重出应缴凭证：申报确认时出证失败或历史单从未出证时重试，幂等 */
+    @RequiresFeature("FSSC_TAX")
+    @RequiresPerm("gl:taxdecl:file")
+    @DataScope("税务申报数据范围")
+    @OperLog(module = "TAX_DECLARATION", operType = "UPDATE", desc = "生成应缴凭证")
+    @PostMapping("/declaration/{id}/voucher")
+    public Result<Long> declarationVoucher(@PathVariable Long id) {
+        return Result.success(declarationService.generateVoucher(id));
+    }
+
+    /** 更正（调整）申报：复制原申报单到新属期并置 ADJUST，关联原单 */
+    @RequiresFeature("FSSC_TAX")
+    @RequiresPerm("gl:taxdecl:create")
+    @DataScope("税务申报数据范围")
+    @OperLog(module = "TAX_DECLARATION", operType = "INSERT", desc = "更正申报")
+    @PostMapping("/declaration/{id}/adjust-copy")
+    public Result<Long> adjustCopy(@PathVariable Long id, @RequestParam(required = false) String period) {
+        return Result.success(declarationService.copyForAdjust(id, period));
+    }
+
     @RequiresFeature("FSSC_TAX")
     @RequiresPerm("gl:taxdecl:list")
     @DataScope("税务申报数据范围")
@@ -228,5 +176,15 @@ public class TaxManagementController {
     @GetMapping("/risk/summary")
     public Result<TaxRiskService.RiskSummary> riskSummary(@RequestParam(required = false) String period) {
         return Result.success(riskService.summary(period));
+    }
+
+    /** 税负率自动算（唯一自动指标），数据源与「税负分析」报表同一条 SQL */
+    @RequiresFeature("FSSC_TAX")
+    @RequiresPerm("gl:taxrisk:resolve")
+    @DataScope("税务风险数据范围")
+    @OperLog(module = "TAX_RISK", operType = "UPDATE", desc = "计算税负率指标")
+    @PostMapping("/risk/compute-burden")
+    public Result<TaxRiskIndicator> computeBurden(@RequestParam String period) {
+        return Result.success(riskService.computeTaxBurden(period));
     }
 }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
+
 /**
  * usePrintTemplate - 打印/套打引擎 composable（V1.4.81）
  *

@@ -282,7 +282,7 @@
       </div>
     </Transition>
 
-    <!-- 影像大图（UX-03：审批人要能看清票据本身；不做在线预览器，列表＋大图即本期交付面） -->
+    <!-- 影像大图（：审批人要能看清票据本身；不做在线预览器，列表＋大图即本期交付面） -->
     <Transition name="h5-fade">
       <div v-if="viewer != null" class="h5-lightbox" @click="viewer = null">
         <button class="h5-lightbox__x" aria-label="关闭大图" @click.stop="viewer = null">×</button>

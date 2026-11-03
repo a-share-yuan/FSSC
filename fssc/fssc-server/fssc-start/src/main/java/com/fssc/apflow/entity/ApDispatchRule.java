@@ -13,7 +13,7 @@ import lombok.Data;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
-/** AP派工规则（蓝图 R-01~R-05）：按付款方法派工；多负责人=选单池；SLA/组长字段支撑转审升级。 */
+/** AP派工规则（蓝图）：按付款方法派工；多负责人=选单池；SLA/组长字段支撑转审升级。 */
 @Data
 @TableName("ap_dispatch_rule")
 public class ApDispatchRule implements Serializable {
@@ -33,7 +33,7 @@ public class ApDispatchRule implements Serializable {
     private String paymentWay;
     /** 负责人清单（逗号分隔，多人=选单池） */
     private String handlers;
-    /** AP组长（修改付款方式转审 R-03） */
+    /** AP组长（修改付款方式转审） */
     private String groupLeader;
     private String companyCode;
     /** SLA时限（小时） */

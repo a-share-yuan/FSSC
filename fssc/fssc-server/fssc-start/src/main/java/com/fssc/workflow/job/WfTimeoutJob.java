@@ -34,6 +34,7 @@ import com.fssc.workflow.service.WfEngineFacade;
 import com.fssc.workflow.service.WfNodeConfigResolver;
 import com.fssc.workflow.service.WfQueryService;
 import com.fssc.workflow.service.WorkCalendarService;
+import com.fssc.workflow.service.EngineTenantScope;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -134,7 +135,7 @@ public class WfTimeoutJob {
      * 整轮扫描内的引擎侧在办任务 id 快照。
      *
      * <p><b>为什么需要</b>：{@link #handleByNodeConfig}/{@link #handleByLegacyRule} 对每条已超时的
-     * 任务都要 {@code taskService.createTaskQuery().taskId(..).singleResult()} 判「引擎侧是否已办结」。
+     * 任务都要 {@code EngineTenantScope.taskQuery(taskService).taskId(..).singleResult()} 判「引擎侧是否已办结」。
      * 在办任务上万、其中大量镜像行在引擎侧并无对应任务（幽灵 PENDING）时，
      * 逐条单行查询会把每轮扫描拖到几十秒（而扫描是 60 秒一次），挤占交互请求。
      *
@@ -272,7 +273,7 @@ public class WfTimeoutJob {
             // 装载失败则保持 null ⇒ 全部退回逐条查引擎，结论与用快照时一致。
             try {
                 Set<String> engineIds = new HashSet<>();
-                for (Task ft : taskService.createTaskQuery().list()) {
+                for (Task ft : EngineTenantScope.taskQuery(taskService).list()) {
                     engineIds.add(ft.getId());
                 }
                 engineTaskSnapshot.set(engineIds);
@@ -683,7 +684,7 @@ public class WfTimeoutJob {
                 // 引擎侧已办结，镜像行是幽灵 PENDING：交给双账补齐脚本，超时动作不空转
                 return true;
             }
-            Task ftask = taskService.createTaskQuery().taskId(t.getTaskId()).singleResult();
+            Task ftask = EngineTenantScope.taskQuery(taskService).taskId(t.getTaskId()).singleResult();
             if (ftask == null) {
                 // 引擎侧已办结，镜像行是幽灵 PENDING：交给双账补齐脚本，超时动作不空转
                 return true;
@@ -746,7 +747,7 @@ public class WfTimeoutJob {
         if (engineTaskGone(t.getTaskId())) {
             return;
         }
-        Task ftask = taskService.createTaskQuery().taskId(t.getTaskId()).singleResult();
+        Task ftask = EngineTenantScope.taskQuery(taskService).taskId(t.getTaskId()).singleResult();
         if (ftask == null) {
             return;
         }
@@ -1237,7 +1238,7 @@ public class WfTimeoutJob {
      * @return 本次实际催办的任务数（并行/会签多任务时 &gt; 1）
      */
     private int urgeByInitiator(String procInstId, Long initiatorId, String initiatorName) {
-        List<Task> open = taskService.createTaskQuery().processInstanceId(procInstId).active().list();
+        List<Task> open = EngineTenantScope.taskQuery(taskService).processInstanceId(procInstId).active().list();
         if (open.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "该单据当前没有在办环节，无需催办");

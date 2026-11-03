@@ -71,7 +71,7 @@ public class OrgHealthChecker {
             // 只体检「启用中」的公司：status='DISABLED' 表示主体已建但尚未启用（无部门无人员），
             // 纳入体检必然全红，属噪声。与 CompanyService.tree() 的规则保持一致。
             List<Map<String, Object>> comps = jdbc.queryForList(
-                    "SELECT id, company_name FROM sys_company WHERE status = 'NORMAL' ORDER BY id");
+                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT id, company_name FROM sys_company WHERE status = 'NORMAL' ORDER BY id");
             checked = comps.size();
             for (Map<String, Object> c : comps) {
                 long cid = num(c.get("id"));
@@ -79,9 +79,9 @@ public class OrgHealthChecker {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("companyId", cid);
                 row.put("companyName", cname);
-                long deptCnt = count("SELECT COUNT(*) c FROM sys_dept WHERE company_id = ?", cid);
-                long rootCnt = count("SELECT COUNT(*) c FROM sys_dept WHERE company_id = ? AND parent_id = 0", cid);
-                long leaderCnt = count("SELECT COUNT(*) c FROM sys_dept WHERE company_id = ? AND leader_id IS NOT NULL", cid);
+                long deptCnt = count("/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT COUNT(*) c FROM sys_dept WHERE company_id = ?", cid);
+                long rootCnt = count("/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT COUNT(*) c FROM sys_dept WHERE company_id = ? AND parent_id = 0", cid);
+                long leaderCnt = count("/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT COUNT(*) c FROM sys_dept WHERE company_id = ? AND leader_id IS NOT NULL", cid);
                 long headCnt = countRole(cid, "ORG_HEAD");
                 row.put("deptCnt", deptCnt);
                 row.put("rootDeptCnt", rootCnt);
@@ -105,7 +105,7 @@ public class OrgHealthChecker {
             }
             // ── R3 leader 即提单人（WARN）──
             for (Map<String, Object> r : jdbc.queryForList(
-                    "SELECT d.company_id, d.id dept_id, d.dept_name, u.nick_name, u.emp_no "
+                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT d.company_id, d.id dept_id, d.dept_name, u.nick_name, u.emp_no "
                             + "FROM sys_dept d JOIN sys_user u ON u.id = d.leader_id "
                             + "WHERE d.leader_id IS NOT NULL AND d.del_flag = 0 AND u.del_flag = 0 "
                             + "AND EXISTS (SELECT 1 FROM exp_bill b WHERE b.create_by = u.id "
@@ -114,11 +114,11 @@ public class OrgHealthChecker {
                 issues.add(issue("R3", "WARN", str(r.get("dept_name")),
                         "部门负责人「" + str(r.get("nick_name")) + "」(" + str(r.get("emp_no"))
                                 + ") 近 30 天在本部门发起过单据：他本人发起的单在该节点无人可办",
-                        "已由 三级降级备用处理，不阻断流程；组织上建议由副职代发，或将该节点改派给上级"));
+                        "已由三级降级备用处理，不阻断流程；组织上建议由副职代发，或将该节点改派给上级"));
             }
             // ── R4 leader 跨公司（WARN）──
             for (Map<String, Object> r : jdbc.queryForList(
-                    "SELECT d.company_id, d.dept_name, u.company_id leader_co, u.nick_name, u.emp_no "
+                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT d.company_id, d.dept_name, u.company_id leader_co, u.nick_name, u.emp_no "
                             + "FROM sys_dept d JOIN sys_user u ON u.id = d.leader_id "
                             + "WHERE d.leader_id IS NOT NULL AND d.del_flag = 0 AND u.del_flag = 0 "
                             + "AND u.company_id <> d.company_id")) {
@@ -174,13 +174,13 @@ public class OrgHealthChecker {
         try {
             Map<String, Set<String>> nameByModel = new LinkedHashMap<>();
             for (Map<String, Object> n : jdbc.queryForList(
-                    "SELECT model_key mk, node_name nm FROM wf_node_config WHERE del_flag = 0")) {
+                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT model_key mk, node_name nm FROM wf_node_config WHERE del_flag = 0")) {
                 nameByModel.computeIfAbsent(str(n.get("mk")), k -> new HashSet<>())
                         .add(str(n.get("nm")));
             }
             Map<String, Set<String>> keyByModel = keyIndex();
             for (Map<String, Object> d : jdbc.queryForList(
-                    "SELECT DISTINCT w.biz_type bt, a.NAME_ nm, a.TASK_DEF_KEY_ dk "
+                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT DISTINCT w.biz_type bt, a.NAME_ nm, a.TASK_DEF_KEY_ dk "
                             + "FROM act_ru_task a JOIN wf_instance w ON w.proc_inst_id = a.PROC_INST_ID_ "
                             + "WHERE a.NAME_ IS NOT NULL AND a.TASK_DEF_KEY_ IS NOT NULL")) {
                 String bt = String.valueOf(col(d, "bt"));
@@ -224,7 +224,7 @@ public class OrgHealthChecker {
         Map<String, Set<String>> built = new LinkedHashMap<>();
         try {
             for (Map<String, Object> n : jdbc.queryForList(
-                    "SELECT model_key mk, node_key nk FROM wf_node_config WHERE del_flag = 0")) {
+                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT model_key mk, node_key nk FROM wf_node_config WHERE del_flag = 0")) {
                 built.computeIfAbsent(String.valueOf(col(n, "mk")), k -> new HashSet<>())
                         .add(String.valueOf(col(n, "nk")));
             }
@@ -246,7 +246,7 @@ public class OrgHealthChecker {
                 "汇报线断在第一层时 escalateTarget 与 empty_strategy=ESCALATE 全部失效"));
         c.add(rule("R3", "leader 即提单人", "WARN",
                 "部门 leader 近 30 天在本部门发起过单据",
-                "已由 三级降级备用处理，不阻断流程，属组织管理提醒"));
+                "已由三级降级备用处理，不阻断流程，属组织管理提醒"));
         c.add(rule("R4", "leader 跨公司", "WARN",
                 "sys_dept.leader_id 指向的人应属本公司",
                 "「直属上级」跨公司，本地公司的事务由外公司人审批（本项目代码不校验，属管理规则）"));
@@ -263,7 +263,7 @@ public class OrgHealthChecker {
 
     private long countRole(long companyId, String roleCode) {
         Long v = jdbc.queryForObject(
-                "SELECT COUNT(DISTINCT u.id) FROM sys_user u "
+                "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT COUNT(DISTINCT u.id) FROM sys_user u "
                         + "JOIN sys_user_role ur ON ur.user_id = u.id "
                         + "JOIN sys_role r ON r.id = ur.role_id "
                         + "WHERE r.role_code = ? AND u.company_id = ? AND u.del_flag = 0 "

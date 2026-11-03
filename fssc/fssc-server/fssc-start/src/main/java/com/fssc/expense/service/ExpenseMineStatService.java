@@ -22,7 +22,7 @@ import java.util.Map;
  *
  * <p><b>它解决什么：</b>原先该页的数字由前端「分页拉数据 + 本地累加」得出
  * （{@code H5Workbench.vue#loadMine} → {@code billApi.myPage(pageSize=200)} 再 {@code reduce} 求和），
- * 加总面最多只能覆盖 pageSize 条（方案册 UX-09 记的原始值是 50 条），单量一多余额就偏小且无从察觉。
+ * 加总面最多只能覆盖 pageSize 条（方案册 U 记的原始值是 50 条），单量一多余额就偏小且无从察觉。
  * 本类把每个指标改成一条 SQL 聚合（{@code SUM(CASE WHEN ...)}，与
  * {@code GlService#trialBalance}/{@code DashboardService#expenseByStatus} 同族写法），
  * 与页面上分页能取到多少条彻底解耦——**不受任何分页条数截断影响**。</p>

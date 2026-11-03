@@ -43,13 +43,18 @@ public class FsscTenantLineHandler implements TenantLineHandler {
      *     "租户上下文缺失"。链路上的租户归属靠 linku_recon_id 关联业务单据推导，不需要列级隔离。
      *   - sys_schema_version（补登记）：数据库迁移版本台账，库级元数据，
      *     由运维脚本在无租户上下文中读写，不属于任何租户。
+     *  - op_stability_log（补登记， 清库窗收口）：稳定性日快照，StabilityLogJob 每日 23:55
+     *     写**一行**（{@code UNIQUE KEY log_date}），供「连续 14 天无非计划重启/无 OOM」验收取值。
+     *     它是平台级运维观测，不是租户业务数据 —— 补 tenant_id 会把"一天一行"变成"一租户一天一行"，
+     *     既改变表语义，也让日快照在无租户上下文的调度线程里写不进去。与 op_job_heartbeat 同类，
+     *     故按全局运维表登记，不建列。
      *
      * 【登记规则】凡"无 tenant_id 列"的表，必须在此显式登记并写明理由；
      *  被排除在外的表由 scripts/health/check_tenant_coverage.sql 巡检暴露，默认按"应隔离"处理。
      */
     private static final Set<String> GLOBAL_DEF_TABLES = Set.of(
             "sys_menu", "sys_dict_type_def", "sys_dict_data_def", "inv_invoice_global",
-            "op_job_heartbeat", "sod_role_conflict", "sod_perm_conflict",
+            "op_job_heartbeat", "op_stability_log", "sod_role_conflict", "sod_perm_conflict",
             "linku_sync_log", "sys_schema_version");
 
     @Override

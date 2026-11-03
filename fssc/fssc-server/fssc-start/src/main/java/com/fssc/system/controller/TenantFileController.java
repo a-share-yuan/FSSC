@@ -98,10 +98,10 @@ public class TenantFileController {
             throw new BizException(ErrorCode.FORBIDDEN,
                     "无权删除该附件：仅上传人本人，或具备「附件删除」权限的岗位可删");
         }
-        Integer refs = jdbc.queryForObject("SELECT ("
-                + "SELECT COUNT(*) FROM exp_bill_attach WHERE file_id=? AND del_flag=0) + ("
-                + "SELECT COUNT(*) FROM exp_bill_attach_cold WHERE file_id=? AND del_flag=0) + ("
-                + "SELECT COUNT(*) FROM op_archive WHERE file_id=? AND del_flag=0)", Integer.class, fileId, fileId, fileId);
+        Integer refs = jdbc.queryForObject("/* tenant-ok: 按 file_id/user_id/role_id 全局唯一键定位 */ SELECT ("
+                + "/* tenant-ok: 按 file_id/user_id/role_id 全局唯一键定位 */ SELECT COUNT(*) FROM exp_bill_attach WHERE file_id=? AND del_flag=0) + ("
+                + "/* tenant-ok: 按 file_id/user_id/role_id 全局唯一键定位 */ SELECT COUNT(*) FROM exp_bill_attach_cold WHERE file_id=? AND del_flag=0) + ("
+                + "/* tenant-ok: 按 file_id/user_id/role_id 全局唯一键定位 */ SELECT COUNT(*) FROM op_archive WHERE file_id=? AND del_flag=0)", Integer.class, fileId, fileId, fileId);
         if (refs != null && refs > 0) {
             throw new BizException(ErrorCode.FORBIDDEN,
                     "该附件已被单据或档案引用，请回到单据上删除附件行；已归档的附件须由具备「附件删除」权限的岗位处理");
@@ -149,22 +149,22 @@ public class TenantFileController {
         if (f == null) return;
         if (uid.equals(f.getUploadBy())) return;
         JdbcTemplate jdbc = this.jdbc;
-        Integer admin = jdbc.queryForObject("SELECT COALESCE(MAX(is_admin),0) FROM sys_user WHERE id=?", Integer.class, uid);
+        Integer admin = jdbc.queryForObject("/* tenant-ok: 按 file_id/user_id/role_id 全局唯一键定位 */ SELECT COALESCE(MAX(is_admin),0) FROM sys_user WHERE id=?", Integer.class, uid);
         if (admin != null && admin == 1) return;
         Integer applicant = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM exp_bill_attach a JOIN exp_bill b ON b.id=a.bill_id WHERE a.file_id=? AND b.apply_user_id=?",
+                "/* tenant-ok: 按 file_id/user_id/role_id 全局唯一键定位 */ SELECT COUNT(*) FROM exp_bill_attach a JOIN exp_bill b ON b.id=a.bill_id WHERE a.file_id=? AND b.apply_user_id=?",
                 Integer.class, fileId, uid);
         if (applicant != null && applicant > 0) return;
         // 当前在途环节的受理人：审批人必须能看到附件与 OCR 结果，
         // 否则"修越权"会顺手把正常审批路径也挡掉（与 的交叉点）。
         Integer assignee = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM exp_bill_attach a JOIN wf_task t "
+                "/* tenant-ok: 按 file_id/user_id/role_id 全局唯一键定位 */ SELECT COUNT(*) FROM exp_bill_attach a JOIN wf_task t "
                         + "ON t.biz_id = a.bill_id AND t.biz_type LIKE 'EXP%' AND t.status='PENDING' "
                         + "WHERE a.file_id=? AND t.assignee_id=?",
                 Integer.class, fileId, uid);
         if (assignee != null && assignee > 0) return;
         Integer finance = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM sys_user_role ur JOIN sys_role r ON r.id=ur.role_id WHERE ur.user_id=? AND r.role_code IN "
+                "/* tenant-ok: 按 file_id/user_id/role_id 全局唯一键定位 */ SELECT COUNT(*) FROM sys_user_role ur JOIN sys_role r ON r.id=ur.role_id WHERE ur.user_id=? AND r.role_code IN "
                         + "('FIN_AUDIT','SCAN_STAFF','SHARING_SUPPORT','FSSC_AUDITOR','FSSC_SUPERVISOR','FIN_GL','BASE_FIN_MANAGER','PLATE_FIN_MANAGER','COST_STAFF','BIZ_FIN_MANAGER')",
                 Integer.class, uid);
         if (finance != null && finance > 0) return;

@@ -196,7 +196,7 @@ public class SoDService {
             // 流程一结束就清空，而历史轨迹全在 act_hi_taskinst。
             // 直接用 act_hi_taskinst 自带的 PROC_INST_ID_ 分组即可。
             for (Map<String, Object> h : jdbc.queryForList(
-                    "SELECT PROC_INST_ID_ AS inst, ASSIGNEE_ AS uid, TASK_DEF_KEY_ AS dk "
+                    "/* tenant-ok: proc_inst_id/start_user_id 全局唯一，租户内调用 */ SELECT PROC_INST_ID_ AS inst, ASSIGNEE_ AS uid, TASK_DEF_KEY_ AS dk "
                             + "FROM act_hi_taskinst "
                             + "WHERE ASSIGNEE_ IS NOT NULL AND TASK_DEF_KEY_ IS NOT NULL")) {
                 // JdbcTemplate 返回的列名按驱动/库大小写不定（MySQL 会返回大写 INST/UID/DK），
@@ -210,7 +210,7 @@ public class SoDService {
             // wf_instance 没有 del_flag 列（流程实例表靠 status 表达最终状态，不做逻辑删除），
             //   带上它会直接 Unknown column 抛错、被外层 catch 吞掉 → 本项永远 0 条。
             for (Map<String, Object> w : jdbc.queryForList(
-                    "SELECT proc_inst_id AS inst, start_user_id AS uid FROM wf_instance "
+                    "/* tenant-ok: proc_inst_id/start_user_id 全局唯一，租户内调用 */ SELECT proc_inst_id AS inst, start_user_id AS uid FROM wf_instance "
                             + "WHERE start_user_id IS NOT NULL")) {
                 starterByInstance.put(String.valueOf(col(w, "inst")), asLong(col(w, "uid")));
             }

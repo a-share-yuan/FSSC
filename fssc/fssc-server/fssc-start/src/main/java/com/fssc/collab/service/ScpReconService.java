@@ -30,7 +30,7 @@ import java.util.UUID;
 /**
  * SCP 供应商对账管理（AP 蓝图 SCC_AP_01/02，外网对账单管理，页面 9.1 序号 1~3，E1~E6）：
  * 收货信息导入（E1，ERP→协同平台 mock）→ 创建预制对账单（E4）→ 异议反馈/处理（E5）→
- * 确认对账单（E6，R-30 增专不调整/增普重算税额）→ 申请开票（打通点2 → ScpFlowService 落地 ScpBill）。
+ * 确认对账单（E6， 增专不调整/增普重算税额）→ 申请开票（打通点2 → ScpFlowService 落地 ScpBill）。
  */
 @Slf4j
 @Service
@@ -99,7 +99,7 @@ public class ScpReconService {
     }
 
     /**
-     * E6 确认对账单：选增专/增普（R-30）——增专数据不调整；增普按税率重算金额/税额/价税合计。
+     * E6 确认对账单：选增专/增普——增专数据不调整；增普按税率重算金额/税额/价税合计。
      * 确认完成即【打通点1】AP 三单匹配数据源就绪。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -115,7 +115,7 @@ public class ScpReconService {
         }
         r.setInvoiceType(invoiceType);
         if ("VAT_NORMAL".equals(invoiceType) && taxRatePct != null && taxRatePct.signum() >= 0) {
-            // R-30：增普按税率重算金额/税额/价税合计（不含税金额不变）
+            // 增普按税率重算金额/税额/价税合计（不含税金额不变）
             BigDecimal tax = nvl(r.getAmount()).multiply(taxRatePct)
                     .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
             r.setTaxAmount(tax);
@@ -146,7 +146,7 @@ public class ScpReconService {
         return r;
     }
 
-    /** 申请开票（E7）：由已确认对账单生成 ScpBill（打通点2，R-31 预制发票号=对账单号+三位流水）。 */
+    /** 申请开票（E7）：由已确认对账单生成 ScpBill（打通点2， 预制发票号=对账单号+三位流水）。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill applyInvoice(Long id, String poNo) {
         ScpRecon r = require(id);

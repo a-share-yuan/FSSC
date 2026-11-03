@@ -921,7 +921,7 @@ public class WfQueryService {
         h.setComment(comment);
         // wf_task_history.oper_time 是 NOT NULL，而旁路行没有登录上下文可派生（正路的 oper_time 由
         // WfEngineFacade.writeHistory 落）。缺这一列 ⇒ 1048 ⇒ 整条 SKIP 冒泡成「镜像办结失败
-        // [WF-MIRROR-001]，已阻止引擎推进」，实例停在 RUNNING 且无 PENDING 行＝无人可办、无出口。
+        // [WF-MIRRO1]，已阻止引擎推进」，实例停在 RUNNING 且无 PENDING 行＝无人可办、无出口。
         h.setOperTime(LocalDateTime.now());
         WfInstance inst = (procInstId == null || procInstId.isBlank()) ? null : instanceByProcInstId(procInstId);
         h.setBizType(inst == null ? "UNKNOWN" : inst.getBizType());

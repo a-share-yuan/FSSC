@@ -240,7 +240,7 @@ public class SupplierService {
             Map<String, Object> after = new LinkedHashMap<>();
             after.put("status", "ACTIVE");
             auditTrailService.recordUpdate("SUPPLIER_ADD", id, sup.getSupplierCode(), "md_supplier",
-                    String.valueOf(id), before, after, "状态位核准（B-14 页面直核）");
+                    String.valueOf(id), before, after, "状态位核准（页面直接核准）");
         }
     }
 

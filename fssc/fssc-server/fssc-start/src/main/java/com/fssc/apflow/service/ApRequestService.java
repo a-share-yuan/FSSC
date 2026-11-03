@@ -48,10 +48,10 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * AP付款服务申请单服务（蓝图 SCC_AP_15~19 状态机 + 派工规则 R-01~R-05）。
+ * AP付款服务申请单服务（蓝图 SCC_AP_15~19 状态机 + 派工规则）。
  *
  * <p>状态机：待派工 → 审单中 →（确认修改付款方式转组长 GROUP_REVIEW）→ 已过账 → 已付款；
- * 旁路：已作废（终止付款，作废后可重拉覆盖单号不变 R-10）/ 已完成。</p>
+ * 旁路：已作废（终止付款，作废后可重拉覆盖单号不变）/ 已完成。</p>
  */
 @Slf4j
 @Service
@@ -113,7 +113,7 @@ public class ApRequestService {
     }
 
     /**
-     * R-09 订单信息获取（蓝图 ERP 接口12，SCC_AP_15）：预付款创建时按 PO 编号到 ERP 校验
+     * 订单信息获取（蓝图 ERP 接口12，SCC_AP_15）：预付款创建时按 PO 编号到 ERP 校验
      * 供应商代码/币种/付款方法；通道 = {PROVIDER}_ORDER_GET（多 ERP 解析，见 ErpChannelResolver），
      * 未配置则 MOCK 跳过（离线可跑）。
      */
@@ -122,21 +122,21 @@ public class ApRequestService {
         if (!connector.isConfigured(category)) {
             collabSyncService.log(CollabSyncLog.IF_AR_SHIPPING, "SHARED_TO_EBS",
                     r.getBillNo(), CollabSyncLog.ST_MOCK,
-                    "R-09 " + category + " 未配置，跳过 PO 校验（PO " + r.getPoNo() + "）", null);
+                    category + " 未配置，跳过 PO 校验（PO " + r.getPoNo() + "）", null);
             return;
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("poNo", r.getPoNo());
         ChannelResponse resp = connector.invokeRead(category, payload);
         if (resp == null || !resp.isOk()) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "R-09 订单信息获取失败（PO " + r.getPoNo() + "）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "订单信息获取失败（PO " + r.getPoNo() + "）");
         }
         collabSyncService.log(CollabSyncLog.IF_AR_SHIPPING, "SHARED_TO_EBS",
                 r.getBillNo(), CollabSyncLog.ST_SUCCESS,
-                "R-09 PO 校验通过（PO " + r.getPoNo() + "）", null);
+                "PO 校验通过（PO " + r.getPoNo() + "）", null);
     }
 
-    /** OA作废后重拉覆盖：单号不变（R-10）。 */
+    /** OA作废后重拉覆盖：单号不变。 */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest repull(Long id, ApServiceRequest fresh) {
         ApServiceRequest r = require(id);
@@ -157,9 +157,9 @@ public class ApRequestService {
         return fresh;
     }
 
-    // 派工（R-01~R-05）
+    // 派工
 
-    /** 自动派工：按单据类型+付款方法匹配规则；多负责人进入选单池（R-02）。 */
+    /** 自动派工：按单据类型+付款方法匹配规则；多负责人进入选单池。 */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest dispatch(Long id) {
         ApServiceRequest r = require(id);
@@ -199,7 +199,7 @@ public class ApRequestService {
         return r;
     }
 
-    /** 选单：多负责人池中认领（R-02）。 */
+    /** 选单：多负责人池中认领。 */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest claim(Long id, String user) {
         ApServiceRequest r = require(id);
@@ -222,7 +222,7 @@ public class ApRequestService {
         return r;
     }
 
-    /** 运营岗手工派工/转单（R-05）。 */
+    /** 运营岗手工派工/转单。 */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest assign(Long id, String user) {
         ApServiceRequest r = require(id);
@@ -254,7 +254,7 @@ public class ApRequestService {
 
     /**
      * 确认服务请求：可修改字段=付款类型/银行账户/付款方法/折扣额/到期日/付款额；
-     * 修改付款方法自动转AP组长审核（R-03）。
+     * 修改付款方法自动转AP组长审核。
      */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest confirm(Long id, ApServiceRequest patch) {
@@ -315,11 +315,11 @@ public class ApRequestService {
         auditAfter.put("modifiedFlag", r.getModifiedFlag());
         auditTrailService.recordUpdate("AP_REQUEST", id, r.getBillNo(), "ap_service_request",
                 String.valueOf(id), auditBefore, auditAfter,
-                wayChanged ? "确认服务请求（付款方法变更，转组长审核 R-03）" : "确认服务请求");
+                wayChanged ? "确认服务请求（付款方法变更，转组长审核）" : "确认服务请求");
         return r;
     }
 
-    /** 组长审核（R-04）：通过/驳回均回上一责任人，通过后可过账，不通过必须填原因。 */
+    /** 组长审核：通过/驳回均回上一责任人，通过后可过账，不通过必须填原因。 */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest groupReview(Long id, boolean pass, String note) {
         ApServiceRequest r = require(id);
@@ -430,7 +430,7 @@ public class ApRequestService {
         return r;
     }
 
-    /** 作废（终止付款；预付款作废后可在OA调整重拉覆盖 R-10）。 */
+    /** 作废（终止付款；预付款作废后可在OA调整重拉覆盖）。 */
     @Transactional(rollbackFor = Exception.class)
     public ApServiceRequest voidRequest(Long id, String reason) {
         ApServiceRequest r = require(id);
@@ -628,7 +628,7 @@ public class ApRequestService {
         }
     }
 
-    /** 发票号规则（蓝图 R-24）：后缀区间 XXXXXX01-10 或逗号分隔单号。 */
+    /** 发票号规则（蓝图）：后缀区间 XXXXXX01-10 或逗号分隔单号。 */
     static boolean validInvoiceNoRule(String invoiceNo) {
         if (invoiceNo == null || invoiceNo.isBlank()) {
             return false;

@@ -36,7 +36,7 @@ public class MasterDataBizAction implements WfBizAction {
 
     @Override
     public Set<String> bizTypes() {
-        // 批次5 B 案 T-MD-1：移域合一——银行账户/印鉴(TR_SEAL_CHANGE)/GL 主数据三档并入主数据核准载体，
+        // 移域合一——银行账户/印鉴(TR_SEAL_CHANGE)/GL 主数据三档并入主数据核准载体，
         // 事件 bizType 不变；三档都没有独立业务状态机（银行账户靠分配＋挂科目），通过侧只记录确认。
         return Set.of("SUPPLIER_ADD", "CUSTOMER_MAINT", "TR_BANK_MASTER", "TR_SEAL_CHANGE", "GL_SHARED_MASTER");
     }

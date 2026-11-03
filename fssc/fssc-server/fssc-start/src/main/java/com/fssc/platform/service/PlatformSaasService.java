@@ -14,6 +14,7 @@ import com.fssc.platform.entity.PfOrder;
 import com.fssc.platform.entity.PfTenantStat;
 import com.fssc.platform.mapper.PfBillMapper;
 import com.fssc.platform.mapper.PfOrderMapper;
+import com.fssc.platform.mapper.PfTenantMapper;
 import com.fssc.platform.mapper.PfTenantStatMapper;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,8 @@ public class PlatformSaasService {
     private final PfOrderMapper orderMapper;
     private final PfBillMapper billMapper;
     private final PfTenantStatMapper statMapper;
+    /** 订单/账单的 ref_tenant_id 存在性校验 */
+    private final PfTenantMapper pfTenantMapper;
 
     // 订单
 
@@ -60,6 +63,7 @@ public class PlatformSaasService {
         if (dup > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "订单号已存在: " + order.getOrderNo());
         }
+        assertRefTenantExists(order.getRefTenantId(), "订单");
         order.setId(null);
         if (order.getOrderType() == null) {
             order.setOrderType("NEW");
@@ -117,6 +121,7 @@ public class PlatformSaasService {
         if (dup > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "账单号已存在: " + bill.getBillNo());
         }
+        assertRefTenantExists(bill.getRefTenantId(), "账单");
         bill.setId(null);
         if (bill.getStatus() == null) {
             bill.setStatus("UNPAID");
@@ -188,5 +193,21 @@ public class PlatformSaasService {
                                 PfTenantStat::getBillCount,
                                 PfTenantStat::getApiCount)));
         return holder[0];
+    }
+
+    /**
+     * ref_tenant_id 存在性校验。
+     *
+     * <p>createOrder/createBill 必须校验 ref_tenant_id 存在：订购记录与租户分属两张表，
+     * 只校单号唯一会留下指向不存在租户的孤儿行。属系统边界输入，值得校验；不做级联删除。
+     */
+    private void assertRefTenantExists(Long refTenantId, String docName) {
+        if (refTenantId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, docName + "必须指定所属租户");
+        }
+        if (pfTenantMapper.selectById(refTenantId) == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    docName + "所属租户不存在: refTenantId=" + refTenantId);
+        }
     }
 }

@@ -12,6 +12,7 @@ import com.fssc.framework.security.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.budget.service.BudgetService;
+import com.fssc.budget.service.BudgetSwitchService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
@@ -59,6 +60,8 @@ public class ContractService {
     private final ContPayConditionMapper payConditionMapper;
     private final ContPayRecordMapper payRecordMapper;
     private final BudgetService budgetService;
+    /** 口径开关：合同是否占预算由租户自行配置（缺省开＝现行强控行为） */
+    private final BudgetSwitchService budgetSwitchService;
     private final VoucherService voucherService;
     private final WfEngineFacade wfEngineFacade;
     /** 组织合法性守卫（安全审计①）：读路径公司隔离 + 写路径公司归属校验 */
@@ -295,6 +298,13 @@ public class ContractService {
     private void freezeBudget(ContContract c) {
         if (c.getNoFixedAmount() != null && c.getNoFixedAmount() == 1) {
             return; // 无固定金额合同不控制预算
+        }
+        // 口径开关：关掉＝合同只看余额不锁额度（弱控）。缺省开，保持现行行为。
+        // 注意释放侧不看开关：已经占上的额度必须还能在关单/变更时释放，否则关一次开关就把额度永久钉住。
+        if (!budgetSwitchService.contractOccupyEnabled()) {
+            log.debug("[预算冻结] 合同 {} 跳过：租户已关闭「合同占用预算」开关（{}）",
+                    c.getContractNo(), BudgetSwitchService.KEY_CONTRACT_OCCUPY);
+            return;
         }
         BigDecimal amt = c.getAmount();
         if (amt == null || amt.compareTo(BigDecimal.ZERO) <= 0) return;

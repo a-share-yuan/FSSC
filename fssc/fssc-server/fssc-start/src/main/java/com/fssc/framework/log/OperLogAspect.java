@@ -99,7 +99,7 @@ public class OperLogAspect {
             l.setModule(operLog.module());
             l.setOperType(operLog.operType());
             l.setOperDesc(operLog.desc());
-            l.setMethod(truncate(((MethodSignature) pjp.getSignature()).getMethod().toString(), 500)); // 全签名超长致 sys_oper_log 写入失败
+            l.setMethod(truncate(((MethodSignature) pjp.getSignature()).getMethod().toString(), 500)); // SO: 全签名超长致 sys_oper_log 写入失败
             l.setRequestMethod(req == null ? null : req.getMethod());
             l.setRequestUri(req == null ? null : req.getRequestURI());
             l.setRequestParam(truncate(toJson(pjp.getArgs())));
@@ -118,7 +118,7 @@ public class OperLogAspect {
             l.setTraceId(MDC.get(TraceIdFilter.MDC_KEY));
             l.setTitle(operLog.module());
             l.setBusinessType(operLog.operType());
-            l.setMethod(truncate(((MethodSignature) pjp.getSignature()).getMethod().toString(), 500)); // 全签名超长致 sys_oper_log 写入失败
+            l.setMethod(truncate(((MethodSignature) pjp.getSignature()).getMethod().toString(), 500)); // SO: 全签名超长致 sys_oper_log 写入失败
             l.setRequestMethod(req == null ? null : req.getMethod());
             l.setOperUrl(req == null ? null : req.getRequestURI());
             l.setOperParam(truncate(toJson(pjp.getArgs())));

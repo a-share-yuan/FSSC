@@ -151,7 +151,7 @@ public class WfProcessOutboxService {
      * 不是错误（引擎在重试/补偿时会重复发事件），故捕获 {@link DuplicateKeyException} 后静默返回。
      *
      * <p><b>失败语义</b>：唯一键冲突之外写失败＝事件丢失＝镜像缺行，必须可见——
-     * 记缺陷（WF-MIRROR-001）后<b>冒泡</b>，与 G0/G1 同一规则（让引擎命令失败、界面可见、可重试）。
+     * 记缺陷（WF-MIRRO1）后<b>冒泡</b>，与 G0/G1 同一规则（让引擎命令失败、界面可见、可重试）。
      */
     public void enqueue(WfProjectionEvent e) {
         if (e == null || e.getEventType() == null) {

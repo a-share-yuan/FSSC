@@ -10,6 +10,7 @@ import com.fssc.common.core.PageResult;
 import com.fssc.common.exception.BizException;
 import com.fssc.common.util.MaskUtil;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.platform.service.TenantQuotaService;
 import com.fssc.system.entity.SysUser;
 import com.fssc.system.entity.SysUserRole;
 import com.fssc.system.entity.SysDept;
@@ -46,6 +47,8 @@ public class UserService {
     private final SysUserMapper sysUserMapper;
     private final SysUserRoleMapper sysUserRoleMapper;
     private final SysDeptMapper sysDeptMapper;
+    /** 套餐人数配额校验（pf_package.max_user 此前无人读取） */
+    private final TenantQuotaService tenantQuotaService;
     private final SysCompanyMapper sysCompanyMapper;
     private final PasswordEncoder passwordEncoder;
     private final SoDService sodService;
@@ -123,6 +126,8 @@ public PageResult<SysUser> page(long pageNum, long pageSize, String keyword, Str
     /** 新增用户（默认密码 123456，可传入 roleIds 一并分配角色） */
     @Transactional(rollbackFor = Exception.class)
     public Long create(SysUser user, List<Long> roleIds) {
+        // 人数配额先判——放到后面会先写入数据库再抛错，事务虽回滚但审计/日志里已有人数虚增
+        tenantQuotaService.assertUserQuota();
         long dup = sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()
                 .eq(SysUser::getUserName, user.getUserName()));
         if (dup > 0) {

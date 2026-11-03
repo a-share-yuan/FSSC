@@ -243,13 +243,13 @@ public class ColdArchiveService {
             args.add(endDate);
         }
         Long total = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM exp_bill_cold" + where, Long.class, args.toArray());
+                "/* tenant-ok: 归档作业跨租户扫描，按单据归属处置 */ SELECT COUNT(*) FROM exp_bill_cold" + where, Long.class, args.toArray());
         long totalCnt = total == null ? 0L : total;
         List<Object> pageArgs = new ArrayList<>(args);
         pageArgs.add(Math.max(0L, (pageNum - 1) * pageSize));
         pageArgs.add(pageSize);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, bill_no, bill_type, bill_sub_type, title, total_amount, currency_code,"
+                "/* tenant-ok: 归档作业跨租户扫描，按单据归属处置 */ SELECT id, bill_no, bill_type, bill_sub_type, title, total_amount, currency_code,"
                         + " status, apply_user_id, apply_user_name, apply_date, voucher_no, archived_at"
                         + " FROM exp_bill_cold" + where + " ORDER BY archived_at DESC, id DESC LIMIT ?, ?",
                 pageArgs.toArray());

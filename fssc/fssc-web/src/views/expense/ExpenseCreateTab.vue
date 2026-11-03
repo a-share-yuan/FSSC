@@ -316,6 +316,7 @@ import { ATTACH_ACCEPT } from '@/utils/attachKind'
 import { pickBudgetLine } from '@/utils/budget'
 import { splitTaxInclusive } from '@/utils/tax'
 import { invoiceOutcome } from '@/utils/invoiceOutcome'
+import { fetchAllPages } from '@/utils/paging'
 import { useI18n } from 'vue-i18n'
 import { useBaseDict, TRAFFIC_LOCAL, TRAFFIC_I18N, PAYEE_TYPE_LOCAL, PAYEE_TYPE_I18N } from '@/composables/useBaseDict'
 import { useCurrency } from '@/composables/useCurrency'
@@ -522,7 +523,7 @@ async function loadMd() {
       maps.forEach((x) => { if (x?.itemId != null && x?.budgetItemId != null) m[String(x.itemId)] = x.budgetItemId })
       budgetMap.value = m
     } catch (e) { budgetMap.value = {} }
-    cities.value = (await mdApi.cities({ pageNum: 1, pageSize: 2000 })).list || []
+    cities.value = await fetchAllPages((p) => mdApi.cities(p), { pageSize: 500 })
     payees.value = (await mdApi.payees({ pageNum: 1, pageSize: 200 })).list || []
     // 出差人受控选择：加载同公司用户列表供出行人下拉
     users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []

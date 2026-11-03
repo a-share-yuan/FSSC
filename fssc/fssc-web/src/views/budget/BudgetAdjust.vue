@@ -33,10 +33,15 @@
             <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="viewDetail(row)">明细</el-button>
-            <el-button v-if="row.status === BillStatus.DRAFT" link type="success" size="small" @click="approve(row)">审批</el-button>
+            <!-- 调整单进流程（配置表早有 BG_ADJUST 路由，代码此前不发起） -->
+            <el-button v-if="row.status === BillStatus.DRAFT" link type="warning" size="small"
+              @click="submitAdjust(row)">提交</el-button>
+            <el-button v-if="row.status === 'APPROVING'" link type="info" size="small"
+              @click="withdrawAdjust(row)">撤回</el-button>
+            <el-button v-if="row.status === BillStatus.DRAFT" link type="success" size="small" @click="approve(row)">直批</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -370,9 +375,29 @@ async function save() {
 
 async function approve(row) {
   try {
-    await ElMessageBox.confirm(`审批通过调整单「${row.adjustNo}」？审批后将更新预算额度`, '审批', { type: 'warning' })
+    await ElMessageBox.confirm(`直批调整单「${row.adjustNo}」？将跳过审批流直接更新预算额度`, '直批（历史路径）', { type: 'warning' })
     await budgetApi.adjustApprove(row.id)
     ElMessage.success(t('budget.budgetAdjust.Approved'))
+    await loadList()
+  } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
+}
+
+/** 提交审批（起 BG_ADJUST 流，路由已在 wf_process_config 配好） */
+async function submitAdjust(row) {
+  try {
+    await ElMessageBox.confirm(`提交调整单「${row.adjustNo}」进入审批流？`, '提交审批', { type: 'warning' })
+    await budgetApi.adjustSubmit(row.id)
+    ElMessage.success('已提交审批')
+    await loadList()
+  } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
+}
+
+/** 撤回审批中的调整单 */
+async function withdrawAdjust(row) {
+  try {
+    await ElMessageBox.confirm(`撤回调整单「${row.adjustNo}」？撤回后可修改重新提交`, '撤回', { type: 'warning' })
+    await budgetApi.adjustWithdraw(row.id)
+    ElMessage.success('已撤回')
     await loadList()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }

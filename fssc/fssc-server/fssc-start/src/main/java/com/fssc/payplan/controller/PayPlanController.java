@@ -41,7 +41,7 @@ public class PayPlanController {
         return Result.success(service.create(plan));
     }
 
-    /** 批次1：驳回计划重报（REJECTED→重新审批），替代"驳回只能新建绕过"的死单出口 */
+    /** 驳回计划重报（REJECTED→重新审批），替代"驳回只能新建绕过"的死单出口 */
     @RequiresPerm("payplan:add")
     @OperLog(module = "PAY_PLAN", operType = "UPDATE", desc = "驳回付款计划重新提交审批")
     @PostMapping("/{id}/resubmit")

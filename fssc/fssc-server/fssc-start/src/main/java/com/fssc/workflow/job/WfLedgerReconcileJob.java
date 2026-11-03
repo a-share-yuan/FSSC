@@ -14,6 +14,7 @@ import com.fssc.workflow.mapper.WfInstanceMapper;
 import com.fssc.workflow.mapper.WfTaskHistoryMapper;
 import com.fssc.workflow.mapper.WfTaskMapper;
 import com.fssc.workflow.service.WfMirrorDefectRecorder;
+import com.fssc.workflow.service.EngineTenantScope;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,7 +69,7 @@ import java.util.function.Supplier;
  *
  * <p><b>只报不修</b>：对账作业绝不自动改数据——静默修复会把"哪里出了问题"
  * 一起抹掉，反而更难定位。差异按租户聚合后落一条 {@code sys_oper_log}（{@code status=1}，
- * {@code error_msg} 带错误码 {@code WF-MIRROR-002}、计数与样本 ID），同时推一条运维告警；
+ * {@code error_msg} 带错误码 {@code WF-MIRRO2}、计数与样本 ID），同时推一条运维告警；
  * 最近一次报告驻留内存，经 {@code GET /api/tenant/wf/perf/ledger-reconcile} 查看。
  *
  * <p>跨租户扫描：本作业在调度线程运行（无租户上下文），所有 {@code wf_*} 查询一律包在
@@ -170,18 +171,18 @@ public class WfLedgerReconcileJob {
         // 引擎账（ACT_*）
         Set<String> engineTaskIds = new LinkedHashSet<>();
         Map<String, String> taskProcInst = new HashMap<>();       // taskId -> procInstId
-        for (Task t : taskService.createTaskQuery().list()) {
+        for (Task t : EngineTenantScope.taskQuery(taskService).list()) {
             engineTaskIds.add(t.getId());
             taskProcInst.put(t.getId(), t.getProcessInstanceId());
         }
         Set<String> engineProcInstIds = new LinkedHashSet<>();
-        List<HistoricProcessInstance> engineProcInstScan = historyService.createHistoricProcessInstanceQuery()
+        List<HistoricProcessInstance> engineProcInstScan = EngineTenantScope.historicProcessQuery(historyService)
                 .listPage(0, HISTORY_SCAN_LIMIT + 1);
         for (HistoricProcessInstance h : engineProcInstScan) {
             engineProcInstIds.add(h.getId());
         }
         Set<String> engineHistTaskIds = new LinkedHashSet<>();
-        List<HistoricTaskInstance> engineHistTaskScan = historyService.createHistoricTaskInstanceQuery()
+        List<HistoricTaskInstance> engineHistTaskScan = EngineTenantScope.historicTaskQuery(historyService)
                 .listPage(0, HISTORY_SCAN_LIMIT + 1);
         for (HistoricTaskInstance h : engineHistTaskScan) {
             // 规则收窄：镜像的任务级记录只在办结时写，故只有「已办结且非删除」的

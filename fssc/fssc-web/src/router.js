@@ -26,7 +26,7 @@ const routes = [
   { path: '/profile', component: () => import('./views/common/Profile.vue'), meta: { title: i18n.global.t('router.main.Profile') } },
   // H5 独立移动端工作台（无侧边栏布局，窄屏专用）
   // 移动报销端 meta.keepAlive ＝ 交给 App.vue 的 <keep-alive>，从「提报/审批」返回
-  // 「单据/待办」时列表与滚动位置、已填内容都在（原先每次返回都整页重建 ⇒ UX-06「数据会丢，
+  // 「单据/待办」时列表与滚动位置、已填内容都在（原先每次返回都整页重建 ⇒ U「数据会丢，
   // 而且不告诉你」）。本地草稿是第二重保险，keep-alive 被回收或刷新页面时接管。
   {
     path: '/h5',

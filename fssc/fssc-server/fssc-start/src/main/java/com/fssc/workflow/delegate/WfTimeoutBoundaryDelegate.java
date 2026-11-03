@@ -8,6 +8,7 @@ import com.fssc.framework.tenant.TenantContext;
 import com.fssc.workflow.entity.WfTask;
 import com.fssc.workflow.job.WfTimeoutJob;
 import com.fssc.workflow.mapper.WfTaskMapper;
+import com.fssc.workflow.service.EngineTenantScope;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +61,7 @@ public class WfTimeoutBoundaryDelegate implements JavaDelegate {
             }
             String nodeKey = activityId.substring(ACT_PREFIX.length());
             String procInstId = execution.getProcessInstanceId();
-            List<Task> tasks = taskService.createTaskQuery()
+            List<Task> tasks = EngineTenantScope.taskQuery(taskService)
                     .processInstanceId(procInstId)
                     .taskDefinitionKey(nodeKey)
                     .list();

@@ -20,6 +20,9 @@
 
     <el-alert :title="$t('flow.bcpObjection.tip')" type="info" :closable="false" show-icon style="margin-bottom: 10px" />
 
+    <!-- 对接未开通/拉取失败：就地说明，不用一次性 toast 刷屏；重试按钮仍在工具栏。 -->
+    <el-alert v-if="loadError" :title="loadError" type="warning" :closable="false" show-icon style="margin-bottom: 10px" />
+
     <el-table :data="rows" v-loading="loading" size="small" border stripe>
       <el-table-column prop="reconNo" :label="$t('flow.bcpObjection.colReconNo')" min-width="165" show-overflow-tooltip />
       <el-table-column prop="partnerId" :label="$t('flow.bcpObjection.colPartner')" min-width="120" show-overflow-tooltip />
@@ -108,6 +111,7 @@ const { t } = useI18n()
 const rows = ref([])
 const loading = ref(false)
 const submitting = ref(false)
+const loadError = ref('')
 const query = reactive({ direction: '' })
 const dialog = reactive({ visible: false, approve: true, remark: '', row: null })
 
@@ -122,9 +126,10 @@ async function load() {
   loading.value = true
   try {
     rows.value = (await bcpObjectionApi.pending({ direction: query.direction || undefined, limit: 200 })) || []
+    loadError.value = ''
   } catch (e) {
     rows.value = []
-    ElMessage.error(e.message || t('flow.bcpObjection.loadFail'))
+    loadError.value = e.message || t('flow.bcpObjection.loadFail')
   } finally {
     loading.value = false
   }

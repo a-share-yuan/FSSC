@@ -12,9 +12,14 @@ import com.fssc.framework.org.OrgGuard;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.gl.entity.GlEntry;
+import com.fssc.invoice.entity.InvInvoice;
+import com.fssc.invoice.mapper.InvInvoiceMapper;
 import com.fssc.gl.mapper.GlEntryMapper;
 import com.fssc.glex.entity.GlTaxProvision;
+import com.fssc.glex.entity.TaxDeclaration;
+import com.fssc.glex.entity.TaxProvisionRule;
 import com.fssc.glex.mapper.GlTaxProvisionMapper;
+import com.fssc.glex.mapper.TaxDeclarationMapper;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.mapper.OpVoucherMapper;
 import com.fssc.workflow.entity.WfInstance;
@@ -38,7 +43,21 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/** 税金计提服务（gl_tax_provision，按会计期间批量计提税金）。 */
+/**
+ * 税金计提服务（gl_tax_provision，按会计期间批量计提税金）。
+ *
+ * <p><b> 改造</b>：税种／计税基数／税率／科目原先写死在本类的三条 {@code ProvSpec} 常量里，
+ * 换客户即改码；现改为从 {@code tax_provision_rule} 读取（{@link TaxProvisionRuleService#effectiveRules()}），
+ * 表空时按内置三条兜底，改造前后行为一致。
+ *
+ * <p>基数来源三档（{@code base_source}）：
+ * <ul>
+ *   <li>MANUAL：取规则缺省基数，可被调用方按税种覆盖（前端「手工录入」）</li>
+ *   <li>DECLARATION：按同期已申报数（FILED/PAID）汇总</li>
+ *   <li>INVOICE：按同期已认证进项税汇总（增值税专用）</li>
+ * </ul>
+ * 汇总结果为 0 的税种<b>跳过不落行</b>——落一条 0 元计提会起一条 0 元审批流，审批人无法判定其意义。
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -53,16 +72,12 @@ public class GlTaxProvisionService {
     private final OpVoucherMapper opVoucherMapper;
     // 挂接核查再往下探一层——凭证出了但 op_gl_entry 零分录即「应落未落」，只读探测，不写任何表
     private final GlEntryMapper glEntryMapper;
-
-    /** 税率常量：增值税13%、附加12%、所得税25%（百分比） */
-    private static final BigDecimal RATE_VAT = new BigDecimal("13.00");
-    private static final BigDecimal RATE_SURCHARGE = new BigDecimal("12.00");
-    private static final BigDecimal RATE_INCOME = new BigDecimal("25.00");
-
-    /** 各税种关联科目（简化为预置科目id，实际应查 md_subject） */
-    private static final Long SUBJECT_VAT = 222105L;
-    private static final Long SUBJECT_SURCHARGE = 222101L;
-    private static final Long SUBJECT_INCOME = 222106L;
+    /** 计提规则：税种/税率/基数来源/科目唯一取数口 */
+    private final TaxProvisionRuleService ruleService;
+    /** DECLARATION 基数来源取数：同期已申报税额 */
+    private final TaxDeclarationMapper taxDeclarationMapper;
+    /** INVOICE 基数来源取数：同期已认证进项税额（数据源＝发票池） */
+    private final InvInvoiceMapper invInvoiceMapper;
 
     public PageResult<GlTaxProvision> page(long pageNum, long pageSize, String period, String taxType, String keyword) {
         LambdaQueryWrapper<GlTaxProvision> qw = new LambdaQueryWrapper<>();
@@ -80,51 +95,83 @@ public class GlTaxProvisionService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /**
-     * 按期间批量计提税金：对增值税/附加/所得税各计提一条，税额=计税基数×税率，
-     * 关联科目并生成凭证号。
-     * <p>逐条起流，不能"3 条记录只挂第 1 条"。
-     * 若循环落 3 行后只以 {@code created.get(0).getId()} 起一条 GL_TAX_PROV，
-     * 另外两条就无流程、无审批、无凭证；
-     * 且流程金额取三条合计（26,940）而审批屏展示第 1 条（13,000），审批人审的与被背书的不是同一件事。
-     * <p>现在：每行一个审批对象（bizId=本行 id、金额=本行税额、标题带税种），
-     * 任一行起流失败即整体回滚（不留半挂接批次），并在收尾做<b>漏挂断言</b>
-     * （见 {@link #assertAllLinked}）——条数与流程实例数不等就抛错回滚，绝不静默。
-     * <p>未选"一张汇总单挂 3 条明细"方案：那要新建头行表（DDL），而逐条起流零 DDL、
-     * 且与本表既有"一行一税种一凭证"的行级语义一致（回写路径 GlBizAction.handleTax 本就按 bizId 逐条出凭证）。
-     */
+    /** 无覆盖的计提：按规则表逐税种落行 */
     @Transactional(rollbackFor = Exception.class)
     public List<GlTaxProvision> provision(String period) {
+        return provision(period, null);
+    }
+
+    /**
+     * 按期间批量计提税金：对规则表里每个生效税种各计提一条，税额=计税基数×税率。
+     *
+     * @param baseOverrides 手工基数覆盖（税种码 → 基数）。只对 {@code base_source=MANUAL} 的规则生效；
+     *                      传了覆盖值时以覆盖值为准，未传则用规则缺省基数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<GlTaxProvision> provision(String period, Map<String, BigDecimal> baseOverrides) {
         if (!StringUtils.hasText(period)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "会计期间不能为空");
+        }
+        List<TaxProvisionRule> rules = ruleService.effectiveRules();
+        if (rules == null || rules.isEmpty()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "未配置任何税金计提规则，请先在「税务计提规则」中维护税种与税率");
         }
         Long tenantId = TenantContext.getTenantId();
         // 组织合法性守卫：记账主体绑定登录公司（集团级=空，保持旧行为）
         Long cid = orgGuard.currentCompany();
         orgGuard.assertCompanyAllowed(cid);
+        // 期间重复计提防护：同一会计期间、同一税种只允许一张有效计提单。
+        // 会计上同期同税种重复计提等于重复入账（会各出一张凭证），只能先冲销原单再重算。
+        // 作废态（REJECTED 驳回 / REVERSED 冲销）不计入占用，允许重新计提。
+        java.util.Set<String> existingTypes = mapper.selectList(new LambdaQueryWrapper<GlTaxProvision>()
+                        .eq(GlTaxProvision::getPeriod, period)
+                        .notIn(GlTaxProvision::getStatus, "REJECTED", "REVERSED"))
+                .stream().map(GlTaxProvision::getTaxType).collect(java.util.stream.Collectors.toSet());
         long seq = countByPeriod(period) + 1;
         List<GlTaxProvision> created = new ArrayList<>();
-        for (ProvSpec spec : specs) {
+        int skipped = 0;
+        int dupSkipped = 0;
+        for (TaxProvisionRule rule : rules) {
+            if (existingTypes.contains(rule.getTaxType())) {
+                log.info("税金计提 {}：税种 {} 本期已有有效计提单，跳过（如需重算请先冲销原单）",
+                        period, rule.getTaxType());
+                dupSkipped++;
+                continue;
+            }
+            BigDecimal base = resolveBase(rule, period, baseOverrides);
+            if (base == null || base.signum() <= 0) {
+                log.info("税金计提 {}：税种 {} 基数来源 {} 汇总为 0，跳过（不落 0 元计提行）",
+                        period, rule.getTaxType(), rule.getBaseSource());
+                skipped++;
+                continue;
+            }
             GlTaxProvision e = new GlTaxProvision();
             e.setTenantId(tenantId);
             e.setCompanyId(cid);
             e.setPeriod(period);
-            e.setTaxType(spec.taxType);
-            e.setSubjectId(spec.subjectId);
-            e.setBaseAmount(spec.baseAmount);
-            e.setRate(spec.rate);
+            e.setTaxType(rule.getTaxType());
+            e.setSubjectId(ruleService.subjectIdOf(rule.getCreditSubjectCode()));
+            e.setBaseAmount(base);
+            e.setRate(rule.getTaxRate());
             // 税金金额公式强校验：taxAmount = baseAmount × rate / 100（四舍五入取 2 位）
-            e.setTaxAmount(calcTaxAmount(spec.baseAmount, spec.rate));
+            e.setTaxAmount(calcTaxAmount(base, rule.getTaxRate()));
             e.setProvisionNo("TX" + period + String.format("%03d", seq++));
-            // 提交只建在途态——旧写法 insert 前硬置 POSTED＋预造 GLTX 号＝提交瞬间即最终状态、
-            // 审批链退化为事后追认。最终状态（POSTED/APPROVED/REJECTED）与凭证真号（JZ…）由
+            // 提交只建在途态——最终状态（POSTED/APPROVED/REJECTED）与凭证真号（JZ…）由
             // GlBizAction.handleTax 在流程办结时回写。
             e.setStatus("APPROVING");
             e.setVoucherNo(null);
             mapper.insert(e);
             created.add(e);
         }
-        // 税金计提即发起 GL_TAX_PROV 税金计提审批流（拆分后：计提走 GL_TAX_PROV，支付走 GL_TAX_PAY）
+        if (created.isEmpty()) {
+            if (dupSkipped > 0) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "本期(" + period + ")已有 " + dupSkipped + " 个税种的计提单，未重复生成；"
+                                + "如需按新基数重算，请先冲销原计提单");
+            }
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "本期(" + period + ")所有税种计税基数均为 0（跳过 " + skipped + " 条），无可计提税金");
+        }
         // 一条记录一个流程实例（逐条起流），审批对象=金额=凭证三者同源
         for (GlTaxProvision e : created) {
             try {
@@ -139,6 +186,71 @@ public class GlTaxProvisionService {
         }
         assertAllLinked(created);
         return created;
+    }
+
+    /**
+     * 计提试算：不落库、不起流，只回答「按当前规则本期应计提哪些税种、各多少钱」。
+     * 前端「手工录入」用它预填，避免用户盲填一个基数就要跑一次真实计提。
+     */
+    public List<Map<String, Object>> preview(String period) {
+        if (!StringUtils.hasText(period)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "会计期间不能为空");
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (TaxProvisionRule rule : ruleService.effectiveRules()) {
+            BigDecimal base = resolveBase(rule, period, null);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("taxType", rule.getTaxType());
+            m.put("ruleName", rule.getRuleName());
+            m.put("baseSource", rule.getBaseSource());
+            m.put("baseAmount", base);
+            m.put("taxRate", rule.getTaxRate());
+            m.put("taxAmount", base == null || base.signum() <= 0
+                    ? BigDecimal.ZERO : calcTaxAmount(base, rule.getTaxRate()));
+            m.put("debitSubjectCode", rule.getDebitSubjectCode());
+            m.put("creditSubjectCode", rule.getCreditSubjectCode());
+            out.add(m);
+        }
+        return out;
+    }
+
+    /** 按规则的基数来源取本期计税基数；取不到返回 null（调用方跳过） */
+    private BigDecimal resolveBase(TaxProvisionRule rule, String period, Map<String, BigDecimal> overrides) {
+        String src = rule.getBaseSource() == null ? "MANUAL" : rule.getBaseSource().toUpperCase();
+        BigDecimal override = overrides == null ? null : overrides.get(rule.getTaxType());
+        if (override != null) {
+            if (override.signum() < 0) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "税种 " + rule.getTaxType() + " 的计税基数不能为负: " + override);
+            }
+            return override;
+        }
+        switch (src) {
+            case "DECLARATION": {
+                List<TaxDeclaration> rows = taxDeclarationMapper.selectList(
+                        new LambdaQueryWrapper<TaxDeclaration>()
+                                .eq(TaxDeclaration::getPeriod, period)
+                                .eq(TaxDeclaration::getTaxType, rule.getTaxType())
+                                .in(TaxDeclaration::getStatus, "FILED", "PAID"));
+                return rows.stream()
+                        .map(d -> d.getTaxAmount() == null ? BigDecimal.ZERO : d.getTaxAmount())
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+            }
+            case "INVOICE": {
+                // 进项认证已并入发票池，取数改读 inv_invoice.deduct_amount，
+                // 独立台账已退役：它与发票池是两张皮，不再作为数据源。
+                List<InvInvoice> rows = invInvoiceMapper.selectList(
+                        new LambdaQueryWrapper<InvInvoice>()
+                                .eq(InvInvoice::getCertifyPeriod, period)
+                                .eq(InvInvoice::getCertifyStatus, "CERTIFIED"));
+                return rows.stream()
+                        .map(d -> d.getDeductAmount() == null ? BigDecimal.ZERO : d.getDeductAmount())
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+            }
+            case "MANUAL":
+            default:
+                return rule.getBaseAmount();
+        }
     }
 
     /**
@@ -300,7 +412,12 @@ public class GlTaxProvisionService {
             case "SURCHARGE":
                 return "附加税";
             case "INCOME":
+            case "CIT":
                 return "所得税";
+            case "IIT":
+                return "个人所得税";
+            case "STAMP":
+                return "印花税";
             default:
                 return taxType;
         }
@@ -335,25 +452,5 @@ public class GlTaxProvisionService {
         return baseAmount.multiply(rate)
                 .divide(new BigDecimal("100"), MathContext.DECIMAL128)
                 .setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private static final List<ProvSpec> specs = Arrays.asList(
-            new ProvSpec("VAT", SUBJECT_VAT, new BigDecimal("100000.00"), RATE_VAT),
-            new ProvSpec("SURCHARGE", SUBJECT_SURCHARGE, new BigDecimal("12000.00"), RATE_SURCHARGE),
-            new ProvSpec("INCOME", SUBJECT_INCOME, new BigDecimal("50000.00"), RATE_INCOME)
-    );
-
-    private static final class ProvSpec {
-        final String taxType;
-        final Long subjectId;
-        final BigDecimal baseAmount;
-        final BigDecimal rate;
-
-        ProvSpec(String taxType, Long subjectId, BigDecimal baseAmount, BigDecimal rate) {
-            this.taxType = taxType;
-            this.subjectId = subjectId;
-            this.baseAmount = baseAmount;
-            this.rate = rate;
-        }
     }
 }

@@ -60,7 +60,7 @@ public final class ArPreInvoiceSplitter {
         return groups;
     }
 
-    /** 预制发票号 = 对账单号 + 三位流水号（蓝图 R-31）。 */
+    /** 预制发票号 = 对账单号 + 三位流水号（蓝图）。 */
     public static String preInvoiceNo(String reconBillNo, int seq) {
         return reconBillNo + String.format("%03d", seq);
     }

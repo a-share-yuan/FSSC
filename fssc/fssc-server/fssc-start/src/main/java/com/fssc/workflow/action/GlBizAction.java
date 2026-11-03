@@ -60,7 +60,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class GlBizAction implements WfBizAction {
 
-    /** 总账记账族（依记账单自身科目生成凭证）；批次2 增盘点差异结转档（B-12） */
+    /** 总账记账族（依记账单自身科目生成凭证）；含盘点差异结转档 */
     private static final Set<String> JOURNAL_TYPES =
             Set.of("GL_ACCRUAL", "GL_DEFER", "GL_MANUAL_VOUCHER", "GL_OTHER_RECEIPT", "GL_CHECK_DIFF");
 
@@ -88,7 +88,7 @@ public class GlBizAction implements WfBizAction {
     @Override
     public Set<String> bizTypes() {
         return Set.of(
-                // 总账记账族（GL_CHECK_DIFF=盘点差异结转档，批次2）
+                // 总账记账族（GL_CHECK_DIFF=盘点差异结转档）
                 "GL_ACCRUAL", "GL_DEFER", "GL_MANUAL_VOUCHER", "GL_OTHER_RECEIPT", "GL_CHECK_DIFF",
                 // 税金族 / 薪酬族 / 内部往来抵消 / 税务退税
                 "GL_TAX_PROV", "GL_TAX_PAY", "GL_SALARY_PROV", "GL_SALARY_PAY", "GL_OFFSET",
@@ -173,6 +173,23 @@ public class GlBizAction implements WfBizAction {
             GlJournalEntry rej = new GlJournalEntry();
             rej.setId(id);
             rej.setStatus("REJECTED");
+            // 预提/待摊被驳回/撤回 → 按「预算冲回」等额释放，额度立刻回到可申请池。
+            // 放在状态回写之前、同一次 update 里带上状态位，避免「单据已 REJECTED、预算还占着」。
+            if (("ACCRUAL".equals(e.getEntryType()) || "DEFER".equals(e.getEntryType()))
+                    && !"RELEASED".equals(e.getBudgetOccupyStatus())) {
+                try {
+                    // 用独立事务：REQUIRED 版抛异常会把当前事务标 rollback-only，
+                    // 即使此处 catch 住，外层收尾提交时仍会 UnexpectedRollbackException
+                    int released = budgetService.releaseAccrualOccupyIsolated(event.getBizType(), id, e.getEntryNo());
+                    if (released > 0 || "OCCUPIED".equals(e.getBudgetOccupyStatus())) {
+                        rej.setBudgetOccupyStatus("RELEASED");
+                    }
+                } catch (Exception ex) {
+                    // 流程已结束，预算侧异常不能把这次收尾一起带回滚——留 error 交人工补偿
+                    log.error("预提/待摊 {} 驳回后释放预算占用失败（单据仍置 REJECTED，预算额度需人工核对）：{}",
+                            e.getEntryNo(), ex.getMessage(), ex);
+                }
+            }
             glJournalEntryMapper.updateById(rej);
             recordStatusAudit(event, id, e.getEntryNo(), "gl_journal_entry", prev, rej.getStatus(),
                     (withdrawn ? "申请人撤回，记账单退回可重办" : "审批驳回，记账单退回可重办") + withComment(event));

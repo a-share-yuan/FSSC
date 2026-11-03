@@ -252,6 +252,8 @@ public final class BillRouteRegistry {
             Map.entry("BUDGET", f("bg_adjust", "adjust_no", null, "reason", null)),
             Map.entry("BG_SCHEME", f("bg_scheme", "scheme_code", null, "scheme_name", "bg_scheme")),
             Map.entry("BG_APPROVE", f("bg_scheme", "scheme_code", null, "scheme_name", "bg_scheme")),
+            // 预算调整单进流程后的镜像取数路由（与 wf_process_config 的 BG_ADJUST 行同名）
+            Map.entry("BG_ADJUST", f("bg_adjust", "adjust_no", null, "reason", null)),
 
             // —— 应收 / 发票 / 对账 ——
             Map.entry("RECEIVABLE", f("rc_receivable", "bill_no", "amount", "bill_no", "rc_receivable")),

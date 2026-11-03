@@ -31,6 +31,12 @@ import BudgetItem from '../budget/BudgetItem.vue'
 import BudgetScheme from '../budget/BudgetScheme.vue'
 import BudgetAdjust from '../budget/BudgetAdjust.vue'
 import BudgetOccupy from '../budget/BudgetOccupy.vue'
+import BudgetParam from '../budget/BudgetParam.vue'
+// 税务管理：五个页签共用既有 gl:tax* 权限码，零新权限点
+import TaxProvisionRule from '../glex/TaxProvisionRule.vue'
+import TaxProvision from '../glex/TaxProvision.vue'
+import TaxDeclaration from '../glex/TaxDeclaration.vue'
+import TaxRisk from '../glex/TaxRisk.vue'
 import FraudBoard from '../compliance/FraudBoard.vue'
 import ComplianceRule from './ComplianceRule.vue'
 // 流程收尾动作配置表（wf_event_action_config）的页面入口
@@ -196,12 +202,28 @@ export const CONFIG_GROUPS = {
   },
   budgetManage: {
     title: '预算管理',
-    sub: '科目 · 方案 · 调整 · 占用',
+    sub: '科目 · 方案 · 调整 · 占用 · 口径',
     tabs: [
       { key: 'item', label: '预算科目', comp: BudgetItem, perm: 'budget:item:list' },
       { key: 'scheme', label: '预算方案', comp: BudgetScheme, perm: 'budget:scheme:list' },
       { key: 'adjust', label: '预算调整', comp: BudgetAdjust, perm: 'budget:adjust:list' },
       { key: 'occupy', label: '预算占用', comp: BudgetOccupy, perm: 'budget:occupy:list' },
+      // 口径开关：预提/待摊是否占预算、合同是否占预算（缺省开＝改造前行为）
+      { key: 'param', label: '预算口径', comp: BudgetParam, perm: 'budget:scheme:list' },
+    ],
+  },
+  // 税务管理：申报台账 / 风险指标两块后端早有、前端无门，
+  // 连同 的计提规则与计提页一并收进本工作区。门控一律复用既有 gl:tax* 码。
+  //  进项认证不在这里：认证的唯一入口是「发票管理 → 进项发票认证」
+  //    （/api/tenant/invoice/certify/**，数据源 inv_invoice）。税务侧那套重复页面已于 2026-11-03 删除。
+  taxManage: {
+    title: '税务管理',
+    sub: '计提规则 · 税金计提 · 申报台账 · 风险指标（进项认证见发票管理）',
+    tabs: [
+      { key: 'rule', label: '计提规则', comp: TaxProvisionRule, perm: 'gl:taxprov:list' },
+      { key: 'provision', label: '税金计提', comp: TaxProvision, perm: 'gl:taxprov:list' },
+      { key: 'declaration', label: '申报台账', comp: TaxDeclaration, perm: 'gl:taxdecl:list' },
+      { key: 'risk', label: '风险指标', comp: TaxRisk, perm: 'gl:taxrisk:list' },
     ],
   },
   compliance: {

@@ -363,19 +363,29 @@ public interface ReportMapper {
     List<Map<String, Object>> contractExecution(@Param("scopeCompanyId") Long scopeCompanyId,
                                                 @Param("scopeDeptIds") List<Long> scopeDeptIds);
 
-    /** 13. 预算超支预警：预算使用率超80%的项目 */
-    // 办结只按公司维；不按部门维（bg_item 公司级预算 dept_id 常为 NULL，
-    // 追加 dept 条件会把「有预算却查不到」的既有缺陷在新端点上复刻）。
+    /** 13. 预算超支预警
+     *
+     *  <p><b>① 口径统一</b>：分母必须含调整额、分子必须含占用额，与
+     *  {@code BudgetService.execRateOf}（总额＋调整 vs 占用＋核销）同一轴线。
+     *  改造前分母只取 {@code total_amount}、分子只取 {@code used_amount}，
+     *  同一条预算行在「执行分析」与「超支预警」两处会显示两个数——同一份数据两个口径，
+     *  业务无法判断哪个是真的。
+     *
+     *  <p>阈值由调用方传入（②），默认 80；{@code budget.alert.threshold} 系统参数由前端/作业读取后带入。
+     */
     @Select("<script>select bi.dim_key as dimKey, d.dept_name as deptName, i.item_name as itemName, bi.budget_year as budgetYear, bi.budget_period as budgetPeriod, " +
-            "bi.total_amount as totalAmount, bi.used_amount as usedAmount, bi.occupy_amount as occupyAmount, " +
-            "round(bi.used_amount * 100.0 / nullif(bi.total_amount, 0), 1) as usageRate, " +
-            "case when bi.used_amount > bi.total_amount then 'OVER' else 'WARNING' end as alertLevel " +
+            "bi.total_amount as totalAmount, bi.adjust_amount as adjustAmount, bi.used_amount as usedAmount, bi.occupy_amount as occupyAmount, " +
+            "(bi.total_amount + bi.adjust_amount) as budgetAmount, (bi.occupy_amount + bi.used_amount) as actualAmount, " +
+            "round((bi.occupy_amount + bi.used_amount) * 100.0 / nullif(bi.total_amount + bi.adjust_amount, 0), 1) as usageRate, " +
+            "case when (bi.occupy_amount + bi.used_amount) > (bi.total_amount + bi.adjust_amount) then 'OVER' else 'WARNING' end as alertLevel " +
             "from bg_item bi left join sys_dept d on bi.dept_id = d.id " +
             "left join md_expense_item i on bi.item_id = i.id where bi.del_flag = 0 " +
-            "and bi.total_amount > 0 and bi.used_amount / bi.total_amount > 0.8 " +
+            "and (bi.total_amount + bi.adjust_amount) &gt; 0 " +
+            "and (bi.occupy_amount + bi.used_amount) / (bi.total_amount + bi.adjust_amount) &gt; #{thresholdPct} / 100.0 " +
             "<if test='scopeCompanyId != null'>and bi.company_id = #{scopeCompanyId}</if> " +
             "order by usageRate desc</script>")
-    List<Map<String, Object>> budgetOverrunAlert(@Param("scopeCompanyId") Long scopeCompanyId);
+    List<Map<String, Object>> budgetOverrunAlert(@Param("scopeCompanyId") Long scopeCompanyId,
+                                                 @Param("thresholdPct") Double thresholdPct);
 
     /** 14. 借款逾期分析：未还款且超过预计还款日的借款 */
     @Select("<script>select b.bill_no as billNo, b.apply_user_name as applyUserName, " +

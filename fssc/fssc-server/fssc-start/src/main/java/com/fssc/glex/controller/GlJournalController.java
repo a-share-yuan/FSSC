@@ -45,11 +45,17 @@ public class GlJournalController {
                                            @RequestParam(required = false) String summary,
                                            @RequestParam(required = false) BigDecimal amount,
                                            @RequestParam(required = false) Long debitSubjectId,
-                                           @RequestParam(required = false) Long creditSubjectId) {
+                                           @RequestParam(required = false) Long creditSubjectId,
+                                           // 预提/待摊的预算维度（费用项 + 承担部门）与软控超支理由；
+                                           // 不传时按 md_item_budget_map 兜底定位预算行
+                                           @RequestParam(required = false) Long expenseItemId,
+                                           @RequestParam(required = false) Long deptId,
+                                           @RequestParam(required = false) String overrunReason) {
         if (amount == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "金额不能为空");
         }
-        return Result.success(service.generate(period, entryType, summary, amount, debitSubjectId, creditSubjectId));
+        return Result.success(service.generate(period, entryType, summary, amount, debitSubjectId, creditSubjectId,
+                expenseItemId, deptId, overrunReason));
     }
 
     /**

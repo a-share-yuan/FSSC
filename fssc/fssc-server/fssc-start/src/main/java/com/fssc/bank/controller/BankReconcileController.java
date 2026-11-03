@@ -70,7 +70,7 @@ public class BankReconcileController {
 
     /** 自动勾对：返回本轮结果（勾对/未勾对条数与未勾对流水号） */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:execute")  //  读写分离：写操作需执行码
+    @RequiresPerm("bank:reconcile:execute")  // 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "自动勾对")
     @PostMapping("/run")
     public Result<Map<String, Object>> run() {
@@ -79,7 +79,7 @@ public class BankReconcileController {
 
     /** 人工勾对：手动将银行流水与付款记录关联 */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:execute")  //  读写分离：写操作需执行码
+    @RequiresPerm("bank:reconcile:execute")  // 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "人工勾对")
     @PostMapping("/manual-match")
     public Result<Void> manualMatch(@RequestBody ManualMatchReq req) {
@@ -101,7 +101,7 @@ public class BankReconcileController {
 
     /** 收款认领核销：银行贷方流水 → 关联应收单（含冲减余额/置DONE/勾对记录） */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:execute")  //  读写分离：写操作需执行码
+    @RequiresPerm("bank:reconcile:execute")  // 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "收款认领核销")
     @PostMapping("/claim")
     public Result<BankReconcileService.ClaimResult> claim(@RequestBody ClaimReq req) {
@@ -110,7 +110,7 @@ public class BankReconcileController {
 
     /** 回单归档：关联回单影像文件并置回单状态 */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:execute")  //  读写分离：写操作需执行码
+    @RequiresPerm("bank:reconcile:execute")  // 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "UPDATE", desc = "回单归档")
     @PostMapping("/slip/archive")
     public Result<Void> archiveSlip(@RequestBody SlipReq req) {
@@ -149,7 +149,7 @@ public class BankReconcileController {
 
     /** 保存账户余额快照（同一账户同一日期去重覆盖） */
     @RequiresFeature("FSSC_BANK")
-    @RequiresPerm("bank:reconcile:execute")  //  读写分离：写操作需执行码
+    @RequiresPerm("bank:reconcile:execute")  // 读写分离：写操作需执行码
     @OperLog(module = "BANK_RECON", operType = "INSERT", desc = "保存银行账户余额快照")
     @PostMapping("/balance/save")
     public Result<Long> saveBalance(@RequestBody BalanceReq req) {

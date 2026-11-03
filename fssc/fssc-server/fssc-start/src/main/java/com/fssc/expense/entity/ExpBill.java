@@ -137,4 +137,13 @@ public class ExpBill extends TenantAuditBase {
     private String paperless;
     /** 实物流签收状态：NOT_REQUIRED 无需（无纸化）/ UNSIGNED 待签收 / SIGNED 已签收 */
     private String deliveryStatus;
+
+    /**
+     * 缴纳税种：仅对公付款单上的「税款付款」填。
+     * 非空即声明本笔付款是缴税——付款批次出凭证时借方按该税种取应交税费(2221)明细，
+     * 而不是默认的 2202 应付账款。为空＝普通对公付款，行为不变。
+     */
+    private String taxType;
+    /** 缴纳税期 yyyyMM：与 taxType 成对，用于凭证摘要与按税期对账 */
+    private String taxPeriod;
 }

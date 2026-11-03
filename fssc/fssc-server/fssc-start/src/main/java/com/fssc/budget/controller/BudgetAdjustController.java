@@ -74,6 +74,28 @@ public class BudgetAdjustController {
         budgetService.adjustApprove(id);
         return Result.success();
     }
+
+    /**
+     * 提交审批：DRAFT → APPROVING，发起 BG_ADJUST 流。
+     * 路由行 wf_process_config 早已在盘（BG_ADJUST → BG_SCHEME），此前代码从不发起。
+     */
+    @RequiresPerm("budget:adjust:create")
+    @OperLog(module = "BUDGET", operType = "UPDATE", desc = "提交预算调整审批")
+    @PostMapping("/submit/{id}")
+    public Result<Void> submit(@PathVariable Long id) {
+        budgetService.adjustSubmit(id);
+        return Result.success();
+    }
+
+    /** 撤回审批中的调整单：流程撤回 + 回退草稿 */
+    @RequiresPerm("budget:adjust:create")
+    @OperLog(module = "BUDGET", operType = "UPDATE", desc = "撤回预算调整审批")
+    @PostMapping("/withdraw/{id}")
+    public Result<Void> withdraw(@PathVariable Long id) {
+        budgetService.adjustWithdraw(id);
+        return Result.success();
+    }
+
     @Data
     public static class AdjustReq {
         private BgAdjust adjust;

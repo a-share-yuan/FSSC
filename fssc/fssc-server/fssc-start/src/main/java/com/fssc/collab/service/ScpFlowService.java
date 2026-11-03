@@ -34,8 +34,8 @@ import java.util.UUID;
 
 /**
  * SCP 供应商协同发票全流程服务（AP 蓝图 SCC_AP_01~10、场景一 AP_S1）：
- * 登记（打通点1/2 数据落地）→ 自动匹配（R-16 容差比对）→ 创建邮包寄送 → 内网签收 →
- * 扫描+票核（R-20 六要素自动校验）→ 记账（打通点3，受 R-14 关账冻结拦截）→
+ * 登记（打通点1/2 数据落地）→ 自动匹配（ 容差比对）→ 创建邮包寄送 → 内网签收 →
+ * 扫描+票核（ 六要素自动校验）→ 记账（打通点3，受 关账冻结拦截）→
  * 集中认证（打通点6）→ 付款回写（打通点5）。ERP 通道未配置时按 MOCK 落日志。
  */
 @Slf4j
@@ -53,7 +53,7 @@ public class ScpFlowService {
 
     /**
      * 供应商确认对账单+申请开票后的数据落地（打通点1/2）：
-     * 预制发票号 = 对账单号 + 三位流水（R-31）；初始状态待匹配。
+     * 预制发票号 = 对账单号 + 三位流水；初始状态待匹配。
      */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill create(ScpBill b) {
@@ -89,7 +89,7 @@ public class ScpFlowService {
     }
 
     /**
-     * 自动匹配（R-16）：按预设容差（ar.recon.tolerance-amt-pct）比对发票与对账单的
+     * 自动匹配：按预设容差（ar.recon.tolerance-amt-pct）比对发票与对账单的
      * 金额/税额/价税合计；购销方信息一致性由登记侧校验。通过→待寄送；不通过→匹配失败。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -118,7 +118,7 @@ public class ScpFlowService {
         return b;
     }
 
-    /** 手工匹配（R-17）：自动未通过时由发票审核岗人工核定对账单基准金额后重新匹配。 */
+    /** 手工匹配：自动未通过时由发票审核岗人工核定对账单基准金额后重新匹配。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill manualMatch(Long id, BigDecimal reconAmount, BigDecimal reconTaxAmount, BigDecimal reconTotal) {
         ScpBill b = require(id);
@@ -139,7 +139,7 @@ public class ScpFlowService {
     }
 
     /**
-     * 强制匹配（R-18）：双方核对无误但自动匹配仍不通过时强制通过。
+     * 强制匹配：双方核对无误但自动匹配仍不通过时强制通过。
      * 蓝图要求一级审批；当前以强制记录（操作人+原因入备注与接口日志）简化，接审批中心后可加签。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -156,7 +156,7 @@ public class ScpFlowService {
         b.setRemark(appendNote(b.getRemark(), "强制匹配："));
         mapper.updateById(b);
         syncService.log(CollabSyncLog.IF_SCP_MATCH_POST, "SCP_TO_EBS", b.getBillNo(),
-                CollabSyncLog.ST_MOCK, "R-18 强制匹配生效（需一级审批，简化记录）：" + reason, null);
+                CollabSyncLog.ST_MOCK, "强制匹配生效（需一级审批，简化记录）：" + reason, null);
         return b;
     }
 
@@ -179,7 +179,7 @@ public class ScpFlowService {
         return base.isBlank() ? add : base + "；" + add;
     }
 
-    /** 取消匹配（R-19）：仅"待寄送"状态可取消，回待匹配。 */
+    /** 取消匹配：仅"待寄送"状态可取消，回待匹配。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill cancelMatch(Long id) {
         ScpBill b = require(id);
@@ -220,7 +220,7 @@ public class ScpFlowService {
         return b;
     }
 
-    /** 扫描识别 + 票核（R-20 六要素自动二次校验）：待扫描 → 票核成功 / 票核失败。 */
+    /** 扫描识别 + 票核（ 六要素自动二次校验）：待扫描 → 票核成功 / 票核失败。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill scan(Long id, ScpBill scanned) {
         ScpBill b = require(id);
@@ -283,7 +283,7 @@ public class ScpFlowService {
 
     /**
      * 记账（打通点3：三单匹配数据推送 ERP）：票核成功 → 记账成功。
-     * R-14：月末关账期间禁止发送数据至 ERP 产生凭证，直接拦截。
+     * 月末关账期间禁止发送数据至 ERP 产生凭证，直接拦截。
      * ERP 通道（ext_interface_config 分类 EBS_AP）未配置时 MOCK 落日志。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -295,8 +295,8 @@ public class ScpFlowService {
         String period = YearMonth.now().toString();
         if (monthCloseService.isFrozen(1L, period)) {
             syncService.log(CollabSyncLog.IF_SCP_MATCH_POST, "SCP_TO_EBS", b.getBillNo(),
-                    CollabSyncLog.ST_FAILED, "R-14 关账冻结：期间 " + period + " 禁止发送数据至ERP产生凭证", null);
-            throw new BizException(ErrorCode.PARAM_INVALID, "R-14 关账冻结：期间 " + period + " 禁止发送数据至ERP产生凭证");
+                    CollabSyncLog.ST_FAILED, "关账冻结：期间 " + period + " 禁止发送数据至ERP产生凭证", null);
+            throw new BizException(ErrorCode.PARAM_INVALID, "关账冻结：期间 " + period + " 禁止发送数据至ERP产生凭证");
         }
         boolean real = false;
         String result = "ERP通道未配置，模拟记账";
@@ -368,7 +368,7 @@ public class ScpFlowService {
     }
 
     /**
-     * R-18 强制匹配申请（四眼原则第一步）：置 FORCE_PENDING 锁定（不可寄送/匹配/票核），
+     * 强制匹配申请（四眼原则第一步）：置 FORCE_PENDING 锁定（不可寄送/匹配/票核），
      * 发起 SCP_FORCE_MATCH 审批流（挂共享主管待办）；差额超阈值须二级财务经理审批（见 approveForce）。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -395,7 +395,7 @@ public class ScpFlowService {
         return b;
     }
 
-    /** R-18 审批通过：四眼（审批人≠申请人）；差额超阈值须二级权限（控制器校验）；通过后放行待寄送。 */
+    /** 审批通过：四眼（审批人≠申请人）；差额超阈值须二级权限（控制器校验）；通过后放行待寄送。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill approveForce(Long id, String approver) {
         ScpBill b = require(id);
@@ -412,11 +412,11 @@ public class ScpFlowService {
         b.setRemark(appendNote(b.getRemark(), "强制匹配审批通过[" + approver + "]"));
         mapper.updateById(b);
         syncService.log(CollabSyncLog.IF_SCP_MATCH_POST, "SCP_TO_EBS", b.getBillNo(),
-                CollabSyncLog.ST_MOCK, "R-18 强制匹配审批通过（" + approver + "）：" + b.getForceReason(), null);
+                CollabSyncLog.ST_MOCK, "强制匹配审批通过（" + approver + "）：" + b.getForceReason(), null);
         return b;
     }
 
-    /** R-18 审批驳回：回退原状态并记录原因。 */
+    /** 审批驳回：回退原状态并记录原因。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill rejectForce(Long id, String approver, String reason) {
         ScpBill b = require(id);
@@ -431,7 +431,7 @@ public class ScpFlowService {
         return b;
     }
 
-    /** 发票替换（蓝图 ERP 接口6）：原票作废，按同对账单重新生成新票（R-31 新流水）。 */
+    /** 发票替换（蓝图 ERP 接口6）：原票作废，按同对账单重新生成新票（ 新流水）。 */
     @Transactional(rollbackFor = Exception.class)
     public ScpBill replaceBill(Long id, String reason) {
         ScpBill old = require(id);

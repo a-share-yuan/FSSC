@@ -7,7 +7,7 @@
       <template #header>
         <div class="card-header">
           <span class="header-title">{{ $t('sharing.quality.pageTitle') }}</span>
-          <el-button v-permission="'sharing:quality:create'" type="primary" size="small" @click="openDialog(null)">{{ $t('sharing.quality.btnAdd') }}</el-button>
+          <el-button v-permission="'op:quality:create'" type="primary" size="small" @click="openDialog(null)">{{ $t('sharing.quality.btnAdd') }}</el-button>
         </div>
       </template>
 
@@ -64,8 +64,8 @@
         <el-table-column prop="remark" :label="$t('common.remark')" min-width="120" show-overflow-tooltip />
         <el-table-column :label="$t('common.operation')" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'sharing:quality:update'" link type="primary" size="small" @click="openDialog(row)">{{ $t('sharing.common.btnEdit') }}</el-button>
-            <el-button v-permission="'sharing:quality:delete'" link type="danger" size="small" @click="del(row)">{{ $t('sharing.common.btnDelete') }}</el-button>
+            <el-button v-permission="'op:quality:update'" link type="primary" size="small" @click="openDialog(row)">{{ $t('sharing.common.btnEdit') }}</el-button>
+            <el-button v-permission="'op:quality:delete'" link type="danger" size="small" @click="del(row)">{{ $t('sharing.common.btnDelete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -109,7 +109,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialog.visible = false">{{ $t('common.cancel') }}</el-button>
-        <el-button v-permission="['sharing:quality:create', 'sharing:quality:update']" type="primary" :loading="dialog.saving" @click="save">{{ $t('common.save') }}</el-button>
+        <el-button v-permission="['op:quality:create', 'op:quality:update']" type="primary" :loading="dialog.saving" @click="save">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>

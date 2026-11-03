@@ -198,7 +198,7 @@ export function docTypeDenyReason(d) {
 }
 
 
-// 本地草稿（UX-06/07：填一半被返回就没了）
+// 本地草稿（U/07：填一半被返回就没了）
 const DRAFT_PREFIX = 'fssc.h5.draft.v1.'
 const RECENT_PREFIX = 'fssc.h5.recent-items.v1.'
 

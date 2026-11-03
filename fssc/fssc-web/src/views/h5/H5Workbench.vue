@@ -13,7 +13,7 @@
 
     <!-- 待办（审批） -->
     <section v-if="tab === 'todo'" class="h5-body">
-      <!-- 三态·加载：骨架屏（AD-13 原先只有「加载中…」一行字） -->
+      <!-- 三态·加载：骨架屏（原先只有「加载中…」一行字） -->
       <template v-if="todosLoading && !todos.length">
         <div v-for="i in 3" :key="i" class="h5-skeleton">
           <div class="h5-skeleton__line h5-skeleton__line--m" />
@@ -97,7 +97,7 @@
       <template v-else>
         <div v-for="b in bills" :key="b.id" class="h5-card h5-card--tap" @click="openDetail(b)">
           <div class="h5-card__row">
-            <!-- AD-09：单号是文本；后 .no 只剩这一处语义，按钮类名改 .h5-btn-danger -->
+            <!-- 单号是文本；后 .no 只剩这一处语义，按钮类名改 .h5-btn-danger -->
             <span class="no">{{ b.billNo }}</span>
             <el-tag size="small" :type="statusType(b.status)">{{ statusLabel(b.status) }}</el-tag>
           </div>
@@ -225,7 +225,7 @@
 
     <!-- 我的 -->
     <section v-if="tab === 'mine'" class="h5-body">
-      <!-- UX-12：没有「我是谁 / 我在哪个公司」⇒ 提单被跨法人拦下时用户无从判断 -->
+      <!-- 没有「我是谁 / 我在哪个公司」⇒ 提单被跨法人拦下时用户无从判断 -->
       <div class="h5-card">
         <div class="h5-idcard">
           <span class="h5-idcard__ava">{{ (myName || '我').slice(0, 1) }}</span>
@@ -245,7 +245,7 @@
         </template>
         <template v-else>
           <div class="h5-big-num">￥{{ money(loanBalance) }}</div>
-          <!-- UX-09 原规则＝只加总前 N 条还宣称是全额，数字不可信。改成库里 SUM 聚合后
+          <!-- 原规则＝只加总前 N 条还宣称是全额，数字不可信。改成库里 SUM 聚合后
                与分页能取回多少条无关；聚合口未上线时回落分页累加，并在同一行如实标出是哪条环节。 -->
           <div class="h5-card__meta">
             未冲销完毕的借款余额（{{ loanCount }} 笔）
@@ -292,11 +292,11 @@
         <div class="h5-state__title">没有被打回的单据</div>
       </div>
 
-      <!-- 退出移出主导航（AD-06/§4.1「破坏性动作不入主导航」）＋二次确认 -->
+      <!-- 退出移出主导航（破坏性动作不入主导航）＋二次确认 -->
       <button class="h5-btn h5-btn--sub h5-mt-16" @click="logout">退出登录</button>
     </section>
 
-    <!-- 吸底 Tab Bar（AD-12：原导航在顶部且含退出） -->
+    <!-- 吸底 Tab Bar（原导航在顶部且含退出） -->
     <nav class="h5-tabbar">
       <button class="h5-tab" :class="{ on: tab === 'todo' }" @click="switchTab('todo')">
         <span class="h5-tab__icon" aria-hidden="true">✓</span><span>待办</span>
@@ -390,7 +390,7 @@ const verifyDenied = ref(null)
 const loanBalance = ref(0)
 const loanCount = ref(0)
 // 「我的」页两个计数：在途单数／打回总数。总数一律取服务端 total（真 COUNT），
-// 不在"已加载的前 N 条"里数数——那是 UX-09 记下的假数根因。
+// 不在"已加载的前 N 条"里数数——那是 U 记下的假数根因。
 const inTransitCount = ref(0)
 const rejectedTotal = ref(0)
 // 数值出处可见性：'server'＝/mine/stat 库里聚合；'local'＝聚合口未上线时的分页累加回落
@@ -467,7 +467,7 @@ const BILL_TYPE_CHIPS = [
 
 const myName = computed(() => store.user?.realName || store.user?.nickName || store.user?.username || '我')
 const myAccount = computed(() => store.user?.userName || store.user?.username || '—')
-// UX-12＋跨法人：companyId 取登录态（同一规则），并把「我在哪个公司」摊开显示，
+// U＋跨法人：companyId 取登录态（同一规则），并把「我在哪个公司」摊开显示，
 // 被 OrgGuard 拦下时用户至少知道是不是自己公司的单
 const myCompany = computed(() => store.user?.companyId ?? '—')
 const myDept = computed(() => store.user?.deptId ?? '—')
@@ -599,7 +599,7 @@ async function loadTodoBadge() {
   try {
     const r = await wfApi.todoPage({ pageNum: 1, pageSize: 1 })
     todoTotal.value = Number(r?.total) || 0
-    // UX-01：首屏给谁看 —— 有待办先落待办，没有再落单据
+    // U：首屏给谁看 —— 有待办先落待办，没有再落单据
     if (todoTotal.value > 0 && !touched.value && tab.value === 'list' && !bills.value.length) {
       tab.value = 'todo'
       loadTodos(true)
@@ -810,7 +810,7 @@ async function loadMine() {
   } finally { mineLoading.value = false }
 }
 
-// 打回重交留在 #/h5 路由族内（原先 location.hash 直接跳 PC 页 ⇒ UX-08）
+// 打回重交留在 #/h5 路由族内（原先 location.hash 直接跳 PC 页 ⇒ U）
 function goResubmit(r) {
   router.push(`/h5/expense/${r.id}/edit`)
 }
@@ -953,7 +953,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* 本页不再重复定义卡片/按钮/表单样式（AD-04：三页各抄一份）；
+/* 本页不再重复定义卡片/按钮/表单样式（三页各抄一份）；
    只留页面特有的下拉刷新指示器。其余见 src/styles/h5-tokens.css。 */
 .h5-pull {
   position: fixed;

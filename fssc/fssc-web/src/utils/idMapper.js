@@ -11,6 +11,7 @@
  */
 
 import { userApi, orgApi } from '@/api'
+import { fetchAllPages } from './paging'
 
 const caches = {
   user: new Map(),
@@ -28,13 +29,14 @@ export async function preloadMappers() {
 
   try {
     const [users, depts, companies] = await Promise.all([
-      userApi.list({ pageNum: 1, pageSize: 2000 }).catch(() => ({ list: [] })),
+      // 用户量超过单页上限时，未拉到的用户会回落显示「用户#123」——分页拉全，别写死上限。
+      fetchAllPages((p) => userApi.list(p), { pageSize: 500 }).catch(() => []),
       orgApi.deptTree().catch(() => []),
       orgApi.companyList?.().catch(() => []).then(r => r || []),
     ])
 
     // 用户映射：id → nickName
-    (users.list || []).forEach(u => {
+    (users || []).forEach(u => {
       caches.user.set(u.id, u.nickName || u.userName || `用户#${u.id}`)
     })
 
