@@ -58,7 +58,7 @@ CREATE TABLE `sys_user` (
   KEY `idx_tenant_dept` (`tenant_id`,`dept_id`),
   KEY `idx_tenant_phone` (`tenant_id`,`phone`),
   KEY `idx_tenant_empno` (`tenant_id`,`emp_no`)
-) ENGINE=InnoDB AUTO_INCREMENT=5011 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户(租户员工)';
+) ENGINE=InnoDB AUTO_INCREMENT=5012 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户(租户员工)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -80,4 +80,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:14:16
+-- Dump completed on 2026-11-03 10:48:30

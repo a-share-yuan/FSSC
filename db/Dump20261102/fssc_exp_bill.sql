@@ -30,6 +30,8 @@ CREATE TABLE `exp_bill` (
   `bill_no` varchar(64) NOT NULL COMMENT '单据编号(由编号规则生成)',
   `paperless` varchar(8) DEFAULT 'N' COMMENT '无纸化标记：Y 无纸化 / N 需实物',
   `delivery_status` varchar(16) DEFAULT NULL COMMENT '实物签收状态：NOT_REQUIRED/UNSIGNED/SIGNED',
+  `tax_type` varchar(32) DEFAULT NULL COMMENT '缴纳税种（仅对公付款的税款付款填）：非空即按税金付款出凭证',
+  `tax_period` varchar(6) DEFAULT NULL COMMENT '缴纳税期 yyyyMM（与 tax_type 成对）',
   `reject_type` varchar(16) DEFAULT NULL COMMENT '驳回类型：THROW_BACK 漏单驳回 / GRADE_BY_GRADE 逐级驳回',
   `bill_type` varchar(20) NOT NULL COMMENT '单据类型:APPLY事前申请/CLAIM费用报销/LOAN员工借款/REPAY借款还款/PAY对公支付',
   `bill_sub_type` varchar(50) DEFAULT NULL COMMENT '单据子类:TRAVEL差旅/DAILY日常/ENTERTAIN招待/TRAIN培训等(取字典)',
@@ -111,7 +113,7 @@ CREATE TABLE `exp_bill` (
   KEY `idx_tenant_agentuser` (`tenant_id`,`agent_user_id`),
   KEY `idx_tenant_owner_pair` (`tenant_id`,`apply_user_id`,`agent_user_id`,`del_flag`),
   KEY `idx_t_comp_status_img` (`tenant_id`,`del_flag`,`company_id`,`status`,`image_status`,`archive_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='费用单据主表(五类单据共用)';
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='费用单据主表(五类单据共用)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -132,4 +134,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:13:47
+-- Dump completed on 2026-11-03 10:48:20

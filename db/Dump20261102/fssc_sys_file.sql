@@ -47,7 +47,7 @@ CREATE TABLE `sys_file` (
   KEY `idx_tenant` (`tenant_id`),
   KEY `idx_tenant_biz` (`tenant_id`,`biz_type`,`biz_id`),
   KEY `idx_tenant_md5` (`tenant_id`,`file_md5`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='文件(租户隔离)';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='文件(租户隔离)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -68,4 +68,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:13:56
+-- Dump completed on 2026-11-03 10:48:01

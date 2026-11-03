@@ -47,7 +47,7 @@ CREATE TABLE `op_quality` (
   KEY `idx_oq_tenant_del_ct` (`tenant_id`,`del_flag`,`check_time`,`id`),
   KEY `idx_oq_tenant_del_result` (`tenant_id`,`del_flag`,`result`),
   KEY `idx_oq_tenant_del_type` (`tenant_id`,`del_flag`,`check_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='共享质检记录';
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='共享质检记录';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -68,4 +68,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:14:07
+-- Dump completed on 2026-11-03 10:48:46

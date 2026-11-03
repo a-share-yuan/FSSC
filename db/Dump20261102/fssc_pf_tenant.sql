@@ -54,7 +54,7 @@ CREATE TABLE `pf_tenant` (
   UNIQUE KEY `uk_tenant_code` (`tenant_code`),
   KEY `idx_status` (`status`),
   KEY `idx_expire` (`expire_time`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='租户主表[平台表-无tenant_id]';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='租户主表[平台表-无tenant_id]';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -76,4 +76,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:13:35
+-- Dump completed on 2026-11-03 10:48:25

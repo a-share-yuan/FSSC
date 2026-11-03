@@ -78,7 +78,7 @@ CREATE TABLE `inv_invoice` (
   KEY `idx_tenant_anomaly` (`tenant_id`,`anomaly_flag`),
   KEY `idx_tenant_owner` (`tenant_id`,`create_by`),
   KEY `idx_ii_tenant_del_comp_id` (`tenant_id`,`del_flag`,`company_id`,`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='发票主表(发票池)';
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='发票主表(发票池)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -99,4 +99,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:14:18
+-- Dump completed on 2026-11-03 10:48:31

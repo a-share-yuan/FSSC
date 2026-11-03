@@ -52,7 +52,7 @@ CREATE TABLE `wf_task_history` (
   KEY `idx_tenant_bizid` (`tenant_id`,`biz_id`,`id`),
   KEY `idx_wth_tenant_action_oper` (`tenant_id`,`action`,`oper_time`,`id`),
   KEY `idx_wth_tenant_target` (`tenant_id`,`target_user_id`,`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='按月分区'
+) ENGINE=InnoDB AUTO_INCREMENT=224 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='按月分区'
 /*!50500 PARTITION BY RANGE  COLUMNS(oper_time)
 (PARTITION p202601 VALUES LESS THAN ('2026-02-01') ENGINE = InnoDB,
  PARTITION p202602 VALUES LESS THAN ('2026-03-01') ENGINE = InnoDB,
@@ -87,6 +87,7 @@ CREATE TABLE `wf_task_history` (
 
 LOCK TABLES `wf_task_history` WRITE;
 /*!40000 ALTER TABLE `wf_task_history` DISABLE KEYS */;
+INSERT INTO `wf_task_history` VALUES (212,1,'c534a2fb-d72c-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_TAX_PROV',25,'SUBMIT',1,'系统管理员','运营支持组',NULL,'税金计提-202706-增值税',NULL,NULL,'2026-11-03 10:17:52'),(213,1,'c5995854-d72c-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_TAX_PROV',26,'SUBMIT',1,'系统管理员','运营支持组',NULL,'税金计提-202706-附加税',NULL,NULL,'2026-11-03 10:17:52'),(214,1,'c5aeb52d-d72c-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_TAX_PROV',27,'SUBMIT',1,'系统管理员','运营支持组',NULL,'税金计提-202706-所得税',NULL,NULL,'2026-11-03 10:17:52'),(215,1,'c5f1b1b6-d72c-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_ACCRUAL',15,'SUBMIT',1,'系统管理员','运营支持组',NULL,'费用预提-202702 全流程测试-预提占用',NULL,NULL,'2026-11-03 10:17:53'),(216,1,'1aa9d0d0-d72e-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_TAX_PROV',28,'SUBMIT',1,'系统管理员','运营支持组',NULL,'税金计提-202706-增值税',NULL,NULL,'2026-11-03 10:27:24'),(217,1,'1ad94559-d72e-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_TAX_PROV',29,'SUBMIT',1,'系统管理员','运营支持组',NULL,'税金计提-202706-附加税',NULL,NULL,'2026-11-03 10:27:25'),(218,1,'1af224a2-d72e-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_TAX_PROV',30,'SUBMIT',1,'系统管理员','运营支持组',NULL,'税金计提-202706-所得税',NULL,NULL,'2026-11-03 10:27:25'),(219,1,'1b3b149b-d72e-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_ACCRUAL',16,'SUBMIT',1,'系统管理员','运营支持组',NULL,'费用预提-202702 全流程测试-预提占用',NULL,NULL,'2026-11-03 10:27:25'),(220,1,'c95fec05-d72e-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_TAX_PROV',31,'SUBMIT',1,'系统管理员','运营支持组',NULL,'税金计提-202706-增值税',NULL,NULL,'2026-11-03 10:32:17'),(221,1,'c97c4cbe-d72e-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_TAX_PROV',32,'SUBMIT',1,'系统管理员','运营支持组',NULL,'税金计提-202706-附加税',NULL,NULL,'2026-11-03 10:32:17'),(222,1,'c9880ca7-d72e-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_TAX_PROV',33,'SUBMIT',1,'系统管理员','运营支持组',NULL,'税金计提-202706-所得税',NULL,NULL,'2026-11-03 10:32:18'),(223,1,'c9bb03a0-d72e-11f1-9881-d8bbc1e55a1a',NULL,'SUBMIT','提单','GL_ACCRUAL',17,'SUBMIT',1,'系统管理员','运营支持组',NULL,'费用预提-202702 全流程测试-预提占用',NULL,NULL,'2026-11-03 10:32:18');
 /*!40000 ALTER TABLE `wf_task_history` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -99,4 +100,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:13:50
+-- Dump completed on 2026-11-03 10:48:29

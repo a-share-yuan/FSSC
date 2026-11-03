@@ -51,7 +51,7 @@ CREATE TABLE `ocr_record` (
   KEY `idx_tenant_batch` (`tenant_id`,`batch_id`),
   KEY `idx_invoice_no` (`tenant_id`,`invoice_no`),
   KEY `idx_img_file` (`img_file_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='OCR 识别结果落库记录';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='OCR 识别结果落库记录';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -60,6 +60,7 @@ CREATE TABLE `ocr_record` (
 
 LOCK TABLES `ocr_record` WRITE;
 /*!40000 ALTER TABLE `ocr_record` DISABLE KEYS */;
+INSERT INTO `ocr_record` VALUES (2,1,1,1,2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'paddle','FAILED','第 1 页未识别出正式发票票面；可改传 XML/OFD 版式文件重新上传；或在「发票管理 › 发票补录」手工录入发票要素',0,'2026-11-03 07:34:47');
 /*!40000 ALTER TABLE `ocr_record` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -72,4 +73,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:14:25
+-- Dump completed on 2026-11-03 10:48:48

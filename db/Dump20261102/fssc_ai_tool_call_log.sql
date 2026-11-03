@@ -52,7 +52,7 @@ CREATE TABLE `ai_tool_call_log` (
   KEY `idx_ai_trace` (`trace_id`),
   KEY `idx_ai_tenant_time` (`tenant_id`,`call_time`),
   KEY `idx_ai_action` (`action_code`(64))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI 工具调用日志：无 del_flag，Mapper 仅 insert，不可删（SOX 友好）';
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI 工具调用日志：无 del_flag，Mapper 仅 insert，不可删（SOX 友好）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -61,6 +61,7 @@ CREATE TABLE `ai_tool_call_log` (
 
 LOCK TABLES `ai_tool_call_log` WRITE;
 /*!40000 ALTER TABLE `ai_tool_call_log` DISABLE KEYS */;
+INSERT INTO `ai_tool_call_log` VALUES (1,1,'f8f43fab8ae04e9f',NULL,NULL,'controller.Budget.itemPage','/api/tenant/budget/item/page','GET','read','LOW','{\"pageNum\":1,\"pageSize\":5,\"schemeId\":101}',NULL,NULL,NULL,0,'无权限访问：动作 controller.Budget.itemPage 标记为 AI 不可调用（§6 红线：删除/审批/反结账/权限变更/发布流程等永不开放）。',1,'admin',NULL,NULL,'127.0.0.1',3,'2026-11-03 07:34:09'),(2,2,'d1c1a47f81874b9b',NULL,NULL,'controller.Budget.itemPage','/api/tenant/budget/item/page','GET','read','LOW','{\"pageNum\":1,\"pageSize\":5,\"schemeId\":101}',NULL,NULL,NULL,0,'无权限访问：动作 controller.Budget.itemPage 标记为 AI 不可调用（§6 红线：删除/审批/反结账/权限变更/发布流程等永不开放）。',5011,'admin2',NULL,NULL,'127.0.0.1',0,'2026-11-03 07:34:13'),(3,1,'b87069ed21874f6b',NULL,NULL,'controller.BudgetOccupy.page','/api/tenant/budget/occupy/page','GET','read','LOW','{\"pageNum\":1,\"pageSize\":10}',200,0,'{\"code\":0,\"data\":{\"list\":[{\"amount\":-100.00,\"bizId\":5,\"bizLineId\":null,\"bizNo\":\"JRN202701001\",\"bizType\":\"GL_ACCRUAL\",\"budgetItemId\":5,\"budgetItemName\":\"行政办公费\",\"createTime\":\"2026-11-03T07:25:56\",\"id\":7,\"operType\":\"RELEASE\",\"operUserId\":3797,\"operUserName\":\"赵勇\",\"operUserNo\":\"100002\",\"remark\":null,\"tenantId\":1},{\"amount\":100.00,\"bizId\":5,\"bizLineId\":null,\"bizNo\":\"JRN202701001\",\"bizType\":\"GL_ACCRUAL\",\"budgetItemId\":5,\"budgetItemName\":\"行政办公费\",\"createTime\":\"2026-11-03T07:25:42\",\"id\":6,\"operType\":\"OCCUPY\",\"operUserId\":1,\"operUserName\":\"系统管理员\",\"operUserNo\":null,\"remark\":null,\"tenantId\":1},{\"amount\":-1000.00,\"bizId\":4,\"bizLineId\":null,\"bizNo\":\"JRN202612002\",\"bizType\":\"GL_ACCRUAL\",\"budgetItemId\":5,\"budgetItemName\":\"行政办公费\",\"createTime\":\"2026-11-03T07:25:30\",\"id\":5,\"operType\":\"RELEASE\",\"operUserId\":1,\"operUserName\":\"系统管理员\",\"operUserNo\":null,\"remark\":null,\"tenantId\":1},{\"amount\":1000.00,\"bizId\":4,\"bizLineId\":null,\"bizNo\":\"JRN202612002\",\"bizType\":\"GL_ACCRUAL\",\"budgetItemId\":5,\"budgetItemName\":\"行政办公费\",\"createTime\":\"2026-11-03T07:24:55\",\"id\":4,\"operType\":\"OCCUPY\",\"operUserId\":1,\"operUserName\":\"系统管理员\",\"operUserNo\":null,\"remark\":null,\"tenantId\":1},{\"amount\":-999999.00,\"bizId\":3,\"bizLineId\":null,\"bizNo\":\"JRN202612002\",\"bizType\":\"GL_DEFER\",\"budgetItemId\":5,\"budgetItemName\":\"行政办公费\",\"createTime\":\"2026-11-03T07:21:14\",\"id\":3,\"operType\":\"RELEASE\",\"operUserId\":3797,\"operUserName\":\"赵勇\",\"operUserNo\":\"100002\",\"remark\":null,\"tenantId\":1},{\"amount\":999999.00,\"bizId\":3,\"bizLineId\":null,\"bizNo\":\"JRN202612002\",\"bizType\":\"GL_DEFER\",\"budgetItemId\":5,\"budgetItemName\":\"行政办公费\",\"createTime\":\"2026-11-03T07:20:47\",\"id\":2,\"operType\":\"OCCUPY\",\"operUserId\":1,\"operUserName\":\"系统管理员\",\"operUserNo\":null,\"remark\":\"超预算软控通过（理由：E2E 软控超支理由）\",\"tenantId\":1}],\"pageNum\":1,\"pageSize\":10,\"pages\":1,\"total\":6},\"msg\":\"成功\",\"success\":true}',1,NULL,1,'admin',NULL,NULL,'127.0.0.1',2452,'2026-11-03 07:34:27'),(4,2,'3ad594a4a62d4322',NULL,NULL,'controller.BudgetOccupy.page','/api/tenant/budget/occupy/page','GET','read','LOW','{\"pageNum\":1,\"pageSize\":10}',200,0,'{\"code\":0,\"data\":{\"list\":[],\"pageNum\":1,\"pageSize\":10,\"pages\":0,\"total\":0},\"msg\":\"成功\",\"success\":true}',1,NULL,5011,'admin2',NULL,NULL,'127.0.0.1',13,'2026-11-03 07:34:30');
 /*!40000 ALTER TABLE `ai_tool_call_log` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -73,4 +74,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:13:58
+-- Dump completed on 2026-11-03 10:48:26

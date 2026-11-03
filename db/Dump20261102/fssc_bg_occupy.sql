@@ -41,7 +41,7 @@ CREATE TABLE `bg_occupy` (
   KEY `idx_tenant` (`tenant_id`),
   KEY `idx_tenant_budget` (`tenant_id`,`budget_item_id`),
   KEY `idx_tenant_biz` (`tenant_id`,`biz_type`,`biz_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='按月分区'
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='按月分区'
 /*!50500 PARTITION BY RANGE  COLUMNS(create_time)
 (PARTITION p202601 VALUES LESS THAN ('2026-02-01') ENGINE = InnoDB,
  PARTITION p202602 VALUES LESS THAN ('2026-03-01') ENGINE = InnoDB,
@@ -88,4 +88,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-02  8:14:13
+-- Dump completed on 2026-11-03 10:48:03
