@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 员工等级（差旅标准控制）（需求 2.18）。
+ * 员工等级（差旅标准控制）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

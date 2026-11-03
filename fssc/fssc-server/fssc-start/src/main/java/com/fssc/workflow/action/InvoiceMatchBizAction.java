@@ -80,7 +80,7 @@ public class InvoiceMatchBizAction implements WfBizAction {
         //   对任意 approved 的 INVOICE_MATCH(_MANUAL) 链都无条件把结论写成 MANUAL_MATCHED，
         //   等于「谁点通过谁放行」，付款强制校验形同虚设：一张超付、无发票覆盖、缺合同环节的单
         //   先被付款校验正确拦下
-        //   （code=400「三单匹配拦截：超付」），
+        // （code=400「三单匹配拦截：超付」），
         //   再把该单的 INVOICE_MATCH 复审链点过两节，结论就被改写成 MANUAL_MATCHED，
         //   付款校验随即放行，异常单真的付了款。
         //   注意：本方法整体被外层 catch(Exception) 兜底，异常会被静默吞掉 ⇒ 硬拦必须抛在 try 之外。

@@ -17,7 +17,7 @@ import { i18n } from './i18n'
  */
 config.global.plugins = [ElementPlus, i18n]
 // locale 固定基准语言：detectLocale() 在 jsdom 里探测结果不稳定
-//（可能是 en-US），会让页面文案随环境漂移、断言忽过忽不过。
+// （可能是 en-US），会让页面文案随环境漂移、断言忽过忽不过。
 i18n.global.locale.value = 'zh-CN'
 
 // jsdom 未实现 matchMedia / ResizeObserver，部分组件（表格、图表）会用到

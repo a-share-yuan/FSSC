@@ -70,7 +70,7 @@ public class InvoiceIssueBizAction implements WfBizAction {
                     String.valueOf(invoiceId), auditBefore, auditAfter,
                     (Boolean.TRUE.equals(event.getApproved()) ? "审批通过" : "审批驳回")
                             + (event.getComment() == null || event.getComment().isBlank() ? "" : "：" + event.getComment()));
-            // 合规整改( )：开票审批通过 → 生成应收单 + 收入确认凭证（销项闭环）
+            // 合规开票审批通过 → 生成应收单 + 收入确认凭证（销项闭环）
             if (Boolean.TRUE.equals(event.getApproved())) {
                 try {
                     createReceivableAndVoucher(invoice, invoiceId);

@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 借款付款类型（需求 2.26）。
+ * 借款付款类型。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

@@ -24,7 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 合同导入导出（需求 5.2/5.5：导出合同模板、导入历史合同）。
+ * 合同导入导出（导出合同模板、导入历史合同）。
  * CSV 格式（UTF-8 BOM）：合同编号,合同名称,合同类型,乙方,金额,签订公司ID,费用类型ID,开始日期,结束日期,备注
  */
 @RestController

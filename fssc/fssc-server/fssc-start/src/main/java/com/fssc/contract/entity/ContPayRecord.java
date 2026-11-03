@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 合同支付记录（cont_pay_record，需求 5.2：实际付款金额/结算数量/单价/单据号/状态/支付日期）。
+ * 合同支付记录（cont_pay_record，实际付款金额/结算数量/单价/单据号/状态/支付日期）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

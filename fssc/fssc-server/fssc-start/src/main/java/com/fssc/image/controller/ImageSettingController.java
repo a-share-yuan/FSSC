@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 影像系统设置（需求 6.3）：业务类型设置 / 文件种类识别设置 CRUD。
+ * 影像系统设置：业务类型设置 / 文件种类识别设置 CRUD。
  * 分库改造：直连 ImgSettingMapper，类级路由 fssc_image 库。
  */
 @RestController

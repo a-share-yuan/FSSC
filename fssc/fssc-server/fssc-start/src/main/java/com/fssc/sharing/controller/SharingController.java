@@ -73,13 +73,13 @@ public class SharingController {
     @OperLog(module = "SHARING", operType = "UPDATE", desc = "完成派工单")
     @PostMapping("/task/{id}/finish")
     public Result<Void> finish(@PathVariable Long id,
-                               // /办结备注（审计口语）随请求提交并落 op_audit_task.remark
+                               // 办结备注（审计口语）随请求提交并落 op_audit_task.remark
                                @RequestParam(required = false) String remark) {
         sharingService.finish(id, remark);
         return Result.success();
     }
 
-    // 任务池管理（需求 8.2.2：撤回/重新分配/全量查看）
+    // 任务池管理（.2：撤回/重新分配/全量查看）
 
     @RequiresPerm("sharing:task:list")
     @GetMapping("/task/manage")
@@ -106,7 +106,7 @@ public class SharingController {
         return Result.success();
     }
 
-    // 工单处理（需求 8.2.3：退单）
+    // 工单处理（.3：退单）
 
     @RequiresPerm("sharing:task:finish")
     @OperLog(module = "SHARING", operType = "UPDATE", desc = "退单退回任务池")
@@ -264,7 +264,7 @@ public class SharingController {
         return Result.success(voucherService.gapCheck(periodYear, periodMonth));
     }
 
-    /** 工单处理（需求 8.2.3）：修改凭证分录 */
+    /** 工单处理（.3）：修改凭证分录 */
     @RequiresPerm("sharing:voucher:post")
     @OperLog(module = "SHARING", operType = "UPDATE", desc = "修改凭证分录")
     @PostMapping("/voucher/{id}/lines/update")

@@ -92,7 +92,7 @@ public class InvoiceEnhanceController {
         return Result.success();
     }
 
-    /** 实时/手动验真（需求 7.1 实时验真、7.2 手动验真）：单张发票立即验真并回写状态 */
+    /** 实时/手动验真（实时验真、7.2 手动验真）：单张发票立即验真并回写状态 */
     @RequiresPerm("inv:verify")
     @OperLog(module = "INV_VERIFY_LOG", operType = "UPDATE", desc = "实时验真")
     @PostMapping("/verify/now")

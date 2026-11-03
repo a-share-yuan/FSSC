@@ -342,7 +342,7 @@ export const VOUCHER_SOURCE = {
   // 本键集不是唯一出处：凭证台账（pay/CorpPayVoucher）与总账（gl/GlLedger）取词走
   //   utils/bizEntry.js 的 VOUCHER_SOURCE_LABEL，补键必须两边同时补，否则界面上照旧直接显示英文。
   // 两张表另有几处措辞不一致
-  //   （EXPENSE/INVOICE_MATCH/GL_ACCRUAL/GL_SALARY_PROV/GL_SALARY_PAY），统一措辞属规则待定项，不要在此擅改。
+  // （EXPENSE/INVOICE_MATCH/GL_ACCRUAL/GL_SALARY_PROV/GL_SALARY_PAY），统一措辞属规则待定项，不要在此擅改。
   FA_ADD: '资产新增', FA_CIP_TO_ASSET: '在建工程转固', FA_DISPOSE: '资产处置',
   // 同族补齐：产品代码里没有写这个 source_type 的出口，摘要一律「费用重分类」
   // ⇒ 判为报表侧模拟写入的数据侧枚举，措辞从数据；详见 bizEntry.js 同名键注释。

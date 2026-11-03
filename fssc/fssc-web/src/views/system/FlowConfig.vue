@@ -1612,7 +1612,7 @@ async function publishModel() {
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || t('system.flow.msgPublishFail')) }
 }
 
-// /发布影响面（在途旧实例 + BPMN 仓库化 diff）
+// 发布影响面（在途旧实例 + BPMN 仓库化 diff）
 const inFlight = reactive({ visible: false, tab: 'inflight', modelName: '', data: null, history: [], diff: '' })
 
 async function openInFlight() {

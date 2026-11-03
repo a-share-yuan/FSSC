@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 收支设置（资金计划）（需求 2.21）。
+ * 收支设置（资金计划）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

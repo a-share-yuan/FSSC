@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 借款额度（需求 2.28：定义员工借款额度上限）。
+ * 借款额度（定义员工借款额度上限）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

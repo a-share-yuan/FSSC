@@ -36,7 +36,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 共享运营-基础配置（需求 8.1）：作业岗位设置 / 分组管理 / 工作日历。
+ * 共享运营-基础配置：作业岗位设置 / 分组管理 / 工作日历。
  * 简单配置类 CRUD，直接走 MP（租户拦截器 + MetaObjectHandler 自动 tenant_id/审计）。
  */
 @RestController
@@ -182,7 +182,7 @@ public class ShOpsConfigController {
         return Result.success();
     }
 
-    // 抢派单规则（需求 8.2.1）
+    // 抢派单规则（.1）
 
     @RequiresPerm("sharing:config")
     @GetMapping("/dispatch-rule/page")

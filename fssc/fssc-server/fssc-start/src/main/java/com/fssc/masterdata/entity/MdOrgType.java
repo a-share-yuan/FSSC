@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 组织类型（需求 2.30：定义组织的分类类型）。
+ * 组织类型（定义组织的分类类型）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

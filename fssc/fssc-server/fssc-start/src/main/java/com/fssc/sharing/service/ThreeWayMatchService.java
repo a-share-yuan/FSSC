@@ -789,7 +789,7 @@ public class ThreeWayMatchService {
             }
         }
         //   发票 ≤ 收货：容差参数化——收货金额 vs 发票金额的容差取自 match_tolerance 参数表
-        //   （公司级，amount_pct 百分比 + amount_abs 绝对值，容差金额 = max(收货×pct/100, abs)；
+        // （公司级，amount_pct 百分比 + amount_abs 绝对值，容差金额 = max(收货×pct/100, abs)；
         //   无公司配置/停用时默认 0.5% / 100 元）。超容差 → ERROR 冻结，容差内 → WARN。
         if (r.getReceiptAmount() != null && invoiceNetAmt.compareTo(r.getReceiptAmount()) > 0) {
             BigDecimal over = invoiceNetAmt.subtract(r.getReceiptAmount());

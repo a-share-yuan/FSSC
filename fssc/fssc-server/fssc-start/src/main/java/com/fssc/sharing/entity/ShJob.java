@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 
 /**
- * 共享作业岗位（需求 8.1.1：岗位设置，岗位需指定作业项）。
+ * 共享作业岗位（.1：岗位设置，岗位需指定作业项）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

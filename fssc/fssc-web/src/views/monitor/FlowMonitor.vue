@@ -692,7 +692,7 @@ function renderSankey() {
       lineStyle: { color: 'gradient', opacity: 0.3 },
       itemStyle: { borderWidth: 0 },
       // 标签截断到 12 字，并开 hideOverlap 让 ECharts 主动隐去避让不开的相邻标签
-      //（叠加高度自适应，节点再多也只会出现"少几个标签"，不会出现整片文字压字）
+      // （叠加高度自适应，节点再多也只会出现"少几个标签"，不会出现整片文字压字）
       label: {
         fontSize: 11,
         formatter: (p) => `${shortNodeLabel(p.name)}(${hits[p.name] || 0})`,

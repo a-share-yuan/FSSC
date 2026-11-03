@@ -33,7 +33,7 @@ import java.time.LocalDateTime;
 import java.util.Set;
 
 /**
- * 影像调阅评价与异常处理（需求 6.5/6.7）。
+ * 影像调阅评价与异常处理。
  * 分库改造：直连 image_review/image_exception/img_batch Mapper，类级路由 fssc_image 库。
  */
 @RestController

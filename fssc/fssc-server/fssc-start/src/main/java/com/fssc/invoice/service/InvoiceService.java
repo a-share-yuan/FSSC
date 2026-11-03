@@ -1212,7 +1212,7 @@ public class InvoiceService {
     }
 
     /**
-     * 发票查询（需求 7.3）：按 业务编号/发票日期范围/扫描(录入)日期范围/供应商/发票代码·号码 等条件获取发票数据。
+     * 发票查询：按 业务编号/发票日期范围/扫描(录入)日期范围/供应商/发票代码·号码 等条件获取发票数据。
      */
     public PageResult<InvInvoice> page(long pageNum, long pageSize, String keyword,
                                        String invoiceNo, String invoiceCode, String sellerName,

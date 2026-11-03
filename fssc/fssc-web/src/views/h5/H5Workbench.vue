@@ -507,7 +507,7 @@ async function loadBills(reset = false) {
     bills.value = billPage.value === 1 ? dedupe(list, 'id') : dedupe([...bills.value, ...list], 'id')
     billTotal.value = Number(r.total) || 0
     // 同类修法：分页判据用服务端 pages/total，不用 list.length >= PAGE_SIZE
-    //（原先待办用后者，接口不分页时恒真 ⇒ 整份列表反复追加）
+    // （原先待办用后者，接口不分页时恒真 ⇒ 整份列表反复追加）
     const pages = Number(r.pages) || Math.ceil(billTotal.value / PAGE_SIZE) || 1
     billHasMore.value = billPage.value < pages
   } catch (e) {
@@ -743,7 +743,7 @@ async function runVerify() {
   if (!canRunVerify) { ElMessage.warning('当前账号无发票验真执行权限，验真请由发票管理岗触发'); return }
   try {
     // 顺带消一处未编号 500：原先调 invoiceApi.verifyRun() 不带 body，而
-    // /verify/run 是「单张验真结果登记」口，服务端取不到 invoiceId 即 NPE ⇒ 有权限的人点了反而必炸。
+    // verify/run 是「单张验真结果登记」口，服务端取不到 invoiceId 即 NPE ⇒ 有权限的人点了反而必炸。
     // 本按钮语义是「把待验的票一次受理」，改走与 PC 发票池同一批量受理口 /verify/batch（同码 inv:verify:run）。
     const pending = invoices.value.filter((x) => x.verifyStatus !== 'SUCCESS')
     if (!pending.length) { ElMessage.info(t('h5.main.No')); return }

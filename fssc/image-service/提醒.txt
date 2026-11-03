@@ -1,1 +1,0 @@
-提醒：目录 D:\SourceCode\Ashare\fssc\image-service 是新建的(此前不存在)，如你原本打算把影像服务源码迁到这里做独立服务拆分，基于当前核验结论，com.fssc.image 包与 fssc_image 分库已经具备了独立拆出的全部前提。

@@ -384,7 +384,7 @@ async function openAssignMenu(row) {
     ElMessage.error(e.message || t('system.role.msgMenuLoadFail'))
   } finally {
     // 先结束骨架屏，让 el-tree 真正挂载后再回显勾选
-    //（否则 menuTreeRef 为 undefined，setCheckedKeys 被可选链静默跳过 → 已选权限恒为空）
+    // （否则 menuTreeRef 为 undefined，setCheckedKeys 被可选链静默跳过 → 已选权限恒为空）
     menuLoading.value = false
   }
   if (!checkedIds.length) return

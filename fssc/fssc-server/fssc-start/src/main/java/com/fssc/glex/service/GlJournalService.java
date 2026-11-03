@@ -190,7 +190,7 @@ public class GlJournalService {
         }
         e.setAmount(amount);
         e.setEntryNo("JRN" + period + String.format("%03d", seq));
-        // /292：发起≠记账。凭证号只能由办结时生成的凭证对象给出，此处不预造号、不置 POSTED。
+        // 292：发起≠记账。凭证号只能由办结时生成的凭证对象给出，此处不预造号、不置 POSTED。
         e.setStatus("APPROVING");
         if (e.getCompanyId() == null) {
             e.setCompanyId(orgGuard.currentCompany());

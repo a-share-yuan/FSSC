@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 成本中心预算组织映射（需求 2.17）。
+ * 成本中心预算组织映射。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

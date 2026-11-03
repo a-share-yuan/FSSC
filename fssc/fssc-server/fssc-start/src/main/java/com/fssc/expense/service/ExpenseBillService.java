@@ -2097,7 +2097,7 @@ public class ExpenseBillService {
             }
         }
         // 借款冲抵/还款的减记已收敛到审批通过环节
-        //（exp_loan_offset 流水 + loan_balance 绝对量重算 + REPAID/PARTIAL_REPAID 翻档，
+        // （exp_loan_offset 流水 + loan_balance 绝对量重算 + REPAID/PARTIAL_REPAID 翻档，
         //  落点 ExpenseWfEventListener.repayLoan / offsetLoansByClaim），
         // 反审核把单据退回未生效态 DRAFT，就必须在同一次调用里把已扣的额反冲回去，
         // 否则「单未生效、账已结清」——这一形态——在反审核环节上原样重现。
@@ -2119,7 +2119,7 @@ public class ExpenseBillService {
         expBillMapper.updateById(update);
     }
 
-    // 事前申请关闭 / 终止报销（需求 4.1 页面规则）
+    // 事前申请关闭 / 终止报销（页面规则）
 
     /** 申请单关闭：已完成且未被任何单据报销引用时关闭，释放已占用预算，状态→CLOSED */
     @Transactional(rollbackFor = Exception.class)

@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 /**
  * 资本性支出申请（FA_CER，FA01）简化申请记录。
  *
- * <p>合规整改（ / DA-01）：原 FA_CER 发起时 bizId=null（无对应业务单据表），导致：
+ * <p>原 FA_CER 发起时 bizId=null（无对应业务单据表），导致：
  * 流程结束事件缺 bizId 不发布 → 资产域监听器收不到回写（DA-01），也无法做预算占用核销。
  * 现引入本简化申请表：发起即落一条 APPLYING 记录并以 {@code bizId=fa_cer_request.id} 启动审批流，
  * 审批通过 → 预算占用 + 状态 APPROVED；驳回 → 状态 REJECTED（预算如有占用则释放）。</p>

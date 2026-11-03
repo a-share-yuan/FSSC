@@ -171,7 +171,7 @@ public class WfZombieReconcileJob {
                     // 「引擎实例已被删、视图仍 RUNNING」有补办结容错，
                     // 直接调 cancelInstance 会在这种半脱节状态下抛「实例不存在或已结束」。
                     int n = wfEngineFacade.cancelRunningInstancesByBiz(bizType, bizId,
-                            "D-WF-14 自动办结：单据 " + bizType + "#" + bizId + " 已结束，流程实例自动撤销");
+                            "自动办结：单据 " + bizType + "#" + bizId + " 已结束，流程实例自动撤销");
                     terminalClosed += n;
                     if (n > 0) {
                         log.info("[僵尸实例对账] 终态清理 bizType={}, bizId={}, 撤销实例 {} 个", bizType, bizId, n);
@@ -179,7 +179,7 @@ public class WfZombieReconcileJob {
                 } else if (billTerminalChecker.isBillNotSubmitted(bizType, bizId)) {
                     // B 类：单据还没提交，挂在待办里点进去是空的
                     int n = wfEngineFacade.cancelRunningInstancesByBiz(bizType, bizId,
-                            "D-WF-14 自动办结：单据 " + bizType + "#" + bizId + " 尚未提交（草稿态），流程实例自动撤销");
+                            "自动办结：单据 " + bizType + "#" + bizId + " 尚未提交（草稿态），流程实例自动撤销");
                     draftClosed += n;
                     if (n > 0) {
                         log.info("[僵尸实例对账] 未提交清理 bizType={}, bizId={}, 撤销实例 {} 个", bizType, bizId, n);

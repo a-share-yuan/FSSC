@@ -270,7 +270,7 @@ public class PrecheckService {
         }
 
         // 8) 拆单检测（SPLIT_ORDER_DETECT，WARN 提示不拦截）：跨单据聚合超出预检表达式引擎的能力边界
-        //    （引擎仅对注入 Map 中的标量变量求值，无窗口/聚合/他单数据访问），故落在 Java 侧审核链；
+        // （引擎仅对注入 Map 中的标量变量求值，无窗口/聚合/他单数据访问），故落在 Java 侧审核链；
         //    md_compliance_rule 已登记同名规则保持规则清单可见性。
         if (isClaim) {
             PrecheckItem split = detectSplitOrder(bill, total);

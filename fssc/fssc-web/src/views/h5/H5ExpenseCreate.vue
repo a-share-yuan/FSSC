@@ -1226,7 +1226,7 @@ async function loadMd() {
     orgApi.companyTree().catch(() => null),
     orgApi.deptTree().catch(() => null),
   ])
-  // /expense-item/tree 返回平铺清单（ExpenseItemService.tree() 只做排序，不组装 children），
+  // expense-item/tree 返回平铺清单（ExpenseItemService.tree() 只做排序，不组装 children），
   // 所以旧页面那段"展平 children"是死代码，这里直接按 itemName 过滤空名。
   items.value = (it || []).filter((x) => x && x.itemName && String(x.itemName).trim())
   const m = {}

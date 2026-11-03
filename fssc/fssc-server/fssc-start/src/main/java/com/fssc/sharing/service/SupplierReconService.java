@@ -369,7 +369,7 @@ public class SupplierReconService {
         upd.setLetterStatus("SENT");
         upd.setLetterSentTime(LocalDateTime.now());
         // ②：发函成功是唯一把供应商确认状态从 NONE 推进到 PENDING 的入口
-        //（状态机：NONE 未发函 → PENDING 等待供应商回函 → CONFIRMED/REJECTED，杜绝「未发函先驳回」）。
+        // （状态机：NONE 未发函 → PENDING 等待供应商回函 → CONFIRMED/REJECTED，杜绝「未发函先驳回」）。
         upd.setSupplierConfirmStatus("PENDING");
         upd.setStatus("SENT");
         upd.setUpdateBy(UserContext.get() == null ? null : UserContext.get().getUserId());

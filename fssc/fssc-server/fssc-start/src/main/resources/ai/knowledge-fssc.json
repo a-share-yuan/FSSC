@@ -1280,7 +1280,7 @@
    "docPath": "docs/业务流程-档案管理模式.md",
    "title": "档案集中管理与非集中管理模式（含流程差异）",
    "heading": "档案集中管理与非集中管理模式（含流程差异）",
-   "text": "> 适用版本：V1.4.92 / V1.4.93（2026-10-24）。\n> 事实来源：代码实测（`DeliveryService`、`SharingService`、`BillArchiveService`、`WfProcessConfigService`）、\n> 数据库实测（`sys_company`、`wf_process_config`、`wf_model`、`wf_node_config`）与当日两条真跑单据\n> （`BX202610240004` 非集中、`BX202610240005` 集中）。节点名、角色码一律取流程定义原文。",
+   "text": "> 适用版本：V1.4.92 / V1.4.93。\n> 事实来源：`DeliveryService`、`SharingService`、`BillArchiveService`、`WfProcessConfigService`）、\n> 数据库实测（`sys_company`、`wf_process_config`、`wf_model`、`wf_node_config`）与当日两条真跑单据\n> （`BX202610240004` 非集中、`BX202610240005` 集中）。节点名、角色码一律取流程定义原文。",
    "restricted": false,
    "length": 275
   },
@@ -1631,7 +1631,7 @@
    "docPath": "docs/业务流程-费用报销.md",
    "title": "业务流程：费用报销全流程",
    "heading": "业务流程：费用报销全流程 / 5. 排障速查",
-   "text": "| 现象 | 先查 |\n|---|---|\n| 提交即被拦 | `precheck_result` 超标项 / 预算占用 / 齐套闸口 |\n| 审批人不对 | wf_node_config 的 node_key 是否孤儿 |\n| 看不到待办 | 连办拦截 / 数据范围 / 节点没配人 |\n| 付款选不到账户 | 账户主数据页大小限制（已知 D-BIZ-04，用手册绕行） |\n| 凭证不平 | 凭证模板映射 / 科目存在性（`md_subject`） |",
+   "text": "| 现象 | 先查 |\n|---|---|\n| 提交即被拦 | `precheck_result` 超标项 / 预算占用 / 齐套闸口 |\n| 审批人不对 | wf_node_config 的 node_key 是否孤儿 |\n| 看不到待办 | 连办拦截 / 数据范围 / 节点没配人 |\n| 付款选不到账户 | 账户主数据页大小限制（已知 ，用手册绕行） |\n| 凭证不平 | 凭证模板映射 / 科目存在性（`md_subject`） |",
    "restricted": false,
    "length": 228
   },

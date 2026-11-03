@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 合同类型（需求 5.1：PO/非PO 合同分类）。
+ * 合同类型（PO/非PO 合同分类）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

@@ -38,7 +38,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 档案归档（需求 6.6 关联：档案调阅/归档）。
+ * 档案归档（关联：档案调阅/归档）。
  * 闭环：审批完成 + 影像完整的单据进入待归档清单 → 归档执行（关联文件迁移至 archive 存储区
  * + 生成档案记录 + 单据标记 ARCHIVED）→ 已归档档案可查可看影像。
  *

@@ -555,7 +555,7 @@ const b = reactive({
   receipts: [],
 })
 
-// /已入账的借款单/申请单 id —— 候选选择器里置灰，防同一张单重复入账
+// 已入账的借款单/申请单 id —— 候选选择器里置灰，防同一张单重复入账
 const loanOffsetIds = computed(() => (b.form?.loanOffsets || []).map((o) => o.loanBillId))
 const relationIds = computed(() => (b.form?.relations || []).map((r) => r.sourceBillId))
 

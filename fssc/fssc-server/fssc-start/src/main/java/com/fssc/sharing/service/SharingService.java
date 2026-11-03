@@ -522,7 +522,7 @@ public class SharingService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
-    /** 任务池管理（需求 8.2.2）：全量任务，支持状态/类型/关键字筛选；增 activeFlag（未激活值域）+ 回填单据状态 */
+    /** 任务池管理（.2）：全量任务，支持状态/类型/关键字筛选；增 activeFlag（未激活值域）+ 回填单据状态 */
     public PageResult<OpAuditTask> manage(long pageNum, long pageSize, String poolStatus, String taskType,
                                           String keyword, String activeFlag) {
         LambdaQueryWrapper<OpAuditTask> w = new LambdaQueryWrapper<>();
@@ -561,7 +561,7 @@ public class SharingService {
         }
     }
 
-    /** 撤回（需求 8.2.2）：已认领 → 回到任务池（WAITING），清除认领人 */
+    /** 撤回（.2）：已认领 → 回到任务池（WAITING），清除认领人 */
     public void withdraw(Long taskId) {
         OpAuditTask task = require(taskId);
         if (!"RECEIVED".equals(task.getPoolStatus())) {
@@ -577,7 +577,7 @@ public class SharingService {
                 .eq(OpAuditTask::getId, taskId));
     }
 
-    /** 重新分配（需求 8.2.2）：改派给指定作业员（assigneeId），状态保持 RECEIVED */
+    /** 重新分配（.2）：改派给指定作业员（assigneeId），状态保持 RECEIVED */
     public void reassign(Long taskId, Long assigneeId) {
         OpAuditTask task = require(taskId);
         // 必填办结（批次 2C，与前端 TaskPool「分配给人」同一规则）：留空会把任务置为 RECEIVED 却无人认领
@@ -593,7 +593,7 @@ public class SharingService {
         opAuditTaskMapper.updateById(update);
     }
 
-    /** 退单（需求 8.2.3）：工单处理人退回业务组任务池（RECEIVED → WAITING + 退单备注） */
+    /** 退单（.3）：工单处理人退回业务组任务池（RECEIVED → WAITING + 退单备注） */
     public void returnTask(Long taskId, String reason) {
         OpAuditTask task = require(taskId);
         if (!"RECEIVED".equals(task.getPoolStatus())) {

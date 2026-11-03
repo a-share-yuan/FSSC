@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 影像系统设置（需求 6.3）：业务类型设置 / 文件种类识别设置。
+ * 影像系统设置：业务类型设置 / 文件种类识别设置。
  * setting_type: BIZ_TYPE 业务类型 / FILE_KIND 文件种类识别。
  */
 @Data

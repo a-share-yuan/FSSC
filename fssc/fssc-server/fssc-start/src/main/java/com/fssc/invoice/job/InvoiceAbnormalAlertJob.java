@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * 发票异常告警推送（需求 7 税务发票管理体验项）。
+ * 发票异常告警推送（税务发票管理体验项）。
  * 每 5 分钟扫描异常发票（验真 FAILED 或 异常标记非 NORMAL：红冲/销方黑名单/作废），
  * 按租户聚合后通过 {@link NotifyService} 多渠道（站内信+企微+邮件）推送至税务经理(TAX_MANAGER)；
  * 该角色无用户时回退推送给租户全部激活用户，保证演示/冒烟可感知。

@@ -267,7 +267,7 @@ watch(() => [props.modelValue, props.billId, props.bizType], async ([v, bid]) =>
     chain.value = { summary: { scope: 'NOT_SUPPORTED', reason: (e && e.message) || '联查失败' } }
   }
   // 兜底：只有「后端确认这是费用域、且链路响应里确实没带头部」才回退费用单详情接口。
-  // /他域主键（抄送记录 id、方案 id…）与 exp_bill.id 不是同一坐标系，
+  // 他域主键（抄送记录 id、方案 id…）与 exp_bill.id 不是同一坐标系，
   // 关联点未命中（NOT_SUPPORTED）或已按他域解析时再拿这个数字去查详情，就会把别人的报销单头贴进来。
   const scope = chain.value?.summary?.scope
   if (!billInfo.value && scope === 'EXPENSE') {

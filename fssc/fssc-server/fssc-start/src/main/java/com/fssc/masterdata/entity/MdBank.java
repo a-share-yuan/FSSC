@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 金融机构（银行主数据）（需求 2.10）。
+ * 金融机构（银行主数据）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

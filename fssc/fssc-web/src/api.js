@@ -47,7 +47,7 @@ export const store = {
   // store 是普通对象（getter/setter 直接读写 localStorage），不是 reactive ⇒
   //    Vue 的 watch(() => store.token) 追踪不到，登录不会触发任何回调。
   //    故在 setter 里额外派发一个事件，供 App.vue 补做「登录成功后预热字典」。
-  //    （修复"字典预热只在刷新页面时才发生"的缺陷）
+  // （修复"字典预热只在刷新页面时才发生"的缺陷）
   set token(v) {
     v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY)
     try {
@@ -890,7 +890,7 @@ export const mdApi = {
   // 下拉专用：全部 NORMAL 城市（不分页）。单据发起页城市选择改用此接口，避免 /page 分页截断低 id 城市
   cityList: () => http.get('/tenant/masterdata/city/list'),
   payees: (params) => http.get('/tenant/masterdata/payee/page', { params }),
-  // D-BIZ-08：走 /select（不挂权限点）——资产建档/付款计划/容差配置选供应商是基本功能，
+  // 走 /select（不挂权限点）——资产建档/付款计划/容差配置选供应商是基本功能，
   // 不该要求用户持有 md:supplier:list；后端该端点与 /page 同一服务逻辑。
   suppliers: (params) => http.get('/tenant/masterdata/supplier/select', { params }),
 
@@ -1287,7 +1287,7 @@ export const masterApi = {
   },
 }
 
-// 基础数据-配置类（需求 2.17/2.23/2.27~2.34，统一 /tenant/masterdata/config/{type}/...）
+// 基础数据-配置类（/2.27~2.34，统一 /tenant/masterdata/config/{type}/...）
 function cfgCrud(type) {
   return {
     page: (p) => http.get(`/tenant/masterdata/config/${type}/page`, { params: p }),
@@ -1396,7 +1396,7 @@ export const sharingApi = {
   pool: (params, cfg) => http.get('/tenant/sharing/task/pool', { params, ...cfg }),
   mine: (params) => http.get('/tenant/sharing/task/mine', { params }),
   receive: (id) => http.post(`/tenant/sharing/task/${id}/receive`),
-  // /办结备注随请求提交（remark → op_audit_task.remark 记录）
+  // 办结备注随请求提交（remark → op_audit_task.remark 记录）
   finish: (id, remark) => http.post(`/tenant/sharing/task/${id}/finish`, null, { params: { remark } }),
   manage: (params) => http.get('/tenant/sharing/task/manage', { params }),
   withdraw: (id) => http.post(`/tenant/sharing/task/${id}/withdraw`),
@@ -1415,7 +1415,7 @@ voucherPost: (id) => http.post(`/tenant/sharing/voucher/${id}/post`),
   voucherBatchPost: (ids) => http.post('/tenant/sharing/voucher/batch-post', ids),
 }
 
-// 预算管理（需求 3 章）
+// 预算管理（章）
 export const budgetApi = {
   schemePage: (params) => http.get('/tenant/budget/scheme/page', { params }),
   schemeCreate: (body) => http.post('/tenant/budget/scheme/create', body),
@@ -1882,7 +1882,7 @@ export async function verifySession() {
   try {
     // silent：会话校验是启动自愈逻辑，失败走 router 守卫/横幅，不弹 toast
     const p = await http.post('/auth/profile', null, { timeout: 5000, silent: true })
-    // /auth/profile 返回 ProfileVo{ user: SysUser, perms, roles, features }（嵌套结构），
+    // auth/profile 返回 ProfileVo{ user: SysUser, perms, roles, features }（嵌套结构），
     // 旧逻辑读 p.id/p.userId 恒为 undefined，导致 store.user 永远缺失 id/userName 等字段。
     // 正确做法：把内层 user（SysUser 全字段）展开合并，并补顶层 perms/roles/features。
     if (p && typeof p === 'object') {
@@ -2104,7 +2104,7 @@ export const collabApi = {
 // BCP 门户行级异议审核（/api/tenant/bcp-objection/**）
 // 供应商（AP）/ 客户（AR）在 BCP 门户对账明细行提起的数量、单价异议；FSSC 侧 AP/AR 岗
 // 经本组端点拉取待审清单并回写结论。后端再以 HMAC-SHA256 签名调用 BCP 门户的开放通道
-// /api/open/linku/**，因此本组端点的可用性取决于两侧共享密钥是否同值。
+// api/open/linku/**，因此本组端点的可用性取决于两侧共享密钥是否同值。
 // 读 = bcp:objection:list，写 = bcp:objection:review。
 export const bcpObjectionApi = {
   pending: (params) => http.get('/tenant/bcp-objection/pending', { params }),

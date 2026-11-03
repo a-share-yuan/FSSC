@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 抢派单规则（需求 8.2.1）：定义工单分派到各小组任务池的规则条件。
+ * 抢派单规则（.1）：定义工单分派到各小组任务池的规则条件。
  * 分派模式：SYSTEM 系统分派 / MANUAL 人工处理。
  * 规则条件：按 共享作业项 / 公司 / 费用类型 / 币种 组合。
  */

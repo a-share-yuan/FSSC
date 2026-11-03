@@ -902,7 +902,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
           }
         })
       }
-      // /载入既有单据时，预算池按本单年度取、行上的预算行按「本单年度 + 行费用项」重解析。
+      // 载入既有单据时，预算池按本单年度取、行上的预算行按「本单年度 + 行费用项」重解析。
       // 旧单带的是上一轮解析出来的行（可能是别的费用项/别的年度），直接沿用会把占用记到错的科目上。
       await loadBudgetPool(form.bill.periodYear)
       resolveLineBudgets()
@@ -1085,7 +1085,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
         id: null, itemId: l.itemId, itemName: l.itemName, expenseDate: l.expenseDate || today(),
         amount: l.amount || 0, taxRate: l.taxRate || 0, taxAmount: l.taxAmount || 0, netAmount: l.netAmount || 0,
         budgetItemId: l.budgetItemId || null, stdAmount: l.stdAmount || null, overStd: l.overStd || 0, overReason: '', remark: l.remark || '',
-        // /373：复制单据时招待三项承载列（attendees / person_count / entertain_type）必须列进这份白名单，漏一项草稿就是空的
+        // 373：复制单据时招待三项承载列（attendees / person_count / entertain_type）必须列进这份白名单，漏一项草稿就是空的
         attendees: l.attendees || null, personCount: l.personCount ?? null, entertainType: l.entertainType || null,
         // 保留行级发票元信息，供发票清单反查回填与继续勾选/调整
         extJson: (l.extJson && typeof l.extJson === 'string' ? l.extJson : JSON.stringify(l.extJson || {})),

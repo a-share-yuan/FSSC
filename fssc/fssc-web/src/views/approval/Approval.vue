@@ -797,7 +797,7 @@ async function approve(row, approved) {
     // 传阅：只有「通过」才可能投递抄送（驳回会终止实例），故仅在通过时显示抄送区
     allowCc: approved,
     // 审批请求改由弹窗执行 —— 成功才关窗；被服务端业务异常拒绝
-    //（「任务已被处理」「禁止审批自己提交的单据」「会计期间已结账」等）时弹窗保持打开、
+    // （「任务已被处理」「禁止审批自己提交的单据」「会计期间已结账」等）时弹窗保持打开、
     // 意见与下一环节点名/审批项选择全部保留，失败原因就地显示并可原地重试。
     // 若先关窗再发请求，失败只剩一条飘过顶部的红条，审批人既丢了意见也不知卡在哪。
     submit: async (payload) => {
@@ -826,7 +826,7 @@ async function approve(row, approved) {
 
 // 批量审批：勾选行统一意见一次性提交后端批量接口
 // （wfApi.batchApprove → 主路径 POST /api/tenant/workflow/task/batch-approve，请求体 { taskIds, comment }；
-//   /api/tenant/wf/batch-approve 只是 404 时的防御性回退，后端并无该路径）。
+// api/tenant/wf/batch-approve 只是 404 时的防御性回退，后端并无该路径）。
 // 完成后按返回的 fail 数组逐条展示失败明细并刷新列表；未勾选时按钮禁用并提示。
 const batchApproving = ref(false)
 const taskTableRef = ref(null)
@@ -1209,7 +1209,7 @@ async function batchApprove() {
       const r = rows.find((x) => String(x.taskId) === String(f?.taskId))
       const name = f?.billNo || r?.billNo || r?.title || '任务 ' + (f?.taskId ?? r?.taskId ?? i + 1)
       // 后端字段是 reason，不是 msg/message：只读后两者 ⇒ 后端精心构造的逐条失败原因
-      //（「任务已被处理，请刷新待办」「禁止审批自己提交的单据」等）全部丢失，界面永远显示
+      // （「任务已被处理，请刷新待办」「禁止审批自己提交的单据」等）全部丢失，界面永远显示
       // 兜底文案「审批失败」，等于把最有用的排障信息吞掉了。reason 必须放最前。
       return `${i + 1}. ${name}：${f?.reason || f?.msg || f?.message || '审批失败'}`
     })

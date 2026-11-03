@@ -185,7 +185,7 @@ public class InvoiceEnhanceService {
     }
 
     /**
-     * 实时/手动验真（需求 7.1/7.2）：发票池按钮与批量入口共用的「发起」出口。
+     * 实时/手动验真：发票池按钮与批量入口共用的「发起」出口。
      *
      * <p>【】模拟通道不再产出「验真通过」。本方法拿不到任何外部报文——调用方是浏览器
      * （{@code POST /verify/now}、{@code /verify/batch}，前端把 result 硬编码成 PASS、按钮文案写着

@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 记账配置（分录生成规则）（需求 2.20）。
+ * 记账配置（分录生成规则）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

@@ -810,7 +810,7 @@ def fix_known_defects():
                 "config.global.plugins = [ElementPlus, i18n]",
                 "config.global.plugins = [ElementPlus, i18n]\n"
                 "// locale 固定基准语言：detectLocale() 在 jsdom 里探测结果不稳定\n"
-                "//（可能是 en-US），会让页面文案随环境漂移、断言忽过忽不过。\n"
+                "// （可能是 en-US），会让页面文案随环境漂移、断言忽过忽不过。\n"
                 "i18n.global.locale.value = 'zh-CN'", 1)
             with open(tp, "w", encoding="utf-8", newline="") as f:
                 f.write(t_raw)

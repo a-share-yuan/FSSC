@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 交通工具（需求 2.23：交通工具类型及对应舱位等级、适用员工等级范围）。
+ * 交通工具（交通工具类型及对应舱位等级、适用员工等级范围）。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

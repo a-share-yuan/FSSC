@@ -81,7 +81,7 @@ releases/
 bpmn-repo/drafts/
 output/
 
-# ---- 施工残留（2026-10-23 清理）----
+# ---- 施工残留 ----
 *.prebak*
 **/vsd_*.py
 **/check_crud*.py

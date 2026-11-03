@@ -546,7 +546,7 @@ const fmt = (v) => Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigit
 // 于是 companyId（下拉选中的数字）被判非法＝填齐也提交不过（假拦，见 requiredRules.spec.js 断言）。
 // 现统一取 `commonRules.*`（自定义 validator，类型无关且仍带红星）。
 // 必填集规则＝逐支只镜像各自服务端已有的断言；服务端没拦的字段不在前端加码
-//（前端单方加码＝假拦，且绕过界面仍是脏数据＝与"星号＝拦截"规则相反）。
+// （前端单方加码＝假拦，且绕过界面仍是脏数据＝与"星号＝拦截"规则相反）。
 const planFormRules = {
   period: commonRules.required('请选择计划期间'),
   planDate: commonRules.required('请选择计划日期'),
@@ -570,7 +570,7 @@ const creditFormRules = {
 const transferFormRules = {
   fromBankAccountId: commonRules.required('请选择付款账户'),
 // 不要本条规则不带 message：async-validator 4.2.5 见到 rule.message 就把 validator 抛出的 Error 文案整条替换掉
-//（`if (errorList.length && rule.message !== undefined) errorList = [].concat(rule.message)`），
+// （`if (errorList.length && rule.message !== undefined) errorList = [].concat(rule.message)`），
 // 于是"没选收款账户"会被显示成"转出与转入账户不能相同"＝报错与病因错位。多因 validator 一律只留 required 标志（红星仍出）。
   toBankAccountId: [{
     required: true,
@@ -639,7 +639,7 @@ const adjustForm = ref({ incomeAdjust: null, outcomeAdjust: null })
 const adjustedIncome = computed(() => Number(adjustPlan.value.incomeAmount || 0) + Number(adjustForm.value.incomeAdjust || 0))
 const adjustedOutcome = computed(() => Number(adjustPlan.value.outcomeAmount || 0) + Number(adjustForm.value.outcomeAdjust || 0))
 // F3：裸值 `0` 当"未选"哨兵＝下拉永远显示空、却把 id=0 当真值发出去
-//（tr_credit_bill.customer_id=0 是脏引用；TrTransferService.create 只判 `== null`，
+// （tr_credit_bill.customer_id=0 是脏引用；TrTransferService.create 只判 `== null`，
 //  0 能穿过非空断言、到 execute() 才报"转出银行账户不存在"＝报错与病因错位）。未选一律 null。
 const emptyCredit = () => ({ receiveDate: '', customerId: null, payMethod: '', payerBank: '', payerAccount: '', amount: 0, currencyCode: 'CNY', sourceChannel: '' })
 const creditForm = ref(emptyCredit())
@@ -865,7 +865,7 @@ async function runBankRecon() {
   // 银企直连页的自动对账同样必须当场反馈结果体（勾对/未勾对条数 + 未勾对流水号 + 拒配原因），
   // 出纳不必翻页核对、也不必等调节表环节才发现漏勾的流水
   // 甲＋乙：命中 0 条不得宣告「已发起 TR_BANK_RECON 对账审批」；"已发起审批"只认后端 processStarted
-  //   （后端 BankReconcileService 仅在勾对数 > 0 且 start 成功时置 true，零命中必为 false）
+  // （后端 BankReconcileService 仅在勾对数 > 0 且 start 成功时置 true，零命中必为 false）
   // 丙：高危批处理动作统一加确认框
   try {
     await ElMessageBox.confirm(

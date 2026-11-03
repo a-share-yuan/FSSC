@@ -1016,7 +1016,7 @@ public class WfQueryService {
         }
         qw.orderByDesc(WfTaskHistory::getId);
         Page<WfTaskHistory> p = historyMapper.selectPage(Page.of(pageNum, pageSize), qw);
-        // /089：分页列表按"最新在前"呈现，实例级定论行要排在同实例末节办理行<b>之前</b>
+        // 089：分页列表按"最新在前"呈现，实例级定论行要排在同实例末节办理行<b>之前</b>
         // 才符合因果（它写的其实是"整单结论"这个最后发生的事件）。写入数据库序、SQL 排序都不动（审计表
         // 只增不改，也不给读侧加 case-when 表达式——一旦解析出问题影响的是整张历史页），
         // 只在返回前按 {@link #causalOrder} 重排<b>本页</b>：每枚实例至多一行定论行，跨页不互相顶位。
@@ -1313,7 +1313,7 @@ public class WfQueryService {
         // 加签记录单独归堆（节点键 → 各道加签），不参与"这一节谁定的论"的聚合
         Map<String, List<Map<String, Object>>> addSignTrail = new LinkedHashMap<>();
         Map<String, String> addSignNodeNames = new LinkedHashMap<>();
-        // /110：记录过的节点键（不含收尾行/加签行）——分母的另一侧真相源
+        // 110：记录过的节点键（不含收尾行/加签行）——分母的另一侧真相源
         Set<String> trailNodes = new HashSet<>();
         for (WfTaskHistory h : his) {
             if (h.getNodeKey() == null) continue;
@@ -1346,7 +1346,7 @@ public class WfQueryService {
             }
             lastHis.put(h.getNodeKey(), h);
         }
-        // /110：分母的另一半真相源＝本实例<b>实际生成过任务</b>的节点（不限 PENDING：
+        // 110：分母的另一半真相源＝本实例<b>实际生成过任务</b>的节点（不限 PENDING：
         // DONE/CANCELLED 都是"这一节真的到过"）。配置里从未生成过的节（条件分支没命中、网关走了另一条）
         // 永远不会到，不能占分母——这就是"配置 14 节实走 6 节""配置 4 节而 3 节即 END"的根因。
         Set<String> everTaskNodes = new HashSet<>();
@@ -1440,7 +1440,7 @@ public class WfQueryService {
                 n.put("addSigns", as);
             }
         }
-        // /110/147：序号与分母按"实际会经过的节点序列"给，不再按配置节点数
+        // 110/147：序号与分母按"实际会经过的节点序列"给，不再按配置节点数
         applySequenceScope(out, everTaskNodes, trailNodes, terminal, forward);
         return out;
     }

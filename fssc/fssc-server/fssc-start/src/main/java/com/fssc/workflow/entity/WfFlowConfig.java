@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 流程配置（wf_flow_config）：需求31 附录 审批流程配置建议。
+ * 流程配置（wf_flow_config）：附录 审批流程配置建议。
  * cfg_type: THRESHOLD 金额阈值 / TIMEOUT 超时处理 / ACTION 审批动作 / INTEGRATION 外部集成
  */
 @Data
