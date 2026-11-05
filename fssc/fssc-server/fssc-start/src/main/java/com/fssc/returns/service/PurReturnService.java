@@ -114,6 +114,7 @@ public class PurReturnService {
         fillCompanyCoords(r);
         fillSourceDocId(r);
         List<PurReturnLine> lines = normalizeLines(r);
+        assertLineRule(lines);
         validateLineSum(r.getAmount(), lines);
         // 表头税额按明细派生回写（不信任前端传值，含税规则）
         r.setTaxAmount(deriveTaxAmount(lines));
@@ -152,6 +153,7 @@ public class PurReturnService {
         fillCompanyCoords(r);
         fillSourceDocId(r);
         List<PurReturnLine> lines = normalizeLines(r);
+        assertLineRule(lines);
         validateLineSum(r.getAmount(), lines);
         // 表头税额按明细派生回写（不信任前端传值，含税规则）
         r.setTaxAmount(deriveTaxAmount(lines));
@@ -385,6 +387,9 @@ public class PurReturnService {
         int no = 1;
         for (PurReturnLine ln : lines) {
             if (ln == null) continue;
+            // 界面「加一行」留出的空行（数量 1、其余全空）不落库，也不参与合计与校验；
+            // 否则会给退货单塞进一行无名称无金额的脏数据，行数与金额口径都对不上。
+            if (isBlankLine(ln)) continue;
             ln.setId(null);
             ln.setReturnId(r.getId());
             if (ln.getLineNo() == null) ln.setLineNo(no);
@@ -394,6 +399,42 @@ public class PurReturnService {
         }
         fillLineTrace(r, out);
         return out;
+    }
+
+    /** 未动过的默认空行：数量停在 1，其余字段全空 */
+    private boolean isBlankLine(PurReturnLine ln) {
+        boolean noCode = ln.getItemCode() == null || ln.getItemCode().isBlank();
+        boolean noName = ln.getItemName() == null || ln.getItemName().isBlank();
+        boolean noUom = ln.getUom() == null || ln.getUom().isBlank();
+        boolean noPrice = ln.getPrice() == null || ln.getPrice().signum() == 0;
+        boolean noAmount = ln.getAmount() == null || ln.getAmount().signum() == 0;
+        boolean defaultQty = ln.getQty() == null || ln.getQty().compareTo(BigDecimal.ONE) == 0;
+        return noCode && noName && noUom && noPrice && noAmount && defaultQty;
+    }
+
+    /**
+     * 明细行逐行校验（与前端 PurchaseReturn.vue 的行内红星同一规则，后端为最终校验）。
+     * 原规则只要求「有一行填了名称且金额 > 0」，数量为 0、单价为空、单位为空都能入库，
+     * 退货数量与收货/对账口径因此对不上；接口、导入等非界面入口也绕不过这道断言。
+     */
+    private void assertLineRule(List<PurReturnLine> lines) {
+        int no = 1;
+        for (PurReturnLine ln : lines) {
+            String pos = "第 " + no + " 行";
+            if (ln.getItemName() == null || ln.getItemName().isBlank()) {
+                throw new BizException(ErrorCode.PARAM_INVALID, pos + "物料名称必填");
+            }
+            if (ln.getQty() == null || ln.getQty().signum() <= 0) {
+                throw new BizException(ErrorCode.PARAM_INVALID, pos + "数量必须大于 0");
+            }
+            if (ln.getPrice() == null || ln.getPrice().signum() <= 0) {
+                throw new BizException(ErrorCode.PARAM_INVALID, pos + "单价必须大于 0");
+            }
+            if (ln.getUom() == null || ln.getUom().isBlank()) {
+                throw new BizException(ErrorCode.PARAM_INVALID, pos + "单位必填（门户发货与对账要按单位核算数量）");
+            }
+            no++;
+        }
     }
 
     /**

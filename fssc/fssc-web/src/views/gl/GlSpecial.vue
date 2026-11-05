@@ -8,7 +8,7 @@
       <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
         <b>{{ $t('gl.special.pageTitle') }}</b>
         <!-- 副标题原枚举六项漏第七个页签「合并报表」，按页签实有条数补齐 -->
-        <span style="color:#909399; font-size:12px">{{ $t('gl.special.pageSub') }}</span>
+        <span style="color:var(--app-text-secondary); font-size:12px">{{ $t('gl.special.pageSub') }}</span>
         <!-- 本单上下文（/139/148）：待办「去处理」带 ?billNo= 进来时，列表只展示被审的那一张 -->
         <el-tag v-if="deepKeyword" size="small" type="warning" closable @close="clearDeepLink">
           {{ $t('gl.special.locatedByNo', { v1: deepKeyword }) }}</el-tag>
@@ -23,7 +23,7 @@
           <!-- 期间选择器曾为空转控件（改选后列表请求 period 恒空）——现在改选即按所选期间重查列表 -->
           <el-date-picker v-model="taxPeriod" type="month" value-format="YYYYMM" :placeholder="$t('gl.special.colTaxPeriod')" style="width:130px" @change="loadTax" />
           <!-- 默认期间的来源在界面写明，避免"没改就直接点到别的期间去" -->
-          <span style="color:#909399; font-size:12px">
+          <span style="color:var(--app-text-secondary); font-size:12px">
             {{ $t('gl.special.defaultPeriodFrom', { v1: periodSource, v2: openPeriod || t('gl.special.fetching') }) }}</span>
           <el-button type="success" @click="doProvision">{{ $t('gl.special.btnProvisionTax') }}</el-button>
           <!-- 落账挂接核查——计提是否真落了账，本页可查（只读，不补记不改账） -->
@@ -106,7 +106,7 @@
           <el-button v-if="canManualPair" type="primary" plain @click="toggleManualPair">
             {{ manualVisible ? t('gl.special.btnCollapseManual') : t('gl.special.modeManual') }}
           </el-button>
-          <span v-if="canManualPair" style="color:#909399; font-size:12px">
+          <span v-if="canManualPair" style="color:var(--app-text-secondary); font-size:12px">
             {{ $t('gl.special.manualOffsetHint') }}</span>
         </div>
         <!-- 手工成对录入：一条金额 → 来账(应收) + 往账(应付) 两条镜像分录，方向由表单固定，
@@ -134,7 +134,7 @@
             <el-button type="success" :loading="manualSubmitting" @click="doManualPair">
               {{ $t('gl.special.btnSubmitPair') }}</el-button>
           </el-form-item>
-          <div style="color:#909399; font-size:12px; line-height:1.6">{{ $t('gl.special.offsetHint') }}</div>
+          <div style="color:var(--app-text-secondary); font-size:12px; line-height:1.6">{{ $t('gl.special.offsetHint') }}</div>
         </el-form>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
         <el-table :data="interData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
@@ -328,7 +328,7 @@
               <span v-if="row.approveTime || row.auditTime">
                 <!-- 原直插 LocalDateTime ISO 串（2026-10-02T22:40:18），统一走 formatDateTime 全站格式 -->
                 {{ row.approveTime ? formatDateTime(row.approveTime) : t('gl.special.stInFlight') }} / {{ row.auditTime ? formatDateTime(row.auditTime) : '—' }}
-                <span v-if="row.auditUserName" style="color:#909399">（{{ row.auditUserName }}）</span>
+                <span v-if="row.auditUserName" style="color:var(--app-text-secondary)">（{{ row.auditUserName }}）</span>
               </span>
               <span v-else style="color:#c0c4cc">—</span>
             </template>
@@ -351,7 +351,7 @@
           <el-button type="success" :disabled="consPeriodClosed" @click="doConsolidate">{{ $t('gl.special.btnConsolidate') }}</el-button>
           <span v-if="consPeriodClosed" class="period-note">{{ $t('gl.special.errPeriodClosed') }}</span>
           <span v-else-if="!canLoadPeriod" class="period-note">{{ $t('gl.special.warnNoPeriodRead') }}</span>
-          <span style="color:#909399; font-size:12px">{{ $t('gl.special.consolidateHint') }}</span>
+          <span style="color:var(--app-text-secondary); font-size:12px">{{ $t('gl.special.consolidateHint') }}</span>
         </div>
         <SkeletonList v-if="loading" :rows="8" :cols="5" />
         <el-table :data="consolidateData" size="small" border stripe v-else v-loading="loading" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')">
@@ -498,7 +498,7 @@
         </el-table-column>
       </el-table>
       <template #footer>
-        <span style="color:#909399; font-size:12px; margin-right:12px">{{ $t('gl.special.hintAuditReadOnly') }}</span>
+        <span style="color:var(--app-text-secondary); font-size:12px; margin-right:12px">{{ $t('gl.special.hintAuditReadOnly') }}</span>
         <el-button @click="lcVisible = false">{{ $t('common.close') }}</el-button>
       </template>
     </el-dialog>
@@ -1439,7 +1439,7 @@ function handleView(row) {
 /* 六页签提交钮旁的期间提示（所选期间已结账禁提 / 期间状态不可读），沿用本页既有 12px 警示色 */
 .period-note { color: #e6a23c; font-size: 12px; }
 /* 月结检查校验清单区（沿用本页「头部一行 + el-table」的既有排布，不引新样式体系） */
-.close-check { border: 1px solid #ebeef5; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; background: #fafcff; }
+.close-check { border: 1px solid var(--app-border); border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; background: var(--app-card-bg); }
 .cc-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-.cc-meta { color: #909399; font-size: 12px; }
+.cc-meta { color: var(--app-text-secondary); font-size: 12px; }
 </style>

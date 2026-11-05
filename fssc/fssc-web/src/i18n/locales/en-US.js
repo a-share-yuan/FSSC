@@ -221,7 +221,7 @@ export default {
   },
 
   // Error codes (front-end fallback; backend returns localized msgs) -
-  // gl：总账域（域8B/T1.6）
+  // gl：总账域
   // 键名遵循本文件顶部的 <层级>.<模块>.<键>；本批＝合并底稿 consolidate / 总账分录台账 ledger /
   // 特殊业务 special / 退税 refund 四个模块。模板取词用 $t（基座 globalInjection 注入）。
   gl: {
@@ -326,6 +326,8 @@ export default {
       btnConfirmPost: 'Confirm Posting',
       colAction: 'Actions',
       btnPost: 'Post',
+      btnView: 'View',
+      titleLines: 'Debit / Credit Lines',
       askPost: 'Post voucher {v1}? Posting writes it to the general ledger and cannot be undone directly (use a red-letter reversal to correct). Continue?',
       msgPostOk: 'Voucher {v1} posted',
       creditShort: 'Cr',
@@ -628,7 +630,7 @@ export default {
       periodOpened: 'Currently open period',
     },
   },
-  // field：跨域共用的列名/字段名（域8B/T1.6）
+  // field：跨域共用的列名/字段名
   // 各业务域的同名标签一律复用这里，避免同一句中文在每个域各建一枚键。
   field: {
     account: 'Bank Account',
@@ -684,7 +686,7 @@ export default {
     summary: 'Summary',
     batchNo: 'Batch No.',
   },
-  // 业务域命名空间（域8B/T1.6 逐域填充）
+  // 业务域命名空间（逐域填充）
   // 先立空块：落地器拒绝自己新造一级命名空间（避免同一域出现两种层次写法）。
   flow: {
     arClose: {

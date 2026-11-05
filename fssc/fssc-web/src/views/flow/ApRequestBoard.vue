@@ -499,7 +499,14 @@ async function openDetail(row) {
 }
 
 async function api(fn, okMsg) {
-  await fn()
+  // 拦截器对业务码一律 reject（api.js:216），这里不接异常的话，一次拦停就被 Vue 全局错误边界
+  // 换成整页「页面出错了」（同族实案见 ArMonthCloseBoard.vue）。
+  try {
+    await fn()
+  } catch (e) {
+    ElMessage.error(e.message)
+    return
+  }
   ElMessage.success(okMsg || t('common.success'))
   await load()
 }

@@ -92,6 +92,16 @@ public class TaxManagementController {
     }
 
     @RequiresFeature("FSSC_TAX")
+    @RequiresPerm("gl:taxdecl:create")
+    @DataScope("税务申报数据范围")
+    @OperLog(module = "TAX_DECLARATION", operType = "UPDATE", desc = "作废申报")
+    @PutMapping("/declaration/{id}/cancel")
+    public Result<Void> cancelDeclaration(@PathVariable Long id) {
+        declarationService.cancel(id);
+        return Result.success();
+    }
+
+    @RequiresFeature("FSSC_TAX")
     @RequiresPerm("gl:taxdecl:file")
     @DataScope("税务申报数据范围")
     @OperLog(module = "TAX_DECLARATION", operType = "UPDATE", desc = "确认申报")

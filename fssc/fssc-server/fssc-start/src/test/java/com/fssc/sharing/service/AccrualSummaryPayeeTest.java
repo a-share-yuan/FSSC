@@ -4,9 +4,16 @@
 package com.fssc.sharing.service;
 
 import com.fssc.expense.entity.ExpBill;
+import com.fssc.expense.entity.ExpBillLine;
+import com.fssc.expense.mapper.ExpBillLineMapper;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.l1.L1TestSupport;
+import com.fssc.masterdata.entity.MdExpenseItem;
+import com.fssc.masterdata.entity.MdSubject;
+import com.fssc.masterdata.mapper.MdExpenseItemMapper;
+import com.fssc.masterdata.mapper.MdSubjectMapper;
+import com.fssc.masterdata.service.PostableSubjectResolver;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
 import com.fssc.sharing.mapper.OpVoucherLineMapper;
@@ -55,6 +62,38 @@ class AccrualSummaryPayeeTest {
         L1TestSupport.inject(svc, "expBillMapper", expBillMapper);
         L1TestSupport.inject(svc, "numberRuleService", numberRuleService);
         Mockito.when(numberRuleService.next(Mockito.any())).thenReturn("JZ2026101200999");
+
+        // 新契约：借方可从费用行逐行取，也可由费用行项目映射；不再回落 6602。
+        // 这里给一张行合计等于应付的单据，让测试走逐行出借方路径。
+        ExpBillLine line = new ExpBillLine();
+        line.setBillId(4L);
+        line.setItemId(31L);
+        line.setAmount(new BigDecimal("60000"));
+        ExpBillLineMapper expBillLineMapper = Mockito.mock(ExpBillLineMapper.class);
+        Mockito.when(expBillLineMapper.selectList(Mockito.any())).thenReturn(java.util.List.of(line));
+        L1TestSupport.inject(svc, "expBillLineMapper", expBillLineMapper);
+
+        MdExpenseItem item = new MdExpenseItem();
+        item.setId(31L);
+        item.setItemName("差旅费");
+        item.setSubjectId(100L);
+        MdExpenseItemMapper mdExpenseItemMapper = Mockito.mock(MdExpenseItemMapper.class);
+        Mockito.when(mdExpenseItemMapper.selectBatchIds(Mockito.any())).thenReturn(java.util.List.of(item));
+        L1TestSupport.inject(svc, "mdExpenseItemMapper", mdExpenseItemMapper);
+
+        MdSubject subject = new MdSubject();
+        subject.setId(100L);
+        subject.setSubjectCode("660205");
+        subject.setSubjectName("管理费用-差旅费");
+        MdSubjectMapper mdSubjectMapper = Mockito.mock(MdSubjectMapper.class);
+        Mockito.when(mdSubjectMapper.selectById(100L)).thenReturn(subject);
+        L1TestSupport.inject(svc, "mdSubjectMapper", mdSubjectMapper);
+
+        PostableSubjectResolver resolver = Mockito.mock(PostableSubjectResolver.class);
+        Mockito.when(resolver.requireExpenseSubject(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(subject);
+        L1TestSupport.inject(svc, "postableSubjectResolver", resolver);
+
         TenantContext.set(1L);
     }
 

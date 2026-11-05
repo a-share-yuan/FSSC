@@ -36,6 +36,7 @@ import com.fssc.purchase.mapper.PoReceiptMapper;
 import com.fssc.asset.entity.StockMove;
 import com.fssc.asset.mapper.StockMoveMapper;
 import com.fssc.workflow.service.WfEngineFacade;
+import com.fssc.system.service.ConfigService;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import lombok.Data;
@@ -87,6 +88,8 @@ public class ThreeWayMatchService {
     /** 收货 vs 发票容差：match_tolerance 参数表（公司级，百分比+绝对值），无配置默认 0.5%/100 元 */
     private final MatchToleranceService matchToleranceService;
     private final WfEngineFacade wfEngineFacade;
+    /** 租户参数读取（预付款比例上限 prepay.max.ratio；非 wf./approve. 前缀，租户可维护） */
+    private final ConfigService configService;
 
     /** 对公付款单分页 + 匹配状态 */
     public PageResult<MatchRow> page(long pageNum, long pageSize, String keyword, String matchStatus) {
@@ -108,6 +111,105 @@ public class ThreeWayMatchService {
             rows.add(m);
         }
         return PageResult.of(rows, p.getTotal(), pageNum, pageSize);
+    }
+
+    /**
+     * 预付款专用档（{@code bill_sub_type=EXP_PREPAY}）。
+     *
+     * <p><b>为什么要另立一档</b>：预付款是「先款后货」——付款时点收货单尚未产生、发票也未开，
+     * 通用档的四单齐套（合同/PO/收货/发票）对它结构性不可达，任何预付款都会被
+     * {@code NO_RECEIPT}／{@code PAY_EXCEED_INVOICE} 冻死。
+     * 预付款真正要控的是「有没有依据」和「付多了没有」：</p>
+     * <ul>
+     *   <li><b>ERROR</b> 无依据：既无合同也无 PO —— 无依据预付直接拦；</li>
+     *   <li><b>WARN</b> 只有 PO 没挂合同：提示补挂，不阻断（实务中框架协议下按 PO 预付常见）；</li>
+     *   <li><b>ERROR</b> 超比例：本次付款 &gt; 合同额（无合同取订单额）× {@code prepay.max.ratio}
+     *       （缺省 0.30；置 0 即等于"任何预付款都拦"，可作为回滚开关）。</li>
+     * </ul>
+     *
+     * <p> 不校验收货单与发票覆盖——那不是预付款的缺件，是本业务的正常形态；
+     * 核销由后续【预付冲销】按实际到货与发票冲销。</p>
+     */
+    private MatchRow checkPrepay(ExpBill bill, MatchRow r, ExpBillPayment pay) {
+        List<MatchIssue> issues = new ArrayList<>();
+        boolean hasError = false;
+
+        // 依据：合同优先，其次采购订单（付款单未挂合同时回退 PO 上的合同，与通用档同源）
+        PoOrder po = bill.getPoId() == null ? null : poOrderMapper.selectById(bill.getPoId());
+        if (po != null) {
+            r.setPoId(po.getId());
+            r.setPoNo(po.getPoNo());
+            r.setPoAmount(nz(po.getAmount()));
+        }
+        Long contractId = bill.getContractId() != null ? bill.getContractId()
+                : (po == null ? null : po.getContractId());
+        ContContract contract = contractId == null ? null : contractMapper.selectById(contractId);
+        if (contract != null) {
+            r.setContractId(contract.getId());
+            r.setContractNo(contract.getContractNo());
+            r.setContractName(contract.getContractName());
+            r.setContractAmount(nz(contract.getAmount()));
+        }
+        if (contract == null && po == null) {
+            hasError = true;
+            issues.add(new MatchIssue("PREPAY_NO_BASIS", "ERROR",
+                    "预付款无依据：既未关联采购合同，也未关联采购订单——预付款必须凭合同或订单支付，"
+                            + "请先在单据上补挂合同/PO 后重试"));
+        } else if (contract == null) {
+            issues.add(new MatchIssue("NO_CONTRACT", "WARN",
+                    "未关联采购合同（仅有采购订单）：预付款比例按订单额核定，建议补挂合同"));
+        }
+
+        // 比例上限
+        BigDecimal base = contract != null ? nz(contract.getAmount()) : (po == null ? BigDecimal.ZERO : nz(po.getAmount()));
+        BigDecimal ratio = prepayMaxRatio();
+        BigDecimal cap = base.multiply(ratio).setScale(2, java.math.RoundingMode.HALF_UP);
+        if (base.signum() > 0 && r.getPayAmount().compareTo(cap) > 0) {
+            hasError = true;
+            issues.add(new MatchIssue("PREPAY_OVER_RATIO", "ERROR",
+                    "预付款超比例上限：本次付款 " + r.getPayAmount() + " > " + (contract != null ? "合同额 " : "订单额 ")
+                            + base + " × 比例 " + ratio.stripTrailingZeros().toPlainString() + " = " + cap
+                            + "（上限参数 prepay.max.ratio，可在【全局参数】按租户调整）"));
+        }
+
+        // 收款方（沿用通用档的提示口径：只记录不拦截）
+        String payeeName = firstNonBlank(pay == null ? null : pay.getPayeeName(), bill.getPayeeName());
+        String payeeBankAccount = firstNonBlank(pay == null ? null : pay.getBankAccount(), bill.getPayeeAccountNo());
+        r.setPayeeName(payeeName);
+        r.setPayeeBankAccount(payeeBankAccount);
+        r.setSupplierName(payeeName);
+        r.setPoSupplierName(po == null ? null : firstNonBlank(po.getSupplierName()));
+        r.setReconStatus("NONE"); // 预付款不校验收付款对账确认，此列仅供页面展示，不代表异常
+
+        r.setMatchStatus(hasError ? "FAILED" : (issues.isEmpty() ? "MATCHED" : "WARN"));
+        r.setFrozen(hasError);
+        r.setMatchCode(issues.isEmpty() ? "PREPAY_EXEMPT" : issues.get(0).getCode());
+        r.setIssues(issues);
+        r.setMsg("预付款档：不校验收货单与发票覆盖（先款后货），按合同/订单与预付款比例上限（"
+                + ratio.stripTrailingZeros().toPlainString() + "）管控；核销走【预付冲销】");
+        return r;
+    }
+
+    /** 预付款比例上限（sys_config: prepay.max.ratio，缺省 0.30；非法值回落缺省，0 表示一律不放行） */
+    private BigDecimal prepayMaxRatio() {
+        String v = null;
+        try {
+            v = configService.getValue("prepay.max.ratio");
+        } catch (Exception e) {
+            log.warn("[三单匹配] 读取 prepay.max.ratio 失败，按缺省 0.30 处理: {}", e.getMessage());
+        }
+        if (v == null || v.isBlank()) {
+            return new BigDecimal("0.30");
+        }
+        try {
+            BigDecimal r = new BigDecimal(v.trim());
+            if (r.signum() < 0) {
+                return BigDecimal.ZERO;
+            }
+            return r.compareTo(BigDecimal.ONE) > 0 ? BigDecimal.ONE : r;
+        } catch (NumberFormatException e) {
+            return new BigDecimal("0.30");
+        }
     }
 
     /** 单张付款单三单匹配检查 */
@@ -669,6 +771,14 @@ public class ThreeWayMatchService {
         ExpBillPayment pay = expBillPaymentMapper.selectOne(new LambdaQueryWrapper<ExpBillPayment>()
                 .eq(ExpBillPayment::getBillId, bill.getId())
                 .last("limit 1"));
+
+        // 预付款（bill_type=PAY + bill_sub_type=EXP_PREPAY）走专用档：
+        // 预付款是「先款后货」，收货单与发票在付款时点尚不存在，四单齐套校验结构性不可达——
+        // 只要走通用档，任何预付款都必报「未关联收货单」「关联发票 0」而被冻死。
+        // 预付款的正解是按合同/订单＋预付款比例上限管控，核销由后续【预付冲销】承担。
+        if ("EXP_PREPAY".equalsIgnoreCase(bill.getBillSubType())) {
+            return checkPrepay(bill, r, pay);
+        }
 
         List<MatchIssue> issues = new ArrayList<>();
         boolean hasError = false;

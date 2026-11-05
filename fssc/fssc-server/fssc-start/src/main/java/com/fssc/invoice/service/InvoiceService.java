@@ -184,21 +184,48 @@ public class InvoiceService {
     /**
      * 进项转出：已勾选的进项税额不得抵扣（用于免税项目/简易计税/集体福利等），
      * 置 CERTIFIED → REVERSED，deduct_amount 清零，并记录转出时间。
+     *
+     * <p>只允许 CERTIFIED 起跳：未勾选的票本来就没有可抵扣进项，"转出"它等于凭空造出一条
+     * 转出记录，账表上会对不上（NOT_CERTIFIED 一步到 REVERSED 即属此类）。
+     * 选错票要报出来，不能静默跳过——用户会以为转出成功。
      */
     @Transactional(rollbackFor = Exception.class)
     public int transferOut(List<Long> ids) {
+        return transferOut(ids, null);
+    }
+
+    /**
+     * 进项转出（带原因）：{@code reason} 是税务口径的转出依据，必须留痕。
+     *
+     * <p>调用方不传原因时仍允许（历史脚本/批量修复），但界面入口已强制填写——不留原因的转出
+     * 在税务检查时说不清"为什么这笔进项不能抵扣"。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int transferOut(List<Long> ids, String reason) {
         requireIds(ids, "请选择待进项转出的发票");
+        String why = reason == null ? null : reason.trim();
+        if (why != null && why.length() > 64) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "转出原因最多 64 字");
+        }
         int n = 0;
         for (Long id : ids) {
             InvInvoice inv = requireInvoice(id);
             if ("REVERSED".equals(inv.getCertifyStatus())) {
                 continue;
             }
+            if (!"CERTIFIED".equals(inv.getCertifyStatus())) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "发票 " + inv.getInvoiceNo() + " 当前认证状态为 " + inv.getCertifyStatus()
+                                + "，只有「已勾选」的发票才能做进项转出（未勾选票没有可抵扣进项，无需转出）");
+            }
             InvInvoice u = new InvInvoice();
             u.setId(id);
             u.setCertifyStatus("REVERSED");
             u.setDeductAmount(BigDecimal.ZERO);
             u.setReverseDate(LocalDateTime.now());
+            if (why != null && !why.isEmpty()) {
+                u.setTransferReason(why);
+            }
             invInvoiceMapper.updateById(u);
             n++;
         }
@@ -305,6 +332,29 @@ public class InvoiceService {
                 .orderByAsc(InvInvoice::getId)
                 .last("LIMIT 1"));
         if (existed != null) {
+            // 驳回/草稿票允许「原票号重提」：把本次填报值覆盖回原行、重置在途态并重新起流。
+            // 无此分支时，前端【编辑重提】重填同票号→本方法直接 return 既有 id，
+            // 前端仍提示"已发起开票审批"，而库里无新实例、单据永久停在 REJECTED（静默假成功）。
+            if ("REJECTED".equals(existed.getStatus()) || "DRAFT".equals(existed.getStatus())) {
+                invoice.setId(existed.getId());
+                invoice.setTenantId(existed.getTenantId());
+                invoice.setStatus("ISSUING");
+                invoice.setSourceDocType("SALES_INVOICE");
+                invoice.setDirection("OUTPUT");
+                if (invoice.getCompanyId() == null) invoice.setCompanyId(existed.getCompanyId());
+                invInvoiceMapper.updateById(invoice);
+                Long uid = UserContext.get() == null ? null : UserContext.get().getUserId();
+                try {
+                    wfEngineFacade.start("INVOICE_ISSUE", existed.getId(), uid,
+                            "发票开具-" + invoice.getInvoiceNo(), invoice.getAmount());
+                } catch (Exception ex) {
+                    log.error("驳回票 {} 重提时发起开票审批失败: {}", invoice.getInvoiceNo(), ex.getMessage(), ex);
+                    throw ex;
+                }
+                log.info("驳回票原票号重提：no={} id={}，已重置为 ISSUING 并重新发起审批",
+                        invoice.getInvoiceNo(), existed.getId());
+                return existed.getId();
+            }
             log.info("该发票已开票成功（单号 {}），本次未重复开具，直接返回既有票 id={}",
                     invoice.getInvoiceNo(), existed.getId());
             return existed.getId();
@@ -1006,7 +1056,7 @@ public class InvoiceService {
      * 返回不一致清单（含实算值），供运维定位漂移数据；fix=true 时顺带自愈。
      *
      * <p>漂移集合由 {@link com.fssc.invoice.mapper.InvInvoiceMapper#selectUsedCountDiff} 一次 JOIN 出，
-     * 不再「取全租户发票→逐张计数」（11.2 万次往返，实测 57 秒）。
+     * 不再「取全租户发票→逐张计数」（11.2 万次往返，约 57 秒）。
      */
     @Transactional(rollbackFor = Exception.class)
     public List<Map<String, Object>> auditUsedCount(boolean fix) {

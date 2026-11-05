@@ -56,6 +56,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="certifyPeriod" label="所属期" width="90" align="center"  sortable />
+      <el-table-column prop="transferReason" label="转出原因" width="110" show-overflow-tooltip />
       <el-table-column prop="certifyDate" label="认证时间" width="150"  sortable :formatter="(row, col, val) => formatDateTime(val)" />
     </el-table>
     <el-pagination class="pager" background layout="total, prev, pager, next" :total="total"
@@ -79,6 +80,27 @@
       <el-descriptions-item label="本期认证张数">{{ summary.certifiedCount }}</el-descriptions-item>
       <el-descriptions-item label="认证发票税额合计(票账比对)">{{ fmt(summary.certifiedTax) }}</el-descriptions-item>
     </el-descriptions>
+
+    <!-- 进项转出：原因必填（税务口径六项，可自定义），否则转出无依据可查 -->
+    <el-dialog v-model="transferVisible" title="进项转出（不可抵扣）" width="460px">
+      <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 12px"
+        title="转出后该批发票不可再认证抵扣，可抵扣税额清零；已转出不可撤销。" />
+      <el-form label-width="96px">
+        <el-form-item label="本次转出">
+          <span>{{ selRows.length }} 张<template v-if="transferTax > 0">，税额合计 ￥{{ fmt(transferTax) }}</template></span>
+        </el-form-item>
+        <el-form-item label="转出原因" required>
+          <el-select v-model="transferReason" filterable allow-create default-first-option
+            placeholder="选择或输入原因（如：集体福利）" style="width: 100%">
+            <el-option v-for="r in TRANSFER_REASONS" :key="r" :label="r" :value="r" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="transferVisible = false">取消</el-button>
+        <el-button type="warning" @click="submitTransferOut">确认转出</el-button>
+      </template>
+    </el-dialog>
   </el-card>
 <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" />
 </template>
@@ -105,6 +127,11 @@ function openTrace(row) {
 
 const rows = ref([])
 const selRows = ref([])
+/** 进项转出弹窗：原因必填、显示本次转出税额合计 */
+const transferVisible = ref(false)
+const transferReason = ref('')
+const transferTax = ref(0)
+const TRANSFER_REASONS = ['集体福利', '个人消费', '非正常损失', '简易计税', '免税项目', '其他']
 const loading = ref(false)
 const kw = ref('')
 const certifyStatus = ref('')
@@ -173,17 +200,33 @@ async function doCancelCertify() {
   try {
     await ElMessageBox.confirm('确认取消所选发票的勾选认证？', '确认', { type: 'warning' })
     const n = await invoiceApi.cancelCertify(requireSel())
-    ElMessage.success(t('asset.deprBatch.Sheets'))
+    ElMessage.success(`已取消勾选 ${n} 张`)
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || String(e)) }
   load()
 }
 async function doTransferOut() {
+  const sel = requireSel()
+  // 税额合计：优先票面税额，退而取可抵扣额/价税分离差额；都取不到就只显示张数，
+  // 不显示 0.00——那会让人误以为这批票没有可转出税额。
+  const taxSum = sel.reduce((s, r) => {
+    const raw = r.taxAmount ?? r.deductAmount ?? (Number(r.amount || 0) - Number(r.netAmount || 0))
+    const v = Number(raw)
+    return s + (Number.isFinite(v) ? v : 0)
+  }, 0)
+  transferTax.value = Number.isFinite(taxSum) ? taxSum : 0
+  transferReason.value = ''
+  transferVisible.value = true
+}
+
+/** 转出原因：税务口径固定六项，允许自定义；不填不许提交（转出必须说明依据） */
+async function submitTransferOut() {
+  if (!transferReason.value) { ElMessage.warning('请选择或填写转出原因'); return }
   try {
-    await ElMessageBox.confirm('进项转出后该批发票不可再认证抵扣，确认转出？', '确认', { type: 'warning' })
-    const n = await invoiceApi.transferOut(requireSel())
-    ElMessage.success(t('asset.deprBatch.Sheets'))
-  } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || String(e)) }
-  load()
+    const n = await invoiceApi.transferOut(requireSel(), transferReason.value)
+    ElMessage.success(`已转出 ${n} 张（原因：${transferReason.value}），可抵扣税额已清零`)
+    transferVisible.value = false
+    load()
+  } catch (e) { ElMessage.error(e.message || String(e)) }
 }
 
 async function loadSummary() {

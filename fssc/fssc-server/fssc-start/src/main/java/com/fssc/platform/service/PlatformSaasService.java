@@ -199,7 +199,8 @@ public class PlatformSaasService {
      * ref_tenant_id 存在性校验。
      *
      * <p>createOrder/createBill 必须校验 ref_tenant_id 存在：订购记录与租户分属两张表，
-     * 只校单号唯一会留下指向不存在租户的孤儿行。属系统边界输入，值得校验；不做级联删除。
+     * 只校单号唯一会留下指向不存在租户的孤儿行。这类"系统边界输入未校验"的产物
+     * 属系统边界输入，值得校验；不做级联删除。
      */
     private void assertRefTenantExists(Long refTenantId, String docName) {
         if (refTenantId == null) {

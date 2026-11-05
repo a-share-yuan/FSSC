@@ -82,12 +82,12 @@ onMounted(() => {
 .head-card { margin-bottom: 12px; }
 .head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .head-title { font-size: 17px; font-weight: 700; }
-.head-sub { font-size: 12px; color: #909399; margin-top: 4px; }
+.head-sub { font-size: 12px; color: var(--app-text-secondary); margin-top: 4px; }
 .head-stats { display: flex; gap: 28px; }
 .stat { text-align: center; }
 .stat-num { font-size: 24px; font-weight: 700; }
 .stat-num.warn { color: #e6a23c; }
 .stat-num.danger { color: #f56c6c; }
 .stat-num.ok { color: #67c23a; }
-.stat-label { font-size: 12px; color: #909399; margin-top: 2px; }
+.stat-label { font-size: 12px; color: var(--app-text-secondary); margin-top: 2px; }
 </style>

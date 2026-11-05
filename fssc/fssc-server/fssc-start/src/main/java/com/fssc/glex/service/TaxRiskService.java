@@ -70,12 +70,14 @@ public class TaxRiskService {
             }
         }
         if (hit == null) {
+            clearStale(period, scopeCompany, "税负分析报表无本期进销项数据");
             log.info("税负率计算 {}：税负分析报表无本期进销项数据，跳过", period);
             return null;
         }
         BigDecimal base = toDecimal(hit.get("taxBase"));
         BigDecimal netTax = toDecimal(hit.get("netTax"));
         if (base == null || base.signum() <= 0) {
+            clearStale(period, scopeCompany, "销项不含税收入为 0");
             log.info("税负率计算 {}：销项不含税收入为 0，税负率无意义，跳过", period);
             return null;
         }
@@ -118,6 +120,31 @@ public class TaxRiskService {
         log.info("税负率自动计算 {}：{}%（阈值 {}%，判定 {}）", period,
                 burden.setScale(2, RoundingMode.HALF_UP), threshold, level);
         return row;
+    }
+
+    /**
+     * 本期算不出指标时，把该属期的旧指标作废（逻辑删），不留"上一轮的值"在列表里冒充本期结果。
+     *
+     * <p>为什么不是保留：指标是算出来的快照，不是业务单据。它的数值没有独立含义——
+     * 只有当"当时的进销项数据"还在时才有意义。本期已无数据可算，旧值继续挂在列表上，
+     * 使用者会把它读成"本期税负率"，这正是需要避免的形态。逻辑删保留行，
+     * 需要追溯时 {@code del_flag=1} 仍在库。</p>
+     */
+    private void clearStale(String period, Long scopeCompany, String why) {
+        LambdaQueryWrapper<TaxRiskIndicator> qw = new LambdaQueryWrapper<TaxRiskIndicator>()
+                .eq(TaxRiskIndicator::getRiskType, "TAX_BURDEN")
+                .eq(TaxRiskIndicator::getPeriod, period);
+        // 数据范围为空时只清"无公司"的行：否则一次重算会把别家公司的指标一起抹掉
+        if (scopeCompany != null) {
+            qw.eq(TaxRiskIndicator::getCompanyId, scopeCompany);
+        } else {
+            qw.isNull(TaxRiskIndicator::getCompanyId);
+        }
+        TaxRiskIndicator stale = riskMapper.selectOne(qw.orderByDesc(TaxRiskIndicator::getId).last("limit 1"));
+        if (stale != null) {
+            riskMapper.deleteById(stale.getId());
+            log.info("税负率计算 {}：{}，作废旧指标 id={}", period, why, stale.getId());
+        }
     }
 
     private BigDecimal resolveBurdenThreshold() {
@@ -209,8 +236,14 @@ public class TaxRiskService {
 
     /**
      * 计算风险评分（0-100）。
+     *
+     * <p>「正常」必须回 0 分：此前不论等级都叠加 severity，于是出现「等级正常、评分 72」的自相矛盾
+     * ——评分是给人看的风险强度，等级说没问题却给 72 分，使用者无从判断该不该处理。
      */
     public int calculateScore(String riskLevel, BigDecimal severity) {
+        if (riskLevel == null || "NORMAL".equals(riskLevel)) {
+            return 0;
+        }
         int base = switch (riskLevel) {
             case "HIGH" -> 80;
             case "WARNING" -> 50;

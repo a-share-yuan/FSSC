@@ -2,7 +2,40 @@
 // Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
 
 import { describe, it, expect } from 'vitest'
-import { rowDetailItems } from './format'
+import { rowDetailItems, COMMON_LABELS } from './format'
+
+// 全表护栏：COMMON_LABELS 是 42 个行详情弹窗共用的唯一中文来源（多数页面不传自己的 labels），
+// 这里逐枚断言"标签必须是中文"，谁再往里写成英文或漏登记，单测直接红。
+describe('COMMON_LABELS - 行详情弹窗中文标签全表', () => {
+  const keys = Object.keys(COMMON_LABELS)
+
+  it('每条标签都含中文', () => {
+    const bad = keys.filter((k) => !/[一-鿿]/.test(COMMON_LABELS[k]))
+    expect(bad, `英文标签: ${bad.join(', ')}`).toEqual([])
+  })
+
+  it('按这些键名摊开成行对象时，没有一条标签是 prettyKey() 生成的英文标题', () => {
+    const prettyKey = (k) => {
+      const s = k.replace(/([a-z\d])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim()
+      return s.charAt(0).toUpperCase() + s.slice(1)
+    }
+    const row = Object.fromEntries(keys.map((k) => [k, 'x']))
+    const got = Object.fromEntries(rowDetailItems(row))
+    // 判据＝标签里必须有中文；"单据ID / SLA 截止"这类带行业缩写的算合格，
+    // 而 "Bank Matched / Flow Status Text" 这种整词英文（＝prettyKey 回落）算不合格
+    const leaked = keys.filter((k) => got[k] !== undefined && !/[一-鿿]/.test(got[k]))
+    expect(leaked, `英文回落: ${leaked.map((k) => k + '→' + got[k]).join(', ')}`).toEqual([])
+    const viaFallback = keys.filter((k) => got[k] === prettyKey(k))
+    expect(viaFallback, `标签等于回落英文标题: ${viaFallback.join(', ')}`).toEqual([])
+  })
+
+  it('收款核销 / 应收单 / 催收待办三张实体的字段有中文标签', () => {
+    const fields = ['receiptDate', 'payMethod', 'bankSerial', 'bankMatched', 'bankMatchedAmount',
+      'flowStatus', 'flowStatusText', 'contactName', 'contactPhone', 'overdueDays', 'note', 'multiRoleWarning']
+    const missing = fields.filter((f) => !COMMON_LABELS[f])
+    expect(missing, `未登记: ${missing.join(', ')}`).toEqual([])
+  })
+})
 
 // 用「行程信息」这一行确认渲染文本里不再出现英文键名与裸码值
 describe('rowDetailItems - 出差行程行', () => {

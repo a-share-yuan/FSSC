@@ -1094,6 +1094,8 @@ export const supplierApi = {
 }
 // 采购三单域（采购订单 + 收货单）
 export const purchaseApi = {
+  /** 采购订单行「物料编码」候选（物料主数据 md_inventory） */
+  materialOptions: (keyword) => http.get('/tenant/purchase/material-options', { params: { keyword } }),
   orderPage: (params, cfg) => http.get('/tenant/purchase/order/page', Object.assign({ params }, cfg || {})),
   orderCreate: (body) => http.post('/tenant/purchase/order/create', body),
   orderUpdate: (body) => http.post('/tenant/purchase/order/update', body),
@@ -1255,7 +1257,12 @@ export const masterApi = {
     sealChange: (id) => http.post(`/tenant/masterdata/bank-account/${id}/start-seal-change`),
   },
   item: { ...crud('expense-item'), tree: () => http.get('/tenant/masterdata/expense-item/tree') },
-  subject: { ...crud('subject'), tree: () => http.get('/tenant/masterdata/subject/tree') },
+  subject: {
+    ...crud('subject'),
+    tree: () => http.get('/tenant/masterdata/subject/tree'),
+    // 可选叶子科目（启用＋末级＋本公司/租户共用）：费用项目「对应会计科目」下拉
+    options: (params) => http.get('/tenant/masterdata/subject/options', { params }),
+  },
   costCenter: { ...crud('cost-center'), tree: () => http.get('/tenant/masterdata/cost-center/tree') },
   city: crud('city'),
   tax: crud('tax-rate'),
@@ -1470,7 +1477,7 @@ export const invoiceApi = {
   // 进项发票全生命周期（认证勾选 / 取消勾选 / 进项转出 / 票账比对申报汇总）
   certify: (ids, period) => http.post('/tenant/invoice/certify', { ids, period }),
   cancelCertify: (ids) => http.post('/tenant/invoice/certify/cancel', { ids }),
-  transferOut: (ids) => http.post('/tenant/invoice/certify/transfer-out', { ids }),
+  transferOut: (ids, reason) => http.post('/tenant/invoice/certify/transfer-out', { ids, reason }),
   filingSummary: (period) => http.get('/tenant/invoice/filing-summary', { params: { period } }),
   // 销项发票作废：body={ invoiceId, reason }（原因必填由前端校验）；后端校验当月/核销引用等条件，失败原样提示
   voidInvoice: (body) => http.post('/tenant/invoice/void', body),
@@ -1625,6 +1632,7 @@ export const taxApi = {
   declarationCreate: (body) => http.post('/tenant/tax/declaration', body),
   declarationSubmit: (id) => http.put(`/tenant/tax/declaration/${id}/submit`),
   declarationApprove: (id) => http.put(`/tenant/tax/declaration/${id}/approve`),
+  declarationCancel: (id) => http.put(`/tenant/tax/declaration/${id}/cancel`),
   declarationFile: (id) => http.put(`/tenant/tax/declaration/${id}/file`),
   declarationPay: (id, paidAmount) =>
     http.put(`/tenant/tax/declaration/${id}/pay`, null, { params: { paidAmount } }),

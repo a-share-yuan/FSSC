@@ -169,6 +169,14 @@ public class TaxRefundService {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "状态不允许从 " + t.getStatus() + " 流转到 " + to);
         }
+        // 过审闸：退税中/已退税只能从「已审批」起跳。此前只校验 FLOW_FORWARD 的先后次序，
+        // 于是「审批中(APPLYING)」可一步跳到「已退税(REFUNDED)」，把整条审批链绕过，
+        // 且流程实例还挂在首节不终止。
+        if (("REFUNDING".equals(to) || "REFUNDED".equals(to)) && !"APPROVED".equals(t.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "退税单 " + t.getRefundNo() + " 当前为 " + t.getStatus()
+                            + "，必须先完成审批（→已审批）才能流转到「退税中／已退税」");
+        }
         TaxRefund u = new TaxRefund();
         u.setId(id);
         u.setStatus(to);

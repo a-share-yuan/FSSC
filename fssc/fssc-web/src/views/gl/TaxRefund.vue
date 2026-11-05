@@ -32,6 +32,12 @@
         </template>
       </el-table-column>
       <el-table-column prop="period" :label="$t('gl.consolidate.colBelong')" width="90"  sortable />
+      <el-table-column label="申请人" width="110" show-overflow-tooltip>
+        <template #default="{ row }">{{ userName(row.applyBy) }}</template>
+      </el-table-column>
+      <el-table-column label="申请时间" width="150" sortable>
+        <template #default="{ row }">{{ formatDateTime(row.applyTime) }}</template>
+      </el-table-column>
       <el-table-column prop="refundType" :label="$t('gl.refund.colMethod')" width="220" show-overflow-tooltip sortable>
         <template #default="{ row }">{{ calcDesc(row) }}</template>
       </el-table-column>
@@ -100,7 +106,9 @@
           <span style="margin-left: 6px; color: #909399; font-size: 12px">{{ $t('gl.refund.hintCap') }}</span>
         </el-form-item>
         <el-form-item v-if="form.refundType === 'CREDIT_REFUND'" :label="$t('gl.refund.colApplyAmount')" prop="taxAmount">
-          <el-input-number v-model="form.taxAmount" :precision="2" :min="0.01" :max="creditQuota || undefined" style="width: 100%" />
+          <!-- 不设 :max：el-input-number 的 max 会在输入时就地钳值，change 拿到的是已被改小的数，
+               用户只看到数字变了却没有任何提示。上限改由 change 处理器判并显式告知。 -->
+          <el-input-number v-model="form.taxAmount" :precision="2" :min="0.01" style="width: 100%" @change="onCreditAmountChange" />
         </el-form-item>
         <el-form-item :label="$t('gl.special.colDesc')">
           <el-input v-model="form.remark" type="textarea" :rows="2" />
@@ -124,7 +132,8 @@
           </el-select>
         </el-form-item>
         <el-form-item v-if="flow.to === 'REFUNDED'" :label="$t('gl.refund.colActualAmount')" prop="refundedAmount">
-          <el-input-number v-model="flow.refundedAmount" :precision="2" :min="0" :max="flow.tax || undefined" style="width: 100%" />
+          <!-- 同上：到账金额的上限也用显式提示，不交给 :max 静默回填 -->
+          <el-input-number v-model="flow.refundedAmount" :precision="2" :min="0" style="width: 100%" @change="onRefundedAmountChange" />
           <span style="color: #909399; font-size: 12px">{{ $t('gl.refund.hintArrival', { v1: fmt(flow.tax) }) }}</span>
         </el-form-item>
         <el-form-item :label="$t('common.remark')">
@@ -146,8 +155,8 @@
 const { rules: formRules } = useFormRules('TAX_REFUND')
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { showRowDetail } from '@/utils/format'
-import { glexApi, orgApi } from '../../api'
+import { showRowDetail, formatDateTime } from '@/utils/format'
+import { glexApi, orgApi, userApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
@@ -203,6 +212,12 @@ const saving = ref(false)
 const createVisible = ref(false)
 const flowVisible = ref(false)
 const companies = ref([])
+/** 申请人 id → 姓名（列表只落 applyBy，逐行查接口不值当） */
+const userNames = ref({})
+function userName(id) {
+  if (id == null) return '—'
+  return userNames.value[id] || ('#' + id)
+}
 const creditQuota = ref(0)
 const f = reactive({ pageNum: 1, pageSize: 10, refundType: '', status: '', period: '', keyword: '' })
 const form = reactive({ companyId: null, refundType: 'EXPORT_REFUND', period: '', baseAmount: null, rate: 13, taxAmount: null, remark: '' })
@@ -211,7 +226,8 @@ const flow = reactive({ id: null, src: '', to: '', remark: '', tax: null, refund
 const formRef = ref(null)
 const flowFormRef = ref(null)
 
-// 与后端 changeStatus 同一规则：→REFUNDED 必须登记实际到账金额，允许 0、不可为负，上限由 el-input-number max 兜
+// 与后端 changeStatus 同一规则：→REFUNDED 必须登记实际到账金额，允许 0、不可为负；
+// 上限（可退税额）由 onRefundedAmountChange 显式提示并回填，规则之外再兜一次提交前校验
 const flowRules = computed(() => ({
   to: commonRules.select(t('gl.refund.errTargetStatus')),
   refundedAmount: flow.to === 'REFUNDED'
@@ -246,9 +262,36 @@ const statusTag = (s) => s === 'REFUNDED' ? 'success' : s === BillStatus.REJECTE
 function flowTargets() {
   const src = flow.src
   const seq = ['DRAFT', 'APPLYING', 'APPROVED', 'REFUNDING', 'REFUNDED']
-  const opts = seq.slice(seq.indexOf(src) + 1).map(v => ({ value: v, label: statusName(v) }))
+  // 与后端 changeStatus 的过审闸同口径：审批中只能先去「已审批」；已审批才能去「退税中/已退税」。
+  // 之前一把给出全部后续态，用户点「已退税」必吃一次参数校验失败。
+  let opts
+  if (src === 'APPLYING') {
+    opts = [{ value: 'APPROVED', label: statusName('APPROVED') }]
+  } else if (src === 'APPROVED') {
+    opts = [{ value: 'REFUNDING', label: statusName('REFUNDING') }, { value: 'REFUNDED', label: statusName('REFUNDED') }]
+  } else {
+    opts = seq.slice(seq.indexOf(src) + 1).map(v => ({ value: v, label: statusName(v) }))
+  }
   if (src !== 'REFUNDED') opts.push({ value: 'REJECTED', label: t('gl.refund.actReject') })
   return opts
+}
+
+/** 到账金额超可退税额时给出显式提示（输入框不再挂 :max，钳制由这里做并说明原因） */
+function onRefundedAmountChange(v) {
+  const cap = Number(flow.tax || 0)
+  if (v != null && cap > 0 && Number(v) > cap) {
+    ElMessage.warning(`实际到账不得超过可退税额 ${fmt(cap)}，已按上限调整`)
+    flow.refundedAmount = cap
+  }
+}
+
+/** 留抵退税申请税额超可留抵余额：同一条口径，超填回填上限并明确提示 */
+function onCreditAmountChange(v) {
+  const cap = Number(creditQuota.value || 0)
+  if (v != null && cap > 0 && Number(v) > cap) {
+    ElMessage.warning(`申请税额不得超过留抵上限 ${fmt(cap)}，已按上限调整`)
+    form.taxAmount = cap
+  }
 }
 
 async function load(page) {
@@ -275,6 +318,14 @@ function onTypeChange(v) {
 
 async function create() {
   if (!(await validateForms([formRef]))) return
+  // 兜底：change 只在失焦/步进时触发，键盘直接回车提交也可能带着超限值过来
+  if (form.refundType === 'CREDIT_REFUND') {
+    const cap = Number(creditQuota.value || 0)
+    if (cap > 0 && Number(form.taxAmount || 0) > cap) {
+      ElMessage.warning(`申请税额不得超过留抵上限 ${fmt(cap)}，请调整后再保存`)
+      return
+    }
+  }
   saving.value = true
   try {
     await glexApi.taxRefundCreate({
@@ -336,6 +387,13 @@ function openFlow(row) {
 
 async function changeStatus() {
   if (!(await validateForms([flowFormRef]))) return
+  if (flow.to === 'REFUNDED') {
+    const cap = Number(flow.tax || 0)
+    if (cap > 0 && Number(flow.refundedAmount || 0) > cap) {
+      ElMessage.warning(`实际到账不得超过可退税额 ${fmt(cap)}，请调整后再提交`)
+      return
+    }
+  }
   try {
     await glexApi.taxRefundStatus(flow.id, flow.to, flow.remark, flow.to === 'REFUNDED' ? flow.refundedAmount : null)
     ElMessage.success(t('gl.refund.msgStatusTo') + statusName(flow.to))
@@ -347,6 +405,13 @@ async function changeStatus() {
 onMounted(async () => {
   autofill(form, 'TAX_REFUND')
   load(1)
+  // 申请人姓名映射：列表只存 applyBy（用户 id），一次性拉人员表后本地映射，避免逐行查询
+  try {
+    const d = await userApi.page({ pageNum: 1, pageSize: 500 })
+    const m = {}
+    for (const u of (d?.list || [])) m[u.id] = u.nickName || u.userName || ('#' + u.id)
+    userNames.value = m
+  } catch (e) { /* 人员表读不到就退回 #id */ }
   try {
     const tree = (await orgApi.companyTree()) || []
     const flat = []

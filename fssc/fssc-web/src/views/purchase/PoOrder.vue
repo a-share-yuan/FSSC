@@ -88,8 +88,8 @@
     <el-pagination style="margin-top: 10px; justify-content: flex-end" layout="total, prev, pager, next"
                    :total="total" :page-size="q.pageSize" :current-page="q.pageNum" @current-change="(n) => { q.pageNum = n; load() }" />
 
-    <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="dlg" :title="form.id ? '编辑采购订单' : '新增采购订单'" width="900px">
+    <!-- 新增/编辑弹窗：取消/Esc/点遮罩统一走脏值守卫，长表单不因误触整单丢失 -->
+    <DirtyGuardDialog ref="dlgRef" v-model="dlg" :dirty="isDlgDirty" :title="form.id ? '编辑采购订单' : '新增采购订单'" width="min(1040px, 94vw)">
       <el-form ref="formRef" :rules="formRules" :model="form" label-width="100px" size="small">
         <el-divider content-position="left">基本信息</el-divider>
         <el-row :gutter="16">
@@ -101,21 +101,36 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="下单日期" prop="orderDate">
-              <el-date-picker v-model="form.orderDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-date-picker v-model="form.orderDate" type="date" value-format="YYYY-MM-DD" :default-value="todayDate" style="width: 100%" />
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="供应商" prop="supplierId">
-              <el-select v-model="form.supplierId" filterable style="width: 100%" placeholder="搜索选择供应商" @change="(id) => { const s = suppliers.find(x => x.id === id); if (s) form.supplierName = s.supplierName }">
+              <el-select
+                v-model="form.supplierId"
+                filterable
+                style="width: 100%"
+                placeholder="搜索选择供应商"
+                no-match-text="无匹配供应商，请从下拉列表中选择"
+                no-data-text="供应商主数据为空，请先在主数据中维护"
+                @change="(id) => { const s = suppliers.find(x => x.id === id); if (s) form.supplierName = s.supplierName }"
+              >
                 <el-option v-for="s in suppliers" :key="s.id" :label="s.supplierCode + ' ' + s.supplierName" :value="s.id" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="关联合同">
-              <el-select v-model="form.contractId" filterable clearable style="width: 100%" :placeholder="contractsDenied ? '当前账号无合同查看权限，可留空' : '选择框架协议合同（可选）'">
+              <el-select
+                v-model="form.contractId"
+                filterable
+                clearable
+                style="width: 100%"
+                :placeholder="contractsDenied ? '当前账号无合同查看权限，可留空' : '选择框架协议合同（可选）'"
+                :no-data-text="contractsDenied ? '当前账号无合同查看权限' : '无可选合同（仅列已审批/生效）'"
+              >
                 <el-option v-for="c in contracts" :key="c.id" :label="c.contractNo + ' ' + c.contractName" :value="c.id" />
               </el-select>
             </el-form-item>
@@ -125,10 +140,10 @@
         <el-row v-if="cipAvailable" :gutter="16">
           <el-col :span="12">
             <el-form-item label="CIP 项目">
+              <template #label>CIP 项目<FieldTip text="仅显示在建项目；关联后收货/发票可按项目归集" /></template>
               <el-select v-model="form.cipId" filterable clearable style="width: 100%" placeholder="关联在建工程项目（可选）">
                 <el-option v-for="c in cipOptions" :key="c.id" :label="cipLabel(c)" :value="c.id" />
               </el-select>
-              <div style="font-size:12px;color:#909399">仅显示在建项目；关联后收货/发票可按项目归集</div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -137,7 +152,8 @@
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="订单金额" prop="amount">
-              <el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" />
+              <template #label>订单金额<FieldTip text="须与行项目合计一致（尾差 ≤ 0.01），否则保存会被拒；只录表头金额、不录行项目时不做此校验" /></template>
+              <el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" :class="{ 'fld-error': amountMismatch }" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -155,7 +171,7 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="交货日期">
-              <el-date-picker v-model="form.deliveryDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" placeholder="预计交货日期" />
+              <el-date-picker v-model="form.deliveryDate" type="date" value-format="YYYY-MM-DD" :default-value="todayDate" style="width: 100%" placeholder="预计交货日期" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -175,13 +191,12 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="状态">
+              <template #label>状态<FieldTip :text="statusHint" /></template>
               <el-select v-model="form.status" :disabled="!!form.id" style="width: 100%">
                 <el-option label="草稿" value="DRAFT" />
                 <el-option label="执行中" value="OPEN" />
                 <el-option label="已关闭" value="CLOSED" />
               </el-select>
-              <div style="font-size:12px;color:#909399">草稿单不发起审批，可直接删除；执行中保存即发起订单审批</div>
-              <div v-if="form.id" style="font-size:12px;color:#909399">已保存订单的状态由审批/收货/付款/结束等操作推进，编辑单据不改变状态</div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -200,6 +215,8 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="法人主体" prop="companyId">
+              <!-- 字段说明从常驻灰字改为标签旁的 ⓘ：不占表单行高，悬浮/键盘聚焦即显示 -->
+              <template #label>法人主体<FieldTip text="决定入哪本账与后续三单匹配范围；公司账号建单时自动带入本公司" /></template>
               <el-tree-select
                 v-model="form.companyId"
                 :data="companyTree"
@@ -208,7 +225,6 @@
                 placeholder="选择公司"
                 style="width: 100%"
               />
-              <div style="font-size:12px;color:#909399">决定入哪本账与后续三单匹配范围；公司账号建单时自动带入本公司</div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -217,20 +233,24 @@
         </el-form-item>
 
         <el-divider content-position="left">行项目明细</el-divider>
-        <el-table :data="formLines" size="small" border style="margin-bottom: 8px" max-height="240" @selection-change="handleSelectionChange" empty-text="暂无数据">
-        <el-table-column type="selection" width="45" />
-          <el-table-column label="行号" width="55" align="center">
-            <!-- 行项目明细不在 el-form 内，guardSubmit 校验不到，
-                 validateLines 失败只弹一条 3 秒即逝的 ElMessage.warning ⇒ 点【保存并提交】毫无反应，
-                 自动化脚本与新手都抓不到原因。此处把出错行号染红，配合下方持久提示条形成可见反馈。 -->
+        <el-table
+          ref="lineTableRef"
+          :data="formLines"
+          size="small"
+          border
+          style="margin-bottom: 8px"
+          max-height="44vh"
+          empty-text="暂无行项目，点下方【+ 添加行】"
+        >
+          <el-table-column label="行号" width="50" align="center">
             <template #default="{ $index }">
-              <span :style="lineErrorAt($index) ? 'color:#f56c6c;font-weight:600' : ''">
-                {{ $index + 1 }}{{ lineErrorAt($index) ? ' ' : '' }}
+              <span :class="{ 'row-err': rowHasIssue($index) }" :title="rowIssueTitle($index)">
+                {{ $index + 1 }}<template v-if="rowHasIssue($index)"> </template>
               </span>
             </template>
           </el-table-column>
           <el-table-column label="物料编码" width="160">
-            <template #default="{ row }">
+            <template #default="{ row, $index }">
               <el-select
                 v-model="row.materialCode"
                 size="small"
@@ -240,14 +260,15 @@
                 allow-create
                 default-first-option
                 placeholder="搜索物料编码/名称"
+                no-match-text="未匹配到物料，可换关键词或直接录入编码"
                 :remote-method="searchMaterials"
                 :loading="materialSearching"
                 style="width: 100%"
-                @change="(val) => { const m = materialOptions.find(x => (x.itemCode || x.code) === val); if (m) row.materialName = m.itemName || m.name || '' }"
+                @change="(val) => { const m = materialOptions.find(x => (x.itemCode || x.code) === val); if (m) { row.materialName = m.itemName || m.name || ''; if (m.unit || m.unitName) row.unit = m.unit || m.unitName } onLineEdit($index) }"
               >
                 <el-option
                   v-for="m in materialOptions"
-                  :key="m.id"
+                  :key="m.code || m.id"
                   :label="(m.itemCode || m.code || '') + ' ' + (m.itemName || m.name || '')"
                   :value="m.itemCode || m.code || ''"
                 />
@@ -255,50 +276,106 @@
             </template>
           </el-table-column>
           <el-table-column label="物料名称" min-width="150">
-            <template #header"><span style="color:#f56c6c">*</span>物料名称</template>
-            <template #default="{ row }">
-              <el-input v-model="row.materialName" size="small" placeholder="物料/服务名称（勿填金额）" />
+            <template #header><span class="th-req">*</span>物料名称</template>
+            <template #default="{ row, $index }">
+              <el-input
+                v-model="row.materialName"
+                size="small"
+                placeholder="物料/服务名称（勿填金额）"
+                :data-line="$index"
+                data-field="materialName"
+                :class="cellClass($index, 'materialName')"
+                :title="cellTip($index, 'materialName')"
+                @input="onLineEdit($index)"
+              />
             </template>
           </el-table-column>
-          <el-table-column label="数量" width="90">
-            <template #default="{ row }">
-              <el-input-number v-model="row.quantity" :min="0" :precision="2" :controls="false" size="small" style="width: 100%" @change="calcLineAmt(row)" />
+          <el-table-column label="数量" width="92">
+            <template #header><span class="th-req">*</span>数量</template>
+            <template #default="{ row, $index }">
+              <el-input-number
+                v-model="row.quantity"
+                :min="0"
+                :precision="2"
+                :controls="false"
+                size="small"
+                placeholder="须 > 0"
+                style="width: 100%"
+                :data-line="$index"
+                data-field="quantity"
+                :class="cellClass($index, 'quantity')"
+                :title="cellTip($index, 'quantity')"
+                @change="calcLineAmt(row); onLineEdit($index)"
+              />
             </template>
           </el-table-column>
-          <el-table-column label="单位" width="70">
-            <template #default="{ row }">
-              <el-select v-model="row.unit" size="small" filterable allow-create default-first-option placeholder="单位" style="width: 100%"><el-option label="个" value="个" /><el-option label="台" value="台" /><el-option label="套" value="套" /><el-option label="件" value="件" /><el-option label="批" value="批" /><el-option label="米" value="米" /><el-option label="吨" value="吨" /><el-option label="kg" value="kg" /><el-option label="箱" value="箱" /><el-option label="包" value="包" /></el-select>
+          <el-table-column label="单位" width="86">
+            <template #header><span class="th-req">*</span>单位</template>
+            <template #default="{ row, $index }">
+              <el-select
+                v-model="row.unit"
+                size="small"
+                filterable
+                allow-create
+                default-first-option
+                placeholder="必填"
+                style="width: 100%"
+                :data-line="$index"
+                data-field="unit"
+                :class="cellClass($index, 'unit')"
+                :title="cellTip($index, 'unit')"
+                @change="onLineEdit($index)"
+              >
+                <el-option label="个" value="个" /><el-option label="台" value="台" /><el-option label="套" value="套" /><el-option label="件" value="件" /><el-option label="批" value="批" /><el-option label="米" value="米" /><el-option label="吨" value="吨" /><el-option label="kg" value="kg" /><el-option label="箱" value="箱" /><el-option label="包" value="包" />
+              </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="单价" width="100">
-            <template #default="{ row }">
-              <el-input-number v-model="row.unitPrice" :min="0" :precision="4" :controls="false" size="small" style="width: 100%" @change="calcLineAmt(row)" />
+          <el-table-column label="单价" width="102">
+            <template #header><span class="th-req">*</span>单价</template>
+            <template #default="{ row, $index }">
+              <el-input-number
+                v-model="row.unitPrice"
+                :min="0"
+                :precision="4"
+                :controls="false"
+                size="small"
+                placeholder="须 > 0"
+                style="width: 100%"
+                :data-line="$index"
+                data-field="unitPrice"
+                :class="cellClass($index, 'unitPrice')"
+                :title="cellTip($index, 'unitPrice')"
+                @change="calcLineAmt(row); onLineEdit($index)"
+              />
             </template>
           </el-table-column>
           <el-table-column label="金额" width="110" align="right">
-            <template #default="{ row }">
-              <span style="font-weight: 600">{{ fmt(row.amount) }}</span>
+            <template #default="{ row, $index }">
+              <span :style="{ fontWeight: 600, color: cellTip($index, 'amount') ? 'var(--el-color-danger)' : '' }">{{ fmt(row.amount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="60" align="center">
             <template #default="{ $index }">
-              <el-button link type="danger" size="small" @click="formLines.splice($index, 1)">删除</el-button>
+              <el-button link type="danger" size="small" @click="removeLine($index)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
-        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px">
+        <div class="line-bar">
           <el-button size="small" type="primary" plain @click="addLine">+ 添加行</el-button>
-          <!-- 行项目校验失败的持久提示条（红色，不随时间消失） -->
-          <span v-if="lineError" style="color: #f56c6c; font-size: 13px; font-weight: 600">
-             {{ lineError }}（请修正标  的行后再提交）
+          <!-- 行项目校验结果：一次性列出全部问题，并允许点条目定位到具体单元格 -->
+          <span v-if="lineIssues.length" class="line-bar__err">
+             行项目有 {{ lineIssues.length }} 处待修正：
+            <span v-for="(it, k) in lineIssueBrief" :key="k" class="line-bar__item">
+              <a class="line-bar__link" @click="focusIssue(it)">{{ it.msg }}</a><span v-if="k < lineIssueBrief.length - 1">；</span>
+            </span>
+            <span v-if="lineIssues.length > lineIssueBrief.length"> 等</span>
           </span>
-          <!-- 勾稽实时提示。原先行项目合计只作展示、与订单金额毫无比对，
-               导致「表头 60000 / 行合计 0」一路放行。 -->
-          <span v-if="amountMismatch" style="color: #f56c6c; font-size: 13px">
+          <span v-else-if="amountMismatch" class="line-bar__err">
              行项目合计 {{ fmt(lineTotal) }} 与订单金额 {{ fmt(Number(form.amount || 0)) }} 不一致，保存将被拒
           </span>
-          <span style="margin-left: auto; color: #909399; font-size: 13px">
-            行项目合计：<b style="color: #409eff; font-size: 15px">{{ fmt(lineTotal) }}</b> {{ form.currency || 'CNY' }}
+          <span class="line-bar__sum">
+            行项目合计：<b>{{ fmt(lineTotal) }}</b> {{ form.currency || 'CNY' }}
+            <el-button v-if="lineTotal > 0 && amountMismatch" link type="primary" size="small" @click="fillAmountFromLines">按合计回填订单金额</el-button>
           </span>
         </div>
 
@@ -307,16 +384,14 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dlg = false">取消</el-button>
+        <el-button @click="dlgRef?.requestClose()">取消</el-button>
         <el-button type="primary" @click="save(false)">保存</el-button>
         <!-- 弹窗内补【保存并提交】，免去"关闭弹窗→回列表找行→点提交"三步跳转 -->
         <el-button type="success" @click="save(true)">保存并提交</el-button>
         <div style="flex:1"></div>
-        <span style="font-size:12px;color:#909399;margin-right:8px">
-          仅【保存】＝存为草稿（不进审批）；【保存并提交】＝直接进入采购经理审批流
-        </span>
+        <span class="footer-hint">保存＝草稿，不进审批；保存并提交＝直接进入审批流</span>
       </template>
-    </el-dialog>
+    </DirtyGuardDialog>
 
     <!-- 详情弹窗 -->
     <el-dialog v-model="dlgDetail" title="采购订单详情" width="780px">
@@ -365,13 +440,15 @@
 <script setup>
 
 const { rules: formRules } = useFormRules('PO_ORDER')
-import { onMounted, reactive, ref, computed } from 'vue'
+import { onMounted, reactive, ref, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { purchaseApi, supplierApi, orgApi, masterApi, cipFlowApi, contractApi, store } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import FieldTip from '../../components/common/FieldTip.vue'
+import DirtyGuardDialog from '../../components/common/DirtyGuardDialog.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { useAutoFill } from '@/composables/useAutoFill'
 import { useFormRules } from '@/composables/useFormRules'
@@ -423,15 +500,42 @@ function poListTagType(s) {
 }
 const form = reactive({})
 const formRef = ref(null)
+const dlgRef = ref(null)
+const lineTableRef = ref(null)
 const { submit: guardSubmit } = useSubmitGuard(formRef)
 const { autofill, saveFormHistory } = useAutoFill()
 const formLines = ref([])
-// 行项目校验失败的持久提示（只用 3 秒即逝的 toast，点【保存并提交】等于毫无反应）
-const lineError = ref('')
-const lineErrorRows = ref([])
-function lineErrorAt(rowIndex) {
-  return lineErrorRows.value.includes(rowIndex)
+/**
+ * 行项目校验结果：[{ idx, field, msg }]。
+ * 收集全部问题而不是遇错即返回——多行多格同时出错时，用户只需看一遍就能改完，
+ * 不必「改一处→再提交→再被拦」地反复试。field 用于把红框落到具体单元格。
+ */
+const lineIssues = ref([])
+const lineIssueBrief = computed(() => lineIssues.value.slice(0, 3))
+function lineIssueOf(idx, field) {
+  return lineIssues.value.find(x => x.idx === idx && x.field === field)
 }
+function cellClass(idx, field) {
+  return lineIssueOf(idx, field) ? 'fld-error' : ''
+}
+function cellTip(idx, field) {
+  const it = lineIssueOf(idx, field)
+  return it ? it.msg : ''
+}
+function rowHasIssue(idx) {
+  return lineIssues.value.some(x => x.idx === idx)
+}
+function rowIssueTitle(idx) {
+  return lineIssues.value.filter(x => x.idx === idx).map(x => x.msg).join('；')
+}
+/** 日期面板默认定位：无值时用当天，避免沿用上次浏览月份 */
+const todayDate = new Date()
+/** 表单快照：用于判断弹窗是否已有未保存内容 */
+let dlgSnapshot = ''
+const isDlgDirty = () => dlg.value && JSON.stringify([form, formLines.value]) !== dlgSnapshot
+const statusHint = computed(() => (form.id
+  ? '草稿单不发起审批，可直接删除；执行中保存即发起订单审批。已保存订单的状态由审批/收货/付款/结束等操作推进，编辑单据不改变状态'
+  : '草稿单不发起审批，可直接删除；执行中保存即发起订单审批'))
 const detailLines = ref([])
 const materialOptions = ref([])
 const materialSearching = ref(false)
@@ -478,7 +582,17 @@ const amountMismatch = computed(() => {
 function fmt(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 
 function addLine() {
-  formLines.value.push({ materialCode: '', materialName: '', quantity: 1, unit: '', unitPrice: 0, amount: 0 })
+  // 单价留空而非 0：默认 0 会让「未填」和「填了 0」长得一样，用户以为已经填好
+  formLines.value.push({ materialCode: '', materialName: '', quantity: 1, unit: '', unitPrice: null, amount: 0 })
+  nextTick(() => {
+    const t = lineTableRef.value
+    if (t?.setScrollTop) t.setScrollTop(1e6)
+  })
+}
+
+function removeLine(idx) {
+  formLines.value.splice(idx, 1)
+  lineIssues.value = []
 }
 
 /**
@@ -497,12 +611,22 @@ function calcLineAmt(row) {
   row.amount = Number(row.quantity || 0) * Number(row.unitPrice || 0)
 }
 
+/** 行内改动：提交过一次被拦后，标记随编辑实时刷新，改对了红框当场消失 */
+function onLineEdit() {
+  if (lineIssues.value.length) lineIssues.value = collectLineIssues()
+}
+
+/** 表头金额按行合计回填（勾稽不一致时的一键修复） */
+function fillAmountFromLines() {
+  form.amount = Number(Number(lineTotal.value).toFixed(2))
+}
+
 async function searchMaterials(query) {
   if (!query) { materialOptions.value = []; return }
   materialSearching.value = true
   try {
-    const d = await masterApi.item.page({ pageNum: 1, pageSize: 20, keyword: query })
-    materialOptions.value = d.list || []
+    // 数据源＝物料主数据（md_inventory），不再拿费用项目冒充物料编码
+    materialOptions.value = (await purchaseApi.materialOptions(query)) || []
   } catch (e) { materialOptions.value = [] }
   finally { materialSearching.value = false }
 }
@@ -535,7 +659,10 @@ function openCreate(row) {
   })
   formLines.value = row && row.lines ? row.lines.map(l => ({ ...l })) : []
   if (!formLines.value.length) addLine()
+  lineIssues.value = []
   dlg.value = true
+  // 开场快照：与当前值不同即视为「有未保存内容」，关窗前要二次确认
+  nextTick(() => { dlgSnapshot = JSON.stringify([form, formLines.value]) })
 }
 
 function viewDetail(row) {
@@ -547,57 +674,74 @@ function viewDetail(row) {
 /**
  * 行项目逐行校验（与后端 PurchaseService.assertOrderLine 同一规则）。
  * guardSubmit 只能校验带 prop 的表单项，行项目明细不在 el-form 内，
- * 历史上从未被任何一层校验过——自动化脚本把 60000 填进「物料名称」、
- * 数量/单价留默认值(1/0) 时照样写入数据库，直到三单匹配才暴露。
- * 后端为最终校验，此处提前拦是为了让用户在点【保存】当场就看到红字，
- * 而不是提交被拒后去猜哪一行错了。
+ * 历史上从未被任何一层校验过——把金额填进「物料名称」、数量/单价留默认值时
+ * 照样写入数据库，直到三单匹配才暴露。
+ * 本函数只负责**收集**问题，不弹窗、不中断：一次列出全部错误，
+ * 由调用方决定提示方式，并把红框落到具体单元格。
  */
-function validateLines() {
-  const lines = formLines.value || []
-  // 全空行忽略（模板新增的空行不算填写内容）
-  const active = lines.filter(l => !isBlankLine(l))
-  // active 是过滤后的下标，原实现按 active 下标提示「第 N 行」，
-  // 与表格实际行号可能错位（空行夹在中间时）。此处回填真实表格下标供行号染红用。
-  const activeIdx = []
-  lines.forEach((l, i) => { if (!isBlankLine(l)) activeIdx.push(i) })
-  const fail = (msg, activePos) => {
-    lineError.value = msg
-    lineErrorRows.value = [activeIdx[activePos] ?? -1]
-    ElMessage.warning(msg)
-    return false
-  }
-  lineError.value = ''
-  lineErrorRows.value = []
-  if (!active.length) return true // 无行项目：采购订单允许只录表头金额
-
-  for (let i = 0; i < active.length; i++) {
-    const l = active[i]
-    const pos = `第 ${i + 1} 行`
-    if (!String(l.materialName || '').trim()) {
-      return fail(`${pos}物料名称必填（只有物料编码不够）`, i)
-    }
-    const name = String(l.materialName).trim()
-    if (/^[0-9][0-9,]*(\.[0-9]+)?$/.test(name)) {
-      return fail(`${pos}物料名称「${name}」是纯数字，疑似把数量/金额填进了名称栏，请填实际品名`, i)
+function collectLineIssues() {
+  const issues = []
+  formLines.value.forEach((l, idx) => {
+    if (isBlankLine(l)) return // 全空行忽略（模板新增的空行不算填写内容）
+    const pos = `第 ${idx + 1} 行`
+    const name = String(l.materialName || '').trim()
+    if (!name) {
+      issues.push({ idx, field: 'materialName', msg: `${pos}物料名称必填（只有物料编码不够）` })
+    } else if (/^[0-9][0-9,]*(\.[0-9]+)?$/.test(name)) {
+      issues.push({ idx, field: 'materialName', msg: `${pos}物料名称是纯数字，请填实际品名` })
     }
     if (!(Number(l.quantity) > 0)) {
-      return fail(`${pos}数量必须大于 0（当前 ${l.quantity}）`, i)
+      issues.push({ idx, field: 'quantity', msg: `${pos}数量必须大于 0` })
     }
     if (!(Number(l.unitPrice) > 0)) {
-      return fail(`${pos}单价必须大于 0（当前 ${l.unitPrice}）`, i)
+      issues.push({ idx, field: 'unitPrice', msg: `${pos}单价必须大于 0` })
     }
-    const expect = Number(l.quantity) * Number(l.unitPrice)
+    // 单位是门户发货（ASN 发运数量）与三单匹配（收货数量换算）的取数依据，
+    // 空值会让门户「单位」列恒空、数量口径无法核对。
+    if (!String(l.unit || '').trim()) {
+      issues.push({ idx, field: 'unit', msg: `${pos}单位必填` })
+    }
+    const expect = Number(l.quantity || 0) * Number(l.unitPrice || 0)
     const actual = Number(l.amount || 0)
-    if (actual > 0 && Math.abs(expect - actual) > 0.01) {
-      return fail(`${pos}量价勾稽不符：数量 × 单价 = ${expect.toFixed(2)}，行金额 = ${actual.toFixed(2)}`, i)
+    if (actual > 0 && expect > 0 && Math.abs(expect - actual) > 0.01) {
+      issues.push({ idx, field: 'amount', msg: `${pos}量价勾稽不符（应为 ${expect.toFixed(2)}）` })
     }
-  }
-  lineError.value = ''
-  lineErrorRows.value = []
+  })
+  return issues
+}
 
+/** 把视口滚到出错单元格并聚焦，配合红框形成「错在哪」的闭环 */
+async function focusIssue(issue) {
+  await nextTick()
+  if (!issue) return
+  // 弹窗内容经 Teleport 挂到 body，组件 $el 未必是真实容器 ⇒ 取不到就退回 document
+  const el = dlgRef.value?.$el
+  const root = el && typeof el.querySelector === 'function' ? el : document
+  const anchor = root.querySelector(`[data-line="${issue.idx}"][data-field="${issue.field}"]`)
+  const fallback = root.querySelector('.fld-error')
+  const box = anchor?.closest?.('.el-input, .el-select, .el-input-number') || anchor || fallback
+  if (!box) return
+  box.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  const input = (anchor && anchor.matches?.('input') ? anchor : null)
+    || box.querySelector?.('input')
+  try { input?.focus({ preventScroll: true }) } catch { /* 只读控件忽略 */ }
+}
+
+/**
+ * 行项目校验入口。
+ * @returns {Promise<boolean>} 通过为 true；失败已写入 lineIssues 并完成提示与定位
+ */
+async function validateLines() {
+  const issues = collectLineIssues()
+  lineIssues.value = issues
+  if (issues.length) {
+    ElMessage.warning(issues[0].msg)
+    await focusIssue(issues[0])
+    return false
+  }
   // 表头与行合计勾稽（与后端 assertHeaderLineAmountConsistent 同一规则）
-  const sum = active.reduce((s, l) => s + Number(l.amount || 0), 0)
-  const header = Number(form.value?.amount || form.amount || 0)
+  const sum = formLines.value.filter(l => !isBlankLine(l)).reduce((s, l) => s + Number(l.amount || 0), 0)
+  const header = Number(form.amount || 0)
   if (sum > 0 && Math.abs(header - sum) > 0.01) {
     ElMessage.warning(`订单金额(${header.toFixed(2)}) ≠ 行项目合计(${sum.toFixed(2)})，请检查行明细`)
     return false
@@ -617,7 +761,7 @@ async function save(thenSubmit = false) {
   saveFormHistory('PO_ORDER', form.value || form)
 
   await guardSubmit(async () => {
-    if (!validateLines()) return          // 行项目校验，先于请求发出
+    if (!(await validateLines())) return   // 行项目校验，先于请求发出
     try {
       const payload = { ...form, lines: formLines.value.filter(l => l.materialName || l.materialCode) }
       let saved
@@ -835,5 +979,69 @@ function batchExport() {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.footer-hint {
+  margin-right: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+/* 行项目工具条：错误摘要 + 合计回填 */
+.line-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.line-bar__err {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-color-danger);
+}
+
+.line-bar__item {
+  margin-right: 2px;
+}
+
+.line-bar__link {
+  color: var(--el-color-danger);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+.line-bar__link:hover {
+  color: var(--el-color-danger-dark-2);
+}
+
+.line-bar__sum {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.line-bar__sum b {
+  font-size: 15px;
+  color: var(--el-color-primary);
+}
+
+/* 表头必填红星：与 el-form-item 的红星同色，取代「单位 *」这类文字标记 */
+:deep(.th-req) {
+  margin-right: 2px;
+  color: var(--el-color-danger);
+}
+
+/* 出错单元格红框：覆盖 input / select / input-number 三种根结构 */
+:deep(.fld-error .el-input__wrapper),
+:deep(.fld-error .el-select__wrapper),
+:deep(.fld-error.el-input .el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+
+.row-err {
+  font-weight: 600;
+  color: var(--el-color-danger);
 }
 </style>

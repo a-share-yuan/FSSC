@@ -265,7 +265,7 @@ const wb = ref(null)
 const router = useRouter()
 
 // 权限守卫
-// 工作台是全员默认落地页(USG-01)，但其中「共享运营任务池」「付款待执行」属模块专属数据。
+// 工作台是全员默认落地页，但其中「共享运营任务池」「付款待执行」属模块专属数据。
 // 无对应权限的角色若照旧无条件请求，会弹出"无该功能/按钮权限：缺少权限：xxx"的误导性报错
 // （非管理员用户里多数人不持 sharing:task:list / pay:batch:list）。
 // 故按权限跳过请求，并同步隐藏对应卡片。
@@ -586,6 +586,14 @@ async function approve(row, decision) {
 
 async function doApprove() {
   if (approving.value) return
+  // allow-create 下拉有一个坑：用户打字后直接点【确认】而不按回车，el-select 不会提交这个"新选项"，
+  // v-model 仍为空 ⇒ 后面的必填校验静默 return，弹窗不关、无红字、无提示。
+  // 这里在确认时把输入框里的字收回模型，等价于"按了回车"。
+  if (!String(approveComment.value || '').trim()) {
+    const input = approveFormRef.value?.$el?.querySelector?.('.el-select input')
+    const typed = input && input.value ? String(input.value).trim() : ''
+    if (typed) approveComment.value = typed
+  }
   // 先跑表单真校验（驳回原因/下一环节办理人），红字落字段；原手工校验保留作双保险
   if (!(await validateForm(approveFormRef.value))) return
   const decision = approveDecision.value

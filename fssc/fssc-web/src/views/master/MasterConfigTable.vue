@@ -35,6 +35,8 @@
       <el-button type="primary" plain @click="load">刷新</el-button>
       <span v-if="cfg.hint" style="color: #909399; font-size: 12px; margin-left: auto">{{ cfg.hint }}</span>
     </div>
+    <el-alert v-if="props.configKey === 'sys-config'" type="info" :closable="false" show-icon style="margin-bottom: 8px"
+              title="带「平台下发·只读」徽标的 wf.*／approve.* 是工作流语义开关，只能由平台 administrator 设置（工作流参数与组织无关，普通管理员改了不生效）；需要变更请联系平台运维。" />
 
     <!-- Table -->
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -57,7 +59,14 @@
       </el-table-column>
       <el-table-column v-if="canWrite('update') || canWrite('delete')" label="操作" width="180" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="canWrite('update')" link size="small" type="primary" @click="openEdit(row)">编辑</el-button>
+          <!-- 平台属主参数（wf./approve.）只有平台 administrator 可写：后端 ConfigService.assertPlatformOwned
+               会 403，前端必须先说破，不能让用户点了才吃错。 -->
+          <el-tooltip v-if="isPlatformOwnedRow(row)" :content="PLATFORM_OWNED_TIP" placement="top">
+            <el-tag type="info" size="small" effect="plain" style="margin-right: 6px">平台下发·只读</el-tag>
+          </el-tooltip>
+          <el-button v-if="canWrite('update')" link size="small" type="primary"
+                     :disabled="isPlatformOwnedRow(row)" :title="isPlatformOwnedRow(row) ? PLATFORM_OWNED_TIP : null"
+                     @click="openEdit(row)">编辑</el-button>
           <el-button v-if="cfg.api.enable && canWrite('enable')" link size="small" :type="(row.enabled ?? ['NORMAL', 'ACTIVE', 'ENABLED'].includes(row.status)) ? 'warning' : 'success'" @click="toggleEnable(row)">{{ (row.enabled ?? ['NORMAL', 'ACTIVE', 'ENABLED'].includes(row.status)) ? '停用' : '启用' }}</el-button>
           <el-button v-if="canWrite('delete')" link size="small" type="danger" @click="del(row)">删除</el-button>
         </template>
@@ -145,7 +154,7 @@ const REGISTRY = {
   project: { title: '项目', api: masterApi.project, columns: [{ prop: 'projectCode', label: '项目编码', width: 120 }, { prop: 'projectName', label: '项目名称', minWidth: 160 }, { prop: 'projectType', label: '类型', width: 100 }, { prop: 'beginDate', label: '开始日期', width: 120 }, { prop: 'endDate', label: '结束日期', width: 120 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'projectCode', label: '项目编码', required: true }, { prop: 'projectName', label: '项目名称', required: true }, { prop: 'projectType', label: t('finance.fxReval.Type') }, { prop: 'beginDate', label: '开始日期', type: 'date' }, { prop: 'endDate', label: '结束日期', type: 'date' }] },
   // 账号/卡号列一律 maskAccount（首尾各留 4 位），接口原值不动。
   bank: { title: '银行账户', api: masterApi.bank, columns: [{ prop: 'accountCode', label: '账号', width: 180, formatter: maskAccount }, { prop: 'accountName', label: '账户名称', minWidth: 140 }, { prop: 'bankName', label: '开户行', minWidth: 140 }, { prop: 'currencyCode', label: '币种', width: 80 }, { prop: 'balance', label: '余额', width: 120, align: 'right', formatter: 'money' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'accountCode', label: '账号', required: true }, { prop: 'accountName', label: '账户名称', required: true }, { prop: 'bankName', label: t('master.bankAccount.Bank2') }, { prop: 'bankBranch', label: t('master.bankAccount.Branch') }, { prop: 'currencyCode', label: t('bill.billDetailPanel.Currency') }, { prop: 'balance', label: '余额', type: 'number' }] },
-  'expense-item': { title: '费用类型', api: masterApi.item, columns: [{ prop: 'itemCode', label: '编码', width: 120 }, { prop: 'itemName', label: '名称', minWidth: 160 }, { prop: 'billType', label: '分类', width: 100, formatter: (v) => docTypeLabel(v) }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'itemCode', label: '编码', required: true }, { prop: 'itemName', label: '名称', required: true }, { prop: 'billType', label: t('master.masterConfig.Category') }] },
+  'expense-item': { title: '费用类型', api: masterApi.item, columns: [{ prop: 'itemCode', label: '编码', width: 120 }, { prop: 'itemName', label: '名称', minWidth: 160 }, { prop: 'billType', label: '分类', width: 100, formatter: (v) => docTypeLabel(v) }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'itemCode', label: '编码', required: true }, { prop: 'itemName', label: '名称', required: true }, { prop: 'billType', label: t('master.masterConfig.Category') }, { prop: 'subjectId', label: '对应会计科目', type: 'select', optionsSource: 'subject-leaf', placeholder: '制证借方科目，仅列启用末级科目' }] },
   city: { title: '城市等级', api: masterApi.city, columns: [{ prop: 'cityCode', label: '城市编码', width: 120 }, { prop: 'cityName', label: '城市名称', minWidth: 140 }, { prop: 'cityLevel', label: '等级', width: 80, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'cityCode', label: '城市编码', required: true }, { prop: 'cityName', label: '城市名称', required: true }, { prop: 'cityLevel', label: '等级', type: 'select', options: [{ label: '一线', value: 1 }, { label: '二线', value: 2 }, { label: '三线', value: 3 }] }] },
   // 后端真实码：查询/新增/改 md:taxrate:*，删除 md:tax:delete（TaxRateController）；菜单载体上 md:tax:list 已软删，不得再用
   'tax-rate': { title: '税码税率', perms: { create: 'md:taxrate:create', update: 'md:taxrate:update', delete: 'md:tax:delete', enable: 'md:taxrate:update' }, api: masterApi.tax, columns: [{ prop: 'rateCode', label: '税码', width: 100 }, { prop: 'rateName', label: '税名', minWidth: 140 }, { prop: 'rateValue', label: '税率', width: 100, align: 'right', formatter: (v) => (Number(v) * 100).toFixed(2) + '%' }, { prop: 'taxType', label: '类型', width: 100, formatter: (v) => taxTypeLabel(v) }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'rateCode', label: '税码', required: true }, { prop: 'rateName', label: '税名', required: true }, { prop: 'rateValue', label: '税率', type: 'number', precision: 4 }, { prop: 'taxType', label: t('finance.fxReval.Type') }] },
@@ -176,8 +185,8 @@ const REGISTRY = {
   cip: { title: '在建工程', api: masterCfgApi.cip, columns: [{ prop: 'cipCode', label: '在建工程编码', width: 140 }, { prop: 'cipName', label: '在建工程名称', minWidth: 220 }, { prop: 'companyName', label: '公司', width: 140, align: 'center' }, { prop: 'remark', label: '备注', minWidth: 200 }, { prop: 'status', label: '状态', width: 100, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'cipCode', label: '在建工程编码', required: true }, { prop: 'cipName', label: '在建工程名称', required: true }, { prop: 'companyName', label: t('master.masterConfig.Owning') }, { prop: 'remark', label: '备注', type: 'textarea' }, { prop: 'status', label: '启用', type: 'switch' }] },
   budgetType: { title: '预算类型', api: masterCfgApi.budgetType, columns: [{ prop: 'typeName', label: '名称', minWidth: 200 }, { prop: 'hasProject', label: '包含项目', width: 110, align: 'center', formatter: (v) => v === 'Y' ? '是' : '否' }, { prop: 'remark', label: '备注', minWidth: 200 }, { prop: 'status', label: '状态', width: 100, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'typeName', label: '名称', required: true }, { prop: 'hasProject', label: '包含项目', type: 'select', options: [{ label: '是', value: 'Y' }, { label: '否', value: 'N' }] }, { prop: 'remark', label: '备注', type: 'textarea' }, { prop: 'status', label: '启用', type: 'switch' }] },
   // system pages
-  dict: { title: '字典管理', api: { page: (p) => dictApi.typePage(p), create: (b) => dictApi.typeCreate(b), update: (b) => dictApi.typeUpdate(b), delete: (id) => dictApi.typeDelete(id) }, columns: [{ prop: 'dictType', label: '字典类型', width: 140 }, { prop: 'dictName', label: '字典名称', minWidth: 160 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'dictType', label: '字典类型', required: true }, { prop: 'dictName', label: '字典名称', required: true }] },
-  'sys-config': { title: '全局参数', api: configApi, columns: [{ prop: 'configKey', label: '参数键', width: 180 }, { prop: 'configValue', label: '参数值', minWidth: 200 }, { prop: 'configName', label: '参数名称', minWidth: 200 }], formFields: [{ prop: 'configKey', label: '参数键', required: true }, { prop: 'configValue', label: '参数值', required: false }, { prop: 'configName', label: '参数名称', type: 'textarea' }] },
+  dict: { title: '字典管理', perms: { create: 'system:dict:create', update: 'system:dict:update', delete: 'system:dict:delete' }, api: { page: (p) => dictApi.typePage(p), create: (b) => dictApi.typeCreate(b), update: (b) => dictApi.typeUpdate(b), delete: (id) => dictApi.typeDelete(id) }, columns: [{ prop: 'dictType', label: '字典类型', width: 140 }, { prop: 'dictName', label: '字典名称', minWidth: 160 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'dictType', label: '字典类型', required: true }, { prop: 'dictName', label: '字典名称', required: true }] },
+  'sys-config': { title: '全局参数', perms: { create: 'system:config:create', update: 'system:config:update' }, api: configApi, columns: [{ prop: 'configKey', label: '参数键', width: 180 }, { prop: 'configValue', label: '参数值', minWidth: 200 }, { prop: 'configName', label: '参数名称', minWidth: 200 }], formFields: [{ prop: 'configKey', label: '参数键', required: true }, { prop: 'configValue', label: '参数值', required: false }, { prop: 'configName', label: '参数名称', type: 'textarea' }] },
   'sys-notice': { title: '公告管理', perms: { create: 'system:notice:create', update: 'system:notice:update', delete: 'system:notice:delete' }, api: { page: (p) => noticeApi.page(p), create: (b) => noticeApi.create(b), update: (b) => noticeApi.update(b), delete: (id) => noticeApi.delete(id) }, columns: [{ prop: 'noticeTitle', label: '标题', minWidth: 200 }, { prop: 'status', label: '状态', width: 100, align: 'center', formatter: (v) => v === 'PUBLISHED' ? '已发布' : (v === 'CLOSED' ? '已关闭' : (v === 'DRAFT' || !v ? '草稿' : v)) }, { prop: 'publishTime', label: '发布时间', width: 160 }], formFields: [{ prop: 'noticeTitle', label: '标题', required: true }, { prop: 'noticeContent', label: '内容', type: 'textarea', rows: 4 }] },
   'sys-message': { title: '消息中心', api: { page: (p) => messageApi.page(p), delete: (id) => messageApi.delete(id) }, readOnly: true, columns: [{ prop: 'title', label: '标题', minWidth: 200 }, { prop: 'content', label: '内容', minWidth: 300 }, { prop: 'msgType', label: '类型', width: 100, formatter: (v) => msgTypeLabel(v) }, { prop: 'createTime', label: '时间', width: 160 }, { prop: 'isRead', label: '状态', width: 80, align: 'center', formatter: (v) => v ? '已读' : '未读' }] },
   'sys-file': { title: '文件管理', api: { page: (p) => fileApi.page(p), delete: (id) => fileApi.delete(id) }, readOnly: true, columns: [{ prop: 'fileName', label: '文件名', minWidth: 200 }, { prop: 'fileSize', label: '大小', width: 100, align: 'right', formatter: (v) => (v / 1024).toFixed(1) + ' KB' }, { prop: 'storageZone', label: '存储区域', width: 100, align: 'center', formatter: (v) => fileStorageZoneLabel(v) }, { prop: 'bizType', label: '业务类型', width: 100, formatter: (v) => docTypeLabel(v) }, { prop: 'createTime', label: '上传时间', width: 160 }] },
@@ -185,7 +194,7 @@ const REGISTRY = {
   'sys-number': { title: '编号规则', hint: '改动后对新单据生效；已生成的单据号不变', perms: { create: 'system:number:create', update: 'system:number:update', delete: 'system:number:delete', enable: 'system:number:update' }, api: { page: (p) => numberApi.rulePage(p), create: (b) => numberApi.ruleCreate(b), update: (b) => numberApi.ruleUpdate(b), delete: (id) => numberApi.ruleDelete(id), enable: (id, on) => numberApi.ruleEnable(id, on) }, columns: [{ prop: 'ruleCode', label: '规则编码', width: 130 }, { prop: 'ruleName', label: '规则名称', minWidth: 150 }, { prop: 'prefix', label: '前缀', width: 90 }, { prop: 'dateFormat', label: '日期格式', width: 100, formatter: (v) => v || '不含日期' }, { prop: 'seqLength', label: '序号长度', width: 90, align: 'center' }, { prop: 'resetCycle', label: '重置周期', width: 90, align: 'center', formatter: (v) => ({ NONE: '不重置', DAY: '按日', MONTH: '按月', YEAR: t('master.masterConfig.Year') }[v] || v || '-') }, { prop: 'step', label: '步长', width: 70, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }, { prop: 'remark', label: '备注', minWidth: 140 }], formFields: [{ prop: 'ruleCode', label: '规则编码', required: true }, { prop: 'ruleName', label: '规则名称', required: true }, { prop: 'prefix', label: t('master.masterConfig.Prefix') }, { prop: 'dateFormat', label: '日期格式', placeholder: t('master.masterConfig.E') }, { prop: 'seqLength', label: '序号长度', type: 'number', precision: 0 }, { prop: 'resetCycle', label: '重置周期', type: 'select', options: [{ label: '不重置', value: 'NONE' }, { label: '按日', value: 'DAY' }, { label: '按月', value: 'MONTH' }, { label: '按年', value: 'YEAR' }] }, { prop: 'step', label: '步长', type: 'number', precision: 0 }, { prop: 'status', label: '状态', type: 'select', options: [{ label: '启用', value: 'NORMAL' }, { label: '停用', value: 'DISABLED' }] }, { prop: 'remark', label: '备注', type: 'textarea', rows: 2 }] },
   // supplier
   // 扫描结论：本页列表没有账号列（bankAccount 只出现在表单项，编辑框要回写全号不能打码），所以此处无打码落点；带账号列的是 bank / payee 两行。
-  supplier: { title: '供应商', api: supplierApi, columns: [{ prop: 'supplierCode', label: '编码', width: 120 }, { prop: 'supplierName', label: '名称', minWidth: 160 }, { prop: 'contactName', label: '联系人', width: 100 }, { prop: 'contactPhone', label: '电话', width: 120 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'supplierCode', label: '编码', required: true }, { prop: 'supplierName', label: '名称', required: true }, { prop: 'contactName', label: t('login.main.Contact') }, { prop: 'contactPhone', label: t('master.customer.Phone') }, { prop: 'bankName', label: t('master.bankAccount.Bank2') }, { prop: 'bankAccount', label: t('master.bankAccount.Bank3') }] },
+  supplier: { title: '供应商', perms: { create: 'md:supplier:create', update: 'md:supplier:update', delete: 'md:supplier:delete' }, api: supplierApi, columns: [{ prop: 'supplierCode', label: '编码', width: 120 }, { prop: 'supplierName', label: '名称', minWidth: 160 }, { prop: 'contactName', label: '联系人', width: 100 }, { prop: 'contactPhone', label: '电话', width: 120 }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'supplierCode', label: '编码', required: true }, { prop: 'supplierName', label: '名称', required: true }, { prop: 'contactName', label: t('login.main.Contact') }, { prop: 'contactPhone', label: t('master.customer.Phone') }, { prop: 'bankName', label: t('master.bankAccount.Bank2') }, { prop: 'bankAccount', label: t('master.bankAccount.Bank3') }] },
   // review rules (CRUD with enable/disable)
   // 按钮按后端真实码裁剪：99031 只持 list/update ⇒ 只剩【编辑】【停用】；99011 只持 list ⇒ 全不渲染。
   // 未声明 perms 时 canWrite 恒真，会把后端必拦的新增/删除也画出来（观察项）。
@@ -202,10 +211,23 @@ const REGISTRY = {
 const cfg = computed(() => REGISTRY[props.configKey] || { title: props.configKey, columns: [], formFields: [], api: {} })
 
 // 写按钮按后端真实权限码门控；未声明 perms 的配置沿用原 readOnly 规则，避免扩大改动面。
+// 一旦声明了 perms，就按「白名单」判：动作没给码＝该动作不许写（不是放行）。
+// 原先 code 缺失即 return true，导致后端根本没有的删除动作（如全局参数无 system:config:delete）
+// 也画成可点；而无权限的角色（如 99006 的 tenant_id=0 死授权）同样看到写按钮，点了吃 4030
+// 平台属主参数前缀：与后端 ConfigService.PLATFORM_OWNED_PREFIXES 逐字同源
+const PLATFORM_OWNED_PREFIXES = ['wf.', 'approve.']
+const PLATFORM_OWNED_TIP = '工作流参数与组织无关，只能由平台 administrator 设置；普通管理员设置不生效。需要变更请联系平台运维。'
+function isPlatformOwnedRow(row) {
+  const k = String(row?.configKey || '').trim().toLowerCase()
+  return PLATFORM_OWNED_PREFIXES.some((p) => k.startsWith(p))
+}
+
 function canWrite(action) {
   if (cfg.value.readOnly) return false
-  const code = cfg.value.perms?.[action]
-  return code ? hasPerm(code) : true
+  const perms = cfg.value.perms
+  if (!perms) return true
+  const code = perms[action]
+  return code ? hasPerm(code) : false
 }
 
 /**
@@ -367,6 +389,11 @@ const DYN_OPTION_SOURCES = {
   'expense-item': async () => {
     const d = await masterApi.item.page({ pageNum: 1, pageSize: 500 })
     return (d?.list || d?.records || []).map((x) => ({ label: x.itemName, value: x.id }))
+  },
+  // 费用项目「对应会计科目」：只列启用＋末级＋本公司/租户共用科目，避免配成父科目导致无法制证
+  'subject-leaf': async () => {
+    const d = await masterApi.subject.options({})
+    return (d || []).map((x) => ({ label: `${x.subjectCode} ${x.subjectName}`, value: x.id }))
   },
 }
 async function loadFormSources() {

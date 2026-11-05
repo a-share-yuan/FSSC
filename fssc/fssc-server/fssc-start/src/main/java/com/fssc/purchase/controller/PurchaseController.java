@@ -44,6 +44,16 @@ public class PurchaseController {
         return Result.success(purchaseService.orderPage(pageNum, pageSize, keyword, status, receivable));
     }
 
+    /**
+     * 采购订单行「物料编码」候选：物料主数据（md_inventory）。
+     * 与建单同一权限码，不额外开口子；不再拿费用项目冒充物料。
+     */
+    @RequiresPerm("po:order:list")
+    @GetMapping("/material-options")
+    public Result<List<Map<String, Object>>> materialOptions(@RequestParam(required = false) String keyword) {
+        return Result.success(purchaseService.materialOptions(keyword));
+    }
+
     @RequiresPerm("po:order:list")
     @PostMapping("/order/create")
     public Result<Long> createOrder(@RequestBody PoOrder o) {

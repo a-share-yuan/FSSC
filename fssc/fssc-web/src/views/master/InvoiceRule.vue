@@ -54,7 +54,7 @@
 
     <!-- Add / Edit Dialog -->
     <el-dialog v-model="dlg" :title="editing.id ? '编辑规则' : '新增规则'" width="560px">
-      <el-form :model="editing" :rules="formRules" label-width="110px" size="small">
+      <el-form ref="formRef" :model="editing" :rules="formRules" label-width="110px" size="small">
         <el-form-item label="关键词" prop="keyword">
           <el-input v-model="editing.keyword" placeholder="多个用 / 分隔，如：打车 / 出租 / 滴滴" />
         </el-form-item>
@@ -103,11 +103,13 @@ const keyword = ref('')
 const loading = ref(false)
 const dlg = ref(false)
 const editing = ref({})
+const formRef = ref(null)
 const itemOptions = ref([])
 
 const formRules = {
   keyword: [{ required: true, message: t('master.invoiceRule.Please') }],
-  expenseItemId: [{ required: true, message: t('master.expenseStandard.Please3') }],
+  // 费用类型可空：后端 InvoiceRuleService 明确允许置空（用于解除绑定），
+  // 界面占位也写明「不选则本条规则只展示不匹配」⇒ 此处不得标必填，否则红星与业务规则相反
 }
 
 async function load() {
@@ -152,6 +154,8 @@ function openEdit(row) {
 }
 
 async function save() {
+  // 关键词是匹配的唯一依据，空关键词的规则永远匹配不到任何单据 ⇒ 保存前先校验
+  try { await formRef.value?.validate() } catch { return }
   const it = itemOptions.value.find((o) => o.value === editing.value.expenseItemId)
   editing.value.itemName = it ? it.label.replace(/^\s*　*/, '') : ''
   try {

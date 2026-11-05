@@ -296,7 +296,7 @@
           </el-table-column>
         </el-table>
         <el-button size="small" style="margin-top: 8px" @click="persons.push(newPerson())">{{ $t('expense.preapply.btnAddTrainee') }}</el-button>
-        <div style="margin-top: 6px; font-size: 12px; color: #909399">{{ $t('expense.preapply.hintTotalCostFormula') }}</div>
+        <FieldTip :text="$t('expense.preapply.hintTotalCostFormula')" />
       </el-card>
 
       <!-- 分摊信息 -->
@@ -376,6 +376,7 @@ import { shareBudgetToLine } from '@/composables/useBill'
 import { hasPerm } from '@/utils/perm'
 import { ccLabel, showRowDetail, budgetLabel, budgetUnseenLabel, formatDateTime } from '@/utils/format'
 import { userApi, masterApi, configApi, store } from '../../api'
+import FieldTip from '../../components/common/FieldTip.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { useAutoFill } from '@/composables/useAutoFill'
 import { useI18n } from 'vue-i18n'
@@ -795,10 +796,11 @@ function openRowDetail(row) {
 
 const route = useRoute()
 const router = useRouter()
-// 出差类型（travel_type）：字典定值域 + i18n 定文案
+// 出差类型（travel_type）：值域与文案统一取字典（sys_dict_data.travel_type）
+// 原第三参传 i18n 覆盖，把 DOMESTIC 译成「国内出差」，而同一字段在差旅报销页显示字典值「境内」
+// ⇒ 同一值域两副脸（D-G-1104-01）。文案唯一源＝字典，页面不再各译一套。
 const travelTypeDict = useBaseDict('travel_type',
-  { DOMESTIC: '境内', ABROAD: '境外', TRIAREA: '三地' },
-  { DOMESTIC: 'expense.preapply.optDomesticTrip', ABROAD: 'expense.preapply.optAbroadTrip', TRIAREA: 'expense.preapply.optThreeCityTrip' })
+  { DOMESTIC: '境内', ABROAD: '境外', TRIAREA: '三地' })
 const travelTypeOptions = travelTypeDict.options
 
 // 城市联动：出发地/目的地随 境内/境外 过滤

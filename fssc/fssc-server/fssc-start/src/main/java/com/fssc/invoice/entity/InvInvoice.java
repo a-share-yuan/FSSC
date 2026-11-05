@@ -66,6 +66,8 @@ public class InvInvoice extends TenantAuditBase {
     private LocalDateTime certifyDate;
     /** 进项转出时间 */
     private LocalDateTime reverseDate;
+    /** 进项转出原因（集体福利/个人消费/非正常损失/简易计税/免税项目/其他，允许自定义） */
+    private String transferReason;
     /** 发票影像文件ID（sys_file.id，供前端预览发票影像） */
     private Long imgFileId;
     /** 所属公司（多分子公司审批路由） */

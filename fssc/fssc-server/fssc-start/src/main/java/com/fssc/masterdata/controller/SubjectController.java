@@ -45,6 +45,17 @@ public class SubjectController {
     public Result<List<MdSubject>> tree(@RequestParam(required = false) Long companyId) {
         return Result.success(service.tree(companyId));
     }
+
+    /**
+     * 可选叶子科目（启用＋末级＋本公司/租户共用）：费用项目「对应会计科目」下拉的数据源。
+     * 同时放开费用项目维护权限，否则只有科目权限的人能配、能配费用项的人反而看不到选项。
+     */
+    @RequiresPerm({"md:subject:list", "md:expenseitem:create", "md:expenseitem:update"})
+    @GetMapping("/options")
+    public Result<List<MdSubject>> options(@RequestParam(required = false) Long companyId,
+                                           @RequestParam(required = false) String keyword) {
+        return Result.success(service.options(companyId, keyword));
+    }
     @RequiresPerm("md:subject:create")
     @OperLog(module = "SUBJECT", operType = "INSERT", desc = "新增Subject")
     @PostMapping("/create")

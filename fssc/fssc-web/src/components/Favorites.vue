@@ -127,16 +127,16 @@ onMounted(() => loadFavorites())
 .fav-item {
   display: flex; align-items: center; gap: 8px;
   padding: 10px; border-radius: 6px; cursor: pointer;
-  border: 1px solid #ebeef5; margin-bottom: 4px;
+  border: 1px solid var(--app-border); margin-bottom: 4px;
   transition: background 0.15s;
 }
 .fav-item:hover { background: rgba(64, 158, 255, 0.12); }
-.fav-drag { color: #c0c4cc; cursor: grab; font-size: 14px; }
+.fav-drag { color: var(--app-text-secondary); cursor: grab; font-size: 14px; }
 .fav-icon { color: #409eff; font-size: 16px; }
 .fav-name { flex: 1; font-size: 13px; }
 .fav-hint {
   display: flex; align-items: center; gap: 4px;
-  font-size: 12px; color: #909399; padding-top: 10px;
-  border-top: 1px solid #ebeef5;
+  font-size: 12px; color: var(--app-text-secondary); padding-top: 10px;
+  border-top: 1px solid var(--app-border);
 }
 </style>

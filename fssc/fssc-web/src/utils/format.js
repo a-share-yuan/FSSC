@@ -216,16 +216,20 @@ export function budgetUnseenLabel(id) {
  */
 
 // 常见业务字段 → 中文标签（全系统共用，避免行详情弹窗显示英文键名"看着像 JSON"）
-const COMMON_LABELS = {
+// 导出仅为可测性：单测按这张表逐枚断言"标签全中文"，防止新登记的键又写成英文或漏写
+export const COMMON_LABELS = {
   billNo: '单号', bizNo: '单号', bill_no: '单号', adjustNo: '调整单号', batchNo: '批次号',
   billId: '单据ID', billType: '单据类型', bizType: '业务类型',
   title: '标题', summary: '摘要', remark: '备注', reason: '原因',
   amount: '金额', totalAmount: '总金额', paidAmount: '已付金额', useAmount: '使用金额',
   receivedAmount: '已收金额', remainAmount: '剩余金额', dueDate: '到期日',
   currency: '币种', currencyCode: '币种', exchangeRate: '汇率',
-  status: '状态', billStatus: '单据状态', poolStatus: '任务状态', taskType: '作业项', delFlag: '删除标记',
+  status: '状态', billStatus: '单据状态', poolStatus: '任务状态', taskType: '作业项',
   applyDate: '申请日期', billDate: '单据日期', receiveTime: '认领时间', slaTime: 'SLA 截止',
-  createTime: '创建时间', createBy: '创建人', updateTime: '更新时间', updateBy: '更新人',
+  // 创建人/更新人/删除标记不再登记标签：本表一旦有键名，rowDetailItems 的过滤会优先保留它，
+  // 技术性字段那条规则就失效了 ⇒ 详情弹窗里出现「创建人：3800」「删除标记：0」这种半截 JSON。
+  // 摘掉标签后它们回落到 isTechField() 一律隐藏；创建时间/更新时间是有业务含义的，保留。
+  createTime: '创建时间', updateTime: '更新时间',
   lineNo: '行号', direction: '方向', subjectCode: '科目编码', subjectName: '科目名称',
   deptName: '部门', deptCode: '部门编码', companyName: '公司', companyCode: '公司编码',
   payeeName: '收款方', bankAccount: '账号', bankName: '开户行',
@@ -258,7 +262,42 @@ const COMMON_LABELS = {
   meetingName: '会议名称', meetingPlace: '会议地点', meetingAmount: '会议费用',
   topic: '会议主题', attendees: '参会人数', personCount: '人数',
   shareType: '分摊方式', shareValue: '分摊值', shareAmount: '分摊金额', sharePercent: '分摊比例',
+  // 行详情弹窗英文回落补登（2026-11-04 体检）：以下键在各页列表列／后端实体里真实存在，
+  // 但此前既不在页面 labels 也不在本表，于是走 prettyKey() 露出 "Bank Matched / Flow Status Text /
+  // Detection Type Cn" 这类英文标题。判据＝.tmp/rd-label-audit.cjs（按页面列）＋
+  // .tmp/rd-entity-audit.cjs（按实体字段）＋跨表高频列，逐枚补中文，新增机制。
+  accountMonthlyDepr: '账面月折旧额', accountMonths: '账面折旧月数', assetName: '资产名称', assetNo: '资产编号',
+  depreciationMonths: '折旧月数', residualRate: '残值率', taxMonthlyDepr: '税法月折旧额', taxMonths: '税法折旧月数',
+  originalAmount: '资产原值', origAmount: '原币金额', baseAmount: '基准金额', netAmount: '不含税金额',
+  approvedAmount: '审批通过金额', deductAmount: '可抵扣税额', offsetAmount: '冲销金额', diffAmount: '差异金额',
+  balance: '余额', price: '单价', unitPrice: '单价', amountPct: '比例容差', amountAbs: '绝对额容差',
+  billSubType: '单据子类型', billCount: '单据张数', bizDate: '业务日期', payTime: '付款时间', postTime: '过账时间',
+  voucherDate: '凭证日期', voucherNo: '凭证号', invoiceType: '发票类型', sellerName: '销方名称',
+  buyerName: '购方名称', certifyDate: '认证日期', certifyPeriod: '认证期间', certifyStatus: '认证状态',
+  contractName: '合同名称', contractAmount: '合同金额', partyBName: '乙方名称', poNo: '采购订单号',
+  planNo: '计划单号', purpose: '用途说明', supplier: '供应商', reconNo: '对账单号', reconStatus: '对账状态',
+  receiptDate: '收款日期', bankSerial: '银行流水号', bankMatched: '银行已匹配', bankMatchedAmount: '银行匹配金额',
+  payMethod: '收款方式', flowStatus: '流程状态', flowStatusText: '流程状态说明', statusText: '状态说明',
+  transDate: '交易日期', transType: '交易类型', oppositeName: '对方户名', oppositeAccount: '对方账号',
+  itemType: '项目类型', sourceRef: '来源单据', slipStatus: '回单状态', serialNo: '流水号',
+  detectionTypeCn: '检测类型', resultCn: '检测结果', actionCn: '处置动作', riskScore: '风险分', riskLevel: '风险等级',
+  reviewedAt: '复核时间', reviewTime: '复核时间', reviewerName: '复核人', details: '检测详情',
+  deliverName: '交付人', expressCompany: '快递公司', expressNo: '快递单号', barcode: '条码', packageCount: '件数',
+  signName: '签收人', archiveNo: '档案号', archiveType: '档案类型', refNo: '引用单号', retentionYears: '保管年限',
+  filingTime: '立卷时间', archivedAt: '归档时间', taskCode: '作业编号', groupLeader: '作业组长',
+  periodCode: '期间编码', periodYear: '期间年份', periodMonth: '期间月份', closeTime: '关闭时间',
+  categoryCode: '类别编码', categoryName: '类别名称', typeName: '类型名称', dimensionCode: '维度编码',
+  ruleCode: '规则编码', ruleName: '规则名称', operType: '操作类型', operTime: '操作时间',
+  operUserName: '操作人', operatorText: '操作人', nodeKey: '节点编码', nodeName: '节点名称',
+  contactName: '联系人', contactPhone: '联系电话', overdueDays: '逾期天数', multiRoleWarning: '多角色提示',
+  expenseType: '费用类型', taxType: '税种', priceType: '计价方式', ccy: '币种', companyNameText: '公司名称',
+  customerCode: '客户编码', customerName: '客户名称', address: '地址', spec: '规格', unit: '单位',
+  action: '动作', category: '类别', enabled: '是否启用', isDefault: '是否默认', priority: '优先级',
+  source: '来源', note: '备注', description: '说明', purpose_: '用途', name_: '名称',
+  createdAt: '创建时间', updatedAt: '更新时间', expireDate: '到期日期', dueTime: '到期时间',
+  errorMsg: '错误信息', failReason: '失败原因', refreshText: '进度更新时间', sortOrder: '排序',
 }
+
 
 // 字段 → 枚举字典：行详情弹窗的值若为枚举码，翻译成中文而不是原样输出英文
 // 兜底文案与 composables/useBaseDict.js 的 TRAFFIC_LOCAL / SEAT_LOCAL / TRAINING_LOCAL 逐字一致；
@@ -266,6 +305,15 @@ const COMMON_LABELS = {
 const TRAFFIC_MODE_LABEL = { AIR: '飞机', RAIL: '高铁', TRAIN: '火车', CAR: '汽车', SHIP: '轮船' }
 const SEAT_CLASS_LABEL = { ECONOMY: '经济舱', BUSINESS: '商务舱', FIRST: '头等舱', SECOND: '二等座', FIRST_SEAT: '一等座' }
 const TRAINING_TYPE_LABEL = { INTERNAL: '内训', EXTERNAL: '外训', PUBLIC: '公开课' }
+// 来源单据类型：rc_receivable.source_doc_type ∪ op_voucher.source_type ∪ 其余 8 张表的同名列，
+// 取值逐枚取自实际数据（13＋8 枚，去重后 17 枚）；缺键时行详情弹窗直接吐英文码
+const SOURCE_DOC_TYPE_LABEL = {
+  BILL: '业务单据', CONTRACT: '合同', EXP_PAY: '对公付款', EXPENSE_PAY: '费用付款',
+  ESTIMATE: '费用暂估', ESTIMATE_REVERSE: '暂估冲回', INV_INVOICE: '发票', INVOICE_ISSUE: '销售开票',
+  INVOICE_MATCH: '发票匹配', MANUAL: '手工登记', PO_RECEIPT: '采购收货', RECEIPT_INVOICE: '收票',
+  RECEIVABLE: '应收单', RED_FLUSH: '红字冲销', SALES_INVOICE: '销售发票', TREASURY_PAY: '资金付款',
+  AR_MONTH_CLOSE: '应收月结',
+}
 const yesNoLabel = (v) => (v === true || v === 1 || v === '1' || v === 'true' ? '是'
   : v === false || v === 0 || v === '0' || v === 'false' ? '否' : '')
 
@@ -273,6 +321,7 @@ const VALUE_ENUM_BY_KEY = {
   status: statusLabel, billStatus: statusLabel, poolStatus: statusLabel,
   verifyStatus: verifyStatusLabel,
   bizType: bizTypeLabel, billType: billTypeLabel, taskType: taskTypeLabel, action: actionLabel,
+  sourceDocType: (v) => SOURCE_DOC_TYPE_LABEL[v] || '', sourceType: (v) => SOURCE_DOC_TYPE_LABEL[v] || '',
   direction: (v) => enumLabel(DIRECTION, v), periodType: (v) => enumLabel(PERIOD_TYPE, v),
   controlType: (v) => enumLabel(CONTROL_TYPE, v), adjustType: (v) => enumLabel(ADJUST_TYPE, v),
   operType: (v) => enumLabel(OPER_TYPE, v), assignType: (v) => enumLabel(ASSIGN_TYPE, v),
@@ -285,10 +334,13 @@ const VALUE_ENUM_BY_KEY = {
   // 布尔语义标志位：数据库/接口给的是 true/false 或 1/0
   roundTrip: yesNoLabel, planFlag: yesNoLabel, travelFlag: yesNoLabel, abroadFlag: yesNoLabel,
   overStd: (v) => (Number(v) === 1 ? '超标' : '合规'),
+  bankMatched: yesNoLabel,
+  // 流程状态码（应收单等列表的计算列）：与 constants/enums.js BILL_STATUS 同一套中文说法
+  flowStatus: (v) => ({ DRAFT: '草稿', RUNNING: '审批中', APPROVED: '已完成', REJECTED: '已驳回', CANCELLED: '已撤回', TERMINATED: '已终止' }[v] || ''),
 }
 
 // 技术性字段：无业务意义，行详情弹窗一律隐藏（页面通过 opts.labels 显式指定的除外）
-const TECH_KEY_RE = /^(id|.*_id|.*Id|.*Ids|createBy|updateBy|createById|updateById|updateTime|deleted|version|tenantId|tenant_id|sort|sortNo|seq|orderNo|extJson|ext_json|activeFlag|active|statusCode|code)$/
+const TECH_KEY_RE = /^(id|.*_id|.*Id|.*Ids|createBy|updateBy|createById|updateById|updateTime|deleted|delFlag|version|tenantId|tenant_id|sort|sortNo|seq|orderNo|extJson|ext_json|activeFlag|active|statusCode|code|linesJson|idempotencyKey)$/
 function isTechField(k) {
   return TECH_KEY_RE.test(k)
 }

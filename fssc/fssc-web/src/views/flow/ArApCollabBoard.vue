@@ -417,7 +417,14 @@ function loadAll() {
 }
 
 async function api(fn, msg) {
-  await fn()
+  // 拦截器对业务码一律 reject（api.js:216），不接异常＝一次拦停把整页换成「页面出错了」
+  // （同族实案见 ArMonthCloseBoard.vue）。
+  try {
+    await fn()
+  } catch (e) {
+    ElMessage.error(e.message)
+    return
+  }
   ElMessage.success(msg)
   await loadAll()
 }

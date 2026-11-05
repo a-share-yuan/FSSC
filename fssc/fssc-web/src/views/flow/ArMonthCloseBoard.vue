@@ -214,7 +214,16 @@ async function load() {
 }
 
 async function api(fn, msg) {
-  await fn()
+  // 五个步骤动作（清接口行／扛数据／过总账／核对／关账期）与差异调整都走这里，原先不接异常：
+  // 后端按业务规则拦停时（例如「参数校验失败：扛数金额为0，无可过总账数据」）拦截器 reject 出的
+  // Error 一路冒到 Vue 全局错误边界 ⇒ 整页换成「页面出错了」，红 toast 只闪一下、月结单也看不见了。
+  // 与本文件 load()（:213 catch (e) { ElMessage.error(e.message) }）同一写法补齐。
+  try {
+    await fn()
+  } catch (e) {
+    ElMessage.error(e.message)
+    return
+  }
   ElMessage.success(msg)
   await load()
 }

@@ -119,7 +119,7 @@ import java.util.Set;
 
 /**
  * 记账凭证服务：审核完成后按费用明细生成借贷分录。
- * 简化规则（演示）：借方=费用行金额（科目取费用项绑定科目，缺省 6602 管理费用）；
+ * 简化规则（演示）：借方=费用行金额（科目取行科目/费用项绑定科目，末级落地，缺配置即报错）；
  * 贷方=合计（其他应付款 2241）。完整凭证规则（税/往来/辅助核算）尚未实现。
  */
 @Slf4j
@@ -590,7 +590,11 @@ public class VoucherService {
             MdGlConfig bestDr = bestMatch(rulePool, line, item, "DEBIT", dimType, ccType, travel, special, billStatus);
             Long drSubjectId; String drCode; String drName;
             if (bestDr != null && debitSubjectId(bestDr) != null) {
-                drSubjectId = debitSubjectId(bestDr);
+                // 规则池同样是制证科目来源：统一过末级/停用/跨公司校验，不能绕过费用项那套闸
+                MdSubject resolvedDr = postableSubjectResolver.requireSubject(
+                        debitSubjectId(bestDr), bill.getCompanyId(),
+                        "记账规则（配置ID " + bestDr.getId() + "）", "【基础资料›记账配置】");
+                drSubjectId = resolvedDr.getId();
                 // 配置行可能只写了 subject_id（界面新建时仅选科目），code/name 为空：
                 // 以 id 指向的主数据为准回填，避免分录文本回落成 "6602"/"管理费用"。
                 String[] coords = subjectCoords(drSubjectId,
@@ -599,7 +603,7 @@ public class VoucherService {
                 drCode = coords[0];
                 drName = coords[1];
             } else {
-                drSubjectId = resolveSubjectId(line.getSubjectId(), item);
+                drSubjectId = resolveSubjectId(line.getSubjectId(), item, bill.getCompanyId());
                 MdSubject s = drSubjectId == null ? null : mdSubjectMapper.selectById(drSubjectId);
                 drCode = s == null ? "6602" : pickNotEmpty(s.getSubjectCode(), "6602");
                 drName = s == null ? "管理费用" : pickNotEmpty(s.getSubjectName(), s.getSubjectCode(), "管理费用");
@@ -615,14 +619,17 @@ public class VoucherService {
             //    若规则未提供，则按旧行为汇总后一笔贷记 2241 兜底（由循环外处理）。
             MdGlConfig bestCr = bestMatch(rulePool, line, item, "CREDIT", dimType, ccType, travel, special, billStatus);
             if (bestCr != null && creditSubjectId(bestCr) != null) {
-                String[] crCoords = subjectCoords(creditSubjectId(bestCr),
+                MdSubject resolvedCr = postableSubjectResolver.requireSubject(
+                        creditSubjectId(bestCr), bill.getCompanyId(),
+                        "记账规则（配置ID " + bestCr.getId() + "）", "【基础资料›记账配置】");
+                String[] crCoords = subjectCoords(resolvedCr.getId(),
                         pickNotEmpty(bestCr.getSubjectCode(), bestCr.getAuxRule(), "2241"),
                         pickNotEmpty(bestCr.getSubjectName(), bestCr.getAuxRule(), "其他应付款"));
                 String crCode = crCoords[0];
                 String crName = crCoords[1];
                 OpVoucherLine crLine = buildLine(tenantId, v.getId(), no++,
                         pickNotEmpty(bestCr.getSubjectName(), crName),
-                        creditSubjectId(bestCr), crCode, crName, "CREDIT", amt,
+                        resolvedCr.getId(), crCode, crName, "CREDIT", amt,
                         line.getDeptId() != null ? line.getDeptId() : bill.getDeptId());
                 opVoucherLineMapper.insert(crLine);
                 credit = credit.add(amt);
@@ -653,7 +660,10 @@ public class VoucherService {
             }
             if (payablePart.signum() > 0) {
                 Long creditSubjectId = findSubjectIdByCode("2241");
-                if (creditSubjectId == null) creditSubjectId = resolveSubjectId(null, null);
+                if (creditSubjectId == null) {
+                    throw new BizException(ErrorCode.PARAM_INVALID,
+                            "报销单 " + bill.getBillNo() + " 无法贷记应付报销款：会计科目 2241 其他应付款缺失，请先维护会计科目表");
+                }
                 OpVoucherLine fallback = buildLine(tenantId, v.getId(), no++,
                         "其他应付款-应付报销款", creditSubjectId,
                         "2241", "其他应付款", "CREDIT", payablePart, bill.getDeptId());
@@ -824,8 +834,8 @@ public class VoucherService {
     /**
      * 对公结算「计提应付」凭证：审批通过＝确认应付，钱还没付。
      * <ul>
-     *  <li>借：费用科目——逐条费用行取行科目/费用项绑定科目（缺省 6602 管理费用）；
-     *      无行或行合计≠应付规则（核定核减、含税差）时按单据规则出一笔 6602，保证借贷必等于应付额</li>
+     *  <li>借：费用科目——逐条费用行取行科目/费用项绑定科目（末级落地，缺配置即报错）；
+     *      无行或行合计≠应付规则（核定核减、含税差）时按唯一费用项映射出一笔，保证借贷必等于应付额</li>
      *  <li>贷：应付账款(2202)，金额 = payable_amount（已扣预付冲销）否则 total_amount</li>
      *  <li>辅助核算：凭证行补 project_id（单据/费用行）与 supplier_id（bill.poId → po_order.supplier_id，取不到留空不猜）</li>
      * </ul>
@@ -912,7 +922,7 @@ public class VoucherService {
                 BigDecimal lamt = line.getAmount() == null ? BigDecimal.ZERO : line.getAmount();
                 if (lamt.signum() == 0) continue;
                 MdExpenseItem item = itemCache.get(line.getItemId());
-                Long drSubjectId = resolveSubjectId(line.getSubjectId(), item);
+                Long drSubjectId = resolveSubjectId(line.getSubjectId(), item, bill.getCompanyId());
                 MdSubject s = drSubjectId == null ? null : mdSubjectMapper.selectById(drSubjectId);
                 String drCode = s == null ? "6602" : pickNotEmpty(s.getSubjectCode(), "6602");
                 String drName = s == null ? "管理费用" : pickNotEmpty(s.getSubjectName(), s.getSubjectCode(), "管理费用");
@@ -927,9 +937,10 @@ public class VoucherService {
                 debit = debit.add(lamt);
             }
         } else {
-            // 无费用行 / 行合计与应付规则不一致（核定核减、税差、预付冲销）：按单据规则一笔计提，避免借贷不平
-            Long expenseSubjectId = resolveSubjectId(null, null);
-            MdSubject s = expenseSubjectId == null ? null : mdSubjectMapper.selectById(expenseSubjectId);
+            // 无费用行 / 行合计与应付规则不一致（核定核减、税差、预付冲销）：按单据规则一笔计提，避免借贷不平。
+            // 借方科目只能来自费用项目映射：多项目混杂时无法确定用哪一个，直接报错而不是回落 6602。
+            Long expenseSubjectId = singleExpenseSubjectOf(lines, bill);
+            MdSubject s = mdSubjectMapper.selectById(expenseSubjectId);
             OpVoucherLine dr = buildLine(tenantId, v.getId(), no++,
                     "结算计提应付-" + accrualPayee,
                     expenseSubjectId, s == null ? "6602" : pickNotEmpty(s.getSubjectCode(), "6602"),
@@ -941,8 +952,8 @@ public class VoucherService {
             opVoucherLineMapper.insert(dr);
             debit = amt;
             if (!lines.isEmpty()) {
-                log.info("对公结算单 {} 费用行合计 {} 与应付口径 {} 不一致，借方按单据口径一笔计提（6602 兜底）",
-                        bill.getBillNo(), lineSum, amt);
+                log.info("对公结算单 {} 费用行合计 {} 与应付口径 {} 不一致，借方按费用项映射一笔计提（科目 {}）",
+                        bill.getBillNo(), lineSum, amt, s.getSubjectCode());
             }
         }
         String payableName = subjectNameOf(payableSubjectId);
@@ -969,8 +980,8 @@ public class VoucherService {
         billUpdate.setVoucherDate(today);
         expBillMapper.updateById(billUpdate);
 
-        log.info("对公结算单 {} 生成计提应付凭证 {} 借管理费用({})/贷应付账款({}) 金额={} 供应商辅助={} 项目辅助={}",
-                bill.getBillNo(), v.getVoucherNo(), "6602", "2202", debit, supplierId, bill.getProjectId());
+        log.info("对公结算单 {} 生成计提应付凭证 {} 借费用科目/贷应付账款(2202) 金额={} 供应商辅助={} 项目辅助={}",
+                bill.getBillNo(), v.getVoucherNo(), debit, supplierId, bill.getProjectId());
         return v.getId();
     }
 
@@ -2086,21 +2097,37 @@ public class VoucherService {
         }
     }
 
-    /** 科目解析：行科目 → 费用项绑定科目（须真实存在）→ 租户 6602 管理费用兜底（NOT NULL 约束） */
-    private Long resolveSubjectId(Long lineSubjectId, MdExpenseItem item) {
-        Long candidate = lineSubjectId;
-        if (candidate == null && item != null) {
-            candidate = item.getSubjectId();
+    /**
+     * 科目解析：行科目 → 费用项绑定科目 → 末级落地。
+     * <p>两者都没有时直接报错并点名费用项与配置入口，不再静默兜底 6602——
+     * 兜底会让「费用项未配科目」的单据悄悄记进管理费用，直到月结才发现科目错配。
+     */
+    private Long resolveSubjectId(Long lineSubjectId, MdExpenseItem item, Long companyId) {
+        return postableSubjectResolver.requireExpenseSubject(item, lineSubjectId, companyId).getId();
+    }
+
+    /**
+     * 结算单整体一笔计提时的借方科目：要求所有非零费用行指向同一费用项。
+     * 行合计与应付口径不一致时借方只能出一笔，多费用项混杂就无法确定科目，宁可不生成也不能猜。
+     */
+    private Long singleExpenseSubjectOf(List<ExpBillLine> lines, ExpBill bill) {
+        Long itemId = null;
+        for (ExpBillLine l : lines) {
+            if (l.getAmount() == null || l.getAmount().signum() == 0) continue;
+            if (itemId == null) {
+                itemId = l.getItemId();
+            } else if (!itemId.equals(l.getItemId())) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "对公结算单 " + bill.getBillNo()
+                                + " 费用行合计与应付金额不一致，且含多个费用项目，无法确定借方会计科目；请核对费用行金额后重新生成");
+            }
         }
-        if (candidate != null && mdSubjectMapper.selectById(candidate) != null) {
-            return candidate;
+        if (itemId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "对公结算单 " + bill.getBillNo() + " 缺少费用行，无法确定借方会计科目；请补录费用行后重新生成");
         }
-        List<MdSubject> fallbackList = mdSubjectMapper.selectList(
-                new LambdaQueryWrapper<MdSubject>()
-                        .eq(MdSubject::getSubjectCode, "6602")
-                        .eq(MdSubject::getStatus, "NORMAL")
-                        .last("limit 1"));
-        return fallbackList.isEmpty() ? null : fallbackList.get(0).getId();
+        return postableSubjectResolver.requireExpenseSubject(
+                mdExpenseItemMapper.selectById(itemId), null, bill.getCompanyId()).getId();
     }
 
     /** 按科目编码查 id（无则 null） */
@@ -3084,7 +3111,7 @@ public class VoucherService {
 
     /**
      * 银行对账差异凭证。
-     * 对账产生差异时（如银行手续费/利息），借：财务费用(6603) 贷：银行存款(1002)。
+     * 对账产生差异时（如银行手续费/利息），借：财务费用-手续费(660301) 贷：银行存款(1002)。
      * 金额取 bank_reconcile.amount（差异金额）。
      * source_type = BANK_RECON
      */
@@ -3115,16 +3142,16 @@ public class VoucherService {
         v.setStatus("DRAFT");
         opVoucherMapper.insert(v);
 
-        Long feeSubjectId = findSubjectIdByCode("6603");
+        Long feeSubjectId = findSubjectIdByCode("660301");
         Long bankSubjectId = findSubjectIdByCode("1002");
         opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 10,
-                "财务费用-手续费", feeSubjectId, "6603", "财务费用", "DEBIT", amt, null));
+                "财务费用-手续费", feeSubjectId, "660301", "财务费用-手续费", "DEBIT", amt, null));
         opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 20,
                 "银行存款-对账差异", bankSubjectId, "1002", "银行存款", "CREDIT", amt, null));
 
         updateVoucherTotals(v.getId(), amt);
         log.info("银行对账 {} 生成差异凭证 {} 借财务费用({})/贷银行存款({}) 金额={}",
-                recon.getId(), v.getVoucherNo(), "6603", "1002", amt);
+                recon.getId(), v.getVoucherNo(), "660301", "1002", amt);
         return v.getId();
     }
 
@@ -3580,7 +3607,7 @@ public class VoucherService {
     /**
      * 薪酬凭证（流程最终状态生成凭证扩域，补科目 2211）。
      * <ul>
-     *  <li><b>GL_SALARY_PROV 薪酬计提</b>：借 管理费用(6602)　贷 应付职工薪酬(2211)，
+     *  <li><b>GL_SALARY_PROV 薪酬计提</b>：借 管理费用-工资薪酬(660225)　贷 应付职工薪酬(2211)，
      *      金额 = gl_salary_run.salary_amount（应发工资规则）</li>
      *  <li><b>GL_SALARY_PAY 薪酬发放</b>：借 应付职工薪酬(2211)　贷 银行存款(1002)，
      *      金额 = gl_salary_run.total_amount（实发规则，差额为代扣社保/个税）</li>
@@ -3610,7 +3637,7 @@ public class VoucherService {
         String provDocType = "GL_SALARY_PAY".equals(bizType) ? "GL_SALARY_PAY" : "GL_SALARY_PROV";
         String payableCode = configSubjectCode(provDocType, "CREDIT", "2211");
         String bankCode = configSubjectCode("GL_SALARY_PAY", "DEBIT", "1002");
-        String expenseCode = configSubjectCode("GL_SALARY_PROV", "DEBIT", "6602");
+        String expenseCode = configSubjectCode("GL_SALARY_PROV", "DEBIT", "660225");
         Long payableId = findSubjectIdByCode(payableCode);
         Long bankId = findSubjectIdByCode(bankCode);
         Long expenseId = findSubjectIdByCode(expenseCode);
@@ -3649,7 +3676,7 @@ public class VoucherService {
         } else {
             String dName = subjectNameOf(expenseId);
             opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 10,
-                    "管理费用-职工薪酬", expenseId, "6602", dName.isBlank() ? "管理费用" : dName, "DEBIT", amt, null));
+                    "管理费用-职工薪酬", expenseId, "660225", dName.isBlank() ? "管理费用-职工薪酬" : dName, "DEBIT", amt, null));
             String cName = subjectNameOf(payableId);
             opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 20,
                     "应付职工薪酬-计提", payableId, "2211", cName.isBlank() ? "应付职工薪酬" : cName, "CREDIT", amt, null));
@@ -4060,7 +4087,7 @@ public class VoucherService {
 
     /**
      * 资产折旧凭证。
-     * 借：管理费用(6602) 贷：累计折旧(1602)，金额取 md_asset.monthlyDepr。
+     * 借：管理费用-折旧费(660203) 贷：累计折旧(1602)，金额取 md_asset.monthlyDepr。
      * source_type = ASSET_DEPRECIATION
      *
      * <p>落期取<b>批单期间</b>，不用系统当期：传 null/null 走前滚兜底时，
@@ -4104,16 +4131,16 @@ public class VoucherService {
         v.setStatus("DRAFT");
         opVoucherMapper.insert(v);
 
-        Long expenseSubjectId = findSubjectIdByCode("6602");
+        Long expenseSubjectId = findSubjectIdByCode("660203");
         Long depSubjectId = findSubjectIdByCode("1602");
         opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 10,
-                "管理费用-折旧", expenseSubjectId, "6602", "管理费用", "DEBIT", amt, asset.getDeptId()));
+                "管理费用-折旧", expenseSubjectId, "660203", "管理费用-折旧费", "DEBIT", amt, asset.getDeptId()));
         opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 20,
                 "累计折旧", depSubjectId, "1602", "累计折旧", "CREDIT", amt, asset.getDeptId()));
 
         updateVoucherTotals(v.getId(), amt);
         log.info("资产 {} 生成折旧凭证 {} 借管理费用({})/贷累计折旧({}) 金额={}",
-                asset.getAssetNo(), v.getVoucherNo(), "6602", "1602", amt);
+                asset.getAssetNo(), v.getVoucherNo(), "660203", "1602", amt);
         return v.getId();
     }
 
@@ -4307,7 +4334,7 @@ public class VoucherService {
      * <p>
      * 按结转类型生成不同科目的会计凭证：
      * <ul>
-     *  <li>ISSUE_COST: 借管理费用(6602) / 贷存货(1405)</li>
+     *  <li>ISSUE_COST: 借管理费用-物料消耗(660227) / 贷存货(1405)</li>
      *  <li>DISPOSAL_COST: 借资产处置损益(6711) / 贷存货(1405)</li>
      *  <li>SCRAP_COST: 借营业外支出(6721) / 贷存货(1405)</li>
      *  <li>INTERNAL_SALE_COST: 借主营业务成本(6401) / 贷存货(1405)</li>
@@ -4343,9 +4370,9 @@ public class VoucherService {
         Long inventorySubjectId = findSubjectIdByCode("1405");
         switch (settleType) {
             case "ISSUE_COST": {
-                Long expenseSubjectId = findSubjectIdByCode("6602");
+                Long expenseSubjectId = findSubjectIdByCode("660227");
                 opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 10,
-                        "管理费用-领用", expenseSubjectId, "6602", "管理费用", "DEBIT", amt, null));
+                        "管理费用-领用", expenseSubjectId, "660227", "管理费用-物料消耗", "DEBIT", amt, null));
                 opVoucherLineMapper.insert(buildLine(tenantId, v.getId(), 20,
                         "库存商品", inventorySubjectId, "1405", "存货", "CREDIT", amt, null));
                 break;

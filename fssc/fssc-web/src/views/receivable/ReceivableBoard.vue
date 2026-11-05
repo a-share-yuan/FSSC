@@ -20,7 +20,7 @@
         <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap">
           <el-input v-model="kw" placeholder="单据号/往来单位" clearable style="width:220px" @keyup.enter="loadReceivable" />
           <el-button type="primary" @click="loadReceivable">查询</el-button>
-          <el-button type="success" @click="openReceivable">按销售订单生成应收</el-button>
+          <el-button type="success" @click="openReceivable">新建应收单</el-button>
           <!-- 逾期批处理补「账期／截止日」入参。留空＝按系统当前日跑（旧行为）；
                业务期间晚于系统日（补跑历史／跑到未来账期）时必须填期间，否则到期日永不早于基准日、逾期集恒空。 -->
           <el-input v-model="overdueBaseline" placeholder="账期/截止日（202611 或 2026-11-30，留空＝当天）" clearable size="small" style="width:250px" />
@@ -192,7 +192,10 @@
     </el-tabs>
 
     <!-- 应收单生成弹窗 -->
-    <el-dialog v-model="dlgReceivable" title="按销售订单生成应收单" width="500px" destroy-on-close>
+    <!-- 标题原写「按销售订单生成应收单」，但表单只有往来单位/金额/币种/到期日/批次号，
+         通篇不接收销售订单（rc_receivable.order_id 恒 NULL）⇒ 文案误导，按实际动作改为「新建应收单」
+         真正按订单批量生成属未建能力，不在此假装。 -->
+    <el-dialog v-model="dlgReceivable" title="新建应收单" width="500px" destroy-on-close>
       <el-form ref="recvFormRef" :model="rForm" :rules="formRules" label-width="120px">
         <el-form-item label="往来单位" prop="customerId">
           <el-select v-model="rForm.customerId" filterable placeholder="选择客户/供应商" style="width:100%">

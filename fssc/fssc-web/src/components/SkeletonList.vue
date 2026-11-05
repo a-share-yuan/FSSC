@@ -27,12 +27,13 @@ function cellWidth(c) {
 .skeleton-list { width: 100%; }
 .skeleton-row {
   display: flex; gap: 12px; align-items: center;
-  padding: 12px 0; border-bottom: 1px solid #ebeef5;
+  padding: 12px 0; border-bottom: 1px solid var(--app-border);
 }
 .skel-cell { flex-shrink: 0; }
 .skel-bar {
   height: 14px; border-radius: 4px;
-  background: linear-gradient(90deg, #f0f2f5 25%, #e6e8eb 37%, #f0f2f5 63%);
+  /* 深浅色体检：骨架条原先写死浅灰渐变，深色卡片上是一排亮白条；改走主题变量 */
+  background: linear-gradient(90deg, var(--app-hover) 25%, var(--app-border) 37%, var(--app-hover) 63%);
   background-size: 400% 100%;
   animation: skel-loading 1.4s ease infinite;
 }

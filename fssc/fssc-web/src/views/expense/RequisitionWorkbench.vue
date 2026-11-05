@@ -176,11 +176,11 @@
         <!-- 流程轨迹 -->
         <h4 style="margin: 14px 0 6px">{{ $t('expense.workbench.tabFlowTrail') }}</h4>
         <el-timeline v-if="detail.data.wfInstance">
-          <el-timeline-item :timestamp="detail.data.wfInstance.startTime" type="primary">{{ $t('expense.workbench.labFlowStarted') }}</el-timeline-item>
-          <el-timeline-item v-if="detail.data.wfInstance.currentNode" :timestamp="detail.data.wfInstance.updateTime" type="warning">
+          <el-timeline-item :timestamp="formatDateTime(detail.data.wfInstance.startTime)" type="primary">{{ $t('expense.workbench.labFlowStarted') }}</el-timeline-item>
+          <el-timeline-item v-if="detail.data.wfInstance.currentNode" :timestamp="formatDateTime(detail.data.wfInstance.updateTime)" type="warning">
             {{ $t('expense.workbench.textCurrent', { v1: detail.data.wfInstance.currentNode }) }}
           </el-timeline-item>
-          <el-timeline-item v-if="detail.data.wfInstance.endTime" :timestamp="detail.data.wfInstance.endTime" type="success">
+          <el-timeline-item v-if="detail.data.wfInstance.endTime" :timestamp="formatDateTime(detail.data.wfInstance.endTime)" type="success">
             {{ detail.data.wfInstance.status === BillStatus.APPROVED ? t('expense.workbench.stApproved') : _statusLabel(detail.data.wfInstance.status) }}
           </el-timeline-item>
         </el-timeline>
@@ -201,6 +201,11 @@
           </el-table-column>
         </el-table>
         <el-empty v-else :description="$t('expense.workbench.emptyVouchers')" :image-size="40" />
+        <!-- 付款批次凭证是另一条腿：出纳按批次制证，记在 op_pay_batch 上而不是本单，
+             只按单据 id 取会显示"无凭证"。这里单独列出，不计入上方记账凭证。 -->
+        <el-alert v-if="detail.data.paymentVouchers?.length" type="info" :closable="false" show-icon
+                  style="margin-top: 8px"
+                  :title="`付款批次凭证（不计入上方记账凭证）：${detail.data.paymentVouchers.map(v => v.voucherNo + '（' + v.status + '）').join('、')}`" />
 
         <!-- 付款记录 -->
         <h4 style="margin: 14px 0 6px">{{ $t('expense.workbench.tabPayments') }}</h4>
@@ -224,8 +229,8 @@
         <h4 style="margin: 14px 0 6px">{{ $t('expense.workbench.tabFiling') }}</h4>
         <el-descriptions v-if="detail.data.archive" :column="1" border size="small">
           <el-descriptions-item :label="$t('expense.workbench.colArchiveNo')">{{ detail.data.archive.archiveNo }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('expense.workbench.colFileStatus')">{{ detail.data.archive.archiveStatus }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('expense.ledger.colFiledAt')">{{ detail.data.archive.archivedAt }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('expense.workbench.colFileStatus')">{{ statusLabel(detail.data.archive.archiveStatus) }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('expense.ledger.colFiledAt')">{{ formatDateTime(detail.data.archive.archivedAt) }}</el-descriptions-item>
         </el-descriptions>
         <el-empty v-else :description="$t('expense.workbench.stNotFiled')" :image-size="40" />
       </template>

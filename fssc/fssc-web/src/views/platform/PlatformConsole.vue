@@ -49,7 +49,7 @@
               <el-option v-for="(v, k) in TENANT_STATUS" :key="k" :label="v.label" :value="k" />
             </el-select>
             <el-button type="primary" size="small" @click="loadTenants(1)">查询</el-button>
-            <span style="color: #909399; font-size: 13px">平台只碰 pf_tenant，操作全部落 pf_oper_log 审计</span>
+            <span style="color: var(--app-text-secondary); font-size: 13px">平台只碰 pf_tenant，操作全部落 pf_oper_log 审计</span>
           </div>
         </template>
         <SkeletonList v-if="tenantLoading" :rows="8" :cols="5" />
@@ -101,7 +101,7 @@
             <el-button type="primary" size="small" :disabled="!matrix.length" :loading="fSaveLoading" @click="saveFeatures">
               保存到套餐
             </el-button>
-            <span style="color: #909399; font-size: 13px">开关按套餐统一生效，用户登录后自动应用所属套餐的功能配置</span>
+            <span style="color: var(--app-text-secondary); font-size: 13px">开关按套餐统一生效，用户登录后自动应用所属套餐的功能配置</span>
           </div>
         </template>
         <el-empty v-if="!matrix.length" description="请先选择套餐加载功能矩阵" />
@@ -131,7 +131,7 @@
           <el-button type="primary" :loading="exportLoading" :disabled="!eq.tenantId" @click="doExport">
             导出数据包
           </el-button>
-          <span style="color: #909399; font-size: 13px">GET /api/platform/tenant/{id}/export：核心业务表逐表 CSV 打包，数据主权迁出场景</span>
+          <span style="color: var(--app-text-secondary); font-size: 13px">GET /api/platform/tenant/{id}/export：核心业务表逐表 CSV 打包，数据主权迁出场景</span>
         </div>
       </el-card>
     </div>
@@ -147,6 +147,7 @@ import SkeletonList from '../../components/SkeletonList.vue'
 import SkeletonDetail from '../../components/SkeletonDetail.vue'
 // echarts 按需引入，用法与 views/Dashboard.vue 保持一致
 import * as echarts from 'echarts/core'
+import { initThemedChart, onThemeChange } from '../../utils/echartsTheme'
 import { LineChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -210,13 +211,15 @@ async function loadDashboard() {
 
 function renderDashChart(rows) {
   if (!dashChart.value) return
-  if (!dashInstance) dashInstance = echarts.init(dashChart.value)
+  // 主题件复用（与 views/dashboard/Dashboard.vue 同一入口）：坐标轴/图例文字跟着 html.dark 走，
+  // 原先写死的 #333/#e4e7ed 在深色底上几乎看不见
+  if (!dashInstance) dashInstance = initThemedChart(dashChart.value)
   dashInstance.setOption({
     tooltip: { trigger: 'axis' },
     legend: { data: ['活跃租户数', '单据增量'] },
     grid: { left: 40, right: 16, top: 36, bottom: 28 },
-    xAxis: { type: 'category', data: rows.map((r) => String(r.date).slice(5)), axisLabel: { color: '#333' }, axisLine: { lineStyle: { color: '#e4e7ed' } } },
-    yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#333' }, splitLine: { lineStyle: { color: '#e4e7ed', opacity: 0.4 } } },
+    xAxis: { type: 'category', data: rows.map((r) => String(r.date).slice(5)) },
+    yAxis: { type: 'value', minInterval: 1 },
     series: [
       { name: '活跃租户数', type: 'line', smooth: true, data: rows.map((r) => Number(r.activeTenants || 0)), itemStyle: { color: '#409eff' } },
       { name: '单据增量', type: 'line', smooth: true, data: rows.map((r) => Number(r.billDelta || 0)), itemStyle: { color: '#67c23a' } },
@@ -385,12 +388,20 @@ function onTabChange(name) {
 
 function onResize() { dashInstance?.resize() }
 
+let offTheme = null
 onMounted(() => {
   loadDashboard()
   window.addEventListener('resize', onResize)
+  // 切深/浅色时重建图表实例（主题是在 init 时选定的，setOption 换不掉），与 Dashboard.vue 同一做法
+  offTheme = onThemeChange(() => {
+    dashInstance?.dispose()
+    dashInstance = null
+    nextTick(() => { if ((dash.value.daily7d || []).length) renderDashChart(dash.value.daily7d) })
+  })
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
+  offTheme && offTheme()
   dashInstance?.dispose()
   dashInstance = null
 })
@@ -405,7 +416,10 @@ async function onCommand(cmd) {
 </script>
 
 <style scoped>
-.pc-wrap { height: 100%; display: flex; flex-direction: column; background: #f0f2f5; }
+/* 深浅色体检（2026-11-04）：这一页原先整块写死浅色值，切深色时页面底/卡片仍是白的，
+   而里面的 el-card、表格跟着 html.dark 变深 ⇒ 拼成"暗卡片坐在亮页面"。改走 useTheme 的 --app-* 变量。
+   顶栏 #1f2d3d 是平台端品牌色带，两种主题下都保持深色，不属于要变量化的对象。 */
+.pc-wrap { height: 100%; display: flex; flex-direction: column; background: var(--app-bg); }
 .pc-header {
   display: flex; align-items: center; gap: 16px; background: #1f2d3d; padding: 0 16px; height: 56px; flex-shrink: 0;
 }
@@ -420,14 +434,15 @@ async function onCommand(cmd) {
 .pc-main { flex: 1; overflow: auto; padding: 16px; }
 .pc-stat { text-align: center; margin-bottom: 12px; }
 .pc-stat-num { font-size: 26px; font-weight: 700; }
-.pc-stat-label { font-size: 12px; color: #8a94a6; margin-top: 4px; }
+.pc-stat-label { font-size: 12px; color: var(--app-text-secondary); margin-top: 4px; }
 .pc-chart { height: 300px; }
 .pc-pager { margin-top: 12px; justify-content: flex-end; }
 .pc-fgroup { margin-bottom: 8px; }
-.pc-fmodule { font-weight: 600; color: #1f3b8f; margin: 10px 0 6px; border-left: 3px solid #409eff; padding-left: 8px; }
+.pc-fmodule { font-weight: 600; color: var(--app-text); margin: 10px 0 6px; border-left: 3px solid #409eff; padding-left: 8px; }
 .pc-fitem {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  border: 1px solid #e3e8ef; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; background: #fafbfc;
+  border: 1px solid var(--app-border); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px;
+  background: var(--app-card-bg);
 }
-.pc-fname { font-size: 13px; color: #1f2733; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-fname { font-size: 13px; color: var(--app-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

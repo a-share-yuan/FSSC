@@ -69,7 +69,9 @@ const total = ref(0)
 const loading = ref(false)
 const computing = ref(false)
 const summary = reactive({ high: 0, warning: 0, attention: 0, total: 0 })
-const period = ref(new Date().toISOString().slice(0, 7).replace('-', ''))
+// 属期不再默认「系统当月」：沙盘/补账场景下当月往往不是业务期间（2026-11 vs 202610），
+// 默认当月会让指标落到错期间。改为必选，选什么就落什么。
+const period = ref('')
 
 function can(c) { return hasPerm(c) }
 function fmt(v) {
@@ -100,12 +102,12 @@ async function load(page) {
 }
 
 async function computeBurden() {
-  if (!period.value) return
+  if (!period.value) { ElMessage.warning('请先选择要计算的属期（如 202610）'); return }
   computing.value = true
   try {
     const row = await taxApi.riskComputeBurden(period.value)
     if (row) ElMessage.success(`税负率 ${row.actualValue}%，判定 ${levelName(row.riskLevel)}`)
-    else ElMessage.warning('本期无销项收入或报表无数据，未生成指标')
+    else ElMessage.warning('本期无销项收入或报表无数据，未生成指标；该属期旧指标已作废')
     load(1)
   } catch (e) {
     ElMessage.error(e.message)

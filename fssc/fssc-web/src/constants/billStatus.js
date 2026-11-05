@@ -75,8 +75,11 @@ export const STATUS_LABEL = {
   GENERATED: '已生成',
   // 付款批次出纳确认态（后端 op_pay_batch.status=CONFIRMED）；缺键时列表原样渲染英文码
   CONFIRMED: '已确认',
-  // 归档/反归档与档案立卷态（exp_bill.archive_status / op_archive.status）
+  // 归档/反归档与档案立卷态（exp_bill.archive_status / op_archive.status|archive_status）
+  // ARCHIVING/ARCHIVED 由【执行归档】与 FM_ARCHIVE 办结写入，缺键时「单据全链路详情」抽屉直显英文码
   UNARCHIVED: '未归档',
+  ARCHIVING: '归档中',
+  ARCHIVED: '已归档',
   FILED: '已立卷',
   // 在建工程转固态（md_cip.status）；缺 IN_PROGRESS 时看板「状态」列直接显示英文码
   IN_PROGRESS: '进行中',
@@ -120,6 +123,17 @@ export const STATUS_LABEL = {
   PROVISIONED: '已计提',
   // 催收待办（rc_collect_todo.status=DOING；全库仅这一列用此码）
   DOING: '催收中',
+  // 应收核销态（rc_receipt.status 现值均为 WRITTEN_OFF）。
+  // 域名称表 constants/enums.js RC_STATUS 早已登记 WRITTEN_OFF→已核销（并写明"补同义词而不是改后端写值"），
+  // 但列表列读 RC_STATUS、行详情弹窗读这张扁平表 ⇒ 同一列在列表里是「已核销」、在弹窗里是英文码。
+  // 这里补齐同义词，两处读侧即刻一致；WRITE_OFF／APPLIED 是 RC_STATUS 里已有的同义拼法，一并登记。
+  WRITTEN_OFF: '已核销',
+  WRITE_OFF: '已核销',
+  APPLIED: '已核销',
+  // 应收单收款进度（rc_receivable.status 现值 NORMAL/DONE/CONFIRMED/PARTIAL；PARTIAL 缺键时弹窗直显英文）
+  PARTIAL: '部分收款',
+  // 坏账确认态（rc_bad_debt.status=CONFIRMED_WO，与 RC_STATUS 同名同义）
+  CONFIRMED_WO: '已确认坏账',
 }
 
 // 状态 → el-tag type

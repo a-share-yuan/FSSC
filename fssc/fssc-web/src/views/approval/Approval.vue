@@ -212,19 +212,19 @@
           <span style="color:#f59a23;font-weight:700">{{ fmt(cur.totalAmount) }} 元</span>
         </el-form-item>
 <el-form-item label="核定报销" prop="approvedAmount">
+          <template #label>核定报销<FieldTip text="不得超出申请金额（审批只能核减，不能核增）" /></template>
 
           <el-input-number v-model="deduct.approvedAmount" :min="0" :precision="2" :max="Number(cur.totalAmount || 0)" style="width:100%" @change="autoRefund" />
-          <div style="font-size:12px;color:#909399">不得超出申请金额（审批只能核减，不能核增）</div>
         </el-form-item>
 <el-form-item label="核定付款" prop="approvedPayAmount">
+          <template #label>核定付款<FieldTip text="不得超出核定报销金额" /></template>
 
           <el-input-number v-model="deduct.approvedPayAmount" :min="0" :precision="2" style="width:100%" @change="autoRefund" />
-          <div style="font-size:12px;color:#909399">不得超出核定报销金额</div>
         </el-form-item>
 <el-form-item label="核定退款" prop="approvedRefundAmount">
+          <template #label>核定退款<FieldTip text="= 核定报销 − 核定付款（改金额时自动重算）" /></template>
 
           <el-input-number v-model="deduct.approvedRefundAmount" :min="0" :precision="2" style="width:100%" />
-          <div style="font-size:12px;color:#909399">= 核定报销 − 核定付款（改金额时自动重算）</div>
         </el-form-item>
 <el-form-item label="核减说明" prop="remark">
 
@@ -270,15 +270,11 @@
           <span style="color: var(--app-text-secondary, #606266)">{{ addSignRow.title || addSignRow.billNo || ('任务 ' + (addSignRow.taskId || '')) }}</span>
         </el-form-item>
         <el-form-item label="加签位置" prop="position">
+          <template #label>加签位置<FieldTip :text="addSignTip" /></template>
           <el-radio-group v-model="addSignForm.position">
             <el-radio label="BEFORE">前加签（加签人先审）</el-radio>
             <el-radio label="AFTER">后加签（我审完后加签人再审）</el-radio>
           </el-radio-group>
-          <div style="font-size:12px;color:#909399;line-height:18px;margin-top:4px">
-            加签人审完<b>自动回跳</b>——前加签回到我、后加签交给下一节点本应办理的人，<b>流程走向不变</b>；
-            加签人的「同意」只代表这一道审完，不会把单据往前推。可多选，按选择顺序<b>依次</b>加签。
-            同一任务同时只允许一组加签，已有进行中的加签需先等它走完或取消。
-          </div>
         </el-form-item>
         <el-form-item label="加签给" prop="signUsers">
           <el-select v-model="addSignForm.signUsers" multiple filterable :loading="addSignCandLoading"
@@ -322,6 +318,7 @@ import { Timer } from '@element-plus/icons-vue'
 import { wfApi, billApi, flowApi, store } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import FieldTip from '../../components/common/FieldTip.vue'
 import ApprovalDetailDrawer from '../../components/approval/ApprovalDetailDrawer.vue'
 import ApprovalDialog from '../../components/approval/ApprovalDialog.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
@@ -682,8 +679,10 @@ async function load() {
     Object.keys(localOp).forEach((t) => {
       const r = rows.find((x) => String(x.taskId) === String(t))
       if (!r) { delete localOp[t]; return }
+      // 一枚条目只可能是 claim 或 unclaim 之一，必须 else-if：
+      // 上一支刚 delete 掉，再读一次 localOp[t].kind 就把 JS 错误原文弹到操作员屏幕上
       if (localOp[t].kind === 'claim' && r.assigneeId) delete localOp[t]
-      if (localOp[t].kind === 'unclaim' && !r.assigneeId) delete localOp[t]
+      else if (localOp[t].kind === 'unclaim' && !r.assigneeId) delete localOp[t]
     })
     tasks.value = rows
     total.value = Number(res?.total || 0)
@@ -816,7 +815,7 @@ async function approve(row, approved) {
         notifyRefused(payload.approved ? '通过' : '驳回', row, e, true)
         throw e
       }
-      ElMessage.success(t('purchase.poOrder.Rejected'))
+      ElMessage.success(t(payload.approved ? 'status.approved' : 'status.rejected'))
       detailVisible.value = false
       load()
     },
@@ -893,6 +892,10 @@ const addSignVisible = ref(false)
 const addSignRow = ref({})
 const addSignForm = reactive({ position: 'BEFORE', signUsers: [], reason: '' })
 const addSignFormRef = ref(null)
+/** 加签规则的完整说明（原为表单内四行灰字，收进标签旁的提示） */
+const addSignTip = '加签人审完自动回跳——前加签回到我、后加签交给下一节点本应办理的人，流程走向不变；'
+  + '加签人的「同意」只代表这一道审完，不会把单据往前推。可多选，按选择顺序依次加签。'
+  + '同一任务同时只允许一组加签，已有进行中的加签需先等它走完或取消。'
 // 与后端 /wf/task/addsign 同一规则：位置二选一、加签人至少一位
 const addSignFormRules = {
   position: commonRules.select('请选择加签位置'),

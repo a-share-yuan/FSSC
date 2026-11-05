@@ -31,7 +31,7 @@
       <el-table-column label="计税基数" width="180">
         <template #default="{ row }">
           <el-input-number v-if="row.baseSource === 'MANUAL'" v-model="row.baseAmount" :precision="2"
-            :min="0" size="small" style="width: 100%" />
+            :min="0" size="small" style="width: 100%" @change="dirty = true" />
           <span v-else>{{ fmt(row.baseAmount) }}</span>
         </template>
       </el-table-column>
@@ -77,7 +77,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { glexApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 
@@ -86,6 +86,8 @@ const preview = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const linkCheck = ref(null)
+/** 手工改过基数＝true：此时点【试算】会把改动整表重拉覆盖，必须先确认 */
+const dirty = ref(false)
 
 function fmt(v) {
   if (v === null || v === undefined || v === '') return '—'
@@ -103,10 +105,17 @@ const totalTax = computed(() => preview.value.reduce((s, r) => s + taxOf(r), 0))
 
 async function loadPreview() {
   if (!period.value) return
+  if (dirty.value && preview.value.length) {
+    try {
+      await ElMessageBox.confirm('【试算】会按计提规则整表重算，你手工改过的基数会被覆盖。继续？', '覆盖确认',
+        { type: 'warning', confirmButtonText: '继续试算', cancelButtonText: '取消' })
+    } catch { return }
+  }
   loading.value = true
   linkCheck.value = null
   try {
     preview.value = (await glexApi.taxPreview(period.value)) || []
+    dirty.value = false
   } catch (e) {
     ElMessage.error(e.message)
   } finally {

@@ -901,8 +901,8 @@ public class NodeOrgResolver {
                 // 集团/共享角色：跨公司候选组。当前运行模式下候选组待办对持有人不可见
                 // （Flowable 7 候选组查询未命中），改为"全局首个持有人"直接指派，保证流程按节点推进不断流；
                 // 候选组仍保留可兜底。先本公司、本公司无人再回落全网（见 companyFirst）。
-                return pickByStrategy(inst.getModelKey(), roleCode, companyFirst(
-                        userIdsGlobalWithRole(roleCode), resolveCompany(procInstId), roleCode), applicant);
+                return pickByStrategy(inst.getModelKey(), roleCode, preferFreshHandlers(procInstId, companyFirst(
+                        userIdsGlobalWithRole(roleCode), resolveCompany(procInstId), roleCode)), applicant);
             }
             Long company = resolveCompany(procInstId);
             if (company == null) {
@@ -912,7 +912,7 @@ public class NodeOrgResolver {
             // 不能只在"恰好 1 人"时才指派：候选组待办不可见会让流程卡死，
             // 故一律按用户 id 取首个持有人确定性指派（候选组仍保留，其余持有人仍可依权办理）。
             // 多持有人时的落点可由 wf.assign.strategy 改为负载均衡/轮询，缺省仍是 id 升序首个。
-            return pickByStrategy(inst.getModelKey(), roleCode, userIds, applicant);
+            return pickByStrategy(inst.getModelKey(), roleCode, preferFreshHandlers(procInstId, userIds), applicant);
         } catch (Exception e) {
             log.warn("节点办理人解析失败 proc={} role={}: {}", procInstId, roleCode, e.getMessage());
             return null;
@@ -971,6 +971,52 @@ public class NodeOrgResolver {
      *      一律走 id 升序首个——负载均衡是叠加能力，不是新风险面。</li>
      * </ol>
      */
+    /**
+     * 同实例回避（软）：把「本单已经办过节点」的人排到候选末尾。
+     *
+     * <p>连办闸 {@code approve.deny_serial_same_handler=1} 的语义是<b>同一人在同一实例内只能办一节</b>。
+     * 派单却按 id 升序取首个持有人，于是常见到「GK_2 派给崔佳怡、GK_3_R 又派给崔佳怡」——她打开就是
+     * 403「禁止同一人在同一审批流程中连续办理多个节点」，只能人工【转办】才能推进（6 节链通常要转办 3～4 次）。
+     *
+     * <p>这里<b>只调顺序、不删人</b>：全员都办过时原样返回，绝不造出"无人可派"的死节点；
+     * 读不到镜像表（异常/无数据）也原样返回，行为与改造前一致。
+     */
+    private List<Long> preferFreshHandlers(String procInstId, List<Long> ids) {
+        if (procInstId == null || ids == null || ids.size() < 2) {
+            return ids;
+        }
+        try {
+            List<WfTask> done = wfTaskMapper.selectList(new LambdaQueryWrapper<WfTask>()
+                    .eq(WfTask::getProcInstId, procInstId)
+                    .eq(WfTask::getStatus, "DONE")
+                    .isNotNull(WfTask::getAssigneeId));
+            if (done == null || done.isEmpty()) {
+                return ids;
+            }
+            java.util.Set<Long> handled = new java.util.HashSet<>();
+            for (WfTask t : done) {
+                if (t.getAssigneeId() != null) handled.add(t.getAssigneeId());
+            }
+            if (handled.isEmpty()) {
+                return ids;
+            }
+            List<Long> fresh = new java.util.ArrayList<>();
+            List<Long> reused = new java.util.ArrayList<>();
+            for (Long id : ids) {
+                (handled.contains(id) ? reused : fresh).add(id);
+            }
+            if (fresh.isEmpty()) {
+                return ids;
+            }
+            fresh.addAll(reused);
+            log.info("同实例回避：proc={} 已办人={} 候选重排 {} -> {}", procInstId, handled, ids, fresh);
+            return fresh;
+        } catch (Exception e) {
+            log.debug("同实例回避查询失败，按原顺序 proc={}: {}", procInstId, e.getMessage());
+            return ids;
+        }
+    }
+
     private Long pickByStrategy(String modelKey, String roleCode, List<Long> userIds, Long applicant) {
         List<Long> eligible = userIds == null ? List.of()
                 : (applicant == null ? userIds

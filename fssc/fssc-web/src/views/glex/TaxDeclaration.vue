@@ -60,6 +60,8 @@
             @click="act(row, 'file')">确认申报</el-button>
           <el-button v-if="row.status === 'FILED' && can('gl:taxdecl:pay')" link type="primary" size="small"
             @click="openPay(row)">确认缴纳</el-button>
+          <el-button v-if="(row.status === 'DRAFT' || row.status === 'PENDING') && can('gl:taxdecl:create')"
+            link type="danger" size="small" @click="act(row, 'cancel')">作废</el-button>
           <el-button v-if="(row.status === 'FILED' || row.status === 'PAID') && can('gl:taxdecl:file')"
             link type="warning" size="small" @click="genVoucher(row)">补出凭证</el-button>
         </template>
@@ -114,6 +116,10 @@
         <el-form-item label="应纳税额">￥{{ fmt(pay.row?.taxAmount) }}</el-form-item>
         <el-form-item label="实缴金额">
           <el-input-number v-model="pay.amount" :precision="2" :min="0" style="width: 100%" />
+          <!-- 差异实时可见；登记前还会二次确认（差异缴纳要有据可查） -->
+          <div v-if="payDiff !== 0" class="pay-diff">
+            与应纳税额差异 {{ payDiff > 0 ? '+' : '' }}{{ fmt(payDiff) }}
+          </div>
         </el-form-item>
       </el-form>
       <el-alert type="warning" :closable="false" show-icon
@@ -147,11 +153,15 @@ const loading = ref(false)
 const formRef = ref(null)
 const dlg = reactive({ visible: false, saving: false, form: {} })
 const pay = reactive({ visible: false, saving: false, row: null, amount: 0 })
+/** 实缴 − 应纳；非 0 即为差异缴纳，登记前要二次确认 */
+const payDiff = computed(() => Number((Number(pay.amount || 0) - Number(pay.row?.taxAmount || 0)).toFixed(2)))
 
+// 必填规则只写 required + message：带上 trigger 会退化成 string 校验器，
+// 数字/布尔类型的正常取值会被判为非法（见 constants/requiredRules.spec.js）
 const formRules = {
-  taxType: [{ required: true, message: '请选择税种', trigger: 'change' }],
-  period: [{ required: true, message: '请选择申报属期', trigger: 'change' }],
-  declareType: [{ required: true, message: '请选择申报类型', trigger: 'change' }],
+  taxType: [{ required: true, message: '请选择税种' }],
+  period: [{ required: true, message: '请选择申报属期' }],
+  declareType: [{ required: true, message: '请选择申报类型' }],
 }
 
 function can(code) { return hasPerm(code) }
@@ -213,11 +223,12 @@ async function create() {
 }
 
 async function act(row, kind) {
-  const label = { submit: '提交', approve: '审批通过', file: '确认申报并出应缴凭证' }[kind]
+  const label = { submit: '提交', approve: '审批通过', file: '确认申报并出应缴凭证', cancel: '作废' }[kind]
   await ElMessageBox.confirm(`对申报单 ${row.declarationNo} 执行「${label}」？`, '确认', { type: 'warning' })
   try {
     if (kind === 'submit') await taxApi.declarationSubmit(row.id)
     else if (kind === 'approve') await taxApi.declarationApprove(row.id)
+    else if (kind === 'cancel') await taxApi.declarationCancel(row.id)
     else await taxApi.declarationFile(row.id)
     ElMessage.success('已执行')
     load()
@@ -232,6 +243,21 @@ function openPay(row) {
   pay.visible = true
 }
 async function doPay() {
+  const paid = Number(pay.amount || 0)
+  // 0 元登记会让「已缴纳」状态与实际情况脱节，直接拦下
+  if (!(paid > 0)) {
+    ElMessage.warning('实缴金额必须大于 0；未实际缴款请勿登记缴纳')
+    return
+  }
+  if (payDiff.value !== 0) {
+    try {
+      await ElMessageBox.confirm(
+        `实缴 ${fmt(paid)} 与应纳 ${fmt(pay.row?.taxAmount)} 不一致（差异 ${payDiff.value > 0 ? '+' : ''}${fmt(payDiff.value)}），确认按实缴金额登记？`,
+        '差异缴纳确认',
+        { type: 'warning', confirmButtonText: '确认登记', cancelButtonText: '返回修改' },
+      )
+    } catch { return }
+  }
   pay.saving = true
   try {
     await taxApi.declarationPay(pay.row.id, pay.amount)
@@ -258,3 +284,13 @@ async function genVoucher(row) {
 
 onMounted(() => load())
 </script>
+
+<style scoped>
+/* 差异金额：只在实缴≠应纳时出现，属于会变化的信息，保留常驻显示 */
+.pay-diff {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-warning);
+}
+</style>

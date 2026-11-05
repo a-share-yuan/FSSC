@@ -64,7 +64,7 @@ public class TaxDeclarationService {
         }
         record.setDeclarationNo(Optional.ofNullable(record.getDeclarationNo())
                 .orElseGet(() -> { try { return numberRuleService.next("TAX_DECLARATION"); }
-                    catch (Exception e) { return "TX" + System.currentTimeMillis(); } }));
+                    catch (Exception e) { return "SB" + System.currentTimeMillis(); } }));
         record.setStatus("DRAFT");
         // 申报性质缺省＝正常申报；缴款截止日未填时按税种规则的 payDeadlineDay 推算
         if (!StringUtils.hasText(record.getDeclarationKind())) {
@@ -111,6 +111,31 @@ public class TaxDeclarationService {
     // 回写分"聚合 VO／数据库表"两层），故本条按自定处理，不写成对比结论。
     // 单表写、无记录的方法一律不补。
     /**
+     * 作废申报：DRAFT / PENDING → CANCELLED。
+     *
+     * <p>补的是界面上「没有作废出口」的缺口：此前 CANCELLED 是库里可达、界面不可达的
+     * 死状态，草稿填错了只能一直挂着。已申报(FILED)/已缴纳(PAID) 不许作废——那要走「更正申报」留痕。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void cancel(Long id) {
+        TaxDeclaration row = requireRow(id);
+        if (!"DRAFT".equals(row.getStatus()) && !"PENDING".equals(row.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "申报 " + row.getDeclarationNo() + " 当前状态为 " + row.getStatus()
+                            + "，只有草稿/待审批可以作废；已申报的请走「更正申报」");
+        }
+        TaxDeclaration upd = new TaxDeclaration();
+        upd.setId(id);
+        upd.setStatus("CANCELLED");
+        declarationMapper.updateById(upd);
+        log.info("税务申报 {} 已作废（{}→CANCELLED）", row.getDeclarationNo(), row.getStatus());
+        Map<String, Object> auditBefore = Collections.singletonMap("status", row.getStatus());
+        Map<String, Object> auditAfter = Collections.singletonMap("status", "CANCELLED");
+        auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
+                String.valueOf(id), auditBefore, auditAfter, "作废税务申报（→CANCELLED）");
+    }
+
+    /**
      * 提交申报：DRAFT → PENDING。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -133,12 +158,23 @@ public class TaxDeclarationService {
 
     /**
      * 审批通过：PENDING → APPROVED。
+     *
+     * <p>禁自审：审批人不得是该申报单的制单人。此前只校验状态，而 {@code gl:taxdecl:approve}
+     * 恰好也授给税务经理（制单人本人）⇒ 提交后自己能点【审批通过】，等于没有复核。
+     * 与引擎侧 {@code approve.deny_self} 同口径：取当前登录人比对 create_by，取不到登录人时按放行处理
+     * （定时任务/系统身份），避免误伤自动化。
      */
     @Transactional(rollbackFor = Exception.class)
     public void approve(Long id) {
         TaxDeclaration row = requireRow(id);
         if (!"PENDING".equals(row.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "申报 " + row.getDeclarationNo() + " 当前状态不可审批");
+        }
+        Long operator = com.fssc.framework.security.UserContext.get() == null
+                ? null : com.fssc.framework.security.UserContext.get().getUserId();
+        if (operator != null && row.getCreateBy() != null && operator.equals(row.getCreateBy())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "禁止审批自己提交的申报单（" + row.getDeclarationNo() + "），请由其他税务/复核岗审批");
         }
         TaxDeclaration upd = new TaxDeclaration();
         upd.setId(id);
