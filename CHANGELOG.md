@@ -2,7 +2,7 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [1.1.1] - 2026-11-05
 
 ### Added
 - 文档体系：`docs/快速上手.md`、`docs/架构总览.md`、`docs/模块地图.md`、`docs/数据模型.md`、`docs/权限与多租户.md`、`docs/流程引擎技术说明.md`、`docs/术语表.md`、`docs/代码阅读指南.md`、`docs/部署手册.md`、`docs/部署运维.md`
@@ -10,17 +10,34 @@
 - `docs/_facts/`：从源码抽取的事实清单（域度量、表分组、API 前缀），由 `_tools/inventory.mjs` 生成、`_tools/emit_facts.mjs` 落盘
 - CI：后端 Maven 构建＋前端 Vite 构建与单元测试，外加两道文档闸（`_tools/secret_scan.mjs --docs-only`、`_tools/cite_check.mjs`）
 - Issue / PR 模板与 `SECURITY.md` 私密漏洞报告通道
+- 制证科目守卫：费用项目新增「对应会计科目」，报销、对公结算、自动制证与记账规则统一校验科目的存在、启用、末级与所属公司
+- 预付款专用三单匹配档，比例上限由 `prepay.max.ratio` 参数控制（缺省 30%）
+- 税务申报作废与审批禁止自审；缴纳登记实缴金额校验与差异确认
+- 进项转出原因（弹窗必填并落库），认证列表新增「转出原因」列；发票池新增「状态」列
+- 月结检查新增「应生成未生成凭证」判定；总账分录台账新增凭证查看抽屉
+- 报表工作台按业务归为 8 组导航，组内页签按组展开
+- `FieldTip` 字段说明组件，用于审批核减、委托、差旅预申请、采购与收货等表单
 
 ### Changed
 - 许可证：全仓改为 AGPL-3.0-or-later，逐文件头同步；`LICENSE-COMMERCIAL.md` 为商业条款占位文件，条款未生效
-- 建库入口统一为 `db/Dump<日期>/` 的整库导出（323 枚、一表一文件，结构与演示数据一起建）
+- 建库入口统一为 `db/Dump<日期>/` 的整库导出（325 个文件：324 枚一表一文件＋1 枚存储过程与函数，结构与演示数据一起建）
 - `vite.config.js` 的 `build.outDir` 改回 `dist` 并启用 `emptyOutDir`
 - 文档口径与代码对齐：Mapper 的 SQL 实际写法、国际化现状、变更 SQL 与回滚 SQL 成对提交的要求
+- 自动制证取消 6602 兜底，银行手续费、折旧、薪酬计提、物料领用、汇兑损益改挂明细科目
+- 收货单单号改由服务端生成；采购订单行改接物料主数据
+- 月度进销项发票统计剔除已驳回与已作废发票
+- `db/Dump20261102/` 内容刷新（表、视图与存储过程数量不变，发票主表新增 `transfer_reason` 列）
+- 后端三个模块与前端版本统一为 1.1.1
 
 ### Fixed
 - `docker/Dockerfile` 的 `COPY` 目标与 `fssc-server/pom.xml` 的 `<finalName>` 对齐，并补齐 `.dockerignore`
 - `docs/部署手册.md` 第 2 节的构建命令按各自的工作目录拆开书写
 - `_tools/inventory.mjs`、`_tools/emit_facts.mjs` 以当前工作目录为根，不再依赖固定的机器路径
+- 深色模式下登录页、平台控制台、收藏、骨架屏、关账工作台的白底与图表文字
+- 看板遇到业务规则拦停时整页跳成「页面出错了」
+- 隐藏页签中的报表图表切换后空白
+- 审批意见输入后未按回车无法提交；委托台账状态角标不随时效刷新
+- 流转派单未避开本单已办节点，导致人工转办偏多
 
 ### Removed
 - 构建产物、日志、数据库备份与临时脚本由 `.gitignore` 排除，不进入发布面

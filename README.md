@@ -28,11 +28,28 @@
 
 - **Internationalisation is wired up and the UI text is extracted.** `fssc/fssc-web/package.json` depends on `vue-i18n`, `fssc/fssc-web/src/i18n/index.js` builds the instance, `main.js` registers it plus a global `LocaleSwitch`, and `src/i18n/locales/{zh-CN,en-US}.js` carry 4,948 keys each. Measured on this snapshot: 175 of 268 `.vue`/`.js` files under `src/` call `$t()`/`t()`/`useI18n()` (7,715 call sites) — every user-visible string in templates (labels, placeholders, table columns, button captions, dialog titles) and in the script layer (toasts, confirmations, table-column definitions) is routed through the locale files. The remaining Chinese literals are source comments, log text, data dictionaries (`enums.js`, `billStatus.js`, `permMappings.js`) and the bpmn-js canvas patch — none of which are interface copy. `scripts/i18n_check.py` gates this in CI: key-set alignment, dangling references, dynamic-key splicing, message compilation and a hard-coded-Chinese baseline that may only go down, never up.
 - **Source-only release.** The front-end package keeps `"private": true`; there is no npm package and no hosted demo. You build and run it yourself — from source (`mvn spring-boot:run` on `fssc/fssc-server/fssc-start`, `npm run dev` on `fssc/fssc-web`) or as a jar (`mvn package` then `java -jar`). See "Three steps to run it" above.
-- **Database bootstrap = one full database dump.** `db/Dump<导出日期>/` (325 files: 324 one-table-per-file dumps plus a routines file, ≈6.9 MB) is the supported way to create the databases; import it as `db/README.md` describes. The accumulated per-version migration scripts under `fssc/fssc-server/sql/` are **not** published — there is no Flyway/Liquibase, so nobody outside the project can order them anyway. Note that the dump is an export of a real drill database: it carries business rows (bills, vouchers, approval history) and 2.3 MB of uploaded attachment bytes in `act_ge_bytearray`.
+- **Database bootstrap = one full database dump.** `db/Dump<导出日期>/` (325 files: 324 one-table-per-file dumps plus a routines file, ≈6.8 MB) is the supported way to create the databases; import it as `db/README.md` describes. The accumulated per-version migration scripts under `fssc/fssc-server/sql/` are **not** published — there is no Flyway/Liquibase, so nobody outside the project can order them anyway. Note that the dump is an export of a real drill database: it carries business rows (bills, vouchers, approval history) and 2.3 MB of uploaded attachment bytes in `act_ge_bytearray`.
 - The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — that migration is not yet verified by a build.
 - This code has been hardened through long manual business drills; treat documented behaviour as *documented*, not *guaranteed*. Each doc states which claims were measured and which were only read off the code.
 
 </details>
+
+---
+
+## 本次更新（v1.1.1）
+
+本版聚焦制证科目守卫、税务闭环、采购与预付、报表导航四条线，并刷新了演示库导出：
+
+- **制证科目**：费用项目新增「对应会计科目」；报销、对公结算、自动制证与记账规则统一校验科目的存在、启用、末级与所属公司，配置缺失在提交环节即拦下；取消 6602 管理费用兜底，银行手续费、折旧、薪酬计提、物料领用、汇兑损益改挂明细科目；新增下级科目后父科目自动置为非末级。
+- **税务**：申报单新增作废（草稿／待审批），已申报与已缴纳只能走更正申报，制单人不得审批自己提交的申报单；退税增加过审闸，审批中不能直接跳到已退税；实缴金额必须大于 0，与应纳不一致时给出差异并二次确认；税务风险属期改为必选，「正常」等级评分固定为 0。
+- **发票**：进项转出必填原因并落库，认证列表新增「转出原因」列，未勾选发票不再允许转出；发票池新增状态列；销项开票补齐购方抬头落库；月度进销项统计剔除已驳回与已作废发票。
+- **采购与预付**：采购订单行改接物料主数据，行校验一次列全问题并标红定位；收货单显示可收余量，单号改由服务端生成；预付款改用专用匹配档，比例上限由 `prepay.max.ratio` 参数控制（缺省 30%）。
+- **月结与总账**：月结检查新增「应生成未生成凭证」判定；看板遇到业务规则拦停时保留页面并红字提示；总账分录台账新增凭证查看抽屉，页签在深链单页下也常显。
+- **报表导航**：报表工作台按业务归为 8 组、组内展开 3～7 个页签；分组入口路由权限补齐，发票类报表统一由 `report:view` 门控；隐藏页签中的图表切换后正确渲染。
+- **协作与界面**：新增 `FieldTip` 字段说明组件；审批意见输入后直接确认也能提交；派单优先避开本单已办过节点的人；委托台账角标按分钟自刷新；登录页、平台控制台、收藏、骨架屏、关账工作台等改用主题变量，修复深色模式下的白底与图表文字；状态与业务类型补中文。
+- **数据与版本**：`db/Dump20261102/` 的内容已刷新为最新演练库导出（325 个文件；表、视图与存储过程数量不变，仅发票主表新增「进项转出原因」一列，业务数据与导出时间戳整体刷新）；后端三个模块与前端版本统一为 1.1.1。
+
+逐条变更见 [`docs/更新说明-v1.1.1.md`](docs/更新说明-v1.1.1.md)。
 
 ---
 
@@ -252,8 +269,8 @@ cd ../fssc-web && npm install && npm run dev
 
 | 通道          | 许可文件                          | 适用场景                                  | 主要义务                                                |
 | :---------- | :---------------------------- | :------------------------------------ | :-------------------------------------------------- |
-|  **开源默认** | [AGPL-3.0](LICENSE)           | 学习、自部署、修改后自用或再分发                      | 强 copyleft + **网络条款**：修改后作为网络服务（SaaS）对外提供，须公开你的修改源码 |
-|  **商业许可** | [商业许可](LICENSE-COMMERCIAL.md) | 闭源分发、去除 copyleft / 网络条款义务、获取商业支持与 SLA | 取得商业许可后免予上述义务；条款与采购见该文件                             |
+| **开源默认**    | [AGPL-3.0](LICENSE)           | 学习、自部署、修改后自用或再分发                      | 强 copyleft + **网络条款**：修改后作为网络服务（SaaS）对外提供，须公开你的修改源码 |
+| **商业许可**    | [商业许可](LICENSE-COMMERCIAL.md) | 闭源分发、去除 copyleft / 网络条款义务、获取商业支持与 SLA | 取得商业许可后免予上述义务；条款与采购见该文件                             |
 
 【注意】**重点提醒（使用前务必读完）**
 
