@@ -42,7 +42,7 @@ CREATE TABLE `md_print_template_item` (
   `font_weight` varchar(8) NOT NULL DEFAULT 'NORMAL' COMMENT 'NORMAL常规/BOLD加粗',
   `align` varchar(8) NOT NULL DEFAULT 'LEFT' COMMENT 'LEFT/CENTER/RIGHT',
   `required` tinyint NOT NULL DEFAULT '0' COMMENT '必录属性:1-必录(缺值时打印前拦截)',
-  `locked` tinyint NOT NULL DEFAULT '0' COMMENT '锁定属性:1-打印时灰显不可改(口径)',
+  `locked` tinyint NOT NULL DEFAULT '0' COMMENT '锁定属性:1-打印时灰显不可改',
   `visible` tinyint NOT NULL DEFAULT '1' COMMENT '是否显示',
   `format_type` varchar(16) NOT NULL DEFAULT 'TEXT' COMMENT 'TEXT文本/NUMBER金额/DATE日期/PERCENT百分比',
   `decimal_places` int NOT NULL DEFAULT '2' COMMENT '小数位(金额)',
@@ -79,4 +79,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:30:38
+-- Dump completed on 2026-11-05 22:33:52

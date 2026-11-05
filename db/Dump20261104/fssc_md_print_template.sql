@@ -54,7 +54,7 @@ CREATE TABLE `md_print_template` (
   UNIQUE KEY `uk_tenant_tpl_code` (`tenant_id`,`template_code`,`version`),
   KEY `idx_pt_tenant_biz` (`tenant_id`,`biz_type`,`status`),
   KEY `idx_pt_tenant_status` (`tenant_id`,`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='打印模板头（套打设计器载体，套打平台/单据设计器）';
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='打印模板头（套打设计器载体）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -76,4 +76,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:30:32
+-- Dump completed on 2026-11-05 22:33:51

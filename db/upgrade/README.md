@@ -1,6 +1,6 @@
-# db/upgrade/ — v1.0.0 → v1.1.1 增量脚本
+# db/upgrade/ — v1.0.0 → v1.2.0 增量脚本
 
-本目录是仓库里**唯一**发布增量 SQL 的地方，只覆盖 `v1.0.0` 升到 `v1.1.1` 这一段。
+本目录是仓库里**唯一**发布增量 SQL 的地方，只覆盖 `v1.0.0` 升到 `v1.2.0` 这一段。
 更早的历史脚本（V1.4.x / V1.5.x）不发布——外部无法还原执行顺序，也没有意义。
 
 - 推荐路径仍然是 **重导 `db/Dump20261104/`**（结构＋主数据一起到位，见 `db/README.md`）。
@@ -27,19 +27,20 @@ for s in V1.6.15_tax_declaration_no_prefix.sql \
          V1.6.22_review_rule_config.sql \
          V1.6.23_credit_auto_approve.sql \
          V1.6.24_violation_reason.sql \
-         V1.6.25_precheck_stats_menu.sql; do
+         V1.6.25_precheck_stats_menu.sql \
+         V1.6.26_vendor_name_cleanup.sql; do
   mysql -uroot -p --default-character-set=utf8mb4 fssc < "$s" || break
 done
 
 # 3) 停服窗口：Flowable 租户回填（必须在旧 jar 停掉、新 jar 起来之前）
 #    systemctl stop fssc / 停掉 java 进程（有看门狗的先停看门狗）
 mysql -uroot -p --default-character-set=utf8mb4 fssc < V1.6.03_flowable_tenant_backfill.sql
-#    换 1.1.1 的 jar 起服
+#    换 1.2.0 的 jar 起服
 ```
 
 ##  这组脚本**不覆盖**制证科目守卫的主数据
 
-v1.1.1 的「费用项目 → 会计科目」映射是**业务配置**，不是结构，脚本里没有：
+v1.2.0 的「费用项目 → 会计科目」映射是**业务配置**，不是结构，脚本里没有：
 
 | 缺什么 | 影响 |
 | --- | --- |
@@ -52,7 +53,7 @@ V1.6.08 只补了 2 条税金科目，那 34+210+112 是 2026-11-04 的库内迁
 
 **所以跑完本目录的脚本后，必须二选一：**
 
-1. 按 `docs/更新说明-v1.1.1.md` 第八节「旧库升级」的清单补齐主数据（科目、费用项目映射、记账规则、计提规则），跑完用那节的自检 SQL 核对；
+1. 按 `docs/更新说明-v1.2.0.md` 第八节「旧库升级」的清单补齐主数据（科目、费用项目映射、记账规则、计提规则），跑完用那节的自检 SQL 核对；
 2. 或者直接重导 `db/Dump20261104/`，一次性到位。
 
 只跑脚本不补主数据，服务能起、页面能开，但**报销提交会被科目守卫拦下**——这是设计行为，不是故障。

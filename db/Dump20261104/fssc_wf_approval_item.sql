@@ -45,7 +45,7 @@ CREATE TABLE `wf_approval_item` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_wai_tenant_node_code` (`tenant_id`,`model_key`,`node_key`,`item_code`),
   KEY `idx_wai_tenant_model_node` (`tenant_id`,`model_key`,`node_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='G2 流程节点审批项（云·工作流「审批项」）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='G2 流程节点审批项';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -66,4 +66,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:29:48
+-- Dump completed on 2026-11-05 22:33:52

@@ -201,6 +201,7 @@ public class GlJournalService {
      *   <li>MANUAL / OTHER_RECEIPT / CHECK_DIFF 不是预提类，不占预算（{@code budget_occupy_status} 留空）。</li>
      * </ul>
      *
+     * <p><b>已知边界</b>：本版没有「预提 → 报销」下推关系，常规做法靠「单据下推回写/冲销源单字段」释放
      * 已下推部分；我方语义等价于「关闭释放」——预提占着，直到被冲销。因此<b>同一笔费用若先预提后报销
      * 且不冲销预提，会占用两次</b>。正确做法：报销前先冲销对应预提（本页「冲销」按钮即释放额度）。</p>
      *
@@ -347,6 +348,7 @@ public class GlJournalService {
         GlJournalEntry upd = new GlJournalEntry();
         upd.setId(id);
         upd.setStatus("REVERSED");
+        // 冲销＝「预算冲回」——预提/待摊占的额度随冲销一起放回可申请池。
         // 与状态回写同事务：不允许「凭证已红字反向、预算还占着」。
         if (("ACCRUAL".equals(e.getEntryType()) || "DEFER".equals(e.getEntryType()))
                 && !"RELEASED".equals(e.getBudgetOccupyStatus())) {

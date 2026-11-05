@@ -29,7 +29,7 @@ CREATE TABLE `gl_accounting_book` (
   `tenant_id` bigint NOT NULL DEFAULT '0' COMMENT '租户ID【多租户隔离字段】',
   `book_code` varchar(32) NOT NULL COMMENT '账簿编码',
   `book_name` varchar(100) NOT NULL COMMENT '账簿名称',
-  `book_type` varchar(16) NOT NULL DEFAULT 'MAIN' COMMENT '账簿类型:MAIN主账簿/SUB副账簿(对齐口径)',
+  `book_type` varchar(16) NOT NULL DEFAULT 'MAIN' COMMENT '账簿类型:MAIN主账簿/SUB副账簿(口径统一)',
   `company_id` bigint NOT NULL COMMENT '核算组织 sys_company.id',
   `standard_id` bigint NOT NULL COMMENT '会计准则 gl_standard.id',
   `base_currency_id` bigint NOT NULL COMMENT '本位币 gl_currency.id',
@@ -71,4 +71,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:30:35
+-- Dump completed on 2026-11-05 22:33:51
