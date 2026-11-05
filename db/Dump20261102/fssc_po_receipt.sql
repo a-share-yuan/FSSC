@@ -51,7 +51,7 @@ CREATE TABLE `po_receipt` (
   UNIQUE KEY `uk_receipt_no` (`tenant_id`,`receipt_no`),
   KEY `idx_receipt_po` (`tenant_id`,`po_id`),
   KEY `idx_tenant_owner` (`tenant_id`,`create_by`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收货单';
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收货单';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -72,4 +72,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:07
+-- Dump completed on 2026-11-04 23:30:16

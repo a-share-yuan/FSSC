@@ -45,7 +45,7 @@ CREATE TABLE `bank_recon_item` (
   `del_flag` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_tenant_acc_month` (`tenant_id`,`account_id`,`month`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='银企未达账差异明细';
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='银企未达账差异明细';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -66,4 +66,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:47:48
+-- Dump completed on 2026-11-04 23:29:40

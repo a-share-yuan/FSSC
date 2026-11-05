@@ -50,7 +50,7 @@ CREATE TABLE `wf_add_sign` (
   KEY `idx_src_task` (`src_task_id`),
   KEY `idx_proc` (`proc_inst_id`),
   KEY `idx_tenant_status` (`tenant_id`,`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='流程加签（前/后加签）';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='流程加签（前/后加签）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -71,4 +71,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:20
+-- Dump completed on 2026-11-04 23:29:45

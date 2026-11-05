@@ -71,7 +71,7 @@ CREATE TABLE `op_archive` (
   KEY `idx_t_del_comp_status` (`tenant_id`,`del_flag`,`company_id`,`archive_status`,`archived_at`),
   KEY `idx_t_del_comp_status_ct` (`tenant_id`,`del_flag`,`company_id`,`archive_status`,`create_time`),
   KEY `idx_t_del_status` (`tenant_id`,`del_flag`,`archive_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='电子会计档案';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='电子会计档案';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -92,4 +92,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:03
+-- Dump completed on 2026-11-04 23:29:32

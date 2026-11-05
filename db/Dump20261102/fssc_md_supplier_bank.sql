@@ -43,7 +43,7 @@ CREATE TABLE `md_supplier_bank` (
   PRIMARY KEY (`id`),
   KEY `idx_msb_supplier` (`supplier_id`),
   KEY `idx_msb_tenant` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='供应商银行账户(N)';
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='供应商银行账户(N)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -52,7 +52,7 @@ CREATE TABLE `md_supplier_bank` (
 
 LOCK TABLES `md_supplier_bank` WRITE;
 /*!40000 ALTER TABLE `md_supplier_bank` DISABLE KEYS */;
-INSERT INTO `md_supplier_bank` VALUES (1,1,6100,'中国工商银行昆山分行','昆山玉山镇支行','6222020000000000167','CNY',0,'NORMAL',NULL,3897,'2026-09-20 05:29:38',3897,'2026-10-23 20:23:48',0),(2,1,28,'工商银行长沙河西支行',NULL,'6222020000000000168','CNY',0,'NORMAL','供应商收款账户 [V3-第2轮]',3897,'2026-09-30 07:44:10',3897,'2026-10-23 20:23:48',0),(3,1,18,'中国工商银行上海分行','工行上海静安支行','6222020000000000169','CNY',0,'NORMAL',NULL,3897,'2026-10-02 23:19:11',3897,'2026-10-23 20:23:48',0),(4,1,19,'中国建设银行上海分行','建行上海浦东支行','6222020000000000170','CNY',0,'NORMAL',NULL,3897,'2026-10-03 00:52:12',3897,'2026-10-23 20:23:48',0),(5,1,29167,'演示银行营业部',NULL,'6222020000000171','CNY',1,'NORMAL','G册环境补齐：V1003 主数据在册账号（手册 G2.4a 假设存在）',3897,'2026-10-17 00:06:45',3897,'2026-10-23 20:23:48',0);
+INSERT INTO `md_supplier_bank` VALUES (1,1,6100,'中国工商银行昆山分行','昆山玉山镇支行','6222020000000000167','CNY',0,'NORMAL',NULL,3897,'2026-09-20 05:29:38',3897,'2026-10-23 20:23:48',0),(2,1,28,'工商银行长沙河西支行',NULL,'6222020000000000168','CNY',0,'NORMAL','供应商收款账户 [V3-第2轮]',3897,'2026-09-30 07:44:10',3897,'2026-10-23 20:23:48',0),(3,1,18,'中国工商银行上海分行','工行上海静安支行','6222020000000000169','CNY',0,'NORMAL',NULL,3897,'2026-10-02 23:19:11',3897,'2026-10-23 20:23:48',0),(4,1,19,'中国建设银行上海分行','建行上海浦东支行','6222020000000000170','CNY',0,'NORMAL',NULL,3897,'2026-10-03 00:52:12',3897,'2026-10-23 20:23:48',0),(5,1,29167,'演示银行营业部',NULL,'6222020000000171','CNY',1,'NORMAL','G册环境补齐：V1003 主数据在册账号（手册 G2.4a 假设存在）',3897,'2026-10-17 00:06:45',3897,'2026-10-23 20:23:48',0),(6,1,20,'中国工商银行上海分行','张江支行','6222020000000000172','CNY',0,'NORMAL','V5人工-幕2 演示种子补录（手册 2.2 要求广联收款账号，档案缺行，经产品「主数据›供应商›银行账户」出口补录）',3897,'2026-11-04 10:49:56',3897,'2026-11-04 10:49:56',0);
 /*!40000 ALTER TABLE `md_supplier_bank` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -65,4 +65,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:47:51
+-- Dump completed on 2026-11-04 23:29:32

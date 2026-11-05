@@ -50,7 +50,7 @@ CREATE TABLE `tax_risk_indicator` (
   PRIMARY KEY (`id`),
   KEY `idx_risk_type` (`risk_type`,`period`),
   KEY `idx_risk_level` (`risk_level`,`resolved`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='税务风险指标（风险评分/等级/预警监控）';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='税务风险指标（风险评分/等级/预警监控）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -59,6 +59,7 @@ CREATE TABLE `tax_risk_indicator` (
 
 LOCK TABLES `tax_risk_indicator` WRITE;
 /*!40000 ALTER TABLE `tax_risk_indicator` DISABLE KEYS */;
+INSERT INTO `tax_risk_indicator` VALUES (1,1,1,'TAX_BURDEN','增值税税负率','TAX_BURDEN','202611',3.0000,10.2917,72,'NORMAL','税负率 10.29%（阈值 3.00%），应纳税额 9880.00 / 不含税收入 96000.00','税负率正常，无需处理',1,3833,'2026-11-04 18:53:04','T人工-已核实口径',3833,'2026-11-04 18:52:15',3833,'2026-11-04 18:53:04',0),(2,1,1,'TAX_BURDEN','增值税税负率','TAX_BURDEN','202610',3.0000,-9.2622,100,'HIGH','税负率 -9.26%（阈值 3.00%），应纳税额 -18524.42 / 不含税收入 200000.00','税负率低于阈值，请核查进项抵扣与收入确认期间归属',0,NULL,NULL,NULL,3833,'2026-11-04 19:39:49',3833,'2026-11-04 19:47:29',0);
 /*!40000 ALTER TABLE `tax_risk_indicator` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -71,4 +72,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:34
+-- Dump completed on 2026-11-04 23:30:43

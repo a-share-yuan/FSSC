@@ -61,6 +61,7 @@ CREATE TABLE `inv_invoice` (
   `certify_period` varchar(6) DEFAULT NULL COMMENT '勾选认证所属期yyyyMM',
   `certify_date` datetime DEFAULT NULL COMMENT '勾选认证时间',
   `reverse_date` datetime DEFAULT NULL COMMENT '进项转出时间',
+  `transfer_reason` varchar(64) DEFAULT NULL COMMENT '进项转出原因（集体福利/个人消费/非正常损失/简易计税/免税项目/其他）',
   `buyer_name` varchar(255) DEFAULT NULL COMMENT '购方抬头(企业名称)',
   `buyer_tax_no` varchar(64) DEFAULT NULL COMMENT '购方税号(企业统一社会信用代码)',
   `lock_status` varchar(32) DEFAULT 'NONE' COMMENT '占用锁定:NONE未占用/LOCKED_IN_USE已占用',
@@ -78,7 +79,7 @@ CREATE TABLE `inv_invoice` (
   KEY `idx_tenant_anomaly` (`tenant_id`,`anomaly_flag`),
   KEY `idx_tenant_owner` (`tenant_id`,`create_by`),
   KEY `idx_ii_tenant_del_comp_id` (`tenant_id`,`del_flag`,`company_id`,`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='发票主表(发票池)';
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='发票主表(发票池)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -99,4 +100,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:31
+-- Dump completed on 2026-11-04 23:30:34

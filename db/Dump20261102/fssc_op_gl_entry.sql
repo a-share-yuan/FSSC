@@ -48,7 +48,7 @@ CREATE TABLE `op_gl_entry` (
   KEY `idx_company_subject` (`company_id`,`period_year`,`period_month`,`subject_id`),
   KEY `idx_voucher` (`voucher_id`),
   KEY `idx_biz` (`biz_id`,`biz_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='总账分录明细（凭证 POSTED 逐行写入）';
+) ENGINE=InnoDB AUTO_INCREMENT=125 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='总账分录明细（凭证 POSTED 逐行写入）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -69,4 +69,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:34
+-- Dump completed on 2026-11-04 23:29:39

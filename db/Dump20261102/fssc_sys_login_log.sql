@@ -41,7 +41,7 @@ CREATE TABLE `sys_login_log` (
   KEY `idx_tenant` (`tenant_id`),
   KEY `idx_tenant_time` (`tenant_id`,`login_time`),
   KEY `idx_tenant_user` (`tenant_id`,`user_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=215 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='租户登录日志[审计表-不可删]';
+) ENGINE=InnoDB AUTO_INCREMENT=635 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='租户登录日志[审计表-不可删]';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -50,7 +50,7 @@ CREATE TABLE `sys_login_log` (
 
 LOCK TABLES `sys_login_log` WRITE;
 /*!40000 ALTER TABLE `sys_login_log` DISABLE KEYS */;
-INSERT INTO `sys_login_log` VALUES (183,1,'admin','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:09:26'),(184,1,'admin','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:17:45'),(185,1,'admin','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:17:50'),(186,1,'100032','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:17:50'),(187,1,'100065','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:17:50'),(188,1,'100029','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:17:50'),(189,1,'100033','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:17:50'),(190,1,'100044','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:17:50'),(191,1,'admin','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:18:00'),(192,1,'admin','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:20:47'),(193,1,'admin','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:21:14'),(194,1,'100029','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:21:33'),(195,1,'100065','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:21:44'),(196,1,'100033','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:21:56'),(197,1,'100044','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:22:07'),(198,1,'100032','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:22:18'),(199,1,'100044','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:22:33'),(200,1,'admin','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:23:01'),(201,1,'admin','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:27:23'),(202,1,'100032','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:27:23'),(203,1,'100065','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:27:23'),(204,1,'100029','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:27:23'),(205,1,'100033','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:27:24'),(206,1,'100044','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:27:24'),(207,1,'admin','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:32:17'),(208,1,'100032','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:32:17'),(209,1,'100065','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:32:17'),(210,1,'100029','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:32:17'),(211,1,'100033','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:32:17'),(212,1,'100044','127.0.0.1',NULL,'Other','Other','PC','LOGIN',0,'登录成功','2026-11-03 10:32:17'),(213,1,'admin','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:33:24'),(214,1,'admin','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-03 10:40:03');
+INSERT INTO `sys_login_log` VALUES (633,1,'100012','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-04 23:08:14'),(634,1,'100012','127.0.0.1',NULL,'Chrome','Windows 10','PC','LOGIN',0,'登录成功','2026-11-04 23:08:34');
 /*!40000 ALTER TABLE `sys_login_log` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -63,4 +63,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:47:59
+-- Dump completed on 2026-11-04 23:29:56

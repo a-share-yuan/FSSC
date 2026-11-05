@@ -49,7 +49,7 @@ CREATE TABLE `img_batch` (
   KEY `idx_tenant_biz` (`tenant_id`,`biz_type`,`biz_id`),
   KEY `idx_tenant_status` (`tenant_id`,`status`),
   KEY `idx_ib_tenant_del_biz` (`tenant_id`,`del_flag`,`biz_type`,`doc_count`,`review_status`,`seal_status`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='影像批次';
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='影像批次';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -58,6 +58,7 @@ CREATE TABLE `img_batch` (
 
 LOCK TABLES `img_batch` WRITE;
 /*!40000 ALTER TABLE `img_batch` DISABLE KEYS */;
+INSERT INTO `img_batch` VALUES (2,1,'IMG2026110400001',3832,'PC',1,'PAY',14,'UPLOADED',NULL,NULL,NULL,'2026-11-04 17:45:18','2026-11-04 17:45:18',0,'UNSEALED','PENDING','FK202611040002'),(3,1,'IMG2026110400002',3832,'PC',1,'PAY',14,'UPLOADED',NULL,NULL,NULL,'2026-11-04 17:45:46','2026-11-04 17:45:45',0,'UNSEALED','PENDING','FK202611040002');
 /*!40000 ALTER TABLE `img_batch` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -70,4 +71,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:49
+-- Dump completed on 2026-11-04 23:30:48

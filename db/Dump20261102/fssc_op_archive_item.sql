@@ -50,7 +50,7 @@ CREATE TABLE `op_archive_item` (
   UNIQUE KEY `uk_arc_item_seq` (`tenant_id`,`archive_id`,`seq_no`),
   KEY `idx_arc_item_bill` (`tenant_id`,`bill_id`,`del_flag`),
   KEY `idx_arc_item_archive` (`archive_id`,`del_flag`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='案卷卷内件清单（一卷多件）';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='案卷卷内件清单（一卷多件）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -71,4 +71,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:23
+-- Dump completed on 2026-11-04 23:30:21

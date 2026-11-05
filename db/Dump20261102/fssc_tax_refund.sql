@@ -47,7 +47,7 @@ CREATE TABLE `tax_refund` (
   `del_flag` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_tenant_type_period` (`tenant_id`,`refund_type`,`period`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='税务退税三场景(出口免抵退/留抵退税/即征即退)';
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='税务退税三场景(出口免抵退/留抵退税/即征即退)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -68,4 +68,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:35
+-- Dump completed on 2026-11-04 23:30:36
