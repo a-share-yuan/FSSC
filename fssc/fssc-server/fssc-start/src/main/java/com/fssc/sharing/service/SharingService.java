@@ -171,6 +171,10 @@ public class SharingService {
             data.put("amount", bill.getTotalAmount() == null ? BigDecimal.ZERO : bill.getTotalAmount());
             data.put("applyUserId", bill.getApplyUserId());
             data.put("expenseType", bill.getBillType());
+            // 信用免审读的是 submitterId（EmployeeCreditService.canAutoApprove），此前只传了
+            // applyUserId ⇒ 该分支永远拿不到人、恒不生效（employee_credit 表长期 0 行）。
+            // 这里补齐键；无信用记录时 canAutoApprove 仍返回 false，行为不变。
+            data.put("submitterId", bill.getApplyUserId());
 
             List<ExpBillLine> lines = expBillLineMapper.selectList(
                     new LambdaQueryWrapper<ExpBillLine>().eq(ExpBillLine::getBillId, bill.getId()));

@@ -75,10 +75,29 @@ public class SmartReviewService {
         return rule;
     }
 
+    /**
+     * 新建审单规则。
+     *
+     * <p>缺省值全部取**最保守**的一档：动作缺省 {@code MANUAL_REVIEW}（与「所有规则未命中→转人工」
+     * 的兜底口径一致，误配也不会变成自动放行）、优先级缺省 100（排在既有规则之后）、状态缺省启用。
+     * 原实现把 status 写死 NORMAL 且不管 action，界面建出来的规则动作是 null，
+     * 命中后既不自动通过也不自动驳回——看着配了、实际空转。
+     */
     @Transactional(rollbackFor = Exception.class)
     public void createRule(ReviewRule rule) {
         assertRuleCodeFree(rule.getRuleCode(), null);
-        rule.setStatus("NORMAL");
+        if (rule.getAction() == null || rule.getAction().isBlank()) {
+            rule.setAction("MANUAL_REVIEW");
+        }
+        if (rule.getStatus() == null || rule.getStatus().isBlank()) {
+            rule.setStatus("NORMAL");
+        }
+        if (rule.getPriority() == null) {
+            rule.setPriority(100);
+        }
+        if (rule.getRiskLevel() == null || rule.getRiskLevel().isBlank()) {
+            rule.setRiskLevel("LOW");
+        }
         rule.setCreateTime(LocalDateTime.now());
         reviewRuleMapper.insert(rule);
     }
