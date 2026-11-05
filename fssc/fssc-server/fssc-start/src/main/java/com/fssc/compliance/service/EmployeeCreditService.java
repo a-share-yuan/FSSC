@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fssc.compliance.entity.EmployeeCredit;
 import com.fssc.compliance.mapper.EmployeeCreditMapper;
+import com.fssc.system.service.ConfigService;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,10 +35,16 @@ import java.math.BigDecimal;
 public class EmployeeCreditService {
 
     private final EmployeeCreditMapper creditMapper;
+    private final ConfigService configService;
 
     private static final int INITIAL_SCORE = 600;
     private static final int MAX_SCORE = 1000;
     private static final int MIN_SCORE = 0;
+
+    /** 信用免审总开关（sys_config，缺省开）：置 0 后信用照常累计，但不再自动放行 */
+    private static final String KEY_AUTO_APPROVE = "review.credit.auto_approve.enabled";
+    /** 免审最低信用等级（sys_config，缺省 C）：低于该档即便有额度也转人工 */
+    private static final String KEY_MIN_LEVEL = "review.credit.auto_approve.min_level";
 
     /**
      * 获取或初始化用户信用。
@@ -74,12 +81,27 @@ public class EmployeeCreditService {
     /**
      * 检查是否可免审（金额低于信用等级对应的免审额度）。
      */
+    /**
+     * 是否允许"信用免审"（跳过人工审核环节）。
+     *
+     * <p>三级判定，任一不过即转人工：
+     * <ol>
+     *   <li>总开关 {@code review.credit.auto_approve.enabled}（缺省开）——关掉只累计不放行；</li>
+     *   <li>信用等级不低于 {@code review.credit.auto_approve.min_level}（缺省 C）——不想放过 C 级就改 B，不用改代码；</li>
+     *   <li>金额在本人免审额度内（额度由分数算：A≥850→5000 / B≥700→2000 / C≥500→500 / D→0）。</li>
+     * </ol>
+     *
+     * <p><b>免审只跳过人工审核环节</b>，不跳过预算校验与合规校验（那两条在提交/预检阶段已经跑过）。
+     */
     public boolean canAutoApprove(Long userId, BigDecimal amount) {
+        if (!autoApproveEnabled()) {
+            return false;
+        }
         EmployeeCredit credit = findByUserId(userId);
         if (credit == null) {
             return false;
         }
-        if ("D".equals(credit.getCreditLevel())) {
+        if (levelRank(credit.getCreditLevel()) < levelRank(minAutoApproveLevel())) {
             return false;
         }
         BigDecimal limit = credit.getAutoApproveLimit();
@@ -87,6 +109,43 @@ public class EmployeeCreditService {
             return false;
         }
         return amount != null && amount.compareTo(limit) <= 0;
+    }
+
+    /** 总开关缺省开：参数缺失/为空都按"开"处理，与铺底前的设计口径一致 */
+    private boolean autoApproveEnabled() {
+        String v = configService.getValue(KEY_AUTO_APPROVE);
+        if (v == null || v.isBlank()) {
+            return true;
+        }
+        String t = v.trim();
+        return "1".equals(t) || "true".equalsIgnoreCase(t) || "Y".equalsIgnoreCase(t);
+    }
+
+    /** 最低免审等级，缺省 C；非法值一律回落 C，避免写错参数把免审全关或全开 */
+    private String minAutoApproveLevel() {
+        String v = configService.getValue(KEY_MIN_LEVEL);
+        if (v == null || v.isBlank()) {
+            return "C";
+        }
+        String t = v.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (t) {
+            case "A", "B", "C", "D" -> t;
+            default -> "C";
+        };
+    }
+
+    /** A=4 B=3 C=2 D=1，未知=0（宁可判低，不可误放） */
+    private int levelRank(String level) {
+        if (level == null) {
+            return 0;
+        }
+        return switch (level.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "A" -> 4;
+            case "B" -> 3;
+            case "C" -> 2;
+            case "D" -> 1;
+            default -> 0;
+        };
     }
 
     /**
