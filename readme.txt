@@ -123,6 +123,7 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   db/
     Dump20261104/           整库 dump（325 个文件，一表一文件；主数据/菜单/流程定义齐全，业务单据为空）
     upgrade/                v1.0.0 → v1.1.1 增量脚本（成对带 rollback，仅原地升级时用）
+    hotfix/                 数据级定点修正（演练留下的脏状态，界面上没有入口改的那种）
     import.sh / import.bat  一键导入脚本（自动选最新的 Dump<日期>/）
     README.md               数据库导入说明（dump 内容、导入与脱敏注意事项）
   _tools/                   开发辅助工具（密钥扫描/引用检查/事实件生成等）

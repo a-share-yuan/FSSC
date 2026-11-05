@@ -33,6 +33,7 @@
 - 后端三个模块与前端版本统一为 1.1.1
 
 ### Fixed
+- 差旅费·BG202611 预算行（`bg_item.id=6`）在 11-03 冻结演练后遗留 `freeze=1`，而前端只有「冻结」没有「解冻」，事前申请提交被「预算行已冻结」拦下：补 `db/hotfix/20261105_bg_item6_unfreeze.sql`（成对 rollback），并同步修正 `db/Dump20261104/fssc_bg_item.sql`
 - `docker/Dockerfile` 的 `COPY` 目标与 `fssc-server/pom.xml` 的 `<finalName>` 对齐，并补齐 `.dockerignore`
 - `docs/部署手册.md` 第 2 节的构建命令按各自的工作目录拆开书写
 - `_tools/inventory.mjs`、`_tools/emit_facts.mjs` 以当前工作目录为根，不再依赖固定的机器路径
