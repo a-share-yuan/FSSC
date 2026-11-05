@@ -47,7 +47,7 @@ CREATE TABLE `md_inventory` (
   PRIMARY KEY (`id`),
   KEY `idx_inventory_tenant` (`tenant_id`),
   KEY `idx_inventory_item` (`item_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='存货收发存(FA-P0-7)';
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='存货收发存(FA-P0-7)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -56,6 +56,7 @@ CREATE TABLE `md_inventory` (
 
 LOCK TABLES `md_inventory` WRITE;
 /*!40000 ALTER TABLE `md_inventory` DISABLE KEYS */;
+INSERT INTO `md_inventory` VALUES (1,1,'MAT-LB-001','安全帽','ABS 加厚 白色','顶',NULL,0.0000,0.00,0.0000,0.00,0.0000,0.00,0.0000,0.00,'MA','2026-11-05 13:13:01',1,NULL),(2,1,'MAT-LB-002','防护手套','棉纱 12 双装','双',NULL,0.0000,0.00,0.0000,0.00,0.0000,0.00,0.0000,0.00,'MA','2026-11-05 13:13:01',1,NULL),(3,1,'MAT-LB-003','防砸安全鞋','牛皮 钢包头','双',NULL,0.0000,0.00,0.0000,0.00,0.0000,0.00,0.0000,0.00,'MA','2026-11-05 13:13:01',1,NULL),(4,1,'MAT-LB-004','防护眼镜','PC 镜片 防雾','副',NULL,0.0000,0.00,0.0000,0.00,0.0000,0.00,0.0000,0.00,'MA','2026-11-05 13:13:01',1,NULL),(5,1,'MAT-LB-005','反光背心','涤纶 荧光黄','件',NULL,0.0000,0.00,0.0000,0.00,0.0000,0.00,0.0000,0.00,'MA','2026-11-05 13:13:01',1,NULL),(6,1,'MAT-LB-006','防尘口罩','KN95 头戴式','只',NULL,0.0000,0.00,0.0000,0.00,0.0000,0.00,0.0000,0.00,'MA','2026-11-05 13:13:01',1,NULL),(7,1,'MAT-BG-001','复印纸','A4 70g 5 包/箱','箱',NULL,0.0000,0.00,0.0000,0.00,0.0000,0.00,0.0000,0.00,'MA','2026-11-05 13:13:01',1,NULL),(8,1,'MAT-BG-002','签字笔','0.5mm 黑色 12 支/盒','盒',NULL,0.0000,0.00,0.0000,0.00,0.0000,0.00,0.0000,0.00,'MA','2026-11-05 13:13:01',1,NULL);
 /*!40000 ALTER TABLE `md_inventory` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -68,4 +69,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:29:54
+-- Dump completed on 2026-11-05 13:14:57

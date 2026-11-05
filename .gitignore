@@ -27,8 +27,10 @@ __pycache__/
 # ---- 数据库导出/备份（含真实业务数据，禁止提交）----
 db/backup/
 # 日后随手导出的整库 dump 默认不入仓（防 git add -A 带进来）；
-# 作为建库入口的那一枚例外已 git add -f 明确入库 —— 见 db/README.md
+# 作为建库入口的那一枚显式放行 —— 见 db/README.md
 db/Dump*/
+!db/Dump20261104/
+!db/Dump20261104/**
 *.dump
 *_full_*.sql
 *_rollback_*.jar
