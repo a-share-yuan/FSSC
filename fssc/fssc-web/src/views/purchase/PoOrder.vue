@@ -80,7 +80,7 @@
                那种单改走「终止」，谁能点由后端状态前置兜底。 -->
           <el-button v-if="['OPEN','APPROVED','REJECTED','INVOICED'].includes(row.status) && hasPerm('po:order:update')" link type="danger" size="small" @click="terminateOrderRow(row)">终止</el-button>
           <!-- 恢复：终止/作废(VOID)后误操作的回退通道，回到 DRAFT 重新提交审批；已有收货金额的单不给恢复 -->
-          <el-button v-if="row.status === 'VOID' && hasPerm('po:order:update')" link type="success" size="small" @click="restoreOrderRow(row)">恢复</el-button>
+          <el-button v-if="row.status === 'VOID' && hasPerm('po:order:update')" link type="success" size="small" @click="restoreOrderRow(row)">{{ $t('purchase.poOrder.Restore') }}</el-button>
           <!-- 归档：仅已关闭(CLOSED)可归档，落最终状态 ARCHIVED 后不可再变更；规则同 PurchaseService.archiveOrder -->
           <el-button v-if="row.status === 'CLOSED' && hasPerm('po:order:update')" link type="warning" size="small" @click="archiveOrderRow(row)">归档</el-button>
         </template>
@@ -891,11 +891,11 @@ async function restoreOrderRow(row) {
   let reason = ''
   try {
     const { value } = await ElMessageBox.prompt(
-      `确认恢复订单 ${row.poNo}（${row.supplierName || ''}）？恢复后回到「草稿」，需重新提交审批`,
-      '恢复采购订单',
+      t('purchase.poOrder.AskRestore', { v1: row.poNo, v2: row.supplierName || '' }),
+      t('purchase.poOrder.TtlRestore'),
       {
-        inputPlaceholder: '请填写恢复原因（必填，不少于 2 个字）',
-        inputValidator: (v) => (v != null && String(v).trim().length >= 2) || '请填写不少于 2 个字的恢复原因',
+        inputPlaceholder: t('purchase.poOrder.RestoreReasonPh'),
+        inputValidator: (v) => (v != null && String(v).trim().length >= 2) || t('purchase.poOrder.RestoreReasonRequired'),
         closeOnClickModal: false,
         distinguishCancelAndClose: true,
       },
@@ -904,7 +904,7 @@ async function restoreOrderRow(row) {
   } catch (_) { return } // 用户取消
   try {
     await purchaseApi.orderRestore(row.id, { reason })
-    ElMessage.success(`订单 ${row.poNo} 已恢复为草稿`)
+    ElMessage.success(t('purchase.poOrder.Restored'))
     load()
   } catch (e) { ElMessage.error(e.message) }
 }
