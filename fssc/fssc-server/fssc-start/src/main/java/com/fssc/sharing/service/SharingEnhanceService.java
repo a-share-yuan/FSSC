@@ -48,6 +48,7 @@ import java.util.Map;
 public class SharingEnhanceService {
 
     private final OpQualityMapper qualityMapper;
+    private final com.fssc.compliance.service.EmployeeCreditService creditService;
     private final ArchiveFacade archiveFacade;
     private final OpBankStatementMapper bankStatementMapper;
     private final MdBankAccountMapper bankAccountMapper;
@@ -115,7 +116,25 @@ public class SharingEnhanceService {
             q.setAuditorId(q.getCheckerId());
         }
         qualityMapper.insert(q);
+        // 而前端用的正是这条路径 ⇒ 质检扣分从来没生效过。
+        // 有违规原因码按字典扣（不同情节不同分值），没有则沿用旧的一刀切 -20。
+        if (q.getAuditorId() != null) {
+            if ("PASS".equals(q.getResult())) {
+                creditService.onQualityPass(q.getAuditorId());
+            } else if ("BACK".equals(q.getResult())) {
+                if (org.springframework.util.StringUtils.hasText(q.getViolationReasonCode())) {
+                    creditService.onViolationByReason(q.getAuditorId(), q.getViolationReasonCode(), q.getDeductReason());
+                } else {
+                    creditService.onQualityFail(q.getAuditorId(), q.getDeductReason());
+                }
+            }
+        }
         return q.getId();
+    }
+
+    /** 违规原因字典（仅启用项，供质检退回下拉） */
+    public java.util.List<com.fssc.compliance.entity.MdViolationReason> violationReasons() {
+        return creditService.listViolationReasons();
     }
 
     /** 更新质检评分 */

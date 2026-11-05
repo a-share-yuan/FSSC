@@ -39,6 +39,7 @@ CREATE TABLE `op_quality` (
   `remark` varchar(500) DEFAULT NULL,
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
   `del_flag` tinyint NOT NULL DEFAULT '0',
+  `violation_reason_code` varchar(32) DEFAULT NULL COMMENT '违规原因码（md_violation_reason.reason_code）；有值则按字典扣分，为空沿用 -20',
   PRIMARY KEY (`id`),
   KEY `idx_tenant` (`tenant_id`),
   KEY `idx_tenant_bill` (`tenant_id`,`bill_id`),
@@ -68,4 +69,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:29:38
+-- Dump completed on 2026-11-05 22:04:36

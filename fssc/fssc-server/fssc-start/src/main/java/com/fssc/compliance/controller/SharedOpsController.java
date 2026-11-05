@@ -146,6 +146,14 @@ public class SharedOpsController {
         return Result.success(qualityCheckService.summary());
     }
 
+    /** 违规原因字典（质检退回时下拉用，带扣分值） */
+    @RequiresFeature("FSSC_SHARED")
+    @RequiresPerm("gl:quality:list")
+    @GetMapping("/quality/violation-reasons")
+    public Result<java.util.List<com.fssc.compliance.entity.MdViolationReason>> violationReasons() {
+        return Result.success(creditService.listViolationReasons());
+    }
+
     // 满意度管理
 
     @RequiresFeature("FSSC_SHARED")

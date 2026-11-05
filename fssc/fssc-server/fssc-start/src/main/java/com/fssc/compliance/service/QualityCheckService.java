@@ -67,7 +67,14 @@ public class QualityCheckService {
             if ("PASS".equals(record.getResult())) {
                 creditService.onQualityPass(record.getAuditorId());
             } else if ("BACK".equals(record.getResult())) {
-                creditService.onQualityFail(record.getAuditorId(), record.getDeductReason());
+                if (StringUtils.hasText(record.getViolationReasonCode())) {
+                    // 按违规原因字典扣分（不同情节不同分值）；原因码非法会直接抛错，不静默按 0 分处理
+                    creditService.onViolationByReason(record.getAuditorId(),
+                            record.getViolationReasonCode(), record.getDeductReason());
+                } else {
+                    // 未选原因：沿用旧的一刀切口径，保持向后兼容
+                    creditService.onQualityFail(record.getAuditorId(), record.getDeductReason());
+                }
             }
         }
         return record.getId();
