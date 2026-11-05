@@ -340,6 +340,14 @@ public class SmartReviewService {
                 employeeCreditService.onApproved(submitterId);
                 log.info("信用免审通过: billNo={}, submitterId={}, amount={}", billNo, submitterId, amount);
             }
+        } else if ("AUTO_PASS".equals(finalAction)) {
+            // 规则命中自动通过同样积累信用（+5）。漏了这一步，「免审要 B 级、B 级要靠免审加分」
+            // 就成了死循环：新员工永远停在 C 级，信用体系只是摆设。
+            Long submitterId = billData.get("submitterId") != null
+                    ? Long.valueOf(billData.get("submitterId").toString()) : null;
+            if (submitterId != null) {
+                employeeCreditService.onApproved(submitterId);
+            }
         } else if ("AUTO_REJECT".equals(finalAction)) {
             Long submitterId = billData.get("submitterId") != null
                     ? Long.valueOf(billData.get("submitterId").toString()) : null;
