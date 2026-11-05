@@ -2,6 +2,16 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### Added
+- **预算明细页补上「冻结／解冻」入口**：此前 `POST /tenant/budget/item/{id}/freeze` 只有接口，界面上既不能冻结也不能解冻，11-03 演练从接口冻了一行之后无处可改。现在列表新增「状态」列（正常／已冻结），操作列按行状态给出「冻结」或「解冻」；两个方向都要求填原因（≥2 字），原因写进审计轨迹
+- 新增权限点 `budget:item:freeze`（按钮级）。后端注解与前端门控都按 `{"budget:item:freeze", "budget:item:create"}` 取 **OR**，授权数据迁移完成前旧码照样能通行，按钮不会因换码整片消失
+- `db/upgrade/V1.6.21_budget_item_freeze_perm.sql`：建权限点并等价授予已持有 `budget:item:create` 的角色（成对 rollback）
+
+### Changed
+- 冻结/解冻改为幂等：行状态与请求一致时不再写库、不再产生审计轨迹，重复点击不会刷出一串无用记录
+
 ## [1.1.1] - 2026-11-05
 
 ### Added

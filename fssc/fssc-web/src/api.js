@@ -1429,8 +1429,8 @@ export const budgetApi = {
   // 调整单进流程（配置表早有 BG_ADJUST 路由，代码此前不发起）
   adjustSubmit: (id) => http.post(`/tenant/budget/adjust/submit/${id}`),
   adjustWithdraw: (id) => http.post(`/tenant/budget/adjust/withdraw/${id}`),
-  // 冻结/解冻预算行；：实际数导入
-  itemFreeze: (id, freeze) => http.post(`/tenant/budget/item/${id}/freeze`, null, { params: { freeze } }),
+  // 冻结/解冻预算行；reason 必填（落审计轨迹，冻结/解冻都要留下原因）
+  itemFreeze: (id, freeze, reason) => http.post(`/tenant/budget/item/${id}/freeze`, null, { params: { freeze, reason } }),
   actualImport: (body) => http.post('/tenant/budget/actual/import', body),
   occupyPage: (params) => http.get('/tenant/budget/occupy/page', { params }),
   // 口径开关：预提/待摊是否占预算、合同是否占预算（租户自助，缺省开）

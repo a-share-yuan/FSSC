@@ -223,12 +223,18 @@ public class BudgetController {
         return Result.success(budgetService.carryOver(fromYear, toYear));
     }
 
-    /** 冻结/解冻预算行：冻结后拒绝新增占用，释放与核销照常 */
-    @RequiresPerm("budget:item:create")
+    /**
+     * 冻结/解冻预算行：冻结后拒绝新增占用，释放与核销照常。
+     * <p>冻结必须填原因（写进审计轨迹）——历史上出现过演练冻结后没人知道为什么、也没有入口改回来的情况。
+     * <p>权限码 2026-11-05 拆细：新码 {@code budget:item:freeze} 与旧码 {@code budget:item:create} 取 OR，
+     * 授权数据迁移完成前两套码都能通行，按钮不会因为换码整片消失。
+     */
+    @RequiresPerm({"budget:item:freeze", "budget:item:create"})
     @OperLog(module = "BUDGET", operType = "UPDATE", desc = "冻结/解冻预算行")
     @PostMapping("/item/{id}/freeze")
-    public Result<Void> freeze(@PathVariable Long id, @RequestParam boolean freeze) {
-        budgetService.setFreeze(id, freeze);
+    public Result<Void> freeze(@PathVariable Long id, @RequestParam boolean freeze,
+                               @RequestParam(required = false) String reason) {
+        budgetService.setFreeze(id, freeze, reason);
         return Result.success();
     }
 
