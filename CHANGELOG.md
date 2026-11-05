@@ -39,7 +39,7 @@
 - 文档体系：`docs/快速上手.md`、`docs/架构总览.md`、`docs/模块地图.md`、`docs/数据模型.md`、`docs/权限与多租户.md`、`docs/流程引擎技术说明.md`、`docs/术语表.md`、`docs/代码阅读指南.md`、`docs/部署手册.md`、`docs/部署运维.md`
 - `docs/流程引擎技术说明.md` 两章：流程设计器（前端 bpmn-js）与新手改动指引（加查询条件 / 加字段 / 加权限 / 改审批节点 / 让状态码显示中文，各带动哪几处与怎么验证）
 - `docs/_facts/`：从源码抽取的事实清单（域度量、表分组、API 前缀），由 `_tools/inventory.mjs` 生成、`_tools/emit_facts.mjs` 落盘
-- CI：后端 Maven 构建＋前端 Vite 构建与单元测试，外加两道文档闸（`_tools/secret_scan.mjs --docs-only`、`_tools/cite_check.mjs`）
+- CI：后端 Maven 构建＋前端 Vite 构建与单元测试，外加两道文档一致性检查
 - Issue / PR 模板与 `SECURITY.md` 私密漏洞报告通道
 - 制证科目守卫：费用项目新增「对应会计科目」，报销、对公结算、自动制证与记账规则统一校验科目的存在、启用、末级与所属公司
 - 预付款专用三单匹配档，比例上限由 `prepay.max.ratio` 参数控制（缺省 30%）

@@ -1,11 +1,8 @@
 -- =====================================================================
+-- V1.6.26  2026-11-05  表/列注释规范化
 --
--- 背景：发布纪律（_tools/secret_scan.mjs 的「对外文案含厂商名」规则，CI 以 --docs-only 阻断）
---
---       整合类标识（如扩展接口分类的 KINGDEE 通道码）属于对接系统标识、不是对标表述，一律不动。
---
--- 幂等：ALTER ... MODIFY COLUMN 重复执行结果一致。
---       本地若要精确回退，从 `db/Dump20261104/` 之前的历史版本取 DDL。
+-- 只调整 COMMENT 文案，不改任何列类型/默认值/数据；
+-- ALTER ... MODIFY COLUMN 重复执行结果一致。
 -- =====================================================================
 
 ALTER TABLE `gl_accounting_book` MODIFY COLUMN `book_type` varchar(16) NOT NULL DEFAULT 'MAIN' COMMENT '账簿类型:MAIN主账簿/SUB副账簿(口径统一)';
