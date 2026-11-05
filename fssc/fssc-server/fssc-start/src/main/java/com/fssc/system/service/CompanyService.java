@@ -115,7 +115,45 @@ public class CompanyService {
         return m;
     }
 
+    /**
+     * 公司启用/停用。
+     *
+     * <p>停用是三处「自锁」风险点，全部前置拦掉（此前是裸 updateById，界面上也没入口，
+     * 一旦有人从接口停错，只能改库恢复）：
+     * <ol>
+     *   <li>不能停用当前登录账号所属公司——否则本人下一次请求就落在停用主体上；</li>
+     *   <li>不能停用最后一家启用公司——全停等于把租户锁死；</li>
+     *   <li>存在未停用的下级公司时拒绝——避免出现「父停子不停」的悬挂树。</li>
+     * </ol>
+     * 不级联改动部门状态：部门是独立主数据，谁停的谁负责，页面按公司树过滤，停用公司下的
+     * 部门本就不会被选到；隐式改别人的数据比留一条可见的不一致更难排查。
+     */
     public void enable(Long id, boolean enable) {
+        SysCompany cur = sysCompanyMapper.selectById(id);
+        if (cur == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "公司不存在: " + id);
+        }
+        if (!enable) {
+            LoginUser me = UserContext.get();
+            if (me != null && id.equals(me.getCompanyId())) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "不能停用当前登录账号所属公司，请先切换到其他公司再操作");
+            }
+            long active = sysCompanyMapper.selectCount(new LambdaQueryWrapper<SysCompany>()
+                    .eq(SysCompany::getStatus, "NORMAL")
+                    .eq(SysCompany::getDelFlag, 0));
+            if (active <= 1) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "至少保留一家启用公司，不能停用最后一家");
+            }
+            long activeChildren = sysCompanyMapper.selectCount(new LambdaQueryWrapper<SysCompany>()
+                    .eq(SysCompany::getParentId, id)
+                    .eq(SysCompany::getStatus, "NORMAL")
+                    .eq(SysCompany::getDelFlag, 0));
+            if (activeChildren > 0) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "该公司下还有 " + activeChildren + " 家未停用的下级公司，请先停用下级公司");
+            }
+        }
         SysCompany u = new SysCompany();
         u.setId(id);
         u.setStatus(enable ? "NORMAL" : "DISABLED");

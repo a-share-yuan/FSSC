@@ -79,6 +79,8 @@
                （非 VOID 且非 PAID/CLOSED/ARCHIVED）。与「作废」并列可见：作废拦在下游收货/付款数据上，
                那种单改走「终止」，谁能点由后端状态前置兜底。 -->
           <el-button v-if="['OPEN','APPROVED','REJECTED','INVOICED'].includes(row.status) && hasPerm('po:order:update')" link type="danger" size="small" @click="terminateOrderRow(row)">终止</el-button>
+          <!-- 恢复：终止/作废(VOID)后误操作的回退通道，回到 DRAFT 重新提交审批；已有收货金额的单不给恢复 -->
+          <el-button v-if="row.status === 'VOID' && hasPerm('po:order:update')" link type="success" size="small" @click="restoreOrderRow(row)">恢复</el-button>
           <!-- 归档：仅已关闭(CLOSED)可归档，落最终状态 ARCHIVED 后不可再变更；规则同 PurchaseService.archiveOrder -->
           <el-button v-if="row.status === 'CLOSED' && hasPerm('po:order:update')" link type="warning" size="small" @click="archiveOrderRow(row)">归档</el-button>
         </template>
@@ -858,12 +860,12 @@ async function voidOrder(row) {
 }
 
 // 终止采购订单（最终状态机人工环节，权限码 po:order:update）：处理已收货/已挂付款但不再履约的单，
-// 与「作废」的分工由后端同一规则把关；终止原因必填（≥2字），落最终状态后不可恢复
+// 与「作废」的分工由后端同一规则把关；终止原因必填（≥2字）。终止后可【恢复】回 DRAFT 重走审批。
 async function terminateOrderRow(row) {
   let reason = ''
   try {
     const { value } = await ElMessageBox.prompt(
-      `确认终止订单 ${row.poNo}（${row.supplierName || ''}）？终止后剩余未执行部分不再履约，且不可恢复`,
+      `确认终止订单 ${row.poNo}（${row.supplierName || ''}）？终止后剩余未执行部分不再履约；误操作可在列表用【恢复】退回草稿`,
       '终止采购订单',
       {
         inputPlaceholder: '请填写终止原因（必填，不少于 2 个字）',
@@ -877,6 +879,32 @@ async function terminateOrderRow(row) {
   try {
     await purchaseApi.orderTerminate(row.id, { reason })
     ElMessage.success(t('purchase.poOrder.Terminated'))
+    load()
+  } catch (e) { ElMessage.error(e.message) }
+}
+
+/**
+ * 恢复已终止的采购订单：VOID → DRAFT，需重新提交审批。
+ * 终止同时取消了审批流实例，所以只能回草稿重走，不能直接恢复成「已审批」。
+ */
+async function restoreOrderRow(row) {
+  let reason = ''
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `确认恢复订单 ${row.poNo}（${row.supplierName || ''}）？恢复后回到「草稿」，需重新提交审批`,
+      '恢复采购订单',
+      {
+        inputPlaceholder: '请填写恢复原因（必填，不少于 2 个字）',
+        inputValidator: (v) => (v != null && String(v).trim().length >= 2) || '请填写不少于 2 个字的恢复原因',
+        closeOnClickModal: false,
+        distinguishCancelAndClose: true,
+      },
+    )
+    reason = String(value || '').trim()
+  } catch (_) { return } // 用户取消
+  try {
+    await purchaseApi.orderRestore(row.id, { reason })
+    ElMessage.success(`订单 ${row.poNo} 已恢复为草稿`)
     load()
   } catch (e) { ElMessage.error(e.message) }
 }

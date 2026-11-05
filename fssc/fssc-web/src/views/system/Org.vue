@@ -29,6 +29,7 @@
                 <span class="tree-node">
                   <span>{{ data.companyName }} <small style="color:#999">{{ data.companyCode }}</small></span>
                   <span class="node-ops">
+                    <el-button v-permission="'system:company:update'" link :type="data.status === 'NORMAL' ? 'warning' : 'success'" size="small" @click.stop="toggleEnable('company', data)">{{ data.status === 'NORMAL' ? $t('system.common.btnDisable') : $t('system.common.btnEnable') }}</el-button>
                     <el-button v-permission="'system:company:update'" link type="primary" size="small" @click.stop="open('company', data)">{{ $t('system.common.btnEdit') }}</el-button>
                     <el-button v-permission="'system:company:delete'" link type="danger" size="small" @click.stop="remove('company', data)">{{ $t('system.common.btnDelete') }}</el-button>
                   </span>
@@ -66,6 +67,7 @@
                   <span class="tree-node">
                     <span>{{ data.deptName }} <small style="color:#999">{{ data.deptCode }}</small></span>
                     <span class="node-ops">
+                      <el-button v-permission="'system:dept:update'" link :type="data.status === 'NORMAL' ? 'warning' : 'success'" size="small" @click.stop="toggleEnable('dept', data)">{{ data.status === 'NORMAL' ? $t('system.common.btnDisable') : $t('system.common.btnEnable') }}</el-button>
                       <el-button v-permission="'system:dept:update'" link type="primary" size="small" @click.stop="open('dept', data)">{{ $t('system.common.btnEdit') }}</el-button>
                       <el-button v-permission="'system:dept:delete'" link type="danger" size="small" @click.stop="remove('dept', data)">{{ $t('system.common.btnDelete') }}</el-button>
                     </span>
@@ -403,6 +405,28 @@ async function remove(kind, row) {
     else if (kind === 'post' && selectedDept.value) { await onDeptSelect(selectedDept.value) }
     else if (kind === 'post' && selectedCompany.value) { await loadPosts(selectedCompany.value.id, null) }
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
+}
+
+/**
+ * 公司/部门启停用。
+ * 后端已带自锁保护（不能停在当前登录主体、不能停最后一家公司、有在用子节点或在职用户时拒绝），
+ * 这里只做二次确认，把「停用会影响什么」说清楚。
+ */
+async function toggleEnable(kind, row) {
+  const enabling = row.status !== 'NORMAL'
+  try {
+    await ElMessageBox.confirm(
+      t(enabling ? 'system.org.askEnableEntity' : 'system.org.askDisableEntity', { v1: typeLabel.value }),
+      t(enabling ? 'system.common.btnEnable' : 'system.common.btnDisable'),
+      { type: 'warning' })
+  } catch { return }
+  try {
+    if (kind === 'company') await orgApi.companyEnable(row.id, enabling)
+    else await orgApi.deptEnable(row.id, enabling)
+    ElMessage.success(t('system.common.msgSaved'))
+    if (kind === 'company') { await loadCompanyTree() }
+    else if (selectedCompany.value) { await loadDeptAndPosts(selectedCompany.value.id) }
+  } catch (e) { if (e?.message) ElMessage.error(e.message) }
 }
 
 // 进页默认选中当前用户所属公司（loadCompanyTree 完成后联动右侧）

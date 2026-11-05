@@ -255,6 +255,38 @@ public class ContractService {
                 String.valueOf(id), auditBefore, auditAfter, "手工关闭");
     }
 
+    /**
+     * 重开已关闭的合同：CLOSED → EFFECTIVE，并重新占用预算。
+     *
+     * <p>关闭时 {@link #releaseBudget} 已把合同预算释放掉，所以重开必须重新占用；预算不够时
+     * 由 {@code BudgetService.occupy} 直接抛错，合同保持 CLOSED——不会出现「状态开了、预算没占」的半截态。
+     *
+     * <p>由「发起变更」关闭的原合同不允许重开：它已经派生出新版本（parentId=本单），
+     * 两份同时生效会把同一份合同算两遍额度。
+     */
+    public void reopen(Long id) {
+        ContContract c = require(id);
+        if (!"CLOSED".equals(c.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "仅已关闭的合同可重开（当前状态: " + c.getStatus() + "）");
+        }
+        long variants = mapper.selectCount(new LambdaQueryWrapper<ContContract>()
+                .eq(ContContract::getParentId, id)
+                .eq(ContContract::getDelFlag, 0));
+        if (variants > 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "该合同已发起变更并派生新版本，不能重开；请在最新版本上操作");
+        }
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
+        auditBefore.put("status", c.getStatus());
+        freezeBudget(c);
+        setStatus(id, "EFFECTIVE");
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
+        auditAfter.put("status", "EFFECTIVE");
+        auditTrailService.recordUpdate("CONTRACT", id, c.getContractNo(), "cont_contract",
+                String.valueOf(id), auditBefore, auditAfter, "重开合同（重新占用预算）");
+    }
+
     /** 发起变更：复制原合同为新的 DRAFT 变更版本（parentId 关联），原合同关闭并释放预算 */
     public Long change(Long id) {
         ContContract c = require(id);

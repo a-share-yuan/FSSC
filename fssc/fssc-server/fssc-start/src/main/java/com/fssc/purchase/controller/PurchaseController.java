@@ -137,6 +137,21 @@ public class PurchaseController {
     }
 
     /**
+     * 恢复已终止的采购订单：VOID → DRAFT，需重新提交审批。
+     * POST /api/tenant/purchase/order/{id}/restore，body {reason: string}。
+     * 与 terminate 成对：终止是人工决策，恢复同样是人工决策，都留显式入口与原因。
+     */
+    @RequiresPerm("po:order:update")
+    @OperLog(module = "PURCHASE", operType = "UPDATE", desc = "恢复采购订单")
+    @PostMapping("/order/{id}/restore")
+    public Result<Void> restoreOrder(@PathVariable("id") Long id,
+                                     @RequestBody(required = false) Map<String, Object> req) {
+        String reason = req == null || req.get("reason") == null ? null : req.get("reason").toString();
+        purchaseService.restoreOrder(id, reason);
+        return Result.success();
+    }
+
+    /**
      * 最终状态机分治：归档采购订单（CLOSED → ARCHIVED）＝人工结案判断，
      * 没有累计量判据可给批处理用（要的是「这批单可以结案」的决定），故留显式入口＋前端按钮。
      * POST /api/tenant/purchase/order/{id}/archive；鉴权写专码 po:order:update。

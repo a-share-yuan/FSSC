@@ -108,6 +108,15 @@ public class ContractController {
         return Result.success();
     }
 
+    /** 重开已关闭合同（CLOSED→EFFECTIVE，并重新占用预算）；变更派生的原合同不可重开 */
+    @RequiresPerm("contract:update")
+    @OperLog(module = "CONTRACT", operType = "UPDATE", desc = "重开合同")
+    @PostMapping("/{id}/reopen")
+    public Result<Void> reopen(@PathVariable Long id) {
+        service.reopen(id);
+        return Result.success();
+    }
+
     @RequiresPerm("contract:update")
     @PostMapping("/{id}/supplement")
     public Result<Long> supplement(@PathVariable Long id) {

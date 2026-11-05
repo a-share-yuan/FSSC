@@ -2195,6 +2195,8 @@ export default {
     },
     org: {
       askDeleteEntity: 'Delete this {v1}?',
+      askDisableEntity: 'Disable this {v1}? No new business can start under it. If active child nodes or active staff remain, the request is rejected with the reason.',
+      askEnableEntity: 'Enable this {v1}? New business can start under it again.',
       btnDeptAdd: 'Add department',
       btnExportCsv: 'Export CSV',
       btnPostAdd: 'Add position',
