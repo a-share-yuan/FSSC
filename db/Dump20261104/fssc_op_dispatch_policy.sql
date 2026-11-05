@@ -31,10 +31,10 @@ CREATE TABLE `op_dispatch_policy` (
   `node_key` varchar(64) NOT NULL DEFAULT '*' COMMENT '节点ID(BPMN userTask id)；* 表示全局默认行',
   `policy_name` varchar(128) DEFAULT NULL COMMENT '策略名称',
   `strategy` varchar(24) NOT NULL DEFAULT 'PICK' COMMENT '分配策略:PICK抢单/BALANCE_TIME均衡按时/BALANCE_VOLUME均衡按量/SMART智能',
-  `normal_hours` decimal(8,2) NOT NULL DEFAULT '24.00' COMMENT '普通任务时限(小时)，口径默认24h',
-  `urgent_hours` decimal(8,2) NOT NULL DEFAULT '4.00' COMMENT '加急任务时限(小时)，口径默认4h',
-  `balance_interval_hours` decimal(8,2) DEFAULT '1.00' COMMENT '均衡·按时的分配间隔(小时)，默认1h一分',
-  `balance_batch_size` int DEFAULT '10' COMMENT '均衡·按量的累积批大小(单)，默认10单一分配',
+  `normal_hours` decimal(8,2) NOT NULL DEFAULT '24.00' COMMENT '普通任务时限(小时)，缺省 24h',
+  `urgent_hours` decimal(8,2) NOT NULL DEFAULT '4.00' COMMENT '加急任务时限(小时)，缺省 4h',
+  `balance_interval_hours` decimal(8,2) DEFAULT '1.00' COMMENT '均衡·按时的分配间隔(小时)，缺省 1h 一分',
+  `balance_batch_size` int DEFAULT '10' COMMENT '均衡·按量的累积批大小(单)，缺省 10 单一分配',
   `smart_weight_volume` decimal(4,2) DEFAULT '0.50' COMMENT '智能策略权重:在手量',
   `smart_weight_urgency` decimal(4,2) DEFAULT '0.30' COMMENT '智能策略权重:时限紧迫度',
   `smart_weight_priority` decimal(4,2) DEFAULT '0.20' COMMENT '智能策略权重:任务优先级',
@@ -70,4 +70,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:30:37
+-- Dump completed on 2026-11-05 22:33:52

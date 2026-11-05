@@ -49,7 +49,7 @@ CREATE TABLE `wf_process_outbox` (
   UNIQUE KEY `uk_wpo_idem` (`idempotency_key`),
   KEY `idx_wpo_claim` (`status`,`next_retry_at`,`id`),
   KEY `idx_wpo_tenant_proc` (`tenant_id`,`proc_inst_id`,`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='流程投影事件发件箱（「流程处理模式=消息队列」，事务性发件箱实现）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='流程投影事件发件箱（事务性发件箱实现）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -70,4 +70,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:29:53
+-- Dump completed on 2026-11-05 22:33:53

@@ -40,8 +40,8 @@ CREATE TABLE `md_form_field` (
   `help_text` varchar(500) DEFAULT NULL COMMENT '字段说明',
   `default_value` varchar(500) DEFAULT NULL COMMENT '默认值',
   `options_json` text COMMENT '选项配置 JSON(SELECT 的选项树/参照表查询)',
-  `required` tinyint NOT NULL DEFAULT '0' COMMENT '必录属性:1-必录(对应"字段必录")',
-  `locked` tinyint NOT NULL DEFAULT '0' COMMENT '锁定属性:1-编辑时灰显不可改(对应"锁定属性")',
+  `required` tinyint NOT NULL DEFAULT '0' COMMENT '必录属性:1-必录',
+  `locked` tinyint NOT NULL DEFAULT '0' COMMENT '锁定属性:1-编辑时灰显不可改',
   `readonly_roles` varchar(500) DEFAULT NULL COMMENT '只读角色码(逗号分隔;命中角色即只读)',
   `visible_roles` varchar(500) DEFAULT NULL COMMENT '可见角色码(逗号分隔;空=全部可见)',
   `unique_flag` tinyint NOT NULL DEFAULT '0' COMMENT '是否唯一键',
@@ -79,4 +79,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:29:48
+-- Dump completed on 2026-11-05 22:33:51

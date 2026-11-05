@@ -45,13 +45,13 @@ for %f in (db\Dump20261104\fssc_*.sql) do mysql --default-character-set=utf8mb4 
 `db/Dump*/` 与 `db/backup/` 在 `.gitignore` 里，是为了防止日后随手 dump 又被 `git add -A` 带进来；
 `Dump20261104/` 是**明确 `git add -f` 入库**的那一枚例外。
 
-## 增量脚本：只有 v1.0.0 → v1.1.1 这一段
+## 增量脚本：只有 v1.0.0 → v1.2.0 这一段
 
 建库仍以整库 dump 为唯一入口，没有「从空库按版本顺序跑脚本」这条路，项目也未引入 Flyway/Liquibase。
 库结构要往前走，首选重新导出一份整库 dump 覆盖 `db/Dump<日期>/`，并同步更新本文件的日期与枚数
 （怎么产这份 dump 见 `docs/数据模型.md` §6）。
 
-唯一的例外是 `db/upgrade/`：把 **v1.0.0 升到 v1.1.1** 所需的增量脚本（结构、参数、菜单、种子）成对发布，
+唯一的例外是 `db/upgrade/`：把 **v1.0.0 升到 v1.2.0** 所需的增量脚本（结构、参数、菜单、种子）成对发布，
 供不能重导库的部署使用。更早的历史脚本不发布——外部还原不了执行顺序，发了也没意义。
 
 `db/hotfix/` 放**数据级**定点修正（某个环境的数据被演练写坏、界面上又没有入口改），
@@ -59,4 +59,4 @@ for %f in (db\Dump20261104\fssc_*.sql) do mysql --default-character-set=utf8mb4 
 
 注意 `db/upgrade/` **不含**制证科目守卫的主数据（34 条明细科目 / 210 条费用项目映射 / 112 条记账规则），
 那批是 11-04 的库内迁移，没有沉淀成脚本；原地升级时必须另行补齐，否则报销提交会被科目守卫拦下。
-详见 `db/upgrade/README.md` 与 `docs/更新说明-v1.1.1.md` 第八节。
+详见 `db/upgrade/README.md` 与 `docs/更新说明-v1.2.0.md` 第八节。

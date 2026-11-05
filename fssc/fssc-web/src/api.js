@@ -1585,6 +1585,7 @@ export const glexApi = {
   journalPage: (pageNum, pageSize, period, entryType, keyword) =>
     http.get('/tenant/glex/journal/page', { params: { pageNum, pageSize, period, entryType, keyword } }),
   /**
+   * 一般总账记账。：ACCRUAL/DEFER 会按「申请占用」口径扣预算，
    * 故额外带预算维度（费用项目 + 承担部门）与软控超支理由；其余类型传了也被后端忽略。
    */
   journalGenerate: (period, entryType, summary, amount, debitSubjectId, creditSubjectId, extra = {}) =>

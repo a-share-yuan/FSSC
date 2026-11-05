@@ -37,6 +37,7 @@ public class GlJournalEntry extends TenantAuditBase {
     /** 记账凭证号 */
     private String voucherNo;
 
+    // ── 预算「申请占用」维度（仅 ACCRUAL/DEFER 用；口径见 GlJournalService#generate） ──
 
     /** 费用项目（md_expense_item.id）：预提/待摊的预算维度来源 */
     private Long expenseItemId;

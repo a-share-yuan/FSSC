@@ -52,7 +52,7 @@ CREATE TABLE `wf_process_log` (
   KEY `idx_wpl_tenant_bizno` (`tenant_id`,`biz_no`),
   KEY `idx_wpl_tenant_type_time` (`tenant_id`,`log_type`,`create_time`),
   KEY `idx_wpl_tenant_del_id` (`tenant_id`,`del_flag`,`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='流程处理详细日志（参数4.3「详细日志开关」，管理中心可查）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='流程处理详细日志（详细日志开关，管理中心可查）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -73,4 +73,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-04 23:30:36
+-- Dump completed on 2026-11-05 22:33:52

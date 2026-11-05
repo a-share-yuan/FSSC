@@ -62,12 +62,14 @@ SELECT 1, 'review.credit.auto_approve.min_level', '信用免审最低等级', 'B
                     WHERE `config_key` = 'review.credit.auto_approve.min_level' AND `tenant_id` = 1);
 
 
+--    ③ 兼容：早期执行过本脚本的库 min_level 是 'C'，此处抬到 'B'（对齐业界「C/D 一律人工」口径）
 UPDATE `sys_config`
    SET `config_value` = 'B', `update_time` = NOW()
  WHERE `config_key` = 'review.credit.auto_approve.min_level'
    AND `tenant_id` = 1
    AND `config_value` = 'C';
 
+--    ④ 免审单抽检比例：自动通过的单据按该比例转为人工复核（流程抽检）
 INSERT INTO `sys_config`
   (`tenant_id`, `config_key`, `config_name`, `config_value`, `value_type`, `group_code`,
    `is_builtin`, `editable`, `remark`, `create_time`, `update_time`, `del_flag`)
