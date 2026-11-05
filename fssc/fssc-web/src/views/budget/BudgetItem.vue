@@ -73,9 +73,20 @@
             <small :class="execRate(row) > 100 ? 'text-red' : ''">{{ execRateText(row) }}</small>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column :label="$t('budget.budgetItem.Status')" width="92" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.freeze === 1 ? 'danger' : 'success'">
+              {{ row.freeze === 1 ? $t('budget.budgetItem.Frozen') : $t('budget.budgetItem.Normal') }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="170" fixed="right">
           <template #default="{ row }">          <InlineActions :visible="true" @view="openDialog(row, true)" :show-approve="canApprove(row)" :show-reject="canApprove(row)" :show-trace="false" @approve="handleApprove(row)" @reject="handleReject(row)" @trace="openTrace(row)" />
             <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
+            <el-button v-if="canFreeze" link size="small"
+              :type="row.freeze === 1 ? 'success' : 'warning'" @click="toggleFreeze(row)">
+              {{ row.freeze === 1 ? $t('budget.budgetItem.Unfreeze') : $t('budget.budgetItem.Freeze') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -187,7 +198,7 @@
 <script setup>
 
 import { onMounted, reactive, ref, nextTick, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart } from 'echarts/charts'
 import { TooltipComponent, GridComponent, LegendComponent } from 'echarts/components'
@@ -244,6 +255,40 @@ const filter = reactive({ schemeId: null, itemId: null })
 const page = reactive({ current: 1, size: 10, total: 0 })
 // 读权限门控——无 budget:item:list 时不发起列表请求、不渲染数据区，给显式空态
 const canList = hasPerm('budget:item:list')
+// 冻结/解冻门控：与后端 @RequiresPerm({"budget:item:freeze", "budget:item:create"}) 对齐。
+// 新权限码尚未授权时退回旧码，滚动升级期间按钮不会整片消失。
+const canFreeze = hasPerm('budget:item:freeze') || hasPerm('budget:item:create')
+
+/**
+ * 冻结/解冻预算行。冻结后拒绝新增占用（释放、核销照常），解冻恢复新增占用。
+ * 必须填原因：这行数据以前被 11-03 的演练冻过一次、事后没人知道为什么，也没有入口能改回来。
+ */
+async function toggleFreeze(row) {
+  const freezing = row.freeze !== 1
+  let reason = ''
+  try {
+    const { value } = await ElMessageBox.prompt(
+      freezing ? t('budget.budgetItem.FreezeTip') : t('budget.budgetItem.UnfreezeTip'),
+      freezing ? t('budget.budgetItem.FreezeTitle') : t('budget.budgetItem.UnfreezeTitle'),
+      {
+        type: 'warning',
+        inputType: 'textarea',
+        inputPlaceholder: t('budget.budgetItem.ReasonPlaceholder'),
+        inputValidator: (v) => (v && v.trim().length >= 2) || t('budget.budgetItem.ReasonRequired'),
+        confirmButtonText: t('budget.budgetItem.Confirm'),
+        cancelButtonText: t('budget.budgetItem.Cancel'),
+      }
+    )
+    reason = (value || '').trim()
+  } catch {
+    return // 用户取消
+  }
+  try {
+    await budgetApi.itemFreeze(row.id, freezing, reason)
+    ElMessage.success(freezing ? t('budget.budgetItem.FreezeDone') : t('budget.budgetItem.UnfreezeDone'))
+    await loadList()
+  } catch (e) { ElMessage.error(e.message) }
+}
 
 // 预算执行月度趋势图
 const trendChartRef = ref()

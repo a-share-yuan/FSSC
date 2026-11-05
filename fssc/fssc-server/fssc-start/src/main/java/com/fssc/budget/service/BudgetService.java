@@ -2317,23 +2317,39 @@ public class BudgetService {
         return res;
     }
 
-    /** 冻结/解冻预算行：冻结后 occupy 拒绝、释放与核销照常 */
+    /**
+     * 冻结/解冻预算行：冻结后 occupy 拒绝、释放与核销照常。
+     *
+     * @param reason 操作原因，冻结时必填（防止再出现「谁冻的、为什么冻」无从追溯的遗留态）；
+     *               解冻可空，但界面同样要求填。原因落审计轨迹的描述字段。
+     */
     @Transactional(rollbackFor = Exception.class)
-    public void setFreeze(Long itemId, boolean freeze) {
+    public void setFreeze(Long itemId, boolean freeze, String reason) {
         BgItem cur = bgItemMapper.selectById(itemId);
         if (cur == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "预算明细不存在: " + itemId);
+        }
+        String trimmed = reason == null ? "" : reason.trim();
+        if (freeze && trimmed.isEmpty()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "冻结预算行必须填写原因");
+        }
+        if (cur.getFreeze() != null && cur.getFreeze() == (freeze ? 1 : 0)) {
+            // 状态未变：不写库、不记审计，避免重复点击刷出一串无用轨迹
+            log.info("预算明细 {} 已是{}状态，忽略本次请求", itemId, freeze ? "冻结" : "解冻");
+            return;
         }
         BgItem upd = new BgItem();
         upd.setId(itemId);
         upd.setFreeze(freeze ? 1 : 0);
         bgItemMapper.updateById(upd);
+        String action = freeze ? "冻结预算行" : "解冻预算行";
         auditTrailService.recordUpdate("BUDGET", itemId, String.valueOf(itemId), "bg_item",
                 String.valueOf(itemId),
                 Collections.singletonMap("freeze", cur.getFreeze()),
                 Collections.singletonMap("freeze", freeze ? 1 : 0),
-                freeze ? "冻结预算行" : "解冻预算行");
-        log.info("预算明细 {} 已{}", itemId, freeze ? "冻结" : "解冻");
+                trimmed.isEmpty() ? action : action + "：" + trimmed);
+        log.info("预算明细 {} 已{}{}", itemId, freeze ? "冻结" : "解冻",
+                trimmed.isEmpty() ? "" : "（原因：" + trimmed + "）");
     }
 
     private static BigDecimal toAmount(Object v) {
