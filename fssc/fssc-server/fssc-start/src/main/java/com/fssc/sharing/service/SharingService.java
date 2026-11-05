@@ -66,6 +66,37 @@ public class SharingService {
     private final BudgetService budgetService;
     private final VoucherService voucherService;
     private final AuditTrailService auditTrailService;
+    private final com.fssc.system.service.ConfigService configService;
+
+    /** 免审单抽检比例（sys_config，缺省 0.10）：抽中的单不自动办结，转人工复核 */
+    private static final String KEY_SAMPLE_RATE = "review.auto_pass.sample_rate";
+
+    /**
+     * 是否被抽中做人工复核。
+     *
+     * 否则免掉的那一关就是盲区。这里按配置比例（缺省 10%）随机抽，抽中就把本单的
+     * 审核任务留在待认领池，等价于转人工。
+     *
+     * <p>比例读取失败一律回落缺省值，不让配置问题变成"全部免审"。
+     */
+    private boolean sampledForManualReview() {
+        double rate = 0.10;
+        try {
+            String v = configService.getValue(KEY_SAMPLE_RATE);
+            if (v != null && !v.isBlank()) {
+                rate = Double.parseDouble(v.trim());
+            }
+        } catch (Exception e) {
+            log.warn("抽检比例读取失败，按缺省 0.10 处理: {}", e.getMessage());
+        }
+        if (rate <= 0) {
+            return false;
+        }
+        if (rate >= 1) {
+            return true;
+        }
+        return java.util.concurrent.ThreadLocalRandom.current().nextDouble() < rate;
+    }
 
     /** 按业务类型生成共享作业链（仅纳入共享中心的单据调用）。返回首环节任务ID。 */
     public Long createChain(ExpBill bill, String bizType) {
@@ -124,7 +155,12 @@ public class SharingService {
         if ("AUTO_PASS".equals(review.getAction())) {
             OpAuditTask first = opAuditTaskMapper.selectById(firstId);
             if (first != null) {
-                autoFinishTask(first, "智能审单自动通过");
+                if (sampledForManualReview()) {
+                    // 抽中：不办结，任务留在待认领池 ⇒ 仍是人工审核，只是比例大幅下降
+                    log.info("单据 {} 智能审单判定自动通过，但抽中质检复核，保留人工审核任务", bill.getBillNo());
+                } else {
+                    autoFinishTask(first, "智能审单自动通过");
+                }
             }
         }
         return firstId;

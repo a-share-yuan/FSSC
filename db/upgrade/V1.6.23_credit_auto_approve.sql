@@ -8,7 +8,7 @@
 --
 -- 本增量：
 --   ① 为全部在职、非管理员用户建档：初始 600 分 / C 级 / 免审额度 500（与代码里算好的口径一致）；
---   ② 写入两个控制参数，让免审可灰度、可一键关停，不必改代码；
+--   ② 写入控制参数：免审总开关、最低免审等级（缺省 B）、免审单抽检比例；
 --   ③ 把 RR_AMOUNT_HIGH 的备注改成归档说明——金额分档已在 CLAIM 流程的
 --      Gw_16/Gw_9/Gw_11/Gw_13（5万/20万/50万/500万）里实现，审单规则不再承担分档。
 --
@@ -49,19 +49,37 @@ SELECT 1, 'review.credit.auto_approve.enabled', '信用免审总开关', '1', 'B
  WHERE NOT EXISTS (SELECT 1 FROM `sys_config`
                     WHERE `config_key` = 'review.credit.auto_approve.enabled' AND `tenant_id` = 1);
 
---    ② 最低免审等级：A/B/C/D，缺省 C（新员工 600 分即 C 级）
+--    ② 最低免审等级：A/B/C/D，缺省 B（新员工 600 分是 C 级，不免审）
 INSERT INTO `sys_config`
   (`tenant_id`, `config_key`, `config_name`, `config_value`, `value_type`, `group_code`,
    `is_builtin`, `editable`, `remark`, `create_time`, `update_time`, `del_flag`)
-SELECT 1, 'review.credit.auto_approve.min_level', '信用免审最低等级', 'C', 'STRING', 'COMMON',
+SELECT 1, 'review.credit.auto_approve.min_level', '信用免审最低等级', 'B', 'STRING', 'COMMON',
        0, 1,
-       '只有等级不低于该档才免审（A>B>C>D）。不想放过 C 级就改成 B；非法值一律回落 C。',
+       '只有等级不低于该档才免审（A>B>C>D）。缺省 B：新员工 600 分（C 级）不免审，攒到 700 升 B 才有额度。非法值一律回落 C。',
        NOW(), NOW(), 0
   FROM DUAL
  WHERE NOT EXISTS (SELECT 1 FROM `sys_config`
                     WHERE `config_key` = 'review.credit.auto_approve.min_level' AND `tenant_id` = 1);
 
--- ③ RR_AMOUNT_HIGH 归档说明（规则保持停用，不做分档改造）
+
+UPDATE `sys_config`
+   SET `config_value` = 'B', `update_time` = NOW()
+ WHERE `config_key` = 'review.credit.auto_approve.min_level'
+   AND `tenant_id` = 1
+   AND `config_value` = 'C';
+
+INSERT INTO `sys_config`
+  (`tenant_id`, `config_key`, `config_name`, `config_value`, `value_type`, `group_code`,
+   `is_builtin`, `editable`, `remark`, `create_time`, `update_time`, `del_flag`)
+SELECT 1, 'review.auto_pass.sample_rate', '免审单抽检比例', '0.10', 'NUMBER', 'COMMON',
+       0, 1,
+       '智能审单判定自动通过的单据，按该比例抽中转为人工复核（免审≠不查）。0=不抽检，1=全部转人工。读取方 SharingService。',
+       NOW(), NOW(), 0
+  FROM DUAL
+ WHERE NOT EXISTS (SELECT 1 FROM `sys_config`
+                    WHERE `config_key` = 'review.auto_pass.sample_rate' AND `tenant_id` = 1);
+
+-- ⑤ RR_AMOUNT_HIGH 归档说明（规则保持停用，不做分档改造）
 UPDATE `op_review_rule`
    SET `remark` = CONCAT(IFNULL(`remark`, ''),
                          IF(IFNULL(`remark`, '') = '', '', ' | '),
