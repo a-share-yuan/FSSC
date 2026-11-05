@@ -1203,4 +1203,63 @@ public class PurchaseService {
                 "采购订单终止（" + o.getPoNo() + "）：" + reason.trim());
         log.info("采购订单 {} 已终止（{}→VOID，原因: {}，操作人: {}）", o.getPoNo(), status, reason.trim(), operator);
     }
+
+    /**
+     * 恢复已终止的采购订单：VOID → DRAFT，回到可编辑、可重新提交审批的起点。
+     *
+     * <p>为什么回到 DRAFT 而不是终止前的状态：终止会同时把该单的审批流实例取消、待办置 CANCELLED
+     * （见 {@link #terminateOrder}），恢复成 APPROVED 就成了「状态说批过了、流程里没有」的假生效。
+     * 回 DRAFT 让单据老老实实重走一遍审批，与 {@link #submitOrder} 的准入（仅 DRAFT 可提交）严格对齐。
+     *
+     * <p>已有收货金额的订单不允许恢复：货已经到了一部分，说明单子执行过，回草稿重来会把
+     * 收货与订单的勾稽关系弄断，正确做法是新建订单或走退货。
+     */
+    public void restoreOrder(Long orderId, String reason) {
+        PoOrder o = orderMapper.selectById(orderId);
+        if (o == null || (o.getDelFlag() != null && o.getDelFlag() == 1)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "采购订单不存在: " + orderId);
+        }
+        if (!"VOID".equals(o.getStatus())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "仅已终止/作废的订单可恢复（当前状态: " + o.getStatus() + "）");
+        }
+        if (o.getReceivedAmount() != null && o.getReceivedAmount().compareTo(BigDecimal.ZERO) > 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "订单已收货 " + o.getReceivedAmount().stripTrailingZeros().toPlainString()
+                            + " 元，不能恢复为草稿；请新建订单或走退货");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "恢复原因必填");
+        }
+        String operator = "unknown";
+        try {
+            LoginUser lu = UserContext.get();
+            if (lu != null) {
+                operator = lu.getRealName() == null || lu.getRealName().isBlank()
+                        ? lu.getUsername() : lu.getRealName();
+            }
+        } catch (Exception ignored) { /* 无用户上下文（系统操作） */ }
+        String suffix = "；【恢复】原因：" + reason.trim() + "；操作人：" + operator
+                + "；时间：" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        String newRemark = (o.getRemark() == null ? "" : o.getRemark()) + suffix;
+        if (newRemark.length() > 500) {
+            newRemark = newRemark.substring(newRemark.length() - 500);
+        }
+        PoOrder upd = new PoOrder();
+        upd.setId(orderId);
+        upd.setStatus("DRAFT");
+        upd.setRemark(newRemark);
+        upd.setUpdateBy(userId());
+        upd.setUpdateTime(LocalDateTime.now());
+        orderMapper.updateById(upd);
+        Map<String, Object> auditBefore = new LinkedHashMap<>();
+        auditBefore.put("status", o.getStatus());
+        auditBefore.put("remark", o.getRemark());
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
+        auditAfter.put("status", "DRAFT");
+        auditAfter.put("remark", newRemark);
+        auditTrailService.recordUpdate("PURCHASE", orderId, o.getPoNo(), "po_order",
+                String.valueOf(orderId), auditBefore, auditAfter, "恢复采购订单：" + reason.trim());
+        log.info("采购订单 {} 已恢复（VOID→DRAFT，原因: {}，操作人: {}）", o.getPoNo(), reason.trim(), operator);
+    }
 }

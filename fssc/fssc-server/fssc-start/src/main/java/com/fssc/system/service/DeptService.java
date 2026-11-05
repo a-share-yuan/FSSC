@@ -11,7 +11,9 @@ import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.OrgVisibility;
 import com.fssc.framework.security.UserContext;
 import com.fssc.system.entity.SysDept;
+import com.fssc.system.entity.SysUser;
 import com.fssc.system.mapper.SysDeptMapper;
+import com.fssc.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +25,7 @@ import java.util.List;
 public class DeptService {
 
     private final SysDeptMapper sysDeptMapper;
+    private final SysUserMapper sysUserMapper;
 
     /**
      * 全租户部门树（无公司参数时的入口）。
@@ -88,7 +91,44 @@ public class DeptService {
                 ErrorCode.PARAM_INVALID, "请选择公司");
     }
 
+    /**
+     * 部门启用/停用。
+     *
+     * <p>停用前置三条，避免把组织树写坏（此前是裸 updateById，且界面上没有入口，停错只能改库）：
+     * <ol>
+     *   <li>不能停用当前登录账号所在部门——否则本人下一次取数就落在停用部门；</li>
+     *   <li>有未停用下级部门时拒绝——避免「父停子不停」；</li>
+     *   <li>部门下还有在职用户（NORMAL）时拒绝——先调岗或停用人员，不做隐式连带。</li>
+     * </ol>
+     */
     public void enable(Long id, boolean enable) {
+        SysDept cur = sysDeptMapper.selectById(id);
+        if (cur == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "部门不存在: " + id);
+        }
+        if (!enable) {
+            LoginUser me = UserContext.get();
+            if (me != null && id.equals(me.getDeptId())) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "不能停用当前登录账号所在部门，请先切换部门归属再操作");
+            }
+            long activeChildren = sysDeptMapper.selectCount(new LambdaQueryWrapper<SysDept>()
+                    .eq(SysDept::getParentId, id)
+                    .eq(SysDept::getStatus, "NORMAL")
+                    .eq(SysDept::getDelFlag, 0));
+            if (activeChildren > 0) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "该部门下还有 " + activeChildren + " 个未停用的子部门，请先停用子部门");
+            }
+            long activeUsers = sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()
+                    .eq(SysUser::getDeptId, id)
+                    .eq(SysUser::getStatus, "NORMAL")
+                    .eq(SysUser::getDelFlag, 0));
+            if (activeUsers > 0) {
+                throw new BizException(ErrorCode.PARAM_INVALID,
+                        "该部门下还有 " + activeUsers + " 名在职用户，请先调整其部门或停用账号");
+            }
+        }
         SysDept u = new SysDept();
         u.setId(id);
         u.setStatus(enable ? "NORMAL" : "DISABLED");

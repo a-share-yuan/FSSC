@@ -937,6 +937,7 @@ export const contractApi = {
   reject: (id) => http.post(`/tenant/contract/${id}/reject`),
   change: (id) => http.post(`/tenant/contract/${id}/change`),
   close: (id) => http.post(`/tenant/contract/${id}/close`),
+  reopen: (id) => http.post(`/tenant/contract/${id}/reopen`),
   supplement: (id) => http.post(`/tenant/contract/${id}/supplement`),
   conditions: (id) => http.get(`/tenant/contract/${id}/conditions`),
   template: () => http.post('/tenant/contract/template'),
@@ -1105,6 +1106,7 @@ export const purchaseApi = {
   orderVoid: (body) => http.post('/tenant/purchase/order/void', body),
   /** 终止采购订单（人工最终状态，权限码 po:order:update）：body={reason}；已收货/已挂付款但不履约的单走这里 */
   orderTerminate: (id, body) => http.post(`/tenant/purchase/order/${id}/terminate`, body),
+  orderRestore: (id, body) => http.post(`/tenant/purchase/order/${id}/restore`, body),
   /** 归档采购订单（人工最终状态，权限码 po:order:update）：CLOSED → ARCHIVED */
   orderArchive: (id) => http.post(`/tenant/purchase/order/${id}/archive`),
   /** 批次1：草稿采购订单提交审批 DRAFT → OPEN + 起 PURCHASE_ORDER_REVIEW */

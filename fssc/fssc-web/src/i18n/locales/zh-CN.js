@@ -2199,6 +2199,8 @@ export default {
     },
     org: {
       askDeleteEntity: '确认删除该{v1}？',
+      askDisableEntity: '确认停用该{v1}？停用后不能再在其下发起业务；若下方还有未停用的子节点或在职人员，会被拦下并提示原因。',
+      askEnableEntity: '确认启用该{v1}？启用后即可在其下发起业务。',
       btnDeptAdd: '新增部门',
       btnExportCsv: '导出',
       btnPostAdd: '新增岗位',
