@@ -150,12 +150,14 @@ const loading = ref(false)
 const formRef = ref(null)
 const dlg = reactive({ visible: false, saving: false, form: {} })
 
+// 必填规则只写 required + message：带上 trigger 会退化成 string 校验器，
+// 数字/布尔类型的正常取值会被判为非法（见 constants/requiredRules.spec.js）
 const rules = {
-  taxType: [{ required: true, message: '请选择税种', trigger: 'change' }],
-  ruleName: [{ required: true, message: '请填写规则名称', trigger: 'blur' }],
-  baseSource: [{ required: true, message: '请选择基数来源', trigger: 'change' }],
-  taxRate: [{ required: true, message: '请填写税率', trigger: 'blur' }],
-  baseAmount: [{ required: true, message: '手工基数来源必须填缺省基数', trigger: 'blur' }],
+  taxType: [{ required: true, message: '请选择税种' }],
+  ruleName: [{ required: true, message: '请填写规则名称' }],
+  baseSource: [{ required: true, message: '请选择基数来源' }],
+  taxRate: [{ required: true, message: '请填写税率' }],
+  baseAmount: [{ required: true, message: '手工基数来源必须填缺省基数' }],
 }
 
 function fmt(v) {

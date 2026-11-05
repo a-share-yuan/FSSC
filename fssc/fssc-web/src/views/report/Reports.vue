@@ -25,10 +25,19 @@
         <el-button type="success" size="small" v-permission="'report:export'" @click="exp('budgetExecution','预算执行')">{{ $t('report.main.Export3') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
       </div>
+      <!-- 分组导航：25 张报表按业务归 8 组，先选组、再选报表。
+           页签条因此只展开当前组（3~7 条），不再横排 25 条挤成一片。 -->
+      <div class="grp-nav" v-if="!isSingle">
+        <el-radio-group v-model="curGroup" size="small" @change="switchGroup">
+          <el-radio-button v-for="g in REPORT_GROUPS" :key="g.key" :value="g.key">
+            {{ g.label }}（{{ g.items.length }}）
+          </el-radio-button>
+        </el-radio-group>
+      </div>
       <!-- W5（非人性化整改）：25 个页签横排难定位，提供分组下拉直达；页签本身保留不动 -->
       <div class="toolbar" style="margin-bottom:8px">
         <el-select v-model="tab" filterable :placeholder="$t('report.main.Quick')" size="small" style="width: 260px">
-          <el-option-group v-for="g in REPORT_GROUPS" :key="g.label" :label="g.label">
+          <el-option-group v-for="g in REPORT_GROUPS" :key="g.key" :label="g.label">
             <el-option v-for="t in g.items" :key="t.name" :label="t.label" :value="t.name" />
           </el-option-group>
         </el-select>
@@ -430,15 +439,42 @@ const TAB_DOMAIN = {
   eff: 'report:approval:view',
   contract: 'report:contract:view', contractExec: 'report:contract:view',
   ops: 'report:sharing:view', opsEff: 'report:sharing:view', quality: 'report:sharing:view',
-  apAging: 'report:p2p:view', supplierPay: 'report:p2p:view', inputInvoice: 'report:p2p:view',
-  arAging: 'report:ar:view', outputInvoice: 'report:ar:view',
+  apAging: 'report:p2p:view', supplierPay: 'report:p2p:view',
+  // 发票族三张统计（进项/销项/税负）后端端点上只要求 report:view（ReportQueryController 注释明写：
+  // 原 P2P/AR/TAX 三把域校验已移除，避免「税务岗缺销项页、部门经理缺税负页」）。
+  // 前端若继续按域码门控，页签会被 v-if 整体不渲染 ⇒ 空白页且无任何提示。
+  inputInvoice: 'report:view', outputInvoice: 'report:view',
+  arAging: 'report:ar:view',
   cashFlow: 'report:cash:view', bankBalance: 'report:cash:view',
-  taxBurden: 'report:tax:view',
+  taxBurden: 'report:view',
   image: 'report:image:view',
   voucherStats: 'report:gl:view',
 }
-/** 判断某 tab 是否有权限（超管通配自动放行） */
-function tabAllowed(name) { return hasPerm(TAB_DOMAIN[name]) }
+/**
+ * 判断某 tab 是否可渲染。两道闸门串联：
+ *  ① 报表域权限（TAB_DOMAIN，无权则连请求都不发）；
+ *  ② 当前分组（分组模式只渲染本组页签，把 25 条页签条压到 3~7 条）。
+ * 单页深链（tab 由路由传入）必须跳过第 ② 道——否则 curGroup 默认落在第一组，
+ * 而 props.tab 属于别组时页签会被整体 v-if 掉，只剩一张空白页。
+ */
+function tabAllowed(name) {
+  if (!hasPerm(TAB_DOMAIN[name])) return false
+  if (isSingle.value) return true
+  const names = groupTabNames(curGroup.value)
+  return !names || names.includes(name)
+}
+
+/** 某分组的页签名集合；key 不存在时返回 null（＝不过滤，退化为全量） */
+function groupTabNames(key) {
+  const g = REPORT_GROUPS.find((x) => x.key === key)
+  return g ? g.items.map((i) => i.name) : null
+}
+
+/** 分组内第一张当前账号有权限的报表，用作切组后的落地页签 */
+function firstTabOfGroup(key) {
+  const names = groupTabNames(key) || []
+  return names.find((n) => hasPerm(TAB_DOMAIN[n])) || names[0] || ''
+}
 
 // 公司列表（用于报表中 companyId → 公司名）
 const selRows = ref([])
@@ -453,38 +489,71 @@ function companyName(id) { const c = companies.value.find((x) => x.value === id)
 // 组件复用时不重建实例，必须 watch props 同步 tab
 // default 由 'dept' 改 ''——宿主路由（/reports 无 props）渲染 25 页签工作台；
 // 显式传 tab 的深链（/reports/dept 等）仍单页模式。
-const props = defineProps({ tab: { type: String, default: '' } })
+const props = defineProps({
+  tab: { type: String, default: '' },
+  // 分组模式：菜单按业务分组进入本页，只渲染该组的页签（25 → 3~7 个）。
+  // 与 tab 互斥优先：传了 tab 即单页深链，分组让位于单页。
+  group: { type: String, default: '' },
+})
 const isSingle = computed(() => !!props.tab)
-const tab = ref(props.tab || 'dept')
-watch(() => props.tab, (v) => { if (v) tab.value = v })
 
 // W5（非人性化整改）：25 张报表按业务分组，供「报表快速定位」下拉跳转。
 // name 必须与 el-tab-pane 的 name 逐一对应；新增/下线页签时两处同步。
 const REPORT_GROUPS = [
-  { label: '费用报销与预算', items: [
+  { key: 'g-expense', label: '费用报销与预算', items: [
     { name: 'dept', label: t('report.main.Department') }, { name: 'summary', label: t('router.finance.Expense') },
     { name: 'trend', label: t('router.finance.Monthly') }, { name: 'composition', label: t('router.finance.Expense2') },
     { name: 'detail', label: t('router.finance.Expense3') }, { name: 'budget', label: t('report.main.Budget') },
     { name: 'budgetAlert', label: t('router.finance.Budget3') } ] },
-  { label: '应付与采购付款', items: [
+  { key: 'g-ap', label: '应付与采购付款', items: [
     { name: 'apAging', label: t('router.finance.Payable') }, { name: 'supplierPay', label: t('router.finance.Supplier') },
     { name: 'inputInvoice', label: t('router.finance.Input') } ] },
-  { label: '应收与销售开票', items: [
+  { key: 'g-ar', label: '应收与销售开票', items: [
     { name: 'arAging', label: t('router.finance.Receivable2') }, { name: 'outputInvoice', label: t('router.finance.Output') } ] },
-  { label: '资金与税务', items: [
+  { key: 'g-cash', label: '资金与税务', items: [
     { name: 'cashFlow', label: t('router.finance.Cash') }, { name: 'bankBalance', label: t('router.finance.Cash2') },
     { name: 'taxBurden', label: t('router.finance.Tax2') } ] },
-  { label: '借款', items: [
+  { key: 'g-loan', label: '借款', items: [
     { name: 'loan', label: t('report.main.Loan') }, { name: 'loanOverdue', label: t('router.finance.Loan') } ] },
-  { label: '合同', items: [
+  { key: 'g-contract', label: '合同', items: [
     { name: 'contract', label: t('router.finance.Contract2') }, { name: 'contractExec', label: t('router.finance.Contract3') } ] },
-  { label: '审批与共享运营', items: [
+  { key: 'g-ops', label: '审批与共享运营', items: [
     { name: 'eff', label: t('report.main.Approval') }, { name: 'ops', label: t('router.finance.Operational') },
     { name: 'opsEff', label: t('router.finance.Operational2') }, { name: 'quality', label: t('router.finance.Inspection') },
     { name: 'image', label: t('router.finance.Image') } ] },
-  { label: '记账凭证', items: [
+  { key: 'g-voucher', label: '记账凭证', items: [
     { name: 'voucherStats', label: t('router.finance.Voucher') } ] },
 ]
+
+/** 当前分组：由 props.group 指定，宿主页（/reports）可在顶部导航切换 */
+const curGroup = ref(props.group || REPORT_GROUPS[0].key)
+/**
+ * 页签初值：单页深链用路由给的 tab；分组模式落在本组第一张有权限的报表；
+ * 宿主模式落在第一组第一张。三条路都避开「默认页签不属于当前分组 ⇒ 空白」。
+ */
+const tab = ref(props.tab || firstTabOfGroup(curGroup.value) || 'dept')
+watch(() => props.tab, (v) => { if (v) tab.value = v })
+
+/** 切组：页签必须跟着落到新组内，否则页签条里没有选中项、内容区空白 */
+function switchGroup(key) {
+  curGroup.value = key
+  if (isSingle.value) return
+  const f = firstTabOfGroup(key)
+  if (f) tab.value = f
+}
+// 同一组件被不同分组菜单复用（/reports/g-ap → /reports/g-ar）时不重建实例，必须同步
+watch(() => props.group, (v) => { if (v && v !== curGroup.value) switchGroup(v) })
+
+// 下拉跨组跳转：选中项不属于当前分组时把分组跟着切过去，
+// 否则该页签被组过滤掉，用户看到的是「选了没反应 + 内容区空白」。
+watch(tab, (v) => {
+  if (isSingle.value || !v) return
+  const names = groupTabNames(curGroup.value)
+  if (names && !names.includes(v)) {
+    const g = REPORT_GROUPS.find((x) => x.items.some((i) => i.name === v))
+    if (g) curGroup.value = g.key
+  }
+})
 const loading = ref(false)
 // 概览四格的值一律来自服务端概览接口；取不到即置 overviewError，界面上摆「本次未刷新成功」，
 // 不再用 ?? 0 把「没取到」说成「金额为 0」。初值为 null（渲染「查询中…」），成功回填后才出数。
@@ -872,4 +941,8 @@ function batchExport() {
 .overview-missing-value { margin-top: 8px; font-size: 18px; font-weight: 500; color: #f56c6c; }
 /* 一 TAB = 一菜单：从菜单深链进来（tab 命中）时隐藏 tab 导航条，只显示该页 */
 .tabless :deep(.el-tabs__header) { display: none; }
+/* 分组导航：8 组按钮在窄屏会换行，故断开连体样式、逐枚圆角，避免出现半截边框 */
+.grp-nav { margin-bottom: 10px; }
+.grp-nav :deep(.el-radio-group) { flex-wrap: wrap; gap: 6px; }
+.grp-nav :deep(.el-radio-button__inner) { border-left: 1px solid var(--el-border-color); border-radius: 4px; }
 </style>

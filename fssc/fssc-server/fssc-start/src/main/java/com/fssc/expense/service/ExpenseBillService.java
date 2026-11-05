@@ -52,6 +52,7 @@ import com.fssc.masterdata.mapper.MdExpenseItemMapper;
 import com.fssc.masterdata.mapper.MdExpenseStandardMapper;
 import com.fssc.masterdata.service.ExchangeRateService;
 import com.fssc.masterdata.service.FormMetaService;
+import com.fssc.masterdata.service.PostableSubjectResolver;
 import com.fssc.purchase.entity.PoOrder;
 import com.fssc.purchase.mapper.PoOrderMapper;
 import com.fssc.sharing.entity.OpPayBatch;
@@ -134,6 +135,8 @@ public class ExpenseBillService {
     private final ExpBillRelationMapper expBillRelationMapper;
     private final ExpTravelMapper expTravelMapper;
     private final MdExpenseItemMapper mdExpenseItemMapper;
+    /** 制证科目预检：提交时就确认每条费用行能落到末级科目 */
+    private final PostableSubjectResolver postableSubjectResolver;
     private final MdExpenseStandardMapper mdExpenseStandardMapper;
     private final MdCityMapper mdCityMapper;
     private final SysUserMapper sysUserMapper;
@@ -292,7 +295,7 @@ public class ExpenseBillService {
     /**
      * 代报销的公司边界（甲的另一半）：代理人只能在自己的公司内替他人报销。
      * 代理报销「代理人只能在报销人主职位所在公司代理报销」的边界语义；
-     * 我方没有"显式代理授权档案"这张表（新建载体＝待授权，见答题卡§8.3），先以组织边界收敛越权面。
+     * 我方没有"显式代理授权档案"这张表（授权载体尚未建立），先以组织边界收敛越权面。
      * 任一方的 company_id 为空（集团岗/脏数据）不拦——缺维度时拒绝会把集团岗挡在门外。
      */
     private void assertAgentCompanyBoundary(LoginUser agent, SysUser principal) {
@@ -535,7 +538,7 @@ public class ExpenseBillService {
     }
 
     /**
-     * 影像状态同步（H-0）：单据存在任一附件/发票时，image_status 由 NONE 升级为 COMPLETE
+     * 影像状态同步：单据存在任一附件/发票时，image_status 由 NONE 升级为 COMPLETE
      * （枚举沿用 ExpBill 注释规则 NONE/PARTIAL/COMPLETE）；只升级不降级，失败不阻断保存。
      */
     private void syncImageStatus(Long billId) {
@@ -818,6 +821,15 @@ public class ExpenseBillService {
         submit(billId, approverUserId, null);
     }
 
+    /** 会按费用行出借方科目的单据：报销（EXPENSE 凭证）与对公结算（EXPENSE_SETTLE 计提凭证） */
+    private static boolean needsExpenseSubject(ExpBill bill) {
+        if (bill == null) {
+            return false;
+        }
+        return "CLAIM".equals(bill.getBillType())
+                || ("PAY".equals(bill.getBillType()) && "SETTLE".equalsIgnoreCase(bill.getBillSubType()));
+    }
+
     /**
      * @param firstAssigneeUserId 提单人为首审环节点名的办理人（方案）；仅当该流程首审节点配成
      *                            PICK 档且灰度放行时生效，由 {@code WfEngineFacade} 统一校验候选集，
@@ -931,6 +943,11 @@ public class ExpenseBillService {
             }
             if (line.getAmount() == null || line.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "明细金额必须大于 0: " + item.getItemName());
+            }
+            // 制证可行性预检（报销 CLAIM / 对公结算 PAY+SETTLE）：科目缺配或非末级在此拦下，
+            // 不让它走到「钱付了、凭证生成失败」那一步
+            if (needsExpenseSubject(bill)) {
+                postableSubjectResolver.requireExpenseSubject(item, line.getSubjectId(), bill.getCompanyId());
             }
             if (item.getNeedInvoice() != null && item.getNeedInvoice() == 1) {
                 needInvoice = true;
@@ -2405,7 +2422,7 @@ public class ExpenseBillService {
         }
         if (used != null) {
             // 已核销/未核销过滤下推到库：关联关系表 8.5 万行，原先每页都全量拉回内存再拿它拼
-            // 8.5 万个 id 的 IN/NOT IN 列表——实测端点 184ms，其中 106ms 是这次整表拉取，
+            // 8.5 万个 id 的 IN/NOT IN 列表——端点约 184ms，其中 106ms 花在这次整表拉取，
             // 且拼出的 SQL 文本本身也随关系数线性膨胀。
             if (used == 1) {
                 qw.inSql(ExpBill::getId, relationBillIdsSql());
@@ -2515,8 +2532,8 @@ public class ExpenseBillService {
      *
      * <p><b>为什么不再写成 {@code apply_user_id=? OR agent_user_id=?}</b>：两列分属不同索引，
      * 优化器不做索引合并，会退化为按 {@code uk_tenant_bill_no} 前缀扫全租户 34 万行再逐行回表判
-     * （实测带 status 过滤的 COUNT 571ms、端点 766ms；带关键字 LIKE 时端点 630ms）。
-     * 改成两臂各自走索引物化出 id 集合后，外层按主键过滤：同一查询实测 2.8~3.8ms。
+     * （带 status 过滤的 COUNT 约 571ms、端点约 766ms；带关键字 LIKE 时端点约 630ms）。
+     * 改成两臂各自走索引物化出 id 集合后，外层按主键过滤：同一查询降到 2.8~3.8ms。
      *
      * <p>子查询里显式写 {@code tenant_id}——租户拦截器只补主表，不补原生 SQL 片段；
      * 外层必须套 {@code SELECT id FROM (…UNION…) d}，否则优化器会把 UNION 退化成逐行求值。

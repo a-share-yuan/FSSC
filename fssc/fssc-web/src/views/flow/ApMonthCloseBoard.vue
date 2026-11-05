@@ -185,7 +185,9 @@
         </div>
       </template>
       <el-timeline v-if="traceList.length" style="padding-left: 4px">
-        <el-timeline-item v-for="(t, i) in traceList" :key="i" :timestamp="t.time" :type="TRACE_TYPE[t.action] || 'primary'">
+        <!-- 时间戳原先直插 LocalDateTime 原串（2026-11-04T15:48:11.286487400，带纳秒与 T），
+             与同页「导出关账报告」(见 traceRows 里 formatDateTime) 两套口径；统一到全站格式。 -->
+        <el-timeline-item v-for="(t, i) in traceList" :key="i" :timestamp="formatDateTime(t.time)" :type="TRACE_TYPE[t.action] || 'primary'">
           <div class="trace-card">
             <div class="trace-action">{{ apMcTraceLabel(t.action) }}<span class="trace-oper" v-if="t.oper"> · {{ t.oper }}</span></div>
             <div class="trace-detail" v-if="t.detail">{{ t.detail }}</div>
@@ -332,12 +334,21 @@ function onLeaderChange(id, u) {
 
 async function doInit() {
   if (!(await validateForms([initFormRef]))) return
-  await apFlowApi.monthCloseCreate({
-    companyId: form.companyId,
-    period: form.period,
-    groupLeader: form.leaderName || me,
-    remark: form.remark,
-  })
+  // 本文件其余异步动作（load/autoCheck/doItem）都 catch 后 ElMessage.error(e.message)，唯独这里没接：
+  // 「同一组织＋同一期间重复发起」被后端以「参数校验失败：期间 2026-10 已存在未完成的关账单」拒绝时，
+  // 异常一路冒到 Vue 的全局错误边界 ⇒ 整页被换成「页面出错了」，红 toast 也只闪一下。
+  // 按本页既有写法补 catch：报人话、弹窗不关、页面照常留在工作台。
+  try {
+    await apFlowApi.monthCloseCreate({
+      companyId: form.companyId,
+      period: form.period,
+      groupLeader: form.leaderName || me,
+      remark: form.remark,
+    })
+  } catch (e) {
+    ElMessage.error(e.message)
+    return
+  }
   ElMessage.success(t('flow.close.msgStarted'))
   initVisible.value = false
   await load()

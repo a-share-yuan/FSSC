@@ -31,14 +31,14 @@
       <el-row :gutter="16">
         <el-col :span="12">
           <el-form-item label="金额容差(%)" prop="amountPct">
+            <template #label>金额容差(%)<FieldTip text="允许的相对差异百分比（按单据金额计算），0 表示不启用比例容差" /></template>
             <el-input-number v-model="form.amountPct" :min="0" :max="100" :precision="2" style="width: 100%" />
-            <div style="font-size:12px;color:#909399">允许的相对差异百分比（按单据金额计算），0 表示不启用比例容差</div>
           </el-form-item>
         </el-col>
         <el-col :span="12">
           <el-form-item label="绝对值容差(元)" prop="amountAbs">
+            <template #label>绝对值容差(元)<FieldTip text="允许的绝对差异金额；与百分比容差任一满足即视为匹配通过" /></template>
             <el-input-number v-model="form.amountAbs" :min="0" :precision="2" style="width: 100%" />
-            <div style="font-size:12px;color:#909399">允许的绝对差异金额；与百分比容差任一满足即视为匹配通过</div>
           </el-form-item>
         </el-col>
       </el-row>
@@ -47,11 +47,11 @@
       <el-row :gutter="16">
         <el-col :span="12">
           <el-form-item label="容差匹配" prop="status">
+            <template #label>容差匹配<FieldTip text="停用后三单匹配严格按金额一致校验（差异为 0）" /></template>
             <!-- 取值必须与后端 MatchToleranceService.STATUS_NORMAL/STATUS_DISABLED 一致（NORMAL 而非 ACTIVE），
                  否则保存会被"status 仅支持 NORMAL/DISABLED"拦下 -->
             <el-switch v-model="form.status" active-value="NORMAL" inactive-value="DISABLED"
                        active-text="启用" inactive-text="停用" />
-            <div style="font-size:12px;color:#909399">停用后三单匹配严格按金额一致校验（差异为 0）</div>
           </el-form-item>
         </el-col>
       </el-row>
@@ -68,6 +68,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { orgApi, matchToleranceApi } from '../../api'
+import FieldTip from '../../components/common/FieldTip.vue'
 import { useFormRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'

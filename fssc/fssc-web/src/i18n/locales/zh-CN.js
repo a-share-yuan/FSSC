@@ -225,7 +225,7 @@ export default {
 
   // 错误码（后端 MessageSource 映射：前端 $t('err.' + code)）
   // 注意：错误文案由后端按 Accept-Language 返回多语；此处仅为前端本地兜底。
-  // gl：总账域（域8B/T1.6）
+  // gl：总账域
   // 键名遵循本文件顶部的 <层级>.<模块>.<键>；本批＝合并底稿 consolidate / 总账分录台账 ledger /
   // 特殊业务 special / 退税 refund 四个模块。模板取词用 $t（基座 globalInjection 注入）。
   gl: {
@@ -330,6 +330,8 @@ export default {
       btnConfirmPost: '确认过账',
       colAction: '操作',
       btnPost: '过账',
+      btnView: '查看',
+      titleLines: '借贷明细',
       askPost: '过账凭证 {v1}？过账后写入总账，不可直接撤销（如需更正请做红字冲销）。确认继续？',
       msgPostOk: '凭证 {v1} 已过账',
       creditShort: '贷',
@@ -632,7 +634,7 @@ export default {
       periodOpened: '当前开账期间',
     },
   },
-  // field：跨域共用的列名/字段名（域8B/T1.6）
+  // field：跨域共用的列名/字段名
   // 各业务域的同名标签一律复用这里，避免同一句中文在每个域各建一枚键。
   field: {
     account: '银行账户',
@@ -688,7 +690,7 @@ export default {
     summary: '摘要',
     batchNo: '批次号',
   },
-  // 业务域命名空间（域8B/T1.6 逐域填充）
+  // 业务域命名空间（逐域填充）
   // 先立空块：落地器拒绝自己新造一级命名空间（避免同一域出现两种层次写法）。
   flow: {
     arClose: {

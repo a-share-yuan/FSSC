@@ -80,12 +80,37 @@
             <el-table-column prop="detailCount" label="笔数" width="70" align="center" />
             <el-table-column label="完成时间" width="150"><template #default="{ row }">{{ row.finishTime ? shortTime(row.finishTime) : '—' }}</template></el-table-column>
           </el-table>
+          <!-- 付款批次凭证：出纳付款这一步的会计凭证（JZ…，借 应付／贷 银行存款）。
+               op_voucher.bill_id 按来源族分家＝批次 id，不属本单单据级凭证 ⇒ 单列，不计入上方「记账凭证 N 张」。 -->
+          <div v-if="chain.paymentVouchers?.length" class="pv-block">
+            <div class="pv-title">付款批次凭证（出纳付款，记在批次名下，不计入上方「记账凭证」）</div>
+            <el-table :data="chain.paymentVouchers" size="small" border>
+              <el-table-column label="凭证号" min-width="170">
+                <template #default="{ row }">{{ voucherWordLabel(row.voucherWord) }}-{{ row.voucherNo }}</template>
+              </el-table-column>
+              <el-table-column prop="summary" label="摘要" min-width="140" show-overflow-tooltip />
+              <el-table-column label="状态" width="80" align="center">
+                <template #default="{ row }"><el-tag size="small" :type="row.status === 'POSTED' ? 'success' : 'warning'">{{ row.status === 'POSTED' ? '已过账' : '草稿' }}</el-tag></template>
+              </el-table-column>
+              <el-table-column label="金额" width="110" align="right">
+                <template #default="{ row }">{{ fmt(row.debitTotal) }}</template>
+              </el-table-column>
+            </el-table>
+          </div>
         </el-collapse-item>
 
         <!-- 记账凭证（含分录） -->
         <el-collapse-item v-if="showSeg('VOUCHER', chain.vouchers)" name="vouchers">
-          <template #title><b>记账凭证</b><el-tag size="small" style="margin-left:8px" :type="chain.vouchers?.length ? 'success' : 'info'">{{ chain.vouchers?.length || 0 }} 张</el-tag></template>
-          <el-empty v-if="!chain.vouchers?.length" description="无凭证（未审核通过或非凭证域单据）" :image-size="48" />
+          <template #title><b>记账凭证</b><el-tag size="small" style="margin-left:8px" :type="chain.vouchers?.length ? 'success' : (voucherPending ? 'danger' : 'info')">{{ chain.vouchers?.length || 0 }} 张</el-tag></template>
+          <!-- 制证失败留痕：把「无凭证」这句空态改写成可核实的原因＋补生成出口，
+               避免一次真实失败被读成"还没审核通过"或"本域没有凭证" -->
+          <el-alert
+            v-if="voucherPending"
+            type="error" :closable="false" show-icon
+            title="凭证自动生成失败，本单费用凭证尚未入账"
+            :description="`${voucherPending.reason || '未返回具体原因'}（错误码 ${voucherPending.code || '—'}${voucherPending.time ? '，' + shortTime(voucherPending.time) : ''}）；补生成请走 共享中心 › 记账凭证 › 生成凭证 重新生成`"
+            style="margin-bottom:8px" />
+          <el-empty v-if="!chain.vouchers?.length" :description="voucherPending ? '无凭证（制证失败，原因见上方留痕）' : '无凭证（未审核通过或非凭证域单据）'" :image-size="48" />
           <div v-else v-for="v in chain.vouchers" :key="v.id" class="voucher-card">
             <div class="voucher-head">
               <!-- op_voucher.voucher_word 存的是英文枚举 JOURNAL，原先直接拼在凭证号前
@@ -207,6 +232,11 @@ function showSeg(k, data) {
 const notSupportReason = computed(
   () => chain.value?.summary?.reason || '未声明单据域且该主键在费用单据表内不存在；请为该页面的追溯入口补传 bizType。'
 )
+/**
+ * 凭证自动生成失败留痕（exp_bill.ext_json.voucherPending）。后端随摘要透出；
+ * 原先抽屉只按 vouchers.length 显示「无凭证」，把"制证失败"和"还没做"混成一格空态。
+ */
+const voucherPending = computed(() => chain.value?.summary?.voucherPending || null)
 
 // 方案 A：业务链时间线节点 → 下方联查明细折叠段 映射（点击时间线节点即展开真实下游数据）
 const SEG2SECTION = { VOUCHER: 'vouchers', PAYMENT: 'payments', BATCH: 'batches', ARCHIVE: 'archives', APPROVED: 'traces', BILL: null }
@@ -300,6 +330,8 @@ watch(() => [props.modelValue, props.billId, props.bizType], async ([v, bid]) =>
 .chain-collapse :deep(.el-collapse-item__header) { font-size: 13px; }
 
 .voucher-card { border: 1px solid var(--app-border, #e4e7ed); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
+.pv-block { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--app-border, #e4e7ed); }
+.pv-title { font-size: 12px; color: var(--app-text-secondary, #606266); margin-bottom: 6px; }
 .voucher-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .voucher-no { font-weight: 700; color: var(--app-text, #303133); }
 .voucher-meta { font-size: 12px; color: #909399; }

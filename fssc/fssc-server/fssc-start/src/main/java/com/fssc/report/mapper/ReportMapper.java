@@ -285,21 +285,27 @@ public interface ReportMapper {
                                               @Param("scopeUserId") Long scopeUserId);
 
     /** 6. 进项发票统计：按月度统计进项发票金额、税额
-     *  列语义对齐建表规则——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。 */
+     *  列语义对齐建表规则——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。
+     *  status 过滤：驳回(VOID/REJECTED)的票不算入统计——把已驳回票也加进合计，
+     *  导致报表与「有效票」对不上（红冲票保留，靠正负两行自然对冲，不要一并排除）。 */
     @Select("<script>select date_format(invoice_date, '%Y-%m') as period, " +
             "count(*) as invoiceCnt, sum(amount) as totalAmount, sum(tax_amount) as taxAmount, " +
             "sum(net_amount) as netAmount " +
             "from inv_invoice where (direction = 'INPUT' or (direction is null and invoice_kind = 'SPECIAL')) and del_flag = 0 " +
+            "and (status is null or status not in ('REJECTED','VOID')) " +
             "<if test='scopeCompanyId != null'>and company_id = #{scopeCompanyId}</if> " +
             "group by date_format(invoice_date, '%Y-%m') order by period desc limit 12</script>")
     List<Map<String, Object>> inputInvoiceStats(@Param("scopeCompanyId") Long scopeCompanyId);
 
     /** 7. 销项发票统计：按月度统计销项发票金额、税额
-     *  列语义对齐建表规则——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。 */
+     *  列语义对齐建表规则——amount=价税合计、net_amount=不含税，故 totalAmount 取 amount、netAmount 取 net_amount。
+     *  status 过滤同进项：已驳回(VOID/REJECTED)的开票单不是有效销项，不得计入
+     *  （驳回票与有效票并列时合计会翻倍）。 */
     @Select("<script>select date_format(invoice_date, '%Y-%m') as period, " +
             "count(*) as invoiceCnt, sum(amount) as totalAmount, sum(tax_amount) as taxAmount, " +
             "sum(net_amount) as netAmount " +
             "from inv_invoice where (direction = 'OUTPUT' or (direction is null and invoice_kind = 'NORMAL')) and del_flag = 0 " +
+            "and (status is null or status not in ('REJECTED','VOID')) " +
             "<if test='scopeCompanyId != null'>and company_id = #{scopeCompanyId}</if> " +
             "group by date_format(invoice_date, '%Y-%m') order by period desc limit 12</script>")
     List<Map<String, Object>> outputInvoiceStats(@Param("scopeCompanyId") Long scopeCompanyId);

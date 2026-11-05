@@ -16,8 +16,11 @@ import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.glex.entity.GlJournalEntry;
 import com.fssc.glex.mapper.GlJournalEntryMapper;
+import com.fssc.masterdata.entity.MdExpenseItem;
 import com.fssc.masterdata.entity.MdSubject;
+import com.fssc.masterdata.mapper.MdExpenseItemMapper;
 import com.fssc.masterdata.mapper.MdSubjectMapper;
+import com.fssc.masterdata.service.PostableSubjectResolver;
 import com.fssc.sharing.service.VoucherService;
 import com.fssc.workflow.service.WfEngineFacade;
 import java.util.HashMap;
@@ -43,6 +46,10 @@ public class GlJournalService {
     private final GlJournalEntryMapper mapper;
     /** 按科目编码解析真实主键，并校验传入科目存在性（默认科目不再是幽灵 ID）。 */
     private final MdSubjectMapper subjectMapper;
+    /** 借方科目缺省时的第二来源：费用项目映射 */
+    private final MdExpenseItemMapper expenseItemMapper;
+    /** 科目末级落地（含唯一末级自动下沉、多末级父科目拒绝） */
+    private final PostableSubjectResolver postableSubjectResolver;
     private final WfEngineFacade wfEngineFacade;
     private final OrgGuard orgGuard;
     /** 记账域冲销走凭证引擎的统一出口 */
@@ -63,8 +70,9 @@ public class GlJournalService {
      * 注释写「仅展示用，非外键约束」与实现不符：凭证引擎直接拿这两个值生成分录。
      *
      * <p>改为按编码查库解析真实主键，租户/公司换了 id 也不会错。
+     * <p>借方不再有默认编码：6602 下设 30+ 明细，任何"猜一个"都会把费用记错明细，
+     * 未指定时必须由费用项目映射提供，两者都没有即拒绝。
      */
-    private static final String DEFAULT_DEBIT_CODE = "6602";
     private static final String DEFAULT_CREDIT_CODE = "1002";
     /** 费用预提的默认贷方：计提负债（2241 其他应付款），不默认落银行存款——见 generate 内注释 */
     private static final String DEFAULT_ACCRUAL_CREDIT_CODE = "2241";
@@ -113,7 +121,7 @@ public class GlJournalService {
 
     /**
      * 把科目主键解析成「库里真实存在的那个」。
-     * <p>{@code subjectId} 为空时按科目编码取默认科目（6602 管理费用 / 1002 银行存款）；
+     * <p>{@code subjectId} 为空时按科目编码取默认科目（贷方 1002 银行存款）；
      * 非空时必须能在 md_subject 命中，否则 400 拒绝——避免幽灵 ID 静默写入数据库、直到生成凭证才暴露。
      */
     private Long resolveSubjectId(Long subjectId, String defaultCode, String side) {
@@ -131,6 +139,25 @@ public class GlJournalService {
                             + " 不是末级科目（下设明细，无法确定用哪一个），无法制证；请在制单页选择末级明细科目");
         }
         return s.getId();
+    }
+
+    /**
+     * 借方科目：显式科目 → 费用项目映射 → 报错。
+     * <p>不再默认 6602：管理费用下设 30+ 明细，默认到父科目要么被末级校验拒绝、
+     * 要么（放宽校验时）把费用记到错误明细，两种都不能接受。
+     */
+    private Long resolveDebitSubjectId(Long debitSubjectId, Long expenseItemId) {
+        if (debitSubjectId != null) {
+            return resolveSubjectId(debitSubjectId, null, "借方");
+        }
+        if (expenseItemId != null) {
+            MdExpenseItem item = expenseItemMapper.selectById(expenseItemId);
+            if (item != null && item.getSubjectId() != null) {
+                return postableSubjectResolver.requireExpenseSubject(item, null, null).getId();
+            }
+        }
+        throw new BizException(ErrorCode.PARAM_INVALID,
+                "借方会计科目未指定：请选择末级借方科目，或为所用费用项目配置对应会计科目（基础资料 › 费用项目）");
     }
 
     private MdSubject subjectById(Long id) {
@@ -221,7 +248,7 @@ public class GlJournalService {
                     + "如需重新生成请先驳回原单");
         }
         e.setSummary(StringUtils.hasText(summary) ? summary : defaultSummary(entryType, period));
-        e.setDebitSubjectId(resolveSubjectId(debitSubjectId, DEFAULT_DEBIT_CODE, "借方"));
+        e.setDebitSubjectId(resolveDebitSubjectId(debitSubjectId, expenseItemId));
         // 预提的贷方是「计提出来的负债」，不是银行存款：默认落 1002 会把一笔尚未付款的预提
         // 记成已付款，账面现金凭空减少。故 ACCRUAL 默认贷 2241 其他应付款；待摊/手工/其他收款仍用 1002。
         String defCreditCode = "ACCRUAL".equals(entryType) ? DEFAULT_ACCRUAL_CREDIT_CODE : DEFAULT_CREDIT_CODE;

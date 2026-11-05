@@ -18,8 +18,10 @@ import com.fssc.framework.facade.ImageFacade;
 import com.fssc.framework.facade.dto.ArchiveInfoDTO;
 import com.fssc.framework.facade.dto.ImageFileDTO;
 import com.fssc.framework.security.UserContext;
+import com.fssc.sharing.entity.OpPayBatch;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
+import com.fssc.sharing.mapper.OpPayBatchMapper;
 import com.fssc.sharing.mapper.OpVoucherLineMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
 import com.fssc.system.service.MenuService;
@@ -52,6 +54,7 @@ public class RequisitionWorkbenchService {
     private final ExpBillMapper expBillMapper;
     private final ExpBillAttachMapper expBillAttachMapper;
     private final ExpBillPaymentMapper expBillPaymentMapper;
+    private final OpPayBatchMapper opPayBatchMapper;
     private final OpVoucherMapper opVoucherMapper;
     private final OpVoucherLineMapper opVoucherLineMapper;
     private final ImageFacade imageFacade;
@@ -409,6 +412,25 @@ public class RequisitionWorkbenchService {
             result.put("voucher", null);
             result.put("voucherLines", Collections.emptyList());
         }
+
+        // 3.1 付款批次凭证（批次级来源，另一条腿）
+        //     op_voucher.bill_id 的粒度按来源族分家：单据级凭证存 exp_bill.id，
+        //     批次级出纳凭证（TREASURY_PAY / CIP_PAY_BATCH）存 op_pay_batch.id。
+        //     只按 bill_id 取，付款明明有凭证也会显示"无凭证"。
+        //     这里走 批次 → 凭证 这一跳，单独返回，不计入上方 voucher/voucherCount——
+        //     付款凭证不能替代本单费用入账，否则会把"费用凭证没生成"的真实失败掩盖成已到账。
+        List<OpPayBatch> payBatches = opPayBatchMapper.selectList(new LambdaQueryWrapper<OpPayBatch>()
+                .eq(OpPayBatch::getSourceDocType, "EXP_PAY")
+                .eq(OpPayBatch::getSourceDocId, billId));
+        List<Long> batchIds = payBatches.stream().map(OpPayBatch::getId).filter(Objects::nonNull).toList();
+        List<OpVoucher> paymentVouchers = batchIds.isEmpty()
+                ? Collections.emptyList()
+                : opVoucherMapper.selectList(new LambdaQueryWrapper<OpVoucher>()
+                        .in(OpVoucher::getSourceType, "TREASURY_PAY", "CIP_PAY_BATCH")
+                        .in(OpVoucher::getSourceDocId, batchIds)
+                        .orderByAsc(OpVoucher::getId));
+        result.put("paymentVouchers", paymentVouchers);
+        result.put("paymentBatchNos", payBatches.stream().map(OpPayBatch::getBatchNo).toList());
 
         // 4. 付款记录（ExpBillPayment by bill_id）
         List<ExpBillPayment> payments = expBillPaymentMapper.selectList(new LambdaQueryWrapper<ExpBillPayment>()

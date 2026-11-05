@@ -242,7 +242,7 @@ onMounted(loadAll)
 .stat-num { font-size: 24px; font-weight: 700; }
 .stat-num.ok { color: #67c23a; }
 .stat-num.danger { color: #f56c6c; }
-.stat-label { font-size: 12px; color: #909399; margin-top: 2px; }
-.hint { font-size: 12px; color: #909399; margin-top: 10px; }
+.stat-label { font-size: 12px; color: var(--app-text-secondary); margin-top: 2px; }
+.hint { font-size: 12px; color: var(--app-text-secondary); margin-top: 10px; }
 .pager { margin-top: 10px; justify-content: flex-end; }
 </style>

@@ -6,6 +6,7 @@
     <template #header>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
         <b>{{ $t('purchase.poReceipt.Goods') }}</b>
+        <FieldTip text="收货金额不得超过采购订单剩余可收（收货金额 − 已累计收货）；保存时自动校验并回写订单累计收货" />
         <el-button type="primary" size="small" @click="openCreate">{{ $t('purchase.poReceipt.Add') }}</el-button>
         <el-input v-model="q.keyword" :placeholder="$t('purchase.poReceipt.Receipt')" clearable style="width: 200px" @keyup.enter="load" />
         <el-select v-model="q.status" :placeholder="$t('common.status')" clearable style="width: 120px" @change="load">
@@ -16,7 +17,6 @@
         <el-button size="small" @click="load">{{ $t('common.search') }}</el-button>
       <el-button size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-        <span style="margin-left: auto; color: #909399; font-size: 12px">收货金额 <= 采购订单剩余可收（自动校验并回写累计收货）</span>
       </div>
     </template>
 
@@ -107,7 +107,14 @@
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="收货金额" prop="amount">
-              <el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" />
+              <el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" :class="{ 'fld-error': overRemain }" />
+              <!-- 选中采购订单后当场给出额度上限，超了立刻标红，不必等服务端拒绝 -->
+              <div v-if="form.poId" class="remain-hint" :class="{ 'remain-hint--bad': overRemain }">
+                <template v-if="poRemain != null && poRemain >= 0">
+                  本单最多可收 {{ fmt(poRemain) }}<template v-if="overRemain">，已超出 {{ fmt(Number(form.amount || 0) - poRemain) }}</template>
+                </template>
+                <template v-else>该订单已超额收货 {{ fmt(Math.abs(poRemain || 0)) }}，不可再收</template>
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -192,12 +199,13 @@
 <script setup>
 
 const { rules: formRules } = useFormRules('PO_RECEIPT')
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { purchaseApi, supplierApi } from '../../api'
 import { hasPerm } from '../../utils/perm'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
+import FieldTip from '../../components/common/FieldTip.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { useAutoFill } from '@/composables/useAutoFill'
 import { useFormRules } from '@/composables/useFormRules'
@@ -239,6 +247,13 @@ const detailRow = ref(null)
 const q = reactive({ pageNum: 1, pageSize: 20, keyword: '', status: '' })
 const form = reactive({})
 const formRef = ref(null)
+/** 所选采购订单的剩余可收＝订单金额 − 累计收货；未选订单为 null（不提示） */
+const poRemain = computed(() => {
+  const po = pos.value.find((x) => x.id === form.poId)
+  if (!po) return null
+  return Number(po.amount || 0) - Number(po.receivedAmount || 0)
+})
+const overRemain = computed(() => poRemain.value != null && Number(form.amount || 0) - poRemain.value > 0.01)
 const { submit: guardSubmit } = useSubmitGuard(formRef)
 const { autofill, saveFormHistory } = useAutoFill()
 
@@ -297,7 +312,9 @@ async function onPoChange(poId) {
       : suppliers.value.find((s) => s.id === po.supplierId)
     form.supplierId = po.supplierId ?? matched?.id ?? null
     form.supplierName = po.supplierName ?? matched?.supplierName ?? ''
-    if (!form.receiptNo) form.receiptNo = 'GRN' + po.poNo.replace(/[^0-9]/g, '').slice(-6)
+    // 不再前端预览取号：原先按 PO 号后 6 位拼 'GRN'，与后端编号规则 PURCHASE_RECEIPT
+    // （GRN＋期间＋定长序号）是两套规则，同一 PO 第二张收货单必与首张重号而撞唯一键
+    // 留空交由服务端取号，手填仍可覆盖。
   }
 }
 
@@ -420,3 +437,23 @@ function batchExport() {
 }
 
 </script>
+
+<style scoped>
+/* 剩余可收额度提示：贴在收货金额下方，超限转为红色 */
+.remain-hint {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
+
+.remain-hint--bad {
+  font-weight: 600;
+  color: var(--el-color-danger);
+}
+
+:deep(.fld-error .el-input__wrapper),
+:deep(.fld-error.el-input .el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+</style>

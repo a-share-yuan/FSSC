@@ -31,6 +31,7 @@ const props = defineProps({
 const chartRef = ref(null)
 let chart = null
 let offTheme = null
+let ro = null
 
 function renderChart() {
   if (!chartRef.value) return
@@ -58,11 +59,17 @@ function resize() {
 onMounted(() => {
   offTheme = onThemeChange(onThemeSwitch)
   nextTick(renderChart)
+  // 报表工作台把 25 张图挂在同一 el-tabs 的隐藏页签里，挂载时容器宽度为 0；
+  // 切到该页不触发 window resize，尺寸就永远停在 0。ResizeObserver 在转可见时才补一次重算。
+  ro = new ResizeObserver(resize)
+  chartRef.value && ro.observe(chartRef.value)
 })
 
 onUnmounted(() => {
   offTheme && offTheme()
   window.removeEventListener('resize', resize)
+  ro && ro.disconnect()
+  ro = null
   chart && chart.dispose()
   chart = null
 })

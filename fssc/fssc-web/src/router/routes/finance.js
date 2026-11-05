@@ -87,6 +87,16 @@ export default [
   { path: 'report/summary', component: () => import('../../views/finance/ReportSummaryBoard.vue'), meta: { title: '报表预聚合' } },
   // reports 为报表工作台宿主（25 页签），不传 tab；成员深链 /reports/* 保留单页模式
   { path: 'reports', component: () => import('../../views/report/Reports.vue'), meta: { title: '管理报表工作台' } },
+  // 报表分组：25 张报表按业务归 8 组，每组是菜单里的一个入口，进去只展开本组页签（3~7 条）。
+  // group 值必须与 Reports.vue 的 REPORT_GROUPS[].key 逐一对应。
+  { path: 'reports/g-expense', component: () => import('../../views/report/Reports.vue'), props: { group: 'g-expense' }, meta: { title: '费用报销与预算' } },
+  { path: 'reports/g-ap', component: () => import('../../views/report/Reports.vue'), props: { group: 'g-ap' }, meta: { title: '应付与采购付款' } },
+  { path: 'reports/g-ar', component: () => import('../../views/report/Reports.vue'), props: { group: 'g-ar' }, meta: { title: '应收与销售开票' } },
+  { path: 'reports/g-cash', component: () => import('../../views/report/Reports.vue'), props: { group: 'g-cash' }, meta: { title: '资金与税务' } },
+  { path: 'reports/g-loan', component: () => import('../../views/report/Reports.vue'), props: { group: 'g-loan' }, meta: { title: '借款' } },
+  { path: 'reports/g-contract', component: () => import('../../views/report/Reports.vue'), props: { group: 'g-contract' }, meta: { title: '合同' } },
+  { path: 'reports/g-ops', component: () => import('../../views/report/Reports.vue'), props: { group: 'g-ops' }, meta: { title: '审批与共享运营' } },
+  { path: 'reports/g-voucher', component: () => import('../../views/report/Reports.vue'), props: { group: 'g-voucher' }, meta: { title: '记账凭证' } },
   { path: 'reports/summary', component: () => import('../../views/report/Reports.vue'), props: { tab: 'summary' }, meta: { title: i18n.global.t('router.finance.Expense') } },
   { path: 'reports/trend', component: () => import('../../views/report/Reports.vue'), props: { tab: 'trend' }, meta: { title: i18n.global.t('router.finance.Monthly') } },
   { path: 'reports/composition', component: () => import('../../views/report/Reports.vue'), props: { tab: 'composition' }, meta: { title: i18n.global.t('router.finance.Expense2') } },

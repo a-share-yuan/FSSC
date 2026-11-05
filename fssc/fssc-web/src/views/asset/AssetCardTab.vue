@@ -115,8 +115,8 @@
         <el-col :span="12"><el-form-item label="折旧月数" prop="depreciationMonths"><el-input-number v-model="aForm.depreciationMonths" :min="1" :max="MONTHS_MAX" :precision="0" style="width:100%" @blur="clampMonths('depreciationMonths', '折旧月数')" /></el-form-item></el-col>
         <el-col :span="12">
           <el-form-item label="税法折旧年限(月)">
+            <template #label>税法折旧年限(月)<FieldTip text="与会计年限分离，支撑税会差异 A105080" /></template>
             <el-input-number v-model="aForm.taxLifeMonths" :precision="0" :max="MONTHS_MAX" style="width:100%" placeholder="可空" @blur="clampMonths('taxLifeMonths', '税法折旧年限')" />
-            <div style="font-size:12px; color:#909399; line-height:1.4">与会计年限分离，支撑税会差异 A105080</div>
           </el-form-item>
         </el-col>
         <el-col :span="12">
@@ -321,6 +321,7 @@ import { useFormRules } from '@/composables/useFormRules'
 import { validateForm } from '@/composables/useFormRules'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { assetApi, cipFlowApi, orgApi } from '../../api'
+import FieldTip from '../../components/common/FieldTip.vue'
 import SkeletonList from '../../components/SkeletonList.vue'
 import InlineActions from '@/components/InlineActions.vue'
 import BillTraceDrawer from '@/components/BillTraceDrawer.vue'

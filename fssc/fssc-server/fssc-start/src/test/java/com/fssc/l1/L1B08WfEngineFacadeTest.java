@@ -43,8 +43,8 @@ import static org.mockito.Mockito.when;
 @DisplayName("L1-B-08 WfEngineFacade 驳回兜底")
 class L1B08WfEngineFacadeTest {
 
-    private static final String TASK_ID = "T-E2E-1";
-    private static final String PROC_ID = "P-E2E-1";
+    private static final String TASK_ID = "task-1";
+    private static final String PROC_ID = "proc-1";
 
     /** 构造一个可控的 facade：task/runtime 全 mock，其余依赖走自动 mock */
     private static FacadeFixture fixture() {
@@ -62,6 +62,7 @@ class L1B08WfEngineFacadeTest {
         TaskQuery tq = mock(TaskQuery.class);
         when(taskService.createTaskQuery()).thenReturn(tq);
         when(tq.taskId(anyString())).thenReturn(tq);
+        when(tq.taskTenantId(anyString())).thenReturn(tq);
         when(tq.active()).thenReturn(tq);
         when(tq.singleResult()).thenReturn(task);
 
@@ -70,6 +71,7 @@ class L1B08WfEngineFacadeTest {
         ProcessInstanceQuery piq = mock(ProcessInstanceQuery.class);
         when(runtimeService.createProcessInstanceQuery()).thenReturn(piq);
         when(piq.processInstanceId(anyString())).thenReturn(piq);
+        when(piq.processInstanceTenantId(anyString())).thenReturn(piq);
         when(piq.singleResult()).thenReturn(pi);
 
         Map<String, Object> vars = new HashMap<>();

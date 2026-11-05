@@ -6,7 +6,10 @@
     <template #header>
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
         <b>{{ $t('gl.ledger.pageTitle') }}</b>
-        <el-tabs v-model="tab" style="flex: 1" :class="{ tabless: isSingle }">
+        <!-- flex-basis:100%：页签条独占一行，避免和右侧公司/年度选择器挤行被裁切。
+             不再加 tabless：单页模式（/op/gl/entry 这类深链）原本会把页签条整条 display:none，
+             用户在「总账分录」里就找不到「凭证台账」入口，只能回左侧菜单。 -->
+        <el-tabs v-model="tab" style="flex: 1 1 100%; min-width: 0">
           <el-tab-pane :label="$t('gl.ledger.tabEntry')" name="entry" />
           <el-tab-pane :label="$t('gl.ledger.tabBalance')" name="balance" />
           <el-tab-pane :label="$t('gl.ledger.tabTrial')" name="trial" />
@@ -185,11 +188,12 @@
           </template>
         </el-table-column>
         <!-- 过账不能只有「勾选若干行→工具栏批量过账」一条路，行上也得有入口，否则
-             台账里那批自动生成的凭证看不见「怎么过账」。按行入口与批量口同一个权限码、同一道制审分离校验。 -->
-        <el-table-column v-if="canPost" :label="$t('gl.ledger.colAction')" width="90" fixed="right">
+             台账里那批自动生成的凭证看不见「怎么过账」。按行入口与批量口同一个权限码、同一道制审分离校验。
+             「查看」不随过账权限收放：详情是只读动作，过账权的人也要能核对借贷两行。 -->
+        <el-table-column :label="$t('gl.ledger.colAction')" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="canPostRow(row)" link size="small" type="success" @click="postOne(row)">{{ $t('gl.ledger.btnPost') }}</el-button>
-            <span v-else style="color: #c0c4cc; font-size: 12px">—</span>
+            <el-button link size="small" @click="openVoucherLines(row)">{{ $t('gl.ledger.btnView') }}</el-button>
+            <el-button v-if="canPost && canPostRow(row)" link size="small" type="success" @click="postOne(row)">{{ $t('gl.ledger.btnPost') }}</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -264,7 +268,7 @@
 
   <!-- 凭证详情抽屉 -->
   <el-drawer v-model="voucherDrawer" :title="$t('gl.ledger.dlgDetail')" size="50%" direction="rtl">
-    <el-descriptions :column="2" border size="small" v-if="voucherDetail">
+    <el-descriptions :column="2" border size="small" v-if="voucherDetail && !detailIsVoucher">
       <el-descriptions-item :label="$t('gl.ledger.fieldVoucherNo')">{{ voucherDetail.voucherNo || '—' }}</el-descriptions-item>
       <el-descriptions-item :label="$t('gl.ledger.fieldVoucherId')">{{ voucherDetail.voucherId || '—' }}</el-descriptions-item>
       <el-descriptions-item :label="$t('gl.ledger.fieldSubjectCode')">{{ voucherDetail.subjectCode || '—' }}</el-descriptions-item>
@@ -277,6 +281,32 @@
       <el-descriptions-item :label="$t('gl.ledger.colBizType')">{{ bizTypeLabel(voucherDetail.bizType) }}</el-descriptions-item>
       <el-descriptions-item :label="$t('gl.ledger.fieldBizId')">{{ voucherDetail.bizId || '—' }}</el-descriptions-item>
     </el-descriptions>
+    <!-- 凭证台账侧的详情＝凭证头＋借贷两行（分录行侧的详情只有单行字段，两者取数口径不同） -->
+    <template v-if="voucherDetail && detailIsVoucher">
+      <el-descriptions :column="2" border size="small">
+        <el-descriptions-item :label="$t('gl.ledger.fieldVoucherNo')">{{ voucherDetail.voucherNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('gl.ledger.colPeriod')">{{ voucherDetail.periodYear ? voucherDetail.periodYear + '-' + String(voucherDetail.periodMonth || '').padStart(2, '0') : '—' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('common.status')">{{ voucherStatusLabel(voucherDetail.status) }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('gl.ledger.colMaker')">{{ creatorLabel(voucherDetail) }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('gl.ledger.colDebitTotal')">{{ fmt(voucherDetail.debitTotal) }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('gl.ledger.colCreditTotal')">{{ fmt(voucherDetail.creditTotal) }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('gl.ledger.fieldSummary')" :span="2">{{ voucherDetail.summary || '—' }}</el-descriptions-item>
+      </el-descriptions>
+      <div style="margin: 14px 0 8px; font-weight: 600">{{ $t('gl.ledger.titleLines') }}</div>
+      <el-table :data="voucherLineRows" size="small" border v-loading="linesLoading" max-height="320">
+        <el-table-column prop="subjectCode" :label="$t('gl.ledger.fieldSubjectCode')" width="110" />
+        <el-table-column prop="subjectName" :label="$t('gl.ledger.fieldSubjectName')" min-width="140" show-overflow-tooltip />
+        <el-table-column :label="$t('gl.ledger.fieldDirection')" width="80" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.direction === 'DEBIT' ? 'danger' : 'success'" size="small">{{ row.direction === 'DEBIT' ? t('gl.ledger.debitShort') : t('gl.ledger.creditShort') }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('gl.ledger.fieldAmount')" width="120" align="right">
+          <template #default="{ row }"><b>{{ fmt(row.amount) }}</b></template>
+        </el-table-column>
+        <el-table-column prop="summary" :label="$t('gl.ledger.fieldSummary')" min-width="150" show-overflow-tooltip />
+      </el-table>
+    </template>
     <div v-if="voucherDetail && voucherDetail.bizId" style="margin-top: 16px">
       <el-button type="primary" size="small" @click="traceBill(voucherDetail)">{{ $t('gl.ledger.btnTrace') }}</el-button>
     </div>
@@ -301,9 +331,24 @@ const { t } = useI18n()
 // 凭证详情抽屉
 const voucherDrawer = ref(false)
 const voucherDetail = ref(null)
+const detailIsVoucher = ref(false)
+const voucherLineRows = ref([])
+const linesLoading = ref(false)
 function openVoucherDetail(row) {
   voucherDetail.value = row
+  detailIsVoucher.value = false
   voucherDrawer.value = true
+}
+// 凭证台账行的详情走 /sharing/voucher/{id}/lines（与凭证页同一个只读权限码 sharing:voucher:list）
+async function openVoucherLines(row) {
+  voucherDetail.value = row
+  detailIsVoucher.value = true
+  voucherLineRows.value = []
+  voucherDrawer.value = true
+  linesLoading.value = true
+  try {
+    voucherLineRows.value = (await sharingApi.voucherLines(row.id)) || []
+  } catch (e) { ElMessage.error(e.message) } finally { linesLoading.value = false }
 }
 
 // BillTraceDrawer

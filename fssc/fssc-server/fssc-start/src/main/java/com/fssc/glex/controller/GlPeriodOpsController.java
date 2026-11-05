@@ -108,6 +108,7 @@ public class GlPeriodOpsController {
                 {"坏账计提已复核", "FIN_AR"},
                 {"资产折旧已计提", "FA_ASSET_ACCOUNT"},
                 {"内部往来已抵消", "FIN_GL"},
+                {"应生成未生成凭证检查", "FIN_GL"},
         };
         int n = 0;
         for (String[] d : defaults) {

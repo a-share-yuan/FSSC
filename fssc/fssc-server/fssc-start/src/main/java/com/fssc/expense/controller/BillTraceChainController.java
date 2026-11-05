@@ -21,8 +21,10 @@ import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.sharing.entity.OpPayBatch;
+import com.fssc.sharing.entity.OpPayBatchDetail;
 import com.fssc.sharing.entity.OpVoucher;
 import com.fssc.sharing.entity.OpVoucherLine;
+import com.fssc.sharing.mapper.OpPayBatchDetailMapper;
 import com.fssc.sharing.mapper.OpPayBatchMapper;
 import com.fssc.sharing.mapper.OpVoucherLineMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
@@ -138,7 +140,14 @@ public class BillTraceChainController {
      * 按裸 bill_id、source_doc_id 撞进本单链路。
      */
     private static final Set<String> VOUCHER_SOURCE_EXPENSE = Set.of(
-            "EXPENSE", "EXPENSE_PAY", "EXP_LOAN", "EXP_REPAY", "EXPENSE_REIM", "EXPENSE_LOAN", "EXPENSE_REPAY");
+            "EXPENSE", "EXPENSE_PAY", "EXPENSE_SETTLE", "EXP_LOAN", "EXP_REPAY",
+            "EXPENSE_REIM", "EXPENSE_LOAN", "EXPENSE_REPAY");
+    /**
+     * 批次级付款凭证来源族：{@code bill_id}/{@code source_doc_id} 存的是 {@code op_pay_batch.id}，
+     * 与单据级凭证分家（同 {@code VoucherAutoPostService.BATCH_LEG_SOURCE_TYPES} 口径）。
+     * 只在“本单付款记录已关联到的批次”范围内取，不做裸主键跨域关联。
+     */
+    private static final Set<String> BATCH_LEG_SOURCE_TYPES = Set.of("TREASURY_PAY", "CIP_PAY_BATCH");
     /** 批次「单据即批次」域：TR_PAY 的 bizId 就是 op_pay_batch.id，不是某条流程的回溯列 */
     private static final Set<String> BATCH_IS_BILL = Set.of("TR_PAY", "TR_PAY_FAIL");
     /**
@@ -168,7 +177,7 @@ public class BillTraceChainController {
     /**
      * 他域「归档」段适用域：只有「单据即档案」的 FM_ARCHIVE（bizId 就是 op_archive.id）。
      * 他域单据不产生档案卷——建卷候选只取 exp_bill（状态＋影像＋未归档），
-     * 按 proc_inst_id 回溯实测也只命中费用域实例 ⇒ 其余域画出来只会是一个永远灰的节点。
+     * 按 proc_inst_id 回溯也只命中费用域实例 ⇒ 其余域画出来只会是一个永远灰的节点。
      */
     private static final Set<String> ARCHIVE_SEGMENT_TYPES = Set.of("FM_ARCHIVE");
     /** 单次返回的轨迹行数上限（多轮次全含，防御性截断） */
@@ -180,6 +189,8 @@ public class BillTraceChainController {
     private final WfTaskHistoryMapper wfTaskHistoryMapper;
     private final WfTaskMapper wfTaskMapper;
     private final OpPayBatchMapper opPayBatchMapper;
+    /** 组批那一行明细（bill_payment_id）＝本单与批次的直接关联，不随付款回写才出现 */
+    private final OpPayBatchDetailMapper opPayBatchDetailMapper;
     private final OpVoucherMapper opVoucherMapper;
     private final OpVoucherLineMapper opVoucherLineMapper;
     private final WfInstanceMapper wfInstanceMapper;
@@ -243,16 +254,49 @@ public class BillTraceChainController {
                         .orderByAsc(ExpBillPayment::getLineNo));
         out.put("payments", payments);
 
-        // 3) 付款批次（按 pay_batch_no 去重）
+        // 3) 付款批次（两臂取并，按批次 id 去重）
+        //    ① pay_batch_no：只在银行付款成功回写时才落到付款记录（PayBatchService.writeBackPayment），
+        //       已组批、未出账的单据按它取永远是 0 批 ⇒ 时间线显示「未组批」、抽屉显「未组批/无批次」，
+        //       而库里明明挂着 APPROVED／CONFIRMED 批次；
+        //    ② op_pay_batch_detail.bill_payment_id：组批那一刻就写好的正向关联（手工组批与自动组批都逐行落），
+        //       不依赖付款是否已发生 ⇒ 已组批未付款也能在本单链路上看见批次。
+        Set<Long> batchIds = new LinkedHashSet<>();
         List<String> batchNos = payments.stream()
                 .map(ExpBillPayment::getPayBatchNo)
                 .filter(n -> n != null && !n.isBlank())
                 .distinct()
                 .toList();
-        List<OpPayBatch> batches = batchNos.isEmpty() ? List.of()
-                : opPayBatchMapper.selectList(new LambdaQueryWrapper<OpPayBatch>()
-                        .in(OpPayBatch::getBatchNo, batchNos));
+        if (!batchNos.isEmpty()) {
+            for (OpPayBatch b : opPayBatchMapper.selectList(new LambdaQueryWrapper<OpPayBatch>()
+                    .in(OpPayBatch::getBatchNo, batchNos))) {
+                batchIds.add(b.getId());
+            }
+        }
+        List<Long> paymentIds = payments.stream().map(ExpBillPayment::getId)
+                .filter(Objects::nonNull).toList();
+        if (!paymentIds.isEmpty()) {
+            for (OpPayBatchDetail d : opPayBatchDetailMapper.selectList(
+                    new LambdaQueryWrapper<OpPayBatchDetail>()
+                            .in(OpPayBatchDetail::getBillPaymentId, paymentIds))) {
+                if (d.getBatchId() != null) {
+                    batchIds.add(d.getBatchId());
+                }
+            }
+        }
+        List<OpPayBatch> batches = batchIds.isEmpty() ? List.of()
+                : opPayBatchMapper.selectBatchIds(batchIds);
         out.put("batches", batches);
+
+        // 3′) 付款批次凭证（出纳付款腿）：凭证记在批次名下（bill_id/source_doc_id＝批次 id），
+        //     与单据级凭证分家。抽屉单列显示，不计入「记账凭证 N 张」与 VOUCHER 段到达判据——
+        //     它证明的是"钱出去了"，不能替代"本单费用已入账"。
+        List<OpVoucher> paymentVouchers = batchLegVouchersOf(batchIds);
+        Map<Long, List<OpVoucherLine>> paymentVoucherLines = new LinkedHashMap<>();
+        for (OpVoucher v : paymentVouchers) {
+            paymentVoucherLines.put(v.getId(), opVoucherLineMapper.selectByVoucherId(v.getId()));
+        }
+        out.put("paymentVouchers", paymentVouchers);
+        out.put("paymentVoucherLines", paymentVoucherLines);
 
         // 4) 凭证（bill_id 老字段 + source_doc_id 标准化字段 + 回溯列 三口取并）
         //    限定费用域来源类型：同 id 的 GL/FA/AP/AR 凭证属其它业务域，不得混入本单链路
@@ -274,7 +318,8 @@ public class BillTraceChainController {
         List<WfTaskHistory> traces = tracesOf(billId, domain);
         out.put("traces", traces);
 
-        out.put("summary", expenseSummary(bill, instances, payments, batches, vouchers, archives, traces));
+        out.put("summary", expenseSummary(bill, instances, payments, batches, vouchers,
+                paymentVouchers, archives, traces));
         return Result.success(out);
     }
 
@@ -737,7 +782,7 @@ public class BillTraceChainController {
      * 本单凭证：bill_id / source_doc_id / proc_inst_id 三口取并。
      *
      * <p>三口写成一条 {@code OR} 时优化器不做 index merge，会对 41 万行凭证表整表扫
-     * （实测 0.9s/次，联查总耗时的一半）；拆成三次等值查询后各自命中
+     * （约 0.9 秒/次，占联查总耗时的一半）；拆成三次等值查询后各自命中
      * {@code idx_tenant_bill}／{@code idx_tenant_srcdoc}／{@code idx_proc_inst_id}，再在内存里按 id 去重正序。
      */
     private List<OpVoucher> expenseVouchersOf(Long billId, List<String> pis) {
@@ -758,6 +803,27 @@ public class BillTraceChainController {
                     .in(OpVoucher::getProcInstId, pis))) {
                 byId.put(v.getId(), v);
             }
+        }
+        return sortedByVoucherId(byId);
+    }
+
+    /**
+     * 付款批次凭证（出纳付款腿）：来源族 {@link #BATCH_LEG_SOURCE_TYPES}，
+     * {@code bill_id}/{@code source_doc_id} 存批次 id。
+     *
+     * <p>只按「本单付款记录已关联到的批次 id 集合」查询——不拿单据 id 直接去撞，
+     * 因为两个 id 空间同段自增、数值会重叠（同 {@code VoucherAutoPostService} 的分家说明），
+     * 那会把同号批次的凭证算到本单头上。
+     */
+    private List<OpVoucher> batchLegVouchersOf(Set<Long> batchIds) {
+        if (batchIds == null || batchIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, OpVoucher> byId = new LinkedHashMap<>();
+        for (OpVoucher v : opVoucherMapper.selectList(new LambdaQueryWrapper<OpVoucher>()
+                .in(OpVoucher::getSourceType, BATCH_LEG_SOURCE_TYPES)
+                .in(OpVoucher::getSourceDocId, batchIds))) {
+            byId.put(v.getId(), v);
         }
         return sortedByVoucherId(byId);
     }
@@ -809,7 +875,8 @@ public class BillTraceChainController {
      */
     private Map<String, Object> expenseSummary(ExpBill bill, List<WfInstance> instances,
                                               List<ExpBillPayment> payments, List<OpPayBatch> batches,
-                                              List<OpVoucher> vouchers, List<ArchiveInfoDTO> archives,
+                                              List<OpVoucher> vouchers, List<OpVoucher> paymentVouchers,
+                                              List<ArchiveInfoDTO> archives,
                                               List<WfTaskHistory> traces) {
         String billStatus = bill.getStatus();
         // 状态/卡点/"已批"证据关联在单据主流程实例上，而不是 id 最大（＝最后完成）的那一枚。
@@ -866,6 +933,7 @@ public class BillTraceChainController {
         summary.put("paymentCount", payments.size());
         summary.put("batchCount", batches.size());
         summary.put("voucherCount", vouchers.size());
+        summary.put("paymentVoucherCount", paymentVouchers.size());
         summary.put("archiveCount", archives.size());
         summary.put("traceCount", traces.size());
         // 各段最终状态计数（判据用）＋存在计数（副标题用），两套并存不互相顶替
@@ -874,6 +942,7 @@ public class BillTraceChainController {
         int batchSettled = settledBatchCount(batches);
         int archived = archivedCount(archives);
         summary.put("postedVoucherCount", posted);
+        summary.put("postedPaymentVoucherCount", postedVoucherCount(paymentVouchers));
         summary.put("paidPaymentCount", payPaid);
         summary.put("settledBatchCount", batchSettled);
         summary.put("archivedCount", archived);

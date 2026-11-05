@@ -102,14 +102,15 @@ public class LinkuOpenSyncService {
         String diffRemark = diffRemark(body, summary);
 
         Long rowId = mapper.selectReconRowId(tenantId, supplierId, period);
+        String supplierName = mapper.selectSupplierNameById(tenantId, supplierId);
         if (rowId == null) {
-            mapper.insertSupplierRecon(tenantId, supplierId, buildReconNo(reconId), period,
+            mapper.insertSupplierRecon(tenantId, supplierId, supplierName, buildReconNo(reconId), period,
                     payableAmount, paidAmount, balance, openingBalance, newStatus, diffRemark,
                     reconId, asLong(body.get("partnerPkId")), asLong(body.get("companyId")), now);
             rowId = mapper.selectReconRowId(tenantId, supplierId, period);
         } else {
             mapper.updateSupplierRecon(rowId, payableAmount, paidAmount, balance, openingBalance,
-                    newStatus, diffRemark, reconId, asLong(body.get("partnerPkId")), now);
+                    newStatus, diffRemark, supplierName, reconId, asLong(body.get("partnerPkId")), now);
         }
         if (rowId == null) {
             throw new BizException(500, "supplier_recon 已写入但回查不到 id，period=" + period + " supplier=" + supplierId);

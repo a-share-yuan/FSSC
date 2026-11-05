@@ -173,7 +173,8 @@ async function doLogin() {
   min-height: 560px;
   border-radius: 20px;
   overflow: hidden;
-  background: #fff;
+  /* 深浅色体检：表单卡随主题走（写死 #fff 时深色下白卡配黑输入框）；品牌渐变区保持原设计 */
+  background: var(--app-card-bg);
   box-shadow: 0 24px 70px rgba(4, 22, 48, .45);
 }
 
@@ -210,15 +211,15 @@ async function doLogin() {
 /* 右侧表单区 */
 .form-side { flex: 1; display: flex; align-items: center; justify-content: center; padding: 36px 44px; }
 .form-box { width: 100%; max-width: 400px; }
-.form-title { margin: 0 0 6px; font-size: 24px; color: #14283f; font-weight: 700; }
-.form-sub { margin: 0 0 26px; font-size: 13px; color: #8a94a6; }
+.form-title { margin: 0 0 6px; font-size: 24px; color: var(--app-text); font-weight: 700; }
+.form-sub { margin: 0 0 26px; font-size: 13px; color: var(--app-text-secondary); }
 .form-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .row-link-icon { margin-right: 3px; }
 /* C-3 图形验证码：输入框 + 可点击刷新的图片并排，图片 120x40 与服务端渲染尺寸一致 */
 .captcha-line { display: flex; align-items: center; gap: 10px; width: 100%; }
 .captcha-img {
   flex: none; width: 120px; height: 40px; border-radius: 8px; cursor: pointer;
-  border: 1px solid #d3d9e2; background: #f5f7fa; object-fit: cover;
+  border: 1px solid var(--app-border); background: #f5f7fa; object-fit: cover;
 }
 .captcha-img-fallback { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
 .captcha-hint { margin-top: 6px; font-size: 12px; color: #e6a23c; line-height: 1.5; }

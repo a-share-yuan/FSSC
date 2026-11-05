@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fssc.asset.entity.MdAsset;
 import com.fssc.asset.entity.StockMove;
+import com.fssc.asset.mapper.MdInventoryMapper;
 import com.fssc.asset.mapper.StockMoveMapper;
 import com.fssc.asset.service.MdAssetService;
 import com.fssc.audit.service.AuditTrailService;
@@ -90,6 +91,13 @@ public class PurchaseService {
     private final AuditTrailService auditTrailService;
     /** 收货→存货移动台账（stock_move）写入位置 */
     private final StockMoveMapper stockMoveMapper;
+    /**
+     * 物料主数据（{@code md_inventory}）—— 采购订单行「物料编码」的候选源。
+     * <p>此前该下拉接的是**费用项目**（{@code md_expense_item}），填进去的"编码"其实是费用项目编号，
+     * 门户「物料编码」列显示的也是它；而真正的物料台账 0 行 ⇒ 门户两列看起来恒空。
+     * 改接物料主数据后，选中物料同时回填名称与单位。</p>
+     */
+    private final MdInventoryMapper inventoryMapper;
     /** 开票回写超收货额时派 INVOICE_MATCH 异常单（ThreeWayMatchService 侧复用 #17 派单链）。
      *  @Lazy 打断 purchase ↔ sharing 潜在循环依赖（sharing 侧亦装配本域 Mapper 与 WfEngineFacade）。 */
     @Lazy
@@ -97,6 +105,36 @@ public class PurchaseService {
     private ThreeWayMatchService threeWayMatchService;
 
     // 采购订单
+
+    /**
+     * 采购订单行「物料编码」候选（物料主数据 {@code md_inventory}）。
+     *
+     * <p>返回 code/name/unit/spec 四枚，供前端下拉显示「编码 名称」并在选中时回填名称与单位。
+     * 关键词同时匹配编码与名称；无关键词返回前 50 条，避免首屏空下拉。</p>
+     */
+    public java.util.List<java.util.Map<String, Object>> materialOptions(String keyword) {
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.fssc.asset.entity.MdInventory> w =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        w.select(com.fssc.asset.entity.MdInventory::getItemCode,
+                        com.fssc.asset.entity.MdInventory::getItemName,
+                        com.fssc.asset.entity.MdInventory::getUnit,
+                        com.fssc.asset.entity.MdInventory::getSpec)
+                .orderByAsc(com.fssc.asset.entity.MdInventory::getItemCode)
+                .last("LIMIT 50");
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = keyword.trim();
+            w.and(x -> x.like(com.fssc.asset.entity.MdInventory::getItemCode, kw)
+                    .or().like(com.fssc.asset.entity.MdInventory::getItemName, kw));
+        }
+        return inventoryMapper.selectList(w).stream().map(i -> {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("code", i.getItemCode());
+            m.put("name", i.getItemName());
+            m.put("unit", i.getUnit());
+            m.put("spec", i.getSpec());
+            return m;
+        }).toList();
+    }
 
     @Transactional(rollbackFor = Exception.class)
     public Long createOrder(PoOrder o) {
@@ -431,11 +469,12 @@ public class PurchaseService {
 
     /**
      * 行项目逐行校验（与前端 PoOrder.vue 的行内红星同一规则，后端为最终校验）。
-     * 四道断言：
+     * 五道断言：
      * ① 物料名称必填 —— 只填了物料编码也算缺（名称是打印/对账/匹配的规则来源）
      * ② 物料名称不得为纯数字 —— 防"金额误填进名称字段"这类字段串位
      * ③ 数量 > 0、单价 > 0 —— 原规则允许 0，直通"行金额恒为 0"
-     * ④ 量价勾稽：数量 × 单价 必须等于行金额（容差 0.01），防三者各填各的
+     * ④ 单位必填 —— 门户发货与三单匹配的数量换算依赖该字段
+     * ⑤ 量价勾稽：数量 × 单价 必须等于行金额（容差 0.01），防三者各填各的
      */
     private void assertOrderLine(PoOrderLine line, int lineNo) {
         String pos = "第 " + lineNo + " 行";
@@ -455,6 +494,13 @@ public class PurchaseService {
         if (nz(line.getUnitPrice()).compareTo(BigDecimal.ZERO) <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, pos + "单价必须大于 0（当前 "
                     + line.getUnitPrice() + "），无价物料请走费用报销而非采购订单");
+        }
+        // 单位是门户发货（ASN 发运数量）与三单匹配（收货数量换算）的取数依据。
+        // 只在前端拦不住接口/导入/其它入口，后端必须同规则兜底，否则 pur_order_line.uom
+        // 仍可能为空，门户「单位」列恒空、数量口径无从核对。
+        if (isBlank(line.getUnit())) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    pos + "单位必填（门户发货与对账要按单位核算数量）");
         }
         BigDecimal expect = nz(line.getQuantity()).multiply(nz(line.getUnitPrice()));
         BigDecimal actual = nz(line.getAmount());

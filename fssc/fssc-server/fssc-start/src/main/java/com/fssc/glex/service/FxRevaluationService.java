@@ -73,7 +73,7 @@ public class FxRevaluationService {
     private static final AtomicInteger VOUCHER_SEQ = new AtomicInteger();
 
     /** 财务费用-汇兑损益 */
-    private static final String SUBJECT_PNL = "6603";
+    private static final String SUBJECT_PNL = "660304";
     /** 应付账款 */
     private static final String SUBJECT_AP = "2202";
     /** 应收账款 */

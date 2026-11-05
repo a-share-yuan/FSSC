@@ -86,6 +86,7 @@
         </el-form-item>
         <el-form-item label="代理人" prop="toUserId">
           <!-- 默认只加载同公司人员，解决全量加载的性能与安全问题 -->
+          <template #label>代理人<FieldTip :text="delegateTip" /></template>
           <UserSelect v-model="dialog.form.toUserId" scope="same-company" show-dept />
         </el-form-item>
         <el-form-item label="适用单据类型">
@@ -101,16 +102,7 @@
         <el-form-item label="委托原因">
           <el-input v-model="dialog.form.reason" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
-        <el-form-item label=" ">
-          <div style="font-size:12px;color:#909399;line-height:18px">
-            只能委托<b>同公司</b>同事：跨公司委托默认被拒（代办会让外公司的人出现在本公司单据的审批记录上），
-            确需放行须由管理员在参数配置中设置
-            <code>delegate.cross_company.whitelist</code>。委托生效期内代理人可代为办理你的待办
-            （两边列表都能看到，代理人侧标注「代 X 办理」、你侧标注「已委托」），建立后代理人会收到站内通知，到期自动失效。
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
+      </el-form>      <template #footer>
         <el-button @click="dialog.visible = false">取消</el-button>
         <el-button type="primary" :loading="dialog.saving" @click="save">保存</el-button>
       </template>
@@ -130,10 +122,11 @@
  *
  * 权限：wf:delegate:list 查询 / wf:delegate:create 新增 / wf:delegate:update 取消
  */
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { flowApi, store } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
+import FieldTip from '../../components/common/FieldTip.vue'
 import { showRowDetail, formatDateTime } from '@/utils/format'
 import { billTypeLabel } from '@/constants/enums.js'
 import { hasPerm } from '@/utils/perm'
@@ -160,6 +153,19 @@ function bizTypesText(v) {
  * 每 10 分钟刷一次 ⇒ 存在最长 10 分钟的窗口：行仍是 NORMAL 却早已失效。
  * 若直接按 status 显示「启用」，用户会误以为还能继续代办。这里按时间就地算出真实态，与后端同一规则。
  */
+// 角标曾经是「渲染那一瞬的快照」：页面开着不动，到了生效时刻仍显示「待生效」、
+// 过了失效时刻仍显示「生效中」，只有刷新才变。
+// 这里把一个分钟级 now 做成响应式驱动重算——不用后端 status 顶替，
+// 因为 status 的到期回收由 WfDelegateExpireJob 每 10 分钟刷一次，
+// 按 status 显示会在「已失效但未回收」的窗口里骗人说还在生效。
+const nowTick = ref(Date.now())
+let tickTimer = null
+onMounted(() => {
+  if (tickTimer) clearInterval(tickTimer)
+  tickTimer = setInterval(() => { nowTick.value = Date.now() }, 60 * 1000)
+})
+onUnmounted(() => { if (tickTimer) { clearInterval(tickTimer); tickTimer = null } })
+
 function effectiveStatus(row) {
   const s = String(row?.status || '').toUpperCase()
   if (s === 'DISABLED') return { text: '已停用', type: 'danger' }
@@ -167,7 +173,7 @@ function effectiveStatus(row) {
   const parse = (v) => (v ? new Date(String(v).replace(' ', 'T')).getTime() : null)
   const begin = parse(row?.beginTime)
   const end = parse(row?.endTime)
-  const now = Date.now()
+  const now = nowTick.value   // 读响应式时钟，跨过生效/失效时刻会自动重算
   if (begin && now < begin) return { text: '待生效', type: 'warning' }
   if (end && now > end) return { text: '已过期', type: 'info' }
   return { text: '生效中', type: 'success' }
@@ -204,6 +210,12 @@ const dialog = reactive({
   visible: false, saving: false,
   form: blankForm(),
 })
+
+/** 委托范围与生效规则说明（原为弹窗底部整段灰字，收进标签旁的提示） */
+const delegateTip = '只能委托同公司同事：跨公司委托默认被拒（代办会让外公司的人出现在本公司单据的审批记录上），'
+  + '确需放行须由管理员在参数配置中设置 delegate.cross_company.whitelist。'
+  + '委托生效期内代理人可代为办理你的待办（两边列表都能看到，代理人侧标注「代 X 办理」、你侧标注「已委托」），'
+  + '建立后代理人会收到站内通知，到期自动失效。'
 
 const formRef = ref(null)
 

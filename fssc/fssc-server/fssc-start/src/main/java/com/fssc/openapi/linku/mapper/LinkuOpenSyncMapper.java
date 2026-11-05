@@ -38,6 +38,10 @@ public interface LinkuOpenSyncMapper {
             + "AND del_flag = 0 LIMIT 1")
     Long selectSupplierIdByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
 
+    @Select("SELECT supplier_name FROM md_supplier WHERE tenant_id = #{tenantId} AND id = #{supplierId} "
+            + "AND del_flag = 0 LIMIT 1")
+    String selectSupplierNameById(@Param("tenantId") Long tenantId, @Param("supplierId") Long supplierId);
+
     @Select("SELECT id FROM crm_customer WHERE tenant_id = #{tenantId} AND customer_code = #{code} "
             + "AND del_flag = 0 LIMIT 1")
     Long selectCustomerIdByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
@@ -62,12 +66,13 @@ public interface LinkuOpenSyncMapper {
             + "payable_amount, paid_amount, balance, opening_balance, period_payable, period_paid, closing_balance, "
             + "recon_type, status, diff_remark, linku_recon_id, linku_partner_id, linku_sync_status, "
             + "linku_sync_time, company_id, create_time, update_time, del_flag) "
-            + "VALUES (#{tenantId}, #{supplierId}, NULL, #{reconNo}, #{period}, "
+            + "VALUES (#{tenantId}, #{supplierId}, #{supplierName}, #{reconNo}, #{period}, "
             + "#{payableAmount}, #{paidAmount}, #{balance}, #{openingBalance}, #{payableAmount}, #{paidAmount}, "
             + "#{balance}, 'AUTO', #{status}, #{diffRemark}, #{linkuReconId}, #{linkuPartnerId}, 'SYNCED', "
             + "#{now}, #{companyId}, #{now}, #{now}, 0)")
     int insertSupplierRecon(@Param("tenantId") Long tenantId,
                             @Param("supplierId") Long supplierId,
+                            @Param("supplierName") String supplierName,
                             @Param("reconNo") String reconNo,
                             @Param("period") String period,
                             @Param("payableAmount") BigDecimal payableAmount,
@@ -87,6 +92,7 @@ public interface LinkuOpenSyncMapper {
             + "period_paid = #{paidAmount}, closing_balance = #{balance}, "
             + "status = CASE WHEN status IN ('DRAFT','DIFF') THEN #{status} ELSE status END, "
             + "diff_remark = #{diffRemark}, linku_recon_id = #{linkuReconId}, linku_sync_status = 'SYNCED', "
+            + "supplier_name = IFNULL(supplier_name, #{supplierName}), "
             + "linku_sync_time = #{now}, linku_partner_id = IFNULL(#{linkuPartnerId}, linku_partner_id), "
             + "update_time = #{now} WHERE id = #{rowId}")
     int updateSupplierRecon(@Param("rowId") Long rowId,
@@ -96,6 +102,7 @@ public interface LinkuOpenSyncMapper {
                             @Param("openingBalance") BigDecimal openingBalance,
                             @Param("status") String status,
                             @Param("diffRemark") String diffRemark,
+                            @Param("supplierName") String supplierName,
                             @Param("linkuReconId") Long linkuReconId,
                             @Param("linkuPartnerId") Long linkuPartnerId,
                             @Param("now") LocalDateTime now);

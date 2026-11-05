@@ -45,7 +45,7 @@
 
     <TablePager v-model:page="q.pageNum" v-model:size="q.pageSize" :total="total" @change="load" />
 
-    <el-dialog v-model="formVisible" :title="editing ? '编辑采购退货单' : '新建采购退货单'" width="900px" destroy-on-close>
+    <DirtyGuardDialog ref="dlgRef" v-model="formVisible" :dirty="isFormDirty" :title="editing ? '编辑采购退货单' : '新建采购退货单'" width="min(1040px, 94vw)" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="96px" size="small">
         <el-row :gutter="12">
           <!-- 供应商代码由纯输入框改远程检索下拉（与合同/付款计划同组件）。
@@ -87,18 +87,76 @@
         <el-divider content-position="left">明细行</el-divider>
         <el-table :data="form.lines" size="small" border>
           <el-table-column label="物料编码" width="130"><template #default="{ row }"><el-input v-model="row.itemCode" maxlength="64" /></template></el-table-column>
-          <el-table-column label="物料名称" min-width="140"><template #default="{ row }"><el-input v-model="row.itemName" /></template></el-table-column>
+          <el-table-column label="物料名称" min-width="140">
+            <template #header><span class="th-req">*</span>物料名称</template>
+            <template #default="{ row, $index }">
+              <el-input
+                v-model="row.itemName"
+                :data-line="$index"
+                data-field="itemName"
+                :class="cellClass($index, 'itemName')"
+                :title="cellTip($index, 'itemName')"
+                @input="onLineEdit"
+              />
+            </template>
+          </el-table-column>
           <!-- 数量列原先不挂 recalc ⇒ 先填单价后改数量时行金额停在旧值，
                表头也随明细合计同步错下去，"表头＝明细合计"的等式校验查不出。数量与单价同权：任一变更即重算行金额。 -->
-          <el-table-column label="数量" width="100"><template #default="{ row }"><el-input v-model="row.qty" @change="recalc(row)" /></template></el-table-column>
+          <el-table-column label="数量" width="100">
+            <template #header><span class="th-req">*</span>数量</template>
+            <template #default="{ row, $index }">
+              <el-input
+                v-model="row.qty"
+                :data-line="$index"
+                data-field="qty"
+                :class="cellClass($index, 'qty')"
+                :title="cellTip($index, 'qty')"
+                @change="recalc(row)"
+              />
+            </template>
+          </el-table-column>
           <!-- 明细补「单位」列（原 uom 恒 NULL，行级追溯断在单位）。
                留空时后端按物料编码从采购订单行回填单位，填了以人工为准。 -->
-          <el-table-column label="单位" width="80"><template #default="{ row }"><el-input v-model="row.uom" placeholder="台/个" maxlength="16" /></template></el-table-column>
-          <el-table-column label="单价" width="110"><template #default="{ row }"><el-input v-model="row.price" @change="recalc(row)" /></template></el-table-column>
+          <el-table-column label="单位" width="86">
+            <template #header><span class="th-req">*</span>单位</template>
+            <template #default="{ row, $index }">
+              <el-input
+                v-model="row.uom"
+                placeholder="台/个"
+                maxlength="16"
+                :data-line="$index"
+                data-field="uom"
+                :class="cellClass($index, 'uom')"
+                :title="cellTip($index, 'uom')"
+                @input="onLineEdit"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="单价" width="110">
+            <template #header><span class="th-req">*</span>单价</template>
+            <template #default="{ row, $index }">
+              <el-input
+                v-model="row.price"
+                :data-line="$index"
+                data-field="price"
+                :class="cellClass($index, 'price')"
+                :title="cellTip($index, 'price')"
+                @change="recalc(row)"
+              />
+            </template>
+          </el-table-column>
           <el-table-column label="税率%" width="90"><template #default="{ row }"><el-input v-model="row.taxRate" /></template></el-table-column>
           <el-table-column label="金额" width="120"><template #default="{ row }"><el-input v-model="row.amount" /></template></el-table-column>
           <el-table-column label="操作" width="70"><template #default="{ row, $index }"><el-button link type="danger" size="small" @click="form.lines.splice($index, 1)">删</el-button></template></el-table-column>
         </el-table>
+        <!-- 行项目校验结果常驻显示：明细不在 el-form 内，guardSubmit 覆盖不到 -->
+        <div v-if="lineIssues.length" class="line-err">
+           明细有 {{ lineIssues.length }} 处待修正：
+          <span v-for="(it, k) in lineIssueBrief" :key="k">
+            <a class="line-err__link" @click="focusIssue(it)">{{ it.msg }}</a><span v-if="k < lineIssueBrief.length - 1">；</span>
+          </span>
+          <span v-if="lineIssues.length > lineIssueBrief.length"> 等</span>
+        </div>
         <div class="line-sum">
           明细合计：<b>{{ lineSum() }}</b>
           <!-- 税额/价税合计为只读派生（含税规则：税额=Σ amount×taxRate/(100+taxRate)，
@@ -113,10 +171,10 @@
         <el-button size="small" type="primary" plain @click="addLine">+ 加一行</el-button>
       </el-form>
       <template #footer>
-        <el-button size="small" @click="formVisible = false">取消</el-button>
+        <el-button size="small" @click="dlgRef?.requestClose()">取消</el-button>
         <el-button type="primary" size="small" @click="doSave">保存</el-button>
       </template>
-    </el-dialog>
+    </DirtyGuardDialog>
 
     <el-dialog v-model="detailVisible" title="采购退货单详情" width="820px" destroy-on-close>
       <el-descriptions :column="2" size="small" border v-if="detail">
@@ -159,7 +217,7 @@
 
 <script setup>
 import { RETURN_STATUS, RETURN_MODE, returnStatusLabel, returnModeLabel } from '@/constants/enums'
-import { onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, reactive, ref, watch, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { returnApi, store, orgApi } from '../../api'
 import { hasPerm } from '../../utils/perm'
@@ -168,6 +226,7 @@ import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { formatDateTime } from '@/utils/format'
 import TablePager from '@/components/common/TablePager.vue'
 import SupplierSelect from '@/components/common/SupplierSelect.vue'
+import DirtyGuardDialog from '@/components/common/DirtyGuardDialog.vue'
 import { useDict } from '@/composables/useDict'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
@@ -210,6 +269,7 @@ const total = ref(0)
 const loading = ref(false)
 const q = reactive({ pageNum: 1, pageSize: 20, vendorCode: '', keyword: '', status: '', billDateStart: '', billDateEnd: '', range: [] })
 const formVisible = ref(false)
+const dlgRef = ref(null)
 const detailVisible = ref(false)
 const reasonVisible = ref(false)
 const editing = ref(false)
@@ -220,6 +280,18 @@ const reasonText = ref('')
 const current = ref(null)
 const form = reactive({ lines: [] })
 const formRef = ref(null)
+const lineIssues = ref([])
+const lineIssueBrief = computed(() => lineIssues.value.slice(0, 3))
+function lineIssueOf(idx, field) {
+  return lineIssues.value.find(x => x.idx === idx && x.field === field)
+}
+function cellClass(idx, field) {
+  return lineIssueOf(idx, field) ? 'fld-error' : ''
+}
+function cellTip(idx, field) {
+  const it = lineIssueOf(idx, field)
+  return it ? it.msg : ''
+}
 const { rules: formRules } = useFormRules('PUR_RETURN')
 const { submit: guardSubmit } = useSubmitGuard(formRef)
 
@@ -289,13 +361,72 @@ async function load() {
 function openCreate() {
   editing.value = false
   Object.assign(form, { id: null, vendorCode: '', vendorName: '', companyId: 1, billDate: '', amount: '', taxAmount: '', returnMode: 'REFUND', sourceDocType: '', sourceBillNo: '', returnReason: '', remark: '', lines: [emptyLine()] })
-  formVisible.value = true
+  openDialog()
 }
+
+/** 打开弹窗并记录开场快照：与当前值不同即视为「有未保存内容」 */
+function openDialog() {
+  formVisible.value = true
+  lineIssues.value = []
+  nextTick(() => { dlgSnapshot = JSON.stringify(form) })
+}
+let dlgSnapshot = ''
+const isFormDirty = () => formVisible.value && JSON.stringify(form) !== dlgSnapshot
 
 function addLine() { form.lines.push(emptyLine()) }
 // 单位随行提交（原 emptyLine 无 uom 字段⇒后端恒收不到，pur_return_line.uom 全表 NULL）
 function emptyLine() { return { itemCode: '', itemName: '', qty: 1, uom: '', price: '', taxRate: 13, amount: '' } }
 function recalc(row) { row.amount = (Number(row.qty) * Number(row.price) || 0).toFixed(2) }
+
+/** 未动过的空行不算填写内容（与采购订单同口径），避免默认 qty=1 被当成有效行 */
+function isBlankReturnLine(l) {
+  return !l.itemCode && !l.itemName && !l.uom
+    && !Number(l.price || 0) && !Number(l.amount || 0) && Number(l.qty || 0) === 1
+}
+
+/**
+ * 明细逐行校验，与后端 PurReturnService.assertLineSameRule 同一规则。
+ * 原规则只要求「有一行填了名称且金额 > 0」，数量为 0、单价为空、单位为空都能保存，
+ * 退货数量口径无法与收货/对账对上。此处收集全部问题后一次提示。
+ */
+function collectLineIssues() {
+  const issues = []
+  ;(form.lines || []).forEach((l, idx) => {
+    if (isBlankReturnLine(l)) return
+    const pos = `第 ${idx + 1} 行`
+    if (!String(l.itemName || '').trim()) {
+      issues.push({ idx, field: 'itemName', msg: `${pos}物料名称必填` })
+    }
+    if (!(Number(l.qty) > 0)) {
+      issues.push({ idx, field: 'qty', msg: `${pos}数量必须大于 0` })
+    }
+    if (!(Number(l.price) > 0)) {
+      issues.push({ idx, field: 'price', msg: `${pos}单价必须大于 0` })
+    }
+    if (!String(l.uom || '').trim()) {
+      issues.push({ idx, field: 'uom', msg: `${pos}单位必填` })
+    }
+  })
+  return issues
+}
+
+function onLineEdit() {
+  if (lineIssues.value.length) lineIssues.value = collectLineIssues()
+}
+
+/** 滚到出错单元格并聚焦 */
+async function focusIssue(issue) {
+  await nextTick()
+  if (!issue) return
+  const anchor = document.querySelector(`[data-line="${issue.idx}"][data-field="${issue.field}"]`)
+  const fallback = document.querySelector('.fld-error')
+  const box = anchor?.closest?.('.el-input, .el-select, .el-input-number') || anchor || fallback
+  if (!box) return
+  box.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  const input = (anchor && anchor.matches?.('input') ? anchor : null) || box.querySelector?.('input')
+  try { input?.focus({ preventScroll: true }) } catch { /* 只读控件忽略 */ }
+}
+
 /** 行税额（含税规则，与后端 PurReturnService.deriveTaxAmount 同式）：amount×rate/(100+rate) */
 const lineTax = (l) => {
   const a = Number(l.amount) || 0
@@ -307,8 +438,16 @@ const derivedInclusive = () => (form.lines || []).reduce((s, l) => s + (Number(l
 
 async function doSave() {
   await guardSubmit(async () => {
-    // 明细行校验与后端 validateLineSum 同一规则（后端还会比对"合计=表头金额，尾差≤0.01"）
-    const filled = (form.lines || []).filter(l => (l.itemName || l.itemCode) && Number(l.amount) > 0)
+    // 明细行逐行校验（名称/数量/单价/单位），全部问题一次列出
+    const issues = collectLineIssues()
+    lineIssues.value = issues
+    if (issues.length) {
+      ElMessage.warning(issues[0].msg)
+      await focusIssue(issues[0])
+      return
+    }
+    // 未填写的空行不落库；一行都没填则拦下
+    const filled = (form.lines || []).filter(l => !isBlankReturnLine(l))
     if (!filled.length) { ElMessage.warning(t('returns.purchaseReturn.Please')); return }
     // 表头金额＝明细合计的等式强校验（前端先拦，后端 validateLineSum 再拦一道）
     const headAmt = Number(form.amount) || 0
@@ -317,7 +456,7 @@ async function doSave() {
       ElMessage.warning(`表头金额（${headAmt.toFixed(2)}）须等于明细合计（${sumAmt.toFixed(2)}），尾差 ≤0.01`)
       return
     }
-    const lines = (form.lines || []).map(l => ({ ...l, amount: Number(l.amount) || 0, qty: Number(l.qty) || 0, price: Number(l.price) || 0, taxRate: Number(l.taxRate) || 0 }))
+    const lines = filled.map(l => ({ ...l, amount: Number(l.amount) || 0, qty: Number(l.qty) || 0, price: Number(l.price) || 0, taxRate: Number(l.taxRate) || 0 }))
     // 表头税额不再吃空输入框（原 form.taxAmount 无输入框恒兜 0），按明细派生回写
     const body = { ...form, amount: Number(form.amount) || 0, taxAmount: Number(derivedTax()) || 0, companyId: Number(form.companyId) || 1, lines }
     try {
@@ -348,7 +487,7 @@ async function act(row, a) {
     detail.value = await returnApi.purGet(id)
     editing.value = true
     Object.assign(form, detail.value, { lines: (detail.value.lines || []).map(l => ({ ...l })) })
-    formVisible.value = true
+    openDialog()
     return
   }
   if (a.key === 'reject' || a.key === 'void') {
@@ -379,4 +518,27 @@ onMounted(() => { load(); loadCompanies(); reasonDict.load() })
 .toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
 .ops { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .line-sum { margin: 6px 0; font-size: 13px; }
+
+/* 表头必填红星：与 el-form-item 红星同色 */
+:deep(.th-req) { margin-right: 2px; color: var(--el-color-danger); }
+
+/* 出错单元格红框 */
+:deep(.fld-error .el-input__wrapper),
+:deep(.fld-error .el-select__wrapper),
+:deep(.fld-error.el-input .el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+
+.line-err {
+  margin: 6px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-color-danger);
+}
+
+.line-err__link {
+  color: var(--el-color-danger);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
 </style>

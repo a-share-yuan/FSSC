@@ -57,6 +57,12 @@
           <el-table-column prop="amount" label="价税合计" width="100" align="right" sortable>
             <template #default="{ row }">{{ fmt(row.amount) }}</template>
           </el-table-column>
+          <el-table-column label="状态" width="130">
+            <template #default="{ row }">
+              <!-- 发票池原先只有「验真状态」，已驳回票与已开具票外观一致，无从识别 -->
+              <el-tag :type="invStatusType(row.status)" size="small" effect="plain">{{ invStatusLabel(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="验真状态" width="110">
             <template #default="{ row }">
               <!-- 未接外部通道时后端只推进到「验真中」并写 verify_msg 说明原因：
@@ -342,7 +348,7 @@ const { rules: bindRules } = useFormRules('INVOICE_BIND')
 const invoiceTypeRule = { invoiceType: commonRules.select('请选择发票类型') }
 const entryRules = computed(() => ({ ...formRules.value, ...invoiceTypeRule, ...invoiceAmountMatch(() => form) }))
 const issueRules = computed(() => ({ ...formRules.value, ...invoiceTypeRule, ...invoiceAmountMatch(() => issueForm) }))
-import { onMounted, reactive, ref, watch, computed } from 'vue'
+import { onMounted, reactive, ref, watch, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { invoiceApi, billApi, mdApi, userApi, store } from '../../api'
@@ -491,6 +497,18 @@ function invTypeLabel(t) { return invoiceTypeLabel(t) }
 // 渠道名称表同上（REALTIME/TAX 等缺档已补，验真记录页与详情共用一处定义）
 function channelLabel(c) { return invoiceChannelLabel(c) }
 function vsType(s) { return s === 'SUCCESS' ? 'success' : s === 'FAILED' ? 'danger' : s === 'PENDING' ? 'warning' : 'info' }
+/** 单据状态（发票池新增「状态」列用）：与 inv_invoice.status 一一对应 */
+const INV_STATUS = {
+  ISSUING: { label: '开票审批中', type: 'warning' },
+  ISSUED: { label: '已开具', type: 'success' },
+  REJECTED: { label: '已驳回', type: 'danger' },
+  NORMAL: { label: '已入池', type: '' },
+  RED_FLUSH: { label: '红冲票', type: 'info' },
+  RED_FLUSHED: { label: '已红冲', type: 'info' },
+  VOID: { label: '已作废', type: 'danger' },
+}
+function invStatusLabel(s) { return (INV_STATUS[s] || {}).label || s || '—' }
+function invStatusType(s) { return (INV_STATUS[s] || {}).type ?? 'info' }
 // 验真完成的两种取值：SUCCESS（现行）与 VERIFIED（历史 3,327 行）。历史上取值的票不再进批量选择/待验候选，
 // 但仍保留行内「实时验真」以便单张补做验真。
 function isVerified(s) { return s === 'SUCCESS' || s === 'VERIFIED' }
@@ -612,9 +630,13 @@ function syncCreateAmount() {
   form.amount = Number(Number(form.netAmount || 0) + Number(form.taxAmount || 0))
 }
 
-function resetForm() {
+// 清空与清校验态必须错开一个 tick：同一 tick 里先 assign 空值再 clearValidate，
+// el-form 会在值变更后的重渲染里重新跑 required 规则，于是"保存成功"紧接着弹出三行必填红字
+// 等 DOM 更新完再清，红字才真的清掉。
+async function resetForm() {
   Object.assign(form, { invoiceCode: '', invoiceNo: '', invoiceType: 'VAT_SPECIAL', invoiceNature: 'BLUE', invoiceDate: '',
     sellerName: '', sellerTaxNo: '', invoiceTitle: '', taxNo: '', buyerName: '', buyerTaxNo: '', netAmount: 0, amount: 0, taxAmount: 0, checkCode: '', currencyCode: 'CNY', remark: '' })
+  await nextTick()
   formRef.value?.clearValidate()
 }
 
@@ -627,7 +649,7 @@ async function saveCreate() {
       lastCreatedId.value = id
       lastCreatedNo.value = no
       ElMessage.success(`补录成功：${no}`)
-      resetForm()
+      await resetForm()
       loadPool()
     } catch (e) { ElMessage.error(e.message) }
   })
@@ -666,7 +688,14 @@ async function saveIssue() {
     await guardIssue(async () => {
       try {
         const no = issueForm.invoiceNo
-        await invoiceApi.issue({ ...issueForm, invoiceKind: kindOf(issueForm.invoiceType) })
+        // 购方名称在本表有两列（invoice_title＝购方名称、buyer_name＝购方抬头），开票表单只填前者。
+        // 后端 issue() 原样落库、不做互补回填（补录链 create() 才做），只传 invoiceTitle 会让
+        // buyer_name 恒 NULL，销项票面抬头丢失。提交时显式补齐，两条链路落值一致。
+        await invoiceApi.issue({
+          ...issueForm,
+          buyerName: issueForm.invoiceTitle,
+          invoiceKind: kindOf(issueForm.invoiceType),
+        })
         lastIssueNo.value = no
         ElMessage.success(`登记成功并已发起开票审批：${no}`)
         resetIssue()

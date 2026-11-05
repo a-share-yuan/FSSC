@@ -24,6 +24,8 @@ export const BIZ_TYPE = {
   APPLY_MEETING: '会议申请', APPLY_TRAVEL: '出差申请', APPLY_TRAIN: '培训申请',
   CLAIM_TRAVEL: '差旅培训报销', CLAIM_G1: '招待费付款', CONTRACT_APPROVE: '合同审批',
   // 流程模型业务类型（wf_model.model_key 全集，标签取自 wf_model.model_name，去「审批流程」后缀）
+  // 审计轨迹的 biz_type 也走本表：月结两档与付款计划是运行期写入的码，缺键即直显英文
+  AP_MONTH_CLOSE: '应付月末关账', AR_MONTH_CLOSE: '应收月结', PAY_PLAN: '付款计划',
   AR_CLAIM: 'AR服务申请', AR_RECON: '应收对账', AR_REPORT: '应收分析报告',
   BAD_DEBT_CONFIRM: '坏账确认', BAD_DEBT_PROV: '坏账计提', BG_SCHEME: '预算方案',
   CUSTOMER_MAINT: '客户主数据维护',
@@ -347,7 +349,7 @@ export const VOUCHER_SOURCE = {
   // 同族补齐：产品代码里没有写这个 source_type 的出口，摘要一律「费用重分类」
   // ⇒ 判为报表侧模拟写入的数据侧枚举，措辞从数据；详见 bizEntry.js 同名键注释。
   EXPENSE_REIM: '费用重分类',
-  // 与 utils/bizEntry.js 的 VOUCHER_SOURCE_LABEL 同步补齐的差集（10-31 实测：凭证生成统计
+  // 与 utils/bizEntry.js 的 VOUCHER_SOURCE_LABEL 同步补齐的差集（凭证生成统计
   INVOICE_MATCH_MANUAL: '手工匹配', GL_MONTH_CLOSE: '月末结转',
   BAD_DEBT_WRITEOFF: '坏账核销', BAD_DEBT_REVERSE: '坏账转回', BAD_DEBT_PROV: '坏账计提',
   AR_CLAIM: '应收认领', AR_NOTE_DISCOUNT: '票据贴现', AR_MONTH_CLOSE: 'AR月末结转',
@@ -739,7 +741,7 @@ export const masterActionLabel = (v) => enumLabel(MASTER_ACTION, v)
  * VOUCHER_GEN_FAILED 由 ExpenseWfEventListener 写。审计轨迹页直接展示原码，缺键即露出英文。
  */
 export const AUDIT_ACTION = {
-  UPDATE: '变更', APPROVE: '同意', REJECT: '驳回', CHECKSUM: '校验和封存', VOUCHER_GEN_FAILED: '凭证生成失败',
+  UPDATE: '变更', APPROVE: '同意', REJECT: '驳回', WITHDRAW: '撤回', CHECKSUM: '校验和封存', VOUCHER_GEN_FAILED: '凭证生成失败',
 }
 export const auditActionLabel = (v) => enumLabel(AUDIT_ACTION, v)
 
@@ -801,7 +803,7 @@ export const reconItemTypeLabel = (v) => enumLabel(RECON_ITEM_TYPE, v)
 
 /** 操作日志的业务动作（sys_oper_log.business_type，库内实值含 PUBLISH/SUBMIT/VOID，种子与运行时两套码并存） */
 export const OPER_BUSINESS_TYPE = {
-  INSERT: '新增', UPDATE: '修改', DELETE: '删除', QUERY: '查询', APPROVE: '审批', EXPORT: '导出',
+  INSERT: '新增', ADD: '新增', UPDATE: '修改', DELETE: '删除', QUERY: '查询', APPROVE: '审批', EXPORT: '导出',
   IMPORT: '导入', PUBLISH: '发布', SUBMIT: '提交', VOID: '作废', OTHER: '其他',
 }
 export const operBusinessTypeLabel = (v) => enumLabel(OPER_BUSINESS_TYPE, v)

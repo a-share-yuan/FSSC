@@ -176,6 +176,17 @@ public class SubjectService {
             e.setStatus("NORMAL");
         }
         mapper.insert(e);
+        // 新增下级后父科目必然不再是末级：标记必须同步置 0，
+        // 否则父科目仍显示 is_leaf=1，与「下设明细」的事实矛盾（制证侧另按实际子节点数兜底）。
+        if (e.getParentId() != null) {
+            MdSubject parent = mapper.selectById(e.getParentId());
+            if (parent != null && (parent.getIsLeaf() == null || parent.getIsLeaf() == 1)) {
+                MdSubject flip = new MdSubject();
+                flip.setId(parent.getId());
+                flip.setIsLeaf(0);
+                mapper.updateById(flip);
+            }
+        }
         TenantCache.evictPrefix(TenantCache.mdPrefix(DOMAIN_TREE));
         return e.getId();
     }

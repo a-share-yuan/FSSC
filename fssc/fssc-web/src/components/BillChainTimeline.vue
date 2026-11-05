@@ -80,6 +80,19 @@ function existCount(key) {
 }
 
 /**
+ * 制证失败留痕（exp_bill.ext_json.voucherPending，写入侧 ExpenseWfEventListener.markVoucherPending）。
+ * 后端早已随摘要透出，前端原先没用 ⇒ 一次真实的制证失败在时间线上只是一格灰节点、
+ * 提示还是默认的「审批后自动生成」，看上去像"还没轮到"。这里把失败原因搬到格子里。
+ */
+const voucherPending = computed(() => summary.value.voucherPending || null)
+/** 节点副标题只有一格宽：取原因首句、去掉参数前缀、截到 20 字，完整原因留在抽屉凭证段 */
+function shortReason(r) {
+  if (!r) return '制证失败，待补生成'
+  const s = String(r).replace(/^参数校验失败[:：]/, '').split(/[；;]/)[0].trim()
+  return s.length > 20 ? s.slice(0, 20) + '…' : s
+}
+
+/**
  * 各段适用性：后端 summary.segmentSupport 按「本单据类型 / 本业务域」逐段裁剪，
  * 无此环节的段整段不画（例：档案卷的链路只有 建卷→归档审批→已归档，不再挂永远灰的「生成凭证」；
  * 事前申请无制证/付款环节；还款单无付款环节）。
@@ -149,6 +162,10 @@ const stages = computed(() => {
     .filter((s) => segOk(s.key) || has(s.key) || existCount(s.key) > 0)
     .map((s) => {
       if (!['VOUCHER', 'PAYMENT', 'BATCH', 'ARCHIVE'].includes(s.key)) return s
+      // 未过账但有制证失败留痕：如实标红并报原因，不再沿用「审批后自动生成」的待办口径
+      if (s.key === 'VOUCHER' && !has(s.key) && voucherPending.value) {
+        return { ...s, state: 'blocked', detail: '制证失败', hint: shortReason(voucherPending.value.reason) }
+      }
       const t = termCount(s.key)
       const e = existCount(s.key)
       const u = UNIT[s.key]

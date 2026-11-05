@@ -206,7 +206,7 @@ async function doLogin() {
     // 登录成功即清场，避免新用户看到前任的提醒（本条「登录成功」在清场之后再弹）。
     clearGlobalOverlays()
     ElMessage.success(t('login.main.Signed'))
-    // USG-01: 落地页按权限分流 —— 无 dashboard:view 的角色落工作台,避免默认页触发6个无权限聚合调用
+    // 落地页按权限分流 —— 无 dashboard:view 的角色落工作台,避免默认页触发6个无权限聚合调用
     // 同族第三处落点：判定必须走 hasPerm()，否则 admin 的 *:*:* 通配码被 includes() 误判为无权、
     // 管理员登录会被分流到 /workbench 而不是 /dashboard（store.user 已在上一行赋好，此处读得到新 perms）
     router.push(hasPerm('dashboard:view') ? '/dashboard' : '/workbench')
@@ -272,7 +272,9 @@ async function doRegister() {
   min-height: 600px;
   border-radius: 20px;
   overflow: hidden;
-  background: #fff;
+  /* 深浅色体检：原先写死 #fff，深色主题下品牌区照常、表单卡却仍是白的，
+     卡里的 el-input/el-checkbox 跟着 html.dark 变深 ⇒ 白底上坐一排黑框。改走 --app-card-bg。 */
+  background: var(--app-card-bg);
   box-shadow: 0 24px 70px rgba(6, 18, 60, .45);
 }
 
@@ -306,15 +308,16 @@ async function doRegister() {
 /* 右侧表单区 */
 .form-side { flex: 1; display: flex; align-items: center; justify-content: center; padding: 36px 44px; }
 .form-box { width: 100%; max-width: 400px; }
-.form-title { margin: 0 0 6px; font-size: 24px; color: #16244a; font-weight: 700; }
-.form-sub { margin: 0 0 26px; font-size: 13px; color: #8a94a6; }
+.form-title { margin: 0 0 6px; font-size: 24px; color: var(--app-text); font-weight: 700; }
+.form-sub { margin: 0 0 26px; font-size: 13px; color: var(--app-text-secondary); }
 .form-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .row-link-icon { margin-right: 3px; }
 /* C-3 图形验证码：输入框 + 可点击刷新的图片并排，图片 120x40 与服务端渲染尺寸一致 */
 .captcha-line { display: flex; align-items: center; gap: 10px; width: 100%; }
 .captcha-img {
   flex: none; width: 120px; height: 40px; border-radius: 8px; cursor: pointer;
-  border: 1px solid #dcdfe6; background: #f5f7fa; object-fit: cover;
+  /* 图底保持浅色：验证码 PNG 由服务端按浅底渲染，随主题变深会看不清码面 */
+  border: 1px solid var(--app-border); background: #f5f7fa; object-fit: cover;
 }
 .captcha-img-fallback { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
 .captcha-hint { margin-top: 6px; font-size: 12px; color: #e6a23c; line-height: 1.5; }

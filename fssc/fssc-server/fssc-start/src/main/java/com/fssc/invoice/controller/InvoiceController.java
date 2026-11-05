@@ -210,7 +210,7 @@ public class InvoiceController {
     @OperLog(module = "INVOICE", operType = "UPDATE", desc = "进项转出")
     @PostMapping("/certify/transfer-out")
     public Result<Integer> transferOut(@RequestBody IdsReq req) {
-        return Result.success(invoiceService.transferOut(req.getIds()));
+        return Result.success(invoiceService.transferOut(req.getIds(), req.getReason()));
     }
 
     /** 票账比对·增值税申报汇总（销项 − 认证进项 = 应纳增值税） */
@@ -244,6 +244,8 @@ public class InvoiceController {
     @Data
     public static class IdsReq {
         private List<Long> ids;
+        /** 仅进项转出用：转出原因（集体福利/个人消费/…，界面必填） */
+        private String reason;
     }
 
     @RequiresPerm("inv:list")
