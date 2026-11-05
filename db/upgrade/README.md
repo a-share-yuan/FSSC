@@ -23,7 +23,8 @@ for s in V1.6.15_tax_declaration_no_prefix.sql \
          V1.6.18_budget_item_496_orphan_map.sql \
          V1.6.19_menu_withdraw_period_perm.sql \
          V1.6.20_prepay_max_ratio.sql \
-         V1.6.21_budget_item_freeze_perm.sql; do
+         V1.6.21_budget_item_freeze_perm.sql \
+         V1.6.22_review_rule_config.sql; do
   mysql -uroot -p --default-character-set=utf8mb4 fssc < "$s" || break
 done
 
@@ -66,6 +67,7 @@ V1.6.08 只补了 2 条税金科目，那 34+210+112 是 2026-11-04 的库内迁
 | `V1.6.19` | 「我的费用单据」撤回入口菜单 + 会计期间只读点补授 + CONFIG_ADMIN 种子行归位 | ✔ |
 | `V1.6.20` | `prepay.max.ratio` 参数（预付款比例上限，缺省 0.30） | ✔ |
 | `V1.6.21` | 预算行冻结/解冻权限点 `budget:item:freeze`，并等价授予已持有 `budget:item:create` 的角色 | ✔ |
+| `V1.6.22` | 智能审单规则页权限码 `policy:list`→`compliance:review:list`、菜单移到「共享运营」、清理 3 条波次测试规则、停用恒不命中的 `PRE-INV-DUPLICATE` | ✔ |
 
 > `V1.6.18` 建的那张 `*_bak20261104` 表是脚本自带的备份，确认数据无误后可自行删除，
 > 它不在 `db/Dump20261104/` 里。

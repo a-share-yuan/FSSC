@@ -50,7 +50,9 @@ export const ROUTE_PERMS = {
   '/compliance/fraud': { perms: ['compliance:fraud:list'] },
   // 合规风控工作区：任一页签的读码即可进页，页内页签再按各自的码过滤（单据流转＝compliance:dispatch:list）
   '/compliance/board': { perms: ['compliance:fraud:list', 'compliance:rule:list', 'compliance:dispatch:list'] },
-  '/compliance/review-rules': { perms: ['policy:list'] },
+  // 智能审单规则页此前借用「费用政策查询」的 policy:list，导致只有政策权的人也能进；
+  // 页面内按钮与后端接口本来就用 compliance:review:*，路由守卫与之一致
+  '/compliance/review-rules': { perms: ['compliance:review:list'] },
   '/compliance/rule': { perms: ['compliance:rule:list'] },
   '/compliance/satisfaction': { perms: ['policy:list'] },
   '/compliance/service-catalog': { perms: ['policy:list'] },
