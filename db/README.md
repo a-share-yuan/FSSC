@@ -30,11 +30,15 @@ for %f in (db\Dump20261102\fssc_*.sql) do mysql --default-character-set=utf8mb4 
 - 影像库表当前只有配置行、无业务行（与源库一致），上传发票后自动产生数据。
 - 口令一律走 `.env` / 环境变量（见根目录 `.env.example`），本目录不含任何明文凭据文件。
 
-## 这份 dump 里带着演练期间的业务数据
+## 这份 dump 里有什么
 
-它是真实跑过一遍业务的库导出，所以**含单据、凭证、审批流水，以及 `act_ge_bytearray` 里 2.3 MB 的上传附件字节**；
-`fssc_crm_customer` / `fssc_md_supplier(_contact)` / `fssc_sys_user` 等表里也带着名称、邮箱、手机号形态的字段值。
+结构、主数据、菜单与权限、流程定义齐全，**业务单据为空**（`exp_bill` / `op_voucher` / `wf_instance` 均为 0 行）——
+它是清库后重新铺底的一版，导入即得一个干净可演示的库，单据由使用者自己跑出来。
+`act_ge_bytearray` 的 2.2 MB 是 190 份 BPMN 定义与 183 张流程图，**不是上传附件**。
+`fssc_crm_customer` / `fssc_md_supplier(_contact)` / `fssc_sys_user` 等主数据表里带着名称、邮箱、手机号形态的字段值，
 发布前请确认这些数据可以公开；要换一批干净数据，就重新导出一份同名结构的 dump 覆盖本目录并同步更新本文件的日期。
+
+> 目录名是历史留用：`Dump20261102/` 里的内容实际是 **2026-11-04 23:30 的导出**（v1.1.1 发布版）。
 
 `db/Dump*/` 与 `db/backup/` 在 `.gitignore` 里，是为了防止日后随手 dump 又被 `git add -A` 带进来；
 `Dump20261102/` 是**明确 `git add -f` 入库**的那一枚例外。
