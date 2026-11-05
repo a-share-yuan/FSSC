@@ -28,7 +28,7 @@ for s in V1.6.15_tax_declaration_no_prefix.sql \
          V1.6.23_credit_auto_approve.sql \
          V1.6.24_violation_reason.sql \
          V1.6.25_precheck_stats_menu.sql \
-         V1.6.26_vendor_name_cleanup.sql; do
+         V1.6.26_comment_normalize.sql; do
   mysql -uroot -p --default-character-set=utf8mb4 fssc < "$s" || break
 done
 
@@ -75,6 +75,7 @@ V1.6.08 只补了 2 条税金科目，那 34+210+112 是 2026-11-04 的库内迁
 | `V1.6.23` | 员工信用铺底（452 人，600 分/C 级/500 元免审额度）、信用免审三参数（总开关/最低等级 B/抽检 10%）、`RR_AMOUNT_HIGH` 归档说明 | ✔ |
 | `V1.6.24` | 违规原因字典 `md_violation_reason`（6 条行为类）+ `op_quality.violation_reason_code`，质检退回按类扣分 | ✔ |
 | `V1.6.25` | 「预检漏拦分析」看板菜单，并把 `compliance:precheck:list` 补给合规岗（此前该组码一条授权都没有） | ✔ |
+| `V1.6.26` | 表/列注释规范化（只改 COMMENT，不动类型与数据） | — |
 
 > `V1.6.18` 建的那张 `*_bak20261104` 表是脚本自带的备份，确认数据无误后可自行删除，
 > 它不在 `db/Dump20261104/` 里。
