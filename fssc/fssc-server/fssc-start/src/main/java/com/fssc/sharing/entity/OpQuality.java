@@ -44,6 +44,8 @@ public class OpQuality implements Serializable {
     private Integer score;
     /** 扣分/问题说明 */
     private String deductReason;
+    /** 违规原因码（md_violation_reason.reason_code）：有值时按字典扣分，为空沿用「质检不合格 -20」旧口径 */
+    private String violationReasonCode;
     /** PASS合格/BACK退回整改 */
     private String result;
     private String remark;

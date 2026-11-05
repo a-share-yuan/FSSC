@@ -752,6 +752,8 @@ export const wfTimeoutApi = {
 export const opApi = {
   qualityPage: (params) => http.get('/tenant/sharing/enhance/quality/page', { params }),
   qualityCreate: (body) => http.post('/tenant/sharing/enhance/quality/create', body),
+  // 违规原因字典（仅行为类；发票真伪/重复/作废由预检拦截，不在此处扣分）
+  qualityViolationReasons: () => http.get('/tenant/sharing/enhance/quality/violation-reasons'),
   qualityUpdate: (body) => http.post('/tenant/sharing/enhance/quality/update', body),
   qualityDelete: (id) => http.post(`/tenant/sharing/enhance/quality/${id}/delete`),
   // 对公付款三单匹配（PO ↔ 收货单 ↔ 发票 ↔ 付款单）

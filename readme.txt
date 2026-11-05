@@ -61,7 +61,7 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   Windows（CMD）：
       for %f in (db\Dump20261104\*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
 
-  注意：db/Dump20261104/ 共 325 个文件 = 一表一文件 324 枚（主库 fssc 318 表 +
+  注意：db/Dump20261104/ 共 326 个文件 = 一表一文件 325 枚（主库 fssc 319 表 +
   影像库 fssc_image 6 表）＋ 1 枚 fssc_routines.sql（存储过程与函数）。
   每个文件自带 CREATE DATABASE IF NOT EXISTS、USE 与
   SET FOREIGN_KEY_CHECKS=0，所以无需预先建库，文件顺序也不影响成败，可重复
@@ -121,7 +121,7 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   bpmn-repo/                流程模型仓库（publish/ 78 个已发布模型，
                             models/ 88 个模型编码共 294 版 XML）
   db/
-    Dump20261104/           整库 dump（325 个文件，一表一文件；主数据/菜单/流程定义齐全，业务单据为空）
+    Dump20261104/           整库 dump（326 个文件，一表一文件；主数据/菜单/流程定义齐全，业务单据为空）
     upgrade/                v1.0.0 → v1.1.1 增量脚本（成对带 rollback，仅原地升级时用）
     hotfix/                 数据级定点修正（演练留下的脏状态，界面上没有入口改的那种）
     import.sh / import.bat  一键导入脚本（自动选最新的 Dump<日期>/）
@@ -138,7 +138,7 @@ Q2 前端页面打开但接口 401/跨域？
    FSSC_API_TARGET 仅影响 preview 模式。
 
 Q3 提示找不到表/flowable 相关错误？
-   确认 db/import.sh 完整执行过（db/Dump20261104/ 的 325 个文件全部导入）；Flowable 的
+   确认 db/import.sh 完整执行过（db/Dump20261104/ 的 326 个文件全部导入）；Flowable 的
    ACT_* 表演示库已内置，首次启动只会做结构校准。
 
 Q4 JDK 版本报错？

@@ -5,8 +5,12 @@ package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.fssc.common.core.ErrorCode;
+import com.fssc.common.exception.BizException;
 import com.fssc.compliance.entity.EmployeeCredit;
+import com.fssc.compliance.entity.MdViolationReason;
 import com.fssc.compliance.mapper.EmployeeCreditMapper;
+import com.fssc.compliance.mapper.MdViolationReasonMapper;
 import com.fssc.system.service.ConfigService;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +40,7 @@ public class EmployeeCreditService {
 
     private final EmployeeCreditMapper creditMapper;
     private final ConfigService configService;
+    private final MdViolationReasonMapper violationReasonMapper;
 
     private static final int INITIAL_SCORE = 600;
     private static final int MAX_SCORE = 1000;
@@ -201,6 +206,46 @@ public class EmployeeCreditService {
                 .setSql("violation_count = violation_count + 1");
         creditMapper.update(null, uw);
         log.warn("员工违规: userId={}, 扣分={}, 原因={}", userId, deductPoints, reason);
+    }
+
+    /**
+     * 按违规原因码扣分：分值取自 md_violation_reason，替代原先写死的一刀切（驳回 -15 / 质检不合格 -20）。
+     *
+     * 管理口径一变就得改代码发版的话，这条链永远跟不上制度调整。
+     *
+     * <p>原因码不存在或已停用时<b>直接报错</b>，不静默按 0 分处理——否则"扣了 0 分"会被当成扣过了。
+     *
+     * @param note 补充说明（质检退回原因等），拼进信用档案的调整原因里便于追溯
+     * @return 实际扣掉的分值（正数）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int onViolationByReason(Long userId, String reasonCode, String note) {
+        MdViolationReason reason = violationReasonMapper.selectOne(new LambdaQueryWrapper<MdViolationReason>()
+                .eq(MdViolationReason::getReasonCode, reasonCode)
+                .eq(MdViolationReason::getStatus, "NORMAL")
+                .eq(MdViolationReason::getDelFlag, 0)
+                .last("limit 1"));
+        if (reason == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "违规原因不存在或已停用: " + reasonCode);
+        }
+        EmployeeCredit credit = getOrCreate(userId, null);
+        int points = reason.getDeductPoints() == null ? 0 : reason.getDeductPoints();
+        adjustScore(credit, -points,
+                "违规：" + reason.getReasonName() + (StringUtils.hasText(note) ? "（" + note + "）" : ""));
+        LambdaUpdateWrapper<EmployeeCredit> uw = new LambdaUpdateWrapper<>();
+        uw.eq(EmployeeCredit::getId, credit.getId())
+                .setSql("violation_count = violation_count + 1");
+        creditMapper.update(null, uw);
+        log.warn("员工违规（分类扣分）: userId={}, code={}, 扣分={}", userId, reasonCode, points);
+        return points;
+    }
+
+    /** 违规原因字典（仅启用项，按 sort 升序；供质检退回下拉） */
+    public java.util.List<MdViolationReason> listViolationReasons() {
+        return violationReasonMapper.selectList(new LambdaQueryWrapper<MdViolationReason>()
+                .eq(MdViolationReason::getStatus, "NORMAL")
+                .eq(MdViolationReason::getDelFlag, 0)
+                .orderByAsc(MdViolationReason::getSort));
     }
 
     /**

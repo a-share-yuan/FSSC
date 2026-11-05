@@ -54,6 +54,13 @@ public class SharingEnhanceController {
         return Result.success(enhanceService.addQuality(q));
     }
 
+    /** 违规原因字典（质检退回时下拉，带扣分值）。注：只含行为类违规，发票真伪/重复/作废由预检拦截 */
+    @RequiresPerm("op:quality:list")
+    @GetMapping("/quality/violation-reasons")
+    public Result<List<com.fssc.compliance.entity.MdViolationReason>> violationReasons() {
+        return Result.success(enhanceService.violationReasons());
+    }
+
     @RequiresPerm("op:quality:update")
     @OperLog(module = "OP_QUALITY", operType = "UPDATE", desc = "更新质检")
     @PostMapping("/quality/update")

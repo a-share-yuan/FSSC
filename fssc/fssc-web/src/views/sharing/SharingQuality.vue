@@ -100,6 +100,14 @@
             <el-option :label="$t('sharing.quality.optBack')" value="BACK" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="dialog.form.result === 'BACK'" :label="$t('sharing.quality.labViolation')">
+          <el-select v-model="dialog.form.violationReasonCode" clearable filterable style="width:100%"
+            :placeholder="$t('sharing.quality.phViolation')">
+            <el-option v-for="r in violationReasons" :key="r.reasonCode"
+              :label="`${r.reasonName}（${$t('sharing.quality.deductN', { v1: r.deductPoints })}）`" :value="r.reasonCode" />
+          </el-select>
+          <div class="violation-tip">{{ $t('sharing.quality.tipViolation') }}</div>
+        </el-form-item>
         <el-form-item :label="$t('sharing.quality.colDeduct')">
           <el-input v-model="dialog.form.deductReason" type="textarea" :rows="2" />
         </el-form-item>
@@ -147,6 +155,9 @@ const rows = ref([])
 const page = reactive({ current: 1, size: 20, total: 0 })
 const q = reactive({ billNo: '', result: '', checkType: '' })
 const dialog = reactive({ visible: false, editing: null, form: {}, saving: false })
+/** 违规原因字典（只有行为类：虚假业务/拆分报销/票面与业务不符/非发票附件缺失/归属错误/超期）。
+ *  发票真伪、重复报销、作废红冲由预检与异常巡检拦截，不在这里扣员工的分。 */
+const violationReasons = ref([])
 
 const qualitySearchRules = reactive({})
 const qualityFormRef = ref(null)
@@ -217,12 +228,19 @@ async function del(row) {
   }
 }
 
-onMounted(() => load())
+onMounted(() => {
+  load()
+  // 违规原因字典：只影响「退回整改」时的信用扣分，取不到就留空、不阻塞页面
+  opApi.qualityViolationReasons()
+    .then((res) => { violationReasons.value = res || [] })
+    .catch(() => { violationReasons.value = [] })
+})
 </script>
 
 <style scoped>
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .header-title { font-size: 15px; font-weight: 600; color: var(--app-text, #303133); }
+.violation-tip { width: 100%; margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary, #909399); }
 :deep(.row-red) { background-color: rgba(245, 108, 108, 0.13) !important; }
 :deep(.row-yellow) { background-color: rgba(230, 162, 60, 0.14) !important; }
 </style>
