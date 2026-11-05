@@ -48,7 +48,7 @@ CREATE TABLE `pay_plan` (
   KEY `idx_plan_type` (`plan_type`),
   KEY `idx_company` (`tenant_id`,`company_id`),
   KEY `idx_tenant_owner` (`tenant_id`,`applicant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采购付款计划';
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采购付款计划';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -69,4 +69,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:16
+-- Dump completed on 2026-11-04 23:29:49

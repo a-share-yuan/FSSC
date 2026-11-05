@@ -34,7 +34,7 @@ CREATE TABLE `sys_number_seq` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_tenant_rule_cycle` (`tenant_id`,`rule_code`,`cycle_key`),
   KEY `idx_tenant` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='单据编号流水';
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='单据编号流水';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -43,7 +43,6 @@ CREATE TABLE `sys_number_seq` (
 
 LOCK TABLES `sys_number_seq` WRITE;
 /*!40000 ALTER TABLE `sys_number_seq` DISABLE KEYS */;
-INSERT INTO `sys_number_seq` VALUES (1,1,'VOUCHER','20261103',19,'2026-11-03 09:21:38'),(2,1,'TAX_DECLARATION','202611',3,'2026-11-03 09:20:30'),(3,1,'BUDGET_ADJUST','20261103',2,'2026-11-03 09:21:45'),(4,1,'IMAGE_BATCH','20261103',1,'2026-11-03 07:34:44');
 /*!40000 ALTER TABLE `sys_number_seq` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -56,4 +55,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:18
+-- Dump completed on 2026-11-04 23:29:39

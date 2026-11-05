@@ -35,7 +35,7 @@ CREATE TABLE `op_job_heartbeat` (
   `update_time` datetime DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_job` (`job_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='定时任务心跳与失败告警';
+) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='定时任务心跳与失败告警';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -44,7 +44,7 @@ CREATE TABLE `op_job_heartbeat` (
 
 LOCK TABLES `op_job_heartbeat` WRITE;
 /*!40000 ALTER TABLE `op_job_heartbeat` DISABLE KEYS */;
-INSERT INTO `op_job_heartbeat` VALUES (25,'AutoDispatchJob','2026-11-03 10:47:02','SUCCESS',6,0,NULL,'2026-11-03 10:47:02'),(26,'WfTimeoutJob','2026-11-03 10:47:02','SUCCESS',5,0,NULL,'2026-11-03 10:47:02'),(27,'InvoiceAbnormalAlertJob','2026-11-03 10:42:58','SUCCESS',7,0,NULL,'2026-11-03 10:42:58'),(28,'InvoiceVerifyScheduler','2026-11-03 10:43:28','SUCCESS',7,0,NULL,'2026-11-03 10:43:28'),(29,'OpTaskDueTimeScanJob','2026-11-03 10:43:28','SUCCESS',4,0,NULL,'2026-11-03 10:43:28'),(30,'HealthProbeJob','2026-11-03 10:44:28','SUCCESS',95,0,NULL,'2026-11-03 10:44:28'),(31,'WfDelegateExpireJob','2026-11-03 10:39:28','SUCCESS',20,0,NULL,'2026-11-03 10:39:28'),(32,'WfLedgerReconcileJob','2026-11-03 10:40:28','SUCCESS',39,0,NULL,'2026-11-03 10:40:28'),(33,'WfDelegateTakeoverSweep','2026-11-03 10:40:28','SUCCESS',5,0,NULL,'2026-11-03 10:40:28'),(34,'WfInstanceArchiveJob','2026-11-03 10:22:28','SUCCESS',23,0,NULL,'2026-11-03 10:22:28');
+INSERT INTO `op_job_heartbeat` VALUES (49,'WfDelegateExpireJob','2026-11-04 23:30:01','SUCCESS',40,0,NULL,'2026-11-04 23:30:02'),(50,'HealthProbeJob','2026-11-04 23:30:02','SUCCESS',12,0,NULL,'2026-11-04 23:30:02'),(51,'AutoDispatchJob','2026-11-04 23:30:32','SUCCESS',13,0,NULL,'2026-11-04 23:30:32'),(52,'WfTimeoutJob','2026-11-04 23:30:32','SUCCESS',11,0,NULL,'2026-11-04 23:30:32'),(53,'WfLedgerReconcileJob','2026-11-04 23:21:01','SUCCESS',36,0,NULL,'2026-11-04 23:21:01'),(54,'WfDelegateTakeoverSweep','2026-11-04 23:21:02','SUCCESS',16,0,NULL,'2026-11-04 23:21:02'),(55,'InvoiceAbnormalAlertJob','2026-11-04 23:28:32','SUCCESS',11,0,NULL,'2026-11-04 23:28:32'),(56,'InvoiceVerifyScheduler','2026-11-04 23:29:02','SUCCESS',22,0,NULL,'2026-11-04 23:29:02'),(57,'OpTaskDueTimeScanJob','2026-11-04 23:29:02','SUCCESS',10,0,NULL,'2026-11-04 23:29:02'),(58,'WfInstanceArchiveJob','2026-11-04 23:13:01','SUCCESS',38,0,NULL,'2026-11-04 23:13:01');
 /*!40000 ALTER TABLE `op_job_heartbeat` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -57,4 +57,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:31
+-- Dump completed on 2026-11-04 23:30:32

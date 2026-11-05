@@ -41,7 +41,7 @@ CREATE TABLE `rc_receipt_line` (
   KEY `idx_receipt_line_receipt` (`receipt_id`),
   KEY `idx_receipt_line_receivable` (`receivable_id`),
   KEY `idx_receipt_line_tenant` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收款核销明细(OTA-P1-12)';
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收款核销明细(OTA-P1-12)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -62,4 +62,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:27
+-- Dump completed on 2026-11-04 23:29:40

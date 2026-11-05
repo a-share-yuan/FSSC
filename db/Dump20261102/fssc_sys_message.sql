@@ -45,7 +45,7 @@ CREATE TABLE `sys_message` (
   KEY `idx_tenant` (`tenant_id`),
   KEY `idx_tenant_receiver` (`tenant_id`,`receiver_id`,`is_read`),
   KEY `idx_tenant_biz` (`tenant_id`,`biz_type`,`biz_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=290 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='站内消息/待办提醒';
+) ENGINE=InnoDB AUTO_INCREMENT=583 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='站内消息/待办提醒';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -54,7 +54,6 @@ CREATE TABLE `sys_message` (
 
 LOCK TABLES `sys_message` WRITE;
 /*!40000 ALTER TABLE `sys_message` DISABLE KEYS */;
-INSERT INTO `sys_message` VALUES (278,1,3851,'APPROVAL','审批待办提醒','您有一条新的审批任务：【税金计提-202706-增值税】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_TAX_PROV',25,'/approval',0,NULL,1,'2026-11-03 10:17:52',1,'2026-11-03 10:17:52',0),(279,1,3951,'APPROVAL','审批待办提醒','您有一条新的审批任务：【税金计提-202706-附加税】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_TAX_PROV',26,'/approval',0,NULL,1,'2026-11-03 10:17:52',1,'2026-11-03 10:17:52',0),(280,1,3851,'APPROVAL','审批待办提醒','您有一条新的审批任务：【税金计提-202706-所得税】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_TAX_PROV',27,'/approval',0,NULL,1,'2026-11-03 10:17:52',1,'2026-11-03 10:17:52',0),(281,1,3951,'APPROVAL','审批待办提醒','您有一条新的审批任务：【费用预提-202702 全流程测试-预提占用】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_ACCRUAL',15,'/approval',0,NULL,1,'2026-11-03 10:17:53',1,'2026-11-03 10:17:53',0),(282,1,3851,'APPROVAL','审批待办提醒','您有一条新的审批任务：【税金计提-202706-增值税】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_TAX_PROV',28,'/approval',0,NULL,1,'2026-11-03 10:27:24',1,'2026-11-03 10:27:24',0),(283,1,3951,'APPROVAL','审批待办提醒','您有一条新的审批任务：【税金计提-202706-附加税】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_TAX_PROV',29,'/approval',0,NULL,1,'2026-11-03 10:27:25',1,'2026-11-03 10:27:25',0),(284,1,3851,'APPROVAL','审批待办提醒','您有一条新的审批任务：【税金计提-202706-所得税】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_TAX_PROV',30,'/approval',0,NULL,1,'2026-11-03 10:27:25',1,'2026-11-03 10:27:25',0),(285,1,3951,'APPROVAL','审批待办提醒','您有一条新的审批任务：【费用预提-202702 全流程测试-预提占用】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_ACCRUAL',16,'/approval',0,NULL,1,'2026-11-03 10:27:25',1,'2026-11-03 10:27:25',0),(286,1,3851,'APPROVAL','审批待办提醒','您有一条新的审批任务：【税金计提-202706-增值税】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_TAX_PROV',31,'/approval',0,NULL,1,'2026-11-03 10:32:17',1,'2026-11-03 10:32:17',0),(287,1,3951,'APPROVAL','审批待办提醒','您有一条新的审批任务：【税金计提-202706-附加税】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_TAX_PROV',32,'/approval',0,NULL,1,'2026-11-03 10:32:17',1,'2026-11-03 10:32:17',0),(288,1,3851,'APPROVAL','审批待办提醒','您有一条新的审批任务：【税金计提-202706-所得税】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_TAX_PROV',33,'/approval',0,NULL,1,'2026-11-03 10:32:18',1,'2026-11-03 10:32:18',0),(289,1,3951,'APPROVAL','审批待办提醒','您有一条新的审批任务：【费用预提-202702 全流程测试-预提占用】（流程：编制底稿/卡片摊销（按类型解析责任人）【共享会计】）','GL_ACCRUAL',17,'/approval',0,NULL,1,'2026-11-03 10:32:18',1,'2026-11-03 10:32:18',0);
 /*!40000 ALTER TABLE `sys_message` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -67,4 +66,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:21
+-- Dump completed on 2026-11-04 23:30:17

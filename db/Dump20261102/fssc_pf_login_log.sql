@@ -38,7 +38,7 @@ CREATE TABLE `pf_login_log` (
   PRIMARY KEY (`id`),
   KEY `idx_login_time` (`login_time`),
   KEY `idx_username` (`username`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='平台登录日志[平台表-不可删-无del_flag]';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='平台登录日志[平台表-不可删-无del_flag]';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -47,6 +47,7 @@ CREATE TABLE `pf_login_log` (
 
 LOCK TABLES `pf_login_log` WRITE;
 /*!40000 ALTER TABLE `pf_login_log` DISABLE KEYS */;
+INSERT INTO `pf_login_log` VALUES (1,'admin','127.0.0.1',NULL,'Chrome','Windows 10','LOGIN',1,'登录成功','2026-11-04 14:08:47'),(2,'admin','127.0.0.1',NULL,'Chrome','Windows 10','LOGIN',1,'登录成功','2026-11-04 15:38:56');
 /*!40000 ALTER TABLE `pf_login_log` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -59,4 +60,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:47:55
+-- Dump completed on 2026-11-04 23:30:01

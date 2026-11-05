@@ -46,7 +46,7 @@ CREATE TABLE `rc_receipt` (
   PRIMARY KEY (`id`),
   KEY `idx_rc_receipt_tenant` (`tenant_id`),
   KEY `idx_tenant_receipt_date` (`tenant_id`,`receipt_date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收款核销单(OTC-P0-6)';
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收款核销单(OTC-P0-6)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -67,4 +67,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:30
+-- Dump completed on 2026-11-04 23:30:21

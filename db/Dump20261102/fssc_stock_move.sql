@@ -52,7 +52,7 @@ CREATE TABLE `stock_move` (
   KEY `idx_move_type_status` (`tenant_id`,`move_type`,`status`),
   KEY `idx_move_item` (`tenant_id`,`item_code`),
   KEY `idx_move_source` (`source_doc_type`,`source_doc_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='存货移动单(逐笔出入库交易)';
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='存货移动单(逐笔出入库交易)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -73,4 +73,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:31
+-- Dump completed on 2026-11-04 23:30:04

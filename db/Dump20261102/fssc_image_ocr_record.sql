@@ -51,7 +51,7 @@ CREATE TABLE `ocr_record` (
   KEY `idx_tenant_batch` (`tenant_id`,`batch_id`),
   KEY `idx_invoice_no` (`tenant_id`,`invoice_no`),
   KEY `idx_img_file` (`img_file_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='OCR 识别结果落库记录';
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='OCR 识别结果落库记录';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -60,7 +60,7 @@ CREATE TABLE `ocr_record` (
 
 LOCK TABLES `ocr_record` WRITE;
 /*!40000 ALTER TABLE `ocr_record` DISABLE KEYS */;
-INSERT INTO `ocr_record` VALUES (2,1,1,1,2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'paddle','FAILED','第 1 页未识别出正式发票票面；可改传 XML/OFD 版式文件重新上传；或在「发票管理 › 发票补录」手工录入发票要素',0,'2026-11-03 07:34:47');
+INSERT INTO `ocr_record` VALUES (2,1,1,1,2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'paddle','FAILED','第 1 页未识别出正式发票票面；可改传 XML/OFD 版式文件重新上传；或在「发票管理 › 发票补录」手工录入发票要素',0,'2026-11-03 07:34:47'),(3,1,NULL,NULL,6,NULL,'04721802','OTHER','2026-10-13',NULL,NULL,2400.0000,NULL,NULL,NULL,NULL,'住宿发票（人工测试样票)\n发票号码：04721802\n开票日期：2026-10-13\n销售方：北京某酒店\n购买方：上海爱共享集团有限公司\n项目：住宿费3晚\n价税合计：2400.00元税率：免税税额：0.00','paddle','SUCCESS',NULL,0,'2026-11-04 21:46:46');
 /*!40000 ALTER TABLE `ocr_record` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -73,4 +73,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:48
+-- Dump completed on 2026-11-04 23:30:48

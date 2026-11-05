@@ -45,7 +45,7 @@ CREATE TABLE `fraud_detection_log` (
   KEY `idx_risk_score` (`risk_score`),
   KEY `idx_created_at` (`created_at`),
   KEY `idx_fdl_tenant_result_id` (`tenant_id`,`detection_result`,`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='反欺诈检测日志表';
+) ENGINE=InnoDB AUTO_INCREMENT=71 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='反欺诈检测日志表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -66,4 +66,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:42
+-- Dump completed on 2026-11-04 23:29:38

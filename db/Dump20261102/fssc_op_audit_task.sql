@@ -55,7 +55,7 @@ CREATE TABLE `op_audit_task` (
   KEY `idx_tenant_bill_type` (`tenant_id`,`bill_id`,`task_type`),
   KEY `idx_tenant_pool_del` (`tenant_id`,`pool_status`,`del_flag`),
   KEY `idx_oat_tenant_del_type_ft` (`tenant_id`,`del_flag`,`task_type`,`finish_time`,`create_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='共享审核任务池';
+) ENGINE=InnoDB AUTO_INCREMENT=40 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='共享审核任务池';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -76,4 +76,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:39
+-- Dump completed on 2026-11-04 23:29:42

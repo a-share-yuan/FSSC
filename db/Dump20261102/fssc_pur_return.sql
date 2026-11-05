@@ -57,7 +57,7 @@ CREATE TABLE `pur_return` (
   UNIQUE KEY `uk_bill_no` (`tenant_id`,`bill_no`),
   KEY `idx_partner` (`tenant_id`,`company_id`,`vendor_code`,`status`),
   KEY `idx_source` (`tenant_id`,`source_doc_type`,`source_doc_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采购退货单(AP退货冲减应付)';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采购退货单(AP退货冲减应付)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -78,4 +78,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:31
+-- Dump completed on 2026-11-04 23:29:38

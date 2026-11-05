@@ -47,7 +47,7 @@ CREATE TABLE `ar_month_close` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_close_no` (`tenant_id`,`close_no`),
   KEY `idx_period` (`tenant_id`,`company_id`,`period`,`close_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AR月末结账(应收月结/成本月结,蓝图9.6)';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AR月末结账(应收月结/成本月结,蓝图9.6)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -68,4 +68,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:17
+-- Dump completed on 2026-11-04 23:29:39

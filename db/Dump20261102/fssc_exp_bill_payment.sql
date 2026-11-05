@@ -57,7 +57,7 @@ CREATE TABLE `exp_bill_payment` (
   KEY `idx_tenant_batch` (`tenant_id`,`pay_batch_no`),
   KEY `idx_proc_inst_id` (`proc_inst_id`),
   KEY `idx_t_del_status_amount` (`tenant_id`,`del_flag`,`pay_status`,`amount`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='单据结算收款信息';
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='单据结算收款信息';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -78,4 +78,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:43
+-- Dump completed on 2026-11-04 23:29:49

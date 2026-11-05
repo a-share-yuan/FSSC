@@ -113,7 +113,7 @@ CREATE TABLE `exp_bill` (
   KEY `idx_tenant_agentuser` (`tenant_id`,`agent_user_id`),
   KEY `idx_tenant_owner_pair` (`tenant_id`,`apply_user_id`,`agent_user_id`,`del_flag`),
   KEY `idx_t_comp_status_img` (`tenant_id`,`del_flag`,`company_id`,`status`,`image_status`,`archive_status`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='费用单据主表(五类单据共用)';
+) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='费用单据主表(五类单据共用)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -134,4 +134,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-03 10:48:20
+-- Dump completed on 2026-11-04 23:30:42
