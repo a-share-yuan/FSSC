@@ -898,6 +898,8 @@ public class ExpenseBillService {
         // 合规预检（风险前置）：一次性反馈全部不合规项，FAIL 聚合拦截
         List<PrecheckService.PrecheckItem> fails = precheckService.failures(billId);
         if (!fails.isEmpty()) {
+            // 拦截留痕（供「预检漏拦率」看板统计）：不留痕就永远算不出哪些问题是被人工事后发现的
+            precheckService.recordBlocks(billId, bill.getBillType(), fails);
             String detail = fails.stream()
                     .map(PrecheckService.PrecheckItem::getMsg)
                     .collect(Collectors.joining("；"));

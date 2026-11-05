@@ -53,6 +53,7 @@ export const ROUTE_PERMS = {
   // 智能审单规则页此前借用「费用政策查询」的 policy:list，导致只有政策权的人也能进；
   // 页面内按钮与后端接口本来就用 compliance:review:*，路由守卫与之一致
   '/compliance/review-rules': { perms: ['compliance:review:list'] },
+  '/compliance/precheck-stats': { perms: ['compliance:precheck:list'] },
   '/compliance/rule': { perms: ['compliance:rule:list'] },
   '/compliance/satisfaction': { perms: ['policy:list'] },
   '/compliance/service-catalog': { perms: ['policy:list'] },
