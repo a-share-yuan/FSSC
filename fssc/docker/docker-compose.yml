@@ -29,7 +29,7 @@ services:
       # 整库 dump 一表一文件，每个文件自带 CREATE DATABASE + USE + SET FOREIGN_KEY_CHECKS=0，
       # 所以整个目录直接挂进 initdb 即可，文件先后不影响成败。换演示数据版本只改 .env 的 FSSC_DUMP_DIR。
       # 注意：initdb 只在 db-data 卷为空时执行一次；想重导就 docker compose down -v 再 up。
-      - ${FSSC_DUMP_DIR:-../../db/Dump20261102}:/docker-entrypoint-initdb.d:ro
+      - ${FSSC_DUMP_DIR:-../../db/Dump20261104}:/docker-entrypoint-initdb.d:ro
     ports:
       - "127.0.0.1:3306:3306"          # 只绑回环：供本机客户端排查，不对局域网开放
     healthcheck:

@@ -1,15 +1,14 @@
 # db/ — 整库 dump（建库入口）
 
-`Dump20261102/` 是本项目一次演练库的 MySQL 整库导出，**建库、起服务、演示都以它为准**。
+`Dump20261104/` 是本项目一次演练库的 MySQL 整库导出，**建库、起服务、演示都以它为准**。
 325 个文件＝一表一文件 324 枚（主库 `fssc` 318 枚，影像库 `fssc_image` 6 枚）＋ `fssc_routines.sql`（存储过程与函数），合计约 6.8 MB。
-
 ## 导入
 
-推荐使用 MySQL Workbench 选择 Dump20261102 目录后全部导入。
+推荐使用 MySQL Workbench 选择 Dump20261104 目录后全部导入。
 
 ```bash
 # 每个文件自带 CREATE DATABASE IF NOT EXISTS + USE，两个库一起建好，无需预先手工建库
-for f in db/Dump20261102/fssc_*.sql; do
+for f in db/Dump20261104/fssc_*.sql; do
   mysql --default-character-set=utf8mb4 -uroot -p < "$f"
 done
 ```
@@ -17,7 +16,7 @@ done
 Windows（CMD）：
 
 ```bat
-for %f in (db\Dump20261102\fssc_*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
+for %f in (db\Dump20261104\fssc_*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
 ```
 
 - 依赖 MySQL 8.x，字符集 `utf8mb4`，排序规则 `utf8mb4_general_ci`。
@@ -38,13 +37,23 @@ for %f in (db\Dump20261102\fssc_*.sql) do mysql --default-character-set=utf8mb4 
 `fssc_crm_customer` / `fssc_md_supplier(_contact)` / `fssc_sys_user` 等主数据表里带着名称、邮箱、手机号形态的字段值，
 发布前请确认这些数据可以公开；要换一批干净数据，就重新导出一份同名结构的 dump 覆盖本目录并同步更新本文件的日期。
 
-> 目录名是历史留用：`Dump20261102/` 里的内容实际是 **2026-11-04 23:30 的导出**（v1.1.1 发布版）。
+> 内容构成：`2026-11-04 23:30` 的整库导出，再于 `2026-11-05` 补入 `V1.6.17`～`V1.6.20` 四个增量
+> （物料铺底 8 条、预算孤儿映射清理、撤回入口菜单与权限、预付款比例参数），因此
+> `md_inventory` / `bg_item` / `md_item_budget_map` / `sys_config` / `sys_menu` / `sys_role_menu`
+> 六个文件是 11-05 重新导出的，其余 319 个文件保持 11-04 的原样。
 
 `db/Dump*/` 与 `db/backup/` 在 `.gitignore` 里，是为了防止日后随手 dump 又被 `git add -A` 带进来；
-`Dump20261102/` 是**明确 `git add -f` 入库**的那一枚例外。
+`Dump20261104/` 是**明确 `git add -f` 入库**的那一枚例外。
 
-## 为什么没有增量迁移脚本
+## 增量脚本：只有 v1.0.0 → v1.1.1 这一段
 
-本仓库只给一条建库路径：导入 `db/Dump<导出日期>/`。没有"从空库按版本顺序跑迁移脚本"这条路，
-项目也未引入 Flyway/Liquibase。库结构要往前走，就重新导出一份同名结构的整库 dump 覆盖
-`db/Dump<日期>/`，并同步更新本文件的日期与枚数（怎么产这份 dump 见 `docs/数据模型.md` §6）。
+建库仍以整库 dump 为唯一入口，没有「从空库按版本顺序跑脚本」这条路，项目也未引入 Flyway/Liquibase。
+库结构要往前走，首选重新导出一份整库 dump 覆盖 `db/Dump<日期>/`，并同步更新本文件的日期与枚数
+（怎么产这份 dump 见 `docs/数据模型.md` §6）。
+
+唯一的例外是 `db/upgrade/`：把 **v1.0.0 升到 v1.1.1** 所需的增量脚本（结构、参数、菜单、种子）成对发布，
+供不能重导库的部署使用。更早的历史脚本不发布——外部还原不了执行顺序，发了也没意义。
+
+注意 `db/upgrade/` **不含**制证科目守卫的主数据（34 条明细科目 / 210 条费用项目映射 / 112 条记账规则），
+那批是 11-04 的库内迁移，没有沉淀成脚本；原地升级时必须另行补齐，否则报销提交会被科目守卫拦下。
+详见 `db/upgrade/README.md` 与 `docs/更新说明-v1.1.1.md` 第八节。
