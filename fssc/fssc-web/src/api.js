@@ -1166,6 +1166,8 @@ export const complianceApi = {
   policyCreate: (body) => http.post('/tenant/compliance/policy/create', body),
   policyUpdate: (body) => http.post('/tenant/compliance/policy/update', body),
   precheck: (billId) => http.get(`/tenant/compliance/precheck?billId=${billId}`),
+  // 预检拦截分布 + 漏拦率（近 N 天）
+  precheckStats: (days) => http.get('/tenant/compliance/precheck/stats', { params: { days } }),
   // 智能审单
   reviewRules: (params) => http.get('/tenant/compliance/review/rules', { params }),
   reviewRuleCreate: (body) => http.post('/tenant/compliance/review/rules', body),

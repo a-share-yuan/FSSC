@@ -327,6 +327,39 @@ public class PrecheckService {
         return precheck(billId).stream().filter(i -> "FAIL".equals(i.getLevel())).toList();
     }
 
+    /**
+     * 把本次拦截落库（precheck_result），供「预检漏拦率」看板统计。
+     *
+     * <p>此前预检在内存里算完就抛异常：拦过多少次、哪条规则在拦、有多少问题是人工质检事后
+     * 才发现的，全都没有留痕——没有这份数据，「漏拦率」无从谈起。
+     *
+     * <p>刻意用 JdbcTemplate 而不是 PrecheckResult 实体：实体比表多出
+     * employee_id / total_rules / final_status 等列（那是规则引擎版的口径），用实体插入会带出
+     * 表里不存在的列。这里只写本表确实有的字段。
+     *
+     * <p>写失败只告警，不影响提交拦截本身。
+     */
+    public void recordBlocks(Long billId, String billType, List<PrecheckItem> fails) {
+        if (fails == null || fails.isEmpty()) {
+            return;
+        }
+        try {
+            long batchId = System.currentTimeMillis();
+            for (PrecheckItem item : fails) {
+                String msg = item.getMsg();
+                jdbcTemplate.update(
+                        "INSERT INTO precheck_result (tenant_id, bill_id, bill_type, rule_code, check_result,"
+                                + " check_message, level, precheck_batch_id, created_at)"
+                                + " VALUES (?,?,?,?,?,?,?,?,NOW())",
+                        TenantContext.getTenantId(), billId, billType, item.getCode(),
+                        "FAIL", msg != null && msg.length() > 500 ? msg.substring(0, 500) : msg,
+                        "FAIL", String.valueOf(batchId));
+            }
+        } catch (Exception e) {
+            log.warn("预检拦截留痕失败（不影响提交拦截）billId={}: {}", billId, e.getMessage());
+        }
+    }
+
     /** 费用政策 CRUD */
     public PageResult<ExpensePolicy> page(long pageNum, long pageSize, String keyword, String status) {
         LambdaQueryWrapper<ExpensePolicy> qw = new LambdaQueryWrapper<>();

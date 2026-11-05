@@ -7,6 +7,7 @@ import com.fssc.common.core.Result;
 import com.fssc.compliance.entity.PrecheckResult;
 import com.fssc.compliance.entity.ReviewRule;
 import com.fssc.compliance.service.PrecheckEngineService;
+import com.fssc.compliance.service.PrecheckStatsService;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,17 @@ import java.util.stream.Collectors;
 public class PrecheckController {
 
     private final PrecheckEngineService precheckEngineService;
+    private final PrecheckStatsService precheckStatsService;
+
+    /**
+     * 预检拦截分布 + 漏拦率（近 N 天）。
+     * 漏拦率＝质检退回中、预检当期没有 FAIL 记录的比例——度量的是系统规则的缺口，不是员工的问题。
+     */
+    @RequiresPerm("compliance:precheck:list")
+    @GetMapping("/stats")
+    public Result<Map<String, Object>> stats(@RequestParam(defaultValue = "30") int days) {
+        return Result.success(precheckStatsService.stats(days));
+    }
 
     @RequiresPerm("compliance:precheck:list")
     @GetMapping("/rules")

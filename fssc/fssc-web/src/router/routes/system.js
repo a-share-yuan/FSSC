@@ -69,6 +69,7 @@ export default [
   // 合规风控（反欺诈+合规规则收敛为一个工作区，逐页签门控；原两页路由保留作深链）
   { path: 'compliance/board', component: () => import('../../views/master/ConfigWorkspace.vue'), props: { group: 'compliance' }, meta: { title: '合规风控' } },
   { path: 'compliance/review-rules', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'review-rules' }, meta: { title: i18n.global.t('router.system.Intelligent') } },
+  { path: 'compliance/precheck-stats', component: () => import('../../views/compliance/PrecheckStats.vue'), meta: { title: i18n.global.t('router.system.PrecheckStats') } },
   { path: 'compliance/fraud', component: () => import('../../views/compliance/FraudBoard.vue'), meta: { title: i18n.global.t('compliance.fraud.Anti') } },
   { path: 'compliance/service-catalog', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'service-catalog' }, meta: { title: i18n.global.t('router.system.Service') } },
   { path: 'compliance/satisfaction', component: () => import('../../views/master/MasterConfigTable.vue'), props: { configKey: 'satisfaction' }, meta: { title: i18n.global.t('router.system.Satisfaction') } },
