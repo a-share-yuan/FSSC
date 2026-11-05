@@ -54,7 +54,7 @@
           <span v-if="row.status === BillStatus.APPROVING" style="color:#909399;font-size:12px">审批中·请到我的待办办理</span>
           <el-button v-if="row.status === 'EFFECTIVE'" link size="small" @click="changeContract(row)">变更</el-button>
           <el-button v-if="row.status === 'EFFECTIVE'" link size="small" type="warning" @click="closeContract(row)">关闭</el-button>
-          <el-button v-if="row.status === 'CLOSED'" link size="small" type="success" @click="reopenContract(row)">重开</el-button>
+          <el-button v-if="row.status === 'CLOSED'" link size="small" type="success" @click="reopenContract(row)">{{ $t('contract.main.BtnReopen') }}</el-button>
           <el-button v-if="row.status !== BillStatus.VOID" link size="small" @click="act('supplement', row)">补充协议</el-button>
           <el-button v-if="row.status === BillStatus.DRAFT" link size="small" type="danger" @click="del(row)">删除</el-button>
         </template>
@@ -503,10 +503,10 @@ async function closeContract(row) {
 async function reopenContract(row) {
   try {
     await ElMessageBox.confirm(
-      '重开后将恢复为「已生效」，并重新占用该合同金额的预算；预算不足会被拒绝。确认重开？',
-      '合同重开', { type: 'warning' })
+      t('contract.main.AskReopen'),
+      t('contract.main.TtlReopen'), { type: 'warning' })
     await contractApi.reopen(row.id)
-    ElMessage.success('已重开')
+    ElMessage.success(t('contract.main.StReopened'))
     await load()
   } catch (e) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
