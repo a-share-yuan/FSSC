@@ -375,7 +375,7 @@
                        :label="`${c.contractNo} | ${c.partyBName || c.contractName || ''} | ${fmt(c.amount)}`"
                        :value="c.id" />
           </el-select>
-          <div style="color: #909399; font-size: 12px; margin-top: 4px">
+          <div style="width: 100%; color: #909399; font-size: 12px; margin-top: 4px">
             {{ $t('pay.match.hintContractLeg') }}</div>
         </el-form-item>
       </el-form>

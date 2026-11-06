@@ -128,7 +128,7 @@ public class MatchToleranceService {
             throw new BizException(ErrorCode.PARAM_INVALID, "绝对值容差不能为负数");
         }
         if (in.getStatus() != null && !STATUS_NORMAL.equals(in.getStatus()) && !STATUS_DISABLED.equals(in.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "status 仅支持 NORMAL/DISABLED");
+            throw new BizException(ErrorCode.PARAM_INVALID, "状态仅支持：正常/停用");
         }
         MatchTolerance exist = toleranceMapper.selectOne(new LambdaQueryWrapper<MatchTolerance>()
                 .eq(MatchTolerance::getCompanyId, in.getCompanyId())

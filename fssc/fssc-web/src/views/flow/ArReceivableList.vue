@@ -81,7 +81,7 @@
         <el-form-item :label="$t('flow.arRecv.labDueDate')" prop="dueDate"><el-date-picker v-model="rForm.dueDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item :label="$t('flow.arRecv.labBatchNo')">
           <el-input v-model="rForm.batchNo" :placeholder="$t('flow.arRecv.phBatchNo')" />
-          <div style="color:#909399;font-size:12px">{{ $t('flow.arRecv.hintBatchNo') }}</div>
+          <div style="width:100%;color:#909399;font-size:12px">{{ $t('flow.arRecv.hintBatchNo') }}</div>
         </el-form-item>
       </el-form>
       <template #footer>

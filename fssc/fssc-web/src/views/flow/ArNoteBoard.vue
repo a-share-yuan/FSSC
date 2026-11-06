@@ -147,6 +147,7 @@ import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import UserSelect from '@/components/common/UserSelect.vue'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
+import { todayLocal } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -195,7 +196,7 @@ function actions(row) {
       const ops = []
       if (row.noteType === 'PAPER' && row.status === 'IN_ACCOUNT') ops.push({ key: 'handover', label: t('flow.note.opHandoverCashier') })
       ops.push({ key: 'endorse', label: t('flow.note.opEndorse') }, { key: 'discount', label: t('flow.note.opDiscountBill') })
-      if (row.dueDate && row.dueDate <= today()) ops.push({ key: 'markDue', label: t('flow.note.opMarkDue') })
+      if (row.dueDate && row.dueDate <= todayLocal()) ops.push({ key: 'markDue', label: t('flow.note.opMarkDue') })
       return ops
     }
     case 'COLLECTING':
@@ -203,10 +204,6 @@ function actions(row) {
     default:
       return []
   }
-}
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
 }
 
 async function load() {
@@ -249,7 +246,7 @@ function act(row, a) {
     handoverVisible.value = true
   } else if (a.key === 'discount') {
     discountForm.rate = ''
-    discountForm.date = today()
+    discountForm.date = todayLocal()
     discountVisible.value = true
   } else if (a.key === 'endorse') {
     inputKind.value = 'endorse'

@@ -46,7 +46,7 @@ public class GlPeriodOpsController {
     private final GlMonthCloseService monthCloseService;
     private final GlCloseCheckItemMapper closeCheckItemMapper;
     private final GlProfitCarryService profitCarryService;
-    /** 月结清单里系统可判的 3 项（凭证已过账/税金计提/内部往来） */
+    /** 月结清单里系统可判的 4 项（凭证已过账/税金计提/内部往来/应生成未生成凭证） */
     private final GlCloseCheckService closeCheckService;
 
     /** 反结账：期间 CLOSED 回退开账；下一期间须未结账（逐期回退）；仅财务总监(CFO)/总账会计(FIN_GL)/租户管理员。body: {"period":"202609"} */
@@ -84,14 +84,17 @@ public class GlPeriodOpsController {
             @RequestParam(required = false) Long companyId) {
         String p = requireCheckPeriod(period);
         Long cid = resolveCheckCompany(companyId);
-        return Result.success(closeCheckItemMapper.selectList(
+        List<GlCloseCheckItem> rows = closeCheckItemMapper.selectList(
                 new LambdaQueryWrapper<GlCloseCheckItem>()
                         .eq(GlCloseCheckItem::getCompanyId, cid)
                         .eq(GlCloseCheckItem::getPeriod, p)
-                        .orderByAsc(GlCloseCheckItem::getId)));
+                        .orderByAsc(GlCloseCheckItem::getId));
+        // 存量行项名含英文状态码，读面统一汉化；存储键不动，勾选时仍按原值做系统校验
+        rows.forEach(r -> r.setItemName(GlCloseCheckService.displayName(r.getItemName())));
+        return Result.success(rows);
     }
 
-    /** 生成当期默认清单（8 项，已存在则跳过）：POST /close-check/seed?period=202611&companyId=1 */
+    /** 生成当期默认清单（9 项，已存在则跳过）：POST /close-check/seed?period=202611&companyId=1 */
     @RequiresPerm("gl:monthclose:close")
     @PostMapping("/close-check/seed")
     public Result<Integer> closeCheckSeed(
@@ -138,12 +141,12 @@ public class GlPeriodOpsController {
         boolean done = Boolean.parseBoolean(String.valueOf(body.getOrDefault("done", "true")));
         GlCloseCheckItem it = closeCheckItemMapper.selectById(id);
         if (it == null) throw new BizException(ErrorCode.PARAM_INVALID, "检查项不存在: " + id);
-        // 系统可判的 3 项不允许「人工勾上」——勾不上就是勾不上。
+        // 系统可判的 4 项不允许「人工勾上」——勾不上就是勾不上。
         // 其余 5 项（银行对账/费用预提/薪酬/坏账/折旧）保留人工判断。
         if (done && GlCloseCheckService.isSystemChecked(it.getItemName())) {
             String err = closeCheckService.verifyOne(it.getItemName(), it.getPeriod(), it.getCompanyId());
             if (err != null) {
-                throw new BizException(ErrorCode.PARAM_INVALID, "「" + it.getItemName() + "」系统校验未通过：" + err);
+                throw new BizException(ErrorCode.PARAM_INVALID, "「" + GlCloseCheckService.displayName(it.getItemName()) + "」系统校验未通过：" + err);
             }
         }
         it.setStatus(done ? "DONE" : "PENDING");

@@ -179,7 +179,7 @@
       <div class="ai-input-area" v-if="tab === 'chat'">
         <el-input
           v-model="input"
-          placeholder="说出你要查什么或做什么... (Enter 发送)"
+          placeholder="说出你要查什么或做什么...（回车发送）"
           :autosize="{ minRows: 1, maxRows: 3 }"
           type="textarea"
           resize="none"

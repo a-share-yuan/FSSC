@@ -54,9 +54,8 @@
     <!-- 折旧凭证查看与过账弹窗（批单 DONE 后逐资产生成的 ASSET_DEPRECIATION 凭证） -->
     <el-dialog v-model="dlgVoucher" title="折旧凭证查看与过账" width="880px">
       <div style="margin-bottom:8px; color:#909399; font-size:12px; line-height:1.6">
-        折旧批「{{ curBatch?.batchNo }}」（期间 {{ curBatch?.period || '—' }}）落账时逐资产生成的折旧凭证
-        （source_type = ASSET_DEPRECIATION）。过账：DRAFT → POSTED 并落总账；
-        月结前置校验要求期间内无 DRAFT 凭证，请在月结前完成过账。
+        折旧批「{{ curBatch?.batchNo }}」（期间 {{ curBatch?.period || '—' }}）落账时逐资产生成的折旧凭证。
+        过账：草稿 → 已过账并落总账；月结前置校验要求期间内无未过账凭证，请在月结前完成过账。
       </div>
       <el-table :data="vouchers" v-loading="vLoading" size="small" border stripe max-height="420"
                 empty-text="暂无折旧凭证" @selection-change="handleVSelection">

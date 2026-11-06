@@ -143,7 +143,7 @@ public class ExpenseBillController {
      * 前置校验在服务层（已制证/付款已执行/批次在途/存在有效勾稽均拒绝，文案给可执行指引）。
      */
     @RequiresPerm("exp:bill:withdraw")
-    @OperLog(module = "EXPENSE_BILL", operType = "UPDATE", desc = "反审核（APPROVED→DRAFT）")
+    @OperLog(module = "EXPENSE_BILL", operType = "UPDATE", desc = "反审核（已审批→草稿）")
     @PostMapping("/unaudit/{id}")
     public Result<Void> unaudit(@PathVariable Long id) {
         expenseBillService.unaudit(id);
@@ -193,9 +193,11 @@ public class ExpenseBillController {
     public Result<PageResult<ExpBill>> myPage(PageQuery query, String billType, String status,
                                               @RequestParam(required = false) BigDecimal minBalance,
                                               @RequestParam(required = false) String keyword,
-                                              String startDate, String endDate, String source) {
+                                              String startDate, String endDate, String source,
+                                              @RequestParam(required = false) String billSubType,
+                                              @RequestParam(required = false) Long customerId) {
         return Result.success(expenseBillService.myPage(query.getPageNum(), query.getPageSize(),
-                billType, status, minBalance, keyword, startDate, endDate, source));
+                billType, status, minBalance, keyword, startDate, endDate, source, billSubType, customerId));
     }
 
     /** 机票查询分页（keyword 服务端过滤 + used 核销状态服务端过滤 + relationUsed 回填） */

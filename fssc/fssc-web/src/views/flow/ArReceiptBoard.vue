@@ -119,7 +119,7 @@ import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { hasPerm } from '@/utils/perm'
-import { showRowDetail } from '@/utils/format'
+import { showRowDetail, todayLocal } from '@/utils/format'
 import { rcStatusLabel } from '@/constants/enums'
 import { useI18n } from 'vue-i18n'
 
@@ -226,7 +226,7 @@ function onWoModeChange(v) { if (v === 'MANUAL') loadRecvCandidates() }
 
 // 收款日期字段名对齐实体 RcReceipt.receiptDate（原绑 payDate，实体无此属性⇒选的日期从未生效）
 function openReceipt() {
-  rcForm.value = { customerId: null, amount: 0, receiptDate: new Date().toISOString().slice(0, 10), payMethod: '', bankSerial: '' }
+  rcForm.value = { customerId: null, amount: 0, receiptDate: todayLocal(), payMethod: '', bankSerial: '' }
   woMode.value = 'AUTO'
   recvCandidates.value = []
   recvPicked.value = []
@@ -290,7 +290,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.rc-wo-tip { font-size: 12px; color: #909399; line-height: 18px; margin-top: 4px; }
+.rc-wo-tip { width: 100%; font-size: 12px; color: #909399; line-height: 18px; margin-top: 4px; }
 .rc-wo { padding: 0 4px 4px; }
 .rc-wo-sum { font-size: 12px; color: var(--app-text-secondary, #606266); margin-top: 6px; }
 </style>

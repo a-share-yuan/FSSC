@@ -204,7 +204,7 @@ public class ExtInterfaceConfigService {
             throw new BizException(ErrorCode.PARAM_INVALID, "接口配置不存在: " + id);
         }
         if (!Set.of("ENABLED", "DISABLED").contains(status)) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "状态仅支持 ENABLED / DISABLED");
+            throw new BizException(ErrorCode.PARAM_INVALID, "状态仅支持：启用/停用");
         }
         c.setStatus(status);
         configMapper.updateById(c);

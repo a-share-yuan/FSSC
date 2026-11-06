@@ -230,7 +230,7 @@ function showSeg(k, data) {
   return segOk(k) || (Array.isArray(data) && data.length > 0)
 }
 const notSupportReason = computed(
-  () => chain.value?.summary?.reason || '未声明单据域且该主键在费用单据表内不存在；请为该页面的追溯入口补传 bizType。'
+  () => chain.value?.summary?.reason || '未声明单据域且该主键在费用单据表内不存在；请为该页面的追溯入口补充单据域。'
 )
 /**
  * 凭证自动生成失败留痕（exp_bill.ext_json.voucherPending）。后端随摘要透出；

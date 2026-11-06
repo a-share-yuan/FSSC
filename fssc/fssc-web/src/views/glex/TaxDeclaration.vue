@@ -1,8 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
-<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 <template>
   <el-card>
     <template #header>
@@ -83,9 +80,9 @@
         </el-form-item>
         <el-form-item label="申报类型" prop="declareType">
           <el-select v-model="dlg.form.declareType" style="width: 100%">
-            <el-option label="按月 MONTHLY" value="MONTHLY" />
-            <el-option label="按季 QUARTERLY" value="QUARTERLY" />
-            <el-option label="按年 ANNUAL" value="ANNUAL" />
+            <el-option label="按月" value="MONTHLY" />
+            <el-option label="按季" value="QUARTERLY" />
+            <el-option label="按年" value="ANNUAL" />
           </el-select>
         </el-form-item>
         <el-form-item label="计税基数">

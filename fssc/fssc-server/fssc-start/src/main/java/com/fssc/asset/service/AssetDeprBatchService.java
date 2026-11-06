@@ -113,7 +113,7 @@ public class AssetDeprBatchService {
     public void submit(Long batchId) {
         AssetDeprBatch batch = require(batchId);
         if (!"DRAFT".equals(batch.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿(DRAFT)批单可发起审批，当前状态: " + batch.getStatus());
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿批单可发起审批，当前状态: " + batch.getStatus());
         }
         Map<String, Object> auditBefore = new LinkedHashMap<>();
         auditBefore.put("status", batch.getStatus());

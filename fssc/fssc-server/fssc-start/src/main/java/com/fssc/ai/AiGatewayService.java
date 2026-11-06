@@ -339,7 +339,7 @@ public class AiGatewayService {
             throw new BizException(ErrorCode.PARAM_INVALID, "票据不存在");
         }
         if (!"PENDING".equals(c.getStatus())) {
-            throw new BizException(ErrorCode.FORBIDDEN, "票据状态=" + c.getStatus() + "，只有 PENDING 可确认");
+            throw new BizException(ErrorCode.FORBIDDEN, "票据状态不允许该操作，只有待确认的票据可确认");
         }
         // 过期即废在执行侧一直成立；确认侧同样不能放行一张注定用不了的票（否则会留下过期仍 CONFIRMED 的死票）
         if (c.getExpireAt() != null && c.getExpireAt().isBefore(LocalDateTime.now())) {
@@ -375,7 +375,7 @@ public class AiGatewayService {
             throw new BizException(ErrorCode.FORBIDDEN, "只有票据申请人本人可以撤回");
         }
         if (!"PENDING".equals(c.getStatus())) {
-            throw new BizException(ErrorCode.FORBIDDEN, "票据状态=" + c.getStatus() + "，只有 PENDING 可撤回");
+            throw new BizException(ErrorCode.FORBIDDEN, "票据状态不允许该操作，只有待撤回的票据可撤回");
         }
         c.setStatus("CANCELLED");
         c.setReason(reason);

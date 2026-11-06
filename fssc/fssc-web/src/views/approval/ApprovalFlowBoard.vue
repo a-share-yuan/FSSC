@@ -58,7 +58,7 @@
           <el-table-column prop="bizType" label="业务类型" width="120" sortable>
             <template #default="{ row }"><el-tag size="small" effect="plain">{{ bizTypeLabel(row.bizType) }}</el-tag></template>
           </el-table-column>
-          <el-table-column prop="modelKey" label="模型Key" width="150" show-overflow-tooltip  sortable />
+          <el-table-column prop="modelKey" label="模型标识" width="150" show-overflow-tooltip  sortable />
           <el-table-column label="审批节点数" width="100" align="center">
             <template #default="{ row }"><b>{{ nodeCount(row) }}</b></template>
           </el-table-column>
@@ -91,7 +91,7 @@
             </div>
           </template>
           <el-alert v-if="templateXml" type="info" :closable="false" style="margin-bottom:8px"
-            title="由 WfBpmnTemplateService 生成：userTask 节点 + 排他网关分支（国外出差 abroad / 招待费 ENTERTAIN / 金额阈值）。下方展示提取的节点与网关条件链。">
+            title="由流程模板生成：人工审批节点 + 排他网关分支（国外出差 / 招待费 / 金额阈值）。下方展示提取的节点与网关条件链。">
           </el-alert>
           <div v-if="chain.length" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px">
             <template v-for="(n, i) in chain" :key="i">
@@ -156,9 +156,10 @@
             <template #default="{ row }">{{ durMin(row.duration) }}</template>
           </el-table-column>
           <el-table-column prop="procInstId" label="流程实例ID" width="120" show-overflow-tooltip  sortable />
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="270">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="goBiz(row)">查看业务</el-button>
+            <el-button link type="primary" size="small" @click="openTrace(row)">追溯</el-button>
             <el-button v-if="row.status === 'RUNNING'" v-permission="'system:message:send'" link type="warning" size="small" @click="urge(row)">催办</el-button>
             <el-button v-if="row.status === 'RUNNING' && canReassign" link type="primary" size="small" @click="openReassign(row)">改派</el-button>
           </template>
@@ -193,6 +194,9 @@
       </template>
     </el-dialog>
     </el-card>
+
+    <!-- 全链路追溯（行内「追溯」与 goBiz 的回落提示指向同一入口） -->
+    <BillTraceDrawer v-model="traceVisible" :bill-id="traceBillId" :biz-type="traceBizType" />
   </div>
 </template>
 
@@ -209,6 +213,7 @@ import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { goBizPage } from '@/utils/bizEntry'
 import { formatDateTime } from '@/utils/format'
+import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 // MEDIUM 增强:催办 / 改派
 import UserSelect from '../../components/common/UserSelect.vue'
 import { messageApi, wfApi, store } from '../../api'
@@ -228,6 +233,24 @@ const reassignRow = ref(null)
 const reassignSaving = ref(false)
 const reassignFormRef = ref(null)
 const reassignForm = ref({ target: null, reason: '' })
+
+/**
+ * 全链路追溯：本页 goBiz 回落时提示「请用行内『追溯』查看全链路」，
+ * 而操作列原先只有查看业务/催办/改派 ⇒ 提示指向一个不存在的入口，用户到此断头。
+ * 这里把 BillTraceDrawer 挂上，按 wf_instance 的 (bizId, bizType) 打开。
+ */
+const traceVisible = ref(false)
+const traceBillId = ref(null)
+const traceBizType = ref(null)
+function openTrace(row) {
+  if (row?.bizId == null) {
+    ElMessage.warning('该实例没有可追溯的业务主键（历史实例缺 biz_id）')
+    return
+  }
+  traceBillId.value = row.bizId
+  traceBizType.value = row.bizType || null
+  traceVisible.value = true
+}
 // 与后端 WfEngineFacade.reassign 同一规则：接办人 + 记录原因（≥2 字）都是硬性输入
 const REASON_MSG = '请填写改派原因（≥2 字，记入审批记录）'
 const reassignFormRules = {
@@ -325,12 +348,12 @@ function nodeCount(row) {
   return String(row.nodeJson).split(',').filter((s) => s.trim()).length
 }
 
-/** 从节点文本/对象里挑出分支关键字（国外出差 / 招待费 / 金额阈值） */
+/** 从节点文本/对象里挑出分支关键字（国外出差 / 招待费 / 金额阈值），界面只出中文 */
 function branchesOf(row) {
   const raw = row.nodeJson || ''
   const out = []
-  ;['国外出差', '招待费', '金额>', 'ENTERTAIN', 'abroad'].forEach((k) => {
-    if (raw.includes(k) && !out.includes(k)) out.push(k)
+  ;[['国外出差', '国外出差'], ['abroad', '国外出差'], ['招待费', '招待费'], ['ENTERTAIN', '招待费'], ['金额>', '金额阈值']].forEach(([k, label]) => {
+    if (raw.includes(k) && !out.includes(label)) out.push(label)
   })
   return out
 }

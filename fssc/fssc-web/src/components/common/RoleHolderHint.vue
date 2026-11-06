@@ -35,29 +35,29 @@ function describe(code, r) {
   if (!r) return []
   const out = []
   if (r.roleExists === false) {
-    out.push({ level: 'bad', text: `${t('common.roleHolderHint.Role')} ${code} 在 sys_role 中不存在：挂这个码的节点不会有任何人可办` })
+    out.push({ level: 'bad', text: `${t('common.roleHolderHint.Role')} ${code} 在角色表中不存在：挂这个码的节点不会有任何人可办` })
     return out
   }
   const scopeLabel = r.orgScope === 'GROUP' ? '集团级（不分公司）' : '按单据公司取人'
   if ((r.total || 0) === 0) {
-    out.push({ level: 'bad', text: `${r.roleName || code}（${scopeLabel}）没有在职的非 admin 持有人：本节点每来一张单据都会走空策略` })
+    out.push({ level: 'bad', text: `${r.roleName || code}（${scopeLabel}）没有在职的非系统管理员持有人：本节点每来一张单据都会走空策略` })
     return out
   }
   out.push({
     level: 'muted',
-    text: `${r.roleName || code}（${scopeLabel}）在职非 admin 持有人 ${r.total} 人`
+    text: `${r.roleName || code}（${scopeLabel}）在职非系统管理员持有人 ${r.total} 人`
       + (r.activeCompanies == null ? '' : `，覆盖 ${r.coveredCompanies}/${r.activeCompanies} 家在营运公司`),
   })
   if (r.orgScope !== 'GROUP' && r.activeCompanies != null && r.coveredCompanies < r.activeCompanies) {
     out.push({
       level: 'bad',
-      text: `还有 ${r.activeCompanies - r.coveredCompanies} 家在营运公司该角色 0 人：这些公司的单据到本节点会走空策略（empty_strategy），要么补人、要么换角色`,
+      text: `还有 ${r.activeCompanies - r.coveredCompanies} 家在营运公司该角色 0 人：这些公司的单据到本节点会走空策略，要么补人、要么换角色`,
     })
   }
   if ((r.multiHolderCompanies || 0) > 0) {
     out.push({
       level: 'warn',
-      text: `${r.multiHolderCompanies} 家公司有 ≥2 名持有人：自动指派按用户主键升序取第一个人，落点由主键顺序决定；需要由上一环节点名请把「取人方式」设为 PICK`,
+      text: `${r.multiHolderCompanies} 家公司有 ≥2 名持有人：自动指派按用户主键升序取第一个人，落点由主键顺序决定；需要由上一环节点名请把「取人方式」设为「点名指派」`,
     })
   }
   const rows = r.companies || []

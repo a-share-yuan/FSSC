@@ -972,7 +972,7 @@ function refuseAdvice(msg) {
     return '本节点按配置需先指定下一环节办理人：请回到弹窗在上方「下一环节」区块点名到人后再提交。'
   }
   if (/他人领取|已由他人/.test(m)) {
-    return '同池同事已抢先领取。本行稍后会显示其姓名或「XX 正在办理」，需要接办请由其释放，或走「转办」。'
+    return '同池同事已抢先领取。本行稍后会显示其姓名或「某某正在办理」，需要接办请由其释放，或走「转办」。'
   }
   if (/候选办理人|无权领取/.test(m)) {
     return '你不在本节点的候选名单内（角色与公司范围不匹配）。请到「系统管理 · 角色授权」核岗，或改由名单内同事办理。'
@@ -1093,7 +1093,7 @@ function batchSummary(rows) {
     { label: '当前节点', value: nodes.length <= 2 ? nodes.join('、') : `${nodes.length} 个节点` },
   ]
   if (unresolved) out.push({ label: '无关联单据', value: `${unresolved} 条业务行已清理，明细已标注，提交时多半逐条失败`, full: true })
-  if (locked) out.push({ label: '他人办理中', value: `${locked} 条已被同池他人领取（服务端 canOperate 会拒），建议先取消勾选`, full: true })
+  if (locked) out.push({ label: '他人办理中', value: `${locked} 条已被同池他人领取（服务端会拒绝办理），建议先取消勾选`, full: true })
   return out
 }
 

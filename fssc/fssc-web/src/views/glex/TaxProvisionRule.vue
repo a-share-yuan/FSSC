@@ -1,8 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
-<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 <template>
   <el-card>
     <template #header>
@@ -16,7 +13,7 @@
     </template>
 
     <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
-      title="基数来源：MANUAL 手工录入（计提时可在计提页改数）；DECLARATION 按同期已申报数汇总；INVOICE 按同期已认证进项税汇总。汇总为 0 的税种在计提时自动跳过。" />
+      title="基数来源：手工录入（计提时可在计提页改数）；按同期已申报数汇总；按同期已认证进项税汇总。汇总为 0 的税种在计提时自动跳过。" />
 
     <SkeletonList v-if="loading" :rows="6" :cols="6" />
     <el-table v-else :data="rows" size="small" :empty-text="'暂无规则（计提将使用内置默认三条）'">
@@ -128,21 +125,21 @@ import { glexApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 
 const TAX_TYPES = [
-  { label: '增值税 VAT', value: 'VAT' },
-  { label: '附加税 SURCHARGE', value: 'SURCHARGE' },
-  { label: '企业所得税 INCOME/CIT', value: 'INCOME' },
-  { label: '个人所得税 IIT', value: 'IIT' },
-  { label: '印花税 STAMP', value: 'STAMP' },
-  { label: '房产税 PROPERTY', value: 'PROPERTY' },
-  { label: '土地使用税 LAND', value: 'LAND' },
-  { label: '车船税 VEHICLE', value: 'VEHICLE' },
+  { label: '增值税', value: 'VAT' },
+  { label: '附加税', value: 'SURCHARGE' },
+  { label: '企业所得税', value: 'INCOME' },
+  { label: '个人所得税', value: 'IIT' },
+  { label: '印花税', value: 'STAMP' },
+  { label: '房产税', value: 'PROPERTY' },
+  { label: '土地使用税', value: 'LAND' },
+  { label: '车船税', value: 'VEHICLE' },
 ]
 const PERIODS = [
-  { label: '按月 MONTHLY', value: 'MONTHLY' },
-  { label: '按季 QUARTERLY', value: 'QUARTERLY' },
-  { label: '按半年 HALF_YEARLY', value: 'HALF_YEARLY' },
-  { label: '按年 ANNUAL', value: 'ANNUAL' },
-  { label: '按次 PER_TIME', value: 'PER_TIME' },
+  { label: '按月', value: 'MONTHLY' },
+  { label: '按季', value: 'QUARTERLY' },
+  { label: '按半年', value: 'HALF_YEARLY' },
+  { label: '按年', value: 'ANNUAL' },
+  { label: '按次', value: 'PER_TIME' },
 ]
 
 const rows = ref([])

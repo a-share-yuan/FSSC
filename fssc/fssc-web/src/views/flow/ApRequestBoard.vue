@@ -610,5 +610,5 @@ onMounted(() => { load(); loadCompanies(); loadUsers(); loadRules() })
 <style scoped>
 .toolbar { display: flex; justify-content: space-between; align-items: center; }
 .ops { display: flex; gap: 6px; align-items: center; }
-.tip { font-size: 12px; color: #e6a23c; }
+.tip { width: 100%; font-size: 12px; color: #e6a23c; }
 </style>

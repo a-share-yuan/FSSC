@@ -494,7 +494,7 @@
             <el-radio label="PAPER">纸质</el-radio>
             <el-radio label="ELECTRONIC">电子</el-radio>
           </el-radio-group>
-          <div style="color:#909399; font-size:12px; line-height:1.6">
+          <div style="width:100%;color:#909399; font-size:12px; line-height:1.6">
             纸质卷归档前须逐件填写起页与页数；电子卷按件计数，不强制编页
           </div>
         </el-form-item>
@@ -515,7 +515,7 @@
           >
             <el-option v-for="b in filingOptions" :key="filingOptionId(b)" :label="filingOptionLabel(b)" :value="filingOptionId(b)" />
           </el-select>
-          <div style="color:#909399; font-size:12px; line-height:1.6">
+          <div style="width:100%;color:#909399; font-size:12px; line-height:1.6">
             {{ arForm.billIds.length > 1
               ? `将建 1 卷、挂 ${arForm.billIds.length} 件（按选择先后编件号）`
               : (arForm.billIds.length === 1 ? '将建 1 卷、挂 1 件；建好后仍可在该卷的卷内目录里【追加件】' : '请至少选择一张单据，否则无法建卷') }}

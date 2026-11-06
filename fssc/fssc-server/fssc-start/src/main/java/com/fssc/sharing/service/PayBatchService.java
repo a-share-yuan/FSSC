@@ -1345,7 +1345,7 @@ public class PayBatchService {
                         blockers.add("PAYEE_ACCOUNT_NOT_ARCHIVED");
                         reasons.add(blockReason("PAYEE_ACCOUNT_NOT_ARCHIVED", "ERROR", acctIssue,
                                 "到 主数据 > 供应商 > 银行账户 补录或更正该供应商的开户账号，使档案账号与付款账号一致"
-                                        + "后回本批次原地重试执行（本拦口不写 FAILED、不发起支付失败处理流）"));
+                                        + "后回本批次原地重试执行（本拦口不置失败、不发起支付失败处理流）"));
                     }
 
                     // 拦口④反欺诈未复审结案（execute:983-988；paymentBlockReason 是纯查询，影子模式下返回 null）

@@ -7,7 +7,7 @@
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
         <b>{{ $t('purchase.matchTolerance.Three') }}</b>
         <el-button size="small" @click="reload">{{ $t('common.refresh') }}</el-button>
-        <span style="margin-left: auto; color: #909399; font-size: 12px">采购订单 -> 收货(GRN) ->{{ $t('purchase.matchTolerance.Amount') }}</span>
+        <span style="margin-left: auto; color: #909399; font-size: 12px">采购订单 → 收货 →{{ $t('purchase.matchTolerance.Amount') }}</span>
       </div>
     </template>
 

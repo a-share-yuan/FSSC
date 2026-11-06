@@ -491,7 +491,7 @@ public class ApMonthCloseService {
             case "1":
                 return "OK";
             default:
-                throw new BizException(ErrorCode.PARAM_INVALID, "检查项状态非法：" + s + "（允许 OK/REJECTED/SUSPENDED/PENDING）");
+                throw new BizException(ErrorCode.PARAM_INVALID, "检查项状态非法：" + s + "（允许：通过/驳回/挂起/待办）");
         }
     }
 

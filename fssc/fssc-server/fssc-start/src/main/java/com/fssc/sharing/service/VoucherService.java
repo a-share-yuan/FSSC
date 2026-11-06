@@ -1592,7 +1592,7 @@ public class VoucherService {
         Map<String, Object> auditAfter = new LinkedHashMap<>();
         auditAfter.put("status", v.getStatus());
         auditTrailService.recordUpdate("VOUCHER", voucherId, v.getVoucherNo(), "op_voucher",
-                String.valueOf(voucherId), auditBefore, auditAfter, "凭证作废（DRAFT → VOID）");
+                String.valueOf(voucherId), auditBefore, auditAfter, "凭证作废");
         // 作废凭证联动清源单表头 voucher_no 冗余引用——否则反审核前置校验
         // （ExpenseBillService.unaudit 按 exp_bill.voucher_no 非空判"已制证"）恒拦，
         // "作废凭证→反审核"链在单据侧断头（通行规则：凭证先行作废后反审核应可走通）。
@@ -1827,7 +1827,7 @@ public class VoucherService {
             ExpBill dbState = expBillMapper.selectById(bill.getId());
             if (dbState != null && "VOID".equals(dbState.getStatus())) {
                 throw new BizException(ErrorCode.PARAM_INVALID,
-                        "单据 " + bill.getBillNo() + " 已作废（VOID），禁止生成凭证");
+                        "单据 " + bill.getBillNo() + " 已作废，禁止生成凭证");
             }
         }
     }

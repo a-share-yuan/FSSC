@@ -99,7 +99,7 @@ public class GlSalaryRunService {
         run.setDeptId(deptId);
         run.setEmpCount(empCount);
 
-        // 人均标准（租户可配置，参数化替代原写死 Mock 常量）
+        // 人均标准（租户可配置，参数化替代原先写死的常量）
         BigDecimal perSalary = stdAmount("salary.std.basic", "8000.00");
         BigDecimal perDeduction = stdAmount("salary.std.deduction", "200.00");
         BigDecimal perSocial = stdAmount("salary.std.social", "1000.00");
@@ -268,7 +268,7 @@ public class GlSalaryRunService {
         if (!"POSTED".equals(st) && !"APPROVED".equals(st)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "薪酬计提链尚未审批通过（当前状态 " + st + "），不可发起发放——"
-                            + "计提驳回（REJECTED）的批次请重新核算生成新批次");
+                            + "已驳回的计提批次请重新核算生成新批次");
         }
         // 发放发起＝"账要变成钱"的最后一道人工可见点，此刻再核一次
         // emp_count 与到人明细是否对得上。取 WARN 而非 fail-closed：明细表 DDL 尚是注释态、

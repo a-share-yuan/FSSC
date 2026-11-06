@@ -332,7 +332,7 @@
         <el-form-item label="支出调整额" prop="outcomeAdjust"><el-input-number v-model="adjustForm.outcomeAdjust" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="调整后计划收入"><span style="font-weight:600;color:#409eff">{{ fmt(adjustedIncome) }}</span></el-form-item>
         <el-form-item label="调整后计划支出"><span style="font-weight:600;color:#409eff">{{ fmt(adjustedOutcome) }}</span></el-form-item>
-        <div style="color:#909399; font-size:12px; padding-left:2px">调整额在原计划收/支基础上追加，保存并发起 TR_PLAN_ADJUST 计划调整审批流</div>
+        <div style="color:#909399; font-size:12px; padding-left:2px">调整额在原计划收/支基础上追加，保存并发起计划调整审批流</div>
       </el-form>
       <template #footer>
         <el-button @click="dlgAdjust = false">取消</el-button>
@@ -402,7 +402,7 @@
         <el-form-item label="币种"><el-select v-model="accForm.currencyCode" style="width:100%">
 <el-option v-for="o in currencyOptions" :key="o.value" :label="currencyLabel(o.value, 'name-code')" :value="o.value" />
 </el-select></el-form-item>
-        <div style="color:#909399; font-size:12px; padding-left:2px">保存即发起 TR_BANK_MASTER 银行主数据审批流（资金岗经办→财务经理复核）</div>
+        <div style="color:#909399; font-size:12px; padding-left:2px">保存即发起银行主数据审批流（资金岗经办→财务经理复核）</div>
       </el-form>
       <template #footer>
         <el-button @click="dlgAccount = false">取消</el-button>

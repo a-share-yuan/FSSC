@@ -266,7 +266,7 @@ public class WfModelService {
         long inFlight = wfQueryService.countRunningOld(m.getModelKey(), null);
         if (inFlight > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "该模型有 " + inFlight + " 个在途实例（wf_instance.status=RUNNING），禁止删除："
+                    "该模型有 " + inFlight + " 个在途实例，禁止删除："
                             + "删除会让节点配置按 model_key 失效、在途单既不催办也不推进。"
                             + "请先办结或终止在途实例；只是不想再被使用的话请改用「停用」。modelKey="
                             + m.getModelKey());

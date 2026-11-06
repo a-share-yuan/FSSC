@@ -111,7 +111,7 @@
         <!-- 4. 归档预览 -->
         <el-tab-pane label="归档预览" name="archive">
           <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
-            title="纯只读：只做 COUNT，不搬移、不删除任何数据（按当前配置回答「当前会归档多少条、N 是多少」）。" />
+            title="纯只读：只做计数，不搬移、不删除任何数据（按当前配置回答「当前会归档多少条、N 是多少」）。" />
           <el-descriptions v-if="archive" :column="4" border size="small" style="margin-bottom: 10px">
             <el-descriptions-item label="保留月数上限">{{ archive.maxMonths ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="默认月数">{{ archive.defaultMonths ?? '—' }}</el-descriptions-item>

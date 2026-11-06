@@ -461,7 +461,7 @@ async function confirmBadDebt(row) {
 }
 async function reconStart() {
   try {
-    const { value: period } = await ElMessageBox.prompt('输入对账期间(yyyyMM)', '应收账款对账（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputValue: badDebtPeriod.value || '', inputValidator: (v) => (v != null && String(v).trim().length >= 6) || '请填写对账期间（yyyyMM）' })
+    const { value: period } = await ElMessageBox.prompt('输入对账期间（6 位年月，如 202610）', '应收账款对账（提交审批）', { confirmButtonText: '提交', cancelButtonText: '取消', inputValue: badDebtPeriod.value || '', inputValidator: (v) => (v != null && String(v).trim().length >= 6) || '请填写对账期间（6 位年月，如 202610）' })
     await receivableApi.reconStart(period, null)
     ElMessage.success(t('receivable.main.Reconciliation'))
   } catch (e) { /* cancelled */ }

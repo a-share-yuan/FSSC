@@ -268,7 +268,7 @@ public class TaskTimeLimitService {
         out.put("overdue", overdue.size() > cap ? overdue.subList(0, cap) : overdue);
         out.put("note", noDue > 0
                 ? "有 " + noDue + " 条「待处理」任务尚无应完成时间（历史遗留），请调用 /api/tenant/wf/ops/time-limit/backfill 补账"
-                : "全部 PENDING 任务均有 due_time，超时判定以该列为唯一真值");
+                : "全部待办任务均有应完成时间，超时判定以该列为唯一真值");
         return out;
     }
 

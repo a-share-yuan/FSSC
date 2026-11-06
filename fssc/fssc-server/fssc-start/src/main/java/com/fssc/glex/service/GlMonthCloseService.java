@@ -335,7 +335,7 @@ public class GlMonthCloseService {
                 .eq(OpVoucher::getStatus, "DRAFT"));
         if (draftCount != null && draftCount > 0) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "月结前须完成凭证审核过账:期间 " + period + " 有 " + draftCount + " 张 DRAFT 凭证");
+                    "月结前须完成凭证审核过账：期间 " + period + " 有 " + draftCount + " 张未过账凭证");
         }
 
         // 账证一致校验——试算只 SUM op_gl_entry 自身借贷，凭证侧消失的分录会两侧同额虚增，
@@ -524,13 +524,13 @@ public class GlMonthCloseService {
         // 联动关账：md_period CLOSED，close_time＝审批通过时刻，close_by＝末节点审批人
         periodService.closeByPeriod(comp, year, month, closer);
         recordCloseAudit(closeId, e, "CLOSED", "月结审批末节点通过，期间 " + period + " 于 " + stamp
-                + " 关账（md_period 已联动 CLOSED" + (closer == null ? "" : "，关账人 id=" + closer) + "）", comment);
+                + " 关账（会计期间已同步关闭" + (closer == null ? "" : "，关账人 id=" + closer) + "）", comment);
         // 月结 CLOSED 同步收尾在途流程实例——期间已关账而 GL_MONTH_CLOSE 实例仍 RUNNING，
         // 会长期挂着一条无人可办的清单任务污染三关前置清点。
         // cancelRunningInstancesByBiz 仅收 RUNNING、去重、双记录；失败不回滚关账事实，告警记录人工跟进。
         try {
             int cancelledWf = wfEngineFacade.cancelRunningInstancesByBiz("GL_MONTH_CLOSE", closeId,
-                    "月结单已 CLOSED，收尾作废在途审批实例");
+                    "月结单已关账，收尾作废在途审批实例");
             if (cancelledWf > 0) {
                 log.info("月结单 {} 关账后同步作废在途流程实例 {} 个", e.getCloseNo(), cancelledWf);
             }
@@ -712,7 +712,7 @@ public class GlMonthCloseService {
         closeLog.setBalanced(true);
         closeLog.setCloseNo("MCU" + period + String.format("%03d", seq));
         closeLog.setStatus("UNCLOSED");
-        closeLog.setResultMsg("反结账：期间 " + period + " 由 CLOSED 回退 OPEN；操作人：" + operator
+        closeLog.setResultMsg("反结账：期间 " + period + " 由已关账回退为已开启；操作人：" + operator
                 + "（" + operUser + "）；时间：" + LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
                 + "；注意：已生成的月结凭证不自动删除，需人工冲销");

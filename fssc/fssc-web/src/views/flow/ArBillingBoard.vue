@@ -159,7 +159,7 @@
         </el-form-item>
         <el-form-item :label="$t('field.customer')">
           <CustomerSelect v-model="mailForm.customerCode" @change="onMailCustomerPick" />
-          <div v-if="mailForm.customerCode" style="color:#909399;font-size:12px">{{ $t('flow.bill.hintPickedFromProfile') }}</div>
+          <div v-if="mailForm.customerCode" style="width:100%;color:#909399;font-size:12px">{{ $t('flow.bill.hintPickedFromProfile') }}</div>
         </el-form-item>
         <el-form-item :label="$t('flow.bill.recipientPick')">
           <el-select v-model="mailForm.recipientId" filterable clearable style="width: 100%" :placeholder="$t('flow.bill.recipientPickPh')" @change="onRecipientChange">

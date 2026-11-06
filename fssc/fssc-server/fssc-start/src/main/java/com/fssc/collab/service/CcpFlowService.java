@@ -106,7 +106,7 @@ public class CcpFlowService {
         }
         if (!ArPreInvoice.ST_INVOICED.equals(inv.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "仅已开票(INVOICED)的预制发票可回写ERP，当前 " + inv.getStatus());
+                    "仅已开票的预制发票可回写ERP，当前 " + inv.getStatus());
         }
         syncService.log(CollabSyncLog.IF_AR_INVOICE_WB, "SHARED_TO_EBS", inv.getPreInvoiceNo(),
                 CollabSyncLog.ST_SUCCESS,

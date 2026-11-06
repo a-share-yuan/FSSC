@@ -134,7 +134,7 @@
         <el-form-item v-if="flow.to === 'REFUNDED'" :label="$t('gl.refund.colActualAmount')" prop="refundedAmount">
           <!-- 同上：到账金额的上限也用显式提示，不交给 :max 静默回填 -->
           <el-input-number v-model="flow.refundedAmount" :precision="2" :min="0" style="width: 100%" @change="onRefundedAmountChange" />
-          <span style="color: #909399; font-size: 12px">{{ $t('gl.refund.hintArrival', { v1: fmt(flow.tax) }) }}</span>
+          <span style="width: 100%; color: #909399; font-size: 12px">{{ $t('gl.refund.hintArrival', { v1: fmt(flow.tax) }) }}</span>
         </el-form-item>
         <el-form-item :label="$t('common.remark')">
           <el-input v-model="flow.remark" type="textarea" :rows="2" />

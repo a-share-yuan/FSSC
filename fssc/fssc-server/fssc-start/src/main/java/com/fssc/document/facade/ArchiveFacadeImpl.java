@@ -240,7 +240,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
                     String.valueOf(archiveId),
                     Collections.singletonMap("archiveStatus", archive.getArchiveStatus()),
                     Collections.singletonMap("archiveStatus", "PENDING"),
-                    "归档审批驳回：在途态回退为待归档（PENDING），可整改后重新执行归档");
+                    "归档审批驳回：在途态回退为待归档，可整改后重新执行归档");
             log.info("档案 {} 审批驳回 → archive_status {} → PENDING（待归档）",
                     archive.getArchiveNo(), archive.getArchiveStatus());
             return;

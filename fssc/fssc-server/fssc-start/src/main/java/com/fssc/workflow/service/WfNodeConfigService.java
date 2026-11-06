@@ -116,9 +116,9 @@ public class WfNodeConfigService {
             String v = es.trim().toUpperCase();
             if ("ADMIN".equals(v)) {
                 throw new BizException(ErrorCode.PARAM_INVALID,
-                        "节点「" + cfg.getNodeName() + "」不允许配置空策略 ADMIN：流程节点禁止 admin 参与（铁律），"
-                                + "找不到审批人时应报错暴露而非转管理员。请改为 ERROR（报错阻断）/ "
-                                + "ESCALATE（沿汇报线升级到真实负责人）/ SKIP（自动跳过）");
+                        "节点「" + cfg.getNodeName() + "」不允许把空策略配为「转管理员」：流程节点禁止系统管理员参与（铁律），"
+                                + "找不到审批人时应报错暴露而非转管理员。请改为报错阻断 / "
+                                + "沿汇报线升级到真实负责人 / 自动跳过");
             }
             cfg.setEmptyStrategy(v);
         }

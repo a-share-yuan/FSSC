@@ -131,6 +131,8 @@ public class ArMonthCloseService {
         if (ArMonthClose.T_COST.equals(c.getCloseType())) {
             List<OpVoucher> vouchers = voucherMapper.selectList(new LambdaQueryWrapper<OpVoucher>()
                     .in(OpVoucher::getSourceType, (Object[]) COST_SOURCE_TYPES)
+                    .eq(OpVoucher::getCompanyId, c.getCompanyId())
+                    .eq(OpVoucher::getDelFlag, 0)
                     .ge(OpVoucher::getVoucherDate, begin)
                     .le(OpVoucher::getVoucherDate, end)
                     .ne(OpVoucher::getStatus, "VOID"));
@@ -141,6 +143,7 @@ public class ArMonthCloseService {
             c.setPulledCount(vouchers.size());
         } else {
             List<RcReceivable> rows = receivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
+                    .eq(RcReceivable::getCompanyId, c.getCompanyId())
                     .ge(RcReceivable::getBillDate, begin)
                     .le(RcReceivable::getBillDate, end));
             BigDecimal sum = rows.stream()
@@ -203,7 +206,11 @@ public class ArMonthCloseService {
             throw new BizException(ErrorCode.PARAM_INVALID, "月结单 " + c.getCloseNo() + " 须先完成扛数与差异调整");
         }
         BigDecimal amount = c.getPulledAmount() == null ? BigDecimal.ZERO : c.getPulledAmount();
-        if (amount.signum() <= 0) {
+        if (amount.signum() < 0) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "本期扛数为负（" + amount.toPlainString() + "），无可过总账数据；请核对红字应收单后再处理");
+        }
+        if (amount.signum() == 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "扛数金额为0，无可过总账数据");
         }
         String voucherNo = voucherService.generateMonthCloseVoucher(c.getTenantId(), c.getCompanyId(), amount,
@@ -244,6 +251,8 @@ public class ArMonthCloseService {
         if (ArMonthClose.T_COST.equals(c.getCloseType())) {
             List<OpVoucher> vouchers = voucherMapper.selectList(new LambdaQueryWrapper<OpVoucher>()
                     .in(OpVoucher::getSourceType, (Object[]) COST_SOURCE_TYPES)
+                    .eq(OpVoucher::getCompanyId, c.getCompanyId())
+                    .eq(OpVoucher::getDelFlag, 0)
                     .ge(OpVoucher::getVoucherDate, begin)
                     .le(OpVoucher::getVoucherDate, end)
                     .ne(OpVoucher::getStatus, "VOID"));
@@ -252,6 +261,7 @@ public class ArMonthCloseService {
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
         } else {
             List<RcReceivable> rows = receivableMapper.selectList(new LambdaQueryWrapper<RcReceivable>()
+                    .eq(RcReceivable::getCompanyId, c.getCompanyId())
                     .ge(RcReceivable::getBillDate, begin)
                     .le(RcReceivable::getBillDate, end));
             current = rows.stream()

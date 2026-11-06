@@ -194,7 +194,7 @@ public class PurchaseService {
         }
         if (!"DRAFT".equals(o.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "仅草稿(DRAFT)状态订单可删除，当前状态: " + o.getStatus());
+                    "仅草稿状态订单可删除，当前状态: " + o.getStatus());
         }
         long receipts = receiptMapper.selectCount(new LambdaQueryWrapper<PoReceipt>().eq(PoReceipt::getPoId, id));
         if (receipts > 0) {
@@ -247,7 +247,7 @@ public class PurchaseService {
         }
         if ("INVOICED".equals(status)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "订单已进入开票/三单匹配（当前状态: INVOICED），不可作废");
+                    "订单已进入开票/三单匹配，不可作废");
         }
         // 下游报销/付款单挂此 PO（付款关联）：存在即拒绝
         Long downBills = expBillMapper.selectCount(new LambdaQueryWrapper<ExpBill>()
@@ -551,7 +551,7 @@ public class PurchaseService {
         // 于是「下单→(审批断链)→收货→暂估应付→三单匹配→付款」全程不要求任何人批过。
         if (!RECEIVABLE_PO_STATUS.contains(o.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "采购订单 " + o.getPoNo() + " 当前状态 "
-                    + o.getStatus() + " 不可收货：仅审批通过(APPROVED)/已开票(INVOICED)的订单允许收货");
+                    + o.getStatus() + " 不可收货：仅审批通过或已开票的订单允许收货");
         }
         if (!r.getSupplierName().equals(o.getSupplierName())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "收货供应商与订单供应商不一致");

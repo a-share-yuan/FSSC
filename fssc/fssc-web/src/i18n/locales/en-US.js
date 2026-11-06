@@ -483,7 +483,7 @@ export default {
       fetching: 'Fetching...',
       genOffset: 'Elimination Entry Generation',
       hintAuditReadOnly: 'This check is a read-only query; it neither posts nor amends entries. For anything not posted, review it by provision no. and re-provision, or contact the administrator for manual handling.',
-      hintNoChecklist: 'This period has no month-end checklist yet; closing directly is blocked by the check gate. Click Generate Checklist to create the 8 items, then have each responsible position close them.',
+      hintNoChecklist: 'This period has no month-end checklist yet; closing directly is blocked by the check gate. Click Generate Checklist to create the 9 items, then have each responsible position close them.',
       manualOffsetHint: 'Use this when intercompany balances do not match and the offset entries must be keyed one by one per the actual business',
       modeManual: 'Enter the pair manually',
       msgConsolSubmitted: 'Consolidation report summarized; the consolidation report approval flow has been started',

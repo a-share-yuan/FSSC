@@ -399,6 +399,17 @@ public class BillTraceChainController {
         List<OpPayBatch> batches = new ArrayList<>(batchById.values());
         out.put("batches", batches);
 
+        // 单据即批次：头部状态以批次实况为准。wf_instance.status 只到 APPROVED（审批通过），
+        // 出纳执行后批次才进 PAID/FAILED，沿用流程状态会出现「头部已审批、下边已付款」两处打架。
+        if (BATCH_IS_BILL.contains(bizType) && !batches.isEmpty()) {
+            OpPayBatch self = batches.stream()
+                    .filter(b -> b.getId() != null && b.getId().equals(bizId))
+                    .findFirst().orElse(batches.get(0));
+            if (self.getStatus() != null && !self.getStatus().isBlank()) {
+                head.put("status", self.getStatus());
+            }
+        }
+
         // 4) 凭证：source_doc_type + source_doc_id 成对精确匹配，或 回溯列命中本单流程。
         // 读侧：bizType 与凭证写侧域名可能不同名
         // （CONTRACT_APPROVE vs CONTRACT／FA_DEPRECIATION vs ASSET_DEPRECIATION，现库凭证 7/34 实证）⇒
@@ -406,6 +417,26 @@ public class BillTraceChainController {
         //    仍按（域, 本域主键）配对＋回溯臂，不引入裸主键跨域关联。
         Set<String> voucherDomains = BillRouteRegistry.voucherSourceDomainsOf(bizType);
         List<OpVoucher> vouchers = genericVouchersOf(voucherDomains, bizId, pis);
+        // 借款放款批次不出批次级出纳凭证（避免与 EXP_LOAN 重复记同一笔银行流出，见
+        // PayBatchBizAction#isLoanPayoutBatch），资金腿由借款单的 EXP_LOAN 凭证承载。
+        // 该凭证的 proc_inst_id 属于借款流程，按本域实例反查不到 ⇒ 联查会显示
+        // 「记账凭证 0 张 + 生成凭证永灰」。这里按批次登记的源单（source_doc_type/source_doc_id）
+        // 把承载凭证补进凭证段，时间线按「已过账即到达」正常变绿。
+        if (BATCH_IS_BILL.contains(bizType) && batches.size() == 1) {
+            OpPayBatch self = batches.get(0);
+            if ("EXP_LOAN".equalsIgnoreCase(self.getSourceDocType()) && self.getSourceDocId() != null) {
+                Set<Long> seen = vouchers.stream().map(OpVoucher::getId)
+                        .filter(Objects::nonNull).collect(Collectors.toSet());
+                for (OpVoucher v : opVoucherMapper.selectList(new LambdaQueryWrapper<OpVoucher>()
+                        .eq(OpVoucher::getSourceDocType, "EXP_LOAN")
+                        .eq(OpVoucher::getSourceDocId, self.getSourceDocId()))) {
+                    if (v.getId() != null && seen.add(v.getId())) {
+                        vouchers.add(v);
+                    }
+                }
+                vouchers.sort(Comparator.comparing(OpVoucher::getId));
+            }
+        }
         Map<Long, List<OpVoucherLine>> voucherLines = new LinkedHashMap<>();
         for (OpVoucher v : vouchers) {
             voucherLines.put(v.getId(), opVoucherLineMapper.selectByVoucherId(v.getId()));

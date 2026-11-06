@@ -108,6 +108,16 @@
                     <el-option :label="$t('system.flow.optScopeCompany')" value="ORG" />
                   </el-select>
                 </el-form-item>
+                <!-- 选「指定公司」必须能指定到具体公司：只存 orgScope=ORG 而 org_ids 为空时，
+                     后端 WfProcessConfigService.orgScopeMatches 对任何公司都判不适用（fail-closed），
+                     模型会变成永远路由不到的"死配置"。 -->
+                <el-form-item v-if="modelForm.orgScope === 'ORG'" label="指定公司">
+                  <el-select v-model="orgIdList" multiple filterable collapse-tags collapse-tags-tooltip
+                             placeholder="选择本模型适用的公司（至少 1 家）" style="width:100%">
+                    <el-option v-for="c in companyOptions" :key="c.value" :label="c.label" :value="c.value" />
+                  </el-select>
+                  <div class="field-hint">留空＝该模型对任何公司都不适用，提单会报「无命中的流程规则」</div>
+                </el-form-item>
                 <el-form-item :label="$t('system.flow.lblWithdrawable')">
                   <el-switch v-model="modelForm.allowWithdraw" />
                 </el-form-item>
@@ -862,7 +872,7 @@
 <script setup>
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { flowApi, flowConfigApi, designerApi, store } from '../../api'
+import { flowApi, flowConfigApi, designerApi, orgApi, store } from '../../api'
 // bpmn-js 全家桶较重：异步组件，仅在切到「流程图」页签时才加载独立 chunk
 const BpmnDesigner = defineAsyncComponent(() => import('../../components/BpmnDesigner.vue'))
 import SkeletonList from '../../components/SkeletonList.vue'
@@ -1050,6 +1060,30 @@ async function loadAllDetails(m) {
 
 // 基本信息
 const modelForm = reactive({})
+
+/**
+ * 生效组织范围＝指定公司时的公司多选。
+ * 库列 wf_model.org_ids 是逗号串（后端 orgScopeMatches 按逗号拆并比对 companyId），
+ * 界面用数组，选中即回写逗号串；切回「全集团」保留原值不清空，避免误改。
+ */
+const companyOptions = ref([])
+const orgIdList = computed({
+  get: () => String(modelForm.orgIds || '').split(',').map((s) => Number(String(s).trim())).filter((n) => Number.isFinite(n) && n > 0),
+  set: (v) => { modelForm.orgIds = (v || []).join(',') },
+})
+async function loadCompanyOptions() {
+  if (companyOptions.value.length) return
+  try {
+    const tree = await orgApi.companyTree({ silent: true })
+    const out = []
+    const walk = (nodes) => (nodes || []).forEach((n) => {
+      if (n?.id != null) out.push({ value: n.id, label: n.companyName || n.companyCode || `公司#${n.id}` })
+      if (n?.children?.length) walk(n.children)
+    })
+    walk(tree)
+    companyOptions.value = out
+  } catch { /* 公司清单取不到时下拉为空，保存仍按已填值提交 */ }
+}
 
 const modelFormRules = computed(() => ({
   modelKey: commonRules.required(t('system.flow.errModelCodeRequired')),
@@ -1848,6 +1882,7 @@ onMounted(() => {
   //   失败不阻断页面（useDict内部 fail-soft 回落本地常量），也不 await 到阻塞首屏——
   //   标签函数是同步的，字典回来后 computed 自动刷新。
   useDictsReady()
+  loadCompanyOptions()
   loadModels().then(() => {
     if (filteredModels.value.length) selectModel(filteredModels.value[0])
   })
@@ -1880,7 +1915,7 @@ try { if (!localStorage.getItem(_guideKey)) { setTimeout(() => flowConfigCm.valu
 .model-meta { display: flex; gap: 12px; font-size: 12px; color: #909399; }
 .model-detail-header { display: flex; align-items: center; }
 .cfg-hint { font-size: 12px; color: #909399; line-height: 1.4; margin-top: 4px; }
-.field-hint { font-size: 12px; color: #909399; line-height: 18px; margin-top: 2px; }
+.field-hint { width: 100%; font-size: 12px; color: #909399; line-height: 18px; margin-top: 2px; }
 /* 节点弹窗：分组标题＋内容区限高，避免整页过长 */
 .node-dialog :deep(.el-dialog__body) { max-height: 70vh; overflow-y: auto; padding-top: 8px; }
 .form-section-title {
