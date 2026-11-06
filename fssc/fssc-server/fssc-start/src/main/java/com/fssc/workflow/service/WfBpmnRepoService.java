@@ -72,11 +72,21 @@ public class WfBpmnRepoService {
         TenantContext.runIgnoreTenant(() ->
                 all.addAll(modelMapper.selectList(new LambdaQueryWrapper<WfModel>()
                         .orderByAsc(WfModel::getModelKey).orderByAsc(WfModel::getId))));
+        // 测试/演练用流程不进快照。
+        // 导出是「库里有什么就导什么」——没有状态过滤，DISABLED 的照样导；
+        // 而导出的目录会被整份提交，等于把测试流程发布出去。这里按 key 前缀挡掉。
+        List<WfModel> exportable = all.stream()
+                .filter(m -> !isExcludedFromRepo(m.getModelKey()))
+                .toList();
+        int skipped = all.size() - exportable.size();
+        if (skipped > 0) {
+            log.info("BPMN 导出跳过测试/演示流程 {} 个", skipped);
+        }
         List<String> indexRows = new ArrayList<>();
         int written = 0;
         int blank = 0;
         List<String> failures = new ArrayList<>();
-        for (WfModel m : all) {
+        for (WfModel m : exportable) {
             String key = safe(m.getModelKey());
             int ver = m.getVersion() == null ? 1 : m.getVersion();
             String xml = m.getBpmnXml();
@@ -117,9 +127,22 @@ public class WfBpmnRepoService {
         r.put("dir", root().toAbsolutePath().normalize().toString().replace('\\', '/'));
         r.put("models", all.size());
         r.put("exported", written);
+        r.put("skipped", skipped);
         r.put("withoutBpmn", blank);
         r.put("failures", failures);
         return r;
+    }
+
+    /** 仓库快照排除的 modelKey 前缀：测试/演练用流程（与业务无关的建-校验-发布演练资产） */
+    private static final List<String> REPO_EXCLUDED_PREFIXES = List.of("GTEST", "TEST_", "DEMO_", "TMP_");
+
+    /** 是否属于「不该进仓库快照」的流程（按 modelKey 前缀判定，大小写不敏感） */
+    private static boolean isExcludedFromRepo(String modelKey) {
+        if (modelKey == null || modelKey.isBlank()) {
+            return false;
+        }
+        String k = modelKey.trim().toUpperCase(java.util.Locale.ROOT);
+        return REPO_EXCLUDED_PREFIXES.stream().anyMatch(k::startsWith);
     }
 
     // 发布 diff
@@ -134,6 +157,14 @@ public class WfBpmnRepoService {
     public Map<String, Object> recordPublish(WfModel oldModel, String newXml, int newVersion,
                                              String deployId, String procDefId, Integer inFlight) {
         String key = safe(oldModel.getModelKey());
+        // 与 exportAll 同一道闸：测试/演练用流程即便被发布，也不往仓库里写快照
+        if (isExcludedFromRepo(key)) {
+            log.info("BPMN 发布快照跳过测试/演示流程 modelKey={}", key);
+            Map<String, Object> skip = new LinkedHashMap<>();
+            skip.put("modelKey", key);
+            skip.put("skipped", true);
+            return skip;
+        }
         int oldVersion = oldModel.getVersion() == null ? 1 : oldModel.getVersion();
         String oldXml = oldModel.getBpmnXml();
         Map<String, Object> r = new LinkedHashMap<>();
