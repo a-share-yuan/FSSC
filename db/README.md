@@ -1,14 +1,15 @@
 # db/ — 整库 dump（建库入口）
 
-`Dump20261104/` 是本项目一次演练库的 MySQL 整库导出，**建库、起服务、演示都以它为准**。
-326 个文件＝一表一文件 325 枚（主库 `fssc` 319 枚，影像库 `fssc_image` 6 枚）＋ `fssc_routines.sql`（存储过程与函数），合计约 6.9 MB。
+`Dump20261106/` 是本项目一次演练库的 MySQL 整库导出，**建库、起服务、演示都以它为准**。
+326 个文件＝一表一文件 325 枚（主库 `fssc` 319 枚，影像库 `fssc_image` 6 枚）＋ `fssc_routines.sql`（视图定义），合计约 6.1 MB。
+
 ## 导入
 
-推荐使用 MySQL Workbench 选择 Dump20261104 目录后全部导入。
+推荐使用 MySQL Workbench 选择 Dump20261106 目录后全部导入。
 
 ```bash
 # 每个文件自带 CREATE DATABASE IF NOT EXISTS + USE，两个库一起建好，无需预先手工建库
-for f in db/Dump20261104/fssc_*.sql; do
+for f in db/Dump20261106/fssc_*.sql; do
   mysql --default-character-set=utf8mb4 -uroot -p < "$f"
 done
 ```
@@ -16,7 +17,7 @@ done
 Windows（CMD）：
 
 ```bat
-for %f in (db\Dump20261104\fssc_*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
+for %f in (db\Dump20261106\fssc_*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
 ```
 
 - 依赖 MySQL 8.x，字符集 `utf8mb4`，排序规则 `utf8mb4_general_ci`。
@@ -24,26 +25,31 @@ for %f in (db\Dump20261104\fssc_*.sql) do mysql --default-character-set=utf8mb4 
 - 视图：本 dump 里有一枚 `v_tax_input_certify`（进项发票认证视图，在 `fssc_routines.sql` 内），语句前面带着
   `/*!50013 DEFINER='root'@'localhost' SQL SECURITY DEFINER */` 这一段。目标库里没有 `root@localhost` 这个账号时，
   这一个文件会报 `ERROR 1449`；把那一段 definer 注释删掉再单独重导这一个文件即可（其余 325 个文件不受影响）。
-  存储过程、函数、触发器：无。
+  存储过程、函数、触发器：无（`db/upgrade/V1.6.90` 里的 `fssc_add_column` / `fssc_drop_column` 由该脚本自建，不依赖 dump）。
 - Flowable 的 `ACT_*` / `FLW_*` 表已在 dump 内；`flowable.database-schema-update=true` 会在首启时补齐缺项。
 - 影像库表当前只有配置行、无业务行（与源库一致），上传发票后自动产生数据。
 - 口令一律走 `.env` / 环境变量（见根目录 `.env.example`），本目录不含任何明文凭据文件。
 
 ## 这份 dump 里有什么
 
-结构、主数据、菜单与权限、流程定义齐全，**业务单据为空**（`exp_bill` / `op_voucher` / `wf_instance` 均为 0 行）——
+结构、主数据、菜单与权限、流程定义齐全，**业务单据为空**（`exp_bill` / `op_voucher` / `wf_instance` / `op_pay_batch` 均为 0 行）——
 它是清库后重新铺底的一版，导入即得一个干净可演示的库，单据由使用者自己跑出来。
-`act_ge_bytearray` 的 2.2 MB 是 190 份 BPMN 定义与 183 张流程图，**不是上传附件**。
+
+`act_ge_bytearray` 的 802 KB 是 **41 份 BPMN 定义与其流程图**，与 `act_re_procdef` / `wf_model` 一一对应，
+**不是上传附件**。
+
 `fssc_crm_customer` / `fssc_md_supplier(_contact)` / `fssc_sys_user` 等主数据表里带着名称、邮箱、手机号形态的字段值，
 发布前请确认这些数据可以公开；要换一批干净数据，就重新导出一份同名结构的 dump 覆盖本目录并同步更新本文件的日期。
 
-> 内容构成：`2026-11-04 23:30` 的整库导出，再于 `2026-11-05` 补入 `V1.6.17`～`V1.6.20` 四个增量
-> （物料铺底 8 条、预算孤儿映射清理、撤回入口菜单与权限、预付款比例参数），因此
-> `md_inventory` / `bg_item` / `md_item_budget_map` / `sys_config` / `sys_menu` / `sys_role_menu`
-> 其中 `md_inventory` / `bg_item` / `md_item_budget_map` / `sys_config` / `sys_menu` / `sys_role_menu` / `employee_credit` / `op_review_rule` / `op_quality` 与新增的 `md_violation_reason` 是 11-05 重新导出的，其余文件保持 11-04 的原样。
+> 内容构成：`2026-11-06` 的整库导出。结构、主数据、菜单与权限、流程定义齐全，业务单据为空。
+> 流程定义为 41 条，与 `wf_model` 一一对应（每类流程一条最新版本）。
+> 含 2026-11-05 之后落库的配置：`gl_close_check_item` 的 202610 月结检查项 9 条、
+> `pf_package` 的「演示版」套餐及 8 个功能项、昆山爱共享（AIG-KS）的第二任单位负责人。
+> `md_inventory` 含 8 条物料铺底（劳保用品与办公耗材），`ar.period.lock.1.2026-11` 为 `0`（未锁），
+> 导入后 2026-11 账期可直接演示。
 
 `db/Dump*/` 与 `db/backup/` 在 `.gitignore` 里，是为了防止日后随手 dump 又被 `git add -A` 带进来；
-`Dump20261104/` 是**明确 `git add -f` 入库**的那一枚例外。
+`Dump20261106/` 是**明确 `git add -f` 入库**的那一枚例外。
 
 ## 增量脚本：只有 v1.0.0 → v1.2.0 这一段
 
