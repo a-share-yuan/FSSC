@@ -237,7 +237,7 @@
 <script setup>
 import { invoiceTypeLabel } from '@/constants/invoiceType'
 import { COURIER_COMPANIES } from '@/constants/enums'
-import { formatDateTime } from '../../utils/format'
+import { formatDateTime, todayLocal } from '../../utils/format'
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage } from 'element-plus'
 import { collabApi, arFlowApi, store } from '../../api'
@@ -328,7 +328,7 @@ const inputText = ref('')
 const sendForm = reactive({ courierCompany: '', courierNo: '' })
 const inputPlaceholder = ref('')
 
-const today = () => new Date().toISOString().slice(0, 10)
+// 本地日历日统一取 utils/format 的 todayLocal()：UTC 串在东八区凌晨会落后一天
 
 // 每个动作对应的后端 @RequiresPerm：无码不渲染，避免点开才 403
 const ACTION_PERM = {
@@ -503,7 +503,7 @@ async function doInput() {
   } else if (inputKind.value === 'pay') {
     const [voucher, date, amt] = parts()
     if (!voucher) return ElMessage.warning(t('flow.collab.errPayVoucherNo'))
-    await api(() => collabApi.scpPayWriteback(id, { payVoucherNo: voucher, payDate: date || today(), payAmount: amt }), t('flow.collab.msgPayWrittenBack'))
+    await api(() => collabApi.scpPayWriteback(id, { payVoucherNo: voucher, payDate: date || todayLocal(), payAmount: amt }), t('flow.collab.msgPayWrittenBack'))
   } else if (['confirm', 'objection', 'resolve', 'voidRecon', 'applyInvoice', 'importGoods'].includes(inputKind.value)) {
     await doReconInput()
   } else {
@@ -528,7 +528,7 @@ async function doCreate() {
 
 function openShipping() {
   Object.keys(shipForm).forEach((k) => delete shipForm[k])
-  shipForm.shippingDate = today()
+  shipForm.shippingDate = todayLocal()
   shipVisible.value = true
 }
 

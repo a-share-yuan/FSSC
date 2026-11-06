@@ -885,6 +885,21 @@ public class NodeOrgResolver {
      * 提单人一人时返回 null，落回候选组 + 节点 empty_strategy 处置（ESCALATE 沿汇报线上收）。
      */
     public Long tryResolveAssignee(String procInstId, String roleCode) {
+        return tryResolveAssignee(procInstId, roleCode, null);
+    }
+
+    /**
+     * 同上，但把 {@code extraHandled} 也当作"本实例已办过"的人参与同实例回避重排。
+     *
+     * <p>专供审批弹窗的"下一环节给谁"预告使用：预告发生在<b>当前任务还没办结</b>时，
+     * 此时当前办理人在 {@code wf_task} 里仍是 PENDING，{@link #preferFreshHandlers} 认不出
+     * 他"马上就会办完"，于是预告按 id 升序取到的仍是他；等他真点通过、任务翻成 DONE 后，
+     * 派发侧的同一次重排会把他挪到末尾，落点换成另一个人——预告与落点就此分叉。
+     * 把当前办理人显式并入"已办"集合，预告才能算出与派发一致的答案。</p>
+     *
+     * @param extraHandled 当前任务办理人（可空；空＝与两参版本完全等价）
+     */
+    public Long tryResolveAssignee(String procInstId, String roleCode, Long extraHandled) {
         try {
             WfInstance inst = findInstance(procInstId);
             if (inst == null) {
@@ -902,7 +917,7 @@ public class NodeOrgResolver {
                 // （Flowable 7 候选组查询未命中），改为"全局首个持有人"直接指派，保证流程按节点推进不断流；
                 // 候选组仍保留可兜底。先本公司、本公司无人再回落全网（见 companyFirst）。
                 return pickByStrategy(inst.getModelKey(), roleCode, preferFreshHandlers(procInstId, companyFirst(
-                        userIdsGlobalWithRole(roleCode), resolveCompany(procInstId), roleCode)), applicant);
+                        userIdsGlobalWithRole(roleCode), resolveCompany(procInstId), roleCode), extraHandled), applicant);
             }
             Long company = resolveCompany(procInstId);
             if (company == null) {
@@ -912,7 +927,8 @@ public class NodeOrgResolver {
             // 不能只在"恰好 1 人"时才指派：候选组待办不可见会让流程卡死，
             // 故一律按用户 id 取首个持有人确定性指派（候选组仍保留，其余持有人仍可依权办理）。
             // 多持有人时的落点可由 wf.assign.strategy 改为负载均衡/轮询，缺省仍是 id 升序首个。
-            return pickByStrategy(inst.getModelKey(), roleCode, preferFreshHandlers(procInstId, userIds), applicant);
+            return pickByStrategy(inst.getModelKey(), roleCode,
+                    preferFreshHandlers(procInstId, userIds, extraHandled), applicant);
         } catch (Exception e) {
             log.warn("节点办理人解析失败 proc={} role={}: {}", procInstId, roleCode, e.getMessage());
             return null;
@@ -982,6 +998,15 @@ public class NodeOrgResolver {
      * 读不到镜像表（异常/无数据）也原样返回，行为与改造前一致。
      */
     private List<Long> preferFreshHandlers(String procInstId, List<Long> ids) {
+        return preferFreshHandlers(procInstId, ids, null);
+    }
+
+    /**
+     * 同实例回避（软）＋可选的"视作已办"补位。
+     *
+     * @param extraHandled 额外算作"已办过"的用户（预告场景传当前任务办理人），可空
+     */
+    private List<Long> preferFreshHandlers(String procInstId, List<Long> ids, Long extraHandled) {
         if (procInstId == null || ids == null || ids.size() < 2) {
             return ids;
         }
@@ -990,12 +1015,14 @@ public class NodeOrgResolver {
                     .eq(WfTask::getProcInstId, procInstId)
                     .eq(WfTask::getStatus, "DONE")
                     .isNotNull(WfTask::getAssigneeId));
-            if (done == null || done.isEmpty()) {
-                return ids;
-            }
             java.util.Set<Long> handled = new java.util.HashSet<>();
-            for (WfTask t : done) {
-                if (t.getAssigneeId() != null) handled.add(t.getAssigneeId());
+            if (done != null) {
+                for (WfTask t : done) {
+                    if (t.getAssigneeId() != null) handled.add(t.getAssigneeId());
+                }
+            }
+            if (extraHandled != null) {
+                handled.add(extraHandled);
             }
             if (handled.isEmpty()) {
                 return ids;

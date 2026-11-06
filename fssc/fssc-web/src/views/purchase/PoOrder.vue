@@ -22,7 +22,7 @@
         <el-button type="primary" size="small" @click="load">{{ $t('common.search') }}</el-button>
       <el-button type="info" size="small" @click="exportCsv">{{ $t('common.export') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
-        <span style="margin-left: auto; color: #909399; font-size: 12px">采购订单 -> 收货(GRN) -> 三单匹配 -> 发票校验 ->{{ $t('purchase.poOrder.Payment') }}</span>
+        <span style="margin-left: auto; color: #909399; font-size: 12px">采购订单 → 收货 → 三单匹配 → 发票校验 →{{ $t('purchase.poOrder.Payment') }}</span>
       </div>
     </template>
 
@@ -141,8 +141,8 @@
         <!-- 采购订单关联在建工程（CIP 项目）：后端契约 /tenant/cip/list 未部署(404)时隐藏本字段 -->
         <el-row v-if="cipAvailable" :gutter="16">
           <el-col :span="12">
-            <el-form-item label="CIP 项目">
-              <template #label>CIP 项目<FieldTip text="仅显示在建项目；关联后收货/发票可按项目归集" /></template>
+            <el-form-item label="在建工程项目">
+              <template #label>在建工程项目<FieldTip text="仅显示在建项目；关联后收货/发票可按项目归集" /></template>
               <el-select v-model="form.cipId" filterable clearable style="width: 100%" placeholder="关联在建工程项目（可选）">
                 <el-option v-for="c in cipOptions" :key="c.id" :label="cipLabel(c)" :value="c.id" />
               </el-select>
@@ -411,7 +411,7 @@
         <el-descriptions-item label="付款条件">{{ detailRow.paymentTerms || '—' }}</el-descriptions-item>
         <el-descriptions-item label="采购员">{{ detailRow.buyerName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="联系电话">{{ detailRow.contactPhone || '—' }}</el-descriptions-item>
-        <el-descriptions-item v-if="detailCipLabel" label="CIP 项目">{{ detailCipLabel }}</el-descriptions-item>
+        <el-descriptions-item v-if="detailCipLabel" label="在建工程项目">{{ detailCipLabel }}</el-descriptions-item>
         <el-descriptions-item label="交货地址" :span="2">{{ detailRow.deliveryAddress || '—' }}</el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ detailRow.remark || '—' }}</el-descriptions-item>
       </el-descriptions>
@@ -456,7 +456,7 @@ import { useAutoFill } from '@/composables/useAutoFill'
 import { useFormRules } from '@/composables/useFormRules'
 import { useSubmitGuard } from '@/composables/useSubmitGuard'
 import { useKeyboard } from '@/composables/useKeyboard'
-import { formatDate, formatDateTime } from '@/utils/format'
+import { formatDate, formatDateTime, todayLocal } from '@/utils/format'
 import { useCurrency } from '@/composables/useCurrency'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
@@ -654,7 +654,7 @@ async function load() {
 function openCreate(row) {
   Object.assign(form, row ? { ...row } : {
     poNo: '', supplierId: null, supplierName: '', contractId: null, cipId: null,
-    orderDate: new Date().toISOString().slice(0, 10), amount: 0,
+    orderDate: todayLocal(), amount: 0,
     currency: 'CNY', deliveryDate: '', paymentTerms: '', buyerName: '',
     contactPhone: '', deliveryAddress: '', companyId: store.user?.companyId ?? null,
     status: 'DRAFT', remark: '',

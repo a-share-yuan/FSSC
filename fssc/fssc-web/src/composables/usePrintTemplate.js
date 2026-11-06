@@ -17,7 +17,6 @@
  *   GET  /api/tenant/masterdata/print/set/{setCode}           取模板套
  *   POST /api/tenant/masterdata/print/render                  渲染（返回 HTML + 必录校验）
  *
- * 必录属性（字段必录 + 锁定属性）：
  *   后端 required=1 的字段缺值时返回 blocked=true 与 missingRequired 清单，
  *   本 composable 默认<b>拦截不打印</b>，可用 force 强制放行。
  * =============================================================================

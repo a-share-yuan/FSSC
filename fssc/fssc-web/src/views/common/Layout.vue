@@ -255,7 +255,7 @@ const kbShortcuts = computed(() => [
   { key: 'Ctrl + B', desc: '收藏夹' },
   { key: 'Ctrl + E', desc: '效率统计' },
   { key: 'Ctrl + H', desc: '切换深/浅色模式' },
-  { key: 'Alt + 1', desc: '首页 Dashboard' },
+  { key: 'Alt + 1', desc: '首页' },
   { key: 'Alt + 2', desc: '我的审批' },
   { key: 'Alt + 3', desc: '任务池' },
   ...(canFlowMonitor ? [{ key: 'Alt + 4', desc: '流程监控大屏' }] : []),

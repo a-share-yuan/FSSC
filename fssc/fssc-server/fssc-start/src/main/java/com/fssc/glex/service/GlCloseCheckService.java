@@ -52,6 +52,14 @@ public class GlCloseCheckService {
     public static final String ITEM_INTER_OFFSET = "内部往来已抵消";
     public static final String ITEM_VOUCHER_EXPECTED = "应生成未生成凭证检查";
 
+    /** 界面显示名：存储键沿用历史值（存量行与系统校验都依赖逐字匹配），读面只出中文 */
+    public static final String LABEL_VOUCHER_POSTED = "全部凭证已过账（无未过账凭证）";
+
+    /** 存储键 → 界面显示名（非本项原样返回） */
+    public static String displayName(String itemName) {
+        return ITEM_VOUCHER_POSTED.equals(itemName) ? LABEL_VOUCHER_POSTED : itemName;
+    }
+
     private final OpVoucherMapper opVoucherMapper;
     private final ExpBillMapper expBillMapper;
     private final GlTaxProvisionMapper taxProvisionMapper;
@@ -108,7 +116,7 @@ public class GlCloseCheckService {
                 .eq(companyId != null, OpVoucher::getCompanyId, companyId)
                 .eq(OpVoucher::getStatus, "DRAFT"));
         long n = draft == null ? 0 : draft;
-        return n == 0 ? null : "本期仍有 " + n + " 张凭证处于 DRAFT（未过账），过账后才能结账";
+        return n == 0 ? null : "本期仍有 " + n + " 张凭证未过账（草稿状态），过账后才能结账";
     }
 
     private String verifyTaxProvision(String period, Long companyId) {

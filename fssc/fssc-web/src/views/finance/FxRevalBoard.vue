@@ -235,7 +235,7 @@ async function doRun() {
 // ④ 反冲：对已生成凭证反向冲销
 async function onReverse(row) {
   await ElMessageBox.confirm(
-    `确认反冲该重估记录（${row.currencyCode || row.fromCurrency} 差异 ${formatMoney(row.revalAmount || row.diff)}）？将生成借贷对调的反向 DRAFT 凭证。`,
+    `确认反冲该重估记录（${row.currencyCode || row.fromCurrency} 差异 ${formatMoney(row.revalAmount || row.diff)}）？将生成借贷对调的反向草稿凭证。`,
     '反冲确认', { type: 'warning' })
   try {
     const ret = await fxRevalApi.reverse(row.id)

@@ -15,6 +15,17 @@ import {
 } from '../constants/enums'
 
 /**
+ * 本地日历日 YYYY-MM-DD：表单预填日期的唯一入口。
+ * 不能用 new Date().toISOString().slice(0, 10)——那是 UTC 日，东八区 00:00~08:00
+ * 会整整落后一天（收款日期/下单日期等默认值会预填成「昨天」）。
+ */
+export function todayLocal() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/**
  * 格式化日期为 YYYY-MM-DD
  * 输入可能是 ISO 字符串、时间戳(ms)、Date 对象或 null
  */

@@ -3061,7 +3061,8 @@ public class WfEngineFacade {
         boolean pool = cfg != null && "ROLE".equals(cfg.getAssignType())
                 && "POOL".equalsIgnoreCase(trim(cfg.getHandlingMode()));
         out.put("mode", pick ? "PICK" : (pool ? "POOL" : "AUTO"));
-        List<Long> ids = previewCandidates(modelKey, cfg, task.getProcessInstanceId(), pick, pool);
+        List<Long> ids = previewCandidates(modelKey, cfg, task.getProcessInstanceId(), pick, pool,
+                toUserIdOrNull(task.getAssignee()));
         out.put("candidates", describeUsers(ids));
         // 会签/票签下一环节是"每人一条待办"，不是"流转给其中一个人"。
         // 把多签类型一并下发，前端据此说破"几人各生成一条"，而不是照单人选节点那样报"将流转给 X"。
@@ -3100,7 +3101,7 @@ public class WfEngineFacade {
      * 那一支不动）。
      */
     private List<Long> previewCandidates(String modelKey, WfNodeConfig cfg, String procInstId,
-                                         boolean pick, boolean pool) {
+                                         boolean pick, boolean pool, Long currentHandler) {
         if (cfg == null) {
             return List.of();
         }
@@ -3111,7 +3112,7 @@ public class WfEngineFacade {
             return List.of();
         }
         return (pick || pool) ? pickCandidates(modelKey, cfg, procInstId)
-                : firstHolderOnly(modelKey, cfg, procInstId);
+                : firstHolderOnly(modelKey, cfg, procInstId, currentHandler);
     }
 
     /**
@@ -3158,9 +3159,18 @@ public class WfEngineFacade {
         return ids;
     }
 
-    /** AUTO 档给"实际会流到谁"这一个答案（与真正取人同一规则），避免弹窗显示一长串其实无意义的人 */
-    private List<Long> firstHolderOnly(String modelKey, WfNodeConfig cfg, String procInstId) {
-        Long only = nodeOrgResolver.tryResolveAssignee(procInstId, cfg.getAssignValue().split(",")[0].trim());
+    /**
+     * AUTO 档给"实际会流到谁"这一个答案（与真正取人同一规则），避免弹窗显示一长串其实无意义的人。
+     *
+     * <p>预告发生在当前任务办结<b>之前</b>，而派发侧的"同实例回避"是按 {@code wf_task} 里
+     * DONE 的行来排的——那一行此刻还是 PENDING，当前办理人因此被当成"没办过"，
+     * 预告就把他自己报成下一节办理人；等他点完通过，同一份候选重排后落点换人。
+     * 所以这里把当前办理人显式并入"已办"集合再算一次（见
+     * {@link NodeOrgResolver#tryResolveAssignee(String, String, Long)}）。</p>
+     */
+    private List<Long> firstHolderOnly(String modelKey, WfNodeConfig cfg, String procInstId, Long currentHandler) {
+        Long only = nodeOrgResolver.tryResolveAssignee(procInstId,
+                cfg.getAssignValue().split(",")[0].trim(), currentHandler);
         return only == null ? List.of() : List.of(only);
     }
 
@@ -5468,32 +5478,32 @@ public class WfEngineFacade {
                         ? "「自由驳回」总开关已开，但本流程未进灰度白名单 sys_config.wf.reject.free.models；本页为只读预览"
                         : "「自由驳回」总开关未开（sys_config.wf.reject.free.enabled 未置 1，默认关闭）；本页为只读预览")
                 : (scopeEnabled
-                        ? "本节点 reject_scope=" + scope + " 且总开关与灰度白名单均已放开；执行面经重启窗口运行期验证后可用"
-                        : "本节点 reject_scope=NONE（未开启指定级次驳回）；本页为只读预览"));
+                        ? "本节点已开启指定级次驳回，且总开关与灰度白名单均已放开；执行面经重启窗口运行期验证后可用"
+                        : "本节点未开启指定级次驳回；本页为只读预览"));
         if (!masterOn) {
             out.put("disabledReason", "总开关未开启（sys_config.wf.reject.free.enabled 未置 1，默认关闭）");
         } else if (!whitelisted) {
             out.put("disabledReason", "本流程未进逐链灰度白名单（sys_config.wf.reject.free.models 未包含 "
                     + gateModelKey + "，空清单＝全库不生效）；如需放开，请把该 model_key 追加进白名单");
         } else if (!scopeEnabled) {
-            out.put("disabledReason", "本节点未开启指定级次驳回（wf_node_config.reject_scope=NONE，缺省）；"
+            out.put("disabledReason", "本节点未开启指定级次驳回；"
                     + "如需按节点放开，请把该节点 reject_scope 配为 PREV_ONE（仅退回上一节点）或 ANY_DONE"
                     + "（退回「声明集」内的节点：提单人节点／上一级／审批项 wf_approval_item.target_node 显式声明的目标）");
         } else if (vote) {
-            out.put("disabledReason", "票签（VOTE）节点按比例聚合判定，不支持指定级次驳回");
+            out.put("disabledReason", "票签节点按比例聚合判定，不支持指定级次驳回");
         } else if (!singleActive) {
             out.put("disabledReason", "该单据当前有 " + activeCount + " 个在办节点（并联/会签），不支持指定级次驳回");
         } else {
             out.put("disabledReason", null);
         }
-        out.put("notice", "只读预览：本接口不修改任何流程数据。执行面（complete 传 rejectToNodeKey）需同时满足"
-                + "「本节点 reject_scope ≠ NONE」「总开关 sys_config.wf.reject.free.enabled=1」"
-                + "「本流程在 sys_config.wf.reject.free.models 灰度白名单内」三项条件，且须先在"
-                + "重启窗口完成运行期验证 —— 原语 moveActivityIdTo 属「搬执行」，会真实改动在办单据本体。"
+        out.put("notice", "只读预览：本接口不修改任何流程数据。执行面（办理时指定退回节点）需同时满足"
+                + "「本节点已开启指定级次驳回」「总开关已开启」"
+                + "「本流程在灰度白名单内」三项条件，且须先在"
+                + "重启窗口完成运行期验证 —— 底层按活动搬移执行，会真实改动在办单据本体。"
                 + (scopeEnabled && "PREV_ONE".equals(scope)
-                        ? " 本节点为 PREV_ONE 档：只允许退回紧邻上一已完成节点 " + prevNodeKey + "，其余目标一律拒绝。"
+                        ? " 本节点为「仅退回上一节点」档：只允许退回紧邻上一已完成节点 " + prevNodeKey + "，其余目标一律拒绝。"
                         : (scopeEnabled && "ANY_DONE".equals(scope)
-                                ? " 本节点为 ANY_DONE 档，但目标须命中声明集 declaredTargets（提单人节点／上一级／审批项显式声明），集外一律拒绝。"
+                                ? " 本节点为「可退回任一已办节点」档，但目标须命中声明范围（提单人节点／上一级／审批项显式声明的目标），范围外一律拒绝。"
                                 : "")));
         return out;
     }
@@ -5542,7 +5552,7 @@ public class WfEngineFacade {
         String scope = freeRejectScopeOf(task);
         if (scope == null) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "本节点未开启指定级次驳回（wf_node_config.reject_scope=NONE），请改用普通驳回");
+                    "本节点未开启指定级次驳回，请改用普通驳回");
         }
         String prev = prevDoneNode(pi, fromNodeKey);
         if ("PREV_ONE".equals(scope)) {

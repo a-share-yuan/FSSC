@@ -201,7 +201,7 @@ public class TaskAssignmentService {
         }
         if (!"PENDING".equals(task.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "任务当前状态为 " + task.getStatus() + "，不可再分配（仅 PENDING 可分配）");
+                    "任务当前状态不允许再分配（仅待办任务可分配）");
         }
 
         BigDecimal amount = req.amount() != null ? req.amount() : task.getAmount();

@@ -324,7 +324,7 @@ public class FormMetaService {
         }
         if (Objects.equals(f.getSystemFlag(), 1)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "系统字段禁止删除（可置 DISABLED 停用）: " + f.getFieldKey());
+                    "系统字段禁止删除（可置为停用）: " + f.getFieldKey());
         }
         validationMapper.delete(new LambdaQueryWrapper<MdFormValidation>()
                 .eq(MdFormValidation::getFormCode, f.getFormCode())

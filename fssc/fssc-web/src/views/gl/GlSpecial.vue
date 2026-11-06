@@ -182,7 +182,6 @@
           <el-select v-model="journalForm.creditSubjectId" clearable filterable placeholder="贷方科目（留空取默认）" style="width:210px">
             <el-option v-for="s in leafSubjects" :key="'c' + s.id" :label="s.subjectCode + ' ' + s.subjectName" :value="s.id" />
           </el-select>
-          <!-- 预提/待摊＝「申请占用」，提交即扣预算，故必须能指定预算维度 -->
           <template v-if="journalNeedsBudget">
             <el-select v-model="journalForm.expenseItemId" clearable filterable
                        placeholder="费用项目（预算维度）" style="width:190px" @visible-change="(v) => v && ensureExpenseItems()">
@@ -279,7 +278,9 @@
                 <el-checkbox :model-value="isCcDone(row)" :disabled="ccTicking" @change="(v) => tickCloseCheck(row, v)" />
               </template>
             </el-table-column>
-            <el-table-column prop="itemName" :label="$t('gl.special.colCheckItem')" min-width="220" show-overflow-tooltip />
+            <el-table-column :label="$t('gl.special.colCheckItem')" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">{{ ccItemLabel(row.itemName) }}</template>
+            </el-table-column>
             <el-table-column :label="$t('gl.special.colPosition')" width="110">
               <template #default="{ row }">{{ ccOwnerLabel(row.ownerRole) }}</template>
             </el-table-column>
@@ -984,7 +985,7 @@ async function doMonthClose() {
     const pending = list.filter((r) => !isCcDone(r))
     if (pending.length) {
       ElMessageBox.alert(
-        t('gl.special.errChecklistBlocked', { v1: period, v2: pending.length, v3: pending.map((r) => r.itemName).join('、') })
+        t('gl.special.errChecklistBlocked', { v1: period, v2: pending.length, v3: pending.map((r) => ccItemLabel(r.itemName)).join('、') })
         + t('gl.special.hintUnclosedPositions'),
         '无法月结', { type: 'warning', confirmButtonText: t('common.gotIt') })
       return
@@ -1014,7 +1015,7 @@ async function doMonthClose() {
  * 月结检查校验清单（生成清单 → 逐项完成 → 执行月结）。
  * 后端三端点已就位（GlPeriodOpsController，权限码与月结同码 gl:monthclose:close）：
  *   GET /api/tenant/gl/close-check/list?period&companyId 当期清单
- *   POST /api/tenant/gl/close-check/seed?period&companyId 生成 8 项（同名项已存在则跳过，可重复点）
+ *   POST /api/tenant/gl/close-check/seed?period&companyId 生成 9 项（同名项已存在则跳过，可重复点）
  *   POST /api/tenant/gl/close-check/check body={id,done} 勾项 / 回退
  * 公司范围必须与月结一致（未选公司即后端默认 1），三端点与「月结」按钮传同一个值——
  * 否则清单建在 A 公司、校验查的是 B 公司，检查校验永远过不去（GlMonthCloseService:248/285-300）。
@@ -1044,6 +1045,10 @@ const ccPercent = computed(() => (closeCheck.value.length ? Math.round((ccDone.v
 // computed：静态对象会在 setup 求值时固化语言（切语言后岗位名不换）
 const CC_OWNER_LABEL = computed(() => ({ FIN_GL: t('gl.special.posGlAccountant'), CASHIER: t('gl.special.posCashier'), FIN_AR: t('gl.special.posArAccountant'), FA_ASSET_ACCOUNT: t('gl.special.posAssetAccountant') }))
 function ccOwnerLabel(code) { return CC_OWNER_LABEL.value[String(code || '').trim()] || t('gl.special.noPosition') }
+
+// 清单项名是后端存储键，历史行沿用「全部凭证已过账（无 DRAFT）」，界面统一显示为中文
+const CC_ITEM_LABEL = { '全部凭证已过账（无 DRAFT）': '全部凭证已过账（无未过账凭证）' }
+function ccItemLabel(name) { return CC_ITEM_LABEL[String(name || '').trim()] || name }
 
 async function fetchCloseCheck(q) {
   const query = q || ccQuery.value
@@ -1438,7 +1443,7 @@ function handleView(row) {
 <style scoped>
 .tax-pay-route { color: #e6a23c; font-size: 12px; }
 /* 六页签提交钮旁的期间提示（所选期间已结账禁提 / 期间状态不可读），沿用本页既有 12px 警示色 */
-.period-note { color: #e6a23c; font-size: 12px; }
+.period-note { width: 100%; color: #e6a23c; font-size: 12px; }
 /* 月结检查校验清单区（沿用本页「头部一行 + el-table」的既有排布，不引新样式体系） */
 .close-check { border: 1px solid var(--app-border); border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; background: var(--app-card-bg); }
 .cc-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }

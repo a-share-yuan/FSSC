@@ -219,7 +219,7 @@ public class ImageService {
     public void setReviewStatus(Long batchId, String reviewStatus) {
         if (reviewStatus == null || !REVIEW_STATUS_ALLOWED.contains(reviewStatus)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "审核状态取值非法：" + reviewStatus + "，仅允许 PENDING/OK/REJECTED");
+                    "审核状态取值非法：" + reviewStatus + "，仅允许：待审核/通过/驳回");
         }
         ImgBatch batch = imgBatchMapper.selectById(batchId);
         if (batch == null) {

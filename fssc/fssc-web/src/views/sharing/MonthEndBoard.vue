@@ -147,7 +147,7 @@ import { hasPerm } from '@/utils/perm'
 // 月结调度自动化
 import { useMonthEndSchedule } from '@/composables/useMonthEndSchedule'
 import { useKeyboard } from '@/composables/useKeyboard'
-import { formatDate, formatDateTime } from '@/utils/format'
+import { formatDate, formatDateTime, todayLocal } from '@/utils/format'
 import TablePager from '../../components/common/TablePager.vue'
 import { useTablePager } from '../../composables/useTablePager'
 import { useI18n } from 'vue-i18n'
@@ -362,7 +362,7 @@ async function loadData() {
       if (!modMap[modName]) modMap[modName] = { name: modName, total: 0, done: 0 }
       modMap[modName].total++
       if (st === 'done') modMap[modName].done++
-      const today = new Date().toISOString().slice(0, 10)
+      const today = todayLocal()
       const planDate = item.planDate || item.planEndDate || ''
       const isOverdue = st !== 'done' && planDate && planDate < today
       return {
@@ -428,7 +428,7 @@ async function markDone(row) {
     }
   } catch { /* 后端不可达时仍更新前端 */ }
   row.status = 'done'
-  row.actualDate = new Date().toISOString().slice(0, 10)
+  row.actualDate = todayLocal()
   const mod = modules.value.find(m => m.name === row.moduleName)
   if (mod) mod.done++
   renderStatusChart()

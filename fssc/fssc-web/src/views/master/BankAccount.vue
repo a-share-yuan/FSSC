@@ -271,10 +271,10 @@ async function toggleEnable(row) {
 }
 
 async function startSealChange(row) {
-  await ElMessageBox.confirm(`确认为账户 [${row.accountName}] 发起印鉴/网银变更审批(TR01-02)?`, '印鉴变更', { type: 'warning' })
+  await ElMessageBox.confirm(`确认为账户 [${row.accountName}] 发起印鉴/网银变更审批？`, '印鉴变更', { type: 'warning' })
   try {
     const proc = await masterApi.bank.sealChange(row.id)
-    ElMessage.success('印鉴变更审批已发起' + (proc ? ':' + proc : ''))
+    ElMessage.success('印鉴变更审批已发起' + (proc ? '：' + proc : ''))
   } catch (e) { ElMessage.error(e.message) }
 }
 

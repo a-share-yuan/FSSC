@@ -104,7 +104,7 @@ public class GlProfitCarryService {
                         .last("limit 1"));
         if (periodRow != null && "CLOSED".equals(periodRow.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "期间 " + period + " 已关账（CLOSED），不可执行损益结转；如需调整请先反结账");
+                    "期间 " + period + " 已关账，不可执行损益结转；如需调整请先反结账");
         }
 
         // 去重：同公司+期间已有结转凭证（VOID 除外）则拒绝

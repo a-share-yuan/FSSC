@@ -227,7 +227,7 @@
             <el-col :xs="24" :md="8">
               <el-form-item :label="$t('expense.claim.colReceiveAmount')">
                 <span style="color:#f59a23;font-weight:700">{{ $t('expense.common.amtYuan', { v1: b.fmt(payable(b)) }) }}</span>
-                <div style="font-size:12px;color:#909399">{{ $t('expense.claim.txtNetPayable', { v1: b.fmt(totalAmount(b)), v2: b.fmt(offsetTotal(b)) }) }}</div>
+                <div style="width:100%;font-size:12px;color:#909399">{{ $t('expense.claim.txtNetPayable', { v1: b.fmt(totalAmount(b)), v2: b.fmt(offsetTotal(b)) }) }}</div>
               </el-form-item>
             </el-col>
 <el-col :xs="24" :md="8">

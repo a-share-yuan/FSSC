@@ -334,7 +334,7 @@ public class BankReconcileService {
             throw new BizException(ErrorCode.PARAM_INVALID, "付款记录不存在: " + paymentIds.get(0));
         }
         if (pay.getPayStatus() == null || !PAID_STATUS.contains(pay.getPayStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "仅已付款（PAID/SUCCESS）的付款记录可参与人工勾对");
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅已付款的付款记录可参与人工勾对");
         }
         // 重复勾对校验（付款侧）：该付款记录已进过勾对记录即不得再占（与 matchCandidates 的剔除规则同源）
         Long used = reconcileMapper.selectCount(new LambdaQueryWrapper<BankReconcile>()

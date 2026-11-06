@@ -147,7 +147,7 @@
             </div>
 
             <div class="table-card">
-              <div class="table-title">超时未办 Top 榜（{{ (backlog.overdueTop || []).length }} 条）</div>
+              <div class="table-title">超时未办排行（{{ (backlog.overdueTop || []).length }} 条）</div>
               <el-table :data="backlog.overdueTop || []" size="small" stripe max-height="360" :empty-text="emptyTextOf(perfFailed, '窗口内无超时未办')">
                 <el-table-column prop="name" label="责任人" min-width="150" show-overflow-tooltip>
                   <template #default="{ row }">
@@ -199,7 +199,7 @@
           </div>
 
           <div class="table-card" style="margin-top:16px">
-            <div class="table-title">办理人时效 Top（近 {{ days }} 天，办理人 {{ handlerTotal }} 位）
+            <div class="table-title">办理人时效排行（近 {{ days }} 天，办理人 {{ handlerTotal }} 位）
               <span v-if="handlerRecon" class="recon-hint">
                 <!-- /两列不再是恒 0 的死列，并把与同页 KPI 的对账式并排给出 -->
                 ｜屏上两列合计 在办 {{ handlerRecon.onHandCellSum }} · 超时 {{ handlerRecon.overdueOnHandCellSum }}
@@ -328,7 +328,7 @@
       <!-- 接口侧 WfQueryService.fillStay 已合入 due_time 优先规则（主窗移交合入完成），
            本页与上方两表同源；无 due_time 的实例双方同走「create_time+节点 SLA」推算兜底 -->
       <div class="perf-note">
-        本表「停留时长 / 超时」的计算方式＝<b>按单据到期时间实算优先</b>，没有到期时间的才按节点配置的超时时长推算，与上方「超时未办 Top 榜」同源。
+        本表「停留时长 / 超时」的计算方式＝<b>按单据到期时间实算优先</b>，没有到期时间的才按节点配置的超时时长推算，与上方「超时未办排行」同源。
       </div>
     </div>
     </template>

@@ -52,9 +52,12 @@ public class TenantQuotaService {
         if (maxUser == null || maxUser <= 0) {
             return;
         }
+        // 只计「启用」账号（status=NORMAL）：提示语给的自救路径是「停用不再使用的账号」，
+        // 若把 DISABLED 也算进占用，停用后配额一点不降 ⇒ 这句话永远兑现不了，只能升级套餐。
         long current = sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>()
                 .eq(SysUser::getTenantId, tenantId)
-                .eq(SysUser::getDelFlag, 0));
+                .eq(SysUser::getDelFlag, 0)
+                .eq(SysUser::getStatus, "NORMAL"));
         if (current >= maxUser) {
             throw new BizException(ErrorCode.PARAM_INVALID,
                     "已达套餐人数上限（" + current + "/" + maxUser + " 人），无法新增用户；请联系平台升级套餐或停用不再使用的账号");

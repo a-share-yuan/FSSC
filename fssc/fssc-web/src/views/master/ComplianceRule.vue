@@ -91,7 +91,7 @@
             <el-option label="拦截" value="BLOCK" />
             <el-option label="警告" value="WARN" />
             <el-option label="转人工" value="REVIEW" />
-            <el-option label="仅提示 PASS" value="PASS" />
+            <el-option label="仅提示（不拦截）" value="PASS" />
           </el-select>
         </el-form-item>
         <el-form-item label="判定表达式">

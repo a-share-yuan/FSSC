@@ -86,7 +86,7 @@ public class TaskHandoverService {
         List<String> taskIds = resolveTaskIds(req);
         if (taskIds.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "没有可移交的在办任务：请确认原办理人是否仍有 PENDING 待办，或直接指定 taskIds");
+                    "没有可移交的在办任务：请确认原办理人是否仍有待办任务，或直接指定 taskIds");
         }
 
         List<String> succeeded = new ArrayList<>();

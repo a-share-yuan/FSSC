@@ -294,7 +294,7 @@ function rowClass({ row }) {
 
 async function approveSupplier(row) {
   try {
-    await ElMessageBox.confirm(`确认核准供应商「${row.supplierName}」？核准后状态位翻为 ACTIVE，方可被业务引用。`, '状态位核准', { type: 'warning', closeOnClickModal: false })
+    await ElMessageBox.confirm(`确认核准供应商「${row.supplierName}」？核准后状态位改为「已启用」，方可被业务引用。`, '状态位核准', { type: 'warning', closeOnClickModal: false })
   } catch (_) { return }
   try {
     await supplierApi.approve(row.id)

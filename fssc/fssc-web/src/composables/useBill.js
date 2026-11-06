@@ -512,11 +512,19 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   }
 
   async function loadBills() {
-    const p = { pageNum: 1, pageSize: 50, billType: filterType.value }
-    if (subType && filterType.value === billType) p.billSubType = subType
-    bills.value = (await billApi.myPage(p)).list || []
-    // 列表刷新后把选中行换成新读到的行对象，否则顶部流程进度停在提交/审批前的旧快照
-    if (selected.value?.id) focusRow(selected.value.id)
+    // 本函数被十几处以 fire-and-forget 方式调用（saveDraft / submit / voidBill / onMounted…）。
+    // 一次列表请求失败若把 rejection 抛出去，同样会被 ErrorBoundary 吃成整页错误，
+    // 与「保存草稿超时」是同一类故障。这里统一收口为「保留现有列表 + 控制台留痕」，
+    // 业务错误提示由 api.js 拦截器负责，不重复弹窗。
+    try {
+      const p = { pageNum: 1, pageSize: 50, billType: filterType.value }
+      if (subType && filterType.value === billType) p.billSubType = subType
+      bills.value = (await billApi.myPage(p)).list || []
+      // 列表刷新后把选中行换成新读到的行对象，否则顶部流程进度停在提交/审批前的旧快照
+      if (selected.value?.id) focusRow(selected.value.id)
+    } catch (e) {
+      console.warn('[useBill] 单据列表刷新失败（保留现有列表）', e?.message || e)
+    }
   }
   function focusRow(id) {
     const r = bills.value.find((x) => String(x.id) === String(id))
@@ -653,6 +661,11 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     }
     return ext
   }
+  // 保存草稿的「可恢复失败」常驻提示。以前 saveDraft 的 catch 直接 throw，未捕获的
+  // promise rejection 会被 ErrorBoundary 换成整页「页面出错了」：表单没了、刚填的内容看不见，
+  // 操作员只能凭「稍后刷新查看结果」的提示重开，再点一次【保存草稿】就是第二张单。
+  // 现在失败一律留在表单内（顶部告警条），并把超时后已落库的草稿 id/单号回填回当前表单。
+  const saveHint = ref(null)
   async function saveDraft(extra) {
     try {
       // 发票勾选联动生成的明细行在未选「费用类型」时（item_id 数据库 NOT NULL），
@@ -711,6 +724,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       for (const r of form.relations) {
         await detailApi.addRelation(r.sourceBillId, id, r.relationType || 'APPLY_CLAIM', r.useAmount)
       }
+      saveHint.value = null
       ElMessage.success('草稿已保存')
       // 明确告知哪些勾选的发票行未随草稿保存（未选费用类型），避免"勾选了却没存上"的困惑
       if (pendingItemLines.length) {
@@ -719,7 +733,35 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       loadBills()
       loadFirstPick(id)
       return id
-    } catch (e) { ElMessage.error(e.message); throw e }
+    } catch (e) {
+      //  不再 throw：任何一次可恢复失败都不许冒到 ErrorBoundary 把整页换掉。
+      // 超时＝服务端多半已落库，此时 form.bill.id 可能还是空的，用户再点一次【保存草稿】
+      // 就会新建第二张单 —— 必须主动回查「我的单据」把 id/单号回填回当前表单。
+      const timeout = !!e?.timeout
+      saveHint.value = {
+        title: timeout ? '保存可能已生效，请勿重复提交' : '草稿未保存',
+        desc: timeout
+          ? '服务器处理较慢，本次保存可能已经写入数据库。已自动核对「我的单据」并回填单号；请先到「我的单据」页签确认，再继续修改或提交，不要重复点【保存草稿】。'
+          : `本次保存未完成：${String(e?.message || '未知原因')}。表单内容仍在，可直接修改后重试。`,
+      }
+      if (timeout) {
+        try {
+          await loadBills()
+          const same = (bills.value || [])
+            .filter((x) => String(x.title || '') === String(form.bill.title || '') && String(x.status || '').toUpperCase() === 'DRAFT')
+            .sort((a, c) => Number(c.id || 0) - Number(a.id || 0))[0]
+          if (same) {
+            form.bill.id = same.id
+            if (same.billNo) form.bill.billNo = same.billNo
+            focusRow(same.id)
+            saveHint.value.desc += ` 已回填草稿 ${same.billNo || '#' + same.id}。`
+          } else {
+            saveHint.value.desc += ' 未在列表中查到同名草稿，请手动切到「我的单据」页签刷新确认后再操作。'
+          }
+        } catch { saveHint.value.desc += ' 列表回查未成功，请手动切到「我的单据」页签刷新确认。' }
+      }
+      return null
+    }
   }
   const submitting = ref(false)
   // 提交被拦时，「原因＋下一步动作」要能被结果面板常驻显示；只弹一次即消失的 toast 等于没告知。
@@ -796,6 +838,12 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
         }
       }
       const id = await saveDraft()
+      // saveDraft 现在把可恢复失败收口成「返回 null + 顶部常驻告警」，不再 throw。
+      // 这里必须显式判空，否则会拿 null 去跑首审选人/合规预检/提交，出现一串误导性报错。
+      if (!id) {
+        ElMessage.error(blockSubmit('草稿未保存成功或仍在处理中：请按页面顶部提示到「我的单据」核对后重新提交，不要重复建单'))
+        return
+      }
       // 提单选人：草稿写入数据库后按"真实提交同一规则"重取首审候选人（金额/公司可能刚改过），
       // 需要点名而用户没选时拦在提交前——后端此时不会拒绝（点名是可选的），拦在页面上才不会
       // 出现"提交成功但单子流到了我没选的人"。
@@ -855,8 +903,12 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
           const reason = String(r.value || '').trim()
           if (!reason) return
           form.bill.extJson = { ...(form.bill.extJson || {}), overrunReason: reason }
-          await saveDraft()   // 让 extJson 随单据写入数据库（服务端 occupy 读 bill.ext_json.overrunReason）
-          const rid = form.bill.id
+          const savedId = await saveDraft()   // 让 extJson 随单据写入数据库（服务端 occupy 读 bill.ext_json.overrunReason）
+          if (!savedId) {
+            ElMessage.error(blockSubmit('超支理由未保存成功或仍在处理中：请按页面顶部提示核对后再提交'))
+            return
+          }
+          const rid = savedId
           await billApi.submit(rid, null, firstPick.mode === 'PICK' ? firstPick.userId : null)
           ElMessage.success('已提交，等待审批')
           activeTab.value = 'my'
@@ -920,7 +972,15 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       // 行程 / 关联事前申请 / 冲销借款各自独立成表，detail 不返回，必须逐表回读：
       // 关联丢了再提交会按申请单全额重复占用，被「累计超出事前申请金额」误拦。
       if (opts.travel) {
-        form.travels = await detailApi.travels(bl.id).catch(() => []) || []
+        // 行程表是差旅/事前申请单总金额的唯一来源：回读失败若静默当空数组，
+        // 页面总金额立刻归零，操作员一提交就是 0 元错单（草稿编辑丢行程的老缺陷）。
+        // 因此失败必须可见，且提示不要直接提交。
+        const trips = await detailApi.travels(bl.id).catch(() => null)
+        form.travels = Array.isArray(trips) ? trips : []
+        saveHint.value = Array.isArray(trips) ? null : {
+          title: '行程明细回读失败',
+          desc: '这张单据的行程明细没能载入，页面总金额可能显示为 0。请刷新后重新进入编辑，确认行程与金额恢复后再操作；不要直接提交审批。',
+        }
       }
       // 分摊行也是独立成表、detail 不返回，这里原来漏读 ⇒ 编辑草稿时「分摊信息」整块空着，
       // 看不见也就改不了预算科目；科目已超预算的草稿于是永远出不了草稿态（库里 exp_bill_share 明明有行）。
@@ -1184,12 +1244,13 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     // state
     activeTab, filterType, form, items, budgets, cities, payees, contracts, customers, costCenters, projects, companies, depts, bills,
     uploading, voucher, voucherLines, selected, loanDialog, applyDialog, loanCandidates, applyCandidates, submitHint,
-    detailVisible, detailData, focusedBill,
+    detailVisible, detailData, focusedBill, saveHint,
     // builders
     newLine, newTravel, newShare,
     qtyPriceChange, qtyCheck,
-    // invoicing：发票清单 → 明细行
-    newInvoice, recalcInvoice, toggleInvoice, removeInvoice, syncInvoiceLine, invOf, rebuildInvoicesFromLines,
+    // invoicing：发票清单 → 明细行（applyItemMatch 供模板「货物/服务名称」改后重匹配调用，
+    // 漏导出会让 @change 抛 $setup.b.applyItemMatch is not a function 并被错误边界吃成整页错误）
+    newInvoice, recalcInvoice, toggleInvoice, removeInvoice, syncInvoiceLine, invOf, rebuildInvoicesFromLines, applyItemMatch,
     // utils
     fmt, recalcLine, onItemChange, pickBudgetFor, sumAmount, sumTax, budgetPreview, budgetWarn, statusType, statusLabel, billTypeLabel, billSubTypeLabel, trafficTypeLabel, today, nowTs,
     // actions

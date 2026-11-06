@@ -349,7 +349,11 @@ export function getMenuTree() { return http.get('/tenant/system/menu/tree') }
 // 报销
 export const billApi = {
   // draft 保存是「服务端成功/客户端超时」的高发口子——带唯一键去重
-  saveDraft: (body, key) => http.post('/tenant/expense/bill/saveDraft', body, { headers: { 'X-Idempotency-Key': key || idemKey() } }),
+  // 保存草稿是真写库端点：全局 20s 一刀切会在服务端已落库之后才断连，页面拿到的是
+  // 「请求超时」而不是结果。端点级覆盖 + longWrite 标记 ⇒ 拦截器按「已提交，处理中」提示，
+  // 调用方也不再把可恢复超时当异常抛出去（否则整页被 ErrorBoundary 换掉、用户重复造单）。
+  saveDraft: (body, key) => http.post('/tenant/expense/bill/saveDraft', body,
+    { ...longWrite, headers: { 'X-Idempotency-Key': key || idemKey() } }),
   // 起流程类写端点：前端 20s 先断、服务端照常提交成功，
   // 用户看到"没反应"再点一次就成了重复单。走既有 longWrite 档：60s 覆盖＋超时按「已受理、结果未知」报。
   submit: (id, approverUserId, firstAssigneeUserId) => http.post(`/tenant/expense/bill/submit/${id}`, null, { params: { approverUserId, firstAssigneeUserId }, ...longWrite }),
@@ -1585,7 +1589,6 @@ export const glexApi = {
   journalPage: (pageNum, pageSize, period, entryType, keyword) =>
     http.get('/tenant/glex/journal/page', { params: { pageNum, pageSize, period, entryType, keyword } }),
   /**
-   * 一般总账记账。：ACCRUAL/DEFER 会按「申请占用」口径扣预算，
    * 故额外带预算维度（费用项目 + 承担部门）与软控超支理由；其余类型传了也被后端忽略。
    */
   journalGenerate: (period, entryType, summary, amount, debitSubjectId, creditSubjectId, extra = {}) =>

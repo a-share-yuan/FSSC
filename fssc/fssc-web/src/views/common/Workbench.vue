@@ -221,7 +221,10 @@
           </div>
           <el-select v-else v-model="nextPickUserId" filterable style="width: 100%"
                      :placeholder="`请指定「${nextPick.nodeName}」办理人`">
-            <el-option v-for="c in nextPick.candidates" :key="c.userId" :value="c.userId" :label="c.name" />
+            <!-- label 必须与"人看得见的名字"同源：el-select 的 filterable 是按 label 过滤的，
+                 若 label 空/只有工号，输入姓名必然"无匹配数据"，只剩方向键能选到人。 -->
+            <el-option v-for="c in nextPick.candidates" :key="c.userId" :value="c.userId"
+                       :label="c.name || c.nickName || c.userName || ('用户' + c.userId)" />
           </el-select>
         </el-form-item>
       </el-form>

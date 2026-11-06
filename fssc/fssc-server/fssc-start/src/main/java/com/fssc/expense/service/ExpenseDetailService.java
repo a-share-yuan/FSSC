@@ -672,7 +672,7 @@ public class ExpenseDetailService {
         }
         if (!"PAY".equals(prepay.getBillType()) || !"PREPAY".equals(prepay.getBillSubType())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "冲销对象不是预付款单(PAY/PREPAY): " + prepayBillId);
+                    "冲销对象不是预付款单: " + prepayBillId);
         }
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "冲销金额必须大于 0");

@@ -84,9 +84,11 @@
               <!-- 反核销（配套 · 单据反操作链第一环）：解除勾稽+解锁发票；付款已执行时服务端拒绝 -->
               <el-button v-if="dir(row) === 'INPUT' && row.lockStatus === 'LOCKED_IN_USE'" v-permission="'inv:unbind'" link size="small" type="danger" @click="unbindBill(row)">解除关联</el-button>
               <el-button v-permission="'inv:line:list'" link size="small" @click="showLines(row)">明细行</el-button>
-              <!-- 销项发票作废/红冲：原因必填，后端校验当月/核销引用等条件，失败原样提示 -->
-              <el-button v-if="dir(row) === 'OUTPUT'" v-permission="'inv:void'" link size="small" type="danger" @click="voidOutputInvoice(row)">作废</el-button>
-              <el-button v-if="dir(row) === 'OUTPUT'" v-permission="'inv:redflush'" link size="small" type="warning" @click="redFlushInvoice(row)">红冲</el-button>
+              <!-- 销项发票作废/红冲：原因必填，后端校验当月/核销引用等条件，失败原样提示。
+                   终态票不再给入口：红字票（RED_FLUSH）本身就是冲销结果、原票（RED_FLUSHED）
+                   已冲完，再点只会被后端拒（"已红冲，请勿重复操作"/"仅已开具可红冲"）。 -->
+              <el-button v-if="canVoid(row)" v-permission="'inv:void'" link size="small" type="danger" @click="voidOutputInvoice(row)">作废</el-button>
+              <el-button v-if="canRedFlush(row)" v-permission="'inv:redflush'" link size="small" type="warning" @click="redFlushInvoice(row)">红冲</el-button>
               <el-popconfirm v-if="dir(row) === 'INPUT'" title="用该发票自动生成报销草稿并占用票面？" width="240" @confirm="openClaim(row)">
                 <template #reference>
                   <!-- 权限键对齐后端 /expense/bill/from-invoice 的 @RequiresPerm("exp:bill:save")；
@@ -165,7 +167,7 @@
       <el-tab-pane v-if="canIssue" label="销售开票" name="issue">
         <el-form ref="issueFormRef" :model="issueForm" :rules="issueRules" label-width="110px" style="max-width: 720px" size="default">
           <el-alert :closable="false" type="info" show-icon style="margin-bottom: 12px"
-            title="销售发票开具登记：价税分离校验（价税合计 = 未税 + 税额）通过后，自动发起开票审批（应收会计 → 财务经理）" />
+            title="销售发票开具登记：价税分离校验（价税合计 = 未税 + 税额）通过后，自动发起开票审批（节点与办理人按「开票审批流程」配置逐节流转，不在本页固定角色名）" />
           <el-row :gutter="12">
             <el-col :span="12"><el-form-item label="发票号码" prop="invoiceNo"><el-input v-model="issueForm.invoiceNo" maxlength="32" /></el-form-item></el-col>
             <el-col :span="12">
@@ -205,7 +207,7 @@
           <el-button v-permission="'inv:verify'" type="success" size="small" :disabled="!realtimeInv" @click="verifyRealtime">实时验真</el-button>
           <el-button v-permission="'inv:verify'" type="primary" size="small" @click="batchVerify">批量发起验真（无外部报文不判定通过）</el-button>
           <el-button size="small" @click="loadVerify">刷新</el-button>
-          <span style="color: #909399; font-size: 13px">定时验真：每 5 分钟扫描待验发票（@Scheduled），有影像且非手工补录者才判定；以下为验真日志（证据链，只增不改，含请求与返回报文）</span>
+          <span style="color: #909399; font-size: 13px">定时验真：每 5 分钟由后台任务扫描待验发票，有影像且非手工补录者才判定；以下为验真日志（证据链，只增不改，含请求与返回报文）</span>
         </div>
         <SkeletonList v-if="vloading" :rows="8" :cols="5" />
         <el-table :data="vlogs" size="small" stripe v-else max-height="480">
@@ -314,7 +316,7 @@
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px">
         <!-- 后端 /used-count/audit 只认 inv:audit；原 inv:audit:fix 无登记，修复按钮永远不出现 -->
         <el-button v-permission="'inv:audit'" type="warning" size="small" :loading="auditLoading" @click="runAuditFix">执行修复</el-button>
-        <span style="color:#909399; font-size:13px">共 {{ auditRows.length }} 张发票占用次数与单据实际关联数不一致，「执行修复」将按单据重算 usedCount。</span>
+        <span style="color:#909399; font-size:13px">共 {{ auditRows.length }} 张发票占用次数与单据实际关联数不一致，「执行修复」将按单据重算占用次数。</span>
       </div>
       <SkeletonList v-if="auditLoading" :rows="8" :cols="5" />
       <el-table :data="auditRows" size="small" border stripe max-height="360" v-else
@@ -523,6 +525,23 @@ function dir(row) {
   const st = row.status, sdt = row.sourceDocType
   return (sdt === 'SALES_INVOICE' || sdt === 'RED_FLUSH'
     || st === 'ISSUING' || st === 'ISSUED' || st === 'RED_FLUSHED' || st === 'RED_FLUSH') ? 'OUTPUT' : 'INPUT'
+}
+
+/**
+ * 销项发票「作废」入口的显示条件：已开具（ISSUED）才谈得上作废。
+ * 红字票（RED_FLUSH）与已红冲的原票（RED_FLUSHED）是终态，后端会拒，按钮留着只是白点。
+ */
+function canVoid(row) {
+  return dir(row) === 'OUTPUT' && row.status === 'ISSUED'
+}
+
+/**
+ * 销项发票「红冲」入口的显示条件：仅未红冲的已开具原票。
+ * 此前只判方向 ⇒ 原票（RED_FLUSHED）与红字票（RED_FLUSH）两行都还挂着【红冲】，
+ * 点下去必然被后端以"已红冲，请勿重复操作"/"仅已开具可红冲"拒绝。
+ */
+function canRedFlush(row) {
+  return dir(row) === 'OUTPUT' && row.status === 'ISSUED'
 }
 
 /** 发票池当前筛选条件（列表与导出共用一套，避免两处口径漂移） */

@@ -125,7 +125,7 @@ public class TaxRefundService {
         TaxRefund t = require(id);
         orgGuard.assertVisible(t.getCompanyId(), t.getApplyBy() != null ? t.getApplyBy() : t.getCreateBy());
         if (!"DRAFT".equals(t.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿(DRAFT)可提交，当前=" + t.getStatus());
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿可提交，当前状态不允许该操作");
         }
         TaxRefund u = new TaxRefund();
         u.setId(id);
@@ -151,7 +151,7 @@ public class TaxRefundService {
         auditAfter.put("applyBy", u.getApplyBy());
         auditAfter.put("applyTime", u.getApplyTime());
         auditTrailService.recordUpdate("TAX_REFUND", id, t.getRefundNo(), "tax_refund",
-                String.valueOf(id), auditBefore, auditAfter, "提交退税申请（DRAFT→APPLYING）");
+                String.valueOf(id), auditBefore, auditAfter, "提交退税申请");
     }
 
     /** 状态流转：仅同租户、遵循合法状态迁移；到账(REFUNDED)须登记实际到账金额，最终状态不可再变更。 */
@@ -160,7 +160,7 @@ public class TaxRefundService {
         TaxRefund t = require(id);
         orgGuard.assertVisible(t.getCompanyId(), t.getApplyBy() != null ? t.getApplyBy() : t.getCreateBy());
         if ("REFUNDED".equals(t.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "退税单已到账(REFUNDED)，已结束，不可再变更");
+            throw new BizException(ErrorCode.PARAM_INVALID, "退税单已到账，已结束，不可再变更");
         }
         if (!StringUtils.hasText(to)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请选择目标状态");
@@ -184,7 +184,7 @@ public class TaxRefundService {
         if ("REFUNDED".equals(to)) {
             BigDecimal tax = t.getTaxAmount() == null ? BigDecimal.ZERO : t.getTaxAmount();
             if (refundedAmount == null) {
-                throw new BizException(ErrorCode.PARAM_INVALID, "退税到账(→REFUNDED)必须登记实际到账金额");
+                throw new BizException(ErrorCode.PARAM_INVALID, "退税到账必须登记实际到账金额");
             }
             if (refundedAmount.compareTo(BigDecimal.ZERO) < 0) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "实际到账金额不能为负");

@@ -1,8 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
-<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
 <template>
   <el-card>
     <template #header>
@@ -19,7 +16,7 @@
     </template>
 
     <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
-      title="试算按「税金计提规则」逐税种算基数与税额；MANUAL 税种可直接改基数。提交后每个税种各起一条审批流，审批通过才出计提凭证。" />
+      title="试算按「税金计提规则」逐税种算基数与税额；手工录入税种可直接改基数。提交后每个税种各起一条审批流，审批通过才出计提凭证。" />
 
     <SkeletonList v-if="loading" :rows="4" :cols="6" />
     <el-table v-else :data="preview" size="small" empty-text="请选择期间后点「试算」">

@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fssc.audit.util.ChecksumUtil;
 import com.fssc.budget.service.BudgetService;
 import com.fssc.common.core.ErrorCode;
@@ -1209,7 +1210,39 @@ public class ExpenseBillService {
               .set(ExpBill::getStatus, "DRAFT")
               .set(ExpBill::getProcInstId, null)
               .set(ExpBill::getUpdateBy, u.getUserId());
+            // 超支理由随单据落库（ext_json.overrunReason），重提时服务端读到它就不再要求补填，
+            // 前端预检也按"已有理由"跳过弹窗——于是驳回→改大金额→重提这条路可以完全不复核超支理由。
+            // 理由描述的是<b>上一轮</b>的金额与调剂方式，金额一改它就不成立了，故退回草稿时清掉，
+            // 让下一次提交必须重新给一次（服务端仍有"需填写超支理由"兜底，前端会重新弹窗）。
+            String cleared = clearOverrunReason(bill.getExtJson());
+            if (cleared != null) {
+                uw.set(ExpBill::getExtJson, cleared);
+            }
             expBillMapper.update(uw);
+        }
+    }
+
+    /**
+     * 从 ext_json 里摘掉 {@code overrunReason} 键，返回新 JSON 串。
+     *
+     * <p>只摘这一个键，其余扩展字段原样保留；原串为空/解析失败/本来就没有该键时返回 {@code null}
+     * （表示无需更新，调用方跳过 set）。</p>
+     */
+    private static String clearOverrunReason(String extJson) {
+        if (extJson == null || extJson.isBlank()) {
+            return null;
+        }
+        try {
+            ObjectMapper om = new ObjectMapper();
+            JsonNode n = om.readTree(extJson);
+            if (n == null || !n.isObject() || !n.has("overrunReason")) {
+                return null;
+            }
+            ((ObjectNode) n).remove("overrunReason");
+            return om.writeValueAsString(n);
+        } catch (Exception ex) {
+            // 解析失败不能顺手把整串覆盖掉——那会连带丢掉别的扩展字段
+            return null;
         }
     }
 
@@ -2087,7 +2120,7 @@ public class ExpenseBillService {
         // 财务对在途单的纠错走流程驳回，对已审单的纠错走付款退款/红字）。
         ExpBill bill = requireMine(billId, u);
         if (!"APPROVED".equals(bill.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "仅已审批（APPROVED）可反审核，当前状态: " + bill.getStatus());
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅已审批的单据可反审核，当前状态不允许该操作");
         }
         if (bill.getVoucherNo() != null && !bill.getVoucherNo().isBlank()) {
             throw new BizException(ErrorCode.PARAM_INVALID,
@@ -2365,6 +2398,26 @@ public class ExpenseBillService {
     public PageResult<ExpBill> myPage(long pageNum, long pageSize, String billType, String status,
                                       BigDecimal minBalance, String keyword,
                                       String startDate, String endDate, String source) {
+        return myPage(pageNum, pageSize, billType, status, minBalance, keyword, startDate, endDate, source,
+                null, null);
+    }
+
+    /**
+     * 同 {@link #myPage(long, long, String, String, BigDecimal, String, String, String, String)}，
+     * 追加两个候选面过滤维度。
+     *
+     * <p>为什么要加：预付冲销的候选清单传了 {@code billSubType:'PREPAY'}，但这个端点从来没有
+     * 接这个参数——服务端静默忽略，弹窗标题写着"该供应商未冲销的预付款"，
+     * 列出来的却是对公结算单（SETTLE），甚至可能是别家供应商的单。
+     * 过滤条件不落到 SQL 上就等于没有，故在服务端补齐。</p>
+     *
+     * @param billSubType 单据子类型（PREPAY/SETTLE/CLAIM…），空＝不限
+     * @param customerId  往来单位（供应商/客户主数据 id），空＝不限
+     */
+    public PageResult<ExpBill> myPage(long pageNum, long pageSize, String billType, String status,
+                                      BigDecimal minBalance, String keyword,
+                                      String startDate, String endDate, String source,
+                                      String billSubType, Long customerId) {
         LoginUser u = UserContext.getRequired();
         // 甲（读侧补齐，与 requireMine/requireViewable 同一规则）：所有人＝报销人 ∪ 该单登记的代理人。
         // 只按 apply_user_id 过滤时，代理人看不到自己代填的单——代填单在他自己的「我的单据」里整片消失，
@@ -2378,6 +2431,14 @@ public class ExpenseBillService {
         }
         if (status != null && !status.isBlank()) {
             qw.eq(ExpBill::getStatus, status);
+        }
+        // 子类型（PREPAY/SETTLE/…）：预付冲销候选、预付冲销放开额度等候选面都靠它把范围收窄
+        if (billSubType != null && !billSubType.isBlank()) {
+            qw.eq(ExpBill::getBillSubType, billSubType.trim());
+        }
+        // 往来单位：冲销只能在同一供应商名下进行，跨供应商冲销会把别人的预付冲掉
+        if (customerId != null) {
+            qw.eq(ExpBill::getCustomerId, customerId);
         }
         if (minBalance != null) {
             qw.gt(ExpBill::getLoanBalance, minBalance);

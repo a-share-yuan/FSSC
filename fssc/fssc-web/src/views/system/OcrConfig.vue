@@ -138,5 +138,5 @@ onMounted(load)
 </script>
 
 <style scoped>
-.tip { color: #909399; font-size: 12px; line-height: 1.6; }
+.tip { width: 100%; color: #909399; font-size: 12px; line-height: 1.6; }
 </style>

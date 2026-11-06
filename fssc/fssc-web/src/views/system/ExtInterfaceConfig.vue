@@ -4,94 +4,101 @@
 <template>
   <div class="ext-interface-config">
     <el-tabs v-model="activeTab" @tab-change="loadData">
-      <el-tab-pane v-for="t in visibleTabs" :key="t.name" :label="t.label" :name="t.name">
-        <template #label><el-icon><component :is="t.icon" /></el-icon>&nbsp;{{ t.label }}{{ catCount(t.name) }}</template>
+      <!-- 循环变量不要叫 t：页签内容已移入 pane，里面的文案走 useI18n 的 t('...')，
+           同名会被循环变量遮蔽（t is not a function，整页落到「页面出错了」）。 -->
+      <el-tab-pane v-for="tab in visibleTabs" :key="tab.name" :label="tab.label" :name="tab.name">
+        <template #label><el-icon><component :is="tab.icon" /></el-icon>&nbsp;{{ tab.label }}{{ catCount(tab.name) }}</template>
+
+        <!-- OCR 通道设置：独立表单（原「OCR通道配置」页面合并于此）。
+             必须挂在本页签的 pane 内——内容放在 el-tabs 外面时，活动 pane 是空的，
+             读屏与自动化取「当前页签内容」只能拿到空白。 -->
+        <OcrConfig v-if="tab.name === 'OCR_CHANNEL'" />
+
+        <!-- 其余 7 类：接口列表；只渲染当前页签，避免 7 份表格同时挂载 -->
+        <template v-else-if="tab.name === activeTab">
+          <!-- 工具栏 -->
+          <div style="display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap">
+            <el-input v-model="keyword" :placeholder="$t('system.extInterface.phSearchIf')" clearable style="width: 280px"
+                      @clear="loadData" @keyup.enter="loadData" />
+            <el-button type="primary" @click="loadData">{{ $t('common.search') }}</el-button>
+            <el-button v-if="canCreate" type="success" @click="openCreate">{{ $t('system.extInterface.btnAddIf') }}</el-button>
+            <router-link to="/system/integration-logs" style="margin-left: 8px">
+              <el-button type="info" link>{{ $t('system.extInterface.lnkCallLogs') }}</el-button>
+            </router-link>
+            <span style="margin-left: auto; color: #909399; font-size: 13px">
+              {{ $t('system.extInterface.statSummary', { v1: pager.total.value, v2: enabledCount }) }}</span>
+          </div>
+
+          <!-- 表格 -->
+          <SkeletonList v-if="loading" :rows="8" :cols="5" />
+          <el-table :data="pagedData" v-else border stripe style="width: 100%" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
+            <el-table-column prop="interfaceName" :label="$t('system.extInterface.colIfName')" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="interfaceCode" :label="$t('system.common.colIfCode')" width="180" show-overflow-tooltip />
+            <el-table-column prop="provider" :label="$t('system.extInterface.colProvider')" width="100">
+              <template #default="{ row }">
+                <el-tag size="small" :type="providerTagType(row.provider)">{{ providerText(row.provider) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="apiUrl" :label="$t('system.common.colApiUrl')" min-width="250" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.apiUrl" style="font-size: 12px; color: var(--app-text-secondary, #606266)">{{ row.apiUrl }}</span>
+                <span v-else style="color: #c0c4cc">{{ $t('system.extInterface.stNotConfigured') }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="modelName" :label="$t('system.extInterface.colModel')" width="150" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ row.modelName || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" :label="$t('common.status')" width="90" align="center">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'ENABLED' ? 'success' : 'info'" size="small">
+                  {{ row.status === 'ENABLED' ? t('system.common.stEnabled') : t('system.extInterface.stDeactivated') }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="isDefault" :label="$t('system.extInterface.colDefault')" width="70" align="center">
+              <template #default="{ row }">
+                <el-tag v-if="row.isDefault === 1" type="warning" size="small">{{ $t('system.extInterface.colDefault') }}</el-tag>
+                <span v-else style="color: #c0c4cc">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('system.extInterface.colTestResult')" width="110" align="center">
+              <template #default="{ row }">
+                <template v-if="row.lastTestResult">
+                  <el-tag :type="row.lastTestResult === 'SUCCESS' ? 'success' : 'danger'" size="small">
+                    {{ row.lastTestResult === 'SUCCESS' ? t('field.approve') : t('system.common.stFailed') }}
+                  </el-tag>
+                  <el-tooltip :content="row.lastTestTime + ' ' + (row.lastTestMsg || '')" placement="top">
+                    <el-icon style="margin-left: 4px; color: #909399; cursor: help"><InfoFilled /></el-icon>
+                  </el-tooltip>
+                </template>
+                <span v-else style="color: #c0c4cc">{{ $t('system.extInterface.stNotTested') }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('common.operation')" width="280" fixed="right">
+              <template #default="{ row }">
+                <el-button v-if="canUpdate" link type="primary" size="small" @click="openEdit(row)">{{ $t('system.common.btnEdit') }}</el-button>
+                <el-button v-if="canUpdate" link :type="row.status === 'ENABLED' ? 'warning' : 'success'" size="small"
+                           @click="toggleStatus(row)">
+                  {{ row.status === 'ENABLED' ? t('system.common.btnDeactivate') : t('system.common.btnEnable') }}
+                </el-button>
+                <el-button v-if="canTest" link type="primary" size="small" :loading="testingId === row.id" @click="testConnection(row)">
+                  {{ $t('system.extInterface.btnTestConn') }}</el-button>
+                <el-button v-if="canUpdate && row.isDefault !== 1" link type="warning" size="small" @click="setDefault(row)">{{ $t('system.extInterface.btnSetDefault') }}</el-button>
+                <el-popconfirm v-if="canDelete" :title="$t('system.extInterface.askDeleteIf')" @confirm="deleteRow(row)">
+                  <template #reference>
+                    <el-button link type="danger" size="small">{{ $t('system.common.btnDelete') }}</el-button>
+                  </template>
+                </el-popconfirm>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <TablePager :pager="pager" @change="loadData" />
+        </template>
       </el-tab-pane>
     </el-tabs>
-
-    <!-- OCR 通道设置：独立表单（原「OCR通道配置」页面合并于此） -->
-    <OcrConfig v-if="activeTab === 'OCR_CHANNEL'" />
-
-    <!-- 工具栏 -->
-    <div v-else style="display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap">
-      <el-input v-model="keyword" :placeholder="$t('system.extInterface.phSearchIf')" clearable style="width: 280px"
-                @clear="loadData" @keyup.enter="loadData" />
-      <el-button type="primary" @click="loadData">{{ $t('common.search') }}</el-button>
-      <el-button v-if="canCreate" type="success" @click="openCreate">{{ $t('system.extInterface.btnAddIf') }}</el-button>
-      <router-link to="/system/integration-logs" style="margin-left: 8px">
-        <el-button type="info" link>{{ $t('system.extInterface.lnkCallLogs') }}</el-button>
-      </router-link>
-      <span style="margin-left: auto; color: #909399; font-size: 13px">
-        {{ $t('system.extInterface.statSummary', { v1: pager.total.value, v2: enabledCount }) }}</span>
-    </div>
-
-    <!-- 表格 -->
-    <SkeletonList v-if="loading" :rows="8" :cols="5" />
-    <el-table :data="pagedData" v-else border stripe style="width: 100%" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
-      <el-table-column prop="interfaceName" :label="$t('system.extInterface.colIfName')" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="interfaceCode" :label="$t('system.common.colIfCode')" width="180" show-overflow-tooltip />
-      <el-table-column prop="provider" :label="$t('system.extInterface.colProvider')" width="100">
-        <template #default="{ row }">
-          <el-tag size="small" :type="providerTagType(row.provider)">{{ providerText(row.provider) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="apiUrl" :label="$t('system.common.colApiUrl')" min-width="250" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span v-if="row.apiUrl" style="font-size: 12px; color: var(--app-text-secondary, #606266)">{{ row.apiUrl }}</span>
-          <span v-else style="color: #c0c4cc">{{ $t('system.extInterface.stNotConfigured') }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="modelName" :label="$t('system.extInterface.colModel')" width="150" show-overflow-tooltip>
-        <template #default="{ row }">
-          {{ row.modelName || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="status" :label="$t('common.status')" width="90" align="center">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 'ENABLED' ? 'success' : 'info'" size="small">
-            {{ row.status === 'ENABLED' ? t('system.common.stEnabled') : t('system.extInterface.stDeactivated') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="isDefault" :label="$t('system.extInterface.colDefault')" width="70" align="center">
-        <template #default="{ row }">
-          <el-tag v-if="row.isDefault === 1" type="warning" size="small">{{ $t('system.extInterface.colDefault') }}</el-tag>
-          <span v-else style="color: #c0c4cc">-</span>
-        </template>
-      </el-table-column>
-      <el-table-column :label="$t('system.extInterface.colTestResult')" width="110" align="center">
-        <template #default="{ row }">
-          <template v-if="row.lastTestResult">
-            <el-tag :type="row.lastTestResult === 'SUCCESS' ? 'success' : 'danger'" size="small">
-              {{ row.lastTestResult === 'SUCCESS' ? t('field.approve') : t('system.common.stFailed') }}
-            </el-tag>
-            <el-tooltip :content="row.lastTestTime + ' ' + (row.lastTestMsg || '')" placement="top">
-              <el-icon style="margin-left: 4px; color: #909399; cursor: help"><InfoFilled /></el-icon>
-            </el-tooltip>
-          </template>
-          <span v-else style="color: #c0c4cc">{{ $t('system.extInterface.stNotTested') }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column :label="$t('common.operation')" width="280" fixed="right">
-        <template #default="{ row }">
-          <el-button v-if="canUpdate" link type="primary" size="small" @click="openEdit(row)">{{ $t('system.common.btnEdit') }}</el-button>
-          <el-button v-if="canUpdate" link :type="row.status === 'ENABLED' ? 'warning' : 'success'" size="small"
-                     @click="toggleStatus(row)">
-            {{ row.status === 'ENABLED' ? t('system.common.btnDeactivate') : t('system.common.btnEnable') }}
-          </el-button>
-          <el-button v-if="canTest" link type="primary" size="small" :loading="testingId === row.id" @click="testConnection(row)">
-            {{ $t('system.extInterface.btnTestConn') }}</el-button>
-          <el-button v-if="canUpdate && row.isDefault !== 1" link type="warning" size="small" @click="setDefault(row)">{{ $t('system.extInterface.btnSetDefault') }}</el-button>
-          <el-popconfirm v-if="canDelete" :title="$t('system.extInterface.askDeleteIf')" @confirm="deleteRow(row)">
-            <template #reference>
-              <el-button link type="danger" size="small">{{ $t('system.common.btnDelete') }}</el-button>
-            </template>
-          </el-popconfirm>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <TablePager :pager="pager" @change="loadData" />
 
     <!-- 编辑/新增对话框 -->
     <el-dialog v-model="dialogVisible" :title="editing.id ? t('system.extInterface.dlgEditTitle') : t('system.extInterface.dlgCreateTitle')" width="680px" @close="resetForm">
@@ -445,5 +452,5 @@ onMounted(() => { loadData(); loadCategories() })
 
 <style scoped>
 .ext-interface-config { padding: 0; }
-.tip { color: #909399; font-size: 12px; line-height: 1.6; }
+.tip { width: 100%; color: #909399; font-size: 12px; line-height: 1.6; }
 </style>

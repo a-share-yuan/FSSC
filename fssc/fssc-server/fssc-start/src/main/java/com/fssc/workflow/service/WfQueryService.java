@@ -15,6 +15,8 @@ import com.fssc.system.mapper.SysConfigMapper;
 import com.fssc.system.mapper.SysDeptMapper;
 import com.fssc.system.mapper.SysUserMapper;
 import com.fssc.workflow.entity.WfCc;
+import com.fssc.workflow.entity.WfAddSign;
+import com.fssc.workflow.mapper.WfAddSignMapper;
 import com.fssc.workflow.entity.WfInstance;
 import com.fssc.workflow.entity.WfNodeConfig;
 import com.fssc.workflow.entity.WfTask;
@@ -74,6 +76,7 @@ public class WfQueryService {
     private final BillTerminalChecker billTerminalChecker;
     private final WfTaskHistoryMapper historyMapper;
     private final WfCcMapper ccMapper;
+    private final WfAddSignMapper addSignMapper;
     private final WfNodeConfigMapper nodeConfigMapper;
     private final SysUserMapper sysUserMapper;
     /** 节点配置解析：与超时催办 Job 同一份规则，看板/列表的"超时"判定不再各算各的 */
@@ -722,6 +725,15 @@ public class WfQueryService {
     @Transactional(rollbackFor = Exception.class)
     public int closePendingTasksByInstance(String procInstId, String reason) {
         if (procInstId == null || procInstId.isBlank()) return 0;
+        // 加签收口（必须先于下面的"无待办即返回"）：
+        //   流程被终止时引擎侧任务直接被删，wf_add_sign 上仍是 ACTIVE/PENDING 的行
+        //   就成了一条"活着的加签挂在死流程上"——加签面板按 ACTIVE 展示，办理人打开
+        //   找不到可办任务，事后也查不出它是随流程一起终止的。
+        //   撤回/驳回终止/取消三条路径都经本方法收尾，故在这里一次性收口，
+        //   而不是在每条路径各补一遍（漏一条就漏一类残留）。
+        //   放在 early-return 之前：本方法被调用时待办行可能已被别的通道翻成 CANCELLED，
+        //   此时 open 为空但加签行仍在。
+        closeOpenAddSignsByInstance(procInstId, reason);
         // 本线程正在办结的任务不算"未办理"——它的镜像行只是还没被 markTaskDone 翻成 DONE。
         final String completing = COMPLETING_TASK_ID.get();
         // 先取待关的行：作废记录要按行写（task_id/node_key 是记录的主键语义，不能只留实例级一行）
@@ -747,6 +759,35 @@ public class WfQueryService {
             recordVoidTrails(open, reason);
         }
         return closed;
+    }
+
+    /**
+     * 把该实例上仍未收口的加签记录置 {@code CANCELLED}。
+     *
+     * <p>只动 {@code PENDING}/{@code ACTIVE} 两种"还没走完"的状态：{@code DONE} 是加签链正常
+     * 走完、{@code CANCELLED} 是人工取消，两者都已有 {@code done_time}，不得被实例级收尾覆写。
+     * {@code FAILED} 同理（后加签未能生效，已告知发起人）。</p>
+     *
+     * <p>终态取值用 {@link WfAddSign#STATUS_CANCELLED} 而不是新增一个"随流程终止"的状态：
+     * 状态机已在用五种取值，加第六种会让下游按状态判断显示的地方（加签面板、审批链追溯）
+     * 全部要改；终止原因写进 {@code reason} 列，语义由文案承载。</p>
+     */
+    private void closeOpenAddSignsByInstance(String procInstId, String reason) {
+        try {
+            int n = addSignMapper.update(null, new LambdaUpdateWrapper<WfAddSign>()
+                    .eq(WfAddSign::getProcInstId, procInstId)
+                    .in(WfAddSign::getStatus, WfAddSign.STATUS_PENDING, WfAddSign.STATUS_ACTIVE)
+                    .set(WfAddSign::getStatus, WfAddSign.STATUS_CANCELLED)
+                    .set(WfAddSign::getDoneTime, LocalDateTime.now())
+                    .set(WfAddSign::getUpdateTime, LocalDateTime.now())
+                    .set(WfAddSign::getReason, "随流程终止关闭：" + (reason == null ? "实例已结束" : reason)));
+            if (n > 0) {
+                log.info("实例 {} 收尾关闭进行中加签 {} 条：{}", procInstId, n, reason);
+            }
+        } catch (Exception ex) {
+            // 加签收口失败不阻断主链路（任务/实例状态已经写好，回滚反而是更大的问题）
+            log.warn("实例 {} 加签收口失败: {}", procInstId, ex.getMessage());
+        }
     }
 
 

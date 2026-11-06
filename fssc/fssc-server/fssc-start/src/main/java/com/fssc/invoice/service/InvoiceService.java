@@ -1151,7 +1151,7 @@ public class InvoiceService {
         String status = inv.getStatus() == null ? "" : inv.getStatus();
         if (!"NORMAL".equals(status) && !"VOID".equals(status)) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "仅未入池流转的进项票（NORMAL/VOID）可更正，当前状态: " + status);
+                    "仅未入池流转的进项票可更正，当前状态: " + status);
         }
         if (netAmount.signum() < 0 || taxAmount.signum() < 0 || amount.signum() <= 0) {
             throw new BizException(ErrorCode.PARAM_INVALID, "金额不能为负且价税合计必须大于 0");
@@ -1239,6 +1239,10 @@ public class InvoiceService {
         red.setDirection("OUTPUT");
         red.setOriginalId(origin.getId());
         red.setTenantId(TenantContext.getTenantId());
+        // 红冲日期落结构化列：此前只写在 remark 文本里，查"哪些票在哪个期间被红冲"只能全文匹配。
+        // 原票与红字票都写同一个时间点——红冲是"一对"动作，两行必须同源。
+        LocalDateTime reverseAt = LocalDateTime.now();
+        red.setReverseDate(reverseAt);
         red.setRemark(appendRemark(null, "【红冲】原票 " + noOf(origin) + "；原因：" + reason.trim()));
         invInvoiceMapper.insert(red);
         // 原票置 RED_FLUSHED + 记录
@@ -1246,6 +1250,7 @@ public class InvoiceService {
         upd.setId(origin.getId());
         upd.setStatus("RED_FLUSHED");
         upd.setAnomalyFlag("RED_FLUSH");
+        upd.setReverseDate(reverseAt);
         upd.setRemark(appendRemark(origin.getRemark(),
                 "【红冲】已生成红字发票 " + redNo + "（id=" + red.getId() + "）；原因：" + reason.trim()));
         invInvoiceMapper.updateById(upd);

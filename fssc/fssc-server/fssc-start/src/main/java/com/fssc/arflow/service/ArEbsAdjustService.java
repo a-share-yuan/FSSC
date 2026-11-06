@@ -129,7 +129,7 @@ public class ArEbsAdjustService {
         }
         if (!ArPreInvoice.ST_INVOICED.equals(inv.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID,
-                    "仅已开票(INVOICED)发票可接收负数推送，当前 " + inv.getStatus());
+                    "仅已开票的发票可接收负数推送，当前 " + inv.getStatus());
         }
         ArPreInvoice u = new ArPreInvoice();
         u.setId(inv.getId());

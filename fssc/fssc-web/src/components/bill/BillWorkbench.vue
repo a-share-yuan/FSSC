@@ -14,17 +14,26 @@
             show-icon :closable="true" :title="submitOutcome.title" :description="submitOutcome.desc"
             @close="submitOutcome = null" />
 
+  <!-- 保存草稿失败/超时＝可恢复态：表单必须留在屏幕上，只挂一条常驻告警。
+       以前异常冒到 ErrorBoundary 会把整页换成「页面出错了」，操作员看不到刚填的内容，
+       只能重开再点一次【保存草稿】，于是同一张单被造两遍。 -->
+  <el-alert v-if="b.saveHint" class="bw-outcome" type="warning" show-icon :closable="true"
+            :title="b.saveHint.title" :description="b.saveHint.desc"
+            @close="b.saveHint = null" />
+
   <el-tabs v-model="b.activeTab">
     <!-- 发起单据 -->
     <el-tab-pane :label="$t('bill.main.Initiate')" name="create">
       <el-row :gutter="16">
-        <!-- 左侧：概要 / 费用详情 / 分摊（由页面 slot 提供） -->
-        <el-col :xs="24" :md="14">
+        <!-- 左侧：概要 / 费用详情 / 分摊（由页面 slot 提供）
+             列宽按「页内再切 :md=8 三列 + label-width 110px」反推：14/24 时窗口 1224 下控件只剩 71px，
+             币种/收款方式/开户行等被截成一字，故填单区取 16/24。 -->
+        <el-col :xs="24" :md="16">
           <slot name="create" v-bind="b" />
         </el-col>
 
         <!-- 右侧：通用区块（公司/部门/预算/附件/冲借款/关联/合同） -->
-        <el-col :xs="24" :md="10">
+        <el-col :xs="24" :md="8">
           <el-card :header="$t('bill.billDetailPanel.Document')">
             <el-form ref="billInfoFormRef" :model="b.form.bill" :rules="billInfoRules" label-width="80px" size="default">
               <el-form-item :label="$t('bill.main.Company')" prop="companyId">
@@ -624,6 +633,13 @@ async function doSaveDraft() {
       try { await props.beforeSaveDraft(b) } catch (e) { /* 钩子异常不阻断保存 */ }
     }
     await b.saveDraft()
+  } catch (e) {
+    // 双保险：useBill.saveDraft 已在内部收口可恢复失败，但页面钩子或后续新增调用若抛异常，
+    // 仍不许冒泡到 ErrorBoundary 换掉整页 —— 表单原样保留，原因写进常驻告警条。
+    b.saveHint = b.saveHint || {
+      title: '草稿未保存',
+      desc: `本次保存未完成：${String(e?.message || '未知原因')}。表单内容仍在，可直接修改后重试；不要重复建单。`,
+    }
   } finally { pendingWrite.value = false }
 }
 
@@ -689,7 +705,7 @@ async function runSubmit() {
       submitOutcome.value = {
         ok: false,
         title: '未提交：附件与发票明细数量不一致',
-        desc: `以下 INVOICE 附件没有对应的发票明细行：${names}。请在「已解析发票 / 手工录入」区补齐发票行（或删除多余附件）后重新提交。`,
+        desc: `以下发票类附件没有对应的发票明细行：${names}。请在「已解析发票 / 手工录入」区补齐发票行（或删除多余附件）后重新提交。`,
       }
       return
     }

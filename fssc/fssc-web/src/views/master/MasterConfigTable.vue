@@ -36,7 +36,7 @@
       <span v-if="cfg.hint" style="color: #909399; font-size: 12px; margin-left: auto">{{ cfg.hint }}</span>
     </div>
     <el-alert v-if="props.configKey === 'sys-config'" type="info" :closable="false" show-icon style="margin-bottom: 8px"
-              title="带「平台下发·只读」徽标的 wf.*／approve.* 是工作流语义开关，只能由平台 administrator 设置（工作流参数与组织无关，普通管理员改了不生效）；需要变更请联系平台运维。" />
+              title="带「平台下发·只读」徽标的 wf.*／approve.* 是工作流语义开关，只能由平台管理员设置（工作流参数与组织无关，普通管理员改了不生效）；需要变更请联系平台运维。" />
 
     <!-- Table -->
     <SkeletonList v-if="loading" :rows="8" :cols="5" />
@@ -135,6 +135,8 @@ const props = defineProps({
 /** op_job_heartbeat.last_result 只有 SUCCESS/FAIL/RUNNING 三枚码（实体注释＋写入侧 markRunning/markSuccess/markFail），名称表外的大写原码兜底，不猜标签 */
 const JOB_RESULT_LABEL = { SUCCESS: '成功', FAIL: '失败', RUNNING: '执行中' }
 const jobResultLabel = (v) => (v == null || v === '' ? '' : JOB_RESULT_LABEL[String(v)] || String(v).toUpperCase())
+/** md_city.city_level 取值域：A 一类 / B 二类 / C 三类 / SPECIAL 特殊城市（列注释与 ExpenseBillService.toStdCityLevel 同源） */
+const CITY_LEVEL_LABEL = { A: '一类（A）', B: '二类（B）', C: '三类（C）', SPECIAL: '特殊城市' }
 /** last_error 屏上只留摘要——先剥 SQL 语句主体（库里存的是 JDBC/MyBatis 原始报错，整段 SQL 正文不落 UI），再截首 200 字；全文不内联展开、不做「查看全文」 */
 const MAX_CELL_ERR_LEN = 200
 /** 剥 SQL 语句正文：SQL [ ... ]（含被库侧 1000 字上限截断而未闭合的尾巴）与 ### SQL: 行整行替换为占位文案 */
@@ -155,7 +157,9 @@ const REGISTRY = {
   // 账号/卡号列一律 maskAccount（首尾各留 4 位），接口原值不动。
   bank: { title: '银行账户', api: masterApi.bank, columns: [{ prop: 'accountCode', label: '账号', width: 180, formatter: maskAccount }, { prop: 'accountName', label: '账户名称', minWidth: 140 }, { prop: 'bankName', label: '开户行', minWidth: 140 }, { prop: 'currencyCode', label: '币种', width: 80 }, { prop: 'balance', label: '余额', width: 120, align: 'right', formatter: 'money' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'accountCode', label: '账号', required: true }, { prop: 'accountName', label: '账户名称', required: true }, { prop: 'bankName', label: t('master.bankAccount.Bank2') }, { prop: 'bankBranch', label: t('master.bankAccount.Branch') }, { prop: 'currencyCode', label: t('bill.billDetailPanel.Currency') }, { prop: 'balance', label: '余额', type: 'number' }] },
   'expense-item': { title: '费用类型', api: masterApi.item, columns: [{ prop: 'itemCode', label: '编码', width: 120 }, { prop: 'itemName', label: '名称', minWidth: 160 }, { prop: 'billType', label: '分类', width: 100, formatter: (v) => docTypeLabel(v) }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'itemCode', label: '编码', required: true }, { prop: 'itemName', label: '名称', required: true }, { prop: 'billType', label: t('master.masterConfig.Category') }, { prop: 'subjectId', label: '对应会计科目', type: 'select', optionsSource: 'subject-leaf', placeholder: '制证借方科目，仅列启用末级科目' }] },
-  city: { title: '城市等级', api: masterApi.city, columns: [{ prop: 'cityCode', label: '城市编码', width: 120 }, { prop: 'cityName', label: '城市名称', minWidth: 140 }, { prop: 'cityLevel', label: '等级', width: 80, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'cityCode', label: '城市编码', required: true }, { prop: 'cityName', label: '城市名称', required: true }, { prop: 'cityLevel', label: '等级', type: 'select', options: [{ label: '一线', value: 1 }, { label: '二线', value: 2 }, { label: '三线', value: 3 }] }] },
+  // 城市等级列的取值域是字母档（md_city.city_level 注释 A一类/B二类/C三类/SPECIAL特殊城市，默认 C），
+  // 不是 1/2/3：写数字会让 ExpenseBillService.toStdCityLevel 落 default→null，差旅标准匹配直接失效。
+  city: { title: '城市等级', api: masterApi.city, columns: [{ prop: 'cityCode', label: '城市编码', width: 120 }, { prop: 'cityName', label: '城市名称', minWidth: 140 }, { prop: 'cityLevel', label: '等级', width: 100, align: 'center', formatter: (v) => CITY_LEVEL_LABEL[v] || v || '-' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'cityCode', label: '城市编码', required: true }, { prop: 'cityName', label: '城市名称', required: true }, { prop: 'cityLevel', label: '等级', type: 'select', options: [{ label: '一类（A）', value: 'A' }, { label: '二类（B）', value: 'B' }, { label: '三类（C）', value: 'C' }, { label: '特殊城市', value: 'SPECIAL' }] }] },
   // 后端真实码：查询/新增/改 md:taxrate:*，删除 md:tax:delete（TaxRateController）；菜单载体上 md:tax:list 已软删，不得再用
   'tax-rate': { title: '税码税率', perms: { create: 'md:taxrate:create', update: 'md:taxrate:update', delete: 'md:tax:delete', enable: 'md:taxrate:update' }, api: masterApi.tax, columns: [{ prop: 'rateCode', label: '税码', width: 100 }, { prop: 'rateName', label: '税名', minWidth: 140 }, { prop: 'rateValue', label: '税率', width: 100, align: 'right', formatter: (v) => (Number(v) * 100).toFixed(2) + '%' }, { prop: 'taxType', label: '类型', width: 100, formatter: (v) => taxTypeLabel(v) }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'rateCode', label: '税码', required: true }, { prop: 'rateName', label: '税名', required: true }, { prop: 'rateValue', label: '税率', type: 'number', precision: 4 }, { prop: 'taxType', label: t('finance.fxReval.Type') }] },
   'expense-standard': { title: '报销标准', api: masterApi.std, columns: [{ prop: 'stdName', label: '标准名称', minWidth: 140 }, { prop: 'stdType', label: '类型', width: 100 }, { prop: 'amount', label: '标准金额', width: 120, align: 'right', formatter: 'money' }, { prop: 'cityLevel', label: '城市等级', width: 100 }], formFields: [{ prop: 'stdCode', label: '标准编码', required: true }, { prop: 'stdName', label: '标准名称', required: true }, { prop: 'stdType', label: t('finance.fxReval.Type') }, { prop: 'amount', label: '标准金额', type: 'number' }, { prop: 'cityLevel', label: '城市等级', type: 'number', precision: 0 }] },
@@ -216,7 +220,7 @@ const cfg = computed(() => REGISTRY[props.configKey] || { title: props.configKey
 // 也画成可点；而无权限的角色（如 99006 的 tenant_id=0 死授权）同样看到写按钮，点了吃 4030
 // 平台属主参数前缀：与后端 ConfigService.PLATFORM_OWNED_PREFIXES 逐字同源
 const PLATFORM_OWNED_PREFIXES = ['wf.', 'approve.']
-const PLATFORM_OWNED_TIP = '工作流参数与组织无关，只能由平台 administrator 设置；普通管理员设置不生效。需要变更请联系平台运维。'
+const PLATFORM_OWNED_TIP = '工作流参数与组织无关，只能由平台管理员设置；普通管理员设置不生效。需要变更请联系平台运维。'
 function isPlatformOwnedRow(row) {
   const k = String(row?.configKey || '').trim().toLowerCase()
   return PLATFORM_OWNED_PREFIXES.some((p) => k.startsWith(p))

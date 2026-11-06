@@ -206,13 +206,13 @@ public class InvoiceVerifyScheduler {
             return "发票不存在";
         }
         if (inv.getImgFileId() == null) {
-            return "无发票影像(img_file_id=NULL)";
+            return "无发票影像";
         }
         if ("MANUAL".equalsIgnoreCase(inv.getSourceDocType())) {
-            return "手工补录来源(source_doc_type=MANUAL)";
+            return "手工补录来源，不参与自动验真";
         }
         if (inv.getInvoiceDate() != null && inv.getInvoiceDate().isAfter(LocalDate.now())) {
-            return "开票日期晚于当前日期(invoice_date=" + inv.getInvoiceDate() + ")";
+            return "开票日期晚于当前日期";
         }
         return null;
     }

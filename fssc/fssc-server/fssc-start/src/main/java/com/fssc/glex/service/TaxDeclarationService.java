@@ -132,7 +132,7 @@ public class TaxDeclarationService {
         Map<String, Object> auditBefore = Collections.singletonMap("status", row.getStatus());
         Map<String, Object> auditAfter = Collections.singletonMap("status", "CANCELLED");
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
-                String.valueOf(id), auditBefore, auditAfter, "作废税务申报（→CANCELLED）");
+                String.valueOf(id), auditBefore, auditAfter, "作废税务申报");
     }
 
     /**
@@ -153,7 +153,7 @@ public class TaxDeclarationService {
         Map<String, Object> auditBefore = Collections.singletonMap("status", row.getStatus());
         Map<String, Object> auditAfter = Collections.singletonMap("status", "PENDING");
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
-                String.valueOf(id), auditBefore, auditAfter, "提交税务申报（DRAFT→PENDING）");
+                String.valueOf(id), auditBefore, auditAfter, "提交税务申报");
     }
 
     /**
@@ -185,7 +185,7 @@ public class TaxDeclarationService {
         Map<String, Object> auditBefore = Collections.singletonMap("status", row.getStatus());
         Map<String, Object> auditAfter = Collections.singletonMap("status", "APPROVED");
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
-                String.valueOf(id), auditBefore, auditAfter, "审批通过税务申报（PENDING→APPROVED）");
+                String.valueOf(id), auditBefore, auditAfter, "审批通过税务申报");
     }
 
     /**
@@ -226,7 +226,7 @@ public class TaxDeclarationService {
         auditAfter.put("status", "FILED");
         auditAfter.put("declareDate", upd.getDeclareDate());
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
-                String.valueOf(id), auditBefore, auditAfter, "确认申报（APPROVED→FILED）");
+                String.valueOf(id), auditBefore, auditAfter, "确认申报");
     }
 
     /**
@@ -329,7 +329,7 @@ public class TaxDeclarationService {
         auditAfter.put("paidAmount", upd.getPaidAmount());
         auditAfter.put("balanceAmount", upd.getBalanceAmount());
         auditTrailService.recordUpdate("GL_TAX", id, row.getDeclarationNo(), "tax_declaration",
-                String.valueOf(id), auditBefore, auditAfter, "确认缴纳（FILED→PAID）");
+                String.valueOf(id), auditBefore, auditAfter, "确认缴纳");
     }
 
     /**

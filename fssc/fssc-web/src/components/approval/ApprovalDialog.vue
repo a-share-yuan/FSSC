@@ -214,8 +214,8 @@
         </div>
         <el-select v-else-if="nextBlock.pick && nextBlock.candidates.length > 1" v-model="st.nextUserId"
                    class="ad-next-select" clearable filterable placeholder="请选择下一环节办理人">
-          <el-option v-for="c in nextBlock.candidates" :key="c.userId" :value="c.userId" :label="c.name">
-            <span>{{ c.name }}</span>
+          <el-option v-for="c in nextBlock.candidates" :key="c.userId" :value="c.userId" :label="labelOf(c)">
+            <span>{{ labelOf(c) }}</span>
             <span class="ad-next-opt-sub">{{ subOf(c) }}</span>
           </el-option>
         </el-select>
@@ -232,8 +232,8 @@
         <template v-else-if="nextBlock.pick && nextBlock.candidates.length === 1">
           <el-select v-model="st.nextUserId" class="ad-next-select" filterable
                      placeholder="已按唯一候选人自动带出">
-            <el-option v-for="c in nextBlock.candidates" :key="c.userId" :value="c.userId" :label="c.name">
-              <span>{{ c.name }}</span>
+            <el-option v-for="c in nextBlock.candidates" :key="c.userId" :value="c.userId" :label="labelOf(c)">
+              <span>{{ labelOf(c) }}</span>
               <span class="ad-next-opt-sub">{{ subOf(c) }}</span>
             </el-option>
           </el-select>
@@ -748,6 +748,16 @@ function loadMi(taskId) {
 }
 
 /** 下拉副标题：部门 + 在办量，帮审批人挑"谁现在有空"而不是熟的人 */
+/**
+ * 候选人展示名：el-select 的 filterable 是按 label 过滤的，
+ * label 一旦为空/只有工号，操作员按姓名输入就是"无匹配数据"，只剩方向键能选到人。
+ * 名字缺字段时逐级回退，绝不返回 undefined。
+ */
+function labelOf(c) {
+  if (!c) return ''
+  return c.name || c.nickName || c.userName || (c.userId != null ? `用户${c.userId}` : '')
+}
+
 function subOf(c) {
   if (!c) return ''
   const parts = []

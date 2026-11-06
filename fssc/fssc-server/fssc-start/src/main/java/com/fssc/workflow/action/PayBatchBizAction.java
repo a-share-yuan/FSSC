@@ -125,8 +125,7 @@ public class PayBatchBizAction implements WfBizAction {
                 settledBefore.put("status", oldStatus);
                 auditTrailService.recordUpdate(event.getBizType(), batchId, batch.getBatchNo(), "op_pay_batch",
                         String.valueOf(batchId), settledBefore, settledBefore,
-                        "审批结束事件到达但批次状态 " + oldStatus + " 不在可改写白名单（DRAFT/CONFIRMED/REJECTED）内，"
-                                + "拒绝回退状态，请人工核对是否重复收尾");
+                        "审批结束事件到达但批次状态不在可回退范围内，拒绝回退状态，请人工核对是否重复收尾");
                 log.warn("付款批次 {} 状态 {} 不在可改写白名单内，审批{}事件不回退状态",
                         batch.getBatchNo(), oldStatus, Boolean.TRUE.equals(event.getApproved()) ? "通过" : "驳回");
                 // 回写半（先付后审的账务闭合）：状态不在白名单（PAID/APPROVED/FAILED/…）时一律不动状态，

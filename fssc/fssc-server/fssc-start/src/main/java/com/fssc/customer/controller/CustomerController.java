@@ -95,7 +95,7 @@ public class CustomerController {
      * 权限沿用 customer:update（核准属档案维护动作，不新设权限点，避免目录漂移）。
      */
     @RequiresPerm("customer:update")
-    @OperLog(module = "CUSTOMER", operType = "UPDATE", desc = "核准客户（PENDING→ACTIVE）")
+    @OperLog(module = "CUSTOMER", operType = "UPDATE", desc = "核准客户（待审核→已启用）")
     @PostMapping("/{id}/approve")
     public Result<Void> approve(@PathVariable Long id) {
         service.approve(id);

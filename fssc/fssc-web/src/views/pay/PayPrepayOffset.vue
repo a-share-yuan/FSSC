@@ -83,7 +83,13 @@ function handleSelectionChange(val) { selRows.value = val }
 
 async function loadPrepay() {
   if (!props.customerId) { ElMessage.warning(t('pay.offset.msgPickPartnerFirst')); return }
-  const list = (await billApi.myPage({ pageNum: 1, pageSize: 100, billType: 'PAY', billSubType: 'PREPAY', status: 'APPROVED' })).list || []
+  // 两个维度都要落到 SQL 上：billSubType 只取预付（否则候选里混进对公结算单），
+  // customerId 只取本供应商（否则能选到别家的预付，冲销会串户）。
+  // 服务端 myPage 此前不认这两个参数，传了也被静默忽略。
+  const list = (await billApi.myPage({
+    pageNum: 1, pageSize: 100, billType: 'PAY', billSubType: 'PREPAY', status: 'APPROVED',
+    customerId: props.customerId,
+  })).list || []
   prepayCandidates.value = list.map((x) => ({
     id: x.id, billNo: x.billNo, title: x.title, totalAmount: Number(x.totalAmount || 0),
     available: Math.max(0, Number(x.totalAmount || 0) - Number(x.offsetAmount || 0)),
