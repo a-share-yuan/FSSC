@@ -2,6 +2,11 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+- 整库 dump 刷新为 `db/Dump20261106/`（326 个文件，约 6.1 MB）：结构与主数据对齐当前实现，业务单据为空；流程定义 41 条与流程模型一一对应，`act_ge_bytearray` 由 2.2 MB 降至 802 KB；补入 202610 月结检查项、演示版套餐与昆山主体负责人配置；物料铺底 8 条保留，2026-11 账期未锁定，导入后可直接演示
+
 ## [1.2.0] - 2026-11-05
 
 ### Added

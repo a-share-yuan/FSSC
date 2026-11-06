@@ -1,0 +1,78 @@
+CREATE DATABASE  IF NOT EXISTS `fssc` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `fssc`;
+-- MySQL dump 10.13  Distrib 8.0.46, for Win64 (x86_64)
+--
+-- Host: localhost    Database: fssc
+-- ------------------------------------------------------
+-- Server version	8.4.11
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `md_cip`
+--
+
+DROP TABLE IF EXISTS `md_cip`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `md_cip` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `tenant_id` bigint NOT NULL COMMENT '租户ID【多租户隔离字段】',
+  `cip_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '在建工程编码',
+  `cip_name` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '在建工程名称',
+  `company_id` bigint DEFAULT NULL COMMENT '所属公司ID（sys_company.id）',
+  `company_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '所属公司名称（冗余展示）',
+  `project_category` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '工程类别:建筑安装/设备/待摊/资本化利息',
+  `manager` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '项目负责人',
+  `dept_id` bigint DEFAULT NULL COMMENT '归属部门ID（sys_dept.id）',
+  `dept_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '归属部门名称（冗余展示）',
+  `start_date` date DEFAULT NULL COMMENT '开工日期',
+  `expected_end_date` date DEFAULT NULL COMMENT '预计完工日期',
+  `budget_amount` decimal(18,2) DEFAULT NULL COMMENT '预算总额',
+  `accrued_amount` decimal(18,2) DEFAULT '0.00' COMMENT '累计归集金额（成本归集明细累加）',
+  `paid_amount` decimal(18,2) NOT NULL DEFAULT '0.00' COMMENT '已付款金额(CL-13 CIP付款自动回写)',
+  `transferred_amount` decimal(18,2) DEFAULT '0.00' COMMENT '已转固金额',
+  `transfer_date` date DEFAULT NULL COMMENT '转固日期',
+  `asset_id` bigint DEFAULT NULL COMMENT '转固生成的固定资产卡片ID（md_asset.id）',
+  `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
+  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'NORMAL' COMMENT '状态:NORMAL正常/DISABLED停用/TRANSFERRING转固审批中/TRANSFERRED已转固',
+  `create_by` bigint DEFAULT NULL,
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_by` bigint DEFAULT NULL,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `del_flag` tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_tenant_cip_code` (`tenant_id`,`cip_code`),
+  KEY `idx_tenant` (`tenant_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='在建工程（基础数据-配置）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `md_cip`
+--
+
+LOCK TABLES `md_cip` WRITE;
+/*!40000 ALTER TABLE `md_cip` DISABLE KEYS */;
+INSERT INTO `md_cip` VALUES (3,1,'1001','营业厅装修',1,'博远咨询有限公司','CONSTRUCTION','wbf',10091,NULL,'2026-08-03','2026-09-07',200000.00,21000.00,0.00,21000.00,'2026-09-17',146,NULL,'TRANSFERRING',1,'2026-09-11 18:55:06',3798,'2026-09-14 00:46:51',0),(16,1,'DEMO2CIP2026001','昆山基地数控加工中心技改项目',33,'昆山爱共享精密制造有限公司','TECH_REVAMP','王慧',1302,'设备工程部','2026-03-01','2026-06-30',580000.00,565000.00,565000.00,565000.00,'2026-06-30',154,'演示：CIP完工转固，资产卡片DEMO2ZC2026001','TRANSFERRED',3851,'2026-03-01 09:00:00',3851,'2026-06-30 10:00:00',0);
+/*!40000 ALTER TABLE `md_cip` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-11-06 18:25:30
