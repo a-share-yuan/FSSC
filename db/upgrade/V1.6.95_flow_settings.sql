@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 入口整理：流程设置归入系统管理，管理类角色获得完整流程维护权限。
 -- 档位等于能力集合；业务数据与流程定义不随档位变化。
--- 由 scripts/apply_flow_settings.py 生成，可重复执行。
+-- 可重复执行。
 
 -- 系统管理 → 流程设置：入口归属、命名与能力名
 UPDATE sys_menu SET parent_id=3390, menu_name='流程设置', sort=4 WHERE id=104;

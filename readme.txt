@@ -22,6 +22,13 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
     定义（42 条流程，余为历史版本），导入即可跑审批；
   * 开源协议：GNU Affero General Public License v3.0（SPDX 标识 AGPL-3.0-or-later，见 LICENSE / NOTICE）；闭源或商业使用需另行取得商业许可（见 LICENSE-COMMERCIAL.md）。
 
+  【v1.2.1 更新要点】可配置表单平台、租户档位引导、流程设置归位、
+  开放接口幂等修正与侧栏换页修复；五本逐步手册统一编号命名。逐条见
+  README.md 的「本次更新」与 CHANGELOG.md。
+  【说明】db/Dump20261109/ 已含本期全部结构、菜单与主数据变更，新建库
+  导入这一份即可直接换用 1.2.1 的 jar；db/upgrade/ 只用于已经在跑、
+  不能重导库的环境，按其中的顺序补跑增量脚本。
+
 二、运行环境（版本必须对齐）
 --------------------------------------------------------------------------------
   组件        版本要求                    说明
@@ -50,18 +57,18 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   默认连 127.0.0.1:3306 的 root；口令用环境变量 MYSQL_PWD 设置，或按提示输入。
   其他主机/端口/账号：bash db/import.sh -h <主机> -P <端口> -u <账号>
 
-  脚本会自动选中 db/ 下最新的一份 Dump<日期>/（当前是 db/Dump20261106/），
+  脚本会自动选中 db/ 下最新的一份 Dump<日期>/（当前是 db/Dump20261109/），
   逐文件导入；主库 fssc 与影像库 fssc_image 在这个过程中自动建好。
 
   等价手工方式（不推荐，仅用于理解）：
-      for f in db/Dump20261106/*.sql; do
+      for f in db/Dump20261109/*.sql; do
         mysql --default-character-set=utf8mb4 -uroot -p < "$f"
       done
 
   Windows（CMD）：
-      for %f in (db\Dump20261106\*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
+      for %f in (db\Dump20261109\*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
 
-  注意：db/Dump20261106/ 共 326 个文件 = 一表一文件 325 枚（主库 fssc 319 表 +
+  注意：db/Dump20261109/ 共 327 个文件 = 一表一文件 326 枚（主库 fssc 320 表 +
   影像库 fssc_image 6 表）＋ 1 枚 fssc_routines.sql（视图定义）。
   每个文件自带 CREATE DATABASE IF NOT EXISTS、USE 与
   SET FOREIGN_KEY_CHECKS=0，所以无需预先建库，文件顺序也不影响成败，可重复
@@ -124,8 +131,8 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   bpmn-repo/                流程模型仓库（publish/ 78 个已发布模型，
                             models/ 88 个模型编码共 294 版 XML）
   db/
-    Dump20261106/           整库 dump（326 个文件，一表一文件；主数据/菜单/流程定义齐全，业务单据为空）
-    upgrade/                v1.0.0 → v1.2.0 增量脚本（成对带 rollback，仅原地升级时用）
+    Dump20261109/           整库 dump（327 个文件，一表一文件；主数据/菜单/流程定义齐全，业务单据为空）
+    upgrade/                v1.0.0 → v1.2.1 增量脚本（成对带 rollback，仅原地升级时用）
     hotfix/                 数据级定点修正（演练留下的脏状态，界面上没有入口改的那种）
     import.sh / import.bat  一键导入脚本（自动选最新的 Dump<日期>/）
     README.md               数据库导入说明（dump 内容、导入与脱敏注意事项）
@@ -141,7 +148,7 @@ Q2 前端页面打开但接口 401/跨域？
    FSSC_API_TARGET 仅影响 preview 模式。
 
 Q3 提示找不到表/flowable 相关错误？
-   确认 db/import.sh 完整执行过（db/Dump20261106/ 的 326 个文件全部导入）；Flowable 的
+   确认 db/import.sh 完整执行过（db/Dump20261109/ 的 327 个文件全部导入）；Flowable 的
    ACT_* 表演示库已内置，首次启动只会做结构校准。
 
 Q4 JDK 版本报错？
