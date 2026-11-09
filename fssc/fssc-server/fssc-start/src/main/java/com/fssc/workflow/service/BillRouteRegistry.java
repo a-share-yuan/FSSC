@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -213,7 +214,7 @@ public final class BillRouteRegistry {
     }
 
     /** 全量显式行（前缀族见 {@link #of(String)} 与 {@link #companyOf(String)}） */
-    private static final Map<String, Route> EXACT = Map.ofEntries(
+    private static final Map<String, Route> EXACT = new ConcurrentHashMap<>(Map.ofEntries(
             // —— 资金域 ——
             // 死映射：treasury_transfer / asset_card 两张表在 information_schema 查无，
             // 两 bizType 在 wf_instance/wf_task 均无行 ⇒ 暂时潜伏。刻意不猜目标表：
@@ -359,7 +360,25 @@ public final class BillRouteRegistry {
             Map.entry("EXP_REPAY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("EXP_APPLY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("EXP_PAY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill"))
-    );
+    ));
+
+    /**
+     * 为可配置表单登记台账行。
+     *
+     * <p>客户在自己的配置里新增一种单据时，不需要改本类：通用运行库的表名与列名是固定的
+     * （{@code biz_form_bill.bill_no / title / company_id}），把 bizType 注册进来就能
+     * 参与起流取单号与待办回填。
+     *
+     * <p>幂等：已存在同名 bizType 时保留原行，不覆盖既有财务单据的映射。
+     *
+     * @param bizType 流程路由键（md_form_config.biz_type 或 form_code）
+     */
+    public static void registerGenericBill(String bizType) {
+        if (bizType == null || bizType.isBlank() || EXACT.containsKey(bizType)) {
+            return;
+        }
+        EXACT.put(bizType, f("biz_form_bill", "bill_no", null, "title", "biz_form_bill"));
+    }
 
     /** 待办回填走 mapper（selectBatchIds 双向匹配 EXP_ 前缀）的类型，见 WfTaskController。 */
     public static final Set<String> EXP_BILL_FILLED = Set.of(

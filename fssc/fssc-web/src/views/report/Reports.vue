@@ -25,23 +25,24 @@
         <el-button type="success" size="small" v-permission="'report:export'" @click="exp('budgetExecution','预算执行')">{{ $t('report.main.Export3') }}</el-button>
       <el-button v-if="selRows.length" type="success" plain size="small" @click="batchExport">导出选中({{ selRows.length }})</el-button>
       </div>
-      <!-- 分组导航：25 张报表按业务归 8 组，先选组、再选报表。
-           页签条因此只展开当前组（3~7 条），不再横排 25 条挤成一片。 -->
+      <!-- 分组导航：报表按业务归组，先选组、再选报表。
+           可见分组由当前版本的能力集合（特性码）决定：报销版/费控版只保留费用与借款组，
+           共享版才展开应付、应收、资金、合同、共享运营、凭证组。 -->
       <div class="grp-nav" v-if="!isSingle">
         <el-radio-group v-model="curGroup" size="small" @change="switchGroup">
-          <el-radio-button v-for="g in REPORT_GROUPS" :key="g.key" :value="g.key">
+          <el-radio-button v-for="g in visibleGroups" :key="g.key" :value="g.key">
             {{ g.label }}（{{ g.items.length }}）
           </el-radio-button>
         </el-radio-group>
       </div>
-      <!-- W5（非人性化整改）：25 个页签横排难定位，提供分组下拉直达；页签本身保留不动 -->
+      <!-- 25 个页签横排难定位，提供分组下拉直达；页签本身保留不动 -->
       <div class="toolbar" style="margin-bottom:8px">
         <el-select v-model="tab" filterable :placeholder="$t('report.main.Quick')" size="small" style="width: 260px">
-          <el-option-group v-for="g in REPORT_GROUPS" :key="g.key" :label="g.label">
+          <el-option-group v-for="g in visibleGroups" :key="g.key" :label="g.label">
             <el-option v-for="t in g.items" :key="t.name" :label="t.label" :value="t.name" />
           </el-option-group>
         </el-select>
-        <span style="margin-left:10px;color:#909399;font-size:12px">共 {{ REPORT_GROUPS.reduce((n, g) => n + g.items.length, 0) }} 张报表，可按分组直接跳转，无需在页签条上逐个数</span>
+        <span style="margin-left:10px;color:#909399;font-size:12px">共 {{ visibleGroups.reduce((n, g) => n + g.items.length, 0) }} 张报表，可按分组直接跳转，无需在页签条上逐个数</span>
       </div>
       <el-tabs v-model="tab">
         <el-tab-pane :label="$t('report.main.Department')" name="dept" v-if="tabAllowed('dept')">
@@ -425,7 +426,7 @@ import { useTablePager } from '../../composables/useTablePager'
 import TablePager from '../../components/common/TablePager.vue'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { formatMoney, formatDate } from '@/utils/format'
-import { hasPerm } from '@/utils/perm'
+import { hasPerm, hasFeature } from '@/utils/perm'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 
@@ -451,14 +452,17 @@ const TAB_DOMAIN = {
   voucherStats: 'report:gl:view',
 }
 /**
- * 判断某 tab 是否可渲染。两道闸门串联：
+ * 判断某 tab 是否可渲染。三道闸门串联：
  *  ① 报表域权限（TAB_DOMAIN，无权则连请求都不发）；
- *  ② 当前分组（分组模式只渲染本组页签，把 25 条页签条压到 3~7 条）。
- * 单页深链（tab 由路由传入）必须跳过第 ② 道——否则 curGroup 默认落在第一组，
+ *  ② 档位能力（分组的 feature，报销版/费控版不含共享类报表）；
+ *  ③ 当前分组（分组模式只渲染本组页签，把 25 条页签条压到 3~7 条）。
+ * 单页深链（tab 由路由传入）必须跳过第 ③ 道——否则 curGroup 默认落在第一组，
  * 而 props.tab 属于别组时页签会被整体 v-if 掉，只剩一张空白页。
  */
 function tabAllowed(name) {
   if (!hasPerm(TAB_DOMAIN[name])) return false
+  const group = REPORT_GROUPS.find((x) => x.items.some((i) => i.name === name))
+  if (group && !hasFeature(group.feature)) return false
   if (isSingle.value) return true
   const names = groupTabNames(curGroup.value)
   return !names || names.includes(name)
@@ -472,7 +476,8 @@ function groupTabNames(key) {
 
 /** 分组内第一张当前账号有权限的报表，用作切组后的落地页签 */
 function firstTabOfGroup(key) {
-  const names = groupTabNames(key) || []
+  const g = visibleGroups.value.find((x) => x.key === key)
+  const names = g ? g.items.map((i) => i.name) : []
   return names.find((n) => hasPerm(TAB_DOMAIN[n])) || names[0] || ''
 }
 
@@ -497,36 +502,48 @@ const props = defineProps({
 })
 const isSingle = computed(() => !!props.tab)
 
-// W5（非人性化整改）：25 张报表按业务分组，供「报表快速定位」下拉跳转。
+// 25 张报表按业务分组，供「报表快速定位」下拉跳转。
 // name 必须与 el-tab-pane 的 name 逐一对应；新增/下线页签时两处同步。
+// feature 与 sys_menu.feature_code 同口径：FC_REPORT 三档都有，FSSC_REPORT 仅共享版。
 const REPORT_GROUPS = [
-  { key: 'g-expense', label: '费用报销与预算', items: [
+  { key: 'g-expense', label: '费用报销与预算', feature: 'FC_REPORT', items: [
     { name: 'dept', label: t('report.main.Department') }, { name: 'summary', label: t('router.finance.Expense') },
     { name: 'trend', label: t('router.finance.Monthly') }, { name: 'composition', label: t('router.finance.Expense2') },
     { name: 'detail', label: t('router.finance.Expense3') }, { name: 'budget', label: t('report.main.Budget') },
     { name: 'budgetAlert', label: t('router.finance.Budget3') } ] },
-  { key: 'g-ap', label: '应付与采购付款', items: [
+  { key: 'g-ap', label: '应付与采购付款', feature: 'FSSC_REPORT', items: [
     { name: 'apAging', label: t('router.finance.Payable') }, { name: 'supplierPay', label: t('router.finance.Supplier') },
     { name: 'inputInvoice', label: t('router.finance.Input') } ] },
-  { key: 'g-ar', label: '应收与销售开票', items: [
+  { key: 'g-ar', label: '应收与销售开票', feature: 'FSSC_REPORT', items: [
     { name: 'arAging', label: t('router.finance.Receivable2') }, { name: 'outputInvoice', label: t('router.finance.Output') } ] },
-  { key: 'g-cash', label: '资金与税务', items: [
+  { key: 'g-cash', label: '资金与税务', feature: 'FSSC_REPORT', items: [
     { name: 'cashFlow', label: t('router.finance.Cash') }, { name: 'bankBalance', label: t('router.finance.Cash2') },
     { name: 'taxBurden', label: t('router.finance.Tax2') } ] },
-  { key: 'g-loan', label: '借款', items: [
+  { key: 'g-loan', label: '借款', feature: 'FC_REPORT', items: [
     { name: 'loan', label: t('report.main.Loan') }, { name: 'loanOverdue', label: t('router.finance.Loan') } ] },
-  { key: 'g-contract', label: '合同', items: [
+  { key: 'g-contract', label: '合同', feature: 'FSSC_REPORT', items: [
     { name: 'contract', label: t('router.finance.Contract2') }, { name: 'contractExec', label: t('router.finance.Contract3') } ] },
-  { key: 'g-ops', label: '审批与共享运营', items: [
+  { key: 'g-ops', label: '审批与共享运营', feature: 'FSSC_REPORT', items: [
     { name: 'eff', label: t('report.main.Approval') }, { name: 'ops', label: t('router.finance.Operational') },
     { name: 'opsEff', label: t('router.finance.Operational2') }, { name: 'quality', label: t('router.finance.Inspection') },
     { name: 'image', label: t('router.finance.Image') } ] },
-  { key: 'g-voucher', label: '记账凭证', items: [
+  { key: 'g-voucher', label: '记账凭证', feature: 'FSSC_REPORT', items: [
     { name: 'voucherStats', label: t('router.finance.Voucher') } ] },
 ]
 
-/** 当前分组：由 props.group 指定，宿主页（/reports）可在顶部导航切换 */
-const curGroup = ref(props.group || REPORT_GROUPS[0].key)
+/**
+ * 当前版本可见的报表分组。判据是登录时下发的特性码快照，与后端菜单裁剪同源；
+ * 权限码可以是超管通配，但档位能力不认超管——报销版 / 费控版不含 FSSC_REPORT，
+ * 应付、应收、资金、合同、共享运营、凭证六组随之收敛。切档后重新登录即生效。
+ */
+const visibleGroups = computed(() => REPORT_GROUPS.filter((g) => hasFeature(g.feature)))
+
+/** 当前分组：由 props.group 指定，且必须是当前版本可见的分组 */
+const curGroup = ref(
+  visibleGroups.value.some((g) => g.key === props.group)
+    ? props.group
+    : (visibleGroups.value[0]?.key || '')
+)
 /**
  * 页签初值：单页深链用路由给的 tab；分组模式落在本组第一张有权限的报表；
  * 宿主模式落在第一组第一张。三条路都避开「默认页签不属于当前分组 ⇒ 空白」。
@@ -541,8 +558,10 @@ function switchGroup(key) {
   const f = firstTabOfGroup(key)
   if (f) tab.value = f
 }
-// 同一组件被不同分组菜单复用（/reports/g-ap → /reports/g-ar）时不重建实例，必须同步
-watch(() => props.group, (v) => { if (v && v !== curGroup.value) switchGroup(v) })
+// 同一组件被不同分组菜单复用时不重建实例，必须同步；不可见分组不切过去
+watch(() => props.group, (v) => {
+  if (v && v !== curGroup.value && visibleGroups.value.some((g) => g.key === v)) switchGroup(v)
+})
 
 // 下拉跨组跳转：选中项不属于当前分组时把分组跟着切过去，
 // 否则该页签被组过滤掉，用户看到的是「选了没反应 + 内容区空白」。
@@ -550,7 +569,7 @@ watch(tab, (v) => {
   if (isSingle.value || !v) return
   const names = groupTabNames(curGroup.value)
   if (names && !names.includes(v)) {
-    const g = REPORT_GROUPS.find((x) => x.items.some((i) => i.name === v))
+    const g = visibleGroups.value.find((x) => x.items.some((i) => i.name === v))
     if (g) curGroup.value = g.key
   }
 })
@@ -842,12 +861,23 @@ const fetchedReports = new Set()
 /** 权限类失败（HTTP 403 / 业务码 4030）：拦截器已出提示，页内不再补弹，空值兜底即可 */
 function isPermErr(e) { return e?.code === 4030 || e?.status === 403 }
 
+// 聚合接口遇到慢查询/连接池打满时可能长期挂起；没有上限的 Promise 会让页签永远停在
+// 「加载中…」。给每枚请求加独立超时，失败后由各自的 catch/兜底落到明确状态，点亮可重试。
+const REPORT_FETCH_TIMEOUT_MS = 15000
+function withTimeout(p, ms) {
+  let timer
+  const guard = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('报表数据获取超时')), ms)
+  })
+  return Promise.race([p, guard]).finally(() => clearTimeout(timer))
+}
+
 async function fetchReports(names, force) {
   const todo = names.filter((n) => REPORTS[n] && (force || !fetchedReports.has(n)))
   if (!todo.length) return
   loading.value = true
   try {
-    const results = await Promise.allSettled(todo.map((n) => REPORTS[n].get()))
+    const results = await Promise.allSettled(todo.map((n) => withTimeout(REPORTS[n].get(), REPORT_FETCH_TIMEOUT_MS)))
     results.forEach((r, i) => {
       const spec = REPORTS[todo[i]]
       if (r.status === 'fulfilled') { spec.put(r.value ?? spec.empty); fetchedReports.add(todo[i]); return }

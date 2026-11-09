@@ -28,7 +28,7 @@
     <bpmn:sequenceFlow id="Flow_back_Task_13" sourceRef="Task_13" targetRef="Task_14" />
     <bpmn:sequenceFlow id="Flow_back_Task_11" sourceRef="Task_11" targetRef="Task_14" />
     <bpmn:userTask id="SP_1" name="预付核销核对【共享会计】" flowable:candidateGroups="FSSC_AUDITOR" />
-    <bpmn:sequenceFlow id="Flow_GW_ST_SP_1" sourceRef="GW_ST" targetRef="SP_1" name="预付核销档"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${billType == 'PREPAY'}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_GW_ST_SP_1" sourceRef="GW_ST" targetRef="SP_1" name="预付核销档"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${subType == 'PREPAY'}</bpmn:conditionExpression></bpmn:sequenceFlow>
     <bpmn:userTask id="SP_2" name="预付复核【基地财务经理】" flowable:candidateGroups="BASE_FIN_MANAGER" />
     <bpmn:sequenceFlow id="Flow_SP_2" sourceRef="SP_1" targetRef="SP_2" />
     <bpmn:sequenceFlow id="Flow_sgjoin_SP_2" sourceRef="SP_2" targetRef="Task_14" />

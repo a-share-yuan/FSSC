@@ -50,6 +50,9 @@ public class InvoiceAbnormalAlertJob {
     /** 告警目标角色编码：税务经理 */
     private static final String ALERT_ROLE = "TAX_MANAGER";
 
+    /** 站内信正文只列前 N 张，其余给出总数与去向，避免异常发票多时正文爆列宽。 */
+    private static final int MAX_DETAIL_LINES = 20;
+
     private final InvInvoiceMapper invoiceMapper;
     private final SysRoleMapper roleMapper;
     private final SysUserRoleMapper userRoleMapper;
@@ -105,10 +108,16 @@ public class InvoiceAbnormalAlertJob {
     private void push(Long tenantId, List<InvInvoice> invoices) {
         String title = "发票异常告警";
         StringBuilder content = new StringBuilder("本次扫描发现 ").append(invoices.size()).append(" 张异常发票：\n");
-        for (InvInvoice inv : invoices) {
+        int shown = Math.min(invoices.size(), MAX_DETAIL_LINES);
+        for (int i = 0; i < shown; i++) {
+            InvInvoice inv = invoices.get(i);
             content.append("  · ").append(inv.getInvoiceNo())
                     .append(" 金额").append(inv.getAmount())
                     .append(" 异常[").append(reason(inv)).append("]\n");
+        }
+        if (invoices.size() > shown) {
+            content.append("  · 其余 ").append(invoices.size() - shown)
+                    .append(" 张请在发票管理页查看\n");
         }
         content.append("请及时处理（红冲/作废/补验真等）。");
         List<Long> targets = taxManagerUsers(tenantId);
@@ -117,7 +126,8 @@ public class InvoiceAbnormalAlertJob {
             return;
         }
         for (Long uid : targets) {
-            notifyService.notifyUser(uid, "ABNORMAL_INVOICE", title, content.toString(), tenantId, null);
+            notifyService.notifyUser(uid, "ABNORMAL_INVOICE", title, content.toString(),
+                    "INVOICE", null, null);
         }
         log.info("[发票异常告警] 租户 {} 已推送站内信给 {} 位税务经理", tenantId, targets.size());
     }

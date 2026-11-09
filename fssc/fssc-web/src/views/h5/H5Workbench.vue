@@ -39,7 +39,7 @@
           <!-- 不可办要说明原因，不能让人点了才知道（服务端 canOperate 同一规则硬拦） -->
           <div v-if="t.lockedByOther" class="h5-flag h5-flag--warn h5-flag--block">同池他人办理中，暂时点不动</div>
           <div v-else-if="t.bizResolved === false" class="h5-flag h5-flag--info h5-flag--block">关联单据未取到，请在电脑端核对</div>
-          <div v-else-if="!isExpBillCarrier(t.billType)" class="h5-flag h5-flag--info h5-flag--block">非费用单据（{{ t.billType || '其他域' }}）：移动端暂不支持办理，请在电脑端处理</div>
+          <div v-else-if="!isExpBillCarrier(t.billType)" class="h5-flag h5-flag--info h5-flag--block">非费用单据（{{ docTypeLabel(t.billType) || '其他域' }}）：移动端暂不支持办理，请在电脑端处理</div>
         </div>
         <div v-if="todosLoading" class="h5-loadmore is-loading"><i class="h5-spin" />加载中…</div>
         <div v-else-if="todoHasMore" class="h5-loadmore" @click="loadMoreTodos">加载更多 ↓</div>

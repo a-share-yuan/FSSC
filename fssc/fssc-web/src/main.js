@@ -15,6 +15,7 @@ import App from './App.vue'
 import router from './router'
 import { bootstrapSession, store } from './api'
 import { applyStoredTheme } from './composables/useTheme'
+import { applyEditionTitle } from './composables/useEditionBrand'
 // 国际化基座（域8A/T0.5）：i18n 实例 + 语言切换器 + Element Plus locale 跟随
 import i18n, { getLocale } from './i18n'
 import { elementLocaleOf } from './i18n/element-locale'
@@ -37,7 +38,10 @@ app.use(ElementPlus, { locale: elementLocaleOf(getLocale()) })
 // 监听语言切换，同步 EP 组件文案（分页/日期/确认框等）
 watch(
   () => i18n.global.locale.value,
-  (loc) => app.use(ElementPlus, { locale: elementLocaleOf(loc) }),
+  (loc) => {
+    app.use(ElementPlus, { locale: elementLocaleOf(loc) })
+    applyEditionTitle(loc)
+  },
 )
 for (const [name, comp] of Object.entries(Icons)) {
   app.component(name, comp)
@@ -94,4 +98,7 @@ app.component('LocaleSwitch', LocaleSwitch)
 // 随后 router 守卫按"无 token"把用户送去 /login，而不是直接跳进 /dashboard。
 // 有登录态时先套上本地主题偏好，登录页保持浅色不受影响。
 if (store.token) applyStoredTheme()
+// 版本标题：刷新后从 localStorage 恢复档位；登录 / 切档 / 登出时由 fssc:edition 事件再刷一次。
+applyEditionTitle(getLocale())
+window.addEventListener('fssc:edition', () => applyEditionTitle(getLocale()))
 bootstrapSession().finally(() => app.mount('#app'))

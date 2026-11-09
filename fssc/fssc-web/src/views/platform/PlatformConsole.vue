@@ -217,7 +217,8 @@ function renderDashChart(rows) {
   dashInstance.setOption({
     tooltip: { trigger: 'axis' },
     legend: { data: ['活跃租户数', '单据增量'] },
-    grid: { left: 40, right: 16, top: 36, bottom: 28 },
+    // 单据增量可能上万（「12,000」约 42px），left:40 会裁掉首字符
+    grid: { left: 8, right: 16, top: 36, bottom: 28, containLabel: true },
     xAxis: { type: 'category', data: rows.map((r) => String(r.date).slice(5)) },
     yAxis: { type: 'value', minInterval: 1 },
     series: [

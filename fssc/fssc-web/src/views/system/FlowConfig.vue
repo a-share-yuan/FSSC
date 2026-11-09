@@ -903,7 +903,7 @@ function useDictsReady() {
 import CoachMark from '@/components/CoachMark.vue'
 import RoleHolderHint from '@/components/common/RoleHolderHint.vue'
 import { formatMoney, formatDateTime, showRowDetail } from '@/utils/format'
-import { hasPerm } from '@/utils/perm'
+import { hasPerm, hasFeature } from '@/utils/perm'
 import { commonRules } from '../../composables/useFormRules'
 import { validateForms } from '../../composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
@@ -929,7 +929,7 @@ const detailTab = ref('info')
 const saving = ref(false)
 
 // 权限门控
-// 本页是「六页签聚合页」，但菜单 104「流程管理」只挂了一个码 wf:model:list，
+// 本页是「六页签聚合页」，但菜单 104「流程设置」只挂了一个码 wf:model:list，
 // 而各页签分别打不同接口、要不同权限码。原先 selectModel() 会并行拉取
 // 节点/绑定/实例/委托四份数据，导致仅有 wf:model:list 的角色（如普通员工
 // COMMON_EMP）一进页就连报「缺少权限：wf:node:list / wf:instance:list」——
@@ -1022,11 +1022,26 @@ const bindingBizTypeOptions = computed(() => {
   return [...map].map(([value, label]) => ({ value, label: label ? `${label}（${value}）` : value }))
 })
 
+/** 模型业务域 → 档位能力码。判据与 sys_menu.feature_code / 登录下发的 features 同源。 */
+const MODEL_FEATURE_BY_BIZ = {
+  EXP_CLAIM: 'FC_EXPENSE',
+  EXP_LOAN: 'FC_LOAN',
+  EXP_APPLY: 'FC_APPLY',
+  BG_SCHEME: 'F_BUDGET',
+}
+
+/** 共享运营档保留全量模型；其余档位只列本档能力覆盖的费用类流程。 */
+function modelVisibleForEdition(m) {
+  if (hasFeature('FSSC_WF_CENTER')) return true
+  const code = MODEL_FEATURE_BY_BIZ[m?.bizType] || MODEL_FEATURE_BY_BIZ[m?.modelKey]
+  return !!code && hasFeature(code)
+}
+
 async function loadModels() {
   loading.models = true
   try {
     const r = await flowApi.modelPage({ pageNum: 1, pageSize: 200 })
-    models.value = r?.list || r?.records || []
+    models.value = (r?.list || r?.records || []).filter(modelVisibleForEdition)
     filteredModels.value = [...models.value]
   } catch (e) { ElMessage.error(e.message) } finally { loading.models = false }
 }

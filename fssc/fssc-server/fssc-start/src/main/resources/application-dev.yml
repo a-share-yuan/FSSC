@@ -26,7 +26,8 @@ fssc:
   # 路由规则：默认 master；@FsscDataSource("image") 注解的类/方法经 AOP 切换到 image 库。
   datasource:
     master:
-      jdbc-url: jdbc:mysql://127.0.0.1:3306/fssc?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false
+      # connectTimeout 只约束建连阶段；查询侧不设 socketTimeout，避免大库慢查询被误切断
+      jdbc-url: jdbc:mysql://127.0.0.1:3306/fssc?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false&connectTimeout=10000
       username: root
       # DB 口令外置：默认值仅供 dev/演示；生产用环境变量 FSSC_DB_PASSWORD 注入真实口令
       password: ${FSSC_DB_PASSWORD:123456}
@@ -36,7 +37,7 @@ fssc:
       maximum-pool-size: 40  # 消除 30 并发下的池排队（P95 从 2s 降到 1s 以内）
       connection-timeout: 30000
     image:
-      jdbc-url: jdbc:mysql://127.0.0.1:3306/fssc_image?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false
+      jdbc-url: jdbc:mysql://127.0.0.1:3306/fssc_image?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false&connectTimeout=10000
       username: root
       password: ${FSSC_DB_PASSWORD:123456}
       driver-class-name: com.mysql.cj.jdbc.Driver

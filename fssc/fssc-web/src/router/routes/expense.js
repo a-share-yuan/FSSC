@@ -30,7 +30,7 @@ export default [
   // 借款 / 还款（需求文档 4.4 / 4.5）
   { path: 'expense/loan', component: () => import('../../views/expense/LoanApply.vue'), meta: { title: i18n.global.t('router.expense.Loan') } },
   { path: 'expense/repay', component: () => import('../../views/expense/LoanApply.vue'), props: { mode: 'REPAY' }, meta: { title: '还款管理' } },
-  { path: 'expense/flow', component: () => import('../../views/system/FlowConfig.vue'), meta: { title: '流程配置' } },
+  { path: 'expense/flow', component: () => import('../../views/system/FlowConfig.vue'), meta: { title: '流程设置' } },
   { path: 'approval', component: () => import('../../views/approval/Approval.vue'), meta: { title: i18n.global.t('router.expense.Approval') } },
   // 审批流看板（BPMN 定义 + 分支 + 实例监控）
   { path: 'wf/board', redirect: '/wf/board/def' },

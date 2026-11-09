@@ -36,7 +36,7 @@ fssc:
       # false = 无独立副本：replica 路由别名 master，仍套只读守卫（报表/追溯不写库照样成立）。
       # 真副本就绪后改为 true 并填下面连接串即可切库，代码与路由键都不用动。
       enabled: ${FSSC_REPLICA_ENABLED:false}
-      jdbc-url: ${FSSC_DB_REPLICA_JDBC_URL:jdbc:mysql://127.0.0.1:3306/fssc?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false}
+      jdbc-url: ${FSSC_DB_REPLICA_JDBC_URL:jdbc:mysql://127.0.0.1:3306/fssc?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&allowPublicKeyRetrieval=true&useSSL=false&connectTimeout=10000}
       username: ${FSSC_DB_USERNAME:root}
       password: ${FSSC_DB_PASSWORD:123456}
       driver-class-name: com.mysql.cj.jdbc.Driver

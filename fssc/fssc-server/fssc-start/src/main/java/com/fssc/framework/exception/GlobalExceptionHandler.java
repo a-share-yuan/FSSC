@@ -166,12 +166,23 @@ public class GlobalExceptionHandler {
      * 引擎原始异常仍完整落服务端日志，响应里不带任何 SQL / 表名 / 部署 ID。
      */
     @ExceptionHandler({FlowableException.class,
-            FlowableOptimisticLockingException.class,
-            FlowableObjectNotFoundException.class})
+            FlowableOptimisticLockingException.class})
     public Result<Void> handleFlowable(Exception ex, HttpServletRequest req) {
         log.error("工作流引擎异常 uri={} type={}", req.getRequestURI(), ex.getClass().getName(), ex);
         return Result.fail(ErrorCode.WORKFLOW_ENGINE_ERROR.getCode(),
                 ErrorCode.WORKFLOW_ENGINE_ERROR.getMessage());
+    }
+
+    /**
+     * 引擎对象不存在（流程实例/任务已办结、被取消，或单据是批量导入的历史语料）
+     * 与引擎故障是两回事：前者重试永远不会成功，应直接告诉操作人去作废重提。
+     */
+    @ExceptionHandler(FlowableObjectNotFoundException.class)
+    public Result<Void> handleFlowableObjectNotFound(FlowableObjectNotFoundException ex,
+                                                     HttpServletRequest req) {
+        log.warn("引擎对象不存在 uri={} msg={}", req.getRequestURI(), ex.getMessage());
+        return Result.fail(409,
+                "流程实例或任务已不存在（可能已办结、已取消，或为历史导入单据），请刷新后重试；如仍需处理请作废重提");
     }
 
     /**

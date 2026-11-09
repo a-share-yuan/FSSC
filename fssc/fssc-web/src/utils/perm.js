@@ -60,3 +60,23 @@ export function hasAllPerms(codes) {
   const s = permSet()
   return superPerm(s) || codes.every((c) => s.has(c))
 }
+
+/**
+ * 档位特性码集合：登录时写入 JWT 的 features 快照（切档后需重新登录）。
+ *
+ * 与上面的权限码判定刻意分开：权限码回答「这个账号能不能用」，
+ * 特性码回答「这套系统当前版本有没有这个功能」。超管通配码只放行前者，
+ * 不能让超管在报销版里看到应收应付等共享类业务。
+ */
+export function featureSet() {
+  const f = store?.user?.features
+  if (!f) return new Set()
+  if (Array.isArray(f)) return new Set(f)
+  return new Set(String(f).split(',').map((s) => s.trim()).filter(Boolean))
+}
+
+/** 是否开通指定特性码；code 为空视为「无需特性码」，返回 true */
+export function hasFeature(code) {
+  if (!code) return true
+  return featureSet().has(code)
+}

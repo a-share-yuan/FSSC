@@ -10,6 +10,8 @@ import com.fssc.framework.security.annotation.DataScope;
 import com.fssc.framework.security.annotation.PlatformOnly;
 import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.platform.entity.PfFeature;
+import com.fssc.platform.mapper.PfFeatureMapper;
 import com.fssc.system.entity.SysDept;
 import com.fssc.system.mapper.SysDeptMapper;
 import java.util.ArrayList;
@@ -44,6 +46,9 @@ public class PermissionAspect {
 
     @Autowired
     private SysDeptMapper sysDeptMapper;
+
+    @Autowired
+    private PfFeatureMapper pfFeatureMapper;
 
     @Around("@annotation(requiresPerm)")
     public Object aroundPerm(ProceedingJoinPoint pjp, RequiresPerm requiresPerm) throws Throwable {
@@ -87,9 +92,34 @@ public class PermissionAspect {
     public Object aroundFeature(ProceedingJoinPoint pjp, RequiresFeature requiresFeature) throws Throwable {
         LoginUser u = UserContext.getRequired();
         if (u.getFeatures() == null || !u.getFeatures().contains(requiresFeature.value())) {
-            throw new BizException(ErrorCode.FEATURE_DISABLED, "未开通功能：" + requiresFeature.value());
+            // detail 只放功能名：BizException 会拼成「当前套餐未开通该功能：银企对账」。
+            // 原实现再带一层「未开通功能：」前缀，读起来是「…：未开通功能：FSSC_BANK」的病句。
+            throw new BizException(ErrorCode.FEATURE_DISABLED, featureLabel(requiresFeature.value()));
         }
         return pjp.proceed();
+    }
+
+    /**
+     * 功能码 → 中文名（pf_feature.feature_name）。
+     *
+     * <p>这条消息是弹给业务用户的，直接抛码会变成「未开通功能：FSSC_BANK」——
+     * 用户看不懂 FSSC_BANK 是什么，也无从判断该找谁开通。查库失败或功能点未登记时退回原码，
+     * 保证「翻译」本身不会把一次正常的拦截变成 500。</p>
+     */
+    private String featureLabel(String code) {
+        try {
+            List<PfFeature> hit = pfFeatureMapper.selectList(
+                    new LambdaQueryWrapper<PfFeature>().eq(PfFeature::getFeatureCode, code));
+            if (!hit.isEmpty()) {
+                String name = hit.get(0).getFeatureName();
+                if (name != null && !name.isBlank()) {
+                    return name;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("功能码 {} 取中文名失败：{}", code, e.getMessage());
+        }
+        return code;
     }
 
     @Around("@annotation(platformOnly)")

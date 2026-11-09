@@ -52,30 +52,39 @@ public class PrecheckResult implements Serializable {
 
     private String precheckBatchId;
 
-    // 合并自 precheck_batch（预检批次）
+    // 以下字段来自批次视图的展示口径，precheck_result 表并未建列。
+    // 标记为非持久化，MyBatis-Plus 生成 SELECT/INSERT 列面时才不会带上它们。
 
     /** 员工ID */
+    @TableField(exist = false)
     private Long employeeId;
 
     /** 规则总数 */
+    @TableField(exist = false)
     private Integer totalRules;
 
     /** 通过规则数 */
+    @TableField(exist = false)
     private Integer passedRules;
 
     /** 失败规则数 */
+    @TableField(exist = false)
     private Integer failedRules;
 
     /** 警告规则数 */
+    @TableField(exist = false)
     private Integer warningRules;
 
     /** 总执行耗时 */
+    @TableField(exist = false)
     private Integer totalExecutionTimeMs;
 
     /** 最终状态：PASS/FAIL/WARNING */
+    @TableField(exist = false)
     private String finalStatus;
 
     /** 是否已提交：1-是 0-否 */
+    @TableField(exist = false)
     private Integer submitted;
 
     @TableField(value = "created_at", fill = FieldFill.INSERT)

@@ -176,11 +176,11 @@
           <el-col :span="14">
             <div class="image-area">
               <el-image
-                v-if="currentPage._url"
-                :src="currentPage._url"
+                v-if="previewUrl"
+                :src="previewUrl"
                 fit="contain"
                 style="width:100%;max-height:560px;border-radius:6px"
-                :preview-src-list="currentPage._url ? [currentPage._url] : []"
+                :preview-src-list="previewUrl ? [previewUrl] : []"
               >
                 <template #error>
                   <div class="image-placeholder">
@@ -216,8 +216,8 @@
 
                 <!-- Amount consistency check -->
                 <div v-if="ocrData.amount || ocrData.netAmount || ocrData.taxAmount" class="amount-check" :class="amountCheckClass">
-                  <el-icon><CircleCheck v-if="amountConsistent" /><Warning v-else /></el-icon>
-                  <span>{{ amountConsistent ? '票面金额自洽' : '票面金额不自洽' }}</span>
+                  <el-icon><CircleCheck v-if="amountCheckState === 'ok'" /><Warning v-else /></el-icon>
+                  <span>{{ amountCheckText }}</span>
                   <span style="margin-left:auto;font-size:11px;color:#909399">
                     {{ ocrData.netAmount || '?' }} + {{ ocrData.taxAmount || '?' }} = {{ ocrData.amount || '?' }}
                   </span>
@@ -281,6 +281,7 @@ const uploading = ref(false)
 const ocrRunning = ref(false)
 const drawerVisible = ref(false)
 const previewVisible = ref(false)
+const previewUrl = ref(null)
 
 const batches = ref([])
 const total = ref(0)
@@ -297,7 +298,7 @@ function ocrStatusLabel(s) { return { NONE: '未识别', PENDING: '识别中', S
 function ocrTagType(s) { return s === 'SUCCESS' ? 'success' : s === 'NEED_REVIEW' ? 'warning' : s === 'FAILED' ? 'danger' : s === 'PENDING' ? 'info' : 'info' }
 function ocrDotClass(s) { return s === 'SUCCESS' ? 'dot-ok' : s === 'NEED_REVIEW' ? 'dot-warn' : s === 'FAILED' ? 'dot-fail' : s === 'PENDING' ? 'dot-pending' : 'dot-none' }
 function ocrBadgeClass(b) { return b._ocrStatus === 'SUCCESS' ? 'ocr-ok' : b._ocrStatus === 'NEED_REVIEW' ? 'ocr-warn' : b._ocrStatus === 'FAILED' ? 'ocr-fail' : 'ocr-none' }
-function verifyLabel(s) { return { NONE: '未验证', PASS: '通过', REJECT: '驳回' }[s] || s || '—' }
+function verifyLabel(s) { return { NONE: '未验证', PASS: '通过', SUCCESS: '通过', FAIL: '不通过', FAILED: '不通过', REJECT: '驳回' }[s] || s || '—' }
 
 const IMG_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'jfif']
 
@@ -415,17 +416,25 @@ function fieldClass(f) {
   return 'field-miss'
 }
 
-const amountConsistent = computed(() => {
-  if (!ocrData.value) return true
+// 缺任一金额时不能判「自洽」：后端该情形一律判不自洽并置页态待复核，
+// 面板若仍亮绿灯＋「? + ? = N」就与页态自相矛盾。
+const amountCheckState = computed(() => {
   const d = ocrData.value
-  if (!d.amount || !d.netAmount || !d.taxAmount) return true
-  const sum = Number(d.netAmount) + Number(d.taxAmount)
-  return Math.abs(sum - Number(d.amount)) < 0.02
+  if (!d) return 'ok'
+  if (!d.amount || !d.netAmount || !d.taxAmount) return 'missing'
+  return Math.abs(Number(d.netAmount) + Number(d.taxAmount) - Number(d.amount)) < 0.02 ? 'ok' : 'fail'
 })
 
-const amountCheckClass = computed(() => amountConsistent.value ? 'amt-ok' : 'amt-fail')
+const amountCheckText = computed(() => (
+  { ok: '票面金额自洽', fail: '票面金额不自洽', missing: '金额要素缺失，无法判定是否自洽' }[amountCheckState.value]
+))
 
-function previewPage(p) {
+const amountCheckClass = computed(() => amountCheckState.value === 'ok' ? 'amt-ok' : 'amt-fail')
+
+async function previewPage(p) {
+  // 下载令牌一次性使用：抽屉缩略图已消费掉 p._url 里的令牌，预览必须另签发一份
+  // （单独存 previewUrl，不能回写 p._url——回写会连带抽屉缩略图重新加载、抢先用掉新令牌）。
+  previewUrl.value = p.fileId ? await getFileUrl(p.fileId) : null
   currentPage.value = p
   previewVisible.value = true
 }

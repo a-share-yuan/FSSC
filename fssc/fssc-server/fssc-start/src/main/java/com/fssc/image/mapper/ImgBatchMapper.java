@@ -26,6 +26,16 @@ public interface ImgBatchMapper extends BaseMapper<ImgBatch> {
     Long countByTenant(@Param("tenantId") Long tenantId);
 
     /**
+     * 该批次号是否已被占用（**含软删行**）。
+     * <p>与唯一键 uk_tenant_batch_no 同口径：唯一键不区分 del_flag，删掉的批次仍占着号。
+     * 取号重试必须用这条原生 SQL——用 BaseMapper 的 selectCount 会被逻辑删插件补上
+     * {@code del_flag=0}，把软删行当"没占用"，取回来的号照样插不进去。
+     */
+    @Select("SELECT COUNT(*) FROM img_batch WHERE tenant_id = #{tenantId} AND batch_no = #{batchNo}")
+    Long countByBatchNoIncludingDeleted(@Param("tenantId") Long tenantId,
+                                        @Param("batchNo") String batchNo);
+
+    /**
      * 按业务类型汇总批次：同一枚覆盖索引承载全部五列，免回表。
      * <p>FORCE INDEX 原因同 {@link #countByTenant(Long)}。
      */

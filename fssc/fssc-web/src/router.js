@@ -17,12 +17,15 @@ import financeRoutes from './router/routes/finance'
 import flowRoutes from './router/routes/flow'
 import returnsRoutes from './router/routes/returns'
 import workflowRoutes from './router/routes/workflow'
+import formRoutes from './router/routes/form'
 import { i18n } from './i18n'
 
 const routes = [
   { path: '/login', component: () => import('./views/common/Login.vue'), meta: { public: true } },
   // 平台管理员独立登录页（与企业员工登录页分离）
   { path: '/platform/login', component: () => import('./views/platform/PlatformLogin.vue'), meta: { public: true } },
+  // 首次登录选档：企业尚未装配（op_mode 为空）时由登录页分流进来，不属于 Layout 侧栏体系
+  { path: '/onboard', component: () => import('./views/common/Onboard.vue'), meta: { title: '切换版本' } },
   { path: '/profile', component: () => import('./views/common/Profile.vue'), meta: { title: i18n.global.t('router.main.Profile') } },
   // H5 独立移动端工作台（无侧边栏布局，窄屏专用）
   // 移动报销端 meta.keepAlive ＝ 交给 App.vue 的 <keep-alive>，从「提报/审批」返回
@@ -70,6 +73,7 @@ const routes = [
       ...flowRoutes,
       ...returnsRoutes,
       ...workflowRoutes,
+      ...formRoutes,
     ],
   },
   // 兜底: 未匹配路由显示 404 页面(整改 EXC-02, 原先是静默重定向至工作台)
@@ -113,6 +117,7 @@ router.beforeEach(async (to) => {
   await ensureMenuPaths()
   const deny = pathDenyReason(to.path, to.meta)
   if (!deny) return true
+  if (deny === 'edition') return denyToWorkbench('当前版本不包含该功能，已返回工作台')
   return denyToWorkbench(deny === 'feature' ? '当前账号未开通该功能，已返回工作台' : undefined)
 })
 

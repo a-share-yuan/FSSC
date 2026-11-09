@@ -137,7 +137,10 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 
 const router = useRouter()
-const form = reactive({ tenantCode: '', username: '', password: '', rememberMe: false, captchaId: '', captchaCode: '' })
+// 一套系统服务一个客户，企业编码默认预填；输入框仍可清空或改写。
+// 注册成功后按新企业编码覆盖这里（见 doRegister）。
+const DEFAULT_TENANT_CODE = 'DEMO1'
+const form = reactive({ tenantCode: DEFAULT_TENANT_CODE, username: '', password: '', rememberMe: false, captchaId: '', captchaCode: '' })
 const loading = ref(false)
 const error = ref('')
 
@@ -202,14 +205,23 @@ async function doLogin() {
     const data = await login({ ...form, subjectType: 'TENANT' })
     store.token = data.token
     store.user = data.user
+    // opMode 只在登录响应顶层返回（不进 JWT），落一份供浏览器标题与主框架标题使用；
+    // 切换版本后重新登录会覆盖这里，标题随之变化。
+    store.edition = data.opMode || ''
     // 快速切换账号时，上一会话挂在 body 上的提示条/确认框不会随路由卸载：
     // 登录成功即清场，避免新用户看到前任的提醒（本条「登录成功」在清场之后再弹）。
     clearGlobalOverlays()
     ElMessage.success(t('login.main.Signed'))
-    // 落地页按权限分流 —— 无 dashboard:view 的角色落工作台,避免默认页触发6个无权限聚合调用
-    // 同族第三处落点：判定必须走 hasPerm()，否则 admin 的 *:*:* 通配码被 includes() 误判为无权、
-    // 管理员登录会被分流到 /workbench 而不是 /dashboard（store.user 已在上一行赋好，此处读得到新 perms）
-    router.push(hasPerm('dashboard:view') ? '/dashboard' : '/workbench')
+    // 装配档为空＝企业还没完成初始化，先去选档；非空直接进工作台，不再打扰。
+    // opMode 由登录接口返回而不进 JWT，装配完成后重新登录自然读到新值。
+    if (!data.opMode) {
+      router.push('/onboard')
+    } else {
+      // 落地页按权限分流 —— 无 dashboard:view 的角色落工作台,避免默认页触发6个无权限聚合调用
+      // 同族第三处落点：判定必须走 hasPerm()，否则 admin 的 *:*:* 通配码被 includes() 误判为无权、
+      // 管理员登录会被分流到 /workbench 而不是 /dashboard（store.user 已在上一行赋好，此处读得到新 perms）
+      router.push(hasPerm('dashboard:view') ? '/dashboard' : '/workbench')
+    }
   } catch (e) {
     error.value = e.message
     if (captchaRequiredCode(e?.code)) {

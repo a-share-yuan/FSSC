@@ -382,7 +382,6 @@ function bizLandingBlocked(row) {
 function openDetailFromDialog() {
   cur.value = approvalRow.value || {}
   detailVisible.value = true
-  detailVisible2.value = false
 }
 
 /**

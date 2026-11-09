@@ -140,7 +140,7 @@
       <el-button size="small" @click="loadSubprocesses">{{ $t('BpmnDesigner.main.Refresh') }}</el-button>
     </div>
 
-    <el-alert v-if="error" type="error" :closable="false" :title="error" style="margin-top: 6px" />
+    <el-alert v-if="error" :type="templateFallback ? 'error' : 'warning'" :closable="false" :title="error" style="margin-top: 6px" />
   </div>
 </template>
 
@@ -345,9 +345,121 @@ function updateElementCount() {
   } catch (e) { /* ignore */ }
 }
 
+/**
+ * 缺少图形位置信息（BPMNDI）的 BPMN 仍然是可执行定义，bpmn-js 却无法渲染。
+ * 按连线顺序补一份横排布局，原节点、连线与属性逐字保留，避免退化成
+ * 「开始 → 审批节点 → 结束」示例模板后又被保存回写覆盖真实流程。
+ */
+const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL'
+const BPMNDI_NS = 'http://www.omg.org/spec/BPMN/20100524/DI'
+const DC_NS = 'http://www.omg.org/spec/DD/20100524/DC'
+const DI_NS = 'http://www.omg.org/spec/DD/20100524/DI'
+const XMLNS_NS = 'http://www.w3.org/2000/xmlns/'
+
+/** 仅当画布被迫展示示例模板时为真：此时禁止保存，防止覆盖原有流程定义 */
+const templateFallback = ref(false)
+
+function injectDiagramLayout(xml) {
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml')
+    if (doc.getElementsByTagName('parsererror').length) return null
+    const defs = doc.documentElement
+    if (doc.getElementsByTagNameNS(BPMNDI_NS, 'BPMNDiagram').length) return null
+    const procs = doc.getElementsByTagNameNS(BPMN_NS, 'process')
+    if (!procs.length) return null
+    const proc = procs[0]
+    const children = Array.from(proc.childNodes).filter(n => n.nodeType === 1)
+    const nodes = children.filter(n => n.localName !== 'sequenceFlow' && n.getAttribute('id'))
+    const flows = children.filter(n => n.localName === 'sequenceFlow')
+    if (!nodes.length) return null
+
+    const byId = new Map(nodes.map(n => [n.getAttribute('id'), n]))
+    const outgoing = new Map(), indeg = new Map()
+    nodes.forEach(n => {
+      const id = n.getAttribute('id')
+      indeg.set(id, 0)
+      outgoing.set(id, [])
+    })
+    const valid = []
+    flows.forEach(f => {
+      const s = f.getAttribute('sourceRef'), t = f.getAttribute('targetRef')
+      if (byId.has(s) && byId.has(t)) {
+        outgoing.get(s).push(t)
+        indeg.set(t, (indeg.get(t) || 0) + 1)
+        valid.push(f)
+      }
+    })
+    const queue = nodes.filter(n => indeg.get(n.getAttribute('id')) === 0).map(n => n.getAttribute('id'))
+    const order = [], seen = new Set()
+    while (queue.length) {
+      const id = queue.shift()
+      if (seen.has(id)) continue
+      seen.add(id)
+      order.push(id)
+      ;(outgoing.get(id) || []).forEach(t => {
+        indeg.set(t, indeg.get(t) - 1)
+        if (indeg.get(t) <= 0) queue.push(t)
+      })
+    }
+    nodes.forEach(n => {
+      const id = n.getAttribute('id')
+      if (!seen.has(id)) { seen.add(id); order.push(id) }
+    })
+
+    defs.setAttributeNS(XMLNS_NS, 'xmlns:bpmndi', BPMNDI_NS)
+    defs.setAttributeNS(XMLNS_NS, 'xmlns:dc', DC_NS)
+    defs.setAttributeNS(XMLNS_NS, 'xmlns:di', DI_NS)
+
+    const CY = 120, X0 = 140, STEP = 180
+    const geom = new Map()
+    order.forEach((id, i) => {
+      const tag = byId.get(id).localName || ''
+      const box = /Task|Activity|Gateway|SubProcess/.test(tag) ? [100, 80] : [36, 36]
+      geom.set(id, { x: X0 + i * STEP, w: box[0], h: box[1] })
+    })
+    const diagram = doc.createElementNS(BPMNDI_NS, 'bpmndi:BPMNDiagram')
+    diagram.setAttribute('id', 'BPMNDiagram_1')
+    const plane = doc.createElementNS(BPMNDI_NS, 'bpmndi:BPMNPlane')
+    plane.setAttribute('id', 'BPMNPlane_1')
+    plane.setAttribute('bpmnElement', proc.getAttribute('id') || 'Process_1')
+    order.forEach(id => {
+      const g = geom.get(id)
+      const shape = doc.createElementNS(BPMNDI_NS, 'bpmndi:BPMNShape')
+      shape.setAttribute('id', id + '_di')
+      shape.setAttribute('bpmnElement', id)
+      const bounds = doc.createElementNS(DC_NS, 'dc:Bounds')
+      bounds.setAttribute('x', g.x)
+      bounds.setAttribute('y', CY - Math.floor(g.h / 2))
+      bounds.setAttribute('width', g.w)
+      bounds.setAttribute('height', g.h)
+      shape.appendChild(bounds)
+      plane.appendChild(shape)
+    })
+    valid.forEach((f, i) => {
+      const s = geom.get(f.getAttribute('sourceRef')), t = geom.get(f.getAttribute('targetRef'))
+      if (!s || !t) return
+      const fid = f.getAttribute('id') || ('Flow_' + i)
+      const edge = doc.createElementNS(BPMNDI_NS, 'bpmndi:BPMNEdge')
+      edge.setAttribute('id', fid + '_di')
+      edge.setAttribute('bpmnElement', fid)
+      const w1 = doc.createElementNS(DI_NS, 'di:waypoint')
+      w1.setAttribute('x', s.x + s.w); w1.setAttribute('y', CY)
+      const w2 = doc.createElementNS(DI_NS, 'di:waypoint')
+      w2.setAttribute('x', t.x); w2.setAttribute('y', CY)
+      edge.appendChild(w1)
+      edge.appendChild(w2)
+      plane.appendChild(edge)
+    })
+    diagram.appendChild(plane)
+    defs.appendChild(diagram)
+    return new XMLSerializer().serializeToString(doc)
+  } catch (e) { return null }
+}
+
 async function render(xml) {
   if (!modeler || !canvasRef.value) return
   error.value = ''
+  templateFallback.value = false
   try {
     await modeler.importXML(xml || EMPTY_XML)
     tryZoomFit()
@@ -356,17 +468,29 @@ async function render(xml) {
     updateZoomState()
     updateElementCount()
   } catch (e) {
-    if (xml && /no diagram to display|missing DI|DI/i.test(e.message || '')) {
+    const laidOut = xml ? injectDiagramLayout(xml) : null
+    if (laidOut) {
       try {
-        await modeler.importXML(EMPTY_XML)
+        await modeler.importXML(laidOut)
         tryZoomFit()
+        colorizeNodes()
+        upgradeExistingTasks()
         updateZoomState()
         updateElementCount()
-        error.value = '原流程图缺少图形位置信息，已载入示例流程，请重新设计后保存'
+        error.value = '原流程图缺少图形位置信息，已按节点顺序自动排版；保存后布局会一并写回'
         return
       } catch (e2) { /* fallthrough */ }
     }
-    error.value = '流程图解析失败：' + (e.message || e)
+    try {
+      await modeler.importXML(EMPTY_XML)
+      tryZoomFit()
+      updateZoomState()
+      updateElementCount()
+      templateFallback.value = true
+      error.value = '流程图缺少可还原的图形信息，当前仅展示示例模板；为保护原流程，已禁止保存，请导入带图形位置信息的 BPMN 后重试'
+    } catch (e2) {
+      error.value = '流程图解析失败：' + (e.message || e)
+    }
   }
 }
 
@@ -622,6 +746,10 @@ function colorizeNodes() {
 }
 
 async function exportXml() {
+  if (templateFallback.value) {
+    ElMessage.error('当前画布仅为示例模板，为避免覆盖原流程定义，已禁止保存')
+    return null
+  }
   try {
     const { xml } = await modeler.saveXML({ format: true })
     emit('update:modelValue', xml)

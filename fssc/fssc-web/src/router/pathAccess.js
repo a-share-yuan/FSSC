@@ -15,10 +15,11 @@ import { ref } from 'vue'
 import { store, getMenuTree } from '../api'
 import { hasAnyPerm, isSuperPerm } from '../utils/perm'
 import { ROUTE_PERMS } from './routePerms'
+import { editionDenyReason } from './editionFeatures'
 
 /** 全员可达：工作台是拦截回落点、个人中心/导航地图是工作台入口、本人视角自助页后端按登录人过滤 */
 export const OPEN_PATHS = new Set([
-  '/workbench', '/profile', '/process-nav',
+  '/workbench', '/profile', '/process-nav', '/onboard',
   '/requisition/todo', '/requisition/done', '/requisition/mine', '/flow-center/cc',
 ])
 
@@ -117,13 +118,17 @@ export function ensureMenuPaths() {
 }
 
 /**
- * @returns '' 可达；'perm' 缺页面权限；'feature' 套餐未开通该功能
+ * @returns '' 可达；'perm' 缺页面权限；'feature' 套餐未开通该功能；'edition' 当前版本不含该功能
  */
 export function pathDenyReason(path, meta) {
   if (!path) return ''
   const m = meta || {}
   if (m.terminal === 'H5' || path.startsWith('/h5')) return ''
   if (OPEN_PATHS.has(path)) return ''
+  // 档位能力闸门先于超管放行：超管通配码只代表账号权限，不代表这套系统装了哪些功能。
+  // 判据来自 sys_menu.feature_code，与后端菜单树裁剪同源；切档后重新登录即生效。
+  const edition = editionDenyReason(path)
+  if (edition) return edition
   if (isSuperPerm()) return ''
   if (Array.isArray(m.perms) && m.perms.length) return hasAnyPerm(m.perms) ? '' : 'perm'
   const entry = ROUTE_PERMS[path]

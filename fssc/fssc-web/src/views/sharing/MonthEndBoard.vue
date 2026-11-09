@@ -144,6 +144,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { initThemedChart, onThemeChange } from '../../utils/echartsTheme'
 import { glexApi, periodApi, flowApi } from '../../api'
 import { hasPerm } from '@/utils/perm'
+import { bizTypeLabel } from '@/constants/enums'
 // 月结调度自动化
 import { useMonthEndSchedule } from '@/composables/useMonthEndSchedule'
 import { useKeyboard } from '@/composables/useKeyboard'
@@ -298,9 +299,18 @@ function renderTimelineChart() {
         return t('sharing.monthEnd.tipSchedule', { v1: d[4], v2: new Date(d[1]).toLocaleDateString(), v3: d[2] ? new Date(d[2]).toLocaleDateString() : t('sharing.monthEnd.txtNotDone') })
       }
     },
-    grid: { left: 50, right: 20, top: 20, bottom: 50 },
+    // y 轴标签是 YYYY-MM-DD（10 个字符约 68px），原先 left:50 装不下，标签首部被画布裁掉，
+    // 界面上只剩「-11-07」。改用 containLabel 由 ECharts 按实际标签宽度反推绘图区，
+    // 主题字号或容器缩放变化后也不会再压住日期。
+    // minInterval 取一天：标签精度只到「日」，若不设下限，跨 2 天的短轴会被切成 3 小时一格，
+    // 格式化后出现 7 个「2026-11-07 / 2026-11-06」重复刻度。
+    grid: { left: 12, right: 24, top: 20, bottom: 50, containLabel: true },
     xAxis: { type: 'category', data: data.map((d, i) => `T${i + 1}`), axisLabel: { fontSize: 10 } },
-    yAxis: { type: 'time', axisLabel: { formatter: v => formatDate(v) } },
+    yAxis: {
+      type: 'time',
+      minInterval: 24 * 3600 * 1000,
+      axisLabel: { formatter: v => formatDate(v), fontSize: 11, hideOverlap: true },
+    },
     series: [{
       type: 'scatter',
       data: data.map(d => [d[0], d[1], { status: d[3], name: d[4], actual: d[2] }]),
@@ -392,7 +402,11 @@ async function loadData() {
           taskList.push({
             id: `flow-${f.id || idx}`,
             moduleName: modName,
-            taskName: f.bizType ? `${f.bizType}-${f.billNo || ''}` : (f.processDefinitionName || t('status.approving')),
+            // bizType 是后端原始码（如 EXP_LOAN），直接拼进任务名会在清单里漏英文码；
+            // 统一走 bizTypeLabel 取中文（字典优先、常量兜底），单号为空时不再留下悬空的「-」。
+            taskName: f.bizType
+              ? `${bizTypeLabel(f.bizType) || f.bizType}${f.billNo ? `-${f.billNo}` : ''}`
+              : (f.processDefinitionName || t('status.approving')),
             owner: f.assignee || '—',
             planDate: f.createTime ? f.createTime.slice(0, 10) : '',
             actualDate: '',

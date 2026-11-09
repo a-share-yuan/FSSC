@@ -41,12 +41,14 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { backend, probeBackend, store } from './api'
+import { backend, probeBackend, store, getOnboardStatus } from './api'
 import { preloadBuiltinDicts, PRELOAD_DICT_TYPES } from './composables/useDict.js'
 // enums.js 的 66 个展示字典（enum_*）也要预热：
 // enumLabel() 同为纯同步函数，被各页直接调用，没有生命周期可挂。
 import { ENUM_DICT_TYPES } from './constants/enums.js'
 import { useI18n } from 'vue-i18n'
+import { getLocale } from './i18n'
+import { applyEditionTitle, setEdition, getEdition } from './composables/useEditionBrand'
 const { t } = useI18n()
 
 const retrying = ref(false)
@@ -84,6 +86,13 @@ async function retry() {
 
 onMounted(() => {
   warmDicts()
+  // 老会话或直接刷新时，localStorage 里可能还没有档位标记（版本标题功能上线前的登录态）。
+  // status 只需要有效的企业 Token，普通员工也可读；补齐后重刷标题，失败保持中性名不影响使用。
+  if (store.token && !getEdition()) {
+    getOnboardStatus()
+      .then((d) => { if (d && d.opMode) setEdition(d.opMode); applyEditionTitle(getLocale()) })
+      .catch(() => {})
+  }
   // 断线期间每 10s 自动重探，后端起来后无需手动刷新
   timer = setInterval(() => {
     if (!backend.online && !retrying.value) probeBackend()
@@ -113,6 +122,12 @@ watch(() => backend.online, (v, old) => {
 //    'fssc:auth' 事件（见 api.js:43 附近）来通知。
 function onAuth(e) {
   if (e && e.detail && e.detail.token) warmDicts()
+  else {
+    // 退出登录、切换版本后清空 token 都走这里：档位副本随之失效，标题回落中性名，
+    // 避免下一个登录者看到上一位用户的版本标题。
+    setEdition('')
+    applyEditionTitle(getLocale())
+  }
 }
 window.addEventListener('fssc:auth', onAuth)
 onBeforeUnmount(() => window.removeEventListener('fssc:auth', onAuth))
