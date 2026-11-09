@@ -481,7 +481,7 @@ const visibleDomains = computed(() => {
 .step.no-perm { opacity: .45; cursor: not-allowed; }
 .step.no-perm:hover { background: var(--app-hover, #f7f8fa); border-color: transparent; transform: none; }
 .step.no-perm .step-go { display: none; }
-.step.no-perm::after { content: ''; font-size: 11px; margin-left: auto; opacity: .8; }
+.step.no-perm::after { content: ''; }
 .step-idx { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: var(--c); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
 .step-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .step-menu { font-size: 11px; color: #909399; }

@@ -24,7 +24,7 @@ public class AiFeedback {
     private String sessionId;
     private String question;
     private String skill;
-    /** 1= -1= */
+    /** 1=赞 -1=踩 */
     private Integer rating;
     /** 不准 / 没查到 / 不是我要的 / 太慢 … */
     private String reason;

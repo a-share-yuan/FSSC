@@ -5,7 +5,7 @@
   <el-container class="layout">
     <!-- PC 侧边栏（≥768px 显示） -->
     <el-aside width="210px" class="aside desktop-menu">
-      <div class="logo"><img class="logo-img" src="../../assets/FSSC_LOGO_Blue.jpeg" alt="FSSC 财务共享" /></div>
+      <div class="logo"><img class="logo-img" src="../../assets/FSSC_LOGO_Blue.jpeg" :alt="productTitle" /></div>
       <el-menu
         :default-active="$route.path"
         router
@@ -23,6 +23,8 @@
         <el-button v-if="isMobile" link class="hamburger" @click="drawer = true">
           <el-icon :size="20"><Menu /></el-icon>
         </el-button>
+        <!-- 版本标题：随 pf_tenant.op_mode 变化；窄屏让位给页面标题与右侧工具栏 -->
+        <span v-if="!isMobile" class="product-title" :title="productTitle">{{ productTitle }}</span>
         <span class="page-title">{{ $route.meta.title }}</span>
 
         <!-- Header 右侧功能区 -->
@@ -49,6 +51,10 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                <!-- 切换版本：超管专属的系统级入口。不进 sys_menu（全局菜单表按档位打码裁剪，
+                     挂侧栏会随特性码在三档间时隐时现），与后端 status().canSwitch / requireAdmin
+                     共用同一把「超管通配码」钥匙；非超管不显示，手动访问也会被引导页送回工作台。 -->
+                <el-dropdown-item v-if="canSwitchMode" command="onboard">切换版本</el-dropdown-item>
                 <!-- 「角色化首页」入口已下架（路由与组件保留，直接访问 /role-dashboard 仍可用）。
                      原因＝四项 KPI 查询键与后端返回不符（恒 0）＋四项为写死的展示值，
                      真要修等于重做整页查询与角色模型，而重做后独有内容与报表看板/流程监控大屏重叠。 -->
@@ -87,7 +93,7 @@
 
       <!-- 移动端抽屉菜单 -->
       <el-drawer v-model="drawer" direction="ltr" size="70%" :with-header="false" class="mobile-drawer">
-        <div class="drawer-logo"><img class="drawer-logo-img" src="../../assets/FSSC_LOGO.png" alt="FSSC 财务共享" /></div>
+        <div class="drawer-logo"><img class="drawer-logo-img" src="../../assets/FSSC_LOGO.png" :alt="productTitle" /></div>
         <el-menu
           :default-active="$route.path"
           router
@@ -160,7 +166,7 @@
     <!-- 弱网降级小通知（右下角，不影响浏览） -->
     <Transition name="net-slide">
       <div v-if="isSlowNetwork && !netNoticeDismissed" class="net-notice" :class="degradationLevel">
-        <span class="net-notice-icon">{{ degradationLevel === 'severe' ? '' : '' }}</span>
+        <span class="net-notice-icon"><i class="fa" :class="degradationLevel === 'severe' ? 'fa-exclamation-triangle' : 'fa-signal'"></i></span>
         <span class="net-notice-text">
           {{ degradationLevel === 'severe' ? '网络较差，已开启重度降级' : '网络较慢，已优化加载速度' }}
         </span>
@@ -192,9 +198,13 @@ import CoachMark from '../../components/CoachMark.vue'
 import { useKeyboard } from '../../composables/useKeyboard'
 import { useTheme } from '../../composables/useTheme'
 import { useNetworkDegradation } from '../../composables/useNetworkDegradation'
-import { hasPerm } from '../../utils/perm'
+import { hasPerm, isSuperPerm } from '../../utils/perm'
+import { editionTitle } from '../../composables/useEditionBrand'
 import { useI18n } from 'vue-i18n'
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+// 顶栏产品名与浏览器标题同源：语言切换时跟着变，档位切换后重新登录会重新挂载 Layout 读到新值
+const productTitle = computed(() => editionTitle(locale.value))
 
 const route = useRoute()
 const router = useRouter()
@@ -239,6 +249,8 @@ const { isDark, toggle: toggleTheme } = useTheme()
  */
 const canFlowMonitor = hasPerm('wf:instance:list')
 const canMonthEnd = hasPerm('gl:monthclose:list')
+// 切换版本仅超管可见，判据与后端 status().canSwitch / requireAdmin 一致
+const canSwitchMode = isSuperPerm()
 /** 入口是否真能打开：与路由守卫同一把钥匙（一个权限码管六个不同判据的页面会给出点得动却被弹回的假入口） */
 const openable = (p) => !pathDenyReason(p)
 // G3 任务池五视图是业务角色日常工作台，权限码为 wf:task:list（与 /wf/pool/mine 同族）
@@ -410,6 +422,8 @@ async function onCommand(cmd) {
     router.push('/login')
   } else if (cmd === 'profile') {
     router.push('/profile')
+  } else if (cmd === 'onboard') {
+    router.push('/onboard')
   } else if (cmd === 'flow-monitor') {
     router.push('/flow-monitor')
   } else if (cmd === 'shared-pool') {
@@ -455,6 +469,12 @@ async function onCommand(cmd) {
   color: var(--app-text, #303133);
   border-bottom: 1px solid var(--app-border, #e4e7ed);
   height: 56px; padding: 0 16px; gap: 8px;
+}
+.product-title {
+  font-size: 15px; font-weight: 600; flex: none; white-space: nowrap;
+  padding-right: 12px; margin-right: 4px;
+  border-right: 1px solid var(--app-border, #e4e7ed);
+  color: var(--app-text, #303133);
 }
 .page-title { font-size: 16px; font-weight: 600; flex: 1; }
 .header-right { display: flex; align-items: center; gap: 8px; }

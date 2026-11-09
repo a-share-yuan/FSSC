@@ -182,6 +182,7 @@
           <el-select v-model="journalForm.creditSubjectId" clearable filterable placeholder="贷方科目（留空取默认）" style="width:210px">
             <el-option v-for="s in leafSubjects" :key="'c' + s.id" :label="s.subjectCode + ' ' + s.subjectName" :value="s.id" />
           </el-select>
+          <!-- 预提/待摊＝「申请占用」，提交即扣预算，故必须能指定预算维度 -->
           <template v-if="journalNeedsBudget">
             <el-select v-model="journalForm.expenseItemId" clearable filterable
                        placeholder="费用项目（预算维度）" style="width:190px" @visible-change="(v) => v && ensureExpenseItems()">
