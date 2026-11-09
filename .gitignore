@@ -29,8 +29,8 @@ db/backup/
 # 日后随手导出的整库 dump 默认不入仓（防 git add -A 带进来）；
 # 作为建库入口的那一枚显式放行 —— 见 db/README.md
 db/Dump*/
-!db/Dump20261106/
-!db/Dump20261106/**
+!db/Dump20261109/
+!db/Dump20261109/**
 *.dump
 *_full_*.sql
 *_rollback_*.jar

@@ -28,7 +28,7 @@
 
 - **Internationalisation is wired up and the UI text is extracted.** `fssc/fssc-web/package.json` depends on `vue-i18n`, `fssc/fssc-web/src/i18n/index.js` builds the instance, `main.js` registers it plus a global `LocaleSwitch`, and `src/i18n/locales/{zh-CN,en-US}.js` carry 4,948 keys each. Measured on this snapshot: 175 of 268 `.vue`/`.js` files under `src/` call `$t()`/`t()`/`useI18n()` (7,715 call sites) — every user-visible string in templates (labels, placeholders, table columns, button captions, dialog titles) and in the script layer (toasts, confirmations, table-column definitions) is routed through the locale files. The remaining Chinese literals are source comments, log text, data dictionaries (`enums.js`, `billStatus.js`, `permMappings.js`) and the bpmn-js canvas patch — none of which are interface copy. `scripts/i18n_check.py` gates this in CI: key-set alignment, dangling references, dynamic-key splicing, message compilation and a hard-coded-Chinese baseline that may only go down, never up.
 - **Source-only release.** The front-end package keeps `"private": true`; there is no npm package and no hosted demo. You build and run it yourself — from source (`mvn spring-boot:run` on `fssc/fssc-server/fssc-start`, `npm run dev` on `fssc/fssc-web`) or as a jar (`mvn package` then `java -jar`). See "Three steps to run it" above.
-- **Database bootstrap = one full database dump.** `db/Dump<导出日期>/` (326 files: 325 one-table-per-file dumps plus a routines file, ≈6.9 MB) is the supported way to create the databases; import it as `db/README.md` describes. Only one slice of incremental SQL is published: `db/upgrade/` carries the paired apply/rollback scripts for **v1.0.0 → v1.2.0** (structure, parameters, menus, seeds) — older per-version scripts stay unpublished, and there is no Flyway/Liquibase. The dump is a **clean** drill database: master data, menus, permissions and process definitions are populated, but it holds **no** business documents (`exp_bill` / `op_voucher` / `wf_instance` are empty), and the 2.2 MB in `act_ge_bytearray` is 190 BPMN definitions plus 183 diagrams, not uploaded attachments.
+- **Database bootstrap = one full database dump.** `db/Dump<导出日期>/` (326 files: 325 one-table-per-file dumps plus a routines file, ≈6.9 MB) is the supported way to create the databases; import it as `db/README.md` describes. Only one slice of incremental SQL is published: `db/upgrade/` carries the paired apply/rollback scripts for **v1.0.0 → v1.2.1** (structure, parameters, menus, seeds) — older per-version scripts stay unpublished, and there is no Flyway/Liquibase. The dump is a **clean** drill database: master data, menus, permissions and process definitions are populated, but it holds **no** business documents (`exp_bill` / `op_voucher` / `wf_instance` are empty), and the 2.2 MB in `act_ge_bytearray` is 190 BPMN definitions plus 183 diagrams, not uploaded attachments.
 - The declared JDK is pinned to **26**, a non-LTS release whose end of availability has already passed; the maintainers have adjudicated a move to the current LTS line but have not run that build yet — that migration is not yet verified by a build.
 - This code has been hardened through long manual business drills; treat documented behaviour as *documented*, not *guaranteed*. Each doc states which claims were measured and which were only read off the code.
 
@@ -36,21 +36,20 @@
 
 ---
 
-## 本次更新（v1.2.0）
+## 本次更新（v1.2.1）
 
-本版的主线是**把只做了一半的能力接完**：一批功能后端有接口、前端没入口，或界面上只有正向按钮没有反向按钮，业务卡住时只能改库。这一版逐个补齐，并补上两块度量。
+本版把「一套代码、多个交付档位」这条线接完，并补上配置化能力；同时修掉几个只在换页、审计写入时才暴露的卡点。
 
-- **补反向入口**：预算行冻结/解冻、公司/部门启停用（另加三道自锁：当前登录主体、最后一家公司、未停用子节点/在职用户）、合同重开（重新占用关闭时释放的预算）、采购订单恢复（回草稿重走审批，已收货单拒绝）。
-- **智能审单规则可用化**：表单补齐规则编码/命中动作/优先级/适用单据类型；启停开关恢复；新建规则的缺省动作取最保守的「转人工」。
-- **信用体系通电**：铺底 452 名在职员工（600 分 / C 级）；免审门槛、最低等级、抽检比例三个参数可调，改完即时生效；修掉「免审要 B 级、B 级要靠免审加分」的死循环。
-- **违规扣分按类**：新增违规原因字典（6 条行为类）；发票真伪、重复报销、作废红冲由预检与异常巡检拦截，不计员工信用——机器能判的不让员工背锅。
-- **预检漏拦分析**（`/compliance/precheck-stats`）：预检拦截开始留痕，按规则码统计拦截分布，并给出「质检退回但预检没拦过」的漏拦率与样本，度量对象是系统规则缺口。
-- **口径修正**：金额分档不在审单规则里重复实现——`CLAIM` 流程已有四个金额网关级联加签。
-- **数据与版本**：`db/Dump20261106/`（326 个文件＝325 表＋视图，约 6.1 MB）已按本版刷新；`db/upgrade/` 发布 v1.0.0→v1.2.0 的增量脚本；后端三个模块与前端版本统一为 1.2.0。
+- **可配置表单平台**：新增单据类型注册与通用单据运行库（`md_form_config` / `md_form_field` / `md_form_validation`），表单、校验与流程路由由配置驱动，扩展单据类型无需改动代码；附一份可选样例配置说明完整链路。尚未提供页面的「表单设计」入口已先行下线，避免点进去落到通配路由。
+- **租户档位引导**：`pf_tenant.op_mode` 记录企业选择的能力集合，首次登录引导据此决定跳转；费用报销版／费控版／共享版三档共用同一套代码与业务数据。已上线系统有专用回填脚本，新部署保持未选择状态由管理员自行决定。
+- **流程设置归位**：流程模型、节点配置与流程绑定的维护能力从共享运营能力码中拆出，「流程设置」归入系统管理，管理类角色获得完整维护权限；预设流程补齐 BPMN 图形布局，节点与执行语义不变。
+- **开放接口幂等修正**：审计表生成列改为只对「成功且幂等键非空」生成值，查询类请求不再撞唯一约束，审计写入不再掩盖业务结果。
+- **界面修复**：侧栏菜单图标补齐（按 `path` 定位、只填空值）；报表菜单分组后的手册跟进；错误边界改为按顶层布局复用并按页复位，换页不再重建侧栏。
+- **文档与数据**：整库 dump 刷新为 `db/Dump20261109/`，结构、菜单与主数据已含本期变更；`docs/真实场景测试/` 收敛为五本手册（三档逐步版 + 其它业务流程 + 系统管理员与流程配置），修掉互引死链；`db/upgrade/` 补入本期增量脚本说明；后端三个模块与前端版本统一为 **1.2.1**（此前工程文件仍停留在 `1.1.1`，与发布标注不一致，本版一并修正）。
 
-逐条变更见 [`docs/更新说明-v1.2.0.md`](docs/更新说明-v1.2.0.md)。
+> 数据库提醒：`db/Dump20261109/` 已含本期全部结构、菜单与主数据变更（含 `pf_tenant.op_mode`、`FC_WF_CONFIG` 与表单平台配置），新建库导入这一份即可直接换上 1.2.1 的 jar。`db/upgrade/` 只用于**已经在跑、不能重导库**的环境，按其中的顺序补跑 v1.0.0 → v1.2.1 增量。
 
----
+逐条变更见 [`CHANGELOG.md`](CHANGELOG.md) 的 1.2.1 条目。
 
 ## 30 秒看懂：这是什么
 
