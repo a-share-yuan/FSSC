@@ -149,8 +149,8 @@
             <!-- 反馈：只用于运营评测，不参与执行 -->
             <div v-if="msg.role === 'ai' && msg.traceId" class="feedback-row">
               <template v-if="!msg.feedback">
-                <el-button link size="small" @click="sendFeedback(msg, 1, '有帮助')"> 有帮助</el-button>
-                <el-button link size="small" @click="sendFeedback(msg, -1, '不准')"> 不准</el-button>
+                <el-button link size="small" @click="sendFeedback(msg, 1, '有帮助')"><i class="fa fa-thumbs-o-up"></i> 有帮助</el-button>
+                <el-button link size="small" @click="sendFeedback(msg, -1, '不准')"><i class="fa fa-thumbs-o-down"></i> 不准</el-button>
                 <el-button link size="small" @click="sendFeedback(msg, -1, '没查到')">没查到</el-button>
                 <el-button link size="small" @click="sendFeedback(msg, -1, '不是我要的')">不是我要的</el-button>
               </template>

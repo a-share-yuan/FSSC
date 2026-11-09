@@ -51,7 +51,7 @@ public class AiInsightController {
         LoginUser u = UserContext.getRequired();
         int rating = intOf(body == null ? null : body.get("rating"), 0);
         if (rating != 1 && rating != -1) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "rating 只接受 1（）或 -1（）");
+            throw new BizException(ErrorCode.PARAM_INVALID, "rating 只接受 1（赞）或 -1（踩）");
         }
         AiFeedback f = new AiFeedback();
         f.setTenantId(u.getTenantId());

@@ -23,7 +23,7 @@
     <div v-if="hasPerfKpi" class="kpi-scope">统计范围：{{ kpiScopeText }}（适用：今日完成／平均耗时／超时率／系统状态）</div>
     <div class="kpi-row">
       <div v-for="kpi in kpiCards" :key="kpi.label" class="kpi-card" :class="kpi.cls" @click="drillKpi(kpi)" style="cursor: pointer">
-        <div class="kpi-icon">{{ kpi.icon }}</div>
+        <div class="kpi-icon"><i class="fa" :class="kpi.icon"></i></div>
         <div class="kpi-body">
           <div class="kpi-val">{{ kpi.value }}</div>
           <div class="kpi-label">{{ kpi.label }}</div>
@@ -145,8 +145,8 @@ const canMonthEnd = hasPerm('gl:monthclose:list')
 const roleConfig = {
   OPERATOR: {
     kpis: [
-      { label: '我的待办', key: 'todo', icon: '', cls: 'blue' },
-      { label: '今日完成', key: 'done', icon: '', cls: 'green' },
+      { label: '我的待办', key: 'todo', icon: 'fa-list-alt', cls: 'blue' },
+      { label: '今日完成', key: 'done', icon: 'fa-check-circle', cls: 'green' },
       { label: '平均耗时', key: 'avgTime', icon: '', cls: 'yellow' },
       { label: '超时率', key: 'timeoutRate', icon: '', cls: 'red' },
     ],
@@ -154,8 +154,8 @@ const roleConfig = {
   },
   SUPERVISOR: {
     kpis: [
-      { label: '团队待办', key: 'todo', icon: '', cls: 'blue' },
-      { label: '今日完成', key: 'done', icon: '', cls: 'green' },
+      { label: '团队待办', key: 'todo', icon: 'fa-users', cls: 'blue' },
+      { label: '今日完成', key: 'done', icon: 'fa-check-circle', cls: 'green' },
       { label: '超时预警', key: 'timeout', icon: '', cls: 'red' },
       { label: '平均耗时', key: 'avgTime', icon: '', cls: 'yellow' },
     ],
@@ -166,10 +166,10 @@ const roleConfig = {
   },
   CFO: {
     kpis: [
-      { label: '本月报销', key: 'monthExp', icon: '', cls: 'blue' },
-      { label: '本月付款', key: 'monthPay', icon: '', cls: 'green' },
-      { label: '预算执行', key: 'budgetRate', icon: '', cls: 'yellow' },
-      { label: '月结进度', key: 'monthProgress', icon: '', cls: 'blue' },
+      { label: '本月报销', key: 'monthExp', icon: 'fa-money', cls: 'blue' },
+      { label: '本月付款', key: 'monthPay', icon: 'fa-credit-card', cls: 'green' },
+      { label: '预算执行', key: 'budgetRate', icon: 'fa-bar-chart', cls: 'yellow' },
+      { label: '月结进度', key: 'monthProgress', icon: 'fa-calendar', cls: 'blue' },
     ],
     widgets: [
       { key: 'kpiBoard', title: t('dashboard.roleDashboard.Management') },
@@ -178,10 +178,10 @@ const roleConfig = {
   },
   ADMIN: {
     kpis: [
-      { label: '在途流程', key: 'inTransit', icon: '', cls: 'blue' },
-      { label: '今日完成', key: 'done', icon: '', cls: 'green' },
+      { label: '在途流程', key: 'inTransit', icon: 'fa-refresh', cls: 'blue' },
+      { label: '今日完成', key: 'done', icon: 'fa-check-circle', cls: 'green' },
       { label: '超时流程', key: 'timeout', icon: '', cls: 'red' },
-      { label: '系统状态', key: 'sysHealth', icon: '', cls: 'green' },
+      { label: '系统状态', key: 'sysHealth', icon: 'fa-desktop', cls: 'green' },
     ],
     widgets: [{ key: 'flowMonitor', title: t('dashboard.roleDashboard.Workflow') }],
   },

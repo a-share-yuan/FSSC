@@ -861,7 +861,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       const fails = checks.filter((c) => c.level === 'FAIL')
       const warns = checks.filter((c) => c.level === 'WARN')
       if (fails.length) {
-        const detail = fails.map((c) => ' ' + c.msg)
+        const detail = fails.map((c) => c.msg)
         // 服务端只说「当前未上传」，看不出下一步动作。预检入参是 billId ⇒ 附件行必须随草稿写入数据库
         // 才被数到（上传时单据还没 id，附件行是挂在 billId=NULL 的孤儿行上的），故这里补可执行动作。
         if (fails.some((c) => c.code === 'INVOICE_REQUIRED' || c.code === 'APPLY_ATTACH_REQUIRED')) {

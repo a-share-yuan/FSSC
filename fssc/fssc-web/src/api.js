@@ -5,6 +5,7 @@ import axios from 'axios'
 import { reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyPermError } from './utils/perm403'
+import { getEdition, setEdition } from './composables/useEditionBrand'
 
 const TOKEN_KEY = 'fssc_token'
 const USER_KEY = 'fssc_user'
@@ -58,7 +59,12 @@ export const store = {
     try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null') } catch { return null }
   },
   set user(v) { v ? localStorage.setItem(USER_KEY, JSON.stringify(v)) : localStorage.removeItem(USER_KEY) },
+  // 当前版本档位（pf_tenant.op_mode 的前端副本）。跟 token/user 一样是普通 getter/setter，
+  // 不是 reactive；标题由 fssc:edition 事件驱动刷新，见 useEditionBrand.js。
+  get edition() { return getEdition() },
+  set edition(v) { setEdition(v) },
   logout() {
+    this.edition = ''
     this.token = ''
     this.user = null
     clearGlobalOverlays()
@@ -342,6 +348,13 @@ export const profileApi = {
   changePhone: (body) => http.post('/auth/profile/changePhone', body),
   /** 更换邮箱 */
   changeEmail: (body) => http.post('/auth/profile/changeEmail', body),
+}
+
+/** 首次登录选档：装配状态与三档清单；silent 避免未装配租户进页时弹无谓错误 */
+export function getOnboardStatus() { return http.get('/tenant/onboard/status', { silent: true }) }
+/** 执行装配：要克隆角色菜单授权并部署流程定义，比普通写端点慢，单独放宽超时 */
+export function applyOnboard(preset) {
+  return http.post('/tenant/onboard/apply', { preset }, { timeout: 120000 })
 }
 
 export function getMenuTree() { return http.get('/tenant/system/menu/tree') }
@@ -1549,8 +1562,11 @@ export const glexApi = {
   taxPreview: (period) =>
     http.get('/tenant/glex/tax-provision/preview', { params: { period } }),
   // bases 可选：{ VAT: 123456.78, ... }，只对 base_source=MANUAL 的税种生效
+  // 注意：这里必须送「非 null 的 JSON 对象」。传 null 时 axios 会带
+  // Content-Type: application/x-www-form-urlencoded 的空体，后端
+  // @RequestBody(required=false) Map 收到表单体直接 415 -> 500（V5 册 D-V51108-18）。
   taxProvision: (period, bases) =>
-    http.post('/tenant/glex/tax-provision/provision', bases || null, { params: { period } }),
+    http.post('/tenant/glex/tax-provision/provision', bases ?? {}, { params: { period } }),
   taxLinkCheck: (period) =>
     http.get('/tenant/glex/tax-provision/link-check', { params: { period } }),
   /* 税金计提规则 */
@@ -1589,6 +1605,7 @@ export const glexApi = {
   journalPage: (pageNum, pageSize, period, entryType, keyword) =>
     http.get('/tenant/glex/journal/page', { params: { pageNum, pageSize, period, entryType, keyword } }),
   /**
+   * 一般总账记账。：ACCRUAL/DEFER 会按「申请占用」口径扣预算，
    * 故额外带预算维度（费用项目 + 承担部门）与软控超支理由；其余类型传了也被后端忽略。
    */
   journalGenerate: (period, entryType, summary, amount, debitSubjectId, creditSubjectId, extra = {}) =>
@@ -2183,4 +2200,15 @@ export const wfEventActionApi = {
   options: (cfg) => http.get('/tenant/wf/event-action-config/options', { ...(cfg || {}) }),
   runtimeSnapshot: (cfg) => http.get('/tenant/wf/event-action-config/runtime-snapshot', { ...(cfg || {}) }),
   update: (body) => http.post('/tenant/wf/event-action-config/update', body),
+}
+
+// 可配置表单平台：一套接口服务所有客户自定义的单据，formCode 由路径传入。
+// 字段与校验规则全部来自 md_form_field / md_form_validation，前端不感知具体单据类型。
+export const formApi = {
+  meta: (formCode, roles) =>
+    http.get(`/tenant/form/meta/${formCode}`, { params: roles ? { roles } : {} }),
+  save: (formCode, id, data) => http.post(`/tenant/form/bill/${formCode}/save`, { id, data }),
+  submit: (id) => http.post(`/tenant/form/bill/submit/${id}`),
+  detail: (id) => http.get(`/tenant/form/bill/detail/${id}`),
+  my: (params) => http.get('/tenant/form/bill/my', { params }),
 }
