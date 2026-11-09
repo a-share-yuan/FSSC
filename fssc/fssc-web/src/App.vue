@@ -31,7 +31,12 @@
           <component :is="Component" :key="route.fullPath" />
         </ErrorBoundary>
       </keep-alive>
-      <ErrorBoundary v-else :key="route.fullPath">
+      <!-- 顶层出口渲染的是布局组件（router.js 里 / 是父路由，业务页全是它的 children）。
+           边界 key 用 route.fullPath 会让边界随每次换页重建，连带把 Layout 整个重新挂载：
+           菜单树清空重拉、el-menu 重新初始化、已展开分组全丢后按 default-active 再展开
+           ⇒ 侧栏「点一下就闪一下／重新展开」。
+           改为按顶层布局稳定复用边界实例；按页清错误状态交给 resetKey（见 ErrorBoundary）。 -->
+      <ErrorBoundary v-else :key="layoutKey(route)" :reset-key="route.fullPath">
         <component :is="Component" />
       </ErrorBoundary>
     </router-view>
@@ -53,6 +58,15 @@ const { t } = useI18n()
 
 const retrying = ref(false)
 let timer = null
+
+/**
+ * 顶层布局键：同一个顶层路由记录（业务页共享 / → Layout）复用同一个错误边界实例。
+ * 只有真正换顶层组件（登录页 / 引导页 / 布局 / 平台控制台 / 404）才重建边界。
+ * 页面内部的错误状态由 ErrorBoundary 的 resetKey 按 route.fullPath 清零。
+ */
+function layoutKey(route) {
+  return (route.matched && route.matched[0] && route.matched[0].path) || route.path
+}
 
 /**
  * 全局预热内置字典。

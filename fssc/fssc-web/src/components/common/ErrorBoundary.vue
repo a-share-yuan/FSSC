@@ -33,7 +33,7 @@
  *
  * 捕获子组件渲染错误，防止白屏，提供重试入口。
  */
-import { onErrorCaptured, ref } from 'vue'
+import { onErrorCaptured, ref, watch } from 'vue'
 
 const hasError = ref(false)
 const errorTitle = ref('页面出错了')
@@ -41,6 +41,24 @@ const errorDesc = ref('抱歉，页面渲染时发生错误，请重试或刷新
 const errorMessage = ref('')
 const errorStack = ref('')
 const showDetail = ref(false)
+
+/**
+ * resetKey：外层传入 route.fullPath。
+ * 边界实例按顶层布局复用后，不能再靠「每次换页重建」来清错误状态，
+ * 否则上一页捕获过的错误会把后续所有页面都挡在兜底页上。
+ * 未传该属性的旧用法行为不变（换页时由外层 key 重建）。
+ */
+const props = defineProps({
+  resetKey: { type: [String, Number], default: '' },
+})
+
+function clearErrorState() {
+  hasError.value = false
+  errorMessage.value = ''
+  errorStack.value = ''
+  showDetail.value = false
+}
+watch(() => props.resetKey, () => clearErrorState())
 
 onErrorCaptured((err, instance, info) => {
   // 一次崩溃通常连着抛多条错误（首错 → 组件卸载期的二次错误）。
@@ -61,17 +79,11 @@ onErrorCaptured((err, instance, info) => {
 })
 
 function handleRetry() {
-  hasError.value = false
-  errorMessage.value = ''
-  errorStack.value = ''
-  showDetail.value = false
+  clearErrorState()
 }
 
 function handleReset() {
-  hasError.value = false
-  errorMessage.value = ''
-  errorStack.value = ''
-  showDetail.value = false
+  clearErrorState()
   location.reload()
 }
 </script>
