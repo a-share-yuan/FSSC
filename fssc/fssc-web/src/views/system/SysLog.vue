@@ -32,7 +32,7 @@
       <SkeletonList v-if="loading" :rows="8" :cols="5" />
       <el-table :data="rows" size="small" stripe v-else max-height="540" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail" :empty-text="$t('common.empty')">
         <el-table-column type="selection" width="45" />
-        <el-table-column prop="title" :label="$t('common.operation')" width="150" show-overflow-tooltip sortable />
+        <el-table-column prop="title" :label="$t('common.operation')" width="150" show-overflow-tooltip sortable :formatter="(row) => operTitleText(row.title)" />
         <el-table-column prop="businessType" :label="$t('system.common.colBizType')" width="100" sortable :formatter="(row) => bizTypeText(row.businessType)" />
         <el-table-column prop="requestMethod" :label="$t('system.common.colMethod')" width="80" sortable />
         <el-table-column prop="operUrl" label="URL" min-width="160" show-overflow-tooltip sortable />
@@ -131,6 +131,20 @@ const bizTypes = computed(() => ([
 ]))
 function bizTypeText(v) { return operBusinessTypeLabel(v) || '-' }
 
+/**
+ * 操作标题兜底：历史日志的 title 落的是 OperLog.module()（EXPENSE_BILL / WF_TASK 这类模块码），
+ * 列表「操作」列直接显示就成了英文码。新写入口已改为 desc（保存报销草稿 / 提交报销单），
+ * 这里只覆盖改造前落库的取值为中文模块名，非纯码的标题原样返回。
+ */
+const LEGACY_MODULE_TITLE = {
+  EXPENSE_BILL: '费用报销单', TENANT: '租户管理', WF_TASK: '流程任务',
+  TREASURY: '资金管理', WF_MODEL: '流程模型',
+}
+function operTitleText(v) {
+  if (!v) return v
+  return /^[A-Z][A-Z0-9_]*$/.test(v) ? (LEGACY_MODULE_TITLE[v] || v) : v
+}
+
 // 登录日志页签状态（懒加载——首次切到才请求，避免无权限账号空打请求）
 const activeTab = ref('oper')
 const loginRows = ref([])
@@ -145,7 +159,7 @@ const lq = reactive({ keyword: '', status: null })
 function openRowDetail(row) {
   return showRowDetail({
     operTime: row.operTime ? formatDateTime(row.operTime) : '',
-    title: row.title,
+    title: operTitleText(row.title),
     businessType: bizTypeText(row.businessType),
     operUserName: row.operUserName,
     operDeptName: row.operDeptName,

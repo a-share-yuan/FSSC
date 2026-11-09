@@ -7,3 +7,4 @@
 | 2026-09-23 23:09:32 | v6 → v7 | c7d3b61e-b760-11f1-890e-d8bbc1e55a1a | SETTLE:230:c7ed7fb1-b760-11f1-890e-d8bbc1e55a1a | 1 | [v6_to_v7_20260923-230932.diff](./v6_to_v7_20260923-230932.diff) |
 | 2026-09-23 23:11:44 | v7 → v8 | 1650ca4e-b761-11f1-890e-d8bbc1e55a1a | SETTLE:231:16605ab1-b761-11f1-890e-d8bbc1e55a1a | 1 | [v7_to_v8_20260923-231144.diff](./v7_to_v8_20260923-231144.diff) |
 | 2026-10-13 20:04:35 | v9 → v10 | 417b2c0c-c6fe-11f1-a8de-d8bbc1e55a1a | SETTLE:233:41ceca4f-c6fe-11f1-a8de-d8bbc1e55a1a | 0 | [v9_to_v10_20261013-200435.diff](./v9_to_v10_20261013-200435.diff) |
+| 2026-11-09 11:36:33 | v11 → v12 | c0a9d1da-dbee-11f1-baa9-d8bbc1e55a1a | SETTLE:235:c1a289bc-dbee-11f1-baa9-d8bbc1e55a1a | 1 | [v11_to_v12_20261109-113633.diff](./v11_to_v12_20261109-113633.diff) |

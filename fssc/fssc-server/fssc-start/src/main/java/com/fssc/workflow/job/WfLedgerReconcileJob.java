@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 流程双账对账作业。
@@ -109,6 +110,12 @@ public class WfLedgerReconcileJob {
      */
     private static final int MIRROR_SCAN_LIMIT = HISTORY_SCAN_LIMIT;
 
+    /** 降级态告警的最小间隔：每轮都推会变成噪声，但完全不推会让「对账已失效」无人察觉。 */
+    private static final long DEGRADED_ALERT_INTERVAL_MS = 3_600_000L;
+
+    /** 引擎侧 ID 分批做存在性核对时每批的上限，避免 IN 列表过长。 */
+    private static final int EXISTENCE_BATCH = 500;
+
     /**
      * 业务账 {@code wf_task_history.action} 中属于「任务级办结记录」的动作白名单。
      *
@@ -132,6 +139,8 @@ public class WfLedgerReconcileJob {
     /** 最近一次对账报告（供运维页只读查看；进程内驻留，重启即空） */
     private volatile Map<String, Object> lastReport = Map.of("status", "NEVER_RUN");
 
+    private final AtomicLong lastDegradedAlertAt = new AtomicLong(0L);
+
     @Scheduled(fixedDelayString = "${fssc.wf.reconcile.interval-ms:600000}",
             initialDelayString = "${fssc.wf.reconcile.initial-delay-ms:180000}")
     public void reconcile() {
@@ -139,7 +148,20 @@ public class WfLedgerReconcileJob {
             Map<String, Object> report = doReconcile();
             lastReport = report;
             if (Boolean.TRUE.equals(report.get("truncated"))) {
-                // 样本截断的轮次已由 doReconcile 记 WARN，差分数不可当结论，故不推告警
+                // 降级轮次同样要有可观测输出：让运维知道「全量对账当前不可用」，
+                // 并给出引擎侧存在性核对的结论。按间隔节流，避免每轮刷屏。
+                long now = System.currentTimeMillis();
+                long prev = lastDegradedAlertAt.get();
+                if (now - prev >= DEGRADED_ALERT_INTERVAL_MS
+                        && lastDegradedAlertAt.compareAndSet(prev, now)) {
+                    long missing = asLong(report.get("engineSideMissingInMirror"));
+                    String content = "流程双账对账处于降级态：业务账超过单轮扫描上限 "
+                            + MIRROR_SCAN_LIMIT + " 行，全量差分数不可作为结论。\n"
+                            + "本轮已对引擎侧全量 ID 做业务账存在性核对，缺失 " + missing + " 条；"
+                            + "业务账侧「有行但引擎已无」的差异本轮无法判定。\n"
+                            + "建议缩小对账窗口（按 create_time 分批）后重跑，或清理历史语料。";
+                    opsAlertService.alert("WARN", "流程双账对账处于降级态", content);
+                }
                 return;
             }
             long drift = asLong(report.get("driftTotal"));
@@ -275,11 +297,17 @@ public class WfLedgerReconcileJob {
         report.put("truncated", truncated);
 
         if (truncated) {
-            // 样本被截断时差分数只反映「哪一册没扫全」，不构成漂移结论：
-            // 既不出运维告警、也不落缺陷记录，否则每轮都会把没扫到的行数重新播一遍。
-            log.warn("[双账对账] 本轮样本超限（上限 {} 行/表），跳过差异判定：引擎实例 {} / 引擎历史任务 {} / "
-                            + "待办 {} / 实例视图 {} / 审批记录 {}",
-                    MIRROR_SCAN_LIMIT, engineProcInstIds.size(), engineHistTaskIds.size(),
+            // 全量差分数只反映「哪一册没扫全」，不能当漂移结论；但作业不能因此彻底静默。
+            // 引擎侧集合本身是全量读的，逐个到业务账做存在性核对，即可得到
+            // 「引擎有、业务账没有」这一侧的确定结论，另一侧标记为无法判定。
+            long missing = engineSideMissingInMirror(engineTaskIds, engineProcInstIds);
+            report.put("degraded", true);
+            report.put("partialMode", "ENGINE_SIDE_EXISTENCE");
+            report.put("engineSideMissingInMirror", missing);
+            report.put("driftTotal", null);
+            log.warn("[双账对账] 本轮样本超限（上限 {} 行/表），转入引擎侧存在性核对：缺失 {} 条；"
+                            + "引擎实例 {} / 引擎历史任务 {} / 待办 {} / 实例视图 {} / 审批记录 {}",
+                    MIRROR_SCAN_LIMIT, missing, engineProcInstIds.size(), engineHistTaskIds.size(),
                     mirrorPendingTaskIds.size(), mirrorProcInstIds.size(), mirrorHistTaskIds.size());
             return report;
         }
@@ -299,6 +327,63 @@ public class WfLedgerReconcileJob {
             log.error("[双账对账] 发现差异 {} 条：{}", driftTotal, report);
         }
         return report;
+    }
+
+    /**
+     * 截断轮次的确定性子结论：引擎侧全量 ID 是否都能在业务账里找到。
+     * 走分批 IN + 精确投影，不做全表扫描；引擎侧本身超限时返回 -1 表示无法核对。
+     */
+    private long engineSideMissingInMirror(Set<String> taskIds, Set<String> procInstIds) {
+        if (taskIds.size() + procInstIds.size() > MIRROR_SCAN_LIMIT) {
+            return -1L;
+        }
+        Set<String> foundTasks = new LinkedHashSet<>();
+        for (List<String> batch : batches(taskIds)) {
+            List<WfTask> rows = ignoreTenant(() -> wfTaskMapper.selectList(
+                    new LambdaQueryWrapper<WfTask>()
+                            .select(WfTask::getTaskId)
+                            .in(WfTask::getTaskId, batch)));
+            if (rows != null) {
+                for (WfTask r : rows) {
+                    if (r.getTaskId() != null) foundTasks.add(r.getTaskId());
+                }
+            }
+        }
+        Set<String> foundInsts = new LinkedHashSet<>();
+        for (List<String> batch : batches(procInstIds)) {
+            List<WfInstance> rows = ignoreTenant(() -> wfInstanceMapper.selectList(
+                    new LambdaQueryWrapper<WfInstance>()
+                            .select(WfInstance::getProcInstId)
+                            .in(WfInstance::getProcInstId, batch)));
+            if (rows != null) {
+                for (WfInstance r : rows) {
+                    if (r.getProcInstId() != null) foundInsts.add(r.getProcInstId());
+                }
+            }
+        }
+        long missing = 0;
+        for (String id : taskIds) {
+            if (!foundTasks.contains(id)) missing++;
+        }
+        for (String id : procInstIds) {
+            if (!foundInsts.contains(id)) missing++;
+        }
+        return missing;
+    }
+
+    private static List<List<String>> batches(Set<String> ids) {
+        List<List<String>> out = new ArrayList<>();
+        List<String> cur = new ArrayList<>(EXISTENCE_BATCH);
+        for (String id : ids) {
+            if (id == null) continue;
+            cur.add(id);
+            if (cur.size() >= EXISTENCE_BATCH) {
+                out.add(cur);
+                cur = new ArrayList<>(EXISTENCE_BATCH);
+            }
+        }
+        if (!cur.isEmpty()) out.add(cur);
+        return out;
     }
 
     private void recordDrift(String vectorName, Vector v) {

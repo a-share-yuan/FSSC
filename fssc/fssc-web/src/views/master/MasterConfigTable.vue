@@ -150,6 +150,27 @@ const errSummary = (v) => {
 }
 /** 只有上次运行 FAIL 才把错误摘要落「最近错误」列；SUCCESS/RUNNING 行的历史残值不外显（写入侧 markSuccess 已清 last_error，此处兜住历史旧行） */
 const lastErrCell = (v, row) => (row != null && String(row.lastResult || '').toUpperCase() === 'FAIL' ? errSummary(v) : '')
+// 记账配置行只存 item_id + item_name（md_gl_config 无编码列）；费用项在主数据里被停用或清空名称时，
+// 列表按 item_id 反查编码兜底，避免费用类型列整格空白。只做展示，不回写 md_gl_config。
+const itemMeta = {}
+let itemMetaPromise = null
+function loadItemMeta() {
+  if (!itemMetaPromise) {
+    itemMetaPromise = masterApi.item.page({ pageNum: 1, pageSize: 500 })
+      .then((d) => {
+        for (const x of d?.list || []) itemMeta[x.id] = { code: x.itemCode, status: x.status }
+        return itemMeta
+      })
+      .catch(() => { itemMetaPromise = null; return itemMeta })
+  }
+  return itemMetaPromise
+}
+const glItemLabel = (v, row) => {
+  const meta = row ? itemMeta[row.itemId] : null
+  const base = String(v ?? '').trim() || String(meta?.code ?? '').trim()
+  if (!base) return '—'
+  return meta?.status === 'DISABLED' ? `${base}（已停用）` : base
+}
 const REGISTRY = {
   // masterApi CRUD pages
   currency: { title: '币种', api: masterApi.currency, columns: [{ prop: 'currencyCode', label: '币种编码', width: 120 }, { prop: 'currencyName', label: '币种名称', minWidth: 140 }, { prop: 'symbol', label: '符号', width: 80 }, { prop: 'decimalDigit', label: '精度', width: 80, align: 'center' }, { prop: 'status', label: '状态', width: 80, align: 'center', formatter: 'enable' }], formFields: [{ prop: 'currencyCode', label: '币种编码', required: true }, { prop: 'currencyName', label: '币种名称', required: true }, { prop: 'symbol', label: t('master.masterConfig.Symbol') }, { prop: 'decimalDigit', label: '精度', type: 'number', precision: 0 }] },
@@ -182,7 +203,7 @@ const REGISTRY = {
   // 按 direction 从规则池挑行后读 getSubjectCode()/getSubjectName()。列表与表单一律改绑承载列；
   // debit/credit_subject_id 两列是引擎取科目 ID 的入口（279/425 非空），原样保留可编辑。
   // subject_name 存的是接口侧规则原文，与 aux_rule（辅助核算规则）同源重复，列表只留 auxRule 这一枚承载规则的列，subject_name 退到表单里可编辑。
-  glConfig: { title: '记账配置', api: masterCfgApi.glConfig, columns: [{ prop: 'itemName', label: '费用类型', width: 140 }, { prop: 'direction', label: '方向', width: 76, align: 'center', formatter: (v) => (v === 'DEBIT' ? '借' : v === 'CREDIT' ? '贷' : (v || '')) }, { prop: 'subjectCode', label: '科目编码', width: 130 }, { prop: 'auxRule', label: '辅助核算规则', minWidth: 140 }], formFields: [{ prop: 'itemId', label: '费用类型ID', required: true }, { prop: 'itemName', label: t('master.masterConfig.Expense2') }, { prop: 'direction', label: '借贷方向', type: 'select', options: [{ label: '借', value: 'DEBIT' }, { label: '贷', value: 'CREDIT' }] }, { prop: 'subjectCode', label: t('master.masterConfig.Account') }, { prop: 'subjectName', label: t('master.masterConfig.Account2') }, { prop: 'debitSubjectId', label: t('master.masterConfig.Debit') }, { prop: 'creditSubjectId', label: t('master.masterConfig.Credit') }, { prop: 'auxRule', label: t('master.masterConfig.Auxiliary') }] },
+  glConfig: { title: '记账配置', api: masterCfgApi.glConfig, columns: [{ prop: 'itemName', label: '费用类型', width: 140, formatter: glItemLabel }, { prop: 'direction', label: '方向', width: 76, align: 'center', formatter: (v) => (v === 'DEBIT' ? '借' : v === 'CREDIT' ? '贷' : (v || '')) }, { prop: 'subjectCode', label: '科目编码', width: 130 }, { prop: 'auxRule', label: '辅助核算规则', minWidth: 140 }], formFields: [{ prop: 'itemId', label: '费用类型ID', required: true }, { prop: 'itemName', label: t('master.masterConfig.Expense2') }, { prop: 'direction', label: '借贷方向', type: 'select', options: [{ label: '借', value: 'DEBIT' }, { label: '贷', value: 'CREDIT' }] }, { prop: 'subjectCode', label: t('master.masterConfig.Account') }, { prop: 'subjectName', label: t('master.masterConfig.Account2') }, { prop: 'debitSubjectId', label: t('master.masterConfig.Debit') }, { prop: 'creditSubjectId', label: t('master.masterConfig.Credit') }, { prop: 'auxRule', label: t('master.masterConfig.Auxiliary') }] },
   incomeExpense: { title: '收支设置', api: masterCfgApi.incomeExpense, columns: [{ prop: 'ieCode', label: '编码', width: 120 }, { prop: 'ieName', label: '名称', minWidth: 140 }, { prop: 'ieType', label: '收支类型', width: 100 }], formFields: [{ prop: 'ieCode', label: '编码', required: true }, { prop: 'ieName', label: '名称', required: true }, { prop: 'ieType', label: '收支类型', type: 'select', options: [{ label: '收入', value: 'IN' }, { label: '支出', value: 'OUT' }] }] },
   loanPayType: { title: '借款付款类型', api: masterCfgApi.loanPayType, columns: [{ prop: 'typeCode', label: '编码', width: 120 }, { prop: 'typeName', label: '名称', minWidth: 140 }, { prop: 'remark', label: '说明', minWidth: 200 }], formFields: [{ prop: 'typeCode', label: '编码', required: true }, { prop: 'typeName', label: '名称', required: true }, { prop: 'remark', label: '说明', type: 'textarea' }] },
   contractType: { title: '合同类型', api: masterCfgApi.contractType, columns: [{ prop: 'typeCode', label: '编码', width: 120 }, { prop: 'typeName', label: '名称', minWidth: 160 }, { prop: 'remark', label: '说明', minWidth: 200 }], formFields: [{ prop: 'typeCode', label: '编码', required: true }, { prop: 'typeName', label: '名称', required: true }, { prop: 'remark', label: '说明', type: 'textarea' }] },
@@ -315,6 +336,7 @@ async function load() {
   if (!cfg.value.api?.page) return
   loading.value = true
   try {
+    if (props.configKey === 'glConfig') await loadItemMeta()
     const d = await cfg.value.api.page({ pageNum: pageNum.value, pageSize: pageSize.value, keyword: searchForm.keyword })
     rows.value = d?.list || d?.records || []
     total.value = Number(d.total || 0)

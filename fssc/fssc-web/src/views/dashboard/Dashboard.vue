@@ -41,7 +41,7 @@ import { useRouter } from 'vue-router'
 // echarts 按需引入（core + 图表 + 组件 + Canvas 渲染器）——显著减小包体积
 import * as echarts from 'echarts/core'
 import { PieChart, BarChart, LineChart } from 'echarts/charts'
-import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
+import { TooltipComponent, LegendComponent, GridComponent, TitleComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { initThemedChart, onThemeChange } from '../../utils/echartsTheme'
 import { ElMessage } from 'element-plus'
@@ -60,7 +60,7 @@ function drill(path) {
   router.push(path)
 }
 
-echarts.use([PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, GridComponent, CanvasRenderer])
+echarts.use([PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, GridComponent, TitleComponent, CanvasRenderer])
 
 const router = useRouter()
 
@@ -196,6 +196,23 @@ function initChart(el) {
   return c
 }
 
+/**
+ * 空数据统一画「暂无数据」。
+ * 不处理的话 ECharts 会画一张只剩坐标轴的空图，value 轴还会留一个孤零零的「0.00」
+ * 贴在画布左上角（审批时效图实测如此），看着像渲染坏了。
+ */
+function renderEmpty(chart) {
+  chart.clear()
+  chart.setOption({
+    title: {
+      text: t('common.empty'),
+      left: 'center',
+      top: 'middle',
+      textStyle: { color: theme().text, fontSize: 13, fontWeight: 'normal', opacity: 0.55 },
+    },
+  })
+}
+
 function axisBase() {
   const t = theme()
   return {
@@ -206,6 +223,7 @@ function axisBase() {
 
 function renderStatus(rows) {
   const chart = initChart(statusChart.value)
+  if (!rows || !rows.length) return renderEmpty(chart)
   chart.setOption({
     tooltip: { trigger: 'item', formatter: t('dashboard.main.B') },
     legend: { bottom: 0, type: 'scroll', textStyle: { color: theme().text } },
@@ -220,6 +238,7 @@ function renderStatus(rows) {
 
 function renderPay() {
   const chart = initChart(payChart.value)
+  if (!Number(pay.value.paidCnt || 0) && !Number(pay.value.waitingCnt || 0)) return renderEmpty(chart)
   chart.setOption({
     tooltip: { trigger: 'item' },
     series: [{
@@ -236,9 +255,11 @@ function renderPay() {
 
 function renderEff(rows) {
   const chart = initChart(effChart.value)
+  if (!rows || !rows.length) return renderEmpty(chart)
   chart.setOption({
     tooltip: { trigger: 'axis' },
-    grid: { left: 40, right: 16, top: 24, bottom: 28 },
+    // containLabel：value 轴标签宽度随数据量级变化（「18,000」约 50px），写死 left 必被裁
+    grid: { left: 8, right: 16, top: 24, bottom: 28, containLabel: true },
     xAxis: { type: 'category', data: rows.map((r) => docTypeLabel(r.bill_type)), ...axisBase() },
     yAxis: { type: 'value', name: '分钟', ...axisBase() },
     series: [{ name: '平均审批分钟', type: 'bar', barWidth: 30, data: rows.map((r) => Number(r.avg_minutes || 0)), itemStyle: { color: '#9b59b6' } }],
@@ -248,10 +269,14 @@ function renderEff(rows) {
 
 function renderTrend(rows) {
   const chart = initChart(trendChart.value)
+  if (!rows || !rows.length) return renderEmpty(chart)
   chart.setOption({
     tooltip: { trigger: 'axis' },
     legend: { textStyle: { color: theme().text } },
-    grid: { left: 40, right: 16, top: 32, bottom: 28 },
+    // 同 renderEff：金额上万时左侧标签是「18,000」，left:40 只能容下 5 个字符，
+    // 首字符被画布裁掉后「18,000→8,000、15,000→5,000、12,000→2,000」，
+    // 视觉上像刻度乱序（实为截断）。
+    grid: { left: 8, right: 16, top: 32, bottom: 28, containLabel: true },
     xAxis: { type: 'category', data: rows.map((r) => `${r.period_year}-${r.period_month}`), ...axisBase() },
     yAxis: { type: 'value', ...axisBase() },
     series: [
@@ -264,10 +289,12 @@ function renderTrend(rows) {
 
 function renderDept(rows) {
   const chart = initChart(deptChart.value)
+  if (!rows || !rows.length) return renderEmpty(chart)
   const list = rows.slice(0, 8).reverse()
   chart.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: 90, right: 40, top: 16, bottom: 24 },
+    // 部门名长度不可控（「运营支持组」5 字 ≈ 60px，长名 8 字就超 90px）：交给 containLabel 自适应
+    grid: { left: 12, right: 40, top: 16, bottom: 24, containLabel: true },
     xAxis: { type: 'value', ...axisBase() },
     yAxis: { type: 'category', data: list.map((r) => r.dept_name || ('部门' + r.dept_id)), ...axisBase() },
     series: [{
@@ -281,9 +308,11 @@ function renderDept(rows) {
 
 function renderBudget(rows) {
   const chart = initChart(budgetChart.value)
+  if (!rows || !rows.length) return renderEmpty(chart)
   chart.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: 90, right: 40, top: 16, bottom: 24 },
+    // 预算项目名同理（「行政办公费」5 字已到 60px，长名会顶到 90px 以上）
+    grid: { left: 12, right: 40, top: 16, bottom: 24, containLabel: true },
     xAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' }, ...axisBase() },
     yAxis: { type: 'category', data: rows.map((r) => r.itemName).reverse(), ...axisBase() },
     series: [{

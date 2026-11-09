@@ -161,7 +161,9 @@ function renderTrend() {
   }
   if (!chart) chart = initThemedChart(trendRef.value)
   chart.setOption({
-    grid: { left: 40, right: 10, top: 20, bottom: 30 },
+    // 下钻的金额可到百万级（「1,234,567」约 60px），写死 left:40 会裁掉首字符；
+    // x 轴 rotate:30 的倾斜标签也需要底部自适应空间，一并交给 containLabel。
+    grid: { left: 8, right: 12, top: 20, bottom: 8, containLabel: true },
     xAxis: { type: 'category', data: trendData.value.map((d) => d.name), axisLabel: { fontSize: 10, rotate: 30 } },
     yAxis: { type: 'value', axisLabel: { fontSize: 10 } },
     series: [{

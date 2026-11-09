@@ -318,11 +318,38 @@ public class ImageService {
         private Integer pageNo;
     }
 
+    /**
+     * 取影像批次号（IMG + yyyyMMdd + 4 位流水，由 sys_number_rule=IMAGE_BATCH 维护）。
+     *
+     * <p><b>为什么取号后还要查重</b>：批次号的唯一约束 uk_tenant_batch_no 建在
+     * (tenant_id, batch_no) 上，**不区分 del_flag**；而清库会把 sys_number_seq 整表清空
+     * （序号从 1 重来），铺底批次（IMG2026110900001/0002…）仍原样保留。
+     * 新批次于是取到与铺底行相同的号，insert 直接抛 DuplicateKey ⇒ 接口返回
+     * 4090「该记录已存在，请勿重复提交」，前端只看到一句泛化报错，上传功能整条不可用。
+     * 2026-11-09 实测：第 18 次清库后连撞两次（0001/0002 都被铺底占用），
+     * 直到物理删掉铺底批次才恢复——这不该由用户去删数据来解决。
+     *
+     * <p>另外务必用 {@code countByBatchNoIncludingDeleted}：逻辑删插件会给普通查询补
+     * {@code del_flag=0}，软删批次明明还占着唯一键，查重却报"没占用"。
+     */
     private String nextBatchNo() {
-        try {
-            return numberRuleService.next("IMAGE_BATCH");
-        } catch (Exception e) {
-            return "IMG" + System.currentTimeMillis();
+        Long tenantId = TenantContext.getTenantId();
+        for (int i = 0; i < 50; i++) {
+            String no;
+            try {
+                no = numberRuleService.next("IMAGE_BATCH");
+            } catch (Exception e) {
+                no = "IMG" + System.currentTimeMillis();
+            }
+            Long used = imgBatchMapper.countByBatchNoIncludingDeleted(tenantId, no);
+            if (used == null || used == 0) {
+                return no;
+            }
+            log.warn("影像批次号 {} 已被占用（唯一键含软删行），顺延重取（第 {} 次）", no, i + 1);
         }
+        // 极端情况：号段被历史数据占满 50 个，退化为时间戳（仍可能与同毫秒并发撞，再兜一次）
+        String fallback = "IMG" + System.currentTimeMillis();
+        log.error("影像批次号连续 50 次撞号，退化为时间戳 {}", fallback);
+        return fallback;
     }
 }

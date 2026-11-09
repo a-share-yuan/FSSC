@@ -5,6 +5,7 @@ package com.fssc.framework.log;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.datasource.DataSourceContextHolder;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
@@ -116,7 +117,11 @@ public class OperLogAspect {
             SysOperLog l = new SysOperLog();
             l.setTenantId(TenantContext.getTenantId());
             l.setTraceId(MDC.get(TraceIdFilter.MDC_KEY));
-            l.setTitle(operLog.module());
+            // 租户日志表没有独立的 module/desc 双列（平台表 pf_oper_log 才有 module+operDesc），
+            // 原先把 module 塞进 title，列表「操作」列就成了 EXPENSE_BILL / WF_TASK 这类码。
+            // 该列语义是「做了什么」，写 desc（保存报销草稿 / 提交报销单）才可读；
+            // 模块归属仍可从 method/oper_url 还原。
+            l.setTitle(operLog.desc());
             l.setBusinessType(operLog.operType());
             l.setMethod(truncate(((MethodSignature) pjp.getSignature()).getMethod().toString(), 500)); // SO: 全签名超长致 sys_oper_log 写入失败
             l.setRequestMethod(req == null ? null : req.getMethod());
@@ -190,7 +195,14 @@ public class OperLogAspect {
         if (cached != null && now - cached.sampledAt() < DEPT_NAME_TTL_MS) {
             return cached.name().isEmpty() ? null : cached.name();
         }
+        // sys_dept 只在 fssc 主库；调用方可能正处在 image 路由（影像上传/核验的 Controller
+        // 类上标了 @FsscDataSource("image")，本切面在同一个请求线程里执行，路由键还留着）。
+        // 不临时切回 master 就会执行 `SELECT ... FROM sys_dept` 打到 fssc_image 库，
+        // 每笔影像上传都刷一条 SQLSyntaxErrorException（Table 'fssc_image.sys_dept' doesn't exist）
+        // 并且操作日志的 dept_name 恒为空。切完必须还原，否则会把后续写入带偏库。
+        String prevDs = DataSourceContextHolder.get();
         try {
+            DataSourceContextHolder.set("master");
             SysDept dept = sysDeptMapper.selectOne(new LambdaQueryWrapper<SysDept>()
                     .select(SysDept::getDeptName)
                     .eq(SysDept::getId, deptId)
@@ -205,6 +217,13 @@ public class OperLogAspect {
             // 不写缓存：下一笔重试；部门缺失不影响整行日志写入数据库
             log.warn("操作日志部门反查失败 deptId={}: {}", deptId, e.getMessage());
             return null;
+        } finally {
+            // 还原路由键：调用方后续（如异步落库前的其它查询）仍按原库走
+            if (prevDs == null) {
+                DataSourceContextHolder.clear();
+            } else {
+                DataSourceContextHolder.set(prevDs);
+            }
         }
     }
 

@@ -6,21 +6,21 @@
     <!-- 目录 / 含可点击子级 → 折叠子菜单（支持多级嵌套） -->
     <el-sub-menu v-if="hasClickableChild(n)" :index="n.path ? 'dir-' + n.id : String(n.id)">
       <template #title>
-        <el-icon v-if="n.icon" class="menu-icon"><component :is="n.icon" /></el-icon>
+        <el-icon class="menu-icon"><component :is="iconOf(n)" /></el-icon>
         <span>{{ n.menuName }}</span>
       </template>
       <!-- 该节点自身也是一个页面（带 path）时，把主页列为首项：
            否则「分组标题点不动 + 子项里又没有主页」会让这个页面在侧栏彻底没有入口
            （资产与存货 /asset、应收管理 /receivable、影像管理 /image 三域均如此，只能从工作台卡片进）。 -->
       <el-menu-item v-if="n.path && hubOpenable(n)" :index="itemIndex(n.path)">
-        <el-icon v-if="n.icon" class="menu-icon"><component :is="n.icon" /></el-icon>
+        <el-icon class="menu-icon"><component :is="iconOf(n)" /></el-icon>
         <span>{{ n.menuName }}总览</span>
       </el-menu-item>
       <MenuTree :nodes="childNodes(n)" />
     </el-sub-menu>
     <!-- 叶子页面 → 直接菜单项 -->
     <el-menu-item v-else-if="n.path" :index="itemIndex(n.path)">
-      <el-icon v-if="n.icon" class="menu-icon"><component :is="n.icon" /></el-icon>
+      <el-icon class="menu-icon"><component :is="iconOf(n)" /></el-icon>
       <span>{{ n.menuName }}</span>
     </el-menu-item>
   </template>
@@ -28,6 +28,7 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import * as ElIcons from '@element-plus/icons-vue'
 import { pathDenyReason } from '../router/pathAccess'
 /**
  * 递归菜单树组件：支持任意层级（顶级 → 目录 → 页面）。
@@ -37,6 +38,19 @@ import { pathDenyReason } from '../router/pathAccess'
  * 依赖外层 el-menu 的 router 模式与配色继承。
  */
 defineOptions({ name: 'MenuTree' })
+
+/**
+ * 图标解析。
+ * 库里的 icon 只是一个字符串，只有能落到 Element Plus 的图标组件上才画得出图形；
+ * 名字为空或拼错时 `<component :is>` 会渲染成**空盒子**——侧栏出现「占着图标位、
+ * 却什么都没有」的空缺（我的费用单据、报表分组都踩过）。这里统一兜底：
+ * 取不到就按节点类型给默认图形，保证任何一条菜单数据都有可见图标。
+ */
+function iconOf(n) {
+  const name = n && n.icon
+  if (name && ElIcons[name]) return name
+  return n && n.menuType === 'M' ? 'Folder' : 'Document'
+}
 defineProps({
   nodes: { type: Array, default: () => [] },
 })

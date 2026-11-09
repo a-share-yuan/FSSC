@@ -172,7 +172,8 @@ function renderTrend() {
   }
   if (!chart) chart = initThemedChart(trendRef.value)
   chart.setOption({
-    grid: { left: 30, right: 10, top: 20, bottom: 30 },
+    // 计数到四位（1,000+）时 left:30 就装不下，标签首字符被裁；containLabel 按实际宽度反推
+    grid: { left: 8, right: 12, top: 20, bottom: 24, containLabel: true },
     xAxis: { type: 'category', data: trendData.value.map((d) => d.label), axisLabel: { fontSize: 11 } },
     yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 11 } },
     series: [{

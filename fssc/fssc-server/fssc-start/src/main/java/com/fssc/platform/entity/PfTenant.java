@@ -36,6 +36,10 @@ public class PfTenant extends PlatformBaseEntity {
     private LocalDateTime expireTime;
     /** 租户超管用户ID（指向 sys_user） */
     private Long adminUserId;
+    /** 装配档：EXPENSE / CONTROL / SHARED。NULL=未初始化，首次登录跳引导页 */
+    private String opMode;
+    /** 装配完成时间；与 op_mode 同批回写，作为幂等重试的完成标记 */
+    private LocalDateTime onboardTime;
     private String remark;
 
     public String getTenantCode() { return tenantCode; }
@@ -91,6 +95,12 @@ public class PfTenant extends PlatformBaseEntity {
 
     public Long getAdminUserId() { return adminUserId; }
     public void setAdminUserId(Long adminUserId) { this.adminUserId = adminUserId; }
+
+    public String getOpMode() { return opMode; }
+    public void setOpMode(String opMode) { this.opMode = opMode; }
+
+    public LocalDateTime getOnboardTime() { return onboardTime; }
+    public void setOnboardTime(LocalDateTime onboardTime) { this.onboardTime = onboardTime; }
 
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }

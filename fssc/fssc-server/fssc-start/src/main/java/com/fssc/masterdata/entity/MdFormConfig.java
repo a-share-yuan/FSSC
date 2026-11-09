@@ -40,8 +40,41 @@ public class MdFormConfig extends TenantAuditBase {
     /** 配置JSON（字段/布局/规则） */
     private String configJson;
 
-    /** 关联流程模型key（参考绑定） */
+    /**
+     * 关联流程模型 key。
+     *
+     * <p>通用单据运行时以本列为起流唯一依据：提交时直接以此 key 启动流程实例，
+     * 不再按 bill_type 做 switch 映射。为空时回退 {@link #formCode}。
+     */
     private String modelKey;
+
+    /**
+     * 流程路由键，对应 {@code wf_process_config.biz_type}。
+     * 为空时运行时回退 {@link #formCode}；同一张表单要按公司/金额分档走不同流程时，
+     * 由 {@code wf_process_config} 的多行配置承担，本列只给一个默认键。
+     */
+    private String bizType;
+
+    /**
+     * 存储方式：{@code JSON} 由通用运行库 {@code biz_form_bill.form_data} 承载任意字段；
+     * {@code EXPENSE_WIDE} 沿用 {@code exp_bill} 宽表与既有费用单据链路。
+     */
+    private String storeMode;
+
+    /** 发起页路径，空则 {@code /form/{formCode}} */
+    private String menuPath;
+
+    /** 侧栏显示名，空则取 {@link #formName} */
+    private String menuName;
+
+    /** 挂在哪个菜单目录下（sys_menu.id） */
+    private Long menuParentId;
+
+    /** 流程标题取值字段 key；空则 formName + 申请人姓名 */
+    private String titleExpr;
+
+    /** 是否允许存草稿 */
+    private Integer allowDraft;
 
     /** 状态 */
     private String status;

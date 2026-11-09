@@ -5,6 +5,7 @@ package com.fssc.openapi.linku;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fssc.common.core.Result;
+import com.fssc.common.exception.BizException;
 import com.fssc.connector.callback.InboundCallbackVerifier;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.openapi.linku.mapper.LinkuOpenLogMapper;
@@ -34,6 +35,10 @@ import java.util.Map;
  *
  * <p><b>未过签不落业务表、也不写审计表</b>（规则）：仅记应用日志（IP + 事件类型 + 拒绝码），
  * 不落请求体，避免未鉴权写入面。已过签的业务失败仍照常写入数据库 —— 那是合法来源的审计线索。</p>
+ *
+ * <p>业务侧抛出的 {@link BizException} 携带明确的状态码（400 参数/409 冲突/500 内部），
+ * 守卫按该码回写 HTTP 状态与业务描述，调用方才能区分「自己传错了」与「服务端故障」；
+ * 只有未预期的异常才收敛为通用 500。</p>
  */
 @Slf4j
 @Component
@@ -131,14 +136,38 @@ public class LinkuOpenGuard {
             }
             return Result.success(ack);
         } catch (Exception ex) {
-            log.error("[LinkU开放接口] 处理失败 eventType={} idempotencyKey={} err={}",
-                    eventType, idempotencyKey, ex.getMessage(), ex);
+            BizException biz = findBizException(ex);
+            int status = biz == null ? 500 : httpStatusOf(biz.getCode());
+            String errCode = biz == null ? "LINKU_OPEN_FAILED" : "LINKU_OPEN_BIZ_REJECTED";
+            String detail = biz == null ? null : truncate(biz.getMessage(), 200);
+            log.error("[LinkU开放接口] 处理失败 eventType={} idempotencyKey={} status={} err={}",
+                    eventType, idempotencyKey, status, ex.getMessage(), ex);
             writeLog(eventType, linkuReconId, supplierId, rawBody, idempotencyKey,
-                    "FAILED", truncate(ex.getMessage(), 500), (int) (System.currentTimeMillis() - start));
-            resp.setStatus(500);
-            return Result.fail(500, "LINKU_OPEN_FAILED");
+                    "FAILED", truncate(detail == null ? ex.getMessage() : detail, 500),
+                    (int) (System.currentTimeMillis() - start));
+            resp.setStatus(status);
+            return Result.fail(status, errCode + (detail == null ? "" : "|" + detail));
         }
         // 不在此清 TenantContext：runIgnoreTenant 内部已自动 restore，请求结束由 JwtAuthFilter 统一 clear。
+    }
+
+    /** 从异常链里找业务异常：checked 异常在 runIgnoreTenant 内被包成 IllegalStateException。 */
+    private static BizException findBizException(Throwable t) {
+        int depth = 0;
+        for (Throwable c = t; c != null && depth++ < 8; c = c.getCause()) {
+            if (c instanceof BizException biz) {
+                return biz;
+            }
+        }
+        return null;
+    }
+
+    /** 业务码转 HTTP 状态：只放行标准 4xx/5xx，非标准业务码一律按参数错误 400。 */
+    private static int httpStatusOf(int code) {
+        if (code >= 400 && code <= 599) {
+            return code;
+        }
+        return code >= 500 ? 500 : 400;
     }
 
     /** 去重判定；{@code idempotency_key} 列缺失时降级为「无去重保护」并告警。 */
@@ -155,17 +184,27 @@ public class LinkuOpenGuard {
         }
     }
 
-    /** 落审计；列缺失时自动去掉唯一键列重试。 */
+    /**
+     * 落审计。查询类请求没有幂等键，必须走不带键的写入：否则生成列会算出
+     * {@code event_type:''}，同一事件类型的所有查询共用这一个值并撞唯一键。
+     */
     private void writeLog(String eventType, Long linkuReconId, Long supplierId, String rawBody,
                           String idempotencyKey, String status, String errorMsg, int durationMs) {
         try {
             TenantContext.runIgnoreTenant(() -> {
+                String body = truncate(rawBody, 4000);
+                LocalDateTime now = LocalDateTime.now();
+                if (!StringUtils.hasText(idempotencyKey)) {
+                    logMapper.insertWithoutKey(eventType, linkuReconId, supplierId, body,
+                            status, errorMsg, durationMs, now);
+                    return;
+                }
                 try {
-                    logMapper.insertWithKey(eventType, linkuReconId, supplierId, truncate(rawBody, 4000),
-                            status, errorMsg, durationMs, idempotencyKey, LocalDateTime.now());
+                    logMapper.insertWithKey(eventType, linkuReconId, supplierId, body,
+                            status, errorMsg, durationMs, idempotencyKey, now);
                 } catch (DataAccessException e) {
-                    logMapper.insertWithoutKey(eventType, linkuReconId, supplierId, truncate(rawBody, 4000),
-                            status, errorMsg, durationMs, LocalDateTime.now());
+                    logMapper.insertWithoutKey(eventType, linkuReconId, supplierId, body,
+                            status, errorMsg, durationMs, now);
                 }
             });
         } catch (DataAccessException e) {

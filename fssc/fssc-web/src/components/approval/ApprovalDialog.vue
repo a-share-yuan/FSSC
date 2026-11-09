@@ -371,7 +371,7 @@
 
     <template #footer>
       <div class="ad-footer">
-        <el-button v-if="st.showDetail" @click="emit('detail')">查看单据详情</el-button>
+        <el-button v-if="st.showDetail" @click="showDetail">查看单据详情</el-button>
         <span class="ad-kbd">Ctrl+Enter 提交 · Esc 取消</span>
         <span class="ad-footer-actions">
           <el-button :disabled="st.submitting" @click="cancel">取消</el-button>
@@ -1100,6 +1100,12 @@ function cancel() {
   approvalReq = ''
   st.resolve?.(null)
   st.resolve = null
+}
+
+/** 「查看单据详情」：先关弹窗再交回父页开抽屉（两者互斥），关窗按取消路径 resolve(null) */
+function showDetail() {
+  cancel()
+  emit('detail')
 }
 
 /** 弹窗内一次性办结：关窗 + 把 payload 交回调用方 */

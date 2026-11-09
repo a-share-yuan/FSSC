@@ -39,20 +39,32 @@ public class MessageService {
         return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
     }
 
+    /** sys_message 的列宽；越界会让整条通知写入失败，业务方拼长文本时以此统一收口。 */
+    private static final int TITLE_MAX = 200;
+    private static final int CONTENT_MAX = 1000;
+
     /** 发送消息给指定用户（业务链路调用，如审批完成通知） */
     public Long send(Long receiverId, String msgType, String title, String content,
                      String bizType, Long bizId, String linkUrl) {
         SysMessage m = new SysMessage();
         m.setReceiverId(receiverId);
         m.setMsgType(msgType == null ? "NOTICE" : msgType);
-        m.setTitle(title);
-        m.setContent(content);
+        m.setTitle(fit(title, TITLE_MAX));
+        m.setContent(fit(content, CONTENT_MAX));
         m.setBizType(bizType);
         m.setBizId(bizId);
         m.setLinkUrl(linkUrl);
         m.setIsRead(0);
         messageMapper.insert(m);
         return m.getId();
+    }
+
+    /** 按列宽截断，超长部分用省略号收尾，保证通知本身不丢。 */
+    private static String fit(String s, int max) {
+        if (s == null || s.length() <= max) {
+            return s;
+        }
+        return s.substring(0, max - 1) + "…";
     }
 
     /**

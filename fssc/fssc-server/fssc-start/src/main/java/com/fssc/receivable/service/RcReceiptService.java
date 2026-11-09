@@ -75,12 +75,27 @@ public class RcReceiptService {
      * 遗留通路＝rc_receipt.receivable_ids 逗号串（#12 明细核销上线前的历史行）。
      * 无从派生的行＝无公司归属，公司账号不可见（与 RcReceivableService.page 的 eq 规则一致）；
      * 集团账号 scopeC=null 不限制，由调用方保证不走本 SQL。
+     *
+     * <p><b>2026-11-09 性能修复（P0）</b>：原写法是一个 OR 连接的两个相关 EXISTS，其中遗留通路
+     * {@code find_in_set(r2.id, rc.receivable_ids)} 完全用不上索引——优化器只能拿每张收款单去
+     * 扫一遍该公司名下全部应收（压测 7 万收款 × 9 万应收 ≈ 六亿次比较，实测 16 分钟不返回）。
+     * 现改为两条分支 {@code UNION}：
+     * <ol>
+     *   <li>明细通路照旧走 {@code rc_receipt_line.receipt_id} / {@code rc_receivable.company_id}；</li>
+     *   <li>遗留通路先用 {@code NOT EXISTS(明细)} 把外层收窄到"真的没有明细的历史行"
+     *       （#12 之后新单必有明细，这一支通常只剩个位数），再逐行 find_in_set。</li>
+     * </ol>
+     * 口径：一张单既有明细、又在 receivable_ids 里挂着别家公司的旧串时，**以明细为准**
+     * （明细是核销事实，逗号串只是历史残留）。UNION 自带去重，与原 OR 的语义等价。
      */
     private static String derivedCompanyScopeSql(Long scopeC) {
         return "select rc.id from rc_receipt rc where exists ("
                 + "select 1 from rc_receipt_line l join rc_receivable r on r.id = l.receivable_id"
                 + " where l.receipt_id = rc.id and l.del_flag = 0 and r.del_flag = 0 and r.company_id = " + scopeC
-                + ") or exists ("
+                + ") union "
+                + "select rc.id from rc_receipt rc where not exists ("
+                + "select 1 from rc_receipt_line l2 where l2.receipt_id = rc.id and l2.del_flag = 0"
+                + ") and exists ("
                 + "select 1 from rc_receivable r2 where r2.del_flag = 0 and r2.company_id = " + scopeC
                 + " and find_in_set(r2.id, rc.receivable_ids))";
     }

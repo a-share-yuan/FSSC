@@ -152,7 +152,9 @@ public class AuthService {
         captchaTrigger.resetOnSuccess(tenantCode, username);
         String token = tokenService.createToken(u, rememberMe);
         saveSysLogin(tenantId, username, true, "登录成功", req);
-        return new LoginResult(token, u);
+        // op_mode 只作首登分流判据：NULL=尚未装配，前端跳选档引导页；非空直接进工作台。
+        // 不写进 LoginUser（会被序列化进 JWT），避免装配后旧 claims 继续把用户送回引导页。
+        return new LoginResult(token, u, tenant.getOpMode());
     }
 
     private LoginUser buildTenantUser(SysUser user, Long tenantId) {
@@ -295,7 +297,7 @@ public class AuthService {
         return switch (tenant.getStatus() == null ? "" : tenant.getStatus()) {
             case "NORMAL" -> {
                 if (tenant.getExpireTime() != null && tenant.getExpireTime().isBefore(LocalDateTime.now())) {
-                    yield "租户套餐已过期，请联系平台续费";
+                    yield "租户使用期限已到期，请联系系统管理员";
                 }
                 yield null;
             }
