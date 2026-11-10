@@ -9,6 +9,7 @@ import com.fssc.common.core.ErrorCode;
 import com.fssc.common.core.Result;
 import com.fssc.common.exception.BizException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -48,8 +49,14 @@ public class GlobalExceptionHandler {
 
     /** 业务异常：直接取 code/msg */
     @ExceptionHandler(BizException.class)
-    public Result<Void> handleBiz(BizException ex, HttpServletRequest req) {
-        log.warn("业务异常 uri={} msg={}", req.getRequestURI(), ex.getMessage());
+    public Result<Void> handleBiz(BizException ex, HttpServletRequest req, HttpServletResponse resp) {
+        log.warn("业务异常 uri={} code={} msg={}", req.getRequestURI(), ex.getCode(), ex.getMessage());
+        // 409 冲突族（会计期间已关账/冻结）同步落到 HTTP 状态：HTTP 200 + code!=0 会让网关、
+        // 客户端与浏览器网络面板都判成「成功」，与「零写入」的实际结果对不上。
+        // 只对该码生效，其余业务异常维持原有 HTTP 200 + code/msg 契约不变。
+        if (ex.getCode() == ErrorCode.PERIOD_CLOSED.getCode()) {
+            resp.setStatus(HttpServletResponse.SC_CONFLICT);
+        }
         return Result.fail(ex.getCode(), ex.getMessage());
     }
 

@@ -140,4 +140,17 @@ public class WfNodeConfig extends TenantAuditBase {
      * 并写一条 {@code VOTE_NOT_REACHED} 记录供质量报表统计。
      */
     private String voteFallback;
+
+    /**
+     * 节点级互斥组：同一流程实例内，同组的不同节点必须由不同人办理。
+     *
+     * <p>空 / NULL ＝ 不启用（默认，历史行行为零变化）。与 {@code approve.deny_serial_same_handler}
+     * 的分工：那个是「整链连办」总闸（线上仅 {@code GL_MONTH_CLOSE}，全流程开启会因 FIN_GL
+     * 净可用人不足而卡死）；本列只约束真正互斥的<b>节点对</b>，例如付款「编制↔执行」、
+     * 凭证「复核↔制证」，组内换人即可，不牵连同链其他节点。
+     *
+     * <p>取值约定：{@code PAY_MAKE_EXEC}（付款编制↔执行）、{@code VOUCHER_REVIEW_POST}
+     * （凭证复核↔制证）；新增组只需在同一 model 的两行上写同一个组名。
+     */
+    private String serialExclusiveGroup;
 }

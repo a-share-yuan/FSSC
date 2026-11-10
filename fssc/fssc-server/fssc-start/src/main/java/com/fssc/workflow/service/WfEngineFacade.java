@@ -289,7 +289,7 @@ public class WfEngineFacade {
                 } catch (Exception ex) {
                     // 不可恢复分支：引擎侧变量已随实例清理，重放/重试都取不回上下文。
                     // 若在此冒泡，isFailOnException=true 会让该流程实例永远无法结束（死循环），
-                    // 故记缺陷（WF-MIRRO3）后返回——缺陷在对账作业下一轮会被重新暴露。
+                    // 故记一条异常记录后返回——对账作业下一轮会重新暴露。
                     mirrorDefectRecorder.record(WfMirrorDefectRecorder.CODE_ENGINE_BYPASS,
                             "PROCESS_COMPLETED.getVariables", null, "procInstId=" + pi.getId(), ex);
                     return;
@@ -642,7 +642,7 @@ public class WfEngineFacade {
      * 服务端"不可再发起"的流程配置状态集。
      *
      * <p>{@code DISABLED} 才是本系统真正写出来的停用语义——界面启停走 {@code WfModelService#enable}。
-     * 发起校验如果只比对 {@code OFFLINE} 就形同虚设：{@code wf_model.status} 现网取值只有
+     * 发起校验如果只比对 {@code OFFLINE} 就形同虚设：{@code wf_model.status} 线上取值只有
      * ACTIVE/DEPLOYED，两个值都不在拦截集里，于是"界面上停了、单据照样提"。
      * {@code OFFLINE} 一并保留，用于兼容历史/外部写入的值。
      */
@@ -736,7 +736,7 @@ public class WfEngineFacade {
         vars.put("outOfPlan", resolveOutOfPlan(processKey, bizId));
         vars.put("overLimit", resolveOverLimit(processKey, bizId));
         vars.put("hasContract", resolveHasContract(processKey, bizId));
-        // billType 的取值域必须与 BPMN 条件的字面量同源。现网 {@code ${billType == '…'}}
+        // billType 的取值域必须与 BPMN 条件的字面量同源。线上 {@code ${billType == '…'}}
         // 条件共 11 条，除 SETTLE 的 {@code PREPAY} 一条用的是子类型，其余全部写在 bizType 域
         // （＝wf_process_config.biz_type 登记值、＝wf_instance.biz_type 落库值）。
         // 所以 billType 一律取 bizType；单据子类型另用下面的 subType 变量承载——
@@ -1294,7 +1294,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 缺陷D2(20260919)：动态指派人合法性校验。
+     * 动态指派人合法性校验。
      * 首节点 {@code assignee=${approver}} 的办理人必须「存在 + NORMAL + 未删除 + 至少持一角色」；
      * 任一不满足（调用方传了零角色/停用/不存在用户）时回退发起人并告警。
      * 零角色用户若被指派：其 JWT 的 per 声明为空、待办对任何真实用户不可见，节点将永久卡死。
@@ -1654,7 +1654,7 @@ public class WfEngineFacade {
             JsonNode f = root.path("abroadFlag");
             if (f.isBoolean()) return f.asBoolean();
             if (f.isTextual()) return Boolean.parseBoolean(f.asText());
-            // 缺陷8(20260918)：出差申请页只有「出差类型」字段(extJson.travelType=DOMESTIC/ABROAD)，无独立 abroadFlag，
+            // 历史兼容：出差申请页只有「出差类型」字段(extJson.travelType=DOMESTIC/ABROAD)，无独立 abroadFlag，
             // 导致 TRAVEL_G1 abroad=true 分支(国外出差→总裁特批)从页面永远无法触发。此处兼容 travelType=ABROAD。
             JsonNode tt = root.path("travelType");
             if (tt.isTextual() && "ABROAD".equalsIgnoreCase(tt.asText())) {
@@ -1730,12 +1730,22 @@ public class WfEngineFacade {
                                 List<Long> cands = nodeOrgResolver.listOperableUserIds(task);
                                 // 推送前做连办预检（连办校验本身一字未动，校验是 413 的必然化产物）。
                                 // 智能推送只看"在办量最少"，不看"这人在本实例已经办过哪一节"。POOL 链一旦
-                                // 落在 approve.deny_serial_same_handler 生效的域（现网＝GL_MONTH_CLOSE 月结链，
+                                // 落在 approve.deny_serial_same_handler 生效的域（线上＝GL_MONTH_CLOSE 月结链，
                                 // 按角色铺人 + 禁 admin），把节点推给刚办过上一节的人就是<b>明知必拒还推</b>：
                                 // 他打开就是"禁止同一人在同一审批流程中连续办理多个节点"，节点既办不掉也
                                 // 领不回别人（抢单池已因 assignee 非空而不再对同池其他人开放）⇒ 节点自锁。
                                 // 校验关时（缺省）本段零成本：不查 wf_instance、不查历史表，行为逐字不变。
                                 final boolean serialPrecheck = isSerialSameHandlerDenied(bizTypeOfInstance(task.getProcessInstanceId()));
+                                // 节点级互斥组（补充约束）：智能推送「只在办量最少」同样不看
+                                // 「这人本实例已办过同组另一节」。POOL 节点一旦被推给 he，他打开就是
+                                // 「互斥组内节点必须由不同人办理」的 403，而 assignee 非空又让同池其他人
+                                // 领不到 ⇒ 节点自锁。这里与 complete() 硬闸、候选回避同一判据，提前剔人。
+                                final String exclGroup = cfg.getSerialExclusiveGroup();
+                                final java.util.Set<Long> exclBlocked =
+                                        (exclGroup != null && !exclGroup.isBlank())
+                                                ? handledInSameSerialGroup(processKey, task.getProcessInstanceId(),
+                                                        cfg.getNodeKey(), exclGroup)
+                                                : java.util.Collections.emptySet();
                                 Long best = null; long bestLoad = Long.MAX_VALUE;
                                 if (cands != null) for (Long uid : cands) {
                                     if (uid == null || uid <= 0) continue;
@@ -1745,6 +1755,10 @@ public class WfEngineFacade {
                                     if (serialPrecheck && !isSystemAutoAuditor(uid)
                                             && handledNodesInInstance(task.getProcessInstanceId(), uid)) {
                                         log.info("智能推送跳过 userId={}：本链有连办闸且其已办理本实例节点（推给他必被拒）", uid);
+                                        continue;
+                                    }
+                                    if (exclBlocked.contains(uid)) {
+                                        log.info("智能推送跳过 userId={}：互斥组「{}」内已办过其他节点（推给他必被拒，且同池他人领不到）", uid, exclGroup);
                                         continue;
                                     }
                                     long load = EngineTenantScope.taskQuery(taskService).taskAssignee(String.valueOf(uid)).count();
@@ -2107,7 +2121,7 @@ public class WfEngineFacade {
     }
 
     /**
-     * 附随开关：通过侧审批意见是否必填。总开关缺省关＝现网行为不变；
+     * 附随开关：通过侧审批意见是否必填。总开关缺省关＝线上行为不变；
      * 白名单为空＝对全部模型生效（避免"翻了开关却没反应"）；读取异常按关闭处理。
      */
     private boolean isApproveCommentRequired(Task task) {
@@ -2194,7 +2208,54 @@ public class WfEngineFacade {
         } catch (Exception ex) {
             log.warn("候选集单据组织解析失败 proc={}: {}", procInstId, ex.getMessage());
         }
-        return candidatesInScope(cfg, company, starter);
+        List<Long> ids = candidatesInScope(cfg, company, starter);
+        // 互斥回避：把本实例内已办过同组其他节点的人剔出候选。
+        // 只在候选 >1 时剔（只剩 1 人时剔了就无人可办，宁可留给 complete() 的硬闸给出明确 403 文案）。
+        String group = cfg == null ? null : cfg.getSerialExclusiveGroup();
+        if (group != null && !group.isBlank() && procInstId != null && ids.size() > 1) {
+            java.util.Set<Long> blocked = handledInSameSerialGroup(modelKey, procInstId, cfg.getNodeKey(), group);
+            if (!blocked.isEmpty()) {
+                List<Long> left = new ArrayList<>(ids);
+                left.removeIf(blocked::contains);
+                if (!left.isEmpty()) {
+                    ids = left;
+                }
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * 本实例内「已办过同互斥组其他节点」的人。
+     *
+     * <p>用途有二：① PICK/POOL 候选集里剔掉他们，避免前端点名点到必然被拒的人；
+     * ② 与 {@code complete()} 的硬闸互为印证（硬闸负责拦，本方法负责提前避开）。
+     *
+     * <p>按 {@code act_hi_taskinst} 取真实轨迹而非 {@code wf_task}：后者是门面镜像，
+     * 镜像开关关闭时只靠门面双写，可能缺行；历史表才是权威。
+     */
+    private java.util.Set<Long> handledInSameSerialGroup(String modelKey, String procInstId,
+                                                         String nodeKey, String group) {
+        java.util.Set<Long> out = new java.util.LinkedHashSet<>();
+        try {
+            for (HistoricTaskInstance h : EngineTenantScope.historicTaskQuery(historyService)
+                    .processInstanceId(procInstId).finished().list()) {
+                String uid = h.getAssignee();
+                if (uid == null || !uid.trim().matches("\\d+")) {
+                    continue;
+                }
+                if (Objects.equals(h.getTaskDefinitionKey(), nodeKey)) {
+                    continue;
+                }
+                WfNodeConfig c = wfNodeConfigResolver.resolve(modelKey, h.getTaskDefinitionKey());
+                if (c != null && group.equals(c.getSerialExclusiveGroup())) {
+                    out.add(Long.parseLong(uid.trim()));
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("互斥组已办人查询失败 proc={} group={}: {}", procInstId, group, ex.getMessage());
+        }
+        return out;
     }
 
     /**
@@ -3711,7 +3772,7 @@ public class WfEngineFacade {
         if (!approved && (comment == null || comment.trim().length() < 2)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "驳回必须填写原因（不少于 2 个字）");
         }
-        // 附随开关：通过侧审批意见必填，默认关＝现网行为一字不改（通过可留空）。
+        // 附随开关：通过侧审批意见必填，默认关＝线上行为一字不改（通过可留空）。
         // 与驳回校验同办结、同豁免面：超时 AUTO_PASS 与空节点自动跳过走 taskService 直连，不经过本方法。
         if (approved && isApproveCommentRequired(task) && (comment == null || comment.trim().length() < 2)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "本流程要求通过时填写审批意见（不少于 2 个字）");
@@ -3782,6 +3843,29 @@ public class WfEngineFacade {
             if (handled > 0) {
                 throw new BizException(ErrorCode.FORBIDDEN,
                         "禁止同一人在同一审批流程中连续办理多个节点（连办/自审拦截）");
+            }
+        }
+        // 节点级互斥组：只约束真正互斥的节点对，不锁整链。
+        // 与上面 deny_serial_same_handler 的分工：那个是「整链连办」总闸（线上仅 GL_MONTH_CLOSE，
+        // 全流程开启会因 FIN_GL 净可用人不足而卡死）；本支按 wf_node_config.serial_exclusive_group
+        // 精确到组，例如付款「编制↔执行」、凭证「复核↔制证」，组内换人即可，不影响同链其他节点。
+        if (self != null && !isSystemAutoAuditor(operator)) {
+            WfNodeConfig curCfg = wfNodeConfigResolver.resolve(self.getModelKey(), task.getTaskDefinitionKey());
+            String group = curCfg == null ? null : curCfg.getSerialExclusiveGroup();
+            if (group != null && !group.isBlank()) {
+                long sameGroup = EngineTenantScope.historicTaskQuery(historyService)
+                        .processInstanceId(task.getProcessInstanceId())
+                        .taskAssignee(String.valueOf(operator)).finished().list().stream()
+                        .filter(h -> !Objects.equals(h.getTaskDefinitionKey(), task.getTaskDefinitionKey()))
+                        .filter(h -> {
+                            WfNodeConfig c = wfNodeConfigResolver.resolve(self.getModelKey(), h.getTaskDefinitionKey());
+                            return c != null && group.equals(c.getSerialExclusiveGroup());
+                        })
+                        .count();
+                if (sameGroup > 0) {
+                    throw new BizException(ErrorCode.FORBIDDEN,
+                            "互斥组「" + group + "」内的节点必须由不同人办理（你已办过同组的其他节点）");
+                }
             }
         }
         // 齐套校验·节点层：缺件一律拒绝，没有"带条件通过"
@@ -4006,7 +4090,7 @@ public class WfEngineFacade {
             throw new BizException(ErrorCode.FORBIDDEN, "只能对当前由你办理的任务发起加签");
         }
         // allow_addsign 曾经"实体不映射、界面不显示、运行时零读取"三重落空
-        // 变成真开关。现网 311 个节点配 0、44 个配 1——一接上就大面积禁签，故必须走灰度：
+        // 变成真开关。线上 311 个节点配 0、44 个配 1——一接上就大面积禁签，故必须走灰度：
         // approve.addsign_gate.enabled=1 且模型在 approve.addsign_gate.models 内才拦，缺省＝不拦（现行为不变）。
         if (isConfigGatedOn("approve.addsign_gate.enabled", "approve.addsign_gate.models", modelKeyOf(task))) {
             WfNodeConfig addSignCfg = wfNodeConfigResolver.resolve(modelKeyOf(task), task.getTaskDefinitionKey());
@@ -4536,7 +4620,7 @@ public class WfEngineFacade {
                 // 此时 assignee 为空。若守卫写成「有 PENDING 镜像就跳过」，assignApprover 的三级解析
                 // 连同 empty_strategy ESCALATE 兜底就一起被跳掉——候选组有组码、组内却解析不出真人时
                 // （例如提单人＝顶级部门负责人本人，DIRECT_SUPERVISOR 判「无上级」），ASSIGNEE_ 永远为空、
-                // 任务对所有人不可见、流程静默卡死（对账作业只报 WF-MIRRO2 不修）。
+                // 任务对所有人不可见、流程静默卡死（对账作业会报出该异常）。
                 // 所以规则是：镜像已解析出真人（assignee_id 非空）才跳过；空 assignee 的镜像行仍走三级解析补派。
                 WfTask mirror = wfQueryService.pendingTaskByTaskId(t.getId());
                 if (mirror != null && mirror.getAssigneeId() != null) {
@@ -4627,7 +4711,7 @@ public class WfEngineFacade {
         if (!nodeOrgResolver.canOperate(task, operator)) {
             throw new BizException(ErrorCode.FORBIDDEN, operateDeniedMessage(task));
         }
-        // allow_transfer 必须真的被读，存了不读等于伪配置。现网 602 个节点全为 1，
+        // allow_transfer 必须真的被读，存了不读等于伪配置。线上 602 个节点全为 1，
         // 所以这道校验不影响现有流程。只管人工转办；超时自动转办由节点的 timeout_action 决定，
         // 是另一条通道。
         WfNodeConfig transferCfg = wfNodeConfigResolver.resolve(modelKeyOf(task), task.getTaskDefinitionKey());
@@ -5765,7 +5849,7 @@ public class WfEngineFacade {
      * {@link RejectAnchor}（关联点＋来源旧实例＋旧实例金额）供执行面使用。真正的"跳回"由
      * {@link #consumeRejectAnchor} 在实例启动、首任务镜像与通知都落账<b>之后</b>执行
      * （走 {@code moveActivityIdTo} 搬执行＋回收首节点副作用）。
-     * 没在定义侧加排他网关：现网 87 枚模型全部锁版本，改定义需重发布窗口且对历史实例不生效，
+     * 没在定义侧加排他网关：线上 87 枚模型全部锁版本，改定义需重发布窗口且对历史实例不生效，
      * 而本能力要在灰度链上立刻可验。
      *
      * <p><b>零影响边界</b>：① 本流程（model_key）无 {@code resubmit_jump_back=1} 的节点 ⇒ 直接返回，
@@ -6094,7 +6178,7 @@ public class WfEngineFacade {
      * 搬执行能力，没法"灰度到 1 条链"——只能全开或全关。所以补一道 model 白名单，与
      * PICK、加签的灰度同一规则：空清单＝全库不生效（fail-closed）。
      *
-     * <p>现网总开关 {@code wf.reject.free.enabled=0}，本道校验接入时不改变任何行为。
+     * <p>线上总开关 {@code wf.reject.free.enabled=0}，本道校验接入时不改变任何行为。
      */
     private boolean isFreeRejectModelAllowed(String modelKey) {
         return isConfigGatedOn("wf.reject.free.enabled", "wf.reject.free.models", modelKey);
@@ -6378,7 +6462,7 @@ public class WfEngineFacade {
         }
         // wf_model.enable_delegate=0 的流程不支持委托代办——委托人的待办不并入受托人，
         // 与 NodeOrgResolver.canOperate 第 3 步同一规则（两处都读 delegateDisabledModels，不会一边显一边拦）。
-        // 现网 87 个模型该列全为 1 ⇒ 清单为空 ⇒ 直接跳过，连实例都不查。
+        // 线上 87 个模型该列全为 1 ⇒ 清单为空 ⇒ 直接跳过，连实例都不查。
         Set<String> delegateOff = nodeOrgResolver.delegateDisabledModels();
         if (!delegateOff.isEmpty() && !delegated.isEmpty()) {
             Map<String, String> modelByProc = new HashMap<>();

@@ -149,6 +149,13 @@ public class SoDService {
     private static final DateTimeFormatter SOD_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final String DIM_ROLE = "ROLE";
     private static final String DIM_PERM = "PERM";
+    /**
+     * DUTY 细分：原先把「首节点自办」与「真自审」混成一个 DUTY 维度，
+     * 导致守卫按设计豁免的正常提交被报成冲突。
+     * 现按守卫口径拆两支——SELF 才有风险，SERIAL 是连办。
+     */
+    private static final String DIM_DUTY_SELF = "DUTY_SELF";
+    private static final String DIM_DUTY_SERIAL = "DUTY_SERIAL";
     // 岗位互斥规则原文即"不得由同一人担任"，属硬约束，严重度恒记高
     private static final String SEVERITY_ROLE_CONFLICT = "高";
 
@@ -186,19 +193,36 @@ public class SoDService {
      * <p>只读查询，不改任何流程数据。
      */
     private List<SodCheckRow> activeDutySeparationRows(String detectTime) {
-        List<SodCheckRow> rows = new ArrayList<>();
+        return scanDuty(detectTime).rows;
+    }
+
+    /** DUTY 扫描结果：冲突行 + 被豁免的「首节点自办」条数（不计入冲突，仅供分层展示） */
+    private static class DutyScan {
+        private final List<SodCheckRow> rows = new ArrayList<>();
+        private long exemptedFirstNode;
+    }
+
+    private DutyScan scanDuty(String detectTime) {
+        DutyScan out = new DutyScan();
         try {
             // 同一实例内「人 → 不同节点 key 集合」
             Map<String, Map<Long, Set<String>>> byInstance = new LinkedHashMap<>();
+            // 同一实例「最先出现」的节点 key ＝ 首节点（SQL 按 START_TIME_ 排序，putIfAbsent 取第一条）
+            Map<String, String> firstNodeKeyByInstance = new HashMap<>();
             // 同一实例内的发起人
             Map<String, Long> starterByInstance = new HashMap<>();
+            // 实例 → model_key（判定 POOL 需要，act_hi_taskinst 本身不带模型）
+            Map<String, String> instModel = new HashMap<>();
+            // POOL 节点集合（model#node）：守卫对 POOL 不走 deny_self，SoD 侧也必须同步豁免
+            java.util.Set<String> poolKeys = new java.util.HashSet<>();
             // 不要再 JOIN act_ru_execution：它是 Flowable 的「运行中执行」表，
             // 流程一结束就清空，而历史轨迹全在 act_hi_taskinst。
             // 直接用 act_hi_taskinst 自带的 PROC_INST_ID_ 分组即可。
             for (Map<String, Object> h : jdbc.queryForList(
                     "/* tenant-ok: proc_inst_id/start_user_id 全局唯一，租户内调用 */ SELECT PROC_INST_ID_ AS inst, ASSIGNEE_ AS uid, TASK_DEF_KEY_ AS dk "
                             + "FROM act_hi_taskinst "
-                            + "WHERE ASSIGNEE_ IS NOT NULL AND TASK_DEF_KEY_ IS NOT NULL")) {
+                            + "WHERE ASSIGNEE_ IS NOT NULL AND TASK_DEF_KEY_ IS NOT NULL "
+                            + "ORDER BY PROC_INST_ID_, START_TIME_")) {
                 // JdbcTemplate 返回的列名按驱动/库大小写不定（MySQL 会返回大写 INST/UID/DK），
                 //   直接 get("inst") 会拿到 null ⇒ 全部数据聚到 "null" 键上，判据永远不命中。
                 String inst = String.valueOf(col(h, "inst"));
@@ -206,29 +230,60 @@ public class SoDService {
                 String dk = String.valueOf(col(h, "dk"));
                 byInstance.computeIfAbsent(inst, k -> new LinkedHashMap<>())
                         .computeIfAbsent(uid, k -> new LinkedHashSet<>()).add(dk);
+                firstNodeKeyByInstance.putIfAbsent(inst, dk);
             }
             // wf_instance 没有 del_flag 列（流程实例表靠 status 表达最终状态，不做逻辑删除），
             //   带上它会直接 Unknown column 抛错、被外层 catch 吞掉 → 本项永远 0 条。
             for (Map<String, Object> w : jdbc.queryForList(
-                    "/* tenant-ok: proc_inst_id/start_user_id 全局唯一，租户内调用 */ SELECT proc_inst_id AS inst, start_user_id AS uid FROM wf_instance "
-                            + "WHERE start_user_id IS NOT NULL")) {
-                starterByInstance.put(String.valueOf(col(w, "inst")), asLong(col(w, "uid")));
+                    "/* tenant-ok: proc_inst_id/start_user_id 全局唯一，租户内调用 */ SELECT proc_inst_id AS inst, start_user_id AS uid, model_key AS mk FROM wf_instance")) {
+                String wi = String.valueOf(col(w, "inst"));
+                String mk = col(w, "mk") == null ? null : String.valueOf(col(w, "mk"));
+                if (mk != null) {
+                    instModel.put(wi, mk);
+                }
+                Object su = col(w, "uid");
+                if (su != null) {
+                    starterByInstance.put(wi, asLong(su));
+                }
+            }
+            // POOL 节点清单：守卫 complete() 里 `isDenySelfEnabled() && !isPoolTask(task)`，
+            // 即 POOL 作业池根本不走自审校验 —— SoD 若不算这一条，会把「发起人在池里领取执行」
+            // 误报成自审（实际存在多条误报）。
+            for (Map<String, Object> r : jdbc.queryForList(
+                    "/* tenant-ok: 配置表全局，租户内读取 */ SELECT model_key AS mk, node_key AS nk FROM wf_node_config "
+                            + "WHERE del_flag = 0 AND UPPER(handling_mode) = 'POOL'")) {
+                Object mk = col(r, "mk");
+                Object nk = col(r, "nk");
+                if (mk != null && nk != null) {
+                    poolKeys.add(mk + "#" + nk);
+                }
             }
             for (Map.Entry<String, Map<Long, Set<String>>> e : byInstance.entrySet()) {
                 String inst = e.getKey();
                 Long starter = starterByInstance.get(inst);
+                String firstDk = firstNodeKeyByInstance.get(inst);
                 for (Map.Entry<Long, Set<String>> per : e.getValue().entrySet()) {
                     long uid = per.getKey();
                     Set<String> keys = per.getValue();
-                    // L2-1 自审：发起人又办过节点
+                    // 与守卫 WfEngineFacade.complete() 同口径，两条豁免都要还原：
+                    //   ① doneTasks > 0 才拦 ⇒ 只办首节点的不算自审；
+                    //   ② POOL 作业池不走 deny_self（代码 `!isPoolTask(task)`）⇒ POOL 节点不算自审。
+                    String mk = instModel.get(inst);
+                    boolean hasNonFirstNonPool = firstDk != null && keys.stream().anyMatch(k ->
+                            !k.equals(firstDk) && !poolKeys.contains(mk + "#" + k));
                     if (starter != null && starter == uid) {
-                        rows.add(dutyRow(uid, "发起人自办本单审批节点",
-                                "L2-不相容职责/自审（approve.deny_self 当前生效的限制）", detectTime));
+                        if (hasNonFirstNonPool) {
+                            out.rows.add(dutyRow(uid, "发起人在已有完成节点后仍办理审批（非首节点自审）",
+                                    "L2-不相容职责/自审（approve.deny_self）", detectTime, DIM_DUTY_SELF));
+                        } else {
+                            // 首节点自办＝提交即办结，守卫豁免；单列计数，不进冲突数
+                            out.exemptedFirstNode++;
+                        }
                     }
-                    // L2-2 同人连办：办过 ≥2 个不同节点
+                    // 同人连办：办过 ≥2 个不同节点
                     if (keys.size() >= 2) {
-                        rows.add(dutyRow(uid, "同一流程内办过 " + keys.size() + " 个不同节点（" + keys + "）",
-                                "L2-不相容职责/连办（approve.deny_serial_same_handler 当前生效的限制）", detectTime));
+                        out.rows.add(dutyRow(uid, "同一流程内办过 " + keys.size() + " 个不同节点（" + keys + "）",
+                                "L2-不相容职责/连办（approve.deny_serial_same_handler 作用域内）", detectTime, DIM_DUTY_SERIAL));
                     }
                 }
             }
@@ -236,9 +291,39 @@ public class SoDService {
             // fail-open：体检类查询异常不得让整个 SoD 报告失败；但必须记录，否则"永远 0 条"无从排查
             LoggerFactory.getLogger(SoDService.class)
                     .warn("SoD 不相容职责(L2)实况查询失败（本次该项返回空，不影响其它维度）: {}", ex.toString());
-            return rows;
+            return out;
         }
-        return rows;
+        return out;
+    }
+
+    /**
+     * 分层计数：把三类分开给前端，不再用一个 total 混算。
+     * <ul>
+     *   <li>{@code staticConflicts} = ROLE + PERM，配置层冲突，&gt;0 即需整改；</li>
+     *   <li>{@code runtimeSelfAudit} = DUTY_SELF，真·非首节点自审，应恒为 0；</li>
+     *   <li>{@code runtimeSerial} = DUTY_SERIAL，同人连办，需配置治理或裁决；</li>
+     *   <li>{@code exemptedFirstNode} = 首节点自办，守卫豁免，仅作提示不计数。</li>
+     * </ul>
+     */
+    public Map<String, Object> summarize() {
+        String detectTime = LocalDateTime.now().format(SOD_TS);
+        List<SodCheckRow> staticRows = new ArrayList<>(roleConflictRows(detectTime));
+        staticRows.addAll(permConflictRows(detectTime));
+        DutyScan duty = scanDuty(detectTime);
+        long role = staticRows.stream().filter(r -> DIM_ROLE.equals(r.getDimension())).count();
+        long perm = staticRows.stream().filter(r -> DIM_PERM.equals(r.getDimension())).count();
+        long self = duty.rows.stream().filter(r -> DIM_DUTY_SELF.equals(r.getDimension())).count();
+        long serial = duty.rows.stream().filter(r -> DIM_DUTY_SERIAL.equals(r.getDimension())).count();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("roleConflicts", role);
+        m.put("permConflicts", perm);
+        m.put("staticConflicts", role + perm);
+        m.put("runtimeSelfAudit", self);
+        m.put("runtimeSerial", serial);
+        m.put("exemptedFirstNode", duty.exemptedFirstNode);
+        m.put("total", role + perm + self + serial);
+        m.put("detectTime", detectTime);
+        return m;
     }
 
     /**
@@ -268,7 +353,7 @@ public class SoDService {
         return v;
     }
 
-    private SodCheckRow dutyRow(long uid, String conflictDesc, String roleName, String detectTime) {
+    private SodCheckRow dutyRow(long uid, String conflictDesc, String roleName, String detectTime, String dimension) {
         SodCheckRow r = new SodCheckRow();
         r.setUserId(uid);
         SysUser u = userMapper.selectById(uid);
@@ -279,7 +364,7 @@ public class SoDService {
         r.setRoleName(roleName);
         r.setConflictDesc(conflictDesc);
         r.setDetectTime(detectTime);
-        r.setDimension("DUTY");
+        r.setDimension(dimension);
         return r;
     }
 
@@ -299,7 +384,11 @@ public class SoDService {
         String kw = keyword == null || keyword.isBlank() ? null : keyword.trim().toLowerCase();
         List<SodCheckRow> out = new ArrayList<>();
         for (SodCheckRow r : rows) {
-            if (dim != null && !dim.equals(r.getDimension())) {
+            // DUTY 已细分为 DUTY_SELF / DUTY_SERIAL：筛选 "DUTY" 时按前缀同时命中两支，
+            // 避免前端「运行时轨迹」页签因为精确等值匹配而查不到行。
+            boolean dimHit = dim == null || dim.equals(r.getDimension())
+                    || ("DUTY".equals(dim) && r.getDimension() != null && r.getDimension().startsWith("DUTY"));
+            if (!dimHit) {
                 continue;
             }
             if (kw != null && !containsAny(kw, r.getUserName(), r.getEmpNo(), r.getRoleName(),

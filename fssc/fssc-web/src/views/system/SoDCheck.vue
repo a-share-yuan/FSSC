@@ -9,34 +9,53 @@
         {{ $t('system.sod.hintPage') }}</template>
     </el-alert>
 
+    <!-- 分层计数：静态冲突 / 运行时连办 / 首节点豁免 分开显示，
+         不再用一个红色 total 把「提交即办结」的正常轨迹报成冲突 -->
     <el-row :gutter="12" style="margin-bottom: 12px">
-      <el-col :span="8">
+      <el-col :span="6">
         <el-card shadow="hover">
-          <div style="color: #909399; font-size: 13px">{{ $t('system.sod.statConflicts') }}</div>
-          <div :style="{ fontSize: '26px', fontWeight: 700, color: total > 0 ? '#f56c6c' : '#67c23a' }">{{ total }}</div>
+          <div class="stat-label">{{ $t('system.sod.statStatic') }}</div>
+          <div :style="{ fontSize: '26px', fontWeight: 700, color: summary.staticConflicts > 0 ? '#f56c6c' : '#67c23a' }">
+            {{ summary.staticConflicts }}
+          </div>
+          <div class="stat-sub">{{ $t('system.sod.statStaticHint', { v1: summary.roleConflicts, v2: summary.permConflicts }) }}</div>
         </el-card>
       </el-col>
-      <el-col :span="8">
+      <el-col :span="6">
         <el-card shadow="hover">
-          <div style="color: #909399; font-size: 13px">{{ $t('system.sod.statPeople') }}</div>
-          <div style="font-size: 26px; font-weight: 700">{{ distinctUsers }}</div>
+          <div class="stat-label">{{ $t('system.sod.statSerial') }}</div>
+          <div :style="{ fontSize: '26px', fontWeight: 700, color: summary.runtimeSerial > 0 ? '#e6a23c' : '#67c23a' }">
+            {{ summary.runtimeSerial }}
+          </div>
+          <div class="stat-sub">{{ $t('system.sod.statSerialHint', { v1: summary.runtimeSelfAudit }) }}</div>
         </el-card>
       </el-col>
-      <el-col :span="8">
+      <el-col :span="6">
         <el-card shadow="hover">
-          <div style="color: #909399; font-size: 13px">{{ $t('system.sod.statCheckedAt') }}</div>
-          <div style="font-size: 16px; font-weight: 600; margin-top: 6px">{{ detectTime || t('system.sod.stNotChecked') }}</div>
+          <div class="stat-label">{{ $t('system.sod.statExempt') }}</div>
+          <div style="font-size: 26px; font-weight: 700; color: #909399">{{ summary.exemptedFirstNode }}</div>
+          <div class="stat-sub">{{ $t('system.sod.statExemptHint') }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover">
+          <div class="stat-label">{{ $t('system.sod.statCheckedAt') }}</div>
+          <div style="font-size: 15px; font-weight: 600; margin-top: 8px">
+            {{ summary.detectTime || detectTime || t('system.sod.stNotChecked') }}
+          </div>
+          <div class="stat-sub">{{ $t('system.sod.statPeople') }} {{ distinctUsers }}</div>
         </el-card>
       </el-col>
     </el-row>
 
     <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap">
       <el-button v-if="canScan" type="primary" :loading="running" @click="runCheck">{{ $t('system.sod.btnRunCheck') }}</el-button>
-      <el-button :loading="loading" @click="load()">{{ $t('common.refresh') }}</el-button>
+      <el-button :loading="loading" @click="refreshAll()">{{ $t('common.refresh') }}</el-button>
       <el-radio-group v-model="dimension" size="small" @change="() => load(1)">
         <el-radio-button value="ALL">{{ $t('system.sod.optAllDimensions') }}</el-radio-button>
         <el-radio-button value="ROLE">{{ $t('system.sod.dimPostHold') }}</el-radio-button>
         <el-radio-button value="PERM">{{ $t('system.sod.dimPermCombo') }}</el-radio-button>
+        <el-radio-button value="DUTY">{{ $t('system.sod.dimDuty') }}</el-radio-button>
       </el-radio-group>
       <el-input v-model="keyword" :placeholder="$t('system.sod.phSearchUser')" clearable style="width: 220px" @keyup.enter="load(1)" />
       <el-button @click="load(1)">{{ $t('common.search') }}</el-button>
@@ -45,17 +64,19 @@
 
     <SkeletonList v-if="loading" :rows="8" :cols="6" />
     <el-table v-else :data="rows" size="small" border stripe :empty-text="$t('system.sod.emptyConflicts')">
-      <el-table-column prop="userName" :label="$t('system.sod.colUser')" width="120" show-overflow-tooltip />
-      <el-table-column prop="empNo" :label="$t('system.sod.colEmpNo')" width="110" show-overflow-tooltip />
+      <el-table-column prop="userName" :label="$t('system.sod.colUser')" width="110" show-overflow-tooltip />
+      <el-table-column prop="empNo" :label="$t('system.sod.colEmpNo')" width="100" show-overflow-tooltip />
       <el-table-column prop="roleName" :label="$t('system.sod.colConflictPosts')" min-width="200" show-overflow-tooltip />
       <el-table-column prop="conflictDesc" :label="$t('system.sod.colConflictDesc')" min-width="240" show-overflow-tooltip />
-      <el-table-column prop="severity" :label="$t('system.sod.colSeverity')" width="90" align="center">
+      <el-table-column prop="severity" :label="$t('system.sod.colSeverity')" width="86" align="center">
         <template #default="{ row }">
           <el-tag :type="severityTag(row.severity)" size="small">{{ row.severity || '—' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="$t('system.sod.colDimension')" width="130" align="center">
-        <template #default="{ row }">{{ dimensionLabel(row.dimension) }}</template>
+      <el-table-column :label="$t('system.sod.colDimension')" width="140" align="center">
+        <template #default="{ row }">
+          <el-tag :type="dimensionTag(row.dimension)" size="small" effect="plain">{{ dimensionLabel(row.dimension) }}</el-tag>
+        </template>
       </el-table-column>
       <el-table-column prop="detectTime" :label="$t('system.sod.colCheckedAt')" width="170" :formatter="(r, c, v) => formatDateTime(v)" />
     </el-table>
@@ -95,19 +116,45 @@ const pageNum = ref(1)
 const pageSize = ref(20)
 const detectTime = ref('')
 
+/** 分层计数（/check/summary）：不再用单一 total 混算三类 */
+const summary = ref({
+  staticConflicts: 0, roleConflicts: 0, permConflicts: 0,
+  runtimeSelfAudit: 0, runtimeSerial: 0, exemptedFirstNode: 0, detectTime: '',
+})
+
 const distinctUsers = computed(() => new Set(rows.value.map((r) => r.userId).filter(Boolean)).size)
 
 function severityTag(v) {
   return v === '高' ? 'danger' : v === '中' ? 'warning' : 'info'
 }
+function dimensionTag(v) {
+  if (v === 'ROLE' || v === 'PERM') return 'danger'
+  if (v === 'DUTY_SELF') return 'danger'
+  if (v === 'DUTY_SERIAL') return 'warning'
+  return 'info'
+}
 function dimensionLabel(v) {
-  return v === 'ROLE' ? t('system.sod.dimPostHold') : v === 'PERM' ? t('system.sod.dimPermCombo') : '—'
+  if (v === 'ROLE') return t('system.sod.dimPostHold')
+  if (v === 'PERM') return t('system.sod.dimPermCombo')
+  if (v === 'DUTY_SELF') return t('system.sod.dimDutySelf')
+  if (v === 'DUTY_SERIAL') return t('system.sod.dimDutySerial')
+  if (v === 'DUTY') return t('system.sod.dimDuty')
+  return '—'
 }
 
 function fillPage(d) {
   rows.value = d?.list || d?.records || d?.rows || []
   total.value = Number(d?.total || 0)
   detectTime.value = rows.value[0]?.detectTime || ''
+}
+
+async function loadSummary() {
+  try {
+    const d = await http.get('/tenant/compliance/sod/check/summary', { silent: true })
+    if (d && typeof d === 'object') summary.value = { ...summary.value, ...d }
+  } catch {
+    // 摘要失败不影响表格；卡片保留上一次读数
+  }
 }
 
 async function load(page) {
@@ -126,6 +173,10 @@ async function load(page) {
   }
 }
 
+async function refreshAll() {
+  await Promise.all([load(), loadSummary()])
+}
+
 async function runCheck() {
   running.value = true
   try {
@@ -133,7 +184,13 @@ async function runCheck() {
       params: { dimension: dimension.value, keyword: keyword.value, pageNum: pageNum.value, pageSize: pageSize.value },
       silent: true,
     }))
-    ElMessage.success(total.value > 0 ? t('system.sod.msgFoundN', { v1: total.value }) : t('system.sod.msgNoneFound'))
+    await loadSummary()
+    // 提示语改分层：静态冲突 / 连办 / 豁免 分别报，避免「22 条冲突」这种把正常轨迹算进去的说法
+    ElMessage.success(t('system.sod.msgFoundLayered', {
+      v1: summary.value.staticConflicts,
+      v2: summary.value.runtimeSerial,
+      v3: summary.value.exemptedFirstNode,
+    }))
   } catch {
     ElMessage.error(t('system.sod.msgCheckFail'))
   } finally {
@@ -141,5 +198,17 @@ async function runCheck() {
   }
 }
 
-onMounted(() => load(1))
+onMounted(() => refreshAll())
 </script>
+
+<style scoped>
+.stat-label {
+  color: #909399;
+  font-size: 13px;
+}
+.stat-sub {
+  color: #a8abb2;
+  font-size: 12px;
+  margin-top: 4px;
+}
+</style>

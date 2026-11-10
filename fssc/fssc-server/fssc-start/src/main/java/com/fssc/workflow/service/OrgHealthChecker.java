@@ -168,21 +168,40 @@ public class OrgHealthChecker {
      * {@code GK_3} 运行时叫「总账记账复核」而配置叫「总账记账」。
      * 引擎按 {@code taskDefinitionKey} 取人故功能不受影响，
      * 但自动化脚本/运维按显示名取人会拿到错误角色 ⇒ <b>只报警、不改任何一侧</b>。
+     *
+     * <p>2026-11-10 修复两处盲区：① 用 {@code wf_instance.model_key} 而非 {@code biz_type}
+     * 关联配置（两者不同名时原来整条模型被跳过）；② 在办 ∪ 近 30 天历史都扫
+     * （原来只扫 {@code act_ru_task}，办结即消失，失配永远查不到）。
      */
     private List<Map<String, Object>> nodeNameMismatchIssues() {
         List<Map<String, Object>> out = new ArrayList<>();
         try {
             Map<String, Set<String>> nameByModel = new LinkedHashMap<>();
+            // key → 配置名：报「运行时 X vs 配置 Y」时能给出真实的 Y（原来只打「(按 key 命中)」）
+            Map<String, Map<String, String>> nameByKey = new LinkedHashMap<>();
             for (Map<String, Object> n : jdbc.queryForList(
-                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT model_key mk, node_name nm FROM wf_node_config WHERE del_flag = 0")) {
-                nameByModel.computeIfAbsent(str(n.get("mk")), k -> new HashSet<>())
-                        .add(str(n.get("nm")));
+                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT model_key mk, node_key nk, node_name nm FROM wf_node_config WHERE del_flag = 0")) {
+                String mk = str(n.get("mk"));
+                nameByModel.computeIfAbsent(mk, k -> new HashSet<>()).add(str(n.get("nm")));
+                nameByKey.computeIfAbsent(mk, k -> new LinkedHashMap<>()).put(str(n.get("nk")), str(n.get("nm")));
             }
             Map<String, Set<String>> keyByModel = keyIndex();
+            // 两处兼容处理：
+            //  ① 原用 w.biz_type 当 model_key —— 但二者并非总是同名：
+            //     FA_TRANSFER_CROSS→FA_TRANSFER、TR_BANK_MASTER/TR_SEAL_CHANGE→MD_MASTER，
+            //     用 biz_type 查 wf_node_config 会查不到，整条模型被 continue 跳过（该检查形同虚设）。
+            //  ② 原只扫 act_ru_task（在办）—— 流程一办结任务即消失，已办结流程的名称失配永远查不到
+            //     （GL_MERGE 的 GMG_2 失配就是这样漏掉的）。
+            //     改为「在办 ∪ 近 30 天历史」，按 (model_key, task_def_key, name) 去重。
             for (Map<String, Object> d : jdbc.queryForList(
-                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT DISTINCT w.biz_type bt, a.NAME_ nm, a.TASK_DEF_KEY_ dk "
+                    "/* tenant-ok: 组织巡检作业跨租户扫描 */ SELECT DISTINCT w.model_key bt, a.NAME_ nm, a.TASK_DEF_KEY_ dk "
                             + "FROM act_ru_task a JOIN wf_instance w ON w.proc_inst_id = a.PROC_INST_ID_ "
-                            + "WHERE a.NAME_ IS NOT NULL AND a.TASK_DEF_KEY_ IS NOT NULL")) {
+                            + "WHERE a.NAME_ IS NOT NULL AND a.TASK_DEF_KEY_ IS NOT NULL "
+                            + "UNION "
+                            + "SELECT DISTINCT w.model_key bt, h.NAME_ nm, h.TASK_DEF_KEY_ dk "
+                            + "FROM act_hi_taskinst h JOIN wf_instance w ON w.proc_inst_id = h.PROC_INST_ID_ "
+                            + "WHERE h.NAME_ IS NOT NULL AND h.TASK_DEF_KEY_ IS NOT NULL "
+                            + "AND h.START_TIME_ >= DATE_SUB(NOW(), INTERVAL 30 DAY)")) {
                 String bt = String.valueOf(col(d, "bt"));
                 String nm = String.valueOf(col(d, "nm"));
                 String dk = String.valueOf(col(d, "dk"));
@@ -201,10 +220,11 @@ public class OrgHealthChecker {
                             "引擎按 taskDefinitionKey 取人故功能不受影响；但按显示名排查会取错角色。"
                                     + "请业务确认哪一侧名称为准后人工同步部署流程与节点配置（两侧都勿由脚本自动改）"));
                 } else if (!nameHit) {
+                    String cfgName = nameByKey.getOrDefault(bt, java.util.Collections.emptyMap())
+                            .getOrDefault(dk, "(该 key 未配节点名)");
                     out.add(issue("R5", "WARN", bt,
                             "节点显示名与配置不一致（功能正常，仅是排查标准不同）：运行时「" + nm
-                                    + "」vs 配置「" + names.stream()
-                                    .filter(x -> keys != null && keys.contains(x)).findFirst().orElse("(按 key 命中)")
+                                    + "」vs 配置「" + cfgName
                                     + "」(key=" + dk + ")",
                             "引擎按 key 取人故不受影响；建议在下次流程发布时把 BPMN 节点名与 wf_node_config.node_name 对齐"));
                 }

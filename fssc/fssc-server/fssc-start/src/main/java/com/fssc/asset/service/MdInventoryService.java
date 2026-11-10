@@ -18,6 +18,7 @@ import com.fssc.framework.security.UserContext;
 import com.fssc.workflow.service.WfEngineFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -44,6 +45,8 @@ public class MdInventoryService {
     private final StockMoveMapper stockMoveMapper;
     private final WfEngineFacade wfEngineFacade;
     private final OrgGuard orgGuard;
+    /** 仅用于仓库兜底解析（md_warehouse 无对应实体/Mapper，避免为此新建一套） */
+    private final JdbcTemplate jdbc;
 
     public PageResult<MdInventory> page(long pn, long ps, String keyword) {
         LambdaQueryWrapper<MdInventory> qw = new LambdaQueryWrapper<>();
@@ -392,7 +395,30 @@ public class MdInventoryService {
             throw new BizException(ErrorCode.PARAM_INVALID, "请输入物料名称");
         }
         if (key.getWarehouseId() == null) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "请选择仓库");
+            // 原实现 warehouseId 为空直接 400「请选择仓库」，
+            // 而业务库当时没有仓库主数据表（仓库表只存在于另一套系统库），
+            // md_inventory.warehouse_id 全表为 NULL ⇒ 存货领用/处置/入库**全部发不起来**
+            // （这正是存货领用、处置类流程此前一直无法发起的原因）。
+            // 现改为：未指定仓库时回落到默认仓（md_warehouse.is_default=1），并留痕。
+            Long dw = defaultWarehouseId();
+            if (dw == null) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "请选择仓库（当前无可用仓库，请先在仓库主数据维护）");
+            }
+            log.warn("存货 {} 未指定仓库，已回落到默认仓 {}", key.getItemCode(), dw);
+            key.setWarehouseId(dw);
+        }
+    }
+
+    /** 默认仓：is_default=1 优先，其次取任一启用仓；都没有返回 null */
+    private Long defaultWarehouseId() {
+        try {
+            java.util.List<Long> ids = jdbc.queryForList(
+                    "SELECT id FROM md_warehouse WHERE del_flag=0 AND status='NORMAL' "
+                            + "ORDER BY is_default DESC, id ASC LIMIT 1", Long.class);
+            return ids.isEmpty() ? null : ids.get(0);
+        } catch (Exception ex) {
+            log.warn("解析默认仓库失败: {}", ex.getMessage());
+            return null;
         }
     }
 

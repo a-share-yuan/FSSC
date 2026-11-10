@@ -1351,7 +1351,22 @@ async function loadOpenPeriod() {
         const raw = list.find((p) => toYm(p) === s)
         return raw && String(raw.status || '').toUpperCase() !== 'CLOSED'
       })
-      if (opened.length) { ym = opened[0]; periodSource.value = t('gl.special.periodOpened') }
+      // 原实现取「最早未关期」：既有数据里 2025 全年仍是 NORMAL，于是恒回 202501，
+      // 与业务期间 2026-10/11 完全脱节。改为围绕当前自然月就近取：
+      // ① 当前月未关 → 用它；② 否则取最近的未来未关期；③ 再否则取最近的过去未关期。
+      const nowYm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+      let pick = ''
+      // ① 直接判「当前自然月」这条记录是否已关：不经 opened 的 find 语义
+      //    （opened 用 list.find 取首条匹配，多公司同期间时可能取到别家公司的 CLOSED 行而误排除本月）。
+      const nowRec = list.find((p) => toYm(p) === nowYm)
+      if (nowRec && String(nowRec.status || '').toUpperCase() !== 'CLOSED') pick = nowYm
+      // ② 本月已关或无该期 → 取最近的未来未关期
+      else pick = opened.find((s) => s > nowYm) || ''
+      if (!pick) {
+        const past = opened.filter((s) => s < nowYm)
+        pick = past.length ? past[past.length - 1] : ''
+      }
+      if (pick) { ym = pick; periodSource.value = t('gl.special.periodOpened') }
       // 全期已关：退回期间表最后一期。此时来源不能再自称「开账期间」，照实写清已结账，
       // 免得界面把一个人造的默认值说成系统事实（计提会落进已关期间，服务端会拒）。
       else if (all.length) { ym = all[all.length - 1]; periodSource.value = t('gl.special.periodLastClosed') }

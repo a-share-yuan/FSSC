@@ -8,6 +8,7 @@ import com.fssc.common.core.Result;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.system.service.SoDService;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -55,5 +56,15 @@ public class SoDCheckController {
                                                               @RequestParam(defaultValue = "1") long pageNum,
                                                               @RequestParam(defaultValue = "20") long pageSize) {
         return Result.success(soDService.checkPage(dimension, keyword, pageNum, pageSize));
+    }
+
+    /**
+     * 分层计数：静态配置冲突 / 运行时真自审 / 运行时连办 / 首节点豁免 分开返回。
+     * 前端据此渲染多格卡片，不再用一个 total 把「合规」报成「冲突」。
+     */
+    @RequiresPerm({"system:sod:list", "system:sod:scan"})
+    @GetMapping("/check/summary")
+    public Result<Map<String, Object>> checkSummary() {
+        return Result.success(soDService.summarize());
     }
 }

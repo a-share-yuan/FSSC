@@ -64,7 +64,19 @@ export function useSubmitGuard(formRef) {
   async function submit(action) {
     // 没挂 ref 的表单无法前端校验——此时宁可放行交给后端必填守卫，也不要静默吞掉提交
     if (!(await validateForms([formRef]))) return undefined
-    return action()
+    try {
+      return await action()
+    } catch (e) {
+      // 业务守卫（会计期间已关账、无待计提资产、超预算…）会以 rejected Promise 冒泡到这里。
+      // 不接住就会一路抛到 Vue 的 ErrorBoundary，整页被替换成「页面出错了」，
+      // 用户已填的表单全丢且看不到真实原因。
+      // api.js 响应拦截器对 HTTP 业务错误已统一弹过一次红色提示，这里只负责「接住」；
+      // 非 http 来源的异常（纯前端 throw）拦截器没弹过，补一次提示。
+      if (!e?.code && !e?.status && !e?.response && !e?.timeout) {
+        ElMessage.error(e?.message || e?.msg || '操作未成功，请检查提示信息后重试')
+      }
+      return undefined
+    }
   }
 
   return { submit }

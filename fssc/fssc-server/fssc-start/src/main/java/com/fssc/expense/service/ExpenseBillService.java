@@ -46,6 +46,7 @@ import com.fssc.invoice.entity.InvInvoice;
 import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.invoice.service.InvoiceService;
 import com.fssc.masterdata.entity.MdCity;
+import com.fssc.masterdata.service.PeriodService;
 import com.fssc.masterdata.entity.MdExpenseItem;
 import com.fssc.masterdata.entity.MdExpenseStandard;
 import com.fssc.masterdata.mapper.MdCityMapper;
@@ -127,6 +128,8 @@ public class ExpenseBillService {
     private static final String EXP_STD_DOMAIN = "expenseStandard";
 
     private final ExpBillMapper expBillMapper;
+    /** 会计期间守卫：关账/冻结期间禁止新建或保存业务单据（G14.6 关账后 409 实证） */
+    private final PeriodService periodService;
     private final ExpBillLineMapper expBillLineMapper;
     /** 分摊行（exp_bill_share）驱动预算占用——多部门分摊时按分摊行分别占用 */
     private final com.fssc.expense.mapper.ExpBillShareMapper expBillShareMapper;
@@ -217,7 +220,7 @@ public class ExpenseBillService {
      *  <li><b>代理人只能是被代理那个单的实际填单人</b>：显式带上 agent_user_id 时必须等于当前登录人，
      *      指他人为代理人一律拒绝（否则代报销成了任意挂名的后门）；</li>
      *  <li><b>二者不可同人</b>：报销人＝登录人即视为未代理，agent_user_id 不写（留空）；</li>
-     *  <li>两个身份都不带 ⇒ 与原先逐字相同（报销人＝登录人、agent_user_id 空），现网默认行为零变更；</li>
+     *  <li>两个身份都不带 ⇒ 与原先逐字相同（报销人＝登录人、agent_user_id 空），线上默认行为零变更；</li>
      *  <li>登记人 {@code create_by/update_by} 与代理身份是两回事，各写各列，不混用。</li>
      * </ul>
      *
@@ -357,6 +360,13 @@ public class ExpenseBillService {
                     bill.setPeriodMonth(bill.getApplyDate().getMonthValue());
                 }
             }
+            // 期间守卫：单据期间由申请日期推导（或由前端显式指定）；已关账期间一律拒绝落库。
+            // 原来 assertOpen 只接在凭证生成/过账侧，导致关账后仍能「草稿已保存」并写入 exp_bill，
+            // 与手册 §四 4「关账后 409 拦截、查数据库无任何新单」相悖。
+            // 必须在 insert 之前、companyId 与 periodYear/Month 都已兜底之后调用。
+            if (bill.getCompanyId() != null && bill.getPeriodYear() != null && bill.getPeriodMonth() != null) {
+                periodService.assertOpen(bill.getCompanyId(), bill.getPeriodYear(), bill.getPeriodMonth());
+            }
             // 借款草稿默认为借款日 + DEFAULT_LOAN_REPAY_DAYS 天到期归还；前端已显式填写则不覆盖
             if ("LOAN".equals(bill.getBillType()) && bill.getExpectRepayDate() == null && bill.getApplyDate() != null) {
                 bill.setExpectRepayDate(bill.getApplyDate().plusDays(DEFAULT_LOAN_REPAY_DAYS));
@@ -373,6 +383,17 @@ public class ExpenseBillService {
             ExpBill exist = requireMine(bill.getId(), u);
             if (!"DRAFT".equals(exist.getStatus())) {
                 throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿可编辑，当前状态: " + exist.getStatus());
+            }
+            // 编辑同样受期间守卫：updateById 忽略 null 字段，期间/公司须按「传值优先、缺省取原值」合并后再校验，
+            // 否则只改标题就能绕过关账闸。
+            Integer editYear = bill.getPeriodYear() != null ? bill.getPeriodYear() : exist.getPeriodYear();
+            Integer editMonth = bill.getPeriodMonth() != null ? bill.getPeriodMonth() : exist.getPeriodMonth();
+            LocalDate editDate = bill.getApplyDate() != null ? bill.getApplyDate() : exist.getApplyDate();
+            if (editYear == null && editDate != null) editYear = editDate.getYear();
+            if (editMonth == null && editDate != null) editMonth = editDate.getMonthValue();
+            Long editCompany = bill.getCompanyId() != null ? bill.getCompanyId() : exist.getCompanyId();
+            if (editCompany != null && editYear != null && editMonth != null) {
+                periodService.assertOpen(editCompany, editYear, editMonth);
             }
             // 甲：编辑环节同样归一身份列（只可补登代理，不接受把单改到第三人名下）
             registerApplicantIdentity(bill, exist, u);
@@ -842,6 +863,10 @@ public class ExpenseBillService {
         ExpBill bill = requireMine(billId, u);
         if (!"DRAFT".equals(bill.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "仅草稿可提交，当前状态: " + bill.getStatus());
+        }
+        // 提交再闸一次：守卫上线前落库的历史草稿也不能在关账期间进入审批链。
+        if (bill.getCompanyId() != null && bill.getPeriodYear() != null && bill.getPeriodMonth() != null) {
+            periodService.assertOpen(bill.getCompanyId(), bill.getPeriodYear(), bill.getPeriodMonth());
         }
         // 提交环节复核代理身份：报销人与代理人同人即视为未代理，撤掉代理列后再进审批链
         // （历史脏行／绕过保存环节的写入在此办结；报销人与代理人的其余组合已由保存环节校验）。

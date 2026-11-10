@@ -36,7 +36,7 @@ import java.util.Set;
 /**
  * 资产域流程结束收尾（事件编排总线策略实现）。
  *
- * <p>修复跨法人调拨公司时序缺陷——
+ * <p>跨法人调拨的公司取值时序——
  * {@code MdAssetService.transfer} 跨法人调拨时不再先改资产归属公司（否则公司维度校验会把调出公司审批人全部拦截），
  * 目标公司经流程变量 {@code targetCompanyId} 传递；本监听器在审批通过后读取并更新资产 {@code company_id}。
  *
@@ -62,6 +62,8 @@ public class AssetWfEventListener implements WfBizAction {
     /** FA_CER 资本性支出申请收尾（预算占用/释放） */
     private final FaCerRequestMapper cerRequestMapper;
     private final BudgetService budgetService;
+    /** 预算占用需在独立事务内执行：占用失败只回滚它自己，不得把审批事务标成 rollback-only */
+    private final org.springframework.transaction.PlatformTransactionManager txManager;
     private final BgOccupyMapper bgOccupyMapper;
     private final WfQueryService wfQueryService;
     /** 审计扩面：审批最终状态状态跃迁记录 */
@@ -214,9 +216,36 @@ public class AssetWfEventListener implements WfBizAction {
             if (Boolean.TRUE.equals(event.getApproved())) {
                 if (cer.getBudgetItemId() != null && cer.getAmount() != null
                         && cerOccupyAmount(cerId).compareTo(BigDecimal.ZERO) <= 0) {
-                    budgetService.occupy(cer.getBudgetItemId(), cer.getAmount(), "FA_CER", cerId, cer.getRequestNo());
-                    log.info("资本性支出申请 {} 审批通过，预算科目 {} 占用 {}",
-                            cer.getRequestNo(), cer.getBudgetItemId(), cer.getAmount());
+                    // 要点：占用失败**不得回滚审批事务**。
+                    // 原实现直接调用 budgetService.occupy(...)，HARD 控方案额度不足时抛 BizException，
+                    // 而本方法运行在流程引擎 complete() 的事务内 ⇒ 整个审批被回滚：
+                    // 任务不消失、接口报 500、单据永远卡在最后一个节点，既不能通过也不能撤回。
+                    // 正确语义：审批结论已成立（人已签），预算占用是「事后记账」，失败应留痕 + 告警，
+                    // 由财务按【预算占用失败】标记人工介入，而不是把审批卡死。
+                    try {
+                        // 必须 REQUIRES_NEW：BudgetService.occupy 带 @Transactional(rollbackFor=Exception.class)，
+                        // 若加入当前事务（引擎 complete() 的同一个事务），它一抛异常就把整个事务标成
+                        // rollback-only —— 即使这里 catch 住，外层提交时仍抛
+                        // UnexpectedRollbackException（这正是审批被卡死的原因）。
+                        // 放进独立事务后：占用失败只回滚「占用」这件事，审批结论照常提交。
+                        org.springframework.transaction.support.TransactionTemplate tt =
+                                new org.springframework.transaction.support.TransactionTemplate(txManager);
+                        tt.setPropagationBehavior(
+                                org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                        tt.executeWithoutResult(st ->
+                                budgetService.occupy(cer.getBudgetItemId(), cer.getAmount(),
+                                        "FA_CER", cerId, cer.getRequestNo()));
+                        log.info("资本性支出申请 {} 审批通过，预算科目 {} 占用 {}",
+                                cer.getRequestNo(), cer.getBudgetItemId(), cer.getAmount());
+                    } catch (Exception bex) {
+                        String reason = "预算占用失败：" + bex.getMessage();
+                        log.error("资本性支出申请 {} 审批通过但预算占用失败（不回滚审批，转人工处理）: {}",
+                                cer.getRequestNo(), bex.getMessage(), bex);
+                        FaCerRequest flag = new FaCerRequest();
+                        flag.setId(cerId);
+                        flag.setRemark(capRemark((cer.getRemark() == null ? "" : cer.getRemark() + "；") + reason));
+                        cerRequestMapper.updateById(flag);
+                    }
                 }
                 if (!"APPROVED".equals(cer.getStatus())) {
                     // 审计扩面：改状态前采集旧值
@@ -262,6 +291,14 @@ public class AssetWfEventListener implements WfBizAction {
         } catch (Exception ex) {
             log.error("资本性支出申请 {} 流程收尾失败: {}", cerId, ex.getMessage(), ex);
         }
+    }
+
+    /** remark 上限 500，超长截尾保最新痕（与 MdAssetService.capRemark 同口径） */
+    private String capRemark(String v) {
+        if (v == null) {
+            return null;
+        }
+        return v.length() <= 500 ? v : v.substring(0, 497) + "...";
     }
 
     /** 汇总 FA_CER 申请已发生的预算占用(OCCUPY−RELEASE 净额)，用于去重占用与驳回释放 */

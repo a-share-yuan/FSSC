@@ -330,13 +330,17 @@ async function loadPeriods() {
   // 无 md:period:list 直接兜底，不发请求（原实现会请求失败再进 catch，但全局 toast 已经弹出）
   if (!canLoadPeriods) return fallback()
   try {
-    const res = await periodApi.page({ pageNum: 1, pageSize: 50 }, { silent: true })
+    // md_period 是「公司 × 年月」笛卡尔积（当前 9 公司 × 36 月 = 324 行）。
+    // 原 pageSize:50 只取第一页 ⇒ 下拉恒停在最早建档的那一年，2026-10 永远进不来。
+    // 改为一次取全量后按 YYYY-MM 去重（同一期间多公司只留一项），再按期间倒序。
+    const res = await periodApi.page({ pageNum: 1, pageSize: 500 }, { silent: true })
     const list = res.list || res.records || []
     // 期间查询两处错位是「看板恒空」的另一半——
     // ① md_period 实体字段是 periodYear/periodMonth，原代码读 p.year/p.month ⇒ 期间串成 'undefined-undefined'；
     // ② 状态过滤只认 OPEN，而会计期间主数据的开账态实为 NORMAL ⇒ 下拉恒空，永远走兜底当月。
     // 看板仍传 'YYYY-MM'（展示规则），由后端 GlMonthCloseService.normalizePeriod 统一折成库内 yyyyMM 再 eq，
     // 因此这里不需要在前端私自改成 6 位。
+    const seen = new Set()
     periods.value = list
       .map((p) => {
         const y = Number(p.periodYear ?? p.year)
@@ -346,8 +350,12 @@ async function loadPeriods() {
         if (st !== 'NORMAL' && st !== 'OPEN' && st !== 'CLOSED') return null
         return { label: t('sharing.monthEnd.periodLabel', { v1: y, v2: m }), value: `${y}-${String(m).padStart(2, '0')}`, raw: p }
       })
-      .filter(Boolean)
-      .reverse()
+      .filter((p) => {
+        if (!p || seen.has(p.value)) return false
+        seen.add(p.value)
+        return true
+      })
+      .sort((a, b) => b.value.localeCompare(a.value))
     if (!periods.value.length) fallback()
   } catch {
     fallback()
@@ -462,7 +470,11 @@ onMounted(async () => {
   // 无权限时不请求、不初始化图表、不启动定时检查（入口已在 Layout 隐藏，此处防直达 URL）
   if (!canView) return
   await loadPeriods()
-  selectedPeriod.value = periods.value[0]?.value || ''
+  // 全量倒序后第一项是最后一年 12 月（未来期），默认落在当前自然月更符合看板语义；
+  // 其余期间（含已关账的 2026-10）都保留在下拉里可手动切换读数。
+  const now = new Date()
+  const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  selectedPeriod.value = periods.value.find(x => x.value === curYm)?.value || periods.value[0]?.value || ''
   await loadData()
   initCharts()
   window.addEventListener('resize', handleResize)

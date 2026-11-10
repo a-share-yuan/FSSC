@@ -39,6 +39,13 @@ public enum ErrorCode {
     DATA_ALREADY_EXISTS(4090, "该记录已存在，请勿重复提交；可在列表中核对已有记录"),
 
     /**
+     * 会计期间已关账/冻结（409 Conflict）。语义与 HTTP 409 一致：客户端改期或等待反结账后可重试，
+     * 重试同一请求必然失败。全局异常处理器会把本码同时落到 HTTP 409，
+     * 让浏览器、网关与自动化脚本都能按 4xx 识别，而不再出现「HTTP 200 + 提示保存成功却落了脏单」。
+     */
+    PERIOD_CLOSED(409, "会计期间已关账/冻结，禁止操作"),
+
+    /**
      * C-3 登录图形验证码（失败阈值触发）：该身份的连续凭据失败已达
      * {@code fssc.login.captcha-fail-threshold}，本次登录必须携带 captchaId/captchaCode。
      * 前端据此显示验证码框并自动拉图（GET /api/auth/captcha）。

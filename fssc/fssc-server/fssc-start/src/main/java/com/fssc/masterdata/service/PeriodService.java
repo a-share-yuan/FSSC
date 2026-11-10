@@ -171,8 +171,12 @@ public class PeriodService {
             return; // 未建期间不拦截
         }
         if ("CLOSED".equals(p.getStatus())) {
-            throw new BizException(ErrorCode.PARAM_INVALID,
-                    String.format("会计期间 %d-%02d 已结账，禁止操作", periodYear, periodMonth));
+            // 409 冲突码：关账期间的新建/保存/提交类操作一律拒绝，前端按红色弹窗渲染。
+            // 原先用 PARAM_INVALID(400)，与「填错字段」无法区分，自动化脚本也判不出 4xx。
+            // 用 (code, message) 构造而非 (ErrorCode, detail)：前者文案即屏幕原文，
+            // 后者会把枚举默认文案再拼一遍，出现「…禁止操作：…禁止新建」的重复前缀。
+            throw new BizException(ErrorCode.PERIOD_CLOSED.getCode(),
+                    String.format("会计期间 %d-%02d 已关账/冻结，禁止新建或保存单据", periodYear, periodMonth));
         }
     }
 
