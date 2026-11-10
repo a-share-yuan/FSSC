@@ -57,6 +57,29 @@ def parse_blocks(md_lines):
             blocks.append(("code", (lang, code)))
             continue
 
+        # 引用内的表格：> | a | b |  且下一行是 > |---|（版本选择表就长这样）
+        if stripped.startswith(">") and i + 1 < n:
+            def _q(x):
+                x = x.strip()
+                return x[1:].strip() if x.startswith(">") else x
+            _cur, _nxt = _q(line), _q(md_lines[i + 1])
+            if _cur.startswith("|") and re.match(r"^\|[\s:|-]+\|$", _nxt):
+                def qcells(s):
+                    s = s.strip()
+                    if s.startswith("|"):
+                        s = s[1:]
+                    if s.endswith("|"):
+                        s = s[:-1]
+                    return [c.strip() for c in s.split("|")]
+                header = qcells(_cur)
+                i += 2
+                rows = []
+                while i < n and _q(md_lines[i]).startswith("|"):
+                    rows.append(qcells(_q(md_lines[i])))
+                    i += 1
+                blocks.append(("table", (header, rows)))
+                continue
+
         # 表格：| a | b |  且下一行是分隔行
         if stripped.startswith("|") and i + 1 < n and re.match(r"^\s*\|[\s:|-]+\|\s*$", md_lines[i + 1]):
             def cells(s):
@@ -88,13 +111,21 @@ def parse_blocks(md_lines):
             i += 1
             continue
 
-        # 引用（连续行合并成一块）
+        # 引用（连续行合并成一块）；遇到「> |」表格头就停手，交给上面的表格分支
         if stripped.startswith(">"):
+            def _qq(x):
+                x = x.strip()
+                return x[1:].strip() if x.startswith(">") else x
             quote = []
             while i < n and md_lines[i].strip().startswith(">"):
-                quote.append(md_lines[i].strip().lstrip(">").strip())
+                _c = _qq(md_lines[i])
+                if (_c.startswith("|") and i + 1 < n
+                        and re.match(r"^\|[\s:|-]+\|$", _qq(md_lines[i + 1]))):
+                    break
+                quote.append(_c)
                 i += 1
-            blocks.append(("quote", " ".join(x for x in quote if x)))
+            if quote:
+                blocks.append(("quote", " ".join(x for x in quote if x)))
             continue
 
         # 列表（连续同类型行合并成一块）
