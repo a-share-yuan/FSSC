@@ -15,5 +15,5 @@
 mysql -uroot -p --default-character-set=utf8mb4 fssc < db/hotfix/20261105_bg_item6_unfreeze.sql
 ```
 
-> `db/Dump20261109/` 已同步修正该行（`freeze=0`），新导入的环境不会复现；
+> `db/Dump20261114/` 已同步修正该行（`freeze=0`），新导入的环境不会复现；
 > 本脚本只用于**已经在跑、不想重导**的环境。
