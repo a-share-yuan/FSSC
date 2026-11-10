@@ -526,7 +526,7 @@ async function loadMd() {
     cities.value = await fetchAllPages((p) => mdApi.cities(p), { pageSize: 500 })
     payees.value = (await mdApi.payees({ pageNum: 1, pageSize: 200 })).list || []
     // 出差人受控选择：加载同公司用户列表供出行人下拉
-    users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
+    users.value = (await userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
   } catch (e) { ElMessage.error(e.message) }
 }
 async function loadBillTypes() {

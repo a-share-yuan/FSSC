@@ -378,7 +378,7 @@ function withdraw(row) {
 
 async function openReassign(row) {
   // 默认只加载同公司人员
-  if (!users.value.length) users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
+  if (!users.value.length) users.value = (await userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
   current.value = row
   reassignForm.assigneeId = row.assigneeId || null
   reassignVis.value = true
@@ -408,7 +408,7 @@ onMounted(async () => {
   if (route.query.poolStatus) filter.poolStatus = String(route.query.poolStatus)
   load()
   // 默认只加载同公司人员
-  try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch (e) { /* ignore */ }
+  try { users.value = (await userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch (e) { /* ignore */ }
 })
 
 function exportCsv() {

@@ -284,7 +284,7 @@ async function doImportExcel(uploadFile) {
 
 onMounted(() => {
   mdApi.customers({ pageNum: 1, pageSize: 200 }).then((d) => { customers.value = d?.list || [] }).catch(() => {})
-  userApi.page({ pageNum: 1, pageSize: 500 }).then((d) => { users.value = d?.list || [] }).catch(() => {})
+  userApi.options({ pageNum: 1, pageSize: 500 }).then((d) => { users.value = d?.list || [] }).catch(() => {})
   loadReceipt()
 })
 </script>

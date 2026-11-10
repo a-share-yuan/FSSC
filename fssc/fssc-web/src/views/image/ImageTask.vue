@@ -177,7 +177,7 @@ async function del(row) {
 
 onMounted(() => {
   // 默认只加载同公司人员
-  userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId }).then((d) => { users.value = d?.list || [] }).catch(() => {})
+  userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId }).then((d) => { users.value = d?.list || [] }).catch(() => {})
   load()
 })
 

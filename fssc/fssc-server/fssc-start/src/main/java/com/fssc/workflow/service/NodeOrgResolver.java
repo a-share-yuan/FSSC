@@ -107,6 +107,12 @@ public class NodeOrgResolver {
     private final WfTaskMapper wfTaskMapper;
     /** {@code wf_model.enable_delegate} 读取（该列为 0 的流程不支持委托代办） */
     private final WfModelMapper wfModelMapper;
+    /**
+     * 同一实例内「谁不能办当前节点」的唯一判据源。取人前先剔掉必然被 complete() 硬闸拒绝的人，
+     * 避免 AUTO 把同组两节派给同一人后由用户在办理时才发现 403（此时 assignee 已写死＝节点自锁）。
+     * 只读 HistoryService / WfNodeConfigResolver / mapper，不反向依赖 WfEngineFacade，无构造器环。
+     */
+    private final WfSerialExclusion wfSerialExclusion;
 
     /** 取人策略（sys_config）：{@code FIRST_ID|LEAST_LOADED|ROUND_ROBIN}，未配置＝FIRST_ID */
     static final String ASSIGN_STRATEGY_KEY = "wf.assign.strategy";
@@ -391,7 +397,9 @@ public class NodeOrgResolver {
                 return;
             }
             for (String g : groups) {
-                Long resolved = tryResolveAssignee(task.getProcessInstanceId(), g);
+                // 纯 BPMN 候选组路径也是 AUTO 派发口，同样要在指派前做 L1 硬约束剔除。
+                Long resolved = tryResolveAssignee(task.getProcessInstanceId(), g, null,
+                        task.getTaskDefinitionKey());
                 if (resolved != null) {
                     flowTaskService.setAssignee(task.getId(), String.valueOf(resolved));
                     log.info("节点办理人动态解析: task={} role={} -> userId={}", task.getId(), g, resolved);
@@ -900,6 +908,25 @@ public class NodeOrgResolver {
      * @param extraHandled 当前任务办理人（可空；空＝与两参版本完全等价）
      */
     public Long tryResolveAssignee(String procInstId, String roleCode, Long extraHandled) {
+        return resolveAssignee(procInstId, roleCode, extraHandled, null);
+    }
+
+    /**
+     * 派发侧专用重载：额外传当前任务的 BPMN {@code taskDefinitionKey}，在指派<b>之前</b>
+     * 按 {@link WfSerialExclusion#blockedUsers} 剔除「本实例已办过整链／同互斥组节点」的人。
+     *
+     * <p>判据与 {@code WfEngineFacade#complete()} 的两道硬闸同源（同一份 {@code act_hi_taskinst}
+     * 查询），避免「派单时就算得出必被拒、却等用户点通过才报 403」的节点自锁。
+     * 剔空时返回 null，由 {@code pickByStrategy} 的空 eligible 分支落到既有
+     * {@code wf_node_config.empty_strategy} 兜底（线上多数节点为 ESCALATE），不新造机制。
+     *
+     * @param taskDefKey 当前任务 BPMN defKey；为 null 时不做硬约束剔除，保持预告／空策略判定原行为
+     */
+    public Long tryResolveAssignee(String procInstId, String roleCode, Long extraHandled, String taskDefKey) {
+        return resolveAssignee(procInstId, roleCode, extraHandled, taskDefKey);
+    }
+
+    private Long resolveAssignee(String procInstId, String roleCode, Long extraHandled, String taskDefKey) {
         try {
             WfInstance inst = findInstance(procInstId);
             if (inst == null) {
@@ -912,12 +939,19 @@ public class NodeOrgResolver {
             Long applicant = resolveApplyUserId(procInstId);
             String scope = roleScopes(Collections.singletonList(roleCode))
                     .getOrDefault(roleCode, "COMPANY");
+            // L1 硬约束：与 complete() 硬闸同一判据、指派前剔人；未命中约束的节点返回空集、零额外查询。
+            Set<Long> blocked = (taskDefKey == null || taskDefKey.isBlank())
+                    ? Set.of()
+                    : wfSerialExclusion.blockedUsers(inst.getModelKey(), inst.getBizType(), procInstId, taskDefKey);
             if ("GROUP".equalsIgnoreCase(scope)) {
                 // 集团/共享角色：跨公司候选组。当前运行模式下候选组待办对持有人不可见
                 // （Flowable 7 候选组查询未命中），改为"全局首个持有人"直接指派，保证流程按节点推进不断流；
                 // 候选组仍保留可兜底。先本公司、本公司无人再回落全网（见 companyFirst）。
-                return pickByStrategy(inst.getModelKey(), roleCode, preferFreshHandlers(procInstId, companyFirst(
-                        userIdsGlobalWithRole(roleCode), resolveCompany(procInstId), roleCode), extraHandled), applicant);
+                List<Long> global = companyFirst(userIdsGlobalWithRole(roleCode),
+                        resolveCompany(procInstId), roleCode);
+                return pickByStrategy(inst.getModelKey(), roleCode,
+                        applySerialExclusion(preferFreshHandlers(procInstId, global, extraHandled), blocked,
+                                procInstId, taskDefKey), applicant);
             }
             Long company = resolveCompany(procInstId);
             if (company == null) {
@@ -928,11 +962,34 @@ public class NodeOrgResolver {
             // 故一律按用户 id 取首个持有人确定性指派（候选组仍保留，其余持有人仍可依权办理）。
             // 多持有人时的落点可由 wf.assign.strategy 改为负载均衡/轮询，缺省仍是 id 升序首个。
             return pickByStrategy(inst.getModelKey(), roleCode,
-                    preferFreshHandlers(procInstId, userIds, extraHandled), applicant);
+                    applySerialExclusion(preferFreshHandlers(procInstId, userIds, extraHandled), blocked,
+                            procInstId, taskDefKey), applicant);
         } catch (Exception e) {
             log.warn("节点办理人解析失败 proc={} role={}: {}", procInstId, roleCode, e.getMessage());
             return null;
         }
+    }
+
+    /** 只做剔除、不改候选人资格；剔空保留空列表交给 pickByStrategy 的 empty 分支走空策略兜底。 */
+    private List<Long> applySerialExclusion(List<Long> ids, Set<Long> blocked,
+                                            String procInstId, String taskDefKey) {
+        if (ids == null || blocked.isEmpty()) {
+            return ids;
+        }
+        List<Long> left = new ArrayList<>();
+        for (Long id : ids) {
+            if (id != null && !blocked.contains(id)) {
+                left.add(id);
+            }
+        }
+        if (left.isEmpty()) {
+            log.warn("L1 硬约束剔空候选：proc={} node={} blocked={} 原始={} → 返回空，交 empty_strategy 兜底",
+                    procInstId, taskDefKey, blocked, ids);
+        } else {
+            log.info("L1 硬约束前置剔除：proc={} node={} blocked={} 候选 {} -> {}",
+                    procInstId, taskDefKey, blocked, ids, left);
+        }
+        return left;
     }
 
     /** 取列表中第一个不是提单人的人（applicant 为 null 时即原"首个持有人"语义） */
@@ -990,12 +1047,13 @@ public class NodeOrgResolver {
     /**
      * 同实例回避（软）：把「本单已经办过节点」的人排到候选末尾。
      *
-     * <p>连办闸 {@code approve.deny_serial_same_handler=1} 的语义是<b>同一人在同一实例内只能办一节</b>。
-     * 派单却按 id 升序取首个持有人，于是常见到「GK_2 派给崔佳怡、GK_3_R 又派给崔佳怡」——她打开就是
-     * 403「禁止同一人在同一审批流程中连续办理多个节点」，只能人工【转办】才能推进（6 节链通常要转办 3～4 次）。
+     * <p>连办闸 {@code approve.deny_serial_same_handler}（1/ALL 或链白名单）的语义是
+     * <b>同一人在同一实例内只能办一节</b>。派单却按 id 升序取首个持有人，于是常见到
+     * 「GK_2 派给崔佳怡、GK_3_R 又派给崔佳怡」——她打开就是 403，只能人工【转办】才能推进。
      *
      * <p>这里<b>只调顺序、不删人</b>：全员都办过时原样返回，绝不造出"无人可派"的死节点；
-     * 读不到镜像表（异常/无数据）也原样返回，行为与改造前一致。
+     * 历史查询失败（返回空集）也原样返回，行为与改造前一致。硬约束<b>剔除</b>由
+     * {@link #applySerialExclusion} 在派发侧单独承担（同源判据、指派前生效），两者不互相替代。
      */
     private List<Long> preferFreshHandlers(String procInstId, List<Long> ids) {
         return preferFreshHandlers(procInstId, ids, null);
@@ -1011,16 +1069,10 @@ public class NodeOrgResolver {
             return ids;
         }
         try {
-            List<WfTask> done = wfTaskMapper.selectList(new LambdaQueryWrapper<WfTask>()
-                    .eq(WfTask::getProcInstId, procInstId)
-                    .eq(WfTask::getStatus, "DONE")
-                    .isNotNull(WfTask::getAssigneeId));
-            java.util.Set<Long> handled = new java.util.HashSet<>();
-            if (done != null) {
-                for (WfTask t : done) {
-                    if (t.getAssigneeId() != null) handled.add(t.getAssigneeId());
-                }
-            }
+            // 与 complete() 硬闸同源：读 Flowable 权威历史 act_hi_taskinst，不再读 wf_task 镜像。
+            // 镜像开关关闭或双写失败时会缺行，会让「软回避」认不出已办人。
+            java.util.Set<Long> handled = new java.util.HashSet<>(
+                    wfSerialExclusion.handledUsers(procInstId, null));
             if (extraHandled != null) {
                 handled.add(extraHandled);
             }

@@ -407,7 +407,7 @@ onMounted(async () => {
   load(1)
   // 申请人姓名映射：列表只存 applyBy（用户 id），一次性拉人员表后本地映射，避免逐行查询
   try {
-    const d = await userApi.page({ pageNum: 1, pageSize: 500 })
+    const d = await userApi.options({ pageNum: 1, pageSize: 500 })
     const m = {}
     for (const u of (d?.list || [])) m[u.id] = u.nickName || u.userName || ('#' + u.id)
     userNames.value = m

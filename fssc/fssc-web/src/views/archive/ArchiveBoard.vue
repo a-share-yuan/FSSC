@@ -1631,7 +1631,7 @@ watch(tab, reload)
 async function loadUsers() {
   // 人员下拉 pageSize 取 200 并带 companyId：全表拉取既慢，又会把别家员工带进选择器
   try {
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
+    const list = (await userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
   } catch (e) { /* ignore */ }
 }

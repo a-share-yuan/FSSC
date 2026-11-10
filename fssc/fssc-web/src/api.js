@@ -987,7 +987,10 @@ export const customerApi = {
 
 // 系统管理
 export const userApi = {
+  // 用户管理页专用（全字段、可跨公司）：需 system:user:list，2026-11-10 起收回该权限
   page: (params) => http.get('/tenant/system/user/page', { params }),
+  // 业务下拉专用取人（申请人/还款人/转办候选人）：强制本公司 + 最小字段集 + 单页≤200
+  options: (params) => http.get('/tenant/system/user/options', { params }),
   // 列表 phone/email 已脱敏，编辑前拉取明文联系方式
   full: (id) => http.get(`/tenant/system/user/${id}/full`),
   create: (body) => http.post('/tenant/system/user/create', body),

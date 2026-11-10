@@ -42,15 +42,47 @@ public class TenantUserController {
     private final UserService userService;
     private final SoDService soDService;
 
-    // 只读查询放开给所有登录租户用户：报销/还款等单据发起页的申请人、还款人下拉必用（写操作仍需权限）
-    // SO：无 system:user:list 权限的调用方裁剪为下拉最小字段集，避免向全员暴露 phone/email
-    // companyId 由前端传入，不可信——直接调 API 不传/乱传就能拉全租户人员。
-    // 无 system:user:list 的调用方一律以登录人公司为准（跨公司请求直接拒绝，不静默改写）；
-    // 只有持用户管理权限的角色可跨公司检索。
+    /**
+     * 用户管理页专用分页（全字段、可跨公司）——**必须持 {@code system:user:list}**。
+     *
+     * <p>2026-11-10 权限整改（D-API-1110-01）：本端点此前对全部登录用户开放，
+     * 普通员工（100001/100011）可直接拉到本公司 129 人的工号/姓名/部门目录。
+     * 业务下拉确实需要取人，但那不是本端点的职责——下拉改走 {@link #options}，
+     * 本端点收回用户管理权限，只有持该权限的角色可跨公司检索全字段。
+     */
+    @RequiresPerm("system:user:list")
     @GetMapping("/page")
     public Result<PageResult<?>> page(PageQuery query, String keyword, String status,
                                       @RequestParam(required = false) String deptIds,
                                       @RequestParam(required = false) Long companyId) {
+        return doPage(query, keyword, status, deptIds, companyId, true);
+    }
+
+    /**
+     * 业务下拉专用取人（申请人/还款人/转办候选人等 18 处前端调用）。
+     *
+     * <p>与 {@code /page} 的差别（等价于原 {@code /page} 的无权限分支）：
+     * <ul>
+     *   <li><b>强制本公司</b>：{@code companyId} 由前端传入不可信，一律以登录人公司为准，
+     *       跨公司请求直接 403，不静默改写；</li>
+     *   <li><b>最小字段集</b>：只回 id/userName/nickName/empNo/deptId/deptName/companyName/status/createTime，
+     *       不回 phone/email/postId 等联系方式；</li>
+     *   <li><b>分页上限</b>：单页最多 {@value #OPTIONS_MAX_PAGE_SIZE} 条，避免一次拉全公司花名册。</li>
+     * </ul>
+     * 只读、无写副作用，故不挂业务权限码，但仍是登录态接口。
+     */
+    @GetMapping("/options")
+    public Result<PageResult<?>> options(PageQuery query, String keyword, String status,
+                                         @RequestParam(required = false) String deptIds,
+                                         @RequestParam(required = false) Long companyId) {
+        return doPage(query, keyword, status, deptIds, companyId, false);
+    }
+
+    /** 下拉取人的单页上限（前端预加载最多 500，这里按 200 收敛）。 */
+    private static final int OPTIONS_MAX_PAGE_SIZE = 200;
+
+    private Result<PageResult<?>> doPage(PageQuery query, String keyword, String status,
+                                        String deptIds, Long companyId, boolean canListAll) {
         // 机构目录树联动：deptIds 为逗号分隔的部门 ID（选中节点及其全部子部门）
         List<Long> deptIdList = null;
         if (deptIds != null && !deptIds.isBlank()) {
@@ -62,7 +94,8 @@ public class TenantUserController {
                 } catch (NumberFormatException ignore) { /* 跳过非法片段 */ }
             }
         }
-        boolean canListAll = hasUserListPerm();
+        // /page 由注解保证持 system:user:list；/options 恒为 false（强制本公司 + 裁剪 + 限页）
+        canListAll = canListAll && hasUserListPerm();
         if (!canListAll) {
             LoginUser me = UserContext.getRequired();
             if (me.getCompanyId() != null) {
@@ -72,6 +105,10 @@ public class TenantUserController {
                             "只能查看本公司人员（公司 " + me.getCompanyId() + "）");
                 }
                 companyId = me.getCompanyId();
+            }
+            // 下拉取人：单页收敛到 OPTIONS_MAX_PAGE_SIZE，避免一次拉全公司花名册
+            if (query.getPageSize() > OPTIONS_MAX_PAGE_SIZE) {
+                query.setPageSize(OPTIONS_MAX_PAGE_SIZE);
             }
         }
         PageResult<SysUser> page = userService.page(query.getPageNum(), query.getPageSize(), keyword, status, deptIdList, companyId);

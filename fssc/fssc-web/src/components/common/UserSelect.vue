@@ -28,7 +28,7 @@
  * UserSelect 人员选择组件（统一人员下拉 + 权限治理）
  *
  * 统一人员展示规则：nickName || userName（可选附加部门后缀），
- * 值绑定用户 id。数据源：userApi.page（租户用户分页）。
+ * 值绑定用户 id。数据源：userApi.options（租户用户分页）。
  *
  * 默认只加载同公司人员，解决全量加载的性能与安全问题。
  *
@@ -61,7 +61,7 @@ const props = defineProps({
   clearable: { type: Boolean, default: true },
   disabled: { type: Boolean, default: false },
   placeholder: { type: String, default: '' },
-  /** 外部已加载的用户列表（避免重复请求）；不传则组件内部通过 userApi.page 拉取 */
+  /** 外部已加载的用户列表（避免重复请求）；不传则组件内部通过 userApi.options 拉取 */
   users: { type: Array, default: null },
   /** 可见范围：'same-company'（同公司，缺省）/ 'same-dept'（同部门）/ 'all'（全量） */
   scope: { type: String, default: 'same-company', validator: (v) => ['same-company', 'same-dept', 'all'].includes(v) },
@@ -113,7 +113,7 @@ async function load() {
 
   try {
     const params = buildQueryParams()
-    const list = (await userApi.page(params)).list || []
+    const list = (await userApi.options(params)).list || []
     innerOptions.value = list
   } catch (e) {
     innerOptions.value = []

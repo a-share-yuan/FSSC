@@ -240,7 +240,7 @@ async function loadRefOptions() {
   const needDept = fields.value.some((f) => f.widgetType === 'DEPT_SELECT')
   if (needUser) {
     try {
-      const res = await userApi.page({ pageNum: 1, pageSize: 500 })
+      const res = await userApi.options({ pageNum: 1, pageSize: 500 })
       const list = res?.list || res?.records || []
       userOptions.value = list.map((u) => ({
         value: u.id,

@@ -648,7 +648,7 @@ onMounted(async () => {
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   try {
     // 默认只加载同公司人员，解决性能与安全问题
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
+    const list = (await userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('expense.common.optCurrentUser')
     const b = wb.value && wb.value.b

@@ -227,6 +227,12 @@ public class WfEngineFacade {
     /** 租户参数（sys_config）：complete 读取 approve.deny_self 自审禁止开关 */
     private final SysConfigMapper sysConfigMapper;
     /**
+     * 同一实例内「谁不能办当前节点」的唯一判据源：本类的连办开关／互斥组预检／连办预检
+     * 全部委托它，与 NodeOrgResolver 的 AUTO 派发前剔除共用同一份 act_hi_taskinst 判定，
+     * 杜绝「预检放行、审批被拒」。只依赖引擎与 mapper，不与本类构成构造器环。
+     */
+    private final WfSerialExclusion wfSerialExclusion;
+    /**
      * 待办列表按流程实例批量取单据键（{@code wf_instance.biz_type/biz_id}）。
      * 不再为了拿 bizType/bizId 去 {@code includeProcessVariables()}——那条路是 Flowable 的
      * "任务+关联实体"查询，1,500 条在办会把全部运行态变量连表拉回，是万级待办的主要耗时。
@@ -1793,8 +1799,11 @@ public class WfEngineFacade {
                     }
                     // 动态解析：直线上级沿部门汇报线、COMPANY 角色解析本公司唯一持有人；
                     // 解析唯一则直接指派，否则维持候选组（todo 侧按公司过滤兜底）
+                    // 派发前做 L1 硬约束剔除：与 complete() 两道硬闸同源，避免把单派给打开必被 403 的人。
+                    // 剔空时 resolved=null，落回候选组 + empty_strategy 兜底（绝不静默硬派）。
                     Long resolved = nodeOrgResolver.tryResolveAssignee(
-                            task.getProcessInstanceId(), value.split(",")[0].trim());
+                            task.getProcessInstanceId(), value.split(",")[0].trim(),
+                            null, task.getTaskDefinitionKey());
                     if (resolved != null) {
                         assignWithDelegateSubstitution(processKey, task, resolved);
                     } else {
@@ -2236,26 +2245,8 @@ public class WfEngineFacade {
      */
     private java.util.Set<Long> handledInSameSerialGroup(String modelKey, String procInstId,
                                                          String nodeKey, String group) {
-        java.util.Set<Long> out = new java.util.LinkedHashSet<>();
-        try {
-            for (HistoricTaskInstance h : EngineTenantScope.historicTaskQuery(historyService)
-                    .processInstanceId(procInstId).finished().list()) {
-                String uid = h.getAssignee();
-                if (uid == null || !uid.trim().matches("\\d+")) {
-                    continue;
-                }
-                if (Objects.equals(h.getTaskDefinitionKey(), nodeKey)) {
-                    continue;
-                }
-                WfNodeConfig c = wfNodeConfigResolver.resolve(modelKey, h.getTaskDefinitionKey());
-                if (c != null && group.equals(c.getSerialExclusiveGroup())) {
-                    out.add(Long.parseLong(uid.trim()));
-                }
-            }
-        } catch (Exception ex) {
-            log.warn("互斥组已办人查询失败 proc={} group={}: {}", procInstId, group, ex.getMessage());
-        }
-        return out;
+        // 判据收敛到 WfSerialExclusion：与 complete() 互斥组硬闸、AUTO 派发前剔除共用同一实现。
+        return wfSerialExclusion.handledInGroup(modelKey, procInstId, nodeKey, group);
     }
 
     /**
@@ -5256,18 +5247,8 @@ public class WfEngineFacade {
      * 这里只是把同一判断在读侧再算一次，且只在校验生效时才会被调用。
      */
     private boolean handledNodesInInstance(String procInstId, Long userId) {
-        if (procInstId == null || userId == null) {
-            return false;
-        }
-        try {
-            return EngineTenantScope.historicTaskQuery(historyService)
-                    .processInstanceId(procInstId)
-                    .taskAssignee(String.valueOf(userId)).finished().count() > 0;
-        } catch (Exception ex) {
-            // 读取失败按"没办过"处理：预检是收紧推送，不是收紧办理权限，误判的后果只是推送范围放宽一点
-            log.debug("连办预检查历史失败 procInstId={} userId={}: {}", procInstId, userId, ex.getMessage());
-            return false;
-        }
+        // 判据收敛到 WfSerialExclusion：与 complete() 连办校验、AUTO 派发前剔除共用同一实现。
+        return wfSerialExclusion.hasHandledInInstance(procInstId, userId);
     }
 
     private boolean isDenySelfEnabled() {
@@ -5294,8 +5275,8 @@ public class WfEngineFacade {
      *  <li>空串 / '0' → 不拦截（当前实际生效值，已显式 seed 进 sys_config）；</li>
      *  <li>'1' 或 'ALL' → 对所有流程启用；</li>
      *  <li>逗号分隔 bizType（如 'GL_MONTH_CLOSE'）→ 仅对该流程链启用（月结链铺办理人+禁 admin 的强制兜底）；</li>
-     *  <li>读取异常 → fail-closed，但<b>只对代码层显式登记的强制流程链</b>
-     *      {@link #SERIAL_SAME_HANDLER_ENFORCED_BIZTYPES} 生效（见下方取舍说明）。</li>
+ *  <li>读取异常 → fail-closed，但<b>只对代码层显式登记的强制流程链</b>
+ *      （{@code WfSerialExclusion.ENFORCED_BIZTYPES}）生效（见下方取舍说明）。</li>
      * </ul>
      * 与 deny_self 的区别：deny_self 仅拦「提交人审自己」，本开关拦「同一人办理同一实例的多个审批节点」（连办）。
      *
@@ -5305,48 +5286,10 @@ public class WfEngineFacade {
      * 其余仍放行——这是本条唯一的行为增量，且仅在 sys_config 读取抛异常时触发。</p>
      */
     private boolean isSerialSameHandlerDenied(String bizType) {
-        if (bizType == null) {
-            return false;
-        }
-        try {
-            SysConfig c = sysConfigMapper.selectOne(
-                    new LambdaQueryWrapper<SysConfig>()
-                            .eq(SysConfig::getConfigKey, "approve.deny_serial_same_handler")
-                            .last("limit 1"));
-            if (c == null || c.getConfigValue() == null) {
-                // 缺省方向统一为 fail-closed（与 approve.deny_self 一致）。
-                // 历史库已有该行（值为空串）⇒ 本分支不改变运行结果；见类上方 javadoc 与治理脚本。
-                log.warn("approve.deny_serial_same_handler 无配置行，按统一缺省方向 fail-closed 拦截 bizType={}", bizType);
-                return true;
-            }
-            String v = c.getConfigValue().trim();
-            if (v.isEmpty() || "0".equals(v)) {
-                return false;
-            }
-            if ("1".equalsIgnoreCase(v) || "ALL".equalsIgnoreCase(v)) {
-                return true;
-            }
-            for (String t : v.split(",")) {
-                if (t.trim().equalsIgnoreCase(bizType)) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (Exception ex) {
-            log.error("读取 approve.deny_serial_same_handler 异常，fail-closed 仅对显式登记流程链拦截 bizType={}: {}",
-                    bizType, ex.getMessage(), ex);
-            return SERIAL_SAME_HANDLER_ENFORCED_BIZTYPES.contains(bizType);
-        }
+        // 判据收敛到 WfSerialExclusion：配置读取、fail-closed 与异常兜底只有一份实现，
+        // AUTO 派发前的 L1 剔除调用同一方法，杜绝「预检放行、审批被拒」。
+        return wfSerialExclusion.serialDenied(bizType);
     }
-
-    /**
-     * 同人连办拦截在<b>代码层显式登记</b>的强制流程链（与 sys_config 值同形：bizType）。
-     *
-     * <p>仅在 sys_config <b>读取异常</b>时作为 fail-closed 的收窄依据——配置可读时一律以配置为准，
-     * 本常量不参与判定。登记规则＝"该链的办理人铺法与 admin 排除是强制兜底、宁可停也不放行"。</p>
-     */
-    private static final Set<String> SERIAL_SAME_HANDLER_ENFORCED_BIZTYPES =
-            Set.of("GL_MONTH_CLOSE");
 
     /** 按任务 ID 反查流程实例 ID；任务已办结时退回历史表（撤销预览的入参便利方法）。 */
     public String procInstIdOfTask(String taskId) {

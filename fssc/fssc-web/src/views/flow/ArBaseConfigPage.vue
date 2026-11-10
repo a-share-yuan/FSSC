@@ -214,7 +214,7 @@ const ruleUserOptions = ref([])
 async function loadRuleUsers() {
   // 默认只加载同公司人员
   try {
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
+    const list = (await userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     ruleUserOptions.value = list.map((u) => u.nickName || u.userName).filter(Boolean)
   } catch { ruleUserOptions.value = [] }
 }

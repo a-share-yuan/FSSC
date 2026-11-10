@@ -158,7 +158,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
   function newTravel() {
     return {
       // 出差人员默认＝当前登录人（同文件 81 行「申请人＝当前登录人」同源）。
-      // 留空会让下拉首位（userApi.page 返回的第一行是系统管理员账号）被回车选中，且单据上不是本人。
+      // 留空会让下拉首位（userApi.options 返回的第一行是系统管理员账号）被回车选中，且单据上不是本人。
       travelerName: store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || '',
       // 出差人员的外键：下拉只绑姓名 ⇒ traveler_id 恒 NULL（重名/改名即断，按 id 取标准的规则也拿不到）
       travelerId: store.user?.userId ?? store.user?.id ?? null,

@@ -175,7 +175,7 @@ function personLabel(name) {
 }
 async function loadUsers() {
   // 月结负责人通常为本财务人员，按同公司过滤
-  try { users.value = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch { users.value = [] }
+  try { users.value = (await userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || [] } catch { users.value = [] }
 }
 
 const pagedRows = computed(() => rows.value.slice((page.pageNum - 1) * page.pageSize, page.pageNum * page.pageSize))

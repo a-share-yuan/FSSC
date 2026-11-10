@@ -587,7 +587,7 @@ async function loadCompanies() {
 }
 
 async function loadUsers() {
-  try { users.value = (await userApi.page({ pageNum: 1, pageSize: 500 })).list || [] } catch { users.value = [] }
+  try { users.value = (await userApi.options({ pageNum: 1, pageSize: 500 })).list || [] } catch { users.value = [] }
 }
 
 async function loadRules() {

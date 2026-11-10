@@ -750,7 +750,7 @@ function shareBudget(b, row) {
 async function loadUsers() {
   try {
     // 默认只加载同公司人员
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
+    const list = (await userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
   } catch (e) { users.value = [] }
 }

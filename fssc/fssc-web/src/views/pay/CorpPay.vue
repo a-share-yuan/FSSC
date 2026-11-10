@@ -428,6 +428,13 @@ function onTypeChange(b) {
   b.form.bill.billSubType = subType.value
   if (b.form.bill.title === '') b.form.bill.title = subTypeLabel.value
   if (subType.value !== 'SETTLE') b.form.bill.extJson.prepayOffsets = []
+  // 付款类型＝款项性质，由单据类型决定（见 hintPayType：「由单据类型决定」）。
+  // 原实现只在载入时按 subType 带一次默认值、且仅当值为 null，切换页签不跟着改，
+  // 于是在 /corp-pay 上「先看预付再切结算」会留下
+  // 「billSubType=SETTLE + extJson.payType=PREPAY」的矛盾快照（页面显示预付款、单据却是结算单）。
+  if (subType.value === 'PREPAY' || subType.value === 'SETTLE') {
+    b.form.bill.extJson.payType = subType.value
+  }
 }
 function supplierCustomers(b) {
   return (b.customers || []).filter((c) => (c.customerType || '').toUpperCase().includes('SUPPLIER') || (c.customerType || '') === '')
@@ -725,7 +732,7 @@ onMounted(async () => {
   } catch (e) { /* 载入失败提示已在 loadBillForEdit 内 */ }
   try {
     // 默认只加载同公司人员
-    const list = (await userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
+    const list = (await userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId })).list || []
     users.value = list
 currentUserName.value = store.user?.realName || store.user?.nickName || store.user?.username || store.user?.userName || t('pay.corp.lblCurrentUser')
     const b = wb.value && wb.value.b

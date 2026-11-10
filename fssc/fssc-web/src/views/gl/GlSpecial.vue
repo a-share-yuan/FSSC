@@ -1320,8 +1320,18 @@ async function loadMasters() {
       companies.value = flat
     }
     if (subRes.status === 'fulfilled') {
-      // fetchAllSubjects 已摊平为数组（不再是 PageResult 单页对象）
-      subjects.value = (subRes.value || []).map((s) => ({ id: s.id, subjectName: s.subjectName || s.name, code: s.subjectCode }))
+      // fetchAllSubjects 已摊平为数组（不再是 PageResult 单页对象）。
+      // 字段必须原样带全：leafSubjects 依赖 isLeaf/status 过滤末级启用科目，
+      // 借贷下拉的 label 依赖 subjectCode；早期只保留 {id,subjectName,code}，
+      // 会令 Number(undefined)===1 恒假 ⇒ 下拉恒空、制单只能报「借方会计科目未指定」。
+      subjects.value = (subRes.value || []).map((s) => ({
+        id: s.id,
+        subjectName: s.subjectName || s.name,
+        subjectCode: s.subjectCode,
+        code: s.subjectCode,          // subjectName(id) 按编码反查历史行用
+        isLeaf: s.isLeaf,
+        status: s.status,
+      }))
     }
   } catch (e) { /* ignore */ }
 }

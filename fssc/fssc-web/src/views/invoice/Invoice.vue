@@ -901,7 +901,7 @@ onMounted(() => {
   loadCurrency()
   autofill(form, 'INVOICE')
   // 默认只加载同公司人员
-  loadPool(); loadVerify(); loadPendingInvs(); userApi.page({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId }).then((d) => { users.value = d?.list || [] }).catch(() => {}) })
+  loadPool(); loadVerify(); loadPendingInvs(); userApi.options({ pageNum: 1, pageSize: 200, companyId: store.user?.companyId }).then((d) => { users.value = d?.list || [] }).catch(() => {}) })
 
 async function exportCsv() {
   // 导出走全量查询，不只是当前页的 20 条
