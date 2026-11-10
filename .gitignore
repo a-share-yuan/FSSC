@@ -85,6 +85,8 @@ output/
 
 # ---- 施工残留 ----
 *.prebak*
+# 手册改名前后的本地备份目录（含旧版内容，不入库）
+docs/_backup_*/
 **/vsd_*.py
 **/check_crud*.py
 *tmp*_resp.json
