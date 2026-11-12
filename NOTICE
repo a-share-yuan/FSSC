@@ -38,8 +38,6 @@ Copyright 2026 The FSSC Project Authors
 
 许可说明：本项目以 **AGPL-3.0-or-later** 为默认开源许可（`LICENSE`），逐文件 SPDX 头与
 `_tools/add_license_header.mjs` 已统一到该标识；商业/闭源路径见 `LICENSE-COMMERCIAL.md`。
-2026-10-29 那份"许可切换待核"的告警已按上述事实关闭：其前提（AGPL-3.0 不在 MySQL 许可清单内）经核不成立，
-真正需要关注的是例外文本本身已换代，这一点写进了上一段。
 
 本项目不捆绑任何第三方厂商的专有文档、界面素材、数据或软件；
 发票识别与查验能力通过可插拔 SPI 外接，本仓库不含任何厂商实现或凭据。
