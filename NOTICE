@@ -1,0 +1,45 @@
+FSSC · 集团财务共享服务平台
+Copyright 2026 The FSSC Project Authors
+
+本名称里的 "FSSC" 取 "Financial Shared Service Center"（财务共享服务中心）这一行业
+通用缩写，指本软件所服务的业务形态本身；本项目与任何同名或近名的商业软件、认证体系
+均无隶属或关联关系，也不包含其代码、界面素材或文档。
+
+贡献者保留其提交的著作权；本项目依据 GNU Affero General Public License v3.0（AGPL-3.0，见 `LICENSE`）授予使用与专利许可；闭源 / 商业使用可另行取得商业许可（见 `LICENSE-COMMERCIAL.md`）。
+
+本产品包含或链接的第三方组件及其许可（节选，完整清单请运行 `mvn dependency:list`
+与 `npm licenses list` 生成，发布前须逐条核对协议兼容性）：
+
+  - Spring Boot (Apache-2.0)
+  - Flowable (Apache-2.0)
+  - MyBatis-Plus (Apache-2.0)
+  - jjwt (Apache-2.0)
+  - Lombok (MIT)
+  - Apache Commons Lang3 (Apache-2.0)
+  - springdoc-openapi (Apache-2.0)
+  - Vue 3 / Vue Router / Pinia (MIT)
+  - Element Plus (MIT)
+  - bpmn-js（包内 license 字段写的是 "SEE LICENSE IN LICENSE"，其 LICENSE 正文为 MIT 样式、
+    版权方 Camunda Services GmbH）/ bpmn-js-properties-panel、diagram-js、bpmn-moddle（MIT）
+  - ECharts (Apache-2.0)
+  - MySQL Connector/J (GPL-2.0 with FOSS exception)  ← 判定见下方专段
+  - Vite / Vitest (MIT)
+
+关于 MySQL Connector/J（GPL-2.0 with FOSS Exception）：
+  - 本发布包只含源码与 pom 里的声明式依赖（fssc-server/fssc-start/pom.xml），不含该驱动的二进制。
+  - MySQL 发行方原先的 FOSS License Exception 已作废（原文："The MySQL FOSS License Exception has now been
+    deprecated."／"It has been replaced by the Universal FOSS Exception."），现行依据是 **Universal FOSS
+    Exception**，本文件不代其解读条文。其存档版 FOSS License List 同时列有 Apache Software License 2.0 与
+    AGPL 3.0，因此本项目从 Apache-2.0 改为 AGPL-3.0 这一切换本身不构成新增障碍；分发含该驱动的构建物前，
+    请按现行 Universal FOSS Exception 文本自行核对，闭源分发路径不在本项目的判断范围内，请自行过法务。
+  - 由 `mvn clean package` 产出的 fat jar（或据此构建的镜像）会把该驱动打进 `BOOT-INF/lib/`。若你分发这类
+    构建物，请连同本 NOTICE 一并保留，并附该例外现行文本链接。
+  - 未改用 MariaDB Connector/J（LGPL）：换驱动需重验 SQL 方言、认证插件、字符集与时区参数面，风险大于收益。
+
+许可说明：本项目以 **AGPL-3.0-or-later** 为默认开源许可（`LICENSE`），逐文件 SPDX 头与
+`_tools/add_license_header.mjs` 已统一到该标识；商业/闭源路径见 `LICENSE-COMMERCIAL.md`。
+2026-10-29 那份"许可切换待核"的告警已按上述事实关闭：其前提（AGPL-3.0 不在 MySQL 许可清单内）经核不成立，
+真正需要关注的是例外文本本身已换代，这一点写进了上一段。
+
+本项目不捆绑任何第三方厂商的专有文档、界面素材、数据或软件；
+发票识别与查验能力通过可插拔 SPI 外接，本仓库不含任何厂商实现或凭据。
