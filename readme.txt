@@ -18,7 +18,7 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
     加签/撤回/传阅/自由驳回全套能力，流程变更不发版；
   * 业务完整：费用报账、应收应付、总账凭证、税务与预算、资产存货、资金票据、
     影像 OCR、共享作业运营，共 36 个业务域包，后端 173 个控制器 / 1,365 个 HTTP 端点；
-  * 数据规模：主库 321 张表 + 影像库 6 张表，演示库内置 57 条已部署流程
+  * 数据规模：主库 322 张表 + 影像库 6 张表，演示库内置 57 条已部署流程
     定义（42 条流程，余为历史版本），导入即可跑审批；
   * 开源协议：GNU Affero General Public License v3.0（SPDX 标识 AGPL-3.0-or-later，见 LICENSE / NOTICE）；闭源或商业使用需另行取得商业许可（见 LICENSE-COMMERCIAL.md）。
 
@@ -68,7 +68,7 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   Windows（CMD）：
       for %f in (db\Dump20261114\*.sql) do mysql --default-character-set=utf8mb4 -uroot -p < "%f"
 
-  注意：db/Dump20261114/ 共 328 个文件 = 一表一文件 327 枚（主库 fssc 321 表 +
+  注意：db/Dump20261114/ 共 329 个文件 = 一表一文件 328 枚（主库 fssc 322 表 +
   影像库 fssc_image 6 表）＋ 1 枚 fssc_routines.sql（视图定义）。
   每个文件自带 CREATE DATABASE IF NOT EXISTS、USE 与
   SET FOREIGN_KEY_CHECKS=0，所以无需预先建库，文件顺序也不影响成败，可重复
@@ -131,7 +131,7 @@ FSSC（Financial Shared Service Center，财务共享服务中心）是一套多
   bpmn-repo/                流程模型仓库（publish/ 78 个已发布模型，
                             models/ 88 个模型编码共 294 版 XML）
   db/
-    Dump20261114/           整库 dump（328 个文件，一表一文件；主数据/菜单/流程定义齐全，业务单据为空）
+    Dump20261114/           整库 dump（329 个文件，一表一文件；主数据/菜单/流程定义齐全，业务单据为空）
     upgrade/                v1.0.0 → v1.2.2 增量脚本（成对带 rollback，仅原地升级时用）
     hotfix/                 数据级定点修正（演练留下的脏状态，界面上没有入口改的那种）
     import.sh / import.bat  一键导入脚本（自动选最新的 Dump<日期>/）
@@ -148,7 +148,7 @@ Q2 前端页面打开但接口 401/跨域？
    FSSC_API_TARGET 仅影响 preview 模式。
 
 Q3 提示找不到表/flowable 相关错误？
-   确认 db/import.sh 完整执行过（db/Dump20261114/ 的 328 个文件全部导入）；Flowable 的
+   确认 db/import.sh 完整执行过（db/Dump20261114/ 的 329 个文件全部导入）；Flowable 的
    ACT_* 表演示库已内置，首次启动只会做结构校准。
 
 Q4 JDK 版本报错？

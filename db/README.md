@@ -1,7 +1,7 @@
 # db/ — 整库 dump（建库入口）
 
 `Dump20261114/` 是本项目一次演练库的 MySQL 整库导出，**建库、起服务、演示都以它为准**。
-328 个文件＝一表一文件 327 枚（主库 `fssc` 321 枚，影像库 `fssc_image` 6 枚）＋ `fssc_routines.sql`（视图定义），合计约 5.9 MB。
+329 个文件＝一表一文件 328 枚（主库 `fssc` 322 枚，影像库 `fssc_image` 6 枚）＋ `fssc_routines.sql`（视图定义），合计约 5.9 MB。
 
 ## 导入
 
@@ -24,7 +24,7 @@ for %f in (db\Dump20261114\fssc_*.sql) do mysql --default-character-set=utf8mb4 
 - 每个文件都带 `SET FOREIGN_KEY_CHECKS=0`，所以**文件名顺序不影响导入成败**；脚本按 `DROP TABLE IF EXISTS + CREATE + INSERT` 写，可重复执行。
 - 视图：本 dump 里有一枚 `v_tax_input_certify`（进项发票认证视图，在 `fssc_routines.sql` 内），语句前面带着
   `/*!50013 DEFINER='root'@'localhost' SQL SECURITY DEFINER */` 这一段。目标库里没有 `root@localhost` 这个账号时，
-  这一个文件会报 `ERROR 1449`；把那一段 definer 注释删掉再单独重导这一个文件即可（其余 327 个文件不受影响）。
+  这一个文件会报 `ERROR 1449`；把那一段 definer 注释删掉再单独重导这一个文件即可（其余 328 个文件不受影响）。
   存储过程、函数、触发器：无（`db/upgrade/V1.6.90` 里的 `fssc_add_column` / `fssc_drop_column` 由该脚本自建，不依赖 dump）。
 - Flowable 的 `ACT_*` / `FLW_*` 表已在 dump 内；`flowable.database-schema-update=true` 会在首启时补齐缺项。
 - 影像库表当前只有配置行、无业务行（与源库一致），上传发票后自动产生数据。
@@ -43,7 +43,7 @@ for %f in (db\Dump20261114\fssc_*.sql) do mysql --default-character-set=utf8mb4 
 
 > 内容构成：`2026-11-10` 的整库导出。结构、主数据、菜单与权限、流程定义齐全，业务单据为空。
 > 本期新增的租户使用方式标记、流程设置能力码、表单平台配置、菜单图标回填与仓库主数据（`md_warehouse`）均已落库；
-> 压测表与内部备份表未随仓发布，仓内共 327 张表（主库 321 张、影像库 6 张）。
+> 压测表与内部备份表未随仓发布，仓内共 328 张表（主库 322 张、影像库 6 张）。
 > `md_inventory` 含 8 条物料铺底（劳保用品与办公耗材），`ar.period.lock.1.2026-11` 为 `0`（未锁），
 > 导入后 2026-11 账期可直接演示。
 

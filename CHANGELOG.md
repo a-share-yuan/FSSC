@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+### Added
+
+- `db/Dump20261114/fssc_sys_notify_template.sql`：补入 `sys_notify_template`（消息模板表：触发点 → 标题/正文/深链）与一条内置驳回模板。该表晚于 11-10 快照，单独导出后并入，导入快照即可得到这张表，不必再单独执行建表脚本
+
+### Changed
+
+- 建库快照枚数随之更新为 **329 个文件 / 328 张表**（主库 322、影像库 6），`db/README.md`、`docs/数据模型.md`、`readme.txt` 与首页同步
+
 ## [1.2.2] - 2026-11-10
 
 ### Added
