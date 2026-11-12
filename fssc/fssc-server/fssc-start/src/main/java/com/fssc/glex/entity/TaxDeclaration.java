@@ -44,6 +44,7 @@ public class TaxDeclaration extends TenantAuditBase {
 
     /**
      * 申报性质：NORMAL 正常申报 / ADJUST 调整（更正）申报。
+     * 与「申报周期」分开表达；原先只有 {@link #declareType}（月/季/年，是申报周期不是性质），
      * 两个概念混在一列会让「按季的正常申报」与「年度的更正申报」无法区分。
      */
     private String declarationKind;

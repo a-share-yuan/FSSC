@@ -40,7 +40,7 @@ public class TaxRiskService {
     private final TaxRiskIndicatorMapper riskMapper;
     /** 税负率自动算的数据源＝税负分析报表同一条 SQL（进项/销项/不含税收入） */
     private final ReportMapper reportMapper;
-    /** 税负率阈值走系统参数，缺省 3.0%（我方自定口径，非厂商依据） */
+    /** 税负率阈值走系统参数，缺省 3.0%（自定口径） */
     private final ConfigService configService;
 
     /**

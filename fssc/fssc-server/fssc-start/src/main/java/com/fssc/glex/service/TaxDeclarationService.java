@@ -232,6 +232,8 @@ public class TaxDeclarationService {
     /**
      * 更正（调整）申报：复制原申报表到新属期，置 {@code declarationKind=ADJUST} 并关联原单。
      *
+     * <p>更正申报按「复制原单 + 关联原单」两步做，金额由用户在新单上改；
+     * 不自建算税引擎——税额以外部申报结果为准。
      *
      * @param sourceId 原申报单 id（须已申报 FILED 或已缴纳 PAID，草稿没有"更正"的含义）
      * @param newPeriod 新属期 yyyyMM；为空＝沿用原属期（同期更正）

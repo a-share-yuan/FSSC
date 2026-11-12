@@ -191,6 +191,7 @@ public class GlJournalService {
      * 生成一般总账记账并置 APPROVING（不预造凭证号），随后按 entryType 发起对应审批流；
      * 审批办结才由 {@code GlBizAction} 置 POSTED 并回写凭证对象上的真实凭证号。
      *
+     * <p><b> 预提/待摊进预算闸口</b>（口径＝预算影响类型「申请占用」，见
      * {@link BudgetService#occupyAccrualBudget}）：</p>
      * <ul>
      *   <li>ACCRUAL（费用预提）/ DEFER（费用待摊）在<b>提交（本方法）</b>即按「申请占用」扣减预算，

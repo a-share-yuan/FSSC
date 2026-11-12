@@ -1691,7 +1691,7 @@ public class AiAskService {
     }
 
     /**
-     * 通道失败原因：网关 error（已含 HTTP 码）＋响应体里的厂商错误码/信息。
+     * 通道失败原因：网关 error（已含 HTTP 码）＋响应体里的上游错误码/信息。
      * 用户要能一眼看出是欠费、鉴权还是模型名写错，而不是只看到 "HTTP 403"。
      */
     private String upstreamDetail(ChannelResponse resp) {

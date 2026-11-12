@@ -70,8 +70,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      # 阻断闸：对外文档（*.md / README / CONTRIBUTING / SECURITY）里不得出现词表内的名称。
       # 词表只存在于 _tools/secret_scan.mjs，本文件不复制任何扫描词。
       # 反例对照已本地验证：同一命令扫内部文档目录会报出命中，说明规则真的在跑。
+      - name: 对外文案用词检查（阻断）
         run: node _tools/secret_scan.mjs --root=. --docs-only --fail-on-hit --list=40
       # 报告腿（不阻断）：全量扫描会抓到源码里的合成测试向量（脱敏单测的号码形态输入等），
       # 那些是合法出现，所以只出报表供人工看趋势；等整改完再升成阻断。
