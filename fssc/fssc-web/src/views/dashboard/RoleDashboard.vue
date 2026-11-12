@@ -147,8 +147,8 @@ const roleConfig = {
     kpis: [
       { label: '我的待办', key: 'todo', icon: 'fa-list-alt', cls: 'blue' },
       { label: '今日完成', key: 'done', icon: 'fa-check-circle', cls: 'green' },
-      { label: '平均耗时', key: 'avgTime', icon: '', cls: 'yellow' },
-      { label: '超时率', key: 'timeoutRate', icon: '', cls: 'red' },
+      { label: '平均耗时', key: 'avgTime', icon: 'fa-clock-o', cls: 'yellow' },
+      { label: '超时率', key: 'timeoutRate', icon: 'fa-exclamation-triangle', cls: 'red' },
     ],
     widgets: [{ key: 'myTasks', title: t('dashboard.roleDashboard.My') }],
   },
@@ -156,8 +156,8 @@ const roleConfig = {
     kpis: [
       { label: '团队待办', key: 'todo', icon: 'fa-users', cls: 'blue' },
       { label: '今日完成', key: 'done', icon: 'fa-check-circle', cls: 'green' },
-      { label: '超时预警', key: 'timeout', icon: '', cls: 'red' },
-      { label: '平均耗时', key: 'avgTime', icon: '', cls: 'yellow' },
+      { label: '超时预警', key: 'timeout', icon: 'fa-exclamation-triangle', cls: 'red' },
+      { label: '平均耗时', key: 'avgTime', icon: 'fa-clock-o', cls: 'yellow' },
     ],
     widgets: [
       { key: 'timeoutAlert', title: t('dashboard.roleDashboard.Overdue2') },
@@ -180,7 +180,7 @@ const roleConfig = {
     kpis: [
       { label: '在途流程', key: 'inTransit', icon: 'fa-refresh', cls: 'blue' },
       { label: '今日完成', key: 'done', icon: 'fa-check-circle', cls: 'green' },
-      { label: '超时流程', key: 'timeout', icon: '', cls: 'red' },
+      { label: '超时流程', key: 'timeout', icon: 'fa-exclamation-triangle', cls: 'red' },
       { label: '系统状态', key: 'sysHealth', icon: 'fa-desktop', cls: 'green' },
     ],
     widgets: [{ key: 'flowMonitor', title: t('dashboard.roleDashboard.Workflow') }],

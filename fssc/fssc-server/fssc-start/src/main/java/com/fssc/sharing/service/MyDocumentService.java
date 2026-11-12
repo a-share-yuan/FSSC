@@ -398,6 +398,7 @@ public class MyDocumentService {
         }
     }
 
+    /** 批量装载：本服务参与查询的全部主表（清单由 {@link #selectSources} 给出，两处须同步修改）。 */
     private void loadAllColumns() {
         List<String> tables = ALL_TABLES;
         if (tables.isEmpty()) return;

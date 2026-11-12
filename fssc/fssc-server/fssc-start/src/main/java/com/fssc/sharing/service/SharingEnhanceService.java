@@ -124,6 +124,7 @@ public class SharingEnhanceService {
             q.setAuditorId(q.getCheckerId());
         }
         qualityMapper.insert(q);
+        // 信用联动：此前这条路径只入库、不扣分，
         // 而前端用的正是这条路径 ⇒ 质检扣分从来没生效过。
         // 有违规原因码按字典扣（不同情节不同分值），没有则沿用旧的一刀切 -20。
         if (q.getAuditorId() != null) {

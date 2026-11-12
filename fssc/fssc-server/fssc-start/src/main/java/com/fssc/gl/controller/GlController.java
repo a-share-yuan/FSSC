@@ -57,6 +57,7 @@ public class GlController {
     public Result<Map<String, Object>> trial(@RequestParam Long companyId,
                                              @RequestParam Integer year,
                                              @RequestParam Integer month,
+                                             // 默认 false＝只统计已过账分录；true 时追加本期间未过账凭证
                                              @RequestParam(required = false) Boolean includeUnposted) {
         return Result.success(glService.trialBalance(companyId, year, month, Boolean.TRUE.equals(includeUnposted)));
     }

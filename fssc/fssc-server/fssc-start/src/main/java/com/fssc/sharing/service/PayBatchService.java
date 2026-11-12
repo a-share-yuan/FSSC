@@ -1631,6 +1631,7 @@ public class PayBatchService {
             return "DEFERRED";
         }
 
+        // 出账账户余额闸：付款与借款放款都经本批次通道，
         // 执行前锁定账户行并核余额，不足整批拒付——避免「钱付出去了、账户余额页还是旧数字」。
         MdBankAccount payAccount = lockPayAccountForDebit(batch);
         assertEnoughPayBalance(payAccount, batch);

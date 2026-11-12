@@ -127,7 +127,7 @@ public class ThreeWayMatchService {
      *       （缺省 0.30；置 0 即等于"任何预付款都拦"，可作为回滚开关）。</li>
      * </ul>
      *
-     * <p> 不校验收货单与发票覆盖——那不是预付款的缺件，是本业务的正常形态；
+     * <p>不校验收货单与发票覆盖——那不是预付款的缺件，是本业务的正常形态；
      * 核销由后续【预付冲销】按实际到货与发票冲销。</p>
      */
     private MatchRow checkPrepay(ExpBill bill, MatchRow r, ExpBillPayment pay) {

@@ -363,6 +363,7 @@ public class ArFlowVoucherService {
 
     private OpVoucherLine line(Long tenantId, Long vId, int no, String summary,
                                Long subjectId, String code, String partnerName, String dir, BigDecimal amount) {
+        // 制证科目落末级：非末级的行过不了账，在制单这一刻就定下来
         MdSubject postable = subjectId == null ? null : postableSubjectResolver.resolve(mdSubjectMapper.selectById(subjectId), code);
         OpVoucherLine l = new OpVoucherLine();
         l.setTenantId(tenantId);

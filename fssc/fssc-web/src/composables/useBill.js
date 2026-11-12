@@ -734,7 +734,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       loadFirstPick(id)
       return id
     } catch (e) {
-      //  不再 throw：任何一次可恢复失败都不许冒到 ErrorBoundary 把整页换掉。
+      // 不再 throw：任何一次可恢复失败都不许冒到 ErrorBoundary 把整页换掉。
       // 超时＝服务端多半已落库，此时 form.bill.id 可能还是空的，用户再点一次【保存草稿】
       // 就会新建第二张单 —— 必须主动回查「我的单据」把 id/单号回填回当前表单。
       const timeout = !!e?.timeout
@@ -873,7 +873,7 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
       }
       if (warns.length) {
         try {
-          await ElMessageBox.confirm(warns.map((c) => ' ' + c.msg).join('\n'),
+          await ElMessageBox.confirm(warns.map((c) => '注意：' + c.msg).join('\n'),
             '合规提示（可继续提交）', { type: 'warning', confirmButtonText: '仍然提交', cancelButtonText: '返回修改' })
         } catch (e) { return }
       }

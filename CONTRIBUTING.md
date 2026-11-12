@@ -34,10 +34,11 @@ cd fssc/fssc-web  && npm install && npm run dev
 | [`docs/权限与多租户.md`](docs/权限与多租户.md) | 多租户隔离靠拦截器；`@RequiresPerm` 多码是 **OR**；403 会被前端渲染成"暂无数据" |
 | [`docs/流程引擎技术说明.md`](docs/流程引擎技术说明.md) §9 | 五件最常做的改动各要动哪几处、怎么验证、有什么坑 |
 
-## 代码约定（跟现有代码保持一致）
+## 代码约定
 
 **后端**
 
+- 包结构固定：`com/fssc/<域>/{controller,service,mapper,entity,dto,vo}`。
 - 类上 `@RestController` + `@RequestMapping("/api/tenant/<域>/...")`；**平台侧功能才用 `/api/platform/`**。URL 第二段决定鉴权域，别自造第三段。
 - 返回统一 `{code, msg, data}`；分页结果的数据键是 **`list`**（不是 `records`/`items`），前端已按此对接。
 - 需要权限的接口加 `@RequiresPerm`；操作留痕加 `@OperLog`。
@@ -80,7 +81,7 @@ cd fssc-web && npm run test:coverage
 cd fssc-server && mvn test           # 后端测试（surefire）
 ```
 
-界面级自动化脚本不在本仓库内。想在 CI 里跑界面级冒烟，请在仓库内另建 `examples/api-smoke/`（2~3 个文件），凭据一律从 `process.env` 读取，把口令写进脚本字面值或把令牌落盘。
+界面级自动化脚本不在本仓库内。想在 CI 里跑界面级冒烟，请在仓库内另建 `examples/api-smoke/`（2~3 个文件），凭据一律从 `process.env` 读取，不要把口令写进脚本字面值，也不要把令牌落盘。
 
 **注意**：这个项目的正确性判定高度依赖运行期行为。数据库、流程引擎、多租户上下文相关的用例**必须打真库**——mock 只能证明调用形状，证明不了迁移与隔离真的生效。
 

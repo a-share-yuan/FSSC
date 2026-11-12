@@ -1679,7 +1679,7 @@ export const taxApi = {
     http.get('/tenant/tax/declaration/sum', { params: { period, taxType } }),
   // 补出/重出应缴凭证
   declarationVoucher: (id) => http.post(`/tenant/tax/declaration/${id}/voucher`),
-  //  进项认证的接口不在这里：唯一入口是上面的 invoiceApi.certify / cancelCertify / transferOut
+  // 进项认证的接口不在这里：唯一入口是上面的 invoiceApi.certify / cancelCertify / transferOut
   // （/api/tenant/invoice/certify/**）。税务侧那套 /tenant/tax/certify/** 已随重复页面一并删除。
   /* 风险指标 */
   riskPage: (params) => http.get('/tenant/tax/risk/page', { params }),

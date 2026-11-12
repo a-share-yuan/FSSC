@@ -276,7 +276,7 @@ export const COMMON_LABELS = {
   // 行详情弹窗英文回落补登（2026-11-04 体检）：以下键在各页列表列／后端实体里真实存在，
   // 但此前既不在页面 labels 也不在本表，于是走 prettyKey() 露出 "Bank Matched / Flow Status Text /
   // Detection Type Cn" 这类英文标题。判据＝.tmp/rd-label-audit.cjs（按页面列）＋
-  // .tmp/rd-entity-audit.cjs（按实体字段）＋跨表高频列，逐枚补中文，新增机制。
+  // .tmp/rd-entity-audit.cjs（按实体字段）＋跨表高频列，逐枚补中文，不新增机制。
   accountMonthlyDepr: '账面月折旧额', accountMonths: '账面折旧月数', assetName: '资产名称', assetNo: '资产编号',
   depreciationMonths: '折旧月数', residualRate: '残值率', taxMonthlyDepr: '税法月折旧额', taxMonths: '税法折旧月数',
   originalAmount: '资产原值', origAmount: '原币金额', baseAmount: '基准金额', netAmount: '不含税金额',

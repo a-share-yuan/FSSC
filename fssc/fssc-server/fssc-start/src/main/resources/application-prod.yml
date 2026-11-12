@@ -70,6 +70,7 @@ fssc:
     # FileService#upload 读该键；application.yml 注释写"空则允许所有"（fail-open），
     # 生产把清单钉死在这里，避免环境变量把白名单覆盖成空值后整条闸失效。
     # 清单取值按 sys_file 实际在传类型核定（pdf/jpg/jpeg/png/xml 全在本清单内；
+    # 其余为单据与影像常规格式）。
     allowed-extensions: jpg,jpeg,png,gif,bmp,webp,pdf,ofd,xml,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar
     max-size: 20971520
 

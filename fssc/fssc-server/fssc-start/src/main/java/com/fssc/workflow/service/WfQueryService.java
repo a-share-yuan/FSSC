@@ -1515,6 +1515,7 @@ public class WfQueryService {
      *       ⇒ 一定进分母：这一节确实到过；</li>
      *   <li>在办节（CURRENT）⇒ 进分母，即使镜像行缺失（老缺陷：引擎任务未必同步 {@code wf_task}）；</li>
      *   <li>尚未到达的节：<b>实例已最终状态</b> ⇒ 不进（永远不会再走）；
+     *       在途且能建 BPMN 前向图 ⇒ 只有前向可达的才进（{@code SKIPPED} 按此判据，两处不重复判定）；
      *       在途但建不出图／实例行缺失（老单据读不到 modelKey）⇒ <b>fail-open 全进</b>，
      *       绝不把真会走的节判成不走；</li>
      *   <li>加签留下的节（{@code addSignOnly}）⇒ 永远不进分母，单独呈现。</li>

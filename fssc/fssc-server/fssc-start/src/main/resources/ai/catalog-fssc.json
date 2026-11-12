@@ -18365,7 +18365,7 @@
    "domain": "com.fssc.gl.controller",
    "controller": "GlController",
    "source": "fssc-start/src/main/java/com/fssc/gl/controller/GlController.java",
-   "params": "Long companyId, Integer year, Integer month, // 默认 false＝只统计已过账分录（与月结校验同一口径）；true 时追加本期间未过账凭证 Boolean includeUnposted",
+   "params": "Long companyId, Integer year, Integer month, // 默认 false＝只统计已过账分录；true 时追加本期间未过账凭证 Boolean includeUnposted",
    "schema": {
     "query": [
      {
@@ -34779,7 +34779,7 @@
       {
        "n": "bankMatched",
        "t": "Integer",
-       "d": "是否与银行流水勾对：0未勾对(企业已收银行未收) 1已勾对 ⚠ 此位只表"
+       "d": "是否与银行流水勾对：0未勾对(企业已收银行未收) 1已勾对 此位只表"
       },
       {
        "n": "bankMatchedAmount",
@@ -44970,7 +44970,7 @@
       {
        "n": "isBuiltin",
        "t": "Integer",
-       "d": "是否平台内置字典（1=内置，0=租户自定义）。 ⚠️ 该列在库中 早已存在 （默认 0）"
+       "d": "是否平台内置字典（1=内置，0=租户自定义）。 该列在库中 早已存在 （默认 0）"
       }
      ]
     }
@@ -45083,7 +45083,7 @@
       {
        "n": "isBuiltin",
        "t": "Integer",
-       "d": "是否平台内置字典（1=内置，0=租户自定义）。 ⚠️ 该列在库中 早已存在 （默认 0）"
+       "d": "是否平台内置字典（1=内置，0=租户自定义）。 该列在库中 早已存在 （默认 0）"
       }
      ]
     }
@@ -51186,7 +51186,7 @@
       {
        "n": "conditionExpr",
        "t": "String",
-       "d": "额外条件表达式（SpEL），如 #bill.urgent == true（⚠ 死列：Wf"
+       "d": "额外条件表达式（SpEL），如 #bill.urgent == true（死列：Wf"
       },
       {
        "n": "priority",
@@ -51378,7 +51378,7 @@
       {
        "n": "conditionExpr",
        "t": "String",
-       "d": "额外条件表达式（SpEL），如 #bill.urgent == true（⚠ 死列：Wf"
+       "d": "额外条件表达式（SpEL），如 #bill.urgent == true（死列：Wf"
       },
       {
        "n": "priority",

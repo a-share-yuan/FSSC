@@ -151,7 +151,7 @@
         </el-table>
         <!-- 行项目校验结果常驻显示：明细不在 el-form 内，guardSubmit 覆盖不到 -->
         <div v-if="lineIssues.length" class="line-err">
-           明细有 {{ lineIssues.length }} 处待修正：
+          <i class="fa fa-exclamation-triangle"></i> 明细有 {{ lineIssues.length }} 处待修正：
           <span v-for="(it, k) in lineIssueBrief" :key="k">
             <a class="line-err__link" @click="focusIssue(it)">{{ it.msg }}</a><span v-if="k < lineIssueBrief.length - 1">；</span>
           </span>

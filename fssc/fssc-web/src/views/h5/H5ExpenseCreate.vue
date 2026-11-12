@@ -810,6 +810,7 @@ const invError = ref('')
 async function loadInvoicePool() {
   invDenied.value = null
   invError.value = ''
+  // 无 inv:list 时直接落缺权面板，不发必回 4030 的请求。
   // silent 只能挡住全局 toast，挡不住每次开页的无效往返与控制台 4030 噪声。
   if (!hasPerm('inv:list')) {
     invDenied.value = { msg: '', permKey: 'inv:list' }

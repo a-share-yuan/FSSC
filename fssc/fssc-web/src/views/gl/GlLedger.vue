@@ -189,7 +189,7 @@
         </el-table-column>
         <!-- 过账不能只有「勾选若干行→工具栏批量过账」一条路，行上也得有入口，否则
              台账里那批自动生成的凭证看不见「怎么过账」。按行入口与批量口同一个权限码、同一道制审分离校验。
-             「查看」不随过账权限收放：详情是只读动作，过账权的人也要能核对借贷两行。 -->
+             「查看」不随过账权限收放：详情是只读动作，没有过账权的人也要能核对借贷两行。 -->
         <el-table-column :label="$t('gl.ledger.colAction')" width="120" fixed="right">
           <template #default="{ row }">
             <el-button link size="small" @click="openVoucherLines(row)">{{ $t('gl.ledger.btnView') }}</el-button>
@@ -212,6 +212,7 @@
 
     <!-- 试算平衡 -->
     <template v-else>
+      <!-- 表头明示取数口径；「含未过账凭证」为显式开关，默认关闭 -->
       <el-alert type="info" :closable="false" style="margin-bottom: 10px" :title="$t('gl.ledger.trialRule')" />
       <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
         <el-checkbox v-model="includeUnposted" @change="load">{{ $t('gl.ledger.chkIncludeUnposted') }}</el-checkbox>

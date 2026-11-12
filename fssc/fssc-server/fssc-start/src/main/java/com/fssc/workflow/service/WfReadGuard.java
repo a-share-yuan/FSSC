@@ -40,6 +40,7 @@ import java.util.Objects;
  *       ⇒ 缺口只在流程侧，那轮补的联查守卫没覆盖到这批后来加的预览端点。</li>
  * </ul>
  *
+ * <p>规则选择：先认「与本单的关系」，
  * 关系不成立再按单据公司兜底——
  * <ol>
  *   <li><b>可办理</b>：{@link NodeOrgResolver#canOperate}（办理人 / 候选组角色∩公司维度 / 委托受托人 /

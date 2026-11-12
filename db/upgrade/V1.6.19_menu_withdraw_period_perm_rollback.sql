@@ -1,5 +1,5 @@
 -- 回滚 V1.6.19：撤销撤回入口菜单与两批授权，并把 CONFIG_ADMIN 的种子行原样放回
---  顺序：先撤授权，再删菜单（避免残留孤儿 role_menu）
+-- 顺序：先撤授权，再删菜单（避免残留孤儿 role_menu）
 
 -- ③ 撤销会计期间只读点补授
 DELETE FROM sys_role_menu

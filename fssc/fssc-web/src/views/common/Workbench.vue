@@ -635,6 +635,7 @@ async function receive(row) {
   try { await sharingApi.receive(row.id); ElMessage.success(t('common.workbench.Task')); await load() } catch (e) { ElMessage.error(e.message) }
 }
 async function finish(row) {
+  // 工作台办结也走带备注的弹窗，
   // 否则一键完成不带任何输入，备注列恒 NULL。
   const { value: remark } = await ElMessageBox.prompt(
     `完成工单 ${row.billNo || row.id}？请填写完成备注（将记录，供审计复核）`, '完成工单', {

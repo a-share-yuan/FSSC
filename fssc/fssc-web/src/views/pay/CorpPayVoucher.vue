@@ -28,6 +28,7 @@
       </div>
     </template>
 
+    <!-- 本页与「试算平衡」的取数来源不同，表头常显口径，避免两个读数被当成同一个 -->
     <el-alert type="info" :closable="false" style="margin-bottom: 10px" :title="$t('pay.voucher.scopeHint')" />
 
     <el-table :data="rows" size="small" border stripe :max-height="420" highlight-current-row @current-change="onSelect" @selection-change="handleSelectionChange" :empty-text="$t('common.empty')" @row-dblclick="openTrace">

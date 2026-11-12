@@ -54,7 +54,7 @@ if (enOnly.length) {
   console.log('  ✓ en 键全部有中文对应');
 }
 if (zhOnly.length) {
-  console.log(`  ${strict ? '✗' : ''} zh 多出 ${zhOnly.length} 个键（英文未补）:`, zhOnly.slice(0, 10));
+  console.log(`  ${strict ? '✗' : '注意'} zh 多出 ${zhOnly.length} 个键（英文未补）:`, zhOnly.slice(0, 10));
   if (strict) fail = true;
 }
 if (fail) process.exit(1);

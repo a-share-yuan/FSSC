@@ -4,7 +4,7 @@
 name: 配置
 blank_issues_enabled: false
 # 本仓库当前托管在 Gitee：https://gitee.com/a-share-yuan/FSSC
-#  下面这两条 contact_links **只有 GitHub 会渲染**（Gitee 没有 issue 表单 / Security Advisory /
+# 下面这两条 contact_links **只有 GitHub 会渲染**（Gitee 没有 issue 表单 / Security Advisory /
 #    Discussions 这三样），所以在 Gitee 上它是惰性的；日后若镜像到 GitHub，把地址换成真实 GitHub 地址，
 #    url 必须写绝对地址（`../../xxx` 这种相对路径 GitHub 不解析，点进去就是 404）。
 contact_links:

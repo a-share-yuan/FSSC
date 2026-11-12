@@ -247,7 +247,7 @@
           <el-table-column label="行号" width="50" align="center">
             <template #default="{ $index }">
               <span :class="{ 'row-err': rowHasIssue($index) }" :title="rowIssueTitle($index)">
-                {{ $index + 1 }}<template v-if="rowHasIssue($index)"> </template>
+                {{ $index + 1 }}<template v-if="rowHasIssue($index)"> <i class="fa fa-exclamation-triangle" style="color:#f56c6c"></i></template>
               </span>
             </template>
           </el-table-column>
@@ -366,14 +366,14 @@
           <el-button size="small" type="primary" plain @click="addLine">+ 添加行</el-button>
           <!-- 行项目校验结果：一次性列出全部问题，并允许点条目定位到具体单元格 -->
           <span v-if="lineIssues.length" class="line-bar__err">
-             行项目有 {{ lineIssues.length }} 处待修正：
+            <i class="fa fa-exclamation-triangle"></i> 行项目有 {{ lineIssues.length }} 处待修正：
             <span v-for="(it, k) in lineIssueBrief" :key="k" class="line-bar__item">
               <a class="line-bar__link" @click="focusIssue(it)">{{ it.msg }}</a><span v-if="k < lineIssueBrief.length - 1">；</span>
             </span>
             <span v-if="lineIssues.length > lineIssueBrief.length"> 等</span>
           </span>
           <span v-else-if="amountMismatch" class="line-bar__err">
-             行项目合计 {{ fmt(lineTotal) }} 与订单金额 {{ fmt(Number(form.amount || 0)) }} 不一致，保存将被拒
+            <i class="fa fa-exclamation-triangle"></i> 行项目合计 {{ fmt(lineTotal) }} 与订单金额 {{ fmt(Number(form.amount || 0)) }} 不一致，保存将被拒
           </span>
           <span class="line-bar__sum">
             行项目合计：<b>{{ fmt(lineTotal) }}</b> {{ form.currency || 'CNY' }}

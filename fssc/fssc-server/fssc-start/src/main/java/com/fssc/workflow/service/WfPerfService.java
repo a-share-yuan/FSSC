@@ -1219,6 +1219,7 @@ public class WfPerfService {
         return namesOfIds(ids);
     }
 
+    /** 用户 id → 显示名（500 一档批查） */
     private Map<Long, String> namesOfIds(Set<Long> ids) {
         Map<Long, String> out = new HashMap<>();
         if (ids == null || ids.isEmpty()) {

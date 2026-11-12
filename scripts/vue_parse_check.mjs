@@ -19,7 +19,7 @@ import { spawnSync } from 'child_process';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 
-//  前端工程根必须**运行时探测**，不能写死 'fssc/fssc-web'：
+// 前端工程根必须**运行时探测**，不能写死 'fssc/fssc-web'：
 //   · 开源仓布局 = <root>/fssc/fssc-web
 //   · 开发源布局 = <root>/fssc-web
 // 写死会让同一套在另一侧找不到源码目录。

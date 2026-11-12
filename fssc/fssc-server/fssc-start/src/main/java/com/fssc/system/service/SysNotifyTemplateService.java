@@ -43,6 +43,7 @@ public class SysNotifyTemplateService {
 
     /** 触发点编码：大写字母开头，允许大写字母/数字/下划线 */
     private static final Pattern TRIGGER_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{2,63}$");
+    /** 占位符 ${name}；渲染侧在 NotifyTemplateService，两处正则须同步修改 */
     private static final Pattern VAR = Pattern.compile("\\$\\{([A-Za-z0-9_]+)}");
     private static final Set<String> MSG_TYPES = Set.of("NOTICE", "APPROVAL", "ALERT");
 

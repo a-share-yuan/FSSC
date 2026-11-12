@@ -158,6 +158,7 @@ const stages = computed(() => {
   ]
 
   // 不适用即整段不画；但若确实取到了该段数据（存在计数>0 或已达），照常画出来——
+  // 宁可显一段真实记录，也不让判据偏差把数据藏掉。
   return all
     .filter((s) => segOk(s.key) || has(s.key) || existCount(s.key) > 0)
     .map((s) => {

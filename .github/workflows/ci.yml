@@ -21,7 +21,7 @@ jobs:
         working-directory: fssc/fssc-server
     steps:
       - uses: actions/checkout@v4
-      #  发布前确认：JDK 26 在 actions/setup-java 的发行版支持情况。
+      # 发布前确认：JDK 26 在 actions/setup-java 的发行版支持情况。
       #    若当时无 26，可退到官方镜像或改用容器 job；不要为了让 CI 变绿而把
       #    maven.compiler.release 降到与 pom 不一致的版本。
       - name: Setup JDK

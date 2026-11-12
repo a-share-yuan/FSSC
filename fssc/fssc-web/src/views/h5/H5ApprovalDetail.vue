@@ -121,7 +121,7 @@
                旧实现传 businessKey，后端无此入参 ⇒ 落进「只查本人参与过的全部留痕」分支，
                面板里混入别的单据、别的域的节点；
                而该端点挂 wf:history:list，提单岗等业务账号直接被拒。
-               /chain 按本单实例取数、以「能读这张单据即可读这张单据的轨迹」守卫，
+               /chain 按本单实例取数、以「能读这张单据即可读这张单据的轨迹」守卫。 -->
           <H5FoldCard v-model:open="folds.hist" title="审批记录" :summary="histSum" :tone="histTone">
             <div v-if="histDenied" class="h5-denied">
               <div class="h5-denied__t">这张单的审批记录对你不开放</div>
