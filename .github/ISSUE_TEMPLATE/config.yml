@@ -6,8 +6,8 @@ blank_issues_enabled: false
 # contact_links 的 url 写绝对地址，相对路径不会被解析。
 contact_links:
   - name: 报告安全漏洞（请勿开公开 Issue）
-    url: https://github.com/eborewbf/FSSC/security/policy
+    url: https://github.com/a-share-yuan/FSSC/security/policy
     about: 鉴权绕过、越权、注入、密钥泄漏等一律走私密渠道，具体见 SECURITY.md
   - name: 使用问答与讨论
-    url: https://github.com/eborewbf/FSSC/issues/new
+    url: https://github.com/a-share-yuan/FSSC/issues/new
     about: 跑不起来、功能怎么用，开 Issue 并打问答标签；缺陷与需求另开
