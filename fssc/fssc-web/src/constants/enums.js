@@ -350,6 +350,7 @@ export const VOUCHER_SOURCE = {
   // ⇒ 判为报表侧模拟写入的数据侧枚举，措辞从数据；详见 bizEntry.js 同名键注释。
   EXPENSE_REIM: '费用重分类',
   // 与 utils/bizEntry.js 的 VOUCHER_SOURCE_LABEL 同步补齐的差集（凭证生成统计
+  // 走本表，资金调拨凭证的来源列直显 TR_TRANSFER ⇒ 差集非空即界面出英文）。措辞与该表逐字一致。
   INVOICE_MATCH_MANUAL: '手工匹配', GL_MONTH_CLOSE: '月末结转',
   BAD_DEBT_WRITEOFF: '坏账核销', BAD_DEBT_REVERSE: '坏账转回', BAD_DEBT_PROV: '坏账计提',
   AR_CLAIM: '应收认领', AR_NOTE_DISCOUNT: '票据贴现', AR_MONTH_CLOSE: 'AR月末结转',
@@ -825,4 +826,3 @@ export const RULE_ACTION = { BLOCK: '拦截', WARN: '警告', REVIEW: '转人工
 export const ruleTypeLabel = (v) => enumLabel(RULE_TYPE, v)
 export const riskLevelLabel = (v) => enumLabel(RISK_LEVEL, v)
 export const ruleActionLabel = (v) => enumLabel(RULE_ACTION, v)
-

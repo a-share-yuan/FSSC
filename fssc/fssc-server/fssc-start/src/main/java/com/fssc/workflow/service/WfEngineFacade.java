@@ -6848,6 +6848,7 @@ public class WfEngineFacade {
      * 路由真值（bizType → [表, 单号列]）只应有一份：{@code WfTaskController.fillBillInfoBatch}、
      * {@code NodeOrgResolver.companyTable} 各写一遍同一件事，三份迟早会漂成三种规则，
      * 所以统一到 {@link BillRouteRegistry}，
+     * 每行沿用迁移前的取值并注明差异与待定项。
      */
 
 }

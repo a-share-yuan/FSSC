@@ -25,6 +25,8 @@ import java.util.stream.Stream;
  * 查询侧仍按 {@code FA} 前缀借 {@code md_asset} 的卡号（同一类"错值比空值危险"）。
  * 收敛到本类之后，改一个 bizType 只需改一处。
  *
+ * <h3>取值口径＝逐行沿用现状，例外单独点名</h3>
+ * 每一行的取值都<b>沿用</b>迁移前各处的现状（包括互相矛盾之处，见各行注释），因此
  * 本表不改变任何一单的落点、待办或候选面。刻意更正只有一处：
  * <ol>
  *   <li>{@code FA_DEPRECIATION} 查询侧 {@code md_asset}→{@code asset_depr_batch}（与取人侧对齐）。</li>
@@ -357,6 +359,7 @@ public final class BillRouteRegistry {
             // 返回 null ⇒ 起流时 wf_instance.biz_no 取不到单号、待办的单号/金额/标题三列也回填不上。
             // 症状是只有这一型空着：同一批 EXP_LOAN、EXP_CLAIM、EXP_PAY 的实例都有号。
             // 取人环节没坏（companyOf 认 EXP_ 前缀），坏的只有查询环节，正是本表要消灭的"三处各写一遍"漂移。
+            // EXP_APPLY 同样缺行（TRAVEL 模型，biz_no 同样为空），与 EXP_REPAY 同因同修，五格与同表其余 EXP_ 行一致。
             Map.entry("EXP_REPAY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("EXP_APPLY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill")),
             Map.entry("EXP_PAY", f("exp_bill", "bill_no", "total_amount", "title", "exp_bill"))
@@ -486,6 +489,7 @@ public final class BillRouteRegistry {
         return family == null ? Set.of(t) : family;
     }
 
+    /** 起流单号回落 exp_bill 的费用域类型（沿用原先 WfEngineFacade.EXP_BILL_TYPES 的 11 项）。 */
     private static final Set<String> BIZNO_EXP_TYPES = Set.of(
             "CLAIM", "CLAIM_TRAVEL", "APPLY", "TRAVEL", "TRAIN", "MEETING",
             "LOAN", "REPAY", "PAY", "PREPAY", "SETTLE");
@@ -499,6 +503,7 @@ public final class BillRouteRegistry {
 
     /**
      * 查询路由（待办回填＋起流单号）。查不到返回 null＝该 bizType 既不回填也不取单号。
+     * 顺序沿用原先：显式映射 → {@code FA}/{@code INV} 前缀 → 费用域类型集合。
      * 注意原先门面用的是 {@code startsWith("FA")}（无下划线），这里保持一致以免多覆盖。
      */
     public static Route of(String bizType) {
@@ -514,6 +519,7 @@ public final class BillRouteRegistry {
     /**
      * 取人路由（COMPANY 范围角色的公司归属表）。返回 null＝不参与公司解析，
      * 后果由 {@code canOperate()} 对 null 公司"放宽放行"承担（＝候选面扩到全租户），办结它属授权口径待定。
+     * 顺序沿用原先：{@code EXP_} 前缀或 8 项费用类型 → 显式映射 → {@code INV_}/{@code FA_} 前缀。
      */
     public static String companyOf(String bizType) {
         if (bizType == null || bizType.isBlank()) return null;

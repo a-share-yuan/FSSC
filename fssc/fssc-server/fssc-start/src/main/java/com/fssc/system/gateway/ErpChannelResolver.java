@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * ERP 通道解析器（多 ERP 适配层，V1.4）。
  *
  * <p>业务诉求：未来对接的 ERP 不止一类，还可能是外部 ERP / 自研 ERP，
- * 业务代码不得硬编码 ERP 通道。本解析器参照集成中间件做法：</p>
+ * 业务代码不得硬编码 ERP 通道。本解析器的通道解析规则如下：</p>
  * <ul>
  *   <li><b>集成平台</b>：业务系统只投递消息到集成引擎，
  *       对端系统由「通信通道（Communication Channel）」配置决定，业务零感知；</li>

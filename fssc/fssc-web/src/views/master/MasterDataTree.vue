@@ -172,6 +172,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+// 写按钮按后端 @RequiresPerm 真实码门控（成本中心删除码在后端是驼峰 md:costCenter:delete，原样使用，不得改写）
 const canCreate = computed(() => hasPerm(props.mode === 'subject' ? 'md:subject:create' : 'md:costcenter:create'))
 const canUpdate = computed(() => hasPerm(props.mode === 'subject' ? 'md:subject:update' : 'md:costcenter:update'))
 const canDelete = computed(() => hasPerm(props.mode === 'subject' ? 'md:subject:delete' : 'md:costCenter:delete'))

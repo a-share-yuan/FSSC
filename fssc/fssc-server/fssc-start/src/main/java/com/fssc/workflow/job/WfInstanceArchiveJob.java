@@ -59,6 +59,7 @@ import java.util.function.Supplier;
  * 且引擎表的分区/外键关系不受我们控制。故本作业只搬 wf_* 镜像表，绝不增删任何 ACT_* 行。
  *
  * <p><b>跨租户扫描</b>：本作业在调度线程运行（无租户上下文），所有 wf_* 查询一律包在
+ * {@link TenantContext#runIgnoreTenant} 内（与 {@code WfLedgerReconcileJob.ignoreTenant} 同一写法）。
  * 冷表 {@code wf_*_cold} 未挂实体、不在 MyBatis-Plus 租户拦截器管辖内，其 SQL 走
  * {@link JdbcTemplate} 并手工带 {@code tenant_id}（与 {@code ColdArchiveService} 同一前例）。
  */
@@ -289,6 +290,7 @@ public class WfInstanceArchiveJob {
 
     /**
      * 跨租户读取：{@code runIgnoreTenant} 只收 Runnable，用单元素数组把结果带出来
+     * （与 {@code WfLedgerReconcileJob.ignoreTenant} 同一写法）。
      */
     private <T> T ignoreTenant(Supplier<T> supplier) {
         Object[] holder = new Object[1];

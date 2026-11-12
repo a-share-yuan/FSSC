@@ -1534,6 +1534,7 @@ public class BudgetService {
      * 再回退映射表（仍要求同主体），定位不到就返回 null 交由调用方记录，<b>绝不臆造预算行</b>。</p>
      *
      * <p><b>超支只记录不阻断</b>：{@code bg_scheme.control_type=HARD} 且额度不足时，费用域是直接拒提；
+     * 薪酬侧若沿用同一判据会让「核算薪酬」按钮在超支部门整体不可用（工资照发、预算却拦不住，业务上无人认领这条校验），
      * 故此处对硬控超支只记 WARN 且不写占用流水，是否改为硬拦需产品确认。</p>
      *
      * <p><b>去重</b>：本批次名下已存在 OCCUPY 流水（{@link BgOccupyMapper#selectOccupiedItemsByBiz}）即整体跳过，

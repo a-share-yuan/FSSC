@@ -35,6 +35,7 @@ import java.util.Objects;
  * <ul>
  *   <li>别的公司的普通账号读这单的在办数据 ⇒ {@code reject-targets}、{@code approval-items}、
  *       {@code withdraw-preview}、{@code query/chain} 全部带出（含各节点审批意见原文），
+ *       <b>响应与合法办理人完全相同</b>＝整份复制；</li>
  *   <li>同一时刻同一账号调单据联查 {@code bill-trace-chain} 被 {@code OrgGuard} 正确拒 403
  *       ⇒ 缺口只在流程侧，那轮补的联查守卫没覆盖到这批后来加的预览端点。</li>
  * </ul>
