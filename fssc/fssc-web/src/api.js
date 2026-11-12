@@ -1378,6 +1378,15 @@ export const configApi = {
   ocrSave: (body) => http.post('/tenant/system/config/ocr', body),
 }
 
+// 消息模板（通知触发点 → 标题/正文/深链）
+// 权限沿用系统参数域 system:config:*：同一批运维角色维护，不另开权限点。
+export const notifyTemplateApi = {
+  page: (params) => http.get('/tenant/system/notify-template/page', { params }),
+  create: (body) => http.post('/tenant/system/notify-template/create', body),
+  update: (body) => http.post('/tenant/system/notify-template/update', body),
+  enable: (id, enable) => http.post(`/tenant/system/notify-template/${id}/enable`, null, { params: { enable } }),
+}
+
 // 查询方案（Variant）——保存个人常用筛选组合
 export const queryVariantApi = {
   list: (pageKey) => http.get('/tenant/system/query-variant/list', { params: { pageKey } }),

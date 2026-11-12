@@ -61,7 +61,7 @@ export const CONFIG_GROUPS = {
   },
   system: {
     title: '系统参数',
-    sub: '全局参数 · 字典 · 编号规则 · 文件 · 公告 · 消息',
+    sub: '全局参数 · 字典 · 编号规则 · 文件 · 公告 · 消息 · 模板',
     tabs: [
       { key: 'sys-config', label: '全局参数', comp: MasterConfigTable, props: { configKey: 'sys-config' }, perm: 'system:config:list' },
       { key: 'dict', label: '字典管理', comp: MasterConfigTable, props: { configKey: 'dict' }, perm: 'system:dict:list' },
@@ -69,6 +69,9 @@ export const CONFIG_GROUPS = {
       { key: 'sys-file', label: '文件管理', comp: MasterConfigTable, props: { configKey: 'sys-file' }, perm: 'system:file:list' },
       { key: 'sys-notice', label: '公告管理', comp: MasterConfigTable, props: { configKey: 'sys-notice' }, perm: 'system:notice:list' },
       { key: 'sys-message', label: '消息中心', comp: MasterConfigTable, props: { configKey: 'sys-message' }, perm: 'system:message:list' },
+      // 消息模板＝通知文案配置。与全局参数同域、同一批运维角色维护，故复用 system:config:*，
+      // 不新增权限点（新开一套码容易出现「页签可见但没授权」的老问题）。
+      { key: 'notify-template', label: '消息模板', comp: MasterConfigTable, props: { configKey: 'notify-template' }, perm: 'system:config:list' },
     ],
   },
   finance: {

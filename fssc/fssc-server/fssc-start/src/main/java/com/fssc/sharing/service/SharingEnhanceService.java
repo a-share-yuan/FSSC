@@ -15,6 +15,9 @@ import com.fssc.document.service.ArchiveDestroyService;
 import com.fssc.expense.entity.ExpBill;
 import com.fssc.expense.mapper.ExpBillMapper;
 import com.fssc.framework.facade.ArchiveFacade;
+import com.fssc.framework.notify.NotifyService;
+import com.fssc.framework.notify.NotifyTemplateService;
+import com.fssc.framework.notify.NotifyTriggers;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
@@ -27,6 +30,7 @@ import com.fssc.sharing.mapper.OpBankStatementMapper;
 import com.fssc.sharing.mapper.OpQualityMapper;
 import com.fssc.sharing.mapper.OpVoucherMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,6 +47,7 @@ import java.util.Map;
 /**
  * 共享运营增强：质检（op_quality）+ 档案归档（op_archive）+ 银行流水（op_bank_statement）。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SharingEnhanceService {
@@ -53,6 +58,9 @@ public class SharingEnhanceService {
     private final OpBankStatementMapper bankStatementMapper;
     private final MdBankAccountMapper bankAccountMapper;
     private final ExpBillMapper expBillMapper;
+    /** 质检退回要告知申请人本人：文案走 sys_notify_template，不写死在本类 */
+    private final NotifyService notifyService;
+    private final NotifyTemplateService notifyTemplateService;
     /** #56 甲档 W6：档案裸绑入口的 voucherId 存在性＋同租户校验 */
     private final OpVoucherMapper voucherMapper;
     /**
@@ -129,7 +137,56 @@ public class SharingEnhanceService {
                 }
             }
         }
+        // 退回整改要让申请人知道：质检记录已落库、信用已扣，通知只是附加动作，失败不回滚
+        notifyQualityBack(q);
         return q.getId();
+    }
+
+    /**
+     * 质检退回（{@code result='BACK'}）告知申请人本人。
+     *
+     * <p>退回与驳回同属「单据被退回去、但人未必知道」的路径，此前只落质检记录、不通知，
+     * 单据就停在「等整改」上没人动。文案走 {@code sys_notify_template}（触发点
+     * {@link NotifyTriggers#EXP_QUALITY_BACK}），模板缺失或停用一律跳过，不阻断质检入库。
+     */
+    private void notifyQualityBack(OpQuality q) {
+        if (q == null || !"BACK".equals(q.getResult()) || q.getBillId() == null) {
+            return;
+        }
+        try {
+            ExpBill bill = expBillMapper.selectById(q.getBillId());
+            if (bill == null) {
+                return;
+            }
+            Long receiver = bill.getApplyUserId() != null ? bill.getApplyUserId() : bill.getCreateBy();
+            if (receiver == null) {
+                log.warn("质检退回通知跳过：单据 {} 既无 apply_user_id 也无 create_by", bill.getBillNo());
+                return;
+            }
+            Map<String, String> vars = new LinkedHashMap<>();
+            vars.put("billNo", nvl(bill.getBillNo()));
+            vars.put("title", nvl(bill.getTitle()));
+            vars.put("billType", nvl(bill.getBillType()));
+            vars.put("score", q.getScore() == null ? "" : String.valueOf(q.getScore()));
+            vars.put("comment", nvl(q.getDeductReason()));
+            vars.put("applyUser", nvl(bill.getApplyUserName()));
+            NotifyTemplateService.Rendered r =
+                    notifyTemplateService.render(NotifyTriggers.EXP_QUALITY_BACK, vars);
+            if (r == null) {
+                return;
+            }
+            notifyService.notifyUser(receiver, r.msgType(), r.title(), r.content(),
+                    "EXP_QUALITY", bill.getId(), r.linkUrl());
+            log.info("质检退回通知已发送: bill={} receiver={}", bill.getBillNo(), receiver);
+        } catch (Exception ex) {
+            log.warn("质检退回通知发送失败（不影响质检入库） bill={}: {}",
+                    q.getBillNo(), ex.getMessage());
+        }
+    }
+
+    /** 模板变量渲染用：null 安全 */
+    private static String nvl(String s) {
+        return s == null ? "" : s;
     }
 
     /** 违规原因字典（仅启用项，供质检退回下拉） */

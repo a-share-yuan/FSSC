@@ -85,9 +85,10 @@ V1.6.08 只补了 2 条税金科目，那 34+210+112 是 2026-11-04 的库内迁
 `db/Dump20261114/` 已包含本期大部分结构、菜单与主数据变更（含 `pf_tenant.op_mode`、
 `FC_WF_CONFIG`、表单平台配置、菜单图标回填与仓库主数据 `md_warehouse`）。
 
-**例外**：`sys_notify_template` 已随快照发布，不必再单独建表；但 `V1.6.106` 的三枚灰度配置与
-CLAIM 锚点晚于这份快照，新部署导入 dump 之后仍需执行它——代码缺省是「全链重走」，
-不执行不会报错，只是重提跳回不开。其余脚本只服务**已经在跑、不能重导库**的环境。
+**例外**：`sys_notify_template` 表已随快照发布、不必再单独建表；但 `V1.6.107` 的第二条模板
+（质检退回）与 `V1.6.106` 的三枚灰度配置、CLAIM 锚点都晚于这份快照，新部署导入 dump 之后
+仍需执行这两支——代码对缺失的模板与配置是 fail-closed（查不到就不通知、不开功能），
+不执行不会报错，只是对应通知与重提跳回不生效。其余脚本只服务**已经在跑、不能重导库**的环境。
 
 ### 结构与菜单（仅原地升级需要）
 
@@ -102,7 +103,8 @@ for s in V1.6.92_tenant_op_mode.sql \
          V1.6.100_menu_icons_backfill.sql \
          V1.6.101_20261110_warehouse_master.sql \
          V1.6.105_20261111_exp_notify_template.sql \
-         V1.6.106_20261111_f5_resubmit_jumpback_enable.sql; do
+         V1.6.106_20261111_f5_resubmit_jumpback_enable.sql \
+         V1.6.107_20261112_exp_quality_back_template.sql; do
   mysql -uroot -p --default-character-set=utf8mb4 fssc < "$s" || break
 done
 ```
@@ -120,6 +122,7 @@ done
 | `V1.6.101_20261110_warehouse_master.sql` | 建 `md_warehouse` 并铺默认仓（上海总部、昆山），把 `md_inventory.warehouse_id` 回填到本公司默认仓；配套 `*_rollback.sql` |
 | `V1.6.105_20261111_exp_notify_template.sql` | 建 `sys_notify_template`（触发点 → 标题/正文/深链），内置「报销单被驳回」一条模板 |
 | `V1.6.106_20261111_f5_resubmit_jumpback_enable.sql` | 补三枚 `wf.resubmit.jumpback.*` / `wf.reject.free.*` 灰度配置，并把 CLAIM 的 `Task_7` 设为跳回锚点；配套 `*_rollback.sql` |
+| `V1.6.107_20261112_exp_quality_back_template.sql` | 补「报销单质检退回整改」模板行（`EXP_QUALITY_BACK`），质检结果为 `BACK` 时通知申请人；配套 `*_rollback.sql`（默认只停用） |
 
 ### 仅已上线系统升级用
 

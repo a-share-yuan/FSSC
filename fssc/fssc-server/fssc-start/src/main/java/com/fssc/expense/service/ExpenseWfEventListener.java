@@ -32,6 +32,7 @@ import com.fssc.framework.facade.event.BillTerminalEvent;
 import com.fssc.framework.log.OperLogWriter;
 import com.fssc.framework.notify.NotifyService;
 import com.fssc.framework.notify.NotifyTemplateService;
+import com.fssc.framework.notify.NotifyTriggers;
 import com.fssc.framework.notify.OpsAlertService;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
@@ -696,8 +697,8 @@ public class ExpenseWfEventListener implements WfBizAction {
         }
     }
 
-    /** 触发点：报销类单据被驳回（对应 sys_notify_template.trigger_code） */
-    private static final String TRIGGER_BILL_REJECTED = "EXP_BILL_REJECTED";
+    /** 触发点：报销类单据被驳回（对应 sys_notify_template.trigger_code，编码统一收在 NotifyTriggers） */
+    private static final String TRIGGER_BILL_REJECTED = NotifyTriggers.EXP_BILL_REJECTED;
 
     /**
      * 驳回通知申请人（站内信必达；企微/邮件/短信按 sys_config {@code notify.*} 启用）。
