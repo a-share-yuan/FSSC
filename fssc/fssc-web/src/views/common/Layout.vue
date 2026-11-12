@@ -8,6 +8,9 @@
       <div class="logo"><img class="logo-img" src="../../assets/FSSC_LOGO_Blue.jpeg" :alt="productTitle" /></div>
       <el-menu
         :default-active="$route.path"
+        :default-openeds="openeds"
+        @open="onMenuOpen"
+        @close="onMenuClose"
         router
         :background-color="isDark ? '#0f0f23' : '#1f2d3d'"
         :text-color="isDark ? '#c8c9cc' : '#bfcbd9'"
@@ -96,6 +99,9 @@
         <div class="drawer-logo"><img class="drawer-logo-img" src="../../assets/FSSC_LOGO.png" :alt="productTitle" /></div>
         <el-menu
           :default-active="$route.path"
+          :default-openeds="openeds"
+          @open="onMenuOpen"
+          @close="onMenuClose"
           router
           :background-color="isDark ? '#16213e' : '#fff'"
           :text-color="isDark ? '#e0e0e0' : undefined"
@@ -212,6 +218,41 @@ const user = store.user
 const drawer = ref(false)
 const isMobile = ref(false)
 const menuTree = ref([])
+/**
+ * 侧栏展开态持久化（修「点一下菜单会重新展开闪一下」）。
+ *
+ * 根因不在数据：菜单树只在 onMounted 拉一次（`ensureMenuTree`）。闪的是**展开态**——
+ * el-menu 的展开状态由组件内部维护，页面切换若触发重挂（`:key="$route.path"` 的
+ * router-view 换实例、或移动端抽屉开关），组件会按 default-openeds 重新初始化，
+ * 用户看到的就是「收起 → 再展开」的一次闪动。
+ *
+ * 做法：把用户真实展开过的分组存进 localStorage，重挂时用 default-openeds 原样恢复。
+ * 不启 unique-opened（那会改变"同时展开多个分组"的习惯，属另一种不人性化）。
+ */
+const MENU_OPENED_KEY = 'fssc.menu.opened'
+const openeds = ref(loadOpeneds())
+
+function loadOpeneds() {
+  try {
+    const raw = localStorage.getItem(MENU_OPENED_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : []
+  } catch { return [] }
+}
+function persistOpeneds() {
+  try { localStorage.setItem(MENU_OPENED_KEY, JSON.stringify(openeds.value)) } catch { /* 隐私模式禁用存储，忽略 */ }
+}
+function onMenuOpen(index) {
+  if (!index || openeds.value.includes(index)) return
+  openeds.value = openeds.value.concat(index)
+  persistOpeneds()
+}
+function onMenuClose(index) {
+  const next = openeds.value.filter((x) => x !== index)
+  if (next.length === openeds.value.length) return
+  openeds.value = next
+  persistOpeneds()
+}
 const searchVisible = ref(false)
 
 // 弱网降级

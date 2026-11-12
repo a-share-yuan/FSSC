@@ -5317,6 +5317,23 @@ public class WfEngineFacade {
             return null;
         }
         String k = idOrTaskId.trim();
+        // ① 业务单号优先：用户记得住的是「BX202611110001」这类单据编号，记不住实例 UUID。
+        //    历史上本方法只认实例ID/任务ID，前端 placeholder 写「流程编号或任务编号」，
+        //    用户按单号查必然查不到——正是「谁记得 ID」那一类体验问题。
+        //    多轮重提会产生多条实例：优先取在办的那一轮，没有在办再取最近一轮（供查历史影响面）。
+        try {
+            List<WfInstance> byNo = wfQueryService.instancesByBizNo(k);
+            if (byNo != null && !byNo.isEmpty()) {
+                for (WfInstance i : byNo) {
+                    if ("RUNNING".equalsIgnoreCase(i.getStatus() == null ? "" : i.getStatus().trim())) {
+                        return i.getProcInstId();
+                    }
+                }
+                return byNo.get(0).getProcInstId();
+            }
+        } catch (Exception ignore) {
+            // 查不到就走原路径，不因单号解析异常阻断实例ID/任务ID的既有用法
+        }
         try {
             if (wfQueryService.instanceByProcInstId(k) != null) {
                 return k;

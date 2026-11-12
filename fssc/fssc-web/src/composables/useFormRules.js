@@ -442,16 +442,53 @@ const formTypeRules = {
 }
 
 /**
- * 跑 el-form 校验，失败时错误自动落到对应表单项（EP 行为）。
+ * 校验失败时把视线带到第一个出错的字段。
+ *
+ * 存在理由：EP 的 validate() reject 之后只是给表单项加 .is-error 红字，页面该停在哪它不管。
+ * 字段一多（尤其是弹窗里滚到底才看到提交按钮），人只看到"还有未填项"却找不到是哪一项——
+ * 通行做法是保存失败直接定位到第一个不合格字段，这里补齐这一步。
+ * @returns {{label: string, prop: string} | null}
+ */
+export function focusFirstError(formRef) {
+  const inst = formRef && typeof formRef.validate === 'function' ? formRef : formRef && formRef.value
+  const root = inst && inst.$el
+  if (!root || typeof root.querySelector !== 'function') return null
+  const item = root.querySelector('.el-form-item.is-error')
+  if (!item) return null
+  const label = (item.querySelector('.el-form-item__label') || {}).textContent || ''
+  const prop = item.getAttribute('data-prop') || ''
+  if (typeof item.scrollIntoView === 'function') {
+    item.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
+  const input = item.querySelector('input:not([type="hidden"]), textarea, .el-select__wrapper')
+  if (input && typeof input.focus === 'function') input.focus({ preventScroll: true })
+  return { label: String(label).replace(/[:：*＊\s]+$/, ''), prop }
+}
+
+/** 等 Vue 把 .is-error 刷到 DOM 上再定位（validate reject 时 DOM 还没更新）。 */
+function nextFrame() {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve())
+    else setTimeout(resolve, 16)
+  })
+}
+
+/**
+ * 跑 el-form 校验，失败时错误自动落到对应表单项（EP 行为），并滚到第一处。
  * @returns {Promise<boolean>} true=通过；false=有字段不合法（已向用户展示）
- * 与 BCP formRules.js 的 validateForm 同构（两仓同一套 API）。
+ * 与 BCP / 零售 formRules.js 的 validateForm 同构（三仓同一套 API）。
  */
 export async function validateForm(formRef) {
   if (!formRef) return true
+  const inst = typeof formRef.validate === 'function' ? formRef : formRef.value
+  if (!inst) return true
   try {
-    await formRef.validate()
+    await inst.validate()
     return true
   } catch {
+    await nextFrame()
+    await nextFrame()
+    focusFirstError(inst)
     return false
   }
 }

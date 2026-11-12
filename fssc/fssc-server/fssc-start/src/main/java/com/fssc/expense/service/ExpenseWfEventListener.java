@@ -30,6 +30,8 @@ import com.fssc.contract.entity.ContPayRecord;
 import com.fssc.contract.mapper.ContPayRecordMapper;
 import com.fssc.framework.facade.event.BillTerminalEvent;
 import com.fssc.framework.log.OperLogWriter;
+import com.fssc.framework.notify.NotifyService;
+import com.fssc.framework.notify.NotifyTemplateService;
 import com.fssc.framework.notify.OpsAlertService;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
@@ -103,6 +105,14 @@ public class ExpenseWfEventListener implements WfBizAction {
     private final OperLogWriter operLogWriter;
     /** 凭证自动生成失败的运维侧主动告警（企微/邮件，未配置则退化为日志） */
     private final OpsAlertService opsAlertService;
+    /**
+     * 驳回通知：申请人本人（站内信必达，企微/邮件/短信按 sys_config notify.* 启用）。
+     * <p>此前驳回是唯一「单据死了没人知道」的终态——档案到期、申报到期、发票异常、应收逾期都会通知，
+     * 只有「你的报销被退了」不会，只能等申请人自己去「我的单据」翻，形成滞压单。
+     */
+    private final NotifyService notifyService;
+    /** 通知文案走 sys_notify_template（触发点 → 模板行），不把文案写死在本类 */
+    private final NotifyTemplateService notifyTemplateService;
     /**
      * 还款资金流入侧唯一载体 {@code exp_bill_receipt}。
      * <p>{@code rc_receipt} 那条旧环节已撤除：员工还款写进那张表只能出「无客户收款单」的噪声，
@@ -680,6 +690,59 @@ public class ExpenseWfEventListener implements WfBizAction {
         // 一并办结，杜绝「单已死、工单还挂着等人认领」的孤儿。
         sharingService.closeOnBillTerminal(bill.getId(),
                 withdrawn ? "单据已撤回" : "单据已驳回");
+        // 驳回要主动告知申请人。撤回是本人点的，通知自己无意义，故只在驳回时发。
+        if (!withdrawn) {
+            notifyRejected(bizType, bill, rejectType, comment);
+        }
+    }
+
+    /** 触发点：报销类单据被驳回（对应 sys_notify_template.trigger_code） */
+    private static final String TRIGGER_BILL_REJECTED = "EXP_BILL_REJECTED";
+
+    /**
+     * 驳回通知申请人（站内信必达；企微/邮件/短信按 sys_config {@code notify.*} 启用）。
+     *
+     * <p><b>为什么必须做</b>：驳回是唯一「单据进入终止态却无人被告知」的路径——档案到期、
+     * 申报到期、发票异常、应收逾期都走 {@link NotifyService}，唯独驳回不发，申请人只能自己
+     * 去「我的单据」逐条翻，这正是滞压单的主要来源。
+     *
+     * <p><b>文案不写死</b>：走 {@code sys_notify_template}（触发点 → 模板行），业务可自行改文案、
+     * 改跳转、或整条停用；本方法只负责「谁收、带哪些变量、用哪个业务域」。
+     *
+     * <p><b>异常不外抛</b>：此时预算已释放、状态已置 REJECTED、作业链已办结，
+     * 通知只是附加动作；因一条消息失败回滚整个驳回，是把「少一条消息」升级成「单子驳不掉」。
+     */
+    private void notifyRejected(String bizType, ExpBill bill, String rejectType, String comment) {
+        try {
+            Long receiver = bill.getApplyUserId() != null ? bill.getApplyUserId() : bill.getCreateBy();
+            if (receiver == null) {
+                log.warn("驳回通知跳过：单据 {} 既无 apply_user_id 也无 create_by", bill.getBillNo());
+                return;
+            }
+            Map<String, String> vars = new LinkedHashMap<>();
+            vars.put("billNo", nvl(bill.getBillNo()));
+            vars.put("title", nvl(bill.getTitle()));
+            vars.put("billType", nvl(bill.getBillType()));
+            vars.put("rejectType", "THROW_BACK".equals(rejectType) ? "漏单驳回" : "逐级驳回");
+            vars.put("comment", comment == null || comment.isBlank() ? "（审批人未填写意见）" : comment);
+            vars.put("applyUser", nvl(bill.getApplyUserName()));
+            NotifyTemplateService.Rendered r = notifyTemplateService.render(TRIGGER_BILL_REJECTED, vars);
+            if (r == null) {
+                return; // 模板未配置/已停用：静默跳过，不算失败
+            }
+            notifyService.notifyUser(receiver, r.msgType(), r.title(), r.content(),
+                    bizType, bill.getId(), r.linkUrl());
+            log.info("驳回通知已发送: bill={} receiver={} trigger={}", bill.getBillNo(), receiver,
+                    TRIGGER_BILL_REJECTED);
+        } catch (Exception ex) {
+            log.warn("驳回通知发送失败（不影响驳回收尾） bill={}: {}",
+                    bill == null ? null : bill.getBillNo(), ex.getMessage());
+        }
+    }
+
+    /** 模板变量渲染用：null 安全 */
+    private static String nvl(String s) {
+        return s == null ? "" : s;
     }
 
     /** audit_remark 是 varchar(1000)，超长必须截，否则收尾整链（含状态）一起失败 */

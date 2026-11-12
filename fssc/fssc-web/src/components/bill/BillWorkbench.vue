@@ -251,8 +251,20 @@
 
       <!-- 底部操作栏 -->
       <el-card style="margin-top: 12px">
-        <el-button :disabled="pendingWrite" @click="doSaveDraft">保存草稿</el-button>
-        <el-button type="primary" :loading="b.submitting" :disabled="pendingWrite" @click="doSubmit">提交审批</el-button>
+        <!-- 「灰了不给原因」是一类高频体验问题：以前这两个按钮只写 :disabled="pendingWrite"，
+             用户看到按钮变灰却不知道为什么、也不知道要等多久。
+             这里给禁用态补一句原因（el-tooltip 包 span：disabled 元素本身不派发鼠标事件，
+             直接包 el-button 不会显示提示）。 -->
+        <el-tooltip :disabled="!pendingWrite" content="上一次保存/提交仍在处理中，完成前不能重复点击（防重复建单）" placement="top">
+          <span class="btn-wrap">
+            <el-button :disabled="pendingWrite" @click="doSaveDraft">保存草稿</el-button>
+          </span>
+        </el-tooltip>
+        <el-tooltip :disabled="!pendingWrite" content="上一次保存/提交仍在处理中，完成前不能重复提交（防重复建单）" placement="top">
+          <span class="btn-wrap">
+            <el-button type="primary" :loading="b.submitting" :disabled="pendingWrite" @click="doSubmit">提交审批</el-button>
+          </span>
+        </el-tooltip>
         <el-button v-if="b.form.bill.id" link @click="b.resetForm()">新建空白单</el-button>
       </el-card>
     </el-tab-pane>
@@ -937,6 +949,8 @@ async function refreshProgress() {
 </script>
 
 <style scoped>
+/* 禁用按钮的 tooltip 载体：必须包一层非 disabled 元素，否则鼠标事件被 el-button 吞掉、提示不出现 */
+.btn-wrap { display: inline-block; margin-right: 12px; }
 /* 结果横幅与进度面板/页签之间留一档间距，标题按中文行长换行 */
 .bw-outcome { margin-bottom: 12px; }
 .bw-outcome :deep(.el-alert__title) { font-size: 14px; font-weight: 600; }

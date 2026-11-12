@@ -10,7 +10,8 @@
   在无运行期验证手段时盲改不可接受，故本页只回答"撤回到某节点会影响什么"，供人工核对；
   真正的执行面留待开关 sys_config.wf.withdraw.done.enabled 放行后再实现。
 
-  入参：实例ID 或 任务ID 均可（后端自动识别），故界面只给一个输入框。
+  入参：**单据编号**（如 BX202611110001，最常用）、实例ID 或 任务ID，后端自动识别，故界面只给一个输入框。
+  早期只认实例ID/任务ID，用户记不住 UUID —— 属「谁记得 ID」那类体验问题，后端已补单据编号解析。
 -->
 <template>
   <div class="wp">
@@ -29,7 +30,7 @@
 
       <div class="wp-query">
         <el-input v-model="keyword" clearable class="wp-input"
-                  placeholder="流程编号或任务编号"
+                  placeholder="单据编号（如 BX202611110001）"
                   @keyup.enter="load" />
         <el-button type="primary" :loading="loading" @click="load">查询</el-button>
       </div>
@@ -77,7 +78,7 @@
         <div class="wp-notice">{{ data.notice }}</div>
       </template>
 
-      <el-empty v-else-if="searched" description="未找到该流程实例（请确认输入的是实例ID或任务ID）" />
+      <el-empty v-else-if="searched" description="未找到该流程（可按单据编号、实例ID 或任务ID 查询；单据编号见「我的单据」列表）" />
     </el-card>
   </div>
 </template>
