@@ -79,13 +79,13 @@
     </el-dialog>
 
     <el-dialog v-model="acctVisible" :title="$t('flow.claim.supplementDialogTitle')" width="520px" destroy-on-close>
-      <el-form :model="acctForm" label-width="100px" size="small">
-        <el-form-item :label="$t('flow.claim.debitAccount')" required>
+      <el-form :model="acctForm" label-width="100px" size="small" :rules="acctRules">
+        <el-form-item :label="$t('flow.claim.debitAccount')" required prop="debitAccount">
           <el-select v-model="acctForm.debitAccount" filterable style="width: 100%" :placeholder="$t('flow.claim.subjectPickPh')">
             <el-option v-for="s in subjectOptions" :key="s.id" :label="`${s.subjectCode} ${s.subjectName}`" :value="s.subjectCode" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="$t('flow.claim.creditAccount')" required>
+        <el-form-item :label="$t('flow.claim.creditAccount')" required prop="creditAccount">
           <el-select v-model="acctForm.creditAccount" filterable style="width: 100%" :placeholder="$t('flow.claim.subjectPickPh')">
             <el-option v-for="s in subjectOptions" :key="s.id" :label="`${s.subjectCode} ${s.subjectName}`" :value="s.subjectCode" />
           </el-select>
@@ -103,8 +103,8 @@
     </el-dialog>
 
     <el-dialog v-model="assignVisible" :title="$t('flow.claim.assignDialogTitle')" width="430px" destroy-on-close>
-      <el-form label-width="80px" size="small">
-        <el-form-item :label="$t('flow.claim.assignUser')" required>
+      <el-form label-width="80px" size="small" :model="{ assignUserId }" :rules="assignRules">
+        <el-form-item :label="$t('flow.claim.assignUser')" required prop="assignUserId">
           <UserSelect v-model="assignUserId" :company-id="current?.companyId" show-dept @change="onAssignUser" />
         </el-form-item>
       </el-form>
@@ -302,6 +302,15 @@ async function loadCompanyTree() {
 onMounted(async () => {
   await Promise.all([load(), loadCompanyTree()])
 })
+
+// required 原先只画红星、提交时不拦；补上真校验
+const acctRules = {
+  debitAccount: [{ required: true, message: '请选择借方科目', trigger: 'change' }],
+  creditAccount: [{ required: true, message: '请选择贷方科目', trigger: 'change' }],
+}
+const assignRules = {
+  assignUserId: [{ required: true, message: '请选择处理人', trigger: 'change' }],
+}
 </script>
 
 <style scoped>

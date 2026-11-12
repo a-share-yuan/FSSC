@@ -146,6 +146,8 @@ import { useTablePager } from '../../composables/useTablePager'
 import { BillStatus, STATUS_LABEL, STATUS_TYPE, statusLabel, statusType } from '@/constants/billStatus.js'
 import { billTypeLabel, taskTypeLabel } from '@/constants/enums'
 import { useI18n } from 'vue-i18n'
+import { validateForm } from '@/composables/useFormRules';
+
 
 const { t } = useI18n()
 
@@ -286,7 +288,7 @@ function openReturn(row) {
 
 async function doReturn() {
   // 先过表单必填校验（allow-create 输入即触发 change），未填不发服务端请求
-  try { await returnFormRef.value?.validate() } catch { return }
+  if (!(await validateForm(returnFormRef))) return;
   const reason = (returnForm.reason || '').trim()
   if (!reason) return ElMessage.warning(t('sharing.taskWork.errReturnReason'))
   await sharingApi.returnTask(current.value.id, reason)

@@ -546,6 +546,8 @@ import { rejectTypeLabel } from '@/constants/billStatus.js'
 import { ElMessage } from 'element-plus'
 import { commonRules } from '../../composables/useFormRules'
 import { useI18n } from 'vue-i18n'
+import { validateForm } from '@/composables/useFormRules';
+
 const { t } = useI18n()
 
 const props = defineProps({
@@ -675,7 +677,7 @@ async function doSubmit() {
 async function runSubmit() {
   submitOutcome.value = null
   if (billInfoFormRef.value) {
-    try { await billInfoFormRef.value.validate() } catch { return }
+    if (!(await validateForm(billInfoFormRef))) return;
   }
   if (props.beforeSubmit) {
     const r = await props.beforeSubmit(b)

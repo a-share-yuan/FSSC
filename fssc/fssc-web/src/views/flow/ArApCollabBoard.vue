@@ -199,8 +199,8 @@
     </el-dialog>
 
     <el-dialog v-model="invWbVisible" :title="$t('flow.collab.actInvWriteBack')" width="460px" destroy-on-close>
-      <el-form label-width="90px" size="small">
-        <el-form-item :label="$t('flow.collab.colPreInvNo')" required>
+      <el-form label-width="90px" size="small" :model="{ invWbId }" :rules="invWbRules">
+        <el-form-item :label="$t('flow.collab.colPreInvNo')" required prop="invWbId">
           <el-select v-model="invWbId" filterable :placeholder="$t('flow.collab.phPickPreInv')" style="width: 100%">
             <el-option v-for="p in preInvoiceOptions" :key="p.id" :value="p.id"
               :label="`${p.preInvoiceNo}（${p.customerName || ''}）`" />
@@ -648,6 +648,11 @@ onMounted(() => {
   else if (tab.value === 'ccp') loadCcp()
   else loadLogs()
 })
+
+// required 原先只画红星、提交时不拦；补上真校验
+const invWbRules = {
+  invWbId: [{ required: true, message: '请选择预制发票', trigger: 'change' }],
+}
 </script>
 
 <style scoped>

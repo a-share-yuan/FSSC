@@ -270,10 +270,10 @@
 
     <!-- ERP 财务调整推送 -->
     <el-dialog v-model="ebsVisible" :title="$t('flow.bill.erpAdjustBoxTitle')" width="560px" destroy-on-close>
-      <el-form :model="ebsForm" label-width="110px" size="small">
-        <el-form-item :label="$t('flow.bill.erpAdjustNo')" required><el-input v-model="ebsForm.adjustNo" :placeholder="$t('flow.bill.erpAdjustNoPh')" maxlength="48" /></el-form-item>
+      <el-form :model="ebsForm" label-width="110px" size="small" :rules="ebsRules">
+        <el-form-item :label="$t('flow.bill.erpAdjustNo')" required prop="adjustNo"><el-input v-model="ebsForm.adjustNo" :placeholder="$t('flow.bill.erpAdjustNoPh')" maxlength="48" /></el-form-item>
         <el-form-item :label="$t('field.customer')"><CustomerSelect v-model="ebsForm.customerCode" /></el-form-item>
-        <el-form-item :label="$t('flow.bill.erpAdjustType')" required><el-input v-model="ebsForm.adjustType" :placeholder="$t('flow.bill.erpAdjustTypePh')" maxlength="16" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.erpAdjustType')" required prop="adjustType"><el-input v-model="ebsForm.adjustType" :placeholder="$t('flow.bill.erpAdjustTypePh')" maxlength="16" /></el-form-item>
         <el-form-item :label="$t('field.amount')"><el-input v-model="ebsForm.amount" /></el-form-item>
         <el-form-item :label="$t('field.taxAmount')"><el-input v-model="ebsForm.taxAmount" /></el-form-item>
         <el-form-item :label="$t('flow.bill.erpStatement')">
@@ -290,9 +290,9 @@
 
     <!-- ERP 负数发票（红字来源）推送 -->
     <el-dialog v-model="redPushVisible" :title="$t('flow.bill.erpNegativeBoxTitle')" width="520px" destroy-on-close>
-      <el-form label-width="110px" size="small">
-        <el-form-item :label="$t('flow.bill.erpMemoNo')" required><el-input v-model="redPushForm.ebsCreditMemoNo" :placeholder="$t('flow.bill.erpMemoNoPh')" /></el-form-item>
-        <el-form-item :label="$t('flow.bill.mailInvoices')" required>
+      <el-form label-width="110px" size="small" :model="{ redPushForm }" :rules="redPushRules">
+        <el-form-item :label="$t('flow.bill.erpMemoNo')" required prop="ebsCreditMemoNo"><el-input v-model="redPushForm.ebsCreditMemoNo" :placeholder="$t('flow.bill.erpMemoNoPh')" /></el-form-item>
+        <el-form-item :label="$t('flow.bill.mailInvoices')" required prop="preInvoiceNo">
           <el-select v-model="redPushForm.preInvoiceNo" filterable style="width: 100%" :placeholder="$t('flow.bill.erpInvoicePickPh')">
             <el-option v-for="i in invoices" :key="i.preInvoiceNo" :value="i.preInvoiceNo"
               :label="`${i.preInvoiceNo} · ${i.customerName || ''} · ${i.invoiceNo || ''}`" />
@@ -707,6 +707,16 @@ async function doRedPush() {
 }
 
 onMounted(load)
+
+// required 原先只画红星、提交时不拦（el-form 没挂 rules）；这里补上真校验
+const ebsRules = {
+  adjustNo: [{ required: true, message: '请填写调整单号', trigger: 'blur' }],
+  adjustType: [{ required: true, message: '请填写调整类型', trigger: 'blur' }],
+}
+const redPushRules = {
+  ebsCreditMemoNo: [{ required: true, message: '请填写红字来源单号', trigger: 'blur' }],
+  preInvoiceNo: [{ required: true, message: '请选择要推送的发票', trigger: 'change' }],
+}
 </script>
 
 <style scoped>

@@ -220,6 +220,8 @@ import { hasPerm } from '@/utils/perm'
 import { commonRules } from '@/composables/useFormRules'
 import SkeletonList from '@/components/SkeletonList.vue'
 import { useI18n } from 'vue-i18n'
+import { validateForm } from '@/composables/useFormRules';
+
 const { t } = useI18n()
 
 // 枚举名称表：取值严格对齐后端实体注释（ExpensePolicyStandard.standardType / levelType / overtimeAction）
@@ -337,7 +339,7 @@ function openEdit(row) {
 }
 
 async function save() {
-  try { await formRef.value.validate() } catch { return }
+  if (!(await validateForm(formRef))) return;
   saving.value = true
   try {
     if (form.id) await expensePolicyApi.update(form)
@@ -384,7 +386,7 @@ function openStdEdit(row) {
 }
 
 async function saveStd() {
-  try { await stdRef.value.validate() } catch { return }
+  if (!(await validateForm(stdRef))) return;
   if (stdForm.standardValueMin != null && stdForm.standardValueMax != null
       && stdForm.standardValueMin > stdForm.standardValueMax) {
     ElMessage.error(t('compliance.expensePolicy.Lower'))

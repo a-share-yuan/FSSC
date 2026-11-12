@@ -93,6 +93,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { masterApi, mdApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import { useI18n } from 'vue-i18n'
+import { validateForm } from '@/composables/useFormRules';
+
 const { t } = useI18n()
 
 const rows = ref([])
@@ -155,7 +157,7 @@ function openEdit(row) {
 
 async function save() {
   // 关键词是匹配的唯一依据，空关键词的规则永远匹配不到任何单据 ⇒ 保存前先校验
-  try { await formRef.value?.validate() } catch { return }
+  if (!(await validateForm(formRef))) return;
   const it = itemOptions.value.find((o) => o.value === editing.value.expenseItemId)
   editing.value.itemName = it ? it.label.replace(/^\s*　*/, '') : ''
   try {

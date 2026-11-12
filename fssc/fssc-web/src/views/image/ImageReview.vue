@@ -167,6 +167,8 @@ import { imageApi } from '../../api'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
 import { useI18n } from 'vue-i18n'
+import { validateForm } from '@/composables/useFormRules';
+
 const { t } = useI18n()
 
 // BillTraceDrawer
@@ -273,7 +275,7 @@ async function delReview(row) {
 }
 async function saveReview() {
   // 先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
-  if (reviewFormRef.value) { try { await reviewFormRef.value.validate() } catch { return } }
+  if (reviewFormRef.value) { if (!(await validateForm(reviewFormRef))) return; }
   await imageApi.reviewCreate({ batchNo: reviewForm.batchNo, bizNo: reviewForm.bizNo, bizType: reviewForm.bizType, remark: reviewForm.remark })
   ElMessage.success(t('image.imageReview.Entered')); reviewForm.visible = false; Object.assign(reviewForm, { batchNo: '', bizNo: '', bizType: '', remark: '' }); loadReview()
 }
@@ -292,7 +294,7 @@ async function delExc(row) {
 }
 async function saveExc() {
   // 先过表单校验（与服务端 AssertUtil.notBlank 双侧同一规则）
-  if (excFormRef.value) { try { await excFormRef.value.validate() } catch { return } }
+  if (excFormRef.value) { if (!(await validateForm(excFormRef))) return; }
   await imageApi.exceptionCreate({ batchNo: excForm.batchNo, bizNo: excForm.bizNo, exceptionType: excForm.exceptionType, exceptionDesc: excForm.exceptionDesc })
   ElMessage.success(t('image.imageReview.Reported')); excForm.visible = false; Object.assign(excForm, { batchNo: '', bizNo: '', exceptionType: 'VERIFY_FAIL', exceptionDesc: '' }); loadExc()
 }

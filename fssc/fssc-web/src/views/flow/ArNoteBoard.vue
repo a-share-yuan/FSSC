@@ -117,8 +117,8 @@
     </el-dialog>
 
     <el-dialog v-model="handoverVisible" :title="$t('flow.note.opHandoverCashier')" width="430px" destroy-on-close>
-      <el-form label-width="90px" size="small">
-        <el-form-item :label="$t('flow.note.phHandoverKeeper')" required>
+      <el-form label-width="90px" size="small" :model="{ handoverUserId }" :rules="handoverRules">
+        <el-form-item :label="$t('flow.note.phHandoverKeeper')" required prop="handoverUserId">
           <UserSelect v-model="handoverUserId" :company-id="current?.companyId" show-dept @change="onHandoverUser" />
         </el-form-item>
       </el-form>
@@ -305,6 +305,11 @@ async function doRegister() {
 }
 
 onMounted(load)
+
+// required 原先只画红星、提交时不拦；补上真校验
+const handoverRules = {
+  handoverUserId: [{ required: true, message: '请选择接收人', trigger: 'change' }],
+}
 </script>
 
 <style scoped>

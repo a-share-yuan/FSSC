@@ -85,11 +85,11 @@
     <el-dialog v-model="transferVisible" title="进项转出（不可抵扣）" width="460px">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 12px"
         title="转出后该批发票不可再认证抵扣，可抵扣税额清零；已转出不可撤销。" />
-      <el-form label-width="96px">
+      <el-form label-width="96px" :model="{ transferReason }" :rules="transferRules">
         <el-form-item label="本次转出">
           <span>{{ selRows.length }} 张<template v-if="transferTax > 0">，税额合计 ￥{{ fmt(transferTax) }}</template></span>
         </el-form-item>
-        <el-form-item label="转出原因" required>
+        <el-form-item label="转出原因" required prop="transferReason">
           <el-select v-model="transferReason" filterable allow-create default-first-option
             placeholder="选择或输入原因（如：集体福利）" style="width: 100%">
             <el-option v-for="r in TRANSFER_REASONS" :key="r" :label="r" :value="r" />
@@ -260,6 +260,11 @@ function exportCsv() {
   ElMessage.success(t('useBill.main.CSV'))
 }
 
+
+// required 原先只画红星、提交时不拦；补上真校验
+const transferRules = {
+  transferReason: [{ required: true, message: '请选择或填写转出原因', trigger: 'change' }],
+}
 </script>
 
 <style scoped>

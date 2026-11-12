@@ -15,6 +15,11 @@
 
 - 建库快照枚数随之更新为 **329 个文件 / 328 张表**（主库 322、影像库 6），`db/README.md`、`docs/数据模型.md`、`readme.txt` 与首页同步
 
+### Fixed
+
+- **假必填**：缴费、票据、影像、发票认证、发票规则、任务作业等 10 个页面里，表单项写了 `required`（或标签里手打 `*`）却没有给 `el-form` 挂 `:rules`／没给 `el-form-item` 挂 `prop`，Element Plus 只画出红星、提交时不做任何拦截，空值直接发出去。已补真校验并统一走 `useFormRules.validateForm`（顺带把焦点带到第一个出错字段）
+- 新增 `npm run check:required`（`fssc-web/scripts/check-required.mjs`）静态守卫：扫出「标了必填但 el-form 没挂 rules」的项，退出码非 0 即失败；当前 194 个 `.vue` 全量通过
+
 ## [1.2.2] - 2026-11-10
 
 ### Added
