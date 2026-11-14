@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.image.facade;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -8,7 +5,9 @@ import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.facade.ImageFacade;
 import com.fssc.framework.facade.dto.ImageFileDTO;
 import com.fssc.framework.facade.dto.InvoiceParseResultDTO;
+import com.fssc.framework.paging.CountSnapshot;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.image.paging.ImageStatsSnapshot;
 import com.fssc.image.channel.OcrLocalParsers;
 import com.fssc.image.channel.OcrResult;
 import com.fssc.image.entity.ImgFile;
@@ -90,14 +89,23 @@ public class ImageFacadeImpl implements ImageFacade {
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED, readOnly = true)
     public Long countBatches() {
-        // 走 img_batch 覆盖索引；tenant_id 显式传参（自写 SQL 不被租户拦截器改写）
-        return imgBatchMapper.countByTenant(TenantContext.getTenantId());
+        Long tenantId = TenantContext.getTenantId();
+        // 2026-11-14 压测：即便 FORCE INDEX 走覆盖索引，50 万行 COUNT 仍要 195ms，
+        // 报表重复打开就反复付这笔开销。总数只用于展示，60 秒快照足够。
+        return CountSnapshot.of(
+                "img_batch/count|" + tenantId + "|" + CountSnapshot.scopeFingerprint(),
+                // 走 img_batch 覆盖索引；tenant_id 显式传参（自写 SQL 不被租户拦截器改写）
+                () -> imgBatchMapper.countByTenant(tenantId));
     }
 
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED, readOnly = true)
     public List<Map<String, Object>> statBatchByBizType() {
-        return imgBatchMapper.statByBizType(TenantContext.getTenantId());
+        Long tenantId = TenantContext.getTenantId();
+        // 全表 GROUP BY 平均 537ms（已走覆盖索引，无索引可救）；同样只用于展示 ⇒ 60 秒快照。
+        return ImageStatsSnapshot.of(
+                "img_batch/stats-by-biz-type|" + tenantId + "|" + CountSnapshot.scopeFingerprint(),
+                () -> imgBatchMapper.statByBizType(tenantId));
     }
 
     @Override
@@ -202,6 +210,13 @@ public class ImageFacadeImpl implements ImageFacade {
         if (invoiceNo == null || invoiceNo.isBlank()) {
             return 0L;
         }
+        // 【全库口径是有意的，不要"顺手"补 tenant_id】
+        // 发票代码+号码全国唯一，合规前置的 PRE-INV-DUPLICATE 要拦的正是
+        // 「同一张发票被不同企业/不同单据重复报销」，按租户过滤会让这条规则形同虚设。
+        // 本方法走 JdbcTemplate（原生 JDBC，不经过 MyBatis 租户拦截器），所以确实查全库；
+        // ImageFacade 接口 Javadoc 也写明「全库口径，不做租户过滤」。
+        // 压测曾建议"补 tenant_id 后可去掉 idx_or_invoice_no"——该建议会改坏业务，已否决：
+        // 索引必须保留（EXPLAIN 39300 行 → 7 行，全库查重的唯一保障）。
         Long cnt = jdbcTemplate.queryForObject(
                 "select count(*) from ocr_record where invoice_no = ?", Long.class, invoiceNo);
         return cnt == null ? 0L : cnt;

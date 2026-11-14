@@ -1097,6 +1097,7 @@ export default {
       rejectPromptTitle: 'Business rejection reason',
       rejectReasonPh: 'Rejection reason (required)',
       replaceInvoice: 'Replace invoice',
+      mailCandidateTruncated: 'Too many candidate invoices; only the first batch is shown. Process in batches or filter by page in the pre-invoice tab.',
       replaceReasonLabel: 'Replacement reason',
       send: 'Send',
       signReceipt: 'Confirm receipt',

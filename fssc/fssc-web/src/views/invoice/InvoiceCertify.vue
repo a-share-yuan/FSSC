@@ -112,7 +112,7 @@ import { invoiceApi } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
-import { useFormRules } from '../../composables/useFormRules'
+import { useFormRules, commonRules } from '../../composables/useFormRules'
 import { useSubmitGuard } from '../../composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
@@ -262,8 +262,10 @@ function exportCsv() {
 
 
 // required 原先只画红星、提交时不拦；补上真校验
+// 必须走 commonRules：转出原因是 filterable+allow-create 下拉，写 { required, message, trigger }
+// 会让 async-validator 改走 string 校验器，选中后仍判非法 ⇒ 永远提交不过
 const transferRules = {
-  transferReason: [{ required: true, message: '请选择或填写转出原因', trigger: 'change' }],
+  transferReason: commonRules.required('请选择或填写转出原因'),
 }
 </script>
 

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.image.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -11,6 +8,7 @@ import com.fssc.common.core.Result;
 import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.image.paging.ImagePageKit;
 import com.fssc.image.entity.ImgSetting;
 import com.fssc.image.mapper.ImgSettingMapper;
 import java.util.List;
@@ -38,16 +36,30 @@ public class ImageSettingController {
     @RequiresPerm("image:setting:list")
     @GetMapping("/page")
     public Result<PageResult<ImgSetting>> page(PageQuery q, String settingType, String keyword) {
+        int size = ImagePageKit.clampSize(q.getPageSize());
+        Page<ImgSetting> p = settingMapper.selectPage(ImagePageKit.<ImgSetting>page(q.getPageNum(), size),
+                settingFilter(settingType, keyword)
+                        .orderByAsc(ImgSetting::getSettingType)
+                        .orderByAsc(ImgSetting::getSettingCode)
+                        // 两列都可能同值，翻页必须追加主键 tiebreaker，否则重复/丢行。
+                        .orderByAsc(ImgSetting::getId));
+        long total = ImagePageKit.total("img_setting/page",
+                () -> settingMapper.selectCount(settingFilter(settingType, keyword)),
+                settingType, keyword);
+        return Result.success(PageResult.of(p.getRecords(), total, q.getPageNum(), size));
+    }
+
+    private LambdaQueryWrapper<ImgSetting> settingFilter(String settingType, String keyword) {
         LambdaQueryWrapper<ImgSetting> w = new LambdaQueryWrapper<>();
         if (settingType != null && !settingType.isBlank()) {
             w.eq(ImgSetting::getSettingType, settingType);
         }
         if (keyword != null && !keyword.isBlank()) {
-            w.and(x -> x.like(ImgSetting::getSettingName, keyword).or().like(ImgSetting::getSettingCode, keyword));
+            String kw = keyword.trim();
+            w.and(x -> x.likeRight(ImgSetting::getSettingName, kw)
+                    .or().likeRight(ImgSetting::getSettingCode, kw));
         }
-        w.orderByAsc(ImgSetting::getSettingType).orderByAsc(ImgSetting::getSettingCode);
-        Page<ImgSetting> p = settingMapper.selectPage(Page.of(q.getPageNum(), q.getPageSize()), w);
-        return Result.success(PageResult.of(p.getRecords(), p.getTotal(), q.getPageNum(), q.getPageSize()));
+        return w;
     }
 
     @RequiresPerm("image:setting:update")

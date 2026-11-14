@@ -127,6 +127,34 @@ const PERF_THRESHOLD = 800 // 超过 800ms 记录慢请求
 const perfLog = reactive({ slowReqs: [], totalReqs: 0, totalErrors: 0, avgMs: 0 })
 export function getPerfLog() { return perfLog }
 
+/**
+ * 读列表端点的分页元数据（X-Page-* / X-Truncated 响应头）。
+ *
+ * <p>后端对「JSON 保持数组形状」的列表端点统一用响应头回分页元数据
+ * （见后端 com.fssc.framework.paging.ListPaging，契约与 BCP PartnerListPaging 一致）：
+ * 载荷仍是数组，既有消费方的 .map/.filter/v-for 不用改；
+ * `X-Truncated: true` 表示「本页不是全部，还有下一页」——
+ * 这是服务端加了取数上限后唯一的信号，<b>不读它就会把截断后的集合当成全量</b>。</p>
+ *
+ * <p>axios 会把响应头键名小写化，这里大小写都兼容。</p>
+ *
+ * @param {any} d api 调用的返回值（数组或对象均可）
+ * @returns {{truncated: boolean, pageNum: number, pageSize: number, returned: number}}
+ */
+export function readPaging(d) {
+  const h = (d && d.__headers) || {}
+  const g = (k) => {
+    const lk = k.toLowerCase()
+    return h[lk] !== undefined ? h[lk] : (h[k] !== undefined ? h[k] : '')
+  }
+  return {
+    truncated: String(g('X-Truncated') ?? 'false').toLowerCase() === 'true',
+    pageNum: Number(g('X-Page-Num') || 0),
+    pageSize: Number(g('X-Page-Size') || 0),
+    returned: Number(g('X-Returned-Count') || 0),
+  }
+}
+
 // 断网自动重试
 const MAX_RETRY = 3
 const RETRY_DELAY = 1000 // 1s
@@ -189,6 +217,15 @@ http.interceptors.response.use(
       if (d && typeof d === 'object' && !Array.isArray(d) && Array.isArray(d.list)) {
         if (!('records' in d)) d.records = d.list
         if (!('rows' in d)) d.rows = d.list
+      }
+      // 分页元数据挂到返回值上（非枚举属性）：数组载荷也能读到 X-Page-* / X-Truncated 响应头。
+      // 用 Object.defineProperty + enumerable:false ⇒ 不影响 v-for / map / JSON.stringify / Vue 响应式。
+      // 用途：像 bank/reconcile/items、ar-flow/pre-invoices 这类「JSON 保持数组 + 元数据走响应头」的端点，
+      // 前端据此判断「本页还有更多」，避免把被服务端上限截断的集合当成全量。
+      if (d && typeof d === 'object') {
+        try {
+          Object.defineProperty(d, '__headers', { value: res.headers || {}, enumerable: false, configurable: true })
+        } catch (e) { /* 冻结对象等极端情况忽略即可 */ }
       }
       return d
     }
@@ -1433,8 +1470,11 @@ export const sharingApi = {
   reassign: (id, assigneeId) => http.post(`/tenant/sharing/task/${id}/reassign`, null, { params: { assigneeId } }),
   returnTask: (id, reason) => http.post(`/tenant/sharing/task/${id}/return`, null, { params: { reason } }),
   voucherGenerate: (billId) => http.post(`/tenant/sharing/voucher/generate/${billId}`),
-  // 契约备查：端点 SharingController.voucherPage 目前只绑 pageNum/pageSize/status/sourceType，
-  // companyId/periodYear/periodMonth 需后端补形参后才生效（前端已按 GlLedger 表头条件送出，后端未落地前静默忽略、不报错）。
+  // 契约备查：SharingController.voucherPage 已绑定
+  //   pageNum/pageSize/status/sourceType/companyId/periodYear/periodMonth/billId/orderBy/order
+  // billId 是「按来源单据直查凭证」的入口（六格抽屉、审批工作台、折旧过账弹窗都用它）：
+  // 传了就走 op_voucher(tenant_id,bill_id) 索引，别再用「取最新一页再前端 find」——
+  // 那种写法在开发库（凭证 0 行）看起来是对的，客户数据上量后目标凭证不在首页里，会静默显示为空。
   voucherPage: (params) => http.get('/tenant/sharing/voucher/page', { params }),
   // 执行结果视图：审批通过后自动制证失败事件，纯只读
   voucherGenFailurePage: (params) => http.get('/tenant/sharing/voucher/gen-failure/page', { params }),

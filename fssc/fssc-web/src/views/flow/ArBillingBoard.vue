@@ -77,6 +77,13 @@
         </template>
       </el-table-column>
     </el-table>
+    <!-- 预制发票分页：后端对本端点加了取数上限（X-Truncated＝本页不是全部）。
+         元数据走响应头、载荷仍是数组，故用「上一页/下一页」而不是页码（契约不提供总数）。 -->
+    <div v-if="tab === 'pre'" class="pager" style="margin-top:6px; text-align:center">
+      <el-button size="small" :disabled="preInvPage <= 1" :loading="loading" @click="preInvPage--; load()">上一页</el-button>
+      <span class="hint">第 {{ preInvPage }} 页 · 本页 {{ invoices.length }} 条{{ preInvTruncated ? '（还有更多）' : '' }}</span>
+      <el-button size="small" :disabled="!preInvTruncated" :loading="loading" @click="preInvPage++; load()">下一页</el-button>
+    </div>
 
     <!-- 邮包 -->
     <el-table v-show="tab === 'mail'" :data="mails" v-loading="loading" size="small" border stripe>
@@ -333,7 +340,7 @@ import { invoiceTypeLabel } from '@/constants/invoiceType'
 import CustomerSelect from '@/components/common/CustomerSelect.vue'
 import {onMounted, reactive, ref, computed} from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { arFlowApi, arGapApi, store } from '../../api'
+import { arFlowApi, arGapApi, store, readPaging } from '../../api'
 import { commonRules } from '@/composables/useFormRules'
 import { validateForms } from '@/composables/useSubmitGuard'
 import { useI18n } from 'vue-i18n'
@@ -341,6 +348,9 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 
 const tab = ref('statement')
+// 预制发票分页（后端加了取数上限，X-Truncated＝本页不是全部）
+const preInvPage = ref(1)
+const preInvTruncated = ref(false)
 const loading = ref(false)
 const statements = ref([])
 const invoices = ref([])
@@ -401,7 +411,12 @@ async function load() {
   loading.value = true
   try {
     if (tab.value === 'statement') statements.value = await arFlowApi.statements({})
-    else if (tab.value === 'pre') invoices.value = await arFlowApi.preInvoices({})
+    else if (tab.value === 'pre') {
+      const list = await arFlowApi.preInvoices({ pageNum: preInvPage.value })
+      invoices.value = list || []
+      // 服务端加了取数上限 ⇒ 截断时必须显式提示，否则「看起来处理完了」其实还有票没处理
+      preInvTruncated.value = readPaging(list).truncated
+    }
     else if (tab.value === 'mail') mails.value = await arFlowApi.mailPackages({})
     else rules.value = await arFlowApi.invoiceRules()
   } catch (e) { ElMessage.error(e.message) } finally { loading.value = false }
@@ -539,6 +554,11 @@ async function openMailCreate() {
     ])
     mailInvoiceOptions.value = (list || []).filter((i) => i.printedFlag)
     mailRecipients.value = recips || []
+    // 邮包候选只取「已打印」的预制发票；若候选集被服务端上限截断，必须提示，
+    // 否则会「看着只有这几张可寄」而漏寄后面的票。
+    if (readPaging(list).truncated) {
+      ElMessage.warning(t('flow.bill.mailCandidateTruncated'))
+    }
   } catch (e) {
     mailInvoiceOptions.value = []
     mailRecipients.value = []
@@ -709,13 +729,16 @@ async function doRedPush() {
 onMounted(load)
 
 // required 原先只画红星、提交时不拦（el-form 没挂 rules）；这里补上真校验
+// required 原先只画红星、提交时不拦；这里补上真校验
+// 必须走 commonRules：preInvoiceNo 是下拉（值可能是数字），写 { required, message, trigger }
+// 会让 async-validator 改走 string 校验器，选中后仍判非法 ⇒ 永远提交不过
 const ebsRules = {
-  adjustNo: [{ required: true, message: '请填写调整单号', trigger: 'blur' }],
-  adjustType: [{ required: true, message: '请填写调整类型', trigger: 'blur' }],
+  adjustNo: commonRules.required('请填写调整单号'),
+  adjustType: commonRules.required('请填写调整类型'),
 }
 const redPushRules = {
-  ebsCreditMemoNo: [{ required: true, message: '请填写红字来源单号', trigger: 'blur' }],
-  preInvoiceNo: [{ required: true, message: '请选择要推送的发票', trigger: 'change' }],
+  ebsCreditMemoNo: commonRules.required('请填写红字来源单号'),
+  preInvoiceNo: commonRules.select('请选择要推送的发票'),
 }
 </script>
 

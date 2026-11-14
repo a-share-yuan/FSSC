@@ -8,9 +8,14 @@
         <b>{{ $t('image.ocrRecords.OCR') }}</b>
         <span style="color:#909399; font-size:12px">{{ $t('image.ocrRecords.Structured') }}</span>
         <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
-          <el-select v-if="canPickBatch" v-model="q.batchId" :placeholder="$t('image.ocrRecords.Filter')" clearable filterable style="width:220px" size="small" @change="search">
+          <!-- 后端已对批次清单加取数上限（默认 200）⇒ 必须远程搜索把 keyword 下推 SQL。
+               filterable 只过滤已加载的选项，不做这一步第 201 个之后的批次永远选不到且无提示。 -->
+          <el-select v-if="canPickBatch" v-model="q.batchId" :placeholder="$t('image.ocrRecords.Filter')"
+                     clearable filterable remote reserve-keyword :remote-method="remoteBatches"
+                     :loading="batchLoading" style="width:220px" size="small" @change="search">
             <el-option v-for="b in batchOptions" :key="b.id" :label="b.batchNo || ('#' + b.id)" :value="b.id" />
           </el-select>
+          <span v-if="batchTruncated" style="color:#e6a23c; font-size:12px">仅显示前 {{ batchOptions.length }} 条批次，请输入批次号继续检索</span>
           <el-input v-model="q.invoiceNo" :placeholder="$t('image.ocrRecords.Invoice')" clearable style="width:160px" size="small" @keyup.enter="search" />
           <el-button size="small" type="primary" @click="search">{{ $t('common.search') }}</el-button>
           <el-button size="small" @click="reset">{{ $t('common.reset') }}</el-button>
@@ -99,7 +104,7 @@
 import { ref, reactive, onMounted } from 'vue'
 // ElMessageBox 用于重识别二次确认
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { imageApi, fileApi } from '../../api'
+import { imageApi, fileApi, readPaging } from '../../api'
 import { invoiceTypeLabel } from '../../constants/invoiceType'
 import { ocrChannelLabel } from '@/constants/enums.js'
 import { exportCsv } from '../../utils/csv'
@@ -117,9 +122,27 @@ const q = reactive({ batchId: '', invoiceNo: '' })
 // 批次下拉需要 image:batch:list；无该码时退回手输，不拿 403 换一个「看起来没数据」的下拉
 const canPickBatch = hasPerm('image:batch:list')
 const batchOptions = ref([])
-async function loadBatches() {
+const batchLoading = ref(false)
+// X-Truncated=true ⇒ 本页不是全部；必须显式提示，否则用户会把 200 条当成全部批次。
+const batchTruncated = ref(false)
+let batchTimer = null
+async function loadBatches(keyword = '') {
   if (!canPickBatch) return
-  try { batchOptions.value = (await imageApi.batchList({})) || [] } catch { batchOptions.value = [] }
+  batchLoading.value = true
+  try {
+    const rows = (await imageApi.batchList({ keyword, pageSize: 200 })) || []
+    batchOptions.value = rows
+    batchTruncated.value = readPaging(rows).truncated
+  } catch {
+    batchOptions.value = []
+    batchTruncated.value = false
+  } finally {
+    batchLoading.value = false
+  }
+}
+function remoteBatches(keyword) {
+  clearTimeout(batchTimer)
+  batchTimer = setTimeout(() => loadBatches(keyword || ''), 300)
 }
 
 // 列表页必须 server 分页（sizes + jumper）

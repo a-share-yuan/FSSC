@@ -304,12 +304,14 @@ onMounted(async () => {
 })
 
 // required 原先只画红星、提交时不拦；补上真校验
+// 必须走 commonRules：三项都是下拉、值为科目/用户 ID，写 { required, message, trigger }
+// 会让 async-validator 改走 string 校验器，选中后仍判非法 ⇒ 永远提交不过
 const acctRules = {
-  debitAccount: [{ required: true, message: '请选择借方科目', trigger: 'change' }],
-  creditAccount: [{ required: true, message: '请选择贷方科目', trigger: 'change' }],
+  debitAccount: commonRules.select('请选择借方科目'),
+  creditAccount: commonRules.select('请选择贷方科目'),
 }
 const assignRules = {
-  assignUserId: [{ required: true, message: '请选择处理人', trigger: 'change' }],
+  assignUserId: commonRules.select('请选择处理人'),
 }
 </script>
 

@@ -28,7 +28,7 @@ vi.mock('echarts/core', () => ({
   })),
 }))
 vi.mock('echarts/charts', () => ({ PieChart: {}, BarChart: {}, LineChart: {} }))
-vi.mock('echarts/components', () => ({ TooltipComponent: {}, LegendComponent: {}, GridComponent: {} }))
+vi.mock('echarts/components', () => ({ TooltipComponent: {}, LegendComponent: {}, GridComponent: {}, TitleComponent: {} }))
 vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }))
 
 vi.mock('@/api', () => {

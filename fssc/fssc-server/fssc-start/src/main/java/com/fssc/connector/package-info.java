@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * 集成连接服务域包（形态 B）。
  *

@@ -394,8 +394,10 @@ async function doReassign() {
 
 async function preview(row) {
   try {
-    const vp = await sharingApi.voucherPage({ pageNum: 1, pageSize: 200 })
-    const v = (vp.list || []).find((x) => String(x.billId) === String(row.billId))
+    // 按 billId 直查（走 op_voucher(tenant_id,bill_id) 索引）；原写法取最新 200 张再前端 find，
+    // 客户数据上量后目标凭证不在其中，会误显示"无分录"
+    const vp = await sharingApi.voucherPage({ pageNum: 1, pageSize: 200, billId: row.billId })
+    const v = (vp.list || []).find((x) => String(x.billId) === String(row.billId)) || (vp.list || [])[0]
     if (!v) { voucherLines.value = []; voucherVis.value = true; return }
     voucherLines.value = await sharingApi.voucherLines(v.id)
     voucherVis.value = true

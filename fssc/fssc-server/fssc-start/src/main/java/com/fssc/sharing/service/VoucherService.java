@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.sharing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -25,6 +22,7 @@ import com.fssc.expense.mapper.ExpBillPaymentMapper;
 import com.fssc.expense.mapper.ExpLoanOffsetMapper;
 import com.fssc.framework.facade.InvoiceDomainFacade;
 import com.fssc.framework.org.OrgGuard;
+import com.fssc.framework.paging.CountSnapshot;
 import com.fssc.framework.security.DataScopeKit;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
@@ -1917,44 +1915,37 @@ public class VoucherService {
     public PageResult<OpVoucher> page(long pageNum, long pageSize, String status, String sourceType,
                                       Long companyId, Integer periodYear, Integer periodMonth,
                                       String orderBy, String order) {
-        LambdaQueryWrapper<OpVoucher> qw = new LambdaQueryWrapper<>();
-        // 过账状态/来源筛选必须后端绑定，否则筛选参数被忽略、只按 id 倒序，筛了等于没筛
-        if (status != null && !status.isBlank()) {
-            qw.eq(OpVoucher::getStatus, status.trim());
-        }
-        if (sourceType != null && !sourceType.isBlank()) {
-            // 来源族支持逗号分隔（如对公付款族 EXPENSE_PAY,EXPENSE_SETTLE,TREASURY_PAY）→ IN 过滤，
-            // 单值仍走 eq。值全部为参数绑定，无 SQL 拼接注入面
-            List<String> sourceTypes = Arrays.stream(sourceType.trim().split(","))
-                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
-            if (sourceTypes.size() > 1) {
-                qw.in(OpVoucher::getSourceType, sourceTypes);
-            } else if (sourceTypes.size() == 1) {
-                qw.eq(OpVoucher::getSourceType, sourceTypes.get(0));
-            }
-        }
-        // 公司/年度/月度三个筛选参数（null＝不参与过滤，保持原规则）
-        if (companyId != null) {
-            qw.eq(OpVoucher::getCompanyId, companyId);
-        }
-        if (periodYear != null) {
-            qw.eq(OpVoucher::getPeriodYear, periodYear);
-        }
-        if (periodMonth != null) {
-            qw.eq(OpVoucher::getPeriodMonth, periodMonth);
-        }
-        // 列头排序（白名单：凭证号 voucherNo / 摘要 summary；缺省 id 倒序＝历史规则）
+        return page(pageNum, pageSize, status, sourceType, companyId, periodYear, periodMonth,
+                orderBy, order, null);
+    }
+
+    /**
+     * 同上，另加 {@code billId} 直查。
+     *
+     * <p><b>为什么必须加这个参数（2026-11-14 修）</b>：六格追溯抽屉、审批工作台、折旧批次过账弹窗
+     * 原来都是「取最新一页凭证 + 前端 {@code find(x => x.billId === id)}」——在开发库（凭证 0 行）
+     * 这种行为看着是对的，一旦客户数据涨到十万级，目标单据的凭证根本不在最新 50/200 行里，
+     * 页面就<b>静默显示「未生成凭证」</b>（不是报错，是看起来正常但错了）。
+     * 走 {@code op_voucher(tenant_id, bill_id)} 索引直查是常数级，且语义确定。</p>
+     */
+    @DataScope("凭证列表数据范围")
+    public PageResult<OpVoucher> page(long pageNum, long pageSize, String status, String sourceType,
+                                      Long companyId, Integer periodYear, Integer periodMonth,
+                                      String orderBy, String order, Long billId) {
+        LambdaQueryWrapper<OpVoucher> qw = buildFilter(status, sourceType, companyId, periodYear, periodMonth, billId);
+        // 列头排序（白名单：凭证号 voucherNo；缺省 id 倒序＝历史规则）
+        // 摘要 summary 已从白名单移出：summary 无索引，ORDER BY summary 只能全表 filesort，
+        // 实测 102.4 万行耗时 2,321ms（同一条件按 id 取首页仅 1.2ms），
+        // 且 varchar 无前缀索引无法参与 ORDER BY，加任何索引都救不了。见 #sortColumnOf。
         SFunction<OpVoucher, ?> sortCol = sortColumnOf(orderBy);
         if (sortCol != null) {
             boolean asc = !"desc".equalsIgnoreCase(order);
             qw.orderBy(true, asc, sortCol);
-            // 排序列同值（如摘要）时以 id 倒序作稳定次级序，避免翻页出现重复/漂移
+            // 排序列同值（如凭证号同前缀）时以 id 倒序作稳定次级序，避免翻页出现重复/漂移
             qw.orderByDesc(OpVoucher::getId);
         } else {
             qw.orderByDesc(OpVoucher::getId);
         }
-        // ③ data_scope 五级：依据登录人 data_scope 注入 公司/部门/本人 过滤（TENANT 不加条件）
-        DataScopeKit.apply(qw, OpVoucher::getCompanyId, null, null);
         // 深翻页走两段式：先只查 id，再按 id 取整行。
         //   ① 只查 id：WHERE 列都在 idx_tenant_company_del_id(tenant_id,company_id,del_flag,id) 上，
         //      深翻只扫索引项、零回表；整行回表则要为 LIMIT 之前的所有行取全列，翻到页码上千时
@@ -1962,7 +1953,18 @@ public class VoucherService {
         //   ② 再按这一页的 id 取整行（selectBatchIds 走主键）。
         // 分页语义、total、排序（含 orderBy 白名单列）全部不变；records 按 id 序还原，
         // 因为 selectBatchIds 按主键返回、不保序。
-        Page<OpVoucher> p = opVoucherMapper.selectPage(Page.of(pageNum, pageSize), qw.select(OpVoucher::getId));
+        //
+        // searchCount=false：COUNT 不再由分页插件每页重算（见下方 total 快照）。
+        Page<OpVoucher> page = Page.of(pageNum, pageSize);
+        page.setSearchCount(false);
+        Page<OpVoucher> p = opVoucherMapper.selectPage(page, qw.select(OpVoucher::getId));
+        // 总数走 60 秒快照：条件相同则翻页/刷新/并发打开同一视图都只数一次。
+        // 无筛选时 COUNT 是 O(N)（102.4 万行实测 519ms，并发上限仅 85 QPS），
+        // 带 status 时走 idx_tenant_del_status（DRAFT 13.6ms / POSTED 513ms），
+        // 带公司时走 idx_tenant_company_del。三者都远贵于「取一页」的 1.2ms，故一律快照。
+        long total = CountSnapshot.of(countKey(status, sourceType, companyId, periodYear, periodMonth, billId),
+                () -> opVoucherMapper.selectCount(
+                        buildFilter(status, sourceType, companyId, periodYear, periodMonth, billId)));
         List<Long> pageIds = new ArrayList<>(p.getRecords().size());
         for (OpVoucher r : p.getRecords()) {
             if (r != null && r.getId() != null) {
@@ -1989,17 +1991,98 @@ public class VoucherService {
         // 落账态一次聚合回填（glEntryCount）——整页一条 GROUP BY SQL，
         // 取代前端逐张 glApi.posted 的 N+1 串行探测（探测失败曾降级显示成「未落账」）
         fillGlEntryCount(p.getRecords());
-        return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
+        return PageResult.of(p.getRecords(), total, pageNum, pageSize);
     }
 
-    /** orderBy 前端列 prop（camelCase）→ 实体列白名单；白名单外的值返回 null（回退默认 id 倒序）。 */
+    /**
+     * 凭证台账筛选条件（不含排序、不含 select 投影）——取数与计数<b>共用同一份构造</b>。
+     *
+     * <p>为什么抽出来：总数走快照后，COUNT 与列表是两次独立查询。若两处各写一遍条件，
+     * 任何一次改条件漏改另一边，「共 N 条」就和列表对不上（页码多一页/少一页）——
+     * 这类漂移在测试里极难发现，只能从结构上杜绝。</p>
+     *
+     * <p>{@code billId} 是给六格抽屉/审批工作台/折旧过账弹窗用的<b>直查</b>参数：
+     * 这些场景原来都是「取最新一页凭证 + 前端 find 目标单据」，在开发库（凭证 0 行）看不出问题，
+     * 客户数据上量后目标凭证根本不在最新 50/200 行里，页面会静默显示「未生成凭证」。
+     * 传 {@code billId} 走 {@code op_voucher(tenant_id, bill_id)} 索引，常数级且语义确定。</p>
+     *
+     * <p>注意本方法会调用 {@link DataScopeKit#apply}：它在同一请求内幂等（只读
+     * {@code DataScopeHolder}），连续调用两次得到的条件完全一致。</p>
+     */
+    private LambdaQueryWrapper<OpVoucher> buildFilter(String status, String sourceType,
+                                                     Long companyId, Integer periodYear, Integer periodMonth,
+                                                     Long billId) {
+        LambdaQueryWrapper<OpVoucher> qw = new LambdaQueryWrapper<>();
+        // 过账状态/来源筛选必须后端绑定，否则筛选参数被忽略、只按 id 倒序，筛了等于没筛
+        if (status != null && !status.isBlank()) {
+            qw.eq(OpVoucher::getStatus, status.trim());
+        }
+        if (sourceType != null && !sourceType.isBlank()) {
+            // 来源族支持逗号分隔（如对公付款族 EXPENSE_PAY,EXPENSE_SETTLE,TREASURY_PAY）→ IN 过滤，
+            // 单值仍走 eq。值全部为参数绑定，无 SQL 拼接注入面
+            List<String> sourceTypes = Arrays.stream(sourceType.trim().split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            if (sourceTypes.size() > 1) {
+                qw.in(OpVoucher::getSourceType, sourceTypes);
+            } else if (sourceTypes.size() == 1) {
+                qw.eq(OpVoucher::getSourceType, sourceTypes.get(0));
+            }
+        }
+        // 公司/年度/月度三个筛选参数（null＝不参与过滤，保持原规则）
+        if (companyId != null) {
+            qw.eq(OpVoucher::getCompanyId, companyId);
+        }
+        if (periodYear != null) {
+            qw.eq(OpVoucher::getPeriodYear, periodYear);
+        }
+        if (periodMonth != null) {
+            qw.eq(OpVoucher::getPeriodMonth, periodMonth);
+        }
+        // 按来源单据直查（六格抽屉/审批工作台/折旧过账弹窗）：走 idx_tenant_bill(tenant_id, bill_id)
+        if (billId != null) {
+            qw.eq(OpVoucher::getBillId, billId);
+        }
+        // ③ data_scope 五级：依据登录人 data_scope 注入 公司/部门/本人 过滤（TENANT 不加条件）
+        DataScopeKit.apply(qw, OpVoucher::getCompanyId, null, null);
+        return qw;
+    }
+
+    /**
+     * 总数快照签名：租户 + 数据权限指纹 + 全部筛选值。
+     *
+     * <p>漏任一项都会串味——最典型的是漏权限：集团账号（TENANT）数出 102 万，
+     * 公司账号（COMPANY）复用同一份快照就会拿到 102 万的总数，页码画到 5 万页，
+     * 每翻一页都是空的。{@link CountSnapshot#scopeFingerprint()} 就是为此存在。</p>
+     */
+    private static String countKey(String status, String sourceType,
+                                   Long companyId, Integer periodYear, Integer periodMonth, Long billId) {
+        return "op_voucher|" + TenantContext.getTenantId()
+                + "|" + CountSnapshot.scopeFingerprint()
+                + "|" + (status == null || status.isBlank() ? "-" : status.trim())
+                + "|" + (sourceType == null || sourceType.isBlank() ? "-" : sourceType.trim())
+                + "|" + companyId + "|" + periodYear + "|" + periodMonth + "|" + billId;
+    }
+
+    /**
+     * orderBy 前端列 prop（camelCase）→ 实体列白名单；白名单外的值返回 null（回退默认 id 倒序）。
+     *
+     * <p><b>summary 为什么被移除（2026-11-14 实测）</b>：{@code op_voucher.summary} 是 varchar
+     * 且无任何索引，{@code ORDER BY summary DESC, id DESC LIMIT 20} 只能把满足条件的<b>全部行</b>
+     * 取出来排序（filesort）——102.4 万行实测 <b>2,321ms</b>，而同一条件按 id 取首页只要 1.2ms。
+     * 这不是「加个索引就好」：MySQL 无法用索引满足 varchar 的排序（前缀索引不参与 ORDER BY），
+     * 而给 summary 建全列索引等于把整张表再存一份，代价远超收益。
+     * 摘要本身可重复、无稳定序，按它排序也没有业务含义，故白名单只保留 voucherNo
+     * （走 {@code uk_tenant_voucher_no}）。</p>
+     *
+     * <p>前端遗留 {@code sortable="custom"} 不必同步改：白名单外的值一律回退 id 倒序，
+     * 不会报错、不会慢查询，只是点摘要列不改变顺序。</p>
+     */
     private static SFunction<OpVoucher, ?> sortColumnOf(String orderBy) {
         if (orderBy == null) {
             return null;
         }
         return switch (orderBy.trim()) {
             case "voucherNo" -> OpVoucher::getVoucherNo;
-            case "summary" -> OpVoucher::getSummary;
             default -> null;
         };
     }

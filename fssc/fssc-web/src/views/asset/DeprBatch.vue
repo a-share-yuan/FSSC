@@ -192,14 +192,22 @@ async function openVouchers(row) {
   try {
     const [y, m] = String(row.period || '').split('-').map(Number)
     const found = []
-    // voucher/page 仅分页（按 id 倒序），折旧凭证为最新生成——扫描前 3 页按来源类型+期间过滤即可覆盖当月批次
-    for (let p = 1; p <= 3; p++) {
-      const r = await sharingApi.voucherPage({ pageNum: p, pageSize: 100 })
+    // 服务端按「来源族 + 期间」过滤（走 idx_tenant_del_source(tenant_id,del_flag,source_type)）。
+    // 原写法是「扫前 3 页再前端筛」——开发库凭证 0 行时能跑通，客户数据上量后最新 300 张
+    // 全是费用凭证，折旧凭证一张都扫不到，弹窗永远是空的（静默少数据，不是报错）。
+    const pageSize = 100
+    for (let p = 1; p <= 20; p++) {
+      const r = await sharingApi.voucherPage({
+        pageNum: p,
+        pageSize,
+        sourceType: 'ASSET_DEPRECIATION',
+        periodYear: y || undefined,
+        periodMonth: m || undefined,
+      })
       const list = r?.list || []
-      found.push(...list.filter((v) => v.sourceType === 'ASSET_DEPRECIATION'
-        && (!y || Number(v.periodYear) === y) && (!m || Number(v.periodMonth) === m)))
+      found.push(...list)
       const t = Number(r?.total || 0)
-      if (!list.length || (t && p * 100 >= t)) break
+      if (!list.length || (t && p * pageSize >= t)) break
     }
     vouchers.value = found
     if (!found.length) ElMessage.info(t('asset.deprBatch.Depreciation2'))

@@ -1101,6 +1101,7 @@ export default {
       rejectPromptTitle: '商务驳回原因',
       rejectReasonPh: '驳回原因（必填）',
       replaceInvoice: '换票',
+      mailCandidateTruncated: '候选发票较多，当前只显示前一批；如需寄送其余发票请先分批处理或在预制发票页翻页筛选。',
       replaceReasonLabel: '换票原因',
       send: '寄送',
       signReceipt: '签收',

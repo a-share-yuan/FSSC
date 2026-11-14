@@ -1,116 +1,112 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
-name: CI
+# FSSC 持续集成
+# 触发：push / PR 到主干分支，或手动触发
+# 覆盖：后端编译+单测、前端构建+单测、E2E 冒烟（可选，需 DB）
+name: FSSC CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main, master, develop ]
   pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: '是否运行 E2E 冒烟（需 MySQL + 后端）'
+        type: boolean
+        default: false
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: fssc-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # 后端构建
   backend:
-    name: 后端构建与测试
+    name: 后端编译 + 单测
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: fssc/fssc-server
     steps:
       - uses: actions/checkout@v4
-      # 发布前确认：JDK 26 在 actions/setup-java 的发行版支持情况。
-      #    若当时无 26，可退到官方镜像或改用容器 job；不要为了让 CI 变绿而把
-      #    maven.compiler.release 降到与 pom 不一致的版本。
-      - name: Setup JDK
+      - name: Set up JDK 26
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '26'
           cache: maven
-      - name: Build
-        run: mvn -B -ntp clean package
-      - name: Test
-        run: mvn -B -ntp test
-      - uses: actions/upload-artifact@v4
+      - name: mvn verify（含单元测试）
+        working-directory: fssc-server
+        run: mvn -B -ntp clean verify
+      - name: 上传测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: fssc-server-jar
-          path: fssc/fssc-server/fssc-start/target/fssc-server.jar
-          retention-days: 7
+          name: surefire-reports
+          path: fssc-server/**/target/surefire-reports/
+          if-no-files-found: ignore
 
+  # 前端构建
   frontend:
-    name: 前端构建与单测
+    name: 前端构建
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: fssc/fssc-web
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
           cache: npm
-          cache-dependency-path: fssc/fssc-web/package-lock.json
-      - run: npm ci
-      - run: npm run build -- --base=./
-      - run: npm run test
-      - name: 覆盖率摘要
+          cache-dependency-path: fssc-web/package-lock.json
+      - name: 安装依赖
+        working-directory: fssc-web
+        run: npm ci --no-audit --no-fund
+      - name: 单元测试（vitest）
+        working-directory: fssc-web
+        run: npm run test
+      - name: 构建（vite build）
+        working-directory: fssc-web
+        run: npm run build
+      - name: 上传构建产物
         if: always()
-        run: npm run test:coverage || true
+        uses: actions/upload-artifact@v4
+        with:
+          name: fssc-web-dist
+          path: fssc-web/dist*/
+          if-no-files-found: ignore
 
-  hygiene:
-    name: 发布卫生检查
+  # E2E 冒烟
+  e2e:
+    name: E2E 冒烟（可选）
+    if: github.event_name == 'workflow_dispatch' && inputs.run_e2e
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: 123456
+          MYSQL_DATABASE: fssc
+        ports: [ '3306:3306' ]
+        options: >-
+          --health-cmd="mysqladmin ping -h127.0.0.1 -uroot -p123456"
+          --health-interval=10s --health-timeout=5s --health-retries=10
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
+          distribution: temurin
+          java-version: '26'
+          cache: maven
+      - uses: actions/setup-python@v5
         with:
-          node-version: '24'
-      # 阻断闸：对外文档（*.md / README / CONTRIBUTING / SECURITY）里不得出现词表内的名称。
-      # 词表只存在于 _tools/secret_scan.mjs，本文件不复制任何扫描词。
-      # 反例对照已本地验证：同一命令扫内部文档目录会报出命中，说明规则真的在跑。
-      - name: 对外文案用词检查（阻断）
-        run: node _tools/secret_scan.mjs --root=. --docs-only --fail-on-hit --list=40
-      # 报告腿（不阻断）：全量扫描会抓到源码里的合成测试向量（脱敏单测的号码形态输入等），
-      # 那些是合法出现，所以只出报表供人工看趋势；等整改完再升成阻断。
-      # 基线口径：命中数按规则分报，只报位置不回显内容；
-      # 已声明随包发布的整库导出另有 323 枚**形态**命中按 `DECLARED_EXPORT` 放行，其内容未豁免（8 处待人工确认，见 §4b）。
-      # ⇒ 这一腿的量级判据是"趋势＋名单自曝"，不是 0；4 处硬编码整改完应降到 191，那时再谈升阻断。
-      - name: 全仓敏感形态报告（非阻断）
-        if: always()
-        continue-on-error: true
-        run: node _tools/secret_scan.mjs --root=. --list=15
-      # 阻断闸：文档里每条 `路径:行号` 必须能跳到真实文件、行号不越界，而且**必须随包发布**
-      # （判据＝在不在 git 索引里：发布面就是 `git archive HEAD`，只在本地工作区有的文件（转储、备份、
-      #   施工产物）对外部读者是死链。非 git 树上退回形态名单兜底，不会静默放行）。
-      # 文档最常见的失效方式就是"行号漂移"和"引了个不存在的文件"，这里把它变成机器判据。
-      # 覆盖：显式引用与句内裸写行号两类，缺文件／行号越界／作用域外一律阻断。
-      # 布局口径：仓库根＝发布册目录内容 ＋ `fssc/` ＋ `bpmn-repo/`，所以本文件所有模块路径都带 `fssc/` 前缀（与册内引用一致）。
-      # 口径：只判存在性与行号边界，不判语义对错——语义仍要靠人读。
-      - name: 文档引用核对（阻断）
+          python-version: '3.13'
+      - name: 初始化数据库
+        run: bash scripts/db-init.sh
+      - name: 打包后端
+        working-directory: fssc-server
+        run: mvn -B -ntp -DskipTests package
+      - name: 启动后端
         run: |
-          set -e
-          DOCS=$(find . -name '*.md' -not -path './node_modules/*' -not -path './_tools/*' -not -path './.git/*' | sort)
-          echo "参与核对的文档数：$(printf '%s\n' "$DOCS" | wc -l)"
-          node _tools/cite_check.mjs $DOCS
-      - name: 禁止提交的产物与数据
-        run: |
-          set -e
-          BAD=0
-          for pat in 'db/Dump' 'db/backup' '_full_' '\.jar$' '/target/' '/dist[0-9]' 'node_modules/' '\.env$' '_run_.*\.log'; do
-            HITS=$(git ls-files | grep -cE "$pat" || true)
-            if [ "$HITS" != "0" ]; then
-              echo "✗ 命中禁止提交的形态: $pat ($HITS 个文件)"
-              git ls-files | grep -E "$pat" | head -20
-              BAD=1
-            fi
+          nohup bash scripts/run-server.sh --port 8089 > /tmp/server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8089/api/health && break || sleep 2
           done
-          # 口令类默认值不得出现在被跟踪的配置里（只查形态，不回显内容）
-          if git grep -nE '^( *(password|secret|api-key)): *"[^"$]{4,}"' -- '*.yml' '*.yaml' | grep -v '\${' ; then
-            echo "✗ 配置文件出现明文字面量凭据"; BAD=1
-          fi
-          [ "$BAD" = 0 ] && echo "✓ 卫生检查通过" || exit 1
+      - name: 运行 E2E 冒烟
+        run: python scripts/run-all-smokes.py

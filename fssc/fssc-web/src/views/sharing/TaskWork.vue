@@ -230,8 +230,10 @@ async function load() {
 async function openVoucher(row) {
   current.value = row
   try {
-    const vp = await sharingApi.voucherPage({ pageNum: 1, pageSize: 200 })
-    const v = (vp.list || []).find((x) => String(x.billId) === String(row.billId))
+    // 按 billId 直查（走 op_voucher(tenant_id,bill_id) 索引）；原写法取最新 200 张再前端 find，
+    // 客户数据上量后目标凭证不在其中 ⇒ 误判为"未生成凭证"并锁死编辑态
+    const vp = await sharingApi.voucherPage({ pageNum: 1, pageSize: 200, billId: row.billId })
+    const v = (vp.list || []).find((x) => String(x.billId) === String(row.billId)) || (vp.list || [])[0]
     voucherInfo.value = v || null
     readonly.value = v ? v.status === BillStatus.POSTED : false
     editableLines.value = v ? await sharingApi.voucherLines(v.id) : []

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.glex.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -99,7 +96,7 @@ public class GlSalaryRunService {
         run.setDeptId(deptId);
         run.setEmpCount(empCount);
 
-        // 人均标准（租户可配置，参数化替代原先写死的常量）
+        // 人均标准（租户可配置，参数化替代原写死 Mock 常量）
         BigDecimal perSalary = stdAmount("salary.std.basic", "8000.00");
         BigDecimal perDeduction = stdAmount("salary.std.deduction", "200.00");
         BigDecimal perSocial = stdAmount("salary.std.social", "1000.00");

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.image.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -36,12 +33,31 @@ public interface ImgBatchMapper extends BaseMapper<ImgBatch> {
                                         @Param("batchNo") String batchNo);
 
     /**
+     * 按封单状态计数，强制走 {@code idx_ib_tenant_del_seal}。
+     *
+     * <p>2026-11-14 实测：优化器对 {@code del_flag=0 AND seal_status=?} 默认选
+     * {@code idx_ib_tenant_del_biz}（305ms，扫 24.7 万行），只有 FORCE INDEX 才用上
+     * 专用索引（126ms）。故必须提供本方法供 {@code ImageService#countTask} 在
+     * 「仅封单状态筛选」时调用 —— 索引与 SQL 必须成对上线。</p>
+     */
+    @Select("SELECT COUNT(*) FROM img_batch FORCE INDEX (idx_ib_tenant_del_seal) "
+            + "WHERE tenant_id = #{tenantId} AND del_flag = 0 AND seal_status = #{sealStatus}")
+    Long countBySealStatus(@Param("tenantId") Long tenantId, @Param("sealStatus") String sealStatus);
+
+    /**
      * 按业务类型汇总批次：同一枚覆盖索引承载全部五列，免回表。
      * <p>FORCE INDEX 原因同 {@link #countByTenant(Long)}。
+     *
+     * <p><b>2026-11-14 修枚举口径</b>：原判定写的是 {@code review_status='PASSED'} /
+     * {@code seal_status='DONE'}，而代码实际写入的白名单是
+     * {@code PENDING/OK/REJECTED} 与 {@code UNSEALED/SEALED}
+     * （见 {@code ImageService#setReviewStatus}、{@code ImageService#seal}）。
+     * 两个 SUM(CASE WHEN) 因此恒为 0 —— 压测库实有 16.7 万 OK、25 万 SEALED，
+     * 接口却五个 bizType 全报 0，属静默错数，不是性能问题。</p>
      */
     @Select("SELECT biz_type AS bizType, COUNT(*) AS batchCnt, SUM(doc_count) AS totalDocs, "
-            + "SUM(CASE WHEN review_status = 'PASSED' THEN 1 ELSE 0 END) AS reviewedCnt, "
-            + "SUM(CASE WHEN seal_status = 'DONE' THEN 1 ELSE 0 END) AS sealedCnt "
+            + "SUM(CASE WHEN review_status = 'OK' THEN 1 ELSE 0 END) AS reviewedCnt, "
+            + "SUM(CASE WHEN seal_status = 'SEALED' THEN 1 ELSE 0 END) AS sealedCnt "
             + "FROM img_batch FORCE INDEX (idx_ib_tenant_del_biz) "
             + "WHERE tenant_id = #{tenantId} AND del_flag = 0 "
             + "GROUP BY biz_type ORDER BY batchCnt DESC")

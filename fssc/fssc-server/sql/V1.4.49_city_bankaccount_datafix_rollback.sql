@@ -1,0 +1,14 @@
+-- =====================================================================================
+-- V1.4.49 回滚脚本 —— 对应 V1.4.49_city_bankaccount_datafix_seed.sql，全部【注释态】，未执行
+-- 生成时间：2026-10-01 14:3x；仅在种子脚本已真实执行后按需回滚。
+--
+-- §1 回滚 长沙 seed
+-- DELETE FROM md_city WHERE city_code = 'B13' AND city_name = '长沙' AND tenant_id = 1;
+--
+-- §2 回滚 表头行软删（恢复可见——注意这会把缺陷行放回下拉，仅用于种子误执行场景）
+-- UPDATE md_bank_account SET del_flag = 0 WHERE id = 162 AND bank_account = '账号' AND del_flag = 1;
+--
+-- §3 回滚 补默认（按公司把默认清零；公司1/32 的原默认不在种子脚本改动面内，勿一起清）
+-- UPDATE md_bank_account SET is_default = 0
+--  WHERE company_id IN (100, 101, 102, 104) AND is_default = 1;
+-- =====================================================================================

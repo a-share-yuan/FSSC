@@ -1,0 +1,47 @@
+-- =====================================================================================
+-- V1.4.49 主窗只报告族（/212/213）数据轨 —— 全部为【注释态】，本文件未执行
+-- 生成时间：2026-10-01 14:3x（执行前须重跑 §0 只读校验，数据快照随演练推进失效）
+-- 执行人：________（需业务/DBA 书面授权；本修复会话只读，未执行任何 INSERT/UPDATE/DELETE）
+--
+-- 【覆盖缺陷】
+--  md_city 无「长沙」，差旅手册目的地无法录入（分级册 12-07:36）
+--  批次所属公司银行账户零 is_default（分级册 F2:116）
+--  md_bank_account 把表头当数据写入数据库，下拉仍可选「账号」（分级册 F2:117）
+--
+-- §0 现库只读校验（2026-10-01 14:3x 实测，fssc 库，UTF-8）
+--   SELECT COUNT(*) FROM md_city WHERE city_name LIKE '%长沙%';                    -- 实测 0
+--   SELECT city_code FROM md_city WHERE city_code LIKE 'B%' ORDER BY city_code DESC LIMIT 1; -- 实测 B12
+--   SELECT company_id, COUNT(*), SUM(is_default=1) FROM md_bank_account
+--    WHERE del_flag=0 GROUP BY company_id;
+--     -- 实测：各公司默认账户覆盖情况已登记于当期执行记录（数值从略）
+--   SELECT id,account_name,bank_account,account_code FROM md_bank_account WHERE id=162;
+--     -- 实测：162 | 某开户主体 银行账户 | 账号 | AC_账号（表头行仍在库）
+--   执行窗口若上述读数已变化（并行窗可能已补默认），对应语句作废并以新读数重写。
+--
+-- §1 长沙 seed
+--   编码沿现库字母序列（A=一线、B=二线字母序到 B12）⇒ 追加 B13；级别/省份取值沿手册规则，
+--   若业务指定其他编码请改后执行。
+-- INSERT INTO md_city (tenant_id, city_code, city_name, province, city_level, is_abroad, sort, status)
+-- VALUES (1, 'B13', '长沙', '湖南', 'B', 0, 99, 'NORMAL');
+--
+-- §2 表头行清洗（软删，不物理删）
+-- UPDATE md_bank_account SET del_flag = 1
+--  WHERE id = 162 AND bank_account = '账号' AND del_flag = 0;
+--   复验：SELECT COUNT(*) FROM md_bank_account WHERE del_flag=0 AND bank_account LIKE '%账号%'; -- 期望 0
+--
+-- §3 补默认账户（模板——"哪一户是默认"是业务裁决，本会话不代选）
+--   每公司至多一默认（现公司1 默认行 id 以重查为准）。占位 <ACCOUNT_ID> 须由出纳/资金岗点名：
+-- UPDATE md_bank_account SET is_default = 1
+--  WHERE company_id = 100 AND id = <ACCOUNT_ID_100> AND del_flag = 0;
+-- UPDATE md_bank_account SET is_default = 1
+--  WHERE company_id = 101 AND id = <ACCOUNT_ID_101> AND del_flag = 0;
+-- UPDATE md_bank_account SET is_default = 1
+--  WHERE company_id = 102 AND id = <ACCOUNT_ID_102> AND del_flag = 0;
+-- UPDATE md_bank_account SET is_default = 1
+--  WHERE company_id = 104 AND id = <ACCOUNT_ID_104> AND del_flag = 0;
+--   复验：SELECT company_id, SUM(is_default=1) FROM md_bank_account WHERE del_flag=0 GROUP BY company_id
+--         HAVING SUM(is_default=1) <> 1;  -- 期望零行
+--
+-- 【与代码轨的边界】下拉过滤环节（把表头行挡在账户下拉外）属代码面另行处置；
+-- 本文件只覆盖数据三件。
+-- =====================================================================================

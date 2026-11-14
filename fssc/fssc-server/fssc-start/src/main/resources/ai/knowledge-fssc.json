@@ -12377,7 +12377,7 @@
    "docPath": "docs/部署运维.md",
    "title": "部署运维",
    "heading": "部署运维 / 2. 配置项全表（.env）",
-   "text": "| 变量 | 必填 | 默认 | 说明 |\n|---|---|---|---|\n| `FSSC_DB_PASSWORD` | 必填 | 无（fail-fast） | 两库共用口令 |\n| `FSSC_JWT_SECRET` | 必填 | 无（fail-fast） | ≥32 字节；多实例必须同值 |\n| `SPRING_PROFILES_ACTIVE` | | dev | prod 关闭 SQL 日志 |\n| `FSSC_DB_MASTER_URL` / `FSSC_DB_IMAGE_URL` | | 127.0.0.1:3306 | 跨机部署才改 |\n| `FSSC_DB_USERNAME` | | root | |\n| `SERVER_PORT` | | 8089 | |\n| `FSSC_API_TARGET` | | http://127.0.0.1:8089 | 前端 preview 反代目标 |\n| `FSSC_REDIS_ENABLED` | | false | 多实例必须 true |\n| `FSSC_OCR_CHANNEL` | | mock | mock/gateway/paddle/http |\n| `INVOICE_GATEWAY_*` | | — | 发票网关（默认 8096） |\n| `FSSC_BANK_GATEWAY` | | mock | 银企通道 |\n| `FSSC_BPMN_REPO_DIR` | | ./bpmn-repo | 流程模型 git 工作副本 |",
+   "text": "| 变量 | 必填 | 默认 | 说明 |\n|---|---|---|---|\n| `FSSC_DB_PASSWORD` |  | 无（fail-fast） | 两库共用口令 |\n| `FSSC_JWT_SECRET` |  | 无（fail-fast） | ≥32 字节；多实例必须同值 |\n| `SPRING_PROFILES_ACTIVE` | | dev | prod 关闭 SQL 日志 |\n| `FSSC_DB_MASTER_URL` / `FSSC_DB_IMAGE_URL` | | 127.0.0.1:3306 | 跨机部署才改 |\n| `FSSC_DB_USERNAME` | | root | |\n| `SERVER_PORT` | | 8089 | |\n| `FSSC_API_TARGET` | | http://127.0.0.1:8089 | 前端 preview 反代目标 |\n| `FSSC_REDIS_ENABLED` | | false | 多实例必须 true |\n| `FSSC_OCR_CHANNEL` | | mock | mock/gateway/paddle/http |\n| `INVOICE_GATEWAY_*` | | — | 发票网关（默认 8096） |\n| `FSSC_BANK_GATEWAY` | | mock | 银企通道 |\n| `FSSC_BPMN_REPO_DIR` | | ./bpmn-repo | 流程模型 git 工作副本 |",
    "restricted": true,
    "length": 656
   },

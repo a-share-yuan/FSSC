@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -50,7 +47,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.同类产品rentHashMap;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -97,7 +94,7 @@ public class WfQueryService {
      * BPMN 前向可达图缓存，key = modelKey@version（重发布必然升版本，天然失效）。
      * 值为 null 表示"该模型无法建图"（XML 缺失/解析失败/结构异常），按 fail-open 处理＝不做任何 SKIPPED 标注。
      */
-    private final Map<String, FlowGraph> flowGraphCache = new ConcurrentHashMap<>();
+    private final Map<String, FlowGraph> flowGraphCache = new 同类产品rentHashMap<>();
 
     // 实例
 

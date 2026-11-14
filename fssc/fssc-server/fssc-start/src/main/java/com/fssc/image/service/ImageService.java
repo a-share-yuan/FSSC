@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.image.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -12,6 +9,7 @@ import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.facade.event.BillImageEvent;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
+import com.fssc.image.paging.ImagePageKit;
 import com.fssc.image.entity.ImgBatch;
 import com.fssc.image.entity.ImgFile;
 import com.fssc.image.mapper.ImgBatchMapper;
@@ -166,28 +164,84 @@ public class ImageService {
         };
     }
 
-    public List<ImgBatch> batches(String bizType, Long bizId) {
-        return imgBatchMapper.selectList(new LambdaQueryWrapper<ImgBatch>()
-                .eq(bizType != null, ImgBatch::getBizType, bizType)
-                .eq(bizId != null, ImgBatch::getBizId, bizId)
-                .orderByDesc(ImgBatch::getId));
+    /**
+     * 批次清单（下拉选项 / 单据影像回显）。
+     *
+     * <p><b>2026-11-14 压测整改</b>：原先无任何 LIMIT，不传参数会一次拉全表
+     * （{@code fssc_image_perf} 实测 50 万行 / 325MB），客户上量后单请求即可打爆 JVM 堆。
+     * 现由 Controller 钳位后传入 {@code limit}，并强制关键字<b>前缀</b>匹配下推 SQL。</p>
+     *
+     * <p><b>为什么不能直接硬截断</b>：本端点的消费方是 OCR 记录页的批次下拉，
+     * 属于「依赖完整选项」的场景；只加 LIMIT 不提供检索会让第 201 个之后的批次永远选不到，
+     * 且界面毫无提示＝静默少数据。故前端配套改为 {@code remote} + {@code remote-method}
+     * 远程搜索，并读 {@code X-Truncated} 给出「仅显示前 N 条，请输入批次号检索」提示。</p>
+     */
+    public List<ImgBatch> batches(String bizType, Long bizId, String keyword, int limit, long offset) {
+        LambdaQueryWrapper<ImgBatch> w = new LambdaQueryWrapper<ImgBatch>()
+                .eq(bizType != null && !bizType.isBlank(), ImgBatch::getBizType, bizType)
+                .eq(bizId != null, ImgBatch::getBizId, bizId);
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = keyword.trim();
+            w.and(x -> x.likeRight(ImgBatch::getBatchNo, kw)
+                    .or().likeRight(ImgBatch::getBizNo, kw));
+        }
+        w.orderByDesc(ImgBatch::getId);
+        // limit/offset 均由 Controller 的 ListPaging 钳位后传入，是纯整数，无注入面。
+        // 多取一行（pageSize+1）用于探测「是否还有下一页」，由 ListPaging.describe 裁掉。
+        w.last("LIMIT " + limit + " OFFSET " + Math.max(0L, offset));
+        return imgBatchMapper.selectList(w);
     }
 
     /** 影像任务分页：业务类型/单号/封单状态/任务状态/来源 筛选 */
     public PageResult<ImgBatch> taskPage(long pageNum, long pageSize, String bizType, String keyword,
                                          String sealStatus, String status) {
+        int size = ImagePageKit.clampSize(pageSize);
+        Page<ImgBatch> page = ImagePageKit.page(pageNum, size);
+        // 主键倒序即稳定序（id 唯一），无需额外 tiebreaker。
+        Page<ImgBatch> p = imgBatchMapper.selectPage(page,
+                buildTaskFilter(bizType, keyword, sealStatus, status).orderByDesc(ImgBatch::getId));
+        long total = ImagePageKit.total("img_batch/task",
+                () -> countTask(bizType, keyword, sealStatus, status),
+                bizType, keyword, sealStatus, status);
+        return PageResult.of(p.getRecords(), total, pageNum, size);
+    }
+
+    /** 取数与计数共用同一份筛选，避免「共 N 条」与列表口径漂移。每次返回新 wrapper。 */
+    private LambdaQueryWrapper<ImgBatch> buildTaskFilter(String bizType, String keyword,
+                                                         String sealStatus, String status) {
         LambdaQueryWrapper<ImgBatch> w = new LambdaQueryWrapper<>();
         if (bizType != null && !bizType.isBlank()) w.eq(ImgBatch::getBizType, bizType);
         if (sealStatus != null && !sealStatus.isBlank()) w.eq(ImgBatch::getSealStatus, sealStatus);
         if (status != null && !status.isBlank()) w.eq(ImgBatch::getStatus, status);
         if (keyword != null && !keyword.isBlank()) {
-            w.and(x -> x.like(ImgBatch::getBatchNo, keyword)
-                    .or().like(ImgBatch::getBizNo, keyword));
+            // 前缀匹配而非 %kw%：后者无法用索引，50 万行实测 COUNT 1108ms；
+            // 前缀匹配走 batch_no/biz_no 索引，且单号检索本就按开头输入。
+            String kw = keyword.trim();
+            w.and(x -> x.likeRight(ImgBatch::getBatchNo, kw)
+                    .or().likeRight(ImgBatch::getBizNo, kw));
         }
-        w.orderByDesc(ImgBatch::getId);
-        Page<ImgBatch> p =
-                imgBatchMapper.selectPage(Page.of(pageNum, pageSize), w);
-        return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
+        // 不带 ORDER BY：同一份 wrapper 也供 selectCount 复用，计数 SQL 里带排序纯浪费。
+        return w;
+    }
+
+    /**
+     * 单按封单状态计数时走专用 FORCE INDEX。
+     *
+     * <p>2026-11-14 实测：{@code idx_ib_tenant_del_seal} 优化器<b>默认不选</b>
+     * （305ms，仍扫 24.7 万行），只有 FORCE INDEX 才降到 126ms。
+     * 索引与 SQL 必须成对上线，否则那条索引纯写放大、零收益，故在此配平。</p>
+     */
+    private long countTask(String bizType, String keyword, String sealStatus, String status) {
+        boolean sealOnly = sealStatus != null && !sealStatus.isBlank()
+                && (bizType == null || bizType.isBlank())
+                && (keyword == null || keyword.isBlank())
+                && (status == null || status.isBlank());
+        if (sealOnly) {
+            Long n = imgBatchMapper.countBySealStatus(TenantContext.getTenantId(), sealStatus.trim());
+            return n == null ? 0L : n;
+        }
+        Long n = imgBatchMapper.selectCount(buildTaskFilter(bizType, keyword, sealStatus, status));
+        return n == null ? 0L : n;
     }
 
     /** 封单/解锁（封单状态更新） */

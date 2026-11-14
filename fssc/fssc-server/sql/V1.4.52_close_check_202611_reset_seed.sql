@@ -1,0 +1,39 @@
+-- ============================================================================
+-- V1.4.52_close_check_202611_reset_seed.sql
+-- 关联缺陷：R5-D-304（月结检查校验清单对未来期间 202611 已预置全部 DONE ⇒ 校验恒开）
+-- 状态：注释态登记件，未执行。执行权＝月结岗（FIN_GL）人工裁决后放行。
+--
+-- 实测底料（只读盘，.tmp_b16/r984_checkitem_status.txt／r985_checker_face.txt／r982_checkitem.txt）：
+--   fssc.gl_close_check_item 总行 16 行＝202609 组 8 行＋202611 组 8 行；两组 status 全 DONE、
+--   checker／check_time 全非空（202609 勾于 2026-10-01 09:19:27，202611 勾于 2026-10-02 22:33 之后，
+--   company_id=1，create_by=NULL）；**202610 组行数 0**。
+--   代码面：生成端点置 PENDING（GlPeriodOpsController.java:115），只有 /close-check/check 才置 DONE
+--   并写 checker／check_time（:130-133）；月结校验按「缺清单拦截 / 存在非 DONE 行拦截」判定
+--   （GlMonthCloseService.java:289-300）。⇒ 202611 一旦到真月结，校验会被这 8 行 DONE 直接放行。
+--
+-- 判据（执行前必须逐条复算，任一不满足即停）：
+--   ① SELECT COUNT(*) FROM fssc.gl_close_check_item WHERE period='202611' AND del_flag=0;      -- 期望 8
+--   ② SELECT COUNT(*) FROM fssc.gl_close_check_item WHERE period='202611' AND status<>'DONE';  -- 期望 0（本件就是来清 0→8 的反向）
+--   ③ 留值快照（改前必留，作回退底料）：SELECT id,period,item_name,status,checker,check_time,remark
+--        FROM fssc.gl_close_check_item WHERE period='202611' ORDER BY id;
+--
+-- 铁律：零 DELETE、零 DDL、不动 202609 组（那是已真跑办结的历史期间）。
+-- ============================================================================
+
+-- ---- 主体：202611 组 8 项回退为待办结（未执行）----
+-- UPDATE fssc.gl_close_check_item
+--    SET status = 'PENDING',
+--        checker = NULL,
+--        check_time = NULL,
+--        remark = CONCAT(IFNULL(remark,''), ' | R5-D-304 重置：未来期间不得预办结（原 DONE 勾于 2026-10-02）'),
+--        update_time = NOW()
+--  WHERE period = '202611'
+--    AND company_id = 1
+--    AND del_flag = 0
+--    AND status = 'DONE';
+-- -- 影响行数期望 8
+
+-- ---- 后置复点（执行后跑）----
+-- SELECT COUNT(*) AS pending_cnt FROM fssc.gl_close_check_item WHERE period='202611' AND status='PENDING';   -- 期望 8
+-- SELECT COUNT(*) AS done_cnt    FROM fssc.gl_close_check_item WHERE period='202611' AND status='DONE';      -- 期望 0
+-- SELECT COUNT(*) AS gate_blocks FROM fssc.gl_close_check_item WHERE period='202611' AND status<>'DONE';      -- 期望 8 ⇒ 月结校验此时会正确拦截

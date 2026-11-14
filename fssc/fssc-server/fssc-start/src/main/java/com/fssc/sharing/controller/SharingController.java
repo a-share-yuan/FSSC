@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.sharing.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -165,12 +162,18 @@ public class SharingController {
                                                      @RequestParam(required = false) Long companyId,
                                                      @RequestParam(required = false) Integer periodYear,
                                                      @RequestParam(required = false) Integer periodMonth,
+                                                     // 按来源单据直查：六格抽屉/审批工作台/折旧过账弹窗点开某张单据的凭证时传它。
+                                                     // 不传时行为与原来完全一致（仍是全量分页列表）。
+                                                     // 为什么必须给这个口子：前端原先是「取最新一页 + find(billId)」，
+                                                     // 开发库凭证 0 行看不出问题，客户数据上量后目标凭证不在最新 50/200 行里，
+                                                     // 页面会静默显示「未生成凭证」——不报错，但答案是错的。
+                                                     @RequestParam(required = false) Long billId,
                                                      // 表头排序透传（前端 sortable="custom" → orderBy/order）。
                                                      // 缺这两个参数时跨页排序契约断裂：排序仅作用当前页、翻页即丢。
                                                      @RequestParam(required = false) String orderBy,
                                                      @RequestParam(required = false) String order) {
         PageResult<OpVoucher> page = voucherService.page(query.getPageNum(), query.getPageSize(), status, sourceType,
-                companyId, periodYear, periodMonth, orderBy, order);
+                companyId, periodYear, periodMonth, orderBy, order, billId);
         // 读侧打标"资金指令未下发"（payLegUnsettled）——已记账但款未付出的历史付款环节凭证
         // 保持不动账，只在凭证台账明示注记；纯只读，不改 status、不写库、不拦记账（记账校验仍是 assertPaymentLegSettled）。
         voucherAutoPostService.fillPayLegUnsettledFlag(page.getList());

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.document.facade;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -24,6 +21,7 @@ import com.fssc.framework.facade.ArchiveFacade;
 import com.fssc.framework.facade.BillFacade;
 import com.fssc.framework.facade.dto.ArchiveInfoDTO;
 import com.fssc.framework.facade.dto.ArchiveRegisterDTO;
+import com.fssc.framework.paging.CountSnapshot;
 import com.fssc.framework.security.LoginUser;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.tenant.TenantContext;
@@ -420,6 +418,29 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
 
     @Override
     public PageResult<OpArchive> pageArchives(long pageNum, long pageSize, String archiveType, String status) {
+        LambdaQueryWrapper<OpArchive> qw = buildArchiveFilter(archiveType, status);
+        qw.orderByDesc(OpArchive::getId);
+        // searchCount=false + 60 秒快照：档案表（op_archive 65 万行/份，8 份后 580 万行）
+        // 的 COUNT 是无索引可救的 O(N)，而翻页时每页都要重算一次，纯浪费。
+        Page<OpArchive> page = Page.of(pageNum, pageSize);
+        page.setSearchCount(false);
+        Page<OpArchive> p = opArchiveMapper.selectPage(page, qw);
+        long total = CountSnapshot.of(
+                "op_archive|" + TenantContext.getTenantId() + "|" + CountSnapshot.scopeFingerprint()
+                        + "|" + (archiveType == null ? "-" : archiveType.trim())
+                        + "|" + (status == null ? "-" : status.trim()),
+                () -> opArchiveMapper.selectCount(buildArchiveFilter(archiveType, status)));
+        archiveService.enrichFlowKey(p.getRecords());   // 补归档流号（列表端点统一挂）
+        return PageResult.of(p.getRecords(), total, pageNum, pageSize);
+    }
+
+    /**
+     * 档案列表筛选条件（取数与计数共用，避免「共 N 条」与列表口径漂移）。
+     *
+     * <p>入参名沿用前端的 status，但判定列改按真相源 {@code archive_status}
+     * （见 {@link #toArchiveStatusAxis}）。</p>
+     */
+    private LambdaQueryWrapper<OpArchive> buildArchiveFilter(String archiveType, String status) {
         LambdaQueryWrapper<OpArchive> qw = new LambdaQueryWrapper<>();
         if (archiveType != null && !archiveType.isBlank()) {
             qw.eq(OpArchive::getArchiveType, archiveType);
@@ -429,10 +450,7 @@ public class ArchiveFacadeImpl implements ArchiveFacade {
             // 传 ARCHIVED/PENDING/ARCHIVING/DISPOSED 按归档流程轴筛；兼容老调用方传保管轴取值（FILED/DESTROYED）。
             qw.eq(OpArchive::getArchiveStatus, toArchiveStatusAxis(status));
         }
-        qw.orderByDesc(OpArchive::getId);
-        Page<OpArchive> p = opArchiveMapper.selectPage(Page.of(pageNum, pageSize), qw);
-        archiveService.enrichFlowKey(p.getRecords());   // 补归档流号（列表端点统一挂）
-        return PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize);
+        return qw;
     }
 
     /** 保管轴取值 → 归档流程轴取值的兼容折算（FILED→ARCHIVED、DESTROYED→DISPOSED，其余原样） */

@@ -29,8 +29,15 @@ const H = vi.hoisted(() => {
 vi.mock('@/api', () => {
   const noop = () => Promise.resolve({ code: 0, data: null })
   return {
-    // 用 getter 暴露 user，使测试改 H.user.perms 后组件在 setup 期读到最新权限
-    store: { token: 'T', get user() { return H.user }, logout() {} },
+    // 用 getter 暴露 user，使测试改 H.user.perms 后组件在 setup 期读到最新权限。
+    // features 兜底给「流程中心」特性码：模型列表现在按版本特性码过滤
+    // （modelVisibleForEdition），没有该码时任何模型都进不了列表，
+    // 首屏链路根本不会触发，本文件所有「应调用」断言都会假红。
+    store: {
+      token: 'T',
+      get user() { return { ...H.user, features: H.user.features || ['FSSC_WF_CENTER'] } },
+      logout() {},
+    },
     backend: { online: true, msg: '' },
     onBackendChange: () => {},
     http: { get: noop, post: noop, put: noop, delete: noop },

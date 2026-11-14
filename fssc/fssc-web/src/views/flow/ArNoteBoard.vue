@@ -307,8 +307,10 @@ async function doRegister() {
 onMounted(load)
 
 // required 原先只画红星、提交时不拦；补上真校验
+// 必须走 commonRules：接收人是下拉、值为用户 ID，写 { required, message, trigger }
+// 会让 async-validator 改走 string 校验器，选中后仍判非法 ⇒ 永远提交不过
 const handoverRules = {
-  handoverUserId: [{ required: true, message: '请选择接收人', trigger: 'change' }],
+  handoverUserId: commonRules.select('请选择接收人'),
 }
 </script>
 

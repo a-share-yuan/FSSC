@@ -79,8 +79,12 @@ async function loadVoucher() {
   if (!props.selected.voucherNo) { ElMessage.info(t('expense.voucher.errNoVoucher')); return }
   loading.value = true
   try {
-    const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50 })).list || []
-    const v = list.find((x) => x.billId === props.selected.id) || list.find((x) => x.voucherNo === props.selected.voucherNo)
+    // 按 billId 直查（后端走 op_voucher(tenant_id,bill_id) 索引）。
+    // 原写法取最新 50 张全租户凭证再前端 find：开发库凭证 0 行时是"对的"，
+    // 客户数据上量后目标凭证不在最新 50 张里，页签会静默显示为空。
+    const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50, billId: props.selected.id })).list || []
+    const v = list.find((x) => String(x.billId) === String(props.selected.id))
+      || (props.selected.voucherNo ? list.find((x) => x.voucherNo === props.selected.voucherNo) : null)
     if (v) {
       Object.assign(voucher, v)
       voucherLines.value = await sharingApi.voucherLines(v.id)
@@ -92,8 +96,8 @@ async function postVoucher() {
   try {
     await sharingApi.voucherPost(voucher.id)
     ElMessage.success(t('expense.voucher.stPosted'))
-    const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50 })).list || []
-    const v = list.find((x) => x.id === voucher.id)
+    const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50, billId: props.selected?.id })).list || []
+    const v = list.find((x) => String(x.id) === String(voucher.id)) || list[0]
     if (v) Object.assign(voucher, v)
   } catch (e) { ElMessage.error(e.message) }
 }

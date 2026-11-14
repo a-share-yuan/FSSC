@@ -110,6 +110,10 @@
           </el-select>
         </div>
       </template>
+      <!-- 服务端对本端点加了取数上限：截断时必须显式提示，
+           否则本地分页器的「共 N 条」会被误读成全量，导出的 CSV 也会静默不完整。 -->
+      <el-alert v-if="itemsTruncated" type="warning" show-icon :closable="false" style="margin-bottom:6px"
+        title="明细较多，当前仅显示前一批；可按未达类型或月份缩小范围后再查" />
       <SkeletonList v-if="itemsLoading" :rows="8" :cols="5" />
       <el-table :data="itemsPager.pagedData" v-else size="small" max-height="420" v-loading="itemsLoading" empty-text="暂无数据" @selection-change="handleSelectionChange" @row-dblclick="openRowDetail">
         <el-table-column type="selection" width="45" />
@@ -141,7 +145,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { p2Api, masterApi } from '../../api'
+import { p2Api, masterApi, readPaging } from '../../api'
 import SkeletonList from '../../components/SkeletonList.vue'
 import BillTraceDrawer from '../../components/BillTraceDrawer.vue'
 import { formatDate, formatDateTime, showRowDetail } from '@/utils/format'
@@ -168,6 +172,8 @@ const itemsVisible = ref(false)
 const items = ref([])
 const itemsLoading = ref(false)
 const itemsType = ref('')
+// 服务端加了取数上限（X-Truncated＝本页不是全部）
+const itemsTruncated = ref(false)
 // 未达账明细追溯弹窗列表本地分页（数据量大时避免一次性渲染上百行 DOM）
 const itemsPager = useTablePager({ mode: 'local' })
 
@@ -199,11 +205,13 @@ async function loadItems() {
   itemsLoading.value = true
   itemsVisible.value = true
   try {
-    items.value = await p2Api.bankReconItems({
+    const list = await p2Api.bankReconItems({
       bankAccountId: bankAccountId.value,
       month: month.value || '',
       itemType: itemsType.value || null,
     })
+    items.value = list || []
+    itemsTruncated.value = readPaging(list).truncated
     if (!items.value.length) ElMessage.info(t('bank.reconcileSheet.No'))
     itemsPager.setSource(items.value)
   } catch (e) { ElMessage.error(e.message) } finally { itemsLoading.value = false }

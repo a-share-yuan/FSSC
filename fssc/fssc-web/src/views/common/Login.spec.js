@@ -47,6 +47,19 @@ describe('Login.vue 组件测试', () => {
     expect(html).toContain('请输入登录密码')
   })
 
+  // 单测环境把 el-input 打了桩，v-model 值不渲染成 DOM 属性；
+  // 输入框里的预填值由真实浏览器脚本覆盖，这里校验更关键的契约：默认值确实随登录请求提交。
+  it('企业编码默认预填 DEMO1，登录请求直接带上', async () => {
+    login.mockResolvedValue({
+      token: 'T-E2E-4', opMode: 'SHARED',
+      user: { userId: 12, realName: '默认编码', perms: ['dashboard:view'] },
+    })
+    const w = mount(Login)
+    await w.find('.submit-btn').trigger('click')
+    await flushPromises()
+    expect(login.mock.calls[0][0]).toMatchObject({ tenantCode: 'DEMO1', subjectType: 'TENANT' })
+  })
+
   it('登录按钮存在且默认不是 loading', () => {
     const w = mount(Login)
     const btn = w.find('.submit-btn')
@@ -56,7 +69,10 @@ describe('Login.vue 组件测试', () => {
 
   it('登录成功：写入 token/user 并跳转 /dashboard', async () => {
     // USG-01 权限分流：带 dashboard:view 权限才落报表看板
-    login.mockResolvedValue({ token: 'T-E2E-1', user: { userId: 9, realName: '测试', perms: ['dashboard:view'] } })
+    login.mockResolvedValue({
+      token: 'T-E2E-1', opMode: 'SHARED',
+      user: { userId: 9, realName: '测试', perms: ['dashboard:view'] },
+    })
     const w = mount(Login)
     await w.find('.submit-btn').trigger('click')
     await flushPromises()
@@ -69,11 +85,25 @@ describe('Login.vue 组件测试', () => {
   })
 
   it('登录成功：无 dashboard:view 权限落地工作台（USG-01 分流）', async () => {
-    login.mockResolvedValue({ token: 'T-E2E-2', user: { userId: 10, realName: '普通员工', perms: ['workbench:view'] } })
+    login.mockResolvedValue({
+      token: 'T-E2E-2', opMode: 'SHARED',
+      user: { userId: 10, realName: '普通员工', perms: ['workbench:view'] },
+    })
     const w = mount(Login)
     await w.find('.submit-btn').trigger('click')
     await flushPromises()
     expect(pushMock).toHaveBeenCalledWith('/workbench')
+  })
+
+  it('装配档为空：登录成功先去选档 /onboard', async () => {
+    login.mockResolvedValue({
+      token: 'T-E2E-3', opMode: '',
+      user: { userId: 11, realName: '待选档', perms: ['dashboard:view'] },
+    })
+    const w = mount(Login)
+    await w.find('.submit-btn').trigger('click')
+    await flushPromises()
+    expect(pushMock).toHaveBeenCalledWith('/onboard')
   })
 
   it('登录失败：展示后端返回的错误信息，不写入 token', async () => {

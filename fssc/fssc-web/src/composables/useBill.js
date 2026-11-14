@@ -1090,15 +1090,19 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     // 必须有 catch（否则接口报错只留控制台异常、界面停在空预览），
     // 且台账首页 50 条查不到时静默失明——空态文案还反向误导（让用户"去选带凭证号的单据"，可他已经选了）
     try {
-      const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50 })).list || []
-      const v = list.find((x) => x.billId === row.id) || list.find((x) => x.voucherNo === row.voucherNo)
+      // 按 billId 直查（后端走 op_voucher(tenant_id,bill_id) 索引，常数级）。
+      // 原写法是「取台账最新 50 张 + 前端 find」：开发库凭证 0 行时看不出问题，
+      // 客户数据上量后目标凭证根本不在最新 50 张里，于是静默失明 + 弹出误导性提示。
+      const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50, billId: row.id })).list || []
+      const v = list.find((x) => String(x.billId) === String(row.id))
+        || list.find((x) => x.voucherNo === row.voucherNo)
       if (v) {
         Object.assign(voucher, v)
         voucherLines.value = await sharingApi.voucherLines(v.id)
       } else {
         voucher.id = null
         voucherLines.value = []
-        ElMessage.warning(`${i18n.global.t('useBill.main.Voucher')} ${row.voucherNo} 未出现在凭证台账首页，请到「凭证」台账按期间翻查`)
+        ElMessage.warning(`${i18n.global.t('useBill.main.Voucher')} ${row.voucherNo} 未查到该单据的凭证记录，请确认凭证是否已生成`)
       }
     } catch (e) { if (e?.message) ElMessage.error(e.message) }
   }
@@ -1106,8 +1110,9 @@ applyUserName: store.user?.realName || store.user?.nickName || store.user?.usern
     try {
       await sharingApi.voucherPost(voucher.id)
       ElMessage.success('已记账')
-      const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50 })).list || []
-      const v = list.find((x) => x.id === voucher.id)
+      // 同样按 billId 回查，避免"过账成功但界面仍旧态"
+      const list = (await sharingApi.voucherPage({ pageNum: 1, pageSize: 50, billId: selected.value?.id })).list || []
+      const v = list.find((x) => String(x.id) === String(voucher.id)) || list[0]
       if (v) Object.assign(voucher, v)
     } catch (e) { ElMessage.error(e.message) }
   }

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.image.controller;
 
 import com.fssc.common.core.PageQuery;
@@ -13,11 +10,13 @@ import com.fssc.framework.facade.BillFacade;
 import com.fssc.framework.facade.ImageFacade;
 import com.fssc.framework.facade.dto.BillArchiveDTO;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.paging.ListPaging;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.image.entity.ImgBatch;
 import com.fssc.image.entity.ImgFile;
 import com.fssc.image.service.ImageService;
 import com.fssc.image.service.OcrService;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -131,11 +130,29 @@ public class ImageController {
         }
     }
 
+    /**
+     * 批次清单（OCR 记录页的批次下拉等）。
+     *
+     * <p><b>2026-11-14 压测整改</b>：原实现无 LIMIT，不传参数一次拉 50 万行。
+     * 现按 {@link ListPaging} 契约钳位为 1..500、默认 200，多取一行探测下一页，
+     * 元数据走 {@code X-Page-*} / {@code X-Truncated}，载荷仍是数组（前端消费方不变）。</p>
+     *
+     * <p><b>不能只加 LIMIT</b>：下拉依赖完整选项，故同时提供 {@code keyword} 前缀检索，
+     * 前端改 {@code remote} 远程搜索；有截断时前端必须提示「请输入批次号继续检索」，
+     * 否则又是静默少数据。</p>
+     */
     @RequiresPerm("image:batch:list")
     @GetMapping("/batch/list")
     public Result<List<ImgBatch>> batches(@RequestParam(required = false) String bizType,
-                                          @RequestParam(required = false) Long bizId) {
-        return Result.success(imageService.batches(bizType, bizId));
+                                          @RequestParam(required = false) Long bizId,
+                                          @RequestParam(required = false) String keyword,
+                                          @RequestParam(required = false) String pageNum,
+                                          @RequestParam(required = false) String pageSize,
+                                          HttpServletResponse response) {
+        ListPaging pg = ListPaging.of(pageNum, pageSize);
+        List<ImgBatch> rows = imageService.batches(bizType, bizId, keyword,
+                pg.pageSize() + 1, pg.offset());
+        return Result.success(pg.describe(rows, response));
     }
 
     // 影像任务（创建/查询/封单/状态）

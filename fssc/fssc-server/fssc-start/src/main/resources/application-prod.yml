@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 # 生产 profile（发布腿新增）
 #
 # 启用方式（不改 application.yml 里的 spring.profiles.active，dev 起跑口径维持现状）：

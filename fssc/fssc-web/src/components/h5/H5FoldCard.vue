@@ -1,6 +1,3 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
-<!-- Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE) -->
-
 <!--
   移动端可折叠卡片：H5 审批详情/提单页整屏是七八段卡片顺排，整页要滚五六屏才到底，
   办理按钮虽吸底但"看单据"本身很累。本组件把每段收成一行标题，默认只展开第一段，

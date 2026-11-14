@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.image.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -15,6 +12,7 @@ import com.fssc.framework.datasource.FsscDataSource;
 import com.fssc.framework.log.OperLog;
 import com.fssc.framework.security.UserContext;
 import com.fssc.framework.security.annotation.RequiresPerm;
+import com.fssc.image.paging.ImagePageKit;
 import com.fssc.image.entity.ImgBatch;
 import com.fssc.image.entity.ImgException;
 import com.fssc.image.entity.ImgReview;
@@ -51,14 +49,25 @@ public class ImageReviewController {
     @RequiresPerm("image:review")
     @GetMapping("/review/page")
     public Result<PageResult<ImgReview>> reviewPage(PageQuery q, String status, String keyword) {
+        int size = ImagePageKit.clampSize(q.getPageSize());
+        Page<ImgReview> page = ImagePageKit.page(q.getPageNum(), size);
+        Page<ImgReview> p = reviewMapper.selectPage(page,
+                reviewFilter(status, keyword).orderByDesc(ImgReview::getId));
+        long total = ImagePageKit.total("img_review/page",
+                () -> reviewMapper.selectCount(reviewFilter(status, keyword)), status, keyword);
+        return Result.success(PageResult.of(p.getRecords(), total, q.getPageNum(), size));
+    }
+
+    /** 取数与计数共用同一筛选；每次新建，避免 selectPage 改写 wrapper 影响 COUNT。 */
+    private LambdaQueryWrapper<ImgReview> reviewFilter(String status, String keyword) {
         LambdaQueryWrapper<ImgReview> w = new LambdaQueryWrapper<>();
         if (status != null && !status.isBlank()) w.eq(ImgReview::getReviewStatus, status);
         if (keyword != null && !keyword.isBlank()) {
-            w.and(x -> x.like(ImgReview::getBatchNo, keyword).or().like(ImgReview::getBizNo, keyword));
+            String kw = keyword.trim();
+            // 前缀匹配：%kw% 无法用索引，单号检索本就按开头输入。
+            w.and(x -> x.likeRight(ImgReview::getBatchNo, kw).or().likeRight(ImgReview::getBizNo, kw));
         }
-        w.orderByDesc(ImgReview::getId);
-        Page<ImgReview> p = reviewMapper.selectPage(Page.of(q.getPageNum(), q.getPageSize()), w);
-        return Result.success(PageResult.of(p.getRecords(), p.getTotal(), q.getPageNum(), q.getPageSize()));
+        return w;
     }
 
     /** 影像评价合法动作（与前端 evaluate 调用同一规则） */
@@ -142,11 +151,19 @@ public class ImageReviewController {
     @RequiresPerm("image:review")
     @GetMapping("/exception/page")
     public Result<PageResult<ImgException>> exceptionPage(PageQuery q, String status) {
+        int size = ImagePageKit.clampSize(q.getPageSize());
+        Page<ImgException> page = ImagePageKit.page(q.getPageNum(), size);
+        Page<ImgException> p = exceptionMapper.selectPage(page,
+                exceptionFilter(status).orderByDesc(ImgException::getId));
+        long total = ImagePageKit.total("img_exception/page",
+                () -> exceptionMapper.selectCount(exceptionFilter(status)), status);
+        return Result.success(PageResult.of(p.getRecords(), total, q.getPageNum(), size));
+    }
+
+    private LambdaQueryWrapper<ImgException> exceptionFilter(String status) {
         LambdaQueryWrapper<ImgException> w = new LambdaQueryWrapper<>();
         if (status != null && !status.isBlank()) w.eq(ImgException::getStatus, status);
-        w.orderByDesc(ImgException::getId);
-        Page<ImgException> p = exceptionMapper.selectPage(Page.of(q.getPageNum(), q.getPageSize()), w);
-        return Result.success(PageResult.of(p.getRecords(), p.getTotal(), q.getPageNum(), q.getPageSize()));
+        return w;
     }
 
     @RequiresPerm("image:review")

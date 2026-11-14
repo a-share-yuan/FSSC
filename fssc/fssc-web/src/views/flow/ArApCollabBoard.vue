@@ -201,7 +201,8 @@
     <el-dialog v-model="invWbVisible" :title="$t('flow.collab.actInvWriteBack')" width="460px" destroy-on-close>
       <el-form label-width="90px" size="small" :model="{ invWbId }" :rules="invWbRules">
         <el-form-item :label="$t('flow.collab.colPreInvNo')" required prop="invWbId">
-          <el-select v-model="invWbId" filterable :placeholder="$t('flow.collab.phPickPreInv')" style="width: 100%">
+          <el-select v-model="invWbId" filterable remote :remote-method="searchPreInvoices"
+            :loading="preInvLoading" :placeholder="$t('flow.collab.phPickPreInv')" style="width: 100%">
             <el-option v-for="p in preInvoiceOptions" :key="p.id" :value="p.id"
               :label="`${p.preInvoiceNo}（${p.customerName || ''}）`" />
           </el-select>
@@ -308,6 +309,7 @@ const inputVisible = ref(false)
 const invWbVisible = ref(false)
 const invWbId = ref(null)
 const preInvoiceOptions = ref([])
+const preInvLoading = ref(false)
 const current = ref(null)
 const form = reactive({})
 const createFormRef = ref(null)
@@ -618,12 +620,28 @@ async function openInvoiceWb() {
   current.value = null
   invWbId.value = null
   preInvoiceOptions.value = []
+  await searchPreInvoices('')
+  invWbVisible.value = true
+}
+
+/**
+ * 预制发票候选：远程搜索。
+ *
+ * <p>后端对本端点加了取数上限（默认 200 条/页）——预制发票是逐笔生成的，租户量大时上万张，
+ * 一次性塞进下拉既慢又选不全。改为按关键字远程检索（后端 keyword 支持预制发票号/对账单号/客户名），
+ * 用户输入即可定位任意一张票。</p>
+ */
+async function searchPreInvoices(kw) {
+  preInvLoading.value = true
   try {
-    preInvoiceOptions.value = (await arFlowApi.preInvoices({ status: 'INVOICED' })) || []
+    preInvoiceOptions.value = (await arFlowApi.preInvoices({
+      status: 'INVOICED', keyword: kw || undefined, pageSize: 50
+    })) || []
   } catch (e) {
     ElMessage.error(e.message)
+  } finally {
+    preInvLoading.value = false
   }
-  invWbVisible.value = true
 }
 
 async function doInvoiceWb() {
@@ -650,8 +668,10 @@ onMounted(() => {
 })
 
 // required 原先只画红星、提交时不拦；补上真校验
+// 必须走 commonRules：invWbId 是远程下拉、值是数字 ID，写 { required, message, trigger }
+// 会让 async-validator 改走 string 校验器，选中后仍判非法 ⇒ 永远提交不过
 const invWbRules = {
-  invWbId: [{ required: true, message: '请选择预制发票', trigger: 'change' }],
+  invWbId: commonRules.select('请选择预制发票'),
 }
 </script>
 

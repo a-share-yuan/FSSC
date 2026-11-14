@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 # 告警规则（错误率/时延/堆内存/连接池/任务失败）
 groups:
   - name: fssc-core

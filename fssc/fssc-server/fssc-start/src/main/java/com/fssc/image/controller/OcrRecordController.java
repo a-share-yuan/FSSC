@@ -1,11 +1,9 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.image.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fssc.image.paging.ImagePageKit;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
 import com.fssc.framework.datasource.FsscDataSource;
@@ -43,10 +41,14 @@ public class OcrRecordController {
             @RequestParam(defaultValue = "20") long pageSize,
             @RequestParam(required = false) Long batchId,
             @RequestParam(required = false) String invoiceNo) {
-        IPage<OcrRecordVO> p =
-            ocrRecordMapper.selectPageWithRelations(Page.of(pageNum, pageSize), batchId, invoiceNo);
+        int size = ImagePageKit.clampSize(pageSize);
+        // 分页插件的自动 COUNT 在 40 万行 ocr_record 上平均 116ms 且每页重算 ⇒ 关掉，总数走 60 秒快照。
+        Page<OcrRecordVO> page = ImagePageKit.page(pageNum, size);
+        IPage<OcrRecordVO> p = ocrRecordMapper.selectPageWithRelations(page, batchId, invoiceNo);
         fillFileNames(p.getRecords());
-        return Result.success(PageResult.of(p.getRecords(), p.getTotal(), pageNum, pageSize));
+        long total = ImagePageKit.total("ocr_record/page",
+                () -> ocrRecordMapper.countWithRelations(batchId, invoiceNo), batchId, invoiceNo);
+        return Result.success(PageResult.of(p.getRecords(), total, pageNum, size));
     }
 
     /** 文件名在 master 库的 sys_file（本类路由在 image 库）⇒ 单列回填，不要跨库 JOIN */

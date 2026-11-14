@@ -1,0 +1,121 @@
+-- ============================================================================
+-- V1.4.45 F5 驳回级次逐节点收紧 + 重提跳回 —— 配置 seed（全部注释态，未执行）
+-- 生成时刻：2026-09-26；数据来源：fssc 库只读普查（mysql -N -e SELECT，零写入）
+-- 方案：流程引擎问题修复方案_20260926.md §6（F5）；裁决项：RA-F5a（打开自由驳回总开关并灰度 1 条链，建议先 CLAIM）
+--
+-- 本文件在本轮演练中【一行都没有执行】。铁律：演练期 MySQL SELECT-only。
+--    开启前必须由业务方裁决 RA-F5a；"驳回到指定节点"会调用 Flowable moveActivityIdTo（搬执行），
+--    属破坏性能力，一旦目标选错会把在办任务搬到错误岗位，因此三道校验缺一不放行。
+-- ============================================================================
+
+-- ---------- 0) 只读普查快照（2026-09-26 18:5x 实测，mysql -N -e）----------
+-- wf_node_config（del_flag=0）总数        = 355 行
+-- reject_scope 现值                       = ANY_DONE 355/355（唯一取值，即"全库一个值"＝本文件要取消的状态）
+-- resubmit_jump_back 现值                 = 0 355/355（全库未启用，配置面已存在但从未被读＝体检 E-05 规则的假配置）
+-- sys_config 既有键 wf.reject.free.enabled = 1 行（id=62，tenant_id=1，config_value='0'，总开关已存在但关着）
+-- sys_config 缺失键                        = wf.reject.free.models / wf.resubmit.jumpback.enabled / wf.resubmit.jumpback.models（0 行）
+--   ⇒ 代码缺省＝fail-closed：总开关不为 '1' 直接关；灰度清单为空即使总开关为 '1' 也一行都不生效。
+--
+-- 四档分桶（互斥且穷尽，39+4+71+241=355，与总数逐字对齐）：
+--   [NONE]      39 行 —— sort=1 的链首节点。链首之前没有"上一已完成节点"可退，级次选择无意义；
+--                      普通驳回（退回提单人）不走本通道，保持原样。
+--   [NONE]       4 行 —— sort<>1 且 multi_type IN (ALL,SEQ,VOTE) 的会签节点，id 明细：
+--                      1445 FM_DESTROY Task_3（共享主管审核账面与档案一致性）
+--                      1580 GL_MONTH_CLOSE Task_9（制造费用分配复核）
+--                      1597 INVOICE_MATCH Task_9（FSSC稽核核算岗终审）
+--                      1644 SETTLE Task_11（财务总监审核）
+--                      原因：执行面校验②要求"实例在办任务恰好 1 条"，会签节点必然 >1 条 ⇒ 预览给出候选却必定失败。
+--                      把档位配成 NONE 是让预览与执行面同源（不在会签上造第二个假开关）。
+--   [ANY_DONE]  71 行 —— 资金链模型的"非链首、非会签"节点（钱已出门的环节，退回任一环最省返工）：
+--                      GL_OFFSET=3 GL_OTHER_RECEIPT=3 GL_SALARY_PAY=5 GL_TAX_PAY=3 LOAN=11
+--                      PAY_PLAN_BASE=4 PAY_PLAN_PLATE=7 PREPAY=7 RECEIVABLE_COLLECT=3 REPAY=2
+--                      SETTLE=10 TR_PAY=8 TR_PAY_FAIL=1 TR_TRANSFER=4（合计 71）
+--   [PREV_ONE] 241 行 —— 其余全部业务节点（费用/资产/档案/发票/往来…）：只允许退回紧邻上一已完成节点，
+--                      不允许跨部门乱退。含灰度链 CLAIM 的 12 行（CLAIM 无 sort=1 配置行，首档为 Task_2 sort=2）。
+--
+-- 前置校验（必须返回一行 39|4|71|241|355|ANY_DONE，否则本文件禁止整批执行，改用 id 白名单重做）：
+-- SELECT CONCAT(SUM(sort=1),'|',SUM(sort<>1 AND multi_type IN ('ALL','SEQ','VOTE')),'|',
+--   SUM(sort<>1 AND NOT(multi_type IN ('ALL','SEQ','VOTE')) AND model_key IN ('TR_PAY','TR_PAY_FAIL','SETTLE','PREPAY','PAY_PLAN_BASE','PAY_PLAN_PLATE','GL_SALARY_PAY','GL_TAX_PAY','GL_OTHER_RECEIPT','GL_OFFSET','LOAN','REPAY','RECEIVABLE_COLLECT','TR_TRANSFER')),'|',
+--   SUM(sort<>1 AND NOT(multi_type IN ('ALL','SEQ','VOTE')) AND model_key NOT IN ('TR_PAY','TR_PAY_FAIL','SETTLE','PREPAY','PAY_PLAN_BASE','PAY_PLAN_PLATE','GL_SALARY_PAY','GL_TAX_PAY','GL_OTHER_RECEIPT','GL_OFFSET','LOAN','REPAY','RECEIVABLE_COLLECT','TR_TRANSFER')),'|',COUNT(*),'|',GROUP_CONCAT(DISTINCT reject_scope))
+--   FROM wf_node_config WHERE del_flag=0;
+
+-- ---------- 1) sys_config：新增三枚灰度键（取值＝与改造前逐字一致，全关）----------
+-- tenant_id 必须是 1：sys_config 走租户拦截器（WHERE tenant_id=<当前租户>），插 NULL/0 的行永远读不到＝假配置。
+--    列名规则对齐 V1.4.42/43/44：名称列是 config_name，无 config_desc；唯一键 uk_tenant_config_key(tenant_id,config_key)。
+-- INSERT IGNORE INTO sys_config (tenant_id, config_key, config_name, value_type, group_code, config_value, is_builtin, editable, remark)
+-- VALUES
+--  (1,'wf.reject.free.models','自由驳回逐链灰度白名单（model_key 逗号分隔，空＝即使总开关=1 也全库不生效）','STRING','WORKFLOW','',
+--     0,1,'F5（方案 §6 步骤 3）。改造前放开条件只有「总开关 ∧ 节点档位」两把锁：实测现网 355/355 节点档位都是 ANY_DONE，'
+--        '单开总开关会一次性放开 355 行，与方案要求的「灰度到 1 条链」不可调和 ⇒ 补第三把锁（逐链白名单，fail-closed）。'),
+--  (1,'wf.resubmit.jumpback.enabled','重新提交跳回被驳回节点总开关（1=允许搬执行，0=一律按全链重走）','BOOL','WORKFLOW','0',
+--     0,1,'F5-②（方案 §6 步骤 5）。搬执行前有六道校验（总开关/节点列/金额未变/旧路由对账/可达性/非会签），任一不过即降级为全链重走并记日志。'),
+--  (1,'wf.resubmit.jumpback.models','重提跳回逐链灰度白名单（model_key 逗号分隔，空＝全库不跳回）','STRING','WORKFLOW','',
+--     0,1,'与上面两枚键同一 fail-closed 范式；跳回会让「提单人重提」这一步直接落到被驳回节点，跳过中间已完成环节，'
+--        '影响的是审批链完整性 ⇒ 单独一把锁，可与自由驳回分别开关（驳回放开不等于跳回放开）。');
+
+-- ---------- 2) 逐节点收紧 reject_scope（取消"全库一个值"）----------
+-- 执行顺序即下列编号：前三条按桶精确命中，第四条是"其余全部"默认处理 ⇒ 四条都去重，重复执行结果不变。
+-- 每条都带原值守卫（AND reject_scope='ANY_DONE'）：只改普查时确认为 ANY_DONE 的行，
+-- 若期间有人手工调过某节点档位，本语句会跳过它而不是覆盖成默认值。
+
+-- 2-1) 链首 39 行 → NONE
+-- UPDATE wf_node_config SET reject_scope='NONE', update_time=NOW()
+--  WHERE del_flag=0 AND sort=1 AND reject_scope='ANY_DONE';
+
+-- 2-2) 会签（非链首）4 行 → NONE
+-- UPDATE wf_node_config SET reject_scope='NONE', update_time=NOW()
+--  WHERE del_flag=0 AND sort<>1 AND multi_type IN ('ALL','SEQ','VOTE') AND reject_scope='ANY_DONE';
+
+-- 2-3) 资金链（非链首、非会签）71 行 → ANY_DONE（现值已是 ANY_DONE，本条实际影响 0 行；写出来是为了把"这一档是选定的、不是漏改的"钉进变更集）
+-- UPDATE wf_node_config SET reject_scope='ANY_DONE', update_time=NOW()
+--  WHERE del_flag=0 AND sort<>1 AND multi_type NOT IN ('ALL','SEQ','VOTE')
+--    AND model_key IN ('TR_PAY','TR_PAY_FAIL','SETTLE','PREPAY','PAY_PLAN_BASE','PAY_PLAN_PLATE',
+--                      'GL_SALARY_PAY','GL_TAX_PAY','GL_OTHER_RECEIPT','GL_OFFSET','LOAN','REPAY',
+--                      'RECEIVABLE_COLLECT','TR_TRANSFER')
+--    AND reject_scope='ANY_DONE';
+
+-- 2-4) 其余 241 行 → PREV_ONE（默认处理桶：非链首、非会签、不在资金链清单内）
+-- UPDATE wf_node_config SET reject_scope='PREV_ONE', update_time=NOW()
+--  WHERE del_flag=0 AND sort<>1
+--    AND (multi_type IS NULL OR multi_type NOT IN ('ALL','SEQ','VOTE'))
+--    AND model_key NOT IN ('TR_PAY','TR_PAY_FAIL','SETTLE','PREPAY','PAY_PLAN_BASE','PAY_PLAN_PLATE',
+--                          'GL_SALARY_PAY','GL_TAX_PAY','GL_OTHER_RECEIPT','GL_OFFSET','LOAN','REPAY',
+--                          'RECEIVABLE_COLLECT','TR_TRANSFER')
+--    AND reject_scope='ANY_DONE';
+
+-- 后置校验（四桶必须回到 39|4|71|241，且 distinct 值只剩 NONE/PREV_ONE/ANY_DONE 三档）：
+-- SELECT CONCAT(SUM(sort=1 AND reject_scope='NONE'),'|',
+--   SUM(sort<>1 AND multi_type IN ('ALL','SEQ','VOTE') AND reject_scope='NONE'),'|',
+--   SUM(reject_scope='ANY_DONE'),'|',SUM(reject_scope='PREV_ONE'),'|',COUNT(*))
+--   FROM wf_node_config WHERE del_flag=0;
+
+-- ---------- 3) resubmit_jump_back=1 的节点（方案点名 TR_PAY/SETTLE，另加灰度链 CLAIM 的共享审核岗）----------
+-- 语义：该节点驳回时把自身 key 写进旧实例变量 rejectOriginNode；提单人改单重新提交后，
+--       引擎在新实例启动末尾把执行搬到该节点（跳过中间已完成环节），前提是金额未变＋旧路由对账通过。
+-- 只配 5 处，都是"返工后中间环节无复核价值"的岗：
+--   1348 CLAIM   Task_7  财务共享审核单据【共享会计】   —— RA-F5a 建议的首条灰度链；资料/金额打回后重提只需回到共享会计
+--   1504 TR_PAY  Task_2  资金主任审核付款批次与账户头寸【资金岗】
+--   1505 TR_PAY  Task_3  基地财务经理审核付款批次【基地财务经理】
+--   1640 SETTLE  Task_7  财务共享审核单据【共享会计】
+--   1641 SETTLE  Task_8  基地财务经理审核【基地财务经理】
+-- 不给审批链上游（总监/总裁/基地总经理）配这一列：那些环节是"金额与授权等级"把关，
+--    跳回会绕开高管审批＝造出合规缺口。金额一旦变化，代码第③道校验也会强制全链重走（不依赖本列）。
+-- UPDATE wf_node_config SET resubmit_jump_back=1, update_time=NOW()
+--  WHERE del_flag=0 AND id IN (1348,1504,1505,1640,1641) AND resubmit_jump_back=0;
+
+-- ---------- 4) 开启语句（RA-F5a 裁决后才执行；先只放 CLAIM 一条链）----------
+-- 4-1) 自由驳回：总开关 + 逐链白名单（两把都要开，缺一不生效）
+-- UPDATE sys_config SET config_value='1'  WHERE tenant_id=1 AND config_key='wf.reject.free.enabled';
+-- UPDATE sys_config SET config_value='CLAIM' WHERE tenant_id=1 AND config_key='wf.reject.free.models';
+-- 4-2) 重提跳回：总开关 + 逐链白名单（可与 4-1 分别开关；建议晚一个窗口再开）
+-- UPDATE sys_config SET config_value='1'      WHERE tenant_id=1 AND config_key='wf.resubmit.jumpback.enabled';
+-- UPDATE sys_config SET config_value='CLAIM'  WHERE tenant_id=1 AND config_key='wf.resubmit.jumpback.models';
+-- 生效面（自由驳回）：总开关=1 ∧ 本流程在白名单 ∧ 本节点 reject_scope≠NONE；预览与执行面同源。
+-- 生效面（重提跳回）：总开关=1 ∧ 本流程在白名单 ∧ 关联点节点 resubmit_jump_back=1 ∧ 金额未变
+--                    ∧ 旧路由对账（当前节点与关联点都在旧链上、二者之间全部已完成）∧ 图上可达 ∧ 关联点非会签。
+
+-- ---------- 5) 明确不做的事（避免把 F5 开成"第二个假开关"或越权通道）----------
+-- (a) 不为"跳回"伪造中间环节的 APPROVE 记录：跳回只写一条 RESUBMIT_SKIP（含原因），链上其余节点保持"未发生"。
+-- (b) 不放宽 reject_scope 来给提单人自己开洞；也不借"驳回到节点"实现自审（转办/改派/挑唯一角色持有人造自审＝禁止）。
+-- (c) 不改 wf_task/wf_task_history 任何历史行；搬执行只影响在办任务与新镜像。
+-- (d) 不动 87 个 bpmn 发布物（那是 F6 的活）；本文件只改配置列，不触发重发布。

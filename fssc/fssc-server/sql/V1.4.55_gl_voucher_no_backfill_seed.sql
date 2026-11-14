@@ -1,0 +1,108 @@
+-- ============================================================================
+-- V1.4.55 GL 专项凭证号回填登记件（波次二十·GLS 环节｜R5-D-153/154/155/156 数据轨）
+-- 类型：注释态登记件（registration-only）。可执行行＝0，本文件不产生任何 DDL/DML。
+-- 目的：把 FSSC /glex/special 各页签业务表里的「自造号 / 空号」按 op_voucher 真身映射回填
+--       为真凭证号（JZ20… 家族）；对「真身根本不存在」的历史缺口，先补齐凭证、再回填。
+-- 铁律：本文件不自动执行；不得凭空编造 JZ 号；执行时须另起实际执行件＋回滚件，
+--       先全库备份、先 SELECT 复核、后 UPDATE，逐表留操作人/时间/依据。
+-- 关联判据件：见同期评审记录（四环节核对）。
+-- ============================================================================
+
+-- §0 现象与证据（只读，已完成，不在本文件重复执行）
+-- 0.1 现值界面展示的自造号五枚：GLTX202611001、GLTX202611002、GLTX202611003、GLTX202611004、
+--     GLMC2026090001；五枚在 op_voucher 以 voucher_no 精确匹配 0 命中（存活与全量均 0）。
+--     证据关联：V5缺陷台账 R5-D-153 行；.tmp_v5probe/r464.txt A/C；Batch-10-段2 §6。
+-- 0.2 同库 op_voucher 全体 75 行凭证号前缀 100% 为 JZ20（真号唯一来源：NumberRuleService 规则 VOUCHER）。
+-- 0.3 真身映射样例（Batch-10-段2 §6 逐行对点）：
+--     gl_tax_provision VAT 行 voucher_no=GLTX202611002（税额 13,000.00）→ op_voucher id=5 JZ2026092900002（POSTED、202611、借 6403/贷 2221）；
+--     gl_journal_entry JRN202611001（15,000.00，status=POSTED、voucher_no 为空）→ op_voucher id=4 JZ2026092900001（POSTED、source_type=GL_ACCRUAL）。
+-- 0.4 历史快照面：db/Dump20260911/ 与 db/backup/20260929/fssc_full_20260929.sql 中还留存更早一代
+--     自造号（GLTX202610002~4、GLMC2026100001、GLIO202610001~2、GLMS2026050001、GLMS2026100001）；
+--     正式环境清查时按「前缀族」横扫，不要只按 §0.1 五枚枚举报表。
+-- 0.5 代码侧现状（已由波次二十前序环节修复并回归）：四族业务表 voucher_no 只写真号，自造号生成点已清零；
+--     本文件只处理「历史历史行」，对增量行无需回填（新增审批办结即回写）。
+
+-- §1 回填总原则（人工执行件必须照此规则编写）
+-- 1.1 关联键一律取 op_voucher.source_type + source_doc_id（代码写证时就落好的规范外键），
+--     禁止按「号段规律」「金额猜测」配真号；配不到真号的行一律留给 §3/§4/§5 的人工裁决。
+-- 1.2 只回填「空号 或 自造前缀（GLTX/GLMC/GLIO/GLMS）」的行；已是 JZ 号且能在 op_voucher 命中的不得改动。
+-- 1.3 回填前先生成旧值快照（原 voucher_no 全量 SELECT 导出到回滚件），UPDATE 时按主键逐行、带上旧值条件。
+-- 1.4 回填动作须登记审计/trace（操作人、时间、依据＝本登记件编号与审批签字），可复用 sys_oper_log 规则。
+-- 1.5 执行顺序建议：先 §3 补证 → 再 §2 回填 → 最后 §6 校验；任何一步不通过即停手人工复核。
+
+-- §2 逐表回填策略（表中 SQL 均为注释示例，编制实际执行件时按 §1 补快照/回滚）
+-- 2.1 gl_tax_provision（source_doc_type='GL_TAX_PROV'）：
+--     -- 复核：SELECT p.id,p.provision_no,p.voucher_no,v.voucher_no v_real,v.status
+--     --       FROM gl_tax_provision p LEFT JOIN op_voucher v
+--     --         ON v.source_doc_type='GL_TAX_PROV' AND v.source_doc_id=p.id AND v.status<>'VOID';
+--     -- 回填：UPDATE gl_tax_provision SET voucher_no=(SELECT v.voucher_no FROM op_voucher v
+--     --       WHERE v.source_doc_type='GL_TAX_PROV' AND v.source_doc_id=gl_tax_provision.id AND v.status<>'VOID' LIMIT 1)
+--     --       WHERE id=? AND (voucher_no IS NULL OR voucher_no LIKE 'GLTX%');
+--     已知映射：VAT 行（税额 13,000.00）→ JZ2026092900002（§0.3）；SURCHARGE/INCOME 两行无真身，见 §3。
+-- 2.2 gl_journal_entry（source_doc_type IN 记账族五型：GL_ACCRUAL/GL_DEFER/GL_MANUAL_VOUCHER/GL_OTHER_RECEIPT/GL_CHECK_DIFF）：
+--     -- 复核/回填规则同 2.1，把 source_doc_type='GL_TAX_PROV' 换成 IN (...) 五型枚举。
+--     已知映射候选：JRN202611001 → JZ2026092900001（§0.3，须人工复核该单 source_type=GL_ACCRUAL 后回填）。
+-- 2.3 gl_inter_offset（source_doc_type='GL_OFFSET'）：历史三行 voucher_no 全 NULL 且零凭证（见 §5），
+--     当前无真号可配；先走 §5 补证，补证后按 2.1 规则回填。不得用 GLIO 自造号占位。
+-- 2.4 gl_month_close：GLMC 串不是任何一张凭证的号——本表 voucher_no 语义＝「该期间的损益结转真号」，
+--     由 GlProfitCarryService 在结转成功且列值为空/空白时回写（仅空回写是代码侧强制校验）。
+--     -- 处置建议（人工裁决后二选一）：
+--     --   a) UPDATE gl_month_close SET voucher_no=NULL WHERE voucher_no LIKE 'GLMC%';
+--     --      （清成空，让下一次损益结转/人工映射把真号铺进去；历史已结转的期间按 b）
+--     --   b) 若该期间存在损益结转凭证（source_type='GL_PROFIT_CARRY'），人工核对后把 v.voucher_no 写回对应行。
+--     不得保留 GLMC 串作为凭证号展示。
+-- 2.5 gl_shared_master：GLMS 串同属自造号，且本表「本申请不产生凭证」（代码侧已不预造号、不写号）。
+--     -- 处置建议：UPDATE gl_shared_master SET voucher_no=NULL WHERE voucher_no LIKE 'GLMS%';（清空即可，无真号可回填）
+-- 2.6 gl_salary_run：该表无 voucher_no 列（隐藏 DDL 裁决项，见 §4），回填面为 0；
+--     凭证按 source_doc_type='GL_SALARY_PAY'/'GL_SALARY_PROV' + source_doc_id 反查，列补齐属另裁。
+-- 2.7 扫尾：SELECT 各表 WHERE voucher_no LIKE 'GL%'（GLTX/GLMC/GLIO/GLMS 及未识别 GL 前缀）复核清零——
+--     合法凭证号均 JZ 前缀，任何 GL 开头残留都应视为自造号（业务单号列如 provision_no/offset_no/close_no 不在本规则内）。
+
+-- §3 R5-D-154 应落未落 13,940.00 的补证（先补证，后回填）
+-- 3.1 事实：202611 期间 SURCHARGE 1,440.00 与 INCOME 12,500.00 两行状态 POSTED，
+--     但 op_voucher / op_gl_entry 均 0 命中（r467 G：a1440=0、a12500=0；GL_TAX_PROV 分录仅 2 条 26,000 含 VAT 13,000）。
+-- 3.2 代码侧已修：计提 = 逐税种一行一流程一凭证（GlTaxProvisionService.provision 逐行起流 + assertAllLinked；
+--     GlBizAction.handleTax 办结出证后回写 POSTED＋真号，出证失败落 APPROVED 不冒充已入账）。
+-- 3.3 历史两行补证路径（人工裁决）：
+--     -- 首选：按现行码让这两条计提重新走一遍「审批最终状态→出证」；办结即自动产生真号并回写，无需手填。
+--     -- 备选：人工按 6403/6801×2221 规则在属期补制凭证，走正常制证-过账通道（不得直接 INSERT op_voucher/op_gl_entry）。
+--     -- 辅助工具：GET /api/tenant/gl/tax-provision/link-check?period=202611（只读，输出 missingVoucher/missingEntry 计数与金额）。
+-- 3.4 补证完成后按 §2.1 回填 voucher_no，并在 §6 复核 op_gl_entry 分录落齐。
+
+-- §4 R5-D-155 薪酬历史缺环节 90,000.00 的处置
+-- 4.1 事实：发放凭证 JZ2026100100003 仅「借 2211 390,000.00 / 贷 1002 390,000.00」两环节；
+--     同批次扣款 12,000＋社保 60,000＋个税 18,000＝90,000.00 无代扣分录（r457 F / r467 A）。
+-- 4.2 代码侧已修：发放链办结时成对生成「代扣缴纳凭证」（source_type=GL_SALARY_WITHHOLD、source_doc_type=GL_SALARY_PAY）——
+--     借 2211＝代扣合计、贷 2221＝个税、贷 2241＝社保＋其他扣除；代扣合计为 0 不出证。据此 2211 借贷闭合（480,000=390,000+90,000）。
+-- 4.3 历史缺口属既成凭证缺陷，不可在本文件内直写期外凭证；须走会计差错更正规则（补制代扣凭证并注明原批次 run_no），
+--     经财务经理签字后按原期间或当期处理；处置结果登记本件 §6 校验栏。
+-- 4.4 另注：gl_salary_run 无 voucher_no 列，发薪凭证与代扣凭证均按 source_doc_id 联查；补列＝DDL 裁决项。
+
+-- §5 R5-D-156 抵消历史三行的补链
+-- 5.1 事实：三条记录 offset_status=OFFSET、voucher_no 全 NULL、op_gl_entry 无 GL_OFFSET 项（r457 C / r466 B）。
+-- 5.2 代码侧现状（现行设计，非缺陷残留）：
+--     -- 自动生成＝成对镜像分录即置 OFFSET（业务语义「已抵消待审批」），凭证在审批办结时生成并回写真号（GlBizAction.handleOffset）；
+--     -- 手工录入＝DRAFT，post 操作出证成功才置 OFFSET 并回写真号（GlInterOffsetService.post）；出证失败保持未抵消。
+-- 5.3 历史三行补链路径（人工裁决）：
+--     -- 首选：确认其审批流最终状态；在途流走到办结即自动出证回写；已驳回流按状态处置，不可强行写号。
+--     -- 备选：人工走 post 同语义的补证通道生成抵消凭证后回填 voucher_no（同样禁止手填 GLIO 号）。
+--     -- 前置：三条记录为同主体自我抵消且含 0.00 元行（R5-D-136），须先按该条裁决处置，再补链。
+-- 5.4 补证后按 2.3 回填，并在 §6 复核 op_gl_entry 出现 biz_type/source 对应 GL_OFFSET 分录。
+
+-- §6 回填后统一校验（编制执行件时逐条 SELECT，全过才算办结）
+-- 6.1 孤儿号＝0：各业务表 voucher_no 非空值必须能在 op_voucher 精确命中：
+--     -- SELECT COUNT(*) orphans FROM gl_tax_provision p LEFT JOIN op_voucher v ON v.voucher_no=p.voucher_no
+--     --   WHERE p.voucher_no IS NOT NULL AND v.id IS NULL;（其余四表同构）
+-- 6.2 前缀规则：业务表 voucher_no 非空值 100% 以 JZ 开头，GL 前缀残留＝0。
+-- 6.3 汇总面：GL_TAX_PROV 分录合计应含 VAT 13,000＋SURCHARGE 1,440＋INCOME 12,500＝26,940；
+--     薪酬 2211 借贷闭合（480,000=390,000+90,000）；抵消 160,000 出现 GL_OFFSET 分录（0.00 行除外）。
+-- 6.4 记录面：本次回填每张表产生审计/操作日志，含操作人、时间、依据（本登记件编号）。
+
+-- §7 人工执行须知（签字栏另附）
+-- 7.1 执行前置：全库备份完成（fssc 库＋master 库）；月结/关账窗口外；双人复核（制单＋复核）。
+-- 7.2 执行件要求：实际执行件命名建议 V1.4.55_gl_voucher_no_backfill_exec.sql，
+--     随附回滚件（含逐行旧值快照），回滚件不经数据库执行不得投产；执行完把结果回填本件 §6。
+-- 7.3 责任链：总账会计编制 → 共享主管复核 → 财务经理审批 → DBA 执行；四步签字缺一不可。
+-- 7.4 禁止项重申：本文件不执行；不得编造 JZ 号；不得直改 op_voucher/op_gl_entry 补平账；
+--     不得在计提/抵消/薪酬单据上写任何非 op_voucher 出处的号串。
+-- ============ 文件结束（登记态） ============

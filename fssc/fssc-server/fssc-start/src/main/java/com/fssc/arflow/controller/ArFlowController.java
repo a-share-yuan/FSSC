@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.arflow.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -28,9 +25,11 @@ import com.fssc.common.core.Result;
 import com.fssc.customer.entity.CrmCustomer;
 import com.fssc.customer.mapper.CrmCustomerMapper;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.paging.ListPaging;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.masterdata.entity.MdSubject;
 import com.fssc.masterdata.service.SubjectService;
+import jakarta.servlet.http.HttpServletResponse;
 import com.fssc.receivable.entity.RcReceipt;
 import com.fssc.receivable.entity.RcReceiptLine;
 import com.fssc.receivable.entity.RcReceivable;
@@ -116,8 +115,15 @@ public class ArFlowController {
     @RequiresPerm("arflow:billing:manage")
     @GetMapping("/pre-invoices")
     public Result<List<ArPreInvoice>> preInvoices(@RequestParam(required = false) String status,
-                                                  @RequestParam(required = false) String customerName) {
-        return Result.success(preInvoiceService.list(status, customerName));
+                                                  @RequestParam(required = false) String customerName,
+                                                  @RequestParam(required = false) String keyword,
+                                                  @RequestParam(required = false) String pageNum,
+                                                  @RequestParam(required = false) String pageSize,
+                                                  HttpServletResponse response) {
+        // 分页契约见 ListPaging：JSON 仍是数组，元数据走 X-Page-* 与 X-Truncated 响应头。
+        // 此前无上限，1.4 万张预制发票一次吐 8.78MB（实测）；keyword 供「发票回写」下拉远程检索。
+        ListPaging paging = ListPaging.of(pageNum, pageSize);
+        return Result.success(preInvoiceService.list(status, customerName, keyword, paging, response));
     }
 
     @RequiresPerm("arflow:billing:manage")

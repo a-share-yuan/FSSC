@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 /**
  * 守卫：不许出现「假必填」。
  *

@@ -826,3 +826,4 @@ export const RULE_ACTION = { BLOCK: '拦截', WARN: '警告', REVIEW: '转人工
 export const ruleTypeLabel = (v) => enumLabel(RULE_TYPE, v)
 export const riskLevelLabel = (v) => enumLabel(RISK_LEVEL, v)
 export const ruleActionLabel = (v) => enumLabel(RULE_ACTION, v)
+

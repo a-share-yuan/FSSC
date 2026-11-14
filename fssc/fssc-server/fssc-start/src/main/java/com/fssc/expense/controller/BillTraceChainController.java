@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.expense.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -291,10 +288,7 @@ public class BillTraceChainController {
         //     与单据级凭证分家。抽屉单列显示，不计入「记账凭证 N 张」与 VOUCHER 段到达判据——
         //     它证明的是"钱出去了"，不能替代"本单费用已入账"。
         List<OpVoucher> paymentVouchers = batchLegVouchersOf(batchIds);
-        Map<Long, List<OpVoucherLine>> paymentVoucherLines = new LinkedHashMap<>();
-        for (OpVoucher v : paymentVouchers) {
-            paymentVoucherLines.put(v.getId(), opVoucherLineMapper.selectByVoucherId(v.getId()));
-        }
+        Map<Long, List<OpVoucherLine>> paymentVoucherLines = voucherLinesOf(paymentVouchers);
         out.put("paymentVouchers", paymentVouchers);
         out.put("paymentVoucherLines", paymentVoucherLines);
 
@@ -302,10 +296,7 @@ public class BillTraceChainController {
         //    限定费用域来源类型：同 id 的 GL/FA/AP/AR 凭证属其它业务域，不得混入本单链路
         List<String> pis = procInstIds(instances);
         List<OpVoucher> vouchers = expenseVouchersOf(billId, pis);
-        Map<Long, List<OpVoucherLine>> voucherLines = new LinkedHashMap<>();
-        for (OpVoucher v : vouchers) {
-            voucherLines.put(v.getId(), opVoucherLineMapper.selectByVoucherId(v.getId()));
-        }
+        Map<Long, List<OpVoucherLine>> voucherLines = voucherLinesOf(vouchers);
         out.put("vouchers", vouchers);
         out.put("voucherLines", voucherLines);
 
@@ -437,10 +428,7 @@ public class BillTraceChainController {
                 vouchers.sort(Comparator.comparing(OpVoucher::getId));
             }
         }
-        Map<Long, List<OpVoucherLine>> voucherLines = new LinkedHashMap<>();
-        for (OpVoucher v : vouchers) {
-            voucherLines.put(v.getId(), opVoucherLineMapper.selectByVoucherId(v.getId()));
-        }
+        Map<Long, List<OpVoucherLine>> voucherLines = voucherLinesOf(vouchers);
         out.put("vouchers", vouchers);
         out.put("voucherLines", voucherLines);
 
@@ -496,10 +484,7 @@ public class BillTraceChainController {
         out.put("bill", head);
         out.put("payments", List.of());
         out.put("batches", List.of());
-        Map<Long, List<OpVoucherLine>> voucherLines = new LinkedHashMap<>();
-        for (OpVoucher v : vouchers) {
-            voucherLines.put(v.getId(), opVoucherLineMapper.selectByVoucherId(v.getId()));
-        }
+        Map<Long, List<OpVoucherLine>> voucherLines = voucherLinesOf(vouchers);
         out.put("vouchers", vouchers);
         out.put("voucherLines", voucherLines);
         out.put("archives", List.of());
@@ -874,6 +859,34 @@ public class BillTraceChainController {
             }
         }
         return sortedByVoucherId(byId);
+    }
+
+    /**
+     * 批量取凭证分录（消除 N+1）。
+     *
+     * <p><b>改前</b>：逐张凭证调一次 {@code selectByVoucherId}，打在 153 万行的
+     * {@code op_voucher_line} 上；一张单据 2~4 张凭证即 2~4 次单表查询。</p>
+     * <p><b>改后</b>：一次 {@code voucher_id IN (...)} 批量查，走
+     * {@code idx_tenant_voucher(tenant_id, voucher_id)}（租户拦截器自动追加
+     * {@code tenant_id}，与改前的自定义 SQL 口径一致）。</p>
+     * <p>保持原契约：每张凭证都有 key（无分录的给空列表），且分录按 {@code line_no} 升序。</p>
+     */
+    private Map<Long, List<OpVoucherLine>> voucherLinesOf(List<OpVoucher> vouchers) {
+        if (vouchers == null || vouchers.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = vouchers.stream().map(OpVoucher::getId)
+                .filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<OpVoucherLine>> grouped = opVoucherLineMapper.selectByVoucherIds(ids)
+                .stream().collect(Collectors.groupingBy(OpVoucherLine::getVoucherId));
+        Map<Long, List<OpVoucherLine>> out = new LinkedHashMap<>();
+        for (OpVoucher v : vouchers) {
+            out.put(v.getId(), grouped.getOrDefault(v.getId(), List.of()));
+        }
+        return out;
     }
 
     private static List<OpVoucher> sortedByVoucherId(Map<Long, OpVoucher> byId) {

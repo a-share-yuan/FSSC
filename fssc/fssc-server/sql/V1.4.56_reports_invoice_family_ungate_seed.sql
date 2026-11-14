@@ -1,0 +1,50 @@
+-- =====================================================================================
+-- V1.4.56  R5-D-114 发票报表族（进项/销项/税负三页菜单）域码摘除登记件 —— 本文件【登记态·全注释·未执行】
+-- 铁律：授权(grant)与数据变更类脚本一律以注释登记、由人工在发布窗放行。本文件所有语句均为注释态，
+--       直接执行不产生任何写库效果。放行前先跑 §0 前置只读校验，核对关联点与三行现值后逐段解注释。
+-- 关联代码环节（同单已成对落码）：ReportQueryController 三页（/input-invoice、/output-invoice、
+--       /tax-burden）已同步摘除 @ReportDomain 注解，域校验保留给业务域明细/写侧接口；接口侧三页
+--       现仅由 @RequiresPerm("report:view") + @DataScope 把守（R5-D-114，波次二十段C）。
+--
+-- 【要解决的问题】
+--   三页菜单此前分挂 P2P/AR/TAX 三把域校验（id=3373 perms='report:view,report:p2p:view'；
+--   3374='report:view,report:ar:view'；3375='report:view,report:tax:view'）⇒ 授权侧
+--   RoleService.assertReportDomainProjection 按菜单 perms 中的 report:<domain>:view 域码解析
+--   归属域，要求角色未来权限集命中该域判据码——结果没有任何现有岗位能同时取到三页：
+--   税务专员-01（report:view＋inv:certify）取不到销项页；部门经理-01（AR 岗）取不到税负页。
+--   报表统计读侧不应重复卡业务域权限：数据面已由 @DataScope 管、业务明细已由各自域接口把守。
+--
+-- 【本件动作（注释态）】
+--   将三页菜单 perms 摘除业务域码，仅保留基础码 report:view；此后 assertReportDomainProjection
+--   对这三页不再解析出归属域（domainOf 返回 null），保存期卡点不再对这三页要求业务域判据码。
+--   接口侧已同步摘除 @ReportDomain（代码环节），两环节必须成对生效，单边落地会造成规则漂移。
+-- =====================================================================================
+--
+-- -- §0 前置只读校验（人工放行前先跑，核对关联点与"改前"值）-----------------------------------
+-- --   期望：三行现有且 perms 与 §1 所列"改前"值逐字一致
+-- SELECT id, menu_name, path, perms, del_flag
+--   FROM fssc.sys_menu WHERE id IN (3373, 3374, 3375) AND del_flag = 0;
+--
+-- -- §1 改前值（本次摘除目标）：
+-- --   id=3373 进项发票统计  perms='report:view,report:p2p:view'
+-- --   id=3374 销项发票统计  perms='report:view,report:ar:view'
+-- --   id=3375 税负分析      perms='report:view,report:tax:view'
+--
+-- -- §2 摘除语句（注释态·未执行；三行，改后值均为 report:view）：
+-- UPDATE fssc.sys_menu SET perms = 'report:view' WHERE id = 3373;
+-- UPDATE fssc.sys_menu SET perms = 'report:view' WHERE id = 3374;
+-- UPDATE fssc.sys_menu SET perms = 'report:view' WHERE id = 3375;
+--
+-- -- §3 改后复点（放行后核对）：
+-- --   期望：三行 perms 均为 'report:view'
+-- SELECT id, menu_name, path, perms, del_flag
+--   FROM fssc.sys_menu WHERE id IN (3373, 3374, 3375) AND del_flag = 0;
+--
+-- -- §4 ROLLBACK 段（登记态·恢复改前 perms 原值；仅回退本次三行时解注释执行）####################
+-- UPDATE fssc.sys_menu SET perms = 'report:view,report:p2p:view' WHERE id = 3373;
+-- UPDATE fssc.sys_menu SET perms = 'report:view,report:ar:view' WHERE id = 3374;
+-- UPDATE fssc.sys_menu SET perms = 'report:view,report:tax:view' WHERE id = 3375;
+--
+-- 判据可验证面：非注释可执行行＝0；含 3373/3374/3375 三行与 ROLLBACK 段；
+-- 全文无任何清除/销毁类语句字样；域码原文仅出现在本注释说明与 ROLLBACK 段。
+-- =====================================================================================

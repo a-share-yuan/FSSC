@@ -1,0 +1,108 @@
+-- ============================================================================
+-- V1.4.72_contract_summary_report_view_seed.sql
+-- 配套缺陷：D-V4（P0·业务链全断）
+--
+-- 【现象】（2026-10-16 V4-run-1015b 人工实测取证）
+--   对公结算单页「付款合同（框架协议，可选）」下拉**对所有角色永久为空**。
+--   而应付会计（FIN_AP, role_id=68）正是唯一要建对公结算单的角色
+--   ⇒ 三单/四单匹配的**合同环节挂不上** ⇒ 付款齐套校验以「缺合同环节」永久拦截。
+--   这是一条所有人无解的阻断缺陷，不是权限配置疏漏的表象。
+--
+-- 【根因链】
+--   1) CorpPay.vue onMounted 无条件调 reportApi.contractSummary()（拿"合同已付合计"做选项标签）；
+--   2) 该接口 @RequiresPerm("report:view")，持有者是 sys_menu id=216「管理报表」，
+--      已授 15 个角色（财务经理/财务总监/共享会计/税务经理/报表查询岗…），
+--      **但 FIN_AP(68) 与 COMMON_EMP(12) 均未获授**；
+--   3) 抛 4030 被 `catch { ignore }` 吞掉 ⇒ 下一行 `contracts.value = clist.map(...)` 整行不执行；
+--   4) 而合同下拉的数据源本是与它**无关**的 contractApi.page（返回 200 有数据）——
+--      一个「装饰性数字」取不到，把「主链路能不能选」一起陪葬了。
+--
+-- 【本件做两件事，分工明确】
+--   §1 代码侧（已随本版落仓，见 CorpPay.vue onMounted）：
+--      把合同列表与报表汇总**解耦**——合同列表独立 try，报表汇总独立 try 且失败降级为 paidAmount=0。
+--      这是根因修复：解耦后，任何角色即使没有 report:view，合同下拉也照常可用。
+--   §2 数据侧（本件）：把 report:view 补进**会进对公结算页**的角色，让"合同已付合计"
+--      这个标签数字也准确（§1 保证可用，§2 保证好看；§1 是必需，§2 是补齐）。
+--
+-- 【授权集合怎么定（自关联，不硬编角色号）】
+--   关联点码 = `exp:pay:submit`（菜单 id=261「对公结算」/ id=260「费用预付款」持有的建单码，
+--   2026-10-16 库内实查确认，**不是** pay:corp:settle —— 后者在 sys_menu 中根本不存在，
+--   用它当关联点会导致一条都关联不到、脚本"执行成功但零效果"）。
+--   判据 = 「谁持对公结算单的建单入口」。凡能进该页建单的角色，都会在建单时读合同剩余额
+--   ⇒ 理应能读合同已付汇总。这样 ① 不会漏（新建结算单的岗位自动纳入）；
+--   ② 不会滥（不碰纯只读的报表岗授权面）。
+--
+-- 【库内实查基线（2026-10-16，执行前）】
+--   · 承载 report:view 的菜单有两枚：id=216「管理报表」(M)、id=3622「管理报表工作台」(C)
+--     —— 故授权按 perms 匹配而非硬写 id，两枚都覆盖。
+--   · 已持该码的角色 15 个：FIN_MANAGER/CFO/FIN_DIRECTOR/PRESIDENT/BOARD_OF_DIRECTORS/VP/
+--     TAX_MANAGER/FSSC_AUDITOR/GM/FIN_AP(68)/REPORT/ORG_HEAD/CENTER_APPROVER/
+--     EXEC_APPROVER/FIN_MGR_ORG/TAX_RPT_STAFF
+--  —— 其中 **FIN_AP(68) 是 D-V4 排查期临时补授的那一行**（备份见
+--     人工测试/backup_第八次修复_20261016/sys_role_menu_补report_view前_20261016.sql），
+--     本件把它从"临时补丁"升格为"种子数据"，并补齐 id=3622 那枚。
+--   · 仍**不**授 report:view 的相关角色：COMMON_EMP(12, 普通员工)、CASHIER(59, 出纳)。
+--     这两类不进本脚本关联点（不持 exp:pay:submit），且 §1 的前端解耦已保证它们
+--     照样能用合同下拉（只是标签上的"已付合计"按 0 计）——这正是"解耦为主、数据为辅"的含义：
+--     不为了一个装饰性数字给全员发报表读权。
+--
+-- 【零回归边界】
+--   · report:view 是**只读**码，本件只加读权，不动任何写权码、不改任何既有角色-菜单关系；
+--   · 反向：仅持 report:view 的报表岗**不会**因此拿到 exp:pay:submit 建单权（授权方向单向）；
+--   · 去重：sys_role_menu 无业务唯一键，用 NOT EXISTS 防重，可重复执行。
+--
+-- 【预检 / 复点（只读，人工放行前先跑）】
+--   SELECT r.id, r.role_code, r.role_name,
+--          IF(EXISTS(SELECT 1 FROM fssc.sys_role_menu rm
+--                      JOIN fssc.sys_menu m ON m.id = rm.menu_id
+--                     WHERE rm.role_id = r.id AND FIND_IN_SET('report:view', m.perms)
+--                       AND m.del_flag = 0), 'Y', 'N') AS has_report_view
+--     FROM fssc.sys_role r WHERE r.del_flag = 0 ORDER BY r.id;
+--
+--   执行后复点（期望：持 exp:pay:submit 的角色 has_report_view 全部 = Y）
+--   SELECT r.role_code, COUNT(*) AS grants
+--     FROM fssc.sys_role_menu rm
+--     JOIN fssc.sys_role r ON r.id = rm.role_id
+--     JOIN fssc.sys_menu m ON m.id = rm.menu_id AND FIND_IN_SET('report:view', m.perms) AND m.del_flag = 0
+--    WHERE r.del_flag = 0 GROUP BY r.role_code ORDER BY r.role_code;
+-- ============================================================================
+
+-- §1 取承载 report:view 的菜单 id（不硬写 216/3622，避免菜单重建后 id 漂移）
+SELECT id, menu_name, menu_type, perms FROM fssc.sys_menu
+ WHERE FIND_IN_SET('report:view', perms) AND del_flag = 0;
+
+-- §2 自关联补授：凡已持有「对公结算单建单入口」权限码（exp:pay:submit）的角色，补授 report:view
+--    去重（NOT EXISTS 防重，可重复执行）
+-- INSERT INTO fssc.sys_role_menu (tenant_id, role_id, menu_id, create_by, create_time)
+-- SELECT r.tenant_id, r.id, m.id, NULL, NOW()
+--   FROM fssc.sys_role r
+--   JOIN fssc.sys_menu m ON FIND_IN_SET('report:view', m.perms) AND m.del_flag = 0
+--   JOIN fssc.sys_role_menu rm ON rm.role_id = r.id
+--   JOIN fssc.sys_menu bm ON bm.id = rm.menu_id
+--  WHERE r.del_flag = 0
+--    AND FIND_IN_SET('exp:pay:submit', bm.perms)
+--    AND bm.del_flag = 0
+--    AND NOT EXISTS (SELECT 1 FROM fssc.sys_role_menu ex
+--                     WHERE ex.role_id = r.id AND ex.menu_id = m.id);
+
+-- ============================================================================
+-- ROLLBACK（人工回退用，同样注释态；仅回收本件新增的授权）
+--   不要整表回滚——report:view 的历史授权（15 个角色）是本件之前就有的，
+--     整表 DELETE 会连坐既有授权。回滚只删「§2 条件命中且原不在集合内」的新增行，
+--     务必先跑下面的 SELECT 人工核对保留哪些 role_id，再定向 DELETE。
+-- SELECT r.id, r.role_code, r.role_name
+--   FROM fssc.sys_role r
+--   JOIN fssc.sys_menu m ON FIND_IN_SET('report:view', m.perms) AND m.del_flag = 0
+--   JOIN fssc.sys_role_menu rm ON rm.role_id = r.id
+--   JOIN fssc.sys_menu bm ON bm.id = rm.menu_id
+--  WHERE r.del_flag = 0
+--    AND FIND_IN_SET('exp:pay:submit', bm.perms)
+--    AND bm.del_flag = 0;
+--
+-- DELETE FROM fssc.sys_role_menu
+--  WHERE role_id IN ( /* ← 上一步核出来的 role_id 逐个填入，勿用子查询 */ )
+--    AND menu_id IN ( SELECT id FROM fssc.sys_menu WHERE FIND_IN_SET('report:view', perms) AND del_flag = 0 );
+--
+-- 【注】FIN_AP(68) 那一行属"临时补丁 → 种子化"的升格，回滚时请**保留**，
+--  否则 D-V4 的 P0 症状会在只靠 §1 解耦的降级态下重新出现。
+-- ============================================================================

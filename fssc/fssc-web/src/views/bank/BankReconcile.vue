@@ -173,6 +173,9 @@
         <el-col :span="12">
           <div class="pending-title">待勾对付款记录（企业已付银行未付，勾选一条）
             <el-tag size="small" type="info" style="margin-left:6px">{{ pendingPayRows.length }} 条</el-tag>
+            <el-tag v-if="pendingPayTruncated" size="small" type="warning" style="margin-left:6px">
+              仅显示前 {{ pendingPayRows.length }} 条，还有更多
+            </el-tag>
           </div>
           <el-table :data="pendingPayRows" size="small" stripe border max-height="300"
             empty-text="暂无待勾对付款记录（请在调节表页先生成当月调节表）"
@@ -186,6 +189,11 @@
             <el-table-column prop="payeeName" label="收款方" min-width="120" show-overflow-tooltip />
             <el-table-column prop="bizDate" label="日期" width="110" show-overflow-tooltip :formatter="(r, c, v) => formatDate(v)" />
           </el-table>
+          <!-- 候选集被服务端上限截断时：追加式加载下一页。
+               人工勾对必须看到全部候选（漏一条就可能勾到已被勾对的记录），故不静默截断。 -->
+          <div v-if="pendingPayTruncated" style="margin-top:6px; text-align:center">
+            <el-button size="small" :loading="loading.pendingPay" @click="loadPendingPay(true)">加载更多候选</el-button>
+          </div>
         </el-col>
       </el-row>
     </el-card>
@@ -213,7 +221,7 @@
 import { onMounted, reactive, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { p2Api } from '../../api'
+import { p2Api, readPaging } from '../../api'
 import { readBillDeepLink } from '../../utils/bizEntry'
 import { formatDate } from '@/utils/format'
 import SkeletonList from '../../components/SkeletonList.vue'
@@ -252,6 +260,11 @@ const pendingBankPageSize = ref(50)
 const pendingBankTotal = ref(0)
 const selPendingBank = ref([])
 const selPendingPay = ref([])
+// 待勾对付款候选：后端对本端点加了取数上限（X-Truncated 表示本页不是全部）。
+// 人工勾对必须看到全部候选 ⇒ 追加式加载，绝不把截断集当全量。
+const PENDING_PAY_PAGE_SIZE = 200
+const pendingPayPage = ref(1)
+const pendingPayTruncated = ref(false)
 const pendingMonth = ref(new Date().getFullYear() + String(new Date().getMonth() + 1).padStart(2, '0'))
 const searchKey = ref('')
 const filterStatus = ref('')
@@ -405,11 +418,20 @@ async function loadPendingBank() {
 
 function onPendingBankSize() { pendingBankPageNum.value = 1; loadPendingBank() }
 
-async function loadPendingPay() {
+async function loadPendingPay(append = false) {
   loading.pendingPay = true
   try {
-    const items = await p2Api.bankReconItems({ month: pendingMonth.value, itemType: 'ENT_OUT' })
-    pendingPayRows.value = (items || []).map(it => {
+    const params = { month: pendingMonth.value, itemType: 'ENT_OUT' }
+    if (append) {
+      params.pageNum = pendingPayPage.value + 1
+      params.pageSize = PENDING_PAY_PAGE_SIZE
+    } else {
+      params.pageNum = 1
+      params.pageSize = PENDING_PAY_PAGE_SIZE
+      pendingPayPage.value = 1
+    }
+    const items = await p2Api.bankReconItems(params)
+    const rows = (items || []).map(it => {
       const m = /^PAYMENT:(\d+)$/.exec(String(it.sourceRef || ''))
       return {
         paymentId: m ? Number(m[1]) : null,
@@ -419,6 +441,11 @@ async function loadPendingPay() {
         bizDate: it.bizDate,
       }
     }).filter(x => x.paymentId != null)
+    // 服务端加了取数上限（X-Truncated 表示本页不是全部）⇒ 追加下一页，绝不把截断集当全量。
+    const pg = readPaging(items)
+    pendingPayTruncated.value = pg.truncated
+    pendingPayRows.value = append ? pendingPayRows.value.concat(rows) : rows
+    if (append) pendingPayPage.value = pendingPayPage.value + 1
   } catch (e) {
     ElMessage.error('待勾对付款明细加载失败：' + (e.message || e))
   } finally {

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.arflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -14,11 +11,13 @@ import com.fssc.arflow.mapper.ArStatementMapper;
 import com.fssc.audit.service.AuditTrailService;
 import com.fssc.common.core.ErrorCode;
 import com.fssc.common.exception.BizException;
+import com.fssc.framework.paging.ListPaging;
 import com.fssc.framework.tenant.TenantContext;
 import com.fssc.system.entity.ExtInterfaceConfig;
 import com.fssc.connector.api.ChannelResponse;
 import com.fssc.connector.api.ConnectorFacade;
 import com.fssc.system.service.ConfigService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -381,7 +380,17 @@ public class ArPreInvoiceService {
         return inv;
     }
 
-    public List<ArPreInvoice> list(String status, String customerName) {
+    /**
+     * 预制发票列表。
+     *
+     * <p><b>分页</b>：{@code paging.limitClause()} 多取一行探测下一页，{@code describe} 裁掉探测行
+     * 并写 {@code X-Page-* 与 X-Truncated} 响应头。此前无上限，1.4 万张预制发票一次吐 8.78MB（实测）。</p>
+     *
+     * <p><b>keyword</b>：按预制发票号 / 对账单号 / 客户名做前缀模糊检索，供「发票回写」下拉
+     * 远程搜索用 —— 有了它就不再需要把全集塞进下拉候选。</p>
+     */
+    public List<ArPreInvoice> list(String status, String customerName, String keyword,
+                                   ListPaging paging, HttpServletResponse response) {
         LambdaQueryWrapper<ArPreInvoice> q = new LambdaQueryWrapper<>();
         if (status != null && !status.isBlank()) {
             q.eq(ArPreInvoice::getStatus, status);
@@ -389,7 +398,15 @@ public class ArPreInvoiceService {
         if (customerName != null && !customerName.isBlank()) {
             q.like(ArPreInvoice::getCustomerName, customerName);
         }
-        return mapper.selectList(q.orderByDesc(ArPreInvoice::getId));
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = keyword.trim();
+            q.and(w -> w.likeRight(ArPreInvoice::getPreInvoiceNo, kw)
+                    .or().likeRight(ArPreInvoice::getReconBillNo, kw)
+                    .or().like(ArPreInvoice::getCustomerName, kw));
+        }
+        List<ArPreInvoice> fetched = mapper.selectList(q.orderByDesc(ArPreInvoice::getId)
+                .last(paging.limitClause()));
+        return paging.describe(fetched, response);
     }
 
     public ArPreInvoice get(Long id) {

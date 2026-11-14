@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -66,7 +63,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.同类产品rentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -239,7 +236,7 @@ public class WfEngineFacade {
      */
     private final WfInstanceMapper wfInstanceMapper;
     /** R1 金额分档流程判定缓存：processKey -> 是否含 金额>/原值> 条件，避免每次发起重复查库 */
-    private final ConcurrentHashMap<String, Boolean> tieredCache = new ConcurrentHashMap<>();
+    private final 同类产品rentHashMap<String, Boolean> tieredCache = new 同类产品rentHashMap<>();
 
     /** 报销审批流程定义KEY */
     public static final String PROC_EXPENSE_CLAIM = "expenseClaim";

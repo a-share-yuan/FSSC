@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.compliance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -725,7 +722,8 @@ public class PrecheckEngineService {
         }
 
         if ("PRE-INV-DUPLICATE".equals(ruleCode)) {
-            // 真实查重 —— 同租户下 OCR 已识别的同票号记录数 >1（或历史已被其他单据使用）即判重复
+            // 真实查重 —— 全库口径：OCR 已识别的同票号记录数 >1（或历史已被其他单据使用）即判重复。
+            // 发票代码+号码全国唯一，跨企业重复报销也必须拦住，故不做租户过滤（见 ImageFacade#countByInvoiceNo）。
             if (invoiceNumber == null || invoiceNumber.isBlank()) {
                 return true;
             }

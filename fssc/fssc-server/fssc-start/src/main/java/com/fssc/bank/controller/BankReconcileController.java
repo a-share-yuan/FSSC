@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright 2026 The FSSC Project Authors (see LICENSE, NOTICE)
-
 package com.fssc.bank.controller;
 
 import com.fssc.bank.entity.BankBalance;
@@ -10,10 +7,12 @@ import com.fssc.bank.service.BankReconcileService;
 import com.fssc.common.core.PageResult;
 import com.fssc.common.core.Result;
 import com.fssc.framework.log.OperLog;
+import com.fssc.framework.paging.ListPaging;
 import com.fssc.framework.security.annotation.RequiresFeature;
 import com.fssc.framework.security.annotation.RequiresPerm;
 import com.fssc.sharing.entity.OpBankStatement;
 import com.fssc.receivable.entity.RcReceivable;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.format.DateTimeFormatter;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -64,8 +63,14 @@ public class BankReconcileController {
     @GetMapping("/items")
     public Result<List<BankReconItem>> items(@RequestParam(required = false) Long bankAccountId,
                                               @RequestParam(required = false) String month,
-                                              @RequestParam(required = false) String itemType) {
-        return Result.success(reconcileService.reconItems(bankAccountId, month, itemType));
+                                              @RequestParam(required = false) String itemType,
+                                              @RequestParam(required = false) String pageNum,
+                                              @RequestParam(required = false) String pageSize,
+                                              HttpServletResponse response) {
+        // 分页契约见 ListPaging：JSON 仍是数组，元数据走 X-Page-* 与 X-Truncated 响应头。
+        // 此前不收分页参数也不设上限，bank_recon_item 45 万行时可一次吐出 196MB（实测 9.3s）。
+        ListPaging paging = ListPaging.of(pageNum, pageSize);
+        return Result.success(reconcileService.reconItems(bankAccountId, month, itemType, paging, response));
     }
 
     /** 自动勾对：返回本轮结果（勾对/未勾对条数与未勾对流水号） */

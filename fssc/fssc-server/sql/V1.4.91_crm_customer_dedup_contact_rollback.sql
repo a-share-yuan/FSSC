@@ -1,0 +1,35 @@
+-- =============================================================================
+-- V1.4.91 回滚：还原 crm_customer 联系人三列与自动建档备注
+-- =============================================================================
+-- 用途：撤销 V1.4.91_crm_customer_dedup_contact.sql 的三条 UPDATE（清列 ＋ 自动备注 ＋ 人工备注 2b）。
+-- 前提：步骤 0 的留底表 fssc.bak_crm_customer_contact_v1491 仍在。
+--       若留底表已删，本件不可用 ⇒ 只能按 md_supplier 现值重新拷回三列
+--       （478 后写入侧已停拷，之后新建的行本来就没有影子值，不受影响）。
+-- 状态：全文注释态，未执行（与正向件同一道校验，正向件未跑就不要跑本件）。
+-- =============================================================================
+
+-- 步骤 1R：按留底逐行还原三列与备注（只还原留底里有值的行）
+-- 2（18:5x 复测自纠）：原 WHERE 只认三列非空 ⇒ 步骤 2b 改写的那 1 行（id=1 SUP-006，
+--   三列本来就全空、只有备注带编号）根本不会被还原 ⇒ 回滚后那行备注仍是改写后的样子。
+--   故 WHERE 补上「备注带需求编号」这一支。
+-- UPDATE fssc.crm_customer c
+--   JOIN fssc.bak_crm_customer_contact_v1491 b ON b.id = c.id
+--    SET c.contact_name  = b.contact_name,
+--        c.contact_phone = b.contact_phone,
+--        c.address       = b.address,
+--        c.remark        = b.remark
+--  WHERE b.contact_name IS NOT NULL OR b.contact_phone IS NOT NULL OR b.address IS NOT NULL
+--  OR b.remark LIKE '%D-V4%';
+
+-- 步骤 2R：复点——影子列应回到 54（若执行期间有新自动建档行，会 ≥54，属正常）
+-- 3（21:3x，与正向件同步）：正向件现在只清 **51** 行（分叉的 3 行 SUP-002/003/004 不在清列范围），
+--   ⇒ 正向执行后该计数会掉到 **3**（＝挂起那 3 行），回滚后应回到 **54**（3 分叉行 ＋ 51 还原行）。
+--   留底表是执行前那一瞬的快照 ⇒ 若库在此期间被并行窗整体重建，本件不可用（禁止按 md_supplier 现值重拷三列）。
+-- SELECT COUNT(*) FROM fssc.crm_customer c
+--   JOIN fssc.md_supplier s ON c.customer_code COLLATE utf8mb4_unicode_ci = s.supplier_code AND s.del_flag=0
+--  WHERE c.del_flag=0 AND (c.contact_name<>'' OR c.contact_phone<>'' OR c.address<>'');
+-- 备注编号应回到 58（57 自动串 ＋ 1 人工串）
+-- SELECT COUNT(*) FROM fssc.crm_customer WHERE del_flag=0 AND remark LIKE '%D-V4%';
+
+-- 步骤 3R：确认无误后再删留底表（不要和回滚同批执行）
+-- DROP TABLE fssc.bak_crm_customer_contact_v1491;
