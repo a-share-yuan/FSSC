@@ -33,14 +33,14 @@ jobs:
           java-version: '26'
           cache: maven
       - name: mvn verify（含单元测试）
-        working-directory: fssc-server
+        working-directory: fssc/fssc-server
         run: mvn -B -ntp clean verify
       - name: 上传测试报告
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports
-          path: fssc-server/**/target/surefire-reports/
+          path: fssc/fssc-server/**/target/surefire-reports/
           if-no-files-found: ignore
 
   # 前端构建
@@ -54,22 +54,22 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: fssc-web/package-lock.json
+          cache-dependency-path: fssc/fssc-web/package-lock.json
       - name: 安装依赖
-        working-directory: fssc-web
+        working-directory: fssc/fssc-web
         run: npm ci --no-audit --no-fund
       - name: 单元测试（vitest）
-        working-directory: fssc-web
+        working-directory: fssc/fssc-web
         run: npm run test
       - name: 构建（vite build）
-        working-directory: fssc-web
+        working-directory: fssc/fssc-web
         run: npm run build
       - name: 上传构建产物
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fssc-web-dist
-          path: fssc-web/dist*/
+          path: fssc/fssc-web/dist*/
           if-no-files-found: ignore
 
   # E2E 冒烟
@@ -100,7 +100,7 @@ jobs:
       - name: 初始化数据库
         run: bash scripts/db-init.sh
       - name: 打包后端
-        working-directory: fssc-server
+        working-directory: fssc/fssc-server
         run: mvn -B -ntp -DskipTests package
       - name: 启动后端
         run: |

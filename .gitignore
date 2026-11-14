@@ -31,8 +31,6 @@ db/backup/
 db/Dump*/
 !db/Dump20261114/
 !db/Dump20261114/**
-!db/Dump20261114/
-!db/Dump20261114/**
 *.dump
 *_full_*.sql
 *_rollback_*.jar
